@@ -1108,17 +1108,17 @@ RDI_LocationRegMemberTable:
 
 @xlist RDI_LinkFlags_XList:
 {
-  @expand(RDI_LinkFlagTable a) `$(a.name)`;
+  @expand(RDI_LinkFlagTable a) `$(a.name != COUNT -> a.name)`;
 }
 
 @xlist RDI_LocalKind_XList:
 {
-  @expand(RDI_LocalKindTable a) `$(a.name)`;
+  @expand(RDI_LocalKindTable a) `$(a.name != COUNT -> a.name)`;
 }
 
 @xlist RDI_LocationKind_XList:
 {
-  @expand(RDI_LocationKindTable a) `$(a.name)`;
+  @expand(RDI_LocationKindTable a) `$(a.name != COUNT -> a.name)`;
 }
 
 @xlist RDI_GlobalVariable_XList:
@@ -1128,7 +1128,7 @@ RDI_LocationRegMemberTable:
 
 @xlist RDI_ThreadVariable_XList:
 {
-  @expand(RDI_ThreadVariableMemberTable a) `$(a.type), $(a.name)`
+  @expand(RDI_ThreadVariableMemberTable a) `$(type), $(a.name)`
 }
 
 @xlist RDI_Procedure_XList:
@@ -1317,17 +1317,17 @@ RDI_EvalConversionKindTable:
 
 @xlist RDI_EvalOp_XList:
 {
-  @expand(RDI_EvalOpTable a) `$(a.name)`;
+  @expand(RDI_EvalOpTable a) `$(a.name != COUNT -> a.name)`;
 }
 
 @xlist RDI_EvalTypeGroup_XList:
 {
-  @expand(RDI_EvalTypeGroupTable a) `$(a.name)`;
+  @expand(RDI_EvalTypeGroupTable a) `$(a.name != COUNT -> a.name)`;
 }
 
 @xlist RDI_EvalConversionKind_XList:
 {
-  @expand(RDI_EvalConversionKindTable a) `$(a.name)`;
+  @expand(RDI_EvalConversionKindTable a) `$(a.name != COUNT -> a.name)`;
 }
 
 @gen(enums)
@@ -1405,7 +1405,7 @@ RDI_NameMapNodeMemberTable:
 
 @xlist RDI_NameMapKind_XList:
 {
-  @expand(RDI_NameMapKindTable a) `$(a.name)`;
+  @expand(RDI_NameMapKindTable a) `$(a.name != COUNT -> a.name)`;
 }
 
 @xlist RDI_NameMap_XList:

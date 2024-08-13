@@ -6,6 +6,17 @@
 #ifndef EVAL_META_H
 #define EVAL_META_H
 
+typedef enum E_TokenKind
+{
+E_TokenKind_Null,
+E_TokenKind_Identifier,
+E_TokenKind_Numeric,
+E_TokenKind_StringLiteral,
+E_TokenKind_CharLiteral,
+E_TokenKind_Symbol,
+E_TokenKind_COUNT,
+} E_TokenKind;
+
 typedef enum E_TypeKind
 {
 E_TypeKind_Null,
@@ -139,6 +150,7 @@ E_InterpretationCode_COUNT,
 } E_InterpretationCode;
 
 C_LINKAGE_BEGIN
+extern String8 e_token_kind_strings[6];
 extern String8 e_expr_kind_strings[41];
 extern String8 e_interpretation_code_display_strings[11];
 extern String8 e_expr_op_strings[41];

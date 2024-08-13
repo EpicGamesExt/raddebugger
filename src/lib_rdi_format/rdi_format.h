@@ -779,11 +779,11 @@ X(RDI_U32, type_idx)\
 X(RDI_U32, container_idx)\
 
 #define RDI_ThreadVariable_XList \
-X(RDI_U32, name_string_idx)\
-X(RDI_LinkFlags, link_flags)\
-X(RDI_U32, tls_off)\
-X(RDI_U32, type_idx)\
-X(RDI_U32, container_idx)\
+X(type, name_string_idx)\
+X(type, link_flags)\
+X(type, tls_off)\
+X(type, type_idx)\
+X(type, container_idx)\
 
 #define RDI_Procedure_XList \
 X(RDI_U32, name_string_idx)\
@@ -882,7 +882,6 @@ X(Convert)\
 X(Pick)\
 X(Pop)\
 X(Insert)\
-X(COUNT)\
 
 #define RDI_EvalTypeGroup_XList \
 X(Other)\
@@ -890,7 +889,6 @@ X(U)\
 X(S)\
 X(F32)\
 X(F64)\
-X(COUNT)\
 
 #define RDI_EvalConversionKind_XList \
 X(Noop)\
@@ -898,7 +896,6 @@ X(Legal)\
 X(OtherToOther)\
 X(ToOther)\
 X(FromOther)\
-X(COUNT)\
 
 #define RDI_NameMapKind_XList \
 X(NULL)\
@@ -908,7 +905,6 @@ X(Procedures)\
 X(Types)\
 X(LinkNameProcedures)\
 X(NormalSourcePaths)\
-X(COUNT)\
 
 #define RDI_NameMap_XList \
 X(RDI_U32, bucket_base_idx)\

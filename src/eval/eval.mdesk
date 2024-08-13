@@ -1,6 +1,17 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
+@table(name)
+E_TokenKindTable:
+{
+  {Null}
+  {Identifier}
+  {Numeric}
+  {StringLiteral}
+  {CharLiteral}
+  {Symbol}
+}
+
 @table(name                 basic_string          basic_byte_size)
 // NOTE(rjf): basic_byte_size == 0xFF? => address sized
 E_TypeKindTable:
@@ -131,6 +142,12 @@ E_InterpretationCodeTable:
   { MalformedBytecode       "Malformed bytecode." }
 }
 
+@enum E_TokenKind:
+{
+  @expand(E_TokenKindTable a) `$(a.name)`,
+  COUNT,
+}
+
 @enum E_TypeKind:
 {
   @expand(E_TypeKindTable a) `$(a.name)`,
@@ -157,6 +174,12 @@ E_InterpretationCodeTable:
 {
   @expand(E_InterpretationCodeTable a) `$(a.name)`,
   COUNT,
+}
+
+@data(String8)
+e_token_kind_strings:
+{
+  @expand(E_TokenKindTable a) `str8_lit_comp("$(a.name)")`
 }
 
 @data(String8)

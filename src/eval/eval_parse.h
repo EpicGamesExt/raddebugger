@@ -44,18 +44,6 @@ struct E_MsgList
 ////////////////////////////////
 //~ rjf: Token Types
 
-typedef enum E_TokenKind
-{
-  E_TokenKind_Null,
-  E_TokenKind_Identifier,
-  E_TokenKind_Numeric,
-  E_TokenKind_StringLiteral,
-  E_TokenKind_CharLiteral,
-  E_TokenKind_Symbol,
-  E_TokenKind_COUNT
-}
-E_TokenKind;
-
 typedef struct E_Token E_Token;
 struct E_Token
 {

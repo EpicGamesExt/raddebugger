@@ -4,6 +4,16 @@
 //- GENERATED CODE
 
 C_LINKAGE_BEGIN
+String8 e_token_kind_strings[6] =
+{
+str8_lit_comp("Null"),
+str8_lit_comp("Identifier"),
+str8_lit_comp("Numeric"),
+str8_lit_comp("StringLiteral"),
+str8_lit_comp("CharLiteral"),
+str8_lit_comp("Symbol"),
+};
+
 String8 e_expr_kind_strings[41] =
 {
 str8_lit_comp("Nil"),

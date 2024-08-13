@@ -2595,6 +2595,152 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
               df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Edit));
             }
             
+            // rjf: [DEV] hovering -> tooltips
+            if(DEV_eval_compiler_tooltips && ui_hovering(sig)) UI_Tooltip DF_Font(ws, DF_FontSlot_Code)
+            {
+              local_persist char *spaces = "                                                                        ";
+              String8         string      = row->display_expr;
+              E_TokenArray    tokens      = e_token_array_from_text(scratch.arena, string);
+              E_Parse         parse       = e_parse_expr_from_text_tokens(scratch.arena, string, &tokens);
+              E_IRTreeAndType irtree      = e_irtree_and_type_from_expr(scratch.arena, parse.expr);
+              E_OpList        oplist      = e_oplist_from_irtree(scratch.arena, irtree.root);
+              String8         bytecode    = e_bytecode_from_oplist(scratch.arena, &oplist);
+              UI_Flags(UI_BoxFlag_DrawTextWeak) ui_labelf("Text:");
+              ui_label(string);
+              ui_spacer(ui_em(2.f, 1.f));
+              UI_Flags(UI_BoxFlag_DrawTextWeak) ui_labelf("Tokens:");
+              for(U64 idx = 0; idx < tokens.count; idx += 1)
+              {
+                ui_labelf("%S: '%S'", e_token_kind_strings[tokens.v[idx].kind], str8_substr(string, tokens.v[idx].range));
+              }
+              ui_spacer(ui_em(2.f, 1.f));
+              UI_Flags(UI_BoxFlag_DrawTextWeak) ui_labelf("Expression:");
+              {
+                typedef struct Task Task;
+                struct Task
+                {
+                  Task *next;
+                  Task *prev;
+                  E_Expr *expr;
+                  S64 depth;
+                };
+                Task start_task = {0, 0, parse.expr};
+                Task *first_task = &start_task;
+                Task *last_task = first_task;
+                for(Task *t = first_task; t != 0; t = t->next)
+                {
+                  String8 ext = {0};
+                  switch(t->expr->kind)
+                  {
+                    default:
+                    {
+                      if(t->expr->string.size != 0)
+                      {
+                        ext = push_str8f(scratch.arena, "'%S'", t->expr->string);
+                      }
+                      else if(t->expr->u32 != 0)
+                      {
+                        ext = push_str8f(scratch.arena, "0x%x", t->expr->u32);
+                      }
+                      else if(t->expr->f32 != 0)
+                      {
+                        ext = push_str8f(scratch.arena, "%f", t->expr->f32);
+                      }
+                      else if(t->expr->f64 != 0)
+                      {
+                        ext = push_str8f(scratch.arena, "%f", t->expr->f64);
+                      }
+                      else if(t->expr->u64 != 0)
+                      {
+                        ext = push_str8f(scratch.arena, "0x%I64x", t->expr->u64);
+                      }
+                    }break;
+                  }
+                  ui_labelf("%.*s%S%s%S", (int)t->depth*2, spaces, e_expr_kind_strings[t->expr->kind], ext.size ? " " : "", ext);
+                  for(E_Expr *child = t->expr->first; child != &e_expr_nil; child = child->next)
+                  {
+                    Task *task = push_array(scratch.arena, Task, 1);
+                    task->expr = child;
+                    task->depth = t->depth+1;
+                    DLLInsert(first_task, last_task, t, task);
+                  }
+                }
+              }
+              ui_spacer(ui_em(2.f, 1.f));
+              UI_Flags(UI_BoxFlag_DrawTextWeak) ui_labelf("IR Tree:");
+              {
+                typedef struct Task Task;
+                struct Task
+                {
+                  Task *next;
+                  Task *prev;
+                  E_IRNode *node;
+                  S64 depth;
+                };
+                Task start_task = {0, 0, irtree.root};
+                Task *first_task = &start_task;
+                Task *last_task = first_task;
+                for(Task *t = first_task; t != 0; t = t->next)
+                {
+                  String8 op_string = {0};
+                  switch(t->node->op)
+                  {
+                    default:{}break;
+                    case E_IRExtKind_Data:{op_string = str8_lit("Data");}break;
+                    case E_IRExtKind_Bytecode:{op_string = str8_lit("Bytecode");}break;
+#define X(name) case RDI_EvalOp_##name:{op_string = str8_lit(#name);}break;
+                    RDI_EvalOp_XList
+#undef X
+                  }
+                  String8 ext = {0};
+                  ui_labelf("%.*s%S", (int)t->depth*2, spaces, op_string);
+                  for(E_IRNode *child = t->node->first; child != &e_irnode_nil; child = child->next)
+                  {
+                    Task *task = push_array(scratch.arena, Task, 1);
+                    task->node = child;
+                    task->depth = t->depth+1;
+                    DLLInsert(first_task, last_task, t, task);
+                  }
+                }
+              }
+              ui_spacer(ui_em(2.f, 1.f));
+              UI_Flags(UI_BoxFlag_DrawTextWeak) ui_labelf("Op List:");
+              {
+                for(E_Op *op = oplist.first; op != 0; op = op->next)
+                {
+                  String8 op_string = {0};
+                  switch(op->opcode)
+                  {
+                    default:{}break;
+                    case E_IRExtKind_Data:{op_string = str8_lit("Data");}break;
+                    case E_IRExtKind_Bytecode:{op_string = str8_lit("Bytecode");}break;
+#define X(name) case RDI_EvalOp_##name:{op_string = str8_lit(#name);}break;
+                    RDI_EvalOp_XList
+#undef X
+                  }
+                  String8 ext = {0};
+                  switch(op->opcode)
+                  {
+                    case E_IRExtKind_Data:{ext = push_str8f(scratch.arena, "'%S'", op->data);}break;
+                    case E_IRExtKind_Bytecode:{ext = str8_lit("[bytecode]");}break;
+                    default:
+                    {
+                      ext = str8_from_u64(scratch.arena, op->p, 16, 0, 0);
+                    }break;
+                  }
+                  ui_labelf("  %S%s%S", op_string, ext.size ? " " : "", ext);
+                }
+              }
+              ui_spacer(ui_em(2.f, 1.f));
+              UI_Flags(UI_BoxFlag_DrawTextWeak) ui_labelf("Bytecode:");
+              {
+                for(U64 idx = 0; idx < bytecode.size; idx += 1)
+                {
+                  ui_labelf("  0x%x ('%c')", (U32)bytecode.str[idx], (char)bytecode.str[idx]);
+                }
+              }
+            }
+            
             // rjf: commit expansion state
             if(next_expanded != row_expanded)
             {
