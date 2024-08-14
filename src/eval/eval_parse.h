@@ -79,6 +79,27 @@ struct E_TokenArray
 ////////////////////////////////
 //~ rjf: Expression Tree Types
 
+typedef U64 E_Space;
+//
+// NOTE(rjf): Evaluations occur within the context of a "space". Each "space"
+// refers to a different offset or address space, but it's a bit looser of a
+// concept than just address space, since it can also refer to offsets into
+// a register block, only type information, or the "space" of all possibly
+// values. It is also used to refer to spaces of unique IDs for key-value
+// stores, e.g. for information in the debugger.
+//
+// Effectively, when considering the result of an evaluation, you use the
+// value for understanding a key *into* a space, e.g. 1+2 -> 3, in the space
+// of all values, or &foo, in the space of all addresses in PID: 1234.
+//
+enum
+{
+  E_Space_Null,
+  E_Space_Types,     // values are not used; evaluation only contain type content
+  E_Space_Values,    // values do not refer to any space, but are standalone numeric values
+  E_Space_Regs,      // values index into evaluator thread's register block
+};
+
 typedef enum E_Mode
 {
   E_Mode_Null,
@@ -97,6 +118,7 @@ struct E_Expr
   void *location;
   E_ExprKind kind;
   E_Mode mode;
+  E_Space space;
   E_TypeKey type_key;
   U32 u32;
   F32 f32;

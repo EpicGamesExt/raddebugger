@@ -3696,7 +3696,7 @@ df_eval_memory_read(void *u, void *out, Rng1U64 vaddr_range)
   if(process->kind == DF_EntityKind_Process)
   {
     Temp scratch = scratch_begin(0, 0);
-    CTRL_ProcessMemorySlice slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, vaddr_range, 0);
+    CTRL_ProcessMemorySlice slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, vaddr_range, df_state->frame_eval_memread_endt_us);
     String8 data = slice.data;
     if(data.size == dim_1u64(vaddr_range))
     {
@@ -6128,6 +6128,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
   df_state->frame_index += 1;
   arena_clear(df_frame_arena());
   df_state->frame_di_scope = di_scope_open();
+  df_state->frame_eval_memread_endt_us = os_now_microseconds() + 10000;
   df_state->dt = dt;
   df_state->time_in_seconds += dt;
   df_state->top_interact_regs = &df_state->base_interact_regs;

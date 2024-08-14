@@ -5,6 +5,12 @@
 //~ rjf: Frontend/UI Pass Tasks
 //
 // [x] fix HRESULTs
+//
+// [ ] EVAL LOOKUP RULES -> currently going 0 -> rdis_count, but we need
+// to prioritize the primary rdi
+// [ ] EVAL SPACES - each rdi gets an rdi space, rdi space is passed to
+// memory reads & so on, used to resolve to value space; REPLACES "mode"
+//
 // [ ] file overrides -> always pick most specific one! found with conflicting
 //     overrides, e.g. C:/devel/ -> D:/devel/, but also C:/devel/foo ->
 //     C:/devel/bar, etc.

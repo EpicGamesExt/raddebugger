@@ -1110,6 +1110,7 @@ struct DF_State
   // rjf: top-level state
   Arena *arena;
   U64 frame_index;
+  U64 frame_eval_memread_endt_us;
   F64 time_in_seconds;
   F32 dt;
   F32 seconds_til_autosave;
