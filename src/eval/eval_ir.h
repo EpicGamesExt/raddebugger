@@ -18,12 +18,8 @@ struct E_Op
 {
   E_Op *next;
   RDI_EvalOp opcode;
-  union
-  {
-    U64 p;
-    String8 bytecode;
-    String8 data;
-  };
+  U64 u64;
+  String8 string;
 };
 
 typedef struct E_OpList E_OpList;
@@ -93,6 +89,7 @@ internal void e_oplist_push_op(Arena *arena, E_OpList *list, RDI_EvalOp opcode, 
 internal void e_oplist_push_uconst(Arena *arena, E_OpList *list, U64 x);
 internal void e_oplist_push_sconst(Arena *arena, E_OpList *list, S64 x);
 internal void e_oplist_push_bytecode(Arena *arena, E_OpList *list, String8 bytecode);
+internal void e_oplist_push_string_literal(Arena *arena, E_OpList *list, String8 string);
 internal void e_oplist_concat_in_place(E_OpList *dst, E_OpList *to_push);
 
 //- rjf: ir tree core building helpers

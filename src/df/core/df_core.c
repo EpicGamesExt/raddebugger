@@ -4983,8 +4983,8 @@ df_eval_viz_block_list_from_eval_view_expr_keys(Arena *arena, DF_EvalView *eval_
   DF_EvalVizBlockList blocks = {0};
   {
     E_Eval eval = e_eval_from_string(arena, expr);
-    U64 expr_comma_pos = str8_find_needle(expr, 0, str8_lit(","), 0);
-    U64 passthrough_pos = str8_find_needle(expr, 0, str8_lit("--"), 0);
+    U64 expr_comma_pos = str8_find_needle(expr, eval.advance, str8_lit(","), 0);
+    U64 passthrough_pos = str8_find_needle(expr, eval.advance, str8_lit("--"), 0);
     String8List default_view_rules = {0};
     if(expr_comma_pos < expr.size && expr_comma_pos < passthrough_pos)
     {

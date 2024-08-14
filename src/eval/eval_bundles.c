@@ -19,6 +19,7 @@ e_eval_from_string(Arena *arena, String8 string)
     .mode     = irtree.mode,
     .type_key = irtree.type_key,
     .code     = interp.code,
+    .advance  = parse.last_token >= tokens.v + tokens.count ? string.size : parse.last_token->range.min,
   };
   e_msg_list_concat_in_place(&eval.msgs, &parse.msgs);
   e_msg_list_concat_in_place(&eval.msgs, &irtree.msgs);
@@ -199,4 +200,33 @@ e_value_eval_from_eval(E_Eval eval)
   }
   
   return eval;
+}
+
+internal E_Eval
+e_element_eval_from_array_eval_index(E_Eval eval, U64 index)
+{
+  E_Eval result = {0};
+  result.mode     = eval.mode;
+  result.type_key = e_type_direct_from_key(eval.type_key);
+  result.code     = eval.code;
+  result.msgs     = eval.msgs;
+  U64 element_size = e_type_byte_size_from_key(result.type_key);
+  switch(eval.mode)
+  {
+    default:{}break;
+    case E_Mode_Value:
+    if(element_size <= sizeof(E_Value) &&
+       index < sizeof(E_Value)/element_size)
+    {
+      MemoryCopy((U8 *)(&result.value.u512[0]),
+                 (U8 *)(&eval.value.u512[0]) + index*element_size,
+                 element_size);
+    }break;
+    case E_Mode_Addr:
+    case E_Mode_Reg:
+    {
+      result.value.u64 = eval.value.u64 + element_size*index;
+    }break;
+  }
+  return result;
 }

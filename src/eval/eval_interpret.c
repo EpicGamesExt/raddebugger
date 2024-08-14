@@ -206,6 +206,12 @@ e_interpret(String8 bytecode)
         nval.u64 = imm;
       }break;
       
+      case RDI_EvalOp_ConstString:
+      {
+        MemoryCopy(&nval, ptr, imm);
+        ptr += imm;
+      }break;
+      
       case RDI_EvalOp_Abs:
       {
         if(imm == RDI_EvalTypeGroup_F32)

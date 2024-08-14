@@ -8531,19 +8531,36 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
         B32 special_case = 0;
         
         // rjf: special-case: strings
-        if(!has_array && direct_type_is_string && eval.mode == E_Mode_Addr)
+        if(!has_array && direct_type_is_string)
         {
           special_case = 1;
           DF_Entity *thread = df_entity_from_handle(df_interact_regs()->thread);
           DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
           U64 element_size = e_type_byte_size_from_key(eval_type->direct_type_key);
-          CTRL_ProcessMemorySlice text_slice = ctrl_query_cached_zero_terminated_data_from_process_vaddr_limit(arena, process->ctrl_machine_id, process->ctrl_handle, eval.value.u64, 256, element_size, 0);
+          
+          // rjf: read text
+          String8 text_data = {0};
+          switch(eval.mode)
+          {
+            default:{}break;
+            case E_Mode_Addr:
+            {
+              CTRL_ProcessMemorySlice text_slice = ctrl_query_cached_zero_terminated_data_from_process_vaddr_limit(arena, process->ctrl_machine_id, process->ctrl_handle, eval.value.u64, 256, element_size, 0);
+              text_data = text_slice.data;
+            }break;
+            case E_Mode_Value:
+            {
+              text_data = str8_cstring_capped(&eval.value.u512[0], (U8 *)(&eval.value.u512[0]) + sizeof(eval.value.u512));
+            }break;
+          }
+          
+          // rjf: convert to utf-8 if needed
           String8 raw_text = {0};
           switch(element_size)
           {
-            default:{raw_text = text_slice.data;}break;
-            case 2: {raw_text = str8_from_16(arena, str16((U16 *)text_slice.data.str, text_slice.data.size/sizeof(U16)));}break;
-            case 4: {raw_text = str8_from_32(arena, str32((U32 *)text_slice.data.str, text_slice.data.size/sizeof(U32)));}break;
+            default:{raw_text = text_data;}break;
+            case 2: {raw_text = str8_from_16(arena, str16((U16 *)text_data.str, text_data.size/sizeof(U16)));}break;
+            case 4: {raw_text = str8_from_32(arena, str32((U32 *)text_data.str, text_data.size/sizeof(U32)));}break;
           }
           String8 text = df_eval_escaped_from_raw_string(arena, raw_text);
           space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, text).x;
@@ -8569,11 +8586,7 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
             U64 direct_type_byte_size = e_type_byte_size_from_key(direct_type_key);
             for(U64 idx = 0; idx < array_count && max_size > space_taken; idx += 1)
             {
-              E_Eval element_eval = zero_struct;
-              element_eval.type_key = direct_type_key;
-              element_eval.mode     = eval.mode;
-              element_eval.value    = eval.value;
-              element_eval.value.u64 += direct_type_byte_size*idx;
+              E_Eval element_eval = e_element_eval_from_array_eval_index(eval, idx);
               String8List element_strs = df_single_line_eval_value_strings_from_eval(arena, flags, default_radix, font, font_size, max_size-space_taken, depth+1, element_eval, opt_member, cfg_table);
               space_taken += f_dim_from_tag_size_string_list(font, font_size, 0, 0, element_strs).x;
               str8_list_concat_in_place(&list, &element_strs);
@@ -8937,13 +8950,7 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DI_Scope *scope,
           DF_ExpandKey key = df_expand_key_make(df_hash_from_expand_key(block->parent_key), idx+1);
           
           // rjf: get eval for this element
-          E_Eval elem_eval = zero_struct;
-          {
-            elem_eval.type_key = direct_type_key;
-            elem_eval.mode     = block->eval.mode;
-            elem_eval.value    = block->eval.value;
-            elem_eval.value.u64 += idx*direct_type_key_byte_size;
-          }
+          E_Eval elem_eval = e_element_eval_from_array_eval_index(block->eval, idx);
           
           // rjf: get view rules
           String8 view_rule_string = df_eval_view_rule_from_key(eval_view, key);

@@ -2722,7 +2722,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                     case E_IRExtKind_Bytecode:{ext = str8_lit("[bytecode]");}break;
                     default:
                     {
-                      ext = str8_from_u64(scratch.arena, op->p, 16, 0, 0);
+                      ext = str8_from_u64(scratch.arena, op->u64, 16, 0, 0);
                     }break;
                   }
                   ui_labelf("  %S%s%S", op_string, ext.size ? " " : "", ext);

@@ -82,7 +82,7 @@ e_oplist_push_op(Arena *arena, E_OpList *list, RDI_EvalOp opcode, U64 p)
   U32 p_size = RDI_DECODEN_FROM_CTRLBITS(ctrlbits);
   E_Op *node = push_array_no_zero(arena, E_Op, 1);
   node->opcode = opcode;
-  node->p = p;
+  node->u64 = p;
   SLLQueuePush(list->first, list->last, node);
   list->op_count += 1;
   list->encoded_size += 1 + p_size;
@@ -127,10 +127,25 @@ e_oplist_push_bytecode(Arena *arena, E_OpList *list, String8 bytecode)
 {
   E_Op *node = push_array_no_zero(arena, E_Op, 1);
   node->opcode = E_IRExtKind_Bytecode;
-  node->bytecode = bytecode;
+  node->string = bytecode;
   SLLQueuePush(list->first, list->last, node);
   list->op_count += 1;
   list->encoded_size += bytecode.size;
+}
+
+internal void
+e_oplist_push_string_literal(Arena *arena, E_OpList *list, String8 string)
+{
+  RDI_EvalOp opcode = RDI_EvalOp_ConstString;
+  U8 ctrlbits = rdi_eval_op_ctrlbits_table[opcode];
+  U32 p_size = RDI_DECODEN_FROM_CTRLBITS(ctrlbits);
+  E_Op *node = push_array_no_zero(arena, E_Op, 1);
+  node->opcode = opcode;
+  node->string = string;
+  node->u64 = Min(string.size, 64);
+  SLLQueuePush(list->first, list->last, node);
+  list->op_count += 1;
+  list->encoded_size += 1 + p_size + node->u64;
 }
 
 internal void
@@ -231,8 +246,8 @@ e_irtree_bytecode_no_copy(Arena *arena, String8 bytecode)
 internal E_IRNode *
 e_irtree_string_literal(Arena *arena, String8 string)
 {
-  E_IRNode *root = e_push_irnode(arena, RDI_EvalOp_ConstU512);
-  root->string = str8(string.str, Min(64, string.size));
+  E_IRNode *root = e_push_irnode(arena, RDI_EvalOp_ConstString);
+  root->string = string;
   return root;
 }
 
@@ -1138,13 +1153,6 @@ e_append_oplist_from_irtree(Arena *arena, E_IRNode *root, E_OpList *out)
       e_oplist_push_bytecode(arena, out, root->string);
     }break;
     
-    case RDI_EvalOp_ConstU128:
-    case RDI_EvalOp_ConstU256:
-    case RDI_EvalOp_ConstU512:
-    {
-      // TODO(rjf)
-    }break;
-    
     case RDI_EvalOp_Cond:
     {
       // rjf: generate oplists for each child
@@ -1169,6 +1177,11 @@ e_append_oplist_from_irtree(Arena *arena, E_IRNode *root, E_OpList *out)
       
       // rjf: merge 3 into out
       e_oplist_concat_in_place(out, &prt_left);
+    }break;
+    
+    case RDI_EvalOp_ConstString:
+    {
+      e_oplist_push_string_literal(arena, out, root->string);
     }break;
     
     default:
@@ -1232,7 +1245,22 @@ e_bytecode_from_oplist(Arena *arena, E_OpList *oplist)
         
         // rjf: fill bytecode
         ptr[0] = opcode;
-        MemoryCopy(ptr + 1, &op->p, extra_byte_count);
+        MemoryCopy(ptr + 1, &op->u64, extra_byte_count);
+        
+        // rjf: advance
+        ptr = next_ptr;
+      }break;
+      
+      case RDI_EvalOp_ConstString:
+      {
+        // rjf: compute bytecode advance
+        U8 *next_ptr = ptr + 2 + op->u64;
+        Assert(next_ptr <= opl);
+        
+        // rjf: fill
+        ptr[0] = opcode;
+        ptr[1] = (U8)op->u64;
+        MemoryCopy(ptr+2, op->string.str, op->u64);
         
         // rjf: advance
         ptr = next_ptr;
@@ -1241,12 +1269,12 @@ e_bytecode_from_oplist(Arena *arena, E_OpList *oplist)
       case E_IRExtKind_Bytecode:
       {
         // rjf: compute bytecode advance
-        U64 size = op->bytecode.size;
+        U64 size = op->string.size;
         U8 *next_ptr = ptr + size;
         Assert(next_ptr <= opl);
         
         // rjf: fill bytecode
-        MemoryCopy(ptr, op->bytecode.str, size);
+        MemoryCopy(ptr, op->string.str, size);
         
         // rjf: advance
         ptr = next_ptr;
