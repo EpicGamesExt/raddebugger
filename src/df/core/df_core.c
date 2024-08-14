@@ -7739,7 +7739,9 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
                       }
                       
                       // rjf: specifically named entity equipment
-                      if(str8_match(child->string, str8_lit("name"), StringMatchFlag_CaseInsensitive) && child->first != &df_g_nil_cfg_node)
+                      if((str8_match(child->string, str8_lit("name"), StringMatchFlag_CaseInsensitive) ||
+                          str8_match(child->string, str8_lit("label"), StringMatchFlag_CaseInsensitive)) &&
+                         child->first != &df_g_nil_cfg_node)
                       {
                         String8 string = df_cfg_raw_from_escaped_string(scratch.arena, child->first->string);
                         if(df_g_entity_kind_flags_table[t->entity->kind] & DF_EntityKindFlag_NameIsPath)
@@ -7748,9 +7750,24 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
                         }
                         df_entity_equip_name(t->entity, string);
                       }
+                      if((str8_match(child->string, str8_lit("active"), StringMatchFlag_CaseInsensitive) ||
+                          str8_match(child->string, str8_lit("enabled"), StringMatchFlag_CaseInsensitive)) &&
+                         child->first != &df_g_nil_cfg_node)
+                      {
+                        df_entity_equip_disabled(t->entity, !str8_match(child->first->string, str8_lit("1"), 0));
+                      }
                       if(str8_match(child->string, str8_lit("disabled"), StringMatchFlag_CaseInsensitive) && child->first != &df_g_nil_cfg_node)
                       {
                         df_entity_equip_disabled(t->entity, str8_match(child->first->string, str8_lit("1"), 0));
+                      }
+                      if(str8_match(child->string, str8_lit("hsva"), StringMatchFlag_CaseInsensitive) && child->first != &df_g_nil_cfg_node)
+                      {
+                        Vec4F32 hsva = {0};
+                        hsva.x = (F32)f64_from_str8(child->first->string);
+                        hsva.y = (F32)f64_from_str8(child->first->next->string);
+                        hsva.z = (F32)f64_from_str8(child->first->next->next->string);
+                        hsva.w = (F32)f64_from_str8(child->first->next->next->next->string);
+                        df_entity_equip_color_hsva(t->entity, hsva);
                       }
                       if(str8_match(child->string, str8_lit("color"), StringMatchFlag_CaseInsensitive) && child->first != &df_g_nil_cfg_node)
                       {
@@ -7765,7 +7782,9 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
                         TxtPt pt = txt_pt(line, 1);
                         df_entity_equip_txt_pt(t->entity, pt);
                       }
-                      if(str8_match(child->string, str8_lit("vaddr"), StringMatchFlag_CaseInsensitive) && child->first != &df_g_nil_cfg_node)
+                      if((str8_match(child->string, str8_lit("vaddr"), StringMatchFlag_CaseInsensitive) ||
+                          str8_match(child->string, str8_lit("addr"), StringMatchFlag_CaseInsensitive)) &&
+                         child->first != &df_g_nil_cfg_node)
                       {
                         U64 vaddr = 0;
                         try_u64_from_str8_c_rules(child->first->string, &vaddr);

@@ -1078,9 +1078,9 @@ ui_end_build(void)
     ui_ctx_menu_close();
   }
   
-  //- rjf: prune untouched or transient widgets in the cache
+  //- rjf: prune untouched or transient boxes in the cache
+  ProfScope("ui prune unused boxes")
   {
-    ProfBegin("ui prune unused widgets");
     for(U64 slot_idx = 0; slot_idx < ui_state->box_table_size; slot_idx += 1)
     {
       for(UI_Box *box = ui_state->box_table[slot_idx].hash_first, *next = 0;
@@ -1096,17 +1096,15 @@ ui_end_build(void)
         }
       }
     }
-    ProfEnd();
   }
   
   //- rjf: layout box tree
+  ProfScope("ui box tree layout")
   {
-    ProfBegin("ui box tree layout");
     for(Axis2 axis = (Axis2)0; axis < Axis2_COUNT; axis = (Axis2)(axis + 1))
     {
       ui_layout_root(ui_state->root, axis);
     }
-    ProfEnd();
   }
   
   //- rjf: close ctx menu if untouched
