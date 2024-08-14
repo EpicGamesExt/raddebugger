@@ -1873,7 +1873,6 @@ txt_expr_off_range_from_line_off_range_string_tokens(U64 off, Rng1U64 line_range
           }break;
           case TXT_TokenKind_Identifier:
           case TXT_TokenKind_Keyword:
-          case TXT_TokenKind_String:
           case TXT_TokenKind_Meta:
           {
             token_ender = 1;

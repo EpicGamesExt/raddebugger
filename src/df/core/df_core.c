@@ -7239,24 +7239,24 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         //- rjf: high-level composite target control operations
         case DF_CoreCmdKind_RunToLine:
         {
-          DF_Entity *file = df_entity_from_handle(params.entity);
+          String8 file_path = params.file_path;
           TxtPt point = params.text_point;
-          if(file->kind == DF_EntityKind_File)
-          {
-            DF_Entity *bp = df_entity_alloc(file, DF_EntityKind_Breakpoint);
-            bp->flags |= DF_EntityFlag_DiesOnRunStop;
-            df_entity_equip_txt_pt(bp, point);
-            df_entity_equip_cfg_src(bp, DF_CfgSrc_Transient);
-            DF_CmdParams p = df_cmd_params_zero();
-            df_cmd_list_push(arena, cmds, &p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Run));
-          }
+          DF_Entity *bp = df_entity_alloc(df_entity_root(), DF_EntityKind_Breakpoint);
+          df_entity_equip_cfg_src(bp, DF_CfgSrc_Transient);
+          bp->flags |= DF_EntityFlag_DiesOnRunStop;
+          DF_Entity *loc = df_entity_alloc(bp, DF_EntityKind_Location);
+          df_entity_equip_name(loc, file_path);
+          df_entity_equip_txt_pt(loc, point);
+          DF_CmdParams p = df_cmd_params_zero();
+          df_cmd_list_push(arena, cmds, &p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Run));
         }break;
         case DF_CoreCmdKind_RunToAddress:
         {
           DF_Entity *bp = df_entity_alloc(df_entity_root(), DF_EntityKind_Breakpoint);
-          bp->flags |= DF_EntityFlag_DiesOnRunStop;
-          df_entity_equip_vaddr(bp, params.vaddr);
           df_entity_equip_cfg_src(bp, DF_CfgSrc_Transient);
+          bp->flags |= DF_EntityFlag_DiesOnRunStop;
+          DF_Entity *loc = df_entity_alloc(bp, DF_EntityKind_Location);
+          df_entity_equip_vaddr(loc, params.vaddr);
           DF_CmdParams p = df_cmd_params_zero();
           df_cmd_list_push(arena, cmds, &p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Run));
         }break;

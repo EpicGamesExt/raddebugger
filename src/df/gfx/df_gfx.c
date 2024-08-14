@@ -11968,6 +11968,7 @@ df_code_slice(DF_Window *ws, DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *m
   TxtRng mouse_expr_rng = {0};
   Vec2F32 mouse_expr_baseline_pos = {0};
   String8 mouse_expr = {0};
+  B32 mouse_expr_is_explicit = 0;
   if(ui_hovering(text_container_sig) && contains_1s64(params->line_num_range, mouse_pt.line)) ProfScope("mouse -> expression range")
   {
     TxtRng selected_rng = txt_rng(*cursor, *mark);
@@ -11982,6 +11983,7 @@ df_code_slice(DF_Window *ws, DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *m
       result.mouse_expr_baseline_pos = mouse_expr_baseline_pos = v2f32(text_container_box->rect.x0+expr_hoff_px,
                                                                        text_container_box->rect.y0+line_slice_idx*params->line_height_px + params->line_height_px*0.85f);
       mouse_expr = str8_substr(line_text, r1u64(selected_rng.min.column-1, selected_rng.max.column-1));
+      mouse_expr_is_explicit = 1;
     }
     else
     {
@@ -12027,7 +12029,7 @@ df_code_slice(DF_Window *ws, DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *m
   if(!ui_dragging(text_container_sig) && text_container_sig.event_flags == 0 && mouse_expr.size != 0)
   {
     E_Eval eval = e_eval_from_string(scratch.arena, mouse_expr);
-    if(eval.mode != E_Mode_Null)
+    if(eval.msgs.max_kind == E_MsgKind_Null && (eval.mode != E_Mode_Null || mouse_expr_is_explicit))
     {
       U64 line_vaddr = 0;
       if(contains_1s64(params->line_num_range, mouse_pt.line))
