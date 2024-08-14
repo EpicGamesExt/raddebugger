@@ -1588,6 +1588,8 @@ internal String8 df_eval_view_rule_from_key(DF_EvalView *eval_view, DF_ExpandKey
 
 //- rjf: evaluation value string builder helpers
 internal String8 df_string_from_ascii_value(Arena *arena, U8 val);
+internal String8 df_string_from_hresult_facility_code(U32 code);
+internal String8 df_string_from_hresult_code(U32 code);
 internal String8 df_string_from_simple_typed_eval(Arena *arena, DF_EvalVizStringFlags flags, U32 radix, E_Eval eval);
 
 //- rjf: writing values back to child processes

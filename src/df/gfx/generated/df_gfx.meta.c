@@ -118,22 +118,26 @@ DF_StringBindingPair df_g_default_binding_table[110] =
 {str8_lit_comp("log_marker"), {OS_Key_M, 0 |OS_EventFlag_Ctrl |OS_EventFlag_Shift |OS_EventFlag_Alt}},
 };
 
-String8 df_g_binding_version_remap_old_name_table[5] =
+String8 df_g_binding_version_remap_old_name_table[7] =
 {
 str8_lit_comp("commands"),
 str8_lit_comp("load_user"),
 str8_lit_comp("load_profile"),
 str8_lit_comp("load_project"),
 str8_lit_comp("open_profile"),
+str8_lit_comp("address_breakpoint"),
+str8_lit_comp("function_breakpoint"),
 };
 
-String8 df_g_binding_version_remap_new_name_table[5] =
+String8 df_g_binding_version_remap_new_name_table[7] =
 {
 str8_lit_comp("run_command"),
 str8_lit_comp("open_user"),
 str8_lit_comp("open_profile"),
 str8_lit_comp("open_project"),
 str8_lit_comp("open_project"),
+str8_lit_comp("add_address_breakpoint"),
+str8_lit_comp("add_function_breakpoint"),
 };
 
 DF_ViewSpecInfo df_g_gfx_view_kind_spec_info_table[31] =
@@ -201,7 +205,7 @@ str8_lit_comp(""),
 str8_lit_comp(""),
 str8_lit_comp(""),
 str8_lit_comp("goto_name"),
-str8_lit_comp("function_breakpoint"),
+str8_lit_comp("add_function_breakpoint"),
 };
 
 DF_ViewSpecInfo df_g_gfx_view_rule_tab_view_spec_info_table[4] =

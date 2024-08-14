@@ -32,7 +32,7 @@ Rng1U64 df_g_cmd_param_slot_range_table[24] =
 {OffsetOf(DF_CmdParams, inline_depth), OffsetOf(DF_CmdParams, inline_depth) + sizeof(U64)},
 };
 
-DF_IconKind df_g_entity_kind_icon_kind_table[28] =
+DF_IconKind df_g_entity_kind_icon_kind_table[30] =
 {
 DF_IconKind_Null,
 DF_IconKind_Null,
@@ -40,6 +40,8 @@ DF_IconKind_Machine,
 DF_IconKind_FileOutline,
 DF_IconKind_FileOutline,
 DF_IconKind_Binoculars,
+DF_IconKind_Null,
+DF_IconKind_Null,
 DF_IconKind_Pin,
 DF_IconKind_Binoculars,
 DF_IconKind_Binoculars,
@@ -64,7 +66,7 @@ DF_IconKind_Null,
 DF_IconKind_Null,
 };
 
-String8 df_g_entity_kind_display_string_table[28] =
+String8 df_g_entity_kind_display_string_table[30] =
 {
 str8_lit_comp("Nil"),
 str8_lit_comp("Root"),
@@ -72,6 +74,8 @@ str8_lit_comp("Machine"),
 str8_lit_comp("File"),
 str8_lit_comp("Override File Link"),
 str8_lit_comp("Auto View Rule"),
+str8_lit_comp("Source Path"),
+str8_lit_comp("Destination Path"),
 str8_lit_comp("Watch Pin"),
 str8_lit_comp("Watch"),
 str8_lit_comp("View Rule"),
@@ -96,7 +100,7 @@ str8_lit_comp("Conversion Failure"),
 str8_lit_comp("EndedProcess"),
 };
 
-String8 df_g_entity_kind_name_lower_table[28] =
+String8 df_g_entity_kind_name_lower_table[30] =
 {
 str8_lit_comp("nil"),
 str8_lit_comp("root"),
@@ -104,6 +108,8 @@ str8_lit_comp("machine"),
 str8_lit_comp("file"),
 str8_lit_comp("override_file_link"),
 str8_lit_comp("auto_view_rule"),
+str8_lit_comp("source_path"),
+str8_lit_comp("dest_path"),
 str8_lit_comp("watch_pin"),
 str8_lit_comp("watch"),
 str8_lit_comp("view_rule"),
@@ -128,7 +134,7 @@ str8_lit_comp("conversion_fail"),
 str8_lit_comp("ended_process"),
 };
 
-String8 df_g_entity_kind_name_label_table[28] =
+String8 df_g_entity_kind_name_label_table[30] =
 {
 str8_lit_comp("Label"),
 str8_lit_comp("Label"),
@@ -136,6 +142,8 @@ str8_lit_comp("Label"),
 str8_lit_comp("Label"),
 str8_lit_comp("Label"),
 str8_lit_comp("Label"),
+str8_lit_comp("Path"),
+str8_lit_comp("Path"),
 str8_lit_comp("Expression"),
 str8_lit_comp("Expression"),
 str8_lit_comp("Expression"),
@@ -160,7 +168,7 @@ str8_lit_comp("Label"),
 str8_lit_comp("Label"),
 };
 
-DF_EntityKindFlags df_g_entity_kind_flags_table[28] =
+DF_EntityKindFlags df_g_entity_kind_flags_table[30] =
 {
 (0*DF_EntityKindFlag_CanDelete) | (0*DF_EntityKindFlag_CanFreeze) | (0*DF_EntityKindFlag_CanEdit) | (0*DF_EntityKindFlag_CanRename) | (0*DF_EntityKindFlag_CanEnable) | (0*DF_EntityKindFlag_CanCondition) | (0*DF_EntityKindFlag_CanDuplicate) | (0*DF_EntityKindFlag_LeafMutUserConfig | 0*DF_EntityKindFlag_LeafMutProjectConfig | 0*DF_EntityKindFlag_LeafMutSoftHalt | 0*DF_EntityKindFlag_LeafMutDebugInfoMap | 0*DF_EntityKindFlag_TreeMutUserConfig | 0*DF_EntityKindFlag_TreeMutProjectConfig | 0*DF_EntityKindFlag_TreeMutSoftHalt | 0*DF_EntityKindFlag_TreeMutDebugInfoMap | 0*DF_EntityKindFlag_NameIsCode | 0*DF_EntityKindFlag_NameIsPath | 0*DF_EntityKindFlag_UserDefinedLifetime),
 (0*DF_EntityKindFlag_CanDelete) | (0*DF_EntityKindFlag_CanFreeze) | (0*DF_EntityKindFlag_CanEdit) | (0*DF_EntityKindFlag_CanRename) | (0*DF_EntityKindFlag_CanEnable) | (0*DF_EntityKindFlag_CanCondition) | (0*DF_EntityKindFlag_CanDuplicate) | (0*DF_EntityKindFlag_LeafMutUserConfig | 0*DF_EntityKindFlag_LeafMutProjectConfig | 0*DF_EntityKindFlag_LeafMutSoftHalt | 0*DF_EntityKindFlag_LeafMutDebugInfoMap | 0*DF_EntityKindFlag_TreeMutUserConfig | 0*DF_EntityKindFlag_TreeMutProjectConfig | 0*DF_EntityKindFlag_TreeMutSoftHalt | 0*DF_EntityKindFlag_TreeMutDebugInfoMap | 0*DF_EntityKindFlag_NameIsCode | 0*DF_EntityKindFlag_NameIsPath | 0*DF_EntityKindFlag_UserDefinedLifetime),
@@ -168,6 +176,8 @@ DF_EntityKindFlags df_g_entity_kind_flags_table[28] =
 (0*DF_EntityKindFlag_CanDelete) | (0*DF_EntityKindFlag_CanFreeze) | (0*DF_EntityKindFlag_CanEdit) | (0*DF_EntityKindFlag_CanRename) | (0*DF_EntityKindFlag_CanEnable) | (0*DF_EntityKindFlag_CanCondition) | (0*DF_EntityKindFlag_CanDuplicate) | (0*DF_EntityKindFlag_LeafMutUserConfig | 0*DF_EntityKindFlag_LeafMutProjectConfig | 0*DF_EntityKindFlag_LeafMutSoftHalt | 0*DF_EntityKindFlag_LeafMutDebugInfoMap | 0*DF_EntityKindFlag_TreeMutUserConfig | 0*DF_EntityKindFlag_TreeMutProjectConfig | 0*DF_EntityKindFlag_TreeMutSoftHalt | 0*DF_EntityKindFlag_TreeMutDebugInfoMap | 0*DF_EntityKindFlag_NameIsCode | 0*DF_EntityKindFlag_NameIsPath | 0*DF_EntityKindFlag_UserDefinedLifetime),
 (0*DF_EntityKindFlag_CanDelete) | (0*DF_EntityKindFlag_CanFreeze) | (0*DF_EntityKindFlag_CanEdit) | (0*DF_EntityKindFlag_CanRename) | (0*DF_EntityKindFlag_CanEnable) | (0*DF_EntityKindFlag_CanCondition) | (0*DF_EntityKindFlag_CanDuplicate) | (1*DF_EntityKindFlag_LeafMutUserConfig | 0*DF_EntityKindFlag_LeafMutProjectConfig | 0*DF_EntityKindFlag_LeafMutSoftHalt | 0*DF_EntityKindFlag_LeafMutDebugInfoMap | 0*DF_EntityKindFlag_TreeMutUserConfig | 0*DF_EntityKindFlag_TreeMutProjectConfig | 0*DF_EntityKindFlag_TreeMutSoftHalt | 0*DF_EntityKindFlag_TreeMutDebugInfoMap | 0*DF_EntityKindFlag_NameIsCode | 0*DF_EntityKindFlag_NameIsPath | 0*DF_EntityKindFlag_UserDefinedLifetime),
 (0*DF_EntityKindFlag_CanDelete) | (0*DF_EntityKindFlag_CanFreeze) | (0*DF_EntityKindFlag_CanEdit) | (0*DF_EntityKindFlag_CanRename) | (0*DF_EntityKindFlag_CanEnable) | (0*DF_EntityKindFlag_CanCondition) | (0*DF_EntityKindFlag_CanDuplicate) | (0*DF_EntityKindFlag_LeafMutUserConfig | 0*DF_EntityKindFlag_LeafMutProjectConfig | 0*DF_EntityKindFlag_LeafMutSoftHalt | 0*DF_EntityKindFlag_LeafMutDebugInfoMap | 0*DF_EntityKindFlag_TreeMutUserConfig | 0*DF_EntityKindFlag_TreeMutProjectConfig | 0*DF_EntityKindFlag_TreeMutSoftHalt | 0*DF_EntityKindFlag_TreeMutDebugInfoMap | 0*DF_EntityKindFlag_NameIsCode | 0*DF_EntityKindFlag_NameIsPath | 1*DF_EntityKindFlag_UserDefinedLifetime),
+(0*DF_EntityKindFlag_CanDelete) | (0*DF_EntityKindFlag_CanFreeze) | (0*DF_EntityKindFlag_CanEdit) | (0*DF_EntityKindFlag_CanRename) | (0*DF_EntityKindFlag_CanEnable) | (0*DF_EntityKindFlag_CanCondition) | (0*DF_EntityKindFlag_CanDuplicate) | (0*DF_EntityKindFlag_LeafMutUserConfig | 0*DF_EntityKindFlag_LeafMutProjectConfig | 0*DF_EntityKindFlag_LeafMutSoftHalt | 0*DF_EntityKindFlag_LeafMutDebugInfoMap | 0*DF_EntityKindFlag_TreeMutUserConfig | 0*DF_EntityKindFlag_TreeMutProjectConfig | 0*DF_EntityKindFlag_TreeMutSoftHalt | 0*DF_EntityKindFlag_TreeMutDebugInfoMap | 0*DF_EntityKindFlag_NameIsCode | 0*DF_EntityKindFlag_NameIsPath | 0*DF_EntityKindFlag_UserDefinedLifetime),
+(0*DF_EntityKindFlag_CanDelete) | (0*DF_EntityKindFlag_CanFreeze) | (0*DF_EntityKindFlag_CanEdit) | (0*DF_EntityKindFlag_CanRename) | (0*DF_EntityKindFlag_CanEnable) | (0*DF_EntityKindFlag_CanCondition) | (0*DF_EntityKindFlag_CanDuplicate) | (0*DF_EntityKindFlag_LeafMutUserConfig | 0*DF_EntityKindFlag_LeafMutProjectConfig | 0*DF_EntityKindFlag_LeafMutSoftHalt | 0*DF_EntityKindFlag_LeafMutDebugInfoMap | 0*DF_EntityKindFlag_TreeMutUserConfig | 0*DF_EntityKindFlag_TreeMutProjectConfig | 0*DF_EntityKindFlag_TreeMutSoftHalt | 0*DF_EntityKindFlag_TreeMutDebugInfoMap | 0*DF_EntityKindFlag_NameIsCode | 0*DF_EntityKindFlag_NameIsPath | 0*DF_EntityKindFlag_UserDefinedLifetime),
 (1*DF_EntityKindFlag_CanDelete) | (0*DF_EntityKindFlag_CanFreeze) | (0*DF_EntityKindFlag_CanEdit) | (1*DF_EntityKindFlag_CanRename) | (0*DF_EntityKindFlag_CanEnable) | (0*DF_EntityKindFlag_CanCondition) | (1*DF_EntityKindFlag_CanDuplicate) | (0*DF_EntityKindFlag_LeafMutUserConfig | 0*DF_EntityKindFlag_LeafMutProjectConfig | 0*DF_EntityKindFlag_LeafMutSoftHalt | 0*DF_EntityKindFlag_LeafMutDebugInfoMap | 0*DF_EntityKindFlag_TreeMutUserConfig | 0*DF_EntityKindFlag_TreeMutProjectConfig | 0*DF_EntityKindFlag_TreeMutSoftHalt | 0*DF_EntityKindFlag_TreeMutDebugInfoMap | 1*DF_EntityKindFlag_NameIsCode | 0*DF_EntityKindFlag_NameIsPath | 1*DF_EntityKindFlag_UserDefinedLifetime),
 (1*DF_EntityKindFlag_CanDelete) | (0*DF_EntityKindFlag_CanFreeze) | (0*DF_EntityKindFlag_CanEdit) | (1*DF_EntityKindFlag_CanRename) | (1*DF_EntityKindFlag_CanEnable) | (0*DF_EntityKindFlag_CanCondition) | (1*DF_EntityKindFlag_CanDuplicate) | (0*DF_EntityKindFlag_LeafMutUserConfig | 0*DF_EntityKindFlag_LeafMutProjectConfig | 0*DF_EntityKindFlag_LeafMutSoftHalt | 0*DF_EntityKindFlag_LeafMutDebugInfoMap | 0*DF_EntityKindFlag_TreeMutUserConfig | 0*DF_EntityKindFlag_TreeMutProjectConfig | 0*DF_EntityKindFlag_TreeMutSoftHalt | 0*DF_EntityKindFlag_TreeMutDebugInfoMap | 1*DF_EntityKindFlag_NameIsCode | 0*DF_EntityKindFlag_NameIsPath | 1*DF_EntityKindFlag_UserDefinedLifetime),
 (1*DF_EntityKindFlag_CanDelete) | (0*DF_EntityKindFlag_CanFreeze) | (0*DF_EntityKindFlag_CanEdit) | (1*DF_EntityKindFlag_CanRename) | (1*DF_EntityKindFlag_CanEnable) | (0*DF_EntityKindFlag_CanCondition) | (1*DF_EntityKindFlag_CanDuplicate) | (0*DF_EntityKindFlag_LeafMutUserConfig | 0*DF_EntityKindFlag_LeafMutProjectConfig | 0*DF_EntityKindFlag_LeafMutSoftHalt | 0*DF_EntityKindFlag_LeafMutDebugInfoMap | 0*DF_EntityKindFlag_TreeMutUserConfig | 0*DF_EntityKindFlag_TreeMutProjectConfig | 0*DF_EntityKindFlag_TreeMutSoftHalt | 0*DF_EntityKindFlag_TreeMutDebugInfoMap | 1*DF_EntityKindFlag_NameIsCode | 0*DF_EntityKindFlag_NameIsPath | 1*DF_EntityKindFlag_UserDefinedLifetime),
@@ -224,7 +234,7 @@ DF_CoreCmdKind_Null,
 DF_CoreCmdKind_Null,
 };
 
-DF_CmdSpecInfo df_g_core_cmd_kind_spec_info_table[222] =
+DF_CmdSpecInfo df_g_core_cmd_kind_spec_info_table[221] =
 {
 { str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp(""), (DF_CmdSpecFlag_ListInUI*0)|(DF_CmdSpecFlag_ListInIPCDocs*0), {DF_CmdParamSlot_Null, DF_EntityKind_Nil, (DF_CmdQueryFlag_AllowFiles*0)|(DF_CmdQueryFlag_AllowFolders*0)|(DF_CmdQueryFlag_CodeInput*0)|(DF_CmdQueryFlag_KeepOldInput*0)|(DF_CmdQueryFlag_SelectOldInput*0)|(DF_CmdQueryFlag_Required*0)}, DF_IconKind_Null},
 { str8_lit_comp("exit"), str8_lit_comp("Exits the debugger."), str8_lit_comp("quit,close,abort"), str8_lit_comp("Exit"), (DF_CmdSpecFlag_ListInUI*1)|(DF_CmdSpecFlag_ListInIPCDocs*1), {DF_CmdParamSlot_Null, DF_EntityKind_Nil, (DF_CmdQueryFlag_AllowFiles*0)|(DF_CmdQueryFlag_AllowFolders*0)|(DF_CmdQueryFlag_CodeInput*0)|(DF_CmdQueryFlag_KeepOldInput*0)|(DF_CmdQueryFlag_SelectOldInput*0)|(DF_CmdQueryFlag_Required*0)}, DF_IconKind_X},
@@ -390,11 +400,10 @@ DF_CmdSpecInfo df_g_core_cmd_kind_spec_info_table[222] =
 { str8_lit_comp("edit_entity"), str8_lit_comp("Opens the editor for an entity."), str8_lit_comp(""), str8_lit_comp("Edit Entity"), (DF_CmdSpecFlag_ListInUI*0)|(DF_CmdSpecFlag_ListInIPCDocs*0), {DF_CmdParamSlot_Null, DF_EntityKind_Nil, (DF_CmdQueryFlag_AllowFiles*0)|(DF_CmdQueryFlag_AllowFolders*0)|(DF_CmdQueryFlag_CodeInput*0)|(DF_CmdQueryFlag_KeepOldInput*0)|(DF_CmdQueryFlag_SelectOldInput*0)|(DF_CmdQueryFlag_Required*0)}, DF_IconKind_Null},
 { str8_lit_comp("duplicate_entity"), str8_lit_comp("Duplicates an entity."), str8_lit_comp(""), str8_lit_comp("Duplicate Entity"), (DF_CmdSpecFlag_ListInUI*0)|(DF_CmdSpecFlag_ListInIPCDocs*0), {DF_CmdParamSlot_Null, DF_EntityKind_Nil, (DF_CmdQueryFlag_AllowFiles*0)|(DF_CmdQueryFlag_AllowFolders*0)|(DF_CmdQueryFlag_CodeInput*0)|(DF_CmdQueryFlag_KeepOldInput*0)|(DF_CmdQueryFlag_SelectOldInput*0)|(DF_CmdQueryFlag_Required*0)}, DF_IconKind_Null},
 { str8_lit_comp("relocate_entity"), str8_lit_comp("Relocates an entity."), str8_lit_comp(""), str8_lit_comp("Relocate Entity"), (DF_CmdSpecFlag_ListInUI*0)|(DF_CmdSpecFlag_ListInIPCDocs*0), {DF_CmdParamSlot_Null, DF_EntityKind_Nil, (DF_CmdQueryFlag_AllowFiles*0)|(DF_CmdQueryFlag_AllowFolders*0)|(DF_CmdQueryFlag_CodeInput*0)|(DF_CmdQueryFlag_KeepOldInput*0)|(DF_CmdQueryFlag_SelectOldInput*0)|(DF_CmdQueryFlag_Required*0)}, DF_IconKind_Null},
-{ str8_lit_comp("add_breakpoint"), str8_lit_comp("Places a breakpoint at a given location (file path and line number, address, or symbol name)."), str8_lit_comp(""), str8_lit_comp("Add Breakpoint"), (DF_CmdSpecFlag_ListInUI*0)|(DF_CmdSpecFlag_ListInIPCDocs*0), {DF_CmdParamSlot_Null, DF_EntityKind_Nil, (DF_CmdQueryFlag_AllowFiles*0)|(DF_CmdQueryFlag_AllowFolders*0)|(DF_CmdQueryFlag_CodeInput*0)|(DF_CmdQueryFlag_KeepOldInput*0)|(DF_CmdQueryFlag_SelectOldInput*0)|(DF_CmdQueryFlag_Required*0)}, DF_IconKind_CircleFilled},
-{ str8_lit_comp("toggle_breakpoint"), str8_lit_comp("Places or removes a breakpoint at a given location (file path and line number, address, or symbol name)."), str8_lit_comp(""), str8_lit_comp("Toggle Breakpoint"), (DF_CmdSpecFlag_ListInUI*0)|(DF_CmdSpecFlag_ListInIPCDocs*0), {DF_CmdParamSlot_Null, DF_EntityKind_Nil, (DF_CmdQueryFlag_AllowFiles*0)|(DF_CmdQueryFlag_AllowFolders*0)|(DF_CmdQueryFlag_CodeInput*0)|(DF_CmdQueryFlag_KeepOldInput*0)|(DF_CmdQueryFlag_SelectOldInput*0)|(DF_CmdQueryFlag_Required*0)}, DF_IconKind_CircleFilled},
-{ str8_lit_comp("text_breakpoint"), str8_lit_comp("Places or removes a breakpoint on the specified line of source code."), str8_lit_comp(""), str8_lit_comp("Text Breakpoint"), (DF_CmdSpecFlag_ListInUI*0)|(DF_CmdSpecFlag_ListInIPCDocs*1), {DF_CmdParamSlot_FilePath, DF_EntityKind_Nil, (DF_CmdQueryFlag_AllowFiles*0)|(DF_CmdQueryFlag_AllowFolders*0)|(DF_CmdQueryFlag_CodeInput*0)|(DF_CmdQueryFlag_KeepOldInput*0)|(DF_CmdQueryFlag_SelectOldInput*0)|(DF_CmdQueryFlag_Required*0)}, DF_IconKind_CircleFilled},
-{ str8_lit_comp("address_breakpoint"), str8_lit_comp("Places or removes a breakpoint on the specified address."), str8_lit_comp(""), str8_lit_comp("Address Breakpoint"), (DF_CmdSpecFlag_ListInUI*1)|(DF_CmdSpecFlag_ListInIPCDocs*1), {DF_CmdParamSlot_VirtualAddr, DF_EntityKind_Nil, (DF_CmdQueryFlag_AllowFiles*0)|(DF_CmdQueryFlag_AllowFolders*0)|(DF_CmdQueryFlag_CodeInput*1)|(DF_CmdQueryFlag_KeepOldInput*0)|(DF_CmdQueryFlag_SelectOldInput*0)|(DF_CmdQueryFlag_Required*1)}, DF_IconKind_CircleFilled},
-{ str8_lit_comp("function_breakpoint"), str8_lit_comp("Places or removes a breakpoint on the first address(es) of the specified function."), str8_lit_comp(""), str8_lit_comp("Function Breakpoint"), (DF_CmdSpecFlag_ListInUI*1)|(DF_CmdSpecFlag_ListInIPCDocs*1), {DF_CmdParamSlot_String, DF_EntityKind_Nil, (DF_CmdQueryFlag_AllowFiles*0)|(DF_CmdQueryFlag_AllowFolders*0)|(DF_CmdQueryFlag_CodeInput*1)|(DF_CmdQueryFlag_KeepOldInput*0)|(DF_CmdQueryFlag_SelectOldInput*0)|(DF_CmdQueryFlag_Required*1)}, DF_IconKind_CircleFilled},
+{ str8_lit_comp("add_breakpoint"), str8_lit_comp("Places a breakpoint at a given location (file path and line number, address, or symbol name)."), str8_lit_comp(""), str8_lit_comp("Add Breakpoint"), (DF_CmdSpecFlag_ListInUI*0)|(DF_CmdSpecFlag_ListInIPCDocs*1), {DF_CmdParamSlot_Null, DF_EntityKind_Nil, (DF_CmdQueryFlag_AllowFiles*0)|(DF_CmdQueryFlag_AllowFolders*0)|(DF_CmdQueryFlag_CodeInput*0)|(DF_CmdQueryFlag_KeepOldInput*0)|(DF_CmdQueryFlag_SelectOldInput*0)|(DF_CmdQueryFlag_Required*0)}, DF_IconKind_CircleFilled},
+{ str8_lit_comp("add_address_breakpoint"), str8_lit_comp("Places a breakpoint on the specified address."), str8_lit_comp(""), str8_lit_comp("Add Address Breakpoint"), (DF_CmdSpecFlag_ListInUI*1)|(DF_CmdSpecFlag_ListInIPCDocs*0), {DF_CmdParamSlot_VirtualAddr, DF_EntityKind_Nil, (DF_CmdQueryFlag_AllowFiles*0)|(DF_CmdQueryFlag_AllowFolders*0)|(DF_CmdQueryFlag_CodeInput*1)|(DF_CmdQueryFlag_KeepOldInput*0)|(DF_CmdQueryFlag_SelectOldInput*0)|(DF_CmdQueryFlag_Required*1)}, DF_IconKind_CircleFilled},
+{ str8_lit_comp("add_function_breakpoint"), str8_lit_comp("Places a breakpoint on the first address(es) of the specified function."), str8_lit_comp(""), str8_lit_comp("Add Function Breakpoint"), (DF_CmdSpecFlag_ListInUI*1)|(DF_CmdSpecFlag_ListInIPCDocs*0), {DF_CmdParamSlot_String, DF_EntityKind_Nil, (DF_CmdQueryFlag_AllowFiles*0)|(DF_CmdQueryFlag_AllowFolders*0)|(DF_CmdQueryFlag_CodeInput*1)|(DF_CmdQueryFlag_KeepOldInput*0)|(DF_CmdQueryFlag_SelectOldInput*0)|(DF_CmdQueryFlag_Required*1)}, DF_IconKind_CircleFilled},
+{ str8_lit_comp("toggle_breakpoint"), str8_lit_comp("Places or removes a breakpoint at a given location (file path and line number, address, or symbol name)."), str8_lit_comp(""), str8_lit_comp("Toggle Breakpoint"), (DF_CmdSpecFlag_ListInUI*0)|(DF_CmdSpecFlag_ListInIPCDocs*1), {DF_CmdParamSlot_Null, DF_EntityKind_Nil, (DF_CmdQueryFlag_AllowFiles*0)|(DF_CmdQueryFlag_AllowFolders*0)|(DF_CmdQueryFlag_CodeInput*0)|(DF_CmdQueryFlag_KeepOldInput*0)|(DF_CmdQueryFlag_SelectOldInput*0)|(DF_CmdQueryFlag_Required*0)}, DF_IconKind_CircleFilled},
 { str8_lit_comp("toggle_breakpoint_cursor"), str8_lit_comp("Places or removes a breakpoint on the line on which the active cursor sits."), str8_lit_comp(""), str8_lit_comp("Toggle Breakpoint At Cursor"), (DF_CmdSpecFlag_ListInUI*1)|(DF_CmdSpecFlag_ListInIPCDocs*1), {DF_CmdParamSlot_Null, DF_EntityKind_Nil, (DF_CmdQueryFlag_AllowFiles*0)|(DF_CmdQueryFlag_AllowFolders*0)|(DF_CmdQueryFlag_CodeInput*0)|(DF_CmdQueryFlag_KeepOldInput*0)|(DF_CmdQueryFlag_SelectOldInput*0)|(DF_CmdQueryFlag_Required*0)}, DF_IconKind_CircleFilled},
 { str8_lit_comp("remove_breakpoint"), str8_lit_comp("Removes an existing breakpoint."), str8_lit_comp(""), str8_lit_comp("Remove Breakpoint"), (DF_CmdSpecFlag_ListInUI*1)|(DF_CmdSpecFlag_ListInIPCDocs*1), {DF_CmdParamSlot_Entity, DF_EntityKind_Breakpoint, (DF_CmdQueryFlag_AllowFiles*0)|(DF_CmdQueryFlag_AllowFolders*0)|(DF_CmdQueryFlag_CodeInput*0)|(DF_CmdQueryFlag_KeepOldInput*0)|(DF_CmdQueryFlag_SelectOldInput*0)|(DF_CmdQueryFlag_Required*1)}, DF_IconKind_Trash},
 { str8_lit_comp("enable_breakpoint"), str8_lit_comp("Enables a breakpoint."), str8_lit_comp(""), str8_lit_comp("Enable Breakpoint"), (DF_CmdSpecFlag_ListInUI*1)|(DF_CmdSpecFlag_ListInIPCDocs*1), {DF_CmdParamSlot_Entity, DF_EntityKind_Breakpoint, (DF_CmdQueryFlag_AllowFiles*0)|(DF_CmdQueryFlag_AllowFolders*0)|(DF_CmdQueryFlag_CodeInput*0)|(DF_CmdQueryFlag_KeepOldInput*0)|(DF_CmdQueryFlag_SelectOldInput*0)|(DF_CmdQueryFlag_Required*1)}, DF_IconKind_CheckFilled},

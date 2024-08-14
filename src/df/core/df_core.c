@@ -4104,6 +4104,158 @@ df_string_from_ascii_value(Arena *arena, U8 val)
 }
 
 internal String8
+df_string_from_hresult_facility_code(U32 code)
+{
+  String8 result = {0};
+  switch(code)
+  {
+    default:{}break;
+    case 0x1:{result = str8_lit("RPC");}break;
+    case 0x2:{result = str8_lit("DISPATCH");}break;
+    case 0x3:{result = str8_lit("STORAGE");}break;
+    case 0x4:{result = str8_lit("ITF");}break;
+    case 0x7:{result = str8_lit("WIN32");}break;
+    case 0x8:{result = str8_lit("WINDOWS");}break;
+    case 0x9:{result = str8_lit("SECURITY|SSPI");}break;
+    case 0xA:{result = str8_lit("CONTROL");}break;
+    case 0xB:{result = str8_lit("CERT");}break;
+    case 0xC:{result = str8_lit("INTERNET");}break;
+    case 0xD:{result = str8_lit("MEDIASERVER");}break;
+    case 0xE:{result = str8_lit("MSMQ");}break;
+    case 0xF:{result = str8_lit("SETUPAPI");}break;
+    case 0x10:{result = str8_lit("SCARD");}break;
+    case 0x11:{result = str8_lit("COMPLUS");}break;
+    case 0x12:{result = str8_lit("AAF");}break;
+    case 0x13:{result = str8_lit("URT");}break;
+    case 0x14:{result = str8_lit("ACS");}break;
+    case 0x15:{result = str8_lit("DPLAY");}break;
+    case 0x16:{result = str8_lit("UMI");}break;
+    case 0x17:{result = str8_lit("SXS");}break;
+    case 0x18:{result = str8_lit("WINDOWS_CE");}break;
+    case 0x19:{result = str8_lit("HTTP");}break;
+    case 0x1A:{result = str8_lit("USERMODE_COMMONLOG");}break;
+    case 0x1B:{result = str8_lit("WER");}break;
+    case 0x1F:{result = str8_lit("USERMODE_FILTER_MANAGER");}break;
+    case 0x20:{result = str8_lit("BACKGROUNDCOPY");}break;
+    case 0x21:{result = str8_lit("CONFIGURATION|WIA");}break;
+    case 0x22:{result = str8_lit("STATE_MANAGEMENT");}break;
+    case 0x23:{result = str8_lit("METADIRECTORY");}break;
+    case 0x24:{result = str8_lit("WINDOWSUPDATE");}break;
+    case 0x25:{result = str8_lit("DIRECTORYSERVICE");}break;
+    case 0x26:{result = str8_lit("GRAPHICS");}break;
+    case 0x27:{result = str8_lit("SHELL|NAP");}break;
+    case 0x28:{result = str8_lit("TPM_SERVICES");}break;
+    case 0x29:{result = str8_lit("TPM_SOFTWARE");}break;
+    case 0x2A:{result = str8_lit("UI");}break;
+    case 0x2B:{result = str8_lit("XAML");}break;
+    case 0x2C:{result = str8_lit("ACTION_QUEUE");}break;
+    case 0x30:{result = str8_lit("WINDOWS_SETUP|PLA");}break;
+    case 0x31:{result = str8_lit("FVE");}break;
+    case 0x32:{result = str8_lit("FWP");}break;
+    case 0x33:{result = str8_lit("WINRM");}break;
+    case 0x34:{result = str8_lit("NDIS");}break;
+    case 0x35:{result = str8_lit("USERMODE_HYPERVISOR");}break;
+    case 0x36:{result = str8_lit("CMI");}break;
+    case 0x37:{result = str8_lit("USERMODE_VIRTUALIZATION");}break;
+    case 0x38:{result = str8_lit("USERMODE_VOLMGR");}break;
+    case 0x39:{result = str8_lit("BCD");}break;
+    case 0x3A:{result = str8_lit("USERMODE_VHD");}break;
+    case 0x3C:{result = str8_lit("SDIAG");}break;
+    case 0x3D:{result = str8_lit("WINPE|WEBSERVICES");}break;
+    case 0x3E:{result = str8_lit("WPN");}break;
+    case 0x3F:{result = str8_lit("WINDOWS_STORE");}break;
+    case 0x40:{result = str8_lit("INPUT");}break;
+    case 0x42:{result = str8_lit("EAP");}break;
+    case 0x50:{result = str8_lit("WINDOWS_DEFENDER");}break;
+    case 0x51:{result = str8_lit("OPC");}break;
+    case 0x52:{result = str8_lit("XPS");}break;
+    case 0x53:{result = str8_lit("RAS");}break;
+    case 0x54:{result = str8_lit("POWERSHELL|MBN");}break;
+    case 0x55:{result = str8_lit("EAS");}break;
+    case 0x62:{result = str8_lit("P2P_INT");}break;
+    case 0x63:{result = str8_lit("P2P");}break;
+    case 0x64:{result = str8_lit("DAF");}break;
+    case 0x65:{result = str8_lit("BLUETOOTH_ATT");}break;
+    case 0x66:{result = str8_lit("AUDIO");}break;
+    case 0x6D:{result = str8_lit("VISUALCPP");}break;
+    case 0x70:{result = str8_lit("SCRIPT");}break;
+    case 0x71:{result = str8_lit("PARSE");}break;
+    case 0x78:{result = str8_lit("BLB");}break;
+    case 0x79:{result = str8_lit("BLB_CLI");}break;
+    case 0x7A:{result = str8_lit("WSBAPP");}break;
+    case 0x80:{result = str8_lit("BLBUI");}break;
+    case 0x81:{result = str8_lit("USN");}break;
+    case 0x82:{result = str8_lit("USERMODE_VOLSNAP");}break;
+    case 0x83:{result = str8_lit("TIERING");}break;
+    case 0x85:{result = str8_lit("WSB_ONLINE");}break;
+    case 0x86:{result = str8_lit("ONLINE_ID");}break;
+    case 0x99:{result = str8_lit("DLS");}break;
+    case 0xA0:{result = str8_lit("SOS");}break;
+    case 0xB0:{result = str8_lit("DEBUGGERS");}break;
+    case 0xE7:{result = str8_lit("USERMODE_SPACES");}break;
+    case 0x100:{result = str8_lit("DMSERVER|RESTORE|SPP");}break;
+    case 0x101:{result = str8_lit("DEPLOYMENT_SERVICES_SERVER");}break;
+    case 0x102:{result = str8_lit("DEPLOYMENT_SERVICES_IMAGING");}break;
+    case 0x103:{result = str8_lit("DEPLOYMENT_SERVICES_MANAGEMENT");}break;
+    case 0x104:{result = str8_lit("DEPLOYMENT_SERVICES_UTIL");}break;
+    case 0x105:{result = str8_lit("DEPLOYMENT_SERVICES_BINLSVC");}break;
+    case 0x107:{result = str8_lit("DEPLOYMENT_SERVICES_PXE");}break;
+    case 0x108:{result = str8_lit("DEPLOYMENT_SERVICES_TFTP");}break;
+    case 0x110:{result = str8_lit("DEPLOYMENT_SERVICES_TRANSPORT_MANAGEMENT");}break;
+    case 0x116:{result = str8_lit("DEPLOYMENT_SERVICES_DRIVER_PROVISIONING");}break;
+    case 0x121:{result = str8_lit("DEPLOYMENT_SERVICES_MULTICAST_SERVER");}break;
+    case 0x122:{result = str8_lit("DEPLOYMENT_SERVICES_MULTICAST_CLIENT");}break;
+    case 0x125:{result = str8_lit("DEPLOYMENT_SERVICES_CONTENT_PROVIDER");}break;
+    case 0x131:{result = str8_lit("LINGUISTIC_SERVICES");}break;
+    case 0x375:{result = str8_lit("WEB");}break;
+    case 0x376:{result = str8_lit("WEB_SOCKET");}break;
+    case 0x446:{result = str8_lit("AUDIOSTREAMING");}break;
+    case 0x600:{result = str8_lit("ACCELERATOR");}break;
+    case 0x701:{result = str8_lit("MOBILE");}break;
+    case 0x7CC:{result = str8_lit("WMAAECMA");}break;
+    case 0x801:{result = str8_lit("WEP");}break;
+    case 0x802:{result = str8_lit("SYNCENGINE");}break;
+    case 0x878:{result = str8_lit("DIRECTMUSIC");}break;
+    case 0x879:{result = str8_lit("DIRECT3D10");}break;
+    case 0x87A:{result = str8_lit("DXGI");}break;
+    case 0x87B:{result = str8_lit("DXGI_DDI");}break;
+    case 0x87C:{result = str8_lit("DIRECT3D11");}break;
+    case 0x888:{result = str8_lit("LEAP");}break;
+    case 0x889:{result = str8_lit("AUDCLNT");}break;
+    case 0x898:{result = str8_lit("WINCODEC_DWRITE_DWM");}break;
+    case 0x899:{result = str8_lit("DIRECT2D");}break;
+    case 0x900:{result = str8_lit("DEFRAG");}break;
+    case 0x901:{result = str8_lit("USERMODE_SDBUS");}break;
+    case 0x902:{result = str8_lit("JSCRIPT");}break;
+    case 0xA01:{result = str8_lit("PIDGENX");}break;
+  }
+  return result;
+}
+
+internal String8
+df_string_from_hresult_code(U32 code)
+{
+  String8 result = {0};
+  switch(code)
+  {
+    default:{}break;
+    case 0x00000000: {result = str8_lit("S_OK: Operation successful");}break;
+    case 0x00000001: {result = str8_lit("S_FALSE: Operation successful but returned no results");}break;
+    case 0x80004004: {result = str8_lit("E_ABORT: Operation aborted");}break;
+    case 0x80004005: {result = str8_lit("E_FAIL: Unspecified failure");}break;
+    case 0x80004002: {result = str8_lit("E_NOINTERFACE: No such interface supported");}break;
+    case 0x80004001: {result = str8_lit("E_NOTIMPL: Not implemented");}break;
+    case 0x80004003: {result = str8_lit("E_POINTER: Pointer that is not valid");}break;
+    case 0x8000FFFF: {result = str8_lit("E_UNEXPECTED: Unexpected failure");}break;
+    case 0x80070005: {result = str8_lit("E_ACCESSDENIED: General access denied error");}break;
+    case 0x80070006: {result = str8_lit("E_HANDLE: Handle that is not valid");}break;
+    case 0x80070057: {result = str8_lit("E_INVALIDARG: One or more arguments are not valid");}break;
+    case 0x8007000E: {result = str8_lit("E_OUTOFMEMORY: Failed to allocate necessary memory");}break;
+  }
+  return result;
+}
+
+internal String8
 df_string_from_simple_typed_eval(Arena *arena, DF_EvalVizStringFlags flags, U32 radix, E_Eval eval)
 {
   String8 result = {0};
@@ -4121,8 +4273,36 @@ df_string_from_simple_typed_eval(Arena *arena, DF_EvalVizStringFlags flags, U32 
     
     case E_TypeKind_Handle:
     {
-      U64 min_digits = (radix == 16) ? type_byte_size*2 : 0;
       result = str8_from_s64(arena, eval.value.s64, radix, 0, digit_group_separator);
+    }break;
+    
+    case E_TypeKind_HResult:
+    {
+      if(flags & DF_EvalVizStringFlag_ReadOnlyDisplayRules)
+      {
+        Temp scratch = scratch_begin(&arena, 1);
+        U32 hresult_value = (U32)eval.value.u64;
+        U32 is_error   = !!(hresult_value & (1ull<<31));
+        U32 error_code = (hresult_value);
+        U32 facility   = (hresult_value & 0x7ff0000) >> 16;
+        String8 value_string = str8_from_s64(scratch.arena, eval.value.u64, radix, 0, digit_group_separator);
+        String8 facility_string = df_string_from_hresult_facility_code(facility);
+        String8 error_string = df_string_from_hresult_code(error_code);
+        result = push_str8f(arena, "%S%s%s%S%s%s%S%s",
+                            error_string,
+                            error_string.size != 0 ? " " : "",
+                            facility_string.size != 0 ? "[" : "",
+                            facility_string,
+                            facility_string.size != 0 ? "] ": "",
+                            error_string.size != 0 ? "(" : "",
+                            value_string,
+                            error_string.size != 0 ? ")" : "");
+        scratch_end(scratch);
+      }
+      else
+      {
+        result = str8_from_s64(arena, eval.value.u64, radix, 0, digit_group_separator);
+      }
     }break;
     
     case E_TypeKind_Char8:
@@ -4156,7 +4336,6 @@ df_string_from_simple_typed_eval(Arena *arena, DF_EvalVizStringFlags flags, U32 
     case E_TypeKind_S32:
     case E_TypeKind_S64:
     {
-      U64 min_digits = (radix == 16) ? type_byte_size*2 : 0;
       result = str8_from_s64(arena, eval.value.s64, radix, 0, digit_group_separator);
     }break;
     
@@ -8401,90 +8580,10 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
             }
           }
         }break;
-        case DF_CoreCmdKind_TextBreakpoint:
+        case DF_CoreCmdKind_AddAddressBreakpoint:
+        case DF_CoreCmdKind_AddFunctionBreakpoint:
         {
-          DF_Entity *entity = df_entity_from_handle(params.entity);
-          if(df_entity_is_nil(entity))
-          {
-            entity = df_entity_from_path(params.file_path, 0);
-          }
-          if(!df_entity_is_nil(entity))
-          {
-            S64 line_num = params.text_point.line;
-            B32 removed_existing = 0;
-            for(DF_Entity *child = entity->first, *next = 0; !df_entity_is_nil(child); child = next)
-            {
-              next = child->next;
-              if(child->kind == DF_EntityKind_Breakpoint && child->flags & DF_EntityFlag_HasTextPoint && child->text_point.line == line_num)
-              {
-                removed_existing = 1;
-                df_entity_mark_for_deletion(child);
-              }
-            }
-            if(removed_existing == 0)
-            {
-              DF_Entity *bp = &df_g_nil_entity;
-              DF_StateDeltaHistoryBatch(df_state_delta_history())
-              {
-                bp = df_entity_alloc(entity, DF_EntityKind_Breakpoint);
-              }
-              df_entity_equip_txt_pt(bp, params.text_point);
-              df_entity_equip_cfg_src(bp, DF_CfgSrc_Project);
-            }
-          }
-        }break;
-        case DF_CoreCmdKind_AddressBreakpoint:
-        {
-          U64 vaddr = params.vaddr;
-          if(vaddr != 0)
-          {
-            DF_Entity *bp = &df_g_nil_entity;
-            DF_EntityList existing_bps = df_query_cached_entity_list_with_kind(DF_EntityKind_Breakpoint);
-            for(DF_EntityNode *n = existing_bps.first; n != 0; n = n->next)
-            {
-              if(n->entity->vaddr == vaddr)
-              {
-                bp = n->entity;
-                break;
-              }
-            }
-            if(df_entity_is_nil(bp))
-            {
-              DF_StateDeltaHistoryBatch(df_state_delta_history())
-              {
-                bp = df_entity_alloc(df_entity_root(), DF_EntityKind_Breakpoint);
-              }
-              df_entity_equip_vaddr(bp, vaddr);
-              df_entity_equip_cfg_src(bp, DF_CfgSrc_Project);
-            }
-            else
-            {
-              df_entity_mark_for_deletion(bp);
-            }
-          }
-        }break;
-        case DF_CoreCmdKind_FunctionBreakpoint:
-        {
-          String8 function_name = params.string;
-          if(function_name.size != 0)
-          {
-            DF_Entity *symb = df_entity_from_name_and_kind(function_name, DF_EntityKind_EntryPoint);
-            DF_Entity *bp = df_entity_ancestor_from_kind(symb, DF_EntityKind_Breakpoint);
-            if(df_entity_is_nil(bp))
-            {
-              DF_StateDeltaHistoryBatch(df_state_delta_history())
-              {
-                bp = df_entity_alloc(df_entity_root(), DF_EntityKind_Breakpoint);
-              }
-              DF_Entity *symbol_name_entity = df_entity_alloc(bp, DF_EntityKind_EntryPoint);
-              df_entity_equip_name(symbol_name_entity, function_name);
-              df_entity_equip_cfg_src(bp, DF_CfgSrc_Project);
-            }
-            else
-            {
-              df_entity_mark_for_deletion(bp);
-            }
-          }
+          df_cmd_list_push(arena, cmds, &params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_AddBreakpoint));
         }break;
         
         //- rjf: watches

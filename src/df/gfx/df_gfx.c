@@ -3795,19 +3795,11 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         }
         if(range.min.line == range.max.line && ui_clicked(df_icon_buttonf(ws, DF_IconKind_CircleFilled, 0, "Toggle Breakpoint")))
         {
-          if(ws->code_ctx_menu_vaddr != 0)
-          {
-            DF_CmdParams p = df_cmd_params_from_window(ws);
-            p.vaddr = ws->code_ctx_menu_vaddr;
-            df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_AddressBreakpoint));
-          }
-          else
-          {
-            DF_CmdParams p = df_cmd_params_from_window(ws);
-            p.file_path = ws->code_ctx_menu_file_path;
-            p.text_point = range.min;
-            df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_TextBreakpoint));
-          }
+          DF_CmdParams p = df_cmd_params_from_window(ws);
+          p.file_path = ws->code_ctx_menu_file_path;
+          p.text_point = range.min;
+          p.vaddr = ws->code_ctx_menu_vaddr;
+          df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ToggleBreakpoint));
           ui_ctx_menu_close();
         }
         if(range.min.line == range.max.line && ui_clicked(df_icon_buttonf(ws, DF_IconKind_Binoculars, 0, "Toggle Watch Expression")))

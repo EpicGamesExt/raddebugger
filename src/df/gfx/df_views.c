@@ -2076,14 +2076,20 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
               if((evt->delta_2s32.x < 0 || evt->delta_2s32.y < 0) && !df_expand_key_match(df_expand_key_zero(), fallback_pt_prev.key))
               {
                 DF_Entity *fallback_watch = df_entity_from_expand_key_and_kind(fallback_pt_prev.key, DF_EntityKind_Watch);
-                new_cursor_key = fallback_pt_prev.key;
-                new_cursor_parent_key = df_parent_expand_key_from_entity(fallback_watch);
+                if(!df_entity_is_nil(fallback_watch))
+                {
+                  new_cursor_key = fallback_pt_prev.key;
+                  new_cursor_parent_key = df_parent_expand_key_from_entity(fallback_watch);
+                }
               }
               else if(!df_expand_key_match(df_expand_key_zero(), fallback_pt_next.key))
               {
                 DF_Entity *fallback_watch = df_entity_from_expand_key_and_kind(fallback_pt_next.key, DF_EntityKind_Watch);
-                new_cursor_key = fallback_pt_next.key;
-                new_cursor_parent_key = df_parent_expand_key_from_entity(fallback_watch);
+                if(!df_entity_is_nil(fallback_watch))
+                {
+                  new_cursor_key = fallback_pt_next.key;
+                  new_cursor_parent_key = df_parent_expand_key_from_entity(fallback_watch);
+                }
               }
               DF_WatchViewPoint new_cursor_pt = {DF_WatchViewColumnKind_Expr, new_cursor_parent_key, new_cursor_key};
               df_entity_mark_for_deletion(watch);

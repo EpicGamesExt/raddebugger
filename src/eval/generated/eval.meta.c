@@ -119,11 +119,12 @@ str8_lit_comp("function"),
 str8_lit_comp("="),
 };
 
-U8 e_kind_basic_byte_size_table[54] =
+U8 e_kind_basic_byte_size_table[55] =
 {
 0,
 0,
 0xFF,
+4,
 1,
 2,
 4,
@@ -177,11 +178,12 @@ U8 e_kind_basic_byte_size_table[54] =
 0,
 };
 
-String8 e_kind_basic_string_table[54] =
+String8 e_kind_basic_string_table[55] =
 {
 str8_lit_comp(""),
 str8_lit_comp("void"),
 str8_lit_comp("HANDLE"),
+str8_lit_comp("HRESULT"),
 str8_lit_comp("char8"),
 str8_lit_comp("char16"),
 str8_lit_comp("char32"),

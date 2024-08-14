@@ -193,6 +193,8 @@ DF_BindingVersionRemapTable:
   {"load_profile" "open_profile"}
   {"load_project" "open_project"}
   {"open_profile" "open_project"}
+  {"address_breakpoint" "add_address_breakpoint"}
+  {"function_breakpoint" "add_function_breakpoint"}
 }
 
 @data(String8) df_g_binding_version_remap_old_name_table:
@@ -269,13 +271,13 @@ DF_GfxViewTable:
 @table(slot  view_spec  opt_cmd_spec)
 DF_CmdParamSlot2ViewSpecMap:
 {
-  {Entity            "entity_lister"            ""                    }
-  {EntityList        "entity_lister"            ""                    }
-  {FilePath          "file_system"              ""                    }
-  {CmdSpec           "commands"                 ""                    }
-  {ID                "system_processes"         ""                    }
-  {String            "symbol_lister"            "goto_name"           }
-  {String            "symbol_lister"            "function_breakpoint" }
+  {Entity            "entity_lister"            ""                        }
+  {EntityList        "entity_lister"            ""                        }
+  {FilePath          "file_system"              ""                        }
+  {CmdSpec           "commands"                 ""                        }
+  {ID                "system_processes"         ""                        }
+  {String            "symbol_lister"            "goto_name"               }
+  {String            "symbol_lister"            "add_function_breakpoint" }
 }
 
 @data(DF_CmdParamSlot) df_g_cmd_param_slot_2_view_spec_src_map:

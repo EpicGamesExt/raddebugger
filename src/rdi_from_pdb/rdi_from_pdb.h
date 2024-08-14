@@ -542,10 +542,10 @@ internal RDI_BinarySectionFlags p2r_rdi_binary_section_flags_from_coff_section_f
 ////////////////////////////////
 //~ rjf: CodeView => RDI Canonical Conversions
 
-internal RDI_Arch         p2r_rdi_arch_from_cv_arch(CV_Arch arch);
-internal RDI_RegCode p2r_rdi_reg_code_from_cv_reg_code(RDI_Arch arch, CV_Reg reg_code);
-internal RDI_Language     p2r_rdi_language_from_cv_language(CV_Language language);
-internal RDI_TypeKind     p2r_rdi_type_kind_from_cv_basic_type(CV_BasicType basic_type);
+internal RDI_Arch     p2r_rdi_arch_from_cv_arch(CV_Arch arch);
+internal RDI_RegCode  p2r_rdi_reg_code_from_cv_reg_code(RDI_Arch arch, CV_Reg reg_code);
+internal RDI_Language p2r_rdi_language_from_cv_language(CV_Language language);
+internal RDI_TypeKind p2r_rdi_type_kind_from_cv_basic_type(CV_BasicType basic_type);
 
 ////////////////////////////////
 //~ rjf: Location Info Building Helpers

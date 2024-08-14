@@ -303,7 +303,7 @@ p2r_rdi_type_kind_from_cv_basic_type(CV_BasicType basic_type)
   switch(basic_type)
   {
     case CV_BasicType_VOID: {result = RDI_TypeKind_Void;}break;
-    case CV_BasicType_HRESULT: {result = RDI_TypeKind_Handle;}break;
+    case CV_BasicType_HRESULT: {result = RDI_TypeKind_HResult;}break;
     
     case CV_BasicType_RCHAR:
     case CV_BasicType_CHAR:

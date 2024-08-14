@@ -62,7 +62,7 @@
   "";
   "// \"raddbg\0\0\"";
   "#define RDI_MAGIC_CONSTANT   0x0000676264646172";
-  "#define RDI_ENCODING_VERSION 8";
+  "#define RDI_ENCODING_VERSION 9";
   "";
   "////////////////////////////////////////////////////////////////";
   "//~ Format Types & Functions";
@@ -711,38 +711,39 @@ RDI_TypeKindTable:
   //-
   {Void                 0x0001     0              FirstBuiltIn                   }
   {Handle               0x0002     0xFFFFFFFF                                    }
-  {Char8                0x0003     1                                             }
-  {Char16               0x0004     2                                             }
-  {Char32               0x0005     4                                             }
-  {UChar8               0x0006     1                                             }
-  {UChar16              0x0007     2                                             }
-  {UChar32              0x0008     4                                             }
-  {U8                   0x0009     1                                             }
-  {U16                  0x000A     2                                             }
-  {U32                  0x000B     4                                             }
-  {U64                  0x000C     8                                             }
-  {U128                 0x000D     16                                            }
-  {U256                 0x000E     32                                            }
-  {U512                 0x000F     64                                            }
-  {S8                   0x0010     1                                             }
-  {S16                  0x0011     2                                             }
-  {S32                  0x0012     4                                             }
-  {S64                  0x0013     8                                             }
-  {S128                 0x0014     16                                            }
-  {S256                 0x0015     32                                            }
-  {S512                 0x0016     64                                            }
-  {Bool                 0x0017     1                                             }
-  {F16                  0x0018     2                                             }
-  {F32                  0x0019     4                                             }
-  {F32PP                0x001A     4                                             }
-  {F48                  0x001B     6                                             }
-  {F64                  0x001C     8                                             }
-  {F80                  0x001D     10                                            }
-  {F128                 0x001E     16                                            }
-  {ComplexF32           0x001F     8                                             }
-  {ComplexF64           0x0020     16                                            }
-  {ComplexF80           0x0021     20                                            }
-  {ComplexF128          0x0022     32              LastBuiltIn                   }
+  {HResult              0x0003     4                                             }
+  {Char8                0x0004     1                                             }
+  {Char16               0x0005     2                                             }
+  {Char32               0x0006     4                                             }
+  {UChar8               0x0007     1                                             }
+  {UChar16              0x0008     2                                             }
+  {UChar32              0x0009     4                                             }
+  {U8                   0x000A     1                                             }
+  {U16                  0x000B     2                                             }
+  {U32                  0x000C     4                                             }
+  {U64                  0x000D     8                                             }
+  {U128                 0x000E     16                                            }
+  {U256                 0x000F     32                                            }
+  {U512                 0x0010     64                                            }
+  {S8                   0x0011     1                                             }
+  {S16                  0x0012     2                                             }
+  {S32                  0x0013     4                                             }
+  {S64                  0x0014     8                                             }
+  {S128                 0x0015     16                                            }
+  {S256                 0x0016     32                                            }
+  {S512                 0x0017     64                                            }
+  {Bool                 0x0018     1                                             }
+  {F16                  0x0019     2                                             }
+  {F32                  0x001A     4                                             }
+  {F32PP                0x001B     4                                             }
+  {F48                  0x001C     6                                             }
+  {F64                  0x001D     8                                             }
+  {F80                  0x001E     10                                            }
+  {F128                 0x001F     16                                            }
+  {ComplexF32           0x0020     8                                             }
+  {ComplexF64           0x0021     16                                            }
+  {ComplexF80           0x0022     20                                            }
+  {ComplexF128          0x0023     32              LastBuiltIn                   }
   //-
   {Modifier             0x1000     0               FirstConstructed              }
   {Ptr                  0x1001     0                                             }

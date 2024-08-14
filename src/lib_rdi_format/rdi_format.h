@@ -52,7 +52,7 @@ typedef int64_t  RDI_S64;
 
 // \"raddbg\0\0\"
 #define RDI_MAGIC_CONSTANT   0x0000676264646172
-#define RDI_ENCODING_VERSION 8
+#define RDI_ENCODING_VERSION 9
 
 ////////////////////////////////////////////////////////////////
 //~ Format Types & Functions
@@ -315,38 +315,39 @@ typedef enum RDI_TypeKindEnum
 RDI_TypeKind_NULL                 = 0x0000,
 RDI_TypeKind_Void                 = 0x0001,
 RDI_TypeKind_Handle               = 0x0002,
-RDI_TypeKind_Char8                = 0x0003,
-RDI_TypeKind_Char16               = 0x0004,
-RDI_TypeKind_Char32               = 0x0005,
-RDI_TypeKind_UChar8               = 0x0006,
-RDI_TypeKind_UChar16              = 0x0007,
-RDI_TypeKind_UChar32              = 0x0008,
-RDI_TypeKind_U8                   = 0x0009,
-RDI_TypeKind_U16                  = 0x000A,
-RDI_TypeKind_U32                  = 0x000B,
-RDI_TypeKind_U64                  = 0x000C,
-RDI_TypeKind_U128                 = 0x000D,
-RDI_TypeKind_U256                 = 0x000E,
-RDI_TypeKind_U512                 = 0x000F,
-RDI_TypeKind_S8                   = 0x0010,
-RDI_TypeKind_S16                  = 0x0011,
-RDI_TypeKind_S32                  = 0x0012,
-RDI_TypeKind_S64                  = 0x0013,
-RDI_TypeKind_S128                 = 0x0014,
-RDI_TypeKind_S256                 = 0x0015,
-RDI_TypeKind_S512                 = 0x0016,
-RDI_TypeKind_Bool                 = 0x0017,
-RDI_TypeKind_F16                  = 0x0018,
-RDI_TypeKind_F32                  = 0x0019,
-RDI_TypeKind_F32PP                = 0x001A,
-RDI_TypeKind_F48                  = 0x001B,
-RDI_TypeKind_F64                  = 0x001C,
-RDI_TypeKind_F80                  = 0x001D,
-RDI_TypeKind_F128                 = 0x001E,
-RDI_TypeKind_ComplexF32           = 0x001F,
-RDI_TypeKind_ComplexF64           = 0x0020,
-RDI_TypeKind_ComplexF80           = 0x0021,
-RDI_TypeKind_ComplexF128          = 0x0022,
+RDI_TypeKind_HResult              = 0x0003,
+RDI_TypeKind_Char8                = 0x0004,
+RDI_TypeKind_Char16               = 0x0005,
+RDI_TypeKind_Char32               = 0x0006,
+RDI_TypeKind_UChar8               = 0x0007,
+RDI_TypeKind_UChar16              = 0x0008,
+RDI_TypeKind_UChar32              = 0x0009,
+RDI_TypeKind_U8                   = 0x000A,
+RDI_TypeKind_U16                  = 0x000B,
+RDI_TypeKind_U32                  = 0x000C,
+RDI_TypeKind_U64                  = 0x000D,
+RDI_TypeKind_U128                 = 0x000E,
+RDI_TypeKind_U256                 = 0x000F,
+RDI_TypeKind_U512                 = 0x0010,
+RDI_TypeKind_S8                   = 0x0011,
+RDI_TypeKind_S16                  = 0x0012,
+RDI_TypeKind_S32                  = 0x0013,
+RDI_TypeKind_S64                  = 0x0014,
+RDI_TypeKind_S128                 = 0x0015,
+RDI_TypeKind_S256                 = 0x0016,
+RDI_TypeKind_S512                 = 0x0017,
+RDI_TypeKind_Bool                 = 0x0018,
+RDI_TypeKind_F16                  = 0x0019,
+RDI_TypeKind_F32                  = 0x001A,
+RDI_TypeKind_F32PP                = 0x001B,
+RDI_TypeKind_F48                  = 0x001C,
+RDI_TypeKind_F64                  = 0x001D,
+RDI_TypeKind_F80                  = 0x001E,
+RDI_TypeKind_F128                 = 0x001F,
+RDI_TypeKind_ComplexF32           = 0x0020,
+RDI_TypeKind_ComplexF64           = 0x0021,
+RDI_TypeKind_ComplexF80           = 0x0022,
+RDI_TypeKind_ComplexF128          = 0x0023,
 RDI_TypeKind_Modifier             = 0x1000,
 RDI_TypeKind_Ptr                  = 0x1001,
 RDI_TypeKind_LRef                 = 0x1002,
@@ -657,6 +658,7 @@ X(COUNT)\
 X(NULL)\
 X(Void)\
 X(Handle)\
+X(HResult)\
 X(Char8)\
 X(Char16)\
 X(Char32)\

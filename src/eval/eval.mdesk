@@ -19,6 +19,7 @@ E_TypeKindTable:
   {Null                      ""                    0    }
   {Void                      "void"                0    }
   {Handle                    "HANDLE"              0xFF }
+  {HResult                   "HRESULT"             4    }
   {Char8                     "char8"               1    }
   {Char16                    "char16"              2    }
   {Char32                    "char32"              4    }

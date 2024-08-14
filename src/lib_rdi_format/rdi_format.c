@@ -182,6 +182,7 @@ switch(kind)
 {
 default:{}break;
 case RDI_TypeKind_Handle:{result = 0xFFFFFFFF;}break;
+case RDI_TypeKind_HResult:{result = 4;}break;
 case RDI_TypeKind_Char8:{result = 1;}break;
 case RDI_TypeKind_Char16:{result = 2;}break;
 case RDI_TypeKind_Char32:{result = 4;}break;

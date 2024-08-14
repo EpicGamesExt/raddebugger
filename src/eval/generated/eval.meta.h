@@ -22,6 +22,7 @@ typedef enum E_TypeKind
 E_TypeKind_Null,
 E_TypeKind_Void,
 E_TypeKind_Handle,
+E_TypeKind_HResult,
 E_TypeKind_Char8,
 E_TypeKind_Char16,
 E_TypeKind_Char32,
@@ -154,8 +155,8 @@ extern String8 e_token_kind_strings[6];
 extern String8 e_expr_kind_strings[41];
 extern String8 e_interpretation_code_display_strings[11];
 extern String8 e_expr_op_strings[41];
-extern U8 e_kind_basic_byte_size_table[54];
-extern String8 e_kind_basic_string_table[54];
+extern U8 e_kind_basic_byte_size_table[55];
+extern String8 e_kind_basic_string_table[55];
 
 C_LINKAGE_END
 

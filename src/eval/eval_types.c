@@ -13,6 +13,7 @@ e_type_kind_from_rdi(RDI_TypeKind kind)
     default:{}break;
     case RDI_TypeKind_Void:                   {result = E_TypeKind_Void;}break;
     case RDI_TypeKind_Handle:                 {result = E_TypeKind_Handle;}break;
+    case RDI_TypeKind_HResult:                {result = E_TypeKind_HResult;}break;
     case RDI_TypeKind_Char8:                  {result = E_TypeKind_Char8;}break;
     case RDI_TypeKind_Char16:                 {result = E_TypeKind_Char16;}break;
     case RDI_TypeKind_Char32:                 {result = E_TypeKind_Char32;}break;
