@@ -498,12 +498,14 @@ e_interpret(String8 bytecode)
       
       case RDI_EvalOp_EqEq:
       {
-        nval.u64 = (svals[0].u64 == svals[1].u64);
+        B32 result = MemoryMatchArray(svals[0].u512, svals[1].u512);
+        nval.u64 = !!result;
       }break;
       
       case RDI_EvalOp_NtEq:
       {
-        nval.u64 = (svals[0].u64 != svals[1].u64);
+        B32 result = MemoryMatchArray(svals[0].u512, svals[1].u512);
+        nval.u64 = !result;
       }break;
       
       case RDI_EvalOp_LsEq:

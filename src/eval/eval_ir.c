@@ -256,7 +256,7 @@ e_irtree_mem_read_type(Arena *arena, E_IRNode *c, E_TypeKey type_key)
 {
   U64 byte_size = e_type_byte_size_from_key(type_key);
   E_IRNode *result = &e_irnode_nil;
-  if(0 < byte_size && byte_size <= 8)
+  if(0 < byte_size && byte_size <= 64)
   {
     // rjf: build the read node
     E_IRNode *read_node = e_push_irnode(arena, RDI_EvalOp_MemRead);
@@ -834,9 +834,10 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
       }
       
       // rjf: determine arithmetic path
-#define E_ArithPath_Normal 0
-#define E_ArithPath_PtrAdd 1
-#define E_ArithPath_PtrSub 2
+#define E_ArithPath_Normal          0
+#define E_ArithPath_PtrAdd          1
+#define E_ArithPath_PtrSub          2
+#define E_ArithPath_PtrArrayCompare 3
       B32 ptr_arithmetic_mul_rptr = 0;
       U32 arith_path = E_ArithPath_Normal;
       if(kind == E_ExprKind_Add)
@@ -867,6 +868,17 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
           {
             arith_path = E_ArithPath_PtrSub;
           }
+        }
+      }
+      else if(kind == E_ExprKind_EqEq)
+      {
+        if(l_type_kind == E_TypeKind_Array && r_type_kind == E_TypeKind_Ptr)
+        {
+          arith_path = E_ArithPath_PtrArrayCompare;
+        }
+        if(r_type_kind == E_TypeKind_Array && l_type_kind == E_TypeKind_Ptr)
+        {
+          arith_path = E_ArithPath_PtrArrayCompare;
         }
       }
       
@@ -968,6 +980,34 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
           }
           result.root     = new_tree;
           result.type_key = e_type_key_basic(E_TypeKind_U64);
+          result.mode     = E_Mode_Value;
+        }break;
+        
+        //- rjf: pointer array comparison
+        case E_ArithPath_PtrArrayCompare:
+        {
+          // rjf: map l/r to pointer/array
+          E_IRTreeAndType *ptr_tree = &l_tree;
+          E_IRTreeAndType *arr_tree = &r_tree;
+          if(l_type_kind == E_TypeKind_Array)
+          {
+            ptr_tree = &r_tree;
+            arr_tree = &l_tree;
+          }
+          
+          // rjf: resolve pointer to value, sized same as array
+          E_IRNode *ptr_root = ptr_tree->root;
+          E_IRNode *arr_root = arr_tree->root;
+          {
+            ptr_root = e_irtree_resolve_to_value(arena, ptr_tree->mode, ptr_tree->root, ptr_tree->type_key);
+          }
+          
+          // rjf: read from pointer into value, to compare with array
+          E_IRNode *mem_root = e_irtree_mem_read_type(arena, ptr_root, arr_tree->type_key);
+          
+          // rjf: generate
+          result.root     = e_irtree_binary_op(arena, op, RDI_EvalTypeGroup_Other, mem_root, arr_root);
+          result.type_key = e_type_key_basic(E_TypeKind_Bool);
           result.mode     = E_Mode_Value;
         }break;
       }

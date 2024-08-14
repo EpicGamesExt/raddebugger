@@ -1279,15 +1279,15 @@ RDI_EvalOpTable:
 
 // NOTE(rjf): "ck" -> "conversion kind, when converted to type group", used in square matrix form
 // e.g. x:0, y:0 means other -> other, x:3, y:1 means uint -> f32, etc.
-@table(name value      ck0             ck1         ck2          ck3         ck4)
+@table(name value       ck0             ck1         ck2          ck3         ck4)
 RDI_EvalTypeGroupTable:
 {
-  {Other 0              OtherToOther    FromOther   FromOther    FromOther   FromOther }
-  {U     1              ToOther         Noop        Noop         Legal       Legal     }
-  {S     2              ToOther         Noop        Noop         Legal       Legal     }
-  {F32   3              ToOther         Legal       Legal        Noop        Legal     }
-  {F64   4              ToOther         Legal       Legal        Legal       Noop      }
-  {COUNT 5              Noop            Noop        Noop         Noop        Noop      }
+  {Other  0              OtherToOther    FromOther   FromOther    FromOther   FromOther   }
+  {U      1              ToOther         Noop        Noop         Legal       Legal       }
+  {S      2              ToOther         Noop        Noop         Legal       Legal       }
+  {F32    3              ToOther         Legal       Legal        Noop        Legal       }
+  {F64    4              ToOther         Legal       Legal        Legal       Noop        }
+  {COUNT  5              Noop            Noop        Noop         Noop        Noop        }
 }
 
 @table(name value error_string)
