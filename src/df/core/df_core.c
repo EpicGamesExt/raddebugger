@@ -7795,7 +7795,8 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
                       DF_EntityKind sub_entity_kind = DF_EntityKind_Nil;
                       for(EachEnumVal(DF_EntityKind, k2))
                       {
-                        if(str8_match(child->string, df_g_entity_kind_name_lower_table[k2], StringMatchFlag_CaseInsensitive))
+                        if(str8_match(child->string, df_g_entity_kind_name_lower_table[k2], StringMatchFlag_CaseInsensitive) ||
+                           (k2 == DF_EntityKind_Executable && str8_match(child->string, str8_lit("exe"), StringMatchFlag_CaseInsensitive)))
                         {
                           Task *task = push_array(scratch.arena, Task, 1);
                           task->next = t->next;
