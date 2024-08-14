@@ -775,33 +775,58 @@ e_leaf_type_from_name(String8 name)
   if(!found)
   {
 #define Case(str) (str8_match(name, str8_lit(str), 0))
-    if(Case("u8") || Case("uint8") || Case("uint8_t") || Case("uchar8") || Case("U8"))
+    if(0){}
+    else if(Case("u8") || Case("uint8") || Case("uint8_t") || Case("U8"))
     {
       key = e_type_key_basic(E_TypeKind_U8);
     }
-    else if(Case("u16") || Case("uint16") || Case("uint16_t") || Case("uchar16") || Case("U16"))
+    else if(Case("uchar8") || Case("uchar"))
+    {
+      key = e_type_key_basic(E_TypeKind_UChar8);
+    }
+    else if(Case("u16") || Case("uint16") || Case("uint16_t") || Case("U16"))
     {
       key = e_type_key_basic(E_TypeKind_U16);
     }
-    else if(Case("u32") || Case("uint32") || Case("uint32_t") || Case("uchar32") || Case("U32") || Case("uint"))
+    else if(Case("uchar16"))
+    {
+      key = e_type_key_basic(E_TypeKind_UChar16);
+    }
+    else if(Case("u32") || Case("uint32") || Case("uint32_t") || Case("U32") || Case("uint"))
     {
       key = e_type_key_basic(E_TypeKind_U32);
+    }
+    else if(Case("uchar32"))
+    {
+      key = e_type_key_basic(E_TypeKind_UChar32);
     }
     else if(Case("u64") || Case("uint64") || Case("uint64_t") || Case("U64"))
     {
       key = e_type_key_basic(E_TypeKind_U64);
     }
-    else if(Case("s8") || Case("b8") || Case("B8") || Case("i8") || Case("int8") || Case("int8_t") || Case("char8") || Case("S8"))
+    else if(Case("s8") || Case("b8") || Case("B8") || Case("i8") || Case("int8") || Case("int8_t") || Case("S8"))
     {
       key = e_type_key_basic(E_TypeKind_S8);
     }
-    else if(Case("s16") ||Case("b16") || Case("B16") || Case("i16") ||  Case("int16") || Case("int16_t") || Case("char16") || Case("S16"))
+    else if(Case("char8") || Case("char"))
+    {
+      key = e_type_key_basic(E_TypeKind_Char8);
+    }
+    else if(Case("s16") || Case("b16") || Case("B16") || Case("i16") ||  Case("int16") || Case("int16_t") || Case("S16"))
     {
       key = e_type_key_basic(E_TypeKind_S16);
+    }
+    else if(Case("char16"))
+    {
+      key = e_type_key_basic(E_TypeKind_Char16);
     }
     else if(Case("s32") || Case("b32") || Case("B32") || Case("i32") || Case("int32") || Case("int32_t") || Case("char32") || Case("S32") || Case("int"))
     {
       key = e_type_key_basic(E_TypeKind_S32);
+    }
+    else if(Case("char32"))
+    {
+      key = e_type_key_basic(E_TypeKind_Char32);
     }
     else if(Case("s64") || Case("b64") || Case("B64") || Case("i64") || Case("int64") || Case("int64_t") || Case("S64"))
     {

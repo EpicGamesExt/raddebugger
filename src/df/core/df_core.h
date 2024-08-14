@@ -332,7 +332,6 @@ struct DF_Entity
   DF_EntityID id;
   U64 gen;
   U64 alloc_time_us;
-  B32 deleted;
   F32 alive_t;
   
   // rjf: basic equipment

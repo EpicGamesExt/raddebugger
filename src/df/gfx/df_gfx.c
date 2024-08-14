@@ -8420,9 +8420,7 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
         E_TypeKind direct_type_kind = e_type_kind_from_key(direct_type_key);
         B32 direct_type_has_content = (direct_type_kind != E_TypeKind_Null && direct_type_kind != E_TypeKind_Void && value_eval.value.u64 != 0);
         B32 direct_type_is_string = (direct_type_kind != E_TypeKind_Null && value_eval.value.u64 != 0 &&
-                                     ((E_TypeKind_Char8 <= direct_type_kind && direct_type_kind <= E_TypeKind_UChar32) ||
-                                      direct_type_kind == E_TypeKind_Char8 ||
-                                      direct_type_kind == E_TypeKind_UChar8));
+                                     (E_TypeKind_Char8 <= direct_type_kind && direct_type_kind <= E_TypeKind_UChar32));
         DF_Entity *thread = df_entity_from_handle(df_interact_regs()->thread);
         DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
         String8 symbol_name = df_symbol_name_from_process_vaddr(arena, process, value_eval.value.u64);
@@ -8448,8 +8446,7 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
         // rjf: special-case: strings
         if(!has_array &&
            direct_type_is_string &&
-           (flags & DF_EvalVizStringFlag_ReadOnlyDisplayRules) &&
-           eval.mode == E_Mode_Addr)
+           (flags & DF_EvalVizStringFlag_ReadOnlyDisplayRules))
         {
           U64 string_memory_addr = value_eval.value.u64;
           U64 element_size = e_type_byte_size_from_key(direct_type_key);

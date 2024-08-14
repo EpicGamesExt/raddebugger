@@ -1080,7 +1080,7 @@ df_entity_child_from_kind(DF_Entity *entity, DF_EntityKind kind)
   DF_Entity *result = &df_g_nil_entity;
   for(DF_Entity *child = entity->first; !df_entity_is_nil(child); child = child->next)
   {
-    if(!child->deleted && child->kind == kind)
+    if(child->kind == kind)
     {
       result = child;
       break;
@@ -1110,7 +1110,7 @@ df_push_entity_child_list_with_kind(Arena *arena, DF_Entity *entity, DF_EntityKi
   DF_EntityList result = {0};
   for(DF_Entity *child = entity->first; !df_entity_is_nil(child); child = child->next)
   {
-    if(!child->deleted && child->kind == kind)
+    if(child->kind == kind)
     {
       df_entity_list_push(arena, &result, child);
     }
@@ -1124,7 +1124,7 @@ df_entity_child_from_name_and_kind(DF_Entity *parent, String8 string, DF_EntityK
   DF_Entity *result = &df_g_nil_entity;
   for(DF_Entity *child = parent->first; !df_entity_is_nil(child); child = child->next)
   {
-    if(!child->deleted && str8_match(child->name, string, 0) && child->kind == kind)
+    if(str8_match(child->name, string, 0) && child->kind == kind)
     {
       result = child;
       break;
@@ -1616,10 +1616,7 @@ df_entity_alloc(DF_Entity *parent, DF_EntityKind kind)
   // rjf: initialize to deleted, record history, then "undelete" if this allocation can be undone
   if(user_defined_lifetime)
   {
-    entity->deleted = 1;
-    df_state_delta_history_push_struct_delta(df_state_delta_history(), &entity->deleted, .guard_entity = entity);
-    entity->deleted = 0;
-    df_state_delta_history_push_struct_delta(df_state_delta_history(), &df_state->kind_alloc_gens[kind], .guard_entity = entity);
+    // TODO(rjf)
   }
   
   // rjf: dirtify caches
@@ -2240,7 +2237,7 @@ df_push_entity_list_with_kind(Arena *arena, DF_EntityKind kind)
       !df_entity_is_nil(entity);
       entity = df_entity_rec_df_pre(entity, &df_g_nil_entity).next)
   {
-    if(!entity->deleted && entity->kind == kind)
+    if(entity->kind == kind)
     {
       df_entity_list_push(arena, &result, entity);
     }
@@ -5411,7 +5408,7 @@ df_cfg_strings_from_core(Arena *arena, String8 root_path, DF_CfgSrc source)
       for(DF_EntityNode *n = entities.first; n != 0; n = n->next)
       {
         DF_Entity *entity = n->entity;
-        if(entity->cfg_src != source || entity->deleted)
+        if(entity->cfg_src != source)
         {
           continue;
         }
@@ -5429,12 +5426,6 @@ df_cfg_strings_from_core(Arena *arena, String8 root_path, DF_CfgSrc source)
         {
           //- rjf: get next iteration
           rec = df_entity_rec_df_pre(e, entity);
-          
-          //- rjf: skip unqualified
-          if(e->deleted)
-          {
-            continue;
-          }
           
           //- rjf: unpack entity info
           typedef U32 EntityInfoFlags;
@@ -5525,7 +5516,7 @@ df_cfg_strings_from_core(Arena *arena, String8 root_path, DF_CfgSrc source)
           }
           
           // rjf: separate top-level entities with extra newline
-          if(df_entity_is_nil(rec.next))
+          if(df_entity_is_nil(rec.next) && (rec.pop_count != 0 || n->next == 0))
           {
             str8_list_pushf(arena, &strs, "\n");
           }
@@ -8424,7 +8415,6 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
             for(DF_Entity *child = entity->first, *next = 0; !df_entity_is_nil(child); child = next)
             {
               next = child->next;
-              if(child->deleted) { continue; }
               if(child->kind == DF_EntityKind_Breakpoint && child->flags & DF_EntityFlag_HasTextPoint && child->text_point.line == line_num)
               {
                 removed_existing = 1;
@@ -8508,7 +8498,6 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
             for(DF_Entity *child = entity->first, *next = 0; !df_entity_is_nil(child); child = next)
             {
               next = child->next;
-              if(child->deleted) { continue; }
               if(child->kind == DF_EntityKind_WatchPin && child->flags & DF_EntityFlag_HasTextPoint && child->text_point.line == line_num &&
                  str8_match(child->name, params.string, 0))
               {
@@ -8980,32 +8969,15 @@ df_core_end_frame(void)
         // rjf: fixup next entity to iterate to
         next = df_entity_rec_df(entity, &df_g_nil_entity, OffsetOf(DF_Entity, next), OffsetOf(DF_Entity, next)).next;
         
-        // rjf: undoable -> just mark as deleted; this must be able to be trivially undone
-        if(undoable)
+        // rjf: eliminate root entity if we're freeing it
+        if(entity == df_state->entities_root)
         {
-          DF_StateDeltaHistoryBatch(df_state_delta_history())
-          {
-            df_state_delta_history_push_struct_delta(df_state_delta_history(), &entity->deleted, .guard_entity = entity);
-            df_state_delta_history_push_struct_delta(df_state_delta_history(), &df_state->kind_alloc_gens[entity->kind], .guard_entity = entity);
-            entity->deleted = 1;
-          }
-          entity->flags &= ~DF_EntityFlag_MarkedForDeletion;
-          df_state->kind_alloc_gens[entity->kind] += 1;
+          df_state->entities_root = &df_g_nil_entity;
         }
         
-        // rjf: not undoable -> actually release
-        if(!undoable)
-        {
-          // rjf: eliminate root entity if we're freeing it
-          if(entity == df_state->entities_root)
-          {
-            df_state->entities_root = &df_g_nil_entity;
-          }
-          
-          // rjf: unhook & release this entity tree
-          df_entity_change_parent(entity, entity->parent, &df_g_nil_entity, &df_g_nil_entity);
-          df_entity_release(entity);
-        }
+        // rjf: unhook & release this entity tree
+        df_entity_change_parent(entity, entity->parent, &df_g_nil_entity, &df_g_nil_entity);
+        df_entity_release(entity);
       }
     }
   }
