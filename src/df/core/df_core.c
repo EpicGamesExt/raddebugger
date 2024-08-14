@@ -7871,6 +7871,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
           if(!removed_already_existing)
           {
             DF_Entity *bp = df_entity_alloc(df_entity_root(), DF_EntityKind_Breakpoint);
+            df_entity_equip_cfg_src(bp, DF_CfgSrc_Project);
             DF_Entity *loc = df_entity_alloc(bp, DF_EntityKind_Location);
             if(file_path.size != 0 && pt.line != 0)
             {
@@ -7894,58 +7895,45 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         }break;
         
         //- rjf: watches
+        case DF_CoreCmdKind_AddWatchPin:
         case DF_CoreCmdKind_ToggleWatchPin:
         {
-          DF_Entity *entity = df_entity_from_handle(params.entity);
-          S64 line_num = params.text_point.line;
-          if(!df_entity_is_nil(entity) && line_num != 0)
+          String8 file_path = params.file_path;
+          TxtPt pt = params.text_point;
+          String8 name = params.string;
+          U64 vaddr = params.vaddr;
+          B32 removed_already_existing = 0;
+          if(core_cmd_kind == DF_CoreCmdKind_ToggleWatchPin)
           {
-            B32 removed_existing = 0;
-            for(DF_Entity *child = entity->first, *next = 0; !df_entity_is_nil(child); child = next)
+            DF_EntityList wps = df_query_cached_entity_list_with_kind(DF_EntityKind_WatchPin);
+            for(DF_EntityNode *n = wps.first; n != 0; n = n->next)
             {
-              next = child->next;
-              if(child->kind == DF_EntityKind_WatchPin && child->flags & DF_EntityFlag_HasTextPoint && child->text_point.line == line_num &&
-                 str8_match(child->name, params.string, 0))
+              DF_Entity *wp = n->entity;
+              DF_Entity *loc = df_entity_child_from_kind(wp, DF_EntityKind_Location);
+              if((loc->flags & DF_EntityFlag_HasTextPoint && path_match_normalized(loc->name, file_path) && loc->text_point.line == pt.line) ||
+                 (loc->flags & DF_EntityFlag_HasVAddr && loc->vaddr == vaddr) ||
+                 (!(loc->flags & DF_EntityFlag_HasTextPoint) && str8_match(loc->name, name, 0)))
               {
-                removed_existing = 1;
-                df_entity_mark_for_deletion(child);
+                df_entity_mark_for_deletion(wp);
+                removed_already_existing = 1;
+                break;
               }
-            }
-            if(removed_existing == 0)
-            {
-              DF_Entity *watch = &df_g_nil_entity;
-              DF_StateDeltaHistoryBatch(df_state_delta_history())
-              {
-                watch = df_entity_alloc(entity, DF_EntityKind_WatchPin);
-              }
-              df_entity_equip_txt_pt(watch, params.text_point);
-              df_entity_equip_name(watch, params.string);
-              df_entity_equip_cfg_src(watch, DF_CfgSrc_Project);
             }
           }
-          else if(params.vaddr != 0)
+          if(!removed_already_existing)
           {
-            B32 removed_existing = 0;
-            DF_EntityList pins = df_query_cached_entity_list_with_kind(DF_EntityKind_WatchPin);
-            for(DF_EntityNode *n = pins.first; n != 0; n = n->next)
+            DF_Entity *wp = df_entity_alloc(df_entity_root(), DF_EntityKind_WatchPin);
+            df_entity_equip_name(wp, name);
+            df_entity_equip_cfg_src(wp, DF_CfgSrc_Project);
+            DF_Entity *loc = df_entity_alloc(wp, DF_EntityKind_Location);
+            if(file_path.size != 0 && pt.line != 0)
             {
-              DF_Entity *pin = n->entity;
-              if(pin->flags & DF_EntityFlag_HasVAddr && pin->vaddr == params.vaddr && str8_match(pin->name, params.string, 0))
-              {
-                removed_existing = 1;
-                df_entity_mark_for_deletion(pin);
-              }
+              df_entity_equip_name(loc, file_path);
+              df_entity_equip_txt_pt(loc, pt);
             }
-            if(!removed_existing)
+            else if(vaddr != 0)
             {
-              DF_Entity *pin = &df_g_nil_entity;
-              DF_StateDeltaHistoryBatch(df_state_delta_history())
-              {
-                pin = df_entity_alloc(df_entity_root(), DF_EntityKind_WatchPin);
-              }
-              df_entity_equip_vaddr(pin, params.vaddr);
-              df_entity_equip_name(pin, params.string);
-              df_entity_equip_cfg_src(pin, DF_CfgSrc_Project);
+              df_entity_equip_vaddr(loc, vaddr);
             }
           }
         }break;

@@ -693,9 +693,10 @@ df_code_view_build(Arena *arena, DF_Window *ws, DF_Panel *panel, DF_View *view, 
       for(DF_EntityNode *n = bps.first; n != 0; n = n->next)
       {
         DF_Entity *bp = n->entity;
-        if(bp->flags & DF_EntityFlag_HasVAddr && contains_1u64(dasm_vaddr_range, bp->vaddr))
+        DF_Entity *loc = df_entity_child_from_kind(bp, DF_EntityKind_Location);
+        if(loc->flags & DF_EntityFlag_HasVAddr && contains_1u64(dasm_vaddr_range, loc->vaddr))
         {
-          U64 off = bp->vaddr-dasm_vaddr_range.min;
+          U64 off = loc->vaddr-dasm_vaddr_range.min;
           U64 idx = dasm_line_array_idx_from_code_off__linear_scan(dasm_lines, off);
           S64 line_num = (S64)(idx+1);
           if(contains_1s64(visible_line_num_range, line_num))
@@ -714,9 +715,10 @@ df_code_view_build(Arena *arena, DF_Window *ws, DF_Panel *panel, DF_View *view, 
       for(DF_EntityNode *n = pins.first; n != 0; n = n->next)
       {
         DF_Entity *pin = n->entity;
-        if(pin->flags & DF_EntityFlag_HasVAddr && contains_1u64(dasm_vaddr_range, pin->vaddr))
+        DF_Entity *loc = df_entity_child_from_kind(pin, DF_EntityKind_Location);
+        if(loc->flags & DF_EntityFlag_HasVAddr && contains_1u64(dasm_vaddr_range, loc->vaddr))
         {
-          U64 off = pin->vaddr-dasm_vaddr_range.min;
+          U64 off = loc->vaddr-dasm_vaddr_range.min;
           U64 idx = dasm_line_array_idx_from_code_off__linear_scan(dasm_lines, off);
           S64 line_num = (S64)(idx+1);
           if(contains_1s64(visible_line_num_range, line_num))
