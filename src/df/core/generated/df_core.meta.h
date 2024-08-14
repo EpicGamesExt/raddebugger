@@ -21,10 +21,8 @@ DF_EntityKind_Nil,
 DF_EntityKind_Root,
 DF_EntityKind_Machine,
 DF_EntityKind_File,
-DF_EntityKind_OverrideFileLink,
 DF_EntityKind_AutoViewRule,
-DF_EntityKind_SourcePath,
-DF_EntityKind_DestPath,
+DF_EntityKind_FilePathMap,
 DF_EntityKind_WatchPin,
 DF_EntityKind_Watch,
 DF_EntityKind_ViewRule,
@@ -468,11 +466,12 @@ struct {B32 *value_ptr; String8 name;} DEV_toggle_table[] =
 };
 C_LINKAGE_BEGIN
 extern Rng1U64 df_g_cmd_param_slot_range_table[24];
-extern DF_IconKind df_g_entity_kind_icon_kind_table[30];
-extern String8 df_g_entity_kind_display_string_table[30];
-extern String8 df_g_entity_kind_name_lower_table[30];
-extern String8 df_g_entity_kind_name_label_table[30];
-extern DF_EntityKindFlags df_g_entity_kind_flags_table[30];
+extern DF_IconKind df_g_entity_kind_icon_kind_table[28];
+extern String8 df_g_entity_kind_display_string_table[28];
+extern String8 df_g_entity_kind_name_lower_table[28];
+extern String8 df_g_entity_kind_name_lower_plural_table[28];
+extern String8 df_g_entity_kind_name_label_table[28];
+extern DF_EntityKindFlags df_g_entity_kind_flags_table[28];
 extern String8 df_g_cfg_src_string_table[4];
 extern DF_CoreCmdKind df_g_cfg_src_load_cmd_kind_table[4];
 extern DF_CoreCmdKind df_g_cfg_src_write_cmd_kind_table[4];

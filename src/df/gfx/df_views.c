@@ -4849,7 +4849,7 @@ DF_VIEW_UI_FUNCTION_DEF(FilePathMap)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
-  DF_EntityList maps_list = df_query_cached_entity_list_with_kind(DF_EntityKind_OverrideFileLink);
+  DF_EntityList maps_list = df_query_cached_entity_list_with_kind(DF_EntityKind_FilePathMap);
   DF_EntityArray maps = df_entity_array_from_list(scratch.arena, &maps_list);
   F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
   
@@ -4940,9 +4940,10 @@ DF_VIEW_UI_FUNCTION_DEF(FilePathMap)
     {
       U64 map_idx = row_idx-1;
       DF_Entity *map = (map_idx < maps.count ? maps.v[map_idx] : &df_g_nil_entity);
-      DF_Entity *map_link = df_entity_from_handle(map->entity_handle);
-      String8 map_src_path = df_full_path_from_entity(scratch.arena, map);
-      String8 map_dst_path = df_full_path_from_entity(scratch.arena, map_link);
+      DF_Entity *map_src = df_entity_child_from_kind(map, DF_EntityKind_Source);
+      DF_Entity *map_dst = df_entity_child_from_kind(map, DF_EntityKind_Dest);
+      String8 map_src_path = map_src->name;
+      String8 map_dst_path = map_dst->name;
       B32 row_selected = (fpms->cursor.y == row_idx);
       
       //- rjf: src

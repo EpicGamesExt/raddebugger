@@ -16,71 +16,69 @@ DF_CfgSrcTable:
 ////////////////////////////////
 //~ rjf: Entity Kind Tables
 
-@table(name          name_lower            op_delete  op_freeze  op_edit  op_rename  op_enable  op_cond  op_dup  lf_mut_user_cfg  tr_mut_user_cfg  lf_mut_prof_cfg  tr_mut_prof_cfg  lf_mut_halt  lf_mut_dbg  tr_mut_halt  tr_mut_dbg  name_is_code  name_is_path  user_lifetime  name_label   icon_kind  display_string)
-//                                         |                                                                                                                                                                                                                                   |
-//                                         |                                                 __________________________________________________________________________________________________________________________________________________________________________________/
-//                                         |                                                /
-//                                          operations________    mutation cascading__  names lt
-//                                         /..................\  /....................\ /...\ |
-//                                         dl fz ed rn en cn dp lu tu lp tp lh ld th td nc np ul
+@table(name          name_lower            name_lower_plural             op_delete  op_freeze  op_edit  op_rename  op_enable  op_cond  op_dup  lf_mut_user_cfg  tr_mut_user_cfg  lf_mut_prof_cfg  tr_mut_prof_cfg  lf_mut_halt  lf_mut_dbg  tr_mut_halt  tr_mut_dbg  name_is_code  name_is_path  user_lifetime  is_serialized  name_label   icon_kind  display_string)
+//                                                                       |                                                                                                                                                                                                                                                  |
+//                                                                       |                                                 _________________________________________________________________________________________________________________________________________________________________________________________________/
+//                                                                       |                                                /
+//                                                                        operations________    mutation cascading__  names lt sz
+//                                                                       /..................\  /....................\ /...\ |  |
+//                                                                       dl fz ed rn en cn dp lu tu lp tp lh ld th td nc np ul iz
 DF_EntityKindTable:
 {
-  {Nil                nil                   0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0                      "Label"             Null                   "Nil"                        }
-  {Root               root                  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0                      "Label"             Null                   "Root"                       }
-  {Machine            machine               0  1  0  1  0  0  0  0  0  0  0  0  0  0  0  0  0  0                      "Label"             Machine                "Machine"                    }
+  {Nil                nil                   nils                          0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0                      "Label"             Null                   "Nil"                        }
+  {Root               root                  roots                         0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0                      "Label"             Null                   "Root"                       }
+  {Machine            machine               machines                      0  1  0  1  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0                      "Label"             Machine                "Machine"                    }
   
   //- rjf: filesystem modeling
-  {File               file                  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0                      "Label"             FileOutline            "File"                       }
-  {OverrideFileLink   override_file_link    0  0  0  0  0  0  0  1  0  0  0  0  0  0  0  0  0  0                      "Label"             FileOutline            "Override File Link"         }
+  {File               file                  files                         0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0                      "Label"             FileOutline            "File"                       }
   
   //- rjf: auto view rules
-  {AutoViewRule       auto_view_rule        0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  1                      "Label"             Binoculars             "Auto View Rule"             }
+  {AutoViewRule       auto_view_rule        auto_view_rules               0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  1  1                      "Label"             Binoculars             "Auto View Rule"             }
   
   //- rjf: file path maps
-  {SourcePath         source_path           0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0                      "Path"              Null                   "Source Path"                }
-  {DestPath           dest_path             0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0                      "Path"              Null                   "Destination Path"           }
+  {FilePathMap        file_path_map         file_path_maps                0  0  0  0  0  0  0  1  0  0  0  0  0  0  0  0  0  0  1                      "Label"             FileOutline            "File Path Map"              }
   
   //- rjf: watch pins
-  {WatchPin           watch_pin             1  0  0  1  0  0  1  0  0  0  0  0  0  0  0  1  0  1                      "Expression"        Pin                    "Watch Pin"                  }
+  {WatchPin           watch_pin             watch_pins                    1  0  0  1  0  0  1  0  0  0  0  0  0  0  0  1  0  1  1                      "Expression"        Pin                    "Watch Pin"                  }
   
   //- rjf: watches
-  {Watch              watch                 1  0  0  1  1  0  1  0  0  0  0  0  0  0  0  1  0  1                      "Expression"        Binoculars             "Watch"                      }
-  {ViewRule           view_rule             1  0  0  1  1  0  1  0  0  0  0  0  0  0  0  1  0  1                      "Expression"        Binoculars             "View Rule"                  }
+  {Watch              watch                 watches                       1  0  0  1  1  0  1  0  0  0  0  0  0  0  0  1  0  1  1                      "Expression"        Binoculars             "Watch"                      }
+  {ViewRule           view_rule             view_rules                    1  0  0  1  1  0  1  0  0  0  0  0  0  0  0  1  0  1  0                      "Expression"        Binoculars             "View Rule"                  }
   
   //- rjf: breakpoints
-  {Breakpoint         breakpoint            1  0  0  1  1  1  1  0  0  1  0  1  0  0  0  0  0  1                      "Label"             CircleFilled           "Breakpoint"                 }
-  {Condition          condition             0  0  0  0  0  0  0  0  0  1  1  1  0  0  0  1  0  1                      "Expression"        CircleFilled           "Condition"                  }
+  {Breakpoint         breakpoint            breakpoints                   1  0  0  1  1  1  1  0  0  1  0  1  0  0  0  0  0  1  1                      "Label"             CircleFilled           "Breakpoint"                 }
+  {Condition          condition             conditions                    0  0  0  0  0  0  0  0  0  1  1  1  0  0  0  1  0  1  0                      "Expression"        CircleFilled           "Condition"                  }
   
   //- rjf: user-controlled locations (source, addresses, symbol names)
-  {Location           location              0  0  0  0  0  0  0  0  0  1  1  1  0  0  0  1  1  1                      "Location"          Null                   "Location"                   }
+  {Location           location              locations                     0  0  0  0  0  0  0  0  0  1  1  1  0  0  0  1  1  1  0                      "Location"          Null                   "Location"                   }
   
   //- rjf: targets
-  {Target             target                1  0  1  1  1  0  1  0  0  1  0  0  0  0  0  0  0  1                      "Label"             Target                 "Target"                     }
-  {Executable         executable            0  0  0  0  0  0  0  0  0  1  0  0  0  0  0  0  1  1                      "Executable"        Null                   "Executable"                 }
-  {Arguments          arguments             0  0  0  0  0  0  0  0  0  1  0  0  0  0  0  0  0  1                      "Arguments"         Null                   "Arguments"                  }
-  {WorkingDirectory   working_directory     0  0  0  0  0  0  0  0  0  1  0  0  0  0  0  0  1  1                      "Execution Path"    Null                   "Working Directory"          }
-  {EntryPoint         entry_point           0  0  0  0  0  0  0  0  0  1  0  1  0  0  0  0  0  1                      "Symbol Name"       Null                   "Entry Point"                }
+  {Target             target                targets                       1  0  1  1  1  0  1  0  0  1  0  0  0  0  0  0  0  1  1                      "Label"             Target                 "Target"                     }
+  {Executable         executable            executables                   0  0  0  0  0  0  0  0  0  1  0  0  0  0  0  0  1  1  0                      "Executable"        Null                   "Executable"                 }
+  {Arguments          arguments             argumentses                   0  0  0  0  0  0  0  0  0  1  0  0  0  0  0  0  0  1  0                      "Arguments"         Null                   "Arguments"                  }
+  {WorkingDirectory   working_directory     working_directories           0  0  0  0  0  0  0  0  0  1  0  0  0  0  0  0  1  1  0                      "Execution Path"    Null                   "Working Directory"          }
+  {EntryPoint         entry_point           entry_points                  0  0  0  0  0  0  0  0  0  1  0  1  0  0  0  0  0  1  0                      "Symbol Name"       Null                   "Entry Point"                }
   
   //- rjf: recent projects
-  {RecentProject      recent_project        0  0  0  0  0  0  0  1  1  0  0  0  0  0  0  0  1  0                      "Path"              Briefcase              "Recent Project"             }
+  {RecentProject      recent_project        recent_projects               0  0  0  0  0  0  0  1  1  0  0  0  0  0  0  0  1  0  1                      "Path"              Briefcase              "Recent Project"             }
   
   //- rjf: src -> dst mapping
-  {Source             source                0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0                      "Path"              Null                   "Source"                     }
-  {Dest               dest                  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0                      "Path"              Null                   "Destination"                }
+  {Source             source                sources                       0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0                      "Path"              Null                   "Source"                     }
+  {Dest               dest                  dests                         0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0                      "Path"              Null                   "Destination"                }
   
   //- rjf: control system entities
-  {Process            process               0  1  0  1  0  0  0  0  0  0  0  0  0  0  0  0  0  0                      "Label"             Threads                "Process"                    }
-  {Thread             thread                0  1  0  1  0  0  0  0  0  0  0  0  0  0  0  0  0  0                      "Label"             Thread                 "Thread"                     }
-  {Module             module                0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0                      "Label"             Module                 "Module"                     }
-  {PendingThreadName  pending_thread_name   0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0                      "Label"             Threads                "Pending Thread Name"        }
-  {DebugInfoPath      debug_info_path       0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0                      "Label"             Module                 "Debug Info Path"            }
+  {Process            process               processes                     0  1  0  1  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0                      "Label"             Threads                "Process"                    }
+  {Thread             thread                threads                       0  1  0  1  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0                      "Label"             Thread                 "Thread"                     }
+  {Module             module                modules                       0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0                      "Label"             Module                 "Module"                     }
+  {PendingThreadName  pending_thread_name   pending_thread_names          0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0                      "Label"             Threads                "Pending Thread Name"        }
+  {DebugInfoPath      debug_info_path       debug_info_paths              0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0                      "Label"             Module                 "Debug Info Path"            }
   
   //- rjf: parser task entities
-  {ConversionTask     conversion_task       0  0  0  1  0  0  0  0  0  0  0  0  0  0  0  0  0  0                      "Label"             Null                   "Conversion Task"            }
-  {ConversionFail     conversion_fail       0  0  0  1  0  0  0  0  0  0  0  0  0  0  0  0  0  0                      "Label"             Null                   "Conversion Failure"         }
+  {ConversionTask     conversion_task       conversion_tasks              0  0  0  1  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0                      "Label"             Null                   "Conversion Task"            }
+  {ConversionFail     conversion_fail       conversion_fails              0  0  0  1  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0                      "Label"             Null                   "Conversion Failure"         }
   
   //- rjf: history
-  {EndedProcess       ended_process         1  0  0  1  0  0  0  0  0  0  0  0  0  0  0  0  0  0                      "Label"             Null                   "EndedProcess"               }
+  {EndedProcess       ended_process         ended_processes               1  0  0  1  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0                      "Label"             Null                   "EndedProcess"               }
 }
 
 ////////////////////////////////
@@ -711,6 +709,11 @@ DF_DevToggleTable:
   @expand(DF_EntityKindTable a) `str8_lit_comp("$(a.name_lower)")`,
 }
 
+@data(String8) df_g_entity_kind_name_lower_plural_table:
+{
+  @expand(DF_EntityKindTable a) `str8_lit_comp("$(a.name_lower_plural)")`,
+}
+
 @data(String8) df_g_entity_kind_name_label_table:
 {
   @expand(DF_EntityKindTable a) `str8_lit_comp("$(a.name_label)")`,
@@ -718,7 +721,7 @@ DF_DevToggleTable:
 
 @data(DF_EntityKindFlags) df_g_entity_kind_flags_table:
 {
-  @expand(DF_EntityKindTable a) `($(a.op_delete)*DF_EntityKindFlag_CanDelete) | ($(a.op_freeze)*DF_EntityKindFlag_CanFreeze) | ($(a.op_edit)*DF_EntityKindFlag_CanEdit) | ($(a.op_rename)*DF_EntityKindFlag_CanRename) | ($(a.op_enable)*DF_EntityKindFlag_CanEnable) | ($(a.op_cond)*DF_EntityKindFlag_CanCondition) | ($(a.op_dup)*DF_EntityKindFlag_CanDuplicate) | ($(a.lf_mut_user_cfg)*DF_EntityKindFlag_LeafMutUserConfig | $(a.lf_mut_prof_cfg)*DF_EntityKindFlag_LeafMutProjectConfig | $(a.lf_mut_halt)*DF_EntityKindFlag_LeafMutSoftHalt | $(a.lf_mut_dbg)*DF_EntityKindFlag_LeafMutDebugInfoMap | $(a.tr_mut_user_cfg)*DF_EntityKindFlag_TreeMutUserConfig | $(a.tr_mut_prof_cfg)*DF_EntityKindFlag_TreeMutProjectConfig | $(a.tr_mut_halt)*DF_EntityKindFlag_TreeMutSoftHalt | $(a.tr_mut_dbg)*DF_EntityKindFlag_TreeMutDebugInfoMap | $(a.name_is_code)*DF_EntityKindFlag_NameIsCode | $(a.name_is_path)*DF_EntityKindFlag_NameIsPath | $(a.user_lifetime)*DF_EntityKindFlag_UserDefinedLifetime)`,
+  @expand(DF_EntityKindTable a) `($(a.op_delete)*DF_EntityKindFlag_CanDelete) | ($(a.op_freeze)*DF_EntityKindFlag_CanFreeze) | ($(a.op_edit)*DF_EntityKindFlag_CanEdit) | ($(a.op_rename)*DF_EntityKindFlag_CanRename) | ($(a.op_enable)*DF_EntityKindFlag_CanEnable) | ($(a.op_cond)*DF_EntityKindFlag_CanCondition) | ($(a.op_dup)*DF_EntityKindFlag_CanDuplicate) | ($(a.lf_mut_user_cfg)*DF_EntityKindFlag_LeafMutUserConfig | $(a.lf_mut_prof_cfg)*DF_EntityKindFlag_LeafMutProjectConfig | $(a.lf_mut_halt)*DF_EntityKindFlag_LeafMutSoftHalt | $(a.lf_mut_dbg)*DF_EntityKindFlag_LeafMutDebugInfoMap | $(a.tr_mut_user_cfg)*DF_EntityKindFlag_TreeMutUserConfig | $(a.tr_mut_prof_cfg)*DF_EntityKindFlag_TreeMutProjectConfig | $(a.tr_mut_halt)*DF_EntityKindFlag_TreeMutSoftHalt | $(a.tr_mut_dbg)*DF_EntityKindFlag_TreeMutDebugInfoMap | $(a.name_is_code)*DF_EntityKindFlag_NameIsCode | $(a.name_is_path)*DF_EntityKindFlag_NameIsPath | $(a.user_lifetime)*DF_EntityKindFlag_UserDefinedLifetime) | $(a.is_serialized)*DF_EntityKindFlag_IsSerializedToConfig`,
 }
 
 //- rjf: config source tables

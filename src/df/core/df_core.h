@@ -99,6 +99,9 @@ enum
   
   //- rjf: lifetime categorization
   DF_EntityKindFlag_UserDefinedLifetime      = (1<<17),
+  
+  //- rjf: serialization
+  DF_EntityKindFlag_IsSerializedToConfig     = (1<<18),
 };
 
 ////////////////////////////////
@@ -1460,7 +1463,6 @@ internal void df_entity_equip_namef(DF_Entity *entity, char *fmt, ...);
 
 //- rjf: opening folders/files & maintaining the entity model of the filesystem
 internal DF_Entity *df_entity_from_path(String8 path, DF_EntityFromPathFlags flags);
-internal DF_EntityList df_possible_overrides_from_entity(Arena *arena, DF_Entity *entity);
 
 //- rjf: file path map override lookups
 internal String8List df_possible_overrides_from_file_path(Arena *arena, String8 file_path);
@@ -1532,9 +1534,6 @@ internal DF_LineList df_lines_from_dbgi_key_voff(Arena *arena, DI_Key *dbgi_key,
 //- rjf: file:line -> line info
 internal DF_LineListArray df_lines_array_from_file_path_line_range(Arena *arena, String8 file_path, Rng1S64 line_num_range);
 internal DF_LineList df_lines_from_file_path_line_num(Arena *arena, String8 file_path, S64 line_num);
-
-//- rjf: src -> voff lookups
-internal DF_TextLineSrc2DasmInfoListArray df_text_line_src2dasm_info_list_array_from_src_line_range(Arena *arena, DF_Entity *file, Rng1S64 line_num_range);
 
 ////////////////////////////////
 //~ rjf: Process/Thread/Module Info Lookups

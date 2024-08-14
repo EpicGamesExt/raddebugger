@@ -3681,9 +3681,9 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           UI_Row
           {
             ui_spacer(ui_em(2.f*indent, 1.f));
-            if(e->kind == DF_EntityKind_OverrideFileLink)
+            DF_Entity *dst = df_entity_from_handle(e->entity_handle);
+            if(!df_entity_is_nil(dst))
             {
-              DF_Entity *dst = df_entity_from_handle(e->entity_handle);
               ui_labelf("[link] %S -> %S", e->name, dst->name);
             }
             else
@@ -4085,35 +4085,15 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           }
         }
         
-        // rjf: go-to-text-location
-        if(entity->flags & DF_EntityFlag_HasTextPoint)
+        // rjf: go-to-location
         {
-          DF_Entity *file_ancestor = df_entity_ancestor_from_kind(entity, DF_EntityKind_File);
-          if(!df_entity_is_nil(file_ancestor) && ui_clicked(df_icon_buttonf(ws, DF_IconKind_FileOutline, 0, "Go To Location")))
-          {
-            Temp scratch = scratch_begin(&arena, 1);
-            DF_CmdParams params = df_cmd_params_from_window(ws);
-            params.file_path = df_full_path_from_entity(scratch.arena, file_ancestor);
-            params.text_point = entity->text_point;
-            df_cmd_params_mark_slot(&params, DF_CmdParamSlot_FilePath);
-            df_cmd_params_mark_slot(&params, DF_CmdParamSlot_TextPoint);
-            df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FindCodeLocation));
-            ui_ctx_menu_close();
-            scratch_end(scratch);
-          }
-        }
-        
-        // rjf: go-to-vaddr-location
-        if(entity->flags & DF_EntityFlag_HasVAddr)
-        {
-          DF_Entity *thread = df_entity_from_handle(df_interact_regs()->thread);
-          if(entity->vaddr != 0 && !df_entity_is_nil(thread) && ui_clicked(df_icon_buttonf(ws, DF_IconKind_FileOutline, 0, "Go To Location")))
+          DF_Entity *loc = df_entity_child_from_kind(entity, DF_EntityKind_Location);
+          if(!df_entity_is_nil(loc) && ui_clicked(df_icon_buttonf(ws, DF_IconKind_FileOutline, 0, "Go To Location")))
           {
             DF_CmdParams params = df_cmd_params_from_window(ws);
-            params.entity = df_handle_from_entity(df_entity_ancestor_from_kind(thread, DF_EntityKind_Process));
-            params.vaddr = entity->vaddr;
-            df_cmd_params_mark_slot(&params, DF_CmdParamSlot_Entity);
-            df_cmd_params_mark_slot(&params, DF_CmdParamSlot_VirtualAddr);
+            params.file_path = loc->name;
+            params.text_point = loc->text_point;
+            params.vaddr = loc->vaddr;
             df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FindCodeLocation));
             ui_ctx_menu_close();
           }
