@@ -12,6 +12,7 @@ struct E_Eval
 {
   E_Value value;
   E_Mode mode;
+  E_Space space;
   E_TypeKey type_key;
   E_InterpretationCode code;
   E_MsgList msgs;

@@ -47,15 +47,6 @@ struct E_TokenArray
 ////////////////////////////////
 //~ rjf: Expression Tree Types
 
-typedef enum E_Mode
-{
-  E_Mode_Null,
-  E_Mode_Value,
-  E_Mode_Addr,
-  E_Mode_Reg,
-}
-E_Mode;
-
 typedef struct E_Expr E_Expr;
 struct E_Expr
 {
@@ -65,7 +56,7 @@ struct E_Expr
   void *location;
   E_ExprKind kind;
   E_Mode mode;
-  // E_Space space;
+  E_Space space;
   E_TypeKey type_key;
   U32 u32;
   F32 f32;

@@ -52,7 +52,7 @@ struct E_IRTreeAndType
   E_IRNode *root;
   E_TypeKey type_key;
   E_Mode mode;
-  // E_Space space;
+  E_Space space;
   E_MsgList msgs;
 };
 
@@ -91,6 +91,7 @@ internal void e_oplist_push_op(Arena *arena, E_OpList *list, RDI_EvalOp opcode, 
 internal void e_oplist_push_uconst(Arena *arena, E_OpList *list, U64 x);
 internal void e_oplist_push_sconst(Arena *arena, E_OpList *list, S64 x);
 internal void e_oplist_push_bytecode(Arena *arena, E_OpList *list, String8 bytecode);
+internal void e_oplist_push_set_space(Arena *arena, E_OpList *list, E_Space space);
 internal void e_oplist_push_string_literal(Arena *arena, E_OpList *list, String8 string);
 internal void e_oplist_concat_in_place(E_OpList *dst, E_OpList *to_push);
 
@@ -106,12 +107,12 @@ internal E_IRNode *e_irtree_binary_op_u(Arena *arena, RDI_EvalOp op, E_IRNode *l
 internal E_IRNode *e_irtree_conditional(Arena *arena, E_IRNode *c, E_IRNode *l, E_IRNode *r);
 internal E_IRNode *e_irtree_bytecode_no_copy(Arena *arena, String8 bytecode);
 internal E_IRNode *e_irtree_string_literal(Arena *arena, String8 string);
-internal E_IRNode *e_irtree_set_space(Arena *arena, E_Space space);
-internal E_IRNode *e_irtree_mem_read_type(Arena *arena, E_IRNode *c, E_TypeKey type_key);
+internal E_IRNode *e_irtree_set_space(Arena *arena, E_Space space, E_IRNode *c);
+internal E_IRNode *e_irtree_mem_read_type(Arena *arena, E_Space space, E_IRNode *c, E_TypeKey type_key);
 internal E_IRNode *e_irtree_convert_lo(Arena *arena, E_IRNode *c, RDI_EvalTypeGroup out, RDI_EvalTypeGroup in);
 internal E_IRNode *e_irtree_trunc(Arena *arena, E_IRNode *c, E_TypeKey type_key);
 internal E_IRNode *e_irtree_convert_hi(Arena *arena, E_IRNode *c, E_TypeKey out, E_TypeKey in);
-internal E_IRNode *e_irtree_resolve_to_value(Arena *arena, E_Mode from_mode, E_IRNode *tree, E_TypeKey type_key);
+internal E_IRNode *e_irtree_resolve_to_value(Arena *arena, E_Space from_space, E_Mode from_mode, E_IRNode *tree, E_TypeKey type_key);
 
 //- rjf: top-level irtree/type extraction
 internal E_IRTreeAndType e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr);

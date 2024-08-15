@@ -3689,8 +3689,9 @@ df_ctrl_last_stop_event(void)
 //~ rjf: Evaluation Context
 
 internal B32
-df_eval_memory_read(void *u, void *out, Rng1U64 vaddr_range)
+df_eval_memory_read(void *u, E_Space space, void *out, Rng1U64 vaddr_range)
 {
+  // TODO(rjf): @spaces pick the correct process from space
   B32 result = 0;
   DF_Entity *process = (DF_Entity *)u;
   if(process->kind == DF_EntityKind_Process)
@@ -4314,27 +4315,30 @@ df_commit_eval_value(E_Eval dst_eval, E_Eval src_eval)
   //- rjf: commit
   if(result && commit_data.size != 0)
   {
-    switch(dst_eval.mode)
+    if(dst_eval.mode == E_Mode_Offset)
     {
-      default:{}break;
-      case E_Mode_Addr:
+      switch(dst_eval.space)
       {
-        ctrl_process_write(process->ctrl_machine_id, process->ctrl_handle, r1u64(dst_eval.value.u64, dst_eval.value.u64+commit_data.size), commit_data.str);
-      }break;
-      case E_Mode_Reg:
-      {
-        CTRL_Unwind unwind = df_query_cached_unwind_from_thread(thread);
-        Architecture arch = df_architecture_from_entity(thread);
-        U64 reg_block_size = regs_block_size_from_architecture(arch);
-        if(unwind.frames.count != 0 &&
-           (0 <= dst_eval.value.u64 && dst_eval.value.u64+commit_data.size < reg_block_size))
+        case E_Space_Regs:
         {
-          void *new_regs = push_array(scratch.arena, U8, reg_block_size);
-          MemoryCopy(new_regs, unwind.frames.v[0].regs, reg_block_size);
-          MemoryCopy((U8 *)new_regs+dst_eval.value.u64, commit_data.str, commit_data.size);
-          result = ctrl_thread_write_reg_block(thread->ctrl_machine_id, thread->ctrl_handle, new_regs);
-        }
-      }break;
+          CTRL_Unwind unwind = df_query_cached_unwind_from_thread(thread);
+          Architecture arch = df_architecture_from_entity(thread);
+          U64 reg_block_size = regs_block_size_from_architecture(arch);
+          if(unwind.frames.count != 0 &&
+             (0 <= dst_eval.value.u64 && dst_eval.value.u64+commit_data.size < reg_block_size))
+          {
+            void *new_regs = push_array(scratch.arena, U8, reg_block_size);
+            MemoryCopy(new_regs, unwind.frames.v[0].regs, reg_block_size);
+            MemoryCopy((U8 *)new_regs+dst_eval.value.u64, commit_data.str, commit_data.size);
+            result = ctrl_thread_write_reg_block(thread->ctrl_machine_id, thread->ctrl_handle, new_regs);
+          }
+        }break;
+        default:
+        {
+          // TODO(rjf): @spaces pick the right process, from the space
+          ctrl_process_write(process->ctrl_machine_id, process->ctrl_handle, r1u64(dst_eval.value.u64, dst_eval.value.u64+commit_data.size), commit_data.str);
+        }break;
+      }
     }
   }
   
@@ -4445,7 +4449,6 @@ df_eval_link_base_chunk_list_from_eval(Arena *arena, E_TypeKey link_member_type_
         chunk->count = 0;
         SLLQueuePush(list.first, list.last, chunk);
       }
-      chunk->b[chunk->count].mode = base_eval.mode;
       chunk->b[chunk->count].offset = base_eval.value.u64;
       chunk->count += 1;
       list.count += 1;
@@ -4455,14 +4458,15 @@ df_eval_link_base_chunk_list_from_eval(Arena *arena, E_TypeKey link_member_type_
     E_Eval link_member_eval =
     {
       .value = {.u64 = base_eval.value.u64 + link_member_off},
-      base_eval.mode,
+      .mode = E_Mode_Offset,
+      .space = base_eval.space,
       .type_key = link_member_type_key,
     };
     E_Eval link_member_value_eval = e_value_eval_from_eval(link_member_eval);
     
     // rjf: advance to next link
     last_eval = base_eval;
-    base_eval.mode = E_Mode_Addr;
+    base_eval.mode = E_Mode_Offset;
     base_eval.value.u64 = link_member_value_eval.value.u64;
   }
   return list;
@@ -4609,7 +4613,8 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DF_EvalView *eval_view, DF_Ex
         direct_type_kind == E_TypeKind_IncompleteClass))
     {
       udt_eval.type_key = direct_type_key;
-      udt_eval.mode  = E_Mode_Addr;
+      udt_eval.mode  = E_Mode_Offset;
+      udt_eval.space = ptr_val_eval.space;
       udt_eval.value = ptr_val_eval.value;
       udt_type_kind  = e_type_kind_from_key(direct_type_key);
     }
@@ -4618,7 +4623,8 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DF_EvalView *eval_view, DF_Ex
     if(direct_type_kind == E_TypeKind_Array)
     {
       arr_eval.type_key = direct_type_key;
-      arr_eval.mode  = E_Mode_Addr;
+      arr_eval.mode  = E_Mode_Offset;
+      arr_eval.space = ptr_val_eval.space;
       arr_eval.value = ptr_val_eval.value;
       arr_type_kind  = e_type_kind_from_key(direct_type_key);
     }
@@ -4627,7 +4633,8 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DF_EvalView *eval_view, DF_Ex
     if(direct_type_kind == E_TypeKind_Ptr || direct_type_kind == E_TypeKind_LRef || direct_type_kind == E_TypeKind_RRef)
     {
       ptr_eval.type_key = direct_type_key;
-      ptr_eval.mode  = E_Mode_Addr;
+      ptr_eval.mode  = E_Mode_Offset;
+      ptr_eval.space = ptr_val_eval.space;
       ptr_eval.value = ptr_val_eval.value;
       ptr_type_kind  = e_type_kind_from_key(direct_type_key);
     }
@@ -4748,8 +4755,9 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DF_EvalView *eval_view, DF_Ex
         E_Member *member = &filtered_data_members.v[child_idx];
         E_Eval child_eval = zero_struct;
         {
-          child_eval.type_key = member->type_key;
-          child_eval.mode = udt_eval.mode;
+          child_eval.type_key  = member->type_key;
+          child_eval.mode      = udt_eval.mode;
+          child_eval.space     = udt_eval.space;
           child_eval.value.u64 = udt_eval.value.u64 + member->off;
         }
         df_append_viz_blocks_for_parent__rec(arena, eval_view, key, child->key, member->name, child_eval, member, &child_cfg, depth+1, list_out);
@@ -4867,7 +4875,8 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DF_EvalView *eval_view, DF_Ex
           E_Eval child_eval = zero_struct;
           {
             child_eval.type_key = udt_eval.type_key;
-            child_eval.mode     = link_base.mode;
+            child_eval.mode     = E_Mode_Offset;
+            child_eval.space    = udt_eval.space;
             child_eval.value.u64= link_base.offset;
           }
           df_append_viz_blocks_for_parent__rec(arena, eval_view, key, child->key, push_str8f(arena, "[%I64u]", child_idx), child_eval, 0, &child_cfg, depth+1, list_out);
@@ -4926,6 +4935,7 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DF_EvalView *eval_view, DF_Ex
         {
           child_eval.type_key = element_type_key;
           child_eval.mode     = arr_eval.mode;
+          child_eval.space    = arr_eval.space;
           child_eval.value.u64= arr_eval.value.u64 + child_idx*element_type_byte_size;
         }
         df_append_viz_blocks_for_parent__rec(arena, eval_view, key, child->key, push_str8f(arena, "[%I64u]", child_idx), child_eval, 0, &child_cfg, depth+1, list_out);
@@ -8322,6 +8332,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
     ctx->arch          = arch;
     ctx->memory_read_user_data = process;
     ctx->memory_read   = df_eval_memory_read;
+    ctx->primary_space = eval_modules_primary->space;
     ctx->reg_size      = regs_block_size_from_architecture(ctx->arch);
     ctx->reg_data      = push_array(arena, U8, ctx->reg_size);
     ctx->module_base   = push_array(arena, U64, 1);

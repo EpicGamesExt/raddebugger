@@ -650,7 +650,6 @@ struct DF_EvalViewCache
 typedef struct DF_EvalLinkBase DF_EvalLinkBase;
 struct DF_EvalLinkBase
 {
-  E_Mode mode;
   U64 offset;
 };
 
@@ -1564,7 +1563,7 @@ internal CTRL_Event df_ctrl_last_stop_event(void);
 ////////////////////////////////
 //~ rjf: Evaluation Context
 
-internal B32 df_eval_memory_read(void *u, void *out, Rng1U64 vaddr_range);
+internal B32 df_eval_memory_read(void *u, E_Space space, void *out, Rng1U64 vaddr_range);
 internal E_Eval df_eval_from_eval_cfg_table(Arena *arena, E_Eval eval, DF_CfgTable *cfg);
 
 ////////////////////////////////

@@ -2377,8 +2377,9 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
         switch(row->eval.mode)
         {
           default:{}break;
-          case E_Mode_Addr:
+          case E_Mode_Offset:
           {
+            // TODO(rjf): @spaces pick the right process from the eval's space
             U64 size = e_type_byte_size_from_key(row->eval.type_key);
             size = Min(size, 64);
             Rng1U64 vaddr_rng = r1u64(row->eval.value.u64, row->eval.value.u64+size);
@@ -2485,7 +2486,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
           ////////////////////
           //- rjf: draw start of cache lines in expansions
           //
-          if((row->eval.mode == E_Mode_Addr || row->eval.mode == E_Mode_Null) &&
+          if((row->eval.mode == E_Mode_Offset || row->eval.mode == E_Mode_Null) &&
              row->eval.msgs.count == 0 &&
              row->eval.value.u64%64 == 0 && row->depth > 0 &&
              !row_expanded)
@@ -2500,7 +2501,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
           ////////////////////
           //- rjf: draw mid-row cache line boundaries in expansions
           //
-          if((row->eval.mode == E_Mode_Addr || row->eval.mode == E_Mode_Null) &&
+          if((row->eval.mode == E_Mode_Offset || row->eval.mode == E_Mode_Null) &&
              row->eval.msgs.max_kind == E_MsgKind_Null &&
              row->eval.value.u64%64 != 0 &&
              row->depth > 0 &&
@@ -2695,6 +2696,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                   {
                     default:{}break;
                     case E_IRExtKind_Bytecode:{op_string = str8_lit("Bytecode");}break;
+                    case E_IRExtKind_SetSpace:{op_string = str8_lit("SetSpace");}break;
 #define X(name) case RDI_EvalOp_##name:{op_string = str8_lit(#name);}break;
                     RDI_EvalOp_XList
 #undef X
@@ -2720,6 +2722,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                   {
                     default:{}break;
                     case E_IRExtKind_Bytecode:{op_string = str8_lit("Bytecode");}break;
+                    case E_IRExtKind_SetSpace:{op_string = str8_lit("SetSpace");}break;
 #define X(name) case RDI_EvalOp_##name:{op_string = str8_lit(#name);}break;
                     RDI_EvalOp_XList
 #undef X
@@ -7532,7 +7535,7 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
       {
         String8 local_name = n->string;
         E_Eval local_eval = e_eval_from_string(scratch.arena, local_name);
-        if(local_eval.mode == E_Mode_Addr)
+        if(local_eval.mode == E_Mode_Offset)
         {
           E_TypeKind local_eval_type_kind = e_type_kind_from_key(local_eval.type_key);
           U64 local_eval_type_size = e_type_byte_size_from_key(local_eval.type_key);

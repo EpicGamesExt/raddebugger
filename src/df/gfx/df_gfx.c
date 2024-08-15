@@ -6133,7 +6133,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           DF_ExpandKey parent_key = df_expand_key_make(5381, 1);
           DF_ExpandKey key = df_expand_key_make(df_hash_from_expand_key(parent_key), 1);
           DF_EvalVizBlockList viz_blocks = df_eval_viz_block_list_from_eval_view_expr_keys(scratch.arena, eval_view, expr, parent_key, key);
-          U32 default_radix = (eval.mode == E_Mode_Reg ? 16 : 10);
+          U32 default_radix = (eval.space == E_Space_Regs ? 16 : 10);
           DF_EvalVizWindowedRowList viz_rows = df_eval_viz_windowed_row_list_from_viz_block_list(scratch.arena, scope, eval_view, default_radix, ui_top_font(), ui_top_font_size(), r1s64(0, 50), &viz_blocks);
           
           //- rjf: animate
@@ -6221,8 +6221,9 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
               switch(row->eval.mode)
               {
                 default:{}break;
-                case E_Mode_Addr:
+                case E_Mode_Offset:
                 {
+                  // TODO(rjf): @spaces pick the right process from the eval's space
                   U64 size = e_type_byte_size_from_key(row->eval.type_key);
                   size = Min(size, 64);
                   Rng1U64 vaddr_rng = r1u64(row->eval.value.u64, row->eval.value.u64+size);
@@ -8455,7 +8456,8 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
           {
             E_Eval pted_eval = zero_struct;
             pted_eval.type_key = direct_type_key;
-            pted_eval.mode     = E_Mode_Addr;
+            pted_eval.mode     = E_Mode_Offset;
+            pted_eval.space    = value_eval.space;
             pted_eval.value    = value_eval.value;
             String8List pted_strs = df_single_line_eval_value_strings_from_eval(arena, flags, default_radix, font, font_size, max_size-space_taken, depth+1, pted_eval, opt_member, cfg_table);
             if(pted_strs.total_size == 0)
@@ -8512,8 +8514,9 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
           switch(eval.mode)
           {
             default:{}break;
-            case E_Mode_Addr:
+            case E_Mode_Offset:
             {
+              // TODO(rjf): @spaces pick the right process from the eval's space
               CTRL_ProcessMemorySlice text_slice = ctrl_query_cached_zero_terminated_data_from_process_vaddr_limit(arena, process->ctrl_machine_id, process->ctrl_handle, eval.value.u64, 256, element_size, 0);
               text_data = text_slice.data;
             }break;
@@ -8612,6 +8615,7 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
             E_Eval member_eval = zero_struct;
             member_eval.type_key   = mem->type_key;
             member_eval.mode       = eval.mode;
+            member_eval.space      = eval.space;
             member_eval.value      = eval.value;
             member_eval.value.u64 += mem->off;
             String8List member_strs = df_single_line_eval_value_strings_from_eval(arena, flags, default_radix, font, font_size, max_size-space_taken, depth+1, member_eval, opt_member, cfg_table);
@@ -8820,6 +8824,7 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DI_Scope *scope,
           {
             member_eval.type_key = member->type_key;
             member_eval.mode     = block->eval.mode;
+            member_eval.space    = block->eval.space;
             member_eval.value    = block->eval.value;
             member_eval.value.u64 += member->off;
           }
@@ -8876,6 +8881,7 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DI_Scope *scope,
           {
             eval.type_key  = block->eval.type_key;
             eval.mode      = E_Mode_Value;
+            eval.space     = block->eval.space;
             eval.value.u64 = enum_val->val;
           }
           
@@ -8971,7 +8977,8 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DI_Scope *scope,
           E_Eval link_eval = zero_struct;
           {
             link_eval.type_key = block->eval.type_key;
-            link_eval.mode     = link_base->mode;
+            link_eval.mode     = E_Mode_Offset;
+            link_eval.space    = block->eval.space;
             link_eval.value.u64= link_base->offset;
           }
           

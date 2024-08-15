@@ -3796,8 +3796,9 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
 //- rjf: eval helpers
 
 internal B32
-ctrl_eval_memory_read(void *u, void *out, Rng1U64 vaddr_range)
+ctrl_eval_memory_read(void *u, E_Space space, void *out, Rng1U64 vaddr_range)
 {
+  // TODO(rjf): @spaces pick the correct process from space
   DMN_Handle process = *(DMN_Handle *)u;
   U64 read_size = dmn_process_read(process, vaddr_range, out);
   B32 result = (read_size == dim_1u64(vaddr_range));
@@ -4721,6 +4722,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
               ctx->arch          = arch;
               ctx->memory_read_user_data = &event->process;
               ctx->memory_read   = ctrl_eval_memory_read;
+              ctx->primary_space = eval_modules_primary->space;
               ctx->reg_size      = regs_block_size_from_architecture(ctx->arch);
               ctx->reg_data      = push_array(temp.arena, U8, ctx->reg_size);
               dmn_thread_read_reg_block(event->thread, ctx->reg_data);

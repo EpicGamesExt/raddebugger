@@ -147,7 +147,7 @@ df_vr_rgba_from_eval(E_Eval eval, DF_Entity *process)
     
     // rjf: extract r/g/b/a values from array
     case E_TypeKind_Array:
-    if(eval.mode == E_Mode_Addr)
+    if(eval.mode == E_Mode_Offset)
     {
       U64 array_total_size = e_type_byte_size_from_key(type_key);
       U64 array_total_size_capped = ClampTop(array_total_size, 64);
@@ -184,7 +184,7 @@ df_vr_rgba_from_eval(E_Eval eval, DF_Entity *process)
     case E_TypeKind_Struct:
     case E_TypeKind_Class:
     case E_TypeKind_Union:
-    if(eval.mode == E_Mode_Addr)
+    if(eval.mode == E_Mode_Offset)
     {
       U64 struct_total_size = e_type_byte_size_from_key(type_key);
       U64 struct_total_size_capped = ClampTop(struct_total_size, 64);

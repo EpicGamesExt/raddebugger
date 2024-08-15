@@ -17,6 +17,7 @@ e_eval_from_string(Arena *arena, String8 string)
   {
     .value    = interp.value,
     .mode     = irtree.mode,
+    .space    = irtree.space,
     .type_key = irtree.type_key,
     .code     = interp.code,
     .advance  = parse.last_token >= tokens.v + tokens.count ? string.size : parse.last_token->range.min,
@@ -37,7 +38,7 @@ e_autoresolved_eval_from_eval(E_Eval eval)
      e_interpret_ctx &&
      e_parse_ctx->modules_count > 0 &&
      e_interpret_ctx->module_base != 0 &&
-     (eval.mode == E_Mode_Value || eval.mode == E_Mode_Reg) &&
+     (eval.mode == E_Mode_Value || eval.space == E_Space_Regs) &&
      (e_type_key_match(eval.type_key, e_type_key_basic(E_TypeKind_S64)) ||
       e_type_key_match(eval.type_key, e_type_key_basic(E_TypeKind_U64)) ||
       e_type_key_match(eval.type_key, e_type_key_basic(E_TypeKind_S32)) ||
@@ -92,8 +93,8 @@ e_dynamically_typed_eval_from_eval(E_Eval eval)
         U64 addr_size = bit_size_from_arch(e_interpret_ctx->arch)/8;
         U64 class_base_vaddr = 0;
         U64 vtable_vaddr = 0;
-        if(e_interpret_ctx->memory_read(e_interpret_ctx->memory_read_user_data, &class_base_vaddr, r1u64(ptr_vaddr, ptr_vaddr+addr_size)) &&
-           e_interpret_ctx->memory_read(e_interpret_ctx->memory_read_user_data, &vtable_vaddr, r1u64(class_base_vaddr, class_base_vaddr+addr_size)))
+        if(e_interpret_ctx->memory_read(e_interpret_ctx->memory_read_user_data, eval.space, &class_base_vaddr, r1u64(ptr_vaddr, ptr_vaddr+addr_size)) &&
+           e_interpret_ctx->memory_read(e_interpret_ctx->memory_read_user_data, eval.space, &vtable_vaddr, r1u64(class_base_vaddr, class_base_vaddr+addr_size)))
         {
           U32 rdi_idx = 0;
           RDI_Parsed *rdi = 0;
@@ -133,6 +134,56 @@ e_dynamically_typed_eval_from_eval(E_Eval eval)
 internal E_Eval
 e_value_eval_from_eval(E_Eval eval)
 {
+  if(eval.mode == E_Mode_Offset)
+  {
+    E_TypeKey type_key = e_type_unwrap(eval.type_key);
+    E_TypeKind type_kind = e_type_kind_from_key(type_key);
+    if(type_kind == E_TypeKind_Array)
+    {
+      eval.mode = E_Mode_Value;
+    }
+    else if(e_interpret_ctx->memory_read != 0)
+    {
+      U64 type_byte_size = e_type_byte_size_from_key(type_key);
+      Rng1U64 value_vaddr_range = r1u64(eval.value.u64, eval.value.u64 + type_byte_size);
+      MemoryZeroStruct(&eval.value);
+      if(!e_type_key_match(type_key, e_type_key_zero()) &&
+         type_byte_size <= sizeof(E_Value) &&
+         e_interpret_ctx->memory_read(e_interpret_ctx->memory_read_user_data, eval.space, &eval.value, value_vaddr_range))
+      {
+        eval.mode = E_Mode_Value;
+        
+        // rjf: mask&shift, for bitfields
+        if(type_kind == E_TypeKind_Bitfield && type_byte_size <= sizeof(U64))
+        {
+          Temp scratch = scratch_begin(0, 0);
+          E_Type *type = e_type_from_key(scratch.arena, type_key);
+          U64 valid_bits_mask = 0;
+          for(U64 idx = 0; idx < type->count; idx += 1)
+          {
+            valid_bits_mask |= (1<<idx);
+          }
+          eval.value.u64 = eval.value.u64 >> type->off;
+          eval.value.u64 = eval.value.u64 & valid_bits_mask;
+          eval.type_key = type->direct_type_key;
+          scratch_end(scratch);
+        }
+        
+        // rjf: manually sign-extend
+        switch(type_kind)
+        {
+          default: break;
+          case E_TypeKind_S8:  {eval.value.s64 = (S64)*((S8 *)&eval.value.u64);}break;
+          case E_TypeKind_S16: {eval.value.s64 = (S64)*((S16 *)&eval.value.u64);}break;
+          case E_TypeKind_S32: {eval.value.s64 = (S64)*((S32 *)&eval.value.u64);}break;
+        }
+      }
+    }
+  }
+  return eval;
+  
+  // TODO(rjf): @spaces check regs path
+#if 0
   switch(eval.mode)
   {
     //- rjf: no work to be done. already in value mode
@@ -140,7 +191,7 @@ e_value_eval_from_eval(E_Eval eval)
     case E_Mode_Value:{}break;
     
     //- rjf: address => resolve into value, if leaf
-    case E_Mode_Addr:
+    case E_Mode_Offset:
     {
       E_TypeKey type_key = e_type_unwrap(eval.type_key);
       E_TypeKind type_kind = e_type_kind_from_key(type_key);
@@ -198,6 +249,7 @@ e_value_eval_from_eval(E_Eval eval)
       eval.mode = E_Mode_Value;
     }break;
   }
+#endif
   
   return eval;
 }
@@ -207,6 +259,7 @@ e_element_eval_from_array_eval_index(E_Eval eval, U64 index)
 {
   E_Eval result = {0};
   result.mode     = eval.mode;
+  result.space    = eval.space;
   result.type_key = e_type_direct_from_key(eval.type_key);
   result.code     = eval.code;
   result.msgs     = eval.msgs;
@@ -222,8 +275,7 @@ e_element_eval_from_array_eval_index(E_Eval eval, U64 index)
                  (U8 *)(&eval.value.u512[0]) + index*element_size,
                  element_size);
     }break;
-    case E_Mode_Addr:
-    case E_Mode_Reg:
+    case E_Mode_Offset:
     {
       result.value.u64 = eval.value.u64 + element_size*index;
     }break;

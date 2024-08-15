@@ -818,7 +818,7 @@ internal void ctrl_thread__module_close(CTRL_MachineID machine_id, DMN_Handle mo
 internal DMN_Event *ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, DMN_RunCtrls *run_ctrls, CTRL_Spoof *spoof);
 
 //- rjf: eval helpers
-internal B32 ctrl_eval_memory_read(void *u, void *out, Rng1U64 vaddr_range);
+internal B32 ctrl_eval_memory_read(void *u, E_Space space, void *out, Rng1U64 vaddr_range);
 
 //- rjf: log flusher
 internal void ctrl_thread__flush_info_log(String8 string);

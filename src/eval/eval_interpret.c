@@ -25,10 +25,11 @@ e_interpret(String8 bytecode)
   E_Interpretation result = {0};
   Temp scratch = scratch_begin(0, 0);
   
-  //- rjf: allocate stack
+  //- rjf: allocate stack & "registers"
   U64 stack_cap = 128; // TODO(rjf): scan bytecode; determine maximum stack depth
   E_Value *stack = push_array_no_zero(scratch.arena, E_Value, stack_cap);
   U64 stack_count = 0;
+  E_Space selected_space = e_interpret_ctx->primary_space;
   
   //- rjf: iterate bytecode & perform ops
   U8 *ptr = bytecode.str;
@@ -37,12 +38,20 @@ e_interpret(String8 bytecode)
   {
     // rjf: consume next opcode
     RDI_EvalOp op = (RDI_EvalOp)*ptr;
-    if(op >= RDI_EvalOp_COUNT)
+    U8 ctrlbits = 0;
+    if(op < RDI_EvalOp_COUNT)
     {
-      result.code = E_InterpretationCode_BadOp;
-      goto done;
+      ctrlbits = rdi_eval_op_ctrlbits_table[op];
     }
-    U8 ctrlbits = rdi_eval_op_ctrlbits_table[op];
+    else switch(op)
+    {
+      case E_IRExtKind_SetSpace:{ctrlbits = RDI_EVAL_CTRLBITS(8, 0, 0);}break;
+      default:
+      {
+        result.code = E_InterpretationCode_BadOp;
+        goto done;
+      }break;
+    }
     ptr += 1;
     
     // rjf: decode
@@ -87,6 +96,11 @@ e_interpret(String8 bytecode)
     E_Value nval = {0};
     switch(op)
     {
+      case E_IRExtKind_SetSpace:
+      {
+        selected_space = imm;
+      }break;
+      
       case RDI_EvalOp_Stop:
       {
         goto done;
@@ -113,7 +127,7 @@ e_interpret(String8 bytecode)
         U64 addr = svals[0].u64;
         U64 size = imm;
         B32 good_read = 0;
-        if(e_interpret_ctx->memory_read != 0 && e_interpret_ctx->memory_read(e_interpret_ctx->memory_read_user_data, &nval, r1u64(addr, addr+size)))
+        if(e_interpret_ctx->memory_read != 0 && e_interpret_ctx->memory_read(e_interpret_ctx->memory_read_user_data, selected_space, &nval, r1u64(addr, addr+size)))
         {
           good_read = 1;
         }

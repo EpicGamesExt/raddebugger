@@ -42,15 +42,14 @@ struct E_MsgList
 typedef U64 E_Space;
 //
 // NOTE(rjf): Evaluations occur within the context of a "space". Each "space"
-// refers to a different offset or address space, but it's a bit looser of a
+// refers to a different offset/address-space, but it's a bit looser of a
 // concept than just address space, since it can also refer to offsets into
-// a register block, only type information, or the "space" of all possibly
-// values. It is also used to refer to spaces of unique IDs for key-value
-// stores, e.g. for information in the debugger.
+// a register block, and it is also used to refer to spaces of unique IDs for
+// key-value stores, e.g. for information in the debugger.
 //
 // Effectively, when considering the result of an evaluation, you use the
-// value for understanding a key *into* a space, e.g. 1+2 -> 3, in the space
-// of all values, or &foo, in the space of all addresses in PID: 1234.
+// value for understanding a key *into* a space, e.g. 1+2 -> 3, in a null
+// space, or &foo, in the space of PID: 1234.
 //
 // The values in the E_Space enum are reserved, but apart from those, any
 // arbitrary value can be used, and then later interpreted.
@@ -58,10 +57,19 @@ typedef U64 E_Space;
 enum
 {
   E_Space_Null,
-  E_Space_Types,     // values are not used; evaluation only contain type content
-  E_Space_Values,    // values do not refer to any space, but are standalone numeric values
-  E_Space_Regs,      // values index into evaluator thread's register block
+  E_Space_Regs,
 };
+
+////////////////////////////////
+//~ rjf: Evaluation Modes
+
+typedef enum E_Mode
+{
+  E_Mode_Null,
+  E_Mode_Value,
+  E_Mode_Offset,
+}
+E_Mode;
 
 ////////////////////////////////
 //~ rjf: Modules
