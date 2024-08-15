@@ -141,7 +141,7 @@ e_oplist_push_set_space(Arena *arena, E_OpList *list, E_Space space)
   node->u64 = space;
   SLLQueuePush(list->first, list->last, node);
   list->op_count += 1;
-  list->encoded_size += sizeof(space);
+  list->encoded_size += 1 + sizeof(space);
 }
 
 internal void
@@ -1225,6 +1225,13 @@ e_append_oplist_from_irtree(Arena *arena, E_IRNode *root, E_OpList *out)
     case E_IRExtKind_SetSpace:
     {
       e_oplist_push_set_space(arena, out, root->u64);
+      for(E_IRNode *child = root->first;
+          child != &e_irnode_nil;
+          child = child->next)
+      {
+        e_append_oplist_from_irtree(arena, child, out);
+      }
+      
     }break;
     
     case RDI_EvalOp_Cond:
