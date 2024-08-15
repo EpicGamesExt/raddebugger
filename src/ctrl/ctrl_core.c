@@ -3796,12 +3796,21 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
 //- rjf: eval helpers
 
 internal B32
-ctrl_eval_memory_read(void *u, E_Space space, void *out, Rng1U64 vaddr_range)
+ctrl_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
 {
-  // TODO(rjf): @spaces pick the correct process from space
-  DMN_Handle process = *(DMN_Handle *)u;
-  U64 read_size = dmn_process_read(process, vaddr_range, out);
-  B32 result = (read_size == dim_1u64(vaddr_range));
+  B32 result = 0;
+  CTRL_Entity *entity = (CTRL_Entity *)space;
+  {
+    switch(entity->kind)
+    {
+      default:{}break;
+      case CTRL_EntityKind_Process:
+      {
+        U64 read_size = dmn_process_read(entity->handle, range, out);
+        result = (read_size == dim_1u64(range));
+      }break;
+    }
+  }
   return result;
 }
 
@@ -4720,8 +4729,8 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
             {
               E_InterpretCtx *ctx = &interpret_ctx;
               ctx->arch          = arch;
-              ctx->memory_read_user_data = &event->process;
-              ctx->memory_read   = ctrl_eval_memory_read;
+              ctx->space_read_user_data = ctrl_state->ctrl_thread_entity_store;
+              ctx->space_read    = ctrl_eval_space_read;
               ctx->primary_space = eval_modules_primary->space;
               ctx->reg_size      = regs_block_size_from_architecture(ctx->arch);
               ctx->reg_data      = push_array(temp.arena, U8, ctx->reg_size);

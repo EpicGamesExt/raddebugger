@@ -8421,6 +8421,7 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
            direct_type_is_string &&
            (flags & DF_EvalVizStringFlag_ReadOnlyDisplayRules))
         {
+          // TODO(rjf): @spaces pick correct space
           U64 string_memory_addr = value_eval.value.u64;
           U64 element_size = e_type_byte_size_from_key(direct_type_key);
           CTRL_ProcessMemorySlice text_slice = ctrl_query_cached_zero_terminated_data_from_process_vaddr_limit(arena, process->ctrl_machine_id, process->ctrl_handle, string_memory_addr, 256, element_size, 0);

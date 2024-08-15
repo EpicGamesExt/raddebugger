@@ -17,6 +17,34 @@ e_select_interpret_ctx(E_InterpretCtx *ctx)
 }
 
 ////////////////////////////////
+//~ rjf: Space Reading Helpers
+
+internal B32
+e_space_read(E_Space space, void *out, Rng1U64 range)
+{
+  B32 result = 0;
+  switch(space)
+  {
+    case E_Space_FIXED_COUNT:
+    case E_Space_Null:{}break;
+    case E_Space_Regs:
+    {
+      Rng1U64 legal_range = r1u64(0, e_interpret_ctx->reg_size);
+      Rng1U64 read_range = intersect_1u64(legal_range, range);
+      U64 read_size = dim_1u64(read_range);
+      MemoryCopy(out, (U8 *)e_interpret_ctx->reg_data + read_range.min, read_size);
+      result = (read_size == dim_1u64(range));
+    }break;
+    default:
+    if(e_interpret_ctx->space_read != 0)
+    {
+      result = e_interpret_ctx->space_read(e_interpret_ctx->space_read_user_data, space, out, range);
+    }break;
+  }
+  return result;
+}
+
+////////////////////////////////
 //~ rjf: Interpretation Functions
 
 internal E_Interpretation
@@ -126,11 +154,7 @@ e_interpret(String8 bytecode)
       {
         U64 addr = svals[0].u64;
         U64 size = imm;
-        B32 good_read = 0;
-        if(e_interpret_ctx->memory_read != 0 && e_interpret_ctx->memory_read(e_interpret_ctx->memory_read_user_data, selected_space, &nval, r1u64(addr, addr+size)))
-        {
-          good_read = 1;
-        }
+        B32 good_read = e_space_read(selected_space, &nval, r1u64(addr, addr+size));
         if(!good_read)
         {
           result.code = E_InterpretationCode_BadMemRead;

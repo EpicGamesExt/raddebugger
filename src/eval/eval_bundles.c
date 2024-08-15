@@ -68,7 +68,7 @@ e_dynamically_typed_eval_from_eval(E_Eval eval)
   E_TypeKind type_kind = e_type_kind_from_key(type_key);
   if(e_type_state != 0 &&
      e_interpret_ctx != 0 &&
-     e_interpret_ctx->memory_read != 0 &&
+     e_interpret_ctx->space_read != 0 &&
      e_interpret_ctx->module_base != 0 &&
      type_kind == E_TypeKind_Ptr)
   {
@@ -93,8 +93,8 @@ e_dynamically_typed_eval_from_eval(E_Eval eval)
         U64 addr_size = bit_size_from_arch(e_interpret_ctx->arch)/8;
         U64 class_base_vaddr = 0;
         U64 vtable_vaddr = 0;
-        if(e_interpret_ctx->memory_read(e_interpret_ctx->memory_read_user_data, eval.space, &class_base_vaddr, r1u64(ptr_vaddr, ptr_vaddr+addr_size)) &&
-           e_interpret_ctx->memory_read(e_interpret_ctx->memory_read_user_data, eval.space, &vtable_vaddr, r1u64(class_base_vaddr, class_base_vaddr+addr_size)))
+        if(e_space_read(eval.space, &class_base_vaddr, r1u64(ptr_vaddr, ptr_vaddr+addr_size)) &&
+           e_space_read(eval.space, &vtable_vaddr, r1u64(class_base_vaddr, class_base_vaddr+addr_size)))
         {
           U32 rdi_idx = 0;
           RDI_Parsed *rdi = 0;
@@ -142,14 +142,14 @@ e_value_eval_from_eval(E_Eval eval)
     {
       eval.mode = E_Mode_Value;
     }
-    else if(e_interpret_ctx->memory_read != 0)
+    else if(e_interpret_ctx->space_read != 0)
     {
       U64 type_byte_size = e_type_byte_size_from_key(type_key);
       Rng1U64 value_vaddr_range = r1u64(eval.value.u64, eval.value.u64 + type_byte_size);
       MemoryZeroStruct(&eval.value);
       if(!e_type_key_match(type_key, e_type_key_zero()) &&
          type_byte_size <= sizeof(E_Value) &&
-         e_interpret_ctx->memory_read(e_interpret_ctx->memory_read_user_data, eval.space, &eval.value, value_vaddr_range))
+         e_space_read(eval.space, &eval.value, value_vaddr_range))
       {
         eval.mode = E_Mode_Value;
         

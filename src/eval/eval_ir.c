@@ -1194,7 +1194,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
       result = e_irtree_and_type_from_expr(arena, rhs);
       if(lhs->kind != E_ExprKind_LeafIdent)
       {
-        e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, expr->location, "Left side of assignment must be an identifier.");
+        e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, expr->location, "Left side of assignment must be an unused identifier.");
       }
     }break;
     

@@ -3689,22 +3689,25 @@ df_ctrl_last_stop_event(void)
 //~ rjf: Evaluation Context
 
 internal B32
-df_eval_memory_read(void *u, E_Space space, void *out, Rng1U64 vaddr_range)
+df_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
 {
-  // TODO(rjf): @spaces pick the correct process from space
   B32 result = 0;
-  DF_Entity *process = (DF_Entity *)u;
-  if(process->kind == DF_EntityKind_Process)
+  DF_Entity *entity = (DF_Entity *)space;
+  switch(entity->kind)
   {
-    Temp scratch = scratch_begin(0, 0);
-    CTRL_ProcessMemorySlice slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, vaddr_range, df_state->frame_eval_memread_endt_us);
-    String8 data = slice.data;
-    if(data.size == dim_1u64(vaddr_range))
+    default:{}break;
+    case DF_EntityKind_Process:
     {
-      result = 1;
-      MemoryCopy(out, data.str, data.size);
-    }
-    scratch_end(scratch);
+      Temp scratch = scratch_begin(0, 0);
+      CTRL_ProcessMemorySlice slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, entity->ctrl_machine_id, entity->ctrl_handle, range, df_state->frame_eval_memread_endt_us);
+      String8 data = slice.data;
+      if(data.size == dim_1u64(range))
+      {
+        result = 1;
+        MemoryCopy(out, data.str, data.size);
+      }
+      scratch_end(scratch);
+    }break;
   }
   return result;
 }
@@ -8330,8 +8333,8 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
   {
     E_InterpretCtx *ctx = interpret_ctx;
     ctx->arch          = arch;
-    ctx->memory_read_user_data = process;
-    ctx->memory_read   = df_eval_memory_read;
+    ctx->space_read_user_data = process;
+    ctx->space_read    = df_eval_space_read;
     ctx->primary_space = eval_modules_primary->space;
     ctx->reg_size      = regs_block_size_from_architecture(ctx->arch);
     ctx->reg_data      = push_array(arena, U8, ctx->reg_size);
