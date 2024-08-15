@@ -8202,12 +8202,12 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
     U64 eval_module_idx = 0;
     for(DF_EntityNode *n = all_modules.first; n != 0; n = n->next, eval_module_idx += 1)
     {
-      DF_Entity *module = n->entity;
-      DI_Key dbgi_key = df_dbgi_key_from_module(module);
+      DF_Entity *m = n->entity;
+      DI_Key dbgi_key = df_dbgi_key_from_module(m);
       eval_modules[eval_module_idx].rdi         = di_rdi_from_key(df_state->frame_di_scope, &dbgi_key, 0);
-      eval_modules[eval_module_idx].vaddr_range = module->vaddr_rng;
-      eval_modules[eval_module_idx].space       = (U64)df_entity_ancestor_from_kind(module, DF_EntityKind_Process);
-      if(contains_1u64(module->vaddr_rng, rip_voff))
+      eval_modules[eval_module_idx].vaddr_range = m->vaddr_rng;
+      eval_modules[eval_module_idx].space       = (U64)df_entity_ancestor_from_kind(m, DF_EntityKind_Process);
+      if(module == m)
       {
         eval_modules_primary = &eval_modules[eval_module_idx];
       }

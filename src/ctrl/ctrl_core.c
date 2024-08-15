@@ -4665,17 +4665,17 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
                   process = process->next)
               {
                 if(process->kind != CTRL_EntityKind_Process) { continue; }
-                for(CTRL_Entity *module = process->first;
-                    module != &ctrl_entity_nil;
-                    module = module->next)
+                for(CTRL_Entity *mod = process->first;
+                    mod != &ctrl_entity_nil;
+                    mod = mod->next)
                 {
-                  if(module->kind != CTRL_EntityKind_Module) { continue; }
-                  CTRL_Entity *dbg_path = ctrl_entity_child_from_kind(module, CTRL_EntityKind_DebugInfoPath);
+                  if(mod->kind != CTRL_EntityKind_Module) { continue; }
+                  CTRL_Entity *dbg_path = ctrl_entity_child_from_kind(mod, CTRL_EntityKind_DebugInfoPath);
                   DI_Key dbgi_key = {dbg_path->string, dbg_path->timestamp};
                   eval_modules[eval_module_idx].rdi         = di_rdi_from_key(di_scope, &dbgi_key, max_U64);
-                  eval_modules[eval_module_idx].vaddr_range = module->vaddr_range;
+                  eval_modules[eval_module_idx].vaddr_range = mod->vaddr_range;
                   eval_modules[eval_module_idx].space       = (U64)process;
-                  if(contains_1u64(module->vaddr_range, thread_rip_vaddr))
+                  if(mod == module)
                   {
                     eval_modules_primary = &eval_modules[eval_module_idx];
                   }
