@@ -284,6 +284,7 @@ typedef enum DF_WatchViewFillKind
 {
   DF_WatchViewFillKind_Watch,
   DF_WatchViewFillKind_Breakpoints,
+  DF_WatchViewFillKind_WatchPins,
   DF_WatchViewFillKind_CallStack,
   DF_WatchViewFillKind_Registers,
   DF_WatchViewFillKind_Locals,

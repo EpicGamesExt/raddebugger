@@ -1433,6 +1433,44 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
           }break;
           
           ////////////////////////////
+          //- rjf: mutable watch pin fill -> build blocks from all watch pins
+          //
+          case DF_WatchViewFillKind_WatchPins:
+          {
+            mutable_entity_kind = DF_EntityKind_WatchPin;
+            DF_EntityList wps = df_query_cached_entity_list_with_kind(mutable_entity_kind);
+            for(DF_EntityNode *n = wps.first; n != 0; n = n->next)
+            {
+              DF_Entity *wp = n->entity;
+              if(wp->flags & DF_EntityFlag_MarkedForDeletion)
+              {
+                continue;
+              }
+              DF_ExpandKey parent_key = df_parent_expand_key_from_entity(wp);
+              DF_ExpandKey key = df_expand_key_from_entity(wp);
+              String8 title = wp->name;
+              FuzzyMatchRangeList matches = fuzzy_match_find(scratch.arena, filter, title);
+              if(matches.count == matches.needle_part_count)
+              {
+                E_MemberList wp_members = {0};
+                {
+                  e_member_list_push_new(scratch.arena, &wp_members, .name = str8_lit("Location"), .off = 0,  .type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_Char8), 256));
+                }
+                E_MemberArray wp_members_array = e_member_array_from_list(scratch.arena, &wp_members);
+                E_TypeKey wp_type = e_type_key_cons(.kind = E_TypeKind_Struct, .name = str8_lit("Watch Pin"), .members = wp_members_array.v, .count = wp_members_array.count);
+                E_Eval eval =
+                {
+                  .mode     = E_Mode_Offset,
+                  .space    = (U64)wp,
+                  .type_key = wp_type,
+                };
+                DF_CfgTable cfg_table = {0};
+                df_append_viz_blocks_for_parent__rec(scratch.arena, eval_view, parent_key, key, title, eval, 0, &cfg_table, 0, &blocks);
+              }
+            }
+          }break;
+          
+          ////////////////////////////
           //- rjf: call stack fill -> build blocks for each call frame
           //
           case DF_WatchViewFillKind_CallStack:
@@ -8323,6 +8361,26 @@ DF_VIEW_UI_FUNCTION_DEF(Breakpoints)
 ////////////////////////////////
 //~ rjf: WatchPins @view_hook_impl
 
+DF_VIEW_SETUP_FUNCTION_DEF(WatchPins)
+{
+  DF_WatchViewState *ewv = df_view_user_state(view, DF_WatchViewState);
+  df_watch_view_init(ewv, view, DF_WatchViewFillKind_WatchPins);
+}
+DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(WatchPins) {return str8_zero();}
+DF_VIEW_CMD_FUNCTION_DEF(WatchPins)
+{
+  DF_WatchViewState *ewv = df_view_user_state(view, DF_WatchViewState);
+  df_watch_view_cmds(ws, panel, view, ewv, cmds);
+}
+DF_VIEW_UI_FUNCTION_DEF(WatchPins)
+{
+  ProfBeginFunction();
+  DF_WatchViewState *ewv = df_view_user_state(view, DF_WatchViewState);
+  df_watch_view_build(ws, panel, view, ewv, 1*(view->query_string_size == 0), 10, rect);
+  ProfEnd();
+}
+
+#if 0
 DF_VIEW_SETUP_FUNCTION_DEF(WatchPins) {}
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(WatchPins) {return str8_lit("");}
 DF_VIEW_CMD_FUNCTION_DEF(WatchPins) {}
@@ -8454,6 +8512,7 @@ DF_VIEW_UI_FUNCTION_DEF(WatchPins)
   
   scratch_end(scratch);
 }
+#endif
 
 ////////////////////////////////
 //~ rjf: ExceptionFilters @view_hook_impl
