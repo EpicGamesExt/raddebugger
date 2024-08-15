@@ -691,6 +691,9 @@ ctrl_entity_alloc(CTRL_EntityStore *store, CTRL_Entity *parent, CTRL_EntityKind 
         node->entity = entity;
       }
     }
+    
+    // rjf: bump counter
+    store->entity_kind_counts[kind] += 1;
   }
   return entity;
 }
@@ -745,6 +748,9 @@ ctrl_entity_release(CTRL_EntityStore *store, CTRL_Entity *entity)
           }
         }
       }
+      
+      // rjf: dec counter
+      store->entity_kind_counts[t->e->kind] -= 1;
     }
     scratch_end(scratch);
   }
@@ -4630,56 +4636,48 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
         if(conditions.node_count != 0) ProfScope("evaluate hit stop conditions")
         {
           DI_Scope *di_scope = di_scope_open();
+          
+          // rjf: gather evaluation modules
+          U64 eval_modules_count = Max(1, ctrl_state->ctrl_thread_entity_store->entity_kind_counts[CTRL_EntityKind_Module]);
+          E_Module *eval_modules = push_array(temp.arena, E_Module, eval_modules_count);
+          E_Module *eval_modules_primary = &eval_modules[0];
+          eval_modules_primary->rdi = &di_rdi_parsed_nil;
+          eval_modules_primary->vaddr_range = r1u64(0, max_U64);
+          {
+            U64 eval_module_idx = 0;
+            for(CTRL_Entity *machine = ctrl_state->ctrl_thread_entity_store->root->first;
+                machine != &ctrl_entity_nil;
+                machine = machine->next)
+            {
+              if(machine->kind != CTRL_EntityKind_Machine) { continue; }
+              for(CTRL_Entity *process = machine->first;
+                  process != &ctrl_entity_nil;
+                  process = process->next)
+              {
+                if(process->kind != CTRL_EntityKind_Process) { continue; }
+                for(CTRL_Entity *module = process->first;
+                    module != &ctrl_entity_nil;
+                    module = module->next)
+                {
+                  if(module->kind != CTRL_EntityKind_Module) { continue; }
+                  CTRL_Entity *dbg_path = ctrl_entity_child_from_kind(module, CTRL_EntityKind_DebugInfoPath);
+                  DI_Key dbgi_key = {dbg_path->string, dbg_path->timestamp};
+                  eval_modules[eval_module_idx].rdi         = di_rdi_from_key(di_scope, &dbgi_key, max_U64);
+                  eval_modules[eval_module_idx].vaddr_range = module->vaddr_range;
+                  eval_modules[eval_module_idx].space       = (U64)process;
+                  if(contains_1u64(module->vaddr_range, thread_rip_vaddr))
+                  {
+                    eval_modules_primary = &eval_modules[eval_module_idx];
+                  }
+                  eval_module_idx += 1;
+                }
+              }
+            }
+          }
+          
+          // rjf: loop through all conditions, check all
           for(String8Node *condition_n = conditions.first; condition_n != 0; condition_n = condition_n->next)
           {
-            // rjf: count all modules
-            U64 all_modules_count = 0;
-            for(CTRL_Entity *child = process->first; child != &ctrl_entity_nil; child = child->next)
-            {
-              if(child->kind == CTRL_EntityKind_Module)
-              {
-                all_modules_count += 1;
-              }
-            }
-            
-            // rjf: gather debug infos
-            U64 rdis_count = Max(1, all_modules_count);
-            RDI_Parsed **rdis = push_array(temp.arena, RDI_Parsed *, rdis_count);
-            rdis[0] = &di_rdi_parsed_nil;
-            Rng1U64 *rdis_vaddr_ranges = push_array(temp.arena, Rng1U64, rdis_count);
-            U64 rdis_primary_idx = 0;
-            ProfScope("gather debug infos")
-            {
-              U64 primary_idx = 0;
-              U64 idx = 0;
-              for(CTRL_Entity *m = process->first;
-                  m != &ctrl_entity_nil && idx < all_modules_count;
-                  m = m->next)
-              {
-                if(m->kind != CTRL_EntityKind_Module)
-                {
-                  continue;
-                }
-                
-                // rjf: unpack
-                CTRL_Entity *dbg_path = ctrl_entity_child_from_kind(m, CTRL_EntityKind_DebugInfoPath);
-                DI_Key dbgi_key = {dbg_path->string, dbg_path->timestamp};
-                
-                // rjf: fill
-                rdis[idx] = di_rdi_from_key(di_scope, &dbgi_key, max_U64);
-                rdis_vaddr_ranges[idx] = m->vaddr_range;
-                
-                // rjf: pick primary module
-                if(m == module)
-                {
-                  rdis_primary_idx = idx;
-                }
-                
-                // rjf: inc
-                idx += 1;
-              }
-            }
-            
             // rjf: build eval type context
             E_TypeCtx type_ctx = zero_struct;
             {
@@ -4687,10 +4685,9 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
               ctx->arch              = arch;
               ctx->ip_vaddr          = thread_rip_vaddr;
               ctx->ip_voff           = thread_rip_voff;
-              ctx->rdis_count        = rdis_count;
-              ctx->rdis_primary_idx  = rdis_primary_idx;
-              ctx->rdis              = rdis;
-              ctx->rdis_vaddr_ranges = rdis_vaddr_ranges;
+              ctx->modules           = eval_modules;
+              ctx->modules_count     = eval_modules_count;
+              ctx->primary_module    = eval_modules_primary;
             }
             
             // rjf: build eval parse context
@@ -4701,14 +4698,13 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
               ctx->arch              = arch;
               ctx->ip_vaddr          = thread_rip_vaddr;
               ctx->ip_voff           = thread_rip_voff;
-              ctx->rdis_count        = rdis_count;
-              ctx->rdis_primary_idx  = rdis_primary_idx;
-              ctx->rdis              = rdis;
-              ctx->rdis_vaddr_ranges = rdis_vaddr_ranges;
+              ctx->modules           = eval_modules;
+              ctx->modules_count     = eval_modules_count;
+              ctx->primary_module    = eval_modules_primary;
               ctx->regs_map      = ctrl_string2reg_from_arch(ctx->arch);
               ctx->reg_alias_map = ctrl_string2alias_from_arch(ctx->arch);
-              ctx->locals_map    = e_push_locals_map_from_rdi_voff(temp.arena, ctx->rdis[ctx->rdis_primary_idx], thread_rip_voff);
-              ctx->member_map    = e_push_member_map_from_rdi_voff(temp.arena, ctx->rdis[ctx->rdis_primary_idx], thread_rip_voff);
+              ctx->locals_map    = e_push_locals_map_from_rdi_voff(temp.arena, eval_modules_primary->rdi, thread_rip_voff);
+              ctx->member_map    = e_push_member_map_from_rdi_voff(temp.arena, eval_modules_primary->rdi, thread_rip_voff);
             }
             
             // rjf: build eval IR context

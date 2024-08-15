@@ -4228,7 +4228,7 @@ DF_VIEW_UI_FUNCTION_DEF(SymbolLister)
       U8 *name_base = rdi_string_from_idx(rdi, procedure->name_string_idx, &name_size);
       String8 name = str8(name_base, name_size);
       RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, procedure->type_idx);
-      E_TypeKey type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), procedure->type_idx, e_parse_ctx_idx_from_rdi(rdi));
+      E_TypeKey type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), procedure->type_idx, e_parse_ctx_module_idx_from_rdi(rdi));
       
       //- rjf: build item button
       ui_set_next_hover_cursor(OS_Cursor_HandPoint);
@@ -5821,13 +5821,13 @@ DF_VIEW_UI_FUNCTION_DEF(CallStack)
         {
           symbol_name.str = rdi_name_from_procedure(row->rdi, row->procedure, &symbol_name.size);
           RDI_TypeNode *type = rdi_element_from_name_idx(row->rdi, TypeNodes, row->procedure->type_idx);
-          symbol_type_string = e_type_string_from_key(scratch.arena, e_type_key_ext(e_type_kind_from_rdi(type->kind), row->procedure->type_idx, e_parse_ctx_idx_from_rdi(row->rdi)));
+          symbol_type_string = e_type_string_from_key(scratch.arena, e_type_key_ext(e_type_kind_from_rdi(type->kind), row->procedure->type_idx, e_parse_ctx_module_idx_from_rdi(row->rdi)));
         }
         if(row->inline_site != 0)
         {
           symbol_name.str = rdi_string_from_idx(row->rdi, row->inline_site->name_string_idx, &symbol_name.size);
           RDI_TypeNode *type = rdi_element_from_name_idx(row->rdi, TypeNodes, row->inline_site->type_idx);
-          symbol_type_string = e_type_string_from_key(scratch.arena, e_type_key_ext(e_type_kind_from_rdi(type->kind), row->inline_site->type_idx, e_parse_ctx_idx_from_rdi(row->rdi)));
+          symbol_type_string = e_type_string_from_key(scratch.arena, e_type_key_ext(e_type_kind_from_rdi(type->kind), row->inline_site->type_idx, e_parse_ctx_module_idx_from_rdi(row->rdi)));
         }
         
         // rjf: build row

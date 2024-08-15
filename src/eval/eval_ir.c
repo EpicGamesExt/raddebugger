@@ -252,6 +252,14 @@ e_irtree_string_literal(Arena *arena, String8 string)
 }
 
 internal E_IRNode *
+e_irtree_set_space(Arena *arena, E_Space space)
+{
+  E_IRNode *root = e_push_irnode(arena, E_IRExtKind_SetSpace);
+  root->u64 = space;
+  return root;
+}
+
+internal E_IRNode *
 e_irtree_mem_read_type(Arena *arena, E_IRNode *c, E_TypeKey type_key)
 {
   U64 byte_size = e_type_byte_size_from_key(type_key);
@@ -343,13 +351,13 @@ e_irtree_resolve_to_value(Arena *arena, E_Mode from_mode, E_IRNode *tree, E_Type
   switch(from_mode)
   {
     default:{}break;
-    case E_Mode_Addr:
-    {
-      result = e_irtree_mem_read_type(arena, tree, type_key);
-    }break;
     case E_Mode_Reg:
     {
       result = e_irtree_unary_op(arena, RDI_EvalOp_RegReadDyn, RDI_EvalTypeGroup_U, tree);
+    }break;
+    case E_Mode_Addr:
+    {
+      result = e_irtree_mem_read_type(arena, tree, type_key);
     }break;
   }
   return result;
@@ -364,9 +372,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
   E_ExprKind kind = expr->kind;
   switch(kind)
   {
-    default:
-    {
-    }break;
+    default:{}break;
     
     //- rjf: array indices
     case E_ExprKind_ArrayIndex:
@@ -575,11 +581,6 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
       else if(r_type_direct_size == 0 && r_type_kind == E_TypeKind_Array)
       {
         e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, r_expr->location, "Cannot dereference arrays of zero-sized types.");
-        break;
-      }
-      else if(r_type_kind == E_TypeKind_Array && r_tree.mode != E_Mode_Addr)
-      {
-        e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, r_expr->location, "Cannot dereference arrays without base address.");
         break;
       }
       else if(r_type_kind != E_TypeKind_Array &&
@@ -1067,10 +1068,9 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
     {
       E_IRNode *new_tree = e_irtree_bytecode_no_copy(arena, expr->string);
       E_TypeKey final_type_key = expr->type_key;
-      E_Mode mode = expr->mode;
       result.root     = new_tree;
       result.type_key = final_type_key;
-      result.mode     = mode;
+      result.mode     = expr->mode;
     }break;
     
     //- rjf: (unexpected) leaf member

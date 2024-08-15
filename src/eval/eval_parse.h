@@ -10,38 +10,6 @@
 #include "generated/eval.meta.h"
 
 ////////////////////////////////
-//~ rjf: Messages
-
-typedef enum E_MsgKind
-{
-  E_MsgKind_Null,
-  E_MsgKind_MalformedInput,
-  E_MsgKind_MissingInfo,
-  E_MsgKind_ResolutionFailure,
-  E_MsgKind_InterpretationError,
-  E_MsgKind_COUNT
-}
-E_MsgKind;
-
-typedef struct E_Msg E_Msg;
-struct E_Msg
-{
-  E_Msg *next;
-  E_MsgKind kind;
-  void *location;
-  String8 text;
-};
-
-typedef struct E_MsgList E_MsgList;
-struct E_MsgList
-{
-  E_Msg *first;
-  E_Msg *last;
-  E_MsgKind max_kind;
-  U64 count;
-};
-
-////////////////////////////////
 //~ rjf: Token Types
 
 typedef struct E_Token E_Token;
@@ -79,27 +47,6 @@ struct E_TokenArray
 ////////////////////////////////
 //~ rjf: Expression Tree Types
 
-typedef U64 E_Space;
-//
-// NOTE(rjf): Evaluations occur within the context of a "space". Each "space"
-// refers to a different offset or address space, but it's a bit looser of a
-// concept than just address space, since it can also refer to offsets into
-// a register block, only type information, or the "space" of all possibly
-// values. It is also used to refer to spaces of unique IDs for key-value
-// stores, e.g. for information in the debugger.
-//
-// Effectively, when considering the result of an evaluation, you use the
-// value for understanding a key *into* a space, e.g. 1+2 -> 3, in the space
-// of all values, or &foo, in the space of all addresses in PID: 1234.
-//
-enum
-{
-  E_Space_Null,
-  E_Space_Types,     // values are not used; evaluation only contain type content
-  E_Space_Values,    // values do not refer to any space, but are standalone numeric values
-  E_Space_Regs,      // values index into evaluator thread's register block
-};
-
 typedef enum E_Mode
 {
   E_Mode_Null,
@@ -118,7 +65,7 @@ struct E_Expr
   void *location;
   E_ExprKind kind;
   E_Mode mode;
-  E_Space space;
+  // E_Space space;
   E_TypeKey type_key;
   U32 u32;
   F32 f32;
@@ -201,15 +148,14 @@ struct E_ParseCtx
   
   // rjf: instruction pointer info
   U64 ip_vaddr;
-  U64 ip_voff; // (within module, which uses `rdis[rdis_primary_idx]` for debug info)
+  U64 ip_voff;
   
-  // rjf: debug info
-  RDI_Parsed **rdis;
-  Rng1U64 *rdis_vaddr_ranges;
-  U64 rdis_count;
-  U64 rdis_primary_idx;
+  // rjf: modules
+  E_Module *modules;
+  U64 modules_count;
+  E_Module *primary_module;
   
-  // rjf: identifier resolution maps
+  // rjf: local identifier resolution maps
   E_String2NumMap *regs_map;
   E_String2NumMap *reg_alias_map;
   E_String2NumMap *locals_map; // (within `rdis[rdis_primary_idx]`)
@@ -236,11 +182,6 @@ global read_only E_Expr e_expr_nil = {&e_expr_nil, &e_expr_nil, &e_expr_nil};
 thread_static E_ParseCtx *e_parse_ctx = 0;
 
 ////////////////////////////////
-//~ rjf: Basic Helper Functions
-
-internal U64 e_hash_from_string(U64 seed, String8 string);
-
-////////////////////////////////
 //~ rjf: Basic Map Functions
 
 //- rjf: string -> num
@@ -265,13 +206,6 @@ internal E_String2NumMap *e_push_locals_map_from_rdi_voff(Arena *arena, RDI_Pars
 internal E_String2NumMap *e_push_member_map_from_rdi_voff(Arena *arena, RDI_Parsed *rdi, U64 voff);
 
 ////////////////////////////////
-//~ rjf: Message Functions
-
-internal void e_msg(Arena *arena, E_MsgList *msgs, E_MsgKind kind, void *location, String8 text);
-internal void e_msgf(Arena *arena, E_MsgList *msgs, E_MsgKind kind, void *location, char *fmt, ...);
-internal void e_msg_list_concat_in_place(E_MsgList *dst, E_MsgList *to_push);
-
-////////////////////////////////
 //~ rjf: Tokenization Functions
 
 #define e_token_at_it(it, arr) (((it) < (arr)->v+(arr)->count) ? (*(it)) : e_token_zero())
@@ -286,7 +220,7 @@ internal E_TokenArray e_token_array_make_first_opl(E_Token *first, E_Token *opl)
 
 internal E_ParseCtx *e_selected_parse_ctx(void);
 internal void e_select_parse_ctx(E_ParseCtx *ctx);
-internal U32 e_parse_ctx_idx_from_rdi(RDI_Parsed *rdi);
+internal U32 e_parse_ctx_module_idx_from_rdi(RDI_Parsed *rdi);
 
 ////////////////////////////////
 //~ rjf: Expression Tree Building Functions

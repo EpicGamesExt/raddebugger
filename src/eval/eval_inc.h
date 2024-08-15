@@ -4,7 +4,7 @@
 #ifndef EVAL_INC_H
 #define EVAL_INC_H
 
-#include "eval/generated/eval.meta.h"
+#include "eval/eval_core.h"
 #include "eval/eval_types.h"
 #include "eval/eval_parse.h"
 #include "eval/eval_ir.h"

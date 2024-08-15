@@ -35,7 +35,7 @@ e_autoresolved_eval_from_eval(E_Eval eval)
 {
   if(e_parse_ctx &&
      e_interpret_ctx &&
-     e_parse_ctx->rdis_count > 0 &&
+     e_parse_ctx->modules_count > 0 &&
      e_interpret_ctx->module_base != 0 &&
      (eval.mode == E_Mode_Value || eval.mode == E_Mode_Reg) &&
      (e_type_key_match(eval.type_key, e_type_key_basic(E_TypeKind_S64)) ||
@@ -45,7 +45,7 @@ e_autoresolved_eval_from_eval(E_Eval eval)
   {
     U64 vaddr = eval.value.u64;
     U64 voff = vaddr - e_interpret_ctx->module_base[0];
-    RDI_Parsed *rdi = e_parse_ctx->rdis[e_parse_ctx->rdis_primary_idx];
+    RDI_Parsed *rdi = e_parse_ctx->primary_module->rdi;
     RDI_Scope *scope = rdi_scope_from_voff(rdi, voff);
     RDI_Procedure *procedure = rdi_procedure_from_voff(rdi, voff);
     RDI_GlobalVariable *gvar = rdi_global_variable_from_voff(rdi, voff);
@@ -98,13 +98,13 @@ e_dynamically_typed_eval_from_eval(E_Eval eval)
           U32 rdi_idx = 0;
           RDI_Parsed *rdi = 0;
           U64 module_base = 0;
-          for(U64 idx = 0; idx < e_type_state->ctx->rdis_count; idx += 1)
+          for(U64 idx = 0; idx < e_type_state->ctx->modules_count; idx += 1)
           {
-            if(contains_1u64(e_type_state->ctx->rdis_vaddr_ranges[idx], vtable_vaddr))
+            if(contains_1u64(e_type_state->ctx->modules[idx].vaddr_range, vtable_vaddr))
             {
               rdi_idx = (U32)idx;
-              rdi = e_type_state->ctx->rdis[idx];
-              module_base = e_type_state->ctx->rdis_vaddr_ranges[idx].min;
+              rdi = e_type_state->ctx->modules[idx].rdi;
+              module_base = e_type_state->ctx->modules[idx].vaddr_range.min;
               break;
             }
           }

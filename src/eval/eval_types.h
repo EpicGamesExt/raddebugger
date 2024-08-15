@@ -173,10 +173,9 @@ struct E_TypeCtx
   U64 ip_voff; // (within module, which uses `rdis[rdis_primary_idx]` for debug info)
   
   // rjf: debug info
-  RDI_Parsed **rdis;
-  Rng1U64 *rdis_vaddr_ranges;
-  U64 rdis_count;
-  U64 rdis_primary_idx;
+  E_Module *modules;
+  U64 modules_count;
+  E_Module *primary_module;
 };
 
 typedef struct E_TypeState E_TypeState;

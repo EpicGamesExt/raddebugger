@@ -9033,13 +9033,13 @@ df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DI_Scope *scope,
         RDI_Parsed *rdi = &di_rdi_parsed_nil;
         U64 base_idx = 0;
         {
-          for(U64 rdi_idx = 0; rdi_idx < e_parse_ctx->rdis_count; rdi_idx += 1)
+          for(U64 module_idx = 0; module_idx < e_parse_ctx->modules_count; module_idx += 1)
           {
             U64 all_items_count = 0;
-            rdi_section_raw_table_from_kind(e_parse_ctx->rdis[rdi_idx], block->fzy_target, &all_items_count);
+            rdi_section_raw_table_from_kind(e_parse_ctx->modules[module_idx].rdi, block->fzy_target, &all_items_count);
             if(base_idx <= item->idx && item->idx < base_idx + all_items_count)
             {
-              rdi = e_parse_ctx->rdis[rdi_idx];
+              rdi = e_parse_ctx->modules[module_idx].rdi;
               break;
             }
             base_idx += all_items_count;

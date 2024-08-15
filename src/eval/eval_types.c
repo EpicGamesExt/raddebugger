@@ -506,7 +506,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
       {
         U64 type_node_idx = key.u32[1];
         U32 rdi_idx = key.u32[2];
-        RDI_Parsed *rdi = e_type_state->ctx->rdis[rdi_idx];
+        RDI_Parsed *rdi = e_type_state->ctx->modules[rdi_idx].rdi;
         RDI_TypeNode *rdi_type = rdi_element_from_name_idx(rdi, TypeNodes, type_node_idx);
         if(rdi_type->kind != RDI_TypeKind_NULL)
         {

@@ -104,6 +104,7 @@ struct CTRL_EntityStore
   CTRL_EntityHashNode *hash_node_free;
   U64 hash_slots_count;
   CTRL_EntityStringChunkNode *free_string_chunks[8];
+  U64 entity_kind_counts[CTRL_EntityKind_COUNT];
 };
 
 ////////////////////////////////
