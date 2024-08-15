@@ -6,6 +6,7 @@
 //
 // [x] fix HRESULTs
 //
+// [ ] decay arrays to pointers in pointer/value comparison
 // [ ] EVAL LOOKUP RULES -> currently going 0 -> rdis_count, but we need
 // to prioritize the primary rdi
 // [ ] EVAL SPACES - each rdi gets an rdi space, rdi space is passed to

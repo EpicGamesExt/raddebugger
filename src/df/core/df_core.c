@@ -7513,8 +7513,9 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
                       DF_EntityKind sub_entity_kind = DF_EntityKind_Nil;
                       for(EachEnumVal(DF_EntityKind, k2))
                       {
-                        if(str8_match(child->string, df_g_entity_kind_name_lower_table[k2], StringMatchFlag_CaseInsensitive) ||
-                           (k2 == DF_EntityKind_Executable && str8_match(child->string, str8_lit("exe"), StringMatchFlag_CaseInsensitive)))
+                        if(child->flags & DF_CfgNodeFlag_Identifier && child->first != &df_g_nil_cfg_node &&
+                           (str8_match(child->string, df_g_entity_kind_name_lower_table[k2], StringMatchFlag_CaseInsensitive) ||
+                            (k2 == DF_EntityKind_Executable && str8_match(child->string, str8_lit("exe"), StringMatchFlag_CaseInsensitive))))
                         {
                           Task *task = push_array(scratch.arena, Task, 1);
                           task->next = t->next;
@@ -8287,28 +8288,6 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
         E_Expr *expr = e_push_expr(arena, E_ExprKind_LeafU64, 0);
         expr->u64 = thread->ctrl_id;
         e_string2expr_map_insert(arena, ctx->macro_map, str8_lit("tid"), expr);
-      }
-      
-      // rjf: thread -> current thread info
-      if(!df_entity_is_nil(thread))
-      {
-        E_MemberList members_list = {0};
-        {
-          E_Member tid_member =
-          {
-            .kind = E_MemberKind_DataField,
-            .type_key = e_type_key_basic(E_TypeKind_U32),
-            .name = str8_lit("tid"),
-            .off = 0,
-          };
-          e_member_list_push(arena, &members_list, &tid_member);
-        }
-        E_MemberArray members = e_member_array_from_list(arena, &members_list);
-        E_TypeKey thread_type_key = e_type_key_cons(.kind = E_TypeKind_Struct, .count = members.count, .members = members.v, .name = str8_lit("Thread"));
-        E_Expr *expr = e_push_expr(arena, E_ExprKind_LeafBytecode, 0);
-        expr->u64 = thread->ctrl_id;
-        expr->type_key = thread_type_key;
-        e_string2expr_map_insert(arena, ctx->macro_map, str8_lit("thread"), expr);
       }
     }
     

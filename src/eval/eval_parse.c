@@ -1145,6 +1145,14 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
           String8                 local_lookup_string = token_string;
           E_Space                 space = E_Space_Null;
           
+          //- rjf: identifiers surrounded by ``s should have those `s stripped
+          if(local_lookup_string.size >= 2 &&
+             local_lookup_string.str[0] == '`' &&
+             local_lookup_string.str[local_lookup_string.size-1] == '`')
+          {
+            token_string = local_lookup_string = str8_substr(local_lookup_string, r1u64(1, local_lookup_string.size-1));
+          }
+          
           //- rjf: form namespaceified fallback versions of this lookup string
           String8List namespaceified_token_strings = {0};
           {

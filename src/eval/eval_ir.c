@@ -1169,6 +1169,16 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
       }
     }break;
     
+    //- rjf: leaf IDs (opaque u64s with type info attached)
+    case E_ExprKind_LeafID:
+    {
+      E_IRNode *new_tree = e_push_irnode(arena, RDI_EvalOp_ConstU64);
+      new_tree->u64   = expr->u64;
+      result.root     = new_tree;
+      result.type_key = expr->type_key;
+      result.mode     = E_Mode_Offset;
+    }break;
+    
     //- rjf: types
     case E_ExprKind_TypeIdent:
     {

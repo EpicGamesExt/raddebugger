@@ -1316,6 +1316,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
   String8 filter = str8(view->query_buffer, view->query_string_size);
   F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
   S64 num_possible_visible_rows = (S64)(dim_2f32(rect).y/row_height_px);
+  DF_EntityKind mutable_entity_kind = DF_EntityKind_Nil;
   
   //////////////////////////////
   //- rjf: determine autocompletion string
@@ -1366,9 +1367,10 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
           //- rjf: mutable watch fill -> build blocks from top-level mutable root expressions
           //
           default:
-          case DF_WatchViewFillKind_Mutable:
+          case DF_WatchViewFillKind_Watch:
           {
-            DF_EntityList watches = df_query_cached_entity_list_with_kind(DF_EntityKind_Watch);
+            mutable_entity_kind = DF_EntityKind_Watch;
+            DF_EntityList watches = df_query_cached_entity_list_with_kind(mutable_entity_kind);
             for(DF_EntityNode *n = watches.first; n != 0; n = n->next)
             {
               DF_Entity *watch = n->entity;
@@ -1387,6 +1389,143 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                 DF_EvalVizBlockList watch_blocks = df_eval_viz_block_list_from_eval_view_expr_keys(scratch.arena, eval_view, expr_string, parent_key, key);
                 df_eval_viz_block_list_concat__in_place(&blocks, &watch_blocks);}
             }
+          }break;
+          
+          ////////////////////////////
+          //- rjf: mutable breakpoint fill -> build blocks from all breakpoints
+          //
+          case DF_WatchViewFillKind_Breakpoints:
+          {
+            mutable_entity_kind = DF_EntityKind_Breakpoint;
+            DF_EntityList bps = df_query_cached_entity_list_with_kind(mutable_entity_kind);
+            for(DF_EntityNode *n = bps.first; n != 0; n = n->next)
+            {
+              DF_Entity *bp = n->entity;
+              if(bp->flags & DF_EntityFlag_MarkedForDeletion)
+              {
+                continue;
+              }
+              DF_ExpandKey parent_key = df_parent_expand_key_from_entity(bp);
+              DF_ExpandKey key = df_expand_key_from_entity(bp);
+              String8 title = df_display_string_from_entity(scratch.arena, bp);
+              FuzzyMatchRangeList matches = fuzzy_match_find(scratch.arena, filter, title);
+              if(matches.count == matches.needle_part_count)
+              {
+                E_MemberList bp_members = {0};
+                {
+                  e_member_list_push_new(scratch.arena, &bp_members, .name = str8_lit("Disabled"), .off = 0,        .type_key = e_type_key_basic(E_TypeKind_S64));
+                  e_member_list_push_new(scratch.arena, &bp_members, .name = str8_lit("Hit Count"),.off = 0+8,      .type_key = e_type_key_basic(E_TypeKind_U64));
+                  e_member_list_push_new(scratch.arena, &bp_members, .name = str8_lit("Label"),    .off = 0+8+8,    .type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_Char8), 256));
+                  e_member_list_push_new(scratch.arena, &bp_members, .name = str8_lit("Location"), .off = 0+8+8+8,  .type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_Char8), 256));
+                }
+                E_MemberArray bp_members_array = e_member_array_from_list(scratch.arena, &bp_members);
+                E_TypeKey bp_type = e_type_key_cons(.kind = E_TypeKind_Struct, .name = str8_lit("Breakpoint"), .members = bp_members_array.v, .count = bp_members_array.count);
+                E_Eval eval =
+                {
+                  .value    = {.u64 = (U64)bp},
+                  .mode     = E_Mode_Offset,
+                  .space    = (U64)df_entity_root(),
+                  .type_key = bp_type,
+                };
+                DF_CfgTable cfg_table = {0};
+                df_append_viz_blocks_for_parent__rec(scratch.arena, eval_view, parent_key, key, title, eval, 0, &cfg_table, 0, &blocks);
+              }
+            }
+          }break;
+          
+          ////////////////////////////
+          //- rjf: call stack fill -> build blocks for each call frame
+          //
+          case DF_WatchViewFillKind_CallStack:
+          {
+            DI_Scope *scope = di_scope_open();
+            
+            //- rjf: unpack
+            DF_Entity *thread = df_entity_from_handle(df_interact_regs()->thread);
+            Architecture arch = df_architecture_from_entity(thread);
+            DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
+            CTRL_Unwind base_unwind = df_query_cached_unwind_from_thread(thread);
+            DF_Unwind rich_unwind = df_unwind_from_ctrl_unwind(scratch.arena, scope, process, &base_unwind);
+            
+            //- rjf: produce per-row info for callstack
+            typedef struct FrameRow FrameRow;
+            struct FrameRow
+            {
+              void *regs;
+              RDI_Parsed *rdi;
+              RDI_Procedure *procedure;
+              RDI_InlineSite *inline_site;
+              U64 unwind_idx;
+              U64 inline_depth;
+            };
+            U64 rows_count = rich_unwind.frames.total_frame_count;
+            FrameRow *rows = push_array(scratch.arena, FrameRow, rows_count);
+            {
+              U64 concrete_frame_idx = 0;
+              U64 row_idx = 0;
+              for(;concrete_frame_idx < rich_unwind.frames.concrete_frame_count; concrete_frame_idx += 1, row_idx += 1)
+              {
+                DF_UnwindFrame *f = &rich_unwind.frames.v[concrete_frame_idx];
+                
+                // rjf: fill rows for inline frames
+                {
+                  U64 inline_unwind_idx = 0;
+                  for(DF_UnwindInlineFrame *fin = f->last_inline_frame; fin != 0; fin = fin->prev, row_idx += 1, inline_unwind_idx += 1)
+                  {
+                    rows[row_idx].regs         = f->regs;
+                    rows[row_idx].rdi          = f->rdi;
+                    rows[row_idx].inline_site  = fin->inline_site;
+                    rows[row_idx].unwind_idx   = concrete_frame_idx;
+                    rows[row_idx].inline_depth = f->inline_frame_count - inline_unwind_idx;
+                  }
+                }
+                
+                // rjf: fill row for concrete frame
+                {
+                  rows[row_idx].regs      = f->regs;
+                  rows[row_idx].rdi       = f->rdi;
+                  rows[row_idx].procedure = f->procedure;
+                  rows[row_idx].unwind_idx= concrete_frame_idx;
+                }
+              }
+            }
+            
+            //- rjf: build viz blocks
+            for(U64 row_idx = 0; row_idx < rows_count; row_idx += 1)
+            {
+              FrameRow *row = &rows[row_idx];
+              DF_ExpandKey parent_key = df_expand_key_make(5381, 0);
+              DF_ExpandKey key = df_expand_key_make(df_hash_from_expand_key(parent_key), row_idx+1);
+              DF_EvalVizBlock *block = df_eval_viz_block_begin(scratch.arena, DF_EvalVizBlockKind_Root, parent_key, key, 0);
+              {
+                E_TypeKey type_key = zero_struct;
+                String8 name = {0};
+                if(row->procedure != 0)
+                {
+                  type_key = e_type_key_ext(E_TypeKind_Function, row->procedure->type_idx, e_parse_ctx_module_idx_from_rdi(row->rdi));
+                  name.str = rdi_name_from_procedure(row->rdi, row->procedure, &name.size);
+                }
+                else if(row->inline_site != 0)
+                {
+                  type_key = e_type_key_ext(E_TypeKind_Function, row->inline_site->type_idx, e_parse_ctx_module_idx_from_rdi(row->rdi));
+                  name.str = rdi_string_from_idx(row->rdi, row->inline_site->name_string_idx, &name.size);
+                }
+                E_Eval eval =
+                {
+                  .value    = {.u64 = regs_rip_from_arch_block(arch, row->regs)},
+                  .mode     = E_Mode_Value,
+                  .space    = (U64)process,
+                  .type_key = type_key,
+                };
+                block->eval               = eval;
+                block->string             = name;
+                block->visual_idx_range   = r1u64(row_idx, row_idx+1);
+                block->semantic_idx_range = r1u64(row_idx, row_idx+1);
+              }
+              df_eval_viz_block_end(&blocks, block);
+            }
+            
+            di_scope_close(scope);
           }break;
           
           ////////////////////////////
@@ -1942,7 +2081,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                 case DF_WatchViewColumnKind_Expr:
                 {
                   DF_WatchViewPoint pt = df_watch_view_point_from_tbl(&blocks, tbl);
-                  DF_Entity *watch = df_entity_from_expand_key_and_kind(pt.key, DF_EntityKind_Watch);
+                  DF_Entity *watch = df_entity_from_expand_key_and_kind(pt.key, mutable_entity_kind);
                   if(!df_entity_is_nil(watch))
                   {
                     df_entity_equip_name(watch, new_string);
@@ -1951,7 +2090,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                   }
                   else if(editing_complete && new_string.size != 0 && df_expand_key_match(pt.key, empty_row_key))
                   {
-                    watch = df_entity_alloc(df_entity_root(), DF_EntityKind_Watch);
+                    watch = df_entity_alloc(df_entity_root(), mutable_entity_kind);
                     df_entity_equip_cfg_src(watch, DF_CfgSrc_Project);
                     df_entity_equip_name(watch, new_string);
                     DF_ExpandKey key = df_expand_key_from_entity(watch);
@@ -1986,7 +2125,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                 {
                   DF_WatchViewPoint pt = df_watch_view_point_from_tbl(&blocks, tbl);
                   df_eval_view_set_key_rule(eval_view, pt.key, new_string);
-                  DF_Entity *watch = df_entity_from_expand_key_and_kind(pt.key, DF_EntityKind_Watch);
+                  DF_Entity *watch = df_entity_from_expand_key_and_kind(pt.key, mutable_entity_kind);
                   DF_Entity *view_rule = df_entity_child_from_kind(watch, DF_EntityKind_ViewRule);
                   if(new_string.size != 0 && df_entity_is_nil(view_rule))
                   {
@@ -2070,14 +2209,14 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
           {
             DF_WatchViewPoint fallback_pt_prev = df_watch_view_point_from_tbl(&blocks, v2s64(0, y - 1));
             DF_WatchViewPoint fallback_pt_next = df_watch_view_point_from_tbl(&blocks, v2s64(0, y + 1));
-            DF_Entity *watch = df_entity_from_expand_key_and_kind(pt.key, DF_EntityKind_Watch);
+            DF_Entity *watch = df_entity_from_expand_key_and_kind(pt.key, mutable_entity_kind);
             if(!df_entity_is_nil(watch))
             {
               DF_ExpandKey new_cursor_key = empty_row_key;
               DF_ExpandKey new_cursor_parent_key = empty_row_parent_key;
               if((evt->delta_2s32.x < 0 || evt->delta_2s32.y < 0) && !df_expand_key_match(df_expand_key_zero(), fallback_pt_prev.key))
               {
-                DF_Entity *fallback_watch = df_entity_from_expand_key_and_kind(fallback_pt_prev.key, DF_EntityKind_Watch);
+                DF_Entity *fallback_watch = df_entity_from_expand_key_and_kind(fallback_pt_prev.key, mutable_entity_kind);
                 if(!df_entity_is_nil(fallback_watch))
                 {
                   new_cursor_key = fallback_pt_prev.key;
@@ -2086,7 +2225,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
               }
               else if(!df_expand_key_match(df_expand_key_zero(), fallback_pt_next.key))
               {
-                DF_Entity *fallback_watch = df_entity_from_expand_key_and_kind(fallback_pt_next.key, DF_EntityKind_Watch);
+                DF_Entity *fallback_watch = df_entity_from_expand_key_and_kind(fallback_pt_next.key, mutable_entity_kind);
                 if(!df_entity_is_nil(fallback_watch))
                 {
                   new_cursor_key = fallback_pt_next.key;
@@ -2102,7 +2241,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
           // rjf: view rule deletions
           else if(selection_tbl.min.x <= DF_WatchViewColumnKind_ViewRule && DF_WatchViewColumnKind_ViewRule <= selection_tbl.max.x)
           {
-            DF_Entity *watch = df_entity_from_expand_key_and_kind(pt.key, DF_EntityKind_Watch);
+            DF_Entity *watch = df_entity_from_expand_key_and_kind(pt.key, mutable_entity_kind);
             DF_Entity *view_rule = df_entity_child_from_kind(watch, DF_EntityKind_ViewRule);
             df_entity_mark_for_deletion(view_rule);
             df_eval_view_set_key_rule(eval_view, pt.key, str8_zero());
@@ -2205,16 +2344,16 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
         DF_ExpandKey first_watch_key = df_key_from_viz_block_list_row_num(&blocks, selection_tbl.min.y);
         DF_ExpandKey reorder_group_prev_watch_key = df_key_from_viz_block_list_row_num(&blocks, selection_tbl.min.y - 1);
         DF_ExpandKey reorder_group_next_watch_key = df_key_from_viz_block_list_row_num(&blocks, selection_tbl.max.y + 1);
-        DF_Entity *reorder_group_prev = df_entity_from_expand_key_and_kind(reorder_group_prev_watch_key, DF_EntityKind_Watch);
-        DF_Entity *reorder_group_next = df_entity_from_expand_key_and_kind(reorder_group_next_watch_key, DF_EntityKind_Watch);
-        DF_Entity *first_watch = df_entity_from_expand_key_and_kind(first_watch_key, DF_EntityKind_Watch);
+        DF_Entity *reorder_group_prev = df_entity_from_expand_key_and_kind(reorder_group_prev_watch_key, mutable_entity_kind);
+        DF_Entity *reorder_group_next = df_entity_from_expand_key_and_kind(reorder_group_next_watch_key, mutable_entity_kind);
+        DF_Entity *first_watch = df_entity_from_expand_key_and_kind(first_watch_key, mutable_entity_kind);
         DF_Entity *last_watch = first_watch;
         if(!df_entity_is_nil(first_watch))
         {
           for(S64 y = selection_tbl.min.y+1; y <= selection_tbl.max.y; y += 1)
           {
             DF_ExpandKey key = df_key_from_viz_block_list_row_num(&blocks, y);
-            DF_Entity *new_last = df_entity_from_expand_key_and_kind(key, DF_EntityKind_Watch);
+            DF_Entity *new_last = df_entity_from_expand_key_and_kind(key, mutable_entity_kind);
             if(!df_entity_is_nil(new_last))
             {
               last_watch = new_last;
@@ -2832,7 +2971,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
             // rjf: bad & hovering -> display
             if(row_is_bad && ui_hovering(sig)) UI_Tooltip
             {
-              UI_PrefWidth(ui_children_sum(1)) df_error_label(str8_lit("Could not read process memory successfully."));
+              UI_PrefWidth(ui_children_sum(1)) df_error_label(str8_lit("Could not read memory successfully."));
             }
             
             // rjf: press -> focus & commit if editing & not selected
@@ -5671,6 +5810,19 @@ DF_VIEW_UI_FUNCTION_DEF(Scheduler)
 ////////////////////////////////
 //~ rjf: CallStack @view_hook_impl
 
+DF_VIEW_SETUP_FUNCTION_DEF(CallStack){}
+DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(CallStack) {return str8_zero();}
+DF_VIEW_CMD_FUNCTION_DEF(CallStack){}
+DF_VIEW_UI_FUNCTION_DEF(CallStack)
+{
+  ProfBeginFunction();
+  DF_WatchViewState *ewv = df_view_user_state(view, DF_WatchViewState);
+  df_watch_view_init(ewv, view, DF_WatchViewFillKind_CallStack);
+  df_watch_view_build(ws, panel, view, ewv, 0, 10, rect);
+  ProfEnd();
+}
+
+#if 0
 DF_VIEW_SETUP_FUNCTION_DEF(CallStack) {}
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(CallStack) { return str8_lit(""); }
 DF_VIEW_CMD_FUNCTION_DEF(CallStack) {}
@@ -5990,6 +6142,7 @@ DF_VIEW_UI_FUNCTION_DEF(CallStack)
   scratch_end(scratch);
   ProfEnd();
 }
+#endif
 
 ////////////////////////////////
 //~ rjf: Modules @view_hook_impl
@@ -6914,9 +7067,9 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
 DF_VIEW_SETUP_FUNCTION_DEF(Watch)
 {
   DF_WatchViewState *ewv = df_view_user_state(view, DF_WatchViewState);
-  df_watch_view_init(ewv, view, DF_WatchViewFillKind_Mutable);
+  df_watch_view_init(ewv, view, DF_WatchViewFillKind_Watch);
 }
-DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Watch) {return str8_lit("");}
+DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Watch) {return str8_zero();}
 DF_VIEW_CMD_FUNCTION_DEF(Watch)
 {
   DF_WatchViewState *ewv = df_view_user_state(view, DF_WatchViewState);
@@ -6924,15 +7077,17 @@ DF_VIEW_CMD_FUNCTION_DEF(Watch)
 }
 DF_VIEW_UI_FUNCTION_DEF(Watch)
 {
+  ProfBeginFunction();
   DF_WatchViewState *ewv = df_view_user_state(view, DF_WatchViewState);
   df_watch_view_build(ws, panel, view, ewv, 1*(view->query_string_size == 0), 10, rect);
+  ProfEnd();
 }
 
 ////////////////////////////////
 //~ rjf: Locals @view_hook_impl
 
 DF_VIEW_SETUP_FUNCTION_DEF(Locals) {}
-DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Locals) { return str8_lit(""); }
+DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Locals) { return str8_zero(); }
 DF_VIEW_CMD_FUNCTION_DEF(Locals) {}
 DF_VIEW_UI_FUNCTION_DEF(Locals)
 {
@@ -6947,7 +7102,7 @@ DF_VIEW_UI_FUNCTION_DEF(Locals)
 //~ rjf: Registers @view_hook_impl
 
 DF_VIEW_SETUP_FUNCTION_DEF(Registers) {}
-DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Registers) { return str8_lit(""); }
+DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Registers) { return str8_zero(); }
 DF_VIEW_CMD_FUNCTION_DEF(Registers) {}
 DF_VIEW_UI_FUNCTION_DEF(Registers)
 {
@@ -6962,7 +7117,7 @@ DF_VIEW_UI_FUNCTION_DEF(Registers)
 //~ rjf: Globals @view_hook_impl
 
 DF_VIEW_SETUP_FUNCTION_DEF(Globals) {}
-DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Globals) { return str8_lit(""); }
+DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Globals) { return str8_zero(); }
 DF_VIEW_CMD_FUNCTION_DEF(Globals) {}
 DF_VIEW_UI_FUNCTION_DEF(Globals)
 {
@@ -6977,7 +7132,7 @@ DF_VIEW_UI_FUNCTION_DEF(Globals)
 //~ rjf: ThreadLocals @view_hook_impl
 
 DF_VIEW_SETUP_FUNCTION_DEF(ThreadLocals) {}
-DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(ThreadLocals) { return str8_lit(""); }
+DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(ThreadLocals) { return str8_zero(); }
 DF_VIEW_CMD_FUNCTION_DEF(ThreadLocals) {}
 DF_VIEW_UI_FUNCTION_DEF(ThreadLocals)
 {
@@ -6992,7 +7147,7 @@ DF_VIEW_UI_FUNCTION_DEF(ThreadLocals)
 //~ rjf: Types @view_hook_impl
 
 DF_VIEW_SETUP_FUNCTION_DEF(Types) {}
-DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Types) { return str8_lit(""); }
+DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Types) { return str8_zero(); }
 DF_VIEW_CMD_FUNCTION_DEF(Types) {}
 DF_VIEW_UI_FUNCTION_DEF(Types)
 {
@@ -7007,7 +7162,7 @@ DF_VIEW_UI_FUNCTION_DEF(Types)
 //~ rjf: Procedures @view_hook_impl
 
 DF_VIEW_SETUP_FUNCTION_DEF(Procedures) {}
-DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Procedures) { return str8_lit(""); }
+DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Procedures) { return str8_zero(); }
 DF_VIEW_CMD_FUNCTION_DEF(Procedures) {}
 DF_VIEW_UI_FUNCTION_DEF(Procedures)
 {
@@ -7972,6 +8127,26 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
 ////////////////////////////////
 //~ rjf: Breakpoints @view_hook_impl
 
+DF_VIEW_SETUP_FUNCTION_DEF(Breakpoints)
+{
+  DF_WatchViewState *ewv = df_view_user_state(view, DF_WatchViewState);
+  df_watch_view_init(ewv, view, DF_WatchViewFillKind_Breakpoints);
+}
+DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Breakpoints) {return str8_zero();}
+DF_VIEW_CMD_FUNCTION_DEF(Breakpoints)
+{
+  DF_WatchViewState *ewv = df_view_user_state(view, DF_WatchViewState);
+  df_watch_view_cmds(ws, panel, view, ewv, cmds);
+}
+DF_VIEW_UI_FUNCTION_DEF(Breakpoints)
+{
+  ProfBeginFunction();
+  DF_WatchViewState *ewv = df_view_user_state(view, DF_WatchViewState);
+  df_watch_view_build(ws, panel, view, ewv, 1*(view->query_string_size == 0), 10, rect);
+  ProfEnd();
+}
+
+#if 0
 DF_VIEW_SETUP_FUNCTION_DEF(Breakpoints) {}
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Breakpoints) {return str8_lit("");}
 DF_VIEW_CMD_FUNCTION_DEF(Breakpoints) {}
@@ -8144,6 +8319,7 @@ DF_VIEW_UI_FUNCTION_DEF(Breakpoints)
   
   scratch_end(scratch);
 }
+#endif
 
 ////////////////////////////////
 //~ rjf: WatchPins @view_hook_impl

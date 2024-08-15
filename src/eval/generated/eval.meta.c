@@ -14,7 +14,7 @@ str8_lit_comp("CharLiteral"),
 str8_lit_comp("Symbol"),
 };
 
-String8 e_expr_kind_strings[41] =
+String8 e_expr_kind_strings[42] =
 {
 str8_lit_comp("Nil"),
 str8_lit_comp("ArrayIndex"),
@@ -52,6 +52,7 @@ str8_lit_comp("LeafU64"),
 str8_lit_comp("LeafF64"),
 str8_lit_comp("LeafF32"),
 str8_lit_comp("LeafIdent"),
+str8_lit_comp("LeafID"),
 str8_lit_comp("TypeIdent"),
 str8_lit_comp("Ptr"),
 str8_lit_comp("Array"),
@@ -74,7 +75,7 @@ str8_lit_comp("Insufficient evaluation machine stack space."),
 str8_lit_comp("Malformed bytecode."),
 };
 
-String8 e_expr_op_strings[41] =
+String8 e_expr_op_strings[42] =
 {
 str8_lit_comp(""),
 str8_lit_comp("[]"),
@@ -112,6 +113,7 @@ str8_lit_comp("U64"),
 str8_lit_comp("F64"),
 str8_lit_comp("F32"),
 str8_lit_comp("leaf_ident"),
+str8_lit_comp("leaf_id"),
 str8_lit_comp("type_ident"),
 str8_lit_comp("ptr"),
 str8_lit_comp("array"),

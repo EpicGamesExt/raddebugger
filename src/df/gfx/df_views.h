@@ -282,7 +282,9 @@ DF_WatchViewColumnKind;
 
 typedef enum DF_WatchViewFillKind
 {
-  DF_WatchViewFillKind_Mutable,
+  DF_WatchViewFillKind_Watch,
+  DF_WatchViewFillKind_Breakpoints,
+  DF_WatchViewFillKind_CallStack,
   DF_WatchViewFillKind_Registers,
   DF_WatchViewFillKind_Locals,
   DF_WatchViewFillKind_Globals,
@@ -319,7 +321,7 @@ struct DF_WatchViewState
 {
   B32 initialized;
   
-  // rjf: fill kind (way that the contents of the watch view are computed)
+  // rjf: fill kinds (way that the contents of the watch view are computed)
   DF_WatchViewFillKind fill_kind;
   
   // rjf; table cursor state
