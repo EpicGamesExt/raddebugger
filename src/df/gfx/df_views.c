@@ -1422,9 +1422,8 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                 E_TypeKey bp_type = e_type_key_cons(.kind = E_TypeKind_Struct, .name = str8_lit("Breakpoint"), .members = bp_members_array.v, .count = bp_members_array.count);
                 E_Eval eval =
                 {
-                  .value    = {.u64 = (U64)bp},
                   .mode     = E_Mode_Offset,
-                  .space    = (U64)df_entity_root(),
+                  .space    = (U64)bp,
                   .type_key = bp_type,
                 };
                 DF_CfgTable cfg_table = {0};

@@ -3696,6 +3696,10 @@ df_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
   switch(entity->kind)
   {
     default:{}break;
+    case DF_EntityKind_Breakpoint:
+    {
+      // TODO(rjf)
+    }break;
     case DF_EntityKind_Process:
     {
       Temp scratch = scratch_begin(0, 0);
