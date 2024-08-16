@@ -1389,7 +1389,10 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
   //
   F_Tag code_font = df_font_from_slot(DF_FontSlot_Code);
   DF_Entity *thread = df_entity_from_handle(df_interact_regs()->thread);
+  Architecture arch = df_architecture_from_entity(thread);
+  CTRL_Unwind base_unwind = df_query_cached_unwind_from_thread(thread);
   DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
+  DF_Unwind rich_unwind = df_unwind_from_ctrl_unwind(scratch.arena, di_scope, process, &base_unwind);
   U64 thread_ip_vaddr = df_query_cached_rip_from_thread_unwind(thread, df_interact_regs()->unwind_count);
   DF_EvalViewKey eval_view_key = df_eval_view_key_from_eval_watch_view(ewv);
   DF_EvalView *eval_view = df_eval_view_from_key(eval_view_key);
@@ -1417,6 +1420,18 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
   //////////////////////////////
   //- rjf: consume events & perform navigations/edits - calculate state
   //
+  typedef struct FrameRow FrameRow;
+  struct FrameRow
+  {
+    void *regs;
+    RDI_Parsed *rdi;
+    RDI_Procedure *procedure;
+    RDI_InlineSite *inline_site;
+    U64 unwind_idx;
+    U64 inline_depth;
+  };
+  U64 frame_rows_count = 0;
+  FrameRow *frame_rows = 0;
   DF_EvalVizBlockList blocks = {0};
   UI_ScrollListRowBlockArray row_blocks = {0};
   Vec2S64 cursor_tbl = {0};
@@ -1555,28 +1570,9 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
           //
           case DF_WatchViewFillKind_CallStack:
           {
-            DI_Scope *scope = di_scope_open();
-            
-            //- rjf: unpack
-            DF_Entity *thread = df_entity_from_handle(df_interact_regs()->thread);
-            Architecture arch = df_architecture_from_entity(thread);
-            DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
-            CTRL_Unwind base_unwind = df_query_cached_unwind_from_thread(thread);
-            DF_Unwind rich_unwind = df_unwind_from_ctrl_unwind(scratch.arena, scope, process, &base_unwind);
-            
             //- rjf: produce per-row info for callstack
-            typedef struct FrameRow FrameRow;
-            struct FrameRow
-            {
-              void *regs;
-              RDI_Parsed *rdi;
-              RDI_Procedure *procedure;
-              RDI_InlineSite *inline_site;
-              U64 unwind_idx;
-              U64 inline_depth;
-            };
-            U64 rows_count = rich_unwind.frames.total_frame_count;
-            FrameRow *rows = push_array(scratch.arena, FrameRow, rows_count);
+            frame_rows_count = rich_unwind.frames.total_frame_count;
+            frame_rows = push_array(scratch.arena, FrameRow, frame_rows_count);
             {
               U64 concrete_frame_idx = 0;
               U64 row_idx = 0;
@@ -1584,33 +1580,33 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
               {
                 DF_UnwindFrame *f = &rich_unwind.frames.v[concrete_frame_idx];
                 
-                // rjf: fill rows for inline frames
+                // rjf: fill frame_rows for inline frames
                 {
                   U64 inline_unwind_idx = 0;
                   for(DF_UnwindInlineFrame *fin = f->last_inline_frame; fin != 0; fin = fin->prev, row_idx += 1, inline_unwind_idx += 1)
                   {
-                    rows[row_idx].regs         = f->regs;
-                    rows[row_idx].rdi          = f->rdi;
-                    rows[row_idx].inline_site  = fin->inline_site;
-                    rows[row_idx].unwind_idx   = concrete_frame_idx;
-                    rows[row_idx].inline_depth = f->inline_frame_count - inline_unwind_idx;
+                    frame_rows[row_idx].regs         = f->regs;
+                    frame_rows[row_idx].rdi          = f->rdi;
+                    frame_rows[row_idx].inline_site  = fin->inline_site;
+                    frame_rows[row_idx].unwind_idx   = concrete_frame_idx;
+                    frame_rows[row_idx].inline_depth = f->inline_frame_count - inline_unwind_idx;
                   }
                 }
                 
                 // rjf: fill row for concrete frame
                 {
-                  rows[row_idx].regs      = f->regs;
-                  rows[row_idx].rdi       = f->rdi;
-                  rows[row_idx].procedure = f->procedure;
-                  rows[row_idx].unwind_idx= concrete_frame_idx;
+                  frame_rows[row_idx].regs      = f->regs;
+                  frame_rows[row_idx].rdi       = f->rdi;
+                  frame_rows[row_idx].procedure = f->procedure;
+                  frame_rows[row_idx].unwind_idx= concrete_frame_idx;
                 }
               }
             }
             
             //- rjf: build viz blocks
-            for(U64 row_idx = 0; row_idx < rows_count; row_idx += 1)
+            for(U64 row_idx = 0; row_idx < frame_rows_count; row_idx += 1)
             {
-              FrameRow *row = &rows[row_idx];
+              FrameRow *row = &frame_rows[row_idx];
               DF_ExpandKey parent_key = df_expand_key_make(5381, 0);
               DF_ExpandKey key = df_expand_key_make(df_hash_from_expand_key(parent_key), row_idx+1);
               DF_EvalVizBlock *block = df_eval_viz_block_begin(scratch.arena, DF_EvalVizBlockKind_Root, parent_key, key, 0);
@@ -1641,8 +1637,6 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
               }
               df_eval_viz_block_end(&blocks, block);
             }
-            
-            di_scope_close(scope);
           }break;
           
           ////////////////////////////
@@ -2095,7 +2089,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
       }
       
       //////////////////////////
-      //- rjf: [table] do cell-granularity go-to-locations
+      //- rjf: [table] do cell-granularity go-to-locations / frame selections
       //
       if(!ewv->text_editing && evt->slot == UI_EventActionSlot_Accept &&
          selection_tbl.min.x == selection_tbl.max.x &&
@@ -2123,6 +2117,15 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
             p.text_point = lines.first->v.pt;
           }
           df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FindCodeLocation));
+        }
+        if(1 <= selection_tbl.min.y && selection_tbl.min.y <= frame_rows_count)
+        {
+          FrameRow *frame_row = &frame_rows[selection_tbl.min.y-1];
+          DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
+          p.entity = df_interact_regs()->thread;
+          p.unwind_index = frame_row->unwind_idx;
+          p.inline_depth = frame_row->inline_depth;
+          df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_SelectUnwind));
         }
       }
       
@@ -3005,6 +3008,17 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                     p.text_point = lines.first->v.pt;
                   }
                   df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FindCodeLocation));
+                }
+                
+                // rjf: double-click, not editable, callstack frame -> select frame
+                if(ui_double_clicked(sig) && !cell_can_edit && semantic_idx < frame_rows_count)
+                {
+                  FrameRow *frame_row = &frame_rows[semantic_idx];
+                  DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
+                  p.entity = df_interact_regs()->thread;
+                  p.unwind_index = frame_row->unwind_idx;
+                  p.inline_depth = frame_row->inline_depth;
+                  df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_SelectUnwind));
                 }
                 
                 // rjf: hovering with error tooltip -> show tooltip
