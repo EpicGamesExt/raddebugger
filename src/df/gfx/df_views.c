@@ -1174,12 +1174,30 @@ df_eval_view_key_from_eval_watch_view(DF_WatchViewState *ewv)
   return key;
 }
 
+//- rjf: index -> column
+
+internal DF_WatchViewColumn *
+df_watch_view_column_from_x(DF_WatchViewState *wv, S64 index)
+{
+  DF_WatchViewColumn *result = wv->first_column;
+  S64 idx = 0;
+  for(DF_WatchViewColumn *c = wv->first_column; c != 0; c = c->next, idx += 1)
+  {
+    result = c;
+    if(idx == index)
+    {
+      break;
+    }
+  }
+  return result;
+}
+
 //- rjf: watch view points <-> table coordinates
 
 internal B32
 df_watch_view_point_match(DF_WatchViewPoint a, DF_WatchViewPoint b)
 {
-  return (a.column_kind == b.column_kind &&
+  return (a.x == b.x &&
           df_expand_key_match(a.parent_key, b.parent_key) &&
           df_expand_key_match(a.key, b.key));
 }
@@ -1188,7 +1206,7 @@ internal DF_WatchViewPoint
 df_watch_view_point_from_tbl(DF_EvalVizBlockList *blocks, Vec2S64 tbl)
 {
   DF_WatchViewPoint pt = zero_struct;
-  pt.column_kind = (DF_WatchViewColumnKind)(tbl.x%DF_WatchViewColumnKind_COUNT);
+  pt.x           = tbl.x;
   pt.key         = df_key_from_viz_block_list_row_num(blocks, tbl.y);
   pt.parent_key  = df_parent_key_from_viz_block_list_row_num(blocks, tbl.y);
   return pt;
@@ -1198,7 +1216,7 @@ internal Vec2S64
 df_tbl_from_watch_view_point(DF_EvalVizBlockList *blocks, DF_WatchViewPoint pt)
 {
   Vec2S64 tbl = {0};
-  tbl.x = (S64)pt.column_kind;
+  tbl.x = pt.x;
   tbl.y = df_row_num_from_viz_block_list_key(blocks, pt.key);
   return tbl;
 }
@@ -1242,7 +1260,34 @@ df_watch_view_text_edit_state_from_pt(DF_WatchViewState *wv, DF_WatchViewPoint p
   return result;
 }
 
-//- rjf: eval/watch views main hooks
+//- rjf: watch view column state mutation
+
+internal DF_WatchViewColumn *
+df_watch_view_column_alloc(DF_WatchViewState *wv, DF_WatchViewColumnKind kind, F32 pct)
+{
+  if(!wv->free_column)
+  {
+    DF_WatchViewColumn *col = push_array(wv->column_arena, DF_WatchViewColumn, 1);
+    SLLStackPush(wv->free_column, col);
+  }
+  DF_WatchViewColumn *col = wv->free_column;
+  SLLStackPop(wv->free_column);
+  DLLPushBack(wv->first_column, wv->last_column, col);
+  wv->column_count += 1;
+  col->kind = kind;
+  col->pct = pct;
+  return col;
+}
+
+internal void
+df_watch_view_column_release(DF_WatchViewState *wv, DF_WatchViewColumn *col)
+{
+  DLLRemove(wv->first_column, wv->last_column, col);
+  SLLStackPush(wv->free_column, col);
+  wv->column_count -= 1;
+}
+
+//- rjf: watch view main hooks
 
 internal void
 df_watch_view_init(DF_WatchViewState *ewv, DF_View *view, DF_WatchViewFillKind fill_kind)
@@ -1250,11 +1295,8 @@ df_watch_view_init(DF_WatchViewState *ewv, DF_View *view, DF_WatchViewFillKind f
   if(ewv->initialized == 0)
   {
     ewv->initialized = 1;
-    ewv->expr_column_pct      = 0.25f;
-    ewv->value_column_pct     = 0.3f;
-    ewv->type_column_pct      = 0.15f;
-    ewv->view_rule_column_pct = 0.30f;
     ewv->fill_kind = fill_kind;
+    ewv->column_arena = df_view_push_arena_ext(view);
     ewv->text_edit_arena = df_view_push_arena_ext(view);
   }
 }
@@ -1958,7 +2000,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
           {
             String8 string = df_string_from_eval_viz_row_column_kind(scratch.arena, eval_view, row, (DF_WatchViewColumnKind)x, 1);
             string.size = Min(string.size, sizeof(ewv->dummy_text_edit_state.input_buffer));
-            DF_WatchViewPoint pt = {(DF_WatchViewColumnKind)x, row->parent_key, row->key};
+            DF_WatchViewPoint pt = {x, row->parent_key, row->key};
             U64 hash = df_hash_from_expand_key(pt.key);
             U64 slot_idx = hash%ewv->text_edit_state_slots_count;
             DF_WatchViewTextEditState *edit_state = push_array(ewv->text_edit_arena, DF_WatchViewTextEditState, 1);
@@ -2435,13 +2477,14 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
   //////////////////////////////
   //- rjf: build ui
   //
-  F32 *col_pcts[] =
+  F32 **col_pcts = push_array(scratch.arena, F32*, ewv->column_count);
   {
-    &ewv->expr_column_pct,
-    &ewv->value_column_pct,
-    &ewv->type_column_pct,
-    &ewv->view_rule_column_pct,
-  };
+    S64 x = 0;
+    for(DF_WatchViewColumn *c = ewv->first_column; c != 0; c = c->next, x += 1)
+    {
+      col_pcts[x] = &c->pct;
+    }
+  }
   B32 pressed = 0;
   Rng1S64 visible_row_rng = {0};
   UI_ScrollListParams scroll_list_params = {0};
@@ -2476,48 +2519,68 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                   &visible_row_rng,
                   &scroll_list_sig)
     UI_Focus(UI_FocusKind_Null)
-    UI_TableF(ArrayCount(col_pcts), col_pcts, "table_header")
+    UI_TableF(ewv->column_count, col_pcts, "table")
   {
     ////////////////////////////
     //- rjf: build table header
     //
     if(visible_row_rng.min == 0) UI_TableVector UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
     {
-      UI_TableCell ui_label(str8_lit("Expression"));
-      UI_TableCell ui_label(str8_lit("Value"));
-      UI_TableCell ui_label(str8_lit("Type"));
-      UI_TableCell if(df_help_label(str8_lit("View Rule"))) UI_Tooltip
+      for(DF_WatchViewColumn *col = ewv->first_column; col != 0; col = col->next)
+        UI_TableCell
       {
-        F32 max_width = ui_top_font_size()*35;
-        ui_label_multiline(max_width, str8_lit("View rules are used to tweak the way evaluated expressions are visualized. Multiple rules can be specified on each row. They are specified in a key:(value) form. Some examples follow:"));
-        ui_spacer(ui_em(1.5f, 1));
-        DF_Font(ws, DF_FontSlot_Code) ui_labelf("array:(N)");
-        UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) ui_label_multiline(max_width, str8_lit("Specifies that a pointer points to N elements, rather than only 1."));
-        ui_spacer(ui_em(1.5f, 1));
-        DF_Font(ws, DF_FontSlot_Code) ui_labelf("omit:(member_1 ... member_n)");
-        UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) ui_label_multiline(max_width, str8_lit("Omits a list of member names from appearing in struct, union, or class evaluations."));
-        ui_spacer(ui_em(1.5f, 1));
-        DF_Font(ws, DF_FontSlot_Code) ui_labelf("only:(member_1 ... member_n)");
-        UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) ui_label_multiline(max_width, str8_lit("Specifies that only the specified members should appear in struct, union, or class evaluations."));
-        ui_spacer(ui_em(1.5f, 1));
-        DF_Font(ws, DF_FontSlot_Code) ui_labelf("list:(next_link_member_name)");
-        UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) ui_label_multiline(max_width, str8_lit("Specifies that some struct, union, or class forms the top of a linked list, with next_link_member_name being the member which points at the next element in the list."));
-        ui_spacer(ui_em(1.5f, 1));
-        DF_Font(ws, DF_FontSlot_Code) ui_labelf("dec");
-        UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) ui_label_multiline(max_width, str8_lit("Specifies that all integral evaluations should appear in base-10 form."));
-        ui_spacer(ui_em(1.5f, 1));
-        DF_Font(ws, DF_FontSlot_Code) ui_labelf("hex");
-        UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) ui_label_multiline(max_width, str8_lit("Specifies that all integral evaluations should appear in base-16 form."));
-        ui_spacer(ui_em(1.5f, 1));
-        DF_Font(ws, DF_FontSlot_Code) ui_labelf("oct");
-        UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) ui_label_multiline(max_width, str8_lit("Specifies that all integral evaluations should appear in base-8 form."));
-        ui_spacer(ui_em(1.5f, 1));
-        DF_Font(ws, DF_FontSlot_Code) ui_labelf("bin");
-        UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) ui_label_multiline(max_width, str8_lit("Specifies that all integral evaluations should appear in base-2 form."));
-        ui_spacer(ui_em(1.5f, 1));
-        DF_Font(ws, DF_FontSlot_Code) ui_labelf("no_addr");
-        UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) ui_label_multiline(max_width, str8_lit("Displays only what pointers point to, if possible, without the pointer's address value."));
-        ui_spacer(ui_em(1.5f, 1));
+        String8 name = {0};
+        switch(col->kind)
+        {
+          default:{}break;
+          case DF_WatchViewColumnKind_Expr:    {name = str8_lit("Expression");}break;
+          case DF_WatchViewColumnKind_Value:   {name = str8_lit("Value");}break;
+          case DF_WatchViewColumnKind_Type:    {name = str8_lit("Type");}break;
+          case DF_WatchViewColumnKind_ViewRule:{name = str8_lit("View Rule");}break;
+        }
+        switch(col->kind)
+        {
+          default:
+          {
+            ui_label(name);
+          }break;
+          case DF_WatchViewColumnKind_ViewRule:
+          {
+            if(df_help_label(name)) UI_Tooltip
+            {
+              F32 max_width = ui_top_font_size()*35;
+              ui_label_multiline(max_width, str8_lit("View rules are used to tweak the way evaluated expressions are visualized. Multiple rules can be specified on each row. They are specified in a key:(value) form. Some examples follow:"));
+              ui_spacer(ui_em(1.5f, 1));
+              DF_Font(ws, DF_FontSlot_Code) ui_labelf("array:(N)");
+              UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) ui_label_multiline(max_width, str8_lit("Specifies that a pointer points to N elements, rather than only 1."));
+              ui_spacer(ui_em(1.5f, 1));
+              DF_Font(ws, DF_FontSlot_Code) ui_labelf("omit:(member_1 ... member_n)");
+              UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) ui_label_multiline(max_width, str8_lit("Omits a list of member names from appearing in struct, union, or class evaluations."));
+              ui_spacer(ui_em(1.5f, 1));
+              DF_Font(ws, DF_FontSlot_Code) ui_labelf("only:(member_1 ... member_n)");
+              UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) ui_label_multiline(max_width, str8_lit("Specifies that only the specified members should appear in struct, union, or class evaluations."));
+              ui_spacer(ui_em(1.5f, 1));
+              DF_Font(ws, DF_FontSlot_Code) ui_labelf("list:(next_link_member_name)");
+              UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) ui_label_multiline(max_width, str8_lit("Specifies that some struct, union, or class forms the top of a linked list, with next_link_member_name being the member which points at the next element in the list."));
+              ui_spacer(ui_em(1.5f, 1));
+              DF_Font(ws, DF_FontSlot_Code) ui_labelf("dec");
+              UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) ui_label_multiline(max_width, str8_lit("Specifies that all integral evaluations should appear in base-10 form."));
+              ui_spacer(ui_em(1.5f, 1));
+              DF_Font(ws, DF_FontSlot_Code) ui_labelf("hex");
+              UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) ui_label_multiline(max_width, str8_lit("Specifies that all integral evaluations should appear in base-16 form."));
+              ui_spacer(ui_em(1.5f, 1));
+              DF_Font(ws, DF_FontSlot_Code) ui_labelf("oct");
+              UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) ui_label_multiline(max_width, str8_lit("Specifies that all integral evaluations should appear in base-8 form."));
+              ui_spacer(ui_em(1.5f, 1));
+              DF_Font(ws, DF_FontSlot_Code) ui_labelf("bin");
+              UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) ui_label_multiline(max_width, str8_lit("Specifies that all integral evaluations should appear in base-2 form."));
+              ui_spacer(ui_em(1.5f, 1));
+              DF_Font(ws, DF_FontSlot_Code) ui_labelf("no_addr");
+              UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) ui_label_multiline(max_width, str8_lit("Displays only what pointers point to, if possible, without the pointer's address value."));
+              ui_spacer(ui_em(1.5f, 1));
+            }
+          }break;
+        }
       }
     }
     
@@ -2541,9 +2604,10 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
         //- rjf: unpack row info
         //
         U64 row_hash = df_hash_from_expand_key(row->key);
-        U64 expr_hash = df_hash_from_string(row->display_expr);
+        B32 row_is_inherited = (row->inherited_type_key_chain.count != 0);
         B32 row_selected = (selection_tbl.min.y <= (semantic_idx+1) && (semantic_idx+1) <= selection_tbl.max.y);
         B32 row_expanded = df_expand_key_is_set(&eval_view->expand_tree_table, row->key);
+        B32 next_row_expanded = row_expanded;
         
         ////////////////////////
         //- rjf: determine if row's data is fresh and/or bad
@@ -2659,7 +2723,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
         //
         if(!(row->flags & DF_EvalVizRowFlag_Canvas)) UI_Parent(row_box) UI_HeightFill
         {
-          ////////////////////
+          //////////////////////
           //- rjf: draw start of cache lines in expansions
           //
           if((row->eval.mode == E_Mode_Offset || row->eval.mode == E_Mode_Null) &&
@@ -2674,7 +2738,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
             ui_build_box_from_key(UI_BoxFlag_Floating|UI_BoxFlag_DrawBackground, ui_key_zero());
           }
           
-          ////////////////////
+          //////////////////////
           //- rjf: draw mid-row cache line boundaries in expansions
           //
           if((row->eval.mode == E_Mode_Offset || row->eval.mode == E_Mode_Null) &&
@@ -2695,6 +2759,274 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
             }
           }
           
+          //////////////////////
+          //- rjf: build all columns
+          //
+          {
+            S64 x = 0;
+            for(DF_WatchViewColumn *col = ewv->first_column; col != 0; col = col->next, x += 1)
+            {
+              //- rjf: unpack cell info
+              DF_WatchViewPoint cell_pt = {x, row->parent_key, row->key};
+              DF_WatchViewTextEditState *cell_edit_state = df_watch_view_text_edit_state_from_pt(ewv, cell_pt);
+              B32 cell_selected = (row_selected && selection_tbl.min.x <= cell_pt.x && cell_pt.x <= selection_tbl.max.x);
+              
+              //- rjf: unpack column-kind-specific info
+              B32 cell_can_edit = 0;
+              FuzzyMatchRangeList cell_matches = {0};
+              String8 cell_pre_edit_string = {0};
+              DF_AutoCompListerFlags cell_autocomp_flags = 0;
+              switch(col->kind)
+              {
+                default:{}break;
+                case DF_WatchViewColumnKind_Expr:
+                {
+                  cell_can_edit = (row->depth == 0 && modifiable);
+                  if(filter.size != 0)
+                  {
+                    cell_matches = fuzzy_match_find(scratch.arena, filter, row->display_expr);
+                  }
+                  cell_pre_edit_string = row->display_expr;
+                  if(row_is_inherited)
+                  {
+                    String8List inheritance_chain_type_names = {0};
+                    for(E_TypeKeyNode *n = row->inherited_type_key_chain.first; n != 0; n = n->next)
+                    {
+                      String8 inherited_type_name = e_type_string_from_key(scratch.arena, n->v);
+                      inherited_type_name = str8_skip_chop_whitespace(inherited_type_name);
+                      str8_list_push(scratch.arena, &inheritance_chain_type_names, inherited_type_name);
+                    }
+                    StringJoin join = {0};
+                    join.sep = str8_lit("::");
+                    String8 inheritance_type = str8_list_join(scratch.arena, &inheritance_chain_type_names, &join);
+                    cell_pre_edit_string = push_str8f(scratch.arena, "%S::%S", inheritance_type, cell_pre_edit_string);
+                  }
+                  cell_autocomp_flags = DF_AutoCompListerFlag_Locals;
+                }break;
+                case DF_WatchViewColumnKind_Value:
+                {
+                  cell_autocomp_flags = DF_AutoCompListerFlag_Locals;
+                }break;
+                case DF_WatchViewColumnKind_Type:
+                {
+                  cell_can_edit = 0;
+                }break;
+                case DF_WatchViewColumnKind_ViewRule:
+                {
+                  cell_can_edit = 1;
+                  cell_autocomp_flags = DF_AutoCompListerFlag_ViewRules;
+                }break;
+              }
+              
+              //- rjf: build cell
+              UI_Signal sig = {0};
+              UI_Palette(palette) UI_TableCell
+                UI_FocusHot(cell_selected ? UI_FocusKind_On : UI_FocusKind_Off)
+                UI_FocusActive((cell_selected && ewv->text_editing) ? UI_FocusKind_On : UI_FocusKind_Off)
+                DF_Font(ws, DF_FontSlot_Code) UI_FlagsAdd(row->depth > 0 ? UI_BoxFlag_DrawTextWeak : 0)
+              {
+                sig = df_line_editf(ws,
+                                    (DF_LineEditFlag_CodeContents*(!(row->flags & DF_EvalVizRowFlag_ExprIsSpecial))|
+                                     DF_LineEditFlag_NoBackground|
+                                     DF_LineEditFlag_DisableEdit*(!cell_can_edit)|
+                                     DF_LineEditFlag_Expander*!!(x == 0 && row->flags & DF_EvalVizRowFlag_CanExpand)|
+                                     DF_LineEditFlag_ExpanderPlaceholder*(x == 0 && row->depth==0)|
+                                     DF_LineEditFlag_ExpanderSpace*(x == 0 && row->depth!=0)),
+                                    row->depth,
+                                    &cell_matches,
+                                    &cell_edit_state->cursor, &cell_edit_state->mark, cell_edit_state->input_buffer, sizeof(cell_edit_state->input_buffer), &cell_edit_state->input_size, &next_row_expanded,
+                                    cell_pre_edit_string,
+                                    "###%I64x_row_%I64x", x, row_hash);
+              }
+              
+              //- rjf: set autocompletion lister query info
+              if(ui_is_focus_active() &&
+                 selection_tbl.min.x == selection_tbl.max.x && selection_tbl.min.y == selection_tbl.max.y &&
+                 txt_pt_match(cell_edit_state->cursor, cell_edit_state->mark))
+              {
+                String8 input = str8(cell_edit_state->input_buffer, cell_edit_state->input_size);
+                DF_AutoCompListerParams params = df_view_rule_autocomp_lister_params_from_input_cursor(scratch.arena, input, cell_edit_state->cursor.column-1);
+                if(params.flags == 0)
+                {
+                  params.flags = cell_autocomp_flags;
+                }
+                df_set_autocomp_lister_query(ws, sig.box->key, &params, input, cell_edit_state->cursor.column-1);
+              }
+              
+              //- rjf: handle click interactions
+              {
+                // rjf: single-click -> move selection here
+                if(ui_pressed(sig))
+                {
+                  ewv->next_cursor = ewv->next_mark = cell_pt;
+                  pressed = 1;
+                }
+                
+                // rjf: double-click -> start editing
+                if(ui_double_clicked(sig) && cell_can_edit)
+                {
+                  ui_kill_action();
+                  DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
+                  df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Edit));
+                }
+              }
+              
+              //- rjf: [DEV] hovering -> tooltips
+              if(DEV_eval_compiler_tooltips && x == 0 && ui_hovering(sig)) UI_Tooltip DF_Font(ws, DF_FontSlot_Code)
+              {
+                local_persist char *spaces = "                                                                        ";
+                String8         string      = row->display_expr;
+                E_TokenArray    tokens      = e_token_array_from_text(scratch.arena, string);
+                E_Parse         parse       = e_parse_expr_from_text_tokens(scratch.arena, string, &tokens);
+                E_IRTreeAndType irtree      = e_irtree_and_type_from_expr(scratch.arena, parse.expr);
+                E_OpList        oplist      = e_oplist_from_irtree(scratch.arena, irtree.root);
+                String8         bytecode    = e_bytecode_from_oplist(scratch.arena, &oplist);
+                UI_Flags(UI_BoxFlag_DrawTextWeak) ui_labelf("Text:");
+                ui_label(string);
+                ui_spacer(ui_em(2.f, 1.f));
+                UI_Flags(UI_BoxFlag_DrawTextWeak) ui_labelf("Tokens:");
+                for(U64 idx = 0; idx < tokens.count; idx += 1)
+                {
+                  ui_labelf("%S: '%S'", e_token_kind_strings[tokens.v[idx].kind], str8_substr(string, tokens.v[idx].range));
+                }
+                ui_spacer(ui_em(2.f, 1.f));
+                UI_Flags(UI_BoxFlag_DrawTextWeak) ui_labelf("Expression:");
+                {
+                  typedef struct Task Task;
+                  struct Task
+                  {
+                    Task *next;
+                    Task *prev;
+                    E_Expr *expr;
+                    S64 depth;
+                  };
+                  Task start_task = {0, 0, parse.expr};
+                  Task *first_task = &start_task;
+                  Task *last_task = first_task;
+                  for(Task *t = first_task; t != 0; t = t->next)
+                  {
+                    String8 ext = {0};
+                    switch(t->expr->kind)
+                    {
+                      default:
+                      {
+                        if(t->expr->string.size != 0)
+                        {
+                          ext = push_str8f(scratch.arena, "'%S'", t->expr->string);
+                        }
+                        else if(t->expr->u32 != 0)
+                        {
+                          ext = push_str8f(scratch.arena, "0x%x", t->expr->u32);
+                        }
+                        else if(t->expr->f32 != 0)
+                        {
+                          ext = push_str8f(scratch.arena, "%f", t->expr->f32);
+                        }
+                        else if(t->expr->f64 != 0)
+                        {
+                          ext = push_str8f(scratch.arena, "%f", t->expr->f64);
+                        }
+                        else if(t->expr->u64 != 0)
+                        {
+                          ext = push_str8f(scratch.arena, "0x%I64x", t->expr->u64);
+                        }
+                      }break;
+                    }
+                    ui_labelf("%.*s%S%s%S", (int)t->depth*2, spaces, e_expr_kind_strings[t->expr->kind], ext.size ? " " : "", ext);
+                    for(E_Expr *child = t->expr->first; child != &e_expr_nil; child = child->next)
+                    {
+                      Task *task = push_array(scratch.arena, Task, 1);
+                      task->expr = child;
+                      task->depth = t->depth+1;
+                      DLLInsert(first_task, last_task, t, task);
+                    }
+                  }
+                }
+                ui_spacer(ui_em(2.f, 1.f));
+                UI_Flags(UI_BoxFlag_DrawTextWeak) ui_labelf("IR Tree:");
+                {
+                  typedef struct Task Task;
+                  struct Task
+                  {
+                    Task *next;
+                    Task *prev;
+                    E_IRNode *node;
+                    S64 depth;
+                  };
+                  Task start_task = {0, 0, irtree.root};
+                  Task *first_task = &start_task;
+                  Task *last_task = first_task;
+                  for(Task *t = first_task; t != 0; t = t->next)
+                  {
+                    String8 op_string = {0};
+                    switch(t->node->op)
+                    {
+                      default:{}break;
+                      case E_IRExtKind_Bytecode:{op_string = str8_lit("Bytecode");}break;
+                      case E_IRExtKind_SetSpace:{op_string = str8_lit("SetSpace");}break;
+#define X(name) case RDI_EvalOp_##name:{op_string = str8_lit(#name);}break;
+                      RDI_EvalOp_XList
+#undef X
+                    }
+                    String8 ext = {0};
+                    ui_labelf("%.*s%S", (int)t->depth*2, spaces, op_string);
+                    for(E_IRNode *child = t->node->first; child != &e_irnode_nil; child = child->next)
+                    {
+                      Task *task = push_array(scratch.arena, Task, 1);
+                      task->node = child;
+                      task->depth = t->depth+1;
+                      DLLInsert(first_task, last_task, t, task);
+                    }
+                  }
+                }
+                ui_spacer(ui_em(2.f, 1.f));
+                UI_Flags(UI_BoxFlag_DrawTextWeak) ui_labelf("Op List:");
+                {
+                  for(E_Op *op = oplist.first; op != 0; op = op->next)
+                  {
+                    String8 op_string = {0};
+                    switch(op->opcode)
+                    {
+                      default:{}break;
+                      case E_IRExtKind_Bytecode:{op_string = str8_lit("Bytecode");}break;
+                      case E_IRExtKind_SetSpace:{op_string = str8_lit("SetSpace");}break;
+#define X(name) case RDI_EvalOp_##name:{op_string = str8_lit(#name);}break;
+                      RDI_EvalOp_XList
+#undef X
+                    }
+                    String8 ext = {0};
+                    switch(op->opcode)
+                    {
+                      case E_IRExtKind_Bytecode:{ext = str8_lit("[bytecode]");}break;
+                      default:
+                      {
+                        ext = str8_from_u64(scratch.arena, op->u64, 16, 0, 0);
+                      }break;
+                    }
+                    ui_labelf("  %S%s%S", op_string, ext.size ? " " : "", ext);
+                  }
+                }
+                ui_spacer(ui_em(2.f, 1.f));
+                UI_Flags(UI_BoxFlag_DrawTextWeak) ui_labelf("Bytecode:");
+                {
+                  for(U64 idx = 0; idx < bytecode.size; idx += 1)
+                  {
+                    ui_labelf("  0x%x ('%c')", (U32)bytecode.str[idx], (char)bytecode.str[idx]);
+                  }
+                }
+              }
+            }
+          }
+          
+          //////////////////////
+          //- rjf: commit expansion state changes
+          //
+          if(next_row_expanded != row_expanded)
+          {
+            df_expand_set_expansion(eval_view->arena, &eval_view->expand_tree_table, row->parent_key, row->key, next_row_expanded);
+          }
+          
+#if 0
           ////////////////////
           //- rjf: expression
           //
@@ -3126,6 +3458,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
               df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Edit));
             }
           }
+#endif
         }
       }
     }
@@ -5847,15 +6180,20 @@ DF_VIEW_UI_FUNCTION_DEF(Scheduler)
 ////////////////////////////////
 //~ rjf: CallStack @view_hook_impl
 
-DF_VIEW_SETUP_FUNCTION_DEF(CallStack){}
+DF_VIEW_SETUP_FUNCTION_DEF(CallStack)
+{
+  DF_WatchViewState *wv = df_view_user_state(view, DF_WatchViewState);
+  df_watch_view_init(wv, view, DF_WatchViewFillKind_CallStack);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Value, 0.5f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Type, 0.5f);
+}
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(CallStack) {return str8_zero();}
 DF_VIEW_CMD_FUNCTION_DEF(CallStack){}
 DF_VIEW_UI_FUNCTION_DEF(CallStack)
 {
   ProfBeginFunction();
-  DF_WatchViewState *ewv = df_view_user_state(view, DF_WatchViewState);
-  df_watch_view_init(ewv, view, DF_WatchViewFillKind_CallStack);
-  df_watch_view_build(ws, panel, view, ewv, 0, 10, rect);
+  DF_WatchViewState *wv = df_view_user_state(view, DF_WatchViewState);
+  df_watch_view_build(ws, panel, view, wv, 0, 10, rect);
   ProfEnd();
 }
 
@@ -7103,8 +7441,12 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
 
 DF_VIEW_SETUP_FUNCTION_DEF(Watch)
 {
-  DF_WatchViewState *ewv = df_view_user_state(view, DF_WatchViewState);
-  df_watch_view_init(ewv, view, DF_WatchViewFillKind_Watch);
+  DF_WatchViewState *wv = df_view_user_state(view, DF_WatchViewState);
+  df_watch_view_init(wv, view, DF_WatchViewFillKind_Watch);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Expr,      0.25f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Value,     0.3f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Type,      0.15f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_ViewRule,  0.30f);
 }
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Watch) {return str8_zero();}
 DF_VIEW_CMD_FUNCTION_DEF(Watch)
@@ -7123,44 +7465,65 @@ DF_VIEW_UI_FUNCTION_DEF(Watch)
 ////////////////////////////////
 //~ rjf: Locals @view_hook_impl
 
-DF_VIEW_SETUP_FUNCTION_DEF(Locals) {}
+DF_VIEW_SETUP_FUNCTION_DEF(Locals)
+{
+  DF_WatchViewState *wv = df_view_user_state(view, DF_WatchViewState);
+  df_watch_view_init(wv, view, DF_WatchViewFillKind_Locals);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Expr,      0.25f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Value,     0.3f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Type,      0.15f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_ViewRule,  0.30f);
+}
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Locals) { return str8_zero(); }
 DF_VIEW_CMD_FUNCTION_DEF(Locals) {}
 DF_VIEW_UI_FUNCTION_DEF(Locals)
 {
   ProfBeginFunction();
-  DF_WatchViewState *ewv = df_view_user_state(view, DF_WatchViewState);
-  df_watch_view_init(ewv, view, DF_WatchViewFillKind_Locals);
-  df_watch_view_build(ws, panel, view, ewv, 0, 10, rect);
+  DF_WatchViewState *wv = df_view_user_state(view, DF_WatchViewState);
+  df_watch_view_build(ws, panel, view, wv, 0, 10, rect);
   ProfEnd();
 }
 
 ////////////////////////////////
 //~ rjf: Registers @view_hook_impl
 
-DF_VIEW_SETUP_FUNCTION_DEF(Registers) {}
+DF_VIEW_SETUP_FUNCTION_DEF(Registers)
+{
+  DF_WatchViewState *wv = df_view_user_state(view, DF_WatchViewState);
+  df_watch_view_init(wv, view, DF_WatchViewFillKind_Registers);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Expr,      0.25f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Value,     0.3f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Type,      0.15f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_ViewRule,  0.30f);
+}
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Registers) { return str8_zero(); }
 DF_VIEW_CMD_FUNCTION_DEF(Registers) {}
 DF_VIEW_UI_FUNCTION_DEF(Registers)
 {
   ProfBeginFunction();
-  DF_WatchViewState *ewv = df_view_user_state(view, DF_WatchViewState);
-  df_watch_view_init(ewv, view, DF_WatchViewFillKind_Registers);
-  df_watch_view_build(ws, panel, view, ewv, 0, 16, rect);
+  DF_WatchViewState *wv = df_view_user_state(view, DF_WatchViewState);
+  df_watch_view_build(ws, panel, view, wv, 0, 16, rect);
   ProfEnd();
 }
 
 ////////////////////////////////
 //~ rjf: Globals @view_hook_impl
 
-DF_VIEW_SETUP_FUNCTION_DEF(Globals) {}
+DF_VIEW_SETUP_FUNCTION_DEF(Globals)
+{
+  DF_WatchViewState *wv = df_view_user_state(view, DF_WatchViewState);
+  df_watch_view_init(wv, view, DF_WatchViewFillKind_Globals);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Expr,      0.25f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Value,     0.3f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Type,      0.15f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_ViewRule,  0.30f);
+}
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Globals) { return str8_zero(); }
 DF_VIEW_CMD_FUNCTION_DEF(Globals) {}
 DF_VIEW_UI_FUNCTION_DEF(Globals)
 {
   ProfBeginFunction();
   DF_WatchViewState *ewv = df_view_user_state(view, DF_WatchViewState);
-  df_watch_view_init(ewv, view, DF_WatchViewFillKind_Globals);
   df_watch_view_build(ws, panel, view, ewv, 0, 10, rect);
   ProfEnd();
 }
@@ -7168,14 +7531,21 @@ DF_VIEW_UI_FUNCTION_DEF(Globals)
 ////////////////////////////////
 //~ rjf: ThreadLocals @view_hook_impl
 
-DF_VIEW_SETUP_FUNCTION_DEF(ThreadLocals) {}
+DF_VIEW_SETUP_FUNCTION_DEF(ThreadLocals)
+{
+  DF_WatchViewState *wv = df_view_user_state(view, DF_WatchViewState);
+  df_watch_view_init(wv, view, DF_WatchViewFillKind_ThreadLocals);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Expr,      0.25f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Value,     0.3f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Type,      0.15f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_ViewRule,  0.30f);
+}
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(ThreadLocals) { return str8_zero(); }
 DF_VIEW_CMD_FUNCTION_DEF(ThreadLocals) {}
 DF_VIEW_UI_FUNCTION_DEF(ThreadLocals)
 {
   ProfBeginFunction();
   DF_WatchViewState *ewv = df_view_user_state(view, DF_WatchViewState);
-  df_watch_view_init(ewv, view, DF_WatchViewFillKind_ThreadLocals);
   df_watch_view_build(ws, panel, view, ewv, 0, 10, rect);
   ProfEnd();
 }
@@ -7183,14 +7553,21 @@ DF_VIEW_UI_FUNCTION_DEF(ThreadLocals)
 ////////////////////////////////
 //~ rjf: Types @view_hook_impl
 
-DF_VIEW_SETUP_FUNCTION_DEF(Types) {}
+DF_VIEW_SETUP_FUNCTION_DEF(Types)
+{
+  DF_WatchViewState *wv = df_view_user_state(view, DF_WatchViewState);
+  df_watch_view_init(wv, view, DF_WatchViewFillKind_Types);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Expr,      0.25f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Value,     0.3f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Type,      0.15f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_ViewRule,  0.30f);
+}
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Types) { return str8_zero(); }
 DF_VIEW_CMD_FUNCTION_DEF(Types) {}
 DF_VIEW_UI_FUNCTION_DEF(Types)
 {
   ProfBeginFunction();
   DF_WatchViewState *ewv = df_view_user_state(view, DF_WatchViewState);
-  df_watch_view_init(ewv, view, DF_WatchViewFillKind_Types);
   df_watch_view_build(ws, panel, view, ewv, 0, 10, rect);
   ProfEnd();
 }
@@ -7198,14 +7575,21 @@ DF_VIEW_UI_FUNCTION_DEF(Types)
 ////////////////////////////////
 //~ rjf: Procedures @view_hook_impl
 
-DF_VIEW_SETUP_FUNCTION_DEF(Procedures) {}
+DF_VIEW_SETUP_FUNCTION_DEF(Procedures)
+{
+  DF_WatchViewState *wv = df_view_user_state(view, DF_WatchViewState);
+  df_watch_view_init(wv, view, DF_WatchViewFillKind_Procedures);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Expr,      0.25f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Value,     0.3f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Type,      0.15f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_ViewRule,  0.30f);
+}
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Procedures) { return str8_zero(); }
 DF_VIEW_CMD_FUNCTION_DEF(Procedures) {}
 DF_VIEW_UI_FUNCTION_DEF(Procedures)
 {
   ProfBeginFunction();
   DF_WatchViewState *ewv = df_view_user_state(view, DF_WatchViewState);
-  df_watch_view_init(ewv, view, DF_WatchViewFillKind_Procedures);
   df_watch_view_build(ws, panel, view, ewv, 0, 10, rect);
   ProfEnd();
 }
@@ -8166,8 +8550,10 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
 
 DF_VIEW_SETUP_FUNCTION_DEF(Breakpoints)
 {
-  DF_WatchViewState *ewv = df_view_user_state(view, DF_WatchViewState);
-  df_watch_view_init(ewv, view, DF_WatchViewFillKind_Breakpoints);
+  DF_WatchViewState *wv = df_view_user_state(view, DF_WatchViewState);
+  df_watch_view_init(wv, view, DF_WatchViewFillKind_Breakpoints);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Expr,      0.5f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Value,     0.5f);
 }
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Breakpoints) {return str8_zero();}
 DF_VIEW_CMD_FUNCTION_DEF(Breakpoints)
@@ -8363,8 +8749,10 @@ DF_VIEW_UI_FUNCTION_DEF(Breakpoints)
 
 DF_VIEW_SETUP_FUNCTION_DEF(WatchPins)
 {
-  DF_WatchViewState *ewv = df_view_user_state(view, DF_WatchViewState);
-  df_watch_view_init(ewv, view, DF_WatchViewFillKind_WatchPins);
+  DF_WatchViewState *wv = df_view_user_state(view, DF_WatchViewState);
+  df_watch_view_init(wv, view, DF_WatchViewFillKind_WatchPins);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Expr,      0.5f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Value,     0.5f);
 }
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(WatchPins) {return str8_zero();}
 DF_VIEW_CMD_FUNCTION_DEF(WatchPins)

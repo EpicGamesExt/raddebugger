@@ -6,6 +6,8 @@
 //
 // [x] fix HRESULTs
 //
+// [ ] save view column pcts; generalize to being a first-class thing in
+//     DF_View, e.g. by just having a string -> f32 store
 // [ ] decay arrays to pointers in pointer/value comparison
 // [ ] EVAL LOOKUP RULES -> currently going 0 -> rdis_count, but we need
 // to prioritize the primary rdi
