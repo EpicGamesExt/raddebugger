@@ -2776,6 +2776,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
               FuzzyMatchRangeList cell_matches = {0};
               String8 cell_pre_edit_string = {0};
               String8 cell_error_string = {0};
+              String8 cell_error_tooltip_string = {0};
               DF_AutoCompListerFlags cell_autocomp_flags = 0;
               DF_GfxViewRuleRowUIFunctionType *cell_ui_hook = 0;
               Vec4F32 cell_base_color = ui_top_palette()->text;
@@ -2818,6 +2819,10 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                     StringJoin join = {str8_lit(""), str8_lit(" "), str8_lit("")};
                     cell_error_string = str8_list_join(scratch.arena, &strings, &join);
                   }
+                  if(row_is_bad)
+                  {
+                    cell_error_tooltip_string = str8_lit("Could not read memory successfully.");
+                  }
                   cell_autocomp_flags = DF_AutoCompListerFlag_Locals;
                   if(row->value_ui_rule_spec != &df_g_nil_gfx_view_rule_spec && row->value_ui_rule_spec != 0)
                   {
@@ -2841,9 +2846,19 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
               }
               
               //- rjf: determine cell's palette
+              UI_BoxFlags cell_flags = 0;
               UI_Palette *palette = ui_top_palette();
               {
-                palette = ui_build_palette(ui_top_palette(), .text = cell_base_color);
+                if(cell_error_tooltip_string.size != 0 ||
+                   cell_error_string.size != 0)
+                {
+                  palette = ui_build_palette(ui_top_palette(), .text = df_rgba_from_theme_color(DF_ThemeColor_TextNegative), .text_weak = df_rgba_from_theme_color(DF_ThemeColor_TextNegative), .background = df_rgba_from_theme_color(DF_ThemeColor_HighlightOverlayError));
+                  cell_flags |= UI_BoxFlag_DrawBackground;
+                }
+                else
+                {
+                  palette = ui_build_palette(ui_top_palette(), .text = cell_base_color);
+                }
               }
               
               //- rjf: build cell
@@ -2851,7 +2866,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
               UI_Palette(palette) UI_TableCell
                 UI_FocusHot(cell_selected ? UI_FocusKind_On : UI_FocusKind_Off)
                 UI_FocusActive((cell_selected && ewv->text_editing) ? UI_FocusKind_On : UI_FocusKind_Off)
-                DF_Font(ws, DF_FontSlot_Code) UI_FlagsAdd(row->depth > 0 ? UI_BoxFlag_DrawTextWeak : 0)
+                DF_Font(ws, DF_FontSlot_Code) UI_FlagsAdd(cell_flags | (row->depth > 0 ? UI_BoxFlag_DrawTextWeak : 0))
               {
                 // rjf: cell has errors? -> build error box
                 if(cell_error_string.size != 0) DF_Font(ws, DF_FontSlot_Main)
@@ -2909,7 +2924,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                 }
               }
               
-              //- rjf: handle click interactions
+              //- rjf: handle interactions
               {
                 // rjf: single-click -> move selection here
                 if(ui_pressed(sig))
@@ -2924,6 +2939,12 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                   ui_kill_action();
                   DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
                   df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Edit));
+                }
+                
+                // rjf: hovering with error tooltip -> show tooltip
+                if(ui_hovering(sig) && cell_error_tooltip_string.size != 0) UI_Tooltip
+                {
+                  UI_PrefWidth(ui_children_sum(1)) df_error_label(cell_error_tooltip_string);
                 }
               }
               
