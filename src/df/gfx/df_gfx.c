@@ -8396,7 +8396,7 @@ df_single_line_eval_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags 
                                      (E_TypeKind_Char8 <= direct_type_kind && direct_type_kind <= E_TypeKind_UChar32));
         DF_Entity *thread = df_entity_from_handle(df_interact_regs()->thread);
         DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
-        String8 symbol_name = df_symbol_name_from_process_vaddr(arena, process, value_eval.value.u64);
+        String8 symbol_name = df_symbol_name_from_process_vaddr(arena, process, value_eval.value.u64, 1);
         
         // rjf: display ptr value
         B32 did_ptr_value = 0;
@@ -10717,7 +10717,7 @@ df_entity_desc_button(DF_Window *ws, DF_Entity *entity, FuzzyMatchRangeList *nam
         DF_Entity *module = df_module_from_process_vaddr(process, rip_vaddr);
         U64 rip_voff = df_voff_from_vaddr(module, rip_vaddr);
         DI_Key dbgi_key = df_dbgi_key_from_module(module);
-        String8 procedure_name = df_symbol_name_from_dbgi_key_voff(scratch.arena, &dbgi_key, rip_voff);
+        String8 procedure_name = df_symbol_name_from_dbgi_key_voff(scratch.arena, &dbgi_key, rip_voff, 0);
         if(procedure_name.size != 0)
         {
           FuzzyMatchRangeList fuzzy_matches = {0};
@@ -12753,11 +12753,17 @@ df_fancy_string_list_from_code_string(Arena *arena, F32 alpha, B32 indirection_s
       }break;
       case TXT_TokenKind_Identifier:
       {
+        E_TypeKey type = e_leaf_type_from_name(token_string);
+        Vec4F32 color = base_color;
+        if(!e_type_key_match(e_type_key_zero(), type))
+        {
+          color = df_rgba_from_theme_color(DF_ThemeColor_CodeType);
+        }
         D_FancyString fancy_string =
         {
           ui_top_font(),
           token_string,
-          base_color,
+          color,
           ui_top_font_size() * (1.f - !!indirection_size_change*(indirection_counter/10.f)),
         };
         d_fancy_string_list_push(arena, &fancy_strings, &fancy_string);

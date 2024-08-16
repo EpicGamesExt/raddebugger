@@ -1224,16 +1224,54 @@ df_tbl_from_watch_view_point(DF_EvalVizBlockList *blocks, DF_WatchViewPoint pt)
 //- rjf: table coordinates -> strings
 
 internal String8
-df_string_from_eval_viz_row_column_kind(Arena *arena, DF_EvalView *ev, DF_EvalVizRow *row, DF_WatchViewColumnKind col_kind, B32 editable)
+df_string_from_eval_viz_row_column(Arena *arena, DF_EvalView *ev, DF_EvalVizRow *row, DF_WatchViewColumn *col, B32 editable)
 {
   String8 result = {0};
-  switch(col_kind)
+  switch(col->kind)
   {
     default:{}break;
-    case DF_WatchViewColumnKind_Expr:    {result = editable ? row->edit_expr : row->display_expr;}break;
-    case DF_WatchViewColumnKind_Value:   {result = editable ? row->edit_value : row->display_value;}break;
-    case DF_WatchViewColumnKind_Type:    {result = !e_type_key_match(row->eval.type_key, e_type_key_zero()) ? e_type_string_from_key(arena, row->eval.type_key) : str8_zero();}break;
-    case DF_WatchViewColumnKind_ViewRule:{result = df_eval_view_rule_from_key(ev, row->key);}break;
+    case DF_WatchViewColumnKind_Expr:
+    {
+      result = editable ? row->edit_expr : row->display_expr;
+      if(row->inherited_type_key_chain.first != 0)
+      {
+        Temp scratch = scratch_begin(&arena, 1);
+        String8List inheritance_chain_type_names = {0};
+        for(E_TypeKeyNode *n = row->inherited_type_key_chain.first; n != 0; n = n->next)
+        {
+          String8 inherited_type_name = e_type_string_from_key(scratch.arena, n->v);
+          inherited_type_name = str8_skip_chop_whitespace(inherited_type_name);
+          str8_list_push(scratch.arena, &inheritance_chain_type_names, inherited_type_name);
+        }
+        if(inheritance_chain_type_names.node_count != 0)
+        {
+          StringJoin join = {0};
+          join.sep = str8_lit("::");
+          String8 inheritance_type = str8_list_join(scratch.arena, &inheritance_chain_type_names, &join);
+          result = push_str8f(scratch.arena, "%S::%S", inheritance_type, result);
+        }
+        scratch_end(scratch);
+      }
+    }break;
+    case DF_WatchViewColumnKind_Value:
+    {
+      result = editable ? row->edit_value : row->display_value;
+    }break;
+    case DF_WatchViewColumnKind_Type:
+    {
+      result = !e_type_key_match(row->eval.type_key, e_type_key_zero()) ? e_type_string_from_key(arena, row->eval.type_key) : str8_zero();
+      result = str8_skip_chop_whitespace(result);
+    }break;
+    case DF_WatchViewColumnKind_ViewRule:
+    {
+      result = df_eval_view_rule_from_key(ev, row->key);
+    }break;
+    case DF_WatchViewColumnKind_Module:
+    {
+      DF_Entity *process = df_entity_from_handle(df_interact_regs()->process);
+      DF_Entity *module = df_module_from_process_vaddr(process, row->eval.value.u64);
+      result = df_display_string_from_entity(arena, module);
+    }break;
   }
   return result;
 }
@@ -1998,7 +2036,8 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
         {
           for(S64 x = selection_tbl.min.x; x <= selection_tbl.max.x; x += 1)
           {
-            String8 string = df_string_from_eval_viz_row_column_kind(scratch.arena, eval_view, row, (DF_WatchViewColumnKind)x, 1);
+            DF_WatchViewColumn *col = df_watch_view_column_from_x(ewv, x);
+            String8 string = df_string_from_eval_viz_row_column(scratch.arena, eval_view, row, col, 1);
             string.size = Min(string.size, sizeof(ewv->dummy_text_edit_state.input_buffer));
             DF_WatchViewPoint pt = {x, row->parent_key, row->key};
             U64 hash = df_hash_from_expand_key(pt.key);
@@ -2246,7 +2285,8 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
         {
           for(S64 x = selection_tbl.min.x; x <= selection_tbl.max.x; x += 1)
           {
-            String8 cell_string = df_string_from_eval_viz_row_column_kind(scratch.arena, eval_view, row, (DF_WatchViewColumnKind)x, 0);
+            DF_WatchViewColumn *col = df_watch_view_column_from_x(ewv, x);
+            String8 cell_string = df_string_from_eval_viz_row_column(scratch.arena, eval_view, row, col, 0);
             cell_string = str8_skip_chop_whitespace(cell_string);
             U64 comma_pos = str8_find_needle(cell_string, 0, str8_lit(","), 0);
             if(selection_tbl.min.x != selection_tbl.max.x || selection_tbl.min.y != selection_tbl.max.y)
@@ -2311,7 +2351,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                   new_cursor_parent_key = df_parent_expand_key_from_entity(fallback_watch);
                 }
               }
-              DF_WatchViewPoint new_cursor_pt = {DF_WatchViewColumnKind_Expr, new_cursor_parent_key, new_cursor_key};
+              DF_WatchViewPoint new_cursor_pt = {0, new_cursor_parent_key, new_cursor_key};
               df_entity_mark_for_deletion(watch);
               ewv->cursor = ewv->mark = ewv->next_cursor = ewv->next_mark = new_cursor_pt;
             }
@@ -2537,6 +2577,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
           case DF_WatchViewColumnKind_Value:   {name = str8_lit("Value");}break;
           case DF_WatchViewColumnKind_Type:    {name = str8_lit("Type");}break;
           case DF_WatchViewColumnKind_ViewRule:{name = str8_lit("View Rule");}break;
+          case DF_WatchViewColumnKind_Module:  {name = str8_lit("Module");}break;
         }
         switch(col->kind)
         {
@@ -2685,7 +2726,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
           
           //- rjf: do canvas row interactions
           {
-            DF_WatchViewPoint pt = {DF_WatchViewColumnKind_Expr, row->parent_key, row->key};
+            DF_WatchViewPoint pt = {0, row->parent_key, row->key};
             UI_Signal sig = ui_signal_from_box(row_box);
             
             // rjf: press -> focus
@@ -2770,16 +2811,17 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
               DF_WatchViewPoint cell_pt = {x, row->parent_key, row->key};
               DF_WatchViewTextEditState *cell_edit_state = df_watch_view_text_edit_state_from_pt(ewv, cell_pt);
               B32 cell_selected = (row_selected && selection_tbl.min.x <= cell_pt.x && cell_pt.x <= selection_tbl.max.x);
+              String8 cell_pre_edit_string = df_string_from_eval_viz_row_column(scratch.arena, eval_view, row, col, 0);
               
               //- rjf: unpack column-kind-specific info
               B32 cell_can_edit = 0;
               FuzzyMatchRangeList cell_matches = {0};
-              String8 cell_pre_edit_string = {0};
               String8 cell_error_string = {0};
               String8 cell_error_tooltip_string = {0};
               DF_AutoCompListerFlags cell_autocomp_flags = 0;
               DF_GfxViewRuleRowUIFunctionType *cell_ui_hook = 0;
               Vec4F32 cell_base_color = ui_top_palette()->text;
+              DF_IconKind cell_icon = DF_IconKind_Null;
               switch(col->kind)
               {
                 default:{}break;
@@ -2789,21 +2831,6 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                   if(filter.size != 0)
                   {
                     cell_matches = fuzzy_match_find(scratch.arena, filter, row->display_expr);
-                  }
-                  cell_pre_edit_string = row->display_expr;
-                  if(row_is_inherited)
-                  {
-                    String8List inheritance_chain_type_names = {0};
-                    for(E_TypeKeyNode *n = row->inherited_type_key_chain.first; n != 0; n = n->next)
-                    {
-                      String8 inherited_type_name = e_type_string_from_key(scratch.arena, n->v);
-                      inherited_type_name = str8_skip_chop_whitespace(inherited_type_name);
-                      str8_list_push(scratch.arena, &inheritance_chain_type_names, inherited_type_name);
-                    }
-                    StringJoin join = {0};
-                    join.sep = str8_lit("::");
-                    String8 inheritance_type = str8_list_join(scratch.arena, &inheritance_chain_type_names, &join);
-                    cell_pre_edit_string = push_str8f(scratch.arena, "%S::%S", inheritance_type, cell_pre_edit_string);
                   }
                   cell_autocomp_flags = DF_AutoCompListerFlag_Locals;
                 }break;
@@ -2828,20 +2855,29 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                   {
                     cell_ui_hook = row->value_ui_rule_spec->info.row_ui;
                   }
-                  cell_pre_edit_string = row->display_value;
+                  if(row->eval.space >= E_Space_FIXED_COUNT)
+                  {
+                    cell_base_color = df_rgba_from_theme_color(DF_ThemeColor_CodeSymbol);
+                  }
                 }break;
                 case DF_WatchViewColumnKind_Type:
                 {
                   cell_can_edit = 0;
                   E_TypeKey key = row->eval.type_key;
-                  cell_pre_edit_string = str8_skip_chop_whitespace(e_type_string_from_key(scratch.arena, key));
                   cell_base_color = df_rgba_from_theme_color(DF_ThemeColor_CodeType);
                 }break;
                 case DF_WatchViewColumnKind_ViewRule:
                 {
                   cell_can_edit = 1;
                   cell_autocomp_flags = DF_AutoCompListerFlag_ViewRules;
-                  cell_pre_edit_string = df_eval_view_rule_from_key(eval_view, row->key);
+                }break;
+                case DF_WatchViewColumnKind_FrameSelection:
+                {
+                  if(semantic_idx == df_interact_regs()->unwind_count - df_interact_regs()->inline_depth)
+                  {
+                    cell_icon = DF_IconKind_RightArrow;
+                    cell_base_color = df_rgba_from_entity(df_entity_from_handle(df_interact_regs()->thread));
+                  }
                 }break;
               }
               
@@ -2890,6 +2926,17 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                   sig = ui_signal_from_box(box);
                 }
                 
+                // rjf: cell has icon? build icon
+                else if(cell_icon != DF_IconKind_Null)
+                {
+                  UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clickable, "###cell_%I64x", row_hash);
+                  UI_Parent(box) DF_Font(ws, DF_FontSlot_Icons) UI_WidthFill UI_TextAlignment(UI_TextAlign_Center)
+                  {
+                    ui_label(df_g_icon_kind_text_table[cell_icon]);
+                  }
+                  sig = ui_signal_from_box(box);
+                }
+                
                 // rjf: build cell line edit
                 else
                 {
@@ -2898,7 +2945,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                                        DF_LineEditFlag_NoBackground|
                                        DF_LineEditFlag_DisableEdit*(!cell_can_edit)|
                                        DF_LineEditFlag_Expander*!!(x == 0 && row->flags & DF_EvalVizRowFlag_CanExpand)|
-                                       DF_LineEditFlag_ExpanderPlaceholder*(x == 0 && row->depth==0)|
+                                       DF_LineEditFlag_ExpanderPlaceholder*(x == 0 && row->depth==0 && col->kind == DF_WatchViewColumnKind_Expr)|
                                        DF_LineEditFlag_ExpanderSpace*(x == 0 && row->depth!=0)),
                                       x == 0 ? row->depth : 0,
                                       &cell_matches,
@@ -2939,6 +2986,25 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                   ui_kill_action();
                   DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
                   df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Edit));
+                }
+                
+                // rjf: double-click, not editable -> go-to-location
+                if(ui_double_clicked(sig) && !cell_can_edit)
+                {
+                  U64 vaddr = row->eval.value.u64;
+                  DF_Entity *module = df_module_from_process_vaddr(process, vaddr);
+                  DI_Key dbgi_key = df_dbgi_key_from_module(module);
+                  U64 voff = df_voff_from_vaddr(module, vaddr);
+                  DF_LineList lines = df_lines_from_dbgi_key_voff(scratch.arena, &dbgi_key, voff);
+                  DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
+                  p.entity = df_handle_from_entity(process);
+                  p.vaddr = vaddr;
+                  if(lines.first != 0)
+                  {
+                    p.file_path = lines.first->v.file_path;
+                    p.text_point = lines.first->v.pt;
+                  }
+                  df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FindCodeLocation));
                 }
                 
                 // rjf: hovering with error tooltip -> show tooltip
@@ -6261,8 +6327,9 @@ DF_VIEW_SETUP_FUNCTION_DEF(CallStack)
 {
   DF_WatchViewState *wv = df_view_user_state(view, DF_WatchViewState);
   df_watch_view_init(wv, view, DF_WatchViewFillKind_CallStack);
-  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Value, 0.5f);
-  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Type, 0.5f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_FrameSelection,  0.05f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Value,  0.7f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Module, 0.25f);
 }
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(CallStack) {return str8_zero();}
 DF_VIEW_CMD_FUNCTION_DEF(CallStack){}
@@ -7656,10 +7723,9 @@ DF_VIEW_SETUP_FUNCTION_DEF(Procedures)
 {
   DF_WatchViewState *wv = df_view_user_state(view, DF_WatchViewState);
   df_watch_view_init(wv, view, DF_WatchViewFillKind_Procedures);
-  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Expr,      0.25f);
-  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Value,     0.3f);
-  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Type,      0.15f);
-  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_ViewRule,  0.30f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Expr,      0.2f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Value,     0.6f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_ViewRule,  0.2f);
 }
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Procedures) { return str8_zero(); }
 DF_VIEW_CMD_FUNCTION_DEF(Procedures) {}
@@ -8132,7 +8198,7 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
           DF_Entity *module = df_module_from_process_vaddr(process, f_rip);
           DI_Key dbgi_key = df_dbgi_key_from_module(module);
           U64 rip_voff = df_voff_from_vaddr(module, f_rip);
-          String8 symbol_name = df_symbol_name_from_dbgi_key_voff(scratch.arena, &dbgi_key, rip_voff);
+          String8 symbol_name = df_symbol_name_from_dbgi_key_voff(scratch.arena, &dbgi_key, rip_voff, 1);
           Annotation *annotation = push_array(scratch.arena, Annotation, 1);
           annotation->name_string = symbol_name.size != 0 ? symbol_name : str8_lit("[external code]");
           annotation->kind_string = str8_lit("Call Stack Frame");

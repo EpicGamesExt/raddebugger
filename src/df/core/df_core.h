@@ -1521,8 +1521,8 @@ internal Rng1U64 df_vaddr_range_from_voff_range(DF_Entity *module, Rng1U64 voff_
 //~ rjf: Debug Info Lookups
 
 //- rjf: voff|vaddr -> symbol lookups
-internal String8 df_symbol_name_from_dbgi_key_voff(Arena *arena, DI_Key *dbgi_key, U64 voff);
-internal String8 df_symbol_name_from_process_vaddr(Arena *arena, DF_Entity *process, U64 vaddr);
+internal String8 df_symbol_name_from_dbgi_key_voff(Arena *arena, DI_Key *dbgi_key, U64 voff, B32 decorated);
+internal String8 df_symbol_name_from_process_vaddr(Arena *arena, DF_Entity *process, U64 vaddr, B32 decorated);
 
 //- rjf: symbol -> voff lookups
 internal U64 df_voff_from_dbgi_key_symbol_name(DI_Key *dbgi_key, String8 symbol_name);

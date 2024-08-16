@@ -1354,7 +1354,7 @@ df_search_tags_from_entity(Arena *arena, DF_Entity *entity)
       DF_Entity *module = df_module_from_process_vaddr(process, rip_vaddr);
       U64 rip_voff = df_voff_from_vaddr(module, rip_vaddr);
       DI_Key dbgi_key = df_dbgi_key_from_module(module);
-      String8 procedure_name = df_symbol_name_from_dbgi_key_voff(scratch.arena, &dbgi_key, rip_voff);
+      String8 procedure_name = df_symbol_name_from_dbgi_key_voff(scratch.arena, &dbgi_key, rip_voff, 0);
       if(procedure_name.size != 0)
       {
         str8_list_push(scratch.arena, &strings, procedure_name);
@@ -2957,7 +2957,7 @@ df_vaddr_range_from_voff_range(DF_Entity *module, Rng1U64 voff_rng)
 //- rjf: symbol lookups
 
 internal String8
-df_symbol_name_from_dbgi_key_voff(Arena *arena, DI_Key *dbgi_key, U64 voff)
+df_symbol_name_from_dbgi_key_voff(Arena *arena, DI_Key *dbgi_key, U64 voff, B32 decorated)
 {
   String8 result = {0};
   {
@@ -2970,9 +2970,21 @@ df_symbol_name_from_dbgi_key_voff(Arena *arena, DI_Key *dbgi_key, U64 voff)
       RDI_Scope *scope = rdi_element_from_name_idx(rdi, Scopes, scope_idx);
       U64 proc_idx = scope->proc_idx;
       RDI_Procedure *procedure = rdi_element_from_name_idx(rdi, Procedures, proc_idx);
-      U64 name_size = 0;
-      U8 *name_ptr = rdi_string_from_idx(rdi, procedure->name_string_idx, &name_size);
-      result = push_str8_copy(arena, str8(name_ptr, name_size));
+      E_TypeKey type = e_type_key_ext(E_TypeKind_Function, procedure->type_idx, e_parse_ctx_module_idx_from_rdi(rdi));
+      String8 name = {0};
+      name.str = rdi_string_from_idx(rdi, procedure->name_string_idx, &name.size);
+      if(decorated && procedure->type_idx != 0)
+      {
+        String8List list = {0};
+        e_type_lhs_string_from_key(scratch.arena, type, &list, 0, 0);
+        str8_list_push(scratch.arena, &list, name);
+        e_type_rhs_string_from_key(scratch.arena, type, &list, 0);
+        result = str8_list_join(arena, &list, 0);
+      }
+      else
+      {
+        result = push_str8_copy(arena, name);
+      }
     }
     if(result.size == 0)
     {
@@ -2989,14 +3001,14 @@ df_symbol_name_from_dbgi_key_voff(Arena *arena, DI_Key *dbgi_key, U64 voff)
 }
 
 internal String8
-df_symbol_name_from_process_vaddr(Arena *arena, DF_Entity *process, U64 vaddr)
+df_symbol_name_from_process_vaddr(Arena *arena, DF_Entity *process, U64 vaddr, B32 decorated)
 {
   String8 result = {0};
   {
     DF_Entity *module = df_module_from_process_vaddr(process, vaddr);
     DI_Key dbgi_key = df_dbgi_key_from_module(module);
     U64 voff = df_voff_from_vaddr(module, vaddr);
-    result = df_symbol_name_from_dbgi_key_voff(arena, &dbgi_key, voff);
+    result = df_symbol_name_from_dbgi_key_voff(arena, &dbgi_key, voff, decorated);
   }
   return result;
 }

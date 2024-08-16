@@ -276,6 +276,8 @@ typedef enum DF_WatchViewColumnKind
   DF_WatchViewColumnKind_Value,
   DF_WatchViewColumnKind_Type,
   DF_WatchViewColumnKind_ViewRule,
+  DF_WatchViewColumnKind_Module,
+  DF_WatchViewColumnKind_FrameSelection,
   DF_WatchViewColumnKind_COUNT
 }
 DF_WatchViewColumnKind;
@@ -546,7 +548,7 @@ internal DF_WatchViewPoint df_watch_view_point_from_tbl(DF_EvalVizBlockList *blo
 internal Vec2S64 df_tbl_from_watch_view_point(DF_EvalVizBlockList *blocks, DF_WatchViewPoint pt);
 
 //- rjf: table coordinates -> strings
-internal String8 df_string_from_eval_viz_row_column_kind(Arena *arena, DF_EvalView *ev, DF_EvalVizRow *row, DF_WatchViewColumnKind col_kind, B32 editable);
+internal String8 df_string_from_eval_viz_row_column(Arena *arena, DF_EvalView *ev, DF_EvalVizRow *row, DF_WatchViewColumn *col, B32 editable);
 
 //- rjf: table coordinates -> text edit state
 internal DF_WatchViewTextEditState *df_watch_view_text_edit_state_from_pt(DF_WatchViewState *wv, DF_WatchViewPoint pt);
