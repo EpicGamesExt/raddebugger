@@ -12681,7 +12681,7 @@ df_label(String8 string)
 internal UI_Signal
 df_error_label(String8 string)
 {
-  UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clickable, "###%S_error_label", string);
+  UI_Box *box = ui_build_box_from_key(0, ui_key_zero());
   UI_Signal sig = ui_signal_from_box(box);
   UI_Parent(box) UI_Palette(ui_build_palette(ui_top_palette(), .text = df_rgba_from_theme_color(DF_ThemeColor_TextNegative), .text_weak = df_rgba_from_theme_color(DF_ThemeColor_TextNegative)))
   {

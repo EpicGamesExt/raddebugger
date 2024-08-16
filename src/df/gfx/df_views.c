@@ -2775,7 +2775,10 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
               B32 cell_can_edit = 0;
               FuzzyMatchRangeList cell_matches = {0};
               String8 cell_pre_edit_string = {0};
+              String8 cell_error_string = {0};
               DF_AutoCompListerFlags cell_autocomp_flags = 0;
+              DF_GfxViewRuleRowUIFunctionType *cell_ui_hook = 0;
+              Vec4F32 cell_base_color = ui_top_palette()->text;
               switch(col->kind)
               {
                 default:{}break;
@@ -2805,17 +2808,42 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                 }break;
                 case DF_WatchViewColumnKind_Value:
                 {
+                  if(row->eval.msgs.max_kind > E_MsgKind_Null)
+                  {
+                    String8List strings = {0};
+                    for(E_Msg *msg = row->eval.msgs.first; msg != 0; msg = msg->next)
+                    {
+                      str8_list_push(scratch.arena, &strings, msg->text);
+                    }
+                    StringJoin join = {str8_lit(""), str8_lit(" "), str8_lit("")};
+                    cell_error_string = str8_list_join(scratch.arena, &strings, &join);
+                  }
                   cell_autocomp_flags = DF_AutoCompListerFlag_Locals;
+                  if(row->value_ui_rule_spec != &df_g_nil_gfx_view_rule_spec && row->value_ui_rule_spec != 0)
+                  {
+                    cell_ui_hook = row->value_ui_rule_spec->info.row_ui;
+                  }
+                  cell_pre_edit_string = row->display_value;
                 }break;
                 case DF_WatchViewColumnKind_Type:
                 {
                   cell_can_edit = 0;
+                  E_TypeKey key = row->eval.type_key;
+                  cell_pre_edit_string = str8_skip_chop_whitespace(e_type_string_from_key(scratch.arena, key));
+                  cell_base_color = df_rgba_from_theme_color(DF_ThemeColor_CodeType);
                 }break;
                 case DF_WatchViewColumnKind_ViewRule:
                 {
                   cell_can_edit = 1;
                   cell_autocomp_flags = DF_AutoCompListerFlag_ViewRules;
+                  cell_pre_edit_string = df_eval_view_rule_from_key(eval_view, row->key);
                 }break;
+              }
+              
+              //- rjf: determine cell's palette
+              UI_Palette *palette = ui_top_palette();
+              {
+                palette = ui_build_palette(ui_top_palette(), .text = cell_base_color);
               }
               
               //- rjf: build cell
@@ -2825,32 +2853,60 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                 UI_FocusActive((cell_selected && ewv->text_editing) ? UI_FocusKind_On : UI_FocusKind_Off)
                 DF_Font(ws, DF_FontSlot_Code) UI_FlagsAdd(row->depth > 0 ? UI_BoxFlag_DrawTextWeak : 0)
               {
-                sig = df_line_editf(ws,
-                                    (DF_LineEditFlag_CodeContents*(!(row->flags & DF_EvalVizRowFlag_ExprIsSpecial))|
-                                     DF_LineEditFlag_NoBackground|
-                                     DF_LineEditFlag_DisableEdit*(!cell_can_edit)|
-                                     DF_LineEditFlag_Expander*!!(x == 0 && row->flags & DF_EvalVizRowFlag_CanExpand)|
-                                     DF_LineEditFlag_ExpanderPlaceholder*(x == 0 && row->depth==0)|
-                                     DF_LineEditFlag_ExpanderSpace*(x == 0 && row->depth!=0)),
-                                    row->depth,
-                                    &cell_matches,
-                                    &cell_edit_state->cursor, &cell_edit_state->mark, cell_edit_state->input_buffer, sizeof(cell_edit_state->input_buffer), &cell_edit_state->input_size, &next_row_expanded,
-                                    cell_pre_edit_string,
-                                    "###%I64x_row_%I64x", x, row_hash);
-              }
-              
-              //- rjf: set autocompletion lister query info
-              if(ui_is_focus_active() &&
-                 selection_tbl.min.x == selection_tbl.max.x && selection_tbl.min.y == selection_tbl.max.y &&
-                 txt_pt_match(cell_edit_state->cursor, cell_edit_state->mark))
-              {
-                String8 input = str8(cell_edit_state->input_buffer, cell_edit_state->input_size);
-                DF_AutoCompListerParams params = df_view_rule_autocomp_lister_params_from_input_cursor(scratch.arena, input, cell_edit_state->cursor.column-1);
-                if(params.flags == 0)
+                // rjf: cell has errors? -> build error box
+                if(cell_error_string.size != 0) DF_Font(ws, DF_FontSlot_Main)
                 {
-                  params.flags = cell_autocomp_flags;
+                  UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clip|UI_BoxFlag_Clickable, "###%I64x_row_%I64x", x, row_hash);
+                  sig = ui_signal_from_box(box);
+                  UI_Parent(box)
+                  {
+                    df_error_label(cell_error_string);
+                  }
                 }
-                df_set_autocomp_lister_query(ws, sig.box->key, &params, input, cell_edit_state->cursor.column-1);
+                
+                // rjf: cell has hook? -> build ui by calling hook
+                else if(cell_ui_hook != 0)
+                {
+                  UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clip|UI_BoxFlag_Clickable, "###val_%I64x", row_hash);
+                  UI_Parent(box)
+                  {
+                    cell_ui_hook(ws, row->key, row->eval, row->value_ui_rule_node);
+                  }
+                  sig = ui_signal_from_box(box);
+                }
+                
+                // rjf: build cell line edit
+                else
+                {
+                  sig = df_line_editf(ws,
+                                      (DF_LineEditFlag_CodeContents*(!(row->flags & DF_EvalVizRowFlag_ExprIsSpecial))|
+                                       DF_LineEditFlag_NoBackground|
+                                       DF_LineEditFlag_DisableEdit*(!cell_can_edit)|
+                                       DF_LineEditFlag_Expander*!!(x == 0 && row->flags & DF_EvalVizRowFlag_CanExpand)|
+                                       DF_LineEditFlag_ExpanderPlaceholder*(x == 0 && row->depth==0)|
+                                       DF_LineEditFlag_ExpanderSpace*(x == 0 && row->depth!=0)),
+                                      x == 0 ? row->depth : 0,
+                                      &cell_matches,
+                                      &cell_edit_state->cursor, &cell_edit_state->mark, cell_edit_state->input_buffer, sizeof(cell_edit_state->input_buffer), &cell_edit_state->input_size, &next_row_expanded,
+                                      cell_pre_edit_string,
+                                      "###%I64x_row_%I64x", x, row_hash);
+                  if(ui_is_focus_active() &&
+                     selection_tbl.min.x == selection_tbl.max.x && selection_tbl.min.y == selection_tbl.max.y &&
+                     txt_pt_match(cell_edit_state->cursor, cell_edit_state->mark))
+                  {
+                    String8 input = str8(cell_edit_state->input_buffer, cell_edit_state->input_size);
+                    DF_AutoCompListerParams params = {cell_autocomp_flags};
+                    if(col->kind == DF_WatchViewColumnKind_ViewRule)
+                    {
+                      params = df_view_rule_autocomp_lister_params_from_input_cursor(scratch.arena, input, cell_edit_state->cursor.column-1);
+                      if(params.flags == 0)
+                      {
+                        params.flags = cell_autocomp_flags;
+                      }
+                    }
+                    df_set_autocomp_lister_query(ws, sig.box->key, &params, input, cell_edit_state->cursor.column-1);
+                  }
+                }
               }
               
               //- rjf: handle click interactions

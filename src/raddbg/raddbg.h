@@ -6,6 +6,8 @@
 //
 // [x] fix HRESULTs
 //
+// [ ] fix selecting hover eval, then hover eval disappearing, causing
+//     busted focus, until a new hover eval is opened
 // [ ] save view column pcts; generalize to being a first-class thing in
 //     DF_View, e.g. by just having a string -> f32 store
 // [ ] decay arrays to pointers in pointer/value comparison
