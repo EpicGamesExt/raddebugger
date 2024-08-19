@@ -157,7 +157,7 @@ e_type_kind_is_basic_or_enum(E_TypeKind kind)
 }
 
 ////////////////////////////////
-//~ rjf: Member List Building Functions
+//~ rjf: Member Functions
 
 internal void
 e_member_list_push(Arena *arena, E_MemberList *list, E_Member *member)

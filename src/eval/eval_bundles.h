@@ -27,5 +27,6 @@ internal E_Eval e_autoresolved_eval_from_eval(E_Eval eval);
 internal E_Eval e_dynamically_typed_eval_from_eval(E_Eval eval);
 internal E_Eval e_value_eval_from_eval(E_Eval eval);
 internal E_Eval e_element_eval_from_array_eval_index(E_Eval eval, U64 index);
+internal E_Eval e_member_eval_from_eval_member_name(E_Eval eval, String8 member_name);
 
 #endif // EVAL_BUNDLES_H

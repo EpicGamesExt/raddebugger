@@ -278,6 +278,7 @@ typedef enum DF_WatchViewColumnKind
   DF_WatchViewColumnKind_ViewRule,
   DF_WatchViewColumnKind_Module,
   DF_WatchViewColumnKind_FrameSelection,
+  DF_WatchViewColumnKind_Member,
   DF_WatchViewColumnKind_COUNT
 }
 DF_WatchViewColumnKind;
@@ -290,7 +291,7 @@ struct DF_WatchViewColumn
   DF_WatchViewColumnKind kind;
   F32 pct;
   U8 string_buffer[1024];
-  U64 string_buffer_size;
+  U64 string_size;
 };
 
 typedef enum DF_WatchViewFillKind
@@ -548,13 +549,13 @@ internal DF_WatchViewPoint df_watch_view_point_from_tbl(DF_EvalVizBlockList *blo
 internal Vec2S64 df_tbl_from_watch_view_point(DF_EvalVizBlockList *blocks, DF_WatchViewPoint pt);
 
 //- rjf: table coordinates -> strings
-internal String8 df_string_from_eval_viz_row_column(Arena *arena, DF_EvalView *ev, DF_EvalVizRow *row, DF_WatchViewColumn *col, B32 editable);
+internal String8 df_string_from_eval_viz_row_column(Arena *arena, DF_EvalView *ev, DF_EvalVizRow *row, DF_WatchViewColumn *col, B32 editable, U32 default_radix, F_Tag font, F32 font_size, F32 max_size_px);
 
 //- rjf: table coordinates -> text edit state
 internal DF_WatchViewTextEditState *df_watch_view_text_edit_state_from_pt(DF_WatchViewState *wv, DF_WatchViewPoint pt);
 
 //- rjf: watch view column state mutation
-internal DF_WatchViewColumn *df_watch_view_column_alloc(DF_WatchViewState *wv, DF_WatchViewColumnKind kind, F32 pct);
+internal DF_WatchViewColumn *df_watch_view_column_alloc(DF_WatchViewState *wv, DF_WatchViewColumnKind kind, F32 pct, String8 string);
 internal void df_watch_view_column_release(DF_WatchViewState *wv, DF_WatchViewColumn *col);
 
 //- rjf: watch view main hooks

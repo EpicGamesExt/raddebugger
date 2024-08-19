@@ -324,7 +324,7 @@ DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(rgba)
   DF_EvalVizBlock *vb = df_eval_viz_block_begin(arena, DF_EvalVizBlockKind_Canvas, key, df_expand_key_make(df_hash_from_expand_key(key), 1), depth);
   vb->eval = eval;
   vb->string = string;
-  vb->cfg_table = *cfg_table;
+  vb->cfg_table = cfg_table;
   vb->visual_idx_range = r1u64(0, 8);
   vb->semantic_idx_range = r1u64(0, 1);
   df_eval_viz_block_end(out, vb);
@@ -507,7 +507,7 @@ DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(text)
   DF_EvalVizBlock *vb = df_eval_viz_block_begin(arena, DF_EvalVizBlockKind_Canvas, key, df_expand_key_make(df_hash_from_expand_key(key), 1), depth);
   vb->eval = eval;
   vb->string = string;
-  vb->cfg_table = *cfg_table;
+  vb->cfg_table = cfg_table;
   vb->visual_idx_range = r1u64(0, 8);
   vb->semantic_idx_range = r1u64(0, 1);
   df_eval_viz_block_end(out, vb);
@@ -654,7 +654,7 @@ DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(disasm)
   DF_EvalVizBlock *vb = df_eval_viz_block_begin(arena, DF_EvalVizBlockKind_Canvas, key, df_expand_key_make(df_hash_from_expand_key(key), 1), depth);
   vb->eval = eval;
   vb->string = string;
-  vb->cfg_table = *cfg_table;
+  vb->cfg_table = cfg_table;
   vb->visual_idx_range = r1u64(0, 8);
   vb->semantic_idx_range = r1u64(0, 1);
   df_eval_viz_block_end(out, vb);
@@ -776,7 +776,7 @@ DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(graph)
   DF_EvalVizBlock *vb = df_eval_viz_block_begin(arena, DF_EvalVizBlockKind_Canvas, key, df_expand_key_make(df_hash_from_expand_key(key), 1), depth);
   vb->eval = eval;
   vb->string = string;
-  vb->cfg_table = *cfg_table;
+  vb->cfg_table = cfg_table;
   vb->visual_idx_range = r1u64(0, 8);
   vb->semantic_idx_range = r1u64(0, 1);
   df_eval_viz_block_end(out, vb);
@@ -918,7 +918,7 @@ DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(bitmap)
   DF_EvalVizBlock *vb = df_eval_viz_block_begin(arena, DF_EvalVizBlockKind_Canvas, key, df_expand_key_make(df_hash_from_expand_key(key), 1), depth);
   vb->eval = eval;
   vb->string = string;
-  vb->cfg_table = *cfg_table;
+  vb->cfg_table = cfg_table;
   vb->visual_idx_range = r1u64(0, 8);
   vb->semantic_idx_range = r1u64(0, 1);
   df_eval_viz_block_end(out, vb);
@@ -1328,7 +1328,7 @@ DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(geo)
   DF_EvalVizBlock *vb = df_eval_viz_block_begin(arena, DF_EvalVizBlockKind_Canvas, key, df_expand_key_make(df_hash_from_expand_key(key), 1), depth);
   vb->eval = eval;
   vb->string = string;
-  vb->cfg_table = *cfg_table;
+  vb->cfg_table = cfg_table;
   vb->visual_idx_range = r1u64(0, 16);
   vb->semantic_idx_range = r1u64(0, 1);
   df_eval_viz_block_end(out, vb);

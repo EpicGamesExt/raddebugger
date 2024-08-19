@@ -4596,7 +4596,7 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DF_EvalView *eval_view, DF_Ex
   {
     DF_EvalVizBlock *block = df_eval_viz_block_begin(arena, DF_EvalVizBlockKind_Root, parent_key, key, depth);
     block->eval                        = eval;
-    block->cfg_table                   = *cfg_table;
+    block->cfg_table                   = cfg_table;
     block->string                      = eval_string;
     block->visual_idx_range            = r1u64(key.child_num-1, key.child_num+0);
     block->semantic_idx_range          = r1u64(key.child_num-1, key.child_num+0);
@@ -4744,7 +4744,7 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DF_EvalView *eval_view, DF_Ex
     {
       last_vb->eval = udt_eval;
       last_vb->string = eval_string;
-      last_vb->cfg_table = *cfg_table;
+      last_vb->cfg_table = cfg_table;
       last_vb->visual_idx_range = last_vb->semantic_idx_range = r1u64(0, filtered_data_members.count);
     }
     for(DF_ExpandNode *child = node->first; child != 0; child = child->next)
@@ -4801,7 +4801,7 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DF_EvalView *eval_view, DF_Ex
     {
       last_vb->eval = udt_eval;
       last_vb->string = eval_string;
-      last_vb->cfg_table = *cfg_table;
+      last_vb->cfg_table = cfg_table;
       last_vb->visual_idx_range = last_vb->semantic_idx_range = r1u64(0, type->count);
     }
     df_eval_viz_block_end(list_out, last_vb);
@@ -4858,7 +4858,7 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DF_EvalView *eval_view, DF_Ex
       {
         last_vb->eval = udt_eval;
         last_vb->string = eval_string;
-        last_vb->cfg_table = *cfg_table;
+        last_vb->cfg_table = cfg_table;
         last_vb->link_member_type_key = link_member->type_key;
         last_vb->link_member_off = link_member->off;
         last_vb->visual_idx_range     = r1u64(0, link_bases.count);
@@ -4923,7 +4923,7 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DF_EvalView *eval_view, DF_Ex
     {
       last_vb->eval = arr_eval;
       last_vb->string = eval_string;
-      last_vb->cfg_table = *cfg_table;
+      last_vb->cfg_table = cfg_table;
       last_vb->visual_idx_range = last_vb->semantic_idx_range = r1u64(0, array_count);
     }
     for(DF_ExpandNode *child = node->first; child != 0; child = child->next)
@@ -5149,7 +5149,7 @@ df_parent_key_from_viz_block_list_row_num(DF_EvalVizBlockList *blocks, S64 row_n
 //- rjf: viz row list building
 
 internal DF_EvalVizRow *
-df_eval_viz_row_list_push_new(Arena *arena, DF_EvalVizWindowedRowList *rows, DF_EvalVizBlock *block, DF_ExpandKey key, E_Eval eval)
+df_eval_viz_row_list_push_new(Arena *arena, DF_EvalView *eval_view, DF_EvalVizWindowedRowList *rows, DF_EvalVizBlock *block, DF_ExpandKey key, E_Eval eval)
 {
   // rjf: push
   DF_EvalVizRow *row = push_array(arena, DF_EvalVizRow, 1);
@@ -5201,6 +5201,69 @@ df_eval_viz_row_list_push_new(Arena *arena, DF_EvalVizWindowedRowList *rows, DF_
         break;
       }
     }
+  }
+  
+  // rjf: fill view-rule-derived info
+  {
+    // rjf: pick cfg table
+    DF_CfgTable *cfg_table = block->cfg_table;
+    {
+      String8 row_view_rules = df_eval_view_rule_from_key(eval_view, row->key);
+      if(row_view_rules.size != 0)
+      {
+        cfg_table = push_array(arena, DF_CfgTable, 1);
+        *cfg_table = df_cfg_table_from_inheritance(arena, cfg_table);
+        df_cfg_table_push_unparsed_string(arena, cfg_table, row_view_rules, DF_CfgSrc_User);
+      }
+    }
+    
+    // rjf: determine if view rules force expandability
+    B32 expandability_required = 0;
+    for(DF_CfgVal *val = cfg_table->first_val; val != 0 && val != &df_g_nil_cfg_val; val = val->linear_next)
+    {
+      DF_CoreViewRuleSpec *spec = df_core_view_rule_spec_from_string(val->string);
+      if(spec->info.flags & DF_CoreViewRuleSpecInfoFlag_Expandable)
+      {
+        expandability_required = 1;
+        break;
+      }
+    }
+    
+    // rjf: determine row ui hook to use for this row
+    DF_GfxViewRuleSpec *value_ui_rule_spec = &df_g_nil_gfx_view_rule_spec;
+    DF_CfgNode *value_ui_rule_node= &df_g_nil_cfg_node;
+    for(DF_CfgVal *val = cfg_table->first_val; val != 0 && val != &df_g_nil_cfg_val; val = val->linear_next)
+    {
+      DF_GfxViewRuleSpec *spec = df_gfx_view_rule_spec_from_string(val->string);
+      if(spec->info.flags & DF_GfxViewRuleSpecInfoFlag_RowUI)
+      {
+        value_ui_rule_spec = spec;
+        value_ui_rule_node = val->last;
+        break;
+      }
+    }
+    
+    // rjf: determine block ui hook to use for this row
+    DF_GfxViewRuleSpec *expand_ui_rule_spec = &df_g_nil_gfx_view_rule_spec;
+    DF_CfgNode *expand_ui_rule_node = &df_g_nil_cfg_node;
+    for(DF_CfgVal *val = cfg_table->first_val; val != 0 && val != &df_g_nil_cfg_val; val = val->linear_next)
+    {
+      DF_GfxViewRuleSpec *spec = df_gfx_view_rule_spec_from_string(val->string);
+      if(spec->info.flags & DF_GfxViewRuleSpecInfoFlag_BlockUI)
+      {
+        expand_ui_rule_spec = spec;
+        expand_ui_rule_node = val->last;
+        break;
+      }
+    }
+    
+    // rjf: fill
+    if(expandability_required) { row->flags |= DF_EvalVizRowFlag_CanExpand; }
+    row->cfg_table = cfg_table;
+    row->value_ui_rule_node = value_ui_rule_node;
+    row->value_ui_rule_spec = value_ui_rule_spec;
+    row->expand_ui_rule_node = expand_ui_rule_node;
+    row->expand_ui_rule_spec = expand_ui_rule_spec;
   }
   
   return row;

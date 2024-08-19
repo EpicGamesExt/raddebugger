@@ -282,3 +282,43 @@ e_element_eval_from_array_eval_index(E_Eval eval, U64 index)
   }
   return result;
 }
+
+internal E_Eval
+e_member_eval_from_eval_member_name(E_Eval eval, String8 member_name)
+{
+  E_Eval result = {0};
+  {
+    Temp scratch = scratch_begin(0, 0);
+    E_MemberArray members = e_type_data_members_from_key(scratch.arena, eval.type_key);
+    for(U64 member_idx = 0; member_idx < members.count; member_idx += 1)
+    {
+      E_Member *member = &members.v[member_idx];
+      if(str8_match(member->name, member_name, 0))
+      {
+        result.mode     = eval.mode;
+        result.space    = eval.space;
+        result.type_key = member->type_key;
+        result.code     = eval.code;
+        result.msgs     = eval.msgs;
+        switch(eval.mode)
+        {
+          default:{}break;
+          case E_Mode_Value:
+          if(member->off < sizeof(eval.value))
+          {
+            U64 member_size = e_type_byte_size_from_key(member->type_key);
+            MemoryCopy((U8 *)(&result.value.u512[0]),
+                       (U8 *)(&eval.value.u512[0]) + member->off,
+                       Min(member_size, sizeof(eval.value) - member->off));
+          }break;
+          case E_Mode_Offset:
+          {
+            result.value.u64 = eval.value.u64 + member->off;
+          }break;
+        }
+      }
+    }
+    scratch_end(scratch);
+  }
+  return result;
+}

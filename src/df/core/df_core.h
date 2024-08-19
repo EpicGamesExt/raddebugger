@@ -711,7 +711,7 @@ struct DF_EvalVizBlock
   FZY_ItemArray fzy_backing_items;
   
   // rjf: visualization config extensions
-  DF_CfgTable cfg_table;
+  DF_CfgTable *cfg_table;
   E_TypeKey link_member_type_key;
   U64 link_member_off;
 };
@@ -748,8 +748,6 @@ enum
   DF_EvalVizStringFlag_ReadOnlyDisplayRules = (1<<0),
 };
 
-// TODO(rjf): move viz-row stuff to gfx layer
-
 typedef U32 DF_EvalVizRowFlags;
 enum
 {
@@ -772,13 +770,12 @@ struct DF_EvalVizRow
   
   // rjf: evaluation artifacts
   E_Eval eval;
+  E_Member *member;
   
   // rjf: basic visualization contents
+  DF_CfgTable *cfg_table;
   String8 display_expr;
   String8 edit_expr;
-  String8 display_value;
-  String8 edit_value;
-  E_TypeKeyList inherited_type_key_chain;
   
   // rjf: variable-size & hook info
   U64 size_in_rows;
@@ -1614,7 +1611,7 @@ internal DF_ExpandKey df_key_from_viz_block_list_row_num(DF_EvalVizBlockList *bl
 internal DF_ExpandKey df_parent_key_from_viz_block_list_row_num(DF_EvalVizBlockList *blocks, S64 row_num);
 
 //- rjf: viz row list building
-internal DF_EvalVizRow *df_eval_viz_row_list_push_new(Arena *arena, DF_EvalVizWindowedRowList *rows, DF_EvalVizBlock *block, DF_ExpandKey key, E_Eval eval);
+internal DF_EvalVizRow *df_eval_viz_row_list_push_new(Arena *arena, DF_EvalView *eval_view, DF_EvalVizWindowedRowList *rows, DF_EvalVizBlock *block, DF_ExpandKey key, E_Eval eval);
 
 ////////////////////////////////
 //~ rjf: Main State Accessors/Mutators
