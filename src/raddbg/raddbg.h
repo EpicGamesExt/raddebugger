@@ -5,7 +5,10 @@
 //~ rjf: Frontend/UI Pass Tasks
 //
 // [x] fix HRESULTs
-// [ ] fix escape char literals
+// [x] fix escape char literals
+// [x] eval: indexing into string literals
+// [x] fix incorrectly consuming keyboard inputs, preventing fallback-to-filtering, when
+//     selecting null selection in watch views
 //
 // [ ] fix selecting hover eval, then hover eval disappearing, causing
 //     busted focus, until a new hover eval is opened

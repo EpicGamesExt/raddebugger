@@ -418,7 +418,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
       e_msg_list_concat_in_place(&result.msgs, &r.msgs);
       
       // rjf: bad conditions? -> error if applicable, exit
-      if(l.root->op == 0 || r.root->op == 0)
+      if(r.root->op == 0)
       {
         break;
       }
@@ -444,31 +444,63 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
       }
       
       // rjf: generate
+      E_IRNode *new_tree = &e_irnode_nil;
       {
-        // rjf: ops to compute the index
-        E_IRNode *index_tree = e_irtree_resolve_to_value(arena, r.space, r.mode, r.root, r_restype);
-        if(direct_type_size > 1)
+        switch(l.mode)
         {
-          E_IRNode *const_tree = e_irtree_const_u(arena, direct_type_size);
-          index_tree = e_irtree_binary_op_u(arena, RDI_EvalOp_Mul, index_tree, const_tree);
+          // rjf: null (types) -> just resolve to new type
+          case E_Mode_Null:
+          {
+          }break;
+          
+          // rjf: offsets -> read from base offset
+          default:
+          case E_Mode_Offset:
+          {
+            // rjf: ops to compute the offset
+            E_IRNode *offset_tree = e_irtree_resolve_to_value(arena, r.space, r.mode, r.root, r_restype);
+            if(direct_type_size > 1)
+            {
+              E_IRNode *const_tree = e_irtree_const_u(arena, direct_type_size);
+              offset_tree = e_irtree_binary_op_u(arena, RDI_EvalOp_Mul, offset_tree, const_tree);
+            }
+            
+            // rjf: ops to compute the base offset (resolve to value if addr-of-pointer)
+            E_IRNode *base_tree = l.root;
+            if(l_restype_kind == E_TypeKind_Ptr && l.mode != E_Mode_Value)
+            {
+              base_tree = e_irtree_resolve_to_value(arena, l.space, l.mode, base_tree, l_restype);
+            }
+            
+            // rjf: ops to compute the final address
+            new_tree = e_irtree_binary_op_u(arena, RDI_EvalOp_Add, offset_tree, base_tree);
+          }break;
+          
+          // rjf: values -> read from stack value
+          case E_Mode_Value:
+          {
+            // rjf: ops to compute the offset
+            E_IRNode *offset_tree = e_irtree_resolve_to_value(arena, r.space, r.mode, r.root, r_restype);
+            if(direct_type_size > 1)
+            {
+              E_IRNode *const_tree = e_irtree_const_u(arena, direct_type_size);
+              offset_tree = e_irtree_binary_op_u(arena, RDI_EvalOp_Mul, offset_tree, const_tree);
+            }
+            
+            // rjf: ops to push stack value, push offset, + read from stack value
+            new_tree = e_push_irnode(arena, RDI_EvalOp_ValueRead);
+            new_tree->u64 = direct_type_size;
+            e_irnode_push_child(new_tree, offset_tree);
+            e_irnode_push_child(new_tree, l.root);
+          }break;
         }
-        
-        // rjf: ops to compute the base address (resolve to value if addr-of-pointer)
-        E_IRNode *base_tree = l.root;
-        if(l_restype_kind == E_TypeKind_Ptr && l.mode != E_Mode_Value)
-        {
-          base_tree = e_irtree_resolve_to_value(arena, l.space, l.mode, base_tree, l_restype);
-        }
-        
-        // rjf: ops to compute the final address
-        E_IRNode *new_tree = e_irtree_binary_op_u(arena, RDI_EvalOp_Add, index_tree, base_tree);
-        
-        // rjf: fill
-        result.root     = new_tree;
-        result.type_key = direct_type;
-        result.mode     = E_Mode_Offset;
-        result.space    = l.space;
       }
+      
+      // rjf: fill
+      result.root     = new_tree;
+      result.type_key = direct_type;
+      result.mode     = l.mode;
+      result.space    = l.space;
     }break;
     
     //- rjf: member accesses
@@ -522,11 +554,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
       }
       
       // rjf: bad conditions? -> error if applicable, exit
-      if(l.root->op == 0)
-      {
-        break;
-      }
-      else if(e_type_key_match(e_type_key_zero(), check_type_key))
+      if(e_type_key_match(e_type_key_zero(), check_type_key))
       {
         break;
       }
@@ -553,17 +581,20 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
         // rjf: build tree
         E_IRNode *new_tree = l.root;
         E_Mode mode = l.mode;
-        if(l_restype_kind == E_TypeKind_Ptr ||
-           l_restype_kind == E_TypeKind_LRef ||
-           l_restype_kind == E_TypeKind_RRef)
+        if(l.root != &e_irnode_nil)
         {
-          new_tree = e_irtree_resolve_to_value(arena, l.space, l.mode, new_tree, l_restype);
-          mode = E_Mode_Offset;
-        }
-        if(r_off != 0)
-        {
-          E_IRNode *const_tree = e_irtree_const_u(arena, r_off);
-          new_tree = e_irtree_binary_op_u(arena, RDI_EvalOp_Add, new_tree, const_tree);
+          if(l_restype_kind == E_TypeKind_Ptr ||
+             l_restype_kind == E_TypeKind_LRef ||
+             l_restype_kind == E_TypeKind_RRef)
+          {
+            new_tree = e_irtree_resolve_to_value(arena, l.space, l.mode, new_tree, l_restype);
+            mode = E_Mode_Offset;
+          }
+          if(r_off != 0)
+          {
+            E_IRNode *const_tree = e_irtree_const_u(arena, r_off);
+            new_tree = e_irtree_binary_op_u(arena, RDI_EvalOp_Add, new_tree, const_tree);
+          }
         }
         
         // rjf: fill

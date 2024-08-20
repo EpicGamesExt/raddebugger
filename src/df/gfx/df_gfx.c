@@ -6178,8 +6178,8 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             DF_EvalVizRow *row = viz_rows.first;
             E_Eval row_eval = e_eval_from_expr(scratch.arena, row->expr);
             String8 row_expr_string = df_expr_string_from_viz_row(scratch.arena, row);
-            String8 row_display_value = df_value_string_from_eval(scratch.arena, DF_EvalVizStringFlag_ReadOnlyDisplayRules, default_radix, ui_top_font(), ui_top_font_size(), 500.f, row_eval, row->cfg_table);
-            expr_column_width_px = f_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, 0, row_expr_string).x + ui_top_font_size()*2.5f;
+            String8 row_display_value = df_value_string_from_eval(scratch.arena, DF_EvalVizStringFlag_ReadOnlyDisplayRules, default_radix, ui_top_font(), ui_top_font_size(), 500.f, row_eval, row->member, row->cfg_table);
+            expr_column_width_px = f_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, 0, row_expr_string).x + ui_top_font_size()*5.f;
             value_column_width_px = f_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, 0, row_display_value).x + ui_top_font_size()*2.5f;
             F32 total_dim_px = (expr_column_width_px + value_column_width_px);
             width_px = Min(80.f*ui_top_font_size(), total_dim_px*1.5f);
@@ -6226,8 +6226,8 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
               //- rjf: unpack row
               E_Eval row_eval = e_eval_from_expr(scratch.arena, row->expr);
               String8 row_expr_string = df_expr_string_from_viz_row(scratch.arena, row);
-              String8 row_edit_value = df_value_string_from_eval(scratch.arena, 0, default_radix, ui_top_font(), ui_top_font_size(), 500.f, row_eval, row->cfg_table);
-              String8 row_display_value = df_value_string_from_eval(scratch.arena, DF_EvalVizStringFlag_ReadOnlyDisplayRules, default_radix, ui_top_font(), ui_top_font_size(), 500.f, row_eval, row->cfg_table);
+              String8 row_edit_value = df_value_string_from_eval(scratch.arena, 0, default_radix, ui_top_font(), ui_top_font_size(), 500.f, row_eval, row->member, row->cfg_table);
+              String8 row_display_value = df_value_string_from_eval(scratch.arena, DF_EvalVizStringFlag_ReadOnlyDisplayRules, default_radix, ui_top_font(), ui_top_font_size(), 500.f, row_eval, row->member, row->cfg_table);
               B32 row_is_editable = df_type_key_is_editable(row_eval.type_key);
               B32 row_is_expandable = df_type_key_is_expandable(row_eval.type_key);
               
@@ -8310,7 +8310,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
 //~ rjf: Eval Viz
 
 internal F32
-df_append_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags flags, U32 default_radix, F_Tag font, F32 font_size, F32 max_size, S32 depth, E_Eval eval, DF_CfgTable *cfg_table, String8List *out)
+df_append_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags flags, U32 default_radix, F_Tag font, F32 font_size, F32 max_size, S32 depth, E_Eval eval, E_Member *member, DF_CfgTable *cfg_table, String8List *out)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(&arena, 1);
@@ -8331,18 +8331,12 @@ df_append_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags flags, U32
   B32 has_array = (df_cfg_val_from_string(cfg_table, str8_lit("array")) != &df_g_nil_cfg_val);
   
   //- rjf: member evaluations -> display member info
-  if(eval.mode == E_Mode_Null && !e_type_key_match(e_type_key_zero(), eval.type_key) && eval.expr->kind == E_ExprKind_MemberAccess)
+  if(eval.mode == E_Mode_Null && !e_type_key_match(e_type_key_zero(), eval.type_key) && member != 0)
   {
-    E_Eval lhs_eval = e_eval_from_expr(scratch.arena, eval.expr->first);
-    E_MemberArray lhs_members = e_type_data_members_from_key(scratch.arena, lhs_eval.type_key);
-    E_Member *member = e_type_member_from_array_name(&lhs_members, eval.expr->first->next->string);
-    if(member != 0)
-    {
-      U64 member_byte_size = e_type_byte_size_from_key(eval.type_key);
-      String8 offset_string = str8_from_u64(arena, member->off, radix, 0, 0);
-      String8 size_string = str8_from_u64(arena, member_byte_size, radix, 0, 0);
-      str8_list_pushf(arena, out, "member (%S offset, %S byte%s)", offset_string, size_string, member_byte_size == 1 ? "" : "s");
-    }
+    U64 member_byte_size = e_type_byte_size_from_key(eval.type_key);
+    String8 offset_string = str8_from_u64(arena, member->off, radix, 0, 0);
+    String8 size_string = str8_from_u64(arena, member_byte_size, radix, 0, 0);
+    str8_list_pushf(arena, out, "member (%S offset, %S byte%s)", offset_string, size_string, member_byte_size == 1 ? "" : "s");
   }
   
   //- rjf: type evaluations -> display type basic information
@@ -8450,7 +8444,7 @@ df_append_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags flags, U32
         {
           E_Expr *deref_expr = e_expr_ref_deref(scratch.arena, eval.expr);
           E_Eval deref_eval = e_eval_from_expr(scratch.arena, deref_expr);
-          space_taken += df_append_value_strings_from_eval(arena, flags, radix, font, font_size, max_size-space_taken, depth+1, deref_eval, cfg_table, out);
+          space_taken += df_append_value_strings_from_eval(arena, flags, radix, font, font_size, max_size-space_taken, depth+1, deref_eval, 0, cfg_table, out);
         }
         else
         {
@@ -8559,7 +8553,7 @@ df_append_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags flags, U32
           {
             E_Expr *element_expr = e_expr_ref_array_index(scratch.arena, eval.expr, idx);
             E_Eval element_eval = e_eval_from_expr(scratch.arena, element_expr);
-            space_taken += df_append_value_strings_from_eval(arena, flags, radix, font, font_size, max_size-space_taken, depth+1, element_eval, cfg_table, out);
+            space_taken += df_append_value_strings_from_eval(arena, flags, radix, font, font_size, max_size-space_taken, depth+1, element_eval, 0, cfg_table, out);
             if(idx+1 < array_count)
             {
               String8 comma = str8_lit(", ");
@@ -8609,7 +8603,7 @@ df_append_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags flags, U32
           E_Member *mem = &filtered_data_members.v[member_idx];
           E_Expr *dot_expr = e_expr_ref_member_access(scratch.arena, eval.expr, mem->name);
           E_Eval dot_eval = e_eval_from_expr(scratch.arena, dot_expr);
-          space_taken += df_append_value_strings_from_eval(arena, flags, radix, font, font_size, max_size-space_taken, depth+1, dot_eval, cfg_table, out);
+          space_taken += df_append_value_strings_from_eval(arena, flags, radix, font, font_size, max_size-space_taken, depth+1, dot_eval, 0, cfg_table, out);
           if(member_idx+1 < filtered_data_members.count)
           {
             String8 comma = str8_lit(", ");
@@ -8640,11 +8634,11 @@ df_append_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags flags, U32
 }
 
 internal String8
-df_value_string_from_eval(Arena *arena, DF_EvalVizStringFlags flags, U32 default_radix, F_Tag font, F32 font_size, F32 max_size, E_Eval eval, DF_CfgTable *cfg_table)
+df_value_string_from_eval(Arena *arena, DF_EvalVizStringFlags flags, U32 default_radix, F_Tag font, F32 font_size, F32 max_size, E_Eval eval, E_Member *member, DF_CfgTable *cfg_table)
 {
   Temp scratch = scratch_begin(&arena, 1);
   String8List strs = {0};
-  df_append_value_strings_from_eval(scratch.arena, flags, default_radix, font, font_size, max_size, 0, eval, cfg_table, &strs);
+  df_append_value_strings_from_eval(scratch.arena, flags, default_radix, font, font_size, max_size, 0, eval, member, cfg_table, &strs);
   String8 result = str8_list_join(arena, &strs, 0);
   scratch_end(scratch);
   return result;
@@ -11242,7 +11236,7 @@ df_code_slice(DF_Window *ws, DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *m
           if(!e_type_key_match(e_type_key_zero(), eval.type_key))
           {
             DF_CfgTable cfg_table = {0};
-            eval_string = df_value_string_from_eval(scratch.arena, DF_EvalVizStringFlag_ReadOnlyDisplayRules, 10, params->font, params->font_size, params->font_size*60.f, eval, &cfg_table);
+            eval_string = df_value_string_from_eval(scratch.arena, DF_EvalVizStringFlag_ReadOnlyDisplayRules, 10, params->font, params->font_size, params->font_size*60.f, eval, 0, &cfg_table);
           }
           ui_spacer(ui_em(1.5f, 1.f));
           ui_set_next_pref_width(ui_children_sum(1));
@@ -12282,6 +12276,7 @@ df_fancy_string_list_from_code_string(Arena *arena, F32 alpha, B32 indirection_s
   TXT_TokenArray tokens = txt_token_array_from_string__c_cpp(scratch.arena, 0, string);
   TXT_Token *tokens_opl = tokens.v+tokens.count;
   S32 indirection_counter = 0;
+  indirection_size_change = 0;
   for(TXT_Token *token = tokens.v; token < tokens_opl; token += 1)
   {
     DF_ThemeColor token_color = df_theme_color_from_txt_token_kind(token->kind);

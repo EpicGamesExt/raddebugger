@@ -1275,7 +1275,8 @@ RDI_EvalOpTable:
   {Pick        42      1 0 1}
   {Pop         43      0 1 0}
   {Insert      44      1 0 0}
-  {COUNT       45      0 0 0}
+  {ValueRead   45      1 2 1}
+  {COUNT       46      0 0 0}
 }
 
 // NOTE(rjf): "ck" -> "conversion kind, when converted to type group", used in square matrix form

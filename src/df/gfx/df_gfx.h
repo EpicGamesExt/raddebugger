@@ -965,8 +965,8 @@ internal void df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdLis
 ////////////////////////////////
 //~ rjf: Eval Viz
 
-internal F32 df_append_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags flags, U32 default_radix, F_Tag font, F32 font_size, F32 max_size, S32 depth, E_Eval eval, DF_CfgTable *cfg_table, String8List *out);
-internal String8 df_value_string_from_eval(Arena *arena, DF_EvalVizStringFlags flags, U32 default_radix, F_Tag font, F32 font_size, F32 max_size, E_Eval eval, DF_CfgTable *cfg_table);
+internal F32 df_append_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags flags, U32 default_radix, F_Tag font, F32 font_size, F32 max_size, S32 depth, E_Eval eval, E_Member *member, DF_CfgTable *cfg_table, String8List *out);
+internal String8 df_value_string_from_eval(Arena *arena, DF_EvalVizStringFlags flags, U32 default_radix, F_Tag font, F32 font_size, F32 max_size, E_Eval eval, E_Member *member, DF_CfgTable *cfg_table);
 
 ////////////////////////////////
 //~ rjf: Hover Eval

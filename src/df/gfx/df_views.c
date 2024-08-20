@@ -1256,7 +1256,7 @@ df_string_from_eval_viz_row_column(Arena *arena, DF_EvalView *ev, DF_EvalVizRow 
     case DF_WatchViewColumnKind_Value:
     {
       E_Eval eval = e_eval_from_expr(arena, row->expr);
-      result = df_value_string_from_eval(arena, !editable * DF_EvalVizStringFlag_ReadOnlyDisplayRules, default_radix, font, font_size, max_size_px, eval, row->cfg_table);
+      result = df_value_string_from_eval(arena, !editable * DF_EvalVizStringFlag_ReadOnlyDisplayRules, default_radix, font, font_size, max_size_px, eval, row->member, row->cfg_table);
     }break;
     case DF_WatchViewColumnKind_Type:
     {
@@ -1280,7 +1280,7 @@ df_string_from_eval_viz_row_column(Arena *arena, DF_EvalView *ev, DF_EvalVizRow 
     {
       E_Expr *expr = e_expr_ref_member_access(arena, row->expr, str8(col->string_buffer, col->string_size));
       E_Eval eval = e_eval_from_expr(arena, expr);
-      result = df_value_string_from_eval(arena, !editable * DF_EvalVizStringFlag_ReadOnlyDisplayRules, default_radix, font, font_size, max_size_px, eval, row->cfg_table);
+      result = df_value_string_from_eval(arena, !editable * DF_EvalVizStringFlag_ReadOnlyDisplayRules, default_radix, font, font_size, max_size_px, eval, row->member, row->cfg_table);
     }break;
   }
   return result;
@@ -1815,7 +1815,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
             for(U64 sub_expand_idx = 0; sub_expand_idx < sub_expand_keys_count; sub_expand_idx += 1)
             {
               FZY_Item *item = &items.v[sub_expand_item_idxs[sub_expand_idx]];
-              E_Expr *child_expr = df_expr_from_eval_viz_block_index(scratch.arena, last_vb, item->idx);
+              E_Expr *child_expr = df_expr_from_eval_viz_block_index(scratch.arena, last_vb, sub_expand_item_idxs[sub_expand_idx]);
               
               // rjf: form split: truncate & complete last block; begin next block
               last_vb = df_eval_viz_block_split_and_continue(scratch.arena, &blocks, last_vb, sub_expand_item_idxs[sub_expand_idx]);
@@ -2004,6 +2004,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
           evt->flags & UI_EventFlag_Paste ||
           (evt->kind == UI_EventKind_Press && evt->slot == UI_EventActionSlot_Edit)) &&
          selection_tbl.min.x == selection_tbl.max.x &&
+         (selection_tbl.min.y != 0 || selection_tbl.min.y != 0) &&
          (selection_tbl.min.x != 0 || modifiable))
       {
         Vec2S64 selection_dim = dim_2s64(selection_tbl);

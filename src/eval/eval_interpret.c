@@ -769,6 +769,17 @@ e_interpret(String8 bytecode)
           goto done;
         }
       }break;
+      
+      case RDI_EvalOp_ValueRead:
+      {
+        U64 bytes_to_read = imm;
+        U64 offset = svals[0].u64;
+        if(offset + bytes_to_read <= sizeof(E_Value))
+        {
+          E_Value src_val = svals[1];
+          MemoryCopy(&nval.u512[0], (U8 *)(&src_val.u512[0]) + offset, bytes_to_read);
+        }
+      }break;
     }
     
     // rjf: push

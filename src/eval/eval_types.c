@@ -1406,7 +1406,7 @@ e_type_data_members_from_key(Arena *arena, E_TypeKey key)
       padding_member->kind = E_MemberKind_Padding;
       padding_member->type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), n->size);
       padding_member->off = n->off;
-      padding_member->name = str8_lit("padding");
+      padding_member->name = push_str8f(arena, "[padding %I64u]", padding_idx);
       padding_idx += 1;
     }
     members = new_members;
@@ -1422,7 +1422,8 @@ e_type_member_from_array_name(E_MemberArray *members, String8 name)
   E_Member *member = 0;
   for(U64 idx = 0; idx < members->count; idx += 1)
   {
-    if(members->v[idx].kind == E_MemberKind_DataField &&
+    if((members->v[idx].kind == E_MemberKind_DataField ||
+        members->v[idx].kind == E_MemberKind_Padding) &&
        str8_match(members->v[idx].name, name, 0))
     {
       member = &members->v[idx];

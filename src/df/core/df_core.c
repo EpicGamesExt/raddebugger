@@ -5026,6 +5026,19 @@ df_eval_viz_row_list_push_new(Arena *arena, DF_EvalView *eval_view, DF_EvalVizWi
   row->size_in_rows = 1;
   row->string       = block->string;
   row->expr         = expr;
+  if(row->expr->kind == E_ExprKind_MemberAccess)
+  {
+    Temp scratch = scratch_begin(&arena, 1);
+    E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, row->expr->first);
+    E_TypeKey type = irtree.type_key;
+    E_MemberArray data_members = e_type_data_members_from_key(scratch.arena, type);
+    E_Member *member = e_type_member_from_array_name(&data_members, row->expr->last->string);
+    if(member != 0)
+    {
+      row->member = e_type_member_copy(arena, member);
+    }
+    scratch_end(scratch);
+  }
   
   // rjf: fill view-rule-derived info
   {
