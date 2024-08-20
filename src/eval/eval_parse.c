@@ -1698,7 +1698,9 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
           it += 1;
           if(token_string.size > 1 && token_string.str[0] == '\'' && token_string.str[1] != '\'')
           {
-            U8 char_val = token_string.str[1];
+            String8 char_literal_escaped = str8_skip(str8_chop(token_string, 1), 1);
+            String8 char_literal_raw = e_raw_from_escaped_string(scratch.arena, char_literal_escaped);
+            U8 char_val = char_literal_raw.size > 0 ? char_literal_raw.str[0] : 0;
             atom = e_push_expr(arena, E_ExprKind_LeafU64, token_string.str);
             atom->u64 = (U64)char_val;
           }
@@ -1712,8 +1714,9 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
         case E_TokenKind_StringLiteral:
         {
           String8 string_value_escaped = str8_chop(str8_skip(token_string, 1), 1);
+          String8 string_value_raw = e_raw_from_escaped_string(arena, string_value_escaped);
           atom = e_push_expr(arena, E_ExprKind_LeafStringLiteral, token_string.str);
-          atom->string = string_value_escaped;
+          atom->string = string_value_raw;
           it += 1;
         }break;
         

@@ -20,6 +20,57 @@ e_hash_from_string(U64 seed, String8 string)
   return result;
 }
 
+internal String8
+e_raw_from_escaped_string(Arena *arena, String8 string)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  String8List strs = {0};
+  U64 start = 0;
+  for(U64 idx = 0; idx <= string.size; idx += 1)
+  {
+    if(idx == string.size || string.str[idx] == '\\' || string.str[idx] == '\r')
+    {
+      String8 str = str8_substr(string, r1u64(start, idx));
+      if(str.size != 0)
+      {
+        str8_list_push(scratch.arena, &strs, str);
+      }
+      start = idx+1;
+    }
+    if(idx < string.size && string.str[idx] == '\\')
+    {
+      U8 next_char = string.str[idx+1];
+      U8 replace_byte = 0;
+      switch(next_char)
+      {
+        default:{}break;
+        case 'a': replace_byte = 0x07; break;
+        case 'b': replace_byte = 0x08; break;
+        case 'e': replace_byte = 0x1b; break;
+        case 'f': replace_byte = 0x0c; break;
+        case 'n': replace_byte = 0x0a; break;
+        case 'r': replace_byte = 0x0d; break;
+        case 't': replace_byte = 0x09; break;
+        case 'v': replace_byte = 0x0b; break;
+        case '\\':replace_byte = '\\'; break;
+        case '\'':replace_byte = '\''; break;
+        case '"': replace_byte = '"';  break;
+        case '?': replace_byte = '?';  break;
+      }
+      String8 replace_string = push_str8_copy(scratch.arena, str8(&replace_byte, 1));
+      str8_list_push(scratch.arena, &strs, replace_string);
+      if(replace_byte == '\\' || replace_byte == '"' || replace_byte == '\'')
+      {
+        idx += 1;
+        start += 1;
+      }
+    }
+  }
+  String8 result = str8_list_join(arena, &strs, 0);
+  scratch_end(scratch);
+  return result;
+}
+
 ////////////////////////////////
 //~ rjf: Message Functions
 

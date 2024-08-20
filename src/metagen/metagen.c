@@ -142,7 +142,7 @@ mg_escaped_from_str8(Arena *arena, String8 string)
       String8 str = str8_substr(string, r1u64(start, idx));
       if(str.size != 0)
       {
-        str8_list_push(arena, &strs, str);
+        str8_list_push(scratch.arena, &strs, str);
       }
       start = idx+1;
     }
