@@ -22,6 +22,7 @@ e_select_interpret_ctx(E_InterpretCtx *ctx)
 internal B32
 e_space_read(E_Space space, void *out, Rng1U64 range)
 {
+  ProfBeginFunction();
   B32 result = 0;
   switch(space)
   {
@@ -41,6 +42,7 @@ e_space_read(E_Space space, void *out, Rng1U64 range)
       result = e_interpret_ctx->space_read(e_interpret_ctx->space_read_user_data, space, out, range);
     }break;
   }
+  ProfEnd();
   return result;
 }
 

@@ -8560,6 +8560,12 @@ df_append_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags flags, U32
               space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, comma).x;
               str8_list_push(arena, out, comma);
             }
+            if(space_taken > max_size && idx+1 < array_count)
+            {
+              String8 ellipses = str8_lit("...");
+              space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, ellipses).x;
+              str8_list_push(arena, out, ellipses);
+            }
           }
         }
         else
@@ -8609,6 +8615,12 @@ df_append_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags flags, U32
             String8 comma = str8_lit(", ");
             space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, comma).x;
             str8_list_push(arena, out, comma);
+          }
+          if(space_taken > max_size && member_idx+1 < filtered_data_members.count)
+          {
+            String8 ellipses = str8_lit("...");
+            space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, ellipses).x;
+            str8_list_push(arena, out, ellipses);
           }
         }
       }

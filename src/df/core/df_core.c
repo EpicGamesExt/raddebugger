@@ -3003,6 +3003,7 @@ df_symbol_name_from_dbgi_key_voff(Arena *arena, DI_Key *dbgi_key, U64 voff, B32 
 internal String8
 df_symbol_name_from_process_vaddr(Arena *arena, DF_Entity *process, U64 vaddr, B32 decorated)
 {
+  ProfBeginFunction();
   String8 result = {0};
   {
     DF_Entity *module = df_module_from_process_vaddr(process, vaddr);
@@ -3010,6 +3011,7 @@ df_symbol_name_from_process_vaddr(Arena *arena, DF_Entity *process, U64 vaddr, B
     U64 voff = df_voff_from_vaddr(module, vaddr);
     result = df_symbol_name_from_dbgi_key_voff(arena, &dbgi_key, voff, decorated);
   }
+  ProfEnd();
   return result;
 }
 
@@ -6233,7 +6235,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
   df_state->frame_index += 1;
   arena_clear(df_frame_arena());
   df_state->frame_di_scope = di_scope_open();
-  df_state->frame_eval_memread_endt_us = os_now_microseconds() + 10000;
+  df_state->frame_eval_memread_endt_us = os_now_microseconds() + 5000;
   df_state->dt = dt;
   df_state->time_in_seconds += dt;
   df_state->top_interact_regs = &df_state->base_interact_regs;

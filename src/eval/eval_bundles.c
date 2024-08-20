@@ -141,6 +141,7 @@ e_dynamically_typed_eval_from_eval(E_Eval eval)
 internal E_Eval
 e_value_eval_from_eval(E_Eval eval)
 {
+  ProfBeginFunction();
   if(eval.mode == E_Mode_Offset)
   {
     E_TypeKey type_key = e_type_unwrap(eval.type_key);
@@ -190,6 +191,7 @@ e_value_eval_from_eval(E_Eval eval)
       }
     }
   }
+  ProfEnd();
   return eval;
   
   // TODO(rjf): @spaces check regs path

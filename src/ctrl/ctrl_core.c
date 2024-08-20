@@ -5350,10 +5350,7 @@ ctrl_mem_stream_thread__entry_point(void *p)
               {
                 range_n->hash = hash;
               }
-              if(!u128_match(u128_zero(), hash))
-              {
-                range_n->mem_gen = post_read_mem_gen;
-              }
+              range_n->mem_gen = post_read_mem_gen;
               ins_atomic_u32_eval_assign(&range_n->is_taken, 0);
               goto commit__break_all;
             }
