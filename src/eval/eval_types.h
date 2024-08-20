@@ -210,6 +210,7 @@ internal RDI_EvalTypeGroup e_type_group_from_kind(E_TypeKind kind);
 internal B32 e_type_kind_is_integer(E_TypeKind kind);
 internal B32 e_type_kind_is_signed(E_TypeKind kind);
 internal B32 e_type_kind_is_basic_or_enum(E_TypeKind kind);
+internal B32 e_type_kind_is_pointer_or_ref(E_TypeKind kind);
 
 ////////////////////////////////
 //~ rjf: Member Functions
@@ -261,6 +262,7 @@ internal B32 e_type_match(E_TypeKey l, E_TypeKey r);
 internal E_Member *e_type_member_copy(Arena *arena, E_Member *src);
 internal int e_type_qsort_compare_members_offset(E_Member *a, E_Member *b);
 internal E_MemberArray e_type_data_members_from_key(Arena *arena, E_TypeKey key);
+internal E_Member *e_type_member_from_array_name(E_MemberArray *members, String8 name);
 internal void e_type_lhs_string_from_key(Arena *arena, E_TypeKey key, String8List *out, U32 prec, B32 skip_return);
 internal void e_type_rhs_string_from_key(Arena *arena, E_TypeKey key, String8List *out, U32 prec);
 internal String8 e_type_string_from_key(Arena *arena, E_TypeKey key);

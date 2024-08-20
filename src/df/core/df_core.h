@@ -179,7 +179,17 @@ typedef struct DF_EvalVizBlockList DF_EvalVizBlockList;
 #define DF_CORE_VIEW_RULE_EVAL_RESOLUTION_FUNCTION_SIG(name) E_Eval name(Arena *arena, E_Eval eval, DF_CfgVal *val)
 #define DF_CORE_VIEW_RULE_EVAL_RESOLUTION_FUNCTION_NAME(name) df_core_view_rule_eval_resolution__##name
 #define DF_CORE_VIEW_RULE_EVAL_RESOLUTION_FUNCTION_DEF(name) internal DF_CORE_VIEW_RULE_EVAL_RESOLUTION_FUNCTION_SIG(DF_CORE_VIEW_RULE_EVAL_RESOLUTION_FUNCTION_NAME(name))
-#define DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_SIG(name) void name(Arena *arena, DF_EvalView *eval_view, E_Eval eval, String8 string, DF_CfgTable *cfg_table, DF_ExpandKey parent_key, DF_ExpandKey key, S32 depth, DF_CfgNode *cfg, struct DF_EvalVizBlockList *out)
+#define DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_SIG(name) void name(Arena *arena,                                    \
+DF_EvalView *eval_view,                          \
+DF_ExpandKey parent_key,                         \
+DF_ExpandKey key,                                \
+DF_ExpandNode *expand_node,                      \
+String8 string,                                  \
+E_Expr *expr,                                    \
+DF_CfgTable *cfg_table,                          \
+S32 depth,                                       \
+DF_CfgVal *cfg_val,                              \
+struct DF_EvalVizBlockList *out)
 #define DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_NAME(name) df_core_view_rule_viz_block_prod__##name
 #define DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(name) internal DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_SIG(DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_NAME(name))
 typedef DF_CORE_VIEW_RULE_EVAL_RESOLUTION_FUNCTION_SIG(DF_CoreViewRuleEvalResolutionHookFunctionType);
@@ -683,7 +693,6 @@ typedef enum DF_EvalVizBlockKind
   DF_EvalVizBlockKind_Members,           // members of struct, class, union
   DF_EvalVizBlockKind_EnumMembers,       // members of enum
   DF_EvalVizBlockKind_Elements,          // elements of array
-  DF_EvalVizBlockKind_Links,             // flattened nodes in a linked list
   DF_EvalVizBlockKind_Canvas,            // escape hatch for arbitrary UI
   DF_EvalVizBlockKind_DebugInfoTable,    // block of filtered debug info table elements
   DF_EvalVizBlockKind_COUNT,
@@ -700,20 +709,20 @@ struct DF_EvalVizBlock
   S32 depth;
   
   // rjf: evaluation info
-  E_Eval eval;
   String8 string;
-  E_Member *member;
+  E_Expr *expr;
   
   // rjf: info about ranges that this block spans
   Rng1U64 visual_idx_range;
   Rng1U64 semantic_idx_range;
-  RDI_SectionKind fzy_target;
-  FZY_ItemArray fzy_backing_items;
   
   // rjf: visualization config extensions
   DF_CfgTable *cfg_table;
-  E_TypeKey link_member_type_key;
-  U64 link_member_off;
+  DF_EvalLinkBaseChunkList *link_bases;
+  E_MemberArray members;
+  E_EnumValArray enum_vals;
+  RDI_SectionKind fzy_target;
+  FZY_ItemArray fzy_backing_items;
 };
 
 typedef struct DF_EvalVizBlockNode DF_EvalVizBlockNode;
@@ -748,43 +757,30 @@ enum
   DF_EvalVizStringFlag_ReadOnlyDisplayRules = (1<<0),
 };
 
-typedef U32 DF_EvalVizRowFlags;
-enum
-{
-  DF_EvalVizRowFlag_CanExpand    = (1<<0),
-  DF_EvalVizRowFlag_CanEditValue = (1<<1),
-  DF_EvalVizRowFlag_Canvas       = (1<<2),
-  DF_EvalVizRowFlag_ExprIsSpecial= (1<<3),
-};
-
 typedef struct DF_EvalVizRow DF_EvalVizRow;
 struct DF_EvalVizRow
 {
   DF_EvalVizRow *next;
-  DF_EvalVizRowFlags flags;
   
-  // rjf: block info
+  // rjf: block hierarchy info
   S32 depth;
   DF_ExpandKey parent_key;
   DF_ExpandKey key;
   
-  // rjf: evaluation artifacts
-  E_Eval eval;
-  E_Member *member;
-  
-  // rjf: basic visualization contents
-  DF_CfgTable *cfg_table;
-  String8 display_expr;
-  String8 edit_expr;
-  
-  // rjf: variable-size & hook info
+  // rjf: row size/scroll info
   U64 size_in_rows;
   U64 skipped_size_in_rows;
   U64 chopped_size_in_rows;
+  
+  // rjf: evaluation expression
+  String8 string;
+  E_Member *member;
+  E_Expr *expr;
+  
+  // rjf: view rule attachments
+  DF_CfgTable *cfg_table;
   struct DF_GfxViewRuleSpec *expand_ui_rule_spec;
   struct DF_CfgNode *expand_ui_rule_node;
-  
-  // rjf: value area override view rule spec
   struct DF_GfxViewRuleSpec *value_ui_rule_spec;
   struct DF_CfgNode *value_ui_rule_node;
 };
@@ -1221,6 +1217,7 @@ read_only global DF_CmdSpec df_g_nil_cmd_spec = {0};
 read_only global DF_CoreViewRuleSpec df_g_nil_core_view_rule_spec = {0};
 read_only global DF_CfgNode df_g_nil_cfg_node = {&df_g_nil_cfg_node, &df_g_nil_cfg_node, &df_g_nil_cfg_node, &df_g_nil_cfg_node};
 read_only global DF_CfgVal df_g_nil_cfg_val = {&df_g_nil_cfg_val, &df_g_nil_cfg_val, &df_g_nil_cfg_node, &df_g_nil_cfg_node};
+read_only global DF_CfgTable df_g_nil_cfg_table = {0, 0, 0, &df_g_nil_cfg_val, &df_g_nil_cfg_val};
 read_only global DF_Entity df_g_nil_entity =
 {
   // rjf: tree links
@@ -1587,6 +1584,11 @@ internal String8 df_string_from_ascii_value(Arena *arena, U8 val);
 internal String8 df_string_from_hresult_facility_code(U32 code);
 internal String8 df_string_from_hresult_code(U32 code);
 internal String8 df_string_from_simple_typed_eval(Arena *arena, DF_EvalVizStringFlags flags, U32 radix, E_Eval eval);
+internal String8 df_escaped_from_raw_string(Arena *arena, String8 raw);
+
+//- rjf: type info -> expandability/editablity
+internal B32 df_type_key_is_expandable(E_TypeKey type_key);
+internal B32 df_type_key_is_editable(E_TypeKey type_key);
 
 //- rjf: writing values back to child processes
 internal B32 df_commit_eval_value(E_Eval dst_eval, E_Eval src_eval);
@@ -1601,7 +1603,7 @@ internal DF_EvalLinkBaseArray df_eval_link_base_array_from_chunk_list(Arena *are
 internal DF_EvalVizBlock *df_eval_viz_block_begin(Arena *arena, DF_EvalVizBlockKind kind, DF_ExpandKey parent_key, DF_ExpandKey key, S32 depth);
 internal DF_EvalVizBlock *df_eval_viz_block_split_and_continue(Arena *arena, DF_EvalVizBlockList *list, DF_EvalVizBlock *split_block, U64 split_idx);
 internal void df_eval_viz_block_end(DF_EvalVizBlockList *list, DF_EvalVizBlock *block);
-internal void df_append_viz_blocks_for_parent__rec(Arena *arena, DF_EvalView *view, DF_ExpandKey parent_key, DF_ExpandKey key, String8 string, E_Eval eval, E_Member *opt_member, DF_CfgTable *cfg_table, S32 depth, DF_EvalVizBlockList *list_out);
+internal void df_append_viz_blocks_for_parent__rec(Arena *arena, DF_EvalView *view, DF_ExpandKey parent_key, DF_ExpandKey key, String8 string, E_Expr *expr, DF_CfgTable *cfg_table, S32 depth, DF_EvalVizBlockList *list_out);
 internal DF_EvalVizBlockList df_eval_viz_block_list_from_eval_view_expr_keys(Arena *arena, DF_EvalView *eval_view, String8 expr, DF_ExpandKey parent_key, DF_ExpandKey key);
 internal void df_eval_viz_block_list_concat__in_place(DF_EvalVizBlockList *dst, DF_EvalVizBlockList *to_push);
 
@@ -1610,8 +1612,19 @@ internal S64 df_row_num_from_viz_block_list_key(DF_EvalVizBlockList *blocks, DF_
 internal DF_ExpandKey df_key_from_viz_block_list_row_num(DF_EvalVizBlockList *blocks, S64 row_num);
 internal DF_ExpandKey df_parent_key_from_viz_block_list_row_num(DF_EvalVizBlockList *blocks, S64 row_num);
 
+//- rjf: viz block * index -> expression
+internal E_Expr *df_expr_from_eval_viz_block_index(Arena *arena, DF_EvalVizBlock *block, U64 index);
+
 //- rjf: viz row list building
-internal DF_EvalVizRow *df_eval_viz_row_list_push_new(Arena *arena, DF_EvalView *eval_view, DF_EvalVizWindowedRowList *rows, DF_EvalVizBlock *block, DF_ExpandKey key, E_Eval eval);
+internal DF_EvalVizRow *df_eval_viz_row_list_push_new(Arena *arena, DF_EvalView *eval_view, DF_EvalVizWindowedRowList *rows, DF_EvalVizBlock *block, DF_ExpandKey key, E_Expr *expr);
+internal DF_EvalVizWindowedRowList df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DF_EvalView *eval_view, Rng1S64 visible_range, DF_EvalVizBlockList *blocks);
+
+//- rjf: viz row -> strings
+internal String8 df_expr_string_from_viz_row(Arena *arena, DF_EvalVizRow *row);
+
+//- rjf: viz row -> expandability/editability
+internal B32 df_viz_row_is_expandable(DF_EvalVizRow *row);
+internal B32 df_viz_row_is_editable(DF_EvalVizRow *row);
 
 ////////////////////////////////
 //~ rjf: Main State Accessors/Mutators

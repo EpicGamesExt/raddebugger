@@ -4220,6 +4220,93 @@ df_string_from_simple_typed_eval(Arena *arena, DF_EvalVizStringFlags flags, U32 
   return result;
 }
 
+internal String8
+df_escaped_from_raw_string(Arena *arena, String8 raw)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  String8List parts = {0};
+  U64 start_split_idx = 0;
+  for(U64 idx = 0; idx <= raw.size; idx += 1)
+  {
+    U8 byte = (idx < raw.size) ? raw.str[idx] : 0;
+    B32 split = 1;
+    String8 separator_replace = {0};
+    switch(byte)
+    {
+      default:{split = 0;}break;
+      case 0:    {}break;
+      case '\a': {separator_replace = str8_lit("\\a");}break;
+      case '\b': {separator_replace = str8_lit("\\b");}break;
+      case '\f': {separator_replace = str8_lit("\\f");}break;
+      case '\n': {separator_replace = str8_lit("\\n");}break;
+      case '\r': {separator_replace = str8_lit("\\r");}break;
+      case '\t': {separator_replace = str8_lit("\\t");}break;
+      case '\v': {separator_replace = str8_lit("\\v");}break;
+      case '\\': {separator_replace = str8_lit("\\\\");}break;
+      case '"':  {separator_replace = str8_lit("\\\"");}break;
+      case '?':  {separator_replace = str8_lit("\\?");}break;
+    }
+    if(split)
+    {
+      String8 substr = str8_substr(raw, r1u64(start_split_idx, idx));
+      start_split_idx = idx+1;
+      str8_list_push(scratch.arena, &parts, substr);
+      if(separator_replace.size != 0)
+      {
+        str8_list_push(scratch.arena, &parts, separator_replace);
+      }
+    }
+  }
+  StringJoin join = {0};
+  String8 result = str8_list_join(arena, &parts, &join);
+  scratch_end(scratch);
+  return result;
+}
+
+//- rjf: type info -> expandability/editablity
+
+internal B32
+df_type_key_is_expandable(E_TypeKey type_key)
+{
+  B32 result = 0;
+  for(E_TypeKey t = type_key; !result; t = e_type_unwrap(e_type_direct_from_key(e_type_unwrap(t))))
+  {
+    E_TypeKind kind = e_type_kind_from_key(t);
+    if(kind == E_TypeKind_Null || kind == E_TypeKind_Function)
+    {
+      break;
+    }
+    if(kind == E_TypeKind_Struct ||
+       kind == E_TypeKind_Union ||
+       kind == E_TypeKind_Class ||
+       kind == E_TypeKind_Array ||
+       kind == E_TypeKind_Enum)
+    {
+      result = 1;
+    }
+  }
+  return result;
+}
+
+internal B32
+df_type_key_is_editable(E_TypeKey type_key)
+{
+  B32 result = 0;
+  for(E_TypeKey t = type_key; !result; t = e_type_unwrap(e_type_direct_from_key(e_type_unwrap(t))))
+  {
+    E_TypeKind kind = e_type_kind_from_key(t);
+    if(kind == E_TypeKind_Null || kind == E_TypeKind_Function)
+    {
+      break;
+    }
+    if((E_TypeKind_FirstBasic <= kind && kind <= E_TypeKind_LastBasic) || e_type_kind_is_pointer_or_ref(kind))
+    {
+      result = 1;
+    }
+  }
+  return result;
+}
+
 //- rjf: writing values back to child processes
 
 internal B32
@@ -4533,6 +4620,8 @@ df_eval_viz_block_begin(Arena *arena, DF_EvalVizBlockKind kind, DF_ExpandKey par
   n->v.parent_key = parent_key;
   n->v.key        = key;
   n->v.depth      = depth;
+  n->v.expr       = &e_expr_nil;
+  n->v.cfg_table  = &df_g_nil_cfg_table;
   return &n->v;
 }
 
@@ -4543,15 +4632,15 @@ df_eval_viz_block_split_and_continue(Arena *arena, DF_EvalVizBlockList *list, DF
   split_block->visual_idx_range.max = split_block->semantic_idx_range.max = split_idx;
   df_eval_viz_block_end(list, split_block);
   DF_EvalVizBlock *continue_block = df_eval_viz_block_begin(arena, split_block->kind, split_block->parent_key, split_block->key, split_block->depth);
-  continue_block->eval = split_block->eval;
-  continue_block->string = split_block->string;
-  continue_block->member = split_block->member;
-  continue_block->visual_idx_range = continue_block->semantic_idx_range = r1u64(split_idx+1, total_count);
+  continue_block->string            = split_block->string;
+  continue_block->expr              = split_block->expr;
+  continue_block->visual_idx_range  = continue_block->semantic_idx_range = r1u64(split_idx+1, total_count);
+  continue_block->cfg_table         = split_block->cfg_table;
+  continue_block->link_bases        = split_block->link_bases;
+  continue_block->members           = split_block->members;
+  continue_block->enum_vals         = split_block->enum_vals;
+  continue_block->fzy_target        = split_block->fzy_target;
   continue_block->fzy_backing_items = split_block->fzy_backing_items;
-  continue_block->fzy_target = split_block->fzy_target;
-  continue_block->cfg_table = split_block->cfg_table;
-  continue_block->link_member_type_key = split_block->link_member_type_key;
-  continue_block->link_member_off = split_block->link_member_off;
   return continue_block;
 }
 
@@ -4566,46 +4655,59 @@ df_eval_viz_block_end(DF_EvalVizBlockList *list, DF_EvalVizBlock *block)
 }
 
 internal void
-df_append_viz_blocks_for_parent__rec(Arena *arena, DF_EvalView *eval_view, DF_ExpandKey parent_key, DF_ExpandKey key, String8 string, E_Eval eval, E_Member *opt_member, DF_CfgTable *cfg_table, S32 depth, DF_EvalVizBlockList *list_out)
+df_append_viz_blocks_for_parent__rec(Arena *arena, DF_EvalView *eval_view, DF_ExpandKey parent_key, DF_ExpandKey key, String8 string, E_Expr *expr, DF_CfgTable *cfg_table, S32 depth, DF_EvalVizBlockList *list_out)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(&arena, 1);
   
-  //////////////////////////////
   //- rjf: determine if this key is expanded
-  //
   DF_ExpandNode *node = df_expand_node_from_key(&eval_view->expand_tree_table, key);
-  B32 parent_is_expanded = (node != 0 && node->expanded && !e_type_key_match(e_type_key_zero(), eval.type_key));
+  B32 parent_is_expanded = (node != 0 && node->expanded);
   
-  //////////////////////////////
-  //- rjf: apply view rules & resolve eval
-  //
-  eval = e_dynamically_typed_eval_from_eval(eval);
-  eval = df_eval_from_eval_cfg_table(arena, eval, cfg_table);
-  
-  //////////////////////////////
-  //- rjf: unpack eval
-  //
-  E_TypeKey eval_type_key = e_type_unwrap(eval.type_key);
-  E_TypeKind eval_type_kind = e_type_kind_from_key(eval_type_key);
-  String8 eval_string = push_str8_copy(arena, string);
-  
-  //////////////////////////////
-  //- rjf: make and push block for root
-  //
+  //- rjf: push block for expression root
   {
     DF_EvalVizBlock *block = df_eval_viz_block_begin(arena, DF_EvalVizBlockKind_Root, parent_key, key, depth);
-    block->eval                        = eval;
+    block->string                      = string;
+    block->expr                        = expr;
     block->cfg_table                   = cfg_table;
-    block->string                      = eval_string;
     block->visual_idx_range            = r1u64(key.child_num-1, key.child_num+0);
     block->semantic_idx_range          = r1u64(key.child_num-1, key.child_num+0);
-    if(opt_member != 0)
-    {
-      block->member = e_type_member_copy(arena, opt_member);
-    }
     df_eval_viz_block_end(list_out, block);
   }
+  
+  //- rjf: determine view rule to generate children blocks
+  DF_CoreViewRuleSpec *expand_view_rule_spec = df_core_view_rule_spec_from_string(str8_lit("default"));
+  DF_CfgVal *expand_view_rule_cfg = &df_g_nil_cfg_val;
+  if(parent_is_expanded)
+  {
+    for(DF_CfgVal *val = cfg_table->first_val;
+        val != 0 && val != &df_g_nil_cfg_val;
+        val = val->linear_next)
+    {
+      DF_CoreViewRuleSpec *spec = df_core_view_rule_spec_from_string(val->string);
+      if(spec->info.flags & DF_CoreViewRuleSpecInfoFlag_VizBlockProd)
+      {
+        expand_view_rule_spec = spec;
+        expand_view_rule_cfg = val;
+        break;
+      }
+    }
+  }
+  
+  //- rjf: do view rule children block generation, if we have an applicable view rule
+  if(parent_is_expanded && expand_view_rule_spec != &df_g_nil_core_view_rule_spec)
+  {
+    expand_view_rule_spec->info.viz_block_prod(arena, eval_view, parent_key, key, node, string, expr, cfg_table, depth+1, expand_view_rule_cfg, list_out);
+  }
+  
+  scratch_end(scratch);
+  ProfEnd();
+  
+  //-
+  //-
+  //-
+  // TODO(rjf): OLD vvvvvvvvvvvvvvvvvvvv
+#if 0
   
   //////////////////////////////
   //- rjf: (pointers) extract type & info to use for members and/or arrays
@@ -4975,6 +5077,7 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DF_EvalView *eval_view, DF_Ex
   
   scratch_end(scratch);
   ProfEnd();
+#endif
 }
 
 internal DF_EvalVizBlockList
@@ -4983,9 +5086,11 @@ df_eval_viz_block_list_from_eval_view_expr_keys(Arena *arena, DF_EvalView *eval_
   ProfBeginFunction();
   DF_EvalVizBlockList blocks = {0};
   {
-    E_Eval eval = e_eval_from_string(arena, expr);
-    U64 expr_comma_pos = str8_find_needle(expr, eval.advance, str8_lit(","), 0);
-    U64 passthrough_pos = str8_find_needle(expr, eval.advance, str8_lit("--"), 0);
+    E_TokenArray tokens = e_token_array_from_text(arena, expr);
+    E_Parse parse = e_parse_expr_from_text_tokens(arena, expr, &tokens);
+    U64 parse_opl = parse.last_token >= tokens.v + tokens.count ? expr.size : parse.last_token->range.min;
+    U64 expr_comma_pos = str8_find_needle(expr, parse_opl, str8_lit(","), 0);
+    U64 passthrough_pos = str8_find_needle(expr, parse_opl, str8_lit("--"), 0);
     String8List default_view_rules = {0};
     if(expr_comma_pos < expr.size && expr_comma_pos < passthrough_pos)
     {
@@ -5017,13 +5122,13 @@ df_eval_viz_block_list_from_eval_view_expr_keys(Arena *arena, DF_EvalView *eval_
       }
     }
     String8 view_rule_string = df_eval_view_rule_from_key(eval_view, key);
-    DF_CfgTable view_rule_table = {0};
+    DF_CfgTable *view_rule_table = push_array(arena, DF_CfgTable, 1);
     for(String8Node *n = default_view_rules.first; n != 0; n = n->next)
     {
-      df_cfg_table_push_unparsed_string(arena, &view_rule_table, n->string, DF_CfgSrc_User);
+      df_cfg_table_push_unparsed_string(arena, view_rule_table, n->string, DF_CfgSrc_User);
     }
-    df_cfg_table_push_unparsed_string(arena, &view_rule_table, view_rule_string, DF_CfgSrc_User);
-    df_append_viz_blocks_for_parent__rec(arena, eval_view, parent_key, key, expr, eval, 0, &view_rule_table, 0, &blocks);
+    df_cfg_table_push_unparsed_string(arena, view_rule_table, view_rule_string, DF_CfgSrc_User);
+    df_append_viz_blocks_for_parent__rec(arena, eval_view, parent_key, key, expr, parse.expr, view_rule_table, 0, &blocks);
   }
   ProfEnd();
   return blocks;
@@ -5146,10 +5251,145 @@ df_parent_key_from_viz_block_list_row_num(DF_EvalVizBlockList *blocks, S64 row_n
   return key;
 }
 
+//- rjf: viz block * index -> expression
+
+internal E_Expr *
+df_expr_from_eval_viz_block_index(Arena *arena, DF_EvalVizBlock *block, U64 index)
+{
+  E_Expr *result = block->expr;
+  switch(block->kind)
+  {
+    default:{}break;
+    case DF_EvalVizBlockKind_Members:
+    {
+      E_MemberArray *members = &block->members;
+      if(index < members->count)
+      {
+        E_Member *member = &members->v[index];
+        E_Expr *dot_expr = e_expr_ref_member_access(arena, block->expr, member->name);
+        result = dot_expr;
+      }
+    }break;
+    case DF_EvalVizBlockKind_EnumMembers:
+    {
+      E_EnumValArray *enum_vals = &block->enum_vals;
+      if(index < enum_vals->count)
+      {
+        E_EnumVal *val = &enum_vals->v[index];
+        E_Expr *dot_expr = e_expr_ref_member_access(arena, block->expr, val->name);
+        result = dot_expr;
+      }
+    }break;
+    case DF_EvalVizBlockKind_Elements:
+    {
+      E_Expr *idx_expr = e_expr_ref_array_index(arena, block->expr, index);
+      result = idx_expr;
+    }break;
+    case DF_EvalVizBlockKind_DebugInfoTable:
+    {
+      // rjf: unpack row info
+      FZY_Item *item = &block->fzy_backing_items.v[index];
+      DF_ExpandKey parent_key = block->parent_key;
+      DF_ExpandKey key = block->key;
+      key.child_num = block->fzy_backing_items.v[index].idx;
+      
+      // rjf: determine module to which this item belongs
+      E_Module *module = e_parse_ctx->primary_module;
+      U64 base_idx = 0;
+      {
+        for(U64 module_idx = 0; module_idx < e_parse_ctx->modules_count; module_idx += 1)
+        {
+          U64 all_items_count = 0;
+          rdi_section_raw_table_from_kind(e_parse_ctx->modules[module_idx].rdi, block->fzy_target, &all_items_count);
+          if(base_idx <= item->idx && item->idx < base_idx + all_items_count)
+          {
+            module = &e_parse_ctx->modules[module_idx];
+            break;
+          }
+          base_idx += all_items_count;
+        }
+      }
+      
+      // rjf: build expr
+      E_Expr *item_expr = &e_expr_nil;
+      {
+        RDI_SectionKind section = block->fzy_target;
+        U64 element_idx = block->fzy_backing_items.v[index].idx - base_idx;
+        switch(section)
+        {
+          default:{}break;
+          case RDI_SectionKind_Procedures:
+          {
+            RDI_Procedure *procedure = rdi_element_from_name_idx(module->rdi, Procedures, element_idx);
+            RDI_Scope *scope = rdi_element_from_name_idx(module->rdi, Scopes, procedure->root_scope_idx);
+            U64 voff = *rdi_element_from_name_idx(module->rdi, ScopeVOffData, scope->voff_range_first);
+            E_OpList oplist = {0};
+            e_oplist_push_op(arena, &oplist, RDI_EvalOp_ModuleOff, voff);
+            String8 bytecode = e_bytecode_from_oplist(arena, &oplist);
+            U32 type_idx = procedure->type_idx;
+            RDI_TypeNode *type_node = rdi_element_from_name_idx(module->rdi, TypeNodes, type_idx);
+            E_TypeKey type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), type_idx, (U32)(module - e_parse_ctx->modules));
+            item_expr = e_push_expr(arena, E_ExprKind_LeafBytecode, 0);
+            item_expr->mode     = E_Mode_Offset;
+            item_expr->space    = module->space;
+            item_expr->type_key = type_key;
+            item_expr->bytecode = bytecode;
+            item_expr->string.str = rdi_string_from_idx(module->rdi, procedure->name_string_idx, &item_expr->string.size);
+          }break;
+          case RDI_SectionKind_GlobalVariables:
+          {
+            RDI_GlobalVariable *gvar = rdi_element_from_name_idx(module->rdi, GlobalVariables, element_idx);
+            U64 voff = gvar->voff;
+            E_OpList oplist = {0};
+            e_oplist_push_op(arena, &oplist, RDI_EvalOp_ModuleOff, voff);
+            String8 bytecode = e_bytecode_from_oplist(arena, &oplist);
+            U32 type_idx = gvar->type_idx;
+            RDI_TypeNode *type_node = rdi_element_from_name_idx(module->rdi, TypeNodes, type_idx);
+            E_TypeKey type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), type_idx, (U32)(module - e_parse_ctx->modules));
+            item_expr = e_push_expr(arena, E_ExprKind_LeafBytecode, 0);
+            item_expr->mode     = E_Mode_Offset;
+            item_expr->space    = module->space;
+            item_expr->type_key = type_key;
+            item_expr->bytecode = bytecode;
+            item_expr->string.str = rdi_string_from_idx(module->rdi, gvar->name_string_idx, &item_expr->string.size);
+          }break;
+          case RDI_SectionKind_ThreadVariables:
+          {
+            RDI_ThreadVariable *tvar = rdi_element_from_name_idx(module->rdi, ThreadVariables, element_idx);
+            E_OpList oplist = {0};
+            e_oplist_push_op(arena, &oplist, RDI_EvalOp_TLSOff, tvar->tls_off);
+            String8 bytecode = e_bytecode_from_oplist(arena, &oplist);
+            U32 type_idx = tvar->type_idx;
+            RDI_TypeNode *type_node = rdi_element_from_name_idx(module->rdi, TypeNodes, type_idx);
+            E_TypeKey type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), type_idx, (U32)(module - e_parse_ctx->modules));
+            item_expr = e_push_expr(arena, E_ExprKind_LeafBytecode, 0);
+            item_expr->mode     = E_Mode_Offset;
+            item_expr->space    = module->space;
+            item_expr->type_key = type_key;
+            item_expr->bytecode = bytecode;
+            item_expr->string.str = rdi_string_from_idx(module->rdi, tvar->name_string_idx, &item_expr->string.size);
+          }break;
+          case RDI_SectionKind_UDTs:
+          {
+            RDI_UDT *udt = rdi_element_from_name_idx(module->rdi, UDTs, element_idx);
+            RDI_TypeNode *type_node = rdi_element_from_name_idx(module->rdi, TypeNodes, udt->self_type_idx);
+            E_TypeKey type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), udt->self_type_idx, (U32)(module - e_parse_ctx->modules));
+            item_expr = e_push_expr(arena, E_ExprKind_TypeIdent, 0);
+            item_expr->type_key = type_key;
+          }break;
+        }
+      }
+      
+      result = item_expr;
+    }break;
+  }
+  return result;
+}
+
 //- rjf: viz row list building
 
 internal DF_EvalVizRow *
-df_eval_viz_row_list_push_new(Arena *arena, DF_EvalView *eval_view, DF_EvalVizWindowedRowList *rows, DF_EvalVizBlock *block, DF_ExpandKey key, E_Eval eval)
+df_eval_viz_row_list_push_new(Arena *arena, DF_EvalView *eval_view, DF_EvalVizWindowedRowList *rows, DF_EvalVizBlock *block, DF_ExpandKey key, E_Expr *expr)
 {
   // rjf: push
   DF_EvalVizRow *row = push_array(arena, DF_EvalVizRow, 1);
@@ -5160,48 +5400,9 @@ df_eval_viz_row_list_push_new(Arena *arena, DF_EvalView *eval_view, DF_EvalVizWi
   row->depth        = block->depth;
   row->parent_key   = block->parent_key;
   row->key          = key;
-  row->eval         = eval;
   row->size_in_rows = 1;
-  
-  // rjf: determine exandability, editability
-  if(e_type_kind_from_key(eval.type_key) != E_TypeKind_Null)
-  {
-    for(E_TypeKey t = eval.type_key;; t = e_type_unwrap(e_type_direct_from_key(e_type_unwrap(t))))
-    {
-      E_TypeKind kind = e_type_kind_from_key(t);
-      if(kind == E_TypeKind_Null)
-      {
-        break;
-      }
-      if(eval.mode != E_Mode_Null && ((E_TypeKind_FirstBasic <= kind && kind <= E_TypeKind_LastBasic) || kind == E_TypeKind_Ptr || kind == E_TypeKind_LRef || kind == E_TypeKind_RRef))
-      {
-        row->flags |= DF_EvalVizRowFlag_CanEditValue;
-      }
-      if(eval.mode == E_Mode_Null && kind == E_TypeKind_Enum)
-      {
-        row->flags |= DF_EvalVizRowFlag_CanExpand;
-      }
-      if(kind == E_TypeKind_Struct ||
-         kind == E_TypeKind_Union ||
-         kind == E_TypeKind_Class ||
-         kind == E_TypeKind_Array)
-      {
-        row->flags |= DF_EvalVizRowFlag_CanExpand;
-      }
-      if(row->flags & DF_EvalVizRowFlag_CanExpand)
-      {
-        break;
-      }
-      if(eval.mode == E_Mode_Null)
-      {
-        break;
-      }
-      if(kind == E_TypeKind_Function)
-      {
-        break;
-      }
-    }
-  }
+  row->string       = block->string;
+  row->expr         = expr;
   
   // rjf: fill view-rule-derived info
   {
@@ -5258,7 +5459,6 @@ df_eval_viz_row_list_push_new(Arena *arena, DF_EvalView *eval_view, DF_EvalVizWi
     }
     
     // rjf: fill
-    if(expandability_required) { row->flags |= DF_EvalVizRowFlag_CanExpand; }
     row->cfg_table = cfg_table;
     row->value_ui_rule_node = value_ui_rule_node;
     row->value_ui_rule_spec = value_ui_rule_spec;
@@ -5267,6 +5467,183 @@ df_eval_viz_row_list_push_new(Arena *arena, DF_EvalView *eval_view, DF_EvalVizWi
   }
   
   return row;
+}
+
+internal DF_EvalVizWindowedRowList
+df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DF_EvalView *eval_view, Rng1S64 visible_range, DF_EvalVizBlockList *blocks)
+{
+  ProfBeginFunction();
+  Temp scratch = scratch_begin(&arena, 1);
+  
+  //////////////////////////////
+  //- rjf: produce windowed rows, per block
+  //
+  U64 visual_idx_off = 0;
+  U64 semantic_idx_off = 0;
+  DF_EvalVizWindowedRowList list = {0};
+  for(DF_EvalVizBlockNode *n = blocks->first; n != 0; n = n->next)
+  {
+    DF_EvalVizBlock *block = &n->v;
+    
+    //////////////////////////////
+    //- rjf: extract block info
+    //
+    U64 block_num_visual_rows     = dim_1u64(block->visual_idx_range);
+    U64 block_num_semantic_rows   = dim_1u64(block->semantic_idx_range);
+    Rng1S64 block_visual_range    = r1s64(visual_idx_off, visual_idx_off + block_num_visual_rows);
+    Rng1S64 block_semantic_range  = r1s64(semantic_idx_off, semantic_idx_off + block_num_semantic_rows);
+    
+    //////////////////////////////
+    //- rjf: get skip/chop of block's index range
+    //
+    U64 num_skipped_visual = 0;
+    U64 num_chopped_visual = 0;
+    {
+      if(visible_range.min > block_visual_range.min)
+      {
+        num_skipped_visual = (visible_range.min - block_visual_range.min);
+        num_skipped_visual = Min(num_skipped_visual, block_num_visual_rows);
+      }
+      if(visible_range.max < block_visual_range.max)
+      {
+        num_chopped_visual = (block_visual_range.max - visible_range.max);
+        num_chopped_visual = Min(num_chopped_visual, block_num_visual_rows);
+      }
+    }
+    
+    //////////////////////////////
+    //- rjf: get visible idx range & invisible counts
+    //
+    Rng1U64 visible_idx_range = block->visual_idx_range;
+    {
+      visible_idx_range.min += num_skipped_visual;
+      visible_idx_range.max -= num_chopped_visual;
+    }
+    
+    //////////////////////////////
+    //- rjf: sum & advance
+    //
+    list.count_before_visual += num_skipped_visual;
+    if(block_num_visual_rows != 0)
+    {
+      list.count_before_semantic += block_num_semantic_rows * num_skipped_visual / block_num_visual_rows;
+    }
+    visual_idx_off += block_num_visual_rows;
+    semantic_idx_off += block_num_semantic_rows;
+    
+    //////////////////////////////
+    //- rjf: produce rows, depending on block's kind
+    //
+    if(visible_idx_range.max > visible_idx_range.min) switch(block->kind)
+    {
+      default:{}break;
+      
+      //////////////////////////////
+      //- rjf: single rows, piping in info from the originating block
+      //
+      case DF_EvalVizBlockKind_Null:
+      case DF_EvalVizBlockKind_Root:
+      {
+        df_eval_viz_row_list_push_new(arena, eval_view, &list, block, block->key, block->expr);
+      }break;
+      
+      //////////////////////////////
+      //- rjf: canvas -> produce blank row, sized by the idx range specified in the block
+      //
+      case DF_EvalVizBlockKind_Canvas:
+      if(num_skipped_visual < block_num_visual_rows)
+      {
+        DF_ExpandKey key = df_expand_key_make(df_hash_from_expand_key(block->parent_key), 1);
+        DF_EvalVizRow *row = df_eval_viz_row_list_push_new(arena, eval_view, &list, block, key, block->expr);
+        row->size_in_rows        = dim_1u64(intersect_1u64(visible_idx_range, r1u64(0, dim_1u64(block->visual_idx_range))));
+        row->skipped_size_in_rows= (visible_idx_range.min > block->visual_idx_range.min) ? visible_idx_range.min - block->visual_idx_range.min : 0;
+        row->chopped_size_in_rows= (visible_idx_range.max < block->visual_idx_range.max) ? block->visual_idx_range.max - visible_idx_range.max : 0;
+      }break;
+      
+      //////////////////////////////
+      //- rjf: all elements of a debug info table -> produce rows for visible range
+      //
+      case DF_EvalVizBlockKind_DebugInfoTable:
+      for(U64 idx = visible_idx_range.min; idx < visible_idx_range.max; idx += 1)
+      {
+        FZY_Item *item = &block->fzy_backing_items.v[idx];
+        DF_ExpandKey parent_key = block->parent_key;
+        DF_ExpandKey key = block->key;
+        key.child_num = block->fzy_backing_items.v[idx].idx;
+        E_Expr *row_expr = df_expr_from_eval_viz_block_index(arena, block, idx);
+        df_eval_viz_row_list_push_new(arena, eval_view, &list, block, key, row_expr);
+      }break;
+      
+      //////////////////////////////
+      //- rjf: members/elements/enum-members
+      //
+      case DF_EvalVizBlockKind_Members:
+      case DF_EvalVizBlockKind_EnumMembers:
+      case DF_EvalVizBlockKind_Elements:
+      {
+        for(U64 idx = visible_idx_range.min; idx < visible_idx_range.max; idx += 1)
+        {
+          DF_ExpandKey key = df_expand_key_make(df_hash_from_expand_key(block->parent_key), idx+1);
+          E_Expr *expr = df_expr_from_eval_viz_block_index(arena, block, idx);
+          df_eval_viz_row_list_push_new(arena, eval_view, &list, block, key, expr);
+        }
+      }break;
+    }
+  }
+  scratch_end(scratch);
+  ProfEnd();
+  return list;
+}
+
+//- rjf: viz row -> strings
+
+internal String8
+df_expr_string_from_viz_row(Arena *arena, DF_EvalVizRow *row)
+{
+  String8 result = row->string;
+  if(result.size == 0) switch(row->expr->kind)
+  {
+    default:
+    {
+      result = e_string_from_expr(arena, row->expr);
+    }break;
+    case E_ExprKind_ArrayIndex:
+    {
+      result = push_str8f(arena, "[%S]", e_string_from_expr(arena, row->expr->last));
+    }break;
+    case E_ExprKind_LeafMember:
+    {
+      result = push_str8f(arena, ".%S", e_string_from_expr(arena, row->expr->last));
+    }break;
+  }
+  return result;
+}
+
+//- rjf: viz row -> expandability/editability
+
+internal B32
+df_viz_row_is_expandable(DF_EvalVizRow *row)
+{
+  B32 result = (row->expand_ui_rule_spec != &df_g_nil_gfx_view_rule_spec && row->expand_ui_rule_spec != 0);
+  if(!result)
+  {
+    Temp scratch = scratch_begin(0, 0);
+    E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, row->expr);
+    result = df_type_key_is_expandable(irtree.type_key);
+    scratch_end(scratch);
+  }
+  return result;
+}
+
+internal B32
+df_viz_row_is_editable(DF_EvalVizRow *row)
+{
+  B32 result = 0;
+  Temp scratch = scratch_begin(0, 0);
+  E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, row->expr);
+  result = df_type_key_is_editable(irtree.type_key);
+  scratch_end(scratch);
+  return result;
 }
 
 ////////////////////////////////

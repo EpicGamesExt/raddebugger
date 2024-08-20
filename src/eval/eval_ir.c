@@ -387,6 +387,12 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
   {
     default:{}break;
     
+    //- rjf: references -> just descend to sub-expr
+    case E_ExprKind_Ref:
+    {
+      result = e_irtree_and_type_from_expr(arena, expr->ref);
+    }break;
+    
     //- rjf: array indices
     case E_ExprKind_ArrayIndex:
     {
@@ -1093,7 +1099,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
     //- rjf: leaf bytecode
     case E_ExprKind_LeafBytecode:
     {
-      E_IRNode *new_tree = e_irtree_bytecode_no_copy(arena, expr->string);
+      E_IRNode *new_tree = e_irtree_bytecode_no_copy(arena, expr->bytecode);
       E_TypeKey final_type_key = expr->type_key;
       result.root     = new_tree;
       result.type_key = final_type_key;

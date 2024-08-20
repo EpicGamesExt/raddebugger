@@ -91,6 +91,7 @@ typedef U32 E_ExprKind;
 typedef enum E_ExprKindEnum
 {
 E_ExprKind_Nil,
+E_ExprKind_Ref,
 E_ExprKind_ArrayIndex,
 E_ExprKind_MemberAccess,
 E_ExprKind_Deref,
@@ -153,9 +154,9 @@ E_InterpretationCode_COUNT,
 
 C_LINKAGE_BEGIN
 extern String8 e_token_kind_strings[6];
-extern String8 e_expr_kind_strings[42];
+extern String8 e_expr_kind_strings[43];
 extern String8 e_interpretation_code_display_strings[11];
-extern String8 e_expr_op_strings[42];
+extern E_OpInfo e_expr_kind_op_info_table[43];
 extern U8 e_kind_basic_byte_size_table[55];
 extern String8 e_kind_basic_string_table[55];
 

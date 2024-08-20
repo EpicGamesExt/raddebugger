@@ -17,40 +17,6 @@ global read_only String8 e_multichar_symbol_strings[] =
   str8_lit_comp("||"),
 };
 
-global read_only struct {E_ExprKind kind; String8 string; S64 precedence;} e_unary_prefix_op_table[] =
-{
-  // { E_ExprKind_???, str8_lit_comp("+"), 2 },
-  { E_ExprKind_Neg,    str8_lit_comp("-"),      2 },
-  { E_ExprKind_LogNot, str8_lit_comp("!"),      2 },
-  { E_ExprKind_Deref,  str8_lit_comp("*"),      2 },
-  { E_ExprKind_Address,str8_lit_comp("&"),      2 },
-  { E_ExprKind_Sizeof, str8_lit_comp("sizeof"), 2 },
-  // { E_ExprKind_Alignof, str8_lit_comp("_Alignof"), 2 },
-};
-
-global read_only struct {E_ExprKind kind; String8 string; S64 precedence;} e_binary_op_table[] =
-{
-  { E_ExprKind_Mul,    str8_lit_comp("*"),  3  },
-  { E_ExprKind_Div,    str8_lit_comp("/"),  3  },
-  { E_ExprKind_Mod,    str8_lit_comp("%"),  3  },
-  { E_ExprKind_Add,    str8_lit_comp("+"),  4  },
-  { E_ExprKind_Sub,    str8_lit_comp("-"),  4  },
-  { E_ExprKind_LShift, str8_lit_comp("<<"), 5  },
-  { E_ExprKind_RShift, str8_lit_comp(">>"), 5  },
-  { E_ExprKind_Less,   str8_lit_comp("<"),  6  },
-  { E_ExprKind_LsEq,   str8_lit_comp("<="), 6  },
-  { E_ExprKind_Grtr,   str8_lit_comp(">"),  6  },
-  { E_ExprKind_GrEq,   str8_lit_comp(">="), 6  },
-  { E_ExprKind_EqEq,   str8_lit_comp("=="), 7  },
-  { E_ExprKind_NtEq,   str8_lit_comp("!="), 7  },
-  { E_ExprKind_BitAnd, str8_lit_comp("&"),  8  },
-  { E_ExprKind_BitXor, str8_lit_comp("^"),  9  },
-  { E_ExprKind_BitOr,  str8_lit_comp("|"),  10 },
-  { E_ExprKind_LogAnd, str8_lit_comp("&&"), 11 },
-  { E_ExprKind_LogOr,  str8_lit_comp("||"), 12 },
-  { E_ExprKind_Define, str8_lit_comp("="),  13 },
-};
-
 global read_only S64 e_max_precedence = 15;
 
 ////////////////////////////////
@@ -676,7 +642,7 @@ internal E_Expr *
 e_push_expr(Arena *arena, E_ExprKind kind, void *location)
 {
   E_Expr *e = push_array(arena, E_Expr, 1);
-  e->first = e->last = e->next = &e_expr_nil;
+  e->first = e->last = e->next = e->ref = &e_expr_nil;
   e->location = location;
   e->kind = kind;
   return e;
@@ -686,6 +652,124 @@ internal void
 e_expr_push_child(E_Expr *parent, E_Expr *child)
 {
   SLLQueuePush_NZ(&e_expr_nil, parent->first, parent->last, child, next);
+}
+
+internal E_Expr *
+e_expr_ref(Arena *arena, E_Expr *ref)
+{
+  E_Expr *expr = e_push_expr(arena, E_ExprKind_Ref, 0);
+  expr->ref = ref;
+  return expr;
+}
+
+internal E_Expr *
+e_expr_ref_member_access(Arena *arena, E_Expr *lhs, String8 member_name)
+{
+  E_Expr *root = e_push_expr(arena, E_ExprKind_MemberAccess, 0);
+  E_Expr *lhs_ref = e_expr_ref(arena, lhs);
+  E_Expr *rhs = e_push_expr(arena, E_ExprKind_LeafMember, 0);
+  rhs->string = push_str8_copy(arena, member_name);
+  e_expr_push_child(root, lhs_ref);
+  e_expr_push_child(root, rhs);
+  return root;
+}
+
+internal E_Expr *
+e_expr_ref_array_index(Arena *arena, E_Expr *lhs, U64 index)
+{
+  E_Expr *root = e_push_expr(arena, E_ExprKind_ArrayIndex, 0);
+  E_Expr *lhs_ref = e_expr_ref(arena, lhs);
+  E_Expr *rhs = e_push_expr(arena, E_ExprKind_LeafU64, 0);
+  rhs->u64 = index;
+  e_expr_push_child(root, lhs_ref);
+  e_expr_push_child(root, rhs);
+  return root;
+}
+
+internal E_Expr *
+e_expr_ref_deref(Arena *arena, E_Expr *rhs)
+{
+  E_Expr *root = e_push_expr(arena, E_ExprKind_Deref, 0);
+  E_Expr *rhs_ref = e_expr_ref(arena, rhs);
+  e_expr_push_child(root, rhs_ref);
+  return rhs_ref;
+}
+
+////////////////////////////////
+//~ rjf: Expression Tree -> String Conversions
+
+internal void
+e_append_strings_from_expr(Arena *arena, E_Expr *expr, String8List *out)
+{
+  switch(expr->kind)
+  {
+    default:
+    {
+      E_OpInfo *op_info = &e_expr_kind_op_info_table[expr->kind];
+      String8 seps[] =
+      {
+        op_info->pre,
+        op_info->sep,
+        op_info->post,
+      };
+      U64 idx = 0;
+      for(E_Expr *child = expr->first; child != &e_expr_nil; child = child->next, idx += 1)
+      {
+        if(seps[idx].size != 0)
+        {
+          str8_list_push(arena, out, seps[idx]);
+        }
+        E_OpInfo *child_op_info = &e_expr_kind_op_info_table[child->kind];
+        B32 need_parens = (child_op_info->precedence > op_info->precedence);
+        if(need_parens)
+        {
+          str8_list_pushf(arena, out, "(");
+        }
+        e_append_strings_from_expr(arena, child, out);
+        if(need_parens)
+        {
+          str8_list_pushf(arena, out, ")");
+        }
+      }
+    }break;
+    case E_ExprKind_LeafBytecode:
+    case E_ExprKind_LeafMember:
+    case E_ExprKind_LeafIdent:
+    {
+      str8_list_push(arena, out, expr->string);
+    }break;
+    case E_ExprKind_LeafStringLiteral:
+    {
+      str8_list_pushf(arena, out, "\"%S\"", expr->string);
+    }break;
+    case E_ExprKind_LeafU64:
+    case E_ExprKind_LeafID:
+    {
+      str8_list_pushf(arena, out, "0x%I64x", expr->u64);
+    }break;
+    case E_ExprKind_LeafF64:
+    {
+      str8_list_pushf(arena, out, "%f", expr->f64);
+    }break;
+    case E_ExprKind_LeafF32:
+    {
+      str8_list_pushf(arena, out, "%f", expr->f32);
+    }break;
+    case E_ExprKind_TypeIdent:
+    {
+      String8 type_string = e_type_string_from_key(arena, expr->type_key);
+      str8_list_push(arena, out, type_string);
+    }break;
+  }
+}
+
+internal String8
+e_string_from_expr(Arena *arena, E_Expr *expr)
+{
+  String8List strings = {0};
+  e_append_strings_from_expr(arena, expr, &strings);
+  String8 result = str8_list_join(arena, &strings, 0);
+  return result;
 }
 
 ////////////////////////////////
@@ -966,12 +1050,13 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
       void *location = 0;
       
       // rjf: try op table
-      for(U64 idx = 0; idx < ArrayCount(e_unary_prefix_op_table); idx += 1)
+      for(EachNonZeroEnumVal(E_ExprKind, k))
       {
-        if(str8_match(token_string, e_unary_prefix_op_table[idx].string, 0))
+        E_OpInfo *op_info = &e_expr_kind_op_info_table[k];
+        if(op_info->kind == E_OpKind_UnaryPrefix && str8_match(op_info->pre, token_string, 0))
         {
-          prefix_unary_precedence = e_unary_prefix_op_table[idx].precedence;
-          prefix_unary_kind = e_unary_prefix_op_table[idx].kind;
+          prefix_unary_precedence = op_info->precedence;
+          prefix_unary_kind = k;
           break;
         }
       }
@@ -1445,7 +1530,8 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
                   atom->mode     = E_Mode_Offset;
                   atom->space    = space;
                   atom->type_key = type_key;
-                  atom->string   = e_bytecode_from_oplist(arena, &oplist);
+                  atom->string   = token_string;
+                  atom->bytecode = e_bytecode_from_oplist(arena, &oplist);
                 }
                 else if(alias_code != 0)
                 {
@@ -1457,7 +1543,8 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
                   atom->mode     = E_Mode_Offset;
                   atom->space    = space;
                   atom->type_key = type_key;
-                  atom->string   = e_bytecode_from_oplist(arena, &oplist);
+                  atom->string   = token_string;
+                  atom->bytecode = e_bytecode_from_oplist(arena, &oplist);
                 }
                 else
                 {
@@ -1470,7 +1557,8 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
                 atom->mode     = E_Mode_Offset;
                 atom->space    = space;
                 atom->type_key = type_key;
-                atom->string   = loc_bytecode;
+                atom->string   = token_string;
+                atom->bytecode = loc_bytecode;
               }break;
               case RDI_LocationKind_ValBytecodeStream:
               {
@@ -1478,7 +1566,8 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
                 atom->mode     = E_Mode_Value;
                 atom->space    = space;
                 atom->type_key = type_key;
-                atom->string   = loc_bytecode;
+                atom->string   = token_string;
+                atom->bytecode = loc_bytecode;
               }break;
               case RDI_LocationKind_AddrRegPlusU16:
               {
@@ -1492,7 +1581,8 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
                 atom->mode     = E_Mode_Offset;
                 atom->space    = space;
                 atom->type_key = type_key;
-                atom->string   = e_bytecode_from_oplist(arena, &oplist);
+                atom->string   = token_string;
+                atom->bytecode = e_bytecode_from_oplist(arena, &oplist);
               }break;
               case RDI_LocationKind_AddrAddrRegPlusU16:
               {
@@ -1507,7 +1597,8 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
                 atom->mode     = E_Mode_Offset;
                 atom->space    = space;
                 atom->type_key = type_key;
-                atom->string   = e_bytecode_from_oplist(arena, &oplist);
+                atom->string   = token_string;
+                atom->bytecode = e_bytecode_from_oplist(arena, &oplist);
               }break;
               case RDI_LocationKind_ValReg:
               {
@@ -1522,7 +1613,8 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
                 atom->mode     = E_Mode_Value;
                 atom->space    = space;
                 atom->type_key = type_key;
-                atom->string   = e_bytecode_from_oplist(arena, &oplist);
+                atom->string   = token_string;
+                atom->bytecode = e_bytecode_from_oplist(arena, &oplist);
               }break;
             }
             
@@ -1763,12 +1855,13 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
       // rjf: first try to find a matching binary operator
       S64 binary_precedence = 0;
       E_ExprKind binary_kind = 0;
-      for(U64 idx = 0; idx < ArrayCount(e_binary_op_table); idx += 1)
+      for(EachNonZeroEnumVal(E_ExprKind, k))
       {
-        if(str8_match(token_string, e_binary_op_table[idx].string, 0))
+        E_OpInfo *op_info = &e_expr_kind_op_info_table[k];
+        if(op_info->kind == E_OpKind_Binary && str8_match(op_info->sep, token_string, 0))
         {
-          binary_precedence = e_binary_op_table[idx].precedence;
-          binary_kind = e_binary_op_table[idx].kind;
+          binary_precedence = op_info->precedence;
+          binary_kind = k;
           break;
         }
       }

@@ -37,6 +37,27 @@ struct E_MsgList
 };
 
 ////////////////////////////////
+//~ rjf: Operator Info
+
+typedef enum E_OpKind
+{
+  E_OpKind_Null,
+  E_OpKind_UnaryPrefix,
+  E_OpKind_Binary,
+}
+E_OpKind;
+
+typedef struct E_OpInfo E_OpInfo;
+struct E_OpInfo
+{
+  E_OpKind kind;
+  S64 precedence;
+  String8 pre;
+  String8 sep;
+  String8 post;
+};
+
+////////////////////////////////
 //~ rjf: Evaluation Spaces
 
 typedef U64 E_Space;

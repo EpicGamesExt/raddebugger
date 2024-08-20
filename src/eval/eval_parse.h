@@ -53,6 +53,7 @@ struct E_Expr
   E_Expr *first;
   E_Expr *last;
   E_Expr *next;
+  E_Expr *ref;
   void *location;
   E_ExprKind kind;
   E_Mode mode;
@@ -63,6 +64,7 @@ struct E_Expr
   U64 u64;
   F64 f64;
   String8 string;
+  String8 bytecode;
 };
 
 ////////////////////////////////
@@ -218,6 +220,17 @@ internal U32 e_parse_ctx_module_idx_from_rdi(RDI_Parsed *rdi);
 
 internal E_Expr *e_push_expr(Arena *arena, E_ExprKind kind, void *location);
 internal void e_expr_push_child(E_Expr *parent, E_Expr *child);
+
+internal E_Expr *e_expr_ref(Arena *arena, E_Expr *ref);
+internal E_Expr *e_expr_ref_member_access(Arena *arena, E_Expr *lhs, String8 member_name);
+internal E_Expr *e_expr_ref_array_index(Arena *arena, E_Expr *lhs, U64 index);
+internal E_Expr *e_expr_ref_deref(Arena *arena, E_Expr *rhs);
+
+////////////////////////////////
+//~ rjf: Expression Tree -> String Conversions
+
+internal void e_append_strings_from_expr(Arena *arena, E_Expr *expr, String8List *out);
+internal String8 e_string_from_expr(Arena *arena, E_Expr *expr);
 
 ////////////////////////////////
 //~ rjf: Parsing Functions

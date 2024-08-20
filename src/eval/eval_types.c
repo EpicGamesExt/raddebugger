@@ -156,6 +156,13 @@ e_type_kind_is_basic_or_enum(E_TypeKind kind)
   return result;
 }
 
+internal B32
+e_type_kind_is_pointer_or_ref(E_TypeKind kind)
+{
+  B32 result = (kind == E_TypeKind_Ptr || kind == E_TypeKind_LRef || kind == E_TypeKind_RRef);
+  return result;
+}
+
 ////////////////////////////////
 //~ rjf: Member Functions
 
@@ -1407,6 +1414,22 @@ e_type_data_members_from_key(Arena *arena, E_TypeKey key)
   
   scratch_end(scratch);
   return members;
+}
+
+internal E_Member *
+e_type_member_from_array_name(E_MemberArray *members, String8 name)
+{
+  E_Member *member = 0;
+  for(U64 idx = 0; idx < members->count; idx += 1)
+  {
+    if(members->v[idx].kind == E_MemberKind_DataField &&
+       str8_match(members->v[idx].name, name, 0))
+    {
+      member = &members->v[idx];
+      break;
+    }
+  }
+  return member;
 }
 
 internal void

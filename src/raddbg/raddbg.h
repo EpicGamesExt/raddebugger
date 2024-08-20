@@ -5,6 +5,7 @@
 //~ rjf: Frontend/UI Pass Tasks
 //
 // [x] fix HRESULTs
+// [ ] fix escape char literals
 //
 // [ ] fix selecting hover eval, then hover eval disappearing, causing
 //     busted focus, until a new hover eval is opened

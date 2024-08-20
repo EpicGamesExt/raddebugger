@@ -2,6 +2,173 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
+//~ rjf: "default"
+
+DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(default)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  
+  ////////////////////////////
+  //- rjf: unpack expression type info
+  //
+  E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, expr);
+  E_TypeKey type_key = e_type_unwrap(irtree.type_key);
+  E_TypeKind type_kind = e_type_kind_from_key(type_key);
+  E_TypeKey direct_type_key = e_type_unwrap(e_type_direct_from_key(type_key));
+  E_TypeKind direct_type_kind = e_type_kind_from_key(direct_type_key);
+  
+  ////////////////////////////
+  //- rjf: do struct/union/class member block generation
+  //
+  if((type_kind == E_TypeKind_Struct ||
+      type_kind == E_TypeKind_Union ||
+      type_kind == E_TypeKind_Class) ||
+     (e_type_kind_is_pointer_or_ref(type_kind) && (direct_type_kind == E_TypeKind_Struct ||
+                                                   direct_type_kind == E_TypeKind_Union ||
+                                                   direct_type_kind == E_TypeKind_Class)))
+  {
+    // rjf: type -> filtered data members
+    E_MemberArray data_members = e_type_data_members_from_key(scratch.arena, e_type_kind_is_pointer_or_ref(type_kind) ? direct_type_key : type_key);
+    E_MemberArray filtered_data_members = df_filtered_data_members_from_members_cfg_table(arena, data_members, cfg_table);
+    
+    // rjf: build blocks for all members, split by sub-expansions
+    DF_EvalVizBlock *last_vb = df_eval_viz_block_begin(arena, DF_EvalVizBlockKind_Members, key, df_expand_key_make(df_hash_from_expand_key(key), 0), depth+1);
+    {
+      last_vb->expr             = expr;
+      last_vb->cfg_table        = cfg_table;
+      last_vb->visual_idx_range = last_vb->semantic_idx_range = r1u64(0, filtered_data_members.count);
+      last_vb->members          = filtered_data_members;
+    }
+    for(DF_ExpandNode *child = expand_node->first; child != 0; child = child->next)
+    {
+      // rjf: unpack expansion info; skip out-of-bounds splits
+      U64 child_num = child->key.child_num;
+      U64 child_idx = child_num-1;
+      E_Expr *child_expr = df_expr_from_eval_viz_block_index(arena, last_vb, child_idx);
+      if(child_idx >= last_vb->semantic_idx_range.max)
+      {
+        continue;
+      }
+      
+      // rjf: form split: truncate & complete last block; begin next block
+      last_vb = df_eval_viz_block_split_and_continue(arena, out, last_vb, child_idx);
+      
+      // rjf: build child config table
+      DF_CfgTable *child_cfg_table = cfg_table;
+      {
+        String8 view_rule_string = df_eval_view_rule_from_key(eval_view, child->key);
+        if(view_rule_string.size != 0)
+        {
+          child_cfg_table = push_array(arena, DF_CfgTable, 1);
+          *child_cfg_table = df_cfg_table_from_inheritance(arena, cfg_table);
+          df_cfg_table_push_unparsed_string(arena, child_cfg_table, view_rule_string, DF_CfgSrc_User);
+        }
+      }
+      
+      // rjf: recurse for child
+      df_append_viz_blocks_for_parent__rec(arena, eval_view, key, child->key, str8_zero(), child_expr, child_cfg_table, depth+1, out);
+    }
+    df_eval_viz_block_end(out, last_vb);
+  }
+  
+  ////////////////////////////
+  //- rjf: do enum member block generation
+  //
+  // (just a single block for all enum members; enum members can never be expanded)
+  //
+  else if(type_kind == E_TypeKind_Enum ||
+          (e_type_kind_is_pointer_or_ref(type_kind) && direct_type_kind == E_TypeKind_Enum))
+  {
+    E_Type *type = e_type_from_key(arena, e_type_kind_is_pointer_or_ref(type_kind) ? direct_type_key : type_key);
+    DF_EvalVizBlock *last_vb = df_eval_viz_block_begin(arena, DF_EvalVizBlockKind_EnumMembers, key, df_expand_key_make(df_hash_from_expand_key(key), 0), depth+1);
+    {
+      last_vb->expr             = expr;
+      last_vb->cfg_table        = cfg_table;
+      last_vb->visual_idx_range = last_vb->semantic_idx_range = r1u64(0, type->count);
+      last_vb->enum_vals.v      = type->enum_vals;
+      last_vb->enum_vals.count  = type->count;
+    }
+    df_eval_viz_block_end(out, last_vb);
+  }
+  
+  ////////////////////////////
+  //- rjf: do array element block generation
+  //
+  else if(type_kind == E_TypeKind_Array ||
+          (e_type_kind_is_pointer_or_ref(type_kind) && direct_type_kind == E_TypeKind_Array))
+  {
+    // rjf: unpack array type info
+    E_Type *array_type = e_type_from_key(scratch.arena, e_type_kind_is_pointer_or_ref(type_kind) ? direct_type_key : type_key);
+    U64 array_count = array_type->count;
+    
+    // rjf: build blocks for all elements, split by sub-expansions
+    DF_EvalVizBlock *last_vb = df_eval_viz_block_begin(arena, DF_EvalVizBlockKind_Elements, key, df_expand_key_make(df_hash_from_expand_key(key), 0), depth+1);
+    {
+      last_vb->expr             = expr;
+      last_vb->cfg_table        = cfg_table;
+      last_vb->visual_idx_range = last_vb->semantic_idx_range = r1u64(0, array_count);
+    }
+    for(DF_ExpandNode *child = expand_node->first; child != 0; child = child->next)
+    {
+      // rjf: unpack expansion info; skip out-of-bounds splits
+      U64 child_num = child->key.child_num;
+      U64 child_idx = child_num-1;
+      E_Expr *child_expr = df_expr_from_eval_viz_block_index(arena, last_vb, child_idx);
+      if(child_idx >= last_vb->semantic_idx_range.max)
+      {
+        continue;
+      }
+      
+      // rjf: form split: truncate & complete last block; begin next block
+      last_vb = df_eval_viz_block_split_and_continue(arena, out, last_vb, child_idx);
+      
+      // rjf: build child config table
+      DF_CfgTable *child_cfg_table = cfg_table;
+      {
+        String8 view_rule_string = df_eval_view_rule_from_key(eval_view, child->key);
+        if(view_rule_string.size != 0)
+        {
+          child_cfg_table = push_array(arena, DF_CfgTable, 1);
+          *child_cfg_table = df_cfg_table_from_inheritance(arena, cfg_table);
+          df_cfg_table_push_unparsed_string(arena, child_cfg_table, view_rule_string, DF_CfgSrc_User);
+        }
+      }
+      
+      // rjf: recurse for child
+      df_append_viz_blocks_for_parent__rec(arena, eval_view, key, child->key, str8_zero(), child_expr, child_cfg_table, depth+1, out);
+    }
+    df_eval_viz_block_end(out, last_vb);
+  }
+  
+  ////////////////////////////
+  //- rjf: do pointer-to-pointer block generation
+  //
+  else if(e_type_kind_is_pointer_or_ref(type_kind) && e_type_kind_is_pointer_or_ref(direct_type_kind))
+  {
+    // rjf: compute key
+    DF_ExpandKey child_key = df_expand_key_make(df_hash_from_expand_key(key), 1);
+    
+    // rjf: build child config table
+    DF_CfgTable *child_cfg_table = cfg_table;
+    {
+      String8 view_rule_string = df_eval_view_rule_from_key(eval_view, child_key);
+      if(view_rule_string.size != 0)
+      {
+        child_cfg_table = push_array(arena, DF_CfgTable, 1);
+        *child_cfg_table = df_cfg_table_from_inheritance(arena, cfg_table);
+        df_cfg_table_push_unparsed_string(arena, child_cfg_table, view_rule_string, DF_CfgSrc_User);
+      }
+    }
+    
+    // rjf: recurse for child
+    E_Expr *child_expr = e_expr_ref_deref(arena, expr);
+    df_append_viz_blocks_for_parent__rec(arena, eval_view, key, child_key, str8_zero(), child_expr, child_cfg_table, depth+1, out);
+  }
+  
+  scratch_end(scratch);
+}
+
+////////////////////////////////
 //~ rjf: "array"
 
 DF_CORE_VIEW_RULE_EVAL_RESOLUTION_FUNCTION_DEF(array)
@@ -322,11 +489,11 @@ df_vr_eval_commit_rgba(E_Eval eval, Vec4F32 rgba)
 DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(rgba)
 {
   DF_EvalVizBlock *vb = df_eval_viz_block_begin(arena, DF_EvalVizBlockKind_Canvas, key, df_expand_key_make(df_hash_from_expand_key(key), 1), depth);
-  vb->eval = eval;
-  vb->string = string;
-  vb->cfg_table = cfg_table;
-  vb->visual_idx_range = r1u64(0, 8);
+  vb->string             = string;
+  vb->expr               = expr;
+  vb->visual_idx_range   = r1u64(0, 8);
   vb->semantic_idx_range = r1u64(0, 1);
+  vb->cfg_table          = cfg_table;
   df_eval_viz_block_end(out, vb);
 }
 
@@ -505,11 +672,11 @@ df_vr_txt_topology_info_from_cfg(DF_CfgNode *cfg)
 DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(text)
 {
   DF_EvalVizBlock *vb = df_eval_viz_block_begin(arena, DF_EvalVizBlockKind_Canvas, key, df_expand_key_make(df_hash_from_expand_key(key), 1), depth);
-  vb->eval = eval;
-  vb->string = string;
-  vb->cfg_table = cfg_table;
-  vb->visual_idx_range = r1u64(0, 8);
+  vb->string             = string;
+  vb->expr               = expr;
+  vb->visual_idx_range   = r1u64(0, 8);
   vb->semantic_idx_range = r1u64(0, 1);
+  vb->cfg_table          = cfg_table;
   df_eval_viz_block_end(out, vb);
 }
 
@@ -652,11 +819,11 @@ df_vr_disasm_topology_info_from_cfg(DF_CfgNode *cfg)
 DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(disasm)
 {
   DF_EvalVizBlock *vb = df_eval_viz_block_begin(arena, DF_EvalVizBlockKind_Canvas, key, df_expand_key_make(df_hash_from_expand_key(key), 1), depth);
-  vb->eval = eval;
-  vb->string = string;
-  vb->cfg_table = cfg_table;
-  vb->visual_idx_range = r1u64(0, 8);
+  vb->string             = string;
+  vb->expr               = expr;
+  vb->visual_idx_range   = r1u64(0, 8);
   vb->semantic_idx_range = r1u64(0, 1);
+  vb->cfg_table          = cfg_table;
   df_eval_viz_block_end(out, vb);
 }
 
@@ -774,11 +941,11 @@ DF_VIEW_UI_FUNCTION_DEF(disasm)
 DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(graph)
 {
   DF_EvalVizBlock *vb = df_eval_viz_block_begin(arena, DF_EvalVizBlockKind_Canvas, key, df_expand_key_make(df_hash_from_expand_key(key), 1), depth);
-  vb->eval = eval;
-  vb->string = string;
-  vb->cfg_table = cfg_table;
-  vb->visual_idx_range = r1u64(0, 8);
+  vb->string             = string;
+  vb->expr               = expr;
+  vb->visual_idx_range   = r1u64(0, 8);
   vb->semantic_idx_range = r1u64(0, 1);
+  vb->cfg_table          = cfg_table;
   df_eval_viz_block_end(out, vb);
 }
 
@@ -916,11 +1083,11 @@ internal UI_BOX_CUSTOM_DRAW(df_vr_bitmap_box_draw)
 DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(bitmap)
 {
   DF_EvalVizBlock *vb = df_eval_viz_block_begin(arena, DF_EvalVizBlockKind_Canvas, key, df_expand_key_make(df_hash_from_expand_key(key), 1), depth);
-  vb->eval = eval;
-  vb->string = string;
-  vb->cfg_table = cfg_table;
-  vb->visual_idx_range = r1u64(0, 8);
+  vb->string             = string;
+  vb->expr               = expr;
+  vb->visual_idx_range   = r1u64(0, 8);
   vb->semantic_idx_range = r1u64(0, 1);
+  vb->cfg_table          = cfg_table;
   df_eval_viz_block_end(out, vb);
 }
 
@@ -1326,11 +1493,11 @@ internal UI_BOX_CUSTOM_DRAW(df_vr_geo_box_draw)
 DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(geo)
 {
   DF_EvalVizBlock *vb = df_eval_viz_block_begin(arena, DF_EvalVizBlockKind_Canvas, key, df_expand_key_make(df_hash_from_expand_key(key), 1), depth);
-  vb->eval = eval;
-  vb->string = string;
-  vb->cfg_table = cfg_table;
-  vb->visual_idx_range = r1u64(0, 16);
+  vb->string             = string;
+  vb->expr               = expr;
+  vb->visual_idx_range   = r1u64(0, 16);
   vb->semantic_idx_range = r1u64(0, 1);
+  vb->cfg_table          = cfg_table;
   df_eval_viz_block_end(out, vb);
 }
 

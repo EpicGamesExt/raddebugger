@@ -5,11 +5,9 @@
 //~ rjf: Bundled Evaluation Functions
 
 internal E_Eval
-e_eval_from_string(Arena *arena, String8 string)
+e_eval_from_expr(Arena *arena, E_Expr *expr)
 {
-  E_TokenArray     tokens   = e_token_array_from_text(arena, string);
-  E_Parse          parse    = e_parse_expr_from_text_tokens(arena, string, &tokens);
-  E_IRTreeAndType  irtree   = e_irtree_and_type_from_expr(arena, parse.expr);
+  E_IRTreeAndType  irtree   = e_irtree_and_type_from_expr(arena, expr);
   E_OpList         oplist   = e_oplist_from_irtree(arena, irtree.root);
   String8          bytecode = e_bytecode_from_oplist(arena, &oplist);
   E_Interpretation interp   = e_interpret(bytecode);
@@ -18,16 +16,25 @@ e_eval_from_string(Arena *arena, String8 string)
     .value    = interp.value,
     .mode     = irtree.mode,
     .space    = irtree.space,
+    .expr     = expr,
     .type_key = irtree.type_key,
     .code     = interp.code,
-    .advance  = parse.last_token >= tokens.v + tokens.count ? string.size : parse.last_token->range.min,
   };
-  e_msg_list_concat_in_place(&eval.msgs, &parse.msgs);
   e_msg_list_concat_in_place(&eval.msgs, &irtree.msgs);
   if(E_InterpretationCode_Good < eval.code && eval.code < E_InterpretationCode_COUNT)
   {
     e_msg(arena, &eval.msgs, E_MsgKind_InterpretationError, 0, e_interpretation_code_display_strings[eval.code]);
   }
+  return eval;
+}
+
+internal E_Eval
+e_eval_from_string(Arena *arena, String8 string)
+{
+  E_TokenArray     tokens   = e_token_array_from_text(arena, string);
+  E_Parse          parse    = e_parse_expr_from_text_tokens(arena, string, &tokens);
+  E_Eval           eval     = e_eval_from_expr(arena, parse.expr);
+  e_msg_list_concat_in_place(&eval.msgs, &parse.msgs);
   return eval;
 }
 

@@ -323,7 +323,7 @@ enum
 #define DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_NAME(name) df_gfx_view_rule_row_ui__##name
 #define DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_DEF(name) DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_SIG(DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_NAME(name))
 
-#define DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_SIG(name) void name(struct DF_Window *ws, DF_ExpandKey key, E_Eval eval, String8 string, struct DF_CfgNode *cfg, Vec2F32 dim)
+#define DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_SIG(name) void name(struct DF_Window *ws, DF_ExpandKey key, E_Eval eval, struct DF_CfgNode *cfg, Vec2F32 dim)
 #define DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_NAME(name) df_gfx_view_rule_block_ui__##name
 #define DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(name) DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_SIG(DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_NAME(name))
 
@@ -965,10 +965,8 @@ internal void df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdLis
 ////////////////////////////////
 //~ rjf: Eval Viz
 
-internal String8 df_escaped_from_raw_string(Arena *arena, String8 raw);
-internal String8List df_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags flags, U32 default_radix, F_Tag font, F32 font_size, F32 max_size, S32 depth, E_Eval eval, E_Member *opt_member, DF_CfgTable *cfg_table);
-internal String8 df_value_string_from_eval(Arena *arena, DF_EvalVizStringFlags flags, U32 default_radix, F_Tag font, F32 font_size, F32 max_size, E_Eval eval, E_Member *opt_member, DF_CfgTable *cfg_table);
-internal DF_EvalVizWindowedRowList df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DF_EvalView *eval_view, U32 default_radix, F_Tag font, F32 font_size, Rng1S64 visible_range, DF_EvalVizBlockList *blocks);
+internal F32 df_append_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags flags, U32 default_radix, F_Tag font, F32 font_size, F32 max_size, S32 depth, E_Eval eval, DF_CfgTable *cfg_table, String8List *out);
+internal String8 df_value_string_from_eval(Arena *arena, DF_EvalVizStringFlags flags, U32 default_radix, F_Tag font, F32 font_size, F32 max_size, E_Eval eval, DF_CfgTable *cfg_table);
 
 ////////////////////////////////
 //~ rjf: Hover Eval

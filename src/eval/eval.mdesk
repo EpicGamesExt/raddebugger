@@ -73,59 +73,60 @@ E_TypeKindTable:
   {Variadic                  ""                    0    }
 }
 
-@table(name  op_string)
+@table(name  op_kind  precedence  string  op_pre  op_sep  op_pos)
 E_ExprKindTable:
 {
-  { Nil                           ""               }
+  { Nil                  Null                0        ""                  ""        ""        "" }
+  { Ref                  Null                0        ""                  ""        ""        "" }
   
-  { ArrayIndex                    "[]"             }
-  { MemberAccess                  "."              }
-  { Deref                         "*"              }
-  { Address                       "&"              }
+  { ArrayIndex           Null                0        "[]"                ""        "["       "]"}
+  { MemberAccess         Null                0        "."                 ""        "."       "" }
+  { Deref                UnaryPrefix         2        "*"                 "*"       ""        "" }
+  { Address              UnaryPrefix         2        "&"                 "&"       ""        "" }
   
-  { Cast                          "cast"           }
-  { Sizeof                        "sizeof"         }
+  { Cast                 Null                0        "cast"              ""        ""        "" }
+  { Sizeof               UnaryPrefix         0        "sizeof"            "sizeof"  ""        "" }
   
-  { Neg                           "-"              }
-  { LogNot                        "!"              }
-  { BitNot                        "~"              }
-  { Mul                           "*"              }
-  { Div                           "/"              }
-  { Mod                           "%"              }
-  { Add                           "+"              }
-  { Sub                           "-"              }
-  { LShift                        "<<"             }
-  { RShift                        ">>"             }
-  { Less                          "<"              }
-  { LsEq                          "<="             }
-  { Grtr                          ">"              }
-  { GrEq                          ">="             }
-  { EqEq                          "=="             }
-  { NtEq                          "!="             }
+  { Neg                  UnaryPrefix         2        "-"                 "-"       ""        "" }
+  { LogNot               UnaryPrefix         2        "!"                 "!"       ""        "" }
+  { BitNot               UnaryPrefix         2        "~"                 "~"       ""        "" }
+  { Mul                  Binary              3        "*"                 ""        "*"       "" }
+  { Div                  Binary              3        "/"                 ""        "/"       "" }
+  { Mod                  Binary              3        "%"                 ""        "%"       "" }
+  { Add                  Binary              4        "+"                 ""        "+"       "" }
+  { Sub                  Binary              4        "-"                 ""        "-"       "" }
+  { LShift               Binary              5        "<<"                ""        "<<"      "" }
+  { RShift               Binary              5        ">>"                ""        ">>"      "" }
+  { Less                 Binary              6        "<"                 ""        "<"       "" }
+  { LsEq                 Binary              6        "<="                ""        "<="      "" }
+  { Grtr                 Binary              6        ">"                 ""        ">"       "" }
+  { GrEq                 Binary              6        ">="                ""        ">="      "" }
+  { EqEq                 Binary              7        "=="                ""        "=="      "" }
+  { NtEq                 Binary              7        "!="                ""        "!="      "" }
   
-  { BitAnd                        "&"              }
-  { BitXor                        "^"              }
-  { BitOr                         "|"              }
-  { LogAnd                        "&&"             }
-  { LogOr                         "||"             }
+  { BitAnd               Binary              8        "&"                 ""        "&"       "" }
+  { BitXor               Binary              9        "^"                 ""        "^"       "" }
+  { BitOr                Binary              10       "|"                 ""        "|"       "" }
+  { LogAnd               Binary              11       "&&"                ""        "&&"      "" }
+  { LogOr                Binary              12       "||"                ""        "||"      "" }
   
-  { Ternary                       "? "             }
+  { Ternary              Null                0        "? "                ""        "?"       ":" }
   
-  { LeafBytecode                  "bytecode"       }
-  { LeafMember                    "member"         }
-  { LeafStringLiteral             "string_literal" }
-  { LeafU64                       "U64"            }
-  { LeafF64                       "F64"            }
-  { LeafF32                       "F32"            }
-  { LeafIdent                     "leaf_ident"     }
-  { LeafID                        "leaf_id"        }
+  { LeafBytecode         Null                0        "bytecode"          ""        ""        "" }
+  { LeafMember           Null                0        "member"            ""        ""        "" }
+  { LeafStringLiteral    Null                0        "string_literal"    ""        ""        "" }
+  { LeafU64              Null                0        "U64"               ""        ""        "" }
+  { LeafF64              Null                0        "F64"               ""        ""        "" }
+  { LeafF32              Null                0        "F32"               ""        ""        "" }
+  { LeafIdent            Null                0        "leaf_ident"        ""        ""        "" }
+  { LeafID               Null                0        "leaf_id"           ""        ""        "" }
   
-  { TypeIdent                     "type_ident"     }
-  { Ptr                           "ptr"            }
-  { Array                         "array"          }
-  { Func                          "function"       }
+  { TypeIdent            Null                0        "type_ident"        ""        ""        "" }
+  { Ptr                  Null                0        "ptr"               ""        ""        "" }
+  { Array                Null                0        "array"             ""        ""        "" }
+  { Func                 Null                0        "function"          ""        ""        "" }
   
-  { Define                        "="              }
+  { Define               Binary              13       "="                 ""        "="       "" }
 }
 
 @table(name display_string)
@@ -195,9 +196,9 @@ e_expr_kind_strings:
   @expand(E_InterpretationCodeTable a) `str8_lit_comp("$(a.display_string)")`
 }
 
-@data(String8) e_expr_op_strings:
+@data(E_OpInfo) e_expr_kind_op_info_table:
 {
-  @expand(E_ExprKindTable a) `str8_lit_comp("$(a.op_string)")`
+  @expand(E_ExprKindTable a) `{ E_OpKind_$(a.op_kind), $(a.precedence), str8_lit_comp("$(a.op_pre)"), str8_lit_comp("$(a.op_sep)"), str8_lit_comp("$(a.op_post)") }`
 }
 
 @data(U8) e_kind_basic_byte_size_table:

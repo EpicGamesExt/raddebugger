@@ -6134,7 +6134,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           DF_ExpandKey key = df_expand_key_make(df_hash_from_expand_key(parent_key), 1);
           DF_EvalVizBlockList viz_blocks = df_eval_viz_block_list_from_eval_view_expr_keys(scratch.arena, eval_view, expr, parent_key, key);
           U32 default_radix = (eval.space == E_Space_Regs ? 16 : 10);
-          DF_EvalVizWindowedRowList viz_rows = df_eval_viz_windowed_row_list_from_viz_block_list(scratch.arena, eval_view, default_radix, ui_top_font(), ui_top_font_size(), r1s64(0, 50), &viz_blocks);
+          DF_EvalVizWindowedRowList viz_rows = df_eval_viz_windowed_row_list_from_viz_block_list(scratch.arena, eval_view, r1s64(0, 50), &viz_blocks);
           
           //- rjf: animate
           {
@@ -6210,27 +6210,31 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             for(DF_EvalVizRow *row = viz_rows.first; row != 0; row = row->next)
             {
               //- rjf: unpack row
-              String8 row_edit_value = df_value_string_from_eval(scratch.arena, 0, default_radix, ui_top_font(), ui_top_font_size(), 500.f, row->eval, row->member, row->cfg_table);
-              String8 row_display_value = df_value_string_from_eval(scratch.arena, DF_EvalVizStringFlag_ReadOnlyDisplayRules, default_radix, ui_top_font(), ui_top_font_size(), 500.f, row->eval, row->member, row->cfg_table);
+              E_Eval row_eval = e_eval_from_expr(scratch.arena, row->expr);
+              String8 row_expr_string = df_expr_string_from_viz_row(scratch.arena, row);
+              String8 row_edit_value = df_value_string_from_eval(scratch.arena, 0, default_radix, ui_top_font(), ui_top_font_size(), 500.f, row_eval, row->cfg_table);
+              String8 row_display_value = df_value_string_from_eval(scratch.arena, DF_EvalVizStringFlag_ReadOnlyDisplayRules, default_radix, ui_top_font(), ui_top_font_size(), 500.f, row_eval, row->cfg_table);
+              B32 row_is_editable = df_type_key_is_editable(row_eval.type_key);
+              B32 row_is_expandable = df_type_key_is_expandable(row_eval.type_key);
               
               //- rjf: calculate width of exp row
               if(row == viz_rows.first)
               {
-                expr_column_width_px = f_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, ui_top_tab_size(), row->display_expr).x + ui_top_font_size()*2.5f;
+                expr_column_width_px = f_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, ui_top_tab_size(), row_display_value).x + ui_top_font_size()*2.5f;
                 expr_column_width_px = Max(expr_column_width_px, ui_top_font_size()*10.f);
               }
               
               //- rjf: determine if row's data is fresh
               B32 row_is_fresh = 0;
-              switch(row->eval.mode)
+              switch(row_eval.mode)
               {
                 default:{}break;
                 case E_Mode_Offset:
                 {
                   // TODO(rjf): @spaces pick the right process from the eval's space
-                  U64 size = e_type_byte_size_from_key(row->eval.type_key);
+                  U64 size = e_type_byte_size_from_key(row_eval.type_key);
                   size = Min(size, 64);
-                  Rng1U64 vaddr_rng = r1u64(row->eval.value.u64, row->eval.value.u64+size);
+                  Rng1U64 vaddr_rng = r1u64(row_eval.value.u64, row_eval.value.u64+size);
                   CTRL_ProcessMemorySlice slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, vaddr_rng, 0);
                   for(U64 idx = 0; idx < (slice.data.size+63)/64; idx += 1)
                   {
@@ -6250,13 +6254,13 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
                 ui_spacer(ui_em(1.5f*row->depth, 1.f));
                 U64 row_hash = df_hash_from_expand_key(row->key);
                 B32 row_is_expanded = df_expand_key_is_set(&eval_view->expand_tree_table, row->key);
-                if(row->flags & DF_EvalVizRowFlag_CanExpand)
+                if(row_is_expandable)
                   UI_PrefWidth(ui_em(1.5f, 1)) UI_Flags(UI_BoxFlag_DrawSideLeft*(row->depth>0))
                   if(ui_pressed(ui_expanderf(row_is_expanded, "###%I64x_%I64x_is_expanded", row->key.parent_hash, row->key.child_num)))
                 {
                   df_expand_set_expansion(eval_view->arena, &eval_view->expand_tree_table, row->parent_key, row->key, !row_is_expanded);
                 }
-                if(!(row->flags & DF_EvalVizRowFlag_CanExpand))
+                if(!row_is_expandable)
                 {
                   UI_PrefWidth(ui_em(1.5f, 1))
                     UI_Flags(UI_BoxFlag_DrawSideLeft*(row->depth>0) | UI_BoxFlag_DrawTextWeak)
@@ -6265,9 +6269,9 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
                 }
                 UI_WidthFill UI_TextRasterFlags(df_raster_flags_from_slot(ws, DF_FontSlot_Code))
                 {
-                  UI_PrefWidth(ui_px(expr_column_width_px, 1.f)) df_code_label(1.f, 1, df_rgba_from_theme_color(DF_ThemeColor_CodeDefault), row->display_expr);
+                  UI_PrefWidth(ui_px(expr_column_width_px, 1.f)) df_code_label(1.f, 1, df_rgba_from_theme_color(DF_ThemeColor_CodeDefault), row_expr_string);
                   ui_spacer(ui_em(1.5f, 1.f));
-                  if(row->flags & DF_EvalVizRowFlag_CanEditValue)
+                  if(row_is_editable)
                   {
                     if(row_is_fresh)
                     {
@@ -6287,7 +6291,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
                     {
                       String8 commit_string = str8(ws->hover_eval_txt_buffer, ws->hover_eval_txt_size);
                       E_Eval write_eval = e_eval_from_string(scratch.arena, commit_string);
-                      B32 success = df_commit_eval_value(row->eval, write_eval);
+                      B32 success = df_commit_eval_value(row_eval, write_eval);
                       if(success == 0)
                       {
                         DF_CmdParams params = df_cmd_params_from_window(ws);
@@ -8283,717 +8287,331 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
 ////////////////////////////////
 //~ rjf: Eval Viz
 
-internal String8
-df_escaped_from_raw_string(Arena *arena, String8 raw)
-{
-  Temp scratch = scratch_begin(&arena, 1);
-  String8List parts = {0};
-  U64 start_split_idx = 0;
-  for(U64 idx = 0; idx <= raw.size; idx += 1)
-  {
-    U8 byte = (idx < raw.size) ? raw.str[idx] : 0;
-    B32 split = 1;
-    String8 separator_replace = {0};
-    switch(byte)
-    {
-      default:{split = 0;}break;
-      case 0:    {}break;
-      case '\a': {separator_replace = str8_lit("\\a");}break;
-      case '\b': {separator_replace = str8_lit("\\b");}break;
-      case '\f': {separator_replace = str8_lit("\\f");}break;
-      case '\n': {separator_replace = str8_lit("\\n");}break;
-      case '\r': {separator_replace = str8_lit("\\r");}break;
-      case '\t': {separator_replace = str8_lit("\\t");}break;
-      case '\v': {separator_replace = str8_lit("\\v");}break;
-      case '\\': {separator_replace = str8_lit("\\\\");}break;
-      case '"':  {separator_replace = str8_lit("\\\"");}break;
-      case '?':  {separator_replace = str8_lit("\\?");}break;
-    }
-    if(split)
-    {
-      String8 substr = str8_substr(raw, r1u64(start_split_idx, idx));
-      start_split_idx = idx+1;
-      str8_list_push(scratch.arena, &parts, substr);
-      if(separator_replace.size != 0)
-      {
-        str8_list_push(scratch.arena, &parts, separator_replace);
-      }
-    }
-  }
-  StringJoin join = {0};
-  String8 result = str8_list_join(arena, &parts, &join);
-  scratch_end(scratch);
-  return result;
-}
-
-internal String8List
-df_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags flags, U32 default_radix, F_Tag font, F32 font_size, F32 max_size, S32 depth, E_Eval eval, E_Member *opt_member, DF_CfgTable *cfg_table)
+internal F32
+df_append_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags flags, U32 default_radix, F_Tag font, F32 font_size, F32 max_size, S32 depth, E_Eval eval, DF_CfgTable *cfg_table, String8List *out)
 {
   ProfBeginFunction();
-  String8List list = {0};
+  Temp scratch = scratch_begin(&arena, 1);
   F32 space_taken = 0;
   
-  //- rjf: type path -> empty
-  if(eval.mode == E_Mode_Null && !e_type_key_match(e_type_key_zero(), eval.type_key))
+  //- rjf: unpack view rules
+  U32 radix = default_radix;
+  DF_CfgVal *dec_cfg = df_cfg_val_from_string(cfg_table, str8_lit("dec"));
+  DF_CfgVal *hex_cfg = df_cfg_val_from_string(cfg_table, str8_lit("hex"));
+  DF_CfgVal *bin_cfg = df_cfg_val_from_string(cfg_table, str8_lit("bin"));
+  DF_CfgVal *oct_cfg = df_cfg_val_from_string(cfg_table, str8_lit("oct"));
+  U64 best_insertion_stamp = Max(dec_cfg->insertion_stamp, Max(hex_cfg->insertion_stamp, Max(bin_cfg->insertion_stamp, oct_cfg->insertion_stamp)));
+  if(dec_cfg != &df_g_nil_cfg_val && dec_cfg->insertion_stamp == best_insertion_stamp) { radix = 10; }
+  if(hex_cfg != &df_g_nil_cfg_val && hex_cfg->insertion_stamp == best_insertion_stamp) { radix = 16; }
+  if(bin_cfg != &df_g_nil_cfg_val && bin_cfg->insertion_stamp == best_insertion_stamp) { radix = 2; }
+  if(oct_cfg != &df_g_nil_cfg_val && oct_cfg->insertion_stamp == best_insertion_stamp) { radix = 8; }
+  B32 no_addr = (df_cfg_val_from_string(cfg_table, str8_lit("no_addr")) != &df_g_nil_cfg_val) && (flags & DF_EvalVizStringFlag_ReadOnlyDisplayRules);
+  B32 has_array = (df_cfg_val_from_string(cfg_table, str8_lit("array")) != &df_g_nil_cfg_val);
+  
+  //- rjf: member evaluations -> display member info
+  if(eval.mode == E_Mode_Null && !e_type_key_match(e_type_key_zero(), eval.type_key) && eval.expr->kind == E_ExprKind_MemberAccess)
   {
-    if(opt_member != 0)
+    E_Eval lhs_eval = e_eval_from_expr(scratch.arena, eval.expr->first);
+    E_MemberArray lhs_members = e_type_data_members_from_key(scratch.arena, lhs_eval.type_key);
+    E_Member *member = e_type_member_from_array_name(&lhs_members, eval.expr->first->next->string);
+    if(member != 0)
     {
-      U64 member_byte_size = e_type_byte_size_from_key(opt_member->type_key);
-      str8_list_pushf(arena, &list, "member (%I64u offset, %I64u byte%s)", opt_member->off, member_byte_size, member_byte_size == 1 ? "s" : "");
-    }
-    else
-    {
-      String8 basic_type_kind_string = e_kind_basic_string_table[e_type_kind_from_key(eval.type_key)];
-      U64 byte_size = e_type_byte_size_from_key(eval.type_key);
-      str8_list_pushf(arena, &list, "%S (%I64u byte%s)", basic_type_kind_string, byte_size, byte_size == 1 ? "s" : "");
+      U64 member_byte_size = e_type_byte_size_from_key(eval.type_key);
+      String8 offset_string = str8_from_u64(arena, member->off, radix, 0, 0);
+      String8 size_string = str8_from_u64(arena, member_byte_size, radix, 0, 0);
+      str8_list_pushf(arena, out, "member (%S offset, %S byte%s)", offset_string, size_string, member_byte_size == 1 ? "" : "s");
     }
   }
   
-  //- rjf: non-type path: descend recursively & produce single-line value strings
-  else if(max_size > 0)
+  //- rjf: type evaluations -> display type basic information
+  else if(eval.mode == E_Mode_Null && !e_type_key_match(e_type_key_zero(), eval.type_key) && eval.expr->kind != E_ExprKind_MemberAccess)
   {
-    E_TypeKind eval_type_kind = e_type_kind_from_key(e_type_unwrap(eval.type_key));
-    U32 radix = default_radix;
-    DF_CfgVal *dec_cfg = df_cfg_val_from_string(cfg_table, str8_lit("dec"));
-    DF_CfgVal *hex_cfg = df_cfg_val_from_string(cfg_table, str8_lit("hex"));
-    DF_CfgVal *bin_cfg = df_cfg_val_from_string(cfg_table, str8_lit("bin"));
-    DF_CfgVal *oct_cfg = df_cfg_val_from_string(cfg_table, str8_lit("oct"));
-    U64 best_insertion_stamp = Max(dec_cfg->insertion_stamp, Max(hex_cfg->insertion_stamp, Max(bin_cfg->insertion_stamp, oct_cfg->insertion_stamp)));
-    if(dec_cfg != &df_g_nil_cfg_val && dec_cfg->insertion_stamp == best_insertion_stamp) { radix = 10; }
-    if(hex_cfg != &df_g_nil_cfg_val && hex_cfg->insertion_stamp == best_insertion_stamp) { radix = 16; }
-    if(bin_cfg != &df_g_nil_cfg_val && bin_cfg->insertion_stamp == best_insertion_stamp) { radix = 2; }
-    if(oct_cfg != &df_g_nil_cfg_val && oct_cfg->insertion_stamp == best_insertion_stamp) { radix = 8; }
-    switch(eval_type_kind)
+    String8 basic_type_kind_string = e_kind_basic_string_table[e_type_kind_from_key(eval.type_key)];
+    U64 byte_size = e_type_byte_size_from_key(eval.type_key);
+    String8 size_string = str8_from_u64(arena, byte_size, radix, 0, 0);
+    str8_list_pushf(arena, out, "%S (%S byte%s)", basic_type_kind_string, size_string, byte_size == 1 ? "" : "s");
+  }
+  
+  //- rjf: value/offset evaluations
+  else if(max_size > 0) switch(e_type_kind_from_key(eval.type_key))
+  {
+    //- rjf: default - leaf cases
+    default:
     {
-      //- rjf: default - leaf cases
-      default:
-      {
-        E_Eval value_eval = e_value_eval_from_eval(eval);
-        String8 string = df_string_from_simple_typed_eval(arena, flags, radix, value_eval);
-        space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, string).x;
-        str8_list_push(arena, &list, string);
-      }break;
+      E_Eval value_eval = e_value_eval_from_eval(eval);
+      String8 string = df_string_from_simple_typed_eval(arena, flags, radix, value_eval);
+      space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, string).x;
+      str8_list_push(arena, out, string);
+    }break;
+    
+    //- rjf: pointers
+    case E_TypeKind_Function:
+    case E_TypeKind_Ptr:
+    case E_TypeKind_LRef:
+    case E_TypeKind_RRef:
+    {
+      // rjf: unpack type info
+      E_TypeKind type_kind = e_type_kind_from_key(eval.type_key);
+      E_TypeKey direct_type_key = e_type_ptee_from_key(eval.type_key);
+      E_TypeKind direct_type_kind = e_type_kind_from_key(direct_type_key);
       
-      //- rjf: pointers
-      case E_TypeKind_Function:
-      case E_TypeKind_Ptr:
-      case E_TypeKind_LRef:
-      case E_TypeKind_RRef:
-      {
-        // rjf: determine ptr value omission
-        DF_CfgVal *noaddr_cfg = df_cfg_val_from_string(cfg_table, str8_lit("no_addr"));
-        B32 no_addr = (noaddr_cfg != &df_g_nil_cfg_val) && (flags & DF_EvalVizStringFlag_ReadOnlyDisplayRules);
-        
-        // rjf: determine presence of array view rule -> omit c-string fastpath
-        DF_CfgVal *array_cfg = df_cfg_val_from_string(cfg_table, str8_lit("array"));
-        B32 has_array = (array_cfg != &df_g_nil_cfg_val);
-        
-        // rjf: get ptr value
-        E_Eval value_eval = e_value_eval_from_eval(eval);
-        
-        // rjf: get pointed-at info
-        E_TypeKind type_kind = e_type_kind_from_key(eval.type_key);
-        E_TypeKey direct_type_key = e_type_ptee_from_key(eval.type_key);
-        E_TypeKind direct_type_kind = e_type_kind_from_key(direct_type_key);
-        B32 direct_type_has_content = (direct_type_kind != E_TypeKind_Null && direct_type_kind != E_TypeKind_Void && value_eval.value.u64 != 0);
-        B32 direct_type_is_string = (direct_type_kind != E_TypeKind_Null && value_eval.value.u64 != 0 &&
-                                     (E_TypeKind_Char8 <= direct_type_kind && direct_type_kind <= E_TypeKind_UChar32));
-        DF_Entity *thread = df_entity_from_handle(df_interact_regs()->thread);
-        DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
-        String8 symbol_name = df_symbol_name_from_process_vaddr(arena, process, value_eval.value.u64, 1);
-        
-        // rjf: display ptr value
-        B32 did_ptr_value = 0;
-        if(!no_addr || (direct_type_has_content == 0 && direct_type_is_string == 0))
-        {
-          did_ptr_value = 1;
-          String8 string = df_string_from_simple_typed_eval(arena, flags, radix, value_eval);
-          space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, string).x;
-          str8_list_push(arena, &list, string);
-        }
-        
-        // rjf: arrow
-        if(did_ptr_value && (direct_type_has_content || symbol_name.size != 0) && (flags & DF_EvalVizStringFlag_ReadOnlyDisplayRules))
-        {
-          String8 arrow = str8_lit(" -> ");
-          str8_list_push(arena, &list, arrow);
-          space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, arrow).x;
-        }
-        
-        // rjf: special-case: strings
-        if(!has_array &&
-           direct_type_is_string &&
-           (flags & DF_EvalVizStringFlag_ReadOnlyDisplayRules))
-        {
-          // TODO(rjf): @spaces pick correct space
-          U64 string_memory_addr = value_eval.value.u64;
-          U64 element_size = e_type_byte_size_from_key(direct_type_key);
-          CTRL_ProcessMemorySlice text_slice = ctrl_query_cached_zero_terminated_data_from_process_vaddr_limit(arena, process->ctrl_machine_id, process->ctrl_handle, string_memory_addr, 256, element_size, 0);
-          String8 raw_text = {0};
-          switch(element_size)
-          {
-            default:{raw_text = text_slice.data;}break;
-            case 2: {raw_text = str8_from_16(arena, str16((U16 *)text_slice.data.str, text_slice.data.size/sizeof(U16)));}break;
-            case 4: {raw_text = str8_from_32(arena, str32((U32 *)text_slice.data.str, text_slice.data.size/sizeof(U32)));}break;
-          }
-          String8 text = df_escaped_from_raw_string(arena, raw_text);
-          space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, text).x;
-          space_taken += 2*f_dim_from_tag_size_string(font, font_size, 0, 0, str8_lit("\"")).x;
-          str8_list_push(arena, &list, str8_lit("\""));
-          str8_list_push(arena, &list, text);
-          str8_list_push(arena, &list, str8_lit("\""));
-        }
-        
-        // rjf: special-case: symbols
-        else if((flags & DF_EvalVizStringFlag_ReadOnlyDisplayRules) && symbol_name.size != 0 &&
-                (type_kind == E_TypeKind_Function ||
-                 direct_type_kind == E_TypeKind_Function ||
-                 direct_type_kind == E_TypeKind_Void))
-        {
-          str8_list_push(arena, &list, symbol_name);
-          space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, symbol_name).x;
-        }
-        
-        // rjf: descend to pointed-at thing
-        else if(direct_type_has_content && (flags & DF_EvalVizStringFlag_ReadOnlyDisplayRules))
-        {
-          if(depth < 4)
-          {
-            E_Eval pted_eval = zero_struct;
-            pted_eval.type_key = direct_type_key;
-            pted_eval.mode     = E_Mode_Offset;
-            pted_eval.space    = value_eval.space;
-            pted_eval.value    = value_eval.value;
-            String8List pted_strs = df_value_strings_from_eval(arena, flags, default_radix, font, font_size, max_size-space_taken, depth+1, pted_eval, opt_member, cfg_table);
-            if(pted_strs.total_size == 0)
-            {
-              String8 unknown = str8_lit("???");
-              str8_list_push(arena, &list, unknown);
-              space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, unknown).x;
-            }
-            else
-            {
-              space_taken += f_dim_from_tag_size_string_list(font, font_size, 0, 0, pted_strs).x;
-              str8_list_concat_in_place(&list, &pted_strs);
-            }
-          }
-          else
-          {
-            String8 ellipses = str8_lit("...");
-            str8_list_push(arena, &list, ellipses);
-            space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, ellipses).x;
-          }
-        }
-      }break;
+      // rjf: unpack info about pointer destination
+      E_Eval value_eval = e_value_eval_from_eval(eval);
+      B32 ptee_has_content = (direct_type_kind != E_TypeKind_Null && direct_type_kind != E_TypeKind_Void);
+      B32 ptee_has_string  = (E_TypeKind_Char8 <= direct_type_kind && direct_type_kind <= E_TypeKind_UChar32);
+      DF_Entity *thread = df_entity_from_handle(df_interact_regs()->thread);
+      DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
+      String8 symbol_name = df_symbol_name_from_process_vaddr(arena, process, value_eval.value.u64, 1);
       
-      //- rjf: arrays
-      case E_TypeKind_Array:
+      // rjf: special case: push strings for textual string content
+      B32 did_content = 0;
+      if(!did_content && ptee_has_string && !has_array && (flags & DF_EvalVizStringFlag_ReadOnlyDisplayRules))
       {
-        Temp scratch = scratch_begin(&arena, 1);
-        E_Type *eval_type = e_type_from_key(scratch.arena, eval.type_key);
-        E_TypeKey direct_type_key = eval_type->direct_type_key;
-        E_TypeKind direct_type_kind = e_type_kind_from_key(direct_type_key);
-        U64 array_count = eval_type->count;
-        
-        // rjf: determine presence of array view rule -> omit c-string fastpath
-        DF_CfgVal *array_cfg = df_cfg_val_from_string(cfg_table, str8_lit("array"));
-        B32 has_array = (array_cfg != &df_g_nil_cfg_val);
-        
-        // rjf: get pointed-at type
-        B32 direct_type_is_string = (direct_type_kind != E_TypeKind_Null &&
-                                     ((E_TypeKind_Char8 <= direct_type_kind && direct_type_kind <= E_TypeKind_UChar32) ||
-                                      direct_type_kind == E_TypeKind_S8 ||
-                                      direct_type_kind == E_TypeKind_U8));
-        B32 special_case = 0;
-        
-        // rjf: special-case: strings
-        if(!has_array && direct_type_is_string)
+        did_content = 1;
+        U64 string_memory_addr = value_eval.value.u64;
+        U64 element_size = e_type_byte_size_from_key(direct_type_key);
+        U64 string_buffer_size = 256;
+        U8 *string_buffer = push_array(arena, U8, string_buffer_size);
+        for(U64 try_size = string_buffer_size; try_size >= 16; try_size /= 2)
         {
-          special_case = 1;
-          DF_Entity *thread = df_entity_from_handle(df_interact_regs()->thread);
-          DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
-          U64 element_size = e_type_byte_size_from_key(eval_type->direct_type_key);
-          
-          // rjf: read text
-          String8 text_data = {0};
-          switch(eval.mode)
+          B32 read_good = e_space_read(eval.space, string_buffer, r1u64(string_memory_addr, string_memory_addr+try_size));
+          if(read_good)
           {
-            default:{}break;
-            case E_Mode_Offset:
-            {
-              // TODO(rjf): @spaces pick the right process from the eval's space
-              CTRL_ProcessMemorySlice text_slice = ctrl_query_cached_zero_terminated_data_from_process_vaddr_limit(arena, process->ctrl_machine_id, process->ctrl_handle, eval.value.u64, 256, element_size, 0);
-              text_data = text_slice.data;
-            }break;
-            case E_Mode_Value:
-            {
-              text_data = str8_cstring_capped(&eval.value.u512[0], (U8 *)(&eval.value.u512[0]) + sizeof(eval.value.u512));
-            }break;
-          }
-          
-          // rjf: convert to utf-8 if needed
-          String8 raw_text = {0};
-          switch(element_size)
-          {
-            default:{raw_text = text_data;}break;
-            case 2: {raw_text = str8_from_16(arena, str16((U16 *)text_data.str, text_data.size/sizeof(U16)));}break;
-            case 4: {raw_text = str8_from_32(arena, str32((U32 *)text_data.str, text_data.size/sizeof(U32)));}break;
-          }
-          String8 text = df_escaped_from_raw_string(arena, raw_text);
-          space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, text).x;
-          space_taken += 2*f_dim_from_tag_size_string(font, font_size, 0, 0, str8_lit("\"")).x;
-          str8_list_push(arena, &list, str8_lit("\""));
-          str8_list_push(arena, &list, text);
-          str8_list_push(arena, &list, str8_lit("\""));
-        }
-        
-        // rjf: open brace
-        if(!special_case)
-        {
-          String8 brace = str8_lit("[");
-          str8_list_push(arena, &list, brace);
-          space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, brace).x;
-        }
-        
-        // rjf: content
-        if(!special_case)
-        {
-          if(depth < 3)
-          {
-            U64 direct_type_byte_size = e_type_byte_size_from_key(direct_type_key);
-            for(U64 idx = 0; idx < array_count && max_size > space_taken; idx += 1)
-            {
-              E_Eval element_eval = e_element_eval_from_array_eval_index(eval, idx);
-              String8List element_strs = df_value_strings_from_eval(arena, flags, default_radix, font, font_size, max_size-space_taken, depth+1, element_eval, opt_member, cfg_table);
-              space_taken += f_dim_from_tag_size_string_list(font, font_size, 0, 0, element_strs).x;
-              str8_list_concat_in_place(&list, &element_strs);
-              if(idx+1 < array_count)
-              {
-                String8 comma = str8_lit(", ");
-                space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, comma).x;
-                str8_list_push(arena, &list, comma);
-              }
-            }
-          }
-          else
-          {
-            String8 ellipses = str8_lit("...");
-            str8_list_push(arena, &list, ellipses);
-            space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, ellipses).x;
+            break;
           }
         }
-        
-        // rjf: close brace
-        if(!special_case)
+        string_buffer[string_buffer_size-1] = 0;
+        String8 string = {0};
+        switch(element_size)
         {
-          String8 brace = str8_lit("]");
-          str8_list_push(arena, &list, brace);
-          space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, brace).x;
+          default:{string = str8_cstring((char *)string_buffer);}break;
+          case 2: {string = str8_from_16(arena, str16_cstring((U16 *)string_buffer));}break;
+          case 4: {string = str8_from_32(arena, str32_cstring((U32 *)string_buffer));}break;
         }
-        scratch_end(scratch);
-      }break;
+        String8 string_escaped = df_escaped_from_raw_string(arena, string);
+        space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, string_escaped).x;
+        space_taken += 2*f_dim_from_tag_size_string(font, font_size, 0, 0, str8_lit("\"")).x;
+        str8_list_push(arena, out, str8_lit("\""));
+        str8_list_push(arena, out, string_escaped);
+        str8_list_push(arena, out, str8_lit("\""));
+      }
       
-      //- rjf: structs
-      case E_TypeKind_Struct:
-      case E_TypeKind_Union:
-      case E_TypeKind_Class:
-      case E_TypeKind_IncompleteStruct:
-      case E_TypeKind_IncompleteUnion:
-      case E_TypeKind_IncompleteClass:
+      // rjf: special case: push strings for symbols
+      if(!did_content && symbol_name.size != 0 &&
+         (type_kind == E_TypeKind_Function || direct_type_kind == E_TypeKind_Function || direct_type_kind == E_TypeKind_Void) &&
+         (flags & DF_EvalVizStringFlag_ReadOnlyDisplayRules))
       {
-        // rjf: open brace
+        did_content = 1;
+        str8_list_push(arena, out, symbol_name);
+        space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, symbol_name).x;
+      }
+      
+      // rjf: descend for all other cases
+      if(!did_content && ptee_has_content && (flags & DF_EvalVizStringFlag_ReadOnlyDisplayRules))
+      {
+        did_content = 1;
+        if(depth<4)
         {
-          String8 brace = str8_lit("{");
-          str8_list_push(arena, &list, brace);
-          space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, brace).x;
-        }
-        
-        // rjf: content
-        if(depth < 4)
-        {
-          Temp scratch = scratch_begin(&arena, 1);
-          E_MemberArray data_members = e_type_data_members_from_key(scratch.arena, eval.type_key);
-          E_MemberArray filtered_data_members = df_filtered_data_members_from_members_cfg_table(scratch.arena, data_members, cfg_table);
-          for(U64 member_idx = 0; member_idx < filtered_data_members.count && max_size > space_taken; member_idx += 1)
-          {
-            E_Member *mem = &filtered_data_members.v[member_idx];
-            E_Eval member_eval = zero_struct;
-            member_eval.type_key   = mem->type_key;
-            member_eval.mode       = eval.mode;
-            member_eval.space      = eval.space;
-            member_eval.value      = eval.value;
-            member_eval.value.u64 += mem->off;
-            String8List member_strs = df_value_strings_from_eval(arena, flags, default_radix, font, font_size, max_size-space_taken, depth+1, member_eval, opt_member, cfg_table);
-            space_taken += f_dim_from_tag_size_string_list(font, font_size, 0, 0, member_strs).x;
-            str8_list_concat_in_place(&list, &member_strs);
-            if(member_idx+1 < filtered_data_members.count)
-            {
-              String8 comma = str8_lit(", ");
-              space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, comma).x;
-              str8_list_push(arena, &list, comma);
-            }
-          }
-          scratch_end(scratch);
+          E_Expr *deref_expr = e_expr_ref_deref(scratch.arena, eval.expr);
+          E_Eval deref_eval = e_eval_from_expr(scratch.arena, deref_expr);
+          space_taken += df_append_value_strings_from_eval(arena, flags, radix, font, font_size, max_size-space_taken, depth+1, deref_eval, cfg_table, out);
         }
         else
         {
           String8 ellipses = str8_lit("...");
-          str8_list_push(arena, &list, ellipses);
+          str8_list_push(arena, out, ellipses);
+          space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, ellipses).x;
+        }
+      }
+      
+      // rjf: push pointer value
+      B32 did_ptr_value = 0;
+      if((!no_addr || !did_content) && depth == 0)
+      {
+        did_ptr_value = 1;
+        if(did_content)
+        {
+          String8 ptr_prefix = str8_lit(" (");
+          space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, ptr_prefix).x;
+          str8_list_push(arena, out, ptr_prefix);
+        }
+        String8 string = df_string_from_simple_typed_eval(arena, flags, radix, value_eval);
+        space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, string).x;
+        str8_list_push(arena, out, string);
+        if(did_content)
+        {
+          String8 close = str8_lit(")");
+          space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, close).x;
+          str8_list_push(arena, out, close);
+        }
+      }
+    }break;
+    
+    //- rjf: arrays
+    case E_TypeKind_Array:
+    {
+      // rjf: unpack type info
+      E_Type *eval_type = e_type_from_key(scratch.arena, eval.type_key);
+      E_TypeKey direct_type_key = eval_type->direct_type_key;
+      E_TypeKind direct_type_kind = e_type_kind_from_key(direct_type_key);
+      U64 array_count = eval_type->count;
+      
+      // rjf: get pointed-at type
+      B32 array_is_string = ((E_TypeKind_Char8 <= direct_type_kind && direct_type_kind <= E_TypeKind_UChar32) ||
+                             direct_type_kind == E_TypeKind_S8 ||
+                             direct_type_kind == E_TypeKind_U8);
+      
+      // rjf: special case: push strings for textual string content
+      B32 did_content = 0;
+      if(!did_content && array_is_string && !has_array && (flags & DF_EvalVizStringFlag_ReadOnlyDisplayRules))
+      {
+        U64 element_size = e_type_byte_size_from_key(direct_type_key);
+        did_content = 1;
+        U64 string_buffer_size = 256;
+        U8 *string_buffer = push_array(arena, U8, string_buffer_size);
+        switch(eval.mode)
+        {
+          case E_Mode_Offset:
+          {
+            U64 string_memory_addr = eval.value.u64;
+            for(U64 try_size = string_buffer_size; try_size >= 16; try_size /= 2)
+            {
+              B32 read_good = e_space_read(eval.space, string_buffer, r1u64(string_memory_addr, string_memory_addr+try_size));
+              if(read_good)
+              {
+                break;
+              }
+            }
+          }break;
+          case E_Mode_Value:
+          {
+            MemoryCopy(string_buffer, &eval.value.u512[0], Min(string_buffer_size, sizeof(eval.value)));
+          }break;
+        }
+        string_buffer[string_buffer_size-1] = 0;
+        String8 string = {0};
+        switch(element_size)
+        {
+          default:{string = str8_cstring(string_buffer);}break;
+          case 2: {string = str8_from_16(arena, str16_cstring((U16 *)string_buffer));}break;
+          case 4: {string = str8_from_32(arena, str32_cstring((U32 *)string_buffer));}break;
+        }
+        String8 string_escaped = df_escaped_from_raw_string(arena, string);
+        space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, string_escaped).x;
+        space_taken += 2*f_dim_from_tag_size_string(font, font_size, 0, 0, str8_lit("\"")).x;
+        str8_list_push(arena, out, str8_lit("\""));
+        str8_list_push(arena, out, string_escaped);
+        str8_list_push(arena, out, str8_lit("\""));
+      }
+      
+      // rjf: descend in all other cases
+      if(!did_content)
+      {
+        did_content = 1;
+        
+        // rjf: [
+        {
+          String8 bracket = str8_lit("[");
+          str8_list_push(arena, out, bracket);
+          space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, bracket).x;
+        }
+        
+        // rjf: build contents
+        if(depth < 4)
+        {
+          for(U64 idx = 0; idx < array_count && max_size > space_taken; idx += 1)
+          {
+            E_Expr *element_expr = e_expr_ref_array_index(scratch.arena, eval.expr, idx);
+            E_Eval element_eval = e_eval_from_expr(scratch.arena, element_expr);
+            space_taken += df_append_value_strings_from_eval(arena, flags, radix, font, font_size, max_size-space_taken, depth+1, element_eval, cfg_table, out);
+            if(idx+1 < array_count)
+            {
+              String8 comma = str8_lit(", ");
+              space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, comma).x;
+              str8_list_push(arena, out, comma);
+            }
+          }
+        }
+        else
+        {
+          String8 ellipses = str8_lit("...");
+          str8_list_push(arena, out, ellipses);
           space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, ellipses).x;
         }
         
-        // rjf: close brace
+        // rjf: ]
         {
-          String8 brace = str8_lit("}");
-          str8_list_push(arena, &list, brace);
-          space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, brace).x;
+          String8 bracket = str8_lit("]");
+          str8_list_push(arena, out, bracket);
+          space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, bracket).x;
         }
-        
-      }break;
-    }
+      }
+    }break;
+    
+    //- rjf: structs
+    case E_TypeKind_Struct:
+    case E_TypeKind_Union:
+    case E_TypeKind_Class:
+    case E_TypeKind_IncompleteStruct:
+    case E_TypeKind_IncompleteUnion:
+    case E_TypeKind_IncompleteClass:
+    {
+      // rjf: open brace
+      {
+        String8 brace = str8_lit("{");
+        str8_list_push(arena, out, brace);
+        space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, brace).x;
+      }
+      
+      // rjf: content
+      if(depth < 4)
+      {
+        E_MemberArray data_members = e_type_data_members_from_key(scratch.arena, eval.type_key);
+        E_MemberArray filtered_data_members = df_filtered_data_members_from_members_cfg_table(scratch.arena, data_members, cfg_table);
+        for(U64 member_idx = 0; member_idx < filtered_data_members.count && max_size > space_taken; member_idx += 1)
+        {
+          E_Member *mem = &filtered_data_members.v[member_idx];
+          E_Expr *dot_expr = e_expr_ref_member_access(scratch.arena, eval.expr, mem->name);
+          E_Eval dot_eval = e_eval_from_expr(scratch.arena, dot_expr);
+          space_taken += df_append_value_strings_from_eval(arena, flags, radix, font, font_size, max_size-space_taken, depth+1, dot_eval, cfg_table, out);
+          if(member_idx+1 < filtered_data_members.count)
+          {
+            String8 comma = str8_lit(", ");
+            space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, comma).x;
+            str8_list_push(arena, out, comma);
+          }
+        }
+      }
+      else
+      {
+        String8 ellipses = str8_lit("...");
+        str8_list_push(arena, out, ellipses);
+        space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, ellipses).x;
+      }
+      
+      // rjf: close brace
+      {
+        String8 brace = str8_lit("}");
+        str8_list_push(arena, out, brace);
+        space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, brace).x;
+      }
+    }break;
   }
+  
+  scratch_end(scratch);
   ProfEnd();
-  return list;
+  return space_taken;
 }
 
 internal String8
-df_value_string_from_eval(Arena *arena, DF_EvalVizStringFlags flags, U32 default_radix, F_Tag font, F32 font_size, F32 max_size, E_Eval eval, E_Member *opt_member, DF_CfgTable *cfg_table)
+df_value_string_from_eval(Arena *arena, DF_EvalVizStringFlags flags, U32 default_radix, F_Tag font, F32 font_size, F32 max_size, E_Eval eval, DF_CfgTable *cfg_table)
 {
   Temp scratch = scratch_begin(&arena, 1);
-  String8List parts = df_value_strings_from_eval(scratch.arena, flags, default_radix, font, font_size, max_size, 0, eval, opt_member, cfg_table);
-  String8 result = str8_list_join(arena, &parts, 0);
+  String8List strs = {0};
+  df_append_value_strings_from_eval(scratch.arena, flags, default_radix, font, font_size, max_size, 0, eval, cfg_table, &strs);
+  String8 result = str8_list_join(arena, &strs, 0);
   scratch_end(scratch);
   return result;
-}
-
-internal DF_EvalVizWindowedRowList
-df_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, DF_EvalView *eval_view, U32 default_radix, F_Tag font, F32 font_size, Rng1S64 visible_range, DF_EvalVizBlockList *blocks)
-{
-  ProfBeginFunction();
-  Temp scratch = scratch_begin(&arena, 1);
-  
-  //////////////////////////////
-  //- rjf: produce windowed rows, per block
-  //
-  U64 visual_idx_off = 0;
-  U64 semantic_idx_off = 0;
-  DF_EvalVizWindowedRowList list = {0};
-  for(DF_EvalVizBlockNode *n = blocks->first; n != 0; n = n->next)
-  {
-    DF_EvalVizBlock *block = &n->v;
-    
-    //////////////////////////////
-    //- rjf: extract block info
-    //
-    U64 block_num_visual_rows     = dim_1u64(block->visual_idx_range);
-    U64 block_num_semantic_rows   = dim_1u64(block->semantic_idx_range);
-    Rng1S64 block_visual_range    = r1s64(visual_idx_off, visual_idx_off + block_num_visual_rows);
-    Rng1S64 block_semantic_range  = r1s64(semantic_idx_off, semantic_idx_off + block_num_semantic_rows);
-    E_TypeKind block_type_kind = e_type_kind_from_key(block->eval.type_key);
-    
-    //////////////////////////////
-    //- rjf: get skip/chop of block's index range
-    //
-    U64 num_skipped_visual = 0;
-    U64 num_chopped_visual = 0;
-    {
-      if(visible_range.min > block_visual_range.min)
-      {
-        num_skipped_visual = (visible_range.min - block_visual_range.min);
-        num_skipped_visual = Min(num_skipped_visual, block_num_visual_rows);
-      }
-      if(visible_range.max < block_visual_range.max)
-      {
-        num_chopped_visual = (block_visual_range.max - visible_range.max);
-        num_chopped_visual = Min(num_chopped_visual, block_num_visual_rows);
-      }
-    }
-    
-    //////////////////////////////
-    //- rjf: get visible idx range & invisible counts
-    //
-    Rng1U64 visible_idx_range = block->visual_idx_range;
-    {
-      visible_idx_range.min += num_skipped_visual;
-      visible_idx_range.max -= num_chopped_visual;
-    }
-    
-    //////////////////////////////
-    //- rjf: sum & advance
-    //
-    list.count_before_visual += num_skipped_visual;
-    if(block_num_visual_rows != 0)
-    {
-      list.count_before_semantic += block_num_semantic_rows * num_skipped_visual / block_num_visual_rows;
-    }
-    visual_idx_off += block_num_visual_rows;
-    semantic_idx_off += block_num_semantic_rows;
-    
-    //////////////////////////////
-    //- rjf: produce rows, depending on block's kind
-    //
-    if(visible_idx_range.max > visible_idx_range.min) switch(block->kind)
-    {
-      default:{}break;
-      
-      //////////////////////////////
-      //- rjf: null -> empty row
-      //
-      case DF_EvalVizBlockKind_Null:
-      {
-        E_Eval eval = zero_struct;
-        df_eval_viz_row_list_push_new(arena, eval_view, &list, block, block->key, eval);
-      }break;
-      
-      //////////////////////////////
-      //- rjf: root -> just a single row. possibly expandable.
-      //
-      case DF_EvalVizBlockKind_Root:
-      {
-        DF_EvalVizRow *row = df_eval_viz_row_list_push_new(arena, eval_view, &list, block, block->key, block->eval);
-        row->display_expr        = block->string;
-        row->edit_expr           = block->string;
-        if(block->member && block->member->kind == E_MemberKind_Padding)
-        {
-          row->flags |= DF_EvalVizRowFlag_ExprIsSpecial;
-        }
-      }break;
-      
-      //////////////////////////////
-      //- rjf: members -> produce rows for the visible range of members.
-      //
-      case DF_EvalVizBlockKind_Members:
-      if(block_type_kind != E_TypeKind_Null)
-      {
-        E_MemberArray data_members = e_type_data_members_from_key(scratch.arena, block->eval.type_key);
-        E_MemberArray filtered_data_members = df_filtered_data_members_from_members_cfg_table(scratch.arena, data_members, block->cfg_table);
-        for(U64 idx = visible_idx_range.min; idx < visible_idx_range.max && idx < filtered_data_members.count; idx += 1)
-        {
-          E_Member *member = &filtered_data_members.v[idx];
-          
-          // rjf: get keys for this row
-          DF_ExpandKey key = df_expand_key_make(df_hash_from_expand_key(block->parent_key), idx+1);
-          
-          // rjf: get member eval
-          E_Eval member_eval = zero_struct;
-          {
-            member_eval.type_key = member->type_key;
-            member_eval.mode     = block->eval.mode;
-            member_eval.space    = block->eval.space;
-            member_eval.value    = block->eval.value;
-            member_eval.value.u64 += member->off;
-          }
-          
-          // rjf: get view rules
-          String8 view_rule_string = df_eval_view_rule_from_key(eval_view, key);
-          DF_CfgTable view_rule_table = df_cfg_table_from_inheritance(scratch.arena, block->cfg_table);
-          df_cfg_table_push_unparsed_string(scratch.arena, &view_rule_table, view_rule_string, DF_CfgSrc_User);
-          
-          // rjf: apply view rules to eval
-          {
-            member_eval = e_dynamically_typed_eval_from_eval(member_eval);
-            member_eval = df_eval_from_eval_cfg_table(arena, member_eval, &view_rule_table);
-          }
-          
-          // rjf: build & push row
-          DF_EvalVizRow *row = df_eval_viz_row_list_push_new(arena, eval_view, &list, block, key, member_eval);
-          row->member = e_type_member_copy(arena, member);
-          if(member->kind == E_MemberKind_Padding)
-          {
-            row->flags |= DF_EvalVizRowFlag_ExprIsSpecial;
-          }
-          row->display_expr        = push_str8_copy(arena, member->name);
-          row->edit_expr           = push_str8f(arena, "%S.%S", block->string, member->name);
-        }
-      }break;
-      
-      //////////////////////////////
-      //- rjf: enum members -> produce rows for the visible range of enum members.
-      //
-      case DF_EvalVizBlockKind_EnumMembers:
-      if(block_type_kind == E_TypeKind_Enum)
-      {
-        E_Type *type = e_type_from_key(scratch.arena, block->eval.type_key);
-        for(U64 idx = visible_idx_range.min; idx < visible_idx_range.max && idx < type->count; idx += 1)
-        {
-          E_EnumVal *enum_val = &type->enum_vals[idx];
-          DF_ExpandKey key = df_expand_key_make(df_hash_from_expand_key(block->parent_key), idx+1);
-          
-          // rjf: produce eval for this enum member
-          E_Eval eval = zero_struct;
-          {
-            eval.type_key  = block->eval.type_key;
-            eval.mode      = E_Mode_Value;
-            eval.space     = block->eval.space;
-            eval.value.u64 = enum_val->val;
-          }
-          
-          // rjf: get view rules
-          String8 view_rule_string = df_eval_view_rule_from_key(eval_view, key);
-          DF_CfgTable view_rule_table = df_cfg_table_from_inheritance(scratch.arena, block->cfg_table);
-          df_cfg_table_push_unparsed_string(scratch.arena, &view_rule_table, view_rule_string, DF_CfgSrc_User);
-          
-          // rjf: apply view rules to eval
-          {
-            eval = e_dynamically_typed_eval_from_eval(eval);
-            eval = df_eval_from_eval_cfg_table(arena, eval, &view_rule_table);
-          }
-          
-          // rjf: build & push row
-          DF_EvalVizRow *row = df_eval_viz_row_list_push_new(arena, eval_view, &list, block, key, eval);
-          row->display_expr        = push_str8_copy(arena, enum_val->name);
-          row->edit_expr           = row->display_expr;
-        }
-      }break;
-      
-      //////////////////////////////
-      //- rjf: elements -> produce rows for the visible range of elements.
-      //
-      case DF_EvalVizBlockKind_Elements:
-      {
-        E_TypeKey direct_type_key = e_type_unwrap(e_type_direct_from_key(e_type_unwrap(block->eval.type_key)));
-        E_TypeKind direct_type_kind = e_type_kind_from_key(direct_type_key);
-        U64 direct_type_key_byte_size = e_type_byte_size_from_key(direct_type_key);
-        for(U64 idx = visible_idx_range.min; idx < visible_idx_range.max; idx += 1)
-        {
-          // rjf: get keys for this row
-          DF_ExpandKey key = df_expand_key_make(df_hash_from_expand_key(block->parent_key), idx+1);
-          
-          // rjf: get eval for this element
-          E_Eval elem_eval = e_element_eval_from_array_eval_index(block->eval, idx);
-          
-          // rjf: get view rules
-          String8 view_rule_string = df_eval_view_rule_from_key(eval_view, key);
-          DF_CfgTable view_rule_table = df_cfg_table_from_inheritance(scratch.arena, block->cfg_table);
-          df_cfg_table_push_unparsed_string(scratch.arena, &view_rule_table, view_rule_string, DF_CfgSrc_User);
-          
-          // rjf: apply view rules to eval
-          {
-            elem_eval = e_dynamically_typed_eval_from_eval(elem_eval);
-            elem_eval = df_eval_from_eval_cfg_table(arena, elem_eval, &view_rule_table);
-          }
-          
-          // rjf: build row
-          DF_EvalVizRow *row = df_eval_viz_row_list_push_new(arena, eval_view, &list, block, key, elem_eval);
-          row->display_expr        = push_str8f(arena, "[%I64u]", idx);
-          row->edit_expr           = push_str8f(arena, "%S[%I64u]", block->string, idx);
-        }
-      }break;
-      
-      //////////////////////////////
-      //- rjf: links -> produce rows for the visible range of links in the linked-list chain.
-      //
-      case DF_EvalVizBlockKind_Links:
-      {
-        DF_EvalLinkBaseChunkList link_base_chunks = df_eval_link_base_chunk_list_from_eval(scratch.arena, block->link_member_type_key, block->link_member_off, block->eval, 512);
-        DF_EvalLinkBaseArray link_bases = df_eval_link_base_array_from_chunk_list(scratch.arena, &link_base_chunks);
-        String8 node_type_string = e_type_string_from_key(arena, block->eval.type_key);
-        for(U64 idx = visible_idx_range.min; idx < visible_idx_range.max; idx += 1)
-        {
-          // rjf: get key for this row
-          DF_ExpandKey key = df_expand_key_make(df_hash_from_expand_key(block->parent_key), idx+1);
-          
-          // rjf: get link base
-          DF_EvalLinkBase *link_base = &link_bases.v[idx];
-          
-          // rjf: get eval for this link
-          E_Eval link_eval = zero_struct;
-          {
-            link_eval.type_key = block->eval.type_key;
-            link_eval.mode     = E_Mode_Offset;
-            link_eval.space    = block->eval.space;
-            link_eval.value.u64= link_base->offset;
-          }
-          
-          // rjf: get view rules
-          String8 view_rule_string = df_eval_view_rule_from_key(eval_view, key);
-          DF_CfgTable view_rule_table = df_cfg_table_from_inheritance(scratch.arena, block->cfg_table);
-          df_cfg_table_push_unparsed_string(scratch.arena, &view_rule_table, view_rule_string, DF_CfgSrc_User);
-          
-          // rjf: apply view rules to eval
-          link_eval = e_dynamically_typed_eval_from_eval(link_eval);
-          link_eval = df_eval_from_eval_cfg_table(arena, link_eval, &view_rule_table);
-          E_TypeKind link_type_kind = e_type_kind_from_key(link_eval.type_key);
-          
-          // rjf: build row
-          DF_EvalVizRow *row = df_eval_viz_row_list_push_new(arena, eval_view, &list, block, key, link_eval);
-          row->display_expr        = push_str8f(arena, "[%I64u]", idx);
-          row->edit_expr           = push_str8f(arena, "(%S *)0xI64x", node_type_string, link_eval.value.u64);
-        }
-      }break;
-      
-      //////////////////////////////
-      //- rjf: canvas -> produce blank row, sized by the idx range specified in the block
-      //
-      case DF_EvalVizBlockKind_Canvas:
-      if(num_skipped_visual < block_num_visual_rows)
-      {
-        DF_ExpandKey key = df_expand_key_make(df_hash_from_expand_key(block->parent_key), 1);
-        DF_EvalVizRow *row = df_eval_viz_row_list_push_new(arena, eval_view, &list, block, key, block->eval);
-        row->flags               = DF_EvalVizRowFlag_Canvas;
-        row->edit_expr           = block->string;
-        row->size_in_rows        = dim_1u64(intersect_1u64(visible_idx_range, r1u64(0, dim_1u64(block->visual_idx_range))));
-        row->skipped_size_in_rows= (visible_idx_range.min > block->visual_idx_range.min) ? visible_idx_range.min - block->visual_idx_range.min : 0;
-        row->chopped_size_in_rows= (visible_idx_range.max < block->visual_idx_range.max) ? block->visual_idx_range.max - visible_idx_range.max : 0;
-      }break;
-      
-      //////////////////////////////
-      //- rjf: all elements of a debug info table -> produce rows for visible range
-      //
-      case DF_EvalVizBlockKind_DebugInfoTable:
-      for(U64 idx = visible_idx_range.min; idx < visible_idx_range.max; idx += 1)
-      {
-        FZY_Item *item = &block->fzy_backing_items.v[idx];
-        
-        // rjf: determine dbgi/rdi to which this item belongs
-        RDI_Parsed *rdi = &di_rdi_parsed_nil;
-        U64 base_idx = 0;
-        {
-          for(U64 module_idx = 0; module_idx < e_parse_ctx->modules_count; module_idx += 1)
-          {
-            U64 all_items_count = 0;
-            rdi_section_raw_table_from_kind(e_parse_ctx->modules[module_idx].rdi, block->fzy_target, &all_items_count);
-            if(base_idx <= item->idx && item->idx < base_idx + all_items_count)
-            {
-              rdi = e_parse_ctx->modules[module_idx].rdi;
-              break;
-            }
-            base_idx += all_items_count;
-          }
-        }
-        
-        // rjf: unpack info about this row
-        String8 name = fzy_item_string_from_rdi_target_element_idx(rdi, block->fzy_target, block->fzy_backing_items.v[idx].idx - base_idx);
-        
-        // rjf: get keys for this row
-        DF_ExpandKey parent_key = block->parent_key;
-        DF_ExpandKey key = block->key;
-        key.child_num = block->fzy_backing_items.v[idx].idx;
-        
-        // rjf: get eval for this row
-        E_Eval eval = e_eval_from_string(arena, name);
-        
-        // rjf: get view rules
-        String8 view_rule_string = df_eval_view_rule_from_key(eval_view, key);
-        DF_CfgTable view_rule_table = df_cfg_table_from_inheritance(scratch.arena, block->cfg_table);
-        df_cfg_table_push_unparsed_string(scratch.arena, &view_rule_table, view_rule_string, DF_CfgSrc_User);
-        
-        // rjf: apply view rules to eval
-        {
-          eval = e_dynamically_typed_eval_from_eval(eval);
-          eval = df_eval_from_eval_cfg_table(arena, eval, &view_rule_table);
-        }
-        
-        // rjf: build row
-        DF_EvalVizRow *row = df_eval_viz_row_list_push_new(arena, eval_view, &list, block, key, eval);
-        row->display_expr = name;
-        row->edit_expr = name;
-      }break;
-    }
-  }
-  scratch_end(scratch);
-  ProfEnd();
-  return list;
 }
 
 ////////////////////////////////
@@ -11588,8 +11206,7 @@ df_code_slice(DF_Window *ws, DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *m
           if(!e_type_key_match(e_type_key_zero(), eval.type_key))
           {
             DF_CfgTable cfg_table = {0};
-            String8List eval_strings = df_value_strings_from_eval(scratch.arena, DF_EvalVizStringFlag_ReadOnlyDisplayRules, 10, params->font, params->font_size, params->font_size*60.f, 0, eval, 0, &cfg_table);
-            eval_string = str8_list_join(scratch.arena, &eval_strings, 0);
+            eval_string = df_value_string_from_eval(scratch.arena, DF_EvalVizStringFlag_ReadOnlyDisplayRules, 10, params->font, params->font_size, params->font_size*60.f, eval, &cfg_table);
           }
           ui_spacer(ui_em(1.5f, 1.f));
           ui_set_next_pref_width(ui_children_sum(1));
