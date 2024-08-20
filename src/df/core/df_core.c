@@ -3345,7 +3345,6 @@ df_lines_from_file_path_line_num(Arena *arena, String8 file_path, S64 line_num)
 internal DF_Entity *
 df_module_from_process_vaddr(DF_Entity *process, U64 vaddr)
 {
-  ProfBeginFunction();
   DF_Entity *module = &df_g_nil_entity;
   for(DF_Entity *child = process->first; !df_entity_is_nil(child); child = child->next)
   {
@@ -3355,7 +3354,6 @@ df_module_from_process_vaddr(DF_Entity *process, U64 vaddr)
       break;
     }
   }
-  ProfEnd();
   return module;
 }
 
@@ -4955,7 +4953,7 @@ df_expr_from_eval_viz_block_index(Arena *arena, DF_EvalVizBlock *block, U64 inde
             RDI_TypeNode *type_node = rdi_element_from_name_idx(module->rdi, TypeNodes, type_idx);
             E_TypeKey type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), type_idx, (U32)(module - e_parse_ctx->modules));
             item_expr = e_push_expr(arena, E_ExprKind_LeafBytecode, 0);
-            item_expr->mode     = E_Mode_Offset;
+            item_expr->mode     = E_Mode_Value;
             item_expr->space    = module->space;
             item_expr->type_key = type_key;
             item_expr->bytecode = bytecode;
@@ -7935,6 +7933,29 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
                 SLLQueuePush(first_task, last_task, child_task);
               }
             }
+          }
+        }break;
+        case DF_CoreCmdKind_RelocateEntity:
+        {
+          DF_Entity *entity = df_entity_from_handle(params.entity);
+          DF_Entity *location = df_entity_child_from_kind(entity, DF_EntityKind_Location);
+          if(df_entity_is_nil(location))
+          {
+            location = df_entity_alloc(entity, DF_EntityKind_Location);
+          }
+          location->flags &= ~DF_EntityFlag_HasTextPoint;
+          location->flags &= ~DF_EntityFlag_HasVAddr;
+          if(params.text_point.line != 0)
+          {
+            df_entity_equip_txt_pt(location, params.text_point);
+          }
+          if(params.vaddr != 0)
+          {
+            df_entity_equip_vaddr(location, params.vaddr);
+          }
+          if(params.file_path.size != 0)
+          {
+            df_entity_equip_name(location, params.file_path);
           }
         }break;
         

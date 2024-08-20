@@ -1630,10 +1630,8 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                   type_key = e_type_key_ext(E_TypeKind_Function, row->inline_site->type_idx, e_parse_ctx_module_idx_from_rdi(row->rdi));
                 }
                 U64 row_vaddr = regs_rip_from_arch_block(arch, row->regs);
-                DF_Entity *module = df_module_from_process_vaddr(process, row_vaddr);
-                U64 row_voff = df_voff_from_vaddr(module, row_vaddr);
                 E_OpList ops = {0};
-                e_oplist_push_op(scratch.arena, &ops, RDI_EvalOp_ModuleOff, row_voff);
+                e_oplist_push_op(scratch.arena, &ops, RDI_EvalOp_ConstU64, row_vaddr);
                 String8 bytecode = e_bytecode_from_oplist(scratch.arena, &ops);
                 E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafBytecode, 0);
                 expr->bytecode = bytecode;
