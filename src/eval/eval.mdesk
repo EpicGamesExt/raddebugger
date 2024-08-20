@@ -84,8 +84,8 @@ E_ExprKindTable:
   { Deref                UnaryPrefix         2        "*"                 "*"       ""        "" }
   { Address              UnaryPrefix         2        "&"                 "&"       ""        "" }
   
-  { Cast                 Null                0        "cast"              ""        ""        "" }
-  { Sizeof               UnaryPrefix         0        "sizeof"            "sizeof"  ""        "" }
+  { Cast                 Null                1        "cast"              ""        ""        "" }
+  { Sizeof               UnaryPrefix         1        "sizeof"            "sizeof"  ""        "" }
   
   { Neg                  UnaryPrefix         2        "-"                 "-"       ""        "" }
   { LogNot               UnaryPrefix         2        "!"                 "!"       ""        "" }

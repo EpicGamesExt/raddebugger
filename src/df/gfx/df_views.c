@@ -2774,7 +2774,6 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
           //- rjf: draw start of cache lines in expansions
           //
           if((row_eval.mode == E_Mode_Offset || row_eval.mode == E_Mode_Null) &&
-             row_eval.msgs.count == 0 &&
              row_eval.value.u64%64 == 0 && row->depth > 0 &&
              !row_expanded)
           {
@@ -2789,7 +2788,6 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
           //- rjf: draw mid-row cache line boundaries in expansions
           //
           if((row_eval.mode == E_Mode_Offset || row_eval.mode == E_Mode_Null) &&
-             row_eval.msgs.max_kind == E_MsgKind_Null &&
              row_eval.value.u64%64 != 0 &&
              row->depth > 0 &&
              !row_expanded)
@@ -2850,10 +2848,18 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                 }goto value_cell;
                 value_cell:;
                 {
-                  if(cell_eval.msgs.max_kind > E_MsgKind_Null)
+                  E_MsgList msgs = cell_eval.msgs;
+                  if(row->depth == 0 && row->string.size != 0)
+                  {
+                    E_TokenArray tokens = e_token_array_from_text(scratch.arena, row->string);
+                    E_Parse parse = e_parse_expr_from_text_tokens(scratch.arena, row->string, &tokens);
+                    e_msg_list_concat_in_place(&parse.msgs, &msgs);
+                    msgs = parse.msgs;
+                  }
+                  if(msgs.max_kind > E_MsgKind_Null)
                   {
                     String8List strings = {0};
-                    for(E_Msg *msg = cell_eval.msgs.first; msg != 0; msg = msg->next)
+                    for(E_Msg *msg = msgs.first; msg != 0; msg = msg->next)
                     {
                       str8_list_push(scratch.arena, &strings, msg->text);
                     }

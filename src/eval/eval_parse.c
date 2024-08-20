@@ -1191,14 +1191,21 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
       it = nested_parse.last_token;
       
       // rjf: build cast-to-U64*, and dereference operators
-      E_Expr *type = e_push_expr(arena, E_ExprKind_TypeIdent, token_string.str);
-      type->type_key = e_type_key_cons_ptr(e_type_key_basic(E_TypeKind_U64));
-      E_Expr *casted = atom;
-      E_Expr *cast = e_push_expr(arena, E_ExprKind_Cast, token_string.str);
-      e_expr_push_child(cast, type);
-      e_expr_push_child(cast, casted);
-      atom = e_push_expr(arena, E_ExprKind_Deref, token_string.str);
-      e_expr_push_child(atom, cast);
+      if(nested_parse.expr == &e_expr_nil)
+      {
+        e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, token_string.str, "Expected expression following `[`.");
+      }
+      else
+      {
+        E_Expr *type = e_push_expr(arena, E_ExprKind_TypeIdent, token_string.str);
+        type->type_key = e_type_key_cons_ptr(e_type_key_basic(E_TypeKind_U64));
+        E_Expr *casted = atom;
+        E_Expr *cast = e_push_expr(arena, E_ExprKind_Cast, token_string.str);
+        e_expr_push_child(cast, type);
+        e_expr_push_child(cast, casted);
+        atom = e_push_expr(arena, E_ExprKind_Deref, token_string.str);
+        e_expr_push_child(atom, cast);
+      }
       
       // rjf: expect ]
       E_Token close_paren_maybe = e_token_at_it(it, tokens);
@@ -1814,7 +1821,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
   }
   
   //- rjf: upgrade atom w/ previously parsed prefix unaries
-  if(atom == &e_expr_nil && first_prefix_unary != 0 && first_prefix_unary->cast_expr != 0)
+  if(atom == &e_expr_nil && first_prefix_unary != 0 && first_prefix_unary->cast_expr != &e_expr_nil)
   {
     atom = first_prefix_unary->cast_expr;
     for(PrefixUnaryNode *prefix_unary = first_prefix_unary->next;
@@ -1830,7 +1837,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
       e_expr_push_child(atom, rhs);
     }
   }
-  else if(atom == 0 && first_prefix_unary != 0)
+  else if(atom == &e_expr_nil && first_prefix_unary != 0)
   {
     e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, last_prefix_unary->location, "Missing expression.");
   }
