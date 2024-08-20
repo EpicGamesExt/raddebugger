@@ -6125,7 +6125,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           UI_Focus((hover_eval_is_open && !ui_any_ctx_menu_is_open() && ws->hover_eval_focused && (!query_is_open || !ws->query_view_selected)) ? UI_FocusKind_Null : UI_FocusKind_Off)
         {
           //- rjf: eval -> viz artifacts
-          F32 row_height = floor_f32(ui_top_font_size()*2.5f);
+          F32 row_height = floor_f32(ui_top_font_size()*2.8f);
           DF_CfgTable cfg_table = {0};
           U64 expr_hash = df_hash_from_string(expr);
           DF_EvalViewKey eval_view_key = df_eval_view_key_from_stringf("eval_hover_%I64x", expr_hash);
@@ -6169,12 +6169,28 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             }
           }
           
+          //- rjf: calculate width
+          F32 width_px = 40.f*ui_top_font_size();
+          F32 expr_column_width_px = 10.f*ui_top_font_size();
+          F32 value_column_width_px = 30.f*ui_top_font_size();
+          if(viz_rows.first != 0)
+          {
+            DF_EvalVizRow *row = viz_rows.first;
+            E_Eval row_eval = e_eval_from_expr(scratch.arena, row->expr);
+            String8 row_expr_string = df_expr_string_from_viz_row(scratch.arena, row);
+            String8 row_display_value = df_value_string_from_eval(scratch.arena, DF_EvalVizStringFlag_ReadOnlyDisplayRules, default_radix, ui_top_font(), ui_top_font_size(), 500.f, row_eval, row->cfg_table);
+            expr_column_width_px = f_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, 0, row_expr_string).x + ui_top_font_size()*2.5f;
+            value_column_width_px = f_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, 0, row_display_value).x + ui_top_font_size()*2.5f;
+            F32 total_dim_px = (expr_column_width_px + value_column_width_px);
+            width_px = Min(80.f*ui_top_font_size(), total_dim_px*1.5f);
+          }
+          
           //- rjf: build hover eval box
           F32 hover_eval_container_height = ws->hover_eval_num_visible_rows_t;
           F32 corner_radius = ui_top_font_size()*0.25f;
           ui_set_next_fixed_x(ws->hover_eval_spawn_pos.x);
           ui_set_next_fixed_y(ws->hover_eval_spawn_pos.y);
-          ui_set_next_pref_width(ui_em(80.f, 1.f));
+          ui_set_next_pref_width(ui_px(width_px, 1.f));
           ui_set_next_pref_height(ui_px(hover_eval_container_height, 1.f));
           ui_set_next_corner_radius_00(0);
           ui_set_next_corner_radius_01(corner_radius);
@@ -6204,8 +6220,6 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           //- rjf: build contents
           UI_Parent(hover_eval_box) UI_PrefHeight(ui_px(row_height, 1.f))
           {
-            F32 expr_column_width_px = 0;
-            
             //- rjf: build rows
             for(DF_EvalVizRow *row = viz_rows.first; row != 0; row = row->next)
             {
@@ -6217,31 +6231,32 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
               B32 row_is_editable = df_type_key_is_editable(row_eval.type_key);
               B32 row_is_expandable = df_type_key_is_expandable(row_eval.type_key);
               
-              //- rjf: calculate width of exp row
-              if(row == viz_rows.first)
-              {
-                expr_column_width_px = f_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, ui_top_tab_size(), row_display_value).x + ui_top_font_size()*2.5f;
-                expr_column_width_px = Max(expr_column_width_px, ui_top_font_size()*10.f);
-              }
-              
-              //- rjf: determine if row's data is fresh
+              //- rjf: determine if row's data is fresh and/or bad
               B32 row_is_fresh = 0;
+              B32 row_is_bad = 0;
               switch(row_eval.mode)
               {
                 default:{}break;
                 case E_Mode_Offset:
+                if(row_eval.space >= E_Space_FIXED_COUNT)
                 {
-                  // TODO(rjf): @spaces pick the right process from the eval's space
-                  U64 size = e_type_byte_size_from_key(row_eval.type_key);
-                  size = Min(size, 64);
-                  Rng1U64 vaddr_rng = r1u64(row_eval.value.u64, row_eval.value.u64+size);
-                  CTRL_ProcessMemorySlice slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, process->ctrl_machine_id, process->ctrl_handle, vaddr_rng, 0);
-                  for(U64 idx = 0; idx < (slice.data.size+63)/64; idx += 1)
+                  DF_Entity *space_entity = (DF_Entity *)row_eval.space;
+                  if(space_entity->kind == DF_EntityKind_Process)
                   {
-                    if(slice.byte_changed_flags[idx] != 0)
+                    U64 size = e_type_byte_size_from_key(row_eval.type_key);
+                    size = Min(size, 64);
+                    Rng1U64 vaddr_rng = r1u64(row_eval.value.u64, row_eval.value.u64+size);
+                    CTRL_ProcessMemorySlice slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, space_entity->ctrl_machine_id, space_entity->ctrl_handle, vaddr_rng, 0);
+                    for(U64 idx = 0; idx < (slice.data.size+63)/64; idx += 1)
                     {
-                      row_is_fresh = 1;
-                      break;
+                      if(slice.byte_changed_flags[idx] != 0)
+                      {
+                        row_is_fresh = 1;
+                      }
+                      if(slice.byte_bad_flags[idx] != 0)
+                      {
+                        row_is_bad = 1;
+                      }
                     }
                   }
                 }break;
@@ -6251,11 +6266,18 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
               UI_WidthFill UI_Row
               {
                 ui_spacer(ui_em(0.75f, 1.f));
-                ui_spacer(ui_em(1.5f*row->depth, 1.f));
+                if(row->depth > 0)
+                {
+                  for(S32 indent = 0; indent < row->depth; indent += 1)
+                  {
+                    ui_spacer(ui_em(0.75f, 1.f));
+                    UI_Flags(UI_BoxFlag_DrawSideLeft) ui_spacer(ui_em(1.5f, 1.f));
+                  }
+                }
                 U64 row_hash = df_hash_from_expand_key(row->key);
                 B32 row_is_expanded = df_expand_key_is_set(&eval_view->expand_tree_table, row->key);
                 if(row_is_expandable)
-                  UI_PrefWidth(ui_em(1.5f, 1)) UI_Flags(UI_BoxFlag_DrawSideLeft*(row->depth>0))
+                  UI_PrefWidth(ui_em(1.5f, 1)) 
                   if(ui_pressed(ui_expanderf(row_is_expanded, "###%I64x_%I64x_is_expanded", row->key.parent_hash, row->key.child_num)))
                 {
                   df_expand_set_expansion(eval_view->arena, &eval_view->expand_tree_table, row->parent_key, row->key, !row_is_expanded);
@@ -6263,7 +6285,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
                 if(!row_is_expandable)
                 {
                   UI_PrefWidth(ui_em(1.5f, 1))
-                    UI_Flags(UI_BoxFlag_DrawSideLeft*(row->depth>0) | UI_BoxFlag_DrawTextWeak)
+                    UI_Flags(UI_BoxFlag_DrawTextWeak)
                     DF_Font(ws, DF_FontSlot_Icons)
                     ui_label(df_g_icon_kind_text_table[DF_IconKind_Dot]);
                 }
@@ -8410,7 +8432,7 @@ df_append_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags flags, U32
       if(!did_content && ptee_has_content && (flags & DF_EvalVizStringFlag_ReadOnlyDisplayRules))
       {
         did_content = 1;
-        if(depth<4)
+        if(depth < 4)
         {
           E_Expr *deref_expr = e_expr_ref_deref(scratch.arena, eval.expr);
           E_Eval deref_eval = e_eval_from_expr(scratch.arena, deref_expr);

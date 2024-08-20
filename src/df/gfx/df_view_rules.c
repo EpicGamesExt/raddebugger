@@ -28,11 +28,11 @@ DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(default)
                                                    direct_type_kind == E_TypeKind_Class)))
   {
     // rjf: type -> filtered data members
-    E_MemberArray data_members = e_type_data_members_from_key(scratch.arena, e_type_kind_is_pointer_or_ref(type_kind) ? direct_type_key : type_key);
+    E_MemberArray data_members = e_type_data_members_from_key(arena, e_type_kind_is_pointer_or_ref(type_kind) ? direct_type_key : type_key);
     E_MemberArray filtered_data_members = df_filtered_data_members_from_members_cfg_table(arena, data_members, cfg_table);
     
     // rjf: build blocks for all members, split by sub-expansions
-    DF_EvalVizBlock *last_vb = df_eval_viz_block_begin(arena, DF_EvalVizBlockKind_Members, key, df_expand_key_make(df_hash_from_expand_key(key), 0), depth+1);
+    DF_EvalVizBlock *last_vb = df_eval_viz_block_begin(arena, DF_EvalVizBlockKind_Members, key, df_expand_key_make(df_hash_from_expand_key(key), 0), depth);
     {
       last_vb->expr             = expr;
       last_vb->cfg_table        = cfg_table;
@@ -66,7 +66,7 @@ DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(default)
       }
       
       // rjf: recurse for child
-      df_append_viz_blocks_for_parent__rec(arena, eval_view, key, child->key, str8_zero(), child_expr, child_cfg_table, depth+1, out);
+      df_append_viz_blocks_for_parent__rec(arena, eval_view, key, child->key, str8_zero(), child_expr, child_cfg_table, depth, out);
     }
     df_eval_viz_block_end(out, last_vb);
   }
@@ -80,7 +80,7 @@ DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(default)
           (e_type_kind_is_pointer_or_ref(type_kind) && direct_type_kind == E_TypeKind_Enum))
   {
     E_Type *type = e_type_from_key(arena, e_type_kind_is_pointer_or_ref(type_kind) ? direct_type_key : type_key);
-    DF_EvalVizBlock *last_vb = df_eval_viz_block_begin(arena, DF_EvalVizBlockKind_EnumMembers, key, df_expand_key_make(df_hash_from_expand_key(key), 0), depth+1);
+    DF_EvalVizBlock *last_vb = df_eval_viz_block_begin(arena, DF_EvalVizBlockKind_EnumMembers, key, df_expand_key_make(df_hash_from_expand_key(key), 0), depth);
     {
       last_vb->expr             = expr;
       last_vb->cfg_table        = cfg_table;
@@ -102,7 +102,7 @@ DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(default)
     U64 array_count = array_type->count;
     
     // rjf: build blocks for all elements, split by sub-expansions
-    DF_EvalVizBlock *last_vb = df_eval_viz_block_begin(arena, DF_EvalVizBlockKind_Elements, key, df_expand_key_make(df_hash_from_expand_key(key), 0), depth+1);
+    DF_EvalVizBlock *last_vb = df_eval_viz_block_begin(arena, DF_EvalVizBlockKind_Elements, key, df_expand_key_make(df_hash_from_expand_key(key), 0), depth);
     {
       last_vb->expr             = expr;
       last_vb->cfg_table        = cfg_table;
@@ -135,7 +135,7 @@ DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(default)
       }
       
       // rjf: recurse for child
-      df_append_viz_blocks_for_parent__rec(arena, eval_view, key, child->key, str8_zero(), child_expr, child_cfg_table, depth+1, out);
+      df_append_viz_blocks_for_parent__rec(arena, eval_view, key, child->key, str8_zero(), child_expr, child_cfg_table, depth, out);
     }
     df_eval_viz_block_end(out, last_vb);
   }
@@ -162,7 +162,7 @@ DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(default)
     
     // rjf: recurse for child
     E_Expr *child_expr = e_expr_ref_deref(arena, expr);
-    df_append_viz_blocks_for_parent__rec(arena, eval_view, key, child_key, str8_zero(), child_expr, child_cfg_table, depth+1, out);
+    df_append_viz_blocks_for_parent__rec(arena, eval_view, key, child_key, str8_zero(), child_expr, child_cfg_table, depth, out);
   }
   
   scratch_end(scratch);

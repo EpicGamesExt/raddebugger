@@ -4526,6 +4526,7 @@ df_filtered_data_members_from_members_cfg_table(Arena *arena, E_MemberArray memb
       {
         MemoryCopyStruct(&filtered_members.v[idx], n->member);
         filtered_members.v[idx].name = push_str8_copy(arena, filtered_members.v[idx].name);
+        filtered_members.v[idx].inheritance_key_chain = e_type_key_list_copy(arena, &filtered_members.v[idx].inheritance_key_chain);
       }
     }
     scratch_end(scratch);
@@ -5235,7 +5236,7 @@ df_expr_string_from_viz_row(Arena *arena, DF_EvalVizRow *row)
     {
       result = push_str8f(arena, "[%S]", e_string_from_expr(arena, row->expr->last));
     }break;
-    case E_ExprKind_LeafMember:
+    case E_ExprKind_MemberAccess:
     {
       result = push_str8f(arena, ".%S", e_string_from_expr(arena, row->expr->last));
     }break;

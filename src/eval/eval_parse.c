@@ -692,7 +692,7 @@ e_expr_ref_deref(Arena *arena, E_Expr *rhs)
   E_Expr *root = e_push_expr(arena, E_ExprKind_Deref, 0);
   E_Expr *rhs_ref = e_expr_ref(arena, rhs);
   e_expr_push_child(root, rhs_ref);
-  return rhs_ref;
+  return root;
 }
 
 ////////////////////////////////
@@ -743,6 +743,9 @@ e_append_strings_from_expr(Arena *arena, E_Expr *expr, String8List *out)
       str8_list_pushf(arena, out, "\"%S\"", expr->string);
     }break;
     case E_ExprKind_LeafU64:
+    {
+      str8_list_pushf(arena, out, "%I64u", expr->u64);
+    }break;
     case E_ExprKind_LeafID:
     {
       str8_list_pushf(arena, out, "0x%I64x", expr->u64);
@@ -759,6 +762,10 @@ e_append_strings_from_expr(Arena *arena, E_Expr *expr, String8List *out)
     {
       String8 type_string = e_type_string_from_key(arena, expr->type_key);
       str8_list_push(arena, out, type_string);
+    }break;
+    case E_ExprKind_Ref:
+    {
+      e_append_strings_from_expr(arena, expr->ref, out);
     }break;
   }
 }
