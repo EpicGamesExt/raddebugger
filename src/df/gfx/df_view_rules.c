@@ -176,7 +176,7 @@ DF_CORE_VIEW_RULE_EVAL_RESOLUTION_FUNCTION_DEF(array)
   Temp scratch = scratch_begin(&arena, 1);
   E_TypeKey type_key = eval.type_key;
   E_TypeKind type_kind = e_type_kind_from_key(type_key);
-  if(type_kind == E_TypeKind_Ptr || type_kind == E_TypeKind_LRef || type_kind == E_TypeKind_RRef)
+  if(e_type_kind_is_pointer_or_ref(type_kind))
   {
     DF_CfgNode *array_node = val->last;
     if(array_node != &df_g_nil_cfg_node)

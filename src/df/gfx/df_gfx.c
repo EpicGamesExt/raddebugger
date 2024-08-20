@@ -8355,7 +8355,7 @@ df_append_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags flags, U32
   }
   
   //- rjf: value/offset evaluations
-  else if(max_size > 0) switch(e_type_kind_from_key(eval.type_key))
+  else if(max_size > 0) switch(e_type_kind_from_key(e_type_unwrap(eval.type_key)))
   {
     //- rjf: default - leaf cases
     default:
@@ -8373,8 +8373,8 @@ df_append_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags flags, U32
     case E_TypeKind_RRef:
     {
       // rjf: unpack type info
-      E_TypeKind type_kind = e_type_kind_from_key(eval.type_key);
-      E_TypeKey direct_type_key = e_type_ptee_from_key(eval.type_key);
+      E_TypeKind type_kind = e_type_kind_from_key(e_type_unwrap(eval.type_key));
+      E_TypeKey direct_type_key = e_type_unwrap(e_type_ptee_from_key(e_type_unwrap(eval.type_key)));
       E_TypeKind direct_type_kind = e_type_kind_from_key(direct_type_key);
       
       // rjf: unpack info about pointer destination
@@ -8420,12 +8420,26 @@ df_append_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags flags, U32
       
       // rjf: special case: push strings for symbols
       if(!did_content && symbol_name.size != 0 &&
-         (type_kind == E_TypeKind_Function || direct_type_kind == E_TypeKind_Function || direct_type_kind == E_TypeKind_Void) &&
+         ((type_kind == E_TypeKind_Ptr && direct_type_kind == E_TypeKind_Void) ||
+          (type_kind == E_TypeKind_Ptr && direct_type_kind == E_TypeKind_Function) ||
+          (type_kind == E_TypeKind_Function)) &&
          (flags & DF_EvalVizStringFlag_ReadOnlyDisplayRules))
       {
         did_content = 1;
         str8_list_push(arena, out, symbol_name);
         space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, symbol_name).x;
+      }
+      
+      // rjf: special case: need symbol name, don't have one
+      if(!did_content && symbol_name.size == 0 &&
+         ((type_kind == E_TypeKind_Ptr && direct_type_kind == E_TypeKind_Function) ||
+          (type_kind == E_TypeKind_Function)) &&
+         (flags & DF_EvalVizStringFlag_ReadOnlyDisplayRules))
+      {
+        did_content = 1;
+        String8 string = str8_lit("???");
+        str8_list_push(arena, out, string);
+        space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, string).x;
       }
       
       // rjf: descend for all other cases
@@ -8448,7 +8462,7 @@ df_append_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags flags, U32
       
       // rjf: push pointer value
       B32 did_ptr_value = 0;
-      if((!no_addr || !did_content) && depth == 0)
+      if(!no_addr || !did_content)
       {
         did_ptr_value = 1;
         if(did_content)
@@ -8473,7 +8487,7 @@ df_append_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags flags, U32
     case E_TypeKind_Array:
     {
       // rjf: unpack type info
-      E_Type *eval_type = e_type_from_key(scratch.arena, eval.type_key);
+      E_Type *eval_type = e_type_from_key(scratch.arena, e_type_unwrap(eval.type_key));
       E_TypeKey direct_type_key = eval_type->direct_type_key;
       E_TypeKind direct_type_kind = e_type_kind_from_key(direct_type_key);
       U64 array_count = eval_type->count;
@@ -8588,7 +8602,7 @@ df_append_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags flags, U32
       // rjf: content
       if(depth < 4)
       {
-        E_MemberArray data_members = e_type_data_members_from_key(scratch.arena, eval.type_key);
+        E_MemberArray data_members = e_type_data_members_from_key(scratch.arena, e_type_unwrap(eval.type_key));
         E_MemberArray filtered_data_members = df_filtered_data_members_from_members_cfg_table(scratch.arena, data_members, cfg_table);
         for(U64 member_idx = 0; member_idx < filtered_data_members.count && max_size > space_taken; member_idx += 1)
         {
