@@ -1233,25 +1233,6 @@ df_string_from_eval_viz_row_column(Arena *arena, DF_EvalView *ev, DF_EvalVizRow 
     case DF_WatchViewColumnKind_Expr:
     {
       result = df_expr_string_from_viz_row(arena, row);
-      if(row->member != 0 && row->member->inheritance_key_chain.first != 0)
-      {
-        Temp scratch = scratch_begin(&arena, 1);
-        String8List inheritance_chain_type_names = {0};
-        for(E_TypeKeyNode *n = row->member->inheritance_key_chain.first; n != 0; n = n->next)
-        {
-          String8 inherited_type_name = e_type_string_from_key(scratch.arena, n->v);
-          inherited_type_name = str8_skip_chop_whitespace(inherited_type_name);
-          str8_list_push(scratch.arena, &inheritance_chain_type_names, inherited_type_name);
-        }
-        if(inheritance_chain_type_names.node_count != 0)
-        {
-          StringJoin join = {0};
-          join.sep = str8_lit("::");
-          String8 inheritance_type = str8_list_join(scratch.arena, &inheritance_chain_type_names, &join);
-          result = push_str8f(scratch.arena, "%S::%S", inheritance_type, result);
-        }
-        scratch_end(scratch);
-      }
     }break;
     case DF_WatchViewColumnKind_Value:
     {
@@ -2822,6 +2803,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
               E_Eval cell_eval = row_eval;
               B32 cell_can_edit = 0;
               FuzzyMatchRangeList cell_matches = {0};
+              String8 cell_inheritance_string = {0};
               String8 cell_error_string = {0};
               String8 cell_error_tooltip_string = {0};
               DF_AutoCompListerFlags cell_autocomp_flags = 0;
@@ -2839,6 +2821,23 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                     cell_matches = fuzzy_match_find(scratch.arena, filter, df_expr_string_from_viz_row(scratch.arena, row));
                   }
                   cell_autocomp_flags = DF_AutoCompListerFlag_Locals;
+                  if(row->member != 0 && row->member->inheritance_key_chain.first != 0)
+                  {
+                    String8List inheritance_chain_type_names = {0};
+                    for(E_TypeKeyNode *n = row->member->inheritance_key_chain.first; n != 0; n = n->next)
+                    {
+                      String8 inherited_type_name = e_type_string_from_key(scratch.arena, n->v);
+                      inherited_type_name = str8_skip_chop_whitespace(inherited_type_name);
+                      str8_list_push(scratch.arena, &inheritance_chain_type_names, inherited_type_name);
+                    }
+                    if(inheritance_chain_type_names.node_count != 0)
+                    {
+                      StringJoin join = {0};
+                      join.sep = str8_lit("::");
+                      String8 inheritance_type = str8_list_join(scratch.arena, &inheritance_chain_type_names, &join);
+                      cell_inheritance_string = inheritance_type;
+                    }
+                  }
                 }break;
                 case DF_WatchViewColumnKind_Value:
                 {
@@ -3037,6 +3036,16 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                   p.unwind_index = frame_row->unwind_idx;
                   p.inline_depth = frame_row->inline_depth;
                   df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_SelectUnwind));
+                }
+                
+                // rjf: hovering with inheritance string -> show tooltip
+                if(ui_hovering(sig) && cell_inheritance_string.size != 0) UI_Tooltip
+                {
+                  UI_PrefWidth(ui_children_sum(1)) UI_Row UI_PrefWidth(ui_text_dim(1, 1))
+                  {
+                    ui_labelf("Inherited from ");
+                    DF_Font(ws, DF_FontSlot_Code) df_code_label(1.f, 0, df_rgba_from_theme_color(DF_ThemeColor_CodeDefault), cell_inheritance_string);
+                  }
                 }
                 
                 // rjf: hovering with error tooltip -> show tooltip
