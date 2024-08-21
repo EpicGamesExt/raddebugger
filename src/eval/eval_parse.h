@@ -136,9 +136,6 @@ struct E_String2ExprMap
 typedef struct E_ParseCtx E_ParseCtx;
 struct E_ParseCtx
 {
-  // rjf: architecture
-  Architecture arch;
-  
   // rjf: instruction pointer info
   U64 ip_vaddr;
   U64 ip_voff;

@@ -904,7 +904,7 @@ e_type_from_expr(E_Expr *expr)
     case E_ExprKind_Ptr:
     {
       E_TypeKey direct_type_key = e_type_from_expr(expr->first);
-      result = e_type_key_cons_ptr(direct_type_key);
+      result = e_type_key_cons_ptr(e_parse_ctx->primary_module->arch, direct_type_key);
     }break;
     case E_ExprKind_Array:
     {
@@ -1198,7 +1198,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
       else
       {
         E_Expr *type = e_push_expr(arena, E_ExprKind_TypeIdent, token_string.str);
-        type->type_key = e_type_key_cons_ptr(e_type_key_basic(E_TypeKind_U64));
+        type->type_key = e_type_key_cons_ptr(e_parse_ctx->primary_module->arch, e_type_key_basic(E_TypeKind_U64));
         E_Expr *casted = atom;
         E_Expr *cast = e_push_expr(arena, E_ExprKind_Cast, token_string.str);
         e_expr_push_child(cast, type);
@@ -1243,6 +1243,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
           E_TypeKey               type_key = zero_struct;
           String8                 local_lookup_string = token_string;
           E_Space                 space = E_Space_Null;
+          Architecture            arch = Architecture_Null;
           
           //- rjf: identifiers surrounded by ``s should have those `s stripped
           if(local_lookup_string.size >= 2 &&
@@ -1315,6 +1316,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
                 {
                   mapped_identifier = 1;
                   space = module->space;
+                  arch = module->arch;
                   U64 all_location_data_size = 0;
                   U8 *all_location_data = rdi_table_from_name(rdi, LocationData, &all_location_data_size);
                   loc_kind = *((RDI_LocationKind *)(all_location_data + block->location_data_off));
@@ -1362,9 +1364,10 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
             if(reg_num != 0)
             {
               reg_code = reg_num;
-              type_key = e_type_key_reg(e_parse_ctx->arch, reg_code);
+              type_key = e_type_key_reg(e_parse_ctx->primary_module->arch, reg_code);
               mapped_identifier = 1;
               space = E_Space_Regs;
+              arch = e_parse_ctx->primary_module->arch;
             }
           }
           
@@ -1375,9 +1378,10 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
             if(alias_num != 0)
             {
               alias_code = (REGS_AliasCode)alias_num;
-              type_key = e_type_key_reg_alias(e_parse_ctx->arch, alias_code);
+              type_key = e_type_key_reg_alias(e_parse_ctx->primary_module->arch, alias_code);
               mapped_identifier = 1;
               space = E_Space_Regs;
+              arch = e_parse_ctx->primary_module->arch;
             }
           }
           
@@ -1419,6 +1423,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
                 type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), type_idx, (U32)module_idx);
                 mapped_identifier = 1;
                 space = module->space;
+                arch = module->arch;
                 break;
               }
             }
@@ -1458,6 +1463,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
                 type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), type_idx, (U32)module_idx);
                 mapped_identifier = 1;
                 space = module->space;
+                arch = module->arch;
                 break;
               }
             }
@@ -1499,6 +1505,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
                 type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), type_idx, (U32)module_idx);
                 mapped_identifier = 1;
                 space = module->space;
+                arch = module->arch;
                 break;
               }
             }
@@ -1513,6 +1520,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
               mapped_identifier = 1;
               identifier_looks_like_type_expr = 1;
               space = E_Space_Null;
+              arch = e_parse_ctx->primary_module->arch;
             }
           }
           
@@ -1537,7 +1545,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
                 }
                 else if(reg_code != 0)
                 {
-                  REGS_Rng reg_rng = regs_reg_code_rng_table_from_architecture(e_parse_ctx->arch)[reg_code];
+                  REGS_Rng reg_rng = regs_reg_code_rng_table_from_architecture(e_parse_ctx->primary_module->arch)[reg_code];
                   E_OpList oplist = {0};
                   e_oplist_push_uconst(arena, &oplist, reg_rng.byte_off);
                   atom = e_push_expr(arena, E_ExprKind_LeafBytecode, token_string.str);
@@ -1549,8 +1557,8 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
                 }
                 else if(alias_code != 0)
                 {
-                  REGS_Slice alias_slice = regs_alias_code_slice_table_from_architecture(e_parse_ctx->arch)[alias_code];
-                  REGS_Rng alias_reg_rng = regs_reg_code_rng_table_from_architecture(e_parse_ctx->arch)[alias_slice.code];
+                  REGS_Slice alias_slice = regs_alias_code_slice_table_from_architecture(e_parse_ctx->primary_module->arch)[alias_code];
+                  REGS_Rng alias_reg_rng = regs_reg_code_rng_table_from_architecture(e_parse_ctx->primary_module->arch)[alias_slice.code];
                   E_OpList oplist = {0};
                   e_oplist_push_uconst(arena, &oplist, alias_reg_rng.byte_off + alias_slice.byte_off);
                   atom = e_push_expr(arena, E_ExprKind_LeafBytecode, token_string.str);
@@ -1586,7 +1594,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
               case RDI_LocationKind_AddrRegPlusU16:
               {
                 E_OpList oplist = {0};
-                U64 byte_size = bit_size_from_arch(e_parse_ctx->arch)/8;
+                U64 byte_size = bit_size_from_arch(arch)/8;
                 U64 regread_param = RDI_EncodeRegReadParam(loc_reg_u16.reg_code, byte_size, 0);
                 e_oplist_push_op(arena, &oplist, RDI_EvalOp_RegRead, regread_param);
                 e_oplist_push_op(arena, &oplist, RDI_EvalOp_ConstU16, loc_reg_u16.offset);
@@ -1601,12 +1609,12 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
               case RDI_LocationKind_AddrAddrRegPlusU16:
               {
                 E_OpList oplist = {0};
-                U64 byte_size = bit_size_from_arch(e_parse_ctx->arch)/8;
+                U64 byte_size = bit_size_from_arch(arch)/8;
                 U64 regread_param = RDI_EncodeRegReadParam(loc_reg_u16.reg_code, byte_size, 0);
                 e_oplist_push_op(arena, &oplist, RDI_EvalOp_RegRead, regread_param);
                 e_oplist_push_op(arena, &oplist, RDI_EvalOp_ConstU16, loc_reg_u16.offset);
                 e_oplist_push_op(arena, &oplist, RDI_EvalOp_Add, 0);
-                e_oplist_push_op(arena, &oplist, RDI_EvalOp_MemRead, bit_size_from_arch(e_parse_ctx->arch)/8);
+                e_oplist_push_op(arena, &oplist, RDI_EvalOp_MemRead, bit_size_from_arch(arch)/8);
                 atom = e_push_expr(arena, E_ExprKind_LeafBytecode, token_string.str);
                 atom->mode     = E_Mode_Offset;
                 atom->space    = space;
@@ -1616,8 +1624,8 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
               }break;
               case RDI_LocationKind_ValReg:
               {
-                REGS_RegCode regs_reg_code = regs_reg_code_from_arch_rdi_code(e_parse_ctx->arch, loc_reg.reg_code);
-                REGS_Rng reg_rng = regs_reg_code_rng_table_from_architecture(e_parse_ctx->arch)[regs_reg_code];
+                REGS_RegCode regs_reg_code = regs_reg_code_from_arch_rdi_code(arch, loc_reg.reg_code);
+                REGS_Rng reg_rng = regs_reg_code_rng_table_from_architecture(arch)[regs_reg_code];
                 E_OpList oplist = {0};
                 U64 byte_size = (U64)reg_rng.byte_size;
                 U64 byte_pos = 0;

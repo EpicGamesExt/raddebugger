@@ -101,6 +101,7 @@ struct E_Module
 {
   RDI_Parsed *rdi;
   Rng1U64 vaddr_range;
+  Architecture arch;
   E_Space space;
 };
 

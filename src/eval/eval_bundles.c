@@ -62,7 +62,7 @@ e_autoresolved_eval_from_eval(E_Eval eval)
     if(string_idx == 0) { string_idx = gvar->name_string_idx; }
     if(string_idx != 0)
     {
-      eval.type_key = e_type_key_cons_ptr(e_type_key_basic(E_TypeKind_Void));
+      eval.type_key = e_type_key_cons_ptr(e_type_state->ctx->primary_module->arch, e_type_key_basic(E_TypeKind_Void));
     }
   }
   return eval;
@@ -97,12 +97,13 @@ e_dynamically_typed_eval_from_eval(E_Eval eval)
       if(has_vtable)
       {
         U64 ptr_vaddr = eval.value.u64;
-        U64 addr_size = bit_size_from_arch(e_interpret_ctx->arch)/8;
+        U64 addr_size = e_type_byte_size_from_key(e_type_unwrap(type_key));
         U64 class_base_vaddr = 0;
         U64 vtable_vaddr = 0;
         if(e_space_read(eval.space, &class_base_vaddr, r1u64(ptr_vaddr, ptr_vaddr+addr_size)) &&
            e_space_read(eval.space, &vtable_vaddr, r1u64(class_base_vaddr, class_base_vaddr+addr_size)))
         {
+          Architecture arch = e_type_state->ctx->primary_module->arch;
           U32 rdi_idx = 0;
           RDI_Parsed *rdi = 0;
           U64 module_base = 0;
@@ -110,6 +111,7 @@ e_dynamically_typed_eval_from_eval(E_Eval eval)
           {
             if(contains_1u64(e_type_state->ctx->modules[idx].vaddr_range, vtable_vaddr))
             {
+              arch = e_type_state->ctx->modules[idx].arch;
               rdi_idx = (U32)idx;
               rdi = e_type_state->ctx->modules[idx].rdi;
               module_base = e_type_state->ctx->modules[idx].vaddr_range.min;
@@ -126,7 +128,7 @@ e_dynamically_typed_eval_from_eval(E_Eval eval)
               RDI_UDT *udt = rdi_element_from_name_idx(rdi, UDTs, global_var->container_idx);
               RDI_TypeNode *type = rdi_element_from_name_idx(rdi, TypeNodes, udt->self_type_idx);
               E_TypeKey derived_type_key = e_type_key_ext(e_type_kind_from_rdi(type->kind), udt->self_type_idx, rdi_idx);
-              E_TypeKey ptr_to_derived_type_key = e_type_key_cons_ptr(derived_type_key);
+              E_TypeKey ptr_to_derived_type_key = e_type_key_cons_ptr(arch, derived_type_key);
               eval.type_key = ptr_to_derived_type_key;
             }
           }

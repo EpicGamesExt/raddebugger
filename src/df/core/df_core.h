@@ -401,6 +401,18 @@ struct DF_EntityRec
 };
 
 ////////////////////////////////
+//~ rjf: Entity Evaluation Types
+
+typedef struct DF_EntityEval DF_EntityEval;
+struct DF_EntityEval
+{
+  B64 enabled;
+  U64 hit_count;
+  U64 label_off;
+  U64 location_off;
+};
+
+////////////////////////////////
 //~ rjf: Entity Fuzzy Listing Types
 
 typedef struct DF_EntityFuzzyItem DF_EntityFuzzyItem;
@@ -1412,6 +1424,9 @@ internal Vec4F32 df_rgba_from_entity(DF_Entity *entity);
 //- rjf: entity -> expansion tree keys
 internal DF_ExpandKey df_expand_key_from_entity(DF_Entity *entity);
 internal DF_ExpandKey df_parent_expand_key_from_entity(DF_Entity *entity);
+
+//- rjf: entity -> evaluation
+internal DF_EntityEval *df_eval_from_entity(Arena *arena, DF_Entity *entity);
 
 ////////////////////////////////
 //~ rjf: Name Allocation

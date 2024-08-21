@@ -1411,6 +1411,32 @@ df_parent_expand_key_from_entity(DF_Entity *entity)
   return parent_key;
 }
 
+//- rjf: entity -> evaluation
+
+internal DF_EntityEval *
+df_eval_from_entity(Arena *arena, DF_Entity *entity)
+{
+  DF_EntityEval *eval = push_array(arena, DF_EntityEval, 1);
+  {
+    DF_Entity *loc = df_entity_child_from_kind(entity, DF_EntityKind_Location);
+    String8 label_string = push_str8_copy(arena, entity->name);
+    String8 loc_string = {0};
+    if(loc->flags & DF_EntityFlag_HasTextPoint)
+    {
+      loc_string = push_str8f(arena, "%S:%I64u:%I64u", loc->name, loc->text_point.line, loc->text_point.column);
+    }
+    else if(loc->flags & DF_EntityFlag_HasVAddr)
+    {
+      loc_string = push_str8f(arena, "0x%I64x", loc->vaddr);
+    }
+    eval->enabled      = !entity->disabled;
+    eval->hit_count    = entity->u64;
+    eval->label_off    = (U64)((U8 *)label_string.str - (U8 *)eval);
+    eval->location_off = (U64)((U8 *)loc_string.str - (U8 *)eval);
+  }
+  return eval;
+}
+
 ////////////////////////////////
 //~ rjf: Name Allocation
 
@@ -3707,10 +3733,21 @@ df_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
   DF_Entity *entity = (DF_Entity *)space;
   switch(entity->kind)
   {
-    default:{}break;
-    case DF_EntityKind_Breakpoint:
+    default:
     {
-      // TODO(rjf)
+      Temp scratch = scratch_begin(0, 0);
+      arena_push(scratch.arena, 0, 64);
+      U64 pos_min = arena_pos(scratch.arena);
+      DF_EntityEval *eval = df_eval_from_entity(scratch.arena, entity);
+      U64 pos_opl = arena_pos(scratch.arena);
+      U64 off_min = 0;
+      U64 off_opl = pos_opl - pos_min;
+      if(off_min <= range.min && range.max <= off_opl)
+      {
+        result = 1;
+        MemoryCopy(out, (U8 *)eval + range.min, dim_1u64(range));
+      }
+      scratch_end(scratch);
     }break;
     case DF_EntityKind_Process:
     {
@@ -8322,6 +8359,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
     {
       DF_Entity *m = n->entity;
       DI_Key dbgi_key = df_dbgi_key_from_module(m);
+      eval_modules[eval_module_idx].arch        = df_architecture_from_entity(m);
       eval_modules[eval_module_idx].rdi         = di_rdi_from_key(df_state->frame_di_scope, &dbgi_key, 0);
       eval_modules[eval_module_idx].vaddr_range = m->vaddr_rng;
       eval_modules[eval_module_idx].space       = (U64)df_entity_ancestor_from_kind(m, DF_EntityKind_Process);
@@ -8355,7 +8393,6 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
   E_TypeCtx *type_ctx = push_array(arena, E_TypeCtx, 1);
   {
     E_TypeCtx *ctx = type_ctx;
-    ctx->arch              = arch;
     ctx->ip_vaddr          = rip_vaddr;
     ctx->ip_voff           = rip_voff;
     ctx->modules           = eval_modules;
@@ -8369,14 +8406,13 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
   ProfScope("build eval parse context")
   {
     E_ParseCtx *ctx = parse_ctx;
-    ctx->arch              = arch;
     ctx->ip_vaddr          = rip_vaddr;
     ctx->ip_voff           = rip_voff;
     ctx->modules           = eval_modules;
     ctx->modules_count     = eval_modules_count;
     ctx->primary_module    = eval_modules_primary;
-    ctx->regs_map      = ctrl_string2reg_from_arch(ctx->arch);
-    ctx->reg_alias_map = ctrl_string2alias_from_arch(ctx->arch);
+    ctx->regs_map      = ctrl_string2reg_from_arch(ctx->primary_module->arch);
+    ctx->reg_alias_map = ctrl_string2alias_from_arch(ctx->primary_module->arch);
     ctx->locals_map    = df_query_cached_locals_map_from_dbgi_key_voff(&primary_dbgi_key, rip_voff);
     ctx->member_map    = df_query_cached_member_map_from_dbgi_key_voff(&primary_dbgi_key, rip_voff);
   }
@@ -8428,11 +8464,11 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
   E_InterpretCtx *interpret_ctx = push_array(arena, E_InterpretCtx, 1);
   {
     E_InterpretCtx *ctx = interpret_ctx;
-    ctx->arch          = arch;
     ctx->space_read_user_data = process;
     ctx->space_read    = df_eval_space_read;
     ctx->primary_space = eval_modules_primary->space;
-    ctx->reg_size      = regs_block_size_from_architecture(ctx->arch);
+    ctx->reg_arch      = eval_modules_primary->arch;
+    ctx->reg_size      = regs_block_size_from_architecture(eval_modules_primary->arch);
     ctx->reg_data      = push_array(arena, U8, ctx->reg_size);
     ctx->module_base   = push_array(arena, U64, 1);
     ctx->module_base[0]= module->vaddr_rng.min;

@@ -398,9 +398,9 @@ e_type_key_cons_array(E_TypeKey element_type_key, U64 count)
 }
 
 internal E_TypeKey
-e_type_key_cons_ptr(E_TypeKey element_type_key)
+e_type_key_cons_ptr(Architecture arch, E_TypeKey element_type_key)
 {
-  E_TypeKey key = e_type_key_cons(.kind = E_TypeKind_Ptr, .direct_key = element_type_key);
+  E_TypeKey key = e_type_key_cons(.arch = arch, .kind = E_TypeKind_Ptr, .direct_key = element_type_key);
   return key;
 }
 
@@ -479,7 +479,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
               }break;
               case E_TypeKind_Ptr:
               {
-                type->byte_size = bit_size_from_arch(e_type_state->ctx->arch)/8;
+                type->byte_size = bit_size_from_arch(node->params.arch)/8;
               }break;
               case E_TypeKind_Array:
               {
@@ -651,7 +651,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
                 type = push_array(arena, E_Type, 1);
                 type->kind            = kind;
                 type->direct_type_key = direct_type_key;
-                type->byte_size       = bit_size_from_arch(e_type_state->ctx->arch)/8;
+                type->byte_size       = bit_size_from_arch(e_type_state->ctx->modules[rdi_idx].arch)/8;
               }break;
               
               case RDI_TypeKind_Array:
@@ -672,7 +672,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
                 {
                   type = push_array(arena, E_Type, 1);
                   type->kind            = kind;
-                  type->byte_size       = bit_size_from_arch(e_type_state->ctx->arch)/8;
+                  type->byte_size       = bit_size_from_arch(e_type_state->ctx->modules[rdi_idx].arch)/8;
                   type->direct_type_key = direct_type_key;
                   type->count           = count;
                   type->param_type_keys = push_array_no_zero(arena, E_TypeKey, type->count);
@@ -705,7 +705,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
                 {
                   type = push_array(arena, E_Type, 1);
                   type->kind            = kind;
-                  type->byte_size       = bit_size_from_arch(e_type_state->ctx->arch)/8;
+                  type->byte_size       = bit_size_from_arch(e_type_state->ctx->modules[rdi_idx].arch)/8;
                   type->owner_type_key  = direct_type_key;
                   type->count           = count;
                   type->param_type_keys = push_array_no_zero(arena, E_TypeKey, type->count);
@@ -743,7 +743,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
                 }
                 type = push_array(arena, E_Type, 1);
                 type->kind            = kind;
-                type->byte_size       = bit_size_from_arch(e_type_state->ctx->arch)/8;
+                type->byte_size       = bit_size_from_arch(e_type_state->ctx->modules[rdi_idx].arch)/8;
                 type->owner_type_key  = owner_type_key;
                 type->direct_type_key = direct_type_key;
               }break;

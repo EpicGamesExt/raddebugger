@@ -169,8 +169,8 @@ e_interpret(String8 bytecode)
         U8 rdi_reg_code     = (imm&0x0000FF)>>0;
         U8 byte_size        = (imm&0x00FF00)>>8;
         U8 byte_off         = (imm&0xFF0000)>>16;
-        REGS_RegCode base_reg_code = regs_reg_code_from_arch_rdi_code(e_interpret_ctx->arch, rdi_reg_code);
-        REGS_Rng rng = regs_reg_code_rng_table_from_architecture(e_interpret_ctx->arch)[base_reg_code];
+        REGS_RegCode base_reg_code = regs_reg_code_from_arch_rdi_code(e_interpret_ctx->reg_arch, rdi_reg_code);
+        REGS_Rng rng = regs_reg_code_rng_table_from_architecture(e_interpret_ctx->reg_arch)[base_reg_code];
         U64 off = (U64)rng.byte_off + byte_off;
         U64 size = (U64)byte_size;
         if(off + size <= e_interpret_ctx->reg_size)
@@ -187,7 +187,7 @@ e_interpret(String8 bytecode)
       case RDI_EvalOp_RegReadDyn:
       {
         U64 off  = svals[0].u64;
-        U64 size = bit_size_from_arch(e_interpret_ctx->arch)/8;
+        U64 size = bit_size_from_arch(e_interpret_ctx->reg_arch)/8;
         if(off + size <= e_interpret_ctx->reg_size)
         {
           MemoryCopy(&nval, (U8*)e_interpret_ctx->reg_data + off, size);

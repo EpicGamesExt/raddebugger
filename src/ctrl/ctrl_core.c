@@ -4672,6 +4672,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
                   if(mod->kind != CTRL_EntityKind_Module) { continue; }
                   CTRL_Entity *dbg_path = ctrl_entity_child_from_kind(mod, CTRL_EntityKind_DebugInfoPath);
                   DI_Key dbgi_key = {dbg_path->string, dbg_path->timestamp};
+                  eval_modules[eval_module_idx].arch        = arch;
                   eval_modules[eval_module_idx].rdi         = di_rdi_from_key(di_scope, &dbgi_key, max_U64);
                   eval_modules[eval_module_idx].vaddr_range = mod->vaddr_range;
                   eval_modules[eval_module_idx].space       = (U64)process;
@@ -4692,7 +4693,6 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
             E_TypeCtx type_ctx = zero_struct;
             {
               E_TypeCtx *ctx = &type_ctx;
-              ctx->arch              = arch;
               ctx->ip_vaddr          = thread_rip_vaddr;
               ctx->ip_voff           = thread_rip_voff;
               ctx->modules           = eval_modules;
@@ -4705,14 +4705,13 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
             ProfScope("build eval parse context")
             {
               E_ParseCtx *ctx = &parse_ctx;
-              ctx->arch              = arch;
               ctx->ip_vaddr          = thread_rip_vaddr;
               ctx->ip_voff           = thread_rip_voff;
               ctx->modules           = eval_modules;
               ctx->modules_count     = eval_modules_count;
               ctx->primary_module    = eval_modules_primary;
-              ctx->regs_map      = ctrl_string2reg_from_arch(ctx->arch);
-              ctx->reg_alias_map = ctrl_string2alias_from_arch(ctx->arch);
+              ctx->regs_map      = ctrl_string2reg_from_arch(arch);
+              ctx->reg_alias_map = ctrl_string2alias_from_arch(arch);
               ctx->locals_map    = e_push_locals_map_from_rdi_voff(temp.arena, eval_modules_primary->rdi, thread_rip_voff);
               ctx->member_map    = e_push_member_map_from_rdi_voff(temp.arena, eval_modules_primary->rdi, thread_rip_voff);
             }
@@ -4728,11 +4727,11 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
             E_InterpretCtx interpret_ctx = zero_struct;
             {
               E_InterpretCtx *ctx = &interpret_ctx;
-              ctx->arch          = arch;
               ctx->space_read_user_data = ctrl_state->ctrl_thread_entity_store;
               ctx->space_read    = ctrl_eval_space_read;
               ctx->primary_space = eval_modules_primary->space;
-              ctx->reg_size      = regs_block_size_from_architecture(ctx->arch);
+              ctx->reg_arch      = eval_modules_primary->arch;
+              ctx->reg_size      = regs_block_size_from_architecture(eval_modules_primary->arch);
               ctx->reg_data      = push_array(temp.arena, U8, ctx->reg_size);
               dmn_thread_read_reg_block(event->thread, ctx->reg_data);
               ctx->module_base   = push_array(temp.arena, U64, 1);

@@ -138,6 +138,7 @@ struct E_Type
 typedef struct E_ConsTypeParams E_ConsTypeParams;
 struct E_ConsTypeParams
 {
+  Architecture arch;
   E_TypeKind kind;
   String8 name;
   E_TypeKey direct_key;
@@ -165,12 +166,9 @@ struct E_ConsTypeSlot
 typedef struct E_TypeCtx E_TypeCtx;
 struct E_TypeCtx
 {
-  // rjf: architecture
-  Architecture arch;
-  
   // rjf: instruction pointer info
   U64 ip_vaddr;
-  U64 ip_voff; // (within module, which uses `rdis[rdis_primary_idx]` for debug info)
+  U64 ip_voff; // (within `primary_module`)
   
   // rjf: debug info
   E_Module *modules;
@@ -243,7 +241,7 @@ internal E_TypeKey e_type_key_cons_(E_ConsTypeParams *params);
 
 //- rjf: constructed type construction helpers
 internal E_TypeKey e_type_key_cons_array(E_TypeKey element_type_key, U64 count);
-internal E_TypeKey e_type_key_cons_ptr(E_TypeKey element_type_key);
+internal E_TypeKey e_type_key_cons_ptr(Architecture arch, E_TypeKey element_type_key);
 
 //- rjf: basic type key functions
 internal B32 e_type_key_match(E_TypeKey l, E_TypeKey r);

@@ -199,7 +199,7 @@ DF_CORE_VIEW_RULE_EVAL_RESOLUTION_FUNCTION_DEF(array)
       // rjf: apply array size to type
       E_TypeKey pointee = e_type_ptee_from_key(type_key);
       E_TypeKey array_type = e_type_key_cons_array(pointee, array_size);
-      eval.type_key = e_type_key_cons_ptr(array_type);
+      eval.type_key = e_type_key_cons_ptr(e_type_state->ctx->primary_module->arch, array_type);
     }
   }
   scratch_end(scratch);

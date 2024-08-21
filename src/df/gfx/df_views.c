@@ -1502,13 +1502,13 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
               {
                 E_MemberList bp_members = {0};
                 {
-                  e_member_list_push_new(scratch.arena, &bp_members, .name = str8_lit("Disabled"), .off = 0,        .type_key = e_type_key_basic(E_TypeKind_S64));
+                  e_member_list_push_new(scratch.arena, &bp_members, .name = str8_lit("Enabled"),  .off = 0,         .type_key = e_type_key_basic(E_TypeKind_S64));
                   e_member_list_push_new(scratch.arena, &bp_members, .name = str8_lit("Hit Count"),.off = 0+8,      .type_key = e_type_key_basic(E_TypeKind_U64));
-                  e_member_list_push_new(scratch.arena, &bp_members, .name = str8_lit("Label"),    .off = 0+8+8,    .type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_Char8), 256));
-                  e_member_list_push_new(scratch.arena, &bp_members, .name = str8_lit("Location"), .off = 0+8+8+8,  .type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_Char8), 256));
+                  e_member_list_push_new(scratch.arena, &bp_members, .name = str8_lit("Label"),    .off = 0+8+8,    .type_key = e_type_key_cons_ptr(architecture_from_context(), e_type_key_basic(E_TypeKind_Char8)));
+                  e_member_list_push_new(scratch.arena, &bp_members, .name = str8_lit("Location"), .off = 0+8+8+8,  .type_key = e_type_key_cons_ptr(architecture_from_context(), e_type_key_basic(E_TypeKind_Char8)));
                 }
                 E_MemberArray bp_members_array = e_member_array_from_list(scratch.arena, &bp_members);
-                E_TypeKey bp_type = e_type_key_cons(.kind = E_TypeKind_Struct, .name = str8_lit("Breakpoint"), .members = bp_members_array.v, .count = bp_members_array.count);
+                E_TypeKey bp_type = e_type_key_cons(.arch = architecture_from_context(), .kind = E_TypeKind_Struct, .name = str8_lit("Breakpoint"), .members = bp_members_array.v, .count = bp_members_array.count);
                 E_Expr *bp_expr = e_push_expr(scratch.arena, E_ExprKind_LeafID, 0);
                 bp_expr->type_key = bp_type;
                 bp_expr->mode = E_Mode_Offset;
@@ -1544,7 +1544,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                   e_member_list_push_new(scratch.arena, &wp_members, .name = str8_lit("Location"), .off = 0,  .type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_Char8), 256));
                 }
                 E_MemberArray wp_members_array = e_member_array_from_list(scratch.arena, &wp_members);
-                E_TypeKey wp_type = e_type_key_cons(.kind = E_TypeKind_Struct, .name = str8_lit("Watch Pin"), .members = wp_members_array.v, .count = wp_members_array.count);
+                E_TypeKey wp_type = e_type_key_cons(.arch = architecture_from_context(), .kind = E_TypeKind_Struct, .name = str8_lit("Watch Pin"), .members = wp_members_array.v, .count = wp_members_array.count);
                 E_Expr *wp_expr = e_push_expr(scratch.arena, E_ExprKind_LeafID, 0);
                 wp_expr->type_key = wp_type;
                 wp_expr->mode = E_Mode_Offset;

@@ -34,10 +34,10 @@ typedef B32 E_SpaceReadFunction(void *user_data, E_Space space, void *out, Rng1U
 typedef struct E_InterpretCtx E_InterpretCtx;
 struct E_InterpretCtx
 {
-  Architecture arch;
   void *space_read_user_data;
   E_SpaceReadFunction *space_read;
   E_Space primary_space;
+  Architecture reg_arch;
   void *reg_data;
   U64 reg_size;
   U64 *module_base;
