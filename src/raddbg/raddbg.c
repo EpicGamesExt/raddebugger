@@ -372,11 +372,20 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
   //////////////////////////////
   //- rjf: show windows after first frame
   //
-  for(DF_Window *w = df_gfx_state->first_window; w != 0; w = w->next)
+  if(os_handle_match(repaint_window_handle, os_handle_zero()))
   {
-    if(w->frames_alive == 1)
+    DF_HandleList windows_to_show = {0};
+    for(DF_Window *w = df_gfx_state->first_window; w != 0; w = w->next)
     {
-      os_window_first_paint(w->os);
+      if(w->frames_alive == 1)
+      {
+        df_handle_list_push(scratch.arena, &windows_to_show, df_handle_from_window(w));
+      }
+    }
+    for(DF_HandleNode *n = windows_to_show.first; n != 0; n = n->next)
+    {
+      DF_Window *window = df_window_from_handle(n->handle);
+      os_window_first_paint(window->os);
     }
   }
   

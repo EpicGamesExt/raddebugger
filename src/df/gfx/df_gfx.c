@@ -984,6 +984,7 @@ df_window_open(Vec2F32 size, OS_Handle preferred_monitor, DF_CfgSrc cfg_src)
     window = push_array(df_gfx_state->arena, DF_Window, 1);
   }
   window->gen += 1;
+  window->frames_alive = 0;
   window->cfg_src = cfg_src;
   window->arena = arena_alloc();
   {
