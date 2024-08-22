@@ -13,6 +13,15 @@
 # define thread_var __thread
 #endif
 
+typedef struct OnlyInModule OnlyInModule;
+struct OnlyInModule
+{
+  int x;
+  int y;
+  int z;
+  char *name;
+};
+
 typedef struct Basics Basics;
 struct Basics
 {
@@ -37,6 +46,7 @@ dll_type_eval_tests(void)
 {
   Basics basics1 = {1, 2, 3, 4};
   Basics basics2 = {4, 5, 6, 7};
+  OnlyInModule only_in_module = {123, 456, 789, "this type is only in the module!"};
   int x = 0;
   (void)x;
 }

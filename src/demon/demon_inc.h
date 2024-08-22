@@ -4,17 +4,14 @@
 #ifndef DEMON_INC_H
 #define DEMON_INC_H
 
-#include "demon_core.h"
-#include "demon_common.h"
-#include "demon_accel.h"
-#include "demon_os.h"
+#include "demon/demon_core.h"
 
 #if OS_WINDOWS
-# include "win32/demon_os_win32.h"
+# include "demon/win32/demon_core_win32.h"
 #elif OS_LINUX
-# include "linux/demon_os_linux.h"
+# include "demon/linux/demon_core_linux.h"
 #else
-# error No Demon Implementation for This OS
+# error Demon layer backend not defined for this operating system.
 #endif
 
-#endif //DEMON_INC_H
+#endif // DEMON_INC_H

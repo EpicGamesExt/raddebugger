@@ -1,49 +1,73 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-// build with:
-// cl /Zi /nologo look_at_raddbg.c
+////////////////////////////////
+//~ rjf: Build Options
 
-#include <windows.h>
-#include <stdint.h>
-#include "raddbg_format/raddbg_format.h"
-#include "raddbg_format/raddbg_format_parse.h"
-#include "raddbg_format/raddbg_format.c"
-#include "raddbg_format/raddbg_format_parse.c"
+#define BUILD_TITLE "ryan_scratch"
+#define OS_FEATURE_GRAPHICAL 1
 
-typedef struct Foo Foo;
-struct Foo
+////////////////////////////////
+//~ rjf: Includes
+
+//- rjf: [lib]
+#include "lib_rdi_format/rdi_format.h"
+#include "lib_rdi_format/rdi_format.c"
+#include "third_party/rad_lzb_simple/rad_lzb_simple.h"
+#include "third_party/rad_lzb_simple/rad_lzb_simple.c"
+
+//- rjf: [h]
+#include "base/base_inc.h"
+#include "os/os_inc.h"
+#include "task_system/task_system.h"
+#include "rdi_make/rdi_make_local.h"
+#include "coff/coff.h"
+#include "codeview/codeview.h"
+#include "codeview/codeview_stringize.h"
+#include "msf/msf.h"
+#include "pdb/pdb.h"
+#include "pdb/pdb_stringize.h"
+
+//- rjf: [c]
+#include "base/base_inc.c"
+#include "os/os_inc.c"
+#include "task_system/task_system.c"
+#include "rdi_make/rdi_make_local.c"
+#include "coff/coff.c"
+#include "codeview/codeview.c"
+#include "codeview/codeview_stringize.c"
+#include "msf/msf.c"
+#include "pdb/pdb.c"
+#include "pdb/pdb_stringize.c"
+
+////////////////////////////////
+//~ rjf: Entry Point
+
+internal void
+entry_point(CmdLine *cmdline)
 {
-  int x;
-  int y;
-  int z;
-};
-
-int main(int argument_count, char **arguments)
-{
-  Foo foo = {123, 456, 789};
-  HANDLE file = CreateFileA(arguments[1], GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
-  DWORD size_hi32 = 0;
-  DWORD size_lo32 = GetFileSize(file, &size_hi32);
-  HANDLE map = CreateFileMappingA(file, 0, PAGE_READONLY, 0, 0, 0);
-  uint64_t data_size = (size_lo32 | ((uint64_t)size_hi32 << 32));
-  uint8_t *data = (uint8_t *)MapViewOfFile(map, FILE_MAP_READ, 0, 0, data_size);
-  RADDBG_Parsed rdbg = {0};
-  RADDBG_ParseStatus parse_status = raddbg_parse(data, data_size, &rdbg);
-  uint64_t foo_count = 0;
-  for(uint64_t idx = 0; idx < rdbg.type_node_count; idx += 1)
+  OS_Handle window = os_window_open(v2f32(1280, 720), 0, str8_lit("Window"));
+  os_window_first_paint(window);
+  for(B32 quit = 0; !quit;)
   {
-    RADDBG_TypeNode *type_node = &rdbg.type_nodes[idx];
-    if(RADDBG_TypeKind_FirstUserDefined <= type_node->kind && type_node->kind <= RADDBG_TypeKind_LastUserDefined)
+    Temp scratch = scratch_begin(0, 0);
+    OS_EventList events = os_get_events(scratch.arena, 0);
+    for(OS_Event *ev = events.first; ev != 0; ev = ev->next)
     {
-      uint64_t name_size = 0;
-      uint8_t *name = raddbg_string_from_idx(&rdbg, type_node->user_defined.name_string_idx, &name_size);
-      if(name_size == 3 && name[0] == 'f' && name[1] == 'o' && name[2] == 'o')
+      if(ev->kind != OS_EventKind_MouseMove)
       {
-        foo_count += 1;
+        printf("%.*s (%.*s)\n", str8_varg(os_string_from_event_kind(ev->kind)), str8_varg(os_g_key_display_string_table[ev->key]));
+        fflush(stdout);
       }
     }
+    for(OS_Event *ev = events.first; ev != 0; ev = ev->next)
+    {
+      if(ev->kind == OS_EventKind_WindowClose)
+      {
+        quit = 1;
+        break;
+      }
+    }
+    scratch_end(scratch);
   }
-  printf("%s -> %I64u foos\n", arguments[1], foo_count);
-  return 0;
 }

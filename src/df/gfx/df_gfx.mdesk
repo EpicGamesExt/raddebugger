@@ -8,6 +8,7 @@
 @embed_file df_g_default_main_font_bytes: "../data/Roboto-Regular.ttf"
 @embed_file df_g_default_code_font_bytes: "../data/liberation-mono.ttf"
 //@embed_file df_g_default_code_font_bytes: "../data/Inconsolata-Regular.ttf"
+@embed_file df_g_icon_file_bytes:         "../data/logo.ico"
 
 ////////////////////////////////
 //~ rjf: Default Bindings
@@ -52,18 +53,18 @@ DF_DefaultBindingTable:
   //- rjf: focused panel changing
   { "next_panel"                  Comma     ctrl     0         0          }
   { "prev_panel"                  Comma     ctrl     shift     0          }
-  { "focus_panel_right"           Right     ctrl     shift     alt        }
-  { "focus_panel_left"            Left      ctrl     shift     alt        }
-  { "focus_panel_up"              Up        ctrl     shift     alt        }
-  { "focus_panel_down"            Down      ctrl     shift     alt        }
+  { "focus_panel_right"           Right     ctrl     0         alt        }
+  { "focus_panel_left"            Left      ctrl     0         alt        }
+  { "focus_panel_up"              Up        ctrl     0         alt        }
+  { "focus_panel_down"            Down      ctrl     0         alt        }
   
   //- rjf: undo/redo
-  //{ "undo"                        Z         ctrl     0         0          }
-  //{ "redo"                        Y         ctrl     0         0          }
+  { "undo"                        Z         ctrl     0         0          }
+  { "redo"                        Y         ctrl     0         0          }
   
   //- rjf: focus history
-  //{ "go_back"                     Left      0        0         alt        }
-  //{ "go_forward"                  Right     0        0         alt        }
+  { "go_back"                     Left      0        0         alt        }
+  { "go_forward"                  Right     0        0         alt        }
   
   //- rjf: panel removal
   { "close_panel"                 P         ctrl     shift     0          }
@@ -76,17 +77,23 @@ DF_DefaultBindingTable:
   { "move_tab_right"              PageDown  ctrl     shift     0          }
   { "move_tab_left"               PageUp    ctrl     shift     0          }
   { "close_tab"                   W         ctrl     0         0          }
-  { "tab_bar_top"                 Up        ctrl     0         alt        }
-  { "tab_bar_bottom"              Down      ctrl     0         alt        }
+  { "tab_bar_top"                 Up        ctrl     shift     alt        }
+  { "tab_bar_bottom"              Down      ctrl     shift     alt        }
   
   //- rjf: files
   { "open"                        O         ctrl     0         0          }
   { "reload_active"               R         ctrl     shift     0          }
   { "switch"                      I         ctrl     0         0          }
+  { "switch_to_partner_file"      O         0        0         alt        }
   
   //- rjf: setting config paths
-  { "load_user"                   O         ctrl     shift     alt        }
-  { "load_profile"                O         ctrl     0         alt        }
+  { "open_user"                   O         ctrl     shift     alt        }
+  { "open_project"                O         ctrl     0         alt        }
+  
+  //- rjf: meta controls
+  { "edit"                        F2        0        0         0          }
+  { "accept"                      Return    0        0         0          }
+  { "cancel"                      Esc       0        0         0          }
   
   //- rjf: directional movement & text controls
   { "move_left"                   Left      0        0         0          }
@@ -113,6 +120,8 @@ DF_DefaultBindingTable:
   { "move_down_page_select"       PageDown  0        shift     0          }
   { "move_up_whole_select"        Home      ctrl     shift     0          }
   { "move_down_whole_select"      End       ctrl     shift     0          }
+  { "move_up_reorder"             Up        0        0         alt        }
+  { "move_down_reorder"           Down      0        0         alt        }
   { "move_home"                   Home      0        0         0          }
   { "move_end"                    End       0        0         0          }
   { "move_home_select"            Home      0        shift     0          }
@@ -123,8 +132,10 @@ DF_DefaultBindingTable:
   { "backspace_single"            Backspace 0        0         0          }
   { "backspace_chunk"             Backspace ctrl     0         0          }
   { "copy"                        C         ctrl     0         0          }
+  { "copy"                        Insert    ctrl     0         0          }
   { "cut"                         X         ctrl     0         0          }
   { "paste"                       V         ctrl     0         0          }
+  { "paste"                       Insert    0        shift     0          }
   { "insert_text"                 Null      0        0         0          }
   
   //- rjf: code navigation
@@ -144,6 +155,7 @@ DF_DefaultBindingTable:
   
   //- rjf: watch expressions
   { "toggle_watch_expr_at_cursor" W         0        0         alt        }
+  { "toggle_watch_expr_at_mouse"  D         ctrl     0         0          }
   { "toggle_watch_pin_at_cursor"  F9        ctrl     0         0          }
   
   //- rjf: breakpoints
@@ -155,108 +167,130 @@ DF_DefaultBindingTable:
   //- rjf: attaching
   { "attach"                      F6        0        shift     0          }
   
-  //- rjf: view drivers
-  { "commands"                    F1        0        0         0          }
-  { "scheduler"                   S         0        0         alt        }
+  //- rjf: filtering
+  { "filter"                      Slash     ctrl     0         0          }
+  
+  //- rjf: command lister
+  { "run_command"                 F1        0        0         0          }
   
   //- rjf: developer commands
-  { "clear_diag_log"              D         ctrl     0         alt        }
-  { "open_diag_log"               D         ctrl     0         0          }
+  { "log_marker"                  M         ctrl     shift     alt        }
+}
+
+@data(DF_StringBindingPair) df_g_default_binding_table:
+{
+  @expand(DF_DefaultBindingTable a) ```{str8_lit_comp("$(a.name)"), {OS_Key_$(a.key), 0 $(a.ctrl != 0 -> `|OS_EventFlag_Ctrl`) $(a.shift != 0 -> `|OS_EventFlag_Shift`) $(a.alt != 0 -> `|OS_EventFlag_Alt`)}}```;
+}
+
+////////////////////////////////
+//~ rjf: Binding Version Remap Table
+
+@table(old_name new_name)
+DF_BindingVersionRemapTable:
+{
+  {"commands"     "run_command"}
+  {"load_user"    "open_user"}
+  {"load_profile" "open_profile"}
+  {"load_project" "open_project"}
+  {"open_profile" "open_project"}
+}
+
+@data(String8) df_g_binding_version_remap_old_name_table:
+{
+  @expand(DF_BindingVersionRemapTable a) `str8_lit_comp("$(a.old_name)")`
+}
+
+@data(String8) df_g_binding_version_remap_new_name_table:
+{
+  @expand(DF_BindingVersionRemapTable a) `str8_lit_comp("$(a.new_name)")`
 }
 
 ////////////////////////////////
 //~ rjf: Gfx Layer View Kinds
 
-@table(name, name_lower, display_string, name_kind, parameterized_by_entity, can_serialize, can_serialize_entity_path, inc_in_docs, docs_desc)
+@table(name, name_lower, display_string, name_kind, icon, parameterized_by_entity, project_specific, can_serialize, can_serialize_entity_path, can_filter, filter_is_code, typing_automatically_filters, inc_in_docs, docs_desc)
 DF_GfxViewTable:
 {
-  { Null                   "null"                   ""                             Null                        0 0 0      0 ""                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         }
-  { Empty                  "empty"                  ""                             Null                        0 0 0      0 ""                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         }
-  { Commands               "commands"               "Commands"                     Null                        0 0 0      0 ""                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         }
-  { FileSystem             "file_system"            "File System"                  Null                        0 0 0      0 ""                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         }
-  { SystemProcesses        "system_processes"       "System Processes"             Null                        0 0 0      0 ""                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         }
-  { EntityLister           "entity_lister"          "Entity List"                  EntityKindName              0 0 0      0 ""                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         }
-  { Target                 "target"                 "Target"                       EntityName                  1 0 0      0 ""                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         }
-  { Targets                "targets"                "Targets"                      Null                        0 1 0      1 "Displays a list of all targets, as well as controls for enabling, disabling, launching, editing, or deleting each target. For more information on targets, read the `Targets` section."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   }
-  { FilePathMap            "file_path_map"          "File Path Map"                Null                        0 1 0      1 "Displays a table of *path maps*. Each path map is a pair of file or folder paths, one being a 'source' path, and one being a 'destination' path. These pairs are used by the debugger when automatically searching for specific files - for instance, when attempting to snap to a source code location specified by debug info. If debug info refers to a path on the machine on which a target executable was originally built, but that path is not valid on the debugger machine, but some alternative path exists, then path maps may be used to redirect the debugger from the debug info's specified paths to the associated appropriate debugger machine file paths."                                                                                                                                                                                                                             }
-  { Scheduler              "scheduler"              "Scheduler"                    Null                        0 1 0      1 "Displays all processes and threads to which the debugger is currently attached, and contains controls for selecting and freezing threads."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                }
-  { CallStack              "call_stack"             "Call Stack"                   Null                        0 1 0      1 "Displays the call stack of the currently selected thread. Each frame in the call stack contains the associated module, function name, and return address. Allows selection of a particular call stack frame other than the top."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          }
-  { Modules                "modules"                "Modules"                      Null                        0 1 0      1 "Displays a table of all modules currently loaded by any process to which the debugger is attached. This table displays each module's name, virtual address range in the containing process' address space, and which debug info file is being used by the debugger for the associated module."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            }
-  { PendingEntity          "pending_entity"         "Pending Entity"               EntityName                  1 0 0      0 ""                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         }
-  { Code                   "code"                   "Code"                         EntityName                  1 1 1      0 ""                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         }
-  { Disassembly            "disassembly"            "Disassembly"                  Null                        0 1 0      1 "Displays disassembled instructions in a textual form from the selected thread's containing process virtual address space."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                }
-  { Watch                  "watch"                  "Watch"                        Null                        0 1 0      1 "The familiar 'watch window' debugger interface. Allows the inputting of a number of expressions. Each expression in the table is evaluated within the context of the selected thread's selected call stack frame. If applicable (depending on visualization rules and the expression's type), these expressions may be hierarchically expanded, which displays children as more rows in the table. The values of these expressions may also be edited, and if possible, can be used to write to registers or memory in attached processes. Also contains a new *view rule* column, not found in other major debuggers, which allows per-row specification of various visualization rules. These view rules may be used to visualize and inspect the evaluation of expressions in a variety of ways. To learn more, read the 'View Rules' section."                                                        }
-  { Locals                 "locals"                 "Locals"                       Null                        0 1 0      1 "Nearly identical to `Watch`, but automatically filled with local variables found within the selected call stack frame of the selected thread, according to the associated debug info. View rules and evaluation values can be edited, like in `Watch`, but unlike `Watch`, expressions cannot be edited or added to the table."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           }
-  { Registers              "registers"              "Registers"                    Null                        0 1 0      1 "Nearly identical to `Watch`, but automatically filled with all register names according to the selected thread's architecture. View rules and evaluation values can be edited, like in `Watch`, but unlike `Watch`, expressions cannot be edited or added to the table."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  }
-  { Output                 "output"                 "Output"                       Null                        0 1 0      1 "Displays textual output from the selected thread's containing process."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   }
-  { Memory                 "memory"                 "Memory"                       Null                        0 1 1      1 "A familiar hex-editor-like interface for viewing memory of attached processes."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           }
-  { Breakpoints            "breakpoints"            "Breakpoints"                  Null                        0 1 0      1 "Displays a table of all breakpoints, containing information about each breakpoint's name, location, and hit count. Also contains per-breakpoint controls for enabling, deleting, or editing each breakpoint. For more information on breakpoints and their features, read the 'Breakpoints' section."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     }
-  { WatchPins              "watch_pins"             "Watch Pins"                   Null                        0 1 0      1 "Displays a table of all watch pins (watched expressions, like those found in `Watch`, but instead of being within a table, being pinned to some source code location, like breakpoints). This table contains each pin's name, location, and controls for editing or deleting each pin."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   }
-  { ExceptionFilters       "exception_filters"      "Exception Filters"            Null                        0 1 0      1 "An interface which controls whether or not the debugger will halt attached processes upon encountering specific exception codes for the first time."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      }
-  { Theme                  "theme"                  "Theme"                        Null                        0 1 0      1 "An interface for modifying the colors used in the debugger's UI. Allows selecting a theme preset, loading a theme from a file, and modifying individual colors within a theme."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           }
+  { Null                   "null"                   ""                             Null                 Null            0 0 0 0 0 0 0      0 ""                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         }
+  { Empty                  "empty"                  ""                             Null                 Null            0 0 0 0 0 0 0      0 ""                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         }
+  { GettingStarted         "getting_started"        "Getting Started"              Null                 QuestionMark    0 0 1 0 0 0 0      0 ""                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         }
+  { Commands               "commands"               "Commands"                     Null                 List            0 0 0 0 0 0 0      0 ""                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         }
+  { FileSystem             "file_system"            "File System"                  Null                 FileOutline     0 0 0 0 0 0 0      0 ""                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         }
+  { SystemProcesses        "system_processes"       "System Processes"             Null                 Null            0 0 0 0 0 0 0      0 ""                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         }
+  { EntityLister           "entity_lister"          "Entity List"                  Null                 Null            0 0 0 0 0 0 0      0 ""                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         }
+  { SymbolLister           "symbol_lister"          "Symbols"                      Null                 Null            0 0 0 0 0 0 0      0 ""                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         }
+  { Target                 "target"                 "Target"                       EntityName           Target          1 0 0 0 0 0 0      0 ""                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         }
+  { Targets                "targets"                "Targets"                      Null                 Target          0 0 1 0 1 0 1      1 "Displays a list of all targets, as well as controls for enabling, disabling, launching, editing, or deleting each target. For more information on targets, read the `Targets` section."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   }
+  { FilePathMap            "file_path_map"          "File Path Map"                Null                 FileOutline     0 0 1 0 0 0 0      1 "Displays a table of *path maps*. Each path map is a pair of file or folder paths, one being a 'source' path, and one being a 'destination' path. These pairs are used by the debugger when automatically searching for specific files - for instance, when attempting to snap to a source code location specified by debug info. If debug info refers to a path on the machine on which a target executable was originally built, but that path is not valid on the debugger machine, but some alternative path exists, then path maps may be used to redirect the debugger from the debug info's specified paths to the associated appropriate debugger machine file paths."                                                                                                                                                                                                                             }
+  { AutoViewRules          "auto_view_rules"        "Auto View Rules"              Null                 Binoculars      0 0 1 0 0 0 0      1 "Displays a table of *auto view rules*. Each *auto view rule* is a pair, with one element being a type, and the other being a view rule, which should be automatically applied to expressions of that type, when possible."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                }
+  { Scheduler              "scheduler"              "Scheduler"                    Null                 Scheduler       0 0 1 0 1 1 1      1 "Displays all processes and threads to which the debugger is currently attached, and contains controls for selecting and freezing threads."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                }
+  { CallStack              "call_stack"             "Call Stack"                   Null                 Thread          0 0 1 0 0 0 0      1 "Displays the call stack of the currently selected thread. Each frame in the call stack contains the associated module, function name, and return address. Allows selection of a particular call stack frame other than the top."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          }
+  { Modules                "modules"                "Modules"                      Null                 Module          0 0 1 0 1 0 1      1 "Displays a table of all modules currently loaded by any process to which the debugger is attached. This table displays each module's name, virtual address range in the containing process' address space, and which debug info file is being used by the debugger for the associated module."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            }
+  { PendingEntity          "pending_entity"         "Pending Entity"               EntityName           FileOutline     1 0 0 0 0 0 0      0 ""                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         }
+  { Code                   "code"                   "Code"                         EntityName           FileOutline     1 1 1 1 0 0 0      0 ""                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         }
+  { Disassembly            "disassembly"            "Disassembly"                  Null                 Glasses         0 0 1 0 0 0 0      1 "Displays disassembled instructions in a textual form from the selected thread's containing process virtual address space."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                }
+  { Watch                  "watch"                  "Watch"                        Null                 Binoculars      0 0 1 0 1 1 1      1 "The familiar 'watch window' debugger interface. Allows the inputting of a number of expressions. Each expression in the table is evaluated within the context of the selected thread's selected call stack frame. If applicable (depending on visualization rules and the expression's type), these expressions may be hierarchically expanded, which displays children as more rows in the table. The values of these expressions may also be edited, and if possible, can be used to write to registers or memory in attached processes. Also contains a new *view rule* column, not found in other major debuggers, which allows per-row specification of various visualization rules. These view rules may be used to visualize and inspect the evaluation of expressions in a variety of ways. To learn more, read the 'View Rules' section."                                                        }
+  { Locals                 "locals"                 "Locals"                       Null                 Binoculars      0 0 1 0 1 1 1      1 "Nearly identical to `Watch`, but automatically filled with local variables found within the selected call stack frame of the selected thread, according to the associated debug info. View rules and evaluation values can be edited, like in `Watch`, but unlike `Watch`, expressions cannot be edited or added to the table."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           }
+  { Registers              "registers"              "Registers"                    Null                 Binoculars      0 0 1 0 1 1 1      1 "Nearly identical to `Watch`, but automatically filled with all register names according to the selected thread's architecture. View rules and evaluation values can be edited, like in `Watch`, but unlike `Watch`, expressions cannot be edited or added to the table."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  }
+  { Globals                "globals"                "Globals"                      Null                 Binoculars      0 0 1 0 1 1 1      1 "Nearly identical to `Watch`, but automatically filled with all global variables within the selected thread's module. View rules and evaluation values can be edited, like in `Watch`, but unlike `Watch`, expressions cannot be edited or added to the table."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            }
+  { ThreadLocals           "thread_locals"          "Thread Locals"                Null                 Binoculars      0 0 1 0 1 1 1      1 "Nearly identical to `Watch`, but automatically filled with all thread local variables within the selected thread's module. View rules and evaluation values can be edited, like in `Watch`, but unlike `Watch`, expressions cannot be edited or added to the table."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      }
+  { Types                  "types"                  "Types"                        Null                 Binoculars      0 0 1 0 1 1 1      1 "Nearly identical to `Watch`, but automatically filled with all types within the selected thread's module. View rules can be edited, like in `Watch`, but unlike `Watch`, expressions cannot be edited or added to the table."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             }
+  { Procedures             "procedures"             "Procedures"                   Null                 Binoculars      0 0 1 0 1 1 1      1 "Nearly identical to `Watch`, but automatically filled with all procedures within the selected thread's module. View rules can be edited, like in `Watch`, but unlike `Watch`, expressions cannot be edited or added to the table."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        }
+  { Output                 "output"                 "Output"                       Null                 List            0 0 1 0 0 0 0      1 "Displays textual output from the selected thread's containing process."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   }
+  { Memory                 "memory"                 "Memory"                       Null                 Grid            0 0 1 0 0 0 0      1 "A familiar hex-editor-like interface for viewing memory of attached processes."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           }
+  { Breakpoints            "breakpoints"            "Breakpoints"                  Null                 CircleFilled    0 0 1 0 1 0 1      1 "Displays a table of all breakpoints, containing information about each breakpoint's name, location, and hit count. Also contains per-breakpoint controls for enabling, deleting, or editing each breakpoint. For more information on breakpoints and their features, read the 'Breakpoints' section."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     }
+  { WatchPins              "watch_pins"             "Watch Pins"                   Null                 Pin             0 0 1 0 1 1 1      1 "Displays a table of all watch pins (watched expressions, like those found in `Watch`, but instead of being within a table, being pinned to some source code location, like breakpoints). This table contains each pin's name, location, and controls for editing or deleting each pin."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   }
+  { ExceptionFilters       "exception_filters"      "Exception Filters"            Null                 Gear            0 0 1 0 1 0 1      1 "An interface which controls whether or not the debugger will halt attached processes upon encountering specific exception codes for the first time."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      }
+  { Settings               "settings"               "Settings"                     Null                 Gear            0 0 1 0 1 0 1      1 "An interface to modify general settings for the debugger's appearance and behavior."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      }
+}
+
+@enum DF_GfxViewKind:
+{
+  @expand(DF_GfxViewTable a) `$(a.name)`,
+  COUNT,
+}
+
+@gen
+{
+  @expand(DF_GfxViewTable a) `DF_VIEW_SETUP_FUNCTION_DEF($(a.name));`;
+  @expand(DF_GfxViewTable a) `DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF($(a.name));`;
+  @expand(DF_GfxViewTable a) `DF_VIEW_CMD_FUNCTION_DEF($(a.name));`;
+  @expand(DF_GfxViewTable a) `DF_VIEW_UI_FUNCTION_DEF($(a.name));`;
+}
+
+@data(DF_ViewSpecInfo) df_g_gfx_view_kind_spec_info_table:
+{
+  @expand(DF_GfxViewTable a) ```{(0|$(a.parameterized_by_entity)*DF_ViewSpecFlag_ParameterizedByEntity|$(a.project_specific)*DF_ViewSpecFlag_ProjectSpecific|$(a.can_serialize)*DF_ViewSpecFlag_CanSerialize|$(a.can_serialize_entity_path)*DF_ViewSpecFlag_CanSerializeEntityPath|$(a.can_filter)*(DF_ViewSpecFlag_CanFilter|DF_ViewSpecFlag_CanSerializeQuery)|$(a.filter_is_code)*DF_ViewSpecFlag_FilterIsCode|$(a.typing_automatically_filters)*DF_ViewSpecFlag_TypingAutomaticallyFilters), str8_lit_comp("$(a.name_lower)"), str8_lit_comp("$(a.display_string)"), DF_NameKind_$(a.name_kind), DF_IconKind_$(a.icon), DF_VIEW_SETUP_FUNCTION_NAME($(a.name)), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME($(a.name)), DF_VIEW_CMD_FUNCTION_NAME($(a.name)), DF_VIEW_UI_FUNCTION_NAME($(a.name))}```;
 }
 
 ////////////////////////////////
-//~ rjf: Default Command -> View Map
+//~ rjf: Command Parameter Slot -> View
 
-@table(cmd view entity_kind_lock)
-DF_CmdSpec2ViewSpecMap:
+@table(slot  view_spec  opt_cmd_spec)
+DF_CmdParamSlot2ViewSpecMap:
 {
-  {"launch_and_run"                    "entity_lister"     Target              }
-  {"launch_and_init"                   "entity_lister"     Target              }
-  {"kill"                              "entity_lister"     Process             }
-  {"detach"                            "entity_lister"     Process             }
-  {"select_thread"                     "entity_lister"     Thread              }
-  {"select_thread_window"              "entity_lister"     Thread              }
-  {"select_thread_view"                "entity_lister"     Thread              }
-  {"freeze_thread"                     "entity_lister"     Thread              }
-  {"thaw_thread"                       "entity_lister"     Thread              }
-  {"freeze_process"                    "entity_lister"     Process             }
-  {"thaw_process"                      "entity_lister"     Process             }
-  {"freeze_machine"                    "entity_lister"     Machine             }
-  {"thaw_machine"                      "entity_lister"     Machine             }
-  {"set_current_path"                  "file_system"       Null                }
-  {"open"                              "file_system"       Null                }
-  {"reload"                            "entity_lister"     File                }
-  {"switch"                            "entity_lister"     File                }
-  {"load_user"                         "file_system"       Null                }
-  {"load_profile"                      "file_system"       Null                }
-  {"find_thread"                       "entity_lister"     Thread              }
-  {"open_thread_disasm"                "entity_lister"     Thread              }
-  {"open_file_memory"                  "entity_lister"     File                }
-  {"open_process_memory"               "entity_lister"     Process             }
-  {"remove_breakpoint"                 "entity_lister"     Breakpoint          }
-  {"edit_breakpoint"                   "entity_lister"     Breakpoint          }
-  {"enable_breakpoint"                 "entity_lister"     Breakpoint          }
-  {"disable_breakpoint"                "entity_lister"     Breakpoint          }
-  {"edit_breakpoint"                   "entity_lister"     Breakpoint          }
-  {"add_target"                        "file_system"       Null                }
-  {"remove_target"                     "entity_lister"     Target              }
-  {"edit_target"                       "entity_lister"     Target              }
-  {"retry_ended_process"               "entity_lister"     EndedProcess        }
-  {"attach"                            "system_processes"  Null                }
-  {"commands"                          "commands"          Null                }
-  {"target_editor"                     "target"            Null                }
-  {"targets"                           "targets"           Null                }
-  {"file_path_map"                     "file_path_map"     Null                }
-  {"scheduler"                         "scheduler"         Null                }
-  {"call_stack"                        "call_stack"        Null                }
-  {"modules"                           "modules"           Null                }
-  {"pending_entity"                    "pending_entity"    Null                }
-  {"code"                              "code"              Null                }
-  {"watch"                             "watch"             Null                }
-  {"locals"                            "locals"            Null                }
-  {"registers"                         "registers"         Null                }
-  {"output"                            "output"            Null                }
-  {"memory"                            "memory"            Null                }
-  {"disassembly"                       "disassembly"       Null                }
-  {"breakpoints"                       "breakpoints"       Null                }
-  {"watch_pins"                        "watch_pins"        Null                }
-  {"exception_filters"                 "exception_filters" Null                }
-  {"theme"                             "theme"             Null                }
-  {"pick_file"                         "file_system"       Null                }
-  {"clear_diag_log"                    "entity_lister"     DiagLog             }
-  {"open_diag_log"                     "entity_lister"     DiagLog             }
+  {Entity            "entity_lister"            ""                    }
+  {EntityList        "entity_lister"            ""                    }
+  {FilePath          "file_system"              ""                    }
+  {CmdSpec           "commands"                 ""                    }
+  {ID                "system_processes"         ""                    }
+  {String            "symbol_lister"            "goto_name"           }
+  {String            "symbol_lister"            "function_breakpoint" }
+}
+
+@data(DF_CmdParamSlot) df_g_cmd_param_slot_2_view_spec_src_map:
+{
+  @expand(DF_CmdParamSlot2ViewSpecMap a) `DF_CmdParamSlot_$(a.slot)`
+}
+
+@data(String8) df_g_cmd_param_slot_2_view_spec_dst_map:
+{
+  @expand(DF_CmdParamSlot2ViewSpecMap a) `str8_lit_comp("$(a.view_spec)")`
+}
+
+@data(String8) df_g_cmd_param_slot_2_view_spec_cmd_map:
+{
+  @expand(DF_CmdParamSlot2ViewSpecMap a) `str8_lit_comp("$(a.opt_cmd_spec)")`
 }
 
 ////////////////////////////////
@@ -264,88 +298,60 @@ DF_CmdSpec2ViewSpecMap:
 //
 // NOTE(rjf): see @view_rule_info
 
-@table(string     vr  ls  ru  bu)
+@table(string     vr  ls  ru  bu  tu  tab_display_string)
 DF_GfxViewRuleTable:
 {
-  {"array"         -   -   -   -}
-  {"list"          x   -   -   -}
-  {"dec"           -   x   -   -}
-  {"bin"           -   x   -   -}
-  {"oct"           -   x   -   -}
-  {"hex"           -   x   -   -}
-  {"only"          x   x   -   -}
-  {"omit"          x   x   -   -}
-  {"no_addr"       -   x   -   -}
-  {"rgba"          -   -   x   x}
-  {"text"          -   -   -   x}
-  {"disasm"        -   -   -   x}
-  {"bitmap"        -   -   x   x}
-  {"geo"           -   -   x   x}
+  {"array"         -   -   -   -   -   ""                              }
+  {"list"          x   -   -   -   -   ""                              }
+  {"dec"           -   x   -   -   -   ""                              }
+  {"bin"           -   x   -   -   -   ""                              }
+  {"oct"           -   x   -   -   -   ""                              }
+  {"hex"           -   x   -   -   -   ""                              }
+  {"only"          x   x   -   -   -   ""                              }
+  {"omit"          x   x   -   -   -   ""                              }
+  {"no_addr"       -   x   -   -   -   ""                              }
+  {"rgba"          -   -   x   x   -   ""                              }
+  {"text"          -   -   -   x   x   "Text"                          }
+  {"disasm"        -   -   -   x   x   "Disassembly"                   }
+  {"bitmap"        -   -   x   x   x   "Bitmap"                        }
+  {"geo"           -   -   x   x   x   "Geometry"                      }
 }
 
-////////////////////////////////
-//~ rjf: Theme Color Codes
-
-@table(name display_name name_lower r g b a)
-DF_ThemeTable:
+@gen
 {
-  {Null                     "Null"                     null                          }
-  {PlainText                "Plain Text"               plain_text                    }
-  {PlainBackground          "Plain Background"         plain_background              }
-  {PlainBorder              "Plain Border"             plain_border                  }
-  {PlainOverlay             "Plain Overlay"            plain_overlay                 }
-  {CodeDefault              "Code (Default)"           code_default                  }
-  {CodeFunction             "Code (Function)"          code_function                 }
-  {CodeType                 "Code (Type)"              code_type                     }
-  {CodeLocal                "Code (Local)"             code_local                    }
-  {CodeKeyword              "Code (Keyword)"           code_keyword                  }
-  {CodeSymbol               "Code (Symbol)"            code_symbol                   }
-  {CodeNumeric              "Code (Numeric)"           code_numeric                  }
-  {CodeString               "Code (String)"            code_string                   }
-  {CodeMeta                 "Code (Meta)"              code_meta                     }
-  {CodeComment              "Code (Comment)"           code_comment                  }
-  {LineInfo0                "Line Info (0)"            line_info_0                   }
-  {LineInfo1                "Line Info (1)"            line_info_1                   }
-  {LineInfo2                "Line Info (2)"            line_info_2                   }
-  {LineInfo3                "Line Info (3)"            line_info_3                   }
-  {AltText                  "Alt Text"                 alt_text                      }
-  {AltBackground            "Alt Background"           alt_background                }
-  {AltBorder                "Alt Border"               alt_border                    }
-  {AltOverlay               "Alt Overlay"              alt_overlay                   }
-  {TabInactive              "Inactive Tab"             tab_inactive                  }
-  {TabActive                "Active Tab"               tab_active                    }
-  {EntityBackground         "Entity Background"        entity_background             }
-  {QueryBar                 "Query Bar"                query_bar                     }
-  {WeakText                 "Weak Text"                weak_text                     }
-  {TextSelection            "Text Selection"           text_selection                }
-  {Cursor                   "Cursor"                   cursor                        }
-  {Highlight0               "Highlight (0)"            highlight_0                   }
-  {Highlight1               "Highlight (1)"            highlight_1                   }
-  {SuccessText              "Success Text"             success_text                  }
-  {SuccessBackground        "Success Background"       success_background            }
-  {SuccessBorder            "Success Border"           success_border                }
-  {FailureText              "Failure Text"             failure_text                  }
-  {FailureBackground        "Failure Background"       failure_background            }
-  {FailureBorder            "Failure Border"           failure_border                }
-  {ActionText               "Action Text"              action_text                   }
-  {ActionBackground         "Action Background"        action_background             }
-  {ActionBorder             "Action Border"            action_border                 }
-  {DropSiteOverlay          "Drop Site Overlay"        drop_site_overlay             }
-  {Thread0                  "Thread (0)"               thread_0                      }
-  {Thread1                  "Thread (1)"               thread_1                      }
-  {Thread2                  "Thread (2)"               thread_2                      }
-  {Thread3                  "Thread (3)"               thread_3                      }
-  {Thread4                  "Thread (4)"               thread_4                      }
-  {Thread5                  "Thread (5)"               thread_5                      }
-  {Thread6                  "Thread (6)"               thread_6                      }
-  {Thread7                  "Thread (7)"               thread_7                      }
-  {ThreadUnwound            "Thread (Unwound)"         thread_unwound                }
-  {InactivePanelOverlay     "Inactive Panel Overlay"   inactive_panel_overlay        }
-  {DropShadow               "Drop Shadow"              drop_shadow                   }
+  ``;
+  @expand(DF_GfxViewRuleTable a)
+    `$(a.vr == "x" -> "DF_GFX_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_DEF(" .. a.name_lower .. ");")`;
+  @expand(DF_GfxViewRuleTable a)
+    `$(a.ls == "x" -> "DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(" .. a.name_lower .. ");")`;
+  @expand(DF_GfxViewRuleTable a)
+    `$(a.ru == "x" -> "DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_DEF(" .. a.name_lower .. ");")`;
+  @expand(DF_GfxViewRuleTable a)
+    `$(a.bu == "x" -> "DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(" .. a.name_lower .. ");")`;
+  @expand(DF_GfxViewRuleTable a)
+    `$(a.tu == "x" -> "DF_VIEW_SETUP_FUNCTION_DEF(" .. a.name_lower .. ");")`;
+  @expand(DF_GfxViewRuleTable a)
+    `$(a.tu == "x" -> "DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(" .. a.name_lower .. ");")`;
+  @expand(DF_GfxViewRuleTable a)
+    `$(a.tu == "x" -> "DF_VIEW_CMD_FUNCTION_DEF(" .. a.name_lower .. ");")`;
+  @expand(DF_GfxViewRuleTable a)
+    `$(a.tu == "x" -> "DF_VIEW_UI_FUNCTION_DEF(" .. a.name_lower .. ");")`;
+}
+
+@data(DF_ViewSpecInfo) @c_file df_g_gfx_view_rule_tab_view_spec_info_table:
+{
+  @expand(DF_GfxViewRuleTable a)
+    ```$(a.tu == "x" -> '{ DF_ViewSpecFlag_CanSerialize|DF_ViewSpecFlag_CanSerializeQuery, str8_lit_comp("' .. a.string .. '_view_rule"), str8_lit_comp("' .. a.tab_display_string .. '"), DF_NameKind_Null, DF_IconKind_Binoculars, ' .. 'DF_VIEW_SETUP_FUNCTION_NAME(' .. a.string .. '), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(' .. a.string .. '), DF_VIEW_CMD_FUNCTION_NAME(' .. a.string .. '), DF_VIEW_UI_FUNCTION_NAME(' .. a.string .. ') }')```;
+}
+
+@data(DF_GfxViewRuleSpecInfo) @c_file df_g_gfx_view_rule_spec_info_table:
+{
+  @expand(DF_GfxViewRuleTable a)
+    ```{ str8_lit_comp("$(a.string)"), (DF_GfxViewRuleSpecInfoFlag_VizRowProd*$(a.vr == "x"))|(DF_GfxViewRuleSpecInfoFlag_LineStringize*$(a.ls == "x"))|(DF_GfxViewRuleSpecInfoFlag_RowUI*$(a.ru == "x"))|(DF_GfxViewRuleSpecInfoFlag_BlockUI*$(a.bu == "x")), $(a.vr == "x" -> "DF_GFX_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_NAME("..a.name_lower..")") $(a.vr != "x" -> 0), $(a.ls == "x" -> "DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_NAME("..a.name_lower..")") $(a.ls != "x" -> 0), $(a.ru == "x" -> "DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_NAME("..a.name_lower..")") $(a.ru != "x" -> 0), $(a.bu == "x" -> "DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_NAME("..a.name_lower..")") $(a.bu != "x" -> 0), str8_lit_comp("$(a.tu == 'x' -> a.string..'_view_rule')") }```;
 }
 
 ////////////////////////////////
-//~ rjf: Theme Presets
+//~ rjf: Theme Tables
 
 @table(name_upper  name_lower  display_string)
 DF_ThemePresetTable:
@@ -361,237 +367,239 @@ DF_ThemePresetTable:
   { FarManager       far_manager      "Far Manager"       }
 }
 
-@table(name                     default_dark        default_light        vs_dark             vs_light            solarized_dark      solarized_light     handmade_hero       four_coder          far_manager)
-DF_ThemePresetColorTable:
+@table(name                      display_name                        name_lower                             default_dark        default_light        vs_dark            vs_light            solarized_dark      solarized_light     handmade_hero       four_coder          far_manager         desc)
+DF_ThemeColorTable:
 {
-  (null                          0xff00ffff          0xff00ffff           0xff00ffff          0xff00ffff          0xff00ffff          0xff00ffff          0xff00ffff          0xff00ffff          0xff00ffff     )
-  (plain_text                    0xe5e5e5ff          0x383838ff           0xe5e5e5ff          0x1e1e1eff          0xe5e5e5ff          0x1e1e1eff          0xa08563ff          0x90b080ff          0x00ffffff     )
-  (plain_background              0x3333337f          0xedededfe           0x1e1e1eff          0xffffffff          0x002b36ff          0xfcf6e2ff          0x0c0c0cff          0x0c0c0cff          0x000082ff     )
-  (plain_border                  0xffffff19          0x0000001d           0xffffff19          0xcccedb1d          0xffffff19          0xcccedb1d          0xffffff19          0x181818a0          0xffffff19     )
-  (plain_overlay                 0xffffff33          0x00000033           0xffffff33          0xffffff33          0xffffff33          0xffffff33          0xffffff33          0xffffff33          0xffffff33     )
-  (code_default                  0xe5e5e5ff          0x282828ff           0xd4d4d4ff          0x000000ff          0x839496ff          0x74878cff          0xa08563ff          0x90b080ff          0x00ffffff     )
-  (code_function                 0x7fcc99ff          0x2a7a45ff           0xdcdcaaff          0x74531fff          0x1c7dd1ff          0xc39d36ff          0xcc5735ff          0x7fcc99ff          0x49b2ffff     )
-  (code_type                     0x66b2e5ff          0x2c688fff           0x4ec9b0ff          0x2b91afff          0x1c7dd1ff          0x66b2e5ff          0xd8a51dff          0x66b2e5ff          0x49b2ffff     )
-  (code_local                    0xfe9548ff          0xfe9548ff           0xfe9548ff          0xfe9548ff          0xfe9548ff          0xfe9548ff          0xfe9548ff          0xfe9548ff          0xfe9548ff     )
-  (code_keyword                  0xf7bf5eff          0xa47729ff           0x569cd6ff          0x0000ffff          0x63980fff          0xc39d36ff          0xac7b0bff          0xd08f20ff          0xff0000ff     )
-  (code_symbol                   0x994c32ff          0x6c2d18ff           0xb4b4b4ff          0x000000ff          0x839496ff          0x2e5256ff          0x994c32ff          0x994c32ff          0xffffffff     )
-  (code_numeric                  0x4ce54cff          0x2c7d2cff           0xb5cea8ff          0x000000ff          0xcb4b20ff          0x657b83ff          0x6b8e23ff          0x50ff30ff          0x2cff50ff     )
-  (code_string                   0xe5cc66ff          0xcc5a0fff           0xd69d85ff          0xc11515ff          0x2aa198ff          0x5ab4a9ff          0x6b8e23ff          0x50ff30ff          0xe5cc66ff     )
-  (code_meta                     0xe54c4cff          0x8a0c0cff           0x9b9b9bff          0x808080ff          0xe54c4cff          0xe54c4cff          0xdab98fff          0x50ff30ff          0xffff00ff     )
-  (code_comment                  0x7f7f7fff          0x7f7f7fff           0x6a9955ff          0x008000ff          0x7f7f7fff          0xadafb2ff          0x686868ff          0x2090f0ff          0x7f7f7fff     )
-  (line_info_0                   0x3f72993f          0x3e71993f           0xbeb7ff3f          0x3f72993f          0x3f72993f          0x3f72993f          0xaf60103f          0x3f72993f          0x3f72993f     )
-  (line_info_1                   0x3f72994c          0x3f72994c           0xbeb7ff4c          0x3f72994c          0x3f72994c          0x3f72994c          0xaf60104c          0x3f72994c          0x3f72994c     )
-  (line_info_2                   0x3f729972          0x3f729972           0xbeb7ff72          0x3f729972          0x3f729972          0x3f729972          0xaf601072          0x3f729972          0x3f729972     )
-  (line_info_3                   0x3f72997f          0x3f72997f           0xbeb7ff7f          0x3f72997f          0x3f72997f          0x3f72997f          0xaf60107f          0x3f72997f          0x3f72997f     )
-  (alt_text                      0xe5e5e5ff          0x535353ff           0xf1f1f1ff          0x535353ff          0xe5e5e5ff          0x535353ff          0xa08563ff          0x90b080ff          0x000000ff     )
-  (alt_background                0x42474c7f          0xfefefebc           0x1b1b1cff          0xfefefebc          0x002b36ff          0xfcf6e2ff          0x0c0c0cff          0x0c0c0cff          0x008184ff     )
-  (alt_border                    0xffffff19          0xffffff19           0x333337ff          0xffffff19          0xffffff19          0xffffff19          0xffffff19          0xffffff19          0xffffff19     )
-  (alt_overlay                   0xffffff33          0xffffff33           0xffffff33          0xffffff33          0xffffff33          0xffffff33          0xffffff33          0xffffff33          0xffffff33     )
-  (tab_inactive                  0x42474c7f          0x42474c7f           0x42474c7f          0x42474c7f          0x42474c7f          0x42474c7f          0x42474c7f          0x42474c7f          0x42474c7f     )
-  (tab_active                    0xa87a4c99          0xc7a27dff           0x007accff          0x007accff          0x28515eff          0xa87a4c99          0xa87a4c99          0xa87a4c99          0xa87a4c99     )
-  (entity_background             0x4293cc99          0x4293cc99           0x4293cc99          0x4293cc99          0x4293cc99          0x4293cc99          0x4293cc99          0x4293cc99          0x4293cc99     )
-  (query_bar                     0x8e2d4ccc          0xd76489cc           0x8e2d4ccc          0x8e2d4ccc          0x8e2d4ccc          0x8e2d4ccc          0x8e2d4ccc          0x8e2d4ccc          0x8e2d4ccc     )
-  (weak_text                     0xffffff7f          0x0000007f           0xffffff7f          0x0000007f          0xffffff7f          0x0000007f          0xa08563af          0x90b080af          0xffffff7f     )
-  (text_selection                0x99ccff4c          0x7d98b34c           0x99ccff4c          0x7d98b34c          0x99ccff4c          0x7d98b34c          0x99ccff4c          0x99ccff4c          0x99ccff4c     )
-  (cursor                        0x66e566e5          0x101010ff           0x66e566e5          0x101010ff          0x66e566e5          0x101010ff          0x66e566e5          0x66e566e5          0x66e566e5     )
-  (highlight_0                   0xb27219ff          0xb272189b           0xb27219ff          0xb27219ff          0xb27219ff          0xb27219ff          0xb27219ff          0xb27219ff          0xb27219ff     )
-  (highlight_1                   0x327f19ff          0x327f19ff           0x327f19ff          0x327f19ff          0x327f19ff          0x327f19ff          0x327f19ff          0x327f19ff          0x327f19ff     )
-  (success_text                  0xe5e5e5ff          0xe5e5e5ff           0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff     )
-  (success_background            0x32b219ff          0x75db61ff           0x32b219ff          0x32b219ff          0x32b219ff          0x32b219ff          0x32b219ff          0x32b219ff          0x32b219ff     )
-  (success_border                0xffffff33          0xffffff33           0xffffff33          0xffffff33          0xffffff33          0xffffff33          0xffffff33          0xffffff33          0xffffff33     )
-  (failure_text                  0xe5e5e5ff          0xe5e5e5ff           0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff          0xe5e5e5ff     )
-  (failure_background            0xb23219ff          0xf27961ff           0xb23219ff          0xb23219ff          0xb23219ff          0xb23219ff          0xb23219ff          0xb23219ff          0xb23219ff     )
-  (failure_border                0xffffff33          0xffffff33           0xffffff33          0xffffff33          0xffffff33          0xffffff33          0xffffff33          0xffffff33          0xffffff33     )
-  (action_text                   0xffffffff          0xffffffff           0xffffffff          0xffffffff          0xffffffff          0xffffffff          0xffffffff          0xffffffff          0xffffffff     )
-  (action_background             0x327fb2ff          0x327fb2ff           0x327fb2ff          0x327fb2ff          0x327fb2ff          0x327fb2ff          0x327fb2ff          0x327fb2ff          0x327fb2ff     )
-  (action_border                 0xffffff33          0xffffff33           0xffffff33          0xffffff33          0xffffff33          0xffffff33          0xffffff33          0xffffff33          0xffffff33     )
-  (drop_site_overlay             0xffffff0c          0xffffff0c           0xffffff0c          0xffffff0c          0xffffff0c          0xffffff0c          0xffffff0c          0xffffff0c          0xffffff0c     )
-  (thread_0                      0xffcb7fff          0xad7c34ff           0xffcb7fff          0xad7c34ff          0xffcb7fff          0xad7c34ff          0xffcb7fff          0xffcb7fff          0xffcb7fff     )
-  (thread_1                      0xb2ff65ff          0x639b2aff           0xb2ff65ff          0x639b2aff          0xb2ff65ff          0x639b2aff          0xb2ff65ff          0xb2ff65ff          0xb2ff65ff     )
-  (thread_2                      0xff99e5ff          0xa94c91ff           0xff99e5ff          0xa94c91ff          0xff99e5ff          0xa94c91ff          0xff99e5ff          0xff99e5ff          0xff99e5ff     )
-  (thread_3                      0x6598ffff          0x305398ff           0x6598ffff          0x305398ff          0x6598ffff          0x305398ff          0x6598ffff          0x6598ffff          0x6598ffff     )
-  (thread_4                      0x65ffcbff          0x339574ff           0x65ffcbff          0x339574ff          0x65ffcbff          0x339574ff          0x65ffcbff          0x65ffcbff          0x65ffcbff     )
-  (thread_5                      0xff9819ff          0xbf7416ff           0xff9819ff          0xbf7416ff          0xff9819ff          0xbf7416ff          0xff9819ff          0xff9819ff          0xff9819ff     )
-  (thread_6                      0x9932ffff          0x57238bff           0x9932ffff          0x57238bff          0x9932ffff          0x57238bff          0x9932ffff          0x9932ffff          0x9932ffff     )
-  (thread_7                      0x65ff4cff          0x2a7e1cff           0x65ff4cff          0x2a7e1cff          0x65ff4cff          0x2a7e1cff          0x65ff4cff          0x65ff4cff          0x65ff4cff     )
-  (thread_unwound                0xb2ccd8ff          0x236481ff           0xb2ccd8ff          0x236481ff          0xb2ccd8ff          0x236481ff          0xb2ccd8ff          0xb2ccd8ff          0xb2ccd8ff     )
-  (inactive_panel_overlay        0x0000003f          0x0000000d           0x0000003f          0x0000000d          0x0000003f          0x0000000d          0x0000003f          0x0000003f          0x0000003f     )
-  (drop_shadow                   0x0000007f          0x0000003b           0x0000007f          0x0000003b          0x0000007f          0x0000003b          0x0000007f          0x0000007f          0x0000007f     )
+  {Null                           "Null"                              null                                   0xff00ffff          0xff00ffff          0xff00ffff          0xff00ffff          0xff00ffff          0xff00ffff          0xff00ffff          0xff00ffff          0xff00ffff          ""}
+  
+  //- rjf: global ui colors
+  {Text                           "Text"                              text                                   0xe5e5e5ff          0x4c4c4cff          0xe5e5e5ff          0x000000ff          0x999999ff          0x333333ff          0xa08462ff          0x90b080ff          0x00fefeff          ""}
+  {TextPositive                   "Text (Positive)"                   text_positive                          0x4dc221ff          0x4d9e2eff          0x4dc221ff          0x4dc221ff          0x4dc221ff          0x4dc221ff          0x4dc221ff          0x4dc221ff          0x4dc221ff          ""}
+  {TextNegative                   "Text (Negative)"                   text_negative                          0xc56452ff          0xbd371eff          0xc56452ff          0xc46451ff          0xc56452ff          0xc56452ff          0xc56452ff          0xc56452ff          0xc56452ff          ""}
+  {TextNeutral                    "Text (Neutral)"                    text_neutral                           0x307eb2ff          0x0064a7ff          0x307eb2ff          0x307eb2ff          0x307eb2ff          0x307eb2ff          0x307eb2ff          0x307eb2ff          0x307eb2ff          ""}
+  {TextWeak                       "Text (Weak)"                       text_weak                              0xa4a4a4fe          0x4c4c4cff          0xa4a4a4fe          0x0000007f          0x9999998a          0x818181ff          0x6e512eff          0x566e4bff          0x00a9a9ff          ""}
+  {Cursor                         "Cursor"                            cursor                                 0x8aff00ff          0x699830ff          0x8aff00ff          0x000000ff          0x8aff00ff          0x586e75ff          0x8aff00ff          0x8aff00ff          0x8aff00ff          ""}
+  {CursorInactive                 "Cursor (Inactive)"                 cursor_inactive                        0xb23217ff          0xb23217ff          0xb23217ff          0xb23217ff          0xb23217ff          0xb23217ff          0xb23217ff          0xb23217ff          0xb23217ff          ""}
+  {Focus                          "Focus"                             focus                                  0xfda200ff          0x9c5900ff          0xfda200ff          0x002affff          0xfda200ff          0x92743dff          0xfda200ff          0xfda200ff          0x00fefeff          ""}
+  {Hover                          "Hover"                             hover                                  0xffffffff          0xffffffff          0xffffffff          0x000000ff          0xffffffff          0x747474ff          0xffffffff          0xffffffff          0xffffffff          ""}
+  {DropShadow                     "Drop Shadow"                       drop_shadow                            0x0000007f          0x0000004c          0x0000007f          0xa3a3a37e          0x0000007f          0xc9bfa394          0x0000007f          0x0000007f          0x0000007f          ""}
+  {DisabledOverlay                "Disabled Overlay"                  disabled_overlay                       0x0000003f          0xa6a6a63f          0x0000003f          0x0000003f          0x0000003f          0xe4dac090          0x0000003f          0x0000003f          0x0000003f          ""}
+  {DropSiteOverlay                "Drop Site Overlay"                 drop_site_overlay                      0xffffff0c          0x4848480c          0xffffff0c          0x0000000c          0xffffff0c          0xffffff0c          0xffffff0c          0xffffff0c          0xffffff0c          ""}
+  {InactivePanelOverlay           "Inactive Panel Overlay"            inactive_panel_overlay                 0x0000003f          0xa4a4a43f          0x0000003f          0xfefefe53          0x0000003f          0x0000001c          0x0000003f          0x0000003f          0x0000003f          ""}
+  {SelectionOverlay               "Selection Overlay"                 selection_overlay                      0x99ccff4c          0x003d7a48          0x99ccff4c          0x3d74ab4b          0x99ccff4c          0x678cb24c          0x99ccff4c          0x99ccff4c          0x99ccff4c          ""}
+  {HighlightOverlay               "Highlight Overlay"                 highlight_overlay                      0xffffff1e          0xffffff1e          0xffffff1e          0x0000001e          0xffffff1e          0xffffff1e          0xffffff1e          0xffffff1e          0xffffff1e          ""}
+  {HighlightOverlayError          "Error Highlight Overlay"           error_highlight_overlay                0x5f12005f          0xff30005f          0x5f12005f          0x5f12005f          0x5f12005f          0x5f12005f          0x5f12005f          0x5f12005f          0x5f12005f          ""}
+  
+  //- rjf: base ui container colors
+  {BaseBackground                 "Base Background"                   base_background                        0x1b1b1bfe          0xccccccfe          0x1b1b1bfe          0xfefefefe          0x002a35fe          0xfcf5e2fe          0x0c0c0cfe          0x0c0c0cfe          0x000081fe          ""}
+  {BaseBackgroundAlt              "Base Background (Alternate)"       base_background_alt                    0x2b2b2bfe          0x2b2b2bfe          0x1b1b1bfe          0xe7e7e7fe          0x2b2b2bfe          0x2b2b2bfe          0x2b2b2bfe          0x2b2b2bfe          0x2b2b2bfe          ""}
+  {BaseBorder                     "Base Border"                       base_border                            0x3f3f3ffe          0xa4a4a4fe          0x3f3f3ffe          0xb6b6b6ff          0xfefefe3a          0xbebaabfe          0x423525fe          0x3f3f3ffe          0x0000fffe          ""}
+  
+  //- rjf: menu bar ui container colors
+  {MenuBarBackground              "Menu Bar Background"               menu_bar_background                    0x3e4c577f          0xeaeaea7f          0x1b1b1bfd          0xffffff7f          0x00202bff          0xeee8d5ff          0x0c0c0cfe          0x0c0c0cfe          0x007d7dff          ""}
+  {MenuBarBackgroundAlt           "Menu Bar Background (Alternate)"   menu_bar_background_alt                0x3e4c577f          0x3e4c577f          0x1b1b1bfd          0xffffff7f          0x3e4c577f          0x3e4c577f          0x3e4c577f          0x3e4c577f          0x007d7dff          ""}
+  {MenuBarBorder                  "Menu Bar Border"                   menu_bar_border                        0xffffff19          0xa4a4a4fe          0x3f3f3ffe          0xb6b6b6ff          0xffffff19          0xbebaabfe          0xffffff19          0xffffff19          0xfefefe00          ""}
+  
+  //- rjf: floating ui container colors
+  {FloatingBackground             "Floating Background"               floating_background                    0x33333333          0xccccccc0          0x33333333          0xfefefec7          0x007fa14e          0xffffff7c          0x0c0c0c32          0x0c0c0c3e          0x007c7c55          ""}
+  {FloatingBackgroundAlt          "Floating Background (Alternate)"   floating_background_alt                0x33333333          0x33333333          0x33333333          0x33333333          0x33333333          0x33333333          0x33333333          0x33333333          0x33333333          ""}
+  {FloatingBorder                 "Floating Border"                   floating_border                        0x3f3f3ffd          0xa4a4a4fe          0x3f3f3ffd          0xb6b6b6ff          0xfdfdfd3a          0xbebaabfe          0x423425fe          0x3f3f3ffd          0x00ffff55          ""}
+  
+  //- rjf: ui element colors
+  {ImplicitButtonBackground       "Implicit Button Background"        implicit_button_background             0x00000000          0x00000000          0x00000000          0x00000000          0x00000000          0x00000000          0x00000000          0x00000000          0x00000000          ""}
+  {ImplicitButtonBorder           "Implicit Button Border"            implicit_button_border                 0x00000000          0x00000000          0x00000000          0x00000000          0x00000000          0xbdb9aa00          0x00000000          0x00000000          0x00000000          ""}
+  {PlainButtonBackground          "Plain Button Background"           plain_button_background                0x1b1b1bfe          0x1b1b1bfe          0x1b1b1bfe          0x1b1b1bfe          0x1b1b1bfe          0x1b1b1bfe          0x1b1b1bfe          0x1b1b1bfe          0x1b1b1bfe          ""}
+  {PlainButtonBorder              "Plain Button Border"               plain_button_border                    0x3f3f3ffe          0x3f3f3ffe          0x3f3f3ffe          0xb6b6b6ff          0xfefefe3a          0xbebaabfe          0x3f3f3ffe          0x3f3f3ffe          0x3f3f3ffe          ""}
+  {PositivePopButtonBackground    "Positive Pop Button Background"    positive_pop_button_background         0x2c5b36ff          0x65f534ff          0x2c5b36ff          0x84ce93ff          0x2c5b36ff          0xb6ddbeff          0x132e19ff          0x152f1bff          0x2c5b36ff          ""}
+  {PositivePopButtonBorder        "Positive Pop Button Border"        positive_pop_button_border             0x3f3f3ffd          0x3f3f3ffd          0x3f3f3ffd          0xb6b6b6ff          0xfefefe3a          0xbebaabfe          0x3f3f3ffd          0x3f3f3ffd          0x3f3f3ffd          ""}
+  {NegativePopButtonBackground    "Negative Pop Button Background"    negative_pop_button_background         0x803425ff          0xff694cff          0x803425ff          0xbd3e24ff          0x803425ff          0xf8b0a1ff          0x803425ff          0x43150cff          0x803425ff          ""}
+  {NegativePopButtonBorder        "Negative Pop Button Border"        negative_pop_button_border             0x3f3f3ffd          0x3f3f3ffd          0x3f3f3ffd          0xb6b6b6ff          0xfefefe3a          0xbebaabfe          0x3f3f3ffd          0x3f3f3ffd          0x3f3f3ffd          ""}
+  {NeutralPopButtonBackground     "Neutral Pop Button Background"     neutral_pop_button_background          0x355b6eff          0xa6becaff          0x355b6eff          0x6e9db5ff          0x355b6eff          0xb2d3e3ff          0x15445cff          0x1b323eff          0x933100ff          ""}
+  {NeutralPopButtonBorder         "Neutral Pop Button Border"         neutral_pop_button_border              0x3f3f3ffd          0xa6a6a6fd          0x3f3f3ffd          0xb6b6b6ff          0xfefefe3a          0xbebaabfe          0x3f3f3ffd          0x3f3f3ffd          0x3f3f3ffd          ""}
+  {ScrollBarButtonBackground      "Scroll Bar Button Background"      scroll_bar_button_background           0x2b2b2bfe          0xa9a9a9fe          0x2b2b2bfe          0xe8e8e8fe          0x005e77fe          0xe3dbc7fe          0x1f1f27fe          0x212721fe          0x007d7dff          ""}
+  {ScrollBarButtonBorder          "Scroll Bar Button Border"          scroll_bar_button_border               0x3f3f3ffe          0xc0c0c0fe          0x3f3f3ffe          0xb6b6b6ff          0xfefefe3a          0xbebaabfe          0xfefefe4d          0x3f3f3ffe          0x3f3f3ffe          ""}
+  {TabBackground                  "Tab Background"                    tab_background                         0x6f5135fe          0xa98b6fff          0x0079ccff          0xfffffffe          0x005e77fe          0xfdf6e3ff          0x1f1f27fe          0x212721fe          0x007d7dff          ""}
+  {TabBorder                      "Tab Border"                        tab_border                             0xfefefe4d          0xffffff4d          0xfefefe4d          0xb6b6b6ff          0xfefefe4d          0xbebaabfe          0xfefefe4d          0xfefefe4d          0xfefefe4d          ""}
+  {TabBackgroundInactive          "Tab Background (Inactive)"         tab_background_inactive                0x3e4c577f          0x8282827f          0xfefefe14          0xcdd4dc7f          0x3e4c577f          0xd4cfc0fe          0x131315ee          0x3a3a3a7f          0x3e4c577f          ""}
+  {TabBorderInactive              "Tab Border (Inactive)"             tab_border_inactive                    0xffffff19          0xffffff19          0xffffff00          0xb6b6b6ff          0xffffff19          0xbebaabfe          0xffffff19          0x00000019          0xfefefe19          ""}
+  
+  //- rjf: code colors
+  {CodeDefault                    "Code (Default)"                    code_default                           0xcbcbcbff          0x4d4d4dff          0xcbcbcbff          0x000000ff          0xcbcbcbff          0x657b83ff          0xa08462ff          0x90b080ff          0x00fefeff          ""}
+  {CodeSymbol                     "Code (Symbol)"                     code_symbol                            0x42a2cffe          0x205670fe          0xdcdcaaff          0x000000ff          0xcb4a15ff          0xcb4a15ff          0xcc5634ff          0x42a2cffe          0x65b1ffff          ""}
+  {CodeType                       "Code (Type)"                       code_type                              0xfec746ff          0x996b00ff          0x4ec9afff          0xa33700ff          0xcb4a15ff          0xcb4a15ff          0xd8a51bff          0xfd7c52ff          0xfec746ff          ""}
+  {CodeLocal                      "Code (Local)"                      code_local                             0x98bc80ff          0x446a2bff          0x9cdbfeff          0x007666ff          0x98bc80ff          0x258ad2ff          0xc04047ff          0x98bc80ff          0x00ff00ff          ""}
+  {CodeRegister                   "Code (Register)"                   code_register                          0xb7afd5ff          0x4c35a1ff          0xb7afd5ff          0xb7afd5ff          0xb7afd5ff          0x373345ff          0xb7afd5ff          0xb7afd5ff          0xb7afd5ff          ""}
+  {CodeKeyword                    "Code (Keyword)"                    code_keyword                           0xb38d4cff          0x573700ff          0x569cd6ff          0x0000ffff          0x849803ff          0x586e75ff          0xac7a09ff          0xd08f1eff          0x00ffffff          ""}
+  {CodeDelimiterOperator          "Code (Delimiters/Operators)"       code_delimiter_operator                0x767676ff          0x767676ff          0x767676ff          0x767676ff          0x767676ff          0x767676ff          0xa08462ff          0x90b080ff          0xffffffff          ""}
+  {CodeNumeric                    "Code (Numeric)"                    code_numeric                           0x98abb1ff          0x3f6e7dff          0xb5cea8ff          0x088658ff          0xd33582ff          0xd33482ef          0x698e21ff          0x4fff2eff          0x00ff00ff          ""}
+  {CodeNumericAltDigitGroup       "Code (Numeric, Alt. Digit Group)"  code_numeric_alt_digit_group           0x738287ff          0x1f4450ff          0x729360ff          0x0c3828ff          0x902559ff          0x8e2659ff          0x3a4e11ff          0x3ccd21ff          0x738287ff          ""}
+  {CodeString                     "Code (String)"                     code_string                            0x98abb1ff          0x3c606bff          0xd59b85ff          0xa31414ff          0x1f9d91ff          0x29a198ff          0x6a8e22ff          0x4fff2eff          0x98abb1ff          ""}
+  {CodeMeta                       "Code (Meta)"                       code_meta                              0xd96759ff          0xad3627ff          0xd59c85ff          0x0000ffff          0x839802ff          0xd96759ff          0xdab98fff          0xa0b8a0ff          0xff0000ff          ""}
+  {CodeComment                    "Code (Comment)"                    code_comment                           0x717171ff          0x4b4b4bff          0x57a54aff          0x008000ff          0x556a6fff          0x93a1a1ff          0x686868ff          0x1e8fefff          0xffffffff          ""}
+  {CodeLineNumbers                "Code Line Numbers"                 code_line_numbers                      0x7f7f7fff          0x4b4b4bff          0x2a91afff          0x227893ff          0x566c73ff          0x227893ef          0xa08462ff          0x7e7e7ffe          0x007d7dff          ""}
+  {CodeLineNumbersSelected        "Code Line Numbers (Selected)"      code_line_numbers_selected             0xbebebeff          0x000000ff          0x9ddaecff          0x123d4bfe          0xa2aaacff          0x111e22ef          0xc8b399ff          0xbebebeff          0x00fefeff          ""}
+  
+  //- rjf: debugging colors
+  {LineInfoBackground0            "Line Info Background 0"            line_info_background_0                 0x99503d3f          0x99503d3f          0x99503d3f          0x99503d3f          0x99503d3f          0x99503d3f          0x99503d3f          0x99503d3f          0x99503d3f          ""}
+  {LineInfoBackground1            "Line Info Background 1"            line_info_background_1                 0xfe82493f          0xfe82493f          0xfe82493f          0xfe82493f          0xfe82493f          0xfe82493f          0xfe82493f          0xfe82493f          0xfe82493f          ""}
+  {LineInfoBackground2            "Line Info Background 2"            line_info_background_2                 0xffba173f          0xffba173f          0xffba173f          0xffba173f          0xffba173f          0xffba173f          0xffba173f          0xffba173f          0xffba173f          ""}
+  {LineInfoBackground3            "Line Info Background 3"            line_info_background_3                 0xcefd693f          0xcefd693f          0xcefd693f          0xcefd693f          0xcefd693f          0xcefd693f          0xcefd693f          0xcefd693f          0xcefd693f          ""}
+  {LineInfoBackground4            "Line Info Background 4"            line_info_background_4                 0x99503d3f          0x99503d3f          0x99503d3f          0x99503d3f          0x99503d3f          0x99503d3f          0x99503d3f          0x99503d3f          0x99503d3f          ""}
+  {LineInfoBackground5            "Line Info Background 5"            line_info_background_5                 0xfe82493f          0xfe82493f          0xfe82493f          0xfe82493f          0xfe82493f          0xfe82493f          0xfe82493f          0xfe82493f          0xfe82493f          ""}
+  {LineInfoBackground6            "Line Info Background 6"            line_info_background_6                 0xffba173f          0xffba173f          0xffba173f          0xffba173f          0xffba173f          0xffba173f          0xffba173f          0xffba173f          0xffba173f          ""}
+  {LineInfoBackground7            "Line Info Background 7"            line_info_background_7                 0xcefd693f          0xcefd693f          0xcefd693f          0xcefd693f          0xcefd693f          0xcefd693f          0xcefd693f          0xcefd693f          0xcefd693f          ""}
+  {Thread0                        "Thread 0"                          thread_0                               0xffcb7fff          0x945800ff          0xffcb7fff          0x945800ff          0xffcb7fff          0x945800ff          0xffcb7fff          0xffcb7fff          0xffcb7fff          ""}
+  {Thread1                        "Thread 1"                          thread_1                               0xb2ff65ff          0x3f5b23ff          0xb2ff65ff          0x3f5b23ff          0xb2ff65ff          0x3f5b23ff          0xb2ff65ff          0xb2ff65ff          0xb2ff65ff          ""}
+  {Thread2                        "Thread 2"                          thread_2                               0xff99e5ff          0x642a55ff          0xff99e5ff          0x642a55ff          0xff99e5ff          0x642a55ff          0xff99e5ff          0xff99e5ff          0xff99e5ff          ""}
+  {Thread3                        "Thread 3"                          thread_3                               0x6598ffff          0x30456fff          0x6598ffff          0x30456fff          0x6598ffff          0x30456fff          0x6598ffff          0x6598ffff          0x6598ffff          ""}
+  {Thread4                        "Thread 4"                          thread_4                               0x65ffcbff          0x264f41ff          0x65ffcbff          0x264f41ff          0x65ffcbff          0x264f41ff          0x65ffcbff          0x65ffcbff          0x65ffcbff          ""}
+  {Thread5                        "Thread 5"                          thread_5                               0xff9819ff          0x736a5fff          0xff9819ff          0x736a5fff          0xff9819ff          0x736a5fff          0xff9819ff          0xff9819ff          0xff9819ff          ""}
+  {Thread6                        "Thread 6"                          thread_6                               0x9932ffff          0x472f5eff          0x9932ffff          0x472f5eff          0x9932ffff          0x472f5eff          0x9932ffff          0x9932ffff          0x9932ffff          ""}
+  {Thread7                        "Thread 7"                          thread_7                               0x65ff4cff          0x405d3bff          0x65ff4cff          0x405d3bff          0x65ff4cff          0x405d3bff          0x65ff4cff          0x65ff4cff          0x65ff4cff          ""}
+  {ThreadUnwound                  "Thread (Unwound)"                  thread_unwound                         0xb2ccd8ff          0x49606aff          0xb2ccd8ff          0x49606aff          0xb2ccd8ff          0x49606aff          0xb2ccd8ff          0xb2ccd8ff          0xb2ccd8ff          ""}
+  {ThreadError                    "Thread (Error)"                    thread_error                           0xb23219ff          0xb23219ff          0xb23219ff          0xb23219ff          0xb23219ff          0xb23218ff          0xb23219ff          0xb23219ff          0xb23219ff          ""}
+  {Breakpoint                     "Breakpoint"                        breakpoint                             0xa72911ff          0xff2800ff          0xa72911ff          0xa72911ff          0xa72911ff          0xff684bff          0xa72911ff          0xa72911ff          0xff2800ff          ""}
+}
+
+@table(old_name new_name)
+DF_ThemeColorVersionRemapTable:
+{
+  {plain_text                          text}
+  {plain_background                    base_background}
+  {plain_border                        base_border}
+  {plain_overlay                       drop_site_overlay}
+  {code_function                       code_symbol}
+  {code_symbol                         code_delimiter_operator}
+  {code_numeric                        code_numeric_alt_digit_group}
+  {line_info_0                         line_info_background_0}
+  {line_info_1                         line_info_background_1}
+  {line_info_2                         line_info_background_2}
+  {line_info_3                         line_info_background_3}
+  {alt_background                      menu_bar_background}
+  {alt_border                          menu_bar_border}
+  {tab_inactive                        tab_background_inactive}
+  {tab_active                          tab_background}
+  {weak_text                           text_weak}
+  {text_selection                      selection}
+  {cursor                              cursor}
+  {highlight_0                         focus}
+  {success_background                  positive_pop_button_background}
+  {failure_background                  negative_pop_button_background}
+  {action_background                   neutral_pop_button_background}
+}
+
+@enum DF_ThemeColor:
+{
+  @expand(DF_ThemeColorTable a) `$(a.name)`,
+  COUNT,
+}
+
+@enum DF_ThemePreset:
+{
+  @expand(DF_ThemePresetTable a) `$(a.name)`,
+  COUNT,
+}
+
+@data(String8) df_g_theme_preset_display_string_table:
+{
+  @expand(DF_ThemePresetTable a) `str8_lit_comp("$(a.display_string)")`,
+}
+
+@data(String8) df_g_theme_preset_code_string_table:
+{
+  @expand(DF_ThemePresetTable a) `str8_lit_comp("$(a.name_lower)")`,
+}
+
+@data(String8) df_g_theme_color_version_remap_old_name_table:
+{
+  @expand(DF_ThemeColorVersionRemapTable a) `str8_lit_comp("$(a.old_name)")`
+}
+
+@data(String8) df_g_theme_color_version_remap_new_name_table:
+{
+  @expand(DF_ThemeColorVersionRemapTable a) `str8_lit_comp("$(a.new_name)")`
+}
+
+@data(Vec4F32) df_g_theme_preset_colors__default_dark:   {@expand(DF_ThemeColorTable a) `rgba_from_u32_lit_comp($(a.default_dark))`}
+@data(Vec4F32) df_g_theme_preset_colors__default_light:  {@expand(DF_ThemeColorTable a) `rgba_from_u32_lit_comp($(a.default_light))`}
+@data(Vec4F32) df_g_theme_preset_colors__vs_dark:        {@expand(DF_ThemeColorTable a) `rgba_from_u32_lit_comp($(a.vs_dark))`}
+@data(Vec4F32) df_g_theme_preset_colors__vs_light:       {@expand(DF_ThemeColorTable a) `rgba_from_u32_lit_comp($(a.vs_light))`}
+@data(Vec4F32) df_g_theme_preset_colors__solarized_dark: {@expand(DF_ThemeColorTable a) `rgba_from_u32_lit_comp($(a.solarized_dark))`,}
+@data(Vec4F32) df_g_theme_preset_colors__solarized_light:{@expand(DF_ThemeColorTable a) `rgba_from_u32_lit_comp($(a.solarized_light))`,}
+@data(Vec4F32) df_g_theme_preset_colors__handmade_hero:  {@expand(DF_ThemeColorTable a) `rgba_from_u32_lit_comp($(a.handmade_hero))`,}
+@data(Vec4F32) df_g_theme_preset_colors__four_coder:     {@expand(DF_ThemeColorTable a) `rgba_from_u32_lit_comp($(a.four_coder))`,}
+@data(Vec4F32) df_g_theme_preset_colors__far_manager:    {@expand(DF_ThemeColorTable a) `rgba_from_u32_lit_comp($(a.far_manager))`;}
+@data(`Vec4F32*`) df_g_theme_preset_colors_table:
+{
+  @expand(DF_ThemePresetTable a) `df_g_theme_preset_colors__$(a.name_lower)`,
+}
+
+@data(String8) df_g_theme_color_display_string_table:
+{
+  @expand(DF_ThemeColorTable a) `str8_lit_comp("$(a.display_name)")`
+}
+
+@data(String8) df_g_theme_color_cfg_string_table:
+{
+  @expand(DF_ThemeColorTable a) `str8_lit_comp("$(a.name_lower)")`
 }
 
 ////////////////////////////////
-//~ rjf: Generators
+//~ rjf: Settings
 
-//- rjf: enums
-
-@table_gen_enum
-DF_GfxViewKind:
+@table(name  name_lower  display_string  default_per_window  default_s32  s32_min  s32_max)
+DF_SettingTable:
 {
-  @expand(DF_GfxViewTable a)
-    `DF_GfxViewKind_$(a.name),`
-    `DF_GfxViewKind_COUNT`;
+  {HoverAnimations       hover_animations        "Hover Animations"        0            1    0  1  }
+  {PressAnimations       press_animations        "Press Animations"        0            1    0  1  }
+  {FocusAnimations       focus_animations        "Focus Animations"        0            0    0  1  }
+  {TooltipAnimations     tooltip_animations      "Tooltip Animations"      0            1    0  1  }
+  {MenuAnimations        menu_animations         "Menu Animations"         0            1    0  1  }
+  {ScrollingAnimations   scrolling_animations    "Scrolling Animations"    0            1    0  1  }
+  {BackgroundBlur        background_blur         "Background Blur"         0            1    0  1  }
+  {ThreadLines           thread_lines            "Thread Lines"            0            1    0  1  }
+  {BreakpointLines       breakpoint_lines        "Breakpoint Lines"        0            1    0  1  }
+  {ThreadGlow            thread_glow             "Thread Glow"             0            1    0  1  }
+  {BreakpointGlow        breakpoint_glow         "Breakpoint Glow"         0            1    0  1  }
+  {OpaqueBackgrounds     opaque_backgrounds      "Opaque Backgrounds"      0            0    0  1  }
+  {TabWidth              tab_width               "Tab Width"               0            4    1  32 }
+  {MainFontSize          main_font_size          "Main Font Size"          1            12   6  72 }
+  {CodeFontSize          code_font_size          "Code Font Size"          1            12   6  72 }
+  {SmoothUIText          smooth_ui_text          "Smooth UI Text"          1            1    0  1  }
+  {SmoothCodeText        smooth_code_text        "Smooth Code Text"        1            0    0  1  }
+  {HintUIText            hint_ui_text            "Hint UI Text"            1            1    0  1  }
+  {HintCodeText          hint_code_text          "Hint Code Text"          1            1    0  1  }
 }
 
-@table_gen_enum
-DF_ThemeColor:
+@enum DF_SettingCode:
 {
-  @expand(DF_ThemeTable, a)
-    `DF_ThemeColor_$(a.name),`;
-  `DF_ThemeColor_COUNT`;
+  @expand(DF_SettingTable a) `$(a.name)`,
+  COUNT
 }
 
-@table_gen_enum
-DF_ThemePreset:
+@data(String8) df_g_setting_code_display_string_table:
 {
-  @expand(DF_ThemePresetTable a)
-    `DF_ThemePreset_$(a.name),`;
-  `DF_ThemePreset_COUNT`;
+  @expand(DF_SettingTable a) `str8_lit_comp("$(a.display_string)")`
 }
 
-//- rjf: theme preset color tables
-
-@table_gen_data(type: String8, fallback: `{0}`)
-df_g_theme_preset_display_string_table:
+@data(String8) df_g_setting_code_lower_string_table:
 {
-  @expand(DF_ThemePresetTable a) `str8_lit_comp("$(a.display_string)"),`;
+  @expand(DF_SettingTable a) `str8_lit_comp("$(a.name_lower)")`
 }
 
-@table_gen_data(type: Vec4F32, fallback: `{1, 0, 1, 1}`)
-df_g_theme_preset_colors__default_dark:
+@data(B8) df_g_setting_code_default_is_per_window_table:
 {
-  @expand(DF_ThemePresetColorTable a) `rgba_from_u32_lit_comp($(a.default_dark)),`;
+  @expand(DF_SettingTable a) `$(a.default_per_window)`
 }
 
-@table_gen_data(type: Vec4F32, fallback: `{1, 0, 1, 1}`)
-df_g_theme_preset_colors__default_light:
+@data(DF_SettingVal) df_g_setting_code_default_val_table:
 {
-  @expand(DF_ThemePresetColorTable a) `rgba_from_u32_lit_comp($(a.default_light)),`;
+  @expand(DF_SettingTable a) `{1, $(a.default_s32)}`
 }
 
-@table_gen_data(type: Vec4F32, fallback: `{1, 0, 1, 1}`)
-df_g_theme_preset_colors__vs_dark:
+@data(Rng1S32) df_g_setting_code_s32_range_table:
 {
-  @expand(DF_ThemePresetColorTable a) `rgba_from_u32_lit_comp($(a.vs_dark)),`;
-}
-
-@table_gen_data(type: Vec4F32, fallback: `{1, 0, 1, 1}`)
-df_g_theme_preset_colors__vs_light:
-{
-  @expand(DF_ThemePresetColorTable a) `rgba_from_u32_lit_comp($(a.vs_light)),`;
-}
-
-@table_gen_data(type: Vec4F32, fallback: `{1, 0, 1, 1}`)
-df_g_theme_preset_colors__solarized_dark:
-{
-  @expand(DF_ThemePresetColorTable a) `rgba_from_u32_lit_comp($(a.solarized_dark)),`;
-}
-
-@table_gen_data(type: Vec4F32, fallback: `{1, 0, 1, 1}`)
-df_g_theme_preset_colors__solarized_light:
-{
-  @expand(DF_ThemePresetColorTable a) `rgba_from_u32_lit_comp($(a.solarized_light)),`;
-}
-
-@table_gen_data(type: Vec4F32, fallback: `{1, 0, 1, 1}`)
-df_g_theme_preset_colors__handmade_hero:
-{
-  @expand(DF_ThemePresetColorTable a) `rgba_from_u32_lit_comp($(a.handmade_hero)),`;
-}
-
-@table_gen_data(type: Vec4F32, fallback: `{1, 0, 1, 1}`)
-df_g_theme_preset_colors__four_coder:
-{
-  @expand(DF_ThemePresetColorTable a) `rgba_from_u32_lit_comp($(a.four_coder)),`;
-}
-
-@table_gen_data(type: Vec4F32, fallback: `{1, 0, 1, 1}`)
-df_g_theme_preset_colors__far_manager:
-{
-  @expand(DF_ThemePresetColorTable a) `rgba_from_u32_lit_comp($(a.far_manager)),`;
-}
-
-@table_gen_data(type: `Vec4F32 *`, fallback: `0`)
-df_g_theme_preset_colors_table:
-{
-  @expand(DF_ThemePresetTable a) `df_g_theme_preset_colors__$(a.name_lower),`;
-}
-
-//- rjf: default cmd -> view tables
-
-@table_gen_data(type: String8, fallback:`{0}`)
-df_g_cmd2view_table_src:
-{
-  @expand(DF_CmdSpec2ViewSpecMap a) `str8_lit_comp("$(a.cmd)"),`
-}
-
-@table_gen_data(type: String8, fallback:`{0}`)
-df_g_cmd2view_table_dst:
-{
-  @expand(DF_CmdSpec2ViewSpecMap a) `str8_lit_comp("$(a.view)"),`
-}
-
-//- rjf: default bindings table
-
-@table_gen_data(type: DF_StringBindingPair, fallback: `{0}`)
-df_g_default_binding_table:
-{
-  @expand(DF_DefaultBindingTable a) ```{str8_lit_comp("$(a.name)"), {OS_Key_$(a.key), 0 $(a.ctrl != 0 -> `|OS_EventFlag_Ctrl`) $(a.shift != 0 -> `|OS_EventFlag_Shift`) $(a.alt != 0 -> `|OS_EventFlag_Alt`)}},```;
-}
-
-//- rjf: view hook forward declares
-
-@table_gen
-{
-  @expand(DF_GfxViewTable a) `DF_VIEW_SETUP_FUNCTION_DEF($(a.name));`;
-  @expand(DF_GfxViewTable a) `DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF($(a.name));`;
-  @expand(DF_GfxViewTable a) `DF_VIEW_CMD_FUNCTION_DEF($(a.name));`;
-  @expand(DF_GfxViewTable a) `DF_VIEW_UI_FUNCTION_DEF($(a.name));`;
-}
-
-//- rjf: gfx view rule function forward declares
-
-@table_gen
-{
-  ``;
-  @expand(DF_GfxViewRuleTable a)
-    `$(a.vr == "x" -> "DF_GFX_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_DEF(" .. a.name_lower .. ");")`;
-  @expand(DF_GfxViewRuleTable a)
-    `$(a.ls == "x" -> "DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(" .. a.name_lower .. ");")`;
-  @expand(DF_GfxViewRuleTable a)
-    `$(a.ru == "x" -> "DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_DEF(" .. a.name_lower .. ");")`;
-  @expand(DF_GfxViewRuleTable a)
-    `$(a.bu == "x" -> "DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(" .. a.name_lower .. ");")`;
-}
-
-//- rjf: gfx view rule tables
-
-@table_gen_data(type: DF_GfxViewRuleSpecInfo, fallback: `{0}`) @c_file
-df_g_gfx_view_rule_spec_info_table:
-{
-  @expand(DF_GfxViewRuleTable a)
-    ```{ str8_lit_comp("$(a.string)"), (DF_GfxViewRuleSpecInfoFlag_VizRowProd*$(a.vr == "x"))|(DF_GfxViewRuleSpecInfoFlag_LineStringize*$(a.ls == "x"))|(DF_GfxViewRuleSpecInfoFlag_RowUI*$(a.ru == "x"))|(DF_GfxViewRuleSpecInfoFlag_BlockUI*$(a.bu == "x")), $(a.vr == "x" -> "DF_GFX_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_NAME("..a.name_lower..")") $(a.vr != "x" -> 0), $(a.ls == "x" -> "DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_NAME("..a.name_lower..")") $(a.ls != "x" -> 0), $(a.ru == "x" -> "DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_NAME("..a.name_lower..")") $(a.ru != "x" -> 0), $(a.bu == "x" -> "DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_NAME("..a.name_lower..")") $(a.bu != "x" -> 0), },```;
-}
-
-//- rjf: default view spec info table
-
-@table_gen_data(type: DF_ViewSpecInfo, fallback: `{0}`)
-df_g_gfx_view_kind_spec_info_table:
-{
-  @expand(DF_GfxViewTable a) ```{(0|$(a.parameterized_by_entity)*DF_ViewSpecFlag_ParameterizedByEntity|$(a.can_serialize)*DF_ViewSpecFlag_CanSerialize|$(a.can_serialize_entity_path)*DF_ViewSpecFlag_CanSerializeEntityPath), str8_lit_comp("$(a.name_lower)"), str8_lit_comp("$(a.display_string)"), DF_NameKind_$(a.name_kind), DF_VIEW_SETUP_FUNCTION_NAME($(a.name)), DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME($(a.name)), DF_VIEW_CMD_FUNCTION_NAME($(a.name)), DF_VIEW_UI_FUNCTION_NAME($(a.name))},```;
-}
-
-//- rjf: theme color string tables
-
-@table_gen_data(type: String8, fallback: `str8_lit_comp("")`)
-df_g_theme_color_display_string_table:
-{
-  @expand(DF_ThemeTable a) `str8_lit_comp("$(a.display_name)"),`;
-}
-
-@table_gen_data(type: String8, fallback: `str8_lit_comp("")`)
-df_g_theme_color_cfg_string_table:
-{
-  @expand(DF_ThemeTable a) `str8_lit_comp("$(a.name_lower)"),`;
+  @expand(DF_SettingTable a) `{$(a.s32_min), $(a.s32_max)}`
 }
 
 ////////////////////////////////
@@ -652,7 +660,7 @@ raddbg_readme:
   {
     @p "`--help` Displays a help menu which documents the possible command line options.";
     @p "`--user:<path>` Specifies a path to the user file which the debugger should use instead of the default. The default user file is stored at `%appdata%/raddbg/default.raddbg_user`. For more information on user files, read the 'User & Profile Files' section.";
-    @p "`--profile:<path>` Specifies a path to the profile file which the debugger should use instead of the default. The default profile file is stored at `%appdata%/raddbg/default.raddbg_profile`. For more information on profile files, read the 'User & Profile Files' section.";
+    @p "`--project:<path>` Specifies a path to the project file which the debugger should use instead of the default. The default project file is stored at `%appdata%/raddbg/default.raddbg_project`. For more information on project files, read the 'User & Project Files' section.";
     @p "`--auto_run` Specifies that the debugger should immediately run its selected targets upon launching.";
     @p "`--auto_step` Specifies that the debugger should immediately step into its selected targets upon launching.";
     //@p "`--ipc` Specifies that the launched debugger instance is for communicating a command to another instance of the debugger. In this mode, any non-argument command line contents will be used to express a command. For more information on commands, read the 'Commands' section. For more information on driving another debugger instance with this argument, read the 'Driving Another Debugger Instance' section."
@@ -685,13 +693,13 @@ raddbg_readme:
   @p "A list of commands and their descriptions are below:";
   @unordered_list
   {
-    @expand(DF_CoreCmdTable a) @p "$(a.lister_omit == 0 -> '`'..a.display_name..'` '..'(`'..a.string..'`) '..a.desc)";
+    @expand(DF_CoreCmdTable a) @p "$(a.ipc_docs_vis == 1 -> '`'..a.display_name..'` '..'(`'..a.string..'`) '..a.desc)";
   }
   
   @subtitle "Targets";
   @p "A *target* is one executable and configuration for launching that executable, including command line arguments and working directory (the directory from which the executable is launched). Each target may also have a custom label (replaces the executable path when visualizing the target), and the name of a custom entry point function (when the default entry points - `main`, `WinMain`, etc. - are not desired when stepping into the program upon launch). The debugger can have several targets at once. Each target can also be enabled or disabled. Some operations work on all enabled targets - for instance, the `Run` or `Kill All` commands (standardly bound as F5 or Shift + F5). Enabling and disabling targets allows one to filter which targets are currently being worked with.";
   @p "To add a target, you can run the `Add Target` command. A target is also created automatically from command line arguments - the rules for how this happens can be found in the `Command-Line Usage` section.";
-  @p "Targets created through command line usage are temporary, meaning they are not persistently saved across runs of the debugger. To change this, you can right click the command-line-created target in the `Targets` view, and click `Save To Profile`. After doing so, the target will be restored across runs, and will no longer need to be specified on the command-line.";
+  @p "Targets created through command line usage are temporary, meaning they are not persistently saved across runs of the debugger. To change this, you can right click the command-line-created target in the `Targets` view, and click `Save To Project`. After doing so, the target will be restored across runs, and will no longer need to be specified on the command-line.";
   
   @subtitle "View Rules";
   @p "*View Rules* are used to transform the way that evaluations in the debugger are visualized. An evaluation is produced by taking an expression string - for instance, the name of a variable - and using debug info and information from an attached process' live runtime (memory, registers, and so on) to interpret it.";
@@ -710,11 +718,11 @@ raddbg_readme:
   @p "Each breakpoint has a hit count. Every time a breakpoint causes execution to stop, this counter is increased.";
   @p "Processor breakpoints are not currently supported, but planned to be in the future.";
   
-  @subtitle "User & Profile Files";
-  @p "Applicable state controlling the debugger's appearance, behavior, targets, breakpoints, and other configurations is saved and reloaded across runs of the debugger through both *user files* and *profile files*. These files are auto-saved. These files are written in a textual format which can be hand-edited as necessary, but they're also continuously re-read and re-written by the debugger. By default, the debugger uses `%appdata%/raddbg/default.raddbg_user` for its user file path, and `%appdata%/raddbg/default.raddbg_profile` for its profile file path. These paths can be overridden on the command line (see the 'Command-Line Usage' section).";
+  @subtitle "User & Project Files";
+  @p "Applicable state controlling the debugger's appearance, behavior, targets, breakpoints, and other configurations is saved and reloaded across runs of the debugger through both *user files* and *project files*. These files are auto-saved. These files are written in a textual format which can be hand-edited as necessary, but they're also continuously re-read and re-written by the debugger. By default, the debugger uses `%appdata%/raddbg/default.raddbg_user` for its user file path, and `%appdata%/raddbg/default.raddbg_project` for its project file path. These paths can be overridden on the command line (see the 'Command-Line Usage' section).";
   @p "The *user file* defaultly stores file path maps, windows (including their preferred monitor, placement, and size), each window's panel layout and tabs, keybindings, theme colors, and fonts.";
-  @p "The *profile file* defaultly stores targets, breakpoints, watch pins, and exception code filters.";
-  @p "Because both can be hand-edited, however, if you want to store something normally stored in a user file in a profile file, or vice versa, this can be done by hand transferring the textual data from one file to another. There is no path in the debugger's UI to support this transfer, currently, although this is planned.";
+  @p "The *project file* defaultly stores targets, breakpoints, watch pins, and exception code filters.";
+  @p "Because both can be hand-edited, however, if you want to store something normally stored in a user file in a project file, or vice versa, this can be done by hand transferring the textual data from one file to another. There is no path in the debugger's UI to support this transfer, currently, although this is planned.";
   
   //@subtitle "Driving Another Debugger Instance";
   //@p "When the debugger is launched with the `--ipc` command-line argument, it does not launch another instance of the graphical debugger. Instead, it launches, sends a string encoding a command to a running instance of the graphical debugger, and then terminates. The set of commands which can be sent are identical to those which can be run from the debugger's UI itself, but these commands must be encoded textually (through the other command-line arguments). These commands are described in the 'Commands' section.";

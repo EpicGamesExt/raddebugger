@@ -1,0 +1,90 @@
+////////////////////////////////
+//~ rjf: Event Kind Tables
+
+@table(name)
+DMN_EventKindTable:
+{
+  {Null}
+  {Error}
+  {HandshakeComplete}
+  {CreateProcess}
+  {ExitProcess}
+  {CreateThread}
+  {ExitThread}
+  {LoadModule}
+  {UnloadModule}
+  {Breakpoint}
+  {Trap}
+  {SingleStep}
+  {Exception}
+  {Halt}
+  {Memory}
+  {DebugString}
+  {SetThreadName}
+}
+
+@table(name)
+DMN_ErrorKindTable:
+{
+  {Null}
+  {NotAttached}
+  {UnexpectedFailure}
+  {InvalidHandle}
+}
+
+@table(name)
+DMN_MemoryEventKindTable:
+{
+  {Null}
+  {Commit}
+  {Reserve}
+  {Decommit}
+  {Release}
+}
+
+@table(name)
+DMN_ExceptionKindTable:
+{
+  {Null}
+  {MemoryRead}
+  {MemoryWrite}
+  {MemoryExecute}
+  {CppThrow}
+}
+
+////////////////////////////////
+//~ rjf: Generators
+
+@enum DMN_EventKind:
+{
+  @expand(DMN_EventKindTable a) `$(a.name)`,
+  COUNT
+}
+
+@data(String8) dmn_event_kind_string_table:
+{
+  @expand(DMN_EventKindTable a) `str8_lit_comp("$(a.name)")`
+}
+
+@enum DMN_ErrorKind:
+{
+  @expand(DMN_ErrorKindTable a) `$(a.name)`,
+  COUNT
+}
+
+@enum DMN_MemoryEventKind:
+{
+  @expand(DMN_MemoryEventKindTable a) `$(a.name)`,
+  COUNT
+}
+
+@enum DMN_ExceptionKind:
+{
+  @expand(DMN_ExceptionKindTable a) `$(a.name)`,
+  COUNT
+}
+
+@data(String8) dmn_exception_kind_string_table:
+{
+  @expand(DMN_ExceptionKindTable a) `str8_lit_comp("$(a.name)")`
+}

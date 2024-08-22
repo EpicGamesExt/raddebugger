@@ -14,7 +14,10 @@ internal U128
 hs_hash_from_data(String8 data)
 {
   U128 u128 = {0};
-  blake2b((U8 *)&u128.u64[0], sizeof(u128), data.str, data.size, 0, 0);
+  if(data.size != 0)
+  {
+    blake2b((U8 *)&u128.u64[0], sizeof(u128), data.str, data.size, 0, 0);
+  }
   return u128;
 }
 
@@ -28,7 +31,7 @@ hs_init(void)
   hs_shared = push_array(arena, HS_Shared, 1);
   hs_shared->arena = arena;
   hs_shared->slots_count = 4096;
-  hs_shared->stripes_count = 64;
+  hs_shared->stripes_count = Min(hs_shared->slots_count, os_get_system_info()->logical_processor_count);
   hs_shared->slots = push_array(arena, HS_Slot, hs_shared->slots_count);
   hs_shared->stripes = push_array(arena, HS_Stripe, hs_shared->stripes_count);
   hs_shared->stripes_free_nodes = push_array(arena, HS_Node *, hs_shared->stripes_count);
@@ -40,7 +43,7 @@ hs_init(void)
     stripe->cv = os_condition_variable_alloc();
   }
   hs_shared->key_slots_count = 4096;
-  hs_shared->key_stripes_count = 64;
+  hs_shared->key_stripes_count = Min(hs_shared->key_slots_count, os_get_system_info()->logical_processor_count);
   hs_shared->key_slots = push_array(arena, HS_KeySlot, hs_shared->key_slots_count);
   hs_shared->key_stripes = push_array(arena, HS_Stripe, hs_shared->key_stripes_count);
   for(U64 idx = 0; idx < hs_shared->key_stripes_count; idx += 1)
@@ -50,7 +53,7 @@ hs_init(void)
     stripe->rw_mutex = os_rw_mutex_alloc();
     stripe->cv = os_condition_variable_alloc();
   }
-  hs_shared->evictor_thread = os_launch_thread(hs_evictor_thread__entry_point, 0, 0);
+  hs_shared->evictor_thread = os_thread_launch(hs_evictor_thread__entry_point, 0, 0);
 }
 
 ////////////////////////////////
@@ -84,7 +87,7 @@ hs_submit_data(U128 key, Arena **data_arena, String8 data)
   HS_Stripe *stripe = &hs_shared->stripes[stripe_idx];
   
   //- rjf: commit data to cache - if already there, just bump key refcount
-  OS_MutexScopeW(stripe->rw_mutex)
+  ProfScope("commit data to cache - if already there, just bump key refcount") OS_MutexScopeW(stripe->rw_mutex)
   {
     HS_Node *existing_node = 0;
     for(HS_Node *n = slot->first; n != 0; n = n->next)
@@ -122,8 +125,8 @@ hs_submit_data(U128 key, Arena **data_arena, String8 data)
   }
   
   //- rjf: commit this hash to key cache
-  U128 key_old_hash = {0};
-  OS_MutexScopeW(key_stripe->rw_mutex)
+  U128 key_expired_hash = {0};
+  ProfScope("commit this hash to key cache") OS_MutexScopeW(key_stripe->rw_mutex)
   {
     HS_KeyNode *key_node = 0;
     for(HS_KeyNode *n = key_slot->first; n != 0; n = n->next)
@@ -142,15 +145,20 @@ hs_submit_data(U128 key, Arena **data_arena, String8 data)
     }
     if(key_node)
     {
-      key_old_hash = key_node->hash;
-      key_node->hash = hash;
+      if(key_node->hash_history_gen >= ArrayCount(key_node->hash_history))
+      {
+        key_expired_hash = key_node->hash_history[key_node->hash_history_gen%ArrayCount(key_node->hash_history)];
+      }
+      key_node->hash_history[key_node->hash_history_gen%ArrayCount(key_node->hash_history)] = hash;
+      key_node->hash_history_gen += 1;
     }
   }
   
-  //- rjf: if this key was correllated with an old hash, dec key ref count of old hash
-  if(!u128_match(key_old_hash, u128_zero()))
+  //- rjf: if this key's history cache was full, dec key ref count of oldest hash
+  ProfScope("if this key's history cache was full, dec key ref count of oldest hash")
+    if(!u128_match(key_expired_hash, u128_zero()))
   {
-    U64 old_hash_slot_idx = key_old_hash.u64[1]%hs_shared->slots_count;
+    U64 old_hash_slot_idx = key_expired_hash.u64[1]%hs_shared->slots_count;
     U64 old_hash_stripe_idx = old_hash_slot_idx%hs_shared->stripes_count;
     HS_Slot *old_hash_slot = &hs_shared->slots[old_hash_slot_idx];
     HS_Stripe *old_hash_stripe = &hs_shared->stripes[old_hash_stripe_idx];
@@ -158,7 +166,7 @@ hs_submit_data(U128 key, Arena **data_arena, String8 data)
     {
       for(HS_Node *n = old_hash_slot->first; n != 0; n = n->next)
       {
-        if(u128_match(n->hash, key_old_hash))
+        if(u128_match(n->hash, key_expired_hash))
         {
           ins_atomic_u64_dec_eval(&n->key_ref_count);
           break;
@@ -239,7 +247,7 @@ hs_scope_touch_node__stripe_r_guarded(HS_Scope *scope, HS_Node *node)
 //~ rjf: Cache Lookup
 
 internal U128
-hs_hash_from_key(U128 key)
+hs_hash_from_key(U128 key, U64 rewind_count)
 {
   U128 result = {0};
   U64 key_slot_idx = key.u64[1]%hs_shared->key_slots_count;
@@ -250,9 +258,9 @@ hs_hash_from_key(U128 key)
   {
     for(HS_KeyNode *n = key_slot->first; n != 0; n = n->next)
     {
-      if(u128_match(n->key, key))
+      if(u128_match(n->key, key) && n->hash_history_gen > 0 && n->hash_history_gen-1 >= rewind_count)
       {
-        result = n->hash;
+        result = n->hash_history[(n->hash_history_gen-1-rewind_count)%ArrayCount(n->hash_history)];
         break;
       }
     }

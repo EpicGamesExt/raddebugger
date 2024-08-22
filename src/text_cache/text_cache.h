@@ -32,15 +32,6 @@ typedef enum TXT_TokenKind
 }
 TXT_TokenKind;
 
-typedef enum TXT_LangKind
-{
-  TXT_LangKind_Null,
-  TXT_LangKind_C,
-  TXT_LangKind_CPlusPlus,
-  TXT_LangKind_COUNT
-}
-TXT_LangKind;
-
 typedef struct TXT_Token TXT_Token;
 struct TXT_Token
 {
@@ -103,37 +94,53 @@ struct TXT_TextInfo
   U64 lines_max_size;
   TXT_LineEndKind line_end_kind;
   TXT_TokenArray tokens;
+  U64 bytes_processed;
+  U64 bytes_to_process;
 };
+
+typedef struct TXT_LineTokensSlice TXT_LineTokensSlice;
+struct TXT_LineTokensSlice
+{
+  TXT_TokenArray *line_tokens;
+};
+
+////////////////////////////////
+//~ rjf: Language Kind Types
+
+typedef enum TXT_LangKind
+{
+  TXT_LangKind_Null,
+  TXT_LangKind_C,
+  TXT_LangKind_CPlusPlus,
+  TXT_LangKind_Odin,
+  TXT_LangKind_Jai,
+  TXT_LangKind_Zig,
+  TXT_LangKind_DisasmX64Intel,
+  TXT_LangKind_COUNT
+}
+TXT_LangKind;
 
 typedef TXT_TokenArray TXT_LangLexFunctionType(Arena *arena, U64 *bytes_processed_counter, String8 string);
 
 ////////////////////////////////
 //~ rjf: Cache Types
 
-typedef struct TXT_KeyFallbackNode TXT_KeyFallbackNode;
-struct TXT_KeyFallbackNode
-{
-  TXT_KeyFallbackNode *next;
-  U128 key;
-  U128 hash;
-};
-
-typedef struct TXT_KeyFallbackSlot TXT_KeyFallbackSlot;
-struct TXT_KeyFallbackSlot
-{
-  TXT_KeyFallbackNode *first;
-  TXT_KeyFallbackNode *last;
-};
-
 typedef struct TXT_Node TXT_Node;
 struct TXT_Node
 {
+  // rjf: links
   TXT_Node *next;
   TXT_Node *prev;
+  
+  // rjf: key
   U128 hash;
   TXT_LangKind lang;
+  
+  // rjf: artifacts
   Arena *arena;
   TXT_TextInfo info;
+  
+  // rjf: metadata
   B32 is_working;
   U64 scope_ref_count;
   U64 last_time_touched_us;
@@ -164,6 +171,7 @@ struct TXT_Touch
 {
   TXT_Touch *next;
   U128 hash;
+  TXT_LangKind lang;
 };
 
 typedef struct TXT_Scope TXT_Scope;
@@ -202,12 +210,6 @@ struct TXT_Shared
   TXT_Stripe *stripes;
   TXT_Node **stripes_free_nodes;
   
-  // rjf: fallback cache
-  U64 fallback_slots_count;
-  U64 fallback_stripes_count;
-  TXT_KeyFallbackSlot *fallback_slots;
-  TXT_Stripe *fallback_stripes;
-  
   // rjf: user -> parse thread
   U64 u2p_ring_size;
   U8 *u2p_ring_base;
@@ -234,6 +236,9 @@ global TXT_Shared *txt_shared = 0;
 //~ rjf: Basic Helpers
 
 internal TXT_LangKind txt_lang_kind_from_extension(String8 extension);
+internal String8 txt_extension_from_lang_kind(TXT_LangKind kind);
+internal TXT_LangKind txt_lang_kind_from_architecture(Architecture arch);
+internal TXT_LangLexFunctionType *txt_lex_function_from_lang_kind(TXT_LangKind kind);
 
 ////////////////////////////////
 //~ rjf: Token Type Functions
@@ -247,6 +252,10 @@ internal TXT_TokenArray txt_token_array_from_list(Arena *arena, TXT_TokenList *l
 //~ rjf: Lexing Functions
 
 internal TXT_TokenArray txt_token_array_from_string__c_cpp(Arena *arena, U64 *bytes_processed_counter, String8 string);
+internal TXT_TokenArray txt_token_array_from_string__odin(Arena *arena, U64 *bytes_processed_counter, String8 string);
+internal TXT_TokenArray txt_token_array_from_string__jai(Arena *arena, U64 *bytes_processed_counter, String8 string);
+internal TXT_TokenArray txt_token_array_from_string__zig(Arena *arena, U64 *bytes_processed_counter, String8 string);
+internal TXT_TokenArray txt_token_array_from_string__disasm_x64_intel(Arena *arena, U64 *bytes_processed_counter, String8 string);
 
 ////////////////////////////////
 //~ rjf: Main Layer Initialization
@@ -274,13 +283,26 @@ internal void txt_scope_touch_node__stripe_r_guarded(TXT_Scope *scope, TXT_Node 
 ////////////////////////////////
 //~ rjf: Cache Lookups
 
-internal TXT_TextInfo txt_text_info_from_key_hash_lang(TXT_Scope *scope, U128 key, U128 hash, TXT_LangKind lang);
+internal TXT_TextInfo txt_text_info_from_hash_lang(TXT_Scope *scope, U128 hash, TXT_LangKind lang);
+internal TXT_TextInfo txt_text_info_from_key_lang(TXT_Scope *scope, U128 key, TXT_LangKind lang, U128 *hash_out);
 
 ////////////////////////////////
-//~ rjf: Transfer Threads
+//~ rjf: Text Info Extractor Helpers
 
-internal B32 txt_u2p_enqueue_req(U128 key, U128 hash, TXT_LangKind lang, U64 endt_us);
-internal void txt_u2p_dequeue_req(U128 *key_out, U128 *hash_out, TXT_LangKind *lang_out);
+internal U64 txt_off_from_info_pt(TXT_TextInfo *info, TxtPt pt);
+internal TxtPt txt_pt_from_info_off__linear_scan(TXT_TextInfo *info, U64 off);
+internal TXT_TokenArray txt_token_array_from_info_line_num__linear_scan(TXT_TextInfo *info, S64 line_num);
+internal Rng1U64 txt_expr_off_range_from_line_off_range_string_tokens(U64 off, Rng1U64 line_range, String8 line_text, TXT_TokenArray *line_tokens);
+internal Rng1U64 txt_expr_off_range_from_info_data_pt(TXT_TextInfo *info, String8 data, TxtPt pt);
+internal String8 txt_string_from_info_data_txt_rng(TXT_TextInfo *info, String8 data, TxtRng rng);
+internal String8 txt_string_from_info_data_line_num(TXT_TextInfo *info, String8 data, S64 line_num);
+internal TXT_LineTokensSlice txt_line_tokens_slice_from_info_data_line_range(Arena *arena, TXT_TextInfo *info, String8 data, Rng1S64 line_range);
+
+////////////////////////////////
+//~ rjf: Parse Threads
+
+internal B32 txt_u2p_enqueue_req(U128 hash, TXT_LangKind lang, U64 endt_us);
+internal void txt_u2p_dequeue_req(U128 *hash_out, TXT_LangKind *lang_out);
 internal void txt_parse_thread__entry_point(void *p);
 
 ////////////////////////////////
@@ -288,4 +310,4 @@ internal void txt_parse_thread__entry_point(void *p);
 
 internal void txt_evictor_thread__entry_point(void *p);
 
-#endif //TEXT_CACHE_H
+#endif // TEXT_CACHE_H

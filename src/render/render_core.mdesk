@@ -19,10 +19,23 @@ R_Tex2DFormatTable:
 }
 
 @table(name, display_string)
-R_Tex2DKindTable:
+R_ResourceKindTable:
 {
+  // static resource is immutable
+  // initial data must be provided at creation time
+  // GPU can read the resource
+  // CPU is not allowed to read or write
   {Static   "Static" }
+
+  // dynamic resource allows resource to be modified
+  // GPU can read & write to it
+  // CPU can write to it using UpdateSubresource
   {Dynamic  "Dynamic"}
+
+  // stream resource will be often updated fully overwriting previous data
+  // GPU can only read it
+  // CPU can update via Map (with WRITE_DISCARD flag) + Unmap
+  {Stream   "Stream "} 
 }
 
 @table(name, display_string)
@@ -41,13 +54,6 @@ R_GeoTopologyKindTable:
   {TriangleStrip  "Triangle Strip" }
 }
 
-@table(name, display_string)
-R_BufferKindTable:
-{
-  {Static   "Static" }
-  {Dynamic  "Dynamic"}
-}
-
 @table(name, batch, display_string)
 R_PassKindTable:
 {
@@ -59,73 +65,67 @@ R_PassKindTable:
 ////////////////////////////////
 //~ rjf: Generators
 
-@table_gen_enum R_Tex2DFormat:
+@enum R_Tex2DFormat:
 {
-  @expand(R_Tex2DFormatTable a) `R_Tex2DFormat_$(a.name),`;
-  `R_Tex2DFormat_COUNT`;
+  @expand(R_Tex2DFormatTable a) `$(a.name)`,
+  COUNT,
 }
 
-@table_gen_enum R_Tex2DKind:
+@enum R_ResourceKind:
 {
-  @expand(R_Tex2DKindTable a) `R_Tex2DKind_$(a.name),`;
-  `R_Tex2DKind_COUNT`;
+  @expand(R_ResourceKindTable a) `$(a.name)`,
+  COUNT,
 }
 
-@table_gen_enum R_Tex2DSampleKind:
+@enum R_Tex2DSampleKind:
 {
-  @expand(R_Tex2DSampleKindTable a) `R_Tex2DSampleKind_$(a.name),`;
-  `R_Tex2DSampleKind_COUNT`;
+  @expand(R_Tex2DSampleKindTable a) `$(a.name)`,
+  COUNT,
 }
 
-@table_gen_enum R_GeoTopologyKind:
+@enum R_GeoTopologyKind:
 {
-  @expand(R_GeoTopologyKindTable a) `R_GeoTopologyKind_$(a.name),`;
-  `R_GeoTopologyKind_COUNT`;
+  @expand(R_GeoTopologyKindTable a) `$(a.name)`,
+  COUNT,
 }
 
-@table_gen_enum R_BufferKind:
+@enum R_PassKind:
 {
-  @expand(R_BufferKindTable a) `R_BufferKind_$(a.name),`;
-  `R_BufferKind_COUNT`;
+  @expand(R_PassKindTable a) `$(a.name)`,
+  COUNT,
 }
 
-@table_gen_enum R_PassKind:
+@data(String8) r_tex2d_format_display_string_table:
 {
-  @expand(R_PassKindTable a) `R_PassKind_$(a.name),`;
-  `R_PassKind_COUNT`;
+  @expand(R_Tex2DFormatTable a) `str8_lit_comp("$(a.display_string)")`;
 }
 
-@table_gen_data(type:String8) r_tex2d_format_display_string_table:
+@data(U8) r_tex2d_format_bytes_per_pixel_table:
 {
-  @expand(R_Tex2DFormatTable a) `str8_lit_comp("$(a.display_string)"),`;
+  @expand(R_Tex2DFormatTable a) `$(a.bytes_per_pixel)`;
 }
 
-@table_gen_data(type:U8) r_tex2d_format_bytes_per_pixel_table:
+@data(String8) r_tex2d_kind_display_string_table:
 {
-  @expand(R_Tex2DFormatTable a) `$(a.bytes_per_pixel),`;
+  @expand(R_Tex2DKindTable a) `str8_lit_comp("$(a.display_string)")`;
 }
 
-@table_gen_data(type:String8) r_tex2d_kind_display_string_table:
+@data(String8) r_tex2d_sample_kind_display_string_table:
 {
-  @expand(R_Tex2DKindTable a) `str8_lit_comp("$(a.display_string)"),`;
+  @expand(R_Tex2DSampleKindTable a) `str8_lit_comp("$(a.display_string)")`;
 }
 
-@table_gen_data(type:String8) r_tex2d_sample_kind_display_string_table:
+@data(String8) r_pass_kind_display_string_table:
 {
-  @expand(R_Tex2DSampleKindTable a) `str8_lit_comp("$(a.display_string)"),`;
+  @expand(R_PassKindTable a) `str8_lit_comp("$(a.display_string)")`;
 }
 
-@table_gen_data(type:String8) r_pass_kind_display_string_table:
+@data(U8) r_pass_kind_batch_table:
 {
-  @expand(R_PassKindTable a) `str8_lit_comp("$(a.display_string)"),`;
+  @expand(R_PassKindTable a) `$(a.batch)`;
 }
 
-@table_gen_data(type:U8) r_pass_kind_batch_table:
+@data(U64) @c_file r_pass_kind_params_size_table:
 {
-  @expand(R_PassKindTable a) `$(a.batch),`;
-}
-
-@table_gen_data(type:U64) @c_file r_pass_kind_params_size_table:
-{
-  @expand(R_PassKindTable a) `sizeof(R_PassParams_$(a.name)),`;
+  @expand(R_PassKindTable a) `sizeof(R_PassParams_$(a.name))`;
 }

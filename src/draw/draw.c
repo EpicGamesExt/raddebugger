@@ -54,6 +54,23 @@ d_fancy_string_list_push(Arena *arena, D_FancyStringList *list, D_FancyString *s
   list->total_size += str->string.size;
 }
 
+internal void
+d_fancy_string_list_concat_in_place(D_FancyStringList *dst, D_FancyStringList *to_push)
+{
+  if(dst->last != 0 && to_push->first != 0)
+  {
+    dst->last->next = to_push->first;
+    dst->last = to_push->last;
+    dst->node_count += to_push->node_count;
+    dst->total_size += to_push->total_size;
+  }
+  else if(to_push->first != 0)
+  {
+    MemoryCopyStruct(dst, to_push);
+  }
+  MemoryZeroStruct(to_push);
+}
+
 internal String8
 d_string_from_fancy_string_list(Arena *arena, D_FancyStringList *list)
 {
@@ -70,14 +87,15 @@ d_string_from_fancy_string_list(Arena *arena, D_FancyStringList *list)
 }
 
 internal D_FancyRunList
-d_fancy_run_list_from_fancy_string_list(Arena *arena, D_FancyStringList *strs)
+d_fancy_run_list_from_fancy_string_list(Arena *arena, F32 tab_size_px, F_RasterFlags flags, D_FancyStringList *strs)
 {
   ProfBeginFunction();
   D_FancyRunList run_list = {0};
+  F32 base_align_px = 0;
   for(D_FancyStringNode *n = strs->first; n != 0; n = n->next)
   {
     D_FancyRunNode *dst_n = push_array(arena, D_FancyRunNode, 1);
-    dst_n->v.run = f_push_run_from_string(arena, n->v.font, n->v.size, 0, n->v.string);
+    dst_n->v.run = f_push_run_from_string(arena, n->v.font, n->v.size, base_align_px, tab_size_px, flags, n->v.string);
     dst_n->v.color = n->v.color;
     dst_n->v.underline_thickness = n->v.underline_thickness;
     dst_n->v.strikethrough_thickness = n->v.strikethrough_thickness;
@@ -85,9 +103,26 @@ d_fancy_run_list_from_fancy_string_list(Arena *arena, D_FancyStringList *strs)
     run_list.node_count += 1;
     run_list.dim.x += dst_n->v.run.dim.x;
     run_list.dim.y = Max(run_list.dim.y, dst_n->v.run.dim.y);
+    base_align_px += dst_n->v.run.dim.x;
   }
   ProfEnd();
   return run_list;
+}
+
+internal D_FancyRunList
+d_fancy_run_list_copy(Arena *arena, D_FancyRunList *src)
+{
+  D_FancyRunList dst = {0};
+  for(D_FancyRunNode *src_n = src->first; src_n != 0; src_n = src_n->next)
+  {
+    D_FancyRunNode *dst_n = push_array(arena, D_FancyRunNode, 1);
+    SLLQueuePush(dst.first, dst.last, dst_n);
+    MemoryCopyStruct(&dst_n->v, &src_n->v);
+    dst_n->v.run.pieces = f_piece_array_copy(arena, &src_n->v.run.pieces);
+    dst.node_count += 1;
+  }
+  dst.dim = src->dim;
+  return dst;
 }
 
 ////////////////////////////////
@@ -100,7 +135,7 @@ d_begin_frame(void)
 {
   if(d_thread_ctx == 0)
   {
-    Arena *arena = arena_alloc__sized(GB(64), MB(8));
+    Arena *arena = arena_alloc(.reserve_size = GB(64), .commit_size = MB(8));
     d_thread_ctx = push_array(arena, D_ThreadCtx, 1);
     d_thread_ctx->arena = arena;
     d_thread_ctx->arena_frame_start_pos = arena_pos(arena);
@@ -272,6 +307,7 @@ d_blur(Rng2F32 rect, F32 blur_size, F32 corner_radius)
   R_Pass *pass = r_pass_from_kind(arena, &bucket->passes, R_PassKind_Blur);
   R_PassParams_Blur *params = pass->params_blur;
   params->rect = rect;
+  params->clip = d_top_clip();
   params->blur_size = blur_size;
   params->corner_radii[Corner_00] = corner_radius;
   params->corner_radii[Corner_01] = corner_radius;
@@ -423,19 +459,22 @@ d_truncated_fancy_run_list(Vec2F32 p, D_FancyRunList *list, F32 max_x, F_Run tra
 {
   ProfBeginFunction();
   
-  // rjf: grab total advance
-  F32 run_list_total_advance = list->dim.x;
+  //- rjf: total advance > max? -> enable trailer
+  B32 trailer_enabled = (list->dim.x > max_x && trailer_run.dim.x < max_x);
   
-  // rjf: total advance > max? -> enable trailer
-  B32 trailer_enabled = (run_list_total_advance >= max_x && trailer_run.dim.x < max_x);
-  
-  // rjf: draw runs
+  //- rjf: draw runs
   F32 advance = 0;
   B32 trailer_found = 0;
   Vec4F32 last_color = {0};
+  U64 byte_off = 0;
   for(D_FancyRunNode *n = list->first; n != 0; n = n->next)
   {
     D_FancyRun *fr = &n->v;
+    Rng1F32 pixel_range = {0};
+    {
+      pixel_range.min = 100000;
+      pixel_range.max = 0;
+    }
     F_Piece *piece_first = fr->run.pieces.v;
     F_Piece *piece_opl = piece_first + fr->run.pieces.count;
     F32 pre_advance = advance;
@@ -444,12 +483,12 @@ d_truncated_fancy_run_list(Vec2F32 p, D_FancyRunList *list, F32 max_x, F_Run tra
         piece < piece_opl;
         piece += 1)
     {
-      if(trailer_enabled && advance + piece->advance >= (max_x - trailer_run.dim.x))
+      if(trailer_enabled && advance + piece->advance > (max_x - trailer_run.dim.x))
       {
         trailer_found = 1;
         break;
       }
-      if(!trailer_enabled && advance + piece->advance >= max_x)
+      if(!trailer_enabled && advance + piece->advance > max_x)
       {
         goto end_draw;
       }
@@ -463,12 +502,19 @@ d_truncated_fancy_run_list(Vec2F32 p, D_FancyRunList *list, F32 max_x, F_Run tra
       if(!r_handle_match(texture, r_handle_zero()))
       {
         d_img(dst, src, texture, fr->color, 0, 0, 0);
+        //d_rect(dst, v4f32(0, 1, 0, 0.5f), 0, 1.f, 0.f);
       }
       advance += piece->advance;
+      pixel_range.min = Min(pre_advance, pixel_range.min);
+      pixel_range.max = Max(advance, pixel_range.max);
     }
     if(fr->underline_thickness > 0)
     {
-      d_rect(r2f32p(p.x+pre_advance, p.y+fr->run.descent-fr->underline_thickness/2, p.x+advance, p.y+fr->run.descent+fr->underline_thickness/2), fr->color, 0, 0, 1.f);
+      d_rect(r2f32p(p.x + pixel_range.min,
+                    p.y+fr->run.descent+fr->run.descent/8,
+                    p.x + pixel_range.max,
+                    p.y+fr->run.descent+fr->run.descent/8+fr->underline_thickness),
+             fr->color, 0, 0, 0.8f);
     }
     if(fr->strikethrough_thickness > 0)
     {
@@ -481,7 +527,7 @@ d_truncated_fancy_run_list(Vec2F32 p, D_FancyRunList *list, F32 max_x, F_Run tra
   }
   end_draw:;
   
-  // rjf: draw trailer
+  //- rjf: draw trailer
   if(trailer_found)
   {
     F_Piece *piece_first = trailer_run.pieces.v;
@@ -512,6 +558,55 @@ d_truncated_fancy_run_list(Vec2F32 p, D_FancyRunList *list, F32 max_x, F_Run tra
 }
 
 internal void
+d_truncated_fancy_run_fuzzy_matches(Vec2F32 p, D_FancyRunList *list, F32 max_x, FuzzyMatchRangeList *ranges, Vec4F32 color)
+{
+  for(FuzzyMatchRangeNode *match_n = ranges->first; match_n != 0; match_n = match_n->next)
+  {
+    Rng1U64 byte_range = match_n->range;
+    Rng1F32 pixel_range = {0};
+    {
+      pixel_range.min = 100000;
+      pixel_range.max = 0;
+    }
+    F32 last_piece_end_pad = 0;
+    U64 byte_off = 0;
+    F32 advance = 0;
+    F32 ascent = 0;
+    F32 descent = 0;
+    for(D_FancyRunNode *fr_n = list->first; fr_n != 0; fr_n = fr_n->next)
+    {
+      D_FancyRun *fr = &fr_n->v;
+      F_Run *run = &fr->run;
+      ascent = run->ascent;
+      descent = run->descent;
+      for(U64 piece_idx = 0; piece_idx < run->pieces.count; piece_idx += 1)
+      {
+        F_Piece *piece = &run->pieces.v[piece_idx];
+        if(contains_1u64(byte_range, byte_off))
+        {
+          F32 pre_advance  = advance + piece->offset.x;
+          F32 post_advance = advance + piece->advance;
+          pixel_range.min = Min(pre_advance,  pixel_range.min);
+          pixel_range.max = Max(post_advance, pixel_range.max);
+        }
+        byte_off += piece->decode_size;
+        advance += piece->advance;
+      }
+    }
+    if(pixel_range.min < pixel_range.max)
+    {
+      Rng2F32 rect = r2f32p(p.x + pixel_range.min - ascent/4.f,
+                            p.y - descent - ascent - ascent/8.f,
+                            p.x + pixel_range.max + ascent/4.f,
+                            p.y - descent - ascent + ascent/8.f + list->dim.y);
+      rect.x0 = Min(rect.x0, p.x+max_x);
+      rect.x1 = Min(rect.x1, p.x+max_x);
+      d_rect(rect, color, (descent+ascent)/4.f, 0, 1.f);
+    }
+  }
+}
+
+internal void
 d_text_run(Vec2F32 p, Vec4F32 color, F_Run run)
 {
   F32 advance = 0;
@@ -528,7 +623,7 @@ d_text_run(Vec2F32 p, Vec4F32 color, F_Run run)
                          p.y + piece->offset.y,
                          p.x + piece->offset.x + advance + size.x,
                          p.y + piece->offset.y + size.y);
-    if(!r_handle_match(texture, r_handle_zero()))
+    if(size.x != 0 && size.y != 0 && !r_handle_match(texture, r_handle_zero()))
     {
       d_img(dst, src, texture, color, 0, 0, 0);
     }
@@ -537,143 +632,10 @@ d_text_run(Vec2F32 p, Vec4F32 color, F_Run run)
 }
 
 internal void
-d_truncated_text_run(Vec2F32 p, Vec4F32 color, F32 max_x, F_Run text_run, F_Run trailer_run)
-{
-  B32 truncated = 0;
-  B32 set_truncation = 0;
-  F32 truncation_p = p.x;
-  F32 max_x_minus_ellipses = max_x - trailer_run.dim.x;
-  F32 available_space = max_x - p.x;
-  
-  // rjf: find last piece before truncation
-  B32 truncation_needed = 0;
-  F_Piece *last_piece_before_truncation = 0;
-  F32 truncation_offset = 0;
-  if(available_space > text_run.dim.x || available_space > trailer_run.dim.x)
-  {
-    F32 advance = 0;
-    F_Piece *text_run_first = text_run.pieces.v;
-    F_Piece *text_run_opl = text_run_first + text_run.pieces.count;
-    for(F_Piece *piece = text_run_first;
-        piece < text_run_opl;
-        piece += 1)
-    {
-      Rng2F32 src = r2f32p((F32)piece->subrect.x0, (F32)piece->subrect.y0, (F32)piece->subrect.x1, (F32)piece->subrect.y1);
-      Vec2F32 size = dim_2f32(src);
-      Rng2F32 dst = r2f32p(p.x + piece->offset.x + advance,
-                           p.y + piece->offset.y,
-                           p.x + piece->offset.x + advance + size.x,
-                           p.y + piece->offset.y + size.y);
-      advance += piece->advance;
-      if(last_piece_before_truncation == 0 && p.x + advance > max_x_minus_ellipses)
-      {
-        truncation_offset = advance - piece->advance;
-        last_piece_before_truncation = piece;
-      }
-      if(p.x + advance > max_x)
-      {
-        truncation_needed = 1;
-      }
-    }
-  }
-  
-  // rjf: draw pieces
-  if(available_space > text_run.dim.x || available_space > trailer_run.dim.x)
-  {
-    F32 advance = 0;
-    F_Piece *text_run_first = text_run.pieces.v;
-    F_Piece *text_run_opl = text_run_first + text_run.pieces.count;
-    for(F_Piece *piece = text_run_first;
-        piece < text_run_opl;
-        piece += 1)
-    {
-      if(truncation_needed && piece == last_piece_before_truncation)
-      {
-        break;
-      }
-      R_Handle texture = piece->texture;
-      Rng2F32 src = r2f32p((F32)piece->subrect.x0, (F32)piece->subrect.y0, (F32)piece->subrect.x1, (F32)piece->subrect.y1);
-      Vec2F32 size = dim_2f32(src);
-      Rng2F32 dst = r2f32p(p.x + piece->offset.x + advance,
-                           p.y + piece->offset.y,
-                           p.x + piece->offset.x + advance + size.x,
-                           p.y + piece->offset.y + size.y);
-      if(!r_handle_match(texture, r_handle_zero()))
-      {
-        d_img(dst, src, texture, color, 0, 0, 0);
-      }
-      advance += piece->advance;
-    }
-  }
-  
-  // rjf: draw truncation ellipses
-  if(truncation_needed && last_piece_before_truncation != 0)
-  {
-    Vec2F32 ellipses_p = {p.x + truncation_offset, p.y};
-    Vec4F32 ellipses_color = color;
-    F32 advance = 0;
-    F_Piece *trailer_run_first = trailer_run.pieces.v;
-    F_Piece *trailer_run_opl = trailer_run_first + trailer_run.pieces.count;
-    for(F_Piece *piece = trailer_run_first;
-        piece < trailer_run_opl;
-        piece += 1)
-    {
-      R_Handle texture = piece->texture;
-      Rng2F32 src = r2f32p((F32)piece->subrect.x0, (F32)piece->subrect.y0, (F32)piece->subrect.x1, (F32)piece->subrect.y1);
-      Vec2F32 size = dim_2f32(src);
-      Rng2F32 dst = r2f32p(ellipses_p.x + piece->offset.x + advance,
-                           ellipses_p.y + piece->offset.y,
-                           ellipses_p.x + piece->offset.x + advance + size.x,
-                           ellipses_p.y + piece->offset.y + size.y);
-      if(!r_handle_match(texture, r_handle_zero()))
-      {
-        d_img(dst, src, texture, ellipses_color, 0, 0, 0);
-      }
-      ellipses_color.w *= 0.5f;
-      advance += piece->advance;
-    }
-  }
-}
-
-internal void
-d_text(F_Tag font, F32 size, Vec2F32 p, Vec4F32 color, String8 string)
+d_text(F_Tag font, F32 size, F32 base_align_px, F32 tab_size_px, F_RasterFlags flags, Vec2F32 p, Vec4F32 color, String8 string)
 {
   Temp scratch = scratch_begin(0, 0);
-  F_Run run = f_push_run_from_string(scratch.arena, font, size, 0, string);
+  F_Run run = f_push_run_from_string(scratch.arena, font, size, base_align_px, tab_size_px, flags, string);
   d_text_run(p, color, run);
-  scratch_end(scratch);
-}
-
-internal void
-d_textf(F_Tag font, F32 size, Vec2F32 p, Vec4F32 color, char *fmt, ...)
-{
-  Temp scratch = scratch_begin(0, 0);
-  va_list args;
-  va_start(args, fmt);
-  String8 string = push_str8fv(scratch.arena, fmt, args);
-  va_end(args);
-  d_text(font, size, p, color, string);
-  scratch_end(scratch);
-}
-
-internal void
-d_truncated_text(F_Tag font, F32 size, Vec2F32 p, Vec4F32 color, F32 max_x, String8 string)
-{
-  Temp scratch = scratch_begin(0, 0);
-  F_Run run = f_push_run_from_string(scratch.arena, font, size, 0, string);
-  F_Run ellipses_run = f_push_run_from_string(scratch.arena, font, size, 0, str8_lit("..."));
-  d_truncated_text_run(p, color, max_x, run, ellipses_run);
-  scratch_end(scratch);
-}
-
-internal void
-d_truncated_textf(F_Tag font, F32 size, Vec2F32 p, Vec4F32 color, F32 max_x, char *fmt, ...)
-{
-  Temp scratch = scratch_begin(0, 0);
-  va_list args;
-  va_start(args, fmt);
-  String8 string = push_str8f(scratch.arena, fmt, args);
-  d_truncated_text(font, size, p, color, max_x, string);
-  va_end(args);
   scratch_end(scratch);
 }

@@ -4,4 +4,4 @@
 #include "df/core/df_core.c"
 #include "df/gfx/df_gfx.c"
 #include "df/gfx/df_views.c"
-#include "df/gfx/df_view_rule_hooks.c"
+#include "df/gfx/df_view_rules.c"

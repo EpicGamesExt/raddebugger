@@ -7,21 +7,6 @@
 ////////////////////////////////
 //~ rjf: Cache Types
 
-typedef struct GEO_KeyFallbackNode GEO_KeyFallbackNode;
-struct GEO_KeyFallbackNode
-{
-  GEO_KeyFallbackNode *next;
-  U128 key;
-  U128 hash;
-};
-
-typedef struct GEO_KeyFallbackSlot GEO_KeyFallbackSlot;
-struct GEO_KeyFallbackSlot
-{
-  GEO_KeyFallbackNode *first;
-  GEO_KeyFallbackNode *last;
-};
-
 typedef struct GEO_Node GEO_Node;
 struct GEO_Node
 {
@@ -97,12 +82,6 @@ struct GEO_Shared
   GEO_Stripe *stripes;
   GEO_Node **stripes_free_nodes;
   
-  // rjf: fallback cache
-  U64 fallback_slots_count;
-  U64 fallback_stripes_count;
-  GEO_KeyFallbackSlot *fallback_slots;
-  GEO_Stripe *fallback_stripes;
-  
   // rjf: user -> xfer thread
   U64 u2x_ring_size;
   U8 *u2x_ring_base;
@@ -151,13 +130,14 @@ internal void geo_scope_touch_node__stripe_r_guarded(GEO_Scope *scope, GEO_Node 
 ////////////////////////////////
 //~ rjf: Cache Lookups
 
-internal R_Handle geo_buffer_from_key_hash(GEO_Scope *scope, U128 key, U128 hash);
+internal R_Handle geo_buffer_from_hash(GEO_Scope *scope, U128 hash);
+internal R_Handle geo_buffer_from_key(GEO_Scope *scope, U128 key);
 
 ////////////////////////////////
 //~ rjf: Transfer Threads
 
-internal B32 geo_u2x_enqueue_req(U128 key, U128 hash, U64 endt_us);
-internal void geo_u2x_dequeue_req(U128 *key_out, U128 *hash_out);
+internal B32 geo_u2x_enqueue_req(U128 hash, U64 endt_us);
+internal void geo_u2x_dequeue_req(U128 *hash_out);
 internal void geo_xfer_thread__entry_point(void *p);
 
 ////////////////////////////////

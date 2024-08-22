@@ -5,111 +5,70 @@
 #define DEMON_CORE_H
 
 ////////////////////////////////
-//~ allen: Demon Low Level Entities
+//~ rjf: Control-Thread-Only Context
+//
+// An instance of this struct must ONLY be returned by dmn_ctrl_begin, and only
+// used by the thread which called it. All APIs which can ONLY run on the
+// control thread, which blocks to control & receive events, will take this
+// parameter. All other APIs can be called from any thread.
 
-typedef U64 DEMON_Handle;
-
-typedef struct DEMON_HandleNode DEMON_HandleNode;
-struct DEMON_HandleNode
+typedef struct DMN_CtrlCtx DMN_CtrlCtx;
+struct DMN_CtrlCtx
 {
-  DEMON_HandleNode *next;
-  DEMON_Handle v;
+  U64 u64[1];
 };
 
-typedef struct DEMON_HandleList DEMON_HandleList;
-struct DEMON_HandleList
+////////////////////////////////
+//~ rjf: Handle Types
+
+typedef union DMN_Handle DMN_Handle;
+union DMN_Handle
 {
-  DEMON_HandleNode *first;
-  DEMON_HandleNode *last;
+  U32 u32[2];
+  U64 u64[1];
+};
+
+typedef struct DMN_HandleNode DMN_HandleNode;
+struct DMN_HandleNode
+{
+  DMN_HandleNode *next;
+  DMN_Handle v;
+};
+
+typedef struct DMN_HandleList DMN_HandleList;
+struct DMN_HandleList
+{
+  DMN_HandleNode *first;
+  DMN_HandleNode *last;
   U64 count;
 };
 
-typedef struct DEMON_HandleArray DEMON_HandleArray;
-struct DEMON_HandleArray
+typedef struct DMN_HandleArray DMN_HandleArray;
+struct DMN_HandleArray
 {
-  DEMON_Handle *handles;
+  DMN_Handle *handles;
   U64 count;
 };
 
 ////////////////////////////////
-//~ rjf: Memory Protection Flags
+//~ rjf: Generated Code
 
-typedef U32 DEMON_MemoryProtectFlags;
-enum{
-  DEMON_MemoryProtectFlag_Read    = (1<<0),
-  DEMON_MemoryProtectFlag_Write   = (1<<1),
-  DEMON_MemoryProtectFlag_Execute = (1<<2),
-};
+#include "generated/demon.meta.h"
 
 ////////////////////////////////
-//~ allen: Demon Event Types
+//~ rjf: Event Types
 
-typedef enum DEMON_EventKind
+typedef struct DMN_Event DMN_Event;
+struct DMN_Event
 {
-  DEMON_EventKind_Null,
-  DEMON_EventKind_Error,
-  DEMON_EventKind_HandshakeComplete,
-  DEMON_EventKind_CreateProcess,
-  DEMON_EventKind_ExitProcess,
-  DEMON_EventKind_CreateThread,
-  DEMON_EventKind_ExitThread,
-  DEMON_EventKind_LoadModule,
-  DEMON_EventKind_UnloadModule,
-  DEMON_EventKind_Breakpoint,
-  DEMON_EventKind_Trap,
-  DEMON_EventKind_SingleStep,
-  DEMON_EventKind_Exception,
-  DEMON_EventKind_Halt,
-  DEMON_EventKind_Memory,
-  DEMON_EventKind_DebugString,
-  DEMON_EventKind_SetThreadName,
-  DEMON_EventKind_COUNT
-}
-DEMON_EventKind;
-
-typedef enum DEMON_ErrorKind
-{
-  DEMON_ErrorKind_Null,
-  DEMON_ErrorKind_NotInitialized,
-  DEMON_ErrorKind_NotAttached,
-  DEMON_ErrorKind_UnexpectedFailure,
-  DEMON_ErrorKind_InvalidHandle,
-}
-DEMON_ErrorKind;
-
-typedef enum DEMON_MemoryEventKind
-{
-  DEMON_MemoryEventKind_Null,
-  DEMON_MemoryEventKind_Commit,
-  DEMON_MemoryEventKind_Reserve,
-  DEMON_MemoryEventKind_Decommit,
-  DEMON_MemoryEventKind_Release,
-  DEMON_MemoryEventKind_COUNT
-}
-DEMON_MemoryEventKind;
-
-typedef enum DEMON_ExceptionKind
-{
-  DEMON_ExceptionKind_Null,
-  DEMON_ExceptionKind_MemoryRead,
-  DEMON_ExceptionKind_MemoryWrite,
-  DEMON_ExceptionKind_MemoryExecute,
-  DEMON_ExceptionKind_CppThrow,
-  DEMON_ExceptionKind_COUNT
-}
-DEMON_ExceptionKind;
-
-typedef struct DEMON_Event DEMON_Event;
-struct DEMON_Event
-{
-  // TODO(allen): condense
-  DEMON_EventKind kind;
-  DEMON_ErrorKind error_kind;
-  DEMON_MemoryEventKind memory_kind;
-  DEMON_ExceptionKind exception_kind;
-  DEMON_Handle process;
-  DEMON_Handle thread;
-  DEMON_Handle module;
+  DMN_EventKind kind;
+  DMN_ErrorKind error_kind;
+  DMN_MemoryEventKind memory_kind;
+  DMN_ExceptionKind exception_kind;
+  DMN_Handle process;
+  DMN_Handle thread;
+  DMN_Handle module;
+  Architecture arch;
   U64 address;
   U64 size;
   String8 string;
@@ -123,171 +82,161 @@ struct DEMON_Event
   B32 exception_repeated;
 };
 
-typedef struct DEMON_EventNode DEMON_EventNode;
-struct DEMON_EventNode
+typedef struct DMN_EventNode DMN_EventNode;
+struct DMN_EventNode
 {
-  DEMON_EventNode *next;
-  DEMON_Event v;
+  DMN_EventNode *next;
+  DMN_Event v;
 };
 
-typedef struct DEMON_EventList DEMON_EventList;
-struct DEMON_EventList
+typedef struct DMN_EventList DMN_EventList;
+struct DMN_EventList
 {
-  DEMON_EventNode *first;
-  DEMON_EventNode *last;
+  DMN_EventNode *first;
+  DMN_EventNode *last;
   U64 count;
 };
 
 ////////////////////////////////
-//~ allen: Demon Run Control Types
+//~ rjf: Run Control Types
 
-typedef struct DEMON_Trap DEMON_Trap;
-struct DEMON_Trap
+typedef struct DMN_Trap DMN_Trap;
+struct DMN_Trap
 {
-  DEMON_Handle process;
-  U64 address;
+  DMN_Handle process;
+  U64 vaddr;
   U64 id;
 };
 
-typedef struct DEMON_TrapChunkNode DEMON_TrapChunkNode;
-struct DEMON_TrapChunkNode
+typedef struct DMN_TrapChunkNode DMN_TrapChunkNode;
+struct DMN_TrapChunkNode
 {
-  DEMON_TrapChunkNode *next;
-  DEMON_Trap *v;
+  DMN_TrapChunkNode *next;
+  DMN_Trap *v;
   U64 cap;
   U64 count;
 };
 
-typedef struct DEMON_TrapChunkList DEMON_TrapChunkList;
-struct DEMON_TrapChunkList
+typedef struct DMN_TrapChunkList DMN_TrapChunkList;
+struct DMN_TrapChunkList
 {
-  DEMON_TrapChunkNode *first;
-  DEMON_TrapChunkNode *last;
+  DMN_TrapChunkNode *first;
+  DMN_TrapChunkNode *last;
   U64 node_count;
   U64 trap_count;
 };
 
-typedef struct DEMON_RunCtrls DEMON_RunCtrls;
-struct DEMON_RunCtrls
+typedef struct DMN_RunCtrls DMN_RunCtrls;
+struct DMN_RunCtrls
 {
-  DEMON_Handle single_step_thread;
+  DMN_Handle single_step_thread;
   B8 ignore_previous_exception;
   B8 run_entities_are_unfrozen;
   B8 run_entities_are_processes;
-  DEMON_Handle *run_entities;
+  DMN_Handle *run_entities;
   U64 run_entity_count;
-  DEMON_TrapChunkList traps;
+  DMN_TrapChunkList traps;
 };
 
 ////////////////////////////////
-//~ allen: Demon Process Listing
+//~ rjf: System Process Listing Types
 
-typedef struct DEMON_ProcessIter DEMON_ProcessIter;
-struct DEMON_ProcessIter
+typedef struct DMN_ProcessIter DMN_ProcessIter;
+struct DMN_ProcessIter
 {
   U64 v[2];
 };
 
-typedef struct DEMON_ProcessInfo DEMON_ProcessInfo;
-struct DEMON_ProcessInfo
+typedef struct DMN_ProcessInfo DMN_ProcessInfo;
+struct DMN_ProcessInfo
 {
   String8 name;
   U32 pid;
 };
 
 ////////////////////////////////
-//~ rjf: Main Layer Initialization
+//~ rjf: Basic Type Functions (Helpers, Implemented Once)
 
-internal void demon_init(void);
-
-////////////////////////////////
-//~ rjf: Basic Type Functions
-
-//- rjf: stringizing
-internal String8 demon_string_from_event_kind(DEMON_EventKind kind);
-internal String8 demon_string_from_memory_event_kind(DEMON_MemoryEventKind kind);
-internal String8 demon_string_from_exception_kind(DEMON_ExceptionKind kind);
-internal void    demon_string_list_from_event(Arena *arena, String8List *out, DEMON_Event *event);
+//- rjf: handles
+internal DMN_Handle dmn_handle_zero(void);
+internal B32 dmn_handle_match(DMN_Handle a, DMN_Handle b);
 
 //- rjf: trap chunk lists
-internal void demon_trap_chunk_list_push(Arena *arena, DEMON_TrapChunkList *list, U64 cap, DEMON_Trap *trap);
-internal void demon_trap_chunk_list_concat_in_place(DEMON_TrapChunkList *dst, DEMON_TrapChunkList *to_push);
-internal void demon_trap_chunk_list_concat_shallow_copy(Arena *arena, DEMON_TrapChunkList *dst, DEMON_TrapChunkList *to_push);
+internal void dmn_trap_chunk_list_push(Arena *arena, DMN_TrapChunkList *list, U64 cap, DMN_Trap *trap);
+internal void dmn_trap_chunk_list_concat_in_place(DMN_TrapChunkList *dst, DMN_TrapChunkList *to_push);
+internal void dmn_trap_chunk_list_concat_shallow_copy(Arena *arena, DMN_TrapChunkList *dst, DMN_TrapChunkList *to_push);
 
 //- rjf: handle lists
-internal void demon_handle_list_push(Arena *arena, DEMON_HandleList *list, DEMON_Handle handle);
-internal DEMON_HandleArray demon_handle_array_from_list(Arena *arena, DEMON_HandleList *list);
-internal DEMON_HandleArray demon_handle_array_copy(Arena *arena, DEMON_HandleArray *src);
+internal void dmn_handle_list_push(Arena *arena, DMN_HandleList *list, DMN_Handle handle);
+internal DMN_HandleArray dmn_handle_array_from_list(Arena *arena, DMN_HandleList *list);
+internal DMN_HandleArray dmn_handle_array_copy(Arena *arena, DMN_HandleArray *src);
+
+//- rjf: event list building
+internal DMN_Event *dmn_event_list_push(Arena *arena, DMN_EventList *list);
 
 ////////////////////////////////
-//~ rjf: Primary Thread & Exclusive Mode Controls
+//~ rjf: Thread Reading Helper Functions (Helpers, Implemented Once)
 
-internal void demon_primary_thread_begin(void);
-internal void demon_exclusive_mode_begin(void);
-internal void demon_exclusive_mode_end(void);
-
-////////////////////////////////
-//~ rjf: Running/Halting
-
-internal DEMON_EventList demon_run(Arena *arena, DEMON_RunCtrls *ctrls);
-internal void demon_halt(U64 code, U64 user_data);
-internal U64 demon_get_time_counter(void);
+internal U64 dmn_rip_from_thread(DMN_Handle thread);
+internal U64 dmn_rsp_from_thread(DMN_Handle thread);
 
 ////////////////////////////////
-//~ rjf: Target Process Launching/Attaching/Killing/Detaching/Halting
+//~ rjf: @dmn_os_hooks Main Layer Initialization (Implemented Per-OS)
 
-internal U32 demon_launch_process(OS_LaunchOptions *options);
-internal B32 demon_attach_process(U32 pid);
-internal B32 demon_kill_process(DEMON_Handle process, U32 exit_code);
-internal B32 demon_detach_process(DEMON_Handle process);
+internal void dmn_init(void);
 
 ////////////////////////////////
-//~ rjf: Entity Functions
+//~ rjf: @dmn_os_hooks Blocking Control Thread Operations (Implemented Per-OS)
 
-//- rjf: basics
-internal B32 demon_object_exists(DEMON_Handle object);
-
-//- rjf: introspection
-internal Architecture      demon_arch_from_object(DEMON_Handle object);
-internal U64               demon_base_vaddr_from_module(DEMON_Handle module);
-internal Rng1U64           demon_vaddr_range_from_module(DEMON_Handle module);
-internal String8           demon_full_path_from_module(Arena *arena, DEMON_Handle module);
-internal U64               demon_stack_base_vaddr_from_thread(DEMON_Handle thread);
-internal U64               demon_tls_root_vaddr_from_thread(DEMON_Handle thread);
-internal DEMON_HandleArray demon_all_processes(Arena *arena);
-internal DEMON_HandleArray demon_threads_from_process(Arena *arena, DEMON_Handle process);
-internal DEMON_HandleArray demon_modules_from_process(Arena *arena, DEMON_Handle process);
-
-//- rjf: target process memory allocation/protection
-internal U64 demon_reserve_memory(DEMON_Handle process, U64 size);
-internal B32 demon_set_memory_protect_flags(DEMON_Handle process, U64 page_vaddr, U64 size, DEMON_MemoryProtectFlags flags);
-internal B32 demon_release_memory(DEMON_Handle process, U64 vaddr, U64 size);
-
-//- rjf: target process memory reading/writing
-internal U64 demon_read_memory(DEMON_Handle process, void *dst, U64 src_address, U64 size);
-internal B32 demon_write_memory(DEMON_Handle process, U64 dst_address, void *src, U64 size);
-internal U64 demon_read_memory_amap_aligned(DEMON_Handle process, void *dst, U64 src_address, U64 size);
-internal U64 demon_read_memory_amap(DEMON_Handle process, void *dst, U64 src_address, U64 size);
-
-//- rjf: thread registers reading/writing
-// IMPORTANT(allen): This API is _trusting_ you. You should never modify the data pointed
-// at by that void pointer! It is pointing to the internal cache of the registers, so it
-// will become invalid after a call to demon_write_regs, or demon_run. Use it to read
-// what you need and be done ASAP and we can avoid an extra copy baked into the API.
-internal void *demon_read_regs(DEMON_Handle thread);
-internal B32   demon_write_regs(DEMON_Handle thread, void *data);
-// TODO(allen): These might be a bad idea when we try to extend to ARM
-// They make sense for x86/x64 abstraction, which often needs identical
-// code paths except for these parts. Revisit this when ARM is integrated.
-internal U64  demon_read_ip(DEMON_Handle thread);
-internal U64  demon_read_sp(DEMON_Handle thread);
-internal void demon_write_ip(DEMON_Handle thread, U64 ip);
+internal DMN_CtrlCtx *dmn_ctrl_begin(void);
+internal void dmn_ctrl_exclusive_access_begin(void);
+internal void dmn_ctrl_exclusive_access_end(void);
+#define DMN_CtrlExclusiveAccessScope DeferLoop(dmn_ctrl_exclusive_access_begin(), dmn_ctrl_exclusive_access_end())
+internal U32 dmn_ctrl_launch(DMN_CtrlCtx *ctx, OS_ProcessLaunchParams *params);
+internal B32 dmn_ctrl_attach(DMN_CtrlCtx *ctx, U32 pid);
+internal B32 dmn_ctrl_kill(DMN_CtrlCtx *ctx, DMN_Handle process, U32 exit_code);
+internal B32 dmn_ctrl_detach(DMN_CtrlCtx *ctx, DMN_Handle process);
+internal DMN_EventList dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls);
 
 ////////////////////////////////
-//~ rjf: Process Listing
+//~ rjf: @dmn_os_hooks Halting (Implemented Per-OS)
 
-internal void demon_proc_iter_begin(DEMON_ProcessIter *iter);
-internal B32  demon_proc_iter_next(Arena *arena, DEMON_ProcessIter *iter, DEMON_ProcessInfo *info_out);
-internal void demon_proc_iter_end(DEMON_ProcessIter *iter);
+internal void dmn_halt(U64 code, U64 user_data);
 
-#endif //DEMON_CORE_H
+////////////////////////////////
+//~ rjf: @dmn_os_hooks Introspection Functions (Implemented Per-OS)
+
+//- rjf: run/memory/register counters
+internal U64 dmn_run_gen(void);
+internal U64 dmn_mem_gen(void);
+internal U64 dmn_reg_gen(void);
+
+//- rjf: non-blocking-control-thread access barriers
+internal B32 dmn_access_open(void);
+internal void dmn_access_close(void);
+#define DMN_AccessScope DeferLoopChecked(dmn_access_open(), dmn_access_close())
+
+//- rjf: processes
+internal U64 dmn_process_memory_reserve(DMN_Handle process, U64 vaddr, U64 size);
+internal void dmn_process_memory_commit(DMN_Handle process, U64 vaddr, U64 size);
+internal void dmn_process_memory_decommit(DMN_Handle process, U64 vaddr, U64 size);
+internal void dmn_process_memory_release(DMN_Handle process, U64 vaddr, U64 size);
+internal void dmn_process_memory_protect(DMN_Handle process, U64 vaddr, U64 size, OS_AccessFlags flags);
+internal U64 dmn_process_read(DMN_Handle process, Rng1U64 range, void *dst);
+internal B32 dmn_process_write(DMN_Handle process, Rng1U64 range, void *src);
+#define dmn_process_read_struct(process, vaddr, ptr) dmn_process_read((process), r1u64((vaddr), (vaddr)+(sizeof(*ptr))), ptr)
+#define dmn_process_write_struct(process, vaddr, ptr) dmn_process_write((process), r1u64((vaddr), (vaddr)+(sizeof(*ptr))), ptr)
+
+//- rjf: threads
+internal Architecture dmn_arch_from_thread(DMN_Handle handle);
+internal U64 dmn_stack_base_vaddr_from_thread(DMN_Handle handle);
+internal U64 dmn_tls_root_vaddr_from_thread(DMN_Handle handle);
+internal B32 dmn_thread_read_reg_block(DMN_Handle handle, void *reg_block);
+internal B32 dmn_thread_write_reg_block(DMN_Handle handle, void *reg_block);
+
+//- rjf: system process listing
+internal void dmn_process_iter_begin(DMN_ProcessIter *iter);
+internal B32  dmn_process_iter_next(Arena *arena, DMN_ProcessIter *iter, DMN_ProcessInfo *info_out);
+internal void dmn_process_iter_end(DMN_ProcessIter *iter);
+
+#endif // DEMON_CORE_H

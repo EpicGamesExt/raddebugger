@@ -8,16 +8,16 @@
 //~ rjf: Base Includes
 
 #include "metagen_base_context_cracking.h"
-#include "metagen_base_types.h"
-#include "metagen_base_markup.h"
-#include "metagen_base_ins.h"
-#include "metagen_base_linked_lists.h"
+
+#include "metagen_base_core.h"
+#include "metagen_base_profile.h"
 #include "metagen_base_arena.h"
 #include "metagen_base_math.h"
-#include "metagen_base_string.h"
+#include "metagen_base_strings.h"
 #include "metagen_base_thread_context.h"
 #include "metagen_base_command_line.h"
-#include "metagen_base_arena_dev.h"
-#include "metagen_base_bits.h"
+#include "metagen_base_markup.h"
+#include "metagen_base_log.h"
+#include "metagen_base_entry_point.h"
 
 #endif // BASE_INC_H

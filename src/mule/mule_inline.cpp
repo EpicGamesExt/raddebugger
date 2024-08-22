@@ -7,7 +7,7 @@
 
 #if defined(_MSC_VER)
 # define FORCE_INLINE __forceinline
-#elif defined(__clang__)
+#elif defined(__clang__) || defined(__GNUC__)
 # define FORCE_INLINE  __attribute__((always_inline))
 #else
 # error need force inline for this compiler
@@ -16,7 +16,7 @@
 ////////////////////////////////
 // NOTE(allen): Inline Stepping
 
-extern unsigned int fixed_frac_bits = 5;
+unsigned int fixed_frac_bits = 5;
 static unsigned int bias = 7;
 
 static FORCE_INLINE unsigned int

@@ -5,6 +5,32 @@
 #define METAGEN_H
 
 ////////////////////////////////
+//~ rjf: Message Type
+
+typedef struct MG_Msg MG_Msg;
+struct MG_Msg
+{
+  String8 location;
+  String8 kind;
+  String8 msg;
+};
+
+typedef struct MG_MsgNode MG_MsgNode;
+struct MG_MsgNode
+{
+  MG_MsgNode *next;
+  MG_Msg v;
+};
+
+typedef struct MG_MsgList MG_MsgList;
+struct MG_MsgList
+{
+  MG_MsgNode *first;
+  MG_MsgNode *last;
+  U64 count;
+};
+
+////////////////////////////////
 //~ rjf: Parse Artifact Types
 
 typedef struct MG_FileParse MG_FileParse;
@@ -186,14 +212,22 @@ typedef struct MG_Layer MG_Layer;
 struct MG_Layer
 {
   String8 key;
+  B32 is_library;
+  String8 gen_folder_name;
+  String8 h_name_override;
+  String8 c_name_override;
   String8List enums;
   String8List structs;
   String8List h_functions;
   String8List h_tables;
   String8List h_catchall;
+  String8List h_header;
+  String8List h_footer;
   String8List c_functions;
   String8List c_tables;
   String8List c_catchall;
+  String8List c_header;
+  String8List c_footer;
 };
 
 typedef struct MG_LayerNode MG_LayerNode;
@@ -229,6 +263,11 @@ read_only global MG_StrExpr mg_str_expr_nil = {&mg_str_expr_nil, &mg_str_expr_ni
 
 internal U64 mg_hash_from_string(String8 string);
 internal TxtPt mg_txt_pt_from_string_off(String8 string, U64 off);
+
+////////////////////////////////
+//~ rjf: Message Lists
+
+internal void mg_msg_list_push(Arena *arena, MG_MsgList *msgs, MG_Msg *msg);
 
 ////////////////////////////////
 //~ rjf: String Escaping

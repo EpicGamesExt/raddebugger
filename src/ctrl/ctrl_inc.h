@@ -74,4 +74,4 @@
 
 #include "ctrl_core.h"
 
-#endif //CTRL_INC_H
+#endif // CTRL_INC_H

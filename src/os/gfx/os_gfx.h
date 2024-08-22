@@ -1,11 +1,28 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-#ifndef OS_GRAPHICAL_H
-#define OS_GRAPHICAL_H
+#ifndef OS_GFX_H
+#define OS_GFX_H
+
+////////////////////////////////
+//~ rjf: Graphics System Info
+
+typedef struct OS_GfxInfo OS_GfxInfo;
+struct OS_GfxInfo
+{
+  F32 double_click_time;
+  F32 caret_blink_time;
+  F32 default_refresh_rate;
+};
 
 ////////////////////////////////
 //~ rjf: Window Types
+
+typedef U32 OS_WindowFlags;
+enum
+{
+  OS_WindowFlag_CustomBorder = (1<<0),
+};
 
 typedef void OS_WindowRepaintFunctionType(OS_Handle window, void *user_data);
 
@@ -40,6 +57,7 @@ typedef enum OS_EventKind
   OS_EventKind_Null,
   OS_EventKind_Press,
   OS_EventKind_Release,
+  OS_EventKind_MouseMove,
   OS_EventKind_Text,
   OS_EventKind_Scroll,
   OS_EventKind_WindowLoseFocus,
@@ -63,6 +81,7 @@ struct OS_Event
 {
   OS_Event *next;
   OS_Event *prev;
+  U64 timestamp_us;
   OS_Handle window;
   OS_EventKind kind;
   OS_EventFlags flags;
@@ -71,6 +90,7 @@ struct OS_Event
   B32 right_sided;
   U32 character;
   U32 repeat_count;
+  Vec2F32 pos;
   Vec2F32 delta;
   String8List strings;
 };
@@ -86,28 +106,37 @@ struct OS_EventList
 ////////////////////////////////
 //~ rjf: Event Functions (Helpers, Implemented Once)
 
+internal String8 os_string_from_event_kind(OS_EventKind kind);
 internal String8List os_string_list_from_event_flags(Arena *arena, OS_EventFlags flags);
 internal U32 os_codepoint_from_event_flags_and_key(OS_EventFlags flags, OS_Key key);
 internal void os_eat_event(OS_EventList *events, OS_Event *event);
 internal B32  os_key_press(OS_EventList *events, OS_Handle window, OS_EventFlags flags, OS_Key key);
 internal B32  os_key_release(OS_EventList *events, OS_Handle window, OS_EventFlags flags, OS_Key key);
 internal B32  os_text(OS_EventList *events, OS_Handle window, U32 character);
+internal OS_EventList os_event_list_copy(Arena *arena, OS_EventList *src);
+internal void os_event_list_concat_in_place(OS_EventList *dst, OS_EventList *to_push);
+internal OS_Event *os_event_list_push_new(Arena *arena, OS_EventList *evts, OS_EventKind kind);
 
 ////////////////////////////////
 //~ rjf: @os_hooks Main Initialization API (Implemented Per-OS)
 
-internal void           os_graphical_init(void);
+internal void os_gfx_init(void);
+
+////////////////////////////////
+//~ rjf: @os_hooks Graphics System Info (Implemented Per-OS)
+
+internal OS_GfxInfo *os_get_gfx_info(void);
 
 ////////////////////////////////
 //~ rjf: @os_hooks Clipboards (Implemented Per-OS)
 
-internal void           os_set_clipboard_text(String8 string);
-internal String8        os_get_clipboard_text(Arena *arena);
+internal void    os_set_clipboard_text(String8 string);
+internal String8 os_get_clipboard_text(Arena *arena);
 
 ////////////////////////////////
 //~ rjf: @os_hooks Windows (Implemented Per-OS)
 
-internal OS_Handle      os_window_open(Vec2F32 resolution, String8 title);
+internal OS_Handle      os_window_open(Vec2F32 resolution, OS_WindowFlags flags, String8 title);
 internal void           os_window_close(OS_Handle window);
 internal void           os_window_first_paint(OS_Handle window);
 internal void           os_window_equip_repaint(OS_Handle window, OS_WindowRepaintFunctionType *repaint, void *user_data);
@@ -117,8 +146,13 @@ internal B32            os_window_is_fullscreen(OS_Handle window);
 internal void           os_window_set_fullscreen(OS_Handle window, B32 fullscreen);
 internal B32            os_window_is_maximized(OS_Handle window);
 internal void           os_window_set_maximized(OS_Handle window, B32 maximized);
+internal void           os_window_minimize(OS_Handle window);
 internal void           os_window_bring_to_front(OS_Handle window);
 internal void           os_window_set_monitor(OS_Handle window, OS_Handle monitor);
+internal void           os_window_clear_custom_border_data(OS_Handle handle);
+internal void           os_window_push_custom_title_bar(OS_Handle handle, F32 thickness);
+internal void           os_window_push_custom_edges(OS_Handle handle, F32 thickness);
+internal void           os_window_push_custom_title_bar_client_area(OS_Handle handle, Rng2F32 rect);
 internal Rng2F32        os_rect_from_window(OS_Handle window);
 internal Rng2F32        os_client_rect_from_window(OS_Handle window);
 internal F32            os_dpi_from_window(OS_Handle window);
@@ -138,7 +172,6 @@ internal Vec2F32        os_dim_from_monitor(OS_Handle monitor);
 internal void           os_send_wakeup_event(void);
 internal OS_EventList   os_get_events(Arena *arena, B32 wait);
 internal OS_EventFlags  os_get_event_flags(void);
-internal B32            os_key_is_down(OS_Key key);
 internal Vec2F32        os_mouse_from_window(OS_Handle window);
 
 ////////////////////////////////
@@ -147,16 +180,13 @@ internal Vec2F32        os_mouse_from_window(OS_Handle window);
 internal void           os_set_cursor(OS_Cursor cursor);
 
 ////////////////////////////////
-//~ rjf: @os_hooks System Properties (Implemented Per-OS)
-
-internal F32            os_double_click_time(void);
-internal F32            os_caret_blink_time(void);
-internal F32            os_default_refresh_rate(void);
-internal B32            os_granular_sleep_enabled(void);
-
-////////////////////////////////
-//~ rjf: @os_hooks Native Messages & Panics (Implemented Per-OS)
+//~ rjf: @os_hooks Native User-Facing Graphical Messages (Implemented Per-OS)
 
 internal void           os_graphical_message(B32 error, String8 title, String8 message);
 
-#endif // OS_GRAPHICAL_H
+////////////////////////////////
+//~ rjf: @os_hooks Shell Operations
+
+internal void           os_show_in_filesystem_ui(String8 path);
+
+#endif // OS_GFX_H

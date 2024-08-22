@@ -67,22 +67,46 @@ REGS_RegTableX64:
   {es                             16   Normal}
   {fs                             16   Normal}
   {gs                             16   Normal}
-  {ymm0                           256  Normal}
-  {ymm1                           256  Normal}
-  {ymm2                           256  Normal}
-  {ymm3                           256  Normal}
-  {ymm4                           256  Normal}
-  {ymm5                           256  Normal}
-  {ymm6                           256  Normal}
-  {ymm7                           256  Normal}
-  {ymm8                           256  Normal}
-  {ymm9                           256  Normal}
-  {ymm10                          256  Normal}
-  {ymm11                          256  Normal}
-  {ymm12                          256  Normal}
-  {ymm13                          256  Normal}
-  {ymm14                          256  Normal}
-  {ymm15                          256  Normal}
+  {zmm0                           512  Normal}
+  {zmm1                           512  Normal}
+  {zmm2                           512  Normal}
+  {zmm3                           512  Normal}
+  {zmm4                           512  Normal}
+  {zmm5                           512  Normal}
+  {zmm6                           512  Normal}
+  {zmm7                           512  Normal}
+  {zmm8                           512  Normal}
+  {zmm9                           512  Normal}
+  {zmm10                          512  Normal}
+  {zmm11                          512  Normal}
+  {zmm12                          512  Normal}
+  {zmm13                          512  Normal}
+  {zmm14                          512  Normal}
+  {zmm15                          512  Normal}
+  {zmm16                          512  Normal}
+  {zmm17                          512  Normal}
+  {zmm18                          512  Normal}
+  {zmm19                          512  Normal}
+  {zmm20                          512  Normal}
+  {zmm21                          512  Normal}
+  {zmm22                          512  Normal}
+  {zmm23                          512  Normal}
+  {zmm24                          512  Normal}
+  {zmm25                          512  Normal}
+  {zmm26                          512  Normal}
+  {zmm27                          512  Normal}
+  {zmm28                          512  Normal}
+  {zmm29                          512  Normal}
+  {zmm30                          512  Normal}
+  {zmm31                          512  Normal}
+  {k0                             64   Normal}
+  {k1                             64   Normal}
+  {k2                             64   Normal}
+  {k3                             64   Normal}
+  {k4                             64   Normal}
+  {k5                             64   Normal}
+  {k6                             64   Normal}
+  {k7                             64   Normal}
 }
 
 @table(name base off size usage)
@@ -146,22 +170,38 @@ REGS_AliasTableX64:
   {ch              rcx    8      8      Normal}
   {dh              rdx    8      8      Normal}
   {bh              rbx    8      8      Normal}
-  {xmm0            ymm0   0      128    Normal}
-  {xmm1            ymm1   0      128    Normal}
-  {xmm2            ymm2   0      128    Normal}
-  {xmm3            ymm3   0      128    Normal}
-  {xmm4            ymm4   0      128    Normal}
-  {xmm5            ymm5   0      128    Normal}
-  {xmm6            ymm6   0      128    Normal}
-  {xmm7            ymm7   0      128    Normal}
-  {xmm8            ymm8   0      128    Normal}
-  {xmm9            ymm9   0      128    Normal}
-  {xmm10           ymm10  0      128    Normal}
-  {xmm11           ymm11  0      128    Normal}
-  {xmm12           ymm12  0      128    Normal}
-  {xmm13           ymm13  0      128    Normal}
-  {xmm14           ymm14  0      128    Normal}
-  {xmm15           ymm15  0      128    Normal}
+  {xmm0            zmm0   0      128    Normal}
+  {xmm1            zmm1   0      128    Normal}
+  {xmm2            zmm2   0      128    Normal}
+  {xmm3            zmm3   0      128    Normal}
+  {xmm4            zmm4   0      128    Normal}
+  {xmm5            zmm5   0      128    Normal}
+  {xmm6            zmm6   0      128    Normal}
+  {xmm7            zmm7   0      128    Normal}
+  {xmm8            zmm8   0      128    Normal}
+  {xmm9            zmm9   0      128    Normal}
+  {xmm10           zmm10  0      128    Normal}
+  {xmm11           zmm11  0      128    Normal}
+  {xmm12           zmm12  0      128    Normal}
+  {xmm13           zmm13  0      128    Normal}
+  {xmm14           zmm14  0      128    Normal}
+  {xmm15           zmm15  0      128    Normal}
+  {ymm0            zmm0   0      256    Normal}
+  {ymm1            zmm1   0      256    Normal}
+  {ymm2            zmm2   0      256    Normal}
+  {ymm3            zmm3   0      256    Normal}
+  {ymm4            zmm4   0      256    Normal}
+  {ymm5            zmm5   0      256    Normal}
+  {ymm6            zmm6   0      256    Normal}
+  {ymm7            zmm7   0      256    Normal}
+  {ymm8            zmm8   0      256    Normal}
+  {ymm9            zmm9   0      256    Normal}
+  {ymm10           zmm10  0      256    Normal}
+  {ymm11           zmm11  0      256    Normal}
+  {ymm12           zmm12  0      256    Normal}
+  {ymm13           zmm13  0      256    Normal}
+  {ymm14           zmm14  0      256    Normal}
+  {ymm15           zmm15  0      256    Normal}
   {mm0             fpr0   0      64     Normal}
   {mm1             fpr1   0      64     Normal}
   {mm2             fpr2   0      64     Normal}
@@ -299,141 +339,129 @@ REGS_ArchTable:
 ////////////////////////////////
 //~ rjf: X64 Generators
 
-@table_gen_enum REGS_RegCodeX64:
+@enum REGS_RegCodeX64:
 {
-  `REGS_RegCodeX64_NULL,`;
-  @expand(REGS_RegTableX64 a) `REGS_RegCodeX64_$(a.name),`;
-  `REGS_RegCodeX64_COUNT`;
+  NULL,
+  @expand(REGS_RegTableX64 a) `$(a.name)`,
+  COUNT,
 }
 
-@table_gen_enum REGS_AliasCodeX64:
+@enum REGS_AliasCodeX64:
 {
-  `REGS_AliasCodeX64_NULL,`;
-  @expand(REGS_AliasTableX64 a) `REGS_AliasCodeX64_$(a.name),`;
-  `REGS_AliasCodeX64_COUNT`;
+  NULL,
+  @expand(REGS_AliasTableX64 a) `$(a.name)`,
+  COUNT,
 }
 
-@table_gen_struct
-REGS_RegBlockX64:
+@struct REGS_RegBlockX64:
 {
-  @expand(REGS_RegTableX64 a) `REGS_Reg$(a.size) $(a.name);`;
+  @expand(REGS_RegTableX64 a) `REGS_Reg$(a.size) $(a.name)`,
 }
 
-@table_gen_data(type:REGS_UsageKind, fallback:`REGS_UsageKind_Normal`)
-regs_g_reg_code_x64_usage_kind_table:
+@data(REGS_UsageKind) regs_g_reg_code_x64_usage_kind_table:
 {
-  `REGS_UsageKind_Normal,`;
-  @expand(REGS_RegTableX64 a) `REGS_UsageKind_$(a.usage),`;
+  `REGS_UsageKind_Normal`;
+  @expand(REGS_RegTableX64 a) `REGS_UsageKind_$(a.usage)`;
 }
 
-@table_gen_data(type:REGS_UsageKind, fallback:`REGS_UsageKind_Normal`)
+@data(REGS_UsageKind)
 regs_g_alias_code_x64_usage_kind_table:
 {
-  `REGS_UsageKind_Normal,`;
-  @expand(REGS_AliasTableX64 a) `REGS_UsageKind_$(a.usage),`;
+  `REGS_UsageKind_Normal`;
+  @expand(REGS_AliasTableX64 a) `REGS_UsageKind_$(a.usage)`;
 }
 
-@table_gen_data(type:String8, fallback:`{0}`)
-regs_g_reg_code_x64_string_table:
+@data(String8) regs_g_reg_code_x64_string_table:
 {
-  `str8_lit_comp(""),`;
-  @expand(REGS_RegTableX64 a) `str8_lit_comp("$(a.name)"),`;
+  `str8_lit_comp("")`;
+  @expand(REGS_RegTableX64 a) `str8_lit_comp("$(a.name)")`;
 }
 
-@table_gen_data(type:String8, fallback:`{0}`)
-regs_g_alias_code_x64_string_table:
+@data(String8) regs_g_alias_code_x64_string_table:
 {
-  `str8_lit_comp(""),`;
-  @expand(REGS_AliasTableX64 a) `str8_lit_comp("$(a.name)"),`;
+  `str8_lit_comp("")`;
+  @expand(REGS_AliasTableX64 a) `str8_lit_comp("$(a.name)")`;
 }
 
-@table_gen_data(type: REGS_Rng, fallback: `{0}`)
-regs_g_reg_code_x64_rng_table:
+@data(REGS_Rng) regs_g_reg_code_x64_rng_table:
 {
-  `{0},`;
-  @expand(REGS_RegTableX64 a) `{(U16)OffsetOf(REGS_RegBlockX64, $(a.name)), $(a.size/8)},`,
+  `{0}`;
+  @expand(REGS_RegTableX64 a) `{(U16)OffsetOf(REGS_RegBlockX64, $(a.name)), $(a.size/8)}`,
 }
 
-@table_gen_data(type: REGS_Slice, fallback: `{0}`)
-regs_g_alias_code_x64_slice_table:
+@data(REGS_Slice) regs_g_alias_code_x64_slice_table:
 {
-  `{0},`;
-  @expand(REGS_AliasTableX64 a) `{REGS_RegCodeX64_$(a.base), $(a.off/8), $(a.size/8)},`,
+  `{0}`;
+  @expand(REGS_AliasTableX64 a) `{REGS_RegCodeX64_$(a.base), $(a.off/8), $(a.size/8)}`,
 }
 
 ////////////////////////////////
 //~ rjf: X86 Generators
 
-@table_gen_enum REGS_RegCodeX86:
+@enum REGS_RegCodeX86:
 {
-  `REGS_RegCodeX86_NULL,`;
-  @expand(REGS_RegTableX86 a) `REGS_RegCodeX86_$(a.name),`;
-  `REGS_RegCodeX86_COUNT`;
+  NULL,
+  @expand(REGS_RegTableX86 a) `$(a.name)`,
+  COUNT,
 }
 
-@table_gen_enum REGS_AliasCodeX86:
+@enum REGS_AliasCodeX86:
 {
-  `REGS_AliasCodeX86_NULL,`;
-  @expand(REGS_AliasTableX86 a) `REGS_AliasCodeX86_$(a.name),`;
-  `REGS_AliasCodeX86_COUNT`;
+  NULL,
+  @expand(REGS_AliasTableX86 a) `$(a.name)`,
+  COUNT,
 }
 
-@table_gen_struct
-REGS_RegBlockX86:
+@struct REGS_RegBlockX86:
 {
-  @expand(REGS_RegTableX86 a) `REGS_Reg$(a.size) $(a.name);`;
+  @expand(REGS_RegTableX86 a) `REGS_Reg$(a.size) $(a.name)`,
 }
 
-@table_gen_data(type:REGS_UsageKind, fallback:`REGS_UsageKind_Normal`)
+@data(REGS_UsageKind)
 regs_g_reg_code_x86_usage_kind_table:
 {
-  `REGS_UsageKind_Normal,`;
-  @expand(REGS_RegTableX86 a) `REGS_UsageKind_$(a.usage),`;
+  `REGS_UsageKind_Normal`;
+  @expand(REGS_RegTableX86 a) `REGS_UsageKind_$(a.usage)`;
 }
 
-@table_gen_data(type:REGS_UsageKind, fallback:`REGS_UsageKind_Normal`)
-regs_g_alias_code_x86_usage_kind_table:
+@data(REGS_UsageKind) regs_g_alias_code_x86_usage_kind_table:
 {
-  `REGS_UsageKind_Normal,`;
-  @expand(REGS_AliasTableX86 a) `REGS_UsageKind_$(a.usage),`;
+  `REGS_UsageKind_Normal`;
+  @expand(REGS_AliasTableX86 a) `REGS_UsageKind_$(a.usage)`;
 }
 
-@table_gen_data(type:String8, fallback:`{0}`)
-regs_g_reg_code_x86_string_table:
+@data(String8) regs_g_reg_code_x86_string_table:
 {
-  `str8_lit_comp(""),`;
-  @expand(REGS_RegTableX86 a) `str8_lit_comp("$(a.name)"),`;
+  `str8_lit_comp("")`;
+  @expand(REGS_RegTableX86 a) `str8_lit_comp("$(a.name)")`;
 }
 
-@table_gen_data(type:String8, fallback:`{0}`)
-regs_g_alias_code_x86_string_table:
+@data(String8) regs_g_alias_code_x86_string_table:
 {
-  `str8_lit_comp(""),`;
-  @expand(REGS_AliasTableX86 a) `str8_lit_comp("$(a.name)"),`;
+  `str8_lit_comp("")`;
+  @expand(REGS_AliasTableX86 a) `str8_lit_comp("$(a.name)")`;
 }
 
-@table_gen_data(type: REGS_Rng, fallback: `{0}`)
-regs_g_reg_code_x86_rng_table:
+@data(REGS_Rng) regs_g_reg_code_x86_rng_table:
 {
-  `{0},`;
-  @expand(REGS_RegTableX86 a) `{(U16)OffsetOf(REGS_RegBlockX86, $(a.name)), $(a.size/8)},`,
+  `{0}`;
+  @expand(REGS_RegTableX86 a) `{(U16)OffsetOf(REGS_RegBlockX86, $(a.name)), $(a.size/8)}`,
 }
 
-@table_gen_data(type: REGS_Slice, fallback: `{0}`)
-regs_g_alias_code_x86_slice_table:
+@data(REGS_Slice) regs_g_alias_code_x86_slice_table:
 {
-  `{0},`;
-  @expand(REGS_AliasTableX86 a) `{REGS_RegCodeX86_$(a.base), $(a.off/8), $(a.size/8)},`,
+  `{0}`;
+  @expand(REGS_AliasTableX86 a) `{REGS_RegCodeX86_$(a.base), $(a.off/8), $(a.size/8)}`,
 }
 
 ////////////////////////////////
 //~ rjf: Architecture-Dynamic Helper Implementation Generators
 
-@c_file @table_gen
+@c_file @gen
 {
   `internal U64 regs_block_size_from_architecture(Architecture arch)`;
   `{`;
-    `U64 result = 0;`;
+    `U64 result = 8;`;
     `switch(arch)`;
     `{`;
       `default:{}break;`;
@@ -443,7 +471,7 @@ regs_g_alias_code_x86_slice_table:
     `}`;
 }
 
-@c_file @table_gen
+@c_file @gen
 {
   `internal U64 regs_reg_code_count_from_architecture(Architecture arch)`;
   `{`;
@@ -457,7 +485,7 @@ regs_g_alias_code_x86_slice_table:
     `}`;
 }
 
-@c_file @table_gen
+@c_file @gen
 {
   `internal U64 regs_alias_code_count_from_architecture(Architecture arch)`;
   `{`;
@@ -471,7 +499,7 @@ regs_g_alias_code_x86_slice_table:
     `}`;
 }
 
-@c_file @table_gen
+@c_file @gen
 {
   `internal String8 *regs_reg_code_string_table_from_architecture(Architecture arch)`;
   `{`;
@@ -485,7 +513,7 @@ regs_g_alias_code_x86_slice_table:
     `}`;
 }
 
-@c_file @table_gen
+@c_file @gen
 {
   `internal String8 *regs_alias_code_string_table_from_architecture(Architecture arch)`;
   `{`;
@@ -499,7 +527,7 @@ regs_g_alias_code_x86_slice_table:
     `}`;
 }
 
-@c_file @table_gen
+@c_file @gen
 {
   `internal REGS_Rng *regs_reg_code_rng_table_from_architecture(Architecture arch)`;
   `{`;
@@ -513,7 +541,7 @@ regs_g_alias_code_x86_slice_table:
     `}`;
 }
 
-@c_file @table_gen
+@c_file @gen
 {
   `internal REGS_Slice *regs_alias_code_slice_table_from_architecture(Architecture arch)`;
   `{`;
@@ -527,7 +555,7 @@ regs_g_alias_code_x86_slice_table:
     `}`;
 }
 
-@c_file @table_gen
+@c_file @gen
 {
   `internal REGS_UsageKind *regs_reg_code_usage_kind_table_from_architecture(Architecture arch)`;
   `{`;
@@ -541,7 +569,7 @@ regs_g_alias_code_x86_slice_table:
     `}`;
 }
 
-@c_file @table_gen
+@c_file @gen
 {
   `internal REGS_UsageKind *regs_alias_code_usage_kind_table_from_architecture(Architecture arch)`;
   `{`;

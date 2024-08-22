@@ -6,7 +6,7 @@
 ** stepping, breakpoints, evaluation, cross-module calls.
 */
 
-#include "raddbg_markup/raddbg_markup.h"
+#include "lib_raddbg_markup/raddbg_markup.h"
 
 ////////////////////////////////
 // NOTE(allen): System For DLL Testing
@@ -252,6 +252,22 @@ struct Has_A_Post_Forward_Reference{
   struct Gets_Referenced_Forwardly value;
 };
 
+struct TypeWithMemberFunction
+{
+  int x;
+  int y;
+  int z;
+  char *name;
+  __declspec(noinline) void SetInfo(int _x, int _y, char *_name)
+  {
+    x = _x;
+    y = _y;
+    z = 0;
+    name = _name;
+    OutputDebugStringA("setting info\n");
+  }
+};
+
 static void
 no_params1(void){
   
@@ -274,6 +290,9 @@ type_coverage_eval_tests(void){
     "With multiple lines in it\r\n"
     "\t> What ways might it be rendered?\n"
     "\t> How would it deal with line endings?\r\n";
+  wchar_t a_wide_string[] =
+    L"This is a string, but instead of being encoded in a stream of bytes,\n"
+    L"it is encoded in a stream of 2-byte packages!\n";
   
   void *pointer = &basics;
   Basics *pointer_to_basics = &basics;
@@ -323,6 +342,9 @@ type_coverage_eval_tests(void){
     swea.z = 'z';
   }
   
+  Struct_With_Embedded_Arrays *swea_ptr = &swea;
+  int access_via_ptr_member = swea_ptr->x;
+  
   Custom_Index_Type custom_index = 42;
   Custom_Index_Type more_custom_indices[] = {
     04,13,22,31,40
@@ -355,6 +377,8 @@ type_coverage_eval_tests(void){
   Has_A_Post_Forward_Reference r2 = {0};
   
   Basics &basics_ref = basics;
+  const Basics *basics_const_ptr = &basics;
+  const Basics &basics_const_ref = basics;
   
   union
   {
@@ -370,6 +394,9 @@ type_coverage_eval_tests(void){
   stks stks_test[256] = {0};
   stks *stks_first = &stks_test[0];
   stks *stks_ptr = stks_first + 8;
+  
+  TypeWithMemberFunction twmf = {0};
+  twmf.SetInfo(123, 456, "foobar");
   
   TestFunction *function = mule_get_module_function("dll_type_eval_tests");
   function();
@@ -914,6 +941,18 @@ struct Template_Example3{
   }
 };
 
+struct SingleInheritanceBase
+{
+  int x;
+  int y;
+};
+
+struct SingleInheritanceDerived : SingleInheritanceBase
+{
+  int z;
+  int w;
+};
+
 struct Has_Members{
   int a;
   int b;
@@ -1090,6 +1129,86 @@ struct Vinheritance_Child : Vinheritance_MidLeft, Vinheritance_MidRight{
   };
 };
 
+struct Minheritance_Base{
+  int x;
+  int y;
+};
+
+struct Minheritance_MidLeft : Minheritance_Base{
+  float left;
+};
+
+struct Minheritance_MidRight : Minheritance_Base{
+  float right;
+};
+
+struct Minheritance_Child : Minheritance_MidLeft, Minheritance_MidRight{
+  char *name;
+};
+
+struct Pure
+{
+  virtual ~Pure() = default;
+  virtual void Foo() = 0;
+};
+
+struct PureChild : Pure
+{
+  virtual ~PureChild() = default;
+  virtual void Foo() {a += 1;}
+  double a = 0;
+};
+
+struct Base
+{
+  int x;
+  int y;
+  int z;
+  virtual ~Base() = default;
+  virtual void Foo() = 0;
+};
+
+struct Derived : Base
+{
+  int r;
+  int g;
+  int b;
+  int a;
+  virtual ~Derived() = default;
+  virtual void Foo() {a += 1;}
+};
+
+struct DerivedA : Base
+{
+  float a;
+  float b;
+  virtual void Foo() {a += 1;}
+  virtual ~DerivedA() = default;
+};
+
+struct DerivedB : Base
+{
+  double c;
+  double d;
+  virtual void Foo() {c += 1;}
+  virtual ~DerivedB() = default;
+};
+
+struct NonVirtualBase
+{
+  int x;
+  int y;
+  int z;
+};
+
+struct NonVirtualDerived : NonVirtualBase
+{
+  int r;
+  int g;
+  int b;
+  int a;
+};
+
 struct OverloadedMethods{
   int x;
   int cool_method(void){
@@ -1245,6 +1364,12 @@ extended_type_coverage_eval_tests(void){
     Template_Example3<void *, float> temp3_vi((void *)&temp3_if, 1.f);
     Template_Example3<int, Template_Example2<int, float>> temp3_itif(123, temp_if);
     
+    SingleInheritanceDerived sid;
+    sid.x = 123;
+    sid.y = 456;
+    sid.z = 789;
+    sid.w = 999;
+    
     Pointer_To_Member pointer_to_member = {
       &Has_Members::a, &Has_Members::c, &Has_Members::bas,
       &Has_Members::x, &Has_Members::z, &Has_Members::bas_f,
@@ -1278,6 +1403,45 @@ extended_type_coverage_eval_tests(void){
     vinheritance_child.right = 13.0f;
     vinheritance_child.x     = -1;
     vinheritance_child.y     = -1;
+    
+    Minheritance_Child minheritance_child;
+    minheritance_child.name  = "foobar";
+    minheritance_child.left  = 10.5f;
+    minheritance_child.right = 13.0f;
+    minheritance_child.Minheritance_MidLeft::x = -1;
+    minheritance_child.Minheritance_MidLeft::y = -1;
+    minheritance_child.Minheritance_MidRight::x = +1;
+    minheritance_child.Minheritance_MidRight::y = +1;
+    
+    Pure *child = new PureChild();
+    child->Foo();
+    child->Foo();
+    child->Foo();
+    delete child;
+    
+    Base *derived = new Derived();
+    derived->Foo();
+    derived->Foo();
+    derived->Foo();
+    delete derived;
+    
+    NonVirtualBase *non_virtual_derived = new NonVirtualDerived();
+    non_virtual_derived->x += 1;
+    non_virtual_derived->x += 1;
+    non_virtual_derived->x += 1;
+    
+    Base *base_array[1024] = {0};
+    for(int i = 0; i < sizeof(base_array)/sizeof(base_array[0]); i += 1)
+    {
+      if((i & 1) == 1)
+      {
+        base_array[i] = new DerivedA();
+      }
+      else
+      {
+        base_array[i] = new DerivedB();
+      }
+    }
     
     OverloadedMethods overloaded_methods;
     {
@@ -1367,6 +1531,34 @@ templated_function_eval_tests(void)
 
 extern "C"{
 #include "mule_c.h"
+}
+
+////////////////////////////////
+//~ rjf: Basic Inline Line Info Tests
+
+#if defined(_MSC_VER)
+# define FORCE_INLINE __forceinline
+#elif defined(__clang__)
+# define FORCE_INLINE  __attribute__((always_inline))
+#else
+# error need force inline for this compiler
+#endif
+
+static FORCE_INLINE void
+basic_inlinee(int inlinee_param_x, int inlinee_param_y, int inlinee_param_z)
+{
+  OutputDebugStringA("A\n");
+  OutputDebugStringA("B\n");
+  OutputDebugStringA("C\n");
+  OutputDebugStringA("D\n");
+}
+
+static void
+basic_inline_tests(void)
+{
+  OutputDebugStringA("{\n");
+  basic_inlinee(12, 34, 56);
+  OutputDebugStringA("}\n");
 }
 
 ////////////////////////////////
@@ -1861,7 +2053,7 @@ control_flow_stepping_tests(void){
     if (i <= 1) goto done;
     if ((i&1) == 0) goto even_case;
     
-    odd_case:
+    // odd_case:
     i = 3*i + 1;
     
     even_case:
@@ -2124,7 +2316,57 @@ debug_string_tests(void)
   {
     OutputDebugStringA("Hello, World!\n");
   }
+  char message[65409+1];
+	memset(&message[0], '=', sizeof(message));
+	for(int i = 1; i < sizeof(message); i += 128)
+	{
+		message[i] = '\n';
+	}
+	message[sizeof(message) - 1] = 0;
+  OutputDebugStringA(message);
 #endif
+}
+
+////////////////////////////////
+//~ rjf: Interrupt Stepping Tests
+
+#include <assert.h>
+
+static void
+interrupt_stepping_tests(void)
+{
+  __debugbreak();
+  __debugbreak();
+  __debugbreak();
+  __debugbreak();
+  for(int i = 0; i < 1000; i += 1)
+  {
+    if(i == 999)
+    {
+      __debugbreak();
+    }
+  }
+  for(int i = 0; i < 1000; i += 1)
+  {
+    if(i == 999)
+    {
+      assert(0);
+    }
+  }
+  int x = 0;
+}
+
+////////////////////////////////
+//~ rjf: JIT Stepping Tests
+
+static void
+jit_stepping_tests(void)
+{
+  OutputDebugString("A\n");
+  VOID *code = VirtualAlloc(0, 0x1000, MEM_COMMIT|MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+  *((uint32_t*)code) = 0xC39090CC;
+  ((void (__fastcall *)()) code)();
+  OutputDebugString("B\n");
 }
 
 ////////////////////////////////
@@ -2408,6 +2650,8 @@ mule_main(int argc, char** argv){
   
   alloca_stepping_tests();
   
+  basic_inline_tests();
+  
   inline_stepping_tests();
   
   overloaded_line_stepping_tests();
@@ -2421,6 +2665,10 @@ mule_main(int argc, char** argv){
   recursion_stepping_tests();
   
   debug_string_tests();
+  
+  jit_stepping_tests();
+  
+  interrupt_stepping_tests();
   
   exception_stepping_tests();
   

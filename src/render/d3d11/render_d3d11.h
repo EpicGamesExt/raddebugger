@@ -20,6 +20,7 @@
 ////////////////////////////////
 //~ rjf: C-side Shader Types
 
+typedef struct R_D3D11_Uniforms_Rect R_D3D11_Uniforms_Rect;
 struct R_D3D11_Uniforms_Rect
 {
   Vec2F32 viewport_size;
@@ -32,16 +33,26 @@ struct R_D3D11_Uniforms_Rect
   Vec2F32 xform_scale;
 };
 
-struct R_D3D11_Uniforms_Blur
+typedef struct R_D3D11_Uniforms_BlurPass R_D3D11_Uniforms_BlurPass;
+struct R_D3D11_Uniforms_BlurPass
 {
   Rng2F32 rect;
-  Vec2F32 viewport_size;
-  F32 blur_size;
-  F32 is_vertical;
   Vec4F32 corner_radii;
+  Vec2F32 direction;
+  Vec2F32 viewport_size;
+  U32 blur_count;
+  U8 _padding0_[204];
+};
+StaticAssert(sizeof(R_D3D11_Uniforms_BlurPass) % 256 == 0, NotAligned); // constant count/offset must be aligned to 256 bytes
+
+typedef struct R_D3D11_Uniforms_Blur R_D3D11_Uniforms_Blur;
+struct R_D3D11_Uniforms_Blur
+{
+  R_D3D11_Uniforms_BlurPass passes[Axis2_COUNT];
   Vec4F32 kernel[32];
 };
 
+typedef struct R_D3D11_Uniforms_Mesh R_D3D11_Uniforms_Mesh;
 struct R_D3D11_Uniforms_Mesh
 {
   Mat4x4F32 xform;
@@ -50,26 +61,29 @@ struct R_D3D11_Uniforms_Mesh
 ////////////////////////////////
 //~ rjf: Main State Types
 
+typedef struct R_D3D11_Tex2D R_D3D11_Tex2D;
 struct R_D3D11_Tex2D
 {
   R_D3D11_Tex2D *next;
   U64 generation;
   ID3D11Texture2D *texture;
   ID3D11ShaderResourceView *view;
-  R_Tex2DKind kind;
+  R_ResourceKind kind;
   Vec2S32 size;
   R_Tex2DFormat format;
 };
 
+typedef struct R_D3D11_Buffer R_D3D11_Buffer;
 struct R_D3D11_Buffer
 {
   R_D3D11_Buffer *next;
   U64 generation;
   ID3D11Buffer *buffer;
-  R_BufferKind kind;
+  R_ResourceKind kind;
   U64 size;
 };
 
+typedef struct R_D3D11_Window R_D3D11_Window;
 struct R_D3D11_Window
 {
   R_D3D11_Window *next;
@@ -100,12 +114,14 @@ struct R_D3D11_Window
   Vec2S32 last_resolution;
 };
 
+typedef struct R_D3D11_FlushBuffer R_D3D11_FlushBuffer;
 struct R_D3D11_FlushBuffer
 {
   R_D3D11_FlushBuffer *next;
   ID3D11Buffer *buffer;
 };
 
+typedef struct R_D3D11_State R_D3D11_State;
 struct R_D3D11_State
 {
   // rjf: state
@@ -127,6 +143,7 @@ struct R_D3D11_State
   IDXGIFactory2           *dxgi_factory;
   ID3D11RasterizerState1  *main_rasterizer;
   ID3D11BlendState        *main_blend_state;
+  ID3D11BlendState        *no_blend_state;
   ID3D11SamplerState      *samplers[R_Tex2DSampleKind_COUNT];
   ID3D11DepthStencilState *noop_depth_stencil;
   ID3D11DepthStencilState *plain_depth_stencil;
@@ -165,5 +182,6 @@ internal R_Handle r_d3d11_handle_from_tex2d(R_D3D11_Tex2D *texture);
 internal R_D3D11_Buffer *r_d3d11_buffer_from_handle(R_Handle handle);
 internal R_Handle r_d3d11_handle_from_buffer(R_D3D11_Buffer *buffer);
 internal ID3D11Buffer *r_d3d11_instance_buffer_from_size(U64 size);
+internal void r_usage_access_flags_from_resource_kind(R_ResourceKind kind, D3D11_USAGE *out_d3d11_usage, UINT *out_cpu_access_flags);
 
 #endif // RENDER_D3D11_H

@@ -23,6 +23,7 @@ struct TCTX
 // NOTE(allen): Thread Context Functions
 
 internal void      tctx_init_and_equip(TCTX *tctx);
+internal void      tctx_release(void);
 internal TCTX*     tctx_get_equipped(void);
 
 internal Arena*    tctx_get_scratch(Arena **conflicts, U64 count);
@@ -37,4 +38,4 @@ internal void      tctx_read_srcloc(char **file_name, U64 *line_number);
 #define scratch_begin(conflicts, count) temp_begin(tctx_get_scratch((conflicts), (count)))
 #define scratch_end(scratch) temp_end(scratch)
 
-#endif //BASE_THREAD_CONTEXT_H
+#endif // BASE_THREAD_CONTEXT_H

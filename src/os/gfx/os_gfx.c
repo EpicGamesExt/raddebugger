@@ -2,7 +2,34 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
+//~ rjf: Generated Code
+
+#include "generated/os_gfx.meta.c"
+
+////////////////////////////////
 //~ rjf: Event Functions (Helpers, Implemented Once)
+
+internal String8
+os_string_from_event_kind(OS_EventKind kind)
+{
+  String8 result = {0};
+  switch(kind)
+  {
+    case OS_EventKind_Null:
+    case OS_EventKind_COUNT:
+    {}break;
+    case OS_EventKind_Press:                {result = str8_lit("Press");}break;
+    case OS_EventKind_Release:              {result = str8_lit("Release");}break;
+    case OS_EventKind_MouseMove:            {result = str8_lit("MouseMove");}break;
+    case OS_EventKind_Text:                 {result = str8_lit("Text");}break;
+    case OS_EventKind_Scroll:               {result = str8_lit("Scroll");}break;
+    case OS_EventKind_WindowLoseFocus:      {result = str8_lit("WindowLoseFocus");}break;
+    case OS_EventKind_WindowClose:          {result = str8_lit("WindowClose");}break;
+    case OS_EventKind_FileDrop:             {result = str8_lit("FileDrop");}break;
+    case OS_EventKind_Wakeup:               {result = str8_lit("Wakeup");}break;
+  }
+  return result;
+}
 
 internal String8List
 os_string_list_from_event_flags(Arena *arena, OS_EventFlags flags)
@@ -188,4 +215,47 @@ os_text(OS_EventList *events, OS_Handle window, U32 character)
     }
   }
   return result;
+}
+
+internal OS_EventList
+os_event_list_copy(Arena *arena, OS_EventList *src)
+{
+  OS_EventList dst = {0};
+  for(OS_Event *s = src->first; s != 0; s = s->next)
+  {
+    OS_Event *d = push_array(arena, OS_Event, 1);
+    MemoryCopyStruct(d, s);
+    d->strings = str8_list_copy(arena, &s->strings);
+    DLLPushBack(dst.first, dst.last, d);
+    dst.count += 1;
+  }
+  return dst;
+}
+
+internal void
+os_event_list_concat_in_place(OS_EventList *dst, OS_EventList *to_push)
+{
+  if(dst->last && to_push->first)
+  {
+    dst->last->next = to_push->first;
+    to_push->first->prev = dst->last;
+    dst->last = to_push->last;
+    dst->count += to_push->count;
+  }
+  else if(!dst->last && to_push->first)
+  {
+    MemoryCopyStruct(dst, to_push);
+  }
+  MemoryZeroStruct(to_push);
+}
+
+internal OS_Event *
+os_event_list_push_new(Arena *arena, OS_EventList *evts, OS_EventKind kind)
+{
+  OS_Event *evt = push_array(arena, OS_Event, 1);
+  DLLPushBack(evts->first, evts->last, evt);
+  evts->count += 1;
+  evt->timestamp_us = os_now_microseconds();
+  evt->kind = kind;
+  return evt;
 }

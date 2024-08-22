@@ -1,13 +1,11 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-/* date = September 6th 2023 8:54 am */
-
 #ifndef PE_H
 #define PE_H
 
 ////////////////////////////////
-//~ rjf: PE Format Types
+//~ rjf: PE Format-Defined Types/Constants
 
 #pragma pack(push,1)
 
@@ -287,7 +285,7 @@ enum
   PE_GlobalFlags_HEAP_ENABLE_TAG_BY_DLL     = (1 << 15),
   PE_GlobalFlags_DISABLE_STACK_EXTENSION    = (1 << 16),
   PE_GlobalFlags_ENABLE_CSRDEBUG            = (1 << 17),
-  PE_GlobalFlags_ENABLE_KDEBUG_SYMBOL_LOAD 	= (1 << 18),
+  PE_GlobalFlags_ENABLE_KDEBUG_SYMBOL_LOAD  = (1 << 18),
   PE_GlobalFlags_DISABLE_PAGE_KERNEL_STACKS = (1 << 19),
   PE_GlobalFlags_ENABLE_SYSTEM_CRIT_BREAKS  = (1 << 20),
   PE_GlobalFlags_HEAP_DISABLE_COALESCING    = (1 << 21),
@@ -445,10 +443,272 @@ struct PE_TLSHeader64
   U32 characteristics;   // COFF_SectionFlags but only align flags are used.
 };
 
+#define PE_RES_ALIGN 4u
+
+global read_only U8 PE_RES_MAGIC[] =
+{
+  0x00, 0x00, 0x00, 0x00,
+  0x20, 0x00, 0x00, 0x00,
+  0xFF, 0xFF, 0x00, 0x00,
+  0xFF, 0xFF, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00
+};
+
+typedef U32 PE_ResourceKind;
+enum
+{
+  PE_ResourceKind_CURSOR       = 0x1,
+  PE_ResourceKind_BITMAP       = 0x2,
+  PE_ResourceKind_ICON         = 0x3,
+  PE_ResourceKind_MENU         = 0x4,
+  PE_ResourceKind_DIALOG       = 0x5,
+  PE_ResourceKind_STRING       = 0x6,
+  PE_ResourceKind_FONTDIR      = 0x7,
+  PE_ResourceKind_FONT         = 0x8,
+  PE_ResourceKind_ACCELERATOR  = 0x9,
+  PE_ResourceKind_RCDATA       = 0xA,
+  PE_ResourceKind_MESSAGETABLE = 0xB,
+  PE_ResourceKind_GROUP_CURSOR = 0xC,
+  PE_ResourceKind_GROUP_ICON   = 0xE,
+  PE_ResourceKind_VERSION      = 0x10,
+  PE_ResourceKind_DLGINCLUDE   = 0x11,
+  PE_ResourceKind_PLUGPLAY     = 0x13,
+  PE_ResourceKind_VXD          = 0x14,
+  PE_ResourceKind_ANICURSOR    = 0x15,
+  PE_ResourceKind_ANIICON      = 0x16,
+  PE_ResourceKind_HTML         = 0x17,
+  PE_ResourceKind_MANIFEST     = 0x18,
+  PE_ResourceKind_BITMAP_NEW   = 0x2002,
+  PE_ResourceKind_MENU_NEW     = 0x2004,
+  PE_ResourceKind_DIALOG_NEW   = 0x2005,
+};
+
+typedef enum PE_ResDataKind
+{
+  PE_ResDataKind_NULL,
+  PE_ResDataKind_DIR,
+  PE_ResDataKind_COFF_LEAF,
+  PE_ResDataKind_COFF_RESOURCE,
+}
+PE_ResDataKind;
+
+typedef struct PE_ResourceHeader PE_ResourceHeader;
+struct PE_ResourceHeader
+{
+  COFF_ResourceHeaderPrefix prefix;
+  U16 type;
+  U16 pad0;
+  U16 name;
+  U16 pad1;
+  U32 data_version;
+  COFF_ResourceMemoryFlags memory_flags;
+  U16 language_id;
+  U32 version;
+  U32 characteristics;
+};
+
+typedef U16 PE_BaseRelocKind;
+enum
+{
+  PE_BaseRelocKind_ABSOLUTE            = 0, // No reallocation is applied. Can be used as padding.
+  PE_BaseRelocKind_HIGH                = 1,
+  PE_BaseRelocKind_LOW                 = 2,
+  PE_BaseRelocKind_HIGHLOW             = 3,
+  PE_BaseRelocKind_HIGHADJ             = 4,
+  PE_BaseRelocKind_MIPS_JMPADDR        = 5,
+  PE_BaseRelocKind_ARM_MOV32           = 5,
+  PE_BaseRelocKind_RISCV_HIGH20        = 5,
+  // 6 is reserved
+  PE_BaseRelocKind_THUMB_MOV32         = 7,
+  PE_BaseRelocKind_RISCV_LOW12I        = 7,
+  PE_BaseRelocKind_RISCV_LOW12S        = 8,
+  PE_BaseRelocKind_LOONGARCH32_MARK_LA = 8,
+  PE_BaseRelocKind_LOONGARCH64_MARK_LA = 8,
+  PE_BaseRelocKind_MIPS_JMPADDR16      = 9,
+  PE_BaseRelocKind_DIR64               = 10,
+};
+#define PE_BaseRelocOffsetFromEntry(x) ((x) & 0x1fff)
+#define PE_BaseRelocKindFromEntry(x)   (((x) >> 12) & 0xf)
+#define PE_BaseRelocMake(k, off)       ((((U16)(k) & 0xf) << 12) | (U16)((off) & 0x1fff))
+
+typedef U32 PE_UnwindOpCode;
+enum
+{
+  PE_UnwindOpCode_PUSH_NONVOL      = 0,
+  PE_UnwindOpCode_ALLOC_LARGE      = 1,
+  PE_UnwindOpCode_ALLOC_SMALL      = 2,
+  PE_UnwindOpCode_SET_FPREG        = 3,
+  PE_UnwindOpCode_SAVE_NONVOL      = 4,
+  PE_UnwindOpCode_SAVE_NONVOL_FAR  = 5,
+  PE_UnwindOpCode_EPILOG           = 6,
+  PE_UnwindOpCode_SPARE_CODE       = 7,
+  PE_UnwindOpCode_SAVE_XMM128      = 8,
+  PE_UnwindOpCode_SAVE_XMM128_FAR  = 9,
+  PE_UnwindOpCode_PUSH_MACHFRAME   = 10,
+};
+
+typedef U8 PE_UnwindGprRegX64;
+enum
+{
+  PE_UnwindGprRegX64_RAX = 0,
+  PE_UnwindGprRegX64_RCX = 1,
+  PE_UnwindGprRegX64_RDX = 2,
+  PE_UnwindGprRegX64_RBX = 3,
+  PE_UnwindGprRegX64_RSP = 4,
+  PE_UnwindGprRegX64_RBP = 5,
+  PE_UnwindGprRegX64_RSI = 6,
+  PE_UnwindGprRegX64_RDI = 7,
+  PE_UnwindGprRegX64_R8  = 8,
+  PE_UnwindGprRegX64_R9  = 9,
+  PE_UnwindGprRegX64_R10 = 10,
+  PE_UnwindGprRegX64_R11 = 11,
+  PE_UnwindGprRegX64_R12 = 12,
+  PE_UnwindGprRegX64_R13 = 13,
+  PE_UnwindGprRegX64_R14 = 14,
+  PE_UnwindGprRegX64_R15 = 15,
+};
+
+typedef U8 PE_UnwindInfoFlags;
+enum
+{
+  PE_UnwindInfoFlag_EHANDLER = (1<<0),
+  PE_UnwindInfoFlag_UHANDLER = (1<<1),
+  PE_UnwindInfoFlag_FHANDLER = 3,
+  PE_UnwindInfoFlag_CHAINED  = (1<<2),
+};
+
+#define PE_UNWIND_OPCODE_FROM_FLAGS(f) ((f)&0xF)
+#define PE_UNWIND_INFO_FROM_FLAGS(f) (((f) >> 4)&0xF)
+
+typedef union PE_UnwindCode PE_UnwindCode;
+union PE_UnwindCode
+{
+  struct
+  {
+    U8 off_in_prolog;
+    U8 flags;
+  };
+  U16 u16;
+};
+
+#define PE_UNWIND_INFO_VERSION_FROM_HDR(x) ((x)&0x7)
+#define PE_UNWIND_INFO_FLAGS_FROM_HDR(x)   (((x) >> 3)&0x1F)
+#define PE_UNWIND_INFO_REG_FROM_FRAME(x)   ((x)&0xF)
+#define PE_UNWIND_INFO_OFF_FROM_FRAME(x)   (((x) >> 4)&0xF)
+
+typedef struct PE_UnwindInfo PE_UnwindInfo;
+struct PE_UnwindInfo
+{
+  U8 header;
+  U8 prolog_size;
+  U8 codes_num;
+  U8 frame;
+};
+
 #pragma pack(pop)
 
 ////////////////////////////////
+//~ rjf: DOS Program
+
+// generated from pe/dos_program.asm
+read_only global U8 pe_dos_program_data[] =
+{
+  0x0E, 0x1F, 0xBA, 0x0E, 0x00, 0xB4, 0x09, 0xCD, 0x21, 0xB8, 0x01, 0x4C, 0xCD, 0x21, 0x54, 0x68,
+  0x69, 0x73, 0x20, 0x70, 0x72, 0x6F, 0x67, 0x72, 0x61, 0x6D, 0x20, 0x63, 0x61, 0x6E, 0x6E, 0x6F,
+  0x74, 0x20, 0x62, 0x65, 0x20, 0x72, 0x75, 0x6E, 0x20, 0x69, 0x6E, 0x20, 0x44, 0x4F, 0x53, 0x20,
+  0x6D, 0x6F, 0x64, 0x65, 0x2E, 0x24, 0x00, 0x00
+};
+read_only global String8 pe_dos_program = {pe_dos_program_data, sizeof(pe_dos_program_data)};
+
+////////////////////////////////
 //~ rjf: Parsed Info Types
+
+//- rjf: relocation blocks
+
+typedef struct PE_BaseRelocBlock PE_BaseRelocBlock;
+struct PE_BaseRelocBlock
+{
+  U64 page_virt_off;
+  U64 entry_count;
+  U16 *entries;
+};
+
+typedef struct PE_BaseRelocBlockNode PE_BaseRelocBlockNode;
+struct PE_BaseRelocBlockNode
+{
+  PE_BaseRelocBlockNode *next;
+  PE_BaseRelocBlock v;
+};
+
+typedef struct PE_BaseRelocBlockList PE_BaseRelocBlockList;
+struct PE_BaseRelocBlockList
+{
+  PE_BaseRelocBlockNode *first;
+  PE_BaseRelocBlockNode *last;
+  U64 count;
+};
+
+//- rjf: resources
+
+typedef struct PE_Resource PE_Resource;
+struct PE_Resource
+{
+  COFF_ResourceID id;
+  PE_ResDataKind kind;
+  union
+  {
+    COFF_ResourceDataEntry leaf;
+    struct PE_ResourceDir *dir;
+    struct
+    {
+      COFF_ResourceID type;
+      U32 data_version;
+      U32 version;
+      COFF_ResourceMemoryFlags memory_flags;
+      String8 data; 
+    }
+    coff_res;
+  }
+  u;
+};
+
+typedef struct PE_ResourceNode PE_ResourceNode;
+struct PE_ResourceNode
+{
+  PE_ResourceNode *next;
+  PE_Resource data;
+};
+
+typedef struct PE_ResourceList PE_ResourceList;
+struct PE_ResourceList
+{
+  PE_ResourceNode *first;
+  PE_ResourceNode *last;
+  U64 count;
+};
+
+typedef struct PE_ResourceArray PE_ResourceArray;
+struct PE_ResourceArray
+{
+  PE_Resource *v;
+  U64 count;
+};
+
+typedef struct PE_ResourceDir PE_ResourceDir;
+struct PE_ResourceDir
+{
+  U32 characteristics;
+  COFF_TimeStamp time_stamp;
+  U16 major_version;
+  U16 minor_version;
+  PE_ResourceList named_list;
+  PE_ResourceList id_list;
+};
+
+//- rjf: bundle
 
 typedef struct PE_BinInfo PE_BinInfo;
 struct PE_BinInfo
@@ -475,161 +735,10 @@ struct PE_BinInfo
 };
 
 ////////////////////////////////
-//~ rjf: Parsed Info Extraction Helper Types
+//~ rjf: Basic Enum Functions
 
-typedef U16 PE_BaseRelocKind;
-enum
-{
-  PE_BaseRelocKind_ABSOLUTE            = 0, // No reallocation is applied. Can be used as padding.
-  PE_BaseRelocKind_HIGH                = 1,
-  PE_BaseRelocKind_LOW                 = 2,
-  PE_BaseRelocKind_HIGHLOW             = 3,
-  PE_BaseRelocKind_HIGHADJ             = 4,
-  PE_BaseRelocKind_MIPS_JMPADDR        = 5,
-  PE_BaseRelocKind_ARM_MOV32           = 5,
-  PE_BaseRelocKind_RISCV_HIGH20        = 5,
-  // 6 is reserved
-  PE_BaseRelocKind_THUMB_MOV32         = 7,
-  PE_BaseRelocKind_RISCV_LOW12I        = 7,
-  PE_BaseRelocKind_RISCV_LOW12S        = 8,
-  PE_BaseRelocKind_LOONGARCH32_MARK_LA = 8,
-  PE_BaseRelocKind_LOONGARCH64_MARK_LA = 8,
-  PE_BaseRelocKind_MIPS_JMPADDR16      = 9,
-  PE_BaseRelocKind_DIR64               = 10,
-};
-#define PE_BaseRelocOffsetFromEntry(x) ((x) & 0x1fff)
-#define PE_BaseRelocKindFromEntry(x)   (((x) >> 12) & 0xf)
-#define PE_BaseRelocMake(k, off)       ((((U16)(k) & 0xf) << 12) | (U16)((off) & 0x1fff))
-
-typedef struct PE_BaseRelocBlock PE_BaseRelocBlock;
-struct PE_BaseRelocBlock
-{
-  U64 page_virt_off;
-  U64 entry_count;
-  U16 *entries;
-};
-
-typedef struct PE_BaseRelocBlockNode PE_BaseRelocBlockNode;
-struct PE_BaseRelocBlockNode
-{
-  PE_BaseRelocBlockNode *next;
-  PE_BaseRelocBlock v;
-};
-
-typedef struct PE_BaseRelocBlockList PE_BaseRelocBlockList;
-struct PE_BaseRelocBlockList
-{
-  PE_BaseRelocBlockNode *first;
-  PE_BaseRelocBlockNode *last;
-  U64 count;
-};
-
-////////////////////////////////
-//~ Resources
-
-#define PE_RES_ALIGN 4u
-
-read_only U8 PE_RES_MAGIC[] = { 0x00, 0x00, 0x00, 0x00, 0x20, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0xFF, 0xFF, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
-
-enum
-{
-  PE_Resource_CURSOR       = 0x1,
-  PE_Resource_BITMAP       = 0x2,
-  PE_Resource_ICON         = 0x3,
-  PE_Resource_MENU         = 0x4,
-  PE_Resource_DIALOG       = 0x5,
-  PE_Resource_STRING       = 0x6,
-  PE_Resource_FONTDIR      = 0x7,
-  PE_Resource_FONT         = 0x8,
-  PE_Resource_ACCELERATOR  = 0x9,
-  PE_Resource_RCDATA       = 0xA,
-  PE_Resource_MESSAGETABLE = 0xB,
-  PE_Resource_GROUP_CURSOR = 0xC,
-  PE_Resource_GROUP_ICON   = 0xE,
-  PE_Resource_VERSION      = 0x10,
-  PE_Resource_DLGINCLUDE   = 0x11,
-  PE_Resource_PLUGPLAY     = 0x13,
-  PE_Resource_VXD          = 0x14,
-  PE_Resource_ANICURSOR    = 0x15,
-  PE_Resource_ANIICON      = 0x16,
-  PE_Resource_HTML         = 0x17,
-  PE_Resource_MANIFEST     = 0x18,
-  PE_Resource_BITMAP_NEW   = 0x2002,
-  PE_Resource_MENU_NEW     = 0x2004,
-  PE_Resource_DIALOG_NEW   = 0x2005,
-};
-typedef U32 PE_ResourceType;
-
-#pragma pack(push, 1)
-typedef struct PE_ResourceHeader
-{
-  COFF_ResourceHeaderPrefix prefix;
-  U16 type;
-  U16 pad0;
-  U16 name;
-  U16 pad1;
-  U32 data_version;
-  COFF_ResourceMemoryFlags memory_flags;
-  U16 language_id;
-  U32 version;
-  U32 characteristics;
-} PE_ResourceHeader;
-#pragma pack(pop)
-
-typedef enum
-{
-  PE_ResData_NULL,
-  PE_ResData_DIR,
-  PE_ResData_COFF_LEAF,
-  PE_ResData_COFF_RESOURCE,
-} PE_ResDataType;
-
-typedef struct PE_Resource
-{
-  COFF_ResourceID id;
-  PE_ResDataType type;
-  union {
-    COFF_ResourceDataEntry leaf;
-    struct PE_ResourceDir *dir;
-    struct {
-      COFF_ResourceID type;
-      U32 data_version;
-      U32 version;
-      COFF_ResourceMemoryFlags memory_flags;
-      String8 data; 
-    } coff_res;
-  } u;
-} PE_Resource;
-
-typedef struct PE_ResourceNode
-{
-  struct PE_ResourceNode *next;
-  PE_Resource data;
-} PE_ResourceNode;
-
-typedef struct PE_ResourceList
-{
-  U64 count;
-  PE_ResourceNode *first;
-  PE_ResourceNode *last;
-} PE_ResourceList;
-
-typedef struct PE_ResourceArray
-{
-  U64 count;
-  PE_Resource *v;
-} PE_ResourceArray;
-
-typedef struct PE_ResourceDir
-{
-  U32 characteristics;
-  COFF_TimeStamp time_stamp;
-  U16 major_version;
-  U16 minor_version;
-  PE_ResourceList named_list;
-  PE_ResourceList id_list;
-} PE_ResourceDir;
+internal U32 pe_slot_count_from_unwind_op_code(PE_UnwindOpCode opcode);
+internal String8 pe_string_from_windows_subsystem(PE_WindowsSubsystem subsystem);
 
 ////////////////////////////////
 //~ rjf: Parser Functions
@@ -661,12 +770,4 @@ internal PE_Resource *     pe_resource_dir_search(PE_ResourceDir *dir, COFF_Reso
 internal PE_ResourceArray  pe_resource_list_to_array(Arena *arena, PE_ResourceList *list);
 internal PE_ResourceDir *  pe_resource_table_from_directory_data(Arena *arena, String8 data);
 
-////////////////////////////////
-
-internal String8 pe_get_dos_program(void);
-
-////////////////////////////////
-
-internal String8 pe_string_from_subsystem(PE_WindowsSubsystem subsystem);
-
-#endif //PE_H
+#endif // PE_H

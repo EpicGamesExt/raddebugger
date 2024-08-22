@@ -151,6 +151,7 @@ typedef struct R_PassParams_Blur R_PassParams_Blur;
 struct R_PassParams_Blur
 {
   Rng2F32 rect;
+  Rng2F32 clip;
   F32 blur_size;
   F32 corner_radii[Corner_COUNT];
 };
@@ -194,61 +195,6 @@ struct R_PassList
 };
 
 ////////////////////////////////
-//~ rjf: 2D Rendering Types
-
-typedef enum R2_CmdKind
-{
-  R2_CmdKind_Null,
-  R2_CmdKind_Rects,
-  R2_CmdKind_COUNT
-}
-R2_CmdKind;
-
-typedef struct R2_CmdInst_Rect R2_CmdInst_Rect;
-struct R2_CmdInst_Rect
-{
-  Rng2F32 dst;
-  Rng2F32 src;
-  Vec4F32 colors[Corner_COUNT];
-  F32 corner_radii[Corner_COUNT];
-  F32 border_thickness;
-  F32 edge_softness;
-  F32 white_texture_override;
-  F32 _unused_[1];
-};
-
-typedef struct R2_Cmd R2_Cmd;
-struct R2_Cmd
-{
-  R2_CmdKind kind;
-  R_Handle texture;
-  Rng2F32 clip;
-  Vec2F32 translate;
-  F32 transparency;
-  U64 count;
-  union
-  {
-    void *data;
-    R2_CmdInst_Rect *data__rect;
-  };
-};
-
-typedef struct R2_CmdNode R2_CmdNode;
-struct R2_CmdNode
-{
-  R2_CmdNode *next;
-  R2_Cmd cmd;
-};
-
-typedef struct R2_CmdList R2_CmdList;
-struct R2_CmdList
-{
-  R2_CmdNode *first;
-  R2_CmdNode *last;
-  U64 count;
-};
-
-////////////////////////////////
 //~ rjf: Handle Type Functions
 
 internal R_Handle r_handle_zero(void);
@@ -276,15 +222,15 @@ r_hook R_Handle          r_window_equip(OS_Handle window);
 r_hook void              r_window_unequip(OS_Handle window, R_Handle window_equip);
 
 //- rjf: textures
-r_hook R_Handle          r_tex2d_alloc(R_Tex2DKind kind, Vec2S32 size, R_Tex2DFormat format, void *data);
+r_hook R_Handle          r_tex2d_alloc(R_ResourceKind kind, Vec2S32 size, R_Tex2DFormat format, void *data);
 r_hook void              r_tex2d_release(R_Handle texture);
-r_hook R_Tex2DKind       r_kind_from_tex2d(R_Handle texture);
+r_hook R_ResourceKind    r_kind_from_tex2d(R_Handle texture);
 r_hook Vec2S32           r_size_from_tex2d(R_Handle texture);
 r_hook R_Tex2DFormat     r_format_from_tex2d(R_Handle texture);
 r_hook void              r_fill_tex2d_region(R_Handle texture, Rng2S32 subrect, void *data);
 
 //- rjf: buffers
-r_hook R_Handle          r_buffer_alloc(R_BufferKind kind, U64 size, void *data);
+r_hook R_Handle          r_buffer_alloc(R_ResourceKind kind, U64 size, void *data);
 r_hook void              r_buffer_release(R_Handle buffer);
 
 //- rjf: frame markers

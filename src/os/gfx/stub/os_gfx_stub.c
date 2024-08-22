@@ -2,8 +2,18 @@
 //~ rjf: @os_hooks Main Initialization API (Implemented Per-OS)
 
 internal void
-os_graphical_init(void)
+os_gfx_init(void)
 {
+}
+
+////////////////////////////////
+//~ rjf: @os_hooks Graphics System Info (Implemented Per-OS)
+
+internal OS_GfxInfo *
+os_get_gfx_info(void)
+{
+  local_persist OS_GfxInfo g = {0};
+  return &g;
 }
 
 ////////////////////////////////
@@ -24,7 +34,7 @@ os_get_clipboard_text(Arena *arena)
 //~ rjf: @os_hooks Windows (Implemented Per-OS)
 
 internal OS_Handle
-os_window_open(Vec2F32 resolution, String8 title)
+os_window_open(Vec2F32 resolution, OS_WindowFlags flags, String8 title)
 {
   OS_Handle handle = {1};
   return handle;
@@ -79,12 +89,37 @@ os_window_set_maximized(OS_Handle window, B32 maximized)
 }
 
 internal void
+os_window_minimize(OS_Handle window)
+{
+}
+
+internal void
 os_window_bring_to_front(OS_Handle window)
 {
 }
 
 internal void
 os_window_set_monitor(OS_Handle window, OS_Handle monitor)
+{
+}
+
+internal void
+os_window_clear_custom_border_data(OS_Handle handle)
+{
+}
+
+internal void
+os_window_push_custom_title_bar(OS_Handle handle, F32 thickness)
+{
+}
+
+internal void
+os_window_push_custom_edges(OS_Handle handle, F32 thickness)
+{
+}
+
+internal void
+os_window_push_custom_title_bar_client_area(OS_Handle handle, Rng2F32 rect)
 {
 }
 
@@ -167,12 +202,6 @@ os_get_event_flags(void)
   return f;
 }
 
-internal B32
-os_key_is_down(OS_Key key)
-{
-  return 0;
-}
-
 internal Vec2F32
 os_mouse_from_window(OS_Handle window)
 {
@@ -188,36 +217,17 @@ os_set_cursor(OS_Cursor cursor)
 }
 
 ////////////////////////////////
-//~ rjf: @os_hooks System Properties (Implemented Per-OS)
-
-internal F32
-os_double_click_time(void)
-{
-  return 1.f;
-}
-
-internal F32
-os_caret_blink_time(void)
-{
-  return 1.f;
-}
-
-internal F32
-os_default_refresh_rate(void)
-{
-  return 60.f;
-}
-
-internal B32
-os_granular_sleep_enabled(void)
-{
-  return 1;
-}
-
-////////////////////////////////
-//~ rjf: @os_hooks Native Messages & Panics (Implemented Per-OS)
+//~ rjf: @os_hooks Native User-Facing Graphical Messages (Implemented Per-OS)
 
 internal void
 os_graphical_message(B32 error, String8 title, String8 message)
+{
+}
+
+////////////////////////////////
+//~ rjf: @os_hooks Shell Operations
+
+internal void
+os_show_in_filesystem_ui(String8 path)
 {
 }

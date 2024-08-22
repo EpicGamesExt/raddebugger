@@ -7,10 +7,11 @@
 ////////////////////////////////
 //~ rjf: Rasterization Flags
 
-typedef U32 F_RunFlags;
+typedef U32 F_RasterFlags;
 enum
 {
-  F_RunFlag_Smooth = (1<<0),
+  F_RasterFlag_Smooth = (1<<0),
+  F_RasterFlag_Hinted = (1<<1),
 };
 
 ////////////////////////////////
@@ -102,6 +103,7 @@ typedef struct F_RasterCacheInfo F_RasterCacheInfo;
 struct F_RasterCacheInfo
 {
   Rng2S16 subrect;
+  Vec2S16 raster_dim;
   S16 atlas_num;
   F32 advance;
 };
@@ -130,6 +132,7 @@ struct F_Hash2StyleRasterCacheNode
   U64 style_hash;
   F32 ascent;
   F32 descent;
+  F32 column_width;
   F_RasterCacheInfo *utf8_class1_direct_map;
   U64 utf8_class1_direct_map_mask[4];
   U64 hash2info_slots_count;
@@ -240,16 +243,18 @@ internal void f_atlas_region_release(F_Atlas *atlas, Rng2S16 region);
 internal F_Piece *f_piece_chunk_list_push_new(Arena *arena, F_PieceChunkList *list, U64 cap);
 internal void f_piece_chunk_list_push(Arena *arena, F_PieceChunkList *list, U64 cap, F_Piece *piece);
 internal F_PieceArray f_piece_array_from_chunk_list(Arena *arena, F_PieceChunkList *list);
+internal F_PieceArray f_piece_array_copy(Arena *arena, F_PieceArray *src);
 
 ////////////////////////////////
 //~ rjf: Rasterization Cache
 
-internal F_Hash2StyleRasterCacheNode *f_hash2style_from_tag_size(F_Tag tag, F32 size);
-internal F_Run f_push_run_from_string(Arena *arena, F_Tag tag, F32 size, F_RunFlags flags, String8 string);
-internal String8List f_wrapped_string_lines_from_font_size_string_max(Arena *arena, F_Tag font, F32 size, String8 string, F32 max);
-internal Vec2F32 f_dim_from_tag_size_string(F_Tag tag, F32 size, String8 string);
-internal Vec2F32 f_dim_from_tag_size_string_list(F_Tag tag, F32 size, String8List list);
-internal U64 f_char_pos_from_tag_size_string_p(F_Tag tag, F32 size, String8 string, F32 p);
+internal F_Hash2StyleRasterCacheNode *f_hash2style_from_tag_size_flags(F_Tag tag, F32 size, F_RasterFlags flags);
+internal F_Run f_push_run_from_string(Arena *arena, F_Tag tag, F32 size, F32 base_align_px, F32 tab_size_px, F_RasterFlags flags, String8 string);
+internal String8List f_wrapped_string_lines_from_font_size_string_max(Arena *arena, F_Tag font, F32 size, F32 base_align_px, F32 tab_size_px, String8 string, F32 max);
+internal Vec2F32 f_dim_from_tag_size_string(F_Tag tag, F32 size, F32 base_align_px, F32 tab_size_px, String8 string);
+internal Vec2F32 f_dim_from_tag_size_string_list(F_Tag tag, F32 size, F32 base_align_px, F32 tab_size_px, String8List list);
+internal F32 f_column_size_from_tag_size(F_Tag tag, F32 size);
+internal U64 f_char_pos_from_tag_size_string_p(F_Tag tag, F32 size, F32 base_align_px, F32 tab_size_px, String8 string, F32 p);
 
 ////////////////////////////////
 //~ rjf: Metrics

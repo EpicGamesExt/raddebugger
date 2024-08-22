@@ -11,7 +11,7 @@ geo_init(void)
   geo_shared = push_array(arena, GEO_Shared, 1);
   geo_shared->arena = arena;
   geo_shared->slots_count = 1024;
-  geo_shared->stripes_count = 64;
+  geo_shared->stripes_count = Min(geo_shared->slots_count, os_get_system_info()->logical_processor_count);
   geo_shared->slots = push_array(arena, GEO_Slot, geo_shared->slots_count);
   geo_shared->stripes = push_array(arena, GEO_Stripe, geo_shared->stripes_count);
   geo_shared->stripes_free_nodes = push_array(arena, GEO_Node *, geo_shared->stripes_count);
@@ -21,27 +21,17 @@ geo_init(void)
     geo_shared->stripes[idx].rw_mutex = os_rw_mutex_alloc();
     geo_shared->stripes[idx].cv = os_condition_variable_alloc();
   }
-  geo_shared->fallback_slots_count = 1024;
-  geo_shared->fallback_stripes_count = 64;
-  geo_shared->fallback_slots = push_array(arena, GEO_KeyFallbackSlot, geo_shared->fallback_slots_count);
-  geo_shared->fallback_stripes = push_array(arena, GEO_Stripe, geo_shared->fallback_stripes_count);
-  for(U64 idx = 0; idx < geo_shared->fallback_stripes_count; idx += 1)
-  {
-    geo_shared->fallback_stripes[idx].arena = arena_alloc();
-    geo_shared->fallback_stripes[idx].rw_mutex = os_rw_mutex_alloc();
-    geo_shared->fallback_stripes[idx].cv = os_condition_variable_alloc();
-  }
   geo_shared->u2x_ring_size = KB(64);
   geo_shared->u2x_ring_base = push_array_no_zero(arena, U8, geo_shared->u2x_ring_size);
   geo_shared->u2x_ring_cv = os_condition_variable_alloc();
   geo_shared->u2x_ring_mutex = os_mutex_alloc();
-  geo_shared->xfer_thread_count = Min(4, os_logical_core_count()-1);
+  geo_shared->xfer_thread_count = Clamp(1, os_get_system_info()->logical_processor_count-1, 4);
   geo_shared->xfer_threads = push_array(arena, OS_Handle, geo_shared->xfer_thread_count);
   for(U64 idx = 0; idx < geo_shared->xfer_thread_count; idx += 1)
   {
-    geo_shared->xfer_threads[idx] = os_launch_thread(geo_xfer_thread__entry_point, (void *)idx, 0);
+    geo_shared->xfer_threads[idx] = os_thread_launch(geo_xfer_thread__entry_point, (void *)idx, 0);
   }
-  geo_shared->evictor_thread = os_launch_thread(geo_evictor_thread__entry_point, 0, 0);
+  geo_shared->evictor_thread = os_thread_launch(geo_evictor_thread__entry_point, 0, 0);
 }
 
 ////////////////////////////////
@@ -144,7 +134,7 @@ geo_scope_touch_node__stripe_r_guarded(GEO_Scope *scope, GEO_Node *node)
 //~ rjf: Cache Lookups
 
 internal R_Handle
-geo_buffer_from_key_hash(GEO_Scope *scope, U128 key, U128 hash)
+geo_buffer_from_hash(GEO_Scope *scope, U128 hash)
 {
   R_Handle handle = {0};
   if(!u128_match(hash, u128_zero()))
@@ -201,42 +191,23 @@ geo_buffer_from_key_hash(GEO_Scope *scope, U128 key, U128 hash)
     }
     if(node_is_new)
     {
-      geo_u2x_enqueue_req(key, hash, max_U64);
+      geo_u2x_enqueue_req(hash, max_U64);
     }
-    if(r_handle_match(handle, r_handle_zero()))
+  }
+  return handle;
+}
+
+internal R_Handle
+geo_buffer_from_key(GEO_Scope *scope, U128 key)
+{
+  R_Handle handle = {0};
+  for(U64 rewind_idx = 0; rewind_idx < 2; rewind_idx += 1)
+  {
+    U128 hash = hs_hash_from_key(key, rewind_idx);
+    handle = geo_buffer_from_hash(scope, hash);
+    if(!r_handle_match(handle, r_handle_zero()))
     {
-      U128 fallback_hash = {0};
-      U64 fallback_slot_idx = key.u64[1]%geo_shared->fallback_slots_count;
-      U64 fallback_stripe_idx = fallback_slot_idx%geo_shared->fallback_stripes_count;
-      GEO_KeyFallbackSlot *fallback_slot = &geo_shared->fallback_slots[fallback_slot_idx];
-      GEO_Stripe *fallback_stripe = &geo_shared->fallback_stripes[fallback_stripe_idx];
-      OS_MutexScopeR(fallback_stripe->rw_mutex) for(GEO_KeyFallbackNode *n = fallback_slot->first; n != 0; n = n->next)
-      {
-        if(u128_match(key, n->key))
-        {
-          fallback_hash = n->hash;
-          break;
-        }
-      }
-      if(!u128_match(fallback_hash, u128_zero()))
-      {
-        U64 retry_slot_idx = fallback_hash.u64[1]%geo_shared->slots_count;
-        U64 retry_stripe_idx = retry_slot_idx%geo_shared->stripes_count;
-        GEO_Slot *retry_slot = &geo_shared->slots[retry_slot_idx];
-        GEO_Stripe *retry_stripe = &geo_shared->stripes[retry_stripe_idx];
-        OS_MutexScopeR(retry_stripe->rw_mutex)
-        {
-          for(GEO_Node *n = retry_slot->first; n != 0; n = n->next)
-          {
-            if(u128_match(fallback_hash, n->hash))
-            {
-              handle = n->buffer;
-              geo_scope_touch_node__stripe_r_guarded(scope, n);
-              break;
-            }
-          }
-        }
-      }
+      break;
     }
   }
   return handle;
@@ -246,17 +217,16 @@ geo_buffer_from_key_hash(GEO_Scope *scope, U128 key, U128 hash)
 //~ rjf: Transfer Threads
 
 internal B32
-geo_u2x_enqueue_req(U128 key, U128 hash, U64 endt_us)
+geo_u2x_enqueue_req(U128 hash, U64 endt_us)
 {
   B32 good = 0;
   OS_MutexScope(geo_shared->u2x_ring_mutex) for(;;)
   {
     U64 unconsumed_size = geo_shared->u2x_ring_write_pos-geo_shared->u2x_ring_read_pos;
     U64 available_size = geo_shared->u2x_ring_size-unconsumed_size;
-    if(available_size >= sizeof(key)+sizeof(hash))
+    if(available_size >= sizeof(hash))
     {
       good = 1;
-      geo_shared->u2x_ring_write_pos += ring_write_struct(geo_shared->u2x_ring_base, geo_shared->u2x_ring_size, geo_shared->u2x_ring_write_pos, &key);
       geo_shared->u2x_ring_write_pos += ring_write_struct(geo_shared->u2x_ring_base, geo_shared->u2x_ring_size, geo_shared->u2x_ring_write_pos, &hash);
       break;
     }
@@ -274,14 +244,13 @@ geo_u2x_enqueue_req(U128 key, U128 hash, U64 endt_us)
 }
 
 internal void
-geo_u2x_dequeue_req(U128 *key_out, U128 *hash_out)
+geo_u2x_dequeue_req(U128 *hash_out)
 {
   OS_MutexScope(geo_shared->u2x_ring_mutex) for(;;)
   {
     U64 unconsumed_size = geo_shared->u2x_ring_write_pos-geo_shared->u2x_ring_read_pos;
-    if(unconsumed_size >= sizeof(*key_out)+sizeof(*hash_out))
+    if(unconsumed_size >= sizeof(*hash_out))
     {
-      geo_shared->u2x_ring_read_pos += ring_read_struct(geo_shared->u2x_ring_base, geo_shared->u2x_ring_size, geo_shared->u2x_ring_read_pos, key_out);
       geo_shared->u2x_ring_read_pos += ring_read_struct(geo_shared->u2x_ring_base, geo_shared->u2x_ring_size, geo_shared->u2x_ring_read_pos, hash_out);
       break;
     }
@@ -293,16 +262,13 @@ geo_u2x_dequeue_req(U128 *key_out, U128 *hash_out)
 internal void
 geo_xfer_thread__entry_point(void *p)
 {
-  TCTX tctx_ = {0};
-  tctx_init_and_equip(&tctx_);
   for(;;)
   {
     HS_Scope *scope = hs_scope_open();
     
     //- rjf: decode
-    U128 key = {0};
     U128 hash = {0};
-    geo_u2x_dequeue_req(&key, &hash);
+    geo_u2x_dequeue_req(&hash);
     
     //- rjf: unpack hash
     U64 slot_idx = hash.u64[1]%geo_shared->slots_count;
@@ -335,7 +301,7 @@ geo_xfer_thread__entry_point(void *p)
     R_Handle buffer = {0};
     if(got_task && data.size != 0)
     {
-      buffer = r_buffer_alloc(R_BufferKind_Static, data.size, data.str);
+      buffer = r_buffer_alloc(R_ResourceKind_Static, data.size, data.str);
     }
     
     //- rjf: commit results to cache
@@ -350,34 +316,6 @@ geo_xfer_thread__entry_point(void *p)
           ins_atomic_u64_inc_eval(&n->load_count);
           break;
         }
-      }
-    }
-    
-    //- rjf: commit this key/hash pair to fallback cache
-    if(got_task && !u128_match(key, u128_zero()) && !u128_match(hash, u128_zero()))
-    {
-      U64 fallback_slot_idx = key.u64[1]%geo_shared->fallback_slots_count;
-      U64 fallback_stripe_idx = fallback_slot_idx%geo_shared->fallback_stripes_count;
-      GEO_KeyFallbackSlot *fallback_slot = &geo_shared->fallback_slots[fallback_slot_idx];
-      GEO_Stripe *fallback_stripe = &geo_shared->fallback_stripes[fallback_stripe_idx];
-      OS_MutexScopeW(fallback_stripe->rw_mutex)
-      {
-        GEO_KeyFallbackNode *node = 0;
-        for(GEO_KeyFallbackNode *n = fallback_slot->first; n != 0; n = n->next)
-        {
-          if(u128_match(n->key, key))
-          {
-            node = n;
-            break;
-          }
-        }
-        if(node == 0)
-        {
-          node = push_array(fallback_stripe->arena, GEO_KeyFallbackNode, 1);
-          SLLQueuePush(fallback_slot->first, fallback_slot->last, node);
-        }
-        node->key = key;
-        node->hash = hash;
       }
     }
     
