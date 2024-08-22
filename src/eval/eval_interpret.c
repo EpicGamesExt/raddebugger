@@ -28,18 +28,29 @@ e_space_read(E_Space space, void *out, Rng1U64 range)
   {
     case E_Space_FIXED_COUNT:
     case E_Space_Null:{}break;
-    case E_Space_Regs:
-    {
-      Rng1U64 legal_range = r1u64(0, e_interpret_ctx->reg_size);
-      Rng1U64 read_range = intersect_1u64(legal_range, range);
-      U64 read_size = dim_1u64(read_range);
-      MemoryCopy(out, (U8 *)e_interpret_ctx->reg_data + read_range.min, read_size);
-      result = (read_size == dim_1u64(range));
-    }break;
     default:
     if(e_interpret_ctx->space_read != 0)
     {
-      result = e_interpret_ctx->space_read(e_interpret_ctx->space_read_user_data, space, out, range);
+      result = e_interpret_ctx->space_read(e_interpret_ctx->space_rw_user_data, space, out, range);
+    }break;
+  }
+  ProfEnd();
+  return result;
+}
+
+internal B32
+e_space_write(E_Space space, void *in, Rng1U64 range)
+{
+  ProfBeginFunction();
+  B32 result = 0;
+  switch(space)
+  {
+    case E_Space_FIXED_COUNT:
+    case E_Space_Null:{}break;
+    default:
+    if(e_interpret_ctx->space_write != 0)
+    {
+      result = e_interpret_ctx->space_write(e_interpret_ctx->space_rw_user_data, space, in, range);
     }break;
   }
   ProfEnd();
@@ -173,11 +184,8 @@ e_interpret(String8 bytecode)
         REGS_Rng rng = regs_reg_code_rng_table_from_architecture(e_interpret_ctx->reg_arch)[base_reg_code];
         U64 off = (U64)rng.byte_off + byte_off;
         U64 size = (U64)byte_size;
-        if(off + size <= e_interpret_ctx->reg_size)
-        {
-          MemoryCopy(&nval, (U8*)e_interpret_ctx->reg_data + off, size);
-        }
-        else
+        B32 good_read = e_space_read(e_interpret_ctx->reg_space, &nval, r1u64(off, off+size));
+        if(!good_read)
         {
           result.code = E_InterpretationCode_BadRegRead;
           goto done;
@@ -188,11 +196,8 @@ e_interpret(String8 bytecode)
       {
         U64 off  = svals[0].u64;
         U64 size = bit_size_from_arch(e_interpret_ctx->reg_arch)/8;
-        if(off + size <= e_interpret_ctx->reg_size)
-        {
-          MemoryCopy(&nval, (U8*)e_interpret_ctx->reg_data + off, size);
-        }
-        else
+        B32 good_read = e_space_read(e_interpret_ctx->reg_space, &nval, r1u64(off, off+size));
+        if(!good_read)
         {
           result.code = E_InterpretationCode_BadRegRead;
           goto done;

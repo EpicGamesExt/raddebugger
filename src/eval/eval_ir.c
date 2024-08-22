@@ -363,10 +363,12 @@ e_irtree_resolve_to_value(Arena *arena, E_Space from_space, E_Mode from_mode, E_
   {
     switch(from_space)
     {
+#if 0
       case E_Space_Regs:
       {
         result = e_irtree_unary_op(arena, RDI_EvalOp_RegReadDyn, RDI_EvalTypeGroup_U, tree);
       }break;
+#endif
       default:
       {
         result = e_irtree_mem_read_type(arena, from_space, tree, type_key);
@@ -679,11 +681,6 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
       }
       else if(e_type_key_match(e_type_key_zero(), r_type_unwrapped))
       {
-        break;
-      }
-      else if(r_tree.mode != E_Mode_Offset || r_tree.space <= E_Space_Regs)
-      {
-        e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, r_expr->location, "Cannot take address of non-memory.");
         break;
       }
       

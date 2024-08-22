@@ -45,7 +45,6 @@ e_autoresolved_eval_from_eval(E_Eval eval)
      e_interpret_ctx &&
      e_parse_ctx->modules_count > 0 &&
      e_interpret_ctx->module_base != 0 &&
-     (eval.mode == E_Mode_Value || eval.space == E_Space_Regs) &&
      (e_type_key_match(eval.type_key, e_type_key_basic(E_TypeKind_S64)) ||
       e_type_key_match(eval.type_key, e_type_key_basic(E_TypeKind_U64)) ||
       e_type_key_match(eval.type_key, e_type_key_basic(E_TypeKind_S32)) ||
@@ -152,7 +151,7 @@ e_value_eval_from_eval(E_Eval eval)
     {
       eval.mode = E_Mode_Value;
     }
-    else if(e_interpret_ctx->space_read != 0)
+    else
     {
       U64 type_byte_size = e_type_byte_size_from_key(type_key);
       Rng1U64 value_vaddr_range = r1u64(eval.value.u64, eval.value.u64 + type_byte_size);

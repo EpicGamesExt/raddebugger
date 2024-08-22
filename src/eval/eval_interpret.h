@@ -29,17 +29,18 @@ struct E_Interpretation
 ////////////////////////////////
 //~ rjf: Interpretation Context
 
-typedef B32 E_SpaceReadFunction(void *user_data, E_Space space, void *out, Rng1U64 offset_range);
+typedef B32 E_SpaceRWFunction(void *user_data, E_Space space, void *out, Rng1U64 offset_range);
 
 typedef struct E_InterpretCtx E_InterpretCtx;
 struct E_InterpretCtx
 {
-  void *space_read_user_data;
-  E_SpaceReadFunction *space_read;
+  void *space_rw_user_data;
+  E_SpaceRWFunction *space_read;
+  E_SpaceRWFunction *space_write;
   E_Space primary_space;
   Architecture reg_arch;
-  void *reg_data;
-  U64 reg_size;
+  E_Space reg_space;
+  U64 reg_unwind_count;
   U64 *module_base;
   U64 *frame_base;
   U64 *tls_base;
@@ -60,6 +61,7 @@ internal void e_select_interpret_ctx(E_InterpretCtx *ctx);
 //~ rjf: Space Reading Helpers
 
 internal B32 e_space_read(E_Space space, void *out, Rng1U64 range);
+internal B32 e_space_write(E_Space space, void *in, Rng1U64 range);
 
 ////////////////////////////////
 //~ rjf: Interpretation Functions

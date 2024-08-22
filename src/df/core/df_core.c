@@ -3736,6 +3736,7 @@ df_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
   DF_Entity *entity = (DF_Entity *)space;
   switch(entity->kind)
   {
+    //- rjf: default -> evaluating a debugger entity; read from entity POD evaluation
     default:
     {
       Temp scratch = scratch_begin(0, 0);
@@ -3757,6 +3758,8 @@ df_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
       }
       scratch_end(scratch);
     }break;
+    
+    //- rjf: process -> reading process memory
     case DF_EntityKind_Process:
     {
       Temp scratch = scratch_begin(0, 0);
@@ -3766,6 +3769,25 @@ df_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
       {
         result = 1;
         MemoryCopy(out, data.str, data.size);
+      }
+      scratch_end(scratch);
+    }break;
+    
+    //- rjf: thread -> reading from thread register block
+    case DF_EntityKind_Thread:
+    {
+      Temp scratch = scratch_begin(0, 0);
+      CTRL_Unwind unwind = df_query_cached_unwind_from_thread(entity);
+      U64 frame_idx = e_interpret_ctx->reg_unwind_count;
+      if(frame_idx < unwind.frames.count)
+      {
+        CTRL_UnwindFrame *f = &unwind.frames.v[frame_idx];
+        U64 regs_size = regs_block_size_from_architecture(e_interpret_ctx->reg_arch);
+        Rng1U64 legal_range = r1u64(0, regs_size);
+        Rng1U64 read_range = intersect_1u64(legal_range, range);
+        U64 read_size = dim_1u64(read_range);
+        MemoryCopy(out, (U8 *)f->regs + read_range.min, read_size);
+        result = (read_size == dim_1u64(range));
       }
       scratch_end(scratch);
     }break;
@@ -3780,12 +3802,37 @@ df_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range)
   DF_Entity *entity = (DF_Entity *)space;
   switch(entity->kind)
   {
+    //- rjf: default -> making commits to entity evaluation
     default:
     {
+      
     }break;
+    
+    //- rjf: process -> commit to process memory
     case DF_EntityKind_Process:
     {
       result = ctrl_process_write(entity->ctrl_machine_id, entity->ctrl_handle, range, in);
+    }break;
+    
+    //- rjf: thread -> commit to thread's register block
+    case DF_EntityKind_Thread:
+    {
+      CTRL_Unwind unwind = df_query_cached_unwind_from_thread(entity);
+      U64 frame_idx = 0;
+      if(frame_idx < unwind.frames.count)
+      {
+        Temp scratch = scratch_begin(0, 0);
+        U64 regs_size = regs_block_size_from_architecture(df_architecture_from_entity(entity));
+        Rng1U64 legal_range = r1u64(0, regs_size);
+        Rng1U64 write_range = intersect_1u64(legal_range, range);
+        U64 write_size = dim_1u64(write_range);
+        CTRL_UnwindFrame *f = &unwind.frames.v[frame_idx];
+        void *new_regs = push_array(scratch.arena, U8, regs_size);
+        MemoryCopy(new_regs, f->regs, regs_size);
+        MemoryCopy((U8 *)new_regs + write_range.min, in, write_size);
+        result = ctrl_thread_write_reg_block(entity->ctrl_machine_id, entity->ctrl_handle, new_regs);
+        scratch_end(scratch);
+      }
     }break;
   }
   return result;
@@ -4482,6 +4529,8 @@ df_commit_eval_value(E_Eval dst_eval, E_Eval src_eval)
   }
   
   //- rjf: commit
+  // TODO(rjf): @spaces
+#if 0
   if(result && commit_data.size != 0)
   {
     if(dst_eval.mode == E_Mode_Offset)
@@ -4510,8 +4559,76 @@ df_commit_eval_value(E_Eval dst_eval, E_Eval src_eval)
       }
     }
   }
+#endif
   
   scratch_end(scratch);
+  return result;
+}
+
+internal B32
+df_commit_eval_value_string(E_Eval dst_eval, String8 string)
+{
+  B32 result = 0;
+  if(dst_eval.mode == E_Mode_Offset)
+  {
+    Temp scratch = scratch_begin(0, 0);
+    E_TypeKey type_key = e_type_unwrap(dst_eval.type_key);
+    E_TypeKind type_kind = e_type_kind_from_key(type_key);
+    E_TypeKey direct_type_key = e_type_unwrap(e_type_direct_from_key(e_type_unwrap(dst_eval.type_key)));
+    E_TypeKind direct_type_kind = e_type_kind_from_key(direct_type_key);
+    String8 commit_data = {0};
+    B32 commit_at_ptr_dest = 0;
+    if(E_TypeKind_FirstBasic <= type_kind && type_kind <= E_TypeKind_LastBasic)
+    {
+      E_Eval src_eval = e_eval_from_string(scratch.arena, string);
+      commit_data = push_str8_copy(scratch.arena, str8_struct(&src_eval.value));
+      commit_data.size = Min(commit_data.size, e_type_byte_size_from_key(type_key));
+    }
+    else if(type_kind == E_TypeKind_Ptr || type_kind == E_TypeKind_Array)
+    {
+      E_Eval src_eval = e_eval_from_string(scratch.arena, string);
+      E_Eval src_eval_value = e_value_eval_from_eval(src_eval);
+      E_TypeKind src_eval_value_type_kind = e_type_kind_from_key(src_eval_value.type_key);
+      if(type_kind == E_TypeKind_Ptr &&
+         (e_type_kind_is_pointer_or_ref(src_eval_value_type_kind) ||
+          e_type_kind_is_integer(src_eval_value_type_kind)) &&
+         src_eval_value.value.u64 != 0 && src_eval_value.mode == E_Mode_Value)
+      {
+        commit_data = push_str8_copy(scratch.arena, str8_struct(&src_eval.value));
+        commit_data.size = Min(commit_data.size, e_type_byte_size_from_key(type_key));
+      }
+      else if(direct_type_kind == E_TypeKind_Char8 ||
+              direct_type_kind == E_TypeKind_UChar8 ||
+              e_type_kind_is_integer(direct_type_kind))
+      {
+        if(string.size >= 1 && string.str[0] == '"')
+        {
+          string = str8_skip(string, 1);
+        }
+        if(string.size >= 1 && string.str[string.size-1] == '"')
+        {
+          string = str8_chop(string, 1);
+        }
+        commit_data = e_raw_from_escaped_string(scratch.arena, string);
+        commit_data.size += 1;
+        if(type_kind == E_TypeKind_Ptr)
+        {
+          commit_at_ptr_dest = 1;
+        }
+      }
+    }
+    if(commit_data.size != 0 && e_type_byte_size_from_key(type_key) != 0)
+    {
+      U64 dst_offset = dst_eval.value.u64;
+      if(dst_eval.mode == E_Mode_Offset && commit_at_ptr_dest)
+      {
+        E_Eval dst_value_eval = e_value_eval_from_eval(dst_eval);
+        dst_offset = dst_value_eval.value.u64;
+      }
+      result = e_space_write(dst_eval.space, commit_data.str, r1u64(dst_offset, dst_offset + commit_data.size));
+    }
+    scratch_end(scratch);
+  }
   return result;
 }
 
@@ -8435,6 +8552,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
     E_ParseCtx *ctx = parse_ctx;
     ctx->ip_vaddr          = rip_vaddr;
     ctx->ip_voff           = rip_voff;
+    ctx->ip_thread_space   = (E_Space)thread;
     ctx->modules           = eval_modules;
     ctx->modules_count     = eval_modules_count;
     ctx->primary_module    = eval_modules_primary;
@@ -8491,20 +8609,16 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
   E_InterpretCtx *interpret_ctx = push_array(arena, E_InterpretCtx, 1);
   {
     E_InterpretCtx *ctx = interpret_ctx;
-    ctx->space_read    = df_eval_space_read;
-    ctx->primary_space = eval_modules_primary->space;
-    ctx->reg_arch      = eval_modules_primary->arch;
-    ctx->reg_size      = regs_block_size_from_architecture(eval_modules_primary->arch);
-    ctx->reg_data      = push_array(arena, U8, ctx->reg_size);
-    ctx->module_base   = push_array(arena, U64, 1);
-    ctx->module_base[0]= module->vaddr_rng.min;
-    ctx->tls_base      = push_array(arena, U64, 1);
-    ctx->tls_base[0]   = df_query_cached_tls_base_vaddr_from_process_root_rip(process, tls_root_vaddr, rip_vaddr);
-    if(unwind_count < unwind.frames.count)
-    {
-      CTRL_UnwindFrame *f = &unwind.frames.v[unwind_count];
-      MemoryCopy(ctx->reg_data, f->regs, ctx->reg_size);
-    }
+    ctx->space_read        = df_eval_space_read;
+    ctx->space_write       = df_eval_space_write;
+    ctx->primary_space     = eval_modules_primary->space;
+    ctx->reg_arch          = eval_modules_primary->arch;
+    ctx->reg_space         = (E_Space)thread;
+    ctx->reg_unwind_count  = unwind_count;
+    ctx->module_base       = push_array(arena, U64, 1);
+    ctx->module_base[0]    = module->vaddr_rng.min;
+    ctx->tls_base          = push_array(arena, U64, 1);
+    ctx->tls_base[0]       = df_query_cached_tls_base_vaddr_from_process_root_rip(process, tls_root_vaddr, rip_vaddr);
   }
   e_select_interpret_ctx(interpret_ctx);
   

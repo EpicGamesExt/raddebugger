@@ -1264,6 +1264,14 @@ df_string_from_eval_viz_row_column(Arena *arena, DF_EvalView *ev, DF_EvalVizRow 
       result = df_value_string_from_eval(arena, !editable * DF_EvalVizStringFlag_ReadOnlyDisplayRules, default_radix, font, font_size, max_size_px, eval, row->member, row->cfg_table);
     }break;
   }
+  if(col->dequote_string &&
+     result.size >= 2 &&
+     result.str[0] == '"' &&
+     result.str[result.size-1] == '"')
+  {
+    result = str8_skip(str8_chop(result, 1), 1);
+  }
+  
   return result;
 }
 
@@ -2169,10 +2177,12 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
               
               // rjf: commit edited cell string
               Vec2S64 tbl = v2s64(x, y);
-              switch((DF_WatchViewColumnKind)x)
+              DF_WatchViewColumn *col = df_watch_view_column_from_x(ewv, x);
+              switch(col->kind)
               {
                 default:{}break;
                 case DF_WatchViewColumnKind_Expr:
+                if(modifiable)
                 {
                   DF_WatchViewPoint pt = df_watch_view_point_from_tbl(&blocks, tbl);
                   DF_Entity *watch = df_entity_from_expand_key_and_kind(pt.key, mutable_entity_kind);
@@ -2202,8 +2212,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                   if(rows.first != 0)
                   {
                     E_Eval dst_eval = e_eval_from_expr(scratch.arena, rows.first->expr);
-                    E_Eval src_eval = e_eval_from_string(scratch.arena, new_string);
-                    success = df_commit_eval_value(dst_eval, src_eval);
+                    success = df_commit_eval_value_string(dst_eval, new_string);
                   }
                   if(!success)
                   {
@@ -2800,13 +2809,6 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
               DF_WatchViewTextEditState *cell_edit_state = df_watch_view_text_edit_state_from_pt(ewv, cell_pt);
               B32 cell_selected = (row_selected && selection_tbl.min.x <= cell_pt.x && cell_pt.x <= selection_tbl.max.x);
               String8 cell_pre_edit_string = df_string_from_eval_viz_row_column(scratch.arena, eval_view, row, col, 0, default_radix, ui_top_font(), ui_top_font_size(), row_string_max_size_px);
-              if(col->dequote_string &&
-                 cell_pre_edit_string.size >= 2 &&
-                 cell_pre_edit_string.str[0] == '"' &&
-                 cell_pre_edit_string.str[cell_pre_edit_string.size-1] == '"')
-              {
-                cell_pre_edit_string = str8_skip(str8_chop(cell_pre_edit_string, 1), 1);
-              }
               
               //- rjf: unpack column-kind-specific info
               E_Eval cell_eval = row_eval;

@@ -78,7 +78,6 @@ typedef U64 E_Space;
 enum
 {
   E_Space_Null,
-  E_Space_Regs,
   E_Space_FIXED_COUNT
 };
 

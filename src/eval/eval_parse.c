@@ -1366,7 +1366,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
               reg_code = reg_num;
               type_key = e_type_key_reg(e_parse_ctx->primary_module->arch, reg_code);
               mapped_identifier = 1;
-              space = E_Space_Regs;
+              space = e_parse_ctx->ip_thread_space;
               arch = e_parse_ctx->primary_module->arch;
             }
           }
@@ -1380,7 +1380,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
               alias_code = (REGS_AliasCode)alias_num;
               type_key = e_type_key_reg_alias(e_parse_ctx->primary_module->arch, alias_code);
               mapped_identifier = 1;
-              space = E_Space_Regs;
+              space = e_parse_ctx->ip_thread_space;
               arch = e_parse_ctx->primary_module->arch;
             }
           }

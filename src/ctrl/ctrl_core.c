@@ -1128,7 +1128,7 @@ ctrl_stored_hash_from_process_vaddr_range(CTRL_MachineID machine_id, DMN_Handle 
     }
     
     //- rjf: not good, or is stale -> submit hash request
-    if((!is_good || is_stale) && os_now_microseconds() >= last_time_requested_us+10000)
+    if((!is_good || is_stale) && os_now_microseconds() >= last_time_requested_us+100000)
     {
       if(ctrl_u2ms_enqueue_req(machine_id, process, range, zero_terminated, endt_us)) OS_MutexScopeW(process_stripe->rw_mutex)
       {
@@ -3809,6 +3809,18 @@ ctrl_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
         U64 read_size = dmn_process_read(entity->handle, range, out);
         result = (read_size == dim_1u64(range));
       }break;
+      case CTRL_EntityKind_Thread:
+      {
+        Temp scratch = scratch_begin(0, 0);
+        U64 regs_size = regs_block_size_from_architecture(entity->arch);
+        void *regs = ctrl_query_cached_reg_block_from_thread(scratch.arena, ctrl_state->ctrl_thread_entity_store, entity->machine_id, entity->handle);
+        Rng1U64 legal_range = r1u64(0, regs_size);
+        Rng1U64 read_range = intersect_1u64(legal_range, range);
+        U64 read_size = dim_1u64(read_range);
+        MemoryCopy(out, (U8 *)regs + read_range.min, read_size);
+        result = (read_size == dim_1u64(range));
+        scratch_end(scratch);
+      }break;
     }
   }
   return result;
@@ -4707,6 +4719,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
               E_ParseCtx *ctx = &parse_ctx;
               ctx->ip_vaddr          = thread_rip_vaddr;
               ctx->ip_voff           = thread_rip_voff;
+              ctx->ip_thread_space   = (E_Space)thread;
               ctx->modules           = eval_modules;
               ctx->modules_count     = eval_modules_count;
               ctx->primary_module    = eval_modules_primary;
@@ -4727,13 +4740,11 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
             E_InterpretCtx interpret_ctx = zero_struct;
             {
               E_InterpretCtx *ctx = &interpret_ctx;
-              ctx->space_read_user_data = ctrl_state->ctrl_thread_entity_store;
+              ctx->space_rw_user_data = ctrl_state->ctrl_thread_entity_store;
               ctx->space_read    = ctrl_eval_space_read;
               ctx->primary_space = eval_modules_primary->space;
               ctx->reg_arch      = eval_modules_primary->arch;
-              ctx->reg_size      = regs_block_size_from_architecture(eval_modules_primary->arch);
-              ctx->reg_data      = push_array(temp.arena, U8, ctx->reg_size);
-              dmn_thread_read_reg_block(event->thread, ctx->reg_data);
+              ctx->reg_space     = (E_Space)thread;
               ctx->module_base   = push_array(temp.arena, U64, 1);
               ctx->module_base[0]= module->vaddr_range.min;
               ctx->tls_base      = push_array(temp.arena, U64, 1);
@@ -5348,8 +5359,8 @@ ctrl_mem_stream_thread__entry_point(void *p)
               if(!u128_match(u128_zero(), hash))
               {
                 range_n->hash = hash;
+                range_n->mem_gen = post_read_mem_gen;
               }
-              range_n->mem_gen = post_read_mem_gen;
               ins_atomic_u32_eval_assign(&range_n->is_taken, 0);
               goto commit__break_all;
             }

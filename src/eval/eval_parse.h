@@ -139,6 +139,7 @@ struct E_ParseCtx
   // rjf: instruction pointer info
   U64 ip_vaddr;
   U64 ip_voff;
+  E_Space ip_thread_space;
   
   // rjf: modules
   E_Module *modules;
