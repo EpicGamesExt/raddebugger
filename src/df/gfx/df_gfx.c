@@ -6120,6 +6120,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         U64 thread_unwind_rip_vaddr = df_query_cached_rip_from_thread_unwind(thread, df_base_interact_regs()->unwind_count);
         String8 expr = ws->hover_eval_string;
         E_Eval eval = e_eval_from_string(scratch.arena, expr);
+        DF_CfgTable top_level_cfg_table = {0};
         
         //- rjf: build if good
         if(!e_type_key_match(eval.type_key, e_type_key_zero()) && !ui_any_ctx_menu_is_open())
@@ -6133,7 +6134,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           DF_EvalView *eval_view = df_eval_view_from_key(eval_view_key);
           DF_ExpandKey parent_key = df_expand_key_make(5381, 1);
           DF_ExpandKey key = df_expand_key_make(df_hash_from_expand_key(parent_key), 1);
-          DF_EvalVizBlockList viz_blocks = df_eval_viz_block_list_from_eval_view_expr_keys(scratch.arena, eval_view, expr, parent_key, key);
+          DF_EvalVizBlockList viz_blocks = df_eval_viz_block_list_from_eval_view_expr_keys(scratch.arena, eval_view, &top_level_cfg_table, expr, parent_key, key);
           U32 default_radix = (eval.space == E_Space_Regs ? 16 : 10);
           DF_EvalVizWindowedRowList viz_rows = df_eval_viz_windowed_row_list_from_viz_block_list(scratch.arena, eval_view, r1s64(0, 50), &viz_blocks);
           
@@ -6181,7 +6182,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             String8 row_expr_string = df_expr_string_from_viz_row(scratch.arena, row);
             String8 row_display_value = df_value_string_from_eval(scratch.arena, DF_EvalVizStringFlag_ReadOnlyDisplayRules, default_radix, ui_top_font(), ui_top_font_size(), 500.f, row_eval, row->member, row->cfg_table);
             expr_column_width_px = f_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, 0, row_expr_string).x + ui_top_font_size()*5.f;
-            value_column_width_px = f_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, 0, row_display_value).x + ui_top_font_size()*2.5f;
+            value_column_width_px = f_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, 0, row_display_value).x + ui_top_font_size()*5.f;
             F32 total_dim_px = (expr_column_width_px + value_column_width_px);
             width_px = Min(80.f*ui_top_font_size(), total_dim_px*1.5f);
           }
@@ -8382,12 +8383,12 @@ df_append_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags flags, U32
       
       // rjf: special case: push strings for textual string content
       B32 did_content = 0;
-      if(!did_content && ptee_has_string && !has_array && (flags & DF_EvalVizStringFlag_ReadOnlyDisplayRules))
+      if(!did_content && ptee_has_string && !has_array)
       {
         did_content = 1;
         U64 string_memory_addr = value_eval.value.u64;
         U64 element_size = e_type_byte_size_from_key(direct_type_key);
-        U64 string_buffer_size = 256;
+        U64 string_buffer_size = 1024;
         U8 *string_buffer = push_array(arena, U8, string_buffer_size);
         for(U64 try_size = string_buffer_size; try_size >= 16; try_size /= 2)
         {
@@ -8414,13 +8415,14 @@ df_append_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags flags, U32
       }
       
       // rjf: special case: push strings for symbols
+      B32 did_string = 0;
       if(!did_content && symbol_name.size != 0 &&
          ((type_kind == E_TypeKind_Ptr && direct_type_kind == E_TypeKind_Void) ||
           (type_kind == E_TypeKind_Ptr && direct_type_kind == E_TypeKind_Function) ||
-          (type_kind == E_TypeKind_Function)) &&
-         (flags & DF_EvalVizStringFlag_ReadOnlyDisplayRules))
+          (type_kind == E_TypeKind_Function)))
       {
         did_content = 1;
+        did_string = 1;
         str8_list_push(arena, out, symbol_name);
         space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, symbol_name).x;
       }
@@ -8457,7 +8459,7 @@ df_append_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags flags, U32
       
       // rjf: push pointer value
       B32 did_ptr_value = 0;
-      if(!no_addr || !did_content)
+      if((!no_addr || !did_content) && (!(flags & DF_EvalVizStringFlag_ReadOnlyDisplayRules) || !did_string))
       {
         did_ptr_value = 1;
         if(did_content)
@@ -8494,11 +8496,11 @@ df_append_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags flags, U32
       
       // rjf: special case: push strings for textual string content
       B32 did_content = 0;
-      if(!did_content && array_is_string && !has_array && (flags & DF_EvalVizStringFlag_ReadOnlyDisplayRules))
+      if(!did_content && array_is_string && !has_array)
       {
         U64 element_size = e_type_byte_size_from_key(direct_type_key);
         did_content = 1;
-        U64 string_buffer_size = 256;
+        U64 string_buffer_size = 1024;
         U8 *string_buffer = push_array(arena, U8, string_buffer_size);
         switch(eval.mode)
         {
@@ -8536,7 +8538,7 @@ df_append_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags flags, U32
       }
       
       // rjf: descend in all other cases
-      if(!did_content)
+      if(!did_content && (flags & DF_EvalVizStringFlag_ReadOnlyDisplayRules))
       {
         did_content = 1;
         
@@ -12319,6 +12321,16 @@ df_fancy_string_list_from_code_string(Arena *arena, F32 alpha, B32 indirection_s
         if(!e_type_key_match(e_type_key_zero(), type))
         {
           color = df_rgba_from_theme_color(DF_ThemeColor_CodeType);
+        }
+        else
+        {
+          DF_Entity *module = df_entity_from_handle(df_interact_regs()->module);
+          DI_Key dbgi_key = df_dbgi_key_from_module(module);
+          U64 symbol_voff = df_voff_from_dbgi_key_symbol_name(&dbgi_key, token_string);
+          if(symbol_voff != 0)
+          {
+            color = df_rgba_from_theme_color(DF_ThemeColor_CodeSymbol);
+          }
         }
         D_FancyString fancy_string =
         {

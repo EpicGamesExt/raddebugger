@@ -283,6 +283,14 @@ typedef enum DF_WatchViewColumnKind
 }
 DF_WatchViewColumnKind;
 
+typedef struct DF_WatchViewColumnParams DF_WatchViewColumnParams;
+struct DF_WatchViewColumnParams
+{
+  String8 string;
+  B32 is_non_code;
+  B32 dequote_string;
+};
+
 typedef struct DF_WatchViewColumn DF_WatchViewColumn;
 struct DF_WatchViewColumn
 {
@@ -292,6 +300,8 @@ struct DF_WatchViewColumn
   F32 pct;
   U8 string_buffer[1024];
   U64 string_size;
+  B32 is_non_code;
+  B32 dequote_string;
 };
 
 typedef enum DF_WatchViewFillKind
@@ -555,7 +565,8 @@ internal String8 df_string_from_eval_viz_row_column(Arena *arena, DF_EvalView *e
 internal DF_WatchViewTextEditState *df_watch_view_text_edit_state_from_pt(DF_WatchViewState *wv, DF_WatchViewPoint pt);
 
 //- rjf: watch view column state mutation
-internal DF_WatchViewColumn *df_watch_view_column_alloc(DF_WatchViewState *wv, DF_WatchViewColumnKind kind, F32 pct, String8 string);
+internal DF_WatchViewColumn *df_watch_view_column_alloc_(DF_WatchViewState *wv, DF_WatchViewColumnKind kind, F32 pct, DF_WatchViewColumnParams *params);
+#define df_watch_view_column_alloc(wv, kind, pct, ...) df_watch_view_column_alloc_((wv), (kind), (pct), &(DF_WatchViewColumnParams){.string = str8_zero(), __VA_ARGS__})
 internal void df_watch_view_column_release(DF_WatchViewState *wv, DF_WatchViewColumn *col);
 
 //- rjf: watch view main hooks

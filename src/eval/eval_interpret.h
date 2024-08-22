@@ -66,4 +66,4 @@ internal B32 e_space_read(E_Space space, void *out, Rng1U64 range);
 
 internal E_Interpretation e_interpret(String8 bytecode);
 
-#endif //EVAL_INTERPRET_H
+#endif // EVAL_INTERPRET_H

@@ -1419,6 +1419,7 @@ df_eval_from_entity(Arena *arena, DF_Entity *entity)
   DF_EntityEval *eval = push_array(arena, DF_EntityEval, 1);
   {
     DF_Entity *loc = df_entity_child_from_kind(entity, DF_EntityKind_Location);
+    DF_Entity *cnd = df_entity_child_from_kind(entity, DF_EntityKind_Condition);
     String8 label_string = push_str8_copy(arena, entity->name);
     String8 loc_string = {0};
     if(loc->flags & DF_EntityFlag_HasTextPoint)
@@ -1429,10 +1430,12 @@ df_eval_from_entity(Arena *arena, DF_Entity *entity)
     {
       loc_string = push_str8f(arena, "0x%I64x", loc->vaddr);
     }
+    String8 cnd_string = push_str8_copy(arena, cnd->name);
     eval->enabled      = !entity->disabled;
     eval->hit_count    = entity->u64;
     eval->label_off    = (U64)((U8 *)label_string.str - (U8 *)eval);
     eval->location_off = (U64)((U8 *)loc_string.str - (U8 *)eval);
+    eval->condition_off= (U64)((U8 *)cnd_string.str - (U8 *)eval);
   }
   return eval;
 }
@@ -3740,12 +3743,17 @@ df_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
       U64 pos_min = arena_pos(scratch.arena);
       DF_EntityEval *eval = df_eval_from_entity(scratch.arena, entity);
       U64 pos_opl = arena_pos(scratch.arena);
-      U64 off_min = 0;
-      U64 off_opl = pos_opl - pos_min;
-      if(off_min <= range.min && range.max <= off_opl)
+      Rng1U64 legal_range = r1u64(0, pos_opl-pos_min);
+      if(contains_1u64(legal_range, range.min))
       {
         result = 1;
-        MemoryCopy(out, (U8 *)eval + range.min, dim_1u64(range));
+        U64 range_dim = dim_1u64(range);
+        U64 bytes_to_read = Min(range_dim, (legal_range.max - range.min));
+        MemoryCopy(out, ((U8 *)eval) + range.min, bytes_to_read);
+        if(bytes_to_read < range_dim)
+        {
+          MemoryZero((U8 *)out + bytes_to_read, range_dim - bytes_to_read);
+        }
       }
       scratch_end(scratch);
     }break;
@@ -3760,6 +3768,24 @@ df_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
         MemoryCopy(out, data.str, data.size);
       }
       scratch_end(scratch);
+    }break;
+  }
+  return result;
+}
+
+internal B32
+df_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range)
+{
+  B32 result = 0;
+  DF_Entity *entity = (DF_Entity *)space;
+  switch(entity->kind)
+  {
+    default:
+    {
+    }break;
+    case DF_EntityKind_Process:
+    {
+      result = ctrl_process_write(entity->ctrl_machine_id, entity->ctrl_handle, range, in);
     }break;
   }
   return result;
@@ -4743,7 +4769,7 @@ df_append_viz_blocks_for_parent__rec(Arena *arena, DF_EvalView *eval_view, DF_Ex
 }
 
 internal DF_EvalVizBlockList
-df_eval_viz_block_list_from_eval_view_expr_keys(Arena *arena, DF_EvalView *eval_view, String8 expr, DF_ExpandKey parent_key, DF_ExpandKey key)
+df_eval_viz_block_list_from_eval_view_expr_keys(Arena *arena, DF_EvalView *eval_view, DF_CfgTable *cfg_table, String8 expr, DF_ExpandKey parent_key, DF_ExpandKey key)
 {
   ProfBeginFunction();
   DF_EvalVizBlockList blocks = {0};
@@ -4784,13 +4810,14 @@ df_eval_viz_block_list_from_eval_view_expr_keys(Arena *arena, DF_EvalView *eval_
       }
     }
     String8 view_rule_string = df_eval_view_rule_from_key(eval_view, key);
-    DF_CfgTable *view_rule_table = push_array(arena, DF_CfgTable, 1);
+    DF_CfgTable *cfg_table_inherited = push_array(arena, DF_CfgTable, 1);
+    *cfg_table_inherited = df_cfg_table_from_inheritance(arena, cfg_table);
     for(String8Node *n = default_view_rules.first; n != 0; n = n->next)
     {
-      df_cfg_table_push_unparsed_string(arena, view_rule_table, n->string, DF_CfgSrc_User);
+      df_cfg_table_push_unparsed_string(arena, cfg_table_inherited, n->string, DF_CfgSrc_User);
     }
-    df_cfg_table_push_unparsed_string(arena, view_rule_table, view_rule_string, DF_CfgSrc_User);
-    df_append_viz_blocks_for_parent__rec(arena, eval_view, parent_key, key, expr, parse.expr, view_rule_table, 0, &blocks);
+    df_cfg_table_push_unparsed_string(arena, cfg_table_inherited, view_rule_string, DF_CfgSrc_User);
+    df_append_viz_blocks_for_parent__rec(arena, eval_view, parent_key, key, expr, parse.expr, cfg_table_inherited, 0, &blocks);
   }
   ProfEnd();
   return blocks;
@@ -8464,7 +8491,6 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
   E_InterpretCtx *interpret_ctx = push_array(arena, E_InterpretCtx, 1);
   {
     E_InterpretCtx *ctx = interpret_ctx;
-    ctx->space_read_user_data = process;
     ctx->space_read    = df_eval_space_read;
     ctx->primary_space = eval_modules_primary->space;
     ctx->reg_arch      = eval_modules_primary->arch;

@@ -1292,7 +1292,7 @@ df_watch_view_text_edit_state_from_pt(DF_WatchViewState *wv, DF_WatchViewPoint p
 //- rjf: watch view column state mutation
 
 internal DF_WatchViewColumn *
-df_watch_view_column_alloc(DF_WatchViewState *wv, DF_WatchViewColumnKind kind, F32 pct, String8 string)
+df_watch_view_column_alloc_(DF_WatchViewState *wv, DF_WatchViewColumnKind kind, F32 pct, DF_WatchViewColumnParams *params)
 {
   if(!wv->free_column)
   {
@@ -1305,8 +1305,10 @@ df_watch_view_column_alloc(DF_WatchViewState *wv, DF_WatchViewColumnKind kind, F
   wv->column_count += 1;
   col->kind = kind;
   col->pct = pct;
-  col->string_size = Min(sizeof(col->string_buffer), string.size);
-  MemoryCopy(col->string_buffer, string.str, col->string_size);
+  col->string_size = Min(sizeof(col->string_buffer), params->string.size);
+  MemoryCopy(col->string_buffer, params->string.str, col->string_size);
+  col->is_non_code = params->is_non_code;
+  col->dequote_string = params->dequote_string;
   return col;
 }
 
@@ -1426,6 +1428,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
   };
   U64 frame_rows_count = 0;
   FrameRow *frame_rows = 0;
+  DF_CfgTable top_level_cfg_table = {0};
   DF_EvalVizBlockList blocks = {0};
   UI_ScrollListRowBlockArray row_blocks = {0};
   Vec2S64 cursor_tbl = {0};
@@ -1475,7 +1478,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
               FuzzyMatchRangeList matches = fuzzy_match_find(scratch.arena, filter, expr_string);
               if(matches.count == matches.needle_part_count)
               {
-                DF_EvalVizBlockList watch_blocks = df_eval_viz_block_list_from_eval_view_expr_keys(scratch.arena, eval_view, expr_string, parent_key, key);
+                DF_EvalVizBlockList watch_blocks = df_eval_viz_block_list_from_eval_view_expr_keys(scratch.arena, eval_view, &top_level_cfg_table, expr_string, parent_key, key);
                 df_eval_viz_block_list_concat__in_place(&blocks, &watch_blocks);}
             }
           }break;
@@ -1486,6 +1489,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
           case DF_WatchViewFillKind_Breakpoints:
           {
             mutable_entity_kind = DF_EntityKind_Breakpoint;
+            df_cfg_table_push_unparsed_string(scratch.arena, &top_level_cfg_table, str8_lit("no_addr"), DF_CfgSrc_User);
             DF_EntityList bps = df_query_cached_entity_list_with_kind(mutable_entity_kind);
             for(DF_EntityNode *n = bps.first; n != 0; n = n->next)
             {
@@ -1502,10 +1506,11 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
               {
                 E_MemberList bp_members = {0};
                 {
-                  e_member_list_push_new(scratch.arena, &bp_members, .name = str8_lit("Enabled"),  .off = 0,         .type_key = e_type_key_basic(E_TypeKind_S64));
+                  e_member_list_push_new(scratch.arena, &bp_members, .name = str8_lit("Enabled"),  .off = 0,        .type_key = e_type_key_basic(E_TypeKind_S64));
                   e_member_list_push_new(scratch.arena, &bp_members, .name = str8_lit("Hit Count"),.off = 0+8,      .type_key = e_type_key_basic(E_TypeKind_U64));
                   e_member_list_push_new(scratch.arena, &bp_members, .name = str8_lit("Label"),    .off = 0+8+8,    .type_key = e_type_key_cons_ptr(architecture_from_context(), e_type_key_basic(E_TypeKind_Char8)));
                   e_member_list_push_new(scratch.arena, &bp_members, .name = str8_lit("Location"), .off = 0+8+8+8,  .type_key = e_type_key_cons_ptr(architecture_from_context(), e_type_key_basic(E_TypeKind_Char8)));
+                  e_member_list_push_new(scratch.arena, &bp_members, .name = str8_lit("Condition"),.off = 0+8+8+8+8,.type_key = e_type_key_cons_ptr(architecture_from_context(), e_type_key_basic(E_TypeKind_Char8)));
                 }
                 E_MemberArray bp_members_array = e_member_array_from_list(scratch.arena, &bp_members);
                 E_TypeKey bp_type = e_type_key_cons(.arch = architecture_from_context(), .kind = E_TypeKind_Struct, .name = str8_lit("Breakpoint"), .members = bp_members_array.v, .count = bp_members_array.count);
@@ -1513,8 +1518,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                 bp_expr->type_key = bp_type;
                 bp_expr->mode = E_Mode_Offset;
                 bp_expr->space = (U64)bp;
-                DF_CfgTable cfg_table = {0};
-                df_append_viz_blocks_for_parent__rec(scratch.arena, eval_view, parent_key, key, title, bp_expr, &cfg_table, 0, &blocks);
+                df_append_viz_blocks_for_parent__rec(scratch.arena, eval_view, parent_key, key, title, bp_expr, &top_level_cfg_table, 0, &blocks);
               }
             }
           }break;
@@ -1549,8 +1553,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                 wp_expr->type_key = wp_type;
                 wp_expr->mode = E_Mode_Offset;
                 wp_expr->space = (U64)wp;
-                DF_CfgTable cfg_table = {0};
-                df_append_viz_blocks_for_parent__rec(scratch.arena, eval_view, parent_key, key, title, wp_expr, &cfg_table, 0, &blocks);
+                df_append_viz_blocks_for_parent__rec(scratch.arena, eval_view, parent_key, key, title, wp_expr, &top_level_cfg_table, 0, &blocks);
               }
             }
           }break;
@@ -1647,7 +1650,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
               {
                 DF_ExpandKey parent_key = df_expand_key_make(5381, 0);
                 DF_ExpandKey key = df_expand_key_make(df_hash_from_expand_key(parent_key), num);
-                DF_EvalVizBlockList root_blocks = df_eval_viz_block_list_from_eval_view_expr_keys(scratch.arena, eval_view, root_expr_string, parent_key, key);
+                DF_EvalVizBlockList root_blocks = df_eval_viz_block_list_from_eval_view_expr_keys(scratch.arena, eval_view, &top_level_cfg_table, root_expr_string, parent_key, key);
                 df_eval_viz_block_list_concat__in_place(&blocks, &root_blocks);
               }
             }
@@ -1659,7 +1662,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
               {
                 DF_ExpandKey parent_key = df_expand_key_make(5381, 0);
                 DF_ExpandKey key = df_expand_key_make(df_hash_from_expand_key(parent_key), num);
-                DF_EvalVizBlockList root_blocks = df_eval_viz_block_list_from_eval_view_expr_keys(scratch.arena, eval_view, root_expr_string, parent_key, key);
+                DF_EvalVizBlockList root_blocks = df_eval_viz_block_list_from_eval_view_expr_keys(scratch.arena, eval_view, &top_level_cfg_table, root_expr_string, parent_key, key);
                 df_eval_viz_block_list_concat__in_place(&blocks, &root_blocks);
               }
             }
@@ -1681,7 +1684,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
               {
                 DF_ExpandKey parent_key = df_expand_key_make(5381, 0);
                 DF_ExpandKey key = df_expand_key_make(df_hash_from_expand_key(parent_key), idx+1);
-                DF_EvalVizBlockList root_blocks = df_eval_viz_block_list_from_eval_view_expr_keys(scratch.arena, eval_view, root_expr_string, parent_key, key);
+                DF_EvalVizBlockList root_blocks = df_eval_viz_block_list_from_eval_view_expr_keys(scratch.arena, eval_view, &top_level_cfg_table, root_expr_string, parent_key, key);
                 df_eval_viz_block_list_concat__in_place(&blocks, &root_blocks);
               }
             }
@@ -1786,7 +1789,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
             }
             
             //- rjf: build blocks for all table items, split by sorted sub-expansions
-            DF_CfgTable *cfg_table = push_array(scratch.arena, DF_CfgTable, 1);
+            DF_CfgTable *cfg_table = &top_level_cfg_table;
             DF_EvalVizBlock *last_vb = df_eval_viz_block_begin(scratch.arena, DF_EvalVizBlockKind_DebugInfoTable, parent_key, root_key, 0);
             {
               last_vb->visual_idx_range = last_vb->semantic_idx_range = r1u64(0, items.count);
@@ -1985,8 +1988,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
           evt->flags & UI_EventFlag_Paste ||
           (evt->kind == UI_EventKind_Press && evt->slot == UI_EventActionSlot_Edit)) &&
          selection_tbl.min.x == selection_tbl.max.x &&
-         (selection_tbl.min.y != 0 || selection_tbl.min.y != 0) &&
-         (selection_tbl.min.x != 0 || modifiable))
+         (selection_tbl.min.y != 0 || selection_tbl.min.y != 0))
       {
         Vec2S64 selection_dim = dim_2s64(selection_tbl);
         ewv->text_editing = 1;
@@ -2798,6 +2800,13 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
               DF_WatchViewTextEditState *cell_edit_state = df_watch_view_text_edit_state_from_pt(ewv, cell_pt);
               B32 cell_selected = (row_selected && selection_tbl.min.x <= cell_pt.x && cell_pt.x <= selection_tbl.max.x);
               String8 cell_pre_edit_string = df_string_from_eval_viz_row_column(scratch.arena, eval_view, row, col, 0, default_radix, ui_top_font(), ui_top_font_size(), row_string_max_size_px);
+              if(col->dequote_string &&
+                 cell_pre_edit_string.size >= 2 &&
+                 cell_pre_edit_string.str[0] == '"' &&
+                 cell_pre_edit_string.str[cell_pre_edit_string.size-1] == '"')
+              {
+                cell_pre_edit_string = str8_skip(str8_chop(cell_pre_edit_string, 1), 1);
+              }
               
               //- rjf: unpack column-kind-specific info
               E_Eval cell_eval = row_eval;
@@ -2875,16 +2884,12 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                   {
                     cell_ui_hook = row->value_ui_rule_spec->info.row_ui;
                   }
-                  if(cell_eval.space >= E_Space_FIXED_COUNT)
-                  {
-                    cell_base_color = df_rgba_from_theme_color(DF_ThemeColor_CodeSymbol);
-                  }
+                  cell_can_edit = df_type_key_is_editable(cell_eval.type_key);
                 }break;
                 case DF_WatchViewColumnKind_Type:
                 {
                   cell_can_edit = 0;
                   E_TypeKey key = cell_eval.type_key;
-                  cell_base_color = df_rgba_from_theme_color(DF_ThemeColor_CodeType);
                 }break;
                 case DF_WatchViewColumnKind_ViewRule:
                 {
@@ -2922,7 +2927,8 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
               UI_Palette(palette) UI_TableCell
                 UI_FocusHot(cell_selected ? UI_FocusKind_On : UI_FocusKind_Off)
                 UI_FocusActive((cell_selected && ewv->text_editing) ? UI_FocusKind_On : UI_FocusKind_Off)
-                DF_Font(ws, DF_FontSlot_Code) UI_FlagsAdd(cell_flags | (row->depth > 0 ? UI_BoxFlag_DrawTextWeak : 0))
+                DF_Font(ws, col->is_non_code ? DF_FontSlot_Main : DF_FontSlot_Code)
+                UI_FlagsAdd(cell_flags | (row->depth > 0 ? UI_BoxFlag_DrawTextWeak : 0))
               {
                 // rjf: cell has errors? -> build error box
                 if(cell_error_string.size != 0) DF_Font(ws, DF_FontSlot_Main)
@@ -2961,7 +2967,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                 else
                 {
                   sig = df_line_editf(ws,
-                                      (DF_LineEditFlag_CodeContents|
+                                      (DF_LineEditFlag_CodeContents*(!col->is_non_code)|
                                        DF_LineEditFlag_NoBackground|
                                        DF_LineEditFlag_DisableEdit*(!cell_can_edit)|
                                        DF_LineEditFlag_Expander*!!(x == 0 && row_is_expandable && col->kind == DF_WatchViewColumnKind_Expr)|
@@ -5934,9 +5940,9 @@ DF_VIEW_SETUP_FUNCTION_DEF(CallStack)
 {
   DF_WatchViewState *wv = df_view_user_state(view, DF_WatchViewState);
   df_watch_view_init(wv, view, DF_WatchViewFillKind_CallStack);
-  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_FrameSelection,  0.05f, str8_zero());
-  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Value,  0.7f, str8_zero());
-  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Module, 0.25f, str8_zero());
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_FrameSelection,  0.05f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Value,  0.7f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Module, 0.25f, .is_non_code = 1);
 }
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(CallStack) {return str8_zero();}
 DF_VIEW_CMD_FUNCTION_DEF(CallStack){}
@@ -6872,10 +6878,10 @@ DF_VIEW_SETUP_FUNCTION_DEF(Watch)
 {
   DF_WatchViewState *wv = df_view_user_state(view, DF_WatchViewState);
   df_watch_view_init(wv, view, DF_WatchViewFillKind_Watch);
-  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Expr,      0.25f, str8_zero());
-  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Value,     0.3f, str8_zero());
-  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Type,      0.15f, str8_zero());
-  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_ViewRule,  0.30f, str8_zero());
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Expr,      0.25f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Value,     0.3f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Type,      0.15f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_ViewRule,  0.30f);
 }
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Watch) {return str8_zero();}
 DF_VIEW_CMD_FUNCTION_DEF(Watch)
@@ -6898,10 +6904,10 @@ DF_VIEW_SETUP_FUNCTION_DEF(Locals)
 {
   DF_WatchViewState *wv = df_view_user_state(view, DF_WatchViewState);
   df_watch_view_init(wv, view, DF_WatchViewFillKind_Locals);
-  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Expr,      0.25f, str8_zero());
-  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Value,     0.3f, str8_zero());
-  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Type,      0.15f, str8_zero());
-  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_ViewRule,  0.30f, str8_zero());
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Expr,      0.25f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Value,     0.3f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Type,      0.15f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_ViewRule,  0.30f);
 }
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Locals) { return str8_zero(); }
 DF_VIEW_CMD_FUNCTION_DEF(Locals) {}
@@ -6920,10 +6926,10 @@ DF_VIEW_SETUP_FUNCTION_DEF(Registers)
 {
   DF_WatchViewState *wv = df_view_user_state(view, DF_WatchViewState);
   df_watch_view_init(wv, view, DF_WatchViewFillKind_Registers);
-  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Expr,      0.25f, str8_zero());
-  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Value,     0.3f, str8_zero());
-  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Type,      0.15f, str8_zero());
-  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_ViewRule,  0.30f, str8_zero());
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Expr,      0.25f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Value,     0.3f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Type,      0.15f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_ViewRule,  0.30f);
 }
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Registers) { return str8_zero(); }
 DF_VIEW_CMD_FUNCTION_DEF(Registers) {}
@@ -6942,10 +6948,10 @@ DF_VIEW_SETUP_FUNCTION_DEF(Globals)
 {
   DF_WatchViewState *wv = df_view_user_state(view, DF_WatchViewState);
   df_watch_view_init(wv, view, DF_WatchViewFillKind_Globals);
-  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Expr,      0.25f, str8_zero());
-  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Value,     0.3f, str8_zero());
-  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Type,      0.15f, str8_zero());
-  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_ViewRule,  0.30f, str8_zero());
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Expr,      0.25f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Value,     0.3f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Type,      0.15f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_ViewRule,  0.30f);
 }
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Globals) { return str8_zero(); }
 DF_VIEW_CMD_FUNCTION_DEF(Globals) {}
@@ -6964,10 +6970,10 @@ DF_VIEW_SETUP_FUNCTION_DEF(ThreadLocals)
 {
   DF_WatchViewState *wv = df_view_user_state(view, DF_WatchViewState);
   df_watch_view_init(wv, view, DF_WatchViewFillKind_ThreadLocals);
-  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Expr,      0.25f, str8_zero());
-  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Value,     0.3f, str8_zero());
-  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Type,      0.15f, str8_zero());
-  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_ViewRule,  0.30f, str8_zero());
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Expr,      0.25f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Value,     0.3f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Type,      0.15f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_ViewRule,  0.30f);
 }
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(ThreadLocals) { return str8_zero(); }
 DF_VIEW_CMD_FUNCTION_DEF(ThreadLocals) {}
@@ -6986,10 +6992,10 @@ DF_VIEW_SETUP_FUNCTION_DEF(Types)
 {
   DF_WatchViewState *wv = df_view_user_state(view, DF_WatchViewState);
   df_watch_view_init(wv, view, DF_WatchViewFillKind_Types);
-  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Expr,      0.25f, str8_zero());
-  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Value,     0.3f, str8_zero());
-  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Type,      0.15f, str8_zero());
-  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_ViewRule,  0.30f, str8_zero());
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Expr,      0.25f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Value,     0.3f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Type,      0.15f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_ViewRule,  0.30f);
 }
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Types) { return str8_zero(); }
 DF_VIEW_CMD_FUNCTION_DEF(Types) {}
@@ -7008,9 +7014,9 @@ DF_VIEW_SETUP_FUNCTION_DEF(Procedures)
 {
   DF_WatchViewState *wv = df_view_user_state(view, DF_WatchViewState);
   df_watch_view_init(wv, view, DF_WatchViewFillKind_Procedures);
-  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Expr,      0.2f, str8_zero());
-  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Value,     0.6f, str8_zero());
-  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_ViewRule,  0.2f, str8_zero());
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Expr,      0.2f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Value,     0.6f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_ViewRule,  0.2f);
 }
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Procedures) { return str8_zero(); }
 DF_VIEW_CMD_FUNCTION_DEF(Procedures) {}
@@ -7980,10 +7986,11 @@ DF_VIEW_SETUP_FUNCTION_DEF(Breakpoints)
 {
   DF_WatchViewState *wv = df_view_user_state(view, DF_WatchViewState);
   df_watch_view_init(wv, view, DF_WatchViewFillKind_Breakpoints);
-  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Member, 0.25f, str8_lit("Label"));
-  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Member, 0.45f, str8_lit("Location"));
-  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Member, 0.10f, str8_lit("Enabled"));
-  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Member, 0.20f, str8_lit("Hit Count"));
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Member, 0.25f, .string = str8_lit("Label"), .dequote_string = 1, .is_non_code = 1);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Member, 0.35f, .string = str8_lit("Location"), .dequote_string = 1, .is_non_code = 1);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Member, 0.20f, .string = str8_lit("Condition"), .dequote_string = 1);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Member, 0.10f, .string = str8_lit("Enabled"));
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Member, 0.10f, .string = str8_lit("Hit Count"));
 }
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Breakpoints) {return str8_zero();}
 DF_VIEW_CMD_FUNCTION_DEF(Breakpoints)
@@ -7995,7 +8002,7 @@ DF_VIEW_UI_FUNCTION_DEF(Breakpoints)
 {
   ProfBeginFunction();
   DF_WatchViewState *ewv = df_view_user_state(view, DF_WatchViewState);
-  df_watch_view_build(ws, panel, view, ewv, 1*(view->query_string_size == 0), 10, rect);
+  df_watch_view_build(ws, panel, view, ewv, 0, 10, rect);
   ProfEnd();
 }
 
@@ -8181,8 +8188,8 @@ DF_VIEW_SETUP_FUNCTION_DEF(WatchPins)
 {
   DF_WatchViewState *wv = df_view_user_state(view, DF_WatchViewState);
   df_watch_view_init(wv, view, DF_WatchViewFillKind_WatchPins);
-  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Expr,      0.5f, str8_zero());
-  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Value,     0.5f, str8_zero());
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Expr,      0.5f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Value,     0.5f);
 }
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(WatchPins) {return str8_zero();}
 DF_VIEW_CMD_FUNCTION_DEF(WatchPins)
@@ -8194,7 +8201,7 @@ DF_VIEW_UI_FUNCTION_DEF(WatchPins)
 {
   ProfBeginFunction();
   DF_WatchViewState *ewv = df_view_user_state(view, DF_WatchViewState);
-  df_watch_view_build(ws, panel, view, ewv, 1*(view->query_string_size == 0), 10, rect);
+  df_watch_view_build(ws, panel, view, ewv, 0, 10, rect);
   ProfEnd();
 }
 

@@ -410,6 +410,7 @@ struct DF_EntityEval
   U64 hit_count;
   U64 label_off;
   U64 location_off;
+  U64 condition_off;
 };
 
 ////////////////////////////////
@@ -1572,7 +1573,8 @@ internal CTRL_Event df_ctrl_last_stop_event(void);
 ////////////////////////////////
 //~ rjf: Evaluation Context
 
-internal B32 df_eval_space_read(void *u, E_Space space, void *out, Rng1U64 vaddr_range);
+internal B32 df_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range);
+internal B32 df_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range);
 internal E_Eval df_eval_from_eval_cfg_table(Arena *arena, E_Eval eval, DF_CfgTable *cfg);
 
 ////////////////////////////////
@@ -1619,7 +1621,7 @@ internal DF_EvalVizBlock *df_eval_viz_block_begin(Arena *arena, DF_EvalVizBlockK
 internal DF_EvalVizBlock *df_eval_viz_block_split_and_continue(Arena *arena, DF_EvalVizBlockList *list, DF_EvalVizBlock *split_block, U64 split_idx);
 internal void df_eval_viz_block_end(DF_EvalVizBlockList *list, DF_EvalVizBlock *block);
 internal void df_append_viz_blocks_for_parent__rec(Arena *arena, DF_EvalView *view, DF_ExpandKey parent_key, DF_ExpandKey key, String8 string, E_Expr *expr, DF_CfgTable *cfg_table, S32 depth, DF_EvalVizBlockList *list_out);
-internal DF_EvalVizBlockList df_eval_viz_block_list_from_eval_view_expr_keys(Arena *arena, DF_EvalView *eval_view, String8 expr, DF_ExpandKey parent_key, DF_ExpandKey key);
+internal DF_EvalVizBlockList df_eval_viz_block_list_from_eval_view_expr_keys(Arena *arena, DF_EvalView *eval_view, DF_CfgTable *cfg_table, String8 expr, DF_ExpandKey parent_key, DF_ExpandKey key);
 internal void df_eval_viz_block_list_concat__in_place(DF_EvalVizBlockList *dst, DF_EvalVizBlockList *to_push);
 
 //- rjf: viz block list <-> table coordinates
