@@ -1149,6 +1149,21 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
     E_Token token = e_token_at_it(it, tokens);
     String8 token_string = str8_substr(text, token.range);
     
+    //- rjf: gather resolution qualifier
+    String8 resolution_qualifier = {0};
+    if(token.kind == E_TokenKind_Identifier)
+    {
+      E_Token next_token = e_token_at_it(it+1, tokens);
+      String8 next_token_string = str8_substr(text, next_token.range);
+      if(next_token.kind == E_TokenKind_Symbol && str8_match(next_token_string, str8_lit(":"), 0))
+      {
+        it += 2;
+        resolution_qualifier = token_string;
+        token = e_token_at_it(it, tokens);
+        token_string = str8_substr(text, token.range);
+      }
+    }
+    
     //- rjf: descent to nested expression
     if(token.kind == E_TokenKind_Symbol && str8_match(token_string, str8_lit("("), 0))
     {
@@ -1283,7 +1298,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
           }
           
           //- rjf: try members
-          if(mapped_identifier == 0)
+          if(mapped_identifier == 0 && (resolution_qualifier.size == 0 || str8_match(resolution_qualifier, str8_lit("member"), 0)))
           {
             U64 data_member_num = e_num_from_string(e_parse_ctx->member_map, token_string);
             if(data_member_num != 0)
@@ -1294,7 +1309,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
           }
           
           //- rjf: try locals
-          if(mapped_identifier == 0)
+          if(mapped_identifier == 0 && (resolution_qualifier.size == 0 || str8_match(resolution_qualifier, str8_lit("local"), 0)))
           {
             E_Module *module = e_parse_ctx->primary_module;
             RDI_Parsed *rdi = module->rdi;
@@ -1358,7 +1373,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
           }
           
           //- rjf: try registers
-          if(mapped_identifier == 0)
+          if(mapped_identifier == 0 && (resolution_qualifier.size == 0 || str8_match(resolution_qualifier, str8_lit("reg"), 0)))
           {
             U64 reg_num = e_num_from_string(e_parse_ctx->regs_map, token_string);
             if(reg_num != 0)
@@ -1372,7 +1387,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
           }
           
           //- rjf: try register aliases
-          if(mapped_identifier == 0)
+          if(mapped_identifier == 0 && (resolution_qualifier.size == 0 || str8_match(resolution_qualifier, str8_lit("reg"), 0)))
           {
             U64 alias_num = e_num_from_string(e_parse_ctx->reg_alias_map, token_string);
             if(alias_num != 0)
@@ -1386,7 +1401,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
           }
           
           //- rjf: try global variables
-          if(mapped_identifier == 0)
+          if(mapped_identifier == 0 && (resolution_qualifier.size == 0 || str8_match(resolution_qualifier, str8_lit("global"), 0)))
           {
             for(U64 module_idx = 0; module_idx < e_parse_ctx->modules_count; module_idx += 1)
             {
@@ -1430,7 +1445,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
           }
           
           //- rjf: try thread variables
-          if(mapped_identifier == 0)
+          if(mapped_identifier == 0 && (resolution_qualifier.size == 0 || str8_match(resolution_qualifier, str8_lit("thread_variable"), 0)))
           {
             for(U64 module_idx = 0; module_idx < e_parse_ctx->modules_count; module_idx += 1)
             {
@@ -1470,7 +1485,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
           }
           
           //- rjf: try procedures
-          if(mapped_identifier == 0)
+          if(mapped_identifier == 0 && (resolution_qualifier.size == 0 || str8_match(resolution_qualifier, str8_lit("procedure"), 0)))
           {
             for(U64 module_idx = 0; module_idx < e_parse_ctx->modules_count; module_idx += 1)
             {
@@ -1512,7 +1527,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
           }
           
           //- rjf: try types
-          if(mapped_identifier == 0)
+          if(mapped_identifier == 0 && (resolution_qualifier.size == 0 || str8_match(resolution_qualifier, str8_lit("type"), 0)))
           {
             type_key = e_leaf_type_from_name(token_string);
             if(!e_type_key_match(e_type_key_zero(), type_key))
@@ -1718,14 +1733,25 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
           }
         }break;
         
-        // rjf: string => leaf string literal
+        // rjf: string => leaf string literal, or file path
         case E_TokenKind_StringLiteral:
         {
-          String8 string_value_escaped = str8_chop(str8_skip(token_string, 1), 1);
-          String8 string_value_raw = e_raw_from_escaped_string(arena, string_value_escaped);
-          atom = e_push_expr(arena, E_ExprKind_LeafStringLiteral, token_string.str);
-          atom->string = string_value_raw;
-          it += 1;
+          if(str8_match(resolution_qualifier, str8_lit("file"), 0))
+          {
+            String8 string_value_escaped = str8_chop(str8_skip(token_string, 1), 1);
+            String8 string_value_raw = e_raw_from_escaped_string(arena, string_value_escaped);
+            atom = e_push_expr(arena, E_ExprKind_LeafFilePath, token_string.str);
+            atom->string = string_value_raw;
+            it += 1;
+          }
+          else
+          {
+            String8 string_value_escaped = str8_chop(str8_skip(token_string, 1), 1);
+            String8 string_value_raw = e_raw_from_escaped_string(arena, string_value_escaped);
+            atom = e_push_expr(arena, E_ExprKind_LeafStringLiteral, token_string.str);
+            atom->string = string_value_raw;
+            it += 1;
+          }
         }break;
         
       }

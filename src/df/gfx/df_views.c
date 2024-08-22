@@ -1654,7 +1654,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
             U64 num = 1;
             for(U64 reg_idx = 1; reg_idx < reg_count; reg_idx += 1, num += 1)
             {
-              String8 root_expr_string = reg_strings[reg_idx];
+              String8 root_expr_string = push_str8f(scratch.arena, "reg:%S", reg_strings[reg_idx]);
               FuzzyMatchRangeList matches = fuzzy_match_find(scratch.arena, filter, root_expr_string);
               if(matches.count == matches.needle_part_count)
               {
@@ -1666,7 +1666,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
             }
             for(U64 alias_idx = 1; alias_idx < alias_count; alias_idx += 1, num += 1)
             {
-              String8 root_expr_string = alias_strings[alias_idx];
+              String8 root_expr_string = push_str8f(scratch.arena, "reg:%S", alias_strings[alias_idx]);
               FuzzyMatchRangeList matches = fuzzy_match_find(scratch.arena, filter, root_expr_string);
               if(matches.count == matches.needle_part_count)
               {

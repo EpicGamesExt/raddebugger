@@ -14,7 +14,7 @@ str8_lit_comp("CharLiteral"),
 str8_lit_comp("Symbol"),
 };
 
-String8 e_expr_kind_strings[43] =
+String8 e_expr_kind_strings[44] =
 {
 str8_lit_comp("Nil"),
 str8_lit_comp("Ref"),
@@ -54,6 +54,7 @@ str8_lit_comp("LeafF64"),
 str8_lit_comp("LeafF32"),
 str8_lit_comp("LeafIdent"),
 str8_lit_comp("LeafID"),
+str8_lit_comp("LeafFilePath"),
 str8_lit_comp("TypeIdent"),
 str8_lit_comp("Ptr"),
 str8_lit_comp("Array"),
@@ -76,7 +77,7 @@ str8_lit_comp("Insufficient evaluation machine stack space."),
 str8_lit_comp("Malformed bytecode."),
 };
 
-E_OpInfo e_expr_kind_op_info_table[43] =
+E_OpInfo e_expr_kind_op_info_table[44] =
 {
 { E_OpKind_Null, 0, str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("Nil") },
 { E_OpKind_Null, 0, str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("Ref") },
@@ -116,6 +117,7 @@ E_OpInfo e_expr_kind_op_info_table[43] =
 { E_OpKind_Null, 0, str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("LeafF32") },
 { E_OpKind_Null, 0, str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("LeafIdent") },
 { E_OpKind_Null, 0, str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("LeafID") },
+{ E_OpKind_Null, 0, str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("LeafFilePath") },
 { E_OpKind_Null, 0, str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("TypeIdent") },
 { E_OpKind_Null, 0, str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("Ptr") },
 { E_OpKind_Null, 0, str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("Array") },
