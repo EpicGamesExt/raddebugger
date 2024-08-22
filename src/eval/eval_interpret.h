@@ -7,18 +7,6 @@
 ////////////////////////////////
 //~ rjf: Bytecode Interpretation Types
 
-typedef union E_Value E_Value;
-union E_Value
-{
-  U64 u512[8];
-  U64 u256[4];
-  U64 u128[2];
-  U64 u64;
-  S64 s64;
-  F64 f64;
-  F32 f32;
-};
-
 typedef struct E_Interpretation E_Interpretation;
 struct E_Interpretation
 {

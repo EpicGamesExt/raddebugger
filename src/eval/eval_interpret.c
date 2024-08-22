@@ -24,15 +24,9 @@ e_space_read(E_Space space, void *out, Rng1U64 range)
 {
   ProfBeginFunction();
   B32 result = 0;
-  switch(space)
+  if(e_interpret_ctx->space_read != 0)
   {
-    case E_Space_FIXED_COUNT:
-    case E_Space_Null:{}break;
-    default:
-    if(e_interpret_ctx->space_read != 0)
-    {
-      result = e_interpret_ctx->space_read(e_interpret_ctx->space_rw_user_data, space, out, range);
-    }break;
+    result = e_interpret_ctx->space_read(e_interpret_ctx->space_rw_user_data, space, out, range);
   }
   ProfEnd();
   return result;
@@ -43,15 +37,9 @@ e_space_write(E_Space space, void *in, Rng1U64 range)
 {
   ProfBeginFunction();
   B32 result = 0;
-  switch(space)
+  if(e_interpret_ctx->space_write != 0)
   {
-    case E_Space_FIXED_COUNT:
-    case E_Space_Null:{}break;
-    default:
-    if(e_interpret_ctx->space_write != 0)
-    {
-      result = e_interpret_ctx->space_write(e_interpret_ctx->space_rw_user_data, space, in, range);
-    }break;
+    result = e_interpret_ctx->space_write(e_interpret_ctx->space_rw_user_data, space, in, range);
   }
   ProfEnd();
   return result;
@@ -86,7 +74,7 @@ e_interpret(String8 bytecode)
     }
     else switch(op)
     {
-      case E_IRExtKind_SetSpace:{ctrlbits = RDI_EVAL_CTRLBITS(8, 0, 0);}break;
+      case E_IRExtKind_SetSpace:{ctrlbits = RDI_EVAL_CTRLBITS(16, 0, 0);}break;
       default:
       {
         result.code = E_InterpretationCode_BadOp;
@@ -139,7 +127,7 @@ e_interpret(String8 bytecode)
     {
       case E_IRExtKind_SetSpace:
       {
-        selected_space = imm;
+        MemoryCopy(&selected_space, ptr, sizeof(E_Space));
       }break;
       
       case RDI_EvalOp_Stop:
@@ -249,6 +237,11 @@ e_interpret(String8 bytecode)
       case RDI_EvalOp_ConstU64:
       {
         nval.u64 = imm;
+      }break;
+      
+      case RDI_EvalOp_ConstU128:
+      {
+        MemoryCopy(&nval, ptr, 16);
       }break;
       
       case RDI_EvalOp_ConstString:

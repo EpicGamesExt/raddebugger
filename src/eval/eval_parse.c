@@ -1257,7 +1257,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
           REGS_AliasCode          alias_code = 0;
           E_TypeKey               type_key = zero_struct;
           String8                 local_lookup_string = token_string;
-          E_Space                 space = E_Space_Null;
+          E_Space                 space = {0};
           Architecture            arch = Architecture_Null;
           
           //- rjf: identifiers surrounded by ``s should have those `s stripped
@@ -1430,7 +1430,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
                 U32 match_idx = matches[matches_count-1];
                 RDI_GlobalVariable *global_var = rdi_element_from_name_idx(rdi, GlobalVariables, match_idx);
                 E_OpList oplist = {0};
-                e_oplist_push_op(arena, &oplist, RDI_EvalOp_ModuleOff, global_var->voff);
+                e_oplist_push_op(arena, &oplist, RDI_EvalOp_ModuleOff, e_value_u64(global_var->voff));
                 loc_kind = RDI_LocationKind_AddrBytecodeStream;
                 loc_bytecode = e_bytecode_from_oplist(arena, &oplist);
                 U32 type_idx = global_var->type_idx;
@@ -1470,7 +1470,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
                 U32 match_idx = matches[0];
                 RDI_ThreadVariable *thread_var = rdi_element_from_name_idx(rdi, ThreadVariables, match_idx);
                 E_OpList oplist = {0};
-                e_oplist_push_op(arena, &oplist, RDI_EvalOp_TLSOff, thread_var->tls_off);
+                e_oplist_push_op(arena, &oplist, RDI_EvalOp_TLSOff, e_value_u64(thread_var->tls_off));
                 loc_kind = RDI_LocationKind_AddrBytecodeStream;
                 loc_bytecode = e_bytecode_from_oplist(arena, &oplist);
                 U32 type_idx = thread_var->type_idx;
@@ -1512,7 +1512,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
                 RDI_Scope *scope = rdi_element_from_name_idx(rdi, Scopes, procedure->root_scope_idx);
                 U64 voff = *rdi_element_from_name_idx(rdi, ScopeVOffData, scope->voff_range_first);
                 E_OpList oplist = {0};
-                e_oplist_push_op(arena, &oplist, RDI_EvalOp_ModuleOff, voff);
+                e_oplist_push_op(arena, &oplist, RDI_EvalOp_ModuleOff, e_value_u64(voff));
                 loc_kind = RDI_LocationKind_ValBytecodeStream;
                 loc_bytecode = e_bytecode_from_oplist(arena, &oplist);
                 U32 type_idx = procedure->type_idx;
@@ -1534,7 +1534,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
             {
               mapped_identifier = 1;
               identifier_looks_like_type_expr = 1;
-              space = E_Space_Null;
+              MemoryZeroStruct(&space);
               arch = e_parse_ctx->primary_module->arch;
             }
           }
@@ -1611,9 +1611,9 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
                 E_OpList oplist = {0};
                 U64 byte_size = bit_size_from_arch(arch)/8;
                 U64 regread_param = RDI_EncodeRegReadParam(loc_reg_u16.reg_code, byte_size, 0);
-                e_oplist_push_op(arena, &oplist, RDI_EvalOp_RegRead, regread_param);
-                e_oplist_push_op(arena, &oplist, RDI_EvalOp_ConstU16, loc_reg_u16.offset);
-                e_oplist_push_op(arena, &oplist, RDI_EvalOp_Add, 0);
+                e_oplist_push_op(arena, &oplist, RDI_EvalOp_RegRead, e_value_u64(regread_param));
+                e_oplist_push_op(arena, &oplist, RDI_EvalOp_ConstU16, e_value_u64(loc_reg_u16.offset));
+                e_oplist_push_op(arena, &oplist, RDI_EvalOp_Add, e_value_u64(0));
                 atom = e_push_expr(arena, E_ExprKind_LeafBytecode, token_string.str);
                 atom->mode     = E_Mode_Offset;
                 atom->space    = space;
@@ -1626,10 +1626,10 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
                 E_OpList oplist = {0};
                 U64 byte_size = bit_size_from_arch(arch)/8;
                 U64 regread_param = RDI_EncodeRegReadParam(loc_reg_u16.reg_code, byte_size, 0);
-                e_oplist_push_op(arena, &oplist, RDI_EvalOp_RegRead, regread_param);
-                e_oplist_push_op(arena, &oplist, RDI_EvalOp_ConstU16, loc_reg_u16.offset);
-                e_oplist_push_op(arena, &oplist, RDI_EvalOp_Add, 0);
-                e_oplist_push_op(arena, &oplist, RDI_EvalOp_MemRead, bit_size_from_arch(arch)/8);
+                e_oplist_push_op(arena, &oplist, RDI_EvalOp_RegRead, e_value_u64(regread_param));
+                e_oplist_push_op(arena, &oplist, RDI_EvalOp_ConstU16, e_value_u64(loc_reg_u16.offset));
+                e_oplist_push_op(arena, &oplist, RDI_EvalOp_Add, e_value_u64(0));
+                e_oplist_push_op(arena, &oplist, RDI_EvalOp_MemRead, e_value_u64(bit_size_from_arch(arch)/8));
                 atom = e_push_expr(arena, E_ExprKind_LeafBytecode, token_string.str);
                 atom->mode     = E_Mode_Offset;
                 atom->space    = space;
@@ -1645,7 +1645,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
                 U64 byte_size = (U64)reg_rng.byte_size;
                 U64 byte_pos = 0;
                 U64 regread_param = RDI_EncodeRegReadParam(loc_reg.reg_code, byte_size, byte_pos);
-                e_oplist_push_op(arena, &oplist, RDI_EvalOp_RegRead, regread_param);
+                e_oplist_push_op(arena, &oplist, RDI_EvalOp_RegRead, e_value_u64(regread_param));
                 atom = e_push_expr(arena, E_ExprKind_LeafBytecode, token_string.str);
                 atom->mode     = E_Mode_Value;
                 atom->space    = space;

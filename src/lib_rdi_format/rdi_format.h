@@ -52,7 +52,7 @@ typedef int64_t  RDI_S64;
 
 // \"raddbg\0\0\"
 #define RDI_MAGIC_CONSTANT   0x0000676264646172
-#define RDI_ENCODING_VERSION 9
+#define RDI_ENCODING_VERSION 10
 
 ////////////////////////////////////////////////////////////////
 //~ Format Types & Functions
@@ -453,37 +453,38 @@ RDI_EvalOp_ConstU8              = 12,
 RDI_EvalOp_ConstU16             = 13,
 RDI_EvalOp_ConstU32             = 14,
 RDI_EvalOp_ConstU64             = 15,
-RDI_EvalOp_ConstString          = 16,
-RDI_EvalOp_Abs                  = 17,
-RDI_EvalOp_Neg                  = 18,
-RDI_EvalOp_Add                  = 19,
-RDI_EvalOp_Sub                  = 20,
-RDI_EvalOp_Mul                  = 21,
-RDI_EvalOp_Div                  = 22,
-RDI_EvalOp_Mod                  = 23,
-RDI_EvalOp_LShift               = 24,
-RDI_EvalOp_RShift               = 25,
-RDI_EvalOp_BitAnd               = 26,
-RDI_EvalOp_BitOr                = 27,
-RDI_EvalOp_BitXor               = 28,
-RDI_EvalOp_BitNot               = 29,
-RDI_EvalOp_LogAnd               = 30,
-RDI_EvalOp_LogOr                = 31,
-RDI_EvalOp_LogNot               = 32,
-RDI_EvalOp_EqEq                 = 33,
-RDI_EvalOp_NtEq                 = 34,
-RDI_EvalOp_LsEq                 = 35,
-RDI_EvalOp_GrEq                 = 36,
-RDI_EvalOp_Less                 = 37,
-RDI_EvalOp_Grtr                 = 38,
-RDI_EvalOp_Trunc                = 39,
-RDI_EvalOp_TruncSigned          = 40,
-RDI_EvalOp_Convert              = 41,
-RDI_EvalOp_Pick                 = 42,
-RDI_EvalOp_Pop                  = 43,
-RDI_EvalOp_Insert               = 44,
-RDI_EvalOp_ValueRead            = 45,
-RDI_EvalOp_COUNT                = 46,
+RDI_EvalOp_ConstU128            = 16,
+RDI_EvalOp_ConstString          = 17,
+RDI_EvalOp_Abs                  = 18,
+RDI_EvalOp_Neg                  = 19,
+RDI_EvalOp_Add                  = 20,
+RDI_EvalOp_Sub                  = 21,
+RDI_EvalOp_Mul                  = 22,
+RDI_EvalOp_Div                  = 23,
+RDI_EvalOp_Mod                  = 24,
+RDI_EvalOp_LShift               = 25,
+RDI_EvalOp_RShift               = 26,
+RDI_EvalOp_BitAnd               = 27,
+RDI_EvalOp_BitOr                = 28,
+RDI_EvalOp_BitXor               = 29,
+RDI_EvalOp_BitNot               = 30,
+RDI_EvalOp_LogAnd               = 31,
+RDI_EvalOp_LogOr                = 32,
+RDI_EvalOp_LogNot               = 33,
+RDI_EvalOp_EqEq                 = 34,
+RDI_EvalOp_NtEq                 = 35,
+RDI_EvalOp_LsEq                 = 36,
+RDI_EvalOp_GrEq                 = 37,
+RDI_EvalOp_Less                 = 38,
+RDI_EvalOp_Grtr                 = 39,
+RDI_EvalOp_Trunc                = 40,
+RDI_EvalOp_TruncSigned          = 41,
+RDI_EvalOp_Convert              = 42,
+RDI_EvalOp_Pick                 = 43,
+RDI_EvalOp_Pop                  = 44,
+RDI_EvalOp_Insert               = 45,
+RDI_EvalOp_ValueRead            = 46,
+RDI_EvalOp_COUNT                = 47,
 } RDI_EvalOpEnum;
 
 typedef RDI_U8 RDI_EvalTypeGroup;
@@ -858,6 +859,7 @@ X(ConstU8)\
 X(ConstU16)\
 X(ConstU32)\
 X(ConstU64)\
+X(ConstU128)\
 X(ConstString)\
 X(Abs)\
 X(Neg)\
@@ -993,10 +995,10 @@ typedef RDI_U32_Table RDI_U32_NameMapBuckets;
 typedef RDI_U32_Table RDI_U32_NameMapNodes;
 #endif
 
-#define RDI_EVAL_CTRLBITS(decodeN,popN,pushN) ((decodeN) | ((popN) << 4) | ((pushN) << 6))
-#define RDI_DECODEN_FROM_CTRLBITS(ctrlbits)   ((ctrlbits) & 0xf)
-#define RDI_POPN_FROM_CTRLBITS(ctrlbits)      (((ctrlbits) >> 4) & 0x3)
-#define RDI_PUSHN_FROM_CTRLBITS(ctrlbits)     (((ctrlbits) >> 6) & 0x3)
+#define RDI_EVAL_CTRLBITS(decodeN,popN,pushN) ((decodeN) | ((popN) << 5) | ((pushN) << 7))
+#define RDI_DECODEN_FROM_CTRLBITS(ctrlbits)   ((ctrlbits) & 0x1f)
+#define RDI_POPN_FROM_CTRLBITS(ctrlbits)      (((ctrlbits) >> 5) & 0x3)
+#define RDI_PUSHN_FROM_CTRLBITS(ctrlbits)     (((ctrlbits) >> 7) & 0x1)
 #define RDI_EncodeRegReadParam(reg,bytesize,bytepos) ((reg)|((bytesize)<<8)|((bytepos)<<16))
 
 typedef struct RDI_Header RDI_Header;
@@ -1357,6 +1359,6 @@ RDI_PROC RDI_U8 *rdi_explanation_string_from_eval_conversion_kind(RDI_EvalConver
 
 extern RDI_U16 rdi_section_element_size_table[37];
 extern RDI_U8 rdi_section_is_required_table[37];
-extern RDI_U8 rdi_eval_op_ctrlbits_table[47];
+extern RDI_U8 rdi_eval_op_ctrlbits_table[48];
 
 #endif // RDI_FORMAT_H

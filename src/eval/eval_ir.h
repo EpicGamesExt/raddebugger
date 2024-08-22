@@ -19,7 +19,7 @@ struct E_Op
 {
   E_Op *next;
   RDI_EvalOp opcode;
-  U64 u64;
+  E_Value value;
   String8 string;
 };
 
@@ -43,7 +43,7 @@ struct E_IRNode
   E_IRNode *next;
   RDI_EvalOp op;
   String8 string;
-  U64 u64;
+  E_Value value;
 };
 
 typedef struct E_IRTreeAndType E_IRTreeAndType;
@@ -87,7 +87,7 @@ internal void e_select_ir_ctx(E_IRCtx *ctx);
 //~ rjf: IR-ization Functions
 
 //- rjf: op list functions
-internal void e_oplist_push_op(Arena *arena, E_OpList *list, RDI_EvalOp opcode, U64 p);
+internal void e_oplist_push_op(Arena *arena, E_OpList *list, RDI_EvalOp opcode, E_Value value);
 internal void e_oplist_push_uconst(Arena *arena, E_OpList *list, U64 x);
 internal void e_oplist_push_sconst(Arena *arena, E_OpList *list, S64 x);
 internal void e_oplist_push_bytecode(Arena *arena, E_OpList *list, String8 bytecode);

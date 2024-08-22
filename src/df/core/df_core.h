@@ -1573,6 +1573,8 @@ internal CTRL_Event df_ctrl_last_stop_event(void);
 ////////////////////////////////
 //~ rjf: Evaluation Context
 
+internal DF_Entity *df_entity_from_eval_space(E_Space space);
+internal E_Space df_eval_space_from_entity(DF_Entity *entity);
 internal B32 df_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range);
 internal B32 df_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range);
 internal E_Eval df_eval_from_eval_cfg_table(Arena *arena, E_Eval eval, DF_CfgTable *cfg);

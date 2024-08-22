@@ -3729,13 +3729,51 @@ df_ctrl_last_stop_event(void)
 ////////////////////////////////
 //~ rjf: Evaluation Context
 
+internal DF_Entity *
+df_entity_from_eval_space(E_Space space)
+{
+  DF_Entity *entity = &df_g_nil_entity;
+  if(space.u64[0] == 0 && space.u64[1] != 0)
+  {
+    entity = (DF_Entity *)space.u64[1];
+  }
+  return entity;
+}
+
+internal E_Space
+df_eval_space_from_entity(DF_Entity *entity)
+{
+  E_Space space = {0};
+  space.u64[1] = (U64)entity;
+  return space;
+}
+
 internal B32
 df_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
 {
   B32 result = 0;
-  DF_Entity *entity = (DF_Entity *)space;
+  DF_Entity *entity = df_entity_from_eval_space(space);
   switch(entity->kind)
   {
+    //- rjf: nil-space -> fall back to file system
+    case DF_EntityKind_Nil:
+    {
+      U128 key = space;
+      U128 hash = hs_hash_from_key(key, 0);
+      HS_Scope *scope = hs_scope_open();
+      {
+        String8 data = hs_data_from_hash(scope, hash);
+        Rng1U64 legal_range = r1u64(0, data.size);
+        Rng1U64 read_range = intersect_1u64(range, legal_range);
+        if(read_range.min < read_range.max)
+        {
+          result = 1;
+          MemoryCopy(out, data.str + read_range.min, dim_1u64(read_range));
+        }
+      }
+      hs_scope_close(scope);
+    }break;
+    
     //- rjf: default -> evaluating a debugger entity; read from entity POD evaluation
     default:
     {
@@ -3799,7 +3837,7 @@ internal B32
 df_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range)
 {
   B32 result = 0;
-  DF_Entity *entity = (DF_Entity *)space;
+  DF_Entity *entity = df_entity_from_eval_space(space);
   switch(entity->kind)
   {
     //- rjf: default -> making commits to entity evaluation
@@ -4307,8 +4345,8 @@ df_string_from_simple_typed_eval(Arena *arena, DF_EvalVizStringFlags flags, U32 
     {
       Temp scratch = scratch_begin(&arena, 1);
       U64 min_digits = (radix == 16) ? type_byte_size*2 : 0;
-      String8 upper64 = str8_from_u64(scratch.arena, eval.value.u128[0], radix, min_digits, digit_group_separator);
-      String8 lower64 = str8_from_u64(scratch.arena, eval.value.u128[1], radix, min_digits, digit_group_separator);
+      String8 upper64 = str8_from_u64(scratch.arena, eval.value.u128.u64[0], radix, min_digits, digit_group_separator);
+      String8 lower64 = str8_from_u64(scratch.arena, eval.value.u128.u64[1], radix, min_digits, digit_group_separator);
       result = push_str8f(arena, "%S:%S", upper64, lower64);
       scratch_end(scratch);
     }break;
@@ -5013,7 +5051,7 @@ df_expr_from_eval_viz_block_index(Arena *arena, DF_EvalVizBlock *block, U64 inde
             RDI_Scope *scope = rdi_element_from_name_idx(module->rdi, Scopes, procedure->root_scope_idx);
             U64 voff = *rdi_element_from_name_idx(module->rdi, ScopeVOffData, scope->voff_range_first);
             E_OpList oplist = {0};
-            e_oplist_push_op(arena, &oplist, RDI_EvalOp_ModuleOff, voff);
+            e_oplist_push_op(arena, &oplist, RDI_EvalOp_ModuleOff, e_value_u64(voff));
             String8 bytecode = e_bytecode_from_oplist(arena, &oplist);
             U32 type_idx = procedure->type_idx;
             RDI_TypeNode *type_node = rdi_element_from_name_idx(module->rdi, TypeNodes, type_idx);
@@ -5030,7 +5068,7 @@ df_expr_from_eval_viz_block_index(Arena *arena, DF_EvalVizBlock *block, U64 inde
             RDI_GlobalVariable *gvar = rdi_element_from_name_idx(module->rdi, GlobalVariables, element_idx);
             U64 voff = gvar->voff;
             E_OpList oplist = {0};
-            e_oplist_push_op(arena, &oplist, RDI_EvalOp_ModuleOff, voff);
+            e_oplist_push_op(arena, &oplist, RDI_EvalOp_ModuleOff, e_value_u64(voff));
             String8 bytecode = e_bytecode_from_oplist(arena, &oplist);
             U32 type_idx = gvar->type_idx;
             RDI_TypeNode *type_node = rdi_element_from_name_idx(module->rdi, TypeNodes, type_idx);
@@ -5046,7 +5084,7 @@ df_expr_from_eval_viz_block_index(Arena *arena, DF_EvalVizBlock *block, U64 inde
           {
             RDI_ThreadVariable *tvar = rdi_element_from_name_idx(module->rdi, ThreadVariables, element_idx);
             E_OpList oplist = {0};
-            e_oplist_push_op(arena, &oplist, RDI_EvalOp_TLSOff, tvar->tls_off);
+            e_oplist_push_op(arena, &oplist, RDI_EvalOp_TLSOff, e_value_u64(tvar->tls_off));
             String8 bytecode = e_bytecode_from_oplist(arena, &oplist);
             U32 type_idx = tvar->type_idx;
             RDI_TypeNode *type_node = rdi_element_from_name_idx(module->rdi, TypeNodes, type_idx);
@@ -8389,7 +8427,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
       eval_modules[eval_module_idx].arch        = df_architecture_from_entity(m);
       eval_modules[eval_module_idx].rdi         = di_rdi_from_key(df_state->frame_di_scope, &dbgi_key, 0);
       eval_modules[eval_module_idx].vaddr_range = m->vaddr_rng;
-      eval_modules[eval_module_idx].space       = (U64)df_entity_ancestor_from_kind(m, DF_EntityKind_Process);
+      eval_modules[eval_module_idx].space       = df_eval_space_from_entity(df_entity_ancestor_from_kind(m, DF_EntityKind_Process));
       if(module == m)
       {
         eval_modules_primary = &eval_modules[eval_module_idx];
@@ -8435,7 +8473,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
     E_ParseCtx *ctx = parse_ctx;
     ctx->ip_vaddr          = rip_vaddr;
     ctx->ip_voff           = rip_voff;
-    ctx->ip_thread_space   = (E_Space)thread;
+    ctx->ip_thread_space   = df_eval_space_from_entity(thread);
     ctx->modules           = eval_modules;
     ctx->modules_count     = eval_modules_count;
     ctx->primary_module    = eval_modules_primary;
@@ -8496,7 +8534,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
     ctx->space_write       = df_eval_space_write;
     ctx->primary_space     = eval_modules_primary->space;
     ctx->reg_arch          = eval_modules_primary->arch;
-    ctx->reg_space         = (E_Space)thread;
+    ctx->reg_space         = df_eval_space_from_entity(thread);
     ctx->reg_unwind_count  = unwind_count;
     ctx->module_base       = push_array(arena, U64, 1);
     ctx->module_base[0]    = module->vaddr_rng.min;

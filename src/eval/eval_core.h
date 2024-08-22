@@ -37,6 +37,21 @@ struct E_MsgList
 };
 
 ////////////////////////////////
+//~ rjf: Register-Sized Value Type
+
+typedef union E_Value E_Value;
+union E_Value
+{
+  U64 u512[8];
+  U64 u256[4];
+  U128 u128;
+  U64 u64;
+  S64 s64;
+  F64 f64;
+  F32 f32;
+};
+
+////////////////////////////////
 //~ rjf: Operator Info
 
 typedef enum E_OpKind
@@ -60,7 +75,7 @@ struct E_OpInfo
 ////////////////////////////////
 //~ rjf: Evaluation Spaces
 
-typedef U64 E_Space;
+typedef U128 E_Space;
 //
 // NOTE(rjf): Evaluations occur within the context of a "space". Each "space"
 // refers to a different offset/address-space, but it's a bit looser of a
@@ -71,15 +86,6 @@ typedef U64 E_Space;
 // Effectively, when considering the result of an evaluation, you use the
 // value for understanding a key *into* a space, e.g. 1+2 -> 3, in a null
 // space, or &foo, in the space of PID: 1234.
-//
-// The values in the E_Space enum are reserved, but apart from those, any
-// arbitrary value can be used, and then later interpreted.
-//
-enum
-{
-  E_Space_Null,
-  E_Space_FIXED_COUNT
-};
 
 ////////////////////////////////
 //~ rjf: Evaluation Modes
@@ -114,6 +120,7 @@ struct E_Module
 
 internal U64 e_hash_from_string(U64 seed, String8 string);
 internal String8 e_raw_from_escaped_string(Arena *arena, String8 string);
+#define e_value_u64(v) (E_Value){.u64 = (v)}
 
 ////////////////////////////////
 //~ rjf: Message Functions

@@ -1527,7 +1527,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                 E_Expr *bp_expr = e_push_expr(scratch.arena, E_ExprKind_LeafID, 0);
                 bp_expr->type_key = bp_type;
                 bp_expr->mode = E_Mode_Offset;
-                bp_expr->space = (U64)bp;
+                bp_expr->space = df_eval_space_from_entity(bp);
                 df_append_viz_blocks_for_parent__rec(scratch.arena, eval_view, parent_key, key, title, bp_expr, &top_level_cfg_table, 0, &blocks);
               }
             }
@@ -1562,7 +1562,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                 E_Expr *wp_expr = e_push_expr(scratch.arena, E_ExprKind_LeafID, 0);
                 wp_expr->type_key = wp_type;
                 wp_expr->mode = E_Mode_Offset;
-                wp_expr->space = (U64)wp;
+                wp_expr->space = df_eval_space_from_entity(wp);
                 df_append_viz_blocks_for_parent__rec(scratch.arena, eval_view, parent_key, key, title, wp_expr, &top_level_cfg_table, 0, &blocks);
               }
             }
@@ -1625,12 +1625,12 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                 }
                 U64 row_vaddr = regs_rip_from_arch_block(arch, row->regs);
                 E_OpList ops = {0};
-                e_oplist_push_op(scratch.arena, &ops, RDI_EvalOp_ConstU64, row_vaddr);
+                e_oplist_push_op(scratch.arena, &ops, RDI_EvalOp_ConstU64, e_value_u64(row_vaddr));
                 String8 bytecode = e_bytecode_from_oplist(scratch.arena, &ops);
                 E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafBytecode, 0);
                 expr->bytecode = bytecode;
                 expr->mode = E_Mode_Value;
-                expr->space = (U64)process;
+                expr->space = df_eval_space_from_entity(process);
                 expr->type_key = type_key;
                 block->expr = expr;
                 block->visual_idx_range   = r1u64(row_idx, row_idx+1);
@@ -2657,9 +2657,8 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
         {
           default:{}break;
           case E_Mode_Offset:
-          if(row_eval.space >= E_Space_FIXED_COUNT)
           {
-            DF_Entity *space_entity = (DF_Entity *)row_eval.space;
+            DF_Entity *space_entity = df_entity_from_eval_space(row_eval.space);
             if(space_entity->kind == DF_EntityKind_Process)
             {
               U64 size = e_type_byte_size_from_key(row_eval.type_key);
@@ -3215,7 +3214,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                       case E_IRExtKind_Bytecode:{ext = str8_lit("[bytecode]");}break;
                       default:
                       {
-                        ext = str8_from_u64(scratch.arena, op->u64, 16, 0, 0);
+                        ext = str8_from_u64(scratch.arena, op->value.u64, 16, 0, 0);
                       }break;
                     }
                     ui_labelf("  %S%s%S", op_string, ext.size ? " " : "", ext);

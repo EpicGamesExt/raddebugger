@@ -62,7 +62,7 @@
   "";
   "// \"raddbg\0\0\"";
   "#define RDI_MAGIC_CONSTANT   0x0000676264646172";
-  "#define RDI_ENCODING_VERSION 9";
+  "#define RDI_ENCODING_VERSION 10";
   "";
   "////////////////////////////////////////////////////////////////";
   "//~ Format Types & Functions";
@@ -1246,37 +1246,38 @@ RDI_EvalOpTable:
   {ConstU16    13      2 0 1}
   {ConstU32    14      4 0 1}
   {ConstU64    15      8 0 1}
-  {ConstString 16      1 0 1}
-  {Abs         17      1 1 1}
-  {Neg         18      1 1 1}
-  {Add         19      1 2 1}
-  {Sub         20      1 2 1}
-  {Mul         21      1 2 1}
-  {Div         22      1 2 1}
-  {Mod         23      1 2 1}
-  {LShift      24      1 2 1}
-  {RShift      25      1 2 1}
-  {BitAnd      26      1 2 1}
-  {BitOr       27      1 2 1}
-  {BitXor      28      1 2 1}
-  {BitNot      29      1 1 1}
-  {LogAnd      30      1 2 1}
-  {LogOr       31      1 2 1}
-  {LogNot      32      1 1 1}
-  {EqEq        33      1 2 1}
-  {NtEq        34      1 2 1}
-  {LsEq        35      1 2 1}
-  {GrEq        36      1 2 1}
-  {Less        37      1 2 1}
-  {Grtr        38      1 2 1}
-  {Trunc       39      1 1 1}
-  {TruncSigned 40      1 1 1}
-  {Convert     41      2 1 1}
-  {Pick        42      1 0 1}
-  {Pop         43      0 1 0}
-  {Insert      44      1 0 0}
-  {ValueRead   45      1 2 1}
-  {COUNT       46      0 0 0}
+  {ConstU128   16     16 0 1}
+  {ConstString 17      1 0 1}
+  {Abs         18      1 1 1}
+  {Neg         19      1 1 1}
+  {Add         20      1 2 1}
+  {Sub         21      1 2 1}
+  {Mul         22      1 2 1}
+  {Div         23      1 2 1}
+  {Mod         24      1 2 1}
+  {LShift      25      1 2 1}
+  {RShift      26      1 2 1}
+  {BitAnd      27      1 2 1}
+  {BitOr       28      1 2 1}
+  {BitXor      29      1 2 1}
+  {BitNot      30      1 1 1}
+  {LogAnd      31      1 2 1}
+  {LogOr       32      1 2 1}
+  {LogNot      33      1 1 1}
+  {EqEq        34      1 2 1}
+  {NtEq        35      1 2 1}
+  {LsEq        36      1 2 1}
+  {GrEq        37      1 2 1}
+  {Less        38      1 2 1}
+  {Grtr        39      1 2 1}
+  {Trunc       40      1 1 1}
+  {TruncSigned 41      1 1 1}
+  {Convert     42      2 1 1}
+  {Pick        43      1 0 1}
+  {Pop         44      0 1 0}
+  {Insert      45      1 0 0}
+  {ValueRead   46      1 2 1}
+  {COUNT       47      0 0 0}
 }
 
 // NOTE(rjf): "ck" -> "conversion kind, when converted to type group", used in square matrix form
@@ -1335,10 +1336,10 @@ RDI_EvalConversionKindTable:
 
 @gen(enums)
 ```
-#define RDI_EVAL_CTRLBITS(decodeN,popN,pushN) ((decodeN) | ((popN) << 4) | ((pushN) << 6))
-#define RDI_DECODEN_FROM_CTRLBITS(ctrlbits)   ((ctrlbits) & 0xf)
-#define RDI_POPN_FROM_CTRLBITS(ctrlbits)      (((ctrlbits) >> 4) & 0x3)
-#define RDI_PUSHN_FROM_CTRLBITS(ctrlbits)     (((ctrlbits) >> 6) & 0x3)
+#define RDI_EVAL_CTRLBITS(decodeN,popN,pushN) ((decodeN) | ((popN) << 5) | ((pushN) << 7))
+#define RDI_DECODEN_FROM_CTRLBITS(ctrlbits)   ((ctrlbits) & 0x1f)
+#define RDI_POPN_FROM_CTRLBITS(ctrlbits)      (((ctrlbits) >> 5) & 0x3)
+#define RDI_PUSHN_FROM_CTRLBITS(ctrlbits)     (((ctrlbits) >> 7) & 0x1)
 #define RDI_EncodeRegReadParam(reg,bytesize,bytepos) ((reg)|((bytesize)<<8)|((bytepos)<<16))
 ```
 

@@ -6135,7 +6135,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           DF_ExpandKey parent_key = df_expand_key_make(5381, 1);
           DF_ExpandKey key = df_expand_key_make(df_hash_from_expand_key(parent_key), 1);
           DF_EvalVizBlockList viz_blocks = df_eval_viz_block_list_from_eval_view_expr_keys(scratch.arena, eval_view, &top_level_cfg_table, expr, parent_key, key);
-          DF_Entity *entity = eval.space ? (DF_Entity *)eval.space : &df_g_nil_entity;
+          DF_Entity *entity = df_entity_from_eval_space(eval.space);
           U32 default_radix = (entity->kind == DF_EntityKind_Thread ? 16 : 10);
           DF_EvalVizWindowedRowList viz_rows = df_eval_viz_windowed_row_list_from_viz_block_list(scratch.arena, eval_view, r1s64(0, 50), &viz_blocks);
           
@@ -6241,9 +6241,8 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
               {
                 default:{}break;
                 case E_Mode_Offset:
-                if(row_eval.space >= E_Space_FIXED_COUNT)
                 {
-                  DF_Entity *space_entity = (DF_Entity *)row_eval.space;
+                  DF_Entity *space_entity = df_entity_from_eval_space(row_eval.space);
                   if(space_entity->kind == DF_EntityKind_Process)
                   {
                     U64 size = e_type_byte_size_from_key(row_eval.type_key);

@@ -138,6 +138,32 @@ fs_timestamp_from_path(String8 path)
   return result;
 }
 
+internal U64
+fs_size_from_path(String8 path)
+{
+  Temp scratch = scratch_begin(0, 0);
+  U64 result = 0;
+  path = path_normalized_from_string(scratch.arena, path);
+  U128 path_key = hs_hash_from_data(path);
+  U64 slot_idx = path_key.u64[0]%fs_shared->slots_count;
+  U64 stripe_idx = slot_idx%fs_shared->stripes_count;
+  FS_Slot *slot = &fs_shared->slots[slot_idx];
+  FS_Stripe *stripe = &fs_shared->stripes[stripe_idx];
+  OS_MutexScopeR(stripe->rw_mutex)
+  {
+    for(FS_Node *n = slot->first; n != 0; n = n->next)
+    {
+      if(str8_match(path, n->path, 0))
+      {
+        result = n->size;
+        break;
+      }
+    }
+  }
+  scratch_end(scratch);
+  return result;
+}
+
 ////////////////////////////////
 //~ rjf: Streamer Threads
 
@@ -263,6 +289,7 @@ fs_streamer_thread__entry_point(void *p)
         if(post_props.modified == pre_props.modified)
         {
           node->timestamp = post_props.modified;
+          node->size = post_props.size;
         }
         ins_atomic_u32_eval_assign(&node->is_working, 0);
       }

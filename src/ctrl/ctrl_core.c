@@ -3799,7 +3799,7 @@ internal B32
 ctrl_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
 {
   B32 result = 0;
-  CTRL_Entity *entity = (CTRL_Entity *)space;
+  CTRL_Entity *entity = (CTRL_Entity *)space.u64[1];
   {
     switch(entity->kind)
     {
@@ -4687,7 +4687,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
                   eval_modules[eval_module_idx].arch        = arch;
                   eval_modules[eval_module_idx].rdi         = di_rdi_from_key(di_scope, &dbgi_key, max_U64);
                   eval_modules[eval_module_idx].vaddr_range = mod->vaddr_range;
-                  eval_modules[eval_module_idx].space       = (U64)process;
+                  eval_modules[eval_module_idx].space.u64[1]= (U64)process;
                   if(mod == module)
                   {
                     eval_modules_primary = &eval_modules[eval_module_idx];
@@ -4719,7 +4719,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
               E_ParseCtx *ctx = &parse_ctx;
               ctx->ip_vaddr          = thread_rip_vaddr;
               ctx->ip_voff           = thread_rip_voff;
-              ctx->ip_thread_space   = (E_Space)thread;
+              ctx->ip_thread_space.u64[1] = (U64)thread;
               ctx->modules           = eval_modules;
               ctx->modules_count     = eval_modules_count;
               ctx->primary_module    = eval_modules_primary;
@@ -4744,7 +4744,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
               ctx->space_read    = ctrl_eval_space_read;
               ctx->primary_space = eval_modules_primary->space;
               ctx->reg_arch      = eval_modules_primary->arch;
-              ctx->reg_space     = (E_Space)thread;
+              ctx->reg_space.u64[1] = (U64)thread;
               ctx->module_base   = push_array(temp.arena, U64, 1);
               ctx->module_base[0]= module->vaddr_range.min;
               ctx->tls_base      = push_array(temp.arena, U64, 1);

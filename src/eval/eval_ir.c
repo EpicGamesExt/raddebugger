@@ -76,13 +76,13 @@ e_select_ir_ctx(E_IRCtx *ctx)
 //- rjf: op list functions
 
 internal void
-e_oplist_push_op(Arena *arena, E_OpList *list, RDI_EvalOp opcode, U64 p)
+e_oplist_push_op(Arena *arena, E_OpList *list, RDI_EvalOp opcode, E_Value value)
 {
   U8 ctrlbits = rdi_eval_op_ctrlbits_table[opcode];
   U32 p_size = RDI_DECODEN_FROM_CTRLBITS(ctrlbits);
   E_Op *node = push_array_no_zero(arena, E_Op, 1);
   node->opcode = opcode;
-  node->u64 = p;
+  node->value = value;
   SLLQueuePush(list->first, list->last, node);
   list->op_count += 1;
   list->encoded_size += 1 + p_size;
@@ -92,10 +92,10 @@ internal void
 e_oplist_push_uconst(Arena *arena, E_OpList *list, U64 x)
 {
   if(0){}
-  else if(x <= 0xFF)       { e_oplist_push_op(arena, list, RDI_EvalOp_ConstU8,  x); }
-  else if(x <= 0xFFFF)     { e_oplist_push_op(arena, list, RDI_EvalOp_ConstU16, x); }
-  else if(x <= 0xFFFFFFFF) { e_oplist_push_op(arena, list, RDI_EvalOp_ConstU32, x); }
-  else                     { e_oplist_push_op(arena, list, RDI_EvalOp_ConstU64, x); }
+  else if(x <= 0xFF)       { e_oplist_push_op(arena, list, RDI_EvalOp_ConstU8,  e_value_u64(x)); }
+  else if(x <= 0xFFFF)     { e_oplist_push_op(arena, list, RDI_EvalOp_ConstU16, e_value_u64(x)); }
+  else if(x <= 0xFFFFFFFF) { e_oplist_push_op(arena, list, RDI_EvalOp_ConstU32, e_value_u64(x)); }
+  else                     { e_oplist_push_op(arena, list, RDI_EvalOp_ConstU64, e_value_u64(x)); }
 }
 
 internal void
@@ -103,22 +103,22 @@ e_oplist_push_sconst(Arena *arena, E_OpList *list, S64 x)
 {
   if(-0x80 <= x && x <= 0x7F)
   {
-    e_oplist_push_op(arena, list, RDI_EvalOp_ConstU8, (U64)x);
-    e_oplist_push_op(arena, list, RDI_EvalOp_TruncSigned, 8);
+    e_oplist_push_op(arena, list, RDI_EvalOp_ConstU8, e_value_u64((U64)x));
+    e_oplist_push_op(arena, list, RDI_EvalOp_TruncSigned, e_value_u64(8));
   }
   else if(-0x8000 <= x && x <= 0x7FFF)
   {
-    e_oplist_push_op(arena, list, RDI_EvalOp_ConstU16, (U64)x);
-    e_oplist_push_op(arena, list, RDI_EvalOp_TruncSigned, 16);
+    e_oplist_push_op(arena, list, RDI_EvalOp_ConstU16, e_value_u64((U64)x));
+    e_oplist_push_op(arena, list, RDI_EvalOp_TruncSigned, e_value_u64(16));
   }
   else if(-0x80000000ll <= x && x <= 0x7FFFFFFFll)
   {
-    e_oplist_push_op(arena, list, RDI_EvalOp_ConstU32, (U64)x);
-    e_oplist_push_op(arena, list, RDI_EvalOp_TruncSigned, 32);
+    e_oplist_push_op(arena, list, RDI_EvalOp_ConstU32, e_value_u64((U64)x));
+    e_oplist_push_op(arena, list, RDI_EvalOp_TruncSigned, e_value_u64(32));
   }
   else
   {
-    e_oplist_push_op(arena, list, RDI_EvalOp_ConstU64, (U64)x);
+    e_oplist_push_op(arena, list, RDI_EvalOp_ConstU64, e_value_u64((U64)x));
   }
 }
 
@@ -138,7 +138,7 @@ e_oplist_push_set_space(Arena *arena, E_OpList *list, E_Space space)
 {
   E_Op *node = push_array_no_zero(arena, E_Op, 1);
   node->opcode = E_IRExtKind_SetSpace;
-  node->u64 = space;
+  node->value.u128 = space;
   SLLQueuePush(list->first, list->last, node);
   list->op_count += 1;
   list->encoded_size += 1 + sizeof(space);
@@ -153,10 +153,10 @@ e_oplist_push_string_literal(Arena *arena, E_OpList *list, String8 string)
   E_Op *node = push_array_no_zero(arena, E_Op, 1);
   node->opcode = opcode;
   node->string = string;
-  node->u64 = Min(string.size, 64);
+  node->value.u64 = Min(string.size, 64);
   SLLQueuePush(list->first, list->last, node);
   list->op_count += 1;
-  list->encoded_size += 1 + p_size + node->u64;
+  list->encoded_size += 1 + p_size + node->value.u64;
 }
 
 internal void
@@ -206,7 +206,7 @@ e_irtree_const_u(Arena *arena, U64 v)
   
   // rjf: build
   E_IRNode *n = e_push_irnode(arena, op);
-  n->u64 = v;
+  n->value.u64 = v;
   return n;
 }
 
@@ -214,7 +214,7 @@ internal E_IRNode *
 e_irtree_unary_op(Arena *arena, RDI_EvalOp op, RDI_EvalTypeGroup group, E_IRNode *c)
 {
   E_IRNode *n = e_push_irnode(arena, op);
-  n->u64 = group;
+  n->value.u64 = group;
   e_irnode_push_child(n, c);
   return n;
 }
@@ -223,7 +223,7 @@ internal E_IRNode *
 e_irtree_binary_op(Arena *arena, RDI_EvalOp op, RDI_EvalTypeGroup group, E_IRNode *l, E_IRNode *r)
 {
   E_IRNode *n = e_push_irnode(arena, op);
-  n->u64 = group;
+  n->value.u64 = group;
   e_irnode_push_child(n, l);
   e_irnode_push_child(n, r);
   return n;
@@ -266,7 +266,7 @@ internal E_IRNode *
 e_irtree_set_space(Arena *arena, E_Space space, E_IRNode *c)
 {
   E_IRNode *root = e_push_irnode(arena, E_IRExtKind_SetSpace);
-  root->u64 = space;
+  root->value.u128 = space;
   e_irnode_push_child(root, c);
   return root;
 }
@@ -280,7 +280,7 @@ e_irtree_mem_read_type(Arena *arena, E_Space space, E_IRNode *c, E_TypeKey type_
   
   // rjf: build the read node
   E_IRNode *read_node = e_push_irnode(arena, RDI_EvalOp_MemRead);
-  read_node->u64 = byte_size;
+  read_node->value.u64 = byte_size;
   e_irnode_push_child(read_node, c);
   
   // rjf: build a signed trunc node if needed
@@ -290,7 +290,7 @@ e_irtree_mem_read_type(Arena *arena, E_Space space, E_IRNode *c, E_TypeKey type_
   if(bit_size < 64 && e_type_kind_is_signed(kind))
   {
     with_trunc = e_push_irnode(arena, RDI_EvalOp_TruncSigned);
-    with_trunc->u64 = bit_size;
+    with_trunc->value.u64 = bit_size;
     e_irnode_push_child(with_trunc, read_node);
   }
   
@@ -307,7 +307,7 @@ internal E_IRNode *
 e_irtree_convert_lo(Arena *arena, E_IRNode *c, RDI_EvalTypeGroup out, RDI_EvalTypeGroup in)
 {
   E_IRNode *n = e_push_irnode(arena, RDI_EvalOp_Convert);
-  n->u64 = in | (out << 8);
+  n->value.u64 = in | (out << 8);
   e_irnode_push_child(n, c);
   return n;
 }
@@ -327,7 +327,7 @@ e_irtree_trunc(Arena *arena, E_IRNode *c, E_TypeKey type_key)
     }
     U64 bit_size = byte_size << 3;
     result = e_push_irnode(arena, op);
-    result->u64 = bit_size;
+    result->value.u64 = bit_size;
     e_irnode_push_child(result, c);
   }
   return result;
@@ -358,22 +358,11 @@ e_irtree_convert_hi(Arena *arena, E_IRNode *c, E_TypeKey out, E_TypeKey in)
 internal E_IRNode *
 e_irtree_resolve_to_value(Arena *arena, E_Space from_space, E_Mode from_mode, E_IRNode *tree, E_TypeKey type_key)
 {
+  // TODO(rjf): @spaces double check that this path is working for register spaces
   E_IRNode *result = tree;
   if(from_mode == E_Mode_Offset)
   {
-    switch(from_space)
-    {
-#if 0
-      case E_Space_Regs:
-      {
-        result = e_irtree_unary_op(arena, RDI_EvalOp_RegReadDyn, RDI_EvalTypeGroup_U, tree);
-      }break;
-#endif
-      default:
-      {
-        result = e_irtree_mem_read_type(arena, from_space, tree, type_key);
-      }break;
-    }
+    result = e_irtree_mem_read_type(arena, from_space, tree, type_key);
   }
   return result;
 }
@@ -491,7 +480,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
             
             // rjf: ops to push stack value, push offset, + read from stack value
             new_tree = e_push_irnode(arena, RDI_EvalOp_ValueRead);
-            new_tree->u64 = direct_type_size;
+            new_tree->value.u64 = direct_type_size;
             e_irnode_push_child(new_tree, offset_tree);
             e_irnode_push_child(new_tree, l.root);
           }break;
@@ -964,7 +953,12 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
             result.root     = new_tree;
             result.type_key = final_type_key;
             result.mode     = E_Mode_Value;
-            result.space    = l_tree.space ? l_tree.space : r_tree.space;
+            result.space    = l_tree.space;
+            E_Space zero_space = {0};
+            if(MemoryMatchStruct(&result.space, &zero_space))
+            {
+              result.space = r_tree.space;
+            }
           }
         }break;
         
@@ -1008,7 +1002,12 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
             result.root     = new_root;
             result.type_key = ptr_type;
             result.mode     = E_Mode_Value;
-            result.space    = l_tree.space ? l_tree.space : r_tree.space;
+            result.space    = l_tree.space;
+            E_Space zero_space = {0};
+            if(MemoryMatchStruct(&result.space, &zero_space))
+            {
+              result.space = r_tree.space;
+            }
           }
         }break;
         
@@ -1040,7 +1039,12 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
           result.root     = new_tree;
           result.type_key = e_type_key_basic(E_TypeKind_U64);
           result.mode     = E_Mode_Value;
-          result.space    = l_tree.space ? l_tree.space : r_tree.space;
+          result.space    = l_tree.space;
+          E_Space zero_space = {0};
+          if(MemoryMatchStruct(&result.space, &zero_space))
+          {
+            result.space = r_tree.space;
+          }
         }break;
         
         //- rjf: pointer array comparison
@@ -1069,7 +1073,12 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
           result.root     = e_irtree_binary_op(arena, op, RDI_EvalTypeGroup_Other, mem_root, arr_root);
           result.type_key = e_type_key_basic(E_TypeKind_Bool);
           result.mode     = E_Mode_Value;
-          result.space    = ptr_tree->space ? ptr_tree->space : arr_tree->space;
+          result.space    = ptr_tree->space;
+          E_Space zero_space = {0};
+          if(MemoryMatchStruct(&result.space, &zero_space))
+          {
+            result.space = arr_tree->space;
+          }
         }break;
       }
     }break;
@@ -1120,7 +1129,12 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
         result.root     = new_tree;
         result.type_key = result_type;
         result.mode     = E_Mode_Value;
-        result.space    = l_expr->space ? l_expr->space : r_expr->space;
+        result.space = l_expr->space;
+        E_Space zero_space = {0};
+        if(MemoryMatchStruct(&result.space, &zero_space))
+        {
+          result.space = r_expr->space;
+        }
       }
     }break;
     
@@ -1207,11 +1221,24 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
     case E_ExprKind_LeafID:
     {
       E_IRNode *new_tree = e_push_irnode(arena, RDI_EvalOp_ConstU64);
-      new_tree->u64   = expr->u64;
+      new_tree->value.u64 = expr->u64;
       result.root     = new_tree;
       result.type_key = expr->type_key;
       result.mode     = E_Mode_Offset;
       result.space    = expr->space;
+    }break;
+    
+    //- rjf: leaf file paths
+    case E_ExprKind_LeafFilePath:
+    {
+      U128 key = fs_key_from_path(expr->string);
+      U64 size = fs_size_from_path(expr->string);
+      E_IRNode *base_offset = e_irtree_const_u(arena, 0);
+      E_IRNode *set_space = e_irtree_set_space(arena, key, base_offset);
+      result.root     = set_space;
+      result.type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), size);
+      result.mode     = E_Mode_Offset;
+      result.space    = key;
     }break;
     
     //- rjf: types
@@ -1269,7 +1296,7 @@ e_append_oplist_from_irtree(Arena *arena, E_IRNode *root, E_OpList *out)
     
     case E_IRExtKind_SetSpace:
     {
-      e_oplist_push_set_space(arena, out, root->u64);
+      e_oplist_push_set_space(arena, out, root->value.u128);
       for(E_IRNode *child = root->first;
           child != &e_irnode_nil;
           child = child->next)
@@ -1292,11 +1319,11 @@ e_append_oplist_from_irtree(Arena *arena, E_IRNode *root, E_OpList *out)
       //  3. <ptr_left>
       
       // rjf: modify prt_right in place to create step 2
-      e_oplist_push_op(arena, &prt_right, RDI_EvalOp_Skip, prt_left.encoded_size);
+      e_oplist_push_op(arena, &prt_right, RDI_EvalOp_Skip, e_value_u64(prt_left.encoded_size));
       
       // rjf: merge 1 into out
       e_oplist_concat_in_place(out, &prt_cond);
-      e_oplist_push_op(arena, out, RDI_EvalOp_Cond, prt_right.encoded_size);
+      e_oplist_push_op(arena, out, RDI_EvalOp_Cond, e_value_u64(prt_right.encoded_size));
       
       // rjf: merge 2 into out
       e_oplist_concat_in_place(out, &prt_right);
@@ -1330,7 +1357,7 @@ e_append_oplist_from_irtree(Arena *arena, E_IRNode *root, E_OpList *out)
         }
         
         // rjf: emit op to compute this node
-        e_oplist_push_op(arena, out, (RDI_EvalOp)root->op, root->u64);
+        e_oplist_push_op(arena, out, (RDI_EvalOp)root->op, root->value);
       }
     }break;
   }
@@ -1371,7 +1398,7 @@ e_bytecode_from_oplist(Arena *arena, E_OpList *oplist)
         
         // rjf: fill bytecode
         ptr[0] = opcode;
-        MemoryCopy(ptr + 1, &op->u64, extra_byte_count);
+        MemoryCopy(ptr + 1, &op->value.u64, extra_byte_count);
         
         // rjf: advance
         ptr = next_ptr;
@@ -1380,13 +1407,13 @@ e_bytecode_from_oplist(Arena *arena, E_OpList *oplist)
       case RDI_EvalOp_ConstString:
       {
         // rjf: compute bytecode advance
-        U8 *next_ptr = ptr + 2 + op->u64;
+        U8 *next_ptr = ptr + 2 + op->value.u64;
         Assert(next_ptr <= opl);
         
         // rjf: fill
         ptr[0] = opcode;
-        ptr[1] = (U8)op->u64;
-        MemoryCopy(ptr+2, op->string.str, op->u64);
+        ptr[1] = (U8)op->value.u64;
+        MemoryCopy(ptr+2, op->string.str, op->value.u64);
         
         // rjf: advance
         ptr = next_ptr;
@@ -1415,7 +1442,7 @@ e_bytecode_from_oplist(Arena *arena, E_OpList *oplist)
         
         // rjf: fill bytecode
         ptr[0] = opcode;
-        MemoryCopy(ptr + 1, &op->u64, extra_byte_count);
+        MemoryCopy(ptr + 1, &op->value.u64, extra_byte_count);
         
         // rjf: advance
         ptr = next_ptr;
