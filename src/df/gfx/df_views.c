@@ -1315,6 +1315,8 @@ df_watch_view_column_alloc_(DF_WatchViewState *wv, DF_WatchViewColumnKind kind, 
   col->pct = pct;
   col->string_size = Min(sizeof(col->string_buffer), params->string.size);
   MemoryCopy(col->string_buffer, params->string.str, col->string_size);
+  col->view_rule_size = Min(sizeof(col->view_rule_buffer), params->view_rule.size);
+  MemoryCopy(col->view_rule_buffer, params->view_rule.str, col->view_rule_size);
   col->is_non_code = params->is_non_code;
   col->dequote_string = params->dequote_string;
   return col;
@@ -2203,6 +2205,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                     snap_to_cursor = 1;
                   }
                 }break;
+                case DF_WatchViewColumnKind_Member:
                 case DF_WatchViewColumnKind_Value:
                 if(editing_complete && evt->slot != UI_EventActionSlot_Cancel)
                 {
@@ -2211,7 +2214,12 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                   B32 success = 0;
                   if(rows.first != 0)
                   {
-                    E_Eval dst_eval = e_eval_from_expr(scratch.arena, rows.first->expr);
+                    E_Expr *expr = rows.first->expr;
+                    if(col->kind == DF_WatchViewColumnKind_Member)
+                    {
+                      expr = e_expr_ref_member_access(scratch.arena, expr, str8(col->string_buffer, col->string_size));
+                    }
+                    E_Eval dst_eval = e_eval_from_expr(scratch.arena, expr);
                     success = df_commit_eval_value_string(dst_eval, new_string);
                   }
                   if(!success)
@@ -2244,10 +2252,6 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                   }
                   state_dirty = 1;
                   snap_to_cursor = 1;
-                }break;
-                case DF_WatchViewColumnKind_Member:
-                {
-                  
                 }break;
               }
             }
@@ -2819,6 +2823,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
               String8 cell_error_tooltip_string = {0};
               DF_AutoCompListerFlags cell_autocomp_flags = 0;
               DF_GfxViewRuleRowUIFunctionType *cell_ui_hook = 0;
+              DF_CfgNode *cell_ui_node = &df_g_nil_cfg_node;
               Vec4F32 cell_base_color = ui_top_palette()->text;
               DF_IconKind cell_icon = DF_IconKind_Null;
               switch(col->kind)
@@ -2885,6 +2890,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                   if(row->value_ui_rule_spec != &df_g_nil_gfx_view_rule_spec && row->value_ui_rule_spec != 0)
                   {
                     cell_ui_hook = row->value_ui_rule_spec->info.row_ui;
+                    cell_ui_node = row->value_ui_rule_node;
                   }
                   cell_can_edit = df_type_key_is_editable(cell_eval.type_key);
                 }break;
@@ -2906,6 +2912,23 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                     cell_base_color = df_rgba_from_entity(df_entity_from_handle(df_interact_regs()->thread));
                   }
                 }break;
+              }
+              
+              //- rjf: apply column-specified view rules
+              if(col->view_rule_size != 0)
+              {
+                String8 col_view_rule = str8(col->view_rule_buffer, col->view_rule_size);
+                DF_CfgTable col_cfg_table = {0};
+                df_cfg_table_push_unparsed_string(scratch.arena, &col_cfg_table, col_view_rule, DF_CfgSrc_User);
+                for(DF_CfgVal *val = col_cfg_table.first_val; val != 0 && val != &df_g_nil_cfg_val; val = val->linear_next)
+                {
+                  DF_GfxViewRuleSpec *spec = df_gfx_view_rule_spec_from_string(val->string);
+                  if(spec != &df_g_nil_gfx_view_rule_spec && spec->info.flags & DF_GfxViewRuleSpecInfoFlag_RowUI)
+                  {
+                    cell_ui_hook = spec->info.row_ui;
+                    cell_ui_node = val->last;
+                  }
+                }
               }
               
               //- rjf: determine cell's palette
@@ -2949,7 +2972,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                   UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clip|UI_BoxFlag_Clickable, "###val_%I64x", row_hash);
                   UI_Parent(box)
                   {
-                    cell_ui_hook(ws, row->key, cell_eval, row->value_ui_rule_node);
+                    cell_ui_hook(ws, row->key, cell_eval, cell_ui_node);
                   }
                   sig = ui_signal_from_box(box);
                 }
@@ -7991,7 +8014,7 @@ DF_VIEW_SETUP_FUNCTION_DEF(Breakpoints)
   df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Member, 0.25f, .string = str8_lit("Label"), .dequote_string = 1, .is_non_code = 1);
   df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Member, 0.35f, .string = str8_lit("Location"), .dequote_string = 1, .is_non_code = 1);
   df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Member, 0.20f, .string = str8_lit("Condition"), .dequote_string = 1);
-  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Member, 0.10f, .string = str8_lit("Enabled"));
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Member, 0.10f, .string = str8_lit("Enabled"), .view_rule = str8_lit("checkbox"));
   df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Member, 0.10f, .string = str8_lit("Hit Count"));
 }
 DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Breakpoints) {return str8_zero();}

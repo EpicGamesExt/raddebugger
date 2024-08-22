@@ -1608,7 +1608,6 @@ internal B32 df_type_key_is_expandable(E_TypeKey type_key);
 internal B32 df_type_key_is_editable(E_TypeKey type_key);
 
 //- rjf: writing values back to child processes
-internal B32 df_commit_eval_value(E_Eval dst_eval, E_Eval src_eval);
 internal B32 df_commit_eval_value_string(E_Eval dst_eval, String8 string);
 
 //- rjf: type helpers

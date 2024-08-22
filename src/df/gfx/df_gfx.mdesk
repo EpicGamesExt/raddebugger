@@ -312,6 +312,7 @@ DF_GfxViewRuleTable:
   {"only"          x   x   -   -   -   ""                              }
   {"omit"          x   x   -   -   -   ""                              }
   {"no_addr"       -   x   -   -   -   ""                              }
+  {"checkbox"      -   -   x   -   -   ""                              }
   {"rgba"          -   -   x   x   -   ""                              }
   {"text"          -   -   -   x   x   "Text"                          }
   {"disasm"        -   -   -   x   x   "Disassembly"                   }

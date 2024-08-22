@@ -291,6 +291,18 @@ DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(omit){}
 DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(no_addr){}
 
 ////////////////////////////////
+//~ rjf: "checkbox"
+
+DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_DEF(checkbox)
+{
+  E_Eval value_eval = e_value_eval_from_eval(eval);
+  if(ui_clicked(df_icon_buttonf(ws, value_eval.value.u64 == 0 ? DF_IconKind_CheckHollow : DF_IconKind_CheckFilled, 0, "###check")))
+  {
+    df_commit_eval_value_string(eval, value_eval.value.u64 == 0 ? str8_lit("1") : str8_lit("0"));
+  }
+}
+
+////////////////////////////////
 //~ rjf: "rgba"
 
 internal Vec4F32
@@ -407,7 +419,7 @@ df_vr_eval_commit_rgba(E_Eval eval, Vec4F32 rgba)
       E_Eval src_eval = eval;
       src_eval.mode = E_Mode_Value;
       src_eval.value.u64 = (U64)val;
-      df_commit_eval_value(eval, src_eval);
+      // TODO(rjf): df_commit_eval_value(eval, src_eval);
     }break;
     
 #if 0

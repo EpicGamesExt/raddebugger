@@ -3805,7 +3805,36 @@ df_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range)
     //- rjf: default -> making commits to entity evaluation
     default:
     {
-      
+      Temp scratch = scratch_begin(0, 0);
+      DF_EntityEval *eval = df_eval_from_entity(scratch.arena, entity);
+      U64 range_dim = dim_1u64(range);
+      if(range.min == OffsetOf(DF_EntityEval, enabled) &&
+         range_dim >= 1)
+      {
+        result = 1;
+        B32 new_enabled = !!((U8 *)in)[0];
+        df_entity_equip_disabled(entity, !new_enabled);
+      }
+      else if(range.min == eval->label_off &&
+              range_dim >= 1)
+      {
+        result = 1;
+        String8 new_name = str8_cstring_capped((U8 *)in, (U8 *)in+range_dim);
+        df_entity_equip_name(entity, new_name);
+      }
+      else if(range.min == eval->condition_off &&
+              range_dim >= 1)
+      {
+        result = 1;
+        DF_Entity *condition = df_entity_child_from_kind(entity, DF_EntityKind_Condition);
+        if(df_entity_is_nil(condition))
+        {
+          condition = df_entity_alloc(entity, DF_EntityKind_Condition);
+        }
+        String8 new_name = str8_cstring_capped((U8 *)in, (U8 *)in+range_dim);
+        df_entity_equip_name(condition, new_name);
+      }
+      scratch_end(scratch);
     }break;
     
     //- rjf: process -> commit to process memory
@@ -4418,152 +4447,6 @@ df_type_key_is_editable(E_TypeKey type_key)
 }
 
 //- rjf: writing values back to child processes
-
-internal B32
-df_commit_eval_value(E_Eval dst_eval, E_Eval src_eval)
-{
-  B32 result = 0;
-  Temp scratch = scratch_begin(0, 0);
-  
-  //- rjf: unpack arguments
-  DF_Entity *thread = df_entity_from_handle(df_interact_regs()->thread);
-  DF_Entity *process = thread->parent;
-  E_TypeKey dst_type_key = dst_eval.type_key;
-  E_TypeKey src_type_key = src_eval.type_key;
-  E_TypeKind dst_type_kind = e_type_kind_from_key(dst_type_key);
-  E_TypeKind src_type_kind = e_type_kind_from_key(src_type_key);
-  U64 dst_type_byte_size = e_type_byte_size_from_key(dst_type_key);
-  U64 src_type_byte_size = e_type_byte_size_from_key(src_type_key);
-  
-  //- rjf: get commit data based on destination type
-  String8 commit_data = {0};
-  if(src_eval.msgs.max_kind == E_MsgKind_Null)
-  {
-    result = 1;
-    switch(dst_type_kind)
-    {
-      default:
-      {
-        // NOTE(rjf): not supported
-        result = 0;
-      }break;
-      
-      //- rjf: pointers
-      case E_TypeKind_Ptr:
-      case E_TypeKind_LRef:
-      if((E_TypeKind_Char8 <= src_type_kind && src_type_kind <= E_TypeKind_Bool) || src_type_kind == E_TypeKind_Ptr)
-      {
-        E_Eval value_eval = e_value_eval_from_eval(src_eval);
-        commit_data = str8((U8 *)&value_eval.value.u64, dst_type_byte_size);
-        commit_data = push_str8_copy(scratch.arena, commit_data);
-      }break;
-      
-      //- rjf: integers
-      case E_TypeKind_Char8:
-      case E_TypeKind_Char16:
-      case E_TypeKind_Char32:
-      case E_TypeKind_S8:
-      case E_TypeKind_S16:
-      case E_TypeKind_S32:
-      case E_TypeKind_S64:
-      case E_TypeKind_UChar8:
-      case E_TypeKind_UChar16:
-      case E_TypeKind_UChar32:
-      case E_TypeKind_U8:
-      case E_TypeKind_U16:
-      case E_TypeKind_U32:
-      case E_TypeKind_U64:
-      case E_TypeKind_Bool:
-      if(E_TypeKind_Char8 <= src_type_kind && src_type_kind <= E_TypeKind_Bool)
-      {
-        E_Eval value_eval = e_value_eval_from_eval(src_eval);
-        commit_data = str8((U8 *)&value_eval.value.u64, dst_type_byte_size);
-        commit_data = push_str8_copy(scratch.arena, commit_data);
-      }break;
-      
-      //- rjf: float32s
-      case E_TypeKind_F32:
-      if((E_TypeKind_Char8 <= src_type_kind && src_type_kind <= E_TypeKind_Bool) ||
-         src_type_kind == E_TypeKind_F32 ||
-         src_type_kind == E_TypeKind_F64)
-      {
-        F32 value = 0;
-        E_Eval value_eval = e_value_eval_from_eval(src_eval);
-        switch(src_type_kind)
-        {
-          case E_TypeKind_F32:{value = value_eval.value.f32;}break;
-          case E_TypeKind_F64:{value = (F32)value_eval.value.f64;}break;
-          default:{value = (F32)value_eval.value.s64;}break;
-        }
-        commit_data = str8((U8 *)&value, sizeof(F32));
-        commit_data = push_str8_copy(scratch.arena, commit_data);
-      }break;
-      
-      //- rjf: float64s
-      case E_TypeKind_F64:
-      if((E_TypeKind_Char8 <= src_type_kind && src_type_kind <= E_TypeKind_Bool) ||
-         src_type_kind == E_TypeKind_F32 ||
-         src_type_kind == E_TypeKind_F64)
-      {
-        F64 value = 0;
-        E_Eval value_eval = e_value_eval_from_eval(src_eval);
-        switch(src_type_kind)
-        {
-          case E_TypeKind_F32:{value = (F64)value_eval.value.f32;}break;
-          case E_TypeKind_F64:{value = value_eval.value.f64;}break;
-          default:{value = (F64)value_eval.value.s64;}break;
-        }
-        commit_data = str8((U8 *)&value, sizeof(F64));
-        commit_data = push_str8_copy(scratch.arena, commit_data);
-      }break;
-      
-      //- rjf: enums
-      case E_TypeKind_Enum:
-      if(E_TypeKind_Char8 <= src_type_kind && src_type_kind <= E_TypeKind_Bool)
-      {
-        E_Eval value_eval = e_value_eval_from_eval(src_eval);
-        commit_data = str8((U8 *)&value_eval.value.u64, dst_type_byte_size);
-        commit_data = push_str8_copy(scratch.arena, commit_data);
-      }break;
-    }
-  }
-  
-  //- rjf: commit
-  // TODO(rjf): @spaces
-#if 0
-  if(result && commit_data.size != 0)
-  {
-    if(dst_eval.mode == E_Mode_Offset)
-    {
-      switch(dst_eval.space)
-      {
-        case E_Space_Regs:
-        {
-          CTRL_Unwind unwind = df_query_cached_unwind_from_thread(thread);
-          Architecture arch = df_architecture_from_entity(thread);
-          U64 reg_block_size = regs_block_size_from_architecture(arch);
-          if(unwind.frames.count != 0 &&
-             (0 <= dst_eval.value.u64 && dst_eval.value.u64+commit_data.size < reg_block_size))
-          {
-            void *new_regs = push_array(scratch.arena, U8, reg_block_size);
-            MemoryCopy(new_regs, unwind.frames.v[0].regs, reg_block_size);
-            MemoryCopy((U8 *)new_regs+dst_eval.value.u64, commit_data.str, commit_data.size);
-            result = ctrl_thread_write_reg_block(thread->ctrl_machine_id, thread->ctrl_handle, new_regs);
-          }
-        }break;
-        default:
-        {
-          // TODO(rjf): @spaces pick the right process, from the space
-          ctrl_process_write(process->ctrl_machine_id, process->ctrl_handle, r1u64(dst_eval.value.u64, dst_eval.value.u64+commit_data.size), commit_data.str);
-        }break;
-      }
-    }
-  }
-#endif
-  
-  scratch_end(scratch);
-  return result;
-}
 
 internal B32
 df_commit_eval_value_string(E_Eval dst_eval, String8 string)
