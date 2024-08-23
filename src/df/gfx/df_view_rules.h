@@ -24,7 +24,6 @@ typedef struct DF_TxtTopologyInfo DF_TxtTopologyInfo;
 struct DF_TxtTopologyInfo
 {
   TXT_LangKind lang;
-  U64 size_cap;
 };
 
 typedef struct DF_VR_TextState DF_VR_TextState;

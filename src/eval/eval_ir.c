@@ -1231,7 +1231,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
     //- rjf: leaf file paths
     case E_ExprKind_LeafFilePath:
     {
-      U128 key = fs_key_from_path(expr->string);
+      U128 key = fs_key_from_path_range(expr->string, r1u64(0, max_U64));
       U64 size = fs_size_from_path(expr->string);
       E_IRNode *base_offset = e_irtree_const_u(arena, 0);
       E_IRNode *set_space = e_irtree_set_space(arena, key, base_offset);
@@ -1442,7 +1442,7 @@ e_bytecode_from_oplist(Arena *arena, E_OpList *oplist)
         
         // rjf: fill bytecode
         ptr[0] = opcode;
-        MemoryCopy(ptr + 1, &op->value.u64, extra_byte_count);
+        MemoryCopy(ptr + 1, &op->value.u128, extra_byte_count);
         
         // rjf: advance
         ptr = next_ptr;

@@ -1577,6 +1577,8 @@ internal DF_Entity *df_entity_from_eval_space(E_Space space);
 internal E_Space df_eval_space_from_entity(DF_Entity *entity);
 internal B32 df_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range);
 internal B32 df_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range);
+internal Rng1U64 df_range_from_eval_cfg(E_Eval eval, DF_CfgNode *cfg);
+internal U128 df_key_from_eval_space_range(E_Space space, Rng1U64 range);
 internal E_Eval df_eval_from_eval_cfg_table(Arena *arena, E_Eval eval, DF_CfgTable *cfg);
 
 ////////////////////////////////

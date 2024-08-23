@@ -609,7 +609,7 @@ dasm_parse_thread__entry_point(void *p)
                     {
                       // TODO(rjf): need redirection path - this may map to a different path on the local machine,
                       // need frontend to communicate path remapping info to this layer
-                      U128 key = fs_key_from_path(file_normalized_full_path);
+                      U128 key = fs_key_from_path_range(file_normalized_full_path, r1u64(0, max_U64));
                       TXT_LangKind lang_kind = txt_lang_kind_from_extension(file_normalized_full_path);
                       U64 endt_us = max_U64;
                       U128 hash = {0};

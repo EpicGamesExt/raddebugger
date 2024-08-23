@@ -662,20 +662,10 @@ df_vr_txt_topology_info_from_cfg(DF_CfgNode *cfg)
   {
     StringJoin join = {0};
     join.sep = str8_lit(" ");
-    DF_CfgNode *size_cfg = df_cfg_node_child_from_string(cfg, str8_lit("size"), 0);
     DF_CfgNode *lang_cfg = df_cfg_node_child_from_string(cfg, str8_lit("lang"), 0);
-    String8List size_expr_strs = {0};
     String8 lang_string = {0};
-    for(DF_CfgNode *child = size_cfg->first; child != &df_g_nil_cfg_node; child = child->next)
-    {
-      str8_list_push(scratch.arena, &size_expr_strs, child->string);
-    }
     lang_string = lang_cfg->first->string;
-    String8 size_expr = str8_list_join(scratch.arena, &size_expr_strs, &join);
-    E_Eval size_eval = e_eval_from_string(scratch.arena, size_expr);
-    E_Eval size_val_eval = e_value_eval_from_eval(size_eval);
     result.lang = txt_lang_kind_from_extension(lang_string);
-    result.size_cap = size_val_eval.value.u64;
   }
   scratch_end(scratch);
   return result;
@@ -711,12 +701,8 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(text)
   //////////////////////////////
   //- rjf: unpack evaluation / view rule params
   //
-  DF_Entity *thread = df_entity_from_handle(df_interact_regs()->thread);
-  DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
+  Rng1U64 range = df_range_from_eval_cfg(eval, cfg);
   DF_TxtTopologyInfo top = df_vr_txt_topology_info_from_cfg(cfg);
-  E_Eval value_eval = e_value_eval_from_eval(eval);
-  U64 base_vaddr = value_eval.value.u64;
-  Rng1U64 vaddr_range = r1u64(base_vaddr, base_vaddr + (top.size_cap ? top.size_cap : 2048));
   
   //////////////////////////////
   //- rjf: evaluation info -> text visualization info
@@ -724,10 +710,9 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(text)
   String8 data = {0};
   TXT_TextInfo info = {0};
   TXT_LineTokensSlice line_tokens_slice = {0};
-  U128 text_key = {0};
+  U128 text_key = df_key_from_eval_space_range(eval.space, range);
   {
     U128 text_hash = {0};
-    text_key = ctrl_hash_store_key_from_process_vaddr_range(process->ctrl_machine_id, process->ctrl_handle, vaddr_range, 1);
     info = txt_text_info_from_key_lang(txt_scope, text_key, top.lang, &text_hash);
     data = hs_data_from_hash(hs_scope, text_hash);
     line_tokens_slice = txt_line_tokens_slice_from_info_data_line_range(scratch.arena, &info, data, r1s64(1, info.lines_count));

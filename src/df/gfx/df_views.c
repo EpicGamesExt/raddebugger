@@ -6448,7 +6448,7 @@ DF_VIEW_CMD_FUNCTION_DEF(Code)
   HS_Scope *hs_scope = hs_scope_open();
   TXT_Scope *txt_scope = txt_scope_open();
   String8 path = df_interact_regs()->file_path;
-  df_interact_regs()->text_key = fs_key_from_path(path);
+  df_interact_regs()->text_key = fs_key_from_path_range(path, r1u64(0, max_U64));
   df_interact_regs()->lang_kind = txt_lang_kind_from_extension(str8_skip_last_dot(path));
   U128 hash = {0};
   TXT_TextInfo info = txt_text_info_from_key_lang(txt_scope, df_interact_regs()->text_key, df_interact_regs()->lang_kind, &hash);
@@ -6519,7 +6519,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   //- rjf: unpack entity info
   //
   String8 path = df_interact_regs()->file_path;
-  df_interact_regs()->text_key = fs_key_from_path(path);
+  df_interact_regs()->text_key = fs_key_from_path_range(path, r1u64(0, max_U64));
   df_interact_regs()->lang_kind = txt_lang_kind_from_extension(str8_skip_last_dot(path));
   U128 hash = {0};
   TXT_TextInfo info = txt_text_info_from_key_lang(txt_scope, df_interact_regs()->text_key, df_interact_regs()->lang_kind, &hash);
