@@ -46,6 +46,7 @@ union E_Value
   U64 u256[4];
   U128 u128;
   U64 u64;
+  U32 u32;
   S64 s64;
   F64 f64;
   F32 f32;

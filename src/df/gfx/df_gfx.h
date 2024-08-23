@@ -195,11 +195,6 @@ struct DF_View
   Arena *project_path_arena;
   String8 project_path;
   
-  // rjf: view specification parameters
-  Arena *params_arena;
-  DF_Handle params_entity;
-  String8 params_file_path;
-  
   // rjf: view state
   UI_ScrollPt2 scroll_pos;
   TxtPt cursor;
@@ -218,8 +213,8 @@ struct DF_View
   // rjf: text query state
   TxtPt query_cursor;
   TxtPt query_mark;
-  U8 query_buffer[1024];
   U64 query_string_size;
+  U8 query_buffer[KB(4)];
 };
 
 ////////////////////////////////
@@ -932,7 +927,7 @@ internal DF_ViewSpec *df_tab_view_spec_from_gfx_view_rule_spec(DF_GfxViewRuleSpe
 
 internal DF_View *df_view_alloc(void);
 internal void df_view_release(DF_View *view);
-internal void df_view_equip_spec(DF_Window *window, DF_View *view, DF_ViewSpec *spec, DF_Entity *entity, String8 file_path, String8 default_query, DF_CfgNode *cfg_root);
+internal void df_view_equip_spec(DF_Window *window, DF_View *view, DF_ViewSpec *spec, String8 query, DF_CfgNode *cfg_root);
 internal void df_view_equip_loading_info(DF_View *view, B32 is_loading, U64 progress_v, U64 progress_target);
 internal void df_view_clear_user_state(DF_View *view);
 internal void *df_view_get_or_push_user_state(DF_View *view, U64 size);

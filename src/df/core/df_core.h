@@ -1652,9 +1652,18 @@ internal B32 df_viz_row_is_editable(DF_EvalVizRow *row);
 
 //- rjf: view rule config tree info extraction
 internal Rng1U64 df_range_from_eval_cfg(E_Eval eval, DF_CfgNode *cfg);
+internal TXT_LangKind df_lang_kind_from_eval_cfg(E_Eval eval, DF_CfgNode *cfg);
 
 //- rjf: view rule eval application
 internal E_Eval df_eval_from_eval_cfg_table(Arena *arena, E_Eval eval, DF_CfgTable *cfg);
+
+//- rjf: eval <-> entity
+internal DF_Entity *df_entity_from_eval_string(String8 string);
+internal String8 df_eval_string_from_entity(Arena *arena, DF_Entity *entity);
+
+//- rjf: eval <-> file path
+internal String8 df_file_path_from_eval_string(Arena *arena, String8 string);
+internal String8 df_eval_string_from_file_path(Arena *arena, String8 string);
 
 ////////////////////////////////
 //~ rjf: Main State Accessors/Mutators

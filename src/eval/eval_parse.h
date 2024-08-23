@@ -59,10 +59,7 @@ struct E_Expr
   E_Mode mode;
   E_Space space;
   E_TypeKey type_key;
-  U32 u32;
-  F32 f32;
-  U64 u64;
-  F64 f64;
+  E_Value value;
   String8 string;
   String8 bytecode;
 };

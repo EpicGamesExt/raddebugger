@@ -486,7 +486,7 @@ e_token_array_from_text(Arena *arena, String8 text)
       }break;
       case E_TokenKind_Numeric:
       {
-        if(!char_is_alpha(byte) && !char_is_digit(byte, 10) && byte != '.')
+        if(!char_is_alpha(byte) && !char_is_digit(byte, 10) && byte != '.' && byte != ':')
         {
           advance = 0;
           token_formed = 1;
@@ -680,7 +680,7 @@ e_expr_ref_array_index(Arena *arena, E_Expr *lhs, U64 index)
   E_Expr *root = e_push_expr(arena, E_ExprKind_ArrayIndex, 0);
   E_Expr *lhs_ref = e_expr_ref(arena, lhs);
   E_Expr *rhs = e_push_expr(arena, E_ExprKind_LeafU64, 0);
-  rhs->u64 = index;
+  rhs->value.u64 = index;
   e_expr_push_child(root, lhs_ref);
   e_expr_push_child(root, rhs);
   return root;
@@ -744,19 +744,19 @@ e_append_strings_from_expr(Arena *arena, E_Expr *expr, String8List *out)
     }break;
     case E_ExprKind_LeafU64:
     {
-      str8_list_pushf(arena, out, "%I64u", expr->u64);
+      str8_list_pushf(arena, out, "%I64u", expr->value.u64);
     }break;
-    case E_ExprKind_LeafID:
+    case E_ExprKind_LeafOffset:
     {
-      str8_list_pushf(arena, out, "0x%I64x", expr->u64);
+      str8_list_pushf(arena, out, "0x%I64x", expr->value.u64);
     }break;
     case E_ExprKind_LeafF64:
     {
-      str8_list_pushf(arena, out, "%f", expr->f64);
+      str8_list_pushf(arena, out, "%f", expr->value.f64);
     }break;
     case E_ExprKind_LeafF32:
     {
-      str8_list_pushf(arena, out, "%f", expr->f32);
+      str8_list_pushf(arena, out, "%f", expr->value.f32);
     }break;
     case E_ExprKind_TypeIdent:
     {
@@ -910,7 +910,7 @@ e_type_from_expr(E_Expr *expr)
     {
       E_Expr *child_expr = expr->first;
       E_TypeKey direct_type_key = e_type_from_expr(child_expr);
-      result = e_type_key_cons_array(direct_type_key, expr->u64);
+      result = e_type_key_cons_array(direct_type_key, expr->value.u64);
     }break;
   }
   return result;
@@ -1688,15 +1688,8 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
           {
             U64 val = 0;
             try_u64_from_str8_c_rules(token_string, &val);
-            if(str8_match(resolution_qualifier, str8_lit("id"), 0))
-            {
-              atom = e_push_expr(arena, E_ExprKind_LeafID, token_string.str);
-            }
-            else
-            {
-              atom = e_push_expr(arena, E_ExprKind_LeafU64, token_string.str);
-            }
-            atom->u64 = val;
+            atom = e_push_expr(arena, E_ExprKind_LeafU64, token_string.str);
+            atom->value.u64 = val;
             break;
           }
           
@@ -1710,14 +1703,14 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
             if(f_pos < token_string.size)
             {
               atom = e_push_expr(arena, E_ExprKind_LeafF32, token_string.str);
-              atom->f32 = (F32)val;
+              atom->value.f32 = (F32)val;
             }
             
             // rjf: no f => f64
             else
             {
               atom = e_push_expr(arena, E_ExprKind_LeafF64, token_string.str);
-              atom->f64 = val;
+              atom->value.f64 = val;
             }
           }
         }break;
@@ -1732,7 +1725,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
             String8 char_literal_raw = e_raw_from_escaped_string(scratch.arena, char_literal_escaped);
             U8 char_val = char_literal_raw.size > 0 ? char_literal_raw.str[0] : 0;
             atom = e_push_expr(arena, E_ExprKind_LeafU64, token_string.str);
-            atom->u64 = (U64)char_val;
+            atom->value.u64 = (U64)char_val;
           }
           else
           {

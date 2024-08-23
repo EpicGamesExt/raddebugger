@@ -1524,7 +1524,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                 }
                 E_MemberArray bp_members_array = e_member_array_from_list(scratch.arena, &bp_members);
                 E_TypeKey bp_type = e_type_key_cons(.arch = architecture_from_context(), .kind = E_TypeKind_Struct, .name = str8_lit("Breakpoint"), .members = bp_members_array.v, .count = bp_members_array.count);
-                E_Expr *bp_expr = e_push_expr(scratch.arena, E_ExprKind_LeafID, 0);
+                E_Expr *bp_expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
                 bp_expr->type_key = bp_type;
                 bp_expr->mode = E_Mode_Offset;
                 bp_expr->space = df_eval_space_from_entity(bp);
@@ -1559,7 +1559,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                 }
                 E_MemberArray wp_members_array = e_member_array_from_list(scratch.arena, &wp_members);
                 E_TypeKey wp_type = e_type_key_cons(.arch = architecture_from_context(), .kind = E_TypeKind_Struct, .name = str8_lit("Watch Pin"), .members = wp_members_array.v, .count = wp_members_array.count);
-                E_Expr *wp_expr = e_push_expr(scratch.arena, E_ExprKind_LeafID, 0);
+                E_Expr *wp_expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
                 wp_expr->type_key = wp_type;
                 wp_expr->mode = E_Mode_Offset;
                 wp_expr->space = df_eval_space_from_entity(wp);
@@ -3128,21 +3128,21 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                         {
                           ext = push_str8f(scratch.arena, "'%S'", t->expr->string);
                         }
-                        else if(t->expr->u32 != 0)
+                        else if(t->expr->value.u32 != 0)
                         {
-                          ext = push_str8f(scratch.arena, "0x%x", t->expr->u32);
+                          ext = push_str8f(scratch.arena, "0x%x", t->expr->value.u32);
                         }
-                        else if(t->expr->f32 != 0)
+                        else if(t->expr->value.f32 != 0)
                         {
-                          ext = push_str8f(scratch.arena, "%f", t->expr->f32);
+                          ext = push_str8f(scratch.arena, "%f", t->expr->value.f32);
                         }
-                        else if(t->expr->f64 != 0)
+                        else if(t->expr->value.f64 != 0)
                         {
-                          ext = push_str8f(scratch.arena, "%f", t->expr->f64);
+                          ext = push_str8f(scratch.arena, "%f", t->expr->value.f64);
                         }
-                        else if(t->expr->u64 != 0)
+                        else if(t->expr->value.u64 != 0)
                         {
-                          ext = push_str8f(scratch.arena, "0x%I64x", t->expr->u64);
+                          ext = push_str8f(scratch.arena, "0x%I64x", t->expr->value.u64);
                         }
                       }break;
                     }
@@ -3794,7 +3794,7 @@ DF_VIEW_UI_FUNCTION_DEF(FileSystem)
       if(query_normalized_with_opt_slash_props.flags & FilePropertyFlag_IsFolder)
       {
         String8 new_path = push_str8f(scratch.arena, "%S%S/", path_query.path, path_query.search);
-        df_view_equip_spec(ws, view, view->spec, &df_g_nil_entity, str8_zero(), new_path, &df_g_nil_cfg_node);
+        df_view_equip_spec(ws, view, view->spec, new_path, &df_g_nil_cfg_node);
       }
       
       // rjf: is a file -> complete view
@@ -3824,7 +3824,7 @@ DF_VIEW_UI_FUNCTION_DEF(FileSystem)
       {
         String8 existing_path = str8_chop_last_slash(path_query.path);
         String8 new_path = push_str8f(scratch.arena, "%S/%S/", existing_path, files[0].filename);
-        df_view_equip_spec(ws, view, view->spec, &df_g_nil_entity, str8_zero(), new_path, &df_g_nil_cfg_node);
+        df_view_equip_spec(ws, view, view->spec, new_path, &df_g_nil_cfg_node);
       }
       else
       {
@@ -3954,7 +3954,7 @@ DF_VIEW_UI_FUNCTION_DEF(FileSystem)
         String8 new_path = str8_chop_last_slash(str8_chop_last_slash(path_query.path));
         new_path = path_normalized_from_string(scratch.arena, new_path);
         String8 new_cmd = push_str8f(scratch.arena, "%S%s", new_path, new_path.size != 0 ? "/" : "");
-        df_view_equip_spec(ws, view, view->spec, &df_g_nil_entity, str8_zero(), new_cmd, &df_g_nil_cfg_node);
+        df_view_equip_spec(ws, view, view->spec, new_cmd, &df_g_nil_cfg_node);
       }
     }
     
@@ -4036,7 +4036,7 @@ DF_VIEW_UI_FUNCTION_DEF(FileSystem)
         if(file->props.flags & FilePropertyFlag_IsFolder)
         {
           String8 new_cmd = push_str8f(scratch.arena, "%S%s", new_path, new_path.size != 0 ? "/" : "");
-          df_view_equip_spec(ws, view, view->spec, &df_g_nil_entity, str8_zero(), new_cmd, &df_g_nil_cfg_node);
+          df_view_equip_spec(ws, view, view->spec, new_cmd, &df_g_nil_cfg_node);
         }
         else
         {
@@ -4597,7 +4597,7 @@ DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Target)
 DF_VIEW_CMD_FUNCTION_DEF(Target)
 {
   DF_TargetViewState *tv = df_view_user_state(view, DF_TargetViewState);
-  DF_Entity *entity = df_entity_from_handle(view->params_entity);
+  DF_Entity *entity = df_entity_from_eval_string(str8(view->query_buffer, view->query_string_size));
   
   // rjf: process commands
   for(DF_CmdNode *n = cmds->first; n != 0; n = n->next)
@@ -4640,7 +4640,7 @@ DF_VIEW_UI_FUNCTION_DEF(Target)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
-  DF_Entity *entity = df_entity_from_handle(view->params_entity);
+  DF_Entity *entity = df_entity_from_eval_string(str8(view->query_buffer, view->query_string_size));
   DF_EntityList custom_entry_points = df_push_entity_child_list_with_kind(scratch.arena, entity, DF_EntityKind_EntryPoint);
   F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
   
@@ -6357,7 +6357,7 @@ DF_VIEW_CMD_FUNCTION_DEF(PendingFile)
   }
   
   //- rjf: determine if file is ready, and which viewer to use
-  String8 file_path = view->params_file_path;
+  String8 file_path = df_file_path_from_eval_string(scratch.arena, str8(view->query_buffer, view->query_string_size));
   B32 file_is_ready = 1;
   DF_GfxViewKind viewer_kind = DF_GfxViewKind_Code;
   
@@ -6388,7 +6388,8 @@ DF_VIEW_CMD_FUNCTION_DEF(PendingFile)
     {
       view_spec = df_view_spec_from_gfx_view_kind(viewer_kind);
     }
-    df_view_equip_spec(ws, view, view_spec, &df_g_nil_entity, file_path, str8_lit(""), cfg_root);
+    String8 query = df_eval_string_from_file_path(scratch.arena, file_path);
+    df_view_equip_spec(ws, view, view_spec, query, cfg_root);
     df_panel_notify_mutation(ws, panel);
   }
   
@@ -6447,9 +6448,10 @@ DF_VIEW_CMD_FUNCTION_DEF(Code)
   Temp scratch = scratch_begin(0, 0);
   HS_Scope *hs_scope = hs_scope_open();
   TXT_Scope *txt_scope = txt_scope_open();
-  String8 path = df_interact_regs()->file_path;
-  df_interact_regs()->text_key = fs_key_from_path_range(path, r1u64(0, max_U64));
-  df_interact_regs()->lang_kind = txt_lang_kind_from_extension(str8_skip_last_dot(path));
+  E_Eval eval = e_eval_from_string(scratch.arena, str8(view->query_buffer, view->query_string_size));
+  Rng1U64 range = df_range_from_eval_cfg(eval, &df_g_nil_cfg_node);
+  df_interact_regs()->text_key = df_key_from_eval_space_range(eval.space, range);
+  df_interact_regs()->lang_kind = df_lang_kind_from_eval_cfg(eval, &df_g_nil_cfg_node);
   U128 hash = {0};
   TXT_TextInfo info = txt_text_info_from_key_lang(txt_scope, df_interact_regs()->text_key, df_interact_regs()->lang_kind, &hash);
   String8 data = hs_data_from_hash(hs_scope, hash);
@@ -6478,7 +6480,7 @@ DF_VIEW_CMD_FUNCTION_DEF(Code)
       // rjf: override file picking
       case DF_CoreCmdKind_PickFile:
       {
-        String8 src = view->params_file_path;
+        String8 src = df_file_path_from_eval_string(scratch.arena, str8(view->query_buffer, view->query_string_size));
         String8 dst = cmd->params.file_path;
         if(src.size != 0 && dst.size != 0)
         {
@@ -6489,8 +6491,8 @@ DF_VIEW_CMD_FUNCTION_DEF(Code)
           df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_SetFileReplacementPath));
           
           // rjf: switch this view to viewing replacement file
-          arena_clear(view->params_arena);
-          view->params_file_path = push_str8_copy(view->params_arena, dst);
+          view->query_string_size = Min(sizeof(view->query_buffer), dst.size);
+          MemoryCopy(view->query_buffer, dst.str, view->query_string_size);
         }
       }break;
     }
@@ -6516,11 +6518,13 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   Rng2F32 bottom_bar_rect = r2f32p(rect.x0, rect.y1 - bottom_bar_height, rect.x1, rect.y1);
   
   //////////////////////////////
-  //- rjf: unpack entity info
+  //- rjf: unpack parameterization info
   //
   String8 path = df_interact_regs()->file_path;
-  df_interact_regs()->text_key = fs_key_from_path_range(path, r1u64(0, max_U64));
-  df_interact_regs()->lang_kind = txt_lang_kind_from_extension(str8_skip_last_dot(path));
+  E_Eval eval = e_eval_from_string(scratch.arena, str8(view->query_buffer, view->query_string_size));
+  Rng1U64 range = df_range_from_eval_cfg(eval, &df_g_nil_cfg_node);
+  df_interact_regs()->text_key = df_key_from_eval_space_range(eval.space, range);
+  df_interact_regs()->lang_kind = df_lang_kind_from_eval_cfg(eval, &df_g_nil_cfg_node);
   U128 hash = {0};
   TXT_TextInfo info = txt_text_info_from_key_lang(txt_scope, df_interact_regs()->text_key, df_interact_regs()->lang_kind, &hash);
   String8 data = hs_data_from_hash(hs_scope, hash);
@@ -6593,15 +6597,18 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   B32 file_is_out_of_date = 0;
   String8 out_of_date_dbgi_name = {0};
   {
-    for(DI_KeyNode *n = dbgi_keys.first; n != 0; n = n->next)
+    U64 file_timestamp = fs_timestamp_from_path(path);
+    if(file_timestamp != 0)
     {
-      DI_Key key = n->v;
-      U64 file_timestamp = fs_timestamp_from_path(path);
-      if(key.min_timestamp < file_timestamp)
+      for(DI_KeyNode *n = dbgi_keys.first; n != 0; n = n->next)
       {
-        file_is_out_of_date = 1;
-        out_of_date_dbgi_name = str8_skip_last_slash(key.path);
-        break;
+        DI_Key key = n->v;
+        if(key.min_timestamp < file_timestamp)
+        {
+          file_is_out_of_date = 1;
+          out_of_date_dbgi_name = str8_skip_last_slash(key.path);
+          break;
+        }
       }
     }
   }

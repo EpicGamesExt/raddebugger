@@ -1169,7 +1169,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
     //- rjf: leaf U64s
     case E_ExprKind_LeafU64:
     {
-      U64 val = expr->u64;
+      U64 val = expr->value.u64;
       E_IRNode *new_tree = e_irtree_const_u(arena, val);
       E_TypeKey type_key = zero_struct;
       if(0){}
@@ -1184,7 +1184,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
     //- rjf: leaf F64s
     case E_ExprKind_LeafF64:
     {
-      U64 val = expr->u64;
+      U64 val = expr->value.u64;
       E_IRNode *new_tree = e_irtree_const_u(arena, val);
       result.root     = new_tree;
       result.type_key = e_type_key_basic(E_TypeKind_F64);
@@ -1194,7 +1194,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
     //- rjf: leaf F32s
     case E_ExprKind_LeafF32:
     {
-      U32 val = expr->u32;
+      U32 val = expr->value.u32;
       E_IRNode *new_tree = e_irtree_const_u(arena, val);
       result.root     = new_tree;
       result.type_key = e_type_key_basic(E_TypeKind_F32);
@@ -1217,11 +1217,11 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
       }
     }break;
     
-    //- rjf: leaf IDs (opaque u64s with type info attached)
-    case E_ExprKind_LeafID:
+    //- rjf: leaf offsets
+    case E_ExprKind_LeafOffset:
     {
       E_IRNode *new_tree = e_push_irnode(arena, RDI_EvalOp_ConstU64);
-      new_tree->value.u64 = expr->u64;
+      new_tree->value.u64 = expr->value.u64;
       result.root     = new_tree;
       result.type_key = expr->type_key;
       result.mode     = E_Mode_Offset;

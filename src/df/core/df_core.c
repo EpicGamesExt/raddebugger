@@ -5429,6 +5429,23 @@ df_range_from_eval_cfg(E_Eval eval, DF_CfgNode *cfg)
   return result;
 }
 
+internal TXT_LangKind
+df_lang_kind_from_eval_cfg(E_Eval eval, DF_CfgNode *cfg)
+{
+  TXT_LangKind lang_kind = TXT_LangKind_Null;
+  if(eval.expr->kind == E_ExprKind_LeafFilePath)
+  {
+    lang_kind = txt_lang_kind_from_extension(str8_skip_last_dot(eval.expr->string));
+  }
+  else
+  {
+    DF_CfgNode *lang_cfg = df_cfg_node_child_from_string(cfg, str8_lit("lang"), 0);
+    String8 lang_kind_string = lang_cfg->first->string;
+    lang_kind = txt_lang_kind_from_extension(lang_kind_string);
+  }
+  return lang_kind;
+}
+
 //- rjf: view rule eval application
 
 internal E_Eval
@@ -5444,6 +5461,56 @@ df_eval_from_eval_cfg_table(Arena *arena, E_Eval eval, DF_CfgTable *cfg)
     }
   }
   return eval;
+}
+
+//- rjf: eval -> entity
+
+internal DF_Entity *
+df_entity_from_eval_string(String8 string)
+{
+  DF_Entity *entity = &df_g_nil_entity;
+  {
+    Temp scratch = scratch_begin(0, 0);
+    E_Eval eval = e_eval_from_string(scratch.arena, string);
+    entity = df_entity_from_eval_space(eval.space);
+    scratch_end(scratch);
+  }
+  return entity;
+}
+
+internal String8
+df_eval_string_from_entity(Arena *arena, DF_Entity *entity)
+{
+  String8 eval_string = push_str8f(arena, "macro:`$%I64u`", entity->id);
+  return eval_string;
+}
+
+//- rjf: eval <-> file path
+
+internal String8
+df_file_path_from_eval_string(Arena *arena, String8 string)
+{
+  String8 result = {0};
+  {
+    Temp scratch = scratch_begin(&arena, 1);
+    E_Eval eval = e_eval_from_string(scratch.arena, string);
+    if(eval.expr->kind == E_ExprKind_LeafFilePath)
+    {
+      result = df_cfg_raw_from_escaped_string(arena, eval.expr->string);
+    }
+    scratch_end(scratch);
+  }
+  return result;
+}
+
+internal String8
+df_eval_string_from_file_path(Arena *arena, String8 string)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  String8 string_escaped = df_cfg_escaped_from_raw_string(scratch.arena, string);
+  String8 result = push_str8f(arena, "file:\"%S\"", string_escaped);
+  scratch_end(scratch);
+  return result;
 }
 
 ////////////////////////////////
@@ -8557,7 +8624,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
       if(!df_entity_is_nil(process))
       {
         E_Expr *expr = e_push_expr(arena, E_ExprKind_LeafU64, 0);
-        expr->u64 = process->ctrl_id;
+        expr->value.u64 = process->ctrl_id;
         e_string2expr_map_insert(arena, ctx->macro_map, str8_lit("pid"), expr);
       }
       
@@ -8565,9 +8632,48 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
       if(!df_entity_is_nil(thread))
       {
         E_Expr *expr = e_push_expr(arena, E_ExprKind_LeafU64, 0);
-        expr->u64 = thread->ctrl_id;
+        expr->value.u64 = thread->ctrl_id;
         e_string2expr_map_insert(arena, ctx->macro_map, str8_lit("tid"), expr);
       }
+    }
+    
+    //- rjf: add macros for entities
+    {
+      Temp scratch = scratch_begin(&arena, 1);
+      E_MemberList entity_members = {0};
+      {
+        e_member_list_push_new(scratch.arena, &entity_members, .name = str8_lit("Enabled"),  .off = 0,        .type_key = e_type_key_basic(E_TypeKind_S64));
+        e_member_list_push_new(scratch.arena, &entity_members, .name = str8_lit("Hit Count"),.off = 0+8,      .type_key = e_type_key_basic(E_TypeKind_U64));
+        e_member_list_push_new(scratch.arena, &entity_members, .name = str8_lit("Label"),    .off = 0+8+8,    .type_key = e_type_key_cons_ptr(architecture_from_context(), e_type_key_basic(E_TypeKind_Char8)));
+        e_member_list_push_new(scratch.arena, &entity_members, .name = str8_lit("Location"), .off = 0+8+8+8,  .type_key = e_type_key_cons_ptr(architecture_from_context(), e_type_key_basic(E_TypeKind_Char8)));
+        e_member_list_push_new(scratch.arena, &entity_members, .name = str8_lit("Condition"),.off = 0+8+8+8+8,.type_key = e_type_key_cons_ptr(architecture_from_context(), e_type_key_basic(E_TypeKind_Char8)));
+      }
+      E_MemberArray entity_members_array = e_member_array_from_list(scratch.arena, &entity_members);
+      E_TypeKey entity_type = e_type_key_cons(.arch = architecture_from_context(),
+                                              .kind = E_TypeKind_Struct,
+                                              .name = str8_lit("Entity"),
+                                              .members = entity_members_array.v,
+                                              .count = entity_members_array.count);
+      DF_EntityKind evallable_kinds[] =
+      {
+        DF_EntityKind_Breakpoint,
+        DF_EntityKind_WatchPin,
+        DF_EntityKind_Target,
+      };
+      for(U64 idx = 0; idx < ArrayCount(evallable_kinds); idx += 1)
+      {
+        DF_EntityList entities = df_query_cached_entity_list_with_kind(evallable_kinds[idx]);
+        for(DF_EntityNode *n = entities.first; n != 0; n = n->next)
+        {
+          DF_Entity *entity = n->entity;
+          E_Expr *expr = e_push_expr(arena, E_ExprKind_LeafOffset, 0);
+          expr->space    = df_eval_space_from_entity(entity);
+          expr->mode     = E_Mode_Offset;
+          expr->type_key = entity_type;
+          e_string2expr_map_insert(arena, ctx->macro_map, push_str8f(arena, "$%I64u", entity->id), expr);
+        }
+      }
+      scratch_end(scratch);
     }
     
     //- rjf: add macros for all watches which define identifiers
