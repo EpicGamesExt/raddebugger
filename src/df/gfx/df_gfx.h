@@ -77,7 +77,7 @@ struct DF_SettingVal
 };
 
 ////////////////////////////////
-//~ rjf: View Functions
+//~ rjf: View Hook Function Types
 
 typedef struct DF_View DF_View;
 typedef struct DF_Panel DF_Panel;

@@ -1688,7 +1688,14 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
           {
             U64 val = 0;
             try_u64_from_str8_c_rules(token_string, &val);
-            atom = e_push_expr(arena, E_ExprKind_LeafU64, token_string.str);
+            if(str8_match(resolution_qualifier, str8_lit("id"), 0))
+            {
+              atom = e_push_expr(arena, E_ExprKind_LeafID, token_string.str);
+            }
+            else
+            {
+              atom = e_push_expr(arena, E_ExprKind_LeafU64, token_string.str);
+            }
             atom->u64 = val;
             break;
           }

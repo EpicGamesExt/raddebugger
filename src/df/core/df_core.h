@@ -1571,15 +1571,18 @@ internal void df_ctrl_run(DF_RunKind run, DF_Entity *run_thread, CTRL_RunFlags f
 internal CTRL_Event df_ctrl_last_stop_event(void);
 
 ////////////////////////////////
-//~ rjf: Evaluation Context
+//~ rjf: Evaluation Spaces
 
+//- rjf: entity <-> eval space
 internal DF_Entity *df_entity_from_eval_space(E_Space space);
 internal E_Space df_eval_space_from_entity(DF_Entity *entity);
+
+//- rjf: eval space reads/writes
 internal B32 df_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range);
 internal B32 df_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range);
-internal Rng1U64 df_range_from_eval_cfg(E_Eval eval, DF_CfgNode *cfg);
+
+//- rjf: asynchronous streamed reads -> hashes from spaces
 internal U128 df_key_from_eval_space_range(E_Space space, Rng1U64 range);
-internal E_Eval df_eval_from_eval_cfg_table(Arena *arena, E_Eval eval, DF_CfgTable *cfg);
 
 ////////////////////////////////
 //~ rjf: Evaluation Views
@@ -1646,6 +1649,12 @@ internal String8 df_expr_string_from_viz_row(Arena *arena, DF_EvalVizRow *row);
 //- rjf: viz row -> expandability/editability
 internal B32 df_viz_row_is_expandable(DF_EvalVizRow *row);
 internal B32 df_viz_row_is_editable(DF_EvalVizRow *row);
+
+//- rjf: view rule config tree info extraction
+internal Rng1U64 df_range_from_eval_cfg(E_Eval eval, DF_CfgNode *cfg);
+
+//- rjf: view rule eval application
+internal E_Eval df_eval_from_eval_cfg_table(Arena *arena, E_Eval eval, DF_CfgTable *cfg);
 
 ////////////////////////////////
 //~ rjf: Main State Accessors/Mutators

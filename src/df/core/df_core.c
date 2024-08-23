@@ -3729,6 +3729,8 @@ df_ctrl_last_stop_event(void)
 ////////////////////////////////
 //~ rjf: Evaluation Context
 
+//- rjf: entity <-> eval space
+
 internal DF_Entity *
 df_entity_from_eval_space(E_Space space)
 {
@@ -3747,6 +3749,8 @@ df_eval_space_from_entity(DF_Entity *entity)
   space.u64[1] = (U64)entity;
   return space;
 }
+
+//- rjf: eval space reads/writes
 
 internal B32
 df_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
@@ -3905,25 +3909,7 @@ df_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range)
   return result;
 }
 
-internal Rng1U64
-df_range_from_eval_cfg(E_Eval eval, DF_CfgNode *cfg)
-{
-  Temp scratch = scratch_begin(0, 0);
-  E_Eval value_eval = e_value_eval_from_eval(eval);
-  DF_CfgNode *size_cfg = df_cfg_node_child_from_string(cfg, str8_lit("size"), 0);
-  String8 size_expr = df_string_from_cfg_node_children(scratch.arena, size_cfg);
-  E_Eval size_eval = e_eval_from_string(scratch.arena, size_expr);
-  E_Eval size_value_eval = e_value_eval_from_eval(size_eval);
-  Rng1U64 result = {0};
-  result.min = value_eval.value.u64;
-  result.max = max_U64;
-  if(size_eval.msgs.max_kind == E_MsgKind_Null)
-  {
-    result.max = result.min + size_value_eval.value.u64;
-  }
-  scratch_end(scratch);
-  return result;
-}
+//- rjf: asynchronous streamed reads -> hashes from spaces
 
 internal U128
 df_key_from_eval_space_range(E_Space space, Rng1U64 range)
@@ -3945,21 +3931,6 @@ df_key_from_eval_space_range(E_Space space, Rng1U64 range)
     }break;
   }
   return result;
-}
-
-internal E_Eval
-df_eval_from_eval_cfg_table(Arena *arena, E_Eval eval, DF_CfgTable *cfg)
-{
-  for(DF_CfgVal *val = cfg->first_val; val != 0 && val != &df_g_nil_cfg_val; val = val->linear_next)
-  {
-    DF_CoreViewRuleSpec *spec = df_core_view_rule_spec_from_string(val->string);
-    if(spec->info.flags & DF_CoreViewRuleSpecInfoFlag_EvalResolution)
-    {
-      eval = spec->info.eval_resolution(arena, eval, val);
-      break;
-    }
-  }
-  return eval;
 }
 
 ////////////////////////////////
@@ -5434,6 +5405,45 @@ df_viz_row_is_editable(DF_EvalVizRow *row)
   result = df_type_key_is_editable(irtree.type_key);
   scratch_end(scratch);
   return result;
+}
+
+//- rjf: view rule config tree info extraction
+
+internal Rng1U64
+df_range_from_eval_cfg(E_Eval eval, DF_CfgNode *cfg)
+{
+  Temp scratch = scratch_begin(0, 0);
+  E_Eval value_eval = e_value_eval_from_eval(eval);
+  DF_CfgNode *size_cfg = df_cfg_node_child_from_string(cfg, str8_lit("size"), 0);
+  String8 size_expr = df_string_from_cfg_node_children(scratch.arena, size_cfg);
+  E_Eval size_eval = e_eval_from_string(scratch.arena, size_expr);
+  E_Eval size_value_eval = e_value_eval_from_eval(size_eval);
+  Rng1U64 result = {0};
+  result.min = value_eval.value.u64;
+  result.max = max_U64;
+  if(size_eval.msgs.max_kind == E_MsgKind_Null)
+  {
+    result.max = result.min + size_value_eval.value.u64;
+  }
+  scratch_end(scratch);
+  return result;
+}
+
+//- rjf: view rule eval application
+
+internal E_Eval
+df_eval_from_eval_cfg_table(Arena *arena, E_Eval eval, DF_CfgTable *cfg)
+{
+  for(DF_CfgVal *val = cfg->first_val; val != 0 && val != &df_g_nil_cfg_val; val = val->linear_next)
+  {
+    DF_CoreViewRuleSpec *spec = df_core_view_rule_spec_from_string(val->string);
+    if(spec->info.flags & DF_CoreViewRuleSpecInfoFlag_EvalResolution)
+    {
+      eval = spec->info.eval_resolution(arena, eval, val);
+      break;
+    }
+  }
+  return eval;
 }
 
 ////////////////////////////////
