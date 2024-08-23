@@ -8671,6 +8671,10 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
           expr->mode     = E_Mode_Offset;
           expr->type_key = entity_type;
           e_string2expr_map_insert(arena, ctx->macro_map, push_str8f(arena, "$%I64u", entity->id), expr);
+          if(entity->name.size != 0)
+          {
+            e_string2expr_map_insert(arena, ctx->macro_map, entity->name, expr);
+          }
         }
       }
       scratch_end(scratch);
