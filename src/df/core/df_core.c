@@ -5158,18 +5158,6 @@ df_eval_viz_row_list_push_new(Arena *arena, DF_EvalView *eval_view, DF_EvalVizWi
       }
     }
     
-    // rjf: determine if view rules force expandability
-    B32 expandability_required = 0;
-    for(DF_CfgVal *val = cfg_table->first_val; val != 0 && val != &df_g_nil_cfg_val; val = val->linear_next)
-    {
-      DF_CoreViewRuleSpec *spec = df_core_view_rule_spec_from_string(val->string);
-      if(spec->info.flags & DF_CoreViewRuleSpecInfoFlag_Expandable)
-      {
-        expandability_required = 1;
-        break;
-      }
-    }
-    
     // rjf: determine row ui hook to use for this row
     DF_GfxViewRuleSpec *value_ui_rule_spec = &df_g_nil_gfx_view_rule_spec;
     DF_CfgNode *value_ui_rule_node= &df_g_nil_cfg_node;
@@ -5187,14 +5175,17 @@ df_eval_viz_row_list_push_new(Arena *arena, DF_EvalView *eval_view, DF_EvalVizWi
     // rjf: determine block ui hook to use for this row
     DF_GfxViewRuleSpec *expand_ui_rule_spec = &df_g_nil_gfx_view_rule_spec;
     DF_CfgNode *expand_ui_rule_node = &df_g_nil_cfg_node;
-    for(DF_CfgVal *val = cfg_table->first_val; val != 0 && val != &df_g_nil_cfg_val; val = val->linear_next)
+    if(block->kind == DF_EvalVizBlockKind_Canvas)
     {
-      DF_GfxViewRuleSpec *spec = df_gfx_view_rule_spec_from_string(val->string);
-      if(spec->info.flags & DF_GfxViewRuleSpecInfoFlag_BlockUI)
+      for(DF_CfgVal *val = cfg_table->first_val; val != 0 && val != &df_g_nil_cfg_val; val = val->linear_next)
       {
-        expand_ui_rule_spec = spec;
-        expand_ui_rule_node = val->last;
-        break;
+        DF_GfxViewRuleSpec *spec = df_gfx_view_rule_spec_from_string(val->string);
+        if(spec->info.flags & DF_GfxViewRuleSpecInfoFlag_BlockUI)
+        {
+          expand_ui_rule_spec = spec;
+          expand_ui_rule_node = val->last;
+          break;
+        }
       }
     }
     
@@ -5364,13 +5355,30 @@ df_expr_string_from_viz_row(Arena *arena, DF_EvalVizRow *row)
 internal B32
 df_viz_row_is_expandable(DF_EvalVizRow *row)
 {
-  B32 result = (row->expand_ui_rule_spec != &df_g_nil_gfx_view_rule_spec && row->expand_ui_rule_spec != 0);
-  if(!result)
+  B32 result = 0;
   {
-    Temp scratch = scratch_begin(0, 0);
-    E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, row->expr);
-    result = df_type_key_is_expandable(irtree.type_key);
-    scratch_end(scratch);
+    // rjf: determine if view rules force expandability
+    if(!result)
+    {
+      for(DF_CfgVal *val = row->cfg_table->first_val; val != 0 && val != &df_g_nil_cfg_val; val = val->linear_next)
+      {
+        DF_CoreViewRuleSpec *spec = df_core_view_rule_spec_from_string(val->string);
+        if(spec->info.flags & DF_CoreViewRuleSpecInfoFlag_Expandable)
+        {
+          result = 1;
+          break;
+        }
+      }
+    }
+    
+    // rjf: determine if type info force expandability
+    if(!result)
+    {
+      Temp scratch = scratch_begin(0, 0);
+      E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, row->expr);
+      result = df_type_key_is_expandable(irtree.type_key);
+      scratch_end(scratch);
+    }
   }
   return result;
 }
