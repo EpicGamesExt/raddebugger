@@ -1181,6 +1181,8 @@ os_alloc_ring_buffer(U64 size, U64 *actual_size_out)
        location with MAP_FIXED */
     S32 fd = memfd_create((const char*)filename_anonymous.str, flag_huge1);
     Assert(fd != -1);
+    /* NOTE(mallchad): This is your warnnig to remember to resize/truncate
+       memory files before writing, this burned me like 3 times already */
     ftruncate(fd, size);
 
     result = mmap(NULL, 2* size, flag_prot, flag_map_initial, -1, 0);
@@ -1370,10 +1372,17 @@ os_string_list_from_system_path(Arena *arena, OS_SystemPath path, String8List *o
   return(result);
 }
 
+/* NOTE: It was tempting to use 'pthread_setname_np' but that is bound to glibc
+   and potentially the best compat would be free of glibc specific functions.
+
+   Also aparently the Linux kernel enforces a 16 char thread name- the process
+   name/cmdline can be arbitrarily long
+   TODO: Rename cmdline to desired thread name*/
 internal void
 os_set_thread_name(String8 string)
 {
-  NotImplemented;
+  LNX_thread self = pthread_self();
+  prctl(PR_SET_NAME, string.str);
 }
 
 ////////////////////////////////
@@ -1425,9 +1434,12 @@ os_file_close(OS_Handle file)
   close(fd);
 }
 
-// Aparently there is a race condition in relation to `stat` and `lstat` so
-// using fstat instead
-// https://cwe.mitre.org/data/definitions/367.html
+/* NOTE: You can just use file maps on Linux and map the whole file because it
+  doesn't commit it to physical memory immediately and so shouldn't cost anything over file
+  mappings. Use MADV prefetch hints for performance.
+  NOTE: Aparently there is a race condition in relation to `stat` and
+  `lstat` so using fstat instead
+  https://cwe.mitre.org/data/definitions/367.html */
 internal U64
 os_file_read(OS_Handle file, Rng1U64 rng, void *out_data)
 {
@@ -1605,13 +1617,16 @@ os_file_map_close(OS_Handle map)
   lnx_free_entity(entity);
 }
 
-/* NOTE(mallcahd): It looks this was supposed to a way to make a sub-portion of a
-  file, presumably to make very large files reasonably sensible to manage. But right now
-the usage seems to just read from 0 starting point always, so I'm just leaving it that way
-for now. Both the win32 and linux backend will break if you try to use this differently for some reason at time of writing [2024-07-11 Thu 17:22]
+/* NOTE(mallcahd): It looks this was supposed to a way to make a sub-portion of
+  a file, presumably to make very large files reasonably sensible to manage. But
+  right now the usage seems to just read from 0 starting point always, so I'm
+  just leaving it that way for now. Both the win32 and linux backend will break
+  if you try to use this differently for some reason at time of writing
+  [2024-07-11 Thu 17:22]
 
-If you would like to complete this function to work the way outlined above, then take the first
-page-boundary aligned boundary before offset  */
+  If you would like to complete this function to work the way outlined above,
+  then take the first page-boundary aligned boundary before offset.
+  NOTE: You can try using MADV prefetch hints for performance. */
 internal void *
 os_file_map_view_open(OS_Handle map, OS_AccessFlags flags, Rng1U64 range)
 {
@@ -1660,7 +1675,7 @@ os_file_map_view_close(OS_Handle map, void *ptr)
   AssertAlways( entity->map.data && (entity->map.data != (void*)-1) );
   /* NOTE: Make sure contents are synced with OS on the off chance the backing
      file isn't POSIX compliant. Use MS_ASYNC if you want performance. */
-  msync(ptr, entity->map.size, MS_SYNC);
+  msync(entity->map.data, entity->map.size, MS_SYNC);
   munmap(entity->map.data, entity->map.size);
 }
 
@@ -1711,7 +1726,7 @@ os_file_iter_next(Arena *arena, OS_FileIter *iter, OS_FileInfo *info_out)
 
     if (iter->flags & OS_FileIterFlag_SkipFiles && file->d_type == DT_REG ) { continue; }
     if (iter->flags & OS_FileIterFlag_SkipFolders && file->d_type == DT_DIR ) { continue; }
-    // Aparently this part of the API is in an indeterminate state. So hardcoding the behavior.
+    // TODO: Aparently this part of the API is in an indeterminate state. So hardcoding the behavior.
     // if (iter->flags & OS_FileIterFlag_SkipHiddenFiles && file->d_name[0] == '.'  ) { continue; }
     if (file->d_name[0] == '.') { continue; }
     break;
@@ -1735,6 +1750,7 @@ os_file_iter_end(OS_FileIter *iter)
   LNX_file_iter* iter_info = (LNX_file_iter*)iter->memory;
   int stream_failure = closedir(iter_info->dir_stream);
   int fd_failure = close(iter_info->dir_fd);
+  // Could be disabled
   Assert(stream_failure == 0 && fd_failure == 0);
 }
 
@@ -1758,8 +1774,11 @@ os_shared_memory_alloc(U64 size, String8 name)
 {
   OS_Handle result = {0};
   LNX_Entity* entity = lnx_alloc_entity(LNX_EntityKind_MemoryMap);
-  // Create, fail if already open, mode: rw-rw----
-  S32 fd = shm_open((char*)name.str, O_RDWR | O_CREAT | O_EXCL, 0660);
+  // Create, reuse if already open, mode: rw-rw----
+  S32 fd = shm_open((char*)name.str, O_RDWR | O_CREAT, 0660);
+  /* NOTE(mallchad): This is your warnnig to remember to resize/truncate
+     memory files before writing, this burned me like 3 times already */
+  ftruncate(fd, size);
   Assert("Failed to alloc shared memory" && fd != -1);
 
   B32 use_huge = (size > os_large_page_size() && lnx_huge_page_enabled);
@@ -1771,6 +1790,8 @@ os_shared_memory_alloc(U64 size, String8 name)
 
   entity->map.data = mapping;
   entity->map.size = size;
+  entity->map.fd = fd;
+  entity->map.shm_name = push_str8_copy( lnx_perm_arena, name );
   result = lnx_handle_from_entity(entity);
   return result;
 }
@@ -1780,11 +1801,11 @@ os_shared_memory_open(String8 name)
 {
   OS_Handle result = {0};
   LNX_Entity* entity = lnx_alloc_entity(LNX_EntityKind_MemoryMap);
-  LNX_fd fd = shm_open((char*)name.str, O_RDWR, 0x0 );
+  LNX_fd fd = shm_open((char*)name.str, O_RDWR, 0660 );
   Assert(fd != -1);
 
   entity->map.fd = fd;
-  entity->map.shm_name = name;
+  entity->map.shm_name = push_str8_copy( lnx_perm_arena, name );
   *result.u64 = IntFromPtr(entity);
 
   return result;
@@ -1814,6 +1835,7 @@ os_shared_memory_view_open(OS_Handle handle, Rng1U64 range)
   result = mapping + range.min; // Get the offset to the map opening
   entity->map.data = mapping;
   entity->map.size = range.max;
+  if (result == (void*)-1) { result = NULL; }
 
   return result;
 }
@@ -1908,11 +1930,16 @@ with an execl variant. */
 internal B32
 os_launch_process(OS_LaunchOptions *options, OS_Handle *handle_out)
 {
-  B32 success = 0;
   Temp scratch = scratch_begin(0, 0);
+  U8* buffer = (void*)mmap(NULL, 4096, PROT_READ | PROT_WRITE,
+                           MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+  B32* success_shared = (B32*)buffer;
+  S32* child_pid = (S32*)buffer+4;
+  *success_shared = 1;
+  *child_pid = 0;
   // TODO(allen): I want to redo this API before I bother implementing it here
   String8List cmdline_list = options->cmd_line;
-  char** cmdline = (char**)push_array(scratch.arena, char*, cmdline_list.node_count);
+  char** cmdline = (char**)push_array(scratch.arena, char*, cmdline_list.node_count + 4);
   String8Node* x_node = cmdline_list.first;
   for (int i=0; i<cmdline_list.node_count; ++i)
   {
@@ -1921,24 +1948,41 @@ os_launch_process(OS_LaunchOptions *options, OS_Handle *handle_out)
   }
 
   if (options->inherit_env) { NotImplemented; };
-  if (options->consoleless == 0) { NotImplemented; };
-  U32 pid = 0;
+  if (options->consoleless == 1) { NotImplemented; };
+  S32 pid = 0;
   pid = fork();
   // Child
   if (pid)
   {
-    execvp((char*)options->path.str, cmdline);
-    success = 1;
+    *child_pid = pid;
+    execv(*cmdline, cmdline);
+    *success_shared = 0;
     exit(0);
-  }
-  // Parent
-  else { wait(NULL); }
+  } // Parent
+  else { waitpid(*child_pid, NULL, 0x0); } // TODO: Heck? Can't figure out how to wait on 'exec'
+  B32 success = *success_shared;
+  munmap(success_shared, 4096);
+  scratch_end(scratch);
   return success;
+}
+
+internal B32
+os_process_wait(OS_Handle handle, U64 endt_us)
+{
+  NotImplemented;
+}
+
+internal void
+os_process_release_handle(OS_Handle handle)
+{
+  NotImplemented;
 }
 
 ////////////////////////////////
 //~ rjf: @os_hooks Threads (Implemented Per-OS)
 
+// TODO: Marked as old / review
+// TODO(mallchad): Isn't one of *params arg useuless? Should it be deleted?
 internal OS_Handle
 os_launch_thread(OS_ThreadFunctionType *func, void *ptr, void *params){
   // entity
@@ -1962,6 +2006,15 @@ os_launch_thread(OS_ThreadFunctionType *func, void *ptr, void *params){
   return(result);
 }
 
+internal B32
+os_thread_wait(OS_Handle handle, U64 endt_us)
+{
+  // TODO: Supposed to be thread sleep?
+  LNX_Entity* entity = lnx_entity_from_handle(handle, LNX_EntityKind_Thread);
+  NotImplemented;
+}
+
+// TODO: Marked as old / review
 internal void
 os_release_thread_handle(OS_Handle thread){
   LNX_Entity *entity = (LNX_Entity*)PtrFromInt(thread.u64[0]);
@@ -2012,7 +2065,9 @@ os_mutex_release(OS_Handle mutex){
 internal void
 os_mutex_take_(OS_Handle mutex){
   LNX_Entity *entity = (LNX_Entity*)PtrFromInt(mutex.u64[0]);
-  pthread_mutex_lock(&entity->mutex);
+  S32 error = 0;
+  while(error = pthread_mutex_lock(&entity->mutex)) { printf("error %d\n", error ); }
+  printf("error %d\n", error );
 }
 
 internal void
@@ -2047,7 +2102,7 @@ os_rw_mutex_alloc(void)
 internal void
 os_rw_mutex_release(OS_Handle rw_mutex)
 {
-  LNX_Entity* entity = lnx_entity_from_handle(rw_mutex, LNX_EntityKind_Mutex);
+  LNX_Entity* entity = lnx_entity_from_handle(rw_mutex, LNX_EntityKind_Rwlock);
   pthread_rwlock_destroy(&entity->rwlock);
 }
 
@@ -2055,7 +2110,7 @@ internal void
 os_rw_mutex_take_r_(OS_Handle mutex)
 {
   // Is blocking varient
-  LNX_Entity* entity = lnx_entity_from_handle(mutex, LNX_EntityKind_Mutex);
+  LNX_Entity* entity = lnx_entity_from_handle(mutex, LNX_EntityKind_Rwlock);
   pthread_rwlock_rdlock(&entity->rwlock);
 }
 
@@ -2064,22 +2119,22 @@ os_rw_mutex_drop_r_(OS_Handle mutex)
 {
   // NOTE: Aparently it results in undefined behaviour if there is no pre-existing lock
   // https://pubs.opengroup.org/onlinepubs/7908799/xsh/pthread_rwlock_unlock.html
-  LNX_Entity* entity = lnx_entity_from_handle(mutex, LNX_EntityKind_Mutex);
+  LNX_Entity* entity = lnx_entity_from_handle(mutex, LNX_EntityKind_Rwlock);
   pthread_rwlock_unlock(&entity->rwlock);
 }
 
 internal void
 os_rw_mutex_take_w_(OS_Handle mutex)
 {
-  LNX_Entity* entity = lnx_entity_from_handle(mutex, LNX_EntityKind_Mutex);
-  pthread_rwlock_rdlock(&entity->rwlock);
+    LNX_Entity* entity = lnx_entity_from_handle(mutex, LNX_EntityKind_Rwlock);
+  pthread_rwlock_wrlock(&(entity->rwlock));
 }
 
 internal void
 os_rw_mutex_drop_w_(OS_Handle mutex)
 {
-  // NOTE: Should be the same thing
-  os_rw_mutex_drop_r_(mutex);
+  LNX_Entity* entity = lnx_entity_from_handle(mutex, LNX_EntityKind_Rwlock);
+  pthread_rwlock_unlock(&(entity->rwlock));
 }
 
 //- rjf: condition variables
@@ -2175,8 +2230,8 @@ os_semaphore_alloc(U32 initial_count, U32 max_count, String8 name)
   OS_Handle result = {0};
 
   // Create the named semaphore
-  // create | error if pre-existing , rw-rw----
-  sem_t* semaphore = sem_open((char*)name.str, O_CREAT | O_EXCL,  0660, initial_count);
+  // create | reuse pre-existing, rw-rw----
+  sem_t* semaphore = sem_open((char*)name.str, O_RDWR | O_CREAT,  0660, initial_count);
   if (semaphore != SEM_FAILED)
   {
     LNX_Entity* entity = lnx_alloc_entity(LNX_EntityKind_Semaphore);
@@ -2199,7 +2254,7 @@ os_semaphore_open(String8 name)
   OS_Handle result = {0};
   LNX_Entity* handle = lnx_alloc_entity(LNX_EntityKind_Semaphore);
   LNX_semaphore* semaphore;
-  semaphore = sem_open((char*)name.str, 0x0);
+  semaphore = sem_open((char*)name.str, 0600);
   handle->semaphore.handle = semaphore;
   Assert("Failed to open POSIX semaphore." || semaphore != SEM_FAILED);
 
