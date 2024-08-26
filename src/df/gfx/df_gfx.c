@@ -794,8 +794,11 @@ df_view_alloc(void)
   view->spec = &df_g_nil_view_spec;
   view->project_path_arena = arena_alloc();
   view->project_path = str8_zero();
-  view->params_arena = arena_alloc();
-  view->params_root = &md_nil_node;
+  for(U64 idx = 0; idx < ArrayCount(view->params_arenas); idx += 1)
+  {
+    view->params_arenas[idx] = arena_alloc();
+    view->params_roots[idx] = &md_nil_node;
+  }
   view->query_cursor = view->query_mark = txt_pt(1, 1);
   view->query_string_size = 0;
   df_gfx_state->allocated_view_count += 1;
@@ -822,7 +825,10 @@ df_view_release(DF_View *view)
   }
   view->first_arena_ext = view->last_arena_ext = 0;
   arena_release(view->project_path_arena);
-  arena_release(view->params_arena);
+  for(U64 idx = 0; idx < ArrayCount(view->params_arenas); idx += 1)
+  {
+    arena_release(view->params_arenas[idx]);
+  }
   arena_release(view->arena);
   view->generation += 1;
   df_gfx_state->allocated_view_count -= 1;
@@ -835,8 +841,11 @@ internal void
 df_view_equip_spec(DF_Window *window, DF_View *view, DF_ViewSpec *spec, String8 query, MD_Node *params)
 {
   // rjf: fill params tree
-  arena_clear(view->params_arena);
-  view->params_root = md_tree_copy(view->params_arena, params);
+  for(U64 idx = 0; idx < ArrayCount(view->params_arenas); idx += 1)
+  {
+    arena_clear(view->params_arenas[idx]);
+  }
+  view->params_roots[0] = md_tree_copy(view->params_arenas[0], params);
   
   // rjf: fill query buffer
   view->query_string_size = Min(sizeof(view->query_buffer), query.size);
@@ -877,7 +886,7 @@ df_view_equip_spec(DF_Window *window, DF_View *view, DF_ViewSpec *spec, String8 
     }
     view->is_filtering = 0;
     view->is_filtering_t = 0;
-    view_setup(window, view, view->params_root, str8(view->query_buffer, view->query_string_size));
+    view_setup(window, view, view->params_roots[view->params_gen%ArrayCount(view->params_roots)], str8(view->query_buffer, view->query_string_size));
   }
 }
 
@@ -3440,7 +3449,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
       {
         df_push_interact_regs();
         DF_ViewCmdFunctionType *do_view_cmds_function = view->spec->info.cmd_hook;
-        do_view_cmds_function(ws, panel, view, view->params_root, str8(view->query_buffer, view->query_string_size), cmds);
+        do_view_cmds_function(ws, panel, view, view->params_roots[view->params_gen%ArrayCount(view->params_roots)], str8(view->query_buffer, view->query_string_size), cmds);
         DF_InteractRegs *view_regs = df_pop_interact_regs();
         if(panel == ws->focused_panel)
         {
@@ -3666,7 +3675,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
               {
                 DF_ViewSpec *view_spec = view->spec;
                 DF_ViewUIFunctionType *build_view_ui_function = view_spec->info.ui_hook;
-                build_view_ui_function(ws, &df_g_nil_panel, view, view->params_root, str8(view->query_buffer, view->query_string_size), view_preview_container->rect);
+                build_view_ui_function(ws, &df_g_nil_panel, view, view->params_roots[view->params_gen%ArrayCount(view->params_roots)], str8(view->query_buffer, view->query_string_size), view_preview_container->rect);
               }
             }
           }
@@ -6123,7 +6132,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
       {
         DF_ViewSpec *view_spec = view->spec;
         DF_ViewUIFunctionType *build_view_ui_function = view_spec->info.ui_hook;
-        build_view_ui_function(ws, &df_g_nil_panel, view, view->params_root, str8(view->query_buffer, view->query_string_size), query_container_content_rect);
+        build_view_ui_function(ws, &df_g_nil_panel, view, view->params_roots[view->params_gen%ArrayCount(view->params_roots)], str8(view->query_buffer, view->query_string_size), query_container_content_rect);
       }
       
       //- rjf: query submission
@@ -7280,7 +7289,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           {
             DF_View *view = df_selected_tab_from_panel(panel);
             DF_ViewUIFunctionType *build_view_ui_function = view->spec->info.ui_hook;
-            build_view_ui_function(ws, panel, view, view->params_root, str8(view->query_buffer, view->query_string_size), content_rect);
+            build_view_ui_function(ws, panel, view, view->params_roots[view->params_gen%ArrayCount(view->params_roots)], str8(view->query_buffer, view->query_string_size), content_rect);
           }
           
           //- rjf: fill with per-view states, after the view has a chance to run
@@ -9437,16 +9446,38 @@ df_cfg_strings_from_gfx(Arena *arena, String8 root_path, DF_CfgSrc source)
                 scratch_end(scratch);
               }
               {
-                MD_NodeRec rec = {0};
-                for(MD_Node *n = view->params_root; n != 0 && n != &md_nil_node; n = rec.next)
+                String8 reserved_keys[] =
                 {
-                  rec = md_node_rec_depth_first_pre(n, view->params_root);
-                  if(n != view->params_root)
+                  str8_lit("project"),
+                  str8_lit("query"),
+                  str8_lit("selected"),
+                };
+                MD_NodeRec rec = {0};
+                MD_Node *params_root = view->params_roots[view->params_gen%ArrayCount(view->params_roots)];
+                for(MD_Node *n = params_root;
+                    !md_node_is_nil(n);
+                    n = rec.next)
+                {
+                  rec = md_node_rec_depth_first_pre(n, params_root);
+                  B32 is_reserved_key = 0;
+                  for(U64 idx = 0; idx < ArrayCount(reserved_keys); idx += 1)
+                  {
+                    if(str8_match(n->string, reserved_keys[idx], 0))
+                    {
+                      is_reserved_key = 1;
+                      break;
+                    }
+                  }
+                  if(is_reserved_key)
+                  {
+                    rec = md_node_rec_depth_first(n, params_root, OffsetOf(MD_Node, next), OffsetOf(MD_Node, next));
+                  }
+                  if(!is_reserved_key && n != params_root)
                   {
                     str8_list_pushf(arena, &strs, "%S", n->string);
                     if(n->first != &md_nil_node)
                     {
-                      str8_list_pushf(arena, &strs, ":{");
+                      str8_list_pushf(arena, &strs, ":{ ");
                     }
                     for(S32 pop_idx = 0; pop_idx < rec.pop_count; pop_idx += 1)
                     {

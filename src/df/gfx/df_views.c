@@ -2772,7 +2772,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
               //- rjf: build
               UI_PermissionFlags(UI_PermissionFlag_Clicks|UI_PermissionFlag_ScrollX)
               {
-                canvas_view_spec->info.ui_hook(ws, &df_g_nil_panel, canvas_view, canvas_view->params_root, str8(canvas_view->query_buffer, canvas_view->query_string_size), canvas_rect);
+                canvas_view_spec->info.ui_hook(ws, &df_g_nil_panel, canvas_view, canvas_view->params_roots[canvas_view->params_gen%ArrayCount(canvas_view->params_roots)], str8(canvas_view->query_buffer, canvas_view->query_string_size), canvas_rect);
               }
               
               //- rjf: pop interaction registers

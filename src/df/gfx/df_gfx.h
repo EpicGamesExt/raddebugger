@@ -182,6 +182,14 @@ struct DF_TransientViewSlot
   DF_TransientViewNode *last;
 };
 
+typedef struct DF_ViewParamDelta DF_ViewParamDelta;
+struct DF_ViewParamDelta
+{
+  DF_ViewParamDelta *next;
+  MD_Node *key_node;
+  String8 value;
+};
+
 typedef struct DF_View DF_View;
 struct DF_View
 {
@@ -232,8 +240,9 @@ struct DF_View
   F32 is_filtering_t;
   
   // rjf: params tree state
-  Arena *params_arena;
-  MD_Node *params_root;
+  Arena *params_arenas[2];
+  MD_Node *params_roots[2];
+  U64 params_gen;
   
   // rjf: text query state
   TxtPt query_cursor;
