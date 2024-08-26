@@ -279,10 +279,14 @@ internal B32        md_node_has_child(MD_Node *node, String8 string, StringMatch
 internal B32        md_node_has_tag(MD_Node *node, String8 string, StringMatchFlags flags);
 internal U64        md_child_count_from_node(MD_Node *node);
 internal U64        md_tag_count_from_node(MD_Node *node);
+internal String8    md_string_from_children(Arena *arena, MD_Node *root);
 
 //- rjf: tree comparison
 internal B32 md_node_deep_match(MD_Node *a, MD_Node *b, StringMatchFlags flags);
 internal B32 md_node_match(MD_Node *a, MD_Node *b, StringMatchFlags flags);
+
+//- rjf: tree duplication
+internal MD_Node *md_tree_copy(Arena *arena, MD_Node *src_root);
 
 ////////////////////////////////
 //~ rjf: Text -> Tokens Functions

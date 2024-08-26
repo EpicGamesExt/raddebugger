@@ -173,6 +173,7 @@ DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(default)
 
 DF_CORE_VIEW_RULE_EVAL_RESOLUTION_FUNCTION_DEF(array)
 {
+#if 0
   Temp scratch = scratch_begin(&arena, 1);
   E_TypeKey type_key = eval.type_key;
   E_TypeKind type_kind = e_type_kind_from_key(type_key);
@@ -203,6 +204,7 @@ DF_CORE_VIEW_RULE_EVAL_RESOLUTION_FUNCTION_DEF(array)
     }
   }
   scratch_end(scratch);
+#endif
   return eval;
 }
 
@@ -656,23 +658,6 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(rgba)
 ////////////////////////////////
 //~ rjf: "text"
 
-internal DF_TxtTopologyInfo
-df_vr_txt_topology_info_from_cfg(DF_CfgNode *cfg)
-{
-  Temp scratch = scratch_begin(0, 0);
-  DF_TxtTopologyInfo result = zero_struct;
-  {
-    StringJoin join = {0};
-    join.sep = str8_lit(" ");
-    DF_CfgNode *lang_cfg = df_cfg_node_child_from_string(cfg, str8_lit("lang"), 0);
-    String8 lang_string = {0};
-    lang_string = lang_cfg->first->string;
-    result.lang = txt_lang_kind_from_extension(lang_string);
-  }
-  scratch_end(scratch);
-  return result;
-}
-
 DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(text)
 {
   DF_EvalVizBlock *vb = df_eval_viz_block_begin(arena, DF_EvalVizBlockKind_Canvas, key, df_expand_key_make(df_hash_from_expand_key(key), 1), depth);
@@ -684,131 +669,8 @@ DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(text)
   df_eval_viz_block_end(out, vb);
 }
 
-#if 0
-DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(text)
-{
-  Temp scratch = scratch_begin(0, 0);
-  HS_Scope *hs_scope = hs_scope_open();
-  TXT_Scope *txt_scope = txt_scope_open();
-  
-  //////////////////////////////
-  //- rjf: get & initialize state
-  //
-  DF_VR_TextState *state = df_view_rule_block_user_state(key, DF_VR_TextState);
-  if(!state->initialized)
-  {
-    state->initialized = 1;
-    state->cursor = state->mark = txt_pt(1, 1);
-  }
-  
-  //////////////////////////////
-  //- rjf: unpack evaluation / view rule params
-  //
-  Rng1U64 range = df_range_from_eval_cfg(eval, cfg);
-  DF_TxtTopologyInfo top = df_vr_txt_topology_info_from_cfg(cfg);
-  
-  //////////////////////////////
-  //- rjf: evaluation info -> text visualization info
-  //
-  String8 data = {0};
-  TXT_TextInfo info = {0};
-  TXT_LineTokensSlice line_tokens_slice = {0};
-  U128 text_key = df_key_from_eval_space_range(eval.space, range);
-  {
-    U128 text_hash = {0};
-    info = txt_text_info_from_key_lang(txt_scope, text_key, top.lang, &text_hash);
-    data = hs_data_from_hash(hs_scope, text_hash);
-    line_tokens_slice = txt_line_tokens_slice_from_info_data_line_range(scratch.arena, &info, data, r1s64(1, info.lines_count));
-  }
-  
-  //////////////////////////////
-  //- rjf: info -> code slice info
-  //
-  DF_CodeSliceParams code_slice_params = {0};
-  {
-    code_slice_params.flags = DF_CodeSliceFlag_LineNums;
-    code_slice_params.line_num_range = r1s64(1, info.lines_count);
-    code_slice_params.line_text = push_array(scratch.arena, String8, info.lines_count);
-    code_slice_params.line_ranges = push_array(scratch.arena, Rng1U64, info.lines_count);
-    code_slice_params.line_tokens = push_array(scratch.arena, TXT_TokenArray, info.lines_count);
-    code_slice_params.line_bps = push_array(scratch.arena, DF_EntityList, info.lines_count);
-    code_slice_params.line_ips = push_array(scratch.arena, DF_EntityList, info.lines_count);
-    code_slice_params.line_pins = push_array(scratch.arena, DF_EntityList, info.lines_count);
-    code_slice_params.line_vaddrs = push_array(scratch.arena, U64, info.lines_count);
-    code_slice_params.line_infos = push_array(scratch.arena, DF_LineList, info.lines_count);
-    for(U64 line_idx = 0; line_idx < info.lines_count; line_idx += 1)
-    {
-      code_slice_params.line_text[line_idx] = str8_substr(data, info.lines_ranges[line_idx]);
-      code_slice_params.line_ranges[line_idx] = info.lines_ranges[line_idx];
-      code_slice_params.line_tokens[line_idx] = line_tokens_slice.line_tokens[line_idx];
-    }
-    code_slice_params.font = df_font_from_slot(DF_FontSlot_Code);
-    code_slice_params.font_size = ui_top_font_size();
-    code_slice_params.tab_size = f_column_size_from_tag_size(code_slice_params.font, code_slice_params.font_size)*df_setting_val_from_code(ws, DF_SettingCode_TabWidth).s32;
-    code_slice_params.line_height_px = ui_top_font_size()*1.5f;
-    code_slice_params.priority_margin_width_px = 0;
-    code_slice_params.catchall_margin_width_px = 0;
-    code_slice_params.line_num_width_px = ui_top_font_size()*5.f;
-    code_slice_params.line_text_max_width_px = ui_top_font_size()*2.f*info.lines_max_size;
-  }
-  
-  //////////////////////////////
-  //- rjf: build UI
-  //
-  if(info.lines_count != 0)
-  {
-    //- rjf: build top-level container
-    UI_Box *container = &ui_g_nil_box;
-    UI_PrefWidth(ui_px(dim.x, 1.f)) UI_PrefHeight(ui_px(dim.y, 1.f))
-    {
-      container = ui_build_box_from_stringf(UI_BoxFlag_AllowOverflow|UI_BoxFlag_Clip, "###text_container");
-    }
-    
-    //- rjf: build code slice
-    UI_WidthFill UI_HeightFill UI_Parent(container)
-    {
-      DF_CodeSliceSignal slice_sig = df_code_slice(ws, &code_slice_params, &state->cursor, &state->mark, &state->preferred_column, str8_lit("###slice"));
-    }
-  }
-  
-  txt_scope_close(txt_scope);
-  hs_scope_close(hs_scope);
-  scratch_end(scratch);
-}
-#endif
-
 ////////////////////////////////
 //~ rjf: "disasm"
-
-internal DF_DisasmTopologyInfo
-df_vr_disasm_topology_info_from_cfg(DF_CfgNode *cfg)
-{
-  Temp scratch = scratch_begin(0, 0);
-  DF_DisasmTopologyInfo result = zero_struct;
-  {
-    StringJoin join = {0};
-    join.sep = str8_lit(" ");
-    DF_CfgNode *size_cfg = df_cfg_node_child_from_string(cfg, str8_lit("size"), 0);
-    DF_CfgNode *arch_cfg = df_cfg_node_child_from_string(cfg, str8_lit("arch"), 0);
-    String8List size_expr_strs = {0};
-    String8 arch_string = {0};
-    for(DF_CfgNode *child = size_cfg->first; child != &df_g_nil_cfg_node; child = child->next)
-    {
-      str8_list_push(scratch.arena, &size_expr_strs, child->string);
-    }
-    arch_string = arch_cfg->first->string;
-    String8 size_expr = str8_list_join(scratch.arena, &size_expr_strs, &join);
-    E_Eval size_eval = e_eval_from_string(scratch.arena, size_expr);
-    E_Eval size_val_eval = e_value_eval_from_eval(size_eval);
-    if(str8_match(arch_string, str8_lit("x64"), StringMatchFlag_CaseInsensitive))
-    {
-      result.arch = Architecture_x64;
-    }
-    result.size_cap = size_val_eval.value.u64;
-  }
-  scratch_end(scratch);
-  return result;
-}
 
 DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(disasm)
 {
@@ -941,6 +803,18 @@ DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(graph)
 ////////////////////////////////
 //~ rjf: "bitmap"
 
+DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(bitmap)
+{
+  DF_EvalVizBlock *vb = df_eval_viz_block_begin(arena, DF_EvalVizBlockKind_Canvas, key, df_expand_key_make(df_hash_from_expand_key(key), 1), depth);
+  vb->string             = string;
+  vb->expr               = expr;
+  vb->visual_idx_range   = r1u64(0, 8);
+  vb->semantic_idx_range = r1u64(0, 1);
+  vb->cfg_table          = cfg_table;
+  df_eval_viz_block_end(out, vb);
+}
+
+#if 0
 internal Vec2F32
 df_bitmap_view_state__screen_from_canvas_pos(DF_BitmapViewState *bvs, Rng2F32 rect, Vec2F32 cvs)
 {
@@ -1057,27 +931,7 @@ internal UI_BOX_CUSTOM_DRAW(df_vr_bitmap_box_draw)
            indicator_color, 3.f, 4.f, 1.f);
   }
 }
-
-DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(bitmap)
-{
-  DF_EvalVizBlock *vb = df_eval_viz_block_begin(arena, DF_EvalVizBlockKind_Canvas, key, df_expand_key_make(df_hash_from_expand_key(key), 1), depth);
-  vb->string             = string;
-  vb->expr               = expr;
-  vb->visual_idx_range   = r1u64(0, 8);
-  vb->semantic_idx_range = r1u64(0, 1);
-  vb->cfg_table          = cfg_table;
-  df_eval_viz_block_end(out, vb);
-}
-
-DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_DEF(bitmap)
-{
-  E_Eval value_eval = e_value_eval_from_eval(eval);
-  U64 base_vaddr = value_eval.value.u64;
-  DF_BitmapTopologyInfo topology = df_vr_bitmap_topology_info_from_cfg(cfg);
-  U64 expected_size = topology.width*topology.height*r_tex2d_format_bytes_per_pixel_table[topology.fmt];
-  DF_Font(ws, DF_FontSlot_Code) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
-    ui_labelf("0x%I64x -> Bitmap (%I64u x %I64u)", base_vaddr, topology.width, topology.height);
-}
+#endif
 
 #if 0
 DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(bitmap)
@@ -1202,6 +1056,7 @@ DF_VIEW_UI_FUNCTION_DEF(bitmap)
 ////////////////////////////////
 //~ rjf: "geo"
 
+#if 0
 internal DF_GeoTopologyInfo
 df_vr_geo_topology_info_from_cfg(DF_CfgNode *cfg)
 {
@@ -1244,6 +1099,7 @@ df_vr_geo_topology_info_from_cfg(DF_CfgNode *cfg)
   scratch_end(scratch);
   return result;
 }
+#endif
 
 internal UI_BOX_CUSTOM_DRAW(df_vr_geo_box_draw)
 {

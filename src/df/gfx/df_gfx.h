@@ -83,17 +83,17 @@ typedef struct DF_View DF_View;
 typedef struct DF_Panel DF_Panel;
 typedef struct DF_Window DF_Window;
 
-#define DF_VIEW_SETUP_FUNCTION_SIG(name) void name(DF_Window *ws, struct DF_View *view, DF_CfgNode *cfg, String8 string)
+#define DF_VIEW_SETUP_FUNCTION_SIG(name) void name(DF_Window *ws, struct DF_View *view, MD_Node *params, String8 string)
 #define DF_VIEW_SETUP_FUNCTION_NAME(name) df_view_setup_##name
 #define DF_VIEW_SETUP_FUNCTION_DEF(name) internal DF_VIEW_SETUP_FUNCTION_SIG(DF_VIEW_SETUP_FUNCTION_NAME(name))
 typedef DF_VIEW_SETUP_FUNCTION_SIG(DF_ViewSetupFunctionType);
 
-#define DF_VIEW_CMD_FUNCTION_SIG(name) void name(struct DF_Window *ws, struct DF_Panel *panel, struct DF_View *view, DF_CfgNode *cfg, String8 string, struct DF_CmdList *cmds)
+#define DF_VIEW_CMD_FUNCTION_SIG(name) void name(struct DF_Window *ws, struct DF_Panel *panel, struct DF_View *view, MD_Node *params, String8 string, struct DF_CmdList *cmds)
 #define DF_VIEW_CMD_FUNCTION_NAME(name) df_view_cmds_##name
 #define DF_VIEW_CMD_FUNCTION_DEF(name) internal DF_VIEW_CMD_FUNCTION_SIG(DF_VIEW_CMD_FUNCTION_NAME(name))
 typedef DF_VIEW_CMD_FUNCTION_SIG(DF_ViewCmdFunctionType);
 
-#define DF_VIEW_UI_FUNCTION_SIG(name) void name(struct DF_Window *ws, struct DF_Panel *panel, struct DF_View *view, DF_CfgNode *cfg, String8 string, Rng2F32 rect)
+#define DF_VIEW_UI_FUNCTION_SIG(name) void name(struct DF_Window *ws, struct DF_Panel *panel, struct DF_View *view, MD_Node *params, String8 string, Rng2F32 rect)
 #define DF_VIEW_UI_FUNCTION_NAME(name) df_view_ui_##name
 #define DF_VIEW_UI_FUNCTION_DEF(name) internal DF_VIEW_UI_FUNCTION_SIG(DF_VIEW_UI_FUNCTION_NAME(name))
 typedef DF_VIEW_UI_FUNCTION_SIG(DF_ViewUIFunctionType);
@@ -231,9 +231,9 @@ struct DF_View
   B32 is_filtering;
   F32 is_filtering_t;
   
-  // rjf: configuration tree state
-  Arena *cfg_arena;
-  DF_CfgNode *cfg_root;
+  // rjf: params tree state
+  Arena *params_arena;
+  MD_Node *params_root;
   
   // rjf: text query state
   TxtPt query_cursor;
@@ -339,7 +339,7 @@ enum
 #define DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_NAME(name) df_gfx_view_rule_line_stringize__##name
 #define DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(name) internal DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_SIG(DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_NAME(name))
 
-#define DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_SIG(name) void name(struct DF_Window *ws, DF_ExpandKey key, E_Eval eval, struct DF_CfgNode *cfg)
+#define DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_SIG(name) void name(struct DF_Window *ws, DF_ExpandKey key, E_Eval eval, MD_Node *params)
 #define DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_NAME(name) df_gfx_view_rule_row_ui__##name
 #define DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_DEF(name) DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_SIG(DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_NAME(name))
 
@@ -948,11 +948,15 @@ internal DF_GfxViewRuleSpec *df_gfx_view_rule_spec_from_string(String8 string);
 ////////////////////////////////
 //~ rjf: View State Functions
 
+//- rjf: allocation/releasing
 internal DF_View *df_view_alloc(void);
 internal void df_view_release(DF_View *view);
-internal void df_view_equip_spec(DF_Window *window, DF_View *view, DF_ViewSpec *spec, String8 query, DF_CfgNode *cfg_root);
+
+//- rjf: equipment
+internal void df_view_equip_spec(DF_Window *window, DF_View *view, DF_ViewSpec *spec, String8 query, MD_Node *params);
 internal void df_view_equip_loading_info(DF_View *view, B32 is_loading, U64 progress_v, U64 progress_target);
-internal void df_view_clear_user_state(DF_View *view);
+
+//- rjf: user state extensions
 internal void *df_view_get_or_push_user_state(DF_View *view, U64 size);
 internal Arena *df_view_push_arena_ext(DF_View *view);
 #define df_view_user_state(view, type) (type *)df_view_get_or_push_user_state((view), sizeof(type))
@@ -960,7 +964,7 @@ internal Arena *df_view_push_arena_ext(DF_View *view);
 ////////////////////////////////
 //~ rjf: Expand-Keyed Transient View Functions
 
-internal DF_View *df_transient_view_from_expand_key(DF_View *owner_view, DF_Window *window, DF_ViewSpec *spec, String8 query, DF_CfgNode *cfg_root, DF_ExpandKey key);
+internal DF_View *df_transient_view_from_expand_key(DF_View *owner_view, DF_Window *window, DF_ViewSpec *spec, String8 query, MD_Node *params, DF_ExpandKey key);
 
 ////////////////////////////////
 //~ rjf: View Rule Instance State Functions

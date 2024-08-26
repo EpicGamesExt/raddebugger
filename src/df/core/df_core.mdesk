@@ -99,7 +99,7 @@ DF_CmdParamSlotTable:
   {TextPoint         text_point            `TxtPt`}
   {CmdSpec           cmd_spec              `struct DF_CmdSpec *`}
   {ViewSpec          view_spec             `struct DF_ViewSpec *`}
-  {CfgNode           cfg_node              `struct DF_CfgNode *`}
+  {ParamsTree        params_tree           `MD_Node *`}
   {OSEvent           os_event              `struct OS_Event *`}
   {VirtualAddr       vaddr                 `U64`}
   {VirtualOff        voff                  `U64`}

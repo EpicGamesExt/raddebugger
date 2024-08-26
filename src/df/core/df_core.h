@@ -171,7 +171,7 @@ struct DF_CtrlFlowInfo
 ////////////////////////////////
 //~ rjf: View Rule Hook Types
 
-typedef struct DF_CfgNode DF_CfgNode;
+typedef struct DF_CfgTree DF_CfgTree;
 typedef struct DF_CfgVal DF_CfgVal;
 typedef struct DF_CfgTable DF_CfgTable;
 typedef struct DF_EvalView DF_EvalView;
@@ -203,6 +203,7 @@ typedef DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_SIG(DF_CoreViewRuleVizBlockPro
 ////////////////////////////////
 //~ rjf: Config Types
 
+#if 0
 typedef U32 DF_CfgNodeFlags;
 enum
 {
@@ -222,7 +223,17 @@ struct DF_CfgNode
   String8 string;
   DF_CfgSrc source;
 };
+#endif
 
+typedef struct DF_CfgTree DF_CfgTree;
+struct DF_CfgTree
+{
+  DF_CfgTree *next;
+  DF_CfgSrc source;
+  MD_Node *root;
+};
+
+#if 0
 typedef struct DF_CfgNodeRec DF_CfgNodeRec;
 struct DF_CfgNodeRec
 {
@@ -230,14 +241,15 @@ struct DF_CfgNodeRec
   S32 push_count;
   S32 pop_count;
 };
+#endif
 
 typedef struct DF_CfgVal DF_CfgVal;
 struct DF_CfgVal
 {
   DF_CfgVal *hash_next;
   DF_CfgVal *linear_next;
-  DF_CfgNode *first;
-  DF_CfgNode *last;
+  DF_CfgTree *first;
+  DF_CfgTree *last;
   U64 insertion_stamp;
   String8 string;
 };
@@ -793,9 +805,9 @@ struct DF_EvalVizRow
   // rjf: view rule attachments
   DF_CfgTable *cfg_table;
   struct DF_GfxViewRuleSpec *expand_ui_rule_spec;
-  struct DF_CfgNode *expand_ui_rule_node;
+  MD_Node *expand_ui_rule_params;
   struct DF_GfxViewRuleSpec *value_ui_rule_spec;
-  struct DF_CfgNode *value_ui_rule_node;
+  MD_Node *value_ui_rule_params;
 };
 
 typedef struct DF_EvalVizWindowedRowList DF_EvalVizWindowedRowList;
@@ -1228,8 +1240,11 @@ struct DF_State
 
 read_only global DF_CmdSpec df_g_nil_cmd_spec = {0};
 read_only global DF_CoreViewRuleSpec df_g_nil_core_view_rule_spec = {0};
+#if 0
 read_only global DF_CfgNode df_g_nil_cfg_node = {&df_g_nil_cfg_node, &df_g_nil_cfg_node, &df_g_nil_cfg_node, &df_g_nil_cfg_node};
-read_only global DF_CfgVal df_g_nil_cfg_val = {&df_g_nil_cfg_val, &df_g_nil_cfg_val, &df_g_nil_cfg_node, &df_g_nil_cfg_node};
+#endif
+read_only global DF_CfgTree df_g_nil_cfg_tree = {&df_g_nil_cfg_tree, DF_CfgSrc_User, &md_nil_node};
+read_only global DF_CfgVal df_g_nil_cfg_val = {&df_g_nil_cfg_val, &df_g_nil_cfg_val, &df_g_nil_cfg_tree, &df_g_nil_cfg_tree};
 read_only global DF_CfgTable df_g_nil_cfg_table = {0, 0, 0, &df_g_nil_cfg_val, &df_g_nil_cfg_val};
 read_only global DF_Entity df_g_nil_entity =
 {
@@ -1325,17 +1340,22 @@ internal void df_expand_set_expansion(Arena *arena, DF_ExpandTreeTable *table, D
 ////////////////////////////////
 //~ rjf: Config Type Pure Functions
 
+#if 0
 internal DF_CfgNode *df_cfg_tree_copy(Arena *arena, DF_CfgNode *src_root);
 internal DF_CfgNodeRec df_cfg_node_rec__depth_first_pre(DF_CfgNode *node, DF_CfgNode *root);
+#endif
+internal DF_CfgTree *df_cfg_tree_copy(Arena *arena, DF_CfgTree *src);
 internal void df_cfg_table_push_unparsed_string(Arena *arena, DF_CfgTable *table, String8 string, DF_CfgSrc source);
 internal DF_CfgTable df_cfg_table_from_inheritance(Arena *arena, DF_CfgTable *src);
 internal DF_CfgTable df_cfg_table_copy(Arena *arena, DF_CfgTable *src);
 internal DF_CfgVal *df_cfg_val_from_string(DF_CfgTable *table, String8 string);
+#if 0
 internal DF_CfgNode *df_cfg_node_child_from_string(DF_CfgNode *node, String8 string, StringMatchFlags flags);
 internal DF_CfgNode *df_first_cfg_node_child_from_flags(DF_CfgNode *node, DF_CfgNodeFlags flags);
 internal String8 df_string_from_cfg_node_children(Arena *arena, DF_CfgNode *node);
 internal Vec4F32 df_hsva_from_cfg_node(DF_CfgNode *node);
 internal String8 df_string_from_cfg_node_key(DF_CfgNode *node, String8 key, StringMatchFlags flags);
+#endif
 
 ////////////////////////////////
 //~ rjf: Debug Info Extraction Type Pure Functions
@@ -1650,13 +1670,13 @@ internal String8 df_expr_string_from_viz_row(Arena *arena, DF_EvalVizRow *row);
 internal B32 df_viz_row_is_expandable(DF_EvalVizRow *row);
 internal B32 df_viz_row_is_editable(DF_EvalVizRow *row);
 
-//- rjf: eval / view rule config tree info extraction
+//- rjf: eval / view rule params tree info extraction
 internal U64 df_base_offset_from_eval(E_Eval eval);
-internal E_Value df_value_from_cfg_key(DF_CfgNode *cfg, String8 key);
-internal Rng1U64 df_range_from_eval_cfg(E_Eval eval, DF_CfgNode *cfg);
-internal TXT_LangKind df_lang_kind_from_eval_cfg(E_Eval eval, DF_CfgNode *cfg);
-internal Vec2S32 df_dim2s32_from_eval_cfg(E_Eval eval, DF_CfgNode *cfg);
-internal R_Tex2DFormat df_tex2dformat_from_eval_cfg(E_Eval eval, DF_CfgNode *cfg);
+internal E_Value df_value_from_params_key(MD_Node *params, String8 key);
+internal Rng1U64 df_range_from_eval_params(E_Eval eval, MD_Node *params);
+internal TXT_LangKind df_lang_kind_from_eval_params(E_Eval eval, MD_Node *params);
+internal Vec2S32 df_dim2s32_from_eval_params(E_Eval eval, MD_Node *params);
+internal R_Tex2DFormat df_tex2dformat_from_eval_params(E_Eval eval, MD_Node *params);
 
 //- rjf: view rule eval application
 internal E_Eval df_eval_from_eval_cfg_table(Arena *arena, E_Eval eval, DF_CfgTable *cfg);

@@ -224,7 +224,7 @@ DF_GfxViewRuleSpecInfo df_g_gfx_view_rule_spec_info_table[15] =
 { str8_lit_comp("rgba"), (DF_GfxViewRuleSpecInfoFlag_VizRowProd*0)|(DF_GfxViewRuleSpecInfoFlag_LineStringize*0)|(DF_GfxViewRuleSpecInfoFlag_RowUI*1)|(DF_GfxViewRuleSpecInfoFlag_ViewUI*1),  0,  0, DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_NAME(rgba) , str8_lit_comp("") },
 { str8_lit_comp("text"), (DF_GfxViewRuleSpecInfoFlag_VizRowProd*0)|(DF_GfxViewRuleSpecInfoFlag_LineStringize*0)|(DF_GfxViewRuleSpecInfoFlag_RowUI*0)|(DF_GfxViewRuleSpecInfoFlag_ViewUI*1),  0,  0,  0, str8_lit_comp("code") },
 { str8_lit_comp("disasm"), (DF_GfxViewRuleSpecInfoFlag_VizRowProd*0)|(DF_GfxViewRuleSpecInfoFlag_LineStringize*0)|(DF_GfxViewRuleSpecInfoFlag_RowUI*0)|(DF_GfxViewRuleSpecInfoFlag_ViewUI*1),  0,  0,  0, str8_lit_comp("disassembly") },
-{ str8_lit_comp("bitmap"), (DF_GfxViewRuleSpecInfoFlag_VizRowProd*0)|(DF_GfxViewRuleSpecInfoFlag_LineStringize*0)|(DF_GfxViewRuleSpecInfoFlag_RowUI*1)|(DF_GfxViewRuleSpecInfoFlag_ViewUI*1),  0,  0, DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_NAME(bitmap) , str8_lit_comp("bitmap") },
+{ str8_lit_comp("bitmap"), (DF_GfxViewRuleSpecInfoFlag_VizRowProd*0)|(DF_GfxViewRuleSpecInfoFlag_LineStringize*0)|(DF_GfxViewRuleSpecInfoFlag_RowUI*0)|(DF_GfxViewRuleSpecInfoFlag_ViewUI*1),  0,  0,  0, str8_lit_comp("bitmap") },
 { str8_lit_comp("geo"), (DF_GfxViewRuleSpecInfoFlag_VizRowProd*0)|(DF_GfxViewRuleSpecInfoFlag_LineStringize*0)|(DF_GfxViewRuleSpecInfoFlag_RowUI*1)|(DF_GfxViewRuleSpecInfoFlag_ViewUI*1),  0,  0, DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_NAME(geo) , str8_lit_comp("geometry") },
 };
 

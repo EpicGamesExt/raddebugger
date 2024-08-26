@@ -18,28 +18,6 @@ internal Vec4F32 df_vr_rgba_from_eval(E_Eval eval, DF_Entity *process);
 internal void df_vr_eval_commit_rgba(E_Eval eval, Vec4F32 rgba);
 
 ////////////////////////////////
-//~ rjf: "text"
-
-typedef struct DF_TxtTopologyInfo DF_TxtTopologyInfo;
-struct DF_TxtTopologyInfo
-{
-  TXT_LangKind lang;
-};
-
-typedef struct DF_VR_TextState DF_VR_TextState;
-struct DF_VR_TextState
-{
-  B32 initialized;
-  TxtPt cursor;
-  TxtPt mark;
-  S64 preferred_column;
-  U64 last_open_frame_idx;
-  F32 loaded_t;
-};
-
-internal DF_TxtTopologyInfo df_vr_txt_topology_info_from_cfg(DF_CfgNode *cfg);
-
-////////////////////////////////
 //~ rjf: "disasm"
 
 typedef struct DF_DisasmTopologyInfo DF_DisasmTopologyInfo;
@@ -59,8 +37,6 @@ struct DF_VR_DisasmState
   U64 last_open_frame_idx;
   F32 loaded_t;
 };
-
-internal DF_DisasmTopologyInfo df_vr_disasm_topology_info_from_cfg(DF_CfgNode *cfg);
 
 ////////////////////////////////
 //~ rjf: "bitmap"
@@ -101,11 +77,13 @@ struct DF_VR_BitmapBoxDrawData
   F32 ui_per_bmp_px;
 };
 
+#if 0
 internal Vec2F32 df_bitmap_view_state__screen_from_canvas_pos(DF_BitmapViewState *bvs, Rng2F32 rect, Vec2F32 cvs);
 internal Rng2F32 df_bitmap_view_state__screen_from_canvas_rect(DF_BitmapViewState *bvs, Rng2F32 rect, Rng2F32 cvs);
 internal Vec2F32 df_bitmap_view_state__canvas_from_screen_pos(DF_BitmapViewState *bvs, Rng2F32 rect, Vec2F32 scr);
 internal Rng2F32 df_bitmap_view_state__canvas_from_screen_rect(DF_BitmapViewState *bvs, Rng2F32 rect, Rng2F32 scr);
 internal DF_BitmapTopologyInfo df_vr_bitmap_topology_info_from_cfg(DF_CfgNode *cfg);
+#endif
 
 ////////////////////////////////
 //~ rjf: "geo"
@@ -140,6 +118,8 @@ struct DF_VR_GeoBoxDrawData
   F32 loaded_t;
 };
 
+#if 0
 internal DF_GeoTopologyInfo df_vr_geo_topology_info_from_cfg(DF_CfgNode *cfg);
+#endif
 
 #endif // DF_VIEW_RULES_H

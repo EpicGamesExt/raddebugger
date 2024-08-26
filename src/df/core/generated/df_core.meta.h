@@ -387,7 +387,7 @@ DF_CmdParamSlot_FilePath,
 DF_CmdParamSlot_TextPoint,
 DF_CmdParamSlot_CmdSpec,
 DF_CmdParamSlot_ViewSpec,
-DF_CmdParamSlot_CfgNode,
+DF_CmdParamSlot_ParamsTree,
 DF_CmdParamSlot_OSEvent,
 DF_CmdParamSlot_VirtualAddr,
 DF_CmdParamSlot_VirtualOff,
@@ -417,7 +417,7 @@ String8 file_path;
 TxtPt text_point;
 struct DF_CmdSpec * cmd_spec;
 struct DF_ViewSpec * view_spec;
-struct DF_CfgNode * cfg_node;
+MD_Node * params_tree;
 struct OS_Event * os_event;
 U64 vaddr;
 U64 voff;

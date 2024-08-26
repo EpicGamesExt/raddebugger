@@ -331,7 +331,7 @@ DF_GfxViewRuleTable:
   {"rgba"          -   -   x   x   ""                              }
   {"text"          -   -   -   x   "code"                          }
   {"disasm"        -   -   -   x   "disassembly"                   }
-  {"bitmap"        -   -   x   x   "bitmap"                        }
+  {"bitmap"        -   -   -   x   "bitmap"                        }
   {"geo"           -   -   x   x   "geometry"                      }
 }
 

@@ -355,10 +355,11 @@ df_expand_set_expansion(Arena *arena, DF_ExpandTreeTable *table, DF_ExpandKey pa
 ////////////////////////////////
 //~ rjf: Config Type Functions
 
+#if 0
 internal DF_CfgNode *
 df_cfg_tree_copy(Arena *arena, DF_CfgNode *src_root)
 {
-  DF_CfgNode *dst_root = &df_g_nil_cfg_node;
+  DF_CfgNode *dst_root = &df_g_nil_cfg_tree;
   DF_CfgNode *dst_parent = dst_root;
   {
     DF_CfgNodeRec rec = {0};
@@ -412,20 +413,28 @@ df_cfg_node_rec__depth_first_pre(DF_CfgNode *node, DF_CfgNode *root)
   }
   return rec;
 }
+#endif
+
+internal DF_CfgTree *
+df_cfg_tree_copy(Arena *arena, DF_CfgTree *src)
+{
+  DF_CfgTree *dst = push_array(arena, DF_CfgTree, 1);
+  dst->source = src->source;
+  dst->root = md_tree_copy(arena, src->root);
+  return dst;
+}
 
 internal void
 df_cfg_table_push_unparsed_string(Arena *arena, DF_CfgTable *table, String8 string, DF_CfgSrc source)
 {
-  Temp scratch = scratch_begin(&arena, 1);
   if(table->slot_count == 0)
   {
     table->slot_count = 64;
     table->slots = push_array(arena, DF_CfgSlot, table->slot_count);
   }
-  MD_TokenizeResult tokenize = md_tokenize_from_text(scratch.arena, string);
-  MD_ParseResult parse = md_parse_from_text_tokens(scratch.arena, str8_lit(""), string, tokenize.tokens);
-  MD_Node *md_root = parse.root;
-  for(MD_EachNode(tln, md_root->first)) if(tln->string.size != 0)
+  MD_TokenizeResult tokenize = md_tokenize_from_text(arena, string);
+  MD_ParseResult parse = md_parse_from_text_tokens(arena, str8_lit(""), string, tokenize.tokens);
+  for(MD_EachNode(tln, parse.root->first)) if(tln->string.size != 0)
   {
     // rjf: map string -> hash*slot
     String8 string = str8(tln->string.str, tln->string.size);
@@ -455,55 +464,12 @@ df_cfg_table_push_unparsed_string(Arena *arena, DF_CfgTable *table, String8 stri
       table->insertion_stamp_counter += 1;
     }
     
-    // rjf: deep copy tree into streamlined config structure
-    DF_CfgNode *dst_root = &df_g_nil_cfg_node;
-    {
-      DF_CfgNode *dst_parent = &df_g_nil_cfg_node;
-      for(MD_Node *src = tln, *src_next = 0; !md_node_is_nil(src); src = src_next)
-      {
-        src_next = 0;
-        
-        // rjf: copy
-        DF_CfgNode *dst = push_array(arena, DF_CfgNode, 1);
-        dst->first = dst->last = dst->parent = dst->next = &df_g_nil_cfg_node;
-        if(dst_parent == &df_g_nil_cfg_node)
-        {
-          dst_root = dst;
-        }
-        else
-        {
-          SLLQueuePush_NZ(&df_g_nil_cfg_node, dst_parent->first, dst_parent->last, dst, next);
-          dst->parent = dst_parent;
-        }
-        {
-          dst->flags |= !!(src->flags & MD_NodeFlag_Identifier)    * DF_CfgNodeFlag_Identifier;
-          dst->flags |= !!(src->flags & MD_NodeFlag_Numeric)       * DF_CfgNodeFlag_Numeric;
-          dst->flags |= !!(src->flags & MD_NodeFlag_StringLiteral) * DF_CfgNodeFlag_StringLiteral;
-          dst->string = push_str8_copy(arena, str8(src->string.str, src->string.size));
-          dst->source = source;
-        }
-        
-        // rjf: grab next
-        if(!md_node_is_nil(src->first))
-        {
-          src_next = src->first;
-          dst_parent = dst;
-        }
-        else for(MD_Node *p = src; !md_node_is_nil(p) && p != tln; p = p->parent, dst_parent = dst_parent->parent)
-        {
-          if(!md_node_is_nil(p->next))
-          {
-            src_next = p->next;
-            break;
-          }
-        }
-      }
-    }
-    
-    // rjf: push tree into value
-    SLLQueuePush_NZ(&df_g_nil_cfg_node, val->first, val->last, dst_root, next);
+    // rjf: create new node within this value
+    DF_CfgTree *tree = push_array(arena, DF_CfgTree, 1);
+    SLLQueuePush_NZ(&df_g_nil_cfg_tree, val->first, val->last, tree, next);
+    tree->source = source;
+    tree->root   = tln;
   }
-  scratch_end(scratch);
 }
 
 internal DF_CfgTable
@@ -566,6 +532,7 @@ df_cfg_val_from_string(DF_CfgTable *table, String8 string)
   return result;
 }
 
+#if 0
 internal DF_CfgNode *
 df_cfg_node_child_from_string(DF_CfgNode *node, String8 string, StringMatchFlags flags)
 {
@@ -673,6 +640,7 @@ df_string_from_cfg_node_key(DF_CfgNode *node, String8 key, StringMatchFlags flag
   DF_CfgNode *child = df_cfg_node_child_from_string(node, key, flags);
   return child->first->string;
 }
+#endif
 
 ////////////////////////////////
 //~ rjf: Debug Info Extraction Type Pure Functions
@@ -4591,10 +4559,10 @@ df_filtered_data_members_from_members_cfg_table(Arena *arena, E_MemberArray memb
     {
       // rjf: check if included by 'only's
       B32 is_included = 1;
-      for(DF_CfgNode *r = only->first; r != &df_g_nil_cfg_node; r = r->next)
+      for(DF_CfgTree *r = only->first; r != &df_g_nil_cfg_tree; r = r->next)
       {
         is_included = 0;
-        for(DF_CfgNode *name_node = r->first; name_node != &df_g_nil_cfg_node; name_node = name_node->next)
+        for(MD_EachNode(name_node, r->root->first))
         {
           String8 name = name_node->string;
           if(str8_match(members.v[idx].name, name, 0))
@@ -4607,9 +4575,9 @@ df_filtered_data_members_from_members_cfg_table(Arena *arena, E_MemberArray memb
       end_inclusion_check:;
       
       // rjf: remove if excluded by 'omit's
-      for(DF_CfgNode *r = omit->first; r != &df_g_nil_cfg_node; r = r->next)
+      for(DF_CfgTree *r = omit->first; r != &df_g_nil_cfg_tree; r = r->next)
       {
-        for(DF_CfgNode *name_node = r->first; name_node != &df_g_nil_cfg_node; name_node = name_node->next)
+        for(MD_EachNode(name_node, r->root->first))
         {
           String8 name = name_node->string;
           if(str8_match(members.v[idx].name, name, 0))
@@ -5173,21 +5141,21 @@ df_eval_viz_row_list_push_new(Arena *arena, DF_EvalView *eval_view, DF_EvalVizWi
     
     // rjf: determine row ui hook to use for this row
     DF_GfxViewRuleSpec *value_ui_rule_spec = &df_g_nil_gfx_view_rule_spec;
-    DF_CfgNode *value_ui_rule_node= &df_g_nil_cfg_node;
+    MD_Node *value_ui_rule_params = &md_nil_node;
     for(DF_CfgVal *val = cfg_table->first_val; val != 0 && val != &df_g_nil_cfg_val; val = val->linear_next)
     {
       DF_GfxViewRuleSpec *spec = df_gfx_view_rule_spec_from_string(val->string);
       if(spec->info.flags & DF_GfxViewRuleSpecInfoFlag_RowUI)
       {
         value_ui_rule_spec = spec;
-        value_ui_rule_node = val->last;
+        value_ui_rule_params = val->last->root;
         break;
       }
     }
     
     // rjf: determine block ui hook to use for this row
     DF_GfxViewRuleSpec *expand_ui_rule_spec = &df_g_nil_gfx_view_rule_spec;
-    DF_CfgNode *expand_ui_rule_node = &df_g_nil_cfg_node;
+    MD_Node *expand_ui_rule_params = &md_nil_node;
     if(block->kind == DF_EvalVizBlockKind_Canvas)
     {
       for(DF_CfgVal *val = cfg_table->first_val; val != 0 && val != &df_g_nil_cfg_val; val = val->linear_next)
@@ -5196,7 +5164,7 @@ df_eval_viz_row_list_push_new(Arena *arena, DF_EvalView *eval_view, DF_EvalVizWi
         if(spec->info.flags & DF_GfxViewRuleSpecInfoFlag_ViewUI)
         {
           expand_ui_rule_spec = spec;
-          expand_ui_rule_node = val->last;
+          expand_ui_rule_params = val->last->root;
           break;
         }
       }
@@ -5204,10 +5172,10 @@ df_eval_viz_row_list_push_new(Arena *arena, DF_EvalView *eval_view, DF_EvalVizWi
     
     // rjf: fill
     row->cfg_table = cfg_table;
-    row->value_ui_rule_node = value_ui_rule_node;
     row->value_ui_rule_spec = value_ui_rule_spec;
-    row->expand_ui_rule_node = expand_ui_rule_node;
+    row->value_ui_rule_params = value_ui_rule_params;
     row->expand_ui_rule_spec = expand_ui_rule_spec;
+    row->expand_ui_rule_params = expand_ui_rule_params;
   }
   
   return row;
@@ -5420,11 +5388,11 @@ df_base_offset_from_eval(E_Eval eval)
 }
 
 internal E_Value
-df_value_from_cfg_key(DF_CfgNode *cfg, String8 key)
+df_value_from_params_key(MD_Node *params, String8 key)
 {
   Temp scratch = scratch_begin(0, 0);
-  DF_CfgNode *key_cfg = df_cfg_node_child_from_string(cfg, key, 0);
-  String8 expr = df_string_from_cfg_node_children(scratch.arena, key_cfg);
+  MD_Node *key_node = md_child_from_string(params, key, 0);
+  String8 expr = md_string_from_children(scratch.arena, key_node);
   E_Eval eval = e_eval_from_string(scratch.arena, expr);
   E_Eval value_eval = e_value_eval_from_eval(eval);
   scratch_end(scratch);
@@ -5432,10 +5400,10 @@ df_value_from_cfg_key(DF_CfgNode *cfg, String8 key)
 }
 
 internal Rng1U64
-df_range_from_eval_cfg(E_Eval eval, DF_CfgNode *cfg)
+df_range_from_eval_params(E_Eval eval, MD_Node *params)
 {
   Temp scratch = scratch_begin(0, 0);
-  U64 size = df_value_from_cfg_key(cfg, str8_lit("size")).u64;
+  U64 size = df_value_from_params_key(params, str8_lit("size")).u64;
   if(size == 0 &&
      (e_type_kind_from_key(eval.type_key) == E_TypeKind_Array ||
       e_type_kind_from_key(e_type_direct_from_key(eval.type_key)) == E_TypeKind_Array))
@@ -5463,7 +5431,7 @@ df_range_from_eval_cfg(E_Eval eval, DF_CfgNode *cfg)
 }
 
 internal TXT_LangKind
-df_lang_kind_from_eval_cfg(E_Eval eval, DF_CfgNode *cfg)
+df_lang_kind_from_eval_params(E_Eval eval, MD_Node *params)
 {
   TXT_LangKind lang_kind = TXT_LangKind_Null;
   if(eval.expr->kind == E_ExprKind_LeafFilePath)
@@ -5472,33 +5440,33 @@ df_lang_kind_from_eval_cfg(E_Eval eval, DF_CfgNode *cfg)
   }
   else
   {
-    DF_CfgNode *lang_cfg = df_cfg_node_child_from_string(cfg, str8_lit("lang"), 0);
-    String8 lang_kind_string = lang_cfg->first->string;
+    MD_Node *lang_node = md_child_from_string(params, str8_lit("lang"), 0);
+    String8 lang_kind_string = lang_node->first->string;
     lang_kind = txt_lang_kind_from_extension(lang_kind_string);
   }
   return lang_kind;
 }
 
 internal Vec2S32
-df_dim2s32_from_eval_cfg(E_Eval eval, DF_CfgNode *cfg)
+df_dim2s32_from_eval_params(E_Eval eval, MD_Node *params)
 {
   Vec2S32 dim = v2s32(1, 1);
   {
-    dim.x = df_value_from_cfg_key(cfg, str8_lit("w")).s32;
-    dim.y = df_value_from_cfg_key(cfg, str8_lit("h")).s32;
+    dim.x = df_value_from_params_key(params, str8_lit("w")).s32;
+    dim.y = df_value_from_params_key(params, str8_lit("h")).s32;
   }
   return dim;
 }
 
 internal R_Tex2DFormat
-df_tex2dformat_from_eval_cfg(E_Eval eval, DF_CfgNode *cfg)
+df_tex2dformat_from_eval_params(E_Eval eval, MD_Node *params)
 {
   R_Tex2DFormat result = R_Tex2DFormat_RGBA8;
   {
-    DF_CfgNode *fmt_child = df_cfg_node_child_from_string(cfg, str8_lit("fmt"), 0);
+    MD_Node *fmt_node = md_child_from_string(params, str8_lit("fmt"), 0);
     for(EachNonZeroEnumVal(R_Tex2DFormat, fmt))
     {
-      if(str8_match(r_tex2d_kind_display_string_table[fmt], fmt_child->first->string, StringMatchFlag_CaseInsensitive))
+      if(str8_match(r_tex2d_kind_display_string_table[fmt], fmt_node->first->string, StringMatchFlag_CaseInsensitive))
       {
         result = fmt;
         break;
@@ -7780,16 +7748,16 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
               if(k_flags & DF_EntityKindFlag_IsSerializedToConfig)
               {
                 DF_CfgVal *k_val = df_cfg_val_from_string(table, df_g_entity_kind_name_lower_table[k]);
-                for(DF_CfgNode *k_cfg = k_val->first;
-                    k_cfg != &df_g_nil_cfg_node;
-                    k_cfg = k_cfg->next)
+                for(DF_CfgTree *k_tree = k_val->first;
+                    k_tree != &df_g_nil_cfg_tree;
+                    k_tree = k_tree->next)
                 {
-                  if(k_cfg->source != src)
+                  if(k_tree->source != src)
                   {
                     continue;
                   }
                   DF_Entity *entity = df_entity_alloc(df_entity_root(), k);
-                  df_entity_equip_cfg_src(entity, k_cfg->source);
+                  df_entity_equip_cfg_src(entity, k_tree->source);
                   
                   // rjf: iterate config tree
                   typedef struct Task Task;
@@ -7797,18 +7765,18 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
                   {
                     Task *next;
                     DF_Entity *entity;
-                    DF_CfgNode *n;
+                    MD_Node *n;
                   };
-                  Task start_task = {0, entity, k_cfg};
+                  Task start_task = {0, entity, k_tree->root};
                   Task *first_task = &start_task;
                   Task *last_task = first_task;
                   for(Task *t = first_task; t != 0; t = t->next)
                   {
-                    DF_CfgNode *node = t->n;
-                    for(DF_CfgNode *child = node->first; child != &df_g_nil_cfg_node; child = child->next)
+                    MD_Node *node = t->n;
+                    for(MD_EachNode(child, node->first))
                     {
                       // rjf: standalone string literals under an entity -> name
-                      if(child->flags & DF_CfgNodeFlag_StringLiteral && child->first == &df_g_nil_cfg_node)
+                      if(child->flags & MD_NodeFlag_StringLiteral && child->first == &md_nil_node)
                       {
                         String8 string = df_cfg_raw_from_escaped_string(scratch.arena, child->string);
                         if(df_g_entity_kind_flags_table[t->entity->kind] & DF_EntityKindFlag_NameIsPath)
@@ -7819,7 +7787,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
                       }
                       
                       // rjf: standalone string literals under an entity, with a numeric child -> name & text location
-                      if(child->flags & DF_CfgNodeFlag_StringLiteral && child->first->flags & DF_CfgNodeFlag_Numeric && child->first->first == &df_g_nil_cfg_node)
+                      if(child->flags & MD_NodeFlag_StringLiteral && child->first->flags & MD_NodeFlag_Numeric && child->first->first == &md_nil_node)
                       {
                         String8 string = df_cfg_raw_from_escaped_string(scratch.arena, child->string);
                         if(df_g_entity_kind_flags_table[t->entity->kind] & DF_EntityKindFlag_NameIsPath)
@@ -7834,7 +7802,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
                       }
                       
                       // rjf: standalone hex literals under an entity -> vaddr
-                      if(child->flags & DF_CfgNodeFlag_Numeric && child->first == &df_g_nil_cfg_node && str8_match(str8_substr(child->string, r1u64(0, 2)), str8_lit("0x"), 0))
+                      if(child->flags & MD_NodeFlag_Numeric && child->first == &md_nil_node && str8_match(str8_substr(child->string, r1u64(0, 2)), str8_lit("0x"), 0))
                       {
                         U64 vaddr = 0;
                         try_u64_from_str8_c_rules(child->string, &vaddr);
@@ -7844,7 +7812,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
                       // rjf: specifically named entity equipment
                       if((str8_match(child->string, str8_lit("name"), StringMatchFlag_CaseInsensitive) ||
                           str8_match(child->string, str8_lit("label"), StringMatchFlag_CaseInsensitive)) &&
-                         child->first != &df_g_nil_cfg_node)
+                         child->first != &md_nil_node)
                       {
                         String8 string = df_cfg_raw_from_escaped_string(scratch.arena, child->first->string);
                         if(df_g_entity_kind_flags_table[t->entity->kind] & DF_EntityKindFlag_NameIsPath)
@@ -7855,15 +7823,15 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
                       }
                       if((str8_match(child->string, str8_lit("active"), StringMatchFlag_CaseInsensitive) ||
                           str8_match(child->string, str8_lit("enabled"), StringMatchFlag_CaseInsensitive)) &&
-                         child->first != &df_g_nil_cfg_node)
+                         child->first != &md_nil_node)
                       {
                         df_entity_equip_disabled(t->entity, !str8_match(child->first->string, str8_lit("1"), 0));
                       }
-                      if(str8_match(child->string, str8_lit("disabled"), StringMatchFlag_CaseInsensitive) && child->first != &df_g_nil_cfg_node)
+                      if(str8_match(child->string, str8_lit("disabled"), StringMatchFlag_CaseInsensitive) && child->first != &md_nil_node)
                       {
                         df_entity_equip_disabled(t->entity, str8_match(child->first->string, str8_lit("1"), 0));
                       }
-                      if(str8_match(child->string, str8_lit("hsva"), StringMatchFlag_CaseInsensitive) && child->first != &df_g_nil_cfg_node)
+                      if(str8_match(child->string, str8_lit("hsva"), StringMatchFlag_CaseInsensitive) && child->first != &md_nil_node)
                       {
                         Vec4F32 hsva = {0};
                         hsva.x = (F32)f64_from_str8(child->first->string);
@@ -7872,13 +7840,13 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
                         hsva.w = (F32)f64_from_str8(child->first->next->next->next->string);
                         df_entity_equip_color_hsva(t->entity, hsva);
                       }
-                      if(str8_match(child->string, str8_lit("color"), StringMatchFlag_CaseInsensitive) && child->first != &df_g_nil_cfg_node)
+                      if(str8_match(child->string, str8_lit("color"), StringMatchFlag_CaseInsensitive) && child->first != &md_nil_node)
                       {
                         Vec4F32 rgba = rgba_from_hex_string_4f32(child->first->string);
                         Vec4F32 hsva = hsva_from_rgba(rgba);
                         df_entity_equip_color_hsva(t->entity, hsva);
                       }
-                      if(str8_match(child->string, str8_lit("line"), StringMatchFlag_CaseInsensitive) && child->first != &df_g_nil_cfg_node)
+                      if(str8_match(child->string, str8_lit("line"), StringMatchFlag_CaseInsensitive) && child->first != &md_nil_node)
                       {
                         S64 line = 0;
                         try_s64_from_str8_c_rules(child->first->string, &line);
@@ -7887,7 +7855,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
                       }
                       if((str8_match(child->string, str8_lit("vaddr"), StringMatchFlag_CaseInsensitive) ||
                           str8_match(child->string, str8_lit("addr"), StringMatchFlag_CaseInsensitive)) &&
-                         child->first != &df_g_nil_cfg_node)
+                         child->first != &md_nil_node)
                       {
                         U64 vaddr = 0;
                         try_u64_from_str8_c_rules(child->first->string, &vaddr);
@@ -7898,7 +7866,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
                       DF_EntityKind sub_entity_kind = DF_EntityKind_Nil;
                       for(EachEnumVal(DF_EntityKind, k2))
                       {
-                        if(child->flags & DF_CfgNodeFlag_Identifier && child->first != &df_g_nil_cfg_node &&
+                        if(child->flags & MD_NodeFlag_Identifier && child->first != &md_nil_node &&
                            (str8_match(child->string, df_g_entity_kind_name_lower_table[k2], StringMatchFlag_CaseInsensitive) ||
                             (k2 == DF_EntityKind_Executable && str8_match(child->string, str8_lit("exe"), StringMatchFlag_CaseInsensitive))))
                         {
@@ -7919,13 +7887,11 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
           
           //- rjf: apply exception code filters
           DF_CfgVal *filter_tables = df_cfg_val_from_string(table, str8_lit("exception_code_filters"));
-          for(DF_CfgNode *table = filter_tables->first;
-              table != &df_g_nil_cfg_node;
+          for(DF_CfgTree *table = filter_tables->first;
+              table != &df_g_nil_cfg_tree;
               table = table->next)
           {
-            for(DF_CfgNode *rule = table->first;
-                rule != &df_g_nil_cfg_node;
-                rule = rule->next)
+            for(MD_EachNode(rule, table->root->first))
             {
               String8 name = rule->string;
               String8 val_string = rule->first->string;

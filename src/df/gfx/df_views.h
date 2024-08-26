@@ -101,8 +101,6 @@ struct DF_PendingFileViewState
 {
   Arena *deferred_cmd_arena;
   DF_CmdList deferred_cmds;
-  Arena *complete_cfg_arena;
-  DF_CfgNode *complete_cfg_root;
 };
 
 ////////////////////////////////

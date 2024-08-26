@@ -144,8 +144,8 @@ md_node_flags_from_token_flags(MD_TokenFlags flags)
   result |=            MD_NodeFlag_Numeric*!!(flags&MD_TokenFlag_Numeric);
   result |=      MD_NodeFlag_StringLiteral*!!(flags&MD_TokenFlag_StringLiteral);
   result |=             MD_NodeFlag_Symbol*!!(flags&MD_TokenFlag_Symbol);
-  result |= MD_NodeFlag_StringSingleQuote	*!!(flags&MD_TokenFlag_StringSingleQuote);
-  result |= MD_NodeFlag_StringDoubleQuote	*!!(flags&MD_TokenFlag_StringDoubleQuote);
+  result |= MD_NodeFlag_StringSingleQuote *!!(flags&MD_TokenFlag_StringSingleQuote);
+  result |= MD_NodeFlag_StringDoubleQuote *!!(flags&MD_TokenFlag_StringDoubleQuote);
   result |=         MD_NodeFlag_StringTick*!!(flags&MD_TokenFlag_StringTick);
   result |=      MD_NodeFlag_StringTriplet*!!(flags&MD_TokenFlag_StringTriplet);
   return result;
@@ -166,16 +166,16 @@ md_node_rec_depth_first(MD_Node *node, MD_Node *subtree_root, U64 child_off, U64
 {
   MD_NodeRec rec = {0};
   rec.next = &md_nil_node;
-  if(!md_node_is_nil(MemberFromOffset(MD_Node *, node, child_off)))
+  if(!md_node_is_nil(*MemberFromOffset(MD_Node **, node, child_off)))
   {
-    rec.next = MemberFromOffset(MD_Node *, node, child_off);
+    rec.next = *MemberFromOffset(MD_Node **, node, child_off);
     rec.push_count = 1;
   }
   else for(MD_Node *p = node; !md_node_is_nil(p) && p != subtree_root; p = p->parent, rec.pop_count += 1)
   {
-    if(!md_node_is_nil(MemberFromOffset(MD_Node *, p, sib_off)))
+    if(!md_node_is_nil(*MemberFromOffset(MD_Node **, p, sib_off)))
     {
-      rec.next = MemberFromOffset(MD_Node *, p, sib_off);
+      rec.next = *MemberFromOffset(MD_Node **, p, sib_off);
       break;
     }
   }
@@ -354,6 +354,20 @@ md_tag_count_from_node(MD_Node *node)
   return result;
 }
 
+internal String8
+md_string_from_children(Arena *arena, MD_Node *root)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  String8List strs = {0};
+  for(MD_EachNode(child, root->first))
+  {
+    str8_list_push(scratch.arena, &strs, child->string);
+  }
+  String8 result = str8_list_join(arena, &strs, 0);
+  scratch_end(scratch);
+  return result;
+}
+
 //- rjf: tree comparison
 
 internal B32
@@ -417,6 +431,48 @@ md_node_deep_match(MD_Node *a, MD_Node *b, StringMatchFlags flags)
   }
   end:;
   return result;
+}
+
+//- rjf: tree duplication
+
+internal MD_Node *
+md_tree_copy(Arena *arena, MD_Node *src_root)
+{
+  MD_Node *dst_root = &md_nil_node;
+  MD_Node *dst_parent = dst_root;
+  {
+    MD_NodeRec rec = {0};
+    for(MD_Node *src = src_root; !md_node_is_nil(src); src = rec.next)
+    {
+      MD_Node *dst = push_array(arena, MD_Node, 1);
+      dst->first = dst->last = dst->parent = dst->next = dst->prev = &md_nil_node;
+      dst->first_tag = dst->last_tag = &md_nil_node;
+      dst->kind  = src->kind;
+      dst->flags = src->flags;
+      dst->string = push_str8_copy(arena, src->string);
+      dst->raw_string = push_str8_copy(arena, src->raw_string);
+      dst->src_offset = src->src_offset;
+      dst->parent = dst_parent;
+      if(dst_parent != &md_nil_node)
+      {
+        DLLPushBack_NPZ(&md_nil_node, dst_parent->first, dst_parent->last, dst, next, prev);
+      }
+      else
+      {
+        dst_root = dst_parent = dst;
+      }
+      rec = md_node_rec_depth_first_pre(src, src_root);
+      if(rec.push_count != 0)
+      {
+        dst_parent = dst;
+      }
+      else for(U64 idx = 0; idx < rec.pop_count; idx += 1)
+      {
+        dst_parent = dst_parent->parent;
+      }
+    }
+  }
+  return dst_root;
 }
 
 ////////////////////////////////
