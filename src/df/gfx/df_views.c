@@ -1446,7 +1446,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
     B32 snap_to_cursor = 0;
     B32 cursor_dirty__tbl = 0;
     B32 take_autocomplete = 0;
-    for(UI_Event *evt = 0;;)
+    for(UI_Event *event = 0;;)
     {
       //////////////////////////
       //- rjf: state -> viz blocks
@@ -1972,15 +1972,16 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
       //- rjf: grab next event, if any - otherwise exit the loop, as we now have
       // the most up-to-date state
       //
-      B32 next_event_good = ui_next_event(&evt);
+      B32 next_event_good = ui_next_event(&event);
       if(!cursor_rugpull && (!next_event_good || !ui_is_focus_active()))
       {
         break;
       }
       UI_Event dummy_evt = zero_struct;
-      if(!next_event_good)
+      UI_Event *evt = &dummy_evt;
+      if(next_event_good)
       {
-        evt = &dummy_evt;
+        evt = event;
       }
       B32 taken = 0;
       
