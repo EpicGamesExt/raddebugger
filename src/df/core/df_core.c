@@ -3912,7 +3912,7 @@ df_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range)
 //- rjf: asynchronous streamed reads -> hashes from spaces
 
 internal U128
-df_key_from_eval_space_range(E_Space space, Rng1U64 range)
+df_key_from_eval_space_range(E_Space space, Rng1U64 range, B32 zero_terminated)
 {
   U128 result = {0};
   DF_Entity *entity = df_entity_from_eval_space(space);
@@ -3927,7 +3927,7 @@ df_key_from_eval_space_range(E_Space space, Rng1U64 range)
     //- rjf: process space -> query 
     case DF_EntityKind_Process:
     {
-      result = ctrl_hash_store_key_from_process_vaddr_range(entity->ctrl_machine_id, entity->ctrl_handle, range, 0);
+      result = ctrl_hash_store_key_from_process_vaddr_range(entity->ctrl_machine_id, entity->ctrl_handle, range, zero_terminated);
     }break;
   }
   return result;
@@ -5193,7 +5193,7 @@ df_eval_viz_row_list_push_new(Arena *arena, DF_EvalView *eval_view, DF_EvalVizWi
       for(DF_CfgVal *val = cfg_table->first_val; val != 0 && val != &df_g_nil_cfg_val; val = val->linear_next)
       {
         DF_GfxViewRuleSpec *spec = df_gfx_view_rule_spec_from_string(val->string);
-        if(spec->info.flags & DF_GfxViewRuleSpecInfoFlag_BlockUI)
+        if(spec->info.flags & DF_GfxViewRuleSpecInfoFlag_ViewUI)
         {
           expand_ui_rule_spec = spec;
           expand_ui_rule_node = val->last;
@@ -5409,22 +5409,55 @@ df_viz_row_is_editable(DF_EvalVizRow *row)
 
 //- rjf: view rule config tree info extraction
 
+internal U64
+df_base_offset_from_eval(E_Eval eval)
+{
+  if(e_type_kind_is_pointer_or_ref(e_type_kind_from_key(eval.type_key)))
+  {
+    eval = e_value_eval_from_eval(eval);
+  }
+  return eval.value.u64;
+}
+
+internal E_Value
+df_value_from_cfg_key(DF_CfgNode *cfg, String8 key)
+{
+  Temp scratch = scratch_begin(0, 0);
+  DF_CfgNode *key_cfg = df_cfg_node_child_from_string(cfg, key, 0);
+  String8 expr = df_string_from_cfg_node_children(scratch.arena, key_cfg);
+  E_Eval eval = e_eval_from_string(scratch.arena, expr);
+  E_Eval value_eval = e_value_eval_from_eval(eval);
+  scratch_end(scratch);
+  return value_eval.value;
+}
+
 internal Rng1U64
 df_range_from_eval_cfg(E_Eval eval, DF_CfgNode *cfg)
 {
   Temp scratch = scratch_begin(0, 0);
-  E_Eval value_eval = e_value_eval_from_eval(eval);
-  DF_CfgNode *size_cfg = df_cfg_node_child_from_string(cfg, str8_lit("size"), 0);
-  String8 size_expr = df_string_from_cfg_node_children(scratch.arena, size_cfg);
-  E_Eval size_eval = e_eval_from_string(scratch.arena, size_expr);
-  E_Eval size_value_eval = e_value_eval_from_eval(size_eval);
-  Rng1U64 result = {0};
-  result.min = value_eval.value.u64;
-  result.max = max_U64;
-  if(size_eval.msgs.max_kind == E_MsgKind_Null)
+  U64 size = df_value_from_cfg_key(cfg, str8_lit("size")).u64;
+  if(size == 0 &&
+     (e_type_kind_from_key(eval.type_key) == E_TypeKind_Array ||
+      e_type_kind_from_key(e_type_direct_from_key(eval.type_key)) == E_TypeKind_Array))
   {
-    result.max = result.min + size_value_eval.value.u64;
+    E_Type *type = e_type_from_key(scratch.arena, eval.type_key);
+    E_Type *array_type = type;
+    if(array_type->kind != E_TypeKind_Array)
+    {
+      array_type = e_type_from_key(scratch.arena, array_type->direct_type_key);
+    }
+    if(array_type->kind != E_TypeKind_Array)
+    {
+      size = array_type->count;
+    }
   }
+  if(size == 0)
+  {
+    size = 16384;
+  }
+  Rng1U64 result = {0};
+  result.min = df_base_offset_from_eval(eval);
+  result.max = result.min + size;
   scratch_end(scratch);
   return result;
 }
@@ -5444,6 +5477,35 @@ df_lang_kind_from_eval_cfg(E_Eval eval, DF_CfgNode *cfg)
     lang_kind = txt_lang_kind_from_extension(lang_kind_string);
   }
   return lang_kind;
+}
+
+internal Vec2S32
+df_dim2s32_from_eval_cfg(E_Eval eval, DF_CfgNode *cfg)
+{
+  Vec2S32 dim = v2s32(1, 1);
+  {
+    dim.x = df_value_from_cfg_key(cfg, str8_lit("w")).s32;
+    dim.y = df_value_from_cfg_key(cfg, str8_lit("h")).s32;
+  }
+  return dim;
+}
+
+internal R_Tex2DFormat
+df_tex2dformat_from_eval_cfg(E_Eval eval, DF_CfgNode *cfg)
+{
+  R_Tex2DFormat result = R_Tex2DFormat_RGBA8;
+  {
+    DF_CfgNode *fmt_child = df_cfg_node_child_from_string(cfg, str8_lit("fmt"), 0);
+    for(EachNonZeroEnumVal(R_Tex2DFormat, fmt))
+    {
+      if(str8_match(r_tex2d_kind_display_string_table[fmt], fmt_child->first->string, StringMatchFlag_CaseInsensitive))
+      {
+        result = fmt;
+        break;
+      }
+    }
+  }
+  return result;
 }
 
 //- rjf: view rule eval application

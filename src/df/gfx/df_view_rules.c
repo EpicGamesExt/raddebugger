@@ -572,6 +572,7 @@ DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_DEF(rgba)
   scratch_end(scratch);
 }
 
+#if 0
 DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(rgba)
 {
   Temp scratch = scratch_begin(0, 0);
@@ -650,6 +651,7 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(rgba)
   
   scratch_end(scratch);
 }
+#endif
 
 ////////////////////////////////
 //~ rjf: "text"
@@ -682,6 +684,7 @@ DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(text)
   df_eval_viz_block_end(out, vb);
 }
 
+#if 0
 DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(text)
 {
   Temp scratch = scratch_begin(0, 0);
@@ -772,13 +775,7 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(text)
   hs_scope_close(hs_scope);
   scratch_end(scratch);
 }
-
-DF_VIEW_SETUP_FUNCTION_DEF(text) {}
-DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(text) { return str8_lit(""); }
-DF_VIEW_CMD_FUNCTION_DEF(text) {}
-DF_VIEW_UI_FUNCTION_DEF(text)
-{
-}
+#endif
 
 ////////////////////////////////
 //~ rjf: "disasm"
@@ -824,6 +821,7 @@ DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(disasm)
   df_eval_viz_block_end(out, vb);
 }
 
+#if 0
 DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(disasm)
 {
   Temp scratch = scratch_begin(0, 0);
@@ -924,13 +922,7 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(disasm)
   hs_scope_close(hs_scope);
   scratch_end(scratch);
 }
-
-DF_VIEW_SETUP_FUNCTION_DEF(disasm) {}
-DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(disasm) { return str8_lit(""); }
-DF_VIEW_CMD_FUNCTION_DEF(disasm) {}
-DF_VIEW_UI_FUNCTION_DEF(disasm)
-{
-}
+#endif
 
 ////////////////////////////////
 //~ rjf: "graph"
@@ -944,17 +936,6 @@ DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(graph)
   vb->semantic_idx_range = r1u64(0, 1);
   vb->cfg_table          = cfg_table;
   df_eval_viz_block_end(out, vb);
-}
-
-DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(graph)
-{
-}
-
-DF_VIEW_SETUP_FUNCTION_DEF(graph) {}
-DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(graph) { return str8_lit(""); }
-DF_VIEW_CMD_FUNCTION_DEF(graph) {}
-DF_VIEW_UI_FUNCTION_DEF(graph)
-{
 }
 
 ////////////////////////////////
@@ -1098,6 +1079,7 @@ DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_DEF(bitmap)
     ui_labelf("0x%I64x -> Bitmap (%I64u x %I64u)", base_vaddr, topology.width, topology.height);
 }
 
+#if 0
 DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(bitmap)
 {
   Temp scratch = scratch_begin(0, 0);
@@ -1172,7 +1154,9 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(bitmap)
   hs_scope_close(hs_scope);
   scratch_end(scratch);
 }
+#endif
 
+#if 0
 DF_VIEW_SETUP_FUNCTION_DEF(bitmap)
 {
   DF_BitmapViewState *bvs = df_view_user_state(view, DF_BitmapViewState);
@@ -1209,201 +1193,11 @@ DF_VIEW_CMD_FUNCTION_DEF(bitmap)
 {
 }
 
-internal UI_BOX_CUSTOM_DRAW(df_bitmap_view_canvas_box_draw)
-{
-  DF_BitmapViewState *bvs = (DF_BitmapViewState *)user_data;
-  Rng2F32 rect_scrn = box->rect;
-  Rng2F32 rect_cvs = df_bitmap_view_state__canvas_from_screen_rect(bvs, rect_scrn, rect_scrn);
-  F32 grid_cell_size_cvs = box->font_size*10.f;
-  F32 grid_line_thickness_px = Max(2.f, box->font_size*0.1f);
-  Vec4F32 grid_line_color = df_rgba_from_theme_color(DF_ThemeColor_TextWeak);
-  for(EachEnumVal(Axis2, axis))
-  {
-    for(F32 v = rect_cvs.p0.v[axis] - mod_f32(rect_cvs.p0.v[axis], grid_cell_size_cvs);
-        v < rect_cvs.p1.v[axis];
-        v += grid_cell_size_cvs)
-    {
-      Vec2F32 p_cvs = {0};
-      p_cvs.v[axis] = v;
-      Vec2F32 p_scr = df_bitmap_view_state__screen_from_canvas_pos(bvs, rect_scrn, p_cvs);
-      Rng2F32 rect = {0};
-      rect.p0.v[axis] = p_scr.v[axis] - grid_line_thickness_px/2;
-      rect.p1.v[axis] = p_scr.v[axis] + grid_line_thickness_px/2;
-      rect.p0.v[axis2_flip(axis)] = box->rect.p0.v[axis2_flip(axis)];
-      rect.p1.v[axis2_flip(axis)] = box->rect.p1.v[axis2_flip(axis)];
-      d_rect(rect, grid_line_color, 0, 0, 1.f);
-    }
-  }
-}
-
 DF_VIEW_UI_FUNCTION_DEF(bitmap)
 {
-  DF_BitmapViewState *bvs = df_view_user_state(view, DF_BitmapViewState);
-  Temp scratch = scratch_begin(0, 0);
-  HS_Scope *hs_scope = hs_scope_open();
-  TEX_Scope *tex_scope = tex_scope_open();
   
-  //////////////////////////////
-  //- rjf: unpack context
-  //
-  DF_Entity *thread = df_entity_from_handle(df_interact_regs()->thread);
-  DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
-  U64 thread_unwind_rip_vaddr = df_query_cached_rip_from_thread_unwind(thread, df_interact_regs()->unwind_count);
-  
-  //////////////////////////////
-  //- rjf: evaluate expression
-  //
-  String8 expr = str8(view->query_buffer, view->query_string_size);
-  E_Eval eval = e_eval_from_string(scratch.arena, expr);
-  E_Eval value_eval = e_value_eval_from_eval(eval);
-  U64 base_vaddr = value_eval.value.u64;
-  U64 expected_size = bvs->top.width*bvs->top.height*r_tex2d_format_bytes_per_pixel_table[bvs->top.fmt];
-  Rng1U64 vaddr_range = r1u64(base_vaddr, base_vaddr+expected_size);
-  
-  //////////////////////////////
-  //- rjf: map expression artifacts -> texture
-  //
-  U128 texture_key = ctrl_hash_store_key_from_process_vaddr_range(process->ctrl_machine_id, process->ctrl_handle, vaddr_range, 0);
-  TEX_Topology topology = tex_topology_make(v2s32((S32)bvs->top.width, (S32)bvs->top.height), bvs->top.fmt);
-  U128 data_hash = {0};
-  R_Handle texture = tex_texture_from_key_topology(tex_scope, texture_key, topology, &data_hash);
-  String8 data = hs_data_from_hash(hs_scope, data_hash);
-  
-  //////////////////////////////
-  //- rjf: build canvas box
-  //
-  UI_Box *canvas_box = &ui_g_nil_box;
-  Vec2F32 canvas_dim = dim_2f32(rect);
-  Rng2F32 canvas_rect = r2f32p(0, 0, canvas_dim.x, canvas_dim.y);
-  UI_Rect(canvas_rect)
-  {
-    canvas_box = ui_build_box_from_stringf(UI_BoxFlag_Clip|UI_BoxFlag_Clickable|UI_BoxFlag_Scroll, "bmp_canvas_%p", view);
-    ui_box_equip_custom_draw(canvas_box, df_bitmap_view_canvas_box_draw, bvs);
-  }
-  
-  //////////////////////////////
-  //- rjf: canvas dragging
-  //
-  UI_Signal canvas_sig = ui_signal_from_box(canvas_box);
-  {
-    if(ui_dragging(canvas_sig))
-    {
-      if(ui_pressed(canvas_sig))
-      {
-        DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
-        df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FocusPanel));
-        ui_store_drag_struct(&bvs->view_center_pos);
-      }
-      Vec2F32 start_view_center_pos = *ui_get_drag_struct(Vec2F32);
-      Vec2F32 drag_delta_scr = ui_drag_delta();
-      Vec2F32 drag_delta_cvs = scale_2f32(drag_delta_scr, 1.f/bvs->zoom);
-      Vec2F32 new_view_center_pos = sub_2f32(start_view_center_pos, drag_delta_cvs);
-      bvs->view_center_pos = new_view_center_pos;
-    }
-    if(canvas_sig.scroll.y != 0)
-    {
-      F32 new_zoom = bvs->zoom - bvs->zoom*canvas_sig.scroll.y/10.f;
-      new_zoom = Clamp(1.f/256.f, new_zoom, 256.f);
-      Vec2F32 mouse_scr_pre = sub_2f32(ui_mouse(), rect.p0);
-      Vec2F32 mouse_cvs = df_bitmap_view_state__canvas_from_screen_pos(bvs, canvas_rect, mouse_scr_pre);
-      bvs->zoom = new_zoom;
-      Vec2F32 mouse_scr_pst = df_bitmap_view_state__screen_from_canvas_pos(bvs, canvas_rect, mouse_cvs);
-      Vec2F32 drift_scr = sub_2f32(mouse_scr_pst, mouse_scr_pre);
-      bvs->view_center_pos = add_2f32(bvs->view_center_pos, scale_2f32(drift_scr, 1.f/new_zoom));
-    }
-    if(ui_double_clicked(canvas_sig))
-    {
-      ui_kill_action();
-      MemoryZeroStruct(&bvs->view_center_pos);
-      bvs->zoom = 1.f;
-    }
-  }
-  
-  //////////////////////////////
-  //- rjf: calculate image coordinates
-  //
-  Rng2F32 img_rect_cvs = r2f32p(-topology.dim.x/2, -topology.dim.y/2, +topology.dim.x/2, +topology.dim.y/2);
-  Rng2F32 img_rect_scr = df_bitmap_view_state__screen_from_canvas_rect(bvs, canvas_rect, img_rect_cvs);
-  
-  //////////////////////////////
-  //- rjf: image-region canvas interaction
-  //
-  Vec2S32 mouse_bmp = {-1, -1};
-  if(ui_hovering(canvas_sig) && !ui_dragging(canvas_sig))
-  {
-    Vec2F32 mouse_scr = sub_2f32(ui_mouse(), rect.p0);
-    Vec2F32 mouse_cvs = df_bitmap_view_state__canvas_from_screen_pos(bvs, canvas_rect, mouse_scr);
-    if(contains_2f32(img_rect_cvs, mouse_cvs))
-    {
-      mouse_bmp = v2s32((S32)(mouse_cvs.x-img_rect_cvs.x0), (S32)(mouse_cvs.y-img_rect_cvs.y0));
-      S64 off_px = mouse_bmp.y*topology.dim.x + mouse_bmp.x;
-      S64 off_bytes = off_px*r_tex2d_format_bytes_per_pixel_table[topology.fmt];
-      if(0 <= off_bytes && off_bytes+r_tex2d_format_bytes_per_pixel_table[topology.fmt] <= data.size &&
-         r_tex2d_format_bytes_per_pixel_table[topology.fmt] != 0)
-      {
-        B32 color_is_good = 1;
-        Vec4F32 color = {0};
-        switch(topology.fmt)
-        {
-          default:{color_is_good = 0;}break;
-          case R_Tex2DFormat_R8:     {color = v4f32(((U8 *)(data.str+off_bytes))[0]/255.f, 0, 0, 1);}break;
-          case R_Tex2DFormat_RG8:    {color = v4f32(((U8 *)(data.str+off_bytes))[0]/255.f, ((U8 *)(data.str+off_bytes))[1]/255.f, 0, 1);}break;
-          case R_Tex2DFormat_RGBA8:  {color = v4f32(((U8 *)(data.str+off_bytes))[0]/255.f, ((U8 *)(data.str+off_bytes))[1]/255.f, ((U8 *)(data.str+off_bytes))[2]/255.f, ((U8 *)(data.str+off_bytes))[3]/255.f);}break;
-          case R_Tex2DFormat_BGRA8:  {color = v4f32(((U8 *)(data.str+off_bytes))[3]/255.f, ((U8 *)(data.str+off_bytes))[2]/255.f, ((U8 *)(data.str+off_bytes))[1]/255.f, ((U8 *)(data.str+off_bytes))[0]/255.f);}break;
-          case R_Tex2DFormat_R16:    {color = v4f32(((U16 *)(data.str+off_bytes))[0]/(F32)max_U16, 0, 0, 1);}break;
-          case R_Tex2DFormat_RGBA16: {color = v4f32(((U16 *)(data.str+off_bytes))[0]/(F32)max_U16, ((U16 *)(data.str+off_bytes))[1]/(F32)max_U16, ((U16 *)(data.str+off_bytes))[2]/(F32)max_U16, ((U16 *)(data.str+off_bytes))[3]/(F32)max_U16);}break;
-          case R_Tex2DFormat_R32:    {color = v4f32(((F32 *)(data.str+off_bytes))[0], 0, 0, 1);}break;
-          case R_Tex2DFormat_RG32:   {color = v4f32(((F32 *)(data.str+off_bytes))[0], ((F32 *)(data.str+off_bytes))[1], 0, 1);}break;
-          case R_Tex2DFormat_RGBA32: {color = v4f32(((F32 *)(data.str+off_bytes))[0], ((F32 *)(data.str+off_bytes))[1], ((F32 *)(data.str+off_bytes))[2], ((F32 *)(data.str+off_bytes))[3]);}break;
-        }
-        if(color_is_good)
-        {
-          Vec4F32 hsva = hsva_from_rgba(color);
-          ui_do_color_tooltip_hsva(hsva);
-        }
-        DF_RichHoverInfo info = {0};
-        {
-          Rng1U64 hover_vaddr_range = r1u64(vaddr_range.min+off_bytes, vaddr_range.min+off_bytes+r_tex2d_format_bytes_per_pixel_table[topology.fmt]);
-          DF_Entity *module = df_module_from_process_vaddr(process, info.vaddr_range.min);
-          info.process     = df_handle_from_entity(process);
-          info.vaddr_range = hover_vaddr_range;
-          info.module      = df_handle_from_entity(module);
-          info.voff_range  = df_voff_range_from_vaddr_range(module, info.vaddr_range);
-          info.dbgi_key    = df_dbgi_key_from_module(module);
-        }
-        df_set_rich_hover_info(&info);
-      }
-    }
-  }
-  
-  //////////////////////////////
-  //- rjf: build image
-  //
-  UI_Parent(canvas_box)
-  {
-    if(0 <= mouse_bmp.x && mouse_bmp.x < bvs->top.width &&
-       0 <= mouse_bmp.x && mouse_bmp.x < bvs->top.height)
-    {
-      F32 pixel_size_scr = 1.f*bvs->zoom;
-      Rng2F32 indicator_rect_scr = r2f32p(img_rect_scr.x0 + mouse_bmp.x*pixel_size_scr,
-                                          img_rect_scr.y0 + mouse_bmp.y*pixel_size_scr,
-                                          img_rect_scr.x0 + (mouse_bmp.x+1)*pixel_size_scr,
-                                          img_rect_scr.y0 + (mouse_bmp.y+1)*pixel_size_scr);
-      UI_Rect(indicator_rect_scr)
-      {
-        ui_build_box_from_key(UI_BoxFlag_DrawBorder|UI_BoxFlag_Floating, ui_key_zero());
-      }
-    }
-    UI_Rect(img_rect_scr) UI_Flags(UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawDropShadow|UI_BoxFlag_Floating)
-    {
-      ui_image(texture, R_Tex2DSampleKind_Nearest, r2f32p(0, 0, (F32)bvs->top.width, (F32)bvs->top.height), v4f32(1, 1, 1, 1), 0, str8_lit("bmp_image"));
-    }
-  }
-  
-  hs_scope_close(hs_scope);
-  tex_scope_close(tex_scope);
-  scratch_end(scratch);
 }
+#endif
 
 ////////////////////////////////
 //~ rjf: "geo"
@@ -1506,6 +1300,7 @@ DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_DEF(geo)
     ui_labelf("0x%I64x -> Geometry", base_vaddr);
 }
 
+#if 0
 DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(geo)
 {
   Temp scratch = scratch_begin(0, 0);
@@ -1602,10 +1397,4 @@ DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(geo)
   geo_scope_close(geo_scope);
   scratch_end(scratch);
 }
-
-DF_VIEW_SETUP_FUNCTION_DEF(geo) {}
-DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(geo) { return str8_lit(""); }
-DF_VIEW_CMD_FUNCTION_DEF(geo) {}
-DF_VIEW_UI_FUNCTION_DEF(geo)
-{
-}
+#endif

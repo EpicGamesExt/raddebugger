@@ -71,6 +71,49 @@ e_raw_from_escaped_string(Arena *arena, String8 string)
   return result;
 }
 
+internal String8
+e_escaped_from_raw_string(Arena *arena, String8 string)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  String8List parts = {0};
+  U64 start_split_idx = 0;
+  for(U64 idx = 0; idx <= string.size; idx += 1)
+  {
+    U8 byte = (idx < string.size) ? string.str[idx] : 0;
+    B32 split = 1;
+    String8 separator_replace = {0};
+    switch(byte)
+    {
+      default:{split = 0;}break;
+      case 0:    {}break;
+      case '\a': {separator_replace = str8_lit("\\a");}break;
+      case '\b': {separator_replace = str8_lit("\\b");}break;
+      case '\f': {separator_replace = str8_lit("\\f");}break;
+      case '\n': {separator_replace = str8_lit("\\n");}break;
+      case '\r': {separator_replace = str8_lit("\\r");}break;
+      case '\t': {separator_replace = str8_lit("\\t");}break;
+      case '\v': {separator_replace = str8_lit("\\v");}break;
+      case '\\': {separator_replace = str8_lit("\\\\");}break;
+      case '"':  {separator_replace = str8_lit("\\\"");}break;
+      case '?':  {separator_replace = str8_lit("\\?");}break;
+    }
+    if(split)
+    {
+      String8 substr = str8_substr(string, r1u64(start_split_idx, idx));
+      start_split_idx = idx+1;
+      str8_list_push(scratch.arena, &parts, substr);
+      if(separator_replace.size != 0)
+      {
+        str8_list_push(scratch.arena, &parts, separator_replace);
+      }
+    }
+  }
+  StringJoin join = {0};
+  String8 result = str8_list_join(arena, &parts, &join);
+  scratch_end(scratch);
+  return result;
+}
+
 ////////////////////////////////
 //~ rjf: Message Functions
 

@@ -109,7 +109,7 @@ ui_event_list_push(Arena *arena, UI_EventList *list, UI_Event *v)
 }
 
 internal void
-ui_eat_event(UI_EventList *list, UI_EventNode *node)
+ui_eat_event_node(UI_EventList *list, UI_EventNode *node)
 {
   DLLRemove(list->first, list->last, node);
   list->count -= 1;
@@ -496,12 +496,6 @@ ui_window(void)
   return ui_state->window;
 }
 
-internal UI_EventList *
-ui_events(void)
-{
-  return ui_state->events;
-}
-
 internal Vec2F32
 ui_mouse(void)
 {
@@ -526,19 +520,100 @@ ui_dt(void)
   return ui_state->animation_dt;
 }
 
+//- rjf: event pumping
+
+internal B32
+ui_next_event(UI_Event **ev)
+{
+  UI_EventList *events = ui_state->events;
+  UI_EventNode *start_node = events->first;
+  if(ev[0] != 0)
+  {
+    start_node = CastFromMember(UI_EventNode, v, ev[0]);
+    start_node = start_node->next;
+    ev[0] = 0;
+  }
+  if(start_node != 0)
+  {
+    UI_PermissionFlags perms = ui_top_permission_flags();
+    for(UI_EventNode *n = start_node; n != 0; n = n->next)
+    {
+      B32 good = 1;
+      if(!(perms & UI_PermissionFlag_ClicksLeft) &&
+         (n->v.kind == UI_EventKind_Press ||
+          n->v.kind == UI_EventKind_Release) &&
+         (n->v.key == OS_Key_LeftMouseButton))
+      {
+        good = 0;
+      }
+      if(!(perms & UI_PermissionFlag_ClicksMiddle) &&
+         (n->v.kind == UI_EventKind_Press ||
+          n->v.kind == UI_EventKind_Release) &&
+         (n->v.key == OS_Key_MiddleMouseButton))
+      {
+        good = 0;
+      }
+      if(!(perms & UI_PermissionFlag_ClicksRight) &&
+         (n->v.kind == UI_EventKind_Press ||
+          n->v.kind == UI_EventKind_Release) &&
+         (n->v.key == OS_Key_RightMouseButton))
+      {
+        good = 0;
+      }
+      if(!(perms & UI_PermissionFlag_ScrollX) && (n->v.kind == UI_EventKind_Scroll) && (n->v.delta_2f32.x != 0 || n->v.modifiers & OS_EventFlag_Shift))
+      {
+        good = 0;
+      }
+      if(!(perms & UI_PermissionFlag_ScrollY) && (n->v.kind == UI_EventKind_Scroll) && n->v.delta_2f32.y != 0 && !(n->v.modifiers & OS_EventFlag_Shift))
+      {
+        good = 0;
+      }
+      if(!(perms & UI_PermissionFlag_Keyboard) &&
+         (n->v.kind == UI_EventKind_Press ||
+          n->v.kind == UI_EventKind_Release) &&
+         (n->v.key != OS_Key_LeftMouseButton &&
+          n->v.key != OS_Key_MiddleMouseButton &&
+          n->v.key != OS_Key_RightMouseButton))
+      {
+        good = 0;
+      }
+      else if(!(perms & UI_PermissionFlag_Text) && (n->v.kind == UI_EventKind_Text))
+      {
+        good = 0;
+      }
+      if(good)
+      {
+        ev[0] = &n->v;
+        break;
+      }
+    }
+  }
+  B32 result = !!ev[0];
+  return result;
+}
+
+internal void
+ui_eat_event(UI_Event *ev)
+{
+  if(ev != 0)
+  {
+    UI_EventNode *n = CastFromMember(UI_EventNode, v, ev);
+    ui_eat_event_node(ui_state->events, n);
+  }
+}
+
 //- rjf: event consumption helpers
 
 internal B32
 ui_key_press(OS_EventFlags mods, OS_Key key)
 {
-  UI_EventList *list = ui_events();
   B32 result = 0;
-  for(UI_EventNode *n = list->first; n != 0; n = n->next)
+  for(UI_Event *evt = 0; ui_next_event(&evt);)
   {
-    if(n->v.kind == UI_EventKind_Press && n->v.key == key && n->v.modifiers == mods)
+    if(evt->kind == UI_EventKind_Press && evt->key == key && evt->modifiers == mods)
     {
       result = 1;
-      ui_eat_event(list, n);
+      ui_eat_event(evt);
       break;
     }
   }
@@ -548,14 +623,13 @@ ui_key_press(OS_EventFlags mods, OS_Key key)
 internal B32
 ui_key_release(OS_EventFlags mods, OS_Key key)
 {
-  UI_EventList *list = ui_events();
   B32 result = 0;
-  for(UI_EventNode *n = list->first; n != 0; n = n->next)
+  for(UI_Event *evt = 0; ui_next_event(&evt);)
   {
-    if(n->v.kind == UI_EventKind_Release && n->v.key == key && n->v.modifiers == mods)
+    if(evt->kind == UI_EventKind_Release && evt->key == key && evt->modifiers == mods)
     {
       result = 1;
-      ui_eat_event(list, n);
+      ui_eat_event(evt);
       break;
     }
   }
@@ -565,16 +639,15 @@ ui_key_release(OS_EventFlags mods, OS_Key key)
 internal B32
 ui_text(U32 character)
 {
-  UI_EventList *list = ui_events();
   B32 result = 0;
   Temp scratch = scratch_begin(0, 0);
   String8 character_text = str8_from_32(scratch.arena, str32(&character, 1));
-  for(UI_EventNode *n = list->first; n != 0; n = n->next)
+  for(UI_Event *evt = 0; ui_next_event(&evt);)
   {
-    if(n->v.kind == UI_EventKind_Text && str8_match(character_text, n->v.string, 0))
+    if(evt->kind == UI_EventKind_Text && str8_match(character_text, evt->string, 0))
     {
       result = 1;
-      ui_eat_event(list, n);
+      ui_eat_event(evt);
       break;
     }
   }
@@ -585,14 +658,13 @@ ui_text(U32 character)
 internal B32
 ui_slot_press(UI_EventActionSlot slot)
 {
-  UI_EventList *list = ui_events();
   B32 result = 0;
-  for(UI_EventNode *n = list->first; n != 0; n = n->next)
+  for(UI_Event *evt = 0; ui_next_event(&evt);)
   {
-    if(n->v.kind == UI_EventKind_Press && n->v.slot == slot)
+    if(evt->kind == UI_EventKind_Press && evt->slot == slot)
     {
       result = 1;
-      ui_eat_event(list, n);
+      ui_eat_event(evt);
       break;
     }
   }
@@ -817,7 +889,7 @@ ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, U
               }
               if(taken)
               {
-                ui_eat_event(events, node);
+                ui_eat_event_node(events, node);
               }
             }
             
@@ -1327,12 +1399,10 @@ ui_end_build(void)
   
   //- rjf: close ctx menu if unconsumed clicks
   {
-    UI_EventList *events = ui_events();
-    for(UI_EventNode *n = events->first; n != 0; n = n->next)
+    for(UI_Event *evt = 0; ui_next_event(&evt);)
     {
-      UI_Event *event = &n->v;
-      if(event->kind == UI_EventKind_Press &&
-         (event->key == OS_Key_LeftMouseButton || event->key == OS_Key_RightMouseButton))
+      if(evt->kind == UI_EventKind_Press &&
+         (evt->key == OS_Key_LeftMouseButton || evt->key == OS_Key_RightMouseButton))
       {
         ui_ctx_menu_close();
       }
@@ -2489,13 +2559,9 @@ ui_signal_from_box(UI_Box *box)
   //- rjf: process events related to this box
   //
   B32 view_scrolled = 0;
-  for(UI_EventNode *n = ui_state->events->first, *next = 0;
-      n != 0;
-      n = next)
+  for(UI_Event *evt = 0; ui_next_event(&evt);)
   {
     B32 taken = 0;
-    next = n->next;
-    UI_Event *evt = &n->v;
     
     //- rjf: unpack event
     Vec2F32 evt_mouse = evt->pos;
@@ -2675,7 +2741,7 @@ ui_signal_from_box(UI_Box *box)
     //- rjf: taken -> eat event
     if(taken)
     {
-      ui_eat_event(ui_state->events, n);
+      ui_eat_event(evt);
     }
   }
   

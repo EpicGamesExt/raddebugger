@@ -48,6 +48,7 @@ union E_Value
   U64 u64;
   U32 u32;
   S64 s64;
+  S32 s32;
   F64 f64;
   F32 f32;
 };
@@ -121,6 +122,7 @@ struct E_Module
 
 internal U64 e_hash_from_string(U64 seed, String8 string);
 internal String8 e_raw_from_escaped_string(Arena *arena, String8 string);
+internal String8 e_escaped_from_raw_string(Arena *arena, String8 string);
 #define e_value_u64(v) (E_Value){.u64 = (v)}
 
 ////////////////////////////////

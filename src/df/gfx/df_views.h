@@ -456,6 +456,28 @@ struct DF_MemoryViewState
 };
 
 ////////////////////////////////
+//~ rjf: Bitmap @view_types
+
+typedef struct DF_BitmapViewState DF_BitmapViewState;
+struct DF_BitmapViewState
+{
+  B32 initialized;
+  Vec2F32 view_center_pos;
+  F32 zoom;
+};
+
+typedef struct DF_BitmapBoxDrawData DF_BitmapBoxDrawData;
+struct DF_BitmapBoxDrawData
+{
+  Rng2F32 src;
+  R_Handle texture;
+  F32 loaded_t;
+  B32 hovered;
+  Vec2S32 mouse_px;
+  F32 ui_per_bmp_px;
+};
+
+////////////////////////////////
 //~ rjf: Settings @view_types
 
 typedef enum DF_SettingsItemKind
@@ -576,5 +598,13 @@ internal void df_watch_view_column_release(DF_WatchViewState *wv, DF_WatchViewCo
 internal void df_watch_view_init(DF_WatchViewState *ewv, DF_View *view, DF_WatchViewFillKind fill_kind);
 internal void df_watch_view_cmds(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewState *ewv, DF_CmdList *cmds);
 internal void df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewState *ewv, B32 modifiable, U32 default_radix, Rng2F32 rect);
+
+////////////////////////////////
+//~ rjf: Bitmap Views
+
+internal Vec2F32 df_bitmap_screen_from_canvas_pos(DF_BitmapViewState *bvs, Rng2F32 rect, Vec2F32 cvs);
+internal Rng2F32 df_bitmap_screen_from_canvas_rect(DF_BitmapViewState *bvs, Rng2F32 rect, Rng2F32 cvs);
+internal Vec2F32 df_bitmap_canvas_from_screen_pos(DF_BitmapViewState *bvs, Rng2F32 rect, Vec2F32 scr);
+internal Rng2F32 df_bitmap_canvas_from_screen_rect(DF_BitmapViewState *bvs, Rng2F32 rect, Rng2F32 scr);
 
 #endif // DEBUG_FRONTEND_VIEWS_H

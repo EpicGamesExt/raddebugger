@@ -196,20 +196,18 @@ ui_line_edit(TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size, 
   if(is_focus_active)
   {
     Temp scratch = scratch_begin(0, 0);
-    UI_EventList *events = ui_events();
-    for(UI_EventNode *n = events->first, *next = 0; n != 0; n = next)
+    for(UI_Event *evt = 0; ui_next_event(&evt);)
     {
       String8 edit_string = str8(edit_buffer, edit_string_size_out[0]);
-      next = n->next;
       
       // rjf: do not consume anything that doesn't fit a single-line's operations
-      if((n->v.kind != UI_EventKind_Edit && n->v.kind != UI_EventKind_Navigate && n->v.kind != UI_EventKind_Text) || n->v.delta_2s32.y != 0)
+      if((evt->kind != UI_EventKind_Edit && evt->kind != UI_EventKind_Navigate && evt->kind != UI_EventKind_Text) || evt->delta_2s32.y != 0)
       {
         continue;
       }
       
       // rjf: map this action to an op
-      UI_TxtOp op = ui_single_line_txt_op_from_event(scratch.arena, &n->v, edit_string, *cursor, *mark);
+      UI_TxtOp op = ui_single_line_txt_op_from_event(scratch.arena, evt, edit_string, *cursor, *mark);
       
       // rjf: perform replace range
       if(!txt_pt_match(op.range.min, op.range.max) || op.replace.size != 0)
@@ -232,7 +230,7 @@ ui_line_edit(TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size, 
       
       // rjf: consume event
       {
-        ui_eat_event(events, n);
+        ui_eat_event(evt);
         changes_made = 1;
       }
     }
@@ -1354,19 +1352,16 @@ ui_scroll_list_begin(UI_ScrollListParams *params, UI_ScrollPt *scroll_pt, Vec2S6
   B32 moved = 0;
   if(params->flags & UI_ScrollListFlag_Nav && cursor_out != 0 && ui_is_focus_active())
   {
-    UI_EventList *events = ui_events();
     Vec2S64 cursor = *cursor_out;
     Vec2S64 mark = mark_out ? *mark_out : cursor;
-    for(UI_EventNode *n = events->first, *next = 0; n != 0; n = next)
+    for(UI_Event *evt = 0; ui_next_event(&evt);)
     {
-      next = n->next;
-      UI_Event *evt = &n->v;
       if((evt->delta_2s32.x == 0 && evt->delta_2s32.y == 0) ||
          evt->flags & UI_EventFlag_Delete)
       {
         continue;
       }
-      ui_eat_event(events, n);
+      ui_eat_event(evt);
       moved = 1;
       switch(evt->delta_unit)
       {

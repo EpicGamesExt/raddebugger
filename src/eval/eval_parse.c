@@ -750,6 +750,10 @@ e_append_strings_from_expr(Arena *arena, E_Expr *expr, String8List *out)
     {
       str8_list_pushf(arena, out, "0x%I64x", expr->value.u64);
     }break;
+    case E_ExprKind_LeafFilePath:
+    {
+      str8_list_pushf(arena, out, "file:\"%S\"", e_escaped_from_raw_string(arena, expr->string));
+    }break;
     case E_ExprKind_LeafF64:
     {
       str8_list_pushf(arena, out, "%f", expr->value.f64);

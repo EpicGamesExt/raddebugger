@@ -1582,7 +1582,7 @@ internal B32 df_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range
 internal B32 df_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range);
 
 //- rjf: asynchronous streamed reads -> hashes from spaces
-internal U128 df_key_from_eval_space_range(E_Space space, Rng1U64 range);
+internal U128 df_key_from_eval_space_range(E_Space space, Rng1U64 range, B32 zero_terminated);
 
 ////////////////////////////////
 //~ rjf: Evaluation Views
@@ -1650,9 +1650,13 @@ internal String8 df_expr_string_from_viz_row(Arena *arena, DF_EvalVizRow *row);
 internal B32 df_viz_row_is_expandable(DF_EvalVizRow *row);
 internal B32 df_viz_row_is_editable(DF_EvalVizRow *row);
 
-//- rjf: view rule config tree info extraction
+//- rjf: eval / view rule config tree info extraction
+internal U64 df_base_offset_from_eval(E_Eval eval);
+internal E_Value df_value_from_cfg_key(DF_CfgNode *cfg, String8 key);
 internal Rng1U64 df_range_from_eval_cfg(E_Eval eval, DF_CfgNode *cfg);
 internal TXT_LangKind df_lang_kind_from_eval_cfg(E_Eval eval, DF_CfgNode *cfg);
+internal Vec2S32 df_dim2s32_from_eval_cfg(E_Eval eval, DF_CfgNode *cfg);
+internal R_Tex2DFormat df_tex2dformat_from_eval_cfg(E_Eval eval, DF_CfgNode *cfg);
 
 //- rjf: view rule eval application
 internal E_Eval df_eval_from_eval_cfg_table(Arena *arena, E_Eval eval, DF_CfgTable *cfg);

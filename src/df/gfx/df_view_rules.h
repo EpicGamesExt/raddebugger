@@ -73,6 +73,7 @@ struct DF_BitmapTopologyInfo
   R_Tex2DFormat fmt;
 };
 
+#if 0
 typedef struct DF_BitmapViewState DF_BitmapViewState;
 struct DF_BitmapViewState
 {
@@ -80,6 +81,7 @@ struct DF_BitmapViewState
   F32 zoom;
   DF_BitmapTopologyInfo top;
 };
+#endif
 
 typedef struct DF_VR_BitmapState DF_VR_BitmapState;
 struct DF_VR_BitmapState

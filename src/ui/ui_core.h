@@ -44,6 +44,25 @@ typedef enum UI_MouseButtonKind
 UI_MouseButtonKind;
 
 ////////////////////////////////
+//~ rjf: Codepath Permissions
+
+typedef U32 UI_PermissionFlags;
+enum
+{
+  UI_PermissionFlag_ClicksLeft   = (1<<0),
+  UI_PermissionFlag_ClicksMiddle = (1<<1),
+  UI_PermissionFlag_ClicksRight  = (1<<2),
+  UI_PermissionFlag_ScrollX      = (1<<3),
+  UI_PermissionFlag_ScrollY      = (1<<4),
+  UI_PermissionFlag_Keyboard     = (1<<5),
+  UI_PermissionFlag_Text         = (1<<6),
+  
+  //- rjf bundles
+  UI_PermissionFlag_Clicks = (UI_PermissionFlag_ClicksLeft|UI_PermissionFlag_ClicksMiddle|UI_PermissionFlag_ClicksRight),
+  UI_PermissionFlag_All = 0xffffffff,
+};
+
+////////////////////////////////
 //~ rjf: Focus Types
 
 typedef enum UI_FocusKind
@@ -656,7 +675,7 @@ internal B32     ui_key_match(UI_Key a, UI_Key b);
 //~ rjf: Event Type Functions
 
 internal UI_EventNode *ui_event_list_push(Arena *arena, UI_EventList *list, UI_Event *v);
-internal void ui_eat_event(UI_EventList *list, UI_EventNode *node);
+internal void ui_eat_event_node(UI_EventList *list, UI_EventNode *node);
 
 ////////////////////////////////
 //~ rjf: Text Operation Functions
@@ -723,11 +742,14 @@ internal UI_State *ui_get_selected_state(void);
 //- rjf: per-frame info
 internal Arena *           ui_build_arena(void);
 internal OS_Handle         ui_window(void);
-internal UI_EventList *    ui_events(void);
 internal Vec2F32           ui_mouse(void);
 internal F_Tag             ui_icon_font(void);
 internal String8           ui_icon_string_from_kind(UI_IconKind icon_kind);
 internal F32               ui_dt(void);
+
+//- rjf: event pumping
+internal B32 ui_next_event(UI_Event **ev);
+internal void ui_eat_event(UI_Event *ev);
 
 //- rjf: event consumption helpers
 internal B32 ui_key_press(OS_EventFlags mods, OS_Key key);
@@ -840,6 +862,7 @@ internal F32                        ui_top_fixed_width(void);
 internal F32                        ui_top_fixed_height(void);
 internal UI_Size                    ui_top_pref_width(void);
 internal UI_Size                    ui_top_pref_height(void);
+internal UI_PermissionFlags         ui_top_permission_flags(void);
 internal UI_BoxFlags                ui_top_flags(void);
 internal UI_FocusKind               ui_top_focus_hot(void);
 internal UI_FocusKind               ui_top_focus_active(void);
@@ -868,6 +891,7 @@ internal F32                        ui_bottom_fixed_width(void);
 internal F32                        ui_bottom_fixed_height(void);
 internal UI_Size                    ui_bottom_pref_width(void);
 internal UI_Size                    ui_bottom_pref_height(void);
+internal UI_PermissionFlags         ui_bottom_permission_flags(void);
 internal UI_BoxFlags                ui_bottom_flags(void);
 internal UI_FocusKind               ui_bottom_focus_hot(void);
 internal UI_FocusKind               ui_bottom_focus_active(void);
@@ -896,6 +920,7 @@ internal F32                        ui_push_fixed_width(F32 v);
 internal F32                        ui_push_fixed_height(F32 v);
 internal UI_Size                    ui_push_pref_width(UI_Size v);
 internal UI_Size                    ui_push_pref_height(UI_Size v);
+internal UI_PermissionFlags         ui_push_permission_flags(UI_PermissionFlags v);
 internal UI_BoxFlags                ui_push_flags(UI_BoxFlags v);
 internal UI_FocusKind               ui_push_focus_hot(UI_FocusKind v);
 internal UI_FocusKind               ui_push_focus_active(UI_FocusKind v);
@@ -924,6 +949,7 @@ internal F32                        ui_pop_fixed_width(void);
 internal F32                        ui_pop_fixed_height(void);
 internal UI_Size                    ui_pop_pref_width(void);
 internal UI_Size                    ui_pop_pref_height(void);
+internal UI_PermissionFlags         ui_pop_permission_flags(void);
 internal UI_BoxFlags                ui_pop_flags(void);
 internal UI_FocusKind               ui_pop_focus_hot(void);
 internal UI_FocusKind               ui_pop_focus_active(void);
@@ -952,6 +978,7 @@ internal F32                        ui_set_next_fixed_width(F32 v);
 internal F32                        ui_set_next_fixed_height(F32 v);
 internal UI_Size                    ui_set_next_pref_width(UI_Size v);
 internal UI_Size                    ui_set_next_pref_height(UI_Size v);
+internal UI_PermissionFlags         ui_set_next_permission_flags(UI_PermissionFlags v);
 internal UI_BoxFlags                ui_set_next_flags(UI_BoxFlags v);
 internal UI_FocusKind               ui_set_next_focus_hot(UI_FocusKind v);
 internal UI_FocusKind               ui_set_next_focus_active(UI_FocusKind v);
@@ -995,6 +1022,7 @@ internal void     ui_pop_corner_radius(void);
 #define UI_FixedHeight(v) DeferLoop(ui_push_fixed_height(v), ui_pop_fixed_height())
 #define UI_PrefWidth(v) DeferLoop(ui_push_pref_width(v), ui_pop_pref_width())
 #define UI_PrefHeight(v) DeferLoop(ui_push_pref_height(v), ui_pop_pref_height())
+#define UI_PermissionFlags(v) DeferLoop(ui_push_permission_flags(v), ui_pop_permission_flags())
 #define UI_Flags(v) DeferLoop(ui_push_flags(v), ui_pop_flags())
 #define UI_FocusHot(v) DeferLoop(ui_push_focus_hot(v), ui_pop_focus_hot())
 #define UI_FocusActive(v) DeferLoop(ui_push_focus_active(v), ui_pop_focus_active())

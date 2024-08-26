@@ -21,6 +21,7 @@ UI_StackTable:
   { PrefHeight                         pref_height                   UI_Size               `ui_px(30.f, 1.f)`                 }
   
   //- rjf: flags
+  { PermissionFlags                    permission_flags              UI_PermissionFlags    UI_PermissionFlag_All              }
   { Flags                              flags                         UI_BoxFlags           0                                  }
   
   //- rjf: interaction

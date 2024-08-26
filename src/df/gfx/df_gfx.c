@@ -305,7 +305,7 @@ df_target_rect_from_panel(Rng2F32 root_rect, DF_Panel *root, DF_Panel *panel)
 internal void
 df_panel_insert_tab_view(DF_Panel *panel, DF_View *prev_view, DF_View *view)
 {
-  DLLInsert_NPZ(&df_g_nil_view, panel->first_tab_view, panel->last_tab_view, prev_view, view, next, prev);
+  DLLInsert_NPZ(&df_g_nil_view, panel->first_tab_view, panel->last_tab_view, prev_view, view, order_next, order_prev);
   panel->tab_view_count += 1;
   if(!df_view_is_project_filtered(view))
   {
@@ -321,7 +321,7 @@ df_panel_remove_tab_view(DF_Panel *panel, DF_View *view)
     panel->selected_tab_view = df_handle_zero();
     if(df_handle_match(df_handle_zero(), panel->selected_tab_view))
     {
-      for(DF_View *v = view->next; !df_view_is_nil(v); v = v->next)
+      for(DF_View *v = view->order_next; !df_view_is_nil(v); v = v->order_next)
       {
         if(!df_view_is_project_filtered(v))
         {
@@ -332,7 +332,7 @@ df_panel_remove_tab_view(DF_Panel *panel, DF_View *view)
     }
     if(df_handle_match(df_handle_zero(), panel->selected_tab_view))
     {
-      for(DF_View *v = view->prev; !df_view_is_nil(v); v = v->prev)
+      for(DF_View *v = view->order_prev; !df_view_is_nil(v); v = v->order_prev)
       {
         if(!df_view_is_project_filtered(v))
         {
@@ -342,7 +342,7 @@ df_panel_remove_tab_view(DF_Panel *panel, DF_View *view)
       }
     }
   }
-  DLLRemove_NPZ(&df_g_nil_view, panel->first_tab_view, panel->last_tab_view, view, next, prev);
+  DLLRemove_NPZ(&df_g_nil_view, panel->first_tab_view, panel->last_tab_view, view, order_next, order_prev);
   panel->tab_view_count -= 1;
 }
 
@@ -741,17 +741,6 @@ df_gfx_view_rule_spec_from_string(String8 string)
   return spec;
 }
 
-internal DF_ViewSpec *
-df_tab_view_spec_from_gfx_view_rule_spec(DF_GfxViewRuleSpec *spec)
-{
-  DF_ViewSpec *result = &df_g_nil_view_spec;
-  if(spec->info.tab_view_spec_name.size != 0)
-  {
-    result = df_view_spec_from_string(spec->info.tab_view_spec_name);
-  }
-  return result;
-}
-
 ////////////////////////////////
 //~ rjf: View State Functions
 
@@ -764,7 +753,7 @@ df_view_alloc(void)
     if(!df_view_is_nil(view))
     {
       df_gfx_state->free_view_count -= 1;
-      SLLStackPop(df_gfx_state->free_view);
+      SLLStackPop_N(df_gfx_state->free_view, alloc_next);
       U64 generation = view->generation;
       MemoryZeroStruct(view);
       view->generation = generation;
@@ -781,22 +770,35 @@ df_view_alloc(void)
   view->spec = &df_g_nil_view_spec;
   view->project_path_arena = arena_alloc();
   view->project_path = str8_zero();
+  view->cfg_arena = arena_alloc();
+  view->cfg_root = &df_g_nil_cfg_node;
   view->query_cursor = view->query_mark = txt_pt(1, 1);
   view->query_string_size = 0;
   df_gfx_state->allocated_view_count += 1;
+  DLLPushBack_NPZ(&df_g_nil_view, df_gfx_state->first_view, df_gfx_state->last_view, view, alloc_next, alloc_prev);
   return view;
 }
 
 internal void
 df_view_release(DF_View *view)
 {
-  SLLStackPush(df_gfx_state->free_view, view);
+  DLLPushBack_NPZ(&df_g_nil_view, df_gfx_state->first_view, df_gfx_state->last_view, view, alloc_next, alloc_prev);
+  SLLStackPush_N(df_gfx_state->free_view, view, alloc_next);
+  for(DF_View *tchild = view->first_transient, *next = 0; !df_view_is_nil(tchild); tchild = next)
+  {
+    next = tchild->order_next;
+    df_view_release(tchild);
+  }
+  view->first_transient = view->last_transient = &df_g_nil_view;
+  view->transient_view_slots_count = 0;
+  view->transient_view_slots = 0;
   for(DF_ArenaExt *ext = view->first_arena_ext; ext != 0; ext = ext->next)
   {
     arena_release(ext->arena);
   }
   view->first_arena_ext = view->last_arena_ext = 0;
   arena_release(view->project_path_arena);
+  arena_release(view->cfg_arena);
   arena_release(view->arena);
   view->generation += 1;
   df_gfx_state->allocated_view_count -= 1;
@@ -806,6 +808,10 @@ df_view_release(DF_View *view)
 internal void
 df_view_equip_spec(DF_Window *window, DF_View *view, DF_ViewSpec *spec, String8 query, DF_CfgNode *cfg_root)
 {
+  // rjf: fill cfg tree
+  arena_clear(view->cfg_arena);
+  view->cfg_root = df_cfg_tree_copy(view->cfg_arena, cfg_root);
+  
   // rjf: fill query buffer
   view->query_string_size = Min(sizeof(view->query_buffer), query.size);
   MemoryCopy(view->query_buffer, query.str, view->query_string_size);
@@ -829,7 +835,7 @@ df_view_equip_spec(DF_Window *window, DF_View *view, DF_ViewSpec *spec, String8 
     }
     view->is_filtering = 0;
     view->is_filtering_t = 0;
-    view_setup(window, view, cfg_root);
+    view_setup(window, view, view->cfg_root);
   }
 }
 
@@ -848,7 +854,15 @@ df_view_clear_user_state(DF_View *view)
   {
     arena_release(ext->arena);
   }
+  for(DF_View *tchild = view->first_transient, *next = 0; !df_view_is_nil(tchild); tchild = next)
+  {
+    next = tchild->order_next;
+    df_view_release(tchild);
+  }
+  view->first_transient = view->last_transient = &df_g_nil_view;
   view->first_arena_ext = view->last_arena_ext = 0;
+  view->transient_view_slots_count = 0;
+  view->transient_view_slots = 0;
   arena_clear(view->arena);
   view->user_data = 0;
 }
@@ -871,6 +885,49 @@ df_view_push_arena_ext(DF_View *view)
   ext->arena = arena_alloc();
   SLLQueuePush(view->first_arena_ext, view->last_arena_ext, ext);
   return ext->arena;
+}
+
+////////////////////////////////
+//~ rjf: Expand-Keyed Transient View Functions
+
+internal DF_View *
+df_transient_view_from_expand_key(DF_View *owner_view, DF_Window *window, DF_ViewSpec *spec, String8 query, DF_CfgNode *cfg_root, DF_ExpandKey key)
+{
+  if(owner_view->transient_view_slots_count == 0)
+  {
+    owner_view->transient_view_slots_count = 256;
+    owner_view->transient_view_slots = push_array(owner_view->arena, DF_TransientViewSlot, owner_view->transient_view_slots_count);
+  }
+  DF_View *view = &df_g_nil_view;
+  U64 hash = df_hash_from_expand_key(key);
+  U64 slot_idx = hash%owner_view->transient_view_slots_count;
+  DF_TransientViewSlot *slot = &owner_view->transient_view_slots[slot_idx];
+  for(DF_TransientViewNode *n = slot->first; n != 0; n = n->next)
+  {
+    if(df_expand_key_match(n->key, key))
+    {
+      view = n->view;
+      n->last_frame_index_touched = df_frame_index();
+      break;
+    }
+  }
+  if(df_view_is_nil(view))
+  {
+    if(!owner_view->free_transient_view_node)
+    {
+      owner_view->free_transient_view_node = push_array(df_gfx_state->arena, DF_TransientViewNode, 1);
+    }
+    DF_TransientViewNode *node = owner_view->free_transient_view_node;
+    SLLStackPop(owner_view->free_transient_view_node);
+    DLLPushBack(slot->first, slot->last, node);
+    node->key = key;
+    node->view = df_view_alloc();
+    node->first_frame_index_touched = node->last_frame_index_touched = df_frame_index();
+    view = node->view;
+    DLLPushBack_NPZ(&df_g_nil_view, owner_view->first_transient, owner_view->last_transient, view, order_next, order_prev);
+    df_view_equip_spec(window, view, spec, query, cfg_root);
+  }
+  return view;
 }
 
 ////////////////////////////////
@@ -961,7 +1018,7 @@ df_panel_release_all_views(DF_Panel *panel)
 {
   for(DF_View *view = panel->first_tab_view, *next = 0; !df_view_is_nil(view); view = next)
   {
-    next = view->next;
+    next = view->order_next;
     df_view_release(view);
   }
   panel->first_tab_view = panel->last_tab_view = &df_g_nil_view;
@@ -1120,7 +1177,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
   {
     for(DF_View *view = panel->first_tab_view;
         !df_view_is_nil(view);
-        view = view->next)
+        view = view->order_next)
     {
       DF_Entity *entity = df_entity_from_eval_string(str8(view->query_buffer, view->query_string_size));
       if(entity->flags & DF_EntityFlag_MarkedForDeletion ||
@@ -1359,7 +1416,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             df_panel_insert_tab_view(new_panel, new_panel->last_tab_view, move_tab);
             new_panel->selected_tab_view = df_handle_from_view(move_tab);
             B32 move_tab_panel_is_empty = 1;
-            for(DF_View *v = move_tab_panel->first_tab_view; !df_view_is_nil(v); v = v->next)
+            for(DF_View *v = move_tab_panel->first_tab_view; !df_view_is_nil(v); v = v->order_next)
             {
               if(!df_view_is_project_filtered(v))
               {
@@ -1423,7 +1480,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             df_handle_list_push(scratch.arena, &panels_to_close, handle);
             for(DF_View *view = panel->first_tab_view, *next = 0; !df_view_is_nil(view); view = next)
             {
-              next = view->next;
+              next = view->order_next;
               DF_GfxViewKind view_kind = df_gfx_view_kind_from_string(view->spec->info.name);
               B32 needs_delete = 1;
               switch(view_kind)
@@ -1957,7 +2014,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           DF_Panel *panel = df_panel_from_handle(params.panel);
           DF_View *view = df_selected_tab_from_panel(panel);
           DF_View *next_view = view;
-          for(DF_View *v = view; !df_view_is_nil(v); v = df_view_is_nil(v->next) ? panel->first_tab_view : v->next)
+          for(DF_View *v = view; !df_view_is_nil(v); v = df_view_is_nil(v->order_next) ? panel->first_tab_view : v->order_next)
           {
             if(!df_view_is_project_filtered(v) && v != view)
             {
@@ -1973,7 +2030,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           DF_Panel *panel = df_panel_from_handle(params.panel);
           DF_View *view = df_selected_tab_from_panel(panel);
           DF_View *next_view = view;
-          for(DF_View *v = view; !df_view_is_nil(v); v = df_view_is_nil(v->prev) ? panel->last_tab_view : v->prev)
+          for(DF_View *v = view; !df_view_is_nil(v); v = df_view_is_nil(v->order_prev) ? panel->last_tab_view : v->order_prev)
           {
             if(!df_view_is_project_filtered(v) && v != view)
             {
@@ -1989,7 +2046,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         {
           DF_Panel *panel = ws->focused_panel;
           DF_View *view = df_selected_tab_from_panel(panel);
-          DF_View *prev_view = core_cmd_kind == DF_CoreCmdKind_MoveTabRight ? view->next : view->prev->prev;
+          DF_View *prev_view = core_cmd_kind == DF_CoreCmdKind_MoveTabRight ? view->order_next : view->order_prev->order_prev;
           if(!df_view_is_nil(prev_view) || core_cmd_kind == DF_CoreCmdKind_MoveTabLeft)
           {
             DF_CmdParams p = df_cmd_params_from_window(ws);
@@ -2055,7 +2112,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             df_panel_insert_tab_view(dst_panel, prev_view, view);
             ws->focused_panel = dst_panel;
             B32 src_panel_is_empty = 1;
-            for(DF_View *v = src_panel->first_tab_view; !df_view_is_nil(v); v = v->next)
+            for(DF_View *v = src_panel->first_tab_view; !df_view_is_nil(v); v = v->order_next)
             {
               if(!df_view_is_project_filtered(v))
               {
@@ -2981,7 +3038,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             {
               continue;
             }
-            for(DF_View *view = panel->first_tab_view; !df_view_is_nil(view); view = view->next)
+            for(DF_View *view = panel->first_tab_view; !df_view_is_nil(view); view = view->order_next)
             {
               if(df_view_is_project_filtered(view)) { continue; }
               String8 view_file_path = df_file_path_from_eval_string(scratch.arena, str8(view->query_buffer, view->query_string_size));
@@ -3007,7 +3064,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             {
               continue;
             }
-            for(DF_View *view = panel->first_tab_view; !df_view_is_nil(view); view = view->next)
+            for(DF_View *view = panel->first_tab_view; !df_view_is_nil(view); view = view->order_next)
             {
               if(df_view_is_project_filtered(view)) { continue; }
               DF_GfxViewKind view_kind = df_gfx_view_kind_from_string(view->spec->info.name);
@@ -3028,7 +3085,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             {
               continue;
             }
-            for(DF_View *view = panel->first_tab_view; !df_view_is_nil(view); view = view->next)
+            for(DF_View *view = panel->first_tab_view; !df_view_is_nil(view); view = view->order_next)
             {
               if(df_view_is_project_filtered(view)) { continue; }
               DF_GfxViewKind view_kind = df_gfx_view_kind_from_string(view->spec->info.name);
@@ -3081,7 +3138,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
               Vec2F32 panel_rect_dim = dim_2f32(panel_rect);
               F32 area = panel_rect_dim.x * panel_rect_dim.y;
               B32 panel_is_empty = 1;
-              for(DF_View *v = panel->first_tab_view; !df_view_is_nil(v); v = v->next)
+              for(DF_View *v = panel->first_tab_view; !df_view_is_nil(v); v = v->order_next)
               {
                 if(!df_view_is_project_filtered(v))
                 {
@@ -3198,7 +3255,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           DF_View *view = df_view_from_handle(params.view);
           DF_Panel *panel = df_panel_from_handle(params.panel);
           B32 view_is_tab = 0;
-          for(DF_View *tab = panel->first_tab_view; !df_view_is_nil(tab); tab = tab->next)
+          for(DF_View *tab = panel->first_tab_view; !df_view_is_nil(tab); tab = tab->order_next)
           {
             if(df_view_is_project_filtered(tab)) { continue; }
             if(tab == view)
@@ -3276,7 +3333,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           MemoryZeroStruct(&ws->query_cmd_params);
           for(DF_View *v = ws->query_view_stack_top, *next = 0; !df_view_is_nil(v); v = next)
           {
-            next = v->next;
+            next = v->order_next;
             df_view_release(v);
           }
           ws->query_view_stack_top = &df_g_nil_view;
@@ -3307,7 +3364,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
     DF_View *view = df_selected_tab_from_panel(panel);
     if(df_view_is_nil(view))
     {
-      for(DF_View *tab = panel->first_tab_view; !df_view_is_nil(tab); tab = tab->next)
+      for(DF_View *tab = panel->first_tab_view; !df_view_is_nil(tab); tab = tab->order_next)
       {
         if(!df_view_is_project_filtered(tab))
         {
@@ -3319,7 +3376,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
     if(!df_view_is_nil(view))
     {
       B32 found = 0;
-      for(DF_View *tab = panel->first_tab_view; !df_view_is_nil(tab); tab = tab->next)
+      for(DF_View *tab = panel->first_tab_view; !df_view_is_nil(tab); tab = tab->order_next)
       {
         if(df_view_is_project_filtered(tab)) {continue;}
         if(tab == view)
@@ -3359,7 +3416,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
       {
         df_push_interact_regs();
         DF_ViewCmdFunctionType *do_view_cmds_function = view->spec->info.cmd_hook;
-        do_view_cmds_function(ws, panel, view, cmds);
+        do_view_cmds_function(ws, panel, view, view->cfg_root, str8(view->query_buffer, view->query_string_size), cmds);
         DF_InteractRegs *view_regs = df_pop_interact_regs();
         if(panel == ws->focused_panel)
         {
@@ -3581,7 +3638,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
               {
                 DF_ViewSpec *view_spec = view->spec;
                 DF_ViewUIFunctionType *build_view_ui_function = view_spec->info.ui_hook;
-                build_view_ui_function(ws, &df_g_nil_panel, view, view_preview_container->rect);
+                build_view_ui_function(ws, &df_g_nil_panel, view, view->cfg_root, str8(view->query_buffer, view->query_string_size), view_preview_container->rect);
               }
             }
           }
@@ -5249,13 +5306,8 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
               U64 open_menu_idx_prime = open_menu_idx;
               if(menu_open && ws->menu_bar_focused && window_is_focused)
               {
-                UI_EventList *events = ui_events();
-                for(UI_EventNode *n = events->first, *next = 0;
-                    n != 0;
-                    n = next)
+                for(UI_Event *evt = 0; ui_next_event(&evt);)
                 {
-                  next = n->next;
-                  UI_Event *evt = &n->v;
                   B32 taken = 0;
                   if(evt->delta_2s32.x > 0)
                   {
@@ -5270,7 +5322,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
                   }
                   if(taken)
                   {
-                    ui_eat_event(events, n);
+                    ui_eat_event(evt);
                   }
                 }
               }
@@ -5856,7 +5908,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             !df_view_is_nil(query_view);
             query_view = next)
         {
-          next = query_view->next;
+          next = query_view->order_next;
           df_view_release(query_view);
         }
         
@@ -5885,7 +5937,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         }
         ws->query_view_stack_top = view;
         ws->query_view_selected = 1;
-        view->next = &df_g_nil_view;
+        view->order_next = &df_g_nil_view;
         
         scratch_end(scratch);
       }
@@ -6039,7 +6091,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
       {
         DF_ViewSpec *view_spec = view->spec;
         DF_ViewUIFunctionType *build_view_ui_function = view_spec->info.ui_hook;
-        build_view_ui_function(ws, &df_g_nil_panel, view, query_container_content_rect);
+        build_view_ui_function(ws, &df_g_nil_panel, view, view->cfg_root, str8(view->query_buffer, view->query_string_size), query_container_content_rect);
       }
       
       //- rjf: query submission
@@ -7188,7 +7240,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           //- rjf: build empty view
           UI_Parent(view_container_box) if(df_view_is_nil(df_selected_tab_from_panel(panel)))
           {
-            DF_VIEW_UI_FUNCTION_NAME(Empty)(ws, panel, &df_g_nil_view, content_rect);
+            DF_VIEW_UI_FUNCTION_NAME(Empty)(ws, panel, &df_g_nil_view, &df_g_nil_cfg_node, str8_zero(), content_rect);
           }
           
           //- rjf: build tab view
@@ -7196,7 +7248,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           {
             DF_View *view = df_selected_tab_from_panel(panel);
             DF_ViewUIFunctionType *build_view_ui_function = view->spec->info.ui_hook;
-            build_view_ui_function(ws, panel, view, content_rect);
+            build_view_ui_function(ws, panel, view, view->cfg_root, str8(view->query_buffer, view->query_string_size), content_rect);
           }
           
           //- rjf: fill with per-view states, after the view has a chance to run
@@ -7223,21 +7275,19 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           if(ui_is_focus_active() && view->spec->info.flags & DF_ViewSpecFlag_TypingAutomaticallyFilters && !view->is_filtering)
           {
             DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
-            UI_EventList *events = ui_events();
-            for(UI_EventNode *n = events->first, *next = 0; n != 0; n = next)
+            for(UI_Event *evt = 0; ui_next_event(&evt);)
             {
-              next = n->next;
-              if(n->v.flags & UI_EventFlag_Paste)
+              if(evt->flags & UI_EventFlag_Paste)
               {
-                ui_eat_event(events, n);
+                ui_eat_event(evt);
                 df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Filter));
                 df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Paste));
               }
-              else if(n->v.string.size != 0 && n->v.kind == UI_EventKind_Text)
+              else if(evt->string.size != 0 && evt->kind == UI_EventKind_Text)
               {
-                ui_eat_event(events, n);
+                ui_eat_event(evt);
                 df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Filter));
-                p.string = n->v.string;
+                p.string = evt->string;
                 df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_InsertText));
               }
             }
@@ -7307,7 +7357,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
               UI_CornerRadius01(panel->tab_side == Side_Min ? 0 : corner_radius)
               UI_CornerRadius10(panel->tab_side == Side_Min ? corner_radius : 0)
               UI_CornerRadius11(panel->tab_side == Side_Min ? 0 : corner_radius)
-              for(DF_View *view = panel->first_tab_view;; view = view->next, view_idx += 1)
+              for(DF_View *view = panel->first_tab_view;; view = view->order_next, view_idx += 1)
             {
               temp_end(scratch);
               if(df_view_is_project_filtered(view)) { continue; }
@@ -7320,7 +7370,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
                 DF_View *drag_view = df_view_from_handle(df_g_drag_drop_payload.view);
                 DF_View *dst_prev_view = df_view_from_handle(df_g_last_drag_drop_prev_tab);
                 if(dst_panel == panel &&
-                   ((!df_view_is_nil(view) && dst_prev_view == view->prev && drag_view != view && drag_view != view->prev) ||
+                   ((!df_view_is_nil(view) && dst_prev_view == view->order_prev && drag_view != view && drag_view != view->order_prev) ||
                     (df_view_is_nil(view) && dst_prev_view == panel->last_tab_view && drag_view != panel->last_tab_view)))
                 {
                   UI_PrefWidth(ui_em(9.f, 0.2f)) UI_Column
@@ -7493,7 +7543,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
               
               // rjf: store off drop-site
               drop_sites[view_idx].p = tab_column_box->rect.x0 - tab_spacing/2;
-              drop_sites[view_idx].prev_view = view->prev;
+              drop_sites[view_idx].prev_view = view->order_prev;
               drop_site_max_p = Max(tab_column_box->rect.x1, drop_site_max_p);
             }
             
@@ -7635,7 +7685,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           DF_DragDropPayload *payload = &df_g_drag_drop_payload;
           DF_View *dragged_view = df_view_from_handle(payload->view);
           B32 view_is_in_panel = 0;
-          for(DF_View *view = panel->first_tab_view; !df_view_is_nil(view); view = view->next)
+          for(DF_View *view = panel->first_tab_view; !df_view_is_nil(view); view = view->order_next)
           {
             if(df_view_is_project_filtered(view)) { continue; }
             if(view == dragged_view)
@@ -7701,56 +7751,77 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
     //- rjf: animate views
     //
     {
+      Temp scratch = scratch_begin(0, 0);
+      typedef struct Task Task;
+      struct Task
+      {
+        Task *next;
+        DF_Panel *panel;
+        DF_View *list_first;
+      };
+      Task start_task = {0, &df_g_nil_panel, ws->query_view_stack_top};
+      Task *first_task = &start_task;
+      Task *last_task = first_task;
       F32 rate = 1 - pow_f32(2, (-10.f * df_dt()));
       F32 fast_rate = 1 - pow_f32(2, (-40.f * df_dt()));
       for(DF_Panel *panel = ws->root_panel;
           !df_panel_is_nil(panel);
           panel = df_panel_rec_df_pre(panel).next)
       {
-        U64 list_firsts_count = 1 + !!(panel == ws->root_panel);
-        DF_View *list_firsts[2] = {panel->first_tab_view, ws->query_view_stack_top};
-        for(U64 idx = 0; idx < list_firsts_count; idx += 1)
+        Task *t = push_array(scratch.arena, Task, 1);
+        SLLQueuePush(first_task, last_task, t);
+        t->panel = panel;
+        t->list_first = panel->first_tab_view;
+      }
+      for(Task *t = first_task; t != 0; t = t->next)
+      {
+        DF_View *list_first = t->list_first;
+        for(DF_View *view = list_first; !df_view_is_nil(view); view = view->order_next)
         {
-          DF_View *list_first = list_firsts[idx];
-          for(DF_View *view = list_first; !df_view_is_nil(view); view = view->next)
+          if(!df_view_is_nil(view->first_transient))
           {
-            if(window_is_focused)
+            Task *task = push_array(scratch.arena, Task, 1);
+            SLLQueuePush(first_task, last_task, task);
+            task->panel = t->panel;
+            task->list_first = view->first_transient;
+          }
+          if(window_is_focused)
+          {
+            if(abs_f32(view->loading_t_target - view->loading_t) > 0.01f ||
+               abs_f32(view->scroll_pos.x.off) > 0.01f ||
+               abs_f32(view->scroll_pos.y.off) > 0.01f ||
+               abs_f32(view->is_filtering_t - (F32)!!view->is_filtering))
             {
-              if(abs_f32(view->loading_t_target - view->loading_t) > 0.01f ||
-                 abs_f32(view->scroll_pos.x.off) > 0.01f ||
-                 abs_f32(view->scroll_pos.y.off) > 0.01f ||
-                 abs_f32(view->is_filtering_t - (F32)!!view->is_filtering))
-              {
-                df_gfx_request_frame();
-              }
-              if(view->loading_t_target != 0 && view == df_selected_tab_from_panel(panel))
-              {
-                df_gfx_request_frame();
-              }
+              df_gfx_request_frame();
             }
-            view->loading_t += (view->loading_t_target - view->loading_t) * rate;
-            view->is_filtering_t += ((F32)!!view->is_filtering - view->is_filtering_t) * fast_rate;
-            view->scroll_pos.x.off -= view->scroll_pos.x.off * (df_setting_val_from_code(ws, DF_SettingCode_ScrollingAnimations).s32 ? fast_rate : 1.f);
-            view->scroll_pos.y.off -= view->scroll_pos.y.off * (df_setting_val_from_code(ws, DF_SettingCode_ScrollingAnimations).s32 ? fast_rate : 1.f);
-            if(abs_f32(view->scroll_pos.x.off) < 0.01f)
+            if(view->loading_t_target != 0 && view == df_selected_tab_from_panel(t->panel))
             {
-              view->scroll_pos.x.off = 0;
+              df_gfx_request_frame();
             }
-            if(abs_f32(view->scroll_pos.y.off) < 0.01f)
-            {
-              view->scroll_pos.y.off = 0;
-            }
-            if(abs_f32(view->is_filtering_t - (F32)!!view->is_filtering) < 0.01f)
-            {
-              view->is_filtering_t = (F32)!!view->is_filtering;
-            }
-            if(view == df_selected_tab_from_panel(panel))
-            {
-              view->loading_t_target = 0;
-            }
+          }
+          view->loading_t += (view->loading_t_target - view->loading_t) * rate;
+          view->is_filtering_t += ((F32)!!view->is_filtering - view->is_filtering_t) * fast_rate;
+          view->scroll_pos.x.off -= view->scroll_pos.x.off * (df_setting_val_from_code(ws, DF_SettingCode_ScrollingAnimations).s32 ? fast_rate : 1.f);
+          view->scroll_pos.y.off -= view->scroll_pos.y.off * (df_setting_val_from_code(ws, DF_SettingCode_ScrollingAnimations).s32 ? fast_rate : 1.f);
+          if(abs_f32(view->scroll_pos.x.off) < 0.01f)
+          {
+            view->scroll_pos.x.off = 0;
+          }
+          if(abs_f32(view->scroll_pos.y.off) < 0.01f)
+          {
+            view->scroll_pos.y.off = 0;
+          }
+          if(abs_f32(view->is_filtering_t - (F32)!!view->is_filtering) < 0.01f)
+          {
+            view->is_filtering_t = (F32)!!view->is_filtering;
+          }
+          if(view == df_selected_tab_from_panel(t->panel))
+          {
+            view->loading_t_target = 0;
           }
         }
       }
+      scratch_end(scratch);
     }
     
     ////////////////////////////
@@ -7765,19 +7836,17 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
     ////////////////////////////
     //- rjf: font size changing
     //
-    for(UI_EventNode *n = events.first, *next = 0; n != 0; n = next)
+    for(UI_Event *evt = 0; ui_next_event(&evt);)
     {
-      next = n->next;
-      UI_Event *event = &n->v;
-      if(event->kind == UI_EventKind_Scroll && event->modifiers & OS_EventFlag_Ctrl)
+      if(evt->kind == UI_EventKind_Scroll && evt->modifiers & OS_EventFlag_Ctrl)
       {
-        ui_eat_event(&events, n);
-        if(event->delta_2f32.y < 0)
+        ui_eat_event(evt);
+        if(evt->delta_2f32.y < 0)
         {
           DF_CmdParams params = df_cmd_params_from_window(ws);
           df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_IncUIFontScale));
         }
-        else if(event->delta_2f32.y > 0)
+        else if(evt->delta_2f32.y > 0)
         {
           DF_CmdParams params = df_cmd_params_from_window(ws);
           df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_DecUIFontScale));
@@ -9331,7 +9400,7 @@ df_cfg_strings_from_gfx(Arena *arena, String8 root_path, DF_CfgSrc source)
           }
           
           // rjf: views
-          for(DF_View *view = p->first_tab_view; !df_view_is_nil(view); view = view->next)
+          for(DF_View *view = p->first_tab_view; !df_view_is_nil(view); view = view->order_next)
           {
             String8 view_string = view->spec->info.name;
             
@@ -12016,28 +12085,26 @@ df_do_txt_controls(TXT_TextInfo *info, String8 data, U64 line_count_per_page, Tx
 {
   Temp scratch = scratch_begin(0, 0);
   B32 change = 0;
-  UI_EventList *events = ui_events();
-  for(UI_EventNode *n = events->first, *next = 0; n != 0; n = next)
+  for(UI_Event *evt = 0; ui_next_event(&evt);)
   {
-    next = n->next;
-    if(n->v.kind != UI_EventKind_Navigate && n->v.kind != UI_EventKind_Edit)
+    if(evt->kind != UI_EventKind_Navigate && evt->kind != UI_EventKind_Edit)
     {
       continue;
     }
     B32 taken = 0;
     String8 line = txt_string_from_info_data_line_num(info, data, cursor->line);
-    UI_TxtOp single_line_op = ui_single_line_txt_op_from_event(scratch.arena, &n->v, line, *cursor, *mark);
+    UI_TxtOp single_line_op = ui_single_line_txt_op_from_event(scratch.arena, evt, line, *cursor, *mark);
     
     //- rjf: invalid single-line op or endpoint units => try multiline
-    if(n->v.delta_unit == UI_EventDeltaUnit_Whole || single_line_op.flags & UI_TxtOpFlag_Invalid)
+    if(evt->delta_unit == UI_EventDeltaUnit_Whole || single_line_op.flags & UI_TxtOpFlag_Invalid)
     {
       U64 line_count = info->lines_count;
       String8 prev_line = txt_string_from_info_data_line_num(info, data, cursor->line-1);
       String8 next_line = txt_string_from_info_data_line_num(info, data, cursor->line+1);
-      Vec2S32 delta = n->v.delta_2s32;
+      Vec2S32 delta = evt->delta_2s32;
       
       //- rjf: wrap lines right
-      if(n->v.delta_unit != UI_EventDeltaUnit_Whole && delta.x > 0 && cursor->column == line.size+1 && cursor->line+1 <= line_count)
+      if(evt->delta_unit != UI_EventDeltaUnit_Whole && delta.x > 0 && cursor->column == line.size+1 && cursor->line+1 <= line_count)
       {
         cursor->line += 1;
         cursor->column = 1;
@@ -12047,7 +12114,7 @@ df_do_txt_controls(TXT_TextInfo *info, String8 data, U64 line_count_per_page, Tx
       }
       
       //- rjf: wrap lines left
-      if(n->v.delta_unit != UI_EventDeltaUnit_Whole && delta.x < 0 && cursor->column == 1 && cursor->line-1 >= 1)
+      if(evt->delta_unit != UI_EventDeltaUnit_Whole && delta.x < 0 && cursor->column == 1 && cursor->line-1 >= 1)
       {
         cursor->line -= 1;
         cursor->column = prev_line.size+1;
@@ -12057,7 +12124,7 @@ df_do_txt_controls(TXT_TextInfo *info, String8 data, U64 line_count_per_page, Tx
       }
       
       //- rjf: movement down (plain)
-      if(n->v.delta_unit == UI_EventDeltaUnit_Char && delta.y > 0 && cursor->line+1 <= line_count)
+      if(evt->delta_unit == UI_EventDeltaUnit_Char && delta.y > 0 && cursor->line+1 <= line_count)
       {
         cursor->line += 1;
         cursor->column = Min(*preferred_column, next_line.size+1);
@@ -12066,7 +12133,7 @@ df_do_txt_controls(TXT_TextInfo *info, String8 data, U64 line_count_per_page, Tx
       }
       
       //- rjf: movement up (plain)
-      if(n->v.delta_unit == UI_EventDeltaUnit_Char && delta.y < 0 && cursor->line-1 >= 1)
+      if(evt->delta_unit == UI_EventDeltaUnit_Char && delta.y < 0 && cursor->line-1 >= 1)
       {
         cursor->line -= 1;
         cursor->column = Min(*preferred_column, prev_line.size+1);
@@ -12075,7 +12142,7 @@ df_do_txt_controls(TXT_TextInfo *info, String8 data, U64 line_count_per_page, Tx
       }
       
       //- rjf: movement down (chunk)
-      if(n->v.delta_unit == UI_EventDeltaUnit_Word && delta.y > 0 && cursor->line+1 <= line_count)
+      if(evt->delta_unit == UI_EventDeltaUnit_Word && delta.y > 0 && cursor->line+1 <= line_count)
       {
         for(S64 line_num = cursor->line+1; line_num <= line_count; line_num += 1)
         {
@@ -12098,7 +12165,7 @@ df_do_txt_controls(TXT_TextInfo *info, String8 data, U64 line_count_per_page, Tx
       }
       
       //- rjf: movement up (chunk)
-      if(n->v.delta_unit == UI_EventDeltaUnit_Word && delta.y < 0 && cursor->line-1 >= 1)
+      if(evt->delta_unit == UI_EventDeltaUnit_Word && delta.y < 0 && cursor->line-1 >= 1)
       {
         for(S64 line_num = cursor->line-1; line_num > 0; line_num -= 1)
         {
@@ -12121,7 +12188,7 @@ df_do_txt_controls(TXT_TextInfo *info, String8 data, U64 line_count_per_page, Tx
       }
       
       //- rjf: movement down (page)
-      if(n->v.delta_unit == UI_EventDeltaUnit_Page && delta.y > 0)
+      if(evt->delta_unit == UI_EventDeltaUnit_Page && delta.y > 0)
       {
         cursor->line += line_count_per_page;
         cursor->column = 1;
@@ -12131,7 +12198,7 @@ df_do_txt_controls(TXT_TextInfo *info, String8 data, U64 line_count_per_page, Tx
       }
       
       //- rjf: movement up (page)
-      if(n->v.delta_unit == UI_EventDeltaUnit_Page && delta.y < 0)
+      if(evt->delta_unit == UI_EventDeltaUnit_Page && delta.y < 0)
       {
         cursor->line -= line_count_per_page;
         cursor->column = 1;
@@ -12141,7 +12208,7 @@ df_do_txt_controls(TXT_TextInfo *info, String8 data, U64 line_count_per_page, Tx
       }
       
       //- rjf: movement to endpoint (+)
-      if(n->v.delta_unit == UI_EventDeltaUnit_Whole && (delta.y > 0 || delta.x > 0))
+      if(evt->delta_unit == UI_EventDeltaUnit_Whole && (delta.y > 0 || delta.x > 0))
       {
         *cursor = txt_pt(line_count, info->lines_count ? dim_1u64(info->lines_ranges[info->lines_count-1])+1 : 1);
         change = 1;
@@ -12149,7 +12216,7 @@ df_do_txt_controls(TXT_TextInfo *info, String8 data, U64 line_count_per_page, Tx
       }
       
       //- rjf: movement to endpoint (-)
-      if(n->v.delta_unit == UI_EventDeltaUnit_Whole && (delta.y < 0 || delta.x < 0))
+      if(evt->delta_unit == UI_EventDeltaUnit_Whole && (delta.y < 0 || delta.x < 0))
       {
         *cursor = txt_pt(1, 1);
         change = 1;
@@ -12157,7 +12224,7 @@ df_do_txt_controls(TXT_TextInfo *info, String8 data, U64 line_count_per_page, Tx
       }
       
       //- rjf: stick mark to cursor, when we don't want to keep it in the same spot
-      if(!(n->v.flags & UI_EventFlag_KeepMark))
+      if(!(evt->flags & UI_EventFlag_KeepMark))
       {
         *mark = *cursor;
       }
@@ -12174,7 +12241,7 @@ df_do_txt_controls(TXT_TextInfo *info, String8 data, U64 line_count_per_page, Tx
     }
     
     //- rjf: copy
-    if(n->v.flags & UI_EventFlag_Copy)
+    if(evt->flags & UI_EventFlag_Copy)
     {
       String8 text = txt_string_from_info_data_txt_rng(info, data, txt_rng(*cursor, *mark));
       os_set_clipboard_text(text);
@@ -12184,7 +12251,7 @@ df_do_txt_controls(TXT_TextInfo *info, String8 data, U64 line_count_per_page, Tx
     //- rjf: consume
     if(taken)
     {
-      ui_eat_event(events, n);
+      ui_eat_event(evt);
     }
   }
   
@@ -12561,11 +12628,8 @@ df_line_edit(DF_Window *ws, DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeLi
   B32 commit = 0;
   if(!is_focus_active && is_focus_hot)
   {
-    UI_EventList *events = ui_events();
-    for(UI_EventNode *n = events->first, *next = 0; n != 0; n = next)
+    for(UI_Event *evt = 0; ui_next_event(&evt);)
     {
-      next = n->next;
-      UI_Event *evt = &n->v;
       if(evt->flags & UI_EventFlag_Copy)
       {
         os_set_clipboard_text(pre_edit_value);
@@ -12593,10 +12657,9 @@ df_line_edit(DF_Window *ws, DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeLi
     B32 start_editing_via_typing = 0;
     if(is_focus_hot)
     {
-      UI_EventList *events = ui_events();
-      for(UI_EventNode *n = events->first; n != 0; n = n->next)
+      for(UI_Event *evt = 0; ui_next_event(&evt);)
       {
-        if(n->v.string.size != 0 || n->v.flags & UI_EventFlag_Paste)
+        if(evt->string.size != 0 || evt->flags & UI_EventFlag_Paste)
         {
           start_editing_via_typing = 1;
           break;
@@ -12629,12 +12692,11 @@ df_line_edit(DF_Window *ws, DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeLi
   //- rjf: determine autocompletion string
   String8 autocomplete_hint_string = {0};
   {
-    UI_EventList *events = ui_events();
-    for(UI_EventNode *n = events->first; n != 0; n = n->next)
+    for(UI_Event *evt = 0; ui_next_event(&evt);)
     {
-      if(n->v.kind == UI_EventKind_AutocompleteHint)
+      if(evt->kind == UI_EventKind_AutocompleteHint)
       {
-        autocomplete_hint_string = n->v.string;
+        autocomplete_hint_string = evt->string;
       }
     }
   }
@@ -12644,20 +12706,18 @@ df_line_edit(DF_Window *ws, DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeLi
   if(!(flags & DF_LineEditFlag_DisableEdit) && (is_focus_active || focus_started))
   {
     Temp scratch = scratch_begin(0, 0);
-    UI_EventList *events = ui_events();
-    for(UI_EventNode *n = events->first, *next = 0; n != 0; n = next)
+    for(UI_Event *evt = 0; ui_next_event(&evt);)
     {
       String8 edit_string = str8(edit_buffer, edit_string_size_out[0]);
-      next = n->next;
       
       // rjf: do not consume anything that doesn't fit a single-line's operations
-      if((n->v.kind != UI_EventKind_Edit && n->v.kind != UI_EventKind_Navigate && n->v.kind != UI_EventKind_Text) || n->v.delta_2s32.y != 0)
+      if((evt->kind != UI_EventKind_Edit && evt->kind != UI_EventKind_Navigate && evt->kind != UI_EventKind_Text) || evt->delta_2s32.y != 0)
       {
         continue;
       }
       
       // rjf: map this action to an op
-      UI_TxtOp op = ui_single_line_txt_op_from_event(scratch.arena, &n->v, edit_string, *cursor, *mark);
+      UI_TxtOp op = ui_single_line_txt_op_from_event(scratch.arena, evt, edit_string, *cursor, *mark);
       
       // rjf: any valid op & autocomplete hint? -> perform autocomplete first, then re-compute op
       if(autocomplete_hint_string.size != 0)
@@ -12670,7 +12730,7 @@ df_line_edit(DF_Window *ws, DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeLi
         edit_string_size_out[0] = new_string.size;
         *cursor = *mark = txt_pt(1, word_off+1+autocomplete_hint_string.size);
         edit_string = str8(edit_buffer, edit_string_size_out[0]);
-        op = ui_single_line_txt_op_from_event(scratch.arena, &n->v, edit_string, *cursor, *mark);
+        op = ui_single_line_txt_op_from_event(scratch.arena, evt, edit_string, *cursor, *mark);
         MemoryZeroStruct(&autocomplete_hint_string);
       }
       
@@ -12695,7 +12755,7 @@ df_line_edit(DF_Window *ws, DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeLi
       
       // rjf: consume event
       {
-        ui_eat_event(events, n);
+        ui_eat_event(evt);
         changes_made = 1;
       }
     }
@@ -12965,8 +13025,6 @@ df_gfx_init(OS_WindowRepaintFunctionType *window_repaint_entry_point, DF_StateDe
   {
     DF_GfxViewRuleSpecInfoArray array = {df_g_gfx_view_rule_spec_info_table, ArrayCount(df_g_gfx_view_rule_spec_info_table)};
     df_register_gfx_view_rule_specs(array);
-    DF_ViewSpecInfoArray tab_view_specs_array = {df_g_gfx_view_rule_tab_view_spec_info_table, ArrayCount(df_g_gfx_view_rule_tab_view_spec_info_table)};
-    df_register_view_specs(tab_view_specs_array);
   }
   
   // rjf: register cmd param slot -> view specs

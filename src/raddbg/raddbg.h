@@ -9,6 +9,7 @@
 // [x] eval: indexing into string literals
 // [x] fix incorrectly consuming keyboard inputs, preventing fallback-to-filtering, when
 //     selecting null selection in watch views
+// [ ] transient view timeout releasing
 //
 // [ ] fix selecting hover eval, then hover eval disappearing, causing
 //     busted focus, until a new hover eval is opened

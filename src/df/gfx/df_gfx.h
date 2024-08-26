@@ -93,12 +93,12 @@ typedef DF_VIEW_SETUP_FUNCTION_SIG(DF_ViewSetupFunctionType);
 #define DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(name) internal DF_VIEW_STRING_FROM_STATE_FUNCTION_SIG(DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(name))
 typedef DF_VIEW_STRING_FROM_STATE_FUNCTION_SIG(DF_ViewStringFromStateFunctionType);
 
-#define DF_VIEW_CMD_FUNCTION_SIG(name) void name(struct DF_Window *ws, struct DF_Panel *panel, struct DF_View *view, struct DF_CmdList *cmds)
+#define DF_VIEW_CMD_FUNCTION_SIG(name) void name(struct DF_Window *ws, struct DF_Panel *panel, struct DF_View *view, DF_CfgNode *cfg, String8 string, struct DF_CmdList *cmds)
 #define DF_VIEW_CMD_FUNCTION_NAME(name) df_view_cmds_##name
 #define DF_VIEW_CMD_FUNCTION_DEF(name) internal DF_VIEW_CMD_FUNCTION_SIG(DF_VIEW_CMD_FUNCTION_NAME(name))
 typedef DF_VIEW_CMD_FUNCTION_SIG(DF_ViewCmdFunctionType);
 
-#define DF_VIEW_UI_FUNCTION_SIG(name) void name(struct DF_Window *ws, struct DF_Panel *panel, struct DF_View *view, Rng2F32 rect)
+#define DF_VIEW_UI_FUNCTION_SIG(name) void name(struct DF_Window *ws, struct DF_Panel *panel, struct DF_View *view, DF_CfgNode *cfg, String8 string, Rng2F32 rect)
 #define DF_VIEW_UI_FUNCTION_NAME(name) df_view_ui_##name
 #define DF_VIEW_UI_FUNCTION_DEF(name) internal DF_VIEW_UI_FUNCTION_SIG(DF_VIEW_UI_FUNCTION_NAME(name))
 typedef DF_VIEW_UI_FUNCTION_SIG(DF_ViewUIFunctionType);
@@ -112,11 +112,10 @@ enum
   DF_ViewSpecFlag_ParameterizedByEntity      = (1<<0),
   DF_ViewSpecFlag_ProjectSpecific            = (1<<1),
   DF_ViewSpecFlag_CanSerialize               = (1<<2),
-  DF_ViewSpecFlag_CanSerializeFilePath       = (1<<3),
-  DF_ViewSpecFlag_CanFilter                  = (1<<4),
-  DF_ViewSpecFlag_FilterIsCode               = (1<<5),
-  DF_ViewSpecFlag_TypingAutomaticallyFilters = (1<<6),
-  DF_ViewSpecFlag_DisplayFilterInTitle       = (1<<7),
+  DF_ViewSpecFlag_CanFilter                  = (1<<3),
+  DF_ViewSpecFlag_FilterIsCode               = (1<<4),
+  DF_ViewSpecFlag_TypingAutomaticallyFilters = (1<<5),
+  DF_ViewSpecFlag_DisplayFilterInTitle       = (1<<6),
 };
 
 typedef struct DF_ViewSpecInfo DF_ViewSpecInfo;
@@ -172,12 +171,38 @@ struct DF_ArenaExt
   Arena *arena;
 };
 
+typedef struct DF_TransientViewNode DF_TransientViewNode;
+struct DF_TransientViewNode
+{
+  DF_TransientViewNode *next;
+  DF_TransientViewNode *prev;
+  DF_ExpandKey key;
+  DF_View *view;
+  U64 first_frame_index_touched;
+  U64 last_frame_index_touched;
+};
+
+typedef struct DF_TransientViewSlot DF_TransientViewSlot;
+struct DF_TransientViewSlot
+{
+  DF_TransientViewNode *first;
+  DF_TransientViewNode *last;
+};
+
 typedef struct DF_View DF_View;
 struct DF_View
 {
+  // rjf: allocation links (for iterating all views)
+  DF_View *alloc_next;
+  DF_View *alloc_prev;
+  
   // rjf: ownership links ('owners' can have lists of views)
-  DF_View *next;
-  DF_View *prev;
+  DF_View *order_next;
+  DF_View *order_prev;
+  
+  // rjf: transient view children
+  DF_View *first_transient;
+  DF_View *last_transient;
   
   // rjf: view specification info
   DF_ViewSpec *spec;
@@ -204,11 +229,18 @@ struct DF_View
   Arena *arena;
   DF_ArenaExt *first_arena_ext;
   DF_ArenaExt *last_arena_ext;
+  U64 transient_view_slots_count;
+  DF_TransientViewSlot *transient_view_slots;
+  DF_TransientViewNode *free_transient_view_node;
   void *user_data;
   
   // rjf: filter mode
   B32 is_filtering;
   F32 is_filtering_t;
+  
+  // rjf: configuration tree state
+  Arena *cfg_arena;
+  DF_CfgNode *cfg_root;
   
   // rjf: text query state
   TxtPt query_cursor;
@@ -303,7 +335,7 @@ enum
   DF_GfxViewRuleSpecInfoFlag_VizRowProd     = (1<<0),
   DF_GfxViewRuleSpecInfoFlag_LineStringize  = (1<<1),
   DF_GfxViewRuleSpecInfoFlag_RowUI          = (1<<2),
-  DF_GfxViewRuleSpecInfoFlag_BlockUI        = (1<<3),
+  DF_GfxViewRuleSpecInfoFlag_ViewUI         = (1<<3),
 };
 
 #define DF_GFX_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_SIG(name) void name(void)
@@ -318,14 +350,9 @@ enum
 #define DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_NAME(name) df_gfx_view_rule_row_ui__##name
 #define DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_DEF(name) DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_SIG(DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_NAME(name))
 
-#define DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_SIG(name) void name(struct DF_Window *ws, DF_ExpandKey key, E_Eval eval, struct DF_CfgNode *cfg, Vec2F32 dim)
-#define DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_NAME(name) df_gfx_view_rule_block_ui__##name
-#define DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(name) DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_SIG(DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_NAME(name))
-
 typedef DF_GFX_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_SIG(DF_GfxViewRuleVizRowProdHookFunctionType);
 typedef DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_SIG(DF_GfxViewRuleLineStringizeHookFunctionType);
 typedef DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_SIG(DF_GfxViewRuleRowUIFunctionType);
-typedef DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_SIG(DF_GfxViewRuleBlockUIFunctionType);
 
 typedef struct DF_GfxViewRuleSpecInfo DF_GfxViewRuleSpecInfo;
 struct DF_GfxViewRuleSpecInfo
@@ -335,8 +362,7 @@ struct DF_GfxViewRuleSpecInfo
   DF_GfxViewRuleVizRowProdHookFunctionType *viz_row_prod;
   DF_GfxViewRuleLineStringizeHookFunctionType *line_stringize;
   DF_GfxViewRuleRowUIFunctionType *row_ui;
-  DF_GfxViewRuleBlockUIFunctionType *block_ui;
-  String8 tab_view_spec_name;
+  String8 view_spec_name;
 };
 
 typedef struct DF_GfxViewRuleSpecInfoArray DF_GfxViewRuleSpecInfoArray;
@@ -754,6 +780,8 @@ struct DF_GfxState
   B32 last_window_queued_save;
   
   // rjf: view state
+  DF_View *first_view;
+  DF_View *last_view;
   DF_View *free_view;
   U64 free_view_count;
   U64 allocated_view_count;
@@ -808,6 +836,10 @@ read_only global DF_GfxViewRuleSpec df_g_nil_gfx_view_rule_spec =
 
 read_only global DF_View df_g_nil_view =
 {
+  &df_g_nil_view,
+  &df_g_nil_view,
+  &df_g_nil_view,
+  &df_g_nil_view,
   &df_g_nil_view,
   &df_g_nil_view,
   &df_g_nil_view_spec,
@@ -920,7 +952,6 @@ internal DF_ViewSpec *df_view_spec_from_cmd_param_slot_spec(DF_CmdParamSlot slot
 
 internal void df_register_gfx_view_rule_specs(DF_GfxViewRuleSpecInfoArray specs);
 internal DF_GfxViewRuleSpec *df_gfx_view_rule_spec_from_string(String8 string);
-internal DF_ViewSpec *df_tab_view_spec_from_gfx_view_rule_spec(DF_GfxViewRuleSpec *spec);
 
 ////////////////////////////////
 //~ rjf: View State Functions
@@ -933,6 +964,11 @@ internal void df_view_clear_user_state(DF_View *view);
 internal void *df_view_get_or_push_user_state(DF_View *view, U64 size);
 internal Arena *df_view_push_arena_ext(DF_View *view);
 #define df_view_user_state(view, type) (type *)df_view_get_or_push_user_state((view), sizeof(type))
+
+////////////////////////////////
+//~ rjf: Expand-Keyed Transient View Functions
+
+internal DF_View *df_transient_view_from_expand_key(DF_View *owner_view, DF_Window *window, DF_ViewSpec *spec, String8 query, DF_CfgNode *cfg_root, DF_ExpandKey key);
 
 ////////////////////////////////
 //~ rjf: View Rule Instance State Functions
