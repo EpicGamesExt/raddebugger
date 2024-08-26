@@ -456,14 +456,6 @@ struct DF_MemoryViewState
 ////////////////////////////////
 //~ rjf: Bitmap @view_types
 
-typedef struct DF_BitmapViewState DF_BitmapViewState;
-struct DF_BitmapViewState
-{
-  B32 initialized;
-  Vec2F32 view_center_pos;
-  F32 zoom;
-};
-
 typedef struct DF_BitmapBoxDrawData DF_BitmapBoxDrawData;
 struct DF_BitmapBoxDrawData
 {
@@ -473,6 +465,13 @@ struct DF_BitmapBoxDrawData
   B32 hovered;
   Vec2S32 mouse_px;
   F32 ui_per_bmp_px;
+};
+
+typedef struct DF_BitmapCanvasBoxDrawData DF_BitmapCanvasBoxDrawData;
+struct DF_BitmapCanvasBoxDrawData
+{
+  Vec2F32 view_center_pos;
+  F32 zoom;
 };
 
 ////////////////////////////////
@@ -600,9 +599,9 @@ internal void df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view,
 ////////////////////////////////
 //~ rjf: Bitmap Views
 
-internal Vec2F32 df_bitmap_screen_from_canvas_pos(DF_BitmapViewState *bvs, Rng2F32 rect, Vec2F32 cvs);
-internal Rng2F32 df_bitmap_screen_from_canvas_rect(DF_BitmapViewState *bvs, Rng2F32 rect, Rng2F32 cvs);
-internal Vec2F32 df_bitmap_canvas_from_screen_pos(DF_BitmapViewState *bvs, Rng2F32 rect, Vec2F32 scr);
-internal Rng2F32 df_bitmap_canvas_from_screen_rect(DF_BitmapViewState *bvs, Rng2F32 rect, Rng2F32 scr);
+internal Vec2F32 df_bitmap_screen_from_canvas_pos(Vec2F32 view_center_pos, F32 zoom, Rng2F32 rect, Vec2F32 cvs);
+internal Rng2F32 df_bitmap_screen_from_canvas_rect(Vec2F32 view_center_pos, F32 zoom, Rng2F32 rect, Rng2F32 cvs);
+internal Vec2F32 df_bitmap_canvas_from_screen_pos(Vec2F32 view_center_pos, F32 zoom, Rng2F32 rect, Vec2F32 scr);
+internal Rng2F32 df_bitmap_canvas_from_screen_rect(Vec2F32 view_center_pos, F32 zoom, Rng2F32 rect, Rng2F32 scr);
 
 #endif // DEBUG_FRONTEND_VIEWS_H

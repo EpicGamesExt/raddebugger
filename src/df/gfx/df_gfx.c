@@ -809,7 +809,7 @@ df_view_alloc(void)
 internal void
 df_view_release(DF_View *view)
 {
-  DLLPushBack_NPZ(&df_g_nil_view, df_gfx_state->first_view, df_gfx_state->last_view, view, alloc_next, alloc_prev);
+  DLLRemove_NPZ(&df_g_nil_view, df_gfx_state->first_view, df_gfx_state->last_view, view, alloc_next, alloc_prev);
   SLLStackPush_N(df_gfx_state->free_view, view, alloc_next);
   for(DF_View *tchild = view->first_transient, *next = 0; !df_view_is_nil(tchild); tchild = next)
   {
@@ -886,7 +886,7 @@ df_view_equip_spec(DF_Window *window, DF_View *view, DF_ViewSpec *spec, String8 
     }
     view->is_filtering = 0;
     view->is_filtering_t = 0;
-    view_setup(window, view, view->params_roots[view->params_gen%ArrayCount(view->params_roots)], str8(view->query_buffer, view->query_string_size));
+    view_setup(window, view, view->params_roots[view->params_read_gen%ArrayCount(view->params_roots)], str8(view->query_buffer, view->query_string_size));
   }
 }
 
@@ -918,6 +918,55 @@ df_view_push_arena_ext(DF_View *view)
   ext->arena = arena_alloc();
   SLLQueuePush(view->first_arena_ext, view->last_arena_ext, ext);
   return ext->arena;
+}
+
+//- rjf: param saving
+
+internal void
+df_store_param(DF_View *view, String8 key, String8 value)
+{
+  B32 new_copy = 0;
+  if(view->params_write_gen == view->params_read_gen)
+  {
+    view->params_write_gen += 1;
+    new_copy = 1;
+  }
+  Arena *new_params_arena = view->params_arenas[view->params_write_gen%ArrayCount(view->params_arenas)];
+  if(new_copy)
+  {
+    arena_clear(new_params_arena);
+    view->params_roots[view->params_write_gen%ArrayCount(view->params_arenas)] = md_tree_copy(new_params_arena, view->params_roots[view->params_read_gen%ArrayCount(view->params_arenas)]);
+  }
+  MD_Node *new_params_root = view->params_roots[view->params_write_gen%ArrayCount(view->params_arenas)];
+  MD_Node *key_node = md_child_from_string(new_params_root, key, 0);
+  if(md_node_is_nil(key_node))
+  {
+    String8 key_copy = push_str8_copy(new_params_arena, key);
+    key_node = md_push_node(new_params_arena, MD_NodeKind_Main, MD_NodeFlag_Identifier, key_copy, key_copy, 0);
+    md_node_push_child(new_params_root, key_node);
+  }
+  key_node->first = key_node->last = &md_nil_node;
+  String8 value_copy = push_str8_copy(new_params_arena, value);
+  MD_TokenizeResult value_tokenize = md_tokenize_from_text(new_params_arena, value_copy);
+  MD_ParseResult value_parse = md_parse_from_text_tokens(new_params_arena, str8_zero(), value_copy, value_tokenize.tokens);
+  for(MD_EachNode(child, value_parse.root->first))
+  {
+    child->parent = key_node;
+  }
+  key_node->first = value_parse.root->first;
+  key_node->last = value_parse.root->last;
+}
+
+internal void
+df_store_paramf(DF_View *view, String8 key, char *fmt, ...)
+{
+  Temp scratch = scratch_begin(0, 0);
+  va_list args;
+  va_start(args, fmt);
+  String8 string = push_str8fv(scratch.arena, fmt, args);
+  df_store_param(view, key, string);
+  va_end(args);
+  scratch_end(scratch);
 }
 
 ////////////////////////////////
@@ -3449,7 +3498,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
       {
         df_push_interact_regs();
         DF_ViewCmdFunctionType *do_view_cmds_function = view->spec->info.cmd_hook;
-        do_view_cmds_function(ws, panel, view, view->params_roots[view->params_gen%ArrayCount(view->params_roots)], str8(view->query_buffer, view->query_string_size), cmds);
+        do_view_cmds_function(ws, panel, view, view->params_roots[view->params_read_gen%ArrayCount(view->params_roots)], str8(view->query_buffer, view->query_string_size), cmds);
         DF_InteractRegs *view_regs = df_pop_interact_regs();
         if(panel == ws->focused_panel)
         {
@@ -3675,7 +3724,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
               {
                 DF_ViewSpec *view_spec = view->spec;
                 DF_ViewUIFunctionType *build_view_ui_function = view_spec->info.ui_hook;
-                build_view_ui_function(ws, &df_g_nil_panel, view, view->params_roots[view->params_gen%ArrayCount(view->params_roots)], str8(view->query_buffer, view->query_string_size), view_preview_container->rect);
+                build_view_ui_function(ws, &df_g_nil_panel, view, view->params_roots[view->params_read_gen%ArrayCount(view->params_roots)], str8(view->query_buffer, view->query_string_size), view_preview_container->rect);
               }
             }
           }
@@ -6132,7 +6181,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
       {
         DF_ViewSpec *view_spec = view->spec;
         DF_ViewUIFunctionType *build_view_ui_function = view_spec->info.ui_hook;
-        build_view_ui_function(ws, &df_g_nil_panel, view, view->params_roots[view->params_gen%ArrayCount(view->params_roots)], str8(view->query_buffer, view->query_string_size), query_container_content_rect);
+        build_view_ui_function(ws, &df_g_nil_panel, view, view->params_roots[view->params_read_gen%ArrayCount(view->params_roots)], str8(view->query_buffer, view->query_string_size), query_container_content_rect);
       }
       
       //- rjf: query submission
@@ -7289,7 +7338,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           {
             DF_View *view = df_selected_tab_from_panel(panel);
             DF_ViewUIFunctionType *build_view_ui_function = view->spec->info.ui_hook;
-            build_view_ui_function(ws, panel, view, view->params_roots[view->params_gen%ArrayCount(view->params_roots)], str8(view->query_buffer, view->query_string_size), content_rect);
+            build_view_ui_function(ws, panel, view, view->params_roots[view->params_read_gen%ArrayCount(view->params_roots)], str8(view->query_buffer, view->query_string_size), content_rect);
           }
           
           //- rjf: fill with per-view states, after the view has a chance to run
@@ -9453,7 +9502,7 @@ df_cfg_strings_from_gfx(Arena *arena, String8 root_path, DF_CfgSrc source)
                   str8_lit("selected"),
                 };
                 MD_NodeRec rec = {0};
-                MD_Node *params_root = view->params_roots[view->params_gen%ArrayCount(view->params_roots)];
+                MD_Node *params_root = view->params_roots[view->params_read_gen%ArrayCount(view->params_roots)];
                 for(MD_Node *n = params_root;
                     !md_node_is_nil(n);
                     n = rec.next)
@@ -14116,6 +14165,17 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
       if(diff >= 0.01f)
       {
         df_gfx_request_frame();
+      }
+    }
+  }
+  
+  //- rjf: commit params changes for all views
+  {
+    for(DF_View *v = df_gfx_state->first_view; !df_view_is_nil(v); v = v->alloc_next)
+    {
+      if(v->params_write_gen == v->params_read_gen+1)
+      {
+        v->params_read_gen += 1;
       }
     }
   }

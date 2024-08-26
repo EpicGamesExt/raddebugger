@@ -2773,7 +2773,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
               //- rjf: build
               UI_PermissionFlags(UI_PermissionFlag_Clicks|UI_PermissionFlag_ScrollX)
               {
-                canvas_view_spec->info.ui_hook(ws, &df_g_nil_panel, canvas_view, canvas_view->params_roots[canvas_view->params_gen%ArrayCount(canvas_view->params_roots)], str8(canvas_view->query_buffer, canvas_view->query_string_size), canvas_rect);
+                canvas_view_spec->info.ui_hook(ws, &df_g_nil_panel, canvas_view, canvas_view->params_roots[canvas_view->params_read_gen%ArrayCount(canvas_view->params_roots)], str8(canvas_view->query_buffer, canvas_view->query_string_size), canvas_rect);
               }
               
               //- rjf: pop interaction registers
@@ -3284,38 +3284,38 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
 //~ rjf: Bitmap Views
 
 internal Vec2F32
-df_bitmap_screen_from_canvas_pos(DF_BitmapViewState *bvs, Rng2F32 rect, Vec2F32 cvs)
+df_bitmap_screen_from_canvas_pos(Vec2F32 view_center_pos, F32 zoom, Rng2F32 rect, Vec2F32 cvs)
 {
   Vec2F32 scr =
   {
-    (rect.x0+rect.x1)/2 + (cvs.x - bvs->view_center_pos.x) * bvs->zoom,
-    (rect.y0+rect.y1)/2 + (cvs.y - bvs->view_center_pos.y) * bvs->zoom,
+    (rect.x0+rect.x1)/2 + (cvs.x - view_center_pos.x) * zoom,
+    (rect.y0+rect.y1)/2 + (cvs.y - view_center_pos.y) * zoom,
   };
   return scr;
 }
 
 internal Rng2F32
-df_bitmap_screen_from_canvas_rect(DF_BitmapViewState *bvs, Rng2F32 rect, Rng2F32 cvs)
+df_bitmap_screen_from_canvas_rect(Vec2F32 view_center_pos, F32 zoom, Rng2F32 rect, Rng2F32 cvs)
 {
-  Rng2F32 scr = r2f32(df_bitmap_screen_from_canvas_pos(bvs, rect, cvs.p0), df_bitmap_screen_from_canvas_pos(bvs, rect, cvs.p1));
+  Rng2F32 scr = r2f32(df_bitmap_screen_from_canvas_pos(view_center_pos, zoom, rect, cvs.p0), df_bitmap_screen_from_canvas_pos(view_center_pos, zoom, rect, cvs.p1));
   return scr;
 }
 
 internal Vec2F32
-df_bitmap_canvas_from_screen_pos(DF_BitmapViewState *bvs, Rng2F32 rect, Vec2F32 scr)
+df_bitmap_canvas_from_screen_pos(Vec2F32 view_center_pos, F32 zoom, Rng2F32 rect, Vec2F32 scr)
 {
   Vec2F32 cvs =
   {
-    (scr.x - (rect.x0+rect.x1)/2) / bvs->zoom + bvs->view_center_pos.x,
-    (scr.y - (rect.y0+rect.y1)/2) / bvs->zoom + bvs->view_center_pos.y,
+    (scr.x - (rect.x0+rect.x1)/2) / zoom + view_center_pos.x,
+    (scr.y - (rect.y0+rect.y1)/2) / zoom + view_center_pos.y,
   };
   return cvs;
 }
 
 internal Rng2F32
-df_bitmap_canvas_from_screen_rect(DF_BitmapViewState *bvs, Rng2F32 rect, Rng2F32 scr)
+df_bitmap_canvas_from_screen_rect(Vec2F32 view_center_pos, F32 zoom, Rng2F32 rect, Rng2F32 scr)
 {
-  Rng2F32 cvs = r2f32(df_bitmap_canvas_from_screen_pos(bvs, rect, scr.p0), df_bitmap_canvas_from_screen_pos(bvs, rect, scr.p1));
+  Rng2F32 cvs = r2f32(df_bitmap_canvas_from_screen_pos(view_center_pos, zoom, rect, scr.p0), df_bitmap_canvas_from_screen_pos(view_center_pos, zoom, rect, scr.p1));
   return cvs;
 }
 
@@ -8043,9 +8043,9 @@ internal UI_BOX_CUSTOM_DRAW(df_bitmap_box_draw)
 
 internal UI_BOX_CUSTOM_DRAW(df_bitmap_view_canvas_box_draw)
 {
-  DF_BitmapViewState *bvs = (DF_BitmapViewState *)user_data;
+  DF_BitmapCanvasBoxDrawData *draw_data = (DF_BitmapCanvasBoxDrawData *)user_data;
   Rng2F32 rect_scrn = box->rect;
-  Rng2F32 rect_cvs = df_bitmap_canvas_from_screen_rect(bvs, rect_scrn, rect_scrn);
+  Rng2F32 rect_cvs = df_bitmap_canvas_from_screen_rect(draw_data->view_center_pos, draw_data->zoom, rect_scrn, rect_scrn);
   F32 grid_cell_size_cvs = box->font_size*10.f;
   F32 grid_line_thickness_px = Max(2.f, box->font_size*0.1f);
   Vec4F32 grid_line_color = df_rgba_from_theme_color(DF_ThemeColor_TextWeak);
@@ -8057,7 +8057,7 @@ internal UI_BOX_CUSTOM_DRAW(df_bitmap_view_canvas_box_draw)
     {
       Vec2F32 p_cvs = {0};
       p_cvs.v[axis] = v;
-      Vec2F32 p_scr = df_bitmap_screen_from_canvas_pos(bvs, rect_scrn, p_cvs);
+      Vec2F32 p_scr = df_bitmap_screen_from_canvas_pos(draw_data->view_center_pos, draw_data->zoom, rect_scrn, p_cvs);
       Rng2F32 rect = {0};
       rect.p0.v[axis] = p_scr.v[axis] - grid_line_thickness_px/2;
       rect.p1.v[axis] = p_scr.v[axis] + grid_line_thickness_px/2;
@@ -8068,22 +8068,27 @@ internal UI_BOX_CUSTOM_DRAW(df_bitmap_view_canvas_box_draw)
   }
 }
 
-DF_VIEW_SETUP_FUNCTION_DEF(Bitmap)
-{
-  DF_BitmapViewState *bvs = df_view_user_state(view, DF_BitmapViewState);
-  bvs->zoom = 1.f;
-}
-
-DF_VIEW_CMD_FUNCTION_DEF(Bitmap)
-{
-}
-
+DF_VIEW_SETUP_FUNCTION_DEF(Bitmap) {}
+DF_VIEW_CMD_FUNCTION_DEF(Bitmap) {}
 DF_VIEW_UI_FUNCTION_DEF(Bitmap)
 {
-  DF_BitmapViewState *bvs = df_view_user_state(view, DF_BitmapViewState);
   Temp scratch = scratch_begin(0, 0);
   HS_Scope *hs_scope = hs_scope_open();
   TEX_Scope *tex_scope = tex_scope_open();
+  
+  //////////////////////////////
+  //- rjf: unpack params
+  //
+  F32 zoom = df_value_from_params_key(params, str8_lit("zoom")).f32;
+  Vec2F32 view_center_pos =
+  {
+    df_value_from_params_key(params, str8_lit("x")).f32,
+    df_value_from_params_key(params, str8_lit("y")).f32,
+  };
+  if(zoom == 0)
+  {
+    zoom = 1.f;
+  }
   
   //////////////////////////////
   //- rjf: evaluate expression
@@ -8112,8 +8117,11 @@ DF_VIEW_UI_FUNCTION_DEF(Bitmap)
   Rng2F32 canvas_rect = r2f32p(0, 0, canvas_dim.x, canvas_dim.y);
   UI_Rect(canvas_rect)
   {
+    DF_BitmapCanvasBoxDrawData *draw_data = push_array(ui_build_arena(), DF_BitmapCanvasBoxDrawData, 1);
+    draw_data->view_center_pos = view_center_pos;
+    draw_data->zoom = zoom;
     canvas_box = ui_build_box_from_stringf(UI_BoxFlag_Clip|UI_BoxFlag_Clickable|UI_BoxFlag_Scroll, "bmp_canvas_%p", view);
-    ui_box_equip_custom_draw(canvas_box, df_bitmap_view_canvas_box_draw, bvs);
+    ui_box_equip_custom_draw(canvas_box, df_bitmap_view_canvas_box_draw, draw_data);
   }
   
   //////////////////////////////
@@ -8127,30 +8135,30 @@ DF_VIEW_UI_FUNCTION_DEF(Bitmap)
       {
         DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
         df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FocusPanel));
-        ui_store_drag_struct(&bvs->view_center_pos);
+        ui_store_drag_struct(&view_center_pos);
       }
       Vec2F32 start_view_center_pos = *ui_get_drag_struct(Vec2F32);
       Vec2F32 drag_delta_scr = ui_drag_delta();
-      Vec2F32 drag_delta_cvs = scale_2f32(drag_delta_scr, 1.f/bvs->zoom);
+      Vec2F32 drag_delta_cvs = scale_2f32(drag_delta_scr, 1.f/zoom);
       Vec2F32 new_view_center_pos = sub_2f32(start_view_center_pos, drag_delta_cvs);
-      bvs->view_center_pos = new_view_center_pos;
+      view_center_pos = new_view_center_pos;
     }
     if(canvas_sig.scroll.y != 0)
     {
-      F32 new_zoom = bvs->zoom - bvs->zoom*canvas_sig.scroll.y/10.f;
+      F32 new_zoom = zoom - zoom*canvas_sig.scroll.y/10.f;
       new_zoom = Clamp(1.f/256.f, new_zoom, 256.f);
       Vec2F32 mouse_scr_pre = sub_2f32(ui_mouse(), rect.p0);
-      Vec2F32 mouse_cvs = df_bitmap_canvas_from_screen_pos(bvs, canvas_rect, mouse_scr_pre);
-      bvs->zoom = new_zoom;
-      Vec2F32 mouse_scr_pst = df_bitmap_screen_from_canvas_pos(bvs, canvas_rect, mouse_cvs);
+      Vec2F32 mouse_cvs = df_bitmap_canvas_from_screen_pos(view_center_pos, zoom, canvas_rect, mouse_scr_pre);
+      zoom = new_zoom;
+      Vec2F32 mouse_scr_pst = df_bitmap_screen_from_canvas_pos(view_center_pos, zoom, canvas_rect, mouse_cvs);
       Vec2F32 drift_scr = sub_2f32(mouse_scr_pst, mouse_scr_pre);
-      bvs->view_center_pos = add_2f32(bvs->view_center_pos, scale_2f32(drift_scr, 1.f/new_zoom));
+      view_center_pos = add_2f32(view_center_pos, scale_2f32(drift_scr, 1.f/new_zoom));
     }
     if(ui_double_clicked(canvas_sig))
     {
       ui_kill_action();
-      MemoryZeroStruct(&bvs->view_center_pos);
-      bvs->zoom = 1.f;
+      MemoryZeroStruct(&view_center_pos);
+      zoom = 1.f;
     }
   }
   
@@ -8158,7 +8166,7 @@ DF_VIEW_UI_FUNCTION_DEF(Bitmap)
   //- rjf: calculate image coordinates
   //
   Rng2F32 img_rect_cvs = r2f32p(-topology.dim.x/2, -topology.dim.y/2, +topology.dim.x/2, +topology.dim.y/2);
-  Rng2F32 img_rect_scr = df_bitmap_screen_from_canvas_rect(bvs, canvas_rect, img_rect_cvs);
+  Rng2F32 img_rect_scr = df_bitmap_screen_from_canvas_rect(view_center_pos, zoom, canvas_rect, img_rect_cvs);
   
   //////////////////////////////
   //- rjf: image-region canvas interaction
@@ -8167,7 +8175,7 @@ DF_VIEW_UI_FUNCTION_DEF(Bitmap)
   if(ui_hovering(canvas_sig) && !ui_dragging(canvas_sig))
   {
     Vec2F32 mouse_scr = sub_2f32(ui_mouse(), rect.p0);
-    Vec2F32 mouse_cvs = df_bitmap_canvas_from_screen_pos(bvs, canvas_rect, mouse_scr);
+    Vec2F32 mouse_cvs = df_bitmap_canvas_from_screen_pos(view_center_pos, zoom, canvas_rect, mouse_scr);
     if(contains_2f32(img_rect_cvs, mouse_cvs))
     {
       mouse_bmp = v2s32((S32)(mouse_cvs.x-img_rect_cvs.x0), (S32)(mouse_cvs.y-img_rect_cvs.y0));
@@ -8208,7 +8216,7 @@ DF_VIEW_UI_FUNCTION_DEF(Bitmap)
     if(0 <= mouse_bmp.x && mouse_bmp.x < dim.x &&
        0 <= mouse_bmp.x && mouse_bmp.x < dim.y)
     {
-      F32 pixel_size_scr = 1.f*bvs->zoom;
+      F32 pixel_size_scr = 1.f*zoom;
       Rng2F32 indicator_rect_scr = r2f32p(img_rect_scr.x0 + mouse_bmp.x*pixel_size_scr,
                                           img_rect_scr.y0 + mouse_bmp.y*pixel_size_scr,
                                           img_rect_scr.x0 + (mouse_bmp.x+1)*pixel_size_scr,
@@ -8223,6 +8231,13 @@ DF_VIEW_UI_FUNCTION_DEF(Bitmap)
       ui_image(texture, R_Tex2DSampleKind_Nearest, r2f32p(0, 0, (F32)dim.x, (F32)dim.y), v4f32(1, 1, 1, 1), 0, str8_lit("bmp_image"));
     }
   }
+  
+  //////////////////////////////
+  //- rjf: store params
+  //
+  df_store_param_f32(view, str8_lit("zoom"), zoom);
+  df_store_param_f32(view, str8_lit("x"), view_center_pos.x);
+  df_store_param_f32(view, str8_lit("y"), view_center_pos.y);
   
   hs_scope_close(hs_scope);
   tex_scope_close(tex_scope);

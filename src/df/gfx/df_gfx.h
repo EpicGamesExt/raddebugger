@@ -242,7 +242,8 @@ struct DF_View
   // rjf: params tree state
   Arena *params_arenas[2];
   MD_Node *params_roots[2];
-  U64 params_gen;
+  U64 params_write_gen;
+  U64 params_read_gen;
   
   // rjf: text query state
   TxtPt query_cursor;
@@ -969,6 +970,11 @@ internal void df_view_equip_loading_info(DF_View *view, B32 is_loading, U64 prog
 internal void *df_view_get_or_push_user_state(DF_View *view, U64 size);
 internal Arena *df_view_push_arena_ext(DF_View *view);
 #define df_view_user_state(view, type) (type *)df_view_get_or_push_user_state((view), sizeof(type))
+
+//- rjf: param saving
+internal void df_store_param(DF_View *view, String8 key, String8 value);
+internal void df_store_paramf(DF_View *view, String8 key, char *fmt, ...);
+#define df_store_param_f32(view, key, f32) df_store_paramf((view), (key), "%ff", (f32))
 
 ////////////////////////////////
 //~ rjf: Expand-Keyed Transient View Functions

@@ -1707,7 +1707,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
             if(f_pos < token_string.size)
             {
               atom = e_push_expr(arena, E_ExprKind_LeafF32, token_string.str);
-              atom->value.f32 = (F32)val;
+              atom->value.f32 = val;
             }
             
             // rjf: no f => f64
