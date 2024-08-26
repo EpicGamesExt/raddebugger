@@ -2044,18 +2044,10 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
           }
           if(row->expand_ui_rule_spec != &df_g_nil_gfx_view_rule_spec && row->expand_ui_rule_spec != 0)
           {
-            DF_CfgNode *cfg = df_cfg_tree_copy(scratch.arena, row->expand_ui_rule_node);
-            DF_CfgNode *cfg_root = push_array(scratch.arena, DF_CfgNode, 1);
-            cfg_root->first = cfg_root->last = cfg;
-            cfg_root->next = cfg_root->parent = &df_g_nil_cfg_node;
-            if(cfg != &df_g_nil_cfg_node)
-            {
-              cfg->parent = cfg_root;
-            }
             DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
             p.string    = e_string_from_expr(scratch.arena, row->expr);
             p.view_spec = df_view_spec_from_string(row->expand_ui_rule_spec->info.view_spec_name);
-            p.cfg_node  = cfg_root;
+            p.cfg_node  = row->expand_ui_rule_node;
             df_cmd_params_mark_slot(&p, DF_CmdParamSlot_String);
             df_cmd_params_mark_slot(&p, DF_CmdParamSlot_ViewSpec);
             df_cmd_params_mark_slot(&p, DF_CmdParamSlot_CfgNode);
@@ -2753,18 +2745,10 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
               if(ui_clicked(sig))
               {
                 DF_ViewSpec *canvas_view_spec = df_view_spec_from_string(row->expand_ui_rule_spec->info.view_spec_name);
-                DF_CfgNode *cfg = df_cfg_tree_copy(scratch.arena, row->expand_ui_rule_node);
-                DF_CfgNode *cfg_root = push_array(scratch.arena, DF_CfgNode, 1);
-                cfg_root->first = cfg_root->last = cfg;
-                cfg_root->next = cfg_root->parent = &df_g_nil_cfg_node;
-                if(cfg != &df_g_nil_cfg_node)
-                {
-                  cfg->parent = cfg_root;
-                }
                 DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
                 p.string    = e_string_from_expr(scratch.arena, row->expr);
                 p.view_spec = canvas_view_spec;
-                p.cfg_node  = cfg_root;
+                p.cfg_node  = row->expand_ui_rule_node;
                 df_cmd_params_mark_slot(&p, DF_CmdParamSlot_String);
                 df_cmd_params_mark_slot(&p, DF_CmdParamSlot_ViewSpec);
                 df_cmd_params_mark_slot(&p, DF_CmdParamSlot_CfgNode);
@@ -3340,7 +3324,6 @@ df_bitmap_canvas_from_screen_rect(DF_BitmapViewState *bvs, Rng2F32 rect, Rng2F32
 //~ rjf: Null @view_hook_impl
 
 DF_VIEW_SETUP_FUNCTION_DEF(Null) {}
-DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Null) { return str8_lit(""); }
 DF_VIEW_CMD_FUNCTION_DEF(Null) {}
 DF_VIEW_UI_FUNCTION_DEF(Null) {}
 
@@ -3348,7 +3331,6 @@ DF_VIEW_UI_FUNCTION_DEF(Null) {}
 //~ rjf: Empty @view_hook_impl
 
 DF_VIEW_SETUP_FUNCTION_DEF(Empty) {}
-DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Empty) { return str8_lit(""); }
 DF_VIEW_CMD_FUNCTION_DEF(Empty) {}
 DF_VIEW_UI_FUNCTION_DEF(Empty)
 {
@@ -3377,7 +3359,6 @@ DF_VIEW_UI_FUNCTION_DEF(Empty)
 //~ rjf: GettingStarted @view_hook_impl
 
 DF_VIEW_SETUP_FUNCTION_DEF(GettingStarted) {}
-DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(GettingStarted) { return str8_lit(""); }
 DF_VIEW_CMD_FUNCTION_DEF(GettingStarted) {}
 DF_VIEW_UI_FUNCTION_DEF(GettingStarted)
 {
@@ -3517,7 +3498,6 @@ DF_VIEW_UI_FUNCTION_DEF(GettingStarted)
 //~ rjf: Commands @view_hook_impl
 
 DF_VIEW_SETUP_FUNCTION_DEF(Commands) {}
-DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Commands) { return str8_lit(""); }
 DF_VIEW_CMD_FUNCTION_DEF(Commands) {}
 DF_VIEW_UI_FUNCTION_DEF(Commands)
 {
@@ -3686,11 +3666,6 @@ DF_VIEW_UI_FUNCTION_DEF(Commands)
 
 DF_VIEW_SETUP_FUNCTION_DEF(FileSystem)
 {
-}
-
-DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(FileSystem)
-{
-  return str8_lit("");
 }
 
 DF_VIEW_CMD_FUNCTION_DEF(FileSystem)
@@ -4136,11 +4111,6 @@ DF_VIEW_SETUP_FUNCTION_DEF(SystemProcesses)
 {
 }
 
-DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(SystemProcesses)
-{
-  return str8_lit("");
-}
-
 DF_VIEW_CMD_FUNCTION_DEF(SystemProcesses)
 {
 }
@@ -4311,11 +4281,6 @@ DF_VIEW_SETUP_FUNCTION_DEF(EntityLister)
 {
 }
 
-DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(EntityLister)
-{
-  return str8_lit("");
-}
-
 DF_VIEW_CMD_FUNCTION_DEF(EntityLister)
 {
 }
@@ -4457,11 +4422,6 @@ DF_VIEW_UI_FUNCTION_DEF(EntityLister)
 
 DF_VIEW_SETUP_FUNCTION_DEF(SymbolLister)
 {
-}
-
-DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(SymbolLister)
-{
-  return str8_lit("");
 }
 
 DF_VIEW_CMD_FUNCTION_DEF(SymbolLister)
@@ -4660,12 +4620,6 @@ DF_VIEW_UI_FUNCTION_DEF(SymbolLister)
 DF_VIEW_SETUP_FUNCTION_DEF(Target)
 {
   DF_TargetViewState *tv = df_view_user_state(view, DF_TargetViewState);
-}
-
-DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Target)
-{
-  DF_TargetViewState *tv = df_view_user_state(view, DF_TargetViewState);
-  return str8_lit("");
 }
 
 DF_VIEW_CMD_FUNCTION_DEF(Target)
@@ -4985,11 +4939,6 @@ DF_VIEW_SETUP_FUNCTION_DEF(Targets)
 {
 }
 
-DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Targets)
-{
-  return str8_lit("");
-}
-
 DF_VIEW_CMD_FUNCTION_DEF(Targets)
 {
 }
@@ -5162,12 +5111,6 @@ DF_VIEW_SETUP_FUNCTION_DEF(FilePathMap)
     fpms->src_column_pct = 0.5f;
     fpms->dst_column_pct = 0.5f;
   }
-}
-
-DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(FilePathMap)
-{
-  DF_FilePathMapViewState *fpms = df_view_user_state(view, DF_FilePathMapViewState);
-  return str8_lit("");
 }
 
 DF_VIEW_CMD_FUNCTION_DEF(FilePathMap)
@@ -5510,12 +5453,6 @@ DF_VIEW_SETUP_FUNCTION_DEF(AutoViewRules)
   }
 }
 
-DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(AutoViewRules)
-{
-  DF_AutoViewRulesViewState *avrs = df_view_user_state(view, DF_AutoViewRulesViewState);
-  return str8_lit("");
-}
-
 DF_VIEW_CMD_FUNCTION_DEF(AutoViewRules)
 {
   DF_AutoViewRulesViewState *avrs = df_view_user_state(view, DF_AutoViewRulesViewState);
@@ -5803,7 +5740,6 @@ DF_VIEW_SETUP_FUNCTION_DEF(Breakpoints)
   df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Member, 0.10f, .string = str8_lit("Enabled"), .view_rule = str8_lit("checkbox"));
   df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Member, 0.10f, .string = str8_lit("Hit Count"));
 }
-DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Breakpoints) {return str8_zero();}
 DF_VIEW_CMD_FUNCTION_DEF(Breakpoints)
 {
   DF_WatchViewState *ewv = df_view_user_state(view, DF_WatchViewState);
@@ -5827,7 +5763,6 @@ DF_VIEW_SETUP_FUNCTION_DEF(WatchPins)
   df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Member, 0.5f, .string = str8_lit("Label"), .dequote_string = 1, .is_non_code = 1);
   df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Member, 0.5f, .string = str8_lit("Location"), .dequote_string = 1, .is_non_code = 1);
 }
-DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(WatchPins) {return str8_zero();}
 DF_VIEW_CMD_FUNCTION_DEF(WatchPins)
 {
   DF_WatchViewState *ewv = df_view_user_state(view, DF_WatchViewState);
@@ -5845,7 +5780,6 @@ DF_VIEW_UI_FUNCTION_DEF(WatchPins)
 //~ rjf: Scheduler @view_hook_impl
 
 DF_VIEW_SETUP_FUNCTION_DEF(Scheduler) {}
-DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Scheduler) {return str8_lit("");}
 DF_VIEW_CMD_FUNCTION_DEF(Scheduler) {}
 DF_VIEW_UI_FUNCTION_DEF(Scheduler)
 {
@@ -6089,7 +6023,6 @@ DF_VIEW_SETUP_FUNCTION_DEF(CallStack)
   df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Value,  0.7f);
   df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Module, 0.25f, .is_non_code = 1);
 }
-DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(CallStack) {return str8_zero();}
 DF_VIEW_CMD_FUNCTION_DEF(CallStack){}
 DF_VIEW_UI_FUNCTION_DEF(CallStack)
 {
@@ -6114,8 +6047,6 @@ DF_VIEW_SETUP_FUNCTION_DEF(Modules)
     mv->dbg_col_pct   = 0.50f;
   }
 }
-
-DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Modules) {return str8_lit("");}
 
 DF_VIEW_CMD_FUNCTION_DEF(Modules)
 {
@@ -6438,7 +6369,6 @@ DF_VIEW_SETUP_FUNCTION_DEF(Watch)
   df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Type,      0.15f);
   df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_ViewRule,  0.30f);
 }
-DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Watch) {return str8_zero();}
 DF_VIEW_CMD_FUNCTION_DEF(Watch)
 {
   DF_WatchViewState *ewv = df_view_user_state(view, DF_WatchViewState);
@@ -6464,7 +6394,6 @@ DF_VIEW_SETUP_FUNCTION_DEF(Locals)
   df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Type,      0.15f);
   df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_ViewRule,  0.30f);
 }
-DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Locals) { return str8_zero(); }
 DF_VIEW_CMD_FUNCTION_DEF(Locals) {}
 DF_VIEW_UI_FUNCTION_DEF(Locals)
 {
@@ -6486,7 +6415,6 @@ DF_VIEW_SETUP_FUNCTION_DEF(Registers)
   df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Type,      0.15f);
   df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_ViewRule,  0.30f);
 }
-DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Registers) { return str8_zero(); }
 DF_VIEW_CMD_FUNCTION_DEF(Registers) {}
 DF_VIEW_UI_FUNCTION_DEF(Registers)
 {
@@ -6508,7 +6436,6 @@ DF_VIEW_SETUP_FUNCTION_DEF(Globals)
   df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Type,      0.15f);
   df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_ViewRule,  0.30f);
 }
-DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Globals) { return str8_zero(); }
 DF_VIEW_CMD_FUNCTION_DEF(Globals) {}
 DF_VIEW_UI_FUNCTION_DEF(Globals)
 {
@@ -6530,7 +6457,6 @@ DF_VIEW_SETUP_FUNCTION_DEF(ThreadLocals)
   df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Type,      0.15f);
   df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_ViewRule,  0.30f);
 }
-DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(ThreadLocals) { return str8_zero(); }
 DF_VIEW_CMD_FUNCTION_DEF(ThreadLocals) {}
 DF_VIEW_UI_FUNCTION_DEF(ThreadLocals)
 {
@@ -6552,7 +6478,6 @@ DF_VIEW_SETUP_FUNCTION_DEF(Types)
   df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Type,      0.15f);
   df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_ViewRule,  0.30f);
 }
-DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Types) { return str8_zero(); }
 DF_VIEW_CMD_FUNCTION_DEF(Types) {}
 DF_VIEW_UI_FUNCTION_DEF(Types)
 {
@@ -6573,7 +6498,6 @@ DF_VIEW_SETUP_FUNCTION_DEF(Procedures)
   df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Value,     0.6f);
   df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_ViewRule,  0.2f);
 }
-DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Procedures) { return str8_zero(); }
 DF_VIEW_CMD_FUNCTION_DEF(Procedures) {}
 DF_VIEW_UI_FUNCTION_DEF(Procedures)
 {
@@ -6591,12 +6515,7 @@ DF_VIEW_SETUP_FUNCTION_DEF(PendingFile)
   DF_PendingFileViewState *pves = df_view_user_state(view, DF_PendingFileViewState);
   pves->deferred_cmd_arena = df_view_push_arena_ext(view);
   pves->complete_cfg_arena = df_view_push_arena_ext(view);
-  pves->complete_cfg_root = df_cfg_tree_copy(pves->complete_cfg_arena, cfg_root);
-}
-
-DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(PendingFile)
-{
-  return str8_lit("");
+  pves->complete_cfg_root = df_cfg_tree_copy(pves->complete_cfg_arena, cfg);
 }
 
 DF_VIEW_CMD_FUNCTION_DEF(PendingFile)
@@ -6696,7 +6615,7 @@ DF_VIEW_SETUP_FUNCTION_DEF(Code)
   df_code_view_init(cv, view);
   
   // rjf: deserialize cursor
-  DF_CfgNode *cursor_cfg = df_cfg_node_child_from_string(cfg_root, str8_lit("cursor"), StringMatchFlag_CaseInsensitive);
+  DF_CfgNode *cursor_cfg = df_cfg_node_child_from_string(cfg, str8_lit("cursor"), StringMatchFlag_CaseInsensitive);
   if(cursor_cfg != &df_g_nil_cfg_node)
   {
     TxtPt cursor = txt_pt(1, 1);
@@ -6713,12 +6632,6 @@ DF_VIEW_SETUP_FUNCTION_DEF(Code)
   view->loading_t = view->loading_t_target = 1.f;
 }
 
-DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Code)
-{
-  String8 string = push_str8f(arena, " cursor:%I64d:%I64d", view->cursor.line, view->cursor.column);
-  return string;
-}
-
 DF_VIEW_CMD_FUNCTION_DEF(Code)
 {
   DF_CodeViewState *cv = df_view_user_state(view, DF_CodeViewState);
@@ -6726,9 +6639,9 @@ DF_VIEW_CMD_FUNCTION_DEF(Code)
   HS_Scope *hs_scope = hs_scope_open();
   TXT_Scope *txt_scope = txt_scope_open();
   E_Eval eval = e_eval_from_string(scratch.arena, string);
-  Rng1U64 range = df_range_from_eval_cfg(eval, &df_g_nil_cfg_node);
+  Rng1U64 range = df_range_from_eval_cfg(eval, cfg);
   df_interact_regs()->text_key = df_key_from_eval_space_range(eval.space, range, 1);
-  df_interact_regs()->lang_kind = df_lang_kind_from_eval_cfg(eval, &df_g_nil_cfg_node);
+  df_interact_regs()->lang_kind = df_lang_kind_from_eval_cfg(eval, cfg);
   U128 hash = {0};
   TXT_TextInfo info = txt_text_info_from_key_lang(txt_scope, df_interact_regs()->text_key, df_interact_regs()->lang_kind, &hash);
   String8 data = hs_data_from_hash(hs_scope, hash);
@@ -6799,9 +6712,9 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   //
   String8 path = df_file_path_from_eval_string(scratch.arena, string);
   E_Eval eval = e_eval_from_string(scratch.arena, string);
-  Rng1U64 range = df_range_from_eval_cfg(eval, &df_g_nil_cfg_node);
+  Rng1U64 range = df_range_from_eval_cfg(eval, cfg);
   df_interact_regs()->text_key = df_key_from_eval_space_range(eval.space, range, 1);
-  df_interact_regs()->lang_kind = df_lang_kind_from_eval_cfg(eval, &df_g_nil_cfg_node);
+  df_interact_regs()->lang_kind = df_lang_kind_from_eval_cfg(eval, cfg);
   U128 hash = {0};
   TXT_TextInfo info = txt_text_info_from_key_lang(txt_scope, df_interact_regs()->text_key, df_interact_regs()->lang_kind, &hash);
   String8 data = hs_data_from_hash(hs_scope, hash);
@@ -6960,11 +6873,6 @@ DF_VIEW_SETUP_FUNCTION_DEF(Disassembly)
     dv->style_flags = DASM_StyleFlag_Addresses|DASM_StyleFlag_SourceFilesNames|DASM_StyleFlag_SourceLines|DASM_StyleFlag_SymbolNames;
     df_code_view_init(&dv->cv, view);
   }
-}
-
-DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Disassembly)
-{
-  return str8_zero();
 }
 
 DF_VIEW_CMD_FUNCTION_DEF(Disassembly)
@@ -7189,11 +7097,6 @@ DF_VIEW_SETUP_FUNCTION_DEF(Output)
   df_code_view_init(cv, view);
 }
 
-DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Output)
-{
-  return str8_zero();
-}
-
 DF_VIEW_CMD_FUNCTION_DEF(Output)
 {
   DF_CodeViewState *cv = df_view_user_state(view, DF_CodeViewState);
@@ -7285,11 +7188,6 @@ DF_VIEW_SETUP_FUNCTION_DEF(Memory)
     mv->bytes_per_cell = 1;
     mv->last_viewed_memory_cache_arena = df_view_push_arena_ext(view);
   }
-}
-
-DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Memory)
-{
-  return str8_lit("");
 }
 
 DF_VIEW_CMD_FUNCTION_DEF(Memory)
@@ -8192,29 +8090,15 @@ internal UI_BOX_CUSTOM_DRAW(df_bitmap_view_canvas_box_draw)
 DF_VIEW_SETUP_FUNCTION_DEF(Bitmap)
 {
   DF_BitmapViewState *bvs = df_view_user_state(view, DF_BitmapViewState);
-  DF_CfgNode *view_center_cfg = df_cfg_node_child_from_string(cfg_root, str8_lit("view_center"), StringMatchFlag_CaseInsensitive);
-  DF_CfgNode *zoom_cfg = df_cfg_node_child_from_string(cfg_root, str8_lit("zoom"), StringMatchFlag_CaseInsensitive);
-  DF_CfgNode *bitmap_cfg = df_cfg_node_child_from_string(cfg_root, str8_lit("bitmap"), StringMatchFlag_CaseInsensitive);
-  DF_Entity *thread = df_entity_from_handle(df_interact_regs()->thread);
-  DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
-  U64 thread_unwind_rip_vaddr = df_query_cached_rip_from_thread_unwind(thread, df_interact_regs()->unwind_count);
-  bvs->view_center_pos.x = (F32)f64_from_str8(bitmap_cfg->first->string);
-  bvs->view_center_pos.y = (F32)f64_from_str8(bitmap_cfg->first->next->string);
+  DF_CfgNode *view_center_cfg = df_cfg_node_child_from_string(cfg, str8_lit("view_center"), StringMatchFlag_CaseInsensitive);
+  DF_CfgNode *zoom_cfg        = df_cfg_node_child_from_string(cfg, str8_lit("zoom"), StringMatchFlag_CaseInsensitive);
+  bvs->view_center_pos.x = (F32)f64_from_str8(view_center_cfg->first->string);
+  bvs->view_center_pos.y = (F32)f64_from_str8(view_center_cfg->first->next->string);
   bvs->zoom = (F32)f64_from_str8(zoom_cfg->first->string);
   if(bvs->zoom == 0)
   {
     bvs->zoom = 1.f;
   }
-}
-
-DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Bitmap)
-{
-  DF_BitmapViewState *bvs = df_view_user_state(view, DF_BitmapViewState);
-  String8 result = push_str8f(arena, "view_center:(%.2f %.2f) zoom:(%.2f)",
-                              bvs->view_center_pos.x,
-                              bvs->view_center_pos.y,
-                              bvs->zoom);
-  return result;
 }
 
 DF_VIEW_CMD_FUNCTION_DEF(Bitmap)
@@ -8376,7 +8260,6 @@ DF_VIEW_UI_FUNCTION_DEF(Bitmap)
 //~ rjf: ExceptionFilters @view_hook_impl
 
 DF_VIEW_SETUP_FUNCTION_DEF(ExceptionFilters) {}
-DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(ExceptionFilters) {return str8_lit("");}
 DF_VIEW_CMD_FUNCTION_DEF(ExceptionFilters) {}
 DF_VIEW_UI_FUNCTION_DEF(ExceptionFilters)
 {
@@ -8515,7 +8398,6 @@ DF_VIEW_UI_FUNCTION_DEF(ExceptionFilters)
 //~ rjf: Settings @view_hook_impl
 
 DF_VIEW_SETUP_FUNCTION_DEF(Settings) {}
-DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(Settings) {return str8_zero();}
 
 DF_VIEW_CMD_FUNCTION_DEF(Settings)
 {

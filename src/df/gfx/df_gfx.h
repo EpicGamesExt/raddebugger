@@ -83,15 +83,10 @@ typedef struct DF_View DF_View;
 typedef struct DF_Panel DF_Panel;
 typedef struct DF_Window DF_Window;
 
-#define DF_VIEW_SETUP_FUNCTION_SIG(name) void name(DF_Window *ws, struct DF_View *view, DF_CfgNode *cfg_root)
+#define DF_VIEW_SETUP_FUNCTION_SIG(name) void name(DF_Window *ws, struct DF_View *view, DF_CfgNode *cfg, String8 string)
 #define DF_VIEW_SETUP_FUNCTION_NAME(name) df_view_setup_##name
 #define DF_VIEW_SETUP_FUNCTION_DEF(name) internal DF_VIEW_SETUP_FUNCTION_SIG(DF_VIEW_SETUP_FUNCTION_NAME(name))
 typedef DF_VIEW_SETUP_FUNCTION_SIG(DF_ViewSetupFunctionType);
-
-#define DF_VIEW_STRING_FROM_STATE_FUNCTION_SIG(name) String8 name(Arena *arena, struct DF_View *view)
-#define DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(name) df_view_string_from_state_##name
-#define DF_VIEW_STRING_FROM_STATE_FUNCTION_DEF(name) internal DF_VIEW_STRING_FROM_STATE_FUNCTION_SIG(DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(name))
-typedef DF_VIEW_STRING_FROM_STATE_FUNCTION_SIG(DF_ViewStringFromStateFunctionType);
 
 #define DF_VIEW_CMD_FUNCTION_SIG(name) void name(struct DF_Window *ws, struct DF_Panel *panel, struct DF_View *view, DF_CfgNode *cfg, String8 string, struct DF_CmdList *cmds)
 #define DF_VIEW_CMD_FUNCTION_NAME(name) df_view_cmds_##name
@@ -115,7 +110,6 @@ enum
   DF_ViewSpecFlag_CanFilter                  = (1<<3),
   DF_ViewSpecFlag_FilterIsCode               = (1<<4),
   DF_ViewSpecFlag_TypingAutomaticallyFilters = (1<<5),
-  DF_ViewSpecFlag_DisplayFilterInTitle       = (1<<6),
 };
 
 typedef struct DF_ViewSpecInfo DF_ViewSpecInfo;
@@ -126,7 +120,6 @@ struct DF_ViewSpecInfo
   String8 display_string;
   DF_IconKind icon_kind;
   DF_ViewSetupFunctionType *setup_hook;
-  DF_ViewStringFromStateFunctionType *string_from_state_hook;
   DF_ViewCmdFunctionType *cmd_hook;
   DF_ViewUIFunctionType *ui_hook;
 };
@@ -823,7 +816,6 @@ read_only global DF_ViewSpec df_g_nil_view_spec =
     {0},
     DF_IconKind_Null,
     DF_VIEW_SETUP_FUNCTION_NAME(Null),
-    DF_VIEW_STRING_FROM_STATE_FUNCTION_NAME(Null),
     DF_VIEW_CMD_FUNCTION_NAME(Null),
     DF_VIEW_UI_FUNCTION_NAME(Null),
   },
@@ -908,8 +900,8 @@ internal void df_panel_remove_tab_view(DF_Panel *panel, DF_View *view);
 internal DF_View *df_selected_tab_from_panel(DF_Panel *panel);
 
 //- rjf: icons & display strings
-internal String8 df_display_string_from_view(Arena *arena, DF_View *view);
 internal DF_IconKind df_icon_kind_from_view(DF_View *view);
+internal D_FancyStringList df_title_fstrs_from_view(Arena *arena, DF_View *view, Vec4F32 primary_color, Vec4F32 secondary_color, F32 size);
 
 ////////////////////////////////
 //~ rjf: Window Type Functions

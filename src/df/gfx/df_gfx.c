@@ -359,40 +359,62 @@ df_selected_tab_from_panel(DF_Panel *panel)
 
 //- rjf: icons & display strings
 
-internal String8
-df_display_string_from_view(Arena *arena, DF_View *view)
-{
-  String8 result = view->spec->info.display_string;
-  {
-    String8 query = str8(view->query_buffer, view->query_string_size);
-    if(query.size != 0)
-    {
-      Temp scratch = scratch_begin(&arena, 1);
-      E_Eval eval = e_eval_from_string(scratch.arena, query);
-      DF_Entity *entity = df_entity_from_eval_space(eval.space);
-      switch(entity->kind)
-      {
-        case DF_EntityKind_Nil:
-        if(eval.expr->kind == E_ExprKind_LeafFilePath)
-        {
-          result = str8_skip_last_slash(push_str8_copy(arena, eval.expr->string));
-        }break;
-        default:
-        if(view->spec->info.flags & DF_ViewSpecFlag_ParameterizedByEntity)
-        {
-          result = df_display_string_from_entity(arena, entity);
-        }break;
-      }
-      scratch_end(scratch);
-    }
-  }
-  return result;
-}
-
 internal DF_IconKind
 df_icon_kind_from_view(DF_View *view)
 {
   DF_IconKind result = view->spec->info.icon_kind;
+  return result;
+}
+
+internal D_FancyStringList
+df_title_fstrs_from_view(Arena *arena, DF_View *view, Vec4F32 primary_color, Vec4F32 secondary_color, F32 size)
+{
+  D_FancyStringList result = {0};
+  Temp scratch = scratch_begin(&arena, 1);
+  String8 query = str8(view->query_buffer, view->query_string_size);
+  String8 file_path = df_file_path_from_eval_string(scratch.arena, query);
+  if(file_path.size != 0)
+  {
+    D_FancyString fstr =
+    {
+      df_font_from_slot(DF_FontSlot_Main),
+      push_str8_copy(arena, str8_skip_last_slash(file_path)),
+      primary_color,
+      size,
+    };
+    d_fancy_string_list_push(arena, &result, &fstr);
+  }
+  else
+  {
+    D_FancyString fstr1 =
+    {
+      df_font_from_slot(DF_FontSlot_Main),
+      view->spec->info.display_string,
+      primary_color,
+      size,
+    };
+    d_fancy_string_list_push(arena, &result, &fstr1);
+    if(query.size != 0)
+    {
+      D_FancyString fstr2 =
+      {
+        df_font_from_slot(DF_FontSlot_Code),
+        str8_lit(" "),
+        primary_color,
+        size,
+      };
+      d_fancy_string_list_push(arena, &result, &fstr2);
+      D_FancyString fstr3 =
+      {
+        df_font_from_slot(DF_FontSlot_Code),
+        push_str8_copy(arena, query),
+        secondary_color,
+        size*0.8f,
+      };
+      d_fancy_string_list_push(arena, &result, &fstr3);
+    }
+  }
+  scratch_end(scratch);
   return result;
 }
 
@@ -835,7 +857,7 @@ df_view_equip_spec(DF_Window *window, DF_View *view, DF_ViewSpec *spec, String8 
     }
     view->is_filtering = 0;
     view->is_filtering_t = 0;
-    view_setup(window, view, view->cfg_root);
+    view_setup(window, view, view->cfg_root, str8(view->query_buffer, view->query_string_size));
   }
 }
 
@@ -3621,14 +3643,18 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             {
               UI_Row
               {
-                String8 display_name = df_display_string_from_view(scratch.arena, view);
                 DF_IconKind icon_kind = df_icon_kind_from_view(view);
+                D_FancyStringList fstrs = df_title_fstrs_from_view(scratch.arena, view, ui_top_palette()->text, ui_top_palette()->text_weak, ui_top_font_size());
                 DF_Font(ws, DF_FontSlot_Icons)
                   UI_FontSize(df_font_size_from_slot(ws, DF_FontSlot_Icons))
                   UI_PrefWidth(ui_em(2.5f, 1.f))
                   UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
                   ui_label(df_g_icon_kind_text_table[icon_kind]);
-                ui_label(display_name);
+                UI_PrefWidth(ui_text_dim(10, 1))
+                {
+                  UI_Box *name_box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
+                  ui_box_equip_display_fancy_strings(name_box, &fstrs);
+                }
               }
               ui_set_next_pref_width(ui_pct(1, 0));
               ui_set_next_pref_height(ui_pct(1, 0));
@@ -4476,8 +4502,8 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         DF_Panel *panel = df_panel_from_handle(ws->tab_ctx_menu_panel);
         DF_View *view = df_view_from_handle(ws->tab_ctx_menu_view);
         DF_IconKind view_icon = df_icon_kind_from_view(view);
+        D_FancyStringList fstrs = df_title_fstrs_from_view(scratch.arena, view, ui_top_palette()->text, ui_top_palette()->text_weak, ui_top_font_size());
         String8 file_path = df_file_path_from_eval_string(scratch.arena, str8(view->query_buffer, view->query_string_size));
-        String8 display_name = df_display_string_from_view(scratch.arena, view);
         
         // rjf: title
         UI_Row
@@ -4490,7 +4516,11 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             UI_TextAlignment(UI_TextAlign_Center)
             UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
             ui_label(df_g_icon_kind_text_table[view_icon]);
-          UI_PrefWidth(ui_text_dim(10, 1)) ui_label(display_name);
+          UI_PrefWidth(ui_text_dim(10, 1))
+          {
+            UI_Box *name_box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
+            ui_box_equip_display_fancy_strings(name_box, &fstrs);
+          }
         }
         
         DF_Palette(ws, DF_PaletteCode_Floating) ui_divider(ui_em(1.f, 1.f));
@@ -4498,7 +4528,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         // rjf: copy name
         if(ui_clicked(df_icon_buttonf(ws, DF_IconKind_Clipboard, 0, "Copy Name")))
         {
-          os_set_clipboard_text(display_name);
+          os_set_clipboard_text(d_string_from_fancy_string_list(scratch.arena, &fstrs));
           ui_ctx_menu_close();
         }
         
@@ -7395,7 +7425,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
               // rjf: gather info for this tab
               B32 view_is_selected = (view == df_selected_tab_from_panel(panel));
               DF_IconKind icon_kind = df_icon_kind_from_view(view);
-              String8 label = df_display_string_from_view(scratch.arena, view);
+              D_FancyStringList title_fstrs = df_title_fstrs_from_view(scratch.arena, view, ui_top_palette()->text, ui_top_palette()->text_weak, ui_top_font_size());
               
               // rjf: begin vertical region for this tab
               ui_set_next_child_layout_axis(Axis2_Y);
@@ -7434,50 +7464,10 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
                         UI_PrefWidth(ui_em(1.75f, 1.f))
                         ui_label(df_g_icon_kind_text_table[icon_kind]);
                     }
-                    if(view->query_string_size != 0 && view->spec->info.flags & DF_ViewSpecFlag_DisplayFilterInTitle)
+                    UI_PrefWidth(ui_text_dim(10, 0))
                     {
-                      UI_PrefWidth(ui_text_dim(10, 0))
-                      {
-                        Temp scratch = scratch_begin(0, 0);
-                        D_FancyStringList fstrs = {0};
-                        {
-                          D_FancyString view_title =
-                          {
-                            df_font_from_slot(DF_FontSlot_Main),
-                            label,
-                            ui_top_palette()->colors[UI_ColorCode_Text],
-                            ui_top_font_size(),
-                          };
-                          d_fancy_string_list_push(scratch.arena, &fstrs, &view_title);
-                        }
-                        {
-                          D_FancyString space =
-                          {
-                            df_font_from_slot(DF_FontSlot_Code),
-                            str8_lit(" "),
-                            v4f32(0, 0, 0, 0),
-                            ui_top_font_size(),
-                          };
-                          d_fancy_string_list_push(scratch.arena, &fstrs, &space);
-                        }
-                        {
-                          D_FancyString query =
-                          {
-                            view->spec->info.flags & DF_ViewSpecFlag_FilterIsCode ? df_font_from_slot(DF_FontSlot_Code) : df_font_from_slot(DF_FontSlot_Main),
-                            str8(view->query_buffer, view->query_string_size),
-                            ui_top_palette()->colors[UI_ColorCode_TextWeak],
-                            ui_top_font_size(),
-                          };
-                          d_fancy_string_list_push(scratch.arena, &fstrs, &query);
-                        }
-                        UI_Box *box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
-                        ui_box_equip_display_fancy_strings(box, &fstrs);
-                        scratch_end(scratch);
-                      }
-                    }
-                    else
-                    {
-                      UI_PrefWidth(ui_text_dim(10, 0)) ui_label(label);
+                      UI_Box *name_box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
+                      ui_box_equip_display_fancy_strings(name_box, &title_fstrs);
                     }
                   }
                   UI_PrefWidth(ui_em(2.35f, 1.f)) UI_TextAlignment(UI_TextAlign_Center)
@@ -9444,8 +9434,33 @@ df_cfg_strings_from_gfx(Arena *arena, String8 root_path, DF_CfgSrc source)
                 str8_list_pushf(arena, &strs, "query:{\"%S\"} ", query_sanitized);
                 scratch_end(scratch);
               }
-              String8 view_state_string = view->spec->info.string_from_state_hook(arena, view);
-              str8_list_push(arena, &strs, view_state_string);
+              {
+                DF_CfgNodeRec rec = {0};
+                for(DF_CfgNode *n = view->cfg_root; n != 0 && n != &df_g_nil_cfg_node; n = rec.next)
+                {
+                  rec = df_cfg_node_rec__depth_first_pre(n, view->cfg_root);
+                  if(n != view->cfg_root)
+                  {
+                    str8_list_pushf(arena, &strs, "%S", n->string);
+                    if(n->first != &df_g_nil_cfg_node)
+                    {
+                      str8_list_pushf(arena, &strs, ":{");
+                    }
+                    for(S32 pop_idx = 0; pop_idx < rec.pop_count; pop_idx += 1)
+                    {
+                      if(pop_idx == rec.pop_count-1 && rec.next == &df_g_nil_cfg_node)
+                      {
+                        break;
+                      }
+                      str8_list_pushf(arena, &strs, "}");
+                    }
+                    if(rec.pop_count != 0 || n->next != &df_g_nil_cfg_node)
+                    {
+                      str8_list_pushf(arena, &strs, " ");
+                    }
+                  }
+                }
+              }
               str8_list_push(arena, &strs, str8_lit("}\n"));
             }
           }
