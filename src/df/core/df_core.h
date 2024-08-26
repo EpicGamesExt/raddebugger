@@ -203,28 +203,6 @@ typedef DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_SIG(DF_CoreViewRuleVizBlockPro
 ////////////////////////////////
 //~ rjf: Config Types
 
-#if 0
-typedef U32 DF_CfgNodeFlags;
-enum
-{
-  DF_CfgNodeFlag_Identifier    = (1<<0),
-  DF_CfgNodeFlag_Numeric       = (1<<1),
-  DF_CfgNodeFlag_StringLiteral = (1<<2),
-};
-
-typedef struct DF_CfgNode DF_CfgNode;
-struct DF_CfgNode
-{
-  DF_CfgNode *first;
-  DF_CfgNode *last;
-  DF_CfgNode *parent;
-  DF_CfgNode *next;
-  DF_CfgNodeFlags flags;
-  String8 string;
-  DF_CfgSrc source;
-};
-#endif
-
 typedef struct DF_CfgTree DF_CfgTree;
 struct DF_CfgTree
 {
@@ -232,16 +210,6 @@ struct DF_CfgTree
   DF_CfgSrc source;
   MD_Node *root;
 };
-
-#if 0
-typedef struct DF_CfgNodeRec DF_CfgNodeRec;
-struct DF_CfgNodeRec
-{
-  DF_CfgNode *next;
-  S32 push_count;
-  S32 pop_count;
-};
-#endif
 
 typedef struct DF_CfgVal DF_CfgVal;
 struct DF_CfgVal
@@ -1240,9 +1208,6 @@ struct DF_State
 
 read_only global DF_CmdSpec df_g_nil_cmd_spec = {0};
 read_only global DF_CoreViewRuleSpec df_g_nil_core_view_rule_spec = {0};
-#if 0
-read_only global DF_CfgNode df_g_nil_cfg_node = {&df_g_nil_cfg_node, &df_g_nil_cfg_node, &df_g_nil_cfg_node, &df_g_nil_cfg_node};
-#endif
 read_only global DF_CfgTree df_g_nil_cfg_tree = {&df_g_nil_cfg_tree, DF_CfgSrc_User, &md_nil_node};
 read_only global DF_CfgVal df_g_nil_cfg_val = {&df_g_nil_cfg_val, &df_g_nil_cfg_val, &df_g_nil_cfg_tree, &df_g_nil_cfg_tree};
 read_only global DF_CfgTable df_g_nil_cfg_table = {0, 0, 0, &df_g_nil_cfg_val, &df_g_nil_cfg_val};
@@ -1340,22 +1305,11 @@ internal void df_expand_set_expansion(Arena *arena, DF_ExpandTreeTable *table, D
 ////////////////////////////////
 //~ rjf: Config Type Pure Functions
 
-#if 0
-internal DF_CfgNode *df_cfg_tree_copy(Arena *arena, DF_CfgNode *src_root);
-internal DF_CfgNodeRec df_cfg_node_rec__depth_first_pre(DF_CfgNode *node, DF_CfgNode *root);
-#endif
 internal DF_CfgTree *df_cfg_tree_copy(Arena *arena, DF_CfgTree *src);
 internal void df_cfg_table_push_unparsed_string(Arena *arena, DF_CfgTable *table, String8 string, DF_CfgSrc source);
 internal DF_CfgTable df_cfg_table_from_inheritance(Arena *arena, DF_CfgTable *src);
 internal DF_CfgTable df_cfg_table_copy(Arena *arena, DF_CfgTable *src);
 internal DF_CfgVal *df_cfg_val_from_string(DF_CfgTable *table, String8 string);
-#if 0
-internal DF_CfgNode *df_cfg_node_child_from_string(DF_CfgNode *node, String8 string, StringMatchFlags flags);
-internal DF_CfgNode *df_first_cfg_node_child_from_flags(DF_CfgNode *node, DF_CfgNodeFlags flags);
-internal String8 df_string_from_cfg_node_children(Arena *arena, DF_CfgNode *node);
-internal Vec4F32 df_hsva_from_cfg_node(DF_CfgNode *node);
-internal String8 df_string_from_cfg_node_key(DF_CfgNode *node, String8 key, StringMatchFlags flags);
-#endif
 
 ////////////////////////////////
 //~ rjf: Debug Info Extraction Type Pure Functions

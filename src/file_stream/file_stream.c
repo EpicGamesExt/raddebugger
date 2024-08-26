@@ -193,48 +193,6 @@ fs_hash_from_path_range(String8 path, Rng1U64 range, U64 endt_us)
           break;
         }
       }
-      
-      //-
-      // TODO(rjf): OLD vvvvvvvvvvvvvvvv
-      //-
-#if 0
-      U64 slot_idx = path_key.u64[0]%fs_shared->slots_count;
-      U64 stripe_idx = slot_idx%fs_shared->stripes_count;
-      FS_Slot *slot = &fs_shared->slots[slot_idx];
-      FS_Stripe *stripe = &fs_shared->stripes[stripe_idx];
-      OS_MutexScopeR(stripe->rw_mutex) for(;;)
-      {
-        FS_Node *node = 0;
-        for(FS_Node *n = slot->first; n != 0; n = n->next)
-        {
-          if(str8_match(path, n->path, 0))
-          {
-            node = n;
-            break;
-          }
-        }
-        if(node == 0) OS_MutexScopeRWPromote(stripe->rw_mutex)
-        {
-          node = push_array(stripe->arena, FS_Node, 1);
-          SLLQueuePush(slot->first, slot->last, node);
-          node->path = push_str8_copy(stripe->arena, path);
-        }
-        if(!ins_atomic_u32_eval_cond_assign(&node->is_working, 1, 0) &&
-           !fs_u2s_enqueue_req(range, path, endt_us))
-        {
-          ins_atomic_u32_eval_assign(&node->is_working, 0);
-        }
-        result = hs_hash_from_key(path_key, 0);
-        if(u128_match(result, u128_zero()) && os_now_microseconds() <= endt_us)
-        {
-          os_condition_variable_wait_rw_r(stripe->cv, stripe->rw_mutex, endt_us);
-        }
-        else
-        {
-          break;
-        }
-      }
-#endif
     }
   }
   

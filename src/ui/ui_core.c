@@ -276,14 +276,6 @@ ui_single_line_txt_op_from_event(Arena *arena, UI_Event *event, String8 string, 
     next_cursor = next_mark = txt_pt(range.min.line, range.min.column + event->string.size);
   }
   
-  //- rjf: replace & commit -> replace entire range
-#if 0
-  if(event->flags & UI_EventFlag_ReplaceAndCommit)
-  {
-    range = txt_rng(txt_pt(cursor.line, 1), txt_pt(cursor.line, line.size+1));
-  }
-#endif
-  
   //- rjf: determine if this event should be taken, based on bounds of cursor
   {
     if(next_cursor.column > string.size+1 || 1 > next_cursor.column || event->delta_2s32.y != 0)

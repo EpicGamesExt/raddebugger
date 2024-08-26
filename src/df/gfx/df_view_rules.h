@@ -49,16 +49,6 @@ struct DF_BitmapTopologyInfo
   R_Tex2DFormat fmt;
 };
 
-#if 0
-typedef struct DF_BitmapViewState DF_BitmapViewState;
-struct DF_BitmapViewState
-{
-  Vec2F32 view_center_pos;
-  F32 zoom;
-  DF_BitmapTopologyInfo top;
-};
-#endif
-
 typedef struct DF_VR_BitmapState DF_VR_BitmapState;
 struct DF_VR_BitmapState
 {
@@ -76,14 +66,6 @@ struct DF_VR_BitmapBoxDrawData
   Vec2S32 mouse_px;
   F32 ui_per_bmp_px;
 };
-
-#if 0
-internal Vec2F32 df_bitmap_view_state__screen_from_canvas_pos(DF_BitmapViewState *bvs, Rng2F32 rect, Vec2F32 cvs);
-internal Rng2F32 df_bitmap_view_state__screen_from_canvas_rect(DF_BitmapViewState *bvs, Rng2F32 rect, Rng2F32 cvs);
-internal Vec2F32 df_bitmap_view_state__canvas_from_screen_pos(DF_BitmapViewState *bvs, Rng2F32 rect, Vec2F32 scr);
-internal Rng2F32 df_bitmap_view_state__canvas_from_screen_rect(DF_BitmapViewState *bvs, Rng2F32 rect, Rng2F32 scr);
-internal DF_BitmapTopologyInfo df_vr_bitmap_topology_info_from_cfg(DF_CfgNode *cfg);
-#endif
 
 ////////////////////////////////
 //~ rjf: "geo"
