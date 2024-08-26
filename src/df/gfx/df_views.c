@@ -2721,9 +2721,10 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
             //- rjf: peek clicks in canvas region, mark clicked
             for(UI_Event *evt = 0; ui_next_event(&evt);)
             {
-              if(evt->kind == UI_EventKind_Press && evt->key == OS_Key_LeftMouseButton)
+              if(evt->kind == UI_EventKind_Press && evt->key == OS_Key_LeftMouseButton && contains_2f32(canvas_rect, evt->pos))
               {
                 pressed = 1;
+                break;
               }
             }
             
