@@ -403,7 +403,7 @@ df_code_view_init(DF_CodeViewState *cv, DF_View *view)
     cv->initialized = 1;
     cv->preferred_column = 1;
     cv->find_text_arena = df_view_push_arena_ext(view);
-    view->cursor = view->mark = txt_pt(1, 1);
+    cv->center_cursor = 1;
   }
   df_view_equip_loading_info(view, 1, 0, 0);
   view->loading_t = view->loading_t_target = 1.f;
@@ -786,7 +786,7 @@ df_code_view_build(Arena *arena, DF_Window *ws, DF_Panel *panel, DF_View *view, 
       Temp scratch = scratch_begin(0, 0);
       B32 found = 0;
       B32 first = 1;
-      S64 line_num_start = view->cursor.line;
+      S64 line_num_start = df_interact_regs()->cursor.line;
       S64 line_num_last = (S64)text_info->lines_count;
       for(S64 line_num = line_num_start;; first = 0)
       {
@@ -796,18 +796,18 @@ df_code_view_build(Arena *arena, DF_Window *ws, DF_Panel *panel, DF_View *view, 
         // rjf: gather line info
         String8 line_string = str8_substr(text_data, text_info->lines_ranges[line_num-1]);
         U64 search_start = 0;
-        if(view->cursor.line == line_num && first)
+        if(df_interact_regs()->cursor.line == line_num && first)
         {
-          search_start = view->cursor.column;
+          search_start = df_interact_regs()->cursor.column;
         }
         
         // rjf: search string
         U64 needle_pos = str8_find_needle(line_string, search_start, cv->find_text_fwd, StringMatchFlag_CaseInsensitive);
         if(needle_pos < line_string.size)
         {
-          view->cursor.line = line_num;
-          view->cursor.column = needle_pos+1;
-          view->mark = view->cursor;
+          df_interact_regs()->cursor.line = line_num;
+          df_interact_regs()->cursor.column = needle_pos+1;
+          df_interact_regs()->mark = df_interact_regs()->cursor;
           found = 1;
           break;
         }
@@ -842,7 +842,7 @@ df_code_view_build(Arena *arena, DF_Window *ws, DF_Panel *panel, DF_View *view, 
       Temp scratch = scratch_begin(0, 0);
       B32 found = 0;
       B32 first = 1;
-      S64 line_num_start = view->cursor.line;
+      S64 line_num_start = df_interact_regs()->cursor.line;
       S64 line_num_last = (S64)text_info->lines_count;
       for(S64 line_num = line_num_start;; first = 0)
       {
@@ -851,9 +851,9 @@ df_code_view_build(Arena *arena, DF_Window *ws, DF_Panel *panel, DF_View *view, 
         
         // rjf: gather line info
         String8 line_string = str8_substr(text_data, text_info->lines_ranges[line_num-1]);
-        if(view->cursor.line == line_num && first)
+        if(df_interact_regs()->cursor.line == line_num && first)
         {
-          line_string = str8_prefix(line_string, view->cursor.column-1);
+          line_string = str8_prefix(line_string, df_interact_regs()->cursor.column-1);
         }
         
         // rjf: search string
@@ -869,9 +869,9 @@ df_code_view_build(Arena *arena, DF_Window *ws, DF_Panel *panel, DF_View *view, 
         }
         if(next_needle_pos < line_string.size)
         {
-          view->cursor.line = line_num;
-          view->cursor.column = next_needle_pos+1;
-          view->mark = view->cursor;
+          df_interact_regs()->cursor.line = line_num;
+          df_interact_regs()->cursor.column = next_needle_pos+1;
+          df_interact_regs()->mark = df_interact_regs()->cursor;
           found = 1;
           break;
         }
@@ -913,7 +913,7 @@ df_code_view_build(Arena *arena, DF_Window *ws, DF_Panel *panel, DF_View *view, 
     S64 line_num = cv->goto_line_num;
     cv->goto_line_num = 0;
     line_num = Clamp(1, line_num, text_info->lines_count);
-    view->cursor = view->mark = txt_pt(line_num, 1);
+    df_interact_regs()->cursor = df_interact_regs()->mark = txt_pt(line_num, 1);
     cv->center_cursor = !cv->contain_cursor || (line_num < target_visible_line_num_range.min+4 || target_visible_line_num_range.max-4 < line_num);
   }
   
@@ -925,7 +925,7 @@ df_code_view_build(Arena *arena, DF_Window *ws, DF_Panel *panel, DF_View *view, 
   {
     if(ui_is_focus_active() && visible_line_num_range.max >= visible_line_num_range.min)
     {
-      snap[Axis2_X] = snap[Axis2_Y] = df_do_txt_controls(text_info, text_data, ClampBot(num_possible_visible_lines, 10) - 10, &view->cursor, &view->mark, &cv->preferred_column);
+      snap[Axis2_X] = snap[Axis2_Y] = df_do_txt_controls(text_info, text_data, ClampBot(num_possible_visible_lines, 10) - 10, &df_interact_regs()->cursor, &df_interact_regs()->mark, &cv->preferred_column);
     }
   }
   
@@ -942,7 +942,7 @@ df_code_view_build(Arena *arena, DF_Window *ws, DF_Panel *panel, DF_View *view, 
     DF_CodeSliceSignal sig = {0};
     UI_Focus(UI_FocusKind_On)
     {
-      sig = df_code_slicef(ws, &code_slice_params, &view->cursor, &view->mark, &cv->preferred_column, "txt_view_%p", view);
+      sig = df_code_slicef(ws, &code_slice_params, &df_interact_regs()->cursor, &df_interact_regs()->mark, &cv->preferred_column, "txt_view_%p", view);
     }
     
     //- rjf: press code slice? -> focus panel
@@ -986,9 +986,9 @@ df_code_view_build(Arena *arena, DF_Window *ws, DF_Panel *panel, DF_View *view, 
     }
     
     //- rjf: selected text on single line, no query? -> set search text
-    if(!txt_pt_match(view->cursor, view->mark) && view->cursor.line == view->mark.line && search_query.size == 0)
+    if(!txt_pt_match(df_interact_regs()->cursor, df_interact_regs()->mark) && df_interact_regs()->cursor.line == df_interact_regs()->mark.line && search_query.size == 0)
     {
-      String8 text = txt_string_from_info_data_txt_rng(text_info, text_data, txt_rng(view->cursor, view->mark));
+      String8 text = txt_string_from_info_data_txt_rng(text_info, text_data, txt_rng(df_interact_regs()->cursor, df_interact_regs()->mark));
       df_set_search_string(text);
     }
   }
@@ -1009,8 +1009,8 @@ df_code_view_build(Arena *arena, DF_Window *ws, DF_Panel *panel, DF_View *view, 
     if(cv->center_cursor)
     {
       cv->center_cursor = 0;
-      String8 cursor_line = str8_substr(text_data, text_info->lines_ranges[view->cursor.line-1]);
-      F32 cursor_advance = f_dim_from_tag_size_string(code_font, code_font_size, 0, code_tab_size, str8_prefix(cursor_line, view->cursor.column-1)).x;
+      String8 cursor_line = str8_substr(text_data, text_info->lines_ranges[df_interact_regs()->cursor.line-1]);
+      F32 cursor_advance = f_dim_from_tag_size_string(code_font, code_font_size, 0, code_tab_size, str8_prefix(cursor_line, df_interact_regs()->cursor.column-1)).x;
       
       // rjf: scroll x
       {
@@ -1022,7 +1022,7 @@ df_code_view_build(Arena *arena, DF_Window *ws, DF_Panel *panel, DF_View *view, 
       
       // rjf: scroll y
       {
-        S64 new_idx = (view->cursor.line-1) - num_possible_visible_lines/2 + 2;
+        S64 new_idx = (df_interact_regs()->cursor.line-1) - num_possible_visible_lines/2 + 2;
         new_idx = Clamp(scroll_idx_rng[Axis2_Y].min, new_idx, scroll_idx_rng[Axis2_Y].max);
         ui_scroll_pt_target_idx(&view->scroll_pos.y, new_idx);
         snap[Axis2_Y] = 0;
@@ -1032,8 +1032,8 @@ df_code_view_build(Arena *arena, DF_Window *ws, DF_Panel *panel, DF_View *view, 
     // rjf: snap in X
     if(snap[Axis2_X])
     {
-      String8 cursor_line = str8_substr(text_data, text_info->lines_ranges[view->cursor.line-1]);
-      S64 cursor_off = (S64)(f_dim_from_tag_size_string(code_font, code_font_size, 0, code_tab_size, str8_prefix(cursor_line, view->cursor.column-1)).x + priority_margin_width_px + catchall_margin_width_px + line_num_width_px);
+      String8 cursor_line = str8_substr(text_data, text_info->lines_ranges[df_interact_regs()->cursor.line-1]);
+      S64 cursor_off = (S64)(f_dim_from_tag_size_string(code_font, code_font_size, 0, code_tab_size, str8_prefix(cursor_line, df_interact_regs()->cursor.column-1)).x + priority_margin_width_px + catchall_margin_width_px + line_num_width_px);
       Rng1S64 visible_pixel_range =
       {
         view->scroll_pos.x.idx,
@@ -1054,7 +1054,7 @@ df_code_view_build(Arena *arena, DF_Window *ws, DF_Panel *panel, DF_View *view, 
     // rjf: snap in Y
     if(snap[Axis2_Y])
     {
-      Rng1S64 cursor_visibility_range = r1s64(view->cursor.line-4, view->cursor.line+4);
+      Rng1S64 cursor_visibility_range = r1s64(df_interact_regs()->cursor.line-4, df_interact_regs()->cursor.line+4);
       cursor_visibility_range.min = ClampBot(0, cursor_visibility_range.min);
       cursor_visibility_range.max = ClampBot(0, cursor_visibility_range.max);
       S64 min_delta = Min(0, cursor_visibility_range.min-(target_visible_line_num_range.min));
@@ -2765,8 +2765,6 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
               //- rjf: push interaction registers, fill with per-view states
               df_push_interact_regs();
               {
-                df_interact_regs()->cursor = canvas_view->cursor;
-                df_interact_regs()->mark = canvas_view->mark;
                 df_interact_regs()->file_path = df_file_path_from_eval_string(df_frame_arena(), str8(canvas_view->query_buffer, canvas_view->query_string_size));
               }
               
@@ -6691,6 +6689,10 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   //////////////////////////////
   //- rjf: unpack parameterization info
   //
+  df_interact_regs()->cursor.line = df_value_from_params_key(params, str8_lit("cursor_line")).s64;
+  df_interact_regs()->cursor.column = df_value_from_params_key(params, str8_lit("cursor_column")).s64;
+  df_interact_regs()->mark.line = df_value_from_params_key(params, str8_lit("mark_line")).s64;
+  df_interact_regs()->mark.column = df_value_from_params_key(params, str8_lit("mark_column")).s64;
   String8 path = df_file_path_from_eval_string(scratch.arena, string);
   E_Eval eval = e_eval_from_string(scratch.arena, string);
   Rng1U64 range = df_range_from_eval_params(eval, params);
@@ -6740,7 +6742,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
   //////////////////////////////
   //- rjf: code is not missing, but not ready -> equip loading info to this view
   //
-  if(!file_is_missing && info.lines_count == 0)
+  if(!file_is_missing && info.lines_count == 0 && eval.msgs.max_kind == E_MsgKind_Null)
   {
     df_view_equip_loading_info(view, 1, info.bytes_processed, info.bytes_to_process);
   }
@@ -6826,7 +6828,7 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
       {
         ui_label(path);
         ui_spacer(ui_em(1.5f, 1));
-        ui_labelf("Line: %I64d, Column: %I64d", view->cursor.line, view->cursor.column);
+        ui_labelf("Line: %I64d, Column: %I64d", df_interact_regs()->cursor.line, df_interact_regs()->cursor.column);
         ui_spacer(ui_pct(1, 0));
         ui_labelf("(read only)");
         ui_labelf("%s",
@@ -6836,6 +6838,14 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
       }
     }
   }
+  
+  //////////////////////////////
+  //- rjf: store params
+  //
+  df_view_store_param_s64(view, str8_lit("cursor_line"), df_interact_regs()->cursor.line);
+  df_view_store_param_s64(view, str8_lit("cursor_column"), df_interact_regs()->cursor.column);
+  df_view_store_param_s64(view, str8_lit("mark_line"), df_interact_regs()->mark.line);
+  df_view_store_param_s64(view, str8_lit("mark_column"), df_interact_regs()->mark.column);
   
   txt_scope_close(txt_scope);
   hs_scope_close(hs_scope);
@@ -7053,10 +7063,10 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
       DF_Font(ws, DF_FontSlot_Code)
     {
       DF_Entity *module = df_module_from_process_vaddr(process, dasm_vaddr_range.min);
-      U64 cursor_vaddr = (1 <= view->cursor.line && view->cursor.line <= dasm_info.lines.count) ? (dasm_vaddr_range.min+dasm_info.lines.v[view->cursor.line-1].code_off) : 0;
+      U64 cursor_vaddr = (1 <= df_interact_regs()->cursor.line && df_interact_regs()->cursor.line <= dasm_info.lines.count) ? (dasm_vaddr_range.min+dasm_info.lines.v[df_interact_regs()->cursor.line-1].code_off) : 0;
       ui_labelf("%S", path_normalized_from_string(scratch.arena, module->name));
       ui_spacer(ui_em(1.5f, 1));
-      ui_labelf("Address: 0x%I64x, Line: %I64d, Column: %I64d", cursor_vaddr, view->cursor.line, view->cursor.column);
+      ui_labelf("Address: 0x%I64x, Line: %I64d, Column: %I64d", cursor_vaddr, df_interact_regs()->cursor.line, df_interact_regs()->cursor.column);
       ui_spacer(ui_pct(1, 0));
       ui_labelf("(read only)");
       ui_labelf("bin");
@@ -7145,7 +7155,7 @@ DF_VIEW_UI_FUNCTION_DEF(Output)
     {
       ui_labelf("(Debug String Output)");
       ui_spacer(ui_em(1.5f, 1));
-      ui_labelf("Line: %I64d, Column: %I64d", view->cursor.line, view->cursor.column);
+      ui_labelf("Line: %I64d, Column: %I64d", df_interact_regs()->cursor.line, df_interact_regs()->cursor.column);
       ui_spacer(ui_pct(1, 0));
       ui_labelf("(read only)");
     }
@@ -8235,9 +8245,9 @@ DF_VIEW_UI_FUNCTION_DEF(Bitmap)
   //////////////////////////////
   //- rjf: store params
   //
-  df_store_param_f32(view, str8_lit("zoom"), zoom);
-  df_store_param_f32(view, str8_lit("x"), view_center_pos.x);
-  df_store_param_f32(view, str8_lit("y"), view_center_pos.y);
+  df_view_store_param_f32(view, str8_lit("zoom"), zoom);
+  df_view_store_param_f32(view, str8_lit("x"), view_center_pos.x);
+  df_view_store_param_f32(view, str8_lit("y"), view_center_pos.y);
   
   hs_scope_close(hs_scope);
   tex_scope_close(tex_scope);

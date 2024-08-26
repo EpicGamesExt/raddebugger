@@ -923,7 +923,7 @@ df_view_push_arena_ext(DF_View *view)
 //- rjf: param saving
 
 internal void
-df_store_param(DF_View *view, String8 key, String8 value)
+df_view_store_param(DF_View *view, String8 key, String8 value)
 {
   B32 new_copy = 0;
   if(view->params_write_gen == view->params_read_gen)
@@ -958,13 +958,13 @@ df_store_param(DF_View *view, String8 key, String8 value)
 }
 
 internal void
-df_store_paramf(DF_View *view, String8 key, char *fmt, ...)
+df_view_store_paramf(DF_View *view, String8 key, char *fmt, ...)
 {
   Temp scratch = scratch_begin(0, 0);
   va_list args;
   va_start(args, fmt);
   String8 string = push_str8fv(scratch.arena, fmt, args);
-  df_store_param(view, key, string);
+  df_view_store_param(view, key, string);
   va_end(args);
   scratch_end(scratch);
 }
@@ -7313,8 +7313,6 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           df_push_interact_regs();
           {
             DF_View *view = df_selected_tab_from_panel(panel);
-            df_interact_regs()->cursor = view->cursor;
-            df_interact_regs()->mark = view->mark;
             df_interact_regs()->file_path = df_file_path_from_eval_string(df_frame_arena(), str8(view->query_buffer, view->query_string_size));
           }
           
@@ -7339,13 +7337,6 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             DF_View *view = df_selected_tab_from_panel(panel);
             DF_ViewUIFunctionType *build_view_ui_function = view->spec->info.ui_hook;
             build_view_ui_function(ws, panel, view, view->params_roots[view->params_read_gen%ArrayCount(view->params_roots)], str8(view->query_buffer, view->query_string_size), content_rect);
-          }
-          
-          //- rjf: fill with per-view states, after the view has a chance to run
-          {
-            DF_View *view = df_selected_tab_from_panel(panel);
-            df_interact_regs()->cursor = view->cursor;
-            df_interact_regs()->mark = view->mark;
           }
           
           //- rjf: pop interaction registers; commit if this is the selected view

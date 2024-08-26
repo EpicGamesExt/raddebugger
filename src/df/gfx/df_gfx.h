@@ -223,8 +223,8 @@ struct DF_View
   
   // rjf: view state
   UI_ScrollPt2 scroll_pos;
-  TxtPt cursor;
-  TxtPt mark;
+  //TxtPt cursor;
+  //TxtPt mark;
   
   // rjf: view-lifetime allocation & user data extensions
   Arena *arena;
@@ -972,9 +972,10 @@ internal Arena *df_view_push_arena_ext(DF_View *view);
 #define df_view_user_state(view, type) (type *)df_view_get_or_push_user_state((view), sizeof(type))
 
 //- rjf: param saving
-internal void df_store_param(DF_View *view, String8 key, String8 value);
-internal void df_store_paramf(DF_View *view, String8 key, char *fmt, ...);
-#define df_store_param_f32(view, key, f32) df_store_paramf((view), (key), "%ff", (f32))
+internal void df_view_store_param(DF_View *view, String8 key, String8 value);
+internal void df_view_store_paramf(DF_View *view, String8 key, char *fmt, ...);
+#define df_view_store_param_f32(view, key, f32) df_view_store_paramf((view), (key), "%ff", (f32))
+#define df_view_store_param_s64(view, key, s64) df_view_store_paramf((view), (key), "%I64d", (s64))
 
 ////////////////////////////////
 //~ rjf: Expand-Keyed Transient View Functions
