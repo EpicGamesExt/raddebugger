@@ -1528,7 +1528,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                 bp_expr->type_key = bp_type;
                 bp_expr->mode = E_Mode_Offset;
                 bp_expr->space = df_eval_space_from_entity(bp);
-                df_append_viz_blocks_for_parent__rec(scratch.arena, eval_view, parent_key, key, title, bp_expr, &top_level_cfg_table, 0, &blocks);
+                df_append_expr_eval_viz_blocks__rec(scratch.arena, eval_view, parent_key, key, title, bp_expr, &top_level_cfg_table, 0, &blocks);
               }
             }
           }break;
@@ -1563,7 +1563,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                 wp_expr->type_key = wp_type;
                 wp_expr->mode = E_Mode_Offset;
                 wp_expr->space = df_eval_space_from_entity(wp);
-                df_append_viz_blocks_for_parent__rec(scratch.arena, eval_view, parent_key, key, title, wp_expr, &top_level_cfg_table, 0, &blocks);
+                df_append_expr_eval_viz_blocks__rec(scratch.arena, eval_view, parent_key, key, title, wp_expr, &top_level_cfg_table, 0, &blocks);
               }
             }
           }break;
@@ -1827,7 +1827,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
               }
               
               // rjf: recurse for child
-              df_append_viz_blocks_for_parent__rec(scratch.arena, eval_view, parent_key, sub_expand_keys[sub_expand_idx], str8_zero(), child_expr, child_cfg_table, 0, &blocks);
+              df_append_expr_eval_viz_blocks__rec(scratch.arena, eval_view, parent_key, sub_expand_keys[sub_expand_idx], str8_zero(), child_expr, child_cfg_table, 0, &blocks);
             }
             df_eval_viz_block_end(&blocks, last_vb);
           }break;
@@ -2366,7 +2366,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
       if(!ewv->text_editing && !(evt->flags & UI_EventFlag_Delete) && !(evt->flags & UI_EventFlag_Reorder))
       {
         B32 cursor_tbl_min_is_empty_selection[Axis2_COUNT] = {0, 1};
-        Rng2S64 cursor_tbl_range = r2s64(v2s64(0, 0), v2s64(3, blocks.total_semantic_row_count));
+        Rng2S64 cursor_tbl_range = r2s64(v2s64(0, 0), v2s64(ewv->column_count-1, blocks.total_semantic_row_count));
         Vec2S32 delta = evt->delta_2s32;
         if(evt->flags & UI_EventFlag_PickSelectSide && !MemoryMatchStruct(&selection_tbl.min, &selection_tbl.max))
         {

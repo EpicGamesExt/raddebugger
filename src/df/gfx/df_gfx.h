@@ -113,10 +113,10 @@ enum
   DF_ViewSpecFlag_ProjectSpecific            = (1<<1),
   DF_ViewSpecFlag_CanSerialize               = (1<<2),
   DF_ViewSpecFlag_CanSerializeFilePath       = (1<<3),
-  DF_ViewSpecFlag_CanSerializeQuery          = (1<<4),
-  DF_ViewSpecFlag_CanFilter                  = (1<<5),
-  DF_ViewSpecFlag_FilterIsCode               = (1<<6),
-  DF_ViewSpecFlag_TypingAutomaticallyFilters = (1<<7),
+  DF_ViewSpecFlag_CanFilter                  = (1<<4),
+  DF_ViewSpecFlag_FilterIsCode               = (1<<5),
+  DF_ViewSpecFlag_TypingAutomaticallyFilters = (1<<6),
+  DF_ViewSpecFlag_DisplayFilterInTitle       = (1<<7),
 };
 
 typedef struct DF_ViewSpecInfo DF_ViewSpecInfo;

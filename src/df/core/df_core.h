@@ -1627,7 +1627,7 @@ internal DF_EvalLinkBaseArray df_eval_link_base_array_from_chunk_list(Arena *are
 internal DF_EvalVizBlock *df_eval_viz_block_begin(Arena *arena, DF_EvalVizBlockKind kind, DF_ExpandKey parent_key, DF_ExpandKey key, S32 depth);
 internal DF_EvalVizBlock *df_eval_viz_block_split_and_continue(Arena *arena, DF_EvalVizBlockList *list, DF_EvalVizBlock *split_block, U64 split_idx);
 internal void df_eval_viz_block_end(DF_EvalVizBlockList *list, DF_EvalVizBlock *block);
-internal void df_append_viz_blocks_for_parent__rec(Arena *arena, DF_EvalView *view, DF_ExpandKey parent_key, DF_ExpandKey key, String8 string, E_Expr *expr, DF_CfgTable *cfg_table, S32 depth, DF_EvalVizBlockList *list_out);
+internal void df_append_expr_eval_viz_blocks__rec(Arena *arena, DF_EvalView *view, DF_ExpandKey parent_key, DF_ExpandKey key, String8 string, E_Expr *expr, DF_CfgTable *cfg_table, S32 depth, DF_EvalVizBlockList *list_out);
 internal DF_EvalVizBlockList df_eval_viz_block_list_from_eval_view_expr_keys(Arena *arena, DF_EvalView *eval_view, DF_CfgTable *cfg_table, String8 expr, DF_ExpandKey parent_key, DF_ExpandKey key);
 internal void df_eval_viz_block_list_concat__in_place(DF_EvalVizBlockList *dst, DF_EvalVizBlockList *to_push);
 

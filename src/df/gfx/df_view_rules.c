@@ -66,7 +66,7 @@ DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(default)
       }
       
       // rjf: recurse for child
-      df_append_viz_blocks_for_parent__rec(arena, eval_view, key, child->key, str8_zero(), child_expr, child_cfg_table, depth, out);
+      df_append_expr_eval_viz_blocks__rec(arena, eval_view, key, child->key, str8_zero(), child_expr, child_cfg_table, depth, out);
     }
     df_eval_viz_block_end(out, last_vb);
   }
@@ -135,7 +135,7 @@ DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(default)
       }
       
       // rjf: recurse for child
-      df_append_viz_blocks_for_parent__rec(arena, eval_view, key, child->key, str8_zero(), child_expr, child_cfg_table, depth, out);
+      df_append_expr_eval_viz_blocks__rec(arena, eval_view, key, child->key, str8_zero(), child_expr, child_cfg_table, depth, out);
     }
     df_eval_viz_block_end(out, last_vb);
   }
@@ -162,7 +162,7 @@ DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(default)
     
     // rjf: recurse for child
     E_Expr *child_expr = e_expr_ref_deref(arena, expr);
-    df_append_viz_blocks_for_parent__rec(arena, eval_view, key, child_key, str8_zero(), child_expr, child_cfg_table, depth, out);
+    df_append_expr_eval_viz_blocks__rec(arena, eval_view, key, child_key, str8_zero(), child_expr, child_cfg_table, depth, out);
   }
   
   scratch_end(scratch);

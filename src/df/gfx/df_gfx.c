@@ -378,6 +378,7 @@ df_display_string_from_view(Arena *arena, DF_View *view)
           result = str8_skip_last_slash(push_str8_copy(arena, eval.expr->string));
         }break;
         default:
+        if(view->spec->info.flags & DF_ViewSpecFlag_ParameterizedByEntity)
         {
           result = df_display_string_from_entity(arena, entity);
         }break;
@@ -7383,7 +7384,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
                         UI_PrefWidth(ui_em(1.75f, 1.f))
                         ui_label(df_g_icon_kind_text_table[icon_kind]);
                     }
-                    if(view->query_string_size != 0)
+                    if(view->query_string_size != 0 && view->spec->info.flags & DF_ViewSpecFlag_DisplayFilterInTitle)
                     {
                       UI_PrefWidth(ui_text_dim(10, 0))
                       {
@@ -9358,7 +9359,7 @@ df_cfg_strings_from_gfx(Arena *arena, String8 root_path, DF_CfgSrc source)
                   scratch_end(scratch);
                 }
               }
-              if(view->query_string_size != 0 && view->spec->info.flags & DF_ViewSpecFlag_CanSerializeQuery)
+              if(view->query_string_size != 0)
               {
                 Temp scratch = scratch_begin(&arena, 1);
                 String8 query_raw = str8(view->query_buffer, view->query_string_size);
@@ -13551,7 +13552,6 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
                     
                     // rjf: read view query string
                     String8 view_query = str8_lit("");
-                    if(view_spec_flags & DF_ViewSpecFlag_CanSerializeQuery)
                     {
                       String8 escaped_query = df_cfg_node_child_from_string(op, str8_lit("query"), StringMatchFlag_CaseInsensitive)->first->string;
                       view_query = df_cfg_raw_from_escaped_string(scratch.arena, escaped_query);

@@ -4770,7 +4770,7 @@ df_eval_viz_block_end(DF_EvalVizBlockList *list, DF_EvalVizBlock *block)
 }
 
 internal void
-df_append_viz_blocks_for_parent__rec(Arena *arena, DF_EvalView *eval_view, DF_ExpandKey parent_key, DF_ExpandKey key, String8 string, E_Expr *expr, DF_CfgTable *cfg_table, S32 depth, DF_EvalVizBlockList *list_out)
+df_append_expr_eval_viz_blocks__rec(Arena *arena, DF_EvalView *eval_view, DF_ExpandKey parent_key, DF_ExpandKey key, String8 string, E_Expr *expr, DF_CfgTable *cfg_table, S32 depth, DF_EvalVizBlockList *list_out)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(&arena, 1);
@@ -4868,7 +4868,7 @@ df_eval_viz_block_list_from_eval_view_expr_keys(Arena *arena, DF_EvalView *eval_
       df_cfg_table_push_unparsed_string(arena, cfg_table_inherited, n->string, DF_CfgSrc_User);
     }
     df_cfg_table_push_unparsed_string(arena, cfg_table_inherited, view_rule_string, DF_CfgSrc_User);
-    df_append_viz_blocks_for_parent__rec(arena, eval_view, parent_key, key, expr, parse.expr, cfg_table_inherited, 0, &blocks);
+    df_append_expr_eval_viz_blocks__rec(arena, eval_view, parent_key, key, expr, parse.expr, cfg_table_inherited, 0, &blocks);
   }
   ProfEnd();
   return blocks;
