@@ -223,8 +223,6 @@ struct DF_View
   
   // rjf: view state
   UI_ScrollPt2 scroll_pos;
-  //TxtPt cursor;
-  //TxtPt mark;
   
   // rjf: view-lifetime allocation & user data extensions
   Arena *arena;
