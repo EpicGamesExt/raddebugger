@@ -5250,6 +5250,18 @@ df_value_from_params(MD_Node *params)
   return value_eval.value;
 }
 
+internal E_TypeKey
+df_type_key_from_params(MD_Node *params)
+{
+  Temp scratch = scratch_begin(0, 0);
+  String8 expr = md_string_from_children(scratch.arena, params);
+  E_TokenArray tokens = e_token_array_from_text(scratch.arena, expr);
+  E_Parse parse = e_parse_type_from_text_tokens(scratch.arena, expr, &tokens);
+  E_TypeKey type_key = e_type_from_expr(parse.expr);
+  scratch_end(scratch);
+  return type_key;
+}
+
 internal E_Value
 df_value_from_params_key(MD_Node *params, String8 key)
 {

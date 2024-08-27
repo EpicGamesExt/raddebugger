@@ -1630,6 +1630,7 @@ internal B32 df_viz_row_is_editable(DF_EvalVizRow *row);
 //- rjf: eval / view rule params tree info extraction
 internal U64 df_base_offset_from_eval(E_Eval eval);
 internal E_Value df_value_from_params(MD_Node *params);
+internal E_TypeKey df_type_key_from_params(MD_Node *params);
 internal E_Value df_value_from_params_key(MD_Node *params, String8 key);
 internal Rng1U64 df_range_from_eval_params(E_Eval eval, MD_Node *params);
 internal TXT_LangKind df_lang_kind_from_eval_params(E_Eval eval, MD_Node *params);

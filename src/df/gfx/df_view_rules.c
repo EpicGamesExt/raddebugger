@@ -282,6 +282,16 @@ DF_CORE_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_DEF(bswap)
 }
 
 ////////////////////////////////
+//~ rjf: "cast"
+
+DF_CORE_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_DEF(cast)
+{
+  E_TypeKey type_key = df_type_key_from_params(params);
+  expr = e_expr_ref_cast(arena, type_key, expr);
+  return expr;
+}
+
+////////////////////////////////
 //~ rjf: "dec"
 
 DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(dec){}
