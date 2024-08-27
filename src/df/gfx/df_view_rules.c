@@ -12,7 +12,7 @@ DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(default)
   //- rjf: unpack expression type info
   //
   E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, expr);
-  E_TypeKey type_key = df_type_key_from_type_key_cfg(e_type_unwrap(irtree.type_key), cfg_table);
+  E_TypeKey type_key = e_type_unwrap(irtree.type_key);
   E_TypeKind type_kind = e_type_kind_from_key(type_key);
   E_TypeKey direct_type_key = e_type_unwrap(e_type_direct_from_key(type_key));
   E_TypeKind direct_type_kind = e_type_kind_from_key(direct_type_key);
@@ -105,7 +105,7 @@ DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(default)
     // rjf: build blocks for all elements, split by sub-expansions
     DF_EvalVizBlock *last_vb = df_eval_viz_block_begin(arena, DF_EvalVizBlockKind_Elements, key, df_expand_key_make(df_hash_from_expand_key(key), 0), depth);
     {
-      last_vb->expr             = e_expr_ref_deref(arena, expr);
+      last_vb->expr             = need_extra_deref ? e_expr_ref_deref(arena, expr) : expr;
       last_vb->cfg_table        = cfg_table;
       last_vb->visual_idx_range = last_vb->semantic_idx_range = r1u64(0, array_count);
     }

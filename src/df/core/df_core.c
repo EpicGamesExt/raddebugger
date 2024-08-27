@@ -3894,35 +3894,11 @@ df_expr_from_expr_cfg(Arena *arena, E_Expr *expr, DF_CfgTable *cfg)
   return expr;
 }
 
-//- rjf: type * view rule -> type
-
-internal E_TypeKey
-df_type_key_from_type_key_cfg(E_TypeKey key, DF_CfgTable *cfg)
-{
-  for(DF_CfgVal *val = cfg->first_val; val != 0 && val != &df_g_nil_cfg_val; val = val->linear_next)
-  {
-    DF_CoreViewRuleSpec *spec = df_core_view_rule_spec_from_string(val->string);
-    if(spec->info.flags & DF_CoreViewRuleSpecInfoFlag_TypeResolution)
-    {
-      key = spec->info.type_resolution(key, val->last->root);
-    }
-  }
-  return key;
-}
-
 //- rjf: eval * view rule table -> eval
 
 internal E_Eval
 df_eval_from_eval_cfg(Arena *arena, E_Eval eval, DF_CfgTable *cfg)
 {
-  for(DF_CfgVal *val = cfg->first_val; val != 0 && val != &df_g_nil_cfg_val; val = val->linear_next)
-  {
-    DF_CoreViewRuleSpec *spec = df_core_view_rule_spec_from_string(val->string);
-    if(spec->info.flags & DF_CoreViewRuleSpecInfoFlag_TypeResolution)
-    {
-      eval.type_key = spec->info.type_resolution(eval.type_key, val->last->root);
-    }
-  }
   for(DF_CfgVal *val = cfg->first_val; val != 0 && val != &df_g_nil_cfg_val; val = val->linear_next)
   {
     DF_CoreViewRuleSpec *spec = df_core_view_rule_spec_from_string(val->string);

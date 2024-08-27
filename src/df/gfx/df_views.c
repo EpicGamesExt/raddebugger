@@ -1239,7 +1239,7 @@ df_string_from_eval_viz_row_column(Arena *arena, DF_EvalView *ev, DF_EvalVizRow 
     case DF_WatchViewColumnKind_Type:
     {
       E_IRTreeAndType irtree = e_irtree_and_type_from_expr(arena, row->expr);
-      E_TypeKey type_key = df_type_key_from_type_key_cfg(irtree.type_key, row->cfg_table);
+      E_TypeKey type_key = irtree.type_key;
       result = !e_type_key_match(type_key, e_type_key_zero()) ? e_type_string_from_key(arena, type_key) : str8_zero();
       result = str8_skip_chop_whitespace(result);
     }break;
