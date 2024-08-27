@@ -1233,7 +1233,7 @@ df_string_from_eval_viz_row_column(Arena *arena, DF_EvalView *ev, DF_EvalVizRow 
     }break;
     case DF_WatchViewColumnKind_Value:
     {
-      E_Eval eval = df_eval_from_eval_cfg(arena, e_eval_from_expr(arena, row->expr), row->cfg_table);
+      E_Eval eval = e_eval_from_expr(arena, row->expr);
       result = df_value_string_from_eval(arena, !editable * DF_EvalVizStringFlag_ReadOnlyDisplayRules, default_radix, font, font_size, max_size_px, eval, row->member, row->cfg_table);
     }break;
     case DF_WatchViewColumnKind_Type:
@@ -1249,7 +1249,7 @@ df_string_from_eval_viz_row_column(Arena *arena, DF_EvalView *ev, DF_EvalVizRow 
     }break;
     case DF_WatchViewColumnKind_Module:
     {
-      E_Eval eval = df_eval_from_eval_cfg(arena, e_eval_from_expr(arena, row->expr), row->cfg_table);
+      E_Eval eval = e_eval_from_expr(arena, row->expr);
       DF_Entity *process = df_entity_from_handle(df_interact_regs()->process);
       DF_Entity *module = df_module_from_process_vaddr(process, eval.value.u64);
       result = df_display_string_from_entity(arena, module);
@@ -2630,7 +2630,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
         U64 row_hash = df_hash_from_expand_key(row->key);
         B32 row_selected = (selection_tbl.min.y <= (semantic_idx+1) && (semantic_idx+1) <= selection_tbl.max.y);
         B32 row_expanded = df_expand_key_is_set(&eval_view->expand_tree_table, row->key);
-        E_Eval row_eval = df_eval_from_eval_cfg(scratch.arena, e_eval_from_expr(scratch.arena, row->expr), row->cfg_table);
+        E_Eval row_eval = e_eval_from_expr(scratch.arena, row->expr);
         B32 row_is_expandable = df_viz_row_is_expandable(row);
         B32 row_is_editable = df_viz_row_is_editable(row);
         B32 next_row_expanded = row_expanded;

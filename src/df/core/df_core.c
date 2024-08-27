@@ -3894,22 +3894,6 @@ df_expr_from_expr_cfg(Arena *arena, E_Expr *expr, DF_CfgTable *cfg)
   return expr;
 }
 
-//- rjf: eval * view rule table -> eval
-
-internal E_Eval
-df_eval_from_eval_cfg(Arena *arena, E_Eval eval, DF_CfgTable *cfg)
-{
-  for(DF_CfgVal *val = cfg->first_val; val != 0 && val != &df_g_nil_cfg_val; val = val->linear_next)
-  {
-    DF_CoreViewRuleSpec *spec = df_core_view_rule_spec_from_string(val->string);
-    if(spec->info.flags & DF_CoreViewRuleSpecInfoFlag_EvalResolution)
-    {
-      eval = spec->info.eval_resolution(arena, eval, val->last->root);
-    }
-  }
-  return eval;
-}
-
 //- rjf: evaluation value string builder helpers
 
 internal String8
@@ -5353,23 +5337,6 @@ df_tex2dformat_from_eval_params(E_Eval eval, MD_Node *params)
     }
   }
   return result;
-}
-
-//- rjf: view rule eval application
-
-internal E_Eval
-df_eval_from_eval_cfg_table(Arena *arena, E_Eval eval, DF_CfgTable *cfg)
-{
-  for(DF_CfgVal *val = cfg->first_val; val != 0 && val != &df_g_nil_cfg_val; val = val->linear_next)
-  {
-    DF_CoreViewRuleSpec *spec = df_core_view_rule_spec_from_string(val->string);
-    if(spec->info.flags & DF_CoreViewRuleSpecInfoFlag_EvalResolution)
-    {
-      eval = spec->info.eval_resolution(arena, eval, val->last->root);
-      break;
-    }
-  }
-  return eval;
 }
 
 //- rjf: eval -> entity
