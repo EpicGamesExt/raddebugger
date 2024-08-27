@@ -39,35 +39,6 @@ struct DF_VR_DisasmState
 };
 
 ////////////////////////////////
-//~ rjf: "bitmap"
-
-typedef struct DF_BitmapTopologyInfo DF_BitmapTopologyInfo;
-struct DF_BitmapTopologyInfo
-{
-  U64 width;
-  U64 height;
-  R_Tex2DFormat fmt;
-};
-
-typedef struct DF_VR_BitmapState DF_VR_BitmapState;
-struct DF_VR_BitmapState
-{
-  U64 last_open_frame_idx;
-  F32 loaded_t;
-};
-
-typedef struct DF_VR_BitmapBoxDrawData DF_VR_BitmapBoxDrawData;
-struct DF_VR_BitmapBoxDrawData
-{
-  Rng2F32 src;
-  R_Handle texture;
-  F32 loaded_t;
-  B32 hovered;
-  Vec2S32 mouse_px;
-  F32 ui_per_bmp_px;
-};
-
-////////////////////////////////
 //~ rjf: "geo"
 
 typedef struct DF_GeoTopologyInfo DF_GeoTopologyInfo;

@@ -6862,6 +6862,8 @@ DF_VIEW_SETUP_FUNCTION_DEF(Disassembly)
   if(dv->initialized == 0)
   {
     dv->initialized = 1;
+    dv->cursor = txt_pt(1, 1);
+    dv->mark = txt_pt(1, 1);
     dv->style_flags = DASM_StyleFlag_Addresses|DASM_StyleFlag_SourceFilesNames|DASM_StyleFlag_SourceLines|DASM_StyleFlag_SymbolNames;
     df_code_view_init(&dv->cv, view);
   }
@@ -6875,23 +6877,54 @@ DF_VIEW_CMD_FUNCTION_DEF(Disassembly)
   HS_Scope *hs_scope = hs_scope_open();
   TXT_Scope *txt_scope = txt_scope_open();
   
-  //- rjf: unpack disasm info
-  DF_Entity *process = df_entity_from_handle(dv->process);
-  Architecture arch = df_architecture_from_entity(process);
-  U64 dasm_base_vaddr = AlignDownPow2(dv->base_vaddr, KB(16));
-  DF_Entity *dasm_module = df_module_from_process_vaddr(process,  dasm_base_vaddr);
-  DI_Key dasm_dbgi_key = df_dbgi_key_from_module(dasm_module);
-  Rng1U64 dasm_vaddr_range = r1u64(dasm_base_vaddr, dasm_base_vaddr+KB(16));
-  U128 dasm_key = ctrl_hash_store_key_from_process_vaddr_range(process->ctrl_machine_id, process->ctrl_handle, dasm_vaddr_range, 0);
+  //////////////////////////////
+  //- rjf: if disassembly views are not parameterized by anything, they
+  // automatically snap to the selected thread's RIP, rounded down to the
+  // nearest 16K boundary
+  //
+  B32 auto_selected_thread = 0;
+  if(string.size == 0)
+  {
+    auto_selected_thread = 1;
+    string = str8_lit("(rip.u64 & (~(0x4000 - 1))");
+  }
+  
+  //////////////////////////////
+  //- rjf: unpack parameterization info
+  //
+  E_Eval eval = e_eval_from_string(scratch.arena, string);
+  E_Space space = eval.space;
+  if(auto_selected_thread)
+  {
+    space = df_eval_space_from_entity(df_entity_from_handle(df_interact_regs()->process));
+  }
+  Rng1U64 range = df_range_from_eval_params(eval, params);
+  Architecture arch = df_architecture_from_eval_params(eval, params);
+  DF_Entity *space_entity = df_entity_from_eval_space(space);
+  DF_Entity *dasm_module = &df_g_nil_entity;
+  DI_Key dbgi_key = {0};
+  U64 base_vaddr = 0;
+  switch(space_entity->kind)
+  {
+    default:{}break;
+    case DF_EntityKind_Process:
+    {
+      arch = df_architecture_from_entity(space_entity);
+      dasm_module = df_module_from_process_vaddr(space_entity, range.min);
+      dbgi_key = df_dbgi_key_from_module(dasm_module);
+      base_vaddr = dasm_module->vaddr_rng.min;
+    }break;
+  }
+  U128 dasm_key = df_key_from_eval_space_range(space, range, 0);
   U128 dasm_data_hash = {0};
   DASM_Params dasm_params = {0};
   {
-    dasm_params.vaddr = dasm_vaddr_range.min;
-    dasm_params.arch = arch;
+    dasm_params.vaddr       = range.min;
+    dasm_params.arch        = arch;
     dasm_params.style_flags = dv->style_flags;
-    dasm_params.syntax = DASM_Syntax_Intel;
-    dasm_params.base_vaddr = dasm_module->vaddr_rng.min;
-    dasm_params.dbgi_key = dasm_dbgi_key;
+    dasm_params.syntax      = DASM_Syntax_Intel;
+    dasm_params.base_vaddr  = base_vaddr;
+    dasm_params.dbgi_key    = dbgi_key;
   }
   DASM_Info dasm_info = dasm_info_from_key_params(dasm_scope, dasm_key, &dasm_params, &dasm_data_hash);
   df_interact_regs()->text_key = dasm_info.text_key;
@@ -6899,11 +6932,17 @@ DF_VIEW_CMD_FUNCTION_DEF(Disassembly)
   U128 dasm_text_hash = {0};
   TXT_TextInfo dasm_text_info = txt_text_info_from_key_lang(txt_scope, df_interact_regs()->text_key, df_interact_regs()->lang_kind, &dasm_text_hash);
   String8 dasm_text_data = hs_data_from_hash(hs_scope, dasm_text_hash);
+  B32 has_disasm = (dasm_info.lines.count != 0 && dasm_text_info.lines_count != 0);
+  B32 is_loading = (!has_disasm && dim_1u64(range) != 0 && eval.msgs.max_kind == E_MsgKind_Null);
   
+  //////////////////////////////
   //- rjf: process general code-view commands
-  df_code_view_cmds(ws, panel, view, &dv->cv, cmds, dasm_text_data, &dasm_text_info, &dasm_info.lines, dasm_vaddr_range, dasm_dbgi_key);
+  //
+  df_code_view_cmds(ws, panel, view, &dv->cv, cmds, dasm_text_data, &dasm_text_info, &dasm_info.lines, range, dbgi_key);
   
+  //////////////////////////////
   //- rjf: process disassembly-specific commands
+  //
   for(DF_CmdNode *n = cmds->first; n != 0; n = n->next)
   {
     DF_Cmd *cmd = &n->cmd;
@@ -6939,8 +6978,6 @@ DF_VIEW_CMD_FUNCTION_DEF(Disassembly)
             }
           }
         }
-        dv->process = df_handle_from_entity(process);
-        dv->base_vaddr = params.vaddr;
         dv->goto_vaddr = params.vaddr;
       }break;
       case DF_CoreCmdKind_ToggleCodeBytesVisibility: {dv->style_flags ^= DASM_StyleFlag_CodeBytes;}break;
@@ -6964,43 +7001,62 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
   TXT_Scope *txt_scope = txt_scope_open();
   
   //////////////////////////////
+  //- rjf: if disassembly views are not parameterized by anything, they
+  // automatically snap to the selected thread's RIP, rounded down to the
+  // nearest 16K boundary
+  //
+  B32 auto_selected_thread = 0;
+  if(string.size == 0)
+  {
+    auto_selected_thread = 1;
+    string = str8_lit("(rip.u64 & (~(0x4000 - 1))");
+  }
+  
+  //////////////////////////////
   //- rjf: set up invariants
   //
   F32 bottom_bar_height = ui_top_font_size()*2.f;
   Rng2F32 code_area_rect = r2f32p(rect.x0, rect.y0, rect.x1, rect.y1 - bottom_bar_height);
   Rng2F32 bottom_bar_rect = r2f32p(rect.x0, rect.y1 - bottom_bar_height, rect.x1, rect.y1);
+  df_interact_regs()->cursor = dv->cursor;
+  df_interact_regs()->mark = dv->mark;
   
   //////////////////////////////
-  //- rjf: no disasm process open? -> snap to selected thread
+  //- rjf: unpack parameterization info
   //
-  if(df_entity_is_nil(df_entity_from_handle(dv->process)))
+  E_Eval eval = e_eval_from_string(scratch.arena, string);
+  E_Space space = eval.space;
+  if(auto_selected_thread)
   {
-    DF_Entity *thread = df_entity_from_handle(df_interact_regs()->thread);
-    U64 rip_vaddr = df_query_cached_rip_from_thread_unwind(thread, df_interact_regs()->unwind_count);
-    dv->process = df_handle_from_entity(df_entity_ancestor_from_kind(thread, DF_EntityKind_Process));
-    dv->base_vaddr = rip_vaddr;
-    dv->goto_vaddr = rip_vaddr;
+    space = df_eval_space_from_entity(df_entity_from_handle(df_interact_regs()->process));
   }
-  
-  //////////////////////////////
-  //- rjf: unpack disassembly info
-  //
-  DF_Entity *process = df_entity_from_handle(dv->process);
-  Architecture arch = df_architecture_from_entity(process);
-  U64 dasm_base_vaddr = AlignDownPow2(dv->base_vaddr, KB(16));
-  DF_Entity *dasm_module = df_module_from_process_vaddr(process,  dasm_base_vaddr);
-  DI_Key dasm_dbgi_key = df_dbgi_key_from_module(dasm_module);
-  Rng1U64 dasm_vaddr_range = r1u64(dasm_base_vaddr, dasm_base_vaddr+KB(16));
-  U128 dasm_key = ctrl_hash_store_key_from_process_vaddr_range(process->ctrl_machine_id, process->ctrl_handle, dasm_vaddr_range, 0);
+  Rng1U64 range = df_range_from_eval_params(eval, params);
+  Architecture arch = df_architecture_from_eval_params(eval, params);
+  DF_Entity *space_entity = df_entity_from_eval_space(space);
+  DF_Entity *dasm_module = &df_g_nil_entity;
+  DI_Key dbgi_key = {0};
+  U64 base_vaddr = 0;
+  switch(space_entity->kind)
+  {
+    default:{}break;
+    case DF_EntityKind_Process:
+    {
+      arch = df_architecture_from_entity(space_entity);
+      dasm_module = df_module_from_process_vaddr(space_entity, range.min);
+      dbgi_key = df_dbgi_key_from_module(dasm_module);
+      base_vaddr = dasm_module->vaddr_rng.min;
+    }break;
+  }
+  U128 dasm_key = df_key_from_eval_space_range(space, range, 0);
   U128 dasm_data_hash = {0};
   DASM_Params dasm_params = {0};
   {
-    dasm_params.vaddr = dasm_vaddr_range.min;
-    dasm_params.arch = arch;
+    dasm_params.vaddr       = range.min;
+    dasm_params.arch        = arch;
     dasm_params.style_flags = dv->style_flags;
-    dasm_params.syntax = DASM_Syntax_Intel;
-    dasm_params.base_vaddr = dasm_module->vaddr_rng.min;
-    dasm_params.dbgi_key = dasm_dbgi_key;
+    dasm_params.syntax      = DASM_Syntax_Intel;
+    dasm_params.base_vaddr  = base_vaddr;
+    dasm_params.dbgi_key    = dbgi_key;
   }
   DASM_Info dasm_info = dasm_info_from_key_params(dasm_scope, dasm_key, &dasm_params, &dasm_data_hash);
   df_interact_regs()->text_key = dasm_info.text_key;
@@ -7009,7 +7065,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
   TXT_TextInfo dasm_text_info = txt_text_info_from_key_lang(txt_scope, df_interact_regs()->text_key, df_interact_regs()->lang_kind, &dasm_text_hash);
   String8 dasm_text_data = hs_data_from_hash(hs_scope, dasm_text_hash);
   B32 has_disasm = (dasm_info.lines.count != 0 && dasm_text_info.lines_count != 0);
-  B32 is_loading = (!has_disasm && !df_entity_is_nil(process) && dim_1u64(dasm_vaddr_range) != 0);
+  B32 is_loading = (!has_disasm && dim_1u64(range) != 0 && eval.msgs.max_kind == E_MsgKind_Null);
   
   //////////////////////////////
   //- rjf: is loading -> equip view with loading information
@@ -7026,7 +7082,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
   {
     U64 vaddr = dv->goto_vaddr;
     dv->goto_vaddr = 0;
-    U64 line_idx = dasm_line_array_idx_from_code_off__linear_scan(&dasm_info.lines, vaddr-dasm_vaddr_range.min);
+    U64 line_idx = dasm_line_array_idx_from_code_off__linear_scan(&dasm_info.lines, vaddr-range.min);
     S64 line_num = (S64)(line_idx+1);
     cv->goto_line_num = line_num;
   }
@@ -7036,7 +7092,7 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
   //
   if(!is_loading && has_disasm)
   {
-    df_code_view_build(scratch.arena, ws, panel, view, cv, DF_CodeViewBuildFlag_All, code_area_rect, dasm_text_data, &dasm_text_info, &dasm_info.lines, dasm_vaddr_range, dasm_dbgi_key);
+    df_code_view_build(scratch.arena, ws, panel, view, cv, DF_CodeViewBuildFlag_All, code_area_rect, dasm_text_data, &dasm_text_info, &dasm_info.lines, range, dbgi_key);
   }
   
   //////////////////////////////
@@ -7045,9 +7101,9 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
   if(!is_loading && has_disasm)
   {
     U64 off = dasm_line_array_code_off_from_idx(&dasm_info.lines, df_interact_regs()->cursor.line-1);
-    df_interact_regs()->vaddr_range = r1u64(dasm_base_vaddr+off, dasm_base_vaddr+off);
+    df_interact_regs()->vaddr_range = r1u64(base_vaddr+off, base_vaddr+off);
     df_interact_regs()->voff_range = df_voff_range_from_vaddr_range(dasm_module, df_interact_regs()->vaddr_range);
-    df_interact_regs()->lines = df_lines_from_dbgi_key_voff(df_frame_arena(), &dasm_dbgi_key, df_interact_regs()->voff_range.min);
+    df_interact_regs()->lines = df_lines_from_dbgi_key_voff(df_frame_arena(), &dbgi_key, df_interact_regs()->voff_range.min);
   }
   
   //////////////////////////////
@@ -7063,16 +7119,24 @@ DF_VIEW_UI_FUNCTION_DEF(Disassembly)
       UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
       DF_Font(ws, DF_FontSlot_Code)
     {
-      DF_Entity *module = df_module_from_process_vaddr(process, dasm_vaddr_range.min);
-      U64 cursor_vaddr = (1 <= df_interact_regs()->cursor.line && df_interact_regs()->cursor.line <= dasm_info.lines.count) ? (dasm_vaddr_range.min+dasm_info.lines.v[df_interact_regs()->cursor.line-1].code_off) : 0;
-      ui_labelf("%S", path_normalized_from_string(scratch.arena, module->name));
-      ui_spacer(ui_em(1.5f, 1));
+      U64 cursor_vaddr = (1 <= df_interact_regs()->cursor.line && df_interact_regs()->cursor.line <= dasm_info.lines.count) ? (range.min+dasm_info.lines.v[df_interact_regs()->cursor.line-1].code_off) : 0;
+      if(!df_entity_is_nil(dasm_module))
+      {
+        ui_labelf("%S", path_normalized_from_string(scratch.arena, dasm_module->name));
+        ui_spacer(ui_em(1.5f, 1));
+      }
       ui_labelf("Address: 0x%I64x, Line: %I64d, Column: %I64d", cursor_vaddr, df_interact_regs()->cursor.line, df_interact_regs()->cursor.column);
       ui_spacer(ui_pct(1, 0));
       ui_labelf("(read only)");
       ui_labelf("bin");
     }
   }
+  
+  //////////////////////////////
+  //- rjf: commit storage
+  //
+  dv->cursor = df_interact_regs()->cursor;
+  dv->mark = df_interact_regs()->mark;
   
   txt_scope_close(txt_scope);
   dasm_scope_close(dasm_scope);

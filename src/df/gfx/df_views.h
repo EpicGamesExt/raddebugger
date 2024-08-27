@@ -419,8 +419,8 @@ typedef struct DF_DisasmViewState DF_DisasmViewState;
 struct DF_DisasmViewState
 {
   B32 initialized;
-  DF_Handle process;
-  U64 base_vaddr;
+  TxtPt cursor;
+  TxtPt mark;
   DASM_StyleFlags style_flags;
   U64 goto_vaddr;
   DF_CodeViewState cv;

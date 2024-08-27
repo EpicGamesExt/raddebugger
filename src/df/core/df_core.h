@@ -1634,6 +1634,7 @@ internal E_TypeKey df_type_key_from_params(MD_Node *params);
 internal E_Value df_value_from_params_key(MD_Node *params, String8 key);
 internal Rng1U64 df_range_from_eval_params(E_Eval eval, MD_Node *params);
 internal TXT_LangKind df_lang_kind_from_eval_params(E_Eval eval, MD_Node *params);
+internal Architecture df_architecture_from_eval_params(E_Eval eval, MD_Node *params);
 internal Vec2S32 df_dim2s32_from_eval_params(E_Eval eval, MD_Node *params);
 internal R_Tex2DFormat df_tex2dformat_from_eval_params(E_Eval eval, MD_Node *params);
 

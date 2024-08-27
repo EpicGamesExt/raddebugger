@@ -4969,6 +4969,7 @@ df_eval_viz_row_list_push_new(Arena *arena, DF_EvalView *eval_view, DF_EvalVizWi
       expr = df_expr_from_expr_cfg(arena, expr, cfg_table);
     }break;
     case DF_EvalVizBlockKind_Root:
+    case DF_EvalVizBlockKind_Canvas:
     {
       cfg_table = block->cfg_table;
     }break;
@@ -5320,6 +5321,19 @@ df_lang_kind_from_eval_params(E_Eval eval, MD_Node *params)
     lang_kind = txt_lang_kind_from_extension(lang_kind_string);
   }
   return lang_kind;
+}
+
+internal Architecture
+df_architecture_from_eval_params(E_Eval eval, MD_Node *params)
+{
+  Architecture arch = Architecture_Null;
+  MD_Node *arch_node = md_child_from_string(params, str8_lit("arch"), 0);
+  String8 arch_kind_string = arch_node->first->string;
+  if(str8_match(arch_kind_string, str8_lit("x64"), StringMatchFlag_CaseInsensitive))
+  {
+    arch = Architecture_x64;
+  }
+  return arch;
 }
 
 internal Vec2S32

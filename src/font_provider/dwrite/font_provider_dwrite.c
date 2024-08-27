@@ -432,7 +432,7 @@ fp_raster(Arena *arena, FP_Handle font_handle, F32 size, FP_RasterFlags flags, S
   F32 right_side_bearing = 0;
   if(font.face != 0)
   {
-    atlas_dim.y = (S16)((96.f/72.f) * size * (font_metrics.ascent + font_metrics.descent) / design_units_per_em);
+    atlas_dim.y = (S16)ceil_f32((96.f/72.f) * size * (font_metrics.ascent + font_metrics.descent) / design_units_per_em);
     for(U64 idx = 0; idx < glyphs_count; idx += 1)
     {
       DWRITE_GLYPH_METRICS *glyph_metrics = glyphs_metrics + idx;
