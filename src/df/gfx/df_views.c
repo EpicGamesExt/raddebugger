@@ -2709,7 +2709,35 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
             //- rjf: unpack
             DF_WatchViewPoint pt = {0, row->parent_key, row->key};
             DF_ViewSpec *canvas_view_spec = df_view_spec_from_string(row->expand_ui_rule_spec->info.view_spec_name);
-            DF_View *canvas_view = df_transient_view_from_expand_key(view, ws, canvas_view_spec, e_string_from_expr(scratch.arena, row->expr), row->expand_ui_rule_params, row->key);
+            DF_View *canvas_view = df_transient_view_from_expand_key(view, row->key);
+            String8 canvas_view_expr = e_string_from_expr(scratch.arena, row->expr);
+            B32 need_new_spec = 0;
+            if(!need_new_spec && !str8_match(str8(canvas_view->query_buffer, canvas_view->query_string_size), canvas_view_expr, 0))
+            {
+              need_new_spec = 1;
+            }
+            if(!need_new_spec)
+            {
+              for(MD_EachNode(child, row->expand_ui_rule_params->first))
+              {
+                MD_Node *current_param = md_child_from_string(canvas_view->params_roots[canvas_view->params_write_gen%ArrayCount(canvas_view->params_roots)],
+                                                              child->string, 0);
+                if(md_node_is_nil(current_param))
+                {
+                  need_new_spec = 1;
+                  break;
+                }
+                else if(!md_node_deep_match(child, current_param, 0))
+                {
+                  need_new_spec = 1;
+                  break;
+                }
+              }
+            }
+            if(need_new_spec)
+            {
+              df_view_equip_spec(ws, canvas_view, canvas_view_spec, canvas_view_expr, row->expand_ui_rule_params);
+            }
             Vec2F32 canvas_dim = v2f32(scroll_list_params.dim_px.x - ui_top_font_size()*1.5f,
                                        (row->skipped_size_in_rows+row->size_in_rows+row->chopped_size_in_rows)*scroll_list_params.row_height_px);
             Rng2F32 canvas_rect = r2f32p(rect.x0,
@@ -2761,6 +2789,9 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
             UI_Box *canvas_box = ui_build_box_from_stringf(UI_BoxFlag_FloatingY, "###canvas_%I64x", row_hash);
             UI_Parent(canvas_box) UI_WidthFill UI_HeightFill
             {
+              //- rjf: loading animation
+              df_loading_overlay(canvas_rect, canvas_view->loading_t, canvas_view->loading_progress_v, canvas_view->loading_progress_v_target);
+              
               //- rjf: push interaction registers, fill with per-view states
               df_push_interact_regs();
               {
@@ -8181,6 +8212,18 @@ DF_VIEW_UI_FUNCTION_DEF(Bitmap)
   U128 data_hash = {0};
   R_Handle texture = tex_texture_from_key_topology(tex_scope, texture_key, topology, &data_hash);
   String8 data = hs_data_from_hash(hs_scope, data_hash);
+  
+  //////////////////////////////
+  //- rjf: equip loading info
+  //
+  if(offset_range.max != offset_range.min &&
+     eval.msgs.max_kind == E_MsgKind_Null &&
+     (u128_match(data_hash, u128_zero()) ||
+      r_handle_match(texture, r_handle_zero()) ||
+      data.size == 0))
+  {
+    df_view_equip_loading_info(view, 1, 0, 0);
+  }
   
   //////////////////////////////
   //- rjf: build canvas box

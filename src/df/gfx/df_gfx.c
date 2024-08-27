@@ -977,7 +977,7 @@ df_view_store_paramf(DF_View *view, String8 key, char *fmt, ...)
 //~ rjf: Expand-Keyed Transient View Functions
 
 internal DF_View *
-df_transient_view_from_expand_key(DF_View *owner_view, DF_Window *window, DF_ViewSpec *spec, String8 query, MD_Node *params, DF_ExpandKey key)
+df_transient_view_from_expand_key(DF_View *owner_view, DF_ExpandKey key)
 {
   if(owner_view->transient_view_slots_count == 0)
   {
@@ -1011,7 +1011,6 @@ df_transient_view_from_expand_key(DF_View *owner_view, DF_Window *window, DF_Vie
     node->first_frame_index_touched = node->last_frame_index_touched = df_frame_index();
     view = node->view;
     DLLPushBack_NPZ(&df_g_nil_view, owner_view->first_transient, owner_view->last_transient, view, order_next, order_prev);
-    df_view_equip_spec(window, view, spec, query, params);
   }
   return view;
 }
@@ -7226,86 +7225,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         UI_Parent(panel_box)
         {
           DF_View *view = df_selected_tab_from_panel(panel);
-          if(view->loading_t >= 0.001f)
-          {
-            // rjf: set up dimensions
-            F32 edge_padding = 30.f;
-            F32 width = ui_top_font_size() * 10;
-            F32 height = ui_top_font_size() * 1.f;
-            F32 min_thickness = ui_top_font_size()/2;
-            F32 trail = ui_top_font_size() * 4;
-            F32 t = pow_f32(sin_f32((F32)df_time_in_seconds() / 1.8f), 2.f);
-            F64 v = 1.f - abs_f32(0.5f - t);
-            Rng2F32 panel_rect = panel_box->rect;
-            
-            // rjf: colors
-            Vec4F32 bg_color = df_rgba_from_theme_color(DF_ThemeColor_FloatingBackground);
-            Vec4F32 bd_color = df_rgba_from_theme_color(DF_ThemeColor_FloatingBorder);
-            Vec4F32 hl_color = df_rgba_from_theme_color(DF_ThemeColor_TextNeutral);
-            bg_color.w *= view->loading_t;
-            bd_color.w *= view->loading_t;
-            hl_color.w *= view->loading_t;
-            
-            // rjf: grab animation params
-            F32 bg_work_indicator_t = 1.f;
-            
-            // rjf: build indicator
-            UI_CornerRadius(height/3.f)
-            {
-              // rjf: rects
-              Rng2F32 indicator_region_rect =
-                r2f32p((panel_rect.x0 + panel_rect.x1)/2 - width/2  - panel_rect.x0,
-                       (panel_rect.y0 + panel_rect.y1)/2 - height/2 - panel_rect.y0,
-                       (panel_rect.x0 + panel_rect.x1)/2 + width/2  - panel_rect.x0,
-                       (panel_rect.y0 + panel_rect.y1)/2 + height/2 - panel_rect.y0);
-              Rng2F32 indicator_rect =
-                r2f32p(indicator_region_rect.x0 + width*t - min_thickness/2 - trail*v,
-                       indicator_region_rect.y0,
-                       indicator_region_rect.x0 + width*t + min_thickness/2 + trail*v,
-                       indicator_region_rect.y1);
-              indicator_rect.x0 = Clamp(indicator_region_rect.x0, indicator_rect.x0, indicator_region_rect.x1);
-              indicator_rect.x1 = Clamp(indicator_region_rect.x0, indicator_rect.x1, indicator_region_rect.x1);
-              indicator_rect = pad_2f32(indicator_rect, -1.f);
-              
-              // rjf: does the view have loading *progress* info? -> draw extra progress layer
-              if(view->loading_progress_v != view->loading_progress_v_target)
-              {
-                F64 pct_done_f64 = ((F64)view->loading_progress_v/(F64)view->loading_progress_v_target);
-                F32 pct_done = (F32)pct_done_f64;
-                ui_set_next_palette(ui_build_palette(ui_top_palette(), .background = v4f32(1, 1, 1, 0.2f*view->loading_t)));
-                ui_set_next_fixed_x(indicator_region_rect.x0);
-                ui_set_next_fixed_y(indicator_region_rect.y0);
-                ui_set_next_fixed_width(dim_2f32(indicator_region_rect).x*pct_done);
-                ui_set_next_fixed_height(dim_2f32(indicator_region_rect).y);
-                ui_build_box_from_key(UI_BoxFlag_DrawBackground|UI_BoxFlag_FloatingX|UI_BoxFlag_FloatingY, ui_key_zero());
-              }
-              
-              // rjf: fill
-              ui_set_next_palette(ui_build_palette(ui_top_palette(), .background = hl_color));
-              ui_set_next_fixed_x(indicator_rect.x0);
-              ui_set_next_fixed_y(indicator_rect.y0);
-              ui_set_next_fixed_width(dim_2f32(indicator_rect).x);
-              ui_set_next_fixed_height(dim_2f32(indicator_rect).y);
-              ui_build_box_from_key(UI_BoxFlag_DrawBackground|UI_BoxFlag_FloatingX|UI_BoxFlag_FloatingY, ui_key_zero());
-              
-              // rjf: animated bar
-              ui_set_next_palette(ui_build_palette(ui_top_palette(), .border = bd_color, .background = bg_color));
-              ui_set_next_fixed_x(indicator_region_rect.x0);
-              ui_set_next_fixed_y(indicator_region_rect.y0);
-              ui_set_next_fixed_width(dim_2f32(indicator_region_rect).x);
-              ui_set_next_fixed_height(dim_2f32(indicator_region_rect).y);
-              UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawBorder|UI_BoxFlag_FloatingX|UI_BoxFlag_FloatingY|UI_BoxFlag_Clickable, "bg_system_status");
-              UI_Signal sig = ui_signal_from_box(box);
-            }
-            
-            // rjf: build background
-            UI_WidthFill UI_HeightFill
-            {
-              ui_set_next_palette(ui_build_palette(ui_top_palette(), .background = bg_color));
-              ui_set_next_blur_size(10.f*view->loading_t);
-              ui_build_box_from_key(UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawBackgroundBlur|UI_BoxFlag_FloatingX|UI_BoxFlag_FloatingY, ui_key_zero());
-            }
-          }
+          df_loading_overlay(panel_rect, view->loading_t, view->loading_progress_v, view->loading_progress_v_target);
         }
         
         //////////////////////////
@@ -7824,6 +7744,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
         Task *next;
         DF_Panel *panel;
         DF_View *list_first;
+        DF_View *transient_owner;
       };
       Task start_task = {0, &df_g_nil_panel, ws->query_view_stack_top};
       Task *first_task = &start_task;
@@ -7850,6 +7771,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             SLLQueuePush(first_task, last_task, task);
             task->panel = t->panel;
             task->list_first = view->first_transient;
+            task->transient_owner = view;
           }
           if(window_is_focused)
           {
@@ -7881,7 +7803,8 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           {
             view->is_filtering_t = (F32)!!view->is_filtering;
           }
-          if(view == df_selected_tab_from_panel(t->panel))
+          if(view == df_selected_tab_from_panel(t->panel) ||
+             t->transient_owner == df_selected_tab_from_panel(t->panel))
           {
             view->loading_t_target = 0;
           }
@@ -9867,6 +9790,93 @@ df_stop_explanation_string_icon_from_ctrl_event(Arena *arena, CTRL_Event *event,
     *icon_out = icon;
   }
   return explanation;
+}
+
+////////////////////////////////
+//~ rjf: UI Widgets: Loading Overlay
+
+internal void
+df_loading_overlay(Rng2F32 rect, F32 loading_t, U64 progress_v, U64 progress_v_target)
+{
+  if(loading_t >= 0.001f)
+  {
+    // rjf: set up dimensions
+    F32 edge_padding = 30.f;
+    F32 width = ui_top_font_size() * 10;
+    F32 height = ui_top_font_size() * 1.f;
+    F32 min_thickness = ui_top_font_size()/2;
+    F32 trail = ui_top_font_size() * 4;
+    F32 t = pow_f32(sin_f32((F32)df_time_in_seconds() / 1.8f), 2.f);
+    F64 v = 1.f - abs_f32(0.5f - t);
+    
+    // rjf: colors
+    Vec4F32 bg_color = df_rgba_from_theme_color(DF_ThemeColor_FloatingBackground);
+    Vec4F32 bd_color = df_rgba_from_theme_color(DF_ThemeColor_FloatingBorder);
+    Vec4F32 hl_color = df_rgba_from_theme_color(DF_ThemeColor_TextNeutral);
+    bg_color.w *= loading_t;
+    bd_color.w *= loading_t;
+    hl_color.w *= loading_t;
+    
+    // rjf: grab animation params
+    F32 bg_work_indicator_t = 1.f;
+    
+    // rjf: build indicator
+    UI_CornerRadius(height/3.f)
+    {
+      // rjf: rects
+      Rng2F32 indicator_region_rect =
+        r2f32p((rect.x0 + rect.x1)/2 - width/2  - rect.x0,
+               (rect.y0 + rect.y1)/2 - height/2 - rect.y0,
+               (rect.x0 + rect.x1)/2 + width/2  - rect.x0,
+               (rect.y0 + rect.y1)/2 + height/2 - rect.y0);
+      Rng2F32 indicator_rect =
+        r2f32p(indicator_region_rect.x0 + width*t - min_thickness/2 - trail*v,
+               indicator_region_rect.y0,
+               indicator_region_rect.x0 + width*t + min_thickness/2 + trail*v,
+               indicator_region_rect.y1);
+      indicator_rect.x0 = Clamp(indicator_region_rect.x0, indicator_rect.x0, indicator_region_rect.x1);
+      indicator_rect.x1 = Clamp(indicator_region_rect.x0, indicator_rect.x1, indicator_region_rect.x1);
+      indicator_rect = pad_2f32(indicator_rect, -1.f);
+      
+      // rjf: does the view have loading *progress* info? -> draw extra progress layer
+      if(progress_v != progress_v_target)
+      {
+        F64 pct_done_f64 = ((F64)progress_v/(F64)progress_v_target);
+        F32 pct_done = (F32)pct_done_f64;
+        ui_set_next_palette(ui_build_palette(ui_top_palette(), .background = v4f32(1, 1, 1, 0.2f*loading_t)));
+        ui_set_next_fixed_x(indicator_region_rect.x0);
+        ui_set_next_fixed_y(indicator_region_rect.y0);
+        ui_set_next_fixed_width(dim_2f32(indicator_region_rect).x*pct_done);
+        ui_set_next_fixed_height(dim_2f32(indicator_region_rect).y);
+        ui_build_box_from_key(UI_BoxFlag_DrawBackground|UI_BoxFlag_FloatingX|UI_BoxFlag_FloatingY, ui_key_zero());
+      }
+      
+      // rjf: fill
+      ui_set_next_palette(ui_build_palette(ui_top_palette(), .background = hl_color));
+      ui_set_next_fixed_x(indicator_rect.x0);
+      ui_set_next_fixed_y(indicator_rect.y0);
+      ui_set_next_fixed_width(dim_2f32(indicator_rect).x);
+      ui_set_next_fixed_height(dim_2f32(indicator_rect).y);
+      ui_build_box_from_key(UI_BoxFlag_DrawBackground|UI_BoxFlag_FloatingX|UI_BoxFlag_FloatingY, ui_key_zero());
+      
+      // rjf: animated bar
+      ui_set_next_palette(ui_build_palette(ui_top_palette(), .border = bd_color, .background = bg_color));
+      ui_set_next_fixed_x(indicator_region_rect.x0);
+      ui_set_next_fixed_y(indicator_region_rect.y0);
+      ui_set_next_fixed_width(dim_2f32(indicator_region_rect).x);
+      ui_set_next_fixed_height(dim_2f32(indicator_region_rect).y);
+      UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawBorder|UI_BoxFlag_FloatingX|UI_BoxFlag_FloatingY|UI_BoxFlag_Clickable, "bg_system_status");
+      UI_Signal sig = ui_signal_from_box(box);
+    }
+    
+    // rjf: build background
+    UI_WidthFill UI_HeightFill
+    {
+      ui_set_next_palette(ui_build_palette(ui_top_palette(), .background = bg_color));
+      ui_set_next_blur_size(10.f*loading_t);
+      ui_build_box_from_key(UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawBackgroundBlur|UI_BoxFlag_FloatingX|UI_BoxFlag_FloatingY, ui_key_zero());
+    }
+  }
 }
 
 ////////////////////////////////

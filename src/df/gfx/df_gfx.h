@@ -979,7 +979,7 @@ internal void df_view_store_paramf(DF_View *view, String8 key, char *fmt, ...);
 ////////////////////////////////
 //~ rjf: Expand-Keyed Transient View Functions
 
-internal DF_View *df_transient_view_from_expand_key(DF_View *owner_view, DF_Window *window, DF_ViewSpec *spec, String8 query, MD_Node *params, DF_ExpandKey key);
+internal DF_View *df_transient_view_from_expand_key(DF_View *owner_view, DF_ExpandKey key);
 
 ////////////////////////////////
 //~ rjf: View Rule Instance State Functions
@@ -1075,6 +1075,11 @@ internal String8 df_stop_explanation_string_icon_from_ctrl_event(Arena *arena, C
 
 #define DF_Palette(ws, code) UI_Palette(df_palette_from_code((ws), (code)))
 #define DF_Font(ws, slot) UI_Font(df_font_from_slot(slot)) UI_TextRasterFlags(df_raster_flags_from_slot((ws), (slot)))
+
+////////////////////////////////
+//~ rjf: UI Widgets: Loading Overlay
+
+internal void df_loading_overlay(Rng2F32 rect, F32 loading_t, U64 progress_v, U64 progress_v_target);
 
 ////////////////////////////////
 //~ rjf: UI Widgets: Fancy Buttons

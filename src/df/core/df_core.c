@@ -5321,8 +5321,7 @@ df_range_from_eval_params(E_Eval eval, MD_Node *params)
   if(size == 0 && e_type_kind_is_pointer_or_ref(type_kind) && (direct_type_kind == E_TypeKind_Struct ||
                                                                direct_type_kind == E_TypeKind_Union ||
                                                                direct_type_kind == E_TypeKind_Class ||
-                                                               direct_type_kind == E_TypeKind_Array ||
-                                                               e_type_kind_is_basic_or_enum(direct_type_kind)))
+                                                               direct_type_kind == E_TypeKind_Array))
   {
     size = e_type_byte_size_from_key(e_type_direct_from_key(e_type_unwrap(eval.type_key)));
   }
