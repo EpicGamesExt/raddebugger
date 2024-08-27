@@ -91,6 +91,7 @@ typedef enum UI_EventKind
   UI_EventKind_MouseMove,
   UI_EventKind_Scroll,
   UI_EventKind_AutocompleteHint,
+  UI_EventKind_FileDrop,
   UI_EventKind_COUNT
 }
 UI_EventKind;
@@ -141,6 +142,7 @@ struct UI_Event
   OS_Key key;
   OS_EventFlags modifiers;
   String8 string;
+  String8List paths;
   Vec2F32 pos;
   Vec2F32 delta_2f32;
   Vec2S32 delta_2s32;

@@ -541,6 +541,26 @@ os_w32_wnd_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
         window->dpi = new_dpi;
       }break;
       
+      //- rjf: [file drop]
+      case WM_DROPFILES:
+      {
+        HDROP drop = (HDROP)wParam;
+        POINT drop_pt = {0};
+        DragQueryPoint(drop, &drop_pt);
+        ScreenToClient(window->hwnd, &drop_pt);
+        U64 num_files_dropped = DragQueryFile(drop, 0xffffffff, 0, 0);
+        OS_Event *event = os_w32_push_event(OS_EventKind_FileDrop, window);
+        event->pos = v2f32((F32)drop_pt.x, (F32)drop_pt.y);
+        for(U64 idx = 0; idx < num_files_dropped; idx += 1)
+        {
+          U64 name_size = DragQueryFile(drop, idx, 0, 0) + 1;
+          U8 *name_ptr = push_array(os_w32_event_arena, U8, name_size);
+          DragQueryFile(drop, idx, name_ptr, name_size);
+          str8_list_push(os_w32_event_arena, &event->strings, str8(name_ptr, name_size));
+        }
+        DragFinish(drop);
+      }break;
+      
       //- rjf: [custom border]
       case WM_NCPAINT:
       {
@@ -1015,6 +1035,7 @@ os_window_open(Vec2F32 resolution, OS_WindowFlags flags, String8 title)
                            0, 0,
                            os_w32_gfx_state->hInstance,
                            0);
+    DragAcceptFiles(hwnd, 1);
     scratch_end(scratch);
   }
   

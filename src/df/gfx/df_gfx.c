@@ -1341,12 +1341,14 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
                 case OS_EventKind_MouseMove: {kind = UI_EventKind_MouseMove;}break;
                 case OS_EventKind_Text:      {kind = UI_EventKind_Text;}break;
                 case OS_EventKind_Scroll:    {kind = UI_EventKind_Scroll;}break;
+                case OS_EventKind_FileDrop:  {kind = UI_EventKind_FileDrop;}break;
               }
             }
             ui_event.kind         = kind;
             ui_event.key          = os_event->key;
             ui_event.modifiers    = os_event->flags;
             ui_event.string       = os_event->character ? str8_from_32(ui_build_arena(), str32(&os_event->character, 1)) : str8_zero();
+            ui_event.paths        = str8_list_copy(ui_build_arena(), &os_event->strings);
             ui_event.pos          = os_event->pos;
             ui_event.delta_2f32   = os_event->delta;
             ui_event.timestamp_us = os_event->timestamp_us;
@@ -7377,7 +7379,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
               }
             }
           }
-          if((view->query_string_size != 0 || view->is_filtering) && ui_is_focus_active() && ui_slot_press(UI_EventActionSlot_Cancel))
+          if(view->spec->info.flags & DF_ViewSpecFlag_CanFilter && (view->query_string_size != 0 || view->is_filtering) && ui_is_focus_active() && ui_slot_press(UI_EventActionSlot_Cancel))
           {
             DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
             df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_ClearFilter));
@@ -7787,6 +7789,25 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
                 }
               }
             }
+          }
+        }
+        
+        //////////////////////////
+        //- rjf: accept file drops
+        //
+        for(UI_Event *evt = 0; ui_next_event(&evt);)
+        {
+          if(evt->kind == UI_EventKind_FileDrop && contains_2f32(content_rect, evt->pos))
+          {
+            for(String8Node *n = evt->paths.first; n != 0; n = n->next)
+            {
+              Temp scratch = scratch_begin(0, 0);
+              DF_CmdParams p = df_cmd_params_from_panel(ws, panel);
+              p.file_path = path_normalized_from_string(scratch.arena, n->string);
+              df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Open));
+              scratch_end(scratch);
+            }
+            ui_eat_event(evt);
           }
         }
       }
