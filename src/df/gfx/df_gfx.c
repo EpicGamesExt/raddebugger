@@ -938,6 +938,10 @@ df_view_store_param(DF_View *view, String8 key, String8 value)
     view->params_roots[view->params_write_gen%ArrayCount(view->params_arenas)] = md_tree_copy(new_params_arena, view->params_roots[view->params_read_gen%ArrayCount(view->params_arenas)]);
   }
   MD_Node *new_params_root = view->params_roots[view->params_write_gen%ArrayCount(view->params_arenas)];
+  if(md_node_is_nil(new_params_root))
+  {
+    new_params_root = view->params_roots[view->params_write_gen%ArrayCount(view->params_arenas)] = md_push_node(new_params_arena, MD_NodeKind_Main, 0, str8_zero(), str8_zero(), 0);
+  }
   MD_Node *key_node = md_child_from_string(new_params_root, key, 0);
   if(md_node_is_nil(key_node))
   {
@@ -8628,7 +8632,7 @@ df_append_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags flags, U32
       
       // rjf: special case: push strings for textual string content
       B32 did_content = 0;
-      if(!did_content && array_is_string && !has_array)
+      if(!did_content && array_is_string && !has_array && (member == 0 || member->kind != E_MemberKind_Padding))
       {
         U64 element_size = e_type_byte_size_from_key(direct_type_key);
         did_content = 1;
@@ -9473,15 +9477,15 @@ df_cfg_strings_from_gfx(Arena *arena, String8 root_path, DF_CfgSrc source)
               {
                 Temp scratch = scratch_begin(&arena, 1);
                 String8 query_raw = str8(view->query_buffer, view->query_string_size);
-                String8 query_sanitized = df_cfg_escaped_from_raw_string(scratch.arena, query_raw);
                 {
-                  String8 query_file_path = df_file_path_from_eval_string(scratch.arena, query_sanitized);
+                  String8 query_file_path = df_file_path_from_eval_string(scratch.arena, query_raw);
                   if(query_file_path.size != 0)
                   {
                     query_file_path = path_relative_dst_from_absolute_dst_src(scratch.arena, query_file_path, root_path);
-                    query_sanitized = push_str8f(scratch.arena, "file:\"%S\"", query_file_path);
+                    query_raw = push_str8f(scratch.arena, "file:\"%S\"", query_file_path);
                   }
                 }
+                String8 query_sanitized = df_cfg_escaped_from_raw_string(scratch.arena, query_raw);
                 str8_list_pushf(arena, &strs, "query:{\"%S\"} ", query_sanitized);
                 scratch_end(scratch);
               }
@@ -9517,7 +9521,7 @@ df_cfg_strings_from_gfx(Arena *arena, String8 root_path, DF_CfgSrc source)
                     str8_list_pushf(arena, &strs, "%S", n->string);
                     if(n->first != &md_nil_node)
                     {
-                      str8_list_pushf(arena, &strs, ":{ ");
+                      str8_list_pushf(arena, &strs, ":{");
                     }
                     for(S32 pop_idx = 0; pop_idx < rec.pop_count; pop_idx += 1)
                     {
