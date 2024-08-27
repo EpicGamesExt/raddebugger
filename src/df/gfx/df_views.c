@@ -3347,6 +3347,31 @@ df_bitmap_canvas_from_screen_rect(Vec2F32 view_center_pos, F32 zoom, Rng2F32 rec
 }
 
 ////////////////////////////////
+//~ rjf: Color RGBA Views
+
+internal Vec4F32
+df_rgba_from_eval_params(E_Eval eval, MD_Node *params)
+{
+  Vec4F32 rgba = {0};
+  {
+    E_Eval value_eval = e_value_eval_from_eval(eval);
+    E_TypeKey type_key = eval.type_key;
+    E_TypeKind type_kind = e_type_kind_from_key(type_key);
+    U64 type_size = e_type_byte_size_from_key(type_key);
+    if(16 <= type_size)
+    {
+      e_space_read(eval.space, &rgba, r1u64(eval.value.u64, eval.value.u64 + 16));
+    }
+    else if(4 <= type_size)
+    {
+      U32 hex_val = value_eval.value.u32;
+      rgba = rgba_from_u32(hex_val);
+    }
+  }
+  return rgba;
+}
+
+////////////////////////////////
 //~ rjf: Null @view_hook_impl
 
 DF_VIEW_SETUP_FUNCTION_DEF(Null) {}
@@ -8363,6 +8388,56 @@ DF_VIEW_UI_FUNCTION_DEF(Bitmap)
   
   hs_scope_close(hs_scope);
   tex_scope_close(tex_scope);
+  scratch_end(scratch);
+}
+
+////////////////////////////////
+//~ rjf: Color @view_hook_impl
+
+DF_VIEW_SETUP_FUNCTION_DEF(ColorRGBA) {}
+DF_VIEW_CMD_FUNCTION_DEF(ColorRGBA) {}
+DF_VIEW_UI_FUNCTION_DEF(ColorRGBA)
+{
+  Temp scratch = scratch_begin(0, 0);
+  Vec2F32 dim = dim_2f32(rect);
+  F32 padding = ui_top_font_size()*3.f;
+  E_Eval eval = e_eval_from_string(scratch.arena, string);
+  Vec4F32 rgba = df_rgba_from_eval_params(eval, params);
+  Vec4F32 hsva = hsva_from_rgba(rgba);
+  UI_WidthFill UI_HeightFill UI_Column UI_Padding(ui_px(padding, 1.f)) UI_Row UI_Padding(ui_pct(1.f, 0.f)) UI_HeightFill
+  {
+    UI_PrefWidth(ui_px(dim.y - padding*2, 1.f))
+    {
+      UI_Signal sv_sig = ui_sat_val_pickerf(hsva.x, &hsva.y, &hsva.z, "sat_val_picker");
+    }
+    UI_PrefWidth(ui_em(3.f, 1.f))
+    {
+      UI_Signal h_sig  = ui_hue_pickerf(&hsva.x, hsva.y, hsva.z, "hue_picker");
+    }
+    UI_PrefWidth(ui_children_sum(1)) UI_Column UI_PrefWidth(ui_text_dim(10, 1)) UI_PrefHeight(ui_em(2.f, 0.f)) DF_Font(ws, DF_FontSlot_Code) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
+    {
+      ui_labelf("Hex");
+      ui_labelf("R");
+      ui_labelf("G");
+      ui_labelf("B");
+      ui_labelf("H");
+      ui_labelf("S");
+      ui_labelf("V");
+      ui_labelf("A");
+    }
+    UI_PrefWidth(ui_children_sum(1)) UI_Column UI_PrefWidth(ui_text_dim(10, 1)) UI_PrefHeight(ui_em(2.f, 0.f)) DF_Font(ws, DF_FontSlot_Code)
+    {
+      String8 hex_string = hex_string_from_rgba_4f32(scratch.arena, rgba);
+      ui_label(hex_string);
+      ui_labelf("%.2f", rgba.x);
+      ui_labelf("%.2f", rgba.y);
+      ui_labelf("%.2f", rgba.z);
+      ui_labelf("%.2f", hsva.x);
+      ui_labelf("%.2f", hsva.y);
+      ui_labelf("%.2f", hsva.z);
+      ui_labelf("%.2f", rgba.w);
+    }
+  }
   scratch_end(scratch);
 }
 

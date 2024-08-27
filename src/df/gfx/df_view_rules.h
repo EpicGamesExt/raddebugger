@@ -14,7 +14,6 @@ struct DF_VR_RGBAState
   U64 memgen_idx;
 };
 
-internal Vec4F32 df_vr_rgba_from_eval(E_Eval eval, DF_Entity *process);
 internal void df_vr_eval_commit_rgba(E_Eval eval, Vec4F32 rgba);
 
 ////////////////////////////////

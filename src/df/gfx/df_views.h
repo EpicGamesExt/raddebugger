@@ -587,4 +587,9 @@ internal Rng2F32 df_bitmap_screen_from_canvas_rect(Vec2F32 view_center_pos, F32 
 internal Vec2F32 df_bitmap_canvas_from_screen_pos(Vec2F32 view_center_pos, F32 zoom, Rng2F32 rect, Vec2F32 scr);
 internal Rng2F32 df_bitmap_canvas_from_screen_rect(Vec2F32 view_center_pos, F32 zoom, Rng2F32 rect, Rng2F32 scr);
 
+////////////////////////////////
+//~ rjf: Color RGBA Views
+
+internal Vec4F32 df_rgba_from_eval_params(E_Eval eval, MD_Node *params);
+
 #endif // DEBUG_FRONTEND_VIEWS_H

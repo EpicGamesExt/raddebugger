@@ -9810,7 +9810,7 @@ df_loading_overlay(Rng2F32 rect, F32 loading_t, U64 progress_v, U64 progress_v_t
     F64 v = 1.f - abs_f32(0.5f - t);
     
     // rjf: colors
-    Vec4F32 bg_color = df_rgba_from_theme_color(DF_ThemeColor_FloatingBackground);
+    Vec4F32 bg_color = df_rgba_from_theme_color(DF_ThemeColor_BaseBackground);
     Vec4F32 bd_color = df_rgba_from_theme_color(DF_ThemeColor_FloatingBorder);
     Vec4F32 hl_color = df_rgba_from_theme_color(DF_ThemeColor_TextNeutral);
     bg_color.w *= loading_t;
