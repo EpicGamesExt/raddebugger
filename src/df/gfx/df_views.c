@@ -1233,13 +1233,13 @@ df_string_from_eval_viz_row_column(Arena *arena, DF_EvalView *ev, DF_EvalVizRow 
     }break;
     case DF_WatchViewColumnKind_Value:
     {
-      E_Eval eval = e_eval_from_expr(arena, row->expr);
+      E_Eval eval = df_eval_from_eval_cfg(arena, e_eval_from_expr(arena, row->expr), row->cfg_table);
       result = df_value_string_from_eval(arena, !editable * DF_EvalVizStringFlag_ReadOnlyDisplayRules, default_radix, font, font_size, max_size_px, eval, row->member, row->cfg_table);
     }break;
     case DF_WatchViewColumnKind_Type:
     {
       E_IRTreeAndType irtree = e_irtree_and_type_from_expr(arena, row->expr);
-      E_TypeKey type_key = irtree.type_key;
+      E_TypeKey type_key = df_type_key_from_type_key_cfg(irtree.type_key, row->cfg_table);
       result = !e_type_key_match(type_key, e_type_key_zero()) ? e_type_string_from_key(arena, type_key) : str8_zero();
       result = str8_skip_chop_whitespace(result);
     }break;
@@ -1249,7 +1249,7 @@ df_string_from_eval_viz_row_column(Arena *arena, DF_EvalView *ev, DF_EvalVizRow 
     }break;
     case DF_WatchViewColumnKind_Module:
     {
-      E_Eval eval = e_eval_from_expr(arena, row->expr);
+      E_Eval eval = df_eval_from_eval_cfg(arena, e_eval_from_expr(arena, row->expr), row->cfg_table);
       DF_Entity *process = df_entity_from_handle(df_interact_regs()->process);
       DF_Entity *module = df_module_from_process_vaddr(process, eval.value.u64);
       result = df_display_string_from_entity(arena, module);
@@ -1268,7 +1268,6 @@ df_string_from_eval_viz_row_column(Arena *arena, DF_EvalView *ev, DF_EvalVizRow 
   {
     result = str8_skip(str8_chop(result, 1), 1);
   }
-  
   return result;
 }
 
@@ -2631,7 +2630,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
         U64 row_hash = df_hash_from_expand_key(row->key);
         B32 row_selected = (selection_tbl.min.y <= (semantic_idx+1) && (semantic_idx+1) <= selection_tbl.max.y);
         B32 row_expanded = df_expand_key_is_set(&eval_view->expand_tree_table, row->key);
-        E_Eval row_eval = e_eval_from_expr(scratch.arena, row->expr);
+        E_Eval row_eval = df_eval_from_eval_cfg(scratch.arena, e_eval_from_expr(scratch.arena, row->expr), row->cfg_table);
         B32 row_is_expandable = df_viz_row_is_expandable(row);
         B32 row_is_editable = df_viz_row_is_editable(row);
         B32 next_row_expanded = row_expanded;
@@ -2915,7 +2914,6 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                 case DF_WatchViewColumnKind_Type:
                 {
                   cell_can_edit = 0;
-                  E_TypeKey key = cell_eval.type_key;
                 }break;
                 case DF_WatchViewColumnKind_ViewRule:
                 {
@@ -2978,7 +2976,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                 {
                   UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clip|UI_BoxFlag_Clickable, "###%I64x_row_%I64x", x, row_hash);
                   sig = ui_signal_from_box(box);
-                  UI_Parent(box)
+                  UI_Parent(box) UI_Flags(0)
                   {
                     df_error_label(cell_error_string);
                   }
@@ -6826,8 +6824,11 @@ DF_VIEW_UI_FUNCTION_DEF(Code)
       }
       DF_Font(ws, DF_FontSlot_Code)
       {
-        ui_label(path);
-        ui_spacer(ui_em(1.5f, 1));
+        if(path.size != 0)
+        {
+          ui_label(path);
+          ui_spacer(ui_em(1.5f, 1));
+        }
         ui_labelf("Line: %I64d, Column: %I64d", df_interact_regs()->cursor.line, df_interact_regs()->cursor.column);
         ui_spacer(ui_pct(1, 0));
         ui_labelf("(read only)");
@@ -8087,6 +8088,16 @@ DF_VIEW_UI_FUNCTION_DEF(Bitmap)
   TEX_Scope *tex_scope = tex_scope_open();
   
   //////////////////////////////
+  //- rjf: evaluate expression
+  //
+  E_Eval eval = e_eval_from_string(scratch.arena, string);
+  Vec2S32 dim = df_dim2s32_from_eval_params(eval, params);
+  R_Tex2DFormat fmt = df_tex2dformat_from_eval_params(eval, params);
+  U64 base_offset = df_base_offset_from_eval(eval);
+  U64 expected_size = dim.x*dim.y*r_tex2d_format_bytes_per_pixel_table[fmt];
+  Rng1U64 offset_range = r1u64(base_offset, base_offset + expected_size);
+  
+  //////////////////////////////
   //- rjf: unpack params
   //
   F32 zoom = df_value_from_params_key(params, str8_lit("zoom")).f32;
@@ -8097,18 +8108,17 @@ DF_VIEW_UI_FUNCTION_DEF(Bitmap)
   };
   if(zoom == 0)
   {
-    zoom = 1.f;
+    F32 available_dim_y = dim_2f32(rect).y;
+    F32 image_dim_y = (F32)dim.y;
+    if(image_dim_y != 0)
+    {
+      zoom = (available_dim_y / image_dim_y) * 0.8f;
+    }
+    else
+    {
+      zoom = 1.f;
+    }
   }
-  
-  //////////////////////////////
-  //- rjf: evaluate expression
-  //
-  E_Eval eval = e_eval_from_string(scratch.arena, string);
-  Vec2S32 dim = df_dim2s32_from_eval_params(eval, params);
-  R_Tex2DFormat fmt = df_tex2dformat_from_eval_params(eval, params);
-  U64 base_offset = df_base_offset_from_eval(eval);
-  U64 expected_size = dim.x*dim.y*r_tex2d_format_bytes_per_pixel_table[fmt];
-  Rng1U64 offset_range = r1u64(base_offset, base_offset + expected_size);
   
   //////////////////////////////
   //- rjf: map expression artifacts -> texture

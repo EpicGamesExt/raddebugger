@@ -3878,6 +3878,62 @@ df_eval_view_rule_from_key(DF_EvalView *eval_view, DF_ExpandKey key)
 ////////////////////////////////
 //~ rjf: Evaluation View Visualization & Interaction
 
+//- rjf: expr * view rule table -> expr
+
+internal E_Expr *
+df_expr_from_expr_cfg(Arena *arena, E_Expr *expr, DF_CfgTable *cfg)
+{
+  for(DF_CfgVal *val = cfg->first_val; val != 0 && val != &df_g_nil_cfg_val; val = val->linear_next)
+  {
+    DF_CoreViewRuleSpec *spec = df_core_view_rule_spec_from_string(val->string);
+    if(spec->info.flags & DF_CoreViewRuleSpecInfoFlag_ExprResolution)
+    {
+      expr = spec->info.expr_resolution(arena, expr, val->last->root);
+    }
+  }
+  return expr;
+}
+
+//- rjf: type * view rule -> type
+
+internal E_TypeKey
+df_type_key_from_type_key_cfg(E_TypeKey key, DF_CfgTable *cfg)
+{
+  for(DF_CfgVal *val = cfg->first_val; val != 0 && val != &df_g_nil_cfg_val; val = val->linear_next)
+  {
+    DF_CoreViewRuleSpec *spec = df_core_view_rule_spec_from_string(val->string);
+    if(spec->info.flags & DF_CoreViewRuleSpecInfoFlag_TypeResolution)
+    {
+      key = spec->info.type_resolution(key, val->last->root);
+    }
+  }
+  return key;
+}
+
+//- rjf: eval * view rule table -> eval
+
+internal E_Eval
+df_eval_from_eval_cfg(Arena *arena, E_Eval eval, DF_CfgTable *cfg)
+{
+  for(DF_CfgVal *val = cfg->first_val; val != 0 && val != &df_g_nil_cfg_val; val = val->linear_next)
+  {
+    DF_CoreViewRuleSpec *spec = df_core_view_rule_spec_from_string(val->string);
+    if(spec->info.flags & DF_CoreViewRuleSpecInfoFlag_TypeResolution)
+    {
+      eval.type_key = spec->info.type_resolution(eval.type_key, val->last->root);
+    }
+  }
+  for(DF_CfgVal *val = cfg->first_val; val != 0 && val != &df_g_nil_cfg_val; val = val->linear_next)
+  {
+    DF_CoreViewRuleSpec *spec = df_core_view_rule_spec_from_string(val->string);
+    if(spec->info.flags & DF_CoreViewRuleSpecInfoFlag_EvalResolution)
+    {
+      eval = spec->info.eval_resolution(arena, eval, val->last->root);
+    }
+  }
+  return eval;
+}
+
 //- rjf: evaluation value string builder helpers
 
 internal String8
@@ -4573,6 +4629,9 @@ df_append_expr_eval_viz_blocks__rec(Arena *arena, DF_EvalView *eval_view, DF_Exp
   ProfBeginFunction();
   Temp scratch = scratch_begin(&arena, 1);
   
+  //- rjf: apply expr resolution view rules
+  expr = df_expr_from_expr_cfg(arena, expr, cfg_table);
+  
   //- rjf: determine if this key is expanded
   DF_ExpandNode *node = df_expand_node_from_key(&eval_view->expand_tree_table, key);
   B32 parent_is_expanded = (node != 0 && node->expanded);
@@ -4590,7 +4649,7 @@ df_append_expr_eval_viz_blocks__rec(Arena *arena, DF_EvalView *eval_view, DF_Exp
   
   //- rjf: determine view rule to generate children blocks
   DF_CoreViewRuleSpec *expand_view_rule_spec = df_core_view_rule_spec_from_string(str8_lit("default"));
-  DF_CfgVal *expand_view_rule_cfg = &df_g_nil_cfg_val;
+  MD_Node *expand_view_rule_params = &md_nil_node;
   if(parent_is_expanded)
   {
     for(DF_CfgVal *val = cfg_table->first_val;
@@ -4601,7 +4660,7 @@ df_append_expr_eval_viz_blocks__rec(Arena *arena, DF_EvalView *eval_view, DF_Exp
       if(spec->info.flags & DF_CoreViewRuleSpecInfoFlag_VizBlockProd)
       {
         expand_view_rule_spec = spec;
-        expand_view_rule_cfg = val;
+        expand_view_rule_params = val->last->root;
         break;
       }
     }
@@ -4610,7 +4669,7 @@ df_append_expr_eval_viz_blocks__rec(Arena *arena, DF_EvalView *eval_view, DF_Exp
   //- rjf: do view rule children block generation, if we have an applicable view rule
   if(parent_is_expanded && expand_view_rule_spec != &df_g_nil_core_view_rule_spec)
   {
-    expand_view_rule_spec->info.viz_block_prod(arena, eval_view, parent_key, key, node, string, expr, cfg_table, depth+1, expand_view_rule_cfg, list_out);
+    expand_view_rule_spec->info.viz_block_prod(arena, eval_view, parent_key, key, node, string, expr, cfg_table, depth+1, expand_view_rule_params, list_out);
   }
   
   scratch_end(scratch);
@@ -4934,7 +4993,59 @@ df_eval_viz_row_list_push_new(Arena *arena, DF_EvalView *eval_view, DF_EvalVizWi
   SLLQueuePush(rows->first, rows->last, row);
   rows->count += 1;
   
-  // rjf: fill basics
+  // rjf: pick cfg table; resolve expression if needed
+  DF_CfgTable *cfg_table = 0;
+  switch(block->kind)
+  {
+    default:
+    {
+      cfg_table = push_array(arena, DF_CfgTable, 1);
+      *cfg_table = df_cfg_table_from_inheritance(arena, block->cfg_table);
+      String8 row_view_rules = df_eval_view_rule_from_key(eval_view, key);
+      if(row_view_rules.size != 0)
+      {
+        df_cfg_table_push_unparsed_string(arena, cfg_table, row_view_rules, DF_CfgSrc_User);
+      }
+      expr = df_expr_from_expr_cfg(arena, expr, cfg_table);
+    }break;
+    case DF_EvalVizBlockKind_Root:
+    {
+      cfg_table = block->cfg_table;
+    }break;
+  }
+  
+  // rjf: determine row ui hook to use for this row
+  DF_GfxViewRuleSpec *value_ui_rule_spec = &df_g_nil_gfx_view_rule_spec;
+  MD_Node *value_ui_rule_params = &md_nil_node;
+  for(DF_CfgVal *val = cfg_table->first_val; val != 0 && val != &df_g_nil_cfg_val; val = val->linear_next)
+  {
+    DF_GfxViewRuleSpec *spec = df_gfx_view_rule_spec_from_string(val->string);
+    if(spec->info.flags & DF_GfxViewRuleSpecInfoFlag_RowUI)
+    {
+      value_ui_rule_spec = spec;
+      value_ui_rule_params = val->last->root;
+      break;
+    }
+  }
+  
+  // rjf: determine block ui hook to use for this row
+  DF_GfxViewRuleSpec *expand_ui_rule_spec = &df_g_nil_gfx_view_rule_spec;
+  MD_Node *expand_ui_rule_params = &md_nil_node;
+  if(block->kind == DF_EvalVizBlockKind_Canvas)
+  {
+    for(DF_CfgVal *val = cfg_table->first_val; val != 0 && val != &df_g_nil_cfg_val; val = val->linear_next)
+    {
+      DF_GfxViewRuleSpec *spec = df_gfx_view_rule_spec_from_string(val->string);
+      if(spec->info.flags & DF_GfxViewRuleSpecInfoFlag_ViewUI)
+      {
+        expand_ui_rule_spec = spec;
+        expand_ui_rule_params = val->last->root;
+        break;
+      }
+    }
+  }
+  
+  // rjf: fill
   row->depth        = block->depth;
   row->parent_key   = block->parent_key;
   row->key          = key;
@@ -4954,60 +5065,11 @@ df_eval_viz_row_list_push_new(Arena *arena, DF_EvalView *eval_view, DF_EvalVizWi
     }
     scratch_end(scratch);
   }
-  
-  // rjf: fill view-rule-derived info
-  {
-    // rjf: pick cfg table
-    DF_CfgTable *cfg_table = block->cfg_table;
-    {
-      String8 row_view_rules = df_eval_view_rule_from_key(eval_view, row->key);
-      if(row_view_rules.size != 0)
-      {
-        cfg_table = push_array(arena, DF_CfgTable, 1);
-        *cfg_table = df_cfg_table_from_inheritance(arena, cfg_table);
-        df_cfg_table_push_unparsed_string(arena, cfg_table, row_view_rules, DF_CfgSrc_User);
-      }
-    }
-    
-    // rjf: determine row ui hook to use for this row
-    DF_GfxViewRuleSpec *value_ui_rule_spec = &df_g_nil_gfx_view_rule_spec;
-    MD_Node *value_ui_rule_params = &md_nil_node;
-    for(DF_CfgVal *val = cfg_table->first_val; val != 0 && val != &df_g_nil_cfg_val; val = val->linear_next)
-    {
-      DF_GfxViewRuleSpec *spec = df_gfx_view_rule_spec_from_string(val->string);
-      if(spec->info.flags & DF_GfxViewRuleSpecInfoFlag_RowUI)
-      {
-        value_ui_rule_spec = spec;
-        value_ui_rule_params = val->last->root;
-        break;
-      }
-    }
-    
-    // rjf: determine block ui hook to use for this row
-    DF_GfxViewRuleSpec *expand_ui_rule_spec = &df_g_nil_gfx_view_rule_spec;
-    MD_Node *expand_ui_rule_params = &md_nil_node;
-    if(block->kind == DF_EvalVizBlockKind_Canvas)
-    {
-      for(DF_CfgVal *val = cfg_table->first_val; val != 0 && val != &df_g_nil_cfg_val; val = val->linear_next)
-      {
-        DF_GfxViewRuleSpec *spec = df_gfx_view_rule_spec_from_string(val->string);
-        if(spec->info.flags & DF_GfxViewRuleSpecInfoFlag_ViewUI)
-        {
-          expand_ui_rule_spec = spec;
-          expand_ui_rule_params = val->last->root;
-          break;
-        }
-      }
-    }
-    
-    // rjf: fill
-    row->cfg_table = cfg_table;
-    row->value_ui_rule_spec = value_ui_rule_spec;
-    row->value_ui_rule_params = value_ui_rule_params;
-    row->expand_ui_rule_spec = expand_ui_rule_spec;
-    row->expand_ui_rule_params = expand_ui_rule_params;
-  }
-  
+  row->cfg_table             = cfg_table;
+  row->value_ui_rule_spec    = value_ui_rule_spec;
+  row->value_ui_rule_params  = value_ui_rule_params;
+  row->expand_ui_rule_spec   = expand_ui_rule_spec;
+  row->expand_ui_rule_params = expand_ui_rule_params;
   return row;
 }
 
@@ -5218,6 +5280,17 @@ df_base_offset_from_eval(E_Eval eval)
 }
 
 internal E_Value
+df_value_from_params(MD_Node *params)
+{
+  Temp scratch = scratch_begin(0, 0);
+  String8 expr = md_string_from_children(scratch.arena, params);
+  E_Eval eval = e_eval_from_string(scratch.arena, expr);
+  E_Eval value_eval = e_value_eval_from_eval(eval);
+  scratch_end(scratch);
+  return value_eval.value;
+}
+
+internal E_Value
 df_value_from_params_key(MD_Node *params, String8 key)
 {
   Temp scratch = scratch_begin(0, 0);
@@ -5316,7 +5389,7 @@ df_eval_from_eval_cfg_table(Arena *arena, E_Eval eval, DF_CfgTable *cfg)
     DF_CoreViewRuleSpec *spec = df_core_view_rule_spec_from_string(val->string);
     if(spec->info.flags & DF_CoreViewRuleSpecInfoFlag_EvalResolution)
     {
-      eval = spec->info.eval_resolution(arena, eval, val);
+      eval = spec->info.eval_resolution(arena, eval, val->last->root);
       break;
     }
   }

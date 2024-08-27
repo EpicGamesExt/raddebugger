@@ -663,6 +663,15 @@ e_expr_ref(Arena *arena, E_Expr *ref)
 }
 
 internal E_Expr *
+e_expr_ref_addr(Arena *arena, E_Expr *rhs)
+{
+  E_Expr *expr = e_push_expr(arena, E_ExprKind_Address, 0);
+  E_Expr *rhs_ref = e_expr_ref(arena, rhs);
+  e_expr_push_child(expr, rhs_ref);
+  return expr;
+}
+
+internal E_Expr *
 e_expr_ref_member_access(Arena *arena, E_Expr *lhs, String8 member_name)
 {
   E_Expr *root = e_push_expr(arena, E_ExprKind_MemberAccess, 0);
@@ -691,6 +700,18 @@ e_expr_ref_deref(Arena *arena, E_Expr *rhs)
 {
   E_Expr *root = e_push_expr(arena, E_ExprKind_Deref, 0);
   E_Expr *rhs_ref = e_expr_ref(arena, rhs);
+  e_expr_push_child(root, rhs_ref);
+  return root;
+}
+
+internal E_Expr *
+e_expr_ref_cast(Arena *arena, E_TypeKey type_key, E_Expr *rhs)
+{
+  E_Expr *root = e_push_expr(arena, E_ExprKind_Cast, 0);
+  E_Expr *lhs = e_push_expr(arena, E_ExprKind_TypeIdent, 0);
+  lhs->type_key = type_key;
+  E_Expr *rhs_ref = e_expr_ref(arena, rhs);
+  e_expr_push_child(root, lhs);
   e_expr_push_child(root, rhs_ref);
   return root;
 }

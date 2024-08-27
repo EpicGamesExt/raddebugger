@@ -176,7 +176,13 @@ typedef struct DF_CfgVal DF_CfgVal;
 typedef struct DF_CfgTable DF_CfgTable;
 typedef struct DF_EvalView DF_EvalView;
 typedef struct DF_EvalVizBlockList DF_EvalVizBlockList;
-#define DF_CORE_VIEW_RULE_EVAL_RESOLUTION_FUNCTION_SIG(name) E_Eval name(Arena *arena, E_Eval eval, DF_CfgVal *val)
+#define DF_CORE_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_SIG(name) E_Expr *name(Arena *arena, E_Expr *expr, MD_Node *params)
+#define DF_CORE_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_NAME(name) df_core_view_rule_expr_resolution__##name
+#define DF_CORE_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_DEF(name) internal DF_CORE_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_SIG(DF_CORE_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_NAME(name))
+#define DF_CORE_VIEW_RULE_TYPE_RESOLUTION_FUNCTION_SIG(name) E_TypeKey name(E_TypeKey type_key, MD_Node *params)
+#define DF_CORE_VIEW_RULE_TYPE_RESOLUTION_FUNCTION_NAME(name) df_core_view_rule_type_resolution__##name
+#define DF_CORE_VIEW_RULE_TYPE_RESOLUTION_FUNCTION_DEF(name) internal DF_CORE_VIEW_RULE_TYPE_RESOLUTION_FUNCTION_SIG(DF_CORE_VIEW_RULE_TYPE_RESOLUTION_FUNCTION_NAME(name))
+#define DF_CORE_VIEW_RULE_EVAL_RESOLUTION_FUNCTION_SIG(name) E_Eval name(Arena *arena, E_Eval eval, MD_Node *params)
 #define DF_CORE_VIEW_RULE_EVAL_RESOLUTION_FUNCTION_NAME(name) df_core_view_rule_eval_resolution__##name
 #define DF_CORE_VIEW_RULE_EVAL_RESOLUTION_FUNCTION_DEF(name) internal DF_CORE_VIEW_RULE_EVAL_RESOLUTION_FUNCTION_SIG(DF_CORE_VIEW_RULE_EVAL_RESOLUTION_FUNCTION_NAME(name))
 #define DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_SIG(name) void name(Arena *arena,                                    \
@@ -188,10 +194,12 @@ String8 string,                                  \
 E_Expr *expr,                                    \
 DF_CfgTable *cfg_table,                          \
 S32 depth,                                       \
-DF_CfgVal *cfg_val,                              \
+MD_Node *params,                                 \
 struct DF_EvalVizBlockList *out)
 #define DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_NAME(name) df_core_view_rule_viz_block_prod__##name
 #define DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(name) internal DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_SIG(DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_NAME(name))
+typedef DF_CORE_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_SIG(DF_CoreViewRuleExprResolutionHookFunctionType);
+typedef DF_CORE_VIEW_RULE_TYPE_RESOLUTION_FUNCTION_SIG(DF_CoreViewRuleTypeResolutionHookFunctionType);
 typedef DF_CORE_VIEW_RULE_EVAL_RESOLUTION_FUNCTION_SIG(DF_CoreViewRuleEvalResolutionHookFunctionType);
 typedef DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_SIG(DF_CoreViewRuleVizBlockProdHookFunctionType);
 
@@ -246,8 +254,10 @@ enum
 {
   DF_CoreViewRuleSpecInfoFlag_Inherited      = (1<<0),
   DF_CoreViewRuleSpecInfoFlag_Expandable     = (1<<1),
-  DF_CoreViewRuleSpecInfoFlag_EvalResolution = (1<<2),
-  DF_CoreViewRuleSpecInfoFlag_VizBlockProd   = (1<<3),
+  DF_CoreViewRuleSpecInfoFlag_ExprResolution = (1<<2),
+  DF_CoreViewRuleSpecInfoFlag_TypeResolution = (1<<4),
+  DF_CoreViewRuleSpecInfoFlag_EvalResolution = (1<<5),
+  DF_CoreViewRuleSpecInfoFlag_VizBlockProd   = (1<<6),
 };
 
 typedef struct DF_CoreViewRuleSpecInfo DF_CoreViewRuleSpecInfo;
@@ -258,6 +268,8 @@ struct DF_CoreViewRuleSpecInfo
   String8 schema;
   String8 description;
   DF_CoreViewRuleSpecInfoFlags flags;
+  DF_CoreViewRuleExprResolutionHookFunctionType *expr_resolution;
+  DF_CoreViewRuleTypeResolutionHookFunctionType *type_resolution;
   DF_CoreViewRuleEvalResolutionHookFunctionType *eval_resolution;
   DF_CoreViewRuleVizBlockProdHookFunctionType *viz_block_prod;
 };
@@ -1577,6 +1589,15 @@ internal String8 df_eval_view_rule_from_key(DF_EvalView *eval_view, DF_ExpandKey
 ////////////////////////////////
 //~ rjf: Evaluation Visualization
 
+//- rjf: expr * view rule table -> expr
+internal E_Expr *df_expr_from_expr_cfg(Arena *arena, E_Expr *expr, DF_CfgTable *cfg);
+
+//- rjf: type * view rule table -> type
+internal E_TypeKey df_type_key_from_type_key_cfg(E_TypeKey key, DF_CfgTable *cfg);
+
+//- rjf: eval * view rule table -> eval
+internal E_Eval df_eval_from_eval_cfg(Arena *arena, E_Eval eval, DF_CfgTable *cfg);
+
 //- rjf: evaluation value string builder helpers
 internal String8 df_string_from_ascii_value(Arena *arena, U8 val);
 internal String8 df_string_from_hresult_facility_code(U32 code);
@@ -1626,6 +1647,7 @@ internal B32 df_viz_row_is_editable(DF_EvalVizRow *row);
 
 //- rjf: eval / view rule params tree info extraction
 internal U64 df_base_offset_from_eval(E_Eval eval);
+internal E_Value df_value_from_params(MD_Node *params);
 internal E_Value df_value_from_params_key(MD_Node *params, String8 key);
 internal Rng1U64 df_range_from_eval_params(E_Eval eval, MD_Node *params);
 internal TXT_LangKind df_lang_kind_from_eval_params(E_Eval eval, MD_Node *params);

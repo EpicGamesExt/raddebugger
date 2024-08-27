@@ -12,7 +12,7 @@ DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(default)
   //- rjf: unpack expression type info
   //
   E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, expr);
-  E_TypeKey type_key = e_type_unwrap(irtree.type_key);
+  E_TypeKey type_key = df_type_key_from_type_key_cfg(e_type_unwrap(irtree.type_key), cfg_table);
   E_TypeKind type_kind = e_type_kind_from_key(type_key);
   E_TypeKey direct_type_key = e_type_unwrap(e_type_direct_from_key(type_key));
   E_TypeKind direct_type_kind = e_type_kind_from_key(direct_type_key);
@@ -100,11 +100,12 @@ DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(default)
     // rjf: unpack array type info
     E_Type *array_type = e_type_from_key(scratch.arena, e_type_kind_is_pointer_or_ref(type_kind) ? direct_type_key : type_key);
     U64 array_count = array_type->count;
+    B32 need_extra_deref = e_type_kind_is_pointer_or_ref(type_kind);
     
     // rjf: build blocks for all elements, split by sub-expansions
     DF_EvalVizBlock *last_vb = df_eval_viz_block_begin(arena, DF_EvalVizBlockKind_Elements, key, df_expand_key_make(df_hash_from_expand_key(key), 0), depth);
     {
-      last_vb->expr             = expr;
+      last_vb->expr             = e_expr_ref_deref(arena, expr);
       last_vb->cfg_table        = cfg_table;
       last_vb->visual_idx_range = last_vb->semantic_idx_range = r1u64(0, array_count);
     }
@@ -171,49 +172,98 @@ DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(default)
 ////////////////////////////////
 //~ rjf: "array"
 
-DF_CORE_VIEW_RULE_EVAL_RESOLUTION_FUNCTION_DEF(array)
+DF_CORE_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_DEF(array)
 {
-#if 0
   Temp scratch = scratch_begin(&arena, 1);
-  E_TypeKey type_key = eval.type_key;
+  E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, expr);
+  E_TypeKey type_key = irtree.type_key;
   E_TypeKind type_kind = e_type_kind_from_key(type_key);
   if(e_type_kind_is_pointer_or_ref(type_kind))
   {
-    DF_CfgNode *array_node = val->last;
-    if(array_node != &df_g_nil_cfg_node)
-    {
-      // rjf: determine array size
-      U64 array_size = 0;
-      {
-        String8List array_size_expr_strs = {0};
-        for(DF_CfgNode *child = array_node->first; child != &df_g_nil_cfg_node; child = child->next)
-        {
-          str8_list_push(scratch.arena, &array_size_expr_strs, child->string);
-        }
-        String8 array_size_expr = str8_list_join(scratch.arena, &array_size_expr_strs, 0);
-        E_Eval array_size_eval = e_eval_from_string(arena, array_size_expr);
-        E_Eval array_size_eval_value = e_value_eval_from_eval(array_size_eval);
-        e_msg_list_concat_in_place(&eval.msgs, &array_size_eval.msgs);
-        array_size = array_size_eval_value.value.u64;
-      }
-      
-      // rjf: apply array size to type
-      E_TypeKey pointee = e_type_ptee_from_key(type_key);
-      E_TypeKey array_type = e_type_key_cons_array(pointee, array_size);
-      eval.type_key = e_type_key_cons_ptr(e_type_state->ctx->primary_module->arch, array_type);
-    }
+    E_Value count = df_value_from_params(params);
+    E_TypeKey element_type_key = e_type_ptee_from_key(type_key);
+    E_TypeKey array_type_key = e_type_key_cons_array(element_type_key, count.u64);
+    E_TypeKey ptr_type_key = e_type_key_cons_ptr(e_type_state->ctx->primary_module->arch, array_type_key);
+    expr = e_expr_ref_cast(arena, ptr_type_key, expr);
   }
   scratch_end(scratch);
-#endif
-  return eval;
+  return expr;
 }
 
 ////////////////////////////////
 //~ rjf: "slice"
 
-DF_CORE_VIEW_RULE_EVAL_RESOLUTION_FUNCTION_DEF(slice)
+DF_CORE_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_DEF(slice)
 {
-  return eval;
+  Temp scratch = scratch_begin(&arena, 1);
+  E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, expr);
+  E_TypeKind type_kind = e_type_kind_from_key(irtree.type_key);
+  if(type_kind == E_TypeKind_Struct || type_kind == E_TypeKind_Class)
+  {
+    // rjf: unpack members
+    E_MemberArray members = e_type_data_members_from_key(scratch.arena, irtree.type_key);
+    
+    // rjf: choose base pointer & count members
+    E_Member *base_ptr_member = 0;
+    E_Member *count_member = 0;
+    for(U64 idx = 0; idx < members.count; idx += 1)
+    {
+      E_Member *member = &members.v[idx];
+      E_TypeKey member_type = e_type_unwrap(member->type_key);
+      E_TypeKind member_type_kind = e_type_kind_from_key(member_type);
+      if(count_member == 0 && e_type_kind_is_integer(member_type_kind))
+      {
+        count_member = member;
+      }
+      if(base_ptr_member == 0 && e_type_kind_is_pointer_or_ref(member_type_kind))
+      {
+        base_ptr_member = &members.v[idx];
+      }
+      if(count_member != 0 && base_ptr_member != 0)
+      {
+        break;
+      }
+    }
+    
+    // rjf: evaluate count member, determine count
+    U64 count = 0;
+    if(count_member != 0)
+    {
+      E_Expr *count_member_expr = e_expr_ref_member_access(scratch.arena, expr, count_member->name);
+      E_Eval count_member_eval = e_eval_from_expr(scratch.arena, count_member_expr);
+      E_Eval count_member_value_eval = e_value_eval_from_eval(count_member_eval);
+      count = count_member_value_eval.value.u64;
+    }
+    
+    // rjf: generate new struct slice type
+    E_TypeKey slice_type_key = zero_struct;
+    if(base_ptr_member != 0 && count_member != 0)
+    {
+      String8 struct_name = e_type_string_from_key(scratch.arena, irtree.type_key);
+      E_TypeKey element_type_key = e_type_ptee_from_key(base_ptr_member->type_key);
+      E_TypeKey array_type_key = e_type_key_cons_array(element_type_key, count);
+      E_TypeKey sized_base_ptr_type_key = e_type_key_cons_ptr(e_type_state->ctx->primary_module->arch, array_type_key);
+      E_MemberList slice_type_members = {0};
+      e_member_list_push(scratch.arena, &slice_type_members, count_member);
+      e_member_list_push(scratch.arena, &slice_type_members, &(E_Member){.kind = E_MemberKind_DataField, .type_key = sized_base_ptr_type_key, .name = base_ptr_member->name, .off = base_ptr_member->off});
+      E_MemberArray slice_type_members_array = e_member_array_from_list(scratch.arena, &slice_type_members);
+      slice_type_key = e_type_key_cons(.arch = e_type_state->ctx->primary_module->arch,
+                                       .kind = E_TypeKind_Struct,
+                                       .name = struct_name,
+                                       .members = slice_type_members_array.v,
+                                       .count = slice_type_members_array.count);
+    }
+    
+    // rjf: generate new expression tree - addr of struct, cast-to-ptr, deref
+    if(base_ptr_member != 0 && count_member != 0)
+    {
+      expr = e_expr_ref_addr(arena, expr);
+      expr = e_expr_ref_cast(arena, e_type_key_cons_ptr(e_type_state->ctx->primary_module->arch, slice_type_key), expr);
+      expr = e_expr_ref_deref(arena, expr);
+    }
+  }
+  scratch_end(scratch);
+  return expr;
 }
 
 ////////////////////////////////
