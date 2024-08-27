@@ -222,6 +222,7 @@ internal E_Expr *e_expr_ref_member_access(Arena *arena, E_Expr *lhs, String8 mem
 internal E_Expr *e_expr_ref_array_index(Arena *arena, E_Expr *lhs, U64 index);
 internal E_Expr *e_expr_ref_deref(Arena *arena, E_Expr *rhs);
 internal E_Expr *e_expr_ref_cast(Arena *arena, E_TypeKey type_key, E_Expr *rhs);
+internal E_Expr *e_expr_ref_bswap(Arena *arena, E_Expr *rhs);
 
 ////////////////////////////////
 //~ rjf: Expression Tree -> String Conversions

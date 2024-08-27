@@ -86,7 +86,7 @@ E_ExprKindTable:
   
   { Cast                 Null                1        "cast"              "("       ")"       "" }
   { Sizeof               UnaryPrefix         1        "sizeof"            "sizeof"  ""        "" }
-  { ByteSwap             UnaryPrefix         1        "bswap"             "bswap"   "("       ")"}
+  { ByteSwap             UnaryPrefix         1        "bswap"             "bswap"   ."("       ")"}
   
   { Neg                  UnaryPrefix         2        "-"                 "-"       ""        "" }
   { LogNot               UnaryPrefix         2        "!"                 "!"       ""        "" }

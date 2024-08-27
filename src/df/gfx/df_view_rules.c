@@ -275,32 +275,10 @@ DF_GFX_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_DEF(list){}
 ////////////////////////////////
 //~ rjf: "bswap"
 
-DF_CORE_VIEW_RULE_EVAL_RESOLUTION_FUNCTION_DEF(bswap)
+DF_CORE_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_DEF(bswap)
 {
-  Temp scratch = scratch_begin(&arena, 1);
-  E_TypeKey type_key = eval.type_key;
-  E_TypeKind type_kind = e_type_kind_from_key(type_key);
-  U64 type_size_bytes = e_type_byte_size_from_key(type_key);
-  if(E_TypeKind_Char8 <= type_kind && type_kind <= E_TypeKind_S256 &&
-     (type_size_bytes == 2 ||
-      type_size_bytes == 4 ||
-      type_size_bytes == 8))
-  {
-    E_Eval value_eval = e_value_eval_from_eval(eval);
-    if(value_eval.mode == E_Mode_Value)
-    {
-      switch(type_size_bytes)
-      {
-        default:{}break;
-        case 2:{U16 v = (U16)value_eval.value.u64; v = bswap_u16(v); value_eval.value.u64 = (U64)v;}break;
-        case 4:{U32 v = (U32)value_eval.value.u64; v = bswap_u32(v); value_eval.value.u64 = (U64)v;}break;
-        case 8:{U64 v =      value_eval.value.u64; v = bswap_u64(v); value_eval.value.u64 =      v;}break;
-      }
-    }
-    eval = value_eval;
-  }
-  scratch_end(scratch);
-  return eval;
+  expr = e_expr_ref_bswap(arena, expr);
+  return expr;
 }
 
 ////////////////////////////////

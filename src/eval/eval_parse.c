@@ -716,6 +716,15 @@ e_expr_ref_cast(Arena *arena, E_TypeKey type_key, E_Expr *rhs)
   return root;
 }
 
+internal E_Expr *
+e_expr_ref_bswap(Arena *arena, E_Expr *rhs)
+{
+  E_Expr *root = e_push_expr(arena, E_ExprKind_ByteSwap, 0);
+  E_Expr *rhs_ref = e_expr_ref(arena, rhs);
+  e_expr_push_child(root, rhs_ref);
+  return root;
+}
+
 ////////////////////////////////
 //~ rjf: Expression Tree -> String Conversions
 
