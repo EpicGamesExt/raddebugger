@@ -3175,7 +3175,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             {
               if(df_view_is_project_filtered(view)) { continue; }
               DF_GfxViewKind view_kind = df_gfx_view_kind_from_string(view->spec->info.name);
-              if(view_kind == DF_GfxViewKind_Disassembly)
+              if(view_kind == DF_GfxViewKind_Disassembly && view->query_string_size == 0)
               {
                 panel_w_disasm = panel;
                 view_w_disasm = view;
