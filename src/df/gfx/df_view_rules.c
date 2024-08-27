@@ -721,108 +721,19 @@ DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(disasm)
   df_eval_viz_block_end(out, vb);
 }
 
-#if 0
-DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(disasm)
+////////////////////////////////
+//~ rjf: "memory"
+
+DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(memory)
 {
-  Temp scratch = scratch_begin(0, 0);
-  HS_Scope *hs_scope = hs_scope_open();
-  TXT_Scope *txt_scope = txt_scope_open();
-  DASM_Scope *dasm_scope = dasm_scope_open();
-  DF_VR_DisasmState *state = df_view_rule_block_user_state(key, DF_VR_DisasmState);
-  if(!state->initialized)
-  {
-    state->initialized = 1;
-    state->cursor = state->mark = txt_pt(1, 1);
-  }
-  if(state->last_open_frame_idx+1 < df_frame_index())
-  {
-    state->loaded_t = 0;
-  }
-  state->last_open_frame_idx = df_frame_index();
-  {
-    //- rjf: unpack params
-    DF_DisasmTopologyInfo top = df_vr_disasm_topology_info_from_cfg(cfg);
-    
-    //- rjf: resolve to address value & range
-    E_Eval value_eval = e_value_eval_from_eval(eval);
-    U64 base_vaddr = value_eval.value.u64;
-    Rng1U64 vaddr_range = r1u64(base_vaddr, base_vaddr + (top.size_cap ? top.size_cap : 2048));
-    
-    //- rjf: unpack thread/process of eval
-    DF_Entity *thread = df_entity_from_handle(df_interact_regs()->thread);
-    DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
-    
-    //- rjf: unpack key for this region in memory
-    U128 dasm_key = ctrl_hash_store_key_from_process_vaddr_range(process->ctrl_machine_id, process->ctrl_handle, vaddr_range, 0);
-    
-    //- rjf: key -> parsed text info
-    U128 data_hash = {0};
-    DASM_Params dasm_params = {0};
-    {
-      dasm_params.vaddr = vaddr_range.min;
-      dasm_params.arch = top.arch;
-      dasm_params.style_flags = DASM_StyleFlag_Addresses;
-      dasm_params.syntax = DASM_Syntax_Intel;
-      dasm_params.base_vaddr = 0;
-    }
-    DASM_Info dasm_info = dasm_info_from_key_params(dasm_scope, dasm_key, &dasm_params, &data_hash);
-    String8 dasm_text_data = {0};
-    TXT_TextInfo dasm_text_info = {0};
-    TXT_LangKind lang_kind = TXT_LangKind_DisasmX64Intel;
-    for(U64 rewind_idx = 0; rewind_idx < 2; rewind_idx += 1)
-    {
-      U128 dasm_text_hash = hs_hash_from_key(dasm_info.text_key, rewind_idx);
-      dasm_text_data = hs_data_from_hash(hs_scope, dasm_text_hash);
-      dasm_text_info = txt_text_info_from_hash_lang(txt_scope, dasm_text_hash, lang_kind);
-      if(dasm_text_info.lines_count != 0)
-      {
-        break;
-      }
-    }
-    TXT_LineTokensSlice line_tokens_slice = txt_line_tokens_slice_from_info_data_line_range(scratch.arena, &dasm_text_info, dasm_text_data, r1s64(1, dasm_info.lines.count));
-    
-    //- rjf: info -> code slice info
-    DF_CodeSliceParams code_slice_params = {0};
-    {
-      code_slice_params.flags = DF_CodeSliceFlag_LineNums;
-      code_slice_params.line_num_range = r1s64(1, dasm_text_info.lines_count);
-      code_slice_params.line_text = push_array(scratch.arena, String8, dasm_text_info.lines_count);
-      code_slice_params.line_ranges = push_array(scratch.arena, Rng1U64, dasm_text_info.lines_count);
-      code_slice_params.line_tokens = push_array(scratch.arena, TXT_TokenArray, dasm_text_info.lines_count);
-      code_slice_params.line_bps = push_array(scratch.arena, DF_EntityList, dasm_text_info.lines_count);
-      code_slice_params.line_ips = push_array(scratch.arena, DF_EntityList, dasm_text_info.lines_count);
-      code_slice_params.line_pins = push_array(scratch.arena, DF_EntityList, dasm_text_info.lines_count);
-      code_slice_params.line_vaddrs = push_array(scratch.arena, U64, dasm_text_info.lines_count);
-      code_slice_params.line_infos = push_array(scratch.arena, DF_LineList, dasm_text_info.lines_count);
-      for(U64 line_idx = 0; line_idx < dasm_text_info.lines_count; line_idx += 1)
-      {
-        code_slice_params.line_text[line_idx] = str8_substr(dasm_text_data, dasm_info.lines.v[line_idx].text_range);
-        code_slice_params.line_ranges[line_idx] = dasm_info.lines.v[line_idx].text_range;
-        code_slice_params.line_tokens[line_idx] = line_tokens_slice.line_tokens[line_idx];
-      }
-      code_slice_params.font = df_font_from_slot(DF_FontSlot_Code);
-      code_slice_params.font_size = ui_top_font_size();
-      code_slice_params.tab_size = f_column_size_from_tag_size(code_slice_params.font, code_slice_params.font_size)*df_setting_val_from_code(ws, DF_SettingCode_TabWidth).s32;
-      code_slice_params.line_height_px = ui_top_font_size()*1.5f;
-      code_slice_params.priority_margin_width_px = 0;
-      code_slice_params.catchall_margin_width_px = 0;
-      code_slice_params.line_num_width_px = ui_top_font_size()*5.f;
-      code_slice_params.line_text_max_width_px = ui_top_font_size()*2.f*dasm_text_info.lines_max_size;
-    }
-    
-    //- rjf: build code slice
-    if(dasm_info.lines.count != 0 && dasm_text_info.lines_count != 0)
-      UI_Padding(ui_pct(1, 0)) UI_PrefWidth(ui_px(dasm_text_info.lines_max_size*ui_top_font_size()*1.2f, 1.f)) UI_Column UI_Padding(ui_pct(1, 0))
-    {
-      DF_CodeSliceSignal sig = df_code_slice(ws, &code_slice_params, &state->cursor, &state->mark, &state->preferred_column, str8_lit("###code_slice"));
-    }
-  }
-  dasm_scope_close(dasm_scope);
-  txt_scope_close(txt_scope);
-  hs_scope_close(hs_scope);
-  scratch_end(scratch);
+  DF_EvalVizBlock *vb = df_eval_viz_block_begin(arena, DF_EvalVizBlockKind_Canvas, key, df_expand_key_make(df_hash_from_expand_key(key), 1), depth);
+  vb->string             = string;
+  vb->expr               = expr;
+  vb->visual_idx_range   = r1u64(0, 16);
+  vb->semantic_idx_range = r1u64(0, 1);
+  vb->cfg_table          = cfg_table;
+  df_eval_viz_block_end(out, vb);
 }
-#endif
 
 ////////////////////////////////
 //~ rjf: "graph"

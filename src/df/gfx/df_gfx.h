@@ -974,6 +974,7 @@ internal void df_view_store_param(DF_View *view, String8 key, String8 value);
 internal void df_view_store_paramf(DF_View *view, String8 key, char *fmt, ...);
 #define df_view_store_param_f32(view, key, f32) df_view_store_paramf((view), (key), "%ff", (f32))
 #define df_view_store_param_s64(view, key, s64) df_view_store_paramf((view), (key), "%I64d", (s64))
+#define df_view_store_param_u64(view, key, u64) df_view_store_paramf((view), (key), "0x%I64x", (u64))
 
 ////////////////////////////////
 //~ rjf: Expand-Keyed Transient View Functions

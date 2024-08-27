@@ -7237,13 +7237,6 @@ DF_VIEW_UI_FUNCTION_DEF(Output)
 DF_VIEW_SETUP_FUNCTION_DEF(Memory)
 {
   DF_MemoryViewState *mv = df_view_user_state(view, DF_MemoryViewState);
-  if(mv->initialized == 0)
-  {
-    mv->initialized = 1;
-    mv->num_columns = 16;
-    mv->bytes_per_cell = 1;
-    mv->last_viewed_memory_cache_arena = df_view_push_arena_ext(view);
-  }
 }
 
 DF_VIEW_CMD_FUNCTION_DEF(Memory)
@@ -7275,20 +7268,13 @@ DF_VIEW_CMD_FUNCTION_DEF(Memory)
         // with this view.
         if(df_view_from_handle(params->view) == view)
         {
-          mv->cursor = mv->mark = params->vaddr;
-          mv->center_cursor = 1;
+          // TODO(rjf)
         }
       }break;
       case DF_CoreCmdKind_SetColumns:
       if(df_view_from_handle(params->view) == view)
       {
-        U64 num_columns = params->index;
-        mv->num_columns = Clamp(1, num_columns, 64);
-        if(mv->num_columns % mv->bytes_per_cell != 0)
-        {
-          mv->bytes_per_cell = 1;
-        }
-        mv->center_cursor = 1;
+        // TODO(rjf)
       }break;
     }
   }
@@ -7299,17 +7285,27 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   HS_Scope *hs_scope = hs_scope_open();
-  
-  //////////////////////////////
-  //- rjf: unpack state
-  //
   DF_MemoryViewState *mv = df_view_user_state(view, DF_MemoryViewState);
   
   //////////////////////////////
-  //- rjf: unpack entity params
+  //- rjf: unpack parameterization info
   //
-  DF_Entity *thread = df_entity_from_handle(df_interact_regs()->thread);
-  DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
+  E_Eval eval = e_eval_from_string(scratch.arena, string);
+  if(u128_match(eval.space, u128_zero()))
+  {
+    eval.space = df_eval_space_from_entity(df_entity_from_handle(df_interact_regs()->process));
+  }
+  Rng1U64 space_range = df_whole_range_from_eval_space(eval.space);
+  U64 cursor         = df_value_from_params_key(params, str8_lit("cursor_vaddr")).u64;
+  U64 mark           = df_value_from_params_key(params, str8_lit("mark_vaddr")).u64;
+  U64 bytes_per_cell = df_value_from_params_key(params, str8_lit("bytes_per_cell")).u64;
+  U64 num_columns    = df_value_from_params_key(params, str8_lit("num_columns")).u64;
+  if(num_columns == 0)
+  {
+    num_columns = 16;
+  }
+  num_columns = ClampBot(1, num_columns);
+  bytes_per_cell = ClampBot(1, bytes_per_cell);
   
   //////////////////////////////
   //- rjf: unpack visual params
@@ -7318,7 +7314,7 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
   F32 font_size = df_font_size_from_slot(ws, DF_FontSlot_Code);
   F32 big_glyph_advance = f_dim_from_tag_size_string(font, font_size, 0, 0, str8_lit("H")).x;
   F32 row_height_px = floor_f32(font_size*2.f);
-  F32 cell_width_px = floor_f32(font_size*2.f * mv->bytes_per_cell);
+  F32 cell_width_px = floor_f32(font_size*2.f * bytes_per_cell);
   F32 scroll_bar_dim = floor_f32(ui_top_font_size()*1.5f);
   Vec2F32 panel_dim = dim_2f32(rect);
   F32 footer_dim = font_size*10.f;
@@ -7329,7 +7325,7 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
   //////////////////////////////
   //- rjf: determine legal scroll range
   //
-  Rng1S64 scroll_idx_rng = r1s64(0, 0x7FFFFFFFFFFFull/mv->num_columns);
+  Rng1S64 scroll_idx_rng = r1s64(0, space_range.max/num_columns);
   
   //////////////////////////////
   //- rjf: determine info about visible range of rows
@@ -7343,8 +7339,8 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
     viz_range_rows.max = view->scroll_pos.y.idx + (S64)view->scroll_pos.y.off + num_possible_visible_rows,
     viz_range_rows.min = clamp_1s64(scroll_idx_rng, viz_range_rows.min);
     viz_range_rows.max = clamp_1s64(scroll_idx_rng, viz_range_rows.max);
-    viz_range_bytes.min = viz_range_rows.min*mv->num_columns;
-    viz_range_bytes.max = (viz_range_rows.max+1)*mv->num_columns+1;
+    viz_range_bytes.min = viz_range_rows.min*num_columns;
+    viz_range_bytes.max = (viz_range_rows.max+1)*num_columns+1;
     if(viz_range_bytes.min > viz_range_bytes.max)
     {
       Swap(U64, viz_range_bytes.min, viz_range_bytes.max);
@@ -7356,8 +7352,8 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
   //
   UI_Focus(UI_FocusKind_On) if(ui_is_focus_active())
   {
-    U64 next_cursor = mv->cursor;
-    U64 next_mark = mv->mark;
+    U64 next_cursor = cursor;
+    U64 next_mark = mark;
     for(UI_Event *evt = 0; ui_next_event(&evt);)
     {
       Vec2S64 cell_delta = {0};
@@ -7374,11 +7370,11 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
         {
           if(evt->delta_2s32.x < 0)
           {
-            cell_delta.x = -(S64)(mv->cursor%mv->num_columns);
+            cell_delta.x = -(S64)(cursor%num_columns);
           }
           else if(evt->delta_2s32.x > 0)
           {
-            cell_delta.x = (mv->num_columns-1) - (S64)(mv->cursor%mv->num_columns);
+            cell_delta.x = (num_columns-1) - (S64)(cursor%num_columns);
           }
           if(evt->delta_2s32.y < 0)
           {
@@ -7395,27 +7391,27 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
       {
         good_action = 1;
       }
-      if(good_action && evt->flags & UI_EventFlag_ZeroDeltaOnSelect && mv->cursor != mv->mark)
+      if(good_action && evt->flags & UI_EventFlag_ZeroDeltaOnSelect && cursor != mark)
       {
         MemoryZeroStruct(&cell_delta);
       }
       if(good_action)
       {
         cell_delta.x = ClampBot(cell_delta.x, (S64)-next_cursor);
-        cell_delta.y = ClampBot(cell_delta.y, (S64)-(next_cursor/mv->num_columns));
+        cell_delta.y = ClampBot(cell_delta.y, (S64)-(next_cursor/num_columns));
         next_cursor += cell_delta.x;
-        next_cursor += cell_delta.y*mv->num_columns;
+        next_cursor += cell_delta.y*num_columns;
         next_cursor = ClampTop(0x7FFFFFFFFFFFull, next_cursor);
       }
-      if(good_action && evt->flags & UI_EventFlag_PickSelectSide && mv->cursor != mv->mark)
+      if(good_action && evt->flags & UI_EventFlag_PickSelectSide && cursor != mark)
       {
         if(evt->delta_2s32.x < 0 || evt->delta_2s32.y < 0)
         {
-          next_cursor = Min(mv->cursor, mv->mark);
+          next_cursor = Min(cursor, mark);
         }
         else
         {
-          next_cursor = Max(mv->cursor, mv->mark);
+          next_cursor = Max(cursor, mark);
         }
       }
       if(good_action && !(evt->flags & UI_EventFlag_KeepMark))
@@ -7428,17 +7424,17 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
         ui_eat_event(evt);
       }
     }
-    mv->cursor = next_cursor;
-    mv->mark = next_mark;
+    cursor = next_cursor;
+    mark = next_mark;
   }
   
   //////////////////////////////
   //- rjf: clamp cursor
   //
   {
-    Rng1U64 cursor_valid_rng = r1u64(0, 0x7FFFFFFFFFFFull);
-    mv->cursor = clamp_1u64(cursor_valid_rng, mv->cursor);
-    mv->mark = clamp_1u64(cursor_valid_rng, mv->mark);
+    Rng1U64 cursor_valid_rng = space_range;
+    cursor = clamp_1u64(cursor_valid_rng, cursor);
+    mark = clamp_1u64(cursor_valid_rng, mark);
   }
   
   //////////////////////////////
@@ -7447,7 +7443,7 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
   if(mv->center_cursor)
   {
     mv->center_cursor = 0;
-    S64 cursor_row_idx = mv->cursor/mv->num_columns;
+    S64 cursor_row_idx = cursor/num_columns;
     S64 new_idx = (cursor_row_idx-num_possible_visible_rows/2+1);
     new_idx = clamp_1s64(scroll_idx_rng, new_idx);
     ui_scroll_pt_target_idx(&view->scroll_pos.y, new_idx);
@@ -7459,7 +7455,7 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
   if(mv->contain_cursor)
   {
     mv->contain_cursor = 0;
-    S64 cursor_row_idx = mv->cursor/mv->num_columns;
+    S64 cursor_row_idx = cursor/num_columns;
     Rng1S64 cursor_viz_range = r1s64(clamp_1s64(scroll_idx_rng, cursor_row_idx-2), clamp_1s64(scroll_idx_rng, cursor_row_idx+3));
     S64 min_delta = Min(0, cursor_viz_range.min-viz_range_rows.min);
     S64 max_delta = Max(0, cursor_viz_range.max-viz_range_rows.max);
@@ -7493,63 +7489,9 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
   //- rjf: grab windowed memory
   //
   U64 visible_memory_size = dim_1u64(viz_range_bytes);
-  U8 *visible_memory = 0;
+  U8 *visible_memory = push_array(scratch.arena, U8, visible_memory_size);
   {
-    Rng1U64 chunk_aligned_range_bytes = r1u64(AlignDownPow2(viz_range_bytes.min, KB(4)), AlignPow2(viz_range_bytes.max, KB(4)));
-    U64 current_memgen_idx = ctrl_mem_gen();
-    B32 range_changed = (chunk_aligned_range_bytes.min != mv->last_viewed_memory_cache_range.min ||
-                         chunk_aligned_range_bytes.max != mv->last_viewed_memory_cache_range.max);
-    B32 mem_changed = (current_memgen_idx != mv->last_viewed_memory_cache_memgen_idx);
-    if(range_changed || mem_changed)
-    {
-      Temp scratch = scratch_begin(0, 0);
-      
-      // rjf: try to read new memory for this range
-      U64 bytes_to_read = dim_1u64(chunk_aligned_range_bytes);
-      U8 *buffer = push_array_no_zero(scratch.arena, U8, bytes_to_read);
-      U64 half1_bytes_read = dmn_process_read(process->ctrl_handle, r1u64(chunk_aligned_range_bytes.min, chunk_aligned_range_bytes.min+bytes_to_read/2), buffer+0);
-      U64 half2_bytes_read = dmn_process_read(process->ctrl_handle, r1u64(chunk_aligned_range_bytes.min+bytes_to_read/2, chunk_aligned_range_bytes.max), buffer+bytes_to_read/2);
-      
-      // rjf: worked? -> clear cache & store
-      if(half1_bytes_read+half2_bytes_read >= bytes_to_read)
-      {
-        arena_clear(mv->last_viewed_memory_cache_arena);
-        mv->last_viewed_memory_cache_buffer = push_array_no_zero(mv->last_viewed_memory_cache_arena, U8, bytes_to_read);
-        MemoryCopy(mv->last_viewed_memory_cache_buffer, buffer, bytes_to_read);
-      }
-      
-      // rjf: didn't work, but range didn't change? -> no-op
-      if(half1_bytes_read == 0 && half2_bytes_read == 0 && !range_changed)
-      {
-        // NOTE(rjf): nothing - use stale memory from cache.
-      }
-      
-      // rjf: didn't work, but range DID change? -> clear cache
-      if(half1_bytes_read == 0 && half2_bytes_read == 0 && range_changed)
-      {
-        arena_clear(mv->last_viewed_memory_cache_arena);
-        mv->last_viewed_memory_cache_buffer = push_array(mv->last_viewed_memory_cache_arena, U8, bytes_to_read);
-      }
-      
-      // rjf: didn't fully work, but changed? -> clear cache memory, fill what we can, zero the rest.
-      if(half1_bytes_read+half2_bytes_read < bytes_to_read && half1_bytes_read+half2_bytes_read != 0)
-      {
-        arena_clear(mv->last_viewed_memory_cache_arena);
-        mv->last_viewed_memory_cache_buffer = push_array(mv->last_viewed_memory_cache_arena, U8, bytes_to_read);
-        MemoryCopy(mv->last_viewed_memory_cache_buffer+0,               buffer+0,               half1_bytes_read);
-        MemoryCopy(mv->last_viewed_memory_cache_buffer+bytes_to_read/2, buffer+bytes_to_read/2, half2_bytes_read);
-      }
-      
-      // rjf: update cache stamps
-      if(!df_ctrl_targets_running())
-      {
-        mv->last_viewed_memory_cache_range = chunk_aligned_range_bytes;
-        mv->last_viewed_memory_cache_memgen_idx = current_memgen_idx;
-      }
-      
-      scratch_end(scratch);
-    }
-    visible_memory = mv->last_viewed_memory_cache_buffer + viz_range_bytes.min-chunk_aligned_range_bytes.min;
+    e_space_read(eval.space, visible_memory, viz_range_bytes);
   }
   
   //////////////////////////////
@@ -7573,6 +7515,8 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
   };
   AnnotationList *visible_memory_annotations = push_array(scratch.arena, AnnotationList, visible_memory_size);
   {
+    DF_Entity *thread = df_entity_from_handle(df_interact_regs()->thread);
+    DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
     CTRL_Unwind unwind = df_query_cached_unwind_from_thread(thread);
     
     //- rjf: fill unwind frame annotations
@@ -7704,8 +7648,8 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
       UI_PrefWidth(ui_px(cell_width_px, 1.f))
         UI_TextAlignment(UI_TextAlign_Center)
       {
-        Rng1U64 col_selection_rng = r1u64(mv->cursor%mv->num_columns, mv->mark%mv->num_columns);
-        for(U64 row_off = 0; row_off < mv->num_columns*mv->bytes_per_cell; row_off += mv->bytes_per_cell)
+        Rng1U64 col_selection_rng = r1u64(cursor%num_columns, mark%num_columns);
+        for(U64 row_off = 0; row_off < num_columns*bytes_per_cell; row_off += bytes_per_cell)
         {
           if(!(col_selection_rng.min <= row_off && row_off <= col_selection_rng.max))
           {
@@ -7790,18 +7734,18 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
       if(mouse_hover_byte_num == 0)
       {
         U64 col_idx = ClampBot(mouse_rel.x-big_glyph_advance*18.f, 0)/cell_width_px;
-        if(col_idx < mv->num_columns)
+        if(col_idx < num_columns)
         {
-          mouse_hover_byte_num = viz_range_bytes.min + row_idx*mv->num_columns + col_idx + 1;
+          mouse_hover_byte_num = viz_range_bytes.min + row_idx*num_columns + col_idx + 1;
         }
       }
       
       // rjf: try from ascii
       if(mouse_hover_byte_num == 0)
       {
-        U64 col_idx = ClampBot(mouse_rel.x - (big_glyph_advance*18.f + cell_width_px*mv->num_columns + big_glyph_advance*1.5f), 0)/big_glyph_advance;
-        col_idx = ClampTop(col_idx, mv->num_columns-1);
-        mouse_hover_byte_num = viz_range_bytes.min + row_idx*mv->num_columns + col_idx + 1;
+        U64 col_idx = ClampBot(mouse_rel.x - (big_glyph_advance*18.f + cell_width_px*num_columns + big_glyph_advance*1.5f), 0)/big_glyph_advance;
+        col_idx = ClampTop(col_idx, num_columns-1);
+        mouse_hover_byte_num = viz_range_bytes.min + row_idx*num_columns + col_idx + 1;
       }
       
       mouse_hover_byte_num = Clamp(1, mouse_hover_byte_num, 0x7FFFFFFFFFFFull+1);
@@ -7821,10 +7765,10 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
       {
         mv->contain_cursor = 1;
       }
-      mv->cursor = mouse_hover_byte_num-1;
+      cursor = mouse_hover_byte_num-1;
       if(ui_pressed(sig))
       {
-        mv->mark = mv->cursor;
+        mark = cursor;
       }
     }
     
@@ -7856,12 +7800,12 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
   //
   UI_Parent(row_container_box) DF_Font(ws, DF_FontSlot_Code) UI_FontSize(font_size)
   {
-    Rng1U64 selection = r1u64(mv->cursor, mv->mark);
-    U8 *row_ascii_buffer = push_array(scratch.arena, U8, mv->num_columns);
+    Rng1U64 selection = r1u64(cursor, mark);
+    U8 *row_ascii_buffer = push_array(scratch.arena, U8, num_columns);
     UI_WidthFill UI_PrefHeight(ui_px(row_height_px, 1.f))
       for(S64 row_idx = viz_range_rows.min; row_idx <= viz_range_rows.max; row_idx += 1)
     {
-      Rng1U64 row_range_bytes = r1u64(row_idx*mv->num_columns, (row_idx+1)*mv->num_columns);
+      Rng1U64 row_range_bytes = r1u64(row_idx*num_columns, (row_idx+1)*num_columns);
       B32 row_is_boundary = 0;
       Vec4F32 row_boundary_color = {0};
       if(row_range_bytes.min%64 == 0)
@@ -7884,9 +7828,9 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
           UI_TextAlignment(UI_TextAlign_Center)
           UI_CornerRadius(0)
         {
-          for(U64 col_idx = 0; col_idx < mv->num_columns; col_idx += 1)
+          for(U64 col_idx = 0; col_idx < num_columns; col_idx += 1)
           {
-            U64 visible_byte_idx = (row_idx-viz_range_rows.min)*mv->num_columns + col_idx;
+            U64 visible_byte_idx = (row_idx-viz_range_rows.min)*num_columns + col_idx;
             U64 global_byte_idx = viz_range_bytes.min+visible_byte_idx;
             U64 global_byte_num = global_byte_idx+1;
             U8 byte_value = visible_memory[visible_byte_idx];
@@ -7965,17 +7909,17 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
         ui_spacer(ui_px(big_glyph_advance*1.5f, 1.f));
         UI_WidthFill
         {
-          MemoryZero(row_ascii_buffer, mv->num_columns);
-          for(U64 col_idx = 0; col_idx < mv->num_columns; col_idx += 1)
+          MemoryZero(row_ascii_buffer, num_columns);
+          for(U64 col_idx = 0; col_idx < num_columns; col_idx += 1)
           {
-            U8 byte_value = visible_memory[(row_idx-viz_range_rows.min)*mv->num_columns + col_idx];
+            U8 byte_value = visible_memory[(row_idx-viz_range_rows.min)*num_columns + col_idx];
             row_ascii_buffer[col_idx] = byte_value;
             if(byte_value <= 32 || 127 < byte_value)
             {
               row_ascii_buffer[col_idx] = '.';
             }
           }
-          String8 ascii_text = str8(row_ascii_buffer, mv->num_columns);
+          String8 ascii_text = str8(row_ascii_buffer, num_columns);
           UI_Box *ascii_box = ui_build_box_from_stringf(UI_BoxFlag_DrawText, "%S###ascii_row_%I64x", ascii_text, row_range_bytes.min);
           if(selection.max >= row_range_bytes.min && selection.min < row_range_bytes.max)
           {
@@ -8039,15 +7983,15 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
       UI_PrefWidth(ui_em(45.f, 1.f)) UI_HeightFill UI_Column
         UI_PrefHeight(ui_px(row_height_px, 0.f))
       {
-        B32 cursor_in_range = (viz_range_bytes.min <= mv->cursor && mv->cursor+8 <= viz_range_bytes.max);
-        ui_labelf("%016I64X", mv->cursor);
+        B32 cursor_in_range = (viz_range_bytes.min <= cursor && cursor+8 <= viz_range_bytes.max);
+        ui_labelf("%016I64X", cursor);
         if(cursor_in_range)
         {
           U64 as_u8  = 0;
           U64 as_u16 = 0;
           U64 as_u32 = 0;
           U64 as_u64 = 0;
-          U64 cursor_off = mv->cursor-viz_range_bytes.min;
+          U64 cursor_off = cursor-viz_range_bytes.min;
           as_u8  = (U64)*(U8 *)(visible_memory + cursor_off);
           as_u16 = (U64)*(U16*)(visible_memory + cursor_off);
           as_u32 = (U64)*(U32*)(visible_memory + cursor_off);
@@ -8073,6 +8017,14 @@ DF_VIEW_UI_FUNCTION_DEF(Memory)
       ui_scroll_pt_target_idx(&view->scroll_pos.y, new_idx);
     }
   }
+  
+  //////////////////////////////
+  //- rjf: save parameters
+  //
+  df_view_store_param_u64(view, str8_lit("cursor_vaddr"), cursor);
+  df_view_store_param_u64(view, str8_lit("mark_vaddr"), mark);
+  df_view_store_param_u64(view, str8_lit("bytes_per_cell"), bytes_per_cell);
+  df_view_store_param_u64(view, str8_lit("num_columns"), num_columns);
   
   hs_scope_close(hs_scope);
   scratch_end(scratch);

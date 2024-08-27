@@ -3731,6 +3731,40 @@ df_key_from_eval_space_range(E_Space space, Rng1U64 range, B32 zero_terminated)
   return result;
 }
 
+//- rjf: space -> entire range
+
+internal Rng1U64
+df_whole_range_from_eval_space(E_Space space)
+{
+  Rng1U64 result = r1u64(0, 0);
+  DF_Entity *entity = df_entity_from_eval_space(space);
+  switch(entity->kind)
+  {
+    //- rjf: nil space -> filesystem key encoded inside of `space`
+    case DF_EntityKind_Nil:
+    {
+      HS_Scope *scope = hs_scope_open();
+      U128 hash = {0};
+      for(U64 idx = 0; idx < 2; idx += 1)
+      {
+        hash = hs_hash_from_key(space, idx);
+        if(!u128_match(hash, u128_zero()))
+        {
+          break;
+        }
+      }
+      String8 data = hs_data_from_hash(scope, hash);
+      result = r1u64(0, data.size);
+      hs_scope_close(scope);
+    }break;
+    case DF_EntityKind_Process:
+    {
+      result = r1u64(0, 0x7FFFFFFFFFFFull);
+    }break;
+  }
+  return result;
+}
+
 ////////////////////////////////
 //~ rjf: Evaluation Views
 
@@ -5280,20 +5314,24 @@ df_range_from_eval_params(E_Eval eval, MD_Node *params)
 {
   Temp scratch = scratch_begin(0, 0);
   U64 size = df_value_from_params_key(params, str8_lit("size")).u64;
-  if(size == 0 &&
-     (e_type_kind_from_key(eval.type_key) == E_TypeKind_Array ||
-      e_type_kind_from_key(e_type_direct_from_key(eval.type_key)) == E_TypeKind_Array))
+  E_TypeKey type_key = e_type_unwrap(eval.type_key);
+  E_TypeKind type_kind = e_type_kind_from_key(type_key);
+  E_TypeKey direct_type_key = e_type_unwrap(e_type_direct_from_key(eval.type_key));
+  E_TypeKind direct_type_kind = e_type_kind_from_key(direct_type_key);
+  if(size == 0 && e_type_kind_is_pointer_or_ref(type_kind) && (direct_type_kind == E_TypeKind_Struct ||
+                                                               direct_type_kind == E_TypeKind_Union ||
+                                                               direct_type_kind == E_TypeKind_Class ||
+                                                               direct_type_kind == E_TypeKind_Array ||
+                                                               e_type_kind_is_basic_or_enum(direct_type_kind)))
   {
-    E_Type *type = e_type_from_key(scratch.arena, eval.type_key);
-    E_Type *array_type = type;
-    if(array_type->kind != E_TypeKind_Array)
-    {
-      array_type = e_type_from_key(scratch.arena, array_type->direct_type_key);
-    }
-    if(array_type->kind != E_TypeKind_Array)
-    {
-      size = array_type->count;
-    }
+    size = e_type_byte_size_from_key(e_type_direct_from_key(e_type_unwrap(eval.type_key)));
+  }
+  if(size == 0 && eval.mode == E_Mode_Offset && (type_kind == E_TypeKind_Struct ||
+                                                 type_kind == E_TypeKind_Union ||
+                                                 type_kind == E_TypeKind_Class ||
+                                                 type_kind == E_TypeKind_Array))
+  {
+    size = e_type_byte_size_from_key(e_type_unwrap(eval.type_key));
   }
   if(size == 0)
   {

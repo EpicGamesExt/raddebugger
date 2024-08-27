@@ -1558,6 +1558,9 @@ internal B32 df_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range
 //- rjf: asynchronous streamed reads -> hashes from spaces
 internal U128 df_key_from_eval_space_range(E_Space space, Rng1U64 range, B32 zero_terminated);
 
+//- rjf: space -> entire range
+internal Rng1U64 df_whole_range_from_eval_space(E_Space space);
+
 ////////////////////////////////
 //~ rjf: Evaluation Views
 
@@ -1629,6 +1632,7 @@ internal B32 df_viz_row_is_editable(DF_EvalVizRow *row);
 
 //- rjf: eval / view rule params tree info extraction
 internal U64 df_base_offset_from_eval(E_Eval eval);
+internal U64 df_size_from_eval_params(E_Eval eval, MD_Node *params);
 internal E_Value df_value_from_params(MD_Node *params);
 internal E_TypeKey df_type_key_from_params(MD_Node *params);
 internal E_Value df_value_from_params_key(MD_Node *params, String8 key);

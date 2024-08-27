@@ -432,23 +432,6 @@ struct DF_DisasmViewState
 typedef struct DF_MemoryViewState DF_MemoryViewState;
 struct DF_MemoryViewState
 {
-  B32 initialized;
-  
-  // rjf: last-viewed-memory cache
-  Arena *last_viewed_memory_cache_arena;
-  U8 *last_viewed_memory_cache_buffer;
-  Rng1U64 last_viewed_memory_cache_range;
-  U64 last_viewed_memory_cache_memgen_idx;
-  
-  // rjf: control state
-  U64 cursor;
-  U64 mark;
-  
-  // rjf: organization state
-  U64 num_columns;
-  U64 bytes_per_cell;
-  
-  // rjf: command pass-through data
   B32 center_cursor;
   B32 contain_cursor;
 };
