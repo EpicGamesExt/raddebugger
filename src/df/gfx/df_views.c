@@ -6547,8 +6547,45 @@ DF_VIEW_CMD_FUNCTION_DEF(PendingFile)
   
   //- rjf: determine if file is ready, and which viewer to use
   String8 file_path = df_file_path_from_eval_string(scratch.arena, str8(view->query_buffer, view->query_string_size));
-  B32 file_is_ready = 1;
+  Rng1U64 file_range = r1u64(0, 1024);
+  U128 file_hash = fs_hash_from_path_range(file_path, file_range, 0);
+  B32 file_is_ready = 0;
   DF_GfxViewKind viewer_kind = DF_GfxViewKind_Code;
+  {
+    HS_Scope *hs_scope = hs_scope_open();
+    String8 data = hs_data_from_hash(hs_scope, file_hash);
+    if(data.size != 0)
+    {
+      U64 num_utf8_bytes = 0;
+      U64 num_unknown_bytes = 0;
+      for(U64 idx = 0; idx < data.size && idx < file_range.max;)
+      {
+        UnicodeDecode decode = utf8_decode(data.str+idx, data.size-idx);
+        if(decode.codepoint != max_U32 && (decode.inc > 1 ||
+                                           (10 <= decode.codepoint && decode.codepoint <= 13) ||
+                                           (32 <= decode.codepoint && decode.codepoint <= 126)))
+        {
+          num_utf8_bytes += decode.inc;
+          idx += decode.inc;
+        }
+        else
+        {
+          num_unknown_bytes += 1;
+          idx += 1;
+        }
+      }
+      file_is_ready = 1;
+      if(num_utf8_bytes > num_unknown_bytes*4)
+      {
+        viewer_kind = DF_GfxViewKind_Code;
+      }
+      else
+      {
+        viewer_kind = DF_GfxViewKind_Memory;
+      }
+    }
+    hs_scope_close(hs_scope);
+  }
   
   //- rjf: if entity is ready, dispatch all deferred commands
   if(file_is_ready)
