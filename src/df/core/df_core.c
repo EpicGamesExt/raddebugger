@@ -5392,7 +5392,7 @@ df_tex2dformat_from_eval_params(E_Eval eval, MD_Node *params)
     MD_Node *fmt_node = md_child_from_string(params, str8_lit("fmt"), 0);
     for(EachNonZeroEnumVal(R_Tex2DFormat, fmt))
     {
-      if(str8_match(r_tex2d_kind_display_string_table[fmt], fmt_node->first->string, StringMatchFlag_CaseInsensitive))
+      if(str8_match(r_tex2d_format_display_string_table[fmt], fmt_node->first->string, StringMatchFlag_CaseInsensitive))
       {
         result = fmt;
         break;

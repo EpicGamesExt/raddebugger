@@ -8233,11 +8233,7 @@ DF_VIEW_UI_FUNCTION_DEF(Bitmap)
   Rng2F32 canvas_rect = r2f32p(0, 0, canvas_dim.x, canvas_dim.y);
   UI_Rect(canvas_rect)
   {
-    DF_BitmapCanvasBoxDrawData *draw_data = push_array(ui_build_arena(), DF_BitmapCanvasBoxDrawData, 1);
-    draw_data->view_center_pos = view_center_pos;
-    draw_data->zoom = zoom;
     canvas_box = ui_build_box_from_stringf(UI_BoxFlag_Clip|UI_BoxFlag_Clickable|UI_BoxFlag_Scroll, "bmp_canvas_%p", view);
-    ui_box_equip_custom_draw(canvas_box, df_bitmap_view_canvas_box_draw, draw_data);
   }
   
   //////////////////////////////
@@ -8276,6 +8272,16 @@ DF_VIEW_UI_FUNCTION_DEF(Bitmap)
       MemoryZeroStruct(&view_center_pos);
       zoom = 1.f;
     }
+  }
+  
+  //////////////////////////////
+  //- rjf: equip canvas draw info
+  //
+  {
+    DF_BitmapCanvasBoxDrawData *draw_data = push_array(ui_build_arena(), DF_BitmapCanvasBoxDrawData, 1);
+    draw_data->view_center_pos = view_center_pos;
+    draw_data->zoom = zoom;
+    ui_box_equip_custom_draw(canvas_box, df_bitmap_view_canvas_box_draw, draw_data);
   }
   
   //////////////////////////////

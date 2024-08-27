@@ -26,12 +26,12 @@ R_ResourceKindTable:
   // GPU can read the resource
   // CPU is not allowed to read or write
   {Static   "Static" }
-
+  
   // dynamic resource allows resource to be modified
   // GPU can read & write to it
   // CPU can write to it using UpdateSubresource
   {Dynamic  "Dynamic"}
-
+  
   // stream resource will be often updated fully overwriting previous data
   // GPU can only read it
   // CPU can update via Map (with WRITE_DISCARD flag) + Unmap
@@ -105,9 +105,9 @@ R_PassKindTable:
   @expand(R_Tex2DFormatTable a) `$(a.bytes_per_pixel)`;
 }
 
-@data(String8) r_tex2d_kind_display_string_table:
+@data(String8) r_resource_kind_display_string_table:
 {
-  @expand(R_Tex2DKindTable a) `str8_lit_comp("$(a.display_string)")`;
+  @expand(R_ResourceKindTable a) `str8_lit_comp("$(a.display_string)")`;
 }
 
 @data(String8) r_tex2d_sample_kind_display_string_table:
