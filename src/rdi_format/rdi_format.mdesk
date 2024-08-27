@@ -1277,7 +1277,8 @@ RDI_EvalOpTable:
   {Pop         44      0 1 0}
   {Insert      45      1 0 0}
   {ValueRead   46      1 2 1}
-  {COUNT       47      0 0 0}
+  {ByteSwap    47      1 1 1}
+  {COUNT       48      0 0 0}
 }
 
 // NOTE(rjf): "ck" -> "conversion kind, when converted to type group", used in square matrix form

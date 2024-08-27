@@ -14,7 +14,7 @@ str8_lit_comp("CharLiteral"),
 str8_lit_comp("Symbol"),
 };
 
-String8 e_expr_kind_strings[44] =
+String8 e_expr_kind_strings[45] =
 {
 str8_lit_comp("Nil"),
 str8_lit_comp("Ref"),
@@ -24,6 +24,7 @@ str8_lit_comp("Deref"),
 str8_lit_comp("Address"),
 str8_lit_comp("Cast"),
 str8_lit_comp("Sizeof"),
+str8_lit_comp("ByteSwap"),
 str8_lit_comp("Neg"),
 str8_lit_comp("LogNot"),
 str8_lit_comp("BitNot"),
@@ -77,7 +78,7 @@ str8_lit_comp("Insufficient evaluation machine stack space."),
 str8_lit_comp("Malformed bytecode."),
 };
 
-E_OpInfo e_expr_kind_op_info_table[44] =
+E_OpInfo e_expr_kind_op_info_table[45] =
 {
 { E_OpKind_Null, 0, str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("Nil") },
 { E_OpKind_Null, 0, str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("Ref") },
@@ -87,6 +88,7 @@ E_OpInfo e_expr_kind_op_info_table[44] =
 { E_OpKind_UnaryPrefix, 2, str8_lit_comp("&"), str8_lit_comp(""), str8_lit_comp("Address") },
 { E_OpKind_Null, 1, str8_lit_comp("("), str8_lit_comp(")"), str8_lit_comp("Cast") },
 { E_OpKind_UnaryPrefix, 1, str8_lit_comp("sizeof"), str8_lit_comp(""), str8_lit_comp("Sizeof") },
+{ E_OpKind_UnaryPrefix, 1, str8_lit_comp("bswap"), str8_lit_comp("("), str8_lit_comp("ByteSwap") },
 { E_OpKind_UnaryPrefix, 2, str8_lit_comp("-"), str8_lit_comp(""), str8_lit_comp("Neg") },
 { E_OpKind_UnaryPrefix, 2, str8_lit_comp("!"), str8_lit_comp(""), str8_lit_comp("LogNot") },
 { E_OpKind_UnaryPrefix, 2, str8_lit_comp("~"), str8_lit_comp(""), str8_lit_comp("BitNot") },

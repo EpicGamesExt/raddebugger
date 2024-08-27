@@ -86,6 +86,7 @@ E_ExprKindTable:
   
   { Cast                 Null                1        "cast"              "("       ")"       "" }
   { Sizeof               UnaryPrefix         1        "sizeof"            "sizeof"  ""        "" }
+  { ByteSwap             UnaryPrefix         1        "bswap"             "bswap"   "("       ")"}
   
   { Neg                  UnaryPrefix         2        "-"                 "-"       ""        "" }
   { LogNot               UnaryPrefix         2        "!"                 "!"       ""        "" }
@@ -110,7 +111,7 @@ E_ExprKindTable:
   { LogAnd               Binary              11       "&&"                ""        "&&"      "" }
   { LogOr                Binary              12       "||"                ""        "||"      "" }
   
-  { Ternary              Null                0        "? "                ""        "?"       ":" }
+  { Ternary              Null                0        "? "                ""        "?"       ":"}
   
   { LeafBytecode         Null                0        "bytecode"          ""        ""        "" }
   { LeafMember           Null                0        "member"            ""        ""        "" }

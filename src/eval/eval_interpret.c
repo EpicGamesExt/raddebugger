@@ -770,6 +770,22 @@ e_interpret(String8 bytecode)
           MemoryCopy(&nval.u512[0], (U8 *)(&src_val.u512[0]) + offset, bytes_to_read);
         }
       }break;
+      
+      case RDI_EvalOp_ByteSwap:
+      {
+        U64 byte_size = imm.u64;
+        switch(byte_size)
+        {
+          default:
+          {
+            result.code = E_InterpretationCode_BadOp;
+            goto done;
+          }break;
+          case 2:{nval.u16 = bswap_u16(svals[0].u16);}break;
+          case 4:{nval.u32 = bswap_u32(svals[0].u32);}break;
+          case 8:{nval.u64 = bswap_u64(svals[0].u64);}break;
+        }
+      }break;
     }
     
     // rjf: push

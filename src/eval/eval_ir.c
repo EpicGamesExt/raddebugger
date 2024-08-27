@@ -783,6 +783,38 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
       }
     }break;
     
+    //- rjf: byteswap
+    case E_ExprKind_ByteSwap:
+    {
+      // rjf: unpack operand
+      E_Expr *r_expr = expr->first;
+      E_IRTreeAndType r_tree = e_irtree_and_type_from_expr(arena, r_expr);
+      e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
+      E_TypeKey r_type = e_type_unwrap(r_tree.type_key);
+      E_TypeKind r_type_kind = e_type_kind_from_key(r_type);
+      U64 r_type_size = e_type_byte_size_from_key(r_type);
+      E_Space space = r_tree.space;
+      
+      // rjf: bad conditions? -> error if applicable, exit
+      if(!e_type_kind_is_integer(r_type_kind) || (r_type_size != 8 && r_type_size != 4 && r_type_size != 2))
+      {
+        e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, expr->location, "Byteswapping this type is not supported.");
+        break;
+      }
+      
+      // rjf: generate
+      {
+        E_IRNode *node = e_push_irnode(arena, RDI_EvalOp_ByteSwap);
+        E_IRNode *rhs = e_irtree_resolve_to_value(arena, space, r_tree.mode, r_tree.root, r_type);
+        e_irnode_push_child(node, rhs);
+        node->value.u64 = r_type_size;
+        result.root = node;
+        result.mode = E_Mode_Value;
+        result.space = space;
+        result.type_key = r_type;
+      }
+    }break;
+    
     //- rjf: unary operations
     case E_ExprKind_Neg:
     case E_ExprKind_LogNot:
