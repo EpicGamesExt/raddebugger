@@ -282,7 +282,7 @@ internal U64        md_tag_count_from_node(MD_Node *node);
 internal String8    md_string_from_children(Arena *arena, MD_Node *root);
 
 //- rjf: tree comparison
-internal B32 md_node_deep_match(MD_Node *a, MD_Node *b, StringMatchFlags flags);
+internal B32 md_tree_match(MD_Node *a, MD_Node *b, StringMatchFlags flags);
 internal B32 md_node_match(MD_Node *a, MD_Node *b, StringMatchFlags flags);
 
 //- rjf: tree duplication

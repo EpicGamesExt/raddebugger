@@ -39,6 +39,7 @@ DF_GfxViewKind_Output,
 DF_GfxViewKind_Memory,
 DF_GfxViewKind_Bitmap,
 DF_GfxViewKind_ColorRGBA,
+DF_GfxViewKind_Geometry3D,
 DF_GfxViewKind_ExceptionFilters,
 DF_GfxViewKind_Settings,
 DF_GfxViewKind_COUNT,
@@ -193,6 +194,7 @@ DF_VIEW_SETUP_FUNCTION_DEF(Output);
 DF_VIEW_SETUP_FUNCTION_DEF(Memory);
 DF_VIEW_SETUP_FUNCTION_DEF(Bitmap);
 DF_VIEW_SETUP_FUNCTION_DEF(ColorRGBA);
+DF_VIEW_SETUP_FUNCTION_DEF(Geometry3D);
 DF_VIEW_SETUP_FUNCTION_DEF(ExceptionFilters);
 DF_VIEW_SETUP_FUNCTION_DEF(Settings);
 DF_VIEW_CMD_FUNCTION_DEF(Null);
@@ -226,6 +228,7 @@ DF_VIEW_CMD_FUNCTION_DEF(Output);
 DF_VIEW_CMD_FUNCTION_DEF(Memory);
 DF_VIEW_CMD_FUNCTION_DEF(Bitmap);
 DF_VIEW_CMD_FUNCTION_DEF(ColorRGBA);
+DF_VIEW_CMD_FUNCTION_DEF(Geometry3D);
 DF_VIEW_CMD_FUNCTION_DEF(ExceptionFilters);
 DF_VIEW_CMD_FUNCTION_DEF(Settings);
 DF_VIEW_UI_FUNCTION_DEF(Null);
@@ -259,6 +262,7 @@ DF_VIEW_UI_FUNCTION_DEF(Output);
 DF_VIEW_UI_FUNCTION_DEF(Memory);
 DF_VIEW_UI_FUNCTION_DEF(Bitmap);
 DF_VIEW_UI_FUNCTION_DEF(ColorRGBA);
+DF_VIEW_UI_FUNCTION_DEF(Geometry3D);
 DF_VIEW_UI_FUNCTION_DEF(ExceptionFilters);
 DF_VIEW_UI_FUNCTION_DEF(Settings);
 
@@ -274,12 +278,11 @@ DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(omit);
 DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(no_addr);
 DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_DEF(checkbox);
 DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_DEF(rgba);
-DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_DEF(geo);
 C_LINKAGE_BEGIN
 extern DF_StringBindingPair df_g_default_binding_table[110];
 extern String8 df_g_binding_version_remap_old_name_table[7];
 extern String8 df_g_binding_version_remap_new_name_table[7];
-extern DF_ViewSpecInfo df_g_gfx_view_kind_spec_info_table[33];
+extern DF_ViewSpecInfo df_g_gfx_view_kind_spec_info_table[34];
 extern DF_CmdParamSlot df_g_cmd_param_slot_2_view_spec_src_map[7];
 extern String8 df_g_cmd_param_slot_2_view_spec_dst_map[7];
 extern String8 df_g_cmd_param_slot_2_view_spec_cmd_map[7];

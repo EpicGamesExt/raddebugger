@@ -335,11 +335,14 @@ DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(no_addr){}
 
 DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_DEF(checkbox)
 {
+  Temp scratch = scratch_begin(0, 0);
+  E_Eval eval = e_eval_from_string(scratch.arena, string);
   E_Eval value_eval = e_value_eval_from_eval(eval);
   if(ui_clicked(df_icon_buttonf(ws, value_eval.value.u64 == 0 ? DF_IconKind_CheckHollow : DF_IconKind_CheckFilled, 0, "###check")))
   {
     df_commit_eval_value_string(eval, value_eval.value.u64 == 0 ? str8_lit("1") : str8_lit("0"));
   }
+  scratch_end(scratch);
 }
 
 ////////////////////////////////
@@ -359,12 +362,8 @@ DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(rgba)
 DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_DEF(rgba)
 {
   Temp scratch = scratch_begin(0, 0);
-  DF_Entity *thread = df_entity_from_handle(df_interact_regs()->thread);
-  DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
-  
-  //- rjf: grab hsva
-  E_Eval value_eval = e_value_eval_from_eval(eval);
-  Vec4F32 rgba = df_rgba_from_eval_params(value_eval, params);
+  E_Eval eval = e_eval_from_string(scratch.arena, string);
+  Vec4F32 rgba = df_rgba_from_eval_params(eval, params);
   Vec4F32 hsva = hsva_from_rgba(rgba);
   
   //- rjf: build text box
@@ -490,90 +489,9 @@ DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(bitmap)
 }
 
 ////////////////////////////////
-//~ rjf: "geo"
+//~ rjf: "geo3d"
 
-#if 0
-internal DF_GeoTopologyInfo
-df_vr_geo_topology_info_from_cfg(DF_CfgNode *cfg)
-{
-  Temp scratch = scratch_begin(0, 0);
-  DF_GeoTopologyInfo result = {0};
-  {
-    StringJoin join = {0};
-    join.sep = str8_lit(" ");
-    DF_CfgNode *count_cfg         = df_cfg_node_child_from_string(cfg, str8_lit("count"), 0);
-    DF_CfgNode *vertices_base_cfg = df_cfg_node_child_from_string(cfg, str8_lit("vertices_base"), 0);
-    DF_CfgNode *vertices_size_cfg = df_cfg_node_child_from_string(cfg, str8_lit("vertices_size"), 0);
-    String8List count_expr_strs = {0};
-    String8List vertices_base_expr_strs = {0};
-    String8List vertices_size_expr_strs = {0};
-    for(DF_CfgNode *child = count_cfg->first; child != &df_g_nil_cfg_node; child = child->next)
-    {
-      str8_list_push(scratch.arena, &count_expr_strs, child->string);
-    }
-    for(DF_CfgNode *child = vertices_base_cfg->first; child != &df_g_nil_cfg_node; child = child->next)
-    {
-      str8_list_push(scratch.arena, &vertices_base_expr_strs, child->string);
-    }
-    for(DF_CfgNode *child = vertices_size_cfg->first; child != &df_g_nil_cfg_node; child = child->next)
-    {
-      str8_list_push(scratch.arena, &vertices_size_expr_strs, child->string);
-    }
-    String8 count_expr = str8_list_join(scratch.arena, &count_expr_strs, &join);
-    String8 vertices_base_expr = str8_list_join(scratch.arena, &vertices_base_expr_strs, &join);
-    String8 vertices_size_expr = str8_list_join(scratch.arena, &vertices_size_expr_strs, &join);
-    E_Eval count_eval = e_eval_from_string(scratch.arena, count_expr);
-    E_Eval vertices_base_eval = e_eval_from_string(scratch.arena, vertices_base_expr);
-    E_Eval vertices_size_eval = e_eval_from_string(scratch.arena, vertices_size_expr);
-    E_Eval count_val_eval = e_value_eval_from_eval(count_eval);
-    E_Eval vertices_base_val_eval = e_value_eval_from_eval(vertices_base_eval);
-    E_Eval vertices_size_val_eval = e_value_eval_from_eval(vertices_size_eval);
-    U64 vertices_base_vaddr = vertices_base_val_eval.value.u64;
-    result.index_count = count_val_eval.value.u64;
-    result.vertices_vaddr_range = r1u64(vertices_base_vaddr, vertices_base_vaddr+vertices_size_val_eval.value.u64);
-  }
-  scratch_end(scratch);
-  return result;
-}
-#endif
-
-internal UI_BOX_CUSTOM_DRAW(df_vr_geo_box_draw)
-{
-  DF_VR_GeoBoxDrawData *draw_data = (DF_VR_GeoBoxDrawData *)user_data;
-  DF_VR_GeoState *state = df_view_rule_block_user_state(draw_data->key, DF_VR_GeoState);
-  
-  // rjf: get clip
-  Rng2F32 clip = box->rect;
-  for(UI_Box *b = box->parent; !ui_box_is_nil(b); b = b->parent)
-  {
-    if(b->flags & UI_BoxFlag_Clip)
-    {
-      clip = intersect_2f32(b->rect, clip);
-    }
-  }
-  
-  // rjf: calculate eye/target
-  Vec3F32 target = {0};
-  Vec3F32 eye = v3f32(state->zoom*cos_f32(state->yaw)*sin_f32(state->pitch),
-                      state->zoom*sin_f32(state->yaw)*sin_f32(state->pitch),
-                      state->zoom*cos_f32(state->pitch));
-  
-  // rjf: mesh
-  Vec2F32 box_dim = dim_2f32(box->rect);
-  R_PassParams_Geo3D *pass = d_geo3d_begin(box->rect,
-                                           make_look_at_4x4f32(eye, target, v3f32(0, 0, 1)),
-                                           make_perspective_4x4f32(0.25f, box_dim.x/box_dim.y, 0.1f, 500.f));
-  pass->clip = clip;
-  d_mesh(draw_data->vertex_buffer, draw_data->index_buffer, R_GeoTopologyKind_Triangles, R_GeoVertexFlag_TexCoord|R_GeoVertexFlag_Normals|R_GeoVertexFlag_RGB, r_handle_zero(), mat_4x4f32(1.f));
-  
-  // rjf: blur
-  if(draw_data->loaded_t < 0.98f)
-  {
-    d_blur(intersect_2f32(clip, box->rect), 10.f-9.f*draw_data->loaded_t, 0);
-  }
-}
-
-DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(geo)
+DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(geo3d)
 {
   DF_EvalVizBlock *vb = df_eval_viz_block_begin(arena, DF_EvalVizBlockKind_Canvas, key, df_expand_key_make(df_hash_from_expand_key(key), 1), depth);
   vb->string             = string;
@@ -583,110 +501,3 @@ DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(geo)
   vb->cfg_table          = cfg_table;
   df_eval_viz_block_end(out, vb);
 }
-
-DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_DEF(geo)
-{
-  E_Eval value_eval = e_value_eval_from_eval(eval);
-  U64 base_vaddr = value_eval.value.u64;
-  DF_Font(ws, DF_FontSlot_Code) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
-    ui_labelf("0x%I64x -> Geometry", base_vaddr);
-}
-
-#if 0
-DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(geo)
-{
-  Temp scratch = scratch_begin(0, 0);
-  GEO_Scope *geo_scope = geo_scope_open();
-  DF_VR_GeoState *state = df_view_rule_block_user_state(key, DF_VR_GeoState);
-  if(!state->initialized)
-  {
-    state->initialized = 1;
-    state->zoom_target = 3.5f;
-    state->yaw = state->yaw_target = -0.125f;
-    state->pitch = state->pitch_target = -0.125f;
-  }
-  if(state->last_open_frame_idx+1 < df_frame_index())
-  {
-    state->loaded_t = 0;
-  }
-  state->last_open_frame_idx = df_frame_index();
-  
-  //- rjf: resolve to address value
-  E_Eval value_eval = e_value_eval_from_eval(eval);
-  U64 base_vaddr = value_eval.value.u64;
-  
-  //- rjf: extract extra geo topology info from view rule
-  DF_GeoTopologyInfo top = df_vr_geo_topology_info_from_cfg(cfg);
-  Rng1U64 index_buffer_vaddr_range = r1u64(base_vaddr, base_vaddr+top.index_count*sizeof(U32));
-  Rng1U64 vertex_buffer_vaddr_range = top.vertices_vaddr_range;
-  
-  //- rjf: unpack thread/process of eval
-  DF_Entity *thread = df_entity_from_handle(df_interact_regs()->thread);
-  DF_Entity *process = df_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
-  
-  //- rjf: obtain keys for index buffer & vertex buffer memory
-  U128 index_buffer_key = ctrl_hash_store_key_from_process_vaddr_range(process->ctrl_machine_id, process->ctrl_handle, index_buffer_vaddr_range, 0);
-  U128 vertex_buffer_key = ctrl_hash_store_key_from_process_vaddr_range(process->ctrl_machine_id, process->ctrl_handle, vertex_buffer_vaddr_range, 0);
-  
-  //- rjf: get gpu buffers
-  R_Handle index_buffer = geo_buffer_from_key(geo_scope, index_buffer_key);
-  R_Handle vertex_buffer = geo_buffer_from_key(geo_scope, vertex_buffer_key);
-  
-  //- rjf: build preview
-  F32 rate = 1 - pow_f32(2, (-15.f * df_dt()));
-  if(top.index_count != 0)
-  {
-    UI_Padding(ui_pct(1.f, 0.f))
-      UI_PrefWidth(ui_px(dim.y, 1.f))
-      UI_Column UI_Padding(ui_pct(1.f, 0.f))
-      UI_PrefHeight(ui_px(dim.y, 1.f))
-    {
-      UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground|UI_BoxFlag_Clickable, "geo_box");
-      UI_Signal sig = ui_signal_from_box(box);
-      if(ui_dragging(sig))
-      {
-        if(ui_pressed(sig))
-        {
-          Vec2F32 data = v2f32(state->yaw_target, state->pitch_target);
-          ui_store_drag_struct(&data);
-        }
-        Vec2F32 drag_delta = ui_drag_delta();
-        Vec2F32 drag_start_data = *ui_get_drag_struct(Vec2F32);
-        state->yaw_target = drag_start_data.x + drag_delta.x/dim_2f32(box->rect).x;
-        state->pitch_target = drag_start_data.y + drag_delta.y/dim_2f32(box->rect).y;
-      }
-      state->zoom += (state->zoom_target - state->zoom) * rate;
-      state->yaw += (state->yaw_target - state->yaw) * rate;
-      state->pitch += (state->pitch_target - state->pitch) * rate;
-      if(abs_f32(state->zoom-state->zoom_target) > 0.001f ||
-         abs_f32(state->yaw-state->yaw_target) > 0.001f ||
-         abs_f32(state->pitch-state->pitch_target) > 0.001f)
-      {
-        df_gfx_request_frame();
-      }
-      DF_VR_GeoBoxDrawData *draw_data = push_array(ui_build_arena(), DF_VR_GeoBoxDrawData, 1);
-      draw_data->key = key;
-      draw_data->vertex_buffer = vertex_buffer;
-      draw_data->index_buffer = index_buffer;
-      draw_data->loaded_t = state->loaded_t;
-      ui_box_equip_custom_draw(box, df_vr_geo_box_draw, draw_data);
-      if(r_handle_match(r_handle_zero(), vertex_buffer))
-      {
-        df_gfx_request_frame();
-        state->loaded_t = 0;
-      }
-      else
-      {
-        state->loaded_t += (1.f - state->loaded_t) * rate;
-        if(state->loaded_t < 0.99f)
-        {
-          df_gfx_request_frame();
-        }
-      }
-    }
-  }
-  
-  geo_scope_close(geo_scope);
-  scratch_end(scratch);
-}
-#endif

@@ -2709,33 +2709,15 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
             //- rjf: unpack
             DF_WatchViewPoint pt = {0, row->parent_key, row->key};
             DF_ViewSpec *canvas_view_spec = df_view_spec_from_string(row->expand_ui_rule_spec->info.view_spec_name);
-            DF_View *canvas_view = df_transient_view_from_expand_key(view, row->key);
+            DF_TransientViewNode *canvas_view_node = df_transient_view_node_from_expand_key(view, row->key);
+            DF_View *canvas_view = canvas_view_node->view;
             String8 canvas_view_expr = e_string_from_expr(scratch.arena, row->expr);
-            B32 need_new_spec = 0;
-            if(!need_new_spec && !str8_match(str8(canvas_view->query_buffer, canvas_view->query_string_size), canvas_view_expr, 0))
-            {
-              need_new_spec = 1;
-            }
-            if(!need_new_spec)
-            {
-              for(MD_EachNode(child, row->expand_ui_rule_params->first))
-              {
-                MD_Node *current_param = md_child_from_string(canvas_view->params_roots[canvas_view->params_write_gen%ArrayCount(canvas_view->params_roots)],
-                                                              child->string, 0);
-                if(md_node_is_nil(current_param))
-                {
-                  need_new_spec = 1;
-                  break;
-                }
-                else if(!md_node_deep_match(child, current_param, 0))
-                {
-                  need_new_spec = 1;
-                  break;
-                }
-              }
-            }
+            B32 need_new_spec = (!str8_match(str8(canvas_view->query_buffer, canvas_view->query_string_size), canvas_view_expr, 0) ||
+                                 !md_tree_match(canvas_view_node->initial_params, row->expand_ui_rule_params, 0));
             if(need_new_spec)
             {
+              arena_clear(canvas_view_node->initial_params_arena);
+              canvas_view_node->initial_params = md_tree_copy(canvas_view_node->initial_params_arena, row->expand_ui_rule_params);
               df_view_equip_spec(ws, canvas_view, canvas_view_spec, canvas_view_expr, row->expand_ui_rule_params);
             }
             Vec2F32 canvas_dim = v2f32(scroll_list_params.dim_px.x - ui_top_font_size()*1.5f,
@@ -3019,7 +3001,8 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                   UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clip|UI_BoxFlag_Clickable, "###val_%I64x", row_hash);
                   UI_Parent(box)
                   {
-                    cell_ui_hook(ws, row->key, cell_eval, cell_ui_params);
+                    String8 row_expr = e_string_from_expr(scratch.arena, row->expr);
+                    cell_ui_hook(ws, row->key, cell_ui_params, row_expr);
                   }
                   sig = ui_signal_from_box(box);
                 }
@@ -3896,7 +3879,7 @@ DF_VIEW_UI_FUNCTION_DEF(FileSystem)
       if(query_normalized_with_opt_slash_props.flags & FilePropertyFlag_IsFolder)
       {
         String8 new_path = push_str8f(scratch.arena, "%S%S/", path_query.path, path_query.search);
-        df_view_equip_spec(ws, view, view->spec, new_path, &md_nil_node);
+        df_view_equip_query(view, new_path);
       }
       
       // rjf: is a file -> complete view
@@ -3926,7 +3909,7 @@ DF_VIEW_UI_FUNCTION_DEF(FileSystem)
       {
         String8 existing_path = str8_chop_last_slash(path_query.path);
         String8 new_path = push_str8f(scratch.arena, "%S/%S/", existing_path, files[0].filename);
-        df_view_equip_spec(ws, view, view->spec, new_path, &md_nil_node);
+        df_view_equip_query(view, new_path);
       }
       else
       {
@@ -4056,7 +4039,7 @@ DF_VIEW_UI_FUNCTION_DEF(FileSystem)
         String8 new_path = str8_chop_last_slash(str8_chop_last_slash(path_query.path));
         new_path = path_normalized_from_string(scratch.arena, new_path);
         String8 new_cmd = push_str8f(scratch.arena, "%S%s", new_path, new_path.size != 0 ? "/" : "");
-        df_view_equip_spec(ws, view, view->spec, new_cmd, &md_nil_node);
+        df_view_equip_query(view, new_cmd);
       }
     }
     
@@ -4138,7 +4121,7 @@ DF_VIEW_UI_FUNCTION_DEF(FileSystem)
         if(file->props.flags & FilePropertyFlag_IsFolder)
         {
           String8 new_cmd = push_str8f(scratch.arena, "%S%s", new_path, new_path.size != 0 ? "/" : "");
-          df_view_equip_spec(ws, view, view->spec, new_cmd, &md_nil_node);
+          df_view_equip_query(view, new_cmd);
         }
         else
         {
@@ -8396,7 +8379,7 @@ DF_VIEW_UI_FUNCTION_DEF(Bitmap)
 }
 
 ////////////////////////////////
-//~ rjf: Color @view_hook_impl
+//~ rjf: ColorRGBA @view_hook_impl
 
 DF_VIEW_SETUP_FUNCTION_DEF(ColorRGBA) {}
 DF_VIEW_CMD_FUNCTION_DEF(ColorRGBA) {}
@@ -8442,6 +8425,158 @@ DF_VIEW_UI_FUNCTION_DEF(ColorRGBA)
       ui_labelf("%.2f", rgba.w);
     }
   }
+  scratch_end(scratch);
+}
+
+////////////////////////////////
+//~ rjf: Geometry3D @view_hook_impl
+
+internal UI_BOX_CUSTOM_DRAW(df_geometry3d_box_draw)
+{
+  DF_Geometry3DBoxDrawData *draw_data = (DF_Geometry3DBoxDrawData *)user_data;
+  
+  // rjf: get clip
+  Rng2F32 clip = box->rect;
+  for(UI_Box *b = box->parent; !ui_box_is_nil(b); b = b->parent)
+  {
+    if(b->flags & UI_BoxFlag_Clip)
+    {
+      clip = intersect_2f32(b->rect, clip);
+    }
+  }
+  
+  // rjf: calculate eye/target
+  Vec3F32 target = {0};
+  Vec3F32 eye = v3f32(draw_data->zoom*cos_f32(draw_data->yaw)*sin_f32(draw_data->pitch),
+                      draw_data->zoom*sin_f32(draw_data->yaw)*sin_f32(draw_data->pitch),
+                      draw_data->zoom*cos_f32(draw_data->pitch));
+  
+  // rjf: mesh
+  Vec2F32 box_dim = dim_2f32(box->rect);
+  R_PassParams_Geo3D *pass = d_geo3d_begin(box->rect,
+                                           make_look_at_4x4f32(eye, target, v3f32(0, 0, 1)),
+                                           make_perspective_4x4f32(0.25f, box_dim.x/box_dim.y, 0.1f, 500.f));
+  pass->clip = clip;
+  d_mesh(draw_data->vertex_buffer, draw_data->index_buffer, R_GeoTopologyKind_Triangles, R_GeoVertexFlag_TexCoord|R_GeoVertexFlag_Normals|R_GeoVertexFlag_RGB, r_handle_zero(), mat_4x4f32(1.f));
+}
+
+DF_VIEW_SETUP_FUNCTION_DEF(Geometry3D)
+{
+  df_view_equip_loading_info(view, 1, 0, 0);
+  view->loading_t = view->loading_t_target = 1.f;
+}
+DF_VIEW_CMD_FUNCTION_DEF(Geometry3D) {}
+DF_VIEW_UI_FUNCTION_DEF(Geometry3D)
+{
+  Temp scratch = scratch_begin(0, 0);
+  GEO_Scope *geo_scope = geo_scope_open();
+  DF_Geometry3DViewState *state = df_view_user_state(view, DF_Geometry3DViewState);
+  
+  //////////////////////////////
+  //- rjf: unpack parameters
+  //
+  U64 count        = df_value_from_params_key(params, str8_lit("count")).u64;
+  U64 vtx_base_off = df_value_from_params_key(params, str8_lit("vtx")).u64;
+  U64 vtx_size     = df_value_from_params_key(params, str8_lit("vtx_size")).u64;
+  F32 yaw_target   = df_value_from_params_key(params, str8_lit("yaw")).f32;
+  F32 pitch_target = df_value_from_params_key(params, str8_lit("pitch")).f32;
+  F32 zoom_target  = df_value_from_params_key(params, str8_lit("zoom")).f32;
+  
+  //////////////////////////////
+  //- rjf: evaluate & unpack expression
+  //
+  E_Eval eval = e_eval_from_string(scratch.arena, string);
+  U64 base_offset = df_base_offset_from_eval(eval);
+  Rng1U64 idxs_range = r1u64(base_offset, base_offset+count*sizeof(U32));
+  Rng1U64 vtxs_range = r1u64(vtx_base_off, vtx_base_off+vtx_size);
+  U128 idxs_key = df_key_from_eval_space_range(eval.space, idxs_range, 0);
+  U128 vtxs_key = df_key_from_eval_space_range(eval.space, vtxs_range, 0);
+  R_Handle idxs_buffer = geo_buffer_from_key(geo_scope, idxs_key);
+  R_Handle vtxs_buffer = geo_buffer_from_key(geo_scope, vtxs_key);
+  
+  //////////////////////////////
+  //- rjf: equip loading info
+  //
+  if(eval.msgs.max_kind == E_MsgKind_Null &&
+     (r_handle_match(idxs_buffer, r_handle_zero()) ||
+      r_handle_match(vtxs_buffer, r_handle_zero())))
+  {
+    df_view_equip_loading_info(view, 1, 0, 0);
+  }
+  
+  //////////////////////////////
+  //- rjf: do first-time camera initialization, if needed
+  //
+  if(zoom_target == 0)
+  {
+    yaw_target   = -0.125f;
+    pitch_target = -0.125f;
+    zoom_target  = 3.5f;
+  }
+  
+  //////////////////////////////
+  //- rjf: animate camera
+  //
+  {
+    F32 fast_rate = 1 - pow_f32(2, (-60.f * df_dt()));
+    F32 slow_rate = 1 - pow_f32(2, (-30.f * df_dt()));
+    state->zoom  += (zoom_target - state->zoom) * slow_rate;
+    state->yaw   += (yaw_target - state->yaw) * fast_rate;
+    state->pitch += (pitch_target - state->pitch) * fast_rate;
+    if(abs_f32(state->zoom  - zoom_target)  > 0.001f ||
+       abs_f32(state->yaw   - yaw_target)   > 0.001f ||
+       abs_f32(state->pitch - pitch_target) > 0.001f)
+    {
+      df_gfx_request_frame();
+    }
+  }
+  
+  //////////////////////////////
+  //- rjf: build
+  //
+  if(count != 0 && !r_handle_match(idxs_buffer, r_handle_zero()) && !r_handle_match(vtxs_buffer, r_handle_zero()))
+  {
+    Vec2F32 dim = dim_2f32(rect);
+    UI_Box *box = &ui_g_nil_box;
+    UI_FixedSize(dim)
+    {
+      box = ui_build_box_from_stringf(UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground|UI_BoxFlag_Clickable|UI_BoxFlag_Scroll, "geo_box");
+    }
+    UI_Signal sig = ui_signal_from_box(box);
+    if(ui_dragging(sig))
+    {
+      if(ui_pressed(sig))
+      {
+        DF_CmdParams p = df_cmd_params_from_view(ws, panel, view);
+        df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FocusPanel));
+        Vec2F32 data = v2f32(yaw_target, pitch_target);
+        ui_store_drag_struct(&data);
+      }
+      Vec2F32 drag_delta      = ui_drag_delta();
+      Vec2F32 drag_start_data = *ui_get_drag_struct(Vec2F32);
+      yaw_target   = drag_start_data.x + drag_delta.x/dim.x;
+      pitch_target = drag_start_data.y + drag_delta.y/dim.y;
+    }
+    zoom_target += sig.scroll.y;
+    zoom_target = Clamp(0.1f, zoom_target, 100.f);
+    pitch_target = Clamp(-0.49f, pitch_target, -0.01f);
+    DF_Geometry3DBoxDrawData *draw_data = push_array(ui_build_arena(), DF_Geometry3DBoxDrawData, 1);
+    draw_data->yaw   = state->yaw;
+    draw_data->pitch = state->pitch;
+    draw_data->zoom  = state->zoom;
+    draw_data->vertex_buffer  = vtxs_buffer;
+    draw_data->index_buffer   = idxs_buffer;
+    ui_box_equip_custom_draw(box, df_geometry3d_box_draw, draw_data);
+  }
+  
+  //////////////////////////////
+  //- rjf: commit parameters
+  //
+  df_view_store_param_f32(view, str8_lit("yaw"),   yaw_target);
+  df_view_store_param_f32(view, str8_lit("pitch"), pitch_target);
+  df_view_store_param_f32(view, str8_lit("zoom"),  zoom_target);
+  
+  geo_scope_close(geo_scope);
   scratch_end(scratch);
 }
 

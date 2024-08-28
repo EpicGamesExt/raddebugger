@@ -1047,6 +1047,8 @@ internal void     ui_pop_corner_radius(void);
 #define UI_TextAlignment(v) DeferLoop(ui_push_text_alignment(v), ui_pop_text_alignment())
 
 //- rjf: stacks (compositions)
+#define UI_FixedPos(v)       DeferLoop((ui_push_fixed_x((v).x), ui_push_fixed_y((v).y)), (ui_pop_fixed_x(), ui_pop_fixed_y()))
+#define UI_FixedSize(v)      DeferLoop((ui_push_fixed_width((v).x), ui_push_fixed_height((v).y)), (ui_pop_fixed_width(), ui_pop_fixed_height()))
 #define UI_WidthFill         UI_PrefWidth(ui_pct(1.f, 0.f))
 #define UI_HeightFill        UI_PrefHeight(ui_pct(1.f, 0.f))
 #define UI_Rect(r)           DeferLoop(ui_push_rect(r), ui_pop_rect())

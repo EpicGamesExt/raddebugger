@@ -846,48 +846,52 @@ df_view_equip_spec(DF_Window *window, DF_View *view, DF_ViewSpec *spec, String8 
     arena_clear(view->params_arenas[idx]);
   }
   view->params_roots[0] = md_tree_copy(view->params_arenas[0], params);
+  view->params_write_gen = view->params_read_gen = 0;
   
   // rjf: fill query buffer
+  df_view_equip_query(view, query);
+  
+  // rjf: initialize state for new view spec
+  DF_ViewSetupFunctionType *view_setup = spec->info.setup_hook;
+  {
+    for(DF_ArenaExt *ext = view->first_arena_ext; ext != 0; ext = ext->next)
+    {
+      arena_release(ext->arena);
+    }
+    for(DF_View *tchild = view->first_transient, *next = 0; !df_view_is_nil(tchild); tchild = next)
+    {
+      next = tchild->order_next;
+      df_view_release(tchild);
+    }
+    view->first_transient = view->last_transient = &df_g_nil_view;
+    view->first_arena_ext = view->last_arena_ext = 0;
+    view->transient_view_slots_count = 0;
+    view->transient_view_slots = 0;
+    arena_clear(view->arena);
+    view->user_data = 0;
+  }
+  MemoryZeroStruct(&view->scroll_pos);
+  view->spec = spec;
+  if(spec->info.flags & DF_ViewSpecFlag_ProjectSpecific)
+  {
+    arena_clear(view->project_path_arena);
+    view->project_path = push_str8_copy(view->project_path_arena, df_cfg_path_from_src(DF_CfgSrc_Project));
+  }
+  else
+  {
+    MemoryZeroStruct(&view->project_path);
+  }
+  view->is_filtering = 0;
+  view->is_filtering_t = 0;
+  view_setup(window, view, view->params_roots[view->params_read_gen%ArrayCount(view->params_roots)], str8(view->query_buffer, view->query_string_size));
+}
+
+internal void
+df_view_equip_query(DF_View *view, String8 query)
+{
   view->query_string_size = Min(sizeof(view->query_buffer), query.size);
   MemoryCopy(view->query_buffer, query.str, view->query_string_size);
   view->query_cursor = view->query_mark = txt_pt(1, query.size+1);
-  
-  // rjf: initialize state for new view spec, if needed
-  if(view->spec != spec || spec == &df_g_nil_view_spec)
-  {
-    DF_ViewSetupFunctionType *view_setup = spec->info.setup_hook;
-    {
-      for(DF_ArenaExt *ext = view->first_arena_ext; ext != 0; ext = ext->next)
-      {
-        arena_release(ext->arena);
-      }
-      for(DF_View *tchild = view->first_transient, *next = 0; !df_view_is_nil(tchild); tchild = next)
-      {
-        next = tchild->order_next;
-        df_view_release(tchild);
-      }
-      view->first_transient = view->last_transient = &df_g_nil_view;
-      view->first_arena_ext = view->last_arena_ext = 0;
-      view->transient_view_slots_count = 0;
-      view->transient_view_slots = 0;
-      arena_clear(view->arena);
-      view->user_data = 0;
-    }
-    MemoryZeroStruct(&view->scroll_pos);
-    view->spec = spec;
-    if(spec->info.flags & DF_ViewSpecFlag_ProjectSpecific)
-    {
-      arena_clear(view->project_path_arena);
-      view->project_path = push_str8_copy(view->project_path_arena, df_cfg_path_from_src(DF_CfgSrc_Project));
-    }
-    else
-    {
-      MemoryZeroStruct(&view->project_path);
-    }
-    view->is_filtering = 0;
-    view->is_filtering_t = 0;
-    view_setup(window, view, view->params_roots[view->params_read_gen%ArrayCount(view->params_roots)], str8(view->query_buffer, view->query_string_size));
-  }
 }
 
 internal void
@@ -976,43 +980,43 @@ df_view_store_paramf(DF_View *view, String8 key, char *fmt, ...)
 ////////////////////////////////
 //~ rjf: Expand-Keyed Transient View Functions
 
-internal DF_View *
-df_transient_view_from_expand_key(DF_View *owner_view, DF_ExpandKey key)
+internal DF_TransientViewNode *
+df_transient_view_node_from_expand_key(DF_View *owner_view, DF_ExpandKey key)
 {
   if(owner_view->transient_view_slots_count == 0)
   {
     owner_view->transient_view_slots_count = 256;
     owner_view->transient_view_slots = push_array(owner_view->arena, DF_TransientViewSlot, owner_view->transient_view_slots_count);
   }
-  DF_View *view = &df_g_nil_view;
   U64 hash = df_hash_from_expand_key(key);
   U64 slot_idx = hash%owner_view->transient_view_slots_count;
   DF_TransientViewSlot *slot = &owner_view->transient_view_slots[slot_idx];
+  DF_TransientViewNode *node = 0;
   for(DF_TransientViewNode *n = slot->first; n != 0; n = n->next)
   {
     if(df_expand_key_match(n->key, key))
     {
-      view = n->view;
+      node = n;
       n->last_frame_index_touched = df_frame_index();
       break;
     }
   }
-  if(df_view_is_nil(view))
+  if(node == 0)
   {
     if(!owner_view->free_transient_view_node)
     {
       owner_view->free_transient_view_node = push_array(df_gfx_state->arena, DF_TransientViewNode, 1);
     }
-    DF_TransientViewNode *node = owner_view->free_transient_view_node;
+    node = owner_view->free_transient_view_node;
     SLLStackPop(owner_view->free_transient_view_node);
     DLLPushBack(slot->first, slot->last, node);
     node->key = key;
     node->view = df_view_alloc();
+    node->initial_params_arena = arena_alloc();
     node->first_frame_index_touched = node->last_frame_index_touched = df_frame_index();
-    view = node->view;
-    DLLPushBack_NPZ(&df_g_nil_view, owner_view->first_transient, owner_view->last_transient, view, order_next, order_prev);
+    DLLPushBack_NPZ(&df_g_nil_view, owner_view->first_transient, owner_view->last_transient, node->view, order_next, order_prev);
   }
-  return view;
+  return node;
 }
 
 ////////////////////////////////

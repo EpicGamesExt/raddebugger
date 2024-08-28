@@ -361,6 +361,10 @@ md_string_from_children(Arena *arena, MD_Node *root)
   String8List strs = {0};
   for(MD_EachNode(child, root->first))
   {
+    if(child->flags == child->prev->flags)
+    {
+      str8_list_push(scratch.arena, &strs, str8_lit(" "));
+    }
     str8_list_push(scratch.arena, &strs, child->string);
   }
   String8 result = str8_list_join(arena, &strs, 0);
@@ -393,7 +397,7 @@ md_node_match(MD_Node *a, MD_Node *b, StringMatchFlags flags)
               !md_node_is_nil(a_tag_arg) || !md_node_is_nil(b_tag_arg);
               a_tag_arg = a_tag_arg->next, b_tag_arg = b_tag_arg->next)
           {
-            if(!md_node_deep_match(a_tag_arg, b_tag_arg, flags))
+            if(!md_tree_match(a_tag_arg, b_tag_arg, flags))
             {
               result = 0;
               goto end;
@@ -413,7 +417,7 @@ md_node_match(MD_Node *a, MD_Node *b, StringMatchFlags flags)
 }
 
 internal B32
-md_node_deep_match(MD_Node *a, MD_Node *b, StringMatchFlags flags)
+md_tree_match(MD_Node *a, MD_Node *b, StringMatchFlags flags)
 {
   B32 result = md_node_match(a, b, flags);
   if(result)
@@ -422,7 +426,7 @@ md_node_deep_match(MD_Node *a, MD_Node *b, StringMatchFlags flags)
         !md_node_is_nil(a_child) || !md_node_is_nil(b_child);
         a_child = a_child->next, b_child = b_child->next)
     {
-      if(!md_node_deep_match(a_child, b_child, flags))
+      if(!md_tree_match(a_child, b_child, flags))
       {
         result = 0;
         goto end;

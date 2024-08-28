@@ -171,6 +171,8 @@ struct DF_TransientViewNode
   DF_TransientViewNode *prev;
   DF_ExpandKey key;
   DF_View *view;
+  Arena *initial_params_arena;
+  MD_Node *initial_params;
   U64 first_frame_index_touched;
   U64 last_frame_index_touched;
 };
@@ -347,7 +349,7 @@ enum
 #define DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_NAME(name) df_gfx_view_rule_line_stringize__##name
 #define DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(name) internal DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_SIG(DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_NAME(name))
 
-#define DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_SIG(name) void name(struct DF_Window *ws, DF_ExpandKey key, E_Eval eval, MD_Node *params)
+#define DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_SIG(name) void name(struct DF_Window *ws, DF_ExpandKey key, MD_Node *params, String8 string)
 #define DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_NAME(name) df_gfx_view_rule_row_ui__##name
 #define DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_DEF(name) DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_SIG(DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_NAME(name))
 
@@ -962,6 +964,7 @@ internal void df_view_release(DF_View *view);
 
 //- rjf: equipment
 internal void df_view_equip_spec(DF_Window *window, DF_View *view, DF_ViewSpec *spec, String8 query, MD_Node *params);
+internal void df_view_equip_query(DF_View *view, String8 query);
 internal void df_view_equip_loading_info(DF_View *view, B32 is_loading, U64 progress_v, U64 progress_target);
 
 //- rjf: user state extensions
@@ -979,7 +982,7 @@ internal void df_view_store_paramf(DF_View *view, String8 key, char *fmt, ...);
 ////////////////////////////////
 //~ rjf: Expand-Keyed Transient View Functions
 
-internal DF_View *df_transient_view_from_expand_key(DF_View *owner_view, DF_ExpandKey key);
+internal DF_TransientViewNode *df_transient_view_node_from_expand_key(DF_View *owner_view, DF_ExpandKey key);
 
 ////////////////////////////////
 //~ rjf: View Rule Instance State Functions

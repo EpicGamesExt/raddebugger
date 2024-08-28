@@ -140,7 +140,7 @@ str8_lit_comp("add_address_breakpoint"),
 str8_lit_comp("add_function_breakpoint"),
 };
 
-DF_ViewSpecInfo df_g_gfx_view_kind_spec_info_table[33] =
+DF_ViewSpecInfo df_g_gfx_view_kind_spec_info_table[34] =
 {
 {(0|0*DF_ViewSpecFlag_ParameterizedByEntity|0*DF_ViewSpecFlag_ProjectSpecific|0*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanFilter|0*DF_ViewSpecFlag_FilterIsCode|0*DF_ViewSpecFlag_TypingAutomaticallyFilters), str8_lit_comp("null"), str8_lit_comp(""), DF_IconKind_Null, DF_VIEW_SETUP_FUNCTION_NAME(Null), DF_VIEW_CMD_FUNCTION_NAME(Null), DF_VIEW_UI_FUNCTION_NAME(Null)},
 {(0|0*DF_ViewSpecFlag_ParameterizedByEntity|0*DF_ViewSpecFlag_ProjectSpecific|0*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanFilter|0*DF_ViewSpecFlag_FilterIsCode|0*DF_ViewSpecFlag_TypingAutomaticallyFilters), str8_lit_comp("empty"), str8_lit_comp(""), DF_IconKind_Null, DF_VIEW_SETUP_FUNCTION_NAME(Empty), DF_VIEW_CMD_FUNCTION_NAME(Empty), DF_VIEW_UI_FUNCTION_NAME(Empty)},
@@ -173,6 +173,7 @@ DF_ViewSpecInfo df_g_gfx_view_kind_spec_info_table[33] =
 {(0|0*DF_ViewSpecFlag_ParameterizedByEntity|0*DF_ViewSpecFlag_ProjectSpecific|1*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanFilter|1*DF_ViewSpecFlag_FilterIsCode|0*DF_ViewSpecFlag_TypingAutomaticallyFilters), str8_lit_comp("memory"), str8_lit_comp("Memory"), DF_IconKind_Grid, DF_VIEW_SETUP_FUNCTION_NAME(Memory), DF_VIEW_CMD_FUNCTION_NAME(Memory), DF_VIEW_UI_FUNCTION_NAME(Memory)},
 {(0|0*DF_ViewSpecFlag_ParameterizedByEntity|0*DF_ViewSpecFlag_ProjectSpecific|1*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanFilter|1*DF_ViewSpecFlag_FilterIsCode|0*DF_ViewSpecFlag_TypingAutomaticallyFilters), str8_lit_comp("bitmap"), str8_lit_comp("Bitmap"), DF_IconKind_Binoculars, DF_VIEW_SETUP_FUNCTION_NAME(Bitmap), DF_VIEW_CMD_FUNCTION_NAME(Bitmap), DF_VIEW_UI_FUNCTION_NAME(Bitmap)},
 {(0|0*DF_ViewSpecFlag_ParameterizedByEntity|0*DF_ViewSpecFlag_ProjectSpecific|1*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanFilter|1*DF_ViewSpecFlag_FilterIsCode|0*DF_ViewSpecFlag_TypingAutomaticallyFilters), str8_lit_comp("color_rgba"), str8_lit_comp("Color (RGBA)"), DF_IconKind_Palette, DF_VIEW_SETUP_FUNCTION_NAME(ColorRGBA), DF_VIEW_CMD_FUNCTION_NAME(ColorRGBA), DF_VIEW_UI_FUNCTION_NAME(ColorRGBA)},
+{(0|0*DF_ViewSpecFlag_ParameterizedByEntity|0*DF_ViewSpecFlag_ProjectSpecific|1*DF_ViewSpecFlag_CanSerialize|0*DF_ViewSpecFlag_CanFilter|1*DF_ViewSpecFlag_FilterIsCode|0*DF_ViewSpecFlag_TypingAutomaticallyFilters), str8_lit_comp("geometry_3d"), str8_lit_comp("Geometry (3D)"), DF_IconKind_Binoculars, DF_VIEW_SETUP_FUNCTION_NAME(Geometry3D), DF_VIEW_CMD_FUNCTION_NAME(Geometry3D), DF_VIEW_UI_FUNCTION_NAME(Geometry3D)},
 {(0|0*DF_ViewSpecFlag_ParameterizedByEntity|0*DF_ViewSpecFlag_ProjectSpecific|1*DF_ViewSpecFlag_CanSerialize|1*DF_ViewSpecFlag_CanFilter|0*DF_ViewSpecFlag_FilterIsCode|1*DF_ViewSpecFlag_TypingAutomaticallyFilters), str8_lit_comp("exception_filters"), str8_lit_comp("Exception Filters"), DF_IconKind_Gear, DF_VIEW_SETUP_FUNCTION_NAME(ExceptionFilters), DF_VIEW_CMD_FUNCTION_NAME(ExceptionFilters), DF_VIEW_UI_FUNCTION_NAME(ExceptionFilters)},
 {(0|0*DF_ViewSpecFlag_ParameterizedByEntity|0*DF_ViewSpecFlag_ProjectSpecific|1*DF_ViewSpecFlag_CanSerialize|1*DF_ViewSpecFlag_CanFilter|0*DF_ViewSpecFlag_FilterIsCode|1*DF_ViewSpecFlag_TypingAutomaticallyFilters), str8_lit_comp("settings"), str8_lit_comp("Settings"), DF_IconKind_Gear, DF_VIEW_SETUP_FUNCTION_NAME(Settings), DF_VIEW_CMD_FUNCTION_NAME(Settings), DF_VIEW_UI_FUNCTION_NAME(Settings)},
 };
@@ -227,7 +228,7 @@ DF_GfxViewRuleSpecInfo df_g_gfx_view_rule_spec_info_table[16] =
 { str8_lit_comp("disasm"), (DF_GfxViewRuleSpecInfoFlag_VizRowProd*0)|(DF_GfxViewRuleSpecInfoFlag_LineStringize*0)|(DF_GfxViewRuleSpecInfoFlag_RowUI*0)|(DF_GfxViewRuleSpecInfoFlag_ViewUI*1),  0,  0,  0, str8_lit_comp("disassembly") },
 { str8_lit_comp("memory"), (DF_GfxViewRuleSpecInfoFlag_VizRowProd*0)|(DF_GfxViewRuleSpecInfoFlag_LineStringize*0)|(DF_GfxViewRuleSpecInfoFlag_RowUI*0)|(DF_GfxViewRuleSpecInfoFlag_ViewUI*1),  0,  0,  0, str8_lit_comp("memory") },
 { str8_lit_comp("bitmap"), (DF_GfxViewRuleSpecInfoFlag_VizRowProd*0)|(DF_GfxViewRuleSpecInfoFlag_LineStringize*0)|(DF_GfxViewRuleSpecInfoFlag_RowUI*0)|(DF_GfxViewRuleSpecInfoFlag_ViewUI*1),  0,  0,  0, str8_lit_comp("bitmap") },
-{ str8_lit_comp("geo"), (DF_GfxViewRuleSpecInfoFlag_VizRowProd*0)|(DF_GfxViewRuleSpecInfoFlag_LineStringize*0)|(DF_GfxViewRuleSpecInfoFlag_RowUI*1)|(DF_GfxViewRuleSpecInfoFlag_ViewUI*1),  0,  0, DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_NAME(geo) , str8_lit_comp("geometry") },
+{ str8_lit_comp("geo3d"), (DF_GfxViewRuleSpecInfoFlag_VizRowProd*0)|(DF_GfxViewRuleSpecInfoFlag_LineStringize*0)|(DF_GfxViewRuleSpecInfoFlag_RowUI*0)|(DF_GfxViewRuleSpecInfoFlag_ViewUI*1),  0,  0,  0, str8_lit_comp("geometry_3d") },
 };
 
 String8 df_g_theme_preset_display_string_table[9] =

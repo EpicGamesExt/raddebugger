@@ -370,7 +370,7 @@ DF_CoreViewRuleKind_Disasm,
 DF_CoreViewRuleKind_Memory,
 DF_CoreViewRuleKind_Graph,
 DF_CoreViewRuleKind_Bitmap,
-DF_CoreViewRuleKind_Geo,
+DF_CoreViewRuleKind_Geo3D,
 DF_CoreViewRuleKind_COUNT,
 } DF_CoreViewRuleKind;
 
@@ -446,7 +446,7 @@ DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(disasm);
 DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(memory);
 DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(graph);
 DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(bitmap);
-DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(geo);
+DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(geo3d);
 global B32 DEV_telemetry_capture = 0;
 global B32 DEV_simulate_lag = 0;
 global B32 DEV_draw_ui_text_pos = 0;

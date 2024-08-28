@@ -1857,7 +1857,7 @@ fancy_viz_eval_tests(void)
     136, 137, 138, 138, 139, 136, 140, 141, 142, 142, 143, 140, 144, 145, 146, 146, 147, 144, 148, 149, 150, 150, 151, 148,
     152, 153, 154, 154, 155, 152, 156, 157, 158, 158, 159, 156, 160, 161, 162, 162, 163, 160, 164, 165, 166, 166, 167, 164,
   };
-  raddbg_pin(index_data, "geo: { count:(sizeof index_data / 4), vertices_base:(vertex_data), vertices_size:(sizeof vertex_data) }");
+  raddbg_pin(index_data, "geo3d: { count:(sizeof index_data/4), vtx:(vertex_data), vtx_size:(sizeof vertex_data) }");
   int x3 = 0;
 }
 

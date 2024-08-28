@@ -458,6 +458,27 @@ struct DF_BitmapCanvasBoxDrawData
 };
 
 ////////////////////////////////
+//~ rjf: Geometry3D @view_types
+
+typedef struct DF_Geometry3DViewState DF_Geometry3DViewState;
+struct DF_Geometry3DViewState
+{
+  F32 yaw;
+  F32 pitch;
+  F32 zoom;
+};
+
+typedef struct DF_Geometry3DBoxDrawData DF_Geometry3DBoxDrawData;
+struct DF_Geometry3DBoxDrawData
+{
+  F32 yaw;
+  F32 pitch;
+  F32 zoom;
+  R_Handle vertex_buffer;
+  R_Handle index_buffer;
+};
+
+////////////////////////////////
 //~ rjf: Settings @view_types
 
 typedef enum DF_SettingsItemKind
