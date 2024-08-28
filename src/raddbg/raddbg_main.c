@@ -64,7 +64,7 @@
 #include "draw/draw.h"
 #include "ui/ui_inc.h"
 #include "dbg_engine/dbg_engine_inc.h"
-#include "dbg_gfx/dbg_gfx_inc.h"
+#include "dbg_frontend/dbg_frontend_inc.h"
 #include "raddbg.h"
 
 //- rjf: [c]
@@ -104,7 +104,7 @@
 #include "draw/draw.c"
 #include "ui/ui_inc.c"
 #include "dbg_engine/dbg_engine_inc.c"
-#include "dbg_gfx/dbg_gfx_inc.c"
+#include "dbg_frontend/dbg_frontend_inc.c"
 #include "raddbg.c"
 
 ////////////////////////////////

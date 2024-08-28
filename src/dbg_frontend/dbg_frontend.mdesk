@@ -318,7 +318,7 @@ D_CmdParamSlot2ViewSpecMap:
 // NOTE(rjf): see @view_rule_info
 
 @table(string     vr  ls  ru  vu)
-DF_GfxViewRuleTable:
+DF_ViewRuleTable:
 {
   {"array"         -   -   -   -   }
   {"list"          x   -   -   -   }
@@ -341,20 +341,20 @@ DF_GfxViewRuleTable:
 @gen
 {
   ``;
-  @expand(DF_GfxViewRuleTable a)
+  @expand(DF_ViewRuleTable a)
     `$(a.vr == "x" -> "DF_GFX_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_DEF(" .. a.name_lower .. ");")`;
-  @expand(DF_GfxViewRuleTable a)
+  @expand(DF_ViewRuleTable a)
     `$(a.ls == "x" -> "DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(" .. a.name_lower .. ");")`;
-  @expand(DF_GfxViewRuleTable a)
+  @expand(DF_ViewRuleTable a)
     `$(a.ru == "x" -> "DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_DEF(" .. a.name_lower .. ");")`;
-  @expand(DF_GfxViewRuleTable a)
+  @expand(DF_ViewRuleTable a)
     `$(a.bu == "x" -> "DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(" .. a.name_lower .. ");")`;
 }
 
-@data(DF_GfxViewRuleSpecInfo) @c_file df_g_gfx_view_rule_spec_info_table:
+@data(DF_ViewRuleSpecInfo) @c_file df_g_gfx_view_rule_spec_info_table:
 {
-  @expand(DF_GfxViewRuleTable a)
-    ```{ str8_lit_comp("$(a.string)"), (DF_GfxViewRuleSpecInfoFlag_VizRowProd*$(a.vr == "x"))|(DF_GfxViewRuleSpecInfoFlag_LineStringize*$(a.ls == "x"))|(DF_GfxViewRuleSpecInfoFlag_RowUI*$(a.ru == "x"))|(DF_GfxViewRuleSpecInfoFlag_ViewUI*$(a.vu == "x")), $(a.vr == "x" -> "DF_GFX_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_NAME("..a.name_lower..")") $(a.vr != "x" -> 0), $(a.ls == "x" -> "DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_NAME("..a.name_lower..")") $(a.ls != "x" -> 0), $(a.ru == "x" -> "DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_NAME("..a.name_lower..")") $(a.ru != "x" -> 0) }```;
+  @expand(DF_ViewRuleTable a)
+    ```{ str8_lit_comp("$(a.string)"), (DF_ViewRuleSpecInfoFlag_VizRowProd*$(a.vr == "x"))|(DF_ViewRuleSpecInfoFlag_LineStringize*$(a.ls == "x"))|(DF_ViewRuleSpecInfoFlag_RowUI*$(a.ru == "x"))|(DF_ViewRuleSpecInfoFlag_ViewUI*$(a.vu == "x")), $(a.vr == "x" -> "DF_GFX_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_NAME("..a.name_lower..")") $(a.vr != "x" -> 0), $(a.ls == "x" -> "DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_NAME("..a.name_lower..")") $(a.ls != "x" -> 0), $(a.ru == "x" -> "DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_NAME("..a.name_lower..")") $(a.ru != "x" -> 0) }```;
 }
 
 ////////////////////////////////

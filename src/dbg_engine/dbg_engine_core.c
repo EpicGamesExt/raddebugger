@@ -755,7 +755,7 @@ d_handle_list_from_entity_list(Arena *arena, D_EntityList entities)
 //- rjf: entity recursion iterators
 
 internal D_EntityRec
-d_entity_rec_df(D_Entity *entity, D_Entity *subtree_root, U64 sib_off, U64 child_off)
+d_entity_rec_depth_first(D_Entity *entity, D_Entity *subtree_root, U64 sib_off, U64 child_off)
 {
   D_EntityRec result = {0};
   if(!d_entity_is_nil(*MemberFromOffset(D_Entity **, entity, child_off)))
@@ -1863,7 +1863,7 @@ d_push_entity_list_with_kind(Arena *arena, D_EntityKind kind)
   D_EntityList result = {0};
   for(D_Entity *entity = d_state->entities_root;
       !d_entity_is_nil(entity);
-      entity = d_entity_rec_df_pre(entity, &d_nil_entity).next)
+      entity = d_entity_rec_depth_first_pre(entity, &d_nil_entity).next)
   {
     if(entity->kind == kind)
     {
@@ -1880,7 +1880,7 @@ d_entity_from_id(D_EntityID id)
   D_Entity *result = &d_nil_entity;
   for(D_Entity *e = d_entity_root();
       !d_entity_is_nil(e);
-      e = d_entity_rec_df_pre(e, &d_nil_entity).next)
+      e = d_entity_rec_depth_first_pre(e, &d_nil_entity).next)
   {
     if(e->id == id)
     {
@@ -1897,7 +1897,7 @@ d_machine_entity_from_machine_id(CTRL_MachineID machine_id)
   D_Entity *result = &d_nil_entity;
   for(D_Entity *e = d_entity_root();
       !d_entity_is_nil(e);
-      e = d_entity_rec_df_pre(e, &d_nil_entity).next)
+      e = d_entity_rec_depth_first_pre(e, &d_nil_entity).next)
   {
     if(e->kind == D_EntityKind_Machine && e->ctrl_machine_id == machine_id)
     {
@@ -1921,7 +1921,7 @@ d_entity_from_ctrl_handle(CTRL_MachineID machine_id, DMN_Handle handle)
   {
     for(D_Entity *e = d_entity_root();
         !d_entity_is_nil(e);
-        e = d_entity_rec_df_pre(e, &d_nil_entity).next)
+        e = d_entity_rec_depth_first_pre(e, &d_nil_entity).next)
     {
       if(e->flags & D_EntityFlag_HasCtrlMachineID &&
          e->flags & D_EntityFlag_HasCtrlHandle &&
@@ -1944,7 +1944,7 @@ d_entity_from_ctrl_id(CTRL_MachineID machine_id, U32 id)
   {
     for(D_Entity *e = d_entity_root();
         !d_entity_is_nil(e);
-        e = d_entity_rec_df_pre(e, &d_nil_entity).next)
+        e = d_entity_rec_depth_first_pre(e, &d_nil_entity).next)
     {
       if(e->flags & D_EntityFlag_HasCtrlMachineID &&
          e->flags & D_EntityFlag_HasCtrlID &&
@@ -2033,7 +2033,7 @@ internal B32
 d_entity_is_frozen(D_Entity *entity)
 {
   B32 is_frozen = !d_entity_is_nil(entity);
-  for(D_Entity *e = entity; !d_entity_is_nil(e); e = d_entity_rec_df_pre(e, entity).next)
+  for(D_Entity *e = entity; !d_entity_is_nil(e); e = d_entity_rec_depth_first_pre(e, entity).next)
   {
     if(e->kind == D_EntityKind_Thread)
     {
@@ -4914,12 +4914,12 @@ d_eval_viz_row_list_push_new(Arena *arena, D_EvalView *eval_view, D_EvalVizWindo
   }
   
   // rjf: determine row ui hook to use for this row
-  DF_GfxViewRuleSpec *value_ui_rule_spec = &df_g_nil_gfx_view_rule_spec;
+  DF_ViewRuleSpec *value_ui_rule_spec = &df_g_nil_gfx_view_rule_spec;
   MD_Node *value_ui_rule_params = &md_nil_node;
   for(D_CfgVal *val = cfg_table->first_val; val != 0 && val != &d_nil_cfg_val; val = val->linear_next)
   {
-    DF_GfxViewRuleSpec *spec = df_gfx_view_rule_spec_from_string(val->string);
-    if(spec->info.flags & DF_GfxViewRuleSpecInfoFlag_RowUI)
+    DF_ViewRuleSpec *spec = df_gfx_view_rule_spec_from_string(val->string);
+    if(spec->info.flags & DF_ViewRuleSpecInfoFlag_RowUI)
     {
       value_ui_rule_spec = spec;
       value_ui_rule_params = val->last->root;
@@ -4928,14 +4928,14 @@ d_eval_viz_row_list_push_new(Arena *arena, D_EvalView *eval_view, D_EvalVizWindo
   }
   
   // rjf: determine block ui hook to use for this row
-  DF_GfxViewRuleSpec *expand_ui_rule_spec = &df_g_nil_gfx_view_rule_spec;
+  DF_ViewRuleSpec *expand_ui_rule_spec = &df_g_nil_gfx_view_rule_spec;
   MD_Node *expand_ui_rule_params = &md_nil_node;
   if(block->kind == D_EvalVizBlockKind_Canvas)
   {
     for(D_CfgVal *val = cfg_table->first_val; val != 0 && val != &d_nil_cfg_val; val = val->linear_next)
     {
-      DF_GfxViewRuleSpec *spec = df_gfx_view_rule_spec_from_string(val->string);
-      if(spec->info.flags & DF_GfxViewRuleSpecInfoFlag_ViewUI)
+      DF_ViewRuleSpec *spec = df_gfx_view_rule_spec_from_string(val->string);
+      if(spec->info.flags & DF_ViewRuleSpecInfoFlag_ViewUI)
       {
         expand_ui_rule_spec = spec;
         expand_ui_rule_params = val->last->root;
@@ -5569,7 +5569,7 @@ d_cfg_strings_from_core(Arena *arena, String8 root_path, D_CfgSrc source)
         for(D_Entity *e = entity; !d_entity_is_nil(e); e = rec.next)
         {
           //- rjf: get next iteration
-          rec = d_entity_rec_df_pre(e, entity);
+          rec = d_entity_rec_depth_first_pre(e, entity);
           
           //- rjf: unpack entity info
           typedef U32 EntityInfoFlags;
@@ -6450,7 +6450,7 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
             {
               for(D_Entity *entity = d_entity_root();
                   !d_entity_is_nil(entity);
-                  entity = d_entity_rec_df_pre(entity, d_entity_root()).next)
+                  entity = d_entity_rec_depth_first_pre(entity, d_entity_root()).next)
               {
                 if(entity->flags & D_EntityFlag_DiesOnRunStop)
                 {
@@ -7939,7 +7939,7 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
         {
           B32 should_freeze = (core_cmd_kind == D_CmdKind_FreezeEntity);
           D_Entity *root = d_entity_from_handle(params.entity);
-          for(D_Entity *e = root; !d_entity_is_nil(e); e = d_entity_rec_df_pre(e, root).next)
+          for(D_Entity *e = root; !d_entity_is_nil(e); e = d_entity_rec_depth_first_pre(e, root).next)
           {
             if(e->kind == D_EntityKind_Thread)
             {
@@ -8567,13 +8567,13 @@ d_end_frame(void)
   {
     for(D_Entity *entity = d_entity_root(), *next = 0; !d_entity_is_nil(entity); entity = next)
     {
-      next = d_entity_rec_df_pre(entity, &d_nil_entity).next;
+      next = d_entity_rec_depth_first_pre(entity, &d_nil_entity).next;
       if(entity->flags & D_EntityFlag_MarkedForDeletion)
       {
         B32 undoable = (d_entity_kind_flags_table[entity->kind] & D_EntityKindFlag_UserDefinedLifetime);
         
         // rjf: fixup next entity to iterate to
-        next = d_entity_rec_df(entity, &d_nil_entity, OffsetOf(D_Entity, next), OffsetOf(D_Entity, next)).next;
+        next = d_entity_rec_depth_first(entity, &d_nil_entity, OffsetOf(D_Entity, next), OffsetOf(D_Entity, next)).next;
         
         // rjf: eliminate root entity if we're freeing it
         if(entity == d_state->entities_root)

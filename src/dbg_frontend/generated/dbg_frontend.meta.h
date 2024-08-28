@@ -3,8 +3,8 @@
 
 //- GENERATED CODE
 
-#ifndef DBG_GFX_META_H
-#define DBG_GFX_META_H
+#ifndef DBG_FRONTEND_META_H
+#define DBG_FRONTEND_META_H
 
 typedef enum DF_GfxViewKind
 {
@@ -5016,4 +5016,4 @@ read_only global String8 df_g_icon_file_bytes = {df_g_icon_file_bytes__data, siz
 
 C_LINKAGE_END
 
-#endif // DBG_GFX_META_H
+#endif // DBG_FRONTEND_META_H

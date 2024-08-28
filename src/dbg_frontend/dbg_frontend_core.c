@@ -7,7 +7,7 @@
 ////////////////////////////////
 //~ rjf: Generated Code
 
-#include "generated/dbg_gfx.meta.c"
+#include "generated/dbg_frontend.meta.c"
 
 ////////////////////////////////
 //~ rjf: Basic Helpers
@@ -697,12 +697,12 @@ df_view_spec_from_cmd_param_slot_spec(D_CmdParamSlot slot, D_CmdSpec *cmd_spec)
 //~ rjf: View Rule Spec State Functions
 
 internal void
-df_register_gfx_view_rule_specs(DF_GfxViewRuleSpecInfoArray specs)
+df_register_gfx_view_rule_specs(DF_ViewRuleSpecInfoArray specs)
 {
   for(U64 idx = 0; idx < specs.count; idx += 1)
   {
     // rjf: extract info from array slot
-    DF_GfxViewRuleSpecInfo *info = &specs.v[idx];
+    DF_ViewRuleSpecInfo *info = &specs.v[idx];
     
     // rjf: skip empties
     if(info->string.size == 0)
@@ -715,24 +715,24 @@ df_register_gfx_view_rule_specs(DF_GfxViewRuleSpecInfoArray specs)
     U64 slot_idx = hash%df_gfx_state->view_rule_spec_table_size;
     
     // rjf: allocate node & push
-    DF_GfxViewRuleSpec *spec = push_array(df_gfx_state->arena, DF_GfxViewRuleSpec, 1);
+    DF_ViewRuleSpec *spec = push_array(df_gfx_state->arena, DF_ViewRuleSpec, 1);
     SLLStackPush_N(df_gfx_state->view_rule_spec_table[slot_idx], spec, hash_next);
     
     // rjf: fill node
-    DF_GfxViewRuleSpecInfo *info_copy = &spec->info;
+    DF_ViewRuleSpecInfo *info_copy = &spec->info;
     MemoryCopyStruct(info_copy, info);
     info_copy->string         = push_str8_copy(df_gfx_state->arena, info->string);
   }
 }
 
-internal DF_GfxViewRuleSpec *
+internal DF_ViewRuleSpec *
 df_gfx_view_rule_spec_from_string(String8 string)
 {
-  DF_GfxViewRuleSpec *spec = &df_g_nil_gfx_view_rule_spec;
+  DF_ViewRuleSpec *spec = &df_g_nil_gfx_view_rule_spec;
   {
     U64 hash = d_hash_from_string(string);
     U64 slot_idx = hash%df_gfx_state->view_rule_spec_table_size;
-    for(DF_GfxViewRuleSpec *s = df_gfx_state->view_rule_spec_table[slot_idx]; s != 0; s = s->hash_next)
+    for(DF_ViewRuleSpec *s = df_gfx_state->view_rule_spec_table[slot_idx]; s != 0; s = s->hash_next)
     {
       if(str8_match(string, s->info.string, 0))
       {
@@ -3799,7 +3799,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
               ui_labelf("%S: %S", d_entity_kind_display_string_table[e->kind], e->name);
             }
           }
-          rec = d_entity_rec_df_pre(e, d_entity_root());
+          rec = d_entity_rec_depth_first_pre(e, d_entity_root());
           indent += rec.push_count;
           indent -= rec.pop_count;
         }
@@ -12858,7 +12858,7 @@ df_gfx_init(OS_WindowRepaintFunctionType *window_repaint_entry_point, D_StateDel
   df_gfx_state->view_spec_table_size = 256;
   df_gfx_state->view_spec_table = push_array(arena, DF_ViewSpec *, df_gfx_state->view_spec_table_size);
   df_gfx_state->view_rule_spec_table_size = 1024;
-  df_gfx_state->view_rule_spec_table = push_array(arena, DF_GfxViewRuleSpec *, d_state->view_rule_spec_table_size);
+  df_gfx_state->view_rule_spec_table = push_array(arena, DF_ViewRuleSpec *, d_state->view_rule_spec_table_size);
   df_gfx_state->view_rule_block_slots_count = 1024;
   df_gfx_state->view_rule_block_slots = push_array(arena, DF_ViewRuleBlockSlot, df_gfx_state->view_rule_block_slots_count);
   df_gfx_state->string_search_arena = arena_alloc();
@@ -12877,7 +12877,7 @@ df_gfx_init(OS_WindowRepaintFunctionType *window_repaint_entry_point, D_StateDel
   
   // rjf: register gfx layer view rules
   {
-    DF_GfxViewRuleSpecInfoArray array = {df_g_gfx_view_rule_spec_info_table, ArrayCount(df_g_gfx_view_rule_spec_info_table)};
+    DF_ViewRuleSpecInfoArray array = {df_g_gfx_view_rule_spec_info_table, ArrayCount(df_g_gfx_view_rule_spec_info_table)};
     df_register_gfx_view_rule_specs(array);
   }
   
@@ -13097,7 +13097,7 @@ df_gfx_begin_frame(Arena *arena, D_CmdList *cmds)
               df_gfx_state->last_window_queued_save = 1;
               d_cmd(D_CmdKind_WriteUserData);
               d_cmd(D_CmdKind_WriteProjectData);
-              d_cmd(D_CmdKind_CloseWindow, .window = df_handle_from_window(ws));
+              d_cmd(D_CmdKind_CloseWindow, .force_confirm = 1, .window = df_handle_from_window(ws));
             }
             
             // NOTE(rjf): if this is the last window and we've queued the final autosave,
@@ -13900,7 +13900,7 @@ df_gfx_begin_frame(Arena *arena, D_CmdList *cmds)
   //- rjf: animate alive-transitions for entities
   {
     F32 rate = 1.f - pow_f32(2.f, -20.f*d_dt());
-    for(D_Entity *e = d_entity_root(); !d_entity_is_nil(e); e = d_entity_rec_df_pre(e, d_entity_root()).next)
+    for(D_Entity *e = d_entity_root(); !d_entity_is_nil(e); e = d_entity_rec_depth_first_pre(e, d_entity_root()).next)
     {
       F32 diff = (1.f - e->alive_t);
       e->alive_t += diff * rate;

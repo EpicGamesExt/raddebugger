@@ -1,8 +1,8 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-#ifndef DBG_GFX_CORE_H
-#define DBG_GFX_CORE_H
+#ifndef DBG_FRONTEND_CORE_H
+#define DBG_FRONTEND_CORE_H
 
 ////////////////////////////////
 //~ rjf: Basic Types
@@ -332,13 +332,13 @@ struct DF_RichHoverInfo
 ////////////////////////////////
 //~ rjf: View Rule Spec Types
 
-typedef U32 DF_GfxViewRuleSpecInfoFlags; // NOTE(rjf): see @view_rule_info
+typedef U32 DF_ViewRuleSpecInfoFlags; // NOTE(rjf): see @view_rule_info
 enum
 {
-  DF_GfxViewRuleSpecInfoFlag_VizRowProd     = (1<<0),
-  DF_GfxViewRuleSpecInfoFlag_LineStringize  = (1<<1),
-  DF_GfxViewRuleSpecInfoFlag_RowUI          = (1<<2),
-  DF_GfxViewRuleSpecInfoFlag_ViewUI         = (1<<3),
+  DF_ViewRuleSpecInfoFlag_VizRowProd     = (1<<0),
+  DF_ViewRuleSpecInfoFlag_LineStringize  = (1<<1),
+  DF_ViewRuleSpecInfoFlag_RowUI          = (1<<2),
+  DF_ViewRuleSpecInfoFlag_ViewUI         = (1<<3),
 };
 
 #define DF_GFX_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_SIG(name) void name(void)
@@ -353,38 +353,38 @@ enum
 #define DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_NAME(name) df_gfx_view_rule_row_ui__##name
 #define DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_DEF(name) DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_SIG(DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_NAME(name))
 
-typedef DF_GFX_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_SIG(DF_GfxViewRuleVizRowProdHookFunctionType);
-typedef DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_SIG(DF_GfxViewRuleLineStringizeHookFunctionType);
-typedef DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_SIG(DF_GfxViewRuleRowUIFunctionType);
+typedef DF_GFX_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_SIG(DF_ViewRuleVizRowProdHookFunctionType);
+typedef DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_SIG(DF_ViewRuleLineStringizeHookFunctionType);
+typedef DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_SIG(DF_ViewRuleRowUIFunctionType);
 
-typedef struct DF_GfxViewRuleSpecInfo DF_GfxViewRuleSpecInfo;
-struct DF_GfxViewRuleSpecInfo
+typedef struct DF_ViewRuleSpecInfo DF_ViewRuleSpecInfo;
+struct DF_ViewRuleSpecInfo
 {
   String8 string;
-  DF_GfxViewRuleSpecInfoFlags flags;
-  DF_GfxViewRuleVizRowProdHookFunctionType *viz_row_prod;
-  DF_GfxViewRuleLineStringizeHookFunctionType *line_stringize;
-  DF_GfxViewRuleRowUIFunctionType *row_ui;
+  DF_ViewRuleSpecInfoFlags flags;
+  DF_ViewRuleVizRowProdHookFunctionType *viz_row_prod;
+  DF_ViewRuleLineStringizeHookFunctionType *line_stringize;
+  DF_ViewRuleRowUIFunctionType *row_ui;
 };
 
-typedef struct DF_GfxViewRuleSpecInfoArray DF_GfxViewRuleSpecInfoArray;
-struct DF_GfxViewRuleSpecInfoArray
+typedef struct DF_ViewRuleSpecInfoArray DF_ViewRuleSpecInfoArray;
+struct DF_ViewRuleSpecInfoArray
 {
-  DF_GfxViewRuleSpecInfo *v;
+  DF_ViewRuleSpecInfo *v;
   U64 count;
 };
 
-typedef struct DF_GfxViewRuleSpec DF_GfxViewRuleSpec;
-struct DF_GfxViewRuleSpec
+typedef struct DF_ViewRuleSpec DF_ViewRuleSpec;
+struct DF_ViewRuleSpec
 {
-  DF_GfxViewRuleSpec *hash_next;
-  DF_GfxViewRuleSpecInfo info;
+  DF_ViewRuleSpec *hash_next;
+  DF_ViewRuleSpecInfo info;
 };
 
 ////////////////////////////////
 //~ rjf: Generated Code
 
-#include "generated/dbg_gfx.meta.h"
+#include "generated/dbg_frontend.meta.h"
 
 ////////////////////////////////
 //~ rjf: Theme Types
@@ -764,7 +764,7 @@ struct DF_GfxState
   
   // rjf: view rule specs
   U64 view_rule_spec_table_size;
-  DF_GfxViewRuleSpec **view_rule_spec_table;
+  DF_ViewRuleSpec **view_rule_spec_table;
   
   // rjf: view rule block state
   U64 view_rule_block_slots_count;
@@ -831,7 +831,7 @@ read_only global DF_ViewSpec df_g_nil_view_spec =
   },
 };
 
-read_only global DF_GfxViewRuleSpec df_g_nil_gfx_view_rule_spec =
+read_only global DF_ViewRuleSpec df_g_nil_gfx_view_rule_spec =
 {
   &df_g_nil_gfx_view_rule_spec,
 };
@@ -952,8 +952,8 @@ internal DF_ViewSpec *df_view_spec_from_cmd_param_slot_spec(D_CmdParamSlot slot,
 ////////////////////////////////
 //~ rjf: View Rule Spec State Functions
 
-internal void df_register_gfx_view_rule_specs(DF_GfxViewRuleSpecInfoArray specs);
-internal DF_GfxViewRuleSpec *df_gfx_view_rule_spec_from_string(String8 string);
+internal void df_register_gfx_view_rule_specs(DF_ViewRuleSpecInfoArray specs);
+internal DF_ViewRuleSpec *df_gfx_view_rule_spec_from_string(String8 string);
 
 ////////////////////////////////
 //~ rjf: View State Functions
@@ -1134,4 +1134,4 @@ internal void df_gfx_init(OS_WindowRepaintFunctionType *window_repaint_entry_poi
 internal void df_gfx_begin_frame(Arena *arena, D_CmdList *cmds);
 internal void df_gfx_end_frame(void);
 
-#endif // DBG_GFX_CORE_H
+#endif // DBG_FRONTEND_CORE_H

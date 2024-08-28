@@ -1,8 +1,8 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-#ifndef DBG_GFX_VIEWS_H
-#define DBG_GFX_VIEWS_H
+#ifndef DBG_FRONTEND_VIEWS_H
+#define DBG_FRONTEND_VIEWS_H
 
 ////////////////////////////////
 //~ rjf: Code View Types
@@ -188,4 +188,4 @@ internal void df_watch_view_init(DF_WatchViewState *ewv, DF_View *view, DF_Watch
 internal void df_watch_view_cmds(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewState *ewv, D_CmdList *cmds);
 internal void df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewState *ewv, B32 modifiable, U32 default_radix, Rng2F32 rect);
 
-#endif // DBG_GFX_VIEWS_H
+#endif // DBG_FRONTEND_VIEWS_H

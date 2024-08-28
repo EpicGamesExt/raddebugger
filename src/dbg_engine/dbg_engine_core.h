@@ -710,9 +710,9 @@ struct D_EvalVizRow
   
   // rjf: view rule attachments
   D_CfgTable *cfg_table;
-  struct DF_GfxViewRuleSpec *expand_ui_rule_spec;
+  struct DF_ViewRuleSpec *expand_ui_rule_spec;
   MD_Node *expand_ui_rule_params;
-  struct DF_GfxViewRuleSpec *value_ui_rule_spec;
+  struct DF_ViewRuleSpec *value_ui_rule_spec;
   MD_Node *value_ui_rule_params;
 };
 
@@ -1241,9 +1241,9 @@ internal D_EntityList d_entity_list_from_handle_list(Arena *arena, D_HandleList 
 internal D_HandleList d_handle_list_from_entity_list(Arena *arena, D_EntityList entities);
 
 //- rjf: entity recursion iterators
-internal D_EntityRec d_entity_rec_df(D_Entity *entity, D_Entity *subtree_root, U64 sib_off, U64 child_off);
-#define d_entity_rec_df_pre(entity, subtree_root)  d_entity_rec_df((entity), (subtree_root), OffsetOf(D_Entity, next), OffsetOf(D_Entity, first))
-#define d_entity_rec_df_post(entity, subtree_root) d_entity_rec_df((entity), (subtree_root), OffsetOf(D_Entity, prev), OffsetOf(D_Entity, last))
+internal D_EntityRec d_entity_rec_depth_first(D_Entity *entity, D_Entity *subtree_root, U64 sib_off, U64 child_off);
+#define d_entity_rec_depth_first_pre(entity, subtree_root)  d_entity_rec_depth_first((entity), (subtree_root), OffsetOf(D_Entity, next), OffsetOf(D_Entity, first))
+#define d_entity_rec_depth_first_post(entity, subtree_root) d_entity_rec_depth_first((entity), (subtree_root), OffsetOf(D_Entity, prev), OffsetOf(D_Entity, last))
 
 //- rjf: ancestor/child introspection
 internal D_Entity *d_entity_child_from_kind(D_Entity *entity, D_EntityKind kind);

@@ -2293,7 +2293,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
           UI_Parent(row_box) UI_FocusHot(row_selected ? UI_FocusKind_On : UI_FocusKind_Off)
         {
           //- rjf: build canvas row contents
-          if(row->expand_ui_rule_spec->info.flags & DF_GfxViewRuleSpecInfoFlag_ViewUI)
+          if(row->expand_ui_rule_spec->info.flags & DF_ViewRuleSpecInfoFlag_ViewUI)
           {
             //- rjf: unpack
             DF_WatchViewPoint pt = {0, row->parent_key, row->key};
@@ -2441,7 +2441,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
               String8 cell_error_string = {0};
               String8 cell_error_tooltip_string = {0};
               DF_AutoCompListerFlags cell_autocomp_flags = 0;
-              DF_GfxViewRuleRowUIFunctionType *cell_ui_hook = 0;
+              DF_ViewRuleRowUIFunctionType *cell_ui_hook = 0;
               MD_Node *cell_ui_params = &md_nil_node;
               Vec4F32 cell_base_color = ui_top_palette()->text;
               DF_IconKind cell_icon = DF_IconKind_Null;
@@ -2540,8 +2540,8 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                 d_cfg_table_push_unparsed_string(scratch.arena, &col_cfg_table, col_view_rule, D_CfgSrc_User);
                 for(D_CfgVal *val = col_cfg_table.first_val; val != 0 && val != &d_nil_cfg_val; val = val->linear_next)
                 {
-                  DF_GfxViewRuleSpec *spec = df_gfx_view_rule_spec_from_string(val->string);
-                  if(spec != &df_g_nil_gfx_view_rule_spec && spec->info.flags & DF_GfxViewRuleSpecInfoFlag_RowUI)
+                  DF_ViewRuleSpec *spec = df_gfx_view_rule_spec_from_string(val->string);
+                  if(spec != &df_g_nil_gfx_view_rule_spec && spec->info.flags & DF_ViewRuleSpecInfoFlag_RowUI)
                   {
                     cell_ui_hook = spec->info.row_ui;
                     cell_ui_params = val->last->root;
