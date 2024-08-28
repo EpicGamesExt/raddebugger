@@ -2,397 +2,6 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
-//~ rjf: Quick Sort Comparisons
-
-internal int
-df_qsort_compare_file_info__default(DF_FileInfo *a, DF_FileInfo *b)
-{
-  int result = 0;
-  if(a->props.flags & FilePropertyFlag_IsFolder && !(b->props.flags & FilePropertyFlag_IsFolder))
-  {
-    result = -1;
-  }
-  else if(b->props.flags & FilePropertyFlag_IsFolder && !(a->props.flags & FilePropertyFlag_IsFolder))
-  {
-    result = +1;
-  }
-  else
-  {
-    result = df_qsort_compare_file_info__filename(a, b);
-  }
-  return result;
-}
-
-internal int
-df_qsort_compare_file_info__default_filtered(DF_FileInfo *a, DF_FileInfo *b)
-{
-  int result = 0;
-  if(a->filename.size < b->filename.size)
-  {
-    result = -1;
-  }
-  else if(a->filename.size > b->filename.size)
-  {
-    result = +1;
-  }
-  return result;
-}
-
-internal int
-df_qsort_compare_file_info__filename(DF_FileInfo *a, DF_FileInfo *b)
-{
-  return strncmp((char *)a->filename.str, (char *)b->filename.str, Min(a->filename.size, b->filename.size));
-}
-
-internal int
-df_qsort_compare_file_info__last_modified(DF_FileInfo *a, DF_FileInfo *b)
-{
-  return ((a->props.modified < b->props.modified) ? -1 :
-          (a->props.modified > b->props.modified) ? +1 :
-          0);
-}
-
-internal int
-df_qsort_compare_file_info__size(DF_FileInfo *a, DF_FileInfo *b)
-{
-  return ((a->props.size < b->props.size) ? -1 :
-          (a->props.size > b->props.size) ? +1 :
-          0);
-}
-
-internal int
-df_qsort_compare_process_info(DF_ProcessInfo *a, DF_ProcessInfo *b)
-{
-  int result = 0;
-  if(a->pid_match_ranges.count > b->pid_match_ranges.count)
-  {
-    result = -1;
-  }
-  else if(a->pid_match_ranges.count < b->pid_match_ranges.count)
-  {
-    result = +1;
-  }
-  else if(a->name_match_ranges.count < b->name_match_ranges.count)
-  {
-    result = -1;
-  }
-  else if(a->name_match_ranges.count > b->name_match_ranges.count)
-  {
-    result = +1;
-  }
-  else if(a->attached_match_ranges.count < b->attached_match_ranges.count)
-  {
-    result = -1;
-  }
-  else if(a->attached_match_ranges.count > b->attached_match_ranges.count)
-  {
-    result = +1;
-  }
-  return result;
-}
-
-internal int
-df_qsort_compare_cmd_lister__strength(DF_CmdListerItem *a, DF_CmdListerItem *b)
-{
-  int result = 0;
-  if(a->name_match_ranges.count > b->name_match_ranges.count)
-  {
-    result = -1;
-  }
-  else if(a->name_match_ranges.count < b->name_match_ranges.count)
-  {
-    result = +1;
-  }
-  else if(a->desc_match_ranges.count > b->desc_match_ranges.count)
-  {
-    result = -1;
-  }
-  else if(a->desc_match_ranges.count < b->desc_match_ranges.count)
-  {
-    result = +1;
-  }
-  else if(a->tags_match_ranges.count > b->tags_match_ranges.count)
-  {
-    result = -1;
-  }
-  else if(a->tags_match_ranges.count < b->tags_match_ranges.count)
-  {
-    result = +1;
-  }
-  else if(a->registrar_idx < b->registrar_idx)
-  {
-    result = -1;
-  }
-  else if(a->registrar_idx > b->registrar_idx)
-  {
-    result = +1;
-  }
-  else if(a->ordering_idx < b->ordering_idx)
-  {
-    result = -1;
-  }
-  else if(a->ordering_idx > b->ordering_idx)
-  {
-    result = +1;
-  }
-  return result;
-}
-
-internal int
-df_qsort_compare_entity_lister__strength(DF_EntityListerItem *a, DF_EntityListerItem *b)
-{
-  int result = 0;
-  if(a->name_match_ranges.count > b->name_match_ranges.count)
-  {
-    result = -1;
-  }
-  else if(a->name_match_ranges.count < b->name_match_ranges.count)
-  {
-    result = +1;
-  }
-  return result;
-}
-
-internal int
-df_qsort_compare_settings_item(DF_SettingsItem *a, DF_SettingsItem *b)
-{
-  int result = 0;
-  if(a->string_matches.count > b->string_matches.count)
-  {
-    result = -1;
-  }
-  else if(a->string_matches.count < b->string_matches.count)
-  {
-    result = +1;
-  }
-  else if(a->kind_string_matches.count > b->kind_string_matches.count)
-  {
-    result = -1;
-  }
-  else if(a->kind_string_matches.count < b->kind_string_matches.count)
-  {
-    result = +1;
-  }
-  return result;
-}
-
-////////////////////////////////
-//~ rjf: Command Lister
-
-internal DF_CmdListerItemList
-df_cmd_lister_item_list_from_needle(Arena *arena, String8 needle)
-{
-  Temp scratch = scratch_begin(&arena, 1);
-  DF_CmdSpecList specs = df_push_cmd_spec_list(scratch.arena);
-  DF_CmdListerItemList result = {0};
-  for(DF_CmdSpecNode *n = specs.first; n != 0; n = n->next)
-  {
-    DF_CmdSpec *spec = n->spec;
-    if(spec->info.flags & DF_CmdSpecFlag_ListInUI)
-    {
-      String8 cmd_display_name = spec->info.display_name;
-      String8 cmd_desc = spec->info.description;
-      String8 cmd_tags = spec->info.search_tags;
-      FuzzyMatchRangeList name_matches = fuzzy_match_find(arena, needle, cmd_display_name);
-      FuzzyMatchRangeList desc_matches = fuzzy_match_find(arena, needle, cmd_desc);
-      FuzzyMatchRangeList tags_matches = fuzzy_match_find(arena, needle, cmd_tags);
-      if(name_matches.count == name_matches.needle_part_count ||
-         desc_matches.count == name_matches.needle_part_count ||
-         tags_matches.count > 0 ||
-         name_matches.needle_part_count == 0)
-      {
-        DF_CmdListerItemNode *node = push_array(arena, DF_CmdListerItemNode, 1);
-        node->item.cmd_spec = spec;
-        node->item.registrar_idx = spec->registrar_index;
-        node->item.ordering_idx = spec->ordering_index;
-        node->item.name_match_ranges = name_matches;
-        node->item.desc_match_ranges = desc_matches;
-        node->item.tags_match_ranges = tags_matches;
-        SLLQueuePush(result.first, result.last, node);
-        result.count += 1;
-      }
-    }
-  }
-  scratch_end(scratch);
-  return result;
-}
-
-internal DF_CmdListerItemArray
-df_cmd_lister_item_array_from_list(Arena *arena, DF_CmdListerItemList list)
-{
-  DF_CmdListerItemArray result = {0};
-  result.count = list.count;
-  result.v = push_array(arena, DF_CmdListerItem, result.count);
-  U64 idx = 0;
-  for(DF_CmdListerItemNode *n = list.first; n != 0; n = n->next, idx += 1)
-  {
-    result.v[idx] = n->item;
-  }
-  return result;
-}
-
-internal void
-df_cmd_lister_item_array_sort_by_strength__in_place(DF_CmdListerItemArray array)
-{
-  quick_sort(array.v, array.count, sizeof(DF_CmdListerItem), df_qsort_compare_cmd_lister__strength);
-}
-
-////////////////////////////////
-//~ rjf: System Process Lister
-
-internal DF_ProcessInfoList
-df_process_info_list_from_query(Arena *arena, String8 query)
-{
-  Temp scratch = scratch_begin(&arena, 1);
-  
-  //- rjf: gather PIDs that we're currently attached to
-  U64 attached_process_count = 0;
-  U32 *attached_process_pids = 0;
-  {
-    DF_EntityList processes = df_query_cached_entity_list_with_kind(DF_EntityKind_Process);
-    attached_process_count = processes.count;
-    attached_process_pids = push_array(scratch.arena, U32, attached_process_count);
-    U64 idx = 0;
-    for(DF_EntityNode *n = processes.first; n != 0; n = n->next, idx += 1)
-    {
-      DF_Entity *process = n->entity;
-      attached_process_pids[idx] = process->ctrl_id;
-    }
-  }
-  
-  //- rjf: build list
-  DF_ProcessInfoList list = {0};
-  {
-    DMN_ProcessIter iter = {0};
-    dmn_process_iter_begin(&iter);
-    for(DMN_ProcessInfo info = {0}; dmn_process_iter_next(scratch.arena, &iter, &info);)
-    {
-      // rjf: skip root-level or otherwise 0-pid processes
-      if(info.pid == 0)
-      {
-        continue;
-      }
-      
-      // rjf: determine if this process is attached
-      B32 is_attached = 0;
-      for(U64 attached_idx = 0; attached_idx < attached_process_count; attached_idx += 1)
-      {
-        if(attached_process_pids[attached_idx] == info.pid)
-        {
-          is_attached = 1;
-          break;
-        }
-      }
-      
-      // rjf: gather fuzzy matches
-      FuzzyMatchRangeList attached_match_ranges = {0};
-      FuzzyMatchRangeList name_match_ranges     = fuzzy_match_find(arena, query, info.name);
-      FuzzyMatchRangeList pid_match_ranges      = fuzzy_match_find(arena, query, push_str8f(scratch.arena, "%i", info.pid));
-      if(is_attached)
-      {
-        attached_match_ranges = fuzzy_match_find(arena, query, str8_lit("[attached]"));
-      }
-      
-      // rjf: determine if this item is filtered out
-      B32 matches_query = (query.size == 0 ||
-                           (attached_match_ranges.needle_part_count != 0 && attached_match_ranges.count >= attached_match_ranges.needle_part_count) ||
-                           (name_match_ranges.count != 0 && name_match_ranges.count >= name_match_ranges.needle_part_count) ||
-                           (pid_match_ranges.count != 0 && pid_match_ranges.count >= pid_match_ranges.needle_part_count));
-      
-      // rjf: push if unfiltered
-      if(matches_query)
-      {
-        DF_ProcessInfoNode *n = push_array(arena, DF_ProcessInfoNode, 1);
-        n->info.info = info;
-        n->info.info.name = push_str8_copy(arena, info.name);
-        n->info.is_attached = is_attached;
-        n->info.attached_match_ranges = attached_match_ranges;
-        n->info.name_match_ranges = name_match_ranges;
-        n->info.pid_match_ranges = pid_match_ranges;
-        SLLQueuePush(list.first, list.last, n);
-        list.count += 1;
-      }
-    }
-    dmn_process_iter_end(&iter);
-  }
-  
-  scratch_end(scratch);
-  return list;
-}
-
-internal DF_ProcessInfoArray
-df_process_info_array_from_list(Arena *arena, DF_ProcessInfoList list)
-{
-  DF_ProcessInfoArray array = {0};
-  array.count = list.count;
-  array.v = push_array(arena, DF_ProcessInfo, array.count);
-  U64 idx = 0;
-  for(DF_ProcessInfoNode *n = list.first; n != 0; n = n->next, idx += 1)
-  {
-    array.v[idx] = n->info;
-  }
-  return array;
-}
-
-internal void
-df_process_info_array_sort_by_strength__in_place(DF_ProcessInfoArray array)
-{
-  quick_sort(array.v, array.count, sizeof(DF_ProcessInfo), df_qsort_compare_process_info);
-}
-
-////////////////////////////////
-//~ rjf: Entity Lister
-
-internal DF_EntityListerItemList
-df_entity_lister_item_list_from_needle(Arena *arena, DF_EntityKind kind, DF_EntityFlags omit_flags, String8 needle)
-{
-  Temp scratch = scratch_begin(&arena, 1);
-  DF_EntityListerItemList result = {0};
-  DF_EntityList ent_list = df_query_cached_entity_list_with_kind(kind);
-  for(DF_EntityNode *n = ent_list.first; n != 0; n = n->next)
-  {
-    DF_Entity *entity = n->entity;
-    if(!(entity->flags & omit_flags))
-    {
-      String8 display_string = df_display_string_from_entity(scratch.arena, entity);
-      FuzzyMatchRangeList match_rngs = fuzzy_match_find(arena, needle, display_string);
-      if(match_rngs.count != 0 || needle.size == 0)
-      {
-        DF_EntityListerItemNode *item_n = push_array(arena, DF_EntityListerItemNode, 1);
-        item_n->item.entity = entity;
-        item_n->item.name_match_ranges = match_rngs;
-        SLLQueuePush(result.first, result.last, item_n);
-        result.count += 1;
-      }
-    }
-  }
-  scratch_end(scratch);
-  return result;
-}
-
-internal DF_EntityListerItemArray
-df_entity_lister_item_array_from_list(Arena *arena, DF_EntityListerItemList list)
-{
-  DF_EntityListerItemArray result = {0};
-  result.count = list.count;
-  result.v = push_array(arena, DF_EntityListerItem, result.count);
-  {
-    U64 idx = 0;
-    for(DF_EntityListerItemNode *n = list.first; n != 0; n = n->next, idx += 1)
-    {
-      result.v[idx] = n->item;
-    }
-  }
-  return result;
-}
-
-internal void
-df_entity_lister_item_array_sort_by_strength__in_place(DF_EntityListerItemArray array)
-{
-  quick_sort(array.v, array.count, sizeof(DF_EntityListerItem), df_qsort_compare_entity_lister__strength);
-}
-
-////////////////////////////////
 //~ rjf: Code Views
 
 internal void
@@ -3291,70 +2900,6 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
 }
 
 ////////////////////////////////
-//~ rjf: Bitmap Views
-
-internal Vec2F32
-df_bitmap_screen_from_canvas_pos(Vec2F32 view_center_pos, F32 zoom, Rng2F32 rect, Vec2F32 cvs)
-{
-  Vec2F32 scr =
-  {
-    (rect.x0+rect.x1)/2 + (cvs.x - view_center_pos.x) * zoom,
-    (rect.y0+rect.y1)/2 + (cvs.y - view_center_pos.y) * zoom,
-  };
-  return scr;
-}
-
-internal Rng2F32
-df_bitmap_screen_from_canvas_rect(Vec2F32 view_center_pos, F32 zoom, Rng2F32 rect, Rng2F32 cvs)
-{
-  Rng2F32 scr = r2f32(df_bitmap_screen_from_canvas_pos(view_center_pos, zoom, rect, cvs.p0), df_bitmap_screen_from_canvas_pos(view_center_pos, zoom, rect, cvs.p1));
-  return scr;
-}
-
-internal Vec2F32
-df_bitmap_canvas_from_screen_pos(Vec2F32 view_center_pos, F32 zoom, Rng2F32 rect, Vec2F32 scr)
-{
-  Vec2F32 cvs =
-  {
-    (scr.x - (rect.x0+rect.x1)/2) / zoom + view_center_pos.x,
-    (scr.y - (rect.y0+rect.y1)/2) / zoom + view_center_pos.y,
-  };
-  return cvs;
-}
-
-internal Rng2F32
-df_bitmap_canvas_from_screen_rect(Vec2F32 view_center_pos, F32 zoom, Rng2F32 rect, Rng2F32 scr)
-{
-  Rng2F32 cvs = r2f32(df_bitmap_canvas_from_screen_pos(view_center_pos, zoom, rect, scr.p0), df_bitmap_canvas_from_screen_pos(view_center_pos, zoom, rect, scr.p1));
-  return cvs;
-}
-
-////////////////////////////////
-//~ rjf: Color RGBA Views
-
-internal Vec4F32
-df_rgba_from_eval_params(E_Eval eval, MD_Node *params)
-{
-  Vec4F32 rgba = {0};
-  {
-    E_Eval value_eval = e_value_eval_from_eval(eval);
-    E_TypeKey type_key = eval.type_key;
-    E_TypeKind type_kind = e_type_kind_from_key(type_key);
-    U64 type_size = e_type_byte_size_from_key(type_key);
-    if(16 <= type_size)
-    {
-      e_space_read(eval.space, &rgba, r1u64(eval.value.u64, eval.value.u64 + 16));
-    }
-    else if(4 <= type_size)
-    {
-      U32 hex_val = value_eval.value.u32;
-      rgba = rgba_from_u32(hex_val);
-    }
-  }
-  return rgba;
-}
-
-////////////////////////////////
 //~ rjf: null @view_hook_impl
 
 DF_VIEW_SETUP_FUNCTION_DEF(null) {}
@@ -3531,6 +3076,144 @@ DF_VIEW_UI_FUNCTION_DEF(getting_started)
 ////////////////////////////////
 //~ rjf: commands @view_hook_impl
 
+typedef struct DF_CmdListerItem DF_CmdListerItem;
+struct DF_CmdListerItem
+{
+  DF_CmdSpec *cmd_spec;
+  U64 registrar_idx;
+  U64 ordering_idx;
+  FuzzyMatchRangeList name_match_ranges;
+  FuzzyMatchRangeList desc_match_ranges;
+  FuzzyMatchRangeList tags_match_ranges;
+};
+
+typedef struct DF_CmdListerItemNode DF_CmdListerItemNode;
+struct DF_CmdListerItemNode
+{
+  DF_CmdListerItemNode *next;
+  DF_CmdListerItem item;
+};
+
+typedef struct DF_CmdListerItemList DF_CmdListerItemList;
+struct DF_CmdListerItemList
+{
+  DF_CmdListerItemNode *first;
+  DF_CmdListerItemNode *last;
+  U64 count;
+};
+
+typedef struct DF_CmdListerItemArray DF_CmdListerItemArray;
+struct DF_CmdListerItemArray
+{
+  DF_CmdListerItem *v;
+  U64 count;
+};
+
+internal DF_CmdListerItemList
+df_cmd_lister_item_list_from_needle(Arena *arena, String8 needle)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  DF_CmdSpecList specs = df_push_cmd_spec_list(scratch.arena);
+  DF_CmdListerItemList result = {0};
+  for(DF_CmdSpecNode *n = specs.first; n != 0; n = n->next)
+  {
+    DF_CmdSpec *spec = n->spec;
+    if(spec->info.flags & DF_CmdSpecFlag_ListInUI)
+    {
+      String8 cmd_display_name = spec->info.display_name;
+      String8 cmd_desc = spec->info.description;
+      String8 cmd_tags = spec->info.search_tags;
+      FuzzyMatchRangeList name_matches = fuzzy_match_find(arena, needle, cmd_display_name);
+      FuzzyMatchRangeList desc_matches = fuzzy_match_find(arena, needle, cmd_desc);
+      FuzzyMatchRangeList tags_matches = fuzzy_match_find(arena, needle, cmd_tags);
+      if(name_matches.count == name_matches.needle_part_count ||
+         desc_matches.count == name_matches.needle_part_count ||
+         tags_matches.count > 0 ||
+         name_matches.needle_part_count == 0)
+      {
+        DF_CmdListerItemNode *node = push_array(arena, DF_CmdListerItemNode, 1);
+        node->item.cmd_spec = spec;
+        node->item.registrar_idx = spec->registrar_index;
+        node->item.ordering_idx = spec->ordering_index;
+        node->item.name_match_ranges = name_matches;
+        node->item.desc_match_ranges = desc_matches;
+        node->item.tags_match_ranges = tags_matches;
+        SLLQueuePush(result.first, result.last, node);
+        result.count += 1;
+      }
+    }
+  }
+  scratch_end(scratch);
+  return result;
+}
+
+internal DF_CmdListerItemArray
+df_cmd_lister_item_array_from_list(Arena *arena, DF_CmdListerItemList list)
+{
+  DF_CmdListerItemArray result = {0};
+  result.count = list.count;
+  result.v = push_array(arena, DF_CmdListerItem, result.count);
+  U64 idx = 0;
+  for(DF_CmdListerItemNode *n = list.first; n != 0; n = n->next, idx += 1)
+  {
+    result.v[idx] = n->item;
+  }
+  return result;
+}
+
+internal int
+df_qsort_compare_cmd_lister__strength(DF_CmdListerItem *a, DF_CmdListerItem *b)
+{
+  int result = 0;
+  if(a->name_match_ranges.count > b->name_match_ranges.count)
+  {
+    result = -1;
+  }
+  else if(a->name_match_ranges.count < b->name_match_ranges.count)
+  {
+    result = +1;
+  }
+  else if(a->desc_match_ranges.count > b->desc_match_ranges.count)
+  {
+    result = -1;
+  }
+  else if(a->desc_match_ranges.count < b->desc_match_ranges.count)
+  {
+    result = +1;
+  }
+  else if(a->tags_match_ranges.count > b->tags_match_ranges.count)
+  {
+    result = -1;
+  }
+  else if(a->tags_match_ranges.count < b->tags_match_ranges.count)
+  {
+    result = +1;
+  }
+  else if(a->registrar_idx < b->registrar_idx)
+  {
+    result = -1;
+  }
+  else if(a->registrar_idx > b->registrar_idx)
+  {
+    result = +1;
+  }
+  else if(a->ordering_idx < b->ordering_idx)
+  {
+    result = -1;
+  }
+  else if(a->ordering_idx > b->ordering_idx)
+  {
+    result = +1;
+  }
+  return result;
+}
+
+internal void
+df_cmd_lister_item_array_sort_by_strength__in_place(DF_CmdListerItemArray array)
+{
+  quick_sort(array.v, array.count, sizeof(DF_CmdListerItem), df_qsort_compare_cmd_lister__strength);
+}
+
 DF_VIEW_SETUP_FUNCTION_DEF(commands) {}
 DF_VIEW_CMD_FUNCTION_DEF(commands) {}
 DF_VIEW_UI_FUNCTION_DEF(commands)
@@ -3697,6 +3380,112 @@ DF_VIEW_UI_FUNCTION_DEF(commands)
 
 ////////////////////////////////
 //~ rjf: file_system @view_hook_impl
+
+typedef enum DF_FileSortKind
+{
+  DF_FileSortKind_Null,
+  DF_FileSortKind_Filename,
+  DF_FileSortKind_LastModified,
+  DF_FileSortKind_Size,
+  DF_FileSortKind_COUNT
+}
+DF_FileSortKind;
+
+typedef struct DF_FileInfo DF_FileInfo;
+struct DF_FileInfo
+{
+  String8 filename;
+  FileProperties props;
+  FuzzyMatchRangeList match_ranges;
+};
+
+typedef struct DF_FileInfoNode DF_FileInfoNode;
+struct DF_FileInfoNode
+{
+  DF_FileInfoNode *next;
+  DF_FileInfo file_info;
+};
+
+typedef struct DF_FileSystemViewPathState DF_FileSystemViewPathState;
+struct DF_FileSystemViewPathState
+{
+  DF_FileSystemViewPathState *hash_next;
+  String8 normalized_path;
+  Vec2S64 cursor;
+};
+
+typedef struct DF_FileSystemViewState DF_FileSystemViewState;
+struct DF_FileSystemViewState
+{
+  B32 initialized;
+  U64 path_state_table_size;
+  DF_FileSystemViewPathState **path_state_table;
+  DF_FileSortKind sort_kind;
+  Side sort_side;
+  Arena *cached_files_arena;
+  String8 cached_files_path;
+  DF_FileSortKind cached_files_sort_kind;
+  Side cached_files_sort_side;
+  U64 cached_file_count;
+  DF_FileInfo *cached_files;
+  F32 col_pcts[3];
+};
+
+internal int
+df_qsort_compare_file_info__filename(DF_FileInfo *a, DF_FileInfo *b)
+{
+  return strncmp((char *)a->filename.str, (char *)b->filename.str, Min(a->filename.size, b->filename.size));
+}
+
+internal int
+df_qsort_compare_file_info__default(DF_FileInfo *a, DF_FileInfo *b)
+{
+  int result = 0;
+  if(a->props.flags & FilePropertyFlag_IsFolder && !(b->props.flags & FilePropertyFlag_IsFolder))
+  {
+    result = -1;
+  }
+  else if(b->props.flags & FilePropertyFlag_IsFolder && !(a->props.flags & FilePropertyFlag_IsFolder))
+  {
+    result = +1;
+  }
+  else
+  {
+    result = df_qsort_compare_file_info__filename(a, b);
+  }
+  return result;
+}
+
+internal int
+df_qsort_compare_file_info__default_filtered(DF_FileInfo *a, DF_FileInfo *b)
+{
+  int result = 0;
+  if(a->filename.size < b->filename.size)
+  {
+    result = -1;
+  }
+  else if(a->filename.size > b->filename.size)
+  {
+    result = +1;
+  }
+  return result;
+}
+
+internal int
+df_qsort_compare_file_info__last_modified(DF_FileInfo *a, DF_FileInfo *b)
+{
+  return ((a->props.modified < b->props.modified) ? -1 :
+          (a->props.modified > b->props.modified) ? +1 :
+          0);
+}
+
+internal int
+df_qsort_compare_file_info__size(DF_FileInfo *a, DF_FileInfo *b)
+{
+  return ((a->props.size < b->props.size) ? -1 :
+          (a->props.size > b->props.size) ? +1 :
+          0);
+}
 
 DF_VIEW_SETUP_FUNCTION_DEF(file_system){}
 DF_VIEW_CMD_FUNCTION_DEF(file_system){}
@@ -4135,6 +3924,169 @@ DF_VIEW_UI_FUNCTION_DEF(file_system)
 ////////////////////////////////
 //~ rjf: system_processes  @view_hook_impl
 
+typedef struct DF_ProcessInfo DF_ProcessInfo;
+struct DF_ProcessInfo
+{
+  DMN_ProcessInfo info;
+  B32 is_attached;
+  FuzzyMatchRangeList attached_match_ranges;
+  FuzzyMatchRangeList name_match_ranges;
+  FuzzyMatchRangeList pid_match_ranges;
+};
+
+typedef struct DF_ProcessInfoNode DF_ProcessInfoNode;
+struct DF_ProcessInfoNode
+{
+  DF_ProcessInfoNode *next;
+  DF_ProcessInfo info;
+};
+
+typedef struct DF_ProcessInfoList DF_ProcessInfoList;
+struct DF_ProcessInfoList
+{
+  DF_ProcessInfoNode *first;
+  DF_ProcessInfoNode *last;
+  U64 count;
+};
+
+typedef struct DF_ProcessInfoArray DF_ProcessInfoArray;
+struct DF_ProcessInfoArray
+{
+  DF_ProcessInfo *v;
+  U64 count;
+};
+
+internal DF_ProcessInfoList
+df_process_info_list_from_query(Arena *arena, String8 query)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  
+  //- rjf: gather PIDs that we're currently attached to
+  U64 attached_process_count = 0;
+  U32 *attached_process_pids = 0;
+  {
+    DF_EntityList processes = df_query_cached_entity_list_with_kind(DF_EntityKind_Process);
+    attached_process_count = processes.count;
+    attached_process_pids = push_array(scratch.arena, U32, attached_process_count);
+    U64 idx = 0;
+    for(DF_EntityNode *n = processes.first; n != 0; n = n->next, idx += 1)
+    {
+      DF_Entity *process = n->entity;
+      attached_process_pids[idx] = process->ctrl_id;
+    }
+  }
+  
+  //- rjf: build list
+  DF_ProcessInfoList list = {0};
+  {
+    DMN_ProcessIter iter = {0};
+    dmn_process_iter_begin(&iter);
+    for(DMN_ProcessInfo info = {0}; dmn_process_iter_next(scratch.arena, &iter, &info);)
+    {
+      // rjf: skip root-level or otherwise 0-pid processes
+      if(info.pid == 0)
+      {
+        continue;
+      }
+      
+      // rjf: determine if this process is attached
+      B32 is_attached = 0;
+      for(U64 attached_idx = 0; attached_idx < attached_process_count; attached_idx += 1)
+      {
+        if(attached_process_pids[attached_idx] == info.pid)
+        {
+          is_attached = 1;
+          break;
+        }
+      }
+      
+      // rjf: gather fuzzy matches
+      FuzzyMatchRangeList attached_match_ranges = {0};
+      FuzzyMatchRangeList name_match_ranges     = fuzzy_match_find(arena, query, info.name);
+      FuzzyMatchRangeList pid_match_ranges      = fuzzy_match_find(arena, query, push_str8f(scratch.arena, "%i", info.pid));
+      if(is_attached)
+      {
+        attached_match_ranges = fuzzy_match_find(arena, query, str8_lit("[attached]"));
+      }
+      
+      // rjf: determine if this item is filtered out
+      B32 matches_query = (query.size == 0 ||
+                           (attached_match_ranges.needle_part_count != 0 && attached_match_ranges.count >= attached_match_ranges.needle_part_count) ||
+                           (name_match_ranges.count != 0 && name_match_ranges.count >= name_match_ranges.needle_part_count) ||
+                           (pid_match_ranges.count != 0 && pid_match_ranges.count >= pid_match_ranges.needle_part_count));
+      
+      // rjf: push if unfiltered
+      if(matches_query)
+      {
+        DF_ProcessInfoNode *n = push_array(arena, DF_ProcessInfoNode, 1);
+        n->info.info = info;
+        n->info.info.name = push_str8_copy(arena, info.name);
+        n->info.is_attached = is_attached;
+        n->info.attached_match_ranges = attached_match_ranges;
+        n->info.name_match_ranges = name_match_ranges;
+        n->info.pid_match_ranges = pid_match_ranges;
+        SLLQueuePush(list.first, list.last, n);
+        list.count += 1;
+      }
+    }
+    dmn_process_iter_end(&iter);
+  }
+  
+  scratch_end(scratch);
+  return list;
+}
+
+internal DF_ProcessInfoArray
+df_process_info_array_from_list(Arena *arena, DF_ProcessInfoList list)
+{
+  DF_ProcessInfoArray array = {0};
+  array.count = list.count;
+  array.v = push_array(arena, DF_ProcessInfo, array.count);
+  U64 idx = 0;
+  for(DF_ProcessInfoNode *n = list.first; n != 0; n = n->next, idx += 1)
+  {
+    array.v[idx] = n->info;
+  }
+  return array;
+}
+
+internal int
+df_qsort_compare_process_info(DF_ProcessInfo *a, DF_ProcessInfo *b)
+{
+  int result = 0;
+  if(a->pid_match_ranges.count > b->pid_match_ranges.count)
+  {
+    result = -1;
+  }
+  else if(a->pid_match_ranges.count < b->pid_match_ranges.count)
+  {
+    result = +1;
+  }
+  else if(a->name_match_ranges.count < b->name_match_ranges.count)
+  {
+    result = -1;
+  }
+  else if(a->name_match_ranges.count > b->name_match_ranges.count)
+  {
+    result = +1;
+  }
+  else if(a->attached_match_ranges.count < b->attached_match_ranges.count)
+  {
+    result = -1;
+  }
+  else if(a->attached_match_ranges.count > b->attached_match_ranges.count)
+  {
+    result = +1;
+  }
+  return result;
+}
+
+internal void
+df_process_info_array_sort_by_strength__in_place(DF_ProcessInfoArray array)
+{
+  quick_sort(array.v, array.count, sizeof(DF_ProcessInfo), df_qsort_compare_process_info);
+}
+
 DF_VIEW_SETUP_FUNCTION_DEF(system_processes){}
 DF_VIEW_CMD_FUNCTION_DEF(system_processes){}
 DF_VIEW_UI_FUNCTION_DEF(system_processes)
@@ -4298,6 +4250,99 @@ DF_VIEW_UI_FUNCTION_DEF(system_processes)
 
 ////////////////////////////////
 //~ rjf: entity_lister @view_hook_impl
+
+typedef struct DF_EntityListerItem DF_EntityListerItem;
+struct DF_EntityListerItem
+{
+  DF_Entity *entity;
+  FuzzyMatchRangeList name_match_ranges;
+};
+
+typedef struct DF_EntityListerItemNode DF_EntityListerItemNode;
+struct DF_EntityListerItemNode
+{
+  DF_EntityListerItemNode *next;
+  DF_EntityListerItem item;
+};
+
+typedef struct DF_EntityListerItemList DF_EntityListerItemList;
+struct DF_EntityListerItemList
+{
+  DF_EntityListerItemNode *first;
+  DF_EntityListerItemNode *last;
+  U64 count;
+};
+
+typedef struct DF_EntityListerItemArray DF_EntityListerItemArray;
+struct DF_EntityListerItemArray
+{
+  DF_EntityListerItem *v;
+  U64 count;
+};
+
+internal DF_EntityListerItemList
+df_entity_lister_item_list_from_needle(Arena *arena, DF_EntityKind kind, DF_EntityFlags omit_flags, String8 needle)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  DF_EntityListerItemList result = {0};
+  DF_EntityList ent_list = df_query_cached_entity_list_with_kind(kind);
+  for(DF_EntityNode *n = ent_list.first; n != 0; n = n->next)
+  {
+    DF_Entity *entity = n->entity;
+    if(!(entity->flags & omit_flags))
+    {
+      String8 display_string = df_display_string_from_entity(scratch.arena, entity);
+      FuzzyMatchRangeList match_rngs = fuzzy_match_find(arena, needle, display_string);
+      if(match_rngs.count != 0 || needle.size == 0)
+      {
+        DF_EntityListerItemNode *item_n = push_array(arena, DF_EntityListerItemNode, 1);
+        item_n->item.entity = entity;
+        item_n->item.name_match_ranges = match_rngs;
+        SLLQueuePush(result.first, result.last, item_n);
+        result.count += 1;
+      }
+    }
+  }
+  scratch_end(scratch);
+  return result;
+}
+
+internal DF_EntityListerItemArray
+df_entity_lister_item_array_from_list(Arena *arena, DF_EntityListerItemList list)
+{
+  DF_EntityListerItemArray result = {0};
+  result.count = list.count;
+  result.v = push_array(arena, DF_EntityListerItem, result.count);
+  {
+    U64 idx = 0;
+    for(DF_EntityListerItemNode *n = list.first; n != 0; n = n->next, idx += 1)
+    {
+      result.v[idx] = n->item;
+    }
+  }
+  return result;
+}
+
+internal int
+df_qsort_compare_entity_lister__strength(DF_EntityListerItem *a, DF_EntityListerItem *b)
+{
+  int result = 0;
+  if(a->name_match_ranges.count > b->name_match_ranges.count)
+  {
+    result = -1;
+  }
+  else if(a->name_match_ranges.count < b->name_match_ranges.count)
+  {
+    result = +1;
+  }
+  return result;
+}
+
+internal void
+df_entity_lister_item_array_sort_by_strength__in_place(DF_EntityListerItemArray array)
+{
+  quick_sort(array.v, array.count, sizeof(DF_EntityListerItem), df_qsort_compare_entity_lister__strength);
+}
 
 DF_VIEW_SETUP_FUNCTION_DEF(entity_lister){}
 DF_VIEW_CMD_FUNCTION_DEF(entity_lister){}
@@ -4626,6 +4671,29 @@ DF_VIEW_UI_FUNCTION_DEF(symbol_lister)
 
 ////////////////////////////////
 //~ rjf: target @view_hook_impl
+
+typedef struct DF_TargetViewState DF_TargetViewState;
+struct DF_TargetViewState
+{
+  B32 initialized;
+  
+  // rjf: pick file kind
+  DF_EntityKind pick_dst_kind;
+  
+  // rjf: selection cursor
+  Vec2S64 cursor;
+  
+  // rjf: text input state
+  TxtPt input_cursor;
+  TxtPt input_mark;
+  U8 input_buffer[1024];
+  U64 input_size;
+  B32 input_editing;
+  
+  // rjf: table column pcts
+  F32 key_pct;
+  F32 value_pct;
+};
 
 DF_VIEW_SETUP_FUNCTION_DEF(target)
 {
@@ -5106,6 +5174,22 @@ DF_VIEW_UI_FUNCTION_DEF(targets)
 ////////////////////////////////
 //~ rjf: file_path_map @view_hook_impl
 
+typedef struct DF_FilePathMapViewState DF_FilePathMapViewState;
+struct DF_FilePathMapViewState
+{
+  B32 initialized;
+  Vec2S64 cursor;
+  TxtPt input_cursor;
+  TxtPt input_mark;
+  U8 input_buffer[1024];
+  U64 input_size;
+  B32 input_editing;
+  DF_Handle pick_file_dst_map;
+  Side pick_file_dst_side;
+  F32 src_column_pct;
+  F32 dst_column_pct;
+};
+
 DF_VIEW_SETUP_FUNCTION_DEF(file_path_map)
 {
   DF_FilePathMapViewState *fpms = df_view_user_state(view, DF_FilePathMapViewState);
@@ -5445,6 +5529,20 @@ DF_VIEW_UI_FUNCTION_DEF(file_path_map)
 
 ////////////////////////////////
 //~ rjf: auto_view_rules @view_hook_impl
+
+typedef struct DF_AutoViewRulesViewState DF_AutoViewRulesViewState;
+struct DF_AutoViewRulesViewState
+{
+  B32 initialized;
+  Vec2S64 cursor;
+  TxtPt input_cursor;
+  TxtPt input_mark;
+  U8 input_buffer[1024];
+  U64 input_size;
+  B32 input_editing;
+  F32 src_column_pct;
+  F32 dst_column_pct;
+};
 
 DF_VIEW_SETUP_FUNCTION_DEF(auto_view_rules)
 {
@@ -6039,6 +6137,24 @@ DF_VIEW_UI_FUNCTION_DEF(call_stack)
 ////////////////////////////////
 //~ rjf: modules @view_hook_impl
 
+typedef struct DF_ModulesViewState DF_ModulesViewState;
+struct DF_ModulesViewState
+{
+  B32 initialized;
+  DF_Handle selected_entity;
+  S64 selected_column;
+  B32 txt_editing;
+  TxtPt txt_cursor;
+  TxtPt txt_mark;
+  U8 txt_buffer[1024];
+  U64 txt_size;
+  DF_Handle pick_file_dst_entity;
+  F32 idx_col_pct;
+  F32 desc_col_pct;
+  F32 range_col_pct;
+  F32 dbg_col_pct;
+};
+
 DF_VIEW_SETUP_FUNCTION_DEF(modules)
 {
   DF_ModulesViewState *mv = df_view_user_state(view, DF_ModulesViewState);
@@ -6514,6 +6630,13 @@ DF_VIEW_UI_FUNCTION_DEF(procedures)
 ////////////////////////////////
 //~ rjf: pending_file @view_hook_impl
 
+typedef struct DF_PendingFileViewState DF_PendingFileViewState;
+struct DF_PendingFileViewState
+{
+  Arena *deferred_cmd_arena;
+  DF_CmdList deferred_cmds;
+};
+
 DF_VIEW_SETUP_FUNCTION_DEF(pending_file)
 {
   DF_PendingFileViewState *pves = df_view_user_state(view, DF_PendingFileViewState);
@@ -6902,6 +7025,17 @@ DF_VIEW_UI_FUNCTION_DEF(text)
 ////////////////////////////////
 //~ rjf: disasm @view_hook_impl
 
+typedef struct DF_DisasmViewState DF_DisasmViewState;
+struct DF_DisasmViewState
+{
+  B32 initialized;
+  TxtPt cursor;
+  TxtPt mark;
+  DASM_StyleFlags style_flags;
+  U64 goto_vaddr;
+  DF_CodeViewState cv;
+};
+
 DF_VIEW_SETUP_FUNCTION_DEF(disasm)
 {
   DF_DisasmViewState *dv = df_view_user_state(view, DF_DisasmViewState);
@@ -7279,6 +7413,13 @@ DF_VIEW_UI_FUNCTION_DEF(output)
 
 ////////////////////////////////
 //~ rjf: memory @view_hook_impl
+
+typedef struct DF_MemoryViewState DF_MemoryViewState;
+struct DF_MemoryViewState
+{
+  B32 center_cursor;
+  B32 contain_cursor;
+};
 
 DF_VIEW_SETUP_FUNCTION_DEF(memory)
 {
@@ -8080,6 +8221,60 @@ DF_VIEW_UI_FUNCTION_DEF(memory)
 ////////////////////////////////
 //~ rjf: bitmap @view_hook_impl
 
+typedef struct DF_BitmapBoxDrawData DF_BitmapBoxDrawData;
+struct DF_BitmapBoxDrawData
+{
+  Rng2F32 src;
+  R_Handle texture;
+  F32 loaded_t;
+  B32 hovered;
+  Vec2S32 mouse_px;
+  F32 ui_per_bmp_px;
+};
+
+typedef struct DF_BitmapCanvasBoxDrawData DF_BitmapCanvasBoxDrawData;
+struct DF_BitmapCanvasBoxDrawData
+{
+  Vec2F32 view_center_pos;
+  F32 zoom;
+};
+
+internal Vec2F32
+df_bitmap_screen_from_canvas_pos(Vec2F32 view_center_pos, F32 zoom, Rng2F32 rect, Vec2F32 cvs)
+{
+  Vec2F32 scr =
+  {
+    (rect.x0+rect.x1)/2 + (cvs.x - view_center_pos.x) * zoom,
+    (rect.y0+rect.y1)/2 + (cvs.y - view_center_pos.y) * zoom,
+  };
+  return scr;
+}
+
+internal Rng2F32
+df_bitmap_screen_from_canvas_rect(Vec2F32 view_center_pos, F32 zoom, Rng2F32 rect, Rng2F32 cvs)
+{
+  Rng2F32 scr = r2f32(df_bitmap_screen_from_canvas_pos(view_center_pos, zoom, rect, cvs.p0), df_bitmap_screen_from_canvas_pos(view_center_pos, zoom, rect, cvs.p1));
+  return scr;
+}
+
+internal Vec2F32
+df_bitmap_canvas_from_screen_pos(Vec2F32 view_center_pos, F32 zoom, Rng2F32 rect, Vec2F32 scr)
+{
+  Vec2F32 cvs =
+  {
+    (scr.x - (rect.x0+rect.x1)/2) / zoom + view_center_pos.x,
+    (scr.y - (rect.y0+rect.y1)/2) / zoom + view_center_pos.y,
+  };
+  return cvs;
+}
+
+internal Rng2F32
+df_bitmap_canvas_from_screen_rect(Vec2F32 view_center_pos, F32 zoom, Rng2F32 rect, Rng2F32 scr)
+{
+  Rng2F32 cvs = r2f32(df_bitmap_canvas_from_screen_pos(view_center_pos, zoom, rect, scr.p0), df_bitmap_canvas_from_screen_pos(view_center_pos, zoom, rect, scr.p1));
+  return cvs;
+}
+
 internal UI_BOX_CUSTOM_DRAW(df_bitmap_box_draw)
 {
   DF_BitmapBoxDrawData *draw_data = (DF_BitmapBoxDrawData *)user_data;
@@ -8351,6 +8546,28 @@ DF_VIEW_UI_FUNCTION_DEF(bitmap)
 ////////////////////////////////
 //~ rjf: color_rgba @view_hook_impl
 
+internal Vec4F32
+df_rgba_from_eval_params(E_Eval eval, MD_Node *params)
+{
+  Vec4F32 rgba = {0};
+  {
+    E_Eval value_eval = e_value_eval_from_eval(eval);
+    E_TypeKey type_key = eval.type_key;
+    E_TypeKind type_kind = e_type_kind_from_key(type_key);
+    U64 type_size = e_type_byte_size_from_key(type_key);
+    if(16 <= type_size)
+    {
+      e_space_read(eval.space, &rgba, r1u64(eval.value.u64, eval.value.u64 + 16));
+    }
+    else if(4 <= type_size)
+    {
+      U32 hex_val = value_eval.value.u32;
+      rgba = rgba_from_u32(hex_val);
+    }
+  }
+  return rgba;
+}
+
 DF_VIEW_SETUP_FUNCTION_DEF(color_rgba) {}
 DF_VIEW_CMD_FUNCTION_DEF(color_rgba) {}
 DF_VIEW_UI_FUNCTION_DEF(color_rgba)
@@ -8400,6 +8617,24 @@ DF_VIEW_UI_FUNCTION_DEF(color_rgba)
 
 ////////////////////////////////
 //~ rjf: geo3d @view_hook_impl
+
+typedef struct DF_Geo3DViewState DF_Geo3DViewState;
+struct DF_Geo3DViewState
+{
+  F32 yaw;
+  F32 pitch;
+  F32 zoom;
+};
+
+typedef struct DF_Geo3DBoxDrawData DF_Geo3DBoxDrawData;
+struct DF_Geo3DBoxDrawData
+{
+  F32 yaw;
+  F32 pitch;
+  F32 zoom;
+  R_Handle vertex_buffer;
+  R_Handle index_buffer;
+};
 
 internal UI_BOX_CUSTOM_DRAW(df_geo3d_box_draw)
 {
@@ -8690,6 +8925,77 @@ DF_VIEW_UI_FUNCTION_DEF(exception_filters)
 
 ////////////////////////////////
 //~ rjf: settings @view_hook_impl
+
+typedef enum DF_SettingsItemKind
+{
+  DF_SettingsItemKind_CategoryHeader,
+  DF_SettingsItemKind_GlobalSetting,
+  DF_SettingsItemKind_WindowSetting,
+  DF_SettingsItemKind_ThemeColor,
+  DF_SettingsItemKind_ThemePreset,
+  DF_SettingsItemKind_COUNT
+}
+DF_SettingsItemKind;
+
+typedef struct DF_SettingsItem DF_SettingsItem;
+struct DF_SettingsItem
+{
+  DF_SettingsItemKind kind;
+  String8 kind_string;
+  String8 string;
+  FuzzyMatchRangeList kind_string_matches;
+  FuzzyMatchRangeList string_matches;
+  DF_IconKind icon_kind;
+  DF_SettingCode code;
+  DF_ThemeColor color;
+  DF_ThemePreset preset;
+  DF_SettingsItemKind category;
+};
+
+typedef struct DF_SettingsItemNode DF_SettingsItemNode;
+struct DF_SettingsItemNode
+{
+  DF_SettingsItemNode *next;
+  DF_SettingsItem v;
+};
+
+typedef struct DF_SettingsItemList DF_SettingsItemList;
+struct DF_SettingsItemList
+{
+  DF_SettingsItemNode *first;
+  DF_SettingsItemNode *last;
+  U64 count;
+};
+
+typedef struct DF_SettingsItemArray DF_SettingsItemArray;
+struct DF_SettingsItemArray
+{
+  DF_SettingsItem *v;
+  U64 count;
+};
+
+internal int
+df_qsort_compare_settings_item(DF_SettingsItem *a, DF_SettingsItem *b)
+{
+  int result = 0;
+  if(a->string_matches.count > b->string_matches.count)
+  {
+    result = -1;
+  }
+  else if(a->string_matches.count < b->string_matches.count)
+  {
+    result = +1;
+  }
+  else if(a->kind_string_matches.count > b->kind_string_matches.count)
+  {
+    result = -1;
+  }
+  else if(a->kind_string_matches.count < b->kind_string_matches.count)
+  {
+    result = +1;
+  }
+  return result;
+}
 
 DF_VIEW_SETUP_FUNCTION_DEF(settings){}
 DF_VIEW_CMD_FUNCTION_DEF(settings){}
