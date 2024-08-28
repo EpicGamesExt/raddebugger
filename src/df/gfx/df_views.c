@@ -8188,7 +8188,11 @@ internal UI_BOX_CUSTOM_DRAW(df_bitmap_view_canvas_box_draw)
   }
 }
 
-DF_VIEW_SETUP_FUNCTION_DEF(Bitmap) {}
+DF_VIEW_SETUP_FUNCTION_DEF(Bitmap)
+{
+  df_view_equip_loading_info(view, 1, 0, 0);
+  view->loading_t = view->loading_t_target = 1.f;
+}
 DF_VIEW_CMD_FUNCTION_DEF(Bitmap) {}
 DF_VIEW_UI_FUNCTION_DEF(Bitmap)
 {

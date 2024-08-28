@@ -7782,7 +7782,8 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             {
               df_gfx_request_frame();
             }
-            if(view->loading_t_target != 0 && view == df_selected_tab_from_panel(t->panel))
+            if(view->loading_t_target != 0 && (view == df_selected_tab_from_panel(t->panel) ||
+                                               t->transient_owner == df_selected_tab_from_panel(t->panel)))
             {
               df_gfx_request_frame();
             }
