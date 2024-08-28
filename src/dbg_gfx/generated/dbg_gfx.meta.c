@@ -178,15 +178,15 @@ DF_ViewSpecInfo df_g_gfx_view_kind_spec_info_table[34] =
 {(0|0*DF_ViewSpecFlag_ParameterizedByEntity|0*DF_ViewSpecFlag_ProjectSpecific|1*DF_ViewSpecFlag_CanSerialize|1*DF_ViewSpecFlag_CanFilter|0*DF_ViewSpecFlag_FilterIsCode|1*DF_ViewSpecFlag_TypingAutomaticallyFilters), str8_lit_comp("settings"), str8_lit_comp("Settings"), DF_IconKind_Gear, DF_VIEW_SETUP_FUNCTION_NAME(settings), DF_VIEW_CMD_FUNCTION_NAME(settings), DF_VIEW_UI_FUNCTION_NAME(settings)},
 };
 
-DF_CmdParamSlot df_g_cmd_param_slot_2_view_spec_src_map[7] =
+D_CmdParamSlot df_g_cmd_param_slot_2_view_spec_src_map[7] =
 {
-DF_CmdParamSlot_Entity,
-DF_CmdParamSlot_EntityList,
-DF_CmdParamSlot_FilePath,
-DF_CmdParamSlot_CmdSpec,
-DF_CmdParamSlot_ID,
-DF_CmdParamSlot_String,
-DF_CmdParamSlot_String,
+D_CmdParamSlot_Entity,
+D_CmdParamSlot_EntityList,
+D_CmdParamSlot_FilePath,
+D_CmdParamSlot_CmdSpec,
+D_CmdParamSlot_ID,
+D_CmdParamSlot_String,
+D_CmdParamSlot_String,
 };
 
 String8 df_g_cmd_param_slot_2_view_spec_dst_map[7] =

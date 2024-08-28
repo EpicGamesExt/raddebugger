@@ -418,7 +418,7 @@ struct UI_Box
   OS_Cursor hover_cursor;
   U32 fastpath_codepoint;
   UI_Key group_key;
-  D_Bucket *draw_bucket;
+  DR_Bucket *draw_bucket;
   UI_BoxCustomDrawFunctionType *custom_draw;
   void *custom_draw_user_data;
   UI_Palette *palette;
@@ -433,7 +433,7 @@ struct UI_Box
   F32 text_padding;
   
   //- rjf: per-build artifacts
-  D_FancyRunList display_string_runs;
+  DR_FancyRunList display_string_runs;
   Rng2F32 rect;
   Vec2F32 fixed_position_animated;
   Vec2F32 position_delta;
@@ -636,7 +636,7 @@ struct UI_State
   String8 drag_state_data;
   Arena *string_hover_arena;
   String8 string_hover_string;
-  D_FancyRunList string_hover_fancy_runs;
+  DR_FancyRunList string_hover_fancy_runs;
   U64 string_hover_begin_us;
   U64 string_hover_build_index;
   U64 last_time_mousemoved_us;
@@ -769,7 +769,7 @@ internal String8           ui_get_drag_data(U64 min_required_size);
 
 //- rjf: hovered string info
 internal B32               ui_string_hover_active(void);
-internal D_FancyRunList    ui_string_hover_runs(Arena *arena);
+internal DR_FancyRunList    ui_string_hover_runs(Arena *arena);
 
 //- rjf: interaction keys
 internal UI_Key            ui_hot_key(void);
@@ -836,10 +836,10 @@ internal UI_Box *          ui_build_box_from_stringf(UI_BoxFlags flags, char *fm
 
 //- rjf: box node equipment
 internal inline void       ui_box_equip_display_string(UI_Box *box, String8 string);
-internal inline void       ui_box_equip_display_fancy_strings(UI_Box *box, D_FancyStringList *strings);
-internal inline void       ui_box_equip_display_string_fancy_runs(UI_Box *box, String8 string, D_FancyRunList *runs);
+internal inline void       ui_box_equip_display_fancy_strings(UI_Box *box, DR_FancyStringList *strings);
+internal inline void       ui_box_equip_display_string_fancy_runs(UI_Box *box, String8 string, DR_FancyRunList *runs);
 internal inline void       ui_box_equip_fuzzy_match_ranges(UI_Box *box, FuzzyMatchRangeList *matches);
-internal inline void       ui_box_equip_draw_bucket(UI_Box *box, D_Bucket *bucket);
+internal inline void       ui_box_equip_draw_bucket(UI_Box *box, DR_Bucket *bucket);
 internal inline void       ui_box_equip_custom_draw(UI_Box *box, UI_BoxCustomDrawFunctionType *custom_draw, void *user_data);
 
 //- rjf: box accessors / queries

@@ -472,7 +472,7 @@ global OS_Handle ipc_s2m_ring_mutex = {0};
 global OS_Handle ipc_s2m_ring_cv = {0};
 
 //- rjf: last focused window
-global DF_Handle last_focused_window = {0};
+global D_Handle last_focused_window = {0};
 
 //- rjf: frame time history
 global U64 frame_time_us_history[64] = {0};

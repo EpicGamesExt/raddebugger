@@ -2,7 +2,7 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 @table(name, name_lower, type, default_init)
-D_StackTable:
+DR_StackTable:
 {
   {Tex2DSampleKind        tex2d_sample_kind      R_Tex2DSampleKind   `R_Tex2DSampleKind_Nearest`                   }
   {XForm2D                xform2d                Mat3x3F32           `{1, 0, 0, 0, 1, 0, 0, 0, 1}`                 }
@@ -12,47 +12,47 @@ D_StackTable:
 
 @gen
 {
-  @expand(D_StackTable a) `typedef struct D_$(a.name)Node D_$(a.name)Node; struct D_$(a.name)Node {D_$(a.name)Node *next; $(a.type) v;};`;
+  @expand(DR_StackTable a) `typedef struct DR_$(a.name)Node DR_$(a.name)Node; struct DR_$(a.name)Node {DR_$(a.name)Node *next; $(a.type) v;};`;
 }
 
 @gen
 {
-  `#define D_BucketStackDecls struct{\\`;
-  @expand(D_StackTable a) `D_$(a.name)Node *top_$(a.name_lower);\\`;
+  `#define DR_BucketStackDecls struct{\\`;
+  @expand(DR_StackTable a) `DR_$(a.name)Node *top_$(a.name_lower);\\`;
   `}`;
 }
 
 @gen
 {
-  @expand(D_StackTable a) `read_only global D_$(a.name)Node d_nil_$(a.name_lower) = {0, $(a.default_init)};`;
+  @expand(DR_StackTable a) `read_only global DR_$(a.name)Node dr_nil_$(a.name_lower) = {0, $(a.default_init)};`;
 }
 
 @gen
 {
-  `#define D_BucketStackInits(b) do{\\`;
-  @expand(D_StackTable a) `(b)->top_$(a.name_lower) = &d_nil_$(a.name_lower);\\`;
+  `#define DR_BucketStackInits(b) do{\\`;
+  @expand(DR_StackTable a) `(b)->top_$(a.name_lower) = &dr_nil_$(a.name_lower);\\`;
   `}while(0)`;
 }
 
 @gen
 {
   `#if 0`;
-  @expand(D_StackTable a) `internal $(a.type) $(=>35) d_push_$(a.name_lower)($(a.type) v);`;
-  @expand(D_StackTable a) `internal $(a.type) $(=>35) d_pop_$(a.name_lower)(void);`;
-  @expand(D_StackTable a) `internal $(a.type) $(=>35) d_top_$(a.name_lower)(void);`;
+  @expand(DR_StackTable a) `internal $(a.type) $(=>35) dr_push_$(a.name_lower)($(a.type) v);`;
+  @expand(DR_StackTable a) `internal $(a.type) $(=>35) dr_pop_$(a.name_lower)(void);`;
+  @expand(DR_StackTable a) `internal $(a.type) $(=>35) dr_top_$(a.name_lower)(void);`;
   `#endif`;
 }
 
 @gen @c_file
 {
-  @expand(D_StackTable a) `internal $(a.type) $(=>35) d_push_$(a.name_lower)($(a.type) v) {D_StackPushImpl($(a.name), $(a.name_lower), $(a.type), v);}`;
-  @expand(D_StackTable a) `internal $(a.type) $(=>35) d_pop_$(a.name_lower)(void) {D_StackPopImpl($(a.name), $(a.name_lower), $(a.type));}`;
-  @expand(D_StackTable a) `internal $(a.type) $(=>35) d_top_$(a.name_lower)(void) {D_StackTopImpl($(a.name), $(a.name_lower), $(a.type));}`;
+  @expand(DR_StackTable a) `internal $(a.type) $(=>35) dr_push_$(a.name_lower)($(a.type) v) {DR_StackPushImpl($(a.name), $(a.name_lower), $(a.type), v);}`;
+  @expand(DR_StackTable a) `internal $(a.type) $(=>35) dr_pop_$(a.name_lower)(void) {DR_StackPopImpl($(a.name), $(a.name_lower), $(a.type));}`;
+  @expand(DR_StackTable a) `internal $(a.type) $(=>35) dr_top_$(a.name_lower)(void) {DR_StackTopImpl($(a.name), $(a.name_lower), $(a.type));}`;
 }
 
 @gen
 {
   `#if 0`;
-  @expand(D_StackTable a) `#define D_$(a.name)Scope(v) $(=>35) DeferLoop(d_push_$(a.name_lower)(v), d_pop_$(a.name_lower)())`;
+  @expand(DR_StackTable a) `#define DR_$(a.name)Scope(v) $(=>35) DeferLoop(dr_push_$(a.name_lower)(v), dr_pop_$(a.name_lower)())`;
   `#endif`;
 }

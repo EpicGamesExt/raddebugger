@@ -5,7 +5,7 @@
 //~ rjf: Config Sources
 
 @table(string, name, load_cmd, write_cmd, apply_cmd)
-DF_CfgSrcTable:
+D_CfgSrcTable:
 {
   {"user"            User             OpenUser       WriteUserData       ApplyUserData    }
   {"project"         Project          OpenProject    WriteProjectData    ApplyProjectData }
@@ -23,7 +23,7 @@ DF_CfgSrcTable:
 //                                                                        operations________    mutation cascading__  names lt sz
 //                                                                       /..................\  /....................\ /...\ |  |
 //                                                                       dl fz ed rn en cn dp lu tu lp tp lh ld th td nc np ul iz
-DF_EntityKindTable:
+D_EntityKindTable:
 {
   {Nil                nil                   nils                          0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0                      "Label"             Null                   "Nil"                        }
   {Root               root                  roots                         0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0                      "Label"             Null                   "Root"                       }
@@ -85,19 +85,19 @@ DF_EntityKindTable:
 //~ rjf: Built-In Command Tables
 
 @table(name, name_lower, c_type)
-DF_CmdParamSlotTable:
+D_CmdParamSlotTable:
 {
-  {Window            window                `DF_Handle`}
-  {Panel             panel                 `DF_Handle`}
-  {DestPanel         dest_panel            `DF_Handle`}
-  {PrevView          prev_view             `DF_Handle`}
-  {View              view                  `DF_Handle`}
-  {Entity            entity                `DF_Handle`}
-  {EntityList        entity_list           `DF_HandleList`}
+  {Window            window                `D_Handle`}
+  {Panel             panel                 `D_Handle`}
+  {DestPanel         dest_panel            `D_Handle`}
+  {PrevView          prev_view             `D_Handle`}
+  {View              view                  `D_Handle`}
+  {Entity            entity                `D_Handle`}
+  {EntityList        entity_list           `D_HandleList`}
   {String            string                `String8`}
   {FilePath          file_path             `String8`}
   {TextPoint         text_point            `TxtPt`}
-  {CmdSpec           cmd_spec              `struct DF_CmdSpec *`}
+  {CmdSpec           cmd_spec              `struct D_CmdSpec *`}
   {ViewSpec          view_spec             `struct DF_ViewSpec *`}
   {ParamsTree        params_tree           `MD_Node *`}
   {OSEvent           os_event              `struct OS_Event *`}
@@ -115,7 +115,7 @@ DF_CmdParamSlotTable:
 @table(name                      ui_vis   ipc_docs_vis   q_slot       q_ent_kind  q_allow_files q_allow_folders  q_keep_oi   q_select_oi  q_is_code  q_required           canonical_icon        string                        display_name                                  desc                                                                                                               search_tags                      )
 //    /                          |        |              |             \___                                     ______________________________________________/           |                     |                             |                                             |                                                                                                                  |
 //   /                           |        |              |                 \                                   /                                                          |                     |                             |                                             |                                                                                                                  |
-DF_CoreCmdTable://               |        |              |                  |                                 |                                                           |                     |                             |                                             |                                                                                                                  |
+D_CoreCmdTable: //               |        |              |                  |                                 |                                                           |                     |                             |                                             |                                                                                                                  |
 {
   {Null                           0        0              Null               Nil                0  0  0  0  0  0                                                           Null                  ""                            ""                                            ""                                                                                                                 ""                               }
   
@@ -518,7 +518,7 @@ DF_CoreCmdTable://               |        |              |                  |   
 // are specified in both tables under the same name.
 
 @table(coverage_check  name  name_lower  string          ih  ex  xp  vb                display_name                  docs    schema                                                         description)
-DF_CoreViewRuleTable:
+D_ViewRuleTable:
 {
   {x  Default    default     "default"                    -   -   -   x                 "Default"                     -       ""                                                             ""                                                                                                                                                                           }
   {x  Array      array       "array"                      -   -   x   -                 "Array"                       x       "x:{expr}"                                                     "Specifies that a pointer points to N elements, rather than only 1."                                                                                                         }
@@ -643,21 +643,21 @@ DF_DevToggleTable:
 
 //- rjf: enums
 
-@enum DF_CfgSrc:
+@enum D_CfgSrc:
 {
-  @expand(DF_CfgSrcTable a) `$(a.name)`,
+  @expand(D_CfgSrcTable a) `$(a.name)`,
   COUNT,
 }
 
-@enum DF_EntityKind:
+@enum D_EntityKind:
 {
-  @expand(DF_EntityKindTable a) `$(a.name)`,
+  @expand(D_EntityKindTable a) `$(a.name)`,
   COUNT,
 }
 
-@enum DF_CoreCmdKind:
+@enum D_CmdKind:
 {
-  @expand(DF_CoreCmdTable, a) `$(a.name)`,
+  @expand(D_CoreCmdTable, a) `$(a.name)`,
   COUNT,
 }
 
@@ -667,109 +667,109 @@ DF_DevToggleTable:
   COUNT,
 }
 
-@enum DF_CoreViewRuleKind:
+@enum D_ViewRuleKind:
 {
-  @expand(DF_CoreViewRuleTable a) `$(a.name)`,
+  @expand(D_ViewRuleTable a) `$(a.name)`,
   COUNT,
 }
 
 //- rjf: command params
 
-@enum DF_CmdParamSlot:
+@enum D_CmdParamSlot:
 {
   Null,
-  @expand(DF_CmdParamSlotTable a) `$(a.name)`,
+  @expand(D_CmdParamSlotTable a) `$(a.name)`,
   COUNT,
 }
 
-@struct DF_CmdParams:
+@struct D_CmdParams:
 {
-  `U64 slot_props[(DF_CmdParamSlot_COUNT + 63) / 64]`;
-  @expand(DF_CmdParamSlotTable a) `$(a.c_type) $(a.name_lower)`;
+  `U64 slot_props[(D_CmdParamSlot_COUNT + 63) / 64]`;
+  @expand(D_CmdParamSlotTable a) `$(a.c_type) $(a.name_lower)`;
 }
 
-@data(Rng1U64) df_g_cmd_param_slot_range_table:
+@data(Rng1U64) d_cmd_param_slot_range_table:
 {
   `{0}`,
-  @expand(DF_CmdParamSlotTable a) `{OffsetOf(DF_CmdParams, $(a.name_lower)), OffsetOf(DF_CmdParams, $(a.name_lower)) + sizeof($(a.c_type))}`,
+  @expand(D_CmdParamSlotTable a) `{OffsetOf(D_CmdParams, $(a.name_lower)), OffsetOf(D_CmdParams, $(a.name_lower)) + sizeof($(a.c_type))}`,
 }
 
 //- rjf: entity kind tables
 
-@data(DF_IconKind) df_g_entity_kind_icon_kind_table:
+@data(DF_IconKind) d_entity_kind_icon_kind_table:
 {
-  @expand(DF_EntityKindTable a) `DF_IconKind_$(a.icon_kind)`,
+  @expand(D_EntityKindTable a) `DF_IconKind_$(a.icon_kind)`,
 }
 
-@data(String8) df_g_entity_kind_display_string_table:
+@data(String8) d_entity_kind_display_string_table:
 {
-  @expand(DF_EntityKindTable a) `str8_lit_comp("$(a.display_string)")`,
+  @expand(D_EntityKindTable a) `str8_lit_comp("$(a.display_string)")`,
 }
 
-@data(String8) df_g_entity_kind_name_lower_table:
+@data(String8) d_entity_kind_name_lower_table:
 {
-  @expand(DF_EntityKindTable a) `str8_lit_comp("$(a.name_lower)")`,
+  @expand(D_EntityKindTable a) `str8_lit_comp("$(a.name_lower)")`,
 }
 
-@data(String8) df_g_entity_kind_name_lower_plural_table:
+@data(String8) d_entity_kind_name_lower_plural_table:
 {
-  @expand(DF_EntityKindTable a) `str8_lit_comp("$(a.name_lower_plural)")`,
+  @expand(D_EntityKindTable a) `str8_lit_comp("$(a.name_lower_plural)")`,
 }
 
-@data(String8) df_g_entity_kind_name_label_table:
+@data(String8) d_entity_kind_name_label_table:
 {
-  @expand(DF_EntityKindTable a) `str8_lit_comp("$(a.name_label)")`,
+  @expand(D_EntityKindTable a) `str8_lit_comp("$(a.name_label)")`,
 }
 
-@data(DF_EntityKindFlags) df_g_entity_kind_flags_table:
+@data(D_EntityKindFlags) d_entity_kind_flags_table:
 {
-  @expand(DF_EntityKindTable a) `($(a.op_delete)*DF_EntityKindFlag_CanDelete) | ($(a.op_freeze)*DF_EntityKindFlag_CanFreeze) | ($(a.op_edit)*DF_EntityKindFlag_CanEdit) | ($(a.op_rename)*DF_EntityKindFlag_CanRename) | ($(a.op_enable)*DF_EntityKindFlag_CanEnable) | ($(a.op_cond)*DF_EntityKindFlag_CanCondition) | ($(a.op_dup)*DF_EntityKindFlag_CanDuplicate) | ($(a.lf_mut_user_cfg)*DF_EntityKindFlag_LeafMutUserConfig | $(a.lf_mut_prof_cfg)*DF_EntityKindFlag_LeafMutProjectConfig | $(a.lf_mut_halt)*DF_EntityKindFlag_LeafMutSoftHalt | $(a.lf_mut_dbg)*DF_EntityKindFlag_LeafMutDebugInfoMap | $(a.tr_mut_user_cfg)*DF_EntityKindFlag_TreeMutUserConfig | $(a.tr_mut_prof_cfg)*DF_EntityKindFlag_TreeMutProjectConfig | $(a.tr_mut_halt)*DF_EntityKindFlag_TreeMutSoftHalt | $(a.tr_mut_dbg)*DF_EntityKindFlag_TreeMutDebugInfoMap | $(a.name_is_code)*DF_EntityKindFlag_NameIsCode | $(a.name_is_path)*DF_EntityKindFlag_NameIsPath | $(a.user_lifetime)*DF_EntityKindFlag_UserDefinedLifetime) | $(a.is_serialized)*DF_EntityKindFlag_IsSerializedToConfig`,
+  @expand(D_EntityKindTable a) `($(a.op_delete)*D_EntityKindFlag_CanDelete) | ($(a.op_freeze)*D_EntityKindFlag_CanFreeze) | ($(a.op_edit)*D_EntityKindFlag_CanEdit) | ($(a.op_rename)*D_EntityKindFlag_CanRename) | ($(a.op_enable)*D_EntityKindFlag_CanEnable) | ($(a.op_cond)*D_EntityKindFlag_CanCondition) | ($(a.op_dup)*D_EntityKindFlag_CanDuplicate) | ($(a.lf_mut_user_cfg)*D_EntityKindFlag_LeafMutUserConfig | $(a.lf_mut_prof_cfg)*D_EntityKindFlag_LeafMutProjectConfig | $(a.lf_mut_halt)*D_EntityKindFlag_LeafMutSoftHalt | $(a.lf_mut_dbg)*D_EntityKindFlag_LeafMutDebugInfoMap | $(a.tr_mut_user_cfg)*D_EntityKindFlag_TreeMutUserConfig | $(a.tr_mut_prof_cfg)*D_EntityKindFlag_TreeMutProjectConfig | $(a.tr_mut_halt)*D_EntityKindFlag_TreeMutSoftHalt | $(a.tr_mut_dbg)*D_EntityKindFlag_TreeMutDebugInfoMap | $(a.name_is_code)*D_EntityKindFlag_NameIsCode | $(a.name_is_path)*D_EntityKindFlag_NameIsPath | $(a.user_lifetime)*D_EntityKindFlag_UserDefinedLifetime) | $(a.is_serialized)*D_EntityKindFlag_IsSerializedToConfig`,
 }
 
 //- rjf: config source tables
 
-@data(String8) df_g_cfg_src_string_table:
+@data(String8) d_cfg_src_string_table:
 {
-  @expand(DF_CfgSrcTable a) `str8_lit_comp("$(a.string)")`,
+  @expand(D_CfgSrcTable a) `str8_lit_comp("$(a.string)")`,
 }
 
-@data(DF_CoreCmdKind) df_g_cfg_src_load_cmd_kind_table:
+@data(D_CmdKind) d_cfg_src_load_cmd_kind_table:
 {
-  @expand(DF_CfgSrcTable a) `DF_CoreCmdKind_$(a.load_cmd)`,
+  @expand(D_CfgSrcTable a) `D_CmdKind_$(a.load_cmd)`,
 }
 
-@data(DF_CoreCmdKind) df_g_cfg_src_write_cmd_kind_table:
+@data(D_CmdKind) d_cfg_src_write_cmd_kind_table:
 {
-  @expand(DF_CfgSrcTable a) `DF_CoreCmdKind_$(a.write_cmd)`,
+  @expand(D_CfgSrcTable a) `D_CmdKind_$(a.write_cmd)`,
 }
 
-@data(DF_CoreCmdKind) df_g_cfg_src_apply_cmd_kind_table:
+@data(D_CmdKind) d_cfg_src_apply_cmd_kind_table:
 {
-  @expand(DF_CfgSrcTable a) `DF_CoreCmdKind_$(a.apply_cmd)`;
+  @expand(D_CfgSrcTable a) `D_CmdKind_$(a.apply_cmd)`;
 }
 
 //- rjf: core view rule function prototypes
 
 @gen
 {
-  @expand(DF_CoreViewRuleTable a) `$(a.xp == "x" -> "DF_CORE_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_DEF(" .. a.name_lower .. ");")`;
-  @expand(DF_CoreViewRuleTable a) `$(a.vb == "x" -> "DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(" .. a.name_lower .. ");")`;
+  @expand(D_ViewRuleTable a) `$(a.xp == "x" -> "D_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_DEF(" .. a.name_lower .. ");")`;
+  @expand(D_ViewRuleTable a) `$(a.vb == "x" -> "D_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(" .. a.name_lower .. ");")`;
 }
 
 //- rjf: core command kind tables
 
-@data(DF_CmdSpecInfo) @c_file df_g_core_cmd_kind_spec_info_table:
+@data(D_CmdSpecInfo) @c_file d_core_cmd_kind_spec_info_table:
 {
-  @expand(DF_CoreCmdTable, a)
-    ```{ str8_lit_comp("$(a.string)"), str8_lit_comp("$(a.desc)"), str8_lit_comp("$(a.search_tags)"), str8_lit_comp("$(a.display_name)"), (DF_CmdSpecFlag_ListInUI*$(a.ui_vis))|(DF_CmdSpecFlag_ListInIPCDocs*$(a.ipc_docs_vis)), {DF_CmdParamSlot_$(a.q_slot), DF_EntityKind_$(a.q_ent_kind), (DF_CmdQueryFlag_AllowFiles*$(a.q_allow_files))|(DF_CmdQueryFlag_AllowFolders*$(a.q_allow_folders))|(DF_CmdQueryFlag_CodeInput*$(a.q_is_code))|(DF_CmdQueryFlag_KeepOldInput*$(a.q_keep_oi))|(DF_CmdQueryFlag_SelectOldInput*$(a.q_select_oi))|(DF_CmdQueryFlag_Required*$(a.q_required))}, DF_IconKind_$(a.canonical_icon)}```;
+  @expand(D_CoreCmdTable, a)
+    ```{ str8_lit_comp("$(a.string)"), str8_lit_comp("$(a.desc)"), str8_lit_comp("$(a.search_tags)"), str8_lit_comp("$(a.display_name)"), (D_CmdSpecFlag_ListInUI*$(a.ui_vis))|(D_CmdSpecFlag_ListInIPCDocs*$(a.ipc_docs_vis)), {D_CmdParamSlot_$(a.q_slot), D_EntityKind_$(a.q_ent_kind), (D_CmdQueryFlag_AllowFiles*$(a.q_allow_files))|(D_CmdQueryFlag_AllowFolders*$(a.q_allow_folders))|(D_CmdQueryFlag_CodeInput*$(a.q_is_code))|(D_CmdQueryFlag_KeepOldInput*$(a.q_keep_oi))|(D_CmdQueryFlag_SelectOldInput*$(a.q_select_oi))|(D_CmdQueryFlag_Required*$(a.q_required))}, DF_IconKind_$(a.canonical_icon)}```;
 }
 
 //- rjf: core view rule tables
 
-@data(DF_CoreViewRuleSpecInfo) @c_file df_g_core_view_rule_spec_info_table:
+@data(D_ViewRuleSpecInfo) @c_file d_core_view_rule_spec_info_table:
 {
-  @expand(DF_CoreViewRuleTable a)
-    ```{str8_lit_comp("$(a.string)"), str8_lit_comp("$(a.display_name)"), str8_lit_comp("$(a.schema)"), str8_lit_comp("$(a.description)"), (DF_CoreViewRuleSpecInfoFlag_Inherited*$(a.ih == "x"))|(DF_CoreViewRuleSpecInfoFlag_Expandable*$(a.ex == "x"))|(DF_CoreViewRuleSpecInfoFlag_ExprResolution*$(a.xp == "x"))|(DF_CoreViewRuleSpecInfoFlag_VizBlockProd*$(a.vb == "x")), $(a.xp == "x" -> "DF_CORE_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_NAME("..a.name_lower..")") $(a.xp != "x" -> 0), $(a.vb == "x" -> "DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_NAME("..a.name_lower..")") $(a.vb != "x" -> 0), }```;
+  @expand(D_ViewRuleTable a)
+    ```{str8_lit_comp("$(a.string)"), str8_lit_comp("$(a.display_name)"), str8_lit_comp("$(a.schema)"), str8_lit_comp("$(a.description)"), (D_ViewRuleSpecInfoFlag_Inherited*$(a.ih == "x"))|(D_ViewRuleSpecInfoFlag_Expandable*$(a.ex == "x"))|(D_ViewRuleSpecInfoFlag_ExprResolution*$(a.xp == "x"))|(D_ViewRuleSpecInfoFlag_VizBlockProd*$(a.vb == "x")), $(a.xp == "x" -> "D_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_NAME("..a.name_lower..")") $(a.xp != "x" -> 0), $(a.vb == "x" -> "D_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_NAME("..a.name_lower..")") $(a.vb != "x" -> 0), }```;
 }
 
 //- rjf: icon kinds

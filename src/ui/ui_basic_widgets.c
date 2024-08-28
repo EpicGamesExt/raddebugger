@@ -160,8 +160,8 @@ internal UI_BOX_CUSTOM_DRAW(ui_line_edit_draw)
     box->rect.y1-2.f,
   };
   Rng2F32 select_rect = union_2f32(cursor_rect, mark_rect);
-  d_rect(select_rect, select_color, font_size/2.f, 0, 1.f);
-  d_rect(cursor_rect, cursor_color, 0.f, 0, 1.f);
+  dr_rect(select_rect, select_color, font_size/2.f, 0, 1.f);
+  dr_rect(cursor_rect, cursor_color, 0.f, 0, 1.f);
 }
 
 internal UI_Signal
@@ -347,12 +347,12 @@ internal UI_BOX_CUSTOM_DRAW(ui_image_draw)
   UI_ImageDrawData *draw_data = (UI_ImageDrawData *)user_data;
   if(r_handle_match(draw_data->texture, r_handle_zero()))
   {
-    R_Rect2DInst *inst = d_rect(box->rect, v4f32(0, 0, 0, 0), 0, 0, 1.f);
+    R_Rect2DInst *inst = dr_rect(box->rect, v4f32(0, 0, 0, 0), 0, 0, 1.f);
     MemoryCopyArray(inst->corner_radii, box->corner_radii);
   }
-  else D_Tex2DSampleKindScope(draw_data->sample_kind)
+  else DR_Tex2DSampleKindScope(draw_data->sample_kind)
   {
-    R_Rect2DInst *inst = d_img(box->rect, draw_data->region, draw_data->texture, draw_data->tint, 0, 0, 0);
+    R_Rect2DInst *inst = dr_img(box->rect, draw_data->region, draw_data->texture, draw_data->tint, 0, 0, 0);
     MemoryCopyArray(inst->corner_radii, box->corner_radii);
   }
   if(draw_data->blur > 0.01f)
@@ -365,7 +365,7 @@ internal UI_BOX_CUSTOM_DRAW(ui_image_draw)
         clip = intersect_2f32(b->rect, clip);
       }
     }
-    R_PassParams_Blur *blur = d_blur(intersect_2f32(clip, box->rect), draw_data->blur, 0);
+    R_PassParams_Blur *blur = dr_blur(intersect_2f32(clip, box->rect), draw_data->blur, 0);
     MemoryCopyArray(blur->corner_radii, box->corner_radii);
   }
 }
@@ -569,13 +569,13 @@ internal UI_BOX_CUSTOM_DRAW(ui_sat_val_picker_draw)
   
   // rjf: white -> rgb background
   {
-    R_Rect2DInst *inst = d_rect(pad_2f32(box->rect, -1.f), v4f32(hue_rgb.x, hue_rgb.y, hue_rgb.z, 1), 4.f, 0, 1.f);
+    R_Rect2DInst *inst = dr_rect(pad_2f32(box->rect, -1.f), v4f32(hue_rgb.x, hue_rgb.y, hue_rgb.z, 1), 4.f, 0, 1.f);
     inst->colors[Corner_00] = inst->colors[Corner_01] = v4f32(1, 1, 1, 1);
   }
   
   // rjf: black gradient overlay
   {
-    R_Rect2DInst *inst = d_rect(pad_2f32(box->rect, -1.f), v4f32(0, 0, 0, 0), 4.f, 0, 1.f);
+    R_Rect2DInst *inst = dr_rect(pad_2f32(box->rect, -1.f), v4f32(0, 0, 0, 0), 4.f, 0, 1.f);
     inst->colors[Corner_01] = v4f32(0, 0, 0, 1);
     inst->colors[Corner_11] = v4f32(0, 0, 0, 1);
   }
@@ -589,7 +589,7 @@ internal UI_BOX_CUSTOM_DRAW(ui_sat_val_picker_draw)
                           center.y - half_size,
                           center.x + half_size,
                           center.y + half_size);
-    d_rect(rect, v4f32(1, 1, 1, 1), half_size/2, 2.f, 1.f);
+    dr_rect(rect, v4f32(1, 1, 1, 1), half_size/2, 2.f, 1.f);
   }
 }
 
@@ -680,7 +680,7 @@ internal UI_BOX_CUSTOM_DRAW(ui_hue_picker_draw)
     Vec3F32 rgb1 = rgb_from_hsv(v3f32(hue1, 1, 1));
     Vec4F32 rgba0 = v4f32(rgb0.x, rgb0.y, rgb0.z, 1);
     Vec4F32 rgba1 = v4f32(rgb1.x, rgb1.y, rgb1.z, 1);
-    R_Rect2DInst *inst = d_rect(rect, v4f32(0, 0, 0, 0), 0, 0, 0.f);
+    R_Rect2DInst *inst = dr_rect(rect, v4f32(0, 0, 0, 0), 0, 0, 0.f);
     inst->colors[Corner_00] = rgba0;
     inst->colors[Corner_01] = rgba1;
     inst->colors[Corner_10] = rgba0;
@@ -698,7 +698,7 @@ internal UI_BOX_CUSTOM_DRAW(ui_hue_picker_draw)
                           center.y - 2.f,
                           center.x + half_size,
                           center.y + 2.f);
-    d_rect(rect, v4f32(1, 1, 1, 1), half_size/2, 2.f, 1.f);
+    dr_rect(rect, v4f32(1, 1, 1, 1), half_size/2, 2.f, 1.f);
   }
 }
 
@@ -772,7 +772,7 @@ internal UI_BOX_CUSTOM_DRAW(ui_alpha_picker_draw)
     Vec2F32 center = center_2f32(rect);
     rect.x0 += (center.x - rect.x0) * 0.3f;
     rect.x1 += (center.x - rect.x1) * 0.3f;
-    R_Rect2DInst *inst = d_rect(rect, v4f32(0, 0, 0, 0), 0, 0, 0);
+    R_Rect2DInst *inst = dr_rect(rect, v4f32(0, 0, 0, 0), 0, 0, 0);
     inst->colors[Corner_00] = inst->colors[Corner_10] = v4f32(1, 1, 1, 1);
   }
   
@@ -785,7 +785,7 @@ internal UI_BOX_CUSTOM_DRAW(ui_alpha_picker_draw)
                           center.y - 2.f,
                           center.x + half_size,
                           center.y + 2.f);
-    d_rect(rect, v4f32(1, 1, 1, 1), half_size/2, 2.f, 1.f);
+    dr_rect(rect, v4f32(1, 1, 1, 1), half_size/2, 2.f, 1.f);
   }
 }
 

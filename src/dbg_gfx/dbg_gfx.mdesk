@@ -286,7 +286,7 @@ DF_GfxViewTable:
 //~ rjf: Command Parameter Slot -> View
 
 @table(slot  view_spec  opt_cmd_spec)
-DF_CmdParamSlot2ViewSpecMap:
+D_CmdParamSlot2ViewSpecMap:
 {
   {Entity            "entity_lister"            ""                        }
   {EntityList        "entity_lister"            ""                        }
@@ -297,19 +297,19 @@ DF_CmdParamSlot2ViewSpecMap:
   {String            "symbol_lister"            "add_function_breakpoint" }
 }
 
-@data(DF_CmdParamSlot) df_g_cmd_param_slot_2_view_spec_src_map:
+@data(D_CmdParamSlot) df_g_cmd_param_slot_2_view_spec_src_map:
 {
-  @expand(DF_CmdParamSlot2ViewSpecMap a) `DF_CmdParamSlot_$(a.slot)`
+  @expand(D_CmdParamSlot2ViewSpecMap a) `D_CmdParamSlot_$(a.slot)`
 }
 
 @data(String8) df_g_cmd_param_slot_2_view_spec_dst_map:
 {
-  @expand(DF_CmdParamSlot2ViewSpecMap a) `str8_lit_comp("$(a.view_spec)")`
+  @expand(D_CmdParamSlot2ViewSpecMap a) `str8_lit_comp("$(a.view_spec)")`
 }
 
 @data(String8) df_g_cmd_param_slot_2_view_spec_cmd_map:
 {
-  @expand(DF_CmdParamSlot2ViewSpecMap a) `str8_lit_comp("$(a.opt_cmd_spec)")`
+  @expand(D_CmdParamSlot2ViewSpecMap a) `str8_lit_comp("$(a.opt_cmd_spec)")`
 }
 
 ////////////////////////////////
@@ -700,7 +700,7 @@ raddbg_readme:
   @p "A list of commands and their descriptions are below:";
   @unordered_list
   {
-    @expand(DF_CoreCmdTable a) @p "$(a.ipc_docs_vis == 1 -> '`'..a.display_name..'` '..'(`'..a.string..'`) '..a.desc)";
+    @expand(D_CoreCmdTable a) @p "$(a.ipc_docs_vis == 1 -> '`'..a.display_name..'` '..'(`'..a.string..'`) '..a.desc)";
   }
   
   @subtitle "Targets";
@@ -716,7 +716,7 @@ raddbg_readme:
   @p "A list of currently-supported view rules are below:";
   @unordered_list
   {
-    @expand(DF_CoreViewRuleTable a) @p "$(a.docs == 'x' -> '`'..a.string..'` ('..a.display_name..') '..a.description)";
+    @expand(D_ViewRuleTable a) @p "$(a.docs == 'x' -> '`'..a.string..'` ('..a.display_name..') '..a.description)";
   }
   
   @subtitle "Breakpoints";

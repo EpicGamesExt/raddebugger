@@ -1,8 +1,8 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-#ifndef DEBUG_FRONTEND_VIEWS_H
-#define DEBUG_FRONTEND_VIEWS_H
+#ifndef DBG_GFX_VIEWS_H
+#define DBG_GFX_VIEWS_H
 
 ////////////////////////////////
 //~ rjf: Code View Types
@@ -105,8 +105,8 @@ typedef struct DF_WatchViewPoint DF_WatchViewPoint;
 struct DF_WatchViewPoint
 {
   S64 x;
-  DF_ExpandKey parent_key;
-  DF_ExpandKey key;
+  D_ExpandKey parent_key;
+  D_ExpandKey key;
 };
 
 typedef struct DF_WatchViewTextEditState DF_WatchViewTextEditState;
@@ -155,25 +155,25 @@ struct DF_WatchViewState
 //~ rjf: Code View Functions
 
 internal void df_code_view_init(DF_CodeViewState *cv, DF_View *view);
-internal void df_code_view_cmds(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewState *cv, DF_CmdList *cmds, String8 text_data, TXT_TextInfo *text_info, DASM_LineArray *dasm_lines, Rng1U64 dasm_vaddr_range, DI_Key dasm_dbgi_key);
+internal void df_code_view_cmds(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewState *cv, D_CmdList *cmds, String8 text_data, TXT_TextInfo *text_info, DASM_LineArray *dasm_lines, Rng1U64 dasm_vaddr_range, DI_Key dasm_dbgi_key);
 internal DF_CodeViewBuildResult df_code_view_build(Arena *arena, DF_Window *ws, DF_Panel *panel, DF_View *view, DF_CodeViewState *cv, DF_CodeViewBuildFlags flags, Rng2F32 rect, String8 text_data, TXT_TextInfo *text_info, DASM_LineArray *dasm_lines, Rng1U64 dasm_vaddr_range, DI_Key dasm_dbgi_key);
 
 ////////////////////////////////
 //~ rjf: Watch View Functions
 
 //- rjf: eval watch view instance -> eval view key
-internal DF_EvalViewKey df_eval_view_key_from_eval_watch_view(DF_WatchViewState *ewv);
+internal D_EvalViewKey df_eval_view_key_from_eval_watch_view(DF_WatchViewState *ewv);
 
 //- rjf: index -> column
 internal DF_WatchViewColumn *df_watch_view_column_from_x(DF_WatchViewState *wv, S64 index);
 
 //- rjf: watch view points <-> table coordinates
 internal B32 df_watch_view_point_match(DF_WatchViewPoint a, DF_WatchViewPoint b);
-internal DF_WatchViewPoint df_watch_view_point_from_tbl(DF_EvalVizBlockList *blocks, Vec2S64 tbl);
-internal Vec2S64 df_tbl_from_watch_view_point(DF_EvalVizBlockList *blocks, DF_WatchViewPoint pt);
+internal DF_WatchViewPoint df_watch_view_point_from_tbl(D_EvalVizBlockList *blocks, Vec2S64 tbl);
+internal Vec2S64 df_tbl_from_watch_view_point(D_EvalVizBlockList *blocks, DF_WatchViewPoint pt);
 
 //- rjf: table coordinates -> strings
-internal String8 df_string_from_eval_viz_row_column(Arena *arena, DF_EvalView *ev, DF_EvalVizRow *row, DF_WatchViewColumn *col, B32 editable, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size_px);
+internal String8 df_string_from_eval_viz_row_column(Arena *arena, D_EvalView *ev, D_EvalVizRow *row, DF_WatchViewColumn *col, B32 editable, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size_px);
 
 //- rjf: table coordinates -> text edit state
 internal DF_WatchViewTextEditState *df_watch_view_text_edit_state_from_pt(DF_WatchViewState *wv, DF_WatchViewPoint pt);
@@ -185,7 +185,7 @@ internal void df_watch_view_column_release(DF_WatchViewState *wv, DF_WatchViewCo
 
 //- rjf: watch view main hooks
 internal void df_watch_view_init(DF_WatchViewState *ewv, DF_View *view, DF_WatchViewFillKind fill_kind);
-internal void df_watch_view_cmds(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewState *ewv, DF_CmdList *cmds);
+internal void df_watch_view_cmds(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewState *ewv, D_CmdList *cmds);
 internal void df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewState *ewv, B32 modifiable, U32 default_radix, Rng2F32 rect);
 
-#endif // DEBUG_FRONTEND_VIEWS_H
+#endif // DBG_GFX_VIEWS_H

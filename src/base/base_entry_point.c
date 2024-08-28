@@ -67,12 +67,12 @@ main_thread_base_entry_point(void (*entry_point)(CmdLine *cmdline), char **argum
 #if defined(FONT_CACHE_H) && !defined(FNT_INIT_MANUAL)
   fnt_init();
 #endif
-#if defined(DF_CORE_H) && !defined(DF_INIT_MANUAL)
-  DF_StateDeltaHistory *hist = df_state_delta_history_alloc();
-  df_core_init(&cmdline, hist);
+#if defined(DBG_ENGINE_CORE_H) && !defined(DF_INIT_MANUAL)
+  D_StateDeltaHistory *hist = d_state_delta_history_alloc();
+  d_init(&cmdline, hist);
 #endif
-#if defined(DF_GFX_H) && !defined(DF_GFX_INIT_MANUAL)
-  df_gfx_init(update_and_render, df_state_delta_history());
+#if defined(DBG_GFX_CORE_H) && !defined(DF_GFX_INIT_MANUAL)
+  df_gfx_init(update_and_render, d_state_delta_history());
 #endif
   entry_point(&cmdline);
   if(capture)

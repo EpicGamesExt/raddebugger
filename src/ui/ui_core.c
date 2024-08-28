@@ -1,8 +1,8 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-#undef RADDBG_LAYER_COLOR
-#define RADDBG_LAYER_COLOR 0.80f, 0.40f, 0.35f
+#undef MARKUP_LAYER_COLOR
+#define MARKUP_LAYER_COLOR 0.80f, 0.40f, 0.35f
 
 ////////////////////////////////
 //~ rjf: Globals
@@ -719,10 +719,10 @@ ui_string_hover_string(Arena *arena)
   return result;
 }
 
-internal D_FancyRunList
+internal DR_FancyRunList
 ui_string_hover_runs(Arena *arena)
 {
-  D_FancyRunList result = d_fancy_run_list_copy(arena, &ui_state->string_hover_fancy_runs);
+  DR_FancyRunList result = dr_fancy_run_list_copy(arena, &ui_state->string_hover_fancy_runs);
   return result;
 }
 
@@ -1490,7 +1490,7 @@ ui_end_build(void)
               {
                 arena_clear(ui_state->string_hover_arena);
                 ui_state->string_hover_string = push_str8_copy(ui_state->string_hover_arena, box_display_string);
-                ui_state->string_hover_fancy_runs = d_fancy_run_list_copy(ui_state->string_hover_arena, &b->display_string_runs);
+                ui_state->string_hover_fancy_runs = dr_fancy_run_list_copy(ui_state->string_hover_arena, &b->display_string_runs);
                 ui_state->string_hover_begin_us = os_now_microseconds();
               }
               ui_state->string_hover_build_index = ui_state->build_index;
@@ -2366,9 +2366,9 @@ ui_box_equip_display_string(UI_Box *box, String8 string)
   if(box->flags & UI_BoxFlag_DrawText && (box->fastpath_codepoint == 0 || !(box->flags & UI_BoxFlag_DrawTextFastpathCodepoint)))
   {
     String8 display_string = ui_box_display_string(box);
-    D_FancyStringNode fancy_string_n = {0, {box->font, display_string, box->palette->colors[text_color_code], box->font_size, 0, 0}};
-    D_FancyStringList fancy_strings = {&fancy_string_n, &fancy_string_n, 1};
-    box->display_string_runs = d_fancy_run_list_from_fancy_string_list(ui_build_arena(), box->tab_size, box->text_raster_flags, &fancy_strings);
+    DR_FancyStringNode fancy_string_n = {0, {box->font, display_string, box->palette->colors[text_color_code], box->font_size, 0, 0}};
+    DR_FancyStringList fancy_strings = {&fancy_string_n, &fancy_string_n, 1};
+    box->display_string_runs = dr_fancy_run_list_from_fancy_string_list(ui_build_arena(), box->tab_size, box->text_raster_flags, &fancy_strings);
   }
   else if(box->flags & UI_BoxFlag_DrawText && box->flags & UI_BoxFlag_DrawTextFastpathCodepoint && box->fastpath_codepoint != 0)
   {
@@ -2379,17 +2379,17 @@ ui_box_equip_display_string(UI_Box *box, String8 string)
     U64 fpcp_pos = str8_find_needle(display_string, 0, fpcp, StringMatchFlag_CaseInsensitive);
     if(fpcp_pos < display_string.size)
     {
-      D_FancyStringNode pst_fancy_string_n = {0,                   {box->font, str8_skip(display_string, fpcp_pos+fpcp.size), box->palette->colors[text_color_code], box->font_size, 0, 0}};
-      D_FancyStringNode cdp_fancy_string_n = {&pst_fancy_string_n, {box->font, str8_substr(display_string, r1u64(fpcp_pos, fpcp_pos+fpcp.size)), box->palette->colors[text_color_code], box->font_size, 3.f, 0}};
-      D_FancyStringNode pre_fancy_string_n = {&cdp_fancy_string_n, {box->font, str8_prefix(display_string, fpcp_pos), box->palette->colors[text_color_code], box->font_size, 0, 0}};
-      D_FancyStringList fancy_strings = {&pre_fancy_string_n, &pst_fancy_string_n, 3};
-      box->display_string_runs = d_fancy_run_list_from_fancy_string_list(ui_build_arena(), box->tab_size, box->text_raster_flags, &fancy_strings);
+      DR_FancyStringNode pst_fancy_string_n = {0,                   {box->font, str8_skip(display_string, fpcp_pos+fpcp.size), box->palette->colors[text_color_code], box->font_size, 0, 0}};
+      DR_FancyStringNode cdp_fancy_string_n = {&pst_fancy_string_n, {box->font, str8_substr(display_string, r1u64(fpcp_pos, fpcp_pos+fpcp.size)), box->palette->colors[text_color_code], box->font_size, 3.f, 0}};
+      DR_FancyStringNode pre_fancy_string_n = {&cdp_fancy_string_n, {box->font, str8_prefix(display_string, fpcp_pos), box->palette->colors[text_color_code], box->font_size, 0, 0}};
+      DR_FancyStringList fancy_strings = {&pre_fancy_string_n, &pst_fancy_string_n, 3};
+      box->display_string_runs = dr_fancy_run_list_from_fancy_string_list(ui_build_arena(), box->tab_size, box->text_raster_flags, &fancy_strings);
     }
     else
     {
-      D_FancyStringNode fancy_string_n = {0, {box->font, display_string, box->palette->colors[UI_ColorCode_Text], box->font_size, 0, 0}};
-      D_FancyStringList fancy_strings = {&fancy_string_n, &fancy_string_n, 1};
-      box->display_string_runs = d_fancy_run_list_from_fancy_string_list(ui_build_arena(), box->tab_size, box->text_raster_flags, &fancy_strings);
+      DR_FancyStringNode fancy_string_n = {0, {box->font, display_string, box->palette->colors[UI_ColorCode_Text], box->font_size, 0, 0}};
+      DR_FancyStringList fancy_strings = {&fancy_string_n, &fancy_string_n, 1};
+      box->display_string_runs = dr_fancy_run_list_from_fancy_string_list(ui_build_arena(), box->tab_size, box->text_raster_flags, &fancy_strings);
     }
     scratch_end(scratch);
   }
@@ -2397,19 +2397,19 @@ ui_box_equip_display_string(UI_Box *box, String8 string)
 }
 
 internal void
-ui_box_equip_display_fancy_strings(UI_Box *box, D_FancyStringList *strings)
+ui_box_equip_display_fancy_strings(UI_Box *box, DR_FancyStringList *strings)
 {
   box->flags |= UI_BoxFlag_HasDisplayString;
-  box->string = d_string_from_fancy_string_list(ui_build_arena(), strings);
-  box->display_string_runs = d_fancy_run_list_from_fancy_string_list(ui_build_arena(), box->tab_size, box->text_raster_flags, strings);
+  box->string = dr_string_from_fancy_string_list(ui_build_arena(), strings);
+  box->display_string_runs = dr_fancy_run_list_from_fancy_string_list(ui_build_arena(), box->tab_size, box->text_raster_flags, strings);
 }
 
 internal inline void
-ui_box_equip_display_string_fancy_runs(UI_Box *box, String8 string, D_FancyRunList *runs)
+ui_box_equip_display_string_fancy_runs(UI_Box *box, String8 string, DR_FancyRunList *runs)
 {
   box->flags |= UI_BoxFlag_HasDisplayString;
   box->string = push_str8_copy(ui_build_arena(), string);
-  box->display_string_runs = d_fancy_run_list_copy(ui_build_arena(), runs);
+  box->display_string_runs = dr_fancy_run_list_copy(ui_build_arena(), runs);
 }
 
 internal inline void
@@ -2420,12 +2420,12 @@ ui_box_equip_fuzzy_match_ranges(UI_Box *box, FuzzyMatchRangeList *matches)
 }
 
 internal void
-ui_box_equip_draw_bucket(UI_Box *box, D_Bucket *bucket)
+ui_box_equip_draw_bucket(UI_Box *box, DR_Bucket *bucket)
 {
   box->flags |= UI_BoxFlag_DrawBucket;
   if(box->draw_bucket != 0)
   {
-    D_BucketScope(box->draw_bucket) d_sub_bucket(bucket);
+    D_BucketScope(box->draw_bucket) dr_sub_bucket(bucket);
   }
   else
   {

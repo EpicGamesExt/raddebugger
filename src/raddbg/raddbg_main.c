@@ -63,7 +63,8 @@
 #include "font_cache/font_cache.h"
 #include "draw/draw.h"
 #include "ui/ui_inc.h"
-#include "df/df_inc.h"
+#include "dbg_engine/dbg_engine_inc.h"
+#include "dbg_gfx/dbg_gfx_inc.h"
 #include "raddbg.h"
 
 //- rjf: [c]
@@ -102,7 +103,8 @@
 #include "font_cache/font_cache.c"
 #include "draw/draw.c"
 #include "ui/ui_inc.c"
-#include "df/df_inc.c"
+#include "dbg_engine/dbg_engine_inc.c"
+#include "dbg_gfx/dbg_gfx_inc.c"
 #include "raddbg.c"
 
 ////////////////////////////////
@@ -234,9 +236,9 @@ entry_point(CmdLine *cmd_line)
         tex_init();
         geo_init();
         fnt_init();
-        DF_StateDeltaHistory *hist = df_state_delta_history_alloc();
-        df_core_init(cmd_line, hist);
-        df_gfx_init(update_and_render, df_state_delta_history());
+        D_StateDeltaHistory *hist = d_state_delta_history_alloc();
+        d_init(cmd_line, hist);
+        df_gfx_init(update_and_render, d_state_delta_history());
       }
       
       //- rjf: setup initial target from command line args
@@ -245,8 +247,8 @@ entry_point(CmdLine *cmd_line)
         if(args.node_count > 0 && args.first->string.size != 0)
         {
           Temp scratch = scratch_begin(0, 0);
-          DF_Entity *target = df_entity_alloc(df_entity_root(), DF_EntityKind_Target);
-          df_entity_equip_cfg_src(target, DF_CfgSrc_CommandLine);
+          D_Entity *target = d_entity_alloc(d_entity_root(), D_EntityKind_Target);
+          d_entity_equip_cfg_src(target, D_CfgSrc_CommandLine);
           String8List passthrough_args_list = {0};
           for(String8Node *n = args.first->next; n != 0; n = n->next)
           {
@@ -260,14 +262,14 @@ entry_point(CmdLine *cmd_line)
           if(args.first->string.size != 0)
           {
             String8 exe_name = args.first->string;
-            DF_Entity *exe = df_entity_alloc(target, DF_EntityKind_Executable);
+            D_Entity *exe = d_entity_alloc(target, D_EntityKind_Executable);
             PathStyle style = path_style_from_str8(exe_name);
             if(style == PathStyle_Relative)
             {
               exe_name = push_str8f(scratch.arena, "%S/%S", current_path, exe_name);
               exe_name = path_normalized_from_string(scratch.arena, exe_name);
             }
-            df_entity_equip_name(exe, exe_name);
+            d_entity_equip_name(exe, exe_name);
           }
           
           // rjf: equip working directory
@@ -275,8 +277,8 @@ entry_point(CmdLine *cmd_line)
           if(path_part_of_arg.size != 0)
           {
             String8 path = push_str8f(scratch.arena, "%S/", path_part_of_arg);
-            DF_Entity *wdir = df_entity_alloc(target, DF_EntityKind_WorkingDirectory);
-            df_entity_equip_name(wdir, path);
+            D_Entity *wdir = d_entity_alloc(target, D_EntityKind_WorkingDirectory);
+            d_entity_equip_name(wdir, path);
           }
           
           // rjf: equip args
@@ -284,8 +286,8 @@ entry_point(CmdLine *cmd_line)
           String8 args_str = str8_list_join(scratch.arena, &passthrough_args_list, &join);
           if(args_str.size != 0)
           {
-            DF_Entity *args_entity = df_entity_alloc(target, DF_EntityKind_Arguments);
-            df_entity_equip_name(args_entity, args_str);
+            D_Entity *args_entity = d_entity_alloc(target, D_EntityKind_Arguments);
+            d_entity_equip_name(args_entity, args_str);
           }
           scratch_end(scratch);
         }
@@ -350,32 +352,32 @@ entry_point(CmdLine *cmd_line)
               if(dst_window != 0)
               {
                 dst_window->window_temporarily_focused_ipc = 1;
-                String8 cmd_spec_string = df_cmd_name_part_from_string(msg);
-                DF_CmdSpec *cmd_spec = df_cmd_spec_from_string(cmd_spec_string);
-                if(!df_cmd_spec_is_nil(cmd_spec))
+                String8 cmd_spec_string = d_cmd_name_part_from_string(msg);
+                D_CmdSpec *cmd_spec = d_cmd_spec_from_string(cmd_spec_string);
+                if(!d_cmd_spec_is_nil(cmd_spec))
                 {
-                  DF_CmdParams params = df_cmd_params_from_window(dst_window);
-                  String8 error = df_cmd_params_apply_spec_query(scratch.arena, &params, cmd_spec, df_cmd_arg_part_from_string(msg));
+                  D_CmdParams params = df_cmd_params_from_window(dst_window);
+                  String8 error = d_cmd_params_apply_spec_query(scratch.arena, &params, cmd_spec, d_cmd_arg_part_from_string(msg));
                   if(error.size == 0)
                   {
-                    df_push_cmd__root(&params, cmd_spec);
+                    d_push_cmd__root(&params, cmd_spec);
                     df_gfx_request_frame();
                   }
                   else
                   {
-                    DF_CmdParams params = df_cmd_params_from_window(dst_window);
+                    D_CmdParams params = df_cmd_params_from_window(dst_window);
                     params.string = error;
-                    df_cmd_params_mark_slot(&params, DF_CmdParamSlot_String);
-                    df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Error));
+                    d_cmd_params_mark_slot(&params, D_CmdParamSlot_String);
+                    d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_Error));
                     df_gfx_request_frame();
                   }
                 }
                 else
                 {
-                  DF_CmdParams params = df_cmd_params_from_window(dst_window);
+                  D_CmdParams params = df_cmd_params_from_window(dst_window);
                   params.string = push_str8f(scratch.arena, "\"%S\" is not a command.", cmd_spec_string);
-                  df_cmd_params_mark_slot(&params, DF_CmdParamSlot_String);
-                  df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Error));
+                  d_cmd_params_mark_slot(&params, D_CmdParamSlot_String);
+                  d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_Error));
                   df_gfx_request_frame();
                 }
               }
@@ -391,26 +393,26 @@ entry_point(CmdLine *cmd_line)
           if(auto_run)
           {
             auto_run = 0;
-            DF_CmdParams params = df_cmd_params_from_gfx();
-            df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_LaunchAndRun));
+            D_CmdParams params = df_cmd_params_from_gfx();
+            d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_LaunchAndRun));
           }
           
           //- rjf: auto step
           if(auto_step)
           {
             auto_step = 0;
-            DF_CmdParams params = df_cmd_params_from_gfx();
-            df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_StepInto));
+            D_CmdParams params = df_cmd_params_from_gfx();
+            d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_StepInto));
           }
           
           //- rjf: jit attach
           if(jit_attach)
           {
             jit_attach = 0;
-            DF_CmdParams params = df_cmd_params_from_gfx();
-            df_cmd_params_mark_slot(&params, DF_CmdParamSlot_ID);
+            D_CmdParams params = df_cmd_params_from_gfx();
+            d_cmd_params_mark_slot(&params, D_CmdParamSlot_ID);
             params.id = jit_pid;
-            df_push_cmd__root(&params, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_Attach));
+            d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_Attach));
           }
           
           //- rjf: quit if no windows are left

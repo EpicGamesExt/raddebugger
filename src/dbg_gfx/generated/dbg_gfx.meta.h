@@ -3,8 +3,8 @@
 
 //- GENERATED CODE
 
-#ifndef DF_GFX_META_H
-#define DF_GFX_META_H
+#ifndef DBG_GFX_META_H
+#define DBG_GFX_META_H
 
 typedef enum DF_GfxViewKind
 {
@@ -283,7 +283,7 @@ extern DF_StringBindingPair df_g_default_binding_table[110];
 extern String8 df_g_binding_version_remap_old_name_table[7];
 extern String8 df_g_binding_version_remap_new_name_table[7];
 extern DF_ViewSpecInfo df_g_gfx_view_kind_spec_info_table[34];
-extern DF_CmdParamSlot df_g_cmd_param_slot_2_view_spec_src_map[7];
+extern D_CmdParamSlot df_g_cmd_param_slot_2_view_spec_src_map[7];
 extern String8 df_g_cmd_param_slot_2_view_spec_dst_map[7];
 extern String8 df_g_cmd_param_slot_2_view_spec_cmd_map[7];
 extern String8 df_g_theme_preset_display_string_table[9];
@@ -5016,4 +5016,4 @@ read_only global String8 df_g_icon_file_bytes = {df_g_icon_file_bytes__data, siz
 
 C_LINKAGE_END
 
-#endif // DF_GFX_META_H
+#endif // DBG_GFX_META_H
