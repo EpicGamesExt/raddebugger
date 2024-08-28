@@ -348,7 +348,7 @@ DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_DEF(checkbox)
 ////////////////////////////////
 //~ rjf: "rgba"
 
-DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(rgba)
+DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(color_rgba)
 {
   DF_EvalVizBlock *vb = df_eval_viz_block_begin(arena, DF_EvalVizBlockKind_Canvas, key, df_expand_key_make(df_hash_from_expand_key(key), 1), depth);
   vb->string             = string;
@@ -359,7 +359,7 @@ DF_CORE_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(rgba)
   df_eval_viz_block_end(out, vb);
 }
 
-DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_DEF(rgba)
+DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_DEF(color_rgba)
 {
   Temp scratch = scratch_begin(0, 0);
   E_Eval eval = e_eval_from_string(scratch.arena, string);

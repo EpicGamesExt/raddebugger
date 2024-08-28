@@ -365,7 +365,6 @@ struct DF_GfxViewRuleSpecInfo
   DF_GfxViewRuleVizRowProdHookFunctionType *viz_row_prod;
   DF_GfxViewRuleLineStringizeHookFunctionType *line_stringize;
   DF_GfxViewRuleRowUIFunctionType *row_ui;
-  String8 view_spec_name;
 };
 
 typedef struct DF_GfxViewRuleSpecInfoArray DF_GfxViewRuleSpecInfoArray;
@@ -825,9 +824,9 @@ read_only global DF_ViewSpec df_g_nil_view_spec =
     {0},
     {0},
     DF_IconKind_Null,
-    DF_VIEW_SETUP_FUNCTION_NAME(Null),
-    DF_VIEW_CMD_FUNCTION_NAME(Null),
-    DF_VIEW_UI_FUNCTION_NAME(Null),
+    DF_VIEW_SETUP_FUNCTION_NAME(null),
+    DF_VIEW_CMD_FUNCTION_NAME(null),
+    DF_VIEW_UI_FUNCTION_NAME(null),
   },
 };
 

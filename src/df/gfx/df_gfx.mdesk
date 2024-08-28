@@ -251,13 +251,13 @@ DF_GfxViewTable:
   { PendingFile            "pending_file"           "Pending File"                 FileOutline     0 0 0 0 0 0      0 ""                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         }
   
   //- rjf: visualizers
-  { Code                   "code"                   "Code"                         FileOutline     0 1 1 0 1 0      0 ""                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         }
-  { Disassembly            "disassembly"            "Disassembly"                  Glasses         0 0 1 0 1 0      1 "Displays disassembled instructions in a textual form from the selected thread's containing process virtual address space."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                }
+  { Text                   "text"                   "Text"                         FileOutline     0 1 1 0 1 0      0 ""                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         }
+  { Disasm                 "disasm"                 "Disassembly"                  Glasses         0 0 1 0 1 0      1 "Displays disassembled instructions in a textual form from the selected thread's containing process virtual address space."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                }
   { Output                 "output"                 "Output"                       List            0 0 1 0 0 0      1 "Displays debug strings, output from attached processes."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  }
   { Memory                 "memory"                 "Memory"                       Grid            0 0 1 0 1 0      1 "A hex-editor-like grid interface for viewing memory."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     }
   { Bitmap                 "bitmap"                 "Bitmap"                       Binoculars      0 0 1 0 1 0      1 "Visualizes memory as a bitmap."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           }
   { ColorRGBA              "color_rgba"             "Color (RGBA)"                 Palette         0 0 1 0 1 0      1 "Visualizes memory as an RGBA color."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      }
-  { Geometry3D             "geometry_3d"            "Geometry (3D)"                Binoculars      0 0 1 0 1 0      1 "Visualizes memory as 3D geometry."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        }
+  { Geo3D                  "geo3d"                  "Geometry (3D)"                Binoculars      0 0 1 0 1 0      1 "Visualizes memory as 3D geometry."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        }
   
   //- rjf: meta (settings)
   { ExceptionFilters       "exception_filters"      "Exception Filters"            Gear            0 0 1 1 0 1      1 "An interface which controls whether or not the debugger will halt attached processes upon encountering specific exception codes for the first time."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      }
@@ -272,14 +272,14 @@ DF_GfxViewTable:
 
 @gen
 {
-  @expand(DF_GfxViewTable a) `DF_VIEW_SETUP_FUNCTION_DEF($(a.name));`;
-  @expand(DF_GfxViewTable a) `DF_VIEW_CMD_FUNCTION_DEF($(a.name));`;
-  @expand(DF_GfxViewTable a) `DF_VIEW_UI_FUNCTION_DEF($(a.name));`;
+  @expand(DF_GfxViewTable a) `DF_VIEW_SETUP_FUNCTION_DEF($(a.name_lower));`;
+  @expand(DF_GfxViewTable a) `DF_VIEW_CMD_FUNCTION_DEF($(a.name_lower));`;
+  @expand(DF_GfxViewTable a) `DF_VIEW_UI_FUNCTION_DEF($(a.name_lower));`;
 }
 
 @data(DF_ViewSpecInfo) df_g_gfx_view_kind_spec_info_table:
 {
-  @expand(DF_GfxViewTable a) ```{(0|$(a.parameterized_by_entity)*DF_ViewSpecFlag_ParameterizedByEntity|$(a.project_specific)*DF_ViewSpecFlag_ProjectSpecific|$(a.can_serialize)*DF_ViewSpecFlag_CanSerialize|$(a.can_filter)*DF_ViewSpecFlag_CanFilter|$(a.filter_is_code)*DF_ViewSpecFlag_FilterIsCode|$(a.typing_automatically_filters)*DF_ViewSpecFlag_TypingAutomaticallyFilters), str8_lit_comp("$(a.name_lower)"), str8_lit_comp("$(a.display_string)"), DF_IconKind_$(a.icon), DF_VIEW_SETUP_FUNCTION_NAME($(a.name)), DF_VIEW_CMD_FUNCTION_NAME($(a.name)), DF_VIEW_UI_FUNCTION_NAME($(a.name))}```;
+  @expand(DF_GfxViewTable a) ```{(0|$(a.parameterized_by_entity)*DF_ViewSpecFlag_ParameterizedByEntity|$(a.project_specific)*DF_ViewSpecFlag_ProjectSpecific|$(a.can_serialize)*DF_ViewSpecFlag_CanSerialize|$(a.can_filter)*DF_ViewSpecFlag_CanFilter|$(a.filter_is_code)*DF_ViewSpecFlag_FilterIsCode|$(a.typing_automatically_filters)*DF_ViewSpecFlag_TypingAutomaticallyFilters), str8_lit_comp("$(a.name_lower)"), str8_lit_comp("$(a.display_string)"), DF_IconKind_$(a.icon), DF_VIEW_SETUP_FUNCTION_NAME($(a.name_lower)), DF_VIEW_CMD_FUNCTION_NAME($(a.name_lower)), DF_VIEW_UI_FUNCTION_NAME($(a.name_lower))}```;
 }
 
 ////////////////////////////////
@@ -317,25 +317,25 @@ DF_CmdParamSlot2ViewSpecMap:
 //
 // NOTE(rjf): see @view_rule_info
 
-@table(string     vr  ls  ru  vu  view_spec_name)
+@table(string     vr  ls  ru  vu)
 DF_GfxViewRuleTable:
 {
-  {"array"         -   -   -   -   ""                              }
-  {"list"          x   -   -   -   ""                              }
-  {"dec"           -   x   -   -   ""                              }
-  {"bin"           -   x   -   -   ""                              }
-  {"oct"           -   x   -   -   ""                              }
-  {"hex"           -   x   -   -   ""                              }
-  {"only"          x   x   -   -   ""                              }
-  {"omit"          x   x   -   -   ""                              }
-  {"no_addr"       -   x   -   -   ""                              }
-  {"checkbox"      -   -   x   -   ""                              }
-  {"rgba"          -   -   x   x   "color_rgba"                    }
-  {"text"          -   -   -   x   "code"                          }
-  {"disasm"        -   -   -   x   "disassembly"                   }
-  {"memory"        -   -   -   x   "memory"                        }
-  {"bitmap"        -   -   -   x   "bitmap"                        }
-  {"geo3d"         -   -   -   x   "geometry_3d"                   }
+  {"array"         -   -   -   -   }
+  {"list"          x   -   -   -   }
+  {"dec"           -   x   -   -   }
+  {"bin"           -   x   -   -   }
+  {"oct"           -   x   -   -   }
+  {"hex"           -   x   -   -   }
+  {"only"          x   x   -   -   }
+  {"omit"          x   x   -   -   }
+  {"no_addr"       -   x   -   -   }
+  {"checkbox"      -   -   x   -   }
+  {"color_rgba"    -   -   x   x   }
+  {"text"          -   -   -   x   }
+  {"disasm"        -   -   -   x   }
+  {"memory"        -   -   -   x   }
+  {"bitmap"        -   -   -   x   }
+  {"geo3d"         -   -   -   x   }
 }
 
 @gen
@@ -354,7 +354,7 @@ DF_GfxViewRuleTable:
 @data(DF_GfxViewRuleSpecInfo) @c_file df_g_gfx_view_rule_spec_info_table:
 {
   @expand(DF_GfxViewRuleTable a)
-    ```{ str8_lit_comp("$(a.string)"), (DF_GfxViewRuleSpecInfoFlag_VizRowProd*$(a.vr == "x"))|(DF_GfxViewRuleSpecInfoFlag_LineStringize*$(a.ls == "x"))|(DF_GfxViewRuleSpecInfoFlag_RowUI*$(a.ru == "x"))|(DF_GfxViewRuleSpecInfoFlag_ViewUI*$(a.vu == "x")), $(a.vr == "x" -> "DF_GFX_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_NAME("..a.name_lower..")") $(a.vr != "x" -> 0), $(a.ls == "x" -> "DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_NAME("..a.name_lower..")") $(a.ls != "x" -> 0), $(a.ru == "x" -> "DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_NAME("..a.name_lower..")") $(a.ru != "x" -> 0), str8_lit_comp("$(a.view_spec_name)") }```;
+    ```{ str8_lit_comp("$(a.string)"), (DF_GfxViewRuleSpecInfoFlag_VizRowProd*$(a.vr == "x"))|(DF_GfxViewRuleSpecInfoFlag_LineStringize*$(a.ls == "x"))|(DF_GfxViewRuleSpecInfoFlag_RowUI*$(a.ru == "x"))|(DF_GfxViewRuleSpecInfoFlag_ViewUI*$(a.vu == "x")), $(a.vr == "x" -> "DF_GFX_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_NAME("..a.name_lower..")") $(a.vr != "x" -> 0), $(a.ls == "x" -> "DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_NAME("..a.name_lower..")") $(a.ls != "x" -> 0), $(a.ru == "x" -> "DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_NAME("..a.name_lower..")") $(a.ru != "x" -> 0) }```;
 }
 
 ////////////////////////////////

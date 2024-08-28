@@ -458,18 +458,18 @@ struct DF_BitmapCanvasBoxDrawData
 };
 
 ////////////////////////////////
-//~ rjf: Geometry3D @view_types
+//~ rjf: Geo3D @view_types
 
-typedef struct DF_Geometry3DViewState DF_Geometry3DViewState;
-struct DF_Geometry3DViewState
+typedef struct DF_Geo3DViewState DF_Geo3DViewState;
+struct DF_Geo3DViewState
 {
   F32 yaw;
   F32 pitch;
   F32 zoom;
 };
 
-typedef struct DF_Geometry3DBoxDrawData DF_Geometry3DBoxDrawData;
-struct DF_Geometry3DBoxDrawData
+typedef struct DF_Geo3DBoxDrawData DF_Geo3DBoxDrawData;
+struct DF_Geo3DBoxDrawData
 {
   F32 yaw;
   F32 pitch;

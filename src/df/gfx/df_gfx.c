@@ -476,11 +476,11 @@ df_prefer_dasm_from_window(DF_Window *window)
   DF_View *view = df_selected_tab_from_panel(panel);
   DF_GfxViewKind view_kind = df_gfx_view_kind_from_string(view->spec->info.name);
   B32 result = 0;
-  if(view_kind == DF_GfxViewKind_Disassembly)
+  if(view_kind == DF_GfxViewKind_Disasm)
   {
     result = 1;
   }
-  else if(view_kind == DF_GfxViewKind_Code)
+  else if(view_kind == DF_GfxViewKind_Text)
   {
     result = 0;
   }
@@ -492,11 +492,11 @@ df_prefer_dasm_from_window(DF_Window *window)
     {
       DF_View *p_view = df_selected_tab_from_panel(p);
       DF_GfxViewKind p_view_kind = df_gfx_view_kind_from_string(p_view->spec->info.name);
-      if(p_view_kind == DF_GfxViewKind_Code)
+      if(p_view_kind == DF_GfxViewKind_Text)
       {
         has_src = 1;
       }
-      if(p_view_kind == DF_GfxViewKind_Disassembly)
+      if(p_view_kind == DF_GfxViewKind_Disasm)
       {
         has_dasm = 1;
       }
@@ -1591,10 +1591,10 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
                 case DF_GfxViewKind_Targets:       {if(df_view_is_nil(targets))             { needs_delete = 0; targets = view;} }break;
                 case DF_GfxViewKind_Scheduler:     {if(df_view_is_nil(scheduler))           { needs_delete = 0; scheduler = view;} }break;
                 case DF_GfxViewKind_Modules:       {if(df_view_is_nil(modules))             { needs_delete = 0; modules = view;} }break;
-                case DF_GfxViewKind_Disassembly:   {if(df_view_is_nil(disasm))              { needs_delete = 0; disasm = view;} }break;
+                case DF_GfxViewKind_Disasm:        {if(df_view_is_nil(disasm))              { needs_delete = 0; disasm = view;} }break;
                 case DF_GfxViewKind_Memory:        {if(df_view_is_nil(memory))              { needs_delete = 0; memory = view;} }break;
                 case DF_GfxViewKind_GettingStarted:{if(df_view_is_nil(getting_started))     { needs_delete = 0; getting_started = view;} }break;
-                case DF_GfxViewKind_Code:
+                case DF_GfxViewKind_Text:
                 {
                   needs_delete = 0;
                   df_handle_list_push(scratch.arena, &code_views, df_handle_from_view(view));
@@ -1697,7 +1697,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           if(df_view_is_nil(disasm))
           {
             disasm = df_view_alloc();
-            df_view_equip_spec(ws, disasm, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_Disassembly), str8_zero(), &md_nil_node);
+            df_view_equip_spec(ws, disasm, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_Disasm), str8_zero(), &md_nil_node);
           }
           if(layout == Layout_Default && df_view_is_nil(memory))
           {
@@ -2286,7 +2286,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           DF_Panel *panel = df_panel_from_handle(params.panel);
           DF_View *view = df_selected_tab_from_panel(panel);
           DF_GfxViewKind view_kind = df_gfx_view_kind_from_string(view->spec->info.name);
-          if(view_kind == DF_GfxViewKind_Code)
+          if(view_kind == DF_GfxViewKind_Text)
           {
             String8 file_path      = df_file_path_from_eval_string(scratch.arena, str8(view->query_buffer, view->query_string_size));
             String8 file_full_path = path_normalized_from_string(scratch.arena, file_path);
@@ -3134,7 +3134,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
               if(df_view_is_project_filtered(view)) { continue; }
               String8 view_file_path = df_file_path_from_eval_string(scratch.arena, str8(view->query_buffer, view->query_string_size));
               DF_GfxViewKind view_kind = df_gfx_view_kind_from_string(view->spec->info.name);
-              if((view_kind == DF_GfxViewKind_Code || view_kind == DF_GfxViewKind_PendingFile) &&
+              if((view_kind == DF_GfxViewKind_Text || view_kind == DF_GfxViewKind_PendingFile) &&
                  path_match_normalized(view_file_path, file_path))
               {
                 panel_w_this_src_code = panel;
@@ -3159,7 +3159,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             {
               if(df_view_is_project_filtered(view)) { continue; }
               DF_GfxViewKind view_kind = df_gfx_view_kind_from_string(view->spec->info.name);
-              if(view_kind == DF_GfxViewKind_Code)
+              if(view_kind == DF_GfxViewKind_Text)
               {
                 panel_w_any_src_code = panel;
                 break;
@@ -3180,7 +3180,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             {
               if(df_view_is_project_filtered(view)) { continue; }
               DF_GfxViewKind view_kind = df_gfx_view_kind_from_string(view->spec->info.name);
-              if(view_kind == DF_GfxViewKind_Disassembly && view->query_string_size == 0)
+              if(view_kind == DF_GfxViewKind_Disasm && view->query_string_size == 0)
               {
                 panel_w_disasm = panel;
                 view_w_disasm = view;
@@ -3265,7 +3265,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             {
               DF_View *view = df_view_alloc();
               String8 file_path_query = df_eval_string_from_file_path(scratch.arena, file_path);
-              df_view_equip_spec(ws, view, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_Code), file_path_query, &md_nil_node);
+              df_view_equip_spec(ws, view, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_Text), file_path_query, &md_nil_node);
               df_panel_insert_tab_view(dst_panel, dst_panel->last_tab_view, view);
               dst_view = view;
             }
@@ -3313,7 +3313,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             if(!df_panel_is_nil(dst_panel) && df_view_is_nil(view_w_disasm))
             {
               DF_View *view = df_view_alloc();
-              df_view_equip_spec(ws, view, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_Disassembly), str8_zero(), &md_nil_node);
+              df_view_equip_spec(ws, view, df_view_spec_from_gfx_view_kind(DF_GfxViewKind_Disasm), str8_zero(), &md_nil_node);
               df_panel_insert_tab_view(dst_panel, dst_panel->last_tab_view, view);
               dst_view = view;
             }
@@ -7258,7 +7258,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
           //- rjf: build empty view
           UI_Parent(view_container_box) if(df_view_is_nil(df_selected_tab_from_panel(panel)))
           {
-            DF_VIEW_UI_FUNCTION_NAME(Empty)(ws, panel, &df_g_nil_view, &md_nil_node, str8_zero(), content_rect);
+            DF_VIEW_UI_FUNCTION_NAME(empty)(ws, panel, &df_g_nil_view, &md_nil_node, str8_zero(), content_rect);
           }
           
           //- rjf: build tab view
