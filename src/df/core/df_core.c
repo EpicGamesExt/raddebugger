@@ -408,7 +408,7 @@ df_cfg_table_push_unparsed_string(Arena *arena, DF_CfgTable *table, String8 stri
     DF_CfgTree *tree = push_array(arena, DF_CfgTree, 1);
     SLLQueuePush_NZ(&df_g_nil_cfg_tree, val->first, val->last, tree, next);
     tree->source = source;
-    tree->root   = tln;
+    tree->root   = md_tree_copy(arena, tln);
   }
 }
 
@@ -7625,7 +7625,7 @@ df_core_begin_frame(Arena *arena, DF_CmdList *cmds, F32 dt)
             if(df_entity_is_nil(recent_project))
             {
               recent_project = df_entity_alloc(df_entity_root(), DF_EntityKind_RecentProject);
-              df_entity_equip_name(recent_project, cfg_path);
+              df_entity_equip_name(recent_project, path_normalized_from_string(scratch.arena, cfg_path));
               df_entity_equip_cfg_src(recent_project, DF_CfgSrc_User);
             }
           }
