@@ -6831,12 +6831,10 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
         case D_CmdKind_RunCommand:
         {
           D_CmdSpec *spec = params.cmd_spec;
-          if(spec != cmd->spec)
+          if(spec != cmd->spec && !d_cmd_spec_is_nil(spec))
           {
             d_cmd_spec_counter_inc(spec);
-            if(!(spec->info.query.flags & D_CmdQueryFlag_Required) &&
-               (spec->info.query.slot == D_CmdParamSlot_Null ||
-                d_cmd_params_has_slot(&params, spec->info.query.slot)))
+            if(!(spec->info.query.flags & D_CmdQueryFlag_Required))
             {
               d_cmd_list_push(arena, cmds, &params, spec);
             }

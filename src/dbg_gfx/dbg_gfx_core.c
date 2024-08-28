@@ -1365,18 +1365,17 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
           D_CmdSpec *spec = params.cmd_spec;
           
           // rjf: command simply executes - just no-op in this layer
-          if(!(spec->info.query.flags & D_CmdQueryFlag_Required) &&
-             !d_cmd_spec_is_nil(spec) &&
-             (spec->info.query.slot == D_CmdParamSlot_Null || d_cmd_params_has_slot(&params, spec->info.query.slot)))
+          if(!d_cmd_spec_is_nil(spec) && !(spec->info.query.flags & D_CmdQueryFlag_Required))
           {
           }
           
-          // rjf: command is missing arguments -> prep query
+          // rjf: command has required query -> prep query
           else
           {
             arena_clear(ws->query_cmd_arena);
             ws->query_cmd_spec   = d_cmd_spec_is_nil(spec) ? cmd->spec : spec;
             ws->query_cmd_params = df_cmd_params_copy(ws->query_cmd_arena, &params);
+            MemoryZeroArray(ws->query_cmd_params_mask);
             ws->query_view_selected = 1;
           }
         }break;
@@ -3384,22 +3383,22 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
         //- rjf: query completion
         case D_CmdKind_CompleteQuery:
         {
+          D_CmdParamSlot slot = ws->query_cmd_spec->info.query.slot;
+          
           // rjf: compound command parameters
-          if(ws->query_cmd_spec->info.query.slot != D_CmdParamSlot_Null &&
-             d_cmd_params_has_slot(&params, ws->query_cmd_spec->info.query.slot))
+          if(slot != D_CmdParamSlot_Null && !(ws->query_cmd_params_mask[slot/64] & (1ull<<(slot%64))))
           {
             D_CmdParams params_copy = df_cmd_params_copy(ws->query_cmd_arena, &params);
             Rng1U64 offset_range_in_params = d_cmd_param_slot_range_table[ws->query_cmd_spec->info.query.slot];
             MemoryCopy((U8 *)(&ws->query_cmd_params) + offset_range_in_params.min,
                        (U8 *)(&params_copy) + offset_range_in_params.min,
                        dim_1u64(offset_range_in_params));
-            d_cmd_params_mark_slot(&ws->query_cmd_params, ws->query_cmd_spec->info.query.slot);
+            ws->query_cmd_params_mask[slot/64] |= (1ull<<(slot%64));
           }
           
           // rjf: determine if command is ready to run
           B32 command_ready = 1;
-          if(ws->query_cmd_spec->info.query.slot != D_CmdParamSlot_Null &&
-             !d_cmd_params_has_slot(&ws->query_cmd_params, ws->query_cmd_spec->info.query.slot))
+          if(slot != D_CmdParamSlot_Null && !(ws->query_cmd_params_mask[slot/64] & (1ull<<(slot%64))))
           {
             command_ready = 0;
           }
@@ -3422,6 +3421,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
           arena_clear(ws->query_cmd_arena);
           ws->query_cmd_spec = &d_nil_cmd_spec;
           MemoryZeroStruct(&ws->query_cmd_params);
+          MemoryZeroArray(ws->query_cmd_params_mask);
           for(DF_View *v = ws->query_view_stack_top, *next = 0; !df_view_is_nil(v); v = next)
           {
             next = v->order_next;

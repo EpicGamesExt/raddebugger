@@ -632,6 +632,7 @@ struct DF_Window
   // rjf: query view stack
   Arena *query_cmd_arena;
   D_CmdSpec *query_cmd_spec;
+  U64 query_cmd_params_mask[(D_CmdParamSlot_COUNT + 63) / 64];
   D_CmdParams query_cmd_params;
   DF_View *query_view_stack_top;
   B32 query_view_selected;
