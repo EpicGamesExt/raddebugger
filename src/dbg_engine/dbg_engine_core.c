@@ -1270,8 +1270,7 @@ d_entity_notify_mutation(D_Entity *entity)
     D_EntityKindFlags flags = d_entity_kind_flags_table[entity->kind];
     if(e == entity && flags & D_EntityKindFlag_LeafMutProjectConfig)
     {
-      D_CmdParams p = {0};
-      d_push_cmd(&p, d_cmd_spec_from_kind(D_CmdKind_WriteProjectData));
+      d_cmd(D_CmdKind_WriteProjectData);
     }
     if(e == entity && flags & D_EntityKindFlag_LeafMutSoftHalt && d_ctrl_targets_running())
     {
@@ -6077,7 +6076,7 @@ d_query_cached_member_map_from_dbgi_key_voff(DI_Key *dbgi_key, U64 voff)
 //- rjf: top-level command dispatch
 
 internal void
-d_push_cmd(D_CmdParams *params, D_CmdSpec *spec)
+d_push_cmd(D_CmdSpec *spec, D_CmdParams *params)
 {
   // rjf: log
   if(params->os_event == 0 || params->os_event->kind != OS_EventKind_MouseMove)
@@ -6145,6 +6144,23 @@ d_push_cmd(D_CmdParams *params, D_CmdSpec *spec)
   d_cmd_list_push(d_state->root_cmd_arena, &d_state->root_cmds, params, spec);
 }
 
+internal void
+d_error(String8 string)
+{
+  d_cmd(D_CmdKind_Error, .string = string);
+}
+
+internal void
+d_errorf(char *fmt, ...)
+{
+  Temp scratch = scratch_begin(0, 0);
+  va_list args;
+  va_start(args, fmt);
+  String8 string = push_str8fv(scratch.arena, fmt, args);
+  d_error(string);
+  scratch_end(scratch);
+}
+
 ////////////////////////////////
 //~ rjf: Main Layer Top-Level Calls
 
@@ -6174,6 +6190,7 @@ d_init(CmdLine *cmdln, D_StateDeltaHistory *hist)
   d_state->view_rule_spec_table = push_array(arena, D_ViewRuleSpec *, d_state->view_rule_spec_table_size);
   d_state->seconds_til_autosave = 0.5f;
   d_state->hist = hist;
+  d_state->top_interact_regs = &d_state->base_interact_regs;
   
   // rjf: set up initial exception filtering rules
   for(CTRL_ExceptionCodeKind k = (CTRL_ExceptionCodeKind)0; k < CTRL_ExceptionCodeKind_COUNT; k = (CTRL_ExceptionCodeKind)(k+1))
@@ -6256,9 +6273,7 @@ d_init(CmdLine *cmdln, D_StateDeltaHistory *hist)
     for(D_CfgSrc src = (D_CfgSrc)0; src < D_CfgSrc_COUNT; src = (D_CfgSrc)(src+1))
     {
       d_state->cfg_path_arenas[src] = arena_alloc();
-      D_CmdParams params = d_cmd_params_zero();
-      params.file_path = path_normalized_from_string(scratch.arena, cfg_src_paths[src]);
-      d_push_cmd(&params, d_cmd_spec_from_kind(d_cfg_src_load_cmd_kind_table[src]));
+      d_cmd(d_cfg_src_load_cmd_kind_table[src], .file_path = path_normalized_from_string(scratch.arena, cfg_src_paths[src]));
     }
     
     // rjf: set up config table arena
@@ -8170,16 +8185,11 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
           String8 file_path = d_interact_regs()->file_path;
           if(file_path.size != 0)
           {
-            D_CmdParams p = d_cmd_params_zero();
-            p.file_path = file_path;
-            p.text_point = d_interact_regs()->cursor;
-            d_push_cmd(&p, d_cmd_spec_from_kind(D_CmdKind_RunToLine));
+            d_cmd(D_CmdKind_RunToLine, .file_path = file_path, .text_point = d_interact_regs()->cursor);
           }
           else
           {
-            D_CmdParams p = d_cmd_params_zero();
-            p.vaddr = d_interact_regs()->vaddr_range.min;
-            d_push_cmd(&p, d_cmd_spec_from_kind(D_CmdKind_RunToAddress));
+            d_cmd(D_CmdKind_RunToAddress, .vaddr = d_interact_regs()->vaddr_range.min);
           }
         }break;
         case D_CmdKind_SetNextStatement:
@@ -8261,21 +8271,15 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
           D_Entity *target = d_entity_from_handle(ended_process->entity_handle);
           if(target->kind == D_EntityKind_Target)
           {
-            D_CmdParams p = params;
-            p.entity = d_handle_from_entity(target);
-            d_push_cmd(&p, d_cmd_spec_from_kind(D_CmdKind_LaunchAndRun));
+            d_cmd(D_CmdKind_LaunchAndRun, .entity = d_handle_from_entity(target));
           }
           else if(d_entity_is_nil(target))
           {
-            D_CmdParams p = params;
-            p.string = str8_lit("The ended process' corresponding target is missing.");
-            d_push_cmd(&p, d_cmd_spec_from_kind(D_CmdKind_Error));
+            d_cmd(D_CmdKind_Error, .string = str8_lit("The ended process' corresponding target is missing."));
           }
           else if(d_entity_is_nil(ended_process))
           {
-            D_CmdParams p = params;
-            p.string = str8_lit("Invalid ended process.");
-            d_push_cmd(&p, d_cmd_spec_from_kind(D_CmdKind_Error));
+            d_cmd(D_CmdKind_Error, .string = str8_lit("Invalid ended process."));
           }
         }break;
         
@@ -8322,9 +8326,7 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
           }
           if(likely_not_in_admin_mode)
           {
-            D_CmdParams p = params;
-            p.string = str8_lit("Could not register as the just-in-time debugger, access was denied; try running the debugger as administrator.");
-            d_push_cmd(&p, d_cmd_spec_from_kind(D_CmdKind_Error));
+            d_cmd(D_CmdKind_Error, .string = str8_lit("Could not register as the just-in-time debugger, access was denied; try running the debugger as administrator."));
           }
 #else
           D_CmdParams p = params;
@@ -8540,8 +8542,7 @@ d_end_frame(void)
   if(d_state->entities_mut_soft_halt)
   {
     d_state->entities_mut_soft_halt = 0;
-    D_CmdParams params = d_cmd_params_zero();
-    d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_SoftHaltRefresh));
+    d_cmd(D_CmdKind_SoftHaltRefresh);
   }
   
   //- rjf: entity mutation -> send refreshed debug info map

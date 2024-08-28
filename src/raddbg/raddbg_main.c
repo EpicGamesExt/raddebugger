@@ -360,22 +360,18 @@ entry_point(CmdLine *cmd_line)
                   String8 error = d_cmd_params_apply_spec_query(scratch.arena, &params, cmd_spec, d_cmd_arg_part_from_string(msg));
                   if(error.size == 0)
                   {
-                    d_push_cmd(&params, cmd_spec);
+                    d_push_cmd(cmd_spec, &params);
                     df_gfx_request_frame();
                   }
                   else
                   {
-                    D_CmdParams params = df_cmd_params_from_window(dst_window);
-                    params.string = error;
-                    d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_Error));
+                    d_error(error);
                     df_gfx_request_frame();
                   }
                 }
                 else
                 {
-                  D_CmdParams params = df_cmd_params_from_window(dst_window);
-                  params.string = push_str8f(scratch.arena, "\"%S\" is not a command.", cmd_spec_string);
-                  d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_Error));
+                  d_errorf("\"%S\" is not a command.", cmd_spec_string);
                   df_gfx_request_frame();
                 }
               }
@@ -391,25 +387,21 @@ entry_point(CmdLine *cmd_line)
           if(auto_run)
           {
             auto_run = 0;
-            D_CmdParams params = df_cmd_params_from_gfx();
-            d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_LaunchAndRun));
+            d_cmd(D_CmdKind_LaunchAndRun);
           }
           
           //- rjf: auto step
           if(auto_step)
           {
             auto_step = 0;
-            D_CmdParams params = df_cmd_params_from_gfx();
-            d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_StepInto));
+            d_cmd(D_CmdKind_StepInto);
           }
           
           //- rjf: jit attach
           if(jit_attach)
           {
             jit_attach = 0;
-            D_CmdParams params = df_cmd_params_from_gfx();
-            params.id = jit_pid;
-            d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_Attach));
+            d_cmd(D_CmdKind_Attach, .id = jit_pid);
           }
           
           //- rjf: quit if no windows are left

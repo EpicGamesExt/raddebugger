@@ -406,7 +406,6 @@ D_CmdParamSlot_COUNT,
 typedef struct D_CmdParams D_CmdParams;
 struct D_CmdParams
 {
-U64 slot_props[(D_CmdParamSlot_COUNT + 63) / 64];
 D_Handle window;
 D_Handle panel;
 D_Handle dest_panel;

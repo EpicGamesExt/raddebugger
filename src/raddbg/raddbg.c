@@ -106,8 +106,7 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
       df_gfx_request_frame();
       df_unbind_spec(df_gfx_state->bind_change_cmd_spec, df_gfx_state->bind_change_binding);
       df_gfx_state->bind_change_active = 0;
-      D_CmdParams p = df_cmd_params_from_gfx();
-      d_push_cmd(&p, d_cmd_spec_from_kind(d_cfg_src_write_cmd_kind_table[D_CfgSrc_User]));
+      d_cmd(d_cfg_src_write_cmd_kind_table[D_CfgSrc_User]);
     }
     for(OS_Event *event = events.first, *next = 0; event != 0; event = next)
     {
@@ -134,8 +133,7 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
         U32 codepoint = os_codepoint_from_event_flags_and_key(event->flags, event->key);
         os_text(&events, os_handle_zero(), codepoint);
         os_eat_event(&events, event);
-        D_CmdParams p = df_cmd_params_from_gfx();
-        d_push_cmd(&p, d_cmd_spec_from_kind(d_cfg_src_write_cmd_kind_table[D_CfgSrc_User]));
+        d_cmd(d_cfg_src_write_cmd_kind_table[D_CfgSrc_User]);
         df_gfx_request_frame();
         break;
       }
@@ -168,8 +166,7 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
       if(!take && event->kind == OS_EventKind_WindowClose && window != 0)
       {
         take = 1;
-        D_CmdParams params = df_cmd_params_from_window(window);
-        d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_CloseWindow));
+        d_cmd(D_CmdKind_CloseWindow, .window = df_handle_from_window(window));
       }
       
       //- rjf: try menu bar operations
@@ -224,7 +221,7 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
           }
           U32 hit_char = os_codepoint_from_event_flags_and_key(event->flags, event->key);
           take = 1;
-          d_push_cmd(&params, run_spec);
+          d_push_cmd(run_spec, &params);
           if(event->flags & OS_EventFlag_Alt)
           {
             window->menu_bar_focus_press_started = 0;
@@ -244,7 +241,7 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
         String8 insertion8 = str8_from_32(scratch.arena, insertion32);
         D_CmdSpec *spec = d_cmd_spec_from_kind(D_CmdKind_InsertText);
         params.string = insertion8;
-        d_push_cmd(&params, spec);
+        d_push_cmd(spec, &params);
         df_gfx_request_frame();
         take = 1;
         if(event->flags & OS_EventFlag_Alt)
@@ -258,7 +255,7 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
       {
         take = 1;
         params.os_event = event;
-        d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_OSEvent));
+        d_push_cmd(d_cmd_spec_from_kind(D_CmdKind_OSEvent), &params);
       }
       
       //- rjf: take
@@ -336,6 +333,7 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
         last_focused_window = df_handle_from_window(w);
       }
       d_push_interact_regs();
+      d_interact_regs()->window = df_handle_from_window(w);
       df_window_update_and_render(scratch.arena, w, &cmds);
       D_InteractRegs *window_regs = d_pop_interact_regs();
       if(df_window_from_handle(last_focused_window) == w)
@@ -403,9 +401,7 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
     os_append_data_to_file_path(main_thread_log_path, log.strings[LogMsgKind_Info]);
     if(log.strings[LogMsgKind_UserError].size != 0)
     {
-      D_CmdParams p = df_cmd_params_from_gfx();
-      p.string = log.strings[LogMsgKind_UserError];
-      d_push_cmd(&p, d_cmd_spec_from_kind(D_CmdKind_Error));
+      d_error(log.strings[LogMsgKind_UserError]);
     }
   }
   

@@ -684,7 +684,6 @@ DF_DevToggleTable:
 
 @struct D_CmdParams:
 {
-  `U64 slot_props[(D_CmdParamSlot_COUNT + 63) / 64]`;
   @expand(D_CmdParamSlotTable a) `$(a.c_type) $(a.name_lower)`;
 }
 
