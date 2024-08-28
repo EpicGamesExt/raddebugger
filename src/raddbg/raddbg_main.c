@@ -367,7 +367,6 @@ entry_point(CmdLine *cmd_line)
                   {
                     D_CmdParams params = df_cmd_params_from_window(dst_window);
                     params.string = error;
-                    d_cmd_params_mark_slot(&params, D_CmdParamSlot_String);
                     d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_Error));
                     df_gfx_request_frame();
                   }
@@ -376,7 +375,6 @@ entry_point(CmdLine *cmd_line)
                 {
                   D_CmdParams params = df_cmd_params_from_window(dst_window);
                   params.string = push_str8f(scratch.arena, "\"%S\" is not a command.", cmd_spec_string);
-                  d_cmd_params_mark_slot(&params, D_CmdParamSlot_String);
                   d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_Error));
                   df_gfx_request_frame();
                 }
@@ -410,7 +408,6 @@ entry_point(CmdLine *cmd_line)
           {
             jit_attach = 0;
             D_CmdParams params = df_cmd_params_from_gfx();
-            d_cmd_params_mark_slot(&params, D_CmdParamSlot_ID);
             params.id = jit_pid;
             d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_Attach));
           }

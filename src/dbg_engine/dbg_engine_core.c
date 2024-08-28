@@ -567,18 +567,6 @@ d_cmd_params_zero(void)
   return p;
 }
 
-internal void
-d_cmd_params_mark_slot(D_CmdParams *params, D_CmdParamSlot slot)
-{
-  params->slot_props[slot/64] |= (1ull<<(slot%64));
-}
-
-internal B32
-d_cmd_params_has_slot(D_CmdParams *params, D_CmdParamSlot slot)
-{
-  return !!(params->slot_props[slot/64] & (1ull<<(slot%64)));
-}
-
 internal String8
 d_cmd_params_apply_spec_query(Arena *arena, D_CmdParams *params, D_CmdSpec *spec, String8 query)
 {
@@ -589,15 +577,12 @@ d_cmd_params_apply_spec_query(Arena *arena, D_CmdParams *params, D_CmdSpec *spec
     case D_CmdParamSlot_String:
     {
       params->string = push_str8_copy(arena, query);
-      d_cmd_params_mark_slot(params, D_CmdParamSlot_String);
     }break;
     case D_CmdParamSlot_FilePath:
     {
       String8TxtPtPair pair = str8_txt_pt_pair_from_string(query);
       params->file_path = push_str8_copy(arena, pair.string);
       params->text_point = pair.pt;
-      d_cmd_params_mark_slot(params, D_CmdParamSlot_FilePath);
-      d_cmd_params_mark_slot(params, D_CmdParamSlot_TextPoint);
     }break;
     case D_CmdParamSlot_TextPoint:
     {
@@ -606,7 +591,6 @@ d_cmd_params_apply_spec_query(Arena *arena, D_CmdParams *params, D_CmdSpec *spec
       {
         params->text_point.column = 1;
         params->text_point.line = v;
-        d_cmd_params_mark_slot(params, D_CmdParamSlot_TextPoint);
       }
       else
       {
@@ -637,32 +621,26 @@ d_cmd_params_apply_spec_query(Arena *arena, D_CmdParams *params, D_CmdSpec *spec
           case D_CmdParamSlot_VirtualAddr:
           {
             params->vaddr = u64;
-            d_cmd_params_mark_slot(params, D_CmdParamSlot_VirtualAddr);
           }break;
           case D_CmdParamSlot_VirtualOff:
           {
             params->voff = u64;
-            d_cmd_params_mark_slot(params, D_CmdParamSlot_VirtualOff);
           }break;
           case D_CmdParamSlot_Index:
           {
             params->index = u64;
-            d_cmd_params_mark_slot(params, D_CmdParamSlot_Index);
           }break;
           case D_CmdParamSlot_UnwindIndex:
           {
             params->unwind_index = u64;
-            d_cmd_params_mark_slot(params, D_CmdParamSlot_UnwindIndex);
           }break;
           case D_CmdParamSlot_InlineDepth:
           {
             params->inline_depth = u64;
-            d_cmd_params_mark_slot(params, D_CmdParamSlot_InlineDepth);
           }break;
           case D_CmdParamSlot_ID:
           {
             params->id = u64;
-            d_cmd_params_mark_slot(params, D_CmdParamSlot_ID);
           }break;
         }
       }
@@ -6280,7 +6258,6 @@ d_init(CmdLine *cmdln, D_StateDeltaHistory *hist)
       d_state->cfg_path_arenas[src] = arena_alloc();
       D_CmdParams params = d_cmd_params_zero();
       params.file_path = path_normalized_from_string(scratch.arena, cfg_src_paths[src]);
-      d_cmd_params_mark_slot(&params, D_CmdParamSlot_FilePath);
       d_push_cmd__root(&params, d_cmd_spec_from_kind(d_cfg_src_load_cmd_kind_table[src]));
     }
     
@@ -6388,7 +6365,6 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
             log_infof("stop_thread: \"%S\"\n", d_display_string_from_entity(scratch.arena, stop_thread));
             D_CmdParams params = d_cmd_params_zero();
             params.entity = d_handle_from_entity(stop_thread);
-            d_cmd_params_mark_slot(&params, D_CmdParamSlot_Entity);
             d_cmd_list_push(arena, cmds, &params, d_cmd_spec_from_kind(D_CmdKind_SelectThread));
           }
           
@@ -6400,7 +6376,6 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
             {
               D_CmdParams params = d_cmd_params_zero();
               params.entity = d_handle_from_entity(selected_thread);
-              d_cmd_params_mark_slot(&params, D_CmdParamSlot_Entity);
               d_cmd_list_push(arena, cmds, &params, d_cmd_spec_from_kind(D_CmdKind_FindThread));
             }
           }
@@ -6576,7 +6551,6 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
           {
             D_CmdParams params = d_cmd_params_zero();
             params.entity = d_handle_from_entity(entity);
-            d_cmd_params_mark_slot(&params, D_CmdParamSlot_Entity);
             d_cmd_list_push(arena, cmds, &params, d_cmd_spec_from_kind(D_CmdKind_SelectThread));
           }
         }break;
@@ -6923,7 +6897,6 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
           {
             D_CmdParams p = params;
             p.string = str8_lit("No active targets exist; cannot launch.");
-            d_cmd_params_mark_slot(&p, D_CmdParamSlot_String);
             d_cmd_list_push(arena, cmds, &p, d_cmd_spec_from_kind(D_CmdKind_Error));
           }
         }break;
@@ -6959,7 +6932,6 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
           {
             D_CmdParams p = params;
             p.string = str8_lit("No attached running processes exist; cannot kill.");
-            d_cmd_params_mark_slot(&p, D_CmdParamSlot_String);
             d_cmd_list_push(arena, cmds, &p, d_cmd_spec_from_kind(D_CmdKind_Error));
           }
         }break;
@@ -6985,7 +6957,6 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
           {
             D_CmdParams p = params;
             p.string = str8_lit("No attached running processes exist; cannot kill.");
-            d_cmd_params_mark_slot(&p, D_CmdParamSlot_String);
             d_cmd_list_push(arena, cmds, &p, d_cmd_spec_from_kind(D_CmdKind_Error));
           }
         }break;
@@ -7025,7 +6996,6 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
           {
             D_CmdParams p = params;
             p.string = str8_lit("Cannot run with all threads frozen.");
-            d_cmd_params_mark_slot(&p, D_CmdParamSlot_String);
             d_cmd_list_push(arena, cmds, &p, d_cmd_spec_from_kind(D_CmdKind_Error));
           }
         }break;
@@ -7042,7 +7012,6 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
             {
               D_CmdParams p = params;
               p.string = str8_lit("Must halt before stepping.");
-              d_cmd_params_mark_slot(&p, D_CmdParamSlot_String);
               d_cmd_list_push(arena, cmds, &p, d_cmd_spec_from_kind(D_CmdKind_Error));
             }
           }
@@ -7050,7 +7019,6 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
           {
             D_CmdParams p = params;
             p.string = str8_lit("Must thaw selected thread before stepping.");
-            d_cmd_params_mark_slot(&p, D_CmdParamSlot_String);
             d_cmd_list_push(arena, cmds, &p, d_cmd_spec_from_kind(D_CmdKind_Error));
           }
           else
@@ -7080,7 +7048,6 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
                 {
                   D_CmdParams p = params;
                   p.string = str8_lit("Could not find the return address of the current callstack frame successfully.");
-                  d_cmd_params_mark_slot(&p, D_CmdParamSlot_String);
                   d_cmd_list_push(arena, cmds, &p, d_cmd_spec_from_kind(D_CmdKind_Error));
                   good = 0;
                 }
@@ -7184,7 +7151,6 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
           {
             D_CmdParams params = d_cmd_params_zero();
             params.entity_list = d_handle_list_from_entity_list(scratch.arena, targets);
-            d_cmd_params_mark_slot(&params, D_CmdParamSlot_EntityList);
             d_cmd_list_push(arena, cmds, &params, d_cmd_spec_from_kind(D_CmdKind_LaunchAndRun));
           }
         }break;
@@ -7211,7 +7177,6 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
             D_EntityList targets = d_push_active_target_list(scratch.arena);
             D_CmdParams p = params;
             p.entity_list = d_handle_list_from_entity_list(scratch.arena, targets);
-            d_cmd_params_mark_slot(&p, D_CmdParamSlot_EntityList);
             d_cmd_list_push(arena, cmds, &p, d_cmd_spec_from_kind(D_CmdKind_LaunchAndInit));
           }
         }break;
@@ -7292,8 +7257,6 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
             }
           }
           D_CmdParams p = params;
-          d_cmd_params_mark_slot(&p, D_CmdParamSlot_UnwindIndex);
-          d_cmd_params_mark_slot(&p, D_CmdParamSlot_InlineDepth);
           p.unwind_index = next_unwind_idx;
           p.inline_depth = next_inline_dpt;
           d_cmd_list_push(arena, cmds, &p, d_cmd_spec_from_kind(D_CmdKind_SelectUnwind));
@@ -7318,7 +7281,6 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
           CTRL_MachineID machine_id = CTRL_MachineID_Local;
           D_CmdParams params = d_cmd_params_zero();
           params.entity = d_handle_from_entity(d_machine_entity_from_machine_id(machine_id));
-          d_cmd_params_mark_slot(&params, D_CmdParamSlot_Entity);
           d_cmd_list_push(arena, cmds, &params, d_cmd_spec_from_kind(D_CmdKind_FreezeMachine));
         }break;
         case D_CmdKind_ThawLocalMachine:
@@ -7326,7 +7288,6 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
           CTRL_MachineID machine_id = CTRL_MachineID_Local;
           D_CmdParams params = d_cmd_params_zero();
           params.entity = d_handle_from_entity(d_machine_entity_from_machine_id(machine_id));
-          d_cmd_params_mark_slot(&params, D_CmdParamSlot_Entity);
           d_cmd_list_push(arena, cmds, &params, d_cmd_spec_from_kind(D_CmdKind_ThawMachine));
         }break;
         
@@ -7502,7 +7463,6 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
           {
             D_CmdParams p = params;
             p.string = push_str8f(scratch.arena, "\"%S\" appears to refer to an existing file which is not a RADDBG config file. This would overwrite the file.", new_path);
-            d_cmd_params_mark_slot(&p, D_CmdParamSlot_String);
             d_cmd_list_push(arena, cmds, &p, d_cmd_spec_from_kind(D_CmdKind_Error));
           }
         }break;
@@ -8269,7 +8229,6 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
           }
           D_CmdParams p = params;
           p.entity = d_handle_from_entity(entity);
-          d_cmd_params_mark_slot(&p, D_CmdParamSlot_Entity);
           d_cmd_list_push(arena, cmds, &p, d_cmd_spec_from_kind(D_CmdKind_EditTarget));
           d_cmd_list_push(arena, cmds, &p, d_cmd_spec_from_kind(D_CmdKind_SelectTarget));
         }break;

@@ -439,7 +439,6 @@ df_code_view_build(Arena *arena, DF_Window *ws, DF_Panel *panel, DF_View *view, 
       {
         D_CmdParams params = df_cmd_params_from_view(ws, panel, view);
         params.string = push_str8f(scratch.arena, "Could not find \"%S\"", cv->find_text_fwd);
-        d_cmd_params_mark_slot(&params, D_CmdParamSlot_String);
         d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_Error));
       }
       scratch_end(scratch);
@@ -503,7 +502,6 @@ df_code_view_build(Arena *arena, DF_Window *ws, DF_Panel *panel, DF_View *view, 
       {
         D_CmdParams params = df_cmd_params_from_view(ws, panel, view);
         params.string = push_str8f(scratch.arena, "Could not find \"%S\"", cv->find_text_bwd);
-        d_cmd_params_mark_slot(&params, D_CmdParamSlot_String);
         d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_Error));
       }
       scratch_end(scratch);
@@ -580,7 +578,6 @@ df_code_view_build(Arena *arena, DF_Window *ws, DF_Panel *panel, DF_View *view, 
       ui_kill_action();
       D_CmdParams params = df_cmd_params_from_view(ws, panel, view);
       params.string = txt_string_from_info_data_txt_rng(text_info, text_data, sig.mouse_expr_rng);
-      d_cmd_params_mark_slot(&params, D_CmdParamSlot_String);
       d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_GoToName));
     }
     
@@ -590,7 +587,6 @@ df_code_view_build(Arena *arena, DF_Window *ws, DF_Panel *panel, DF_View *view, 
       cv->watch_expr_at_mouse = 0;
       D_CmdParams params = df_cmd_params_from_view(ws, panel, view);
       params.string = txt_string_from_info_data_txt_rng(text_info, text_data, sig.mouse_expr_rng);
-      d_cmd_params_mark_slot(&params, D_CmdParamSlot_String);
       d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_ToggleWatchExpression));
     }
     
@@ -1657,9 +1653,6 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
             p.string      = e_string_from_expr(scratch.arena, row->expr);
             p.view_spec   = df_view_spec_from_string(row->expand_ui_rule_spec->info.string);
             p.params_tree = row->expand_ui_rule_params;
-            d_cmd_params_mark_slot(&p, D_CmdParamSlot_String);
-            d_cmd_params_mark_slot(&p, D_CmdParamSlot_ViewSpec);
-            d_cmd_params_mark_slot(&p, D_CmdParamSlot_ParamsTree);
             d_push_cmd__root(&p, d_cmd_spec_from_kind(D_CmdKind_OpenTab));
           }
         }
@@ -1821,7 +1814,6 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                   {
                     D_CmdParams params = df_cmd_params_from_view(ws, panel, view);
                     params.string = str8_lit("Could not commit value successfully.");
-                    d_cmd_params_mark_slot(&params, D_CmdParamSlot_String);
                     d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_Error));
                   }
                 }break;
@@ -3001,7 +2993,6 @@ DF_VIEW_UI_FUNCTION_DEF(getting_started)
           {
             D_CmdParams params = df_cmd_params_from_view(ws, panel, view);
             params.cmd_spec = d_cmd_spec_from_kind(D_CmdKind_AddTarget);
-            d_cmd_params_mark_slot(&params, D_CmdParamSlot_CmdSpec);
             d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_RunCommand));
           }
         }break;
@@ -3024,7 +3015,6 @@ DF_VIEW_UI_FUNCTION_DEF(getting_started)
             {
               D_CmdParams params = df_cmd_params_from_view(ws, panel, view);
               params.entity = d_handle_from_entity(target);
-              d_cmd_params_mark_slot(&params, D_CmdParamSlot_Entity);
               d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_LaunchAndRun));
             }
             ui_spacer(ui_em(1.5f, 1));
@@ -3032,7 +3022,6 @@ DF_VIEW_UI_FUNCTION_DEF(getting_started)
             {
               D_CmdParams params = df_cmd_params_from_view(ws, panel, view);
               params.entity = d_handle_from_entity(target);
-              d_cmd_params_mark_slot(&params, D_CmdParamSlot_Entity);
               d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_LaunchAndInit));
             }
           }
@@ -3242,7 +3231,6 @@ DF_VIEW_UI_FUNCTION_DEF(commands)
     {
       DF_CmdListerItem *item = &cmd_array.v[0];
       params.cmd_spec = item->cmd_spec;
-      d_cmd_params_mark_slot(&params, D_CmdParamSlot_CmdSpec);
     }
     d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_CompleteQuery));
   }
@@ -3358,7 +3346,6 @@ DF_VIEW_UI_FUNCTION_DEF(commands)
       {
         D_CmdParams params = df_cmd_params_from_view(ws, panel, view);
         params.cmd_spec = item->cmd_spec;
-        d_cmd_params_mark_slot(&params, D_CmdParamSlot_CmdSpec);
         d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_CompleteQuery));
       }
     }
@@ -3560,7 +3547,6 @@ DF_VIEW_UI_FUNCTION_DEF(file_system)
     {
       D_CmdParams p = d_cmd_params_zero();
       p.file_path = path_query.path;
-      d_cmd_params_mark_slot(&p, D_CmdParamSlot_FilePath);
       d_push_cmd__root(&p, d_cmd_spec_from_kind(D_CmdKind_SetCurrentPath));
     }
     
@@ -3651,7 +3637,6 @@ DF_VIEW_UI_FUNCTION_DEF(file_system)
     {
       D_CmdParams params = df_cmd_params_from_view(ws, panel, view);
       params.file_path = query_normalized_with_opt_slash;
-      d_cmd_params_mark_slot(&params, D_CmdParamSlot_FilePath);
       d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_CompleteQuery));
     }
     
@@ -3670,7 +3655,6 @@ DF_VIEW_UI_FUNCTION_DEF(file_system)
       {
         D_CmdParams params = df_cmd_params_from_view(ws, panel, view);
         params.file_path = query_normalized_with_opt_slash;
-        d_cmd_params_mark_slot(&params, D_CmdParamSlot_FilePath);
         d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_CompleteQuery));
       }
     }
@@ -3680,7 +3664,6 @@ DF_VIEW_UI_FUNCTION_DEF(file_system)
     {
       D_CmdParams params = df_cmd_params_from_view(ws, panel, view);
       params.file_path = path_query.path;
-      d_cmd_params_mark_slot(&params, D_CmdParamSlot_FilePath);
       d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_CompleteQuery));
     }
     
@@ -3698,7 +3681,6 @@ DF_VIEW_UI_FUNCTION_DEF(file_system)
       {
         D_CmdParams params = df_cmd_params_from_view(ws, panel, view);
         params.file_path = push_str8f(scratch.arena, "%S%S", path_query.path, filename);
-        d_cmd_params_mark_slot(&params, D_CmdParamSlot_FilePath);
         d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_CompleteQuery));
       }
     }
@@ -3708,7 +3690,6 @@ DF_VIEW_UI_FUNCTION_DEF(file_system)
     {
       D_CmdParams params = df_cmd_params_from_view(ws, panel, view);
       params.file_path = query;
-      d_cmd_params_mark_slot(&params, D_CmdParamSlot_FilePath);
       d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_CompleteQuery));
     }
   }
@@ -3910,7 +3891,6 @@ DF_VIEW_UI_FUNCTION_DEF(file_system)
         {
           D_CmdParams params = df_cmd_params_from_view(ws, panel, view);
           params.file_path = new_path;
-          d_cmd_params_mark_slot(&params, D_CmdParamSlot_FilePath);
           d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_CompleteQuery));
         }
       }
@@ -4134,7 +4114,6 @@ DF_VIEW_UI_FUNCTION_DEF(system_processes)
     DF_ProcessInfo *info = &process_info_array.v[0];
     D_CmdParams params = df_cmd_params_from_view(ws, panel, view);
     params.id = info->info.pid;
-    d_cmd_params_mark_slot(&params, D_CmdParamSlot_ID);
     d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_CompleteQuery));
   }
   
@@ -4225,7 +4204,6 @@ DF_VIEW_UI_FUNCTION_DEF(system_processes)
       {
         D_CmdParams params = df_cmd_params_from_view(ws, panel, view);
         params.id = info->info.pid;
-        d_cmd_params_mark_slot(&params, D_CmdParamSlot_ID);
         d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_CompleteQuery));
       }
     }
@@ -4377,8 +4355,6 @@ DF_VIEW_UI_FUNCTION_DEF(entity_lister)
     D_Entity *ent = ent_arr.v[0].entity;
     D_CmdParams params = df_cmd_params_from_view(ws, panel, view);
     params.entity = d_handle_from_entity(ent);
-    d_cmd_params_mark_slot(&params, D_CmdParamSlot_Entity);
-    d_cmd_params_mark_slot(&params, D_CmdParamSlot_EntityList);
     d_handle_list_push(scratch.arena, &params.entity_list, params.entity);
     d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_CompleteQuery));
   }
@@ -4461,8 +4437,6 @@ DF_VIEW_UI_FUNCTION_DEF(entity_lister)
       {
         D_CmdParams params = df_cmd_params_from_view(ws, panel, view);
         params.entity = d_handle_from_entity(ent);
-        d_cmd_params_mark_slot(&params, D_CmdParamSlot_Entity);
-        d_cmd_params_mark_slot(&params, D_CmdParamSlot_EntityList);
         d_handle_list_push(scratch.arena, &params.entity_list, params.entity);
         d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_CompleteQuery));
       }
@@ -4544,7 +4518,6 @@ DF_VIEW_UI_FUNCTION_DEF(symbol_lister)
         {
           D_CmdParams p = df_cmd_params_from_view(ws, panel, view);
           p.string = name;
-          d_cmd_params_mark_slot(&p, D_CmdParamSlot_String);
           d_push_cmd__root(&p, d_cmd_spec_from_kind(D_CmdKind_CompleteQuery));
         }
         break;
@@ -4637,7 +4610,6 @@ DF_VIEW_UI_FUNCTION_DEF(symbol_lister)
       {
         D_CmdParams p = df_cmd_params_from_view(ws, panel, view);
         p.string = name;
-        d_cmd_params_mark_slot(&p, D_CmdParamSlot_String);
         d_push_cmd__root(&p, d_cmd_spec_from_kind(D_CmdKind_CompleteQuery));
       }
       if(ui_hovering(sig)) UI_Tooltip
@@ -4961,7 +4933,6 @@ DF_VIEW_UI_FUNCTION_DEF(target)
             {
               D_CmdParams params = df_cmd_params_from_view(ws, panel, view);
               params.cmd_spec = d_cmd_spec_from_kind(kv_info[idx].fill_with_file ? D_CmdKind_PickFile : D_CmdKind_PickFolder);
-              d_cmd_params_mark_slot(&params, D_CmdParamSlot_CmdSpec);
               d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_RunCommand));
               tv->pick_dst_kind = kv_info[idx].storage_child_kind;
             }
@@ -5087,7 +5058,6 @@ DF_VIEW_UI_FUNCTION_DEF(targets)
       {
         D_CmdParams params = df_cmd_params_from_view(ws, panel, view);
         params.cmd_spec = d_cmd_spec_from_kind(D_CmdKind_AddTarget);
-        d_cmd_params_mark_slot(&params, D_CmdParamSlot_CmdSpec);
         d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_RunCommand));
       }
     }
@@ -5151,7 +5121,6 @@ DF_VIEW_UI_FUNCTION_DEF(targets)
           {
             D_CmdParams params = df_cmd_params_from_view(ws, panel, view);
             params.entity = d_handle_from_entity(target);
-            d_cmd_params_mark_slot(&params, D_CmdParamSlot_Entity);
             d_handle_list_push(scratch.arena, &params.entity_list, params.entity);
             d_push_cmd__root(&params, d_cmd_spec_from_kind(ctrls[ctrl_idx].cmd));
           }
@@ -5232,8 +5201,6 @@ DF_VIEW_CMD_FUNCTION_DEF(file_path_map)
         D_CmdParams p = df_cmd_params_from_view(ws, panel, view);
         p.entity = d_handle_from_entity(storage_entity);
         p.file_path = pick_string;
-        d_cmd_params_mark_slot(&p, D_CmdParamSlot_Entity);
-        d_cmd_params_mark_slot(&p, D_CmdParamSlot_FilePath);
         d_push_cmd__root(&p, d_cmd_spec_from_kind(pick_side == Side_Min ?
                                                   D_CmdKind_SetFileOverrideLinkSrc :
                                                   D_CmdKind_SetFileOverrideLinkDst));
@@ -5409,7 +5376,6 @@ DF_VIEW_UI_FUNCTION_DEF(file_path_map)
         {
           D_CmdParams params = df_cmd_params_from_view(ws, panel, view);
           params.cmd_spec = d_cmd_spec_from_kind(D_CmdKind_PickFileOrFolder);
-          d_cmd_params_mark_slot(&params, D_CmdParamSlot_CmdSpec);
           d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_RunCommand));
           fpms->pick_file_dst_map = d_handle_from_entity(map);
           fpms->pick_file_dst_side = Side_Min;
@@ -5484,7 +5450,6 @@ DF_VIEW_UI_FUNCTION_DEF(file_path_map)
           {
             D_CmdParams params = df_cmd_params_from_view(ws, panel, view);
             params.cmd_spec = d_cmd_spec_from_kind(D_CmdKind_PickFileOrFolder);
-            d_cmd_params_mark_slot(&params, D_CmdParamSlot_CmdSpec);
             d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_RunCommand));
             fpms->pick_file_dst_map = d_handle_from_entity(map);
             fpms->pick_file_dst_side = Side_Max;
@@ -5501,8 +5466,6 @@ DF_VIEW_UI_FUNCTION_DEF(file_path_map)
     D_CmdParams p = df_cmd_params_from_view(ws, panel, view);
     p.entity = commit_map;
     p.file_path = new_string;
-    d_cmd_params_mark_slot(&p, D_CmdParamSlot_Entity);
-    d_cmd_params_mark_slot(&p, D_CmdParamSlot_FilePath);
     d_push_cmd__root(&p, d_cmd_spec_from_kind(commit_side == Side_Min ?
                                               D_CmdKind_SetFileOverrideLinkSrc :
                                               D_CmdKind_SetFileOverrideLinkDst));
@@ -5803,8 +5766,6 @@ DF_VIEW_UI_FUNCTION_DEF(auto_view_rules)
     D_CmdParams p = df_cmd_params_from_view(ws, panel, view);
     p.entity = commit_map;
     p.string = new_string;
-    d_cmd_params_mark_slot(&p, D_CmdParamSlot_Entity);
-    d_cmd_params_mark_slot(&p, D_CmdParamSlot_FilePath);
     d_push_cmd__root(&p, d_cmd_spec_from_kind(commit_side == Side_Min ?
                                               D_CmdKind_SetAutoViewRuleType :
                                               D_CmdKind_SetAutoViewRuleViewRule));
@@ -6030,7 +5991,6 @@ DF_VIEW_UI_FUNCTION_DEF(scheduler)
             D_CmdKind cmd_kind = frozen ? D_CmdKind_ThawEntity : D_CmdKind_FreezeEntity;
             D_CmdParams params = df_cmd_params_from_view(ws, panel, view);
             params.entity = d_handle_from_entity(entity);
-            d_cmd_params_mark_slot(&params, D_CmdParamSlot_Entity);
             d_push_cmd__root(&params, d_cmd_spec_from_kind(cmd_kind));
           }
         }
@@ -6057,8 +6017,6 @@ DF_VIEW_UI_FUNCTION_DEF(scheduler)
                 D_CmdParams params = df_cmd_params_from_view(ws, panel, view);
                 params.entity = d_handle_from_entity(entity);
                 d_handle_list_push(scratch.arena, &params.entity_list, d_handle_from_entity(entity));
-                d_cmd_params_mark_slot(&params, D_CmdParamSlot_Entity);
-                d_cmd_params_mark_slot(&params, D_CmdParamSlot_EntityList);
                 d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_Detach));
               }
             }
@@ -6068,7 +6026,6 @@ DF_VIEW_UI_FUNCTION_DEF(scheduler)
               {
                 D_CmdParams params = df_cmd_params_from_view(ws, panel, view);
                 d_handle_list_push(scratch.arena, &params.entity_list, d_handle_from_entity(entity));
-                d_cmd_params_mark_slot(&params, D_CmdParamSlot_EntityList);
                 d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_Restart));
               }
             }
@@ -6079,7 +6036,6 @@ DF_VIEW_UI_FUNCTION_DEF(scheduler)
               {
                 D_CmdParams params = df_cmd_params_from_view(ws, panel, view);
                 d_handle_list_push(scratch.arena, &params.entity_list, d_handle_from_entity(entity));
-                d_cmd_params_mark_slot(&params, D_CmdParamSlot_EntityList);
                 d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_Kill));
               }
             }
@@ -6433,7 +6389,6 @@ DF_VIEW_UI_FUNCTION_DEF(modules)
                 {
                   D_CmdParams params = df_cmd_params_from_view(ws, panel, view);
                   params.cmd_spec = d_cmd_spec_from_kind(D_CmdKind_PickFile);
-                  d_cmd_params_mark_slot(&params, D_CmdParamSlot_CmdSpec);
                   d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_RunCommand));
                   mv->pick_file_dst_entity = d_handle_from_entity(entity);
                 }
@@ -6899,7 +6854,6 @@ DF_VIEW_UI_FUNCTION_DEF(text)
       {
         D_CmdParams params = df_cmd_params_from_view(ws, panel, view);
         params.cmd_spec = d_cmd_spec_from_kind(D_CmdKind_PickFile);
-        d_cmd_params_mark_slot(&params, D_CmdParamSlot_CmdSpec);
         d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_RunCommand));
       }
       scratch_end(scratch);

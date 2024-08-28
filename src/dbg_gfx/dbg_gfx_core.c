@@ -511,13 +511,6 @@ internal D_CmdParams
 df_cmd_params_from_window(DF_Window *window)
 {
   D_CmdParams p = d_cmd_params_zero();
-  d_cmd_params_mark_slot(&p, D_CmdParamSlot_Window);
-  d_cmd_params_mark_slot(&p, D_CmdParamSlot_Panel);
-  d_cmd_params_mark_slot(&p, D_CmdParamSlot_View);
-  d_cmd_params_mark_slot(&p, D_CmdParamSlot_PreferDisassembly);
-  d_cmd_params_mark_slot(&p, D_CmdParamSlot_Entity);
-  d_cmd_params_mark_slot(&p, D_CmdParamSlot_UnwindIndex);
-  d_cmd_params_mark_slot(&p, D_CmdParamSlot_InlineDepth);
   p.window = df_handle_from_window(window);
   p.panel  = df_handle_from_panel(window->focused_panel);
   p.view   = df_handle_from_view(df_selected_tab_from_panel(window->focused_panel));
@@ -532,13 +525,6 @@ internal D_CmdParams
 df_cmd_params_from_panel(DF_Window *window, DF_Panel *panel)
 {
   D_CmdParams p = d_cmd_params_zero();
-  d_cmd_params_mark_slot(&p, D_CmdParamSlot_Window);
-  d_cmd_params_mark_slot(&p, D_CmdParamSlot_Panel);
-  d_cmd_params_mark_slot(&p, D_CmdParamSlot_View);
-  d_cmd_params_mark_slot(&p, D_CmdParamSlot_PreferDisassembly);
-  d_cmd_params_mark_slot(&p, D_CmdParamSlot_Entity);
-  d_cmd_params_mark_slot(&p, D_CmdParamSlot_UnwindIndex);
-  d_cmd_params_mark_slot(&p, D_CmdParamSlot_InlineDepth);
   p.window = df_handle_from_window(window);
   p.panel  = df_handle_from_panel(panel);
   p.view   = df_handle_from_view(df_selected_tab_from_panel(panel));
@@ -553,13 +539,6 @@ internal D_CmdParams
 df_cmd_params_from_view(DF_Window *window, DF_Panel *panel, DF_View *view)
 {
   D_CmdParams p = d_cmd_params_zero();
-  d_cmd_params_mark_slot(&p, D_CmdParamSlot_Window);
-  d_cmd_params_mark_slot(&p, D_CmdParamSlot_Panel);
-  d_cmd_params_mark_slot(&p, D_CmdParamSlot_View);
-  d_cmd_params_mark_slot(&p, D_CmdParamSlot_PreferDisassembly);
-  d_cmd_params_mark_slot(&p, D_CmdParamSlot_Entity);
-  d_cmd_params_mark_slot(&p, D_CmdParamSlot_UnwindIndex);
-  d_cmd_params_mark_slot(&p, D_CmdParamSlot_InlineDepth);
   p.window = df_handle_from_window(window);
   p.panel  = df_handle_from_panel(panel);
   p.view   = df_handle_from_view(view);
@@ -1322,7 +1301,6 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
           {
             D_CmdParams p = params;
             p.view_spec = view_spec;
-            d_cmd_params_mark_slot(&p, D_CmdParamSlot_ViewSpec);
             d_cmd_list_push(arena, cmds, &p, d_cmd_spec_from_kind(D_CmdKind_OpenTab));
           }
         }break;
@@ -1886,7 +1864,6 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
             D_CmdKind write_cmd = d_cfg_src_write_cmd_kind_table[src];
             D_CmdParams p = d_cmd_params_zero();
             p.file_path = d_cfg_path_from_src(src);
-            d_cmd_params_mark_slot(&p, D_CmdParamSlot_FilePath);
             d_push_cmd__root(&p, d_cmd_spec_from_kind(write_cmd));
           }
         }break;
@@ -2273,9 +2250,6 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
             p.window = df_handle_from_window(ws);
             p.panel = df_handle_from_panel(ws->focused_panel);
             p.entity = params.entity;
-            d_cmd_params_mark_slot(&p, D_CmdParamSlot_Window);
-            d_cmd_params_mark_slot(&p, D_CmdParamSlot_Panel);
-            d_cmd_params_mark_slot(&p, D_CmdParamSlot_Entity);
             d_cmd_list_push(arena, cmds, &p, d_cmd_spec_from_kind(D_CmdKind_PendingFile));
           }
 #endif
@@ -2746,19 +2720,12 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
               {
                 params.file_path = line.file_path;
                 params.text_point = line.pt;
-                d_cmd_params_mark_slot(&params, D_CmdParamSlot_FilePath);
-                d_cmd_params_mark_slot(&params, D_CmdParamSlot_TextPoint);
               }
               params.entity = d_handle_from_entity(thread);
               params.voff = rip_voff;
               params.vaddr = rip_vaddr;
               params.unwind_index = unwind_index;
               params.inline_depth = inline_depth;
-              d_cmd_params_mark_slot(&params, D_CmdParamSlot_Entity);
-              d_cmd_params_mark_slot(&params, D_CmdParamSlot_VirtualOff);
-              d_cmd_params_mark_slot(&params, D_CmdParamSlot_VirtualAddr);
-              d_cmd_params_mark_slot(&params, D_CmdParamSlot_UnwindIndex);
-              d_cmd_params_mark_slot(&params, D_CmdParamSlot_InlineDepth);
               d_cmd_list_push(arena, cmds, &params, d_cmd_spec_from_kind(D_CmdKind_FindCodeLocation));
             }
             
@@ -2771,11 +2738,6 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
               params.vaddr = rip_vaddr;
               params.unwind_index = unwind_index;
               params.inline_depth = inline_depth;
-              d_cmd_params_mark_slot(&params, D_CmdParamSlot_Entity);
-              d_cmd_params_mark_slot(&params, D_CmdParamSlot_VirtualOff);
-              d_cmd_params_mark_slot(&params, D_CmdParamSlot_VirtualAddr);
-              d_cmd_params_mark_slot(&params, D_CmdParamSlot_UnwindIndex);
-              d_cmd_params_mark_slot(&params, D_CmdParamSlot_InlineDepth);
               d_cmd_list_push(arena, cmds, &params, d_cmd_spec_from_kind(D_CmdKind_FindCodeLocation));
             }
             
@@ -2794,9 +2756,6 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
           params.entity = d_handle_from_entity(selected_thread);
           params.unwind_index = d_base_interact_regs()->unwind_count;
           params.inline_depth = d_base_interact_regs()->inline_depth;
-          d_cmd_params_mark_slot(&params, D_CmdParamSlot_Entity);
-          d_cmd_params_mark_slot(&params, D_CmdParamSlot_UnwindIndex);
-          d_cmd_params_mark_slot(&params, D_CmdParamSlot_InlineDepth);
           d_cmd_list_push(arena, cmds, &params, d_cmd_spec_from_kind(D_CmdKind_FindThread));
         }break;
         
@@ -2922,7 +2881,6 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
             {
               D_CmdParams p = params;
               p.string = push_str8f(scratch.arena, "`%S` could not be found.", name);
-              d_cmd_params_mark_slot(&p, D_CmdParamSlot_String);
               d_push_cmd__root(&p, d_cmd_spec_from_kind(D_CmdKind_Error));
             }
             
@@ -2936,8 +2894,6 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
                 {
                   p.file_path = lines.first->v.file_path;
                   p.text_point = lines.first->v.pt;
-                  d_cmd_params_mark_slot(&p, D_CmdParamSlot_FilePath);
-                  d_cmd_params_mark_slot(&p, D_CmdParamSlot_TextPoint);
                   if(voff_dbgi_key.path.size != 0)
                   {
                     D_EntityList modules = d_modules_from_dbgi_key(scratch.arena, &voff_dbgi_key);
@@ -2947,8 +2903,6 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
                     {
                       p.entity = d_handle_from_entity(process);
                       p.vaddr = module->vaddr_rng.min + lines.first->v.voff_range.min;
-                      d_cmd_params_mark_slot(&p, D_CmdParamSlot_Entity);
-                      d_cmd_params_mark_slot(&p, D_CmdParamSlot_VirtualAddr);
                     }
                   }
                 }
@@ -2963,8 +2917,6 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
               D_CmdParams p = params;
               p.file_path = path;
               p.text_point = txt_pt(1, 1);
-              d_cmd_params_mark_slot(&p, D_CmdParamSlot_FilePath);
-              d_cmd_params_mark_slot(&p, D_CmdParamSlot_TextPoint);
               d_cmd_list_push(arena, cmds, &p, d_cmd_spec_from_kind(D_CmdKind_FindCodeLocation));
             }
           }
@@ -2996,7 +2948,6 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
           {
             D_CmdParams params = df_cmd_params_from_window(ws);
             params.string = str8_lit("Invalid target.");
-            d_cmd_params_mark_slot(&params, D_CmdParamSlot_String);
             d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_Error));
           }
         }break;
@@ -3011,21 +2962,18 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
             {
               D_CmdParams params = df_cmd_params_from_window(ws);
               params.entity = d_handle_from_entity(entity);
-              d_cmd_params_mark_slot(&params, D_CmdParamSlot_Entity);
               d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_SpawnEntityView));
             }break;
             case D_EntityKind_Thread:
             {
               D_CmdParams params = df_cmd_params_from_window(ws);
               params.entity = d_handle_from_entity(entity);
-              d_cmd_params_mark_slot(&params, D_CmdParamSlot_Entity);
               d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_SelectThread));
             }break;
             case D_EntityKind_Target:
             {
               D_CmdParams params = df_cmd_params_from_window(ws);
               params.entity = d_handle_from_entity(entity);
-              d_cmd_params_mark_slot(&params, D_CmdParamSlot_Entity);
               d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_SelectTarget));
             }break;
           }
@@ -3042,7 +2990,6 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
             {
               D_CmdParams params = df_cmd_params_from_panel(ws, panel);
               params.entity = d_handle_from_entity(entity);
-              d_cmd_params_mark_slot(&params, D_CmdParamSlot_Entity);
               d_cmd_list_push(arena, cmds, &params, d_cmd_spec_from_kind(D_CmdKind_EditTarget));
             }break;
           }
@@ -3283,7 +3230,6 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
               dst_panel->selected_tab_view = df_handle_from_view(dst_view);
               D_CmdParams params = df_cmd_params_from_view(ws, dst_panel, dst_view);
               params.text_point = point;
-              d_cmd_params_mark_slot(&params, D_CmdParamSlot_TextPoint);
               d_cmd_list_push(arena, cmds, &params, d_cmd_spec_from_kind(D_CmdKind_GoToLine));
               d_cmd_list_push(arena, cmds, &params, d_cmd_spec_from_kind(cursor_snap_kind));
               panel_used_for_src_code = dst_panel;
@@ -3331,8 +3277,6 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
               D_CmdParams params = df_cmd_params_from_view(ws, dst_panel, dst_view);
               params.entity = d_handle_from_entity(process);
               params.vaddr = vaddr;
-              d_cmd_params_mark_slot(&params, D_CmdParamSlot_Entity);
-              d_cmd_params_mark_slot(&params, D_CmdParamSlot_VirtualAddr);
               d_cmd_list_push(arena, cmds, &params, d_cmd_spec_from_kind(D_CmdKind_GoToAddress));
               d_cmd_list_push(arena, cmds, &params, d_cmd_spec_from_kind(cursor_snap_kind));
             }
@@ -4005,8 +3949,6 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
             D_CmdParams params = df_cmd_params_from_window(ws);
             params.file_path = lines.first->v.file_path;
             params.text_point = lines.first->v.pt;
-            d_cmd_params_mark_slot(&params, D_CmdParamSlot_FilePath);
-            d_cmd_params_mark_slot(&params, D_CmdParamSlot_TextPoint);
             d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_FindCodeLocation));
           }
           ui_ctx_menu_close();
@@ -4026,8 +3968,6 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
             }
           }
           D_CmdParams params = df_cmd_params_from_window(ws);
-          d_cmd_params_mark_slot(&params, D_CmdParamSlot_Entity);
-          d_cmd_params_mark_slot(&params, D_CmdParamSlot_VirtualAddr);
           params.entity = d_handle_from_entity(thread);
           params.vaddr = vaddr;
           d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_FindCodeLocation));
@@ -4085,8 +4025,6 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
             D_CmdParams params = df_cmd_params_from_window(ws);
             params.entity = d_handle_from_entity(entity);
             params.string = str8(ws->entity_ctx_menu_input_buffer, ws->entity_ctx_menu_input_size);
-            d_cmd_params_mark_slot(&params, D_CmdParamSlot_Entity);
-            d_cmd_params_mark_slot(&params, D_CmdParamSlot_String);
             d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_NameEntity));
           }
         }
@@ -4110,8 +4048,6 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
               D_CmdParams params = df_cmd_params_from_window(ws);
               params.entity = d_handle_from_entity(condition);
               params.string = new_string;
-              d_cmd_params_mark_slot(&params, D_CmdParamSlot_Entity);
-              d_cmd_params_mark_slot(&params, D_CmdParamSlot_String);
               d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_NameEntity));
             }
             else if(!d_entity_is_nil(condition))
@@ -4138,8 +4074,6 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
               D_CmdParams params = df_cmd_params_from_window(ws);
               params.entity = d_handle_from_entity(exe);
               params.string = new_string;
-              d_cmd_params_mark_slot(&params, D_CmdParamSlot_Entity);
-              d_cmd_params_mark_slot(&params, D_CmdParamSlot_String);
               d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_NameEntity));
             }
             else if(!d_entity_is_nil(exe))
@@ -4166,8 +4100,6 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
               D_CmdParams params = df_cmd_params_from_window(ws);
               params.entity = d_handle_from_entity(args);
               params.string = new_string;
-              d_cmd_params_mark_slot(&params, D_CmdParamSlot_Entity);
-              d_cmd_params_mark_slot(&params, D_CmdParamSlot_String);
               d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_NameEntity));
             }
             else if(!d_entity_is_nil(args))
@@ -4195,7 +4127,6 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
         {
           D_CmdParams params = df_cmd_params_from_window(ws);
           params.entity = d_handle_from_entity(entity);
-          d_cmd_params_mark_slot(&params, D_CmdParamSlot_Entity);
           d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_DuplicateEntity));
           ui_ctx_menu_close();
         }
@@ -4205,7 +4136,6 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
         {
           D_CmdParams params = df_cmd_params_from_window(ws);
           params.entity = d_handle_from_entity(entity);
-          d_cmd_params_mark_slot(&params, D_CmdParamSlot_Entity);
           d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_EditEntity));
           ui_ctx_menu_close();
         }
@@ -4215,7 +4145,6 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
         {
           D_CmdParams params = df_cmd_params_from_window(ws);
           params.entity = d_handle_from_entity(entity);
-          d_cmd_params_mark_slot(&params, D_CmdParamSlot_Entity);
           d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_RemoveEntity));
           ui_ctx_menu_close();
         }
@@ -4228,14 +4157,12 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
           {
             D_CmdParams params = df_cmd_params_from_window(ws);
             params.entity = d_handle_from_entity(entity);
-            d_cmd_params_mark_slot(&params, D_CmdParamSlot_Entity);
             d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_EnableEntity));
           }
           if(is_enabled && ui_clicked(df_icon_buttonf(ws, DF_IconKind_CheckFilled, 0, "Disable###enabler")))
           {
             D_CmdParams params = df_cmd_params_from_window(ws);
             params.entity = d_handle_from_entity(entity);
-            d_cmd_params_mark_slot(&params, D_CmdParamSlot_Entity);
             d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_DisableEntity));
           }
         }
@@ -4249,14 +4176,12 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
           {
             D_CmdParams params = df_cmd_params_from_window(ws);
             params.entity = d_handle_from_entity(entity);
-            d_cmd_params_mark_slot(&params, D_CmdParamSlot_Entity);
             d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_ThawEntity));
           }
           if(!is_frozen && ui_clicked(df_icon_buttonf(ws, DF_IconKind_Unlocked, 0, "Freeze###freeze_thaw")))
           {
             D_CmdParams params = df_cmd_params_from_window(ws);
             params.entity = d_handle_from_entity(entity);
-            d_cmd_params_mark_slot(&params, D_CmdParamSlot_Entity);
             d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_FreezeEntity));
           }
         }
@@ -4292,13 +4217,11 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
               {
                 D_CmdParams p = d_cmd_params_zero();
                 p.file_path = path_w_slash;
-                d_cmd_params_mark_slot(&p, D_CmdParamSlot_FilePath);
                 d_push_cmd__root(&p, d_cmd_spec_from_kind(D_CmdKind_SetCurrentPath));
               }
               {
                 D_CmdParams p = df_cmd_params_from_window(ws);
                 p.cmd_spec = d_cmd_spec_from_kind(D_CmdKind_Open);
-                d_cmd_params_mark_slot(&p, D_CmdParamSlot_CmdSpec);
                 d_push_cmd__root(&p, d_cmd_spec_from_kind(D_CmdKind_RunCommand));
               }
               ui_ctx_menu_close();
@@ -4310,8 +4233,6 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
               D_CmdParams params = df_cmd_params_from_window(ws);
               params.file_path = d_full_path_from_entity(scratch.arena, entity);
               params.text_point = txt_pt(1, 1);
-              d_cmd_params_mark_slot(&params, D_CmdParamSlot_FilePath);
-              d_cmd_params_mark_slot(&params, D_CmdParamSlot_TextPoint);
               d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_FindCodeLocation));
               ui_ctx_menu_close();
             }
@@ -4331,7 +4252,6 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
               {
                 D_CmdParams params = df_cmd_params_from_window(ws);
                 params.entity = d_handle_from_entity(entity);
-                d_cmd_params_mark_slot(&params, D_CmdParamSlot_Entity);
                 d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_SelectThread));
                 ui_ctx_menu_close();
               }
@@ -4411,7 +4331,6 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
               {
                 D_CmdParams params = df_cmd_params_from_window(ws);
                 params.entity = d_handle_from_entity(entity);
-                d_cmd_params_mark_slot(&params, D_CmdParamSlot_Entity);
                 d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_FindThread));
                 ui_ctx_menu_close();
               }
@@ -4454,7 +4373,6 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
             {
               D_CmdParams params = df_cmd_params_from_window(ws);
               params.entity = d_handle_from_entity(entity);
-              d_cmd_params_mark_slot(&params, D_CmdParamSlot_Entity);
               d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_LaunchAndRun));
               ui_ctx_menu_close();
             }
@@ -4462,7 +4380,6 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
             {
               D_CmdParams params = df_cmd_params_from_window(ws);
               params.entity = d_handle_from_entity(entity);
-              d_cmd_params_mark_slot(&params, D_CmdParamSlot_Entity);
               d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_LaunchAndInit));
               ui_ctx_menu_close();
             }
@@ -4637,7 +4554,6 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
             D_CmdParams params = df_cmd_params_from_window(ws);
             {
               params.view = df_handle_from_view(view);
-              d_cmd_params_mark_slot(&params, D_CmdParamSlot_View);
             }
             d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_Filter));
             ui_ctx_menu_close();
@@ -4647,7 +4563,6 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
             D_CmdParams params = df_cmd_params_from_window(ws);
             {
               params.view = df_handle_from_view(view);
-              d_cmd_params_mark_slot(&params, D_CmdParamSlot_View);
             }
             d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_ClearFilter));
             ui_ctx_menu_close();
@@ -5277,7 +5192,6 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
                 {
                   D_CmdParams params = df_cmd_params_from_window(ws);
                   params.entity = d_handle_from_entity(target);
-                  d_cmd_params_mark_slot(&params, D_CmdParamSlot_Entity);
                   d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_EditTarget));
                   ui_ctx_menu_close();
                   ws->menu_bar_focused = 0;
@@ -5781,7 +5695,6 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
             {
               D_CmdParams p = df_cmd_params_from_window(ws);
               p.cmd_spec = d_cmd_spec_from_kind(D_CmdKind_OpenUser);
-              d_cmd_params_mark_slot(&p, D_CmdParamSlot_CmdSpec);
               d_push_cmd__root(&p, d_cmd_spec_from_kind(D_CmdKind_RunCommand));
             }
           }
@@ -5817,7 +5730,6 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
             {
               D_CmdParams p = df_cmd_params_from_window(ws);
               p.cmd_spec = d_cmd_spec_from_kind(D_CmdKind_OpenProject);
-              d_cmd_params_mark_slot(&p, D_CmdParamSlot_CmdSpec);
               d_push_cmd__root(&p, d_cmd_spec_from_kind(D_CmdKind_RunCommand));
             }
           }
@@ -6211,7 +6123,6 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
         {
           D_CmdParams p = df_cmd_params_from_window(ws);
           p.string = error;
-          d_cmd_params_mark_slot(&p, D_CmdParamSlot_String);
           d_push_cmd__root(&p, d_cmd_spec_from_kind(D_CmdKind_Error));
         }
         scratch_end(scratch);
@@ -6493,7 +6404,6 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
                       {
                         D_CmdParams params = df_cmd_params_from_window(ws);
                         params.string = str8_lit("Could not commit value successfully.");
-                        d_cmd_params_mark_slot(&params, D_CmdParamSlot_String);
                         d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_Error));
                       }
                     }
@@ -6526,7 +6436,6 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
                     {
                       D_CmdParams params = df_cmd_params_from_window(ws);
                       params.string = expr;
-                      d_cmd_params_mark_slot(&params, D_CmdParamSlot_String);
                       d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_ToggleWatchExpression));
                     }
                   }
@@ -7628,10 +7537,6 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
                   params.dest_panel = df_handle_from_panel(panel);
                   params.view = df_handle_from_view(view);
                   params.prev_view = df_handle_from_view(active_drop_site->prev_view);
-                  d_cmd_params_mark_slot(&params, D_CmdParamSlot_Panel);
-                  d_cmd_params_mark_slot(&params, D_CmdParamSlot_DestPanel);
-                  d_cmd_params_mark_slot(&params, D_CmdParamSlot_View);
-                  d_cmd_params_mark_slot(&params, D_CmdParamSlot_PrevView);
                   d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_MoveTab));
                 }
               }
@@ -7691,10 +7596,6 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
                   params.panel = df_handle_from_panel(src_panel);
                   params.dest_panel = df_handle_from_panel(panel);
                   params.view = df_handle_from_view(view);
-                  d_cmd_params_mark_slot(&params, D_CmdParamSlot_PrevView);
-                  d_cmd_params_mark_slot(&params, D_CmdParamSlot_Panel);
-                  d_cmd_params_mark_slot(&params, D_CmdParamSlot_DestPanel);
-                  d_cmd_params_mark_slot(&params, D_CmdParamSlot_View);
                   d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_MoveTab));
                   df_panel_notify_mutation(ws, panel);
                 }
@@ -7706,9 +7607,6 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
                   params.panel = df_handle_from_panel(panel);
                   params.text_point = payload.text_point;
                   params.entity = d_handle_from_entity(entity);
-                  d_cmd_params_mark_slot(&params, D_CmdParamSlot_Panel);
-                  d_cmd_params_mark_slot(&params, D_CmdParamSlot_TextPoint);
-                  d_cmd_params_mark_slot(&params, D_CmdParamSlot_Entity);
                   d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_SpawnEntityView));
                 }
               }
@@ -10137,7 +10035,6 @@ df_cmd_list_menu_buttons(DF_Window *ws, U64 count, D_CmdKind *cmds, U32 *fastpat
     {
       D_CmdParams params = df_cmd_params_from_window(ws);
       params.cmd_spec = spec;
-      d_cmd_params_mark_slot(&params, D_CmdParamSlot_CmdSpec);
       d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_RunCommand));
       ui_ctx_menu_close();
       ws->menu_bar_focused = 0;
@@ -10537,7 +10434,6 @@ df_entity_desc_button(DF_Window *ws, D_Entity *entity, FuzzyMatchRangeList *name
     {
       D_CmdParams params = df_cmd_params_from_window(ws);
       params.entity = d_handle_from_entity(entity);
-      d_cmd_params_mark_slot(&params, D_CmdParamSlot_Entity);
       d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_EntityRefFastPath));
     }
     
@@ -10597,8 +10493,6 @@ df_src_loc_button(DF_Window *ws, String8 file_path, TxtPt point)
     D_CmdParams params = df_cmd_params_from_window(ws);
     params.file_path = file_path;
     params.text_point = point;
-    d_cmd_params_mark_slot(&params, D_CmdParamSlot_FilePath);
-    d_cmd_params_mark_slot(&params, D_CmdParamSlot_TextPoint);
     d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_FindCodeLocation));
   }
   
@@ -11116,7 +11010,6 @@ df_code_slice(DF_Window *ws, DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *m
             {
               D_CmdParams params = df_cmd_params_from_window(ws);
               params.entity = d_handle_from_entity(thread);
-              d_cmd_params_mark_slot(&params, D_CmdParamSlot_Entity);
               d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_SelectThread));
               ui_kill_action();
             }
@@ -11197,7 +11090,6 @@ df_code_slice(DF_Window *ws, DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *m
             {
               D_CmdParams params = df_cmd_params_from_window(ws);
               params.entity = d_handle_from_entity(bp);
-              d_cmd_params_mark_slot(&params, D_CmdParamSlot_Entity);
               d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_RemoveBreakpoint));
             }
             
@@ -11257,7 +11149,6 @@ df_code_slice(DF_Window *ws, DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *m
             {
               D_CmdParams params = df_cmd_params_from_window(ws);
               params.entity = d_handle_from_entity(pin);
-              d_cmd_params_mark_slot(&params, D_CmdParamSlot_Entity);
               d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_RemoveEntity));
             }
             
@@ -13321,7 +13212,6 @@ df_gfx_begin_frame(Arena *arena, D_CmdList *cmds)
             {
               D_CmdParams p = df_cmd_params_from_window(w);
               p.string = push_str8_copy(arena, params.string);
-              d_cmd_params_mark_slot(&p, D_CmdParamSlot_String);
               d_push_cmd__root(&p, d_cmd_spec_from_kind(D_CmdKind_Error));
             }
           }
@@ -13365,7 +13255,6 @@ df_gfx_begin_frame(Arena *arena, D_CmdList *cmds)
                                                      running_processes.count == 1 ? ""   : "es");
               D_CmdParams p = df_cmd_params_from_window(ws);
               p.force_confirm = 1;
-              d_cmd_params_mark_slot(&p, D_CmdParamSlot_ForceConfirm);
               d_cmd_list_push(df_gfx_state->confirm_arena, &df_gfx_state->confirm_cmds, &p, d_cmd_spec_from_kind(D_CmdKind_CloseWindow));
             }
             
@@ -13458,9 +13347,6 @@ df_gfx_begin_frame(Arena *arena, D_CmdList *cmds)
               p.window = df_handle_from_window(window);
               p.panel = df_handle_from_panel(window->focused_panel);
               p.view = df_handle_from_view(df_selected_tab_from_panel(window->focused_panel));
-              d_cmd_params_mark_slot(&p, D_CmdParamSlot_Window);
-              d_cmd_params_mark_slot(&p, D_CmdParamSlot_Panel);
-              d_cmd_params_mark_slot(&p, D_CmdParamSlot_View);
               d_cmd_list_push(arena, cmds, &p, cmd->spec);
             }
           }
@@ -14148,14 +14034,12 @@ df_gfx_begin_frame(Arena *arena, D_CmdList *cmds)
         {
           D_CmdParams p = params;
           p.string = df_push_search_string(scratch.arena);
-          d_cmd_params_mark_slot(&p, D_CmdParamSlot_String);
           d_cmd_list_push(arena, cmds, &p, d_cmd_spec_from_kind(D_CmdKind_FindTextForward));
         }break;
         case D_CmdKind_FindPrev:
         {
           D_CmdParams p = params;
           p.string = df_push_search_string(scratch.arena);
-          d_cmd_params_mark_slot(&p, D_CmdParamSlot_String);
           d_cmd_list_push(arena, cmds, &p, d_cmd_spec_from_kind(D_CmdKind_FindTextBackward));
         }break;
       }

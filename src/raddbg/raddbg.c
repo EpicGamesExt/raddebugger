@@ -221,7 +221,6 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
           if(run_spec != spec)
           {
             params.cmd_spec = spec;
-            d_cmd_params_mark_slot(&params, D_CmdParamSlot_CmdSpec);
           }
           U32 hit_char = os_codepoint_from_event_flags_and_key(event->flags, event->key);
           take = 1;
@@ -245,7 +244,6 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
         String8 insertion8 = str8_from_32(scratch.arena, insertion32);
         D_CmdSpec *spec = d_cmd_spec_from_kind(D_CmdKind_InsertText);
         params.string = insertion8;
-        d_cmd_params_mark_slot(&params, D_CmdParamSlot_String);
         d_push_cmd__root(&params, spec);
         df_gfx_request_frame();
         take = 1;

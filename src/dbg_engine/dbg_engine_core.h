@@ -1218,8 +1218,6 @@ internal String8 d_cmd_arg_part_from_string(String8 string);
 
 //- rjf: command parameter bundles
 internal D_CmdParams d_cmd_params_zero(void);
-internal void d_cmd_params_mark_slot(D_CmdParams *params, D_CmdParamSlot slot);
-internal B32 d_cmd_params_has_slot(D_CmdParams *params, D_CmdParamSlot slot);
 internal String8 d_cmd_params_apply_spec_query(Arena *arena, D_CmdParams *params, D_CmdSpec *spec, String8 query);
 
 //- rjf: command lists
