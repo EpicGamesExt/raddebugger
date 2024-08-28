@@ -494,7 +494,7 @@ ui_mouse(void)
   return ui_state->mouse;
 }
 
-internal F_Tag
+internal FNT_Tag
 ui_icon_font(void)
 {
   return ui_state->icon_info.icon_font;
@@ -1427,7 +1427,7 @@ ui_end_build(void)
       UI_BoxRec rec = {0};
       for(UI_Box *b = box; !ui_box_is_nil(b); rec = ui_box_rec_df_pre(b, box), b = rec.next)
       {
-        if(b->flags & UI_BoxFlag_DrawText && b->flags & UI_BoxFlag_HasDisplayString && !f_tag_match(b->font, ui_icon_font()))
+        if(b->flags & UI_BoxFlag_DrawText && b->flags & UI_BoxFlag_HasDisplayString && !fnt_tag_match(b->font, ui_icon_font()))
         {
           String8 display_string = ui_box_display_string(b);
           str8_list_push(scratch.arena, &strs, display_string);
@@ -2457,11 +2457,11 @@ internal Vec2F32
 ui_box_text_position(UI_Box *box)
 {
   Vec2F32 result = {0};
-  F_Tag font = box->font;
+  FNT_Tag font = box->font;
   F32 font_size = box->font_size;
-  F_Metrics font_metrics = f_metrics_from_tag_size(font, font_size);
+  FNT_Metrics font_metrics = fnt_metrics_from_tag_size(font, font_size);
   result.y = floor_f32((box->rect.p0.y + box->rect.p1.y)/2.f) + font_metrics.capital_height/2.f;
-  if(!f_tag_match(font, ui_icon_font()))
+  if(!fnt_tag_match(font, ui_icon_font()))
   {
     result.y += font_metrics.descent/2;
   }
@@ -2492,10 +2492,10 @@ ui_box_text_position(UI_Box *box)
 internal U64
 ui_box_char_pos_from_xy(UI_Box *box, Vec2F32 xy)
 {
-  F_Tag font = box->font;
+  FNT_Tag font = box->font;
   F32 font_size = box->font_size;
   String8 line = ui_box_display_string(box);
-  U64 result = f_char_pos_from_tag_size_string_p(font, font_size, 0, box->tab_size, line, xy.x - ui_box_text_position(box).x);
+  U64 result = fnt_char_pos_from_tag_size_string_p(font, font_size, 0, box->tab_size, line, xy.x - ui_box_text_position(box).x);
   return result;
 }
 

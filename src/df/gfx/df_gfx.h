@@ -469,7 +469,7 @@ struct DF_CodeSliceParams
   DI_KeyList relevant_dbgi_keys;
   
   // rjf: visual parameters
-  F_Tag font;
+  FNT_Tag font;
   F32 font_size;
   F32 tab_size;
   String8 search_query;
@@ -804,7 +804,7 @@ struct DF_GfxState
   Arena *cfg_code_font_path_arena;
   String8 cfg_main_font_path;
   String8 cfg_code_font_path;
-  F_Tag cfg_font_tags[DF_FontSlot_COUNT]; // derivative from font paths
+  FNT_Tag cfg_font_tags[DF_FontSlot_COUNT]; // derivative from font paths
   
   // rjf: global settings
   DF_SettingVal cfg_setting_vals[DF_CfgSrc_COUNT][DF_SettingCode_COUNT];
@@ -1009,8 +1009,8 @@ internal void df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdLis
 ////////////////////////////////
 //~ rjf: Eval Viz
 
-internal F32 df_append_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags flags, U32 default_radix, F_Tag font, F32 font_size, F32 max_size, S32 depth, E_Eval eval, E_Member *member, DF_CfgTable *cfg_table, String8List *out);
-internal String8 df_value_string_from_eval(Arena *arena, DF_EvalVizStringFlags flags, U32 default_radix, F_Tag font, F32 font_size, F32 max_size, E_Eval eval, E_Member *member, DF_CfgTable *cfg_table);
+internal F32 df_append_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags flags, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size, S32 depth, E_Eval eval, E_Member *member, DF_CfgTable *cfg_table, String8List *out);
+internal String8 df_value_string_from_eval(Arena *arena, DF_EvalVizStringFlags flags, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size, E_Eval eval, E_Member *member, DF_CfgTable *cfg_table);
 
 ////////////////////////////////
 //~ rjf: Hover Eval
@@ -1055,9 +1055,9 @@ internal DF_ThemeColor df_theme_color_from_txt_token_kind(TXT_TokenKind kind);
 internal UI_Palette *df_palette_from_code(DF_Window *ws, DF_PaletteCode code);
 
 //- rjf: fonts/sizes
-internal F_Tag df_font_from_slot(DF_FontSlot slot);
+internal FNT_Tag df_font_from_slot(DF_FontSlot slot);
 internal F32 df_font_size_from_slot(DF_Window *ws, DF_FontSlot slot);
-internal F_RasterFlags df_raster_flags_from_slot(DF_Window *ws, DF_FontSlot slot);
+internal FNT_RasterFlags df_raster_flags_from_slot(DF_Window *ws, DF_FontSlot slot);
 
 //- rjf: settings
 internal DF_SettingVal df_setting_val_from_code(DF_Window *optional_window, DF_SettingCode code);

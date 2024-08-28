@@ -10,7 +10,7 @@
 typedef struct D_FancyString D_FancyString;
 struct D_FancyString
 {
-  F_Tag font;
+  FNT_Tag font;
   String8 string;
   Vec4F32 color;
   F32 size;
@@ -37,7 +37,7 @@ struct D_FancyStringList
 typedef struct D_FancyRun D_FancyRun;
 struct D_FancyRun
 {
-  F_Run run;
+  FNT_Run run;
   Vec4F32 color;
   F32 underline_thickness;
   F32 strikethrough_thickness;
@@ -111,7 +111,7 @@ internal U64 d_hash_from_string(String8 string);
 internal void d_fancy_string_list_push(Arena *arena, D_FancyStringList *list, D_FancyString *str);
 internal void d_fancy_string_list_concat_in_place(D_FancyStringList *dst, D_FancyStringList *to_push);
 internal String8 d_string_from_fancy_string_list(Arena *arena, D_FancyStringList *list);
-internal D_FancyRunList d_fancy_run_list_from_fancy_string_list(Arena *arena, F32 tab_size_px, F_RasterFlags flags, D_FancyStringList *strs);
+internal D_FancyRunList d_fancy_run_list_from_fancy_string_list(Arena *arena, F32 tab_size_px, FNT_RasterFlags flags, D_FancyStringList *strs);
 internal D_FancyRunList d_fancy_run_list_copy(Arena *arena, D_FancyRunList *src);
 
 ////////////////////////////////
@@ -183,9 +183,9 @@ internal void d_sub_bucket(D_Bucket *bucket);
 //~ rjf: Draw Call Helpers
 
 //- rjf: text
-internal void d_truncated_fancy_run_list(Vec2F32 p, D_FancyRunList *list, F32 max_x, F_Run trailer_run);
+internal void d_truncated_fancy_run_list(Vec2F32 p, D_FancyRunList *list, F32 max_x, FNT_Run trailer_run);
 internal void d_truncated_fancy_run_fuzzy_matches(Vec2F32 p, D_FancyRunList *list, F32 max_x, FuzzyMatchRangeList *ranges, Vec4F32 color);
-internal void d_text_run(Vec2F32 p, Vec4F32 color, F_Run run);
-internal void d_text(F_Tag font, F32 size, F32 base_align_px, F32 tab_size_px, F_RasterFlags flags, Vec2F32 p, Vec4F32 color, String8 string);
+internal void d_text_run(Vec2F32 p, Vec4F32 color, FNT_Run run);
+internal void d_text(FNT_Tag font, F32 size, F32 base_align_px, F32 tab_size_px, FNT_RasterFlags flags, Vec2F32 p, Vec4F32 color, String8 string);
 
 #endif // DRAW_H

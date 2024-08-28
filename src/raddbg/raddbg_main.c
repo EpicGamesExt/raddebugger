@@ -14,7 +14,7 @@
 #define R_INIT_MANUAL 1
 #define TEX_INIT_MANUAL 1
 #define GEO_INIT_MANUAL 1
-#define F_INIT_MANUAL 1
+#define FNT_INIT_MANUAL 1
 #define DF_INIT_MANUAL 1
 #define DF_GFX_INIT_MANUAL 1
 
@@ -233,7 +233,7 @@ entry_point(CmdLine *cmd_line)
         r_init(cmd_line);
         tex_init();
         geo_init();
-        f_init();
+        fnt_init();
         DF_StateDeltaHistory *hist = df_state_delta_history_alloc();
         df_core_init(cmd_line, hist);
         df_gfx_init(update_and_render, df_state_delta_history());

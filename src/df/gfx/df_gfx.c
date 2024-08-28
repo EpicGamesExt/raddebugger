@@ -1173,36 +1173,36 @@ df_window_open(Vec2F32 size, OS_Handle preferred_monitor, DF_CfgSrc cfg_src)
       Temp scratch = scratch_begin(0, 0);
       DF_FontSlot slot = english_font_slots[idx];
       String8 sample_text = str8_lit("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890~!@#$%^&*()-_+=[{]}\\|;:'\",<.>/?");
-      f_push_run_from_string(scratch.arena,
-                             df_font_from_slot(slot),
-                             df_font_size_from_slot(window, DF_FontSlot_Code),
-                             0, 0, 0,
-                             sample_text);
-      f_push_run_from_string(scratch.arena,
-                             df_font_from_slot(slot),
-                             df_font_size_from_slot(window, DF_FontSlot_Main),
-                             0, 0, 0,
-                             sample_text);
+      fnt_push_run_from_string(scratch.arena,
+                               df_font_from_slot(slot),
+                               df_font_size_from_slot(window, DF_FontSlot_Code),
+                               0, 0, 0,
+                               sample_text);
+      fnt_push_run_from_string(scratch.arena,
+                               df_font_from_slot(slot),
+                               df_font_size_from_slot(window, DF_FontSlot_Main),
+                               0, 0, 0,
+                               sample_text);
       scratch_end(scratch);
     }
     for(DF_IconKind icon_kind = DF_IconKind_Null; icon_kind < DF_IconKind_COUNT; icon_kind = (DF_IconKind)(icon_kind+1))
     {
       Temp scratch = scratch_begin(0, 0);
-      f_push_run_from_string(scratch.arena,
-                             df_font_from_slot(icon_font_slot),
-                             df_font_size_from_slot(window, icon_font_slot),
-                             0, 0, F_RasterFlag_Smooth,
-                             df_g_icon_kind_text_table[icon_kind]);
-      f_push_run_from_string(scratch.arena,
-                             df_font_from_slot(icon_font_slot),
-                             df_font_size_from_slot(window, DF_FontSlot_Main),
-                             0, 0, F_RasterFlag_Smooth,
-                             df_g_icon_kind_text_table[icon_kind]);
-      f_push_run_from_string(scratch.arena,
-                             df_font_from_slot(icon_font_slot),
-                             df_font_size_from_slot(window, DF_FontSlot_Code),
-                             0, 0, F_RasterFlag_Smooth,
-                             df_g_icon_kind_text_table[icon_kind]);
+      fnt_push_run_from_string(scratch.arena,
+                               df_font_from_slot(icon_font_slot),
+                               df_font_size_from_slot(window, icon_font_slot),
+                               0, 0, FNT_RasterFlag_Smooth,
+                               df_g_icon_kind_text_table[icon_kind]);
+      fnt_push_run_from_string(scratch.arena,
+                               df_font_from_slot(icon_font_slot),
+                               df_font_size_from_slot(window, DF_FontSlot_Main),
+                               0, 0, FNT_RasterFlag_Smooth,
+                               df_g_icon_kind_text_table[icon_kind]);
+      fnt_push_run_from_string(scratch.arena,
+                               df_font_from_slot(icon_font_slot),
+                               df_font_size_from_slot(window, DF_FontSlot_Code),
+                               0, 0, FNT_RasterFlag_Smooth,
+                               df_g_icon_kind_text_table[icon_kind]);
       scratch_end(scratch);
     }
   }
@@ -3602,9 +3602,9 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
     //
     {
       // rjf: gather font info
-      F_Tag main_font = df_font_from_slot(DF_FontSlot_Main);
+      FNT_Tag main_font = df_font_from_slot(DF_FontSlot_Main);
       F32 main_font_size = df_font_size_from_slot(ws, DF_FontSlot_Main);
-      F_Tag icon_font = df_font_from_slot(DF_FontSlot_Icons);
+      FNT_Tag icon_font = df_font_from_slot(DF_FontSlot_Icons);
       
       // rjf: build icon info
       UI_IconInfo icon_info = {0};
@@ -3650,9 +3650,9 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
       ui_push_pref_height(ui_em(2.75f, 1.f));
       ui_push_palette(df_palette_from_code(ws, DF_PaletteCode_Base));
       ui_push_blur_size(10.f);
-      F_RasterFlags text_raster_flags = 0;
-      if(df_setting_val_from_code(ws, DF_SettingCode_SmoothUIText).s32) {text_raster_flags |= F_RasterFlag_Smooth;}
-      if(df_setting_val_from_code(ws, DF_SettingCode_HintUIText).s32) {text_raster_flags |= F_RasterFlag_Hinted;}
+      FNT_RasterFlags text_raster_flags = 0;
+      if(df_setting_val_from_code(ws, DF_SettingCode_SmoothUIText).s32) {text_raster_flags |= FNT_RasterFlag_Smooth;}
+      if(df_setting_val_from_code(ws, DF_SettingCode_HintUIText).s32) {text_raster_flags |= FNT_RasterFlag_Hinted;}
       ui_push_text_raster_flags(text_raster_flags);
     }
     
@@ -6356,8 +6356,8 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
             E_Eval row_eval = e_eval_from_expr(scratch.arena, row->expr);
             String8 row_expr_string = df_expr_string_from_viz_row(scratch.arena, row);
             String8 row_display_value = df_value_string_from_eval(scratch.arena, DF_EvalVizStringFlag_ReadOnlyDisplayRules, default_radix, ui_top_font(), ui_top_font_size(), 500.f, row_eval, row->member, row->cfg_table);
-            expr_column_width_px = f_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, 0, row_expr_string).x + ui_top_font_size()*5.f;
-            value_column_width_px = f_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, 0, row_display_value).x + ui_top_font_size()*5.f;
+            expr_column_width_px = fnt_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, 0, row_expr_string).x + ui_top_font_size()*5.f;
+            value_column_width_px = fnt_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, 0, row_display_value).x + ui_top_font_size()*5.f;
             F32 total_dim_px = (expr_column_width_px + value_column_width_px);
             width_px = Min(80.f*ui_top_font_size(), total_dim_px*1.5f);
           }
@@ -8128,11 +8128,11 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
                  v4f32(1, 0, 1, 1), 1, 0, 1);
         }
         F32 max_x = 100000.f;
-        F_Run ellipses_run = {0};
+        FNT_Run ellipses_run = {0};
         if(!(box->flags & UI_BoxFlag_DisableTextTrunc))
         {
           max_x = (box->rect.x1-text_position.x);
-          ellipses_run = f_push_run_from_string(scratch.arena, box->font, box->font_size, 0, box->tab_size, 0, str8_lit("..."));
+          ellipses_run = fnt_push_run_from_string(scratch.arena, box->font, box->font_size, 0, box->tab_size, 0, str8_lit("..."));
         }
         d_truncated_fancy_run_list(text_position, &box->display_string_runs, max_x, ellipses_run);
         if(box->flags & UI_BoxFlag_HasFuzzyMatchRanges)
@@ -8351,11 +8351,11 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
 #if 1
       Vec2F32 p = add_2f32(os_mouse_from_window(ws->os), v2f32(30, 0));
       d_rect(os_client_rect_from_window(ws->os), v4f32(0, 0, 0, 0.9f), 0, 0, 0);
-      F_Run trailer_run = f_push_run_from_string(scratch.arena, df_font_from_slot(DF_FontSlot_Main), 16.f, 0, 0, 0, str8_lit("..."));
+      FNT_Run trailer_run = fnt_push_run_from_string(scratch.arena, df_font_from_slot(DF_FontSlot_Main), 16.f, 0, 0, 0, str8_lit("..."));
       D_FancyStringList strs = {0};
       D_FancyString str = {df_font_from_slot(DF_FontSlot_Main), str8_lit("Shift + F5"), v4f32(1, 1, 1, 1), 72.f, 0.f};
       d_fancy_string_list_push(scratch.arena, &strs, &str);
-      D_FancyRunList runs = d_fancy_run_list_from_fancy_string_list(scratch.arena, 0, F_RasterFlag_Smooth, &strs);
+      D_FancyRunList runs = d_fancy_run_list_from_fancy_string_list(scratch.arena, 0, FNT_RasterFlag_Smooth, &strs);
       d_truncated_fancy_run_list(p, &runs, 1000000.f, trailer_run);
       d_rect(r2f32(p, add_2f32(p, runs.dim)), v4f32(1, 0, 0, 0.5f), 0, 1, 0);
       d_rect(r2f32(sub_2f32(p, v2f32(4, 4)), add_2f32(p, v2f32(4, 4))), v4f32(1, 0, 1, 1), 0, 0, 0);
@@ -8370,7 +8370,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
       D_FancyString str3 = {df_font_from_slot(DF_FontSlot_Code), str8_lit("very fancy text!"), v4f32(1, 0.8f, 0.4f, 1), 18.f, 4.f, 4.f};
       d_fancy_string_list_push(scratch.arena, &strs, &str3);
       D_FancyRunList runs = d_fancy_run_list_from_fancy_string_list(scratch.arena, 0, 0, &strs);
-      F_Run trailer_run = f_push_run_from_string(scratch.arena, df_font_from_slot(DF_FontSlot_Main), 16.f, 0, 0, 0, str8_lit("..."));
+      FNT_Run trailer_run = fnt_push_run_from_string(scratch.arena, df_font_from_slot(DF_FontSlot_Main), 16.f, 0, 0, 0, str8_lit("..."));
       F32 limit = 500.f + sin_f32(df_time_in_seconds()/10.f)*200.f;
       d_truncated_fancy_run_list(p, &runs, limit, trailer_run);
       d_rect(r2f32p(p.x+limit, 0, p.x+limit+2.f, 1000), v4f32(1, 0, 0, 1), 0, 0, 0);
@@ -8397,7 +8397,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, DF_CmdList *cmds)
 //~ rjf: Eval Viz
 
 internal F32
-df_append_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags flags, U32 default_radix, F_Tag font, F32 font_size, F32 max_size, S32 depth, E_Eval eval, E_Member *member, DF_CfgTable *cfg_table, String8List *out)
+df_append_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags flags, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size, S32 depth, E_Eval eval, E_Member *member, DF_CfgTable *cfg_table, String8List *out)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(&arena, 1);
@@ -8443,7 +8443,7 @@ df_append_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags flags, U32
     {
       E_Eval value_eval = e_value_eval_from_eval(eval);
       String8 string = df_string_from_simple_typed_eval(arena, flags, radix, value_eval);
-      space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, string).x;
+      space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, string).x;
       str8_list_push(arena, out, string);
     }break;
     
@@ -8494,8 +8494,8 @@ df_append_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags flags, U32
           case 4: {string = str8_from_32(arena, str32_cstring((U32 *)string_buffer));}break;
         }
         String8 string_escaped = df_escaped_from_raw_string(arena, string);
-        space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, string_escaped).x;
-        space_taken += 2*f_dim_from_tag_size_string(font, font_size, 0, 0, str8_lit("\"")).x;
+        space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, string_escaped).x;
+        space_taken += 2*fnt_dim_from_tag_size_string(font, font_size, 0, 0, str8_lit("\"")).x;
         str8_list_push(arena, out, str8_lit("\""));
         str8_list_push(arena, out, string_escaped);
         str8_list_push(arena, out, str8_lit("\""));
@@ -8509,7 +8509,7 @@ df_append_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags flags, U32
       {
         did_content = 1;
         str8_list_push(arena, out, symbol_name);
-        space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, symbol_name).x;
+        space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, symbol_name).x;
       }
       
       // rjf: special case: need symbol name, don't have one
@@ -8521,7 +8521,7 @@ df_append_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags flags, U32
         did_content = 1;
         String8 string = str8_lit("???");
         str8_list_push(arena, out, string);
-        space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, string).x;
+        space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, string).x;
       }
       
       // rjf: descend for all other cases
@@ -8538,7 +8538,7 @@ df_append_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags flags, U32
         {
           String8 ellipses = str8_lit("...");
           str8_list_push(arena, out, ellipses);
-          space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, ellipses).x;
+          space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, ellipses).x;
         }
       }
       
@@ -8550,16 +8550,16 @@ df_append_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags flags, U32
         if(did_content)
         {
           String8 ptr_prefix = str8_lit(" (");
-          space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, ptr_prefix).x;
+          space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, ptr_prefix).x;
           str8_list_push(arena, out, ptr_prefix);
         }
         String8 string = df_string_from_simple_typed_eval(arena, flags, radix, value_eval);
-        space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, string).x;
+        space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, string).x;
         str8_list_push(arena, out, string);
         if(did_content)
         {
           String8 close = str8_lit(")");
-          space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, close).x;
+          space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, close).x;
           str8_list_push(arena, out, close);
         }
       }
@@ -8615,8 +8615,8 @@ df_append_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags flags, U32
           case 4: {string = str8_from_32(arena, str32_cstring((U32 *)string_buffer));}break;
         }
         String8 string_escaped = df_escaped_from_raw_string(arena, string);
-        space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, string_escaped).x;
-        space_taken += 2*f_dim_from_tag_size_string(font, font_size, 0, 0, str8_lit("\"")).x;
+        space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, string_escaped).x;
+        space_taken += 2*fnt_dim_from_tag_size_string(font, font_size, 0, 0, str8_lit("\"")).x;
         str8_list_push(arena, out, str8_lit("\""));
         str8_list_push(arena, out, string_escaped);
         str8_list_push(arena, out, str8_lit("\""));
@@ -8631,7 +8631,7 @@ df_append_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags flags, U32
         {
           String8 bracket = str8_lit("[");
           str8_list_push(arena, out, bracket);
-          space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, bracket).x;
+          space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, bracket).x;
         }
         
         // rjf: build contents
@@ -8645,13 +8645,13 @@ df_append_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags flags, U32
             if(idx+1 < array_count)
             {
               String8 comma = str8_lit(", ");
-              space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, comma).x;
+              space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, comma).x;
               str8_list_push(arena, out, comma);
             }
             if(space_taken > max_size && idx+1 < array_count)
             {
               String8 ellipses = str8_lit("...");
-              space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, ellipses).x;
+              space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, ellipses).x;
               str8_list_push(arena, out, ellipses);
             }
           }
@@ -8660,14 +8660,14 @@ df_append_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags flags, U32
         {
           String8 ellipses = str8_lit("...");
           str8_list_push(arena, out, ellipses);
-          space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, ellipses).x;
+          space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, ellipses).x;
         }
         
         // rjf: ]
         {
           String8 bracket = str8_lit("]");
           str8_list_push(arena, out, bracket);
-          space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, bracket).x;
+          space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, bracket).x;
         }
       }
     }break;
@@ -8684,7 +8684,7 @@ df_append_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags flags, U32
       {
         String8 brace = str8_lit("{");
         str8_list_push(arena, out, brace);
-        space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, brace).x;
+        space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, brace).x;
       }
       
       // rjf: content
@@ -8701,13 +8701,13 @@ df_append_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags flags, U32
           if(member_idx+1 < filtered_data_members.count)
           {
             String8 comma = str8_lit(", ");
-            space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, comma).x;
+            space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, comma).x;
             str8_list_push(arena, out, comma);
           }
           if(space_taken > max_size && member_idx+1 < filtered_data_members.count)
           {
             String8 ellipses = str8_lit("...");
-            space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, ellipses).x;
+            space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, ellipses).x;
             str8_list_push(arena, out, ellipses);
           }
         }
@@ -8716,14 +8716,14 @@ df_append_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags flags, U32
       {
         String8 ellipses = str8_lit("...");
         str8_list_push(arena, out, ellipses);
-        space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, ellipses).x;
+        space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, ellipses).x;
       }
       
       // rjf: close brace
       {
         String8 brace = str8_lit("}");
         str8_list_push(arena, out, brace);
-        space_taken += f_dim_from_tag_size_string(font, font_size, 0, 0, brace).x;
+        space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, brace).x;
       }
     }break;
   }
@@ -8734,7 +8734,7 @@ df_append_value_strings_from_eval(Arena *arena, DF_EvalVizStringFlags flags, U32
 }
 
 internal String8
-df_value_string_from_eval(Arena *arena, DF_EvalVizStringFlags flags, U32 default_radix, F_Tag font, F32 font_size, F32 max_size, E_Eval eval, E_Member *member, DF_CfgTable *cfg_table)
+df_value_string_from_eval(Arena *arena, DF_EvalVizStringFlags flags, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size, E_Eval eval, E_Member *member, DF_CfgTable *cfg_table)
 {
   Temp scratch = scratch_begin(&arena, 1);
   String8List strs = {0};
@@ -9213,10 +9213,10 @@ df_palette_from_code(DF_Window *ws, DF_PaletteCode code)
 
 //- rjf: fonts/sizes
 
-internal F_Tag
+internal FNT_Tag
 df_font_from_slot(DF_FontSlot slot)
 {
-  F_Tag result = df_gfx_state->cfg_font_tags[slot];
+  FNT_Tag result = df_gfx_state->cfg_font_tags[slot];
   return result;
 }
 
@@ -9258,16 +9258,16 @@ df_font_size_from_slot(DF_Window *ws, DF_FontSlot slot)
   return result;
 }
 
-internal F_RasterFlags
+internal FNT_RasterFlags
 df_raster_flags_from_slot(DF_Window *ws, DF_FontSlot slot)
 {
-  F_RasterFlags flags = F_RasterFlag_Smooth|F_RasterFlag_Hinted;
+  FNT_RasterFlags flags = FNT_RasterFlag_Smooth|FNT_RasterFlag_Hinted;
   switch(slot)
   {
     default:{}break;
-    case DF_FontSlot_Icons:{flags = F_RasterFlag_Smooth;}break;
-    case DF_FontSlot_Main: {flags = (!!df_setting_val_from_code(ws, DF_SettingCode_SmoothUIText).s32*F_RasterFlag_Smooth)|(!!df_setting_val_from_code(ws, DF_SettingCode_HintUIText).s32*F_RasterFlag_Hinted);}break;
-    case DF_FontSlot_Code: {flags = (!!df_setting_val_from_code(ws, DF_SettingCode_SmoothCodeText).s32*F_RasterFlag_Smooth)|(!!df_setting_val_from_code(ws, DF_SettingCode_HintCodeText).s32*F_RasterFlag_Hinted);}break;
+    case DF_FontSlot_Icons:{flags = FNT_RasterFlag_Smooth;}break;
+    case DF_FontSlot_Main: {flags = (!!df_setting_val_from_code(ws, DF_SettingCode_SmoothUIText).s32*FNT_RasterFlag_Smooth)|(!!df_setting_val_from_code(ws, DF_SettingCode_HintUIText).s32*FNT_RasterFlag_Hinted);}break;
+    case DF_FontSlot_Code: {flags = (!!df_setting_val_from_code(ws, DF_SettingCode_SmoothCodeText).s32*FNT_RasterFlag_Smooth)|(!!df_setting_val_from_code(ws, DF_SettingCode_HintCodeText).s32*FNT_RasterFlag_Hinted);}break;
   }
   return flags;
 }
@@ -10674,7 +10674,7 @@ internal UI_BOX_CUSTOM_DRAW(df_thread_box_draw_extensions)
     F32 lock_icon_off = ui_top_font_size()*0.2f;
     Vec4F32 lock_icon_color = df_rgba_from_theme_color(DF_ThemeColor_TextNegative);
     d_text(df_font_from_slot(DF_FontSlot_Icons),
-           box->font_size, 0, 0, F_RasterFlag_Smooth,
+           box->font_size, 0, 0, FNT_RasterFlag_Smooth,
            v2f32((box->rect.x0 + box->rect.x1)/2 + lock_icon_off/2,
                  box->rect.y0 + lock_icon_off/2),
            lock_icon_color,
@@ -10726,11 +10726,11 @@ internal UI_BOX_CUSTOM_DRAW(df_bp_box_draw_extensions)
   if(u->remap_px_delta != 0)
   {
     F32 remap_px_delta = u->remap_px_delta;
-    F32 circle_advance = f_dim_from_tag_size_string(box->font, box->font_size, 0, 0, df_g_icon_kind_text_table[DF_IconKind_CircleFilled]).x;
+    F32 circle_advance = fnt_dim_from_tag_size_string(box->font, box->font_size, 0, 0, df_g_icon_kind_text_table[DF_IconKind_CircleFilled]).x;
     Vec2F32 bp_text_pos = ui_box_text_position(box);
     Vec2F32 bp_center = v2f32(bp_text_pos.x + circle_advance/2, bp_text_pos.y);
-    F_Metrics icon_font_metrics = f_metrics_from_tag_size(box->font, box->font_size);
-    F32 icon_font_line_height = f_line_height_from_metrics(&icon_font_metrics);
+    FNT_Metrics icon_font_metrics = fnt_metrics_from_tag_size(box->font, box->font_size);
+    F32 icon_font_line_height = fnt_line_height_from_metrics(&icon_font_metrics);
     F32 remap_bar_thickness = 0.3f*ui_top_font_size();
     Vec4F32 remap_color = u->color;
     remap_color.w *= 0.3f;
@@ -10739,7 +10739,7 @@ internal UI_BOX_CUSTOM_DRAW(df_bp_box_draw_extensions)
                                        bp_center.x + remap_bar_thickness,
                                        bp_center.y + ClampBot(remap_px_delta, 0) - remap_bar_thickness),
                                 remap_color, 2.f, 0, 1.f);
-    d_text(box->font, box->font_size, 0, 0, F_RasterFlag_Smooth,
+    d_text(box->font, box->font_size, 0, 0, FNT_RasterFlag_Smooth,
            v2f32(bp_text_pos.x,
                  bp_center.y + remap_px_delta),
            remap_color,
@@ -10892,7 +10892,7 @@ df_code_slice(DF_Window *ws, DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *m
             ui_set_next_hover_cursor(OS_Cursor_UpDownLeftRight);
             ui_set_next_font(df_font_from_slot(DF_FontSlot_Icons));
             ui_set_next_font_size(params->font_size);
-            ui_set_next_text_raster_flags(F_RasterFlag_Smooth);
+            ui_set_next_text_raster_flags(FNT_RasterFlag_Smooth);
             ui_set_next_pref_width(ui_pct(1, 0));
             ui_set_next_pref_height(ui_pct(1, 0));
             ui_set_next_palette(ui_build_palette(ui_top_palette(), .text = color));
@@ -11049,7 +11049,7 @@ df_code_slice(DF_Window *ws, DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *m
             ui_set_next_hover_cursor(OS_Cursor_UpDownLeftRight);
             ui_set_next_font(df_font_from_slot(DF_FontSlot_Icons));
             ui_set_next_font_size(params->font_size);
-            ui_set_next_text_raster_flags(F_RasterFlag_Smooth);
+            ui_set_next_text_raster_flags(FNT_RasterFlag_Smooth);
             ui_set_next_pref_width(ui_pct(1, 0));
             ui_set_next_pref_height(ui_pct(1, 0));
             ui_set_next_palette(ui_build_palette(ui_top_palette(), .text = color));
@@ -11170,7 +11170,7 @@ df_code_slice(DF_Window *ws, DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *m
             // rjf: build box for breakpoint
             ui_set_next_font(df_font_from_slot(DF_FontSlot_Icons));
             ui_set_next_font_size(params->font_size * 1.f);
-            ui_set_next_text_raster_flags(F_RasterFlag_Smooth);
+            ui_set_next_text_raster_flags(FNT_RasterFlag_Smooth);
             ui_set_next_hover_cursor(OS_Cursor_HandPoint);
             ui_set_next_palette(ui_build_palette(ui_top_palette(), .text = bp_color));
             ui_set_next_text_alignment(UI_TextAlign_Center);
@@ -11231,7 +11231,7 @@ df_code_slice(DF_Window *ws, DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *m
             // rjf: build box for watch
             ui_set_next_font(df_font_from_slot(DF_FontSlot_Icons));
             ui_set_next_font_size(params->font_size * 1.f);
-            ui_set_next_text_raster_flags(F_RasterFlag_Smooth);
+            ui_set_next_text_raster_flags(FNT_RasterFlag_Smooth);
             ui_set_next_hover_cursor(OS_Cursor_HandPoint);
             ui_set_next_palette(ui_build_palette(ui_top_palette(), .text = color));
             ui_set_next_text_alignment(UI_TextAlign_Center);
@@ -11385,7 +11385,7 @@ df_code_slice(DF_Window *ws, DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *m
         line_num += 1, line_idx += 1)
     {
       String8 line_text = params->line_text[line_idx];
-      F32 line_text_dim = f_dim_from_tag_size_string(params->font, params->font_size, 0, params->tab_size, line_text).x + params->line_num_width_px;
+      F32 line_text_dim = fnt_dim_from_tag_size_string(params->font, params->font_size, 0, params->tab_size, line_text).x + params->line_num_width_px;
       line_extras_off[line_idx] = Max(line_text_dim, params->font_size*50);
     }
   }
@@ -11533,7 +11533,7 @@ df_code_slice(DF_Window *ws, DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *m
     String8 line_string = (params->line_num_range.min <= line_num && line_num <= params->line_num_range.max) ? (params->line_text[mouse_y_line_idx]) : str8_zero();
     
     // rjf: mouse x * string => column
-    S64 column = f_char_pos_from_tag_size_string_p(params->font, params->font_size, 0, params->tab_size, line_string, mouse.x-text_container_box->rect.x0-params->line_num_width_px-line_num_padding_px)+1;
+    S64 column = fnt_char_pos_from_tag_size_string_p(params->font, params->font_size, 0, params->tab_size, line_string, mouse.x-text_container_box->rect.x0-params->line_num_width_px-line_num_padding_px)+1;
     
     // rjf: bundle
     mouse_pt = txt_pt(line_num, column);
@@ -11737,7 +11737,7 @@ df_code_slice(DF_Window *ws, DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *m
     {
       U64 line_slice_idx = mouse_pt.line-params->line_num_range.min;
       String8 line_text = params->line_text[line_slice_idx];
-      F32 expr_hoff_px = params->line_num_width_px + f_dim_from_tag_size_string(params->font, params->font_size, 0, params->tab_size, str8_prefix(line_text, selected_rng.min.column-1)).x;
+      F32 expr_hoff_px = params->line_num_width_px + fnt_dim_from_tag_size_string(params->font, params->font_size, 0, params->tab_size, str8_prefix(line_text, selected_rng.min.column-1)).x;
       result.mouse_expr_rng = mouse_expr_rng = selected_rng;
       result.mouse_expr_baseline_pos = mouse_expr_baseline_pos = v2f32(text_container_box->rect.x0+expr_hoff_px,
                                                                        text_container_box->rect.y0+line_slice_idx*params->line_height_px + params->line_height_px*0.85f);
@@ -11754,7 +11754,7 @@ df_code_slice(DF_Window *ws, DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *m
       Rng1U64 expr_off_rng = txt_expr_off_range_from_line_off_range_string_tokens(mouse_pt_off, line_range, line_text, &line_tokens);
       if(expr_off_rng.max != expr_off_rng.min)
       {
-        F32 expr_hoff_px = params->line_num_width_px + f_dim_from_tag_size_string(params->font, params->font_size, 0, params->tab_size, str8_prefix(line_text, expr_off_rng.min-line_range.min)).x;
+        F32 expr_hoff_px = params->line_num_width_px + fnt_dim_from_tag_size_string(params->font, params->font_size, 0, params->tab_size, str8_prefix(line_text, expr_off_rng.min-line_range.min)).x;
         result.mouse_expr_rng = mouse_expr_rng = txt_rng(txt_pt(mouse_pt.line, 1+(expr_off_rng.min-line_range.min)), txt_pt(mouse_pt.line, 1+(expr_off_rng.max-line_range.min)));
         result.mouse_expr_baseline_pos = mouse_expr_baseline_pos = v2f32(text_container_box->rect.x0+expr_hoff_px,
                                                                          text_container_box->rect.y0+line_slice_idx*params->line_height_px + params->line_height_px*0.85f);
@@ -12055,8 +12055,8 @@ df_code_slice(DF_Window *ws, DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *m
               Rng1U64 match_range = r1u64(needle_pos, needle_pos+params->search_query.size);
               Rng1F32 match_column_pixel_off_range =
               {
-                f_dim_from_tag_size_string(line_box->font, line_box->font_size, 0, params->tab_size, str8_prefix(line_string, match_range.min)).x,
-                f_dim_from_tag_size_string(line_box->font, line_box->font_size, 0, params->tab_size, str8_prefix(line_string, match_range.max)).x,
+                fnt_dim_from_tag_size_string(line_box->font, line_box->font_size, 0, params->tab_size, str8_prefix(line_string, match_range.min)).x,
+                fnt_dim_from_tag_size_string(line_box->font, line_box->font_size, 0, params->tab_size, str8_prefix(line_string, match_range.max)).x,
               };
               Rng2F32 match_rect =
               {
@@ -12110,8 +12110,8 @@ df_code_slice(DF_Window *ws, DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *m
               };
               Rng1F32 select_column_pixel_off_range =
               {
-                f_dim_from_tag_size_string(line_box->font, line_box->font_size, 0, params->tab_size, str8_prefix(line_string, select_column_range_in_line.min-1)).x,
-                f_dim_from_tag_size_string(line_box->font, line_box->font_size, 0, params->tab_size, str8_prefix(line_string, select_column_range_in_line.max-1)).x,
+                fnt_dim_from_tag_size_string(line_box->font, line_box->font_size, 0, params->tab_size, str8_prefix(line_string, select_column_range_in_line.min-1)).x,
+                fnt_dim_from_tag_size_string(line_box->font, line_box->font_size, 0, params->tab_size, str8_prefix(line_string, select_column_range_in_line.max-1)).x,
               };
               Rng2F32 select_rect =
               {
@@ -12139,7 +12139,7 @@ df_code_slice(DF_Window *ws, DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *m
         if(cursor->line == line_num)
         {
           S64 column = cursor->column;
-          Vec2F32 advance = f_dim_from_tag_size_string(line_box->font, line_box->font_size, 0, params->tab_size, str8_prefix(line_string, column-1));
+          Vec2F32 advance = fnt_dim_from_tag_size_string(line_box->font, line_box->font_size, 0, params->tab_size, str8_prefix(line_string, column-1));
           F32 cursor_off_pixels = advance.x;
           F32 cursor_thickness = ClampBot(4.f, line_box->font_size/6.f);
           Rng2F32 cursor_rect =
@@ -12463,7 +12463,7 @@ df_error_label(String8 string)
   UI_Parent(box) UI_Palette(ui_build_palette(ui_top_palette(), .text = df_rgba_from_theme_color(DF_ThemeColor_TextNegative), .text_weak = df_rgba_from_theme_color(DF_ThemeColor_TextNegative)))
   {
     ui_set_next_font(df_font_from_slot(DF_FontSlot_Icons));
-    ui_set_next_text_raster_flags(F_RasterFlag_Smooth);
+    ui_set_next_text_raster_flags(FNT_RasterFlag_Smooth);
     ui_set_next_text_alignment(UI_TextAlign_Center);
     ui_set_next_flags(UI_BoxFlag_DrawTextWeak);
     UI_PrefWidth(ui_em(2.25f, 1.f)) ui_label(df_g_icon_kind_text_table[DF_IconKind_WarningBig]);
@@ -12485,7 +12485,7 @@ df_help_label(String8 string)
     {
       result = 1;
       ui_set_next_font(df_font_from_slot(DF_FontSlot_Icons));
-      ui_set_next_text_raster_flags(F_RasterFlag_Smooth);
+      ui_set_next_text_raster_flags(FNT_RasterFlag_Smooth);
       ui_set_next_text_alignment(UI_TextAlign_Center);
       UI_Box *help_hoverer = ui_build_box_from_stringf(UI_BoxFlag_DrawText|UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawHotEffects, "###help_hoverer_%S", string);
       ui_box_equip_display_string(help_hoverer, df_g_icon_kind_text_table[DF_IconKind_QuestionMark]);
@@ -12946,7 +12946,7 @@ df_line_edit(DF_Window *ws, DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeLi
     {
       String8 edit_string = str8(edit_buffer, edit_string_size_out[0]);
       Temp scratch = scratch_begin(0, 0);
-      F32 total_text_width = f_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, ui_top_tab_size(), edit_string).x;
+      F32 total_text_width = fnt_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, ui_top_tab_size(), edit_string).x;
       F32 total_editstr_width = total_text_width - !!(flags & (DF_LineEditFlag_Expander|DF_LineEditFlag_ExpanderSpace|DF_LineEditFlag_ExpanderPlaceholder)) * expander_size_px;
       ui_set_next_pref_width(ui_px(total_editstr_width+ui_top_font_size()*2, 0.f));
       UI_Box *editstr_box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|UI_BoxFlag_DisableTextTrunc, "###editstr");
@@ -13022,13 +13022,13 @@ df_line_edit(DF_Window *ws, DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeLi
       draw_data->mark = *mark;
       ui_box_equip_custom_draw(editstr_box, ui_line_edit_draw, draw_data);
       mouse_pt = txt_pt(1, 1+ui_box_char_pos_from_xy(editstr_box, ui_mouse()));
-      cursor_off = f_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, ui_top_tab_size(), str8_prefix(edit_string, cursor->column-1)).x;
+      cursor_off = fnt_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, ui_top_tab_size(), str8_prefix(edit_string, cursor->column-1)).x;
       scratch_end(scratch);
     }
     else if((is_focus_active || is_focus_active_disabled) && !(flags & DF_LineEditFlag_CodeContents))
     {
       String8 edit_string = str8(edit_buffer, edit_string_size_out[0]);
-      F32 total_text_width = f_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, ui_top_tab_size(), edit_string).x;
+      F32 total_text_width = fnt_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, ui_top_tab_size(), edit_string).x;
       F32 total_editstr_width = total_text_width - !!(flags & (DF_LineEditFlag_Expander|DF_LineEditFlag_ExpanderSpace|DF_LineEditFlag_ExpanderPlaceholder)) * expander_size_px;
       ui_set_next_pref_width(ui_px(total_editstr_width+ui_top_font_size()*2, 0.f));
       UI_Box *editstr_box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|UI_BoxFlag_DisableTextTrunc, "###editstr");
@@ -13039,7 +13039,7 @@ df_line_edit(DF_Window *ws, DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeLi
       ui_box_equip_display_string(editstr_box, edit_string);
       ui_box_equip_custom_draw(editstr_box, ui_line_edit_draw, draw_data);
       mouse_pt = txt_pt(1, 1+ui_box_char_pos_from_xy(editstr_box, ui_mouse()));
-      cursor_off = f_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, ui_top_tab_size(), str8_prefix(edit_string, cursor->column-1)).x;
+      cursor_off = fnt_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, ui_top_tab_size(), str8_prefix(edit_string, cursor->column-1)).x;
     }
   }
   
@@ -13501,11 +13501,11 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
           
           //- rjf: apply fonts
           {
-            F_Tag defaults[DF_FontSlot_COUNT] =
+            FNT_Tag defaults[DF_FontSlot_COUNT] =
             {
-              f_tag_from_static_data_string(&df_g_default_main_font_bytes),
-              f_tag_from_static_data_string(&df_g_default_code_font_bytes),
-              f_tag_from_static_data_string(&df_g_icon_font_bytes),
+              fnt_tag_from_static_data_string(&df_g_default_main_font_bytes),
+              fnt_tag_from_static_data_string(&df_g_default_code_font_bytes),
+              fnt_tag_from_static_data_string(&df_g_icon_font_bytes),
             };
             MemoryZeroArray(df_gfx_state->cfg_font_tags);
             {
@@ -13529,16 +13529,16 @@ df_gfx_begin_frame(Arena *arena, DF_CmdList *cmds)
               String8 main_font_path = path_absolute_dst_from_relative_dst_src(scratch.arena, main_font_relative_path, cfg_folder);
               if(os_file_path_exists(code_font_path) && !md_node_is_nil(code_font_node) && code_font_relative_path.size != 0)
               {
-                df_gfx_state->cfg_font_tags[DF_FontSlot_Code] = f_tag_from_path(code_font_path);
+                df_gfx_state->cfg_font_tags[DF_FontSlot_Code] = fnt_tag_from_path(code_font_path);
               }
               if(os_file_path_exists(main_font_path) && !md_node_is_nil(main_font_node) && main_font_relative_path.size != 0)
               {
-                df_gfx_state->cfg_font_tags[DF_FontSlot_Main] = f_tag_from_path(main_font_path);
+                df_gfx_state->cfg_font_tags[DF_FontSlot_Main] = fnt_tag_from_path(main_font_path);
               }
             }
             for(DF_FontSlot slot = (DF_FontSlot)0; slot < DF_FontSlot_COUNT; slot = (DF_FontSlot)(slot+1))
             {
-              if(f_tag_match(f_tag_zero(), df_gfx_state->cfg_font_tags[slot]))
+              if(fnt_tag_match(fnt_tag_zero(), df_gfx_state->cfg_font_tags[slot]))
               {
                 df_gfx_state->cfg_font_tags[slot] = defaults[slot];
               }

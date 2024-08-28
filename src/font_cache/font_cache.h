@@ -7,24 +7,18 @@
 ////////////////////////////////
 //~ rjf: Rasterization Flags
 
-typedef U32 F_RasterFlags;
+typedef U32 FNT_RasterFlags;
 enum
 {
-  F_RasterFlag_Smooth = (1<<0),
-  F_RasterFlag_Hinted = (1<<1),
+  FNT_RasterFlag_Smooth = (1<<0),
+  FNT_RasterFlag_Hinted = (1<<1),
 };
 
 ////////////////////////////////
 //~ rjf: Handles & Tags
 
-typedef struct F_Hash F_Hash;
-struct F_Hash
-{
-  U64 u64[2];
-};
-
-typedef struct F_Tag F_Tag;
-struct F_Tag
+typedef struct FNT_Tag FNT_Tag;
+struct FNT_Tag
 {
   U64 u64[2];
 };
@@ -32,8 +26,8 @@ struct F_Tag
 ////////////////////////////////
 //~ rjf: Draw Package Types (For Cache Queries)
 
-typedef struct F_Piece F_Piece;
-struct F_Piece
+typedef struct FNT_Piece FNT_Piece;
+struct FNT_Piece
 {
   R_Handle texture;
   Rng2S16 subrect;
@@ -42,35 +36,35 @@ struct F_Piece
   U16 decode_size;
 };
 
-typedef struct F_PieceChunkNode F_PieceChunkNode;
-struct F_PieceChunkNode
+typedef struct FNT_PieceChunkNode FNT_PieceChunkNode;
+struct FNT_PieceChunkNode
 {
-  F_PieceChunkNode *next;
-  F_Piece *v;
+  FNT_PieceChunkNode *next;
+  FNT_Piece *v;
   U64 count;
   U64 cap;
 };
 
-typedef struct F_PieceChunkList F_PieceChunkList;
-struct F_PieceChunkList
+typedef struct FNT_PieceChunkList FNT_PieceChunkList;
+struct FNT_PieceChunkList
 {
-  F_PieceChunkNode *first;
-  F_PieceChunkNode *last;
+  FNT_PieceChunkNode *first;
+  FNT_PieceChunkNode *last;
   U64 node_count;
   U64 total_piece_count;
 };
 
-typedef struct F_PieceArray F_PieceArray;
-struct F_PieceArray
+typedef struct FNT_PieceArray FNT_PieceArray;
+struct FNT_PieceArray
 {
-  F_Piece *v;
+  FNT_Piece *v;
   U64 count;
 };
 
-typedef struct F_Run F_Run;
-struct F_Run
+typedef struct FNT_Run FNT_Run;
+struct FNT_Run
 {
-  F_PieceArray pieces;
+  FNT_PieceArray pieces;
   Vec2F32 dim;
   F32 ascent;
   F32 descent;
@@ -79,21 +73,21 @@ struct F_Run
 ////////////////////////////////
 //~ rjf: Font Path -> Handle * Metrics * Path Cache Types
 
-typedef struct F_FontHashNode F_FontHashNode;
-struct F_FontHashNode
+typedef struct FNT_FontHashNode FNT_FontHashNode;
+struct FNT_FontHashNode
 {
-  F_FontHashNode *hash_next;
-  F_Tag tag;
+  FNT_FontHashNode *hash_next;
+  FNT_Tag tag;
   FP_Handle handle;
   FP_Metrics metrics;
   String8 path;
 };
 
-typedef struct F_FontHashSlot F_FontHashSlot;
-struct F_FontHashSlot
+typedef struct FNT_FontHashSlot FNT_FontHashSlot;
+struct FNT_FontHashSlot
 {
-  F_FontHashNode *first;
-  F_FontHashNode *last;
+  FNT_FontHashNode *first;
+  FNT_FontHashNode *last;
 };
 
 ////////////////////////////////
@@ -117,18 +111,18 @@ struct F_Hash2InfoRasterCacheNode
   F_RasterCacheInfo info;
 };
 
-typedef struct F_Hash2InfoRasterCacheSlot F_Hash2InfoRasterCacheSlot;
-struct F_Hash2InfoRasterCacheSlot
+typedef struct FNT_Hash2InfoRasterCacheSlot FNT_Hash2InfoRasterCacheSlot;
+struct FNT_Hash2InfoRasterCacheSlot
 {
   F_Hash2InfoRasterCacheNode *first;
   F_Hash2InfoRasterCacheNode *last;
 };
 
-typedef struct F_Hash2StyleRasterCacheNode F_Hash2StyleRasterCacheNode;
-struct F_Hash2StyleRasterCacheNode
+typedef struct FNT_Hash2StyleRasterCacheNode FNT_Hash2StyleRasterCacheNode;
+struct FNT_Hash2StyleRasterCacheNode
 {
-  F_Hash2StyleRasterCacheNode *hash_next;
-  F_Hash2StyleRasterCacheNode *hash_prev;
+  FNT_Hash2StyleRasterCacheNode *hash_next;
+  FNT_Hash2StyleRasterCacheNode *hash_prev;
   U64 style_hash;
   F32 ascent;
   F32 descent;
@@ -136,50 +130,50 @@ struct F_Hash2StyleRasterCacheNode
   F_RasterCacheInfo *utf8_class1_direct_map;
   U64 utf8_class1_direct_map_mask[4];
   U64 hash2info_slots_count;
-  F_Hash2InfoRasterCacheSlot *hash2info_slots;
+  FNT_Hash2InfoRasterCacheSlot *hash2info_slots;
 };
 
-typedef struct F_Hash2StyleRasterCacheSlot F_Hash2StyleRasterCacheSlot;
-struct F_Hash2StyleRasterCacheSlot
+typedef struct FNT_Hash2StyleRasterCacheSlot FNT_Hash2StyleRasterCacheSlot;
+struct FNT_Hash2StyleRasterCacheSlot
 {
-  F_Hash2StyleRasterCacheNode *first;
-  F_Hash2StyleRasterCacheNode *last;
+  FNT_Hash2StyleRasterCacheNode *first;
+  FNT_Hash2StyleRasterCacheNode *last;
 };
 
 ////////////////////////////////
 //~ rjf: Atlas Types
 
-typedef U32 F_AtlasRegionNodeFlags;
+typedef U32 FNT_AtlasRegionNodeFlags;
 enum
 {
-  F_AtlasRegionNodeFlag_Taken = (1<<0),
+  FNT_AtlasRegionNodeFlag_Taken = (1<<0),
 };
 
-typedef struct F_AtlasRegionNode F_AtlasRegionNode;
-struct F_AtlasRegionNode
+typedef struct FNT_AtlasRegionNode FNT_AtlasRegionNode;
+struct FNT_AtlasRegionNode
 {
-  F_AtlasRegionNode *parent;
-  F_AtlasRegionNode *children[Corner_COUNT];
+  FNT_AtlasRegionNode *parent;
+  FNT_AtlasRegionNode *children[Corner_COUNT];
   Vec2S16 max_free_size[Corner_COUNT];
-  F_AtlasRegionNodeFlags flags;
+  FNT_AtlasRegionNodeFlags flags;
   U64 num_allocated_descendants;
 };
 
-typedef struct F_Atlas F_Atlas;
-struct F_Atlas
+typedef struct FNT_Atlas FNT_Atlas;
+struct FNT_Atlas
 {
-  F_Atlas *next;
-  F_Atlas *prev;
+  FNT_Atlas *next;
+  FNT_Atlas *prev;
   R_Handle texture;
   Vec2S16 root_dim;
-  F_AtlasRegionNode *root;
+  FNT_AtlasRegionNode *root;
 };
 
 ////////////////////////////////
 //~ rjf: Metrics
 
-typedef struct F_Metrics F_Metrics;
-struct F_Metrics
+typedef struct FNT_Metrics FNT_Metrics;
+struct FNT_Metrics
 {
   F32 ascent;
   F32 descent;
@@ -190,81 +184,81 @@ struct F_Metrics
 ////////////////////////////////
 //~ rjf: Main State Type
 
-typedef struct F_State F_State;
-struct F_State
+typedef struct FNT_State FNT_State;
+struct FNT_State
 {
   Arena *arena;
   
   // rjf: font table
   U64 font_hash_table_size;
-  F_FontHashSlot *font_hash_table;
+  FNT_FontHashSlot *font_hash_table;
   
   // rjf: hash -> raster cache table
   U64 hash2style_slots_count;
-  F_Hash2StyleRasterCacheSlot *hash2style_slots;
+  FNT_Hash2StyleRasterCacheSlot *hash2style_slots;
   
   // rjf: atlas list
-  F_Atlas *first_atlas;
-  F_Atlas *last_atlas;
+  FNT_Atlas *first_atlas;
+  FNT_Atlas *last_atlas;
 };
 
 ////////////////////////////////
 //~ rjf: Globals
 
-global F_State *f_state = 0;
+global FNT_State *f_state = 0;
 
 ////////////////////////////////
 //~ rjf: Basic Functions
 
-internal F_Hash f_hash_from_string(String8 string);
-internal U64 f_little_hash_from_string(String8 string);
-internal Vec2S32 f_vertex_from_corner(Corner corner);
+internal U128 fnt_hash_from_string(String8 string);
+internal U64 fnt_little_hash_from_string(String8 string);
+internal Vec2S32 fnt_vertex_from_corner(Corner corner);
 
 ////////////////////////////////
 //~ rjf: Font Tags
 
-internal F_Tag f_tag_zero(void);
-internal B32 f_tag_match(F_Tag a, F_Tag b);
-internal FP_Handle f_handle_from_tag(F_Tag tag);
-internal FP_Metrics f_fp_metrics_from_tag(F_Tag tag);
-internal F_Tag f_tag_from_path(String8 path);
-internal F_Tag f_tag_from_static_data_string(String8 *data_ptr);
-internal String8 f_path_from_tag(F_Tag tag);
+internal FNT_Tag fnt_tag_zero(void);
+internal B32 fnt_tag_match(FNT_Tag a, FNT_Tag b);
+internal FP_Handle fnt_handle_from_tag(FNT_Tag tag);
+internal FP_Metrics fnt_fp_metrics_from_tag(FNT_Tag tag);
+internal FNT_Tag fnt_tag_from_path(String8 path);
+internal FNT_Tag fnt_tag_from_static_data_string(String8 *data_ptr);
+internal String8 fnt_path_from_tag(FNT_Tag tag);
 
 ////////////////////////////////
 //~ rjf: Atlas
 
-internal Rng2S16 f_atlas_region_alloc(Arena *arena, F_Atlas *atlas, Vec2S16 needed_size);
-internal void f_atlas_region_release(F_Atlas *atlas, Rng2S16 region);
+internal Rng2S16 fnt_atlas_region_alloc(Arena *arena, FNT_Atlas *atlas, Vec2S16 needed_size);
+internal void fnt_atlas_region_release(FNT_Atlas *atlas, Rng2S16 region);
 
 ////////////////////////////////
 //~ rjf: Piece Type Functions
 
-internal F_Piece *f_piece_chunk_list_push_new(Arena *arena, F_PieceChunkList *list, U64 cap);
-internal void f_piece_chunk_list_push(Arena *arena, F_PieceChunkList *list, U64 cap, F_Piece *piece);
-internal F_PieceArray f_piece_array_from_chunk_list(Arena *arena, F_PieceChunkList *list);
-internal F_PieceArray f_piece_array_copy(Arena *arena, F_PieceArray *src);
+internal FNT_Piece *fnt_piece_chunk_list_push_new(Arena *arena, FNT_PieceChunkList *list, U64 cap);
+internal void fnt_piece_chunk_list_push(Arena *arena, FNT_PieceChunkList *list, U64 cap, FNT_Piece *piece);
+internal FNT_PieceArray fnt_piece_array_from_chunk_list(Arena *arena, FNT_PieceChunkList *list);
+internal FNT_PieceArray fnt_piece_array_copy(Arena *arena, FNT_PieceArray *src);
 
 ////////////////////////////////
 //~ rjf: Rasterization Cache
 
-internal F_Hash2StyleRasterCacheNode *f_hash2style_from_tag_size_flags(F_Tag tag, F32 size, F_RasterFlags flags);
-internal F_Run f_push_run_from_string(Arena *arena, F_Tag tag, F32 size, F32 base_align_px, F32 tab_size_px, F_RasterFlags flags, String8 string);
-internal String8List f_wrapped_string_lines_from_font_size_string_max(Arena *arena, F_Tag font, F32 size, F32 base_align_px, F32 tab_size_px, String8 string, F32 max);
-internal Vec2F32 f_dim_from_tag_size_string(F_Tag tag, F32 size, F32 base_align_px, F32 tab_size_px, String8 string);
-internal Vec2F32 f_dim_from_tag_size_string_list(F_Tag tag, F32 size, F32 base_align_px, F32 tab_size_px, String8List list);
-internal F32 f_column_size_from_tag_size(F_Tag tag, F32 size);
-internal U64 f_char_pos_from_tag_size_string_p(F_Tag tag, F32 size, F32 base_align_px, F32 tab_size_px, String8 string, F32 p);
+internal FNT_Hash2StyleRasterCacheNode *fnt_hash2style_from_tag_size_flags(FNT_Tag tag, F32 size, FNT_RasterFlags flags);
+internal FNT_Run fnt_push_run_from_string(Arena *arena, FNT_Tag tag, F32 size, F32 base_align_px, F32 tab_size_px, FNT_RasterFlags flags, String8 string);
+internal String8List fnt_wrapped_string_lines_from_font_size_string_max(Arena *arena, FNT_Tag font, F32 size, F32 base_align_px, F32 tab_size_px, String8 string, F32 max);
+internal Vec2F32 fnt_dim_from_tag_size_string(FNT_Tag tag, F32 size, F32 base_align_px, F32 tab_size_px, String8 string);
+internal Vec2F32 fnt_dim_from_tag_size_string_list(FNT_Tag tag, F32 size, F32 base_align_px, F32 tab_size_px, String8List list);
+internal F32 fnt_column_size_from_tag_size(FNT_Tag tag, F32 size);
+internal U64 fnt_char_pos_from_tag_size_string_p(FNT_Tag tag, F32 size, F32 base_align_px, F32 tab_size_px, String8 string, F32 p);
 
 ////////////////////////////////
 //~ rjf: Metrics
 
-internal F_Metrics f_metrics_from_tag_size(F_Tag tag, F32 size);
-internal F32 f_line_height_from_metrics(F_Metrics *metrics);
+internal FNT_Metrics fnt_metrics_from_tag_size(FNT_Tag tag, F32 size);
+internal F32 fnt_line_height_from_metrics(FNT_Metrics *metrics);
 
 ////////////////////////////////
 //~ rjf: Main Calls
 
-internal void f_init(void);
+internal void fnt_init(void);
 
 #endif // FONT_CACHE_H

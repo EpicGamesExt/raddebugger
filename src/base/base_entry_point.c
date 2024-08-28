@@ -64,8 +64,8 @@ main_thread_base_entry_point(void (*entry_point)(CmdLine *cmdline), char **argum
 #if defined(GEO_CACHE_H) && !defined(GEO_INIT_MANUAL)
   geo_init();
 #endif
-#if defined(FONT_CACHE_H) && !defined(F_INIT_MANUAL)
-  f_init();
+#if defined(FONT_CACHE_H) && !defined(FNT_INIT_MANUAL)
+  fnt_init();
 #endif
 #if defined(DF_CORE_H) && !defined(DF_INIT_MANUAL)
   DF_StateDeltaHistory *hist = df_state_delta_history_alloc();

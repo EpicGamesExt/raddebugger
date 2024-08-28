@@ -41,9 +41,9 @@ UI_StackTable:
   { HoverCursor                        hover_cursor                  OS_Cursor             OS_Cursor_Pointer                  }
   
   //- rjf: font
-  { Font                               font                          F_Tag                 `f_tag_zero()`                     }
+  { Font                               font                          FNT_Tag               `fnt_tag_zero()`                   }
   { FontSize                           font_size                     F32                   24.f                               }
-  { TextRasterFlags                    text_raster_flags             F_RasterFlags         F_RasterFlag_Hinted                }
+  { TextRasterFlags                    text_raster_flags             FNT_RasterFlags       FNT_RasterFlag_Hinted              }
   { TabSize                            tab_size                      F32                   `24.f*4.f`                         }
   
   //- rjf: corner radii

@@ -87,7 +87,7 @@ d_string_from_fancy_string_list(Arena *arena, D_FancyStringList *list)
 }
 
 internal D_FancyRunList
-d_fancy_run_list_from_fancy_string_list(Arena *arena, F32 tab_size_px, F_RasterFlags flags, D_FancyStringList *strs)
+d_fancy_run_list_from_fancy_string_list(Arena *arena, F32 tab_size_px, FNT_RasterFlags flags, D_FancyStringList *strs)
 {
   ProfBeginFunction();
   D_FancyRunList run_list = {0};
@@ -95,7 +95,7 @@ d_fancy_run_list_from_fancy_string_list(Arena *arena, F32 tab_size_px, F_RasterF
   for(D_FancyStringNode *n = strs->first; n != 0; n = n->next)
   {
     D_FancyRunNode *dst_n = push_array(arena, D_FancyRunNode, 1);
-    dst_n->v.run = f_push_run_from_string(arena, n->v.font, n->v.size, base_align_px, tab_size_px, flags, n->v.string);
+    dst_n->v.run = fnt_push_run_from_string(arena, n->v.font, n->v.size, base_align_px, tab_size_px, flags, n->v.string);
     dst_n->v.color = n->v.color;
     dst_n->v.underline_thickness = n->v.underline_thickness;
     dst_n->v.strikethrough_thickness = n->v.strikethrough_thickness;
@@ -118,7 +118,7 @@ d_fancy_run_list_copy(Arena *arena, D_FancyRunList *src)
     D_FancyRunNode *dst_n = push_array(arena, D_FancyRunNode, 1);
     SLLQueuePush(dst.first, dst.last, dst_n);
     MemoryCopyStruct(&dst_n->v, &src_n->v);
-    dst_n->v.run.pieces = f_piece_array_copy(arena, &src_n->v.run.pieces);
+    dst_n->v.run.pieces = fnt_piece_array_copy(arena, &src_n->v.run.pieces);
     dst.node_count += 1;
   }
   dst.dim = src->dim;
@@ -455,7 +455,7 @@ d_sub_bucket(D_Bucket *bucket)
 //- rjf: text
 
 internal void
-d_truncated_fancy_run_list(Vec2F32 p, D_FancyRunList *list, F32 max_x, F_Run trailer_run)
+d_truncated_fancy_run_list(Vec2F32 p, D_FancyRunList *list, F32 max_x, FNT_Run trailer_run)
 {
   ProfBeginFunction();
   
@@ -475,11 +475,11 @@ d_truncated_fancy_run_list(Vec2F32 p, D_FancyRunList *list, F32 max_x, F_Run tra
       pixel_range.min = 100000;
       pixel_range.max = 0;
     }
-    F_Piece *piece_first = fr->run.pieces.v;
-    F_Piece *piece_opl = piece_first + fr->run.pieces.count;
+    FNT_Piece *piece_first = fr->run.pieces.v;
+    FNT_Piece *piece_opl = piece_first + fr->run.pieces.count;
     F32 pre_advance = advance;
     last_color = fr->color;
-    for(F_Piece *piece = piece_first;
+    for(FNT_Piece *piece = piece_first;
         piece < piece_opl;
         piece += 1)
     {
@@ -530,11 +530,11 @@ d_truncated_fancy_run_list(Vec2F32 p, D_FancyRunList *list, F32 max_x, F_Run tra
   //- rjf: draw trailer
   if(trailer_found)
   {
-    F_Piece *piece_first = trailer_run.pieces.v;
-    F_Piece *piece_opl = piece_first + trailer_run.pieces.count;
+    FNT_Piece *piece_first = trailer_run.pieces.v;
+    FNT_Piece *piece_opl = piece_first + trailer_run.pieces.count;
     F32 pre_advance = advance;
     Vec4F32 trailer_piece_color = last_color;
-    for(F_Piece *piece = piece_first;
+    for(FNT_Piece *piece = piece_first;
         piece < piece_opl;
         piece += 1)
     {
@@ -576,12 +576,12 @@ d_truncated_fancy_run_fuzzy_matches(Vec2F32 p, D_FancyRunList *list, F32 max_x, 
     for(D_FancyRunNode *fr_n = list->first; fr_n != 0; fr_n = fr_n->next)
     {
       D_FancyRun *fr = &fr_n->v;
-      F_Run *run = &fr->run;
+      FNT_Run *run = &fr->run;
       ascent = run->ascent;
       descent = run->descent;
       for(U64 piece_idx = 0; piece_idx < run->pieces.count; piece_idx += 1)
       {
-        F_Piece *piece = &run->pieces.v[piece_idx];
+        FNT_Piece *piece = &run->pieces.v[piece_idx];
         if(contains_1u64(byte_range, byte_off))
         {
           F32 pre_advance  = advance + piece->offset.x;
@@ -607,12 +607,12 @@ d_truncated_fancy_run_fuzzy_matches(Vec2F32 p, D_FancyRunList *list, F32 max_x, 
 }
 
 internal void
-d_text_run(Vec2F32 p, Vec4F32 color, F_Run run)
+d_text_run(Vec2F32 p, Vec4F32 color, FNT_Run run)
 {
   F32 advance = 0;
-  F_Piece *piece_first = run.pieces.v;
-  F_Piece *piece_opl = piece_first + run.pieces.count;
-  for(F_Piece *piece = piece_first;
+  FNT_Piece *piece_first = run.pieces.v;
+  FNT_Piece *piece_opl = piece_first + run.pieces.count;
+  for(FNT_Piece *piece = piece_first;
       piece < piece_opl;
       piece += 1)
   {
@@ -632,10 +632,10 @@ d_text_run(Vec2F32 p, Vec4F32 color, F_Run run)
 }
 
 internal void
-d_text(F_Tag font, F32 size, F32 base_align_px, F32 tab_size_px, F_RasterFlags flags, Vec2F32 p, Vec4F32 color, String8 string)
+d_text(FNT_Tag font, F32 size, F32 base_align_px, F32 tab_size_px, FNT_RasterFlags flags, Vec2F32 p, Vec4F32 color, String8 string)
 {
   Temp scratch = scratch_begin(0, 0);
-  F_Run run = f_push_run_from_string(scratch.arena, font, size, base_align_px, tab_size_px, flags, string);
+  FNT_Run run = fnt_push_run_from_string(scratch.arena, font, size, base_align_px, tab_size_px, flags, string);
   d_text_run(p, color, run);
   scratch_end(scratch);
 }
