@@ -1583,7 +1583,7 @@ internal E_String2NumMap *d_query_cached_locals_map_from_dbgi_key_voff(DI_Key *d
 internal E_String2NumMap *d_query_cached_member_map_from_dbgi_key_voff(DI_Key *dbgi_key, U64 voff);
 
 //- rjf: top-level command dispatch
-internal void d_push_cmd__root(D_CmdParams *params, D_CmdSpec *spec);
+internal void d_push_cmd(D_CmdParams *params, D_CmdSpec *spec);
 
 ////////////////////////////////
 //~ rjf: Main Layer Top-Level Calls

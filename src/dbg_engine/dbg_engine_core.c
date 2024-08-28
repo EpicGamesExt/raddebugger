@@ -1271,7 +1271,7 @@ d_entity_notify_mutation(D_Entity *entity)
     if(e == entity && flags & D_EntityKindFlag_LeafMutProjectConfig)
     {
       D_CmdParams p = {0};
-      d_push_cmd__root(&p, d_cmd_spec_from_kind(D_CmdKind_WriteProjectData));
+      d_push_cmd(&p, d_cmd_spec_from_kind(D_CmdKind_WriteProjectData));
     }
     if(e == entity && flags & D_EntityKindFlag_LeafMutSoftHalt && d_ctrl_targets_running())
     {
@@ -6077,7 +6077,7 @@ d_query_cached_member_map_from_dbgi_key_voff(DI_Key *dbgi_key, U64 voff)
 //- rjf: top-level command dispatch
 
 internal void
-d_push_cmd__root(D_CmdParams *params, D_CmdSpec *spec)
+d_push_cmd(D_CmdParams *params, D_CmdSpec *spec)
 {
   // rjf: log
   if(params->os_event == 0 || params->os_event->kind != OS_EventKind_MouseMove)
@@ -6258,7 +6258,7 @@ d_init(CmdLine *cmdln, D_StateDeltaHistory *hist)
       d_state->cfg_path_arenas[src] = arena_alloc();
       D_CmdParams params = d_cmd_params_zero();
       params.file_path = path_normalized_from_string(scratch.arena, cfg_src_paths[src]);
-      d_push_cmd__root(&params, d_cmd_spec_from_kind(d_cfg_src_load_cmd_kind_table[src]));
+      d_push_cmd(&params, d_cmd_spec_from_kind(d_cfg_src_load_cmd_kind_table[src]));
     }
     
     // rjf: set up config table arena
@@ -8173,13 +8173,13 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
             D_CmdParams p = d_cmd_params_zero();
             p.file_path = file_path;
             p.text_point = d_interact_regs()->cursor;
-            d_push_cmd__root(&p, d_cmd_spec_from_kind(D_CmdKind_RunToLine));
+            d_push_cmd(&p, d_cmd_spec_from_kind(D_CmdKind_RunToLine));
           }
           else
           {
             D_CmdParams p = d_cmd_params_zero();
             p.vaddr = d_interact_regs()->vaddr_range.min;
-            d_push_cmd__root(&p, d_cmd_spec_from_kind(D_CmdKind_RunToAddress));
+            d_push_cmd(&p, d_cmd_spec_from_kind(D_CmdKind_RunToAddress));
           }
         }break;
         case D_CmdKind_SetNextStatement:
@@ -8263,19 +8263,19 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
           {
             D_CmdParams p = params;
             p.entity = d_handle_from_entity(target);
-            d_push_cmd__root(&p, d_cmd_spec_from_kind(D_CmdKind_LaunchAndRun));
+            d_push_cmd(&p, d_cmd_spec_from_kind(D_CmdKind_LaunchAndRun));
           }
           else if(d_entity_is_nil(target))
           {
             D_CmdParams p = params;
             p.string = str8_lit("The ended process' corresponding target is missing.");
-            d_push_cmd__root(&p, d_cmd_spec_from_kind(D_CmdKind_Error));
+            d_push_cmd(&p, d_cmd_spec_from_kind(D_CmdKind_Error));
           }
           else if(d_entity_is_nil(ended_process))
           {
             D_CmdParams p = params;
             p.string = str8_lit("Invalid ended process.");
-            d_push_cmd__root(&p, d_cmd_spec_from_kind(D_CmdKind_Error));
+            d_push_cmd(&p, d_cmd_spec_from_kind(D_CmdKind_Error));
           }
         }break;
         
@@ -8324,12 +8324,12 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
           {
             D_CmdParams p = params;
             p.string = str8_lit("Could not register as the just-in-time debugger, access was denied; try running the debugger as administrator.");
-            d_push_cmd__root(&p, d_cmd_spec_from_kind(D_CmdKind_Error));
+            d_push_cmd(&p, d_cmd_spec_from_kind(D_CmdKind_Error));
           }
 #else
           D_CmdParams p = params;
           p.string = str8_lit("Registering as the just-in-time debugger is currently not supported on this system.");
-          d_push_cmd__root(&p, d_cmd_spec_from_kind(D_CmdKind_Error));
+          d_push_cmd(&p, d_cmd_spec_from_kind(D_CmdKind_Error));
 #endif
         }break;
         
@@ -8541,7 +8541,7 @@ d_end_frame(void)
   {
     d_state->entities_mut_soft_halt = 0;
     D_CmdParams params = d_cmd_params_zero();
-    d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_SoftHaltRefresh));
+    d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_SoftHaltRefresh));
   }
   
   //- rjf: entity mutation -> send refreshed debug info map

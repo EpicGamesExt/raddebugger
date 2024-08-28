@@ -173,7 +173,7 @@ df_panel_notify_mutation(DF_Window *window, DF_Panel *panel)
 {
   D_CmdParams p = df_cmd_params_from_panel(window, panel);
   D_CfgSrc src = window->cfg_src;
-  d_push_cmd__root(&p, d_cmd_spec_from_kind(d_cfg_src_write_cmd_kind_table[src]));
+  d_push_cmd(&p, d_cmd_spec_from_kind(d_cfg_src_write_cmd_kind_table[src]));
 }
 
 //- rjf: tree construction
@@ -1864,7 +1864,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
             D_CmdKind write_cmd = d_cfg_src_write_cmd_kind_table[src];
             D_CmdParams p = d_cmd_params_zero();
             p.file_path = d_cfg_path_from_src(src);
-            d_push_cmd__root(&p, d_cmd_spec_from_kind(write_cmd));
+            d_push_cmd(&p, d_cmd_spec_from_kind(write_cmd));
           }
         }break;
         
@@ -2224,7 +2224,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
           {
             D_CmdParams p = d_cmd_params_zero();
             p.string = push_str8f(scratch.arena, "Couldn't open file at \"%S\".", path);
-            d_push_cmd__root(&p, d_cmd_spec_from_kind(D_CmdKind_Error));
+            d_push_cmd(&p, d_cmd_spec_from_kind(D_CmdKind_Error));
           }
         }break;
         case D_CmdKind_Switch:
@@ -2744,7 +2744,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
             // rjf: retry on stopped, pending debug info
             if(!d_ctrl_targets_running() && (dbgi_pending || missing_rip))
             {
-              d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_FindThread));
+              d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_FindThread));
             }
           }
           di_scope_close(scope);
@@ -2881,7 +2881,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
             {
               D_CmdParams p = params;
               p.string = push_str8f(scratch.arena, "`%S` could not be found.", name);
-              d_push_cmd__root(&p, d_cmd_spec_from_kind(D_CmdKind_Error));
+              d_push_cmd(&p, d_cmd_spec_from_kind(D_CmdKind_Error));
             }
             
             // rjf: name resolved to voff * dbg info
@@ -2948,7 +2948,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
           {
             D_CmdParams params = df_cmd_params_from_window(ws);
             params.string = str8_lit("Invalid target.");
-            d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_Error));
+            d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_Error));
           }
         }break;
         
@@ -2962,19 +2962,19 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
             {
               D_CmdParams params = df_cmd_params_from_window(ws);
               params.entity = d_handle_from_entity(entity);
-              d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_SpawnEntityView));
+              d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_SpawnEntityView));
             }break;
             case D_EntityKind_Thread:
             {
               D_CmdParams params = df_cmd_params_from_window(ws);
               params.entity = d_handle_from_entity(entity);
-              d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_SelectThread));
+              d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_SelectThread));
             }break;
             case D_EntityKind_Target:
             {
               D_CmdParams params = df_cmd_params_from_window(ws);
               params.entity = d_handle_from_entity(entity);
-              d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_SelectTarget));
+              d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_SelectTarget));
             }break;
           }
         }break;
@@ -3351,13 +3351,13 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
           if(!(ws->query_cmd_spec->info.query.flags & D_CmdQueryFlag_KeepOldInput))
           {
             D_CmdParams p = df_cmd_params_from_window(ws);
-            d_push_cmd__root(&p, d_cmd_spec_from_kind(D_CmdKind_CancelQuery));
+            d_push_cmd(&p, d_cmd_spec_from_kind(D_CmdKind_CancelQuery));
           }
           
           // rjf: push command if possible
           if(command_ready)
           {
-            d_push_cmd__root(&ws->query_cmd_params, ws->query_cmd_spec);
+            d_push_cmd(&ws->query_cmd_params, ws->query_cmd_spec);
           }
         }break;
         case D_CmdKind_CancelQuery:
@@ -3873,7 +3873,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
           D_CmdParams p = df_cmd_params_from_window(ws);
           p.entity = d_handle_from_entity(thread);
           p.vaddr = new_rip_vaddr;
-          d_push_cmd__root(&p, d_cmd_spec_from_kind(D_CmdKind_SetThreadIP));
+          d_push_cmd(&p, d_cmd_spec_from_kind(D_CmdKind_SetThreadIP));
           ui_ctx_menu_close();
         }
         if(range.min.line == range.max.line && ui_clicked(df_icon_buttonf(ws, DF_IconKind_Play, 0, "Run To Line")))
@@ -3883,13 +3883,13 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
             D_CmdParams p = df_cmd_params_from_window(ws);
             p.file_path = ws->code_ctx_menu_file_path;
             p.text_point = range.min;
-            d_push_cmd__root(&p, d_cmd_spec_from_kind(D_CmdKind_RunToLine));
+            d_push_cmd(&p, d_cmd_spec_from_kind(D_CmdKind_RunToLine));
           }
           else
           {
             D_CmdParams p = df_cmd_params_from_window(ws);
             p.vaddr = ws->code_ctx_menu_vaddr;
-            d_push_cmd__root(&p, d_cmd_spec_from_kind(D_CmdKind_RunToAddress));
+            d_push_cmd(&p, d_cmd_spec_from_kind(D_CmdKind_RunToAddress));
           }
           ui_ctx_menu_close();
         }
@@ -3910,7 +3910,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
           String8 expr = str8_substr(data, expr_off_range);
           D_CmdParams p = df_cmd_params_from_window(ws);
           p.string = expr;
-          d_push_cmd__root(&p, d_cmd_spec_from_kind(D_CmdKind_GoToName));
+          d_push_cmd(&p, d_cmd_spec_from_kind(D_CmdKind_GoToName));
           ui_ctx_menu_close();
         }
         if(range.min.line == range.max.line && ui_clicked(df_icon_buttonf(ws, DF_IconKind_CircleFilled, 0, "Toggle Breakpoint")))
@@ -3919,7 +3919,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
           p.file_path = ws->code_ctx_menu_file_path;
           p.text_point = range.min;
           p.vaddr = ws->code_ctx_menu_vaddr;
-          d_push_cmd__root(&p, d_cmd_spec_from_kind(D_CmdKind_ToggleBreakpoint));
+          d_push_cmd(&p, d_cmd_spec_from_kind(D_CmdKind_ToggleBreakpoint));
           ui_ctx_menu_close();
         }
         if(range.min.line == range.max.line && ui_clicked(df_icon_buttonf(ws, DF_IconKind_Binoculars, 0, "Toggle Watch Expression")))
@@ -3939,7 +3939,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
           String8 expr = str8_substr(data, expr_off_range);
           D_CmdParams p = df_cmd_params_from_window(ws);
           p.string = expr;
-          d_push_cmd__root(&p, d_cmd_spec_from_kind(D_CmdKind_ToggleWatchExpression));
+          d_push_cmd(&p, d_cmd_spec_from_kind(D_CmdKind_ToggleWatchExpression));
           ui_ctx_menu_close();
         }
         if(ws->code_ctx_menu_file_path.size == 0 && range.min.line == range.max.line && ui_clicked(df_icon_buttonf(ws, DF_IconKind_FileOutline, 0, "Go To Source")))
@@ -3949,7 +3949,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
             D_CmdParams params = df_cmd_params_from_window(ws);
             params.file_path = lines.first->v.file_path;
             params.text_point = lines.first->v.pt;
-            d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_FindCodeLocation));
+            d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_FindCodeLocation));
           }
           ui_ctx_menu_close();
         }
@@ -3970,7 +3970,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
           D_CmdParams params = df_cmd_params_from_window(ws);
           params.entity = d_handle_from_entity(thread);
           params.vaddr = vaddr;
-          d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_FindCodeLocation));
+          d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_FindCodeLocation));
           ui_ctx_menu_close();
         }
         hs_scope_close(hs_scope);
@@ -4025,7 +4025,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
             D_CmdParams params = df_cmd_params_from_window(ws);
             params.entity = d_handle_from_entity(entity);
             params.string = str8(ws->entity_ctx_menu_input_buffer, ws->entity_ctx_menu_input_size);
-            d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_NameEntity));
+            d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_NameEntity));
           }
         }
         
@@ -4048,7 +4048,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
               D_CmdParams params = df_cmd_params_from_window(ws);
               params.entity = d_handle_from_entity(condition);
               params.string = new_string;
-              d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_NameEntity));
+              d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_NameEntity));
             }
             else if(!d_entity_is_nil(condition))
             {
@@ -4074,7 +4074,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
               D_CmdParams params = df_cmd_params_from_window(ws);
               params.entity = d_handle_from_entity(exe);
               params.string = new_string;
-              d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_NameEntity));
+              d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_NameEntity));
             }
             else if(!d_entity_is_nil(exe))
             {
@@ -4100,7 +4100,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
               D_CmdParams params = df_cmd_params_from_window(ws);
               params.entity = d_handle_from_entity(args);
               params.string = new_string;
-              d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_NameEntity));
+              d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_NameEntity));
             }
             else if(!d_entity_is_nil(args))
             {
@@ -4127,7 +4127,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
         {
           D_CmdParams params = df_cmd_params_from_window(ws);
           params.entity = d_handle_from_entity(entity);
-          d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_DuplicateEntity));
+          d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_DuplicateEntity));
           ui_ctx_menu_close();
         }
         
@@ -4136,7 +4136,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
         {
           D_CmdParams params = df_cmd_params_from_window(ws);
           params.entity = d_handle_from_entity(entity);
-          d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_EditEntity));
+          d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_EditEntity));
           ui_ctx_menu_close();
         }
         
@@ -4145,7 +4145,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
         {
           D_CmdParams params = df_cmd_params_from_window(ws);
           params.entity = d_handle_from_entity(entity);
-          d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_RemoveEntity));
+          d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_RemoveEntity));
           ui_ctx_menu_close();
         }
         
@@ -4157,13 +4157,13 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
           {
             D_CmdParams params = df_cmd_params_from_window(ws);
             params.entity = d_handle_from_entity(entity);
-            d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_EnableEntity));
+            d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_EnableEntity));
           }
           if(is_enabled && ui_clicked(df_icon_buttonf(ws, DF_IconKind_CheckFilled, 0, "Disable###enabler")))
           {
             D_CmdParams params = df_cmd_params_from_window(ws);
             params.entity = d_handle_from_entity(entity);
-            d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_DisableEntity));
+            d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_DisableEntity));
           }
         }
         
@@ -4176,13 +4176,13 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
           {
             D_CmdParams params = df_cmd_params_from_window(ws);
             params.entity = d_handle_from_entity(entity);
-            d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_ThawEntity));
+            d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_ThawEntity));
           }
           if(!is_frozen && ui_clicked(df_icon_buttonf(ws, DF_IconKind_Unlocked, 0, "Freeze###freeze_thaw")))
           {
             D_CmdParams params = df_cmd_params_from_window(ws);
             params.entity = d_handle_from_entity(entity);
-            d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_FreezeEntity));
+            d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_FreezeEntity));
           }
         }
         
@@ -4195,7 +4195,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
             params.file_path = loc->name;
             params.text_point = loc->text_point;
             params.vaddr = loc->vaddr;
-            d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_FindCodeLocation));
+            d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_FindCodeLocation));
             ui_ctx_menu_close();
           }
         }
@@ -4217,12 +4217,12 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
               {
                 D_CmdParams p = d_cmd_params_zero();
                 p.file_path = path_w_slash;
-                d_push_cmd__root(&p, d_cmd_spec_from_kind(D_CmdKind_SetCurrentPath));
+                d_push_cmd(&p, d_cmd_spec_from_kind(D_CmdKind_SetCurrentPath));
               }
               {
                 D_CmdParams p = df_cmd_params_from_window(ws);
                 p.cmd_spec = d_cmd_spec_from_kind(D_CmdKind_Open);
-                d_push_cmd__root(&p, d_cmd_spec_from_kind(D_CmdKind_RunCommand));
+                d_push_cmd(&p, d_cmd_spec_from_kind(D_CmdKind_RunCommand));
               }
               ui_ctx_menu_close();
             }
@@ -4233,7 +4233,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
               D_CmdParams params = df_cmd_params_from_window(ws);
               params.file_path = d_full_path_from_entity(scratch.arena, entity);
               params.text_point = txt_pt(1, 1);
-              d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_FindCodeLocation));
+              d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_FindCodeLocation));
               ui_ctx_menu_close();
             }
           }break;
@@ -4252,7 +4252,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
               {
                 D_CmdParams params = df_cmd_params_from_window(ws);
                 params.entity = d_handle_from_entity(entity);
-                d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_SelectThread));
+                d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_SelectThread));
                 ui_ctx_menu_close();
               }
             }
@@ -4331,7 +4331,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
               {
                 D_CmdParams params = df_cmd_params_from_window(ws);
                 params.entity = d_handle_from_entity(entity);
-                d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_FindThread));
+                d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_FindThread));
                 ui_ctx_menu_close();
               }
             }
@@ -4373,14 +4373,14 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
             {
               D_CmdParams params = df_cmd_params_from_window(ws);
               params.entity = d_handle_from_entity(entity);
-              d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_LaunchAndRun));
+              d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_LaunchAndRun));
               ui_ctx_menu_close();
             }
             if(ui_clicked(df_icon_buttonf(ws, DF_IconKind_PlayStepForward, 0, "Launch And Initialize")))
             {
               D_CmdParams params = df_cmd_params_from_window(ws);
               params.entity = d_handle_from_entity(entity);
-              d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_LaunchAndInit));
+              d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_LaunchAndInit));
               ui_ctx_menu_close();
             }
           }break;
@@ -4555,7 +4555,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
             {
               params.view = df_handle_from_view(view);
             }
-            d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_Filter));
+            d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_Filter));
             ui_ctx_menu_close();
           }
           if(ui_clicked(df_cmd_spec_button(ws, d_cmd_spec_from_kind(D_CmdKind_ClearFilter))))
@@ -4564,7 +4564,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
             {
               params.view = df_handle_from_view(view);
             }
-            d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_ClearFilter));
+            d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_ClearFilter));
             ui_ctx_menu_close();
           }
         }
@@ -4573,7 +4573,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
         if(ui_clicked(df_icon_buttonf(ws, DF_IconKind_X, 0, "Close Tab")))
         {
           D_CmdParams params = df_cmd_params_from_view(ws, panel, view);
-          d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_CloseTab));
+          d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_CloseTab));
           ui_ctx_menu_close();
         }
         
@@ -4623,14 +4623,14 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
                 if(ui_clicked(ui_buttonf("OK")) || (ui_key_match(bg_box->default_nav_focus_hot_key, ui_key_zero()) && ui_slot_press(UI_EventActionSlot_Accept)))
               {
                 D_CmdParams p = d_cmd_params_zero();
-                d_push_cmd__root(&p, d_cmd_spec_from_kind(D_CmdKind_ConfirmAccept));
+                d_push_cmd(&p, d_cmd_spec_from_kind(D_CmdKind_ConfirmAccept));
               }
               UI_CornerRadius10(ui_top_font_size()*0.25f)
                 UI_CornerRadius11(ui_top_font_size()*0.25f)
                 if(ui_clicked(ui_buttonf("Cancel")) || ui_slot_press(UI_EventActionSlot_Cancel))
               {
                 D_CmdParams p = d_cmd_params_zero();
-                d_push_cmd__root(&p, d_cmd_spec_from_kind(D_CmdKind_ConfirmCancel));
+                d_push_cmd(&p, d_cmd_spec_from_kind(D_CmdKind_ConfirmCancel));
               }
             }
             ui_spacer(ui_em(3.f, 1.f));
@@ -5192,7 +5192,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
                 {
                   D_CmdParams params = df_cmd_params_from_window(ws);
                   params.entity = d_handle_from_entity(target);
-                  d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_EditTarget));
+                  d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_EditTarget));
                   ui_ctx_menu_close();
                   ws->menu_bar_focused = 0;
                 }
@@ -5463,7 +5463,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
             if(ui_clicked(sig))
             {
               D_CmdParams params = df_cmd_params_from_window(ws);
-              d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_Run));
+              d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_Run));
             }
           }
           
@@ -5498,7 +5498,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
             if(ui_clicked(sig))
             {
               D_CmdParams params = df_cmd_params_from_window(ws);
-              d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_Restart));
+              d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_Restart));
             }
           }
           
@@ -5525,7 +5525,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
             if(ui_clicked(sig))
             {
               D_CmdParams params = df_cmd_params_from_window(ws);
-              d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_Halt));
+              d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_Halt));
             }
           }
           
@@ -5555,7 +5555,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
             if(ui_clicked(sig))
             {
               D_CmdParams params = df_cmd_params_from_window(ws);
-              d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_Kill));
+              d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_Kill));
             }
           }
           
@@ -5588,7 +5588,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
             if(ui_clicked(sig))
             {
               D_CmdParams params = df_cmd_params_from_window(ws);
-              d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_StepOver));
+              d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_StepOver));
             }
           }
           
@@ -5621,7 +5621,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
             if(ui_clicked(sig))
             {
               D_CmdParams params = df_cmd_params_from_window(ws);
-              d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_StepInto));
+              d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_StepInto));
             }
           }
           
@@ -5654,7 +5654,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
             if(ui_clicked(sig))
             {
               D_CmdParams params = df_cmd_params_from_window(ws);
-              d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_StepOut));
+              d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_StepOut));
             }
           }
           
@@ -5695,7 +5695,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
             {
               D_CmdParams p = df_cmd_params_from_window(ws);
               p.cmd_spec = d_cmd_spec_from_kind(D_CmdKind_OpenUser);
-              d_push_cmd__root(&p, d_cmd_spec_from_kind(D_CmdKind_RunCommand));
+              d_push_cmd(&p, d_cmd_spec_from_kind(D_CmdKind_RunCommand));
             }
           }
           
@@ -5730,7 +5730,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
             {
               D_CmdParams p = df_cmd_params_from_window(ws);
               p.cmd_spec = d_cmd_spec_from_kind(D_CmdKind_OpenProject);
-              d_push_cmd__root(&p, d_cmd_spec_from_kind(D_CmdKind_RunCommand));
+              d_push_cmd(&p, d_cmd_spec_from_kind(D_CmdKind_RunCommand));
             }
           }
           
@@ -5767,7 +5767,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
             if(ui_clicked(cls_sig))
             {
               D_CmdParams p = df_cmd_params_from_window(ws);
-              d_push_cmd__root(&p, d_cmd_spec_from_kind(D_CmdKind_CloseWindow));
+              d_push_cmd(&p, d_cmd_spec_from_kind(D_CmdKind_CloseWindow));
             }
             os_window_push_custom_title_bar_client_area(ws->os, min_sig.box->rect);
             os_window_push_custom_title_bar_client_area(ws->os, max_sig.box->rect);
@@ -6110,7 +6110,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
           ui_slot_press(UI_EventActionSlot_Cancel)) || query_cancelled)
       {
         D_CmdParams params = df_cmd_params_from_window(ws);
-        d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_CancelQuery));
+        d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_CancelQuery));
       }
       if((ui_is_focus_active() && ui_slot_press(UI_EventActionSlot_Accept)) || query_completed)
       {
@@ -6118,12 +6118,12 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
         DF_View *view = ws->query_view_stack_top;
         D_CmdParams params = df_cmd_params_from_window(ws);
         String8 error = d_cmd_params_apply_spec_query(scratch.arena, &params, ws->query_cmd_spec, str8(view->query_buffer, view->query_string_size));
-        d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_CompleteQuery));
+        d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_CompleteQuery));
         if(error.size != 0)
         {
           D_CmdParams p = df_cmd_params_from_window(ws);
           p.string = error;
-          d_push_cmd__root(&p, d_cmd_spec_from_kind(D_CmdKind_Error));
+          d_push_cmd(&p, d_cmd_spec_from_kind(D_CmdKind_Error));
         }
         scratch_end(scratch);
       }
@@ -6404,7 +6404,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
                       {
                         D_CmdParams params = df_cmd_params_from_window(ws);
                         params.string = str8_lit("Could not commit value successfully.");
-                        d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_Error));
+                        d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_Error));
                       }
                     }
                   }
@@ -6436,7 +6436,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
                     {
                       D_CmdParams params = df_cmd_params_from_window(ws);
                       params.string = expr;
-                      d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_ToggleWatchExpression));
+                      d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_ToggleWatchExpression));
                     }
                   }
                   if(ws->hover_eval_file_path.size != 0 || ws->hover_eval_vaddr != 0)
@@ -6460,7 +6460,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
                       params.text_point = ws->hover_eval_file_pt;
                       params.vaddr = ws->hover_eval_vaddr;
                       params.string = expr;
-                      d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_ToggleWatchPin));
+                      d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_ToggleWatchPin));
                     }
                   }
                 }
@@ -6610,7 +6610,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
                   p.panel = payload.panel;
                   p.view = payload.view;
                   p.dir2 = dir;
-                  d_push_cmd__root(&p, d_cmd_spec_from_kind(D_CmdKind_SplitPanel));
+                  d_push_cmd(&p, d_cmd_spec_from_kind(D_CmdKind_SplitPanel));
                 }
               }
             }
@@ -6696,7 +6696,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
               p.panel = payload.panel;
               p.view = payload.view;
               p.dir2 = dir;
-              d_push_cmd__root(&p, d_cmd_spec_from_kind(D_CmdKind_SplitPanel));
+              d_push_cmd(&p, d_cmd_spec_from_kind(D_CmdKind_SplitPanel));
             }
             
             // rjf: exit on opl child
@@ -6995,7 +6995,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
                   p.panel = payload.panel;
                   p.view = payload.view;
                   p.dir2 = dir;
-                  d_push_cmd__root(&p, d_cmd_spec_from_kind(D_CmdKind_SplitPanel));
+                  d_push_cmd(&p, d_cmd_spec_from_kind(D_CmdKind_SplitPanel));
                 }
                 else
                 {
@@ -7004,7 +7004,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
                   p.panel = payload.panel;
                   p.view = payload.view;
                   p.prev_view = df_handle_from_view(panel->last_tab_view);
-                  d_push_cmd__root(&p, d_cmd_spec_from_kind(D_CmdKind_MoveTab));
+                  d_push_cmd(&p, d_cmd_spec_from_kind(D_CmdKind_MoveTab));
                 }
               }
             }
@@ -7055,7 +7055,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
             if(view->is_filtering && ui_is_focus_active() && ui_slot_press(UI_EventActionSlot_Accept))
             {
               D_CmdParams p = df_cmd_params_from_view(ws, panel, view);
-              d_push_cmd__root(&p, d_cmd_spec_from_kind(D_CmdKind_ApplyFilter));
+              d_push_cmd(&p, d_cmd_spec_from_kind(D_CmdKind_ApplyFilter));
             }
             if(view->is_filtering || view->is_filtering_t > 0.01f)
             {
@@ -7096,7 +7096,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
                   if(ui_pressed(sig))
                   {
                     D_CmdParams p = df_cmd_params_from_panel(ws, panel);
-                    d_push_cmd__root(&p, d_cmd_spec_from_kind(D_CmdKind_FocusPanel));
+                    d_push_cmd(&p, d_cmd_spec_from_kind(D_CmdKind_FocusPanel));
                   }
                 }
               }
@@ -7200,22 +7200,22 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
               if(evt->flags & UI_EventFlag_Paste)
               {
                 ui_eat_event(evt);
-                d_push_cmd__root(&p, d_cmd_spec_from_kind(D_CmdKind_Filter));
-                d_push_cmd__root(&p, d_cmd_spec_from_kind(D_CmdKind_Paste));
+                d_push_cmd(&p, d_cmd_spec_from_kind(D_CmdKind_Filter));
+                d_push_cmd(&p, d_cmd_spec_from_kind(D_CmdKind_Paste));
               }
               else if(evt->string.size != 0 && evt->kind == UI_EventKind_Text)
               {
                 ui_eat_event(evt);
-                d_push_cmd__root(&p, d_cmd_spec_from_kind(D_CmdKind_Filter));
+                d_push_cmd(&p, d_cmd_spec_from_kind(D_CmdKind_Filter));
                 p.string = evt->string;
-                d_push_cmd__root(&p, d_cmd_spec_from_kind(D_CmdKind_InsertText));
+                d_push_cmd(&p, d_cmd_spec_from_kind(D_CmdKind_InsertText));
               }
             }
           }
           if(view->spec->info.flags & DF_ViewSpecFlag_CanFilter && (view->query_string_size != 0 || view->is_filtering) && ui_is_focus_active() && ui_slot_press(UI_EventActionSlot_Cancel))
           {
             D_CmdParams p = df_cmd_params_from_view(ws, panel, view);
-            d_push_cmd__root(&p, d_cmd_spec_from_kind(D_CmdKind_ClearFilter));
+            d_push_cmd(&p, d_cmd_spec_from_kind(D_CmdKind_ClearFilter));
           }
         }
         
@@ -7226,7 +7226,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
         if(ui_pressed(panel_sig))
         {
           D_CmdParams p = df_cmd_params_from_panel(ws, panel);
-          d_push_cmd__root(&p, d_cmd_spec_from_kind(D_CmdKind_FocusPanel));
+          d_push_cmd(&p, d_cmd_spec_from_kind(D_CmdKind_FocusPanel));
         }
         
         //////////////////////////
@@ -7374,7 +7374,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
                     if(ui_clicked(sig) || ui_middle_clicked(sig))
                     {
                       D_CmdParams params = df_cmd_params_from_view(ws, panel, view);
-                      d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_CloseTab));
+                      d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_CloseTab));
                     }
                   }
                 }
@@ -7386,7 +7386,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
                   {
                     next_selected_tab_view = view;
                     D_CmdParams p = df_cmd_params_from_panel(ws, panel);
-                    d_push_cmd__root(&p, d_cmd_spec_from_kind(D_CmdKind_FocusPanel));
+                    d_push_cmd(&p, d_cmd_spec_from_kind(D_CmdKind_FocusPanel));
                   }
                   else if(ui_dragging(sig) && !df_drag_is_active() && length_2f32(ui_drag_delta()) > 10.f)
                   {
@@ -7407,7 +7407,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
                   else if(ui_middle_clicked(sig))
                   {
                     D_CmdParams params = df_cmd_params_from_view(ws, panel, view);
-                    d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_CloseTab));
+                    d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_CloseTab));
                   }
                   if(ui_released(sig))
                   {
@@ -7465,7 +7465,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
                 if(ui_clicked(sig))
                 {
                   D_CmdParams p = df_cmd_params_from_panel(ws, panel);
-                  d_push_cmd__root(&p, d_cmd_spec_from_kind(D_CmdKind_FocusPanel));
+                  d_push_cmd(&p, d_cmd_spec_from_kind(D_CmdKind_FocusPanel));
                   UI_Key view_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("_view_menu_key_"));
                   ui_ctx_menu_open(view_menu_key, add_new_box->key, v2f32(0, tab_bar_vheight));
                 }
@@ -7537,7 +7537,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
                   params.dest_panel = df_handle_from_panel(panel);
                   params.view = df_handle_from_view(view);
                   params.prev_view = df_handle_from_view(active_drop_site->prev_view);
-                  d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_MoveTab));
+                  d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_MoveTab));
                 }
               }
             }
@@ -7596,7 +7596,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
                   params.panel = df_handle_from_panel(src_panel);
                   params.dest_panel = df_handle_from_panel(panel);
                   params.view = df_handle_from_view(view);
-                  d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_MoveTab));
+                  d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_MoveTab));
                   df_panel_notify_mutation(ws, panel);
                 }
                 
@@ -7607,7 +7607,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
                   params.panel = df_handle_from_panel(panel);
                   params.text_point = payload.text_point;
                   params.entity = d_handle_from_entity(entity);
-                  d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_SpawnEntityView));
+                  d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_SpawnEntityView));
                 }
               }
             }
@@ -7626,7 +7626,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
               Temp scratch = scratch_begin(0, 0);
               D_CmdParams p = df_cmd_params_from_panel(ws, panel);
               p.file_path = path_normalized_from_string(scratch.arena, n->string);
-              d_push_cmd__root(&p, d_cmd_spec_from_kind(D_CmdKind_Open));
+              d_push_cmd(&p, d_cmd_spec_from_kind(D_CmdKind_Open));
               scratch_end(scratch);
             }
             ui_eat_event(evt);
@@ -7736,12 +7736,12 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
         if(evt->delta_2f32.y < 0)
         {
           D_CmdParams params = df_cmd_params_from_window(ws);
-          d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_IncUIFontScale));
+          d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_IncUIFontScale));
         }
         else if(evt->delta_2f32.y > 0)
         {
           D_CmdParams params = df_cmd_params_from_window(ws);
-          d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_DecUIFontScale));
+          d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_DecUIFontScale));
         }
       }
     }
@@ -9873,7 +9873,7 @@ df_cmd_binding_buttons(DF_Window *ws, D_CmdSpec *spec)
         {
           D_CmdParams p = d_cmd_params_zero();
           p.string = str8_lit("Cannot rebind; this command uses a reserved keybinding.");
-          d_push_cmd__root(&p, d_cmd_spec_from_kind(D_CmdKind_Error));
+          d_push_cmd(&p, d_cmd_spec_from_kind(D_CmdKind_Error));
         }
         else
         {
@@ -10035,7 +10035,7 @@ df_cmd_list_menu_buttons(DF_Window *ws, U64 count, D_CmdKind *cmds, U32 *fastpat
     {
       D_CmdParams params = df_cmd_params_from_window(ws);
       params.cmd_spec = spec;
-      d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_RunCommand));
+      d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_RunCommand));
       ui_ctx_menu_close();
       ws->menu_bar_focused = 0;
     }
@@ -10434,7 +10434,7 @@ df_entity_desc_button(DF_Window *ws, D_Entity *entity, FuzzyMatchRangeList *name
     {
       D_CmdParams params = df_cmd_params_from_window(ws);
       params.entity = d_handle_from_entity(entity);
-      d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_EntityRefFastPath));
+      d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_EntityRefFastPath));
     }
     
     // rjf: right-click => context menu for this entity
@@ -10493,7 +10493,7 @@ df_src_loc_button(DF_Window *ws, String8 file_path, TxtPt point)
     D_CmdParams params = df_cmd_params_from_window(ws);
     params.file_path = file_path;
     params.text_point = point;
-    d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_FindCodeLocation));
+    d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_FindCodeLocation));
   }
   
   // rjf: hover => show full path
@@ -11010,7 +11010,7 @@ df_code_slice(DF_Window *ws, DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *m
             {
               D_CmdParams params = df_cmd_params_from_window(ws);
               params.entity = d_handle_from_entity(thread);
-              d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_SelectThread));
+              d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_SelectThread));
               ui_kill_action();
             }
             
@@ -11090,7 +11090,7 @@ df_code_slice(DF_Window *ws, DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *m
             {
               D_CmdParams params = df_cmd_params_from_window(ws);
               params.entity = d_handle_from_entity(bp);
-              d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_RemoveBreakpoint));
+              d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_RemoveBreakpoint));
             }
             
             // rjf: drag start
@@ -11149,7 +11149,7 @@ df_code_slice(DF_Window *ws, DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *m
             {
               D_CmdParams params = df_cmd_params_from_window(ws);
               params.entity = d_handle_from_entity(pin);
-              d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_RemoveEntity));
+              d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_RemoveEntity));
             }
             
             // rjf: drag start
@@ -11178,7 +11178,7 @@ df_code_slice(DF_Window *ws, DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *m
           p.file_path = d_interact_regs()->file_path;
           p.text_point = txt_pt(line_num, 1);
           p.vaddr = params->line_vaddrs[line_idx];
-          d_push_cmd__root(&p, d_cmd_spec_from_kind(D_CmdKind_AddBreakpoint));
+          d_push_cmd(&p, d_cmd_spec_from_kind(D_CmdKind_AddBreakpoint));
         }
       }
     }
@@ -11580,7 +11580,7 @@ df_code_slice(DF_Window *ws, DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *m
             p.file_path = d_interact_regs()->file_path;
             p.text_point = txt_pt(line_num, 1);
             p.vaddr = line_vaddr;
-            d_push_cmd__root(&p, d_cmd_spec_from_kind(D_CmdKind_RelocateEntity));
+            d_push_cmd(&p, d_cmd_spec_from_kind(D_CmdKind_RelocateEntity));
           }break;
           case D_EntityKind_Thread:
           {
@@ -11602,7 +11602,7 @@ df_code_slice(DF_Window *ws, DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *m
             D_CmdParams p = df_cmd_params_from_window(ws);
             p.entity = d_handle_from_entity(dropped_entity);
             p.vaddr = new_rip_vaddr;
-            d_push_cmd__root(&p, d_cmd_spec_from_kind(D_CmdKind_SetThreadIP));
+            d_push_cmd(&p, d_cmd_spec_from_kind(D_CmdKind_SetThreadIP));
           }break;
         }
       }
@@ -13189,8 +13189,8 @@ df_gfx_begin_frame(Arena *arena, D_CmdList *cmds)
           // rjf: save
           {
             D_CmdParams params = d_cmd_params_zero();
-            d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_WriteUserData));
-            d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_WriteProjectData));
+            d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_WriteUserData));
+            d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_WriteProjectData));
             df_gfx_state->last_window_queued_save = 1;
           }
           
@@ -13198,7 +13198,7 @@ df_gfx_begin_frame(Arena *arena, D_CmdList *cmds)
           for(DF_Window *window = df_gfx_state->first_window; window != 0; window = window->next)
           {
             D_CmdParams params = df_cmd_params_from_window(window);
-            d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_CloseWindow));
+            d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_CloseWindow));
           }
         }break;
         
@@ -13212,7 +13212,7 @@ df_gfx_begin_frame(Arena *arena, D_CmdList *cmds)
             {
               D_CmdParams p = df_cmd_params_from_window(w);
               p.string = push_str8_copy(arena, params.string);
-              d_push_cmd__root(&p, d_cmd_spec_from_kind(D_CmdKind_Error));
+              d_push_cmd(&p, d_cmd_spec_from_kind(D_CmdKind_Error));
             }
           }
         }break;
@@ -13266,10 +13266,10 @@ df_gfx_begin_frame(Arena *arena, D_CmdList *cmds)
               df_gfx_state->last_window_queued_save = 1;
               {
                 D_CmdParams params = d_cmd_params_zero();
-                d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_WriteUserData));
-                d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_WriteProjectData));
+                d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_WriteUserData));
+                d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_WriteProjectData));
               }
-              d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_CloseWindow));
+              d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_CloseWindow));
             }
             
             // NOTE(rjf): if this is the last window and we've queued the final autosave,
@@ -13314,7 +13314,7 @@ df_gfx_begin_frame(Arena *arena, D_CmdList *cmds)
           df_gfx_state->confirm_key = ui_key_zero();
           for(D_CmdNode *n = df_gfx_state->confirm_cmds.first; n != 0; n = n->next)
           {
-            d_push_cmd__root(&n->cmd.params, n->cmd.spec);
+            d_push_cmd(&n->cmd.params, n->cmd.spec);
           }
         }break;
         case D_CmdKind_ConfirmCancel:
@@ -13382,7 +13382,7 @@ df_gfx_begin_frame(Arena *arena, D_CmdList *cmds)
               continue;
             }
             D_CmdParams params = df_cmd_params_from_window(window);
-            d_push_cmd__root(&params, d_cmd_spec_from_kind(D_CmdKind_CloseWindow));
+            d_push_cmd(&params, d_cmd_spec_from_kind(D_CmdKind_CloseWindow));
           }
           
           //- rjf: apply fonts
