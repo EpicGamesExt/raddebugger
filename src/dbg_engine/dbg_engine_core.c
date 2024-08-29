@@ -1582,6 +1582,33 @@ internal void
 d_entity_equip_param(D_Entity *entity, String8 key, String8 value)
 {
   Temp scratch = scratch_begin(0, 0);
+  
+  //- rjf: try to incrementally add to existing tree
+  B32 incrementally_added = 0;
+  if(!md_node_is_nil(entity->params_root))
+  {
+    MD_Node *params = entity->params_root;
+    MD_Node *key_node = md_child_from_string(params, key, 0);
+    if(md_node_is_nil(key_node))
+    {
+      String8 key_copy = push_str8_copy(entity->params_arena, key);
+      key_node = md_push_node(entity->params_arena, MD_NodeKind_Main, MD_NodeFlag_Identifier, key_copy, key_copy, 0);
+      md_node_push_child(params, key_node);
+      String8 value_copy = push_str8_copy(entity->params_arena, value);
+      MD_TokenizeResult value_tokenize = md_tokenize_from_text(scratch.arena, value_copy);
+      MD_ParseResult value_parse = md_parse_from_text_tokens(scratch.arena, str8_zero(), value_copy, value_tokenize.tokens);
+      for(MD_EachNode(child, value_parse.root->first))
+      {
+        child->parent = key_node;
+      }
+      key_node->first = value_parse.root->first;
+      key_node->last = value_parse.root->last;
+      incrementally_added = 1;
+    }
+  }
+  
+  //- rjf: not incrementally added -> fully rewrite parameter tree
+  if(!incrementally_added)
   {
     MD_Node *params = md_tree_copy(scratch.arena, entity->params_root);
     MD_Node *key_node = md_child_from_string(params, key, 0);
@@ -1600,6 +1627,7 @@ d_entity_equip_param(D_Entity *entity, String8 key, String8 value)
     key_node->last = value_parse.root->last;
     d_entity_equip_params(entity, params);
   }
+  
   scratch_end(scratch);
 }
 

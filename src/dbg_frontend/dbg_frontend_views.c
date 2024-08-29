@@ -3392,6 +3392,67 @@ struct DF_FileSystemViewState
   F32 col_pcts[3];
 };
 
+typedef struct DF_PathQuery DF_PathQuery;
+struct DF_PathQuery
+{
+  String8 prefix;
+  String8 path;
+  String8 search;
+};
+
+internal DF_PathQuery
+df_path_query_from_string(String8 string)
+{
+  String8 dir_str_in_input = {0};
+  for(U64 i = 0; i < string.size; i += 1)
+  {
+    String8 substr1 = str8_substr(string, r1u64(i, i+1));
+    String8 substr2 = str8_substr(string, r1u64(i, i+2));
+    String8 substr3 = str8_substr(string, r1u64(i, i+3));
+    if(str8_match(substr1, str8_lit("/"), StringMatchFlag_SlashInsensitive))
+    {
+      dir_str_in_input = str8_substr(string, r1u64(i, string.size));
+    }
+    else if(i != 0 && str8_match(substr2, str8_lit(":/"), StringMatchFlag_SlashInsensitive))
+    {
+      dir_str_in_input = str8_substr(string, r1u64(i-1, string.size));
+    }
+    else if(str8_match(substr2, str8_lit("./"), StringMatchFlag_SlashInsensitive))
+    {
+      dir_str_in_input = str8_substr(string, r1u64(i, string.size));
+    }
+    else if(str8_match(substr3, str8_lit("../"), StringMatchFlag_SlashInsensitive))
+    {
+      dir_str_in_input = str8_substr(string, r1u64(i, string.size));
+    }
+    if(dir_str_in_input.size != 0)
+    {
+      break;
+    }
+  }
+  
+  DF_PathQuery path_query = {0};
+  if(dir_str_in_input.size != 0)
+  {
+    String8 dir = dir_str_in_input;
+    String8 search = {0};
+    U64 one_past_last_slash = dir.size;
+    for(U64 i = 0; i < dir_str_in_input.size; i += 1)
+    {
+      if(dir_str_in_input.str[i] == '/' || dir_str_in_input.str[i] == '\\')
+      {
+        one_past_last_slash = i+1;
+      }
+    }
+    dir.size = one_past_last_slash;
+    search = str8_substr(dir_str_in_input, r1u64(one_past_last_slash, dir_str_in_input.size));
+    path_query.path = dir;
+    path_query.search = search;
+    path_query.prefix = str8_substr(string, r1u64(0, path_query.path.str - string.str));
+  }
+  return path_query;
+}
+
 internal int
 df_qsort_compare_file_info__filename(DF_FileInfo *a, DF_FileInfo *b)
 {

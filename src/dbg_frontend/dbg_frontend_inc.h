@@ -5,6 +5,7 @@
 #define DBG_FRONTEND_INC_H
 
 #include "dbg_frontend_core.h"
+#include "dbg_frontend_widgets.h"
 #include "dbg_frontend_views.h"
 #include "dbg_frontend_view_rules.h"
 

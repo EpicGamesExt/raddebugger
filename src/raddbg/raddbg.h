@@ -221,7 +221,7 @@
 // [ ] @bug view-snapping in scroll-lists, accounting for mapping between
 //     visual positions & logical positions (variably sized rows in watch,
 //     table headers, etc.)
-// [ ] @cleanup collapse DF_CfgNodes into just being MD trees, find another way
+// [x] @cleanup collapse DF_CfgNodes into just being MD trees, find another way
 //     to encode config source - don't need it at every node
 // [ ] @cleanup straighten out index/number space & types & terminology for
 //     scroll lists
@@ -230,7 +230,7 @@
 // [ ] @cleanup naming pass over eval visualization part of the frontend,
 //     "blocks" vs. "canvas" vs. "expansion" - etc.
 // [ ] @cleanup central worker thread pool - eliminate per-layer thread pools
-// [ ] @cleanup in the frontend, we are starting to have to pass down "DF_Window"
+// [x] @cleanup in the frontend, we are starting to have to pass down "DF_Window"
 //     everywhere, because of per-window parameters (e.g. font rendering settings).
 //     this is really better solved by implicit thread-local parameters, similar to
 //     interaction registers, so that one window can "pick" all of the implicit

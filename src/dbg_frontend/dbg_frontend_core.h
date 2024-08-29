@@ -5,17 +5,6 @@
 #define DBG_FRONTEND_CORE_H
 
 ////////////////////////////////
-//~ rjf: Basic Types
-
-typedef struct DF_PathQuery DF_PathQuery;
-struct DF_PathQuery
-{
-  String8 prefix;
-  String8 path;
-  String8 search;
-};
-
-////////////////////////////////
 //~ rjf: Binding Types
 
 typedef struct DF_Binding DF_Binding;
@@ -413,83 +402,6 @@ typedef enum DF_PaletteCode
 DF_PaletteCode;
 
 ////////////////////////////////
-//~ rjf: UI Helper & Widget Types
-
-//- rjf: line edits
-
-typedef U32 DF_LineEditFlags;
-enum
-{
-  DF_LineEditFlag_Expander            = (1<<0),
-  DF_LineEditFlag_ExpanderSpace       = (1<<1),
-  DF_LineEditFlag_ExpanderPlaceholder = (1<<2),
-  DF_LineEditFlag_DisableEdit         = (1<<3),
-  DF_LineEditFlag_CodeContents        = (1<<4),
-  DF_LineEditFlag_Border              = (1<<5),
-  DF_LineEditFlag_NoBackground        = (1<<6),
-  DF_LineEditFlag_PreferDisplayString = (1<<7),
-  DF_LineEditFlag_DisplayStringIsCode = (1<<8),
-};
-
-//- rjf: code viewing/editing widgets
-
-typedef U32 DF_CodeSliceFlags;
-enum
-{
-  DF_CodeSliceFlag_Clickable         = (1<<0),
-  DF_CodeSliceFlag_PriorityMargin    = (1<<1),
-  DF_CodeSliceFlag_CatchallMargin    = (1<<2),
-  DF_CodeSliceFlag_LineNums          = (1<<3),
-};
-
-typedef struct DF_CodeSliceParams DF_CodeSliceParams;
-struct DF_CodeSliceParams
-{
-  // rjf: content
-  DF_CodeSliceFlags flags;
-  Rng1S64 line_num_range;
-  String8 *line_text;
-  Rng1U64 *line_ranges;
-  TXT_TokenArray *line_tokens;
-  D_EntityList *line_bps;
-  D_EntityList *line_ips;
-  D_EntityList *line_pins;
-  U64 *line_vaddrs;
-  D_LineList *line_infos;
-  DI_KeyList relevant_dbgi_keys;
-  
-  // rjf: visual parameters
-  FNT_Tag font;
-  F32 font_size;
-  F32 tab_size;
-  String8 search_query;
-  F32 line_height_px;
-  F32 priority_margin_width_px;
-  F32 catchall_margin_width_px;
-  F32 line_num_width_px;
-  F32 line_text_max_width_px;
-  F32 margin_float_off_px;
-};
-
-typedef struct DF_CodeSliceSignal DF_CodeSliceSignal;
-struct DF_CodeSliceSignal
-{
-  UI_Signal base;
-  TxtPt mouse_pt;
-  TxtRng mouse_expr_rng;
-  Vec2F32 mouse_expr_baseline_pos;
-  S64 clicked_margin_line_num;
-  D_Entity *dropped_entity;
-  S64 dropped_entity_line_num;
-  TxtRng copy_range;
-  B32 toggle_cursor_watch;
-  S64 set_next_statement_line_num;
-  S64 run_to_line_num;
-  S64 goto_disasm_line_num;
-  S64 goto_src_line_num;
-};
-
-////////////////////////////////
 //~ rjf: Auto-Complete Lister Types
 
 typedef U32 DF_AutoCompListerFlags;
@@ -569,9 +481,6 @@ struct DF_Window
   // rjf: config/settings
   DF_SettingVal setting_vals[DF_SettingCode_COUNT];
   UI_Palette cfg_palettes[DF_PaletteCode_COUNT]; // derivative from theme
-  
-  // rjf: view state delta history
-  D_StateDeltaHistory *view_state_hist;
   
   // rjf: dev interface state
   B32 dev_menu_is_open;
@@ -666,51 +575,7 @@ struct DF_Window
 };
 
 ////////////////////////////////
-//~ rjf: View Rule Block State Types
-
-typedef struct DF_ViewRuleBlockArenaExt DF_ViewRuleBlockArenaExt;
-struct DF_ViewRuleBlockArenaExt
-{
-  DF_ViewRuleBlockArenaExt *next;
-  Arena *arena;
-};
-
-typedef struct DF_ViewRuleBlockNode DF_ViewRuleBlockNode;
-struct DF_ViewRuleBlockNode
-{
-  DF_ViewRuleBlockNode *next;
-  D_ExpandKey key;
-  DF_ViewRuleBlockArenaExt *first_arena_ext;
-  DF_ViewRuleBlockArenaExt *last_arena_ext;
-  Arena *user_state_arena;
-  void *user_state;
-  U64 user_state_size;
-};
-
-typedef struct DF_ViewRuleBlockSlot DF_ViewRuleBlockSlot;
-struct DF_ViewRuleBlockSlot
-{
-  DF_ViewRuleBlockNode *first;
-  DF_ViewRuleBlockNode *last;
-};
-
-////////////////////////////////
 //~ rjf: Main Per-Process Graphical State
-
-typedef struct DF_String2ViewNode DF_String2ViewNode;
-struct DF_String2ViewNode
-{
-  DF_String2ViewNode *hash_next;
-  String8 string;
-  String8 view_name;
-};
-
-typedef struct DF_String2ViewSlot DF_String2ViewSlot;
-struct DF_String2ViewSlot
-{
-  DF_String2ViewNode *first;
-  DF_String2ViewNode *last;
-};
 
 typedef struct DF_State DF_State;
 struct DF_State
@@ -761,11 +626,6 @@ struct DF_State
   // rjf: view rule specs
   U64 view_rule_spec_table_size;
   DF_ViewRuleSpec **view_rule_spec_table;
-  
-  // rjf: view rule block state
-  U64 view_rule_block_slots_count;
-  DF_ViewRuleBlockSlot *view_rule_block_slots;
-  DF_ViewRuleBlockNode *free_view_rule_block_node;
   
   // rjf: cmd param slot -> view spec rule table
   D_CmdParamSlotViewSpecRuleList cmd_param_slot_view_spec_table[D_CmdParamSlot_COUNT];
@@ -856,11 +716,6 @@ global DF_State *df_state = 0;
 global DF_DragDropPayload df_drag_drop_payload = {0};
 global D_Handle df_last_drag_drop_panel = {0};
 global D_Handle df_last_drag_drop_prev_tab = {0};
-
-////////////////////////////////
-//~ rjf: Basic Helpers
-
-internal DF_PathQuery df_path_query_from_string(String8 string);
 
 ////////////////////////////////
 //~ rjf: View Type Functions
@@ -978,13 +833,6 @@ internal void df_view_store_paramf(DF_View *view, String8 key, char *fmt, ...);
 internal DF_TransientViewNode *df_transient_view_node_from_expand_key(DF_View *owner_view, D_ExpandKey key);
 
 ////////////////////////////////
-//~ rjf: View Rule Instance State Functions
-
-internal void *df_view_rule_block_get_or_push_user_state(D_ExpandKey key, U64 size);
-#define df_view_rule_block_user_state(key, type) (type *)df_view_rule_block_get_or_push_user_state(key, sizeof(type))
-internal Arena *df_view_rule_block_push_arena_ext(D_ExpandKey key);
-
-////////////////////////////////
 //~ rjf: Panel State Functions
 
 internal DF_Panel *df_panel_alloc(DF_Window *ws);
@@ -1065,55 +913,6 @@ internal String8List df_cfg_strings_from_gfx(Arena *arena, String8 root_path, D_
 
 internal String8 df_string_from_exception_code(U32 code);
 internal String8 df_stop_explanation_string_icon_from_ctrl_event(Arena *arena, CTRL_Event *event, DF_IconKind *icon_out);
-
-////////////////////////////////
-//~ rjf: UI Building Helpers
-
-#define DF_Palette(code) UI_Palette(df_palette_from_code(code))
-#define DF_Font(slot) UI_Font(df_font_from_slot(slot)) UI_TextRasterFlags(df_raster_flags_from_slot((slot)))
-
-////////////////////////////////
-//~ rjf: UI Widgets: Loading Overlay
-
-internal void df_loading_overlay(Rng2F32 rect, F32 loading_t, U64 progress_v, U64 progress_v_target);
-
-////////////////////////////////
-//~ rjf: UI Widgets: Fancy Buttons
-
-internal void df_cmd_binding_buttons(D_CmdSpec *spec);
-internal UI_Signal df_menu_bar_button(String8 string);
-internal UI_Signal df_cmd_spec_button(D_CmdSpec *spec);
-internal void df_cmd_list_menu_buttons(U64 count, D_CmdKind *cmds, U32 *fastpath_codepoints);
-internal UI_Signal df_icon_button(DF_IconKind kind, FuzzyMatchRangeList *matches, String8 string);
-internal UI_Signal df_icon_buttonf(DF_IconKind kind, FuzzyMatchRangeList *matches, char *fmt, ...);
-internal void df_entity_tooltips(D_Entity *entity);
-internal UI_Signal df_entity_desc_button(D_Entity *entity, FuzzyMatchRangeList *name_matches, String8 fuzzy_query, B32 is_implicit);
-internal void df_src_loc_button(String8 file_path, TxtPt point);
-
-////////////////////////////////
-//~ rjf: UI Widgets: Text View
-
-internal UI_BOX_CUSTOM_DRAW(df_thread_box_draw_extensions);
-internal UI_BOX_CUSTOM_DRAW(df_bp_box_draw_extensions);
-internal DF_CodeSliceSignal df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *preferred_column, String8 string);
-internal DF_CodeSliceSignal df_code_slicef(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *preferred_column, char *fmt, ...);
-
-internal B32 df_do_txt_controls(TXT_TextInfo *info, String8 data, U64 line_count_per_page, TxtPt *cursor, TxtPt *mark, S64 *preferred_column);
-
-////////////////////////////////
-//~ rjf: UI Widgets: Fancy Labels
-
-internal UI_Signal df_label(String8 string);
-internal UI_Signal df_error_label(String8 string);
-internal B32 df_help_label(String8 string);
-internal DR_FancyStringList df_fancy_string_list_from_code_string(Arena *arena, F32 alpha, B32 indirection_size_change, Vec4F32 base_color, String8 string);
-internal UI_Box *df_code_label(F32 alpha, B32 indirection_size_change, Vec4F32 base_color, String8 string);
-
-////////////////////////////////
-//~ rjf: UI Widgets: Line Edit
-
-internal UI_Signal df_line_edit(DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size, U64 *edit_string_size_out, B32 *expanded_out, String8 pre_edit_value, String8 string);
-internal UI_Signal df_line_editf(DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size, U64 *edit_string_size_out, B32 *expanded_out, String8 pre_edit_value, char *fmt, ...);
 
 ////////////////////////////////
 //~ rjf: Continuous Frame Requests
