@@ -1208,220 +1208,6 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
           }
         }break;
         
-        //- rjf: panel tab controls
-        case D_CmdKind_NextTab:
-        {
-          DF_Panel *panel = df_panel_from_handle(params.panel);
-          DF_View *view = df_selected_tab_from_panel(panel);
-          DF_View *next_view = view;
-          for(DF_View *v = view; !df_view_is_nil(v); v = df_view_is_nil(v->order_next) ? panel->first_tab_view : v->order_next)
-          {
-            if(!df_view_is_project_filtered(v) && v != view)
-            {
-              next_view = v;
-              break;
-            }
-          }
-          view = next_view;
-          panel->selected_tab_view = df_handle_from_view(view);
-        }break;
-        case D_CmdKind_PrevTab:
-        {
-          DF_Panel *panel = df_panel_from_handle(params.panel);
-          DF_View *view = df_selected_tab_from_panel(panel);
-          DF_View *next_view = view;
-          for(DF_View *v = view; !df_view_is_nil(v); v = df_view_is_nil(v->order_prev) ? panel->last_tab_view : v->order_prev)
-          {
-            if(!df_view_is_project_filtered(v) && v != view)
-            {
-              next_view = v;
-              break;
-            }
-          }
-          view = next_view;
-          panel->selected_tab_view = df_handle_from_view(view);
-        }break;
-        case D_CmdKind_MoveTabRight:
-        case D_CmdKind_MoveTabLeft:
-        {
-          DF_Panel *panel = ws->focused_panel;
-          DF_View *view = df_selected_tab_from_panel(panel);
-          DF_View *prev_view = (kind == D_CmdKind_MoveTabRight ? view->order_next : view->order_prev->order_prev);
-          if(!df_view_is_nil(prev_view) || kind == D_CmdKind_MoveTabLeft)
-          {
-            D_CmdParams p = df_cmd_params_from_window(ws);
-            p.panel = df_handle_from_panel(panel);
-            p.dest_panel = df_handle_from_panel(panel);
-            p.view = df_handle_from_view(view);
-            p.prev_view = df_handle_from_view(prev_view);
-            d_cmd_list_push(arena, cmds, &p, d_cmd_spec_from_kind(D_CmdKind_MoveTab));
-          }
-        }break;
-        case D_CmdKind_OpenTab:
-        {
-          DF_Panel *panel = df_panel_from_handle(params.panel);
-          DF_ViewSpec *spec = params.view_spec;
-          D_Entity *entity = &d_nil_entity;
-          if(spec->info.flags & DF_ViewSpecFlag_ParameterizedByEntity)
-          {
-            entity = d_entity_from_handle(params.entity);
-          }
-          if(!df_panel_is_nil(panel) && spec != &df_nil_view_spec)
-          {
-            DF_View *view = df_view_alloc();
-            String8 query = {0};
-            if(!d_entity_is_nil(entity))
-            {
-              query = d_eval_string_from_entity(scratch.arena, entity);
-            }
-            else if(params.file_path.size != 0)
-            {
-              query = d_eval_string_from_file_path(scratch.arena, params.file_path);
-            }
-            else if(params.string.size != 0)
-            {
-              query = params.string;
-            }
-            df_view_equip_spec(view, spec, query, params.params_tree);
-            df_panel_insert_tab_view(panel, panel->last_tab_view, view);
-          }
-        }break;
-        case D_CmdKind_CloseTab:
-        {
-          DF_Panel *panel = df_panel_from_handle(params.panel);
-          DF_View *view = df_view_from_handle(params.view);
-          if(!df_view_is_nil(view))
-          {
-            df_panel_remove_tab_view(panel, view);
-            df_view_release(view);
-          }
-        }break;
-        case D_CmdKind_MoveTab:
-        {
-          DF_Panel *src_panel = df_panel_from_handle(params.panel);
-          DF_View *view = df_view_from_handle(params.view);
-          DF_Panel *dst_panel = df_panel_from_handle(params.dest_panel);
-          DF_View *prev_view = df_view_from_handle(params.prev_view);
-          if(!df_panel_is_nil(src_panel) &&
-             !df_panel_is_nil(dst_panel) &&
-             prev_view != view)
-          {
-            df_panel_remove_tab_view(src_panel, view);
-            df_panel_insert_tab_view(dst_panel, prev_view, view);
-            ws->focused_panel = dst_panel;
-            B32 src_panel_is_empty = 1;
-            for(DF_View *v = src_panel->first_tab_view; !df_view_is_nil(v); v = v->order_next)
-            {
-              if(!df_view_is_project_filtered(v))
-              {
-                src_panel_is_empty = 0;
-                break;
-              }
-            }
-            if(src_panel_is_empty && src_panel != ws->root_panel)
-            {
-              D_CmdParams p = df_cmd_params_from_panel(ws, src_panel);
-              d_cmd_list_push(arena, cmds, &p, d_cmd_spec_from_kind(D_CmdKind_ClosePanel));
-            }
-          }
-        }break;
-        case D_CmdKind_TabBarTop:
-        {
-          DF_Panel *panel = df_panel_from_handle(params.panel);
-          panel->tab_side = Side_Min;
-        }break;
-        case D_CmdKind_TabBarBottom:
-        {
-          DF_Panel *panel = df_panel_from_handle(params.panel);
-          panel->tab_side = Side_Max;
-        }break;
-        
-        //- rjf: files
-        case D_CmdKind_Open:
-        {
-          String8 path = params.file_path;
-          FileProperties props = os_properties_from_file_path(path);
-          if(props.created != 0)
-          {
-            D_CmdParams p = params;
-            p.window    = df_handle_from_window(ws);
-            p.panel     = df_handle_from_panel(ws->focused_panel);
-            d_cmd_list_push(arena, cmds, &p, d_cmd_spec_from_kind(D_CmdKind_PendingFile));
-          }
-          else
-          {
-            d_errorf("Couldn't open file at \"%S\".", path);
-          }
-        }break;
-        case D_CmdKind_Switch:
-        {
-          // TODO(rjf): @viz_merge
-#if 0
-          B32 already_opened = 0;
-          DF_Panel *panel = df_panel_from_handle(params.panel);
-          for(DF_View *v = panel->first_tab_view; !df_view_is_nil(v); v = v->next)
-          {
-            if(df_view_is_project_filtered(v)) { continue; }
-            D_Entity *v_param_entity = d_entity_from_handle(v->params_entity);
-            if(v_param_entity == d_entity_from_handle(params.entity))
-            {
-              panel->selected_tab_view = df_handle_from_view(v);
-              already_opened = 1;
-              break;
-            }
-          }
-          if(already_opened == 0)
-          {
-            D_CmdParams p = params;
-            p.window = df_handle_from_window(ws);
-            p.panel = df_handle_from_panel(ws->focused_panel);
-            p.entity = params.entity;
-            d_cmd_list_push(arena, cmds, &p, d_cmd_spec_from_kind(D_CmdKind_PendingFile));
-          }
-#endif
-        }break;
-        case D_CmdKind_SwitchToPartnerFile:
-        {
-          DF_Panel *panel = df_panel_from_handle(params.panel);
-          DF_View *view = df_selected_tab_from_panel(panel);
-          DF_ViewKind view_kind = df_view_kind_from_string(view->spec->info.name);
-          if(view_kind == DF_ViewKind_Text)
-          {
-            String8 file_path      = d_file_path_from_eval_string(scratch.arena, str8(view->query_buffer, view->query_string_size));
-            String8 file_full_path = path_normalized_from_string(scratch.arena, file_path);
-            String8 file_folder    = str8_chop_last_slash(file_full_path);
-            String8 file_name      = str8_skip_last_slash(str8_chop_last_dot(file_full_path));
-            String8 file_ext       = str8_skip_last_dot(file_full_path);
-            String8 partner_ext_candidates[] =
-            {
-              str8_lit_comp("h"),
-              str8_lit_comp("hpp"),
-              str8_lit_comp("hxx"),
-              str8_lit_comp("c"),
-              str8_lit_comp("cc"),
-              str8_lit_comp("cxx"),
-              str8_lit_comp("cpp"),
-            };
-            for(U64 idx = 0; idx < ArrayCount(partner_ext_candidates); idx += 1)
-            {
-              if(!str8_match(partner_ext_candidates[idx], file_ext, StringMatchFlag_CaseInsensitive))
-              {
-                String8 candidate = push_str8f(scratch.arena, "%S.%S", file_name, partner_ext_candidates[idx]);
-                String8 candidate_path = push_str8f(scratch.arena, "%S/%S", file_folder, candidate);
-                FileProperties candidate_props = os_properties_from_file_path(candidate_path);
-                if(candidate_props.modified != 0)
-                {
-                  // TODO(rjf):
-                  //D_CmdParams p = df_cmd_params_from_panel(ws, panel);
-                  //p.entity = d_handle_from_entity(candidate);
-                  //d_cmd_list_push(arena, cmds, &p, d_cmd_spec_from_kind(D_CmdKind_Switch));
-                  break;
-                }
-              }
-            }
-          }
-        }break;
-        
         //- rjf: meta controls
         case D_CmdKind_Edit:
         {
@@ -9434,6 +9220,223 @@ df_begin_frame(Arena *arena, D_CmdList *cmds)
               for(DF_Panel *child = parent->first; !df_panel_is_nil(child); child = child->next)
               {
                 child->pct_of_parent /= 1.f-removed_size_pct;
+              }
+            }
+          }
+        }break;
+        
+        //- rjf: panel tab controls
+        case D_CmdKind_NextTab:
+        {
+          DF_Panel *panel = df_panel_from_handle(params->panel);
+          DF_View *view = df_selected_tab_from_panel(panel);
+          DF_View *next_view = view;
+          for(DF_View *v = view; !df_view_is_nil(v); v = df_view_is_nil(v->order_next) ? panel->first_tab_view : v->order_next)
+          {
+            if(!df_view_is_project_filtered(v) && v != view)
+            {
+              next_view = v;
+              break;
+            }
+          }
+          view = next_view;
+          panel->selected_tab_view = df_handle_from_view(view);
+        }break;
+        case D_CmdKind_PrevTab:
+        {
+          DF_Panel *panel = df_panel_from_handle(params->panel);
+          DF_View *view = df_selected_tab_from_panel(panel);
+          DF_View *next_view = view;
+          for(DF_View *v = view; !df_view_is_nil(v); v = df_view_is_nil(v->order_prev) ? panel->last_tab_view : v->order_prev)
+          {
+            if(!df_view_is_project_filtered(v) && v != view)
+            {
+              next_view = v;
+              break;
+            }
+          }
+          view = next_view;
+          panel->selected_tab_view = df_handle_from_view(view);
+        }break;
+        case D_CmdKind_MoveTabRight:
+        case D_CmdKind_MoveTabLeft:
+        {
+          DF_Window *ws = df_window_from_handle(params->window);
+          DF_Panel *panel = ws->focused_panel;
+          DF_View *view = df_selected_tab_from_panel(panel);
+          DF_View *prev_view = (kind == D_CmdKind_MoveTabRight ? view->order_next : view->order_prev->order_prev);
+          if(!df_view_is_nil(prev_view) || kind == D_CmdKind_MoveTabLeft)
+          {
+            D_CmdParams p = df_cmd_params_from_window(ws);
+            p.panel = df_handle_from_panel(panel);
+            p.dest_panel = df_handle_from_panel(panel);
+            p.view = df_handle_from_view(view);
+            p.prev_view = df_handle_from_view(prev_view);
+            d_cmd_list_push(arena, cmds, &p, d_cmd_spec_from_kind(D_CmdKind_MoveTab));
+          }
+        }break;
+        case D_CmdKind_OpenTab:
+        {
+          DF_Panel *panel = df_panel_from_handle(params->panel);
+          DF_ViewSpec *spec = params->view_spec;
+          D_Entity *entity = &d_nil_entity;
+          if(spec->info.flags & DF_ViewSpecFlag_ParameterizedByEntity)
+          {
+            entity = d_entity_from_handle(params->entity);
+          }
+          if(!df_panel_is_nil(panel) && spec != &df_nil_view_spec)
+          {
+            DF_View *view = df_view_alloc();
+            String8 query = {0};
+            if(!d_entity_is_nil(entity))
+            {
+              query = d_eval_string_from_entity(scratch.arena, entity);
+            }
+            else if(params->file_path.size != 0)
+            {
+              query = d_eval_string_from_file_path(scratch.arena, params->file_path);
+            }
+            else if(params->string.size != 0)
+            {
+              query = params->string;
+            }
+            df_view_equip_spec(view, spec, query, params->params_tree);
+            df_panel_insert_tab_view(panel, panel->last_tab_view, view);
+          }
+        }break;
+        case D_CmdKind_CloseTab:
+        {
+          DF_Panel *panel = df_panel_from_handle(params->panel);
+          DF_View *view = df_view_from_handle(params->view);
+          if(!df_view_is_nil(view))
+          {
+            df_panel_remove_tab_view(panel, view);
+            df_view_release(view);
+          }
+        }break;
+        case D_CmdKind_MoveTab:
+        {
+          DF_Window *ws = df_window_from_handle(params->window);
+          DF_Panel *src_panel = df_panel_from_handle(params->panel);
+          DF_View *view = df_view_from_handle(params->view);
+          DF_Panel *dst_panel = df_panel_from_handle(params->dest_panel);
+          DF_View *prev_view = df_view_from_handle(params->prev_view);
+          if(!df_panel_is_nil(src_panel) &&
+             !df_panel_is_nil(dst_panel) &&
+             prev_view != view)
+          {
+            df_panel_remove_tab_view(src_panel, view);
+            df_panel_insert_tab_view(dst_panel, prev_view, view);
+            ws->focused_panel = dst_panel;
+            B32 src_panel_is_empty = 1;
+            for(DF_View *v = src_panel->first_tab_view; !df_view_is_nil(v); v = v->order_next)
+            {
+              if(!df_view_is_project_filtered(v))
+              {
+                src_panel_is_empty = 0;
+                break;
+              }
+            }
+            if(src_panel_is_empty && src_panel != ws->root_panel)
+            {
+              D_CmdParams p = df_cmd_params_from_panel(ws, src_panel);
+              d_cmd_list_push(arena, cmds, &p, d_cmd_spec_from_kind(D_CmdKind_ClosePanel));
+            }
+          }
+        }break;
+        case D_CmdKind_TabBarTop:
+        {
+          DF_Panel *panel = df_panel_from_handle(params->panel);
+          panel->tab_side = Side_Min;
+        }break;
+        case D_CmdKind_TabBarBottom:
+        {
+          DF_Panel *panel = df_panel_from_handle(params->panel);
+          panel->tab_side = Side_Max;
+        }break;
+        
+        //- rjf: files
+        case D_CmdKind_Open:
+        {
+          DF_Window *ws = df_window_from_handle(params->window);
+          String8 path = params->file_path;
+          FileProperties props = os_properties_from_file_path(path);
+          if(props.created != 0)
+          {
+            D_CmdParams p = *params;
+            p.window    = df_handle_from_window(ws);
+            p.panel     = df_handle_from_panel(ws->focused_panel);
+            d_cmd_list_push(arena, cmds, &p, d_cmd_spec_from_kind(D_CmdKind_PendingFile));
+          }
+          else
+          {
+            d_errorf("Couldn't open file at \"%S\".", path);
+          }
+        }break;
+        case D_CmdKind_Switch:
+        {
+          // TODO(rjf): @viz_merge
+#if 0
+          B32 already_opened = 0;
+          DF_Panel *panel = df_panel_from_handle(params->panel);
+          for(DF_View *v = panel->first_tab_view; !df_view_is_nil(v); v = v->next)
+          {
+            if(df_view_is_project_filtered(v)) { continue; }
+            D_Entity *v_param_entity = d_entity_from_handle(v->params_entity);
+            if(v_param_entity == d_entity_from_handle(params->entity))
+            {
+              panel->selected_tab_view = df_handle_from_view(v);
+              already_opened = 1;
+              break;
+            }
+          }
+          if(already_opened == 0)
+          {
+            D_CmdParams p = params;
+            p.window = df_handle_from_window(ws);
+            p.panel = df_handle_from_panel(ws->focused_panel);
+            p.entity = params->entity;
+            d_cmd_list_push(arena, cmds, &p, d_cmd_spec_from_kind(D_CmdKind_PendingFile));
+          }
+#endif
+        }break;
+        case D_CmdKind_SwitchToPartnerFile:
+        {
+          DF_Panel *panel = df_panel_from_handle(params->panel);
+          DF_View *view = df_selected_tab_from_panel(panel);
+          DF_ViewKind view_kind = df_view_kind_from_string(view->spec->info.name);
+          if(view_kind == DF_ViewKind_Text)
+          {
+            String8 file_path      = d_file_path_from_eval_string(scratch.arena, str8(view->query_buffer, view->query_string_size));
+            String8 file_full_path = path_normalized_from_string(scratch.arena, file_path);
+            String8 file_folder    = str8_chop_last_slash(file_full_path);
+            String8 file_name      = str8_skip_last_slash(str8_chop_last_dot(file_full_path));
+            String8 file_ext       = str8_skip_last_dot(file_full_path);
+            String8 partner_ext_candidates[] =
+            {
+              str8_lit_comp("h"),
+              str8_lit_comp("hpp"),
+              str8_lit_comp("hxx"),
+              str8_lit_comp("c"),
+              str8_lit_comp("cc"),
+              str8_lit_comp("cxx"),
+              str8_lit_comp("cpp"),
+            };
+            for(U64 idx = 0; idx < ArrayCount(partner_ext_candidates); idx += 1)
+            {
+              if(!str8_match(partner_ext_candidates[idx], file_ext, StringMatchFlag_CaseInsensitive))
+              {
+                String8 candidate = push_str8f(scratch.arena, "%S.%S", file_name, partner_ext_candidates[idx]);
+                String8 candidate_path = push_str8f(scratch.arena, "%S/%S", file_folder, candidate);
+                FileProperties candidate_props = os_properties_from_file_path(candidate_path);
+                if(candidate_props.modified != 0)
+                {
+                  // TODO(rjf):
+                  //D_CmdParams p = df_cmd_params_from_panel(ws, panel);
+                  //p.entity = d_handle_from_entity(candidate);
+                  //d_cmd_list_push(arena, cmds, &p, d_cmd_spec_from_kind(D_CmdKind_Switch));
+                  break;
+                }
               }
             }
           }
