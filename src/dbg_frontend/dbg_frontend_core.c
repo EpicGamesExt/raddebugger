@@ -6089,6 +6089,12 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
         ws->hover_eval_open_t = 0;
       }
       
+      // rjf: reset focus state if hover eval is not being built
+      if(!build_hover_eval || ws->hover_eval_string.size == 0 || !hover_eval_is_open)
+      {
+        ws->hover_eval_focused = 0;
+      }
+      
       // rjf: build hover eval
       if(build_hover_eval && ws->hover_eval_string.size != 0 && hover_eval_is_open)
         DF_Font(DF_FontSlot_Code)

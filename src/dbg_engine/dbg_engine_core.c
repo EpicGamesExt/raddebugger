@@ -1230,37 +1230,6 @@ d_name_release(String8 string)
 ////////////////////////////////
 //~ rjf: Entity State Functions
 
-//- rjf: entity mutation notification codepath
-
-internal void
-d_entity_notify_mutation(D_Entity *entity)
-{
-  for(D_Entity *e = entity; !d_entity_is_nil(e); e = e->parent)
-  {
-    D_EntityKindFlags flags = d_entity_kind_flags_table[entity->kind];
-    if(e == entity && flags & D_EntityKindFlag_LeafMutProjectConfig)
-    {
-      d_cmd(D_CmdKind_WriteProjectData);
-    }
-    if(e == entity && flags & D_EntityKindFlag_LeafMutSoftHalt && d_ctrl_targets_running())
-    {
-      d_state->entities_mut_soft_halt = 1;
-    }
-    if(e == entity && flags & D_EntityKindFlag_LeafMutDebugInfoMap)
-    {
-      d_state->entities_mut_dbg_info_map = 1;
-    }
-    if(flags & D_EntityKindFlag_TreeMutSoftHalt && d_ctrl_targets_running())
-    {
-      d_state->entities_mut_soft_halt = 1;
-    }
-    if(flags & D_EntityKindFlag_TreeMutDebugInfoMap)
-    {
-      d_state->entities_mut_dbg_info_map = 1;
-    }
-  }
-}
-
 //- rjf: entity allocation + tree forming
 
 internal D_Entity *
@@ -1321,7 +1290,6 @@ d_entity_alloc(D_Entity *parent, D_EntityKind kind)
   
   // rjf: dirtify caches
   d_state->kind_alloc_gens[kind] += 1;
-  d_entity_notify_mutation(entity);
   
   // rjf: log
   LogInfoNamedBlockF("new_entity")
@@ -1339,7 +1307,6 @@ d_entity_mark_for_deletion(D_Entity *entity)
   if(!d_entity_is_nil(entity))
   {
     entity->flags |= D_EntityFlag_MarkedForDeletion;
-    d_entity_notify_mutation(entity);
   }
 }
 
@@ -1409,10 +1376,6 @@ d_entity_change_parent(D_Entity *entity, D_Entity *old_parent, D_Entity *new_par
   entity->parent = new_parent;
   
   // rjf: notify
-  d_entity_notify_mutation(entity);
-  d_entity_notify_mutation(new_parent);
-  d_entity_notify_mutation(old_parent);
-  d_entity_notify_mutation(prev_child);
   d_state->kind_alloc_gens[entity->kind] += 1;
 }
 
@@ -1426,7 +1389,6 @@ d_entity_equip_txt_pt(D_Entity *entity, TxtPt point)
   d_state_delta_history_push_struct_delta(d_state_delta_history(), &entity->flags, .guard_entity = entity);
   entity->text_point = point;
   entity->flags |= D_EntityFlag_HasTextPoint;
-  d_entity_notify_mutation(entity);
 }
 
 internal void
@@ -1437,7 +1399,6 @@ d_entity_equip_entity_handle(D_Entity *entity, D_Handle handle)
   d_state_delta_history_push_struct_delta(d_state_delta_history(), &entity->flags, .guard_entity = entity);
   entity->entity_handle = handle;
   entity->flags |= D_EntityFlag_HasEntityHandle;
-  d_entity_notify_mutation(entity);
 }
 
 internal void
@@ -1446,7 +1407,6 @@ d_entity_equip_disabled(D_Entity *entity, B32 value)
   d_require_entity_nonnil(entity, return);
   d_state_delta_history_push_struct_delta(d_state_delta_history(), &entity->disabled, .guard_entity = entity);
   entity->disabled = value;
-  d_entity_notify_mutation(entity);
 }
 
 internal void
@@ -1457,7 +1417,6 @@ d_entity_equip_u64(D_Entity *entity, U64 u64)
   d_state_delta_history_push_struct_delta(d_state_delta_history(), &entity->flags, .guard_entity = entity);
   entity->u64 = u64;
   entity->flags |= D_EntityFlag_HasU64;
-  d_entity_notify_mutation(entity);
 }
 
 internal void
@@ -1478,7 +1437,6 @@ d_entity_equip_color_hsva(D_Entity *entity, Vec4F32 hsva)
   d_state_delta_history_push_struct_delta(d_state_delta_history(), &entity->flags, .guard_entity = entity);
   entity->color_hsva = hsva;
   entity->flags |= D_EntityFlag_HasColor;
-  d_entity_notify_mutation(entity);
 }
 
 internal void
@@ -1487,7 +1445,6 @@ d_entity_equip_cfg_src(D_Entity *entity, D_CfgSrc cfg_src)
   d_require_entity_nonnil(entity, return);
   d_state_delta_history_push_struct_delta(d_state_delta_history(), &entity->cfg_src, .guard_entity = entity);
   entity->cfg_src = cfg_src;
-  d_entity_notify_mutation(entity);
 }
 
 internal void
@@ -1496,7 +1453,6 @@ d_entity_equip_timestamp(D_Entity *entity, U64 timestamp)
   d_require_entity_nonnil(entity, return);
   d_state_delta_history_push_struct_delta(d_state_delta_history(), &entity->timestamp, .guard_entity = entity);
   entity->timestamp = timestamp;
-  d_entity_notify_mutation(entity);
 }
 
 //- rjf: control layer correllation equipment
@@ -1509,7 +1465,6 @@ d_entity_equip_ctrl_machine_id(D_Entity *entity, CTRL_MachineID machine_id)
   d_state_delta_history_push_struct_delta(d_state_delta_history(), &entity->flags, .guard_entity = entity);
   entity->ctrl_machine_id = machine_id;
   entity->flags |= D_EntityFlag_HasCtrlMachineID;
-  d_entity_notify_mutation(entity);
 }
 
 internal void
@@ -1520,7 +1475,6 @@ d_entity_equip_ctrl_handle(D_Entity *entity, DMN_Handle handle)
   d_state_delta_history_push_struct_delta(d_state_delta_history(), &entity->flags, .guard_entity = entity);
   entity->ctrl_handle = handle;
   entity->flags |= D_EntityFlag_HasCtrlHandle;
-  d_entity_notify_mutation(entity);
 }
 
 internal void
@@ -1531,7 +1485,6 @@ d_entity_equip_arch(D_Entity *entity, Architecture arch)
   d_state_delta_history_push_struct_delta(d_state_delta_history(), &entity->flags, .guard_entity = entity);
   entity->arch = arch;
   entity->flags |= D_EntityFlag_HasArch;
-  d_entity_notify_mutation(entity);
 }
 
 internal void
@@ -1542,7 +1495,6 @@ d_entity_equip_ctrl_id(D_Entity *entity, U32 id)
   d_state_delta_history_push_struct_delta(d_state_delta_history(), &entity->flags, .guard_entity = entity);
   entity->ctrl_id = id;
   entity->flags |= D_EntityFlag_HasCtrlID;
-  d_entity_notify_mutation(entity);
 }
 
 internal void
@@ -1553,7 +1505,6 @@ d_entity_equip_stack_base(D_Entity *entity, U64 stack_base)
   d_state_delta_history_push_struct_delta(d_state_delta_history(), &entity->flags, .guard_entity = entity);
   entity->stack_base = stack_base;
   entity->flags |= D_EntityFlag_HasStackBase;
-  d_entity_notify_mutation(entity);
 }
 
 internal void
@@ -1564,7 +1515,6 @@ d_entity_equip_vaddr_rng(D_Entity *entity, Rng1U64 range)
   d_state_delta_history_push_struct_delta(d_state_delta_history(), &entity->flags, .guard_entity = entity);
   entity->vaddr_rng = range;
   entity->flags |= D_EntityFlag_HasVAddrRng;
-  d_entity_notify_mutation(entity);
 }
 
 internal void
@@ -1575,7 +1525,6 @@ d_entity_equip_vaddr(D_Entity *entity, U64 vaddr)
   d_state_delta_history_push_struct_delta(d_state_delta_history(), &entity->flags, .guard_entity = entity);
   entity->vaddr = vaddr;
   entity->flags |= D_EntityFlag_HasVAddr;
-  d_entity_notify_mutation(entity);
 }
 
 //- rjf: name equipment
@@ -1597,7 +1546,6 @@ d_entity_equip_name(D_Entity *entity, String8 name)
   {
     entity->name = str8_zero();
   }
-  d_entity_notify_mutation(entity);
 }
 
 internal void
@@ -1985,18 +1933,14 @@ d_set_thread_freeze_state(D_Entity *thread, B32 frozen)
     }
     node->handle = thread_handle;
     d_handle_list_push_node(&d_state->frozen_threads, node);
-    d_state->entities_mut_soft_halt = 1;
   }
   
   // rjf: frozen => not frozen
   if(is_frozen && !should_be_frozen)
   {
-    d_state->entities_mut_soft_halt = 1;
     d_handle_list_remove(&d_state->frozen_threads, already_frozen_node);
     SLLStackPush(d_state->free_handle_node, already_frozen_node);
   }
-  
-  d_entity_notify_mutation(thread);
 }
 
 internal B32
@@ -3270,6 +3214,46 @@ d_unwind_from_ctrl_unwind(Arena *arena, DI_Scope *di_scope, D_Entity *process, C
 ////////////////////////////////
 //~ rjf: Target Controls
 
+#if !defined(BLAKE2_H)
+#define HAVE_SSE2
+#include "third_party/blake2/blake2.h"
+#include "third_party/blake2/blake2b.c"
+#endif
+
+//- rjf: state which parameterizes runs, but can be live-edited -> hash
+
+internal U128
+d_hash_from_ctrl_param_state(void)
+{
+  U128 result = {0};
+  Temp scratch = scratch_begin(0, 0);
+  {
+    // rjf: build data strings of all param data
+    String8List strings = {0};
+    {
+      for(D_HandleNode *n = d_state->frozen_threads.first; n != 0; n = n->next)
+      {
+        str8_list_push(scratch.arena, &strings, str8_struct(&n->handle));
+      }
+      D_EntityList bps = d_query_cached_entity_list_with_kind(D_EntityKind_Breakpoint);
+      for(D_EntityNode *n = bps.first; n != 0; n = n->next)
+      {
+        D_Entity *bp = n->entity;
+        D_Entity *loc = d_entity_child_from_kind(bp, D_EntityKind_Location);
+        str8_list_push(scratch.arena, &strings, loc->name);
+        str8_list_push(scratch.arena, &strings, str8_struct(&loc->text_point));
+        str8_list_push(scratch.arena, &strings, str8_struct(&loc->vaddr));
+      }
+    }
+    
+    // rjf: join & hash to produce result
+    String8 string = str8_list_join(scratch.arena, &strings, 0);
+    blake2b((U8 *)&result.u64[0], sizeof(result), string.str, string.size, 0, 0);
+  }
+  scratch_end(scratch);
+  return result;
+}
+
 //- rjf: control message dispatching
 
 internal void
@@ -3290,6 +3274,11 @@ internal void
 d_ctrl_run(D_RunKind run, D_Entity *run_thread, CTRL_RunFlags flags, CTRL_TrapList *run_traps)
 {
   Temp scratch = scratch_begin(0, 0);
+  
+  // rjf: compute hash of all run-parameterization entities, store
+  {
+    d_state->ctrl_last_run_param_state_hash = d_hash_from_ctrl_param_state();
+  }
   
   // rjf: build run message
   CTRL_Msg msg = {(run == D_RunKind_Run || run == D_RunKind_Step) ? CTRL_MsgKind_Run : CTRL_MsgKind_SingleStep};
@@ -8506,18 +8495,16 @@ d_end_frame(void)
 {
   ProfBeginFunction();
   
-  //- rjf: entity mutation -> soft halt
-  if(d_state->entities_mut_soft_halt)
+  //- rjf: compute state parameterization hash for ctrl runs, if ctrl is running -
+  // if the hash doesn't match the one for the last run, we need to soft-halt and
+  // re-send down the parameterization state
+  if(d_ctrl_targets_running())
   {
-    d_state->entities_mut_soft_halt = 0;
-    d_cmd(D_CmdKind_SoftHaltRefresh);
-  }
-  
-  //- rjf: entity mutation -> send refreshed debug info map
-  if(d_state->entities_mut_dbg_info_map) ProfScope("entity mutation -> send refreshed debug info map")
-  {
-    d_state->entities_mut_dbg_info_map = 0;
-    // TODO(rjf)
+    U128 state_hash = d_hash_from_ctrl_param_state();
+    if(!u128_match(state_hash, d_state->ctrl_last_run_param_state_hash))
+    {
+      d_cmd(D_CmdKind_SoftHaltRefresh);
+    }
   }
   
   //- rjf: send messages

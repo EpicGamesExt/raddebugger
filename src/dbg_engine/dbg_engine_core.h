@@ -75,33 +75,23 @@ typedef U32 D_EntityKindFlags;
 enum
 {
   //- rjf: allowed operations
-  D_EntityKindFlag_CanDelete                = (1<<8),
-  D_EntityKindFlag_CanFreeze                = (1<<9),
-  D_EntityKindFlag_CanEdit                  = (1<<10),
-  D_EntityKindFlag_CanRename                = (1<<11),
-  D_EntityKindFlag_CanEnable                = (1<<12),
-  D_EntityKindFlag_CanCondition             = (1<<13),
-  D_EntityKindFlag_CanDuplicate             = (1<<14),
-  
-  //- rjf: mutation -> cascading effects
-  D_EntityKindFlag_LeafMutUserConfig        = (1<<0),
-  D_EntityKindFlag_TreeMutUserConfig        = (1<<1),
-  D_EntityKindFlag_LeafMutProjectConfig     = (1<<2),
-  D_EntityKindFlag_TreeMutProjectConfig     = (1<<3),
-  D_EntityKindFlag_LeafMutSoftHalt          = (1<<4),
-  D_EntityKindFlag_TreeMutSoftHalt          = (1<<5),
-  D_EntityKindFlag_LeafMutDebugInfoMap      = (1<<6),
-  D_EntityKindFlag_TreeMutDebugInfoMap      = (1<<7),
+  D_EntityKindFlag_CanDelete                = (1<<0),
+  D_EntityKindFlag_CanFreeze                = (1<<1),
+  D_EntityKindFlag_CanEdit                  = (1<<2),
+  D_EntityKindFlag_CanRename                = (1<<3),
+  D_EntityKindFlag_CanEnable                = (1<<4),
+  D_EntityKindFlag_CanCondition             = (1<<5),
+  D_EntityKindFlag_CanDuplicate             = (1<<6),
   
   //- rjf: name categorization
-  D_EntityKindFlag_NameIsCode               = (1<<15),
-  D_EntityKindFlag_NameIsPath               = (1<<16),
+  D_EntityKindFlag_NameIsCode               = (1<<7),
+  D_EntityKindFlag_NameIsPath               = (1<<8),
   
   //- rjf: lifetime categorization
-  D_EntityKindFlag_UserDefinedLifetime      = (1<<17),
+  D_EntityKindFlag_UserDefinedLifetime      = (1<<9),
   
   //- rjf: serialization
-  D_EntityKindFlag_IsSerializedToConfig     = (1<<18),
+  D_EntityKindFlag_IsSerializedToConfig     = (1<<10),
 };
 
 ////////////////////////////////
@@ -1008,8 +998,6 @@ struct D_State
   D_Entity *entities_free[2]; // [0] -> normal lifetime, not user defined; [1] -> user defined lifetime (& thus undoable)
   U64 entities_free_count;
   U64 entities_active_count;
-  B32 entities_mut_soft_halt;
-  B32 entities_mut_dbg_info_map;
   
   // rjf: entity query caches
   U64 kind_alloc_gens[D_EntityKind_COUNT];
@@ -1052,6 +1040,7 @@ struct D_State
   D_Handle ctrl_last_run_thread;
   CTRL_RunFlags ctrl_last_run_flags;
   CTRL_TrapList ctrl_last_run_traps;
+  U128 ctrl_last_run_param_state_hash;
   B32 ctrl_is_running;
   B32 ctrl_soft_halt_issued;
   Arena *ctrl_msg_arena;
@@ -1243,9 +1232,6 @@ internal void d_name_release(String8 string);
 ////////////////////////////////
 //~ rjf: Entity Stateful Functions
 
-//- rjf: entity mutation notification codepath
-internal void d_entity_notify_mutation(D_Entity *entity);
-
 //- rjf: entity allocation + tree forming
 internal D_Entity *d_entity_alloc(D_Entity *parent, D_EntityKind kind);
 internal void d_entity_mark_for_deletion(D_Entity *entity);
@@ -1364,6 +1350,9 @@ internal D_Unwind d_unwind_from_ctrl_unwind(Arena *arena, DI_Scope *di_scope, D_
 
 ////////////////////////////////
 //~ rjf: Target Controls
+
+//- rjf: state which parameterizes runs, but can be live-edited -> hash
+internal U128 d_hash_from_ctrl_param_state(void);
 
 //- rjf: control message dispatching
 internal void d_push_ctrl_msg(CTRL_Msg *msg);
