@@ -614,6 +614,10 @@ struct DF_Window
   UI_Key tab_ctx_menu_key;
   D_Handle tab_ctx_menu_panel;
   D_Handle tab_ctx_menu_view;
+  U8 tab_ctx_menu_input_buffer[1024];
+  U64 tab_ctx_menu_input_size;
+  TxtPt tab_ctx_menu_input_cursor;
+  TxtPt tab_ctx_menu_input_mark;
   
   // rjf: autocomplete lister state
   U64 autocomp_last_frame_idx;

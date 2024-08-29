@@ -4475,6 +4475,41 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
           ui_ctx_menu_close();
         }
         
+        // rjf: param tree editing
+        UI_TextPadding(ui_top_font_size()*1.5f) DF_Font(ws, DF_FontSlot_Code)
+        {
+          Temp scratch = scratch_begin(&arena, 1);
+          D_ViewRuleSpec *core_vr_spec = d_view_rule_spec_from_string(view->spec->info.name);
+          String8 schema_string = core_vr_spec->info.schema;
+          MD_TokenizeResult schema_tokenize = md_tokenize_from_text(scratch.arena, schema_string);
+          MD_ParseResult schema_parse = md_parse_from_text_tokens(scratch.arena, str8_zero(), schema_string, schema_tokenize.tokens);
+          MD_Node *schema_root = schema_parse.root->first;
+          if(!md_node_is_nil(schema_root))
+          {
+            if(!md_node_is_nil(schema_root->first))
+            {
+              DF_Palette(ws, DF_PaletteCode_Floating) ui_divider(ui_em(1.f, 1.f));
+            }
+            for(MD_EachNode(key, schema_root->first))
+            {
+              UI_Row
+              {
+                MD_Node *params = view->params_roots[view->params_write_gen%ArrayCount(view->params_roots)];
+                MD_Node *param_tree = md_child_from_string(params, key->string, 0);
+                String8 pre_edit_value = md_string_from_children(scratch.arena, param_tree);
+                UI_PrefWidth(ui_em(10.f, 1.f)) ui_label(key->string);
+                UI_Signal sig = df_line_editf(ws, DF_LineEditFlag_Border|DF_LineEditFlag_CodeContents, 0, 0, &ws->tab_ctx_menu_input_cursor, &ws->tab_ctx_menu_input_mark, ws->tab_ctx_menu_input_buffer, sizeof(ws->tab_ctx_menu_input_buffer), &ws->tab_ctx_menu_input_size, 0, pre_edit_value, "%S##view_param", key->string);
+                if(ui_committed(sig))
+                {
+                  String8 new_string = str8(ws->tab_ctx_menu_input_buffer, ws->tab_ctx_menu_input_size);
+                  df_view_store_param(view, key->string, new_string);
+                }
+              }
+            }
+          }
+          scratch_end(scratch);
+        }
+        
       }
       
       scratch_end(scratch);
