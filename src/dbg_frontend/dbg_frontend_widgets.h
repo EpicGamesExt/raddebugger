@@ -68,16 +68,6 @@ struct DF_CodeSliceSignal
   UI_Signal base;
   TxtPt mouse_pt;
   TxtRng mouse_expr_rng;
-  Vec2F32 mouse_expr_baseline_pos;
-  S64 clicked_margin_line_num;
-  D_Entity *dropped_entity;
-  S64 dropped_entity_line_num;
-  TxtRng copy_range;
-  B32 toggle_cursor_watch;
-  S64 set_next_statement_line_num;
-  S64 run_to_line_num;
-  S64 goto_disasm_line_num;
-  S64 goto_src_line_num;
 };
 
 ////////////////////////////////

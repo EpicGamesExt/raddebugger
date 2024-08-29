@@ -1925,8 +1925,8 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
       String8 line_text = params->line_text[line_slice_idx];
       F32 expr_hoff_px = params->line_num_width_px + fnt_dim_from_tag_size_string(params->font, params->font_size, 0, params->tab_size, str8_prefix(line_text, selected_rng.min.column-1)).x;
       result.mouse_expr_rng = mouse_expr_rng = selected_rng;
-      result.mouse_expr_baseline_pos = mouse_expr_baseline_pos = v2f32(text_container_box->rect.x0+expr_hoff_px,
-                                                                       text_container_box->rect.y0+line_slice_idx*params->line_height_px + params->line_height_px*0.85f);
+      mouse_expr_baseline_pos = v2f32(text_container_box->rect.x0+expr_hoff_px,
+                                      text_container_box->rect.y0+line_slice_idx*params->line_height_px + params->line_height_px*0.85f);
       mouse_expr = str8_substr(line_text, r1u64(selected_rng.min.column-1, selected_rng.max.column-1));
       mouse_expr_is_explicit = 1;
     }
@@ -1942,8 +1942,8 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
       {
         F32 expr_hoff_px = params->line_num_width_px + fnt_dim_from_tag_size_string(params->font, params->font_size, 0, params->tab_size, str8_prefix(line_text, expr_off_rng.min-line_range.min)).x;
         result.mouse_expr_rng = mouse_expr_rng = txt_rng(txt_pt(mouse_pt.line, 1+(expr_off_rng.min-line_range.min)), txt_pt(mouse_pt.line, 1+(expr_off_rng.max-line_range.min)));
-        result.mouse_expr_baseline_pos = mouse_expr_baseline_pos = v2f32(text_container_box->rect.x0+expr_hoff_px,
-                                                                         text_container_box->rect.y0+line_slice_idx*params->line_height_px + params->line_height_px*0.85f);
+        mouse_expr_baseline_pos = v2f32(text_container_box->rect.x0+expr_hoff_px,
+                                        text_container_box->rect.y0+line_slice_idx*params->line_height_px + params->line_height_px*0.85f);
         mouse_expr = str8_substr(line_text, r1u64(expr_off_rng.min-line_range.min, expr_off_rng.max-line_range.min));
       }
     }
