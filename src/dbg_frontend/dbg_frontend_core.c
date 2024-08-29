@@ -505,9 +505,9 @@ df_cmd_params_from_window(DF_Window *window)
   p.panel  = df_handle_from_panel(window->focused_panel);
   p.view   = df_handle_from_view(df_selected_tab_from_panel(window->focused_panel));
   p.prefer_dasm = df_prefer_dasm_from_window(window);
-  p.entity = d_interact_regs()->thread;
-  p.unwind_index = d_interact_regs()->unwind_count;
-  p.inline_depth = d_interact_regs()->inline_depth;
+  p.entity = d_regs()->thread;
+  p.unwind_index = d_regs()->unwind_count;
+  p.inline_depth = d_regs()->inline_depth;
   return p;
 }
 
@@ -519,9 +519,9 @@ df_cmd_params_from_panel(DF_Window *window, DF_Panel *panel)
   p.panel  = df_handle_from_panel(panel);
   p.view   = df_handle_from_view(df_selected_tab_from_panel(panel));
   p.prefer_dasm = df_prefer_dasm_from_window(window);
-  p.entity = d_interact_regs()->thread;
-  p.unwind_index = d_interact_regs()->unwind_count;
-  p.inline_depth = d_interact_regs()->inline_depth;
+  p.entity = d_regs()->thread;
+  p.unwind_index = d_regs()->unwind_count;
+  p.inline_depth = d_regs()->inline_depth;
   return p;
 }
 
@@ -533,9 +533,9 @@ df_cmd_params_from_view(DF_Window *window, DF_Panel *panel, DF_View *view)
   p.panel  = df_handle_from_panel(panel);
   p.view   = df_handle_from_view(view);
   p.prefer_dasm = df_prefer_dasm_from_window(window);
-  p.entity = d_interact_regs()->thread;
-  p.unwind_index = d_interact_regs()->unwind_count;
-  p.inline_depth = d_interact_regs()->inline_depth;
+  p.entity = d_regs()->thread;
+  p.unwind_index = d_regs()->unwind_count;
+  p.inline_depth = d_regs()->inline_depth;
   return p;
 }
 
@@ -1139,9 +1139,9 @@ df_window_open(Vec2F32 size, OS_Handle preferred_monitor, D_CfgSrc cfg_src)
   {
     os_window_set_monitor(window->os, preferred_monitor);
   }
-  if(df_state->first_window == 0) D_InteractRegsScope
+  if(df_state->first_window == 0) D_RegsScope
   {
-    d_interact_regs()->window = df_handle_from_window(window);
+    d_regs()->window = df_handle_from_window(window);
     DF_FontSlot english_font_slots[] = {DF_FontSlot_Main, DF_FontSlot_Code};
     DF_FontSlot icon_font_slot = DF_FontSlot_Icons;
     for(U64 idx = 0; idx < ArrayCount(english_font_slots); idx += 1)
@@ -2731,11 +2731,11 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
         }break;
         case D_CmdKind_FindSelectedThread:
         {
-          D_Entity *selected_thread = d_entity_from_handle(d_base_interact_regs()->thread);
+          D_Entity *selected_thread = d_entity_from_handle(d_base_regs()->thread);
           D_CmdParams params = df_cmd_params_from_window(ws);
           params.entity = d_handle_from_entity(selected_thread);
-          params.unwind_index = d_base_interact_regs()->unwind_count;
-          params.inline_depth = d_base_interact_regs()->inline_depth;
+          params.unwind_index = d_base_regs()->unwind_count;
+          params.inline_depth = d_base_regs()->inline_depth;
           d_cmd_list_push(arena, cmds, &params, d_cmd_spec_from_kind(D_CmdKind_FindThread));
         }break;
         
@@ -3017,7 +3017,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
           {
             file_path = params.file_path;
             point = params.text_point;
-            thread = d_entity_from_handle(d_interact_regs()->thread);
+            thread = d_entity_from_handle(d_regs()->thread);
             process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
             vaddr = params.vaddr;
           }
@@ -3398,8 +3398,8 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
   //////////////////////////////
   //- rjf: fill panel/view interaction registers
   //
-  d_interact_regs()->panel  = df_handle_from_panel(ws->focused_panel);
-  d_interact_regs()->view   = ws->focused_panel->selected_tab_view;
+  d_regs()->panel  = df_handle_from_panel(ws->focused_panel);
+  d_regs()->view   = ws->focused_panel->selected_tab_view;
   
   //////////////////////////////
   //- rjf: process view-level commands on leaf panels
@@ -3417,15 +3417,15 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
       DF_View *view = df_selected_tab_from_panel(panel);
       if(!df_view_is_nil(view))
       {
-        d_push_interact_regs();
-        d_interact_regs()->panel = df_handle_from_panel(panel);
-        d_interact_regs()->view  = df_handle_from_view(view);
+        d_push_regs();
+        d_regs()->panel = df_handle_from_panel(panel);
+        d_regs()->view  = df_handle_from_view(view);
         DF_ViewCmdFunctionType *do_view_cmds_function = view->spec->info.cmd_hook;
         do_view_cmds_function(view, view->params_roots[view->params_read_gen%ArrayCount(view->params_roots)], str8(view->query_buffer, view->query_string_size), cmds);
-        D_InteractRegs *view_regs = d_pop_interact_regs();
+        D_Regs *view_regs = d_pop_regs();
         if(panel == ws->focused_panel)
         {
-          MemoryCopyStruct(d_interact_regs(), view_regs);
+          MemoryCopyStruct(d_regs(), view_regs);
         }
       }
     }
@@ -3693,7 +3693,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
         
         //- rjf: draw current interaction regs
         {
-          D_InteractRegs *regs = d_interact_regs();
+          D_Regs *regs = d_regs();
 #define Handle(name) ui_labelf("%s: [0x%I64x, 0x%I64x]", #name, (regs->name).u64[0], (regs->name).u64[1])
           Handle(window);
           Handle(panel);
@@ -3825,7 +3825,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
         }
         if(range.min.line == range.max.line && ui_clicked(df_icon_buttonf(DF_IconKind_RightArrow, 0, "Set Next Statement")))
         {
-          D_Entity *thread = d_entity_from_handle(d_interact_regs()->thread);
+          D_Entity *thread = d_entity_from_handle(d_regs()->thread);
           U64 new_rip_vaddr = ws->code_ctx_menu_vaddr;
           if(ws->code_ctx_menu_file_path.size != 0)
           {
@@ -3911,7 +3911,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
         }
         if(ws->code_ctx_menu_file_path.size != 0 && range.min.line == range.max.line && ui_clicked(df_icon_buttonf(DF_IconKind_FileOutline, 0, "Go To Disassembly")))
         {
-          D_Entity *thread = d_entity_from_handle(d_interact_regs()->thread);
+          D_Entity *thread = d_entity_from_handle(d_regs()->thread);
           U64 vaddr = 0;
           for(D_LineNode *n = lines.first; n != 0; n = n->next)
           {
@@ -4140,7 +4140,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
           {
             if(entity->kind == D_EntityKind_Thread)
             {
-              B32 is_selected = d_handle_match(d_base_interact_regs()->thread, d_handle_from_entity(entity));
+              B32 is_selected = d_handle_match(d_base_regs()->thread, d_handle_from_entity(entity));
               if(is_selected)
               {
                 df_icon_buttonf(DF_IconKind_Thread, 0, "[Selected]###select_entity");
@@ -4566,8 +4566,8 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
         Temp scratch = scratch_begin(&arena, 1);
         
         //- rjf: unpack lister params
-        D_Entity *thread = d_entity_from_handle(d_base_interact_regs()->thread);
-        U64 thread_rip_vaddr = d_query_cached_rip_from_thread_unwind(thread, d_base_interact_regs()->unwind_count);
+        D_Entity *thread = d_entity_from_handle(d_base_regs()->thread);
+        U64 thread_rip_vaddr = d_query_cached_rip_from_thread_unwind(thread, d_base_regs()->unwind_count);
         D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
         D_Entity *module = d_module_from_process_vaddr(process, thread_rip_vaddr);
         U64 thread_rip_voff = d_voff_from_vaddr(module, thread_rip_vaddr);
@@ -6097,9 +6097,9 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
       {
         Temp scratch = scratch_begin(&arena, 1);
         DI_Scope *scope = di_scope_open();
-        D_Entity *thread = d_entity_from_handle(d_base_interact_regs()->thread);
+        D_Entity *thread = d_entity_from_handle(d_base_regs()->thread);
         D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
-        U64 thread_unwind_rip_vaddr = d_query_cached_rip_from_thread_unwind(thread, d_base_interact_regs()->unwind_count);
+        U64 thread_unwind_rip_vaddr = d_query_cached_rip_from_thread_unwind(thread, d_base_regs()->unwind_count);
         String8 expr = ws->hover_eval_string;
         E_Eval eval = e_eval_from_string(scratch.arena, expr);
         D_CfgTable top_level_cfg_table = {0};
@@ -7030,12 +7030,12 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
           UI_WidthFill
         {
           //- rjf: push interaction registers, fill with per-view states
-          d_push_interact_regs();
+          d_push_regs();
           {
             DF_View *view = df_selected_tab_from_panel(panel);
-            d_interact_regs()->panel = df_handle_from_panel(panel);
-            d_interact_regs()->view  = df_handle_from_view(view);
-            d_interact_regs()->file_path = d_file_path_from_eval_string(d_frame_arena(), str8(view->query_buffer, view->query_string_size));
+            d_regs()->panel = df_handle_from_panel(panel);
+            d_regs()->view  = df_handle_from_view(view);
+            d_regs()->file_path = d_file_path_from_eval_string(d_frame_arena(), str8(view->query_buffer, view->query_string_size));
           }
           
           //- rjf: build view container
@@ -7062,10 +7062,10 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
           }
           
           //- rjf: pop interaction registers; commit if this is the selected view
-          D_InteractRegs *view_regs = d_pop_interact_regs();
+          D_Regs *view_regs = d_pop_regs();
           if(ws->focused_panel == panel)
           {
-            MemoryCopyStruct(d_interact_regs(), view_regs);
+            MemoryCopyStruct(d_regs(), view_regs);
           }
         }
         
@@ -8223,7 +8223,7 @@ df_append_value_strings_from_eval(Arena *arena, D_EvalVizStringFlags flags, U32 
       E_Eval value_eval = e_value_eval_from_eval(eval);
       B32 ptee_has_content = (direct_type_kind != E_TypeKind_Null && direct_type_kind != E_TypeKind_Void);
       B32 ptee_has_string  = (E_TypeKind_Char8 <= direct_type_kind && direct_type_kind <= E_TypeKind_UChar32);
-      D_Entity *thread = d_entity_from_handle(d_interact_regs()->thread);
+      D_Entity *thread = d_entity_from_handle(d_regs()->thread);
       D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
       String8 symbol_name = d_symbol_name_from_process_vaddr(arena, process, value_eval.value.u64, 1);
       
@@ -8511,7 +8511,7 @@ df_value_string_from_eval(Arena *arena, D_EvalVizStringFlags flags, U32 default_
 internal void
 df_set_hover_eval(Vec2F32 pos, String8 file_path, TxtPt pt, U64 vaddr, String8 string)
 {
-  DF_Window *window = df_window_from_handle(d_interact_regs()->window);
+  DF_Window *window = df_window_from_handle(d_regs()->window);
   if(window->hover_eval_last_frame_idx+1 < d_frame_index() &&
      ui_key_match(ui_active_key(UI_MouseButtonKind_Left), ui_key_zero()) &&
      ui_key_match(ui_active_key(UI_MouseButtonKind_Middle), ui_key_zero()) &&
@@ -8753,7 +8753,7 @@ df_view_rule_autocomp_lister_params_from_input_cursor(Arena *arena, String8 stri
 internal void
 df_set_autocomp_lister_query(UI_Key root_key, DF_AutoCompListerParams *params, String8 input, U64 cursor_off)
 {
-  DF_Window *window = df_window_from_handle(d_interact_regs()->window);
+  DF_Window *window = df_window_from_handle(d_regs()->window);
   String8 query = df_autocomp_query_word_from_input_string_off(input, cursor_off);
   String8 current_query = str8(window->autocomp_lister_query_buffer, window->autocomp_lister_query_size);
   if(cursor_off != window->autocomp_cursor_off)
@@ -8970,7 +8970,7 @@ df_theme_color_from_txt_token_kind(TXT_TokenKind kind)
 internal UI_Palette *
 df_palette_from_code(DF_PaletteCode code)
 {
-  DF_Window *window = df_window_from_handle(d_interact_regs()->window);
+  DF_Window *window = df_window_from_handle(d_regs()->window);
   UI_Palette *result = &window->cfg_palettes[code];
   return result;
 }
@@ -8988,7 +8988,7 @@ internal F32
 df_font_size_from_slot(DF_FontSlot slot)
 {
   F32 result = 0;
-  DF_Window *ws = df_window_from_handle(d_interact_regs()->window);
+  DF_Window *ws = df_window_from_handle(d_regs()->window);
   F32 dpi = os_dpi_from_window(ws->os);
   if(dpi != ws->last_dpi)
   {
@@ -9042,7 +9042,7 @@ df_raster_flags_from_slot(DF_FontSlot slot)
 internal DF_SettingVal
 df_setting_val_from_code(DF_SettingCode code)
 {
-  DF_Window *window = df_window_from_handle(d_interact_regs()->window);
+  DF_Window *window = df_window_from_handle(d_regs()->window);
   DF_SettingVal result = {0};
   if(window != 0)
   {
@@ -9902,7 +9902,7 @@ df_cmd_list_menu_buttons(U64 count, D_CmdKind *cmds, U32 *fastpath_codepoints)
     {
       d_cmd(D_CmdKind_RunCommand, .cmd_spec = spec);
       ui_ctx_menu_close();
-      DF_Window *window = df_window_from_handle(d_interact_regs()->window);
+      DF_Window *window = df_window_from_handle(d_regs()->window);
       window->menu_bar_focused = 0;
     }
   }
@@ -10150,7 +10150,7 @@ df_entity_desc_button(D_Entity *entity, FuzzyMatchRangeList *name_matches, Strin
   {
     CTRL_Event stop_event = d_ctrl_last_stop_event();
     D_Entity *stopped_thread = d_entity_from_ctrl_handle(stop_event.machine_id, stop_event.entity);
-    D_Entity *selected_thread = d_entity_from_handle(d_base_interact_regs()->thread);
+    D_Entity *selected_thread = d_entity_from_handle(d_base_regs()->thread);
     if(selected_thread == entity)
     {
       palette = df_palette_from_code(DF_PaletteCode_NeutralPopButton);
@@ -10305,7 +10305,7 @@ df_entity_desc_button(D_Entity *entity, FuzzyMatchRangeList *name_matches, Strin
     else if(ui_right_clicked(sig))
     {
       D_Handle handle = d_handle_from_entity(entity);
-      DF_Window *window = df_window_from_handle(d_interact_regs()->window);
+      DF_Window *window = df_window_from_handle(d_regs()->window);
       ui_ctx_menu_open(df_state->entity_ctx_menu_key, sig.box->key, v2f32(0, sig.box->rect.y1 - sig.box->rect.y0));
       window->entity_ctx_menu_entity = handle;
     }
@@ -10509,9 +10509,9 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   DF_CodeSliceSignal result = {0};
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
-  D_Entity *selected_thread = d_entity_from_handle(d_interact_regs()->thread);
+  D_Entity *selected_thread = d_entity_from_handle(d_regs()->thread);
   D_Entity *selected_thread_process = d_entity_ancestor_from_kind(selected_thread, D_EntityKind_Process);
-  U64 selected_thread_rip_unwind_vaddr = d_query_cached_rip_from_thread_unwind(selected_thread, d_interact_regs()->unwind_count);
+  U64 selected_thread_rip_unwind_vaddr = d_query_cached_rip_from_thread_unwind(selected_thread, d_regs()->unwind_count);
   D_Entity *selected_thread_module = d_module_from_process_vaddr(selected_thread_process, selected_thread_rip_unwind_vaddr);
   CTRL_Event stop_event = d_ctrl_last_stop_event();
   D_Entity *stopper_thread = d_entity_from_ctrl_handle(stop_event.machine_id, stop_event.entity);
@@ -10609,7 +10609,7 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             {
               continue;
             }
-            U64 unwind_count = (thread == selected_thread) ? d_interact_regs()->unwind_count : 0;
+            U64 unwind_count = (thread == selected_thread) ? d_regs()->unwind_count : 0;
             U64 thread_rip_vaddr = d_query_cached_rip_from_thread_unwind(thread, unwind_count);
             D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
             D_Entity *module = d_module_from_process_vaddr(process, thread_rip_vaddr);
@@ -10709,7 +10709,7 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             {
               D_Handle handle = d_handle_from_entity(thread);
               ui_ctx_menu_open(df_state->entity_ctx_menu_key, thread_box->key, v2f32(0, thread_box->rect.y1-thread_box->rect.y0));
-              DF_Window *window = df_window_from_handle(d_interact_regs()->window);
+              DF_Window *window = df_window_from_handle(d_regs()->window);
               window->entity_ctx_menu_entity = handle;
             }
             
@@ -10767,7 +10767,7 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             {
               continue;
             }
-            U64 unwind_count = (thread == selected_thread) ? d_interact_regs()->unwind_count : 0;
+            U64 unwind_count = (thread == selected_thread) ? d_regs()->unwind_count : 0;
             U64 thread_rip_vaddr = d_query_cached_rip_from_thread_unwind(thread, unwind_count);
             D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
             D_Entity *module = d_module_from_process_vaddr(process, thread_rip_vaddr);
@@ -10830,7 +10830,7 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
               
               // rjf: fill out progress t (progress into range of current line's
               // voff range)
-              if(d_interact_regs()->file_path.size != 0 && params->line_infos[line_idx].first != 0)
+              if(d_regs()->file_path.size != 0 && params->line_infos[line_idx].first != 0)
               {
                 D_LineList *lines = &params->line_infos[line_idx];
                 D_Line *line = 0;
@@ -10865,7 +10865,7 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             {
               D_Handle handle = d_handle_from_entity(thread);
               ui_ctx_menu_open(df_state->entity_ctx_menu_key, thread_box->key, v2f32(0, thread_box->rect.y1-thread_box->rect.y0));
-              DF_Window *window = df_window_from_handle(d_interact_regs()->window);
+              DF_Window *window = df_window_from_handle(d_regs()->window);
               window->entity_ctx_menu_entity = handle;
             }
             
@@ -10907,7 +10907,7 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
               bp_draw->alive_t  = bp->alive_t;
               bp_draw->do_lines = df_setting_val_from_code(DF_SettingCode_BreakpointLines).s32;
               bp_draw->do_glow  = df_setting_val_from_code(DF_SettingCode_BreakpointGlow).s32;
-              if(d_interact_regs()->file_path.size != 0)
+              if(d_regs()->file_path.size != 0)
               {
                 D_LineList *lines = &params->line_infos[line_idx];
                 for(D_LineNode *n = lines->first; n != 0; n = n->next)
@@ -10966,7 +10966,7 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             {
               D_Handle handle = d_handle_from_entity(bp);
               ui_ctx_menu_open(df_state->entity_ctx_menu_key, bp_box->key, v2f32(0, bp_box->rect.y1-bp_box->rect.y0));
-              DF_Window *window = df_window_from_handle(d_interact_regs()->window);
+              DF_Window *window = df_window_from_handle(d_regs()->window);
               window->entity_ctx_menu_entity = handle;
             }
           }
@@ -11024,7 +11024,7 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             {
               D_Handle handle = d_handle_from_entity(pin);
               ui_ctx_menu_open(df_state->entity_ctx_menu_key, pin_box->key, v2f32(0, pin_box->rect.y1-pin_box->rect.y0));
-              DF_Window *window = df_window_from_handle(d_interact_regs()->window);
+              DF_Window *window = df_window_from_handle(d_regs()->window);
               window->entity_ctx_menu_entity = handle;
             }
           }
@@ -11035,7 +11035,7 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
         if(ui_clicked(line_margin_sig))
         {
           d_cmd(D_CmdKind_AddBreakpoint,
-                .file_path  = d_interact_regs()->file_path,
+                .file_path  = d_regs()->file_path,
                 .text_point = txt_pt(line_num, 1),
                 .vaddr      = params->line_vaddrs[line_idx]);
         }
@@ -11080,7 +11080,7 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
           {
             if(n->v.dbgi_key.min_timestamp >= best_stamp)
             {
-              has_line_info = (n->v.pt.line == line_num || d_interact_regs()->file_path.size == 0);
+              has_line_info = (n->v.pt.line == line_num || d_regs()->file_path.size == 0);
               line_info_line_num = n->v.pt.line;
               best_stamp = n->v.dbgi_key.min_timestamp;
             }
@@ -11250,7 +11250,7 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
               if(ui_right_clicked(sig))
               {
                 ui_ctx_menu_open(df_state->entity_ctx_menu_key, sig.box->key, v2f32(0, sig.box->rect.y1-sig.box->rect.y0));
-                DF_Window *window = df_window_from_handle(d_interact_regs()->window);
+                DF_Window *window = df_window_from_handle(d_regs()->window);
                 window->entity_ctx_menu_entity = d_handle_from_entity(pin);
               }
             }
@@ -11391,11 +11391,11 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
         *cursor = *mark = mouse_pt;
       }
       ui_ctx_menu_open(df_state->code_ctx_menu_key, ui_key_zero(), sub_2f32(ui_mouse(), v2f32(2, 2)));
-      DF_Window *window = df_window_from_handle(d_interact_regs()->window);
+      DF_Window *window = df_window_from_handle(d_regs()->window);
       arena_clear(window->code_ctx_menu_arena);
-      window->code_ctx_menu_file_path = push_str8_copy(window->code_ctx_menu_arena, d_interact_regs()->file_path);
-      window->code_ctx_menu_text_key  = d_interact_regs()->text_key;
-      window->code_ctx_menu_lang_kind = d_interact_regs()->lang_kind;
+      window->code_ctx_menu_file_path = push_str8_copy(window->code_ctx_menu_arena, d_regs()->file_path);
+      window->code_ctx_menu_text_key  = d_regs()->text_key;
+      window->code_ctx_menu_lang_kind = d_regs()->lang_kind;
       window->code_ctx_menu_range     = txt_rng(*cursor, *mark);
       if(params->line_num_range.min <= cursor->line && cursor->line < params->line_num_range.max)
       {
@@ -11438,14 +11438,14 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
           {
             d_cmd(D_CmdKind_RelocateEntity,
                   .entity = d_handle_from_entity(dropped_entity),
-                  .file_path  = d_interact_regs()->file_path,
+                  .file_path  = d_regs()->file_path,
                   .text_point = txt_pt(line_num, 1),
                   .vaddr      = line_vaddr);
           }break;
           case D_EntityKind_Thread:
           {
             U64 new_rip_vaddr = line_vaddr;
-            if(d_interact_regs()->file_path.size != 0)
+            if(d_regs()->file_path.size != 0)
             {
               D_LineList *lines = &params->line_infos[line_idx];
               for(D_LineNode *n = lines->first; n != 0; n = n->next)
@@ -11518,7 +11518,7 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   {
     U64 line_slice_idx = mouse_pt.line-params->line_num_range.min;
     D_LineList *lines = &params->line_infos[line_slice_idx];
-    if(lines->first != 0 && (d_interact_regs()->file_path.size == 0 || lines->first->v.pt.line == mouse_pt.line))
+    if(lines->first != 0 && (d_regs()->file_path.size == 0 || lines->first->v.pt.line == mouse_pt.line))
     {
       DF_RichHoverInfo info = {0};
       info.process      = d_handle_from_entity(selected_thread_process);
@@ -11544,7 +11544,7 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
         U64 line_idx = mouse_pt.line-params->line_num_range.min;
         line_vaddr = params->line_vaddrs[line_idx];
       }
-      df_set_hover_eval(mouse_expr_baseline_pos, d_interact_regs()->file_path, mouse_pt, line_vaddr, mouse_expr);
+      df_set_hover_eval(mouse_expr_baseline_pos, d_regs()->file_path, mouse_pt, line_vaddr, mouse_expr);
     }
   }
   
@@ -11907,7 +11907,7 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
           D_LineList *lines = &params->line_infos[line_idx];
           for(D_LineNode *n = lines->first; n != 0; n = n->next)
           {
-            if((n->v.pt.line == line_num || d_interact_regs()->file_path.size == 0) &&
+            if((n->v.pt.line == line_num || d_regs()->file_path.size == 0) &&
                ((di_key_match(&n->v.dbgi_key, &rich_hover.dbgi_key) &&
                  n->v.voff_range.min <= rich_hover_voff_range.min && rich_hover_voff_range.min < n->v.voff_range.max) ||
                 (params->line_vaddrs[line_idx] == rich_hover.vaddr_range.min && rich_hover.vaddr_range.min != 0)))
@@ -12287,7 +12287,7 @@ df_fancy_string_list_from_code_string(Arena *arena, F32 alpha, B32 indirection_s
         }
         else
         {
-          D_Entity *module = d_entity_from_handle(d_interact_regs()->module);
+          D_Entity *module = d_entity_from_handle(d_regs()->module);
           DI_Key dbgi_key = d_dbgi_key_from_module(module);
           U64 symbol_voff = d_voff_from_dbgi_key_symbol_name(&dbgi_key, token_string);
           if(symbol_voff != 0)

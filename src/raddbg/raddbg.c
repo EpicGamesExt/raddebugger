@@ -332,13 +332,13 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
       {
         last_focused_window = df_handle_from_window(w);
       }
-      d_push_interact_regs();
-      d_interact_regs()->window = df_handle_from_window(w);
+      d_push_regs();
+      d_regs()->window = df_handle_from_window(w);
       df_window_update_and_render(scratch.arena, w, &cmds);
-      D_InteractRegs *window_regs = d_pop_interact_regs();
+      D_Regs *window_regs = d_pop_regs();
       if(df_window_from_handle(last_focused_window) == w)
       {
-        MemoryCopyStruct(d_interact_regs(), window_regs);
+        MemoryCopyStruct(d_regs(), window_regs);
       }
     }
   }

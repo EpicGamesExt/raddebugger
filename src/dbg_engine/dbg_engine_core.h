@@ -484,8 +484,8 @@ struct D_LineListArray
 ////////////////////////////////
 //~ rjf: Interaction Context Register Types
 
-typedef struct D_InteractRegs D_InteractRegs;
-struct D_InteractRegs
+typedef struct D_Regs D_Regs;
+struct D_Regs
 {
   D_Handle module;
   D_Handle process;
@@ -506,11 +506,11 @@ struct D_InteractRegs
   DI_Key dbgi_key;
 };
 
-typedef struct D_InteractRegsNode D_InteractRegsNode;
-struct D_InteractRegsNode
+typedef struct D_RegsNode D_RegsNode;
+struct D_RegsNode
 {
-  D_InteractRegsNode *next;
-  D_InteractRegs v;
+  D_RegsNode *next;
+  D_Regs v;
 };
 
 ////////////////////////////////
@@ -1023,8 +1023,8 @@ struct D_State
   DI_Scope *frame_di_scope;
   
   // rjf: interaction registers
-  D_InteractRegsNode base_interact_regs;
-  D_InteractRegsNode *top_interact_regs;
+  D_RegsNode base_regs;
+  D_RegsNode *top_regs;
   
   // rjf: top-level command batch
   Arena *root_cmd_arena;
@@ -1533,12 +1533,12 @@ internal U64 d_frame_index(void);
 internal Arena *d_frame_arena(void);
 internal F64 d_time_in_seconds(void);
 
-//- rjf: interaction registers
-internal D_InteractRegs *d_interact_regs(void);
-internal D_InteractRegs *d_base_interact_regs(void);
-internal D_InteractRegs *d_push_interact_regs(void);
-internal D_InteractRegs *d_pop_interact_regs(void);
-#define D_InteractRegsScope DeferLoop(d_push_interact_regs(), d_pop_interact_regs())
+//- rjf: registers
+internal D_Regs *d_regs(void);
+internal D_Regs *d_base_regs(void);
+internal D_Regs *d_push_regs(void);
+internal D_Regs *d_pop_regs(void);
+#define D_RegsScope DeferLoop(d_push_regs(), d_pop_regs())
 
 //- rjf: undo/redo history
 internal D_StateDeltaHistory *d_state_delta_history(void);
@@ -1585,13 +1585,13 @@ internal E_String2NumMap *d_query_cached_member_map_from_dbgi_key_voff(DI_Key *d
 internal void d_push_cmd(D_CmdSpec *spec, D_CmdParams *params);
 internal void d_error(String8 string);
 internal void d_errorf(char *fmt, ...);
-#define d_cmd(kind, ...) d_push_cmd(d_cmd_spec_from_kind(kind),           \
-&(D_CmdParams)                        \
-{                                     \
-.window = d_interact_regs()->window, \
-.panel  = d_interact_regs()->panel,  \
-.view   = d_interact_regs()->view,   \
-__VA_ARGS__                          \
+#define d_cmd(kind, ...) d_push_cmd(d_cmd_spec_from_kind(kind),  \
+&(D_CmdParams)               \
+{                            \
+.window = d_regs()->window, \
+.panel  = d_regs()->panel,  \
+.view   = d_regs()->view,   \
+__VA_ARGS__                 \
 })
 
 ////////////////////////////////

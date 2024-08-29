@@ -3413,8 +3413,8 @@ d_ctrl_run(D_RunKind run, D_Entity *run_thread, CTRL_RunFlags flags, CTRL_TrapLi
   d_state->ctrl_is_running = 1;
   
   // rjf: reset selected frame to top unwind
-  d_state->base_interact_regs.v.unwind_count = 0;
-  d_state->base_interact_regs.v.inline_depth = 0;
+  d_state->base_regs.v.unwind_count = 0;
+  d_state->base_regs.v.inline_depth = 0;
   
   scratch_end(scratch);
 }
@@ -5386,38 +5386,38 @@ d_time_in_seconds(void)
 
 //- rjf: interaction registers
 
-internal D_InteractRegs *
-d_interact_regs(void)
+internal D_Regs *
+d_regs(void)
 {
-  D_InteractRegs *regs = &d_state->top_interact_regs->v;
+  D_Regs *regs = &d_state->top_regs->v;
   return regs;
 }
 
-internal D_InteractRegs *
-d_base_interact_regs(void)
+internal D_Regs *
+d_base_regs(void)
 {
-  D_InteractRegs *regs = &d_state->base_interact_regs.v;
+  D_Regs *regs = &d_state->base_regs.v;
   return regs;
 }
 
-internal D_InteractRegs *
-d_push_interact_regs(void)
+internal D_Regs *
+d_push_regs(void)
 {
-  D_InteractRegs *top = d_interact_regs();
-  D_InteractRegsNode *n = push_array(d_frame_arena(), D_InteractRegsNode, 1);
+  D_Regs *top = d_regs();
+  D_RegsNode *n = push_array(d_frame_arena(), D_RegsNode, 1);
   MemoryCopyStruct(&n->v, top);
-  SLLStackPush(d_state->top_interact_regs, n);
+  SLLStackPush(d_state->top_regs, n);
   return &n->v;
 }
 
-internal D_InteractRegs *
-d_pop_interact_regs(void)
+internal D_Regs *
+d_pop_regs(void)
 {
-  D_InteractRegs *regs = &d_state->top_interact_regs->v;
-  SLLStackPop(d_state->top_interact_regs);
-  if(d_state->top_interact_regs == 0)
+  D_Regs *regs = &d_state->top_regs->v;
+  SLLStackPop(d_state->top_regs);
+  if(d_state->top_regs == 0)
   {
-    d_state->top_interact_regs = &d_state->base_interact_regs;
+    d_state->top_regs = &d_state->base_regs;
   }
   return regs;
 }
@@ -6189,7 +6189,7 @@ d_init(CmdLine *cmdln, D_StateDeltaHistory *hist)
   d_state->view_rule_spec_table = push_array(arena, D_ViewRuleSpec *, d_state->view_rule_spec_table_size);
   d_state->seconds_til_autosave = 0.5f;
   d_state->hist = hist;
-  d_state->top_interact_regs = &d_state->base_interact_regs;
+  d_state->top_regs = &d_state->base_regs;
   
   // rjf: set up initial exception filtering rules
   for(CTRL_ExceptionCodeKind k = (CTRL_ExceptionCodeKind)0; k < CTRL_ExceptionCodeKind_COUNT; k = (CTRL_ExceptionCodeKind)(k+1))
@@ -6318,10 +6318,10 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
   d_state->frame_eval_memread_endt_us = os_now_microseconds() + 5000;
   d_state->dt = dt;
   d_state->time_in_seconds += dt;
-  d_state->top_interact_regs = &d_state->base_interact_regs;
-  d_state->top_interact_regs->v.file_path = push_str8_copy(d_frame_arena(), d_state->top_interact_regs->v.file_path);
-  d_state->top_interact_regs->v.lines = d_line_list_copy(d_frame_arena(), &d_state->top_interact_regs->v.lines);
-  d_state->top_interact_regs->v.dbgi_key = di_key_copy(d_frame_arena(), &d_state->top_interact_regs->v.dbgi_key);
+  d_state->top_regs = &d_state->base_regs;
+  d_state->top_regs->v.file_path = push_str8_copy(d_frame_arena(), d_state->top_regs->v.file_path);
+  d_state->top_regs->v.lines = d_line_list_copy(d_frame_arena(), &d_state->top_regs->v.lines);
+  d_state->top_regs->v.dbgi_key = di_key_copy(d_frame_arena(), &d_state->top_regs->v.dbgi_key);
   
   //- rjf: sync with ctrl thread
   ProfScope("sync with ctrl thread")
@@ -6385,7 +6385,7 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
           // rjf: if no stop-causing thread, and if selected thread, snap to selected
           if(should_snap && d_entity_is_nil(stop_thread))
           {
-            D_Entity *selected_thread = d_entity_from_handle(d_interact_regs()->thread);
+            D_Entity *selected_thread = d_entity_from_handle(d_regs()->thread);
             if(!d_entity_is_nil(selected_thread))
             {
               D_CmdParams params = d_cmd_params_zero();
@@ -6552,10 +6552,10 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
           d_entity_equip_color_rgba(entity, thread_color);
           
           // rjf: automatically select if we don't have a selected thread
-          D_Entity *selected_thread = d_entity_from_handle(d_state->base_interact_regs.v.thread);
+          D_Entity *selected_thread = d_entity_from_handle(d_state->base_regs.v.thread);
           if(d_entity_is_nil(selected_thread))
           {
-            d_state->base_interact_regs.v.thread = d_handle_from_entity(entity);
+            d_state->base_regs.v.thread = d_handle_from_entity(entity);
           }
           
           // rjf: do initial snap
@@ -7201,27 +7201,27 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
           D_Entity *thread = d_entity_from_handle(params.entity);
           D_Entity *module = d_module_from_thread(thread);
           D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
-          d_state->base_interact_regs.v.unwind_count = 0;
-          d_state->base_interact_regs.v.inline_depth = 0;
-          d_state->base_interact_regs.v.thread = d_handle_from_entity(thread);
-          d_state->base_interact_regs.v.module = d_handle_from_entity(module);
-          d_state->base_interact_regs.v.process = d_handle_from_entity(process);
+          d_state->base_regs.v.unwind_count = 0;
+          d_state->base_regs.v.inline_depth = 0;
+          d_state->base_regs.v.thread = d_handle_from_entity(thread);
+          d_state->base_regs.v.module = d_handle_from_entity(module);
+          d_state->base_regs.v.process = d_handle_from_entity(process);
         }break;
         case D_CmdKind_SelectUnwind:
         {
           DI_Scope *di_scope = di_scope_open();
-          D_Entity *thread = d_entity_from_handle(d_state->base_interact_regs.v.thread);
+          D_Entity *thread = d_entity_from_handle(d_state->base_regs.v.thread);
           D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
           CTRL_Unwind base_unwind = d_query_cached_unwind_from_thread(thread);
           D_Unwind rich_unwind = d_unwind_from_ctrl_unwind(scratch.arena, di_scope, process, &base_unwind);
           if(params.unwind_index < rich_unwind.frames.concrete_frame_count)
           {
             D_UnwindFrame *frame = &rich_unwind.frames.v[params.unwind_index];
-            d_state->base_interact_regs.v.unwind_count = params.unwind_index;
-            d_state->base_interact_regs.v.inline_depth = 0;
+            d_state->base_regs.v.unwind_count = params.unwind_index;
+            d_state->base_regs.v.inline_depth = 0;
             if(params.inline_depth <= frame->inline_frame_count)
             {
-              d_state->base_interact_regs.v.inline_depth = params.inline_depth;
+              d_state->base_regs.v.inline_depth = params.inline_depth;
             }
           }
           di_scope_close(di_scope);
@@ -7230,12 +7230,12 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
         case D_CmdKind_DownOneFrame:
         {
           DI_Scope *di_scope = di_scope_open();
-          D_Entity *thread = d_entity_from_handle(d_state->base_interact_regs.v.thread);
+          D_Entity *thread = d_entity_from_handle(d_state->base_regs.v.thread);
           D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
           CTRL_Unwind base_unwind = d_query_cached_unwind_from_thread(thread);
           D_Unwind rich_unwind = d_unwind_from_ctrl_unwind(scratch.arena, di_scope, process, &base_unwind);
-          U64 crnt_unwind_idx = d_state->base_interact_regs.v.unwind_count;
-          U64 crnt_inline_dpt = d_state->base_interact_regs.v.inline_depth;
+          U64 crnt_unwind_idx = d_state->base_regs.v.unwind_count;
+          U64 crnt_inline_dpt = d_state->base_regs.v.inline_depth;
           U64 next_unwind_idx = crnt_unwind_idx;
           U64 next_inline_dpt = crnt_inline_dpt;
           if(crnt_unwind_idx < rich_unwind.frames.concrete_frame_count)
@@ -8132,7 +8132,7 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
         //- rjf: cursor operations
         case D_CmdKind_ToggleBreakpointAtCursor:
         {
-          D_InteractRegs *regs = d_interact_regs();
+          D_Regs *regs = d_regs();
           D_CmdParams p = d_cmd_params_zero();
           p.file_path  = regs->file_path;
           p.text_point = regs->cursor;
@@ -8141,7 +8141,7 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
         }break;
         case D_CmdKind_ToggleWatchPinAtCursor:
         {
-          D_InteractRegs *regs = d_interact_regs();
+          D_Regs *regs = d_regs();
           D_CmdParams p = d_cmd_params_zero();
           p.file_path  = regs->file_path;
           p.text_point = regs->cursor;
@@ -8154,7 +8154,7 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
         {
           HS_Scope *hs_scope = hs_scope_open();
           TXT_Scope *txt_scope = txt_scope_open();
-          D_InteractRegs *regs = d_interact_regs();
+          D_Regs *regs = d_regs();
           U128 text_key = regs->text_key;
           TXT_LangKind lang_kind = regs->lang_kind;
           TxtRng range = txt_rng(regs->cursor, regs->mark);
@@ -8181,24 +8181,24 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
         }break;
         case D_CmdKind_RunToCursor:
         {
-          String8 file_path = d_interact_regs()->file_path;
+          String8 file_path = d_regs()->file_path;
           if(file_path.size != 0)
           {
-            d_cmd(D_CmdKind_RunToLine, .file_path = file_path, .text_point = d_interact_regs()->cursor);
+            d_cmd(D_CmdKind_RunToLine, .file_path = file_path, .text_point = d_regs()->cursor);
           }
           else
           {
-            d_cmd(D_CmdKind_RunToAddress, .vaddr = d_interact_regs()->vaddr_range.min);
+            d_cmd(D_CmdKind_RunToAddress, .vaddr = d_regs()->vaddr_range.min);
           }
         }break;
         case D_CmdKind_SetNextStatement:
         {
-          D_Entity *thread = d_entity_from_handle(d_interact_regs()->thread);
-          String8 file_path = d_interact_regs()->file_path;
-          U64 new_rip_vaddr = d_interact_regs()->vaddr_range.min;
+          D_Entity *thread = d_entity_from_handle(d_regs()->thread);
+          String8 file_path = d_regs()->file_path;
+          U64 new_rip_vaddr = d_regs()->vaddr_range.min;
           if(file_path.size != 0)
           {
-            D_LineList *lines = &d_interact_regs()->lines;
+            D_LineList *lines = &d_regs()->lines;
             for(D_LineNode *n = lines->first; n != 0; n = n->next)
             {
               D_EntityList modules = d_modules_from_dbgi_key(scratch.arena, &n->v.dbgi_key);
@@ -8345,10 +8345,10 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
   }
   
   //- rjf: unpack eval-dependent info
-  D_Entity *process = d_entity_from_handle(d_interact_regs()->process);
-  D_Entity *thread = d_entity_from_handle(d_interact_regs()->thread);
+  D_Entity *process = d_entity_from_handle(d_regs()->process);
+  D_Entity *thread = d_entity_from_handle(d_regs()->thread);
   Architecture arch = d_architecture_from_entity(thread);
-  U64 unwind_count = d_interact_regs()->unwind_count;
+  U64 unwind_count = d_regs()->unwind_count;
   U64 rip_vaddr = d_query_cached_rip_from_thread_unwind(thread, unwind_count);
   CTRL_Unwind unwind = d_query_cached_unwind_from_thread(thread);
   D_Entity *module = d_module_from_process_vaddr(process, rip_vaddr);
