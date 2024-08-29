@@ -4672,7 +4672,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
                 item.kind_string = str8_lit("Language");
                 item.matches     = fuzzy_match_find(scratch.arena, query, item.string);
               }
-              if(query.size == 0 || item.matches.count != 0)
+              if(item.string.size != 0 && (query.size == 0 || item.matches.count != 0))
               {
                 df_autocomp_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
               }
