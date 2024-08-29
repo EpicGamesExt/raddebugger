@@ -728,7 +728,7 @@ struct PE_BinInfo
   OS_Guid dbg_guid;
   U32 dbg_age;
   U32 dbg_time;
-  Architecture arch;
+  Arch arch;
   Rng1U64 *data_dir_franges;
   U32 data_dir_count;
   PE_TLSHeader64 tls_header;

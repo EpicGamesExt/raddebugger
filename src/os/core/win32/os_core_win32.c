@@ -1389,7 +1389,7 @@ win32_exception_filter(EXCEPTION_POINTERS* exception_ptrs)
           frame.AddrStack.Offset = context->Sp;
           frame.AddrStack.Mode = AddrModeFlat;
 #else
-#  error Architecture not supported!
+#  error Arch not supported!
 #endif
           
           for(U32 idx=0; ;idx++)

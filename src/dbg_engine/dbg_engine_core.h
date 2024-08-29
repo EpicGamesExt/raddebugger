@@ -289,7 +289,7 @@ struct D_Entity
   // rjf: ctrl equipment
   CTRL_MachineID ctrl_machine_id;
   DMN_Handle ctrl_handle;
-  Architecture arch;
+  Arch arch;
   U32 ctrl_id;
   U64 stack_base;
   Rng1U64 vaddr_rng;
@@ -297,6 +297,10 @@ struct D_Entity
   
   // rjf: string equipment
   String8 string;
+  
+  // rjf: parameter tree
+  Arena *params_arena;
+  MD_Node *params_root;
 };
 
 typedef struct D_EntityNode D_EntityNode;
@@ -1251,7 +1255,7 @@ internal void d_entity_equip_timestamp(D_Entity *entity, U64 timestamp);
 //- rjf: control layer correllation equipment
 internal void d_entity_equip_ctrl_machine_id(D_Entity *entity, CTRL_MachineID machine_id);
 internal void d_entity_equip_ctrl_handle(D_Entity *entity, DMN_Handle handle);
-internal void d_entity_equip_arch(D_Entity *entity, Architecture arch);
+internal void d_entity_equip_arch(D_Entity *entity, Arch arch);
 internal void d_entity_equip_ctrl_id(D_Entity *entity, U32 id);
 internal void d_entity_equip_stack_base(D_Entity *entity, U64 stack_base);
 internal void d_entity_equip_vaddr_rng(D_Entity *entity, Rng1U64 range);
@@ -1260,6 +1264,10 @@ internal void d_entity_equip_vaddr(D_Entity *entity, U64 vaddr);
 //- rjf: name equipment
 internal void d_entity_equip_name(D_Entity *entity, String8 name);
 internal void d_entity_equip_namef(D_Entity *entity, char *fmt, ...);
+
+//- rjf: params tree equipment
+internal void d_entity_equip_params(D_Entity *entity, MD_Node *params);
+internal void d_entity_equip_param(D_Entity *entity, String8 key, String8 value);
 
 //- rjf: opening folders/files & maintaining the entity model of the filesystem
 internal D_Entity *d_entity_from_path(String8 path, D_EntityFromPathFlags flags);
@@ -1341,7 +1349,7 @@ internal D_LineList d_lines_from_file_path_line_num(Arena *arena, String8 file_p
 internal D_Entity *d_module_from_process_vaddr(D_Entity *process, U64 vaddr);
 internal D_Entity *d_module_from_thread(D_Entity *thread);
 internal U64 d_tls_base_vaddr_from_process_root_rip(D_Entity *process, U64 root_vaddr, U64 rip_vaddr);
-internal Architecture d_architecture_from_entity(D_Entity *entity);
+internal Arch d_arch_from_entity(D_Entity *entity);
 internal E_String2NumMap *d_push_locals_map_from_dbgi_key_voff(Arena *arena, DI_Scope *scope, DI_Key *dbgi_key, U64 voff);
 internal E_String2NumMap *d_push_member_map_from_dbgi_key_voff(Arena *arena, DI_Scope *scope, DI_Key *dbgi_key, U64 voff);
 internal B32 d_set_thread_rip(D_Entity *thread, U64 vaddr);
@@ -1456,7 +1464,7 @@ internal E_TypeKey d_type_key_from_params(MD_Node *params);
 internal E_Value d_value_from_params_key(MD_Node *params, String8 key);
 internal Rng1U64 d_range_from_eval_params(E_Eval eval, MD_Node *params);
 internal TXT_LangKind d_lang_kind_from_eval_params(E_Eval eval, MD_Node *params);
-internal Architecture d_architecture_from_eval_params(E_Eval eval, MD_Node *params);
+internal Arch d_arch_from_eval_params(E_Eval eval, MD_Node *params);
 internal Vec2S32 d_dim2s32_from_eval_params(E_Eval eval, MD_Node *params);
 internal R_Tex2DFormat d_tex2dformat_from_eval_params(E_Eval eval, MD_Node *params);
 

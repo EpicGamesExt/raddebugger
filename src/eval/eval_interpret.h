@@ -26,7 +26,7 @@ struct E_InterpretCtx
   E_SpaceRWFunction *space_read;
   E_SpaceRWFunction *space_write;
   E_Space primary_space;
-  Architecture reg_arch;
+  Arch reg_arch;
   E_Space reg_space;
   U64 reg_unwind_count;
   U64 *module_base;

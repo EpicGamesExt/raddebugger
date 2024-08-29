@@ -108,18 +108,18 @@ struct REGS_Slice
 ////////////////////////////////
 //~ rjf: Helpers
 
-internal U64 regs_block_size_from_architecture(Architecture arch);
-internal U64 regs_reg_code_count_from_architecture(Architecture arch);
-internal U64 regs_alias_code_count_from_architecture(Architecture arch);
-internal String8 *regs_reg_code_string_table_from_architecture(Architecture arch);
-internal String8 *regs_alias_code_string_table_from_architecture(Architecture arch);
-internal REGS_Rng *regs_reg_code_rng_table_from_architecture(Architecture arch);
-internal REGS_Slice *regs_alias_code_slice_table_from_architecture(Architecture arch);
-internal REGS_UsageKind *regs_reg_code_usage_kind_table_from_architecture(Architecture arch);
-internal REGS_UsageKind *regs_alias_code_usage_kind_table_from_architecture(Architecture arch);
-internal U64 regs_rip_from_arch_block(Architecture arch, void *block);
-internal U64 regs_rsp_from_arch_block(Architecture arch, void *block);
-internal void regs_arch_block_write_rip(Architecture arch, void *block, U64 rip);
-internal void regs_arch_block_write_rsp(Architecture arch, void *block, U64 rsp);
+internal U64 regs_block_size_from_arch(Arch arch);
+internal U64 regs_reg_code_count_from_arch(Arch arch);
+internal U64 regs_alias_code_count_from_arch(Arch arch);
+internal String8 *regs_reg_code_string_table_from_arch(Arch arch);
+internal String8 *regs_alias_code_string_table_from_arch(Arch arch);
+internal REGS_Rng *regs_reg_code_rng_table_from_arch(Arch arch);
+internal REGS_Slice *regs_alias_code_slice_table_from_arch(Arch arch);
+internal REGS_UsageKind *regs_reg_code_usage_kind_table_from_arch(Arch arch);
+internal REGS_UsageKind *regs_alias_code_usage_kind_table_from_arch(Arch arch);
+internal U64 regs_rip_from_arch_block(Arch arch, void *block);
+internal U64 regs_rsp_from_arch_block(Arch arch, void *block);
+internal void regs_arch_block_write_rip(Arch arch, void *block, U64 rip);
+internal void regs_arch_block_write_rsp(Arch arch, void *block, U64 rsp);
 
 #endif // REGS_H

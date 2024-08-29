@@ -10,7 +10,7 @@
 #endif
 
 internal DASM_Inst
-dasm_inst_from_code(Arena *arena, Architecture arch, U64 vaddr, String8 code, DASM_Syntax syntax)
+dasm_inst_from_code(Arena *arena, Arch arch, U64 vaddr, String8 code, DASM_Syntax syntax)
 {
   DASM_Inst inst = {0};
   switch(arch)
@@ -18,8 +18,8 @@ dasm_inst_from_code(Arena *arena, Architecture arch, U64 vaddr, String8 code, DA
     default:{}break;
     
     //- rjf: x86/x64 disassembly
-    case Architecture_x86:
-    case Architecture_x64:
+    case Arch_x86:
+    case Arch_x64:
     {
       // rjf: determine zydis formatter style
       ZydisFormatterStyle style = ZYDIS_FORMATTER_STYLE_INTEL;
@@ -138,7 +138,7 @@ dasm_inst_from_code(Arena *arena, Architecture arch, U64 vaddr, String8 code, DA
 //~ rjf: Control Flow Analysis
 
 internal DASM_CtrlFlowInfo
-dasm_ctrl_flow_info_from_arch_vaddr_code(Arena *arena, DASM_InstFlags exit_points_mask, Architecture arch, U64 vaddr, String8 code)
+dasm_ctrl_flow_info_from_arch_vaddr_code(Arena *arena, DASM_InstFlags exit_points_mask, Arch arch, U64 vaddr, String8 code)
 {
   Temp scratch = scratch_begin(&arena, 1);
   DASM_CtrlFlowInfo info = {0};
@@ -395,7 +395,7 @@ dasm_info_from_hash_params(DASM_Scope *scope, U128 hash, DASM_Params *params)
           {
             log_infof("hash:        [0x%I64x 0x%I64x]\n", hash.u64[0], hash.u64[1]);
             log_infof("vaddr:       0x%I64x\n", params->vaddr);
-            log_infof("arch:        %S\n", string_from_architecture(params->arch));
+            log_infof("arch:        %S\n", string_from_arch(params->arch));
             log_infof("style_flags: 0x%x\n", params->style_flags);
             log_infof("syntax:      %i\n",   params->syntax);
             log_infof("base_vaddr:  0x%I64x\n", params->base_vaddr);
@@ -459,7 +459,7 @@ dasm_u2p_enqueue_req(U128 hash, DASM_Params *params, U64 endt_us)
   {
     U64 unconsumed_size = dasm_shared->u2p_ring_write_pos - dasm_shared->u2p_ring_read_pos;
     U64 available_size = dasm_shared->u2p_ring_size - unconsumed_size;
-    if(available_size >= sizeof(hash)+sizeof(U64)+sizeof(Architecture)+sizeof(DASM_StyleFlags)+sizeof(DASM_Syntax)+sizeof(U64)+sizeof(U64)+params->dbgi_key.path.size+sizeof(U64))
+    if(available_size >= sizeof(hash)+sizeof(U64)+sizeof(Arch)+sizeof(DASM_StyleFlags)+sizeof(DASM_Syntax)+sizeof(U64)+sizeof(U64)+params->dbgi_key.path.size+sizeof(U64))
     {
       good = 1;
       dasm_shared->u2p_ring_write_pos += ring_write_struct(dasm_shared->u2p_ring_base, dasm_shared->u2p_ring_size, dasm_shared->u2p_ring_write_pos, &hash);
@@ -494,7 +494,7 @@ dasm_u2p_dequeue_req(Arena *arena, U128 *hash_out, DASM_Params *params_out)
   OS_MutexScope(dasm_shared->u2p_ring_mutex) for(;;)
   {
     U64 unconsumed_size = dasm_shared->u2p_ring_write_pos - dasm_shared->u2p_ring_read_pos;
-    if(unconsumed_size >= sizeof(*hash_out)+sizeof(U64)+sizeof(Architecture)+sizeof(DASM_StyleFlags)+sizeof(DASM_Syntax)+sizeof(U64)+sizeof(U64)+sizeof(U64))
+    if(unconsumed_size >= sizeof(*hash_out)+sizeof(U64)+sizeof(Arch)+sizeof(DASM_StyleFlags)+sizeof(DASM_Syntax)+sizeof(U64)+sizeof(U64)+sizeof(U64))
     {
       dasm_shared->u2p_ring_read_pos += ring_read_struct(dasm_shared->u2p_ring_base, dasm_shared->u2p_ring_size, dasm_shared->u2p_ring_read_pos, hash_out);
       dasm_shared->u2p_ring_read_pos += ring_read_struct(dasm_shared->u2p_ring_base, dasm_shared->u2p_ring_size, dasm_shared->u2p_ring_read_pos, &params_out->vaddr);
@@ -576,8 +576,8 @@ dasm_parse_thread__entry_point(void *p)
         default:{}break;
         
         //- rjf: x86/x64 decoding
-        case Architecture_x64:
-        case Architecture_x86:
+        case Arch_x64:
+        case Arch_x86:
         {
           // rjf: disassemble
           RDI_SourceFile *last_file = &rdi_nil_element_union.source_file;

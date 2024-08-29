@@ -462,7 +462,7 @@ typedef struct ELF_SegmentArray{
 typedef struct ELF_Parsed{
   String8 data;
   ELF_Class elf_class;
-  Architecture arch;
+  Arch arch;
   
   ELF_Shdr64 *sections;
   String8 *section_names;

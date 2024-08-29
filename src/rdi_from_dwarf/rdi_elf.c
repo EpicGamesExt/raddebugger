@@ -81,7 +81,7 @@ elf_parsed_from_data(Arena *arena, String8 elf_data){
   
   //- validate & translate header values
   B32 header_is_good = 0;
-  Architecture arch = Architecture_Null;
+  Arch arch = Arch_Null;
   if (decoded_header){
     header_is_good = 1;
     
@@ -96,8 +96,8 @@ elf_parsed_from_data(Arena *arena, String8 elf_data){
     if (header_is_good){
       switch (e_machine){
         default: header_is_good = 0;
-        case ELF_Machine_386:    arch = Architecture_x86; break;
-        case ELF_Machine_X86_64: arch = Architecture_x64; break;
+        case ELF_Machine_386:    arch = Arch_x86; break;
+        case ELF_Machine_X86_64: arch = Arch_x64; break;
       }
     }
     

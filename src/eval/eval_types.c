@@ -256,7 +256,7 @@ e_type_key_ext(E_TypeKind kind, U32 type_idx, U32 rdi_idx)
 }
 
 internal E_TypeKey
-e_type_key_reg(Architecture arch, REGS_RegCode code)
+e_type_key_reg(Arch arch, REGS_RegCode code)
 {
   E_TypeKey key = {E_TypeKeyKind_Reg};
   key.u32[0] = (U32)arch;
@@ -265,7 +265,7 @@ e_type_key_reg(Architecture arch, REGS_RegCode code)
 }
 
 internal E_TypeKey
-e_type_key_reg_alias(Architecture arch, REGS_AliasCode code)
+e_type_key_reg_alias(Arch arch, REGS_AliasCode code)
 {
   E_TypeKey key = {E_TypeKeyKind_RegAlias};
   key.u32[0] = (U32)arch;
@@ -398,7 +398,7 @@ e_type_key_cons_array(E_TypeKey element_type_key, U64 count)
 }
 
 internal E_TypeKey
-e_type_key_cons_ptr(Architecture arch, E_TypeKey element_type_key)
+e_type_key_cons_ptr(Arch arch, E_TypeKey element_type_key)
 {
   E_TypeKey key = e_type_key_cons(.arch = arch, .kind = E_TypeKind_Ptr, .direct_key = element_type_key);
   return key;
@@ -818,16 +818,16 @@ e_type_from_key(Arena *arena, E_TypeKey key)
       //- rjf: reg type keys
       case E_TypeKeyKind_Reg:
       {
-        Architecture arch = (Architecture)key.u32[0];
+        Arch arch = (Arch)key.u32[0];
         REGS_RegCode code = (REGS_RegCode)key.u32[1];
-        REGS_Rng rng = regs_reg_code_rng_table_from_architecture(arch)[code];
+        REGS_Rng rng = regs_reg_code_rng_table_from_arch(arch)[code];
         reg_byte_count = (U64)rng.byte_size;
       }goto build_reg_type;
       case E_TypeKeyKind_RegAlias:
       {
-        Architecture arch = (Architecture)key.u32[0];
+        Arch arch = (Arch)key.u32[0];
         REGS_AliasCode code = (REGS_AliasCode)key.u32[1];
-        REGS_Slice slice = regs_alias_code_slice_table_from_architecture(arch)[code];
+        REGS_Slice slice = regs_alias_code_slice_table_from_arch(arch)[code];
         reg_byte_count = (U64)slice.byte_size;
       }goto build_reg_type;
       build_reg_type:

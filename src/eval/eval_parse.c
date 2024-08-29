@@ -1292,7 +1292,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
           E_TypeKey               type_key = zero_struct;
           String8                 local_lookup_string = token_string;
           E_Space                 space = {0};
-          Architecture            arch = Architecture_Null;
+          Arch                    arch = Arch_Null;
           
           //- rjf: identifiers surrounded by ``s should have those `s stripped
           if(local_lookup_string.size >= 2 &&
@@ -1594,7 +1594,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
                 }
                 else if(reg_code != 0)
                 {
-                  REGS_Rng reg_rng = regs_reg_code_rng_table_from_architecture(e_parse_ctx->primary_module->arch)[reg_code];
+                  REGS_Rng reg_rng = regs_reg_code_rng_table_from_arch(e_parse_ctx->primary_module->arch)[reg_code];
                   E_OpList oplist = {0};
                   e_oplist_push_uconst(arena, &oplist, reg_rng.byte_off);
                   atom = e_push_expr(arena, E_ExprKind_LeafBytecode, token_string.str);
@@ -1606,8 +1606,8 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
                 }
                 else if(alias_code != 0)
                 {
-                  REGS_Slice alias_slice = regs_alias_code_slice_table_from_architecture(e_parse_ctx->primary_module->arch)[alias_code];
-                  REGS_Rng alias_reg_rng = regs_reg_code_rng_table_from_architecture(e_parse_ctx->primary_module->arch)[alias_slice.code];
+                  REGS_Slice alias_slice = regs_alias_code_slice_table_from_arch(e_parse_ctx->primary_module->arch)[alias_code];
+                  REGS_Rng alias_reg_rng = regs_reg_code_rng_table_from_arch(e_parse_ctx->primary_module->arch)[alias_slice.code];
                   E_OpList oplist = {0};
                   e_oplist_push_uconst(arena, &oplist, alias_reg_rng.byte_off + alias_slice.byte_off);
                   atom = e_push_expr(arena, E_ExprKind_LeafBytecode, token_string.str);
@@ -1674,7 +1674,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
               case RDI_LocationKind_ValReg:
               {
                 REGS_RegCode regs_reg_code = regs_reg_code_from_arch_rdi_code(arch, loc_reg.reg_code);
-                REGS_Rng reg_rng = regs_reg_code_rng_table_from_architecture(arch)[regs_reg_code];
+                REGS_Rng reg_rng = regs_reg_code_rng_table_from_arch(arch)[regs_reg_code];
                 E_OpList oplist = {0};
                 U64 byte_size = (U64)reg_rng.byte_size;
                 U64 byte_pos = 0;

@@ -3,13 +3,13 @@
 
 //- GENERATED CODE
 
-internal RDI_RegCode regs_rdi_code_from_arch_reg_code(Architecture arch, REGS_RegCode code)
+internal RDI_RegCode regs_rdi_code_from_arch_reg_code(Arch arch, REGS_RegCode code)
 {
 RDI_RegCode result = 0;
 switch(arch)
 {
 default:{}break;
-case Architecture_x64:
+case Arch_x64:
 {
 switch(code)
 {
@@ -116,7 +116,7 @@ case REGS_RegCodeX64_k6:{result = RDI_RegCodeX64_k6;}break;
 case REGS_RegCodeX64_k7:{result = RDI_RegCodeX64_k7;}break;
 }
 }break;
-case Architecture_x86:
+case Arch_x86:
 {
 switch(code)
 {
@@ -186,13 +186,13 @@ case REGS_RegCodeX86_ymm7:{result = RDI_RegCodeX86_ymm7;}break;
 }
 return result;
 }
-internal REGS_RegCode regs_reg_code_from_arch_rdi_code(Architecture arch, RDI_RegCode code)
+internal REGS_RegCode regs_reg_code_from_arch_rdi_code(Arch arch, RDI_RegCode code)
 {
 REGS_RegCode result = 0;
 switch(arch)
 {
 default:{}break;
-case Architecture_x64:
+case Arch_x64:
 {
 switch(code)
 {
@@ -299,7 +299,7 @@ case RDI_RegCodeX64_k6:{result = REGS_RegCodeX64_k6;}break;
 case RDI_RegCodeX64_k7:{result = REGS_RegCodeX64_k7;}break;
 }
 }break;
-case Architecture_x86:
+case Arch_x86:
 {
 switch(code)
 {

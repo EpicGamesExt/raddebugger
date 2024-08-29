@@ -131,8 +131,8 @@ dmn_rip_from_thread(DMN_Handle thread)
   U64 result = 0;
   Temp scratch = scratch_begin(0, 0);
   {
-    Architecture arch = dmn_arch_from_thread(thread);
-    U64 reg_block_size = regs_block_size_from_architecture(arch);
+    Arch arch = dmn_arch_from_thread(thread);
+    U64 reg_block_size = regs_block_size_from_arch(arch);
     void *reg_block = push_array(scratch.arena, U8, reg_block_size);
     dmn_thread_read_reg_block(thread, reg_block);
     result = regs_rip_from_arch_block(arch, reg_block);
@@ -147,8 +147,8 @@ dmn_rsp_from_thread(DMN_Handle thread)
   U64 result = 0;
   Temp scratch = scratch_begin(0, 0);
   {
-    Architecture arch = dmn_arch_from_thread(thread);
-    U64 reg_block_size = regs_block_size_from_architecture(arch);
+    Arch arch = dmn_arch_from_thread(thread);
+    U64 reg_block_size = regs_block_size_from_arch(arch);
     void *reg_block = push_array(scratch.arena, U8, reg_block_size);
     dmn_thread_read_reg_block(thread, reg_block);
     result = regs_rsp_from_arch_block(arch, reg_block);

@@ -1281,6 +1281,7 @@ d_entity_alloc(D_Entity *parent, D_EntityKind kind)
   entity->id = d_state->entities_id_gen;
   entity->gen += 1;
   entity->alloc_time_us = os_now_microseconds();
+  entity->params_root = &md_nil_node;
   
   // rjf: initialize to deleted, record history, then "undelete" if this allocation can be undone
   if(user_defined_lifetime)
@@ -1351,6 +1352,10 @@ d_entity_release(D_Entity *entity)
     if(task->e->string.size != 0)
     {
       d_name_release(task->e->string);
+    }
+    if(task->e->params_arena != 0)
+    {
+      arena_release(task->e->params_arena);
     }
     d_state->kind_alloc_gens[task->e->kind] += 1;
   }
@@ -1478,7 +1483,7 @@ d_entity_equip_ctrl_handle(D_Entity *entity, DMN_Handle handle)
 }
 
 internal void
-d_entity_equip_arch(D_Entity *entity, Architecture arch)
+d_entity_equip_arch(D_Entity *entity, Arch arch)
 {
   d_require_entity_nonnil(entity, return);
   d_state_delta_history_push_struct_delta(d_state_delta_history(), &entity->arch, .guard_entity = entity);
@@ -1557,6 +1562,44 @@ d_entity_equip_namef(D_Entity *entity, char *fmt, ...)
   String8 string = push_str8fv(scratch.arena, fmt, args);
   va_end(args);
   d_entity_equip_name(entity, string);
+  scratch_end(scratch);
+}
+
+//- rjf: params tree equipment
+
+internal void
+d_entity_equip_params(D_Entity *entity, MD_Node *params)
+{
+  if(entity->params_arena == 0)
+  {
+    entity->params_arena = arena_alloc();
+  }
+  arena_clear(entity->params_arena);
+  entity->params_root = md_tree_copy(entity->params_arena, params);
+}
+
+internal void
+d_entity_equip_param(D_Entity *entity, String8 key, String8 value)
+{
+  Temp scratch = scratch_begin(0, 0);
+  {
+    MD_Node *params = md_tree_copy(scratch.arena, entity->params_root);
+    MD_Node *key_node = md_child_from_string(params, key, 0);
+    if(md_node_is_nil(key_node))
+    {
+      key_node = md_push_node(scratch.arena, MD_NodeKind_Main, MD_NodeFlag_Identifier, key, key, 0);
+      md_node_push_child(params, key_node);
+    }
+    MD_TokenizeResult value_tokenize = md_tokenize_from_text(scratch.arena, value);
+    MD_ParseResult value_parse = md_parse_from_text_tokens(scratch.arena, str8_zero(), value, value_tokenize.tokens);
+    for(MD_EachNode(child, value_parse.root->first))
+    {
+      child->parent = key_node;
+    }
+    key_node->first = value_parse.root->first;
+    key_node->last = value_parse.root->last;
+    d_entity_equip_params(entity, params);
+  }
   scratch_end(scratch);
 }
 
@@ -2208,7 +2251,7 @@ d_trap_net_from_thread__step_over_inst(Arena *arena, D_Entity *thread)
   
   // rjf: thread => unpacked info
   D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
-  Architecture arch = d_architecture_from_entity(thread);
+  Arch arch = d_arch_from_entity(thread);
   U64 ip_vaddr = ctrl_query_cached_rip_from_thread(d_state->ctrl_entity_store, thread->ctrl_machine_id, thread->ctrl_handle);
   
   // rjf: ip => machine code
@@ -2248,7 +2291,7 @@ d_trap_net_from_thread__step_over_line(Arena *arena, D_Entity *thread)
   D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
   D_Entity *module = d_module_from_thread(thread);
   DI_Key dbgi_key = d_dbgi_key_from_module(module);
-  Architecture arch = d_architecture_from_entity(thread);
+  Arch arch = d_arch_from_entity(thread);
   U64 ip_vaddr = ctrl_query_cached_rip_from_thread(d_state->ctrl_entity_store, thread->ctrl_machine_id, thread->ctrl_handle);
   log_infof("ip_vaddr: 0x%I64x\n", ip_vaddr);
   log_infof("dbgi_key: {%S, 0x%I64x}\n", dbgi_key.path, dbgi_key.min_timestamp);
@@ -2409,7 +2452,7 @@ d_trap_net_from_thread__step_into_line(Arena *arena, D_Entity *thread)
   D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
   D_Entity *module = d_module_from_thread(thread);
   DI_Key dbgi_key = d_dbgi_key_from_module(module);
-  Architecture arch = d_architecture_from_entity(thread);
+  Arch arch = d_arch_from_entity(thread);
   U64 ip_vaddr = ctrl_query_cached_rip_from_thread(d_state->ctrl_entity_store, thread->ctrl_machine_id, thread->ctrl_handle);
   
   // rjf: ip => line vaddr range
@@ -3093,8 +3136,8 @@ d_tls_base_vaddr_from_process_root_rip(D_Entity *process, U64 root_vaddr, U64 ri
   return base_vaddr;
 }
 
-internal Architecture
-d_architecture_from_entity(D_Entity *entity)
+internal Arch
+d_arch_from_entity(D_Entity *entity)
 {
   return entity->arch;
 }
@@ -3173,7 +3216,7 @@ d_module_from_thread_candidates(D_Entity *thread, D_EntityList *candidates)
 internal D_Unwind
 d_unwind_from_ctrl_unwind(Arena *arena, DI_Scope *di_scope, D_Entity *process, CTRL_Unwind *base_unwind)
 {
-  Architecture arch = d_architecture_from_entity(process);
+  Arch arch = d_arch_from_entity(process);
   D_Unwind result = {0};
   result.frames.concrete_frame_count = base_unwind->frames.count;
   result.frames.total_frame_count = result.frames.concrete_frame_count;
@@ -3486,7 +3529,7 @@ d_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
       if(frame_idx < unwind.frames.count)
       {
         CTRL_UnwindFrame *f = &unwind.frames.v[frame_idx];
-        U64 regs_size = regs_block_size_from_architecture(e_interpret_ctx->reg_arch);
+        U64 regs_size = regs_block_size_from_arch(e_interpret_ctx->reg_arch);
         Rng1U64 legal_range = r1u64(0, regs_size);
         Rng1U64 read_range = intersect_1u64(legal_range, range);
         U64 read_size = dim_1u64(read_range);
@@ -3555,7 +3598,7 @@ d_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range)
       if(frame_idx < unwind.frames.count)
       {
         Temp scratch = scratch_begin(0, 0);
-        U64 regs_size = regs_block_size_from_architecture(d_architecture_from_entity(entity));
+        U64 regs_size = regs_block_size_from_arch(d_arch_from_entity(entity));
         Rng1U64 legal_range = r1u64(0, regs_size);
         Rng1U64 write_range = intersect_1u64(legal_range, range);
         U64 write_size = dim_1u64(write_range);
@@ -5224,15 +5267,15 @@ d_lang_kind_from_eval_params(E_Eval eval, MD_Node *params)
   return lang_kind;
 }
 
-internal Architecture
-d_architecture_from_eval_params(E_Eval eval, MD_Node *params)
+internal Arch
+d_arch_from_eval_params(E_Eval eval, MD_Node *params)
 {
-  Architecture arch = Architecture_Null;
+  Arch arch = Arch_Null;
   MD_Node *arch_node = md_child_from_string(params, str8_lit("arch"), 0);
   String8 arch_kind_string = arch_node->first->string;
   if(str8_match(arch_kind_string, str8_lit("x64"), StringMatchFlag_CaseInsensitive))
   {
-    arch = Architecture_x64;
+    arch = Arch_x64;
   }
   return arch;
 }
@@ -8310,7 +8353,7 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
   //- rjf: unpack eval-dependent info
   D_Entity *process = d_entity_from_handle(d_regs()->process);
   D_Entity *thread = d_entity_from_handle(d_regs()->thread);
-  Architecture arch = d_architecture_from_entity(thread);
+  Arch arch = d_arch_from_entity(thread);
   U64 unwind_count = d_regs()->unwind_count;
   U64 rip_vaddr = d_query_cached_rip_from_thread_unwind(thread, unwind_count);
   CTRL_Unwind unwind = d_query_cached_unwind_from_thread(thread);
@@ -8330,7 +8373,7 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
     {
       D_Entity *m = n->entity;
       DI_Key dbgi_key = d_dbgi_key_from_module(m);
-      eval_modules[eval_module_idx].arch        = d_architecture_from_entity(m);
+      eval_modules[eval_module_idx].arch        = d_arch_from_entity(m);
       eval_modules[eval_module_idx].rdi         = di_rdi_from_key(d_state->frame_di_scope, &dbgi_key, 0);
       eval_modules[eval_module_idx].vaddr_range = m->vaddr_rng;
       eval_modules[eval_module_idx].space       = d_eval_space_from_entity(d_entity_ancestor_from_kind(m, D_EntityKind_Process));
@@ -8423,12 +8466,12 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
       {
         e_member_list_push_new(scratch.arena, &entity_members, .name = str8_lit("Enabled"),  .off = 0,        .type_key = e_type_key_basic(E_TypeKind_S64));
         e_member_list_push_new(scratch.arena, &entity_members, .name = str8_lit("Hit Count"),.off = 0+8,      .type_key = e_type_key_basic(E_TypeKind_U64));
-        e_member_list_push_new(scratch.arena, &entity_members, .name = str8_lit("Label"),    .off = 0+8+8,    .type_key = e_type_key_cons_ptr(architecture_from_context(), e_type_key_basic(E_TypeKind_Char8)));
-        e_member_list_push_new(scratch.arena, &entity_members, .name = str8_lit("Location"), .off = 0+8+8+8,  .type_key = e_type_key_cons_ptr(architecture_from_context(), e_type_key_basic(E_TypeKind_Char8)));
-        e_member_list_push_new(scratch.arena, &entity_members, .name = str8_lit("Condition"),.off = 0+8+8+8+8,.type_key = e_type_key_cons_ptr(architecture_from_context(), e_type_key_basic(E_TypeKind_Char8)));
+        e_member_list_push_new(scratch.arena, &entity_members, .name = str8_lit("Label"),    .off = 0+8+8,    .type_key = e_type_key_cons_ptr(arch_from_context(), e_type_key_basic(E_TypeKind_Char8)));
+        e_member_list_push_new(scratch.arena, &entity_members, .name = str8_lit("Location"), .off = 0+8+8+8,  .type_key = e_type_key_cons_ptr(arch_from_context(), e_type_key_basic(E_TypeKind_Char8)));
+        e_member_list_push_new(scratch.arena, &entity_members, .name = str8_lit("Condition"),.off = 0+8+8+8+8,.type_key = e_type_key_cons_ptr(arch_from_context(), e_type_key_basic(E_TypeKind_Char8)));
       }
       E_MemberArray entity_members_array = e_member_array_from_list(scratch.arena, &entity_members);
-      E_TypeKey entity_type = e_type_key_cons(.arch = architecture_from_context(),
+      E_TypeKey entity_type = e_type_key_cons(.arch = arch_from_context(),
                                               .kind = E_TypeKind_Struct,
                                               .name = str8_lit("Entity"),
                                               .members = entity_members_array.v,

@@ -399,23 +399,23 @@ txt_rng_contains(TxtRng r, TxtPt pt)
 //~ rjf: Toolchain/Environment Enum Functions
 
 internal U64
-bit_size_from_arch(Architecture arch)
+bit_size_from_arch(Arch arch)
 {
   // TODO(rjf): metacode
   U64 arch_bitsize = 0;
   switch(arch)
   {
-    case Architecture_x64:   arch_bitsize = 64; break;
-    case Architecture_x86:   arch_bitsize = 32; break;
-    case Architecture_arm64: arch_bitsize = 64; break;
-    case Architecture_arm32: arch_bitsize = 32; break;
+    case Arch_x64:   arch_bitsize = 64; break;
+    case Arch_x86:   arch_bitsize = 32; break;
+    case Arch_arm64: arch_bitsize = 64; break;
+    case Arch_arm32: arch_bitsize = 32; break;
     default: break;
   }
   return arch_bitsize;
 }
 
 internal U64
-max_instruction_size_from_arch(Architecture arch)
+max_instruction_size_from_arch(Arch arch)
 {
   // TODO(rjf): make this real
   return 64;
@@ -434,17 +434,17 @@ operating_system_from_context(void){
   return os;
 }
 
-internal Architecture
-architecture_from_context(void){
-  Architecture arch = Architecture_Null;
+internal Arch
+arch_from_context(void){
+  Arch arch = Arch_Null;
 #if ARCH_X64
-  arch = Architecture_x64;
+  arch = Arch_x64;
 #elif ARCH_X86
-  arch = Architecture_x86;
+  arch = Arch_x86;
 #elif ARCH_ARM64
-  arch = Architecture_arm64;
+  arch = Arch_arm64;
 #elif ARCH_ARM32
-  arch = Architecture_arm32;
+  arch = Arch_arm32;
 #endif
   return arch;
 }

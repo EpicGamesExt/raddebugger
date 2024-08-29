@@ -255,7 +255,7 @@ RDI_VMapEntryMemberTable:
 }
 
 ////////////////////////////////
-//~ rjf: Architecture Info Tables
+//~ rjf: Arch Info Tables
 
 @table(name value addr_size)
 RDI_ArchTable:

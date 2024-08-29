@@ -115,10 +115,10 @@ demon_lnx_open_memory_fd_for_pid(pid_t pid){
   return(result);
 }
 
-internal Architecture
+internal Arch
 demon_lnx_arch_from_pid(pid_t pid){
   Temp scratch = scratch_begin(0, 0);
-  Architecture result = Architecture_Null;
+  Arch result = Arch_Null;
   
   // exe path
   String8 exe_path = demon_lnx_executable_path_from_pid(scratch.arena, pid);
@@ -168,22 +168,22 @@ demon_lnx_arch_from_pid(pid_t pid){
   switch (ehdr.e_machine){
     case SYMS_ElfMachineKind_386:
     {
-      result = Architecture_x86;
+      result = Arch_x86;
     }break;
     
     case SYMS_ElfMachineKind_ARM:
     {
-      result = Architecture_arm32;
+      result = Arch_arm32;
     }break;
     
     case SYMS_ElfMachineKind_X86_64:
     {
-      result = Architecture_x64;
+      result = Arch_x64;
     }break;
     
     case SYMS_ElfMachineKind_AARCH64:
     {
-      result = Architecture_arm64;
+      result = Arch_arm64;
     }break;
   }
   
@@ -192,9 +192,9 @@ demon_lnx_arch_from_pid(pid_t pid){
 }
 
 internal DEMON_LNX_ProcessAux
-demon_lnx_aux_from_pid(pid_t pid, Architecture arch){
+demon_lnx_aux_from_pid(pid_t pid, Arch arch){
   DEMON_LNX_ProcessAux result = {0};
-  B32 addr_32bit = (arch == Architecture_x86 || arch == Architecture_arm32);
+  B32 addr_32bit = (arch == Arch_x86 || arch == Arch_arm32);
   
   // open aux data
   Temp scratch = scratch_begin(0, 0);
@@ -300,8 +300,8 @@ demon_lnx_phdr_info_from_memory(int memory_fd, B32 is_32bit, U64 phvaddr, U64 ph
 
 internal DEMON_LNX_ModuleNode*
 demon_lnx_module_list_from_process(Arena *arena, DEMON_Entity *process){
-  Architecture arch = (Architecture)process->arch;
-  B32 is_32bit = (arch == Architecture_x86 || arch == Architecture_arm32);
+  Arch arch = (Arch)process->arch;
+  B32 is_32bit = (arch == Arch_x86 || arch == Arch_arm32);
   int memory_fd = (int)process->ext_u64;
   
   // aux from pid
@@ -839,11 +839,11 @@ demon_os_run(Arena *arena, DEMON_OS_RunCtrls *controls){
     U8 *trap_swap_bytes = 0;
     
     if (result.first == 0){
-      // TODO(allen): per-Architecture implementation of single steps
+      // TODO(allen): per-Arch implementation of single steps
       // set single step bit
       if (single_step_thread != 0){
         switch (single_step_thread->arch){
-          case Architecture_x86:
+          case Arch_x86:
           {
             // TODO(allen): possibly buggy
             SYMS_RegX86 regs = {0};
@@ -852,7 +852,7 @@ demon_os_run(Arena *arena, DEMON_OS_RunCtrls *controls){
             demon_os_write_regs_x86(single_step_thread, &regs);
           }break;
           
-          case Architecture_x64:
+          case Arch_x64:
           {
             // TODO(allen): possibly buggy
             SYMS_RegX64 regs = {0};
@@ -863,7 +863,7 @@ demon_os_run(Arena *arena, DEMON_OS_RunCtrls *controls){
         }
       }
       
-      // TODO(allen): per-Architecture implementation of traps
+      // TODO(allen): per-Arch implementation of traps
       trap_swap_bytes = push_array_no_zero(scratch.arena, U8, controls->trap_count);
       
       {
@@ -980,13 +980,13 @@ demon_os_run(Arena *arena, DEMON_OS_RunCtrls *controls){
         union{ SYMS_RegX86 x86; SYMS_RegX64 x64; } regs = {0};
         
         switch (thread->arch){
-          case Architecture_x86:
+          case Arch_x86:
           {
             demon_os_read_regs_x86(thread, &regs.x86);
             instruction_pointer = regs.x86.eip.u32;
           }break;
           
-          case Architecture_x64:
+          case Arch_x64:
           {
             demon_os_read_regs_x64(thread, &regs.x64);
             instruction_pointer = regs.x64.rip.u64;
@@ -1052,7 +1052,7 @@ demon_os_run(Arena *arena, DEMON_OS_RunCtrls *controls){
                     // this stuff in the log to make sense of it still.
                   }
                   else{
-                    Architecture arch = demon_lnx_arch_from_pid(new_pid);
+                    Arch arch = demon_lnx_arch_from_pid(new_pid);
                     
                     // process entity
                     DEMON_Entity *new_process = demon_ent_new(demon_ent_root, DEMON_EntityKind_Process, new_pid);
@@ -1105,14 +1105,14 @@ demon_os_run(Arena *arena, DEMON_OS_RunCtrls *controls){
                   if (e_kind == DEMON_EventKind_Breakpoint){
                     // TODO(allen): possibly buggy
                     switch (thread->arch){
-                      case Architecture_x86:
+                      case Arch_x86:
                       {
                         instruction_pointer -= 1;
                         regs.x86.eip.u32 = instruction_pointer;
                         demon_os_write_regs_x86(thread, &regs.x86);
                       }break;
                       
-                      case Architecture_x64:
+                      case Arch_x64:
                       {
                         instruction_pointer -= 1;
                         regs.x64.rip.u64 = instruction_pointer;
@@ -1336,7 +1336,7 @@ demon_os_run(Arena *arena, DEMON_OS_RunCtrls *controls){
     
     // cleanup
     if (did_run){
-      // TODO(allen): per-Architecture
+      // TODO(allen): per-Arch
       // unset traps
       {
         DEMON_OS_Trap *trap = controls->traps;
@@ -1348,7 +1348,7 @@ demon_os_run(Arena *arena, DEMON_OS_RunCtrls *controls){
         }
       }
       
-      // TODO(allen): per-Architecture
+      // TODO(allen): per-Arch
       // unset single step bit
       //  the single step bit is automatically unset whenever we single step
       //  but if *something else* happened, it will still be there ready to
@@ -1356,7 +1356,7 @@ demon_os_run(Arena *arena, DEMON_OS_RunCtrls *controls){
       if (single_step_thread != 0){
         // TODO(allen): possibly buggy
         switch (single_step_thread->arch){
-          case Architecture_x86:
+          case Arch_x86:
           {
             SYMS_RegX86 regs = {0};
             demon_os_read_regs_x86(single_step_thread, &regs);
@@ -1364,7 +1364,7 @@ demon_os_run(Arena *arena, DEMON_OS_RunCtrls *controls){
             demon_os_write_regs_x86(single_step_thread, &regs);
           }break;
           
-          case Architecture_x64:
+          case Arch_x64:
           {
             SYMS_RegX64 regs = {0};
             demon_os_read_regs_x64(single_step_thread, &regs);
@@ -1555,7 +1555,7 @@ demon_os_launch_process(OS_LaunchOptions *options){
           else{
             result = pid;
             
-            Architecture arch = demon_lnx_arch_from_pid(pid);
+            Arch arch = demon_lnx_arch_from_pid(pid);
             
             // process entity
             DEMON_Entity *process = demon_ent_new(demon_ent_root, DEMON_EntityKind_Process, pid);
@@ -1688,7 +1688,7 @@ demon_os_attach_process(U32 pid){
   
   // initialize new entities on success
   if (result){
-    Architecture arch = demon_lnx_arch_from_pid(the_process->pid);
+    Arch arch = demon_lnx_arch_from_pid(the_process->pid);
     
     // process entity
     DEMON_Entity *process = demon_ent_new(demon_ent_root, DEMON_EntityKind_Process, the_process->pid);
@@ -1816,15 +1816,15 @@ internal U64
 demon_os_tls_root_vaddr_from_thread(DEMON_Entity *thread){
   U64 result = 0;
   switch (thread->arch){
-    case Architecture_x64:
-    case Architecture_x86:
+    case Arch_x64:
+    case Arch_x86:
     {
       U32 fsbase = 0;
       pid_t tid = (pid_t)thread->id;
       if (ptrace(PT_GETFSBASE, tid, (void*)&fsbase, 0) != -1){
         result = (U64)fsbase;
       }
-      if (thread->arch == Architecture_x64){
+      if (thread->arch == Arch_x64){
         result += 8;
       }
       else{

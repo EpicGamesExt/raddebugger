@@ -68,7 +68,7 @@ struct DMN_Event
   DMN_Handle process;
   DMN_Handle thread;
   DMN_Handle module;
-  Architecture arch;
+  Arch arch;
   U64 address;
   U64 size;
   String8 string;
@@ -228,7 +228,7 @@ internal B32 dmn_process_write(DMN_Handle process, Rng1U64 range, void *src);
 #define dmn_process_write_struct(process, vaddr, ptr) dmn_process_write((process), r1u64((vaddr), (vaddr)+(sizeof(*ptr))), ptr)
 
 //- rjf: threads
-internal Architecture dmn_arch_from_thread(DMN_Handle handle);
+internal Arch dmn_arch_from_thread(DMN_Handle handle);
 internal U64 dmn_stack_base_vaddr_from_thread(DMN_Handle handle);
 internal U64 dmn_tls_root_vaddr_from_thread(DMN_Handle handle);
 internal B32 dmn_thread_read_reg_block(DMN_Handle handle, void *reg_block);

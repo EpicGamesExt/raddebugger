@@ -163,7 +163,7 @@ e_interpret(String8 bytecode)
         U8 byte_size        = (imm.u64&0x00FF00)>>8;
         U8 byte_off         = (imm.u64&0xFF0000)>>16;
         REGS_RegCode base_reg_code = regs_reg_code_from_arch_rdi_code(e_interpret_ctx->reg_arch, rdi_reg_code);
-        REGS_Rng rng = regs_reg_code_rng_table_from_architecture(e_interpret_ctx->reg_arch)[base_reg_code];
+        REGS_Rng rng = regs_reg_code_rng_table_from_arch(e_interpret_ctx->reg_arch)[base_reg_code];
         U64 off = (U64)rng.byte_off + byte_off;
         U64 size = (U64)byte_size;
         B32 good_read = e_space_read(e_interpret_ctx->reg_space, &nval, r1u64(off, off+size));

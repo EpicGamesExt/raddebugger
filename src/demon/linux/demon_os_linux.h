@@ -198,8 +198,8 @@ internal B32                   demon_lnx_attach_pid(Arena *arena, pid_t pid, DEM
 internal String8               demon_lnx_executable_path_from_pid(Arena *arena, pid_t pid);
 internal int                   demon_lnx_open_memory_fd_for_pid(pid_t pid);
 
-internal Architecture          demon_lnx_arch_from_pid(pid_t pid);
-internal DEMON_LNX_ProcessAux  demon_lnx_aux_from_pid(pid_t pid, Architecture arch);
+internal Arch          demon_lnx_arch_from_pid(pid_t pid);
+internal DEMON_LNX_ProcessAux  demon_lnx_aux_from_pid(pid_t pid, Arch arch);
 internal DEMON_LNX_PhdrInfo    demon_lnx_phdr_info_from_memory(int memory_fd, B32 is_32bit,
                                                                U64 phvaddr, U64 phstride, U64 phcount);
 internal DEMON_LNX_ModuleNode* demon_lnx_module_list_from_process(Arena *arena, DEMON_Entity *process);

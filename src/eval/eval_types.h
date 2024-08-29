@@ -23,7 +23,7 @@ struct E_TypeKey
 {
   E_TypeKeyKind kind;
   U32 u32[3];
-  // [0] -> E_TypeKind (Basic, Cons, Ext); Architecture (Reg, RegAlias)
+  // [0] -> E_TypeKind (Basic, Cons, Ext); Arch (Reg, RegAlias)
   // [1] -> Type Index In RDI (Ext); Code (Reg, RegAlias); Type Index In Constructed (Cons)
   // [2] -> RDI Index (Ext)
 };
@@ -138,7 +138,7 @@ struct E_Type
 typedef struct E_ConsTypeParams E_ConsTypeParams;
 struct E_ConsTypeParams
 {
-  Architecture arch;
+  Arch arch;
   E_TypeKind kind;
   String8 name;
   E_TypeKey direct_key;
@@ -230,8 +230,8 @@ internal void e_select_type_ctx(E_TypeCtx *ctx);
 internal E_TypeKey e_type_key_zero(void);
 internal E_TypeKey e_type_key_basic(E_TypeKind kind);
 internal E_TypeKey e_type_key_ext(E_TypeKind kind, U32 type_idx, U32 rdi_idx);
-internal E_TypeKey e_type_key_reg(Architecture arch, REGS_RegCode code);
-internal E_TypeKey e_type_key_reg_alias(Architecture arch, REGS_AliasCode code);
+internal E_TypeKey e_type_key_reg(Arch arch, REGS_RegCode code);
+internal E_TypeKey e_type_key_reg_alias(Arch arch, REGS_AliasCode code);
 
 //- rjf: constructed type construction
 internal U64 e_hash_from_cons_type_params(E_ConsTypeParams *params);
@@ -241,7 +241,7 @@ internal E_TypeKey e_type_key_cons_(E_ConsTypeParams *params);
 
 //- rjf: constructed type construction helpers
 internal E_TypeKey e_type_key_cons_array(E_TypeKey element_type_key, U64 count);
-internal E_TypeKey e_type_key_cons_ptr(Architecture arch, E_TypeKey element_type_key);
+internal E_TypeKey e_type_key_cons_ptr(Arch arch, E_TypeKey element_type_key);
 
 //- rjf: basic type key functions
 internal B32 e_type_key_match(E_TypeKey l, E_TypeKey r);

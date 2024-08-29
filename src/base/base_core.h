@@ -439,16 +439,16 @@ typedef enum OperatingSystem
 }
 OperatingSystem;
 
-typedef enum Architecture
+typedef enum Arch
 {
-  Architecture_Null,
-  Architecture_x64,
-  Architecture_x86,
-  Architecture_arm64,
-  Architecture_arm32,
-  Architecture_COUNT,
+  Arch_Null,
+  Arch_x64,
+  Arch_x86,
+  Arch_arm64,
+  Arch_arm32,
+  Arch_COUNT,
 }
-Architecture;
+Arch;
 
 typedef enum Compiler
 {
@@ -779,11 +779,11 @@ internal B32 txt_rng_contains(TxtRng r, TxtPt pt);
 ////////////////////////////////
 //~ rjf: Toolchain/Environment Enum Functions
 
-internal U64 bit_size_from_arch(Architecture arch);
-internal U64 max_instruction_size_from_arch(Architecture arch);
+internal U64 bit_size_from_arch(Arch arch);
+internal U64 max_instruction_size_from_arch(Arch arch);
 
 internal OperatingSystem operating_system_from_context(void);
-internal Architecture architecture_from_context(void);
+internal Arch arch_from_context(void);
 internal Compiler compiler_from_context(void);
 
 ////////////////////////////////

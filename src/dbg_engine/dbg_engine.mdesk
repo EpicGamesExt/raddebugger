@@ -27,6 +27,8 @@ D_EntityKindTable:
 {
   {Nil                nil                   nils                          0  0  0  0  0  0  0  0  0  0  0                      "Label"             Null                   "Nil"                        }
   {Root               root                  roots                         0  0  0  0  0  0  0  0  0  0  0                      "Label"             Null                   "Root"                       }
+  
+  //- rjf: machines
   {Machine            machine               machines                      0  1  0  1  0  0  0  0  0  0  0                      "Label"             Machine                "Machine"                    }
   
   //- rjf: filesystem modeling
@@ -59,7 +61,7 @@ D_EntityKindTable:
   {WorkingDirectory   working_directory     working_directories           0  0  0  0  0  0  0  0  1  1  0                      "Execution Path"    Null                   "Working Directory"          }
   {EntryPoint         entry_point           entry_points                  0  0  0  0  0  0  0  0  0  1  0                      "Symbol Name"       Null                   "Entry Point"                }
   
-  //- rjf: view containers (windows, panels, views)
+  //- rjf: frontend containers (windows, panels, views)
   {Window             window                windows                       1  0  0  0  0  0  1  0  0  1  1                      "Label"             Window                 "Window"                     }
   {Panel              panel                 panels                        1  0  0  0  0  0  1  0  0  1  1                      "Label"             XSplit                 "Panel"                      }
   {View               view                  views                         1  0  0  0  0  0  1  0  0  1  1                      "Label"             Null                   "View"                       }

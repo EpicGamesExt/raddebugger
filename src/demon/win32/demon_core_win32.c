@@ -492,23 +492,23 @@ dmn_w32_image_info_from_process_base_vaddr(HANDLE process, U64 base_vaddr)
   if(got_coff_header)
   {
     U64 optional_size_off = 0;
-    Architecture arch = Architecture_Null;
+    Arch arch = Arch_Null;
     switch(coff_header.machine)
     {
       case COFF_MachineType_X86:
       {
-        arch = Architecture_x86;
+        arch = Arch_x86;
         optional_size_off = OffsetOf(PE_OptionalHeader32, sizeof_image);
       }break;
       case COFF_MachineType_X64:
       {
-        arch = Architecture_x64;
+        arch = Arch_x64;
         optional_size_off = OffsetOf(PE_OptionalHeader32Plus, sizeof_image);
       }break;
       default:
       {}break;
     }
-    if(arch != Architecture_Null)
+    if(arch != Arch_Null)
     {
       U64 optional_off = coff_header_off + sizeof(coff_header);
       U32 size = 0;
@@ -577,7 +577,7 @@ dmn_w32_xsave_tag_word_from_real_tag_word(U16 ftw)
 }
 
 internal B32
-dmn_w32_thread_read_reg_block(Architecture arch, HANDLE thread, void *reg_block)
+dmn_w32_thread_read_reg_block(Arch arch, HANDLE thread, void *reg_block)
 {
   B32 result = 0;
   ProfBeginFunction();
@@ -586,17 +586,17 @@ dmn_w32_thread_read_reg_block(Architecture arch, HANDLE thread, void *reg_block)
     ////////////////////////////
     //- rjf: unimplemented win32/arch combos
     //
-    case Architecture_Null:
-    case Architecture_COUNT:
+    case Arch_Null:
+    case Arch_COUNT:
     {}break;
-    case Architecture_arm64:
-    case Architecture_arm32:
+    case Arch_arm64:
+    case Arch_arm32:
     {NotImplemented;}break;
     
     ////////////////////////////
     //- rjf: x86
     //
-    case Architecture_x86:
+    case Arch_x86:
     {
       REGS_RegBlockX86 *dst = (REGS_RegBlockX86 *)reg_block;
       
@@ -679,7 +679,7 @@ dmn_w32_thread_read_reg_block(Architecture arch, HANDLE thread, void *reg_block)
     ////////////////////////////
     //- rjf: x64
     //
-    case Architecture_x64:
+    case Arch_x64:
     {
       Temp scratch = scratch_begin(0, 0);
       REGS_RegBlockX64 *dst = (REGS_RegBlockX64 *)reg_block;
@@ -871,7 +871,7 @@ dmn_w32_thread_read_reg_block(Architecture arch, HANDLE thread, void *reg_block)
 }
 
 internal B32
-dmn_w32_thread_write_reg_block(Architecture arch, HANDLE thread, void *reg_block)
+dmn_w32_thread_write_reg_block(Arch arch, HANDLE thread, void *reg_block)
 {
   B32 result = 0;
   ProfBeginFunction();
@@ -880,17 +880,17 @@ dmn_w32_thread_write_reg_block(Architecture arch, HANDLE thread, void *reg_block
     ////////////////////////////
     //- rjf: unimplemented win32/arch combos
     //
-    case Architecture_Null:
-    case Architecture_COUNT:
+    case Arch_Null:
+    case Arch_COUNT:
     {}break;
-    case Architecture_arm64:
-    case Architecture_arm32:
+    case Arch_arm64:
+    case Arch_arm32:
     {NotImplemented;}break;
     
     ////////////////////////////
     //- rjf: x86
     //
-    case Architecture_x86:
+    case Arch_x86:
     {
       REGS_RegBlockX86 *src = (REGS_RegBlockX86 *)reg_block;
       
@@ -958,7 +958,7 @@ dmn_w32_thread_write_reg_block(Architecture arch, HANDLE thread, void *reg_block
     ////////////////////////////
     //- rjf: x64
     //
-    case Architecture_x64:
+    case Arch_x64:
     {
       Temp scratch = scratch_begin(0, 0);
       REGS_RegBlockX64 *src = (REGS_RegBlockX64 *)reg_block;
@@ -1450,11 +1450,11 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
       if(!dmn_handle_match(ctrls->single_step_thread, dmn_handle_zero()))
       {
         DMN_W32_Entity *thread = dmn_w32_entity_from_handle(ctrls->single_step_thread);
-        Architecture arch = thread->arch;
+        Arch arch = thread->arch;
         switch(arch)
         {
           default:{}break;
-          case Architecture_x64:
+          case Arch_x64:
           {
             U32 ctx_flags = DMN_W32_CTX_X64|DMN_W32_CTX_INTEL_CONTROL;
             DWORD size = 0;
@@ -1477,19 +1477,19 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
       if(!dmn_handle_match(ctrls->single_step_thread, dmn_handle_zero())) ProfScope("set single step bit")
       {
         DMN_W32_Entity *thread = dmn_w32_entity_from_handle(ctrls->single_step_thread);
-        Architecture arch = thread->arch;
+        Arch arch = thread->arch;
         switch(arch)
         {
           //- rjf: unimplemented win32/arch combos
-          case Architecture_Null:
-          case Architecture_COUNT:
+          case Arch_Null:
+          case Arch_COUNT:
           {}break;
-          case Architecture_arm64:
-          case Architecture_arm32:
+          case Arch_arm64:
+          case Arch_arm32:
           {NotImplemented;}break;
           
           //- rjf: x86
-          case Architecture_x86:
+          case Arch_x86:
           {
             REGS_RegBlockX86 regs = {0};
             dmn_thread_read_reg_block(ctrls->single_step_thread, &regs);
@@ -1498,7 +1498,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
           }break;
           
           //- rjf: x64
-          case Architecture_x64:
+          case Arch_x64:
           {
             if(!GetThreadContext(thread->handle, single_step_thread_ctx))
             {
@@ -2095,7 +2095,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                   default:
                   {
                     Temp temp = temp_begin(scratch.arena);
-                    U64 regs_block_size = regs_block_size_from_architecture(thread->arch);
+                    U64 regs_block_size = regs_block_size_from_arch(thread->arch);
                     void *regs_block = push_array(scratch.arena, U8, regs_block_size);
                     if(dmn_w32_thread_read_reg_block(thread->arch, thread->handle, regs_block))
                     {
@@ -2106,7 +2106,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                   }break;
                   
                   //- rjf: x64 (fastpath)
-                  case Architecture_x64:
+                  case Arch_x64:
                   {
                     CONTEXT *ctx = 0;
                     U32 ctx_flags = DMN_W32_CTX_X64|DMN_W32_CTX_INTEL_CONTROL;
@@ -2464,26 +2464,26 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
       if(!dmn_handle_match(ctrls->single_step_thread, dmn_handle_zero())) ProfScope("unset single step bit")
       {
         DMN_W32_Entity *thread = dmn_w32_entity_from_handle(ctrls->single_step_thread);
-        Architecture arch = thread->arch;
+        Arch arch = thread->arch;
         switch(arch)
         {
           //- rjf: unimplemented win32/arch combos
-          case Architecture_Null:
-          case Architecture_COUNT:
+          case Arch_Null:
+          case Arch_COUNT:
           {}break;
-          case Architecture_arm64:
-          case Architecture_arm32:
+          case Arch_arm64:
+          case Arch_arm32:
           {NotImplemented;}break;
           
           //- rjf: x86/64
-          case Architecture_x86:
+          case Arch_x86:
           {
             REGS_RegBlockX86 regs = {0};
             dmn_thread_read_reg_block(ctrls->single_step_thread, &regs);
             regs.eflags.u32 &= ~0x100;
             dmn_thread_write_reg_block(ctrls->single_step_thread, &regs);
           }break;
-          case Architecture_x64:
+          case Arch_x64:
           {
             if(!GetThreadContext(thread->handle, single_step_thread_ctx))
             {
@@ -2737,10 +2737,10 @@ dmn_process_write(DMN_Handle process, Rng1U64 range, void *src)
 
 //- rjf: threads
 
-internal Architecture
+internal Arch
 dmn_arch_from_thread(DMN_Handle handle)
 {
-  Architecture arch = Architecture_Null;
+  Arch arch = Arch_Null;
   DMN_AccessScope
   {
     DMN_W32_Entity *entity = dmn_w32_entity_from_handle(handle);
@@ -2762,18 +2762,18 @@ dmn_stack_base_vaddr_from_thread(DMN_Handle handle)
       U64 tlb = thread->thread.thread_local_base;
       switch(thread->arch)
       {
-        case Architecture_Null:
-        case Architecture_COUNT:
+        case Arch_Null:
+        case Arch_COUNT:
         {}break;
-        case Architecture_arm64:
-        case Architecture_arm32:
+        case Arch_arm64:
+        case Arch_arm32:
         {NotImplemented;}break;
-        case Architecture_x64:
+        case Arch_x64:
         {
           U64 stack_base_addr = tlb + 0x8;
           dmn_w32_process_read(process->handle, r1u64(stack_base_addr, stack_base_addr+8), &result);
         }break;
-        case Architecture_x86:
+        case Arch_x86:
         {
           U64 stack_base_addr = tlb + 0x4;
           dmn_w32_process_read(process->handle, r1u64(stack_base_addr, stack_base_addr+4), &result);
@@ -2796,17 +2796,17 @@ dmn_tls_root_vaddr_from_thread(DMN_Handle handle)
       result = entity->thread.thread_local_base;
       switch(entity->arch)
       {
-        case Architecture_Null:
-        case Architecture_COUNT:
+        case Arch_Null:
+        case Arch_COUNT:
         {}break;
-        case Architecture_arm64:
-        case Architecture_arm32:
+        case Arch_arm64:
+        case Arch_arm32:
         {NotImplemented;}break;
-        case Architecture_x64:
+        case Arch_x64:
         {
           result += 88;
         }break;
-        case Architecture_x86:
+        case Arch_x86:
         {
           result += 44;
         }break;

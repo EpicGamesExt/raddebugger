@@ -315,7 +315,7 @@ internal String32 str32_from_8(Arena *arena, String8 in);
 internal String8 string_from_dimension(Dimension dimension);
 internal String8 string_from_side(Side side);
 internal String8 string_from_operating_system(OperatingSystem os);
-internal String8 string_from_architecture(Architecture arch);
+internal String8 string_from_arch(Arch arch);
 
 ////////////////////////////////
 //~ rjf: Time Types -> String

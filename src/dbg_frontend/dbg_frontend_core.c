@@ -4612,11 +4612,11 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
           //- rjf: gather registers
           if(ws->autocomp_lister_params.flags & DF_AutoCompListerFlag_Registers)
           {
-            Architecture arch = d_architecture_from_entity(thread);
-            U64 reg_names_count = regs_reg_code_count_from_architecture(arch);
-            U64 alias_names_count = regs_alias_code_count_from_architecture(arch);
-            String8 *reg_names = regs_reg_code_string_table_from_architecture(arch);
-            String8 *alias_names = regs_alias_code_string_table_from_architecture(arch);
+            Arch arch = d_arch_from_entity(thread);
+            U64 reg_names_count = regs_reg_code_count_from_arch(arch);
+            U64 alias_names_count = regs_alias_code_count_from_arch(arch);
+            String8 *reg_names = regs_reg_code_string_table_from_arch(arch);
+            String8 *alias_names = regs_alias_code_string_table_from_arch(arch);
             for(U64 idx = 0; idx < reg_names_count; idx += 1)
             {
               if(reg_names[idx].size != 0)
@@ -4699,12 +4699,12 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
           //- rjf: gather architectures
           if(ws->autocomp_lister_params.flags & DF_AutoCompListerFlag_Architectures)
           {
-            for(EachNonZeroEnumVal(Architecture, arch))
+            for(EachNonZeroEnumVal(Arch, arch))
             {
               DF_AutoCompListerItem item = {0};
               {
-                item.string      = string_from_architecture(arch);
-                item.kind_string = str8_lit("Architecture");
+                item.string      = string_from_arch(arch);
+                item.kind_string = str8_lit("Arch");
                 item.matches     = fuzzy_match_find(scratch.arena, query, item.string);
               }
               if(query.size == 0 || item.matches.count != 0)
@@ -9998,8 +9998,8 @@ df_entity_tooltips(D_Entity *entity)
     {
       String8 display_string = d_display_string_from_entity(scratch.arena, entity);
       U64 rip_vaddr = d_query_cached_rip_from_thread(entity);
-      Architecture arch = d_architecture_from_entity(entity);
-      String8 arch_str = string_from_architecture(arch);
+      Arch arch = d_arch_from_entity(entity);
+      String8 arch_str = string_from_arch(arch);
       U32 pid_or_tid = entity->ctrl_id;
       if(display_string.size != 0) UI_PrefWidth(ui_children_sum(1)) UI_Row
       {
@@ -10045,7 +10045,7 @@ df_entity_tooltips(D_Entity *entity)
       }
       UI_PrefWidth(ui_children_sum(1)) UI_Row
       {
-        UI_PrefWidth(ui_em(18.f, 1.f)) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) ui_labelf("Architecture: ");
+        UI_PrefWidth(ui_em(18.f, 1.f)) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) ui_labelf("Arch: ");
         UI_PrefWidth(ui_text_dim(10, 1)) ui_label(arch_str);
       }
       ui_spacer(ui_em(1.5f, 1.f));

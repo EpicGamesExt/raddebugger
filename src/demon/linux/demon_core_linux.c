@@ -131,7 +131,7 @@ dmn_process_write(DMN_Handle process, Rng1U64 range, void *src)
 
 //- rjf: threads
 
-internal Architecture
+internal Arch
 dmn_arch_from_thread(DMN_Handle handle)
 {
 }

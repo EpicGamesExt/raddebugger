@@ -267,10 +267,10 @@ pe_bin_info_from_data(Arena *arena, String8 data)
     switch(coff_header.machine)
     {
       default:{}break;
-      case COFF_MachineType_X86:   {info.arch = Architecture_x86;}break;
-      case COFF_MachineType_X64:   {info.arch = Architecture_x64;}break;
-      case COFF_MachineType_ARM:   {info.arch = Architecture_arm32;}break;
-      case COFF_MachineType_ARM64: {info.arch = Architecture_arm64;}break;
+      case COFF_MachineType_X86:   {info.arch = Arch_x86;}break;
+      case COFF_MachineType_X64:   {info.arch = Arch_x64;}break;
+      case COFF_MachineType_ARM:   {info.arch = Arch_arm32;}break;
+      case COFF_MachineType_ARM64: {info.arch = Arch_arm64;}break;
     }
     MemoryCopyStruct(&info.tls_header, &tls_header);
   }
@@ -284,7 +284,7 @@ internal U64
 pe_intel_pdata_off_from_voff__binary_search(String8 data, PE_BinInfo *bin, U64 voff)
 {
   U64 result = 0;
-  if(bin->arch != Architecture_Null && PE_DataDirectoryIndex_EXCEPTIONS < bin->data_dir_count)
+  if(bin->arch != Arch_Null && PE_DataDirectoryIndex_EXCEPTIONS < bin->data_dir_count)
   {
     Rng1U64 range = bin->data_dir_franges[PE_DataDirectoryIndex_EXCEPTIONS];
     U64 pdata_off = range.min;
@@ -467,7 +467,7 @@ pe_tls_rng_from_bin_base_vaddr(String8 data, PE_BinInfo *bin, U64 base_vaddr)
 {
   U64 result_addr = (bin->tls_header.index_address - bin->image_base);
   U64 result_size = sizeof(U32);
-  if(bin->arch != Architecture_Null)
+  if(bin->arch != Arch_Null)
   {
     U64 addr_size = bit_size_from_arch(bin->arch)/8;
     Temp scratch = scratch_begin(0, 0);

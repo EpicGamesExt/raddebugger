@@ -520,8 +520,8 @@ ctrl_entity_store_alloc(void)
   store->arena = arena;
   store->hash_slots_count = 1024;
   store->hash_slots = push_array(arena, CTRL_EntityHashSlot, store->hash_slots_count);
-  CTRL_Entity *root = store->root = ctrl_entity_alloc(store, &ctrl_entity_nil, CTRL_EntityKind_Root, Architecture_Null, 0, dmn_handle_zero(), 0);
-  CTRL_Entity *local_machine = ctrl_entity_alloc(store, root, CTRL_EntityKind_Machine, architecture_from_context(), CTRL_MachineID_Local, dmn_handle_zero(), 0);
+  CTRL_Entity *root = store->root = ctrl_entity_alloc(store, &ctrl_entity_nil, CTRL_EntityKind_Root, Arch_Null, 0, dmn_handle_zero(), 0);
+  CTRL_Entity *local_machine = ctrl_entity_alloc(store, root, CTRL_EntityKind_Machine, arch_from_context(), CTRL_MachineID_Local, dmn_handle_zero(), 0);
   (void)local_machine;
   return store;
 }
@@ -628,7 +628,7 @@ ctrl_entity_string_release(CTRL_EntityStore *store, String8 string)
 //- rjf: entity construction/deletion
 
 internal CTRL_Entity *
-ctrl_entity_alloc(CTRL_EntityStore *store, CTRL_Entity *parent, CTRL_EntityKind kind, Architecture arch, CTRL_MachineID machine_id, DMN_Handle handle, U64 id)
+ctrl_entity_alloc(CTRL_EntityStore *store, CTRL_Entity *parent, CTRL_EntityKind kind, Arch arch, CTRL_MachineID machine_id, DMN_Handle handle, U64 id)
 {
   CTRL_Entity *entity = &ctrl_entity_nil;
   {
@@ -883,7 +883,7 @@ ctrl_entity_store_apply_events(CTRL_EntityStore *store, CTRL_EventList *list)
         CTRL_Entity *debug_info_path = ctrl_entity_child_from_kind(module, CTRL_EntityKind_DebugInfoPath);
         if(debug_info_path == &ctrl_entity_nil)
         {
-          debug_info_path = ctrl_entity_alloc(store, module, CTRL_EntityKind_DebugInfoPath, Architecture_Null, 0, dmn_handle_zero(), 0);
+          debug_info_path = ctrl_entity_alloc(store, module, CTRL_EntityKind_DebugInfoPath, Arch_Null, 0, dmn_handle_zero(), 0);
         }
         ctrl_entity_equip_string(store, debug_info_path, event->string);
         debug_info_path->timestamp = event->timestamp;
@@ -901,12 +901,12 @@ ctrl_init(void)
   Arena *arena = arena_alloc();
   ctrl_state = push_array(arena, CTRL_State, 1);
   ctrl_state->arena = arena;
-  for(Architecture arch = (Architecture)0; arch < Architecture_COUNT; arch = (Architecture)(arch+1))
+  for(Arch arch = (Arch)0; arch < Arch_COUNT; arch = (Arch)(arch+1))
   {
-    String8 *reg_names = regs_reg_code_string_table_from_architecture(arch);
-    U64 reg_count = regs_reg_code_count_from_architecture(arch);
-    String8 *alias_names = regs_alias_code_string_table_from_architecture(arch);
-    U64 alias_count = regs_alias_code_count_from_architecture(arch);
+    String8 *reg_names = regs_reg_code_string_table_from_arch(arch);
+    U64 reg_count = regs_reg_code_count_from_arch(arch);
+    String8 *alias_names = regs_alias_code_string_table_from_arch(arch);
+    U64 alias_count = regs_alias_code_count_from_arch(arch);
     ctrl_state->arch_string2reg_tables[arch] = e_string2num_map_make(ctrl_state->arena, 256);
     ctrl_state->arch_string2alias_tables[arch] = e_string2num_map_make(ctrl_state->arena, 256);
     for(U64 idx = 1; idx < reg_count; idx += 1)
@@ -1452,8 +1452,8 @@ ctrl_query_cached_reg_block_from_thread(Arena *arena, CTRL_EntityStore *store, C
 {
   CTRL_ThreadRegCache *cache = &ctrl_state->thread_reg_cache;
   CTRL_Entity *thread_entity = ctrl_entity_from_machine_id_handle(store, machine_id, thread);
-  Architecture arch = thread_entity->arch;
-  U64 reg_block_size = regs_block_size_from_architecture(arch);
+  Arch arch = thread_entity->arch;
+  U64 reg_block_size = regs_block_size_from_arch(arch);
   U64 hash = ctrl_hash_from_machine_id_handle(machine_id, thread);
   U64 slot_idx = hash%cache->slots_count;
   U64 stripe_idx = slot_idx%cache->stripes_count;
@@ -1552,7 +1552,7 @@ ctrl_query_cached_rip_from_thread(CTRL_EntityStore *store, CTRL_MachineID machin
 {
   Temp scratch = scratch_begin(0, 0);
   CTRL_Entity *thread_entity = ctrl_entity_from_machine_id_handle(store, machine_id, thread);
-  Architecture arch = thread_entity->arch;
+  Arch arch = thread_entity->arch;
   void *block = ctrl_query_cached_reg_block_from_thread(scratch.arena, store, machine_id, thread);
   U64 result = regs_rip_from_arch_block(arch, block);
   scratch_end(scratch);
@@ -1564,7 +1564,7 @@ ctrl_query_cached_rsp_from_thread(CTRL_EntityStore *store, CTRL_MachineID machin
 {
   Temp scratch = scratch_begin(0, 0);
   CTRL_Entity *thread_entity = ctrl_entity_from_machine_id_handle(store, machine_id, thread);
-  Architecture arch = thread_entity->arch;
+  Arch arch = thread_entity->arch;
   void *block = ctrl_query_cached_reg_block_from_thread(scratch.arena, store, machine_id, thread);
   U64 result = regs_rsp_from_arch_block(arch, block);
   scratch_end(scratch);
@@ -1718,7 +1718,7 @@ ctrl_initial_debug_info_path_from_module(Arena *arena, CTRL_MachineID machine_id
 //- rjf: unwind deep copier
 
 internal CTRL_Unwind
-ctrl_unwind_deep_copy(Arena *arena, Architecture arch, CTRL_Unwind *src)
+ctrl_unwind_deep_copy(Arena *arena, Arch arch, CTRL_Unwind *src)
 {
   CTRL_Unwind dst = {0};
   {
@@ -1726,7 +1726,7 @@ ctrl_unwind_deep_copy(Arena *arena, Architecture arch, CTRL_Unwind *src)
     dst.frames.count = src->frames.count;
     dst.frames.v = push_array(arena, CTRL_UnwindFrame, dst.frames.count);
     MemoryCopy(dst.frames.v, src->frames.v, sizeof(dst.frames.v[0])*dst.frames.count);
-    U64 block_size = regs_block_size_from_architecture(arch);
+    U64 block_size = regs_block_size_from_arch(arch);
     for(U64 idx = 0; idx < dst.frames.count; idx += 1)
     {
       dst.frames.v[idx].regs = push_array_no_zero(arena, U8, block_size);
@@ -2585,13 +2585,13 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN
 //- rjf: abstracted unwind step
 
 internal CTRL_UnwindStepResult
-ctrl_unwind_step(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN_Handle process, DMN_Handle module, Architecture arch, void *reg_block, U64 endt_us)
+ctrl_unwind_step(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN_Handle process, DMN_Handle module, Arch arch, void *reg_block, U64 endt_us)
 {
   CTRL_UnwindStepResult result = {0};
   switch(arch)
   {
     default:{}break;
-    case Architecture_x64:
+    case Arch_x64:
     {
       result = ctrl_unwind_step__pe_x64(store, machine_id, process, module, (REGS_RegBlockX64 *)reg_block, endt_us);
     }break;
@@ -2612,12 +2612,12 @@ ctrl_unwind_from_thread(Arena *arena, CTRL_EntityStore *store, CTRL_MachineID ma
   //- rjf: unpack args
   CTRL_Entity *thread_entity = ctrl_entity_from_machine_id_handle(store, machine_id, thread);
   CTRL_Entity *process_entity = thread_entity->parent;
-  Architecture arch = thread_entity->arch;
-  U64 arch_reg_block_size = regs_block_size_from_architecture(arch);
+  Arch arch = thread_entity->arch;
+  U64 arch_reg_block_size = regs_block_size_from_arch(arch);
   
   //- rjf: grab initial register block
   void *regs_block = ctrl_query_cached_reg_block_from_thread(scratch.arena, store, machine_id, thread);
-  B32 regs_block_good = (arch != Architecture_Null && regs_block != 0);
+  B32 regs_block_good = (arch != Arch_Null && regs_block != 0);
   
   //- rjf: loop & unwind
   CTRL_UnwindFrameNode *first_frame_node = 0;
@@ -2721,13 +2721,13 @@ ctrl_reg_gen(void)
 //- rjf: name -> register/alias hash tables, for eval
 
 internal E_String2NumMap *
-ctrl_string2reg_from_arch(Architecture arch)
+ctrl_string2reg_from_arch(Arch arch)
 {
   return &ctrl_state->arch_string2reg_tables[arch];
 }
 
 internal E_String2NumMap *
-ctrl_string2alias_from_arch(Architecture arch)
+ctrl_string2alias_from_arch(Arch arch)
 {
   return &ctrl_state->arch_string2alias_tables[arch];
 }
@@ -3415,7 +3415,7 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
           log_infof("process:        [%I64u]\n",  ev->process.u64[0]);
           log_infof("thread:         [%I64u]\n",  ev->thread.u64[0]);
           log_infof("module:         [%I64u]\n",  ev->module.u64[0]);
-          log_infof("arch:           %S\n",       string_from_architecture(ev->arch));
+          log_infof("arch:           %S\n",       string_from_arch(ev->arch));
           log_infof("address:        0x%I64x\n",  ev->address);
           log_infof("string:         \"%S\"\n",   ev->string);
           log_infof("ip_vaddr:       0x%I64x\n",  ev->instruction_pointer);
@@ -3498,7 +3498,7 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
                       RDI_GlobalVariable *global_var = rdi_element_from_name_idx(rdi, GlobalVariables, ids[0]);
                       U64 global_var_voff = global_var->voff;
                       U64 global_var_vaddr = global_var->voff + module->vaddr_range.min;
-                      Architecture arch = process->arch;
+                      Arch arch = process->arch;
                       U64 addr_size = bit_size_from_arch(arch)/8;
                       dmn_process_read(ev->process, r1u64(global_var_vaddr, global_var_vaddr+addr_size), &asan_shadow_base_vaddr);
                       asan_shadow_variable_exists_but_is_zero = (asan_shadow_base_vaddr == 0);
@@ -3557,7 +3557,7 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
       if(do_spoof) ProfScope("prep spoof")
       {
         CTRL_Entity *spoof_process = ctrl_entity_from_machine_id_handle(ctrl_state->ctrl_thread_entity_store, CTRL_MachineID_Local, spoof->process);
-        Architecture arch = spoof_process->arch;
+        Arch arch = spoof_process->arch;
         size_of_spoof = bit_size_from_arch(arch)/8;
         dmn_process_read(spoof_process->handle, r1u64(spoof->vaddr, spoof->vaddr+size_of_spoof), &spoof_old_ip_value);
       }
@@ -3623,8 +3623,8 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
   if(spoof != 0)
   {
     CTRL_Entity *thread = ctrl_entity_from_machine_id_handle(ctrl_state->ctrl_thread_entity_store, CTRL_MachineID_Local, spoof->thread);
-    Architecture arch = thread->arch;
-    void *regs_block = push_array(scratch.arena, U8, regs_block_size_from_architecture(arch));
+    Arch arch = thread->arch;
+    void *regs_block = push_array(scratch.arena, U8, regs_block_size_from_arch(arch));
     dmn_thread_read_reg_block(spoof->thread, regs_block);
     U64 spoof_thread_rip = regs_rip_from_arch_block(arch, regs_block);
     if(spoof_thread_rip == spoof->new_ip_value)
@@ -3812,7 +3812,7 @@ ctrl_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
       case CTRL_EntityKind_Thread:
       {
         Temp scratch = scratch_begin(0, 0);
-        U64 regs_size = regs_block_size_from_architecture(entity->arch);
+        U64 regs_size = regs_block_size_from_arch(entity->arch);
         void *regs = ctrl_query_cached_reg_block_from_thread(scratch.arena, ctrl_state->ctrl_thread_entity_store, entity->machine_id, entity->handle);
         Rng1U64 legal_range = r1u64(0, regs_size);
         Rng1U64 read_range = intersect_1u64(legal_range, range);
@@ -3862,7 +3862,7 @@ ctrl_thread__launch(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
   for(String8Node *n = msg->entry_points.first; n != 0; n = n->next)
   {
     String8 string = n->string;
-    CTRL_Entity *entry = ctrl_entity_alloc(ctrl_state->ctrl_thread_entity_store, ctrl_state->ctrl_thread_entity_store->root, CTRL_EntityKind_EntryPoint, Architecture_Null, 0, dmn_handle_zero(), (U64)id);
+    CTRL_Entity *entry = ctrl_entity_alloc(ctrl_state->ctrl_thread_entity_store, ctrl_state->ctrl_thread_entity_store->root, CTRL_EntityKind_EntryPoint, Arch_Null, 0, dmn_handle_zero(), (U64)id);
     ctrl_entity_equip_string(ctrl_state->ctrl_thread_entity_store, entry, string);
   }
 }
@@ -4548,7 +4548,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
       //
       CTRL_Entity *thread = ctrl_entity_from_machine_id_handle(ctrl_state->ctrl_thread_entity_store, CTRL_MachineID_Local, event->thread);
       CTRL_Entity *process = ctrl_entity_from_machine_id_handle(ctrl_state->ctrl_thread_entity_store, CTRL_MachineID_Local, event->process);
-      Architecture arch = thread->arch;
+      Arch arch = thread->arch;
       U64 thread_rip_vaddr = dmn_rip_from_thread(event->thread);
       CTRL_Entity *module = &ctrl_entity_nil;
       {

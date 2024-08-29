@@ -106,7 +106,7 @@ struct DMN_W32_Entity
   U32 gen;
   U64 id;
   HANDLE handle;
-  Architecture arch;
+  Arch arch;
   union
   {
     struct
@@ -174,7 +174,7 @@ struct DMN_W32_InjectedBreak
 typedef struct DMN_W32_ImageInfo DMN_W32_ImageInfo;
 struct DMN_W32_ImageInfo
 {
-  Architecture arch;
+  Arch arch;
   U32 size;
 };
 
@@ -277,8 +277,8 @@ internal DMN_W32_ImageInfo dmn_w32_image_info_from_process_base_vaddr(HANDLE pro
 //- rjf: threads
 internal U16 dmn_w32_real_tag_word_from_xsave(XSAVE_FORMAT *fxsave);
 internal U16 dmn_w32_xsave_tag_word_from_real_tag_word(U16 ftw);
-internal B32 dmn_w32_thread_read_reg_block(Architecture arch, HANDLE thread, void *reg_block);
-internal B32 dmn_w32_thread_write_reg_block(Architecture arch, HANDLE thread, void *reg_block);
+internal B32 dmn_w32_thread_read_reg_block(Arch arch, HANDLE thread, void *reg_block);
+internal B32 dmn_w32_thread_write_reg_block(Arch arch, HANDLE thread, void *reg_block);
 
 //- rjf: remote thread injection
 internal DWORD dmn_w32_inject_thread(HANDLE process, U64 start_address);

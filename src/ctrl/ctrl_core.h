@@ -63,7 +63,7 @@ struct CTRL_Entity
   CTRL_Entity *prev;
   CTRL_Entity *parent;
   CTRL_EntityKind kind;
-  Architecture arch;
+  Arch arch;
   CTRL_MachineID machine_id;
   DMN_Handle handle;
   U64 id;
@@ -371,7 +371,7 @@ struct CTRL_Event
   CTRL_MachineID machine_id;
   DMN_Handle entity;
   DMN_Handle parent;
-  Architecture arch;
+  Arch arch;
   U64 u64_code;
   U32 entity_id;
   Rng1U64 vaddr_rng;
@@ -562,8 +562,8 @@ struct CTRL_State
   CTRL_WakeupFunctionType *wakeup_hook;
   
   // rjf: name -> register/alias hash tables for eval
-  E_String2NumMap arch_string2reg_tables[Architecture_COUNT];
-  E_String2NumMap arch_string2alias_tables[Architecture_COUNT];
+  E_String2NumMap arch_string2reg_tables[Arch_COUNT];
+  E_String2NumMap arch_string2alias_tables[Arch_COUNT];
   
   // rjf: caches
   CTRL_ProcessMemoryCache process_memory_cache;
@@ -696,7 +696,7 @@ internal String8 ctrl_entity_string_alloc(CTRL_EntityStore *store, String8 strin
 internal void ctrl_entity_string_release(CTRL_EntityStore *store, String8 string);
 
 //- rjf: entity construction/deletion
-internal CTRL_Entity *ctrl_entity_alloc(CTRL_EntityStore *store, CTRL_Entity *parent, CTRL_EntityKind kind, Architecture arch, CTRL_MachineID machine_id, DMN_Handle handle, U64 id);
+internal CTRL_Entity *ctrl_entity_alloc(CTRL_EntityStore *store, CTRL_Entity *parent, CTRL_EntityKind kind, Arch arch, CTRL_MachineID machine_id, DMN_Handle handle, U64 id);
 internal void ctrl_entity_release(CTRL_EntityStore *store, CTRL_Entity *entity);
 
 //- rjf: entity equipment
@@ -763,14 +763,14 @@ internal String8 ctrl_initial_debug_info_path_from_module(Arena *arena, CTRL_Mac
 //~ rjf: Unwinding Functions
 
 //- rjf: unwind deep copier
-internal CTRL_Unwind ctrl_unwind_deep_copy(Arena *arena, Architecture arch, CTRL_Unwind *src);
+internal CTRL_Unwind ctrl_unwind_deep_copy(Arena *arena, Arch arch, CTRL_Unwind *src);
 
 //- rjf: [x64]
 internal REGS_Reg64 *ctrl_unwind_reg_from_pe_gpr_reg__pe_x64(REGS_RegBlockX64 *regs, PE_UnwindGprRegX64 gpr_reg);
 internal CTRL_UnwindStepResult ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN_Handle process_handle, DMN_Handle module, REGS_RegBlockX64 *regs, U64 endt_us);
 
 //- rjf: abstracted unwind step
-internal CTRL_UnwindStepResult ctrl_unwind_step(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN_Handle process_handle, DMN_Handle module, Architecture arch, void *reg_block, U64 endt_us);
+internal CTRL_UnwindStepResult ctrl_unwind_step(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN_Handle process_handle, DMN_Handle module, Arch arch, void *reg_block, U64 endt_us);
 
 //- rjf: abstracted full unwind
 internal CTRL_Unwind ctrl_unwind_from_thread(Arena *arena, CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN_Handle thread, U64 endt_us);
@@ -789,8 +789,8 @@ internal U64 ctrl_mem_gen(void);
 internal U64 ctrl_reg_gen(void);
 
 //- rjf: name -> register/alias hash tables, for eval
-internal E_String2NumMap *ctrl_string2reg_from_arch(Architecture arch);
-internal E_String2NumMap *ctrl_string2alias_from_arch(Architecture arch);
+internal E_String2NumMap *ctrl_string2reg_from_arch(Arch arch);
+internal E_String2NumMap *ctrl_string2alias_from_arch(Arch arch);
 
 ////////////////////////////////
 //~ rjf: Control-Thread Functions

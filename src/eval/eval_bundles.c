@@ -102,7 +102,7 @@ e_dynamically_typed_eval_from_eval(E_Eval eval)
         if(e_space_read(eval.space, &class_base_vaddr, r1u64(ptr_vaddr, ptr_vaddr+addr_size)) &&
            e_space_read(eval.space, &vtable_vaddr, r1u64(class_base_vaddr, class_base_vaddr+addr_size)))
         {
-          Architecture arch = e_type_state->ctx->primary_module->arch;
+          Arch arch = e_type_state->ctx->primary_module->arch;
           U32 rdi_idx = 0;
           RDI_Parsed *rdi = 0;
           U64 module_base = 0;

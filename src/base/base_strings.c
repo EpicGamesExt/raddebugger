@@ -1459,7 +1459,7 @@ string_from_operating_system(OperatingSystem os){
 }
 
 internal String8
-string_from_architecture(Architecture arch){
+string_from_arch(Arch arch){
   local_persist String8 strings[] = {
     str8_lit_comp("Null"),
     str8_lit_comp("x64"),
@@ -1468,7 +1468,7 @@ string_from_architecture(Architecture arch){
     str8_lit_comp("arm32"),
   };
   String8 result = str8_lit("error");
-  if (arch < Architecture_COUNT){
+  if (arch < Arch_COUNT){
     result = strings[arch];
   }
   return(result);

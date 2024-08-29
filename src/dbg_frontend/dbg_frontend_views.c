@@ -985,7 +985,7 @@ df_watch_view_build(DF_View *view, DF_WatchViewState *ewv, B32 modifiable, U32 d
   //
   FNT_Tag code_font = df_font_from_slot(DF_FontSlot_Code);
   D_Entity *thread = d_entity_from_handle(d_regs()->thread);
-  Architecture arch = d_architecture_from_entity(thread);
+  Arch arch = d_arch_from_entity(thread);
   CTRL_Unwind base_unwind = d_query_cached_unwind_from_thread(thread);
   D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
   D_Unwind rich_unwind = d_unwind_from_ctrl_unwind(scratch.arena, di_scope, process, &base_unwind);
@@ -1107,12 +1107,12 @@ df_watch_view_build(DF_View *view, DF_WatchViewState *ewv, B32 modifiable, U32 d
                 {
                   e_member_list_push_new(scratch.arena, &bp_members, .name = str8_lit("Enabled"),  .off = 0,        .type_key = e_type_key_basic(E_TypeKind_S64));
                   e_member_list_push_new(scratch.arena, &bp_members, .name = str8_lit("Hit Count"),.off = 0+8,      .type_key = e_type_key_basic(E_TypeKind_U64));
-                  e_member_list_push_new(scratch.arena, &bp_members, .name = str8_lit("Label"),    .off = 0+8+8,    .type_key = e_type_key_cons_ptr(architecture_from_context(), e_type_key_basic(E_TypeKind_Char8)));
-                  e_member_list_push_new(scratch.arena, &bp_members, .name = str8_lit("Location"), .off = 0+8+8+8,  .type_key = e_type_key_cons_ptr(architecture_from_context(), e_type_key_basic(E_TypeKind_Char8)));
-                  e_member_list_push_new(scratch.arena, &bp_members, .name = str8_lit("Condition"),.off = 0+8+8+8+8,.type_key = e_type_key_cons_ptr(architecture_from_context(), e_type_key_basic(E_TypeKind_Char8)));
+                  e_member_list_push_new(scratch.arena, &bp_members, .name = str8_lit("Label"),    .off = 0+8+8,    .type_key = e_type_key_cons_ptr(arch_from_context(), e_type_key_basic(E_TypeKind_Char8)));
+                  e_member_list_push_new(scratch.arena, &bp_members, .name = str8_lit("Location"), .off = 0+8+8+8,  .type_key = e_type_key_cons_ptr(arch_from_context(), e_type_key_basic(E_TypeKind_Char8)));
+                  e_member_list_push_new(scratch.arena, &bp_members, .name = str8_lit("Condition"),.off = 0+8+8+8+8,.type_key = e_type_key_cons_ptr(arch_from_context(), e_type_key_basic(E_TypeKind_Char8)));
                 }
                 E_MemberArray bp_members_array = e_member_array_from_list(scratch.arena, &bp_members);
-                E_TypeKey bp_type = e_type_key_cons(.arch = architecture_from_context(), .kind = E_TypeKind_Struct, .name = str8_lit("Breakpoint"), .members = bp_members_array.v, .count = bp_members_array.count);
+                E_TypeKey bp_type = e_type_key_cons(.arch = arch_from_context(), .kind = E_TypeKind_Struct, .name = str8_lit("Breakpoint"), .members = bp_members_array.v, .count = bp_members_array.count);
                 E_Expr *bp_expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
                 bp_expr->type_key = bp_type;
                 bp_expr->mode = E_Mode_Offset;
@@ -1147,7 +1147,7 @@ df_watch_view_build(DF_View *view, DF_WatchViewState *ewv, B32 modifiable, U32 d
                   e_member_list_push_new(scratch.arena, &wp_members, .name = str8_lit("Location"), .off = 0,  .type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_Char8), 256));
                 }
                 E_MemberArray wp_members_array = e_member_array_from_list(scratch.arena, &wp_members);
-                E_TypeKey wp_type = e_type_key_cons(.arch = architecture_from_context(), .kind = E_TypeKind_Struct, .name = str8_lit("Watch Pin"), .members = wp_members_array.v, .count = wp_members_array.count);
+                E_TypeKey wp_type = e_type_key_cons(.arch = arch_from_context(), .kind = E_TypeKind_Struct, .name = str8_lit("Watch Pin"), .members = wp_members_array.v, .count = wp_members_array.count);
                 E_Expr *wp_expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
                 wp_expr->type_key = wp_type;
                 wp_expr->mode = E_Mode_Offset;
@@ -1235,11 +1235,11 @@ df_watch_view_build(DF_View *view, DF_WatchViewState *ewv, B32 modifiable, U32 d
           case DF_WatchViewFillKind_Registers:
           {
             D_Entity *thread = d_entity_from_handle(d_regs()->thread);
-            Architecture arch = d_architecture_from_entity(thread);
-            U64 reg_count = regs_reg_code_count_from_architecture(arch);
-            String8 *reg_strings = regs_reg_code_string_table_from_architecture(arch);
-            U64 alias_count = regs_alias_code_count_from_architecture(arch);
-            String8 *alias_strings = regs_alias_code_string_table_from_architecture(arch);
+            Arch arch = d_arch_from_entity(thread);
+            U64 reg_count = regs_reg_code_count_from_arch(arch);
+            String8 *reg_strings = regs_reg_code_string_table_from_arch(arch);
+            U64 alias_count = regs_alias_code_count_from_arch(arch);
+            String8 *alias_strings = regs_alias_code_string_table_from_arch(arch);
             U64 num = 1;
             for(U64 reg_idx = 1; reg_idx < reg_count; reg_idx += 1, num += 1)
             {
@@ -6651,7 +6651,7 @@ DF_VIEW_CMD_FUNCTION_DEF(disasm)
     space = d_eval_space_from_entity(d_entity_from_handle(d_regs()->process));
   }
   Rng1U64 range = d_range_from_eval_params(eval, params);
-  Architecture arch = d_architecture_from_eval_params(eval, params);
+  Arch arch = d_arch_from_eval_params(eval, params);
   D_Entity *space_entity = d_entity_from_eval_space(space);
   D_Entity *dasm_module = &d_nil_entity;
   DI_Key dbgi_key = {0};
@@ -6661,7 +6661,7 @@ DF_VIEW_CMD_FUNCTION_DEF(disasm)
     default:{}break;
     case D_EntityKind_Process:
     {
-      arch = d_architecture_from_entity(space_entity);
+      arch = d_arch_from_entity(space_entity);
       dasm_module = d_module_from_process_vaddr(space_entity, range.min);
       dbgi_key = d_dbgi_key_from_module(dasm_module);
       base_vaddr = dasm_module->vaddr_rng.min;
@@ -6680,7 +6680,7 @@ DF_VIEW_CMD_FUNCTION_DEF(disasm)
   }
   DASM_Info dasm_info = dasm_info_from_key_params(dasm_scope, dasm_key, &dasm_params, &dasm_data_hash);
   d_regs()->text_key = dasm_info.text_key;
-  d_regs()->lang_kind = txt_lang_kind_from_architecture(arch);
+  d_regs()->lang_kind = txt_lang_kind_from_arch(arch);
   U128 dasm_text_hash = {0};
   TXT_TextInfo dasm_text_info = txt_text_info_from_key_lang(txt_scope, d_regs()->text_key, d_regs()->lang_kind, &dasm_text_hash);
   String8 dasm_text_data = hs_data_from_hash(hs_scope, dasm_text_hash);
@@ -6783,7 +6783,7 @@ DF_VIEW_UI_FUNCTION_DEF(disasm)
     space = d_eval_space_from_entity(d_entity_from_handle(d_regs()->process));
   }
   Rng1U64 range = d_range_from_eval_params(eval, params);
-  Architecture arch = d_architecture_from_eval_params(eval, params);
+  Arch arch = d_arch_from_eval_params(eval, params);
   D_Entity *space_entity = d_entity_from_eval_space(space);
   D_Entity *dasm_module = &d_nil_entity;
   DI_Key dbgi_key = {0};
@@ -6793,7 +6793,7 @@ DF_VIEW_UI_FUNCTION_DEF(disasm)
     default:{}break;
     case D_EntityKind_Process:
     {
-      arch = d_architecture_from_entity(space_entity);
+      arch = d_arch_from_entity(space_entity);
       dasm_module = d_module_from_process_vaddr(space_entity, range.min);
       dbgi_key = d_dbgi_key_from_module(dasm_module);
       base_vaddr = dasm_module->vaddr_rng.min;
@@ -6812,7 +6812,7 @@ DF_VIEW_UI_FUNCTION_DEF(disasm)
   }
   DASM_Info dasm_info = dasm_info_from_key_params(dasm_scope, dasm_key, &dasm_params, &dasm_data_hash);
   d_regs()->text_key = dasm_info.text_key;
-  d_regs()->lang_kind = txt_lang_kind_from_architecture(arch);
+  d_regs()->lang_kind = txt_lang_kind_from_arch(arch);
   U128 dasm_text_hash = {0};
   TXT_TextInfo dasm_text_info = txt_text_info_from_key_lang(txt_scope, d_regs()->text_key, d_regs()->lang_kind, &dasm_text_hash);
   String8 dasm_text_data = hs_data_from_hash(hs_scope, dasm_text_hash);
