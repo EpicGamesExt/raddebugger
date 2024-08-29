@@ -54,13 +54,12 @@ D_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(default)
       last_vb = d_eval_viz_block_split_and_continue(arena, out, last_vb, child_idx);
       
       // rjf: build child config table
-      D_CfgTable *child_cfg_table = cfg_table;
+      D_CfgTable *child_cfg_table = push_array(arena, D_CfgTable, 1);
+      *child_cfg_table = d_cfg_table_from_inheritance(arena, cfg_table);
       {
         String8 view_rule_string = d_eval_view_rule_from_key(eval_view, child->key);
         if(view_rule_string.size != 0)
         {
-          child_cfg_table = push_array(arena, D_CfgTable, 1);
-          *child_cfg_table = d_cfg_table_from_inheritance(arena, cfg_table);
           d_cfg_table_push_unparsed_string(arena, child_cfg_table, view_rule_string, D_CfgSrc_User);
         }
       }
@@ -124,13 +123,12 @@ D_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(default)
       last_vb = d_eval_viz_block_split_and_continue(arena, out, last_vb, child_idx);
       
       // rjf: build child config table
-      D_CfgTable *child_cfg_table = cfg_table;
+      D_CfgTable *child_cfg_table = push_array(arena, D_CfgTable, 1);
+      *child_cfg_table = d_cfg_table_from_inheritance(arena, cfg_table);
       {
         String8 view_rule_string = d_eval_view_rule_from_key(eval_view, child->key);
         if(view_rule_string.size != 0)
         {
-          child_cfg_table = push_array(arena, D_CfgTable, 1);
-          *child_cfg_table = d_cfg_table_from_inheritance(arena, cfg_table);
           d_cfg_table_push_unparsed_string(arena, child_cfg_table, view_rule_string, D_CfgSrc_User);
         }
       }
@@ -150,13 +148,12 @@ D_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(default)
     D_ExpandKey child_key = d_expand_key_make(df_hash_from_expand_key(key), 1);
     
     // rjf: build child config table
-    D_CfgTable *child_cfg_table = cfg_table;
+    D_CfgTable *child_cfg_table = push_array(arena, D_CfgTable, 1);
+    *child_cfg_table = d_cfg_table_from_inheritance(arena, cfg_table);
     {
       String8 view_rule_string = d_eval_view_rule_from_key(eval_view, child_key);
       if(view_rule_string.size != 0)
       {
-        child_cfg_table = push_array(arena, D_CfgTable, 1);
-        *child_cfg_table = d_cfg_table_from_inheritance(arena, cfg_table);
         d_cfg_table_push_unparsed_string(arena, child_cfg_table, view_rule_string, D_CfgSrc_User);
       }
     }

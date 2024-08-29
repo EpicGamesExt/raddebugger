@@ -80,8 +80,6 @@ struct DF_SettingVal
 //~ rjf: View Hook Function Types
 
 typedef struct DF_View DF_View;
-typedef struct DF_Panel DF_Panel;
-typedef struct DF_Window DF_Window;
 
 #define DF_VIEW_SETUP_FUNCTION_SIG(name) void name(DF_View *view, MD_Node *params, String8 string)
 #define DF_VIEW_SETUP_FUNCTION_NAME(name) df_view_setup_##name
