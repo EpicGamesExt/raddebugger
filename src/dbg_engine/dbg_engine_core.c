@@ -792,12 +792,12 @@ d_push_entity_child_list_with_kind(Arena *arena, D_Entity *entity, D_EntityKind 
 }
 
 internal D_Entity *
-d_entity_child_from_name_and_kind(D_Entity *parent, String8 string, D_EntityKind kind)
+d_entity_child_from_string_and_kind(D_Entity *parent, String8 string, D_EntityKind kind)
 {
   D_Entity *result = &d_nil_entity;
   for(D_Entity *child = parent->first; !d_entity_is_nil(child); child = child->next)
   {
-    if(str8_match(child->name, string, 0) && child->kind == kind)
+    if(str8_match(child->string, string, 0) && child->kind == kind)
     {
       result = child;
       break;
@@ -894,7 +894,7 @@ d_full_path_from_entity(Arena *arena, D_Entity *entity)
     {
       if(e->kind == D_EntityKind_File)
       {
-        str8_list_push_front(scratch.arena, &strs, e->name);
+        str8_list_push_front(scratch.arena, &strs, e->string);
       }
     }
     StringJoin join = {0};
@@ -915,9 +915,9 @@ d_display_string_from_entity(Arena *arena, D_Entity *entity)
   {
     default:
     {
-      if(entity->name.size != 0)
+      if(entity->string.size != 0)
       {
-        result = push_str8_copy(arena, entity->name);
+        result = push_str8_copy(arena, entity->string);
       }
       else
       {
@@ -928,37 +928,37 @@ d_display_string_from_entity(Arena *arena, D_Entity *entity)
     
     case D_EntityKind_Target:
     {
-      if(entity->name.size != 0)
+      if(entity->string.size != 0)
       {
-        result = push_str8_copy(arena, entity->name);
+        result = push_str8_copy(arena, entity->string);
       }
       else
       {
         D_Entity *exe = d_entity_child_from_kind(entity, D_EntityKind_Executable);
-        result = push_str8_copy(arena, exe->name);
+        result = push_str8_copy(arena, exe->string);
       }
     }break;
     
     case D_EntityKind_Breakpoint:
     {
-      if(entity->name.size != 0)
+      if(entity->string.size != 0)
       {
-        result = push_str8_copy(arena, entity->name);
+        result = push_str8_copy(arena, entity->string);
       }
       else
       {
         D_Entity *loc = d_entity_child_from_kind(entity, D_EntityKind_Location);
         if(loc->flags & D_EntityFlag_HasTextPoint)
         {
-          result = push_str8f(arena, "%S:%I64d:%I64d", str8_skip_last_slash(loc->name), loc->text_point.line, loc->text_point.column);
+          result = push_str8f(arena, "%S:%I64d:%I64d", str8_skip_last_slash(loc->string), loc->text_point.line, loc->text_point.column);
         }
         else if(loc->flags & D_EntityFlag_HasVAddr)
         {
           result = str8_from_u64(arena, loc->vaddr, 16, 16, 0);
         }
-        else if(loc->name.size != 0)
+        else if(loc->string.size != 0)
         {
-          result = push_str8_copy(arena, loc->name);
+          result = push_str8_copy(arena, loc->string);
         }
       }
     }break;
@@ -966,7 +966,7 @@ d_display_string_from_entity(Arena *arena, D_Entity *entity)
     case D_EntityKind_Process:
     {
       D_Entity *main_mod_child = d_entity_child_from_kind(entity, D_EntityKind_Module);
-      String8 main_mod_name = str8_skip_last_slash(main_mod_child->name);
+      String8 main_mod_name = str8_skip_last_slash(main_mod_child->string);
       result = push_str8f(arena, "%S%s%sPID: %i%s",
                           main_mod_name,
                           main_mod_name.size != 0 ? " " : "",
@@ -977,7 +977,7 @@ d_display_string_from_entity(Arena *arena, D_Entity *entity)
     
     case D_EntityKind_Thread:
     {
-      String8 name = entity->name;
+      String8 name = entity->string;
       if(name.size == 0)
       {
         D_Entity *process = d_entity_ancestor_from_kind(entity, D_EntityKind_Process);
@@ -997,12 +997,12 @@ d_display_string_from_entity(Arena *arena, D_Entity *entity)
     
     case D_EntityKind_Module:
     {
-      result = push_str8_copy(arena, str8_skip_last_slash(entity->name));
+      result = push_str8_copy(arena, str8_skip_last_slash(entity->string));
     }break;
     
     case D_EntityKind_RecentProject:
     {
-      result = push_str8_copy(arena, str8_skip_last_slash(entity->name));
+      result = push_str8_copy(arena, str8_skip_last_slash(entity->string));
     }break;
   }
   return result;
@@ -1093,17 +1093,17 @@ d_eval_from_entity(Arena *arena, D_Entity *entity)
   {
     D_Entity *loc = d_entity_child_from_kind(entity, D_EntityKind_Location);
     D_Entity *cnd = d_entity_child_from_kind(entity, D_EntityKind_Condition);
-    String8 label_string = push_str8_copy(arena, entity->name);
+    String8 label_string = push_str8_copy(arena, entity->string);
     String8 loc_string = {0};
     if(loc->flags & D_EntityFlag_HasTextPoint)
     {
-      loc_string = push_str8f(arena, "%S:%I64u:%I64u", loc->name, loc->text_point.line, loc->text_point.column);
+      loc_string = push_str8f(arena, "%S:%I64u:%I64u", loc->string, loc->text_point.line, loc->text_point.column);
     }
     else if(loc->flags & D_EntityFlag_HasVAddr)
     {
       loc_string = push_str8f(arena, "0x%I64x", loc->vaddr);
     }
-    String8 cnd_string = push_str8_copy(arena, cnd->name);
+    String8 cnd_string = push_str8_copy(arena, cnd->string);
     eval->enabled      = !entity->disabled;
     eval->hit_count    = entity->u64;
     eval->label_off    = (U64)((U8 *)label_string.str - (U8 *)eval);
@@ -1348,9 +1348,9 @@ d_entity_release(D_Entity *entity)
     d_state->entities_free_count += 1;
     d_state->entities_active_count -= 1;
     task->e->gen += 1;
-    if(task->e->name.size != 0)
+    if(task->e->string.size != 0)
     {
-      d_name_release(task->e->name);
+      d_name_release(task->e->string);
     }
     d_state->kind_alloc_gens[task->e->kind] += 1;
   }
@@ -1533,18 +1533,18 @@ internal void
 d_entity_equip_name(D_Entity *entity, String8 name)
 {
   d_require_entity_nonnil(entity, return);
-  if(entity->name.size != 0)
+  if(entity->string.size != 0)
   {
-    d_name_release(entity->name);
+    d_name_release(entity->string);
   }
-  d_state_delta_history_push_struct_delta(d_state_delta_history(), &entity->name, .guard_entity = entity);
+  d_state_delta_history_push_struct_delta(d_state_delta_history(), &entity->string, .guard_entity = entity);
   if(name.size != 0)
   {
-    entity->name = d_name_alloc(name);
+    entity->string = d_name_alloc(name);
   }
   else
   {
-    entity->name = str8_zero();
+    entity->string = str8_zero();
   }
 }
 
@@ -1582,7 +1582,7 @@ d_entity_from_path(String8 path, D_EntityFromPathFlags flags)
       D_Entity *next_parent = &d_nil_entity;
       for(D_Entity *child = parent->first; !d_entity_is_nil(child); child = child->next)
       {
-        B32 name_matches = str8_match(child->name, path_part_n->string, path_match_flags);
+        B32 name_matches = str8_match(child->string, path_part_n->string, path_match_flags);
         if(name_matches && child->kind == D_EntityKind_File)
         {
           next_parent = child;
@@ -1637,7 +1637,7 @@ d_entity_from_path(String8 path, D_EntityFromPathFlags flags)
       D_Entity *next_parent = &d_nil_entity;
       for(D_Entity *child = parent->first; !d_entity_is_nil(child); child = child->next)
       {
-        B32 name_matches = str8_match(child->name, path_part_n->string, path_match_flags);
+        B32 name_matches = str8_match(child->string, path_part_n->string, path_match_flags);
         if(name_matches && child->kind == D_EntityKind_File)
         {
           next_parent = child;
@@ -1723,8 +1723,8 @@ d_possible_overrides_from_file_path(Arena *arena, String8 file_path)
       D_Entity *dst = d_entity_child_from_kind(link, D_EntityKind_Dest);
       PathStyle src_style = PathStyle_Relative;
       PathStyle dst_style = PathStyle_Relative;
-      String8List src_parts = path_normalized_list_from_string(scratch.arena, src->name, &src_style);
-      String8List dst_parts = path_normalized_list_from_string(scratch.arena, dst->name, &dst_style);
+      String8List src_parts = path_normalized_list_from_string(scratch.arena, src->string, &src_style);
+      String8List dst_parts = path_normalized_list_from_string(scratch.arena, dst->string, &dst_style);
       
       //- rjf: determine if this link can possibly redirect to the target file path
       B32 dst_redirects_to_pth = 0;
@@ -1884,7 +1884,7 @@ d_entity_from_name_and_kind(String8 string, D_EntityKind kind)
   D_EntityList all_of_this_kind = d_query_cached_entity_list_with_kind(kind);
   for(D_EntityNode *n = all_of_this_kind.first; n != 0; n = n->next)
   {
-    if(str8_match(n->entity->name, string, 0))
+    if(str8_match(n->entity->string, string, 0))
     {
       result = n->entity;
       break;
@@ -2528,7 +2528,7 @@ internal DI_Key
 d_dbgi_key_from_module(D_Entity *module)
 {
   D_Entity *debug_info_path = d_entity_child_from_kind(module, D_EntityKind_DebugInfoPath);
-  DI_Key key = {debug_info_path->name, debug_info_path->timestamp};
+  DI_Key key = {debug_info_path->string, debug_info_path->timestamp};
   return key;
 }
 
@@ -3240,9 +3240,12 @@ d_hash_from_ctrl_param_state(void)
       {
         D_Entity *bp = n->entity;
         D_Entity *loc = d_entity_child_from_kind(bp, D_EntityKind_Location);
-        str8_list_push(scratch.arena, &strings, loc->name);
+        D_Entity *cnd = d_entity_child_from_kind(bp, D_EntityKind_Condition);
+        str8_list_push(scratch.arena, &strings, str8_struct(&bp->disabled));
+        str8_list_push(scratch.arena, &strings, loc->string);
         str8_list_push(scratch.arena, &strings, str8_struct(&loc->text_point));
         str8_list_push(scratch.arena, &strings, str8_struct(&loc->vaddr));
+        str8_list_push(scratch.arena, &strings, str8_struct(&cnd->string));
       }
     }
     
@@ -3310,13 +3313,13 @@ d_ctrl_run(D_RunKind run, D_Entity *run_thread, CTRL_RunFlags flags, CTRL_TrapLi
       // rjf: textual location -> add breakpoints for all possible override locations
       if(loc->flags & D_EntityFlag_HasTextPoint)
       {
-        String8List overrides = d_possible_overrides_from_file_path(scratch.arena, loc->name);
+        String8List overrides = d_possible_overrides_from_file_path(scratch.arena, loc->string);
         for(String8Node *n = overrides.first; n != 0; n = n->next)
         {
           CTRL_UserBreakpoint ctrl_user_bp = {CTRL_UserBreakpointKind_FileNameAndLineColNumber};
           ctrl_user_bp.string    = n->string;
           ctrl_user_bp.pt        = loc->text_point;
-          ctrl_user_bp.condition = cnd->name;
+          ctrl_user_bp.condition = cnd->string;
           ctrl_user_breakpoint_list_push(scratch.arena, &msg.user_bps, &ctrl_user_bp);
         }
       }
@@ -3326,16 +3329,16 @@ d_ctrl_run(D_RunKind run, D_Entity *run_thread, CTRL_RunFlags flags, CTRL_TrapLi
       {
         CTRL_UserBreakpoint ctrl_user_bp = {CTRL_UserBreakpointKind_VirtualAddress};
         ctrl_user_bp.u64       = loc->vaddr;
-        ctrl_user_bp.condition = cnd->name;
+        ctrl_user_bp.condition = cnd->string;
         ctrl_user_breakpoint_list_push(scratch.arena, &msg.user_bps, &ctrl_user_bp);
       }
       
       // rjf: symbol name location -> add breakpoint for symbol name
-      else if(loc->name.size != 0)
+      else if(loc->string.size != 0)
       {
         CTRL_UserBreakpoint ctrl_user_bp = {CTRL_UserBreakpointKind_SymbolNameAndOffset};
-        ctrl_user_bp.string    = loc->name;
-        ctrl_user_bp.condition = cnd->name;
+        ctrl_user_bp.string    = loc->string;
+        ctrl_user_bp.condition = cnd->string;
         ctrl_user_breakpoint_list_push(scratch.arena, &msg.user_bps, &ctrl_user_bp);
       }
     }
@@ -5539,17 +5542,17 @@ d_cfg_strings_from_core(Arena *arena, String8 root_path, D_CfgSrc source)
             EntityInfoFlag_HasColor    = (1<<4),
             EntityInfoFlag_HasChildren = (1<<5),
           };
-          String8 entity_name_escaped = e->name;
+          String8 entity_name_escaped = e->string;
           if(d_entity_kind_flags_table[e->kind] & D_EntityKindFlag_NameIsPath)
           {
             Temp scratch = scratch_begin(&arena, 1);
-            String8 path_normalized = path_normalized_from_string(scratch.arena, e->name);
+            String8 path_normalized = path_normalized_from_string(scratch.arena, e->string);
             entity_name_escaped = path_relative_dst_from_absolute_dst_src(arena, path_normalized, root_path);
             scratch_end(scratch);
           }
           else
           {
-            entity_name_escaped = d_cfg_escaped_from_raw_string(arena, e->name);
+            entity_name_escaped = d_cfg_escaped_from_raw_string(arena, e->string);
           }
           EntityInfoFlags info_flags = 0;
           if(entity_name_escaped.size != 0)         { info_flags |= EntityInfoFlag_HasName; }
@@ -6365,7 +6368,7 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
             {
               D_Entity *bp = n->entity;
               D_Entity *loc = d_entity_child_from_kind(bp, D_EntityKind_Location);
-              D_LineList loc_lines = d_lines_from_file_path_line_num(scratch.arena, loc->name, loc->text_point.line);
+              D_LineList loc_lines = d_lines_from_file_path_line_num(scratch.arena, loc->string, loc->text_point.line);
               if(loc_lines.first != 0)
               {
                 for(D_LineNode *n = loc_lines.first; n != 0; n = n->next)
@@ -6381,9 +6384,9 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
               {
                 bp->u64 += 1;
               }
-              else if(loc->name.size != 0)
+              else if(loc->string.size != 0)
               {
-                U64 symb_voff = d_voff_from_dbgi_key_symbol_name(&dbgi_key, loc->name);
+                U64 symb_voff = d_voff_from_dbgi_key_symbol_name(&dbgi_key, loc->string);
                 if(symb_voff == stop_thread_voff)
                 {
                   bp->u64 += 1;
@@ -6470,7 +6473,7 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
               if(event->machine_id == pending_thread_name->ctrl_machine_id && event->entity_id == pending_thread_name->ctrl_id)
               {
                 d_entity_mark_for_deletion(pending_thread_name);
-                d_entity_equip_name(entity, pending_thread_name->name);
+                d_entity_equip_name(entity, pending_thread_name->string);
                 break;
               }
             }
@@ -6557,9 +6560,9 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
             {
               D_Entity *target = n->entity;
               D_Entity *exe = d_entity_child_from_kind(target, D_EntityKind_Executable);
-              String8 exe_name = exe->name;
+              String8 exe_name = exe->string;
               String8 exe_name_normalized = path_normalized_from_string(scratch.arena, exe_name);
-              String8 module_name_normalized = path_normalized_from_string(scratch.arena, module->name);
+              String8 module_name_normalized = path_normalized_from_string(scratch.arena, module->string);
               if(str8_match(exe_name_normalized, module_name_normalized, StringMatchFlag_CaseInsensitive) &&
                  target->flags & D_EntityFlag_HasColor)
               {
@@ -6807,10 +6810,10 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
             {
               // rjf: extract data from target
               D_Entity *target = n->entity;
-              String8 name = d_entity_child_from_kind(target, D_EntityKind_Executable)->name;
-              String8 args = d_entity_child_from_kind(target, D_EntityKind_Arguments)->name;
-              String8 path = d_entity_child_from_kind(target, D_EntityKind_WorkingDirectory)->name;
-              String8 entry= d_entity_child_from_kind(target, D_EntityKind_EntryPoint)->name;
+              String8 name = d_entity_child_from_kind(target, D_EntityKind_Executable)->string;
+              String8 args = d_entity_child_from_kind(target, D_EntityKind_Arguments)->string;
+              String8 path = d_entity_child_from_kind(target, D_EntityKind_WorkingDirectory)->string;
+              String8 entry= d_entity_child_from_kind(target, D_EntityKind_EntryPoint)->string;
               name  = str8_skip_chop_whitespace(name);
               args  = str8_skip_chop_whitespace(args);
               path  = str8_skip_chop_whitespace(path);
@@ -7287,7 +7290,7 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
           if(entity->kind == D_EntityKind_RecentProject)
           {
             D_CmdParams p = d_cmd_params_zero();
-            p.file_path = entity->name;
+            p.file_path = entity->string;
             d_cmd_list_push(arena, cmds, &p, d_cmd_spec_from_kind(D_CmdKind_OpenProject));
           }
         }break;
@@ -7467,7 +7470,7 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
             D_Entity *recent_project = &d_nil_entity;
             for(D_EntityNode *n = recent_projects.first; n != 0; n = n->next)
             {
-              if(path_match_normalized(cfg_path, n->entity->name))
+              if(path_match_normalized(cfg_path, n->entity->string))
               {
                 recent_project = n->entity;
                 break;
@@ -7753,7 +7756,7 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
           }
           
           // rjf: empty src/dest -> delete
-          if(!d_entity_is_nil(map) && map->name.size == 0 && d_entity_is_nil(d_entity_from_handle(map->entity_handle)))
+          if(!d_entity_is_nil(map) && map->string.size == 0 && d_entity_is_nil(d_entity_from_handle(map->entity_handle)))
           {
             d_entity_mark_for_deletion(map);
           }
@@ -7777,6 +7780,7 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
           //- rjf: unpack
           String8 src_path = params.string;
           String8 dst_path = params.file_path;
+#if 0
           // TODO(rjf):
           
           //- rjf: grab src file & chosen replacement
@@ -7788,7 +7792,7 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
           D_Entity *first_diff_dst = replacement;
           for(;!d_entity_is_nil(first_diff_src) && !d_entity_is_nil(first_diff_dst);)
           {
-            if(!str8_match(first_diff_src->name, first_diff_dst->name, StringMatchFlag_CaseInsensitive) ||
+            if(!str8_match(first_diff_src->string, first_diff_dst->string, StringMatchFlag_CaseInsensitive) ||
                first_diff_src->parent->kind != D_EntityKind_File ||
                first_diff_src->parent->parent->kind != D_EntityKind_File ||
                first_diff_dst->parent->kind != D_EntityKind_File ||
@@ -7803,7 +7807,7 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
           //- rjf: override first different
           if(!d_entity_is_nil(first_diff_src) && !d_entity_is_nil(first_diff_dst))
           {
-            D_Entity *link = d_entity_child_from_name_and_kind(first_diff_src->parent, first_diff_src->name, D_EntityKind_FilePathMap);
+            D_Entity *link = d_entity_child_from_string_and_kind(first_diff_src->parent, first_diff_src->name, D_EntityKind_FilePathMap);
             if(d_entity_is_nil(link))
             {
               link = d_entity_alloc(first_diff_src->parent, D_EntityKind_FilePathMap);
@@ -7811,6 +7815,7 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
             }
             d_entity_equip_entity_handle(link, d_handle_from_entity(first_diff_dst));
           }
+#endif
         }break;
         
         //- rjf: auto view rules
@@ -7838,7 +7843,7 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
             D_Entity *edit_child = (core_cmd_kind == D_CmdKind_SetAutoViewRuleType ? src : dst);
             d_entity_equip_name(edit_child, params.string);
           }
-          if(src->name.size == 0 && dst->name.size == 0)
+          if(src->string.size == 0 && dst->string.size == 0)
           {
             d_entity_mark_for_deletion(map);
           }
@@ -7857,8 +7862,8 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
               D_Entity *map = n->entity;
               D_Entity *src = d_entity_child_from_kind(map, D_EntityKind_Source);
               D_Entity *dst = d_entity_child_from_kind(map, D_EntityKind_Dest);
-              String8 type = src->name;
-              String8 view_rule = dst->name;
+              String8 type = src->string;
+              String8 view_rule = dst->string;
               U64 hash = d_hash_from_string(type);
               U64 slot_idx = hash%cache->slots_count;
               D_AutoViewRuleSlot *slot = &cache->slots[slot_idx];
@@ -7954,8 +7959,8 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
               if(src_n->flags & D_EntityFlag_HasColor)        {d_entity_equip_color_hsva(dst_n, d_hsva_from_entity(src_n));}
               if(src_n->flags & D_EntityFlag_HasVAddrRng)     {d_entity_equip_vaddr_rng(dst_n, src_n->vaddr_rng);}
               if(src_n->flags & D_EntityFlag_HasVAddr)        {d_entity_equip_vaddr(dst_n, src_n->vaddr);}
-              if(src_n->disabled)                              {d_entity_equip_disabled(dst_n, 1);}
-              if(src_n->name.size != 0)                        {d_entity_equip_name(dst_n, src_n->name);}
+              if(src_n->disabled)                             {d_entity_equip_disabled(dst_n, 1);}
+              if(src_n->string.size != 0)                     {d_entity_equip_name(dst_n, src_n->string);}
               dst_n->cfg_src = src_n->cfg_src;
               for(D_Entity *src_child = task->src_n->first; !d_entity_is_nil(src_child); src_child = src_child->next)
               {
@@ -7997,7 +8002,7 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
         {
           String8 file_path = params.file_path;
           TxtPt pt = params.text_point;
-          String8 name = params.string;
+          String8 string = params.string;
           U64 vaddr = params.vaddr;
           B32 removed_already_existing = 0;
           if(core_cmd_kind == D_CmdKind_ToggleBreakpoint)
@@ -8007,9 +8012,9 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
             {
               D_Entity *bp = n->entity;
               D_Entity *loc = d_entity_child_from_kind(bp, D_EntityKind_Location);
-              if((loc->flags & D_EntityFlag_HasTextPoint && path_match_normalized(loc->name, file_path) && loc->text_point.line == pt.line) ||
+              if((loc->flags & D_EntityFlag_HasTextPoint && path_match_normalized(loc->string, file_path) && loc->text_point.line == pt.line) ||
                  (loc->flags & D_EntityFlag_HasVAddr && loc->vaddr == vaddr) ||
-                 (!(loc->flags & D_EntityFlag_HasTextPoint) && str8_match(loc->name, name, 0)))
+                 (!(loc->flags & D_EntityFlag_HasTextPoint) && str8_match(loc->string, string, 0)))
               {
                 d_entity_mark_for_deletion(bp);
                 removed_already_existing = 1;
@@ -8027,9 +8032,9 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
               d_entity_equip_name(loc, file_path);
               d_entity_equip_txt_pt(loc, pt);
             }
-            else if(name.size != 0)
+            else if(string.size != 0)
             {
-              d_entity_equip_name(loc, name);
+              d_entity_equip_name(loc, string);
             }
             else if(vaddr != 0)
             {
@@ -8049,7 +8054,7 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
         {
           String8 file_path = params.file_path;
           TxtPt pt = params.text_point;
-          String8 name = params.string;
+          String8 string = params.string;
           U64 vaddr = params.vaddr;
           B32 removed_already_existing = 0;
           if(core_cmd_kind == D_CmdKind_ToggleWatchPin)
@@ -8059,9 +8064,9 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
             {
               D_Entity *wp = n->entity;
               D_Entity *loc = d_entity_child_from_kind(wp, D_EntityKind_Location);
-              if((loc->flags & D_EntityFlag_HasTextPoint && path_match_normalized(loc->name, file_path) && loc->text_point.line == pt.line) ||
+              if((loc->flags & D_EntityFlag_HasTextPoint && path_match_normalized(loc->string, file_path) && loc->text_point.line == pt.line) ||
                  (loc->flags & D_EntityFlag_HasVAddr && loc->vaddr == vaddr) ||
-                 (!(loc->flags & D_EntityFlag_HasTextPoint) && str8_match(loc->name, name, 0)))
+                 (!(loc->flags & D_EntityFlag_HasTextPoint) && str8_match(loc->string, string, 0)))
               {
                 d_entity_mark_for_deletion(wp);
                 removed_already_existing = 1;
@@ -8072,7 +8077,7 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
           if(!removed_already_existing)
           {
             D_Entity *wp = d_entity_alloc(d_entity_root(), D_EntityKind_WatchPin);
-            d_entity_equip_name(wp, name);
+            d_entity_equip_name(wp, string);
             d_entity_equip_cfg_src(wp, D_CfgSrc_Project);
             D_Entity *loc = d_entity_alloc(wp, D_EntityKind_Location);
             if(file_path.size != 0 && pt.line != 0)
@@ -8445,9 +8450,9 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
           expr->mode     = E_Mode_Offset;
           expr->type_key = entity_type;
           e_string2expr_map_insert(arena, ctx->macro_map, push_str8f(arena, "$%I64u", entity->id), expr);
-          if(entity->name.size != 0)
+          if(entity->string.size != 0)
           {
-            e_string2expr_map_insert(arena, ctx->macro_map, entity->name, expr);
+            e_string2expr_map_insert(arena, ctx->macro_map, entity->string, expr);
           }
         }
       }
@@ -8459,7 +8464,7 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
     for(D_EntityNode *n = watches.first; n != 0; n = n->next)
     {
       D_Entity *watch = n->entity;
-      String8 expr = watch->name;
+      String8 expr = watch->string;
       E_TokenArray tokens   = e_token_array_from_text(arena, expr);
       E_Parse      parse    = e_parse_expr_from_text_tokens(arena, expr, &tokens);
       if(parse.msgs.max_kind == E_MsgKind_Null)

@@ -206,7 +206,7 @@ df_code_view_build(Arena *arena, DF_View *view, DF_CodeViewState *cv, DF_CodeVie
       {
         D_Entity *bp = n->entity;
         D_Entity *loc = d_entity_child_from_kind(bp, D_EntityKind_Location);
-        if(path_match_normalized(loc->name, d_regs()->file_path) &&
+        if(path_match_normalized(loc->string, d_regs()->file_path) &&
            visible_line_num_range.min <= loc->text_point.line && loc->text_point.line <= visible_line_num_range.max)
         {
           U64 slice_line_idx = (loc->text_point.line-visible_line_num_range.min);
@@ -252,7 +252,7 @@ df_code_view_build(Arena *arena, DF_View *view, DF_CodeViewState *cv, DF_CodeVie
       {
         D_Entity *wp = n->entity;
         D_Entity *loc = d_entity_child_from_kind(wp, D_EntityKind_Location);
-        if(path_match_normalized(loc->name, d_regs()->file_path) &&
+        if(path_match_normalized(loc->string, d_regs()->file_path) &&
            visible_line_num_range.min <= loc->text_point.line && loc->text_point.line <= visible_line_num_range.max)
         {
           U64 slice_line_idx = (loc->text_point.line-visible_line_num_range.min);
@@ -1072,8 +1072,8 @@ df_watch_view_build(DF_View *view, DF_WatchViewState *ewv, B32 modifiable, U32 d
               D_ExpandKey parent_key = d_parent_expand_key_from_entity(watch);
               D_ExpandKey key = d_expand_key_from_entity(watch);
               D_Entity *view_rule = d_entity_child_from_kind(watch, D_EntityKind_ViewRule);
-              d_eval_view_set_key_rule(eval_view, key, view_rule->name);
-              String8 expr_string = watch->name;
+              d_eval_view_set_key_rule(eval_view, key, view_rule->string);
+              String8 expr_string = watch->string;
               FuzzyMatchRangeList matches = fuzzy_match_find(scratch.arena, filter, expr_string);
               if(matches.count == matches.needle_part_count)
               {
@@ -1138,7 +1138,7 @@ df_watch_view_build(DF_View *view, DF_WatchViewState *ewv, B32 modifiable, U32 d
               }
               D_ExpandKey parent_key = d_parent_expand_key_from_entity(wp);
               D_ExpandKey key = d_expand_key_from_entity(wp);
-              String8 title = wp->name;
+              String8 title = wp->string;
               FuzzyMatchRangeList matches = fuzzy_match_find(scratch.arena, filter, title);
               if(matches.count == matches.needle_part_count)
               {
@@ -2986,7 +2986,7 @@ DF_VIEW_UI_FUNCTION_DEF(getting_started)
         case 1:
         {
           D_Entity *target = d_first_entity_from_list(&targets);
-          String8 target_full_path = target->name;
+          String8 target_full_path = target->string;
           String8 target_name = str8_skip_last_slash(target_full_path);
           UI_PrefHeight(ui_em(3.75f, 1.f))
             UI_Row
@@ -4692,11 +4692,11 @@ DF_VIEW_UI_FUNCTION_DEF(target)
   }
   kv_info[] =
   {
-    { 0, 0, 0, str8_lit("Label"),                D_EntityKind_Nil,              entity->name },
-    { 1, 0, 0, str8_lit("Executable"),           D_EntityKind_Executable,       d_entity_child_from_kind(entity, D_EntityKind_Executable)->name },
-    { 0, 0, 0, str8_lit("Arguments"),            D_EntityKind_Arguments,        d_entity_child_from_kind(entity, D_EntityKind_Arguments)->name },
-    { 0, 1, 0, str8_lit("Working Directory"),    D_EntityKind_WorkingDirectory, d_entity_child_from_kind(entity, D_EntityKind_WorkingDirectory)->name },
-    { 0, 0, 1, str8_lit("Entry Point Override"), D_EntityKind_EntryPoint,       d_entity_child_from_kind(entity, D_EntityKind_EntryPoint)->name },
+    { 0, 0, 0, str8_lit("Label"),                D_EntityKind_Nil,              entity->string },
+    { 1, 0, 0, str8_lit("Executable"),           D_EntityKind_Executable,       d_entity_child_from_kind(entity, D_EntityKind_Executable)->string },
+    { 0, 0, 0, str8_lit("Arguments"),            D_EntityKind_Arguments,        d_entity_child_from_kind(entity, D_EntityKind_Arguments)->string },
+    { 0, 1, 0, str8_lit("Working Directory"),    D_EntityKind_WorkingDirectory, d_entity_child_from_kind(entity, D_EntityKind_WorkingDirectory)->string },
+    { 0, 0, 1, str8_lit("Entry Point Override"), D_EntityKind_EntryPoint,       d_entity_child_from_kind(entity, D_EntityKind_EntryPoint)->string },
   };
   
   //- rjf: take controls to start/end editing
@@ -5243,8 +5243,8 @@ DF_VIEW_UI_FUNCTION_DEF(file_path_map)
       D_Entity *map = (map_idx < maps.count ? maps.v[map_idx] : &d_nil_entity);
       D_Entity *map_src = d_entity_child_from_kind(map, D_EntityKind_Source);
       D_Entity *map_dst = d_entity_child_from_kind(map, D_EntityKind_Dest);
-      String8 map_src_path = map_src->name;
-      String8 map_dst_path = map_dst->name;
+      String8 map_src_path = map_src->string;
+      String8 map_dst_path = map_dst->string;
       B32 row_selected = (fpms->cursor.y == row_idx);
       
       //- rjf: src
@@ -5779,7 +5779,7 @@ DF_VIEW_CMD_FUNCTION_DEF(modules)
         D_Entity *module = d_entity_from_handle(mv->pick_file_dst_entity);
         if(module->kind == D_EntityKind_Module)
         {
-          String8 exe_path = module->name;
+          String8 exe_path = module->string;
           String8 dbg_path = pick_string;
           // TODO(rjf)
         }
@@ -6032,7 +6032,7 @@ DF_VIEW_UI_FUNCTION_DEF(modules)
     mv->txt_editing = 0;
     if(!d_entity_is_nil(commit_module))
     {
-      String8 exe_path = commit_module->name;
+      String8 exe_path = commit_module->string;
       String8 dbg_path = str8(mv->txt_buffer, mv->txt_size);
       // TODO(rjf)
     }
@@ -6874,7 +6874,7 @@ DF_VIEW_UI_FUNCTION_DEF(disasm)
       U64 cursor_vaddr = (1 <= d_regs()->cursor.line && d_regs()->cursor.line <= dasm_info.lines.count) ? (range.min+dasm_info.lines.v[d_regs()->cursor.line-1].code_off) : 0;
       if(!d_entity_is_nil(dasm_module))
       {
-        ui_labelf("%S", path_normalized_from_string(scratch.arena, dasm_module->name));
+        ui_labelf("%S", path_normalized_from_string(scratch.arena, dasm_module->string));
         ui_spacer(ui_em(1.5f, 1));
       }
       ui_labelf("Address: 0x%I64x, Line: %I64d, Column: %I64d", cursor_vaddr, d_regs()->cursor.line, d_regs()->cursor.column);

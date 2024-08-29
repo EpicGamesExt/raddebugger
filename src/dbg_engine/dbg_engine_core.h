@@ -295,8 +295,8 @@ struct D_Entity
   Rng1U64 vaddr_rng;
   U64 vaddr;
   
-  // rjf: name equipment
-  String8 name;
+  // rjf: string equipment
+  String8 string;
 };
 
 typedef struct D_EntityNode D_EntityNode;
@@ -1191,7 +1191,7 @@ internal D_EntityRec d_entity_rec_depth_first(D_Entity *entity, D_Entity *subtre
 internal D_Entity *d_entity_child_from_kind(D_Entity *entity, D_EntityKind kind);
 internal D_Entity *d_entity_ancestor_from_kind(D_Entity *entity, D_EntityKind kind);
 internal D_EntityList d_push_entity_child_list_with_kind(Arena *arena, D_Entity *entity, D_EntityKind kind);
-internal D_Entity *d_entity_child_from_name_and_kind(D_Entity *parent, String8 string, D_EntityKind kind);
+internal D_Entity *d_entity_child_from_string_and_kind(D_Entity *parent, String8 string, D_EntityKind kind);
 
 //- rjf: entity list building
 internal void d_entity_list_push(Arena *arena, D_EntityList *list, D_Entity *entity);

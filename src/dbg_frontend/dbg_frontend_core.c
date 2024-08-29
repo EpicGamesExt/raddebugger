@@ -3774,11 +3774,11 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
             D_Entity *dst = d_entity_from_handle(e->entity_handle);
             if(!d_entity_is_nil(dst))
             {
-              ui_labelf("[link] %S -> %S", e->name, dst->name);
+              ui_labelf("[link] %S -> %S", e->string, dst->string);
             }
             else
             {
-              ui_labelf("%S: %S", d_entity_kind_display_string_table[e->kind], e->name);
+              ui_labelf("%S: %S", d_entity_kind_display_string_table[e->kind], e->string);
             }
           }
           rec = d_entity_rec_depth_first_pre(e, d_entity_root());
@@ -3972,7 +3972,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
         // rjf: name editor
         if(kind_flags & D_EntityKindFlag_CanRename) UI_TextPadding(ui_top_font_size()*1.5f)
         {
-          UI_Signal sig = df_line_editf(DF_LineEditFlag_Border, 0, 0, &ws->entity_ctx_menu_input_cursor, &ws->entity_ctx_menu_input_mark, ws->entity_ctx_menu_input_buffer, sizeof(ws->entity_ctx_menu_input_buffer), &ws->entity_ctx_menu_input_size, 0, entity->name, "%S###entity_name_edit_%p", d_entity_kind_name_label_table[entity->kind], entity);
+          UI_Signal sig = df_line_editf(DF_LineEditFlag_Border, 0, 0, &ws->entity_ctx_menu_input_cursor, &ws->entity_ctx_menu_input_mark, ws->entity_ctx_menu_input_buffer, sizeof(ws->entity_ctx_menu_input_buffer), &ws->entity_ctx_menu_input_size, 0, entity->string, "%S###entity_name_edit_%p", d_entity_kind_name_label_table[entity->kind], entity);
           if(ui_committed(sig))
           {
             d_cmd(D_CmdKind_NameEntity,
@@ -3987,7 +3987,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
           UI_TextPadding(ui_top_font_size()*1.5f)
         {
           D_Entity *condition = d_entity_child_from_kind(entity, D_EntityKind_Condition);
-          UI_Signal sig = df_line_editf(DF_LineEditFlag_Border|DF_LineEditFlag_CodeContents, 0, 0, &ws->entity_ctx_menu_input_cursor, &ws->entity_ctx_menu_input_mark, ws->entity_ctx_menu_input_buffer, sizeof(ws->entity_ctx_menu_input_buffer), &ws->entity_ctx_menu_input_size, 0, condition->name, "Condition###entity_cond_edit_%p", entity);
+          UI_Signal sig = df_line_editf(DF_LineEditFlag_Border|DF_LineEditFlag_CodeContents, 0, 0, &ws->entity_ctx_menu_input_cursor, &ws->entity_ctx_menu_input_mark, ws->entity_ctx_menu_input_buffer, sizeof(ws->entity_ctx_menu_input_buffer), &ws->entity_ctx_menu_input_size, 0, condition->string, "Condition###entity_cond_edit_%p", entity);
           if(ui_committed(sig))
           {
             String8 new_string = str8(ws->entity_ctx_menu_input_buffer, ws->entity_ctx_menu_input_size);
@@ -4010,7 +4010,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
         if(entity->kind == D_EntityKind_Target) UI_TextPadding(ui_top_font_size()*1.5f)
         {
           D_Entity *exe = d_entity_child_from_kind(entity, D_EntityKind_Executable);
-          UI_Signal sig = df_line_editf(DF_LineEditFlag_Border, 0, 0, &ws->entity_ctx_menu_input_cursor, &ws->entity_ctx_menu_input_mark, ws->entity_ctx_menu_input_buffer, sizeof(ws->entity_ctx_menu_input_buffer), &ws->entity_ctx_menu_input_size, 0, exe->name, "Executable###entity_exe_edit_%p", entity);
+          UI_Signal sig = df_line_editf(DF_LineEditFlag_Border, 0, 0, &ws->entity_ctx_menu_input_cursor, &ws->entity_ctx_menu_input_mark, ws->entity_ctx_menu_input_buffer, sizeof(ws->entity_ctx_menu_input_buffer), &ws->entity_ctx_menu_input_size, 0, exe->string, "Executable###entity_exe_edit_%p", entity);
           if(ui_committed(sig))
           {
             String8 new_string = str8(ws->entity_ctx_menu_input_buffer, ws->entity_ctx_menu_input_size);
@@ -4033,7 +4033,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
         if(entity->kind == D_EntityKind_Target) UI_TextPadding(ui_top_font_size()*1.5f)
         {
           D_Entity *args = d_entity_child_from_kind(entity, D_EntityKind_Arguments);
-          UI_Signal sig = df_line_editf(DF_LineEditFlag_Border, 0, 0, &ws->entity_ctx_menu_input_cursor, &ws->entity_ctx_menu_input_mark, ws->entity_ctx_menu_input_buffer, sizeof(ws->entity_ctx_menu_input_buffer), &ws->entity_ctx_menu_input_size, 0, args->name, "Arguments###entity_args_edit_%p", entity);
+          UI_Signal sig = df_line_editf(DF_LineEditFlag_Border, 0, 0, &ws->entity_ctx_menu_input_cursor, &ws->entity_ctx_menu_input_mark, ws->entity_ctx_menu_input_buffer, sizeof(ws->entity_ctx_menu_input_buffer), &ws->entity_ctx_menu_input_size, 0, args->string, "Arguments###entity_args_edit_%p", entity);
           if(ui_committed(sig))
           {
             String8 new_string = str8(ws->entity_ctx_menu_input_buffer, ws->entity_ctx_menu_input_size);
@@ -4121,7 +4121,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
           if(!d_entity_is_nil(loc) && ui_clicked(df_icon_buttonf(DF_IconKind_FileOutline, 0, "Go To Location")))
           {
             d_cmd(D_CmdKind_FindCodeLocation,
-                  .file_path  = loc->name,
+                  .file_path  = loc->string,
                   .text_point = loc->text_point,
                   .vaddr      = loc->vaddr);
             ui_ctx_menu_close();
@@ -4194,17 +4194,17 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
                     RDI_InlineSite *inline_site = inline_frame->inline_site;
                     String8 name = {0};
                     name.str = rdi_string_from_idx(rdi, inline_site->name_string_idx, &name.size);
-                    str8_list_pushf(scratch.arena, &lines, "0x%I64x: [inlined] \"%S\"%s%S", rip_vaddr, name, d_entity_is_nil(module) ? "" : " in ", module->name);
+                    str8_list_pushf(scratch.arena, &lines, "0x%I64x: [inlined] \"%S\"%s%S", rip_vaddr, name, d_entity_is_nil(module) ? "" : " in ", module->string);
                   }
                   if(procedure != 0)
                   {
                     String8 name = {0};
                     name.str = rdi_name_from_procedure(rdi, procedure, &name.size);
-                    str8_list_pushf(scratch.arena, &lines, "0x%I64x: \"%S\"%s%S", rip_vaddr, name, d_entity_is_nil(module) ? "" : " in ", module->name);
+                    str8_list_pushf(scratch.arena, &lines, "0x%I64x: \"%S\"%s%S", rip_vaddr, name, d_entity_is_nil(module) ? "" : " in ", module->string);
                   }
                   else if(!d_entity_is_nil(module))
                   {
-                    str8_list_pushf(scratch.arena, &lines, "0x%I64x: [??? in %S]", rip_vaddr, module->name);
+                    str8_list_pushf(scratch.arena, &lines, "0x%I64x: [??? in %S]", rip_vaddr, module->string);
                   }
                   else
                   {
@@ -4235,13 +4235,13 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
             UI_Signal copy_full_path_sig = df_icon_buttonf(DF_IconKind_Clipboard, 0, "Copy Full Path");
             if(ui_clicked(copy_full_path_sig))
             {
-              String8 string = entity->name;
+              String8 string = entity->string;
               os_set_clipboard_text(string);
               ui_ctx_menu_close();
             }
             if(ui_hovering(copy_full_path_sig)) UI_Tooltip
             {
-              String8 string = entity->name;
+              String8 string = entity->string;
               ui_label(string);
             }
             if(ui_clicked(df_icon_buttonf(DF_IconKind_Clipboard, 0, "Copy Base Address")))
@@ -5301,7 +5301,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
               D_Entity *task = n->entity;
               if(task->alloc_time_us + 500000 < os_now_microseconds())
               {
-                String8 rdi_path = task->name;
+                String8 rdi_path = task->string;
                 String8 rdi_name = str8_skip_last_slash(rdi_path);
                 String8 task_text = push_str8f(scratch.arena, "Creating %S...", rdi_name);
                 UI_Key key = ui_key_from_stringf(ui_key_zero(), "task_%p", task);
@@ -10060,7 +10060,7 @@ df_entity_tooltips(D_Entity *entity)
         RDI_Procedure *procedure = f->procedure;
         U64 rip_vaddr = regs_rip_from_arch_block(entity->arch, f->regs);
         D_Entity *module = d_module_from_process_vaddr(process, rip_vaddr);
-        String8 module_name = d_entity_is_nil(module) ? str8_lit("???") : str8_skip_last_slash(module->name);
+        String8 module_name = d_entity_is_nil(module) ? str8_lit("???") : str8_skip_last_slash(module->string);
         
         // rjf: inline frames
         for(D_UnwindInlineFrame *fin = f->last_inline_frame; fin != 0; fin = fin->prev)
@@ -10115,7 +10115,7 @@ df_entity_tooltips(D_Entity *entity)
       UI_PrefWidth(ui_text_dim(10, 1)) ui_label(display_string);
       UI_PrefWidth(ui_children_sum(1)) UI_Row
       {
-        String8 stop_condition = d_entity_child_from_kind(entity, D_EntityKind_Condition)->name;
+        String8 stop_condition = d_entity_child_from_kind(entity, D_EntityKind_Condition)->string;
         if(stop_condition.size == 0)
         {
           stop_condition = str8_lit("true");
@@ -10242,7 +10242,7 @@ df_entity_desc_button(D_Entity *entity, FuzzyMatchRangeList *name_matches, Strin
     if(entity->kind == D_EntityKind_Target) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_FontSize(ui_top_font_size()*0.95f)
     {
       D_Entity *args = d_entity_child_from_kind(entity, D_EntityKind_Arguments);
-      ui_label(args->name);
+      ui_label(args->string);
     }
     if(kind_flags & D_EntityKindFlag_CanEnable && entity->disabled) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_FontSize(ui_top_font_size()*0.95f) UI_HeightFill
     {
@@ -11218,7 +11218,7 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
         for(D_EntityNode *n = pins.first; n != 0; n = n->next)
         {
           D_Entity *pin = n->entity;
-          String8 pin_expr = pin->name;
+          String8 pin_expr = pin->string;
           E_Eval eval = e_eval_from_string(scratch.arena, pin_expr);
           String8 eval_string = {0};
           if(!e_type_key_match(e_type_key_zero(), eval.type_key))
