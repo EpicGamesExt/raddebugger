@@ -544,83 +544,6 @@ D_ViewRuleTable:
 }
 
 ////////////////////////////////
-//~ rjf: Icons (TODO(rjf): this needs to move to the df_gfx graphical layer)
-
-@table(name, text)
-DF_IconTable:
-{
-  (Null                     "")
-  (FolderOpenOutline        "b")
-  (FolderClosedOutline      "c")
-  (FolderOpenFilled         "B")
-  (FolderClosedFilled       "C")
-  (FileOutline              "f")
-  (FileFilled               "F")
-  (Play                     "g")
-  (PlayStepForward          "h")
-  (Pause                    "r")
-  (Stop                     "s")
-  (Info                     "i")
-  (WarningSmall             "w")
-  (WarningBig               "W")
-  (Unlocked                 "k")
-  (Locked                   "K")
-  (LeftArrow                "L")
-  (RightArrow               "R")
-  (UpArrow                  "U")
-  (DownArrow                "D")
-  (Gear                     "G")
-  (Pencil                   "P")
-  (Trash                    "3")
-  (Pin                      "p")
-  (RadioHollow              "O")
-  (RadioFilled              "o")
-  (CheckHollow              "!")
-  (CheckFilled              "1")
-  (LeftCaret                "<")
-  (RightCaret               ">")
-  (UpCaret                  "^")
-  (DownCaret                "v")
-  (UpScroll                 "9")
-  (DownScroll               "0")
-  (LeftScroll               "7")
-  (RightScroll              "8")
-  (Add                      "+")
-  (Minus                    "-")
-  (Thread                   "'")
-  (Threads                  '\\"')
-  (Machine                  "M")
-  (CircleFilled             ".")
-  (X                        "x")
-  (Refresh                  "q")
-  (Undo                     "j")
-  (Redo                     "u")
-  (Save                     "m")
-  (Window                   "n")
-  (Target                   "l")
-  (Clipboard                "a")
-  (Scheduler                "z")
-  (Module                   "y")
-  (XSplit                   "X")
-  (YSplit                   "Y")
-  (ClosePanel               "S")
-  (StepInto                 "T")
-  (StepOver                 "Z")
-  (StepOut                  "d")
-  (Find                     "N")
-  (Palette                  "E")
-  (Thumbnails               "H")
-  (Glasses                  "e")
-  (Binoculars               "I")
-  (List                     "J")
-  (Grid                     "A")
-  (QuestionMark             "?")
-  (Person                   "4")
-  (Briefcase                "5")
-  (Dot                      "c")
-}
-
-////////////////////////////////
 //~ rjf: Developer Toggles
 
 @table(name)
@@ -661,12 +584,6 @@ DF_DevToggleTable:
   COUNT,
 }
 
-@enum DF_IconKind:
-{
-  @expand(DF_IconTable a) `$(a.name)`,
-  COUNT,
-}
-
 @enum D_ViewRuleKind:
 {
   @expand(D_ViewRuleTable a) `$(a.name)`,
@@ -694,11 +611,6 @@ DF_DevToggleTable:
 }
 
 //- rjf: entity kind tables
-
-@data(DF_IconKind) d_entity_kind_icon_kind_table:
-{
-  @expand(D_EntityKindTable a) `DF_IconKind_$(a.icon_kind)`,
-}
 
 @data(String8) d_entity_kind_display_string_table:
 {
@@ -760,7 +672,7 @@ DF_DevToggleTable:
 @data(D_CmdSpecInfo) @c_file d_core_cmd_kind_spec_info_table:
 {
   @expand(D_CoreCmdTable, a)
-    ```{ str8_lit_comp("$(a.string)"), str8_lit_comp("$(a.desc)"), str8_lit_comp("$(a.search_tags)"), str8_lit_comp("$(a.display_name)"), (D_CmdSpecFlag_ListInUI*$(a.ui_vis))|(D_CmdSpecFlag_ListInIPCDocs*$(a.ipc_docs_vis)), {D_CmdParamSlot_$(a.q_slot), D_EntityKind_$(a.q_ent_kind), (D_CmdQueryFlag_AllowFiles*$(a.q_allow_files))|(D_CmdQueryFlag_AllowFolders*$(a.q_allow_folders))|(D_CmdQueryFlag_CodeInput*$(a.q_is_code))|(D_CmdQueryFlag_KeepOldInput*$(a.q_keep_oi))|(D_CmdQueryFlag_SelectOldInput*$(a.q_select_oi))|(D_CmdQueryFlag_Required*$(a.q_required))}, DF_IconKind_$(a.canonical_icon)}```;
+    ```{ str8_lit_comp("$(a.string)"), str8_lit_comp("$(a.desc)"), str8_lit_comp("$(a.search_tags)"), str8_lit_comp("$(a.display_name)"), (D_CmdSpecFlag_ListInUI*$(a.ui_vis))|(D_CmdSpecFlag_ListInIPCDocs*$(a.ipc_docs_vis)), {D_CmdParamSlot_$(a.q_slot), D_EntityKind_$(a.q_ent_kind), (D_CmdQueryFlag_AllowFiles*$(a.q_allow_files))|(D_CmdQueryFlag_AllowFolders*$(a.q_allow_folders))|(D_CmdQueryFlag_CodeInput*$(a.q_is_code))|(D_CmdQueryFlag_KeepOldInput*$(a.q_keep_oi))|(D_CmdQueryFlag_SelectOldInput*$(a.q_select_oi))|(D_CmdQueryFlag_Required*$(a.q_required))}}```;
 }
 
 //- rjf: core view rule tables
@@ -769,13 +681,6 @@ DF_DevToggleTable:
 {
   @expand(D_ViewRuleTable a)
     ```{str8_lit_comp("$(a.string)"), str8_lit_comp("$(a.display_name)"), str8_lit_comp("$(a.schema)"), str8_lit_comp("$(a.description)"), (D_ViewRuleSpecInfoFlag_Inherited*$(a.ih == "x"))|(D_ViewRuleSpecInfoFlag_Expandable*$(a.ex == "x"))|(D_ViewRuleSpecInfoFlag_ExprResolution*$(a.xp == "x"))|(D_ViewRuleSpecInfoFlag_VizBlockProd*$(a.vb == "x")), $(a.xp == "x" -> "D_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_NAME("..a.name_lower..")") $(a.xp != "x" -> 0), $(a.vb == "x" -> "D_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_NAME("..a.name_lower..")") $(a.vb != "x" -> 0), }```;
-}
-
-//- rjf: icon kinds
-
-@data(String8) df_g_icon_kind_text_table:
-{
-  @expand(DF_IconTable a) `str8_lit_comp("$(a.text)")`;
 }
 
 //- rjf: developer toggles

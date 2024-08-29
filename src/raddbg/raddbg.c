@@ -83,7 +83,7 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
   OS_EventList events = {0};
   if(os_handle_match(repaint_window_handle, os_handle_zero()))
   {
-    events = os_get_events(scratch.arena, df_gfx_state->num_frames_requested == 0);
+    events = os_get_events(scratch.arena, df_state->num_frames_requested == 0);
   }
   
   //////////////////////////////
@@ -94,18 +94,18 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
   //////////////////////////////
   //- rjf: bind change
   //
-  if(!df_gfx_state->confirm_active && df_gfx_state->bind_change_active)
+  if(!df_state->confirm_active && df_state->bind_change_active)
   {
     if(os_key_press(&events, os_handle_zero(), 0, OS_Key_Esc))
     {
-      df_gfx_request_frame();
-      df_gfx_state->bind_change_active = 0;
+      df_request_frame();
+      df_state->bind_change_active = 0;
     }
     if(os_key_press(&events, os_handle_zero(), 0, OS_Key_Delete))
     {
-      df_gfx_request_frame();
-      df_unbind_spec(df_gfx_state->bind_change_cmd_spec, df_gfx_state->bind_change_binding);
-      df_gfx_state->bind_change_active = 0;
+      df_request_frame();
+      df_unbind_spec(df_state->bind_change_cmd_spec, df_state->bind_change_binding);
+      df_state->bind_change_active = 0;
       d_cmd(d_cfg_src_write_cmd_kind_table[D_CfgSrc_User]);
     }
     for(OS_Event *event = events.first, *next = 0; event != 0; event = next)
@@ -122,19 +122,19 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
          event->key != OS_Key_Alt &&
          event->key != OS_Key_Shift)
       {
-        df_gfx_state->bind_change_active = 0;
+        df_state->bind_change_active = 0;
         DF_Binding binding = zero_struct;
         {
           binding.key = event->key;
           binding.flags = event->flags;
         }
-        df_unbind_spec(df_gfx_state->bind_change_cmd_spec, df_gfx_state->bind_change_binding);
-        df_bind_spec(df_gfx_state->bind_change_cmd_spec, binding);
+        df_unbind_spec(df_state->bind_change_cmd_spec, df_state->bind_change_binding);
+        df_bind_spec(df_state->bind_change_cmd_spec, binding);
         U32 codepoint = os_codepoint_from_event_flags_and_key(event->flags, event->key);
         os_text(&events, os_handle_zero(), codepoint);
         os_eat_event(&events, event);
         d_cmd(d_cfg_src_write_cmd_kind_table[D_CfgSrc_User]);
-        df_gfx_request_frame();
+        df_request_frame();
         break;
       }
     }
@@ -174,7 +174,7 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
         if(!take && event->kind == OS_EventKind_Press && event->key == OS_Key_Alt && event->flags == 0 && event->is_repeat == 0)
         {
           take = 1;
-          df_gfx_request_frame();
+          df_request_frame();
           window->menu_bar_focused_on_press = window->menu_bar_focused;
           window->menu_bar_key_held = 1;
           window->menu_bar_focus_press_started = 1;
@@ -182,26 +182,26 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
         if(!take && event->kind == OS_EventKind_Release && event->key == OS_Key_Alt && event->flags == 0 && event->is_repeat == 0)
         {
           take = 1;
-          df_gfx_request_frame();
+          df_request_frame();
           window->menu_bar_key_held = 0;
         }
         if(window->menu_bar_focused && event->kind == OS_EventKind_Press && event->key == OS_Key_Alt && event->flags == 0 && event->is_repeat == 0)
         {
           take = 1;
-          df_gfx_request_frame();
+          df_request_frame();
           window->menu_bar_focused = 0;
         }
         else if(window->menu_bar_focus_press_started && !window->menu_bar_focused && event->kind == OS_EventKind_Release && event->flags == 0 && event->key == OS_Key_Alt && event->is_repeat == 0)
         {
           take = 1;
-          df_gfx_request_frame();
+          df_request_frame();
           window->menu_bar_focused = !window->menu_bar_focused_on_press;
           window->menu_bar_focus_press_started = 0;
         }
         else if(event->kind == OS_EventKind_Press && event->key == OS_Key_Esc && window->menu_bar_focused && !ui_any_ctx_menu_is_open())
         {
           take = 1;
-          df_gfx_request_frame();
+          df_request_frame();
           window->menu_bar_focused = 0;
         }
       }
@@ -231,7 +231,7 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
         {
           window->menu_bar_focus_press_started = 0;
         }
-        df_gfx_request_frame();
+        df_request_frame();
       }
       
       //- rjf: try text events
@@ -242,7 +242,7 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
         D_CmdSpec *spec = d_cmd_spec_from_kind(D_CmdKind_InsertText);
         params.string = insertion8;
         d_push_cmd(spec, &params);
-        df_gfx_request_frame();
+        df_request_frame();
         take = 1;
         if(event->flags & OS_EventFlag_Alt)
         {
@@ -276,7 +276,7 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
   //
   {
     d_begin_frame(scratch.arena, &cmds, dt);
-    df_gfx_begin_frame(scratch.arena, &cmds);
+    df_begin_frame(scratch.arena, &cmds);
   }
   
   //////////////////////////////
@@ -294,7 +294,7 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
   {
     B32 over_focused_window = 0;
     {
-      for(DF_Window *window = df_gfx_state->first_window; window != 0; window = window->next)
+      for(DF_Window *window = df_state->first_window; window != 0; window = window->next)
       {
         Vec2F32 mouse = os_mouse_from_window(window->os);
         Rng2F32 rect = os_client_rect_from_window(window->os);
@@ -307,7 +307,7 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
     }
     if(!over_focused_window)
     {
-      for(DF_Window *window = df_gfx_state->first_window; window != 0; window = window->next)
+      for(DF_Window *window = df_state->first_window; window != 0; window = window->next)
       {
         Vec2F32 mouse = os_mouse_from_window(window->os);
         Rng2F32 rect = os_client_rect_from_window(window->os);
@@ -325,7 +325,7 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
   //
   {
     dr_begin_frame();
-    for(DF_Window *w = df_gfx_state->first_window; w != 0; w = w->next)
+    for(DF_Window *w = df_state->first_window; w != 0; w = w->next)
     {
       B32 window_is_focused = os_window_is_focused(w->os);
       if(window_is_focused)
@@ -347,7 +347,7 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
   //- rjf: end frontend frame, send signals, etc.
   //
   {
-    df_gfx_end_frame();
+    df_end_frame();
     d_end_frame();
   }
   
@@ -356,7 +356,7 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
   //
   {
     r_begin_frame();
-    for(DF_Window *w = df_gfx_state->first_window; w != 0; w = w->next)
+    for(DF_Window *w = df_state->first_window; w != 0; w = w->next)
     {
       r_window_begin_frame(w->os, w->r);
       dr_submit_bucket(w->os, w->r, w->draw_bucket);
@@ -371,7 +371,7 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
   if(os_handle_match(repaint_window_handle, os_handle_zero()))
   {
     D_HandleList windows_to_show = {0};
-    for(DF_Window *w = df_gfx_state->first_window; w != 0; w = w->next)
+    for(DF_Window *w = df_state->first_window; w != 0; w = w->next)
     {
       if(w->frames_alive == 1)
       {

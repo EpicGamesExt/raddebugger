@@ -118,7 +118,7 @@ struct DF_ViewSpecInfo
   DF_ViewSpecFlags flags;
   String8 name;
   String8 display_string;
-  DF_IconKind icon_kind;
+  U32 icon_kind;
   DF_ViewSetupFunctionType *setup_hook;
   DF_ViewCmdFunctionType *cmd_hook;
   DF_ViewUIFunctionType *ui_hook;
@@ -341,21 +341,21 @@ enum
   DF_ViewRuleSpecInfoFlag_ViewUI         = (1<<3),
 };
 
-#define DF_GFX_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_SIG(name) void name(void)
-#define DF_GFX_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_NAME(name) df_gfx_view_rule_viz_row_prod__##name
-#define DF_GFX_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_DEF(name) internal DF_GFX_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_SIG(DF_GFX_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_NAME(name))
+#define DF_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_SIG(name) void name(void)
+#define DF_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_NAME(name) df_view_rule_viz_row_prod__##name
+#define DF_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_DEF(name) internal DF_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_SIG(DF_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_NAME(name))
 
-#define DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_SIG(name) void name(void)
-#define DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_NAME(name) df_gfx_view_rule_line_stringize__##name
-#define DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(name) internal DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_SIG(DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_NAME(name))
+#define DF_VIEW_RULE_LINE_STRINGIZE_FUNCTION_SIG(name) void name(void)
+#define DF_VIEW_RULE_LINE_STRINGIZE_FUNCTION_NAME(name) df_view_rule_line_stringize__##name
+#define DF_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(name) internal DF_VIEW_RULE_LINE_STRINGIZE_FUNCTION_SIG(DF_VIEW_RULE_LINE_STRINGIZE_FUNCTION_NAME(name))
 
-#define DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_SIG(name) void name(struct DF_Window *ws, D_ExpandKey key, MD_Node *params, String8 string)
-#define DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_NAME(name) df_gfx_view_rule_row_ui__##name
-#define DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_DEF(name) DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_SIG(DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_NAME(name))
+#define DF_VIEW_RULE_ROW_UI_FUNCTION_SIG(name) void name(struct DF_Window *ws, D_ExpandKey key, MD_Node *params, String8 string)
+#define DF_VIEW_RULE_ROW_UI_FUNCTION_NAME(name) df_view_rule_row_ui__##name
+#define DF_VIEW_RULE_ROW_UI_FUNCTION_DEF(name) DF_VIEW_RULE_ROW_UI_FUNCTION_SIG(DF_VIEW_RULE_ROW_UI_FUNCTION_NAME(name))
 
-typedef DF_GFX_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_SIG(DF_ViewRuleVizRowProdHookFunctionType);
-typedef DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_SIG(DF_ViewRuleLineStringizeHookFunctionType);
-typedef DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_SIG(DF_ViewRuleRowUIFunctionType);
+typedef DF_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_SIG(DF_ViewRuleVizRowProdHookFunctionType);
+typedef DF_VIEW_RULE_LINE_STRINGIZE_FUNCTION_SIG(DF_ViewRuleLineStringizeHookFunctionType);
+typedef DF_VIEW_RULE_ROW_UI_FUNCTION_SIG(DF_ViewRuleRowUIFunctionType);
 
 typedef struct DF_ViewRuleSpecInfo DF_ViewRuleSpecInfo;
 struct DF_ViewRuleSpecInfo
@@ -721,8 +721,8 @@ struct DF_String2ViewSlot
   DF_String2ViewNode *last;
 };
 
-typedef struct DF_GfxState DF_GfxState;
-struct DF_GfxState
+typedef struct DF_State DF_State;
+struct DF_State
 {
   // rjf: arenas
   Arena *arena;
@@ -817,9 +817,9 @@ struct DF_GfxState
 ////////////////////////////////
 //~ rjf: Globals
 
-read_only global DF_ViewSpec df_g_nil_view_spec =
+read_only global DF_ViewSpec df_nil_view_spec =
 {
-  &df_g_nil_view_spec,
+  &df_nil_view_spec,
   {
     0,
     {0},
@@ -831,35 +831,35 @@ read_only global DF_ViewSpec df_g_nil_view_spec =
   },
 };
 
-read_only global DF_ViewRuleSpec df_g_nil_gfx_view_rule_spec =
+read_only global DF_ViewRuleSpec df_nil_view_rule_spec =
 {
-  &df_g_nil_gfx_view_rule_spec,
+  &df_nil_view_rule_spec,
 };
 
-read_only global DF_View df_g_nil_view =
+read_only global DF_View df_nil_view =
 {
-  &df_g_nil_view,
-  &df_g_nil_view,
-  &df_g_nil_view,
-  &df_g_nil_view,
-  &df_g_nil_view,
-  &df_g_nil_view,
-  &df_g_nil_view_spec,
+  &df_nil_view,
+  &df_nil_view,
+  &df_nil_view,
+  &df_nil_view,
+  &df_nil_view,
+  &df_nil_view,
+  &df_nil_view_spec,
 };
 
-read_only global DF_Panel df_g_nil_panel =
+read_only global DF_Panel df_nil_panel =
 {
-  &df_g_nil_panel,
-  &df_g_nil_panel,
-  &df_g_nil_panel,
-  &df_g_nil_panel,
-  &df_g_nil_panel,
+  &df_nil_panel,
+  &df_nil_panel,
+  &df_nil_panel,
+  &df_nil_panel,
+  &df_nil_panel,
 };
 
-global DF_GfxState *df_gfx_state = 0;
-global DF_DragDropPayload df_g_drag_drop_payload = {0};
-global D_Handle df_g_last_drag_drop_panel = {0};
-global D_Handle df_g_last_drag_drop_prev_tab = {0};
+global DF_State *df_state = 0;
+global DF_DragDropPayload df_drag_drop_payload = {0};
+global D_Handle df_last_drag_drop_panel = {0};
+global D_Handle df_last_drag_drop_prev_tab = {0};
 
 ////////////////////////////////
 //~ rjf: Basic Helpers
@@ -877,7 +877,7 @@ internal DF_View *df_view_from_handle(D_Handle handle);
 ////////////////////////////////
 //~ rjf: View Spec Type Functions
 
-internal DF_GfxViewKind df_gfx_view_kind_from_string(String8 string);
+internal DF_ViewKind df_view_kind_from_string(String8 string);
 
 ////////////////////////////////
 //~ rjf: Panel Type Functions
@@ -946,14 +946,14 @@ internal DF_RichHoverInfo df_get_rich_hover_info(void);
 
 internal void df_register_view_specs(DF_ViewSpecInfoArray specs);
 internal DF_ViewSpec *df_view_spec_from_string(String8 string);
-internal DF_ViewSpec *df_view_spec_from_gfx_view_kind(DF_GfxViewKind gfx_view_kind);
+internal DF_ViewSpec *df_view_spec_from_kind(DF_ViewKind kind);
 internal DF_ViewSpec *df_view_spec_from_cmd_param_slot_spec(D_CmdParamSlot slot, D_CmdSpec *cmd_spec);
 
 ////////////////////////////////
 //~ rjf: View Rule Spec State Functions
 
-internal void df_register_gfx_view_rule_specs(DF_ViewRuleSpecInfoArray specs);
-internal DF_ViewRuleSpec *df_gfx_view_rule_spec_from_string(String8 string);
+internal void df_register_view_rule_specs(DF_ViewRuleSpecInfoArray specs);
+internal DF_ViewRuleSpec *df_view_rule_spec_from_string(String8 string);
 
 ////////////////////////////////
 //~ rjf: View State Functions
@@ -1125,13 +1125,13 @@ internal UI_Signal df_line_editf(DF_Window *ws, DF_LineEditFlags flags, S32 dept
 ////////////////////////////////
 //~ rjf: Continuous Frame Requests
 
-internal void df_gfx_request_frame(void);
+internal void df_request_frame(void);
 
 ////////////////////////////////
 //~ rjf: Main Layer Top-Level Calls
 
-internal void df_gfx_init(OS_WindowRepaintFunctionType *window_repaint_entry_point, D_StateDeltaHistory *hist);
-internal void df_gfx_begin_frame(Arena *arena, D_CmdList *cmds);
-internal void df_gfx_end_frame(void);
+internal void df_init(OS_WindowRepaintFunctionType *window_repaint_entry_point, D_StateDeltaHistory *hist);
+internal void df_begin_frame(Arena *arena, D_CmdList *cmds);
+internal void df_end_frame(void);
 
 #endif // DBG_FRONTEND_CORE_H

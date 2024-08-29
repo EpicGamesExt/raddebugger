@@ -2083,7 +2083,6 @@ d_register_cmd_specs(D_CmdSpecInfoArray specs)
     info_copy->display_name           = push_str8_copy(d_state->arena, info->display_name);
     info_copy->flags                  = info->flags;
     info_copy->query                  = info->query;
-    info_copy->canonical_icon_kind    = info->canonical_icon_kind;
     spec->registrar_index = registrar_idx;
     spec->ordering_index = idx;
   }
@@ -2109,9 +2108,9 @@ d_cmd_spec_from_string(String8 string)
 }
 
 internal D_CmdSpec *
-d_cmd_spec_from_kind(D_CmdKind core_cmd_kind)
+d_cmd_spec_from_kind(D_CmdKind kind)
 {
-  String8 string = d_core_cmd_kind_spec_info_table[core_cmd_kind].string;
+  String8 string = d_core_cmd_kind_spec_info_table[kind].string;
   D_CmdSpec *result = d_cmd_spec_from_string(string);
   return result;
 }
@@ -4914,11 +4913,11 @@ d_eval_viz_row_list_push_new(Arena *arena, D_EvalView *eval_view, D_EvalVizWindo
   }
   
   // rjf: determine row ui hook to use for this row
-  DF_ViewRuleSpec *value_ui_rule_spec = &df_g_nil_gfx_view_rule_spec;
+  DF_ViewRuleSpec *value_ui_rule_spec = &df_nil_view_rule_spec;
   MD_Node *value_ui_rule_params = &md_nil_node;
   for(D_CfgVal *val = cfg_table->first_val; val != 0 && val != &d_nil_cfg_val; val = val->linear_next)
   {
-    DF_ViewRuleSpec *spec = df_gfx_view_rule_spec_from_string(val->string);
+    DF_ViewRuleSpec *spec = df_view_rule_spec_from_string(val->string);
     if(spec->info.flags & DF_ViewRuleSpecInfoFlag_RowUI)
     {
       value_ui_rule_spec = spec;
@@ -4928,13 +4927,13 @@ d_eval_viz_row_list_push_new(Arena *arena, D_EvalView *eval_view, D_EvalVizWindo
   }
   
   // rjf: determine block ui hook to use for this row
-  DF_ViewRuleSpec *expand_ui_rule_spec = &df_g_nil_gfx_view_rule_spec;
+  DF_ViewRuleSpec *expand_ui_rule_spec = &df_nil_view_rule_spec;
   MD_Node *expand_ui_rule_params = &md_nil_node;
   if(block->kind == D_EvalVizBlockKind_Canvas)
   {
     for(D_CfgVal *val = cfg_table->first_val; val != 0 && val != &d_nil_cfg_val; val = val->linear_next)
     {
-      DF_ViewRuleSpec *spec = df_gfx_view_rule_spec_from_string(val->string);
+      DF_ViewRuleSpec *spec = df_view_rule_spec_from_string(val->string);
       if(spec->info.flags & DF_ViewRuleSpecInfoFlag_ViewUI)
       {
         expand_ui_rule_spec = spec;

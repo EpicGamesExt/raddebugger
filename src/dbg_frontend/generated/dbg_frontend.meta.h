@@ -6,44 +6,118 @@
 #ifndef DBG_FRONTEND_META_H
 #define DBG_FRONTEND_META_H
 
-typedef enum DF_GfxViewKind
+typedef enum DF_IconKind
 {
-DF_GfxViewKind_Null,
-DF_GfxViewKind_Empty,
-DF_GfxViewKind_GettingStarted,
-DF_GfxViewKind_Commands,
-DF_GfxViewKind_FileSystem,
-DF_GfxViewKind_SystemProcesses,
-DF_GfxViewKind_EntityLister,
-DF_GfxViewKind_SymbolLister,
-DF_GfxViewKind_Target,
-DF_GfxViewKind_Targets,
-DF_GfxViewKind_FilePathMap,
-DF_GfxViewKind_AutoViewRules,
-DF_GfxViewKind_Breakpoints,
-DF_GfxViewKind_WatchPins,
-DF_GfxViewKind_Scheduler,
-DF_GfxViewKind_CallStack,
-DF_GfxViewKind_Modules,
-DF_GfxViewKind_Watch,
-DF_GfxViewKind_Locals,
-DF_GfxViewKind_Registers,
-DF_GfxViewKind_Globals,
-DF_GfxViewKind_ThreadLocals,
-DF_GfxViewKind_Types,
-DF_GfxViewKind_Procedures,
-DF_GfxViewKind_PendingFile,
-DF_GfxViewKind_Text,
-DF_GfxViewKind_Disasm,
-DF_GfxViewKind_Output,
-DF_GfxViewKind_Memory,
-DF_GfxViewKind_Bitmap,
-DF_GfxViewKind_ColorRGBA,
-DF_GfxViewKind_Geo3D,
-DF_GfxViewKind_ExceptionFilters,
-DF_GfxViewKind_Settings,
-DF_GfxViewKind_COUNT,
-} DF_GfxViewKind;
+DF_IconKind_Null,
+DF_IconKind_FolderOpenOutline,
+DF_IconKind_FolderClosedOutline,
+DF_IconKind_FolderOpenFilled,
+DF_IconKind_FolderClosedFilled,
+DF_IconKind_FileOutline,
+DF_IconKind_FileFilled,
+DF_IconKind_Play,
+DF_IconKind_PlayStepForward,
+DF_IconKind_Pause,
+DF_IconKind_Stop,
+DF_IconKind_Info,
+DF_IconKind_WarningSmall,
+DF_IconKind_WarningBig,
+DF_IconKind_Unlocked,
+DF_IconKind_Locked,
+DF_IconKind_LeftArrow,
+DF_IconKind_RightArrow,
+DF_IconKind_UpArrow,
+DF_IconKind_DownArrow,
+DF_IconKind_Gear,
+DF_IconKind_Pencil,
+DF_IconKind_Trash,
+DF_IconKind_Pin,
+DF_IconKind_RadioHollow,
+DF_IconKind_RadioFilled,
+DF_IconKind_CheckHollow,
+DF_IconKind_CheckFilled,
+DF_IconKind_LeftCaret,
+DF_IconKind_RightCaret,
+DF_IconKind_UpCaret,
+DF_IconKind_DownCaret,
+DF_IconKind_UpScroll,
+DF_IconKind_DownScroll,
+DF_IconKind_LeftScroll,
+DF_IconKind_RightScroll,
+DF_IconKind_Add,
+DF_IconKind_Minus,
+DF_IconKind_Thread,
+DF_IconKind_Threads,
+DF_IconKind_Machine,
+DF_IconKind_CircleFilled,
+DF_IconKind_X,
+DF_IconKind_Refresh,
+DF_IconKind_Undo,
+DF_IconKind_Redo,
+DF_IconKind_Save,
+DF_IconKind_Window,
+DF_IconKind_Target,
+DF_IconKind_Clipboard,
+DF_IconKind_Scheduler,
+DF_IconKind_Module,
+DF_IconKind_XSplit,
+DF_IconKind_YSplit,
+DF_IconKind_ClosePanel,
+DF_IconKind_StepInto,
+DF_IconKind_StepOver,
+DF_IconKind_StepOut,
+DF_IconKind_Find,
+DF_IconKind_Palette,
+DF_IconKind_Thumbnails,
+DF_IconKind_Glasses,
+DF_IconKind_Binoculars,
+DF_IconKind_List,
+DF_IconKind_Grid,
+DF_IconKind_QuestionMark,
+DF_IconKind_Person,
+DF_IconKind_Briefcase,
+DF_IconKind_Dot,
+DF_IconKind_COUNT,
+} DF_IconKind;
+
+typedef enum DF_ViewKind
+{
+DF_ViewKind_Null,
+DF_ViewKind_Empty,
+DF_ViewKind_GettingStarted,
+DF_ViewKind_Commands,
+DF_ViewKind_FileSystem,
+DF_ViewKind_SystemProcesses,
+DF_ViewKind_EntityLister,
+DF_ViewKind_SymbolLister,
+DF_ViewKind_Target,
+DF_ViewKind_Targets,
+DF_ViewKind_FilePathMap,
+DF_ViewKind_AutoViewRules,
+DF_ViewKind_Breakpoints,
+DF_ViewKind_WatchPins,
+DF_ViewKind_Scheduler,
+DF_ViewKind_CallStack,
+DF_ViewKind_Modules,
+DF_ViewKind_Watch,
+DF_ViewKind_Locals,
+DF_ViewKind_Registers,
+DF_ViewKind_Globals,
+DF_ViewKind_ThreadLocals,
+DF_ViewKind_Types,
+DF_ViewKind_Procedures,
+DF_ViewKind_PendingFile,
+DF_ViewKind_Text,
+DF_ViewKind_Disasm,
+DF_ViewKind_Output,
+DF_ViewKind_Memory,
+DF_ViewKind_Bitmap,
+DF_ViewKind_ColorRGBA,
+DF_ViewKind_Geo3D,
+DF_ViewKind_ExceptionFilters,
+DF_ViewKind_Settings,
+DF_ViewKind_COUNT,
+} DF_ViewKind;
 
 typedef enum DF_ThemeColor
 {
@@ -266,23 +340,26 @@ DF_VIEW_UI_FUNCTION_DEF(geo3d);
 DF_VIEW_UI_FUNCTION_DEF(exception_filters);
 DF_VIEW_UI_FUNCTION_DEF(settings);
 
-DF_GFX_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_DEF(list);
-DF_GFX_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_DEF(only);
-DF_GFX_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_DEF(omit);
-DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(dec);
-DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(bin);
-DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(oct);
-DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(hex);
-DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(only);
-DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(omit);
-DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(no_addr);
-DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_DEF(checkbox);
-DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_DEF(color_rgba);
+DF_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_DEF(list);
+DF_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_DEF(only);
+DF_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_DEF(omit);
+DF_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(dec);
+DF_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(bin);
+DF_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(oct);
+DF_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(hex);
+DF_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(only);
+DF_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(omit);
+DF_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(no_addr);
+DF_VIEW_RULE_ROW_UI_FUNCTION_DEF(checkbox);
+DF_VIEW_RULE_ROW_UI_FUNCTION_DEF(color_rgba);
 C_LINKAGE_BEGIN
 extern DF_StringBindingPair df_g_default_binding_table[110];
 extern String8 df_g_binding_version_remap_old_name_table[7];
 extern String8 df_g_binding_version_remap_new_name_table[7];
+extern String8 df_g_icon_kind_text_table[69];
 extern DF_ViewSpecInfo df_g_gfx_view_kind_spec_info_table[34];
+extern DF_IconKind df_cmd_kind_icon_kind_table[221];
+extern DF_IconKind df_entity_kind_icon_kind_table[28];
 extern D_CmdParamSlot df_g_cmd_param_slot_2_view_spec_src_map[7];
 extern String8 df_g_cmd_param_slot_2_view_spec_dst_map[7];
 extern String8 df_g_cmd_param_slot_2_view_spec_cmd_map[7];

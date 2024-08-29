@@ -764,7 +764,6 @@ struct D_CmdSpecInfo
   String8 display_name;
   D_CmdSpecFlags flags;
   D_CmdQuery query;
-  DF_IconKind canonical_icon_kind;
 };
 
 typedef struct D_CmdSpec D_CmdSpec;
@@ -1347,7 +1346,7 @@ internal B32 d_entity_is_frozen(D_Entity *entity);
 
 internal void d_register_cmd_specs(D_CmdSpecInfoArray specs);
 internal D_CmdSpec *d_cmd_spec_from_string(String8 string);
-internal D_CmdSpec *d_cmd_spec_from_kind(D_CmdKind core_cmd_kind);
+internal D_CmdSpec *d_cmd_spec_from_kind(D_CmdKind kind);
 internal void d_cmd_spec_counter_inc(D_CmdSpec *spec);
 internal D_CmdSpecList d_push_cmd_spec_list(Arena *arena);
 

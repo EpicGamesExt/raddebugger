@@ -15,8 +15,8 @@
 #define TEX_INIT_MANUAL 1
 #define GEO_INIT_MANUAL 1
 #define FNT_INIT_MANUAL 1
+#define D_INIT_MANUAL 1
 #define DF_INIT_MANUAL 1
-#define DF_GFX_INIT_MANUAL 1
 
 ////////////////////////////////
 //~ rjf: Includes
@@ -238,7 +238,7 @@ entry_point(CmdLine *cmd_line)
         fnt_init();
         D_StateDeltaHistory *hist = d_state_delta_history_alloc();
         d_init(cmd_line, hist);
-        df_gfx_init(update_and_render, d_state_delta_history());
+        df_init(update_and_render, d_state_delta_history());
       }
       
       //- rjf: setup initial target from command line args
@@ -340,7 +340,7 @@ entry_point(CmdLine *cmd_line)
             if(msg.size != 0)
             {
               log_infof("ipc_msg: \"%S\"", msg);
-              DF_Window *dst_window = df_gfx_state->first_window;
+              DF_Window *dst_window = df_state->first_window;
               for(DF_Window *window = dst_window; window != 0; window = window->next)
               {
                 if(os_window_is_focused(window->os))
@@ -361,18 +361,18 @@ entry_point(CmdLine *cmd_line)
                   if(error.size == 0)
                   {
                     d_push_cmd(cmd_spec, &params);
-                    df_gfx_request_frame();
+                    df_request_frame();
                   }
                   else
                   {
                     d_error(error);
-                    df_gfx_request_frame();
+                    df_request_frame();
                   }
                 }
                 else
                 {
                   d_errorf("\"%S\" is not a command.", cmd_spec_string);
-                  df_gfx_request_frame();
+                  df_request_frame();
                 }
               }
             }
@@ -405,7 +405,7 @@ entry_point(CmdLine *cmd_line)
           }
           
           //- rjf: quit if no windows are left
-          if(df_gfx_state->first_window == 0)
+          if(df_state->first_window == 0)
           {
             break;
           }

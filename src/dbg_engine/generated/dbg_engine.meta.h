@@ -274,80 +274,6 @@ D_CmdKind_LogMarker,
 D_CmdKind_COUNT,
 } D_CmdKind;
 
-typedef enum DF_IconKind
-{
-DF_IconKind_Null,
-DF_IconKind_FolderOpenOutline,
-DF_IconKind_FolderClosedOutline,
-DF_IconKind_FolderOpenFilled,
-DF_IconKind_FolderClosedFilled,
-DF_IconKind_FileOutline,
-DF_IconKind_FileFilled,
-DF_IconKind_Play,
-DF_IconKind_PlayStepForward,
-DF_IconKind_Pause,
-DF_IconKind_Stop,
-DF_IconKind_Info,
-DF_IconKind_WarningSmall,
-DF_IconKind_WarningBig,
-DF_IconKind_Unlocked,
-DF_IconKind_Locked,
-DF_IconKind_LeftArrow,
-DF_IconKind_RightArrow,
-DF_IconKind_UpArrow,
-DF_IconKind_DownArrow,
-DF_IconKind_Gear,
-DF_IconKind_Pencil,
-DF_IconKind_Trash,
-DF_IconKind_Pin,
-DF_IconKind_RadioHollow,
-DF_IconKind_RadioFilled,
-DF_IconKind_CheckHollow,
-DF_IconKind_CheckFilled,
-DF_IconKind_LeftCaret,
-DF_IconKind_RightCaret,
-DF_IconKind_UpCaret,
-DF_IconKind_DownCaret,
-DF_IconKind_UpScroll,
-DF_IconKind_DownScroll,
-DF_IconKind_LeftScroll,
-DF_IconKind_RightScroll,
-DF_IconKind_Add,
-DF_IconKind_Minus,
-DF_IconKind_Thread,
-DF_IconKind_Threads,
-DF_IconKind_Machine,
-DF_IconKind_CircleFilled,
-DF_IconKind_X,
-DF_IconKind_Refresh,
-DF_IconKind_Undo,
-DF_IconKind_Redo,
-DF_IconKind_Save,
-DF_IconKind_Window,
-DF_IconKind_Target,
-DF_IconKind_Clipboard,
-DF_IconKind_Scheduler,
-DF_IconKind_Module,
-DF_IconKind_XSplit,
-DF_IconKind_YSplit,
-DF_IconKind_ClosePanel,
-DF_IconKind_StepInto,
-DF_IconKind_StepOver,
-DF_IconKind_StepOut,
-DF_IconKind_Find,
-DF_IconKind_Palette,
-DF_IconKind_Thumbnails,
-DF_IconKind_Glasses,
-DF_IconKind_Binoculars,
-DF_IconKind_List,
-DF_IconKind_Grid,
-DF_IconKind_QuestionMark,
-DF_IconKind_Person,
-DF_IconKind_Briefcase,
-DF_IconKind_Dot,
-DF_IconKind_COUNT,
-} DF_IconKind;
-
 typedef enum D_ViewRuleKind
 {
 D_ViewRuleKind_Default,
@@ -471,7 +397,6 @@ struct {B32 *value_ptr; String8 name;} DEV_toggle_table[] =
 };
 C_LINKAGE_BEGIN
 extern Rng1U64 d_cmd_param_slot_range_table[24];
-extern DF_IconKind d_entity_kind_icon_kind_table[28];
 extern String8 d_entity_kind_display_string_table[28];
 extern String8 d_entity_kind_name_lower_table[28];
 extern String8 d_entity_kind_name_lower_plural_table[28];
@@ -481,7 +406,6 @@ extern String8 d_cfg_src_string_table[4];
 extern D_CmdKind d_cfg_src_load_cmd_kind_table[4];
 extern D_CmdKind d_cfg_src_write_cmd_kind_table[4];
 extern D_CmdKind d_cfg_src_apply_cmd_kind_table[4];
-extern String8 df_g_icon_kind_text_table[69];
 
 C_LINKAGE_END
 

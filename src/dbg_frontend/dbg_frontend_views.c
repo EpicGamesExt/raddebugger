@@ -1322,7 +1322,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
             FZY_ItemArray items = fzy_items_from_key_params_query(fzy_scope, fuzzy_search_key, &params, filter, endt_us, &items_stale);
             if(items_stale)
             {
-              df_gfx_request_frame();
+              df_request_frame();
             }
             
             //- rjf: gather unsorted child expansion keys
@@ -1636,7 +1636,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
             B32 is_expanded = d_expand_key_is_set(&eval_view->expand_tree_table, row->key);
             d_expand_set_expansion(eval_view->arena, &eval_view->expand_tree_table, row->parent_key, row->key, !is_expanded);
           }
-          if(row->expand_ui_rule_spec != &df_g_nil_gfx_view_rule_spec && row->expand_ui_rule_spec != 0)
+          if(row->expand_ui_rule_spec != &df_nil_view_rule_spec && row->expand_ui_rule_spec != 0)
           {
             d_cmd(D_CmdKind_OpenTab,
                   .string      = e_string_from_expr(scratch.arena, row->expr),
@@ -2280,8 +2280,8 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
         UI_Box *row_box = ui_build_box_from_stringf(row_flags|
                                                     UI_BoxFlag_DrawSideBottom|
                                                     UI_BoxFlag_Clickable|
-                                                    ((row->expand_ui_rule_spec == &df_g_nil_gfx_view_rule_spec) * UI_BoxFlag_DisableFocusOverlay)|
-                                                    ((row->expand_ui_rule_spec != &df_g_nil_gfx_view_rule_spec) * UI_BoxFlag_Clip),
+                                                    ((row->expand_ui_rule_spec == &df_nil_view_rule_spec) * UI_BoxFlag_DisableFocusOverlay)|
+                                                    ((row->expand_ui_rule_spec != &df_nil_view_rule_spec) * UI_BoxFlag_Clip),
                                                     "row_%I64x", row_hash);
         ui_ts_vector_idx += 1;
         ui_ts_cell_idx = 0;
@@ -2289,7 +2289,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
         ////////////////////////
         //- rjf: row with expand ui rule -> build large singular row for "escape hatch" ui
         //
-        if(row->expand_ui_rule_spec != &df_g_nil_gfx_view_rule_spec)
+        if(row->expand_ui_rule_spec != &df_nil_view_rule_spec)
           UI_Parent(row_box) UI_FocusHot(row_selected ? UI_FocusKind_On : UI_FocusKind_Off)
         {
           //- rjf: build canvas row contents
@@ -2372,7 +2372,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
               //- rjf: build
               UI_PermissionFlags(UI_PermissionFlag_Clicks|UI_PermissionFlag_ScrollX)
               {
-                canvas_view_spec->info.ui_hook(ws, &df_g_nil_panel, canvas_view, canvas_view->params_roots[canvas_view->params_read_gen%ArrayCount(canvas_view->params_roots)], str8(canvas_view->query_buffer, canvas_view->query_string_size), canvas_rect);
+                canvas_view_spec->info.ui_hook(ws, &df_nil_panel, canvas_view, canvas_view->params_roots[canvas_view->params_read_gen%ArrayCount(canvas_view->params_roots)], str8(canvas_view->query_buffer, canvas_view->query_string_size), canvas_rect);
               }
               
               //- rjf: pop interaction registers
@@ -2384,7 +2384,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
         ////////////////////////
         //- rjf: build non-canvas row contents
         //
-        if(row->expand_ui_rule_spec == &df_g_nil_gfx_view_rule_spec) UI_Parent(row_box) UI_HeightFill
+        if(row->expand_ui_rule_spec == &df_nil_view_rule_spec) UI_Parent(row_box) UI_HeightFill
         {
           //////////////////////
           //- rjf: draw start of cache lines in expansions
@@ -2506,7 +2506,7 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                     cell_error_tooltip_string = str8_lit("Could not read memory successfully.");
                   }
                   cell_autocomp_flags = DF_AutoCompListerFlag_Locals;
-                  if(row->value_ui_rule_spec != &df_g_nil_gfx_view_rule_spec && row->value_ui_rule_spec != 0)
+                  if(row->value_ui_rule_spec != &df_nil_view_rule_spec && row->value_ui_rule_spec != 0)
                   {
                     cell_ui_hook = row->value_ui_rule_spec->info.row_ui;
                     cell_ui_params = row->value_ui_rule_params;
@@ -2540,8 +2540,8 @@ df_watch_view_build(DF_Window *ws, DF_Panel *panel, DF_View *view, DF_WatchViewS
                 d_cfg_table_push_unparsed_string(scratch.arena, &col_cfg_table, col_view_rule, D_CfgSrc_User);
                 for(D_CfgVal *val = col_cfg_table.first_val; val != 0 && val != &d_nil_cfg_val; val = val->linear_next)
                 {
-                  DF_ViewRuleSpec *spec = df_gfx_view_rule_spec_from_string(val->string);
-                  if(spec != &df_g_nil_gfx_view_rule_spec && spec->info.flags & DF_ViewRuleSpecInfoFlag_RowUI)
+                  DF_ViewRuleSpec *spec = df_view_rule_spec_from_string(val->string);
+                  if(spec != &df_nil_view_rule_spec && spec->info.flags & DF_ViewRuleSpecInfoFlag_RowUI)
                   {
                     cell_ui_hook = spec->info.row_ui;
                     cell_ui_params = val->last->root;
@@ -2941,7 +2941,7 @@ DF_VIEW_UI_FUNCTION_DEF(getting_started)
           UI_Padding(ui_pct(1, 0))
           UI_PrefWidth(ui_px(icon_dim, 1.f))
         {
-          R_Handle texture = df_gfx_state->icon_texture;
+          R_Handle texture = df_state->icon_texture;
           Vec2S32 texture_dim = r_size_from_tex2d(texture);
           ui_image(texture, R_Tex2DSampleKind_Linear, r2f32p(0, 0, texture_dim.x, texture_dim.y), v4f32(1, 1, 1, 1), 0, str8_lit(""));
         }
@@ -3276,7 +3276,8 @@ DF_VIEW_UI_FUNCTION_DEF(commands)
           UI_HeightFill
           UI_TextAlignment(UI_TextAlign_Center)
         {
-          DF_IconKind icon = item->cmd_spec->info.canonical_icon_kind;
+          D_CmdKind cmd_kind = d_cmd_kind_from_string(item->cmd_spec->info.string);
+          DF_IconKind icon = df_cmd_kind_icon_kind_table[cmd_kind];
           if(icon != DF_IconKind_Null)
           {
             ui_label(df_g_icon_kind_text_table[icon]);
@@ -4367,7 +4368,7 @@ DF_VIEW_UI_FUNCTION_DEF(entity_lister)
       }
       UI_Parent(box)
       {
-        DF_IconKind icon_kind = d_entity_kind_icon_kind_table[ent->kind];
+        DF_IconKind icon_kind = df_entity_kind_icon_kind_table[ent->kind];
         if(icon_kind != DF_IconKind_Null)
         {
           UI_TextAlignment(UI_TextAlign_Center)
@@ -4445,7 +4446,7 @@ DF_VIEW_UI_FUNCTION_DEF(symbol_lister)
   FZY_ItemArray items = fzy_items_from_key_params_query(fzy_scope, fuzzy_search_key, &fuzzy_search_params, string, endt_us, &items_stale);
   if(items_stale)
   {
-    df_gfx_request_frame();
+    df_request_frame();
   }
   
   //- rjf: submit best match when hitting enter w/ no selection
@@ -6549,7 +6550,7 @@ DF_VIEW_CMD_FUNCTION_DEF(pending_file)
   Rng1U64 file_range = r1u64(0, 1024);
   U128 file_hash = fs_hash_from_path_range(file_path, file_range, 0);
   B32 file_is_ready = 0;
-  DF_GfxViewKind viewer_kind = DF_GfxViewKind_Text;
+  DF_ViewKind viewer_kind = DF_ViewKind_Text;
   {
     HS_Scope *hs_scope = hs_scope_open();
     String8 data = hs_data_from_hash(hs_scope, file_hash);
@@ -6576,11 +6577,11 @@ DF_VIEW_CMD_FUNCTION_DEF(pending_file)
       file_is_ready = 1;
       if(num_utf8_bytes > num_unknown_bytes*4)
       {
-        viewer_kind = DF_GfxViewKind_Text;
+        viewer_kind = DF_ViewKind_Text;
       }
       else
       {
-        viewer_kind = DF_GfxViewKind_Memory;
+        viewer_kind = DF_ViewKind_Memory;
       }
     }
     hs_scope_close(hs_scope);
@@ -6606,12 +6607,12 @@ DF_VIEW_CMD_FUNCTION_DEF(pending_file)
   }
   
   //- rjf: if entity is ready, replace this view with the correct one, if any viewer is specified
-  if(file_is_ready && viewer_kind != DF_GfxViewKind_Null)
+  if(file_is_ready && viewer_kind != DF_ViewKind_Null)
   {
     DF_ViewSpec *view_spec = df_view_spec_from_string(params_copy->string);
-    if(view_spec == &df_g_nil_view_spec)
+    if(view_spec == &df_nil_view_spec)
     {
-      view_spec = df_view_spec_from_gfx_view_kind(viewer_kind);
+      view_spec = df_view_spec_from_kind(viewer_kind);
     }
     String8 query = d_eval_string_from_file_path(scratch.arena, file_path);
     df_view_equip_spec(ws, view, view_spec, query, params_copy);
@@ -6619,7 +6620,7 @@ DF_VIEW_CMD_FUNCTION_DEF(pending_file)
   }
   
   //- rjf: if entity is ready, but we have no viewer for it, then just close this tab
-  if(file_is_ready && viewer_kind == DF_GfxViewKind_Null)
+  if(file_is_ready && viewer_kind == DF_ViewKind_Null)
   {
     d_cmd(D_CmdKind_CloseTab);
   }
@@ -6630,7 +6631,7 @@ DF_VIEW_CMD_FUNCTION_DEF(pending_file)
 DF_VIEW_UI_FUNCTION_DEF(pending_file)
 {
   view->loading_t = view->loading_t_target = 1.f;
-  df_gfx_request_frame();
+  df_request_frame();
 }
 
 ////////////////////////////////
@@ -8588,7 +8589,7 @@ DF_VIEW_UI_FUNCTION_DEF(geo3d)
        abs_f32(state->yaw   - yaw_target)   > 0.001f ||
        abs_f32(state->pitch - pitch_target) > 0.001f)
     {
-      df_gfx_request_frame();
+      df_request_frame();
     }
   }
   
@@ -9251,7 +9252,7 @@ DF_VIEW_UI_FUNCTION_DEF(settings)
       Vec3F32 hsv = v3f32(hsva.x, hsva.y, hsva.z);
       Vec3F32 rgb = rgb_from_hsv(hsv);
       Vec4F32 rgba = v4f32(rgb.x, rgb.y, rgb.z, sv->color_ctx_menu_color_hsva.w);
-      df_gfx_state->cfg_theme_target.colors[sv->color_ctx_menu_color] = rgba;
+      df_state->cfg_theme_target.colors[sv->color_ctx_menu_color] = rgba;
     }
   }
   
@@ -9296,7 +9297,7 @@ DF_VIEW_UI_FUNCTION_DEF(settings)
       S32 slider_s32_val = 0;
       F32 slider_pct = 0.f;
       UI_BoxFlags flags = UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawHotEffects|UI_BoxFlag_DrawActiveEffects;
-      DF_SettingVal *val_table = &df_gfx_state->cfg_setting_vals[D_CfgSrc_User][0];
+      DF_SettingVal *val_table = &df_state->cfg_setting_vals[D_CfgSrc_User][0];
       switch(item->kind)
       {
         case DF_SettingsItemKind_COUNT:{}break;
@@ -9442,7 +9443,7 @@ DF_VIEW_UI_FUNCTION_DEF(settings)
         if(sv->preset_apply_confirm == item->preset)
         {
           Vec4F32 *colors = df_g_theme_preset_colors_table[item->preset];
-          MemoryCopy(df_gfx_state->cfg_theme_target.colors, colors, sizeof(df_gfx_state->cfg_theme_target.colors));
+          MemoryCopy(df_state->cfg_theme_target.colors, colors, sizeof(df_state->cfg_theme_target.colors));
           sv->preset_apply_confirm = DF_ThemePreset_COUNT;
         }
         else

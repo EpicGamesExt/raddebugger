@@ -208,10 +208,98 @@ DF_BindingVersionRemapTable:
 }
 
 ////////////////////////////////
+//~ rjf: Icons
+
+@table(name, text)
+DF_IconTable:
+{
+  (Null                     "")
+  (FolderOpenOutline        "b")
+  (FolderClosedOutline      "c")
+  (FolderOpenFilled         "B")
+  (FolderClosedFilled       "C")
+  (FileOutline              "f")
+  (FileFilled               "F")
+  (Play                     "g")
+  (PlayStepForward          "h")
+  (Pause                    "r")
+  (Stop                     "s")
+  (Info                     "i")
+  (WarningSmall             "w")
+  (WarningBig               "W")
+  (Unlocked                 "k")
+  (Locked                   "K")
+  (LeftArrow                "L")
+  (RightArrow               "R")
+  (UpArrow                  "U")
+  (DownArrow                "D")
+  (Gear                     "G")
+  (Pencil                   "P")
+  (Trash                    "3")
+  (Pin                      "p")
+  (RadioHollow              "O")
+  (RadioFilled              "o")
+  (CheckHollow              "!")
+  (CheckFilled              "1")
+  (LeftCaret                "<")
+  (RightCaret               ">")
+  (UpCaret                  "^")
+  (DownCaret                "v")
+  (UpScroll                 "9")
+  (DownScroll               "0")
+  (LeftScroll               "7")
+  (RightScroll              "8")
+  (Add                      "+")
+  (Minus                    "-")
+  (Thread                   "'")
+  (Threads                  '\\"')
+  (Machine                  "M")
+  (CircleFilled             ".")
+  (X                        "x")
+  (Refresh                  "q")
+  (Undo                     "j")
+  (Redo                     "u")
+  (Save                     "m")
+  (Window                   "n")
+  (Target                   "l")
+  (Clipboard                "a")
+  (Scheduler                "z")
+  (Module                   "y")
+  (XSplit                   "X")
+  (YSplit                   "Y")
+  (ClosePanel               "S")
+  (StepInto                 "T")
+  (StepOver                 "Z")
+  (StepOut                  "d")
+  (Find                     "N")
+  (Palette                  "E")
+  (Thumbnails               "H")
+  (Glasses                  "e")
+  (Binoculars               "I")
+  (List                     "J")
+  (Grid                     "A")
+  (QuestionMark             "?")
+  (Person                   "4")
+  (Briefcase                "5")
+  (Dot                      "c")
+}
+
+@enum DF_IconKind:
+{
+  @expand(DF_IconTable a) `$(a.name)`,
+  COUNT,
+}
+
+@data(String8) df_g_icon_kind_text_table:
+{
+  @expand(DF_IconTable a) `str8_lit_comp("$(a.text)")`;
+}
+
+////////////////////////////////
 //~ rjf: Gfx Layer View Kinds
 
 @table(name               name_lower               display_string                 icon            parameterized_by_entity  project_specific can_serialize can_filter filter_is_code typing_automatically_filters inc_in_docs docs_desc)
-DF_GfxViewTable:
+DF_ViewTable:
 {
   //- rjf: basics
   { Null                   "null"                   ""                             Null            0 0 0 0 0 0      0 ""                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         }
@@ -264,29 +352,42 @@ DF_GfxViewTable:
   { Settings               "settings"               "Settings"                     Gear            0 0 1 1 0 1      1 "An interface to modify general settings for the debugger's appearance and behavior."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      }
 }
 
-@enum DF_GfxViewKind:
+@enum DF_ViewKind:
 {
-  @expand(DF_GfxViewTable a) `$(a.name)`,
+  @expand(DF_ViewTable a) `$(a.name)`,
   COUNT,
 }
 
 @gen
 {
-  @expand(DF_GfxViewTable a) `DF_VIEW_SETUP_FUNCTION_DEF($(a.name_lower));`;
-  @expand(DF_GfxViewTable a) `DF_VIEW_CMD_FUNCTION_DEF($(a.name_lower));`;
-  @expand(DF_GfxViewTable a) `DF_VIEW_UI_FUNCTION_DEF($(a.name_lower));`;
+  @expand(DF_ViewTable a) `DF_VIEW_SETUP_FUNCTION_DEF($(a.name_lower));`;
+  @expand(DF_ViewTable a) `DF_VIEW_CMD_FUNCTION_DEF($(a.name_lower));`;
+  @expand(DF_ViewTable a) `DF_VIEW_UI_FUNCTION_DEF($(a.name_lower));`;
 }
 
 @data(DF_ViewSpecInfo) df_g_gfx_view_kind_spec_info_table:
 {
-  @expand(DF_GfxViewTable a) ```{(0|$(a.parameterized_by_entity)*DF_ViewSpecFlag_ParameterizedByEntity|$(a.project_specific)*DF_ViewSpecFlag_ProjectSpecific|$(a.can_serialize)*DF_ViewSpecFlag_CanSerialize|$(a.can_filter)*DF_ViewSpecFlag_CanFilter|$(a.filter_is_code)*DF_ViewSpecFlag_FilterIsCode|$(a.typing_automatically_filters)*DF_ViewSpecFlag_TypingAutomaticallyFilters), str8_lit_comp("$(a.name_lower)"), str8_lit_comp("$(a.display_string)"), DF_IconKind_$(a.icon), DF_VIEW_SETUP_FUNCTION_NAME($(a.name_lower)), DF_VIEW_CMD_FUNCTION_NAME($(a.name_lower)), DF_VIEW_UI_FUNCTION_NAME($(a.name_lower))}```;
+  @expand(DF_ViewTable a) ```{(0|$(a.parameterized_by_entity)*DF_ViewSpecFlag_ParameterizedByEntity|$(a.project_specific)*DF_ViewSpecFlag_ProjectSpecific|$(a.can_serialize)*DF_ViewSpecFlag_CanSerialize|$(a.can_filter)*DF_ViewSpecFlag_CanFilter|$(a.filter_is_code)*DF_ViewSpecFlag_FilterIsCode|$(a.typing_automatically_filters)*DF_ViewSpecFlag_TypingAutomaticallyFilters), str8_lit_comp("$(a.name_lower)"), str8_lit_comp("$(a.display_string)"), DF_IconKind_$(a.icon), DF_VIEW_SETUP_FUNCTION_NAME($(a.name_lower)), DF_VIEW_CMD_FUNCTION_NAME($(a.name_lower)), DF_VIEW_UI_FUNCTION_NAME($(a.name_lower))}```;
+}
+
+////////////////////////////////
+//~ rjf: Built-In Debug Engine Kind -> Icon Kind Table
+
+@data(DF_IconKind) df_cmd_kind_icon_kind_table:
+{
+  @expand(D_CoreCmdTable a) `DF_IconKind_$(a.canonical_icon)`
+}
+
+@data(DF_IconKind) df_entity_kind_icon_kind_table:
+{
+  @expand(D_EntityKindTable a) `DF_IconKind_$(a.icon_kind)`,
 }
 
 ////////////////////////////////
 //~ rjf: Command Parameter Slot -> View
 
 @table(slot  view_spec  opt_cmd_spec)
-D_CmdParamSlot2ViewSpecMap:
+DF_CmdParamSlot2ViewSpecMap:
 {
   {Entity            "entity_lister"            ""                        }
   {EntityList        "entity_lister"            ""                        }
@@ -299,17 +400,17 @@ D_CmdParamSlot2ViewSpecMap:
 
 @data(D_CmdParamSlot) df_g_cmd_param_slot_2_view_spec_src_map:
 {
-  @expand(D_CmdParamSlot2ViewSpecMap a) `D_CmdParamSlot_$(a.slot)`
+  @expand(DF_CmdParamSlot2ViewSpecMap a) `D_CmdParamSlot_$(a.slot)`
 }
 
 @data(String8) df_g_cmd_param_slot_2_view_spec_dst_map:
 {
-  @expand(D_CmdParamSlot2ViewSpecMap a) `str8_lit_comp("$(a.view_spec)")`
+  @expand(DF_CmdParamSlot2ViewSpecMap a) `str8_lit_comp("$(a.view_spec)")`
 }
 
 @data(String8) df_g_cmd_param_slot_2_view_spec_cmd_map:
 {
-  @expand(D_CmdParamSlot2ViewSpecMap a) `str8_lit_comp("$(a.opt_cmd_spec)")`
+  @expand(DF_CmdParamSlot2ViewSpecMap a) `str8_lit_comp("$(a.opt_cmd_spec)")`
 }
 
 ////////////////////////////////
@@ -342,11 +443,11 @@ DF_ViewRuleTable:
 {
   ``;
   @expand(DF_ViewRuleTable a)
-    `$(a.vr == "x" -> "DF_GFX_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_DEF(" .. a.name_lower .. ");")`;
+    `$(a.vr == "x" -> "DF_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_DEF(" .. a.name_lower .. ");")`;
   @expand(DF_ViewRuleTable a)
-    `$(a.ls == "x" -> "DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(" .. a.name_lower .. ");")`;
+    `$(a.ls == "x" -> "DF_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(" .. a.name_lower .. ");")`;
   @expand(DF_ViewRuleTable a)
-    `$(a.ru == "x" -> "DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_DEF(" .. a.name_lower .. ");")`;
+    `$(a.ru == "x" -> "DF_VIEW_RULE_ROW_UI_FUNCTION_DEF(" .. a.name_lower .. ");")`;
   @expand(DF_ViewRuleTable a)
     `$(a.bu == "x" -> "DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(" .. a.name_lower .. ");")`;
 }
@@ -354,7 +455,7 @@ DF_ViewRuleTable:
 @data(DF_ViewRuleSpecInfo) @c_file df_g_gfx_view_rule_spec_info_table:
 {
   @expand(DF_ViewRuleTable a)
-    ```{ str8_lit_comp("$(a.string)"), (DF_ViewRuleSpecInfoFlag_VizRowProd*$(a.vr == "x"))|(DF_ViewRuleSpecInfoFlag_LineStringize*$(a.ls == "x"))|(DF_ViewRuleSpecInfoFlag_RowUI*$(a.ru == "x"))|(DF_ViewRuleSpecInfoFlag_ViewUI*$(a.vu == "x")), $(a.vr == "x" -> "DF_GFX_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_NAME("..a.name_lower..")") $(a.vr != "x" -> 0), $(a.ls == "x" -> "DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_NAME("..a.name_lower..")") $(a.ls != "x" -> 0), $(a.ru == "x" -> "DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_NAME("..a.name_lower..")") $(a.ru != "x" -> 0) }```;
+    ```{ str8_lit_comp("$(a.string)"), (DF_ViewRuleSpecInfoFlag_VizRowProd*$(a.vr == "x"))|(DF_ViewRuleSpecInfoFlag_LineStringize*$(a.ls == "x"))|(DF_ViewRuleSpecInfoFlag_RowUI*$(a.ru == "x"))|(DF_ViewRuleSpecInfoFlag_ViewUI*$(a.vu == "x")), $(a.vr == "x" -> "DF_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_NAME("..a.name_lower..")") $(a.vr != "x" -> 0), $(a.ls == "x" -> "DF_VIEW_RULE_LINE_STRINGIZE_FUNCTION_NAME("..a.name_lower..")") $(a.ls != "x" -> 0), $(a.ru == "x" -> "DF_VIEW_RULE_ROW_UI_FUNCTION_NAME("..a.name_lower..")") $(a.ru != "x" -> 0) }```;
 }
 
 ////////////////////////////////
@@ -690,7 +791,7 @@ raddbg_readme:
   @p "A list of debugger interfaces, which can occupy tabs, are below:";
   @unordered_list
   {
-    @expand(DF_GfxViewTable a) @p "$(a.inc_in_docs -> '`'..a.display_string..'` '..a.docs_desc)";
+    @expand(DF_ViewTable a) @p "$(a.inc_in_docs -> '`'..a.display_string..'` '..a.docs_desc)";
   }
   
   @subtitle "Commands";

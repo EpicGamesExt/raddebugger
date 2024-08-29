@@ -270,7 +270,7 @@ D_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_DEF(slice)
 //~ rjf: "list"
 
 D_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(list){}
-DF_GFX_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_DEF(list){}
+DF_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_DEF(list){}
 
 ////////////////////////////////
 //~ rjf: "bswap"
@@ -294,46 +294,46 @@ D_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_DEF(cast)
 ////////////////////////////////
 //~ rjf: "dec"
 
-DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(dec){}
+DF_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(dec){}
 
 ////////////////////////////////
 //~ rjf: "bin"
 
-DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(bin){}
+DF_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(bin){}
 
 ////////////////////////////////
 //~ rjf: "oct"
 
-DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(oct){}
+DF_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(oct){}
 
 ////////////////////////////////
 //~ rjf: "hex"
 
-DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(hex){}
+DF_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(hex){}
 
 ////////////////////////////////
 //~ rjf: "only"
 
 D_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(only){}
-DF_GFX_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_DEF(only){}
-DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(only){}
+DF_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_DEF(only){}
+DF_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(only){}
 
 ////////////////////////////////
 //~ rjf: "omit"
 
 D_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(omit){}
-DF_GFX_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_DEF(omit){}
-DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(omit){}
+DF_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_DEF(omit){}
+DF_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(omit){}
 
 ////////////////////////////////
 //~ rjf: "no_addr"
 
-DF_GFX_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(no_addr){}
+DF_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(no_addr){}
 
 ////////////////////////////////
 //~ rjf: "checkbox"
 
-DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_DEF(checkbox)
+DF_VIEW_RULE_ROW_UI_FUNCTION_DEF(checkbox)
 {
   Temp scratch = scratch_begin(0, 0);
   E_Eval eval = e_eval_from_string(scratch.arena, string);
@@ -359,7 +359,7 @@ D_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(color_rgba)
   d_eval_viz_block_end(out, vb);
 }
 
-DF_GFX_VIEW_RULE_ROW_UI_FUNCTION_DEF(color_rgba)
+DF_VIEW_RULE_ROW_UI_FUNCTION_DEF(color_rgba)
 {
   Temp scratch = scratch_begin(0, 0);
   E_Eval eval = e_eval_from_string(scratch.arena, string);
