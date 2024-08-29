@@ -184,14 +184,6 @@ struct DF_TransientViewSlot
   DF_TransientViewNode *last;
 };
 
-typedef struct DF_ViewParamDelta DF_ViewParamDelta;
-struct DF_ViewParamDelta
-{
-  DF_ViewParamDelta *next;
-  MD_Node *key_node;
-  String8 value;
-};
-
 typedef struct DF_View DF_View;
 struct DF_View
 {
