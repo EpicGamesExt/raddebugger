@@ -936,43 +936,6 @@ df_watch_view_init(DF_WatchViewState *ewv, DF_View *view, DF_WatchViewFillKind f
 }
 
 internal void
-df_watch_view_cmds(DF_View *view, DF_WatchViewState *ewv, D_CmdList *cmds)
-{
-  for(D_CmdNode *n = cmds->first; n != 0; n = n->next)
-  {
-    D_Cmd *cmd = &n->cmd;
-    D_CmdKind core_cmd_kind = d_cmd_kind_from_string(cmd->spec->info.string);
-    
-    // rjf: process
-    switch(core_cmd_kind)
-    {
-      default:break;
-      
-      //- rjf: watch expression toggling
-      case D_CmdKind_ToggleWatchExpression:
-      if(cmd->params.string.size != 0)
-      {
-        D_Entity *existing_watch = d_entity_from_name_and_kind(cmd->params.string, D_EntityKind_Watch);
-        if(d_entity_is_nil(existing_watch))
-        {
-          D_Entity *watch = &d_nil_entity;
-          D_StateDeltaHistoryBatch(d_state_delta_history())
-          {
-            watch = d_entity_alloc(d_entity_root(), D_EntityKind_Watch);
-          }
-          d_entity_equip_cfg_src(watch, D_CfgSrc_Project);
-          d_entity_equip_name(watch, cmd->params.string);
-        }
-        else
-        {
-          d_entity_mark_for_deletion(existing_watch);
-        }
-      }break;
-    }
-  }
-}
-
-internal void
 df_watch_view_build(DF_View *view, DF_WatchViewState *ewv, B32 modifiable, U32 default_radix, Rng2F32 rect)
 {
   ProfBeginFunction();
@@ -5502,11 +5465,7 @@ DF_VIEW_SETUP_FUNCTION_DEF(breakpoints)
   df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Member, 0.10f, .string = str8_lit("Enabled"), .view_rule = str8_lit("checkbox"));
   df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Member, 0.10f, .string = str8_lit("Hit Count"));
 }
-DF_VIEW_CMD_FUNCTION_DEF(breakpoints)
-{
-  DF_WatchViewState *ewv = df_view_user_state(view, DF_WatchViewState);
-  df_watch_view_cmds(view, ewv, cmds);
-}
+DF_VIEW_CMD_FUNCTION_DEF(breakpoints){}
 DF_VIEW_UI_FUNCTION_DEF(breakpoints)
 {
   ProfBeginFunction();
@@ -5525,11 +5484,7 @@ DF_VIEW_SETUP_FUNCTION_DEF(watch_pins)
   df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Member, 0.5f, .string = str8_lit("Label"), .dequote_string = 1, .is_non_code = 1);
   df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Member, 0.5f, .string = str8_lit("Location"), .dequote_string = 1, .is_non_code = 1);
 }
-DF_VIEW_CMD_FUNCTION_DEF(watch_pins)
-{
-  DF_WatchViewState *ewv = df_view_user_state(view, DF_WatchViewState);
-  df_watch_view_cmds(view, ewv, cmds);
-}
+DF_VIEW_CMD_FUNCTION_DEF(watch_pins){}
 DF_VIEW_UI_FUNCTION_DEF(watch_pins)
 {
   ProfBeginFunction();
@@ -6130,11 +6085,7 @@ DF_VIEW_SETUP_FUNCTION_DEF(watch)
   df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Type,      0.15f);
   df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_ViewRule,  0.30f);
 }
-DF_VIEW_CMD_FUNCTION_DEF(watch)
-{
-  DF_WatchViewState *ewv = df_view_user_state(view, DF_WatchViewState);
-  df_watch_view_cmds(view, ewv, cmds);
-}
+DF_VIEW_CMD_FUNCTION_DEF(watch){}
 DF_VIEW_UI_FUNCTION_DEF(watch)
 {
   ProfBeginFunction();

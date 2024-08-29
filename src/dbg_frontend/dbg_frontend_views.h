@@ -185,7 +185,6 @@ internal void df_watch_view_column_release(DF_WatchViewState *wv, DF_WatchViewCo
 
 //- rjf: watch view main hooks
 internal void df_watch_view_init(DF_WatchViewState *ewv, DF_View *view, DF_WatchViewFillKind fill_kind);
-internal void df_watch_view_cmds(DF_View *view, DF_WatchViewState *ewv, D_CmdList *cmds);
 internal void df_watch_view_build(DF_View *view, DF_WatchViewState *ewv, B32 modifiable, U32 default_radix, Rng2F32 rect);
 
 #endif // DBG_FRONTEND_VIEWS_H

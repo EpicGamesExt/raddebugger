@@ -8119,7 +8119,7 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
           d_cmd_list_push(arena, cmds, &params, d_cmd_spec_from_kind(D_CmdKind_AddBreakpoint));
         }break;
         
-        //- rjf: watches
+        //- rjf: watch pins
         case D_CmdKind_AddWatchPin:
         case D_CmdKind_ToggleWatchPin:
         {
@@ -8160,6 +8160,27 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
             {
               d_entity_equip_vaddr(loc, vaddr);
             }
+          }
+        }break;
+        
+        //- rjf: watches
+        case D_CmdKind_ToggleWatchExpression:
+        if(params.string.size != 0)
+        {
+          D_Entity *existing_watch = d_entity_from_name_and_kind(params.string, D_EntityKind_Watch);
+          if(d_entity_is_nil(existing_watch))
+          {
+            D_Entity *watch = &d_nil_entity;
+            D_StateDeltaHistoryBatch(d_state_delta_history())
+            {
+              watch = d_entity_alloc(d_entity_root(), D_EntityKind_Watch);
+            }
+            d_entity_equip_cfg_src(watch, D_CfgSrc_Project);
+            d_entity_equip_name(watch, cmd->params.string);
+          }
+          else
+          {
+            d_entity_mark_for_deletion(existing_watch);
           }
         }break;
         
