@@ -83,17 +83,17 @@ typedef struct DF_View DF_View;
 typedef struct DF_Panel DF_Panel;
 typedef struct DF_Window DF_Window;
 
-#define DF_VIEW_SETUP_FUNCTION_SIG(name) void name(DF_Window *ws, struct DF_View *view, MD_Node *params, String8 string)
+#define DF_VIEW_SETUP_FUNCTION_SIG(name) void name(DF_View *view, MD_Node *params, String8 string)
 #define DF_VIEW_SETUP_FUNCTION_NAME(name) df_view_setup_##name
 #define DF_VIEW_SETUP_FUNCTION_DEF(name) internal DF_VIEW_SETUP_FUNCTION_SIG(DF_VIEW_SETUP_FUNCTION_NAME(name))
 typedef DF_VIEW_SETUP_FUNCTION_SIG(DF_ViewSetupFunctionType);
 
-#define DF_VIEW_CMD_FUNCTION_SIG(name) void name(struct DF_Window *ws, struct DF_Panel *panel, struct DF_View *view, MD_Node *params, String8 string, struct D_CmdList *cmds)
+#define DF_VIEW_CMD_FUNCTION_SIG(name) void name(DF_View *view, MD_Node *params, String8 string, D_CmdList *cmds)
 #define DF_VIEW_CMD_FUNCTION_NAME(name) df_view_cmds_##name
 #define DF_VIEW_CMD_FUNCTION_DEF(name) internal DF_VIEW_CMD_FUNCTION_SIG(DF_VIEW_CMD_FUNCTION_NAME(name))
 typedef DF_VIEW_CMD_FUNCTION_SIG(DF_ViewCmdFunctionType);
 
-#define DF_VIEW_UI_FUNCTION_SIG(name) void name(struct DF_Window *ws, struct DF_Panel *panel, struct DF_View *view, MD_Node *params, String8 string, Rng2F32 rect)
+#define DF_VIEW_UI_FUNCTION_SIG(name) void name(DF_View *view, MD_Node *params, String8 string, Rng2F32 rect)
 #define DF_VIEW_UI_FUNCTION_NAME(name) df_view_ui_##name
 #define DF_VIEW_UI_FUNCTION_DEF(name) internal DF_VIEW_UI_FUNCTION_SIG(DF_VIEW_UI_FUNCTION_NAME(name))
 typedef DF_VIEW_UI_FUNCTION_SIG(DF_ViewUIFunctionType);
@@ -349,7 +349,7 @@ enum
 #define DF_VIEW_RULE_LINE_STRINGIZE_FUNCTION_NAME(name) df_view_rule_line_stringize__##name
 #define DF_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(name) internal DF_VIEW_RULE_LINE_STRINGIZE_FUNCTION_SIG(DF_VIEW_RULE_LINE_STRINGIZE_FUNCTION_NAME(name))
 
-#define DF_VIEW_RULE_ROW_UI_FUNCTION_SIG(name) void name(struct DF_Window *ws, D_ExpandKey key, MD_Node *params, String8 string)
+#define DF_VIEW_RULE_ROW_UI_FUNCTION_SIG(name) void name(D_ExpandKey key, MD_Node *params, String8 string)
 #define DF_VIEW_RULE_ROW_UI_FUNCTION_NAME(name) df_view_rule_row_ui__##name
 #define DF_VIEW_RULE_ROW_UI_FUNCTION_DEF(name) DF_VIEW_RULE_ROW_UI_FUNCTION_SIG(DF_VIEW_RULE_ROW_UI_FUNCTION_NAME(name))
 
@@ -594,7 +594,6 @@ struct DF_Window
   
   // rjf: code context menu state
   Arena *code_ctx_menu_arena;
-  UI_Key code_ctx_menu_key;
   String8 code_ctx_menu_file_path;
   U128 code_ctx_menu_text_key;
   TXT_LangKind code_ctx_menu_lang_kind;
@@ -603,7 +602,6 @@ struct DF_Window
   D_LineList code_ctx_menu_lines;
   
   // rjf: entity context menu state
-  UI_Key entity_ctx_menu_key;
   D_Handle entity_ctx_menu_entity;
   U8 entity_ctx_menu_input_buffer[1024];
   U64 entity_ctx_menu_input_size;
@@ -611,7 +609,6 @@ struct DF_Window
   TxtPt entity_ctx_menu_input_mark;
   
   // rjf: tab context menu state
-  UI_Key tab_ctx_menu_key;
   D_Handle tab_ctx_menu_panel;
   D_Handle tab_ctx_menu_view;
   U8 tab_ctx_menu_input_buffer[1024];
@@ -748,6 +745,11 @@ struct DF_State
   B32 bind_change_active;
   D_CmdSpec *bind_change_cmd_spec;
   DF_Binding bind_change_binding;
+  
+  // rjf: top-level context menu keys
+  UI_Key code_ctx_menu_key;
+  UI_Key entity_ctx_menu_key;
+  UI_Key tab_ctx_menu_key;
   
   // rjf: confirmation popup state
   UI_Key confirm_key;
@@ -892,9 +894,6 @@ internal D_Handle df_handle_from_panel(DF_Panel *panel);
 internal DF_Panel *df_panel_from_handle(D_Handle handle);
 internal UI_Key df_ui_key_from_panel(DF_Panel *panel);
 
-//- rjf: panel tree mutation notification
-internal void df_panel_notify_mutation(DF_Window *window, DF_Panel *panel);
-
 //- rjf: tree construction
 internal void df_panel_insert(DF_Panel *parent, DF_Panel *prev_child, DF_Panel *new_child);
 internal void df_panel_remove(DF_Panel *parent, DF_Panel *child);
@@ -967,7 +966,7 @@ internal DF_View *df_view_alloc(void);
 internal void df_view_release(DF_View *view);
 
 //- rjf: equipment
-internal void df_view_equip_spec(DF_Window *window, DF_View *view, DF_ViewSpec *spec, String8 query, MD_Node *params);
+internal void df_view_equip_spec(DF_View *view, DF_ViewSpec *spec, String8 query, MD_Node *params);
 internal void df_view_equip_query(DF_View *view, String8 query);
 internal void df_view_equip_loading_info(DF_View *view, B32 is_loading, U64 progress_v, U64 progress_target);
 
@@ -1020,7 +1019,7 @@ internal String8 df_value_string_from_eval(Arena *arena, D_EvalVizStringFlags fl
 ////////////////////////////////
 //~ rjf: Hover Eval
 
-internal void df_set_hover_eval(DF_Window *ws, Vec2F32 pos, String8 file_path, TxtPt pt, U64 vaddr, String8 string);
+internal void df_set_hover_eval(Vec2F32 pos, String8 file_path, TxtPt pt, U64 vaddr, String8 string);
 
 ////////////////////////////////
 //~ rjf: Auto-Complete Lister
@@ -1032,7 +1031,7 @@ internal void df_autocomp_lister_item_array_sort__in_place(DF_AutoCompListerItem
 
 internal String8 df_autocomp_query_word_from_input_string_off(String8 input, U64 cursor_off);
 internal DF_AutoCompListerParams df_view_rule_autocomp_lister_params_from_input_cursor(Arena *arena, String8 string, U64 cursor_off);
-internal void df_set_autocomp_lister_query(DF_Window *ws, UI_Key root_key, DF_AutoCompListerParams *params, String8 input, U64 cursor_off);
+internal void df_set_autocomp_lister_query(UI_Key root_key, DF_AutoCompListerParams *params, String8 input, U64 cursor_off);
 
 ////////////////////////////////
 //~ rjf: Search Strings
@@ -1057,15 +1056,15 @@ internal Vec4F32 df_rgba_from_theme_color(DF_ThemeColor color);
 internal DF_ThemeColor df_theme_color_from_txt_token_kind(TXT_TokenKind kind);
 
 //- rjf: code -> palette
-internal UI_Palette *df_palette_from_code(DF_Window *ws, DF_PaletteCode code);
+internal UI_Palette *df_palette_from_code(DF_PaletteCode code);
 
 //- rjf: fonts/sizes
 internal FNT_Tag df_font_from_slot(DF_FontSlot slot);
-internal F32 df_font_size_from_slot(DF_Window *ws, DF_FontSlot slot);
-internal FNT_RasterFlags df_raster_flags_from_slot(DF_Window *ws, DF_FontSlot slot);
+internal F32 df_font_size_from_slot(DF_FontSlot slot);
+internal FNT_RasterFlags df_raster_flags_from_slot(DF_FontSlot slot);
 
 //- rjf: settings
-internal DF_SettingVal df_setting_val_from_code(DF_Window *optional_window, DF_SettingCode code);
+internal DF_SettingVal df_setting_val_from_code(DF_SettingCode code);
 
 //- rjf: config serialization
 internal int df_qsort_compare__cfg_string_bindings(DF_StringBindingPair *a, DF_StringBindingPair *b);
@@ -1080,8 +1079,8 @@ internal String8 df_stop_explanation_string_icon_from_ctrl_event(Arena *arena, C
 ////////////////////////////////
 //~ rjf: UI Building Helpers
 
-#define DF_Palette(ws, code) UI_Palette(df_palette_from_code((ws), (code)))
-#define DF_Font(ws, slot) UI_Font(df_font_from_slot(slot)) UI_TextRasterFlags(df_raster_flags_from_slot((ws), (slot)))
+#define DF_Palette(code) UI_Palette(df_palette_from_code(code))
+#define DF_Font(slot) UI_Font(df_font_from_slot(slot)) UI_TextRasterFlags(df_raster_flags_from_slot((slot)))
 
 ////////////////////////////////
 //~ rjf: UI Widgets: Loading Overlay
@@ -1091,23 +1090,23 @@ internal void df_loading_overlay(Rng2F32 rect, F32 loading_t, U64 progress_v, U6
 ////////////////////////////////
 //~ rjf: UI Widgets: Fancy Buttons
 
-internal void df_cmd_binding_buttons(DF_Window *ws, D_CmdSpec *spec);
+internal void df_cmd_binding_buttons(D_CmdSpec *spec);
 internal UI_Signal df_menu_bar_button(String8 string);
-internal UI_Signal df_cmd_spec_button(DF_Window *ws, D_CmdSpec *spec);
-internal void df_cmd_list_menu_buttons(DF_Window *ws, U64 count, D_CmdKind *cmds, U32 *fastpath_codepoints);
-internal UI_Signal df_icon_button(DF_Window *ws, DF_IconKind kind, FuzzyMatchRangeList *matches, String8 string);
-internal UI_Signal df_icon_buttonf(DF_Window *ws, DF_IconKind kind, FuzzyMatchRangeList *matches, char *fmt, ...);
-internal void df_entity_tooltips(DF_Window *ws, D_Entity *entity);
-internal UI_Signal df_entity_desc_button(DF_Window *ws, D_Entity *entity, FuzzyMatchRangeList *name_matches, String8 fuzzy_query, B32 is_implicit);
-internal void df_src_loc_button(DF_Window *ws, String8 file_path, TxtPt point);
+internal UI_Signal df_cmd_spec_button(D_CmdSpec *spec);
+internal void df_cmd_list_menu_buttons(U64 count, D_CmdKind *cmds, U32 *fastpath_codepoints);
+internal UI_Signal df_icon_button(DF_IconKind kind, FuzzyMatchRangeList *matches, String8 string);
+internal UI_Signal df_icon_buttonf(DF_IconKind kind, FuzzyMatchRangeList *matches, char *fmt, ...);
+internal void df_entity_tooltips(D_Entity *entity);
+internal UI_Signal df_entity_desc_button(D_Entity *entity, FuzzyMatchRangeList *name_matches, String8 fuzzy_query, B32 is_implicit);
+internal void df_src_loc_button(String8 file_path, TxtPt point);
 
 ////////////////////////////////
 //~ rjf: UI Widgets: Text View
 
 internal UI_BOX_CUSTOM_DRAW(df_thread_box_draw_extensions);
 internal UI_BOX_CUSTOM_DRAW(df_bp_box_draw_extensions);
-internal DF_CodeSliceSignal df_code_slice(DF_Window *ws, DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *preferred_column, String8 string);
-internal DF_CodeSliceSignal df_code_slicef(DF_Window *ws, DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *preferred_column, char *fmt, ...);
+internal DF_CodeSliceSignal df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *preferred_column, String8 string);
+internal DF_CodeSliceSignal df_code_slicef(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *preferred_column, char *fmt, ...);
 
 internal B32 df_do_txt_controls(TXT_TextInfo *info, String8 data, U64 line_count_per_page, TxtPt *cursor, TxtPt *mark, S64 *preferred_column);
 
@@ -1123,8 +1122,8 @@ internal UI_Box *df_code_label(F32 alpha, B32 indirection_size_change, Vec4F32 b
 ////////////////////////////////
 //~ rjf: UI Widgets: Line Edit
 
-internal UI_Signal df_line_edit(DF_Window *ws, DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size, U64 *edit_string_size_out, B32 *expanded_out, String8 pre_edit_value, String8 string);
-internal UI_Signal df_line_editf(DF_Window *ws, DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size, U64 *edit_string_size_out, B32 *expanded_out, String8 pre_edit_value, char *fmt, ...);
+internal UI_Signal df_line_edit(DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size, U64 *edit_string_size_out, B32 *expanded_out, String8 pre_edit_value, String8 string);
+internal UI_Signal df_line_editf(DF_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size, U64 *edit_string_size_out, B32 *expanded_out, String8 pre_edit_value, char *fmt, ...);
 
 ////////////////////////////////
 //~ rjf: Continuous Frame Requests

@@ -333,7 +333,6 @@ struct D_Entity
   B32 disabled;
   U64 u64;
   Vec4F32 color_hsva;
-  F32 life_left;
   D_CfgSrc cfg_src;
   U64 timestamp;
   
@@ -1539,6 +1538,7 @@ internal D_InteractRegs *d_interact_regs(void);
 internal D_InteractRegs *d_base_interact_regs(void);
 internal D_InteractRegs *d_push_interact_regs(void);
 internal D_InteractRegs *d_pop_interact_regs(void);
+#define D_InteractRegsScope DeferLoop(d_push_interact_regs(), d_pop_interact_regs())
 
 //- rjf: undo/redo history
 internal D_StateDeltaHistory *d_state_delta_history(void);
@@ -1585,13 +1585,13 @@ internal E_String2NumMap *d_query_cached_member_map_from_dbgi_key_voff(DI_Key *d
 internal void d_push_cmd(D_CmdSpec *spec, D_CmdParams *params);
 internal void d_error(String8 string);
 internal void d_errorf(char *fmt, ...);
-#define d_cmd(kind, ...) d_push_cmd(d_cmd_spec_from_kind(kind),\
-&(D_CmdParams)\
-{\
+#define d_cmd(kind, ...) d_push_cmd(d_cmd_spec_from_kind(kind),           \
+&(D_CmdParams)                        \
+{                                     \
 .window = d_interact_regs()->window, \
-.panel  = d_interact_regs()->panel,   \
-.view   = d_interact_regs()->view,     \
-__VA_ARGS__\
+.panel  = d_interact_regs()->panel,  \
+.view   = d_interact_regs()->view,   \
+__VA_ARGS__                          \
 })
 
 ////////////////////////////////

@@ -476,7 +476,7 @@ DF_IconKind_Null,
 DF_IconKind_Null,
 };
 
-DF_IconKind df_entity_kind_icon_kind_table[28] =
+DF_IconKind df_entity_kind_icon_kind_table[31] =
 {
 DF_IconKind_Null,
 DF_IconKind_Null,
@@ -494,6 +494,9 @@ DF_IconKind_Target,
 DF_IconKind_Null,
 DF_IconKind_Null,
 DF_IconKind_Null,
+DF_IconKind_Null,
+DF_IconKind_Window,
+DF_IconKind_XSplit,
 DF_IconKind_Null,
 DF_IconKind_Briefcase,
 DF_IconKind_Null,

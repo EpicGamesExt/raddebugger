@@ -34,6 +34,9 @@ D_EntityKind_Executable,
 D_EntityKind_Arguments,
 D_EntityKind_WorkingDirectory,
 D_EntityKind_EntryPoint,
+D_EntityKind_Window,
+D_EntityKind_Panel,
+D_EntityKind_View,
 D_EntityKind_RecentProject,
 D_EntityKind_Source,
 D_EntityKind_Dest,
@@ -397,11 +400,11 @@ struct {B32 *value_ptr; String8 name;} DEV_toggle_table[] =
 };
 C_LINKAGE_BEGIN
 extern Rng1U64 d_cmd_param_slot_range_table[24];
-extern String8 d_entity_kind_display_string_table[28];
-extern String8 d_entity_kind_name_lower_table[28];
-extern String8 d_entity_kind_name_lower_plural_table[28];
-extern String8 d_entity_kind_name_label_table[28];
-extern D_EntityKindFlags d_entity_kind_flags_table[28];
+extern String8 d_entity_kind_display_string_table[31];
+extern String8 d_entity_kind_name_lower_table[31];
+extern String8 d_entity_kind_name_lower_plural_table[31];
+extern String8 d_entity_kind_name_label_table[31];
+extern D_EntityKindFlags d_entity_kind_flags_table[31];
 extern String8 d_cfg_src_string_table[4];
 extern D_CmdKind d_cfg_src_load_cmd_kind_table[4];
 extern D_CmdKind d_cfg_src_write_cmd_kind_table[4];

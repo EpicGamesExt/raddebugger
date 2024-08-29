@@ -338,7 +338,7 @@ DF_VIEW_RULE_ROW_UI_FUNCTION_DEF(checkbox)
   Temp scratch = scratch_begin(0, 0);
   E_Eval eval = e_eval_from_string(scratch.arena, string);
   E_Eval value_eval = e_value_eval_from_eval(eval);
-  if(ui_clicked(df_icon_buttonf(ws, value_eval.value.u64 == 0 ? DF_IconKind_CheckHollow : DF_IconKind_CheckFilled, 0, "###check")))
+  if(ui_clicked(df_icon_buttonf(value_eval.value.u64 == 0 ? DF_IconKind_CheckHollow : DF_IconKind_CheckFilled, 0, "###check")))
   {
     d_commit_eval_value_string(eval, value_eval.value.u64 == 0 ? str8_lit("1") : str8_lit("0"));
   }
@@ -368,7 +368,7 @@ DF_VIEW_RULE_ROW_UI_FUNCTION_DEF(color_rgba)
   
   //- rjf: build text box
   UI_Box *text_box = &ui_g_nil_box;
-  UI_WidthFill DF_Font(ws, DF_FontSlot_Code)
+  UI_WidthFill DF_Font(DF_FontSlot_Code)
   {
     text_box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
     DR_FancyStringList fancy_strings = {0};

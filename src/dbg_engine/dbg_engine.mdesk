@@ -59,6 +59,11 @@ D_EntityKindTable:
   {WorkingDirectory   working_directory     working_directories           0  0  0  0  0  0  0  0  0  1  0  0  0  0  0  0  1  1  0                      "Execution Path"    Null                   "Working Directory"          }
   {EntryPoint         entry_point           entry_points                  0  0  0  0  0  0  0  0  0  1  0  1  0  0  0  0  0  1  0                      "Symbol Name"       Null                   "Entry Point"                }
   
+  //- rjf: view containers (windows, panels, views)
+  {Window             window                windows                       1  0  0  0  0  0  1  1  1  1  1  0  0  0  0  0  0  1  1                      "Label"             Window                 "Window"                     }
+  {Panel              panel                 panels                        1  0  0  0  0  0  1  1  1  1  1  0  0  0  0  0  0  1  1                      "Label"             XSplit                 "Panel"                      }
+  {View               view                  views                         1  0  0  0  0  0  1  1  1  1  1  0  0  0  0  0  0  1  1                      "Label"             Null                   "View"                       }
+  
   //- rjf: recent projects
   {RecentProject      recent_project        recent_projects               0  0  0  0  0  0  0  1  1  0  0  0  0  0  0  0  1  0  1                      "Path"              Briefcase              "Recent Project"             }
   
