@@ -129,46 +129,6 @@ typedef enum D_RunKind
 D_RunKind;
 
 ////////////////////////////////
-//~ rjf: Control Flow Analysis Types
-
-typedef U32 D_CtrlFlowFlags;
-enum
-{
-  D_CtrlFlowFlag_StackPointerChangesVariably = (1<<0),
-};
-
-typedef struct D_CtrlFlowPoint D_CtrlFlowPoint;
-struct D_CtrlFlowPoint
-{
-  U64 vaddr;
-  U64 jump_dest_vaddr;
-  DASM_InstFlags inst_flags;
-};
-
-typedef struct D_CtrlFlowPointNode D_CtrlFlowPointNode;
-struct D_CtrlFlowPointNode
-{
-  D_CtrlFlowPointNode *next;
-  D_CtrlFlowPoint v;
-};
-
-typedef struct D_CtrlFlowPointList D_CtrlFlowPointList;
-struct D_CtrlFlowPointList
-{
-  D_CtrlFlowPointNode *first;
-  D_CtrlFlowPointNode *last;
-  U64 count;
-};
-
-typedef struct D_CtrlFlowInfo D_CtrlFlowInfo;
-struct D_CtrlFlowInfo
-{
-  D_CtrlFlowFlags flags;
-  D_CtrlFlowPointList exit_points;
-  U64 total_size;
-};
-
-////////////////////////////////
 //~ rjf: View Rule Hook Types
 
 typedef struct D_CfgTree D_CfgTree;
@@ -1197,11 +1157,6 @@ internal D_CfgVal *d_cfg_val_from_string(D_CfgTable *table, String8 string);
 //~ rjf: Debug Info Extraction Type Pure Functions
 
 internal D_LineList d_line_list_copy(Arena *arena, D_LineList *list);
-
-////////////////////////////////
-//~ rjf: Control Flow Analysis Pure Functions
-
-internal D_CtrlFlowInfo d_ctrl_flow_info_from_arch_vaddr_code(Arena *arena, DASM_InstFlags exit_points_mask, Architecture arch, U64 vaddr, String8 code);
 
 ////////////////////////////////
 //~ rjf: Command Type Pure Functions

@@ -135,6 +135,36 @@ dasm_inst_from_code(Arena *arena, Architecture arch, U64 vaddr, String8 code, DA
 }
 
 ////////////////////////////////
+//~ rjf: Control Flow Analysis
+
+internal DASM_CtrlFlowInfo
+dasm_ctrl_flow_info_from_arch_vaddr_code(Arena *arena, DASM_InstFlags exit_points_mask, Architecture arch, U64 vaddr, String8 code)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  DASM_CtrlFlowInfo info = {0};
+  for(U64 offset = 0; offset < code.size;)
+  {
+    DASM_Inst inst = dasm_inst_from_code(scratch.arena, arch, vaddr+offset, str8_skip(code, offset), DASM_Syntax_Intel);
+    U64 inst_vaddr = vaddr+offset;
+    offset += inst.size;
+    info.total_size += inst.size;
+    if(inst.flags & exit_points_mask)
+    {
+      DASM_CtrlFlowPoint point = {0};
+      point.inst_flags = inst.flags;
+      point.vaddr = inst_vaddr;
+      point.jump_dest_vaddr = inst.jump_dest_vaddr;
+      DASM_CtrlFlowPointNode *node = push_array(arena, DASM_CtrlFlowPointNode, 1);
+      node->v = point;
+      SLLQueuePush(info.exit_points.first, info.exit_points.last, node);
+      info.exit_points.count += 1;
+    }
+  }
+  scratch_end(scratch);
+  return info;
+}
+
+////////////////////////////////
 //~ rjf: Parameter Type Functions
 
 internal B32

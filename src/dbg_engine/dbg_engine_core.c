@@ -472,36 +472,6 @@ d_line_list_copy(Arena *arena, D_LineList *list)
 }
 
 ////////////////////////////////
-//~ rjf: Control Flow Analysis Functions
-
-internal D_CtrlFlowInfo
-d_ctrl_flow_info_from_arch_vaddr_code(Arena *arena, DASM_InstFlags exit_points_mask, Architecture arch, U64 vaddr, String8 code)
-{
-  Temp scratch = scratch_begin(&arena, 1);
-  D_CtrlFlowInfo info = {0};
-  for(U64 offset = 0; offset < code.size;)
-  {
-    DASM_Inst inst = dasm_inst_from_code(scratch.arena, arch, vaddr+offset, str8_skip(code, offset), DASM_Syntax_Intel);
-    U64 inst_vaddr = vaddr+offset;
-    offset += inst.size;
-    info.total_size += inst.size;
-    if(inst.flags & exit_points_mask)
-    {
-      D_CtrlFlowPoint point = {0};
-      point.inst_flags = inst.flags;
-      point.vaddr = inst_vaddr;
-      point.jump_dest_vaddr = inst.jump_dest_vaddr;
-      D_CtrlFlowPointNode *node = push_array(arena, D_CtrlFlowPointNode, 1);
-      node->v = point;
-      SLLQueuePush(info.exit_points.first, info.exit_points.last, node);
-      info.exit_points.count += 1;
-    }
-  }
-  scratch_end(scratch);
-  return info;
-}
-
-////////////////////////////////
 //~ rjf: Command Type Pure Functions
 
 //- rjf: specs
@@ -2396,22 +2366,21 @@ d_trap_net_from_thread__step_over_line(Arena *arena, D_Entity *thread)
   }
   
   // rjf: machine code => ctrl flow analysis
-  D_CtrlFlowInfo ctrl_flow_info = {0};
+  DASM_CtrlFlowInfo ctrl_flow_info = {0};
   if(good_line_info)
   {
-    ctrl_flow_info = d_ctrl_flow_info_from_arch_vaddr_code(scratch.arena,
-                                                           DASM_InstFlag_Call|
-                                                           DASM_InstFlag_Branch|
-                                                           DASM_InstFlag_UnconditionalJump|
-                                                           DASM_InstFlag_ChangesStackPointer|
-                                                           DASM_InstFlag_Return,
-                                                           arch,
-                                                           line_vaddr_rng.min,
-                                                           machine_code);
+    ctrl_flow_info = dasm_ctrl_flow_info_from_arch_vaddr_code(scratch.arena,
+                                                              DASM_InstFlag_Call|
+                                                              DASM_InstFlag_Branch|
+                                                              DASM_InstFlag_UnconditionalJump|
+                                                              DASM_InstFlag_ChangesStackPointer|
+                                                              DASM_InstFlag_Return,
+                                                              arch,
+                                                              line_vaddr_rng.min,
+                                                              machine_code);
     LogInfoNamedBlockF("ctrl_flow_info")
     {
-      log_infof("flags: %x\n", ctrl_flow_info.flags);
-      LogInfoNamedBlockF("exit_points") for(D_CtrlFlowPointNode *n = ctrl_flow_info.exit_points.first; n != 0; n = n->next)
+      LogInfoNamedBlockF("exit_points") for(DASM_CtrlFlowPointNode *n = ctrl_flow_info.exit_points.first; n != 0; n = n->next)
       {
         log_infof("{vaddr:0x%I64x, jump_dest_vaddr:0x%I64x, inst_flags:%x}\n", n->v.vaddr, n->v.jump_dest_vaddr, n->v.inst_flags);
       }
@@ -2419,9 +2388,9 @@ d_trap_net_from_thread__step_over_line(Arena *arena, D_Entity *thread)
   }
   
   // rjf: push traps for all exit points
-  if(good_line_info) for(D_CtrlFlowPointNode *n = ctrl_flow_info.exit_points.first; n != 0; n = n->next)
+  if(good_line_info) for(DASM_CtrlFlowPointNode *n = ctrl_flow_info.exit_points.first; n != 0; n = n->next)
   {
-    D_CtrlFlowPoint *point = &n->v;
+    DASM_CtrlFlowPoint *point = &n->v;
     CTRL_TrapFlags flags = 0;
     B32 add = 1;
     U64 trap_addr = point->vaddr;
@@ -2537,24 +2506,24 @@ d_trap_net_from_thread__step_into_line(Arena *arena, D_Entity *thread)
   }
   
   // rjf: machine code => ctrl flow analysis
-  D_CtrlFlowInfo ctrl_flow_info = {0};
+  DASM_CtrlFlowInfo ctrl_flow_info = {0};
   if(good_line_info)
   {
-    ctrl_flow_info = d_ctrl_flow_info_from_arch_vaddr_code(scratch.arena,
-                                                           DASM_InstFlag_Call|
-                                                           DASM_InstFlag_Branch|
-                                                           DASM_InstFlag_UnconditionalJump|
-                                                           DASM_InstFlag_ChangesStackPointer|
-                                                           DASM_InstFlag_Return,
-                                                           arch,
-                                                           line_vaddr_rng.min,
-                                                           machine_code);
+    ctrl_flow_info = dasm_ctrl_flow_info_from_arch_vaddr_code(scratch.arena,
+                                                              DASM_InstFlag_Call|
+                                                              DASM_InstFlag_Branch|
+                                                              DASM_InstFlag_UnconditionalJump|
+                                                              DASM_InstFlag_ChangesStackPointer|
+                                                              DASM_InstFlag_Return,
+                                                              arch,
+                                                              line_vaddr_rng.min,
+                                                              machine_code);
   }
   
   // rjf: push traps for all exit points
-  if(good_line_info) for(D_CtrlFlowPointNode *n = ctrl_flow_info.exit_points.first; n != 0; n = n->next)
+  if(good_line_info) for(DASM_CtrlFlowPointNode *n = ctrl_flow_info.exit_points.first; n != 0; n = n->next)
   {
-    D_CtrlFlowPoint *point = &n->v;
+    DASM_CtrlFlowPoint *point = &n->v;
     CTRL_TrapFlags flags = 0;
     B32 add = 1;
     U64 trap_addr = point->vaddr;

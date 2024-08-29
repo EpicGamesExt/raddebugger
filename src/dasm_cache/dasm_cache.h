@@ -41,6 +41,39 @@ struct DASM_Inst
 };
 
 ////////////////////////////////
+//~ rjf: Control Flow Analysis Types
+
+typedef struct DASM_CtrlFlowPoint DASM_CtrlFlowPoint;
+struct DASM_CtrlFlowPoint
+{
+  U64 vaddr;
+  U64 jump_dest_vaddr;
+  DASM_InstFlags inst_flags;
+};
+
+typedef struct DASM_CtrlFlowPointNode DASM_CtrlFlowPointNode;
+struct DASM_CtrlFlowPointNode
+{
+  DASM_CtrlFlowPointNode *next;
+  DASM_CtrlFlowPoint v;
+};
+
+typedef struct DASM_CtrlFlowPointList DASM_CtrlFlowPointList;
+struct DASM_CtrlFlowPointList
+{
+  DASM_CtrlFlowPointNode *first;
+  DASM_CtrlFlowPointNode *last;
+  U64 count;
+};
+
+typedef struct DASM_CtrlFlowInfo DASM_CtrlFlowInfo;
+struct DASM_CtrlFlowInfo
+{
+  DASM_CtrlFlowPointList exit_points;
+  U64 total_size;
+};
+
+////////////////////////////////
 //~ rjf: Disassembly Text Decoration Types
 
 typedef U32 DASM_StyleFlags;
@@ -248,6 +281,11 @@ global DASM_Shared *dasm_shared = 0;
 //~ rjf: Instruction Decoding/Disassembling Type Functions
 
 internal DASM_Inst dasm_inst_from_code(Arena *arena, Architecture arch, U64 vaddr, String8 code, DASM_Syntax syntax);
+
+////////////////////////////////
+//~ rjf: Control Flow Analysis
+
+internal DASM_CtrlFlowInfo dasm_ctrl_flow_info_from_arch_vaddr_code(Arena *arena, DASM_InstFlags exit_points_mask, Architecture arch, U64 vaddr, String8 code);
 
 ////////////////////////////////
 //~ rjf: Parameter Type Functions
