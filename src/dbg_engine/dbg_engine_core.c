@@ -6787,6 +6787,48 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
     scratch_end(scratch);
   }
   
+  //- rjf: eliminate entities that are marked for deletion
+  ProfScope("eliminate deleted entities")
+  {
+    for(D_Entity *entity = d_entity_root(), *next = 0; !d_entity_is_nil(entity); entity = next)
+    {
+      next = d_entity_rec_depth_first_pre(entity, &d_nil_entity).next;
+      if(entity->flags & D_EntityFlag_MarkedForDeletion)
+      {
+        B32 undoable = (d_entity_kind_flags_table[entity->kind] & D_EntityKindFlag_UserDefinedLifetime);
+        
+        // rjf: fixup next entity to iterate to
+        next = d_entity_rec_depth_first(entity, &d_nil_entity, OffsetOf(D_Entity, next), OffsetOf(D_Entity, next)).next;
+        
+        // rjf: eliminate root entity if we're freeing it
+        if(entity == d_state->entities_root)
+        {
+          d_state->entities_root = &d_nil_entity;
+        }
+        
+        // rjf: unhook & release this entity tree
+        d_entity_change_parent(entity, entity->parent, &d_nil_entity, &d_nil_entity);
+        d_entity_release(entity);
+      }
+    }
+  }
+  
+  //- rjf: garbage collect eliminated thread unwinds
+  for(U64 slot_idx = 0; slot_idx < d_state->unwind_cache.slots_count; slot_idx += 1)
+  {
+    D_UnwindCacheSlot *slot = &d_state->unwind_cache.slots[slot_idx];
+    for(D_UnwindCacheNode *n = slot->first, *next = 0; n != 0; n = next)
+    {
+      next = n->next;
+      if(d_entity_is_nil(d_entity_from_handle(n->thread)))
+      {
+        DLLRemove(slot->first, slot->last, n);
+        arena_release(n->arena);
+        SLLStackPush(d_state->unwind_cache.free_node, n);
+      }
+    }
+  }
+  
   //- rjf: sync with di parsers
   ProfScope("sync with di parsers")
   {
@@ -8605,14 +8647,6 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
   }
   e_select_interpret_ctx(interpret_ctx);
   
-  ProfEnd();
-}
-
-internal void
-d_end_frame(void)
-{
-  ProfBeginFunction();
-  
   //- rjf: compute state parameterization hash for ctrl runs, if ctrl is running -
   // if the hash doesn't match the one for the last run, we need to soft-halt and
   // re-send down the parameterization state
@@ -8635,47 +8669,13 @@ d_end_frame(void)
     }
   }
   
-  //- rjf: eliminate entities that are marked for deletion
-  ProfScope("eliminate deleted entities")
-  {
-    for(D_Entity *entity = d_entity_root(), *next = 0; !d_entity_is_nil(entity); entity = next)
-    {
-      next = d_entity_rec_depth_first_pre(entity, &d_nil_entity).next;
-      if(entity->flags & D_EntityFlag_MarkedForDeletion)
-      {
-        B32 undoable = (d_entity_kind_flags_table[entity->kind] & D_EntityKindFlag_UserDefinedLifetime);
-        
-        // rjf: fixup next entity to iterate to
-        next = d_entity_rec_depth_first(entity, &d_nil_entity, OffsetOf(D_Entity, next), OffsetOf(D_Entity, next)).next;
-        
-        // rjf: eliminate root entity if we're freeing it
-        if(entity == d_state->entities_root)
-        {
-          d_state->entities_root = &d_nil_entity;
-        }
-        
-        // rjf: unhook & release this entity tree
-        d_entity_change_parent(entity, entity->parent, &d_nil_entity, &d_nil_entity);
-        d_entity_release(entity);
-      }
-    }
-  }
-  
-  //- rjf: garbage collect eliminated thread unwinds
-  for(U64 slot_idx = 0; slot_idx < d_state->unwind_cache.slots_count; slot_idx += 1)
-  {
-    D_UnwindCacheSlot *slot = &d_state->unwind_cache.slots[slot_idx];
-    for(D_UnwindCacheNode *n = slot->first, *next = 0; n != 0; n = next)
-    {
-      next = n->next;
-      if(d_entity_is_nil(d_entity_from_handle(n->thread)))
-      {
-        DLLRemove(slot->first, slot->last, n);
-        arena_release(n->arena);
-        SLLStackPush(d_state->unwind_cache.free_node, n);
-      }
-    }
-  }
+  ProfEnd();
+}
+
+internal void
+d_end_frame(void)
+{
+  ProfBeginFunction();
   
   //- rjf: write config changes
   ProfScope("write config changes")
