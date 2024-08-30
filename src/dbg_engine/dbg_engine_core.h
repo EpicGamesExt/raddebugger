@@ -658,6 +658,31 @@ struct D_EvalVizWindowedRowList
 };
 
 ////////////////////////////////
+//~ rjf: Message Types
+
+typedef struct D_Msg D_Msg;
+struct D_Msg
+{
+  D_MsgKind kind;
+  D_Regs *regs;
+};
+
+typedef struct D_MsgNode D_MsgNode;
+struct D_MsgNode
+{
+  D_MsgNode *next;
+  D_Msg v;
+};
+
+typedef struct D_MsgList D_MsgList;
+struct D_MsgList
+{
+  D_MsgNode *first;
+  D_MsgNode *last;
+  U64 count;
+};
+
+////////////////////////////////
 //~ rjf: Command Specification Types
 
 typedef U32 D_CmdQueryFlags;
@@ -956,6 +981,10 @@ struct D_State
   // rjf: interaction registers
   D_RegsNode base_regs;
   D_RegsNode *top_regs;
+  
+  // rjf: messages
+  Arena *msgs_arena;
+  D_MsgList msgs;
   
   // rjf: top-level command batch
   Arena *root_cmd_arena;
@@ -1527,6 +1556,17 @@ internal void d_errorf(char *fmt, ...);
 .panel  = d_regs()->panel,  \
 .view   = d_regs()->view,   \
 __VA_ARGS__                 \
+})
+
+////////////////////////////////
+//~ rjf: Message Functions
+
+internal void d_msg_(D_MsgKind kind, D_Regs *regs);
+#define d_msg(kind, ...) d_msg_((kind),\
+&(D_Regs)\
+{\
+d_regs_lit_init_top\
+__VA_ARGS__\
 })
 
 ////////////////////////////////

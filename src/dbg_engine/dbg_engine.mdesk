@@ -144,6 +144,128 @@ D_RegTable:
   @expand(D_RegTable a) `{OffsetOf(D_Regs, $(a.name_lower)), OffsetOf(D_Regs, $(a.name_lower)) + sizeof($(a.c_type))}`
 }
 
+@gen
+{
+  `#define d_regs_lit_init_top \\`
+  @expand(D_RegTable a) `.$(a.name_lower) = d_regs()->$(a.name_lower),\\`
+    ``;
+}
+
+////////////////////////////////
+//~ rjf: Message Tables
+
+@table(name                        name_lower                                 show_in_ui  show_in_ipc_docs     q_slot  q_ent_kind  q_allow_files  q_allow_folders  q_keep_oi  q_select_oi  q_is_code  q_required          canonical_icon          desc)
+D_MsgKindTable:
+{
+  {Null                             null                                       0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  
+  //- rjf: low level target operations
+  {LaunchAndRun                    launch_and_run                              0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {LaunchAndInit                   launch_and_init                             0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {Kill                            kill                                        0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {KillAll                         kill_all                                    0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {Attach                          attach                                      0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {Detach                          detach                                      0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {Continue                        continue                                    0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {StepIntoInst                    step_into_inst                              0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {StepOverInst                    step_over_inst                              0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {StepIntoLine                    step_into_line                              0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {StepOverLine                    step_over_line                              0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {StepOut                         step_out                                    0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {Halt                            halt                                        0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {SoftHaltRefresh                 soft_halt_refresh                           0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {SetThreadIP                     set_thread_ip                               0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  
+  //- rjf: high level target operations
+  {RunToLine                       run_to_line                                 0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {RunToAddress                    run_to_address                              0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {Run                             run                                         0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {Restart                         restart                                     0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {StepInto                        step_into                                   0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {StepOver                        step_over                                   0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  
+  //- rjf: thread / frame selection
+  {SelectThread                    select_thread                               0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {SelectUnwind                    select_unwind                               0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {UpOneFrame                      up_one_frame                                0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {DownOneFrame                    down_one_frame                              0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  
+  //- rjf: thread freezing/thawing
+  {FreezeThread                    freeze_thread                               0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {ThawThread                      thaw_thread                                 0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {FreezeProcess                   freeze_process                              0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {ThawProcess                     thaw_process                                0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {FreezeMachine                   freeze_machine                              0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {ThawMachine                     thaw_machine                                0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {FreezeLocalMachine              freeze_local_machine                        0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {ThawLocalMachine                thaw_local_machine                          0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  
+  //- rjf: path overrides
+  {SetFileOverrideLinkSrc          set_file_override_link_src                  0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {SetFileOverrideLinkDst          set_file_override_link_dst                  0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {SetFileReplacementPath          set_file_replacement_path                   0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  
+  //- rjf: auto view rules
+  {SetAutoViewRuleType             set_auto_view_rule_type                     0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {SetAutoViewRuleViewRule         set_auto_view_rule_view_rule                0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  
+  //- rjf: general entity operations
+  {EnableEntity                    enable_entity                               0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {EnableBreakpoint                enable_breakpoint                           0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {EnableTarget                    enable_target                               0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {DisableEntity                   disable_entity                              0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {DisableBreakpoint               disable_breakpoint                          0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {DisableTarget                   disable_target                              0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {FreezeEntity                    freeze_entity                               0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {ThawEntity                      thaw_entity                                 0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {RemoveEntity                    remove_entity                               0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {RemoveBreakpoint                remove_breakpoint                           0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {RemoveTarget                    remove_target                               0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {NameEntity                      name_entity                                 0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {DuplicateEntity                 duplicate_entity                            0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {RelocateEntity                  relocate_entity                             0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  
+  //- rjf: breakpoints
+  {AddBreakpoint                   add_breakpoint                              0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {ToggleBreakpoint                toggle_breakpoint                           0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {AddAddressBreakpoint            add_address_breakpoint                      0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {AddFunctionBreakpoint           add_function_breakpoint                     0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  
+  //- rjf: watch pins
+  {AddWatchPin                     add_watch_pin                               0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {ToggleWatchPin                  toggle_watch_pin                            0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  
+  //- rjf: watch expressions
+  {ToggleWatchExpression           toggle_watch_expression                     0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  
+  //- rjf: at-cursor operations
+  {ToggleBreakpointAtCursor        toggle_breakpoint_at_cursor                 0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {ToggleWatchPinAtCursor          toggle_watch_pin_at_cursor                  0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {ToggleWatchExpressionAtCursor   toggle_watch_expression_at_cursor           0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {GoToNameAtCursor                go_to_name_at_cursor                        0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {RunToCursor                     run_to_cursor                               0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {SetNextStatement                set_next_statement                          0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  
+  //- rjf: targets
+  {AddTarget                       add_target                                  0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {SelectTarget                    select_target                               0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {RetryEndedProcess               retry_ended_process                         0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  
+  //- rjf: meta
+  {RegisterAsJITDebugger           register_as_jit_debugger                    0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {LogMarker                       log_marker                                  0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+}
+
+@enum D_MsgKind:
+{
+  @expand(D_MsgKindTable a) `$(a.name)`
+}
+
+@data(String8) d_msg_kind_name_lower_table:
+{
+  @expand(D_MsgKindTable a) `str8_lit_comp("$(a.name_lower)")`
+}
+
 ////////////////////////////////
 //~ rjf: Built-In Command Tables
 

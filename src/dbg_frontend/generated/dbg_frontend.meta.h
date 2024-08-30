@@ -6,6 +6,71 @@
 #ifndef DBG_FRONTEND_META_H
 #define DBG_FRONTEND_META_H
 
+typedef enum DF_MsgKind
+{
+DF_MsgKind_Null,
+DF_MsgKind_Exit,
+DF_MsgKind_RunCommand,
+DF_MsgKind_ToggleDevMenu,
+DF_MsgKind_ApplyUserData,
+DF_MsgKind_ApplyProjectData,
+DF_MsgKind_WriteUserData,
+DF_MsgKind_WriteProjectData,
+DF_MsgKind_Error,
+DF_MsgKind_OpenWindow,
+DF_MsgKind_CloseWindow,
+DF_MsgKind_ToggleFullscreen,
+DF_MsgKind_ConfirmAccept,
+DF_MsgKind_ConfirmCancel,
+DF_MsgKind_CompleteQuery,
+DF_MsgKind_CancelQuery,
+DF_MsgKind_FindTextForward,
+DF_MsgKind_FindTextBackward,
+DF_MsgKind_FindNext,
+DF_MsgKind_FindPrev,
+DF_MsgKind_IncUIFontScale,
+DF_MsgKind_DecUIFontScale,
+DF_MsgKind_IncCodeFontScale,
+DF_MsgKind_DecCodeFontScale,
+DF_MsgKind_NewPanelLeft,
+DF_MsgKind_NewPanelUp,
+DF_MsgKind_NewPanelRight,
+DF_MsgKind_NewPanelDown,
+DF_MsgKind_SplitPanel,
+DF_MsgKind_ClosePanel,
+DF_MsgKind_RotatePanelColumns,
+DF_MsgKind_NextPanel,
+DF_MsgKind_PrevPanel,
+DF_MsgKind_FocusPanel,
+DF_MsgKind_FocusPanelRight,
+DF_MsgKind_FocusPanelLeft,
+DF_MsgKind_FocusPanelUp,
+DF_MsgKind_FocusPanelDown,
+DF_MsgKind_GoBack,
+DF_MsgKind_GoForward,
+DF_MsgKind_NextTab,
+DF_MsgKind_PrevTab,
+DF_MsgKind_MoveTabRight,
+DF_MsgKind_MoveTabLeft,
+DF_MsgKind_MoveTab,
+DF_MsgKind_OpenTab,
+DF_MsgKind_CloseTab,
+DF_MsgKind_TabBarTop,
+DF_MsgKind_TabBarBottom,
+DF_MsgKind_Filter,
+DF_MsgKind_ClearFilter,
+DF_MsgKind_ApplyFilter,
+DF_MsgKind_ResetToDefaultPanels,
+DF_MsgKind_ResetToCompactPanels,
+DF_MsgKind_Open,
+DF_MsgKind_Switch,
+DF_MsgKind_SwitchToPartnerFile,
+DF_MsgKind_FindThread,
+DF_MsgKind_FindSelectedThread,
+DF_MsgKind_GoToName,
+DF_MsgKind_FindCodeLocation,
+} DF_MsgKind;
+
 typedef enum DF_IconKind
 {
 DF_IconKind_Null,
@@ -353,6 +418,7 @@ DF_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(no_addr);
 DF_VIEW_RULE_ROW_UI_FUNCTION_DEF(checkbox);
 DF_VIEW_RULE_ROW_UI_FUNCTION_DEF(color_rgba);
 C_LINKAGE_BEGIN
+extern String8 df_msg_kind_name_lower_table[61];
 extern DF_StringBindingPair df_g_default_binding_table[110];
 extern String8 df_g_binding_version_remap_old_name_table[7];
 extern String8 df_g_binding_version_remap_new_name_table[7];

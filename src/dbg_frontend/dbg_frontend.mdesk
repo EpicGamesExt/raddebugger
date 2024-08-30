@@ -2,6 +2,125 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
+//~ rjf: Message Tables
+
+@table(name                     name_lower                                    show_in_ui  show_in_ipc_docs     q_slot  q_ent_kind  q_allow_files  q_allow_folders  q_keep_oi  q_select_oi  q_is_code  q_required          canonical_icon          desc)
+DF_MsgKindTable:
+{
+  {Null                          null                                          0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  
+  //- rjf: meta
+  {Exit                          exit                                          0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {RunCommand                    run_command                                   0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {ToggleDevMenu                 toggle_dev_menu                               0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  
+  //- rjf: config reading/writing
+  {ApplyUserData                 apply_user_data                               0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {ApplyProjectData              apply_project_data                            0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {WriteUserData                 write_user_data                               0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {WriteProjectData              write_project_data                            0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  
+  //- rjf: notifications
+  {Error                         error                                         0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  
+  //- rjf: windows
+  {OpenWindow                    open_window                                   0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {CloseWindow                   close_window                                  0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {ToggleFullscreen              toggle_fullscreen                             0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  
+  //- rjf: confirmation
+  {ConfirmAccept                 confirm_accept                                0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {ConfirmCancel                 confirm_cancel                                0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  
+  //- rjf: queries
+  {CompleteQuery                 complete_query                                0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {CancelQuery                   cancel_query                                  0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  
+  //- rjf: searching
+  {FindTextForward               find_text_forward                             0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {FindTextBackward              find_text_backward                            0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {FindNext                      find_next                                     0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {FindPrev                      find_prev                                     0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  
+  //- rjf: font sizes
+  {IncUIFontScale                inc_ui_font_scale                             0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {DecUIFontScale                dec_ui_font_scale                             0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {IncCodeFontScale              inc_code_font_scale                           0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {DecCodeFontScale              dec_code_font_scale                           0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  
+  //- rjf: panel creation/removal
+  {NewPanelLeft                  new_panel_left                                0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {NewPanelUp                    new_panel_up                                  0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {NewPanelRight                 new_panel_right                               0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {NewPanelDown                  new_panel_down                                0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {SplitPanel                    split_panel                                   0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {ClosePanel                    close_panel                                   0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  
+  //- rjf: panel rearranging
+  {RotatePanelColumns            rotate_panel_columns                          0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  
+  //- rjf: panel focusing
+  {NextPanel                     next_panel                                    0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {PrevPanel                     prev_panel                                    0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {FocusPanel                    focus_panel                                   0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {FocusPanelRight               focus_panel_right                             0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {FocusPanelLeft                focus_panel_left                              0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {FocusPanelUp                  focus_panel_up                                0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {FocusPanelDown                focus_panel_down                              0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  
+  //- rjf: view history navigation
+  {GoBack                        go_back                                       0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {GoForward                     go_forward                                    0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  
+  //- rjf: tab selection
+  {NextTab                       next_tab                                      0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {PrevTab                       prev_tab                                      0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  
+  //- rjf: tab rearranging
+  {MoveTabRight                  move_tab_right                                0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {MoveTabLeft                   move_tab_left                                 0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {MoveTab                       move_tab                                      0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  
+  //- rjf: tab creation/removal
+  {OpenTab                       open_tab                                      0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {CloseTab                      close_tab                                     0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  
+  //- rjf: panel tab settings
+  {TabBarTop                     tab_bar_top                                   0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {TabBarBottom                  tab_bar_bottom                                0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  
+  //- rjf: tab filters
+  {Filter                        filter                                        0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {ClearFilter                   clear_filter                                  0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {ApplyFilter                   apply_filter                                  0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  
+  //- rjf: default panel layouts
+  {ResetToDefaultPanels          reset_to_default_panels                       0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {ResetToCompactPanels          reset_to_compact_panels                       0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  
+  //- rjf: filesystem fast paths
+  {Open                          open                                          0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {Switch                        switch                                        0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {SwitchToPartnerFile           switch_to_partner_file                        0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  
+  //- rjf: snapping to code locations
+  {FindThread                    find_thread                                   0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {FindSelectedThread            find_selected_thread                          0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {GoToName                      go_to_name                                    0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {FindCodeLocation              find_code_location                            0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+}
+
+@enum DF_MsgKind:
+{
+  @expand(DF_MsgKindTable a) `$(a.name)`
+}
+
+@data(String8) df_msg_kind_name_lower_table:
+{
+  @expand(DF_MsgKindTable a) `str8_lit_comp("$(a.name_lower)")`
+}
+
+////////////////////////////////
 //~ rjf: Embedded Data
 
 @embed_file df_g_icon_font_bytes:         "../data/icons.ttf"

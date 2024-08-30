@@ -6216,6 +6216,19 @@ d_errorf(char *fmt, ...)
 }
 
 ////////////////////////////////
+//~ rjf: Message Functions
+
+internal void
+d_msg_(D_MsgKind kind, D_Regs *regs)
+{
+  D_MsgNode *n = push_array(d_state->msgs_arena, D_MsgNode, 1);
+  SLLQueuePush(d_state->msgs.first, d_state->msgs.last, n);
+  d_state->msgs.count += 1;
+  n->v.kind = kind;
+  n->v.regs = d_regs_copy(d_state->msgs_arena, regs);
+}
+
+////////////////////////////////
 //~ rjf: Main Layer Top-Level Calls
 
 internal void

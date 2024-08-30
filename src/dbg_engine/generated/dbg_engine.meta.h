@@ -36,6 +36,81 @@ D_RegSlot_String,
 D_RegSlot_ParamsTree,
 } D_RegSlot;
 
+typedef enum D_MsgKind
+{
+D_MsgKind_Null,
+D_MsgKind_LaunchAndRun,
+D_MsgKind_LaunchAndInit,
+D_MsgKind_Kill,
+D_MsgKind_KillAll,
+D_MsgKind_Attach,
+D_MsgKind_Detach,
+D_MsgKind_Continue,
+D_MsgKind_StepIntoInst,
+D_MsgKind_StepOverInst,
+D_MsgKind_StepIntoLine,
+D_MsgKind_StepOverLine,
+D_MsgKind_StepOut,
+D_MsgKind_Halt,
+D_MsgKind_SoftHaltRefresh,
+D_MsgKind_SetThreadIP,
+D_MsgKind_RunToLine,
+D_MsgKind_RunToAddress,
+D_MsgKind_Run,
+D_MsgKind_Restart,
+D_MsgKind_StepInto,
+D_MsgKind_StepOver,
+D_MsgKind_SelectThread,
+D_MsgKind_SelectUnwind,
+D_MsgKind_UpOneFrame,
+D_MsgKind_DownOneFrame,
+D_MsgKind_FreezeThread,
+D_MsgKind_ThawThread,
+D_MsgKind_FreezeProcess,
+D_MsgKind_ThawProcess,
+D_MsgKind_FreezeMachine,
+D_MsgKind_ThawMachine,
+D_MsgKind_FreezeLocalMachine,
+D_MsgKind_ThawLocalMachine,
+D_MsgKind_SetFileOverrideLinkSrc,
+D_MsgKind_SetFileOverrideLinkDst,
+D_MsgKind_SetFileReplacementPath,
+D_MsgKind_SetAutoViewRuleType,
+D_MsgKind_SetAutoViewRuleViewRule,
+D_MsgKind_EnableEntity,
+D_MsgKind_EnableBreakpoint,
+D_MsgKind_EnableTarget,
+D_MsgKind_DisableEntity,
+D_MsgKind_DisableBreakpoint,
+D_MsgKind_DisableTarget,
+D_MsgKind_FreezeEntity,
+D_MsgKind_ThawEntity,
+D_MsgKind_RemoveEntity,
+D_MsgKind_RemoveBreakpoint,
+D_MsgKind_RemoveTarget,
+D_MsgKind_NameEntity,
+D_MsgKind_DuplicateEntity,
+D_MsgKind_RelocateEntity,
+D_MsgKind_AddBreakpoint,
+D_MsgKind_ToggleBreakpoint,
+D_MsgKind_AddAddressBreakpoint,
+D_MsgKind_AddFunctionBreakpoint,
+D_MsgKind_AddWatchPin,
+D_MsgKind_ToggleWatchPin,
+D_MsgKind_ToggleWatchExpression,
+D_MsgKind_ToggleBreakpointAtCursor,
+D_MsgKind_ToggleWatchPinAtCursor,
+D_MsgKind_ToggleWatchExpressionAtCursor,
+D_MsgKind_GoToNameAtCursor,
+D_MsgKind_RunToCursor,
+D_MsgKind_SetNextStatement,
+D_MsgKind_AddTarget,
+D_MsgKind_SelectTarget,
+D_MsgKind_RetryEndedProcess,
+D_MsgKind_RegisterAsJITDebugger,
+D_MsgKind_LogMarker,
+} D_MsgKind;
+
 typedef enum D_CfgSrc
 {
 D_CfgSrc_User,
@@ -421,6 +496,34 @@ U64 unwind_index;
 U64 inline_depth;
 };
 
+#define d_regs_lit_init_top \
+.module = d_regs()->module,\
+.process = d_regs()->process,\
+.thread = d_regs()->thread,\
+.window = d_regs()->window,\
+.panel = d_regs()->panel,\
+.view = d_regs()->view,\
+.prev_view = d_regs()->prev_view,\
+.dst_panel = d_regs()->dst_panel,\
+.entity = d_regs()->entity,\
+.entity_list = d_regs()->entity_list,\
+.unwind_count = d_regs()->unwind_count,\
+.inline_depth = d_regs()->inline_depth,\
+.file_path = d_regs()->file_path,\
+.cursor = d_regs()->cursor,\
+.mark = d_regs()->mark,\
+.text_key = d_regs()->text_key,\
+.lang_kind = d_regs()->lang_kind,\
+.lines = d_regs()->lines,\
+.dbgi_key = d_regs()->dbgi_key,\
+.vaddr_range = d_regs()->vaddr_range,\
+.voff_range = d_regs()->voff_range,\
+.force_confirm = d_regs()->force_confirm,\
+.prefer_disasm = d_regs()->prefer_disasm,\
+.dir2 = d_regs()->dir2,\
+.string = d_regs()->string,\
+.params_tree = d_regs()->params_tree,\
+
 D_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_DEF(array);
 D_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_DEF(slice);
 D_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_DEF(bswap);
@@ -461,6 +564,7 @@ struct {B32 *value_ptr; String8 name;} DEV_toggle_table[] =
 };
 C_LINKAGE_BEGIN
 extern Rng1U64 d_reg_slot_range_table[26];
+extern String8 d_msg_kind_name_lower_table[71];
 extern Rng1U64 d_cmd_param_slot_range_table[23];
 extern String8 d_entity_kind_display_string_table[31];
 extern String8 d_entity_kind_name_lower_table[31];
