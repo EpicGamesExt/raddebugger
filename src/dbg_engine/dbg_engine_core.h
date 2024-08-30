@@ -30,6 +30,41 @@ struct D_HandleList
 };
 
 ////////////////////////////////
+//~ rjf: Line Info Types
+
+typedef struct D_Line D_Line;
+struct D_Line
+{
+  String8 file_path;
+  TxtPt pt;
+  Rng1U64 voff_range;
+  DI_Key dbgi_key;
+};
+
+typedef struct D_LineNode D_LineNode;
+struct D_LineNode
+{
+  D_LineNode *next;
+  D_Line v;
+};
+
+typedef struct D_LineList D_LineList;
+struct D_LineList
+{
+  D_LineNode *first;
+  D_LineNode *last;
+  U64 count;
+};
+
+typedef struct D_LineListArray D_LineListArray;
+struct D_LineListArray
+{
+  D_LineList *v;
+  U64 count;
+  DI_KeyList dbgi_keys;
+};
+
+////////////////////////////////
 //~ rjf: Sparse Tree Expansion State Data Structure
 
 typedef struct D_ExpandKey D_ExpandKey;
@@ -401,64 +436,7 @@ struct D_Unwind
 };
 
 ////////////////////////////////
-//~ rjf: Line Info Types
-
-typedef struct D_Line D_Line;
-struct D_Line
-{
-  String8 file_path;
-  TxtPt pt;
-  Rng1U64 voff_range;
-  DI_Key dbgi_key;
-};
-
-typedef struct D_LineNode D_LineNode;
-struct D_LineNode
-{
-  D_LineNode *next;
-  D_Line v;
-};
-
-typedef struct D_LineList D_LineList;
-struct D_LineList
-{
-  D_LineNode *first;
-  D_LineNode *last;
-  U64 count;
-};
-
-typedef struct D_LineListArray D_LineListArray;
-struct D_LineListArray
-{
-  D_LineList *v;
-  U64 count;
-  DI_KeyList dbgi_keys;
-};
-
-////////////////////////////////
-//~ rjf: Interaction Context Register Types
-
-typedef struct D_Regs D_Regs;
-struct D_Regs
-{
-  D_Handle module;
-  D_Handle process;
-  D_Handle thread;
-  U64 unwind_count;
-  U64 inline_depth;
-  D_Handle window;
-  D_Handle panel;
-  D_Handle view;
-  String8 file_path;
-  TxtPt cursor;
-  TxtPt mark;
-  U128 text_key;
-  TXT_LangKind lang_kind;
-  Rng1U64 vaddr_range;
-  Rng1U64 voff_range;
-  D_LineList lines;
-  DI_Key dbgi_key;
-};
+//~ rjf: Context Register Types
 
 typedef struct D_RegsNode D_RegsNode;
 struct D_RegsNode
@@ -1110,7 +1088,13 @@ internal void d_handle_list_push_node(D_HandleList *list, D_HandleNode *node);
 internal void d_handle_list_push(Arena *arena, D_HandleList *list, D_Handle handle);
 internal void d_handle_list_remove(D_HandleList *list, D_HandleNode *node);
 internal D_HandleNode *d_handle_list_find(D_HandleList *list, D_Handle handle);
-internal D_HandleList d_push_handle_list_copy(Arena *arena, D_HandleList list);
+internal D_HandleList d_handle_list_copy(Arena *arena, D_HandleList list);
+
+////////////////////////////////
+//~ rjf: Registers Type Pure Functions
+
+internal void d_regs_copy_contents(Arena *arena, D_Regs *dst, D_Regs *src);
+internal D_Regs *d_regs_copy(Arena *arena, D_Regs *src);
 
 ////////////////////////////////
 //~ rjf: State History Data Structure

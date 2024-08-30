@@ -488,7 +488,7 @@ df_cmd_params_copy(Arena *arena, D_CmdParams *src)
 {
   D_CmdParams dst = {0};
   MemoryCopyStruct(&dst, src);
-  dst.entity_list = d_push_handle_list_copy(arena, src->entity_list);
+  dst.entity_list = d_handle_list_copy(arena, src->entity_list);
   if(dst.entity_list.count == 0 && !d_handle_match(src->entity, d_handle_zero()))
   {
     d_handle_list_push(arena, &dst.entity_list, dst.entity);

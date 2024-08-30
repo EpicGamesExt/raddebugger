@@ -6,6 +6,36 @@
 #ifndef DBG_ENGINE_META_H
 #define DBG_ENGINE_META_H
 
+typedef enum D_RegSlot
+{
+D_RegSlot_Module,
+D_RegSlot_Process,
+D_RegSlot_Thread,
+D_RegSlot_Window,
+D_RegSlot_Panel,
+D_RegSlot_View,
+D_RegSlot_PrevView,
+D_RegSlot_DstPanel,
+D_RegSlot_Entity,
+D_RegSlot_EntityList,
+D_RegSlot_UnwindCount,
+D_RegSlot_InlineDepth,
+D_RegSlot_FilePath,
+D_RegSlot_Cursor,
+D_RegSlot_Mark,
+D_RegSlot_TextKey,
+D_RegSlot_LangKind,
+D_RegSlot_Lines,
+D_RegSlot_DbgiKey,
+D_RegSlot_VaddrRange,
+D_RegSlot_VoffRange,
+D_RegSlot_ForceConfirm,
+D_RegSlot_PreferDisasm,
+D_RegSlot_Dir2,
+D_RegSlot_String,
+D_RegSlot_ParamsTree,
+} D_RegSlot;
+
 typedef enum D_CfgSrc
 {
 D_CfgSrc_User,
@@ -332,6 +362,37 @@ D_CmdParamSlot_InlineDepth,
 D_CmdParamSlot_COUNT,
 } D_CmdParamSlot;
 
+typedef struct D_Regs D_Regs;
+struct D_Regs
+{
+D_Handle module;
+D_Handle process;
+D_Handle thread;
+D_Handle window;
+D_Handle panel;
+D_Handle view;
+D_Handle prev_view;
+D_Handle dst_panel;
+D_Handle entity;
+D_HandleList entity_list;
+U64 unwind_count;
+U64 inline_depth;
+String8 file_path;
+TxtPt cursor;
+TxtPt mark;
+U128 text_key;
+TXT_LangKind lang_kind;
+D_LineList lines;
+DI_Key dbgi_key;
+Rng1U64 vaddr_range;
+Rng1U64 voff_range;
+B32 force_confirm;
+B32 prefer_disasm;
+Dir2 dir2;
+String8 string;
+MD_Node * params_tree;
+};
+
 typedef struct D_CmdParams D_CmdParams;
 struct D_CmdParams
 {
@@ -399,7 +460,8 @@ struct {B32 *value_ptr; String8 name;} DEV_toggle_table[] =
 {&DEV_updating_indicator, str8_lit_comp("updating_indicator")},
 };
 C_LINKAGE_BEGIN
-extern Rng1U64 d_cmd_param_slot_range_table[24];
+extern Rng1U64 d_reg_slot_range_table[26];
+extern Rng1U64 d_cmd_param_slot_range_table[23];
 extern String8 d_entity_kind_display_string_table[31];
 extern String8 d_entity_kind_name_lower_table[31];
 extern String8 d_entity_kind_name_lower_plural_table[31];

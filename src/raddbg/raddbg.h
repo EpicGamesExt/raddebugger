@@ -4,6 +4,8 @@
 ////////////////////////////////
 //~ rjf: Frontend/UI Pass Tasks
 //
+// [ ] empty user file causing failure to launch
+//
 // [ ] engine/frontend commands situation
 //  - currently, there is an interesting bifurcation of commands in the
 //    frontend; you can either push a command *at a root level*, or push a

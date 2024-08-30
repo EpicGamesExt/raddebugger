@@ -100,7 +100,7 @@ d_handle_list_find(D_HandleList *list, D_Handle handle)
 }
 
 internal D_HandleList
-d_push_handle_list_copy(Arena *arena, D_HandleList list)
+d_handle_list_copy(Arena *arena, D_HandleList list)
 {
   D_HandleList result = {0};
   for(D_HandleNode *n = list.first; n != 0; n = n->next)
@@ -108,6 +108,29 @@ d_push_handle_list_copy(Arena *arena, D_HandleList list)
     d_handle_list_push(arena, &result, n->handle);
   }
   return result;
+}
+
+////////////////////////////////
+//~ rjf: Registers Type Pure Functions
+
+internal void
+d_regs_copy_contents(Arena *arena, D_Regs *dst, D_Regs *src)
+{
+  MemoryCopyStruct(dst, src);
+  dst->entity_list = d_handle_list_copy(arena, src->entity_list);
+  dst->file_path   = push_str8_copy(arena, src->file_path);
+  dst->lines       = d_line_list_copy(arena, &src->lines);
+  dst->dbgi_key    = di_key_copy(arena, &src->dbgi_key);
+  dst->string      = push_str8_copy(arena, src->string);
+  dst->params_tree = md_tree_copy(arena, src->params_tree);
+}
+
+internal D_Regs *
+d_regs_copy(Arena *arena, D_Regs *src)
+{
+  D_Regs *dst = push_array(arena, D_Regs, 1);
+  d_regs_copy_contents(arena, dst, src);
+  return dst;
 }
 
 ////////////////////////////////
@@ -6351,9 +6374,7 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
   d_state->dt = dt;
   d_state->time_in_seconds += dt;
   d_state->top_regs = &d_state->base_regs;
-  d_state->top_regs->v.file_path = push_str8_copy(d_frame_arena(), d_state->top_regs->v.file_path);
-  d_state->top_regs->v.lines = d_line_list_copy(d_frame_arena(), &d_state->top_regs->v.lines);
-  d_state->top_regs->v.dbgi_key = di_key_copy(d_frame_arena(), &d_state->top_regs->v.dbgi_key);
+  d_regs_copy_contents(d_frame_arena(), &d_state->top_regs->v, &d_state->top_regs->v);
   
   //- rjf: sync with ctrl thread
   ProfScope("sync with ctrl thread")

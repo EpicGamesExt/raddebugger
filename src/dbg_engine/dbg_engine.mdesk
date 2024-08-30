@@ -89,6 +89,62 @@ D_EntityKindTable:
 }
 
 ////////////////////////////////
+//~ rjf: Registers Type Table
+
+@table(c_type  name_lower  name)
+D_RegTable:
+{
+  // rjf: entity slots
+  {D_Handle         module           Module        }
+  {D_Handle         process          Process       }
+  {D_Handle         thread           Thread        }
+  {D_Handle         window           Window        }
+  {D_Handle         panel            Panel         }
+  {D_Handle         view             View          }
+  {D_Handle         prev_view        PrevView      }
+  {D_Handle         dst_panel        DstPanel      }
+  {D_Handle         entity           Entity        }
+  {D_HandleList     entity_list      EntityList    }
+  
+  // rjf: frame selection
+  {U64              unwind_count     UnwindCount   }
+  {U64              inline_depth     InlineDepth   }
+  
+  // rjf: code / address location info
+  {String8          file_path        FilePath      }
+  {TxtPt            cursor           Cursor        }
+  {TxtPt            mark             Mark          }
+  {U128             text_key         TextKey       }
+  {TXT_LangKind     lang_kind        LangKind      }
+  {D_LineList       lines            Lines         }
+  {DI_Key           dbgi_key         DbgiKey       }
+  {Rng1U64          vaddr_range      VaddrRange    }
+  {Rng1U64          voff_range       VoffRange     }
+  
+  // rjf: general parameters
+  {B32              force_confirm    ForceConfirm  }
+  {B32              prefer_disasm    PreferDisasm  }
+  {Dir2             dir2             Dir2          }
+  {String8          string           String        }
+  {`MD_Node *`      params_tree      ParamsTree    }
+}
+
+@enum D_RegSlot:
+{
+  @expand(D_RegTable a) `$(a.name)`
+}
+
+@struct D_Regs:
+{
+  @expand(D_RegTable a) `$(a.c_type) $(a.name_lower)`
+}
+
+@data(Rng1U64) d_reg_slot_range_table:
+{
+  @expand(D_RegTable a) `{OffsetOf(D_Regs, $(a.name_lower)), OffsetOf(D_Regs, $(a.name_lower)) + sizeof($(a.c_type))}`
+}
+
+////////////////////////////////
 //~ rjf: Built-In Command Tables
 
 @table(name, name_lower, c_type)
@@ -613,7 +669,6 @@ DF_DevToggleTable:
 
 @data(Rng1U64) d_cmd_param_slot_range_table:
 {
-  `{0}`,
   @expand(D_CmdParamSlotTable a) `{OffsetOf(D_CmdParams, $(a.name_lower)), OffsetOf(D_CmdParams, $(a.name_lower)) + sizeof($(a.c_type))}`,
 }
 

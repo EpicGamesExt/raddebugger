@@ -4,9 +4,38 @@
 //- GENERATED CODE
 
 C_LINKAGE_BEGIN
-Rng1U64 d_cmd_param_slot_range_table[24] =
+Rng1U64 d_reg_slot_range_table[26] =
 {
-{0},
+{OffsetOf(D_Regs, module), OffsetOf(D_Regs, module) + sizeof(D_Handle)},
+{OffsetOf(D_Regs, process), OffsetOf(D_Regs, process) + sizeof(D_Handle)},
+{OffsetOf(D_Regs, thread), OffsetOf(D_Regs, thread) + sizeof(D_Handle)},
+{OffsetOf(D_Regs, window), OffsetOf(D_Regs, window) + sizeof(D_Handle)},
+{OffsetOf(D_Regs, panel), OffsetOf(D_Regs, panel) + sizeof(D_Handle)},
+{OffsetOf(D_Regs, view), OffsetOf(D_Regs, view) + sizeof(D_Handle)},
+{OffsetOf(D_Regs, prev_view), OffsetOf(D_Regs, prev_view) + sizeof(D_Handle)},
+{OffsetOf(D_Regs, dst_panel), OffsetOf(D_Regs, dst_panel) + sizeof(D_Handle)},
+{OffsetOf(D_Regs, entity), OffsetOf(D_Regs, entity) + sizeof(D_Handle)},
+{OffsetOf(D_Regs, entity_list), OffsetOf(D_Regs, entity_list) + sizeof(D_HandleList)},
+{OffsetOf(D_Regs, unwind_count), OffsetOf(D_Regs, unwind_count) + sizeof(U64)},
+{OffsetOf(D_Regs, inline_depth), OffsetOf(D_Regs, inline_depth) + sizeof(U64)},
+{OffsetOf(D_Regs, file_path), OffsetOf(D_Regs, file_path) + sizeof(String8)},
+{OffsetOf(D_Regs, cursor), OffsetOf(D_Regs, cursor) + sizeof(TxtPt)},
+{OffsetOf(D_Regs, mark), OffsetOf(D_Regs, mark) + sizeof(TxtPt)},
+{OffsetOf(D_Regs, text_key), OffsetOf(D_Regs, text_key) + sizeof(U128)},
+{OffsetOf(D_Regs, lang_kind), OffsetOf(D_Regs, lang_kind) + sizeof(TXT_LangKind)},
+{OffsetOf(D_Regs, lines), OffsetOf(D_Regs, lines) + sizeof(D_LineList)},
+{OffsetOf(D_Regs, dbgi_key), OffsetOf(D_Regs, dbgi_key) + sizeof(DI_Key)},
+{OffsetOf(D_Regs, vaddr_range), OffsetOf(D_Regs, vaddr_range) + sizeof(Rng1U64)},
+{OffsetOf(D_Regs, voff_range), OffsetOf(D_Regs, voff_range) + sizeof(Rng1U64)},
+{OffsetOf(D_Regs, force_confirm), OffsetOf(D_Regs, force_confirm) + sizeof(B32)},
+{OffsetOf(D_Regs, prefer_disasm), OffsetOf(D_Regs, prefer_disasm) + sizeof(B32)},
+{OffsetOf(D_Regs, dir2), OffsetOf(D_Regs, dir2) + sizeof(Dir2)},
+{OffsetOf(D_Regs, string), OffsetOf(D_Regs, string) + sizeof(String8)},
+{OffsetOf(D_Regs, params_tree), OffsetOf(D_Regs, params_tree) + sizeof(MD_Node *)},
+};
+
+Rng1U64 d_cmd_param_slot_range_table[23] =
+{
 {OffsetOf(D_CmdParams, window), OffsetOf(D_CmdParams, window) + sizeof(D_Handle)},
 {OffsetOf(D_CmdParams, panel), OffsetOf(D_CmdParams, panel) + sizeof(D_Handle)},
 {OffsetOf(D_CmdParams, dest_panel), OffsetOf(D_CmdParams, dest_panel) + sizeof(D_Handle)},
