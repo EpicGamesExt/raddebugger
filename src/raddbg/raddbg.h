@@ -4,22 +4,13 @@
 ////////////////////////////////
 //~ rjf: Frontend/UI Pass Tasks
 //
-// [x] fix HRESULTs
-// [x] fix escape char literals
-// [x] eval: indexing into string literals
-// [x] fix incorrectly consuming keyboard inputs, preventing fallback-to-filtering, when
-//     selecting null selection in watch views
 // [ ] transient view timeout releasing
 //
-// [x] fix selecting hover eval, then hover eval disappearing, causing
-//     busted focus, until a new hover eval is opened
 // [ ] save view column pcts; generalize to being a first-class thing in
 //     DF_View, e.g. by just having a string -> f32 store
 // [ ] decay arrays to pointers in pointer/value comparison
 // [ ] EVAL LOOKUP RULES -> currently going 0 -> rdis_count, but we need
 // to prioritize the primary rdi
-// [ ] EVAL SPACES - each rdi gets an rdi space, rdi space is passed to
-// memory reads & so on, used to resolve to value space; REPLACES "mode"
 //
 // [ ] file overrides -> always pick most specific one! found with conflicting
 //     overrides, e.g. C:/devel/ -> D:/devel/, but also C:/devel/foo ->
@@ -29,7 +20,6 @@
 // [ ] theme lister -> fonts & font sizes
 // [ ] "Browse..." buttons should adopt a more relevant starting search path,
 //     if possible
-// [ ] move breakpoints to being a global thing, not nested to particular files
 // [ ] visualize all breakpoints everywhere - source view should show up in
 //     disasm, disasm should show up in source view, function should show up in
 //     both, etc.
@@ -37,11 +27,6 @@
 //      them being visible, it is confusing when you run and you stop there,
 //      because you're like "wait why did it stop" and then you later remember
 //      that's because there was a function breakpoint there.
-//
-// [ ] n-row table selection, in watch window & other UIs, multi-selection
-//     ctrl+C
-//
-// [ ] target/breakpoint/watch-pin reordering
 //
 // [ ] font lister
 // [ ] per-panel font size overrides
@@ -60,8 +45,6 @@
 //     of active "concept keys", which can be used to e.g. build context menus
 //     automatically (could just be a per-box attachment; right-click any
 //     point, search up the tree and see the concept keys)
-// [ ] ui_next_event(...), built-in focus filtering, no need to manually check
-//     if(ui_is_focus_active())
 
 ////////////////////////////////
 //~ rjf: Hot, Medium Priority Tasks (Low-Hanging-Fruit Features, UI Jank, Cleanup)
@@ -128,9 +111,6 @@
 //      color to white (or the inverse of the background color, or whatever) so
 //      that the user can see what things on the screen use that theme color.
 //
-//  [ ] Theme window should include font scaling. I was able to find the
-//      command for increasing the font scale, but I imagine most people
-//      wouldn't think to look there.
 //  [ ] I had to go into the user file to change the font. That should probably
 //      be in the theme window?
 //
@@ -179,22 +159,11 @@
 // [ ] @eval_upgrade
 //  [ ] new eval system; support strings, many address spaces, many debug
 //      infos, wide/async transforms (e.g. diff(blob1, blob2))
-//  [ ] collapse frontend visualization systems - source view, disasm view,
-//      callstack, modules, scheduler, should *all* be flavors of watch view
 //
 // [ ] Fancy View Rules
 //  [ ] table column boundaries should be checked against *AFTER* table
 //      contents, not before
 //  [ ] `array:(x, y)` - multidimensional array
-//  [ ] `text[:lang]` - interpret memory as text, in lang `lang`
-//  [ ] `disasm:arch` - interpret memory as machine code for isa `arch`
-//  [ ] `memory` - view memory in usual memory hex-editor view
-//  NOTE(rjf): When the visualization system is solid, layers like dasm, txti,
-//  and so on can be dispensed with, as things like the source view, disasm
-//  view, or memory view will simply be specializations of the general purpose
-//  viz system.
-//  [ ] view rule hook for standalone visualization ui, granted its own
-//      tab
 //
 // [ ] search-in-all-files
 //
@@ -207,7 +176,6 @@
 //
 // [ ] globally disable/configure default view rule-like things (string
 //     viz for u8s in particular)
-// [ ] globally disable/configure bp/ip lines in source view
 //
 // [ ] @feature processor/data breakpoints
 // [ ] @feature automatically snap to search matches when searching source files
@@ -221,20 +189,9 @@
 // [ ] @bug view-snapping in scroll-lists, accounting for mapping between
 //     visual positions & logical positions (variably sized rows in watch,
 //     table headers, etc.)
-// [x] @cleanup collapse DF_CfgNodes into just being MD trees, find another way
-//     to encode config source - don't need it at every node
 // [ ] @cleanup straighten out index/number space & types & terminology for
 //     scroll lists
-// [ ] @cleanup simplification pass over eval visualization pipeline & types,
-//     including view rule hooks
-// [ ] @cleanup naming pass over eval visualization part of the frontend,
-//     "blocks" vs. "canvas" vs. "expansion" - etc.
 // [ ] @cleanup central worker thread pool - eliminate per-layer thread pools
-// [x] @cleanup in the frontend, we are starting to have to pass down "DF_Window"
-//     everywhere, because of per-window parameters (e.g. font rendering settings).
-//     this is really better solved by implicit thread-local parameters, similar to
-//     interaction registers, so that one window can "pick" all of the implicit
-//     parameters, and then 99% of the UI code does not have to care.
 // [ ] @cleanup eliminate explicit font parameters in the various ui paths (e.g.
 //     code slice params)
 
@@ -434,6 +391,50 @@
 //
 // [x] PDB files distributed with the build are not found by DbgHelp!!!
 // [x] Jai compiler debugging crash
+//
+//- 2024/8/29
+//
+// [x] fix HRESULTs
+// [x] fix escape char literals
+// [x] eval: indexing into string literals
+// [x] fix incorrectly consuming keyboard inputs, preventing fallback-to-filtering, when
+//     selecting null selection in watch views
+// [x] ui_next_event(...), built-in focus filtering, no need to manually check
+//     if(ui_is_focus_active())
+//  [x] Theme window should include font scaling. I was able to find the
+//      command for increasing the font scale, but I imagine most people
+//      wouldn't think to look there.
+// [x] n-row table selection, in watch window & other UIs, multi-selection
+//     ctrl+C
+// [x] target/breakpoint/watch-pin reordering
+// [x] move breakpoints to being a global thing, not nested to particular files
+// [x] EVAL SPACES - each rdi gets an rdi space, rdi space is passed to
+// memory reads & so on, used to resolve to value space; REPLACES "mode"
+// [x] fix selecting hover eval, then hover eval disappearing, causing
+//     busted focus, until a new hover eval is opened
+//  [x] `text[:lang]` - interpret memory as text, in lang `lang`
+//  [x] `disasm:arch` - interpret memory as machine code for isa `arch`
+//  [x] `memory` - view memory in usual memory hex-editor view
+//  NOTE(rjf): When the visualization system is solid, layers like dasm, txti,
+//  and so on can be dispensed with, as things like the source view, disasm
+//  view, or memory view will simply be specializations of the general purpose
+//  viz system.
+//  [x] view rule hook for standalone visualization ui, granted its own
+//      tab
+//  [x] collapse frontend visualization systems - source view, disasm view,
+//      callstack, modules, scheduler, should *all* be flavors of watch view
+// [x] globally disable/configure bp/ip lines in source view
+// [x] @cleanup naming pass over eval visualization part of the frontend,
+//     "blocks" vs. "canvas" vs. "expansion" - etc.
+// [x] @cleanup collapse DF_CfgNodes into just being MD trees, find another way
+//     to encode config source - don't need it at every node
+// [x] @cleanup in the frontend, we are starting to have to pass down "DF_Window"
+//     everywhere, because of per-window parameters (e.g. font rendering settings).
+//     this is really better solved by implicit thread-local parameters, similar to
+//     interaction registers, so that one window can "pick" all of the implicit
+//     parameters, and then 99% of the UI code does not have to care.
+// [x] @cleanup simplification pass over eval visualization pipeline & types,
+//     including view rule hooks
 
 #ifndef RADDBG_H
 #define RADDBG_H
