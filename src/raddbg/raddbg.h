@@ -4,6 +4,47 @@
 ////////////////////////////////
 //~ rjf: Frontend/UI Pass Tasks
 //
+// [ ] engine/frontend commands situation
+//  - currently, there is an interesting bifurcation of commands in the
+//    frontend; you can either push a command *at a root level*, or push a
+//    command to a locally-accessible list if you want that command to run
+//    on the same frame (root level commands are deferred by a frame, since
+//    the engine must see them first).
+//  - things would be simpler if there was only a single "push command"
+//    mechanism, and codepaths only ever saw these commands at most once.
+//    this would require an alternate strategy of the initial "gather" of
+//    commands, and instead it would just be a global queue, or something...
+//    it is a little weird since commands are not just consumed in order...
+//  - this will clean up the various different ways that codepaths
+//    parameterize commands.
+// [ ] frontend entities vs. engine entities
+//  - currently, the engine has entities like "watch", and the frontend
+//    has entities like "windows", "panels", and "views".
+//  - because "watch" entities ideally have a hierarchical relationship
+//    with windows, panels, and views (enabling things like drag/drop
+//    from watch window -> tab, or tab -> watch window, trivially), it
+//    would be much better if all entities could collapse into engine
+//    entities.
+//  - now, the frontend requires various specialized resources for things
+//    like windows, so what I am thinking is that the engine just controls
+//    all of the stateful windows/panel/view/watch mechanisms, and then
+//    the frontend pure-functionally queries stuff like os/r handles
+//    on-demand, and then prunes them, immediate-mode cache style.
+// [ ] command params -> d_regs
+//  - currently there are two almost-identical concepts relating to commands:
+//    the parameters struct, and D_Regs. D_Regs is a registers struct which
+//    is used to manage a stack of contextual information in various debugger
+//    codepaths. it is used so that codepaths can register information they
+//    know about, without passing it down to everyone explicitly - but those
+//    later codepaths can still pass that information along. e.g. a window
+//    calls into a watch window, watch window calls into visualizer, visualizer
+//    pushes command, which needs to pass which window it occurred on along.
+//  - i think D_Regs needs to expand a bit in order to encompass all of the
+//    things that the command parameters were being used for, but at that point
+//    commands can just be a spec * regs, and then the push-command API can
+//    just have ways of overriding regs values explicitly, when the codepath
+//    needs to be opinionated about which things are affected by which commands
+//
 // [ ] transient view timeout releasing
 //
 // [ ] save view column pcts; generalize to being a first-class thing in
