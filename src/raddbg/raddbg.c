@@ -7,9 +7,9 @@
 internal void
 update_and_render(OS_Handle repaint_window_handle, void *user_data)
 {
-  ProfTick(0);
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
+  DI_Scope *di_scope = di_scope_open();
   
   //////////////////////////////
   //- rjf: begin logging
@@ -27,8 +27,9 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
   log_scope_begin();
   
   //////////////////////////////
-  //- rjf: tick cache layers
+  //- rjf: mark user-facing tick
   //
+  ProfTick(0);
   txt_user_clock_tick();
   dasm_user_clock_tick();
   geo_user_clock_tick();
@@ -143,7 +144,6 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
   //////////////////////////////
   //- rjf: consume events
   //
-  B32 queue_drag_drop = 0;
   {
     for(OS_Event *event = events.first, *next = 0;
         event != 0;
@@ -153,14 +153,6 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
       DF_Window *window = df_window_from_os_handle(event->window);
       D_CmdParams params = window ? df_cmd_params_from_window(window) : df_cmd_params_from_gfx();
       B32 take = 0;
-      B32 skip = 0;
-      
-      //- rjf: try drag-drop
-      if(df_drag_is_active() && event->kind == OS_EventKind_Release && event->key == OS_Key_LeftMouseButton)
-      {
-        skip = 1;
-        queue_drag_drop = 1;
-      }
       
       //- rjf: try window close
       if(!take && event->kind == OS_EventKind_WindowClose && window != 0)
@@ -259,7 +251,7 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
       }
       
       //- rjf: take
-      if(take && !skip)
+      if(take)
       {
         os_eat_event(&events, event);
       }
@@ -272,98 +264,10 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
   D_CmdList cmds = d_gather_root_cmds(scratch.arena);
   
   //////////////////////////////
-  //- rjf: begin frame
+  //- rjf: tick debug engine; do frontend frame
   //
-  {
-    d_begin_frame(scratch.arena, &cmds, dt);
-    df_begin_frame(scratch.arena, &cmds);
-  }
-  
-  //////////////////////////////
-  //- rjf: queue drop for drag/drop
-  //
-  if(queue_drag_drop)
-  {
-    df_queue_drag_drop();
-  }
-  
-  //////////////////////////////
-  //- rjf: auto-focus moused-over windows while dragging
-  //
-  if(df_drag_is_active())
-  {
-    B32 over_focused_window = 0;
-    {
-      for(DF_Window *window = df_state->first_window; window != 0; window = window->next)
-      {
-        Vec2F32 mouse = os_mouse_from_window(window->os);
-        Rng2F32 rect = os_client_rect_from_window(window->os);
-        if(os_window_is_focused(window->os) && contains_2f32(rect, mouse))
-        {
-          over_focused_window = 1;
-          break;
-        }
-      }
-    }
-    if(!over_focused_window)
-    {
-      for(DF_Window *window = df_state->first_window; window != 0; window = window->next)
-      {
-        Vec2F32 mouse = os_mouse_from_window(window->os);
-        Rng2F32 rect = os_client_rect_from_window(window->os);
-        if(!os_window_is_focused(window->os) && contains_2f32(rect, mouse))
-        {
-          os_window_focus(window->os);
-          break;
-        }
-      }
-    }
-  }
-  
-  //////////////////////////////
-  //- rjf: update & render
-  //
-  {
-    dr_begin_frame();
-    for(DF_Window *w = df_state->first_window; w != 0; w = w->next)
-    {
-      B32 window_is_focused = os_window_is_focused(w->os);
-      if(window_is_focused)
-      {
-        last_focused_window = df_handle_from_window(w);
-      }
-      d_push_regs();
-      d_regs()->window = df_handle_from_window(w);
-      df_window_update_and_render(scratch.arena, w, &cmds);
-      D_Regs *window_regs = d_pop_regs();
-      if(df_window_from_handle(last_focused_window) == w)
-      {
-        MemoryCopyStruct(d_regs(), window_regs);
-      }
-    }
-  }
-  
-  //////////////////////////////
-  //- rjf: end frontend frame, send signals, etc.
-  //
-  {
-    df_end_frame();
-    d_end_frame();
-  }
-  
-  //////////////////////////////
-  //- rjf: submit rendering to all windows
-  //
-  {
-    r_begin_frame();
-    for(DF_Window *w = df_state->first_window; w != 0; w = w->next)
-    {
-      r_window_begin_frame(w->os, w->r);
-      dr_submit_bucket(w->os, w->r, w->draw_bucket);
-      r_window_end_frame(w->os, w->r);
-    }
-    r_end_frame();
-  }
+  d_tick(scratch.arena, di_scope, &cmds, dt);
+  df_frame(scratch.arena, &cmds);
   
   //////////////////////////////
   //- rjf: show windows after first frame
@@ -405,6 +309,7 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
     }
   }
   
+  di_scope_close(di_scope);
   scratch_end(scratch);
   ProfEnd();
 }

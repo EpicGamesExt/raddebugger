@@ -6364,12 +6364,11 @@ d_gather_root_cmds(Arena *arena)
 }
 
 internal void
-d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
+d_tick(Arena *arena, DI_Scope *di_scope, D_CmdList *cmds, F32 dt)
 {
   ProfBeginFunction();
   d_state->frame_index += 1;
   arena_clear(d_frame_arena());
-  d_state->frame_di_scope = di_scope_open();
   d_state->frame_eval_memread_endt_us = os_now_microseconds() + 5000;
   d_state->dt = dt;
   d_state->time_in_seconds += dt;
@@ -8486,7 +8485,7 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
       D_Entity *m = n->entity;
       DI_Key dbgi_key = d_dbgi_key_from_module(m);
       eval_modules[eval_module_idx].arch        = d_arch_from_entity(m);
-      eval_modules[eval_module_idx].rdi         = di_rdi_from_key(d_state->frame_di_scope, &dbgi_key, 0);
+      eval_modules[eval_module_idx].rdi         = di_rdi_from_key(di_scope, &dbgi_key, 0);
       eval_modules[eval_module_idx].vaddr_range = m->vaddr_rng;
       eval_modules[eval_module_idx].space       = d_eval_space_from_entity(d_entity_ancestor_from_kind(m, D_EntityKind_Process));
       if(module == m)
@@ -8505,7 +8504,7 @@ d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt)
     for(D_EntityNode *n = all_modules.first; n != 0; n = n->next, idx += 1)
     {
       DI_Key dbgi_key = d_dbgi_key_from_module(n->entity);
-      rdis[idx] = di_rdi_from_key(d_state->frame_di_scope, &dbgi_key, 0);
+      rdis[idx] = di_rdi_from_key(di_scope, &dbgi_key, 0);
       rdis_vaddr_ranges[idx] = n->entity->vaddr_rng;
       if(n->entity == module)
       {
@@ -8692,9 +8691,6 @@ d_end_frame(void)
       MemoryZeroStruct(&d_state->cfg_write_data[src]);
     }
   }
-  
-  //- rjf: end scopes
-  di_scope_close(d_state->frame_di_scope);
   
   ProfEnd();
 }

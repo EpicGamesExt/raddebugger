@@ -10599,3 +10599,49 @@ df_end_frame(void)
   
   ProfEnd();
 }
+
+internal void
+df_frame(Arena *arena, D_CmdList *cmds)
+{
+  df_begin_frame(arena, cmds);
+  {
+    B32 queue_drag_drop = 0;
+    if(queue_drag_drop)
+    {
+      df_queue_drag_drop();
+    }
+    dr_begin_frame();
+    for(DF_Window *w = df_state->first_window; w != 0; w = w->next)
+    {
+      B32 window_is_focused = os_window_is_focused(w->os);
+      if(window_is_focused)
+      {
+        last_focused_window = df_handle_from_window(w);
+      }
+      d_push_regs();
+      d_regs()->window = df_handle_from_window(w);
+      df_window_update_and_render(arena, w, cmds);
+      D_Regs *window_regs = d_pop_regs();
+      if(df_window_from_handle(last_focused_window) == w)
+      {
+        MemoryCopyStruct(d_regs(), window_regs);
+      }
+    }
+  }
+  df_end_frame();
+  d_end_frame();
+  
+  //////////////////////////////
+  //- rjf: submit rendering to all windows
+  //
+  {
+    r_begin_frame();
+    for(DF_Window *w = df_state->first_window; w != 0; w = w->next)
+    {
+      r_window_begin_frame(w->os, w->r);
+      dr_submit_bucket(w->os, w->r, w->draw_bucket);
+      r_window_end_frame(w->os, w->r);
+    }
+    r_end_frame();
+  }
+}

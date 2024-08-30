@@ -952,7 +952,6 @@ struct D_State
   
   // rjf: frame info
   Arena *frame_arenas[2];
-  DI_Scope *frame_di_scope;
   
   // rjf: interaction registers
   D_RegsNode base_regs;
@@ -1535,7 +1534,7 @@ __VA_ARGS__                 \
 
 internal void d_init(CmdLine *cmdln, D_StateDeltaHistory *hist);
 internal D_CmdList d_gather_root_cmds(Arena *arena);
-internal void d_begin_frame(Arena *arena, D_CmdList *cmds, F32 dt);
+internal void d_tick(Arena *arena, DI_Scope *di_scope, D_CmdList *cmds, F32 dt);
 internal void d_end_frame(void);
 
 #endif // DBG_ENGINE_CORE_H
