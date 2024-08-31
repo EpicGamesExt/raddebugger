@@ -8,6 +8,7 @@
 
 typedef enum D_RegSlot
 {
+D_RegSlot_Machine,
 D_RegSlot_Module,
 D_RegSlot_Process,
 D_RegSlot_Thread,
@@ -29,6 +30,7 @@ D_RegSlot_Lines,
 D_RegSlot_DbgiKey,
 D_RegSlot_VaddrRange,
 D_RegSlot_VoffRange,
+D_RegSlot_PID,
 D_RegSlot_ForceConfirm,
 D_RegSlot_PreferDisasm,
 D_RegSlot_Dir2,
@@ -109,6 +111,7 @@ D_MsgKind_SelectTarget,
 D_MsgKind_RetryEndedProcess,
 D_MsgKind_RegisterAsJITDebugger,
 D_MsgKind_LogMarker,
+D_MsgKind_COUNT,
 } D_MsgKind;
 
 typedef enum D_CfgSrc
@@ -440,6 +443,7 @@ D_CmdParamSlot_COUNT,
 typedef struct D_Regs D_Regs;
 struct D_Regs
 {
+D_Handle machine;
 D_Handle module;
 D_Handle process;
 D_Handle thread;
@@ -461,6 +465,7 @@ D_LineList lines;
 DI_Key dbgi_key;
 Rng1U64 vaddr_range;
 Rng1U64 voff_range;
+U32 pid;
 B32 force_confirm;
 B32 prefer_disasm;
 Dir2 dir2;
@@ -497,6 +502,7 @@ U64 inline_depth;
 };
 
 #define d_regs_lit_init_top \
+.machine = d_regs()->machine,\
 .module = d_regs()->module,\
 .process = d_regs()->process,\
 .thread = d_regs()->thread,\
@@ -518,6 +524,7 @@ U64 inline_depth;
 .dbgi_key = d_regs()->dbgi_key,\
 .vaddr_range = d_regs()->vaddr_range,\
 .voff_range = d_regs()->voff_range,\
+.pid = d_regs()->pid,\
 .force_confirm = d_regs()->force_confirm,\
 .prefer_disasm = d_regs()->prefer_disasm,\
 .dir2 = d_regs()->dir2,\
@@ -563,7 +570,7 @@ struct {B32 *value_ptr; String8 name;} DEV_toggle_table[] =
 {&DEV_updating_indicator, str8_lit_comp("updating_indicator")},
 };
 C_LINKAGE_BEGIN
-extern Rng1U64 d_reg_slot_range_table[26];
+extern Rng1U64 d_reg_slot_range_table[28];
 extern String8 d_msg_kind_name_lower_table[71];
 extern Rng1U64 d_cmd_param_slot_range_table[23];
 extern String8 d_entity_kind_display_string_table[31];

@@ -4,8 +4,9 @@
 //- GENERATED CODE
 
 C_LINKAGE_BEGIN
-Rng1U64 d_reg_slot_range_table[26] =
+Rng1U64 d_reg_slot_range_table[28] =
 {
+{OffsetOf(D_Regs, machine), OffsetOf(D_Regs, machine) + sizeof(D_Handle)},
 {OffsetOf(D_Regs, module), OffsetOf(D_Regs, module) + sizeof(D_Handle)},
 {OffsetOf(D_Regs, process), OffsetOf(D_Regs, process) + sizeof(D_Handle)},
 {OffsetOf(D_Regs, thread), OffsetOf(D_Regs, thread) + sizeof(D_Handle)},
@@ -27,6 +28,7 @@ Rng1U64 d_reg_slot_range_table[26] =
 {OffsetOf(D_Regs, dbgi_key), OffsetOf(D_Regs, dbgi_key) + sizeof(DI_Key)},
 {OffsetOf(D_Regs, vaddr_range), OffsetOf(D_Regs, vaddr_range) + sizeof(Rng1U64)},
 {OffsetOf(D_Regs, voff_range), OffsetOf(D_Regs, voff_range) + sizeof(Rng1U64)},
+{OffsetOf(D_Regs, pid), OffsetOf(D_Regs, pid) + sizeof(U32)},
 {OffsetOf(D_Regs, force_confirm), OffsetOf(D_Regs, force_confirm) + sizeof(B32)},
 {OffsetOf(D_Regs, prefer_disasm), OffsetOf(D_Regs, prefer_disasm) + sizeof(B32)},
 {OffsetOf(D_Regs, dir2), OffsetOf(D_Regs, dir2) + sizeof(Dir2)},

@@ -69,6 +69,7 @@ DF_MsgKind_FindThread,
 DF_MsgKind_FindSelectedThread,
 DF_MsgKind_GoToName,
 DF_MsgKind_FindCodeLocation,
+DF_MsgKind_COUNT,
 } DF_MsgKind;
 
 typedef enum DF_IconKind

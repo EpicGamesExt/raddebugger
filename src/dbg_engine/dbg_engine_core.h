@@ -1565,7 +1565,7 @@ internal void d_msg_(D_MsgKind kind, D_Regs *regs);
 #define d_msg(kind, ...) d_msg_((kind),\
 &(D_Regs)\
 {\
-d_regs_lit_init_top\
+d_regs_lit_init_top \
 __VA_ARGS__\
 })
 

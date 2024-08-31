@@ -7810,6 +7810,19 @@ df_request_frame(void)
 }
 
 ////////////////////////////////
+//~ rjf: Message Functions
+
+internal void
+df_msg_(DF_MsgKind kind, D_Regs *regs)
+{
+  DF_MsgNode *n = push_array(df_state->msgs_arena, DF_MsgNode, 1);
+  SLLQueuePush(df_state->msgs.first, df_state->msgs.last, n);
+  df_state->msgs.count += 1;
+  n->v.kind = kind;
+  n->v.regs = d_regs_copy(df_state->msgs_arena, regs);
+}
+
+////////////////////////////////
 //~ rjf: Main Layer Top-Level Calls
 
 #if !defined(STBI_INCLUDE_STB_IMAGE_H)
@@ -10601,9 +10614,12 @@ df_end_frame(void)
 }
 
 internal void
-df_frame(Arena *arena, D_CmdList *cmds)
+df_frame(D_CmdList *cmds, F32 dt)
 {
-  df_begin_frame(arena, cmds);
+  Temp scratch = scratch_begin(0, 0);
+  DI_Scope *di_scope = di_scope_open();
+  d_tick(scratch.arena, di_scope, cmds, dt);
+  df_begin_frame(scratch.arena, cmds);
   {
     B32 queue_drag_drop = 0;
     if(queue_drag_drop)
@@ -10620,7 +10636,7 @@ df_frame(Arena *arena, D_CmdList *cmds)
       }
       d_push_regs();
       d_regs()->window = df_handle_from_window(w);
-      df_window_update_and_render(arena, w, cmds);
+      df_window_update_and_render(scratch.arena, w, cmds);
       D_Regs *window_regs = d_pop_regs();
       if(df_window_from_handle(last_focused_window) == w)
       {
@@ -10644,4 +10660,7 @@ df_frame(Arena *arena, D_CmdList *cmds)
     }
     r_end_frame();
   }
+  
+  di_scope_close(di_scope);
+  scratch_end(scratch);
 }

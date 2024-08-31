@@ -95,6 +95,7 @@ D_EntityKindTable:
 D_RegTable:
 {
   // rjf: entity slots
+  {D_Handle         machine          Machine       }
   {D_Handle         module           Module        }
   {D_Handle         process          Process       }
   {D_Handle         thread           Thread        }
@@ -122,6 +123,7 @@ D_RegTable:
   {Rng1U64          voff_range       VoffRange     }
   
   // rjf: general parameters
+  {U32              pid              PID           }
   {B32              force_confirm    ForceConfirm  }
   {B32              prefer_disasm    PreferDisasm  }
   {Dir2             dir2             Dir2          }
@@ -258,7 +260,8 @@ D_MsgKindTable:
 
 @enum D_MsgKind:
 {
-  @expand(D_MsgKindTable a) `$(a.name)`
+  @expand(D_MsgKindTable a) `$(a.name)`,
+  COUNT
 }
 
 @data(String8) d_msg_kind_name_lower_table:

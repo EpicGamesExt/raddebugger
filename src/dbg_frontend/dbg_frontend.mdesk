@@ -112,7 +112,8 @@ DF_MsgKindTable:
 
 @enum DF_MsgKind:
 {
-  @expand(DF_MsgKindTable a) `$(a.name)`
+  @expand(DF_MsgKindTable a) `$(a.name)`,
+  COUNT
 }
 
 @data(String8) df_msg_kind_name_lower_table:

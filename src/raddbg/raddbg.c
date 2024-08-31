@@ -9,7 +9,6 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
-  DI_Scope *di_scope = di_scope_open();
   
   //////////////////////////////
   //- rjf: begin logging
@@ -27,13 +26,22 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
   log_scope_begin();
   
   //////////////////////////////
-  //- rjf: mark user-facing tick
+  //- rjf: mark user-facing thread tick
   //
   ProfTick(0);
   txt_user_clock_tick();
   dasm_user_clock_tick();
   geo_user_clock_tick();
   tex_user_clock_tick();
+  
+  //////////////////////////////
+  //- rjf: get events from the OS
+  //
+  OS_EventList events = {0};
+  if(os_handle_match(repaint_window_handle, os_handle_zero()))
+  {
+    events = os_get_events(scratch.arena, df_state->num_frames_requested == 0);
+  }
   
   //////////////////////////////
   //- rjf: pick target hz
@@ -77,15 +85,6 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
   //- rjf: target Hz -> delta time
   //
   F32 dt = 1.f/target_hz;
-  
-  //////////////////////////////
-  //- rjf: get events from the OS
-  //
-  OS_EventList events = {0};
-  if(os_handle_match(repaint_window_handle, os_handle_zero()))
-  {
-    events = os_get_events(scratch.arena, df_state->num_frames_requested == 0);
-  }
   
   //////////////////////////////
   //- rjf: begin measuring actual per-frame work
@@ -264,10 +263,9 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
   D_CmdList cmds = d_gather_root_cmds(scratch.arena);
   
   //////////////////////////////
-  //- rjf: tick debug engine; do frontend frame
+  //- rjf: do frontend frame
   //
-  d_tick(scratch.arena, di_scope, &cmds, dt);
-  df_frame(scratch.arena, &cmds);
+  df_frame(&cmds, dt);
   
   //////////////////////////////
   //- rjf: show windows after first frame
@@ -309,7 +307,6 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
     }
   }
   
-  di_scope_close(di_scope);
   scratch_end(scratch);
   ProfEnd();
 }
