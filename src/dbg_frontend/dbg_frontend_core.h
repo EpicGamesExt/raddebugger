@@ -960,7 +960,7 @@ internal void df_msg_(DF_MsgKind kind, D_Regs *regs);
 #define df_msg(kind, ...) df_msg_((kind),\
 &(D_Regs)\
 {\
-d_regs_lit_init_top\
+d_regs_lit_init_top \
 __VA_ARGS__\
 })
 

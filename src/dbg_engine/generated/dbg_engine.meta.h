@@ -42,7 +42,7 @@ typedef enum D_MsgKind
 {
 D_MsgKind_Null,
 D_MsgKind_LaunchAndRun,
-D_MsgKind_LaunchAndInit,
+D_MsgKind_LaunchAndStepInto,
 D_MsgKind_Kill,
 D_MsgKind_KillAll,
 D_MsgKind_Attach,
@@ -74,8 +74,8 @@ D_MsgKind_FreezeMachine,
 D_MsgKind_ThawMachine,
 D_MsgKind_FreezeLocalMachine,
 D_MsgKind_ThawLocalMachine,
-D_MsgKind_SetFileOverrideLinkSrc,
-D_MsgKind_SetFileOverrideLinkDst,
+D_MsgKind_SetPathMapSrc,
+D_MsgKind_SetPathMapDst,
 D_MsgKind_SetFileReplacementPath,
 D_MsgKind_SetAutoViewRuleType,
 D_MsgKind_SetAutoViewRuleViewRule,
@@ -572,6 +572,7 @@ struct {B32 *value_ptr; String8 name;} DEV_toggle_table[] =
 C_LINKAGE_BEGIN
 extern Rng1U64 d_reg_slot_range_table[28];
 extern String8 d_msg_kind_name_lower_table[71];
+extern String8 d_msg_kind_name_display_table[71];
 extern Rng1U64 d_cmd_param_slot_range_table[23];
 extern String8 d_entity_kind_display_string_table[31];
 extern String8 d_entity_kind_name_lower_table[31];

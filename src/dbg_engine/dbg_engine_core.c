@@ -5653,8 +5653,8 @@ d_cfg_strings_from_core(Arena *arena, String8 root_path, D_CfgSrc source)
             entity_name_escaped = d_cfg_escaped_from_raw_string(arena, e->string);
           }
           EntityInfoFlags info_flags = 0;
-          if(entity_name_escaped.size != 0)         { info_flags |= EntityInfoFlag_HasName; }
-          if(!!e->disabled)                         { info_flags |= EntityInfoFlag_HasDisabled; }
+          if(entity_name_escaped.size != 0)        { info_flags |= EntityInfoFlag_HasName; }
+          if(!!e->disabled)                        { info_flags |= EntityInfoFlag_HasDisabled; }
           if(e->flags & D_EntityFlag_HasTextPoint) { info_flags |= EntityInfoFlag_HasTxtPt; }
           if(e->flags & D_EntityFlag_HasVAddr)     { info_flags |= EntityInfoFlag_HasVAddr; }
           if(e->flags & D_EntityFlag_HasColor)     { info_flags |= EntityInfoFlag_HasColor; }
@@ -5754,47 +5754,6 @@ d_cfg_strings_from_core(Arena *arena, String8 root_path, D_CfgSrc source)
     }
     str8_list_push(arena, &strs, str8_lit("}\n\n"));
   }
-  
-  //- rjf: write eval view cache
-#if 0
-  if(source == D_CfgSrc_Project)
-  {
-    B32 first = 1;
-    for(U64 eval_view_slot_idx = 0;
-        eval_view_slot_idx < d_state->eval_view_cache.slots_count;
-        eval_view_slot_idx += 1)
-    {
-      for(D_EvalView *ev = d_state->eval_view_cache.slots[idx].first;
-          ev != &d_nil_eval_view && ev != 0;
-          ev = ev->hash_next)
-      {
-        if(first)
-        {
-          first = 0;
-          str8_list_push(arena, &strs, str8_lit("/// eval view state ///////////////////////////////////////////////////////////\n"));
-          str8_list_push(arena, &strs, str8_lit("\n"));
-        }
-        str8_list_push(arena, &strs, str8_lit("eval_view:\n"));
-        str8_list_push(arena, &strs, str8_lit("{\n"));
-        str8_list_pushf(arena, &strs, "  key: (%I64x, %I64x)\n", ev->key.u64[0], ev->key.u64[1]);
-        for(U64 expand_slot_idx = 0;
-            expand_slot_idx < ev->expand_tree_table.slots_count;
-            expand_slot_idx += 1)
-        {
-          for(D_ExpandNode *expand_node = ev->expand_tree_table.slots[expand_slot_idx].first;
-              expand_node != 0;
-              expand_node = expand_node->hash_next)
-          {
-            D_ExpandKey key = expand_node->key;
-            B32 expanded = expand_node->expanded;
-            str8_list_pushf(arena, &strs, "  node: ()\n");
-          }
-        }
-        str8_list_push(arena, &strs, str8_lit("}\n\n"));
-      }
-    }
-  }
-#endif
   
   ProfEnd();
   return strs;
@@ -6918,7 +6877,7 @@ d_tick(Arena *arena, DI_Scope *di_scope, D_CmdList *cmds, F32 dt)
           
           //- rjf: [low level target operations] target launching
           case D_MsgKind_LaunchAndRun:
-          case D_MsgKind_LaunchAndInit:
+          case D_MsgKind_LaunchAndStepInto:
           {
             // rjf: get list of targets to launch
             D_EntityList targets = d_entity_list_from_handle_list(scratch.arena, regs->entity_list);
@@ -6990,7 +6949,7 @@ d_tick(Arena *arena, DI_Scope *di_scope, D_CmdList *cmds, F32 dt)
               }
               
               // rjf: run
-              d_ctrl_run(D_RunKind_Run, &d_nil_entity, CTRL_RunFlag_StopOnEntryPoint * (msg->kind == D_MsgKind_LaunchAndInit), 0);
+              d_ctrl_run(D_RunKind_Run, &d_nil_entity, CTRL_RunFlag_StopOnEntryPoint * (msg->kind == D_MsgKind_LaunchAndStepInto), 0);
             }
             
             // rjf: no targets -> error
@@ -7281,7 +7240,7 @@ d_tick(Arena *arena, DI_Scope *di_scope, D_CmdList *cmds, F32 dt)
             else if(!d_ctrl_targets_running())
             {
               D_EntityList targets = d_push_active_target_list(scratch.arena);
-              d_msg(D_MsgKind_LaunchAndInit, .entity_list = d_handle_list_from_entity_list(scratch.arena, targets));
+              d_msg(D_MsgKind_LaunchAndStepInto, .entity_list = d_handle_list_from_entity_list(scratch.arena, targets));
             }
           }break;
           
@@ -7385,8 +7344,8 @@ d_tick(Arena *arena, DI_Scope *di_scope, D_CmdList *cmds, F32 dt)
           }break;
           
           //- rjf: path overrides (TODO(rjf))
-          case D_MsgKind_SetFileOverrideLinkSrc:{}break;
-          case D_MsgKind_SetFileOverrideLinkDst:{}break;
+          case D_MsgKind_SetPathMapSrc:{}break;
+          case D_MsgKind_SetPathMapDst:{}break;
           case D_MsgKind_SetFileReplacementPath:{}break;
           
           //- rjf: auto view rules (TODO(rjf))

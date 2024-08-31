@@ -8302,6 +8302,11 @@ df_frame(OS_Handle repaint_window_handle)
       D_RegsScope
       {
         d_regs_copy_contents(scratch.arena, d_regs(), regs);
+        Dir2 split_dir = Dir2_Invalid;
+        DF_Panel *split_panel = &df_nil_panel;
+        U64 panel_sib_off = 0;
+        U64 panel_child_off = 0;
+        Vec2S32 panel_change_dir = {0};
         switch(msg->kind)
         {
           default:{}break;
@@ -8375,49 +8380,442 @@ df_frame(OS_Handle repaint_window_handle)
           case DF_MsgKind_CancelQuery:{}break;
           
           //- rjf: searching
-          case DF_MsgKind_FindTextForward:{}break;
-          case DF_MsgKind_FindTextBackward:{}break;
-          case DF_MsgKind_FindNext:{}break;
-          case DF_MsgKind_FindPrev:{}break;
+          case DF_MsgKind_FindTextForward:
+          case DF_MsgKind_FindTextBackward:
+          {
+            df_set_search_string(regs->string);
+          }break;
+          case DF_MsgKind_FindNext:{df_msg(DF_MsgKind_FindTextForward);}break;
+          case DF_MsgKind_FindPrev:{df_msg(DF_MsgKind_FindTextBackward);}break;
           
           //- rjf: font sizes
-          case DF_MsgKind_IncUIFontScale:{}break;
-          case DF_MsgKind_DecUIFontScale:{}break;
-          case DF_MsgKind_IncCodeFontScale:{}break;
-          case DF_MsgKind_DecCodeFontScale:{}break;
+          case DF_MsgKind_IncUIFontScale:
+          {
+            DF_Window *window = df_window_from_handle(regs->window);
+            if(window != 0)
+            {
+              window->setting_vals[DF_SettingCode_MainFontSize].set = 1;
+              window->setting_vals[DF_SettingCode_MainFontSize].s32 += 1;
+              window->setting_vals[DF_SettingCode_MainFontSize].s32 = clamp_1s32(df_g_setting_code_s32_range_table[DF_SettingCode_MainFontSize], window->setting_vals[DF_SettingCode_MainFontSize].s32);
+            }
+          }break;
+          case DF_MsgKind_DecUIFontScale:
+          {
+            DF_Window *window = df_window_from_handle(regs->window);
+            if(window != 0)
+            {
+              window->setting_vals[DF_SettingCode_MainFontSize].set = 1;
+              window->setting_vals[DF_SettingCode_MainFontSize].s32 -= 1;
+              window->setting_vals[DF_SettingCode_MainFontSize].s32 = clamp_1s32(df_g_setting_code_s32_range_table[DF_SettingCode_MainFontSize], window->setting_vals[DF_SettingCode_MainFontSize].s32);
+            }
+          }break;
+          case DF_MsgKind_IncCodeFontScale:
+          {
+            DF_Window *window = df_window_from_handle(regs->window);
+            if(window != 0)
+            {
+              window->setting_vals[DF_SettingCode_CodeFontSize].set = 1;
+              window->setting_vals[DF_SettingCode_CodeFontSize].s32 += 1;
+              window->setting_vals[DF_SettingCode_CodeFontSize].s32 = clamp_1s32(df_g_setting_code_s32_range_table[DF_SettingCode_CodeFontSize], window->setting_vals[DF_SettingCode_CodeFontSize].s32);
+            }
+          }break;
+          case DF_MsgKind_DecCodeFontScale:
+          {
+            DF_Window *window = df_window_from_handle(regs->window);
+            if(window != 0)
+            {
+              window->setting_vals[DF_SettingCode_CodeFontSize].set = 1;
+              window->setting_vals[DF_SettingCode_CodeFontSize].s32 -= 1;
+              window->setting_vals[DF_SettingCode_CodeFontSize].s32 = clamp_1s32(df_g_setting_code_s32_range_table[DF_SettingCode_CodeFontSize], window->setting_vals[DF_SettingCode_CodeFontSize].s32);
+            }
+          }break;
           
-          //- rjf: panel creation/removal
-          case DF_MsgKind_NewPanelLeft:{}break;
-          case DF_MsgKind_NewPanelUp:{}break;
-          case DF_MsgKind_NewPanelRight:{}break;
-          case DF_MsgKind_NewPanelDown:{}break;
-          case DF_MsgKind_SplitPanel:{}break;
-          case DF_MsgKind_ClosePanel:{}break;
+          //- rjf: [panel creation/removal] splitting
+          case DF_MsgKind_NewPanelLeft: {split_dir = Dir2_Left;}goto panel_split;
+          case DF_MsgKind_NewPanelUp:   {split_dir = Dir2_Up;}goto panel_split;
+          case DF_MsgKind_NewPanelRight:{split_dir = Dir2_Right;}goto panel_split;
+          case DF_MsgKind_NewPanelDown: {split_dir = Dir2_Down;}goto panel_split;
+          case DF_MsgKind_SplitPanel:
+          {
+            split_dir = regs->dir2;
+            split_panel = df_panel_from_handle(regs->dst_panel);
+          }goto panel_split;
+          panel_split:;
+          if(split_dir != Dir2_Invalid)
+          {
+            DF_Window *ws = df_window_from_handle(regs->dst_panel);
+            if(df_panel_is_nil(split_panel))
+            {
+              split_panel = ws->focused_panel;
+            }
+            DF_Panel *new_panel = &df_nil_panel;
+            Axis2 split_axis = axis2_from_dir2(split_dir);
+            Side split_side = side_from_dir2(split_dir);
+            DF_Panel *panel = split_panel;
+            DF_Panel *parent = panel->parent;
+            if(!df_panel_is_nil(parent) && parent->split_axis == split_axis)
+            {
+              DF_Panel *next = df_panel_alloc(ws);
+              df_panel_insert(parent, split_side == Side_Max ? panel : panel->prev, next);
+              next->pct_of_parent = 1.f/parent->child_count;
+              for(DF_Panel *child = parent->first; !df_panel_is_nil(child); child = child->next)
+              {
+                if(child != next)
+                {
+                  child->pct_of_parent *= (F32)(parent->child_count-1) / (parent->child_count);
+                }
+              }
+              ws->focused_panel = next;
+              new_panel = next;
+            }
+            else
+            {
+              DF_Panel *pre_prev = panel->prev;
+              DF_Panel *pre_parent = parent;
+              DF_Panel *new_parent = df_panel_alloc(ws);
+              new_parent->pct_of_parent = panel->pct_of_parent;
+              if(!df_panel_is_nil(pre_parent))
+              {
+                df_panel_remove(pre_parent, panel);
+                df_panel_insert(pre_parent, pre_prev, new_parent);
+              }
+              else
+              {
+                ws->root_panel = new_parent;
+              }
+              DF_Panel *left = panel;
+              DF_Panel *right = df_panel_alloc(ws);
+              new_panel = right;
+              if(split_side == Side_Min)
+              {
+                Swap(DF_Panel *, left, right);
+              }
+              df_panel_insert(new_parent, &df_nil_panel, left);
+              df_panel_insert(new_parent, left, right);
+              new_parent->split_axis = split_axis;
+              left->pct_of_parent = 0.5f;
+              right->pct_of_parent = 0.5f;
+              ws->focused_panel = new_panel;
+            }
+            if(!df_panel_is_nil(new_panel->prev))
+            {
+              Rng2F32 prev_rect_pct = new_panel->prev->animated_rect_pct;
+              new_panel->animated_rect_pct = prev_rect_pct;
+              new_panel->animated_rect_pct.p0.v[split_axis] = new_panel->animated_rect_pct.p1.v[split_axis];
+            }
+            if(!df_panel_is_nil(new_panel->next))
+            {
+              Rng2F32 next_rect_pct = new_panel->next->animated_rect_pct;
+              new_panel->animated_rect_pct = next_rect_pct;
+              new_panel->animated_rect_pct.p1.v[split_axis] = new_panel->animated_rect_pct.p0.v[split_axis];
+            }
+            DF_Panel *move_tab_panel = df_panel_from_handle(regs->panel);
+            DF_View *move_tab = df_view_from_handle(regs->view);
+            if(!df_panel_is_nil(new_panel) && !df_view_is_nil(move_tab) && !df_panel_is_nil(move_tab_panel) &&
+               msg->kind == DF_MsgKind_SplitPanel)
+            {
+              df_panel_remove_tab_view(move_tab_panel, move_tab);
+              df_panel_insert_tab_view(new_panel, new_panel->last_tab_view, move_tab);
+              new_panel->selected_tab_view = df_handle_from_view(move_tab);
+              B32 move_tab_panel_is_empty = 1;
+              for(DF_View *v = move_tab_panel->first_tab_view; !df_view_is_nil(v); v = v->order_next)
+              {
+                if(!df_view_is_project_filtered(v))
+                {
+                  move_tab_panel_is_empty = 0;
+                  break;
+                }
+              }
+              if(move_tab_panel_is_empty && move_tab_panel != ws->root_panel &&
+                 move_tab_panel != new_panel->prev && move_tab_panel != new_panel->next)
+              {
+                df_msg(DF_MsgKind_ClosePanel, .panel = df_handle_from_panel(move_tab_panel));
+              }
+            }
+          }
+          
+          //- rjf: [panel creation/removal] removal
+          case DF_MsgKind_ClosePanel:
+          {
+            DF_Window *ws = df_window_from_handle(regs->window);
+            DF_Panel *panel = df_panel_from_handle(regs->panel);
+            DF_Panel *parent = panel->parent;
+            if(!df_panel_is_nil(parent))
+            {
+              Axis2 split_axis = parent->split_axis;
+              
+              // NOTE(rjf): If we're removing all but the last child of this parent,
+              // we should just remove both children.
+              if(parent->child_count == 2)
+              {
+                DF_Panel *discard_child = panel;
+                DF_Panel *keep_child = panel == parent->first ? parent->last : parent->first;
+                DF_Panel *grandparent = parent->parent;
+                DF_Panel *parent_prev = parent->prev;
+                F32 pct_of_parent = parent->pct_of_parent;
+                
+                // rjf: unhook kept child
+                df_panel_remove(parent, keep_child);
+                
+                // rjf: unhook this subtree
+                if(!df_panel_is_nil(grandparent))
+                {
+                  df_panel_remove(grandparent, parent);
+                }
+                
+                // rjf: release the things we should discard
+                {
+                  df_panel_release(ws, parent);
+                  df_panel_release(ws, discard_child);
+                }
+                
+                // rjf: re-hook our kept child into the overall tree
+                if(df_panel_is_nil(grandparent))
+                {
+                  ws->root_panel = keep_child;
+                }
+                else
+                {
+                  df_panel_insert(grandparent, parent_prev, keep_child);
+                }
+                keep_child->pct_of_parent = pct_of_parent;
+                
+                // rjf: reset focus, if needed
+                if(ws->focused_panel == discard_child)
+                {
+                  ws->focused_panel = keep_child;
+                  for(DF_Panel *grandchild = ws->focused_panel; !df_panel_is_nil(grandchild); grandchild = grandchild->first)
+                  {
+                    ws->focused_panel = grandchild;
+                  }
+                }
+                
+                // rjf: keep-child split-axis == grandparent split-axis? bubble keep-child up into grandparent's children
+                if(!df_panel_is_nil(grandparent) && grandparent->split_axis == keep_child->split_axis && !df_panel_is_nil(keep_child->first))
+                {
+                  df_panel_remove(grandparent, keep_child);
+                  DF_Panel *prev = parent_prev;
+                  for(DF_Panel *child = keep_child->first, *next = 0; !df_panel_is_nil(child); child = next)
+                  {
+                    next = child->next;
+                    df_panel_remove(keep_child, child);
+                    df_panel_insert(grandparent, prev, child);
+                    prev = child;
+                    child->pct_of_parent *= keep_child->pct_of_parent;
+                  }
+                  df_panel_release(ws, keep_child);
+                }
+              }
+              // NOTE(rjf): Otherwise we can just remove this child.
+              else
+              {
+                DF_Panel *next = &df_nil_panel;
+                F32 removed_size_pct = panel->pct_of_parent;
+                if(df_panel_is_nil(next)) { next = panel->prev; }
+                if(df_panel_is_nil(next)) { next = panel->next; }
+                df_panel_remove(parent, panel);
+                df_panel_release(ws, panel);
+                if(ws->focused_panel == panel)
+                {
+                  ws->focused_panel = next;
+                }
+                for(DF_Panel *child = parent->first; !df_panel_is_nil(child); child = child->next)
+                {
+                  child->pct_of_parent /= 1.f-removed_size_pct;
+                }
+              }
+            }
+          }break;
           
           //- rjf: panel rearranging
-          case DF_MsgKind_RotatePanelColumns:{}break;
+          case DF_MsgKind_RotatePanelColumns:
+          {
+            DF_Window *ws = df_window_from_handle(regs->window);
+            DF_Panel *panel = ws->focused_panel;
+            DF_Panel *parent = &df_nil_panel;
+            for(DF_Panel *p = panel->parent; !df_panel_is_nil(p); p = p->parent)
+            {
+              if(p->split_axis == Axis2_X)
+              {
+                parent = p;
+                break;
+              }
+            }
+            if(!df_panel_is_nil(parent) && parent->child_count > 1)
+            {
+              DF_Panel *old_first = parent->first;
+              DF_Panel *new_first = parent->first->next;
+              old_first->next = &df_nil_panel;
+              old_first->prev = parent->last;
+              parent->last->next = old_first;
+              new_first->prev = &df_nil_panel;
+              parent->first = new_first;
+              parent->last = old_first;
+            }
+          }break;
           
           //- rjf: panel focusing
-          case DF_MsgKind_NextPanel:{}break;
-          case DF_MsgKind_PrevPanel:{}break;
-          case DF_MsgKind_FocusPanel:{}break;
-          case DF_MsgKind_FocusPanelRight:{}break;
-          case DF_MsgKind_FocusPanelLeft:{}break;
-          case DF_MsgKind_FocusPanelUp:{}break;
-          case DF_MsgKind_FocusPanelDown:{}break;
+          case DF_MsgKind_NextPanel: panel_sib_off = OffsetOf(DF_Panel, next); panel_child_off = OffsetOf(DF_Panel, first); goto panel_cycle;
+          case DF_MsgKind_PrevPanel: panel_sib_off = OffsetOf(DF_Panel, prev); panel_child_off = OffsetOf(DF_Panel, last); goto panel_cycle;
+          panel_cycle:;
+          {
+            DF_Window *ws = df_window_from_handle(regs->window);
+            for(DF_Panel *panel = ws->focused_panel; !df_panel_is_nil(panel);)
+            {
+              DF_PanelRec rec = df_panel_rec_df(panel, panel_sib_off, panel_child_off);
+              panel = rec.next;
+              if(df_panel_is_nil(panel))
+              {
+                panel = ws->root_panel;
+              }
+              if(df_panel_is_nil(panel->first))
+              {
+                df_msg(DF_MsgKind_FocusPanel, .panel = df_handle_from_panel(panel));
+                break;
+              }
+            }
+          }break;
+          case DF_MsgKind_FocusPanel:
+          {
+            DF_Window *ws = df_window_from_handle(regs->window);
+            DF_Panel *panel = df_panel_from_handle(regs->panel);
+            if(!df_panel_is_nil(panel))
+            {
+              ws->focused_panel = panel;
+              ws->menu_bar_focused = 0;
+              ws->query_view_selected = 0;
+            }
+          }break;
+          case DF_MsgKind_FocusPanelRight: panel_change_dir = v2s32(+1, +0); goto msg_focus_panel_dir;
+          case DF_MsgKind_FocusPanelLeft:  panel_change_dir = v2s32(-1, +0); goto msg_focus_panel_dir;
+          case DF_MsgKind_FocusPanelUp:    panel_change_dir = v2s32(+0, -1); goto msg_focus_panel_dir;
+          case DF_MsgKind_FocusPanelDown:  panel_change_dir = v2s32(+0, +1); goto msg_focus_panel_dir;
+          msg_focus_panel_dir:;
+          {
+            DF_Window *ws = df_window_from_handle(regs->window);
+            DF_Panel *src_panel = ws->focused_panel;
+            Rng2F32 src_panel_rect = df_target_rect_from_panel(r2f32(v2f32(0, 0), v2f32(1000, 1000)), ws->root_panel, src_panel);
+            Vec2F32 src_panel_center = center_2f32(src_panel_rect);
+            Vec2F32 src_panel_half_dim = scale_2f32(dim_2f32(src_panel_rect), 0.5f);
+            Vec2F32 travel_dim = add_2f32(src_panel_half_dim, v2f32(10.f, 10.f));
+            Vec2F32 travel_dst = add_2f32(src_panel_center, mul_2f32(travel_dim, v2f32((F32)panel_change_dir.x, (F32)panel_change_dir.y)));
+            DF_Panel *dst_root = &df_nil_panel;
+            for(DF_Panel *p = ws->root_panel; !df_panel_is_nil(p); p = df_panel_rec_df_pre(p).next)
+            {
+              if(p == src_panel || !df_panel_is_nil(p->first))
+              {
+                continue;
+              }
+              Rng2F32 p_rect = df_target_rect_from_panel(r2f32(v2f32(0, 0), v2f32(1000, 1000)), ws->root_panel, p);
+              if(contains_2f32(p_rect, travel_dst))
+              {
+                dst_root = p;
+                break;
+              }
+            }
+            if(!df_panel_is_nil(dst_root))
+            {
+              DF_Panel *dst_panel = &df_nil_panel;
+              for(DF_Panel *p = dst_root; !df_panel_is_nil(p); p = df_panel_rec_df_pre(p).next)
+              {
+                if(df_panel_is_nil(p->first) && p != src_panel)
+                {
+                  dst_panel = p;
+                  break;
+                }
+              }
+              df_msg(DF_MsgKind_FocusPanel, .panel = df_handle_from_panel(dst_panel));
+            }
+          }break;
           
           //- rjf: view history navigation
           case DF_MsgKind_GoBack:{}break;
           case DF_MsgKind_GoForward:{}break;
           
           //- rjf: tab selection
-          case DF_MsgKind_NextTab:{}break;
-          case DF_MsgKind_PrevTab:{}break;
+          case DF_MsgKind_NextTab:
+          {
+            DF_Panel *panel = df_panel_from_handle(regs->panel);
+            DF_View *view = df_selected_tab_from_panel(panel);
+            DF_View *next_view = view;
+            for(DF_View *v = view;
+                !df_view_is_nil(v);
+                v = df_view_is_nil(v->order_next) ? panel->first_tab_view : v->order_next)
+            {
+              if(!df_view_is_project_filtered(v) && v != view)
+              {
+                next_view = v;
+                break;
+              }
+            }
+            view = next_view;
+            panel->selected_tab_view = df_handle_from_view(view);
+          }break;
+          case DF_MsgKind_PrevTab:
+          {
+            DF_Panel *panel = df_panel_from_handle(regs->panel);
+            DF_View *view = df_selected_tab_from_panel(panel);
+            DF_View *next_view = view;
+            for(DF_View *v = view;
+                !df_view_is_nil(v);
+                v = df_view_is_nil(v->order_prev) ? panel->last_tab_view : v->order_prev)
+            {
+              if(!df_view_is_project_filtered(v) && v != view)
+              {
+                next_view = v;
+                break;
+              }
+            }
+            view = next_view;
+            panel->selected_tab_view = df_handle_from_view(view);
+          }break;
           
           //- rjf: tab rearranging
-          case DF_MsgKind_MoveTabRight:{}break;
-          case DF_MsgKind_MoveTabLeft:{}break;
-          case DF_MsgKind_MoveTab:{}break;
+          case DF_MsgKind_MoveTabRight:
+          case DF_MsgKind_MoveTabLeft:
+          {
+            DF_Window *ws = df_window_from_handle(regs->window);
+            DF_Panel *panel = ws->focused_panel;
+            DF_View *view = df_selected_tab_from_panel(panel);
+            DF_View *prev_view = (msg->kind == DF_MsgKind_MoveTabRight ? view->order_next : view->order_prev->order_prev);
+            if(!df_view_is_nil(prev_view) || msg->kind == DF_MsgKind_MoveTabLeft)
+            {
+              df_msg(DF_MsgKind_MoveTab,
+                     .panel     = df_handle_from_panel(panel),
+                     .dst_panel = df_handle_from_panel(panel),
+                     .view      = df_handle_from_view(view),
+                     .prev_view = df_handle_from_view(prev_view));
+            }
+          }break;
+          case DF_MsgKind_MoveTab:
+          {
+            DF_Window * ws        = df_window_from_handle(regs->window);
+            DF_Panel *  src_panel = df_panel_from_handle(regs->panel);
+            DF_View *   view      = df_view_from_handle(regs->view);
+            DF_Panel *  dst_panel = df_panel_from_handle(regs->dst_panel);
+            DF_View *prev_view = df_view_from_handle(regs->prev_view);
+            if(!df_panel_is_nil(src_panel) &&
+               !df_panel_is_nil(dst_panel) &&
+               prev_view != view)
+            {
+              df_panel_remove_tab_view(src_panel, view);
+              df_panel_insert_tab_view(dst_panel, prev_view, view);
+              ws->focused_panel = dst_panel;
+              B32 src_panel_is_empty = 1;
+              for(DF_View *v = src_panel->first_tab_view; !df_view_is_nil(v); v = v->order_next)
+              {
+                if(!df_view_is_project_filtered(v))
+                {
+                  src_panel_is_empty = 0;
+                  break;
+                }
+              }
+              if(src_panel_is_empty && src_panel != ws->root_panel)
+              {
+                df_msg(DF_MsgKind_ClosePanel, .panel = df_handle_from_panel(src_panel));
+              }
+            }
+          }break;
           
           //- rjf: tab creation/removal
           case DF_MsgKind_OpenTab:{}break;
