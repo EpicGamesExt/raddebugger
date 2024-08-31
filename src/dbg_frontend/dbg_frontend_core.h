@@ -963,8 +963,6 @@ __VA_ARGS__\
 //~ rjf: Main Layer Top-Level Calls
 
 internal void df_init(OS_WindowRepaintFunctionType *window_repaint_entry_point, D_StateDeltaHistory *hist);
-internal void df_begin_frame(Arena *arena, D_CmdList *cmds);
-internal void df_end_frame(void);
 internal void df_frame(D_CmdList *cmds, F32 dt);
 
 #endif // DBG_FRONTEND_CORE_H

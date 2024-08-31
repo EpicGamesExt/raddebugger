@@ -1575,6 +1575,5 @@ __VA_ARGS__\
 internal void d_init(CmdLine *cmdln, D_StateDeltaHistory *hist);
 internal D_CmdList d_gather_root_cmds(Arena *arena);
 internal void d_tick(Arena *arena, DI_Scope *di_scope, D_CmdList *cmds, F32 dt);
-internal void d_end_frame(void);
 
 #endif // DBG_ENGINE_CORE_H

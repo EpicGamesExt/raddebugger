@@ -20,9 +20,6 @@ DF_MsgKindTable:
   {WriteUserData                 write_user_data                               0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
   {WriteProjectData              write_project_data                            0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
   
-  //- rjf: notifications
-  {Error                         error                                         0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
-  
   //- rjf: windows
   {OpenWindow                    open_window                                   0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
   {CloseWindow                   close_window                                  0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}

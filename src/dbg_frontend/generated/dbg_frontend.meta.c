@@ -4,7 +4,7 @@
 //- GENERATED CODE
 
 C_LINKAGE_BEGIN
-String8 df_msg_kind_name_lower_table[61] =
+String8 df_msg_kind_name_lower_table[60] =
 {
 str8_lit_comp("null"),
 str8_lit_comp("exit"),
@@ -14,7 +14,6 @@ str8_lit_comp("apply_user_data"),
 str8_lit_comp("apply_project_data"),
 str8_lit_comp("write_user_data"),
 str8_lit_comp("write_project_data"),
-str8_lit_comp("error"),
 str8_lit_comp("open_window"),
 str8_lit_comp("close_window"),
 str8_lit_comp("toggle_fullscreen"),

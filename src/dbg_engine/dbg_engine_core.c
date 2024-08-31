@@ -7788,6 +7788,7 @@ d_tick(Arena *arena, DI_Scope *di_scope, D_CmdList *cmds, F32 dt)
     }
     arena_clear(d_state->msgs_arena);
     MemoryZeroStruct(&d_state->msgs);
+    scratch_end(scratch);
   }
   
   //////////////////////////////
@@ -9605,30 +9606,6 @@ d_tick(Arena *arena, DI_Scope *di_scope, D_CmdList *cmds, F32 dt)
     {
       MemoryZeroStruct(&d_state->ctrl_msgs);
       arena_clear(d_state->ctrl_msg_arena);
-    }
-  }
-  
-  ProfEnd();
-}
-
-internal void
-d_end_frame(void)
-{
-  ProfBeginFunction();
-  
-  //- rjf: write config changes
-  ProfScope("write config changes")
-  {
-    for(D_CfgSrc src = (D_CfgSrc)0; src < D_CfgSrc_COUNT; src = (D_CfgSrc)(src+1)) ProfScope("write %.*s config data", str8_varg(d_cfg_src_string_table[src]))
-    {
-      if(d_state->cfg_write_issued[src])
-      {
-        d_state->cfg_write_issued[src] = 0;
-        String8 path = d_cfg_path_from_src(src);
-        os_write_data_list_to_file_path(path, d_state->cfg_write_data[src]);
-      }
-      arena_clear(d_state->cfg_write_arenas[src]);
-      MemoryZeroStruct(&d_state->cfg_write_data[src]);
     }
   }
   
