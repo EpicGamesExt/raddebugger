@@ -5845,8 +5845,9 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
         }
       }
     }
+    
+    ui_end_build();
   }
-  ui_end_build();
   
   //////////////////////////////
   //- rjf: ensure hover eval is in-bounds
@@ -7958,23 +7959,252 @@ df_init(OS_WindowRepaintFunctionType *window_repaint_entry_point, D_StateDeltaHi
 }
 
 internal void
-df_begin_frame(Arena *arena, D_CmdList *cmds)
-{
-  ProfBeginFunction();
-  
-  ProfEnd();
-}
-
-internal void
-df_frame(D_CmdList *cmds, F32 dt)
+df_frame(OS_Handle repaint_window_handle)
 {
   Temp scratch = scratch_begin(0, 0);
   DI_Scope *di_scope = di_scope_open();
   
   //////////////////////////////
+  //- rjf: mark user-facing thread tick
+  //
+  ProfTick(0);
+  txt_user_clock_tick();
+  dasm_user_clock_tick();
+  geo_user_clock_tick();
+  tex_user_clock_tick();
+  
+  //////////////////////////////
+  //- rjf: get events from the OS
+  //
+  OS_EventList events = {0};
+  if(os_handle_match(repaint_window_handle, os_handle_zero()))
+  {
+    events = os_get_events(scratch.arena, df_state->num_frames_requested == 0);
+  }
+  
+  //////////////////////////////
+  //- rjf: pick target hz
+  //
+  // TODO(rjf): maximize target, given all windows and their monitors
+  F32 target_hz = os_get_gfx_info()->default_refresh_rate;
+  if(df_state->frame_time_us_history_idx > 32)
+  {
+    // rjf: calculate average frame time out of the last N
+    U64 num_frames_in_history = Min(ArrayCount(df_state->frame_time_us_history), df_state->frame_time_us_history_idx);
+    U64 frame_time_history_sum_us = 0;
+    for(U64 idx = 0; idx < num_frames_in_history; idx += 1)
+    {
+      frame_time_history_sum_us += df_state->frame_time_us_history[idx];
+    }
+    U64 frame_time_history_avg_us = frame_time_history_sum_us/num_frames_in_history;
+    
+    // rjf: pick among a number of sensible targets to snap to, given how well
+    // we've been performing
+    F32 possible_alternate_hz_targets[] = {target_hz, 60.f, 120.f, 144.f, 240.f};
+    F32 best_target_hz = target_hz;
+    S64 best_target_hz_frame_time_us_diff = max_S64;
+    for(U64 idx = 0; idx < ArrayCount(possible_alternate_hz_targets); idx += 1)
+    {
+      F32 candidate = possible_alternate_hz_targets[idx];
+      if(candidate <= target_hz)
+      {
+        U64 candidate_frame_time_us = 1000000/(U64)candidate;
+        S64 frame_time_us_diff = (S64)frame_time_history_avg_us - (S64)candidate_frame_time_us;
+        if(abs_s64(frame_time_us_diff) < best_target_hz_frame_time_us_diff)
+        {
+          best_target_hz = candidate;
+          best_target_hz_frame_time_us_diff = frame_time_us_diff;
+        }
+      }
+    }
+    target_hz = best_target_hz;
+  }
+  
+  //////////////////////////////
+  //- rjf: target Hz -> delta time
+  //
+  F32 dt = 1.f/target_hz;
+  
+  //////////////////////////////
+  //- rjf: begin measuring actual per-frame work
+  //
+  U64 begin_time_us = os_now_microseconds();
+  
+  //////////////////////////////
+  //- rjf: bind change
+  //
+  if(!df_state->confirm_active && df_state->bind_change_active)
+  {
+    if(os_key_press(&events, os_handle_zero(), 0, OS_Key_Esc))
+    {
+      df_request_frame();
+      df_state->bind_change_active = 0;
+    }
+    if(os_key_press(&events, os_handle_zero(), 0, OS_Key_Delete))
+    {
+      df_request_frame();
+      df_unbind_spec(df_state->bind_change_cmd_spec, df_state->bind_change_binding);
+      df_state->bind_change_active = 0;
+      d_cmd(d_cfg_src_write_cmd_kind_table[D_CfgSrc_User]);
+    }
+    for(OS_Event *event = events.first, *next = 0; event != 0; event = next)
+    {
+      if(event->kind == OS_EventKind_Press &&
+         event->key != OS_Key_Esc &&
+         event->key != OS_Key_Return &&
+         event->key != OS_Key_Backspace &&
+         event->key != OS_Key_Delete &&
+         event->key != OS_Key_LeftMouseButton &&
+         event->key != OS_Key_RightMouseButton &&
+         event->key != OS_Key_MiddleMouseButton &&
+         event->key != OS_Key_Ctrl &&
+         event->key != OS_Key_Alt &&
+         event->key != OS_Key_Shift)
+      {
+        df_state->bind_change_active = 0;
+        DF_Binding binding = zero_struct;
+        {
+          binding.key = event->key;
+          binding.flags = event->flags;
+        }
+        df_unbind_spec(df_state->bind_change_cmd_spec, df_state->bind_change_binding);
+        df_bind_spec(df_state->bind_change_cmd_spec, binding);
+        U32 codepoint = os_codepoint_from_event_flags_and_key(event->flags, event->key);
+        os_text(&events, os_handle_zero(), codepoint);
+        os_eat_event(&events, event);
+        d_cmd(d_cfg_src_write_cmd_kind_table[D_CfgSrc_User]);
+        df_request_frame();
+        break;
+      }
+    }
+  }
+  
+  //////////////////////////////
+  //- rjf: consume events
+  //
+  {
+    for(OS_Event *event = events.first, *next = 0;
+        event != 0;
+        event = next)
+    {
+      next = event->next;
+      DF_Window *window = df_window_from_os_handle(event->window);
+      D_CmdParams params = window ? df_cmd_params_from_window(window) : df_cmd_params_from_gfx();
+      B32 take = 0;
+      
+      //- rjf: try window close
+      if(!take && event->kind == OS_EventKind_WindowClose && window != 0)
+      {
+        take = 1;
+        d_cmd(D_CmdKind_CloseWindow, .window = df_handle_from_window(window));
+      }
+      
+      //- rjf: try menu bar operations
+      {
+        if(!take && event->kind == OS_EventKind_Press && event->key == OS_Key_Alt && event->flags == 0 && event->is_repeat == 0)
+        {
+          take = 1;
+          df_request_frame();
+          window->menu_bar_focused_on_press = window->menu_bar_focused;
+          window->menu_bar_key_held = 1;
+          window->menu_bar_focus_press_started = 1;
+        }
+        if(!take && event->kind == OS_EventKind_Release && event->key == OS_Key_Alt && event->flags == 0 && event->is_repeat == 0)
+        {
+          take = 1;
+          df_request_frame();
+          window->menu_bar_key_held = 0;
+        }
+        if(window->menu_bar_focused && event->kind == OS_EventKind_Press && event->key == OS_Key_Alt && event->flags == 0 && event->is_repeat == 0)
+        {
+          take = 1;
+          df_request_frame();
+          window->menu_bar_focused = 0;
+        }
+        else if(window->menu_bar_focus_press_started && !window->menu_bar_focused && event->kind == OS_EventKind_Release && event->flags == 0 && event->key == OS_Key_Alt && event->is_repeat == 0)
+        {
+          take = 1;
+          df_request_frame();
+          window->menu_bar_focused = !window->menu_bar_focused_on_press;
+          window->menu_bar_focus_press_started = 0;
+        }
+        else if(event->kind == OS_EventKind_Press && event->key == OS_Key_Esc && window->menu_bar_focused && !ui_any_ctx_menu_is_open())
+        {
+          take = 1;
+          df_request_frame();
+          window->menu_bar_focused = 0;
+        }
+      }
+      
+      //- rjf: try hotkey presses
+      if(!take && event->kind == OS_EventKind_Press)
+      {
+        DF_Binding binding = {event->key, event->flags};
+        D_CmdSpecList spec_candidates = df_cmd_spec_list_from_binding(scratch.arena, binding);
+        if(spec_candidates.first != 0 && !d_cmd_spec_is_nil(spec_candidates.first->spec))
+        {
+          D_CmdSpec *run_spec = d_cmd_spec_from_kind(D_CmdKind_RunCommand);
+          D_CmdSpec *spec = spec_candidates.first->spec;
+          if(run_spec != spec)
+          {
+            params.cmd_spec = spec;
+          }
+          U32 hit_char = os_codepoint_from_event_flags_and_key(event->flags, event->key);
+          take = 1;
+          d_push_cmd(run_spec, &params);
+          if(event->flags & OS_EventFlag_Alt)
+          {
+            window->menu_bar_focus_press_started = 0;
+          }
+        }
+        else if(OS_Key_F1 <= event->key && event->key <= OS_Key_F19)
+        {
+          window->menu_bar_focus_press_started = 0;
+        }
+        df_request_frame();
+      }
+      
+      //- rjf: try text events
+      if(!take && event->kind == OS_EventKind_Text)
+      {
+        String32 insertion32 = str32(&event->character, 1);
+        String8 insertion8 = str8_from_32(scratch.arena, insertion32);
+        D_CmdSpec *spec = d_cmd_spec_from_kind(D_CmdKind_InsertText);
+        params.string = insertion8;
+        d_push_cmd(spec, &params);
+        df_request_frame();
+        take = 1;
+        if(event->flags & OS_EventFlag_Alt)
+        {
+          window->menu_bar_focus_press_started = 0;
+        }
+      }
+      
+      //- rjf: do fall-through
+      if(!take)
+      {
+        take = 1;
+        params.os_event = event;
+        d_push_cmd(d_cmd_spec_from_kind(D_CmdKind_OSEvent), &params);
+      }
+      
+      //- rjf: take
+      if(take)
+      {
+        os_eat_event(&events, event);
+      }
+    }
+  }
+  
+  //////////////////////////////
+  //- rjf: gather root-level commands
+  //
+  D_CmdList cmds = d_gather_root_cmds(scratch.arena);
+  
+  //////////////////////////////
   //- rjf: tick debug engine
   //
-  d_tick(scratch.arena, di_scope, cmds, dt);
+  d_tick(scratch.arena, di_scope, &cmds, dt);
   
   //////////////////////////////
   //- rjf: apply new rich hover info
@@ -8077,25 +8307,68 @@ df_frame(D_CmdList *cmds, F32 dt)
           default:{}break;
           
           //- rjf: meta
-          case DF_MsgKind_Null:{}break;
-          case DF_MsgKind_Exit:{}break;
-          case DF_MsgKind_RunCommand:{}break;
-          case DF_MsgKind_ToggleDevMenu:{}break;
+          case DF_MsgKind_Exit:
+          {
+            // TODO(rjf): current implementation is wrong - will lose multiple windows!!!
+          }break;
+          case DF_MsgKind_RunCommand:
+          {
+            // TODO(rjf): need to somehow pass the command kind down...
+          }break;
+          case DF_MsgKind_ToggleDevMenu:
+          {
+            // TODO(rjf)
+          }break;
           
           //- rjf: config reading/writing
-          case DF_MsgKind_ApplyUserData:{}break;
-          case DF_MsgKind_ApplyProjectData:{}break;
-          case DF_MsgKind_WriteUserData:{}break;
-          case DF_MsgKind_WriteProjectData:{}break;
+          case DF_MsgKind_ApplyUserData:
+          case DF_MsgKind_ApplyProjectData:
+          {
+            // TODO(rjf)
+          }break;
+          case DF_MsgKind_WriteUserData:
+          case DF_MsgKind_WriteProjectData:
+          {
+            // TODO(rjf)
+          }break;
           
           //- rjf: windows
-          case DF_MsgKind_OpenWindow:{}break;
-          case DF_MsgKind_CloseWindow:{}break;
-          case DF_MsgKind_ToggleFullscreen:{}break;
+          case DF_MsgKind_OpenWindow:
+          {
+            DF_Window *originating_window = df_window_from_handle(regs->window);
+            if(originating_window == 0)
+            {
+              originating_window = df_state->first_window;
+            }
+            DF_Window *new_ws = df_window_open(v2f32(1280, 720), os_handle_zero(), D_CfgSrc_User);
+            if(originating_window != 0)
+            {
+              MemoryCopy(new_ws->setting_vals, originating_window->setting_vals, sizeof(DF_SettingVal)*DF_SettingCode_COUNT);
+            }
+          }break;
+          case DF_MsgKind_CloseWindow:
+          {
+            // TODO(rjf): coordinate with Exit msg
+          }break;
+          case DF_MsgKind_ToggleFullscreen:
+          {
+            DF_Window *window = df_window_from_handle(regs->window);
+            if(window != 0)
+            {
+              os_window_set_fullscreen(window->os, !os_window_is_fullscreen(window->os));
+            }
+          }break;
           
           //- rjf: confirmation
-          case DF_MsgKind_ConfirmAccept:{}break;
-          case DF_MsgKind_ConfirmCancel:{}break;
+          case DF_MsgKind_ConfirmAccept:
+          {
+            // TODO(rjf): confirm cmds -> msgs
+          }break;
+          case DF_MsgKind_ConfirmCancel:
+          {
+            df_state->confirm_active = 0;
+            df_state->confirm_key = ui_key_zero();
+          }break;
           
           //- rjf: queries
           case DF_MsgKind_CompleteQuery:{}break;
@@ -8186,7 +8459,7 @@ df_frame(D_CmdList *cmds, F32 dt)
   B32 panel_reset_done = 0;
   {
     B32 cfg_write_done[D_CfgSrc_COUNT] = {0};
-    for(D_CmdNode *cmd_node = cmds->first;
+    for(D_CmdNode *cmd_node = cmds.first;
         cmd_node != 0;
         cmd_node = cmd_node->next)
     {
@@ -8215,7 +8488,7 @@ df_frame(D_CmdList *cmds, F32 dt)
           {
             D_CmdParams p = *params;
             p.view_spec = view_spec;
-            d_cmd_list_push(scratch.arena, cmds, &p, d_cmd_spec_from_kind(D_CmdKind_OpenTab));
+            d_cmd_list_push(scratch.arena, &cmds, &p, d_cmd_spec_from_kind(D_CmdKind_OpenTab));
           }
         }break;
         
@@ -8380,7 +8653,7 @@ df_frame(D_CmdList *cmds, F32 dt)
         case D_CmdKind_SelectUnwind:
         thread_locator:;
         {
-          d_cmd_list_push(scratch.arena, cmds, params, d_cmd_spec_from_kind(D_CmdKind_FindThread));
+          d_cmd_list_push(scratch.arena, &cmds, params, d_cmd_spec_from_kind(D_CmdKind_FindThread));
         }break;
         
         //- rjf: loading/applying stateful config changes
@@ -8983,11 +9256,11 @@ df_frame(D_CmdList *cmds, F32 dt)
             D_CmdParams blank_params = df_cmd_params_from_window(ws);
             if(monitor_dim.x < 1920)
             {
-              d_cmd_list_push(scratch.arena, cmds, &blank_params, d_cmd_spec_from_kind(D_CmdKind_ResetToCompactPanels));
+              d_cmd_list_push(scratch.arena, &cmds, &blank_params, d_cmd_spec_from_kind(D_CmdKind_ResetToCompactPanels));
             }
             else
             {
-              d_cmd_list_push(scratch.arena, cmds, &blank_params, d_cmd_spec_from_kind(D_CmdKind_ResetToDefaultPanels));
+              d_cmd_list_push(scratch.arena, &cmds, &blank_params, d_cmd_spec_from_kind(D_CmdKind_ResetToDefaultPanels));
             }
           }
           
@@ -9064,13 +9337,13 @@ df_frame(D_CmdList *cmds, F32 dt)
         {
           D_CmdParams p = *params;
           p.string = df_push_search_string(scratch.arena);
-          d_cmd_list_push(scratch.arena, cmds, &p, d_cmd_spec_from_kind(D_CmdKind_FindTextForward));
+          d_cmd_list_push(scratch.arena, &cmds, &p, d_cmd_spec_from_kind(D_CmdKind_FindTextForward));
         }break;
         case D_CmdKind_FindPrev:
         {
           D_CmdParams p = *params;
           p.string = df_push_search_string(scratch.arena);
-          d_cmd_list_push(scratch.arena, cmds, &p, d_cmd_spec_from_kind(D_CmdKind_FindTextBackward));
+          d_cmd_list_push(scratch.arena, &cmds, &p, d_cmd_spec_from_kind(D_CmdKind_FindTextBackward));
         }break;
         
         //- rjf: font sizes
@@ -9215,7 +9488,7 @@ df_frame(D_CmdList *cmds, F32 dt)
                move_tab_panel != new_panel->prev && move_tab_panel != new_panel->next)
             {
               D_CmdParams p = df_cmd_params_from_panel(ws, move_tab_panel);
-              d_cmd_list_push(scratch.arena, cmds, &p, d_cmd_spec_from_kind(D_CmdKind_ClosePanel));
+              d_cmd_list_push(scratch.arena, &cmds, &p, d_cmd_spec_from_kind(D_CmdKind_ClosePanel));
             }
           }
         }break;
@@ -9265,7 +9538,7 @@ df_frame(D_CmdList *cmds, F32 dt)
             {
               D_CmdParams p = df_cmd_params_from_window(ws);
               p.panel = df_handle_from_panel(panel);
-              d_cmd_list_push(scratch.arena, cmds, &p, d_cmd_spec_from_kind(D_CmdKind_FocusPanel));
+              d_cmd_list_push(scratch.arena, &cmds, &p, d_cmd_spec_from_kind(D_CmdKind_FocusPanel));
               break;
             }
           }
@@ -9323,7 +9596,7 @@ df_frame(D_CmdList *cmds, F32 dt)
             }
             D_CmdParams p = df_cmd_params_from_window(ws);
             p.panel = df_handle_from_panel(dst_panel);
-            d_cmd_list_push(scratch.arena, cmds, &p, d_cmd_spec_from_kind(D_CmdKind_FocusPanel));
+            d_cmd_list_push(scratch.arena, &cmds, &p, d_cmd_spec_from_kind(D_CmdKind_FocusPanel));
           }
         }break;
         
@@ -9475,7 +9748,7 @@ df_frame(D_CmdList *cmds, F32 dt)
             p.dest_panel = df_handle_from_panel(panel);
             p.view = df_handle_from_view(view);
             p.prev_view = df_handle_from_view(prev_view);
-            d_cmd_list_push(scratch.arena, cmds, &p, d_cmd_spec_from_kind(D_CmdKind_MoveTab));
+            d_cmd_list_push(scratch.arena, &cmds, &p, d_cmd_spec_from_kind(D_CmdKind_MoveTab));
           }
         }break;
         case D_CmdKind_OpenTab:
@@ -9543,7 +9816,7 @@ df_frame(D_CmdList *cmds, F32 dt)
             if(src_panel_is_empty && src_panel != ws->root_panel)
             {
               D_CmdParams p = df_cmd_params_from_panel(ws, src_panel);
-              d_cmd_list_push(scratch.arena, cmds, &p, d_cmd_spec_from_kind(D_CmdKind_ClosePanel));
+              d_cmd_list_push(scratch.arena, &cmds, &p, d_cmd_spec_from_kind(D_CmdKind_ClosePanel));
             }
           }
         }break;
@@ -9569,7 +9842,7 @@ df_frame(D_CmdList *cmds, F32 dt)
             D_CmdParams p = *params;
             p.window    = df_handle_from_window(ws);
             p.panel     = df_handle_from_panel(ws->focused_panel);
-            d_cmd_list_push(scratch.arena, cmds, &p, d_cmd_spec_from_kind(D_CmdKind_PendingFile));
+            d_cmd_list_push(scratch.arena, &cmds, &p, d_cmd_spec_from_kind(D_CmdKind_PendingFile));
           }
           else
           {
@@ -10066,7 +10339,7 @@ df_frame(D_CmdList *cmds, F32 dt)
               params.vaddr = rip_vaddr;
               params.unwind_index = unwind_index;
               params.inline_depth = inline_depth;
-              d_cmd_list_push(scratch.arena, cmds, &params, d_cmd_spec_from_kind(D_CmdKind_FindCodeLocation));
+              d_cmd_list_push(scratch.arena, &cmds, &params, d_cmd_spec_from_kind(D_CmdKind_FindCodeLocation));
             }
             
             // rjf: snap to resolved address w/o line info
@@ -10078,7 +10351,7 @@ df_frame(D_CmdList *cmds, F32 dt)
               params.vaddr = rip_vaddr;
               params.unwind_index = unwind_index;
               params.inline_depth = inline_depth;
-              d_cmd_list_push(scratch.arena, cmds, &params, d_cmd_spec_from_kind(D_CmdKind_FindCodeLocation));
+              d_cmd_list_push(scratch.arena, &cmds, &params, d_cmd_spec_from_kind(D_CmdKind_FindCodeLocation));
             }
             
             // rjf: retry on stopped, pending debug info
@@ -10097,7 +10370,7 @@ df_frame(D_CmdList *cmds, F32 dt)
           params.entity = d_handle_from_entity(selected_thread);
           params.unwind_index = d_base_regs()->unwind_count;
           params.inline_depth = d_base_regs()->inline_depth;
-          d_cmd_list_push(scratch.arena, cmds, &params, d_cmd_spec_from_kind(D_CmdKind_FindThread));
+          d_cmd_list_push(scratch.arena, &cmds, &params, d_cmd_spec_from_kind(D_CmdKind_FindThread));
         }break;
         
         //- rjf: name finding
@@ -10245,7 +10518,7 @@ df_frame(D_CmdList *cmds, F32 dt)
                     }
                   }
                 }
-                d_cmd_list_push(scratch.arena, cmds, &p, d_cmd_spec_from_kind(D_CmdKind_FindCodeLocation));
+                d_cmd_list_push(scratch.arena, &cmds, &p, d_cmd_spec_from_kind(D_CmdKind_FindCodeLocation));
               }
             }
             
@@ -10256,7 +10529,7 @@ df_frame(D_CmdList *cmds, F32 dt)
               D_CmdParams p = *params;
               p.file_path = path;
               p.text_point = txt_pt(1, 1);
-              d_cmd_list_push(scratch.arena, cmds, &p, d_cmd_spec_from_kind(D_CmdKind_FindCodeLocation));
+              d_cmd_list_push(scratch.arena, &cmds, &p, d_cmd_spec_from_kind(D_CmdKind_FindCodeLocation));
             }
           }
         }break;
@@ -10270,7 +10543,7 @@ df_frame(D_CmdList *cmds, F32 dt)
             default: break;
             case D_EntityKind_Target:
             {
-              d_cmd_list_push(scratch.arena, cmds, params, d_cmd_spec_from_kind(D_CmdKind_EditTarget));
+              d_cmd_list_push(scratch.arena, &cmds, params, d_cmd_spec_from_kind(D_CmdKind_EditTarget));
             }break;
           }
         }break;
@@ -10281,7 +10554,7 @@ df_frame(D_CmdList *cmds, F32 dt)
           D_Entity *entity = d_entity_from_handle(params->entity);
           if(!d_entity_is_nil(entity) && entity->kind == D_EntityKind_Target)
           {
-            d_cmd_list_push(scratch.arena, cmds, params, d_cmd_spec_from_kind(D_CmdKind_Target));
+            d_cmd_list_push(scratch.arena, &cmds, params, d_cmd_spec_from_kind(D_CmdKind_Target));
           }
           else
           {
@@ -10322,7 +10595,7 @@ df_frame(D_CmdList *cmds, F32 dt)
             {
               D_CmdParams params = df_cmd_params_from_panel(ws, panel);
               params.entity = d_handle_from_entity(entity);
-              d_cmd_list_push(scratch.arena, cmds, &params, d_cmd_spec_from_kind(D_CmdKind_EditTarget));
+              d_cmd_list_push(scratch.arena, &cmds, &params, d_cmd_spec_from_kind(D_CmdKind_EditTarget));
             }break;
           }
         }break;
@@ -10563,8 +10836,8 @@ df_frame(D_CmdList *cmds, F32 dt)
               dst_panel->selected_tab_view = df_handle_from_view(dst_view);
               D_CmdParams params = df_cmd_params_from_view(ws, dst_panel, dst_view);
               params.text_point = point;
-              d_cmd_list_push(scratch.arena, cmds, &params, d_cmd_spec_from_kind(D_CmdKind_GoToLine));
-              d_cmd_list_push(scratch.arena, cmds, &params, d_cmd_spec_from_kind(cursor_snap_kind));
+              d_cmd_list_push(scratch.arena, &cmds, &params, d_cmd_spec_from_kind(D_CmdKind_GoToLine));
+              d_cmd_list_push(scratch.arena, &cmds, &params, d_cmd_spec_from_kind(cursor_snap_kind));
               panel_used_for_src_code = dst_panel;
             }
           }
@@ -10610,8 +10883,8 @@ df_frame(D_CmdList *cmds, F32 dt)
               D_CmdParams params = df_cmd_params_from_view(ws, dst_panel, dst_view);
               params.entity = d_handle_from_entity(process);
               params.vaddr = vaddr;
-              d_cmd_list_push(scratch.arena, cmds, &params, d_cmd_spec_from_kind(D_CmdKind_GoToAddress));
-              d_cmd_list_push(scratch.arena, cmds, &params, d_cmd_spec_from_kind(cursor_snap_kind));
+              d_cmd_list_push(scratch.arena, &cmds, &params, d_cmd_spec_from_kind(D_CmdKind_GoToAddress));
+              d_cmd_list_push(scratch.arena, &cmds, &params, d_cmd_spec_from_kind(cursor_snap_kind));
             }
           }
         }break;
@@ -10737,13 +11010,13 @@ df_frame(D_CmdList *cmds, F32 dt)
       B32 window_is_focused = os_window_is_focused(w->os);
       if(window_is_focused)
       {
-        last_focused_window = df_handle_from_window(w);
+        df_state->last_focused_window = df_handle_from_window(w);
       }
       d_push_regs();
       d_regs()->window = df_handle_from_window(w);
-      df_window_update_and_render(scratch.arena, w, cmds);
+      df_window_update_and_render(scratch.arena, w, &cmds);
       D_Regs *window_regs = d_pop_regs();
-      if(df_window_from_handle(last_focused_window) == w)
+      if(df_window_from_handle(df_state->last_focused_window) == w)
       {
         MemoryCopyStruct(d_regs(), window_regs);
       }
@@ -10806,6 +11079,34 @@ df_frame(D_CmdList *cmds, F32 dt)
     }
     r_end_frame();
   }
+  
+  //////////////////////////////
+  //- rjf: show windows after first frame
+  //
+  if(os_handle_match(repaint_window_handle, os_handle_zero()))
+  {
+    D_HandleList windows_to_show = {0};
+    for(DF_Window *w = df_state->first_window; w != 0; w = w->next)
+    {
+      if(w->frames_alive == 1)
+      {
+        d_handle_list_push(scratch.arena, &windows_to_show, df_handle_from_window(w));
+      }
+    }
+    for(D_HandleNode *n = windows_to_show.first; n != 0; n = n->next)
+    {
+      DF_Window *window = df_window_from_handle(n->handle);
+      os_window_first_paint(window->os);
+    }
+  }
+  
+  //////////////////////////////
+  //- rjf: determine frame time, record into history
+  //
+  U64 end_time_us = os_now_microseconds();
+  U64 frame_time_us = end_time_us-begin_time_us;
+  df_state->frame_time_us_history[df_state->frame_time_us_history_idx%ArrayCount(df_state->frame_time_us_history)] = frame_time_us;
+  df_state->frame_time_us_history_idx += 1;
   
   di_scope_close(di_scope);
   scratch_end(scratch);

@@ -666,6 +666,7 @@ struct DF_State
   DF_Window *free_window;
   U64 window_count;
   B32 last_window_queued_save;
+  D_Handle last_focused_window;
   
   // rjf: view state
   DF_View *first_view;
@@ -697,6 +698,10 @@ struct DF_State
   
   // rjf: icon texture
   R_Handle icon_texture;
+  
+  // rjf: frame time history
+  U64 frame_time_us_history[64];
+  U64 frame_time_us_history_idx;
 };
 
 ////////////////////////////////
@@ -963,6 +968,6 @@ __VA_ARGS__\
 //~ rjf: Main Layer Top-Level Calls
 
 internal void df_init(OS_WindowRepaintFunctionType *window_repaint_entry_point, D_StateDeltaHistory *hist);
-internal void df_frame(D_CmdList *cmds, F32 dt);
+internal void df_frame(OS_Handle repaint_window_handle);
 
 #endif // DBG_FRONTEND_CORE_H
