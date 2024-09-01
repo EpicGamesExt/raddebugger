@@ -607,6 +607,7 @@ struct DF_State
 {
   // rjf: arenas
   Arena *arena;
+  B32 quit;
   
   // rjf: messages
   Arena *msgs_arena;
@@ -641,8 +642,9 @@ struct DF_State
   F32 confirm_t;
   Arena *confirm_arena;
   D_CmdList confirm_cmds;
+  DF_Msg confirm_msg;
   String8 confirm_title;
-  String8 confirm_msg;
+  String8 confirm_desc;
   
   // rjf: string search state
   Arena *string_search_arena;

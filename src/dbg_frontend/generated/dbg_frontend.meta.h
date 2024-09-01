@@ -427,6 +427,7 @@ extern DF_StringBindingPair df_g_default_binding_table[110];
 extern String8 df_g_binding_version_remap_old_name_table[7];
 extern String8 df_g_binding_version_remap_new_name_table[7];
 extern String8 df_g_icon_kind_text_table[69];
+extern String8 df_view_kind_name_lower_table[34];
 extern DF_ViewSpecInfo df_g_gfx_view_kind_spec_info_table[34];
 extern DF_IconKind df_cmd_kind_icon_kind_table[221];
 extern DF_IconKind df_entity_kind_icon_kind_table[31];

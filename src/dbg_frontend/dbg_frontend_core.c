@@ -2758,7 +2758,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
           UI_WidthFill UI_PrefHeight(ui_children_sum(1.f)) UI_Column UI_Padding(ui_pct(1, 0))
           {
             UI_TextRasterFlags(df_raster_flags_from_slot(DF_FontSlot_Main)) UI_FontSize(ui_top_font_size()*2.f) UI_PrefHeight(ui_em(3.f, 1.f)) ui_label(df_state->confirm_title);
-            UI_PrefHeight(ui_em(3.f, 1.f)) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) ui_label(df_state->confirm_msg);
+            UI_PrefHeight(ui_em(3.f, 1.f)) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) ui_label(df_state->confirm_desc);
             ui_spacer(ui_em(1.5f, 1.f));
             UI_Row UI_Padding(ui_pct(1.f, 0.f)) UI_WidthFill UI_PrefHeight(ui_em(5.f, 1.f))
             {
@@ -8313,7 +8313,34 @@ df_frame(void)
           //- rjf: meta
           case DF_MsgKind_Exit:
           {
-            // TODO(rjf): current implementation is wrong - will lose multiple windows!!!
+            D_EntityList running_processes = d_query_cached_entity_list_with_kind(D_EntityKind_Process);
+            
+            // NOTE(rjf): if targets are running, push confirmation first, and
+            // get user's OK
+            UI_Key key = ui_key_from_string(ui_key_zero(), str8_lit("lossy_exit_confirmation"));
+            if(!ui_key_match(key, df_state->confirm_key) && running_processes.count != 0 && !regs->force_confirm)
+            {
+              df_state->confirm_key = key;
+              df_state->confirm_active = 1;
+              arena_clear(df_state->confirm_arena);
+              MemoryZeroStruct(&df_state->confirm_msg);
+              df_state->confirm_title = push_str8f(df_state->confirm_arena, "Are you sure you want to exit?");
+              df_state->confirm_desc = push_str8f(df_state->confirm_arena, "The debugger is still attached to %slive process%s.",
+                                                  running_processes.count == 1 ? "a " : "",
+                                                  running_processes.count == 1 ? ""   : "es");
+              df_state->confirm_msg.kind = DF_MsgKind_Exit;
+              df_state->confirm_msg.regs = d_regs_copy(df_state->confirm_arena, regs);
+              df_state->confirm_msg.regs->force_confirm = 1;
+            }
+            
+            // rjf: if no targets are running, or this is force-confirmed,
+            // then save & exit
+            else
+            {
+              df_msg(DF_MsgKind_WriteUserData);
+              df_msg(DF_MsgKind_WriteProjectData);
+              df_state->quit = 1;
+            }
           }break;
           case DF_MsgKind_RunCommand:
           {
@@ -8321,7 +8348,8 @@ df_frame(void)
           }break;
           case DF_MsgKind_ToggleDevMenu:
           {
-            // TODO(rjf)
+            DF_Window *window = df_window_from_handle(regs->window);
+            window->dev_menu_is_open ^= 1;
           }break;
           
           //- rjf: config reading/writing
@@ -8366,7 +8394,13 @@ df_frame(void)
           //- rjf: confirmation
           case DF_MsgKind_ConfirmAccept:
           {
-            // TODO(rjf): confirm cmds -> msgs
+            df_state->confirm_active = 0;
+            df_state->confirm_key = ui_key_zero();
+            D_RegsScope
+            {
+              d_regs_copy_contents(scratch.arena, d_regs(), df_state->confirm_msg.regs);
+              df_msg(df_state->confirm_msg.kind);
+            }
           }break;
           case DF_MsgKind_ConfirmCancel:
           {
@@ -8819,7 +8853,15 @@ df_frame(void)
           //- rjf: tab creation/removal
           case DF_MsgKind_OpenTab:
           {
-            // TODO(rjf): need some way to pass down the view
+            DF_Panel *panel = df_panel_from_handle(regs->panel);
+            DF_View *view = df_view_alloc();
+            df_view_equip_spec(view, &df_nil_view_spec, regs->string, regs->params_tree);
+            DF_View *prev_view = panel->last_tab_view;
+            if(!df_view_is_nil(df_view_from_handle(regs->prev_view)))
+            {
+              prev_view = df_view_from_handle(regs->prev_view);
+            }
+            df_panel_insert_tab_view(panel, prev_view, view);
           }break;
           case DF_MsgKind_CloseTab:
           {
@@ -9258,21 +9300,20 @@ df_frame(void)
             FileProperties props = os_properties_from_file_path(path);
             if(props.created != 0)
             {
-              // TODO(rjf): open new tab, evaluating file path, using pending_file view rule
-              df_msg(DF_MsgKind_OpenTab);
-#if 0
-              D_CmdParams p = *params;
-              p.window    = df_handle_from_window(ws);
-              p.panel     = df_handle_from_panel(ws->focused_panel);
-              d_cmd_list_push(scratch.arena, &cmds, &p, d_cmd_spec_from_kind(D_CmdKind_PendingFile));
-#endif
+              df_msg(DF_MsgKind_OpenTab,
+                     .panel = df_handle_from_panel(ws->focused_panel),
+                     .string = d_eval_string_from_file_path(scratch.arena, path),
+                     .params_tree = md_tree_from_string(scratch.arena, df_view_kind_name_lower_table[DF_ViewKind_PendingFile]));
             }
             else
             {
               log_user_errorf("Couldn't open file at \"%S\".", path);
             }
           }break;
-          case DF_MsgKind_Switch:{}break;
+          case DF_MsgKind_Switch:
+          {
+            // TODO(rjf): @msgs
+          }break;
           case DF_MsgKind_SwitchToPartnerFile:
           {
             DF_Panel *panel = df_panel_from_handle(regs->panel);
@@ -9301,10 +9342,7 @@ df_frame(void)
                 FileProperties candidate_props = os_properties_from_file_path(candidate_path);
                 if(candidate_props.modified != 0)
                 {
-                  // TODO(rjf):
-                  //D_CmdParams p = df_cmd_params_from_panel(ws, panel);
-                  //p.entity = d_handle_from_entity(candidate);
-                  //d_cmd_list_push(arena, cmds, &p, d_cmd_spec_from_kind(D_CmdKind_Switch));
+                  df_msg(DF_MsgKind_FindCodeLocation, .file_path = candidate_path, .cursor = txt_pt(0, 0));
                   break;
                 }
               }
@@ -9625,11 +9663,14 @@ df_frame(void)
               {
                 disasm_view_prioritized = (df_selected_tab_from_panel(dst_panel) == view_w_disasm);
                 dst_panel->selected_tab_view = df_handle_from_view(dst_view);
-                df_msg(DF_MsgKind_GoToLine,
-                       .panel  = df_handle_from_panel(dst_panel),
-                       .view   = df_handle_from_view(dst_view),
-                       .cursor = point);
-                df_msg(cursor_snap_kind);
+                if(point.line != 0)
+                {
+                  df_msg(DF_MsgKind_GoToLine,
+                         .panel  = df_handle_from_panel(dst_panel),
+                         .view   = df_handle_from_view(dst_view),
+                         .cursor = point);
+                  df_msg(cursor_snap_kind);
+                }
                 panel_used_for_src_code = dst_panel;
               }
             }
@@ -9672,7 +9713,7 @@ df_frame(void)
               if(!df_panel_is_nil(dst_panel))
               {
                 dst_panel->selected_tab_view = df_handle_from_view(dst_view);
-                df_msg(DF_MsgKind_GoToLine,
+                df_msg(DF_MsgKind_GoToAddress,
                        .panel       = df_handle_from_panel(dst_panel),
                        .view        = df_handle_from_view(dst_view),
                        .process     = d_handle_from_entity(process),
@@ -9814,9 +9855,9 @@ df_frame(void)
               arena_clear(df_state->confirm_arena);
               MemoryZeroStruct(&df_state->confirm_cmds);
               df_state->confirm_title = push_str8f(df_state->confirm_arena, "Are you sure you want to exit?");
-              df_state->confirm_msg = push_str8f(df_state->confirm_arena, "The debugger is still attached to %slive process%s.",
-                                                 running_processes.count == 1 ? "a " : "",
-                                                 running_processes.count == 1 ? ""   : "es");
+              df_state->confirm_desc = push_str8f(df_state->confirm_arena, "The debugger is still attached to %slive process%s.",
+                                                  running_processes.count == 1 ? "a " : "",
+                                                  running_processes.count == 1 ? ""   : "es");
               D_CmdParams p = df_cmd_params_from_window(ws);
               p.force_confirm = 1;
               d_cmd_list_push(df_state->confirm_arena, &df_state->confirm_cmds, &p, d_cmd_spec_from_kind(D_CmdKind_CloseWindow));
@@ -11086,7 +11127,7 @@ df_frame(void)
         }break;
         case D_CmdKind_Switch:
         {
-          // TODO(rjf): @viz_merge
+          // TODO(rjf): @msgs
 #if 0
           B32 already_opened = 0;
           DF_Panel *panel = df_panel_from_handle(params->panel);
@@ -12227,7 +12268,7 @@ df_frame(void)
   }
   
   //////////////////////////////
-  //- rjf: queue drag drop (TODO(rjf))
+  //- rjf: queue drag drop (TODO(rjf): @msgs)
   //
   B32 queue_drag_drop = 0;
   if(queue_drag_drop)

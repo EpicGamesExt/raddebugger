@@ -671,7 +671,6 @@ internal B32
 frame(void)
 {
   ProfBeginFunction();
-  B32 should_quit = 0;
   Temp scratch = scratch_begin(0, 0);
   
   //- rjf: begin logging
@@ -700,15 +699,9 @@ frame(void)
     }
   }
   
-  //- rjf: quit if no windows are left
-  if(df_state->first_window == 0)
-  {
-    should_quit = 1;
-  }
-  
   scratch_end(scratch);
   ProfEnd();
-  return should_quit;
+  return df_state->quit;
 }
 
 ////////////////////////////////

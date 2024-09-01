@@ -299,6 +299,12 @@ internal MD_TokenizeResult md_tokenize_from_text(Arena *arena, String8 text);
 internal MD_ParseResult md_parse_from_text_tokens(Arena *arena, String8 filename, String8 text, MD_TokenArray tokens);
 
 ////////////////////////////////
+//~ rjf: Bundled Text -> Tree Functions
+
+internal MD_ParseResult md_parse_from_text(Arena *arena, String8 filename, String8 text);
+#define md_tree_from_string(arena, string) (md_parse_from_text((arena), str8_zero(), (string)).root)
+
+////////////////////////////////
 //~ rjf: Tree -> Text Functions
 
 internal String8List md_debug_string_list_from_tree(Arena *arena, MD_Node *root);

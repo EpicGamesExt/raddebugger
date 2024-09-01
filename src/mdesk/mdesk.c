@@ -1099,6 +1099,19 @@ if(work_top == 0) {work_top = &broken_work;}\
 }
 
 ////////////////////////////////
+//~ rjf: Bundled Text -> Tree Functions
+
+internal MD_ParseResult
+md_parse_from_text(Arena *arena, String8 filename, String8 text)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  MD_TokenizeResult tokenize = md_tokenize_from_text(scratch.arena, text);
+  MD_ParseResult parse = md_parse_from_text_tokens(arena, filename, text, tokenize.tokens); 
+  scratch_end(scratch);
+  return parse;
+}
+
+////////////////////////////////
 //~ rjf: Tree -> Text Functions
 
 internal String8List

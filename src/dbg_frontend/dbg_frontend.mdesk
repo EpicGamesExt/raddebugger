@@ -488,6 +488,11 @@ DF_ViewTable:
   @expand(DF_ViewTable a) `DF_VIEW_UI_FUNCTION_DEF($(a.name_lower));`;
 }
 
+@data(String8) df_view_kind_name_lower_table:
+{
+  @expand(DF_ViewTable a) `str8_lit_comp("$(a.name_lower)")`
+}
+
 @data(DF_ViewSpecInfo) df_g_gfx_view_kind_spec_info_table:
 {
   @expand(DF_ViewTable a) ```{(0|$(a.parameterized_by_entity)*DF_ViewSpecFlag_ParameterizedByEntity|$(a.project_specific)*DF_ViewSpecFlag_ProjectSpecific|$(a.can_serialize)*DF_ViewSpecFlag_CanSerialize|$(a.can_filter)*DF_ViewSpecFlag_CanFilter|$(a.filter_is_code)*DF_ViewSpecFlag_FilterIsCode|$(a.typing_automatically_filters)*DF_ViewSpecFlag_TypingAutomaticallyFilters), str8_lit_comp("$(a.name_lower)"), str8_lit_comp("$(a.display_string)"), DF_IconKind_$(a.icon), DF_VIEW_SETUP_FUNCTION_NAME($(a.name_lower)), DF_VIEW_CMD_FUNCTION_NAME($(a.name_lower)), DF_VIEW_UI_FUNCTION_NAME($(a.name_lower))}```;
