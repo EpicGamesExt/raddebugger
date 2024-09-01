@@ -4,8 +4,9 @@
 //- GENERATED CODE
 
 C_LINKAGE_BEGIN
-Rng1U64 d_reg_slot_range_table[28] =
+Rng1U64 d_reg_slot_range_table[29] =
 {
+{0},
 {OffsetOf(D_Regs, machine), OffsetOf(D_Regs, machine) + sizeof(D_Handle)},
 {OffsetOf(D_Regs, module), OffsetOf(D_Regs, module) + sizeof(D_Handle)},
 {OffsetOf(D_Regs, process), OffsetOf(D_Regs, process) + sizeof(D_Handle)},
@@ -186,8 +187,9 @@ str8_lit_comp("register_as_jit_debugger"),
 str8_lit_comp("log_marker"),
 };
 
-Rng1U64 d_cmd_param_slot_range_table[23] =
+Rng1U64 d_cmd_param_slot_range_table[24] =
 {
+{0},
 {OffsetOf(D_CmdParams, window), OffsetOf(D_CmdParams, window) + sizeof(D_Handle)},
 {OffsetOf(D_CmdParams, panel), OffsetOf(D_CmdParams, panel) + sizeof(D_Handle)},
 {OffsetOf(D_CmdParams, dest_panel), OffsetOf(D_CmdParams, dest_panel) + sizeof(D_Handle)},

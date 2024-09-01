@@ -8,6 +8,7 @@
 
 typedef enum D_RegSlot
 {
+D_RegSlot_Null,
 D_RegSlot_Machine,
 D_RegSlot_Module,
 D_RegSlot_Process,
@@ -36,6 +37,7 @@ D_RegSlot_PreferDisasm,
 D_RegSlot_Dir2,
 D_RegSlot_String,
 D_RegSlot_ParamsTree,
+D_RegSlot_COUNT,
 } D_RegSlot;
 
 typedef enum D_MsgKind
@@ -570,10 +572,10 @@ struct {B32 *value_ptr; String8 name;} DEV_toggle_table[] =
 {&DEV_updating_indicator, str8_lit_comp("updating_indicator")},
 };
 C_LINKAGE_BEGIN
-extern Rng1U64 d_reg_slot_range_table[28];
+extern Rng1U64 d_reg_slot_range_table[29];
 extern String8 d_msg_kind_name_lower_table[71];
 extern String8 d_msg_kind_name_display_table[71];
-extern Rng1U64 d_cmd_param_slot_range_table[23];
+extern Rng1U64 d_cmd_param_slot_range_table[24];
 extern String8 d_entity_kind_display_string_table[31];
 extern String8 d_entity_kind_name_lower_table[31];
 extern String8 d_entity_kind_name_lower_plural_table[31];

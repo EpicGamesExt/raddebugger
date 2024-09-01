@@ -133,7 +133,9 @@ D_RegTable:
 
 @enum D_RegSlot:
 {
-  @expand(D_RegTable a) `$(a.name)`
+  Null,
+  @expand(D_RegTable a) `$(a.name)`,
+  COUNT,
 }
 
 @struct D_Regs:
@@ -143,6 +145,7 @@ D_RegTable:
 
 @data(Rng1U64) d_reg_slot_range_table:
 {
+  `{0}`,
   @expand(D_RegTable a) `{OffsetOf(D_Regs, $(a.name_lower)), OffsetOf(D_Regs, $(a.name_lower)) + sizeof($(a.c_type))}`
 }
 
@@ -799,6 +802,7 @@ DF_DevToggleTable:
 
 @data(Rng1U64) d_cmd_param_slot_range_table:
 {
+  `{0}`,
   @expand(D_CmdParamSlotTable a) `{OffsetOf(D_CmdParams, $(a.name_lower)), OffsetOf(D_CmdParams, $(a.name_lower)) + sizeof($(a.c_type))}`,
 }
 

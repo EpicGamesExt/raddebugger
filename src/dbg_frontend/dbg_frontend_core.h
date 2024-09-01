@@ -361,6 +361,45 @@ struct DF_ViewRuleSpec
 };
 
 ////////////////////////////////
+//~ rjf: Message Kind Metadata Types
+
+typedef U32 DF_MsgQueryFlags;
+enum
+{
+  DF_MsgQueryFlag_AllowFiles       = (1<<0),
+  DF_MsgQueryFlag_AllowFolders     = (1<<1),
+  DF_MsgQueryFlag_CodeInput        = (1<<2),
+  DF_MsgQueryFlag_KeepOldInput     = (1<<3),
+  DF_MsgQueryFlag_SelectOldInput   = (1<<4),
+  DF_MsgQueryFlag_Required         = (1<<5),
+};
+
+typedef struct DF_MsgQuery DF_MsgQuery;
+struct DF_MsgQuery
+{
+  DF_MsgQueryFlags flags;
+  D_RegSlot slot;
+  D_EntityKind entity_kind;
+};
+
+typedef U32 DF_MsgKindFlags;
+enum
+{
+  DF_MsgKindFlag_ListInUI      = (1<<0),
+  DF_MsgKindFlag_ListInIPCDocs = (1<<1),
+};
+
+typedef struct DF_MsgKindInfo DF_MsgKindInfo;
+struct DF_MsgKindInfo
+{
+  String8 display_name;
+  String8 description;
+  String8 search_tags;
+  DF_MsgKindFlags flags;
+  DF_MsgQuery query;
+};
+
+////////////////////////////////
 //~ rjf: Generated Code
 
 #include "generated/dbg_frontend.meta.h"
@@ -957,6 +996,7 @@ internal void df_request_frame(void);
 ////////////////////////////////
 //~ rjf: Message Functions
 
+internal DF_MsgKind df_msg_kind_from_string(String8 string);
 internal void df_msg_(DF_MsgKind kind, D_Regs *regs);
 #define df_msg(kind, ...) df_msg_((kind),\
 &(D_Regs)\

@@ -7812,6 +7812,21 @@ df_request_frame(void)
 ////////////////////////////////
 //~ rjf: Message Functions
 
+internal DF_MsgKind
+df_msg_kind_from_string(String8 string)
+{
+  DF_MsgKind result = DF_MsgKind_Null;
+  for(EachNonZeroEnumVal(DF_MsgKind, k))
+  {
+    if(str8_match(string, df_msg_kind_name_lower_table[k], 0))
+    {
+      result = k;
+      break;
+    }
+  }
+  return result;
+}
+
 internal void
 df_msg_(DF_MsgKind kind, D_Regs *regs)
 {
@@ -8344,7 +8359,41 @@ df_frame(void)
           }break;
           case DF_MsgKind_RunCommand:
           {
-            // TODO(rjf): need to somehow pass the command kind down...
+            D_MsgKind d_kind = d_msg_kind_from_string(regs->string);
+            DF_MsgKind df_kind = df_msg_kind_from_string(regs->string);
+            DF_MsgKindInfo *info = 0;
+            if(d_kind != D_MsgKind_Null)
+            {
+              info = &df_d_msg_kind_info_table[d_kind];
+            }
+            if(df_kind != DF_MsgKind_Null)
+            {
+              info = &df_msg_kind_info_table[df_kind];
+            }
+            if(info != 0)
+            {
+              if(info->query.flags & DF_MsgQueryFlag_Required)
+              {
+                DF_Window *window = df_window_from_handle(regs->window);
+                if(window != 0)
+                {
+                  // TODO(rjf): @msgs
+                  // arena_clear(window->query_cmd_arena);
+                  // window->query_cmd_spec   = d_cmd_spec_is_nil(spec) ? cmd->spec : spec;
+                  // window->query_cmd_params = df_cmd_params_copy(window->query_cmd_arena, params);
+                  // MemoryZeroArray(window->query_cmd_params_mask);
+                  // window->query_view_selected = 1;
+                }
+              }
+              else if(d_kind != D_MsgKind_Null)
+              {
+                d_msg(d_kind);
+              }
+              else if(df_kind != DF_MsgKind_Null)
+              {
+                df_msg(df_kind);
+              }
+            }
           }break;
           case DF_MsgKind_ToggleDevMenu:
           {

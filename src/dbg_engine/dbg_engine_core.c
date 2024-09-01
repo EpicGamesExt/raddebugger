@@ -6181,6 +6181,21 @@ d_errorf(char *fmt, ...)
 ////////////////////////////////
 //~ rjf: Message Functions
 
+internal D_MsgKind
+d_msg_kind_from_string(String8 string)
+{
+  D_MsgKind result = D_MsgKind_Null;
+  for(EachNonZeroEnumVal(D_MsgKind, k))
+  {
+    if(str8_match(string, d_msg_kind_name_lower_table[k], 0))
+    {
+      result = k;
+      break;
+    }
+  }
+  return result;
+}
+
 internal void
 d_msg_(D_MsgKind kind, D_Regs *regs)
 {

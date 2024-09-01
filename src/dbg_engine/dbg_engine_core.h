@@ -1561,6 +1561,7 @@ __VA_ARGS__                 \
 ////////////////////////////////
 //~ rjf: Message Functions
 
+internal D_MsgKind d_msg_kind_from_string(String8 string);
 internal void d_msg_(D_MsgKind kind, D_Regs *regs);
 #define d_msg(kind, ...) d_msg_((kind),\
 &(D_Regs)\

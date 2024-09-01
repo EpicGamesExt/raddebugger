@@ -423,6 +423,8 @@ DF_VIEW_RULE_ROW_UI_FUNCTION_DEF(checkbox);
 DF_VIEW_RULE_ROW_UI_FUNCTION_DEF(color_rgba);
 C_LINKAGE_BEGIN
 extern String8 df_msg_kind_name_lower_table[64];
+extern DF_MsgKindInfo df_msg_kind_info_table[64];
+extern DF_MsgKindInfo df_d_msg_kind_info_table[71];
 extern DF_StringBindingPair df_g_default_binding_table[110];
 extern String8 df_g_binding_version_remap_old_name_table[7];
 extern String8 df_g_binding_version_remap_new_name_table[7];

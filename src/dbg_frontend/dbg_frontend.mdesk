@@ -124,6 +124,16 @@ DF_MsgKindTable:
   @expand(DF_MsgKindTable a) `str8_lit_comp("$(a.name_lower)")`
 }
 
+@data(DF_MsgKindInfo) df_msg_kind_info_table:
+{
+  @expand(DF_MsgKindTable a) `{str8_lit_comp("$(a.display_name)"), str8_lit_comp("$(a.desc)"), str8_lit_comp("$(a.search_tags)"), (($(a.show_in_ui)*DF_MsgKindFlag_ListInUI)|($(a.show_in_ipc_docs)*DF_MsgKindFlag_ListInIPCDocs)), {($(a.q_allow_files)*DF_MsgQueryFlag_AllowFiles)|($(a.q_allow_folders)*DF_MsgQueryFlag_AllowFolders)|($(a.q_keep_oi)*DF_MsgQueryFlag_KeepOldInput)|($(a.q_select_oi)*DF_MsgQueryFlag_SelectOldInput)|($(a.q_is_code)*DF_MsgQueryFlag_CodeInput)|($(a.q_required)*DF_MsgQueryFlag_Required), D_RegSlot_$(a.q_slot), D_EntityKind_$(a.q_ent_kind)}}`
+}
+
+@data(DF_MsgKindInfo) df_d_msg_kind_info_table:
+{
+  @expand(D_MsgKindTable a) `{str8_lit_comp("$(a.display_name)"), str8_lit_comp("$(a.desc)"), str8_lit_comp("$(a.search_tags)"), (($(a.show_in_ui)*DF_MsgKindFlag_ListInUI)|($(a.show_in_ipc_docs)*DF_MsgKindFlag_ListInIPCDocs)), {($(a.q_allow_files)*DF_MsgQueryFlag_AllowFiles)|($(a.q_allow_folders)*DF_MsgQueryFlag_AllowFolders)|($(a.q_keep_oi)*DF_MsgQueryFlag_KeepOldInput)|($(a.q_select_oi)*DF_MsgQueryFlag_SelectOldInput)|($(a.q_is_code)*DF_MsgQueryFlag_CodeInput)|($(a.q_required)*DF_MsgQueryFlag_Required), D_RegSlot_$(a.q_slot), D_EntityKind_$(a.q_ent_kind)}}`
+}
+
 ////////////////////////////////
 //~ rjf: Embedded Data
 
