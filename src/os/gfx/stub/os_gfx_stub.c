@@ -51,11 +51,6 @@ os_window_first_paint(OS_Handle window)
 }
 
 internal void
-os_window_equip_repaint(OS_Handle window, OS_WindowRepaintFunctionType *repaint, void *user_data)
-{
-}
-
-internal void
 os_window_focus(OS_Handle window)
 {
 }

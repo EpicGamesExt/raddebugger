@@ -660,7 +660,6 @@ struct DF_State
   D_CmdParamSlotViewSpecRuleList cmd_param_slot_view_spec_table[D_CmdParamSlot_COUNT];
   
   // rjf: windows
-  OS_WindowRepaintFunctionType *repaint_hook;
   DF_Window *first_window;
   DF_Window *last_window;
   DF_Window *free_window;
@@ -967,7 +966,7 @@ __VA_ARGS__\
 ////////////////////////////////
 //~ rjf: Main Layer Top-Level Calls
 
-internal void df_init(OS_WindowRepaintFunctionType *window_repaint_entry_point, D_StateDeltaHistory *hist);
-internal void df_frame(OS_Handle repaint_window_handle);
+internal void df_init(D_StateDeltaHistory *hist);
+internal void df_frame(void);
 
 #endif // DBG_FRONTEND_CORE_H

@@ -102,3 +102,23 @@ supplement_thread_base_entry_point(void (*entry_point)(void *params), void *para
   entry_point(params);
   tctx_release();
 }
+
+internal B32
+update(void)
+{
+  ProfTick(0);
+#if defined(TEXT_CACHE_H)
+  txt_user_clock_tick();
+#endif
+#if defined(DASM_CACHE_H)
+  dasm_user_clock_tick();
+#endif
+#if defined(GEO_CACHE_H)
+  geo_user_clock_tick();
+#endif
+#if defined(TEXTURE_CACHE_H)
+  tex_user_clock_tick();
+#endif
+  B32 result = frame();
+  return result;
+}

@@ -357,17 +357,10 @@ os_w32_wnd_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
       case WM_SIZE:
       case WM_PAINT:
       {
-        if(window->repaint != 0)
-        {
-          PAINTSTRUCT ps = {0};
-          BeginPaint(hwnd, &ps);
-          window->repaint(os_w32_handle_from_window(window), window->repaint_user_data);
-          EndPaint(hwnd, &ps);
-        }
-        else
-        {
-          result = DefWindowProcW(hwnd, uMsg, wParam, lParam);
-        }
+        PAINTSTRUCT ps = {0};
+        BeginPaint(hwnd, &ps);
+        update();
+        EndPaint(hwnd, &ps);
       }break;
       
       case WM_CLOSE:
@@ -1090,14 +1083,6 @@ os_window_first_paint(OS_Handle window_handle)
 }
 
 internal void
-os_window_equip_repaint(OS_Handle handle, OS_WindowRepaintFunctionType *repaint, void *user_data)
-{
-  OS_W32_Window *window = os_w32_window_from_handle(handle);
-  window->repaint = repaint;
-  window->repaint_user_data = user_data;
-}
-
-internal void
 os_window_focus(OS_Handle handle)
 {
   OS_W32_Window *window = os_w32_window_from_handle(handle);
@@ -1125,8 +1110,6 @@ internal void
 os_window_set_fullscreen(OS_Handle handle, B32 fullscreen)
 {
   OS_W32_Window *window = os_w32_window_from_handle(handle);
-  OS_WindowRepaintFunctionType *repaint = window->repaint;
-  window->repaint = 0;
   DWORD window_style = GetWindowLong(window->hwnd, GWL_STYLE);
   B32 is_fullscreen_already = os_window_is_fullscreen(handle);
   if(fullscreen)
@@ -1155,7 +1138,6 @@ os_window_set_fullscreen(OS_Handle handle, B32 fullscreen)
                  SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER |
                  SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
   }
-  window->repaint = repaint;
 }
 
 internal B32

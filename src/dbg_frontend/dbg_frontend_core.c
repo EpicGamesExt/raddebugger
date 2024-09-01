@@ -1075,7 +1075,6 @@ df_window_open(Vec2F32 size, OS_Handle preferred_monitor, D_CfgSrc cfg_src)
       scratch_end(scratch);
     }
   }
-  os_window_equip_repaint(window->os, df_state->repaint_hook, window);
   DLLPushBack(df_state->first_window, df_state->last_window, window);
   return window;
 }
@@ -7834,7 +7833,7 @@ df_msg_(DF_MsgKind kind, D_Regs *regs)
 #endif
 
 internal void
-df_init(OS_WindowRepaintFunctionType *window_repaint_entry_point, D_StateDeltaHistory *hist)
+df_init(D_StateDeltaHistory *hist)
 {
   ProfBeginFunction();
   Arena *arena = arena_alloc();
@@ -7853,7 +7852,6 @@ df_init(OS_WindowRepaintFunctionType *window_repaint_entry_point, D_StateDeltaHi
   df_state->entity_ctx_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("_entity_ctx_menu_"));
   df_state->tab_ctx_menu_key    = ui_key_from_string(ui_key_zero(), str8_lit("_tab_ctx_menu_"));
   df_state->string_search_arena = arena_alloc();
-  df_state->repaint_hook = window_repaint_entry_point;
   df_state->cfg_main_font_path_arena = arena_alloc();
   df_state->cfg_code_font_path_arena = arena_alloc();
   df_state->rich_hover_info_next_arena = arena_alloc();
@@ -7959,10 +7957,11 @@ df_init(OS_WindowRepaintFunctionType *window_repaint_entry_point, D_StateDeltaHi
 }
 
 internal void
-df_frame(OS_Handle repaint_window_handle)
+df_frame(void)
 {
   Temp scratch = scratch_begin(0, 0);
   DI_Scope *di_scope = di_scope_open();
+  local_persist S32 depth = 0;
   
   //////////////////////////////
   //- rjf: mark user-facing thread tick
@@ -7977,7 +7976,7 @@ df_frame(OS_Handle repaint_window_handle)
   //- rjf: get events from the OS
   //
   OS_EventList events = {0};
-  if(os_handle_match(repaint_window_handle, os_handle_zero()))
+  if(depth == 0) DeferLoop(depth += 1, depth -= 1)
   {
     events = os_get_events(scratch.arena, df_state->num_frames_requested == 0);
   }
@@ -12319,7 +12318,7 @@ df_frame(OS_Handle repaint_window_handle)
   //////////////////////////////
   //- rjf: show windows after first frame
   //
-  if(os_handle_match(repaint_window_handle, os_handle_zero()))
+  if(depth == 0)
   {
     D_HandleList windows_to_show = {0};
     for(DF_Window *w = df_state->first_window; w != 0; w = w->next)
@@ -12332,7 +12331,7 @@ df_frame(OS_Handle repaint_window_handle)
     for(D_HandleNode *n = windows_to_show.first; n != 0; n = n->next)
     {
       DF_Window *window = df_window_from_handle(n->handle);
-      os_window_first_paint(window->os);
+      DeferLoop(depth += 1, depth -= 1) os_window_first_paint(window->os);
     }
   }
   

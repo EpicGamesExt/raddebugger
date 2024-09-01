@@ -143,12 +143,6 @@ os_window_first_paint(OS_Handle handle)
 }
 
 internal void
-os_window_equip_repaint(OS_Handle handle, OS_WindowRepaintFunctionType *repaint, void *user_data)
-{
-  if(os_handle_match(handle, os_handle_zero())) {return;}
-}
-
-internal void
 os_window_focus(OS_Handle handle)
 {
   if(os_handle_match(handle, os_handle_zero())) {return;}

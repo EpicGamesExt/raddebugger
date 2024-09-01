@@ -24,8 +24,6 @@ enum
   OS_WindowFlag_CustomBorder = (1<<0),
 };
 
-typedef void OS_WindowRepaintFunctionType(OS_Handle window, void *user_data);
-
 ////////////////////////////////
 //~ rjf: Cursor Types
 
@@ -104,6 +102,11 @@ struct OS_EventList
 };
 
 ////////////////////////////////
+//~ rjf: Application-Defined Frame Hook Forward Declaration
+
+internal B32 frame(void);
+
+////////////////////////////////
 //~ rjf: Event Functions (Helpers, Implemented Once)
 
 internal String8 os_string_from_event_kind(OS_EventKind kind);
@@ -139,7 +142,6 @@ internal String8 os_get_clipboard_text(Arena *arena);
 internal OS_Handle      os_window_open(Vec2F32 resolution, OS_WindowFlags flags, String8 title);
 internal void           os_window_close(OS_Handle window);
 internal void           os_window_first_paint(OS_Handle window);
-internal void           os_window_equip_repaint(OS_Handle window, OS_WindowRepaintFunctionType *repaint, void *user_data);
 internal void           os_window_focus(OS_Handle window);
 internal B32            os_window_is_focused(OS_Handle window);
 internal B32            os_window_is_fullscreen(OS_Handle window);

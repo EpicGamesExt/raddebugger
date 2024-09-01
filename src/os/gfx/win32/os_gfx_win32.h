@@ -39,8 +39,6 @@ struct OS_W32_Window
   OS_W32_Window *prev;
   HWND hwnd;
   WINDOWPLACEMENT last_window_placement;
-  OS_WindowRepaintFunctionType *repaint;
-  void *repaint_user_data;
   F32 dpi;
   B32 first_paint_done;
   B32 maximized;

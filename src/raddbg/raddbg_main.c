@@ -657,12 +657,21 @@ ipc_signaler_thread__entry_point(void *p)
 }
 
 ////////////////////////////////
+//~ rjf: Ctrl -> Main Thread Wakeup Hook
+
+internal CTRL_WAKEUP_FUNCTION_DEF(wakeup_hook_ctrl)
+{
+  os_send_wakeup_event();
+}
+
+////////////////////////////////
 //~ rjf: Per-Frame Entry Point
 
-internal void
-update_and_render(OS_Handle repaint_window_handle, void *user_data)
+internal B32
+frame(void)
 {
   ProfBeginFunction();
+  B32 should_quit = 0;
   Temp scratch = scratch_begin(0, 0);
   
   //- rjf: begin logging
@@ -679,7 +688,7 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
   log_scope_begin();
   
   //- rjf: do frontend frame
-  df_frame(repaint_window_handle);
+  df_frame();
   
   //- rjf: end logging
   {
@@ -691,16 +700,15 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
     }
   }
   
+  //- rjf: quit if no windows are left
+  if(df_state->first_window == 0)
+  {
+    should_quit = 1;
+  }
+  
   scratch_end(scratch);
   ProfEnd();
-}
-
-////////////////////////////////
-//~ rjf: Ctrl -> Main Thread Wakeup Hook
-
-internal CTRL_WAKEUP_FUNCTION_DEF(wakeup_hook_ctrl)
-{
-  os_send_wakeup_event();
+  return should_quit;
 }
 
 ////////////////////////////////
@@ -798,7 +806,7 @@ entry_point(CmdLine *cmd_line)
         fnt_init();
         D_StateDeltaHistory *hist = d_state_delta_history_alloc();
         d_init(cmd_line, hist);
-        df_init(update_and_render, d_state_delta_history());
+        df_init(d_state_delta_history());
       }
       
       //- rjf: setup initial target from command line args
@@ -874,7 +882,7 @@ entry_point(CmdLine *cmd_line)
       
       //- rjf: main application loop
       {
-        for(;;)
+        for(B32 quit = 0; !quit;)
         {
           //- rjf: consume IPC messages, dispatch UI commands
           {
@@ -939,9 +947,8 @@ entry_point(CmdLine *cmd_line)
             scratch_end(scratch);
           }
           
-          //- rjf: update & render frame
-          OS_Handle repaint_window = {0};
-          update_and_render(repaint_window, 0);
+          //- rjf: update
+          quit = update();
           
           //- rjf: auto run
           if(auto_run)
@@ -962,12 +969,6 @@ entry_point(CmdLine *cmd_line)
           {
             jit_attach = 0;
             d_cmd(D_CmdKind_Attach, .id = jit_pid);
-          }
-          
-          //- rjf: quit if no windows are left
-          if(df_state->first_window == 0)
-          {
-            break;
           }
         }
       }
@@ -1037,7 +1038,7 @@ entry_point(CmdLine *cmd_line)
       scratch_end(scratch);
     }break;
     
-    //- rjf: built-in pdb/dwarf -> raddbg converter mode
+    //- rjf: built-in pdb/dwarf -> rdi converter mode
     case ExecMode_Converter:
     {
       Temp scratch = scratch_begin(0, 0);
