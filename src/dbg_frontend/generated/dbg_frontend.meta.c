@@ -4,7 +4,7 @@
 //- GENERATED CODE
 
 C_LINKAGE_BEGIN
-String8 df_msg_kind_name_lower_table[60] =
+String8 df_msg_kind_name_lower_table[64] =
 {
 str8_lit_comp("null"),
 str8_lit_comp("exit"),
@@ -66,6 +66,10 @@ str8_lit_comp("find_thread"),
 str8_lit_comp("find_selected_thread"),
 str8_lit_comp("go_to_name"),
 str8_lit_comp("find_code_location"),
+str8_lit_comp("go_to_line"),
+str8_lit_comp("go_to_address"),
+str8_lit_comp("center_cursor"),
+str8_lit_comp("contain_cursor"),
 };
 
 DF_StringBindingPair df_g_default_binding_table[110] =

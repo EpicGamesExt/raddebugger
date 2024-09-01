@@ -8818,32 +8818,870 @@ df_frame(OS_Handle repaint_window_handle)
           }break;
           
           //- rjf: tab creation/removal
-          case DF_MsgKind_OpenTab:{}break;
-          case DF_MsgKind_CloseTab:{}break;
+          case DF_MsgKind_OpenTab:
+          {
+            // TODO(rjf): need some way to pass down the view
+          }break;
+          case DF_MsgKind_CloseTab:
+          {
+            DF_Panel *panel = df_panel_from_handle(regs->panel);
+            DF_View *view = df_view_from_handle(regs->view);
+            if(!df_view_is_nil(view))
+            {
+              df_panel_remove_tab_view(panel, view);
+              df_view_release(view);
+            }
+          }break;
           
           //- rjf: panel tab settings
-          case DF_MsgKind_TabBarTop:{}break;
-          case DF_MsgKind_TabBarBottom:{}break;
+          case DF_MsgKind_TabBarTop:
+          {
+            DF_Panel *panel = df_panel_from_handle(regs->panel);
+            panel->tab_side = Side_Min;
+          }break;
+          case DF_MsgKind_TabBarBottom:
+          {
+            DF_Panel *panel = df_panel_from_handle(regs->panel);
+            panel->tab_side = Side_Max;
+          }break;
           
           //- rjf: tab filters
-          case DF_MsgKind_Filter:{}break;
-          case DF_MsgKind_ClearFilter:{}break;
-          case DF_MsgKind_ApplyFilter:{}break;
+          case DF_MsgKind_Filter:
+          {
+            DF_View *view = df_view_from_handle(regs->view);
+            DF_Panel *panel = df_panel_from_handle(regs->panel);
+            B32 view_is_tab = 0;
+            for(DF_View *tab = panel->first_tab_view; !df_view_is_nil(tab); tab = tab->order_next)
+            {
+              if(df_view_is_project_filtered(tab)) { continue; }
+              if(tab == view)
+              {
+                view_is_tab = 1;
+                break;
+              }
+            }
+            if(view_is_tab && view->spec->info.flags & DF_ViewSpecFlag_CanFilter)
+            {
+              view->is_filtering ^= 1;
+              view->query_cursor = txt_pt(1, 1+(S64)view->query_string_size);
+              view->query_mark = txt_pt(1, 1);
+            }
+          }break;
+          case DF_MsgKind_ClearFilter:
+          {
+            DF_View *view = df_view_from_handle(regs->view);
+            if(!df_view_is_nil(view))
+            {
+              view->query_string_size = 0;
+              view->is_filtering = 0;
+              view->query_cursor = view->query_mark = txt_pt(1, 1);
+            }
+          }break;
+          case DF_MsgKind_ApplyFilter:
+          {
+            DF_View *view = df_view_from_handle(regs->view);
+            if(!df_view_is_nil(view))
+            {
+              view->is_filtering = 0;
+            }
+          }break;
           
           //- rjf: default panel layouts
-          case DF_MsgKind_ResetToDefaultPanels:{}break;
-          case DF_MsgKind_ResetToCompactPanels:{}break;
+          case DF_MsgKind_ResetToDefaultPanels:
+          case DF_MsgKind_ResetToCompactPanels:
+          {
+            DF_Window *ws = df_window_from_handle(regs->window);
+            
+            typedef enum Layout
+            {
+              Layout_Default,
+              Layout_Compact,
+            }
+            Layout;
+            Layout layout = Layout_Default;
+            switch(msg->kind)
+            {
+              default:{}break;
+              case DF_MsgKind_ResetToDefaultPanels:{layout = Layout_Default;}break;
+              case DF_MsgKind_ResetToCompactPanels:{layout = Layout_Compact;}break;
+            }
+            
+            //- rjf: gather all panels in the panel tree - remove & gather views
+            // we'd like to keep in the next layout
+            D_HandleList panels_to_close = {0};
+            D_HandleList views_to_close = {0};
+            DF_View *watch = &df_nil_view;
+            DF_View *locals = &df_nil_view;
+            DF_View *regs = &df_nil_view;
+            DF_View *globals = &df_nil_view;
+            DF_View *tlocals = &df_nil_view;
+            DF_View *types = &df_nil_view;
+            DF_View *procs = &df_nil_view;
+            DF_View *callstack = &df_nil_view;
+            DF_View *breakpoints = &df_nil_view;
+            DF_View *watch_pins = &df_nil_view;
+            DF_View *output = &df_nil_view;
+            DF_View *targets = &df_nil_view;
+            DF_View *scheduler = &df_nil_view;
+            DF_View *modules = &df_nil_view;
+            DF_View *disasm = &df_nil_view;
+            DF_View *memory = &df_nil_view;
+            DF_View *getting_started = &df_nil_view;
+            D_HandleList code_views = {0};
+            for(DF_Panel *panel = ws->root_panel; !df_panel_is_nil(panel); panel = df_panel_rec_df_pre(panel).next)
+            {
+              D_Handle handle = df_handle_from_panel(panel);
+              d_handle_list_push(scratch.arena, &panels_to_close, handle);
+              for(DF_View *view = panel->first_tab_view, *next = 0; !df_view_is_nil(view); view = next)
+              {
+                next = view->order_next;
+                DF_ViewKind view_kind = df_view_kind_from_string(view->spec->info.name);
+                B32 needs_delete = 1;
+                switch(view_kind)
+                {
+                  default:{}break;
+                  case DF_ViewKind_Watch:         {if(df_view_is_nil(watch))               { needs_delete = 0; watch = view;} }break;
+                  case DF_ViewKind_Locals:        {if(df_view_is_nil(locals))              { needs_delete = 0; locals = view;} }break;
+                  case DF_ViewKind_Registers:     {if(df_view_is_nil(regs))                { needs_delete = 0; regs = view;} }break;
+                  case DF_ViewKind_Globals:       {if(df_view_is_nil(globals))             { needs_delete = 0; globals = view;} }break;
+                  case DF_ViewKind_ThreadLocals:  {if(df_view_is_nil(tlocals))             { needs_delete = 0; tlocals = view;} }break;
+                  case DF_ViewKind_Types:         {if(df_view_is_nil(types))               { needs_delete = 0; types = view;} }break;
+                  case DF_ViewKind_Procedures:    {if(df_view_is_nil(procs))               { needs_delete = 0; procs = view;} }break;
+                  case DF_ViewKind_CallStack:     {if(df_view_is_nil(callstack))           { needs_delete = 0; callstack = view;} }break;
+                  case DF_ViewKind_Breakpoints:   {if(df_view_is_nil(breakpoints))         { needs_delete = 0; breakpoints = view;} }break;
+                  case DF_ViewKind_WatchPins:     {if(df_view_is_nil(watch_pins))          { needs_delete = 0; watch_pins = view;} }break;
+                  case DF_ViewKind_Output:        {if(df_view_is_nil(output))              { needs_delete = 0; output = view;} }break;
+                  case DF_ViewKind_Targets:       {if(df_view_is_nil(targets))             { needs_delete = 0; targets = view;} }break;
+                  case DF_ViewKind_Scheduler:     {if(df_view_is_nil(scheduler))           { needs_delete = 0; scheduler = view;} }break;
+                  case DF_ViewKind_Modules:       {if(df_view_is_nil(modules))             { needs_delete = 0; modules = view;} }break;
+                  case DF_ViewKind_Disasm:        {if(df_view_is_nil(disasm))              { needs_delete = 0; disasm = view;} }break;
+                  case DF_ViewKind_Memory:        {if(df_view_is_nil(memory))              { needs_delete = 0; memory = view;} }break;
+                  case DF_ViewKind_GettingStarted:{if(df_view_is_nil(getting_started))     { needs_delete = 0; getting_started = view;} }break;
+                  case DF_ViewKind_Text:
+                  {
+                    needs_delete = 0;
+                    d_handle_list_push(scratch.arena, &code_views, df_handle_from_view(view));
+                  }break;
+                }
+                if(!needs_delete)
+                {
+                  df_panel_remove_tab_view(panel, view);
+                }
+              }
+            }
+            
+            //- rjf: close all panels/views
+            for(D_HandleNode *n = panels_to_close.first; n != 0; n = n->next)
+            {
+              DF_Panel *panel = df_panel_from_handle(n->handle);
+              if(panel != ws->root_panel)
+              {
+                df_panel_release(ws, panel);
+              }
+              else
+              {
+                df_panel_release_all_views(panel);
+                panel->first = panel->last = &df_nil_panel;
+              }
+            }
+            
+            //- rjf: allocate any missing views
+            if(df_view_is_nil(watch))
+            {
+              watch = df_view_alloc();
+              df_view_equip_spec(watch, df_view_spec_from_kind(DF_ViewKind_Watch), str8_zero(), &md_nil_node);
+            }
+            if(layout == Layout_Default && df_view_is_nil(locals))
+            {
+              locals = df_view_alloc();
+              df_view_equip_spec(locals, df_view_spec_from_kind(DF_ViewKind_Locals), str8_zero(), &md_nil_node);
+            }
+            if(layout == Layout_Default && df_view_is_nil(regs))
+            {
+              regs = df_view_alloc();
+              df_view_equip_spec(regs, df_view_spec_from_kind(DF_ViewKind_Registers), str8_zero(), &md_nil_node);
+            }
+            if(layout == Layout_Default && df_view_is_nil(globals))
+            {
+              globals = df_view_alloc();
+              df_view_equip_spec(globals, df_view_spec_from_kind(DF_ViewKind_Globals), str8_zero(), &md_nil_node);
+            }
+            if(layout == Layout_Default && df_view_is_nil(tlocals))
+            {
+              tlocals = df_view_alloc();
+              df_view_equip_spec(tlocals, df_view_spec_from_kind(DF_ViewKind_ThreadLocals), str8_zero(), &md_nil_node);
+            }
+            if(df_view_is_nil(types))
+            {
+              types = df_view_alloc();
+              df_view_equip_spec(types, df_view_spec_from_kind(DF_ViewKind_Types), str8_zero(), &md_nil_node);
+            }
+            if(layout == Layout_Default && df_view_is_nil(procs))
+            {
+              procs = df_view_alloc();
+              df_view_equip_spec(procs, df_view_spec_from_kind(DF_ViewKind_Procedures), str8_zero(), &md_nil_node);
+            }
+            if(df_view_is_nil(callstack))
+            {
+              callstack = df_view_alloc();
+              df_view_equip_spec(callstack, df_view_spec_from_kind(DF_ViewKind_CallStack), str8_zero(), &md_nil_node);
+            }
+            if(df_view_is_nil(breakpoints))
+            {
+              breakpoints = df_view_alloc();
+              df_view_equip_spec(breakpoints, df_view_spec_from_kind(DF_ViewKind_Breakpoints), str8_zero(), &md_nil_node);
+            }
+            if(layout == Layout_Default && df_view_is_nil(watch_pins))
+            {
+              watch_pins = df_view_alloc();
+              df_view_equip_spec(watch_pins, df_view_spec_from_kind(DF_ViewKind_WatchPins), str8_zero(), &md_nil_node);
+            }
+            if(df_view_is_nil(output))
+            {
+              output = df_view_alloc();
+              df_view_equip_spec(output, df_view_spec_from_kind(DF_ViewKind_Output), str8_zero(), &md_nil_node);
+            }
+            if(df_view_is_nil(targets))
+            {
+              targets = df_view_alloc();
+              df_view_equip_spec(targets, df_view_spec_from_kind(DF_ViewKind_Targets), str8_zero(), &md_nil_node);
+            }
+            if(df_view_is_nil(scheduler))
+            {
+              scheduler = df_view_alloc();
+              df_view_equip_spec(scheduler, df_view_spec_from_kind(DF_ViewKind_Scheduler), str8_zero(), &md_nil_node);
+            }
+            if(df_view_is_nil(modules))
+            {
+              modules = df_view_alloc();
+              df_view_equip_spec(modules, df_view_spec_from_kind(DF_ViewKind_Modules), str8_zero(), &md_nil_node);
+            }
+            if(df_view_is_nil(disasm))
+            {
+              disasm = df_view_alloc();
+              df_view_equip_spec(disasm, df_view_spec_from_kind(DF_ViewKind_Disasm), str8_zero(), &md_nil_node);
+            }
+            if(layout == Layout_Default && df_view_is_nil(memory))
+            {
+              memory = df_view_alloc();
+              df_view_equip_spec(memory, df_view_spec_from_kind(DF_ViewKind_Memory), str8_zero(), &md_nil_node);
+            }
+            if(code_views.count == 0 && df_view_is_nil(getting_started))
+            {
+              getting_started = df_view_alloc();
+              df_view_equip_spec(getting_started, df_view_spec_from_kind(DF_ViewKind_GettingStarted), str8_zero(), &md_nil_node);
+            }
+            
+            //- rjf: apply layout
+            switch(layout)
+            {
+              //- rjf: default layout
+              case Layout_Default:
+              {
+                // rjf: root split
+                ws->root_panel->split_axis = Axis2_X;
+                DF_Panel *root_0 = df_panel_alloc(ws);
+                DF_Panel *root_1 = df_panel_alloc(ws);
+                df_panel_insert(ws->root_panel, ws->root_panel->last, root_0);
+                df_panel_insert(ws->root_panel, ws->root_panel->last, root_1);
+                root_0->pct_of_parent = 0.85f;
+                root_1->pct_of_parent = 0.15f;
+                
+                // rjf: root_0 split
+                root_0->split_axis = Axis2_Y;
+                DF_Panel *root_0_0 = df_panel_alloc(ws);
+                DF_Panel *root_0_1 = df_panel_alloc(ws);
+                df_panel_insert(root_0, root_0->last, root_0_0);
+                df_panel_insert(root_0, root_0->last, root_0_1);
+                root_0_0->pct_of_parent = 0.80f;
+                root_0_1->pct_of_parent = 0.20f;
+                
+                // rjf: root_1 split
+                root_1->split_axis = Axis2_Y;
+                DF_Panel *root_1_0 = df_panel_alloc(ws);
+                DF_Panel *root_1_1 = df_panel_alloc(ws);
+                df_panel_insert(root_1, root_1->last, root_1_0);
+                df_panel_insert(root_1, root_1->last, root_1_1);
+                root_1_0->pct_of_parent = 0.50f;
+                root_1_1->pct_of_parent = 0.50f;
+                df_panel_insert_tab_view(root_1_0, root_1_0->last_tab_view, targets);
+                df_panel_insert_tab_view(root_1_1, root_1_1->last_tab_view, scheduler);
+                root_1_0->selected_tab_view = df_handle_from_view(targets);
+                root_1_1->selected_tab_view = df_handle_from_view(scheduler);
+                root_1_1->tab_side = Side_Max;
+                
+                // rjf: root_0_0 split
+                root_0_0->split_axis = Axis2_X;
+                DF_Panel *root_0_0_0 = df_panel_alloc(ws);
+                DF_Panel *root_0_0_1 = df_panel_alloc(ws);
+                df_panel_insert(root_0_0, root_0_0->last, root_0_0_0);
+                df_panel_insert(root_0_0, root_0_0->last, root_0_0_1);
+                root_0_0_0->pct_of_parent = 0.25f;
+                root_0_0_1->pct_of_parent = 0.75f;
+                
+                // rjf: root_0_0_0 split
+                root_0_0_0->split_axis = Axis2_Y;
+                DF_Panel *root_0_0_0_0 = df_panel_alloc(ws);
+                DF_Panel *root_0_0_0_1 = df_panel_alloc(ws);
+                df_panel_insert(root_0_0_0, root_0_0_0->last, root_0_0_0_0);
+                df_panel_insert(root_0_0_0, root_0_0_0->last, root_0_0_0_1);
+                root_0_0_0_0->pct_of_parent = 0.5f;
+                root_0_0_0_1->pct_of_parent = 0.5f;
+                df_panel_insert_tab_view(root_0_0_0_0, root_0_0_0_0->last_tab_view, disasm);
+                root_0_0_0_0->selected_tab_view = df_handle_from_view(disasm);
+                df_panel_insert_tab_view(root_0_0_0_1, root_0_0_0_1->last_tab_view, breakpoints);
+                df_panel_insert_tab_view(root_0_0_0_1, root_0_0_0_1->last_tab_view, watch_pins);
+                df_panel_insert_tab_view(root_0_0_0_1, root_0_0_0_1->last_tab_view, output);
+                df_panel_insert_tab_view(root_0_0_0_1, root_0_0_0_1->last_tab_view, memory);
+                root_0_0_0_1->selected_tab_view = df_handle_from_view(output);
+                
+                // rjf: root_0_1 split
+                root_0_1->split_axis = Axis2_X;
+                DF_Panel *root_0_1_0 = df_panel_alloc(ws);
+                DF_Panel *root_0_1_1 = df_panel_alloc(ws);
+                df_panel_insert(root_0_1, root_0_1->last, root_0_1_0);
+                df_panel_insert(root_0_1, root_0_1->last, root_0_1_1);
+                root_0_1_0->pct_of_parent = 0.60f;
+                root_0_1_1->pct_of_parent = 0.40f;
+                df_panel_insert_tab_view(root_0_1_0, root_0_1_0->last_tab_view, watch);
+                df_panel_insert_tab_view(root_0_1_0, root_0_1_0->last_tab_view, locals);
+                df_panel_insert_tab_view(root_0_1_0, root_0_1_0->last_tab_view, regs);
+                df_panel_insert_tab_view(root_0_1_0, root_0_1_0->last_tab_view, globals);
+                df_panel_insert_tab_view(root_0_1_0, root_0_1_0->last_tab_view, tlocals);
+                df_panel_insert_tab_view(root_0_1_0, root_0_1_0->last_tab_view, types);
+                df_panel_insert_tab_view(root_0_1_0, root_0_1_0->last_tab_view, procs);
+                root_0_1_0->selected_tab_view = df_handle_from_view(watch);
+                root_0_1_0->tab_side = Side_Max;
+                df_panel_insert_tab_view(root_0_1_1, root_0_1_1->last_tab_view, callstack);
+                df_panel_insert_tab_view(root_0_1_1, root_0_1_1->last_tab_view, modules);
+                root_0_1_1->selected_tab_view = df_handle_from_view(callstack);
+                root_0_1_1->tab_side = Side_Max;
+                
+                // rjf: fill main panel with getting started, OR all collected code views
+                if(!df_view_is_nil(getting_started))
+                {
+                  df_panel_insert_tab_view(root_0_0_1, root_0_0_1->last_tab_view, getting_started);
+                }
+                for(D_HandleNode *n = code_views.first; n != 0; n = n->next)
+                {
+                  DF_View *view = df_view_from_handle(n->handle);
+                  if(!df_view_is_nil(view))
+                  {
+                    df_panel_insert_tab_view(root_0_0_1, root_0_0_1->last_tab_view, view);
+                  }
+                }
+                
+                // rjf: choose initial focused panel
+                ws->focused_panel = root_0_0_1;
+              }break;
+              
+              //- rjf: compact layout:
+              case Layout_Compact:
+              {
+                // rjf: root split
+                ws->root_panel->split_axis = Axis2_X;
+                DF_Panel *root_0 = df_panel_alloc(ws);
+                DF_Panel *root_1 = df_panel_alloc(ws);
+                df_panel_insert(ws->root_panel, ws->root_panel->last, root_0);
+                df_panel_insert(ws->root_panel, ws->root_panel->last, root_1);
+                root_0->pct_of_parent = 0.25f;
+                root_1->pct_of_parent = 0.75f;
+                
+                // rjf: root_0 split
+                root_0->split_axis = Axis2_Y;
+                DF_Panel *root_0_0 = df_panel_alloc(ws);
+                {
+                  if(!df_view_is_nil(watch)) { df_panel_insert_tab_view(root_0_0, root_0_0->last_tab_view, watch); }
+                  if(!df_view_is_nil(types)) { df_panel_insert_tab_view(root_0_0, root_0_0->last_tab_view, types); }
+                  root_0_0->selected_tab_view = df_handle_from_view(watch);
+                }
+                DF_Panel *root_0_1 = df_panel_alloc(ws);
+                {
+                  if(!df_view_is_nil(scheduler))     { df_panel_insert_tab_view(root_0_1, root_0_1->last_tab_view, scheduler); }
+                  if(!df_view_is_nil(targets))       { df_panel_insert_tab_view(root_0_1, root_0_1->last_tab_view, targets); }
+                  if(!df_view_is_nil(breakpoints))   { df_panel_insert_tab_view(root_0_1, root_0_1->last_tab_view, breakpoints); }
+                  if(!df_view_is_nil(watch_pins))    { df_panel_insert_tab_view(root_0_1, root_0_1->last_tab_view, watch_pins); }
+                  root_0_1->selected_tab_view = df_handle_from_view(scheduler);
+                }
+                DF_Panel *root_0_2 = df_panel_alloc(ws);
+                {
+                  if(!df_view_is_nil(disasm))    { df_panel_insert_tab_view(root_0_2, root_0_2->last_tab_view, disasm); }
+                  if(!df_view_is_nil(output))    { df_panel_insert_tab_view(root_0_2, root_0_2->last_tab_view, output); }
+                  root_0_2->selected_tab_view = df_handle_from_view(disasm);
+                }
+                DF_Panel *root_0_3 = df_panel_alloc(ws);
+                {
+                  if(!df_view_is_nil(callstack))    { df_panel_insert_tab_view(root_0_3, root_0_3->last_tab_view, callstack); }
+                  if(!df_view_is_nil(modules))      { df_panel_insert_tab_view(root_0_3, root_0_3->last_tab_view, modules); }
+                  root_0_3->selected_tab_view = df_handle_from_view(callstack);
+                }
+                df_panel_insert(root_0, root_0->last, root_0_0);
+                df_panel_insert(root_0, root_0->last, root_0_1);
+                df_panel_insert(root_0, root_0->last, root_0_2);
+                df_panel_insert(root_0, root_0->last, root_0_3);
+                root_0_0->pct_of_parent = 0.25f;
+                root_0_1->pct_of_parent = 0.25f;
+                root_0_2->pct_of_parent = 0.25f;
+                root_0_3->pct_of_parent = 0.25f;
+                
+                // rjf: fill main panel with getting started, OR all collected code views
+                if(!df_view_is_nil(getting_started))
+                {
+                  df_panel_insert_tab_view(root_1, root_1->last_tab_view, getting_started);
+                }
+                for(D_HandleNode *n = code_views.first; n != 0; n = n->next)
+                {
+                  DF_View *view = df_view_from_handle(n->handle);
+                  if(!df_view_is_nil(view))
+                  {
+                    df_panel_insert_tab_view(root_1, root_1->last_tab_view, view);
+                  }
+                }
+                
+                // rjf: choose initial focused panel
+                ws->focused_panel = root_1;
+              }break;
+            }
+            
+            // rjf: dispatch cfg saves
+            for(D_CfgSrc src = (D_CfgSrc)0; src < D_CfgSrc_COUNT; src = (D_CfgSrc)(src+1))
+            {
+              D_CmdKind write_cmd = d_cfg_src_write_cmd_kind_table[src];
+              d_cmd(write_cmd, .file_path = d_cfg_path_from_src(src));
+            }
+          }break;
           
           //- rjf: filesystem fast paths
-          case DF_MsgKind_Open:{}break;
+          case DF_MsgKind_Open:
+          {
+            DF_Window *ws = df_window_from_handle(regs->window);
+            String8 path = regs->file_path;
+            FileProperties props = os_properties_from_file_path(path);
+            if(props.created != 0)
+            {
+              // TODO(rjf): open new tab, evaluating file path, using pending_file view rule
+              df_msg(DF_MsgKind_OpenTab);
+#if 0
+              D_CmdParams p = *params;
+              p.window    = df_handle_from_window(ws);
+              p.panel     = df_handle_from_panel(ws->focused_panel);
+              d_cmd_list_push(scratch.arena, &cmds, &p, d_cmd_spec_from_kind(D_CmdKind_PendingFile));
+#endif
+            }
+            else
+            {
+              log_user_errorf("Couldn't open file at \"%S\".", path);
+            }
+          }break;
           case DF_MsgKind_Switch:{}break;
-          case DF_MsgKind_SwitchToPartnerFile:{}break;
+          case DF_MsgKind_SwitchToPartnerFile:
+          {
+            DF_Panel *panel = df_panel_from_handle(regs->panel);
+            DF_View *view = df_selected_tab_from_panel(panel);
+            String8 file_path      = d_file_path_from_eval_string(scratch.arena, str8(view->query_buffer, view->query_string_size));
+            String8 file_full_path = path_normalized_from_string(scratch.arena, file_path);
+            String8 file_folder    = str8_chop_last_slash(file_full_path);
+            String8 file_name      = str8_skip_last_slash(str8_chop_last_dot(file_full_path));
+            String8 file_ext       = str8_skip_last_dot(file_full_path);
+            String8 partner_ext_candidates[] =
+            {
+              str8_lit_comp("h"),
+              str8_lit_comp("hpp"),
+              str8_lit_comp("hxx"),
+              str8_lit_comp("c"),
+              str8_lit_comp("cc"),
+              str8_lit_comp("cxx"),
+              str8_lit_comp("cpp"),
+            };
+            for(U64 idx = 0; idx < ArrayCount(partner_ext_candidates); idx += 1)
+            {
+              if(!str8_match(partner_ext_candidates[idx], file_ext, StringMatchFlag_CaseInsensitive))
+              {
+                String8 candidate = push_str8f(scratch.arena, "%S.%S", file_name, partner_ext_candidates[idx]);
+                String8 candidate_path = push_str8f(scratch.arena, "%S/%S", file_folder, candidate);
+                FileProperties candidate_props = os_properties_from_file_path(candidate_path);
+                if(candidate_props.modified != 0)
+                {
+                  // TODO(rjf):
+                  //D_CmdParams p = df_cmd_params_from_panel(ws, panel);
+                  //p.entity = d_handle_from_entity(candidate);
+                  //d_cmd_list_push(arena, cmds, &p, d_cmd_spec_from_kind(D_CmdKind_Switch));
+                  break;
+                }
+              }
+            }
+          }break;
           
-          //- rjf: snapping to code locations
-          case DF_MsgKind_FindThread:{}break;
-          case DF_MsgKind_FindSelectedThread:{}break;
-          case DF_MsgKind_GoToName:{}break;
-          case DF_MsgKind_FindCodeLocation:{}break;
+          //- rjf: [snapping to code locations] thread finding
+          case DF_MsgKind_FindThread:
+          {
+            for(DF_Window *ws = df_state->first_window; ws != 0; ws = ws->next)
+            {
+              DI_Scope *scope = di_scope_open();
+              D_Entity *thread = d_entity_from_handle(regs->entity);
+              U64 unwind_index = regs->unwind_count;
+              U64 inline_depth = regs->inline_depth;
+              if(thread->kind == D_EntityKind_Thread)
+              {
+                // rjf: grab rip
+                U64 rip_vaddr = d_query_cached_rip_from_thread_unwind(thread, unwind_index);
+                
+                // rjf: extract thread/rip info
+                D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
+                D_Entity *module = d_module_from_process_vaddr(process, rip_vaddr);
+                DI_Key dbgi_key = d_dbgi_key_from_module(module);
+                RDI_Parsed *rdi = di_rdi_from_key(scope, &dbgi_key, 0);
+                U64 rip_voff = d_voff_from_vaddr(module, rip_vaddr);
+                D_LineList lines = d_lines_from_dbgi_key_voff(scratch.arena, &dbgi_key, rip_voff);
+                D_Line line = {0};
+                {
+                  U64 idx = 0;
+                  for(D_LineNode *n = lines.first; n != 0; n = n->next, idx += 1)
+                  {
+                    line = n->v;
+                    if(idx == inline_depth)
+                    {
+                      break;
+                    }
+                  }
+                }
+                
+                // rjf: snap to resolved line
+                B32 missing_rip = (rip_vaddr == 0);
+                B32 dbgi_missing = (dbgi_key.min_timestamp == 0 || dbgi_key.path.size == 0);
+                B32 dbgi_pending = !dbgi_missing && rdi == &di_rdi_parsed_nil;
+                B32 has_line_info = (line.voff_range.max != 0);
+                B32 has_module = !d_entity_is_nil(module);
+                B32 has_dbg_info = has_module && !dbgi_missing;
+                if(!dbgi_pending && (has_line_info || has_module))
+                {
+                  df_msg(DF_MsgKind_FindCodeLocation,
+                         .file_path   = line.file_path,
+                         .cursor      = line.pt,
+                         .vaddr_range = r1u64(rip_vaddr, rip_vaddr),
+                         .voff_range  = r1u64(rip_voff, rip_voff));
+                }
+                
+                // rjf: snap to resolved address w/o line info
+                if(!missing_rip && !dbgi_pending && !has_line_info && !has_module)
+                {
+                  df_msg(DF_MsgKind_FindCodeLocation,
+                         .vaddr_range = r1u64(rip_vaddr, rip_vaddr),
+                         .voff_range  = r1u64(rip_voff, rip_voff));
+                }
+                
+                // rjf: retry on stopped, pending debug info
+                if(!d_ctrl_targets_running() && (dbgi_pending || missing_rip))
+                {
+                  df_msg(DF_MsgKind_FindThread);
+                }
+              }
+              di_scope_close(scope);
+            }
+          }break;
+          case DF_MsgKind_FindSelectedThread:
+          {
+            df_msg(DF_MsgKind_FindThread, .thread = d_base_regs()->thread);
+          }break;
+          
+          //- rjf: [snapping to code locations] name finding
+          case DF_MsgKind_GoToName:
+          {
+            
+          }break;
+          
+          //- rjf: [snapping to code locations] go to code location
+          case DF_MsgKind_FindCodeLocation:
+          {
+            // NOTE(rjf): This command is where a lot of high-level flow things
+            // in the debugger come together. It's that codepath that runs any
+            // time a source code location is clicked in the UI, when a thread
+            // is selected, or when a thread causes a halt (hitting a breakpoint
+            // or exception or something). This is the logic that manages the
+            // flow of how views and panels are changed, opened, etc. when
+            // something like that happens.
+            //
+            // The gist of the intended rule for textual source code locations
+            // is the following:
+            //
+            // 1. Try to find a panel that's viewing the file (has it open in a
+            //    tab, *and* that tab is selected).
+            // 2. Try to find a panel that has the file open in a tab, but does not
+            //    currently have that tab selected.
+            // 3. Try to find a panel that has ANY source code open in any tab.
+            // 4. If the above things fail, try to pick the biggest panel, which
+            //    is generally a decent rule (because it matches the popular
+            //    debugger usage UI paradigm).
+            //
+            // The reason why this is a little more complicated than you might
+            // imagine is because this debugger frontend does not have any special
+            // "code panels" or anything like that, unlike e.g. VS or Remedy. All
+            // panels are identical in nature to allow for the user to organize
+            // the interface how they want, but in cases like this, we have to
+            // "fish out" the best option given the user's configuration. This
+            // can't be what the user wants in 100% of cases (this program cannot
+            // read anyone's mind), but it does provide expected behavior in
+            // common cases.
+            //
+            // The gist of the intended rule for finding disassembly locations is
+            // the following:
+            //
+            // 1. Try to find a panel that's viewing disassembly already - if so,
+            //    snap it to the right address.
+            // 2. If there is no disassembly tab open, then we need to open one
+            //    ONLY if source code was not found.
+            // 3. If we need to open a disassembly tab, we will first try to pick
+            //    the biggest empty panel.
+            // 4. If there is no empty panel, then we will pick the biggest
+            //    panel.
+            DF_Window *ws = df_window_from_handle(regs->window);
+            
+            // rjf: grab things to find. path * point, process * address, etc.
+            String8 file_path = {0};
+            TxtPt point = {0};
+            D_Entity *thread = &d_nil_entity;
+            D_Entity *process = &d_nil_entity;
+            U64 vaddr = 0;
+            {
+              file_path = regs->file_path;
+              point     = regs->cursor;
+              thread    = d_entity_from_handle(d_regs()->thread);
+              process   = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
+              vaddr     = regs->vaddr_range.min;
+            }
+            
+            // rjf: given a src code location, and a process, if no vaddr is specified,
+            // try to map the src coordinates to a vaddr via line info
+            if(vaddr == 0 && file_path.size != 0 && !d_entity_is_nil(process))
+            {
+              D_LineList lines = d_lines_from_file_path_line_num(scratch.arena, file_path, point.line);
+              for(D_LineNode *n = lines.first; n != 0; n = n->next)
+              {
+                D_EntityList modules = d_modules_from_dbgi_key(scratch.arena, &n->v.dbgi_key);
+                D_Entity *module = d_module_from_thread_candidates(thread, &modules);
+                vaddr = d_vaddr_from_voff(module, n->v.voff_range.min);
+                break;
+              }
+            }
+            
+            // rjf: first, try to find panel/view pair that already has the src file open
+            DF_Panel *panel_w_this_src_code = &df_nil_panel;
+            DF_View *view_w_this_src_code = &df_nil_view;
+            for(DF_Panel *panel = ws->root_panel; !df_panel_is_nil(panel); panel = df_panel_rec_df_pre(panel).next)
+            {
+              if(!df_panel_is_nil(panel->first))
+              {
+                continue;
+              }
+              for(DF_View *view = panel->first_tab_view; !df_view_is_nil(view); view = view->order_next)
+              {
+                if(df_view_is_project_filtered(view)) { continue; }
+                String8 view_file_path = d_file_path_from_eval_string(scratch.arena, str8(view->query_buffer, view->query_string_size));
+                DF_ViewKind view_kind = df_view_kind_from_string(view->spec->info.name);
+                if((view_kind == DF_ViewKind_Text || view_kind == DF_ViewKind_PendingFile) &&
+                   path_match_normalized(view_file_path, file_path))
+                {
+                  panel_w_this_src_code = panel;
+                  view_w_this_src_code = view;
+                  if(view == df_selected_tab_from_panel(panel))
+                  {
+                    break;
+                  }
+                }
+              }
+            }
+            
+            // rjf: find a panel that already has *any* code open
+            DF_Panel *panel_w_any_src_code = &df_nil_panel;
+            for(DF_Panel *panel = ws->root_panel; !df_panel_is_nil(panel); panel = df_panel_rec_df_pre(panel).next)
+            {
+              if(!df_panel_is_nil(panel->first))
+              {
+                continue;
+              }
+              for(DF_View *view = panel->first_tab_view; !df_view_is_nil(view); view = view->order_next)
+              {
+                if(df_view_is_project_filtered(view)) { continue; }
+                DF_ViewKind view_kind = df_view_kind_from_string(view->spec->info.name);
+                if(view_kind == DF_ViewKind_Text)
+                {
+                  panel_w_any_src_code = panel;
+                  break;
+                }
+              }
+            }
+            
+            // rjf: try to find panel/view pair that has disassembly open
+            DF_Panel *panel_w_disasm = &df_nil_panel;
+            DF_View *view_w_disasm = &df_nil_view;
+            for(DF_Panel *panel = ws->root_panel; !df_panel_is_nil(panel); panel = df_panel_rec_df_pre(panel).next)
+            {
+              if(!df_panel_is_nil(panel->first))
+              {
+                continue;
+              }
+              for(DF_View *view = panel->first_tab_view; !df_view_is_nil(view); view = view->order_next)
+              {
+                if(df_view_is_project_filtered(view)) { continue; }
+                DF_ViewKind view_kind = df_view_kind_from_string(view->spec->info.name);
+                if(view_kind == DF_ViewKind_Disasm && view->query_string_size == 0)
+                {
+                  panel_w_disasm = panel;
+                  view_w_disasm = view;
+                  if(view == df_selected_tab_from_panel(panel))
+                  {
+                    break;
+                  }
+                }
+              }
+            }
+            
+            // rjf: find the biggest panel
+            DF_Panel *biggest_panel = &df_nil_panel;
+            {
+              Rng2F32 root_rect = os_client_rect_from_window(ws->os);
+              F32 best_panel_area = 0;
+              for(DF_Panel *panel = ws->root_panel; !df_panel_is_nil(panel); panel = df_panel_rec_df_pre(panel).next)
+              {
+                if(!df_panel_is_nil(panel->first))
+                {
+                  continue;
+                }
+                Rng2F32 panel_rect = df_target_rect_from_panel(root_rect, ws->root_panel, panel);
+                Vec2F32 panel_rect_dim = dim_2f32(panel_rect);
+                F32 area = panel_rect_dim.x * panel_rect_dim.y;
+                if((best_panel_area == 0 || area > best_panel_area))
+                {
+                  best_panel_area = area;
+                  biggest_panel = panel;
+                }
+              }
+            }
+            
+            // rjf: find the biggest empty panel
+            DF_Panel *biggest_empty_panel = &df_nil_panel;
+            {
+              Rng2F32 root_rect = os_client_rect_from_window(ws->os);
+              F32 best_panel_area = 0;
+              for(DF_Panel *panel = ws->root_panel; !df_panel_is_nil(panel); panel = df_panel_rec_df_pre(panel).next)
+              {
+                if(!df_panel_is_nil(panel->first))
+                {
+                  continue;
+                }
+                Rng2F32 panel_rect = df_target_rect_from_panel(root_rect, ws->root_panel, panel);
+                Vec2F32 panel_rect_dim = dim_2f32(panel_rect);
+                F32 area = panel_rect_dim.x * panel_rect_dim.y;
+                B32 panel_is_empty = 1;
+                for(DF_View *v = panel->first_tab_view; !df_view_is_nil(v); v = v->order_next)
+                {
+                  if(!df_view_is_project_filtered(v))
+                  {
+                    panel_is_empty = 0;
+                    break;
+                  }
+                }
+                if(panel_is_empty && (best_panel_area == 0 || area > best_panel_area))
+                {
+                  best_panel_area = area;
+                  biggest_empty_panel = panel;
+                }
+              }
+            }
+            
+            // rjf: given the above, find source code location.
+            B32 disasm_view_prioritized = 0;
+            DF_Panel *panel_used_for_src_code = &df_nil_panel;
+            if(file_path.size != 0)
+            {
+              // rjf: determine which panel we will use to find the code loc
+              DF_Panel *dst_panel = &df_nil_panel;
+              {
+                if(df_panel_is_nil(dst_panel)) { dst_panel = panel_w_this_src_code; }
+                if(df_panel_is_nil(dst_panel)) { dst_panel = panel_w_any_src_code; }
+                if(df_panel_is_nil(dst_panel)) { dst_panel = biggest_empty_panel; }
+                if(df_panel_is_nil(dst_panel)) { dst_panel = biggest_panel; }
+              }
+              
+              // rjf: construct new view if needed
+              DF_View *dst_view = view_w_this_src_code;
+              if(!df_panel_is_nil(dst_panel) && df_view_is_nil(view_w_this_src_code))
+              {
+                DF_View *view = df_view_alloc();
+                String8 file_path_query = d_eval_string_from_file_path(scratch.arena, file_path);
+                df_view_equip_spec(view, df_view_spec_from_kind(DF_ViewKind_Text), file_path_query, &md_nil_node);
+                df_panel_insert_tab_view(dst_panel, dst_panel->last_tab_view, view);
+                dst_view = view;
+              }
+              
+              // rjf: determine if we need a contain or center
+              DF_MsgKind cursor_snap_kind = DF_MsgKind_CenterCursor;
+              if(!df_panel_is_nil(dst_panel) && dst_view == view_w_this_src_code && df_selected_tab_from_panel(dst_panel) == dst_view)
+              {
+                cursor_snap_kind = DF_MsgKind_ContainCursor;
+              }
+              
+              // rjf: move cursor & snap-to-cursor
+              if(!df_panel_is_nil(dst_panel))
+              {
+                disasm_view_prioritized = (df_selected_tab_from_panel(dst_panel) == view_w_disasm);
+                dst_panel->selected_tab_view = df_handle_from_view(dst_view);
+                df_msg(DF_MsgKind_GoToLine,
+                       .panel  = df_handle_from_panel(dst_panel),
+                       .view   = df_handle_from_view(dst_view),
+                       .cursor = point);
+                df_msg(cursor_snap_kind);
+                panel_used_for_src_code = dst_panel;
+              }
+            }
+            
+            // rjf: given the above, find disassembly location.
+            if(!d_entity_is_nil(process) && vaddr != 0)
+            {
+              // rjf: determine which panel we will use to find the disasm loc -
+              // we *cannot* use the same panel we used for source code, if any.
+              DF_Panel *dst_panel = &df_nil_panel;
+              {
+                if(df_panel_is_nil(dst_panel)) { dst_panel = panel_w_disasm; }
+                if(df_panel_is_nil(panel_used_for_src_code) && df_panel_is_nil(dst_panel)) { dst_panel = biggest_empty_panel; }
+                if(df_panel_is_nil(panel_used_for_src_code) && df_panel_is_nil(dst_panel)) { dst_panel = biggest_panel; }
+                if(dst_panel == panel_used_for_src_code &&
+                   !disasm_view_prioritized)
+                {
+                  dst_panel = &df_nil_panel;
+                }
+              }
+              
+              // rjf: construct new view if needed
+              DF_View *dst_view = view_w_disasm;
+              if(!df_panel_is_nil(dst_panel) && df_view_is_nil(view_w_disasm))
+              {
+                DF_View *view = df_view_alloc();
+                df_view_equip_spec(view, df_view_spec_from_kind(DF_ViewKind_Disasm), str8_zero(), &md_nil_node);
+                df_panel_insert_tab_view(dst_panel, dst_panel->last_tab_view, view);
+                dst_view = view;
+              }
+              
+              // rjf: determine if we need a contain or center
+              DF_MsgKind cursor_snap_kind = DF_MsgKind_CenterCursor;
+              if(dst_view == view_w_disasm && df_selected_tab_from_panel(dst_panel) == dst_view)
+              {
+                cursor_snap_kind = DF_MsgKind_ContainCursor;
+              }
+              
+              // rjf: move cursor & snap-to-cursor
+              if(!df_panel_is_nil(dst_panel))
+              {
+                dst_panel->selected_tab_view = df_handle_from_view(dst_view);
+                df_msg(DF_MsgKind_GoToLine,
+                       .panel       = df_handle_from_panel(dst_panel),
+                       .view        = df_handle_from_view(dst_view),
+                       .process     = d_handle_from_entity(process),
+                       .vaddr_range = r1u64(vaddr, vaddr));
+                df_msg(cursor_snap_kind);
+              }
+            }
+          }break;
         }
       }
     }

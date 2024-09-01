@@ -68,6 +68,10 @@ DF_MsgKind_FindThread,
 DF_MsgKind_FindSelectedThread,
 DF_MsgKind_GoToName,
 DF_MsgKind_FindCodeLocation,
+DF_MsgKind_GoToLine,
+DF_MsgKind_GoToAddress,
+DF_MsgKind_CenterCursor,
+DF_MsgKind_ContainCursor,
 DF_MsgKind_COUNT,
 } DF_MsgKind;
 
@@ -418,7 +422,7 @@ DF_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(no_addr);
 DF_VIEW_RULE_ROW_UI_FUNCTION_DEF(checkbox);
 DF_VIEW_RULE_ROW_UI_FUNCTION_DEF(color_rgba);
 C_LINKAGE_BEGIN
-extern String8 df_msg_kind_name_lower_table[60];
+extern String8 df_msg_kind_name_lower_table[64];
 extern DF_StringBindingPair df_g_default_binding_table[110];
 extern String8 df_g_binding_version_remap_old_name_table[7];
 extern String8 df_g_binding_version_remap_new_name_table[7];

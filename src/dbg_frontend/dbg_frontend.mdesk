@@ -105,6 +105,12 @@ DF_MsgKindTable:
   {FindSelectedThread            find_selected_thread                          0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
   {GoToName                      go_to_name                                    0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
   {FindCodeLocation              find_code_location                            0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  
+  //- rjf: view messages
+  {GoToLine                      go_to_line                                    0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {GoToAddress                   go_to_address                                 0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {CenterCursor                  center_cursor                                 0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {ContainCursor                 contain_cursor                                0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
 }
 
 @enum DF_MsgKind:
