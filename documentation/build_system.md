@@ -20,8 +20,14 @@ this can be turned into a `.desktop` file.
 
 ## Compiler Flags
 * -lpthread | POSIX threading library
-* -dl | dynamic linking library
-* -rt | realtime time library for clock functionality
+* -ldl | dynamic linking library
+* -lrt | realtime time library for clock functionality
+* -lfreetype | freetype font provider library
+* -latomic | GLIBC atomic intrinsics
+* -m | Standard Math Library
+* -Wno=parenthesis | Checks surprising gotchas with operator precedence, seems
+  mostly like basic noob trap mistakes, think we can ignore it here.
+* -Werror=atomic-memory-ordering | This is probably an actual major bug if it appears.
 
 ## Linker Flags
 * `-Wl,-z,notext` this linker flag was given to allow metagen to relocate data in the read only segment, it gave the option between that and "-fPIC". This is the exact compiler output.

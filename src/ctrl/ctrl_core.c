@@ -5176,7 +5176,7 @@ ctrl_mem_stream_thread__entry_point(void *p)
           {
             if(MemoryMatchStruct(&range_n->vaddr_range, &vaddr_range) && range_n->zero_terminated == zero_terminated)
             {
-              got_task = !ins_atomic_u32_eval_cond_assign(&range_n->is_taken, 1, 0);
+              got_task = !ins_atomic_u32_eval_cond_assign((U32*)&range_n->is_taken, 1, 0);
               preexisting_mem_gen = range_n->mem_gen;
               preexisting_hash = range_n->hash;
               vaddr_range_clamped = range_n->vaddr_range_clamped;

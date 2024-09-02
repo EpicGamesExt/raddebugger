@@ -1123,6 +1123,7 @@ dmn_init(void)
 internal DMN_CtrlCtx *
 dmn_ctrl_begin(void)
 {
+  // Boolean return, just says the context is valid
   DMN_CtrlCtx *ctx = (DMN_CtrlCtx *)1;
   dmn_w32_ctrl_thread = 1;
   return ctx;

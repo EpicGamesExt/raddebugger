@@ -14,7 +14,9 @@
 //~ rjf: Decide On Backend
 
 #if !defined(R_BACKEND) && OS_WINDOWS
-# define R_BACKEND R_BACKEND_D3D11
+  #define R_BACKEND R_BACKEND_D3D11
+#else
+  #define R_BACKEND R_BACKEND_STUB
 #endif
 
 ////////////////////////////////

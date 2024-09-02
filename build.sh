@@ -24,16 +24,35 @@
 # - `asan`: enable address sanitizer
 # - `telemetry`: enable RAD telemetry profiling support
 # - `gcodeview`: generate codeview symbols instead of DRWARF for clang
+#
+# Also you can set the environment variable RAD_DEBUG=1 to enable some extra debug output
 
 # --- Random Init -----------------------------------------------------------
+ansi_red="\x1b[31m"
+ansi_cyanbold="\x1b[36;1m"
+ansi_reset="\e[0m"
+function rad_log ()
+{
+    echo -e "$ansi_cyanbold[Rad Build]$ansi_reset ${@}"
+}
+
+function rad_debug_log ()
+{
+    if [[ -n ${RAD_DEBUG} ]] ; then
+        # -e enable escape sequences
+        rad_log "${@}"
+    fi
+}
+
 # cd to script directory
 self_directory="$(dirname $(readlink -f $0))"
-echo "cd to '${self_directory}'"
+rad_log "cd to '${self_directory}'"
 cd "${self_directory}"
+RAD_BUILD_DEBUG="${RAD_DEBUG}"
 if [[ -n ${RAD_BUILD_DEBUG} ]] ; then
     shellcheck $0
 fi
-# RAD_META_COMPILE_ONLY
+# RAD_META_COMPILE_ONLY=1
 
 # --- Unpack Command Line Build Arguments ------------------------------------
 # NOTE: With this setup you can use environment variables or arguments and
@@ -41,31 +60,31 @@ fi
 for x_arg in $@ ; do  declare ${x_arg}=1 ; done
 if [[ -z "${msvc}" &&  -z "${clang}" ]] ; then clang=1 ; fi
 if [[ -z "${release}" ]] ; then debug=1 ; fi
-if [[ -n "${debug}" ]]   ; then release= && echo "[debug mode]" ; fi
-if [[ -n "${release}" ]] ; then debug= && echo "[release mode]" ; fi
-if [[ -n "${msvc}" ]]    ; then clang= && echo "[msvc compile]" ; fi
-if [[ -n "${clang}" ]]   ; then msvc= && echo "[clang compile]" ; fi
+if [[ -n "${debug}" ]]   ; then release= && rad_log "[debug mode]" ; fi
+if [[ -n "${release}" ]] ; then debug= && rad_log "[release mode]" ; fi
+if [[ -n "${msvc}" ]]    ; then clang= && rad_log "[msvc compile]" ; fi
+if [[ -n "${clang}" ]]   ; then msvc= && rad_log "[clang compile]" ; fi
 if [[ -z "$1" ]]          ; then echo "[default mode, assuming 'raddbg' build]" && raddbg=1 ; fi
 if [[ "$1" == "release" && -z "$2" ]] ; then
-    echo "[default mode, assuming 'raddbg' build]" && raddbg=1 ;
+    rad_log "[default mode, assuming 'raddbg' build]" && raddbg=1 ;
 fi
 if [[ -n "${msvc}" ]] ; then
     clang=0
-    echo "You're going to have to figure out something else if you want to use \
+    rad_log "You're going to have to figure out something else if you want to use \
 anything even remotely MSVC related on Linux. Bailing."
     exit 1
 fi
 
 set auto_compile_flags=
 [[ -n "${telemetry}" ]] && auto_compile_flags="${auto_compile_flags} -DPROFILE_TELEMETRY=1" &&
-    echo "[telemetry profiling enabled]"
+    rad_log "[telemetry profiling enabled]"
 [[ -n "${asan}"      ]] && auto_compile_flags="${auto_compile_flags} -fsanitize=address" &&
-    "echo [asan enabled]"
+    "rad_log [asan enabled]"
 
 # --- Compile/Link Line Definitions ------------------------------------------
     cl_common="/I../src/ /I../local/ /nologo /FC /Z7"
- clang_common="-I../src/ -I../local/ -fdiagnostics-absolute-paths -Wall -Wno-unknown-warning-option -Wno-missing-braces -Wno-unused-function -Wno-writable-strings -Wno-unused-value -Wno-unused-variable -Wno-unused-local-typedef -Wno-deprecated-register -Wno-deprecated-declarations -Wno-unused-but-set-variable -Wno-single-bit-bitfield-constant-conversion -Wno-compare-distinct-pointer-types -Xclang -flto-visibility-public-std -D_USE_MATH_DEFINES -Dstrdup=_strdup -Dgnu_printf=printf -Wl,-z,notext -lpthread -ldl -lrt -latomic"
- clang_errors="-Werror=atomic-memory-ordering"
+ clang_common="-I../src/ -I../local -I/usr/include/freetype2/ -fdiagnostics-absolute-paths -Wall -Wno-unknown-warning-option -Wno-missing-braces -Wno-unused-function -Wno-writable-strings -Wno-unused-value -Wno-unused-variable -Wno-unused-local-typedef -Wno-deprecated-register -Wno-deprecated-declarations -Wno-unused-but-set-variable -Wno-single-bit-bitfield-constant-conversion -Wno-compare-distinct-pointer-types -Xclang -flto-visibility-public-std -D_USE_MATH_DEFINES -Dstrdup=_strdup -Dgnu_printf=printf -Wl,-z,notext -lpthread -ldl -lrt -latomic -lm -lfreetype"
+ clang_errors="-Werror=atomic-memory-ordering -Wno-parentheses"
      cl_debug="cl /Od /Ob1 /DBUILD_DEBUG=1 ${cl_common} ${auto_compile_flags}"
    cl_release="cl /O2 /DBUILD_DEBUG=0 ${cl_common} ${auto_compile_flags}"
   clang_debug="clang -g -O0 -DBUILD_DEBUG=1 ${clang_common} ${clang_errors} ${auto_compile_flags}"
@@ -117,7 +136,7 @@ compile="${compile} -DBUILD_GIT_HASH=\"$(git describe --always --dirty)\""
 
 # --- Build & Run Metaprogram ------------------------------------------------
 if [[ -n "${no_meta}" ]] ; then
-    echo "[skipping metagen]"
+    rad_log "[skipping metagen]"
 else
   cd build
   ${compile_debug} "../src/metagen/metagen_main.c" ${compile_link} "${out}metagen.exe" || exit 1
@@ -130,6 +149,7 @@ fi
 
 function finish()
 {
+    rad_log "Some unexpected command failed unexpectedly. ${ansi_red}Line: $1 ${ansi_reset}"
     exit 1
 }
 
@@ -145,15 +165,13 @@ function build_single()
 
 function build_dll()
 {
-    didbuild=1 &&
-        ${compile} "$1" ${compile_link} ${@:3:100} ${link_dll} "${out}$2" || finish
+    didbuild=1
+    ${compile} "$1" ${compile_link} ${@:3:100} ${link_dll} "${out}$2"
     return $?
 }
 
-if [[ -n ${RAD_BUILD_DEBUG} ]] ; then
-    echo "Compile Command: "
-    echo ${compile}
-fi
+rad_debug_log "Compile Command: "
+rad_debug_log ${compile}
 
 cd build
 [[ -n "${raddbg}"                ]] && build_single ../src/raddbg/raddbg_main.c                               raddbg.exe
@@ -164,21 +182,22 @@ cd build
 [[ -n "${ryan_scratch}"          ]] && build_single ../src/scratch/ryan_scratch.c                             ryan_scratch.exe
 [[ -n "${cpp_tests}"             ]] && build_single ../src/scratch/i_hate_c_plus_plus.cpp                     cpp_tests.exe
 [[ -n "${look_at_raddbg}"        ]] && build_single ../src/scratch/look_at_raddbg.c                           look_at_raddbg.exe
-[[ -n "${mule_main}"             ]] &&
-    didbuild=1 &&
-        rm -v vc*.pdb mule*.pdb &&
-        ${compile_release} ${only_compile} ../src/mule/mule_inline.cpp &&
+if [[ -n "${mule_main}"             ]] ; then
+    didbuild=1
+    rm -v vc*.pdb mule*.pdb
+    ${compile_release} ${only_compile} ../src/mule/mule_inline.cpp &&
         ${compile_release} ${only_compile} ../src/mule/mule_o2.cpp &&
         ${compile_debug} ${EHsc} ../src/mule/mule_main.cpp ../src/mule/mule_c.c \
-                         mule_inline.obj mule_o2.obj ${compile_link} ${no_aslr} \
+                         "mule_inline.o" "mule_o2.o" ${compile_link} ${no_aslr} \
                          ${out} mule_main.exe || exit 1
+fi
 
 # Continue building the rest line normal
-[[ -n "${mule_module}" ]] &&  build_dll ../src/mule/mule_module.cpp mule_module.dll || exit 1
-[[ -n "${mule_hotload}" ]] && build_single ../src/mule/mule_hotload_main.c mule_hotload.exe ;
-build_dll ../src/mule/mule_hotload_module_main.c mule_hotload_module.dll || exit 1
+[[ -n "${mule_module}" ]] && $(build_dll ../src/mule/mule_module.cpp mule_module.dll || finish ${LINENO} )
+[[ -n "${mule_hotload}" ]] && $(build_single ../src/mule/mule_hotload_main.c mule_hotload.exe &&
+    build_dll ../src/mule/mule_hotload_module_main.c mule_hotload_module.dll || finish ${LINENO})
 
-if [[ "${mule_peb_trample}"=="1" ]] ; then
+if [[ -n "${mule_peb_trample}" ]] ; then
   didbuild=1
   [[ -f "mule_peb_trample.exe"     ]] && mv "mule_peb_trample.exe" "mule_peb_trample_old_${random}.exe"
   [[ -f "mule_peb_trample_new.pdb" ]] && mv "mule_peb_trample_new.pdb" "mule_peb_trample_old_${random}.pdb"
@@ -193,6 +212,9 @@ cd "${self_directory}"
 
 # --- Warn On No Builds ------------------------------------------------------
 if [[ -z "${didbuild}" ]] ; then
-  echo "[WARNING] no valid build target specified; must use build target names as arguments to this script, like `build raddbg` or `build rdi_from_pdb`."
+  rad_log "[WARNING] no valid build target specified; must use build target names as arguments to this script, like `build raddbg` or `build rdi_from_pdb`."
   exit 1
+else
+    rad_log "Build Finished!"
+    exit 0
 fi

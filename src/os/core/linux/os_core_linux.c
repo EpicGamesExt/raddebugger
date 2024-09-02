@@ -1461,8 +1461,8 @@ os_file_read(OS_Handle file, Rng1U64 rng, void *out_data)
 internal void
 os_file_write(OS_Handle file, Rng1U64 rng, void *data)
 {
-  // 0 file descriptor is stdin, bail
-  if (*file.u64 == 0) { return; }
+  // Zero Valid Argument
+  if (*file.u64 == 0 || data == NULL) { return; }
   S32 fd = lnx_fd_from_handle(file);
   LNX_fstat file_info;
   fstat(fd, &file_info);
@@ -1497,6 +1497,19 @@ os_properties_from_file(OS_Handle file)
   LNX_fstat props = {0};
   B32 error = fstat(fd, &props);
 
+  if (error == 0)
+  {
+    lnx_file_properties_from_stat(&result, &props);
+  }
+  return result;
+}
+
+internal FileProperties
+os_properties_from_file_path(String8 path)
+{
+  FileProperties result = {0};
+  LNX_fstat props = {0};
+  B32 error = stat((char*)path.str, &props);
   if (error == 0)
   {
     lnx_file_properties_from_stat(&result, &props);
@@ -2066,8 +2079,7 @@ internal void
 os_mutex_take_(OS_Handle mutex){
   LNX_Entity *entity = (LNX_Entity*)PtrFromInt(mutex.u64[0]);
   S32 error = 0;
-  while(error = pthread_mutex_lock(&entity->mutex)) { printf("error %d\n", error ); }
-  printf("error %d\n", error );
+  while(error = pthread_mutex_lock(&entity->mutex)) { }
 }
 
 internal void
@@ -2211,15 +2223,17 @@ os_condition_variable_wait_rw_w_(OS_Handle cv, OS_Handle mutex_rw, U64 endt_us)
 }
 
 internal void
-os_condition_variable_signal_(OS_Handle cv){
+os_condition_variable_signal_(OS_Handle cv)
+{
   LNX_Entity *entity = lnx_entity_from_handle(cv, LNX_EntityKind_ConditionVariable);
   pthread_cond_signal(&entity->cond);
 }
 
 internal void
-os_condition_variable_broadcast_(OS_Handle cv){
-  NotImplemented;
+os_condition_variable_broadcast_(OS_Handle cv)
+{
   LNX_Entity *entity = lnx_entity_from_handle(cv, LNX_EntityKind_ConditionVariable);
+  pthread_cond_broadcast(&entity->cond);
 }
 
 //- rjf: cross-process semaphores
@@ -2377,4 +2391,10 @@ os_make_guid(void)
   MemoryCopy(&result.data4, 8+ tmp, 8);
 
   return result;
+}
+
+int
+main(int argc, char** argv)
+{
+  main_thread_base_entry_point(entry_point, argv, (U64)argc);
 }

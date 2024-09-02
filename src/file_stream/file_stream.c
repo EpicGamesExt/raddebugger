@@ -83,7 +83,7 @@ fs_hash_from_path(String8 path, U64 endt_us)
           SLLQueuePush(slot->first, slot->last, node);
           node->path = push_str8_copy(stripe->arena, path);
         }
-        if(!ins_atomic_u32_eval_cond_assign(&node->is_working, 1, 0) &&
+        if(!ins_atomic_u32_eval_cond_assign((U32*)&node->is_working, 1, 0) &&
            !fs_u2s_enqueue_path(path, endt_us))
         {
           ins_atomic_u32_eval_assign(&node->is_working, 0);
@@ -270,7 +270,7 @@ fs_detector_thread__entry_point(void *p)
           FileProperties props = os_properties_from_file_path(n->path);
           if(props.modified != n->timestamp)
           {
-            if(!ins_atomic_u32_eval_cond_assign(&n->is_working, 1, 0) &&
+            if(!ins_atomic_u32_eval_cond_assign((U32*)&n->is_working, 1, 0) &&
                !fs_u2s_enqueue_path(n->path, os_now_microseconds()+100000))
             {
               ins_atomic_u32_eval_assign(&n->is_working, 0);

@@ -4,7 +4,9 @@
 #include "demon_core.c"
 
 #if OS_WINDOWS
-# include "win32/demon_core_win32.c"
+  #include "win32/demon_core_win32.c"
+#elif OS_LINUX
+  #include "linux/demon_core_linux.c"
 #else
-# error Demon layer backend not defined for this operating system.
+  #error Demon layer backend not defined for this operating system.
 #endif

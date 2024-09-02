@@ -395,7 +395,7 @@ dasm_parse_thread__entry_point(void *p)
       {
         if(u128_match(n->hash, hash) && dasm_params_match(&n->params, &params))
         {
-          got_task = !ins_atomic_u32_eval_cond_assign(&n->is_working, 1, 0);
+          got_task = !ins_atomic_u32_eval_cond_assign((U32*)&n->is_working, 1, 0);
           break;
         }
       }

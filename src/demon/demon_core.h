@@ -154,6 +154,8 @@ struct DMN_ProcessInfo
   U32 pid;
 };
 
+// == OS Independent Layer ==
+
 ////////////////////////////////
 //~ rjf: Basic Type Functions (Helpers, Implemented Once)
 
@@ -179,6 +181,8 @@ internal DMN_Event *dmn_event_list_push(Arena *arena, DMN_EventList *list);
 
 internal U64 dmn_rip_from_thread(DMN_Handle thread);
 internal U64 dmn_rsp_from_thread(DMN_Handle thread);
+
+// == OS Layer ==
 
 ////////////////////////////////
 //~ rjf: @dmn_os_hooks Main Layer Initialization (Implemented Per-OS)

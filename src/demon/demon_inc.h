@@ -7,9 +7,11 @@
 #include "demon_core.h"
 
 #if OS_WINDOWS
-# include "win32/demon_core_win32.h"
+  #include "win32/demon_core_win32.h"
+#elif OS_LINUX
+  #include "linux/demon_core_linux.h"
 #else
-# error Demon layer backend not defined for this operating system.
+  #error Demon layer backend not defined for this operating system.
 #endif
 
 #endif // DEMON_INC_H

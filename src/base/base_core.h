@@ -192,7 +192,7 @@ ins_atomic_u64_eval_cond_assign__impl(volatile U64* x, U64 k, U64 c)
                                       0, __ATOMIC_ACQ_REL, __ATOMIC_RELEASE );
 }
 
-U64
+U32
 ins_atomic_u32_eval_cond_assign__impl(volatile U32* x, U32 k, U32 c)
 {
   U32 _temp_expected = k;
@@ -200,6 +200,7 @@ ins_atomic_u32_eval_cond_assign__impl(volatile U32* x, U32 k, U32 c)
                                       0, __ATOMIC_ACQ_REL, __ATOMIC_RELEASE );
 }
 
+// TODO(mallchad): I so do not understand how this is supposed to work. Plz send halp.
 #define ins_atomic_u64_eval(x)  __atomic_load_n( (volatile U64 *)(x), __ATOMIC_ACQUIRE )
 #define ins_atomic_u64_inc_eval(x) __atomic_add_fetch( (volatile U64 *)(x), 1, __ATOMIC_ACQ_REL )
 #define ins_atomic_u64_dec_eval(x)  __atomic_add_fetch( (volatile U64 *)(x), -1, __ATOMIC_ACQ_REL )
