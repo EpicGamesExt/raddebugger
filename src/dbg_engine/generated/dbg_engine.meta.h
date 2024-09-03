@@ -76,41 +76,8 @@ D_MsgKind_FreezeMachine,
 D_MsgKind_ThawMachine,
 D_MsgKind_FreezeLocalMachine,
 D_MsgKind_ThawLocalMachine,
-D_MsgKind_SetPathMapSrc,
-D_MsgKind_SetPathMapDst,
-D_MsgKind_SetFileReplacementPath,
-D_MsgKind_SetAutoViewRuleType,
-D_MsgKind_SetAutoViewRuleViewRule,
-D_MsgKind_EnableEntity,
-D_MsgKind_EnableBreakpoint,
-D_MsgKind_EnableTarget,
-D_MsgKind_DisableEntity,
-D_MsgKind_DisableBreakpoint,
-D_MsgKind_DisableTarget,
-D_MsgKind_RemoveEntity,
-D_MsgKind_RemoveBreakpoint,
-D_MsgKind_RemoveTarget,
-D_MsgKind_NameEntity,
-D_MsgKind_DuplicateEntity,
-D_MsgKind_RelocateEntity,
-D_MsgKind_AddBreakpoint,
-D_MsgKind_ToggleBreakpoint,
-D_MsgKind_AddAddressBreakpoint,
-D_MsgKind_AddFunctionBreakpoint,
-D_MsgKind_AddWatchPin,
-D_MsgKind_ToggleWatchPin,
-D_MsgKind_ToggleWatchExpression,
-D_MsgKind_ToggleBreakpointAtCursor,
-D_MsgKind_ToggleWatchPinAtCursor,
-D_MsgKind_ToggleWatchExpressionAtCursor,
-D_MsgKind_GoToNameAtCursor,
 D_MsgKind_RunToCursor,
 D_MsgKind_SetNextStatement,
-D_MsgKind_AddTarget,
-D_MsgKind_SelectTarget,
-D_MsgKind_RetryEndedProcess,
-D_MsgKind_RegisterAsJITDebugger,
-D_MsgKind_LogMarker,
 D_MsgKind_COUNT,
 } D_MsgKind;
 
@@ -568,8 +535,8 @@ struct {B32 *value_ptr; String8 name;} DEV_toggle_table[] =
 };
 C_LINKAGE_BEGIN
 extern Rng1U64 d_reg_slot_range_table[29];
-extern String8 d_msg_kind_name_lower_table[69];
-extern String8 d_msg_kind_name_display_table[69];
+extern String8 d_msg_kind_name_lower_table[36];
+extern String8 d_msg_kind_name_display_table[36];
 extern Rng1U64 d_cmd_param_slot_range_table[24];
 extern String8 d_entity_kind_display_string_table[28];
 extern String8 d_entity_kind_name_lower_table[28];

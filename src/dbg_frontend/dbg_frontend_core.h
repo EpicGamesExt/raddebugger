@@ -549,6 +549,7 @@ struct DF_Window
   
   // rjf: top-level info & handles
   Arena *arena;
+  String8 cfg_string;
   OS_Handle os;
   R_Handle r;
   UI_State *ui;
@@ -662,7 +663,6 @@ struct DF_Window
 typedef struct DF_State DF_State;
 struct DF_State
 {
-  // rjf: arenas
   Arena *arena;
   B32 quit;
   
@@ -976,6 +976,17 @@ internal String8 df_push_search_string(Arena *arena);
 
 ////////////////////////////////
 //~ rjf: Colors, Fonts, Config
+
+//- rjf: string <-> cfg tree
+internal MD_Node *df_cfg_tree_from_string(String8 string);
+internal String8 df_string_from_cfg_tree(Arena *arena, MD_Node *node);
+
+//- rjf: config tree mutations
+internal DF_CfgSlot df_cfg_slot_from_tree(MD_Node *node);
+internal MD_Node *df_cfg_tree_store(MD_Node *parent, MD_Node *replace_node, String8 string);
+internal MD_Node *df_cfg_tree_storef(MD_Node *parent, MD_Node *replace_node, char *fmt, ...);
+#define df_cfg_tree_set_key(parent, key, val) df_cfg_tree_store((parent), md_child_from_string((parent), (key), 0), (val))
+#define df_cfg_tree_set_keyf(parent, key, fmt, ...) df_cfg_tree_storef((parent), md_child_from_string((parent), (key), 0), (fmt), __VA_ARGS__)
 
 //- rjf: keybindings
 internal void df_clear_bindings(void);

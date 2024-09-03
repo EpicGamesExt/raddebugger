@@ -260,12 +260,17 @@ internal MD_NodeRec md_node_rec_depth_first(MD_Node *node, MD_Node *subtree_root
 
 //- rjf: tree building
 internal MD_Node *md_push_node(Arena *arena, MD_NodeKind kind, MD_NodeFlags flags, String8 string, String8 raw_string, U64 src_offset);
+internal void md_node_insert_child(MD_Node *parent, MD_Node *prev_child, MD_Node *node);
 internal void md_node_push_child(MD_Node *parent, MD_Node *node);
+internal void md_node_remove_child(MD_Node *parent, MD_Node *node);
+internal void md_node_insert_tag(MD_Node *parent, MD_Node *prev_child, MD_Node *node);
 internal void md_node_push_tag(MD_Node *parent, MD_Node *node);
+internal void md_node_remove_tag(MD_Node *parent, MD_Node *node);
 
 //- rjf: tree building helpers
 internal MD_Node *md_push_list(Arena *arena);
 internal MD_Node *md_list_push_ref(Arena *arena, MD_Node *list, MD_Node *ref_dst);
+internal void md_list_concat_in_place(MD_Node *dst, MD_Node **src);
 
 //- rjf: tree introspection
 internal MD_Node *  md_node_from_chain_string(MD_Node *first, MD_Node *opl, String8 string, StringMatchFlags flags);

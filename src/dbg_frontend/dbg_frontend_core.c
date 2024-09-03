@@ -2082,12 +2082,10 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
         {
           if(ws->code_ctx_menu_file_path.size != 0)
           {
-            d_cmd(D_CmdKind_RunToLine, .file_path = ws->code_ctx_menu_file_path, .text_point = range.min);
             d_msg(D_MsgKind_RunToLine, .file_path = ws->code_ctx_menu_file_path, .cursor = range.min);
           }
           else
           {
-            d_cmd(D_CmdKind_RunToAddress, .vaddr = ws->code_ctx_menu_vaddr);
             d_msg(D_MsgKind_RunToAddress, .vaddr_range = r1u64(ws->code_ctx_menu_vaddr, ws->code_ctx_menu_vaddr));
           }
           ui_ctx_menu_close();
@@ -2107,7 +2105,6 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
             expr_off_range = txt_expr_off_range_from_info_data_pt(&info, data, range.min);
           }
           String8 expr = str8_substr(data, expr_off_range);
-          d_cmd(D_CmdKind_GoToName, .string = expr);
           df_msg(DF_MsgKind_GoToName, .string = expr);
           ui_ctx_menu_close();
         }
@@ -7073,6 +7070,176 @@ df_push_search_string(Arena *arena)
 ////////////////////////////////
 //~ rjf: Colors, Fonts, Config
 
+//- rjf: string <-> cfg tree
+
+internal MD_Node *
+df_cfg_tree_from_string(String8 string)
+{
+  MD_Node *result = &md_nil_node;
+  Temp scratch = scratch_begin(0, 0);
+  {
+    MD_Node *lookup_tree = md_tree_from_string(scratch.arena, string);
+    MD_Node *lookup_root = &md_nil_node;
+    for(MD_EachNode(op, lookup_tree->first))
+    {
+      // rjf: user -> look into user subtree
+      if(op == lookup_tree->first && str8_match(op->string, str8_lit("user"), StringMatchFlag_CaseInsensitive))
+      {
+        lookup_root = df_state->cfg_slot_roots[DF_CfgSlot_User];
+      }
+      
+      // rjf: project -> look into project subtree
+      else if(op == lookup_tree->first && str8_match(op->string, str8_lit("project"), StringMatchFlag_CaseInsensitive))
+      {
+        lookup_root = df_state->cfg_slot_roots[DF_CfgSlot_Project];
+      }
+      
+      // rjf: skip cases
+      else if(op->flags & MD_NodeFlag_Symbol && str8_match(op->string, str8_lit("."), 0))
+      {
+        continue;
+      }
+      
+      // rjf: look up `.name` or `.name[idx]` or `.name:"label"`
+      else if(op->flags & MD_NodeFlag_Symbol && str8_match(op->string, str8_lit("."), 0) &&
+              op->next->flags & MD_NodeFlag_Identifier)
+      {
+        String8 label_target = {0};
+        if(op->next->first->flags & MD_NodeFlag_StringDoubleQuote)
+        {
+          label_target = op->next->first->string;
+        }
+        U64 idx_target = 0;
+        if(op->next->next->flags & MD_NodeFlag_HasBracketLeft &&
+           op->next->next->flags & MD_NodeFlag_HasBracketRight &&
+           op->next->next->first->flags & MD_NodeFlag_Numeric &&
+           op->next->next->first == op->next->last)
+        {
+          String8 idx_string = md_string_from_children(scratch.arena, op->next->next);
+          E_Eval idx_eval = e_eval_from_string(scratch.arena, idx_string);
+          E_Eval idx_eval_value = e_value_eval_from_eval(idx_eval);
+          idx_target = idx_eval_value.value.u64;
+        }
+        U64 idx_search = 0;
+        for(MD_EachNode(tln, lookup_root->first))
+        {
+          if(str8_match(tln->string, op->next->string, 0))
+          {
+            B32 label_target_matches = 1;
+            if(label_target.size != 0)
+            {
+              MD_Node *label_child = md_child_from_string(tln, str8_lit("label"), 0);
+              label_target_matches = str8_match(label_target, label_child->first->string, 0);
+            }
+            lookup_root = tln;
+            if(idx_target == idx_search)
+            {
+              break;
+            }
+            idx_search += 1;
+          }
+        }
+      }
+    }
+    result = lookup_root;
+  }
+  scratch_end(scratch);
+  return result;
+}
+
+internal String8
+df_string_from_cfg_tree(Arena *arena, MD_Node *node)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  String8List strings = {0};
+  for(MD_Node *n = node; !md_node_is_nil(n); n = n->parent)
+  {
+    if(n == df_state->cfg_slot_roots[DF_CfgSlot_User])
+    {
+      str8_list_push_front(scratch.arena, &strings, str8_lit("user"));
+      break;
+    }
+    else if(n == df_state->cfg_slot_roots[DF_CfgSlot_Project])
+    {
+      str8_list_push_front(scratch.arena, &strings, str8_lit("project"));
+      break;
+    }
+    U64 index = 0;
+    for(MD_Node *n2 = n->prev; !md_node_is_nil(n2); n2 = n2->prev)
+    {
+      if(str8_match(n2->string, n->string, 0))
+      {
+        index += 1;
+      }
+    }
+    str8_list_push_frontf(scratch.arena, &strings, ".%S[%I64u]", n->string, index);
+  }
+  String8 result = str8_list_join(arena, &strings, 0);
+  scratch_end(scratch);
+  return result;
+}
+
+//- rjf: config tree mutations
+
+internal DF_CfgSlot
+df_cfg_slot_from_tree(MD_Node *node)
+{
+  DF_CfgSlot slot = DF_CfgSlot_User;
+  for(MD_Node *n = node; !md_node_is_nil(n); n = n->parent)
+  {
+    for(EachEnumVal(DF_CfgSlot, s))
+    {
+      if(n == df_state->cfg_slot_roots[s])
+      {
+        slot = s;
+        goto end;
+      }
+    }
+  }
+  end:;
+  return slot;
+}
+
+internal MD_Node *
+df_cfg_tree_store(MD_Node *parent, MD_Node *replace_node, String8 string)
+{
+  DF_CfgSlot slot = df_cfg_slot_from_tree(parent);
+  Arena *arena = df_state->cfg_slot_arenas[slot];
+  MD_Node *new_root = &md_nil_node;
+  if(string.size != 0)
+  {
+    String8 string_copy = push_str8_copy(arena, string);
+    new_root = md_tree_from_string(arena, string_copy);
+  }
+  MD_Node *result = &md_nil_node;
+  result = new_root->first;
+  MD_Node *prev_child = parent->last;
+  if(!md_node_is_nil(replace_node))
+  {
+    prev_child = replace_node->prev;
+    md_node_remove_child(replace_node->parent, replace_node);
+  }
+  for(MD_EachNode(child, new_root->first))
+  {
+    md_node_insert_child(parent, prev_child, child);
+    prev_child = child;
+  }
+  return result;
+}
+
+internal MD_Node *
+df_cfg_tree_storef(MD_Node *parent, MD_Node *replace_node, char *fmt, ...)
+{
+  Temp scratch = scratch_begin(0, 0);
+  va_list args;
+  va_start(args, fmt);
+  String8 string = push_str8fv(scratch.arena, fmt, args);
+  MD_Node *result = df_cfg_tree_store(parent, replace_node, string);
+  va_end(args);
+  scratch_end(scratch);
+  return result;
+}
+
 //- rjf: keybindings
 
 internal void
@@ -8502,6 +8669,45 @@ df_frame(void)
             DF_Window *window = df_window_from_handle(regs->window);
             window->dev_menu_is_open ^= 1;
           }break;
+          case DF_MsgKind_RegisterAsJITDebugger:
+          {
+#if OS_WINDOWS
+            char filename_cstr[MAX_PATH] = {0};
+            GetModuleFileName(0, filename_cstr, sizeof(filename_cstr));
+            String8 debugger_binary_path = str8_cstring(filename_cstr);
+            String8 name8 = str8_lit("Debugger");
+            String8 data8 = push_str8f(scratch.arena, "%S --jit_pid:%%ld --jit_code:%%ld --jit_addr:0x%%p", debugger_binary_path);
+            String16 name16 = str16_from_8(scratch.arena, name8);
+            String16 data16 = str16_from_8(scratch.arena, data8);
+            B32 likely_not_in_admin_mode = 0;
+            {
+              HKEY reg_key = 0;
+              LSTATUS status = 0;
+              status = RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\WOW6432Node\\Microsoft\\Windows NT\\CurrentVersion\\AeDebug\\", 0, KEY_SET_VALUE, &reg_key);
+              likely_not_in_admin_mode = (status == ERROR_ACCESS_DENIED);
+              status = RegSetValueExW(reg_key, (LPCWSTR)name16.str, 0, REG_SZ, (BYTE *)data16.str, data16.size*sizeof(U16)+2);
+              RegCloseKey(reg_key);
+            }
+            {
+              HKEY reg_key = 0;
+              LSTATUS status = 0;
+              status = RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\AeDebug\\", 0, KEY_SET_VALUE, &reg_key);
+              likely_not_in_admin_mode = (status == ERROR_ACCESS_DENIED);
+              status = RegSetValueExW(reg_key, (LPCWSTR)name16.str, 0, REG_SZ, (BYTE *)data16.str, data16.size*sizeof(U16)+2);
+              RegCloseKey(reg_key);
+            }
+            if(likely_not_in_admin_mode)
+            {
+              log_user_errorf("Could not register as the just-in-time debugger, access was denied; try running the debugger as administrator.");
+            }
+#else
+            log_user_errorf("Registering as the just-in-time debugger is currently not supported on this system.");
+#endif
+          }break;
+          case DF_MsgKind_LogMarker:
+          {
+            log_infof("\"#MARKER\"");
+          }break;
           
           //- rjf: config loading/saving
           case DF_MsgKind_LoadUser:     cfg_slot = DF_CfgSlot_User; goto load_cfg_data;
@@ -8524,6 +8730,310 @@ df_frame(void)
           save_cfg_data:;
           {
             // TODO(rjf): @msgs
+          }break;
+          
+          //- rjf: general entity operations
+          case DF_MsgKind_EnableEntity:
+          case DF_MsgKind_EnableBreakpoint:
+          case DF_MsgKind_EnableTarget:
+          {
+            D_Entity *entity = d_entity_from_handle(regs->entity);
+            d_entity_equip_disabled(entity, 0);
+          }break;
+          case DF_MsgKind_DisableEntity:
+          case DF_MsgKind_DisableBreakpoint:
+          case DF_MsgKind_DisableTarget:
+          {
+            D_Entity *entity = d_entity_from_handle(regs->entity);
+            d_entity_equip_disabled(entity, 1);
+          }break;
+          case DF_MsgKind_RemoveEntity:
+          case DF_MsgKind_RemoveBreakpoint:
+          case DF_MsgKind_RemoveTarget:
+          {
+            D_Entity *entity = d_entity_from_handle(regs->entity);
+            D_EntityKindFlags kind_flags = d_entity_kind_flags_table[entity->kind];
+            if(kind_flags & D_EntityKindFlag_CanDelete)
+            {
+              d_entity_mark_for_deletion(entity);
+            }
+          }break;
+          case DF_MsgKind_NameEntity:
+          {
+            D_Entity *entity = d_entity_from_handle(regs->entity);
+            String8 string = regs->string;
+            d_entity_equip_name(entity, string);
+          }break;
+          case DF_MsgKind_DuplicateEntity:
+          {
+            D_Entity *src = d_entity_from_handle(regs->entity);
+            if(!d_entity_is_nil(src))
+            {
+              typedef struct Task Task;
+              struct Task
+              {
+                Task *next;
+                D_Entity *src_n;
+                D_Entity *dst_parent;
+              };
+              Task starter_task = {0, src, src->parent};
+              Task *first_task = &starter_task;
+              Task *last_task = &starter_task;
+              for(Task *task = first_task; task != 0; task = task->next)
+              {
+                D_Entity *src_n = task->src_n;
+                D_Entity *dst_n = d_entity_alloc(task->dst_parent, task->src_n->kind);
+                if(src_n->flags & D_EntityFlag_HasTextPoint)    {d_entity_equip_txt_pt(dst_n, src_n->text_point);}
+                if(src_n->flags & D_EntityFlag_HasU64)          {d_entity_equip_u64(dst_n, src_n->u64);}
+                if(src_n->flags & D_EntityFlag_HasColor)        {d_entity_equip_color_hsva(dst_n, d_hsva_from_entity(src_n));}
+                if(src_n->flags & D_EntityFlag_HasVAddrRng)     {d_entity_equip_vaddr_rng(dst_n, src_n->vaddr_rng);}
+                if(src_n->flags & D_EntityFlag_HasVAddr)        {d_entity_equip_vaddr(dst_n, src_n->vaddr);}
+                if(src_n->disabled)                             {d_entity_equip_disabled(dst_n, 1);}
+                if(src_n->string.size != 0)                     {d_entity_equip_name(dst_n, src_n->string);}
+                dst_n->cfg_src = src_n->cfg_src;
+                for(D_Entity *src_child = task->src_n->first; !d_entity_is_nil(src_child); src_child = src_child->next)
+                {
+                  Task *child_task = push_array(scratch.arena, Task, 1);
+                  child_task->src_n = src_child;
+                  child_task->dst_parent = dst_n;
+                  SLLQueuePush(first_task, last_task, child_task);
+                }
+              }
+            }
+          }break;
+          case DF_MsgKind_RelocateEntity:
+          {
+            D_Entity *entity = d_entity_from_handle(regs->entity);
+            D_Entity *location = d_entity_child_from_kind(entity, D_EntityKind_Location);
+            if(d_entity_is_nil(location))
+            {
+              location = d_entity_alloc(entity, D_EntityKind_Location);
+            }
+            location->flags &= ~D_EntityFlag_HasTextPoint;
+            location->flags &= ~D_EntityFlag_HasVAddr;
+            if(regs->cursor.line != 0)
+            {
+              d_entity_equip_txt_pt(location, regs->cursor);
+            }
+            if(regs->vaddr_range.min != 0)
+            {
+              d_entity_equip_vaddr(location, regs->vaddr_range.min);
+            }
+            if(regs->file_path.size != 0)
+            {
+              d_entity_equip_name(location, regs->file_path);
+            }
+          }break;
+          
+          //- rjf: breakpoints
+          case DF_MsgKind_AddBreakpoint:
+          case DF_MsgKind_ToggleBreakpoint:
+          {
+            String8 file_path = regs->file_path;
+            TxtPt pt = regs->cursor;
+            String8 string = regs->string;
+            U64 vaddr = regs->vaddr_range.min;
+            B32 removed_already_existing = 0;
+            if(msg->kind == DF_MsgKind_ToggleBreakpoint)
+            {
+              D_EntityList bps = d_query_cached_entity_list_with_kind(D_EntityKind_Breakpoint);
+              for(D_EntityNode *n = bps.first; n != 0; n = n->next)
+              {
+                D_Entity *bp = n->entity;
+                D_Entity *loc = d_entity_child_from_kind(bp, D_EntityKind_Location);
+                if((loc->flags & D_EntityFlag_HasTextPoint && path_match_normalized(loc->string, file_path) && loc->text_point.line == pt.line) ||
+                   (loc->flags & D_EntityFlag_HasVAddr && loc->vaddr == vaddr) ||
+                   (!(loc->flags & D_EntityFlag_HasTextPoint) && str8_match(loc->string, string, 0)))
+                {
+                  d_entity_mark_for_deletion(bp);
+                  removed_already_existing = 1;
+                  break;
+                }
+              }
+            }
+            if(!removed_already_existing)
+            {
+              D_Entity *bp = d_entity_alloc(d_entity_root(), D_EntityKind_Breakpoint);
+              d_entity_equip_cfg_src(bp, D_CfgSrc_Project);
+              D_Entity *loc = d_entity_alloc(bp, D_EntityKind_Location);
+              if(file_path.size != 0 && pt.line != 0)
+              {
+                d_entity_equip_name(loc, file_path);
+                d_entity_equip_txt_pt(loc, pt);
+              }
+              else if(string.size != 0)
+              {
+                d_entity_equip_name(loc, string);
+              }
+              else if(vaddr != 0)
+              {
+                d_entity_equip_vaddr(loc, vaddr);
+              }
+            }
+          }break;
+          case DF_MsgKind_AddAddressBreakpoint:
+          case DF_MsgKind_AddFunctionBreakpoint:
+          {
+            d_msg(DF_MsgKind_AddBreakpoint);
+          }break;
+          
+          //- rjf: watch pins
+          case DF_MsgKind_AddWatchPin:
+          case DF_MsgKind_ToggleWatchPin:
+          {
+            String8 file_path = regs->file_path;
+            TxtPt pt = regs->cursor;
+            String8 string = regs->string;
+            U64 vaddr = regs->vaddr_range.min;
+            B32 removed_already_existing = 0;
+            if(msg->kind == DF_MsgKind_ToggleWatchPin)
+            {
+              D_EntityList wps = d_query_cached_entity_list_with_kind(D_EntityKind_WatchPin);
+              for(D_EntityNode *n = wps.first; n != 0; n = n->next)
+              {
+                D_Entity *wp = n->entity;
+                D_Entity *loc = d_entity_child_from_kind(wp, D_EntityKind_Location);
+                if((loc->flags & D_EntityFlag_HasTextPoint && path_match_normalized(loc->string, file_path) && loc->text_point.line == pt.line) ||
+                   (loc->flags & D_EntityFlag_HasVAddr && loc->vaddr == vaddr) ||
+                   (!(loc->flags & D_EntityFlag_HasTextPoint) && str8_match(loc->string, string, 0)))
+                {
+                  d_entity_mark_for_deletion(wp);
+                  removed_already_existing = 1;
+                  break;
+                }
+              }
+            }
+            if(!removed_already_existing)
+            {
+              D_Entity *wp = d_entity_alloc(d_entity_root(), D_EntityKind_WatchPin);
+              d_entity_equip_name(wp, string);
+              d_entity_equip_cfg_src(wp, D_CfgSrc_Project);
+              D_Entity *loc = d_entity_alloc(wp, D_EntityKind_Location);
+              if(file_path.size != 0 && pt.line != 0)
+              {
+                d_entity_equip_name(loc, file_path);
+                d_entity_equip_txt_pt(loc, pt);
+              }
+              else if(vaddr != 0)
+              {
+                d_entity_equip_vaddr(loc, vaddr);
+              }
+            }
+          }break;
+          
+          //- rjf: watch expressions
+          case DF_MsgKind_ToggleWatchExpression:
+          if(regs->string.size != 0)
+          {
+            D_Entity *existing_watch = d_entity_from_name_and_kind(regs->string, D_EntityKind_Watch);
+            if(d_entity_is_nil(existing_watch))
+            {
+              D_Entity *watch = &d_nil_entity;
+              D_StateDeltaHistoryBatch(d_state_delta_history())
+              {
+                watch = d_entity_alloc(d_entity_root(), D_EntityKind_Watch);
+              }
+              d_entity_equip_cfg_src(watch, D_CfgSrc_Project);
+              d_entity_equip_name(watch, regs->string);
+            }
+            else
+            {
+              d_entity_mark_for_deletion(existing_watch);
+            }
+          }break;
+          
+          //- rjf: at-cursor operations
+          case DF_MsgKind_ToggleBreakpointAtCursor:{d_msg(DF_MsgKind_ToggleBreakpoint);}break;
+          case DF_MsgKind_ToggleWatchPinAtCursor:{d_msg(DF_MsgKind_ToggleWatchPin);}break;
+          case DF_MsgKind_GoToNameAtCursor:
+          case DF_MsgKind_ToggleWatchExpressionAtCursor:
+          {
+            // rjf: get expr
+            String8 expr = {0};
+            {
+              HS_Scope *hs_scope = hs_scope_open();
+              TXT_Scope *txt_scope = txt_scope_open();
+              U128 text_key = regs->text_key;
+              TXT_LangKind lang_kind = regs->lang_kind;
+              TxtRng range = txt_rng(regs->cursor, regs->mark);
+              U128 hash = {0};
+              TXT_TextInfo info = txt_text_info_from_key_lang(txt_scope, text_key, lang_kind, &hash);
+              String8 data = hs_data_from_hash(hs_scope, hash);
+              Rng1U64 expr_off_range = {0};
+              if(range.min.column != range.max.column)
+              {
+                expr_off_range = r1u64(txt_off_from_info_pt(&info, range.min), txt_off_from_info_pt(&info, range.max));
+              }
+              else
+              {
+                expr_off_range = txt_expr_off_range_from_info_data_pt(&info, data, range.min);
+              }
+              expr = push_str8_copy(scratch.arena, str8_substr(data, expr_off_range));
+              txt_scope_close(txt_scope);
+              hs_scope_close(hs_scope);
+            }
+            
+            // rjf: push command for this expr
+            // TODO(rjf): @msgs
+            // d_msg(msg->kind == DF_MsgKind_GoToNameAtCursor ? DF_MsgKind_GoToName :
+            // msg->kind == DF_MsgKind_ToggleWatchExpressionAtCursor ? DF_MsgKind_ToggleWatchExpression :
+            // DF_MsgKind_GoToName, .string = expr);
+          }break;
+          
+          //- rjf: targets
+          case DF_MsgKind_AddTarget:
+          {
+            DF_CfgSlot cfg_slot = DF_CfgSlot_Project;
+            MD_Node *cfg_root = df_state->cfg_slot_roots[cfg_slot];
+            String8 cfg_path = cfg_root->string;
+            String8 cfg_folder = str8_chop_last_slash(cfg_path);
+            String8 file_path = regs->file_path;
+            String8 file_path_normalized = path_normalized_from_string(scratch.arena, file_path);
+            String8 file_path_relative = path_relative_dst_from_absolute_dst_src(scratch.arena, file_path_normalized, cfg_folder);
+            String8 file_path_escaped = escaped_from_raw_string(scratch.arena, file_path_relative);
+            String8 working_dir_normalized = str8_chop_last_slash(file_path_normalized);
+            String8 working_dir_relative = path_relative_dst_from_absolute_dst_src(scratch.arena, working_dir_normalized, cfg_folder);
+            String8 working_dir_escaped = escaped_from_raw_string(scratch.arena, working_dir_relative);
+            MD_Node *target_cfg = df_cfg_tree_storef(cfg_root, &md_nil_node,
+                                                     "target:{executable:\"%S\", working_directory:\"%S\"}",
+                                                     file_path_escaped,
+                                                     working_dir_escaped);
+            df_msg(DF_MsgKind_SelectTarget, .string = df_string_from_cfg_tree(scratch.arena, target_cfg));
+          }break;
+          case DF_MsgKind_SelectTarget:
+          {
+            MD_Node *target_cfg = df_cfg_tree_from_string(regs->string);
+            if(!md_node_is_nil(target_cfg))
+            {
+              for(MD_EachNode(root_ref, df_state->cfg_root->first))
+              {
+                for(MD_EachNode(tln, root_ref->first->first))
+                {
+                  if(str8_match(target_cfg->string, tln->string, 0))
+                  {
+                    df_cfg_tree_set_keyf(tln, str8_lit("disabled"), "%i", tln == target_cfg);
+                  }
+                }
+              }
+            }
+            
+#if 0 // TODO(rjf): @msgs
+            D_Entity *entity = d_entity_from_handle(regs->entity);
+            if(entity->kind == D_EntityKind_Target)
+            {
+              D_EntityList all_targets = d_query_cached_entity_list_with_kind(D_EntityKind_Target);
+              B32 is_selected = !entity->disabled;
+              for(D_EntityNode *n = all_targets.first; n != 0; n = n->next)
+              {
+                D_Entity *target = n->entity;
+                d_entity_equip_disabled(target, 1);
+              }
+              if(!is_selected)
+              {
+                d_entity_equip_disabled(entity, 0);
+              }
+            }
+#endif
           }break;
           
           //- rjf: windows
