@@ -835,7 +835,7 @@ struct D_UnwindCacheNode
   U64 reggen;
   U64 memgen;
   Arena *arena;
-  D_Handle thread;
+  CTRL_MachineIDHandlePair pair;
   CTRL_Unwind unwind;
 };
 
@@ -860,7 +860,7 @@ typedef struct D_RunTLSBaseCacheNode D_RunTLSBaseCacheNode;
 struct D_RunTLSBaseCacheNode
 {
   D_RunTLSBaseCacheNode *hash_next;
-  D_Handle process;
+  CTRL_MachineIDHandlePair pair;
   U64 root_vaddr;
   U64 rip_vaddr;
   U64 tls_base_vaddr;
@@ -987,6 +987,7 @@ struct D_State
   D_MsgList msgs;
   
   // rjf: top-level command batch
+  // TODO(rjf): @msgs
   Arena *root_cmd_arena;
   D_CmdList root_cmds;
   
@@ -1040,6 +1041,8 @@ struct D_State
   D_ViewRuleSpec **view_rule_spec_table;
   
   // rjf: freeze state
+  CTRL_MachineIDHandlePairList frozen_thread_handles;
+  CTRL_MachineIDHandlePairNode *free_frozen_thread_handle_node;
   D_HandleList frozen_threads;
   D_HandleNode *free_handle_node;
   
@@ -1047,7 +1050,8 @@ struct D_State
   Arena *ctrl_last_run_arena;
   D_RunKind ctrl_last_run_kind;
   U64 ctrl_last_run_frame_idx;
-  D_Handle ctrl_last_run_thread;
+  CTRL_MachineID ctrl_last_run_machine_id;
+  DMN_Handle ctrl_last_run_thread;
   CTRL_RunFlags ctrl_last_run_flags;
   CTRL_TrapList ctrl_last_run_traps;
   U128 ctrl_last_run_param_state_hash;
@@ -1299,7 +1303,7 @@ internal D_Entity *d_entity_from_u64_and_kind(U64 u64, D_EntityKind kind);
 
 //- rjf: entity freezing state
 internal void d_set_thread_freeze_state(D_Entity *thread, B32 frozen);
-internal B32 d_entity_is_frozen(D_Entity *entity);
+internal B32 d_entity_is_frozen(CTRL_Entity *entity);
 
 ////////////////////////////////
 //~ rjf: Command Stateful Functions
@@ -1319,9 +1323,9 @@ internal D_ViewRuleSpec *d_view_rule_spec_from_string(String8 string);
 ////////////////////////////////
 //~ rjf: Stepping "Trap Net" Builders
 
-internal CTRL_TrapList d_trap_net_from_thread__step_over_inst(Arena *arena, D_Entity *thread);
-internal CTRL_TrapList d_trap_net_from_thread__step_over_line(Arena *arena, D_Entity *thread);
-internal CTRL_TrapList d_trap_net_from_thread__step_into_line(Arena *arena, D_Entity *thread);
+internal CTRL_TrapList d_trap_net_from_thread__step_over_inst(Arena *arena, CTRL_Entity *thread);
+internal CTRL_TrapList d_trap_net_from_thread__step_over_line(Arena *arena, CTRL_Entity *thread);
+internal CTRL_TrapList d_trap_net_from_thread__step_into_line(Arena *arena, CTRL_Entity *thread);
 
 ////////////////////////////////
 //~ rjf: Modules & Debug Info Mappings
@@ -1342,7 +1346,7 @@ internal Rng1U64 d_vaddr_range_from_voff_range(D_Entity *module, Rng1U64 voff_rn
 
 //- rjf: voff|vaddr -> symbol lookups
 internal String8 d_symbol_name_from_dbgi_key_voff(Arena *arena, DI_Key *dbgi_key, U64 voff, B32 decorated);
-internal String8 d_symbol_name_from_process_vaddr(Arena *arena, D_Entity *process, U64 vaddr, B32 decorated);
+internal String8 d_symbol_name_from_process_vaddr(Arena *arena, CTRL_Entity *process, U64 vaddr, B32 decorated);
 
 //- rjf: symbol -> voff lookups
 internal U64 d_voff_from_dbgi_key_symbol_name(DI_Key *dbgi_key, String8 symbol_name);
@@ -1360,13 +1364,13 @@ internal D_LineList d_lines_from_file_path_line_num(Arena *arena, String8 file_p
 
 internal D_Entity *d_module_from_process_vaddr(D_Entity *process, U64 vaddr);
 internal D_Entity *d_module_from_thread(D_Entity *thread);
-internal U64 d_tls_base_vaddr_from_process_root_rip(D_Entity *process, U64 root_vaddr, U64 rip_vaddr);
+internal U64 d_tls_base_vaddr_from_process_root_rip(CTRL_Entity *process, U64 root_vaddr, U64 rip_vaddr);
 internal Arch d_arch_from_entity(D_Entity *entity);
 internal E_String2NumMap *d_push_locals_map_from_dbgi_key_voff(Arena *arena, DI_Scope *scope, DI_Key *dbgi_key, U64 voff);
 internal E_String2NumMap *d_push_member_map_from_dbgi_key_voff(Arena *arena, DI_Scope *scope, DI_Key *dbgi_key, U64 voff);
 internal B32 d_set_thread_rip(D_Entity *thread, U64 vaddr);
 internal D_Entity *d_module_from_thread_candidates(D_Entity *thread, D_EntityList *candidates);
-internal D_Unwind d_unwind_from_ctrl_unwind(Arena *arena, DI_Scope *di_scope, D_Entity *process, CTRL_Unwind *base_unwind);
+internal D_Unwind d_unwind_from_ctrl_unwind(Arena *arena, DI_Scope *di_scope, CTRL_Entity *process, CTRL_Unwind *base_unwind);
 
 ////////////////////////////////
 //~ rjf: Target Controls
@@ -1378,7 +1382,7 @@ internal U128 d_hash_from_ctrl_param_state(void);
 internal void d_push_ctrl_msg(CTRL_Msg *msg);
 
 //- rjf: control thread running
-internal void d_ctrl_run(D_RunKind run, D_Entity *run_thread, CTRL_RunFlags flags, CTRL_TrapList *run_traps);
+internal void d_ctrl_run(D_RunKind run, CTRL_Entity *run_thread, CTRL_RunFlags flags, CTRL_TrapList *run_traps);
 
 //- rjf: stopped info from the control thread
 internal CTRL_Event d_ctrl_last_stop_event(void);
@@ -1387,8 +1391,8 @@ internal CTRL_Event d_ctrl_last_stop_event(void);
 //~ rjf: Evaluation Spaces
 
 //- rjf: entity <-> eval space
-internal D_Entity *d_entity_from_eval_space(E_Space space);
-internal E_Space d_eval_space_from_entity(D_Entity *entity);
+internal CTRL_Entity *d_entity_from_eval_space(E_Space space);
+internal E_Space d_eval_space_from_entity(CTRL_Entity *entity);
 
 //- rjf: eval space reads/writes
 internal B32 d_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range);
@@ -1504,6 +1508,14 @@ internal D_Regs *d_push_regs(void);
 internal D_Regs *d_pop_regs(void);
 #define D_RegsScope DeferLoop(d_push_regs(), d_pop_regs())
 
+//- rjf: register setting helpers
+internal void d_regs_set_thread(CTRL_Entity *thread);
+
+//- rjf: register accessing helpers
+internal CTRL_Entity *d_regs_process(void);
+internal CTRL_Entity *d_regs_thread(void);
+internal CTRL_Entity *d_regs_module(void);
+
 //- rjf: undo/redo history
 internal D_StateDeltaHistory *d_state_delta_history(void);
 
@@ -1521,7 +1533,7 @@ internal D_CfgTable *d_cfg_table(void);
 //- rjf: config serialization
 internal String8 d_cfg_escaped_from_raw_string(Arena *arena, String8 string);
 internal String8 d_cfg_raw_from_escaped_string(Arena *arena, String8 string);
-internal String8List d_cfg_strings_from_core(Arena *arena, String8 root_path, D_CfgSrc source);
+internal String8List d_cfg_strings_from_state(Arena *arena, String8 root_path, D_CfgSrc source);
 internal void d_cfg_push_write_string(D_CfgSrc src, String8 string);
 
 //- rjf: current path
@@ -1538,10 +1550,10 @@ internal D_EntityList d_push_active_target_list(Arena *arena);
 internal D_Entity *d_entity_from_expand_key_and_kind(D_ExpandKey key, D_EntityKind kind);
 
 //- rjf: per-run caches
-internal CTRL_Unwind d_query_cached_unwind_from_thread(D_Entity *thread);
-internal U64 d_query_cached_rip_from_thread(D_Entity *thread);
-internal U64 d_query_cached_rip_from_thread_unwind(D_Entity *thread, U64 unwind_count);
-internal U64 d_query_cached_tls_base_vaddr_from_process_root_rip(D_Entity *process, U64 root_vaddr, U64 rip_vaddr);
+internal CTRL_Unwind d_query_cached_unwind_from_thread(CTRL_Entity *thread);
+internal U64 d_query_cached_rip_from_thread(CTRL_Entity *thread);
+internal U64 d_query_cached_rip_from_thread_unwind(CTRL_Entity *thread, U64 unwind_count);
+internal U64 d_query_cached_tls_base_vaddr_from_process_root_rip(CTRL_Entity *process, U64 root_vaddr, U64 rip_vaddr);
 internal E_String2NumMap *d_query_cached_locals_map_from_dbgi_key_voff(DI_Key *dbgi_key, U64 voff);
 internal E_String2NumMap *d_query_cached_member_map_from_dbgi_key_voff(DI_Key *dbgi_key, U64 voff);
 

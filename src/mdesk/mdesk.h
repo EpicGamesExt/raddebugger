@@ -263,6 +263,10 @@ internal MD_Node *md_push_node(Arena *arena, MD_NodeKind kind, MD_NodeFlags flag
 internal void md_node_push_child(MD_Node *parent, MD_Node *node);
 internal void md_node_push_tag(MD_Node *parent, MD_Node *node);
 
+//- rjf: tree building helpers
+internal MD_Node *md_push_list(Arena *arena);
+internal MD_Node *md_list_push_ref(Arena *arena, MD_Node *list, MD_Node *ref_dst);
+
 //- rjf: tree introspection
 internal MD_Node *  md_node_from_chain_string(MD_Node *first, MD_Node *opl, String8 string, StringMatchFlags flags);
 internal MD_Node *  md_node_from_chain_index(MD_Node *first, MD_Node *opl, U64 index);

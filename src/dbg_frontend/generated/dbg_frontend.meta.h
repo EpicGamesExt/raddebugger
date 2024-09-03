@@ -12,10 +12,10 @@ DF_MsgKind_Null,
 DF_MsgKind_Exit,
 DF_MsgKind_RunCommand,
 DF_MsgKind_ToggleDevMenu,
-DF_MsgKind_ApplyUserData,
-DF_MsgKind_ApplyProjectData,
-DF_MsgKind_WriteUserData,
-DF_MsgKind_WriteProjectData,
+DF_MsgKind_LoadUser,
+DF_MsgKind_LoadProject,
+DF_MsgKind_SaveUser,
+DF_MsgKind_SaveProject,
 DF_MsgKind_OpenWindow,
 DF_MsgKind_CloseWindow,
 DF_MsgKind_ToggleFullscreen,
@@ -72,6 +72,49 @@ DF_MsgKind_GoToLine,
 DF_MsgKind_GoToAddress,
 DF_MsgKind_CenterCursor,
 DF_MsgKind_ContainCursor,
+DF_MsgKind_Edit,
+DF_MsgKind_Accept,
+DF_MsgKind_Cancel,
+DF_MsgKind_MoveLeft,
+DF_MsgKind_MoveRight,
+DF_MsgKind_MoveUp,
+DF_MsgKind_MoveDown,
+DF_MsgKind_MoveLeftSelect,
+DF_MsgKind_MoveRightSelect,
+DF_MsgKind_MoveUpSelect,
+DF_MsgKind_MoveDownSelect,
+DF_MsgKind_MoveLeftChunk,
+DF_MsgKind_MoveRightChunk,
+DF_MsgKind_MoveUpChunk,
+DF_MsgKind_MoveDownChunk,
+DF_MsgKind_MoveUpPage,
+DF_MsgKind_MoveDownPage,
+DF_MsgKind_MoveUpWhole,
+DF_MsgKind_MoveDownWhole,
+DF_MsgKind_MoveLeftChunkSelect,
+DF_MsgKind_MoveRightChunkSelect,
+DF_MsgKind_MoveUpChunkSelect,
+DF_MsgKind_MoveDownChunkSelect,
+DF_MsgKind_MoveUpPageSelect,
+DF_MsgKind_MoveDownPageSelect,
+DF_MsgKind_MoveUpWholeSelect,
+DF_MsgKind_MoveDownWholeSelect,
+DF_MsgKind_MoveUpReorder,
+DF_MsgKind_MoveDownReorder,
+DF_MsgKind_MoveHome,
+DF_MsgKind_MoveEnd,
+DF_MsgKind_MoveHomeSelect,
+DF_MsgKind_MoveEndSelect,
+DF_MsgKind_SelectAll,
+DF_MsgKind_DeleteSingle,
+DF_MsgKind_DeleteChunk,
+DF_MsgKind_BackspaceSingle,
+DF_MsgKind_BackspaceChunk,
+DF_MsgKind_Copy,
+DF_MsgKind_Cut,
+DF_MsgKind_Paste,
+DF_MsgKind_InsertText,
+DF_MsgKind_OSEvent,
 DF_MsgKind_COUNT,
 } DF_MsgKind;
 
@@ -422,9 +465,8 @@ DF_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(no_addr);
 DF_VIEW_RULE_ROW_UI_FUNCTION_DEF(checkbox);
 DF_VIEW_RULE_ROW_UI_FUNCTION_DEF(color_rgba);
 C_LINKAGE_BEGIN
-extern String8 df_msg_kind_name_lower_table[64];
-extern DF_MsgKindInfo df_msg_kind_info_table[64];
-extern DF_MsgKindInfo df_d_msg_kind_info_table[71];
+extern DF_MsgKindInfo df_msg_kind_info_table[107];
+extern DF_MsgKindInfo df_d_msg_kind_info_table[69];
 extern DF_StringBindingPair df_g_default_binding_table[110];
 extern String8 df_g_binding_version_remap_old_name_table[7];
 extern String8 df_g_binding_version_remap_new_name_table[7];
@@ -432,7 +474,7 @@ extern String8 df_g_icon_kind_text_table[69];
 extern String8 df_view_kind_name_lower_table[34];
 extern DF_ViewSpecInfo df_g_gfx_view_kind_spec_info_table[34];
 extern DF_IconKind df_cmd_kind_icon_kind_table[221];
-extern DF_IconKind df_entity_kind_icon_kind_table[31];
+extern DF_IconKind df_entity_kind_icon_kind_table[28];
 extern D_CmdParamSlot df_g_cmd_param_slot_2_view_spec_src_map[7];
 extern String8 df_g_cmd_param_slot_2_view_spec_dst_map[7];
 extern String8 df_g_cmd_param_slot_2_view_spec_cmd_map[7];

@@ -62,14 +62,40 @@ struct CTRL_Entity
   CTRL_Entity *next;
   CTRL_Entity *prev;
   CTRL_Entity *parent;
+  U64 alloc_time_us;
   CTRL_EntityKind kind;
   Arch arch;
   CTRL_MachineID machine_id;
   DMN_Handle handle;
   U64 id;
   Rng1U64 vaddr_range;
+  U64 stack_base;
   U64 timestamp;
+  U32 rgba_u32;
   String8 string;
+};
+
+typedef struct CTRL_EntityRec CTRL_EntityRec;
+struct CTRL_EntityRec
+{
+  CTRL_Entity *next;
+  S32 push_count;
+  S64 pop_count;
+};
+
+typedef struct CTRL_EntityNode CTRL_EntityNode;
+struct CTRL_EntityNode
+{
+  CTRL_EntityNode *next;
+  CTRL_Entity *v;
+};
+
+typedef struct CTRL_EntityList CTRL_EntityList;
+struct CTRL_EntityList
+{
+  CTRL_EntityNode *first;
+  CTRL_EntityNode *last;
+  U64 count;
 };
 
 typedef struct CTRL_EntityHashNode CTRL_EntityHashNode;
@@ -105,6 +131,10 @@ struct CTRL_EntityStore
   U64 hash_slots_count;
   CTRL_EntityStringChunkNode *free_string_chunks[8];
   U64 entity_kind_counts[CTRL_EntityKind_COUNT];
+  Arena *entity_kind_lists_arenas[CTRL_EntityKind_COUNT];
+  U64 entity_kind_lists_gens[CTRL_EntityKind_COUNT];
+  U64 entity_kind_alloc_gens[CTRL_EntityKind_COUNT];
+  CTRL_EntityList entity_kind_lists[CTRL_EntityKind_COUNT];
 };
 
 ////////////////////////////////
@@ -686,6 +716,9 @@ internal CTRL_Event ctrl_event_from_serialized_string(Arena *arena, String8 stri
 ////////////////////////////////
 //~ rjf: Entity Type Functions
 
+//- rjf: entity list data structures
+internal void ctrl_entity_list_push(Arena *arena, CTRL_EntityList *list, CTRL_Entity *entity);
+
 //- rjf: cache creation/destruction
 internal CTRL_EntityStore *ctrl_entity_store_alloc(void);
 internal void ctrl_entity_store_release(CTRL_EntityStore *store);
@@ -705,6 +738,22 @@ internal void ctrl_entity_equip_string(CTRL_EntityStore *store, CTRL_Entity *ent
 //- rjf: entity store lookups
 internal CTRL_Entity *ctrl_entity_from_machine_id_handle(CTRL_EntityStore *store, CTRL_MachineID machine_id, DMN_Handle handle);
 internal CTRL_Entity *ctrl_entity_child_from_kind(CTRL_Entity *parent, CTRL_EntityKind kind);
+internal CTRL_Entity *ctrl_entity_ancestor_from_kind(CTRL_Entity *entity, CTRL_EntityKind kind);
+internal CTRL_Entity *ctrl_module_from_process_vaddr(CTRL_Entity *process, U64 vaddr);
+internal DI_Key ctrl_dbgi_key_from_module(CTRL_Entity *module);
+internal CTRL_EntityList ctrl_modules_from_dbgi_key(Arena *arena, CTRL_EntityStore *store, DI_Key *dbgi_key);
+internal CTRL_Entity *ctrl_module_from_thread_candidates(CTRL_EntityStore *store, CTRL_Entity *thread, CTRL_EntityList *candidates);
+internal CTRL_EntityList ctrl_entity_list_from_kind(CTRL_EntityStore *store, CTRL_EntityKind kind);
+internal U64 ctrl_vaddr_from_voff(CTRL_Entity *module, U64 voff);
+internal U64 ctrl_voff_from_vaddr(CTRL_Entity *module, U64 vaddr);
+internal Rng1U64 ctrl_vaddr_range_from_voff_range(CTRL_Entity *module, Rng1U64 voff_range);
+internal Rng1U64 ctrl_voff_range_from_vaddr_range(CTRL_Entity *module, Rng1U64 vaddr_range);
+
+
+//- rjf: entity tree iteration
+internal CTRL_EntityRec ctrl_entity_rec_depth_first(CTRL_Entity *entity, CTRL_Entity *subtree_root, U64 sib_off, U64 child_off);
+#define ctrl_entity_rec_depth_first_pre(entity, subtree_root)  ctrl_entity_rec_depth_first((entity), (subtree_root), OffsetOf(CTRL_Entity, next), OffsetOf(CTRL_Entity, first))
+#define ctrl_entity_rec_depth_first_post(entity, subtree_root) ctrl_entity_rec_depth_first((entity), (subtree_root), OffsetOf(CTRL_Entity, prev), OffsetOf(CTRL_Entity, last))
 
 //- rjf: applying events to entity caches
 internal void ctrl_entity_store_apply_events(CTRL_EntityStore *store, CTRL_EventList *list);

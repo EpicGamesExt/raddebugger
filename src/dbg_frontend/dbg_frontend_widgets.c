@@ -415,6 +415,7 @@ df_icon_buttonf(DF_IconKind kind, FuzzyMatchRangeList *matches, char *fmt, ...)
 internal void
 df_entity_tooltips(D_Entity *entity)
 {
+#if 0 // TODO(rjf): @msgs
   Temp scratch = scratch_begin(0, 0);
   DF_Palette(DF_PaletteCode_Floating) switch(entity->kind)
   {
@@ -576,11 +577,140 @@ df_entity_tooltips(D_Entity *entity)
     }break;
   }
   scratch_end(scratch);
+#endif
+}
+
+internal void
+df_ctrl_entity_tooltips(CTRL_Entity *entity)
+{
+  Temp scratch = scratch_begin(0, 0);
+  DF_Palette(DF_PaletteCode_Floating) switch(entity->kind)
+  {
+    default:{}break;
+    case CTRL_EntityKind_Thread: UI_Flags(0)
+      UI_Tooltip UI_PrefWidth(ui_text_dim(10, 1))
+    {
+      String8 display_string = entity->string;
+      if(display_string.size == 0)
+      {
+        display_string = push_str8f(scratch.arena, "TID: %I64u", entity->id);
+      }
+      U64 rip_vaddr = d_query_cached_rip_from_thread(entity);
+      Arch arch = entity->arch;
+      String8 arch_str = string_from_arch(arch);
+      if(display_string.size != 0) UI_PrefWidth(ui_children_sum(1)) UI_Row
+      {
+        if(entity->rgba_u32 != 0)
+        {
+          ui_set_next_palette(ui_build_palette(ui_top_palette(), .text = rgba_from_u32(entity->rgba_u32)));
+        }
+        UI_PrefWidth(ui_text_dim(10, 1)) ui_label(display_string);
+      }
+      {
+        CTRL_Event stop_event = d_ctrl_last_stop_event();
+        CTRL_Entity *stopper_thread = ctrl_entity_from_machine_id_handle(d_state->ctrl_entity_store, stop_event.machine_id, stop_event.entity);
+        if(stopper_thread == entity)
+        {
+          ui_spacer(ui_em(1.5f, 1.f));
+          DF_IconKind icon_kind = DF_IconKind_Null;
+          String8 explanation = df_stop_explanation_string_icon_from_ctrl_event(scratch.arena, &stop_event, &icon_kind);
+          if(explanation.size != 0)
+          {
+            UI_Palette *palette = ui_top_palette();
+            if(stop_event.cause == CTRL_EventCause_Error ||
+               stop_event.cause == CTRL_EventCause_InterruptedByException ||
+               stop_event.cause == CTRL_EventCause_InterruptedByTrap ||
+               stop_event.cause == CTRL_EventCause_UserBreakpoint)
+            {
+              palette = ui_build_palette(ui_top_palette(), .text = df_rgba_from_theme_color(DF_ThemeColor_TextNegative));
+            }
+            UI_PrefWidth(ui_children_sum(1)) UI_Row UI_Palette(palette)
+            {
+              UI_PrefWidth(ui_em(1.5f, 1.f))
+                DF_Font(DF_FontSlot_Icons)
+                ui_label(df_g_icon_kind_text_table[icon_kind]);
+              UI_PrefWidth(ui_text_dim(10, 1)) ui_label(explanation);
+            }
+          }
+        }
+      }
+      ui_spacer(ui_em(1.5f, 1.f));
+      UI_PrefWidth(ui_children_sum(1)) UI_Row
+      {
+        UI_PrefWidth(ui_em(18.f, 1.f)) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) ui_labelf("TID: ");
+        UI_PrefWidth(ui_text_dim(10, 1)) ui_labelf("%I64u", entity->id);
+      }
+      UI_PrefWidth(ui_children_sum(1)) UI_Row
+      {
+        UI_PrefWidth(ui_em(18.f, 1.f)) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) ui_labelf("Arch: ");
+        UI_PrefWidth(ui_text_dim(10, 1)) ui_label(arch_str);
+      }
+      ui_spacer(ui_em(1.5f, 1.f));
+      DI_Scope *di_scope = di_scope_open();
+      CTRL_Entity *process = ctrl_entity_ancestor_from_kind(entity, CTRL_EntityKind_Process);
+      CTRL_Unwind base_unwind = d_query_cached_unwind_from_thread(entity);
+      D_Unwind rich_unwind = d_unwind_from_ctrl_unwind(scratch.arena, di_scope, process, &base_unwind);
+      for(U64 idx = 0; idx < rich_unwind.frames.concrete_frame_count; idx += 1)
+      {
+        D_UnwindFrame *f = &rich_unwind.frames.v[idx];
+        RDI_Parsed *rdi = f->rdi;
+        RDI_Procedure *procedure = f->procedure;
+        U64 rip_vaddr = regs_rip_from_arch_block(entity->arch, f->regs);
+        CTRL_Entity *module = ctrl_module_from_process_vaddr(process, rip_vaddr);
+        String8 module_name = module == &ctrl_entity_nil ? str8_lit("???") : str8_skip_last_slash(module->string);
+        
+        // rjf: inline frames
+        for(D_UnwindInlineFrame *fin = f->last_inline_frame; fin != 0; fin = fin->prev)
+          UI_PrefWidth(ui_children_sum(1)) UI_Row
+        {
+          String8 name = {0};
+          name.str = rdi_string_from_idx(rdi, fin->inline_site->name_string_idx, &name.size);
+          DF_Font(DF_FontSlot_Code) UI_PrefWidth(ui_em(18.f, 1.f)) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) ui_labelf("0x%I64x", rip_vaddr);
+          DF_Font(DF_FontSlot_Code) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_text_dim(10, 1)) ui_label(str8_lit("[inlined]"));
+          if(name.size != 0)
+          {
+            DF_Font(DF_FontSlot_Code) UI_PrefWidth(ui_text_dim(10, 1))
+            {
+              df_code_label(1.f, 0, df_rgba_from_theme_color(DF_ThemeColor_CodeSymbol), name);
+            }
+          }
+          else
+          {
+            DF_Font(DF_FontSlot_Code) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_text_dim(10, 1)) ui_labelf("[??? in %S]", module_name);
+          }
+        }
+        
+        // rjf: concrete frame
+        UI_PrefWidth(ui_children_sum(1)) UI_Row
+        {
+          String8 name = {0};
+          name.str = rdi_name_from_procedure(rdi, procedure, &name.size);
+          DF_Font(DF_FontSlot_Code) UI_PrefWidth(ui_em(18.f, 1.f)) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) ui_labelf("0x%I64x", rip_vaddr);
+          if(name.size != 0)
+          {
+            DF_Font(DF_FontSlot_Code) UI_PrefWidth(ui_text_dim(10, 1))
+            {
+              df_code_label(1.f, 0, df_rgba_from_theme_color(DF_ThemeColor_CodeSymbol), name);
+            }
+          }
+          else
+          {
+            DF_Font(DF_FontSlot_Code) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_text_dim(10, 1)) ui_labelf("[??? in %S]", module_name);
+          }
+        }
+      }
+      di_scope_close(di_scope);
+    }break;
+  }
+  scratch_end(scratch);
 }
 
 internal UI_Signal
 df_entity_desc_button(D_Entity *entity, FuzzyMatchRangeList *name_matches, String8 fuzzy_query, B32 is_implicit)
 {
+  UI_Signal sig = {0};
+  return sig;
+#if 0 // TODO(rjf): @msgs
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   UI_Palette *palette = ui_top_palette();
@@ -760,6 +890,7 @@ df_entity_desc_button(D_Entity *entity, FuzzyMatchRangeList *name_matches, Strin
   scratch_end(scratch);
   ProfEnd();
   return sig;
+#endif
 }
 
 internal void
@@ -947,12 +1078,12 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   DF_CodeSliceSignal result = {0};
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
-  D_Entity *selected_thread = d_entity_from_handle(d_regs()->thread);
-  D_Entity *selected_thread_process = d_entity_ancestor_from_kind(selected_thread, D_EntityKind_Process);
+  CTRL_Entity *selected_thread = d_regs_thread();
+  CTRL_Entity *selected_thread_process = ctrl_entity_ancestor_from_kind(selected_thread, CTRL_EntityKind_Process);
   U64 selected_thread_rip_unwind_vaddr = d_query_cached_rip_from_thread_unwind(selected_thread, d_regs()->unwind_count);
-  D_Entity *selected_thread_module = d_module_from_process_vaddr(selected_thread_process, selected_thread_rip_unwind_vaddr);
+  CTRL_Entity *selected_thread_module = ctrl_module_from_process_vaddr(selected_thread_process, selected_thread_rip_unwind_vaddr);
   CTRL_Event stop_event = d_ctrl_last_stop_event();
-  D_Entity *stopper_thread = d_entity_from_ctrl_handle(stop_event.machine_id, stop_event.entity);
+  CTRL_Entity *stopper_thread = ctrl_entity_from_machine_id_handle(d_state->ctrl_entity_store, stop_event.machine_id, stop_event.entity);
   B32 is_focused = ui_is_focus_active();
   B32 ctrlified = (os_get_event_flags() & OS_EventFlag_Ctrl);
   Vec4F32 code_line_bgs[] =
@@ -998,10 +1129,10 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
         line_num < params->line_num_range.max;
         line_num += 1, line_idx += 1)
     {
-      D_EntityList threads = params->line_ips[line_idx];
-      for(D_EntityNode *n = threads.first; n != 0; n = n->next)
+      CTRL_EntityList threads = params->line_ips[line_idx];
+      for(CTRL_EntityNode *n = threads.first; n != 0; n = n->next)
       {
-        if(n->entity == stopper_thread && (stop_event.cause == CTRL_EventCause_InterruptedByTrap || stop_event.cause == CTRL_EventCause_InterruptedByException))
+        if(n->v == stopper_thread && (stop_event.cause == CTRL_EventCause_InterruptedByTrap || stop_event.cause == CTRL_EventCause_InterruptedByException))
         {
           line_bg_colors[line_idx] = df_rgba_from_theme_color(DF_ThemeColor_HighlightOverlayError);
         }
@@ -1033,26 +1164,26 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
           line_num <= params->line_num_range.max;
           line_num += 1, line_idx += 1)
       {
-        D_EntityList line_ips  = params->line_ips[line_idx];
+        CTRL_EntityList line_ips  = params->line_ips[line_idx];
         ui_set_next_hover_cursor(OS_Cursor_HandPoint);
         UI_Box *line_margin_box = ui_build_box_from_stringf(UI_BoxFlag_Clickable*!!(params->flags & DF_CodeSliceFlag_Clickable)|UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawActiveEffects, "line_margin_%I64x", line_num);
         UI_Parent(line_margin_box)
         {
           //- rjf: build margin thread ip ui
-          for(D_EntityNode *n = line_ips.first; n != 0; n = n->next)
+          for(CTRL_EntityNode *n = line_ips.first; n != 0; n = n->next)
           {
             // rjf: unpack thread
-            D_Entity *thread = n->entity;
+            CTRL_Entity *thread = n->v;
             if(thread != selected_thread)
             {
               continue;
             }
             U64 unwind_count = (thread == selected_thread) ? d_regs()->unwind_count : 0;
             U64 thread_rip_vaddr = d_query_cached_rip_from_thread_unwind(thread, unwind_count);
-            D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
-            D_Entity *module = d_module_from_process_vaddr(process, thread_rip_vaddr);
-            DI_Key dbgi_key = d_dbgi_key_from_module(module);
-            U64 thread_rip_voff = d_voff_from_vaddr(module, thread_rip_vaddr);
+            CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, CTRL_EntityKind_Process);
+            CTRL_Entity *module = ctrl_module_from_process_vaddr(process, thread_rip_vaddr);
+            DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
+            U64 thread_rip_voff = ctrl_voff_from_vaddr(module, thread_rip_vaddr);
             
             // rjf: thread info => color
             Vec4F32 color = v4f32(1, 1, 1, 1);
@@ -1068,9 +1199,9 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
               {
                 color = df_rgba_from_theme_color(DF_ThemeColor_ThreadError);
               }
-              else if(thread->flags & D_EntityFlag_HasColor)
+              else if(thread->rgba_u32 != 0)
               {
-                color = d_rgba_from_entity(thread);
+                color = rgba_from_u32(thread->rgba_u32);
               }
               if(d_ctrl_targets_running() && d_ctrl_last_run_frame_idx() < d_frame_index())
               {
@@ -1103,11 +1234,11 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             {
               DF_ThreadBoxDrawExtData *u = push_array(ui_build_arena(), DF_ThreadBoxDrawExtData, 1);
               u->thread_color = color;
-              u->alive_t = thread->alive_t;
-              u->is_selected = (thread == selected_thread);
-              u->is_frozen = d_entity_is_frozen(thread);
-              u->do_lines  = df_setting_val_from_code(DF_SettingCode_ThreadLines).s32;
-              u->do_glow   = df_setting_val_from_code(DF_SettingCode_ThreadGlow).s32;
+              u->alive_t      = ClampTop(1.f, (os_now_microseconds() - thread->alloc_time_us) / 500000.f);
+              u->is_selected  = (thread == selected_thread);
+              u->is_frozen    = d_entity_is_frozen(thread);
+              u->do_lines     = df_setting_val_from_code(DF_SettingCode_ThreadLines).s32;
+              u->do_glow      = df_setting_val_from_code(DF_SettingCode_ThreadGlow).s32;
               ui_box_equip_custom_draw(thread_box, df_thread_box_draw_extensions, u);
               
               // rjf: fill out progress t (progress into range of current line's
@@ -1139,25 +1270,31 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             // rjf: hover tooltips
             if(ui_hovering(thread_sig) && !df_drag_is_active())
             {
-              df_entity_tooltips(thread);
+              df_ctrl_entity_tooltips(thread);
             }
             
             // rjf: ip right-click menu
             if(ui_right_clicked(thread_sig))
             {
+              // TODO(rjf): @msgs
+#if 0
               D_Handle handle = d_handle_from_entity(thread);
               ui_ctx_menu_open(df_state->entity_ctx_menu_key, thread_box->key, v2f32(0, thread_box->rect.y1-thread_box->rect.y0));
               DF_Window *window = df_window_from_handle(d_regs()->window);
               window->entity_ctx_menu_entity = handle;
+#endif
             }
             
             // rjf: drag start
             if(ui_dragging(thread_sig) && !contains_2f32(thread_box->rect, ui_mouse()))
             {
+              // TODO(rjf): @msgs
+#if 0
               DF_DragDropPayload payload = {0};
               payload.key = thread_box->key;
               payload.entity = d_handle_from_entity(thread);
               df_drag_begin(&payload);
+#endif
             }
           }
         }
@@ -1189,7 +1326,7 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
           line_num <= params->line_num_range.max;
           line_num += 1, line_idx += 1)
       {
-        D_EntityList line_ips  = params->line_ips[line_idx];
+        CTRL_EntityList line_ips  = params->line_ips[line_idx];
         D_EntityList line_bps  = params->line_bps[line_idx];
         D_EntityList line_pins = params->line_pins[line_idx];
         ui_set_next_hover_cursor(OS_Cursor_HandPoint);
@@ -1197,20 +1334,20 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
         UI_Parent(line_margin_box)
         {
           //- rjf: build margin thread ip ui
-          for(D_EntityNode *n = line_ips.first; n != 0; n = n->next)
+          for(CTRL_EntityNode *n = line_ips.first; n != 0; n = n->next)
           {
             // rjf: unpack thread
-            D_Entity *thread = n->entity;
+            CTRL_Entity *thread = n->v;
             if(thread == selected_thread)
             {
               continue;
             }
             U64 unwind_count = (thread == selected_thread) ? d_regs()->unwind_count : 0;
             U64 thread_rip_vaddr = d_query_cached_rip_from_thread_unwind(thread, unwind_count);
-            D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
-            D_Entity *module = d_module_from_process_vaddr(process, thread_rip_vaddr);
-            DI_Key dbgi_key = d_dbgi_key_from_module(module);
-            U64 thread_rip_voff = d_voff_from_vaddr(module, thread_rip_vaddr);
+            CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, CTRL_EntityKind_Process);
+            CTRL_Entity *module = ctrl_module_from_process_vaddr(process, thread_rip_vaddr);
+            DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
+            U64 thread_rip_voff = ctrl_voff_from_vaddr(module, thread_rip_vaddr);
             
             // rjf: thread info => color
             Vec4F32 color = v4f32(1, 1, 1, 1);
@@ -1226,9 +1363,9 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
               {
                 color = df_rgba_from_theme_color(DF_ThemeColor_ThreadError);
               }
-              else if(thread->flags & D_EntityFlag_HasColor)
+              else if(thread->rgba_u32 != 0)
               {
-                color = d_rgba_from_entity(thread);
+                color = rgba_from_u32(thread->rgba_u32);
               }
               if(d_ctrl_targets_running() && d_ctrl_last_run_frame_idx() < d_frame_index())
               {
@@ -1261,9 +1398,9 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             {
               DF_ThreadBoxDrawExtData *u = push_array(ui_build_arena(), DF_ThreadBoxDrawExtData, 1);
               u->thread_color = color;
-              u->alive_t = thread->alive_t;
-              u->is_selected = (thread == selected_thread);
-              u->is_frozen = d_entity_is_frozen(thread);
+              u->alive_t      = ClampTop(1.f, (os_now_microseconds()-thread->alloc_time_us)/500000.f);
+              u->is_selected  = (thread == selected_thread);
+              u->is_frozen    = d_entity_is_frozen(thread);
               ui_box_equip_custom_draw(thread_box, df_thread_box_draw_extensions, u);
               
               // rjf: fill out progress t (progress into range of current line's
@@ -1295,32 +1432,38 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             // rjf: hover tooltips
             if(ui_hovering(thread_sig) && !df_drag_is_active())
             {
-              df_entity_tooltips(thread);
+              df_ctrl_entity_tooltips(thread);
             }
             
             // rjf: ip right-click menu
             if(ui_right_clicked(thread_sig))
             {
+              // TODO(rjf): @msgs
+#if 0
               D_Handle handle = d_handle_from_entity(thread);
               ui_ctx_menu_open(df_state->entity_ctx_menu_key, thread_box->key, v2f32(0, thread_box->rect.y1-thread_box->rect.y0));
               DF_Window *window = df_window_from_handle(d_regs()->window);
               window->entity_ctx_menu_entity = handle;
+#endif
             }
             
             // rjf: double click => select
             if(ui_double_clicked(thread_sig))
             {
-              d_cmd(D_CmdKind_SelectThread, .entity = d_handle_from_entity(thread));
+              d_msg(D_MsgKind_SelectThread, .machine_id = thread->machine_id, .thread = thread->handle);
               ui_kill_action();
             }
             
             // rjf: drag start
             if(ui_dragging(thread_sig) && !contains_2f32(thread_box->rect, ui_mouse()))
             {
+              // TODO(rjf): @msgs
+#if 0
               DF_DragDropPayload payload = {0};
               payload.key = thread_box->key;
               payload.entity = d_handle_from_entity(thread);
               df_drag_begin(&payload);
+#endif
             }
           }
           
@@ -1512,7 +1655,8 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
         {
           U64 best_stamp = 0;
           S64 line_info_line_num = 0;
-          F32 line_info_t = selected_thread_module->alive_t;
+          F32 line_info_t = (os_now_microseconds() - selected_thread_module->alloc_time_us) / 500000.f;
+          line_info_t = ClampTop(1.f, line_info_t);
           D_LineList *lines = &params->line_infos[line_idx];
           for(D_LineNode *n = lines->first; n != 0; n = n->next)
           {
@@ -1605,10 +1749,10 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
         line_num < params->line_num_range.max;
         line_num += 1, line_idx += 1)
     {
-      D_EntityList threads = params->line_ips[line_idx];
-      for(D_EntityNode *n = threads.first; n != 0; n = n->next)
+      CTRL_EntityList threads = params->line_ips[line_idx];
+      for(CTRL_EntityNode *n = threads.first; n != 0; n = n->next)
       {
-        D_Entity *thread = n->entity;
+        CTRL_Entity *thread = n->v;
         if(thread == stopper_thread &&
            (stop_event.cause == CTRL_EventCause_InterruptedByException ||
             stop_event.cause == CTRL_EventCause_InterruptedByTrap))
@@ -1958,6 +2102,8 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
     D_LineList *lines = &params->line_infos[line_slice_idx];
     if(lines->first != 0 && (d_regs()->file_path.size == 0 || lines->first->v.pt.line == mouse_pt.line))
     {
+      // TODO(rjf): @msgs
+#if 0
       DF_RichHoverInfo info = {0};
       info.process      = d_handle_from_entity(selected_thread_process);
       info.vaddr_range  = d_vaddr_range_from_voff_range(selected_thread_module, lines->first->v.voff_range);
@@ -1965,6 +2111,7 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
       info.dbgi_key     = lines->first->v.dbgi_key;
       info.voff_range   = lines->first->v.voff_range;
       df_set_rich_hover_info(&info);
+#endif
     }
   }
   
@@ -2146,7 +2293,7 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
                       {
                         mapped_special = 1;
                         new_color_kind = DF_ThemeColor_CodeSymbol;
-                        mix_t = selected_thread_module->alive_t;
+                        mix_t = ClampTop(1.f, (os_now_microseconds() - selected_thread_module->alloc_time_us) / 500000.f);
                       }
                     }
                     if(!mapped_special && token->kind == TXT_TokenKind_Identifier)
@@ -2156,7 +2303,7 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
                       {
                         mapped_special = 1;
                         new_color_kind = DF_ThemeColor_CodeType;
-                        mix_t = selected_thread_module->alive_t;
+                        mix_t = ClampTop(1.f, (os_now_microseconds() - selected_thread_module->alloc_time_us) / 500000.f);
                       }
                     }
                     break;
@@ -2168,7 +2315,7 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
                     {
                       mapped_special = 1;
                       new_color_kind = DF_ThemeColor_CodeLocal;
-                      mix_t = selected_thread_module->alive_t;
+                      mix_t = ClampTop(1.f, (os_now_microseconds() - selected_thread_module->alloc_time_us) / 500000.f);
                     }
                   }
                   if(!mapped_special && token->kind == TXT_TokenKind_Identifier)
@@ -2178,7 +2325,7 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
                     {
                       mapped_special = 1;
                       new_color_kind = DF_ThemeColor_CodeLocal;
-                      mix_t = selected_thread_module->alive_t;
+                      mix_t = ClampTop(1.f, (os_now_microseconds() - selected_thread_module->alloc_time_us) / 500000.f);
                     }
                   }
                   if(!mapped_special)
@@ -2188,7 +2335,7 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
                     {
                       mapped_special = 1;
                       new_color_kind = DF_ThemeColor_CodeRegister;
-                      mix_t = selected_thread_module->alive_t;
+                      mix_t = ClampTop(1.f, (os_now_microseconds() - selected_thread_module->alloc_time_us) / 500000.f);
                     }
                   }
                   if(!mapped_special)
@@ -2198,7 +2345,7 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
                     {
                       mapped_special = 1;
                       new_color_kind = DF_ThemeColor_CodeRegister;
-                      mix_t = selected_thread_module->alive_t;
+                      mix_t = ClampTop(1.f, (os_now_microseconds() - selected_thread_module->alloc_time_us) / 500000.f);
                     }
                   }
                 }
@@ -2725,8 +2872,8 @@ df_fancy_string_list_from_code_string(Arena *arena, F32 alpha, B32 indirection_s
         }
         else
         {
-          D_Entity *module = d_entity_from_handle(d_regs()->module);
-          DI_Key dbgi_key = d_dbgi_key_from_module(module);
+          CTRL_Entity *module = d_regs_module();
+          DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
           U64 symbol_voff = d_voff_from_dbgi_key_symbol_name(&dbgi_key, token_string);
           if(symbol_voff != 0)
           {

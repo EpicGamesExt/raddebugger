@@ -15,10 +15,10 @@ DF_MsgKindTable:
   {ToggleDevMenu                 toggle_dev_menu                               0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
   
   //- rjf: config reading/writing
-  {ApplyUserData                 apply_user_data                               0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
-  {ApplyProjectData              apply_project_data                            0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
-  {WriteUserData                 write_user_data                               0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
-  {WriteProjectData              write_project_data                            0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {LoadUser                      load_user_data                                0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {LoadProject                   load_project_data                             0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {SaveUser                      save_user_data                                0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {SaveProject                   save_project_data                             0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
   
   //- rjf: windows
   {OpenWindow                    open_window                                   0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
@@ -111,6 +111,55 @@ DF_MsgKindTable:
   {GoToAddress                   go_to_address                                 0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
   {CenterCursor                  center_cursor                                 0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
   {ContainCursor                 contain_cursor                                0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  
+  //- rjf: meta controls
+  {Edit                          edit                                          0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {Accept                        accept                                        0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {Cancel                        cancel                                        0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  
+  //- rjf: directional movement & text controls
+  {MoveLeft                      move_left                                     0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {MoveRight                     move_right                                    0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {MoveUp                        move_up                                       0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {MoveDown                      move_down                                     0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {MoveLeftSelect                move_left_select                              0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {MoveRightSelect               move_right_select                             0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {MoveUpSelect                  move_up_select                                0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {MoveDownSelect                move_down_select                              0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {MoveLeftChunk                 move_left_chunk                               0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {MoveRightChunk                move_right_chunk                              0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {MoveUpChunk                   move_up_chunk                                 0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {MoveDownChunk                 move_down_chunk                               0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {MoveUpPage                    move_up_page                                  0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {MoveDownPage                  move_down_page                                0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {MoveUpWhole                   move_up_whole                                 0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {MoveDownWhole                 move_down_whole                               0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {MoveLeftChunkSelect           move_left_chunk_select                        0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {MoveRightChunkSelect          move_right_chunk_select                       0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {MoveUpChunkSelect             move_up_chunk_select                          0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {MoveDownChunkSelect           move_down_chunk_select                        0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {MoveUpPageSelect              move_up_page_select                           0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {MoveDownPageSelect            move_down_page_select                         0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {MoveUpWholeSelect             move_up_whole_select                          0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {MoveDownWholeSelect           move_down_whole_select                        0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {MoveUpReorder                 move_up_reorder                               0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {MoveDownReorder               move_down_reorder                             0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {MoveHome                      move_home                                     0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {MoveEnd                       move_end                                      0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {MoveHomeSelect                move_home_select                              0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {MoveEndSelect                 move_end_select                               0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {SelectAll                     select_all                                    0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {DeleteSingle                  delete_single                                 0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {DeleteChunk                   delete_chunk                                  0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {BackspaceSingle               backspace_single                              0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {BackspaceChunk                backspace_chunk                               0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {Copy                          copy                                          0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {Cut                           cut                                           0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {Paste                         paste                                         0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {InsertText                    insert_text                                   0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  
+  //- rjf: os event passthrough
+  {OSEvent                       os_event                                      0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
 }
 
 @enum DF_MsgKind:
@@ -119,19 +168,14 @@ DF_MsgKindTable:
   COUNT
 }
 
-@data(String8) df_msg_kind_name_lower_table:
-{
-  @expand(DF_MsgKindTable a) `str8_lit_comp("$(a.name_lower)")`
-}
-
 @data(DF_MsgKindInfo) df_msg_kind_info_table:
 {
-  @expand(DF_MsgKindTable a) `{str8_lit_comp("$(a.display_name)"), str8_lit_comp("$(a.desc)"), str8_lit_comp("$(a.search_tags)"), (($(a.show_in_ui)*DF_MsgKindFlag_ListInUI)|($(a.show_in_ipc_docs)*DF_MsgKindFlag_ListInIPCDocs)), {($(a.q_allow_files)*DF_MsgQueryFlag_AllowFiles)|($(a.q_allow_folders)*DF_MsgQueryFlag_AllowFolders)|($(a.q_keep_oi)*DF_MsgQueryFlag_KeepOldInput)|($(a.q_select_oi)*DF_MsgQueryFlag_SelectOldInput)|($(a.q_is_code)*DF_MsgQueryFlag_CodeInput)|($(a.q_required)*DF_MsgQueryFlag_Required), D_RegSlot_$(a.q_slot), D_EntityKind_$(a.q_ent_kind)}}`
+  @expand(DF_MsgKindTable a) `{str8_lit_comp("$(a.name_lower)"), str8_lit_comp("$(a.display_name)"), str8_lit_comp("$(a.desc)"), str8_lit_comp("$(a.search_tags)"), (($(a.show_in_ui)*DF_MsgKindFlag_ListInUI)|($(a.show_in_ipc_docs)*DF_MsgKindFlag_ListInIPCDocs)), {($(a.q_allow_files)*DF_MsgQueryFlag_AllowFiles)|($(a.q_allow_folders)*DF_MsgQueryFlag_AllowFolders)|($(a.q_keep_oi)*DF_MsgQueryFlag_KeepOldInput)|($(a.q_select_oi)*DF_MsgQueryFlag_SelectOldInput)|($(a.q_is_code)*DF_MsgQueryFlag_CodeInput)|($(a.q_required)*DF_MsgQueryFlag_Required), D_RegSlot_$(a.q_slot), D_EntityKind_$(a.q_ent_kind)}}`
 }
 
 @data(DF_MsgKindInfo) df_d_msg_kind_info_table:
 {
-  @expand(D_MsgKindTable a) `{str8_lit_comp("$(a.display_name)"), str8_lit_comp("$(a.desc)"), str8_lit_comp("$(a.search_tags)"), (($(a.show_in_ui)*DF_MsgKindFlag_ListInUI)|($(a.show_in_ipc_docs)*DF_MsgKindFlag_ListInIPCDocs)), {($(a.q_allow_files)*DF_MsgQueryFlag_AllowFiles)|($(a.q_allow_folders)*DF_MsgQueryFlag_AllowFolders)|($(a.q_keep_oi)*DF_MsgQueryFlag_KeepOldInput)|($(a.q_select_oi)*DF_MsgQueryFlag_SelectOldInput)|($(a.q_is_code)*DF_MsgQueryFlag_CodeInput)|($(a.q_required)*DF_MsgQueryFlag_Required), D_RegSlot_$(a.q_slot), D_EntityKind_$(a.q_ent_kind)}}`
+  @expand(D_MsgKindTable a) `{str8_lit_comp("$(a.name_lower)"), str8_lit_comp("$(a.display_name)"), str8_lit_comp("$(a.desc)"), str8_lit_comp("$(a.search_tags)"), (($(a.show_in_ui)*DF_MsgKindFlag_ListInUI)|($(a.show_in_ipc_docs)*DF_MsgKindFlag_ListInIPCDocs)), {($(a.q_allow_files)*DF_MsgQueryFlag_AllowFiles)|($(a.q_allow_folders)*DF_MsgQueryFlag_AllowFolders)|($(a.q_keep_oi)*DF_MsgQueryFlag_KeepOldInput)|($(a.q_select_oi)*DF_MsgQueryFlag_SelectOldInput)|($(a.q_is_code)*DF_MsgQueryFlag_CodeInput)|($(a.q_required)*DF_MsgQueryFlag_Required), D_RegSlot_$(a.q_slot), D_EntityKind_$(a.q_ent_kind)}}`
 }
 
 ////////////////////////////////

@@ -111,6 +111,7 @@ internal B32 frame(void);
 
 internal String8 os_string_from_event_kind(OS_EventKind kind);
 internal String8List os_string_list_from_event_flags(Arena *arena, OS_EventFlags flags);
+internal OS_Key os_key_from_string(String8 string);
 internal U32 os_codepoint_from_event_flags_and_key(OS_EventFlags flags, OS_Key key);
 internal void os_eat_event(OS_EventList *events, OS_Event *event);
 internal B32  os_key_press(OS_EventList *events, OS_Handle window, OS_EventFlags flags, OS_Key key);

@@ -5,6 +5,18 @@
 #define DBG_FRONTEND_CORE_H
 
 ////////////////////////////////
+//~ rjf: Config Slots
+
+typedef enum DF_CfgSlot
+{
+  DF_CfgSlot_User,
+  DF_CfgSlot_Project,
+  DF_CfgSlot_CommandLine,
+  DF_CfgSlot_COUNT
+}
+DF_CfgSlot;
+
+////////////////////////////////
 //~ rjf: Binding Types
 
 typedef struct DF_Binding DF_Binding;
@@ -392,6 +404,7 @@ enum
 typedef struct DF_MsgKindInfo DF_MsgKindInfo;
 struct DF_MsgKindInfo
 {
+  String8 name_lower;
   String8 display_name;
   String8 description;
   String8 search_tags;
@@ -594,6 +607,11 @@ struct DF_Window
   S64 autocomp_cursor_num;
   
   // rjf: query view stack
+  Arena *query_msg_arena;
+  String8 query_msg_name;
+  DF_MsgQuery query_msg_query;
+  U64 query_msg_regs_mask[(D_RegSlot_COUNT+63)/64];
+  D_Regs *query_msg_regs;
   Arena *query_cmd_arena;
   D_CmdSpec *query_cmd_spec;
   U64 query_cmd_params_mask[(D_CmdParamSlot_COUNT + 63) / 64];
@@ -648,15 +666,25 @@ struct DF_State
   Arena *arena;
   B32 quit;
   
-  // rjf: messages
-  Arena *msgs_arena;
-  DF_MsgList msgs;
+  // rjf: icon texture
+  R_Handle icon_texture;
+  
+  // rjf: frame time history
+  U64 frame_time_us_history[64];
+  U64 frame_time_us_history_idx;
   
   // rjf: frame request state
   U64 num_frames_requested;
   
-  // rjf: history cache
-  D_StateDeltaHistory *hist;
+  // rjf: config trees
+  Arena *cfg_root_arena;
+  MD_Node *cfg_root;
+  Arena *cfg_slot_arenas[DF_CfgSlot_COUNT];
+  MD_Node *cfg_slot_roots[DF_CfgSlot_COUNT];
+  
+  // rjf: messages
+  Arena *msgs_arena;
+  DF_MsgList msgs;
   
   // rjf: key map table
   Arena *key_map_arena;
@@ -735,13 +763,6 @@ struct DF_State
   
   // rjf: global settings
   DF_SettingVal cfg_setting_vals[D_CfgSrc_COUNT][DF_SettingCode_COUNT];
-  
-  // rjf: icon texture
-  R_Handle icon_texture;
-  
-  // rjf: frame time history
-  U64 frame_time_us_history[64];
-  U64 frame_time_us_history_idx;
 };
 
 ////////////////////////////////
@@ -846,9 +867,11 @@ internal DF_Window *df_window_from_handle(D_Handle handle);
 
 internal D_CmdParams df_cmd_params_from_gfx(void);
 internal B32 df_prefer_dasm_from_window(DF_Window *window);
+#if 0 // TODO(rjf): @msgs
 internal D_CmdParams df_cmd_params_from_window(DF_Window *window);
 internal D_CmdParams df_cmd_params_from_panel(DF_Window *window, DF_Panel *panel);
 internal D_CmdParams df_cmd_params_from_view(DF_Window *window, DF_Panel *panel, DF_View *view);
+#endif
 internal D_CmdParams df_cmd_params_copy(Arena *arena, D_CmdParams *src);
 
 ////////////////////////////////
@@ -955,7 +978,6 @@ internal String8 df_push_search_string(Arena *arena);
 //~ rjf: Colors, Fonts, Config
 
 //- rjf: keybindings
-internal OS_Key df_os_key_from_cfg_string(String8 string);
 internal void df_clear_bindings(void);
 internal DF_BindingList df_bindings_from_spec(Arena *arena, D_CmdSpec *spec);
 internal void df_bind_spec(D_CmdSpec *spec, DF_Binding binding);
@@ -980,7 +1002,7 @@ internal DF_SettingVal df_setting_val_from_code(DF_SettingCode code);
 
 //- rjf: config serialization
 internal int df_qsort_compare__cfg_string_bindings(DF_StringBindingPair *a, DF_StringBindingPair *b);
-internal String8List df_cfg_strings_from_gfx(Arena *arena, String8 root_path, D_CfgSrc source);
+internal String8List df_cfg_strings_from_state(Arena *arena, String8 root_path, D_CfgSrc source);
 
 ////////////////////////////////
 //~ rjf: Process Control Info Stringification
@@ -996,7 +1018,14 @@ internal void df_request_frame(void);
 ////////////////////////////////
 //~ rjf: Message Functions
 
+//- rjf: string -> msg kind
 internal DF_MsgKind df_msg_kind_from_string(String8 string);
+
+//- rjf: register setting helpers
+internal void df_regs_set_window(DF_Window *window);
+internal void df_regs_set_from_query_slot_string(D_RegSlot slot, String8 string);
+
+//- rjf: message pushing
 internal void df_msg_(DF_MsgKind kind, D_Regs *regs);
 #define df_msg(kind, ...) df_msg_((kind),\
 &(D_Regs)\
@@ -1008,7 +1037,7 @@ __VA_ARGS__\
 ////////////////////////////////
 //~ rjf: Main Layer Top-Level Calls
 
-internal void df_init(D_StateDeltaHistory *hist);
+internal void df_init(void);
 internal void df_frame(void);
 
 #endif // DBG_FRONTEND_CORE_H

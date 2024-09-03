@@ -510,6 +510,17 @@ ctrl_event_from_serialized_string(Arena *arena, String8 string)
 ////////////////////////////////
 //~ rjf: Entity Type Functions
 
+//- rjf: entity list data structures
+
+internal void
+ctrl_entity_list_push(Arena *arena, CTRL_EntityList *list, CTRL_Entity *entity)
+{
+  CTRL_EntityNode *n = push_array(arena, CTRL_EntityNode, 1);
+  n->v = entity;
+  SLLQueuePush(list->first, list->last, n);
+  list->count += 1;
+}
+
 //- rjf: cache creation/destruction
 
 internal CTRL_EntityStore *
@@ -520,6 +531,10 @@ ctrl_entity_store_alloc(void)
   store->arena = arena;
   store->hash_slots_count = 1024;
   store->hash_slots = push_array(arena, CTRL_EntityHashSlot, store->hash_slots_count);
+  for(EachEnumVal(CTRL_EntityKind, k))
+  {
+    store->entity_kind_lists_arenas[k] = arena_alloc();
+  }
   CTRL_Entity *root = store->root = ctrl_entity_alloc(store, &ctrl_entity_nil, CTRL_EntityKind_Root, Arch_Null, 0, dmn_handle_zero(), 0);
   CTRL_Entity *local_machine = ctrl_entity_alloc(store, root, CTRL_EntityKind_Machine, arch_from_context(), CTRL_MachineID_Local, dmn_handle_zero(), 0);
   (void)local_machine;
@@ -648,12 +663,13 @@ ctrl_entity_alloc(CTRL_EntityStore *store, CTRL_Entity *parent, CTRL_EntityKind 
     
     // rjf: fill
     {
-      entity->kind        = kind;
-      entity->arch        = arch;
-      entity->machine_id  = machine_id;
-      entity->handle      = handle;
-      entity->id          = id;
-      entity->parent      = parent;
+      entity->kind          = kind;
+      entity->arch          = arch;
+      entity->alloc_time_us = os_now_microseconds();
+      entity->machine_id    = machine_id;
+      entity->handle        = handle;
+      entity->id            = id;
+      entity->parent        = parent;
       entity->next = entity->prev = entity->first = entity->last = &ctrl_entity_nil;
       if(parent != &ctrl_entity_nil)
       {
@@ -692,7 +708,8 @@ ctrl_entity_alloc(CTRL_EntityStore *store, CTRL_Entity *parent, CTRL_EntityKind 
       }
     }
     
-    // rjf: bump counter
+    // rjf: bump alloc generation / counts
+    store->entity_kind_alloc_gens[kind] += 1;
     store->entity_kind_counts[kind] += 1;
   }
   return entity;
@@ -808,6 +825,161 @@ ctrl_entity_child_from_kind(CTRL_Entity *parent, CTRL_EntityKind kind)
   return result;
 }
 
+internal CTRL_Entity *
+ctrl_entity_ancestor_from_kind(CTRL_Entity *entity, CTRL_EntityKind kind)
+{
+  CTRL_Entity *result = &ctrl_entity_nil;
+  for(CTRL_Entity *p = entity->parent; p != &ctrl_entity_nil; p = p->parent)
+  {
+    if(p->kind == kind)
+    {
+      result = p;
+      break;
+    }
+  }
+  return result;
+}
+
+internal CTRL_Entity *
+ctrl_module_from_process_vaddr(CTRL_Entity *process, U64 vaddr)
+{
+  CTRL_Entity *result = &ctrl_entity_nil;
+  for(CTRL_Entity *child = process->first;
+      child != &ctrl_entity_nil;
+      child = child->next)
+  {
+    if(child->kind == CTRL_EntityKind_Module && contains_1u64(child->vaddr_range, vaddr))
+    {
+      result = child;
+      break;
+    }
+  }
+  return result;
+}
+
+internal DI_Key
+ctrl_dbgi_key_from_module(CTRL_Entity *module)
+{
+  CTRL_Entity *debug_info_path = ctrl_entity_child_from_kind(module, CTRL_EntityKind_DebugInfoPath);
+  DI_Key dbgi_key = {debug_info_path->string, debug_info_path->timestamp};
+  return dbgi_key;
+}
+
+internal CTRL_EntityList
+ctrl_modules_from_dbgi_key(Arena *arena, CTRL_EntityStore *store, DI_Key *dbgi_key)
+{
+  CTRL_EntityList list = {0};
+  CTRL_EntityList all_modules = ctrl_entity_list_from_kind(store, CTRL_EntityKind_Module);
+  for(CTRL_EntityNode *n = all_modules.first; n != 0; n = n->next)
+  {
+    CTRL_Entity *module = n->v;
+    DI_Key module_dbgi_key = ctrl_dbgi_key_from_module(module);
+    if(di_key_match(&module_dbgi_key, dbgi_key))
+    {
+      ctrl_entity_list_push(arena, &list, module);
+    }
+  }
+  return list;
+}
+
+internal CTRL_Entity *
+ctrl_module_from_thread_candidates(CTRL_EntityStore *store, CTRL_Entity *thread, CTRL_EntityList *candidates)
+{
+  CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, CTRL_EntityKind_Process);
+  U64 thread_rip_vaddr = ctrl_query_cached_rip_from_thread(store, thread->machine_id, thread->handle);
+  CTRL_Entity *src_module = ctrl_module_from_process_vaddr(process, thread_rip_vaddr);
+  CTRL_Entity *module = &ctrl_entity_nil;
+  for(CTRL_EntityNode *n = candidates->first; n != 0; n = n->next)
+  {
+    CTRL_Entity *candidate_module = n->v;
+    CTRL_Entity *candidate_process = ctrl_entity_ancestor_from_kind(candidate_module, CTRL_EntityKind_Process);
+    if(candidate_process == process)
+    {
+      module = candidate_module;
+    }
+    if(candidate_module == src_module)
+    {
+      break;
+    }
+  }
+  return module;
+}
+
+internal CTRL_EntityList
+ctrl_entity_list_from_kind(CTRL_EntityStore *store, CTRL_EntityKind kind)
+{
+  if(store->entity_kind_lists_gens[kind] != store->entity_kind_alloc_gens[kind])
+  {
+    arena_clear(store->entity_kind_lists_arenas[kind]);
+    for(CTRL_Entity *e = store->root;
+        e != &ctrl_entity_nil;
+        e = ctrl_entity_rec_depth_first_pre(e, store->root).next)
+    {
+      if(e->kind == kind)
+      {
+        ctrl_entity_list_push(store->entity_kind_lists_arenas[kind], &store->entity_kind_lists[kind], e);
+      }
+    }
+    store->entity_kind_lists_gens[kind] = store->entity_kind_alloc_gens[kind];
+  }
+  return store->entity_kind_lists[kind];
+}
+
+internal U64
+ctrl_vaddr_from_voff(CTRL_Entity *module, U64 voff)
+{
+  U64 result = voff + module->vaddr_range.min;
+  return result;
+}
+
+internal U64
+ctrl_voff_from_vaddr(CTRL_Entity *module, U64 vaddr)
+{
+  U64 result = vaddr - module->vaddr_range.min;
+  return result;
+}
+
+internal Rng1U64
+ctrl_vaddr_range_from_voff_range(CTRL_Entity *module, Rng1U64 voff_range)
+{
+  U64 dim = dim_1u64(voff_range);
+  U64 min = ctrl_vaddr_from_voff(module, voff_range.min);
+  Rng1U64 result = {min, min+dim};
+  return result;
+}
+
+internal Rng1U64
+ctrl_voff_range_from_vaddr_range(CTRL_Entity *module, Rng1U64 vaddr_range)
+{
+  U64 dim = dim_1u64(vaddr_range);
+  U64 min = ctrl_voff_from_vaddr(module, vaddr_range.min);
+  Rng1U64 result = {min, min+dim};
+  return result;
+}
+
+//- rjf: entity tree iteration
+
+internal CTRL_EntityRec
+ctrl_entity_rec_depth_first(CTRL_Entity *entity, CTRL_Entity *subtree_root, U64 sib_off, U64 child_off)
+{
+  CTRL_EntityRec result = {0};
+  if((*MemberFromOffset(CTRL_Entity **, entity, child_off)) != &ctrl_entity_nil)
+  {
+    result.next = *MemberFromOffset(CTRL_Entity **, entity, child_off);
+    result.push_count = 1;
+  }
+  else for(CTRL_Entity *parent = entity; parent != subtree_root && parent != &ctrl_entity_nil; parent = parent->parent)
+  {
+    if(parent != subtree_root && (*MemberFromOffset(CTRL_Entity **, parent, sib_off)) != &ctrl_entity_nil)
+    {
+      result.next = *MemberFromOffset(CTRL_Entity **, parent, sib_off);
+      break;
+    }
+    result.pop_count += 1;
+  }
+  return result;
+}
+
 //- rjf: applying events to entity caches
 
 internal void
@@ -848,6 +1020,7 @@ ctrl_entity_store_apply_events(CTRL_EntityStore *store, CTRL_EventList *list)
       {
         CTRL_Entity *process = ctrl_entity_from_machine_id_handle(store, event->machine_id, event->parent);
         CTRL_Entity *thread = ctrl_entity_alloc(store, process, CTRL_EntityKind_Thread, event->arch, event->machine_id, event->entity, (U64)event->entity_id);
+        thread->stack_base = event->stack_base;
         ctrl_query_cached_rip_from_thread(store, event->machine_id, event->entity);
       }break;
       case CTRL_EventKind_EndThread:

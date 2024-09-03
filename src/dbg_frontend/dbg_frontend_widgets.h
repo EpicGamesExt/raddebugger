@@ -43,7 +43,7 @@ struct DF_CodeSliceParams
   Rng1U64 *line_ranges;
   TXT_TokenArray *line_tokens;
   D_EntityList *line_bps;
-  D_EntityList *line_ips;
+  CTRL_EntityList *line_ips;
   D_EntityList *line_pins;
   U64 *line_vaddrs;
   D_LineList *line_infos;
@@ -91,6 +91,7 @@ internal void df_cmd_list_menu_buttons(U64 count, D_CmdKind *cmds, U32 *fastpath
 internal UI_Signal df_icon_button(DF_IconKind kind, FuzzyMatchRangeList *matches, String8 string);
 internal UI_Signal df_icon_buttonf(DF_IconKind kind, FuzzyMatchRangeList *matches, char *fmt, ...);
 internal void df_entity_tooltips(D_Entity *entity);
+internal void df_ctrl_entity_tooltips(CTRL_Entity *entity);
 internal UI_Signal df_entity_desc_button(D_Entity *entity, FuzzyMatchRangeList *name_matches, String8 fuzzy_query, B32 is_implicit);
 internal void df_src_loc_button(String8 file_path, TxtPt point);
 
