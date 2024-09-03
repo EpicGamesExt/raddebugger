@@ -799,7 +799,7 @@ entry_point(CmdLine *cmd_line)
         fnt_init();
         D_StateDeltaHistory *hist = d_state_delta_history_alloc();
         d_init(cmd_line, hist);
-        df_init();
+        df_init(cmd_line);
       }
       
       //- rjf: setup initial target from command line args
@@ -950,21 +950,21 @@ entry_point(CmdLine *cmd_line)
           if(auto_run)
           {
             auto_run = 0;
-            d_cmd(D_CmdKind_LaunchAndRun);
+            d_msg(D_MsgKind_LaunchAndRun);
           }
           
           //- rjf: auto step
           if(auto_step)
           {
             auto_step = 0;
-            d_cmd(D_CmdKind_StepInto);
+            d_msg(D_MsgKind_StepInto);
           }
           
           //- rjf: jit attach
           if(jit_attach)
           {
             jit_attach = 0;
-            d_cmd(D_CmdKind_Attach, .id = jit_pid);
+            d_msg(D_MsgKind_Attach, .pid = jit_pid);
           }
         }
       }
