@@ -169,8 +169,6 @@ struct MD_Node
   MD_Node *parent;
   MD_Node *first;
   MD_Node *last;
-  
-  // rjf: tag links
   MD_Node *first_tag;
   MD_Node *last_tag;
   
@@ -182,6 +180,9 @@ struct MD_Node
   
   // rjf: source code info
   U64 src_offset;
+  
+  // rjf: user-controlled data attachments
+  U64 user_gen;
 };
 
 typedef struct MD_NodeRec MD_NodeRec;

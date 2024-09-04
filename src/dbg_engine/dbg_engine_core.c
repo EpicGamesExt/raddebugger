@@ -117,16 +117,11 @@ internal void
 d_regs_copy_contents(Arena *arena, D_Regs *dst, D_Regs *src)
 {
   MemoryCopyStruct(dst, src);
-  dst->entity_list = d_handle_list_copy(arena, src->entity_list);
   dst->file_path   = push_str8_copy(arena, src->file_path);
   dst->lines       = d_line_list_copy(arena, &src->lines);
   dst->dbgi_key    = di_key_copy(arena, &src->dbgi_key);
   dst->string      = push_str8_copy(arena, src->string);
   dst->params_tree = md_tree_copy(arena, src->params_tree);
-  if(dst->entity_list.count == 0 && !d_handle_match(d_handle_zero(), dst->entity))
-  {
-    d_handle_list_push(arena, &dst->entity_list, dst->entity);
-  }
 }
 
 internal D_Regs *
@@ -653,6 +648,7 @@ d_cmd_params_apply_spec_query(Arena *arena, D_CmdParams *params, D_CmdSpec *spec
 
 //- rjf: command lists
 
+#if 0 // TODO(rjf): @msgs
 internal void
 d_cmd_list_push(Arena *arena, D_CmdList *cmds, D_CmdParams *params, D_CmdSpec *spec)
 {
@@ -662,6 +658,7 @@ d_cmd_list_push(Arena *arena, D_CmdList *cmds, D_CmdParams *params, D_CmdSpec *s
   DLLPushBack(cmds->first, cmds->last, n);
   cmds->count += 1;
 }
+#endif
 
 //- rjf: string -> core layer command kind
 
@@ -3403,7 +3400,7 @@ d_ctrl_run(D_RunKind run, CTRL_Entity *run_thread, CTRL_RunFlags flags, CTRL_Tra
   CTRL_Msg msg = {(run == D_RunKind_Run || run == D_RunKind_Step) ? CTRL_MsgKind_Run : CTRL_MsgKind_SingleStep};
   {
     D_EntityList user_bps = d_query_cached_entity_list_with_kind(D_EntityKind_Breakpoint);
-    CTRL_Entity *process = ctrl_entity_ancestor_from_kind(run_thread, D_EntityKind_Process);
+    CTRL_Entity *process = ctrl_entity_ancestor_from_kind(run_thread, CTRL_EntityKind_Process);
     msg.run_flags = flags;
     msg.machine_id = run_thread->machine_id;
     msg.entity = run_thread->handle;
@@ -3558,6 +3555,7 @@ d_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
     }break;
     
     //- rjf: default -> evaluating a debugger entity; read from entity POD evaluation
+    default:{}break;
 #if 0 // TODO(rjf): @msgs
     default:
     {
@@ -3597,7 +3595,7 @@ d_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
     }break;
     
     //- rjf: thread -> reading from thread register block
-    case D_EntityKind_Thread:
+    case CTRL_EntityKind_Thread:
     {
       Temp scratch = scratch_begin(0, 0);
       CTRL_Unwind unwind = d_query_cached_unwind_from_thread(entity);
@@ -3626,7 +3624,8 @@ d_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range)
   switch(entity->kind)
   {
     //- rjf: default -> making commits to entity evaluation
-#if 0
+    default:{}break;
+#if 0 // TODO(rjf): @msgs
     default:
     {
       Temp scratch = scratch_begin(0, 0);
@@ -3701,14 +3700,16 @@ d_key_from_eval_space_range(E_Space space, Rng1U64 range, B32 zero_terminated)
   CTRL_Entity *entity = d_entity_from_eval_space(space);
   switch(entity->kind)
   {
+    default:{}break;
+    
     //- rjf: nil space -> filesystem key encoded inside of `space`
-    case D_EntityKind_Nil:
+    case CTRL_EntityKind_Null:
     {
       result = space;
     }break;
     
     //- rjf: process space -> query 
-    case D_EntityKind_Process:
+    case CTRL_EntityKind_Process:
     {
       result = ctrl_hash_store_key_from_process_vaddr_range(entity->machine_id, entity->handle, range, zero_terminated);
     }break;
@@ -3725,6 +3726,8 @@ d_whole_range_from_eval_space(E_Space space)
   CTRL_Entity *entity = d_entity_from_eval_space(space);
   switch(entity->kind)
   {
+    default:{}break;
+    
     //- rjf: nil space -> filesystem key encoded inside of `space`
     case CTRL_EntityKind_Null:
     {
@@ -3742,6 +3745,8 @@ d_whole_range_from_eval_space(E_Space space)
       result = r1u64(0, data.size);
       hs_scope_close(scope);
     }break;
+    
+    //- rjf: process -> process address space
     case CTRL_EntityKind_Process:
     {
       result = r1u64(0, 0x7FFFFFFFFFFFull);
@@ -5428,7 +5433,7 @@ d_file_path_from_eval_string(Arena *arena, String8 string)
     E_Eval eval = e_eval_from_string(scratch.arena, string);
     if(eval.expr->kind == E_ExprKind_LeafFilePath)
     {
-      result = d_cfg_raw_from_escaped_string(arena, eval.expr->string);
+      result = raw_from_escaped_string(arena, eval.expr->string);
     }
     scratch_end(scratch);
   }
@@ -5439,7 +5444,7 @@ internal String8
 d_eval_string_from_file_path(Arena *arena, String8 string)
 {
   Temp scratch = scratch_begin(&arena, 1);
-  String8 string_escaped = d_cfg_escaped_from_raw_string(scratch.arena, string);
+  String8 string_escaped = escaped_from_raw_string(scratch.arena, string);
   String8 result = push_str8f(arena, "file:\"%S\"", string_escaped);
   scratch_end(scratch);
   return result;
@@ -5574,6 +5579,7 @@ d_ctrl_targets_running(void)
   return d_state->ctrl_is_running;
 }
 
+#if 0 // TODO(rjf): @msgs
 //- rjf: config paths
 
 internal String8
@@ -5589,9 +5595,11 @@ d_cfg_table(void)
 {
   return &d_state->cfg_table;
 }
+#endif
 
 //- rjf: config serialization
 
+#if 0 // TODO(rjf): @msgs
 internal String8
 d_cfg_escaped_from_raw_string(Arena *arena, String8 string)
 {
@@ -5829,6 +5837,7 @@ d_cfg_push_write_string(D_CfgSrc src, String8 string)
 {
   str8_list_push(d_state->cfg_write_arenas[src], &d_state->cfg_write_data[src], push_str8_copy(d_state->cfg_write_arenas[src], string));
 }
+#endif
 
 //- rjf: current path
 
@@ -5840,6 +5849,7 @@ d_current_path(void)
 
 //- rjf: entity kind cache
 
+#if 0 // TODO(rjf): @msgs
 internal D_EntityList
 d_query_cached_entity_list_with_kind(D_EntityKind kind)
 {
@@ -5863,6 +5873,7 @@ d_query_cached_entity_list_with_kind(D_EntityKind kind)
   ProfEnd();
   return result;
 }
+#endif
 
 //- rjf: active entity based queries
 
@@ -6157,6 +6168,8 @@ d_query_cached_member_map_from_dbgi_key_voff(DI_Key *dbgi_key, U64 voff)
 
 //- rjf: top-level command dispatch
 
+#if 0 // TODO(rjf): @msgs
+
 internal void
 d_push_cmd(D_CmdSpec *spec, D_CmdParams *params)
 {
@@ -6243,6 +6256,8 @@ d_errorf(char *fmt, ...)
   scratch_end(scratch);
 }
 
+#endif
+
 ////////////////////////////////
 //~ rjf: Message Functions
 
@@ -6284,7 +6299,9 @@ d_init(CmdLine *cmdln, D_StateDeltaHistory *hist)
   {
     d_state->frame_arenas[idx] = arena_alloc();
   }
+#if 0 // TODO(rjf): @msgs
   d_state->root_cmd_arena = arena_alloc();
+#endif
   d_state->output_log_key = hs_hash_from_data(str8_lit("df_output_log_key"));
   d_state->entities_arena = arena_alloc(.reserve_size = GB(64), .commit_size = KB(64));
   d_state->entities_root = &d_nil_entity;
@@ -6380,6 +6397,7 @@ d_init(CmdLine *cmdln, D_StateDeltaHistory *hist)
     }
     
     // rjf: set up config path state
+#if 0 // TODO(rjf): @msgs
     String8 cfg_src_paths[D_CfgSrc_COUNT] = {user_cfg_path, project_cfg_path};
     for(D_CfgSrc src = (D_CfgSrc)0; src < D_CfgSrc_COUNT; src = (D_CfgSrc)(src+1))
     {
@@ -6389,14 +6407,18 @@ d_init(CmdLine *cmdln, D_StateDeltaHistory *hist)
     
     // rjf: set up config table arena
     d_state->cfg_arena = arena_alloc();
+#endif
+    
     scratch_end(scratch);
   }
   
+#if 0 // TODO(rjf): @msgs
   // rjf: set up config write state
   for(D_CfgSrc src = (D_CfgSrc)0; src < D_CfgSrc_COUNT; src = (D_CfgSrc)(src+1))
   {
     d_state->cfg_write_arenas[src] = arena_alloc();
   }
+#endif
   
   // rjf: set up initial browse path
   {
@@ -6409,6 +6431,7 @@ d_init(CmdLine *cmdln, D_StateDeltaHistory *hist)
   }
 }
 
+#if 0 // TODO(rjf): @msgs
 internal D_CmdList
 d_gather_root_cmds(Arena *arena)
 {
@@ -6419,9 +6442,10 @@ d_gather_root_cmds(Arena *arena)
   }
   return cmds;
 }
+#endif
 
 internal void
-d_tick(Arena *arena, DI_Scope *di_scope, D_CmdList *cmds, F32 dt)
+d_tick(Arena *arena, DI_Scope *di_scope, F32 dt)
 {
   ProfBeginFunction();
   d_state->frame_index += 1;
@@ -6549,8 +6573,7 @@ d_tick(Arena *arena, DI_Scope *di_scope, D_CmdList *cmds, F32 dt)
           if(event->cause == CTRL_EventCause_InterruptedByException ||
              event->cause == CTRL_EventCause_InterruptedByTrap)
           {
-            D_CmdParams params = d_cmd_params_zero();
-            d_cmd_list_push(arena, cmds, &params, d_cmd_spec_from_kind(D_CmdKind_Error));
+            log_user_errorf("Interrupted by exception");
           }
           
           // rjf: kill all entities which are marked to die on stop
@@ -6675,9 +6698,7 @@ d_tick(Arena *arena, DI_Scope *di_scope, D_CmdList *cmds, F32 dt)
           B32 do_initial_snap = (already_existing_processes.count == 1 && thread_idx_in_process == 0);
           if(do_initial_snap)
           {
-            D_CmdParams params = d_cmd_params_zero();
-            params.entity = d_handle_from_entity(entity);
-            d_cmd_list_push(arena, cmds, &params, d_cmd_spec_from_kind(D_CmdKind_SelectThread));
+            d_msg(D_MsgKind_SelectThread, .machine_id = event->machine_id, .thread = event->entity);
           }
         }break;
         
@@ -7483,6 +7504,7 @@ d_tick(Arena *arena, DI_Scope *di_scope, D_CmdList *cmds, F32 dt)
     scratch_end(scratch);
   }
   
+#if 0 // TODO(rjf): @msgs
   //////////////////////////////
   //- rjf: clear root level commands
   //
@@ -7490,7 +7512,9 @@ d_tick(Arena *arena, DI_Scope *di_scope, D_CmdList *cmds, F32 dt)
     arena_clear(d_state->root_cmd_arena);
     MemoryZeroStruct(&d_state->root_cmds);
   }
+#endif
   
+#if 0 // TODO(rjf): @msgs
   //////////////////////////////
   //- rjf: autosave
   //
@@ -7504,6 +7528,7 @@ d_tick(Arena *arena, DI_Scope *di_scope, D_CmdList *cmds, F32 dt)
       d_state->seconds_til_autosave = 5.f;
     }
   }
+#endif
   
   //////////////////////////////
   //- rjf: process top-level commands
@@ -9096,7 +9121,7 @@ d_tick(Arena *arena, DI_Scope *di_scope, D_CmdList *cmds, F32 dt)
   CTRL_Entity *module = ctrl_module_from_process_vaddr(process, rip_vaddr);
   U64 rip_voff = ctrl_voff_from_vaddr(module, rip_vaddr);
   U64 tls_root_vaddr = ctrl_query_cached_tls_root_vaddr_from_thread(d_state->ctrl_entity_store, thread->machine_id, thread->handle);
-  CTRL_EntityList all_modules = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, D_EntityKind_Module);
+  CTRL_EntityList all_modules = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Module);
   U64 eval_modules_count = Max(1, all_modules.count);
   E_Module *eval_modules = push_array(arena, E_Module, eval_modules_count);
   E_Module *eval_modules_primary = &eval_modules[0];

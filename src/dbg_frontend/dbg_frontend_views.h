@@ -155,7 +155,7 @@ struct DF_WatchViewState
 //~ rjf: Code View Functions
 
 internal void df_code_view_init(DF_CodeViewState *cv, DF_View *view);
-internal void df_code_view_cmds(DF_View *view, DF_CodeViewState *cv, D_CmdList *cmds, String8 text_data, TXT_TextInfo *text_info, DASM_LineArray *dasm_lines, Rng1U64 dasm_vaddr_range, DI_Key dasm_dbgi_key);
+internal void df_code_view_cmds(DF_View *view, DF_CodeViewState *cv, String8 text_data, TXT_TextInfo *text_info, DASM_LineArray *dasm_lines, Rng1U64 dasm_vaddr_range, DI_Key dasm_dbgi_key);
 internal DF_CodeViewBuildResult df_code_view_build(Arena *arena, DF_View *view, DF_CodeViewState *cv, DF_CodeViewBuildFlags flags, Rng2F32 rect, String8 text_data, TXT_TextInfo *text_info, DASM_LineArray *dasm_lines, Rng1U64 dasm_vaddr_range, DI_Key dasm_dbgi_key);
 
 ////////////////////////////////

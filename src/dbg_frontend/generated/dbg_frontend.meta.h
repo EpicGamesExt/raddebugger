@@ -6,9 +6,79 @@
 #ifndef DBG_FRONTEND_META_H
 #define DBG_FRONTEND_META_H
 
+typedef enum DF_RegSlot
+{
+DF_RegSlot_Null,
+DF_RegSlot_MachineID,
+DF_RegSlot_Process,
+DF_RegSlot_Module,
+DF_RegSlot_Thread,
+DF_RegSlot_Window,
+DF_RegSlot_Panel,
+DF_RegSlot_View,
+DF_RegSlot_PrevView,
+DF_RegSlot_DstPanel,
+DF_RegSlot_CfgTree,
+DF_RegSlot_CfgTreeList,
+DF_RegSlot_UnwindCount,
+DF_RegSlot_InlineDepth,
+DF_RegSlot_FilePath,
+DF_RegSlot_Cursor,
+DF_RegSlot_Mark,
+DF_RegSlot_TextKey,
+DF_RegSlot_LangKind,
+DF_RegSlot_Lines,
+DF_RegSlot_DbgiKey,
+DF_RegSlot_VaddrRange,
+DF_RegSlot_VoffRange,
+DF_RegSlot_PID,
+DF_RegSlot_ForceConfirm,
+DF_RegSlot_PreferDisasm,
+DF_RegSlot_Dir2,
+DF_RegSlot_String,
+DF_RegSlot_ParamsTree,
+DF_RegSlot_OSEvent,
+DF_RegSlot_COUNT,
+} DF_RegSlot;
+
 typedef enum DF_MsgKind
 {
 DF_MsgKind_Null,
+DF_MsgKind_LaunchAndRun,
+DF_MsgKind_LaunchAndStepInto,
+DF_MsgKind_Kill,
+DF_MsgKind_KillAll,
+DF_MsgKind_Attach,
+DF_MsgKind_Detach,
+DF_MsgKind_Continue,
+DF_MsgKind_StepIntoInst,
+DF_MsgKind_StepOverInst,
+DF_MsgKind_StepIntoLine,
+DF_MsgKind_StepOverLine,
+DF_MsgKind_StepOut,
+DF_MsgKind_Halt,
+DF_MsgKind_SoftHaltRefresh,
+DF_MsgKind_SetThreadIP,
+DF_MsgKind_RunToLine,
+DF_MsgKind_RunToAddress,
+DF_MsgKind_Run,
+DF_MsgKind_Restart,
+DF_MsgKind_StepInto,
+DF_MsgKind_StepOver,
+DF_MsgKind_SelectThread,
+DF_MsgKind_SelectUnwind,
+DF_MsgKind_UpOneFrame,
+DF_MsgKind_DownOneFrame,
+DF_MsgKind_FreezeThread,
+DF_MsgKind_ThawThread,
+DF_MsgKind_FreezeProcess,
+DF_MsgKind_ThawProcess,
+DF_MsgKind_FreezeMachine,
+DF_MsgKind_ThawMachine,
+DF_MsgKind_FreezeLocalMachine,
+DF_MsgKind_ThawLocalMachine,
+DF_MsgKind_RunToCursor,
+DF_MsgKind_SetNextStatement,
 DF_MsgKind_Exit,
 DF_MsgKind_RunCommand,
 DF_MsgKind_ToggleDevMenu,
@@ -229,7 +299,6 @@ DF_ViewKind_FileSystem,
 DF_ViewKind_SystemProcesses,
 DF_ViewKind_EntityLister,
 DF_ViewKind_SymbolLister,
-DF_ViewKind_Target,
 DF_ViewKind_Targets,
 DF_ViewKind_FilePathMap,
 DF_ViewKind_AutoViewRules,
@@ -376,6 +445,71 @@ DF_SettingCode_HintCodeText,
 DF_SettingCode_COUNT,
 } DF_SettingCode;
 
+typedef struct DF_Regs DF_Regs;
+struct DF_Regs
+{
+CTRL_MachineID machine_id;
+DMN_Handle process;
+DMN_Handle module;
+DMN_Handle thread;
+DF_Handle window;
+DF_Handle panel;
+DF_Handle view;
+DF_Handle prev_view;
+DF_Handle dst_panel;
+DF_Handle cfg_tree;
+DF_HandleList cfg_tree_list;
+U64 unwind_count;
+U64 inline_depth;
+String8 file_path;
+TxtPt cursor;
+TxtPt mark;
+U128 text_key;
+TXT_LangKind lang_kind;
+D_LineList lines;
+DI_Key dbgi_key;
+Rng1U64 vaddr_range;
+Rng1U64 voff_range;
+U32 pid;
+B32 force_confirm;
+B32 prefer_disasm;
+Dir2 dir2;
+String8 string;
+MD_Node * params_tree;
+OS_Event * os_event;
+};
+
+#define df_regs_lit_init_top \
+.machine_id = df_regs()->machine_id,\
+.process = df_regs()->process,\
+.module = df_regs()->module,\
+.thread = df_regs()->thread,\
+.window = df_regs()->window,\
+.panel = df_regs()->panel,\
+.view = df_regs()->view,\
+.prev_view = df_regs()->prev_view,\
+.dst_panel = df_regs()->dst_panel,\
+.cfg_tree = df_regs()->cfg_tree,\
+.cfg_tree_list = df_regs()->cfg_tree_list,\
+.unwind_count = df_regs()->unwind_count,\
+.inline_depth = df_regs()->inline_depth,\
+.file_path = df_regs()->file_path,\
+.cursor = df_regs()->cursor,\
+.mark = df_regs()->mark,\
+.text_key = df_regs()->text_key,\
+.lang_kind = df_regs()->lang_kind,\
+.lines = df_regs()->lines,\
+.dbgi_key = df_regs()->dbgi_key,\
+.vaddr_range = df_regs()->vaddr_range,\
+.voff_range = df_regs()->voff_range,\
+.pid = df_regs()->pid,\
+.force_confirm = df_regs()->force_confirm,\
+.prefer_disasm = df_regs()->prefer_disasm,\
+.dir2 = df_regs()->dir2,\
+.string = df_regs()->string,\
+.params_tree = df_regs()->params_tree,\
+.os_event = df_regs()->os_event,\
+
 DF_VIEW_SETUP_FUNCTION_DEF(null);
 DF_VIEW_SETUP_FUNCTION_DEF(empty);
 DF_VIEW_SETUP_FUNCTION_DEF(getting_started);
@@ -384,7 +518,6 @@ DF_VIEW_SETUP_FUNCTION_DEF(file_system);
 DF_VIEW_SETUP_FUNCTION_DEF(system_processes);
 DF_VIEW_SETUP_FUNCTION_DEF(entity_lister);
 DF_VIEW_SETUP_FUNCTION_DEF(symbol_lister);
-DF_VIEW_SETUP_FUNCTION_DEF(target);
 DF_VIEW_SETUP_FUNCTION_DEF(targets);
 DF_VIEW_SETUP_FUNCTION_DEF(file_path_map);
 DF_VIEW_SETUP_FUNCTION_DEF(auto_view_rules);
@@ -418,7 +551,6 @@ DF_VIEW_CMD_FUNCTION_DEF(file_system);
 DF_VIEW_CMD_FUNCTION_DEF(system_processes);
 DF_VIEW_CMD_FUNCTION_DEF(entity_lister);
 DF_VIEW_CMD_FUNCTION_DEF(symbol_lister);
-DF_VIEW_CMD_FUNCTION_DEF(target);
 DF_VIEW_CMD_FUNCTION_DEF(targets);
 DF_VIEW_CMD_FUNCTION_DEF(file_path_map);
 DF_VIEW_CMD_FUNCTION_DEF(auto_view_rules);
@@ -452,7 +584,6 @@ DF_VIEW_UI_FUNCTION_DEF(file_system);
 DF_VIEW_UI_FUNCTION_DEF(system_processes);
 DF_VIEW_UI_FUNCTION_DEF(entity_lister);
 DF_VIEW_UI_FUNCTION_DEF(symbol_lister);
-DF_VIEW_UI_FUNCTION_DEF(target);
 DF_VIEW_UI_FUNCTION_DEF(targets);
 DF_VIEW_UI_FUNCTION_DEF(file_path_map);
 DF_VIEW_UI_FUNCTION_DEF(auto_view_rules);
@@ -492,14 +623,14 @@ DF_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(no_addr);
 DF_VIEW_RULE_ROW_UI_FUNCTION_DEF(checkbox);
 DF_VIEW_RULE_ROW_UI_FUNCTION_DEF(color_rgba);
 C_LINKAGE_BEGIN
+extern Rng1U64 df_reg_slot_range_table[30];
 extern DF_MsgKindInfo df_msg_kind_info_table[134];
-extern DF_MsgKindInfo df_d_msg_kind_info_table[36];
 extern DF_StringBindingPair df_g_default_binding_table[110];
 extern String8 df_g_binding_version_remap_old_name_table[7];
 extern String8 df_g_binding_version_remap_new_name_table[7];
 extern String8 df_g_icon_kind_text_table[69];
-extern String8 df_view_kind_name_lower_table[34];
-extern DF_ViewSpecInfo df_g_gfx_view_kind_spec_info_table[34];
+extern String8 df_view_kind_name_lower_table[33];
+extern DF_ViewSpecInfo df_g_gfx_view_kind_spec_info_table[33];
 extern DF_IconKind df_cmd_kind_icon_kind_table[221];
 extern DF_IconKind df_entity_kind_icon_kind_table[28];
 extern D_CmdParamSlot df_g_cmd_param_slot_2_view_spec_src_map[7];

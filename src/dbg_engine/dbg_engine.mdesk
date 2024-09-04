@@ -91,9 +91,9 @@ D_RegTable:
 {
   // rjf: entity info
   {CTRL_MachineID   machine_id       MachineID     }
-  {DMN_Handle       process          process       }
-  {DMN_Handle       module           module        }
-  {DMN_Handle       thread           thread        }
+  {DMN_Handle       process          Process       }
+  {DMN_Handle       module           Module        }
+  {DMN_Handle       thread           Thread        }
   {D_Handle         window           Window        }
   {D_Handle         panel            Panel         }
   {D_Handle         view             View          }
@@ -157,8 +157,6 @@ D_RegTable:
 @table(name                       name_display                          name_lower                                  show_in_ui  show_in_ipc_docs     q_slot  q_ent_kind  q_allow_files  q_allow_folders  q_keep_oi  q_select_oi  q_is_code  q_required          canonical_icon          desc)
 D_MsgKindTable:
 {
-  {Null                            ""                                          null                                        0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
-  
   //- rjf: low level target operations
   {LaunchAndRun                    "Launch And Run"                            launch_and_run                              0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
   {LaunchAndStepInto               "Launch And Step Into"                      launch_and_step_into                        0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
@@ -207,17 +205,14 @@ D_MsgKindTable:
 
 @enum D_MsgKind:
 {
+  Null,
   @expand(D_MsgKindTable a) `$(a.name)`,
   COUNT
 }
 
 @data(String8) d_msg_kind_name_lower_table:
 {
-  @expand(D_MsgKindTable a) `str8_lit_comp("$(a.name_lower)")`
-}
-
-@data(String8) d_msg_kind_name_display_table:
-{
+  `{0}`,
   @expand(D_MsgKindTable a) `str8_lit_comp("$(a.name_lower)")`
 }
 

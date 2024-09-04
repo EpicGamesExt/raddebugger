@@ -19,7 +19,7 @@ df_code_view_init(DF_CodeViewState *cv, DF_View *view)
 }
 
 internal void
-df_code_view_cmds(DF_View *view, DF_CodeViewState *cv, D_CmdList *cmds, String8 text_data, TXT_TextInfo *text_info, DASM_LineArray *dasm_lines, Rng1U64 dasm_vaddr_range, DI_Key dasm_dbgi_key)
+df_code_view_cmds(DF_View *view, DF_CodeViewState *cv, String8 text_data, TXT_TextInfo *text_info, DASM_LineArray *dasm_lines, Rng1U64 dasm_vaddr_range, DI_Key dasm_dbgi_key)
 {
   for(D_CmdNode *n = cmds->first; n != 0; n = n->next)
   {
@@ -4626,6 +4626,8 @@ DF_VIEW_UI_FUNCTION_DEF(symbol_lister)
 ////////////////////////////////
 //~ rjf: target @view_hook_impl
 
+#if 0 // TODO(rjf): @msgs
+
 typedef struct DF_TargetViewState DF_TargetViewState;
 struct DF_TargetViewState
 {
@@ -4960,6 +4962,8 @@ DF_VIEW_UI_FUNCTION_DEF(target)
   ProfEnd();
 }
 
+#endif
+
 ////////////////////////////////
 //~ rjf: targets @view_hook_impl
 
@@ -5114,6 +5118,12 @@ DF_VIEW_UI_FUNCTION_DEF(targets)
 
 ////////////////////////////////
 //~ rjf: file_path_map @view_hook_impl
+
+DF_VIEW_SETUP_FUNCTION_DEF(file_path_map){}
+DF_VIEW_CMD_FUNCTION_DEF(file_path_map){}
+DF_VIEW_UI_FUNCTION_DEF(file_path_map){}
+
+#if 0 // TODO(rjf): @msgs
 
 typedef struct DF_FilePathMapViewState DF_FilePathMapViewState;
 struct DF_FilePathMapViewState
@@ -5454,6 +5464,8 @@ DF_VIEW_UI_FUNCTION_DEF(file_path_map)
   ProfEnd();
 }
 
+#endif
+
 ////////////////////////////////
 //~ rjf: auto_view_rules @view_hook_impl
 
@@ -5748,6 +5760,12 @@ DF_VIEW_UI_FUNCTION_DEF(call_stack)
 
 ////////////////////////////////
 //~ rjf: modules @view_hook_impl
+
+DF_VIEW_SETUP_FUNCTION_DEF(modules){}
+DF_VIEW_CMD_FUNCTION_DEF(modules){}
+DF_VIEW_UI_FUNCTION_DEF(modules){}
+
+#if 0 // TODO(rjf): @msgs
 
 typedef struct DF_ModulesViewState DF_ModulesViewState;
 struct DF_ModulesViewState
@@ -6083,6 +6101,7 @@ DF_VIEW_UI_FUNCTION_DEF(modules)
   scratch_end(scratch);
   ProfEnd();
 }
+#endif
 
 ////////////////////////////////
 //~ rjf: watch @view_hook_impl
@@ -6233,52 +6252,10 @@ DF_VIEW_UI_FUNCTION_DEF(procedures)
 ////////////////////////////////
 //~ rjf: pending_file @view_hook_impl
 
-typedef struct DF_PendingFileViewState DF_PendingFileViewState;
-struct DF_PendingFileViewState
-{
-  Arena *deferred_cmd_arena;
-  D_CmdList deferred_cmds;
-};
-
-DF_VIEW_SETUP_FUNCTION_DEF(pending_file)
-{
-  DF_PendingFileViewState *pves = df_view_user_state(view, DF_PendingFileViewState);
-  pves->deferred_cmd_arena = df_view_push_arena_ext(view);
-}
-
+DF_VIEW_SETUP_FUNCTION_DEF(pending_file){}
 DF_VIEW_CMD_FUNCTION_DEF(pending_file)
 {
   Temp scratch = scratch_begin(0, 0);
-  DF_PendingFileViewState *pves = df_view_user_state(view, DF_PendingFileViewState);
-  
-  //- rjf: process commands
-  for(D_CmdNode *n = cmds->first; n != 0; n = n->next)
-  {
-    D_Cmd *cmd = &n->cmd;
-    
-    // rjf: mismatched window/panel => skip
-    if(!d_handle_match(d_regs()->window, cmd->params.window) ||
-       !d_handle_match(d_regs()->panel, cmd->params.panel))
-    {
-      continue;
-    }
-    
-    // rjf: process
-    D_CmdKind core_cmd_kind = d_cmd_kind_from_string(cmd->spec->info.string);
-    switch(core_cmd_kind)
-    {
-      default:break;
-      
-      // rjf: gather deferred commands to redispatch when entity is ready
-      case D_CmdKind_GoToLine:
-      case D_CmdKind_GoToAddress:
-      case D_CmdKind_CenterCursor:
-      case D_CmdKind_ContainCursor:
-      {
-        d_cmd_list_push(pves->deferred_cmd_arena, &pves->deferred_cmds, &cmd->params, cmd->spec);
-      }break;
-    }
-  }
   
   //- rjf: determine if file is ready, and which viewer to use
   String8 file_path = d_file_path_from_eval_string(scratch.arena, str8(view->query_buffer, view->query_string_size));

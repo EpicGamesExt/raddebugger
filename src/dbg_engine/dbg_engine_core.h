@@ -764,6 +764,7 @@ struct D_CmdSpecInfoArray
 ////////////////////////////////
 //~ rjf: Command Types
 
+#if 0 // TODO(rjf): @msgs
 typedef struct D_Cmd D_Cmd;
 struct D_Cmd
 {
@@ -786,6 +787,7 @@ struct D_CmdList
   D_CmdNode *last;
   U64 count;
 };
+#endif
 
 ////////////////////////////////
 //~ rjf: Main State Caches
@@ -987,9 +989,10 @@ struct D_State
   D_MsgList msgs;
   
   // rjf: top-level command batch
-  // TODO(rjf): @msgs
+#if 0 // TODO(rjf): @msgs
   Arena *root_cmd_arena;
   D_CmdList root_cmds;
+#endif
   
   // rjf: output log key
   U128 output_log_key;
@@ -1066,6 +1069,7 @@ struct D_State
   Arena *ctrl_stop_arena;
   CTRL_Event ctrl_last_stop_event;
   
+#if 0 // TODO(rjf): @msgs
   // rjf: config reading state
   Arena *cfg_path_arenas[D_CfgSrc_COUNT];
   String8 cfg_paths[D_CfgSrc_COUNT];
@@ -1077,6 +1081,7 @@ struct D_State
   B32 cfg_write_issued[D_CfgSrc_COUNT];
   Arena *cfg_write_arenas[D_CfgSrc_COUNT];
   String8List cfg_write_data[D_CfgSrc_COUNT];
+#endif
   
   // rjf: current path
   Arena *current_path_arena;
@@ -1183,7 +1188,9 @@ internal D_CmdParams d_cmd_params_zero(void);
 internal String8 d_cmd_params_apply_spec_query(Arena *arena, D_CmdParams *params, D_CmdSpec *spec, String8 query);
 
 //- rjf: command lists
+#if 0 // TODO(rjf): @msgs
 internal void d_cmd_list_push(Arena *arena, D_CmdList *cmds, D_CmdParams *params, D_CmdSpec *spec);
+#endif
 
 //- rjf: string -> core layer command kind
 internal D_CmdKind d_cmd_kind_from_string(String8 string);
@@ -1524,17 +1531,21 @@ internal D_RunKind d_ctrl_last_run_kind(void);
 internal U64 d_ctrl_last_run_frame_idx(void);
 internal B32 d_ctrl_targets_running(void);
 
+#if 0 // TODO(rjf): @msgs
 //- rjf: config paths
 internal String8 d_cfg_path_from_src(D_CfgSrc src);
 
 //- rjf: config state
 internal D_CfgTable *d_cfg_table(void);
+#endif
 
 //- rjf: config serialization
+#if 0 // TODO(rjf): @msgs
 internal String8 d_cfg_escaped_from_raw_string(Arena *arena, String8 string);
 internal String8 d_cfg_raw_from_escaped_string(Arena *arena, String8 string);
 internal String8List d_cfg_strings_from_state(Arena *arena, String8 root_path, D_CfgSrc source);
 internal void d_cfg_push_write_string(D_CfgSrc src, String8 string);
+#endif
 
 //- rjf: current path
 internal String8 d_current_path(void);
@@ -1558,6 +1569,7 @@ internal E_String2NumMap *d_query_cached_locals_map_from_dbgi_key_voff(DI_Key *d
 internal E_String2NumMap *d_query_cached_member_map_from_dbgi_key_voff(DI_Key *dbgi_key, U64 voff);
 
 //- rjf: top-level command dispatch
+#if 0 // TODO(rjf): @msgs
 internal void d_push_cmd(D_CmdSpec *spec, D_CmdParams *params);
 internal void d_error(String8 string);
 internal void d_errorf(char *fmt, ...);
@@ -1569,6 +1581,7 @@ internal void d_errorf(char *fmt, ...);
 .view   = d_regs()->view,   \
 __VA_ARGS__                 \
 })
+#endif
 
 ////////////////////////////////
 //~ rjf: Message Functions
@@ -1586,7 +1599,9 @@ __VA_ARGS__\
 //~ rjf: Main Layer Top-Level Calls
 
 internal void d_init(CmdLine *cmdln, D_StateDeltaHistory *hist);
+#if 0 // TODO(rjf): @msgs
 internal D_CmdList d_gather_root_cmds(Arena *arena);
-internal void d_tick(Arena *arena, DI_Scope *di_scope, D_CmdList *cmds, F32 dt);
+#endif
+internal void d_tick(Arena *arena, DI_Scope *di_scope, F32 dt);
 
 #endif // DBG_ENGINE_CORE_H

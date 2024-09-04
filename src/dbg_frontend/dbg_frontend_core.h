@@ -17,6 +17,30 @@ typedef enum DF_CfgSlot
 DF_CfgSlot;
 
 ////////////////////////////////
+//~ rjf: Handle Types
+
+typedef struct DF_Handle DF_Handle;
+struct DF_Handle
+{
+  U64 u64[4];
+};
+
+typedef struct DF_HandleNode DF_HandleNode;
+struct DF_HandleNode
+{
+  DF_HandleNode *next;
+  DF_Handle v;
+};
+
+typedef struct DF_HandleList DF_HandleList;
+struct DF_HandleList
+{
+  DF_HandleNode *first;
+  DF_HandleNode *last;
+  U64 count;
+};
+
+////////////////////////////////
 //~ rjf: Binding Types
 
 typedef struct DF_Binding DF_Binding;
@@ -82,17 +106,17 @@ struct DF_SettingVal
 
 typedef struct DF_View DF_View;
 
-#define DF_VIEW_SETUP_FUNCTION_SIG(name) void name(DF_View *view, MD_Node *params, String8 string)
+#define DF_VIEW_SETUP_FUNCTION_SIG(name) void name(void)
 #define DF_VIEW_SETUP_FUNCTION_NAME(name) df_view_setup_##name
 #define DF_VIEW_SETUP_FUNCTION_DEF(name) internal DF_VIEW_SETUP_FUNCTION_SIG(DF_VIEW_SETUP_FUNCTION_NAME(name))
 typedef DF_VIEW_SETUP_FUNCTION_SIG(DF_ViewSetupFunctionType);
 
-#define DF_VIEW_CMD_FUNCTION_SIG(name) void name(DF_View *view, MD_Node *params, String8 string, D_CmdList *cmds)
+#define DF_VIEW_CMD_FUNCTION_SIG(name) void name(void)
 #define DF_VIEW_CMD_FUNCTION_NAME(name) df_view_cmds_##name
 #define DF_VIEW_CMD_FUNCTION_DEF(name) internal DF_VIEW_CMD_FUNCTION_SIG(DF_VIEW_CMD_FUNCTION_NAME(name))
 typedef DF_VIEW_CMD_FUNCTION_SIG(DF_ViewCmdFunctionType);
 
-#define DF_VIEW_UI_FUNCTION_SIG(name) void name(DF_View *view, MD_Node *params, String8 string, Rng2F32 rect)
+#define DF_VIEW_UI_FUNCTION_SIG(name) void name(Rng2F32 rect)
 #define DF_VIEW_UI_FUNCTION_NAME(name) df_view_ui_##name
 #define DF_VIEW_UI_FUNCTION_DEF(name) internal DF_VIEW_UI_FUNCTION_SIG(DF_VIEW_UI_FUNCTION_NAME(name))
 typedef DF_VIEW_UI_FUNCTION_SIG(DF_ViewUIFunctionType);
@@ -194,6 +218,9 @@ struct DF_View
   DF_View *order_next;
   DF_View *order_prev;
   
+  // rjf: cfg tree handle
+  DF_Handle handle;
+  
   // rjf: transient view children
   DF_View *first_transient;
   DF_View *last_transient;
@@ -241,6 +268,21 @@ struct DF_View
   TxtPt query_mark;
   U64 query_string_size;
   U8 query_buffer[KB(4)];
+};
+
+typedef struct DF_ViewNode DF_ViewNode;
+struct DF_ViewNode
+{
+  DF_ViewNode *next;
+  DF_ViewNode *prev;
+  DF_View v;
+};
+
+typedef struct DF_ViewSlot DF_ViewSlot;
+struct DF_ViewSlot
+{
+  DF_ViewNode *first;
+  DF_ViewNode *last;
 };
 
 ////////////////////////////////
@@ -300,9 +342,8 @@ DF_DragDropState;
 typedef struct DF_DragDropPayload DF_DragDropPayload;
 struct DF_DragDropPayload
 {
-  UI_Key key;
-  D_Handle panel;
-  D_Handle view;
+  UI_Key key__;
+  DF_Handle cfg_tree;
   D_Handle entity;
   TxtPt text_point;
 };
@@ -424,7 +465,7 @@ typedef struct DF_Msg DF_Msg;
 struct DF_Msg
 {
   DF_MsgKind kind;
-  D_Regs *regs;
+  DF_Regs *regs;
 };
 
 typedef struct DF_MsgNode DF_MsgNode;
@@ -543,6 +584,7 @@ struct DF_Window
   // rjf: links & metadata
   DF_Window *next;
   DF_Window *prev;
+  DF_Handle handle;
   U64 first_frame_touched;
   U64 last_frame_touched;
   U64 gen;
@@ -551,7 +593,6 @@ struct DF_Window
   
   // rjf: top-level info & handles
   Arena *arena;
-  String8 cfg_key;
   OS_Handle os;
   R_Handle r;
   UI_State *ui;
@@ -588,8 +629,7 @@ struct DF_Window
   TxtPt entity_ctx_menu_input_mark;
   
   // rjf: tab context menu state
-  D_Handle tab_ctx_menu_panel;
-  D_Handle tab_ctx_menu_view;
+  DF_Handle tab_ctx_menu_view;
   U8 tab_ctx_menu_input_buffer[1024];
   U64 tab_ctx_menu_input_size;
   TxtPt tab_ctx_menu_input_cursor;
@@ -611,7 +651,7 @@ struct DF_Window
   
   // rjf: query view stack
   Arena *query_msg_arena;
-  String8 query_msg_name;
+  DF_MsgKind query_msg_kind;
   DF_MsgQuery query_msg_query;
   U64 query_msg_regs_mask[(D_RegSlot_COUNT+63)/64];
   D_Regs *query_msg_regs;
@@ -675,6 +715,16 @@ struct DF_WindowSlot
 };
 
 ////////////////////////////////
+//~ rjf: Context Register Types
+
+typedef struct DF_RegsNode DF_RegsNode;
+struct DF_RegsNode
+{
+  DF_RegsNode *next;
+  DF_Regs v;
+};
+
+////////////////////////////////
 //~ rjf: Main Per-Process Graphical State
 
 typedef struct DF_State DF_State;
@@ -683,6 +733,9 @@ struct DF_State
   Arena *arena;
   B32 quit;
   U64 frame_index;
+  
+  // rjf: frame arenas
+  Arena *frame_arenas[2];
   
   // rjf: icon texture
   R_Handle icon_texture;
@@ -697,7 +750,12 @@ struct DF_State
   Arena *cfg_root_arena;
   MD_Node *cfg_root;
   Arena *cfg_slot_arenas[DF_CfgSlot_COUNT];
+  U64 cfg_slot_gens[DF_CfgSlot_COUNT];
   MD_Node *cfg_slot_roots[DF_CfgSlot_COUNT];
+  
+  // rjf: interaction registers
+  DF_RegsNode base_regs;
+  DF_RegsNode *top_regs;
   
   // rjf: messages
   Arena *msgs_arena;
@@ -706,6 +764,10 @@ struct DF_State
   // rjf: window state cache
   U64 window_slots_count;
   DF_WindowSlot *window_slots;
+  
+  // rjf: view state cache
+  U64 view_slots_count;
+  DF_ViewSlot *view_slots;
   
   // rjf: key map table
   Arena *key_map_arena;
@@ -729,7 +791,6 @@ struct DF_State
   B32 confirm_active;
   F32 confirm_t;
   Arena *confirm_arena;
-  D_CmdList confirm_cmds;
   DF_Msg confirm_msg;
   String8 confirm_title;
   String8 confirm_desc;
@@ -808,12 +869,15 @@ read_only global DF_ViewRuleSpec df_nil_view_rule_spec =
   &df_nil_view_rule_spec,
 };
 
+read_only global DF_Window df_nil_window = {0};
+
 read_only global DF_View df_nil_view =
 {
   &df_nil_view,
   &df_nil_view,
   &df_nil_view,
   &df_nil_view,
+  {0},
   &df_nil_view,
   &df_nil_view,
   &df_nil_view_spec,
@@ -838,6 +902,20 @@ global D_Handle df_last_drag_drop_prev_tab = {0};
 
 internal U64 df_hash_from_seed_string(U64 seed, String8 string);
 internal U64 df_hash_from_string(String8 string);
+
+////////////////////////////////
+//~ rjf: Handle Type Functions
+
+internal DF_Handle df_handle_zero(void);
+internal B32 df_handle_match(DF_Handle a, DF_Handle b);
+internal void df_handle_list_push(Arena *arena, DF_HandleList *list, DF_Handle v);
+internal DF_HandleList df_handle_list_copy(Arena *arena, DF_HandleList *src);
+
+////////////////////////////////
+//~ rjf: Register Type Functions
+
+internal void df_regs_copy_contents(Arena *arena, DF_Regs *dst, DF_Regs *src);
+internal DF_Regs *df_regs_copy(Arena *arena, DF_Regs *src);
 
 ////////////////////////////////
 //~ rjf: View Type Functions
@@ -881,7 +959,7 @@ internal DF_View *df_selected_tab_from_panel(DF_Panel *panel);
 
 //- rjf: icons & display strings
 internal DF_IconKind df_icon_kind_from_view(DF_View *view);
-internal DR_FancyStringList df_title_fstrs_from_view(Arena *arena, DF_View *view, Vec4F32 primary_color, Vec4F32 secondary_color, F32 size);
+internal DR_FancyStringList df_title_fstrs_from_view_spec_query(Arena *arena, DF_ViewSpec *spec, String8 query, Vec4F32 primary_color, Vec4F32 secondary_color, F32 size);
 
 ////////////////////////////////
 //~ rjf: Window Type Functions
@@ -930,6 +1008,9 @@ internal DF_ViewRuleSpec *df_view_rule_spec_from_string(String8 string);
 ////////////////////////////////
 //~ rjf: View State Functions
 
+//- rjf: cfg tree -> view
+internal DF_View *df_view_from_cfg_tree(MD_Node *view_cfg);
+
 //- rjf: allocation/releasing
 internal DF_View *df_view_alloc(void);
 internal void df_view_release(DF_View *view);
@@ -966,13 +1047,13 @@ internal void df_panel_release_all_views(DF_Panel *panel);
 ////////////////////////////////
 //~ rjf: Window State Functions
 
-internal DF_Window *df_window_from_cfg_key(String8 cfg_key);
+internal DF_Window *df_window_from_cfg_tree(MD_Node *window_cfg);
 
 internal DF_Window *df_window_open(Vec2F32 size, OS_Handle preferred_monitor, D_CfgSrc cfg_src);
 
 internal DF_Window *df_window_from_os_handle(OS_Handle os);
 
-internal void df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds);
+internal void df_window_frame(Arena *arena, MD_Node *window_cfg);
 
 ////////////////////////////////
 //~ rjf: Eval Viz
@@ -1004,7 +1085,16 @@ internal void df_set_search_string(String8 string);
 internal String8 df_push_search_string(Arena *arena);
 
 ////////////////////////////////
+//~ rjf: Main State Accessors
+
+internal Arena *df_frame_arena(void);
+
+////////////////////////////////
 //~ rjf: Colors, Fonts, Config
+
+//- rjf: handle <-> cfg tree
+internal DF_Handle df_handle_from_cfg_tree(MD_Node *cfg);
+internal MD_Node *df_cfg_tree_from_handle(DF_Handle handle);
 
 //- rjf: string <-> cfg tree
 internal MD_Node *df_cfg_tree_from_key(String8 string);
@@ -1014,8 +1104,15 @@ internal String8 df_key_from_cfg_tree(Arena *arena, MD_Node *node);
 internal DF_CfgSlot df_cfg_slot_from_tree(MD_Node *node);
 internal MD_Node *df_cfg_tree_store(MD_Node *parent, MD_Node *replace_node, String8 string);
 internal MD_Node *df_cfg_tree_storef(MD_Node *parent, MD_Node *replace_node, char *fmt, ...);
+internal void df_cfg_tree_set_string(MD_Node *node, String8 string);
+internal void df_cfg_tree_set_stringf(MD_Node *node, char *fmt, ...);
 #define df_cfg_tree_set_key(parent, key, val) df_cfg_tree_store((parent), md_child_from_string((parent), (key), 0), (val))
 #define df_cfg_tree_set_keyf(parent, key, fmt, ...) df_cfg_tree_storef((parent), md_child_from_string((parent), (key), 0), (fmt), __VA_ARGS__)
+#define df_cfg_tree_remove(node) df_cfg_tree_store((node)->parent, (node), str8_zero())
+
+//- rjf: config tree lookups
+internal Rng2F32 df_target_rect_from_panel_child_cfg(Rng2F32 parent_rect, Axis2 parent_split_axis, MD_Node *panel);
+internal Rng2F32 df_target_rect_from_panel_cfg(Rng2F32 root_rect, MD_Node *panel);
 
 //- rjf: keybindings
 internal void df_clear_bindings(void);
@@ -1041,8 +1138,10 @@ internal FNT_RasterFlags df_raster_flags_from_slot(DF_FontSlot slot);
 internal DF_SettingVal df_setting_val_from_code(DF_SettingCode code);
 
 //- rjf: config serialization
+#if 0 // TODO(rjf): @msgs
 internal int df_qsort_compare__cfg_string_bindings(DF_StringBindingPair *a, DF_StringBindingPair *b);
 internal String8List df_cfg_strings_from_state(Arena *arena, String8 root_path, D_CfgSrc source);
+#endif
 
 ////////////////////////////////
 //~ rjf: Process Control Info Stringification
@@ -1056,23 +1155,37 @@ internal String8 df_stop_explanation_string_icon_from_ctrl_event(Arena *arena, C
 internal void df_request_frame(void);
 
 ////////////////////////////////
+//~ rjf: Registers Functions
+
+internal DF_Regs *df_regs(void);
+internal DF_Regs *df_base_regs(void);
+internal DF_Regs *df_push_regs(void);
+internal DF_Regs *df_pop_regs(void);
+#define DF_RegsScope DeferLoop(df_push_regs(), df_pop_regs())
+
+////////////////////////////////
 //~ rjf: Message Functions
 
 //- rjf: string -> msg kind
 internal DF_MsgKind df_msg_kind_from_string(String8 string);
 
 //- rjf: register setting helpers
-internal void df_regs_set_window(DF_Window *window);
+internal void df_regs_set_window(MD_Node *cfg_tree);
+internal void df_regs_set_panel(MD_Node *cfg_tree);
+internal void df_regs_set_view(MD_Node *cfg_tree);
 internal void df_regs_set_from_query_slot_string(D_RegSlot slot, String8 string);
 
 //- rjf: message pushing
-internal void df_msg_(DF_MsgKind kind, D_Regs *regs);
+internal void df_msg_(DF_MsgKind kind, DF_Regs *regs);
 #define df_msg(kind, ...) df_msg_((kind),\
-&(D_Regs)\
+&(DF_Regs)\
 {\
-d_regs_lit_init_top \
+df_regs_lit_init_top \
 __VA_ARGS__\
 })
+
+//- rjf: message iteration
+internal B32 df_next_msg(DF_Msg **msg);
 
 ////////////////////////////////
 //~ rjf: Main Layer Top-Level Calls

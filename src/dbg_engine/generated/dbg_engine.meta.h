@@ -10,9 +10,9 @@ typedef enum D_RegSlot
 {
 D_RegSlot_Null,
 D_RegSlot_MachineID,
-D_RegSlot_process,
-D_RegSlot_module,
-D_RegSlot_thread,
+D_RegSlot_Process,
+D_RegSlot_Module,
+D_RegSlot_Thread,
 D_RegSlot_Window,
 D_RegSlot_Panel,
 D_RegSlot_View,
@@ -536,7 +536,6 @@ struct {B32 *value_ptr; String8 name;} DEV_toggle_table[] =
 C_LINKAGE_BEGIN
 extern Rng1U64 d_reg_slot_range_table[29];
 extern String8 d_msg_kind_name_lower_table[36];
-extern String8 d_msg_kind_name_display_table[36];
 extern Rng1U64 d_cmd_param_slot_range_table[24];
 extern String8 d_entity_kind_display_string_table[28];
 extern String8 d_entity_kind_name_lower_table[28];
