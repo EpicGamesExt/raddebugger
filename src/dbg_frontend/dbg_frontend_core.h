@@ -232,6 +232,7 @@ struct DF_View
   U64 generation;
   
   // rjf: loading animation state
+  B32 is_loading;
   F32 loading_t;
   F32 loading_t_target;
   U64 loading_progress_v;
@@ -342,7 +343,6 @@ DF_DragDropState;
 typedef struct DF_DragDropPayload DF_DragDropPayload;
 struct DF_DragDropPayload
 {
-  UI_Key key__;
   DF_Handle cfg_tree;
   D_Handle entity;
   TxtPt text_point;
@@ -825,8 +825,10 @@ struct DF_State
   U64 free_view_count;
   U64 allocated_view_count;
   
-  // rjf: drag/drop state machine
+  // rjf: drag/drop state
+  Arena *drag_drop_arena;
   DF_DragDropState drag_drop_state;
+  DF_Regs *drag_drop_regs;
   
   // rjf: rich hover info
   Arena *rich_hover_info_next_arena;
@@ -983,8 +985,9 @@ internal D_CmdParams df_cmd_params_copy(Arena *arena, D_CmdParams *src);
 //~ rjf: Global Cross-Window UI Interaction State Functions
 
 internal B32 df_drag_is_active(void);
-internal void df_drag_begin(DF_DragDropPayload *payload);
-internal B32 df_drag_drop(DF_DragDropPayload *out_payload);
+internal void df_drag_begin_(DF_Regs *regs);
+#define df_drag_begin(...) df_drag_begin_(&(DF_Regs){df_regs_lit_init_top __VA_ARGS__})
+internal B32 df_drag_drop(void);
 internal void df_drag_kill(void);
 internal void df_queue_drag_drop(void);
 
@@ -1053,7 +1056,7 @@ internal DF_Window *df_window_open(Vec2F32 size, OS_Handle preferred_monitor, D_
 
 internal DF_Window *df_window_from_os_handle(OS_Handle os);
 
-internal void df_window_frame(Arena *arena, MD_Node *window_cfg);
+internal void df_window_frame(MD_Node *window_cfg);
 
 ////////////////////////////////
 //~ rjf: Eval Viz
@@ -1102,17 +1105,20 @@ internal String8 df_key_from_cfg_tree(Arena *arena, MD_Node *node);
 
 //- rjf: config tree mutations
 internal DF_CfgSlot df_cfg_slot_from_tree(MD_Node *node);
-internal MD_Node *df_cfg_tree_store(MD_Node *parent, MD_Node *replace_node, String8 string);
-internal MD_Node *df_cfg_tree_storef(MD_Node *parent, MD_Node *replace_node, char *fmt, ...);
+internal MD_Node *df_cfg_tree_store(MD_Node *parent, MD_Node *prev_child, String8 string);
+internal MD_Node *df_cfg_tree_storef(MD_Node *parent, MD_Node *prev_child, char *fmt, ...);
 internal void df_cfg_tree_set_string(MD_Node *node, String8 string);
 internal void df_cfg_tree_set_stringf(MD_Node *node, char *fmt, ...);
+internal void df_cfg_tree_insert_child(MD_Node *parent, MD_Node *prev_child, MD_Node *node);
+internal void df_cfg_tree_release(MD_Node *node);
 #define df_cfg_tree_set_key(parent, key, val) df_cfg_tree_store((parent), md_child_from_string((parent), (key), 0), (val))
 #define df_cfg_tree_set_keyf(parent, key, fmt, ...) df_cfg_tree_storef((parent), md_child_from_string((parent), (key), 0), (fmt), __VA_ARGS__)
-#define df_cfg_tree_remove(node) df_cfg_tree_store((node)->parent, (node), str8_zero())
 
 //- rjf: config tree lookups
+internal Axis2 df_split_axis_from_panel_cfg(MD_Node *panel);
 internal Rng2F32 df_target_rect_from_panel_child_cfg(Rng2F32 parent_rect, Axis2 parent_split_axis, MD_Node *panel);
 internal Rng2F32 df_target_rect_from_panel_cfg(Rng2F32 root_rect, MD_Node *panel);
+internal B32 df_tab_cfg_is_project_filtered(MD_Node *cfg);
 
 //- rjf: keybindings
 internal void df_clear_bindings(void);

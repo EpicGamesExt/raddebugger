@@ -15,11 +15,10 @@ DF_RegSlot_Module,
 DF_RegSlot_Thread,
 DF_RegSlot_Window,
 DF_RegSlot_Panel,
-DF_RegSlot_View,
-DF_RegSlot_PrevView,
-DF_RegSlot_DstPanel,
+DF_RegSlot_Tab,
 DF_RegSlot_CfgTree,
 DF_RegSlot_CfgTreeList,
+DF_RegSlot_PrevCfgChild,
 DF_RegSlot_UnwindCount,
 DF_RegSlot_InlineDepth,
 DF_RegSlot_FilePath,
@@ -144,6 +143,7 @@ DF_MsgKind_FocusPanelUp,
 DF_MsgKind_FocusPanelDown,
 DF_MsgKind_GoBack,
 DF_MsgKind_GoForward,
+DF_MsgKind_SelectTab,
 DF_MsgKind_NextTab,
 DF_MsgKind_PrevTab,
 DF_MsgKind_MoveTabRight,
@@ -454,11 +454,10 @@ DMN_Handle module;
 DMN_Handle thread;
 DF_Handle window;
 DF_Handle panel;
-DF_Handle view;
-DF_Handle prev_view;
-DF_Handle dst_panel;
+DF_Handle tab;
 DF_Handle cfg_tree;
 DF_HandleList cfg_tree_list;
+DF_Handle prev_cfg_child;
 U64 unwind_count;
 U64 inline_depth;
 String8 file_path;
@@ -486,11 +485,10 @@ OS_Event * os_event;
 .thread = df_regs()->thread,\
 .window = df_regs()->window,\
 .panel = df_regs()->panel,\
-.view = df_regs()->view,\
-.prev_view = df_regs()->prev_view,\
-.dst_panel = df_regs()->dst_panel,\
+.tab = df_regs()->tab,\
 .cfg_tree = df_regs()->cfg_tree,\
 .cfg_tree_list = df_regs()->cfg_tree_list,\
+.prev_cfg_child = df_regs()->prev_cfg_child,\
 .unwind_count = df_regs()->unwind_count,\
 .inline_depth = df_regs()->inline_depth,\
 .file_path = df_regs()->file_path,\
@@ -623,8 +621,8 @@ DF_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(no_addr);
 DF_VIEW_RULE_ROW_UI_FUNCTION_DEF(checkbox);
 DF_VIEW_RULE_ROW_UI_FUNCTION_DEF(color_rgba);
 C_LINKAGE_BEGIN
-extern Rng1U64 df_reg_slot_range_table[30];
-extern DF_MsgKindInfo df_msg_kind_info_table[134];
+extern Rng1U64 df_reg_slot_range_table[29];
+extern DF_MsgKindInfo df_msg_kind_info_table[135];
 extern DF_StringBindingPair df_g_default_binding_table[110];
 extern String8 df_g_binding_version_remap_old_name_table[7];
 extern String8 df_g_binding_version_remap_new_name_table[7];

@@ -14,11 +14,10 @@ DF_RegTable:
   {DMN_Handle       thread           Thread        }
   {DF_Handle        window           Window        }
   {DF_Handle        panel            Panel         }
-  {DF_Handle        view             View          }
-  {DF_Handle        prev_view        PrevView      }
-  {DF_Handle        dst_panel        DstPanel      }
+  {DF_Handle        tab              Tab           }
   {DF_Handle        cfg_tree         CfgTree       }
   {DF_HandleList    cfg_tree_list    CfgTreeList   }
+  {DF_Handle        prev_cfg_child   PrevCfgChild  }
   
   // rjf: frame selection
   {U64              unwind_count     UnwindCount   }
@@ -176,6 +175,7 @@ DF_MsgKindTable:
   {GoForward                       ""                                          go_forward                                    0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
   
   //- rjf: tab selection
+  {SelectTab                       ""                                          select_tab                                    0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
   {NextTab                         ""                                          next_tab                                      0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
   {PrevTab                         ""                                          prev_tab                                      0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
   

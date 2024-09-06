@@ -18,55 +18,6 @@ df_code_view_init(DF_CodeViewState *cv, DF_View *view)
   view->loading_t = view->loading_t_target = 1.f;
 }
 
-internal void
-df_code_view_cmds(DF_View *view, DF_CodeViewState *cv, String8 text_data, TXT_TextInfo *text_info, DASM_LineArray *dasm_lines, Rng1U64 dasm_vaddr_range, DI_Key dasm_dbgi_key)
-{
-  for(D_CmdNode *n = cmds->first; n != 0; n = n->next)
-  {
-    D_Cmd *cmd = &n->cmd;
-    
-    // rjf: mismatched window/panel => skip
-    if(!d_handle_match(d_regs()->window, cmd->params.window) ||
-       !d_handle_match(d_regs()->panel, cmd->params.panel))
-    {
-      continue;
-    }
-    
-    // rjf: process
-    D_CmdKind core_cmd_kind = d_cmd_kind_from_string(cmd->spec->info.string);
-    switch(core_cmd_kind)
-    {
-      default: break;
-      case D_CmdKind_GoToLine:
-      {
-        cv->goto_line_num = cmd->params.text_point.line;
-      }break;
-      case D_CmdKind_CenterCursor:
-      {
-        cv->center_cursor = 1;
-      }break;
-      case D_CmdKind_ContainCursor:
-      {
-        cv->contain_cursor = 1;
-      }break;
-      case D_CmdKind_FindTextForward:
-      {
-        arena_clear(cv->find_text_arena);
-        cv->find_text_fwd = push_str8_copy(cv->find_text_arena, cmd->params.string);
-      }break;
-      case D_CmdKind_FindTextBackward:
-      {
-        arena_clear(cv->find_text_arena);
-        cv->find_text_bwd = push_str8_copy(cv->find_text_arena, cmd->params.string);
-      }break;
-      case D_CmdKind_ToggleWatchExpressionAtMouse:
-      {
-        cv->watch_expr_at_mouse = 1;
-      }break;
-    }
-  }
-}
-
 internal DF_CodeViewBuildResult
 df_code_view_build(Arena *arena, DF_View *view, DF_CodeViewState *cv, DF_CodeViewBuildFlags flags, Rng2F32 rect, String8 text_data, TXT_TextInfo *text_info, DASM_LineArray *dasm_lines, Rng1U64 dasm_vaddr_range, DI_Key dasm_dbgi_key)
 {
@@ -74,6 +25,51 @@ df_code_view_build(Arena *arena, DF_View *view, DF_CodeViewState *cv, DF_CodeVie
   Temp scratch = scratch_begin(&arena, 1);
   HS_Scope *hs_scope = hs_scope_open();
   TXT_Scope *txt_scope = txt_scope_open();
+  
+  //////////////////////////////
+  //- rjf: process messages
+  //
+  for(DF_Msg *msg = 0; df_next_msg(&msg);)
+  {
+    // rjf: mismatched window/panel => skip
+    if(!df_handle_match(df_regs()->window, msg->regs->window) ||
+       !df_handle_match(df_regs()->panel, msg->regs->panel))
+    {
+      continue;
+    }
+    
+    // rjf: process
+    switch(msg->kind)
+    {
+      default: break;
+      case DF_MsgKind_GoToLine:
+      {
+        cv->goto_line_num = msg->regs.cursor.line;
+      }break;
+      case DF_MsgKind_CenterCursor:
+      {
+        cv->center_cursor = 1;
+      }break;
+      case DF_MsgKind_ContainCursor:
+      {
+        cv->contain_cursor = 1;
+      }break;
+      case DF_MsgKind_FindTextForward:
+      {
+        arena_clear(cv->find_text_arena);
+        cv->find_text_fwd = push_str8_copy(cv->find_text_arena, msg->regs->string);
+      }break;
+      case DF_MsgKind_FindTextBackward:
+      {
+        arena_clear(cv->find_text_arena);
+        cv->find_text_bwd = push_str8_copy(cv->find_text_arena, msg->regs->string);
+      }break;
+      case DF_MsgKind_ToggleWatchExpressionAtMouse:
+      {
+        cv->watch_expr_at_mouse = 1;
+      }break;
+    }
+  }
   
   //////////////////////////////
   //- rjf: extract invariants
