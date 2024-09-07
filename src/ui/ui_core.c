@@ -430,8 +430,6 @@ ui_state_alloc(void)
   ui->string_hover_arena = arena_alloc();
   ui->box_table_size = 4096;
   ui->box_table = push_array(arena, UI_BoxHashSlot, ui->box_table_size);
-  ui->anim_slots_count = 4096;
-  ui->anim_slots = push_array(arena, UI_AnimSlot, ui->anim_slots_count);
   UI_InitStackNils(ui);
   return ui;
 }
@@ -799,25 +797,6 @@ ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, U
     ui_state->build_box_count = 0;
     ui_state->tooltip_open = 0;
     ui_state->ctx_menu_changed = 0;
-    ui_state->default_animation_rate = 1 - pow_f32(2, (-50.f * ui_state->animation_dt));
-  }
-  
-  //- rjf: prune unused animation nodes
-  ProfScope("ui prune unused animation nodes")
-  {
-    for(UI_AnimNode *n = ui_state->lru_anim_node, *next = &ui_nil_anim_node; n != &ui_nil_anim_node; n = next)
-    {
-      next = n->lru_next;
-      if(n->last_touched_build_index+1 < ui_state->build_index)
-      {
-        DLLRemove_NPZ(&ui_nil_anim_node, ui_state->lru_anim_node, ui_state->mru_anim_node, n, lru_next, lru_prev);
-        SLLStackPush_N(ui_state->free_anim_node, n, slot_next);
-      }
-      else
-      {
-        break;
-      }
-    }
   }
   
   //- rjf: detect mouse-moves
@@ -1276,18 +1255,8 @@ ui_end_build(void)
   }
   
   //- rjf: animate
-  ProfScope("animate")
   {
-    for(U64 slot_idx = 0; slot_idx < ui_state->anim_slots_count; slot_idx += 1)
-    {
-      for(UI_AnimNode *n = ui_state->anim_slots[slot_idx].first;
-          n != &ui_nil_anim_node && n != 0;
-          n = n->slot_next)
-      {
-        n->current += (n->params.target - n->current) * n->params.rate;
-        ui_state->is_animating = (ui_state->is_animating || abs_f32(n->params.target - n->current) > n->params.epsilon);
-      }
-    }
+    ProfBegin("ui animate");
     F32 vast_rate = 1 - pow_f32(2, (-60.f * ui_state->animation_dt));
     F32 fast_rate = 1 - pow_f32(2, (-50.f * ui_state->animation_dt));
     F32 fish_rate = 1 - pow_f32(2, (-40.f * ui_state->animation_dt));
@@ -1403,6 +1372,7 @@ ui_end_build(void)
         }
       }
     }
+    ProfEnd();
   }
   
   //- rjf: animate context menu
@@ -2945,58 +2915,6 @@ ui_signal_from_box(UI_Box *box)
   
   ProfEnd();
   return sig;
-}
-
-////////////////////////////////
-//~ rjf: Animation Cache Interaction API
-
-internal F32
-ui_anim_(UI_Key key, UI_AnimParams *params)
-{
-  // rjf: get animation cache node
-  UI_AnimNode *node = &ui_nil_anim_node;
-  {
-    U64 slot_idx = key.u64[0]%ui_state->anim_slots_count;
-    UI_AnimSlot *slot = &ui_state->anim_slots[slot_idx];
-    for(UI_AnimNode *n = slot->first; n != &ui_nil_anim_node; n = n->slot_next)
-    {
-      if(ui_key_match(n->key, key))
-      {
-        node = n;
-        break;
-      }
-    }
-    if(node == &ui_nil_anim_node)
-    {
-      node = ui_state->free_anim_node;
-      if(node != 0)
-      {
-        SLLStackPop_N(ui_state->free_anim_node, slot_next);
-      }
-      else
-      {
-        node = push_array(ui_state->arena, UI_AnimNode, 1);
-      }
-      node->first_touched_build_index = ui_state->build_index;
-      node->key = key;
-      MemoryCopyStruct(&node->params, params);
-      DLLPushBack_NPZ(&ui_nil_anim_node, slot->first, slot->last, node, slot_next, slot_prev);
-    }
-    else
-    {
-      DLLRemove_NPZ(&ui_nil_anim_node, ui_state->lru_anim_node, ui_state->mru_anim_node, node, lru_next, lru_prev);
-    }
-  }
-  
-  // rjf: touch node & update parameters - grab current
-  node->last_touched_build_index = ui_state->build_index;
-  DLLPushBack_NPZ(&ui_nil_anim_node, ui_state->lru_anim_node, ui_state->mru_anim_node, node, lru_next, lru_prev);
-  MemoryCopyStruct(&node->params, params);
-  if(node->params.epsilon == 0)
-  {
-    node->params.epsilon = (node->params.target - node->params.initial) / 10000.f;
-  }
-  return node->current;;
 }
 
 ////////////////////////////////

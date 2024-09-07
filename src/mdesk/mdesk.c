@@ -212,13 +212,9 @@ md_node_push_child(MD_Node *parent, MD_Node *node)
 }
 
 internal void
-md_node_unhook_child(MD_Node *node)
+md_node_remove_child(MD_Node *parent, MD_Node *node)
 {
-  MD_Node *parent = node->parent;
-  if(!md_node_is_nil(parent))
-  {
-    DLLRemove_NPZ(&md_nil_node, parent->first, parent->last, node, next, prev);
-  }
+  DLLRemove_NPZ(&md_nil_node, parent->first, parent->last, node, next, prev);
 }
 
 internal void
@@ -236,13 +232,9 @@ md_node_push_tag(MD_Node *parent, MD_Node *node)
 }
 
 internal void
-md_node_unhook_tag(MD_Node *node)
+md_node_remove_tag(MD_Node *parent, MD_Node *node)
 {
-  MD_Node *parent = node->parent;
-  if(!md_node_is_nil(parent))
-  {
-    DLLRemove_NPZ(&md_nil_node, parent->first_tag, parent->last_tag, node, next, prev);
-  }
+  DLLRemove_NPZ(&md_nil_node, parent->first_tag, parent->last_tag, node, next, prev);
 }
 
 //- rjf: tree building helpers

@@ -4,7 +4,7 @@
 //- GENERATED CODE
 
 C_LINKAGE_BEGIN
-Rng1U64 df_reg_slot_range_table[29] =
+Rng1U64 df_reg_slot_range_table[30] =
 {
 {0},
 {OffsetOf(DF_Regs, machine_id), OffsetOf(DF_Regs, machine_id) + sizeof(CTRL_MachineID)},
@@ -13,10 +13,11 @@ Rng1U64 df_reg_slot_range_table[29] =
 {OffsetOf(DF_Regs, thread), OffsetOf(DF_Regs, thread) + sizeof(DMN_Handle)},
 {OffsetOf(DF_Regs, window), OffsetOf(DF_Regs, window) + sizeof(DF_Handle)},
 {OffsetOf(DF_Regs, panel), OffsetOf(DF_Regs, panel) + sizeof(DF_Handle)},
-{OffsetOf(DF_Regs, tab), OffsetOf(DF_Regs, tab) + sizeof(DF_Handle)},
+{OffsetOf(DF_Regs, view), OffsetOf(DF_Regs, view) + sizeof(DF_Handle)},
+{OffsetOf(DF_Regs, prev_view), OffsetOf(DF_Regs, prev_view) + sizeof(DF_Handle)},
+{OffsetOf(DF_Regs, dst_panel), OffsetOf(DF_Regs, dst_panel) + sizeof(DF_Handle)},
 {OffsetOf(DF_Regs, cfg_tree), OffsetOf(DF_Regs, cfg_tree) + sizeof(DF_Handle)},
 {OffsetOf(DF_Regs, cfg_tree_list), OffsetOf(DF_Regs, cfg_tree_list) + sizeof(DF_HandleList)},
-{OffsetOf(DF_Regs, prev_cfg_child), OffsetOf(DF_Regs, prev_cfg_child) + sizeof(DF_Handle)},
 {OffsetOf(DF_Regs, unwind_count), OffsetOf(DF_Regs, unwind_count) + sizeof(U64)},
 {OffsetOf(DF_Regs, inline_depth), OffsetOf(DF_Regs, inline_depth) + sizeof(U64)},
 {OffsetOf(DF_Regs, file_path), OffsetOf(DF_Regs, file_path) + sizeof(String8)},
@@ -37,7 +38,7 @@ Rng1U64 df_reg_slot_range_table[29] =
 {OffsetOf(DF_Regs, os_event), OffsetOf(DF_Regs, os_event) + sizeof(OS_Event *)},
 };
 
-DF_MsgKindInfo df_msg_kind_info_table[135] =
+DF_MsgKindInfo df_msg_kind_info_table[134] =
 {
 {0},
 {str8_lit_comp("exit"), str8_lit_comp("Exit"), str8_lit_comp(""), str8_lit_comp("Exit"), ((0*DF_MsgKindFlag_ListInUI)|(0*DF_MsgKindFlag_ListInIPCDocs)), {(0*DF_MsgQueryFlag_AllowFiles)|(0*DF_MsgQueryFlag_AllowFolders)|(0*DF_MsgQueryFlag_KeepOldInput)|(0*DF_MsgQueryFlag_SelectOldInput)|(0*DF_MsgQueryFlag_CodeInput)|(0*DF_MsgQueryFlag_Required), D_RegSlot_Null, D_EntityKind_Nil}},
@@ -105,7 +106,6 @@ DF_MsgKindInfo df_msg_kind_info_table[135] =
 {str8_lit_comp("focus_panel_down"), str8_lit_comp("FocusPanelDown"), str8_lit_comp(""), str8_lit_comp("FocusPanelDown"), ((0*DF_MsgKindFlag_ListInUI)|(0*DF_MsgKindFlag_ListInIPCDocs)), {(0*DF_MsgQueryFlag_AllowFiles)|(0*DF_MsgQueryFlag_AllowFolders)|(0*DF_MsgQueryFlag_KeepOldInput)|(0*DF_MsgQueryFlag_SelectOldInput)|(0*DF_MsgQueryFlag_CodeInput)|(0*DF_MsgQueryFlag_Required), D_RegSlot_Null, D_EntityKind_Nil}},
 {str8_lit_comp("go_back"), str8_lit_comp("GoBack"), str8_lit_comp(""), str8_lit_comp("GoBack"), ((0*DF_MsgKindFlag_ListInUI)|(0*DF_MsgKindFlag_ListInIPCDocs)), {(0*DF_MsgQueryFlag_AllowFiles)|(0*DF_MsgQueryFlag_AllowFolders)|(0*DF_MsgQueryFlag_KeepOldInput)|(0*DF_MsgQueryFlag_SelectOldInput)|(0*DF_MsgQueryFlag_CodeInput)|(0*DF_MsgQueryFlag_Required), D_RegSlot_Null, D_EntityKind_Nil}},
 {str8_lit_comp("go_forward"), str8_lit_comp("GoForward"), str8_lit_comp(""), str8_lit_comp("GoForward"), ((0*DF_MsgKindFlag_ListInUI)|(0*DF_MsgKindFlag_ListInIPCDocs)), {(0*DF_MsgQueryFlag_AllowFiles)|(0*DF_MsgQueryFlag_AllowFolders)|(0*DF_MsgQueryFlag_KeepOldInput)|(0*DF_MsgQueryFlag_SelectOldInput)|(0*DF_MsgQueryFlag_CodeInput)|(0*DF_MsgQueryFlag_Required), D_RegSlot_Null, D_EntityKind_Nil}},
-{str8_lit_comp("select_tab"), str8_lit_comp("SelectTab"), str8_lit_comp(""), str8_lit_comp("SelectTab"), ((0*DF_MsgKindFlag_ListInUI)|(0*DF_MsgKindFlag_ListInIPCDocs)), {(0*DF_MsgQueryFlag_AllowFiles)|(0*DF_MsgQueryFlag_AllowFolders)|(0*DF_MsgQueryFlag_KeepOldInput)|(0*DF_MsgQueryFlag_SelectOldInput)|(0*DF_MsgQueryFlag_CodeInput)|(0*DF_MsgQueryFlag_Required), D_RegSlot_Null, D_EntityKind_Nil}},
 {str8_lit_comp("next_tab"), str8_lit_comp("NextTab"), str8_lit_comp(""), str8_lit_comp("NextTab"), ((0*DF_MsgKindFlag_ListInUI)|(0*DF_MsgKindFlag_ListInIPCDocs)), {(0*DF_MsgQueryFlag_AllowFiles)|(0*DF_MsgQueryFlag_AllowFolders)|(0*DF_MsgQueryFlag_KeepOldInput)|(0*DF_MsgQueryFlag_SelectOldInput)|(0*DF_MsgQueryFlag_CodeInput)|(0*DF_MsgQueryFlag_Required), D_RegSlot_Null, D_EntityKind_Nil}},
 {str8_lit_comp("prev_tab"), str8_lit_comp("PrevTab"), str8_lit_comp(""), str8_lit_comp("PrevTab"), ((0*DF_MsgKindFlag_ListInUI)|(0*DF_MsgKindFlag_ListInIPCDocs)), {(0*DF_MsgQueryFlag_AllowFiles)|(0*DF_MsgQueryFlag_AllowFolders)|(0*DF_MsgQueryFlag_KeepOldInput)|(0*DF_MsgQueryFlag_SelectOldInput)|(0*DF_MsgQueryFlag_CodeInput)|(0*DF_MsgQueryFlag_Required), D_RegSlot_Null, D_EntityKind_Nil}},
 {str8_lit_comp("move_tab_right"), str8_lit_comp("MoveTabRight"), str8_lit_comp(""), str8_lit_comp("MoveTabRight"), ((0*DF_MsgKindFlag_ListInUI)|(0*DF_MsgKindFlag_ListInIPCDocs)), {(0*DF_MsgQueryFlag_AllowFiles)|(0*DF_MsgQueryFlag_AllowFolders)|(0*DF_MsgQueryFlag_KeepOldInput)|(0*DF_MsgQueryFlag_SelectOldInput)|(0*DF_MsgQueryFlag_CodeInput)|(0*DF_MsgQueryFlag_Required), D_RegSlot_Null, D_EntityKind_Nil}},
