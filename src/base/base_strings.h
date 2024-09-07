@@ -337,12 +337,6 @@ internal String8 indented_from_string(Arena *arena, String8 string);
 internal String8List wrapped_lines_from_string(Arena *arena, String8 string, U64 first_line_max_width, U64 max_width, U64 wrap_indent);
 
 ////////////////////////////////
-//~ rjf: Text Escaping
-
-internal String8 escaped_from_raw_string(Arena *arena, String8 string);
-internal String8 raw_from_escaped_string(Arena *arena, String8 string);
-
-////////////////////////////////
 //~ rjf: String <-> Color
 
 internal String8 hex_string_from_rgba_4f32(Arena *arena, Vec4F32 rgba);

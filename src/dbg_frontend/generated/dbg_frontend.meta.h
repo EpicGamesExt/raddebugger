@@ -12,37 +12,10 @@ DF_MsgKind_Null,
 DF_MsgKind_Exit,
 DF_MsgKind_RunCommand,
 DF_MsgKind_ToggleDevMenu,
-DF_MsgKind_RegisterAsJITDebugger,
-DF_MsgKind_LogMarker,
 DF_MsgKind_LoadUser,
 DF_MsgKind_LoadProject,
 DF_MsgKind_SaveUser,
 DF_MsgKind_SaveProject,
-DF_MsgKind_EnableEntity,
-DF_MsgKind_EnableBreakpoint,
-DF_MsgKind_EnableTarget,
-DF_MsgKind_DisableEntity,
-DF_MsgKind_DisableBreakpoint,
-DF_MsgKind_DisableTarget,
-DF_MsgKind_RemoveEntity,
-DF_MsgKind_RemoveBreakpoint,
-DF_MsgKind_RemoveTarget,
-DF_MsgKind_NameEntity,
-DF_MsgKind_DuplicateEntity,
-DF_MsgKind_RelocateEntity,
-DF_MsgKind_AddTarget,
-DF_MsgKind_SelectTarget,
-DF_MsgKind_AddBreakpoint,
-DF_MsgKind_ToggleBreakpoint,
-DF_MsgKind_AddAddressBreakpoint,
-DF_MsgKind_AddFunctionBreakpoint,
-DF_MsgKind_AddWatchPin,
-DF_MsgKind_ToggleWatchPin,
-DF_MsgKind_ToggleWatchExpression,
-DF_MsgKind_GoToNameAtCursor,
-DF_MsgKind_ToggleBreakpointAtCursor,
-DF_MsgKind_ToggleWatchPinAtCursor,
-DF_MsgKind_ToggleWatchExpressionAtCursor,
 DF_MsgKind_OpenWindow,
 DF_MsgKind_CloseWindow,
 DF_MsgKind_ToggleFullscreen,
@@ -492,8 +465,8 @@ DF_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(no_addr);
 DF_VIEW_RULE_ROW_UI_FUNCTION_DEF(checkbox);
 DF_VIEW_RULE_ROW_UI_FUNCTION_DEF(color_rgba);
 C_LINKAGE_BEGIN
-extern DF_MsgKindInfo df_msg_kind_info_table[134];
-extern DF_MsgKindInfo df_d_msg_kind_info_table[36];
+extern DF_MsgKindInfo df_msg_kind_info_table[107];
+extern DF_MsgKindInfo df_d_msg_kind_info_table[69];
 extern DF_StringBindingPair df_g_default_binding_table[110];
 extern String8 df_g_binding_version_remap_old_name_table[7];
 extern String8 df_g_binding_version_remap_new_name_table[7];

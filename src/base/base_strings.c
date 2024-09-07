@@ -1666,69 +1666,6 @@ wrapped_lines_from_string(Arena *arena, String8 string, U64 first_line_max_width
 }
 
 ////////////////////////////////
-//~ rjf: Text Escaping
-
-internal String8
-escaped_from_raw_string(Arena *arena, String8 string)
-{
-  Temp scratch = scratch_begin(&arena, 1);
-  String8List parts = {0};
-  U64 split_start_idx = 0;
-  for(U64 idx = 0; idx <= string.size; idx += 1)
-  {
-    U8 byte = (idx < string.size ? string.str[idx] : 0);
-    if(byte == 0 || byte == '\"' || byte == '\\')
-    {
-      String8 part = str8_substr(string, r1u64(split_start_idx, idx));
-      str8_list_push(scratch.arena, &parts, part);
-      switch(byte)
-      {
-        default:{}break;
-        case '\"':{str8_list_push(scratch.arena, &parts, str8_lit("\\\""));}break;
-        case '\\':{str8_list_push(scratch.arena, &parts, str8_lit("\\\\"));}break;
-      }
-      split_start_idx = idx+1;
-    }
-  }
-  StringJoin join = {0};
-  String8 result = str8_list_join(arena, &parts, &join);
-  scratch_end(scratch);
-  return result;
-}
-
-internal String8
-raw_from_escaped_string(Arena *arena, String8 string)
-{
-  Temp scratch = scratch_begin(&arena, 1);
-  String8List parts = {0};
-  U64 split_start_idx = 0;
-  U64 extra_advance = 0;
-  for(U64 idx = 0; idx <= string.size; ((idx += 1+extra_advance), extra_advance=0))
-  {
-    U8 byte = (idx < string.size ? string.str[idx] : 0);
-    if(byte == 0 || byte == '\\')
-    {
-      String8 part = str8_substr(string, r1u64(split_start_idx, idx));
-      str8_list_push(scratch.arena, &parts, part);
-      if(byte == '\\' && idx+1 < string.size)
-      {
-        switch(string.str[idx+1])
-        {
-          default:{}break;
-          case '"': {extra_advance = 1; str8_list_push(scratch.arena, &parts, str8_lit("\""));}break;
-          case '\\':{extra_advance = 1; str8_list_push(scratch.arena, &parts, str8_lit("\\"));}break;
-        }
-      }
-      split_start_idx = idx+1+extra_advance;
-    }
-  }
-  StringJoin join = {0};
-  String8 result = str8_list_join(arena, &parts, &join);
-  scratch_end(scratch);
-  return result;
-}
-
-////////////////////////////////
 //~ rjf: String <-> Color
 
 internal String8

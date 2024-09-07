@@ -200,9 +200,58 @@ D_MsgKindTable:
   {FreezeLocalMachine              "Freeze Local Machine"                      freeze_local_machine                        0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
   {ThawLocalMachine                "Thaw Local Machine"                        thaw_local_machine                          0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
   
+  //- rjf: path overrides
+  {SetPathMapSrc                   "Set Path Map Source"                       set_path_map_src                  0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {SetPathMapDst                   "Set Path Map Destination"                  set_path_map_dst                  0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {SetFileReplacementPath          "Set File Replacement Path"                 set_file_replacement_path                   0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  
+  //- rjf: auto view rules
+  {SetAutoViewRuleType             "Set Auto View Rule Type"                   set_auto_view_rule_type                     0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {SetAutoViewRuleViewRule         "Set Auto View Rule View Rule"              set_auto_view_rule_view_rule                0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  
+  //- rjf: general entity operations
+  {EnableEntity                    "Enable Entity"                             enable_entity                               0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {EnableBreakpoint                "Enable Breakpoint"                         enable_breakpoint                           0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {EnableTarget                    "Enable Target"                             enable_target                               0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {DisableEntity                   "Disable Entity"                            disable_entity                              0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {DisableBreakpoint               "Disable Breakpoint"                        disable_breakpoint                          0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {DisableTarget                   "Disable Target"                            disable_target                              0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {RemoveEntity                    "Remove Entity"                             remove_entity                               0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {RemoveBreakpoint                "Remove Breakpoint"                         remove_breakpoint                           0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {RemoveTarget                    "Remove Target"                             remove_target                               0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {NameEntity                      "Name Entity"                               name_entity                                 0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {DuplicateEntity                 "Duplicate Entity"                          duplicate_entity                            0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {RelocateEntity                  "Relocate Entity"                           relocate_entity                             0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  
+  //- rjf: breakpoints
+  {AddBreakpoint                   "Add Breakpoint"                            add_breakpoint                              0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {ToggleBreakpoint                "Toggle Breakpoint"                         toggle_breakpoint                           0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {AddAddressBreakpoint            "Add Address Breakpoint"                    add_address_breakpoint                      0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {AddFunctionBreakpoint           "Add Function Breakpoint"                   add_function_breakpoint                     0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  
+  //- rjf: watch pins
+  {AddWatchPin                     "Add Watch Pin"                             add_watch_pin                               0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {ToggleWatchPin                  "Toggle Watch Pin"                          toggle_watch_pin                            0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  
+  //- rjf: watch expressions
+  {ToggleWatchExpression           "Toggle Watch Expression"                   toggle_watch_expression                     0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  
   //- rjf: at-cursor operations
+  {ToggleBreakpointAtCursor        "Toggle Breakpoint At Cursor"               toggle_breakpoint_at_cursor                 0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {ToggleWatchPinAtCursor          "Toggle Watch Pin At Cursor"                toggle_watch_pin_at_cursor                  0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {ToggleWatchExpressionAtCursor   "Toggle Watch Expression At Cursor"         toggle_watch_expression_at_cursor           0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {GoToNameAtCursor                "Go To Name At Cursor"                      go_to_name_at_cursor                        0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
   {RunToCursor                     "Run To Cursor"                             run_to_cursor                               0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
   {SetNextStatement                "Set Next Statement"                        set_next_statement                          0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  
+  //- rjf: targets
+  {AddTarget                       "Add Target"                                add_target                                  0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {SelectTarget                    "Select Target"                             select_target                               0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {RetryEndedProcess               "Retry Ended Process"                       retry_ended_process                         0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  
+  //- rjf: meta
+  {RegisterAsJITDebugger           "Register As JIT Debugger"                  register_as_jit_debugger                    0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {LogMarker                       "Log Marker"                                log_marker                                  0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
 }
 
 @enum D_MsgKind:

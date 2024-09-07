@@ -7441,7 +7441,263 @@ d_tick(Arena *arena, DI_Scope *di_scope, D_CmdList *cmds, F32 dt)
             d_msg(D_MsgKind_ThawMachine, .machine_id = CTRL_MachineID_Local);
           }break;
           
+          //- rjf: path overrides (TODO(rjf))
+          case D_MsgKind_SetPathMapSrc:{}break;
+          case D_MsgKind_SetPathMapDst:{}break;
+          case D_MsgKind_SetFileReplacementPath:{}break;
+          
+          //- rjf: auto view rules (TODO(rjf))
+          case D_MsgKind_SetAutoViewRuleType:{}break;
+          case D_MsgKind_SetAutoViewRuleViewRule:{}break;
+          
+          //- rjf: general entity operations
+          case D_MsgKind_EnableEntity:
+          case D_MsgKind_EnableBreakpoint:
+          case D_MsgKind_EnableTarget:
+          {
+            D_Entity *entity = d_entity_from_handle(regs->entity);
+            d_entity_equip_disabled(entity, 0);
+          }break;
+          case D_MsgKind_DisableEntity:
+          case D_MsgKind_DisableBreakpoint:
+          case D_MsgKind_DisableTarget:
+          {
+            D_Entity *entity = d_entity_from_handle(regs->entity);
+            d_entity_equip_disabled(entity, 1);
+          }break;
+          case D_MsgKind_RemoveEntity:
+          case D_MsgKind_RemoveBreakpoint:
+          case D_MsgKind_RemoveTarget:
+          {
+            D_Entity *entity = d_entity_from_handle(regs->entity);
+            D_EntityKindFlags kind_flags = d_entity_kind_flags_table[entity->kind];
+            if(kind_flags & D_EntityKindFlag_CanDelete)
+            {
+              d_entity_mark_for_deletion(entity);
+            }
+          }break;
+          case D_MsgKind_NameEntity:
+          {
+            D_Entity *entity = d_entity_from_handle(regs->entity);
+            String8 string = regs->string;
+            d_entity_equip_name(entity, string);
+          }break;
+          case D_MsgKind_DuplicateEntity:
+          {
+            D_Entity *src = d_entity_from_handle(regs->entity);
+            if(!d_entity_is_nil(src))
+            {
+              typedef struct Task Task;
+              struct Task
+              {
+                Task *next;
+                D_Entity *src_n;
+                D_Entity *dst_parent;
+              };
+              Task starter_task = {0, src, src->parent};
+              Task *first_task = &starter_task;
+              Task *last_task = &starter_task;
+              for(Task *task = first_task; task != 0; task = task->next)
+              {
+                D_Entity *src_n = task->src_n;
+                D_Entity *dst_n = d_entity_alloc(task->dst_parent, task->src_n->kind);
+                if(src_n->flags & D_EntityFlag_HasTextPoint)    {d_entity_equip_txt_pt(dst_n, src_n->text_point);}
+                if(src_n->flags & D_EntityFlag_HasU64)          {d_entity_equip_u64(dst_n, src_n->u64);}
+                if(src_n->flags & D_EntityFlag_HasColor)        {d_entity_equip_color_hsva(dst_n, d_hsva_from_entity(src_n));}
+                if(src_n->flags & D_EntityFlag_HasVAddrRng)     {d_entity_equip_vaddr_rng(dst_n, src_n->vaddr_rng);}
+                if(src_n->flags & D_EntityFlag_HasVAddr)        {d_entity_equip_vaddr(dst_n, src_n->vaddr);}
+                if(src_n->disabled)                             {d_entity_equip_disabled(dst_n, 1);}
+                if(src_n->string.size != 0)                     {d_entity_equip_name(dst_n, src_n->string);}
+                dst_n->cfg_src = src_n->cfg_src;
+                for(D_Entity *src_child = task->src_n->first; !d_entity_is_nil(src_child); src_child = src_child->next)
+                {
+                  Task *child_task = push_array(scratch.arena, Task, 1);
+                  child_task->src_n = src_child;
+                  child_task->dst_parent = dst_n;
+                  SLLQueuePush(first_task, last_task, child_task);
+                }
+              }
+            }
+          }break;
+          case D_MsgKind_RelocateEntity:
+          {
+            D_Entity *entity = d_entity_from_handle(regs->entity);
+            D_Entity *location = d_entity_child_from_kind(entity, D_EntityKind_Location);
+            if(d_entity_is_nil(location))
+            {
+              location = d_entity_alloc(entity, D_EntityKind_Location);
+            }
+            location->flags &= ~D_EntityFlag_HasTextPoint;
+            location->flags &= ~D_EntityFlag_HasVAddr;
+            if(regs->cursor.line != 0)
+            {
+              d_entity_equip_txt_pt(location, regs->cursor);
+            }
+            if(regs->vaddr_range.min != 0)
+            {
+              d_entity_equip_vaddr(location, regs->vaddr_range.min);
+            }
+            if(regs->file_path.size != 0)
+            {
+              d_entity_equip_name(location, regs->file_path);
+            }
+          }break;
+          
+          //- rjf: breakpoints
+          case D_MsgKind_AddBreakpoint:
+          case D_MsgKind_ToggleBreakpoint:
+          {
+            String8 file_path = regs->file_path;
+            TxtPt pt = regs->cursor;
+            String8 string = regs->string;
+            U64 vaddr = regs->vaddr_range.min;
+            B32 removed_already_existing = 0;
+            if(msg->kind == D_MsgKind_ToggleBreakpoint)
+            {
+              D_EntityList bps = d_query_cached_entity_list_with_kind(D_EntityKind_Breakpoint);
+              for(D_EntityNode *n = bps.first; n != 0; n = n->next)
+              {
+                D_Entity *bp = n->entity;
+                D_Entity *loc = d_entity_child_from_kind(bp, D_EntityKind_Location);
+                if((loc->flags & D_EntityFlag_HasTextPoint && path_match_normalized(loc->string, file_path) && loc->text_point.line == pt.line) ||
+                   (loc->flags & D_EntityFlag_HasVAddr && loc->vaddr == vaddr) ||
+                   (!(loc->flags & D_EntityFlag_HasTextPoint) && str8_match(loc->string, string, 0)))
+                {
+                  d_entity_mark_for_deletion(bp);
+                  removed_already_existing = 1;
+                  break;
+                }
+              }
+            }
+            if(!removed_already_existing)
+            {
+              D_Entity *bp = d_entity_alloc(d_entity_root(), D_EntityKind_Breakpoint);
+              d_entity_equip_cfg_src(bp, D_CfgSrc_Project);
+              D_Entity *loc = d_entity_alloc(bp, D_EntityKind_Location);
+              if(file_path.size != 0 && pt.line != 0)
+              {
+                d_entity_equip_name(loc, file_path);
+                d_entity_equip_txt_pt(loc, pt);
+              }
+              else if(string.size != 0)
+              {
+                d_entity_equip_name(loc, string);
+              }
+              else if(vaddr != 0)
+              {
+                d_entity_equip_vaddr(loc, vaddr);
+              }
+            }
+          }break;
+          case D_MsgKind_AddAddressBreakpoint:
+          case D_MsgKind_AddFunctionBreakpoint:
+          {
+            d_msg(D_MsgKind_AddBreakpoint);
+          }break;
+          
+          //- rjf: watch pins
+          case D_MsgKind_AddWatchPin:
+          case D_MsgKind_ToggleWatchPin:
+          {
+            String8 file_path = regs->file_path;
+            TxtPt pt = regs->cursor;
+            String8 string = regs->string;
+            U64 vaddr = regs->vaddr_range.min;
+            B32 removed_already_existing = 0;
+            if(msg->kind == D_MsgKind_ToggleWatchPin)
+            {
+              D_EntityList wps = d_query_cached_entity_list_with_kind(D_EntityKind_WatchPin);
+              for(D_EntityNode *n = wps.first; n != 0; n = n->next)
+              {
+                D_Entity *wp = n->entity;
+                D_Entity *loc = d_entity_child_from_kind(wp, D_EntityKind_Location);
+                if((loc->flags & D_EntityFlag_HasTextPoint && path_match_normalized(loc->string, file_path) && loc->text_point.line == pt.line) ||
+                   (loc->flags & D_EntityFlag_HasVAddr && loc->vaddr == vaddr) ||
+                   (!(loc->flags & D_EntityFlag_HasTextPoint) && str8_match(loc->string, string, 0)))
+                {
+                  d_entity_mark_for_deletion(wp);
+                  removed_already_existing = 1;
+                  break;
+                }
+              }
+            }
+            if(!removed_already_existing)
+            {
+              D_Entity *wp = d_entity_alloc(d_entity_root(), D_EntityKind_WatchPin);
+              d_entity_equip_name(wp, string);
+              d_entity_equip_cfg_src(wp, D_CfgSrc_Project);
+              D_Entity *loc = d_entity_alloc(wp, D_EntityKind_Location);
+              if(file_path.size != 0 && pt.line != 0)
+              {
+                d_entity_equip_name(loc, file_path);
+                d_entity_equip_txt_pt(loc, pt);
+              }
+              else if(vaddr != 0)
+              {
+                d_entity_equip_vaddr(loc, vaddr);
+              }
+            }
+          }break;
+          
+          //- rjf: watch expressions
+          case D_MsgKind_ToggleWatchExpression:
+          if(regs->string.size != 0)
+          {
+            D_Entity *existing_watch = d_entity_from_name_and_kind(regs->string, D_EntityKind_Watch);
+            if(d_entity_is_nil(existing_watch))
+            {
+              D_Entity *watch = &d_nil_entity;
+              D_StateDeltaHistoryBatch(d_state_delta_history())
+              {
+                watch = d_entity_alloc(d_entity_root(), D_EntityKind_Watch);
+              }
+              d_entity_equip_cfg_src(watch, D_CfgSrc_Project);
+              d_entity_equip_name(watch, regs->string);
+            }
+            else
+            {
+              d_entity_mark_for_deletion(existing_watch);
+            }
+          }break;
+          
           //- rjf: at-cursor operations
+          case D_MsgKind_ToggleBreakpointAtCursor:{d_msg(D_MsgKind_ToggleBreakpoint);}break;
+          case D_MsgKind_ToggleWatchPinAtCursor:{d_msg(D_MsgKind_ToggleWatchPin);}break;
+          case D_MsgKind_GoToNameAtCursor:
+          case D_MsgKind_ToggleWatchExpressionAtCursor:
+          {
+            // rjf: get expr
+            String8 expr = {0};
+            {
+              HS_Scope *hs_scope = hs_scope_open();
+              TXT_Scope *txt_scope = txt_scope_open();
+              U128 text_key = regs->text_key;
+              TXT_LangKind lang_kind = regs->lang_kind;
+              TxtRng range = txt_rng(regs->cursor, regs->mark);
+              U128 hash = {0};
+              TXT_TextInfo info = txt_text_info_from_key_lang(txt_scope, text_key, lang_kind, &hash);
+              String8 data = hs_data_from_hash(hs_scope, hash);
+              Rng1U64 expr_off_range = {0};
+              if(range.min.column != range.max.column)
+              {
+                expr_off_range = r1u64(txt_off_from_info_pt(&info, range.min), txt_off_from_info_pt(&info, range.max));
+              }
+              else
+              {
+                expr_off_range = txt_expr_off_range_from_info_data_pt(&info, data, range.min);
+              }
+              expr = push_str8_copy(scratch.arena, str8_substr(data, expr_off_range));
+              txt_scope_close(txt_scope);
+              hs_scope_close(hs_scope);
+            }
+            
+            // rjf: push command for this expr
+            // TODO(rjf): @msgs
+            // d_msg(msg->kind == D_MsgKind_GoToNameAtCursor ? D_MsgKind_GoToName :
+            // msg->kind == D_MsgKind_ToggleWatchExpressionAtCursor ? D_MsgKind_ToggleWatchExpression :
+            // D_MsgKind_GoToName, .string = expr);
+          }break;
+          {}break;
           case D_MsgKind_RunToCursor:
           {
             String8 file_path = regs->file_path;
@@ -7474,6 +7730,100 @@ d_tick(Arena *arena, DI_Scope *di_scope, D_CmdList *cmds, F32 dt)
               }
             }
             d_msg(D_MsgKind_SetThreadIP, .thread = regs->thread, .vaddr_range = r1u64(new_rip_vaddr, 0));
+          }break;
+          
+          //- rjf: targets
+          case D_MsgKind_AddTarget:
+          {
+            D_Entity *entity = d_entity_alloc(d_entity_root(), D_EntityKind_Target);
+            d_entity_equip_disabled(entity, 1);
+            d_entity_equip_cfg_src(entity, D_CfgSrc_Project);
+            D_Entity *exe = d_entity_alloc(entity, D_EntityKind_Executable);
+            d_entity_equip_name(exe, regs->file_path);
+            String8 working_dir = str8_chop_last_slash(regs->file_path);
+            if(working_dir.size != 0)
+            {
+              String8 working_dir_path = push_str8f(scratch.arena, "%S/", working_dir);
+              D_Entity *execution_path = d_entity_alloc(entity, D_EntityKind_WorkingDirectory);
+              d_entity_equip_name(execution_path, working_dir_path);
+            }
+            d_msg(D_MsgKind_SelectTarget, .entity = d_handle_from_entity(entity));
+          }break;
+          case D_MsgKind_SelectTarget:
+          {
+            D_Entity *entity = d_entity_from_handle(regs->entity);
+            if(entity->kind == D_EntityKind_Target)
+            {
+              D_EntityList all_targets = d_query_cached_entity_list_with_kind(D_EntityKind_Target);
+              B32 is_selected = !entity->disabled;
+              for(D_EntityNode *n = all_targets.first; n != 0; n = n->next)
+              {
+                D_Entity *target = n->entity;
+                d_entity_equip_disabled(target, 1);
+              }
+              if(!is_selected)
+              {
+                d_entity_equip_disabled(entity, 0);
+              }
+            }
+          }break;
+          case D_MsgKind_RetryEndedProcess:
+          {
+            D_Entity *ended_process = d_entity_from_handle(regs->entity);
+            D_Entity *target = d_entity_from_handle(ended_process->entity_handle);
+            if(target->kind == D_EntityKind_Target)
+            {
+              d_msg(D_MsgKind_LaunchAndRun, .entity = d_handle_from_entity(target));
+            }
+            else if(d_entity_is_nil(target))
+            {
+              log_user_errorf("The ended process' corresponding target is missing.");
+            }
+            else if(d_entity_is_nil(ended_process))
+            {
+              log_user_errorf("Invalid ended process.");
+            }
+          }break;
+          
+          //- rjf: meta
+          case D_MsgKind_RegisterAsJITDebugger:
+          {
+#if OS_WINDOWS
+            char filename_cstr[MAX_PATH] = {0};
+            GetModuleFileName(0, filename_cstr, sizeof(filename_cstr));
+            String8 debugger_binary_path = str8_cstring(filename_cstr);
+            String8 name8 = str8_lit("Debugger");
+            String8 data8 = push_str8f(scratch.arena, "%S --jit_pid:%%ld --jit_code:%%ld --jit_addr:0x%%p", debugger_binary_path);
+            String16 name16 = str16_from_8(scratch.arena, name8);
+            String16 data16 = str16_from_8(scratch.arena, data8);
+            B32 likely_not_in_admin_mode = 0;
+            {
+              HKEY reg_key = 0;
+              LSTATUS status = 0;
+              status = RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\WOW6432Node\\Microsoft\\Windows NT\\CurrentVersion\\AeDebug\\", 0, KEY_SET_VALUE, &reg_key);
+              likely_not_in_admin_mode = (status == ERROR_ACCESS_DENIED);
+              status = RegSetValueExW(reg_key, (LPCWSTR)name16.str, 0, REG_SZ, (BYTE *)data16.str, data16.size*sizeof(U16)+2);
+              RegCloseKey(reg_key);
+            }
+            {
+              HKEY reg_key = 0;
+              LSTATUS status = 0;
+              status = RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\AeDebug\\", 0, KEY_SET_VALUE, &reg_key);
+              likely_not_in_admin_mode = (status == ERROR_ACCESS_DENIED);
+              status = RegSetValueExW(reg_key, (LPCWSTR)name16.str, 0, REG_SZ, (BYTE *)data16.str, data16.size*sizeof(U16)+2);
+              RegCloseKey(reg_key);
+            }
+            if(likely_not_in_admin_mode)
+            {
+              log_user_errorf("Could not register as the just-in-time debugger, access was denied; try running the debugger as administrator.");
+            }
+#else
+            log_user_errorf("Registering as the just-in-time debugger is currently not supported on this system.");
+#endif
+          }break;
+          case D_MsgKind_LogMarker:
+          {
+            log_infof("\"#MARKER\"");
           }break;
         }
       }
