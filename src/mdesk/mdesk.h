@@ -193,6 +193,21 @@ struct MD_NodeRec
   S32 pop_count;
 };
 
+typedef struct MD_NodePtrNode MD_NodePtrNode;
+struct MD_NodePtrNode
+{
+  MD_NodePtrNode *next;
+  MD_Node *v;
+};
+
+typedef struct MD_NodePtrList MD_NodePtrList;
+struct MD_NodePtrList
+{
+  MD_NodePtrNode *first;
+  MD_NodePtrNode *last;
+  U64 count;
+};
+
 ////////////////////////////////
 //~ rjf: Text -> Tokens Types
 
@@ -254,7 +269,8 @@ internal MD_NodeFlags md_node_flags_from_token_flags(MD_TokenFlags flags);
 internal B32 md_node_is_nil(MD_Node *node);
 
 //- rjf: iteration
-#define MD_EachNode(it, first) MD_Node *it = first; !md_node_is_nil(it); it = it->next
+#define MD_EachNode(it, first_in_chain) MD_Node *it = first_in_chain; !md_node_is_nil(it); it = it->next
+#define MD_EachNodeRef(it, first_in_chain) MD_Node *ref_it = first_in_chain, *it = first_in_chain->first; !md_node_is_nil(ref_it) && !md_node_is_nil(it); (ref_it = ref_it->next, it = ref_it->first)
 internal MD_NodeRec md_node_rec_depth_first(MD_Node *node, MD_Node *subtree_root, U64 child_off, U64 sib_off);
 #define md_node_rec_depth_first_pre(node, subtree_root) md_node_rec_depth_first((node), (subtree_root), OffsetOf(MD_Node, first), OffsetOf(MD_Node, next))
 #define md_node_rec_depth_first_pre_rev(node, subtree_root) md_node_rec_depth_first((node), (subtree_root), OffsetOf(MD_Node, last), OffsetOf(MD_Node, prev))
@@ -263,10 +279,10 @@ internal MD_NodeRec md_node_rec_depth_first(MD_Node *node, MD_Node *subtree_root
 internal MD_Node *md_push_node(Arena *arena, MD_NodeKind kind, MD_NodeFlags flags, String8 string, String8 raw_string, U64 src_offset);
 internal void md_node_insert_child(MD_Node *parent, MD_Node *prev_child, MD_Node *node);
 internal void md_node_push_child(MD_Node *parent, MD_Node *node);
-internal void md_node_unhook_child(MD_Node *node);
+internal void md_unhook_child(MD_Node *node);
 internal void md_node_insert_tag(MD_Node *parent, MD_Node *prev_child, MD_Node *node);
 internal void md_node_push_tag(MD_Node *parent, MD_Node *node);
-internal void md_node_unhook_tag(MD_Node *node);
+internal void md_unhook_tag(MD_Node *node);
 
 //- rjf: tree building helpers
 internal MD_Node *md_push_list(Arena *arena);
@@ -285,6 +301,7 @@ internal MD_Node *  md_child_from_index(MD_Node *node, U64 index);
 internal MD_Node *  md_tag_from_index(MD_Node *node, U64 index);
 internal MD_Node *  md_tag_arg_from_index(MD_Node *node, String8 tag_string, StringMatchFlags flags, U64 index);
 internal MD_Node *  md_tag_arg_from_string(MD_Node *node, String8 tag_string, StringMatchFlags tag_str_flags, String8 arg_string, StringMatchFlags arg_str_flags);
+internal MD_Node *  md_ancestor_from_string(MD_Node *node, String8 string, StringMatchFlags flags);
 internal B32        md_node_has_child(MD_Node *node, String8 string, StringMatchFlags flags);
 internal B32        md_node_has_tag(MD_Node *node, String8 string, StringMatchFlags flags);
 internal U64        md_child_count_from_node(MD_Node *node);
@@ -297,6 +314,9 @@ internal B32 md_node_match(MD_Node *a, MD_Node *b, StringMatchFlags flags);
 
 //- rjf: tree duplication
 internal MD_Node *md_tree_copy(Arena *arena, MD_Node *src_root);
+
+//- rjf: node pointer lists
+internal void md_node_ptr_list_push(Arena *arena, MD_NodePtrList *list, MD_Node *node);
 
 ////////////////////////////////
 //~ rjf: Text -> Tokens Functions

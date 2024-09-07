@@ -524,7 +524,7 @@ df_prefer_dasm_from_window(DF_Window *window)
   return result;
 }
 
-#if 0 // TODO(rjf): @msgs
+#if 0 // NOTE(rjf): @msgs
 internal D_CmdParams
 df_cmd_params_from_window(DF_Window *window)
 {
@@ -625,7 +625,6 @@ internal void
 df_drag_kill(void)
 {
   df_state->drag_drop_state = DF_DragDropState_Null;
-  MemoryZeroStruct(&df_drag_drop_payload);
 }
 
 internal void
@@ -647,6 +646,19 @@ df_get_rich_hover_info(void)
 {
   DF_RichHoverInfo info = df_state->rich_hover_info_current;
   return info;
+}
+
+////////////////////////////////
+//~ rjf: Context Menu Opening
+
+internal void
+df_ctx_menu_open_(UI_Box *box, DF_Regs *regs)
+{
+  MD_Node *window_cfg = df_cfg_tree_from_handle(regs->window);
+  DF_Window *window = df_window_from_cfg_tree(window_cfg);
+  arena_clear(window->ctx_menu_arena);
+  ui_ctx_menu_open(df_state->ctx_menu_key, box->key, v2f32(0, box->rect.y1 - box->rect.y0));
+  window->ctx_menu_regs = df_regs_copy(window->ctx_menu_arena, regs);
 }
 
 ////////////////////////////////
@@ -888,7 +900,7 @@ df_view_equip_spec(DF_View *view, DF_ViewSpec *spec, String8 query, MD_Node *par
   df_view_equip_query(view, query);
   
   // rjf: initialize state for new view spec
-  // TODO(rjf): @msgs DF_ViewSetupFunctionType *view_setup = spec->info.setup_hook;
+  // NOTE(rjf): @msgs DF_ViewSetupFunctionType *view_setup = spec->info.setup_hook;
   {
     for(DF_ArenaExt *ext = view->first_arena_ext; ext != 0; ext = ext->next)
     {
@@ -919,7 +931,7 @@ df_view_equip_spec(DF_View *view, DF_ViewSpec *spec, String8 query, MD_Node *par
   }
   view->is_filtering = 0;
   view->is_filtering_t = 0;
-  // TODO(rjf): @msgs view_setup(view, view->params_roots[view->params_read_gen%ArrayCount(view->params_roots)], str8(view->query_buffer, view->query_string_size));
+  // NOTE(rjf): @msgs view_setup(view, view->params_roots[view->params_read_gen%ArrayCount(view->params_roots)], str8(view->query_buffer, view->query_string_size));
 }
 
 internal void
@@ -1404,7 +1416,7 @@ df_window_frame(MD_Node *window_cfg)
   ProfScope("gather all panel cfg trees")
   {
     Axis2 root_split_axis = md_node_is_nil(md_child_from_string(window_cfg, str8_lit("split_x"), 0)) ? Axis2_Y : Axis2_X;
-    MD_Node *panels_cfg = md_child_from_string(window_cfg, str8_lit("panels"), 0);
+    MD_Node *panels_cfg = df_panel_tree_from_window_cfg(window_cfg);
     if(!md_node_is_nil(panels_cfg))
     {
       PanelTask *start_task = push_array(scratch.arena, PanelTask, 1);
@@ -1413,7 +1425,7 @@ df_window_frame(MD_Node *window_cfg)
       start_task->split_axis = root_split_axis;
       for(PanelTask *t = first_panel_task; t != 0; t = t->next)
       {
-        if(!md_node_is_nil(md_child_from_string(t->root, str8_lit("selected"), 0)))
+        if(!md_node_is_nil(md_tag_from_string(t->root, str8_lit("selected"), 0)))
         {
           focused_panel_cfg = t->root;
         }
@@ -2150,14 +2162,12 @@ df_window_frame(MD_Node *window_cfg)
     if(drag_active && window_is_focused)
     {
       Temp scratch = scratch_begin(0, 0);
-      DF_DragDropPayload *payload = &df_drag_drop_payload;
-      MD_Node *drag_cfg = df_cfg_tree_from_handle(payload->cfg_tree);
       {
         //- rjf: tab dragging
-        if(str8_match(drag_cfg->string, str8_lit("tab"), 0)) DF_RegsScope
+        MD_Node *tab_cfg = df_cfg_tree_from_handle(df_state->drag_drop_regs->tab);
+        if(!md_node_is_nil(tab_cfg)) DF_RegsScope(.tab = df_state->drag_drop_regs->tab)
         {
-          df_regs_set_view(drag_cfg);
-          MD_Node *expr_cfg = drag_cfg->first;
+          MD_Node *expr_cfg = tab_cfg->first;
           MD_Node *spec_cfg = expr_cfg->first;
           DF_ViewSpec *spec = df_view_spec_from_string(spec_cfg->string);
           UI_Size main_width = ui_top_pref_width();
@@ -2312,6 +2322,7 @@ df_window_frame(MD_Node *window_cfg)
         ui_divider(ui_em(1.f, 1.f));
         
         //- rjf: draw entity tree
+#if 0 // TODO(rjf): @msgs
         D_EntityRec rec = {0};
         S32 indent = 0;
         UI_PrefWidth(ui_text_dim(10, 1)) ui_labelf("Entity Tree:");
@@ -2336,6 +2347,7 @@ df_window_frame(MD_Node *window_cfg)
           indent += rec.push_count;
           indent -= rec.pop_count;
         }
+#endif
       }
     }
     
@@ -2930,10 +2942,9 @@ df_window_frame(MD_Node *window_cfg)
       UI_CtxMenu(df_state->tab_ctx_menu_key) UI_PrefWidth(ui_em(40.f, 1.f)) UI_CornerRadius(0)
         DF_Palette(DF_PaletteCode_ImplicitButton)
       {
-        MD_Node *tab_cfg = df_cfg_tree_from_handle(ws->tab_ctx_menu_view);
-        DF_RegsScope
+        DF_RegsScope(.tab = ws->tab_ctx_menu_view)
         {
-          df_regs_set_view(tab_cfg);
+          MD_Node *tab_cfg = df_cfg_tree_from_handle(df_regs()->tab);
           String8 query = tab_cfg->string;
           DF_ViewSpec *view_spec = df_view_spec_from_string(tab_cfg->first->string);
           DF_IconKind view_icon = view_spec->info.icon_kind;
@@ -3652,9 +3663,9 @@ df_window_frame(MD_Node *window_cfg)
               Assert(ArrayCount(codepoints) == ArrayCount(cmds));
               df_cmd_list_menu_buttons(ArrayCount(cmds), cmds, codepoints);
               DF_Palette(DF_PaletteCode_Floating) ui_divider(ui_em(1.f, 1.f));
-              for(MD_EachNode(root_ref, df_state->cfg_root->first))
+              for(EachEnumVal(DF_CfgSlot, slot))
               {
-                for(MD_EachNode(tln, root_ref->first->first))
+                for(MD_EachNode(tln, df_state->cfg_slot_roots[slot]->first))
                 {
                   if(!str8_match(tln->string, str8_lit("target"), 0))
                   {
@@ -3866,6 +3877,7 @@ df_window_frame(MD_Node *window_cfg)
           ui_spacer(ui_em(0.75f, 1));
           
           // rjf: conversion task visualization
+#if 0 // TODO(rjf): @msgs
           UI_PrefWidth(ui_text_dim(10, 1)) UI_HeightFill
             DF_Palette(DF_PaletteCode_NeutralPopButton)
           {
@@ -3892,6 +3904,7 @@ df_window_frame(MD_Node *window_cfg)
             }
             scratch_end(scratch);
           }
+#endif
         }
         
         //- rjf: center column
@@ -3902,7 +3915,7 @@ df_window_frame(MD_Node *window_cfg)
         {
           Temp scratch = scratch_begin(0, 0);
           D_EntityList targets = d_push_active_target_list(scratch.arena);
-          D_EntityList processes = d_query_cached_entity_list_with_kind(D_EntityKind_Process);
+          CTRL_EntityList processes = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Process);
           B32 have_targets = targets.count != 0;
           B32 can_send_signal = !d_ctrl_targets_running();
           B32 can_play  = (have_targets && (can_send_signal || d_ctrl_last_run_frame_idx()+4 > d_frame_index()));
@@ -4257,6 +4270,7 @@ df_window_frame(MD_Node *window_cfg)
     ProfScope("build bottom bar")
     {
       B32 is_running = d_ctrl_targets_running() && d_ctrl_last_run_frame_idx() < d_frame_index();
+      F32 error_t = ClampBot(0, 1.f - (df_state->error_num_seconds_shown/df_state->error_num_seconds_to_show));
       CTRL_Event stop_event = d_ctrl_last_stop_event();
       UI_Palette *positive_scheme = df_palette_from_code(DF_PaletteCode_PositivePopButton);
       UI_Palette *running_scheme  = df_palette_from_code(DF_PaletteCode_NeutralPopButton);
@@ -4280,7 +4294,7 @@ df_window_frame(MD_Node *window_cfg)
           }break;
         }
       }
-      if(ws->error_t > 0.01f)
+      if(error_t > 0.01f)
       {
         UI_Palette *blended_scheme = push_array(ui_build_arena(), UI_Palette, 1);
         MemoryCopyStruct(blended_scheme, palette);
@@ -4288,7 +4302,7 @@ df_window_frame(MD_Node *window_cfg)
         {
           for(U64 idx = 0; idx < 4; idx += 1)
           {
-            blended_scheme->colors[code].v[idx] += (negative_scheme->colors[code].v[idx] - blended_scheme->colors[code].v[idx]) * ws->error_t;
+            blended_scheme->colors[code].v[idx] += (negative_scheme->colors[code].v[idx] - blended_scheme->colors[code].v[idx]) * error_t;
           }
         }
         palette = blended_scheme;
@@ -4343,20 +4357,22 @@ df_window_frame(MD_Node *window_cfg)
         // rjf: bind change visualization
         if(df_state->bind_change_active)
         {
+          MD_Node *bind_cfg = df_cfg_tree_from_handle(df_state->bind_change_bind_handle);
+          DF_MsgKind msg_kind = df_msg_kind_from_string(bind_cfg->first->string);
           UI_PrefWidth(ui_text_dim(10, 1))
             UI_Flags(UI_BoxFlag_DrawBackground)
             UI_TextAlignment(UI_TextAlign_Center)
             UI_CornerRadius(4)
             DF_Palette(DF_PaletteCode_NeutralPopButton)
-            ui_labelf("Currently rebinding \"%S\" hotkey", df_state->bind_change_cmd_spec->info.display_name);
+            ui_labelf("Currently rebinding \"%S\" hotkey", df_msg_kind_info_table[msg_kind].display_name);
         }
         
         // rjf: error visualization
-        else if(ws->error_t >= 0.01f)
+        else if(df_state->error_num_seconds_shown < df_state->error_num_seconds_to_show)
         {
-          ws->error_t -= d_dt()/8.f;
+          df_state->error_num_seconds_shown += df_state->dt;
           df_request_frame();
-          String8 error_string = str8(ws->error_buffer, ws->error_string_size);
+          String8 error_string = df_state->error_string;
           if(error_string.size != 0)
           {
             ui_set_next_pref_width(ui_children_sum(1));
@@ -4596,7 +4612,7 @@ df_window_frame(MD_Node *window_cfg)
           df_regs_set_from_query_slot_string(ws->query_msg_query.slot, str8(view->query_buffer, view->query_string_size));
           df_msg(ws->query_msg_kind);
         }
-#if 0 // TODO(rjf): @msgs
+#if 0 // NOTE(rjf): @msgs
         D_CmdParams params = df_cmd_params_from_window(ws);
         String8 error = d_cmd_params_apply_spec_query(scratch.arena, &params, ws->query_cmd_spec, str8(view->query_buffer, view->query_string_size));
         d_push_cmd(d_cmd_spec_from_kind(D_CmdKind_CompleteQuery), &params);
@@ -5335,9 +5351,9 @@ df_window_frame(MD_Node *window_cfg)
           }
           if(!md_node_is_nil(selected_tab_cfg))
           {
-            selected_tab_spec = df_view_spec_from_string(selected_tab_cfg->first->string);
+            selected_tab_spec = df_view_spec_from_string(selected_tab_cfg->first->first->string);
             tab_filter_string = raw_from_escaped_string(scratch.arena, md_tag_from_string(selected_tab_cfg, str8_lit("filter"), 0)->first->string);
-            tab_expr_string = raw_from_escaped_string(scratch.arena, selected_tab_cfg->string);
+            tab_expr_string = raw_from_escaped_string(scratch.arena, selected_tab_cfg->first->string);
             tab_filter_open = !md_node_is_nil(md_tag_from_string(selected_tab_cfg, str8_lit("filter_open"), 0));
             tab_filtering_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "tab_%p_filter_t", selected_tab_cfg),
                                       (F32)!!tab_filter_open);
@@ -5352,12 +5368,9 @@ df_window_frame(MD_Node *window_cfg)
           //////////////////////////
           //- rjf: push registers for this panel
           //
-          df_push_regs();
-          {
-            df_regs()->panel     = df_handle_from_cfg_tree(panel_cfg);
-            df_regs()->tab       = df_handle_from_cfg_tree(selected_tab_cfg);
-            df_regs()->file_path = d_file_path_from_eval_string(scratch.arena, tab_expr_string);
-          }
+          df_push_regs(.panel     = df_handle_from_cfg_tree(panel_cfg),
+                       .tab       = df_handle_from_cfg_tree(selected_tab_cfg),
+                       .file_path = d_file_path_from_eval_string(scratch.arena, tab_expr_string));
           
           //////////////////////////
           //- rjf: calculate UI rectangles
@@ -5407,8 +5420,9 @@ df_window_frame(MD_Node *window_cfg)
           //- rjf: build combined split+movetab drag/drop sites
           //
           {
-            MD_Node *view_cfg = df_cfg_tree_from_handle(df_drag_drop_payload.cfg_tree);
-            if(df_drag_is_active() && !md_node_is_nil(view_cfg) && contains_2f32(panel_rect, ui_mouse()))
+            if(df_drag_is_active() &&
+               !md_node_is_nil(df_cfg_tree_from_handle(df_state->drag_drop_regs->tab)) &&
+               contains_2f32(panel_rect, ui_mouse()))
             {
               F32 drop_site_dim_px = ceil_f32(ui_top_font_size()*7.f);
               Vec2F32 drop_site_half_dim = v2f32(drop_site_dim_px/2, drop_site_dim_px/2);
@@ -6770,10 +6784,11 @@ df_window_frame(MD_Node *window_cfg)
     }
     
     //- rjf: draw border/overlay color to signify error
-    if(ws->error_t > 0.01f)
+    F32 error_t = ClampBot(0, 1.f - (df_state->error_num_seconds_shown/df_state->error_num_seconds_to_show));
+    if(error_t > 0.01f)
     {
       Vec4F32 color = df_rgba_from_theme_color(DF_ThemeColor_NegativePopButtonBackground);
-      color.w *= ws->error_t;
+      color.w *= error_t;
       Rng2F32 rect = os_client_rect_from_window(ws->os);
       dr_rect(pad_2f32(rect, 24.f), color, 0, 16.f, 12.f);
       dr_rect(rect, v4f32(color.x, color.y, color.z, color.w*0.05f), 0, 0, 0);
@@ -7496,29 +7511,368 @@ df_frame_arena(void)
 internal DF_Handle
 df_handle_from_cfg_tree(MD_Node *cfg)
 {
-  DF_CfgSlot slot = df_cfg_slot_from_tree(cfg);
   DF_Handle handle = {0};
-  handle.u64[0] = (U64)slot;
-  handle.u64[1] = df_state->cfg_slot_gens[slot];
-  handle.u64[2] = (U64)cfg;
-  handle.u64[3] = cfg->user_gen;
+  handle.u64[0] = (U64)cfg;
+  handle.u64[1] = cfg->user_gen;
   return handle;
 }
 
 internal MD_Node *
 df_cfg_tree_from_handle(DF_Handle handle)
 {
-  DF_CfgSlot slot = (DF_CfgSlot)handle.u64[0];
-  MD_Node *cfg_tree = (MD_Node *)handle.u64[2];
-  if(df_state->cfg_slot_gens[slot] != handle.u64[1] ||
-     cfg_tree->user_gen != handle.u64[3])
+  MD_Node *cfg_tree = (MD_Node *)handle.u64[0];
+  if(cfg_tree->user_gen != handle.u64[1])
   {
     cfg_tree = &md_nil_node;
   }
   return cfg_tree;
 }
 
-//- rjf: string <-> cfg tree
+//- rjf: cfg tree -> slot
+
+internal DF_CfgSlot
+df_cfg_slot_from_tree(MD_Node *node)
+{
+  DF_CfgSlot slot = DF_CfgSlot_User;
+  for(MD_Node *n = node; !md_node_is_nil(n); n = n->parent)
+  {
+    for(EachEnumVal(DF_CfgSlot, s))
+    {
+      if(n == df_state->cfg_slot_roots[s])
+      {
+        slot = s;
+        goto end;
+      }
+    }
+  }
+  end:;
+  return slot;
+}
+
+//- rjf: cfg slot allocations
+
+internal MD_Node *
+df_cfg_node_alloc(void)
+{
+  MD_Node *node = df_state->cfg_free;
+  if(!md_node_is_nil(node))
+  {
+    SLLStackPop(df_state->cfg_free);
+    U64 gen = node->user_gen;
+    MemoryZeroStruct(node);
+    node->user_gen = gen+1;
+  }
+  else
+  {
+    node = push_array(df_state->cfg_arena, MD_Node, 1);
+  }
+  node->first = node->last = node->parent = node->next = node->prev = node->first_tag = node->last_tag = &md_nil_node;
+  node->user_gen += 1;
+  return node;
+}
+
+internal void
+df_cfg_node_release(MD_Node *node)
+{
+  Temp scratch = scratch_begin(0, 0);
+  typedef struct Task Task;
+  struct Task
+  {
+    Task *next;
+    MD_Node *node;
+  };
+  Task start_task = {0, node};
+  Task *first_task = &start_task;
+  Task *last_task = first_task;
+  for(Task *t = first_task; t != 0; t = t->next)
+  {
+    for(MD_EachNode(child, t->node->first))
+    {
+      Task *task = push_array(scratch.arena, Task, 1);
+      task->node = child;
+      SLLQueuePush(first_task, last_task, task);
+    }
+    for(MD_EachNode(child, t->node->first_tag))
+    {
+      Task *task = push_array(scratch.arena, Task, 1);
+      task->node = child;
+      SLLQueuePush(first_task, last_task, task);
+    }
+    SLLStackPush(df_state->cfg_free, t->node);
+    if(t->node->string.size != 0)
+    {
+      df_cfg_string_release(t->node->string);
+    }
+    if(t->node->raw_string.size != 0)
+    {
+      df_cfg_string_release(t->node->raw_string);
+    }
+    t->node->user_gen += 1;
+  }
+  scratch_end(scratch);
+}
+
+internal U64
+df_cfg_string_bucket_idx_from_string_size(U64 size)
+{
+  U64 size_rounded = u64_up_to_pow2(size+1);
+  size_rounded = ClampBot((1<<4), size_rounded);
+  U64 bucket_idx = 0;
+  switch(size_rounded)
+  {
+    case 1<<4: {bucket_idx = 0;}break;
+    case 1<<5: {bucket_idx = 1;}break;
+    case 1<<6: {bucket_idx = 2;}break;
+    case 1<<7: {bucket_idx = 3;}break;
+    case 1<<8: {bucket_idx = 4;}break;
+    case 1<<9: {bucket_idx = 5;}break;
+    case 1<<10:{bucket_idx = 6;}break;
+    default:{bucket_idx = ArrayCount(df_state->cfg_free_string_chunks)-1;}break;
+  }
+  return bucket_idx;
+}
+
+internal String8
+df_cfg_string_alloc(String8 string)
+{
+  if(string.size == 0) {return str8_zero();}
+  U64 bucket_idx = df_cfg_string_bucket_idx_from_string_size(string.size);
+  
+  // rjf: loop -> find node, allocate if not there
+  //
+  // (we do a loop here so that all allocation logic goes through
+  // the same path, such that we *always* pull off a free list,
+  // rather than just using what was pushed onto an arena directly,
+  // which is not undoable; the free lists we control, and are thus
+  // trivially undoable)
+  //
+  DF_StringChunkNode *node = 0;
+  for(;node == 0;)
+  {
+    node = df_state->cfg_free_string_chunks[bucket_idx];
+    
+    // rjf: pull from bucket free list
+    if(node != 0)
+    {
+      if(bucket_idx == ArrayCount(df_state->cfg_free_string_chunks)-1)
+      {
+        node = 0;
+        DF_StringChunkNode *prev = 0;
+        for(DF_StringChunkNode *n = df_state->cfg_free_string_chunks[bucket_idx];
+            n != 0;
+            prev = n, n = n->next)
+        {
+          if(n->size >= string.size+1)
+          {
+            if(prev == 0)
+            {
+              df_state->cfg_free_string_chunks[bucket_idx] = n->next;
+            }
+            else
+            {
+              prev->next = n->next;
+            }
+            node = n;
+            break;
+          }
+        }
+      }
+      else
+      {
+        SLLStackPop(df_state->cfg_free_string_chunks[bucket_idx]);
+      }
+    }
+    
+    // rjf: no found node -> allocate new, push onto associated free list
+    if(node == 0)
+    {
+      U64 chunk_size = 0;
+      if(bucket_idx < ArrayCount(df_state->cfg_free_string_chunks)-1)
+      {
+        chunk_size = 1<<(bucket_idx+4);
+      }
+      else
+      {
+        chunk_size = u64_up_to_pow2(string.size);
+      }
+      U8 *chunk_memory = push_array(df_state->cfg_arena, U8, chunk_size);
+      DF_StringChunkNode *chunk = (DF_StringChunkNode *)chunk_memory;
+      SLLStackPush(df_state->cfg_free_string_chunks[bucket_idx], chunk);
+    }
+  }
+  
+  // rjf: fill string & return
+  String8 allocated_string = str8((U8 *)node, string.size);
+  MemoryCopy((U8 *)node, string.str, string.size);
+  return allocated_string;
+}
+
+internal void
+df_cfg_string_release(String8 string)
+{
+  if(string.size == 0) {return;}
+  U64 bucket_idx = df_cfg_string_bucket_idx_from_string_size(string.size);
+  DF_StringChunkNode *node = (DF_StringChunkNode *)string.str;
+  node->size = u64_up_to_pow2(string.size);
+  SLLStackPush(df_state->cfg_free_string_chunks[bucket_idx], node);
+}
+
+//- rjf: tree -> cfg slot copying
+
+internal MD_Node *
+df_cfg_tree_copy(MD_Node *src)
+{
+  Temp scratch = scratch_begin(0, 0);
+  typedef struct Task Task;
+  struct Task
+  {
+    Task *next;
+    MD_Node *dst_parent;
+    MD_Node *first;
+  };
+  Task start_task = {0, &md_nil_node, src};
+  Task *first_task = &start_task;
+  Task *last_task = first_task;
+  MD_Node *dst_root = &md_nil_node;
+  for(Task *t = first_task; t != 0; t = t->next)
+  {
+    for(MD_EachNode(src, t->first))
+    {
+      MD_Node *dst = df_cfg_node_alloc();
+      dst->kind       = src->kind;
+      dst->flags      = src->flags;
+      dst->string     = df_cfg_string_alloc(src->string);
+      dst->raw_string = df_cfg_string_alloc(src->raw_string);
+      dst->src_offset = src->src_offset;
+      dst->user_gen   = src->user_gen;
+      if(!md_node_is_nil(t->dst_parent))
+      {
+        if(dst->kind == MD_NodeKind_Tag)
+        {
+          md_node_push_tag(t->dst_parent, dst);
+        }
+        else
+        {
+          md_node_push_child(t->dst_parent, dst);
+        }
+      }
+      else
+      {
+        dst_root = dst;
+      }
+      if(!md_node_is_nil(src->first_tag))
+      {
+        Task *task = push_array(scratch.arena, Task, 1);
+        task->first = src->first_tag;
+        task->dst_parent = dst;
+        SLLQueuePush(first_task, last_task, task);
+      }
+      if(!md_node_is_nil(src->first))
+      {
+        Task *task = push_array(scratch.arena, Task, 1);
+        task->first = src->first;
+        task->dst_parent = dst;
+        SLLQueuePush(first_task, last_task, task);
+      }
+    }
+  }
+  scratch_end(scratch);
+  return dst_root;
+}
+
+//- rjf: string -> cfg tree helper
+
+internal MD_Node *
+df_file_cfg_tree_from_string(String8 string)
+{
+  Temp scratch = scratch_begin(0, 0);
+  MD_Node *root = md_tree_from_string(scratch.arena, string);
+  MD_Node *result = df_cfg_tree_copy(root);
+  scratch_end(scratch);
+  return result;
+}
+
+internal MD_Node *
+df_single_cfg_tree_from_string(String8 string)
+{
+  Temp scratch = scratch_begin(0, 0);
+  MD_Node *root = md_tree_from_string(scratch.arena, string)->first;
+  MD_Node *result = df_cfg_tree_copy(root);
+  scratch_end(scratch);
+  return result;
+}
+
+internal MD_Node *
+df_single_cfg_tree_from_stringf(char *fmt, ...)
+{
+  Temp scratch = scratch_begin(0, 0);
+  va_list args;
+  va_start(args, fmt);
+  String8 string = push_str8fv(scratch.arena, fmt, args);
+  MD_Node *result = df_single_cfg_tree_from_string(string);
+  va_end(args);
+  scratch_end(scratch);
+  return result;
+}
+
+//- rjf: cfg node string replacing helper
+
+internal void
+df_cfg_tree_set_string(MD_Node *node, String8 new_string)
+{
+  df_cfg_string_release(node->string);
+  node->string = df_cfg_string_alloc(new_string);
+}
+
+internal void
+df_cfg_tree_set_stringf(MD_Node *node, char *fmt, ...)
+{
+  Temp scratch = scratch_begin(0, 0);
+  va_list args;
+  va_start(args, fmt);
+  String8 string = push_str8fv(scratch.arena, fmt, args);
+  df_cfg_tree_set_string(node, string);
+  va_end(args);
+  scratch_end(scratch);
+}
+
+//- rjf: cfg subtree replacing helper
+
+internal MD_Node *
+df_cfg_tree_set_key(MD_Node *root, String8 key, String8 value)
+{
+  MD_Node *existing_node = md_child_from_string(root, key, 0);
+  MD_Node *new_node = &md_nil_node;
+  if(value.size != 0)
+  {
+    new_node = df_single_cfg_tree_from_string(value);
+  }
+  MD_Node *prev_node = existing_node->prev;
+  if(!md_node_is_nil(existing_node))
+  {
+    md_unhook_child(existing_node);
+  }
+  if(!md_node_is_nil(new_node))
+  {
+    md_node_insert_child(root, prev_node, new_node);
+  }
+  return new_node;
+}
+
+internal MD_Node *
+df_cfg_tree_set_keyf(MD_Node *root, String8 key, char *fmt, ...)
+{
+  Temp scratch = scratch_begin(0, 0);
+  va_list args;
+  va_start(args, fmt);
+  String8 value = push_str8fv(scratch.arena, fmt, args);
+  MD_Node *result = df_cfg_tree_set_key(root, key, value);
+  va_end(args);
+  scratch_end(scratch);
+  return result;
+}
+
+//- rjf: key string <-> cfg tree
 
 internal MD_Node *
 df_cfg_tree_from_key(String8 string)
@@ -7627,97 +7981,62 @@ df_key_from_cfg_tree(Arena *arena, MD_Node *node)
   return result;
 }
 
-//- rjf: config tree mutations
-
-internal DF_CfgSlot
-df_cfg_slot_from_tree(MD_Node *node)
-{
-  DF_CfgSlot slot = DF_CfgSlot_User;
-  for(MD_Node *n = node; !md_node_is_nil(n); n = n->parent)
-  {
-    for(EachEnumVal(DF_CfgSlot, s))
-    {
-      if(n == df_state->cfg_slot_roots[s])
-      {
-        slot = s;
-        goto end;
-      }
-    }
-  }
-  end:;
-  return slot;
-}
-
-internal MD_Node *
-df_cfg_tree_store(MD_Node *parent, MD_Node *prev_child, String8 string)
-{
-  if(md_node_is_nil(parent))
-  {
-    return &md_nil_node;
-  }
-  DF_CfgSlot slot = df_cfg_slot_from_tree(parent);
-  Arena *arena = df_state->cfg_slot_arenas[slot];
-  String8 string_copy = push_str8_copy(arena, string);
-  MD_Node *new_root = md_tree_from_string(arena, string_copy);
-  MD_Node *result = &md_nil_node;
-  if(!md_node_is_nil(new_root))
-  {
-    result = new_root->first;
-    for(MD_EachNode(child, new_root->first))
-    {
-      md_node_insert_child(parent, prev_child, child);
-      prev_child = child;
-    }
-  }
-  return result;
-}
-
-internal MD_Node *
-df_cfg_tree_storef(MD_Node *parent, MD_Node *prev_child, char *fmt, ...)
-{
-  Temp scratch = scratch_begin(0, 0);
-  va_list args;
-  va_start(args, fmt);
-  String8 string = push_str8fv(scratch.arena, fmt, args);
-  MD_Node *result = df_cfg_tree_store(parent, prev_child, string);
-  va_end(args);
-  scratch_end(scratch);
-  return result;
-}
-
-internal void
-df_cfg_tree_set_string(MD_Node *node, String8 string)
-{
-  DF_CfgSlot slot = df_cfg_slot_from_tree(node);
-  Arena *arena = df_state->cfg_slot_arenas[slot];
-  node->string = push_str8_copy(arena, string);
-}
-
-internal void
-df_cfg_tree_set_stringf(MD_Node *node, char *fmt, ...)
-{
-  Temp scratch = scratch_begin(0, 0);
-  va_list args;
-  va_start(args, fmt);
-  String8 string = push_str8fv(scratch.arena, fmt, args);
-  df_cfg_tree_set_string(node, string);
-  va_end(args);
-  scratch_end(scratch);
-}
-
-internal void
-df_cfg_tree_insert_child(MD_Node *parent, MD_Node *prev_child, MD_Node *node)
-{
-  md_node_insert_child(parent, prev_child, node);
-}
-
-internal void
-df_cfg_tree_release(MD_Node *node)
-{
-  // TODO(rjf): @msgs
-}
-
 //- rjf: config tree lookups
+
+internal MD_Node *
+df_cfg_tree_last_from_key(MD_Node *root, String8 key)
+{
+  MD_Node *result = &md_nil_node;
+  for(MD_Node *tln = root->last; !md_node_is_nil(tln); tln = tln->prev)
+  {
+    if(str8_match(tln->string, key, 0))
+    {
+      result = tln;
+      break;
+    }
+  }
+  return result;
+}
+
+internal Vec4F32
+df_rgba_from_cfg_tree(MD_Node *cfg)
+{
+  Vec4F32 result = {0};
+  MD_Node *child = md_child_from_string(cfg, str8_lit("color"), 0);
+  if(!md_node_is_nil(child))
+  {
+    // rjf: hex-specified colors
+    U64 hex_val = 0;
+    if(child->first == child->last &&
+       child->flags & MD_NodeFlag_Numeric &&
+       try_u64_from_str8_c_rules(child->first->string, &hex_val))
+    {
+      result = rgba_from_u32((U32)hex_val);
+    }
+    
+    // rjf: per-channel expressions
+    else
+    {
+      Temp scratch = scratch_begin(0, 0);
+      for(MD_EachNode(channel_cfg, child->first))
+      {
+        temp_end(scratch);
+        U32 slot = 0;
+        if(0){}
+        else if(str8_match(channel_cfg->string, str8_lit("r"), StringMatchFlag_CaseInsensitive)) { slot = 0; }
+        else if(str8_match(channel_cfg->string, str8_lit("g"), StringMatchFlag_CaseInsensitive)) { slot = 1; }
+        else if(str8_match(channel_cfg->string, str8_lit("b"), StringMatchFlag_CaseInsensitive)) { slot = 2; }
+        else if(str8_match(channel_cfg->string, str8_lit("a"), StringMatchFlag_CaseInsensitive)) { slot = 3; }
+        String8 expr_string = md_string_from_children(scratch.arena, channel_cfg);
+        E_Eval eval = e_eval_from_string(scratch.arena, expr_string);
+        E_Eval value_eval = e_value_eval_from_eval(eval);
+        result.v[slot] = e_f32_from_eval(value_eval);
+      }
+      scratch_end(scratch);
+    }
+  }
+  return result;
+}
 
 internal Axis2
 df_split_axis_from_panel_cfg(MD_Node *panel)
@@ -8604,11 +8923,10 @@ df_base_regs(void)
 }
 
 internal DF_Regs *
-df_push_regs(void)
+df_push_regs_(DF_Regs *regs)
 {
-  DF_Regs *top = df_regs();
   DF_RegsNode *n = push_array(df_frame_arena(), DF_RegsNode, 1);
-  MemoryCopyStruct(&n->v, top);
+  MemoryCopyStruct(&n->v, regs);
   SLLStackPush(df_state->top_regs, n);
   return &n->v;
 }
@@ -8768,12 +9086,12 @@ df_init(CmdLine *cmdln)
   Arena *arena = arena_alloc();
   df_state = push_array(arena, DF_State, 1);
   df_state->arena = arena;
+  df_state->log = log_alloc();
   df_state->num_frames_requested = 2;
-  df_state->cfg_root_arena = arena_alloc();
-  df_state->cfg_root = &md_nil_node;
+  df_state->cfg_arena = arena_alloc();
+  df_state->cfg_free = &md_nil_node;
   for(EachEnumVal(DF_CfgSlot, slot))
   {
-    df_state->cfg_slot_arenas[slot] = arena_alloc();
     df_state->cfg_slot_roots[slot] = &md_nil_node;
   }
   df_state->msgs_arena = arena_alloc();
@@ -8788,6 +9106,7 @@ df_init(CmdLine *cmdln)
   df_state->code_ctx_menu_key   = ui_key_from_string(ui_key_zero(), str8_lit("_code_ctx_menu_"));
   df_state->entity_ctx_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("_entity_ctx_menu_"));
   df_state->tab_ctx_menu_key    = ui_key_from_string(ui_key_zero(), str8_lit("_tab_ctx_menu_"));
+  df_state->error_arena = arena_alloc();
   df_state->string_search_arena = arena_alloc();
   df_state->cfg_main_font_path_arena = arena_alloc();
   df_state->cfg_code_font_path_arena = arena_alloc();
@@ -8819,6 +9138,17 @@ df_init(CmdLine *cmdln)
     }
     df_msg(DF_MsgKind_LoadUser, .file_path = user_cfg_path);
     df_msg(DF_MsgKind_LoadProject, .file_path = project_cfg_path);
+    scratch_end(scratch);
+  }
+  
+  // rjf: open ui thread log file
+  {
+    Temp scratch = scratch_begin(0, 0);
+    String8 user_program_data_path = os_get_process_info()->user_program_data_path;
+    String8 user_data_folder = push_str8f(scratch.arena, "%S/raddbg/logs", user_program_data_path);
+    df_state->log_path = push_str8f(df_state->arena, "%S/ui_thread.raddbg_log", user_data_folder);
+    os_make_directory(user_data_folder);
+    os_write_data_to_file_path(df_state->log_path, str8_zero());
     scratch_end(scratch);
   }
   
@@ -8931,13 +9261,10 @@ df_frame(void)
   local_persist S32 depth = 0;
   
   //////////////////////////////
-  //- rjf: apply new rich hover info
+  //- rjf: begin logging
   //
-  arena_clear(df_state->rich_hover_info_current_arena);
-  MemoryCopyStruct(&df_state->rich_hover_info_current, &df_state->rich_hover_info_next);
-  df_state->rich_hover_info_current.dbgi_key = di_key_copy(df_state->rich_hover_info_current_arena, &df_state->rich_hover_info_current.dbgi_key);
-  arena_clear(df_state->rich_hover_info_next_arena);
-  MemoryZeroStruct(&df_state->rich_hover_info_next);
+  log_select(df_state->log);
+  log_scope_begin();
   
   //////////////////////////////
   //- rjf: get events from the OS
@@ -8947,6 +9274,15 @@ df_frame(void)
   {
     events = os_get_events(scratch.arena, df_state->num_frames_requested == 0);
   }
+  
+  //////////////////////////////
+  //- rjf: apply new rich hover info
+  //
+  arena_clear(df_state->rich_hover_info_current_arena);
+  MemoryCopyStruct(&df_state->rich_hover_info_current, &df_state->rich_hover_info_next);
+  df_state->rich_hover_info_current.dbgi_key = di_key_copy(df_state->rich_hover_info_current_arena, &df_state->rich_hover_info_current.dbgi_key);
+  arena_clear(df_state->rich_hover_info_next_arena);
+  MemoryZeroStruct(&df_state->rich_hover_info_next);
   
   //////////////////////////////
   //- rjf: pick target hz
@@ -8997,7 +9333,7 @@ df_frame(void)
   U64 begin_time_us = os_now_microseconds();
   
   //////////////////////////////
-  //- rjf: bind change
+  //- rjf: consume OS events for bind change
   //
   if(!df_state->confirm_active && df_state->bind_change_active)
   {
@@ -9009,9 +9345,8 @@ df_frame(void)
     if(os_key_press(&events, os_handle_zero(), 0, OS_Key_Delete))
     {
       df_request_frame();
-      df_unbind_spec(df_state->bind_change_cmd_spec, df_state->bind_change_binding);
+      df_msg(DF_MsgKind_RemoveEntity, .cfg_tree = df_state->bind_change_bind_handle);
       df_state->bind_change_active = 0;
-      // TODO(rjf): @msgs df_msg(d_cfg_src_write_cmd_kind_table[D_CfgSrc_User]);
     }
     for(OS_Event *event = events.first, *next = 0; event != 0; event = next)
     {
@@ -9027,7 +9362,24 @@ df_frame(void)
          event->key != OS_Key_Alt &&
          event->key != OS_Key_Shift)
       {
-        df_state->bind_change_active = 0;
+        MD_Node *current_bind_cfg = df_cfg_tree_from_handle(df_state->bind_change_bind_handle);
+        MD_Node *bindings_root_cfg = current_bind_cfg->parent;
+        if(md_node_is_nil(bindings_root_cfg))
+        {
+          bindings_root_cfg = md_child_from_string(df_state->cfg_slot_roots[DF_CfgSlot_User], str8_lit("keybindings"), 0);
+          if(md_node_is_nil(bindings_root_cfg))
+          {
+            bindings_root_cfg = df_single_cfg_tree_from_string(str8_lit("keybindings"));
+            md_node_insert_child(df_state->cfg_slot_roots[DF_CfgSlot_User], df_state->cfg_slot_roots[DF_CfgSlot_User]->last, bindings_root_cfg);
+          }
+        }
+        MD_Node *prev_bind_cfg = current_bind_cfg->prev;
+        String8List modifiers_strings = os_string_list_from_event_flags(scratch.arena, event->flags);
+        String8 modifiers_string = str8_list_join(scratch.arena, &modifiers_strings, &(StringJoin){.sep = str8_lit(" ")});
+        String8 key_string = os_g_key_cfg_string_table[event->key];
+        MD_Node *new_bind_cfg = df_single_cfg_tree_from_stringf("{\"%S\" %S %S}", df_state->bind_change_msg_name, modifiers_string, key_string);
+        md_node_insert_child(bindings_root_cfg, prev_bind_cfg, new_bind_cfg);
+#if 0 // NOTE(rjf): @msgs
         DF_Binding binding = zero_struct;
         {
           binding.key = event->key;
@@ -9035,10 +9387,12 @@ df_frame(void)
         }
         df_unbind_spec(df_state->bind_change_cmd_spec, df_state->bind_change_binding);
         df_bind_spec(df_state->bind_change_cmd_spec, binding);
+#endif
         U32 codepoint = os_codepoint_from_event_flags_and_key(event->flags, event->key);
         os_text(&events, os_handle_zero(), codepoint);
         os_eat_event(&events, event);
         df_request_frame();
+        df_state->bind_change_active = 0;
         break;
       }
     }
@@ -9110,10 +9464,9 @@ df_frame(void)
           // rjf: look into keymap; push run-command message to frontend if this event
           // matches a binding
           B32 taken_by_keybinding = 0;
-          for(MD_EachNode(file_ref, df_state->cfg_root->first))
+          for(EachEnumVal(DF_CfgSlot, slot))
           {
-            MD_Node *file = file_ref->first;
-            for(MD_EachNode(tln, file->first))
+            for(MD_EachNode(tln, df_state->cfg_slot_roots[slot]->first))
             {
               if(str8_match(tln->string, str8_lit("keybindings"), StringMatchFlag_CaseInsensitive))
               {
@@ -9121,8 +9474,8 @@ df_frame(void)
                 {
                   OS_Key map_key = OS_Key_Null;
                   OS_EventFlags map_flags = 0;
-                  String8 map_msg_name = {0};
-                  for(MD_EachNode(child, map->first))
+                  String8 map_msg_name = map->first->string;
+                  for(MD_EachNode(child, map->first->next))
                   {
                     if(0){}
                     else if(str8_match(child->string, str8_lit("ctrl"), 0))  { map_flags |= OS_EventFlag_Ctrl; }
@@ -9131,11 +9484,7 @@ df_frame(void)
                     else
                     {
                       OS_Key key = os_key_from_string(child->string);
-                      if(key == OS_Key_Null)
-                      {
-                        map_msg_name = child->string;
-                      }
-                      else
+                      if(key != OS_Key_Null)
                       {
                         map_key = key;
                       }
@@ -9191,7 +9540,7 @@ df_frame(void)
     }
   }
   
-#if 0 // TODO(rjf): @msgs
+#if 0 // NOTE(rjf): @msgs
   //////////////////////////////
   //- rjf: gather root-level commands
   //
@@ -9201,7 +9550,7 @@ df_frame(void)
   //////////////////////////////
   //- rjf: process messages
   //
-  ProfScope("process messages") DF_RegsScope
+  ProfScope("process messages") DF_RegsScope()
   {
     for(DF_Msg *msg = 0; df_next_msg(&msg);)
     {
@@ -9329,17 +9678,10 @@ df_frame(void)
         case DF_MsgKind_LoadProject:  cfg_slot = DF_CfgSlot_Project; goto load_cfg_data;
         load_cfg_data:;
         {
-          arena_clear(df_state->cfg_slot_arenas[cfg_slot]);
-          arena_clear(df_state->cfg_root_arena);
           String8 cfg_path = regs->file_path;
-          String8 cfg_data = os_data_from_file_path(df_state->cfg_slot_arenas[cfg_slot], cfg_path);
-          df_state->cfg_slot_roots[cfg_slot] = md_tree_from_string(df_state->cfg_slot_arenas[cfg_slot], cfg_data);
-          df_state->cfg_root = md_push_list(df_state->cfg_root_arena);
-          for(EachEnumVal(DF_CfgSlot, slot))
-          {
-            md_list_push_ref(df_state->cfg_root_arena, df_state->cfg_root, df_state->cfg_slot_roots[slot]);
-          }
-          df_state->cfg_slot_gens[cfg_slot] += 1;
+          String8 cfg_data = os_data_from_file_path(scratch.arena, cfg_path);
+          MD_Node *cfg_tree = df_file_cfg_tree_from_string(cfg_data);
+          df_state->cfg_slot_roots[cfg_slot] = cfg_tree;
         }break;
         case DF_MsgKind_SaveUser:    cfg_slot = DF_CfgSlot_User; goto save_cfg_data;
         case DF_MsgKind_SaveProject: cfg_slot = DF_CfgSlot_Project; goto save_cfg_data;
@@ -9368,7 +9710,7 @@ df_frame(void)
         case DF_MsgKind_RemoveTarget:
         {
           MD_Node *cfg_tree = df_cfg_tree_from_handle(regs->cfg_tree);
-          df_cfg_tree_release(cfg_tree);
+          df_cfg_node_release(cfg_tree);
         }break;
         case DF_MsgKind_NameEntity:
         {
@@ -9377,42 +9719,9 @@ df_frame(void)
         }break;
         case DF_MsgKind_DuplicateEntity:
         {
-#if 0 // TODO(rjf): @msgs
-          D_Entity *src = d_entity_from_handle(regs->entity);
-          if(!d_entity_is_nil(src))
-          {
-            typedef struct Task Task;
-            struct Task
-            {
-              Task *next;
-              D_Entity *src_n;
-              D_Entity *dst_parent;
-            };
-            Task starter_task = {0, src, src->parent};
-            Task *first_task = &starter_task;
-            Task *last_task = &starter_task;
-            for(Task *task = first_task; task != 0; task = task->next)
-            {
-              D_Entity *src_n = task->src_n;
-              D_Entity *dst_n = d_entity_alloc(task->dst_parent, task->src_n->kind);
-              if(src_n->flags & D_EntityFlag_HasTextPoint)    {d_entity_equip_txt_pt(dst_n, src_n->text_point);}
-              if(src_n->flags & D_EntityFlag_HasU64)          {d_entity_equip_u64(dst_n, src_n->u64);}
-              if(src_n->flags & D_EntityFlag_HasColor)        {d_entity_equip_color_hsva(dst_n, d_hsva_from_entity(src_n));}
-              if(src_n->flags & D_EntityFlag_HasVAddrRng)     {d_entity_equip_vaddr_rng(dst_n, src_n->vaddr_rng);}
-              if(src_n->flags & D_EntityFlag_HasVAddr)        {d_entity_equip_vaddr(dst_n, src_n->vaddr);}
-              if(src_n->disabled)                             {d_entity_equip_disabled(dst_n, 1);}
-              if(src_n->string.size != 0)                     {d_entity_equip_name(dst_n, src_n->string);}
-              dst_n->cfg_src = src_n->cfg_src;
-              for(D_Entity *src_child = task->src_n->first; !d_entity_is_nil(src_child); src_child = src_child->next)
-              {
-                Task *child_task = push_array(scratch.arena, Task, 1);
-                child_task->src_n = src_child;
-                child_task->dst_parent = dst_n;
-                SLLQueuePush(first_task, last_task, child_task);
-              }
-            }
-          }
-#endif
+          MD_Node *cfg_tree = df_cfg_tree_from_handle(regs->cfg_tree);
+          MD_Node *cfg_tree_dup = df_cfg_tree_copy(cfg_tree);
+          md_node_insert_child(cfg_tree->parent, cfg_tree, cfg_tree_dup);
         }break;
         case DF_MsgKind_RelocateEntity:
         {
@@ -9449,9 +9758,9 @@ df_frame(void)
           B32 removed_already_existing = 0;
           if(msg->kind == DF_MsgKind_ToggleBreakpoint)
           {
-            for(MD_EachNode(root_ref, df_state->cfg_root))
+            for(EachEnumVal(DF_CfgSlot, slot))
             {
-              for(MD_EachNode(tln, root_ref->first->first))
+              for(MD_EachNode(tln, df_state->cfg_slot_roots[slot]))
               {
                 if(str8_match(tln->string, str8_lit("breakpoint"), 0))
                 {
@@ -9471,7 +9780,7 @@ df_frame(void)
                      str8_match(tln_symbol, symbol, 0) ||
                      tln_vaddr == vaddr)
                   {
-                    df_cfg_tree_release(tln);
+                    df_cfg_node_release(tln);
                     removed_already_existing = 1;
                     goto break_all_remove_existing;
                   }
@@ -9485,8 +9794,9 @@ df_frame(void)
           if(!removed_already_existing)
           {
             MD_Node *root = df_state->cfg_slot_roots[DF_CfgSlot_Project];
-            MD_Node *prev_bp = md_child_from_string(root, str8_lit("breakpoint"), 0);
-            MD_Node *new_bp = df_cfg_tree_storef(root, prev_bp->prev, "breakpoint");
+            MD_Node *prev_bp = df_cfg_tree_last_from_key(root, str8_lit("breakpoint"));
+            MD_Node *new_bp = df_single_cfg_tree_from_stringf("breakpoint");
+            md_node_insert_child(root, prev_bp, new_bp);
             df_msg(DF_MsgKind_RelocateEntity, .cfg_tree = df_handle_from_cfg_tree(new_bp));
           }
         }break;
@@ -9593,7 +9903,11 @@ df_frame(void)
           }
           
           // rjf: push command for this expr
-          // TODO(rjf): @msgs
+          df_msg(msg->kind == DF_MsgKind_GoToNameAtCursor ? DF_MsgKind_GoToName :
+                 msg->kind == DF_MsgKind_ToggleWatchExpressionAtCursor ? DF_MsgKind_ToggleWatchExpression :
+                 DF_MsgKind_GoToName,
+                 .string = expr);
+          // NOTE(rjf): @msgs
           // d_msg(msg->kind == DF_MsgKind_GoToNameAtCursor ? DF_MsgKind_GoToName :
           // msg->kind == DF_MsgKind_ToggleWatchExpressionAtCursor ? DF_MsgKind_ToggleWatchExpression :
           // DF_MsgKind_GoToName, .string = expr);
@@ -9613,30 +9927,32 @@ df_frame(void)
           String8 working_dir_normalized = str8_chop_last_slash(file_path_normalized);
           String8 working_dir_relative = path_relative_dst_from_absolute_dst_src(scratch.arena, working_dir_normalized, cfg_folder);
           String8 working_dir_escaped = escaped_from_raw_string(scratch.arena, working_dir_relative);
-          MD_Node *target_cfg = df_cfg_tree_storef(cfg_root, &md_nil_node,
-                                                   "target:{executable:\"%S\", working_directory:\"%S\"}",
-                                                   file_path_escaped,
-                                                   working_dir_escaped);
+          MD_Node *target_cfg = df_single_cfg_tree_from_stringf("target:{executable:\"%S\", working_directory:\"%S\"}",
+                                                                file_path_escaped,
+                                                                working_dir_escaped);
+          MD_Node *last_target_cfg = df_cfg_tree_last_from_key(cfg_root, str8_lit("target"));
+          md_node_insert_child(cfg_root, last_target_cfg, target_cfg);
           df_msg(DF_MsgKind_SelectTarget, .string = df_key_from_cfg_tree(scratch.arena, target_cfg));
         }break;
         case DF_MsgKind_SelectTarget:
         {
-          MD_Node *target_cfg = df_cfg_tree_from_key(regs->string);
+          MD_Node *target_cfg = df_cfg_tree_from_handle(regs->cfg_tree);
+          DF_CfgSlot cfg_slot = df_cfg_slot_from_tree(target_cfg);
           if(!md_node_is_nil(target_cfg))
           {
-            for(MD_EachNode(root_ref, df_state->cfg_root->first))
+            for(EachEnumVal(DF_CfgSlot, slot))
             {
-              for(MD_EachNode(tln, root_ref->first->first))
+              for(MD_EachNode(tln, df_state->cfg_slot_roots[slot]->first))
               {
                 if(str8_match(target_cfg->string, tln->string, 0))
                 {
-                  df_cfg_tree_set_keyf(tln, str8_lit("disabled"), "%i", tln == target_cfg);
+                  df_cfg_tree_set_keyf(tln, str8_lit("disabled"), "%s", tln == target_cfg ? "" : "1");
                 }
               }
             }
           }
           
-#if 0 // TODO(rjf): @msgs
+#if 0 // NOTE(rjf): @msgs
           D_Entity *entity = d_entity_from_handle(regs->entity);
           if(entity->kind == D_EntityKind_Target)
           {
@@ -9679,7 +9995,7 @@ df_frame(void)
         {
           df_state->confirm_active = 0;
           df_state->confirm_key = ui_key_zero();
-          DF_RegsScope
+          DF_RegsScope()
           {
             df_regs_copy_contents(scratch.arena, df_regs(), df_state->confirm_msg.regs);
             df_msg(df_state->confirm_msg.kind);
@@ -9786,7 +10102,8 @@ df_frame(void)
               for(MD_EachNode(child, parent_cfg->first)) {child_count += !!(child->flags & MD_NodeFlag_Numeric);}
               F32 new_child_pct = 1.f/child_count;
               MD_Node *prev_child = split_side == Side_Max ? panel_cfg : panel_cfg->prev;
-              MD_Node *next = df_cfg_tree_storef(parent_cfg, prev_child, "%f", new_child_pct);
+              MD_Node *next = df_single_cfg_tree_from_stringf("%f", new_child_pct);
+              md_node_insert_child(parent_cfg, prev_child, next);
               for(MD_EachNode(child, parent_cfg->first))
               {
                 if(child != next && child->flags & MD_NodeFlag_Numeric)
@@ -9857,8 +10174,8 @@ df_frame(void)
              msg->kind == DF_MsgKind_SplitPanel)
           {
             MD_Node *move_tab_panel_cfg = move_tab_cfg->parent;
-            df_cfg_tree_unhook(move_tab_cfg);
-            df_cfg_tree_insert_child(new_panel_cfg, new_panel_cfg->last, move_tab_cfg);
+            md_unhook_child(move_tab_cfg);
+            md_node_insert_child(new_panel_cfg, new_panel_cfg->last, move_tab_cfg);
             df_msg(DF_MsgKind_SelectTab, .tab = df_handle_from_cfg_tree(move_tab_cfg));
             B32 move_tab_panel_is_empty = 1;
             for(MD_EachNode(child, move_tab_panel_cfg->first))
@@ -9879,9 +10196,23 @@ df_frame(void)
         //- rjf: [panel creation/removal] removal
         case DF_MsgKind_ClosePanel:
         {
+          // rjf: unpack context of the panel-to-close
           MD_Node *panel_cfg = df_cfg_tree_from_handle(regs->panel);
+          DF_CfgSlot cfg_slot = df_cfg_slot_from_tree(panel_cfg);
+          MD_Node *root_panel_cfg = &md_nil_node;
+          for(MD_Node *p = panel_cfg; !md_node_is_nil(p); p = p->parent)
+          {
+            root_panel_cfg = p;
+            if(str8_match(root_panel_cfg->string, str8_lit("panels"), 0))
+            {
+              break;
+            }
+          }
+          MD_Node *window_cfg = root_panel_cfg->parent;
           MD_Node *parent_cfg = panel_cfg->parent;
-          if(!str8_match(panel_cfg->string, str8_lit("panels"), 0))
+          
+          // rjf: close panel, if not root
+          if(panel_cfg != root_panel_cfg)
           {
             // rjf: count children
             U64 child_count = 0;
@@ -9893,7 +10224,7 @@ df_frame(void)
             if(child_count == 2)
             {
               // rjf: gather nodes
-              MD_Node *grandparent_cfg = !str8_match(parent_cfg->string, str8_lit("panels"), 0) ? parent_cfg->parent : &md_nil_node;
+              MD_Node *grandparent_cfg = (parent_cfg != root_panel_cfg) ? parent_cfg->parent : &md_nil_node;
               MD_Node *discard_child_cfg = panel_cfg;
               MD_Node *keep_child_cfg = &md_nil_node;
               F32 pct_of_parent = f32_from_str8(parent_cfg->string);
@@ -9919,145 +10250,106 @@ df_frame(void)
               }
               
               // rjf: unhook kept child
-              df_cfg_tree_unhook(keep_child_cfg);
+              md_unhook_child(keep_child_cfg);
               
               // rjf: unhook this subtree
               if(!md_node_is_nil(grandparent_cfg))
               {
-                df_cfg_tree_unhook(parent_cfg);
+                md_unhook_child(parent_cfg);
               }
               
               // rjf: release the things we should discard
               {
-                df_cfg_tree_release(parent_cfg);
-                df_cfg_tree_release(discard_child_cfg);
+                df_cfg_node_release(parent_cfg);
+                df_cfg_node_release(discard_child_cfg);
               }
               
               // rjf: re-hook our kept child into the overall tree
-              if(df_panel_is_nil(grandparent))
+              if(md_node_is_nil(grandparent_cfg))
               {
-                ws->root_panel = keep_child;
+                md_node_insert_child(window_cfg, window_cfg->last, keep_child_cfg);
+                df_cfg_tree_set_stringf(keep_child_cfg, "panels");
               }
               else
               {
-                df_panel_insert(grandparent, parent_prev, keep_child);
+                md_node_insert_child(grandparent_cfg, parent_prev_cfg, keep_child_cfg);
+                df_cfg_tree_set_stringf(keep_child_cfg, "%f", pct_of_parent);
               }
-              keep_child->pct_of_parent = pct_of_parent;
               
               // rjf: reset focus, if needed
-              if(ws->focused_panel == discard_child)
+              if(md_node_has_tag(discard_child_cfg, str8_lit("selected"), 0))
               {
-                ws->focused_panel = keep_child;
-                for(DF_Panel *grandchild = ws->focused_panel; !df_panel_is_nil(grandchild); grandchild = grandchild->first)
+                MD_Node *new_focused_panel_cfg = keep_child_cfg;
+                for(MD_Node *descendant = new_focused_panel_cfg; !md_node_is_nil(descendant); descendant = descendant->first)
                 {
-                  ws->focused_panel = grandchild;
+                  new_focused_panel_cfg = descendant;
                 }
+                df_msg(DF_MsgKind_FocusPanel, .panel = df_handle_from_cfg_tree(new_focused_panel_cfg));
               }
               
-              // rjf: keep-child split-axis == grandparent split-axis? bubble keep-child up into grandparent's children
-              if(!df_panel_is_nil(grandparent) && grandparent->split_axis == keep_child->split_axis && !df_panel_is_nil(keep_child->first))
+              // rjf: keep-child has children? bubble keep-child children up into grandparent's children
+              if(!md_node_is_nil(grandparent_cfg) && !md_node_is_nil(md_node_from_chain_flags(keep_child_cfg->first, &md_nil_node, MD_NodeFlag_Numeric)))
               {
-                df_panel_remove(grandparent, keep_child);
-                DF_Panel *prev = parent_prev;
-                for(DF_Panel *child = keep_child->first, *next = 0; !df_panel_is_nil(child); child = next)
+                md_unhook_child(keep_child_cfg);
+                MD_Node *prev_cfg = parent_prev_cfg;
+                F32 keep_child_pct = f32_from_str8(keep_child_cfg->string);
+                for(MD_Node *child_cfg = keep_child_cfg->first, *next = 0; !md_node_is_nil(child_cfg); child_cfg = next)
                 {
-                  next = child->next;
-                  df_panel_remove(keep_child, child);
-                  df_panel_insert(grandparent, prev, child);
-                  prev = child;
-                  child->pct_of_parent *= keep_child->pct_of_parent;
+                  next = child_cfg->next;
+                  md_unhook_child(child_cfg);
+                  md_node_insert_child(grandparent_cfg, prev_cfg, child_cfg);
+                  prev_cfg = child_cfg;
+                  F32 pct = f32_from_str8(child_cfg->string);
+                  F32 new_pct = pct*keep_child_pct;
+                  df_cfg_tree_set_stringf(child_cfg, "%f", new_pct);
                 }
-                df_panel_release(ws, keep_child);
+                df_cfg_node_release(keep_child_cfg);
               }
             }
             
-            // NOTE(rjf): If we're removing all but the last child of this parent,
-            // we should just remove both children.
-            if(parent->child_count == 2)
-            {
-              DF_Panel *discard_child = panel;
-              DF_Panel *keep_child = panel == parent->first ? parent->last : parent->first;
-              DF_Panel *grandparent = parent->parent;
-              DF_Panel *parent_prev = parent->prev;
-              F32 pct_of_parent = parent->pct_of_parent;
-              
-              // rjf: unhook kept child
-              df_panel_remove(parent, keep_child);
-              
-              // rjf: unhook this subtree
-              if(!df_panel_is_nil(grandparent))
-              {
-                df_panel_remove(grandparent, parent);
-              }
-              
-              // rjf: release the things we should discard
-              {
-                df_panel_release(ws, parent);
-                df_panel_release(ws, discard_child);
-              }
-              
-              // rjf: re-hook our kept child into the overall tree
-              if(df_panel_is_nil(grandparent))
-              {
-                ws->root_panel = keep_child;
-              }
-              else
-              {
-                df_panel_insert(grandparent, parent_prev, keep_child);
-              }
-              keep_child->pct_of_parent = pct_of_parent;
-              
-              // rjf: reset focus, if needed
-              if(ws->focused_panel == discard_child)
-              {
-                ws->focused_panel = keep_child;
-                for(DF_Panel *grandchild = ws->focused_panel; !df_panel_is_nil(grandchild); grandchild = grandchild->first)
-                {
-                  ws->focused_panel = grandchild;
-                }
-              }
-              
-              // rjf: keep-child split-axis == grandparent split-axis? bubble keep-child up into grandparent's children
-              if(!df_panel_is_nil(grandparent) && grandparent->split_axis == keep_child->split_axis && !df_panel_is_nil(keep_child->first))
-              {
-                df_panel_remove(grandparent, keep_child);
-                DF_Panel *prev = parent_prev;
-                for(DF_Panel *child = keep_child->first, *next = 0; !df_panel_is_nil(child); child = next)
-                {
-                  next = child->next;
-                  df_panel_remove(keep_child, child);
-                  df_panel_insert(grandparent, prev, child);
-                  prev = child;
-                  child->pct_of_parent *= keep_child->pct_of_parent;
-                }
-                df_panel_release(ws, keep_child);
-              }
-            }
-            
-            // NOTE(rjf): Otherwise we can just remove this child.
+            // rjf: if we are just removing one child of >2, then we just need
+            // to remove this one from the list & give its space back to siblings
             else
             {
-              DF_Panel *next = &df_nil_panel;
-              F32 removed_size_pct = panel->pct_of_parent;
-              if(df_panel_is_nil(next)) { next = panel->prev; }
-              if(df_panel_is_nil(next)) { next = panel->next; }
-              df_panel_remove(parent, panel);
-              df_panel_release(ws, panel);
-              if(ws->focused_panel == panel)
+              F32 removed_size_pct = f32_from_str8(panel_cfg->string);
+              MD_Node *next = &md_nil_node;
+              if(!md_node_is_nil(next))
               {
-                ws->focused_panel = next;
+                next = md_node_from_chain_flags(panel_cfg->next, &md_nil_node, MD_NodeFlag_Numeric);
               }
-              for(DF_Panel *child = parent->first; !df_panel_is_nil(child); child = child->next)
+              if(!md_node_is_nil(next))
               {
-                child->pct_of_parent /= 1.f-removed_size_pct;
+                for(MD_EachNode(child, parent_cfg->first))
+                {
+                  if(child != panel_cfg && child->flags & MD_NodeFlag_Numeric)
+                  {
+                    next = child;
+                  }
+                }
+              }
+              B32 panel_is_focused = md_node_has_tag(panel_cfg, str8_lit("selected"), 0);
+              md_unhook_child(panel_cfg);
+              df_cfg_node_release(panel_cfg);
+              if(panel_is_focused)
+              {
+                df_msg(DF_MsgKind_FocusPanel, .panel = df_handle_from_cfg_tree(next));
+              }
+              for(MD_EachNode(child, parent_cfg->first))
+              {
+                F32 pct = f32_from_str8(child->string);
+                F32 new_pct = pct / (1.f - removed_size_pct);
+                df_cfg_tree_set_stringf(child, "%f", new_pct);
               }
             }
           }
         }break;
         
         //- rjf: panel rearranging
+#if 0 // TODO(rjf): @msgs
         case DF_MsgKind_RotatePanelColumns:
         {
+          MD_Node *panel = df_cfg_tree_from_handle(regs->panel);
+          MD_Node *parent = &md_nil_node;
           DF_Window *ws = df_window_from_handle(regs->window);
           DF_Panel *panel = ws->focused_panel;
           DF_Panel *parent = &df_nil_panel;
@@ -10081,12 +10373,14 @@ df_frame(void)
             parent->last = old_first;
           }
         }break;
+#endif
         
         //- rjf: panel focusing
         case DF_MsgKind_NextPanel: panel_sib_off = OffsetOf(DF_Panel, next); panel_child_off = OffsetOf(DF_Panel, first); goto panel_cycle;
         case DF_MsgKind_PrevPanel: panel_sib_off = OffsetOf(DF_Panel, prev); panel_child_off = OffsetOf(DF_Panel, last); goto panel_cycle;
         panel_cycle:;
         {
+#if 0 // TODO(rjf): @msgs
           DF_Window *ws = df_window_from_handle(regs->window);
           for(DF_Panel *panel = ws->focused_panel; !df_panel_is_nil(panel);)
           {
@@ -10102,9 +10396,11 @@ df_frame(void)
               break;
             }
           }
+#endif
         }break;
         case DF_MsgKind_FocusPanel:
         {
+#if 0 // TODO(rjf): @msgs
           DF_Window *ws = df_window_from_handle(regs->window);
           DF_Panel *panel = df_panel_from_handle(regs->panel);
           if(!df_panel_is_nil(panel))
@@ -10113,6 +10409,7 @@ df_frame(void)
             ws->menu_bar_focused = 0;
             ws->query_view_selected = 0;
           }
+#endif
         }break;
         case DF_MsgKind_FocusPanelRight: panel_change_dir = v2s32(+1, +0); goto msg_focus_panel_dir;
         case DF_MsgKind_FocusPanelLeft:  panel_change_dir = v2s32(-1, +0); goto msg_focus_panel_dir;
@@ -10120,6 +10417,7 @@ df_frame(void)
         case DF_MsgKind_FocusPanelDown:  panel_change_dir = v2s32(+0, +1); goto msg_focus_panel_dir;
         msg_focus_panel_dir:;
         {
+#if 0 // TODO(rjf): @msgs
           DF_Window *ws = df_window_from_handle(regs->window);
           DF_Panel *src_panel = ws->focused_panel;
           Rng2F32 src_panel_rect = df_target_rect_from_panel(r2f32(v2f32(0, 0), v2f32(1000, 1000)), ws->root_panel, src_panel);
@@ -10154,6 +10452,7 @@ df_frame(void)
             }
             df_msg(DF_MsgKind_FocusPanel, .panel = df_handle_from_panel(dst_panel));
           }
+#endif
         }break;
         
         //- rjf: view history navigation
@@ -10163,6 +10462,7 @@ df_frame(void)
         //- rjf: tab selection
         case DF_MsgKind_NextTab:
         {
+#if 0 // TODO(rjf): @msgs
           DF_Panel *panel = df_panel_from_handle(regs->panel);
           DF_View *view = df_selected_tab_from_panel(panel);
           DF_View *next_view = view;
@@ -10178,9 +10478,11 @@ df_frame(void)
           }
           view = next_view;
           panel->selected_tab_view = df_handle_from_view(view);
+#endif
         }break;
         case DF_MsgKind_PrevTab:
         {
+#if 0 // TODO(rjf): @msgs
           DF_Panel *panel = df_panel_from_handle(regs->panel);
           DF_View *view = df_selected_tab_from_panel(panel);
           DF_View *next_view = view;
@@ -10196,12 +10498,14 @@ df_frame(void)
           }
           view = next_view;
           panel->selected_tab_view = df_handle_from_view(view);
+#endif
         }break;
         
         //- rjf: tab rearranging
         case DF_MsgKind_MoveTabRight:
         case DF_MsgKind_MoveTabLeft:
         {
+#if 0 // TODO(rjf): @msgs
           DF_Window *ws = df_window_from_handle(regs->window);
           DF_Panel *panel = ws->focused_panel;
           DF_View *view = df_selected_tab_from_panel(panel);
@@ -10214,9 +10518,11 @@ df_frame(void)
                    .view      = df_handle_from_view(view),
                    .prev_view = df_handle_from_view(prev_view));
           }
+#endif
         }break;
         case DF_MsgKind_MoveTab:
         {
+#if 0 // TODO(rjf): @msgs
           DF_Window * ws        = df_window_from_handle(regs->window);
           DF_Panel *  src_panel = df_panel_from_handle(regs->panel);
           DF_View *   view      = df_view_from_handle(regs->view);
@@ -10243,11 +10549,13 @@ df_frame(void)
               df_msg(DF_MsgKind_ClosePanel, .panel = df_handle_from_panel(src_panel));
             }
           }
+#endif
         }break;
         
         //- rjf: tab creation/removal
         case DF_MsgKind_OpenTab:
         {
+#if 0 // TODO(rjf): @msgs
           DF_Panel *panel = df_panel_from_handle(regs->panel);
           DF_View *view = df_view_alloc();
           df_view_equip_spec(view, &df_nil_view_spec, regs->string, regs->params_tree);
@@ -10257,9 +10565,11 @@ df_frame(void)
             prev_view = df_view_from_handle(regs->prev_view);
           }
           df_panel_insert_tab_view(panel, prev_view, view);
+#endif
         }break;
         case DF_MsgKind_CloseTab:
         {
+#if 0 // TODO(rjf): @msgs
           DF_Panel *panel = df_panel_from_handle(regs->panel);
           DF_View *view = df_view_from_handle(regs->view);
           if(!df_view_is_nil(view))
@@ -10267,23 +10577,29 @@ df_frame(void)
             df_panel_remove_tab_view(panel, view);
             df_view_release(view);
           }
+#endif
         }break;
         
         //- rjf: panel tab settings
         case DF_MsgKind_TabBarTop:
         {
+#if 0 // TODO(rjf): @msgs
           DF_Panel *panel = df_panel_from_handle(regs->panel);
           panel->tab_side = Side_Min;
+#endif
         }break;
         case DF_MsgKind_TabBarBottom:
         {
+#if 0 // TODO(rjf): @msgs
           DF_Panel *panel = df_panel_from_handle(regs->panel);
           panel->tab_side = Side_Max;
+#endif
         }break;
         
         //- rjf: tab filters
         case DF_MsgKind_Filter:
         {
+#if 0 // TODO(rjf): @msgs
           DF_View *view = df_view_from_handle(regs->view);
           DF_Panel *panel = df_panel_from_handle(regs->panel);
           B32 view_is_tab = 0;
@@ -10302,9 +10618,11 @@ df_frame(void)
             view->query_cursor = txt_pt(1, 1+(S64)view->query_string_size);
             view->query_mark = txt_pt(1, 1);
           }
+#endif
         }break;
         case DF_MsgKind_ClearFilter:
         {
+#if 0 // TODO(rjf): @msgs
           DF_View *view = df_view_from_handle(regs->view);
           if(!df_view_is_nil(view))
           {
@@ -10312,20 +10630,24 @@ df_frame(void)
             view->is_filtering = 0;
             view->query_cursor = view->query_mark = txt_pt(1, 1);
           }
+#endif
         }break;
         case DF_MsgKind_ApplyFilter:
         {
+#if 0 // TODO(rjf): @msgs
           DF_View *view = df_view_from_handle(regs->view);
           if(!df_view_is_nil(view))
           {
             view->is_filtering = 0;
           }
+#endif
         }break;
         
         //- rjf: default panel layouts
         case DF_MsgKind_ResetToDefaultPanels:
         case DF_MsgKind_ResetToCompactPanels:
         {
+#if 0 // TODO(rjf): @msgs
           DF_Window *ws = df_window_from_handle(regs->window);
           
           typedef enum Layout
@@ -10678,18 +11000,18 @@ df_frame(void)
               ws->focused_panel = root_1;
             }break;
           }
+#endif
         }break;
         
         //- rjf: filesystem fast paths
         case DF_MsgKind_Open:
         {
-          DF_Window *ws = df_window_from_handle(regs->window);
+#if 0 // TODO(rjf): @msgs
           String8 path = regs->file_path;
           FileProperties props = os_properties_from_file_path(path);
           if(props.created != 0)
           {
             df_msg(DF_MsgKind_OpenTab,
-                   .panel = df_handle_from_panel(ws->focused_panel),
                    .string = d_eval_string_from_file_path(scratch.arena, path),
                    .params_tree = md_tree_from_string(scratch.arena, df_view_kind_name_lower_table[DF_ViewKind_PendingFile]));
           }
@@ -10697,6 +11019,7 @@ df_frame(void)
           {
             log_user_errorf("Couldn't open file at \"%S\".", path);
           }
+#endif
         }break;
         case DF_MsgKind_Switch:
         {
@@ -10704,6 +11027,7 @@ df_frame(void)
         }break;
         case DF_MsgKind_SwitchToPartnerFile:
         {
+#if 0 // TODO(rjf): @msgs
           DF_Panel *panel = df_panel_from_handle(regs->panel);
           DF_View *view = df_selected_tab_from_panel(panel);
           String8 file_path      = d_file_path_from_eval_string(scratch.arena, str8(view->query_buffer, view->query_string_size));
@@ -10735,6 +11059,7 @@ df_frame(void)
               }
             }
           }
+#endif
         }break;
         
         //- rjf: [snapping to code locations] thread finding
@@ -10818,6 +11143,8 @@ df_frame(void)
         //- rjf: [snapping to code locations] go to code location
         case DF_MsgKind_FindCodeLocation:
         {
+#if 0 // TODO(rjf): @msgs
+          
           // NOTE(rjf): This command is where a lot of high-level flow things
           // in the debugger come together. It's that codepath that runs any
           // time a source code location is clicked in the UI, when a thread
@@ -11110,6 +11437,7 @@ df_frame(void)
               df_msg(cursor_snap_kind);
             }
           }
+#endif
         }break;
       }
     }
@@ -11163,6 +11491,7 @@ df_frame(void)
   //////////////////////////////
   //- rjf: animate alive-transitions for entities
   //
+#if 0 // TODO(rjf): @msgs
   {
     F32 rate = 1.f - pow_f32(2.f, -20.f*d_dt());
     for(D_Entity *e = d_entity_root(); !d_entity_is_nil(e); e = d_entity_rec_depth_first_pre(e, d_entity_root()).next)
@@ -11175,11 +11504,12 @@ df_frame(void)
       }
     }
   }
+#endif
   
   //////////////////////////////
   //- rjf: capture is active? -> keep rendering
   //
-  if(ProfIsCapturing() || DEV_telemetry_capture)
+  if(ProfIsCapturing())
   {
     df_request_frame();
   }
@@ -11187,6 +11517,7 @@ df_frame(void)
   //////////////////////////////
   //- rjf: commit params changes for all views
   //
+#if 0 // TODO(rjf): @msgs
   {
     for(DF_View *v = df_state->first_view; !df_view_is_nil(v); v = v->alloc_next)
     {
@@ -11196,6 +11527,7 @@ df_frame(void)
       }
     }
   }
+#endif
   
   //////////////////////////////
   //- rjf: process top-level graphical commands
@@ -13759,26 +14091,25 @@ df_frame(void)
   //
   {
     dr_begin_frame();
-    for(MD_EachNode(root_ref, df_state->cfg_root->first))
+    for(EachEnumVal(DF_CfgSlot, slot))
     {
-      for(MD_EachNode(tln, root_ref->first->first))
+      for(MD_EachNode(tln, df_state->cfg_slot_roots[slot]->first))
       {
         if(str8_match(tln->string, str8_lit("window"), 0))
         {
-          String8 window_cfg_key = df_key_from_cfg_tree(scratch.arena, tln);
-          DF_Window *w = df_window_from_cfg_key(window_cfg_key);
-          B32 window_is_focused = os_window_is_focused(w->os);
+          DF_Window *window = df_window_from_cfg_tree(tln);
+          B32 window_is_focused = os_window_is_focused(window->os);
           if(window_is_focused)
           {
-            df_state->last_focused_window = df_handle_from_window(w);
+            df_state->last_focused_window = df_handle_from_cfg_tree(tln);
           }
-          d_push_regs();
-          d_regs()->window = df_handle_from_window(w);
-          df_window_frame(w);
-          D_Regs *window_regs = d_pop_regs();
-          if(df_window_from_handle(df_state->last_focused_window) == w)
+          df_push_regs();
+          df_regs()->window = df_handle_from_cfg_tree(tln);
+          df_window_frame(tln);
+          DF_Regs *window_regs = df_pop_regs();
+          if(window_is_focused)
           {
-            MemoryCopyStruct(d_regs(), window_regs);
+            MemoryCopyStruct(df_regs(), window_regs);
           }
         }
       }
@@ -13799,7 +14130,6 @@ df_frame(void)
   if(df_state->drag_drop_state == DF_DragDropState_Dropping)
   {
     df_state->drag_drop_state = DF_DragDropState_Null;
-    MemoryZeroStruct(&df_drag_drop_payload);
   }
   
   //////////////////////////////
@@ -13871,6 +14201,21 @@ df_frame(void)
   //- rjf: tick frame counter
   //
   df_state->frame_index += 1;
+  
+  //////////////////////////////
+  //- rjf: end logging
+  //
+  {
+    LogScopeResult log = log_scope_end(scratch.arena);
+    os_append_data_to_file_path(df_state->log_path, log.strings[LogMsgKind_Info]);
+    if(log.strings[LogMsgKind_UserError].size != 0)
+    {
+      arena_clear(df_state->error_arena);
+      df_state->error_string = push_str8_copy(df_state->error_arena, log.strings[LogMsgKind_UserError]);
+      df_state->error_num_seconds_shown = 0.f;
+      df_state->error_num_seconds_to_show = 10.f;
+    }
+  }
   
   di_scope_close(di_scope);
   scratch_end(scratch);

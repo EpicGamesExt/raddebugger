@@ -152,6 +152,30 @@ struct DF_WatchViewState
 };
 
 ////////////////////////////////
+//~ rjf: View Building API
+
+//- rjf: getting view parameters
+internal U128 get_view_id(void); // TODO(rjf): @msgs {(U64)view, d_hash_from_string(str8_struct(&view))}
+internal String8 get_view_expression(void);
+internal String8 get_view_filter(void);
+internal UI_ScrollPt2 get_view_scroll_position(void);
+
+//- rjf: overwriting view parameters
+internal void set_view_expression(String8 string);
+internal void set_view_filter(String8 string);
+internal void set_view_scroll_position(UI_ScrollPt2 pos);
+
+//- rjf: getting view resources (top-level view lifetime arena, extra arenas, user state slot)
+internal Arena *get_view_arena(void);
+internal void *get_or_push_view_state(U64 needed_size);
+#define get_view_state(T) (T *)get_or_push_view_state(sizeof(T))
+internal Arena *push_view_extension_arena(void);
+
+//- rjf: view completion
+internal void complete_view_(String8 string);
+#define complete_view(...)
+
+////////////////////////////////
 //~ rjf: Code View Functions
 
 internal void df_code_view_init(DF_CodeViewState *cv, DF_View *view);

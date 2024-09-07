@@ -1660,6 +1660,8 @@ d_entity_equip_param(D_Entity *entity, String8 key, String8 value)
 
 //- rjf: opening folders/files & maintaining the entity model of the filesystem
 
+#if 0 // TODO(rjf): @msgs
+
 internal D_Entity *
 d_entity_from_path(String8 path, D_EntityFromPathFlags flags)
 {
@@ -1789,11 +1791,14 @@ d_entity_from_path(String8 path, D_EntityFromPathFlags flags)
   return result;
 }
 
+#endif
+
 //- rjf: file path map override lookups
 
 internal String8List
 d_possible_overrides_from_file_path(Arena *arena, String8 file_path)
 {
+#if 0 // TODO(rjf): @msgs
   // NOTE(rjf): This path, given some target file path, scans all file path map
   // overrides, and collects the set of file paths which could've redirected
   // to the target file path given the set of file path maps.
@@ -1862,9 +1867,14 @@ d_possible_overrides_from_file_path(Arena *arena, String8 file_path)
   }
   scratch_end(scratch);
   return result;
+#endif
+  String8List result = {0};
+  return result;
 }
 
 //- rjf: top-level state queries
+
+#if 0 // TODO(rjf): @msgs
 
 internal D_Entity *
 d_entity_root(void)
@@ -2006,6 +2016,8 @@ d_entity_from_u64_and_kind(U64 u64, D_EntityKind kind)
   }
   return result;
 }
+
+#endif
 
 //- rjf: entity freezing state
 
@@ -2631,6 +2643,7 @@ d_trap_net_from_thread__step_into_line(Arena *arena, CTRL_Entity *thread)
 ////////////////////////////////
 //~ rjf: Modules & Debug Info Mappings
 
+#if 0 // TODO(rjf): @msgs
 //- rjf: module <=> debug info keys
 
 internal DI_Key
@@ -2702,6 +2715,7 @@ d_vaddr_range_from_voff_range(D_Entity *module, Rng1U64 voff_rng)
   vaddr_rng.max = vaddr_rng.min + rng_size;
   return vaddr_rng;
 }
+#endif
 
 ////////////////////////////////
 //~ rjf: Debug Info Lookups
@@ -3339,6 +3353,7 @@ internal U128
 d_hash_from_ctrl_param_state(void)
 {
   U128 result = {0};
+#if 0 // TODO(rjf): @msgs
   Temp scratch = scratch_begin(0, 0);
   {
     // rjf: build data strings of all param data
@@ -3367,6 +3382,7 @@ d_hash_from_ctrl_param_state(void)
     blake2b((U8 *)&result.u64[0], sizeof(result), string.str, string.size, 0, 0);
   }
   scratch_end(scratch);
+#endif
   return result;
 }
 
@@ -3390,6 +3406,7 @@ internal void
 d_ctrl_run(D_RunKind run, CTRL_Entity *run_thread, CTRL_RunFlags flags, CTRL_TrapList *run_traps)
 {
   Temp scratch = scratch_begin(0, 0);
+#if 0 // TODO(rjf): @msgs
   
   // rjf: compute hash of all run-parameterization entities, store
   {
@@ -3491,6 +3508,7 @@ d_ctrl_run(D_RunKind run, CTRL_Entity *run_thread, CTRL_RunFlags flags, CTRL_Tra
   d_state->base_regs.v.unwind_count = 0;
   d_state->base_regs.v.inline_depth = 0;
   
+#endif
   scratch_end(scratch);
 }
 
@@ -5881,16 +5899,17 @@ internal DI_KeyList
 d_push_active_dbgi_key_list(Arena *arena)
 {
   DI_KeyList dbgis = {0};
-  D_EntityList modules = d_query_cached_entity_list_with_kind(D_EntityKind_Module);
-  for(D_EntityNode *n = modules.first; n != 0; n = n->next)
+  CTRL_EntityList modules = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Module);
+  for(CTRL_EntityNode *n = modules.first; n != 0; n = n->next)
   {
-    D_Entity *module = n->entity;
-    DI_Key key = d_dbgi_key_from_module(module);
+    CTRL_Entity *module = n->v;
+    DI_Key key = ctrl_dbgi_key_from_module(module);
     di_key_list_push(arena, &dbgis, &key);
   }
   return dbgis;
 }
 
+#if 0 // TODO(rjf): @msgs
 internal D_EntityList
 d_push_active_target_list(Arena *arena)
 {
@@ -5905,9 +5924,11 @@ d_push_active_target_list(Arena *arena)
   }
   return active_targets;
 }
+#endif
 
 //- rjf: expand key based entity queries
 
+#if 0 // TODO(rjf): @msgs
 internal D_Entity *
 d_entity_from_expand_key_and_kind(D_ExpandKey key, D_EntityKind kind)
 {
@@ -5924,6 +5945,7 @@ d_entity_from_expand_key_and_kind(D_ExpandKey key, D_EntityKind kind)
   }
   return result;
 }
+#endif
 
 //- rjf: per-run caches
 
@@ -6577,6 +6599,7 @@ d_tick(Arena *arena, DI_Scope *di_scope, F32 dt)
           }
           
           // rjf: kill all entities which are marked to die on stop
+#if 0 // TODO(rjf): @msgs
           {
             D_Entity *request = d_entity_from_id(event->msg_id);
             if(d_entity_is_nil(request))
@@ -6592,6 +6615,7 @@ d_tick(Arena *arena, DI_Scope *di_scope, F32 dt)
               }
             }
           }
+#endif
         }break;
         
         //- rjf: entity creation/deletion
@@ -6749,6 +6773,7 @@ d_tick(Arena *arena, DI_Scope *di_scope, F32 dt)
           }
         }break;
         
+#if 0 // TODO(rjf): @msgs
         case CTRL_EventKind_EndProc:
         {
           U32 pid = event->entity_id;
@@ -6768,9 +6793,11 @@ d_tick(Arena *arena, DI_Scope *di_scope, F32 dt)
           D_Entity *module = d_entity_from_ctrl_handle(event->machine_id, event->entity);
           d_entity_mark_for_deletion(module);
         }break;
+#endif
         
         //- rjf: debug info changes
         
+#if 0 // TODO(rjf): @msgs
         case CTRL_EventKind_ModuleDebugInfoPathChange:
         {
           D_Entity *module = d_entity_from_ctrl_handle(event->machine_id, event->entity);
@@ -6782,6 +6809,7 @@ d_tick(Arena *arena, DI_Scope *di_scope, F32 dt)
           d_entity_equip_name(debug_info, event->string);
           d_entity_equip_timestamp(debug_info, event->timestamp);
         }break;
+#endif
         
         //- rjf: debug strings
         
@@ -6791,6 +6819,7 @@ d_tick(Arena *arena, DI_Scope *di_scope, F32 dt)
           mtx_push_op(d_state->output_log_key, op);
         }break;
         
+#if 0 // TODO(rjf): @msgs
         case CTRL_EventKind_ThreadName:
         {
           String8 string = event->string;
@@ -6815,6 +6844,7 @@ d_tick(Arena *arena, DI_Scope *di_scope, F32 dt)
             d_entity_equip_name(entity, string);
           }
         }break;
+#endif
         
         //- rjf: memory
         
@@ -6919,6 +6949,7 @@ d_tick(Arena *arena, DI_Scope *di_scope, F32 dt)
   ProfScope("sync with di parsers")
   {
     Temp scratch = scratch_begin(&arena, 1);
+#if 0 // TODO(rjf): @msgs
     DI_EventList events = di_p2u_pop_events(scratch.arena, 0);
     for(DI_EventNode *n = events.first; n != 0; n = n->next)
     {
@@ -6941,6 +6972,7 @@ d_tick(Arena *arena, DI_Scope *di_scope, F32 dt)
         }break;
       }
     }
+#endif
     scratch_end(scratch);
   }
   
@@ -9252,6 +9284,7 @@ d_tick(Arena *arena, DI_Scope *di_scope, F32 dt)
 #endif
     
     //- rjf: add macros for all watches which define identifiers
+#if 0 // TODO(rjf): @msgs
     D_EntityList watches = d_query_cached_entity_list_with_kind(D_EntityKind_Watch);
     for(D_EntityNode *n = watches.first; n != 0; n = n->next)
     {
@@ -9264,6 +9297,7 @@ d_tick(Arena *arena, DI_Scope *di_scope, F32 dt)
         e_push_leaf_ident_exprs_from_expr__in_place(arena, ctx->macro_map, parse.expr);
       }
     }
+#endif
   }
   e_select_ir_ctx(ir_ctx);
   

@@ -78,6 +78,7 @@ DF_MsgKindTable:
   //- rjf: meta
   {Exit                            ""                                          exit                                          0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
   {RunCommand                      ""                                          run_command                                   0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {SetCurrentPath                  ""                                          run_command                                   0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
   {ToggleDevMenu                   ""                                          toggle_dev_menu                               0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
   {RegisterAsJITDebugger           "Register As JIT Debugger"                  register_as_jit_debugger                      0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
   {LogMarker                       "Log Marker"                                log_marker                                    0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
@@ -124,6 +125,9 @@ DF_MsgKindTable:
   {ToggleBreakpointAtCursor        "Toggle Breakpoint At Cursor"               toggle_breakpoint_at_cursor                   0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
   {ToggleWatchPinAtCursor          "Toggle Watch Pin At Cursor"                toggle_watch_pin_at_cursor                    0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
   {ToggleWatchExpressionAtCursor   "Toggle Watch Expression At Cursor"         toggle_watch_expression_at_cursor             0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  
+  //- rjf: at-mouse operations
+  {ToggleWatchExpressionAtMouse    "Toggle Watch Expression At Mouse"          toggle_watch_expression_at_mouse              0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
   
   //- rjf: windows
   {OpenWindow                      ""                                          open_window                                   0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
@@ -194,6 +198,7 @@ DF_MsgKindTable:
   
   //- rjf: tab filters
   {Filter                          ""                                          filter                                        0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {SetFilter                       ""                                          set_filter                                    0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
   {ClearFilter                     ""                                          clear_filter                                  0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
   {ApplyFilter                     ""                                          apply_filter                                  0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
   
