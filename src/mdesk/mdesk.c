@@ -212,7 +212,7 @@ md_node_push_child(MD_Node *parent, MD_Node *node)
 }
 
 internal void
-md_unhook_child(MD_Node *node)
+md_node_unhook_child(MD_Node *node)
 {
   MD_Node *parent = node->parent;
   if(!md_node_is_nil(parent))
@@ -236,7 +236,7 @@ md_node_push_tag(MD_Node *parent, MD_Node *node)
 }
 
 internal void
-md_unhook_tag(MD_Node *node)
+md_node_unhook_tag(MD_Node *node)
 {
   MD_Node *parent = node->parent;
   if(!md_node_is_nil(parent))
@@ -391,21 +391,6 @@ md_tag_arg_from_string(MD_Node *node, String8 tag_string, StringMatchFlags tag_s
   MD_Node *tag = md_tag_from_string(node, tag_string, tag_str_flags);
   MD_Node *arg = md_child_from_string(tag, arg_string, arg_str_flags);
   return arg;
-}
-
-internal MD_Node *
-md_ancestor_from_string(MD_Node *node, String8 string, StringMatchFlags flags)
-{
-  MD_Node *result = &md_nil_node;
-  for(MD_Node *n = node->parent; !md_node_is_nil(n); n = n->parent)
-  {
-    if(str8_match(n->string, string, flags))
-    {
-      result = n;
-      break;
-    }
-  }
-  return result;
 }
 
 internal B32
@@ -566,18 +551,6 @@ md_tree_copy(Arena *arena, MD_Node *src_root)
   }
   return dst_root;
 }
-
-//- rjf: node pointer lists
-
-internal void
-md_node_ptr_list_push(Arena *arena, MD_NodePtrList *list, MD_Node *node)
-{
-  MD_NodePtrNode *n = push_array(arena, MD_NodePtrNode, 1);
-  n->v = node;
-  SLLQueuePush(list->first, list->last, n);
-  list->count += 1;
-}
-
 
 ////////////////////////////////
 //~ rjf: Text -> Tokens Functions

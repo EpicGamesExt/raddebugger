@@ -239,7 +239,6 @@ e_member_eval_from_eval_member_name(E_Eval eval, String8 member_name)
       {
         result.mode     = eval.mode;
         result.space    = eval.space;
-        
         result.type_key = member->type_key;
         result.code     = eval.code;
         result.msgs     = eval.msgs;
@@ -262,26 +261,6 @@ e_member_eval_from_eval_member_name(E_Eval eval, String8 member_name)
       }
     }
     scratch_end(scratch);
-  }
-  return result;
-}
-
-internal F32
-e_f32_from_eval(E_Eval eval)
-{
-  F32 result = 0;
-  E_TypeKind kind = e_type_kind_from_key(e_type_unwrap(eval.type_key));
-  if(e_type_kind_is_integer(kind))
-  {
-    result = (F32)eval.value.s64;
-  }
-  else if(kind == E_TypeKind_F64)
-  {
-    result = (F32)eval.value.f64;
-  }
-  else if(kind == E_TypeKind_F32)
-  {
-    result = eval.value.f32;
   }
   return result;
 }

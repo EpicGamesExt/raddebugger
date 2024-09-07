@@ -2,28 +2,6 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
-//~ rjf: View Building API
-
-//- rjf: getting view parameters
-internal U128 get_view_id(void){return u128_zero();} // TODO(rjf): @msgs {(U64)view, d_hash_from_string(str8_struct(&view))}
-internal String8 get_view_expression(void) { return str8_zero(); }
-internal String8 get_view_filter(void) { return str8_zero(); }
-internal UI_ScrollPt2 get_view_scroll_position(void) { UI_ScrollPt2 pt = {0}; return pt; }
-
-//- rjf: overwriting view parameters
-internal void set_view_expression(String8 string){}
-internal void set_view_filter(String8 string){}
-internal void set_view_scroll_position(UI_ScrollPt2 pos){}
-
-//- rjf: getting view resources (top-level view lifetime arena, extra arenas, user state slot)
-internal Arena *get_view_arena(void){return 0;}
-internal void *get_or_push_view_state(U64 needed_size){return 0;}
-internal Arena *push_view_extension_arena(void){return 0;}
-
-//- rjf: view completion
-internal void complete_view_(String8 string){}
-
-////////////////////////////////
 //~ rjf: Code Views
 
 internal void
@@ -66,7 +44,7 @@ df_code_view_build(Arena *arena, DF_View *view, DF_CodeViewState *cv, DF_CodeVie
       default: break;
       case DF_MsgKind_GoToLine:
       {
-        cv->goto_line_num = msg->regs->cursor.line;
+        cv->goto_line_num = msg->regs.cursor.line;
       }break;
       case DF_MsgKind_CenterCursor:
       {
@@ -188,9 +166,9 @@ df_code_view_build(Arena *arena, DF_View *view, DF_CodeViewState *cv, DF_CodeVie
     code_slice_params.line_text                 = push_array(scratch.arena, String8, visible_line_count);
     code_slice_params.line_ranges               = push_array(scratch.arena, Rng1U64, visible_line_count);
     code_slice_params.line_tokens               = push_array(scratch.arena, TXT_TokenArray, visible_line_count);
-    code_slice_params.line_bps                  = push_array(scratch.arena, MD_NodePtrList, visible_line_count);
+    code_slice_params.line_bps                  = push_array(scratch.arena, D_EntityList, visible_line_count);
     code_slice_params.line_ips                  = push_array(scratch.arena, CTRL_EntityList, visible_line_count);
-    code_slice_params.line_pins                 = push_array(scratch.arena, MD_NodePtrList, visible_line_count);
+    code_slice_params.line_pins                 = push_array(scratch.arena, D_EntityList, visible_line_count);
     code_slice_params.line_vaddrs               = push_array(scratch.arena, U64, visible_line_count);
     code_slice_params.line_infos                = push_array(scratch.arena, D_LineList, visible_line_count);
     code_slice_params.font                      = code_font;
@@ -219,7 +197,6 @@ df_code_view_build(Arena *arena, DF_View *view, DF_CodeViewState *cv, DF_CodeVie
     // rjf: find visible breakpoints for source code
     ProfScope("find visible breakpoints")
     {
-#if 0 // TODO(rjf): @msgs
       D_EntityList bps = d_query_cached_entity_list_with_kind(D_EntityKind_Breakpoint);
       for(D_EntityNode *n = bps.first; n != 0; n = n->next)
       {
@@ -232,7 +209,6 @@ df_code_view_build(Arena *arena, DF_View *view, DF_CodeViewState *cv, DF_CodeVie
           d_entity_list_push(scratch.arena, &code_slice_params.line_bps[slice_line_idx], bp);
         }
       }
-#endif
     }
     
     // rjf: find live threads mapping to source code
@@ -267,7 +243,6 @@ df_code_view_build(Arena *arena, DF_View *view, DF_CodeViewState *cv, DF_CodeVie
     // rjf: find visible watch pins for source code
     ProfScope("find visible watch pins")
     {
-#if 0 // TODO(rjf): @msgs
       D_EntityList wps = d_query_cached_entity_list_with_kind(D_EntityKind_WatchPin);
       for(D_EntityNode *n = wps.first; n != 0; n = n->next)
       {
@@ -280,7 +255,6 @@ df_code_view_build(Arena *arena, DF_View *view, DF_CodeViewState *cv, DF_CodeVie
           d_entity_list_push(scratch.arena, &code_slice_params.line_pins[slice_line_idx], wp);
         }
       }
-#endif
     }
     
     // rjf: find all src -> dasm info
@@ -321,7 +295,6 @@ df_code_view_build(Arena *arena, DF_View *view, DF_CodeViewState *cv, DF_CodeVie
     // rjf: find breakpoints mapping to this disasm
     if(dasm_lines) ProfScope("find breakpoints mapping to this disassembly")
     {
-#if 0 // TODO(rjf): @msgs
       D_EntityList bps = d_query_cached_entity_list_with_kind(D_EntityKind_Breakpoint);
       for(D_EntityNode *n = bps.first; n != 0; n = n->next)
       {
@@ -339,13 +312,11 @@ df_code_view_build(Arena *arena, DF_View *view, DF_CodeViewState *cv, DF_CodeVie
           }
         }
       }
-#endif
     }
     
     // rjf: find watch pins mapping to this disasm
     if(dasm_lines) ProfScope("find watch pins mapping to this disassembly")
     {
-#if 0 // TODO(rjf): @msgs
       D_EntityList pins = d_query_cached_entity_list_with_kind(D_EntityKind_WatchPin);
       for(D_EntityNode *n = pins.first; n != 0; n = n->next)
       {
@@ -363,7 +334,6 @@ df_code_view_build(Arena *arena, DF_View *view, DF_CodeViewState *cv, DF_CodeVie
           }
         }
       }
-#endif
     }
     
     // rjf: fill dasm -> src info
@@ -464,7 +434,7 @@ df_code_view_build(Arena *arena, DF_View *view, DF_CodeViewState *cv, DF_CodeVie
       cv->center_cursor = found;
       if(found == 0)
       {
-        log_user_errorf("Could not find \"%S\"", cv->find_text_fwd);
+        d_errorf("Could not find \"%S\"", cv->find_text_fwd);
       }
       scratch_end(scratch);
     }
@@ -525,7 +495,7 @@ df_code_view_build(Arena *arena, DF_View *view, DF_CodeViewState *cv, DF_CodeVie
       cv->center_cursor = found;
       if(found == 0)
       {
-        log_user_errorf("Could not find \"%S\"", cv->find_text_bwd);
+        d_errorf("Could not find \"%S\"", cv->find_text_bwd);
       }
       scratch_end(scratch);
     }
@@ -1798,7 +1768,7 @@ df_watch_view_build(DF_View *view, DF_WatchViewState *ewv, B32 modifiable, U32 d
                   }
                   if(!success)
                   {
-                    log_user_errorf("Could not commit value successfully.");
+                    d_error(str8_lit("Could not commit value successfully."));
                   }
                 }break;
                 case DF_WatchViewColumnKind_Type:{}break;
@@ -2340,9 +2310,11 @@ df_watch_view_build(DF_View *view, DF_WatchViewState *ewv, B32 modifiable, U32 d
               }
               if(ui_clicked(sig))
               {
-                df_msg(DF_MsgKind_OpenTab,
-                       .string = e_string_from_expr(scratch.arena, row->expr),
-                       .params_tree = row->expand_ui_rule_params);
+                DF_ViewSpec *canvas_view_spec = df_view_spec_from_string(row->expand_ui_rule_spec->info.string);
+                d_cmd(D_CmdKind_OpenTab,
+                      .string      = e_string_from_expr(scratch.arena, row->expr),
+                      .view_spec   = canvas_view_spec,
+                      .params_tree = row->expand_ui_rule_params);
               }
             }
             
@@ -2366,7 +2338,7 @@ df_watch_view_build(DF_View *view, DF_WatchViewState *ewv, B32 modifiable, U32 d
               //- rjf: build
               UI_PermissionFlags(UI_PermissionFlag_Clicks|UI_PermissionFlag_ScrollX)
               {
-                canvas_view_spec->info.ui_hook(canvas_rect);
+                canvas_view_spec->info.ui_hook(canvas_view, canvas_view->params_roots[canvas_view->params_read_gen%ArrayCount(canvas_view->params_roots)], str8(canvas_view->query_buffer, canvas_view->query_string_size), canvas_rect);
               }
               
               //- rjf: pop interaction registers
@@ -2651,7 +2623,7 @@ df_watch_view_build(DF_View *view, DF_WatchViewState *ewv, B32 modifiable, U32 d
                 if(ui_double_clicked(sig) && cell_can_edit)
                 {
                   ui_kill_action();
-                  df_msg(DF_MsgKind_Edit);
+                  d_cmd(D_CmdKind_Edit);
                 }
                 
                 // rjf: double-click, not editable -> go-to-location
@@ -2866,7 +2838,7 @@ df_watch_view_build(DF_View *view, DF_WatchViewState *ewv, B32 modifiable, U32 d
   //
   if(pressed)
   {
-    df_msg(DF_MsgKind_FocusPanel);
+    d_cmd(D_CmdKind_FocusPanel);
   }
   
   scratch_end(scratch);
@@ -2903,7 +2875,7 @@ DF_VIEW_UI_FUNCTION_DEF(empty)
     {
       if(ui_clicked(df_icon_buttonf(DF_IconKind_X, 0, "Close Panel")))
       {
-        df_msg(DF_MsgKind_ClosePanel);
+        d_cmd(D_CmdKind_ClosePanel);
       }
     }
   }
@@ -2974,14 +2946,13 @@ DF_VIEW_UI_FUNCTION_DEF(getting_started)
             DF_Palette(DF_PaletteCode_NeutralPopButton)
             if(ui_clicked(df_icon_buttonf(DF_IconKind_Add, 0, "Add Target")))
           {
-            df_msg(DF_MsgKind_RunCommand, .string = df_msg_kind_info_table[DF_MsgKind_AddTarget].name_lower);
+            d_cmd(D_CmdKind_RunCommand, .cmd_spec = d_cmd_spec_from_kind(D_CmdKind_AddTarget));
           }
         }break;
         
         //- rjf: user has 1 target. build helper for launching it
         case 1:
         {
-#if 0 // TODO(rjf): @msgs
           D_Entity *target = d_first_entity_from_list(&targets);
           String8 target_full_path = target->string;
           String8 target_name = str8_skip_last_slash(target_full_path);
@@ -3003,7 +2974,6 @@ DF_VIEW_UI_FUNCTION_DEF(getting_started)
               d_cmd(D_CmdKind_LaunchAndInit, .entity = d_handle_from_entity(target));
             }
           }
-#endif
         }break;
         
         //- rjf: user has N targets.
@@ -3188,7 +3158,6 @@ DF_VIEW_UI_FUNCTION_DEF(commands)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
-#if 0 // TODO(rjf): @msgs
   
   //- rjf: grab state
   typedef struct DF_CmdsViewState DF_CmdsViewState;
@@ -3196,18 +3165,17 @@ DF_VIEW_UI_FUNCTION_DEF(commands)
   {
     D_CmdSpec *selected_cmd_spec;
   };
-  DF_CmdsViewState *cv = get_view_state(DF_CmdsViewState);
+  DF_CmdsViewState *cv = df_view_user_state(view, DF_CmdsViewState);
   
   //- rjf: build filtered array of commands
-  String8 filter = get_view_filter();
-  DF_CmdListerItemList cmd_list = df_cmd_lister_item_list_from_needle(scratch.arena, filter);
+  DF_CmdListerItemList cmd_list = df_cmd_lister_item_list_from_needle(scratch.arena, string);
   DF_CmdListerItemArray cmd_array = df_cmd_lister_item_array_from_list(scratch.arena, cmd_list);
   df_cmd_lister_item_array_sort_by_strength__in_place(cmd_array);
   
   //- rjf: submit best match when hitting enter w/ no selection
   if(cv->selected_cmd_spec == &d_nil_cmd_spec && ui_slot_press(UI_EventActionSlot_Accept))
   {
-    df_msg(DF_MsgKind_CompleteQuery, .cmd_spec = (cmd_array.count > 0 ? cmd_array.v[0].cmd_spec : &d_nil_cmd_spec));
+    d_cmd(D_CmdKind_CompleteQuery, .cmd_spec = (cmd_array.count > 0 ? cmd_array.v[0].cmd_spec : &d_nil_cmd_spec));
   }
   
   //- rjf: selected kind -> cursor
@@ -3335,7 +3303,6 @@ DF_VIEW_UI_FUNCTION_DEF(commands)
     cv->selected_cmd_spec = &d_nil_cmd_spec;
   }
   
-#endif
   scratch_end(scratch);
   ProfEnd();
 }
@@ -3516,7 +3483,7 @@ DF_VIEW_UI_FUNCTION_DEF(file_system)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
-  String8 query = get_view_filter();
+  String8 query = string;
   String8 query_normalized = path_normalized_from_string(scratch.arena, query);
   B32 query_has_slash = (query.size != 0 && char_to_correct_slash(query.str[query.size-1]) == '/');
   String8 query_normalized_with_opt_slash = push_str8f(scratch.arena, "%S%s", query_normalized, query_has_slash ? "/" : "");
@@ -3528,13 +3495,13 @@ DF_VIEW_UI_FUNCTION_DEF(file_system)
   B32 dir_selection = !!(window->query_cmd_spec->info.query.flags & D_CmdQueryFlag_AllowFolders);
   
   //- rjf: get extra state for this view
-  DF_FileSystemViewState *fs = get_view_state(DF_FileSystemViewState);
+  DF_FileSystemViewState *fs = df_view_user_state(view, DF_FileSystemViewState);
   if(fs->initialized == 0)
   {
     fs->initialized = 1;
     fs->path_state_table_size = 256;
-    fs->path_state_table = push_array(get_view_arena(), DF_FileSystemViewPathState *, fs->path_state_table_size);
-    fs->cached_files_arena = push_view_extension_arena();
+    fs->path_state_table = push_array(view->arena, DF_FileSystemViewPathState *, fs->path_state_table_size);
+    fs->cached_files_arena = df_view_push_arena_ext(view);
     fs->col_pcts[0] = 0.60f;
     fs->col_pcts[1] = 0.20f;
     fs->col_pcts[2] = 0.20f;
@@ -3556,10 +3523,10 @@ DF_VIEW_UI_FUNCTION_DEF(file_system)
     }
     if(ps == 0)
     {
-      ps = push_array(get_view_arena(), DF_FileSystemViewPathState, 1);
+      ps = push_array(view->arena, DF_FileSystemViewPathState, 1);
       ps->hash_next = fs->path_state_table[slot];
       fs->path_state_table[slot] = ps;
-      ps->normalized_path = push_str8_copy(get_view_arena(), key);
+      ps->normalized_path = push_str8_copy(view->arena, key);
     }
   }
   
@@ -3582,7 +3549,7 @@ DF_VIEW_UI_FUNCTION_DEF(file_system)
     // choose the most recent change to a file browser path, and live with the
     // consequences).
     {
-      df_msg(DF_MsgKind_SetCurrentPath, .file_path = path_query.path);
+      d_cmd(D_CmdKind_SetCurrentPath, .file_path = path_query.path);
     }
     
     //- rjf: get files, filtered
@@ -3670,7 +3637,7 @@ DF_VIEW_UI_FUNCTION_DEF(file_system)
     // rjf: command search part is empty, but directory matches some file:
     if(path_query_path_props.created != 0 && path_query.search.size == 0)
     {
-      df_msg(DF_MsgKind_CompleteQuery, .file_path = query_normalized_with_opt_slash);
+      d_cmd(D_CmdKind_CompleteQuery, .file_path = query_normalized_with_opt_slash);
     }
     
     // rjf: command argument exactly matches some file:
@@ -3680,20 +3647,20 @@ DF_VIEW_UI_FUNCTION_DEF(file_system)
       if(query_normalized_with_opt_slash_props.flags & FilePropertyFlag_IsFolder)
       {
         String8 new_path = push_str8f(scratch.arena, "%S%S/", path_query.path, path_query.search);
-        df_msg(DF_MsgKind_SetFilter, .string = new_path);
+        df_view_equip_query(view, new_path);
       }
       
       // rjf: is a file -> complete view
       else
       {
-        df_msg(DF_MsgKind_CompleteQuery, .file_path = query_normalized_with_opt_slash);
+        d_cmd(D_CmdKind_CompleteQuery, .file_path = query_normalized_with_opt_slash);
       }
     }
     
     // rjf: command argument is empty, picking folders -> use current folder
     else if(path_query.search.size == 0 && dir_selection)
     {
-      df_msg(DF_MsgKind_CompleteQuery, .file_path = path_query.path);
+      d_cmd(D_CmdKind_CompleteQuery, .file_path = path_query.path);
     }
     
     // rjf: command argument does not exactly match any file, but lister results are in:
@@ -3704,19 +3671,19 @@ DF_VIEW_UI_FUNCTION_DEF(file_system)
       {
         String8 existing_path = str8_chop_last_slash(path_query.path);
         String8 new_path = push_str8f(scratch.arena, "%S/%S/", existing_path, files[0].filename);
-        df_msg(DF_MsgKind_SetFilter, .string = new_path);
+        df_view_equip_query(view, new_path);
       }
       else
       {
         String8 file_path = push_str8f(scratch.arena, "%S%S", path_query.path, filename);
-        df_msg(DF_MsgKind_CompleteQuery, .file_path = file_path);
+        d_cmd(D_CmdKind_CompleteQuery, .file_path = file_path);
       }
     }
     
     // rjf: command argument does not match any file, and lister is empty (new file)
     else
     {
-      df_msg(DF_MsgKind_CompleteQuery, .file_path = query);
+      d_cmd(D_CmdKind_CompleteQuery, .file_path = query);
     }
   }
   
@@ -3784,10 +3751,9 @@ DF_VIEW_UI_FUNCTION_DEF(file_system)
     scroll_list_params.cursor_min_is_empty_selection[Axis2_Y] = 1;
   }
   UI_ScrollListSignal scroll_list_sig = {0};
-  UI_ScrollPt2 scroll_pos = get_view_scroll_position();
   UI_Focus(UI_FocusKind_On)
     UI_ScrollList(&scroll_list_params,
-                  &scroll_pos.y,
+                  &view->scroll_pos.y,
                   &ps->cursor,
                   0,
                   &visible_row_range,
@@ -3829,8 +3795,8 @@ DF_VIEW_UI_FUNCTION_DEF(file_system)
       {
         String8 new_path = str8_chop_last_slash(str8_chop_last_slash(path_query.path));
         new_path = path_normalized_from_string(scratch.arena, new_path);
-        String8 new_filter = push_str8f(scratch.arena, "%S%s", new_path, new_path.size != 0 ? "/" : "");
-        set_view_filter(new_filter);
+        String8 new_cmd = push_str8f(scratch.arena, "%S%s", new_path, new_path.size != 0 ? "/" : "");
+        df_view_equip_query(view, new_cmd);
       }
     }
     
@@ -3847,7 +3813,7 @@ DF_VIEW_UI_FUNCTION_DEF(file_system)
       UI_Signal file_sig = {0};
       UI_FocusHot(file_kb_focus ? UI_FocusKind_On : UI_FocusKind_Off)
       {
-        file_sig = ui_buttonf("##%S", file->filename);
+        file_sig = ui_buttonf("##%S_%p", file->filename, view);
       }
       
       // rjf: make content
@@ -3911,17 +3877,16 @@ DF_VIEW_UI_FUNCTION_DEF(file_system)
         new_path = path_normalized_from_string(scratch.arena, new_path);
         if(file->props.flags & FilePropertyFlag_IsFolder)
         {
-          String8 new_filter = push_str8f(scratch.arena, "%S%s", new_path, new_path.size != 0 ? "/" : "");
-          set_view_filter(new_filter);
+          String8 new_cmd = push_str8f(scratch.arena, "%S%s", new_path, new_path.size != 0 ? "/" : "");
+          df_view_equip_query(view, new_cmd);
         }
         else
         {
-          complete_view(.file_path = new_path);
+          d_cmd(D_CmdKind_CompleteQuery, .file_path = new_path);
         }
       }
     }
   }
-  set_view_scroll_position(scroll_pos);
   
   scratch_end(scratch);
   ProfEnd();
@@ -4112,16 +4077,16 @@ DF_VIEW_UI_FUNCTION_DEF(system_processes)
     String8 cached_process_arg;
     DF_ProcessInfoArray cached_process_array;
   };
-  DF_SystemProcessesViewState *sp = get_view_state(DF_SystemProcessesViewState);
+  DF_SystemProcessesViewState *sp = df_view_user_state(view, DF_SystemProcessesViewState);
   if(sp->initialized == 0)
   {
     sp->initialized = 1;
     sp->need_initial_gather = 1;
-    sp->cached_process_arena = push_view_extension_arena();
+    sp->cached_process_arena = df_view_push_arena_ext(view);
   }
   
   //- rjf: gather list of filtered process infos
-  String8 query = get_view_filter();
+  String8 query = string;
   DF_ProcessInfoArray process_info_array = sp->cached_process_array;
   if(sp->need_initial_gather || !str8_match(sp->cached_process_arg, query, 0))
   {
@@ -4138,7 +4103,7 @@ DF_VIEW_UI_FUNCTION_DEF(system_processes)
   if(sp->selected_pid == 0 && process_info_array.count > 0 && ui_slot_press(UI_EventActionSlot_Accept))
   {
     DF_ProcessInfo *info = &process_info_array.v[0];
-    complete_view(.pid = info->info.pid);
+    d_cmd(D_CmdKind_CompleteQuery, .id = info->info.pid);
   }
   
   //- rjf: selected PID -> cursor
@@ -4167,10 +4132,9 @@ DF_VIEW_UI_FUNCTION_DEF(system_processes)
     scroll_list_params.cursor_min_is_empty_selection[Axis2_Y] = 1;
   }
   UI_ScrollListSignal scroll_list_sig = {0};
-  UI_ScrollPt2 scroll_pos = get_view_scroll_position();
   UI_Focus(UI_FocusKind_On)
     UI_ScrollList(&scroll_list_params,
-                  &scroll_pos.y,
+                  &view->scroll_pos.y,
                   &cursor,
                   0,
                   &visible_row_range,
@@ -4227,11 +4191,10 @@ DF_VIEW_UI_FUNCTION_DEF(system_processes)
       // rjf: click => activate this specific process
       if(ui_clicked(sig))
       {
-        complete_view(.pid = info->info.pid);
+        d_cmd(D_CmdKind_CompleteQuery, .id = info->info.pid);
       }
     }
   }
-  set_view_scroll_position(scroll_pos);
   
   //- rjf: selected num -> selected PID
   {
@@ -4350,7 +4313,6 @@ DF_VIEW_SETUP_FUNCTION_DEF(entity_lister){}
 DF_VIEW_CMD_FUNCTION_DEF(entity_lister){}
 DF_VIEW_UI_FUNCTION_DEF(entity_lister)
 {
-#if 0 // TODO(rjf): @msgs
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   DF_Window *window = df_window_from_handle(d_regs()->window);
@@ -4470,7 +4432,6 @@ DF_VIEW_UI_FUNCTION_DEF(entity_lister)
   
   scratch_end(scratch);
   ProfEnd();
-#endif
 }
 
 ////////////////////////////////
@@ -4508,13 +4469,12 @@ DF_VIEW_UI_FUNCTION_DEF(symbol_lister)
   {
     Vec2S64 cursor;
   };
-  DF_SymbolListerViewState *slv = get_view_state(DF_SymbolListerViewState);
+  DF_SymbolListerViewState *slv = df_view_user_state(view, DF_SymbolListerViewState);
   
-  //- rjf: filter -> rdi, filtered items
-  String8 filter = get_view_filter();
-  U128 fuzzy_search_key = get_view_id();
+  //- rjf: query -> raddbg, filtered items
+  U128 fuzzy_search_key = {(U64)view, d_hash_from_string(str8_struct(&view))};
   B32 items_stale = 0;
-  FZY_ItemArray items = fzy_items_from_key_params_query(fzy_scope, fuzzy_search_key, &fuzzy_search_params, filter, endt_us, &items_stale);
+  FZY_ItemArray items = fzy_items_from_key_params_query(fzy_scope, fuzzy_search_key, &fuzzy_search_params, string, endt_us, &items_stale);
   if(items_stale)
   {
     df_request_frame();
@@ -4538,7 +4498,7 @@ DF_VIEW_UI_FUNCTION_DEF(symbol_lister)
         String8 name = str8(name_base, name_size);
         if(name.size != 0)
         {
-          complete_view(.string = name);
+          d_cmd(D_CmdKind_CompleteQuery, .string = name);
         }
         break;
       }
@@ -4559,10 +4519,9 @@ DF_VIEW_UI_FUNCTION_DEF(symbol_lister)
     scroll_list_params.cursor_min_is_empty_selection[Axis2_Y] = 1;
   }
   UI_ScrollListSignal scroll_list_sig = {0};
-  UI_ScrollPt2 scroll_pos = get_view_scroll_position();
   UI_Focus(UI_FocusKind_On)
     UI_ScrollList(&scroll_list_params,
-                  &scroll_pos.y,
+                  &view->scroll_pos.y,
                   &slv->cursor,
                   0,
                   &visible_row_range,
@@ -4629,7 +4588,7 @@ DF_VIEW_UI_FUNCTION_DEF(symbol_lister)
       UI_Signal sig = ui_signal_from_box(box);
       if(ui_clicked(sig))
       {
-        complete_view(.string = name);
+        d_cmd(D_CmdKind_CompleteQuery, .string = name);
       }
       if(ui_hovering(sig)) UI_Tooltip
       {
@@ -4654,7 +4613,6 @@ DF_VIEW_UI_FUNCTION_DEF(symbol_lister)
     }
   }
   
-  set_view_scroll_position(scroll_pos);
   fzy_scope_close(fzy_scope);
   di_scope_close(di_scope);
   scratch_end(scratch);
@@ -5009,7 +4967,6 @@ DF_VIEW_SETUP_FUNCTION_DEF(targets){}
 DF_VIEW_CMD_FUNCTION_DEF(targets){}
 DF_VIEW_UI_FUNCTION_DEF(targets)
 {
-#if 0 // TODO(rjf): @msgs
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   D_EntityList targets_list = d_query_cached_entity_list_with_kind(D_EntityKind_Target);
@@ -5153,7 +5110,6 @@ DF_VIEW_UI_FUNCTION_DEF(targets)
   
   scratch_end(scratch);
   ProfEnd();
-#endif
 }
 
 ////////////////////////////////
@@ -5516,44 +5472,42 @@ DF_VIEW_UI_FUNCTION_DEF(auto_view_rules){}
 ////////////////////////////////
 //~ rjf: breakpoints @view_hook_impl
 
-DF_VIEW_SETUP_FUNCTION_DEF(breakpoints){}
+DF_VIEW_SETUP_FUNCTION_DEF(breakpoints)
+{
+  DF_WatchViewState *wv = df_view_user_state(view, DF_WatchViewState);
+  df_watch_view_init(wv, view, DF_WatchViewFillKind_Breakpoints);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Member, 0.25f, .string = str8_lit("Label"), .dequote_string = 1, .is_non_code = 1);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Member, 0.35f, .string = str8_lit("Location"), .dequote_string = 1, .is_non_code = 1);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Member, 0.20f, .string = str8_lit("Condition"), .dequote_string = 1);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Member, 0.10f, .string = str8_lit("Enabled"), .view_rule = str8_lit("checkbox"));
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Member, 0.10f, .string = str8_lit("Hit Count"));
+}
 DF_VIEW_CMD_FUNCTION_DEF(breakpoints){}
 DF_VIEW_UI_FUNCTION_DEF(breakpoints)
 {
-#if 0 // TODO(rjf): @msgs
-  DF_WatchViewState *wv = get_view_state(DF_WatchViewState);
-  if(wv->initialized == 0)
-  {
-    wv->initialized = 1;
-    df_watch_view_init(wv, view, DF_WatchViewFillKind_Breakpoints);
-    df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Member, 0.25f, .string = str8_lit("Label"), .dequote_string = 1, .is_non_code = 1);
-    df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Member, 0.35f, .string = str8_lit("Location"), .dequote_string = 1, .is_non_code = 1);
-    df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Member, 0.20f, .string = str8_lit("Condition"), .dequote_string = 1);
-    df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Member, 0.10f, .string = str8_lit("Enabled"), .view_rule = str8_lit("checkbox"));
-    df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Member, 0.10f, .string = str8_lit("Hit Count"));
-  }
-  df_watch_view_build(view, wv, 0, 10, rect);
-#endif
+  ProfBeginFunction();
+  DF_WatchViewState *ewv = df_view_user_state(view, DF_WatchViewState);
+  df_watch_view_build(view, ewv, 0, 10, rect);
+  ProfEnd();
 }
 
 ////////////////////////////////
 //~ rjf: watch_pins @view_hook_impl
 
-DF_VIEW_SETUP_FUNCTION_DEF(watch_pins){}
+DF_VIEW_SETUP_FUNCTION_DEF(watch_pins)
+{
+  DF_WatchViewState *wv = df_view_user_state(view, DF_WatchViewState);
+  df_watch_view_init(wv, view, DF_WatchViewFillKind_WatchPins);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Member, 0.5f, .string = str8_lit("Label"), .dequote_string = 1, .is_non_code = 1);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Member, 0.5f, .string = str8_lit("Location"), .dequote_string = 1, .is_non_code = 1);
+}
 DF_VIEW_CMD_FUNCTION_DEF(watch_pins){}
 DF_VIEW_UI_FUNCTION_DEF(watch_pins)
 {
-#if 0 // TODO(rjf): @msgs
-  DF_WatchViewState *wv = df_view_user_state(view, DF_WatchViewState);
-  if(wv->initialized == 0)
-  {
-    wv->initialized = 1;
-    df_watch_view_init(wv, view, DF_WatchViewFillKind_WatchPins);
-    df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Member, 0.5f, .string = str8_lit("Label"), .dequote_string = 1, .is_non_code = 1);
-    df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Member, 0.5f, .string = str8_lit("Location"), .dequote_string = 1, .is_non_code = 1);
-  }
-  df_watch_view_build(view, wv, 0, 10, rect);
-#endif
+  ProfBeginFunction();
+  DF_WatchViewState *ewv = df_view_user_state(view, DF_WatchViewState);
+  df_watch_view_build(view, ewv, 0, 10, rect);
+  ProfEnd();
 }
 
 ////////////////////////////////
@@ -5783,22 +5737,21 @@ DF_VIEW_UI_FUNCTION_DEF(scheduler)
 ////////////////////////////////
 //~ rjf: call_stack @view_hook_impl
 
-DF_VIEW_SETUP_FUNCTION_DEF(call_stack){}
+DF_VIEW_SETUP_FUNCTION_DEF(call_stack)
+{
+  DF_WatchViewState *wv = df_view_user_state(view, DF_WatchViewState);
+  df_watch_view_init(wv, view, DF_WatchViewFillKind_CallStack);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_FrameSelection,  0.05f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Value,  0.7f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Module, 0.25f, .is_non_code = 1);
+}
 DF_VIEW_CMD_FUNCTION_DEF(call_stack){}
 DF_VIEW_UI_FUNCTION_DEF(call_stack)
 {
-#if 0 // TODO(rjf): @msgs
+  ProfBeginFunction();
   DF_WatchViewState *wv = df_view_user_state(view, DF_WatchViewState);
-  if(wv->initialized == 0)
-  {
-    wv->initialized = 1;
-    df_watch_view_init(wv, view, DF_WatchViewFillKind_CallStack);
-    df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_FrameSelection,  0.05f);
-    df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Value,  0.7f);
-    df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Module, 0.25f, .is_non_code = 1);
-  }
   df_watch_view_build(view, wv, 0, 10, rect);
-#endif
+  ProfEnd();
 }
 
 ////////////////////////////////
@@ -6149,45 +6102,43 @@ DF_VIEW_UI_FUNCTION_DEF(modules)
 ////////////////////////////////
 //~ rjf: watch @view_hook_impl
 
-DF_VIEW_SETUP_FUNCTION_DEF(watch){}
+DF_VIEW_SETUP_FUNCTION_DEF(watch)
+{
+  DF_WatchViewState *wv = df_view_user_state(view, DF_WatchViewState);
+  df_watch_view_init(wv, view, DF_WatchViewFillKind_Watch);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Expr,      0.25f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Value,     0.3f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Type,      0.15f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_ViewRule,  0.30f);
+}
 DF_VIEW_CMD_FUNCTION_DEF(watch){}
 DF_VIEW_UI_FUNCTION_DEF(watch)
 {
-#if 0 // TODO(rjf): @msgs
-  DF_WatchViewState *wv = df_view_user_state(view, DF_WatchViewState);
-  if(wv->initialized == 0)
-  {
-    wv->initialized = 1;
-    df_watch_view_init(wv, view, DF_WatchViewFillKind_Watch);
-    df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Expr,      0.25f);
-    df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Value,     0.3f);
-    df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Type,      0.15f);
-    df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_ViewRule,  0.30f);
-  }
-  df_watch_view_build(view, wv, 1*(view->query_string_size == 0), 10, rect);
-#endif
+  ProfBeginFunction();
+  DF_WatchViewState *ewv = df_view_user_state(view, DF_WatchViewState);
+  df_watch_view_build(view, ewv, 1*(view->query_string_size == 0), 10, rect);
+  ProfEnd();
 }
 
 ////////////////////////////////
 //~ rjf: locals @view_hook_impl
 
-DF_VIEW_SETUP_FUNCTION_DEF(locals) {}
+DF_VIEW_SETUP_FUNCTION_DEF(locals)
+{
+  DF_WatchViewState *wv = df_view_user_state(view, DF_WatchViewState);
+  df_watch_view_init(wv, view, DF_WatchViewFillKind_Locals);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Expr,      0.25f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Value,     0.3f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Type,      0.15f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_ViewRule,  0.30f);
+}
 DF_VIEW_CMD_FUNCTION_DEF(locals) {}
 DF_VIEW_UI_FUNCTION_DEF(locals)
 {
-#if 0 // TODO(rjf): @msgs
+  ProfBeginFunction();
   DF_WatchViewState *wv = df_view_user_state(view, DF_WatchViewState);
-  if(wv->initialized == 0)
-  {
-    wv->initialized = 1;
-    df_watch_view_init(wv, view, DF_WatchViewFillKind_Locals);
-    df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Expr,      0.25f);
-    df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Value,     0.3f);
-    df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Type,      0.15f);
-    df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_ViewRule,  0.30f);
-  }
   df_watch_view_build(view, wv, 0, 10, rect);
-#endif
+  ProfEnd();
 }
 
 ////////////////////////////////
@@ -6195,98 +6146,103 @@ DF_VIEW_UI_FUNCTION_DEF(locals)
 
 DF_VIEW_SETUP_FUNCTION_DEF(registers)
 {
+  DF_WatchViewState *wv = df_view_user_state(view, DF_WatchViewState);
+  df_watch_view_init(wv, view, DF_WatchViewFillKind_Registers);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Expr,      0.25f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Value,     0.3f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Type,      0.15f);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_ViewRule,  0.30f);
 }
 DF_VIEW_CMD_FUNCTION_DEF(registers) {}
 DF_VIEW_UI_FUNCTION_DEF(registers)
 {
-#if 0 // TODO(rjf): @msgs
+  ProfBeginFunction();
   DF_WatchViewState *wv = df_view_user_state(view, DF_WatchViewState);
-  if(wv->initialized == 0)
-  {
-    wv->initialized = 1;
-    df_watch_view_init(wv, view, DF_WatchViewFillKind_Registers);
-    df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Expr,      0.25f);
-    df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Value,     0.3f);
-    df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Type,      0.15f);
-    df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_ViewRule,  0.30f);
-  }
   df_watch_view_build(view, wv, 0, 16, rect);
-#endif
+  ProfEnd();
 }
 
 ////////////////////////////////
 //~ rjf: globals @view_hook_impl
 
-DF_VIEW_SETUP_FUNCTION_DEF(globals){}
-DF_VIEW_CMD_FUNCTION_DEF(globals) {}
-DF_VIEW_UI_FUNCTION_DEF(globals)
+DF_VIEW_SETUP_FUNCTION_DEF(globals)
 {
-#if 0 // TODO(rjf): @msgs
   DF_WatchViewState *wv = df_view_user_state(view, DF_WatchViewState);
   df_watch_view_init(wv, view, DF_WatchViewFillKind_Globals);
   df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Expr,      0.25f);
   df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Value,     0.3f);
   df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Type,      0.15f);
   df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_ViewRule,  0.30f);
+}
+DF_VIEW_CMD_FUNCTION_DEF(globals) {}
+DF_VIEW_UI_FUNCTION_DEF(globals)
+{
+  ProfBeginFunction();
   DF_WatchViewState *ewv = df_view_user_state(view, DF_WatchViewState);
   df_watch_view_build(view, ewv, 0, 10, rect);
-#endif
+  ProfEnd();
 }
 
 ////////////////////////////////
 //~ rjf: thread_locals @view_hook_impl
 
-DF_VIEW_SETUP_FUNCTION_DEF(thread_locals){}
-DF_VIEW_CMD_FUNCTION_DEF(thread_locals){}
-DF_VIEW_UI_FUNCTION_DEF(thread_locals)
+DF_VIEW_SETUP_FUNCTION_DEF(thread_locals)
 {
-#if 0 // TODO(rjf): @msgs
   DF_WatchViewState *wv = df_view_user_state(view, DF_WatchViewState);
   df_watch_view_init(wv, view, DF_WatchViewFillKind_ThreadLocals);
   df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Expr,      0.25f);
   df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Value,     0.3f);
   df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Type,      0.15f);
   df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_ViewRule,  0.30f);
+}
+DF_VIEW_CMD_FUNCTION_DEF(thread_locals) {}
+DF_VIEW_UI_FUNCTION_DEF(thread_locals)
+{
+  ProfBeginFunction();
   DF_WatchViewState *ewv = df_view_user_state(view, DF_WatchViewState);
   df_watch_view_build(view, ewv, 0, 10, rect);
-#endif
+  ProfEnd();
 }
 
 ////////////////////////////////
 //~ rjf: types @view_hook_impl
 
-DF_VIEW_SETUP_FUNCTION_DEF(types) {}
-DF_VIEW_CMD_FUNCTION_DEF(types) {}
-DF_VIEW_UI_FUNCTION_DEF(types)
+DF_VIEW_SETUP_FUNCTION_DEF(types)
 {
-#if 0 // TODO(rjf): @msgs
   DF_WatchViewState *wv = df_view_user_state(view, DF_WatchViewState);
   df_watch_view_init(wv, view, DF_WatchViewFillKind_Types);
   df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Expr,      0.25f);
   df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Value,     0.3f);
   df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Type,      0.15f);
   df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_ViewRule,  0.30f);
+}
+DF_VIEW_CMD_FUNCTION_DEF(types) {}
+DF_VIEW_UI_FUNCTION_DEF(types)
+{
+  ProfBeginFunction();
   DF_WatchViewState *ewv = df_view_user_state(view, DF_WatchViewState);
   df_watch_view_build(view, ewv, 0, 10, rect);
-#endif
+  ProfEnd();
 }
 
 ////////////////////////////////
 //~ rjf: procedures @view_hook_impl
 
-DF_VIEW_SETUP_FUNCTION_DEF(procedures) {}
-DF_VIEW_CMD_FUNCTION_DEF(procedures) {}
-DF_VIEW_UI_FUNCTION_DEF(procedures)
+DF_VIEW_SETUP_FUNCTION_DEF(procedures)
 {
-#if 0 // TODO(rjf): @msgs
   DF_WatchViewState *wv = df_view_user_state(view, DF_WatchViewState);
   df_watch_view_init(wv, view, DF_WatchViewFillKind_Procedures);
   df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Expr,      0.2f);
   df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Value,     0.6f);
   df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_ViewRule,  0.2f);
+}
+DF_VIEW_CMD_FUNCTION_DEF(procedures) {}
+DF_VIEW_UI_FUNCTION_DEF(procedures)
+{
+  ProfBeginFunction();
   DF_WatchViewState *ewv = df_view_user_state(view, DF_WatchViewState);
   df_watch_view_build(view, ewv, 0, 10, rect);
-#endif
+  ProfEnd();
 }
 
 ////////////////////////////////
@@ -6295,12 +6251,10 @@ DF_VIEW_UI_FUNCTION_DEF(procedures)
 DF_VIEW_SETUP_FUNCTION_DEF(pending_file){}
 DF_VIEW_CMD_FUNCTION_DEF(pending_file)
 {
-#if 0 // TODO(rjf): @msgs
   Temp scratch = scratch_begin(0, 0);
   
   //- rjf: determine if file is ready, and which viewer to use
-  String8 expr = get_view_expression();
-  String8 file_path = d_file_path_from_eval_string(scratch.arena, expr);
+  String8 file_path = d_file_path_from_eval_string(scratch.arena, str8(view->query_buffer, view->query_string_size));
   Rng1U64 file_range = r1u64(0, 1024);
   U128 file_hash = fs_hash_from_path_range(file_path, file_range, 0);
   B32 file_is_ready = 0;
@@ -6379,15 +6333,12 @@ DF_VIEW_CMD_FUNCTION_DEF(pending_file)
   }
   
   scratch_end(scratch);
-#endif
 }
 
 DF_VIEW_UI_FUNCTION_DEF(pending_file)
 {
-#if 0 // TODO(rjf): @msgs
   view->loading_t = view->loading_t_target = 1.f;
   df_request_frame();
-#endif
 }
 
 ////////////////////////////////
@@ -6395,17 +6346,14 @@ DF_VIEW_UI_FUNCTION_DEF(pending_file)
 
 DF_VIEW_SETUP_FUNCTION_DEF(text)
 {
-#if 0 // TODO(rjf): @msgs
   DF_CodeViewState *cv = df_view_user_state(view, DF_CodeViewState);
   df_code_view_init(cv, view);
   df_view_equip_loading_info(view, 1, 0, 0);
   view->loading_t = view->loading_t_target = 1.f;
-#endif
 }
 
 DF_VIEW_CMD_FUNCTION_DEF(text)
 {
-#if 0 // TODO(rjf): @msgs
   DF_CodeViewState *cv = df_view_user_state(view, DF_CodeViewState);
   Temp scratch = scratch_begin(0, 0);
   HS_Scope *hs_scope = hs_scope_open();
@@ -6460,12 +6408,10 @@ DF_VIEW_CMD_FUNCTION_DEF(text)
   txt_scope_close(txt_scope);
   hs_scope_close(hs_scope);
   scratch_end(scratch);
-#endif
 }
 
 DF_VIEW_UI_FUNCTION_DEF(text)
 {
-#if 0 // TODO(rjf): @msgs
   DF_CodeViewState *cv = df_view_user_state(view, DF_CodeViewState);
   Temp scratch = scratch_begin(0, 0);
   HS_Scope *hs_scope = hs_scope_open();
@@ -6642,7 +6588,6 @@ DF_VIEW_UI_FUNCTION_DEF(text)
   txt_scope_close(txt_scope);
   hs_scope_close(hs_scope);
   scratch_end(scratch);
-#endif
 }
 
 ////////////////////////////////
@@ -6661,7 +6606,6 @@ struct DF_DisasmViewState
 
 DF_VIEW_SETUP_FUNCTION_DEF(disasm)
 {
-#if 0 // TODO(rjf): @msgs
   DF_DisasmViewState *dv = df_view_user_state(view, DF_DisasmViewState);
   if(dv->initialized == 0)
   {
@@ -6671,12 +6615,10 @@ DF_VIEW_SETUP_FUNCTION_DEF(disasm)
     dv->style_flags = DASM_StyleFlag_Addresses|DASM_StyleFlag_SourceFilesNames|DASM_StyleFlag_SourceLines|DASM_StyleFlag_SymbolNames;
     df_code_view_init(&dv->cv, view);
   }
-#endif
 }
 
 DF_VIEW_CMD_FUNCTION_DEF(disasm)
 {
-#if 0 // TODO(rjf): @msgs
   DF_DisasmViewState *dv = df_view_user_state(view, DF_DisasmViewState);
   Temp scratch = scratch_begin(0, 0);
   DASM_Scope *dasm_scope = dasm_scope_open();
@@ -6795,12 +6737,10 @@ DF_VIEW_CMD_FUNCTION_DEF(disasm)
   hs_scope_close(hs_scope);
   dasm_scope_close(dasm_scope);
   scratch_end(scratch);
-#endif
 }
 
 DF_VIEW_UI_FUNCTION_DEF(disasm)
 {
-#if 0 // TODO(rjf): @msgs
   DF_DisasmViewState *dv = df_view_user_state(view, DF_DisasmViewState);
   DF_CodeViewState *cv = &dv->cv;
   Temp scratch = scratch_begin(0, 0);
@@ -6950,7 +6890,6 @@ DF_VIEW_UI_FUNCTION_DEF(disasm)
   dasm_scope_close(dasm_scope);
   hs_scope_close(hs_scope);
   scratch_end(scratch);
-#endif
 }
 
 ////////////////////////////////
@@ -6958,15 +6897,12 @@ DF_VIEW_UI_FUNCTION_DEF(disasm)
 
 DF_VIEW_SETUP_FUNCTION_DEF(output)
 {
-#if 0 // TODO(rjf): @msgs
   DF_CodeViewState *cv = df_view_user_state(view, DF_CodeViewState);
   df_code_view_init(cv, view);
-#endif
 }
 
 DF_VIEW_CMD_FUNCTION_DEF(output)
 {
-#if 0 // TODO(rjf): @msgs
   DF_CodeViewState *cv = df_view_user_state(view, DF_CodeViewState);
   Temp scratch = scratch_begin(0, 0);
   HS_Scope *hs_scope = hs_scope_open();
@@ -6980,12 +6916,10 @@ DF_VIEW_CMD_FUNCTION_DEF(output)
   txt_scope_close(txt_scope);
   hs_scope_close(hs_scope);
   scratch_end(scratch);
-#endif
 }
 
 DF_VIEW_UI_FUNCTION_DEF(output)
 {
-#if 0 // TODO(rjf): @msgs
   DF_CodeViewState *cv = df_view_user_state(view, DF_CodeViewState);
   Temp scratch = scratch_begin(0, 0);
   HS_Scope *hs_scope = hs_scope_open();
@@ -7043,7 +6977,6 @@ DF_VIEW_UI_FUNCTION_DEF(output)
   txt_scope_close(txt_scope);
   hs_scope_close(hs_scope);
   scratch_end(scratch);
-#endif
 }
 
 ////////////////////////////////
@@ -7056,10 +6989,13 @@ struct DF_MemoryViewState
   B32 contain_cursor;
 };
 
-DF_VIEW_SETUP_FUNCTION_DEF(memory){}
+DF_VIEW_SETUP_FUNCTION_DEF(memory)
+{
+  DF_MemoryViewState *mv = df_view_user_state(view, DF_MemoryViewState);
+}
+
 DF_VIEW_CMD_FUNCTION_DEF(memory)
 {
-#if 0 // TODO(rjf): @msgs
   DF_MemoryViewState *mv = df_view_user_state(view, DF_MemoryViewState);
   for(D_CmdNode *n = cmds->first; n != 0; n = n->next)
   {
@@ -7097,12 +7033,10 @@ DF_VIEW_CMD_FUNCTION_DEF(memory)
       }break;
     }
   }
-#endif
 }
 
 DF_VIEW_UI_FUNCTION_DEF(memory)
 {
-#if 0 // TODO(rjf): @msgs
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   HS_Scope *hs_scope = hs_scope_open();
@@ -7851,7 +7785,6 @@ DF_VIEW_UI_FUNCTION_DEF(memory)
   hs_scope_close(hs_scope);
   scratch_end(scratch);
   ProfEnd();
-#endif
 }
 
 ////////////////////////////////
@@ -7972,11 +7905,14 @@ internal UI_BOX_CUSTOM_DRAW(df_bitmap_view_canvas_box_draw)
   }
 }
 
-DF_VIEW_SETUP_FUNCTION_DEF(bitmap){}
-DF_VIEW_CMD_FUNCTION_DEF(bitmap){}
+DF_VIEW_SETUP_FUNCTION_DEF(bitmap)
+{
+  df_view_equip_loading_info(view, 1, 0, 0);
+  view->loading_t = view->loading_t_target = 1.f;
+}
+DF_VIEW_CMD_FUNCTION_DEF(bitmap) {}
 DF_VIEW_UI_FUNCTION_DEF(bitmap)
 {
-#if 0 // TODO(rjf): @msgs
   Temp scratch = scratch_begin(0, 0);
   HS_Scope *hs_scope = hs_scope_open();
   TEX_Scope *tex_scope = tex_scope_open();
@@ -8173,7 +8109,6 @@ DF_VIEW_UI_FUNCTION_DEF(bitmap)
   hs_scope_close(hs_scope);
   tex_scope_close(tex_scope);
   scratch_end(scratch);
-#endif
 }
 
 ////////////////////////////////
@@ -8205,7 +8140,6 @@ DF_VIEW_SETUP_FUNCTION_DEF(color_rgba) {}
 DF_VIEW_CMD_FUNCTION_DEF(color_rgba) {}
 DF_VIEW_UI_FUNCTION_DEF(color_rgba)
 {
-#if 0 // TODO(rjf): @msgs
   Temp scratch = scratch_begin(0, 0);
   Vec2F32 dim = dim_2f32(rect);
   F32 padding = ui_top_font_size()*3.f;
@@ -8247,7 +8181,6 @@ DF_VIEW_UI_FUNCTION_DEF(color_rgba)
     }
   }
   scratch_end(scratch);
-#endif
 }
 
 ////////////////////////////////
@@ -8300,11 +8233,14 @@ internal UI_BOX_CUSTOM_DRAW(df_geo3d_box_draw)
   dr_mesh(draw_data->vertex_buffer, draw_data->index_buffer, R_GeoTopologyKind_Triangles, R_GeoVertexFlag_TexCoord|R_GeoVertexFlag_Normals|R_GeoVertexFlag_RGB, r_handle_zero(), mat_4x4f32(1.f));
 }
 
-DF_VIEW_SETUP_FUNCTION_DEF(geo3d){}
+DF_VIEW_SETUP_FUNCTION_DEF(geo3d)
+{
+  df_view_equip_loading_info(view, 1, 0, 0);
+  view->loading_t = view->loading_t_target = 1.f;
+}
 DF_VIEW_CMD_FUNCTION_DEF(geo3d) {}
 DF_VIEW_UI_FUNCTION_DEF(geo3d)
 {
-#if 0 // TODO(rjf): @msgs
   Temp scratch = scratch_begin(0, 0);
   GEO_Scope *geo_scope = geo_scope_open();
   DF_Geo3DViewState *state = df_view_user_state(view, DF_Geo3DViewState);
@@ -8414,7 +8350,6 @@ DF_VIEW_UI_FUNCTION_DEF(geo3d)
   
   geo_scope_close(geo_scope);
   scratch_end(scratch);
-#endif
 }
 
 ////////////////////////////////
@@ -8424,11 +8359,10 @@ DF_VIEW_SETUP_FUNCTION_DEF(exception_filters) {}
 DF_VIEW_CMD_FUNCTION_DEF(exception_filters) {}
 DF_VIEW_UI_FUNCTION_DEF(exception_filters)
 {
-#if 0 // TODO(rjf): @msgs
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
-  String8 filter = get_view_filter();
+  String8 query = string;
   
   //- rjf: get state
   typedef struct DF_ExceptionFiltersViewState DF_ExceptionFiltersViewState;
@@ -8476,7 +8410,7 @@ DF_VIEW_UI_FUNCTION_DEF(exception_filters)
   {
     DF_ExceptionFiltersOptionChunkNode *node = opts_list.last;
     String8 name = push_str8f(scratch.arena, "0x%x %S", ctrl_exception_code_kind_code_table[k], ctrl_exception_code_kind_display_string_table[k]);
-    FuzzyMatchRangeList matches = fuzzy_match_find(scratch.arena, filter, name);
+    FuzzyMatchRangeList matches = fuzzy_match_find(scratch.arena, query, name);
     if(matches.count >= matches.needle_part_count)
     {
       if(node == 0 || node->count >= node->cap)
@@ -8520,10 +8454,9 @@ DF_VIEW_UI_FUNCTION_DEF(exception_filters)
     scroll_list_params.cursor_min_is_empty_selection[Axis2_Y] = 1;
   }
   UI_ScrollListSignal scroll_list_sig = {0};
-  UI_ScrollPt2 scroll_pos = get_view_scroll_position();
   UI_Focus(UI_FocusKind_On)
     UI_ScrollList(&scroll_list_params,
-                  &scroll_pos.y,
+                  &view->scroll_pos.y,
                   &sv->cursor,
                   0,
                   &visible_row_range,
@@ -8552,11 +8485,9 @@ DF_VIEW_UI_FUNCTION_DEF(exception_filters)
       }
     }
   }
-  set_view_scroll_position(scroll_pos);
   
   scratch_end(scratch);
   ProfEnd();
-#endif
 }
 
 ////////////////////////////////
@@ -8637,11 +8568,10 @@ DF_VIEW_SETUP_FUNCTION_DEF(settings){}
 DF_VIEW_CMD_FUNCTION_DEF(settings){}
 DF_VIEW_UI_FUNCTION_DEF(settings)
 {
-#if 0 // TODO(rjf): @msgs
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
-  String8 filter = get_view_filter();
+  String8 query = string;
   DF_Window *window = df_window_from_handle(d_regs()->window);
   
   //////////////////////////////
@@ -8661,7 +8591,7 @@ DF_VIEW_UI_FUNCTION_DEF(settings)
     DF_ThemePreset preset_apply_confirm;
     B32 category_opened[DF_SettingsItemKind_COUNT];
   };
-  DF_SettingsViewState *sv = get_view_state(DF_SettingsViewState);
+  DF_SettingsViewState *sv = df_view_user_state(view, DF_SettingsViewState);
   if(!sv->initialized)
   {
     sv->initialized = 1;
@@ -9061,9 +8991,8 @@ DF_VIEW_UI_FUNCTION_DEF(settings)
     scroll_list_params.cursor_min_is_empty_selection[Axis2_Y] = 1;
   }
   UI_ScrollListSignal scroll_list_sig = {0};
-  UI_ScrollPt2 scroll_pos = get_view_scroll_position();
   UI_Focus(UI_FocusKind_On)
-    UI_ScrollList(&scroll_list_params, &scroll_pos.y, &sv->cursor, 0, &visible_row_range, &scroll_list_sig)
+    UI_ScrollList(&scroll_list_params, &view->scroll_pos.y, &sv->cursor, 0, &visible_row_range, &scroll_list_sig)
     UI_Focus(UI_FocusKind_Null)
   {
     for(S64 row_num = visible_row_range.min; row_num <= visible_row_range.max && row_num < items.count; row_num += 1)
@@ -9249,8 +9178,6 @@ DF_VIEW_UI_FUNCTION_DEF(settings)
     }
   }
   
-  set_view_scroll_position(scroll_pos);
   scratch_end(scratch);
   ProfEnd();
-#endif
 }

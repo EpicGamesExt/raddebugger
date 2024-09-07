@@ -80,7 +80,6 @@ DF_MsgKind_RunToCursor,
 DF_MsgKind_SetNextStatement,
 DF_MsgKind_Exit,
 DF_MsgKind_RunCommand,
-DF_MsgKind_SetCurrentPath,
 DF_MsgKind_ToggleDevMenu,
 DF_MsgKind_RegisterAsJITDebugger,
 DF_MsgKind_LogMarker,
@@ -113,7 +112,6 @@ DF_MsgKind_GoToNameAtCursor,
 DF_MsgKind_ToggleBreakpointAtCursor,
 DF_MsgKind_ToggleWatchPinAtCursor,
 DF_MsgKind_ToggleWatchExpressionAtCursor,
-DF_MsgKind_ToggleWatchExpressionAtMouse,
 DF_MsgKind_OpenWindow,
 DF_MsgKind_CloseWindow,
 DF_MsgKind_ToggleFullscreen,
@@ -156,7 +154,6 @@ DF_MsgKind_CloseTab,
 DF_MsgKind_TabBarTop,
 DF_MsgKind_TabBarBottom,
 DF_MsgKind_Filter,
-DF_MsgKind_SetFilter,
 DF_MsgKind_ClearFilter,
 DF_MsgKind_ApplyFilter,
 DF_MsgKind_ResetToDefaultPanels,
@@ -625,7 +622,7 @@ DF_VIEW_RULE_ROW_UI_FUNCTION_DEF(checkbox);
 DF_VIEW_RULE_ROW_UI_FUNCTION_DEF(color_rgba);
 C_LINKAGE_BEGIN
 extern Rng1U64 df_reg_slot_range_table[29];
-extern DF_MsgKindInfo df_msg_kind_info_table[138];
+extern DF_MsgKindInfo df_msg_kind_info_table[135];
 extern DF_StringBindingPair df_g_default_binding_table[110];
 extern String8 df_g_binding_version_remap_old_name_table[7];
 extern String8 df_g_binding_version_remap_new_name_table[7];

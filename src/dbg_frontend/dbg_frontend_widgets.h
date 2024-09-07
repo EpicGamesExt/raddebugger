@@ -42,9 +42,9 @@ struct DF_CodeSliceParams
   String8 *line_text;
   Rng1U64 *line_ranges;
   TXT_TokenArray *line_tokens;
-  MD_NodePtrList *line_bps;
+  D_EntityList *line_bps;
   CTRL_EntityList *line_ips;
-  MD_NodePtrList *line_pins;
+  D_EntityList *line_pins;
   U64 *line_vaddrs;
   D_LineList *line_infos;
   DI_KeyList relevant_dbgi_keys;
@@ -84,17 +84,13 @@ internal void df_loading_overlay(Rng2F32 rect, F32 loading_t, U64 progress_v, U6
 ////////////////////////////////
 //~ rjf: UI Widgets: Fancy Buttons
 
-internal void df_keybinding_buttons(String8 msg_name);
 internal void df_cmd_binding_buttons(D_CmdSpec *spec);
 internal UI_Signal df_menu_bar_button(String8 string);
-internal UI_Signal df_msg_button(String8 msg_name);
 internal UI_Signal df_cmd_spec_button(D_CmdSpec *spec);
 internal void df_cmd_list_menu_buttons(U64 count, D_CmdKind *cmds, U32 *fastpath_codepoints);
-internal void df_msg_list_menu_buttons(U64 count, String8 *msg_names, U32 *fastpath_codepoints);
 internal UI_Signal df_icon_button(DF_IconKind kind, FuzzyMatchRangeList *matches, String8 string);
 internal UI_Signal df_icon_buttonf(DF_IconKind kind, FuzzyMatchRangeList *matches, char *fmt, ...);
 internal void df_entity_tooltips(D_Entity *entity);
-internal void df_cfg_tree_tooltips(MD_Node *cfg_tree);
 internal void df_ctrl_entity_tooltips(CTRL_Entity *entity);
 internal UI_Signal df_entity_desc_button(D_Entity *entity, FuzzyMatchRangeList *name_matches, String8 fuzzy_query, B32 is_implicit);
 internal void df_src_loc_button(String8 file_path, TxtPt point);

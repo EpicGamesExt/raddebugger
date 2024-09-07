@@ -1293,15 +1293,12 @@ internal void d_entity_equip_params(D_Entity *entity, MD_Node *params);
 internal void d_entity_equip_param(D_Entity *entity, String8 key, String8 value);
 
 //- rjf: opening folders/files & maintaining the entity model of the filesystem
-#if 0 // TODO(rjf): @msgs
 internal D_Entity *d_entity_from_path(String8 path, D_EntityFromPathFlags flags);
-#endif
 
 //- rjf: file path map override lookups
 internal String8List d_possible_overrides_from_file_path(Arena *arena, String8 file_path);
 
 //- rjf: top-level state queries
-#if 0 // TODO(rjf): @msgs
 internal D_Entity *d_entity_root(void);
 internal D_EntityList d_push_entity_list_with_kind(Arena *arena, D_EntityKind kind);
 internal D_Entity *d_entity_from_id(D_EntityID id);
@@ -1310,7 +1307,6 @@ internal D_Entity *d_entity_from_ctrl_handle(CTRL_MachineID machine_id, DMN_Hand
 internal D_Entity *d_entity_from_ctrl_id(CTRL_MachineID machine_id, U32 id);
 internal D_Entity *d_entity_from_name_and_kind(String8 string, D_EntityKind kind);
 internal D_Entity *d_entity_from_u64_and_kind(U64 u64, D_EntityKind kind);
-#endif
 
 //- rjf: entity freezing state
 internal void d_set_thread_freeze_state(D_Entity *thread, B32 frozen);
@@ -1341,7 +1337,6 @@ internal CTRL_TrapList d_trap_net_from_thread__step_into_line(Arena *arena, CTRL
 ////////////////////////////////
 //~ rjf: Modules & Debug Info Mappings
 
-#if 0 // TODO(rjf): @msgs
 //- rjf: module <=> debug info keys
 internal DI_Key d_dbgi_key_from_module(D_Entity *module);
 internal D_EntityList d_modules_from_dbgi_key(Arena *arena, DI_Key *dbgi_key);
@@ -1352,7 +1347,6 @@ internal U64 d_voff_from_vaddr(D_Entity *module, U64 vaddr);
 internal U64 d_vaddr_from_voff(D_Entity *module, U64 voff);
 internal Rng1U64 d_voff_range_from_vaddr_range(D_Entity *module, Rng1U64 vaddr_rng);
 internal Rng1U64 d_vaddr_range_from_voff_range(D_Entity *module, Rng1U64 voff_rng);
-#endif
 
 ////////////////////////////////
 //~ rjf: Debug Info Lookups
@@ -1557,20 +1551,14 @@ internal void d_cfg_push_write_string(D_CfgSrc src, String8 string);
 internal String8 d_current_path(void);
 
 //- rjf: entity kind cache
-#if 0 // TODO(rjf): @msgs
 internal D_EntityList d_query_cached_entity_list_with_kind(D_EntityKind kind);
-#endif
 
 //- rjf: active entity based queries
 internal DI_KeyList d_push_active_dbgi_key_list(Arena *arena);
-#if 0 // TODO(rjf): @msgs
 internal D_EntityList d_push_active_target_list(Arena *arena);
-#endif
 
 //- rjf: expand key based entity queries
-#if 0 // TODO(rjf): @msgs
 internal D_Entity *d_entity_from_expand_key_and_kind(D_ExpandKey key, D_EntityKind kind);
-#endif
 
 //- rjf: per-run caches
 internal CTRL_Unwind d_query_cached_unwind_from_thread(CTRL_Entity *thread);

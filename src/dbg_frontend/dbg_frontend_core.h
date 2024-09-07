@@ -9,7 +9,6 @@
 
 typedef enum DF_CfgSlot
 {
-  DF_CfgSlot_Null,
   DF_CfgSlot_User,
   DF_CfgSlot_Project,
   DF_CfgSlot_CommandLine,
@@ -18,22 +17,12 @@ typedef enum DF_CfgSlot
 DF_CfgSlot;
 
 ////////////////////////////////
-//~ rjf: String Allocation Types
-
-typedef struct DF_StringChunkNode DF_StringChunkNode;
-struct DF_StringChunkNode
-{
-  DF_StringChunkNode *next;
-  U64 size;
-};
-
-////////////////////////////////
 //~ rjf: Handle Types
 
 typedef struct DF_Handle DF_Handle;
 struct DF_Handle
 {
-  U64 u64[2];
+  U64 u64[4];
 };
 
 typedef struct DF_HandleNode DF_HandleNode;
@@ -351,6 +340,14 @@ typedef enum DF_DragDropState
 }
 DF_DragDropState;
 
+typedef struct DF_DragDropPayload DF_DragDropPayload;
+struct DF_DragDropPayload
+{
+  DF_Handle cfg_tree;
+  D_Handle entity;
+  TxtPt text_point;
+};
+
 ////////////////////////////////
 //~ rjf: Rich Hover Types
 
@@ -454,7 +451,6 @@ struct DF_MsgKindInfo
   String8 search_tags;
   DF_MsgKindFlags flags;
   DF_MsgQuery query;
-  U32 icon_kind;
 };
 
 ////////////////////////////////
@@ -616,10 +612,6 @@ struct DF_Window
   B32 menu_bar_key_held;
   B32 menu_bar_focus_press_started;
   
-  // rjf: context menu state
-  Arena *ctx_menu_arena;
-  DF_Regs *ctx_menu_regs;
-  
   // rjf: code context menu state
   Arena *code_ctx_menu_arena;
   String8 code_ctx_menu_file_path;
@@ -693,6 +685,11 @@ struct DF_Window
   F32 hover_eval_open_t;
   F32 hover_eval_num_visible_rows_t;
   
+  // rjf: error state
+  U8 error_buffer[512];
+  U64 error_string_size;
+  F32 error_t;
+  
   // rjf: panel state
   DF_Panel *root_panel;
   DF_Panel *free_panel;
@@ -736,9 +733,6 @@ struct DF_State
   Arena *arena;
   B32 quit;
   U64 frame_index;
-  F32 dt;
-  Log *log;
-  String8 log_path;
   
   // rjf: frame arenas
   Arena *frame_arenas[2];
@@ -752,11 +746,12 @@ struct DF_State
   // rjf: frame request state
   U64 num_frames_requested;
   
-  // rjf: config tree state
-  Arena *cfg_arena;
+  // rjf: config trees
+  Arena *cfg_root_arena;
+  MD_Node *cfg_root;
+  Arena *cfg_slot_arenas[DF_CfgSlot_COUNT];
+  U64 cfg_slot_gens[DF_CfgSlot_COUNT];
   MD_Node *cfg_slot_roots[DF_CfgSlot_COUNT];
-  MD_Node *cfg_free;
-  DF_StringChunkNode *cfg_free_string_chunks[8];
   
   // rjf: interaction registers
   DF_RegsNode base_regs;
@@ -782,13 +777,11 @@ struct DF_State
   U64 key_map_total_count;
   
   // rjf: bind change
-  Arena *bind_change_arena;
   B32 bind_change_active;
-  String8 bind_change_msg_name;
-  DF_Handle bind_change_bind_handle;
+  D_CmdSpec *bind_change_cmd_spec;
+  DF_Binding bind_change_binding;
   
   // rjf: top-level context menu keys
-  UI_Key ctx_menu_key;
   UI_Key code_ctx_menu_key;
   UI_Key entity_ctx_menu_key;
   UI_Key tab_ctx_menu_key;
@@ -801,12 +794,6 @@ struct DF_State
   DF_Msg confirm_msg;
   String8 confirm_title;
   String8 confirm_desc;
-  
-  // rjf: error popup state
-  Arena *error_arena;
-  String8 error_string;
-  F32 error_num_seconds_shown;
-  F32 error_num_seconds_to_show;
   
   // rjf: string search state
   Arena *string_search_arena;
@@ -829,7 +816,7 @@ struct DF_State
   DF_Window *free_window;
   U64 window_count;
   B32 last_window_queued_save;
-  DF_Handle last_focused_window;
+  D_Handle last_focused_window;
   
   // rjf: view state
   DF_View *first_view;
@@ -908,6 +895,7 @@ read_only global DF_Panel df_nil_panel =
 };
 
 global DF_State *df_state = 0;
+global DF_DragDropPayload df_drag_drop_payload = {0};
 global D_Handle df_last_drag_drop_panel = {0};
 global D_Handle df_last_drag_drop_prev_tab = {0};
 
@@ -1005,12 +993,6 @@ internal void df_queue_drag_drop(void);
 
 internal void df_set_rich_hover_info(DF_RichHoverInfo *info);
 internal DF_RichHoverInfo df_get_rich_hover_info(void);
-
-////////////////////////////////
-//~ rjf: Context Menu Opening
-
-internal void df_ctx_menu_open_(UI_Box *box, DF_Regs *regs);
-#define df_ctx_menu_open(box, ...) df_ctx_menu_open_((box), &(DF_Regs){df_regs_lit_init_top __VA_ARGS__})
 
 ////////////////////////////////
 //~ rjf: View Spec State Functions
@@ -1117,48 +1099,26 @@ internal Arena *df_frame_arena(void);
 internal DF_Handle df_handle_from_cfg_tree(MD_Node *cfg);
 internal MD_Node *df_cfg_tree_from_handle(DF_Handle handle);
 
-//- rjf: cfg tree -> slot
-internal DF_CfgSlot df_cfg_slot_from_tree(MD_Node *node);
-
-//- rjf: cfg slot allocations
-internal MD_Node *df_cfg_node_alloc(void);
-internal void df_cfg_node_release(MD_Node *node);
-internal U64 df_cfg_string_bucket_idx_from_string_size(U64 size);
-internal String8 df_cfg_string_alloc(String8 string);
-internal void df_cfg_string_release(String8 string);
-
-//- rjf: tree -> cfg slot copying
-internal MD_Node *df_cfg_tree_copy(MD_Node *src);
-
-//- rjf: string -> cfg tree helpers
-internal MD_Node *df_file_cfg_tree_from_string(String8 string);
-internal MD_Node *df_single_cfg_tree_from_string(String8 string);
-internal MD_Node *df_single_cfg_tree_from_stringf(char *fmt, ...);
-
-//- rjf: cfg node string replacing helper
-internal void df_cfg_tree_set_string(MD_Node *node, String8 new_string);
-internal void df_cfg_tree_set_stringf(MD_Node *node, char *fmt, ...);
-
-//- rjf: cfg subtree replacing helper
-internal MD_Node *df_cfg_tree_set_key(MD_Node *root, String8 key, String8 value);
-internal MD_Node *df_cfg_tree_set_keyf(MD_Node *root, String8 key, char *fmt, ...);
-
-//- rjf: key string <-> cfg tree
+//- rjf: string <-> cfg tree
 internal MD_Node *df_cfg_tree_from_key(String8 string);
 internal String8 df_key_from_cfg_tree(Arena *arena, MD_Node *node);
 
-//- rjf: cfg tree general introspection helpers
-internal MD_Node *df_cfg_tree_last_from_key(MD_Node *root, String8 key);
-internal Vec4F32 df_rgba_from_cfg_tree(MD_Node *cfg);
+//- rjf: config tree mutations
+internal DF_CfgSlot df_cfg_slot_from_tree(MD_Node *node);
+internal MD_Node *df_cfg_tree_store(MD_Node *parent, MD_Node *prev_child, String8 string);
+internal MD_Node *df_cfg_tree_storef(MD_Node *parent, MD_Node *prev_child, char *fmt, ...);
+internal void df_cfg_tree_set_string(MD_Node *node, String8 string);
+internal void df_cfg_tree_set_stringf(MD_Node *node, char *fmt, ...);
+internal void df_cfg_tree_insert_child(MD_Node *parent, MD_Node *prev_child, MD_Node *node);
+internal void df_cfg_tree_release(MD_Node *node);
+#define df_cfg_tree_set_key(parent, key, val) df_cfg_tree_store((parent), md_child_from_string((parent), (key), 0), (val))
+#define df_cfg_tree_set_keyf(parent, key, fmt, ...) df_cfg_tree_storef((parent), md_child_from_string((parent), (key), 0), (fmt), __VA_ARGS__)
 
-//- rjf: window/panel/tab tree introspection helpers
+//- rjf: config tree lookups
 internal Axis2 df_split_axis_from_panel_cfg(MD_Node *panel);
 internal Rng2F32 df_target_rect_from_panel_child_cfg(Rng2F32 parent_rect, Axis2 parent_split_axis, MD_Node *panel);
 internal Rng2F32 df_target_rect_from_panel_cfg(Rng2F32 root_rect, MD_Node *panel);
 internal B32 df_tab_cfg_is_project_filtered(MD_Node *cfg);
-#define df_window_from_panel_cfg(node) md_ancestor_from_string((node), str8_lit("window"), 0)
-#define df_panel_tree_from_panel_cfg(node) (str8_match((node)->string, str8_lit("panels"), 0) ? (node) : md_ancestor_from_string((node), str8_lit("panels"), 0))
-#define df_panel_tree_from_window_cfg(node) md_child_from_string((node), str8_lit("panels"), 0)
 
 //- rjf: keybindings
 internal void df_clear_bindings(void);
@@ -1205,10 +1165,9 @@ internal void df_request_frame(void);
 
 internal DF_Regs *df_regs(void);
 internal DF_Regs *df_base_regs(void);
-internal DF_Regs *df_push_regs_(DF_Regs *regs);
-#define df_push_regs(...) df_push_regs_(&(DF_Regs){df_regs_lit_init_top __VA_ARGS__ })
+internal DF_Regs *df_push_regs(void);
 internal DF_Regs *df_pop_regs(void);
-#define DF_RegsScope(...) DeferLoop(df_push_regs(__VA_ARGS__), df_pop_regs())
+#define DF_RegsScope DeferLoop(df_push_regs(), df_pop_regs())
 
 ////////////////////////////////
 //~ rjf: Message Functions
