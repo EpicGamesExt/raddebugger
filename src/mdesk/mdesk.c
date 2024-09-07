@@ -211,24 +211,6 @@ md_node_push_tag(MD_Node *parent, MD_Node *node)
   DLLPushBack_NPZ(&md_nil_node, parent->first_tag, parent->last_tag, node, next, prev);
 }
 
-//- rjf: tree building helpers
-
-internal MD_Node *
-md_push_list(Arena *arena)
-{
-  MD_Node *n = md_push_node(arena, MD_NodeKind_List, 0, str8_zero(), str8_zero(), 0);
-  return n;
-}
-
-internal MD_Node *
-md_list_push_ref(Arena *arena, MD_Node *list, MD_Node *ref_dst)
-{
-  MD_Node *ref = md_push_node(arena, MD_NodeKind_Reference, 0, str8_zero(), str8_zero(), 0);
-  ref->first = ref->last = ref_dst;
-  md_node_push_child(list, ref);
-  return ref;
-}
-
 //- rjf: tree introspection
 
 internal MD_Node *

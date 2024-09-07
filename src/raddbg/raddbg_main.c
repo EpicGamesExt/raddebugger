@@ -799,7 +799,7 @@ entry_point(CmdLine *cmd_line)
         fnt_init();
         D_StateDeltaHistory *hist = d_state_delta_history_alloc();
         d_init(cmd_line, hist);
-        df_init();
+        df_init(d_state_delta_history());
       }
       
       //- rjf: setup initial target from command line args
@@ -910,34 +910,31 @@ entry_point(CmdLine *cmd_line)
                   break;
                 }
               }
-              if(dst_window != 0) D_RegsScope
+              if(dst_window != 0)
               {
-                df_regs_set_window(dst_window);
                 dst_window->window_temporarily_focused_ipc = 1;
-                U64 first_space_pos = str8_find_needle(msg, 0, str8_lit(" "), 0);
-                String8 msg_kind_name = lower_from_str8(scratch.arena, str8_prefix(msg, first_space_pos));
-                String8 args_string = str8_skip(msg, first_space_pos);
-                args_string = str8_skip_chop_whitespace(args_string);
-                D_MsgKind d_kind = d_msg_kind_from_string(msg_kind_name);
-                DF_MsgKind df_kind = df_msg_kind_from_string(msg_kind_name);
-                DF_MsgQuery query = (d_kind  != D_MsgKind_Null ? df_d_msg_kind_info_table[d_kind].query :
-                                     df_kind != DF_MsgKind_Null? df_msg_kind_info_table[df_kind].query :
-                                     (DF_MsgQuery){0});
-                df_regs_set_from_query_slot_string(query.slot, args_string);
-                if(d_kind != D_MsgKind_Null)
+                String8 cmd_spec_string = d_cmd_name_part_from_string(msg);
+                D_CmdSpec *cmd_spec = d_cmd_spec_from_string(cmd_spec_string);
+                if(!d_cmd_spec_is_nil(cmd_spec))
                 {
-                  d_msg(d_kind);
+                  D_CmdParams params = df_cmd_params_from_window(dst_window);
+                  String8 error = d_cmd_params_apply_spec_query(scratch.arena, &params, cmd_spec, d_cmd_arg_part_from_string(msg));
+                  if(error.size == 0)
+                  {
+                    d_push_cmd(cmd_spec, &params);
+                    df_request_frame();
+                  }
+                  else
+                  {
+                    d_error(error);
+                    df_request_frame();
+                  }
                 }
-                if(df_kind != DF_MsgKind_Null)
+                else
                 {
-                  df_msg(df_kind);
+                  d_errorf("\"%S\" is not a command.", cmd_spec_string);
+                  df_request_frame();
                 }
-                if(d_kind == D_MsgKind_Null &&
-                   df_kind == DF_MsgKind_Null)
-                {
-                  log_user_errorf("\"%S\" is not a command.", msg_kind_name);
-                }
-                df_request_frame();
               }
             }
             scratch_end(scratch);

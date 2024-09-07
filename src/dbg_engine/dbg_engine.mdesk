@@ -61,6 +61,11 @@ D_EntityKindTable:
   {WorkingDirectory   working_directory     working_directories           0  0  0  0  0  0  0  0  1  1  0                      "Execution Path"    Null                   "Working Directory"          }
   {EntryPoint         entry_point           entry_points                  0  0  0  0  0  0  0  0  0  1  0                      "Symbol Name"       Null                   "Entry Point"                }
   
+  //- rjf: frontend containers (windows, panels, views)
+  {Window             window                windows                       1  0  0  0  0  0  1  0  0  1  1                      "Label"             Window                 "Window"                     }
+  {Panel              panel                 panels                        1  0  0  0  0  0  1  0  0  1  1                      "Label"             XSplit                 "Panel"                      }
+  {View               view                  views                         1  0  0  0  0  0  1  0  0  1  1                      "Label"             Null                   "View"                       }
+  
   //- rjf: recent projects
   {RecentProject      recent_project        recent_projects               0  0  0  0  0  0  0  0  1  0  1                      "Path"              Briefcase              "Recent Project"             }
   
@@ -89,11 +94,11 @@ D_EntityKindTable:
 @table(c_type  name_lower  name)
 D_RegTable:
 {
-  // rjf: entity info
-  {CTRL_MachineID   machine_id       MachineID     }
-  {DMN_Handle       process          process       }
-  {DMN_Handle       module           module        }
-  {DMN_Handle       thread           thread        }
+  // rjf: entity slots
+  {D_Handle         machine          Machine       }
+  {D_Handle         module           Module        }
+  {D_Handle         process          Process       }
+  {D_Handle         thread           Thread        }
   {D_Handle         window           Window        }
   {D_Handle         panel            Panel         }
   {D_Handle         view             View          }
@@ -216,6 +221,8 @@ D_MsgKindTable:
   {DisableEntity                   "Disable Entity"                            disable_entity                              0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
   {DisableBreakpoint               "Disable Breakpoint"                        disable_breakpoint                          0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
   {DisableTarget                   "Disable Target"                            disable_target                              0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {FreezeEntity                    "Freeze Entity"                             freeze_entity                               0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
+  {ThawEntity                      "Thaw Entity"                               thaw_entity                                 0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
   {RemoveEntity                    "Remove Entity"                             remove_entity                               0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
   {RemoveBreakpoint                "Remove Breakpoint"                         remove_breakpoint                           0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}
   {RemoveTarget                    "Remove Target"                             remove_target                               0 0                              Null    Nil         0  0  0  0  0  0                                                                       Null                    ""}

@@ -7,10 +7,10 @@ C_LINKAGE_BEGIN
 Rng1U64 d_reg_slot_range_table[29] =
 {
 {0},
-{OffsetOf(D_Regs, machine_id), OffsetOf(D_Regs, machine_id) + sizeof(CTRL_MachineID)},
-{OffsetOf(D_Regs, process), OffsetOf(D_Regs, process) + sizeof(DMN_Handle)},
-{OffsetOf(D_Regs, module), OffsetOf(D_Regs, module) + sizeof(DMN_Handle)},
-{OffsetOf(D_Regs, thread), OffsetOf(D_Regs, thread) + sizeof(DMN_Handle)},
+{OffsetOf(D_Regs, machine), OffsetOf(D_Regs, machine) + sizeof(D_Handle)},
+{OffsetOf(D_Regs, module), OffsetOf(D_Regs, module) + sizeof(D_Handle)},
+{OffsetOf(D_Regs, process), OffsetOf(D_Regs, process) + sizeof(D_Handle)},
+{OffsetOf(D_Regs, thread), OffsetOf(D_Regs, thread) + sizeof(D_Handle)},
 {OffsetOf(D_Regs, window), OffsetOf(D_Regs, window) + sizeof(D_Handle)},
 {OffsetOf(D_Regs, panel), OffsetOf(D_Regs, panel) + sizeof(D_Handle)},
 {OffsetOf(D_Regs, view), OffsetOf(D_Regs, view) + sizeof(D_Handle)},
@@ -37,7 +37,7 @@ Rng1U64 d_reg_slot_range_table[29] =
 {OffsetOf(D_Regs, params_tree), OffsetOf(D_Regs, params_tree) + sizeof(MD_Node *)},
 };
 
-String8 d_msg_kind_name_lower_table[69] =
+String8 d_msg_kind_name_lower_table[71] =
 {
 str8_lit_comp("null"),
 str8_lit_comp("launch_and_run"),
@@ -84,6 +84,8 @@ str8_lit_comp("enable_target"),
 str8_lit_comp("disable_entity"),
 str8_lit_comp("disable_breakpoint"),
 str8_lit_comp("disable_target"),
+str8_lit_comp("freeze_entity"),
+str8_lit_comp("thaw_entity"),
 str8_lit_comp("remove_entity"),
 str8_lit_comp("remove_breakpoint"),
 str8_lit_comp("remove_target"),
@@ -110,7 +112,7 @@ str8_lit_comp("register_as_jit_debugger"),
 str8_lit_comp("log_marker"),
 };
 
-String8 d_msg_kind_name_display_table[69] =
+String8 d_msg_kind_name_display_table[71] =
 {
 str8_lit_comp("null"),
 str8_lit_comp("launch_and_run"),
@@ -157,6 +159,8 @@ str8_lit_comp("enable_target"),
 str8_lit_comp("disable_entity"),
 str8_lit_comp("disable_breakpoint"),
 str8_lit_comp("disable_target"),
+str8_lit_comp("freeze_entity"),
+str8_lit_comp("thaw_entity"),
 str8_lit_comp("remove_entity"),
 str8_lit_comp("remove_breakpoint"),
 str8_lit_comp("remove_target"),
@@ -211,7 +215,7 @@ Rng1U64 d_cmd_param_slot_range_table[24] =
 {OffsetOf(D_CmdParams, inline_depth), OffsetOf(D_CmdParams, inline_depth) + sizeof(U64)},
 };
 
-String8 d_entity_kind_display_string_table[28] =
+String8 d_entity_kind_display_string_table[31] =
 {
 str8_lit_comp("Nil"),
 str8_lit_comp("Root"),
@@ -230,6 +234,9 @@ str8_lit_comp("Executable"),
 str8_lit_comp("Arguments"),
 str8_lit_comp("Working Directory"),
 str8_lit_comp("Entry Point"),
+str8_lit_comp("Window"),
+str8_lit_comp("Panel"),
+str8_lit_comp("View"),
 str8_lit_comp("Recent Project"),
 str8_lit_comp("Source"),
 str8_lit_comp("Destination"),
@@ -243,7 +250,7 @@ str8_lit_comp("Conversion Failure"),
 str8_lit_comp("EndedProcess"),
 };
 
-String8 d_entity_kind_name_lower_table[28] =
+String8 d_entity_kind_name_lower_table[31] =
 {
 str8_lit_comp("nil"),
 str8_lit_comp("root"),
@@ -262,6 +269,9 @@ str8_lit_comp("executable"),
 str8_lit_comp("arguments"),
 str8_lit_comp("working_directory"),
 str8_lit_comp("entry_point"),
+str8_lit_comp("window"),
+str8_lit_comp("panel"),
+str8_lit_comp("view"),
 str8_lit_comp("recent_project"),
 str8_lit_comp("source"),
 str8_lit_comp("dest"),
@@ -275,7 +285,7 @@ str8_lit_comp("conversion_fail"),
 str8_lit_comp("ended_process"),
 };
 
-String8 d_entity_kind_name_lower_plural_table[28] =
+String8 d_entity_kind_name_lower_plural_table[31] =
 {
 str8_lit_comp("nils"),
 str8_lit_comp("roots"),
@@ -294,6 +304,9 @@ str8_lit_comp("executables"),
 str8_lit_comp("argumentses"),
 str8_lit_comp("working_directories"),
 str8_lit_comp("entry_points"),
+str8_lit_comp("windows"),
+str8_lit_comp("panels"),
+str8_lit_comp("views"),
 str8_lit_comp("recent_projects"),
 str8_lit_comp("sources"),
 str8_lit_comp("dests"),
@@ -307,7 +320,7 @@ str8_lit_comp("conversion_fails"),
 str8_lit_comp("ended_processes"),
 };
 
-String8 d_entity_kind_name_label_table[28] =
+String8 d_entity_kind_name_label_table[31] =
 {
 str8_lit_comp("Label"),
 str8_lit_comp("Label"),
@@ -326,6 +339,9 @@ str8_lit_comp("Executable"),
 str8_lit_comp("Arguments"),
 str8_lit_comp("Execution Path"),
 str8_lit_comp("Symbol Name"),
+str8_lit_comp("Label"),
+str8_lit_comp("Label"),
+str8_lit_comp("Label"),
 str8_lit_comp("Path"),
 str8_lit_comp("Path"),
 str8_lit_comp("Path"),
@@ -339,7 +355,7 @@ str8_lit_comp("Label"),
 str8_lit_comp("Label"),
 };
 
-D_EntityKindFlags d_entity_kind_flags_table[28] =
+D_EntityKindFlags d_entity_kind_flags_table[31] =
 {
 (0*D_EntityKindFlag_CanDelete) | (0*D_EntityKindFlag_CanFreeze) | (0*D_EntityKindFlag_CanEdit) | (0*D_EntityKindFlag_CanRename) | (0*D_EntityKindFlag_CanEnable) | (0*D_EntityKindFlag_CanCondition) | (0*D_EntityKindFlag_CanDuplicate) | (0*D_EntityKindFlag_NameIsCode) | (0*D_EntityKindFlag_NameIsPath) | (0*D_EntityKindFlag_UserDefinedLifetime) | (0*D_EntityKindFlag_IsSerializedToConfig),
 (0*D_EntityKindFlag_CanDelete) | (0*D_EntityKindFlag_CanFreeze) | (0*D_EntityKindFlag_CanEdit) | (0*D_EntityKindFlag_CanRename) | (0*D_EntityKindFlag_CanEnable) | (0*D_EntityKindFlag_CanCondition) | (0*D_EntityKindFlag_CanDuplicate) | (0*D_EntityKindFlag_NameIsCode) | (0*D_EntityKindFlag_NameIsPath) | (0*D_EntityKindFlag_UserDefinedLifetime) | (0*D_EntityKindFlag_IsSerializedToConfig),
@@ -358,6 +374,9 @@ D_EntityKindFlags d_entity_kind_flags_table[28] =
 (0*D_EntityKindFlag_CanDelete) | (0*D_EntityKindFlag_CanFreeze) | (0*D_EntityKindFlag_CanEdit) | (0*D_EntityKindFlag_CanRename) | (0*D_EntityKindFlag_CanEnable) | (0*D_EntityKindFlag_CanCondition) | (0*D_EntityKindFlag_CanDuplicate) | (0*D_EntityKindFlag_NameIsCode) | (0*D_EntityKindFlag_NameIsPath) | (1*D_EntityKindFlag_UserDefinedLifetime) | (0*D_EntityKindFlag_IsSerializedToConfig),
 (0*D_EntityKindFlag_CanDelete) | (0*D_EntityKindFlag_CanFreeze) | (0*D_EntityKindFlag_CanEdit) | (0*D_EntityKindFlag_CanRename) | (0*D_EntityKindFlag_CanEnable) | (0*D_EntityKindFlag_CanCondition) | (0*D_EntityKindFlag_CanDuplicate) | (0*D_EntityKindFlag_NameIsCode) | (1*D_EntityKindFlag_NameIsPath) | (1*D_EntityKindFlag_UserDefinedLifetime) | (0*D_EntityKindFlag_IsSerializedToConfig),
 (0*D_EntityKindFlag_CanDelete) | (0*D_EntityKindFlag_CanFreeze) | (0*D_EntityKindFlag_CanEdit) | (0*D_EntityKindFlag_CanRename) | (0*D_EntityKindFlag_CanEnable) | (0*D_EntityKindFlag_CanCondition) | (0*D_EntityKindFlag_CanDuplicate) | (0*D_EntityKindFlag_NameIsCode) | (0*D_EntityKindFlag_NameIsPath) | (1*D_EntityKindFlag_UserDefinedLifetime) | (0*D_EntityKindFlag_IsSerializedToConfig),
+(1*D_EntityKindFlag_CanDelete) | (0*D_EntityKindFlag_CanFreeze) | (0*D_EntityKindFlag_CanEdit) | (0*D_EntityKindFlag_CanRename) | (0*D_EntityKindFlag_CanEnable) | (0*D_EntityKindFlag_CanCondition) | (1*D_EntityKindFlag_CanDuplicate) | (0*D_EntityKindFlag_NameIsCode) | (0*D_EntityKindFlag_NameIsPath) | (1*D_EntityKindFlag_UserDefinedLifetime) | (1*D_EntityKindFlag_IsSerializedToConfig),
+(1*D_EntityKindFlag_CanDelete) | (0*D_EntityKindFlag_CanFreeze) | (0*D_EntityKindFlag_CanEdit) | (0*D_EntityKindFlag_CanRename) | (0*D_EntityKindFlag_CanEnable) | (0*D_EntityKindFlag_CanCondition) | (1*D_EntityKindFlag_CanDuplicate) | (0*D_EntityKindFlag_NameIsCode) | (0*D_EntityKindFlag_NameIsPath) | (1*D_EntityKindFlag_UserDefinedLifetime) | (1*D_EntityKindFlag_IsSerializedToConfig),
+(1*D_EntityKindFlag_CanDelete) | (0*D_EntityKindFlag_CanFreeze) | (0*D_EntityKindFlag_CanEdit) | (0*D_EntityKindFlag_CanRename) | (0*D_EntityKindFlag_CanEnable) | (0*D_EntityKindFlag_CanCondition) | (1*D_EntityKindFlag_CanDuplicate) | (0*D_EntityKindFlag_NameIsCode) | (0*D_EntityKindFlag_NameIsPath) | (1*D_EntityKindFlag_UserDefinedLifetime) | (1*D_EntityKindFlag_IsSerializedToConfig),
 (0*D_EntityKindFlag_CanDelete) | (0*D_EntityKindFlag_CanFreeze) | (0*D_EntityKindFlag_CanEdit) | (0*D_EntityKindFlag_CanRename) | (0*D_EntityKindFlag_CanEnable) | (0*D_EntityKindFlag_CanCondition) | (0*D_EntityKindFlag_CanDuplicate) | (0*D_EntityKindFlag_NameIsCode) | (1*D_EntityKindFlag_NameIsPath) | (0*D_EntityKindFlag_UserDefinedLifetime) | (1*D_EntityKindFlag_IsSerializedToConfig),
 (0*D_EntityKindFlag_CanDelete) | (0*D_EntityKindFlag_CanFreeze) | (0*D_EntityKindFlag_CanEdit) | (0*D_EntityKindFlag_CanRename) | (0*D_EntityKindFlag_CanEnable) | (0*D_EntityKindFlag_CanCondition) | (0*D_EntityKindFlag_CanDuplicate) | (0*D_EntityKindFlag_NameIsCode) | (0*D_EntityKindFlag_NameIsPath) | (0*D_EntityKindFlag_UserDefinedLifetime) | (0*D_EntityKindFlag_IsSerializedToConfig),
 (0*D_EntityKindFlag_CanDelete) | (0*D_EntityKindFlag_CanFreeze) | (0*D_EntityKindFlag_CanEdit) | (0*D_EntityKindFlag_CanRename) | (0*D_EntityKindFlag_CanEnable) | (0*D_EntityKindFlag_CanCondition) | (0*D_EntityKindFlag_CanDuplicate) | (0*D_EntityKindFlag_NameIsCode) | (0*D_EntityKindFlag_NameIsPath) | (0*D_EntityKindFlag_UserDefinedLifetime) | (0*D_EntityKindFlag_IsSerializedToConfig),

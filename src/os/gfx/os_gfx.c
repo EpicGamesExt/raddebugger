@@ -45,23 +45,6 @@ os_string_list_from_event_flags(Arena *arena, OS_EventFlags flags)
   return result;
 }
 
-internal OS_Key
-os_key_from_string(String8 string)
-{
-  OS_Key result = OS_Key_Null;
-  {
-    for(OS_Key key = OS_Key_Null; key < OS_Key_COUNT; key = (OS_Key)(key+1))
-    {
-      if(str8_match(string, os_g_key_cfg_string_table[key], StringMatchFlag_CaseInsensitive))
-      {
-        result = key;
-        break;
-      }
-    }
-  }
-  return result;
-}
-
 internal U32
 os_codepoint_from_event_flags_and_key(OS_EventFlags flags, OS_Key key)
 {

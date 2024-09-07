@@ -9,10 +9,10 @@
 typedef enum D_RegSlot
 {
 D_RegSlot_Null,
-D_RegSlot_MachineID,
-D_RegSlot_process,
-D_RegSlot_module,
-D_RegSlot_thread,
+D_RegSlot_Machine,
+D_RegSlot_Module,
+D_RegSlot_Process,
+D_RegSlot_Thread,
 D_RegSlot_Window,
 D_RegSlot_Panel,
 D_RegSlot_View,
@@ -87,6 +87,8 @@ D_MsgKind_EnableTarget,
 D_MsgKind_DisableEntity,
 D_MsgKind_DisableBreakpoint,
 D_MsgKind_DisableTarget,
+D_MsgKind_FreezeEntity,
+D_MsgKind_ThawEntity,
 D_MsgKind_RemoveEntity,
 D_MsgKind_RemoveBreakpoint,
 D_MsgKind_RemoveTarget,
@@ -142,6 +144,9 @@ D_EntityKind_Executable,
 D_EntityKind_Arguments,
 D_EntityKind_WorkingDirectory,
 D_EntityKind_EntryPoint,
+D_EntityKind_Window,
+D_EntityKind_Panel,
+D_EntityKind_View,
 D_EntityKind_RecentProject,
 D_EntityKind_Source,
 D_EntityKind_Dest,
@@ -440,10 +445,10 @@ D_CmdParamSlot_COUNT,
 typedef struct D_Regs D_Regs;
 struct D_Regs
 {
-CTRL_MachineID machine_id;
-DMN_Handle process;
-DMN_Handle module;
-DMN_Handle thread;
+D_Handle machine;
+D_Handle module;
+D_Handle process;
+D_Handle thread;
 D_Handle window;
 D_Handle panel;
 D_Handle view;
@@ -499,9 +504,9 @@ U64 inline_depth;
 };
 
 #define d_regs_lit_init_top \
-.machine_id = d_regs()->machine_id,\
-.process = d_regs()->process,\
+.machine = d_regs()->machine,\
 .module = d_regs()->module,\
+.process = d_regs()->process,\
 .thread = d_regs()->thread,\
 .window = d_regs()->window,\
 .panel = d_regs()->panel,\
@@ -568,14 +573,14 @@ struct {B32 *value_ptr; String8 name;} DEV_toggle_table[] =
 };
 C_LINKAGE_BEGIN
 extern Rng1U64 d_reg_slot_range_table[29];
-extern String8 d_msg_kind_name_lower_table[69];
-extern String8 d_msg_kind_name_display_table[69];
+extern String8 d_msg_kind_name_lower_table[71];
+extern String8 d_msg_kind_name_display_table[71];
 extern Rng1U64 d_cmd_param_slot_range_table[24];
-extern String8 d_entity_kind_display_string_table[28];
-extern String8 d_entity_kind_name_lower_table[28];
-extern String8 d_entity_kind_name_lower_plural_table[28];
-extern String8 d_entity_kind_name_label_table[28];
-extern D_EntityKindFlags d_entity_kind_flags_table[28];
+extern String8 d_entity_kind_display_string_table[31];
+extern String8 d_entity_kind_name_lower_table[31];
+extern String8 d_entity_kind_name_lower_plural_table[31];
+extern String8 d_entity_kind_name_label_table[31];
+extern D_EntityKindFlags d_entity_kind_flags_table[31];
 extern String8 d_cfg_src_string_table[4];
 extern D_CmdKind d_cfg_src_load_cmd_kind_table[4];
 extern D_CmdKind d_cfg_src_write_cmd_kind_table[4];
