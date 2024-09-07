@@ -535,7 +535,7 @@ struct DF_AutoCompListerParams
 };
 
 ////////////////////////////////
-//~ rjf: Window State Cache
+//~ rjf: Per-Window State
 
 typedef struct DF_Window DF_Window;
 struct DF_Window
@@ -543,15 +543,13 @@ struct DF_Window
   // rjf: links & metadata
   DF_Window *next;
   DF_Window *prev;
-  U64 first_frame_touched;
-  U64 last_frame_touched;
   U64 gen;
   U64 frames_alive;
   D_CfgSrc cfg_src;
   
   // rjf: top-level info & handles
   Arena *arena;
-  String8 cfg_key;
+  String8 cfg_string;
   OS_Handle os;
   R_Handle r;
   UI_State *ui;
@@ -659,21 +657,6 @@ struct DF_Window
   DR_Bucket *draw_bucket;
 };
 
-typedef struct DF_WindowNode DF_WindowNode;
-struct DF_WindowNode
-{
-  DF_WindowNode *next;
-  DF_WindowNode *prev;
-  DF_Window v;
-};
-
-typedef struct DF_WindowSlot DF_WindowSlot;
-struct DF_WindowSlot
-{
-  DF_WindowNode *first;
-  DF_WindowNode *last;
-};
-
 ////////////////////////////////
 //~ rjf: Main Per-Process Graphical State
 
@@ -682,13 +665,13 @@ struct DF_State
 {
   Arena *arena;
   B32 quit;
-  U64 frame_index;
   
   // rjf: icon texture
   R_Handle icon_texture;
   
   // rjf: frame time history
   U64 frame_time_us_history[64];
+  U64 frame_time_us_history_idx;
   
   // rjf: frame request state
   U64 num_frames_requested;
@@ -702,10 +685,6 @@ struct DF_State
   // rjf: messages
   Arena *msgs_arena;
   DF_MsgList msgs;
-  
-  // rjf: window state cache
-  U64 window_slots_count;
-  DF_WindowSlot *window_slots;
   
   // rjf: key map table
   Arena *key_map_arena;
@@ -834,12 +813,6 @@ global D_Handle df_last_drag_drop_panel = {0};
 global D_Handle df_last_drag_drop_prev_tab = {0};
 
 ////////////////////////////////
-//~ rjf: Basic Helpers
-
-internal U64 df_hash_from_seed_string(U64 seed, String8 string);
-internal U64 df_hash_from_string(String8 string);
-
-////////////////////////////////
 //~ rjf: View Type Functions
 
 internal B32 df_view_is_nil(DF_View *view);
@@ -966,8 +939,6 @@ internal void df_panel_release_all_views(DF_Panel *panel);
 ////////////////////////////////
 //~ rjf: Window State Functions
 
-internal DF_Window *df_window_from_cfg_key(String8 cfg_key);
-
 internal DF_Window *df_window_open(Vec2F32 size, OS_Handle preferred_monitor, D_CfgSrc cfg_src);
 
 internal DF_Window *df_window_from_os_handle(OS_Handle os);
@@ -1007,8 +978,8 @@ internal String8 df_push_search_string(Arena *arena);
 //~ rjf: Colors, Fonts, Config
 
 //- rjf: string <-> cfg tree
-internal MD_Node *df_cfg_tree_from_key(String8 string);
-internal String8 df_key_from_cfg_tree(Arena *arena, MD_Node *node);
+internal MD_Node *df_cfg_tree_from_string(String8 string);
+internal String8 df_string_from_cfg_tree(Arena *arena, MD_Node *node);
 
 //- rjf: config tree mutations
 internal DF_CfgSlot df_cfg_slot_from_tree(MD_Node *node);
@@ -1077,7 +1048,7 @@ __VA_ARGS__\
 ////////////////////////////////
 //~ rjf: Main Layer Top-Level Calls
 
-internal void df_init(CmdLine *cmdln);
+internal void df_init(void);
 internal void df_frame(void);
 
 #endif // DBG_FRONTEND_CORE_H

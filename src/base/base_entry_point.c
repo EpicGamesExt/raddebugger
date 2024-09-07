@@ -80,7 +80,7 @@ main_thread_base_entry_point(void (*entry_point)(CmdLine *cmdline), char **argum
   d_init(&cmdline, hist);
 #endif
 #if defined(DBG_FRONTEND_CORE_H) && !defined(DF_INIT_MANUAL)
-  df_init(&cmdline);
+  df_init();
 #endif
   
   //- rjf: call into entry point

@@ -10,26 +10,6 @@
 #include "generated/dbg_frontend.meta.c"
 
 ////////////////////////////////
-//~ rjf: Basic Helpers
-
-internal U64
-df_hash_from_seed_string(U64 seed, String8 string)
-{
-  U64 result = seed;
-  for(U64 i = 0; i < string.size; i += 1)
-  {
-    result = ((result << 5) + result) + string.str[i];
-  }
-  return result;
-}
-
-internal U64
-df_hash_from_string(String8 string)
-{
-  return df_hash_from_seed_string(5381, string);
-}
-
-////////////////////////////////
 //~ rjf: View Type Functions
 
 internal B32
@@ -1007,154 +987,6 @@ df_panel_release_all_views(DF_Panel *panel)
 
 ////////////////////////////////
 //~ rjf: Window State Functions
-
-internal DF_Window *
-df_window_from_cfg_key(String8 cfg_key)
-{
-  DF_Window *result = 0;
-  MD_Node *window_cfg = df_cfg_tree_from_key(cfg_key);
-  if(!md_node_is_nil(window_cfg))
-  {
-    Temp scratch = scratch_begin(0, 0);
-    
-    // rjf: unpack key
-    String8 cfg_key_normalized = df_key_from_cfg_tree(scratch.arena, window_cfg);
-    U64 hash = df_hash_from_string(cfg_key_normalized);
-    U64 slot_idx = hash%df_state->window_slots_count;
-    DF_WindowSlot *slot = &df_state->window_slots[slot_idx];
-    
-    // rjf: key * slot -> node
-    DF_WindowNode *node = 0;
-    for(DF_WindowNode *n = slot->first; n != 0; n = n->next)
-    {
-      if(str8_match(cfg_key_normalized, n->v.cfg_key, 0))
-      {
-        node = n;
-        break;
-      }
-    }
-    
-    // rjf: need new node? -> allocate & open window
-    if(node == 0)
-    {
-      // rjf: allocate & insert
-      Arena *arena = arena_alloc();
-      node = push_array(arena, DF_WindowNode, 1);
-      DLLPushBack(slot->first, slot->last, node);
-      
-      // rjf: unpack size from cfg
-      Vec2F32 size = v2f32(1280, 720);
-      {
-        MD_Node *size_cfg = md_child_from_string(window_cfg, str8_lit("size"), 0);
-        MD_Node *size_x_cfg = size_cfg->first;
-        MD_Node *size_y_cfg = size_x_cfg->next;
-        U64 size_x = 0;
-        U64 size_y = 0;
-        if(try_u64_from_str8_c_rules(size_x_cfg->string, &size_x) &&
-           try_u64_from_str8_c_rules(size_y_cfg->string, &size_y))
-        {
-          size = v2f32((F32)size_x, (F32)size_y);
-        }
-      }
-      
-      // rjf: unpack monitor from cfg
-      OS_Handle preferred_monitor = os_primary_monitor();
-      {
-        OS_HandleArray monitors = os_push_monitors_array(scratch.arena);
-        MD_Node *monitor_cfg = md_child_from_string(window_cfg, str8_lit("monitor"), 0);
-        String8 monitor_name = monitor_cfg->first->string;
-        for(U64 idx = 0; idx < monitors.count; idx += 1)
-        {
-          String8 name = os_name_from_monitor(scratch.arena, monitors.v[idx]);
-          if(str8_match(monitor_name, name, StringMatchFlag_CaseInsensitive))
-          {
-            preferred_monitor = monitors.v[idx];
-            break;
-          }
-        }
-      }
-      
-      // rjf: fill
-      DF_Window *w = &node->v;
-      w->first_frame_touched = w->last_frame_touched = df_state->frame_index;
-      w->arena = arena;
-      w->cfg_key = push_str8_copy(arena, cfg_key_normalized);
-      w->os = os_window_open(size, OS_WindowFlag_CustomBorder, str8_lit(BUILD_TITLE_STRING_LITERAL));
-      os_window_set_monitor(w->os, preferred_monitor);
-      w->r = r_window_equip(w->os);
-      w->ui = ui_state_alloc();
-      w->code_ctx_menu_arena = arena_alloc();
-      w->hover_eval_arena = arena_alloc();
-      w->autocomp_lister_params_arena = arena_alloc();
-      w->free_panel = &df_nil_panel;
-      w->root_panel = df_panel_alloc(w);
-      w->focused_panel = w->root_panel;
-      w->query_cmd_arena = arena_alloc();
-      w->query_cmd_spec = &d_nil_cmd_spec;
-      w->query_view_stack_top = &df_nil_view;
-      w->last_dpi = os_dpi_from_window(w->os);
-      for(EachEnumVal(DF_SettingCode, code))
-      {
-        if(df_g_setting_code_default_is_per_window_table[code])
-        {
-          w->setting_vals[code] = df_g_setting_code_default_val_table[code];
-        }
-      }
-      D_RegsScope
-      {
-        d_regs()->window = df_handle_from_window(w);
-        DF_FontSlot english_font_slots[] = {DF_FontSlot_Main, DF_FontSlot_Code};
-        DF_FontSlot icon_font_slot = DF_FontSlot_Icons;
-        for(U64 idx = 0; idx < ArrayCount(english_font_slots); idx += 1)
-        {
-          Temp scratch = scratch_begin(0, 0);
-          DF_FontSlot slot = english_font_slots[idx];
-          String8 sample_text = str8_lit("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890~!@#$%^&*()-_+=[{]}\\|;:'\",<.>/?");
-          fnt_push_run_from_string(scratch.arena,
-                                   df_font_from_slot(slot),
-                                   df_font_size_from_slot(DF_FontSlot_Code),
-                                   0, 0, 0,
-                                   sample_text);
-          fnt_push_run_from_string(scratch.arena,
-                                   df_font_from_slot(slot),
-                                   df_font_size_from_slot(DF_FontSlot_Main),
-                                   0, 0, 0,
-                                   sample_text);
-          scratch_end(scratch);
-        }
-        for(DF_IconKind icon_kind = DF_IconKind_Null; icon_kind < DF_IconKind_COUNT; icon_kind = (DF_IconKind)(icon_kind+1))
-        {
-          Temp scratch = scratch_begin(0, 0);
-          fnt_push_run_from_string(scratch.arena,
-                                   df_font_from_slot(icon_font_slot),
-                                   df_font_size_from_slot(icon_font_slot),
-                                   0, 0, FNT_RasterFlag_Smooth,
-                                   df_g_icon_kind_text_table[icon_kind]);
-          fnt_push_run_from_string(scratch.arena,
-                                   df_font_from_slot(icon_font_slot),
-                                   df_font_size_from_slot(DF_FontSlot_Main),
-                                   0, 0, FNT_RasterFlag_Smooth,
-                                   df_g_icon_kind_text_table[icon_kind]);
-          fnt_push_run_from_string(scratch.arena,
-                                   df_font_from_slot(icon_font_slot),
-                                   df_font_size_from_slot(DF_FontSlot_Code),
-                                   0, 0, FNT_RasterFlag_Smooth,
-                                   df_g_icon_kind_text_table[icon_kind]);
-          scratch_end(scratch);
-        }
-      }
-    }
-    
-    // rjf: obtain result
-    if(node != 0)
-    {
-      result = &node->v;
-    }
-    
-    scratch_end(scratch);
-  }
-  return result;
-}
 
 internal DF_Window *
 df_window_open(Vec2F32 size, OS_Handle preferred_monitor, D_CfgSrc cfg_src)
@@ -2278,10 +2110,10 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
         }
         if(range.min.line == range.max.line && ui_clicked(df_icon_buttonf(DF_IconKind_CircleFilled, 0, "Toggle Breakpoint")))
         {
-          df_msg(DF_MsgKind_ToggleBreakpoint,
-                 .file_path  = ws->code_ctx_menu_file_path,
-                 .cursor     = range.min,
-                 .vaddr_range= r1u64(ws->code_ctx_menu_vaddr, ws->code_ctx_menu_vaddr));
+          d_cmd(D_CmdKind_ToggleBreakpoint,
+                .file_path = ws->code_ctx_menu_file_path,
+                .text_point = range.min,
+                .vaddr = ws->code_ctx_menu_vaddr);
           ui_ctx_menu_close();
         }
         if(range.min.line == range.max.line && ui_clicked(df_icon_buttonf(DF_IconKind_Binoculars, 0, "Toggle Watch Expression")))
@@ -2299,16 +2131,16 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
             expr_off_range = txt_expr_off_range_from_info_data_pt(&info, data, range.min);
           }
           String8 expr = str8_substr(data, expr_off_range);
-          df_msg(DF_MsgKind_ToggleWatchExpression, .string = expr);
+          d_cmd(D_CmdKind_ToggleWatchExpression, .string = expr);
           ui_ctx_menu_close();
         }
         if(ws->code_ctx_menu_file_path.size == 0 && range.min.line == range.max.line && ui_clicked(df_icon_buttonf(DF_IconKind_FileOutline, 0, "Go To Source")))
         {
           if(lines.first != 0)
           {
-            df_msg(DF_MsgKind_FindCodeLocation,
-                   .file_path = lines.first->v.file_path,
-                   .cursor = lines.first->v.pt);
+            d_cmd(D_CmdKind_FindCodeLocation,
+                  .file_path = lines.first->v.file_path,
+                  .text_point = lines.first->v.pt);
           }
           ui_ctx_menu_close();
         }
@@ -2379,9 +2211,9 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
           UI_Signal sig = df_line_editf(DF_LineEditFlag_Border, 0, 0, &ws->entity_ctx_menu_input_cursor, &ws->entity_ctx_menu_input_mark, ws->entity_ctx_menu_input_buffer, sizeof(ws->entity_ctx_menu_input_buffer), &ws->entity_ctx_menu_input_size, 0, entity->string, "%S###entity_name_edit_%p", d_entity_kind_name_label_table[entity->kind], entity);
           if(ui_committed(sig))
           {
-            df_msg(DF_MsgKind_NameEntity,
-                   .entity = d_handle_from_entity(entity),
-                   .string = str8(ws->entity_ctx_menu_input_buffer, ws->entity_ctx_menu_input_size));
+            d_cmd(D_CmdKind_NameEntity,
+                  .entity = d_handle_from_entity(entity),
+                  .string = str8(ws->entity_ctx_menu_input_buffer, ws->entity_ctx_menu_input_size));
           }
         }
         
@@ -2401,7 +2233,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
               {
                 condition = d_entity_alloc(entity, D_EntityKind_Condition);
               }
-              df_msg(DF_MsgKind_NameEntity, .entity = d_handle_from_entity(condition), .string = new_string);
+              d_cmd(D_CmdKind_NameEntity, .entity = d_handle_from_entity(condition), .string = new_string);
             }
             else if(!d_entity_is_nil(condition))
             {
@@ -2424,7 +2256,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
               {
                 exe = d_entity_alloc(entity, D_EntityKind_Executable);
               }
-              df_msg(DF_MsgKind_NameEntity, .entity = d_handle_from_entity(exe), .string = new_string);
+              d_cmd(D_CmdKind_NameEntity, .entity = d_handle_from_entity(exe), .string = new_string);
             }
             else if(!d_entity_is_nil(exe))
             {
@@ -2447,7 +2279,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
               {
                 args = d_entity_alloc(entity, D_EntityKind_Arguments);
               }
-              df_msg(DF_MsgKind_NameEntity, .entity = d_handle_from_entity(args), .string = new_string);
+              d_cmd(D_CmdKind_NameEntity, .entity = d_handle_from_entity(args), .string = new_string);
             }
             else if(!d_entity_is_nil(args))
             {
@@ -2472,21 +2304,21 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
         // rjf: duplicate
         if(kind_flags & D_EntityKindFlag_CanDuplicate && ui_clicked(df_icon_buttonf(DF_IconKind_XSplit, 0, "Duplicate")))
         {
-          df_msg(DF_MsgKind_DuplicateEntity, .entity = d_handle_from_entity(entity));
+          d_cmd(D_CmdKind_DuplicateEntity, .entity = d_handle_from_entity(entity));
           ui_ctx_menu_close();
         }
         
         // rjf: edit
         if(kind_flags & D_EntityKindFlag_CanEdit && ui_clicked(df_icon_buttonf(DF_IconKind_Pencil, 0, "Edit")))
         {
-          df_msg(DF_MsgKind_EditEntity, .entity = d_handle_from_entity(entity));
+          d_cmd(D_CmdKind_EditEntity, .entity = d_handle_from_entity(entity));
           ui_ctx_menu_close();
         }
         
         // rjf: deletion
         if(kind_flags & D_EntityKindFlag_CanDelete && ui_clicked(df_icon_buttonf(DF_IconKind_Trash, 0, "Delete")))
         {
-          df_msg(DF_MsgKind_RemoveEntity, .entity = d_handle_from_entity(entity));
+          d_cmd(D_CmdKind_RemoveEntity, .entity = d_handle_from_entity(entity));
           ui_ctx_menu_close();
         }
         
@@ -2496,11 +2328,11 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
           B32 is_enabled = !entity->disabled;
           if(!is_enabled && ui_clicked(df_icon_buttonf(DF_IconKind_CheckHollow, 0, "Enable###enabler")))
           {
-            df_msg(DF_MsgKind_EnableEntity, .entity = d_handle_from_entity(entity));
+            d_cmd(D_CmdKind_EnableEntity, .entity = d_handle_from_entity(entity));
           }
           if(is_enabled && ui_clicked(df_icon_buttonf(DF_IconKind_CheckFilled, 0, "Disable###enabler")))
           {
-            df_msg(DF_MsgKind_DisableEntity, .entity = d_handle_from_entity(entity));
+            d_cmd(D_CmdKind_DisableEntity, .entity = d_handle_from_entity(entity));
           }
         }
         
@@ -2513,11 +2345,11 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
           ui_set_next_palette(df_palette_from_code(is_frozen ? DF_PaletteCode_NegativePopButton : DF_PaletteCode_PositivePopButton));
           if(is_frozen && ui_clicked(df_icon_buttonf(DF_IconKind_Locked, 0, "Thaw###freeze_thaw")))
           {
-            d_msg(D_MsgKind_ThawEntity, .entity = d_handle_from_entity(entity));
+            d_cmd(D_CmdKind_ThawEntity, .entity = d_handle_from_entity(entity));
           }
           if(!is_frozen && ui_clicked(df_icon_buttonf(DF_IconKind_Unlocked, 0, "Freeze###freeze_thaw")))
           {
-            d_msg(D_MsgKind_FreezeEntity, .entity = d_handle_from_entity(entity));
+            d_cmd(D_CmdKind_FreezeEntity, .entity = d_handle_from_entity(entity));
           }
 #endif
         }
@@ -2527,10 +2359,10 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
           D_Entity *loc = d_entity_child_from_kind(entity, D_EntityKind_Location);
           if(!d_entity_is_nil(loc) && ui_clicked(df_icon_buttonf(DF_IconKind_FileOutline, 0, "Go To Location")))
           {
-            df_msg(DF_MsgKind_FindCodeLocation,
-                   .file_path  = loc->string,
-                   .text_point = loc->text_point,
-                   .vaddr      = loc->vaddr);
+            d_cmd(D_CmdKind_FindCodeLocation,
+                  .file_path  = loc->string,
+                  .text_point = loc->text_point,
+                  .vaddr      = loc->vaddr);
             ui_ctx_menu_close();
           }
         }
@@ -2554,7 +2386,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
               }
               else if(ui_clicked(df_icon_buttonf(DF_IconKind_Thread, 0, "Select###select_entity")))
               {
-                d_msg(D_MsgKind_SelectThread, .entity = d_handle_from_entity(entity));
+                d_cmd(D_CmdKind_SelectThread, .entity = d_handle_from_entity(entity));
                 ui_ctx_menu_close();
               }
             }
@@ -2631,7 +2463,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
             {
               if(ui_clicked(df_icon_buttonf(DF_IconKind_FileOutline, 0, "Find")))
               {
-                df_msg(DF_MsgKind_FindThread, .entity = d_handle_from_entity(entity));
+                d_cmd(D_CmdKind_FindThread, .entity = d_handle_from_entity(entity));
                 ui_ctx_menu_close();
               }
             }
@@ -2671,12 +2503,12 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
           {
             if(ui_clicked(df_icon_buttonf(DF_IconKind_Play, 0, "Launch And Run")))
             {
-              d_msg(D_MsgKind_LaunchAndRun, .entity = d_handle_from_entity(entity));
+              d_cmd(D_CmdKind_LaunchAndRun, .entity = d_handle_from_entity(entity));
               ui_ctx_menu_close();
             }
             if(ui_clicked(df_icon_buttonf(DF_IconKind_PlayStepForward, 0, "Launch And Initialize")))
             {
-              d_msg(D_MsgKind_LaunchAndInit, .entity = d_handle_from_entity(entity));
+              d_cmd(D_CmdKind_LaunchAndInit, .entity = d_handle_from_entity(entity));
               ui_ctx_menu_close();
             }
           }break;
@@ -2848,12 +2680,12 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
         {
           if(ui_clicked(df_cmd_spec_button(d_cmd_spec_from_kind(D_CmdKind_Filter))))
           {
-            df_msg(DF_MsgKind_Filter, .view = df_handle_from_view(view));
+            d_cmd(D_CmdKind_Filter, .view = df_handle_from_view(view));
             ui_ctx_menu_close();
           }
           if(ui_clicked(df_cmd_spec_button(d_cmd_spec_from_kind(D_CmdKind_ClearFilter))))
           {
-            df_msg(DF_MsgKind_ClearFilter, .view = df_handle_from_view(view));
+            d_cmd(D_CmdKind_ClearFilter, .view = df_handle_from_view(view));
             ui_ctx_menu_close();
           }
         }
@@ -2861,7 +2693,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
         // rjf: close tab
         if(ui_clicked(df_icon_buttonf(DF_IconKind_X, 0, "Close Tab")))
         {
-          df_msg(DF_MsgKind_CloseTab, .panel = df_handle_from_panel(panel), .view = df_handle_from_view(view));
+          d_cmd(D_CmdKind_CloseTab, .panel = df_handle_from_panel(panel), .view = df_handle_from_view(view));
           ui_ctx_menu_close();
         }
         
@@ -2945,13 +2777,13 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
                 DF_Palette(DF_PaletteCode_NeutralPopButton)
                 if(ui_clicked(ui_buttonf("OK")) || (ui_key_match(bg_box->default_nav_focus_hot_key, ui_key_zero()) && ui_slot_press(UI_EventActionSlot_Accept)))
               {
-                df_msg(DF_MsgKind_ConfirmAccept);
+                d_cmd(D_CmdKind_ConfirmAccept);
               }
               UI_CornerRadius10(ui_top_font_size()*0.25f)
                 UI_CornerRadius11(ui_top_font_size()*0.25f)
                 if(ui_clicked(ui_buttonf("Cancel")) || ui_slot_press(UI_EventActionSlot_Cancel))
               {
-                df_msg(DF_MsgKind_ConfirmCancel);
+                d_cmd(D_CmdKind_ConfirmCancel);
               }
             }
             ui_spacer(ui_em(3.f, 1.f));
@@ -3512,7 +3344,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
                 UI_Palette(palette) sig = df_icon_buttonf(DF_IconKind_Target, 0, "%S##%p", target_name, target);
                 if(ui_clicked(sig))
                 {
-                  df_msg(DF_MsgKind_SelectTarget, .entity = d_handle_from_entity(target));
+                  d_cmd(D_CmdKind_EditTarget, .entity = d_handle_from_entity(target));
                   ui_ctx_menu_close();
                   ws->menu_bar_focused = 0;
                 }
@@ -3782,7 +3614,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
             }
             if(ui_clicked(sig))
             {
-              d_msg(D_MsgKind_Run);
+              d_cmd(D_CmdKind_Run);
             }
           }
           
@@ -3816,7 +3648,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
             }
             if(ui_clicked(sig))
             {
-              d_msg(D_MsgKind_Restart);
+              d_cmd(D_CmdKind_Restart);
             }
           }
           
@@ -3842,7 +3674,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
             }
             if(ui_clicked(sig))
             {
-              d_msg(D_MsgKind_Halt);
+              d_cmd(D_CmdKind_Halt);
             }
           }
           
@@ -3871,7 +3703,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
             }
             if(ui_clicked(sig))
             {
-              d_msg(D_MsgKind_Kill);
+              d_cmd(D_CmdKind_Kill);
             }
           }
           
@@ -3903,7 +3735,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
             }
             if(ui_clicked(sig))
             {
-              d_msg(D_MsgKind_StepOver);
+              d_cmd(D_CmdKind_StepOver);
             }
           }
           
@@ -3935,7 +3767,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
             }
             if(ui_clicked(sig))
             {
-              d_msg(D_MsgKind_StepInto);
+              d_cmd(D_CmdKind_StepInto);
             }
           }
           
@@ -3967,7 +3799,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
             }
             if(ui_clicked(sig))
             {
-              d_msg(D_MsgKind_StepOut);
+              d_cmd(D_CmdKind_StepOut);
             }
           }
           
@@ -4006,7 +3838,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
             UI_Signal user_sig = ui_signal_from_box(user_box);
             if(ui_clicked(user_sig))
             {
-              df_msg(DF_MsgKind_RunCommand, .string = df_msg_kind_info_table[DF_MsgKind_LoadUser].name_lower);
+              d_cmd(D_CmdKind_RunCommand, .cmd_spec = d_cmd_spec_from_kind(D_CmdKind_OpenUser));
             }
           }
           
@@ -4039,7 +3871,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
             UI_Signal prof_sig = ui_signal_from_box(prof_box);
             if(ui_clicked(prof_sig))
             {
-              df_msg(DF_MsgKind_RunCommand, .string = df_msg_kind_info_table[DF_MsgKind_LoadProject].name_lower);
+              d_cmd(D_CmdKind_RunCommand, .cmd_spec = d_cmd_spec_from_kind(D_CmdKind_OpenProject));
             }
           }
           
@@ -4075,7 +3907,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
             }
             if(ui_clicked(cls_sig))
             {
-              df_msg(DF_MsgKind_CloseWindow);
+              d_cmd(D_CmdKind_CloseWindow, .window = df_handle_from_window(ws));
             }
             os_window_push_custom_title_bar_client_area(ws->os, min_sig.box->rect);
             os_window_push_custom_title_bar_client_area(ws->os, max_sig.box->rect);
@@ -4419,6 +4251,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
           ui_slot_press(UI_EventActionSlot_Cancel)) || query_cancelled)
       {
         df_msg(DF_MsgKind_CancelQuery);
+        d_cmd(D_CmdKind_CancelQuery);
       }
       if((ui_is_focus_active() && ui_slot_press(UI_EventActionSlot_Accept)) || query_completed)
       {
@@ -4759,7 +4592,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
                     }
                     if(ui_clicked(watch_sig))
                     {
-                      df_msg(DF_MsgKind_ToggleWatchExpression, .string = expr);
+                      d_cmd(D_CmdKind_ToggleWatchExpression, .string = expr);
                     }
                   }
                   if(ws->hover_eval_file_path.size != 0 || ws->hover_eval_vaddr != 0)
@@ -4778,11 +4611,11 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
                     }
                     if(ui_clicked(pin_sig))
                     {
-                      df_msg(DF_MsgKind_ToggleWatchPin,
-                             .file_path  = ws->hover_eval_file_path,
-                             .cursor     = ws->hover_eval_file_pt,
-                             .vaddr_range= r1u64(ws->hover_eval_vaddr, ws->hover_eval_vaddr),
-                             .string     = expr);
+                      d_cmd(D_CmdKind_ToggleWatchPin,
+                            .file_path  = ws->hover_eval_file_path,
+                            .text_point = ws->hover_eval_file_pt,
+                            .vaddr      = ws->hover_eval_vaddr,
+                            .string     = expr);
                     }
                   }
                 }
@@ -4927,11 +4760,11 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
                 if(dir != Dir2_Invalid)
                 {
                   DF_Panel *split_panel = panel;
-                  df_msg(DF_MsgKind_SplitPanel,
-                         .dst_panel  = df_handle_from_panel(split_panel),
-                         .panel      = payload.panel,
-                         .view       = payload.view,
-                         .dir2       = dir);
+                  d_cmd(D_CmdKind_SplitPanel,
+                        .dest_panel = df_handle_from_panel(split_panel),
+                        .panel      = payload.panel,
+                        .view       = payload.view,
+                        .dir2       = dir);
                 }
               }
             }
@@ -5012,11 +4845,11 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
                 split_panel = panel->last;
                 dir = (panel->split_axis == Axis2_X ? Dir2_Right : Dir2_Down);
               }
-              df_msg(DF_MsgKind_SplitPanel,
-                     .dst_panel  = df_handle_from_panel(split_panel),
-                     .panel      = payload.panel,
-                     .view       = payload.view,
-                     .dir2       = dir);
+              d_cmd(D_CmdKind_SplitPanel,
+                    .dest_panel = df_handle_from_panel(split_panel),
+                    .panel      = payload.panel,
+                    .view       = payload.view,
+                    .dir2       = dir);
             }
             
             // rjf: exit on opl child
@@ -5306,19 +5139,19 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
               {
                 if(dir != Dir2_Invalid)
                 {
-                  df_msg(DF_MsgKind_SplitPanel,
-                         .dst_panel = df_handle_from_panel(panel),
-                         .panel = payload.panel,
-                         .view = payload.view,
-                         .dir2 = dir);
+                  d_cmd(D_CmdKind_SplitPanel,
+                        .dest_panel = df_handle_from_panel(panel),
+                        .panel = payload.panel,
+                        .view = payload.view,
+                        .dir2 = dir);
                 }
                 else
                 {
-                  df_msg(DF_MsgKind_MoveTab,
-                         .dst_panel = df_handle_from_panel(panel),
-                         .panel = payload.panel,
-                         .view = payload.view,
-                         .prev_view = df_handle_from_view(panel->last_tab_view));
+                  d_cmd(D_CmdKind_MoveTab,
+                        .dest_panel = df_handle_from_panel(panel),
+                        .panel = payload.panel,
+                        .view = payload.view,
+                        .prev_view = df_handle_from_view(panel->last_tab_view));
                 }
               }
             }
@@ -5368,7 +5201,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
           {
             if(view->is_filtering && ui_is_focus_active() && ui_slot_press(UI_EventActionSlot_Accept))
             {
-              df_msg(DF_MsgKind_ApplyFilter, .view = df_handle_from_view(view));
+              d_cmd(D_CmdKind_ApplyFilter, .view = df_handle_from_view(view));
             }
             if(view->is_filtering || view->is_filtering_t > 0.01f)
             {
@@ -5407,7 +5240,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
                                                str8_lit("###filter_text_input"));
                   if(ui_pressed(sig))
                   {
-                    df_msg(DF_MsgKind_FocusPanel, .panel = df_handle_from_panel(panel));
+                    d_cmd(D_CmdKind_FocusPanel, .panel = df_handle_from_panel(panel));
                   }
                 }
               }
@@ -5512,20 +5345,20 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
               if(evt->flags & UI_EventFlag_Paste)
               {
                 ui_eat_event(evt);
-                df_msg(DF_MsgKind_Filter);
-                df_msg(DF_MsgKind_Paste);
+                d_cmd(D_CmdKind_Filter);
+                d_cmd(D_CmdKind_Paste);
               }
               else if(evt->string.size != 0 && evt->kind == UI_EventKind_Text)
               {
                 ui_eat_event(evt);
-                df_msg(DF_MsgKind_Filter);
-                df_msg(DF_MsgKind_InsertText, .string = evt->string);
+                d_cmd(D_CmdKind_Filter);
+                d_cmd(D_CmdKind_InsertText, .string = evt->string);
               }
             }
           }
           if(view->spec->info.flags & DF_ViewSpecFlag_CanFilter && (view->query_string_size != 0 || view->is_filtering) && ui_is_focus_active() && ui_slot_press(UI_EventActionSlot_Cancel))
           {
-            df_msg(DF_MsgKind_ClearFilter, .view = df_handle_from_view(view));
+            d_cmd(D_CmdKind_ClearFilter, .view = df_handle_from_view(view));
           }
         }
         
@@ -5535,7 +5368,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
         UI_Signal panel_sig = ui_signal_from_box(panel_box);
         if(ui_pressed(panel_sig))
         {
-          df_msg(DF_MsgKind_FocusPanel, .panel = df_handle_from_panel(panel));
+          d_cmd(D_CmdKind_FocusPanel, .panel = df_handle_from_panel(panel));
         }
         
         //////////////////////////
@@ -5682,7 +5515,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
                     UI_Signal sig = ui_buttonf("%S###close_view_%p", df_g_icon_kind_text_table[DF_IconKind_X], view);
                     if(ui_clicked(sig) || ui_middle_clicked(sig))
                     {
-                      df_msg(DF_MsgKind_CloseTab, .panel = df_handle_from_panel(panel), .view = df_handle_from_view(view));
+                      d_cmd(D_CmdKind_CloseTab, .panel = df_handle_from_panel(panel), .view = df_handle_from_view(view));
                     }
                   }
                 }
@@ -5693,7 +5526,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
                   if(ui_pressed(sig))
                   {
                     next_selected_tab_view = view;
-                    df_msg(DF_MsgKind_FocusPanel, .panel = df_handle_from_panel(panel));
+                    d_cmd(D_CmdKind_FocusPanel, .panel = df_handle_from_panel(panel));
                   }
                   else if(ui_dragging(sig) && !df_drag_is_active() && length_2f32(ui_drag_delta()) > 10.f)
                   {
@@ -5713,7 +5546,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
                   }
                   else if(ui_middle_clicked(sig))
                   {
-                    df_msg(DF_MsgKind_CloseTab, .panel = df_handle_from_panel(panel), .view = df_handle_from_view(view));
+                    d_cmd(D_CmdKind_CloseTab, .panel = df_handle_from_panel(panel), .view = df_handle_from_view(view));
                   }
                 }
               }
@@ -5766,7 +5599,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
                 UI_Signal sig = ui_signal_from_box(add_new_box);
                 if(ui_clicked(sig))
                 {
-                  df_msg(DF_MsgKind_FocusPanel, .panel = df_handle_from_panel(panel));
+                  d_cmd(D_CmdKind_FocusPanel, .panel = df_handle_from_panel(panel));
                   UI_Key view_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("_view_menu_key_"));
                   ui_ctx_menu_open(view_menu_key, add_new_box->key, v2f32(0, tab_bar_vheight));
                 }
@@ -5833,11 +5666,11 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
                 DF_Panel *src_panel = df_panel_from_handle(payload.panel);
                 if(!df_panel_is_nil(panel) && !df_view_is_nil(view))
                 {
-                  df_msg(DF_MsgKind_MoveTab,
-                         .panel = df_handle_from_panel(src_panel),
-                         .dst_panel = df_handle_from_panel(panel),
-                         .view = df_handle_from_view(view),
-                         .prev_view = df_handle_from_view(active_drop_site->prev_view));
+                  d_cmd(D_CmdKind_MoveTab,
+                        .panel = df_handle_from_panel(src_panel),
+                        .dest_panel = df_handle_from_panel(panel),
+                        .view = df_handle_from_view(view),
+                        .prev_view = df_handle_from_view(active_drop_site->prev_view));
                 }
               }
             }
@@ -5891,21 +5724,20 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
                 // rjf: view drop
                 if(!df_view_is_nil(view))
                 {
-                  df_msg(DF_MsgKind_MoveTab,
-                         .prev_view = df_handle_from_view(panel->last_tab_view),
-                         .panel = df_handle_from_panel(src_panel),
-                         .dst_panel = df_handle_from_panel(panel),
-                         .view = df_handle_from_view(view));
+                  d_cmd(D_CmdKind_MoveTab,
+                        .prev_view = df_handle_from_view(panel->last_tab_view),
+                        .panel = df_handle_from_panel(src_panel),
+                        .dest_panel = df_handle_from_panel(panel),
+                        .view = df_handle_from_view(view));
                 }
                 
                 // rjf: entity drop
                 if(!d_entity_is_nil(entity))
                 {
-                  // TODO(rjf): @msgs
-                  // df_msg(D_MsgKind_SpawnEntityView,
-                  // .panel = df_handle_from_panel(panel),
-                  // .text_point = payload.text_point,
-                  // .entity = d_handle_from_entity(entity));
+                  d_cmd(D_CmdKind_SpawnEntityView,
+                        .panel = df_handle_from_panel(panel),
+                        .text_point = payload.text_point,
+                        .entity = d_handle_from_entity(entity));
                 }
               }
             }
@@ -5922,7 +5754,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
             for(String8Node *n = evt->paths.first; n != 0; n = n->next)
             {
               Temp scratch = scratch_begin(0, 0);
-              df_msg(DF_MsgKind_Open, .file_path = path_normalized_from_string(scratch.arena, n->string));
+              d_cmd(D_CmdKind_Open, .file_path = path_normalized_from_string(scratch.arena, n->string));
               scratch_end(scratch);
             }
             ui_eat_event(evt);
@@ -6031,11 +5863,11 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
         ui_eat_event(evt);
         if(evt->delta_2f32.y < 0)
         {
-          df_msg(DF_MsgKind_IncUIFontScale);
+          d_cmd(D_CmdKind_IncUIFontScale, .window = df_handle_from_window(ws));
         }
         else if(evt->delta_2f32.y > 0)
         {
-          df_msg(DF_MsgKind_DecUIFontScale);
+          d_cmd(D_CmdKind_DecUIFontScale, .window = df_handle_from_window(ws));
         }
       }
     }
@@ -7241,7 +7073,7 @@ df_push_search_string(Arena *arena)
 //- rjf: string <-> cfg tree
 
 internal MD_Node *
-df_cfg_tree_from_key(String8 string)
+df_cfg_tree_from_string(String8 string)
 {
   MD_Node *result = &md_nil_node;
   Temp scratch = scratch_begin(0, 0);
@@ -7316,7 +7148,7 @@ df_cfg_tree_from_key(String8 string)
 }
 
 internal String8
-df_key_from_cfg_tree(Arena *arena, MD_Node *node)
+df_string_from_cfg_tree(Arena *arena, MD_Node *node)
 {
   Temp scratch = scratch_begin(&arena, 1);
   String8List strings = {0};
@@ -8265,7 +8097,7 @@ df_msg_(DF_MsgKind kind, D_Regs *regs)
 #endif
 
 internal void
-df_init(CmdLine *cmdln)
+df_init(void)
 {
   ProfBeginFunction();
   Arena *arena = arena_alloc();
@@ -8280,8 +8112,6 @@ df_init(CmdLine *cmdln)
     df_state->cfg_slot_roots[slot] = &md_nil_node;
   }
   df_state->msgs_arena = arena_alloc();
-  df_state->window_slots_count = 256;
-  df_state->window_slots = push_array(arena, DF_WindowSlot, df_state->window_slots_count);
   df_state->key_map_arena = arena_alloc();
   df_state->confirm_arena = arena_alloc();
   df_state->view_spec_table_size = 256;
@@ -8297,33 +8127,6 @@ df_init(CmdLine *cmdln)
   df_state->rich_hover_info_next_arena = arena_alloc();
   df_state->rich_hover_info_current_arena = arena_alloc();
   df_clear_bindings();
-  
-  // rjf: do initial config load
-  {
-    Temp scratch = scratch_begin(0, 0);
-    String8 user_cfg_path = cmd_line_string(cmdln, str8_lit("user"));
-    String8 project_cfg_path = cmd_line_string(cmdln, str8_lit("project"));
-    if(project_cfg_path.size == 0)
-    {
-      project_cfg_path = cmd_line_string(cmdln, str8_lit("profile"));
-    }
-    {
-      String8 user_program_data_path = os_get_process_info()->user_program_data_path;
-      String8 user_data_folder = push_str8f(scratch.arena, "%S/%S", user_program_data_path, str8_lit("raddbg"));
-      os_make_directory(user_data_folder);
-      if(user_cfg_path.size == 0)
-      {
-        user_cfg_path = push_str8f(scratch.arena, "%S/default.raddbg_user", user_data_folder);
-      }
-      if(project_cfg_path.size == 0)
-      {
-        project_cfg_path = push_str8f(scratch.arena, "%S/default.raddbg_project", user_data_folder);
-      }
-    }
-    df_msg(DF_MsgKind_LoadUser, .file_path = user_cfg_path);
-    df_msg(DF_MsgKind_LoadProject, .file_path = project_cfg_path);
-    scratch_end(scratch);
-  }
   
   // rjf: register gfx layer views
   {
@@ -8444,10 +8247,10 @@ df_frame(void)
   //
   // TODO(rjf): maximize target, given all windows and their monitors
   F32 target_hz = os_get_gfx_info()->default_refresh_rate;
-  if(df_state->frame_index > 32)
+  if(df_state->frame_time_us_history_idx > 32)
   {
     // rjf: calculate average frame time out of the last N
-    U64 num_frames_in_history = Min(ArrayCount(df_state->frame_time_us_history), df_state->frame_index);
+    U64 num_frames_in_history = Min(ArrayCount(df_state->frame_time_us_history), df_state->frame_time_us_history_idx);
     U64 frame_time_history_sum_us = 0;
     for(U64 idx = 0; idx < num_frames_in_history; idx += 1)
     {
@@ -8502,7 +8305,7 @@ df_frame(void)
       df_request_frame();
       df_unbind_spec(df_state->bind_change_cmd_spec, df_state->bind_change_binding);
       df_state->bind_change_active = 0;
-      // TODO(rjf): @msgs df_msg(d_cfg_src_write_cmd_kind_table[D_CfgSrc_User]);
+      d_cmd(d_cfg_src_write_cmd_kind_table[D_CfgSrc_User]);
     }
     for(OS_Event *event = events.first, *next = 0; event != 0; event = next)
     {
@@ -8919,7 +8722,7 @@ df_frame(void)
             df_state->cfg_root = md_push_list(df_state->cfg_root_arena);
             for(EachEnumVal(DF_CfgSlot, slot))
             {
-              md_list_push_ref(df_state->cfg_root_arena, df_state->cfg_root, df_state->cfg_slot_roots[slot]);
+              md_list_push_ref(df_state->cfg_root_arena, df_state->cfg_root, df_state->cfg_slot_roots[cfg_slot]);
             }
           }break;
           case DF_MsgKind_SaveUser:    cfg_slot = DF_CfgSlot_User; goto save_cfg_data;
@@ -9195,11 +8998,11 @@ df_frame(void)
                                                      "target:{executable:\"%S\", working_directory:\"%S\"}",
                                                      file_path_escaped,
                                                      working_dir_escaped);
-            df_msg(DF_MsgKind_SelectTarget, .string = df_key_from_cfg_tree(scratch.arena, target_cfg));
+            df_msg(DF_MsgKind_SelectTarget, .string = df_string_from_cfg_tree(scratch.arena, target_cfg));
           }break;
           case DF_MsgKind_SelectTarget:
           {
-            MD_Node *target_cfg = df_cfg_tree_from_key(regs->string);
+            MD_Node *target_cfg = df_cfg_tree_from_string(regs->string);
             if(!md_node_is_nil(target_cfg))
             {
               for(MD_EachNode(root_ref, df_state->cfg_root->first))
@@ -10148,6 +9951,13 @@ df_frame(void)
                 // rjf: choose initial focused panel
                 ws->focused_panel = root_1;
               }break;
+            }
+            
+            // rjf: dispatch cfg saves
+            for(D_CfgSrc src = (D_CfgSrc)0; src < D_CfgSrc_COUNT; src = (D_CfgSrc)(src+1))
+            {
+              D_CmdKind write_cmd = d_cfg_src_write_cmd_kind_table[src];
+              d_cmd(write_cmd, .file_path = d_cfg_path_from_src(src));
             }
           }break;
           
@@ -13151,28 +12961,20 @@ df_frame(void)
   //
   {
     dr_begin_frame();
-    for(MD_EachNode(root_ref, df_state->cfg_root->first))
+    for(DF_Window *w = df_state->first_window; w != 0; w = w->next)
     {
-      for(MD_EachNode(tln, root_ref->first->first))
+      B32 window_is_focused = os_window_is_focused(w->os);
+      if(window_is_focused)
       {
-        if(str8_match(tln->string, str8_lit("window"), 0))
-        {
-          String8 window_cfg_key = df_key_from_cfg_tree(scratch.arena, tln);
-          DF_Window *w = df_window_from_cfg_key(window_cfg_key);
-          B32 window_is_focused = os_window_is_focused(w->os);
-          if(window_is_focused)
-          {
-            df_state->last_focused_window = df_handle_from_window(w);
-          }
-          d_push_regs();
-          d_regs()->window = df_handle_from_window(w);
-          df_window_update_and_render(scratch.arena, w, &cmds);
-          D_Regs *window_regs = d_pop_regs();
-          if(df_window_from_handle(df_state->last_focused_window) == w)
-          {
-            MemoryCopyStruct(d_regs(), window_regs);
-          }
-        }
+        df_state->last_focused_window = df_handle_from_window(w);
+      }
+      d_push_regs();
+      d_regs()->window = df_handle_from_window(w);
+      df_window_update_and_render(scratch.arena, w, &cmds);
+      D_Regs *window_regs = d_pop_regs();
+      if(df_window_from_handle(df_state->last_focused_window) == w)
+      {
+        MemoryCopyStruct(d_regs(), window_regs);
       }
     }
   }
@@ -13203,19 +13005,33 @@ df_frame(void)
   }
   
   //////////////////////////////
+  //- rjf: write config changes (TODO(rjf): @msgs)
+  //
+  ProfScope("write config changes")
+  {
+    for(D_CfgSrc src = (D_CfgSrc)0; src < D_CfgSrc_COUNT; src = (D_CfgSrc)(src+1)) ProfScope("write %.*s config data", str8_varg(d_cfg_src_string_table[src]))
+    {
+      if(d_state->cfg_write_issued[src])
+      {
+        d_state->cfg_write_issued[src] = 0;
+        String8 path = d_cfg_path_from_src(src);
+        os_write_data_list_to_file_path(path, d_state->cfg_write_data[src]);
+      }
+      arena_clear(d_state->cfg_write_arenas[src]);
+      MemoryZeroStruct(&d_state->cfg_write_data[src]);
+    }
+  }
+  
+  //////////////////////////////
   //- rjf: submit rendering to all windows
   //
   {
     r_begin_frame();
-    for(U64 slot_idx = 0; slot_idx < df_state->window_slots_count; slot_idx += 1)
+    for(DF_Window *w = df_state->first_window; w != 0; w = w->next)
     {
-      for(DF_WindowNode *n = df_state->window_slots[slot_idx].first; n != 0; n = n->next)
-      {
-        DF_Window *w = &n->v;
-        r_window_begin_frame(w->os, w->r);
-        dr_submit_bucket(w->os, w->r, w->draw_bucket);
-        r_window_end_frame(w->os, w->r);
-      }
+      r_window_begin_frame(w->os, w->r);
+      dr_submit_bucket(w->os, w->r, w->draw_bucket);
+      r_window_end_frame(w->os, w->r);
     }
     r_end_frame();
   }
@@ -13225,30 +13041,18 @@ df_frame(void)
   //
   if(depth == 0)
   {
-    typedef struct Task Task;
-    struct Task
+    D_HandleList windows_to_show = {0};
+    for(DF_Window *w = df_state->first_window; w != 0; w = w->next)
     {
-      Task *next;
-      DF_Window *w;
-    };
-    Task *first_task = 0;
-    Task *last_task = 0;
-    for(U64 slot_idx = 0; slot_idx < df_state->window_slots_count; slot_idx += 1)
-    {
-      for(DF_WindowNode *n = df_state->window_slots[slot_idx].first; n != 0; n = n->next)
+      if(w->frames_alive == 1)
       {
-        DF_Window *w = &n->v;
-        if(w->first_frame_touched == w->last_frame_touched)
-        {
-          Task *t = push_array(scratch.arena, Task, 1);
-          SLLQueuePush(first_task, last_task, t);
-          t->w = w;
-        }
+        d_handle_list_push(scratch.arena, &windows_to_show, df_handle_from_window(w));
       }
     }
-    for(Task *t = first_task; t != 0; t = t->next)
+    for(D_HandleNode *n = windows_to_show.first; n != 0; n = n->next)
     {
-      DeferLoop(depth += 1, depth -= 1) os_window_first_paint(t->w->os);
+      DF_Window *window = df_window_from_handle(n->handle);
+      DeferLoop(depth += 1, depth -= 1) os_window_first_paint(window->os);
     }
   }
   
@@ -13257,12 +13061,8 @@ df_frame(void)
   //
   U64 end_time_us = os_now_microseconds();
   U64 frame_time_us = end_time_us-begin_time_us;
-  df_state->frame_time_us_history[df_state->frame_index%ArrayCount(df_state->frame_time_us_history)] = frame_time_us;
-  
-  //////////////////////////////
-  //- rjf: tick frame counter
-  //
-  df_state->frame_index += 1;
+  df_state->frame_time_us_history[df_state->frame_time_us_history_idx%ArrayCount(df_state->frame_time_us_history)] = frame_time_us;
+  df_state->frame_time_us_history_idx += 1;
   
   di_scope_close(di_scope);
   scratch_end(scratch);

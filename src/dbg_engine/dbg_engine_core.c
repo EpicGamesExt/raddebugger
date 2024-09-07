@@ -9271,6 +9271,7 @@ d_tick(Arena *arena, DI_Scope *di_scope, D_CmdList *cmds, F32 dt)
     U128 state_hash = d_hash_from_ctrl_param_state();
     if(!u128_match(state_hash, d_state->ctrl_last_run_param_state_hash))
     {
+      d_cmd(D_CmdKind_SoftHaltRefresh);
       d_msg(D_MsgKind_SoftHaltRefresh);
     }
   }

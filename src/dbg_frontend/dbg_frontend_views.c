@@ -552,7 +552,7 @@ df_code_view_build(Arena *arena, DF_View *view, DF_CodeViewState *cv, DF_CodeVie
     //- rjf: press code slice? -> focus panel
     if(ui_pressed(sig.base))
     {
-      df_msg(DF_MsgKind_FocusPanel);
+      d_cmd(D_CmdKind_FocusPanel);
     }
     
     //- rjf: dragging & outside region? -> contain cursor
@@ -572,14 +572,14 @@ df_code_view_build(Arena *arena, DF_View *view, DF_CodeViewState *cv, DF_CodeVie
     if(ui_pressed(sig.base) && sig.base.event_flags & OS_EventFlag_Ctrl)
     {
       ui_kill_action();
-      df_msg(DF_MsgKind_GoToName, .string = txt_string_from_info_data_txt_rng(text_info, text_data, sig.mouse_expr_rng));
+      d_cmd(D_CmdKind_GoToName, .string = txt_string_from_info_data_txt_rng(text_info, text_data, sig.mouse_expr_rng));
     }
     
     //- rjf: watch expr at mouse
     if(cv->watch_expr_at_mouse)
     {
       cv->watch_expr_at_mouse = 0;
-      df_msg(DF_MsgKind_ToggleWatchExpression, .string = txt_string_from_info_data_txt_rng(text_info, text_data, sig.mouse_expr_rng));
+      d_cmd(D_CmdKind_ToggleWatchExpression, .string = txt_string_from_info_data_txt_rng(text_info, text_data, sig.mouse_expr_rng));
     }
     
     //- rjf: selected text on single line, no query? -> set search text
@@ -724,11 +724,11 @@ df_code_view_build(Arena *arena, DF_View *view, DF_CodeViewState *cv, DF_CodeVie
           ui_eat_event(evt);
           if(evt->delta_2f32.y < 0)
           {
-            df_msg(DF_MsgKind_IncCodeFontScale);
+            d_cmd(D_CmdKind_IncCodeFontScale);
           }
           else if(evt->delta_2f32.y > 0)
           {
-            df_msg(DF_MsgKind_DecCodeFontScale);
+            d_cmd(D_CmdKind_DecCodeFontScale);
           }
         }
       }
@@ -1606,13 +1606,10 @@ df_watch_view_build(DF_View *view, DF_WatchViewState *ewv, B32 modifiable, U32 d
           }
           if(row->expand_ui_rule_spec != &df_nil_view_rule_spec && row->expand_ui_rule_spec != 0)
           {
-            // TODO(rjf): @msgs
-#if 0
-            df_msg(DF_MsgKind_OpenTab,
-                   .string      = e_string_from_expr(scratch.arena, row->expr),
-                   .view_spec   = df_view_spec_from_string(row->expand_ui_rule_spec->info.string),
-                   .params_tree = row->expand_ui_rule_params);
-#endif
+            d_cmd(D_CmdKind_OpenTab,
+                  .string      = e_string_from_expr(scratch.arena, row->expr),
+                  .view_spec   = df_view_spec_from_string(row->expand_ui_rule_spec->info.string),
+                  .params_tree = row->expand_ui_rule_params);
           }
         }
       }
