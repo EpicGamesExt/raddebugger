@@ -797,9 +797,8 @@ entry_point(CmdLine *cmd_line)
         tex_init();
         geo_init();
         fnt_init();
-        D_StateDeltaHistory *hist = d_state_delta_history_alloc();
-        d_init(cmd_line, hist);
-        df_init(d_state_delta_history());
+        d_init(cmd_line);
+        df_init();
       }
       
       //- rjf: setup initial target from command line args

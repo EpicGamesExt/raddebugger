@@ -138,100 +138,6 @@ d_regs_copy(Arena *arena, D_Regs *src)
 }
 
 ////////////////////////////////
-//~ rjf: State History Data Structure
-
-internal D_StateDeltaHistory *
-d_state_delta_history_alloc(void)
-{
-  Arena *arena = arena_alloc();
-  D_StateDeltaHistory *hist = push_array(arena, D_StateDeltaHistory, 1);
-  hist->arena = arena;
-  for(Side side = (Side)0; side < Side_COUNT; side = (Side)(side+1))
-  {
-    hist->side_arenas[side] = arena_alloc();
-  }
-  return hist;
-}
-
-internal void
-d_state_delta_history_release(D_StateDeltaHistory *hist)
-{
-  for(Side side = (Side)0; side < Side_COUNT; side = (Side)(side+1))
-  {
-    arena_release(hist->side_arenas[side]);
-  }
-  arena_release(hist->arena);
-}
-
-internal void
-d_state_delta_history_batch_begin(D_StateDeltaHistory *hist)
-{
-  if(hist == 0) { return; }
-  if(hist->side_arenas[Side_Max] != 0)
-  {
-    arena_clear(hist->side_arenas[Side_Max]);
-    hist->side_tops[Side_Max] = 0;
-  }
-  D_StateDeltaBatch *batch = push_array(hist->side_arenas[Side_Min], D_StateDeltaBatch, 1);
-  SLLStackPush(hist->side_tops[Side_Min], batch);
-  hist->batch_is_active = 1;
-}
-
-internal void
-d_state_delta_history_batch_end(D_StateDeltaHistory *hist)
-{
-  if(hist == 0) { return; }
-  hist->batch_is_active = 0;
-}
-
-internal void
-d_state_delta_history_push_delta_(D_StateDeltaHistory *hist, D_StateDeltaParams *params)
-{
-  if(hist == 0) { return; }
-  D_StateDeltaBatch *batch = hist->side_tops[Side_Min];
-  if(batch == 0 || hist->batch_is_active == 0) { return; }
-  D_StateDeltaNode *n = push_array(hist->side_arenas[Side_Min], D_StateDeltaNode, 1);
-  SLLQueuePush(batch->first, batch->last, n);
-  n->v.guard_entity = d_handle_from_entity(params->guard_entity);
-  n->v.vaddr = (U64)params->ptr;
-  n->v.data = push_str8_copy(hist->arena, str8((U8*)params->ptr, params->size));
-}
-
-internal void
-d_state_delta_history_wind(D_StateDeltaHistory *hist, Side side)
-{
-  if(hist == 0) { return; }
-  B32 done = 0;
-  for(D_StateDeltaBatch *src_batch = hist->side_tops[side];
-      src_batch != 0 && !done;
-      src_batch = hist->side_tops[side])
-  {
-    U64 pop_pos = (U64)hist->side_tops[side] - (U64)hist->side_arenas[side];
-    SLLStackPop(hist->side_tops[side]);
-    {
-      D_StateDeltaBatch *dst_batch = push_array(hist->side_arenas[side_flip(side)], D_StateDeltaBatch, 1);
-      SLLStackPush(hist->side_tops[side_flip(side)], dst_batch);
-      for(D_StateDeltaNode *src_n = src_batch->first; src_n != 0; src_n = src_n->next)
-      {
-        D_StateDelta *src_delta = &src_n->v;
-        B32 handle_is_good = (d_handle_match(src_delta->guard_entity, d_handle_zero()) ||
-                              !d_entity_is_nil(d_entity_from_handle(src_delta->guard_entity)));
-        if(handle_is_good)
-        {
-          D_StateDeltaNode *dst_n = push_array(hist->side_arenas[side_flip(side)], D_StateDeltaNode, 1);
-          SLLQueuePush(dst_batch->first, dst_batch->last, dst_n);
-          dst_n->v.vaddr = src_delta->vaddr;
-          dst_n->v.data = push_str8_copy(hist->side_arenas[side_flip(side)], str8((U8 *)src_delta->vaddr, src_delta->data.size));
-          MemoryCopy((void *)src_delta->vaddr, src_delta->data.str, src_delta->data.size);
-          done = 1;
-        }
-      }
-    }
-    arena_pop_to(hist->side_arenas[side], pop_pos);
-  }
-}
-
-////////////////////////////////
 //~ rjf: Sparse Tree Expansion State Data Structure
 
 //- rjf: keys
@@ -1197,12 +1103,10 @@ d_name_alloc(String8 string)
           {
             if(prev == 0)
             {
-              d_state_delta_history_push_struct_delta(d_state_delta_history(), &d_state->free_name_chunks[bucket_idx]);
               d_state->free_name_chunks[bucket_idx] = n->next;
             }
             else
             {
-              d_state_delta_history_push_struct_delta(d_state_delta_history(), &prev->next);
               prev->next = n->next;
             }
             node = n;
@@ -1212,7 +1116,6 @@ d_name_alloc(String8 string)
       }
       else
       {
-        d_state_delta_history_push_struct_delta(d_state_delta_history(), &d_state->free_name_chunks[bucket_idx]);
         SLLStackPop(d_state->free_name_chunks[bucket_idx]);
       }
     }
@@ -1237,7 +1140,6 @@ d_name_alloc(String8 string)
   
   // rjf: fill string & return
   String8 allocated_string = str8((U8 *)node, string.size);
-  d_state_delta_history_push_delta(d_state_delta_history(), .ptr = allocated_string.str, .size = Max(allocated_string.size, sizeof(*node)));
   MemoryCopy((U8 *)node, string.str, string.size);
   return allocated_string;
 }
@@ -1248,8 +1150,6 @@ d_name_release(String8 string)
   if(string.size == 0) {return;}
   U64 bucket_idx = d_name_bucket_idx_from_string_size(string.size);
   D_NameChunkNode *node = (D_NameChunkNode *)string.str;
-  d_state_delta_history_push_delta(d_state_delta_history(), .ptr = node, .size = Max(node->size, sizeof(*node)));
-  d_state_delta_history_push_struct_delta(d_state_delta_history(), &d_state->free_name_chunks[bucket_idx]);
   node->size = u64_up_to_pow2(string.size);
   SLLStackPush(d_state->free_name_chunks[bucket_idx], node);
 }
@@ -1416,8 +1316,6 @@ internal void
 d_entity_equip_txt_pt(D_Entity *entity, TxtPt point)
 {
   d_require_entity_nonnil(entity, return);
-  d_state_delta_history_push_struct_delta(d_state_delta_history(), &entity->text_point, .guard_entity = entity);
-  d_state_delta_history_push_struct_delta(d_state_delta_history(), &entity->flags, .guard_entity = entity);
   entity->text_point = point;
   entity->flags |= D_EntityFlag_HasTextPoint;
 }
@@ -1426,8 +1324,6 @@ internal void
 d_entity_equip_entity_handle(D_Entity *entity, D_Handle handle)
 {
   d_require_entity_nonnil(entity, return);
-  d_state_delta_history_push_struct_delta(d_state_delta_history(), &entity->entity_handle, .guard_entity = entity);
-  d_state_delta_history_push_struct_delta(d_state_delta_history(), &entity->flags, .guard_entity = entity);
   entity->entity_handle = handle;
   entity->flags |= D_EntityFlag_HasEntityHandle;
 }
@@ -1436,7 +1332,6 @@ internal void
 d_entity_equip_disabled(D_Entity *entity, B32 value)
 {
   d_require_entity_nonnil(entity, return);
-  d_state_delta_history_push_struct_delta(d_state_delta_history(), &entity->disabled, .guard_entity = entity);
   entity->disabled = value;
 }
 
@@ -1444,8 +1339,6 @@ internal void
 d_entity_equip_u64(D_Entity *entity, U64 u64)
 {
   d_require_entity_nonnil(entity, return);
-  d_state_delta_history_push_struct_delta(d_state_delta_history(), &entity->u64, .guard_entity = entity);
-  d_state_delta_history_push_struct_delta(d_state_delta_history(), &entity->flags, .guard_entity = entity);
   entity->u64 = u64;
   entity->flags |= D_EntityFlag_HasU64;
 }
@@ -1464,8 +1357,6 @@ internal void
 d_entity_equip_color_hsva(D_Entity *entity, Vec4F32 hsva)
 {
   d_require_entity_nonnil(entity, return);
-  d_state_delta_history_push_struct_delta(d_state_delta_history(), &entity->color_hsva, .guard_entity = entity);
-  d_state_delta_history_push_struct_delta(d_state_delta_history(), &entity->flags, .guard_entity = entity);
   entity->color_hsva = hsva;
   entity->flags |= D_EntityFlag_HasColor;
 }
@@ -1474,7 +1365,6 @@ internal void
 d_entity_equip_cfg_src(D_Entity *entity, D_CfgSrc cfg_src)
 {
   d_require_entity_nonnil(entity, return);
-  d_state_delta_history_push_struct_delta(d_state_delta_history(), &entity->cfg_src, .guard_entity = entity);
   entity->cfg_src = cfg_src;
 }
 
@@ -1482,7 +1372,6 @@ internal void
 d_entity_equip_timestamp(D_Entity *entity, U64 timestamp)
 {
   d_require_entity_nonnil(entity, return);
-  d_state_delta_history_push_struct_delta(d_state_delta_history(), &entity->timestamp, .guard_entity = entity);
   entity->timestamp = timestamp;
 }
 
@@ -1492,8 +1381,6 @@ internal void
 d_entity_equip_ctrl_machine_id(D_Entity *entity, CTRL_MachineID machine_id)
 {
   d_require_entity_nonnil(entity, return);
-  d_state_delta_history_push_struct_delta(d_state_delta_history(), &entity->ctrl_machine_id, .guard_entity = entity);
-  d_state_delta_history_push_struct_delta(d_state_delta_history(), &entity->flags, .guard_entity = entity);
   entity->ctrl_machine_id = machine_id;
   entity->flags |= D_EntityFlag_HasCtrlMachineID;
 }
@@ -1502,8 +1389,6 @@ internal void
 d_entity_equip_ctrl_handle(D_Entity *entity, DMN_Handle handle)
 {
   d_require_entity_nonnil(entity, return);
-  d_state_delta_history_push_struct_delta(d_state_delta_history(), &entity->ctrl_handle, .guard_entity = entity);
-  d_state_delta_history_push_struct_delta(d_state_delta_history(), &entity->flags, .guard_entity = entity);
   entity->ctrl_handle = handle;
   entity->flags |= D_EntityFlag_HasCtrlHandle;
 }
@@ -1512,8 +1397,6 @@ internal void
 d_entity_equip_arch(D_Entity *entity, Arch arch)
 {
   d_require_entity_nonnil(entity, return);
-  d_state_delta_history_push_struct_delta(d_state_delta_history(), &entity->arch, .guard_entity = entity);
-  d_state_delta_history_push_struct_delta(d_state_delta_history(), &entity->flags, .guard_entity = entity);
   entity->arch = arch;
   entity->flags |= D_EntityFlag_HasArch;
 }
@@ -1522,8 +1405,6 @@ internal void
 d_entity_equip_ctrl_id(D_Entity *entity, U32 id)
 {
   d_require_entity_nonnil(entity, return);
-  d_state_delta_history_push_struct_delta(d_state_delta_history(), &entity->ctrl_id, .guard_entity = entity);
-  d_state_delta_history_push_struct_delta(d_state_delta_history(), &entity->flags, .guard_entity = entity);
   entity->ctrl_id = id;
   entity->flags |= D_EntityFlag_HasCtrlID;
 }
@@ -1532,8 +1413,6 @@ internal void
 d_entity_equip_stack_base(D_Entity *entity, U64 stack_base)
 {
   d_require_entity_nonnil(entity, return);
-  d_state_delta_history_push_struct_delta(d_state_delta_history(), &entity->stack_base, .guard_entity = entity);
-  d_state_delta_history_push_struct_delta(d_state_delta_history(), &entity->flags, .guard_entity = entity);
   entity->stack_base = stack_base;
   entity->flags |= D_EntityFlag_HasStackBase;
 }
@@ -1542,8 +1421,6 @@ internal void
 d_entity_equip_vaddr_rng(D_Entity *entity, Rng1U64 range)
 {
   d_require_entity_nonnil(entity, return);
-  d_state_delta_history_push_struct_delta(d_state_delta_history(), &entity->vaddr_rng, .guard_entity = entity);
-  d_state_delta_history_push_struct_delta(d_state_delta_history(), &entity->flags, .guard_entity = entity);
   entity->vaddr_rng = range;
   entity->flags |= D_EntityFlag_HasVAddrRng;
 }
@@ -1552,8 +1429,6 @@ internal void
 d_entity_equip_vaddr(D_Entity *entity, U64 vaddr)
 {
   d_require_entity_nonnil(entity, return);
-  d_state_delta_history_push_struct_delta(d_state_delta_history(), &entity->vaddr, .guard_entity = entity);
-  d_state_delta_history_push_struct_delta(d_state_delta_history(), &entity->flags, .guard_entity = entity);
   entity->vaddr = vaddr;
   entity->flags |= D_EntityFlag_HasVAddr;
 }
@@ -1568,7 +1443,6 @@ d_entity_equip_name(D_Entity *entity, String8 name)
   {
     d_name_release(entity->string);
   }
-  d_state_delta_history_push_struct_delta(d_state_delta_history(), &entity->string, .guard_entity = entity);
   if(name.size != 0)
   {
     entity->string = d_name_alloc(name);
@@ -5226,14 +5100,6 @@ d_pop_regs(void)
   return regs;
 }
 
-//- rjf: undo/redo history
-
-internal D_StateDeltaHistory *
-d_state_delta_history(void)
-{
-  return d_state->hist;
-}
-
 //- rjf: control state
 
 internal D_RunKind
@@ -5933,7 +5799,7 @@ d_errorf(char *fmt, ...)
 #endif
 
 internal void
-d_init(CmdLine *cmdln, D_StateDeltaHistory *hist)
+d_init(CmdLine *cmdln)
 {
   Arena *arena = arena_alloc();
   d_state = push_array(arena, D_State, 1);
@@ -5957,7 +5823,6 @@ d_init(CmdLine *cmdln, D_StateDeltaHistory *hist)
   d_state->view_rule_spec_table_size = 1024;
   d_state->view_rule_spec_table = push_array(arena, D_ViewRuleSpec *, d_state->view_rule_spec_table_size);
   d_state->seconds_til_autosave = 0.5f;
-  d_state->hist = hist;
   d_state->top_regs = &d_state->base_regs;
   
   // rjf: set up initial exception filtering rules
@@ -7203,11 +7068,9 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
         //- rjf: undo/redo
         case D_CmdKind_Undo:
         {
-          d_state_delta_history_wind(d_state->hist, Side_Min);
         }break;
         case D_CmdKind_Redo:
         {
-          d_state_delta_history_wind(d_state->hist, Side_Max);
         }break;
         
         //- rjf: files
@@ -7385,20 +7248,14 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
         case D_CmdKind_EnableTarget:
         {
           D_Entity *entity = d_entity_from_handle(params.entity);
-          D_StateDeltaHistoryBatch(d_state_delta_history())
-          {
-            d_entity_equip_disabled(entity, 0);
-          }
+          d_entity_equip_disabled(entity, 0);
         }break;
         case D_CmdKind_DisableEntity:
         case D_CmdKind_DisableBreakpoint:
         case D_CmdKind_DisableTarget:
         {
           D_Entity *entity = d_entity_from_handle(params.entity);
-          D_StateDeltaHistoryBatch(d_state_delta_history())
-          {
-            d_entity_equip_disabled(entity, 1);
-          }
+          d_entity_equip_disabled(entity, 1);
         }break;
         case D_CmdKind_FreezeEntity:
         case D_CmdKind_ThawEntity:
@@ -7454,15 +7311,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
             for(Task *task = first_task; task != 0; task = task->next)
             {
               D_Entity *src_n = task->src_n;
-              if(task == first_task)
-              {
-                d_state_delta_history_batch_begin(d_state_delta_history());
-              }
               D_Entity *dst_n = d_entity_alloc(task->dst_parent, task->src_n->kind);
-              if(task == first_task)
-              {
-                d_state_delta_history_batch_end(d_state_delta_history());
-              }
               if(src_n->flags & D_EntityFlag_HasTextPoint)    {d_entity_equip_txt_pt(dst_n, src_n->text_point);}
               if(src_n->flags & D_EntityFlag_HasU64)          {d_entity_equip_u64(dst_n, src_n->u64);}
               if(src_n->flags & D_EntityFlag_HasColor)        {d_entity_equip_color_hsva(dst_n, d_hsva_from_entity(src_n));}
@@ -7609,10 +7458,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
           if(d_entity_is_nil(existing_watch))
           {
             D_Entity *watch = &d_nil_entity;
-            D_StateDeltaHistoryBatch(d_state_delta_history())
-            {
-              watch = d_entity_alloc(d_entity_root(), D_EntityKind_Watch);
-            }
+            watch = d_entity_alloc(d_entity_root(), D_EntityKind_Watch);
             d_entity_equip_cfg_src(watch, D_CfgSrc_Project);
             d_entity_equip_name(watch, cmd->params.string);
           }
@@ -7714,10 +7560,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
         {
           // rjf: build target
           D_Entity *entity = &d_nil_entity;
-          D_StateDeltaHistoryBatch(d_state_delta_history())
-          {
-            entity = d_entity_alloc(d_entity_root(), D_EntityKind_Target);
-          }
+          entity = d_entity_alloc(d_entity_root(), D_EntityKind_Target);
           d_entity_equip_disabled(entity, 1);
           d_entity_equip_cfg_src(entity, D_CfgSrc_Project);
           D_Entity *exe = d_entity_alloc(entity, D_EntityKind_Executable);
@@ -7739,19 +7582,16 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
           D_Entity *entity = d_entity_from_handle(params.entity);
           if(entity->kind == D_EntityKind_Target)
           {
-            D_StateDeltaHistoryBatch(d_state_delta_history())
+            D_EntityList all_targets = d_query_cached_entity_list_with_kind(D_EntityKind_Target);
+            B32 is_selected = !entity->disabled;
+            for(D_EntityNode *n = all_targets.first; n != 0; n = n->next)
             {
-              D_EntityList all_targets = d_query_cached_entity_list_with_kind(D_EntityKind_Target);
-              B32 is_selected = !entity->disabled;
-              for(D_EntityNode *n = all_targets.first; n != 0; n = n->next)
-              {
-                D_Entity *target = n->entity;
-                d_entity_equip_disabled(target, 1);
-              }
-              if(!is_selected)
-              {
-                d_entity_equip_disabled(entity, 0);
-              }
+              D_Entity *target = n->entity;
+              d_entity_equip_disabled(target, 1);
+            }
+            if(!is_selected)
+            {
+              d_entity_equip_disabled(entity, 0);
             }
           }
         }break;

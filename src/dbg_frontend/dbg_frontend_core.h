@@ -626,9 +626,6 @@ struct DF_State
   // rjf: frame request state
   U64 num_frames_requested;
   
-  // rjf: history cache
-  D_StateDeltaHistory *hist;
-  
   // rjf: key map table
   Arena *key_map_arena;
   U64 key_map_table_size;
@@ -966,7 +963,7 @@ internal void df_request_frame(void);
 ////////////////////////////////
 //~ rjf: Main Layer Top-Level Calls
 
-internal void df_init(D_StateDeltaHistory *hist);
+internal void df_init(void);
 internal void df_frame(void);
 
 #endif // DBG_FRONTEND_CORE_H

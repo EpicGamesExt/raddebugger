@@ -2571,11 +2571,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
             {
               if(ui_clicked(df_icon_buttonf(DF_IconKind_Trash, 0, "Remove Color###color_toggle")))
               {
-                D_StateDeltaHistoryBatch(d_state_delta_history())
-                {
-                  d_state_delta_history_push_struct_delta(d_state_delta_history(), &entity->flags, .guard_entity = entity);
-                  entity->flags &= ~D_EntityFlag_HasColor;
-                }
+                entity->flags &= ~D_EntityFlag_HasColor;
               }
             }
             
@@ -2583,10 +2579,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
           }
           if(!entity_has_color && ui_clicked(df_icon_buttonf(DF_IconKind_Palette, 0, "Apply Color###color_toggle")))
           {
-            D_StateDeltaHistoryBatch(d_state_delta_history())
-            {
-              d_entity_equip_color_rgba(entity, v4f32(1, 1, 1, 1));
-            }
+            d_entity_equip_color_rgba(entity, v4f32(1, 1, 1, 1));
           }
         }
       }
@@ -7821,14 +7814,13 @@ df_request_frame(void)
 #endif
 
 internal void
-df_init(D_StateDeltaHistory *hist)
+df_init(void)
 {
   ProfBeginFunction();
   Arena *arena = arena_alloc();
   df_state = push_array(arena, DF_State, 1);
   df_state->arena = arena;
   df_state->num_frames_requested = 2;
-  df_state->hist = hist;
   df_state->key_map_arena = arena_alloc();
   df_state->confirm_arena = arena_alloc();
   df_state->view_spec_table_size = 256;

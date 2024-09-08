@@ -45,7 +45,7 @@ main_thread_base_entry_point(void (*entry_point)(CmdLine *cmdline), char **argum
 #if defined(DASM_CACHE_H) && !defined(DASM_INIT_MANUAL)
   dasm_init();
 #endif
-#if defined(DI_H) && !defined(DI_INIT_MANUAL)
+#if defined(DBGI_H) && !defined(DBGI_INIT_MANUAL)
   di_init();
 #endif
 #if defined(FUZZY_SEARCH_H) && !defined(FZY_INIT_MANUAL)
@@ -76,11 +76,10 @@ main_thread_base_entry_point(void (*entry_point)(CmdLine *cmdline), char **argum
   fnt_init();
 #endif
 #if defined(DBG_ENGINE_CORE_H) && !defined(D_INIT_MANUAL)
-  D_StateDeltaHistory *hist = d_state_delta_history_alloc();
-  d_init(&cmdline, hist);
+  d_init(&cmdline);
 #endif
 #if defined(DBG_FRONTEND_CORE_H) && !defined(DF_INIT_MANUAL)
-  df_init(update_and_render, d_state_delta_history());
+  df_init();
 #endif
   
   //- rjf: call into entry point

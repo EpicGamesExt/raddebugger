@@ -920,49 +920,6 @@ struct D_RunLocalsCache
 };
 
 ////////////////////////////////
-//~ rjf: State Delta History Types
-
-typedef struct D_StateDeltaParams D_StateDeltaParams;
-struct D_StateDeltaParams
-{
-  void *ptr;
-  U64 size;
-  D_Entity *guard_entity;
-};
-
-typedef struct D_StateDelta D_StateDelta;
-struct D_StateDelta
-{
-  D_Handle guard_entity;
-  U64 vaddr;
-  String8 data;
-};
-
-typedef struct D_StateDeltaNode D_StateDeltaNode;
-struct D_StateDeltaNode
-{
-  D_StateDeltaNode *next;
-  D_StateDelta v;
-};
-
-typedef struct D_StateDeltaBatch D_StateDeltaBatch;
-struct D_StateDeltaBatch
-{
-  D_StateDeltaBatch *next;
-  D_StateDeltaNode *first;
-  D_StateDeltaNode *last;
-};
-
-typedef struct D_StateDeltaHistory D_StateDeltaHistory;
-struct D_StateDeltaHistory
-{
-  Arena *arena;
-  Arena *side_arenas[Side_COUNT]; // min -> undo; max -> redo
-  D_StateDeltaBatch *side_tops[Side_COUNT];
-  B32 batch_is_active;
-};
-
-////////////////////////////////
 //~ rjf: Main State Types
 
 //- rjf: name allocator types
@@ -1000,9 +957,6 @@ struct D_State
   
   // rjf: output log key
   U128 output_log_key;
-  
-  // rjf: history cache
-  D_StateDeltaHistory *hist;
   
   // rjf: name allocator
   D_NameChunkNode *free_name_chunks[8];
@@ -1128,19 +1082,6 @@ internal D_HandleList d_handle_list_copy(Arena *arena, D_HandleList list);
 
 internal void d_regs_copy_contents(Arena *arena, D_Regs *dst, D_Regs *src);
 internal D_Regs *d_regs_copy(Arena *arena, D_Regs *src);
-
-////////////////////////////////
-//~ rjf: State History Data Structure
-
-internal D_StateDeltaHistory *d_state_delta_history_alloc(void);
-internal void d_state_delta_history_release(D_StateDeltaHistory *hist);
-internal void d_state_delta_history_batch_begin(D_StateDeltaHistory *hist);
-internal void d_state_delta_history_batch_end(D_StateDeltaHistory *hist);
-#define D_StateDeltaHistoryBatch(hist) DeferLoop(d_state_delta_history_batch_begin(hist), d_state_delta_history_batch_end(hist))
-internal void d_state_delta_history_push_delta_(D_StateDeltaHistory *hist, D_StateDeltaParams *params);
-#define d_state_delta_history_push_delta(hist, ...) d_state_delta_history_push_delta_((hist), &(D_StateDeltaParams){.size = 1, __VA_ARGS__})
-#define d_state_delta_history_push_struct_delta(hist, sptr, ...) d_state_delta_history_push_delta((hist), .ptr = (sptr), .size = sizeof(*(sptr)), __VA_ARGS__)
-internal void d_state_delta_history_wind(D_StateDeltaHistory *hist, Side side);
 
 ////////////////////////////////
 //~ rjf: Sparse Tree Expansion State Data Structure
@@ -1497,9 +1438,6 @@ internal D_Regs *d_push_regs(void);
 internal D_Regs *d_pop_regs(void);
 #define D_RegsScope DeferLoop(d_push_regs(), d_pop_regs())
 
-//- rjf: undo/redo history
-internal D_StateDeltaHistory *d_state_delta_history(void);
-
 //- rjf: control state
 internal D_RunKind d_ctrl_last_run_kind(void);
 internal U64 d_ctrl_last_run_frame_idx(void);
@@ -1554,7 +1492,7 @@ __VA_ARGS__                 \
 ////////////////////////////////
 //~ rjf: Main Layer Top-Level Calls
 
-internal void d_init(CmdLine *cmdln, D_StateDeltaHistory *hist);
+internal void d_init(CmdLine *cmdln);
 internal D_CmdList d_gather_root_cmds(Arena *arena);
 internal void d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_Scope *di_scope, D_CmdList *cmds, F32 dt);
 

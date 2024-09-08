@@ -1,8 +1,8 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-#ifndef DI_H
-#define DI_H
+#ifndef DBGI_H
+#define DBGI_H
 
 ////////////////////////////////
 //~ rjf: Cache Key Type
@@ -252,4 +252,4 @@ internal DI_EventList di_p2u_pop_events(Arena *arena, U64 endt_us);
 
 internal void di_parse_thread__entry_point(void *p);
 
-#endif // DI_H
+#endif // DBGI_H
