@@ -572,6 +572,39 @@ struct UI_Nav
 };
 
 ////////////////////////////////
+//~ rjf: Animation State Types
+
+typedef struct UI_AnimParams UI_AnimParams;
+struct UI_AnimParams
+{
+  F32 initial;
+  F32 target;
+  F32 rate;
+  F32 epsilon;
+};
+
+typedef struct UI_AnimNode UI_AnimNode;
+struct UI_AnimNode
+{
+  UI_AnimNode *slot_next;
+  UI_AnimNode *slot_prev;
+  UI_AnimNode *lru_next;
+  UI_AnimNode *lru_prev;
+  U64 first_touched_build_index;
+  U64 last_touched_build_index;
+  UI_Key key;
+  UI_AnimParams params;
+  F32 current;
+};
+
+typedef struct UI_AnimSlot UI_AnimSlot;
+struct UI_AnimSlot
+{
+  UI_AnimNode *first;
+  UI_AnimNode *last;
+};
+
+////////////////////////////////
 //~ rjf: Generated Code
 
 #include "generated/ui.meta.h"
@@ -601,6 +634,13 @@ struct UI_State
   U64 box_table_size;
   UI_BoxHashSlot *box_table;
   
+  //- rjf: anim cache
+  UI_AnimNode *free_anim_node;
+  UI_AnimNode *lru_anim_node;
+  UI_AnimNode *mru_anim_node;
+  U64 anim_slots_count;
+  UI_AnimSlot *anim_slots;
+  
   //- rjf: build state machine state
   B32 is_in_open_ctx_menu;
   
@@ -622,6 +662,7 @@ struct UI_State
   UI_EventList *events;
   Vec2F32 mouse;
   F32 animation_dt;
+  F32 default_animation_rate;
   
   //- rjf: user interaction state
   UI_Key hot_box_key;
@@ -851,6 +892,18 @@ internal U64               ui_box_char_pos_from_xy(UI_Box *box, Vec2F32 xy);
 //~ rjf: User Interaction
 
 internal UI_Signal ui_signal_from_box(UI_Box *box);
+
+////////////////////////////////
+//~ rjf: Animation Cache Interaction API
+
+read_only global UI_AnimNode ui_nil_anim_node =
+{
+  &ui_nil_anim_node,
+  &ui_nil_anim_node,
+};
+
+internal F32 ui_anim_(UI_Key key, UI_AnimParams *params);
+#define ui_anim(key, target_val, ...) ui_anim_((key), &(UI_AnimParams){.target = (target_val), __VA_ARGS__, .rate = (ui_state->default_animation_rate)})
 
 ////////////////////////////////
 //~ rjf: Stacks

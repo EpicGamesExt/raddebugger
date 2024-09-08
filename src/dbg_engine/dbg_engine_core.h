@@ -5,6 +5,56 @@
 #define DBG_ENGINE_CORE_H
 
 ////////////////////////////////
+//~ rjf: Input State Types
+
+typedef struct D_PathMap D_PathMap;
+struct D_PathMap
+{
+  String8 src;
+  String8 dst;
+};
+
+typedef struct D_PathMapArray D_PathMapArray;
+struct D_PathMapArray
+{
+  D_PathMap *v;
+  U64 count;
+};
+
+typedef struct D_Breakpoint D_Breakpoint;
+struct D_Breakpoint
+{
+  String8 file_path;
+  TxtPt pt;
+  U64 vaddr;
+  String8 condition;
+};
+
+typedef struct D_BreakpointArray D_BreakpointArray;
+struct D_BreakpointArray
+{
+  D_Breakpoint *v;
+  U64 count;
+};
+
+typedef struct D_Target D_Target;
+struct D_Target
+{
+  String8 exe;
+  String8 args;
+  String8 working_directory;
+  String8 custom_entry_point_name;
+  String8List env;
+};
+
+typedef struct D_TargetArray D_TargetArray;
+struct D_TargetArray
+{
+  D_Target *v;
+  U64 count;
+};
+
+////////////////////////////////
 //~ rjf: Handles
 
 typedef struct D_Handle D_Handle;
