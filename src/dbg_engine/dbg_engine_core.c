@@ -3321,7 +3321,7 @@ d_unwind_from_ctrl_unwind(Arena *arena, DI_Scope *di_scope, D_Entity *process, C
 //- rjf: state which parameterizes runs, but can be live-edited -> hash
 
 internal U128
-d_hash_from_ctrl_param_state(void)
+d_hash_from_ctrl_param_state(D_BreakpointArray *breakpoints)
 {
   U128 result = {0};
   Temp scratch = scratch_begin(0, 0);
@@ -3333,17 +3333,14 @@ d_hash_from_ctrl_param_state(void)
       {
         str8_list_push(scratch.arena, &strings, str8_struct(&n->handle));
       }
-      D_EntityList bps = d_query_cached_entity_list_with_kind(D_EntityKind_Breakpoint);
-      for(D_EntityNode *n = bps.first; n != 0; n = n->next)
+      for(U64 idx = 0; idx < breakpoints->count; idx += 1)
       {
-        D_Entity *bp = n->entity;
-        D_Entity *loc = d_entity_child_from_kind(bp, D_EntityKind_Location);
-        D_Entity *cnd = d_entity_child_from_kind(bp, D_EntityKind_Condition);
-        str8_list_push(scratch.arena, &strings, str8_struct(&bp->disabled));
-        str8_list_push(scratch.arena, &strings, loc->string);
-        str8_list_push(scratch.arena, &strings, str8_struct(&loc->text_point));
-        str8_list_push(scratch.arena, &strings, str8_struct(&loc->vaddr));
-        str8_list_push(scratch.arena, &strings, str8_struct(&cnd->string));
+        D_Breakpoint *bp = &breakpoints->v[idx];
+        str8_list_push(scratch.arena, &strings, bp->file_path);
+        str8_list_push(scratch.arena, &strings, str8_struct(&bp->pt));
+        str8_list_push(scratch.arena, &strings, bp->symbol_name);
+        str8_list_push(scratch.arena, &strings, str8_struct(&bp->vaddr));
+        str8_list_push(scratch.arena, &strings, bp->condition);
       }
     }
     
@@ -3367,115 +3364,6 @@ d_push_ctrl_msg(CTRL_Msg *msg)
     d_state->ctrl_soft_halt_issued = 1;
     ctrl_halt();
   }
-}
-
-//- rjf: control thread running
-
-internal void
-d_ctrl_run(D_RunKind run, D_Entity *run_thread, CTRL_RunFlags flags, CTRL_TrapList *run_traps)
-{
-  Temp scratch = scratch_begin(0, 0);
-  
-  // rjf: compute hash of all run-parameterization entities, store
-  {
-    d_state->ctrl_last_run_param_state_hash = d_hash_from_ctrl_param_state();
-  }
-  
-  // rjf: build run message
-  CTRL_Msg msg = {(run == D_RunKind_Run || run == D_RunKind_Step) ? CTRL_MsgKind_Run : CTRL_MsgKind_SingleStep};
-  {
-    D_EntityList user_bps = d_query_cached_entity_list_with_kind(D_EntityKind_Breakpoint);
-    D_Entity *process = d_entity_ancestor_from_kind(run_thread, D_EntityKind_Process);
-    msg.run_flags = flags;
-    msg.machine_id = run_thread->ctrl_machine_id;
-    msg.entity = run_thread->ctrl_handle;
-    msg.parent = process->ctrl_handle;
-    MemoryCopyArray(msg.exception_code_filters, d_state->ctrl_exception_code_filters);
-    if(run_traps != 0)
-    {
-      MemoryCopyStruct(&msg.traps, run_traps);
-    }
-    for(D_EntityNode *user_bp_n = user_bps.first;
-        user_bp_n != 0;
-        user_bp_n = user_bp_n->next)
-    {
-      // rjf: unpack user breakpoint entity
-      D_Entity *user_bp = user_bp_n->entity;
-      if(user_bp->disabled)
-      {
-        continue;
-      }
-      D_Entity *loc = d_entity_child_from_kind(user_bp, D_EntityKind_Location);
-      D_Entity *cnd = d_entity_child_from_kind(user_bp, D_EntityKind_Condition);
-      
-      // rjf: textual location -> add breakpoints for all possible override locations
-      if(loc->flags & D_EntityFlag_HasTextPoint)
-      {
-        String8List overrides = d_possible_overrides_from_file_path(scratch.arena, loc->string);
-        for(String8Node *n = overrides.first; n != 0; n = n->next)
-        {
-          CTRL_UserBreakpoint ctrl_user_bp = {CTRL_UserBreakpointKind_FileNameAndLineColNumber};
-          ctrl_user_bp.string    = n->string;
-          ctrl_user_bp.pt        = loc->text_point;
-          ctrl_user_bp.condition = cnd->string;
-          ctrl_user_breakpoint_list_push(scratch.arena, &msg.user_bps, &ctrl_user_bp);
-        }
-      }
-      
-      // rjf: virtual address location -> add breakpoint for address
-      else if(loc->flags & D_EntityFlag_HasVAddr)
-      {
-        CTRL_UserBreakpoint ctrl_user_bp = {CTRL_UserBreakpointKind_VirtualAddress};
-        ctrl_user_bp.u64       = loc->vaddr;
-        ctrl_user_bp.condition = cnd->string;
-        ctrl_user_breakpoint_list_push(scratch.arena, &msg.user_bps, &ctrl_user_bp);
-      }
-      
-      // rjf: symbol name location -> add breakpoint for symbol name
-      else if(loc->string.size != 0)
-      {
-        CTRL_UserBreakpoint ctrl_user_bp = {CTRL_UserBreakpointKind_SymbolNameAndOffset};
-        ctrl_user_bp.string    = loc->string;
-        ctrl_user_bp.condition = cnd->string;
-        ctrl_user_breakpoint_list_push(scratch.arena, &msg.user_bps, &ctrl_user_bp);
-      }
-    }
-    for(D_HandleNode *n = d_state->frozen_threads.first; n != 0; n = n->next)
-    {
-      D_Entity *thread = d_entity_from_handle(n->handle);
-      if(!d_entity_is_nil(thread))
-      {
-        CTRL_MachineIDHandlePair pair = {thread->ctrl_machine_id, thread->ctrl_handle};
-        ctrl_machine_id_handle_pair_list_push(scratch.arena, &msg.freeze_state_threads, &pair);
-      }
-    }
-    msg.freeze_state_is_frozen = 1;
-  }
-  
-  // rjf: push msg
-  d_push_ctrl_msg(&msg);
-  
-  // rjf: copy run traps to scratch (needed, if the caller can pass `d_state->ctrl_last_run_traps`)
-  CTRL_TrapList run_traps_copy = {0};
-  if(run_traps != 0)
-  {
-    run_traps_copy = ctrl_trap_list_copy(scratch.arena, run_traps);
-  }
-  
-  // rjf: store last run info
-  arena_clear(d_state->ctrl_last_run_arena);
-  d_state->ctrl_last_run_kind = run;
-  d_state->ctrl_last_run_frame_idx = d_frame_index();
-  d_state->ctrl_last_run_thread = d_handle_from_entity(run_thread);
-  d_state->ctrl_last_run_flags = flags;
-  d_state->ctrl_last_run_traps = ctrl_trap_list_copy(d_state->ctrl_last_run_arena, &run_traps_copy);
-  d_state->ctrl_is_running = 1;
-  
-  // rjf: reset selected frame to top unwind
-  d_state->base_regs.v.unwind_count = 0;
-  d_state->base_regs.v.inline_depth = 0;
-  
-  scratch_end(scratch);
 }
 
 //- rjf: stopped info from the control thread
@@ -6866,6 +6754,20 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
   }
   
   //////////////////////////////
+  //- rjf: compute state parameterization hash for ctrl runs, if ctrl is running -
+  // if the hash doesn't match the one for the last run, we need to soft-halt and
+  // re-send down the parameterization state
+  //
+  if(d_ctrl_targets_running())
+  {
+    U128 state_hash = d_hash_from_ctrl_param_state(breakpoints);
+    if(!u128_match(state_hash, d_state->ctrl_last_run_param_state_hash))
+    {
+      d_cmd(D_CmdKind_SoftHaltRefresh);
+    }
+  }
+  
+  //////////////////////////////
   //- rjf: process top-level commands
   //
   ProfScope("process top-level commands")
@@ -8464,7 +8366,97 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
       // rjf: do run if needed
       if(need_run)
       {
-        d_ctrl_run(run_kind, run_thread, run_flags, &run_traps);
+        // rjf: compute hash of all run-parameterization entities, store
+        {
+          d_state->ctrl_last_run_param_state_hash = d_hash_from_ctrl_param_state(breakpoints);
+        }
+        
+        // rjf: build run message
+        CTRL_Msg msg = {(run_kind == D_RunKind_Run || run_kind == D_RunKind_Step) ? CTRL_MsgKind_Run : CTRL_MsgKind_SingleStep};
+        {
+          D_EntityList user_bps = d_query_cached_entity_list_with_kind(D_EntityKind_Breakpoint);
+          D_Entity *process = d_entity_ancestor_from_kind(run_thread, D_EntityKind_Process);
+          msg.run_flags  = run_flags;
+          msg.machine_id = run_thread->ctrl_machine_id;
+          msg.entity     = run_thread->ctrl_handle;
+          msg.parent     = process->ctrl_handle;
+          MemoryCopyArray(msg.exception_code_filters, d_state->ctrl_exception_code_filters);
+          MemoryCopyStruct(&msg.traps, &run_traps);
+          for(D_EntityNode *user_bp_n = user_bps.first;
+              user_bp_n != 0;
+              user_bp_n = user_bp_n->next)
+          {
+            // rjf: unpack user breakpoint entity
+            D_Entity *user_bp = user_bp_n->entity;
+            if(user_bp->disabled)
+            {
+              continue;
+            }
+            D_Entity *loc = d_entity_child_from_kind(user_bp, D_EntityKind_Location);
+            D_Entity *cnd = d_entity_child_from_kind(user_bp, D_EntityKind_Condition);
+            
+            // rjf: textual location -> add breakpoints for all possible override locations
+            if(loc->flags & D_EntityFlag_HasTextPoint)
+            {
+              String8List overrides = d_possible_overrides_from_file_path(scratch.arena, loc->string);
+              for(String8Node *n = overrides.first; n != 0; n = n->next)
+              {
+                CTRL_UserBreakpoint ctrl_user_bp = {CTRL_UserBreakpointKind_FileNameAndLineColNumber};
+                ctrl_user_bp.string    = n->string;
+                ctrl_user_bp.pt        = loc->text_point;
+                ctrl_user_bp.condition = cnd->string;
+                ctrl_user_breakpoint_list_push(scratch.arena, &msg.user_bps, &ctrl_user_bp);
+              }
+            }
+            
+            // rjf: virtual address location -> add breakpoint for address
+            else if(loc->flags & D_EntityFlag_HasVAddr)
+            {
+              CTRL_UserBreakpoint ctrl_user_bp = {CTRL_UserBreakpointKind_VirtualAddress};
+              ctrl_user_bp.u64       = loc->vaddr;
+              ctrl_user_bp.condition = cnd->string;
+              ctrl_user_breakpoint_list_push(scratch.arena, &msg.user_bps, &ctrl_user_bp);
+            }
+            
+            // rjf: symbol name location -> add breakpoint for symbol name
+            else if(loc->string.size != 0)
+            {
+              CTRL_UserBreakpoint ctrl_user_bp = {CTRL_UserBreakpointKind_SymbolNameAndOffset};
+              ctrl_user_bp.string    = loc->string;
+              ctrl_user_bp.condition = cnd->string;
+              ctrl_user_breakpoint_list_push(scratch.arena, &msg.user_bps, &ctrl_user_bp);
+            }
+          }
+          for(D_HandleNode *n = d_state->frozen_threads.first; n != 0; n = n->next)
+          {
+            D_Entity *thread = d_entity_from_handle(n->handle);
+            if(!d_entity_is_nil(thread))
+            {
+              CTRL_MachineIDHandlePair pair = {thread->ctrl_machine_id, thread->ctrl_handle};
+              ctrl_machine_id_handle_pair_list_push(scratch.arena, &msg.freeze_state_threads, &pair);
+            }
+          }
+          msg.freeze_state_is_frozen = 1;
+        }
+        
+        // rjf: push msg
+        d_push_ctrl_msg(&msg);
+        
+        // rjf: copy run traps to scratch (needed, if run_traps can be `d_state->ctrl_last_run_traps`)
+        CTRL_TrapList run_traps_copy = ctrl_trap_list_copy(scratch.arena, &run_traps);
+        
+        // rjf: store last run info
+        arena_clear(d_state->ctrl_last_run_arena);
+        d_state->ctrl_last_run_kind      = run_kind;
+        d_state->ctrl_last_run_frame_idx = d_frame_index();
+        d_state->ctrl_last_run_thread    = d_handle_from_entity(run_thread);
+        d_state->ctrl_last_run_flags     = run_flags;
+        d_state->ctrl_last_run_traps     = ctrl_trap_list_copy(d_state->ctrl_last_run_arena, &run_traps_copy);
+        d_state->ctrl_is_running         = 1;
+        
+        // rjf: reset selected frame to top unwind
+        d_state->base_regs.v.unwind_count = 0;
+        d_state->base_regs.v.inline_depth = 0;
       }
     }
     scratch_end(scratch);
@@ -8664,20 +8656,6 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
     ctx->tls_base[0]       = d_query_cached_tls_base_vaddr_from_process_root_rip(process, tls_root_vaddr, rip_vaddr);
   }
   e_select_interpret_ctx(interpret_ctx);
-  
-  //////////////////////////////
-  //- rjf: compute state parameterization hash for ctrl runs, if ctrl is running -
-  // if the hash doesn't match the one for the last run, we need to soft-halt and
-  // re-send down the parameterization state
-  //
-  if(d_ctrl_targets_running())
-  {
-    U128 state_hash = d_hash_from_ctrl_param_state();
-    if(!u128_match(state_hash, d_state->ctrl_last_run_param_state_hash))
-    {
-      d_cmd(D_CmdKind_SoftHaltRefresh);
-    }
-  }
   
   //////////////////////////////
   //- rjf: send messages to control

@@ -1380,13 +1380,10 @@ internal D_Unwind d_unwind_from_ctrl_unwind(Arena *arena, DI_Scope *di_scope, D_
 //~ rjf: Target Controls
 
 //- rjf: state which parameterizes runs, but can be live-edited -> hash
-internal U128 d_hash_from_ctrl_param_state(void);
+internal U128 d_hash_from_ctrl_param_state(D_BreakpointArray *breakpoints);
 
 //- rjf: control message dispatching
 internal void d_push_ctrl_msg(CTRL_Msg *msg);
-
-//- rjf: control thread running
-internal void d_ctrl_run(D_RunKind run, D_Entity *run_thread, CTRL_RunFlags flags, CTRL_TrapList *run_traps);
 
 //- rjf: stopped info from the control thread
 internal CTRL_Event d_ctrl_last_stop_event(void);

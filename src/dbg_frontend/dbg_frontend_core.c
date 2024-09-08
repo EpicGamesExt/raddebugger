@@ -8219,9 +8219,14 @@ df_frame(void)
     breakpoints.count = bp_entities.count;
     breakpoints.v = push_array(scratch.arena, D_Breakpoint, breakpoints.count);
     U64 idx = 0;
-    for(D_EntityNode *n = bp_entities.first; n != 0; n = n->next, idx += 1)
+    for(D_EntityNode *n = bp_entities.first; n != 0; n = n->next)
     {
       D_Entity *src_bp = n->entity;
+      if(src_bp->disabled)
+      {
+        breakpoints.count -= 1;
+        continue;
+      }
       D_Entity *src_bp_loc = d_entity_child_from_kind(src_bp, D_EntityKind_Location);
       D_Entity *src_bp_cnd = d_entity_child_from_kind(src_bp, D_EntityKind_Condition);
       D_Breakpoint *dst_bp = &breakpoints.v[idx];
@@ -8230,6 +8235,7 @@ df_frame(void)
       dst_bp->symbol_name = src_bp_loc->string;
       dst_bp->vaddr       = src_bp_loc->vaddr;
       dst_bp->condition   = src_bp_cnd->string;
+      idx += 1;
     }
   }
   
