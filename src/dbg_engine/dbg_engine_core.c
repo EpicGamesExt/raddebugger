@@ -8374,7 +8374,6 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
         // rjf: build run message
         CTRL_Msg msg = {(run_kind == D_RunKind_Run || run_kind == D_RunKind_Step) ? CTRL_MsgKind_Run : CTRL_MsgKind_SingleStep};
         {
-          D_EntityList user_bps = d_query_cached_entity_list_with_kind(D_EntityKind_Breakpoint);
           D_Entity *process = d_entity_ancestor_from_kind(run_thread, D_EntityKind_Process);
           msg.run_flags  = run_flags;
           msg.machine_id = run_thread->ctrl_machine_id;
@@ -8382,48 +8381,40 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
           msg.parent     = process->ctrl_handle;
           MemoryCopyArray(msg.exception_code_filters, d_state->ctrl_exception_code_filters);
           MemoryCopyStruct(&msg.traps, &run_traps);
-          for(D_EntityNode *user_bp_n = user_bps.first;
-              user_bp_n != 0;
-              user_bp_n = user_bp_n->next)
+          for(U64 idx = 0; idx < breakpoints->count; idx += 1)
           {
             // rjf: unpack user breakpoint entity
-            D_Entity *user_bp = user_bp_n->entity;
-            if(user_bp->disabled)
-            {
-              continue;
-            }
-            D_Entity *loc = d_entity_child_from_kind(user_bp, D_EntityKind_Location);
-            D_Entity *cnd = d_entity_child_from_kind(user_bp, D_EntityKind_Condition);
+            D_Breakpoint *bp = &breakpoints->v[idx];
             
             // rjf: textual location -> add breakpoints for all possible override locations
-            if(loc->flags & D_EntityFlag_HasTextPoint)
+            if(bp->file_path.size != 0 && bp->pt.line != 0)
             {
-              String8List overrides = d_possible_overrides_from_file_path(scratch.arena, loc->string);
+              String8List overrides = d_possible_overrides_from_file_path(scratch.arena, bp->file_path);
               for(String8Node *n = overrides.first; n != 0; n = n->next)
               {
                 CTRL_UserBreakpoint ctrl_user_bp = {CTRL_UserBreakpointKind_FileNameAndLineColNumber};
                 ctrl_user_bp.string    = n->string;
-                ctrl_user_bp.pt        = loc->text_point;
-                ctrl_user_bp.condition = cnd->string;
+                ctrl_user_bp.pt        = bp->pt;
+                ctrl_user_bp.condition = bp->condition;
                 ctrl_user_breakpoint_list_push(scratch.arena, &msg.user_bps, &ctrl_user_bp);
               }
             }
             
             // rjf: virtual address location -> add breakpoint for address
-            else if(loc->flags & D_EntityFlag_HasVAddr)
+            if(bp->vaddr != 0)
             {
               CTRL_UserBreakpoint ctrl_user_bp = {CTRL_UserBreakpointKind_VirtualAddress};
-              ctrl_user_bp.u64       = loc->vaddr;
-              ctrl_user_bp.condition = cnd->string;
+              ctrl_user_bp.u64       = bp->vaddr;
+              ctrl_user_bp.condition = bp->condition;
               ctrl_user_breakpoint_list_push(scratch.arena, &msg.user_bps, &ctrl_user_bp);
             }
             
             // rjf: symbol name location -> add breakpoint for symbol name
-            else if(loc->string.size != 0)
+            if(bp->symbol_name.size != 0)
             {
               CTRL_UserBreakpoint ctrl_user_bp = {CTRL_UserBreakpointKind_SymbolNameAndOffset};
-              ctrl_user_bp.string    = loc->string;
-              ctrl_user_bp.condition = cnd->string;
+              ctrl_user_bp.string    = bp->symbol_name;
+              ctrl_user_bp.condition = bp->condition;
               ctrl_user_breakpoint_list_push(scratch.arena, &msg.user_bps, &ctrl_user_bp);
             }
           }
