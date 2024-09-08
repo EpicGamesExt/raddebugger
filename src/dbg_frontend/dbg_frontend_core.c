@@ -8245,6 +8245,199 @@ df_frame(void)
   d_tick(scratch.arena, &targets, &breakpoints, di_scope, &cmds, dt);
   
   //////////////////////////////
+  //- rjf: unpack eval-dependent info
+  //
+  D_Entity *process = d_entity_from_handle(d_regs()->process);
+  D_Entity *thread = d_entity_from_handle(d_regs()->thread);
+  Arch arch = d_arch_from_entity(thread);
+  U64 unwind_count = d_regs()->unwind_count;
+  U64 rip_vaddr = d_query_cached_rip_from_thread_unwind(thread, unwind_count);
+  CTRL_Unwind unwind = d_query_cached_unwind_from_thread(thread);
+  D_Entity *module = d_module_from_process_vaddr(process, rip_vaddr);
+  U64 rip_voff = d_voff_from_vaddr(module, rip_vaddr);
+  U64 tls_root_vaddr = ctrl_query_cached_tls_root_vaddr_from_thread(d_state->ctrl_entity_store, thread->ctrl_machine_id, thread->ctrl_handle);
+  D_EntityList all_modules = d_query_cached_entity_list_with_kind(D_EntityKind_Module);
+  U64 eval_modules_count = Max(1, all_modules.count);
+  E_Module *eval_modules = push_array(scratch.arena, E_Module, eval_modules_count);
+  E_Module *eval_modules_primary = &eval_modules[0];
+  eval_modules_primary->rdi = &di_rdi_parsed_nil;
+  eval_modules_primary->vaddr_range = r1u64(0, max_U64);
+  DI_Key primary_dbgi_key = {0};
+  {
+    U64 eval_module_idx = 0;
+    for(D_EntityNode *n = all_modules.first; n != 0; n = n->next, eval_module_idx += 1)
+    {
+      D_Entity *m = n->entity;
+      DI_Key dbgi_key = d_dbgi_key_from_module(m);
+      eval_modules[eval_module_idx].arch        = d_arch_from_entity(m);
+      eval_modules[eval_module_idx].rdi         = di_rdi_from_key(di_scope, &dbgi_key, 0);
+      eval_modules[eval_module_idx].vaddr_range = m->vaddr_rng;
+      eval_modules[eval_module_idx].space       = d_eval_space_from_entity(d_entity_ancestor_from_kind(m, D_EntityKind_Process));
+      if(module == m)
+      {
+        eval_modules_primary = &eval_modules[eval_module_idx];
+      }
+    }
+  }
+  U64 rdis_count = Max(1, all_modules.count);
+  RDI_Parsed **rdis = push_array(scratch.arena, RDI_Parsed *, rdis_count);
+  rdis[0] = &di_rdi_parsed_nil;
+  U64 rdis_primary_idx = 0;
+  Rng1U64 *rdis_vaddr_ranges = push_array(scratch.arena, Rng1U64, rdis_count);
+  {
+    U64 idx = 0;
+    for(D_EntityNode *n = all_modules.first; n != 0; n = n->next, idx += 1)
+    {
+      DI_Key dbgi_key = d_dbgi_key_from_module(n->entity);
+      rdis[idx] = di_rdi_from_key(di_scope, &dbgi_key, 0);
+      rdis_vaddr_ranges[idx] = n->entity->vaddr_rng;
+      if(n->entity == module)
+      {
+        primary_dbgi_key = dbgi_key;
+        rdis_primary_idx = idx;
+      }
+    }
+  }
+  
+  //////////////////////////////
+  //- rjf: build eval type context
+  //
+  E_TypeCtx *type_ctx = push_array(scratch.arena, E_TypeCtx, 1);
+  {
+    E_TypeCtx *ctx = type_ctx;
+    ctx->ip_vaddr          = rip_vaddr;
+    ctx->ip_voff           = rip_voff;
+    ctx->modules           = eval_modules;
+    ctx->modules_count     = eval_modules_count;
+    ctx->primary_module    = eval_modules_primary;
+  }
+  e_select_type_ctx(type_ctx);
+  
+  //////////////////////////////
+  //- rjf: build eval parse context
+  //
+  E_ParseCtx *parse_ctx = push_array(scratch.arena, E_ParseCtx, 1);
+  ProfScope("build eval parse context")
+  {
+    E_ParseCtx *ctx = parse_ctx;
+    ctx->ip_vaddr          = rip_vaddr;
+    ctx->ip_voff           = rip_voff;
+    ctx->ip_thread_space   = d_eval_space_from_entity(thread);
+    ctx->modules           = eval_modules;
+    ctx->modules_count     = eval_modules_count;
+    ctx->primary_module    = eval_modules_primary;
+    ctx->regs_map      = ctrl_string2reg_from_arch(ctx->primary_module->arch);
+    ctx->reg_alias_map = ctrl_string2alias_from_arch(ctx->primary_module->arch);
+    ctx->locals_map    = d_query_cached_locals_map_from_dbgi_key_voff(&primary_dbgi_key, rip_voff);
+    ctx->member_map    = d_query_cached_member_map_from_dbgi_key_voff(&primary_dbgi_key, rip_voff);
+  }
+  e_select_parse_ctx(parse_ctx);
+  
+  //////////////////////////////
+  //- rjf: build eval IR context
+  //
+  E_IRCtx *ir_ctx = push_array(scratch.arena, E_IRCtx, 1);
+  {
+    E_IRCtx *ctx = ir_ctx;
+    ctx->macro_map     = push_array(scratch.arena, E_String2ExprMap, 1);
+    ctx->macro_map[0]  = e_string2expr_map_make(scratch.arena, 512);
+    
+    //- rjf: add macros for constants
+    {
+      // rjf: pid -> current process' ID
+      if(!d_entity_is_nil(process))
+      {
+        E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafU64, 0);
+        expr->value.u64 = process->ctrl_id;
+        e_string2expr_map_insert(scratch.arena, ctx->macro_map, str8_lit("pid"), expr);
+      }
+      
+      // rjf: tid -> current thread's ID
+      if(!d_entity_is_nil(thread))
+      {
+        E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafU64, 0);
+        expr->value.u64 = thread->ctrl_id;
+        e_string2expr_map_insert(scratch.arena, ctx->macro_map, str8_lit("tid"), expr);
+      }
+    }
+    
+    //- rjf: add macros for entities
+    {
+      E_MemberList entity_members = {0};
+      {
+        e_member_list_push_new(scratch.arena, &entity_members, .name = str8_lit("Enabled"),  .off = 0,        .type_key = e_type_key_basic(E_TypeKind_S64));
+        e_member_list_push_new(scratch.arena, &entity_members, .name = str8_lit("Hit Count"),.off = 0+8,      .type_key = e_type_key_basic(E_TypeKind_U64));
+        e_member_list_push_new(scratch.arena, &entity_members, .name = str8_lit("Label"),    .off = 0+8+8,    .type_key = e_type_key_cons_ptr(arch_from_context(), e_type_key_basic(E_TypeKind_Char8)));
+        e_member_list_push_new(scratch.arena, &entity_members, .name = str8_lit("Location"), .off = 0+8+8+8,  .type_key = e_type_key_cons_ptr(arch_from_context(), e_type_key_basic(E_TypeKind_Char8)));
+        e_member_list_push_new(scratch.arena, &entity_members, .name = str8_lit("Condition"),.off = 0+8+8+8+8,.type_key = e_type_key_cons_ptr(arch_from_context(), e_type_key_basic(E_TypeKind_Char8)));
+      }
+      E_MemberArray entity_members_array = e_member_array_from_list(scratch.arena, &entity_members);
+      E_TypeKey entity_type = e_type_key_cons(.arch = arch_from_context(),
+                                              .kind = E_TypeKind_Struct,
+                                              .name = str8_lit("Entity"),
+                                              .members = entity_members_array.v,
+                                              .count = entity_members_array.count);
+      D_EntityKind evallable_kinds[] =
+      {
+        D_EntityKind_Breakpoint,
+        D_EntityKind_WatchPin,
+        D_EntityKind_Target,
+      };
+      for(U64 idx = 0; idx < ArrayCount(evallable_kinds); idx += 1)
+      {
+        D_EntityList entities = d_query_cached_entity_list_with_kind(evallable_kinds[idx]);
+        for(D_EntityNode *n = entities.first; n != 0; n = n->next)
+        {
+          D_Entity *entity = n->entity;
+          E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
+          expr->space    = d_eval_space_from_entity(entity);
+          expr->mode     = E_Mode_Offset;
+          expr->type_key = entity_type;
+          e_string2expr_map_insert(scratch.arena, ctx->macro_map, push_str8f(scratch.arena, "$%I64u", entity->id), expr);
+          if(entity->string.size != 0)
+          {
+            e_string2expr_map_insert(scratch.arena, ctx->macro_map, entity->string, expr);
+          }
+        }
+      }
+    }
+    
+    //- rjf: add macros for all watches which define identifiers
+    D_EntityList watches = d_query_cached_entity_list_with_kind(D_EntityKind_Watch);
+    for(D_EntityNode *n = watches.first; n != 0; n = n->next)
+    {
+      D_Entity *watch = n->entity;
+      String8 expr = watch->string;
+      E_TokenArray tokens   = e_token_array_from_text(scratch.arena, expr);
+      E_Parse      parse    = e_parse_expr_from_text_tokens(scratch.arena, expr, &tokens);
+      if(parse.msgs.max_kind == E_MsgKind_Null)
+      {
+        e_push_leaf_ident_exprs_from_expr__in_place(scratch.arena, ctx->macro_map, parse.expr);
+      }
+    }
+  }
+  e_select_ir_ctx(ir_ctx);
+  
+  //////////////////////////////
+  //- rjf: build eval interpretation context
+  //
+  E_InterpretCtx *interpret_ctx = push_array(scratch.arena, E_InterpretCtx, 1);
+  {
+    E_InterpretCtx *ctx = interpret_ctx;
+    ctx->space_read        = d_eval_space_read;
+    ctx->space_write       = d_eval_space_write;
+    ctx->primary_space     = eval_modules_primary->space;
+    ctx->reg_arch          = eval_modules_primary->arch;
+    ctx->reg_space         = d_eval_space_from_entity(thread);
+    ctx->reg_unwind_count  = unwind_count;
+    ctx->module_base       = push_array(scratch.arena, U64, 1);
+    ctx->module_base[0]    = module->vaddr_rng.min;
+    ctx->tls_base          = push_array(scratch.arena, U64, 1);
+    ctx->tls_base[0]       = d_query_cached_tls_base_vaddr_from_process_root_rip(process, tls_root_vaddr, rip_vaddr);
+  }
+  e_select_interpret_ctx(interpret_ctx);
+  
+  //////////////////////////////
   //- rjf: apply new rich hover info
   //
   arena_clear(df_state->rich_hover_info_current_arena);
