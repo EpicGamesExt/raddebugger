@@ -1055,7 +1055,8 @@ struct D_State
   Arena *ctrl_last_run_arena;
   D_RunKind ctrl_last_run_kind;
   U64 ctrl_last_run_frame_idx;
-  D_Handle ctrl_last_run_thread;
+  CTRL_MachineID ctrl_last_run_thread_machine_id;
+  DMN_Handle ctrl_last_run_thread_handle;
   CTRL_RunFlags ctrl_last_run_flags;
   CTRL_TrapList ctrl_last_run_traps;
   U128 ctrl_last_run_param_state_hash;
@@ -1303,7 +1304,6 @@ internal D_Entity *d_machine_entity_from_machine_id(CTRL_MachineID machine_id);
 internal D_Entity *d_entity_from_ctrl_handle(CTRL_MachineID machine_id, DMN_Handle handle);
 internal D_Entity *d_entity_from_ctrl_id(CTRL_MachineID machine_id, U32 id);
 internal D_Entity *d_entity_from_name_and_kind(String8 string, D_EntityKind kind);
-internal D_Entity *d_entity_from_u64_and_kind(U64 u64, D_EntityKind kind);
 
 //- rjf: entity freezing state
 internal void d_set_thread_freeze_state(D_Entity *thread, B32 frozen);
@@ -1327,9 +1327,9 @@ internal D_ViewRuleSpec *d_view_rule_spec_from_string(String8 string);
 ////////////////////////////////
 //~ rjf: Stepping "Trap Net" Builders
 
-internal CTRL_TrapList d_trap_net_from_thread__step_over_inst(Arena *arena, D_Entity *thread);
-internal CTRL_TrapList d_trap_net_from_thread__step_over_line(Arena *arena, D_Entity *thread);
-internal CTRL_TrapList d_trap_net_from_thread__step_into_line(Arena *arena, D_Entity *thread);
+internal CTRL_TrapList d_trap_net_from_thread__step_over_inst(Arena *arena, CTRL_Entity *thread);
+internal CTRL_TrapList d_trap_net_from_thread__step_over_line(Arena *arena, CTRL_Entity *thread);
+internal CTRL_TrapList d_trap_net_from_thread__step_into_line(Arena *arena, CTRL_Entity *thread);
 
 ////////////////////////////////
 //~ rjf: Modules & Debug Info Mappings
