@@ -2166,6 +2166,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
         DF_Palette(DF_PaletteCode_ImplicitButton)
       {
         D_Entity *entity = d_entity_from_handle(ws->entity_ctx_menu_entity);
+        CTRL_Entity *entity_ctrl = ctrl_entity_from_machine_id_handle(d_state->ctrl_entity_store, entity->ctrl_machine_id, entity->ctrl_handle);
         DF_IconKind entity_icon = df_entity_kind_icon_kind_table[entity->kind];
         D_EntityKindFlags kind_flags = d_entity_kind_flags_table[entity->kind];
         String8 display_name = d_display_string_from_entity(scratch.arena, entity);
@@ -2333,7 +2334,7 @@ df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds)
         // rjf: freezing
         if(kind_flags & D_EntityKindFlag_CanFreeze)
         {
-          B32 is_frozen = d_entity_is_frozen(entity);
+          B32 is_frozen = ctrl_entity_tree_is_frozen(entity_ctrl);
           ui_set_next_palette(df_palette_from_code(is_frozen ? DF_PaletteCode_NegativePopButton : DF_PaletteCode_PositivePopButton));
           if(is_frozen && ui_clicked(df_icon_buttonf(DF_IconKind_Locked, 0, "Thaw###freeze_thaw")))
           {

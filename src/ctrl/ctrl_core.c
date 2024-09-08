@@ -178,7 +178,6 @@ ctrl_msg_deep_copy(Arena *arena, CTRL_Msg *dst, CTRL_Msg *src)
   dst->env_string_list      = str8_list_copy(arena, &src->env_string_list);
   dst->traps                = ctrl_trap_list_copy(arena, &src->traps);
   dst->user_bps             = ctrl_user_breakpoint_list_copy(arena, &src->user_bps);
-  dst->freeze_state_threads = ctrl_machine_id_handle_pair_list_copy(arena, &src->freeze_state_threads);
 }
 
 //- rjf: list building
@@ -272,16 +271,6 @@ ctrl_serialized_string_from_msg_list(Arena *arena, CTRL_MsgList *msgs)
         str8_serial_push_struct(scratch.arena, &msgs_srlzed, &bp->condition.size);
         str8_serial_push_data(scratch.arena, &msgs_srlzed, bp->condition.str, bp->condition.size);
       }
-      
-      // rjf: write freeze state thread list
-      str8_serial_push_struct(scratch.arena, &msgs_srlzed, &msg->freeze_state_threads.count);
-      for(CTRL_MachineIDHandlePairNode *n = msg->freeze_state_threads.first; n != 0; n = n->next)
-      {
-        str8_serial_push_struct(scratch.arena, &msgs_srlzed, &n->v);
-      }
-      
-      // rjf: write freeze state
-      str8_serial_push_struct(scratch.arena, &msgs_srlzed, &msg->freeze_state_is_frozen);
     }
   }
   String8 string = str8_serial_end(arena, &msgs_srlzed);
@@ -394,19 +383,6 @@ ctrl_msg_list_from_serialized_string(Arena *arena, String8 string)
         bp->condition.str = push_array_no_zero(arena, U8, bp->condition.size);
         read_off += str8_deserial_read(string, read_off, bp->condition.str, bp->condition.size, 1);
       }
-      
-      // rjf: read freeze state thread list
-      U64 frozen_thread_count = 0;
-      read_off += str8_deserial_read_struct(string, read_off, &frozen_thread_count);
-      for(U64 idx = 0; idx < frozen_thread_count; idx += 1)
-      {
-        CTRL_MachineIDHandlePair pair = {0};
-        read_off += str8_deserial_read_struct(string, read_off, &pair);
-        ctrl_machine_id_handle_pair_list_push(arena, &msg->freeze_state_threads, &pair);
-      }
-      
-      // rjf: read freeze state
-      read_off += str8_deserial_read_struct(string, read_off, &msg->freeze_state_is_frozen);
     }
   }
   return msgs;
@@ -509,6 +485,17 @@ ctrl_event_from_serialized_string(Arena *arena, String8 string)
 
 ////////////////////////////////
 //~ rjf: Entity Type Functions
+
+//- rjf: entity list data structures
+
+internal void
+ctrl_entity_list_push(Arena *arena, CTRL_EntityList *list, CTRL_Entity *entity)
+{
+  CTRL_EntityNode *n = push_array(arena, CTRL_EntityNode, 1);
+  n->v = entity;
+  SLLQueuePush(list->first, list->last, n);
+  list->count += 1;
+}
 
 //- rjf: cache creation/destruction
 
@@ -944,12 +931,28 @@ ctrl_voff_range_from_vaddr_range(CTRL_Entity *module, Rng1U64 vaddr_range)
   return result;
 }
 
+internal B32
+ctrl_entity_tree_is_frozen(CTRL_Entity *root)
+{
+  B32 is_frozen = 1;
+  for(CTRL_Entity *e = root; e != &ctrl_entity_nil; e = ctrl_entity_rec_depth_first_pre(e, root).next)
+  {
+    if(e->kind == CTRL_EntityKind_Thread && !e->is_frozen)
+    {
+      is_frozen = 0;
+      break;
+    }
+  }
+  return is_frozen;
+}
+
 //- rjf: entity tree iteration
 
 internal CTRL_EntityRec
 ctrl_entity_rec_depth_first(CTRL_Entity *entity, CTRL_Entity *subtree_root, U64 sib_off, U64 child_off)
 {
   CTRL_EntityRec result = {0};
+  result.next = &ctrl_entity_nil;
   if((*MemberFromOffset(CTRL_Entity **, entity, child_off)) != &ctrl_entity_nil)
   {
     result.next = *MemberFromOffset(CTRL_Entity **, entity, child_off);
@@ -1018,6 +1021,16 @@ ctrl_entity_store_apply_events(CTRL_EntityStore *store, CTRL_EventList *list)
       {
         CTRL_Entity *thread = ctrl_entity_from_machine_id_handle(store, event->machine_id, event->entity);
         ctrl_entity_equip_string(store, thread, event->string);
+      }break;
+      case CTRL_EventKind_ThreadFrozen:
+      {
+        CTRL_Entity *thread = ctrl_entity_from_machine_id_handle(store, event->machine_id, event->entity);
+        thread->is_frozen = 1;
+      }break;
+      case CTRL_EventKind_ThreadThawed:
+      {
+        CTRL_Entity *thread = ctrl_entity_from_machine_id_handle(store, event->machine_id, event->entity);
+        thread->is_frozen = 0;
       }break;
       
       //- rjf: modules
@@ -3100,6 +3113,24 @@ ctrl_thread__entry_point(void *p)
             evt->timestamp  = new_dbgi_timestamp;
             ctrl_c2u_push_events(&evts);
           }break;
+          case CTRL_MsgKind_FreezeThread:
+          {
+            CTRL_EventList evts = {0};
+            CTRL_Event *evt = ctrl_event_list_push(scratch.arena, &evts);
+            evt->kind       = CTRL_EventKind_ThreadFrozen;
+            evt->machine_id = msg->machine_id;
+            evt->entity     = msg->entity;
+            ctrl_c2u_push_events(&evts);
+          }break;
+          case CTRL_MsgKind_ThawThread:
+          {
+            CTRL_EventList evts = {0};
+            CTRL_Event *evt = ctrl_event_list_push(scratch.arena, &evts);
+            evt->kind       = CTRL_EventKind_ThreadThawed;
+            evt->machine_id = msg->machine_id;
+            evt->entity     = msg->entity;
+            ctrl_c2u_push_events(&evts);
+          }break;
         }
       }
     }
@@ -4262,18 +4293,10 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
           U64 rip = dmn_rip_from_thread(thread->handle);
           
           // rjf: determine if thread is frozen
-          B32 thread_is_frozen = !msg->freeze_state_is_frozen;
-          for(CTRL_MachineIDHandlePairNode *n = msg->freeze_state_threads.first; n != 0; n = n->next)
-          {
-            if(dmn_handle_match(n->v.handle, thread->handle))
-            {
-              thread_is_frozen ^= 1;
-              break;
-            }
-          }
+          B32 thread_is_frozen = thread->is_frozen;
           
           // rjf: not frozen? -> check if stuck & gather if so
-          if(thread_is_frozen == 0)
+          if(!thread_is_frozen)
           {
             for(DMN_TrapChunkNode *n = user_traps.first; n != 0; n = n->next)
             {
@@ -4353,6 +4376,28 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
   }
   
   //////////////////////////////
+  //- rjf: gather frozen threads
+  //
+  CTRL_EntityList frozen_threads = {0};
+  for(CTRL_Entity *machine = ctrl_state->ctrl_thread_entity_store->root->first;
+      machine != &ctrl_entity_nil;
+      machine = machine->next)
+  {
+    if(machine->kind != CTRL_EntityKind_Machine) { continue; }
+    for(CTRL_Entity *process = machine->first; process != &ctrl_entity_nil; process = process->next)
+    {
+      if(process->kind != CTRL_EntityKind_Process) { continue; }
+      for(CTRL_Entity *thread = process->first; thread != &ctrl_entity_nil; thread = thread->next)
+      {
+        if(thread->is_frozen)
+        {
+          ctrl_entity_list_push(scratch.arena, &frozen_threads, thread);
+        }
+      }
+    }
+  }
+  
+  //////////////////////////////
   //- rjf: resolve trap net
   //
   DMN_TrapChunkList trap_net_traps = {0};
@@ -4417,14 +4462,14 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
       //
       DMN_RunCtrls run_ctrls = {0};
       run_ctrls.ignore_previous_exception = 1;
-      run_ctrls.run_entity_count = msg->freeze_state_threads.count;
+      run_ctrls.run_entity_count = frozen_threads.count;
       run_ctrls.run_entities     = push_array(scratch.arena, DMN_Handle, run_ctrls.run_entity_count);
-      run_ctrls.run_entities_are_unfrozen = !msg->freeze_state_is_frozen;
+      run_ctrls.run_entities_are_unfrozen = 0;
       {
         U64 idx = 0;
-        for(CTRL_MachineIDHandlePairNode *n = msg->freeze_state_threads.first; n != 0; n = n->next)
+        for(CTRL_EntityNode *n = frozen_threads.first; n != 0; n = n->next)
         {
-          run_ctrls.run_entities[idx] = n->v.handle;
+          run_ctrls.run_entities[idx] = n->v->handle;
           idx += 1;
         }
       }

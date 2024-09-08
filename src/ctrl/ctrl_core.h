@@ -64,6 +64,7 @@ struct CTRL_Entity
   CTRL_Entity *parent;
   CTRL_EntityKind kind;
   Arch arch;
+  B32 is_frozen;
   CTRL_MachineID machine_id;
   DMN_Handle handle;
   U64 id;
@@ -278,6 +279,8 @@ typedef enum CTRL_MsgKind
   CTRL_MsgKind_SingleStep,
   CTRL_MsgKind_SetUserEntryPoints,
   CTRL_MsgKind_SetModuleDebugInfoPath,
+  CTRL_MsgKind_FreezeThread,
+  CTRL_MsgKind_ThawThread,
   CTRL_MsgKind_COUNT,
 }
 CTRL_MsgKind;
@@ -307,8 +310,6 @@ struct CTRL_Msg
   String8List env_string_list;
   CTRL_TrapList traps;
   CTRL_UserBreakpointList user_bps;
-  CTRL_MachineIDHandlePairList freeze_state_threads; // NOTE(rjf): can be frozen or unfrozen, depending on `freeze_state_is_frozen`
-  B32 freeze_state_is_frozen;
 };
 
 typedef struct CTRL_MsgNode CTRL_MsgNode;
@@ -345,6 +346,10 @@ typedef enum CTRL_EventKind
   CTRL_EventKind_EndProc,
   CTRL_EventKind_EndThread,
   CTRL_EventKind_EndModule,
+  
+  //- rjf: thread freeze state changes
+  CTRL_EventKind_ThreadFrozen,
+  CTRL_EventKind_ThreadThawed,
   
   //- rjf: debug info changes
   CTRL_EventKind_ModuleDebugInfoPathChange,
@@ -713,6 +718,9 @@ internal CTRL_Event ctrl_event_from_serialized_string(Arena *arena, String8 stri
 ////////////////////////////////
 //~ rjf: Entity Type Functions
 
+//- rjf: entity list data structures
+internal void ctrl_entity_list_push(Arena *arena, CTRL_EntityList *list, CTRL_Entity *entity);
+
 //- rjf: cache creation/destruction
 internal CTRL_EntityStore *ctrl_entity_store_alloc(void);
 internal void ctrl_entity_store_release(CTRL_EntityStore *store);
@@ -742,6 +750,7 @@ internal U64 ctrl_vaddr_from_voff(CTRL_Entity *module, U64 voff);
 internal U64 ctrl_voff_from_vaddr(CTRL_Entity *module, U64 vaddr);
 internal Rng1U64 ctrl_vaddr_range_from_voff_range(CTRL_Entity *module, Rng1U64 voff_range);
 internal Rng1U64 ctrl_voff_range_from_vaddr_range(CTRL_Entity *module, Rng1U64 vaddr_range);
+internal B32 ctrl_entity_tree_is_frozen(CTRL_Entity *root);
 
 //- rjf: entity tree iteration
 internal CTRL_EntityRec ctrl_entity_rec_depth_first(CTRL_Entity *entity, CTRL_Entity *subtree_root, U64 sib_off, U64 child_off);

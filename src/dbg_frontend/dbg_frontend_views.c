@@ -5606,6 +5606,7 @@ DF_VIEW_UI_FUNCTION_DEF(scheduler)
         idx += 1)
     {
       D_Entity *entity = items.v[idx].entity;
+      CTRL_Entity *entity_ctrl = ctrl_entity_from_machine_id_handle(d_state->ctrl_entity_store, entity->ctrl_machine_id, entity->ctrl_handle);
       B32 row_is_selected = (cursor.y == (S64)(idx+1));
       F32 depth = 0.f;
       if(query.size == 0) switch(entity->kind)
@@ -5628,7 +5629,7 @@ DF_VIEW_UI_FUNCTION_DEF(scheduler)
         UI_TableCellSized(ui_em(1.5f*depth, 1.f)) {}
         UI_TableCellSized(ui_em(2.25f, 1.f)) UI_FocusHot((row_is_selected && cursor.x == 0) ? UI_FocusKind_On : UI_FocusKind_Off)
         {
-          B32 frozen = d_entity_is_frozen(entity);
+          B32 frozen = ctrl_entity_tree_is_frozen(entity_ctrl);
           UI_Palette *palette = ui_top_palette();
           if(frozen)
           {

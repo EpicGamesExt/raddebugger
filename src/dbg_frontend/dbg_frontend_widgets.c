@@ -1047,6 +1047,7 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             {
               continue;
             }
+            CTRL_Entity *thread_ctrl = ctrl_entity_from_machine_id_handle(d_state->ctrl_entity_store, thread->ctrl_machine_id, thread->ctrl_handle);
             U64 unwind_count = (thread == selected_thread) ? d_regs()->unwind_count : 0;
             U64 thread_rip_vaddr = d_query_cached_rip_from_thread_unwind(thread, unwind_count);
             D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
@@ -1105,7 +1106,7 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
               u->thread_color = color;
               u->alive_t = thread->alive_t;
               u->is_selected = (thread == selected_thread);
-              u->is_frozen = d_entity_is_frozen(thread);
+              u->is_frozen = !!thread_ctrl->is_frozen;
               u->do_lines  = df_setting_val_from_code(DF_SettingCode_ThreadLines).s32;
               u->do_glow   = df_setting_val_from_code(DF_SettingCode_ThreadGlow).s32;
               ui_box_equip_custom_draw(thread_box, df_thread_box_draw_extensions, u);
@@ -1205,6 +1206,7 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             {
               continue;
             }
+            CTRL_Entity *thread_ctrl = ctrl_entity_from_machine_id_handle(d_state->ctrl_entity_store, thread->ctrl_machine_id, thread->ctrl_handle);
             U64 unwind_count = (thread == selected_thread) ? d_regs()->unwind_count : 0;
             U64 thread_rip_vaddr = d_query_cached_rip_from_thread_unwind(thread, unwind_count);
             D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
@@ -1263,7 +1265,7 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
               u->thread_color = color;
               u->alive_t = thread->alive_t;
               u->is_selected = (thread == selected_thread);
-              u->is_frozen = d_entity_is_frozen(thread);
+              u->is_frozen = !!thread_ctrl->is_frozen;
               ui_box_equip_custom_draw(thread_box, df_thread_box_draw_extensions, u);
               
               // rjf: fill out progress t (progress into range of current line's

@@ -1047,10 +1047,6 @@ struct D_State
   U64 view_rule_spec_table_size;
   D_ViewRuleSpec **view_rule_spec_table;
   
-  // rjf: freeze state
-  D_HandleList frozen_threads;
-  D_HandleNode *free_handle_node;
-  
   // rjf: control thread user -> ctrl driving state
   Arena *ctrl_last_run_arena;
   D_RunKind ctrl_last_run_kind;
@@ -1304,10 +1300,6 @@ internal D_Entity *d_machine_entity_from_machine_id(CTRL_MachineID machine_id);
 internal D_Entity *d_entity_from_ctrl_handle(CTRL_MachineID machine_id, DMN_Handle handle);
 internal D_Entity *d_entity_from_ctrl_id(CTRL_MachineID machine_id, U32 id);
 internal D_Entity *d_entity_from_name_and_kind(String8 string, D_EntityKind kind);
-
-//- rjf: entity freezing state
-internal void d_set_thread_freeze_state(D_Entity *thread, B32 frozen);
-internal B32 d_entity_is_frozen(D_Entity *entity);
 
 ////////////////////////////////
 //~ rjf: Command Stateful Functions

@@ -1371,7 +1371,6 @@ d_entity_release(D_Entity *entity)
       log_infof("id: $0x%I64x\n", task->e->id);
       log_infof("display_string: \"%S\"\n", name);
     }
-    d_set_thread_freeze_state(task->e, 0);
     SLLStackPush(d_state->entities_free[free_list_idx], task->e);
     d_state->entities_free_count += 1;
     d_state->entities_active_count -= 1;
@@ -1989,59 +1988,6 @@ d_entity_from_name_and_kind(String8 string, D_EntityKind kind)
     }
   }
   return result;
-}
-
-//- rjf: entity freezing state
-
-internal void
-d_set_thread_freeze_state(D_Entity *thread, B32 frozen)
-{
-  D_Handle thread_handle = d_handle_from_entity(thread);
-  D_HandleNode *already_frozen_node = d_handle_list_find(&d_state->frozen_threads, thread_handle);
-  B32 is_frozen = !!already_frozen_node;
-  B32 should_be_frozen = frozen;
-  
-  // rjf: not frozen => frozen
-  if(!is_frozen && should_be_frozen)
-  {
-    D_HandleNode *node = d_state->free_handle_node;
-    if(node)
-    {
-      SLLStackPop(d_state->free_handle_node);
-    }
-    else
-    {
-      node = push_array(d_state->arena, D_HandleNode, 1);
-    }
-    node->handle = thread_handle;
-    d_handle_list_push_node(&d_state->frozen_threads, node);
-  }
-  
-  // rjf: frozen => not frozen
-  if(is_frozen && !should_be_frozen)
-  {
-    d_handle_list_remove(&d_state->frozen_threads, already_frozen_node);
-    SLLStackPush(d_state->free_handle_node, already_frozen_node);
-  }
-}
-
-internal B32
-d_entity_is_frozen(D_Entity *entity)
-{
-  B32 is_frozen = !d_entity_is_nil(entity);
-  for(D_Entity *e = entity; !d_entity_is_nil(e); e = d_entity_rec_depth_first_pre(e, entity).next)
-  {
-    if(e->kind == D_EntityKind_Thread)
-    {
-      B32 thread_is_frozen = !!d_handle_list_find(&d_state->frozen_threads, d_handle_from_entity(e));
-      if(!thread_is_frozen)
-      {
-        is_frozen = 0;
-        break;
-      }
-    }
-  }
-  return is_frozen;
 }
 
 ////////////////////////////////
@@ -3313,9 +3259,24 @@ d_hash_from_ctrl_param_state(D_BreakpointArray *breakpoints)
     // rjf: build data strings of all param data
     String8List strings = {0};
     {
-      for(D_HandleNode *n = d_state->frozen_threads.first; n != 0; n = n->next)
+      for(CTRL_Entity *machine = d_state->ctrl_entity_store->root->first;
+          machine != &ctrl_entity_nil;
+          machine = machine->next)
       {
-        str8_list_push(scratch.arena, &strings, str8_struct(&n->handle));
+        if(machine->kind != CTRL_EntityKind_Machine) { continue; }
+        for(CTRL_Entity *process = machine->first;
+            process != &ctrl_entity_nil;
+            process = process->next)
+        {
+          if(process->kind != CTRL_EntityKind_Process) { continue; }
+          for(CTRL_Entity *thread = process->first;
+              thread != &ctrl_entity_nil;
+              thread = thread->next)
+          {
+            if(thread->kind != CTRL_EntityKind_Thread) { continue; }
+            str8_list_push(scratch.arena, &strings, str8_struct(&thread->is_frozen));
+          }
+        }
       }
       for(U64 idx = 0; idx < breakpoints->count; idx += 1)
       {
@@ -6515,7 +6476,6 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
         case CTRL_EventKind_EndThread:
         {
           D_Entity *thread = d_entity_from_ctrl_handle(event->machine_id, event->entity);
-          d_set_thread_freeze_state(thread, 0);
           d_entity_mark_for_deletion(thread);
         }break;
         
@@ -6961,11 +6921,10 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
         case D_CmdKind_Continue:
         {
           B32 good_to_run = 0;
-          D_EntityList machines = d_query_cached_entity_list_with_kind(D_EntityKind_Machine);
-          for(D_EntityNode *n = machines.first; n != 0; n = n->next)
+          CTRL_EntityList threads = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Thread);
+          for(CTRL_EntityNode *n = threads.first; n != 0; n = n->next)
           {
-            D_Entity *machine = n->entity;
-            if(!d_entity_is_frozen(machine))
+            if(!n->v->is_frozen)
             {
               good_to_run = 1;
               break;
@@ -7001,7 +6960,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
               d_cmd_list_push(arena, cmds, &p, d_cmd_spec_from_kind(D_CmdKind_Error));
             }
           }
-          else if(d_entity_is_frozen(d_thread))
+          else if(thread->is_frozen)
           {
             D_CmdParams p = params;
             p.string = str8_lit("Must thaw selected thread before stepping.");
@@ -7928,7 +7887,12 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
           {
             if(e->kind == D_EntityKind_Thread)
             {
-              d_set_thread_freeze_state(e, should_freeze);
+              CTRL_Entity *thread = ctrl_entity_from_machine_id_handle(d_state->ctrl_entity_store, e->ctrl_machine_id, e->ctrl_handle);
+              thread->is_frozen = should_freeze;
+              CTRL_Msg msg = {should_freeze ? CTRL_MsgKind_FreezeThread : CTRL_MsgKind_ThawThread};
+              msg.machine_id = thread->machine_id;
+              msg.entity = thread->handle;
+              d_push_ctrl_msg(&msg);
             }
           }
         }break;
@@ -8403,16 +8367,6 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
               ctrl_user_breakpoint_list_push(scratch.arena, &msg.user_bps, &ctrl_user_bp);
             }
           }
-          for(D_HandleNode *n = d_state->frozen_threads.first; n != 0; n = n->next)
-          {
-            D_Entity *thread = d_entity_from_handle(n->handle);
-            if(!d_entity_is_nil(thread))
-            {
-              CTRL_MachineIDHandlePair pair = {thread->ctrl_machine_id, thread->ctrl_handle};
-              ctrl_machine_id_handle_pair_list_push(scratch.arena, &msg.freeze_state_threads, &pair);
-            }
-          }
-          msg.freeze_state_is_frozen = 1;
         }
         
         // rjf: push msg
