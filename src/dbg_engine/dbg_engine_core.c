@@ -3143,39 +3143,6 @@ d_push_member_map_from_dbgi_key_voff(Arena *arena, DI_Scope *scope, DI_Key *dbgi
   return result;
 }
 
-internal B32
-d_set_thread_rip(D_Entity *thread, U64 vaddr)
-{
-  Temp scratch = scratch_begin(0, 0);
-  void *block = ctrl_query_cached_reg_block_from_thread(scratch.arena, d_state->ctrl_entity_store, thread->ctrl_machine_id, thread->ctrl_handle);
-  regs_arch_block_write_rip(thread->arch, block, vaddr);
-  B32 result = ctrl_thread_write_reg_block(thread->ctrl_machine_id, thread->ctrl_handle, block);
-  
-  // rjf: early mutation of unwind cache for immediate frontend effect
-  if(result)
-  {
-    D_UnwindCache *cache = &d_state->unwind_cache;
-    if(cache->slots_count != 0)
-    {
-      D_Handle thread_handle = d_handle_from_entity(thread);
-      U64 hash = d_hash_from_string(str8_struct(&thread_handle));
-      U64 slot_idx = hash%cache->slots_count;
-      D_UnwindCacheSlot *slot = &cache->slots[slot_idx];
-      for(D_UnwindCacheNode *n = slot->first; n != 0; n = n->next)
-      {
-        if(d_handle_match(n->thread, thread_handle) && n->unwind.frames.count != 0)
-        {
-          regs_arch_block_write_rip(thread->arch, n->unwind.frames.v[0].regs, vaddr);
-          break;
-        }
-      }
-    }
-  }
-  
-  scratch_end(scratch);
-  return result;
-}
-
 internal D_Entity *
 d_module_from_thread_candidates(D_Entity *thread, D_EntityList *candidates)
 {
@@ -3241,61 +3208,6 @@ d_unwind_from_ctrl_unwind(Arena *arena, DI_Scope *di_scope, D_Entity *process, C
 
 ////////////////////////////////
 //~ rjf: Target Controls
-
-#if !defined(BLAKE2_H)
-#define HAVE_SSE2
-#include "third_party/blake2/blake2.h"
-#include "third_party/blake2/blake2b.c"
-#endif
-
-//- rjf: state which parameterizes runs, but can be live-edited -> hash
-
-internal U128
-d_hash_from_ctrl_param_state(D_BreakpointArray *breakpoints)
-{
-  U128 result = {0};
-  Temp scratch = scratch_begin(0, 0);
-  {
-    // rjf: build data strings of all param data
-    String8List strings = {0};
-    {
-      for(CTRL_Entity *machine = d_state->ctrl_entity_store->root->first;
-          machine != &ctrl_entity_nil;
-          machine = machine->next)
-      {
-        if(machine->kind != CTRL_EntityKind_Machine) { continue; }
-        for(CTRL_Entity *process = machine->first;
-            process != &ctrl_entity_nil;
-            process = process->next)
-        {
-          if(process->kind != CTRL_EntityKind_Process) { continue; }
-          for(CTRL_Entity *thread = process->first;
-              thread != &ctrl_entity_nil;
-              thread = thread->next)
-          {
-            if(thread->kind != CTRL_EntityKind_Thread) { continue; }
-            str8_list_push(scratch.arena, &strings, str8_struct(&thread->is_frozen));
-          }
-        }
-      }
-      for(U64 idx = 0; idx < breakpoints->count; idx += 1)
-      {
-        D_Breakpoint *bp = &breakpoints->v[idx];
-        str8_list_push(scratch.arena, &strings, bp->file_path);
-        str8_list_push(scratch.arena, &strings, str8_struct(&bp->pt));
-        str8_list_push(scratch.arena, &strings, bp->symbol_name);
-        str8_list_push(scratch.arena, &strings, str8_struct(&bp->vaddr));
-        str8_list_push(scratch.arena, &strings, bp->condition);
-      }
-    }
-    
-    // rjf: join & hash to produce result
-    String8 string = str8_list_join(scratch.arena, &strings, 0);
-    blake2b((U8 *)&result.u64[0], sizeof(result), string.str, string.size, 0, 0);
-  }
-  scratch_end(scratch);
-  return result;
-}
 
 //- rjf: control message dispatching
 
@@ -6014,6 +5926,12 @@ d_errorf(char *fmt, ...)
 ////////////////////////////////
 //~ rjf: Main Layer Top-Level Calls
 
+#if !defined(BLAKE2_H)
+#define HAVE_SSE2
+#include "third_party/blake2/blake2.h"
+#include "third_party/blake2/blake2b.c"
+#endif
+
 internal void
 d_init(CmdLine *cmdln, D_StateDeltaHistory *hist)
 {
@@ -6584,6 +6502,51 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
   }
   
   //////////////////////////////
+  //- rjf: hash ctrl parameterization state
+  //
+  U128 ctrl_param_state_hash = {0};
+  {
+    Temp scratch = scratch_begin(0, 0);
+    
+    // rjf: build data strings of all param data
+    String8List strings = {0};
+    {
+      CTRL_EntityList threads = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Thread);
+      for(CTRL_EntityNode *n = threads.first; n != 0; n = n->next)
+      {
+        CTRL_Entity *thread = n->v;
+        str8_list_push(scratch.arena, &strings, str8_struct(&thread->is_frozen));
+      }
+      for(U64 idx = 0; idx < breakpoints->count; idx += 1)
+      {
+        D_Breakpoint *bp = &breakpoints->v[idx];
+        str8_list_push(scratch.arena, &strings, bp->file_path);
+        str8_list_push(scratch.arena, &strings, str8_struct(&bp->pt));
+        str8_list_push(scratch.arena, &strings, bp->symbol_name);
+        str8_list_push(scratch.arena, &strings, str8_struct(&bp->vaddr));
+        str8_list_push(scratch.arena, &strings, bp->condition);
+      }
+    }
+    
+    // rjf: join & hash to produce result
+    String8 string = str8_list_join(scratch.arena, &strings, 0);
+    blake2b((U8 *)&ctrl_param_state_hash.u64[0], sizeof(ctrl_param_state_hash), string.str, string.size, 0, 0);
+    
+    scratch_end(scratch);
+  }
+  
+  //////////////////////////////
+  //- rjf: if ctrl thread is running, and our ctrl parameterization
+  // state hash has changed since the last run, we should soft-
+  // halt-refresh to inform the ctrl thread about the updated
+  // state
+  //
+  if(d_ctrl_targets_running() && !u128_match(ctrl_param_state_hash, d_state->ctrl_last_run_param_state_hash))
+  {
+    d_cmd(D_CmdKind_SoftHaltRefresh);
+  }
+  
+  //////////////////////////////
   //- rjf: eliminate entities that are marked for deletion
   //
   ProfScope("eliminate deleted entities")
@@ -6686,20 +6649,6 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
       d_cmd_list_push(arena, cmds, &params, d_cmd_spec_from_kind(D_CmdKind_WriteUserData));
       d_cmd_list_push(arena, cmds, &params, d_cmd_spec_from_kind(D_CmdKind_WriteProjectData));
       d_state->seconds_til_autosave = 5.f;
-    }
-  }
-  
-  //////////////////////////////
-  //- rjf: compute state parameterization hash for ctrl runs, if ctrl is running -
-  // if the hash doesn't match the one for the last run, we need to soft-halt and
-  // re-send down the parameterization state
-  //
-  if(d_ctrl_targets_running())
-  {
-    U128 state_hash = d_hash_from_ctrl_param_state(breakpoints);
-    if(!u128_match(state_hash, d_state->ctrl_last_run_param_state_hash))
-    {
-      d_cmd(D_CmdKind_SoftHaltRefresh);
     }
   }
   
@@ -7016,7 +6965,32 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
           U64 vaddr = params.vaddr;
           if(thread->kind == D_EntityKind_Thread && vaddr != 0)
           {
-            d_set_thread_rip(thread, vaddr);
+            void *block = ctrl_query_cached_reg_block_from_thread(scratch.arena, d_state->ctrl_entity_store, thread->ctrl_machine_id, thread->ctrl_handle);
+            regs_arch_block_write_rip(thread->arch, block, vaddr);
+            B32 result = ctrl_thread_write_reg_block(thread->ctrl_machine_id, thread->ctrl_handle, block);
+            
+            // rjf: early mutation of unwind cache for immediate frontend effect
+            if(result)
+            {
+              D_UnwindCache *cache = &d_state->unwind_cache;
+              if(cache->slots_count != 0)
+              {
+                D_Handle thread_handle = d_handle_from_entity(thread);
+                U64 hash = d_hash_from_string(str8_struct(&thread_handle));
+                U64 slot_idx = hash%cache->slots_count;
+                D_UnwindCacheSlot *slot = &cache->slots[slot_idx];
+                for(D_UnwindCacheNode *n = slot->first; n != 0; n = n->next)
+                {
+                  if(d_handle_match(n->thread, thread_handle) && n->unwind.frames.count != 0)
+                  {
+                    regs_arch_block_write_rip(thread->arch, n->unwind.frames.v[0].regs, vaddr);
+                    break;
+                  }
+                }
+              }
+            }
+            
+            scratch_end(scratch);
           }
         }break;
         
@@ -7782,25 +7756,6 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
           }
         }break;
         
-        //- rjf: ended processes
-        case D_CmdKind_RetryEndedProcess:
-        {
-          D_Entity *ended_process = d_entity_from_handle(params.entity);
-          D_Entity *target = d_entity_from_handle(ended_process->entity_handle);
-          if(target->kind == D_EntityKind_Target)
-          {
-            d_cmd(D_CmdKind_LaunchAndRun, .entity = d_handle_from_entity(target));
-          }
-          else if(d_entity_is_nil(target))
-          {
-            d_cmd(D_CmdKind_Error, .string = str8_lit("The ended process' corresponding target is missing."));
-          }
-          else if(d_entity_is_nil(ended_process))
-          {
-            d_cmd(D_CmdKind_Error, .string = str8_lit("Invalid ended process."));
-          }
-        }break;
-        
         //- rjf: attaching
         case D_CmdKind_Attach:
         {
@@ -7865,7 +7820,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
       {
         // rjf: compute hash of all run-parameterization entities, store
         {
-          d_state->ctrl_last_run_param_state_hash = d_hash_from_ctrl_param_state(breakpoints);
+          d_state->ctrl_last_run_param_state_hash = ctrl_param_state_hash;
         }
         
         // rjf: build run message

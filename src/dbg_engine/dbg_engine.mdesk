@@ -83,9 +83,6 @@ D_EntityKindTable:
   //- rjf: parser task entities
   {ConversionTask     conversion_task       conversion_tasks              0  0  0  1  0  0  0  0  0  0  0                      "Label"             Null                   "Conversion Task"            }
   {ConversionFail     conversion_fail       conversion_fails              0  0  0  1  0  0  0  0  0  0  0                      "Label"             Null                   "Conversion Failure"         }
-  
-  //- rjf: history
-  {EndedProcess       ended_process         ended_processes               1  0  0  1  0  0  0  0  0  0  0                      "Label"             Null                   "EndedProcess"               }
 }
 
 ////////////////////////////////
@@ -447,9 +444,6 @@ D_CoreCmdTable: //               |        |              |                  |   
   {SelectTarget                   1        1              Entity             Target             0  0  0  0  0  1                                                           Target                "select_target"               "Select Target"                               "Selects a target."                                                                                                ""                               }
   {EnableTarget                   1        1              Entity             Target             0  0  0  0  0  1                                                           CheckFilled           "enable_target"               "Enable Target"                               "Enables a target, in addition to all targets currently enabled."                                                  ""                               }
   {DisableTarget                  1        1              Entity             Target             0  0  0  0  0  1                                                           CheckHollow           "disable_target"              "Disable Target"                              "Disables a target."                                                                                               ""                               }
-  
-  //- rjf: ended processes
-  {RetryEndedProcess              0        0              Entity             Process            0  0  0  0  0  0                                                           Null                  "retry_ended_process"         "Retry Ended Process"                         "Launches a new process with the same options as the passed ended process."                                        ""                               }
   
   //- rjf: attaching
   {Attach                         1        1              ID                 Nil                0  0  0  0  0  1                                                           Null                  "attach"                      "Attach"                                      "Attaches to a process that is already running on the local machine."                                              ""                               }

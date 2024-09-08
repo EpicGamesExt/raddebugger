@@ -65,7 +65,7 @@ Rng1U64 d_cmd_param_slot_range_table[24] =
 {OffsetOf(D_CmdParams, inline_depth), OffsetOf(D_CmdParams, inline_depth) + sizeof(U64)},
 };
 
-String8 d_entity_kind_display_string_table[31] =
+String8 d_entity_kind_display_string_table[30] =
 {
 str8_lit_comp("Nil"),
 str8_lit_comp("Root"),
@@ -97,10 +97,9 @@ str8_lit_comp("Pending Thread Name"),
 str8_lit_comp("Debug Info Path"),
 str8_lit_comp("Conversion Task"),
 str8_lit_comp("Conversion Failure"),
-str8_lit_comp("EndedProcess"),
 };
 
-String8 d_entity_kind_name_lower_table[31] =
+String8 d_entity_kind_name_lower_table[30] =
 {
 str8_lit_comp("nil"),
 str8_lit_comp("root"),
@@ -132,10 +131,9 @@ str8_lit_comp("pending_thread_name"),
 str8_lit_comp("debug_info_path"),
 str8_lit_comp("conversion_task"),
 str8_lit_comp("conversion_fail"),
-str8_lit_comp("ended_process"),
 };
 
-String8 d_entity_kind_name_lower_plural_table[31] =
+String8 d_entity_kind_name_lower_plural_table[30] =
 {
 str8_lit_comp("nils"),
 str8_lit_comp("roots"),
@@ -167,10 +165,9 @@ str8_lit_comp("pending_thread_names"),
 str8_lit_comp("debug_info_paths"),
 str8_lit_comp("conversion_tasks"),
 str8_lit_comp("conversion_fails"),
-str8_lit_comp("ended_processes"),
 };
 
-String8 d_entity_kind_name_label_table[31] =
+String8 d_entity_kind_name_label_table[30] =
 {
 str8_lit_comp("Label"),
 str8_lit_comp("Label"),
@@ -202,10 +199,9 @@ str8_lit_comp("Label"),
 str8_lit_comp("Label"),
 str8_lit_comp("Label"),
 str8_lit_comp("Label"),
-str8_lit_comp("Label"),
 };
 
-D_EntityKindFlags d_entity_kind_flags_table[31] =
+D_EntityKindFlags d_entity_kind_flags_table[30] =
 {
 (0*D_EntityKindFlag_CanDelete) | (0*D_EntityKindFlag_CanFreeze) | (0*D_EntityKindFlag_CanEdit) | (0*D_EntityKindFlag_CanRename) | (0*D_EntityKindFlag_CanEnable) | (0*D_EntityKindFlag_CanCondition) | (0*D_EntityKindFlag_CanDuplicate) | (0*D_EntityKindFlag_NameIsCode) | (0*D_EntityKindFlag_NameIsPath) | (0*D_EntityKindFlag_UserDefinedLifetime) | (0*D_EntityKindFlag_IsSerializedToConfig),
 (0*D_EntityKindFlag_CanDelete) | (0*D_EntityKindFlag_CanFreeze) | (0*D_EntityKindFlag_CanEdit) | (0*D_EntityKindFlag_CanRename) | (0*D_EntityKindFlag_CanEnable) | (0*D_EntityKindFlag_CanCondition) | (0*D_EntityKindFlag_CanDuplicate) | (0*D_EntityKindFlag_NameIsCode) | (0*D_EntityKindFlag_NameIsPath) | (0*D_EntityKindFlag_UserDefinedLifetime) | (0*D_EntityKindFlag_IsSerializedToConfig),
@@ -237,7 +233,6 @@ D_EntityKindFlags d_entity_kind_flags_table[31] =
 (0*D_EntityKindFlag_CanDelete) | (0*D_EntityKindFlag_CanFreeze) | (0*D_EntityKindFlag_CanEdit) | (0*D_EntityKindFlag_CanRename) | (0*D_EntityKindFlag_CanEnable) | (0*D_EntityKindFlag_CanCondition) | (0*D_EntityKindFlag_CanDuplicate) | (0*D_EntityKindFlag_NameIsCode) | (0*D_EntityKindFlag_NameIsPath) | (0*D_EntityKindFlag_UserDefinedLifetime) | (0*D_EntityKindFlag_IsSerializedToConfig),
 (0*D_EntityKindFlag_CanDelete) | (0*D_EntityKindFlag_CanFreeze) | (0*D_EntityKindFlag_CanEdit) | (1*D_EntityKindFlag_CanRename) | (0*D_EntityKindFlag_CanEnable) | (0*D_EntityKindFlag_CanCondition) | (0*D_EntityKindFlag_CanDuplicate) | (0*D_EntityKindFlag_NameIsCode) | (0*D_EntityKindFlag_NameIsPath) | (0*D_EntityKindFlag_UserDefinedLifetime) | (0*D_EntityKindFlag_IsSerializedToConfig),
 (0*D_EntityKindFlag_CanDelete) | (0*D_EntityKindFlag_CanFreeze) | (0*D_EntityKindFlag_CanEdit) | (1*D_EntityKindFlag_CanRename) | (0*D_EntityKindFlag_CanEnable) | (0*D_EntityKindFlag_CanCondition) | (0*D_EntityKindFlag_CanDuplicate) | (0*D_EntityKindFlag_NameIsCode) | (0*D_EntityKindFlag_NameIsPath) | (0*D_EntityKindFlag_UserDefinedLifetime) | (0*D_EntityKindFlag_IsSerializedToConfig),
-(1*D_EntityKindFlag_CanDelete) | (0*D_EntityKindFlag_CanFreeze) | (0*D_EntityKindFlag_CanEdit) | (1*D_EntityKindFlag_CanRename) | (0*D_EntityKindFlag_CanEnable) | (0*D_EntityKindFlag_CanCondition) | (0*D_EntityKindFlag_CanDuplicate) | (0*D_EntityKindFlag_NameIsCode) | (0*D_EntityKindFlag_NameIsPath) | (0*D_EntityKindFlag_UserDefinedLifetime) | (0*D_EntityKindFlag_IsSerializedToConfig),
 };
 
 String8 d_cfg_src_string_table[4] =
@@ -272,7 +267,7 @@ D_CmdKind_Null,
 D_CmdKind_Null,
 };
 
-D_CmdSpecInfo d_core_cmd_kind_spec_info_table[221] =
+D_CmdSpecInfo d_core_cmd_kind_spec_info_table[220] =
 {
 { str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp(""), (D_CmdSpecFlag_ListInUI*0)|(D_CmdSpecFlag_ListInIPCDocs*0), {D_CmdParamSlot_Null, D_EntityKind_Nil, (D_CmdQueryFlag_AllowFiles*0)|(D_CmdQueryFlag_AllowFolders*0)|(D_CmdQueryFlag_CodeInput*0)|(D_CmdQueryFlag_KeepOldInput*0)|(D_CmdQueryFlag_SelectOldInput*0)|(D_CmdQueryFlag_Required*0)}},
 { str8_lit_comp("exit"), str8_lit_comp("Exits the debugger."), str8_lit_comp("quit,close,abort"), str8_lit_comp("Exit"), (D_CmdSpecFlag_ListInUI*1)|(D_CmdSpecFlag_ListInIPCDocs*1), {D_CmdParamSlot_Null, D_EntityKind_Nil, (D_CmdQueryFlag_AllowFiles*0)|(D_CmdQueryFlag_AllowFolders*0)|(D_CmdQueryFlag_CodeInput*0)|(D_CmdQueryFlag_KeepOldInput*0)|(D_CmdQueryFlag_SelectOldInput*0)|(D_CmdQueryFlag_Required*0)}},
@@ -455,7 +450,6 @@ D_CmdSpecInfo d_core_cmd_kind_spec_info_table[221] =
 { str8_lit_comp("select_target"), str8_lit_comp("Selects a target."), str8_lit_comp(""), str8_lit_comp("Select Target"), (D_CmdSpecFlag_ListInUI*1)|(D_CmdSpecFlag_ListInIPCDocs*1), {D_CmdParamSlot_Entity, D_EntityKind_Target, (D_CmdQueryFlag_AllowFiles*0)|(D_CmdQueryFlag_AllowFolders*0)|(D_CmdQueryFlag_CodeInput*0)|(D_CmdQueryFlag_KeepOldInput*0)|(D_CmdQueryFlag_SelectOldInput*0)|(D_CmdQueryFlag_Required*1)}},
 { str8_lit_comp("enable_target"), str8_lit_comp("Enables a target, in addition to all targets currently enabled."), str8_lit_comp(""), str8_lit_comp("Enable Target"), (D_CmdSpecFlag_ListInUI*1)|(D_CmdSpecFlag_ListInIPCDocs*1), {D_CmdParamSlot_Entity, D_EntityKind_Target, (D_CmdQueryFlag_AllowFiles*0)|(D_CmdQueryFlag_AllowFolders*0)|(D_CmdQueryFlag_CodeInput*0)|(D_CmdQueryFlag_KeepOldInput*0)|(D_CmdQueryFlag_SelectOldInput*0)|(D_CmdQueryFlag_Required*1)}},
 { str8_lit_comp("disable_target"), str8_lit_comp("Disables a target."), str8_lit_comp(""), str8_lit_comp("Disable Target"), (D_CmdSpecFlag_ListInUI*1)|(D_CmdSpecFlag_ListInIPCDocs*1), {D_CmdParamSlot_Entity, D_EntityKind_Target, (D_CmdQueryFlag_AllowFiles*0)|(D_CmdQueryFlag_AllowFolders*0)|(D_CmdQueryFlag_CodeInput*0)|(D_CmdQueryFlag_KeepOldInput*0)|(D_CmdQueryFlag_SelectOldInput*0)|(D_CmdQueryFlag_Required*1)}},
-{ str8_lit_comp("retry_ended_process"), str8_lit_comp("Launches a new process with the same options as the passed ended process."), str8_lit_comp(""), str8_lit_comp("Retry Ended Process"), (D_CmdSpecFlag_ListInUI*0)|(D_CmdSpecFlag_ListInIPCDocs*0), {D_CmdParamSlot_Entity, D_EntityKind_Process, (D_CmdQueryFlag_AllowFiles*0)|(D_CmdQueryFlag_AllowFolders*0)|(D_CmdQueryFlag_CodeInput*0)|(D_CmdQueryFlag_KeepOldInput*0)|(D_CmdQueryFlag_SelectOldInput*0)|(D_CmdQueryFlag_Required*0)}},
 { str8_lit_comp("attach"), str8_lit_comp("Attaches to a process that is already running on the local machine."), str8_lit_comp(""), str8_lit_comp("Attach"), (D_CmdSpecFlag_ListInUI*1)|(D_CmdSpecFlag_ListInIPCDocs*1), {D_CmdParamSlot_ID, D_EntityKind_Nil, (D_CmdQueryFlag_AllowFiles*0)|(D_CmdQueryFlag_AllowFolders*0)|(D_CmdQueryFlag_CodeInput*0)|(D_CmdQueryFlag_KeepOldInput*0)|(D_CmdQueryFlag_SelectOldInput*0)|(D_CmdQueryFlag_Required*1)}},
 { str8_lit_comp("register_as_jit_debugger"), str8_lit_comp("Registers the RAD debugger as the just-in-time (JIT) debugger used by the operating system."), str8_lit_comp(""), str8_lit_comp("Register As Just-In-Time (JIT) Debugger"), (D_CmdSpecFlag_ListInUI*1)|(D_CmdSpecFlag_ListInIPCDocs*1), {D_CmdParamSlot_Null, D_EntityKind_Nil, (D_CmdQueryFlag_AllowFiles*0)|(D_CmdQueryFlag_AllowFolders*0)|(D_CmdQueryFlag_CodeInput*0)|(D_CmdQueryFlag_KeepOldInput*0)|(D_CmdQueryFlag_SelectOldInput*0)|(D_CmdQueryFlag_Required*0)}},
 { str8_lit_comp("entity_ref_fast_path"), str8_lit_comp("Activates the default behavior when clicking an entity reference."), str8_lit_comp(""), str8_lit_comp("Entity Reference Fast Path"), (D_CmdSpecFlag_ListInUI*0)|(D_CmdSpecFlag_ListInIPCDocs*0), {D_CmdParamSlot_Null, D_EntityKind_Nil, (D_CmdQueryFlag_AllowFiles*0)|(D_CmdQueryFlag_AllowFolders*0)|(D_CmdQueryFlag_CodeInput*0)|(D_CmdQueryFlag_KeepOldInput*0)|(D_CmdQueryFlag_SelectOldInput*0)|(D_CmdQueryFlag_Required*0)}},

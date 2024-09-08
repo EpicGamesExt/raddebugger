@@ -81,7 +81,6 @@ D_EntityKind_PendingThreadName,
 D_EntityKind_DebugInfoPath,
 D_EntityKind_ConversionTask,
 D_EntityKind_ConversionFail,
-D_EntityKind_EndedProcess,
 D_EntityKind_COUNT,
 } D_EntityKind;
 
@@ -268,7 +267,6 @@ D_CmdKind_EditTarget,
 D_CmdKind_SelectTarget,
 D_CmdKind_EnableTarget,
 D_CmdKind_DisableTarget,
-D_CmdKind_RetryEndedProcess,
 D_CmdKind_Attach,
 D_CmdKind_RegisterAsJITDebugger,
 D_CmdKind_EntityRefFastPath,
@@ -498,11 +496,11 @@ struct {B32 *value_ptr; String8 name;} DEV_toggle_table[] =
 C_LINKAGE_BEGIN
 extern Rng1U64 d_reg_slot_range_table[29];
 extern Rng1U64 d_cmd_param_slot_range_table[24];
-extern String8 d_entity_kind_display_string_table[31];
-extern String8 d_entity_kind_name_lower_table[31];
-extern String8 d_entity_kind_name_lower_plural_table[31];
-extern String8 d_entity_kind_name_label_table[31];
-extern D_EntityKindFlags d_entity_kind_flags_table[31];
+extern String8 d_entity_kind_display_string_table[30];
+extern String8 d_entity_kind_name_lower_table[30];
+extern String8 d_entity_kind_name_lower_plural_table[30];
+extern String8 d_entity_kind_name_label_table[30];
+extern D_EntityKindFlags d_entity_kind_flags_table[30];
 extern String8 d_cfg_src_string_table[4];
 extern D_CmdKind d_cfg_src_load_cmd_kind_table[4];
 extern D_CmdKind d_cfg_src_write_cmd_kind_table[4];

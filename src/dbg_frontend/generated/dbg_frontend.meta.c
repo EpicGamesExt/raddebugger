@@ -289,7 +289,7 @@ DF_ViewSpecInfo df_g_gfx_view_kind_spec_info_table[34] =
 {(0|0*DF_ViewSpecFlag_ParameterizedByEntity|0*DF_ViewSpecFlag_ProjectSpecific|1*DF_ViewSpecFlag_CanSerialize|1*DF_ViewSpecFlag_CanFilter|0*DF_ViewSpecFlag_FilterIsCode|1*DF_ViewSpecFlag_TypingAutomaticallyFilters), str8_lit_comp("settings"), str8_lit_comp("Settings"), DF_IconKind_Gear, DF_VIEW_SETUP_FUNCTION_NAME(settings), DF_VIEW_CMD_FUNCTION_NAME(settings), DF_VIEW_UI_FUNCTION_NAME(settings)},
 };
 
-DF_IconKind df_cmd_kind_icon_kind_table[221] =
+DF_IconKind df_cmd_kind_icon_kind_table[220] =
 {
 DF_IconKind_Null,
 DF_IconKind_X,
@@ -476,7 +476,6 @@ DF_IconKind_Null,
 DF_IconKind_Null,
 DF_IconKind_Null,
 DF_IconKind_Null,
-DF_IconKind_Null,
 DF_IconKind_FileOutline,
 DF_IconKind_Find,
 DF_IconKind_Find,
@@ -514,7 +513,7 @@ DF_IconKind_Null,
 DF_IconKind_Null,
 };
 
-DF_IconKind df_entity_kind_icon_kind_table[31] =
+DF_IconKind df_entity_kind_icon_kind_table[30] =
 {
 DF_IconKind_Null,
 DF_IconKind_Null,
@@ -544,7 +543,6 @@ DF_IconKind_Thread,
 DF_IconKind_Module,
 DF_IconKind_Threads,
 DF_IconKind_Module,
-DF_IconKind_Null,
 DF_IconKind_Null,
 DF_IconKind_Null,
 };

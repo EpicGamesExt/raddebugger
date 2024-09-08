@@ -1364,15 +1364,11 @@ internal U64 d_tls_base_vaddr_from_process_root_rip(D_Entity *process, U64 root_
 internal Arch d_arch_from_entity(D_Entity *entity);
 internal E_String2NumMap *d_push_locals_map_from_dbgi_key_voff(Arena *arena, DI_Scope *scope, DI_Key *dbgi_key, U64 voff);
 internal E_String2NumMap *d_push_member_map_from_dbgi_key_voff(Arena *arena, DI_Scope *scope, DI_Key *dbgi_key, U64 voff);
-internal B32 d_set_thread_rip(D_Entity *thread, U64 vaddr);
 internal D_Entity *d_module_from_thread_candidates(D_Entity *thread, D_EntityList *candidates);
 internal D_Unwind d_unwind_from_ctrl_unwind(Arena *arena, DI_Scope *di_scope, D_Entity *process, CTRL_Unwind *base_unwind);
 
 ////////////////////////////////
 //~ rjf: Target Controls
-
-//- rjf: state which parameterizes runs, but can be live-edited -> hash
-internal U128 d_hash_from_ctrl_param_state(D_BreakpointArray *breakpoints);
 
 //- rjf: control message dispatching
 internal void d_push_ctrl_msg(CTRL_Msg *msg);
