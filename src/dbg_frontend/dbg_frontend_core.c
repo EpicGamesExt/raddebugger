@@ -8188,62 +8188,12 @@ df_frame(void)
   D_CmdList cmds = d_gather_root_cmds(scratch.arena);
   
   //////////////////////////////
-  //- rjf: gather targets
+  //- rjf: clear root level commands
   //
-  D_TargetArray targets = {0};
   {
-    D_EntityList target_entities = d_query_cached_entity_list_with_kind(D_EntityKind_Target);
-    targets.count = target_entities.count;
-    targets.v = push_array(scratch.arena, D_Target, targets.count);
-    U64 idx = 0;
-    for(D_EntityNode *n = target_entities.first; n != 0; n = n->next, idx += 1)
-    {
-      D_Entity *src_target = n->entity;
-      D_Entity *src_target_exe   = d_entity_child_from_kind(src_target, D_EntityKind_Target);
-      D_Entity *src_target_args  = d_entity_child_from_kind(src_target, D_EntityKind_Arguments);
-      D_Entity *src_target_wdir  = d_entity_child_from_kind(src_target, D_EntityKind_WorkingDirectory);
-      D_Entity *src_target_entry = d_entity_child_from_kind(src_target, D_EntityKind_EntryPoint);
-      D_Target *dst_target = &targets.v[idx];
-      dst_target->exe                     = src_target_exe->string;
-      dst_target->args                    = src_target_args->string;
-      dst_target->working_directory       = src_target_wdir->string;
-      dst_target->custom_entry_point_name = src_target_entry->string;
-    }
+    arena_clear(d_state->root_cmd_arena);
+    MemoryZeroStruct(&d_state->root_cmds);
   }
-  
-  //////////////////////////////
-  //- rjf: gather breakpoints
-  //
-  D_BreakpointArray breakpoints = {0};
-  {
-    D_EntityList bp_entities = d_query_cached_entity_list_with_kind(D_EntityKind_Breakpoint);
-    breakpoints.count = bp_entities.count;
-    breakpoints.v = push_array(scratch.arena, D_Breakpoint, breakpoints.count);
-    U64 idx = 0;
-    for(D_EntityNode *n = bp_entities.first; n != 0; n = n->next)
-    {
-      D_Entity *src_bp = n->entity;
-      if(src_bp->disabled)
-      {
-        breakpoints.count -= 1;
-        continue;
-      }
-      D_Entity *src_bp_loc = d_entity_child_from_kind(src_bp, D_EntityKind_Location);
-      D_Entity *src_bp_cnd = d_entity_child_from_kind(src_bp, D_EntityKind_Condition);
-      D_Breakpoint *dst_bp = &breakpoints.v[idx];
-      dst_bp->file_path   = src_bp_loc->string;
-      dst_bp->pt          = src_bp_loc->text_point;
-      dst_bp->symbol_name = src_bp_loc->string;
-      dst_bp->vaddr       = src_bp_loc->vaddr;
-      dst_bp->condition   = src_bp_cnd->string;
-      idx += 1;
-    }
-  }
-  
-  //////////////////////////////
-  //- rjf: tick debug engine
-  //
-  d_tick(scratch.arena, &targets, &breakpoints, di_scope, &cmds, dt);
   
   //////////////////////////////
   //- rjf: unpack eval-dependent info
@@ -8439,95 +8389,10 @@ df_frame(void)
   e_select_interpret_ctx(interpret_ctx);
   
   //////////////////////////////
-  //- rjf: apply new rich hover info
-  //
-  arena_clear(df_state->rich_hover_info_current_arena);
-  MemoryCopyStruct(&df_state->rich_hover_info_current, &df_state->rich_hover_info_next);
-  df_state->rich_hover_info_current.dbgi_key = di_key_copy(df_state->rich_hover_info_current_arena, &df_state->rich_hover_info_current.dbgi_key);
-  arena_clear(df_state->rich_hover_info_next_arena);
-  MemoryZeroStruct(&df_state->rich_hover_info_next);
-  
-  //////////////////////////////
-  //- rjf: animate confirmation
-  //
-  {
-    F32 rate = df_setting_val_from_code(DF_SettingCode_MenuAnimations).s32 ? 1 - pow_f32(2, (-10.f * d_dt())) : 1.f;
-    B32 confirm_open = df_state->confirm_active;
-    df_state->confirm_t += rate * ((F32)!!confirm_open-df_state->confirm_t);
-    if(abs_f32(df_state->confirm_t - (F32)!!confirm_open) > 0.005f)
-    {
-      df_request_frame();
-    }
-  }
-  
-  //////////////////////////////
-  //- rjf: animate theme
-  //
-  {
-    DF_Theme *current = &df_state->cfg_theme;
-    DF_Theme *target = &df_state->cfg_theme_target;
-    F32 rate = 1 - pow_f32(2, (-50.f * d_dt()));
-    for(DF_ThemeColor color = DF_ThemeColor_Null;
-        color < DF_ThemeColor_COUNT;
-        color = (DF_ThemeColor)(color+1))
-    {
-      if(abs_f32(target->colors[color].x - current->colors[color].x) > 0.01f ||
-         abs_f32(target->colors[color].y - current->colors[color].y) > 0.01f ||
-         abs_f32(target->colors[color].z - current->colors[color].z) > 0.01f ||
-         abs_f32(target->colors[color].w - current->colors[color].w) > 0.01f)
-      {
-        df_request_frame();
-      }
-      current->colors[color].x += (target->colors[color].x - current->colors[color].x) * rate;
-      current->colors[color].y += (target->colors[color].y - current->colors[color].y) * rate;
-      current->colors[color].z += (target->colors[color].z - current->colors[color].z) * rate;
-      current->colors[color].w += (target->colors[color].w - current->colors[color].w) * rate;
-    }
-  }
-  
-  //////////////////////////////
-  //- rjf: animate alive-transitions for entities
-  //
-  {
-    F32 rate = 1.f - pow_f32(2.f, -20.f*d_dt());
-    for(D_Entity *e = d_entity_root(); !d_entity_is_nil(e); e = d_entity_rec_depth_first_pre(e, d_entity_root()).next)
-    {
-      F32 diff = (1.f - e->alive_t);
-      e->alive_t += diff * rate;
-      if(diff >= 0.01f)
-      {
-        df_request_frame();
-      }
-    }
-  }
-  
-  //////////////////////////////
-  //- rjf: capture is active? -> keep rendering
-  //
-  if(ProfIsCapturing() || DEV_telemetry_capture)
-  {
-    df_request_frame();
-  }
-  
-  //////////////////////////////
-  //- rjf: commit params changes for all views
-  //
-  {
-    for(DF_View *v = df_state->first_view; !df_view_is_nil(v); v = v->alloc_next)
-    {
-      if(v->params_write_gen == v->params_read_gen+1)
-      {
-        v->params_read_gen += 1;
-      }
-    }
-  }
-  
-  //////////////////////////////
   //- rjf: process top-level graphical commands
   //
   B32 panel_reset_done = 0;
   {
-    B32 cfg_write_done[D_CfgSrc_COUNT] = {0};
     for(D_CmdNode *cmd_node = cmds.first;
         cmd_node != 0;
         cmd_node = cmd_node->next)
@@ -8565,10 +8430,15 @@ df_frame(void)
         case D_CmdKind_RunCommand:
         {
           D_CmdSpec *spec = params->cmd_spec;
+          if(!d_cmd_spec_is_nil(spec))
+          {
+            d_cmd_spec_counter_inc(spec);
+          }
           
           // rjf: command simply executes - just no-op in this layer
           if(!d_cmd_spec_is_nil(spec) && !(spec->info.query.flags & D_CmdQueryFlag_Required))
           {
+            d_cmd_list_push(scratch.arena, &cmds, params, spec);
           }
           
           // rjf: command has required query -> prep query
@@ -8725,6 +8595,165 @@ df_frame(void)
           d_cmd_list_push(scratch.arena, &cmds, params, d_cmd_spec_from_kind(D_CmdKind_FindThread));
         }break;
         
+        //- rjf: config path saving/loading/applying
+        case D_CmdKind_OpenRecentProject:
+        {
+          D_Entity *entity = d_entity_from_handle(params->entity);
+          if(entity->kind == D_EntityKind_RecentProject)
+          {
+            D_CmdParams p = d_cmd_params_zero();
+            p.file_path = entity->string;
+            d_cmd_list_push(scratch.arena, &cmds, &p, d_cmd_spec_from_kind(D_CmdKind_OpenProject));
+          }
+        }break;
+        case D_CmdKind_OpenUser:
+        case D_CmdKind_OpenProject:
+        {
+          B32 load_cfg[D_CfgSrc_COUNT] = {0};
+          for(D_CfgSrc src = (D_CfgSrc)0; src < D_CfgSrc_COUNT; src = (D_CfgSrc)(src+1))
+          {
+            load_cfg[src] = (kind == d_cfg_src_load_cmd_kind_table[src]);
+          }
+          
+          //- rjf: normalize path
+          String8 new_path = path_normalized_from_string(scratch.arena, params->file_path);
+          
+          //- rjf: path -> data
+          FileProperties props = {0};
+          String8 data = {0};
+          {
+            OS_Handle file = os_file_open(OS_AccessFlag_ShareRead|OS_AccessFlag_Read, new_path);
+            props = os_properties_from_file(file);
+            data = os_string_from_file_range(scratch.arena, file, r1u64(0, props.size));
+            os_file_close(file);
+          }
+          
+          //- rjf: investigate file path/data
+          B32 file_is_okay = 1;
+          if(props.modified != 0 && data.size != 0 && !str8_match(str8_prefix(data, 9), str8_lit("// raddbg"), 0))
+          {
+            file_is_okay = 0;
+          }
+          
+          //- rjf: set new config paths
+          if(file_is_okay)
+          {
+            for(D_CfgSrc src = (D_CfgSrc)0; src < D_CfgSrc_COUNT; src = (D_CfgSrc)(src+1))
+            {
+              if(load_cfg[src])
+              {
+                arena_clear(d_state->cfg_path_arenas[src]);
+                d_state->cfg_paths[src] = push_str8_copy(d_state->cfg_path_arenas[src], new_path);
+              }
+            }
+          }
+          
+          //- rjf: get config file properties
+          FileProperties cfg_props[D_CfgSrc_COUNT] = {0};
+          if(file_is_okay)
+          {
+            for(D_CfgSrc src = (D_CfgSrc)0; src < D_CfgSrc_COUNT; src = (D_CfgSrc)(src+1))
+            {
+              String8 path = d_cfg_path_from_src(src);
+              cfg_props[src] = os_properties_from_file_path(path);
+            }
+          }
+          
+          //- rjf: load files
+          String8 cfg_data[D_CfgSrc_COUNT] = {0};
+          U64 cfg_timestamps[D_CfgSrc_COUNT] = {0};
+          if(file_is_okay)
+          {
+            for(D_CfgSrc src = (D_CfgSrc)0; src < D_CfgSrc_COUNT; src = (D_CfgSrc)(src+1))
+            {
+              String8 path = d_cfg_path_from_src(src);
+              OS_Handle file = os_file_open(OS_AccessFlag_ShareRead|OS_AccessFlag_Read, path);
+              FileProperties props = os_properties_from_file(file);
+              String8 data = os_string_from_file_range(scratch.arena, file, r1u64(0, props.size));
+              if(data.size != 0)
+              {
+                cfg_data[src] = data;
+                cfg_timestamps[src] = props.modified;
+              }
+              os_file_close(file);
+            }
+          }
+          
+          //- rjf: determine if we need to save config
+          B32 cfg_save[D_CfgSrc_COUNT] = {0};
+          if(file_is_okay)
+          {
+            for(D_CfgSrc src = (D_CfgSrc)0; src < D_CfgSrc_COUNT; src = (D_CfgSrc)(src+1))
+            {
+              cfg_save[src] = (load_cfg[src] && cfg_props[src].created == 0);
+            }
+          }
+          
+          //- rjf: determine if we need to reload config
+          B32 cfg_load[D_CfgSrc_COUNT] = {0};
+          B32 cfg_load_any = 0;
+          if(file_is_okay)
+          {
+            for(D_CfgSrc src = (D_CfgSrc)0; src < D_CfgSrc_COUNT; src = (D_CfgSrc)(src+1))
+            {
+              cfg_load[src] = (load_cfg[src] && ((cfg_save[src] == 0 && d_state->cfg_cached_timestamp[src] != cfg_timestamps[src]) || cfg_props[src].created == 0));
+              cfg_load_any = cfg_load_any || cfg_load[src];
+            }
+          }
+          
+          //- rjf: load => build new config table
+          if(cfg_load_any)
+          {
+            arena_clear(d_state->cfg_arena);
+            MemoryZeroStruct(&d_state->cfg_table);
+            for(D_CfgSrc src = (D_CfgSrc)0; src < D_CfgSrc_COUNT; src = (D_CfgSrc)(src+1))
+            {
+              d_cfg_table_push_unparsed_string(d_state->cfg_arena, &d_state->cfg_table, cfg_data[src], src);
+            }
+          }
+          
+          //- rjf: load => dispatch apply
+          //
+          // NOTE(rjf): must happen before `save`. we need to create a default before saving, which
+          // occurs in the 'apply' path.
+          //
+          if(file_is_okay)
+          {
+            for(D_CfgSrc src = (D_CfgSrc)0; src < D_CfgSrc_COUNT; src = (D_CfgSrc)(src+1))
+            {
+              if(cfg_load[src])
+              {
+                D_CmdKind cmd_kind = d_cfg_src_apply_cmd_kind_table[src];
+                D_CmdParams params = d_cmd_params_zero();
+                d_cmd_list_push(scratch.arena, &cmds, &params, d_cmd_spec_from_kind(cmd_kind));
+                d_state->cfg_cached_timestamp[src] = cfg_timestamps[src];
+              }
+            }
+          }
+          
+          //- rjf: save => dispatch write
+          if(file_is_okay)
+          {
+            for(D_CfgSrc src = (D_CfgSrc)0; src < D_CfgSrc_COUNT; src = (D_CfgSrc)(src+1))
+            {
+              if(cfg_save[src])
+              {
+                D_CmdKind cmd_kind = d_cfg_src_write_cmd_kind_table[src];
+                D_CmdParams params = d_cmd_params_zero();
+                d_cmd_list_push(scratch.arena, &cmds, &params, d_cmd_spec_from_kind(cmd_kind));
+              }
+            }
+          }
+          
+          //- rjf: bad file -> alert user
+          if(!file_is_okay)
+          {
+            D_CmdParams p = *params;
+            p.string = push_str8f(scratch.arena, "\"%S\" appears to refer to an existing file which is not a RADDBG config file. This would overwrite the file.", new_path);
+            d_cmd_list_push(scratch.arena, &cmds, &p, d_cmd_spec_from_kind(D_CmdKind_Error));
+          }
+        }break;
+        
         //- rjf: loading/applying stateful config changes
         case D_CmdKind_ApplyUserData:
         case D_CmdKind_ApplyProjectData:
@@ -8732,7 +8761,7 @@ df_frame(void)
           D_CfgTable *table = d_cfg_table();
           OS_HandleArray monitors = os_push_monitors_array(scratch.arena);
           
-          //- rjf: get src
+          //- rjf: get config source
           D_CfgSrc src = D_CfgSrc_User;
           for(D_CfgSrc s = (D_CfgSrc)0; s < D_CfgSrc_COUNT; s = (D_CfgSrc)(s+1))
           {
@@ -8746,6 +8775,230 @@ df_frame(void)
           //- rjf: get paths
           String8 cfg_path   = d_cfg_path_from_src(src);
           String8 cfg_folder = str8_chop_last_slash(cfg_path);
+          
+          //- rjf: keep track of recent projects
+          if(src == D_CfgSrc_Project)
+          {
+            D_EntityList recent_projects = d_query_cached_entity_list_with_kind(D_EntityKind_RecentProject);
+            D_Entity *recent_project = &d_nil_entity;
+            for(D_EntityNode *n = recent_projects.first; n != 0; n = n->next)
+            {
+              if(path_match_normalized(cfg_path, n->entity->string))
+              {
+                recent_project = n->entity;
+                break;
+              }
+            }
+            if(d_entity_is_nil(recent_project))
+            {
+              recent_project = d_entity_alloc(d_entity_root(), D_EntityKind_RecentProject);
+              d_entity_equip_name(recent_project, path_normalized_from_string(scratch.arena, cfg_path));
+              d_entity_equip_cfg_src(recent_project, D_CfgSrc_User);
+            }
+          }
+          
+          //- rjf: eliminate all existing entities which are derived from config
+          {
+            for(EachEnumVal(D_EntityKind, k))
+            {
+              D_EntityKindFlags k_flags = d_entity_kind_flags_table[k];
+              if(k_flags & D_EntityKindFlag_IsSerializedToConfig)
+              {
+                D_EntityList entities = d_query_cached_entity_list_with_kind(k);
+                for(D_EntityNode *n = entities.first; n != 0; n = n->next)
+                {
+                  if(n->entity->cfg_src == src)
+                  {
+                    d_entity_mark_for_deletion(n->entity);
+                  }
+                }
+              }
+            }
+          }
+          
+          //- rjf: apply all entities
+          {
+            for(EachEnumVal(D_EntityKind, k))
+            {
+              D_EntityKindFlags k_flags = d_entity_kind_flags_table[k];
+              if(k_flags & D_EntityKindFlag_IsSerializedToConfig)
+              {
+                D_CfgVal *k_val = d_cfg_val_from_string(table, d_entity_kind_name_lower_table[k]);
+                for(D_CfgTree *k_tree = k_val->first;
+                    k_tree != &d_nil_cfg_tree;
+                    k_tree = k_tree->next)
+                {
+                  if(k_tree->source != src)
+                  {
+                    continue;
+                  }
+                  D_Entity *entity = d_entity_alloc(d_entity_root(), k);
+                  d_entity_equip_cfg_src(entity, k_tree->source);
+                  
+                  // rjf: iterate config tree
+                  typedef struct Task Task;
+                  struct Task
+                  {
+                    Task *next;
+                    D_Entity *entity;
+                    MD_Node *n;
+                  };
+                  Task start_task = {0, entity, k_tree->root};
+                  Task *first_task = &start_task;
+                  Task *last_task = first_task;
+                  for(Task *t = first_task; t != 0; t = t->next)
+                  {
+                    MD_Node *node = t->n;
+                    for(MD_EachNode(child, node->first))
+                    {
+                      // rjf: standalone string literals under an entity -> name
+                      if(child->flags & MD_NodeFlag_StringLiteral && child->first == &md_nil_node)
+                      {
+                        String8 string = d_cfg_raw_from_escaped_string(scratch.arena, child->string);
+                        if(d_entity_kind_flags_table[t->entity->kind] & D_EntityKindFlag_NameIsPath)
+                        {
+                          string = path_absolute_dst_from_relative_dst_src(scratch.arena, string, cfg_folder);
+                        }
+                        d_entity_equip_name(t->entity, string);
+                      }
+                      
+                      // rjf: standalone string literals under an entity, with a numeric child -> name & text location
+                      if(child->flags & MD_NodeFlag_StringLiteral && child->first->flags & MD_NodeFlag_Numeric && child->first->first == &md_nil_node)
+                      {
+                        String8 string = d_cfg_raw_from_escaped_string(scratch.arena, child->string);
+                        if(d_entity_kind_flags_table[t->entity->kind] & D_EntityKindFlag_NameIsPath)
+                        {
+                          string = path_absolute_dst_from_relative_dst_src(scratch.arena, string, cfg_folder);
+                        }
+                        d_entity_equip_name(t->entity, string);
+                        S64 line = 0;
+                        try_s64_from_str8_c_rules(child->first->string, &line);
+                        TxtPt pt = txt_pt(line, 1);
+                        d_entity_equip_txt_pt(t->entity, pt);
+                      }
+                      
+                      // rjf: standalone hex literals under an entity -> vaddr
+                      if(child->flags & MD_NodeFlag_Numeric && child->first == &md_nil_node && str8_match(str8_substr(child->string, r1u64(0, 2)), str8_lit("0x"), 0))
+                      {
+                        U64 vaddr = 0;
+                        try_u64_from_str8_c_rules(child->string, &vaddr);
+                        d_entity_equip_vaddr(t->entity, vaddr);
+                      }
+                      
+                      // rjf: specifically named entity equipment
+                      if((str8_match(child->string, str8_lit("name"), StringMatchFlag_CaseInsensitive) ||
+                          str8_match(child->string, str8_lit("label"), StringMatchFlag_CaseInsensitive)) &&
+                         child->first != &md_nil_node)
+                      {
+                        String8 string = d_cfg_raw_from_escaped_string(scratch.arena, child->first->string);
+                        if(d_entity_kind_flags_table[t->entity->kind] & D_EntityKindFlag_NameIsPath)
+                        {
+                          string = path_absolute_dst_from_relative_dst_src(scratch.arena, string, cfg_folder);
+                        }
+                        d_entity_equip_name(t->entity, string);
+                      }
+                      if((str8_match(child->string, str8_lit("active"), StringMatchFlag_CaseInsensitive) ||
+                          str8_match(child->string, str8_lit("enabled"), StringMatchFlag_CaseInsensitive)) &&
+                         child->first != &md_nil_node)
+                      {
+                        d_entity_equip_disabled(t->entity, !str8_match(child->first->string, str8_lit("1"), 0));
+                      }
+                      if(str8_match(child->string, str8_lit("disabled"), StringMatchFlag_CaseInsensitive) && child->first != &md_nil_node)
+                      {
+                        d_entity_equip_disabled(t->entity, str8_match(child->first->string, str8_lit("1"), 0));
+                      }
+                      if(str8_match(child->string, str8_lit("hsva"), StringMatchFlag_CaseInsensitive) && child->first != &md_nil_node)
+                      {
+                        Vec4F32 hsva = {0};
+                        hsva.x = (F32)f64_from_str8(child->first->string);
+                        hsva.y = (F32)f64_from_str8(child->first->next->string);
+                        hsva.z = (F32)f64_from_str8(child->first->next->next->string);
+                        hsva.w = (F32)f64_from_str8(child->first->next->next->next->string);
+                        d_entity_equip_color_hsva(t->entity, hsva);
+                      }
+                      if(str8_match(child->string, str8_lit("color"), StringMatchFlag_CaseInsensitive) && child->first != &md_nil_node)
+                      {
+                        Vec4F32 rgba = rgba_from_hex_string_4f32(child->first->string);
+                        Vec4F32 hsva = hsva_from_rgba(rgba);
+                        d_entity_equip_color_hsva(t->entity, hsva);
+                      }
+                      if(str8_match(child->string, str8_lit("line"), StringMatchFlag_CaseInsensitive) && child->first != &md_nil_node)
+                      {
+                        S64 line = 0;
+                        try_s64_from_str8_c_rules(child->first->string, &line);
+                        TxtPt pt = txt_pt(line, 1);
+                        d_entity_equip_txt_pt(t->entity, pt);
+                      }
+                      if((str8_match(child->string, str8_lit("vaddr"), StringMatchFlag_CaseInsensitive) ||
+                          str8_match(child->string, str8_lit("addr"), StringMatchFlag_CaseInsensitive)) &&
+                         child->first != &md_nil_node)
+                      {
+                        U64 vaddr = 0;
+                        try_u64_from_str8_c_rules(child->first->string, &vaddr);
+                        d_entity_equip_vaddr(t->entity, vaddr);
+                      }
+                      
+                      // rjf: sub-entity -> create new task
+                      D_EntityKind sub_entity_kind = D_EntityKind_Nil;
+                      for(EachEnumVal(D_EntityKind, k2))
+                      {
+                        if(child->flags & MD_NodeFlag_Identifier && child->first != &md_nil_node &&
+                           (str8_match(child->string, d_entity_kind_name_lower_table[k2], StringMatchFlag_CaseInsensitive) ||
+                            (k2 == D_EntityKind_Executable && str8_match(child->string, str8_lit("exe"), StringMatchFlag_CaseInsensitive))))
+                        {
+                          Task *task = push_array(scratch.arena, Task, 1);
+                          task->next = t->next;
+                          task->entity = d_entity_alloc(t->entity, k2);
+                          task->n = child;
+                          t->next = task;
+                          break;
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+          
+          //- rjf: apply exception code filters
+          D_CfgVal *filter_tables = d_cfg_val_from_string(table, str8_lit("exception_code_filters"));
+          for(D_CfgTree *table = filter_tables->first;
+              table != &d_nil_cfg_tree;
+              table = table->next)
+          {
+            for(MD_EachNode(rule, table->root->first))
+            {
+              String8 name = rule->string;
+              String8 val_string = rule->first->string;
+              U64 val = 0;
+              if(try_u64_from_str8_c_rules(val_string, &val))
+              {
+                CTRL_ExceptionCodeKind kind = CTRL_ExceptionCodeKind_Null;
+                for(CTRL_ExceptionCodeKind k = (CTRL_ExceptionCodeKind)(CTRL_ExceptionCodeKind_Null+1);
+                    k < CTRL_ExceptionCodeKind_COUNT;
+                    k = (CTRL_ExceptionCodeKind)(k+1))
+                {
+                  if(str8_match(name, ctrl_exception_code_kind_lowercase_code_string_table[k], 0))
+                  {
+                    kind = k;
+                    break;
+                  }
+                }
+                if(kind != CTRL_ExceptionCodeKind_Null)
+                {
+                  if(val)
+                  {
+                    d_state->ctrl_exception_code_filters[kind/64] |= (1ull<<(kind%64));
+                  }
+                  else
+                  {
+                    d_state->ctrl_exception_code_filters[kind/64] &= ~(1ull<<(kind%64));
+                  }
+                }
+              }
+            }
+          }
           
           //- rjf: eliminate all windows
           for(DF_Window *window = df_state->first_window; window != 0; window = window->next)
@@ -9383,15 +9636,20 @@ df_frame(void)
               break;
             }
           }
-          if(cfg_write_done[src] == 0)
-          {
-            cfg_write_done[src] = 1;
-            String8 path = d_cfg_path_from_src(src);
-            String8List strs = df_cfg_strings_from_gfx(scratch.arena, path, src);
-            String8 data = str8_list_join(scratch.arena, &strs, 0);
-            String8 data_indented = indented_from_string(scratch.arena, data);
-            d_cfg_push_write_string(src, data_indented);
-          }
+          arena_clear(d_state->cfg_write_arenas[src]);
+          MemoryZeroStruct(&d_state->cfg_write_data[src]);
+          String8 path = d_cfg_path_from_src(src);
+          String8List d_strs = d_cfg_strings_from_core(scratch.arena, path, src);
+          String8List df_strs = df_cfg_strings_from_gfx(scratch.arena, path, src);
+          String8 header = push_str8f(scratch.arena, "// raddbg %s file\n\n", d_cfg_src_string_table[src].str);
+          String8List strs = {0};
+          str8_list_push(scratch.arena, &strs, header);
+          str8_list_concat_in_place(&strs, &d_strs);
+          str8_list_concat_in_place(&strs, &df_strs);
+          String8 data = str8_list_join(scratch.arena, &strs, 0);
+          String8 data_indented = indented_from_string(scratch.arena, data);
+          d_state->cfg_write_issued[src] = 1;
+          d_cfg_push_write_string(src, data_indented);
         }break;
         
         //- rjf: code navigation
@@ -11056,6 +11314,160 @@ df_frame(void)
           DF_Window *ws = df_window_from_handle(params->window);
           ws->dev_menu_is_open ^= 1;
         }break;
+      }
+    }
+  }
+  
+  //////////////////////////////
+  //- rjf: gather targets
+  //
+  D_TargetArray targets = {0};
+  {
+    D_EntityList target_entities = d_query_cached_entity_list_with_kind(D_EntityKind_Target);
+    targets.count = target_entities.count;
+    targets.v = push_array(scratch.arena, D_Target, targets.count);
+    U64 idx = 0;
+    for(D_EntityNode *n = target_entities.first; n != 0; n = n->next, idx += 1)
+    {
+      D_Entity *src_target = n->entity;
+      D_Entity *src_target_exe   = d_entity_child_from_kind(src_target, D_EntityKind_Target);
+      D_Entity *src_target_args  = d_entity_child_from_kind(src_target, D_EntityKind_Arguments);
+      D_Entity *src_target_wdir  = d_entity_child_from_kind(src_target, D_EntityKind_WorkingDirectory);
+      D_Entity *src_target_entry = d_entity_child_from_kind(src_target, D_EntityKind_EntryPoint);
+      D_Target *dst_target = &targets.v[idx];
+      dst_target->exe                     = src_target_exe->string;
+      dst_target->args                    = src_target_args->string;
+      dst_target->working_directory       = src_target_wdir->string;
+      dst_target->custom_entry_point_name = src_target_entry->string;
+    }
+  }
+  
+  //////////////////////////////
+  //- rjf: gather breakpoints
+  //
+  D_BreakpointArray breakpoints = {0};
+  {
+    D_EntityList bp_entities = d_query_cached_entity_list_with_kind(D_EntityKind_Breakpoint);
+    breakpoints.count = bp_entities.count;
+    breakpoints.v = push_array(scratch.arena, D_Breakpoint, breakpoints.count);
+    U64 idx = 0;
+    for(D_EntityNode *n = bp_entities.first; n != 0; n = n->next)
+    {
+      D_Entity *src_bp = n->entity;
+      if(src_bp->disabled)
+      {
+        breakpoints.count -= 1;
+        continue;
+      }
+      D_Entity *src_bp_loc = d_entity_child_from_kind(src_bp, D_EntityKind_Location);
+      D_Entity *src_bp_cnd = d_entity_child_from_kind(src_bp, D_EntityKind_Condition);
+      D_Breakpoint *dst_bp = &breakpoints.v[idx];
+      dst_bp->file_path   = src_bp_loc->string;
+      dst_bp->pt          = src_bp_loc->text_point;
+      dst_bp->symbol_name = src_bp_loc->string;
+      dst_bp->vaddr       = src_bp_loc->vaddr;
+      dst_bp->condition   = src_bp_cnd->string;
+      idx += 1;
+    }
+  }
+  
+  //////////////////////////////
+  //- rjf: tick debug engine
+  //
+  // TODO(rjf): hacking around for @msgs
+  D_CmdList more_cmds = d_gather_root_cmds(scratch.arena);
+  if(cmds.first != 0 && more_cmds.first != 0)
+  {
+    cmds.last->next = more_cmds.first;
+    cmds.last = more_cmds.last;
+    cmds.count += more_cmds.count;
+  }
+  else if(more_cmds.first != 0)
+  {
+    MemoryCopyStruct(&cmds, &more_cmds);
+  }
+  d_tick(scratch.arena, &targets, &breakpoints, di_scope, &cmds, dt);
+  
+  //////////////////////////////
+  //- rjf: apply new rich hover info
+  //
+  arena_clear(df_state->rich_hover_info_current_arena);
+  MemoryCopyStruct(&df_state->rich_hover_info_current, &df_state->rich_hover_info_next);
+  df_state->rich_hover_info_current.dbgi_key = di_key_copy(df_state->rich_hover_info_current_arena, &df_state->rich_hover_info_current.dbgi_key);
+  arena_clear(df_state->rich_hover_info_next_arena);
+  MemoryZeroStruct(&df_state->rich_hover_info_next);
+  
+  //////////////////////////////
+  //- rjf: animate confirmation
+  //
+  {
+    F32 rate = df_setting_val_from_code(DF_SettingCode_MenuAnimations).s32 ? 1 - pow_f32(2, (-10.f * d_dt())) : 1.f;
+    B32 confirm_open = df_state->confirm_active;
+    df_state->confirm_t += rate * ((F32)!!confirm_open-df_state->confirm_t);
+    if(abs_f32(df_state->confirm_t - (F32)!!confirm_open) > 0.005f)
+    {
+      df_request_frame();
+    }
+  }
+  
+  //////////////////////////////
+  //- rjf: animate theme
+  //
+  {
+    DF_Theme *current = &df_state->cfg_theme;
+    DF_Theme *target = &df_state->cfg_theme_target;
+    F32 rate = 1 - pow_f32(2, (-50.f * d_dt()));
+    for(DF_ThemeColor color = DF_ThemeColor_Null;
+        color < DF_ThemeColor_COUNT;
+        color = (DF_ThemeColor)(color+1))
+    {
+      if(abs_f32(target->colors[color].x - current->colors[color].x) > 0.01f ||
+         abs_f32(target->colors[color].y - current->colors[color].y) > 0.01f ||
+         abs_f32(target->colors[color].z - current->colors[color].z) > 0.01f ||
+         abs_f32(target->colors[color].w - current->colors[color].w) > 0.01f)
+      {
+        df_request_frame();
+      }
+      current->colors[color].x += (target->colors[color].x - current->colors[color].x) * rate;
+      current->colors[color].y += (target->colors[color].y - current->colors[color].y) * rate;
+      current->colors[color].z += (target->colors[color].z - current->colors[color].z) * rate;
+      current->colors[color].w += (target->colors[color].w - current->colors[color].w) * rate;
+    }
+  }
+  
+  //////////////////////////////
+  //- rjf: animate alive-transitions for entities
+  //
+  {
+    F32 rate = 1.f - pow_f32(2.f, -20.f*d_dt());
+    for(D_Entity *e = d_entity_root(); !d_entity_is_nil(e); e = d_entity_rec_depth_first_pre(e, d_entity_root()).next)
+    {
+      F32 diff = (1.f - e->alive_t);
+      e->alive_t += diff * rate;
+      if(diff >= 0.01f)
+      {
+        df_request_frame();
+      }
+    }
+  }
+  
+  //////////////////////////////
+  //- rjf: capture is active? -> keep rendering
+  //
+  if(ProfIsCapturing() || DEV_telemetry_capture)
+  {
+    df_request_frame();
+  }
+  
+  //////////////////////////////
+  //- rjf: commit params changes for all views
+  //
+  {
+    for(DF_View *v = df_state->first_view; !df_view_is_nil(v); v = v->alloc_next)
+    {
+      if(v->params_write_gen == v->params_read_gen+1)
+      {
+        v->params_read_gen += 1;
       }
     }
   }
