@@ -6179,34 +6179,6 @@ d_errorf(char *fmt, ...)
 }
 
 ////////////////////////////////
-//~ rjf: Message Functions
-
-internal D_MsgKind
-d_msg_kind_from_string(String8 string)
-{
-  D_MsgKind result = D_MsgKind_Null;
-  for(EachNonZeroEnumVal(D_MsgKind, k))
-  {
-    if(str8_match(string, d_msg_kind_name_lower_table[k], 0))
-    {
-      result = k;
-      break;
-    }
-  }
-  return result;
-}
-
-internal void
-d_msg_(D_MsgKind kind, D_Regs *regs)
-{
-  D_MsgNode *n = push_array(d_state->msgs_arena, D_MsgNode, 1);
-  SLLQueuePush(d_state->msgs.first, d_state->msgs.last, n);
-  d_state->msgs.count += 1;
-  n->v.kind = kind;
-  n->v.regs = d_regs_copy(d_state->msgs_arena, regs);
-}
-
-////////////////////////////////
 //~ rjf: Main Layer Top-Level Calls
 
 internal void
@@ -6236,7 +6208,6 @@ d_init(CmdLine *cmdln, D_StateDeltaHistory *hist)
   d_state->seconds_til_autosave = 0.5f;
   d_state->hist = hist;
   d_state->top_regs = &d_state->base_regs;
-  d_state->msgs_arena = arena_alloc();
   
   // rjf: set up initial exception filtering rules
   for(CTRL_ExceptionCodeKind k = (CTRL_ExceptionCodeKind)0; k < CTRL_ExceptionCodeKind_COUNT; k = (CTRL_ExceptionCodeKind)(k+1))
@@ -6356,7 +6327,7 @@ d_gather_root_cmds(Arena *arena)
 }
 
 internal void
-d_tick(Arena *arena, DI_Scope *di_scope, D_CmdList *cmds, F32 dt)
+d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_Scope *di_scope, D_CmdList *cmds, F32 dt)
 {
   ProfBeginFunction();
   d_state->frame_index += 1;
@@ -6873,899 +6844,6 @@ d_tick(Arena *arena, DI_Scope *di_scope, D_CmdList *cmds, F32 dt)
   }
   
   //////////////////////////////
-  //- rjf: process messages
-  //
-  ProfScope("process messages")
-  {
-    Temp scratch = scratch_begin(&arena, 1);
-    for(D_MsgNode *n = d_state->msgs.first; n != 0; n = n->next)
-    {
-      temp_end(scratch);
-      D_Msg *msg = &n->v;
-      D_Regs *regs = msg->regs;
-      D_RegsScope
-      {
-        d_regs_copy_contents(scratch.arena, d_regs(), regs);
-        switch(msg->kind)
-        {
-          default:{}break;
-          
-          //- rjf: [low level target operations] target launching
-          case D_MsgKind_LaunchAndRun:
-          case D_MsgKind_LaunchAndStepInto:
-          {
-            // rjf: get list of targets to launch
-            D_EntityList targets = d_entity_list_from_handle_list(scratch.arena, regs->entity_list);
-            
-            // rjf: no targets => assume all active targets
-            if(targets.count == 0)
-            {
-              targets = d_push_active_target_list(scratch.arena);
-            }
-            
-            // rjf: launch
-            if(targets.count != 0)
-            {
-              for(D_EntityNode *n = targets.first; n != 0; n = n->next)
-              {
-                // rjf: extract data from target
-                D_Entity *target = n->entity;
-                String8 name = d_entity_child_from_kind(target, D_EntityKind_Executable)->string;
-                String8 args = d_entity_child_from_kind(target, D_EntityKind_Arguments)->string;
-                String8 path = d_entity_child_from_kind(target, D_EntityKind_WorkingDirectory)->string;
-                String8 entry= d_entity_child_from_kind(target, D_EntityKind_EntryPoint)->string;
-                name  = str8_skip_chop_whitespace(name);
-                args  = str8_skip_chop_whitespace(args);
-                path  = str8_skip_chop_whitespace(path);
-                entry = str8_skip_chop_whitespace(entry);
-                if(path.size == 0)
-                {
-                  path = os_get_current_path(scratch.arena);
-                }
-                
-                // rjf: build launch options
-                String8List cmdln_strings = {0};
-                {
-                  str8_list_push(scratch.arena, &cmdln_strings, name);
-                  {
-                    U64 start_split_idx = 0;
-                    B32 quoted = 0;
-                    for(U64 idx = 0; idx <= args.size; idx += 1)
-                    {
-                      U8 byte = idx < args.size ? args.str[idx] : 0;
-                      if(byte == '"')
-                      {
-                        quoted ^= 1;
-                      }
-                      B32 splitter_found = (!quoted && (byte == 0 || char_is_space(byte)));
-                      if(splitter_found)
-                      {
-                        String8 string = str8_substr(args, r1u64(start_split_idx, idx));
-                        if(string.size > 0)
-                        {
-                          str8_list_push(scratch.arena, &cmdln_strings, string);
-                        }
-                        start_split_idx = idx+1;
-                      }
-                    }
-                  }
-                }
-                
-                // rjf: push message to launch
-                {
-                  CTRL_Msg msg = {CTRL_MsgKind_Launch};
-                  msg.path = path;
-                  msg.cmd_line_string_list = cmdln_strings;
-                  msg.env_inherit = 1;
-                  MemoryCopyArray(msg.exception_code_filters, d_state->ctrl_exception_code_filters);
-                  str8_list_push(scratch.arena, &msg.entry_points, entry);
-                  d_push_ctrl_msg(&msg);
-                }
-              }
-              
-              // rjf: run
-              d_ctrl_run(D_RunKind_Run, &d_nil_entity, CTRL_RunFlag_StopOnEntryPoint * (msg->kind == D_MsgKind_LaunchAndStepInto), 0);
-            }
-            
-            // rjf: no targets -> error
-            if(targets.count == 0)
-            {
-              log_user_errorf("No active targets exist; cannot launch.");
-            }
-          }break;
-          
-          //- rjf: [low level target operations] killing
-          case D_MsgKind_Kill:
-          {
-            D_EntityList processes = d_entity_list_from_handle_list(scratch.arena, regs->entity_list);
-            
-            // rjf: no processes => kill everything
-            if(processes.count == 0)
-            {
-              processes = d_query_cached_entity_list_with_kind(D_EntityKind_Process);
-            }
-            
-            // rjf: kill processes
-            if(processes.count != 0)
-            {
-              for(D_EntityNode *n = processes.first; n != 0; n = n->next)
-              {
-                D_Entity *process = n->entity;
-                CTRL_Msg msg = {CTRL_MsgKind_Kill};
-                {
-                  msg.exit_code = 1;
-                  msg.machine_id = process->ctrl_machine_id;
-                  msg.entity = process->ctrl_handle;
-                  MemoryCopyArray(msg.exception_code_filters, d_state->ctrl_exception_code_filters);
-                }
-                d_push_ctrl_msg(&msg);
-              }
-            }
-            
-            // rjf: no processes -> error
-            if(processes.count == 0)
-            {
-              log_user_errorf("No attached running processes exist; cannot kill.");
-            }
-          }break;
-          case D_MsgKind_KillAll:
-          {
-            d_msg(D_MsgKind_Kill);
-          }break;
-          
-          //- rjf: [low level target operations] attaching / detaching
-          case D_MsgKind_Attach:
-          {
-            U32 pid = regs->pid;
-            if(pid != 0)
-            {
-              CTRL_Msg msg = {CTRL_MsgKind_Attach};
-              msg.entity_id = pid;
-              MemoryCopyArray(msg.exception_code_filters, d_state->ctrl_exception_code_filters);
-              d_push_ctrl_msg(&msg);
-            }
-          }break;
-          case D_MsgKind_Detach:
-          {
-            for(D_HandleNode *n = regs->entity_list.first; n != 0; n = n->next)
-            {
-              D_Entity *entity = d_entity_from_handle(n->handle);
-              if(entity->kind == D_EntityKind_Process)
-              {
-                CTRL_Msg msg = {CTRL_MsgKind_Detach};
-                msg.machine_id = entity->ctrl_machine_id;
-                msg.entity = entity->ctrl_handle;
-                MemoryCopyArray(msg.exception_code_filters, d_state->ctrl_exception_code_filters);
-                d_push_ctrl_msg(&msg);
-              }
-            }
-          }break;
-          
-          //- rjf: [low level target operations] continuing from halted state
-          case D_MsgKind_Continue:
-          {
-            B32 good_to_run = 0;
-            D_EntityList machines = d_query_cached_entity_list_with_kind(D_EntityKind_Machine);
-            for(D_EntityNode *n = machines.first; n != 0; n = n->next)
-            {
-              D_Entity *machine = n->entity;
-              if(!d_entity_is_frozen(machine))
-              {
-                good_to_run = 1;
-                break;
-              }
-            }
-            if(good_to_run)
-            {
-              d_ctrl_run(D_RunKind_Run, &d_nil_entity, 0, 0);
-            }
-            else
-            {
-              log_user_errorf("Cannot run with all threads frozen.");
-            }
-          }break;
-          
-          //- rjf: [low level target operations] stepping
-          case D_MsgKind_StepIntoInst:
-          case D_MsgKind_StepOverInst:
-          case D_MsgKind_StepIntoLine:
-          case D_MsgKind_StepOverLine:
-          case D_MsgKind_StepOut:
-          {
-            D_Entity *thread = d_entity_from_handle(regs->thread);
-            if(d_ctrl_targets_running())
-            {
-              if(d_ctrl_last_run_kind() == D_RunKind_Run)
-              {
-                log_user_errorf("Must halt before stepping.");
-              }
-            }
-            else if(d_entity_is_frozen(thread))
-            {
-              log_user_errorf("Must thaw selected thread before stepping.");
-            }
-            else
-            {
-              B32 good = 1;
-              CTRL_TrapList traps = {0};
-              switch(msg->kind)
-              {
-                default:{}break;
-                case D_MsgKind_StepIntoInst: {}break;
-                case D_MsgKind_StepOverInst: {traps = d_trap_net_from_thread__step_over_inst(scratch.arena, thread);}break;
-                case D_MsgKind_StepIntoLine: {traps = d_trap_net_from_thread__step_into_line(scratch.arena, thread);}break;
-                case D_MsgKind_StepOverLine: {traps = d_trap_net_from_thread__step_over_line(scratch.arena, thread);}break;
-                case D_MsgKind_StepOut:
-                {
-                  // rjf: thread => full unwind
-                  CTRL_Unwind unwind = ctrl_unwind_from_thread(scratch.arena, d_state->ctrl_entity_store, thread->ctrl_machine_id, thread->ctrl_handle, os_now_microseconds()+10000);
-                  
-                  // rjf: use first unwind frame to generate trap
-                  if(unwind.flags == 0 && unwind.frames.count > 1)
-                  {
-                    U64 vaddr = regs_rip_from_arch_block(thread->arch, unwind.frames.v[1].regs);
-                    CTRL_Trap trap = {CTRL_TrapFlag_EndStepping|CTRL_TrapFlag_IgnoreStackPointerCheck, vaddr};
-                    ctrl_trap_list_push(scratch.arena, &traps, &trap);
-                  }
-                  else
-                  {
-                    log_user_errorf("Could not find the return address of the current callstack frame successfully.");
-                    good = 0;
-                  }
-                }break;
-              }
-              if(good && traps.count != 0)
-              {
-                d_ctrl_run(D_RunKind_Step, thread, 0, &traps);
-              }
-              if(good && traps.count == 0)
-              {
-                d_ctrl_run(D_RunKind_SingleStep, thread, 0, &traps);
-              }
-            }
-          }break;
-          
-          //- rjf: [low level target operations] halting
-          case D_MsgKind_Halt:
-          {
-            if(d_ctrl_targets_running())
-            {
-              ctrl_halt();
-            }
-          }break;
-          case D_MsgKind_SoftHaltRefresh:
-          {
-            if(d_ctrl_targets_running())
-            {
-              d_ctrl_run(d_state->ctrl_last_run_kind, d_entity_from_handle(d_state->ctrl_last_run_thread), d_state->ctrl_last_run_flags, &d_state->ctrl_last_run_traps);
-            }
-          }break;
-          
-          //- rjf: [low level target operations] setting thread rip
-          case D_MsgKind_SetThreadIP:
-          {
-            D_Entity *thread = d_entity_from_handle(regs->thread);
-            U64 vaddr = regs->vaddr_range.min;
-            void *block = ctrl_query_cached_reg_block_from_thread(scratch.arena, d_state->ctrl_entity_store, thread->ctrl_machine_id, thread->ctrl_handle);
-            regs_arch_block_write_rip(thread->arch, block, vaddr);
-            B32 result = ctrl_thread_write_reg_block(thread->ctrl_machine_id, thread->ctrl_handle, block);
-            
-            // rjf: early mutation of unwind cache for immediate frontend effect
-            if(result)
-            {
-              D_UnwindCache *cache = &d_state->unwind_cache;
-              if(cache->slots_count != 0)
-              {
-                D_Handle thread_handle = d_handle_from_entity(thread);
-                U64 hash = d_hash_from_string(str8_struct(&thread_handle));
-                U64 slot_idx = hash%cache->slots_count;
-                D_UnwindCacheSlot *slot = &cache->slots[slot_idx];
-                for(D_UnwindCacheNode *n = slot->first; n != 0; n = n->next)
-                {
-                  if(d_handle_match(n->thread, thread_handle) && n->unwind.frames.count != 0)
-                  {
-                    regs_arch_block_write_rip(thread->arch, n->unwind.frames.v[0].regs, vaddr);
-                    break;
-                  }
-                }
-              }
-            }
-          }break;
-          
-          //- rjf: high level target operations [running]
-          case D_MsgKind_RunToLine:
-          {
-            String8 file_path = regs->file_path;
-            TxtPt pt = regs->cursor;
-            D_Entity *bp = d_entity_alloc(d_entity_root(), D_EntityKind_Breakpoint);
-            d_entity_equip_cfg_src(bp, D_CfgSrc_Transient);
-            bp->flags |= D_EntityFlag_DiesOnRunStop;
-            D_Entity *loc = d_entity_alloc(bp, D_EntityKind_Location);
-            d_entity_equip_name(loc, file_path);
-            d_entity_equip_txt_pt(loc, pt);
-            d_msg(D_MsgKind_Run);
-          }break;
-          case D_MsgKind_RunToAddress:
-          {
-            D_Entity *bp = d_entity_alloc(d_entity_root(), D_EntityKind_Breakpoint);
-            d_entity_equip_cfg_src(bp, D_CfgSrc_Transient);
-            bp->flags |= D_EntityFlag_DiesOnRunStop;
-            D_Entity *loc = d_entity_alloc(bp, D_EntityKind_Location);
-            d_entity_equip_vaddr(loc, regs->vaddr_range.min);
-            d_msg(D_MsgKind_Run);
-          }break;
-          case D_MsgKind_Run:
-          {
-            D_EntityList processes = d_query_cached_entity_list_with_kind(D_EntityKind_Process);
-            if(processes.count != 0)
-            {
-              d_msg(D_MsgKind_Continue);
-            }
-            else if(!d_ctrl_targets_running())
-            {
-              d_msg(D_MsgKind_LaunchAndRun);
-            }
-          }break;
-          case D_MsgKind_Restart:
-          {
-            // rjf: kill all
-            {
-              d_msg(D_MsgKind_KillAll);
-            }
-            
-            // rjf: gather targets corresponding to all launched processes
-            D_EntityList targets = {0};
-            {
-              D_EntityList processes = d_query_cached_entity_list_with_kind(D_EntityKind_Process);
-              for(D_EntityNode *n = processes.first; n != 0; n = n->next)
-              {
-                D_Entity *process = n->entity;
-                D_Entity *target = d_entity_from_handle(process->entity_handle);
-                if(!d_entity_is_nil(target))
-                {
-                  d_entity_list_push(scratch.arena, &targets, target);
-                }
-              }
-            }
-            
-            // rjf: re-launch targets
-            {
-              d_msg(D_MsgKind_LaunchAndRun, .entity_list = d_handle_list_from_entity_list(scratch.arena, targets));
-            }
-          }break;
-          
-          //- rjf: high level target operations [stepping]
-          case D_MsgKind_StepInto:
-          case D_MsgKind_StepOver:
-          {
-            D_EntityList processes = d_query_cached_entity_list_with_kind(D_EntityKind_Process);
-            if(processes.count != 0)
-            {
-              D_MsgKind step_msg_kind = (msg->kind == D_MsgKind_StepInto
-                                         ? D_MsgKind_StepIntoLine
-                                         : D_MsgKind_StepOverLine);
-              if(regs->prefer_disasm)
-              {
-                step_msg_kind = (msg->kind == D_MsgKind_StepInto
-                                 ? D_MsgKind_StepIntoInst
-                                 : D_MsgKind_StepOverInst);
-              }
-              d_msg(step_msg_kind);
-            }
-            else if(!d_ctrl_targets_running())
-            {
-              D_EntityList targets = d_push_active_target_list(scratch.arena);
-              d_msg(D_MsgKind_LaunchAndStepInto, .entity_list = d_handle_list_from_entity_list(scratch.arena, targets));
-            }
-          }break;
-          
-          //- rjf: thread / frame selection
-          case D_MsgKind_SelectThread:
-          {
-            D_Entity *thread = d_entity_from_handle(regs->thread);
-            D_Entity *module = d_module_from_thread(thread);
-            D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
-            d_state->base_regs.v.unwind_count = 0;
-            d_state->base_regs.v.inline_depth = 0;
-            d_state->base_regs.v.thread = d_handle_from_entity(thread);
-            d_state->base_regs.v.module = d_handle_from_entity(module);
-            d_state->base_regs.v.process = d_handle_from_entity(process);
-          }break;
-          case D_MsgKind_SelectUnwind:
-          {
-            DI_Scope *di_scope = di_scope_open();
-            D_Entity *thread = d_entity_from_handle(d_state->base_regs.v.thread);
-            D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
-            CTRL_Unwind base_unwind = d_query_cached_unwind_from_thread(thread);
-            D_Unwind rich_unwind = d_unwind_from_ctrl_unwind(scratch.arena, di_scope, process, &base_unwind);
-            if(regs->unwind_count < rich_unwind.frames.concrete_frame_count)
-            {
-              D_UnwindFrame *frame = &rich_unwind.frames.v[regs->unwind_count];
-              d_state->base_regs.v.unwind_count = regs->unwind_count;
-              d_state->base_regs.v.inline_depth = 0;
-              if(regs->inline_depth <= frame->inline_frame_count)
-              {
-                d_state->base_regs.v.inline_depth = regs->inline_depth;
-              }
-            }
-            di_scope_close(di_scope);
-          }break;
-          case D_MsgKind_UpOneFrame:
-          case D_MsgKind_DownOneFrame:
-          {
-            DI_Scope *di_scope = di_scope_open();
-            D_Entity *thread = d_entity_from_handle(d_state->base_regs.v.thread);
-            D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
-            CTRL_Unwind base_unwind = d_query_cached_unwind_from_thread(thread);
-            D_Unwind rich_unwind = d_unwind_from_ctrl_unwind(scratch.arena, di_scope, process, &base_unwind);
-            U64 crnt_unwind_idx = d_state->base_regs.v.unwind_count;
-            U64 crnt_inline_dpt = d_state->base_regs.v.inline_depth;
-            U64 next_unwind_idx = crnt_unwind_idx;
-            U64 next_inline_dpt = crnt_inline_dpt;
-            if(crnt_unwind_idx < rich_unwind.frames.concrete_frame_count)
-            {
-              D_UnwindFrame *f = &rich_unwind.frames.v[crnt_unwind_idx];
-              switch(msg->kind)
-              {
-                default:{}break;
-                case D_MsgKind_UpOneFrame:
-                {
-                  if(crnt_inline_dpt < f->inline_frame_count)
-                  {
-                    next_inline_dpt += 1;
-                  }
-                  else if(crnt_unwind_idx > 0)
-                  {
-                    next_unwind_idx -= 1;
-                    next_inline_dpt = 0;
-                  }
-                }break;
-                case D_MsgKind_DownOneFrame:
-                {
-                  if(crnt_inline_dpt > 0)
-                  {
-                    next_inline_dpt -= 1;
-                  }
-                  else if(crnt_unwind_idx < rich_unwind.frames.concrete_frame_count)
-                  {
-                    next_unwind_idx += 1;
-                    next_inline_dpt = (f+1)->inline_frame_count;
-                  }
-                }break;
-              }
-            }
-            d_msg(D_MsgKind_SelectUnwind,
-                  .unwind_count = next_unwind_idx,
-                  .inline_depth = next_inline_dpt);
-            di_scope_close(di_scope);
-          }break;
-          
-          //- rjf: thread freezing/thawing
-          case D_MsgKind_FreezeThread:      {d_msg(D_MsgKind_FreezeEntity, .entity = regs->thread);}break;
-          case D_MsgKind_ThawThread:        {d_msg(D_MsgKind_ThawEntity,   .entity = regs->thread);}break;
-          case D_MsgKind_FreezeProcess:     {d_msg(D_MsgKind_FreezeEntity, .entity = regs->process);}break;
-          case D_MsgKind_ThawProcess:       {d_msg(D_MsgKind_ThawEntity,   .entity = regs->process);}break;
-          case D_MsgKind_FreezeMachine:     {d_msg(D_MsgKind_FreezeEntity, .entity = regs->machine);}break;
-          case D_MsgKind_ThawMachine:       {d_msg(D_MsgKind_ThawEntity,   .entity = regs->machine);}break;
-          case D_MsgKind_FreezeLocalMachine:
-          {
-            D_Entity *machine = d_machine_entity_from_machine_id(CTRL_MachineID_Local);
-            d_msg(D_MsgKind_FreezeEntity, .entity = d_handle_from_entity(machine));
-          }break;
-          case D_MsgKind_ThawLocalMachine:
-          {
-            D_Entity *machine = d_machine_entity_from_machine_id(CTRL_MachineID_Local);
-            d_msg(D_MsgKind_ThawEntity, .entity = d_handle_from_entity(machine));
-          }break;
-          
-          //- rjf: path overrides (TODO(rjf))
-          case D_MsgKind_SetPathMapSrc:{}break;
-          case D_MsgKind_SetPathMapDst:{}break;
-          case D_MsgKind_SetFileReplacementPath:{}break;
-          
-          //- rjf: auto view rules (TODO(rjf))
-          case D_MsgKind_SetAutoViewRuleType:{}break;
-          case D_MsgKind_SetAutoViewRuleViewRule:{}break;
-          
-          //- rjf: general entity operations
-          case D_MsgKind_EnableEntity:
-          case D_MsgKind_EnableBreakpoint:
-          case D_MsgKind_EnableTarget:
-          {
-            D_Entity *entity = d_entity_from_handle(regs->entity);
-            d_entity_equip_disabled(entity, 0);
-          }break;
-          case D_MsgKind_DisableEntity:
-          case D_MsgKind_DisableBreakpoint:
-          case D_MsgKind_DisableTarget:
-          {
-            D_Entity *entity = d_entity_from_handle(regs->entity);
-            d_entity_equip_disabled(entity, 1);
-          }break;
-          case D_MsgKind_FreezeEntity:
-          case D_MsgKind_ThawEntity:
-          {
-            B32 should_freeze = (msg->kind == D_MsgKind_FreezeEntity);
-            D_Entity *root = d_entity_from_handle(regs->entity);
-            for(D_Entity *e = root;
-                !d_entity_is_nil(e);
-                e = d_entity_rec_depth_first_pre(e, root).next)
-            {
-              if(e->kind == D_EntityKind_Thread)
-              {
-                d_set_thread_freeze_state(e, should_freeze);
-              }
-            }
-          }break;
-          case D_MsgKind_RemoveEntity:
-          case D_MsgKind_RemoveBreakpoint:
-          case D_MsgKind_RemoveTarget:
-          {
-            D_Entity *entity = d_entity_from_handle(regs->entity);
-            D_EntityKindFlags kind_flags = d_entity_kind_flags_table[entity->kind];
-            if(kind_flags & D_EntityKindFlag_CanDelete)
-            {
-              d_entity_mark_for_deletion(entity);
-            }
-          }break;
-          case D_MsgKind_NameEntity:
-          {
-            D_Entity *entity = d_entity_from_handle(regs->entity);
-            String8 string = regs->string;
-            d_entity_equip_name(entity, string);
-          }break;
-          case D_MsgKind_DuplicateEntity:
-          {
-            D_Entity *src = d_entity_from_handle(regs->entity);
-            if(!d_entity_is_nil(src))
-            {
-              typedef struct Task Task;
-              struct Task
-              {
-                Task *next;
-                D_Entity *src_n;
-                D_Entity *dst_parent;
-              };
-              Task starter_task = {0, src, src->parent};
-              Task *first_task = &starter_task;
-              Task *last_task = &starter_task;
-              for(Task *task = first_task; task != 0; task = task->next)
-              {
-                D_Entity *src_n = task->src_n;
-                D_Entity *dst_n = d_entity_alloc(task->dst_parent, task->src_n->kind);
-                if(src_n->flags & D_EntityFlag_HasTextPoint)    {d_entity_equip_txt_pt(dst_n, src_n->text_point);}
-                if(src_n->flags & D_EntityFlag_HasU64)          {d_entity_equip_u64(dst_n, src_n->u64);}
-                if(src_n->flags & D_EntityFlag_HasColor)        {d_entity_equip_color_hsva(dst_n, d_hsva_from_entity(src_n));}
-                if(src_n->flags & D_EntityFlag_HasVAddrRng)     {d_entity_equip_vaddr_rng(dst_n, src_n->vaddr_rng);}
-                if(src_n->flags & D_EntityFlag_HasVAddr)        {d_entity_equip_vaddr(dst_n, src_n->vaddr);}
-                if(src_n->disabled)                             {d_entity_equip_disabled(dst_n, 1);}
-                if(src_n->string.size != 0)                     {d_entity_equip_name(dst_n, src_n->string);}
-                dst_n->cfg_src = src_n->cfg_src;
-                for(D_Entity *src_child = task->src_n->first; !d_entity_is_nil(src_child); src_child = src_child->next)
-                {
-                  Task *child_task = push_array(scratch.arena, Task, 1);
-                  child_task->src_n = src_child;
-                  child_task->dst_parent = dst_n;
-                  SLLQueuePush(first_task, last_task, child_task);
-                }
-              }
-            }
-          }break;
-          case D_MsgKind_RelocateEntity:
-          {
-            D_Entity *entity = d_entity_from_handle(regs->entity);
-            D_Entity *location = d_entity_child_from_kind(entity, D_EntityKind_Location);
-            if(d_entity_is_nil(location))
-            {
-              location = d_entity_alloc(entity, D_EntityKind_Location);
-            }
-            location->flags &= ~D_EntityFlag_HasTextPoint;
-            location->flags &= ~D_EntityFlag_HasVAddr;
-            if(regs->cursor.line != 0)
-            {
-              d_entity_equip_txt_pt(location, regs->cursor);
-            }
-            if(regs->vaddr_range.min != 0)
-            {
-              d_entity_equip_vaddr(location, regs->vaddr_range.min);
-            }
-            if(regs->file_path.size != 0)
-            {
-              d_entity_equip_name(location, regs->file_path);
-            }
-          }break;
-          
-          //- rjf: breakpoints
-          case D_MsgKind_AddBreakpoint:
-          case D_MsgKind_ToggleBreakpoint:
-          {
-            String8 file_path = regs->file_path;
-            TxtPt pt = regs->cursor;
-            String8 string = regs->string;
-            U64 vaddr = regs->vaddr_range.min;
-            B32 removed_already_existing = 0;
-            if(msg->kind == D_MsgKind_ToggleBreakpoint)
-            {
-              D_EntityList bps = d_query_cached_entity_list_with_kind(D_EntityKind_Breakpoint);
-              for(D_EntityNode *n = bps.first; n != 0; n = n->next)
-              {
-                D_Entity *bp = n->entity;
-                D_Entity *loc = d_entity_child_from_kind(bp, D_EntityKind_Location);
-                if((loc->flags & D_EntityFlag_HasTextPoint && path_match_normalized(loc->string, file_path) && loc->text_point.line == pt.line) ||
-                   (loc->flags & D_EntityFlag_HasVAddr && loc->vaddr == vaddr) ||
-                   (!(loc->flags & D_EntityFlag_HasTextPoint) && str8_match(loc->string, string, 0)))
-                {
-                  d_entity_mark_for_deletion(bp);
-                  removed_already_existing = 1;
-                  break;
-                }
-              }
-            }
-            if(!removed_already_existing)
-            {
-              D_Entity *bp = d_entity_alloc(d_entity_root(), D_EntityKind_Breakpoint);
-              d_entity_equip_cfg_src(bp, D_CfgSrc_Project);
-              D_Entity *loc = d_entity_alloc(bp, D_EntityKind_Location);
-              if(file_path.size != 0 && pt.line != 0)
-              {
-                d_entity_equip_name(loc, file_path);
-                d_entity_equip_txt_pt(loc, pt);
-              }
-              else if(string.size != 0)
-              {
-                d_entity_equip_name(loc, string);
-              }
-              else if(vaddr != 0)
-              {
-                d_entity_equip_vaddr(loc, vaddr);
-              }
-            }
-          }break;
-          case D_MsgKind_AddAddressBreakpoint:
-          case D_MsgKind_AddFunctionBreakpoint:
-          {
-            d_msg(D_MsgKind_AddBreakpoint);
-          }break;
-          
-          //- rjf: watch pins
-          case D_MsgKind_AddWatchPin:
-          case D_MsgKind_ToggleWatchPin:
-          {
-            String8 file_path = regs->file_path;
-            TxtPt pt = regs->cursor;
-            String8 string = regs->string;
-            U64 vaddr = regs->vaddr_range.min;
-            B32 removed_already_existing = 0;
-            if(msg->kind == D_MsgKind_ToggleWatchPin)
-            {
-              D_EntityList wps = d_query_cached_entity_list_with_kind(D_EntityKind_WatchPin);
-              for(D_EntityNode *n = wps.first; n != 0; n = n->next)
-              {
-                D_Entity *wp = n->entity;
-                D_Entity *loc = d_entity_child_from_kind(wp, D_EntityKind_Location);
-                if((loc->flags & D_EntityFlag_HasTextPoint && path_match_normalized(loc->string, file_path) && loc->text_point.line == pt.line) ||
-                   (loc->flags & D_EntityFlag_HasVAddr && loc->vaddr == vaddr) ||
-                   (!(loc->flags & D_EntityFlag_HasTextPoint) && str8_match(loc->string, string, 0)))
-                {
-                  d_entity_mark_for_deletion(wp);
-                  removed_already_existing = 1;
-                  break;
-                }
-              }
-            }
-            if(!removed_already_existing)
-            {
-              D_Entity *wp = d_entity_alloc(d_entity_root(), D_EntityKind_WatchPin);
-              d_entity_equip_name(wp, string);
-              d_entity_equip_cfg_src(wp, D_CfgSrc_Project);
-              D_Entity *loc = d_entity_alloc(wp, D_EntityKind_Location);
-              if(file_path.size != 0 && pt.line != 0)
-              {
-                d_entity_equip_name(loc, file_path);
-                d_entity_equip_txt_pt(loc, pt);
-              }
-              else if(vaddr != 0)
-              {
-                d_entity_equip_vaddr(loc, vaddr);
-              }
-            }
-          }break;
-          
-          //- rjf: watch expressions
-          case D_MsgKind_ToggleWatchExpression:
-          if(regs->string.size != 0)
-          {
-            D_Entity *existing_watch = d_entity_from_name_and_kind(regs->string, D_EntityKind_Watch);
-            if(d_entity_is_nil(existing_watch))
-            {
-              D_Entity *watch = &d_nil_entity;
-              D_StateDeltaHistoryBatch(d_state_delta_history())
-              {
-                watch = d_entity_alloc(d_entity_root(), D_EntityKind_Watch);
-              }
-              d_entity_equip_cfg_src(watch, D_CfgSrc_Project);
-              d_entity_equip_name(watch, regs->string);
-            }
-            else
-            {
-              d_entity_mark_for_deletion(existing_watch);
-            }
-          }break;
-          
-          //- rjf: at-cursor operations
-          case D_MsgKind_ToggleBreakpointAtCursor:{d_msg(D_MsgKind_ToggleBreakpoint);}break;
-          case D_MsgKind_ToggleWatchPinAtCursor:{d_msg(D_MsgKind_ToggleWatchPin);}break;
-          case D_MsgKind_GoToNameAtCursor:
-          case D_MsgKind_ToggleWatchExpressionAtCursor:
-          {
-            // rjf: get expr
-            String8 expr = {0};
-            {
-              HS_Scope *hs_scope = hs_scope_open();
-              TXT_Scope *txt_scope = txt_scope_open();
-              U128 text_key = regs->text_key;
-              TXT_LangKind lang_kind = regs->lang_kind;
-              TxtRng range = txt_rng(regs->cursor, regs->mark);
-              U128 hash = {0};
-              TXT_TextInfo info = txt_text_info_from_key_lang(txt_scope, text_key, lang_kind, &hash);
-              String8 data = hs_data_from_hash(hs_scope, hash);
-              Rng1U64 expr_off_range = {0};
-              if(range.min.column != range.max.column)
-              {
-                expr_off_range = r1u64(txt_off_from_info_pt(&info, range.min), txt_off_from_info_pt(&info, range.max));
-              }
-              else
-              {
-                expr_off_range = txt_expr_off_range_from_info_data_pt(&info, data, range.min);
-              }
-              expr = push_str8_copy(scratch.arena, str8_substr(data, expr_off_range));
-              txt_scope_close(txt_scope);
-              hs_scope_close(hs_scope);
-            }
-            
-            // rjf: push command for this expr
-            // TODO(rjf): @msgs
-            // d_msg(msg->kind == D_MsgKind_GoToNameAtCursor ? D_MsgKind_GoToName :
-            // msg->kind == D_MsgKind_ToggleWatchExpressionAtCursor ? D_MsgKind_ToggleWatchExpression :
-            // D_MsgKind_GoToName, .string = expr);
-          }break;
-          {}break;
-          case D_MsgKind_RunToCursor:
-          {
-            String8 file_path = regs->file_path;
-            if(file_path.size != 0)
-            {
-              d_msg(D_MsgKind_RunToLine);
-            }
-            else
-            {
-              d_msg(D_MsgKind_RunToAddress);
-            }
-          }break;
-          case D_MsgKind_SetNextStatement:
-          {
-            D_Entity *thread = d_entity_from_handle(regs->thread);
-            String8 file_path = regs->file_path;
-            U64 new_rip_vaddr = regs->vaddr_range.min;
-            if(file_path.size != 0)
-            {
-              D_LineList *lines = &regs->lines;
-              for(D_LineNode *n = lines->first; n != 0; n = n->next)
-              {
-                D_EntityList modules = d_modules_from_dbgi_key(scratch.arena, &n->v.dbgi_key);
-                D_Entity *module = d_module_from_thread_candidates(thread, &modules);
-                if(!d_entity_is_nil(module))
-                {
-                  new_rip_vaddr = d_vaddr_from_voff(module, n->v.voff_range.min);
-                  break;
-                }
-              }
-            }
-            d_msg(D_MsgKind_SetThreadIP, .thread = regs->thread, .vaddr_range = r1u64(new_rip_vaddr, 0));
-          }break;
-          
-          //- rjf: targets
-          case D_MsgKind_AddTarget:
-          {
-            D_Entity *entity = d_entity_alloc(d_entity_root(), D_EntityKind_Target);
-            d_entity_equip_disabled(entity, 1);
-            d_entity_equip_cfg_src(entity, D_CfgSrc_Project);
-            D_Entity *exe = d_entity_alloc(entity, D_EntityKind_Executable);
-            d_entity_equip_name(exe, regs->file_path);
-            String8 working_dir = str8_chop_last_slash(regs->file_path);
-            if(working_dir.size != 0)
-            {
-              String8 working_dir_path = push_str8f(scratch.arena, "%S/", working_dir);
-              D_Entity *execution_path = d_entity_alloc(entity, D_EntityKind_WorkingDirectory);
-              d_entity_equip_name(execution_path, working_dir_path);
-            }
-            d_msg(D_MsgKind_SelectTarget, .entity = d_handle_from_entity(entity));
-          }break;
-          case D_MsgKind_SelectTarget:
-          {
-            D_Entity *entity = d_entity_from_handle(regs->entity);
-            if(entity->kind == D_EntityKind_Target)
-            {
-              D_EntityList all_targets = d_query_cached_entity_list_with_kind(D_EntityKind_Target);
-              B32 is_selected = !entity->disabled;
-              for(D_EntityNode *n = all_targets.first; n != 0; n = n->next)
-              {
-                D_Entity *target = n->entity;
-                d_entity_equip_disabled(target, 1);
-              }
-              if(!is_selected)
-              {
-                d_entity_equip_disabled(entity, 0);
-              }
-            }
-          }break;
-          case D_MsgKind_RetryEndedProcess:
-          {
-            D_Entity *ended_process = d_entity_from_handle(regs->entity);
-            D_Entity *target = d_entity_from_handle(ended_process->entity_handle);
-            if(target->kind == D_EntityKind_Target)
-            {
-              d_msg(D_MsgKind_LaunchAndRun, .entity = d_handle_from_entity(target));
-            }
-            else if(d_entity_is_nil(target))
-            {
-              log_user_errorf("The ended process' corresponding target is missing.");
-            }
-            else if(d_entity_is_nil(ended_process))
-            {
-              log_user_errorf("Invalid ended process.");
-            }
-          }break;
-          
-          //- rjf: meta
-          case D_MsgKind_RegisterAsJITDebugger:
-          {
-#if OS_WINDOWS
-            char filename_cstr[MAX_PATH] = {0};
-            GetModuleFileName(0, filename_cstr, sizeof(filename_cstr));
-            String8 debugger_binary_path = str8_cstring(filename_cstr);
-            String8 name8 = str8_lit("Debugger");
-            String8 data8 = push_str8f(scratch.arena, "%S --jit_pid:%%ld --jit_code:%%ld --jit_addr:0x%%p", debugger_binary_path);
-            String16 name16 = str16_from_8(scratch.arena, name8);
-            String16 data16 = str16_from_8(scratch.arena, data8);
-            B32 likely_not_in_admin_mode = 0;
-            {
-              HKEY reg_key = 0;
-              LSTATUS status = 0;
-              status = RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\WOW6432Node\\Microsoft\\Windows NT\\CurrentVersion\\AeDebug\\", 0, KEY_SET_VALUE, &reg_key);
-              likely_not_in_admin_mode = (status == ERROR_ACCESS_DENIED);
-              status = RegSetValueExW(reg_key, (LPCWSTR)name16.str, 0, REG_SZ, (BYTE *)data16.str, data16.size*sizeof(U16)+2);
-              RegCloseKey(reg_key);
-            }
-            {
-              HKEY reg_key = 0;
-              LSTATUS status = 0;
-              status = RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\AeDebug\\", 0, KEY_SET_VALUE, &reg_key);
-              likely_not_in_admin_mode = (status == ERROR_ACCESS_DENIED);
-              status = RegSetValueExW(reg_key, (LPCWSTR)name16.str, 0, REG_SZ, (BYTE *)data16.str, data16.size*sizeof(U16)+2);
-              RegCloseKey(reg_key);
-            }
-            if(likely_not_in_admin_mode)
-            {
-              log_user_errorf("Could not register as the just-in-time debugger, access was denied; try running the debugger as administrator.");
-            }
-#else
-            log_user_errorf("Registering as the just-in-time debugger is currently not supported on this system.");
-#endif
-          }break;
-          case D_MsgKind_LogMarker:
-          {
-            log_infof("\"#MARKER\"");
-          }break;
-        }
-      }
-    }
-    arena_clear(d_state->msgs_arena);
-    MemoryZeroStruct(&d_state->msgs);
-    scratch_end(scratch);
-  }
-  
-  //////////////////////////////
   //- rjf: clear root level commands
   //
   {
@@ -7804,6 +6882,13 @@ d_tick(Arena *arena, DI_Scope *di_scope, D_CmdList *cmds, F32 dt)
       D_CmdParams params = cmd->params;
       D_CmdKind core_cmd_kind = d_cmd_kind_from_string(cmd->spec->info.string);
       d_cmd_spec_counter_inc(cmd->spec);
+      
+      // rjf: prep ctrl running arguments
+      B32 need_run = 0;
+      D_RunKind run_kind = D_RunKind_Run;
+      D_Entity *run_thread = &d_nil_entity;
+      CTRL_RunFlags run_flags = 0;
+      CTRL_TrapList run_traps = {0};
       
       // rjf: process command
       switch(core_cmd_kind)
@@ -7898,7 +6983,10 @@ d_tick(Arena *arena, DI_Scope *di_scope, D_CmdList *cmds, F32 dt)
             }
             
             // rjf: run
-            d_ctrl_run(D_RunKind_Run, &d_nil_entity, CTRL_RunFlag_StopOnEntryPoint * (core_cmd_kind == D_CmdKind_LaunchAndInit), 0);
+            need_run = 1;
+            run_kind = D_RunKind_Run;
+            run_thread = &d_nil_entity;
+            run_flags = (core_cmd_kind == D_CmdKind_LaunchAndInit) ? CTRL_RunFlag_StopOnEntryPoint : 0;
           }
           
           // rjf: no targets -> error
@@ -7999,7 +7087,9 @@ d_tick(Arena *arena, DI_Scope *di_scope, D_CmdList *cmds, F32 dt)
           }
           if(good_to_run)
           {
-            d_ctrl_run(D_RunKind_Run, &d_nil_entity, 0, 0);
+            need_run = 1;
+            run_kind = D_RunKind_Run;
+            run_thread = &d_nil_entity;
           }
           else
           {
@@ -8064,11 +7154,19 @@ d_tick(Arena *arena, DI_Scope *di_scope, D_CmdList *cmds, F32 dt)
             }
             if(good && traps.count != 0)
             {
-              d_ctrl_run(D_RunKind_Step, thread, 0, &traps);
+              need_run   = 1;
+              run_kind   = D_RunKind_Step;
+              run_thread = thread;
+              run_flags  = 0;
+              run_traps  = traps;
             }
             if(good && traps.count == 0)
             {
-              d_ctrl_run(D_RunKind_SingleStep, thread, 0, &traps);
+              need_run   = 1;
+              run_kind   = D_RunKind_SingleStep;
+              run_thread = thread;
+              run_flags  = 0;
+              run_traps  = traps;
             }
           }
         }break;
@@ -8081,7 +7179,11 @@ d_tick(Arena *arena, DI_Scope *di_scope, D_CmdList *cmds, F32 dt)
         {
           if(d_ctrl_targets_running())
           {
-            d_ctrl_run(d_state->ctrl_last_run_kind, d_entity_from_handle(d_state->ctrl_last_run_thread), d_state->ctrl_last_run_flags, &d_state->ctrl_last_run_traps);
+            need_run   = 1;
+            run_kind   = d_state->ctrl_last_run_kind;
+            run_thread = d_entity_from_handle(d_state->ctrl_last_run_thread);
+            run_flags  = d_state->ctrl_last_run_flags;
+            run_traps  = d_state->ctrl_last_run_traps;
           }
         }break;
         case D_CmdKind_SetThreadIP:
@@ -9357,6 +8459,12 @@ d_tick(Arena *arena, DI_Scope *di_scope, D_CmdList *cmds, F32 dt)
         {
           log_infof("\"#MARKER\"");
         }break;
+      }
+      
+      // rjf: do run if needed
+      if(need_run)
+      {
+        d_ctrl_run(run_kind, run_thread, run_flags, &run_traps);
       }
     }
     scratch_end(scratch);

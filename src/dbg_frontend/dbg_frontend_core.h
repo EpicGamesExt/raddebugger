@@ -405,31 +405,6 @@ struct DF_MsgKindInfo
 #include "generated/dbg_frontend.meta.h"
 
 ////////////////////////////////
-//~ rjf: Message Types
-
-typedef struct DF_Msg DF_Msg;
-struct DF_Msg
-{
-  DF_MsgKind kind;
-  D_Regs *regs;
-};
-
-typedef struct DF_MsgNode DF_MsgNode;
-struct DF_MsgNode
-{
-  DF_MsgNode *next;
-  DF_Msg v;
-};
-
-typedef struct DF_MsgList DF_MsgList;
-struct DF_MsgList
-{
-  DF_MsgNode *first;
-  DF_MsgNode *last;
-  U64 count;
-};
-
-////////////////////////////////
 //~ rjf: Theme Types
 
 typedef struct DF_Theme DF_Theme;
@@ -648,10 +623,6 @@ struct DF_State
   Arena *arena;
   B32 quit;
   
-  // rjf: messages
-  Arena *msgs_arena;
-  DF_MsgList msgs;
-  
   // rjf: frame request state
   U64 num_frames_requested;
   
@@ -681,7 +652,6 @@ struct DF_State
   F32 confirm_t;
   Arena *confirm_arena;
   D_CmdList confirm_cmds;
-  DF_Msg confirm_msg;
   String8 confirm_title;
   String8 confirm_desc;
   
@@ -992,18 +962,6 @@ internal String8 df_stop_explanation_string_icon_from_ctrl_event(Arena *arena, C
 //~ rjf: Continuous Frame Requests
 
 internal void df_request_frame(void);
-
-////////////////////////////////
-//~ rjf: Message Functions
-
-internal DF_MsgKind df_msg_kind_from_string(String8 string);
-internal void df_msg_(DF_MsgKind kind, D_Regs *regs);
-#define df_msg(kind, ...) df_msg_((kind),\
-&(D_Regs)\
-{\
-d_regs_lit_init_top \
-__VA_ARGS__\
-})
 
 ////////////////////////////////
 //~ rjf: Main Layer Top-Level Calls

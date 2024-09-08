@@ -7,36 +7,6 @@
 ////////////////////////////////
 //~ rjf: Input State Types
 
-typedef struct D_PathMap D_PathMap;
-struct D_PathMap
-{
-  String8 src;
-  String8 dst;
-};
-
-typedef struct D_PathMapArray D_PathMapArray;
-struct D_PathMapArray
-{
-  D_PathMap *v;
-  U64 count;
-};
-
-typedef struct D_Breakpoint D_Breakpoint;
-struct D_Breakpoint
-{
-  String8 file_path;
-  TxtPt pt;
-  U64 vaddr;
-  String8 condition;
-};
-
-typedef struct D_BreakpointArray D_BreakpointArray;
-struct D_BreakpointArray
-{
-  D_Breakpoint *v;
-  U64 count;
-};
-
 typedef struct D_Target D_Target;
 struct D_Target
 {
@@ -51,6 +21,23 @@ typedef struct D_TargetArray D_TargetArray;
 struct D_TargetArray
 {
   D_Target *v;
+  U64 count;
+};
+
+typedef struct D_Breakpoint D_Breakpoint;
+struct D_Breakpoint
+{
+  String8 file_path;
+  TxtPt pt;
+  String8 symbol_name;
+  U64 vaddr;
+  String8 condition;
+};
+
+typedef struct D_BreakpointArray D_BreakpointArray;
+struct D_BreakpointArray
+{
+  D_Breakpoint *v;
   U64 count;
 };
 
@@ -708,31 +695,6 @@ struct D_EvalVizWindowedRowList
 };
 
 ////////////////////////////////
-//~ rjf: Message Types
-
-typedef struct D_Msg D_Msg;
-struct D_Msg
-{
-  D_MsgKind kind;
-  D_Regs *regs;
-};
-
-typedef struct D_MsgNode D_MsgNode;
-struct D_MsgNode
-{
-  D_MsgNode *next;
-  D_Msg v;
-};
-
-typedef struct D_MsgList D_MsgList;
-struct D_MsgList
-{
-  D_MsgNode *first;
-  D_MsgNode *last;
-  U64 count;
-};
-
-////////////////////////////////
 //~ rjf: Command Specification Types
 
 typedef U32 D_CmdQueryFlags;
@@ -1031,10 +993,6 @@ struct D_State
   // rjf: interaction registers
   D_RegsNode base_regs;
   D_RegsNode *top_regs;
-  
-  // rjf: messages
-  Arena *msgs_arena;
-  D_MsgList msgs;
   
   // rjf: top-level command batch
   Arena *root_cmd_arena;
@@ -1609,22 +1567,10 @@ __VA_ARGS__                 \
 })
 
 ////////////////////////////////
-//~ rjf: Message Functions
-
-internal D_MsgKind d_msg_kind_from_string(String8 string);
-internal void d_msg_(D_MsgKind kind, D_Regs *regs);
-#define d_msg(kind, ...) d_msg_((kind),\
-&(D_Regs)\
-{\
-d_regs_lit_init_top \
-__VA_ARGS__\
-})
-
-////////////////////////////////
 //~ rjf: Main Layer Top-Level Calls
 
 internal void d_init(CmdLine *cmdln, D_StateDeltaHistory *hist);
 internal D_CmdList d_gather_root_cmds(Arena *arena);
-internal void d_tick(Arena *arena, DI_Scope *di_scope, D_CmdList *cmds, F32 dt);
+internal void d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_Scope *di_scope, D_CmdList *cmds, F32 dt);
 
 #endif // DBG_ENGINE_CORE_H

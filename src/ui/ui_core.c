@@ -805,7 +805,7 @@ ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, U
   //- rjf: prune unused animation nodes
   ProfScope("ui prune unused animation nodes")
   {
-    for(UI_AnimNode *n = ui_state->lru_anim_node, *next = &ui_nil_anim_node; n != &ui_nil_anim_node; n = next)
+    for(UI_AnimNode *n = ui_state->lru_anim_node, *next = &ui_nil_anim_node; n != &ui_nil_anim_node && n != 0; n = next)
     {
       next = n->lru_next;
       if(n->last_touched_build_index+1 < ui_state->build_index)
