@@ -3787,15 +3787,23 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
                 U32 arglist_itypes_count = arglist->count;
                 
                 // rjf: build param type array
-                RDIM_Type **params = push_array(arena, RDIM_Type *, arglist_itypes_count+1);
+                U64 num_this_extras = 1;
+                if(lf->this_itype == 0)
+                {
+                  num_this_extras = 0;
+                }
+                RDIM_Type **params = push_array(arena, RDIM_Type *, arglist_itypes_count+num_this_extras);
                 for(U32 idx = 0; idx < arglist_itypes_count; idx += 1)
                 {
-                  params[idx+1] = p2r_type_ptr_from_itype(arglist_itypes_base[idx]);
+                  params[idx+num_this_extras] = p2r_type_ptr_from_itype(arglist_itypes_base[idx]);
                 }
-                params[0] = p2r_type_ptr_from_itype(lf->this_itype);
+                if(lf->this_itype != 0)
+                {
+                  params[0] = p2r_type_ptr_from_itype(lf->this_itype);
+                }
                 
                 // rjf: fill dst type
-                dst_type->count = arglist_itypes_count+1;
+                dst_type->count = arglist_itypes_count+num_this_extras;
                 dst_type->param_types = params;
               }break;
               
