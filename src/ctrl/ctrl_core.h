@@ -13,7 +13,7 @@ typedef U64 CTRL_MachineID;
 #define CTRL_MachineID_Local (1)
 
 ////////////////////////////////
-//~ rjf: Machine/Handle Pair Types
+//~ rjf: Entity Handle Types
 
 typedef struct CTRL_MachineIDHandlePair CTRL_MachineIDHandlePair;
 struct CTRL_MachineIDHandlePair

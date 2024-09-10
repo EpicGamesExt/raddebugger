@@ -1027,11 +1027,6 @@ struct D_State
   Arena *cfg_arena;
   D_CfgTable cfg_table;
   
-  // rjf: config writing state
-  B32 cfg_write_issued[D_CfgSrc_COUNT];
-  Arena *cfg_write_arenas[D_CfgSrc_COUNT];
-  String8List cfg_write_data[D_CfgSrc_COUNT];
-  
   // rjf: current path
   Arena *current_path_arena;
   String8 current_path;
@@ -1452,7 +1447,6 @@ internal D_CfgTable *d_cfg_table(void);
 internal String8 d_cfg_escaped_from_raw_string(Arena *arena, String8 string);
 internal String8 d_cfg_raw_from_escaped_string(Arena *arena, String8 string);
 internal String8List d_cfg_strings_from_core(Arena *arena, String8 root_path, D_CfgSrc source);
-internal void d_cfg_push_write_string(D_CfgSrc src, String8 string);
 
 //- rjf: current path
 internal String8 d_current_path(void);

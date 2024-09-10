@@ -9272,8 +9272,6 @@ df_frame(void)
               break;
             }
           }
-          arena_clear(d_state->cfg_write_arenas[src]);
-          MemoryZeroStruct(&d_state->cfg_write_data[src]);
           String8 path = d_cfg_path_from_src(src);
           String8List d_strs = d_cfg_strings_from_core(scratch.arena, path, src);
           String8List df_strs = df_cfg_strings_from_gfx(scratch.arena, path, src);
@@ -9284,8 +9282,7 @@ df_frame(void)
           str8_list_concat_in_place(&strs, &df_strs);
           String8 data = str8_list_join(scratch.arena, &strs, 0);
           String8 data_indented = indented_from_string(scratch.arena, data);
-          d_state->cfg_write_issued[src] = 1;
-          d_cfg_push_write_string(src, data_indented);
+          os_write_data_to_file_path(path, data_indented);
         }break;
         
         //- rjf: code navigation
@@ -12127,24 +12124,6 @@ df_frame(void)
   if(df_state->num_frames_requested > 0)
   {
     df_state->num_frames_requested -= 1;
-  }
-  
-  //////////////////////////////
-  //- rjf: write config changes (TODO(rjf): @msgs)
-  //
-  ProfScope("write config changes")
-  {
-    for(D_CfgSrc src = (D_CfgSrc)0; src < D_CfgSrc_COUNT; src = (D_CfgSrc)(src+1)) ProfScope("write %.*s config data", str8_varg(d_cfg_src_string_table[src]))
-    {
-      if(d_state->cfg_write_issued[src])
-      {
-        d_state->cfg_write_issued[src] = 0;
-        String8 path = d_cfg_path_from_src(src);
-        os_write_data_list_to_file_path(path, d_state->cfg_write_data[src]);
-      }
-      arena_clear(d_state->cfg_write_arenas[src]);
-      MemoryZeroStruct(&d_state->cfg_write_data[src]);
-    }
   }
   
   //////////////////////////////

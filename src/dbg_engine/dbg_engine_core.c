@@ -5370,12 +5370,6 @@ d_cfg_strings_from_core(Arena *arena, String8 root_path, D_CfgSrc source)
   return strs;
 }
 
-internal void
-d_cfg_push_write_string(D_CfgSrc src, String8 string)
-{
-  str8_list_push(d_state->cfg_write_arenas[src], &d_state->cfg_write_data[src], push_str8_copy(d_state->cfg_write_arenas[src], string));
-}
-
 //- rjf: current path
 
 internal String8
@@ -5813,12 +5807,6 @@ d_init(void)
   
   // rjf: set up run state
   d_state->ctrl_last_run_arena = arena_alloc();
-  
-  // rjf: set up config write state
-  for(D_CfgSrc src = (D_CfgSrc)0; src < D_CfgSrc_COUNT; src = (D_CfgSrc)(src+1))
-  {
-    d_state->cfg_write_arenas[src] = arena_alloc();
-  }
   
   // rjf: set up initial browse path
   {
