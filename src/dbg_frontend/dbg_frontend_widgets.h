@@ -87,7 +87,7 @@ internal void df_loading_overlay(Rng2F32 rect, F32 loading_t, U64 progress_v, U6
 internal void df_cmd_binding_buttons(D_CmdSpec *spec);
 internal UI_Signal df_menu_bar_button(String8 string);
 internal UI_Signal df_cmd_spec_button(D_CmdSpec *spec);
-internal void df_cmd_list_menu_buttons(U64 count, D_CmdKind *cmds, U32 *fastpath_codepoints);
+internal void df_cmd_list_menu_buttons(U64 count, D_CmdSpec **cmd_specs, U32 *fastpath_codepoints);
 internal UI_Signal df_icon_button(DF_IconKind kind, FuzzyMatchRangeList *matches, String8 string);
 internal UI_Signal df_icon_buttonf(DF_IconKind kind, FuzzyMatchRangeList *matches, char *fmt, ...);
 internal void df_entity_tooltips(D_Entity *entity);

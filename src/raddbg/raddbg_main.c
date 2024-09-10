@@ -695,7 +695,7 @@ frame(void)
     os_append_data_to_file_path(main_thread_log_path, log.strings[LogMsgKind_Info]);
     if(log.strings[LogMsgKind_UserError].size != 0)
     {
-      d_error(log.strings[LogMsgKind_UserError]);
+      // TODO(rjf): @msgs
     }
   }
   
@@ -797,8 +797,8 @@ entry_point(CmdLine *cmd_line)
         tex_init();
         geo_init();
         fnt_init();
-        d_init(cmd_line);
-        df_init();
+        d_init();
+        df_init(cmd_line);
       }
       
       //- rjf: setup initial target from command line args
@@ -925,13 +925,13 @@ entry_point(CmdLine *cmd_line)
                   }
                   else
                   {
-                    d_error(error);
+                    log_user_error(error);
                     df_request_frame();
                   }
                 }
                 else
                 {
-                  d_errorf("\"%S\" is not a command.", cmd_spec_string);
+                  log_user_errorf("\"%S\" is not a command.", cmd_spec_string);
                   df_request_frame();
                 }
               }

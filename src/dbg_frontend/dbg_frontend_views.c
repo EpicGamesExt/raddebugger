@@ -19,12 +19,10 @@ df_code_view_init(DF_CodeViewState *cv, DF_View *view)
 }
 
 internal void
-df_code_view_cmds(DF_View *view, DF_CodeViewState *cv, D_CmdList *cmds, String8 text_data, TXT_TextInfo *text_info, DASM_LineArray *dasm_lines, Rng1U64 dasm_vaddr_range, DI_Key dasm_dbgi_key)
+df_code_view_cmds(DF_View *view, DF_CodeViewState *cv, String8 text_data, TXT_TextInfo *text_info, DASM_LineArray *dasm_lines, Rng1U64 dasm_vaddr_range, DI_Key dasm_dbgi_key)
 {
-  for(D_CmdNode *n = cmds->first; n != 0; n = n->next)
+  for(D_Cmd *cmd = 0; df_next_cmd(&cmd);)
   {
-    D_Cmd *cmd = &n->cmd;
-    
     // rjf: mismatched window/panel => skip
     if(!d_handle_match(d_regs()->window, cmd->params.window) ||
        !d_handle_match(d_regs()->panel, cmd->params.panel))
@@ -33,33 +31,33 @@ df_code_view_cmds(DF_View *view, DF_CodeViewState *cv, D_CmdList *cmds, String8 
     }
     
     // rjf: process
-    D_CmdKind core_cmd_kind = d_cmd_kind_from_string(cmd->spec->info.string);
-    switch(core_cmd_kind)
+    DF_CmdKind kind = df_cmd_kind_from_string(cmd->spec->info.string);
+    switch(kind)
     {
       default: break;
-      case D_CmdKind_GoToLine:
+      case DF_CmdKind_GoToLine:
       {
         cv->goto_line_num = cmd->params.text_point.line;
       }break;
-      case D_CmdKind_CenterCursor:
+      case DF_CmdKind_CenterCursor:
       {
         cv->center_cursor = 1;
       }break;
-      case D_CmdKind_ContainCursor:
+      case DF_CmdKind_ContainCursor:
       {
         cv->contain_cursor = 1;
       }break;
-      case D_CmdKind_FindTextForward:
+      case DF_CmdKind_FindTextForward:
       {
         arena_clear(cv->find_text_arena);
         cv->find_text_fwd = push_str8_copy(cv->find_text_arena, cmd->params.string);
       }break;
-      case D_CmdKind_FindTextBackward:
+      case DF_CmdKind_FindTextBackward:
       {
         arena_clear(cv->find_text_arena);
         cv->find_text_bwd = push_str8_copy(cv->find_text_arena, cmd->params.string);
       }break;
-      case D_CmdKind_ToggleWatchExpressionAtMouse:
+      case DF_CmdKind_ToggleWatchExpressionAtMouse:
       {
         cv->watch_expr_at_mouse = 1;
       }break;
@@ -145,13 +143,13 @@ df_code_view_build(Arena *arena, DF_View *view, DF_CodeViewState *cv, DF_CodeVie
   B32 search_query_is_active = 0;
   {
     DF_Window *window = df_window_from_handle(d_regs()->window);
-    D_CmdKind query_cmd_kind = d_cmd_kind_from_string(window->query_cmd_spec->info.string);
-    if(query_cmd_kind == D_CmdKind_FindTextForward ||
-       query_cmd_kind == D_CmdKind_FindTextBackward)
+    DF_CmdKind query_cmd_kind = df_cmd_kind_from_string(window->query_cmd_spec->info.string);
+    if(query_cmd_kind == DF_CmdKind_FindTextForward ||
+       query_cmd_kind == DF_CmdKind_FindTextBackward)
     {
       search_query = str8(window->query_view_stack_top->query_buffer, window->query_view_stack_top->query_string_size);
       search_query_is_active = 1;
-      search_query_side = (query_cmd_kind == D_CmdKind_FindTextForward) ? Side_Max : Side_Min;
+      search_query_side = (query_cmd_kind == DF_CmdKind_FindTextForward) ? Side_Max : Side_Min;
     }
   }
   
@@ -438,7 +436,7 @@ df_code_view_build(Arena *arena, DF_View *view, DF_CodeViewState *cv, DF_CodeVie
       cv->center_cursor = found;
       if(found == 0)
       {
-        d_errorf("Could not find \"%S\"", cv->find_text_fwd);
+        log_user_errorf("Could not find \"%S\"", cv->find_text_fwd);
       }
       scratch_end(scratch);
     }
@@ -499,7 +497,7 @@ df_code_view_build(Arena *arena, DF_View *view, DF_CodeViewState *cv, DF_CodeVie
       cv->center_cursor = found;
       if(found == 0)
       {
-        d_errorf("Could not find \"%S\"", cv->find_text_bwd);
+        log_user_errorf("Could not find \"%S\"", cv->find_text_bwd);
       }
       scratch_end(scratch);
     }
@@ -552,7 +550,7 @@ df_code_view_build(Arena *arena, DF_View *view, DF_CodeViewState *cv, DF_CodeVie
     //- rjf: press code slice? -> focus panel
     if(ui_pressed(sig.base))
     {
-      d_cmd(D_CmdKind_FocusPanel);
+      df_cmd(DF_CmdKind_FocusPanel);
     }
     
     //- rjf: dragging & outside region? -> contain cursor
@@ -572,14 +570,14 @@ df_code_view_build(Arena *arena, DF_View *view, DF_CodeViewState *cv, DF_CodeVie
     if(ui_pressed(sig.base) && sig.base.event_flags & OS_EventFlag_Ctrl)
     {
       ui_kill_action();
-      d_cmd(D_CmdKind_GoToName, .string = txt_string_from_info_data_txt_rng(text_info, text_data, sig.mouse_expr_rng));
+      df_cmd(DF_CmdKind_GoToName, .string = txt_string_from_info_data_txt_rng(text_info, text_data, sig.mouse_expr_rng));
     }
     
     //- rjf: watch expr at mouse
     if(cv->watch_expr_at_mouse)
     {
       cv->watch_expr_at_mouse = 0;
-      d_cmd(D_CmdKind_ToggleWatchExpression, .string = txt_string_from_info_data_txt_rng(text_info, text_data, sig.mouse_expr_rng));
+      df_cmd(DF_CmdKind_ToggleWatchExpression, .string = txt_string_from_info_data_txt_rng(text_info, text_data, sig.mouse_expr_rng));
     }
     
     //- rjf: selected text on single line, no query? -> set search text
@@ -724,11 +722,11 @@ df_code_view_build(Arena *arena, DF_View *view, DF_CodeViewState *cv, DF_CodeVie
           ui_eat_event(evt);
           if(evt->delta_2f32.y < 0)
           {
-            d_cmd(D_CmdKind_IncCodeFontScale);
+            df_cmd(DF_CmdKind_IncCodeFontScale);
           }
           else if(evt->delta_2f32.y > 0)
           {
-            d_cmd(D_CmdKind_DecCodeFontScale);
+            df_cmd(DF_CmdKind_DecCodeFontScale);
           }
         }
       }
@@ -1602,10 +1600,10 @@ df_watch_view_build(DF_View *view, DF_WatchViewState *ewv, B32 modifiable, U32 d
           }
           if(row->expand_ui_rule_spec != &df_nil_view_rule_spec && row->expand_ui_rule_spec != 0)
           {
-            d_cmd(D_CmdKind_OpenTab,
-                  .string      = e_string_from_expr(scratch.arena, row->expr),
-                  .view_spec   = df_view_spec_from_string(row->expand_ui_rule_spec->info.string),
-                  .params_tree = row->expand_ui_rule_params);
+            df_cmd(DF_CmdKind_OpenTab,
+                   .string      = e_string_from_expr(scratch.arena, row->expr),
+                   .view_spec   = df_view_spec_from_string(row->expand_ui_rule_spec->info.string),
+                   .params_tree = row->expand_ui_rule_params);
           }
         }
       }
@@ -1638,11 +1636,11 @@ df_watch_view_build(DF_View *view, DF_WatchViewState *ewv, B32 modifiable, U32 d
             file_path = lines.first->v.file_path;
             pt        = lines.first->v.pt;
           }
-          d_cmd(D_CmdKind_FindCodeLocation,
-                .entity    = d_handle_from_entity(process),
-                .vaddr     = vaddr,
-                .file_path = file_path,
-                .text_point= pt);
+          df_cmd(DF_CmdKind_FindCodeLocation,
+                 .entity    = d_handle_from_entity(process),
+                 .vaddr     = vaddr,
+                 .file_path = file_path,
+                 .text_point= pt);
         }
         if(1 <= selection_tbl.min.y && selection_tbl.min.y <= frame_rows_count)
         {
@@ -1766,7 +1764,7 @@ df_watch_view_build(DF_View *view, DF_WatchViewState *ewv, B32 modifiable, U32 d
                   }
                   if(!success)
                   {
-                    d_error(str8_lit("Could not commit value successfully."));
+                    log_user_error(str8_lit("Could not commit value successfully."));
                   }
                 }break;
                 case DF_WatchViewColumnKind_Type:{}break;
@@ -2309,10 +2307,10 @@ df_watch_view_build(DF_View *view, DF_WatchViewState *ewv, B32 modifiable, U32 d
               if(ui_clicked(sig))
               {
                 DF_ViewSpec *canvas_view_spec = df_view_spec_from_string(row->expand_ui_rule_spec->info.string);
-                d_cmd(D_CmdKind_OpenTab,
-                      .string      = e_string_from_expr(scratch.arena, row->expr),
-                      .view_spec   = canvas_view_spec,
-                      .params_tree = row->expand_ui_rule_params);
+                df_cmd(DF_CmdKind_OpenTab,
+                       .string      = e_string_from_expr(scratch.arena, row->expr),
+                       .view_spec   = canvas_view_spec,
+                       .params_tree = row->expand_ui_rule_params);
               }
             }
             
@@ -2617,7 +2615,7 @@ df_watch_view_build(DF_View *view, DF_WatchViewState *ewv, B32 modifiable, U32 d
                 if(ui_double_clicked(sig) && cell_can_edit)
                 {
                   ui_kill_action();
-                  d_cmd(D_CmdKind_Edit);
+                  df_cmd(DF_CmdKind_Edit);
                 }
                 
                 // rjf: double-click, not editable -> go-to-location
@@ -2635,11 +2633,11 @@ df_watch_view_build(DF_View *view, DF_WatchViewState *ewv, B32 modifiable, U32 d
                     file_path = lines.first->v.file_path;
                     pt        = lines.first->v.pt;
                   }
-                  d_cmd(D_CmdKind_FindCodeLocation,
-                        .entity     = d_handle_from_entity(process),
-                        .vaddr      = vaddr,
-                        .file_path  = file_path,
-                        .text_point = pt);
+                  df_cmd(DF_CmdKind_FindCodeLocation,
+                         .entity     = d_handle_from_entity(process),
+                         .vaddr      = vaddr,
+                         .file_path  = file_path,
+                         .text_point = pt);
                 }
                 
                 // rjf: double-click, not editable, callstack frame -> select frame
@@ -2833,7 +2831,7 @@ df_watch_view_build(DF_View *view, DF_WatchViewState *ewv, B32 modifiable, U32 d
   //
   if(pressed)
   {
-    d_cmd(D_CmdKind_FocusPanel);
+    df_cmd(DF_CmdKind_FocusPanel);
   }
   
   scratch_end(scratch);
@@ -2870,7 +2868,7 @@ DF_VIEW_UI_FUNCTION_DEF(empty)
     {
       if(ui_clicked(df_icon_buttonf(DF_IconKind_X, 0, "Close Panel")))
       {
-        d_cmd(D_CmdKind_ClosePanel);
+        df_cmd(DF_CmdKind_ClosePanel);
       }
     }
   }
@@ -2941,7 +2939,7 @@ DF_VIEW_UI_FUNCTION_DEF(getting_started)
             DF_Palette(DF_PaletteCode_NeutralPopButton)
             if(ui_clicked(df_icon_buttonf(DF_IconKind_Add, 0, "Add Target")))
           {
-            d_cmd(D_CmdKind_RunCommand, .cmd_spec = d_cmd_spec_from_kind(D_CmdKind_AddTarget));
+            df_cmd(DF_CmdKind_RunCommand, .cmd_spec = df_cmd_spec_from_kind(DF_CmdKind_AddTarget));
           }
         }break;
         
@@ -2997,7 +2995,7 @@ DF_VIEW_UI_FUNCTION_DEF(getting_started)
       UI_Padding(ui_pct(1, 0))
     {
       ui_labelf("use");
-      D_CmdSpec *spec = d_cmd_spec_from_kind(D_CmdKind_RunCommand);
+      D_CmdSpec *spec = df_cmd_spec_from_kind(DF_CmdKind_RunCommand);
       UI_Flags(UI_BoxFlag_DrawBorder) UI_TextAlignment(UI_TextAlign_Center) df_cmd_binding_buttons(spec);
       ui_labelf("to open command menu");
     }
@@ -3170,7 +3168,7 @@ DF_VIEW_UI_FUNCTION_DEF(commands)
   //- rjf: submit best match when hitting enter w/ no selection
   if(cv->selected_cmd_spec == &d_nil_cmd_spec && ui_slot_press(UI_EventActionSlot_Accept))
   {
-    d_cmd(D_CmdKind_CompleteQuery, .cmd_spec = (cmd_array.count > 0 ? cmd_array.v[0].cmd_spec : &d_nil_cmd_spec));
+    df_cmd(DF_CmdKind_CompleteQuery, .cmd_spec = (cmd_array.count > 0 ? cmd_array.v[0].cmd_spec : &d_nil_cmd_spec));
   }
   
   //- rjf: selected kind -> cursor
@@ -3239,7 +3237,7 @@ DF_VIEW_UI_FUNCTION_DEF(commands)
           UI_HeightFill
           UI_TextAlignment(UI_TextAlign_Center)
         {
-          D_CmdKind cmd_kind = d_cmd_kind_from_string(item->cmd_spec->info.string);
+          DF_CmdKind cmd_kind = df_cmd_kind_from_string(item->cmd_spec->info.string);
           DF_IconKind icon = df_cmd_kind_icon_kind_table[cmd_kind];
           if(icon != DF_IconKind_Null)
           {
@@ -3283,7 +3281,7 @@ DF_VIEW_UI_FUNCTION_DEF(commands)
       UI_Signal sig = ui_signal_from_box(box);
       if(ui_clicked(sig))
       {
-        d_cmd(D_CmdKind_CompleteQuery, .cmd_spec = item->cmd_spec);
+        df_cmd(DF_CmdKind_CompleteQuery, .cmd_spec = item->cmd_spec);
       }
     }
   }
@@ -3544,7 +3542,7 @@ DF_VIEW_UI_FUNCTION_DEF(file_system)
     // choose the most recent change to a file browser path, and live with the
     // consequences).
     {
-      d_cmd(D_CmdKind_SetCurrentPath, .file_path = path_query.path);
+      df_cmd(DF_CmdKind_SetCurrentPath, .file_path = path_query.path);
     }
     
     //- rjf: get files, filtered
@@ -3632,7 +3630,7 @@ DF_VIEW_UI_FUNCTION_DEF(file_system)
     // rjf: command search part is empty, but directory matches some file:
     if(path_query_path_props.created != 0 && path_query.search.size == 0)
     {
-      d_cmd(D_CmdKind_CompleteQuery, .file_path = query_normalized_with_opt_slash);
+      df_cmd(DF_CmdKind_CompleteQuery, .file_path = query_normalized_with_opt_slash);
     }
     
     // rjf: command argument exactly matches some file:
@@ -3648,14 +3646,14 @@ DF_VIEW_UI_FUNCTION_DEF(file_system)
       // rjf: is a file -> complete view
       else
       {
-        d_cmd(D_CmdKind_CompleteQuery, .file_path = query_normalized_with_opt_slash);
+        df_cmd(DF_CmdKind_CompleteQuery, .file_path = query_normalized_with_opt_slash);
       }
     }
     
     // rjf: command argument is empty, picking folders -> use current folder
     else if(path_query.search.size == 0 && dir_selection)
     {
-      d_cmd(D_CmdKind_CompleteQuery, .file_path = path_query.path);
+      df_cmd(DF_CmdKind_CompleteQuery, .file_path = path_query.path);
     }
     
     // rjf: command argument does not exactly match any file, but lister results are in:
@@ -3671,14 +3669,14 @@ DF_VIEW_UI_FUNCTION_DEF(file_system)
       else
       {
         String8 file_path = push_str8f(scratch.arena, "%S%S", path_query.path, filename);
-        d_cmd(D_CmdKind_CompleteQuery, .file_path = file_path);
+        df_cmd(DF_CmdKind_CompleteQuery, .file_path = file_path);
       }
     }
     
     // rjf: command argument does not match any file, and lister is empty (new file)
     else
     {
-      d_cmd(D_CmdKind_CompleteQuery, .file_path = query);
+      df_cmd(DF_CmdKind_CompleteQuery, .file_path = query);
     }
   }
   
@@ -3877,7 +3875,7 @@ DF_VIEW_UI_FUNCTION_DEF(file_system)
         }
         else
         {
-          d_cmd(D_CmdKind_CompleteQuery, .file_path = new_path);
+          df_cmd(DF_CmdKind_CompleteQuery, .file_path = new_path);
         }
       }
     }
@@ -4098,7 +4096,7 @@ DF_VIEW_UI_FUNCTION_DEF(system_processes)
   if(sp->selected_pid == 0 && process_info_array.count > 0 && ui_slot_press(UI_EventActionSlot_Accept))
   {
     DF_ProcessInfo *info = &process_info_array.v[0];
-    d_cmd(D_CmdKind_CompleteQuery, .id = info->info.pid);
+    df_cmd(DF_CmdKind_CompleteQuery, .id = info->info.pid);
   }
   
   //- rjf: selected PID -> cursor
@@ -4186,7 +4184,7 @@ DF_VIEW_UI_FUNCTION_DEF(system_processes)
       // rjf: click => activate this specific process
       if(ui_clicked(sig))
       {
-        d_cmd(D_CmdKind_CompleteQuery, .id = info->info.pid);
+        df_cmd(DF_CmdKind_CompleteQuery, .id = info->info.pid);
       }
     }
   }
@@ -4336,7 +4334,7 @@ DF_VIEW_UI_FUNCTION_DEF(entity_lister)
   if(d_entity_is_nil(d_entity_from_handle(fev->selected_entity_handle)) && ent_arr.count != 0 && ui_slot_press(UI_EventActionSlot_Accept))
   {
     D_Entity *ent = ent_arr.v[0].entity;
-    d_cmd(D_CmdKind_CompleteQuery, .entity = d_handle_from_entity(ent));
+    df_cmd(DF_CmdKind_CompleteQuery, .entity = d_handle_from_entity(ent));
   }
   
   //- rjf: selected entity -> cursor
@@ -4415,7 +4413,7 @@ DF_VIEW_UI_FUNCTION_DEF(entity_lister)
       }
       if(ui_clicked(ui_signal_from_box(box)))
       {
-        d_cmd(D_CmdKind_CompleteQuery, .entity = d_handle_from_entity(ent));
+        df_cmd(DF_CmdKind_CompleteQuery, .entity = d_handle_from_entity(ent));
       }
     }
   }
@@ -4493,7 +4491,7 @@ DF_VIEW_UI_FUNCTION_DEF(symbol_lister)
         String8 name = str8(name_base, name_size);
         if(name.size != 0)
         {
-          d_cmd(D_CmdKind_CompleteQuery, .string = name);
+          df_cmd(DF_CmdKind_CompleteQuery, .string = name);
         }
         break;
       }
@@ -4583,7 +4581,7 @@ DF_VIEW_UI_FUNCTION_DEF(symbol_lister)
       UI_Signal sig = ui_signal_from_box(box);
       if(ui_clicked(sig))
       {
-        d_cmd(D_CmdKind_CompleteQuery, .string = name);
+        df_cmd(DF_CmdKind_CompleteQuery, .string = name);
       }
       if(ui_hovering(sig)) UI_Tooltip
       {
@@ -4651,10 +4649,8 @@ DF_VIEW_CMD_FUNCTION_DEF(target)
   D_Entity *entity = d_entity_from_eval_string(string);
   
   // rjf: process commands
-  for(D_CmdNode *n = cmds->first; n != 0; n = n->next)
+  for(D_Cmd *cmd = 0; df_next_cmd(&cmd);)
   {
-    D_Cmd *cmd = &n->cmd;
-    
     // rjf: mismatched window/panel => skip
     if(!d_handle_match(d_regs()->window, cmd->params.window) ||
        !d_handle_match(d_regs()->panel, cmd->params.panel))
@@ -4663,12 +4659,12 @@ DF_VIEW_CMD_FUNCTION_DEF(target)
     }
     
     // rjf: process command
-    D_CmdKind core_cmd_kind = d_cmd_kind_from_string(cmd->spec->info.string);
-    switch(core_cmd_kind)
+    DF_CmdKind kind = df_cmd_kind_from_string(cmd->spec->info.string);
+    switch(kind)
     {
       default:break;
-      case D_CmdKind_PickFile:
-      case D_CmdKind_PickFolder:
+      case DF_CmdKind_PickFile:
+      case DF_CmdKind_PickFolder:
       {
         String8 pick_string = cmd->params.file_path;
         D_Entity *storage_entity = entity;
@@ -4861,7 +4857,7 @@ DF_VIEW_UI_FUNCTION_DEF(target)
             // rjf: focus panel on press
             if(ui_pressed(sig))
             {
-              d_cmd(D_CmdKind_FocusPanel);
+              df_cmd(DF_CmdKind_FocusPanel);
             }
             
             // rjf: begin editing on double-click
@@ -4903,7 +4899,7 @@ DF_VIEW_UI_FUNCTION_DEF(target)
               UI_TextAlignment(UI_TextAlign_Center)
               if(ui_clicked(ui_buttonf("Browse...")))
             {
-              d_cmd(D_CmdKind_RunCommand, .cmd_spec = d_cmd_spec_from_kind(kv_info[idx].fill_with_file ? D_CmdKind_PickFile : D_CmdKind_PickFolder));
+              df_cmd(DF_CmdKind_RunCommand, .cmd_spec = df_cmd_spec_from_kind(kv_info[idx].fill_with_file ? DF_CmdKind_PickFile : DF_CmdKind_PickFolder));
               tv->pick_dst_kind = kv_info[idx].storage_child_kind;
             }
           }
@@ -5026,7 +5022,7 @@ DF_VIEW_UI_FUNCTION_DEF(targets)
         add_sig = df_icon_buttonf(DF_IconKind_Add, 0, "Add New Target");
       if(ui_clicked(add_sig))
       {
-        d_cmd(D_CmdKind_RunCommand, .cmd_spec = d_cmd_spec_from_kind(D_CmdKind_AddTarget));
+        df_cmd(DF_CmdKind_RunCommand, .cmd_spec = df_cmd_spec_from_kind(DF_CmdKind_AddTarget));
       }
     }
     
@@ -5046,7 +5042,7 @@ DF_VIEW_UI_FUNCTION_DEF(targets)
         UI_Signal sig = df_icon_buttonf(!target->disabled ? DF_IconKind_CheckFilled : DF_IconKind_CheckHollow, 0, "###ebl_%p", target);
         if(ui_clicked(sig))
         {
-          d_cmd(!target->disabled ? D_CmdKind_DisableTarget : D_CmdKind_EnableTarget, .entity = d_handle_from_entity(target));
+          df_cmd(!target->disabled ? DF_CmdKind_DisableTarget : DF_CmdKind_EnableTarget, .entity = d_handle_from_entity(target));
         }
       }
       
@@ -5063,14 +5059,15 @@ DF_VIEW_UI_FUNCTION_DEF(targets)
         {
           DF_IconKind icon;
           String8 text;
-          D_CmdKind cmd;
+          D_CmdKind d_cmd;
+          DF_CmdKind df_cmd;
         }
         ctrls[] =
         {
           { DF_IconKind_PlayStepForward,  str8_lit("Launch and Initialize"), D_CmdKind_LaunchAndInit },
           { DF_IconKind_Play,             str8_lit("Launch and Run"),        D_CmdKind_LaunchAndRun  },
-          { DF_IconKind_Pencil,           str8_lit("Edit"),                  D_CmdKind_Target        },
-          { DF_IconKind_Trash,            str8_lit("Delete"),                D_CmdKind_RemoveTarget  },
+          { DF_IconKind_Pencil,           str8_lit("Edit"),                  D_CmdKind_Null, DF_CmdKind_Target        },
+          { DF_IconKind_Trash,            str8_lit("Delete"),                D_CmdKind_Null, DF_CmdKind_RemoveTarget  },
         };
         for(U64 ctrl_idx = 0; ctrl_idx < ArrayCount(ctrls); ctrl_idx += 1)
         {
@@ -5085,7 +5082,14 @@ DF_VIEW_UI_FUNCTION_DEF(targets)
           }
           if(ui_clicked(sig))
           {
-            d_cmd(ctrls[ctrl_idx].cmd, .entity = d_handle_from_entity(target));
+            if(ctrls[ctrl_idx].d_cmd != D_CmdKind_Null)
+            {
+              d_cmd(ctrls[ctrl_idx].d_cmd, .entity = d_handle_from_entity(target));
+            }
+            if(ctrls[ctrl_idx].df_cmd != DF_CmdKind_Null)
+            {
+              df_cmd(ctrls[ctrl_idx].df_cmd, .entity = d_handle_from_entity(target));
+            }
           }
         }
       }
@@ -5138,10 +5142,8 @@ DF_VIEW_CMD_FUNCTION_DEF(file_path_map)
   DF_FilePathMapViewState *fpms = df_view_user_state(view, DF_FilePathMapViewState);
   
   // rjf: process commands
-  for(D_CmdNode *n = cmds->first; n != 0; n = n->next)
+  for(D_Cmd *cmd = 0; df_next_cmd(&cmd);)
   {
-    D_Cmd *cmd = &n->cmd;
-    
     // rjf: mismatched window/panel => skip
     if(!d_handle_match(d_regs()->window, cmd->params.window) ||
        !d_handle_match(d_regs()->panel, cmd->params.panel))
@@ -5150,22 +5152,22 @@ DF_VIEW_CMD_FUNCTION_DEF(file_path_map)
     }
     
     //rjf: process
-    D_CmdKind core_cmd_kind = d_cmd_kind_from_string(cmd->spec->info.string);
-    switch(core_cmd_kind)
+    DF_CmdKind kind = df_cmd_kind_from_string(cmd->spec->info.string);
+    switch(kind)
     {
       default:break;
-      case D_CmdKind_PickFile:
-      case D_CmdKind_PickFolder:
-      case D_CmdKind_PickFileOrFolder:
+      case DF_CmdKind_PickFile:
+      case DF_CmdKind_PickFolder:
+      case DF_CmdKind_PickFileOrFolder:
       {
         String8 pick_string = cmd->params.file_path;
         Side pick_side = fpms->pick_file_dst_side;
         D_Entity *storage_entity = d_entity_from_handle(fpms->pick_file_dst_map);
-        d_cmd(pick_side == Side_Min ?
-              D_CmdKind_SetFileOverrideLinkSrc :
-              D_CmdKind_SetFileOverrideLinkDst,
-              .entity    = d_handle_from_entity(storage_entity),
-              .file_path = pick_string);
+        df_cmd(pick_side == Side_Min ?
+               DF_CmdKind_SetFileOverrideLinkSrc :
+               DF_CmdKind_SetFileOverrideLinkDst,
+               .entity    = d_handle_from_entity(storage_entity),
+               .file_path = pick_string);
       }break;
     }
   }
@@ -5300,7 +5302,7 @@ DF_VIEW_UI_FUNCTION_DEF(file_path_map)
           // rjf: focus panel on press
           if(ui_pressed(sig))
           {
-            d_cmd(D_CmdKind_FocusPanel);
+            df_cmd(DF_CmdKind_FocusPanel);
           }
           
           // rjf: begin editing on double-click
@@ -5335,7 +5337,7 @@ DF_VIEW_UI_FUNCTION_DEF(file_path_map)
           UI_PrefWidth(ui_text_dim(10, 1))
           if(ui_clicked(ui_buttonf("Browse...")))
         {
-          d_cmd(D_CmdKind_RunCommand, .cmd_spec = d_cmd_spec_from_kind(D_CmdKind_PickFileOrFolder));
+          df_cmd(DF_CmdKind_RunCommand, .cmd_spec = df_cmd_spec_from_kind(DF_CmdKind_PickFileOrFolder));
           fpms->pick_file_dst_map = d_handle_from_entity(map);
           fpms->pick_file_dst_side = Side_Min;
         }
@@ -5370,7 +5372,7 @@ DF_VIEW_UI_FUNCTION_DEF(file_path_map)
           // rjf: focus panel on press
           if(ui_pressed(sig))
           {
-            d_cmd(D_CmdKind_FocusPanel);
+            df_cmd(DF_CmdKind_FocusPanel);
           }
           
           // rjf: begin editing on double-click
@@ -5406,7 +5408,7 @@ DF_VIEW_UI_FUNCTION_DEF(file_path_map)
             UI_PrefWidth(ui_text_dim(10, 1))
             if(ui_clicked(ui_buttonf("Browse...")))
           {
-            d_cmd(D_CmdKind_RunCommand, .cmd_spec = d_cmd_spec_from_kind(D_CmdKind_PickFileOrFolder));
+            df_cmd(DF_CmdKind_RunCommand, .cmd_spec = df_cmd_spec_from_kind(DF_CmdKind_PickFileOrFolder));
             fpms->pick_file_dst_map = d_handle_from_entity(map);
             fpms->pick_file_dst_side = Side_Max;
           }
@@ -5419,11 +5421,11 @@ DF_VIEW_UI_FUNCTION_DEF(file_path_map)
   if(edit_commit && commit_side != Side_Invalid)
   {
     String8 new_string = str8(fpms->input_buffer, fpms->input_size);
-    d_cmd(commit_side == Side_Min ?
-          D_CmdKind_SetFileOverrideLinkSrc :
-          D_CmdKind_SetFileOverrideLinkDst,
-          .entity    = commit_map,
-          .file_path = new_string);
+    df_cmd(commit_side == Side_Min ?
+           DF_CmdKind_SetFileOverrideLinkSrc :
+           DF_CmdKind_SetFileOverrideLinkDst,
+           .entity    = commit_map,
+           .file_path = new_string);
   }
   
   //- rjf: apply editing finish
@@ -5773,10 +5775,8 @@ DF_VIEW_SETUP_FUNCTION_DEF(modules)
 DF_VIEW_CMD_FUNCTION_DEF(modules)
 {
   DF_ModulesViewState *mv = df_view_user_state(view, DF_ModulesViewState);
-  for(D_CmdNode *n = cmds->first; n != 0; n = n->next)
+  for(D_Cmd *cmd = 0; df_next_cmd(&cmd);)
   {
-    D_Cmd *cmd = &n->cmd;
-    
     // rjf: mismatched window/panel => skip
     if(!d_handle_match(d_regs()->window, cmd->params.window) ||
        !d_handle_match(d_regs()->panel, cmd->params.panel))
@@ -5785,11 +5785,11 @@ DF_VIEW_CMD_FUNCTION_DEF(modules)
     }
     
     //rjf: process
-    D_CmdKind core_cmd_kind = d_cmd_kind_from_string(cmd->spec->info.string);
-    switch(core_cmd_kind)
+    DF_CmdKind kind = df_cmd_kind_from_string(cmd->spec->info.string);
+    switch(kind)
     {
       default:break;
-      case D_CmdKind_PickFile:
+      case DF_CmdKind_PickFile:
       {
         Temp scratch = scratch_begin(0, 0);
         String8 pick_string = cmd->params.file_path;
@@ -5966,7 +5966,7 @@ DF_VIEW_UI_FUNCTION_DEF(modules)
               if(ui_pressed(sig))
               {
                 next_cursor = v2s64(1, (S64)idx+1);
-                d_cmd(D_CmdKind_FocusPanel);
+                df_cmd(DF_CmdKind_FocusPanel);
               }
             }
             UI_TableCell
@@ -6006,7 +6006,7 @@ DF_VIEW_UI_FUNCTION_DEF(modules)
               {
                 edit_commit = (mv->txt_editing && !txt_is_selected);
                 next_cursor = v2s64(2, (S64)idx+1);
-                d_cmd(D_CmdKind_FocusPanel);
+                df_cmd(DF_CmdKind_FocusPanel);
               }
               
               // rjf: double-click -> begin editing
@@ -6031,7 +6031,7 @@ DF_VIEW_UI_FUNCTION_DEF(modules)
               {
                 if(ui_clicked(ui_buttonf("Browse...")) || (brw_is_selected && edit_begin))
                 {
-                  d_cmd(D_CmdKind_RunCommand, .cmd_spec = d_cmd_spec_from_kind(D_CmdKind_PickFile));
+                  df_cmd(DF_CmdKind_RunCommand, .cmd_spec = df_cmd_spec_from_kind(DF_CmdKind_PickFile));
                   mv->pick_file_dst_entity = d_handle_from_entity(entity);
                 }
               }
@@ -6242,10 +6242,8 @@ DF_VIEW_CMD_FUNCTION_DEF(pending_file)
   DF_PendingFileViewState *pves = df_view_user_state(view, DF_PendingFileViewState);
   
   //- rjf: process commands
-  for(D_CmdNode *n = cmds->first; n != 0; n = n->next)
+  for(D_Cmd *cmd = 0; df_next_cmd(&cmd);)
   {
-    D_Cmd *cmd = &n->cmd;
-    
     // rjf: mismatched window/panel => skip
     if(!d_handle_match(d_regs()->window, cmd->params.window) ||
        !d_handle_match(d_regs()->panel, cmd->params.panel))
@@ -6254,16 +6252,16 @@ DF_VIEW_CMD_FUNCTION_DEF(pending_file)
     }
     
     // rjf: process
-    D_CmdKind core_cmd_kind = d_cmd_kind_from_string(cmd->spec->info.string);
-    switch(core_cmd_kind)
+    DF_CmdKind kind = df_cmd_kind_from_string(cmd->spec->info.string);
+    switch(kind)
     {
       default:break;
       
       // rjf: gather deferred commands to redispatch when entity is ready
-      case D_CmdKind_GoToLine:
-      case D_CmdKind_GoToAddress:
-      case D_CmdKind_CenterCursor:
-      case D_CmdKind_ContainCursor:
+      case DF_CmdKind_GoToLine:
+      case DF_CmdKind_GoToAddress:
+      case DF_CmdKind_CenterCursor:
+      case DF_CmdKind_ContainCursor:
       {
         d_cmd_list_push(pves->deferred_cmd_arena, &pves->deferred_cmds, &cmd->params, cmd->spec);
       }break;
@@ -6346,7 +6344,7 @@ DF_VIEW_CMD_FUNCTION_DEF(pending_file)
   //- rjf: if entity is ready, but we have no viewer for it, then just close this tab
   if(file_is_ready && viewer_kind == DF_ViewKind_Null)
   {
-    d_cmd(D_CmdKind_CloseTab);
+    df_cmd(DF_CmdKind_CloseTab);
   }
   
   scratch_end(scratch);
@@ -6384,13 +6382,11 @@ DF_VIEW_CMD_FUNCTION_DEF(text)
   String8 data = hs_data_from_hash(hs_scope, hash);
   
   //- rjf: process general code-view commands
-  df_code_view_cmds(view, cv, cmds, data, &info, 0, r1u64(0, 0), di_key_zero());
+  df_code_view_cmds(view, cv, data, &info, 0, r1u64(0, 0), di_key_zero());
   
   //- rjf: process code-file commands
-  for(D_CmdNode *n = cmds->first; n != 0; n = n->next)
+  for(D_Cmd *cmd = 0; df_next_cmd(&cmd);)
   {
-    D_Cmd *cmd = &n->cmd;
-    
     // rjf: mismatched window/panel => skip
     if(!d_handle_match(d_regs()->window, cmd->params.window) ||
        !d_handle_match(d_regs()->panel, cmd->params.panel))
@@ -6399,20 +6395,20 @@ DF_VIEW_CMD_FUNCTION_DEF(text)
     }
     
     // rjf: process
-    D_CmdKind core_cmd_kind = d_cmd_kind_from_string(cmd->spec->info.string);
-    switch(core_cmd_kind)
+    DF_CmdKind kind = df_cmd_kind_from_string(cmd->spec->info.string);
+    switch(kind)
     {
       default:{}break;
       
       // rjf: override file picking
-      case D_CmdKind_PickFile:
+      case DF_CmdKind_PickFile:
       {
         String8 src = d_file_path_from_eval_string(scratch.arena, str8(view->query_buffer, view->query_string_size));
         String8 dst = cmd->params.file_path;
         if(src.size != 0 && dst.size != 0)
         {
           // rjf: record src -> dst mapping
-          d_cmd(D_CmdKind_SetFileReplacementPath, .string = src, .file_path = dst);
+          df_cmd(DF_CmdKind_SetFileReplacementPath, .string = src, .file_path = dst);
           
           // rjf: switch this view to viewing replacement file
           view->query_string_size = Min(sizeof(view->query_buffer), dst.size);
@@ -6485,7 +6481,7 @@ DF_VIEW_UI_FUNCTION_DEF(text)
         UI_TextAlignment(UI_TextAlign_Center)
         if(ui_clicked(ui_buttonf("Find alternative...")))
       {
-        d_cmd(D_CmdKind_RunCommand, .cmd_spec = d_cmd_spec_from_kind(D_CmdKind_PickFile));
+        df_cmd(DF_CmdKind_RunCommand, .cmd_spec = df_cmd_spec_from_kind(DF_CmdKind_PickFile));
       }
       scratch_end(scratch);
     }
@@ -6703,14 +6699,13 @@ DF_VIEW_CMD_FUNCTION_DEF(disasm)
   //////////////////////////////
   //- rjf: process general code-view commands
   //
-  df_code_view_cmds(view, &dv->cv, cmds, dasm_text_data, &dasm_text_info, &dasm_info.lines, range, dbgi_key);
+  df_code_view_cmds(view, &dv->cv, dasm_text_data, &dasm_text_info, &dasm_info.lines, range, dbgi_key);
   
   //////////////////////////////
   //- rjf: process disassembly-specific commands
   //
-  for(D_CmdNode *n = cmds->first; n != 0; n = n->next)
+  for(D_Cmd *cmd = 0; df_next_cmd(&cmd);)
   {
-    D_Cmd *cmd = &n->cmd;
     D_CmdParams params = cmd->params;
     
     // rjf: mismatched window/panel => skip
@@ -6721,11 +6716,11 @@ DF_VIEW_CMD_FUNCTION_DEF(disasm)
     }
     
     // rjf: process
-    D_CmdKind core_cmd_kind = d_cmd_kind_from_string(cmd->spec->info.string);
-    switch(core_cmd_kind)
+    DF_CmdKind kind = df_cmd_kind_from_string(cmd->spec->info.string);
+    switch(kind)
     {
       default: break;
-      case D_CmdKind_GoToAddress:
+      case DF_CmdKind_GoToAddress:
       {
         D_Entity *process = &d_nil_entity;
         {
@@ -6745,8 +6740,8 @@ DF_VIEW_CMD_FUNCTION_DEF(disasm)
         }
         dv->goto_vaddr = params.vaddr;
       }break;
-      case D_CmdKind_ToggleCodeBytesVisibility: {dv->style_flags ^= DASM_StyleFlag_CodeBytes;}break;
-      case D_CmdKind_ToggleAddressVisibility:   {dv->style_flags ^= DASM_StyleFlag_Addresses;}break;
+      case DF_CmdKind_ToggleCodeBytesVisibility: {dv->style_flags ^= DASM_StyleFlag_CodeBytes;}break;
+      case DF_CmdKind_ToggleAddressVisibility:   {dv->style_flags ^= DASM_StyleFlag_Addresses;}break;
     }
   }
   
@@ -6929,7 +6924,7 @@ DF_VIEW_CMD_FUNCTION_DEF(output)
   U128 hash = {0};
   TXT_TextInfo info = txt_text_info_from_key_lang(txt_scope, d_regs()->text_key, d_regs()->lang_kind, &hash);
   String8 data = hs_data_from_hash(hs_scope, hash);
-  df_code_view_cmds(view, cv, cmds, data, &info, 0, r1u64(0, 0), di_key_zero());
+  df_code_view_cmds(view, cv, data, &info, 0, r1u64(0, 0), di_key_zero());
   txt_scope_close(txt_scope);
   hs_scope_close(hs_scope);
   scratch_end(scratch);
@@ -7014,25 +7009,24 @@ DF_VIEW_SETUP_FUNCTION_DEF(memory)
 DF_VIEW_CMD_FUNCTION_DEF(memory)
 {
   DF_MemoryViewState *mv = df_view_user_state(view, DF_MemoryViewState);
-  for(D_CmdNode *n = cmds->first; n != 0; n = n->next)
+  for(D_Cmd *cmd = 0; df_next_cmd(&cmd);)
   {
-    D_Cmd *cmd = &n->cmd;
-    D_CmdKind core_cmd_kind = d_cmd_kind_from_string(cmd->spec->info.string);
+    DF_CmdKind kind = df_cmd_kind_from_string(cmd->spec->info.string);
     D_CmdParams *params = &cmd->params;
-    switch(core_cmd_kind)
+    switch(kind)
     {
       default: break;
-      case D_CmdKind_CenterCursor:
+      case DF_CmdKind_CenterCursor:
       if(df_view_from_handle(params->view) == view)
       {
         mv->center_cursor = 1;
       }break;
-      case D_CmdKind_ContainCursor:
+      case DF_CmdKind_ContainCursor:
       if(df_view_from_handle(params->view) == view)
       {
         mv->contain_cursor = 1;
       }break;
-      case D_CmdKind_GoToAddress:
+      case DF_CmdKind_GoToAddress:
       {
         // NOTE(rjf): go-to-address occurs with disassembly snaps, and we don't
         // generally want to respond to those in thise view, so just skip any
@@ -7043,7 +7037,7 @@ DF_VIEW_CMD_FUNCTION_DEF(memory)
           // TODO(rjf)
         }
       }break;
-      case D_CmdKind_SetColumns:
+      case DF_CmdKind_SetColumns:
       if(df_view_from_handle(params->view) == view)
       {
         // TODO(rjf)
@@ -7526,7 +7520,7 @@ DF_VIEW_UI_FUNCTION_DEF(memory)
     // rjf: press -> focus panel
     if(ui_pressed(sig))
     {
-      d_cmd(D_CmdKind_FocusPanel);
+      df_cmd(DF_CmdKind_FocusPanel);
     }
     
     // rjf: click & drag -> select
@@ -7553,11 +7547,11 @@ DF_VIEW_UI_FUNCTION_DEF(memory)
           ui_eat_event(evt);
           if(evt->delta_2f32.y < 0)
           {
-            d_cmd(D_CmdKind_IncCodeFontScale);
+            df_cmd(DF_CmdKind_IncCodeFontScale);
           }
           else if(evt->delta_2f32.y > 0)
           {
-            d_cmd(D_CmdKind_DecCodeFontScale);
+            df_cmd(DF_CmdKind_DecCodeFontScale);
           }
         }
       }
@@ -8004,7 +7998,7 @@ DF_VIEW_UI_FUNCTION_DEF(bitmap)
     {
       if(ui_pressed(canvas_sig))
       {
-        d_cmd(D_CmdKind_FocusPanel);
+        df_cmd(DF_CmdKind_FocusPanel);
         ui_store_drag_struct(&view_center_pos);
       }
       Vec2F32 start_view_center_pos = *ui_get_drag_struct(Vec2F32);
@@ -8333,7 +8327,7 @@ DF_VIEW_UI_FUNCTION_DEF(geo3d)
     {
       if(ui_pressed(sig))
       {
-        d_cmd(D_CmdKind_FocusPanel);
+        df_cmd(DF_CmdKind_FocusPanel);
         Vec2F32 data = v2f32(yaw_target, pitch_target);
         ui_store_drag_struct(&data);
       }
@@ -9141,7 +9135,7 @@ DF_VIEW_UI_FUNCTION_DEF(settings)
         ui_ctx_menu_open(color_ctx_menu_keys[item->color], item_box->key, v2f32(0, dim_2f32(item_box->rect).y));
         sv->color_ctx_menu_color = item->color;
         sv->color_ctx_menu_color_hsva = v4f32(hsv.x, hsv.y, hsv.z, rgba.w);
-        d_cmd(D_CmdKind_FocusPanel);
+        df_cmd(DF_CmdKind_FocusPanel);
       }
       if((item->kind == DF_SettingsItemKind_GlobalSetting || item->kind == DF_SettingsItemKind_WindowSetting) &&
          is_toggler && ui_clicked(sig))

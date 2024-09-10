@@ -942,7 +942,6 @@ struct D_State
   U64 frame_eval_memread_endt_us;
   F64 time_in_seconds;
   F32 dt;
-  F32 seconds_til_autosave;
   
   // rjf: frame info
   Arena *frame_arenas[2];
@@ -951,9 +950,9 @@ struct D_State
   D_RegsNode base_regs;
   D_RegsNode *top_regs;
   
-  // rjf: top-level command batch
-  Arena *root_cmd_arena;
-  D_CmdList root_cmds;
+  // rjf: commands
+  Arena *cmds_arena;
+  D_CmdList cmds;
   
   // rjf: output log key
   U128 output_log_key;
@@ -1478,8 +1477,6 @@ internal E_String2NumMap *d_query_cached_member_map_from_dbgi_key_voff(DI_Key *d
 
 //- rjf: top-level command dispatch
 internal void d_push_cmd(D_CmdSpec *spec, D_CmdParams *params);
-internal void d_error(String8 string);
-internal void d_errorf(char *fmt, ...);
 #define d_cmd(kind, ...) d_push_cmd(d_cmd_spec_from_kind(kind),  \
 &(D_CmdParams)               \
 {                            \
@@ -1489,11 +1486,13 @@ internal void d_errorf(char *fmt, ...);
 __VA_ARGS__                 \
 })
 
+//- rjf: command iteration
+internal B32 d_next_cmd(D_Cmd **cmd);
+
 ////////////////////////////////
 //~ rjf: Main Layer Top-Level Calls
 
-internal void d_init(CmdLine *cmdln);
-internal D_CmdList d_gather_root_cmds(Arena *arena);
-internal void d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_Scope *di_scope, D_CmdList *cmds, F32 dt);
+internal void d_init(void);
+internal void d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_Scope *di_scope, F32 dt);
 
 #endif // DBG_ENGINE_CORE_H

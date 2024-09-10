@@ -13,6 +13,17 @@ D_CfgSrcTable:
   {"transient"       Transient        Null           Null                Null             }
 }
 
+@enum D_CfgSrc:
+{
+  @expand(D_CfgSrcTable a) `$(a.name)`,
+  COUNT,
+}
+
+@data(String8) d_cfg_src_string_table:
+{
+  @expand(D_CfgSrcTable a) `str8_lit_comp("$(a.string)")`,
+}
+
 ////////////////////////////////
 //~ rjf: Entity Kind Tables
 
@@ -83,6 +94,37 @@ D_EntityKindTable:
   //- rjf: parser task entities
   {ConversionTask     conversion_task       conversion_tasks              0  0  0  1  0  0  0  0  0  0  0                      "Label"             Null                   "Conversion Task"            }
   {ConversionFail     conversion_fail       conversion_fails              0  0  0  1  0  0  0  0  0  0  0                      "Label"             Null                   "Conversion Failure"         }
+}
+
+@enum D_EntityKind:
+{
+  @expand(D_EntityKindTable a) `$(a.name)`,
+  COUNT,
+}
+
+@data(String8) d_entity_kind_display_string_table:
+{
+  @expand(D_EntityKindTable a) `str8_lit_comp("$(a.display_string)")`,
+}
+
+@data(String8) d_entity_kind_name_lower_table:
+{
+  @expand(D_EntityKindTable a) `str8_lit_comp("$(a.name_lower)")`,
+}
+
+@data(String8) d_entity_kind_name_lower_plural_table:
+{
+  @expand(D_EntityKindTable a) `str8_lit_comp("$(a.name_lower_plural)")`,
+}
+
+@data(String8) d_entity_kind_name_label_table:
+{
+  @expand(D_EntityKindTable a) `str8_lit_comp("$(a.name_label)")`,
+}
+
+@data(D_EntityKindFlags) d_entity_kind_flags_table:
+{
+  @expand(D_EntityKindTable a) `($(a.op_delete)*D_EntityKindFlag_CanDelete) | ($(a.op_freeze)*D_EntityKindFlag_CanFreeze) | ($(a.op_edit)*D_EntityKindFlag_CanEdit) | ($(a.op_rename)*D_EntityKindFlag_CanRename) | ($(a.op_enable)*D_EntityKindFlag_CanEnable) | ($(a.op_cond)*D_EntityKindFlag_CanCondition) | ($(a.op_dup)*D_EntityKindFlag_CanDuplicate) | ($(a.name_is_code)*D_EntityKindFlag_NameIsCode) | ($(a.name_is_path)*D_EntityKindFlag_NameIsPath) | ($(a.user_lifetime)*D_EntityKindFlag_UserDefinedLifetime) | ($(a.is_serialized)*D_EntityKindFlag_IsSerializedToConfig)`,
 }
 
 ////////////////////////////////
@@ -187,21 +229,9 @@ D_CmdParamSlotTable:
 @table(name                      ui_vis   ipc_docs_vis   q_slot       q_ent_kind  q_allow_files q_allow_folders  q_keep_oi   q_select_oi  q_is_code  q_required           canonical_icon        string                        display_name                                  desc                                                                                                               search_tags                      )
 //    /                          |        |              |             \___                                     ______________________________________________/           |                     |                             |                                             |                                                                                                                  |
 //   /                           |        |              |                 \                                   /                                                          |                     |                             |                                             |                                                                                                                  |
-D_CoreCmdTable: //               |        |              |                  |                                 |                                                           |                     |                             |                                             |                                                                                                                  |
+D_CmdTable:     //               |        |              |                  |                                 |                                                           |                     |                             |                                             |                                                                                                                  |
 {
   {Null                           0        0              Null               Nil                0  0  0  0  0  0                                                           Null                  ""                            ""                                            ""                                                                                                                 ""                               }
-  
-  //- rjf: exiting
-  {Exit                           1        1              Null               Nil                0  0  0  0  0  0                                                           X                     "exit"                        "Exit"                                        "Exits the debugger."                                                                                              "quit,close,abort"               }
-  
-  //- rjf: command runner
-  {RunCommand                     1        1              CmdSpec            Nil                0  0  0  0  0  1                                                           Null                  "run_command"                 "Run Command"                                 "Runs a command from the command palette."                                                                         "help,cmd"                       }
-  
-  //- rjf: notifications
-  {Error                          0        1              Null               Nil                0  0  0  0  0  0                                                           Null                  "error"                       "Error"                                       "Notifies of an error."                                                                                            ""                               }
-  
-  //- rjf: os event passthrough
-  {OSEvent                        0        0              Null               Nil                0  0  0  0  0  0                                                           Null                  "os_event"                    "OS Event"                                    ""                                                                                                                 ""                               }
   
   //- rjf: low-level target control operations
   {LaunchAndRun                   1        1              EntityList         Target             0  0  0  0  0  1                                                           Play                  "launch_and_run"              "Launch and Run"                              "Starts debugging a new instance of a target, then runs."                                                          "launch,start,run,target"        }
@@ -242,261 +272,41 @@ D_CoreCmdTable: //               |        |              |                  |   
   {ThawMachine                    0        1              Entity             Machine            0  0  0  0  0  1                                                           Unlocked              "thaw_machine"                "Thaw Machine"                                "Thaws the passed machine."                                                                                        ""                               }
   {FreezeLocalMachine             1        1              Null               Nil                0  0  0  0  0  0                                                           Machine               "freeze_local_machine"        "Freeze Local Machine"                        "Freezes the local machine."                                                                                       ""                               }
   {ThawLocalMachine               1        1              Null               Nil                0  0  0  0  0  0                                                           Machine               "thaw_local_machine"          "Thaw Local Machine"                          "Thaws the local machine."                                                                                         ""                               }
-  
-  //- rjf: font sizes
-  {IncUIFontScale                 1        1              Null               Nil                0  0  0  0  0  0                                                           Null                  "inc_ui_font_scale"           "Increase UI Font Scale"                      "Increases the font size used for UI."                                                                             ""                               }
-  {DecUIFontScale                 1        1              Null               Nil                0  0  0  0  0  0                                                           Null                  "dec_ui_font_scale"           "Decrease UI Font Scale"                      "Decreases the font size used for UI."                                                                             ""                               }
-  {IncCodeFontScale               1        1              Null               Nil                0  0  0  0  0  0                                                           Null                  "inc_code_font_scale"         "Increase Code Font Scale"                    "Increases the font size used for code."                                                                           ""                               }
-  {DecCodeFontScale               1        1              Null               Nil                0  0  0  0  0  0                                                           Null                  "dec_code_font_scale"         "Decrease Code Font Scale"                    "Decreases the font size used for code."                                                                           ""                               }
-  
-  //- rjf: windows
-  {OpenWindow                     1        1              Null               Nil                0  0  0  0  0  0                                                           Window                "open_window"                 "Open New Window"                             "Opens a new window."                                                                                              ""                               }
-  {CloseWindow                    1        1              Null               Nil                0  0  0  0  0  0                                                           Window                "close_window"                "Close Window"                                "Closes an opened window."                                                                                         ""                               }
-  {ToggleFullscreen               1        1              Null               Nil                0  0  0  0  0  0                                                           Window                "toggle_fullscreen"           "Toggle Fullscreen"                           "Toggles fullscreen view on the active window."                                                                    ""                               }
-  
-  //- rjf: confirmations
-  {ConfirmAccept                  0        1              Null               Nil                0  0  0  0  0  0                                                           Null                  "confirm_accept"              "Confirm Accept"                              "Accepts the active confirmation prompt."                                                                          ""                               }
-  {ConfirmCancel                  0        1              Null               Nil                0  0  0  0  0  0                                                           Null                  "confirm_cancel"              "Confirm Cancel"                              "Cancels the active confirmation prompt."                                                                          ""                               }
-  
-  //- rjf: panel splitting
-  {ResetToDefaultPanels           1        1              Null               Nil                0  0  0  0  0  0                                                           Window                "reset_to_default_panels"     "Reset To Default Panel Layout"               "Resets the window to the default panel layout."                                                                   "panel"                          }
-  {ResetToCompactPanels           1        1              Null               Nil                0  0  0  0  0  0                                                           Window                "reset_to_compact_panels"     "Reset To Compact Panel Layout"               "Resets the window to the compact panel layout."                                                                   "panel"                          }
-  {NewPanelLeft                   1        1              Null               Nil                0  0  0  0  0  0                                                           XSplit                "new_panel_left"              "Split Panel Left"                            "Creates a new panel to the left of the active panel."                                                             "panel"                          }
-  {NewPanelUp                     1        1              Null               Nil                0  0  0  0  0  0                                                           YSplit                "new_panel_up"                "Split Panel Up"                              "Creates a new panel at the top of the active panel."                                                              "panel"                          }
-  {NewPanelRight                  1        1              Null               Nil                0  0  0  0  0  0                                                           XSplit                "new_panel_right"             "Split Panel Right"                           "Creates a new panel to the right of the active panel."                                                            "panel"                          }
-  {NewPanelDown                   1        1              Null               Nil                0  0  0  0  0  0                                                           YSplit                "new_panel_down"              "Split Panel Down"                            "Creates a new panel at the bottom of the active panel."                                                           "panel"                          }
-  {SplitPanel                     0        0              Null               Nil                0  0  0  0  0  0                                                           Null                  "split_panel"                 "Split Panel"                                 "Creates a new panel in a given direction, and moves a tab to it, if specified."                                   ""                               }
-  
-  //- rjf: panel rotation
-  {RotatePanelColumns             1        1              Null               Nil                0  0  0  0  0  0                                                           Null                  "rotate_panel_columns"        "Rotate Panel Columns"                        "Rotates all panels at the closest column level of the panel hierarchy."                                           ""                               }
-  
-  //- rjf: focused panel changing
-  {NextPanel                      1        1              Null               Nil                0  0  0  0  0  0                                                           RightArrow            "next_panel"                  "Focus Next Panel"                            "Cycles the active panel forward."                                                                                 ""                               }
-  {PrevPanel                      1        1              Null               Nil                0  0  0  0  0  0                                                           LeftArrow             "prev_panel"                  "Focus Previous Panel"                        "Cycles the active panel backwards."                                                                               ""                               }
-  {FocusPanel                     0        0              Null               Nil                0  0  0  0  0  0                                                           Null                  "focus_panel"                 "Focus Panel"                                 "Focuses a new panel."                                                                                             ""                               }
-  {FocusPanelRight                1        1              Null               Nil                0  0  0  0  0  0                                                           RightArrow            "focus_panel_right"           "Focus Panel Right"                           "Focuses a panel rightward of the currently focused panel."                                                        ""                               }
-  {FocusPanelLeft                 1        1              Null               Nil                0  0  0  0  0  0                                                           LeftArrow             "focus_panel_left"            "Focus Panel Left"                            "Focuses a panel leftward of the currently focused panel."                                                         ""                               }
-  {FocusPanelUp                   1        1              Null               Nil                0  0  0  0  0  0                                                           UpArrow               "focus_panel_up"              "Focus Panel Up"                              "Focuses a panel upward of the currently focused panel."                                                           ""                               }
-  {FocusPanelDown                 1        1              Null               Nil                0  0  0  0  0  0                                                           DownArrow             "focus_panel_down"            "Focus Panel Down"                            "Focuses a panel downward of the currently focused panel."                                                         ""                               }
-  
-  //- rjf: undo/redo
-  {Undo                           1        1              Null               Nil                0  0  0  0  0  0                                                           Undo                  "undo"                        "Undo"                                        "Undoes the previous action."                                                                                      ""                               }
-  {Redo                           1        1              Null               Nil                0  0  0  0  0  0                                                           Redo                  "redo"                        "Redo"                                        "Redoes the first previously undone action."                                                                       ""                               }
-  
-  //- rjf: focus history
-  {GoBack                         1        1              Null               Nil                0  0  0  0  0  0                                                           LeftArrow             "go_back"                     "Go Back"                                     "Returns to the previously selected panel and tab in recorded history."                                            ""                               }
-  {GoForward                      1        1              Null               Nil                0  0  0  0  0  0                                                           RightArrow            "go_forward"                  "Go Forward"                                  "Returns to the next selected panel and tab in recorded history."                                                  ""                               }
-  
-  //- rjf: panel removal
-  {ClosePanel                     1        1              Null               Nil                0  0  0  0  0  0                                                           ClosePanel            "close_panel"                 "Close Panel"                                 "Closes the currently active panel."                                                                               ""                               }
-  
-  //- rjf: panel tab
-  {NextTab                        1        1              Null               Nil                0  0  0  0  0  0                                                           RightArrow            "next_tab"                    "Focus Next Tab"                              "Focuses the next tab on the active panel."                                                                        ""                               }
-  {PrevTab                        1        1              Null               Nil                0  0  0  0  0  0                                                           LeftArrow             "prev_tab"                    "Focus Previous Tab"                          "Focuses the previous tab on the active panel."                                                                    ""                               }
-  {MoveTabRight                   1        1              Null               Nil                0  0  0  0  0  0                                                           RightArrow            "move_tab_right"              "Move Tab Right"                              "Moves the selected tab right one slot."                                                                           ""                               }
-  {MoveTabLeft                    1        1              Null               Nil                0  0  0  0  0  0                                                           LeftArrow             "move_tab_left"               "Move Tab Left"                               "Moves the selected tab left one slot."                                                                            ""                               }
-  {OpenTab                        0        0              Null               Nil                0  0  0  0  0  0                                                           Null                  "open_tab"                    "Open Tab"                                    "Opens a new tab with the parameterized view specification."                                                       ""                               }
-  {CloseTab                       1        1              Null               Nil                0  0  0  0  0  0                                                           X                     "close_tab"                   "Close Tab"                                   "Closes the currently opened tab."                                                                                 ""                               }
-  {MoveTab                        0        0              Null               Nil                0  0  0  0  0  0                                                           Null                  "move_tab"                    "Move Tab"                                    "Moves a tab to a new panel."                                                                                      ""                               }
-  {TabBarTop                      1        1              Null               Nil                0  0  0  0  0  0                                                           UpArrow               "tab_bar_top"                 "Anchor Tab Bar To Top"                       "Anchors a panel's tab bar to the top of the panel."                                                               ""                               }
-  {TabBarBottom                   1        1              Null               Nil                0  0  0  0  0  0                                                           DownArrow             "tab_bar_bottom"              "Anchor Tab Bar To Bottom"                    "Anchors a panel's tab bar to the bottom of the panel."                                                            ""                               }
-  
-  //- rjf: files
-  {SetCurrentPath                 0        1              Null               Nil                0  0  0  0  0  0                                                           FileOutline           "set_current_path"            "Set Current Path"                            "Sets the debugger's current path, which is used as a starting point when browsing for files."                     ""                               }
-  {Open                           1        1              FilePath           Nil                1  0  0  0  0  1                                                           FileOutline           "open"                        "Open"                                        "Opens a file."                                                                                                    "code,source,file"               }
-  {Switch                         1        1              Entity             File               0  0  0  0  0  1                                                           FileOutline           "switch"                      "Switch"                                      "Switches to a loaded file."                                                                                       "code,source,file"               }
-  {SwitchToPartnerFile            1        1              Null               Nil                0  0  0  0  0  0                                                           FileOutline           "switch_to_partner_file"      "Switch To Partner File"                      "Switches to the focused file's partner; or from header to implementation or vice versa."                          "code,source,file"               }
-  
-  //- rjf: source <-> disasm
-  {GoToDisassembly                1        1              Null               Nil                0  0  0  0  0  0                                                           Glasses               "go_to_disassembly"           "Go To Disassembly"                           "Goes to the disassembly, if any, for a given source code line."                                                   "code,source,disassembly,disasm" }
-  {GoToSource                     1        1              Null               Nil                0  0  0  0  0  0                                                           FileOutline           "go_to_source"                "Go To Source"                                "Goes to the source code, if any, for a given disassembly line."                                                   "code,source,disassembly,disasm" }
-  
-  //- rjf: override file links
-  {SetFileOverrideLinkSrc         0        0              Null               Nil                0  0  0  0  0  0                                                           Null                  "set_file_override_link_src"  "Set File Override Link Source"               "Sets the source path for an override file link."                                                                  ""                               }
-  {SetFileOverrideLinkDst         0        0              Null               Nil                0  0  0  0  0  0                                                           Null                  "set_file_override_link_dst"  "Set File Override Link Destination"          "Sets the destination path for an override file link."                                                             ""                               }
-  {SetFileReplacementPath         0        0              Null               Nil                0  0  0  0  0  0                                                           Null                  "set_file_replacement_path"   "Set File Replacement Path"                   "Sets the path which should be used as the replacement for the passed file."                                       ""                               }
-  
-  //- rjf: auto view rules
-  {SetAutoViewRuleType            0        0              Null               Nil                0  0  0  0  0  0                                                           Null                  "set_auto_view_rule_type"     "Set Auto View Rule Type"                     "Sets the type for an auto view rule."                                                                             ""                               }
-  {SetAutoViewRuleViewRule        0        0              Null               Nil                0  0  0  0  0  0                                                           Null                  "set_auto_view_rule_view_rule""Set Auto View Rule View Rule"                "Sets the view rule string for an auto view rule."                                                                 ""                               }
-  
-  //- rjf: setting config paths
-  {OpenUser                       1        1              FilePath           Nil                1  0  0  0  0  1                                                           Person                "open_user"                   "Open User"                                   "Opens a user file path, immediately loading it, and begins autosaving to it."                                     "load,user,project,layout"       }
-  {OpenProject                    1        1              FilePath           Nil                1  0  0  0  0  1                                                           Briefcase             "open_project"                "Open Project"                                "Opens a project file path, immediately loading it, and begins autosaving to it."                                  "project,project,session"        }
-  {OpenRecentProject              1        1              Entity             RecentProject      0  0  0  0  0  1                                                           Briefcase             "open_recent_project"         "Open Recent Project"                         "Opens a recently used project file."                                                                              "project,project,session"        }
-  
-  //- rjf: loading/applying stateful config changes
-  {ApplyUserData                  0        0              Null               Nil                0  0  0  0  0  0                                                           Null                  "apply_user_data"             "Apply User Data"                             "Applies user data from the active user file."                                                                     ""                               }
-  {ApplyProjectData               0        0              Null               Nil                0  0  0  0  0  0                                                           Null                  "apply_project_data"          "Apply Project Data"                          "Applies project data from the active project file."                                                               ""                               }
-  
-  //- rjf: writing config changes
-  {WriteUserData                  0        1              Null               Nil                0  0  0  0  0  0                                                           Null                  "write_user_data"             "Write User Data"                             "Writes user data to the active user file."                                                                        ""                               }
-  {WriteProjectData               0        1              Null               Nil                0  0  0  0  0  0                                                           Null                  "write_project_data"          "Write Project Data"                          "Writes project data to the active project file."                                                                  ""                               }
-  
-  //- rjf: meta controls
-  {Edit                           1        1              Null               Nil                0  0  0  0  0  0                                                           Pencil                "edit"                        "Edit"                                        "Edits the current selection."                                                                                     ""                               }
-  {Accept                         1        1              Null               Nil                0  0  0  0  0  0                                                           CheckFilled           "accept"                      "Accept"                                      "Accepts current changes, or answers prompts in the affirmative."                                                  ""                               }
-  {Cancel                         1        1              Null               Nil                0  0  0  0  0  0                                                           X                     "cancel"                      "Cancel"                                      "Rejects current changes, exits temporary menus, or answers prompts in the negative."                              ""                               }
-  
-  //- rjf: directional movement & text controls
-  {MoveLeft                       1        1              Null               Nil                0  0  0  0  0  0                                                           Null                  "move_left"                   "Move Left"                                   "Moves the cursor or selection left."                                                                              ""                               }
-  {MoveRight                      1        1              Null               Nil                0  0  0  0  0  0                                                           Null                  "move_right"                  "Move Right"                                  "Moves the cursor or selection right."                                                                             ""                               }
-  {MoveUp                         1        1              Null               Nil                0  0  0  0  0  0                                                           Null                  "move_up"                     "Move Up"                                     "Moves the cursor or selection up."                                                                                ""                               }
-  {MoveDown                       1        1              Null               Nil                0  0  0  0  0  0                                                           Null                  "move_down"                   "Move Down"                                   "Moves the cursor or selection down."                                                                              ""                               }
-  {MoveLeftSelect                 1        1              Null               Nil                0  0  0  0  0  0                                                           Null                  "move_left_select"            "Move Left Select"                            "Moves the cursor or selection left, while selecting."                                                             ""                               }
-  {MoveRightSelect                1        1              Null               Nil                0  0  0  0  0  0                                                           Null                  "move_right_select"           "Move Right Select"                           "Moves the cursor or selection right, while selecting."                                                            ""                               }
-  {MoveUpSelect                   1        1              Null               Nil                0  0  0  0  0  0                                                           Null                  "move_up_select"              "Move Up Select"                              "Moves the cursor or selection up, while selecting."                                                               ""                               }
-  {MoveDownSelect                 1        1              Null               Nil                0  0  0  0  0  0                                                           Null                  "move_down_select"            "Move Down Select"                            "Moves the cursor or selection down, while selecting."                                                             ""                               }
-  {MoveLeftChunk                  1        1              Null               Nil                0  0  0  0  0  0                                                           Null                  "move_left_chunk"             "Move Left Select"                            "Moves the cursor or selection left one chunk."                                                                    ""                               }
-  {MoveRightChunk                 1        1              Null               Nil                0  0  0  0  0  0                                                           Null                  "move_right_chunk"            "Move Right Select"                           "Moves the cursor or selection right one chunk."                                                                   ""                               }
-  {MoveUpChunk                    1        1              Null               Nil                0  0  0  0  0  0                                                           Null                  "move_up_chunk"               "Move Up Chunk"                               "Moves the cursor or selection up one chunk."                                                                      ""                               }
-  {MoveDownChunk                  1        1              Null               Nil                0  0  0  0  0  0                                                           Null                  "move_down_chunk"             "Move Down Chunk"                             "Moves the cursor or selection down one chunk."                                                                    ""                               }
-  {MoveUpPage                     1        1              Null               Nil                0  0  0  0  0  0                                                           Null                  "move_up_page"                "Move Up Page"                                "Moves the cursor or selection up one page."                                                                       ""                               }
-  {MoveDownPage                   1        1              Null               Nil                0  0  0  0  0  0                                                           Null                  "move_down_page"              "Move Down Page"                              "Moves the cursor or selection down one page."                                                                     ""                               }
-  {MoveUpWhole                    1        1              Null               Nil                0  0  0  0  0  0                                                           Null                  "move_up_whole"               "Move Up Whole"                               "Moves the cursor or selection to the beginning of the relevant content."                                          ""                               }
-  {MoveDownWhole                  1        1              Null               Nil                0  0  0  0  0  0                                                           Null                  "move_down_whole"             "Move Down Whole"                             "Moves the cursor or selection to the end of the relevant content."                                                ""                               }
-  {MoveLeftChunkSelect            1        1              Null               Nil                0  0  0  0  0  0                                                           Null                  "move_left_chunk_select"      "Move Left Chunk Select"                      "Moves the cursor or selection left one chunk."                                                                    ""                               }
-  {MoveRightChunkSelect           1        1              Null               Nil                0  0  0  0  0  0                                                           Null                  "move_right_chunk_select"     "Move Right Chunk Select"                     "Moves the cursor or selection right one chunk."                                                                   ""                               }
-  {MoveUpChunkSelect              1        1              Null               Nil                0  0  0  0  0  0                                                           Null                  "move_up_chunk_select"        "Move Up Chunk Select"                        "Moves the cursor or selection up one chunk."                                                                      ""                               }
-  {MoveDownChunkSelect            1        1              Null               Nil                0  0  0  0  0  0                                                           Null                  "move_down_chunk_select"      "Move Down Chunk Select"                      "Moves the cursor or selection down one chunk."                                                                    ""                               }
-  {MoveUpPageSelect               1        1              Null               Nil                0  0  0  0  0  0                                                           Null                  "move_up_page_select"         "Move Up Page Select"                         "Moves the cursor or selection up one page, while selecting."                                                      ""                               }
-  {MoveDownPageSelect             1        1              Null               Nil                0  0  0  0  0  0                                                           Null                  "move_down_page_select"       "Move Down Page Select"                       "Moves the cursor or selection down one page, while selecting."                                                    ""                               }
-  {MoveUpWholeSelect              1        1              Null               Nil                0  0  0  0  0  0                                                           Null                  "move_up_whole_select"        "Move Up Whole Select"                        "Moves the cursor or selection to the beginning of the relevant content, while selecting."                         ""                               }
-  {MoveDownWholeSelect            1        1              Null               Nil                0  0  0  0  0  0                                                           Null                  "move_down_whole_select"      "Move Down Whole Select"                      "Moves the cursor or selection to the end of the relevant content, while selecting."                               ""                               }
-  {MoveUpReorder                  1        1              Null               Nil                0  0  0  0  0  0                                                           Null                  "move_up_reorder"             "Move Up Reorder"                             "Moves the cursor or selection up, while swapping the currently selected element with that upward."                ""                               }
-  {MoveDownReorder                1        1              Null               Nil                0  0  0  0  0  0                                                           Null                  "move_down_reorder"           "Move Down Reorder"                           "Moves the cursor or selection down, while swapping the currently selected element with that downward."            ""                               }
-  {MoveHome                       1        1              Null               Nil                0  0  0  0  0  0                                                           Null                  "move_home"                   "Move Home"                                   "Moves the cursor to the beginning of the line."                                                                   ""                               }
-  {MoveEnd                        1        1              Null               Nil                0  0  0  0  0  0                                                           Null                  "move_end"                    "Move End"                                    "Moves the cursor to the end of the line."                                                                         ""                               }
-  {MoveHomeSelect                 1        1              Null               Nil                0  0  0  0  0  0                                                           Null                  "move_home_select"            "Move Home Select"                            "Moves the cursor to the beginning of the line, while selecting."                                                  ""                               }
-  {MoveEndSelect                  1        1              Null               Nil                0  0  0  0  0  0                                                           Null                  "move_end_select"             "Move End Select"                             "Moves the cursor to the end of the line, while selecting."                                                        ""                               }
-  {SelectAll                      1        1              Null               Nil                0  0  0  0  0  0                                                           Null                  "select_all"                  "Select All"                                  "Selects everything possible."                                                                                     ""                               }
-  {DeleteSingle                   1        1              Null               Nil                0  0  0  0  0  0                                                           Null                  "delete_single"               "Delete Single"                               "Deletes a single element to the right of the cursor, or the active selection."                                    ""                               }
-  {DeleteChunk                    1        1              Null               Nil                0  0  0  0  0  0                                                           Null                  "delete_chunk"                "Delete Chunk"                                "Deletes a chunk to the right of the cursor, or the active selection."                                             ""                               }
-  {BackspaceSingle                1        1              Null               Nil                0  0  0  0  0  0                                                           Null                  "backspace_single"            "Backspace Single"                            "Deletes a single element to the left of the cursor, or the active selection."                                     ""                               }
-  {BackspaceChunk                 1        1              Null               Nil                0  0  0  0  0  0                                                           Null                  "backspace_chunk"             "Backspace Chunk"                             "Deletes a chunk to the left of the cursor, or the active selection."                                              ""                               }
-  {Copy                           1        1              Null               Nil                0  0  0  0  0  0                                                           Clipboard             "copy"                        "Copy"                                        "Copies the active selection to the clipboard."                                                                    ""                               }
-  {Cut                            1        1              Null               Nil                0  0  0  0  0  0                                                           Clipboard             "cut"                         "Cut"                                         "Copies the active selection to the clipboard, then deletes it."                                                   ""                               }
-  {Paste                          1        1              Null               Nil                0  0  0  0  0  0                                                           Clipboard             "paste"                       "Paste"                                       "Pastes the current contents of the clipboard."                                                                    ""                               }
-  {InsertText                     0        1              Null               Nil                0  0  0  0  0  0                                                           Null                  "insert_text"                 "Insert Text"                                 "Inserts the text that was used to cause this command."                                                            ""                               }
-  
-  //- rjf: code navigation
-  {GoToLine                       1        1              TextPoint          Nil                0  0  0  0  1  1                                                           Null                  "goto_line"                   "Go To Line"                                  "Jumps to a line number in the current code file."                                                                 ""                               }
-  {GoToAddress                    1        1              VirtualAddr        Nil                0  0  0  0  1  1                                                           Null                  "goto_address"                "Go To Address"                               "Jumps to an address in the current memory or disassembly view."                                                   ""                               }
-  {CenterCursor                   1        1              Null               Nil                0  0  0  0  0  0                                                           Null                  "center_cursor"               "Center Cursor"                               "Snaps the current code view to center the cursor."                                                                ""                               }
-  {ContainCursor                  1        1              Null               Nil                0  0  0  0  0  0                                                           Null                  "contain_cursor"              "Contain Cursor"                              "Snaps the current code view to contain the cursor."                                                               ""                               }
-  {FindTextForward                1        1              String             Nil                0  0  1  1  1  1                                                           Find                  "find_text_forward"           "Find Text (Forward)"                         "Searches the current code file forward (from the cursor) for a string."                                           ""                               }
-  {FindTextBackward               1        1              String             Nil                0  0  1  1  1  1                                                           Find                  "find_text_backward"          "Find Text (Backwards)"                       "Searches the current code file backwards (from the cursor) for a string."                                         ""                               }
-  {FindNext                       1        1              Null               Nil                0  0  1  0  0  0                                                           Find                  "find_next"                   "Find Next"                                   "Searches the current code file forward (from the cursor) for the last searched string."                           ""                               }
-  {FindPrev                       1        1              Null               Nil                0  0  1  0  0  0                                                           Find                  "find_prev"                   "Find Previous"                               "Searches the current code file backwards (from the cursor) for the last searched string."                         ""                               }
-  
-  //- rjf: thread finding
-  {FindThread                     1        1              Entity             Thread             0  0  0  0  0  1                                                           Find                  "find_thread"                 "Find Thread"                                 "Jumps to the passed thread in either source code, disassembly, or both if they're already open."                  ""                               }
-  {FindSelectedThread             1        1              Null               Nil                0  0  0  0  0  0                                                           Find                  "find_selected_thread"        "Find Selected Thread"                        "Jumps to the selected thread in either source code, disassembly, or both if they're already open."                ""                               }
-  
-  //- rjf: name finding
-  {GoToName                       1        1              String             Nil                0  0  0  0  1  1                                                           Null                  "goto_name"                   "Go To Name"                                  "Searches for the passed string as a file, a symbol in debug info, and more, then jumps to it if possible."        ""                               }
-  {GoToNameAtCursor               1        1              Null               Nil                0  0  0  0  0  0                                                           Null                  "goto_name_at_cursor"         "Go To Name At Cursor"                        "Searches for the text at the cursor as a file, a symbol in debug info, and more, then jumps to it if possible."   ""                               }
-  
-  //- rjf: watch expressions
-  {ToggleWatchExpression          1        1              Null               Nil                0  0  0  0  0  0                                                           Binoculars            "toggle_watch_expr"           "Toggle Watch Expression"                     "Adds or removes an expression to an opened watch view."                                                           ""                               }
-  {ToggleWatchExpressionAtCursor  1        1              Null               Nil                0  0  0  0  0  0                                                           Binoculars            "toggle_watch_expr_at_cursor" "Toggle Watch Expression At Cursor"           "Adds or removes the expression that the cursor or selection is currently over to an opened watch view."           ""                               }
-  {ToggleWatchExpressionAtMouse   1        1              Null               Nil                0  0  0  0  0  0                                                           Binoculars            "toggle_watch_expr_at_mouse"  "Toggle Watch Expression At Mouse"            "Adds or removes the expression that the mouse is currently over to an opened watch view."                         ""                               }
-  
-  //- rjf: memory view parameterization
-  {SetColumns                     1        1              Index              Nil                0  0  0  0  1  1                                                           Thumbnails            "set_columns"                 "Set Columns"                                 "Sets the number of columns for a memory view."                                                                    ""                               }
-  
-  //- rjf: disassembly view parameterization
-  {ToggleAddressVisibility        1        1              Null               Nil                0  0  0  0  0  0                                                           Thumbnails            "toggle_address_visibility"   "Toggle Address Visibility"                   "Toggles the visibility of addresses in a disassembly view."                                                       ""                               }
-  {ToggleCodeBytesVisibility      1        1              Null               Nil                0  0  0  0  0  0                                                           Thumbnails            "toggle_code_bytes_visibility""Toggle Code Bytes Visibility"                "Toggles the visibility of machine code bytes in a disassembly view."                                              ""                               }
-  
-  //- rjf: general entity operations
-  {EnableEntity                   0        0              Null               Nil                0  0  0  0  0  0                                                           Null                  "enable_entity"               "Enable Entity"                               "Enables an entity."                                                                                               ""                               }
-  {DisableEntity                  0        0              Null               Nil                0  0  0  0  0  0                                                           Null                  "disable_entity"              "Disable Entity"                              "Disables an entity."                                                                                              ""                               }
   {FreezeEntity                   0        0              Null               Nil                0  0  0  0  0  0                                                           Null                  "freeze_entity"               "Freeze Entity"                               "Freezes an entity."                                                                                               ""                               }
   {ThawEntity                     0        0              Null               Nil                0  0  0  0  0  0                                                           Null                  "thaw_entity"                 "Thaw Entity"                                 "Thaws an entity."                                                                                                 ""                               }
-  {RemoveEntity                   0        0              Null               Nil                0  0  0  0  0  0                                                           Null                  "remove_entity"               "Remove Entity"                               "Removes an entity."                                                                                               ""                               }
-  {NameEntity                     0        0              Null               Nil                0  0  0  0  0  0                                                           Null                  "name_entity"                 "Name Entity"                                 "Equips an entity with a name."                                                                                    ""                               }
-  {EditEntity                     0        0              Null               Nil                0  0  0  0  0  0                                                           Null                  "edit_entity"                 "Edit Entity"                                 "Opens the editor for an entity."                                                                                  ""                               }
-  {DuplicateEntity                0        0              Null               Nil                0  0  0  0  0  0                                                           Null                  "duplicate_entity"            "Duplicate Entity"                            "Duplicates an entity."                                                                                            ""                               }
-  {RelocateEntity                 0        0              Null               Nil                0  0  0  0  0  0                                                           Null                  "relocate_entity"             "Relocate Entity"                             "Relocates an entity."                                                                                             ""                               }
-  
-  //- rjf: breakpoints
-  {AddBreakpoint                  0        1              Null               Nil                0  0  0  0  0  0                                                           CircleFilled          "add_breakpoint"              "Add Breakpoint"                              "Places a breakpoint at a given location (file path and line number, address, or symbol name)."                    ""                               }
-  {AddAddressBreakpoint           1        0              VirtualAddr        Nil                0  0  0  0  1  1                                                           CircleFilled          "add_address_breakpoint"      "Add Address Breakpoint"                      "Places a breakpoint on the specified address."                                                                    ""                               }
-  {AddFunctionBreakpoint          1        0              String             Nil                0  0  0  0  1  1                                                           CircleFilled          "add_function_breakpoint"     "Add Function Breakpoint"                     "Places a breakpoint on the first address(es) of the specified function."                                          ""                               }
-  {ToggleBreakpoint               0        1              Null               Nil                0  0  0  0  0  0                                                           CircleFilled          "toggle_breakpoint"           "Toggle Breakpoint"                           "Places or removes a breakpoint at a given location (file path and line number, address, or symbol name)."         ""                               }
-  {RemoveBreakpoint               1        1              Entity             Breakpoint         0  0  0  0  0  1                                                           Trash                 "remove_breakpoint"           "Remove Breakpoint"                           "Removes an existing breakpoint."                                                                                  ""                               }
-  {EnableBreakpoint               1        1              Entity             Breakpoint         0  0  0  0  0  1                                                           CheckFilled           "enable_breakpoint"           "Enable Breakpoint"                           "Enables a breakpoint."                                                                                            ""                               }
-  {DisableBreakpoint              1        1              Entity             Breakpoint         0  0  0  0  0  1                                                           CheckHollow           "disable_breakpoint"          "Disable Breakpoint"                          "Disables a breakpoint."                                                                                           ""                               }
-  
-  //- rjf: watch pins
-  {AddWatchPin                    0        1              Null               Nil                0  0  0  0  0  0                                                           Binoculars            "add_watch_pin"               "Add Watch Pin"                               "Places a watch pin at a given location (file path and line number or address)."                                   ""                               }
-  {ToggleWatchPin                 0        0              Null               Nil                0  0  0  0  0  0                                                           Binoculars            "toggle_watch_pin"            "Toggle Watch Pin"                            "Places or removes a watch pin at a given location (file path and line number or address)."                        ""                               }
-  
-  //- rjf: cursor operations
-  {ToggleBreakpointAtCursor       1        1              Null               Nil                0  0  0  0  0  0                                                           CircleFilled          "toggle_breakpoint_cursor"    "Toggle Breakpoint At Cursor"                 "Places or removes a breakpoint on the line on which the active cursor sits."                                      ""                               }
-  {ToggleWatchPinAtCursor         1        1              String             Nil                0  0  0  0  1  1                                                           Binoculars            "toggle_watch_pin_at_cursor"  "Toggle Watch Pin At Cursor"                  "Places or removes a watch pin at the cursor on the currently active file."                                        ""                               }
-  
-  //- rjf: targets
-  {AddTarget                      1        1              FilePath           Nil                1  0  0  0  0  1                                                           Target                "add_target"                  "Add Target"                                  "Adds a new target."                                                                                               "application,executable,debug"   }
-  {RemoveTarget                   1        1              Entity             Target             0  0  0  0  0  1                                                           Trash                 "remove_target"               "Remove Target"                               "Removes an existing target."                                                                                      "delete,remove,target"           }
-  {EditTarget                     1        1              Entity             Target             0  0  0  0  0  1                                                           Pencil                "edit_target"                 "Edit Target"                                 "Edits an existing target."                                                                                        ""                               }
-  {SelectTarget                   1        1              Entity             Target             0  0  0  0  0  1                                                           Target                "select_target"               "Select Target"                               "Selects a target."                                                                                                ""                               }
-  {EnableTarget                   1        1              Entity             Target             0  0  0  0  0  1                                                           CheckFilled           "enable_target"               "Enable Target"                               "Enables a target, in addition to all targets currently enabled."                                                  ""                               }
-  {DisableTarget                  1        1              Entity             Target             0  0  0  0  0  1                                                           CheckHollow           "disable_target"              "Disable Target"                              "Disables a target."                                                                                               ""                               }
   
   //- rjf: attaching
   {Attach                         1        1              ID                 Nil                0  0  0  0  0  1                                                           Null                  "attach"                      "Attach"                                      "Attaches to a process that is already running on the local machine."                                              ""                               }
-  {RegisterAsJITDebugger          1        1              Null               Nil                0  0  0  0  0  0                                                           Null                  "register_as_jit_debugger"    "Register As Just-In-Time (JIT) Debugger"     "Registers the RAD debugger as the just-in-time (JIT) debugger used by the operating system."                      ""                               }
-  
-  //- rjf: catchall general entity activation paths (drag/drop, clicking)
-  {EntityRefFastPath              0        0              Null               Nil                0  0  0  0  0  0                                                           Null                  "entity_ref_fast_path"        "Entity Reference Fast Path"                  "Activates the default behavior when clicking an entity reference."                                                ""                               }
-  {SpawnEntityView                0        0              Null               Nil                0  0  0  0  0  0                                                           Null                  "spawn_entity_view"           "Spawn Entity View"                           "Spawns a new view, given an entity and other parameterizations."                                                  ""                               }
-  {FindCodeLocation               0        1              FilePath           Nil                0  0  0  0  0  1                                                           FileOutline           "find_code_location"          "Find Code Location"                          "Finds a specific source code location given file, line, and column coordinates. Opens the file if necessary."     ""                               }
-  
-  //- rjf: general-purpose view filtering
-  {Filter                         1        1              Null               Nil                0  0  0  0  0  0                                                           Find                  "filter"                      "Filter"                                      "Begins filtering the active view."                                                                                "sort,search,filter,find"        }
-  {ApplyFilter                    1        1              Null               Nil                0  0  0  0  0  0                                                           Find                  "apply_filter"                "Apply Filter"                                "Applies the typed filter to the active view."                                                                     "sort,search,filter,find,apply"  }
-  {ClearFilter                    1        1              Null               Nil                0  0  0  0  0  0                                                           Find                  "clear_filter"                "Clear Filter"                                "Clears the filter applied to the active view."                                                                    "sort,search,filter,find,clear"  }
-  
-  //- rjf: view drivers
-  {GettingStarted                 1        1              Null               Nil                0  0  0  0  0  0                                                           QuestionMark          "getting_started"             "Getting Started"                             "Opens the menu for information on getting started."                                                               "tutorial,help"                  }
-  {Commands                       0        0              Null               Nil                0  0  0  0  0  0                                                           List                  "commands"                    "Commands"                                    "Opens the list of all commands."                                                                                  ""                               }
-  {Target                         0        0              Null               Nil                0  0  0  0  0  0                                                           Target                "target"                      "Target"                                      "Opens the editor for a target."                                                                                   ""                               }
-  {Targets                        1        1              Null               Nil                0  0  0  0  0  0                                                           Target                "targets"                     "Targets"                                     "Opens the list of all targets."                                                                                   ""                               }
-  {FilePathMap                    1        1              Null               Nil                0  0  0  0  0  0                                                           FileOutline           "file_path_map"               "File Path Map"                               "Opens the file path mapping editor."                                                                              ""                               }
-  {AutoViewRules                  1        1              Null               Nil                0  0  0  0  0  0                                                           Binoculars            "auto_view_rules"             "Auto View Rules"                             "Opens the auto view rule editor."                                                                                 ""                               }
-  {Breakpoints                    1        1              Null               Nil                0  0  0  0  0  0                                                           CircleFilled          "breakpoints"                 "Breakpoints"                                 "Opens the breakpoints view."                                                                                      ""                               }
-  {WatchPins                      1        1              Null               Nil                0  0  0  0  0  0                                                           Pin                   "watch_pins"                  "Watch Pins"                                  "Opens the watch pins view."                                                                                       ""                               }
-  {Scheduler                      1        1              Null               Nil                0  0  0  0  0  0                                                           Scheduler             "scheduler"                   "Scheduler"                                   "Opens the scheduler view, for process and thread controls."                                                       "threads,processes,targets"      }
-  {CallStack                      1        1              Null               Nil                0  0  0  0  0  0                                                           Thread                "call_stack"                  "Call Stack"                                  "Opens the call stack view."                                                                                       "callstack,thread,unwind"        }
-  {Modules                        1        1              Null               Nil                0  0  0  0  0  0                                                           Module                "modules"                     "Modules"                                     "Opens the modules view."                                                                                          ""                               }
-  {Watch                          1        1              Null               Nil                0  0  0  0  0  0                                                           Binoculars            "watch"                       "Watch"                                       "Opens a watch view."                                                                                              ""                               }
-  {Locals                         1        1              Null               Nil                0  0  0  0  0  0                                                           Binoculars            "locals"                      "Locals"                                      "Opens a locals view."                                                                                             ""                               }
-  {Registers                      1        1              Null               Nil                0  0  0  0  0  0                                                           Binoculars            "registers"                   "Registers"                                   "Opens a registers view."                                                                                          ""                               }
-  {Globals                        1        1              Null               Nil                0  0  0  0  0  0                                                           Binoculars            "globals"                     "Globals"                                     "Opens a globals view."                                                                                            ""                               }
-  {ThreadLocals                   1        1              Null               Nil                0  0  0  0  0  0                                                           Binoculars            "thread_locals"               "Thread Locals"                               "Opens a thread locals view."                                                                                      ""                               }
-  {Types                          1        1              Null               Nil                0  0  0  0  0  0                                                           Binoculars            "types"                       "Types"                                       "Opens a types view."                                                                                              ""                               }
-  {Procedures                     1        1              Null               Nil                0  0  0  0  0  0                                                           Binoculars            "procedures"                  "Procedures"                                  "Opens a procedures view."                                                                                         ""                               }
-  {PendingFile                    0        0              Null               Nil                0  0  0  0  0  0                                                           FileOutline           "pending_file"                "Pending File"                                "Opens a view which asynchronously analyzes the file path parameter, then picks an appropriate viewer for it."     ""                               }
-  {Disassembly                    1        1              Null               Nil                0  0  0  0  0  0                                                           Glasses               "disassembly"                 "Disassembly"                                 "Opens the disassembly view."                                                                                      "disasm"                         }
-  {Output                         1        1              Null               Nil                0  0  0  0  0  0                                                           List                  "output"                      "Output"                                      "Opens an output view."                                                                                            ""                               }
-  {Memory                         1        1              Null               Nil                0  0  0  0  0  0                                                           Grid                  "memory"                      "Memory"                                      "Opens a memory view."                                                                                             ""                               }
-  {ExceptionFilters               1        1              Null               Nil                0  0  0  0  0  0                                                           Gear                  "exception_filters"           "Exception Filters"                           "Opens the exception filters view."                                                                                "exceptions,filters"             }
-  {Settings                       1        1              Null               Nil                0  0  0  0  0  0                                                           Gear                  "settings"                    "Settings"                                    "Opens the settings view."                                                                                         "theme,color,scheme,options"     }
-  
-  //- rjf: queries
-  {PickFile                       0        0              FilePath           Nil                1  0  0  0  0  1                                                           FileOutline           "pick_file"                   "Pick File"                                   "Opens the file browser to pick a file."                                                                           ""                               }
-  {PickFolder                     0        0              FilePath           Nil                0  1  0  0  0  1                                                           FolderOpenFilled      "pick_folder"                 "Pick Folder"                                 "Opens the file browser to pick a folder."                                                                         ""                               }
-  {PickFileOrFolder               0        0              FilePath           Nil                1  1  0  0  0  1                                                           FileOutline           "pick_file_or_folder"         "Pick File/Folder"                            "Opens the file browser to pick a file or folder."                                                                 ""                               }
-  
-  //- rjf: query completion
-  {CompleteQuery                  0        0              Null               Nil                0  0  0  0  0  0                                                           Null                  "complete_query"              "Complete Query"                              "Completes a query."                                                                                               ""                               }
-  {CancelQuery                    0        0              Null               Nil                0  0  0  0  0  0                                                           Null                  "cancel_query"                "Cancel Query"                                "Cancels a query."                                                                                                 ""                               }
-  
-  //- rjf: developer commands
-  {ToggleDevMenu                  1        1              Null               Nil                0  0  0  0  0  0                                                           Null                  "toggle_dev_menu"             "Toggle Developer Menu"                       "Opens and closes the developer menu."                                                                             ""                               }
-  {LogMarker                      1        1              Null               Nil                0  0  0  0  0  0                                                           Null                  "log_marker"                  "Log Marker"                                  "Logs a marker in the application log, to denote specific points in time within the log."                          ""                               }
+}
+
+@enum D_CmdKind:
+{
+  @expand(D_CmdTable, a) `$(a.name)`,
+  COUNT,
+}
+
+@enum D_CmdParamSlot:
+{
+  Null,
+  @expand(D_CmdParamSlotTable a) `$(a.name)`,
+  COUNT,
+}
+
+@struct D_CmdParams:
+{
+  @expand(D_CmdParamSlotTable a) `$(a.c_type) $(a.name_lower)`;
+}
+
+@data(Rng1U64) d_cmd_param_slot_range_table:
+{
+  `{0}`,
+  @expand(D_CmdParamSlotTable a) `{OffsetOf(D_CmdParams, $(a.name_lower)), OffsetOf(D_CmdParams, $(a.name_lower)) + sizeof($(a.c_type))}`,
+}
+
+@data(D_CmdSpecInfo) @c_file d_core_cmd_kind_spec_info_table:
+{
+  @expand(D_CmdTable, a)
+    ```{ str8_lit_comp("$(a.string)"), str8_lit_comp("$(a.desc)"), str8_lit_comp("$(a.search_tags)"), str8_lit_comp("$(a.display_name)"), (D_CmdSpecFlag_ListInUI*$(a.ui_vis))|(D_CmdSpecFlag_ListInIPCDocs*$(a.ipc_docs_vis)), {D_CmdParamSlot_$(a.q_slot), D_EntityKind_$(a.q_ent_kind), (D_CmdQueryFlag_AllowFiles*$(a.q_allow_files))|(D_CmdQueryFlag_AllowFolders*$(a.q_allow_folders))|(D_CmdQueryFlag_CodeInput*$(a.q_is_code))|(D_CmdQueryFlag_KeepOldInput*$(a.q_keep_oi))|(D_CmdQueryFlag_SelectOldInput*$(a.q_select_oi))|(D_CmdQueryFlag_Required*$(a.q_required))}}```;
 }
 
 ////////////////////////////////
@@ -612,6 +422,24 @@ D_ViewRuleTable:
   {-  Geo3D      geo3d       "geo3d"                      -   x   -   x                 "Geometry (3D)"               x       "x:{'count':expr, 'vtx':expr, 'vtx_size':expr}" "Displays as geometry, interpreting the data as index or vertex data."                                                                                                                      }
 }
 
+@enum D_ViewRuleKind:
+{
+  @expand(D_ViewRuleTable a) `$(a.name)`,
+  COUNT,
+}
+
+@gen
+{
+  @expand(D_ViewRuleTable a) `$(a.xp == "x" -> "D_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_DEF(" .. a.name_lower .. ");")`;
+  @expand(D_ViewRuleTable a) `$(a.vb == "x" -> "D_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(" .. a.name_lower .. ");")`;
+}
+
+@data(D_ViewRuleSpecInfo) @c_file d_core_view_rule_spec_info_table:
+{
+  @expand(D_ViewRuleTable a)
+    ```{str8_lit_comp("$(a.string)"), str8_lit_comp("$(a.display_name)"), str8_lit_comp("$(a.schema)"), str8_lit_comp("$(a.description)"), (D_ViewRuleSpecInfoFlag_Inherited*$(a.ih == "x"))|(D_ViewRuleSpecInfoFlag_Expandable*$(a.ex == "x"))|(D_ViewRuleSpecInfoFlag_ExprResolution*$(a.xp == "x"))|(D_ViewRuleSpecInfoFlag_VizBlockProd*$(a.vb == "x")), $(a.xp == "x" -> "D_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_NAME("..a.name_lower..")") $(a.xp != "x" -> 0), $(a.vb == "x" -> "D_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_NAME("..a.name_lower..")") $(a.vb != "x" -> 0), }```;
+}
+
 ////////////////////////////////
 //~ rjf: Developer Toggles
 
@@ -629,130 +457,6 @@ DF_DevToggleTable:
   {scratch_mouse_draw}
   {updating_indicator}
 }
-
-////////////////////////////////
-//~ rjf: Generators
-
-//- rjf: enums
-
-@enum D_CfgSrc:
-{
-  @expand(D_CfgSrcTable a) `$(a.name)`,
-  COUNT,
-}
-
-@enum D_EntityKind:
-{
-  @expand(D_EntityKindTable a) `$(a.name)`,
-  COUNT,
-}
-
-@enum D_CmdKind:
-{
-  @expand(D_CoreCmdTable, a) `$(a.name)`,
-  COUNT,
-}
-
-@enum D_ViewRuleKind:
-{
-  @expand(D_ViewRuleTable a) `$(a.name)`,
-  COUNT,
-}
-
-//- rjf: command params
-
-@enum D_CmdParamSlot:
-{
-  Null,
-  @expand(D_CmdParamSlotTable a) `$(a.name)`,
-  COUNT,
-}
-
-@struct D_CmdParams:
-{
-  @expand(D_CmdParamSlotTable a) `$(a.c_type) $(a.name_lower)`;
-}
-
-@data(Rng1U64) d_cmd_param_slot_range_table:
-{
-  `{0}`,
-  @expand(D_CmdParamSlotTable a) `{OffsetOf(D_CmdParams, $(a.name_lower)), OffsetOf(D_CmdParams, $(a.name_lower)) + sizeof($(a.c_type))}`,
-}
-
-//- rjf: entity kind tables
-
-@data(String8) d_entity_kind_display_string_table:
-{
-  @expand(D_EntityKindTable a) `str8_lit_comp("$(a.display_string)")`,
-}
-
-@data(String8) d_entity_kind_name_lower_table:
-{
-  @expand(D_EntityKindTable a) `str8_lit_comp("$(a.name_lower)")`,
-}
-
-@data(String8) d_entity_kind_name_lower_plural_table:
-{
-  @expand(D_EntityKindTable a) `str8_lit_comp("$(a.name_lower_plural)")`,
-}
-
-@data(String8) d_entity_kind_name_label_table:
-{
-  @expand(D_EntityKindTable a) `str8_lit_comp("$(a.name_label)")`,
-}
-
-@data(D_EntityKindFlags) d_entity_kind_flags_table:
-{
-  @expand(D_EntityKindTable a) `($(a.op_delete)*D_EntityKindFlag_CanDelete) | ($(a.op_freeze)*D_EntityKindFlag_CanFreeze) | ($(a.op_edit)*D_EntityKindFlag_CanEdit) | ($(a.op_rename)*D_EntityKindFlag_CanRename) | ($(a.op_enable)*D_EntityKindFlag_CanEnable) | ($(a.op_cond)*D_EntityKindFlag_CanCondition) | ($(a.op_dup)*D_EntityKindFlag_CanDuplicate) | ($(a.name_is_code)*D_EntityKindFlag_NameIsCode) | ($(a.name_is_path)*D_EntityKindFlag_NameIsPath) | ($(a.user_lifetime)*D_EntityKindFlag_UserDefinedLifetime) | ($(a.is_serialized)*D_EntityKindFlag_IsSerializedToConfig)`,
-}
-
-//- rjf: config source tables
-
-@data(String8) d_cfg_src_string_table:
-{
-  @expand(D_CfgSrcTable a) `str8_lit_comp("$(a.string)")`,
-}
-
-@data(D_CmdKind) d_cfg_src_load_cmd_kind_table:
-{
-  @expand(D_CfgSrcTable a) `D_CmdKind_$(a.load_cmd)`,
-}
-
-@data(D_CmdKind) d_cfg_src_write_cmd_kind_table:
-{
-  @expand(D_CfgSrcTable a) `D_CmdKind_$(a.write_cmd)`,
-}
-
-@data(D_CmdKind) d_cfg_src_apply_cmd_kind_table:
-{
-  @expand(D_CfgSrcTable a) `D_CmdKind_$(a.apply_cmd)`;
-}
-
-//- rjf: core view rule function prototypes
-
-@gen
-{
-  @expand(D_ViewRuleTable a) `$(a.xp == "x" -> "D_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_DEF(" .. a.name_lower .. ");")`;
-  @expand(D_ViewRuleTable a) `$(a.vb == "x" -> "D_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(" .. a.name_lower .. ");")`;
-}
-
-//- rjf: core command kind tables
-
-@data(D_CmdSpecInfo) @c_file d_core_cmd_kind_spec_info_table:
-{
-  @expand(D_CoreCmdTable, a)
-    ```{ str8_lit_comp("$(a.string)"), str8_lit_comp("$(a.desc)"), str8_lit_comp("$(a.search_tags)"), str8_lit_comp("$(a.display_name)"), (D_CmdSpecFlag_ListInUI*$(a.ui_vis))|(D_CmdSpecFlag_ListInIPCDocs*$(a.ipc_docs_vis)), {D_CmdParamSlot_$(a.q_slot), D_EntityKind_$(a.q_ent_kind), (D_CmdQueryFlag_AllowFiles*$(a.q_allow_files))|(D_CmdQueryFlag_AllowFolders*$(a.q_allow_folders))|(D_CmdQueryFlag_CodeInput*$(a.q_is_code))|(D_CmdQueryFlag_KeepOldInput*$(a.q_keep_oi))|(D_CmdQueryFlag_SelectOldInput*$(a.q_select_oi))|(D_CmdQueryFlag_Required*$(a.q_required))}}```;
-}
-
-//- rjf: core view rule tables
-
-@data(D_ViewRuleSpecInfo) @c_file d_core_view_rule_spec_info_table:
-{
-  @expand(D_ViewRuleTable a)
-    ```{str8_lit_comp("$(a.string)"), str8_lit_comp("$(a.display_name)"), str8_lit_comp("$(a.schema)"), str8_lit_comp("$(a.description)"), (D_ViewRuleSpecInfoFlag_Inherited*$(a.ih == "x"))|(D_ViewRuleSpecInfoFlag_Expandable*$(a.ex == "x"))|(D_ViewRuleSpecInfoFlag_ExprResolution*$(a.xp == "x"))|(D_ViewRuleSpecInfoFlag_VizBlockProd*$(a.vb == "x")), $(a.xp == "x" -> "D_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_NAME("..a.name_lower..")") $(a.xp != "x" -> 0), $(a.vb == "x" -> "D_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_NAME("..a.name_lower..")") $(a.vb != "x" -> 0), }```;
-}
-
-//- rjf: developer toggles
 
 @gen
 {

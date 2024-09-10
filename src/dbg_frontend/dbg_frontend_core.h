@@ -75,7 +75,7 @@ typedef struct DF_View DF_View;
 #define DF_VIEW_SETUP_FUNCTION_DEF(name) internal DF_VIEW_SETUP_FUNCTION_SIG(DF_VIEW_SETUP_FUNCTION_NAME(name))
 typedef DF_VIEW_SETUP_FUNCTION_SIG(DF_ViewSetupFunctionType);
 
-#define DF_VIEW_CMD_FUNCTION_SIG(name) void name(DF_View *view, MD_Node *params, String8 string, D_CmdList *cmds)
+#define DF_VIEW_CMD_FUNCTION_SIG(name) void name(DF_View *view, MD_Node *params, String8 string)
 #define DF_VIEW_CMD_FUNCTION_NAME(name) df_view_cmds_##name
 #define DF_VIEW_CMD_FUNCTION_DEF(name) internal DF_VIEW_CMD_FUNCTION_SIG(DF_VIEW_CMD_FUNCTION_NAME(name))
 typedef DF_VIEW_CMD_FUNCTION_SIG(DF_ViewCmdFunctionType);
@@ -623,8 +623,15 @@ struct DF_State
   Arena *arena;
   B32 quit;
   
+  // rjf: commands
+  Arena *cmds_arena;
+  D_CmdList cmds;
+  
   // rjf: frame request state
   U64 num_frames_requested;
+  
+  // rjf: autosave timer
+  F32 seconds_until_autosave;
   
   // rjf: key map table
   Arena *key_map_arena;
@@ -887,7 +894,7 @@ internal DF_Window *df_window_open(Vec2F32 size, OS_Handle preferred_monitor, D_
 
 internal DF_Window *df_window_from_os_handle(OS_Handle os);
 
-internal void df_window_update_and_render(Arena *arena, DF_Window *ws, D_CmdList *cmds);
+internal void df_window_update_and_render(Arena *arena, DF_Window *ws);
 
 ////////////////////////////////
 //~ rjf: Eval Viz
@@ -961,9 +968,30 @@ internal String8 df_stop_explanation_string_icon_from_ctrl_event(Arena *arena, C
 internal void df_request_frame(void);
 
 ////////////////////////////////
+//~ rjf: Commands
+
+// TODO(rjf): @msgs temporary glue
+internal D_CmdSpec *df_cmd_spec_from_kind(DF_CmdKind kind);
+internal DF_CmdKind df_cmd_kind_from_string(String8 string);
+
+//- rjf: pushing
+internal void df_push_cmd(D_CmdSpec *spec, D_CmdParams *params);
+#define df_cmd(kind, ...) df_push_cmd(df_cmd_spec_from_kind(kind), \
+&(D_CmdParams)               \
+{                            \
+.window = d_regs()->window, \
+.panel  = d_regs()->panel,  \
+.view   = d_regs()->view,   \
+__VA_ARGS__                 \
+})
+
+//- rjf: iterating
+internal B32 df_next_cmd(D_Cmd **cmd);
+
+////////////////////////////////
 //~ rjf: Main Layer Top-Level Calls
 
-internal void df_init(void);
+internal void df_init(CmdLine *cmdln);
 internal void df_frame(void);
 
 #endif // DBG_FRONTEND_CORE_H

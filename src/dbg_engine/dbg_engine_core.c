@@ -5706,87 +5706,26 @@ d_query_cached_member_map_from_dbgi_key_voff(DI_Key *dbgi_key, U64 voff)
 internal void
 d_push_cmd(D_CmdSpec *spec, D_CmdParams *params)
 {
-  // rjf: log
-  if(params->os_event == 0 || params->os_event->kind != OS_EventKind_MouseMove)
+  d_cmd_list_push(d_state->cmds_arena, &d_state->cmds, params, spec);
+}
+
+//- rjf: command iteration
+
+internal B32
+d_next_cmd(D_Cmd **cmd)
+{
+  D_CmdNode *start_node = d_state->cmds.first;
+  if(cmd[0] != 0)
   {
-    Temp scratch = scratch_begin(0, 0);
-    D_Entity *entity = d_entity_from_handle(params->entity);
-    log_infof("df_cmd:\n{\n", spec->info.string);
-    log_infof("spec: \"%S\"\n", spec->info.string);
-#define HandleParamPrint(mem_name) if(!d_handle_match(d_handle_zero(), params->mem_name)) { log_infof("%s: [0x%I64x, 0x%I64x]\n", #mem_name, params->mem_name.u64[0], params->mem_name.u64[1]); }
-    HandleParamPrint(window);
-    HandleParamPrint(panel);
-    HandleParamPrint(dest_panel);
-    HandleParamPrint(prev_view);
-    HandleParamPrint(view);
-    if(!d_entity_is_nil(entity))
-    {
-      String8 entity_name = d_display_string_from_entity(scratch.arena, entity);
-      log_infof("entity: \"%S\"\n", entity_name);
-    }
-    U64 idx = 0;
-    for(D_HandleNode *n = params->entity_list.first; n != 0; n = n->next, idx += 1)
-    {
-      D_Entity *entity = d_entity_from_handle(n->handle);
-      if(!d_entity_is_nil(entity))
-      {
-        String8 entity_name = d_display_string_from_entity(scratch.arena, entity);
-        log_infof("entity_list[%I64u]: \"%S\"\n", idx, entity_name);
-      }
-    }
-    if(!d_cmd_spec_is_nil(params->cmd_spec))
-    {
-      log_infof("cmd_spec: \"%S\"\n", params->cmd_spec->info.string);
-    }
-    if(params->string.size != 0)        { log_infof("string: \"%S\"\n", params->string); }
-    if(params->file_path.size != 0)     { log_infof("file_path: \"%S\"\n", params->file_path); }
-    if(params->text_point.line != 0)    { log_infof("text_point: [line:%I64d, col:%I64d]\n", params->text_point.line, params->text_point.column); }
-    if(params->vaddr != 0)              { log_infof("vaddr: 0x%I64x\n", params->vaddr); }
-    if(params->voff != 0)               { log_infof("voff: 0x%I64x\n", params->voff); }
-    if(params->index != 0)              { log_infof("index: 0x%I64x\n", params->index); }
-    if(params->unwind_index != 0)       { log_infof("unwind_index: 0x%I64x\n", params->unwind_index); }
-    if(params->inline_depth != 0)       { log_infof("inline_depth: 0x%I64x\n", params->inline_depth); }
-    if(params->id != 0)                 { log_infof("id: 0x%I64x\n", params->id); }
-    if(params->os_event != 0)
-    {
-      String8 kind_string = str8_lit("<unknown>");
-      switch(params->os_event->kind)
-      {
-        default:{}break;
-        case OS_EventKind_Press:          {kind_string = str8_lit("press");}break;
-        case OS_EventKind_Release:        {kind_string = str8_lit("release");}break;
-        case OS_EventKind_MouseMove:      {kind_string = str8_lit("mousemove");}break;
-        case OS_EventKind_Text:           {kind_string = str8_lit("text");}break;
-        case OS_EventKind_Scroll:         {kind_string = str8_lit("scroll");}break;
-        case OS_EventKind_WindowLoseFocus:{kind_string = str8_lit("losefocus");}break;
-        case OS_EventKind_WindowClose:    {kind_string = str8_lit("closewindow");}break;
-        case OS_EventKind_FileDrop:       {kind_string = str8_lit("filedrop");}break;
-        case OS_EventKind_Wakeup:         {kind_string = str8_lit("wakeup");}break;
-      }
-      log_infof("os_event->kind: %S\n", kind_string);
-    }
-#undef HandleParamPrint
-    log_infof("}\n\n");
-    scratch_end(scratch);
+    start_node = CastFromMember(D_CmdNode, cmd, cmd[0]);
+    start_node = start_node->next;
   }
-  d_cmd_list_push(d_state->root_cmd_arena, &d_state->root_cmds, params, spec);
-}
-
-internal void
-d_error(String8 string)
-{
-  d_cmd(D_CmdKind_Error, .string = string);
-}
-
-internal void
-d_errorf(char *fmt, ...)
-{
-  Temp scratch = scratch_begin(0, 0);
-  va_list args;
-  va_start(args, fmt);
-  String8 string = push_str8fv(scratch.arena, fmt, args);
-  d_error(string);
-  scratch_end(scratch);
+  cmd[0] = 0;
+  if(start_node != 0)
+  {
+    cmd[0] = &start_node->cmd;
+  }
+  return !!cmd[0];
 }
 
 ////////////////////////////////
@@ -5799,7 +5738,7 @@ d_errorf(char *fmt, ...)
 #endif
 
 internal void
-d_init(CmdLine *cmdln)
+d_init(void)
 {
   Arena *arena = arena_alloc();
   d_state = push_array(arena, D_State, 1);
@@ -5808,7 +5747,7 @@ d_init(CmdLine *cmdln)
   {
     d_state->frame_arenas[idx] = arena_alloc();
   }
-  d_state->root_cmd_arena = arena_alloc();
+  d_state->cmds_arena = arena_alloc();
   d_state->output_log_key = hs_hash_from_data(str8_lit("df_output_log_key"));
   d_state->entities_arena = arena_alloc(.reserve_size = GB(64), .commit_size = KB(64));
   d_state->entities_root = &d_nil_entity;
@@ -5822,7 +5761,6 @@ d_init(CmdLine *cmdln)
   d_state->cmd_spec_table = push_array(arena, D_CmdSpec *, d_state->cmd_spec_table_size);
   d_state->view_rule_spec_table_size = 1024;
   d_state->view_rule_spec_table = push_array(arena, D_ViewRuleSpec *, d_state->view_rule_spec_table_size);
-  d_state->seconds_til_autosave = 0.5f;
   d_state->top_regs = &d_state->base_regs;
   
   // rjf: set up initial exception filtering rules
@@ -5876,44 +5814,6 @@ d_init(CmdLine *cmdln)
   // rjf: set up run state
   d_state->ctrl_last_run_arena = arena_alloc();
   
-  // rjf: set up config reading state
-  {
-    Temp scratch = scratch_begin(0, 0);
-    
-    // rjf: unpack command line arguments
-    String8 user_cfg_path = cmd_line_string(cmdln, str8_lit("user"));
-    String8 project_cfg_path = cmd_line_string(cmdln, str8_lit("project"));
-    if(project_cfg_path.size == 0)
-    {
-      project_cfg_path = cmd_line_string(cmdln, str8_lit("profile"));
-    }
-    {
-      String8 user_program_data_path = os_get_process_info()->user_program_data_path;
-      String8 user_data_folder = push_str8f(scratch.arena, "%S/%S", user_program_data_path, str8_lit("raddbg"));
-      os_make_directory(user_data_folder);
-      if(user_cfg_path.size == 0)
-      {
-        user_cfg_path = push_str8f(scratch.arena, "%S/default.raddbg_user", user_data_folder);
-      }
-      if(project_cfg_path.size == 0)
-      {
-        project_cfg_path = push_str8f(scratch.arena, "%S/default.raddbg_project", user_data_folder);
-      }
-    }
-    
-    // rjf: set up config path state
-    String8 cfg_src_paths[D_CfgSrc_COUNT] = {user_cfg_path, project_cfg_path};
-    for(D_CfgSrc src = (D_CfgSrc)0; src < D_CfgSrc_COUNT; src = (D_CfgSrc)(src+1))
-    {
-      d_state->cfg_path_arenas[src] = arena_alloc();
-      d_cmd(d_cfg_src_load_cmd_kind_table[src], .file_path = path_normalized_from_string(scratch.arena, cfg_src_paths[src]));
-    }
-    
-    // rjf: set up config table arena
-    d_state->cfg_arena = arena_alloc();
-    scratch_end(scratch);
-  }
-  
   // rjf: set up config write state
   for(D_CfgSrc src = (D_CfgSrc)0; src < D_CfgSrc_COUNT; src = (D_CfgSrc)(src+1))
   {
@@ -5931,19 +5831,8 @@ d_init(CmdLine *cmdln)
   }
 }
 
-internal D_CmdList
-d_gather_root_cmds(Arena *arena)
-{
-  D_CmdList cmds = {0};
-  for(D_CmdNode *n = d_state->root_cmds.first; n != 0; n = n->next)
-  {
-    d_cmd_list_push(arena, &cmds, &n->cmd.params, n->cmd.spec);
-  }
-  return cmds;
-}
-
 internal void
-d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_Scope *di_scope, D_CmdList *cmds, F32 dt)
+d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_Scope *di_scope, F32 dt)
 {
   ProfBeginFunction();
   d_state->frame_index += 1;
@@ -6012,7 +5901,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
             log_infof("stop_thread: \"%S\"\n", d_display_string_from_entity(scratch.arena, stop_thread));
             D_CmdParams params = d_cmd_params_zero();
             params.entity = d_handle_from_entity(stop_thread);
-            d_cmd_list_push(arena, cmds, &params, d_cmd_spec_from_kind(D_CmdKind_SelectThread));
+            d_push_cmd(d_cmd_spec_from_kind(D_CmdKind_SelectThread), &params);
           }
           
           // rjf: if no stop-causing thread, and if selected thread, snap to selected
@@ -6023,7 +5912,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
             {
               D_CmdParams params = d_cmd_params_zero();
               params.entity = d_handle_from_entity(selected_thread);
-              d_cmd_list_push(arena, cmds, &params, d_cmd_spec_from_kind(D_CmdKind_FindThread));
+              df_push_cmd(d_cmd_spec_from_kind(DF_CmdKind_FindThread), &params);
             }
           }
           
@@ -6071,8 +5960,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
           if(event->cause == CTRL_EventCause_InterruptedByException ||
              event->cause == CTRL_EventCause_InterruptedByTrap)
           {
-            D_CmdParams params = d_cmd_params_zero();
-            d_cmd_list_push(arena, cmds, &params, d_cmd_spec_from_kind(D_CmdKind_Error));
+            log_user_error(str8_zero());
           }
           
           // rjf: kill all entities which are marked to die on stop
@@ -6198,7 +6086,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
           {
             D_CmdParams params = d_cmd_params_zero();
             params.entity = d_handle_from_entity(entity);
-            d_cmd_list_push(arena, cmds, &params, d_cmd_spec_from_kind(D_CmdKind_SelectThread));
+            d_push_cmd(d_cmd_spec_from_kind(D_CmdKind_SelectThread), &params);
           }
         }break;
         
@@ -6504,33 +6392,16 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
   }
   
   //////////////////////////////
-  //- rjf: autosave
-  //
-  {
-    d_state->seconds_til_autosave -= dt;
-    if(d_state->seconds_til_autosave <= 0.f)
-    {
-      D_CmdParams params = d_cmd_params_zero();
-      d_cmd_list_push(arena, cmds, &params, d_cmd_spec_from_kind(D_CmdKind_WriteUserData));
-      d_cmd_list_push(arena, cmds, &params, d_cmd_spec_from_kind(D_CmdKind_WriteProjectData));
-      d_state->seconds_til_autosave = 5.f;
-    }
-  }
-  
-  //////////////////////////////
   //- rjf: process top-level commands
   //
   ProfScope("process top-level commands")
   {
     Temp scratch = scratch_begin(&arena, 1);
-    for(D_CmdNode *cmd_node = cmds->first;
-        cmd_node != 0;
-        cmd_node = cmd_node->next)
+    for(D_Cmd *cmd = 0; d_next_cmd(&cmd);)
     {
       temp_end(scratch);
       
       // rjf: unpack command
-      D_Cmd *cmd = &cmd_node->cmd;
       D_CmdParams params = cmd->params;
       D_CmdKind core_cmd_kind = d_cmd_kind_from_string(cmd->spec->info.string);
       d_cmd_spec_counter_inc(cmd->spec);
@@ -6630,9 +6501,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
           // rjf: no targets -> error
           if(targets.count == 0)
           {
-            D_CmdParams p = params;
-            p.string = str8_lit("No active targets exist; cannot launch.");
-            d_cmd_list_push(arena, cmds, &p, d_cmd_spec_from_kind(D_CmdKind_Error));
+            log_user_error(str8_lit("No active targets exist; cannot launch."));
           }
         }break;
         case D_CmdKind_Kill:
@@ -6665,9 +6534,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
           // rjf: no processes -> error
           if(processes.count == 0)
           {
-            D_CmdParams p = params;
-            p.string = str8_lit("No attached running processes exist; cannot kill.");
-            d_cmd_list_push(arena, cmds, &p, d_cmd_spec_from_kind(D_CmdKind_Error));
+            log_user_error(str8_lit("No attached running processes exist; cannot kill."));
           }
         }break;
         case D_CmdKind_KillAll:
@@ -6690,9 +6557,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
           }
           if(processes.count == 0)
           {
-            D_CmdParams p = params;
-            p.string = str8_lit("No attached running processes exist; cannot kill.");
-            d_cmd_list_push(arena, cmds, &p, d_cmd_spec_from_kind(D_CmdKind_Error));
+            log_user_error(str8_lit("No attached running processes exist; cannot kill."));
           }
         }break;
         case D_CmdKind_Detach:
@@ -6730,9 +6595,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
           }
           else
           {
-            D_CmdParams p = params;
-            p.string = str8_lit("Cannot run with all threads frozen.");
-            d_cmd_list_push(arena, cmds, &p, d_cmd_spec_from_kind(D_CmdKind_Error));
+            log_user_error(str8_lit("Cannot run with all threads frozen."));
           }
         }break;
         case D_CmdKind_StepIntoInst:
@@ -6747,16 +6610,12 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
           {
             if(d_ctrl_last_run_kind() == D_RunKind_Run)
             {
-              D_CmdParams p = params;
-              p.string = str8_lit("Must halt before stepping.");
-              d_cmd_list_push(arena, cmds, &p, d_cmd_spec_from_kind(D_CmdKind_Error));
+              log_user_error(str8_lit("Must halt before stepping."));
             }
           }
           else if(thread->is_frozen)
           {
-            D_CmdParams p = params;
-            p.string = str8_lit("Must thaw selected thread before stepping.");
-            d_cmd_list_push(arena, cmds, &p, d_cmd_spec_from_kind(D_CmdKind_Error));
+            log_user_error(str8_lit("Must thaw selected thread before stepping."));
           }
           else
           {
@@ -6783,9 +6642,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
                 }
                 else
                 {
-                  D_CmdParams p = params;
-                  p.string = str8_lit("Could not find the return address of the current callstack frame successfully.");
-                  d_cmd_list_push(arena, cmds, &p, d_cmd_spec_from_kind(D_CmdKind_Error));
+                  log_user_error(str8_lit("Could not find the return address of the current callstack frame successfully."));
                   good = 0;
                 }
               }break;
@@ -6871,7 +6728,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
           d_entity_equip_name(loc, file_path);
           d_entity_equip_txt_pt(loc, point);
           D_CmdParams p = d_cmd_params_zero();
-          d_cmd_list_push(arena, cmds, &p, d_cmd_spec_from_kind(D_CmdKind_Run));
+          d_push_cmd(d_cmd_spec_from_kind(D_CmdKind_Run), &p);
         }break;
         case D_CmdKind_RunToAddress:
         {
@@ -6881,7 +6738,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
           D_Entity *loc = d_entity_alloc(bp, D_EntityKind_Location);
           d_entity_equip_vaddr(loc, params.vaddr);
           D_CmdParams p = d_cmd_params_zero();
-          d_cmd_list_push(arena, cmds, &p, d_cmd_spec_from_kind(D_CmdKind_Run));
+          d_push_cmd(d_cmd_spec_from_kind(D_CmdKind_Run), &p);
         }break;
         case D_CmdKind_Run:
         {
@@ -6890,12 +6747,11 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
           if(processes.count != 0)
           {
             D_CmdParams params = d_cmd_params_zero();
-            d_cmd_list_push(arena, cmds, &params, d_cmd_spec_from_kind(D_CmdKind_Continue));
+            d_push_cmd(d_cmd_spec_from_kind(D_CmdKind_Continue), &params);
           }
           else if(!d_ctrl_targets_running())
           {
-            D_CmdParams params = d_cmd_params_zero();
-            d_cmd_list_push(arena, cmds, &params, d_cmd_spec_from_kind(D_CmdKind_LaunchAndRun));
+            d_push_cmd(d_cmd_spec_from_kind(D_CmdKind_LaunchAndRun), &params);
           }
         }break;
         case D_CmdKind_Restart:
@@ -6903,7 +6759,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
           // rjf: kill all
           {
             D_CmdParams params = d_cmd_params_zero();
-            d_cmd_list_push(arena, cmds, &params, d_cmd_spec_from_kind(D_CmdKind_KillAll));
+            d_push_cmd(d_cmd_spec_from_kind(D_CmdKind_KillAll), &params);
           }
           
           // rjf: gather targets corresponding to all launched processes
@@ -6925,7 +6781,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
           {
             D_CmdParams params = d_cmd_params_zero();
             params.entity_list = d_handle_list_from_entity_list(scratch.arena, targets);
-            d_cmd_list_push(arena, cmds, &params, d_cmd_spec_from_kind(D_CmdKind_LaunchAndRun));
+            d_push_cmd(d_cmd_spec_from_kind(D_CmdKind_LaunchAndRun), &params);
           }
         }break;
         case D_CmdKind_StepInto:
@@ -6944,16 +6800,53 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
                                ? D_CmdKind_StepIntoInst
                                : D_CmdKind_StepOverInst);
             }
-            d_cmd_list_push(arena, cmds, &params, d_cmd_spec_from_kind(step_cmd_kind));
+            d_push_cmd(d_cmd_spec_from_kind(step_cmd_kind), &params);
           }
           else if(!d_ctrl_targets_running())
           {
             D_EntityList targets = d_push_active_target_list(scratch.arena);
             D_CmdParams p = params;
             p.entity_list = d_handle_list_from_entity_list(scratch.arena, targets);
-            d_cmd_list_push(arena, cmds, &p, d_cmd_spec_from_kind(D_CmdKind_LaunchAndInit));
+            d_push_cmd(d_cmd_spec_from_kind(D_CmdKind_LaunchAndInit), &p);
           }
         }break;
+        case D_CmdKind_RunToCursor:
+        {
+          String8 file_path = d_regs()->file_path;
+          if(file_path.size != 0)
+          {
+            d_cmd(D_CmdKind_RunToLine, .file_path = file_path, .text_point = d_regs()->cursor);
+          }
+          else
+          {
+            d_cmd(D_CmdKind_RunToAddress, .vaddr = d_regs()->vaddr_range.min);
+          }
+        }break;
+        case D_CmdKind_SetNextStatement:
+        {
+          D_Entity *thread = d_entity_from_handle(d_regs()->thread);
+          String8 file_path = d_regs()->file_path;
+          U64 new_rip_vaddr = d_regs()->vaddr_range.min;
+          if(file_path.size != 0)
+          {
+            D_LineList *lines = &d_regs()->lines;
+            for(D_LineNode *n = lines->first; n != 0; n = n->next)
+            {
+              D_EntityList modules = d_modules_from_dbgi_key(scratch.arena, &n->v.dbgi_key);
+              D_Entity *module = d_module_from_thread_candidates(thread, &modules);
+              if(!d_entity_is_nil(module))
+              {
+                new_rip_vaddr = d_vaddr_from_voff(module, n->v.voff_range.min);
+                break;
+              }
+            }
+          }
+          D_CmdParams p = d_cmd_params_zero();
+          p.entity = d_handle_from_entity(thread);
+          p.vaddr = new_rip_vaddr;
+          d_push_cmd(d_cmd_spec_from_kind(D_CmdKind_SetThreadIP), &p);
+        }break;
+        
         
         //- rjf: debug control context management operations
         case D_CmdKind_SelectThread:
@@ -6966,6 +6859,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
           d_state->base_regs.v.thread = d_handle_from_entity(thread);
           d_state->base_regs.v.module = d_handle_from_entity(module);
           d_state->base_regs.v.process = d_handle_from_entity(process);
+          df_push_cmd(df_cmd_spec_from_kind(DF_CmdKind_FindThread), &params);
         }break;
         case D_CmdKind_SelectUnwind:
         {
@@ -6984,6 +6878,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
               d_state->base_regs.v.inline_depth = params.inline_depth;
             }
           }
+          df_push_cmd(df_cmd_spec_from_kind(DF_CmdKind_FindThread), &params);
           di_scope_close(di_scope);
         }break;
         case D_CmdKind_UpOneFrame:
@@ -7033,7 +6928,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
           D_CmdParams p = params;
           p.unwind_index = next_unwind_idx;
           p.inline_depth = next_inline_dpt;
-          d_cmd_list_push(arena, cmds, &p, d_cmd_spec_from_kind(D_CmdKind_SelectUnwind));
+          d_push_cmd(d_cmd_spec_from_kind(D_CmdKind_SelectUnwind), &p);
           di_scope_close(di_scope);
         }break;
         case D_CmdKind_FreezeThread:
@@ -7048,214 +6943,21 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
                                      core_cmd_kind == D_CmdKind_FreezeMachine)
                                     ? D_CmdKind_FreezeEntity
                                     : D_CmdKind_ThawEntity);
-          d_cmd_list_push(arena, cmds, &params, d_cmd_spec_from_kind(disptch_kind));
+          d_push_cmd(d_cmd_spec_from_kind(disptch_kind), &params);
         }break;
         case D_CmdKind_FreezeLocalMachine:
         {
           CTRL_MachineID machine_id = CTRL_MachineID_Local;
           D_CmdParams params = d_cmd_params_zero();
           params.entity = d_handle_from_entity(d_machine_entity_from_machine_id(machine_id));
-          d_cmd_list_push(arena, cmds, &params, d_cmd_spec_from_kind(D_CmdKind_FreezeMachine));
+          d_push_cmd(d_cmd_spec_from_kind(D_CmdKind_FreezeMachine), &params);
         }break;
         case D_CmdKind_ThawLocalMachine:
         {
           CTRL_MachineID machine_id = CTRL_MachineID_Local;
           D_CmdParams params = d_cmd_params_zero();
           params.entity = d_handle_from_entity(d_machine_entity_from_machine_id(machine_id));
-          d_cmd_list_push(arena, cmds, &params, d_cmd_spec_from_kind(D_CmdKind_ThawMachine));
-        }break;
-        
-        //- rjf: undo/redo
-        case D_CmdKind_Undo:
-        {
-        }break;
-        case D_CmdKind_Redo:
-        {
-        }break;
-        
-        //- rjf: files
-        case D_CmdKind_SetCurrentPath:
-        {
-          arena_clear(d_state->current_path_arena);
-          d_state->current_path = push_str8_copy(d_state->current_path_arena, params.file_path);
-        }break;
-        
-        //- rjf: override file links
-        case D_CmdKind_SetFileOverrideLinkSrc:
-        case D_CmdKind_SetFileOverrideLinkDst:
-        {
-          // rjf: unpack args
-          D_Entity *map = d_entity_from_handle(params.entity);
-          String8 path = path_normalized_from_string(scratch.arena, params.file_path);
-          String8 path_folder = str8_chop_last_slash(path);
-          String8 path_file = str8_skip_last_slash(path);
-          
-          // rjf: src -> move map & commit name; dst -> open destination file & refer to it in map
-          switch(core_cmd_kind)
-          {
-            default:{}break;
-            case D_CmdKind_SetFileOverrideLinkSrc:
-            {
-              D_Entity *map_parent = (params.file_path.size != 0) ? d_entity_from_path(path_folder, D_EntityFromPathFlag_OpenAsNeeded|D_EntityFromPathFlag_OpenMissing) : d_entity_root();
-              if(d_entity_is_nil(map))
-              {
-                map = d_entity_alloc(map_parent, D_EntityKind_FilePathMap);
-              }
-              else
-              {
-                d_entity_change_parent(map, map->parent, map_parent, &d_nil_entity);
-              }
-              d_entity_equip_name(map, path_file);
-            }break;
-            case D_CmdKind_SetFileOverrideLinkDst:
-            {
-              if(d_entity_is_nil(map))
-              {
-                map = d_entity_alloc(d_entity_root(), D_EntityKind_FilePathMap);
-              }
-              D_Entity *map_dst_entity = &d_nil_entity;
-              if(params.file_path.size != 0)
-              {
-                map_dst_entity = d_entity_from_path(path, D_EntityFromPathFlag_All);
-              }
-              d_entity_equip_entity_handle(map, d_handle_from_entity(map_dst_entity));
-            }break;
-          }
-          
-          // rjf: empty src/dest -> delete
-          if(!d_entity_is_nil(map) && map->string.size == 0 && d_entity_is_nil(d_entity_from_handle(map->entity_handle)))
-          {
-            d_entity_mark_for_deletion(map);
-          }
-        }break;
-        case D_CmdKind_SetFileReplacementPath:
-        {
-          // NOTE(rjf):
-          //
-          // C:/foo/bar/baz.c
-          // D:/foo/bar/baz.c
-          // -> override C: -> D:
-          //
-          // C:/1/2/foo/bar.c
-          // C:/2/3/foo/bar.c
-          // -> override C:/1/2 -> C:2/3
-          //
-          // C:/foo/bar/baz.c
-          // D:/1/2/3.c
-          // -> override C:/foo/bar/baz.c -> D:/1/2/3.c
-          
-          //- rjf: unpack
-          String8 src_path = params.string;
-          String8 dst_path = params.file_path;
-#if 0
-          // TODO(rjf):
-          
-          //- rjf: grab src file & chosen replacement
-          D_Entity *file = d_entity_from_handle(params.entity);
-          D_Entity *replacement = d_entity_from_path(params.file_path, D_EntityFromPathFlag_OpenAsNeeded|D_EntityFromPathFlag_OpenMissing);
-          
-          //- rjf: find 
-          D_Entity *first_diff_src = file;
-          D_Entity *first_diff_dst = replacement;
-          for(;!d_entity_is_nil(first_diff_src) && !d_entity_is_nil(first_diff_dst);)
-          {
-            if(!str8_match(first_diff_src->string, first_diff_dst->string, StringMatchFlag_CaseInsensitive) ||
-               first_diff_src->parent->kind != D_EntityKind_File ||
-               first_diff_src->parent->parent->kind != D_EntityKind_File ||
-               first_diff_dst->parent->kind != D_EntityKind_File ||
-               first_diff_dst->parent->parent->kind != D_EntityKind_File)
-            {
-              break;
-            }
-            first_diff_src = first_diff_src->parent;
-            first_diff_dst = first_diff_dst->parent;
-          }
-          
-          //- rjf: override first different
-          if(!d_entity_is_nil(first_diff_src) && !d_entity_is_nil(first_diff_dst))
-          {
-            D_Entity *link = d_entity_child_from_string_and_kind(first_diff_src->parent, first_diff_src->name, D_EntityKind_FilePathMap);
-            if(d_entity_is_nil(link))
-            {
-              link = d_entity_alloc(first_diff_src->parent, D_EntityKind_FilePathMap);
-              d_entity_equip_name(link, first_diff_src->name);
-            }
-            d_entity_equip_entity_handle(link, d_handle_from_entity(first_diff_dst));
-          }
-#endif
-        }break;
-        
-        //- rjf: auto view rules
-        case D_CmdKind_SetAutoViewRuleType:
-        case D_CmdKind_SetAutoViewRuleViewRule:
-        {
-          D_Entity *map = d_entity_from_handle(params.entity);
-          if(d_entity_is_nil(map))
-          {
-            map = d_entity_alloc(d_entity_root(), D_EntityKind_AutoViewRule);
-            d_entity_equip_cfg_src(map, D_CfgSrc_Project);
-          }
-          D_Entity *src = d_entity_child_from_kind(map, D_EntityKind_Source);
-          if(d_entity_is_nil(src))
-          {
-            src = d_entity_alloc(map, D_EntityKind_Source);
-          }
-          D_Entity *dst = d_entity_child_from_kind(map, D_EntityKind_Dest);
-          if(d_entity_is_nil(dst))
-          {
-            dst = d_entity_alloc(map, D_EntityKind_Dest);
-          }
-          if(map->kind == D_EntityKind_AutoViewRule)
-          {
-            D_Entity *edit_child = (core_cmd_kind == D_CmdKind_SetAutoViewRuleType ? src : dst);
-            d_entity_equip_name(edit_child, params.string);
-          }
-          if(src->string.size == 0 && dst->string.size == 0)
-          {
-            d_entity_mark_for_deletion(map);
-          }
-          {
-            D_AutoViewRuleMapCache *cache = &d_state->auto_view_rule_cache;
-            if(cache->arena == 0)
-            {
-              cache->arena = arena_alloc();
-            }
-            arena_clear(cache->arena);
-            cache->slots_count = 1024;
-            cache->slots = push_array(cache->arena, D_AutoViewRuleSlot, cache->slots_count);
-            D_EntityList maps = d_query_cached_entity_list_with_kind(D_EntityKind_AutoViewRule);
-            for(D_EntityNode *n = maps.first; n != 0; n = n->next)
-            {
-              D_Entity *map = n->entity;
-              D_Entity *src = d_entity_child_from_kind(map, D_EntityKind_Source);
-              D_Entity *dst = d_entity_child_from_kind(map, D_EntityKind_Dest);
-              String8 type = src->string;
-              String8 view_rule = dst->string;
-              U64 hash = d_hash_from_string(type);
-              U64 slot_idx = hash%cache->slots_count;
-              D_AutoViewRuleSlot *slot = &cache->slots[slot_idx];
-              D_AutoViewRuleNode *node = push_array(cache->arena, D_AutoViewRuleNode, 1);
-              node->type = push_str8_copy(cache->arena, type);
-              node->view_rule = push_str8_copy(cache->arena, view_rule);
-              SLLQueuePush(slot->first, slot->last, node);
-            }
-          }
-        }break;
-        
-        //- rjf: general entity operations
-        case D_CmdKind_EnableEntity:
-        case D_CmdKind_EnableBreakpoint:
-        case D_CmdKind_EnableTarget:
-        {
-          D_Entity *entity = d_entity_from_handle(params.entity);
-          d_entity_equip_disabled(entity, 0);
-        }break;
-        case D_CmdKind_DisableEntity:
-        case D_CmdKind_DisableBreakpoint:
-        case D_CmdKind_DisableTarget:
-        {
-          D_Entity *entity = d_entity_from_handle(params.entity);
-          d_entity_equip_disabled(entity, 1);
+          d_push_cmd(d_cmd_spec_from_kind(D_CmdKind_ThawMachine), &params);
         }break;
         case D_CmdKind_FreezeEntity:
         case D_CmdKind_ThawEntity:
@@ -7275,326 +6977,6 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
             }
           }
         }break;
-        case D_CmdKind_RemoveEntity:
-        case D_CmdKind_RemoveBreakpoint:
-        case D_CmdKind_RemoveTarget:
-        {
-          D_Entity *entity = d_entity_from_handle(params.entity);
-          D_EntityKindFlags kind_flags = d_entity_kind_flags_table[entity->kind];
-          if(kind_flags & D_EntityKindFlag_CanDelete)
-          {
-            d_entity_mark_for_deletion(entity);
-          }
-        }break;
-        case D_CmdKind_NameEntity:
-        {
-          D_Entity *entity = d_entity_from_handle(params.entity);
-          String8 string = params.string;
-          d_entity_equip_name(entity, string);
-        }break;
-        case D_CmdKind_EditEntity:{}break;
-        case D_CmdKind_DuplicateEntity:
-        {
-          D_Entity *src = d_entity_from_handle(params.entity);
-          if(!d_entity_is_nil(src))
-          {
-            typedef struct Task Task;
-            struct Task
-            {
-              Task *next;
-              D_Entity *src_n;
-              D_Entity *dst_parent;
-            };
-            Task starter_task = {0, src, src->parent};
-            Task *first_task = &starter_task;
-            Task *last_task = &starter_task;
-            for(Task *task = first_task; task != 0; task = task->next)
-            {
-              D_Entity *src_n = task->src_n;
-              D_Entity *dst_n = d_entity_alloc(task->dst_parent, task->src_n->kind);
-              if(src_n->flags & D_EntityFlag_HasTextPoint)    {d_entity_equip_txt_pt(dst_n, src_n->text_point);}
-              if(src_n->flags & D_EntityFlag_HasU64)          {d_entity_equip_u64(dst_n, src_n->u64);}
-              if(src_n->flags & D_EntityFlag_HasColor)        {d_entity_equip_color_hsva(dst_n, d_hsva_from_entity(src_n));}
-              if(src_n->flags & D_EntityFlag_HasVAddrRng)     {d_entity_equip_vaddr_rng(dst_n, src_n->vaddr_rng);}
-              if(src_n->flags & D_EntityFlag_HasVAddr)        {d_entity_equip_vaddr(dst_n, src_n->vaddr);}
-              if(src_n->disabled)                             {d_entity_equip_disabled(dst_n, 1);}
-              if(src_n->string.size != 0)                     {d_entity_equip_name(dst_n, src_n->string);}
-              dst_n->cfg_src = src_n->cfg_src;
-              for(D_Entity *src_child = task->src_n->first; !d_entity_is_nil(src_child); src_child = src_child->next)
-              {
-                Task *child_task = push_array(scratch.arena, Task, 1);
-                child_task->src_n = src_child;
-                child_task->dst_parent = dst_n;
-                SLLQueuePush(first_task, last_task, child_task);
-              }
-            }
-          }
-        }break;
-        case D_CmdKind_RelocateEntity:
-        {
-          D_Entity *entity = d_entity_from_handle(params.entity);
-          D_Entity *location = d_entity_child_from_kind(entity, D_EntityKind_Location);
-          if(d_entity_is_nil(location))
-          {
-            location = d_entity_alloc(entity, D_EntityKind_Location);
-          }
-          location->flags &= ~D_EntityFlag_HasTextPoint;
-          location->flags &= ~D_EntityFlag_HasVAddr;
-          if(params.text_point.line != 0)
-          {
-            d_entity_equip_txt_pt(location, params.text_point);
-          }
-          if(params.vaddr != 0)
-          {
-            d_entity_equip_vaddr(location, params.vaddr);
-          }
-          if(params.file_path.size != 0)
-          {
-            d_entity_equip_name(location, params.file_path);
-          }
-        }break;
-        
-        //- rjf: breakpoints
-        case D_CmdKind_AddBreakpoint:
-        case D_CmdKind_ToggleBreakpoint:
-        {
-          String8 file_path = params.file_path;
-          TxtPt pt = params.text_point;
-          String8 string = params.string;
-          U64 vaddr = params.vaddr;
-          B32 removed_already_existing = 0;
-          if(core_cmd_kind == D_CmdKind_ToggleBreakpoint)
-          {
-            D_EntityList bps = d_query_cached_entity_list_with_kind(D_EntityKind_Breakpoint);
-            for(D_EntityNode *n = bps.first; n != 0; n = n->next)
-            {
-              D_Entity *bp = n->entity;
-              D_Entity *loc = d_entity_child_from_kind(bp, D_EntityKind_Location);
-              if((loc->flags & D_EntityFlag_HasTextPoint && path_match_normalized(loc->string, file_path) && loc->text_point.line == pt.line) ||
-                 (loc->flags & D_EntityFlag_HasVAddr && loc->vaddr == vaddr) ||
-                 (!(loc->flags & D_EntityFlag_HasTextPoint) && str8_match(loc->string, string, 0)))
-              {
-                d_entity_mark_for_deletion(bp);
-                removed_already_existing = 1;
-                break;
-              }
-            }
-          }
-          if(!removed_already_existing)
-          {
-            D_Entity *bp = d_entity_alloc(d_entity_root(), D_EntityKind_Breakpoint);
-            d_entity_equip_cfg_src(bp, D_CfgSrc_Project);
-            D_Entity *loc = d_entity_alloc(bp, D_EntityKind_Location);
-            if(file_path.size != 0 && pt.line != 0)
-            {
-              d_entity_equip_name(loc, file_path);
-              d_entity_equip_txt_pt(loc, pt);
-            }
-            else if(string.size != 0)
-            {
-              d_entity_equip_name(loc, string);
-            }
-            else if(vaddr != 0)
-            {
-              d_entity_equip_vaddr(loc, vaddr);
-            }
-          }
-        }break;
-        case D_CmdKind_AddAddressBreakpoint:
-        case D_CmdKind_AddFunctionBreakpoint:
-        {
-          d_cmd_list_push(arena, cmds, &params, d_cmd_spec_from_kind(D_CmdKind_AddBreakpoint));
-        }break;
-        
-        //- rjf: watch pins
-        case D_CmdKind_AddWatchPin:
-        case D_CmdKind_ToggleWatchPin:
-        {
-          String8 file_path = params.file_path;
-          TxtPt pt = params.text_point;
-          String8 string = params.string;
-          U64 vaddr = params.vaddr;
-          B32 removed_already_existing = 0;
-          if(core_cmd_kind == D_CmdKind_ToggleWatchPin)
-          {
-            D_EntityList wps = d_query_cached_entity_list_with_kind(D_EntityKind_WatchPin);
-            for(D_EntityNode *n = wps.first; n != 0; n = n->next)
-            {
-              D_Entity *wp = n->entity;
-              D_Entity *loc = d_entity_child_from_kind(wp, D_EntityKind_Location);
-              if((loc->flags & D_EntityFlag_HasTextPoint && path_match_normalized(loc->string, file_path) && loc->text_point.line == pt.line) ||
-                 (loc->flags & D_EntityFlag_HasVAddr && loc->vaddr == vaddr) ||
-                 (!(loc->flags & D_EntityFlag_HasTextPoint) && str8_match(loc->string, string, 0)))
-              {
-                d_entity_mark_for_deletion(wp);
-                removed_already_existing = 1;
-                break;
-              }
-            }
-          }
-          if(!removed_already_existing)
-          {
-            D_Entity *wp = d_entity_alloc(d_entity_root(), D_EntityKind_WatchPin);
-            d_entity_equip_name(wp, string);
-            d_entity_equip_cfg_src(wp, D_CfgSrc_Project);
-            D_Entity *loc = d_entity_alloc(wp, D_EntityKind_Location);
-            if(file_path.size != 0 && pt.line != 0)
-            {
-              d_entity_equip_name(loc, file_path);
-              d_entity_equip_txt_pt(loc, pt);
-            }
-            else if(vaddr != 0)
-            {
-              d_entity_equip_vaddr(loc, vaddr);
-            }
-          }
-        }break;
-        
-        //- rjf: watches
-        case D_CmdKind_ToggleWatchExpression:
-        if(params.string.size != 0)
-        {
-          D_Entity *existing_watch = d_entity_from_name_and_kind(params.string, D_EntityKind_Watch);
-          if(d_entity_is_nil(existing_watch))
-          {
-            D_Entity *watch = &d_nil_entity;
-            watch = d_entity_alloc(d_entity_root(), D_EntityKind_Watch);
-            d_entity_equip_cfg_src(watch, D_CfgSrc_Project);
-            d_entity_equip_name(watch, cmd->params.string);
-          }
-          else
-          {
-            d_entity_mark_for_deletion(existing_watch);
-          }
-        }break;
-        
-        //- rjf: cursor operations
-        case D_CmdKind_ToggleBreakpointAtCursor:
-        {
-          D_Regs *regs = d_regs();
-          D_CmdParams p = d_cmd_params_zero();
-          p.file_path  = regs->file_path;
-          p.text_point = regs->cursor;
-          p.vaddr      = regs->vaddr_range.min;
-          d_cmd_list_push(arena, cmds, &p, d_cmd_spec_from_kind(D_CmdKind_ToggleBreakpoint));
-        }break;
-        case D_CmdKind_ToggleWatchPinAtCursor:
-        {
-          D_Regs *regs = d_regs();
-          D_CmdParams p = d_cmd_params_zero();
-          p.file_path  = regs->file_path;
-          p.text_point = regs->cursor;
-          p.vaddr      = regs->vaddr_range.min;
-          p.string     = params.string;
-          d_cmd_list_push(arena, cmds, &p, d_cmd_spec_from_kind(D_CmdKind_ToggleWatchPin));
-        }break;
-        case D_CmdKind_GoToNameAtCursor:
-        case D_CmdKind_ToggleWatchExpressionAtCursor:
-        {
-          HS_Scope *hs_scope = hs_scope_open();
-          TXT_Scope *txt_scope = txt_scope_open();
-          D_Regs *regs = d_regs();
-          U128 text_key = regs->text_key;
-          TXT_LangKind lang_kind = regs->lang_kind;
-          TxtRng range = txt_rng(regs->cursor, regs->mark);
-          U128 hash = {0};
-          TXT_TextInfo info = txt_text_info_from_key_lang(txt_scope, text_key, lang_kind, &hash);
-          String8 data = hs_data_from_hash(hs_scope, hash);
-          Rng1U64 expr_off_range = {0};
-          if(range.min.column != range.max.column)
-          {
-            expr_off_range = r1u64(txt_off_from_info_pt(&info, range.min), txt_off_from_info_pt(&info, range.max));
-          }
-          else
-          {
-            expr_off_range = txt_expr_off_range_from_info_data_pt(&info, data, range.min);
-          }
-          String8 expr = str8_substr(data, expr_off_range);
-          D_CmdParams p = d_cmd_params_zero();
-          p.string = expr;
-          d_cmd_list_push(arena, cmds, &p, d_cmd_spec_from_kind(core_cmd_kind == D_CmdKind_GoToNameAtCursor ? D_CmdKind_GoToName :
-                                                                core_cmd_kind == D_CmdKind_ToggleWatchExpressionAtCursor ? D_CmdKind_ToggleWatchExpression :
-                                                                D_CmdKind_GoToName));
-          txt_scope_close(txt_scope);
-          hs_scope_close(hs_scope);
-        }break;
-        case D_CmdKind_RunToCursor:
-        {
-          String8 file_path = d_regs()->file_path;
-          if(file_path.size != 0)
-          {
-            d_cmd(D_CmdKind_RunToLine, .file_path = file_path, .text_point = d_regs()->cursor);
-          }
-          else
-          {
-            d_cmd(D_CmdKind_RunToAddress, .vaddr = d_regs()->vaddr_range.min);
-          }
-        }break;
-        case D_CmdKind_SetNextStatement:
-        {
-          D_Entity *thread = d_entity_from_handle(d_regs()->thread);
-          String8 file_path = d_regs()->file_path;
-          U64 new_rip_vaddr = d_regs()->vaddr_range.min;
-          if(file_path.size != 0)
-          {
-            D_LineList *lines = &d_regs()->lines;
-            for(D_LineNode *n = lines->first; n != 0; n = n->next)
-            {
-              D_EntityList modules = d_modules_from_dbgi_key(scratch.arena, &n->v.dbgi_key);
-              D_Entity *module = d_module_from_thread_candidates(thread, &modules);
-              if(!d_entity_is_nil(module))
-              {
-                new_rip_vaddr = d_vaddr_from_voff(module, n->v.voff_range.min);
-                break;
-              }
-            }
-          }
-          D_CmdParams p = d_cmd_params_zero();
-          p.entity = d_handle_from_entity(thread);
-          p.vaddr = new_rip_vaddr;
-          d_cmd_list_push(arena, cmds, &p, d_cmd_spec_from_kind(D_CmdKind_SetThreadIP));
-        }break;
-        
-        //- rjf: targets
-        case D_CmdKind_AddTarget:
-        {
-          // rjf: build target
-          D_Entity *entity = &d_nil_entity;
-          entity = d_entity_alloc(d_entity_root(), D_EntityKind_Target);
-          d_entity_equip_disabled(entity, 1);
-          d_entity_equip_cfg_src(entity, D_CfgSrc_Project);
-          D_Entity *exe = d_entity_alloc(entity, D_EntityKind_Executable);
-          d_entity_equip_name(exe, params.file_path);
-          String8 working_dir = str8_chop_last_slash(params.file_path);
-          if(working_dir.size != 0)
-          {
-            String8 working_dir_path = push_str8f(scratch.arena, "%S/", working_dir);
-            D_Entity *execution_path = d_entity_alloc(entity, D_EntityKind_WorkingDirectory);
-            d_entity_equip_name(execution_path, working_dir_path);
-          }
-          D_CmdParams p = params;
-          p.entity = d_handle_from_entity(entity);
-          d_cmd_list_push(arena, cmds, &p, d_cmd_spec_from_kind(D_CmdKind_EditTarget));
-          d_cmd_list_push(arena, cmds, &p, d_cmd_spec_from_kind(D_CmdKind_SelectTarget));
-        }break;
-        case D_CmdKind_SelectTarget:
-        {
-          D_Entity *entity = d_entity_from_handle(params.entity);
-          if(entity->kind == D_EntityKind_Target)
-          {
-            D_EntityList all_targets = d_query_cached_entity_list_with_kind(D_EntityKind_Target);
-            B32 is_selected = !entity->disabled;
-            for(D_EntityNode *n = all_targets.first; n != 0; n = n->next)
-            {
-              D_Entity *target = n->entity;
-              d_entity_equip_disabled(target, 1);
-            }
-            if(!is_selected)
-            {
-              d_entity_equip_disabled(entity, 0);
-            }
-          }
-        }break;
         
         //- rjf: attaching
         case D_CmdKind_Attach:
@@ -7607,51 +6989,6 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
             MemoryCopyArray(msg.exception_code_filters, d_state->ctrl_exception_code_filters);
             d_push_ctrl_msg(&msg);
           }
-        }break;
-        
-        //- rjf: jit-debugger registration
-        case D_CmdKind_RegisterAsJITDebugger:
-        {
-#if OS_WINDOWS
-          char filename_cstr[MAX_PATH] = {0};
-          GetModuleFileName(0, filename_cstr, sizeof(filename_cstr));
-          String8 debugger_binary_path = str8_cstring(filename_cstr);
-          String8 name8 = str8_lit("Debugger");
-          String8 data8 = push_str8f(scratch.arena, "%S --jit_pid:%%ld --jit_code:%%ld --jit_addr:0x%%p", debugger_binary_path);
-          String16 name16 = str16_from_8(scratch.arena, name8);
-          String16 data16 = str16_from_8(scratch.arena, data8);
-          B32 likely_not_in_admin_mode = 0;
-          {
-            HKEY reg_key = 0;
-            LSTATUS status = 0;
-            status = RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\WOW6432Node\\Microsoft\\Windows NT\\CurrentVersion\\AeDebug\\", 0, KEY_SET_VALUE, &reg_key);
-            likely_not_in_admin_mode = (status == ERROR_ACCESS_DENIED);
-            status = RegSetValueExW(reg_key, (LPCWSTR)name16.str, 0, REG_SZ, (BYTE *)data16.str, data16.size*sizeof(U16)+2);
-            RegCloseKey(reg_key);
-          }
-          {
-            HKEY reg_key = 0;
-            LSTATUS status = 0;
-            status = RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\AeDebug\\", 0, KEY_SET_VALUE, &reg_key);
-            likely_not_in_admin_mode = (status == ERROR_ACCESS_DENIED);
-            status = RegSetValueExW(reg_key, (LPCWSTR)name16.str, 0, REG_SZ, (BYTE *)data16.str, data16.size*sizeof(U16)+2);
-            RegCloseKey(reg_key);
-          }
-          if(likely_not_in_admin_mode)
-          {
-            d_cmd(D_CmdKind_Error, .string = str8_lit("Could not register as the just-in-time debugger, access was denied; try running the debugger as administrator."));
-          }
-#else
-          D_CmdParams p = params;
-          p.string = str8_lit("Registering as the just-in-time debugger is currently not supported on this system.");
-          d_push_cmd(&p, d_cmd_spec_from_kind(D_CmdKind_Error));
-#endif
-        }break;
-        
-        //- rjf: developer commands
-        case D_CmdKind_LogMarker:
-        {
-          log_infof("\"#MARKER\"");
         }break;
       }
       
@@ -7734,6 +7071,14 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
       }
     }
     scratch_end(scratch);
+  }
+  
+  //////////////////////////////
+  //- rjf: clear command batch
+  //
+  {
+    arena_clear(d_state->cmds_arena);
+    MemoryZeroStruct(&d_state->cmds);
   }
   
   //////////////////////////////

@@ -177,7 +177,7 @@ df_cmd_binding_buttons(D_CmdSpec *spec)
       {
         if((binding.key == OS_Key_Esc || binding.key == OS_Key_Delete) && binding.flags == 0)
         {
-          d_error(str8_lit("Cannot rebind; this command uses a reserved keybinding."));
+          log_user_error(str8_lit("Cannot rebind; this command uses a reserved keybinding."));
         }
         else
         {
@@ -294,7 +294,7 @@ df_cmd_spec_button(D_CmdSpec *spec)
                                           "###cmd_%p", spec);
   UI_Parent(box) UI_HeightFill UI_Padding(ui_em(1.f, 1.f))
   {
-    D_CmdKind kind = d_cmd_kind_from_string(spec->info.string);
+    DF_CmdKind kind = df_cmd_kind_from_string(spec->info.string);
     DF_IconKind canonical_icon = df_cmd_kind_icon_kind_table[kind];
     if(canonical_icon != DF_IconKind_Null)
     {
@@ -328,17 +328,17 @@ df_cmd_spec_button(D_CmdSpec *spec)
 }
 
 internal void
-df_cmd_list_menu_buttons(U64 count, D_CmdKind *cmds, U32 *fastpath_codepoints)
+df_cmd_list_menu_buttons(U64 count, D_CmdSpec **cmd_specs, U32 *fastpath_codepoints)
 {
   Temp scratch = scratch_begin(0, 0);
   for(U64 idx = 0; idx < count; idx += 1)
   {
-    D_CmdSpec *spec = d_cmd_spec_from_kind(cmds[idx]);
+    D_CmdSpec *spec = cmd_specs[idx];
     ui_set_next_fastpath_codepoint(fastpath_codepoints[idx]);
     UI_Signal sig = df_cmd_spec_button(spec);
     if(ui_clicked(sig))
     {
-      d_cmd(D_CmdKind_RunCommand, .cmd_spec = spec);
+      df_cmd(DF_CmdKind_RunCommand, .cmd_spec = spec);
       ui_ctx_menu_close();
       DF_Window *window = df_window_from_handle(d_regs()->window);
       window->menu_bar_focused = 0;
@@ -736,7 +736,7 @@ df_entity_desc_button(D_Entity *entity, FuzzyMatchRangeList *name_matches, Strin
     // rjf: click => fastpath for this entity
     if(ui_clicked(sig))
     {
-      d_cmd(D_CmdKind_EntityRefFastPath, .entity = d_handle_from_entity(entity));
+      df_cmd(DF_CmdKind_EntityRefFastPath, .entity = d_handle_from_entity(entity));
     }
     
     // rjf: right-click => context menu for this entity
@@ -793,7 +793,7 @@ df_src_loc_button(String8 file_path, TxtPt point)
   // rjf: click => find code location
   if(ui_clicked(sig))
   {
-    d_cmd(D_CmdKind_FindCodeLocation, .file_path = file_path, .text_point = point);
+    df_cmd(DF_CmdKind_FindCodeLocation, .file_path = file_path, .text_point = point);
   }
   
   // rjf: hover => show full path
@@ -1390,7 +1390,7 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             // rjf: click => remove breakpoint
             if(ui_clicked(bp_sig))
             {
-              d_cmd(D_CmdKind_RemoveBreakpoint, .entity = d_handle_from_entity(bp));
+              df_cmd(DF_CmdKind_RemoveBreakpoint, .entity = d_handle_from_entity(bp));
             }
             
             // rjf: drag start
@@ -1448,7 +1448,7 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             // rjf: click => remove pin
             if(ui_clicked(pin_sig))
             {
-              d_cmd(D_CmdKind_RemoveEntity, .entity = d_handle_from_entity(pin));
+              df_cmd(DF_CmdKind_RemoveEntity, .entity = d_handle_from_entity(pin));
             }
             
             // rjf: drag start
@@ -1474,10 +1474,10 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
         UI_Signal line_margin_sig = ui_signal_from_box(line_margin_box);
         if(ui_clicked(line_margin_sig))
         {
-          d_cmd(D_CmdKind_AddBreakpoint,
-                .file_path  = d_regs()->file_path,
-                .text_point = txt_pt(line_num, 1),
-                .vaddr      = params->line_vaddrs[line_idx]);
+          df_cmd(DF_CmdKind_AddBreakpoint,
+                 .file_path  = d_regs()->file_path,
+                 .text_point = txt_pt(line_num, 1),
+                 .vaddr      = params->line_vaddrs[line_idx]);
         }
       }
     }
@@ -1876,11 +1876,11 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
           case D_EntityKind_Breakpoint:
           case D_EntityKind_WatchPin:
           {
-            d_cmd(D_CmdKind_RelocateEntity,
-                  .entity = d_handle_from_entity(dropped_entity),
-                  .file_path  = d_regs()->file_path,
-                  .text_point = txt_pt(line_num, 1),
-                  .vaddr      = line_vaddr);
+            df_cmd(DF_CmdKind_RelocateEntity,
+                   .entity = d_handle_from_entity(dropped_entity),
+                   .file_path  = d_regs()->file_path,
+                   .text_point = txt_pt(line_num, 1),
+                   .vaddr      = line_vaddr);
           }break;
           case D_EntityKind_Thread:
           {
