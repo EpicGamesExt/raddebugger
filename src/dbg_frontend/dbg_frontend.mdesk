@@ -36,8 +36,6 @@
 //   /                           |        |              |                 \                                   /                                                          |                     |                             |                                             |                                                                                                                  |
 DF_CmdTable:    //               |        |              |                  |                                 |                                                           |                     |                             |                                             |                                                                                                                  |
 {
-  {Null                           0        0              Null               Nil                0  0  0  0  0  0                                                           Null                  ""                            ""                                            ""                                                                                                                 ""                               }
-  
   //- rjf: exiting
   {Exit                           1        1              Null               Nil                0  0  0  0  0  0                                                           X                     "exit"                        "Exit"                                        "Exits the debugger."                                                                                              "quit,close,abort"               }
   
@@ -305,12 +303,17 @@ DF_CmdTable:    //               |        |              |                  |   
 
 @enum DF_CmdKind:
 {
+  `Null`,
+  @expand(D_CmdTable a) `$(a.name)`,
   @expand(DF_CmdTable, a) `$(a.name)`,
   COUNT,
 }
 
 @data(D_CmdSpecInfo) @c_file df_cmd_kind_spec_info_table:
 {
+  `{0}`,
+  @expand(D_CmdTable, a)
+    ```{ str8_lit_comp("$(a.string)"), str8_lit_comp("$(a.desc)"), str8_lit_comp("$(a.search_tags)"), str8_lit_comp("$(a.display_name)"), (D_CmdSpecFlag_ListInUI*$(a.ui_vis))|(D_CmdSpecFlag_ListInIPCDocs*$(a.ipc_docs_vis)), {D_CmdParamSlot_$(a.q_slot), D_EntityKind_$(a.q_ent_kind), (D_CmdQueryFlag_AllowFiles*$(a.q_allow_files))|(D_CmdQueryFlag_AllowFolders*$(a.q_allow_folders))|(D_CmdQueryFlag_CodeInput*$(a.q_is_code))|(D_CmdQueryFlag_KeepOldInput*$(a.q_keep_oi))|(D_CmdQueryFlag_SelectOldInput*$(a.q_select_oi))|(D_CmdQueryFlag_Required*$(a.q_required))}}```;
   @expand(DF_CmdTable, a)
     ```{ str8_lit_comp("$(a.string)"), str8_lit_comp("$(a.desc)"), str8_lit_comp("$(a.search_tags)"), str8_lit_comp("$(a.display_name)"), (D_CmdSpecFlag_ListInUI*$(a.ui_vis))|(D_CmdSpecFlag_ListInIPCDocs*$(a.ipc_docs_vis)), {D_CmdParamSlot_$(a.q_slot), D_EntityKind_$(a.q_ent_kind), (D_CmdQueryFlag_AllowFiles*$(a.q_allow_files))|(D_CmdQueryFlag_AllowFolders*$(a.q_allow_folders))|(D_CmdQueryFlag_CodeInput*$(a.q_is_code))|(D_CmdQueryFlag_KeepOldInput*$(a.q_keep_oi))|(D_CmdQueryFlag_SelectOldInput*$(a.q_select_oi))|(D_CmdQueryFlag_Required*$(a.q_required))}}```;
 }
@@ -685,7 +688,9 @@ DF_ViewTable:
 
 @data(DF_IconKind) df_cmd_kind_icon_kind_table:
 {
-  @expand(DF_CmdTable a) `DF_IconKind_$(a.canonical_icon)`
+  DF_IconKind_Null,
+  @expand(D_CmdTable a)  `DF_IconKind_$(a.canonical_icon)`,
+  @expand(DF_CmdTable a) `DF_IconKind_$(a.canonical_icon)`,
 }
 
 @data(DF_IconKind) df_entity_kind_icon_kind_table:

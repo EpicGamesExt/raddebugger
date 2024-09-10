@@ -609,6 +609,9 @@ struct DF_Window
   DF_Panel *free_panel;
   DF_Panel *focused_panel;
   
+  // rjf: per-frame ui events state
+  UI_EventList ui_events;
+  
   // rjf: per-frame drawing state
   DR_Bucket *draw_bucket;
 };
@@ -894,7 +897,7 @@ internal DF_Window *df_window_open(Vec2F32 size, OS_Handle preferred_monitor, D_
 
 internal DF_Window *df_window_from_os_handle(OS_Handle os);
 
-internal void df_window_update_and_render(Arena *arena, DF_Window *ws);
+internal void df_window_frame(DF_Window *ws);
 
 ////////////////////////////////
 //~ rjf: Eval Viz

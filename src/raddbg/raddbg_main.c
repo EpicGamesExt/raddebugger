@@ -920,7 +920,7 @@ entry_point(CmdLine *cmd_line)
                   String8 error = d_cmd_params_apply_spec_query(scratch.arena, &params, cmd_spec, d_cmd_arg_part_from_string(msg));
                   if(error.size == 0)
                   {
-                    d_push_cmd(cmd_spec, &params);
+                    df_push_cmd(cmd_spec, &params);
                     df_request_frame();
                   }
                   else
@@ -946,21 +946,21 @@ entry_point(CmdLine *cmd_line)
           if(auto_run)
           {
             auto_run = 0;
-            d_cmd(D_CmdKind_LaunchAndRun);
+            df_cmd(DF_CmdKind_LaunchAndRun);
           }
           
           //- rjf: auto step
           if(auto_step)
           {
             auto_step = 0;
-            d_cmd(D_CmdKind_StepInto);
+            df_cmd(DF_CmdKind_StepInto);
           }
           
           //- rjf: jit attach
           if(jit_attach)
           {
             jit_attach = 0;
-            d_cmd(D_CmdKind_Attach, .id = jit_pid);
+            df_cmd(DF_CmdKind_Attach, .id = jit_pid);
           }
         }
       }

@@ -1312,7 +1312,7 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             // rjf: double click => select
             if(ui_double_clicked(thread_sig))
             {
-              d_cmd(D_CmdKind_SelectThread, .entity = d_handle_from_entity(thread));
+              df_cmd(DF_CmdKind_SelectThread, .entity = d_handle_from_entity(thread));
               ui_kill_action();
             }
             
@@ -1899,7 +1899,7 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
                 }
               }
             }
-            d_cmd(D_CmdKind_SetThreadIP, .entity = d_handle_from_entity(dropped_entity), .vaddr = new_rip_vaddr);
+            df_cmd(DF_CmdKind_SetThreadIP, .entity = d_handle_from_entity(dropped_entity), .vaddr = new_rip_vaddr);
           }break;
         }
       }

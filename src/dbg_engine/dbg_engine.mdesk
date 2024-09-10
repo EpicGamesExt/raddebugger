@@ -231,8 +231,6 @@ D_CmdParamSlotTable:
 //   /                           |        |              |                 \                                   /                                                          |                     |                             |                                             |                                                                                                                  |
 D_CmdTable:     //               |        |              |                  |                                 |                                                           |                     |                             |                                             |                                                                                                                  |
 {
-  {Null                           0        0              Null               Nil                0  0  0  0  0  0                                                           Null                  ""                            ""                                            ""                                                                                                                 ""                               }
-  
   //- rjf: low-level target control operations
   {LaunchAndRun                   1        1              EntityList         Target             0  0  0  0  0  1                                                           Play                  "launch_and_run"              "Launch and Run"                              "Starts debugging a new instance of a target, then runs."                                                          "launch,start,run,target"        }
   {LaunchAndInit                  1        1              EntityList         Target             0  0  0  0  0  1                                                           PlayStepForward       "launch_and_init"             "Launch and Initialize"                       "Starts debugging a new instance of a target, then stops at the program's entry point."                            "launch,start,entry,point"       }
@@ -281,6 +279,7 @@ D_CmdTable:     //               |        |              |                  |   
 
 @enum D_CmdKind:
 {
+  Null,
   @expand(D_CmdTable, a) `$(a.name)`,
   COUNT,
 }
@@ -305,6 +304,7 @@ D_CmdTable:     //               |        |              |                  |   
 
 @data(D_CmdSpecInfo) @c_file d_core_cmd_kind_spec_info_table:
 {
+  `{0}`,
   @expand(D_CmdTable, a)
     ```{ str8_lit_comp("$(a.string)"), str8_lit_comp("$(a.desc)"), str8_lit_comp("$(a.search_tags)"), str8_lit_comp("$(a.display_name)"), (D_CmdSpecFlag_ListInUI*$(a.ui_vis))|(D_CmdSpecFlag_ListInIPCDocs*$(a.ipc_docs_vis)), {D_CmdParamSlot_$(a.q_slot), D_EntityKind_$(a.q_ent_kind), (D_CmdQueryFlag_AllowFiles*$(a.q_allow_files))|(D_CmdQueryFlag_AllowFolders*$(a.q_allow_folders))|(D_CmdQueryFlag_CodeInput*$(a.q_is_code))|(D_CmdQueryFlag_KeepOldInput*$(a.q_keep_oi))|(D_CmdQueryFlag_SelectOldInput*$(a.q_select_oi))|(D_CmdQueryFlag_Required*$(a.q_required))}}```;
 }

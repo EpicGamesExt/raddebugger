@@ -1645,10 +1645,10 @@ df_watch_view_build(DF_View *view, DF_WatchViewState *ewv, B32 modifiable, U32 d
         if(1 <= selection_tbl.min.y && selection_tbl.min.y <= frame_rows_count)
         {
           FrameRow *frame_row = &frame_rows[selection_tbl.min.y-1];
-          d_cmd(D_CmdKind_SelectUnwind,
-                .entity       = d_regs()->thread,
-                .unwind_index = frame_row->unwind_idx,
-                .inline_depth = frame_row->inline_depth);
+          df_cmd(DF_CmdKind_SelectUnwind,
+                 .entity       = d_regs()->thread,
+                 .unwind_index = frame_row->unwind_idx,
+                 .inline_depth = frame_row->inline_depth);
         }
       }
       
@@ -2644,10 +2644,10 @@ df_watch_view_build(DF_View *view, DF_WatchViewState *ewv, B32 modifiable, U32 d
                 if(ui_double_clicked(sig) && !cell_can_edit && semantic_idx < frame_rows_count)
                 {
                   FrameRow *frame_row = &frame_rows[semantic_idx];
-                  d_cmd(D_CmdKind_SelectUnwind,
-                        .entity      = d_regs()->thread,
-                        .unwind_index = frame_row->unwind_idx,
-                        .inline_depth = frame_row->inline_depth);
+                  df_cmd(DF_CmdKind_SelectUnwind,
+                         .entity      = d_regs()->thread,
+                         .unwind_index = frame_row->unwind_idx,
+                         .inline_depth = frame_row->inline_depth);
                 }
                 
                 // rjf: hovering with inheritance string -> show tooltip
@@ -2959,12 +2959,12 @@ DF_VIEW_UI_FUNCTION_DEF(getting_started)
           {
             if(ui_clicked(df_icon_buttonf(DF_IconKind_Play, 0, "Launch %S", target_name)))
             {
-              d_cmd(D_CmdKind_LaunchAndRun, .entity = d_handle_from_entity(target));
+              df_cmd(DF_CmdKind_LaunchAndRun, .entity = d_handle_from_entity(target));
             }
             ui_spacer(ui_em(1.5f, 1));
             if(ui_clicked(df_icon_buttonf(DF_IconKind_Play, 0, "Step Into %S", target_name)))
             {
-              d_cmd(D_CmdKind_LaunchAndInit, .entity = d_handle_from_entity(target));
+              df_cmd(DF_CmdKind_LaunchAndInit, .entity = d_handle_from_entity(target));
             }
           }
         }break;
@@ -5059,15 +5059,14 @@ DF_VIEW_UI_FUNCTION_DEF(targets)
         {
           DF_IconKind icon;
           String8 text;
-          D_CmdKind d_cmd;
-          DF_CmdKind df_cmd;
+          DF_CmdKind cmd;
         }
         ctrls[] =
         {
-          { DF_IconKind_PlayStepForward,  str8_lit("Launch and Initialize"), D_CmdKind_LaunchAndInit },
-          { DF_IconKind_Play,             str8_lit("Launch and Run"),        D_CmdKind_LaunchAndRun  },
-          { DF_IconKind_Pencil,           str8_lit("Edit"),                  D_CmdKind_Null, DF_CmdKind_Target        },
-          { DF_IconKind_Trash,            str8_lit("Delete"),                D_CmdKind_Null, DF_CmdKind_RemoveTarget  },
+          { DF_IconKind_PlayStepForward,  str8_lit("Launch and Initialize"), DF_CmdKind_LaunchAndInit },
+          { DF_IconKind_Play,             str8_lit("Launch and Run"),        DF_CmdKind_LaunchAndRun  },
+          { DF_IconKind_Pencil,           str8_lit("Edit"),                  DF_CmdKind_Target        },
+          { DF_IconKind_Trash,            str8_lit("Delete"),                DF_CmdKind_RemoveTarget  },
         };
         for(U64 ctrl_idx = 0; ctrl_idx < ArrayCount(ctrls); ctrl_idx += 1)
         {
@@ -5082,14 +5081,7 @@ DF_VIEW_UI_FUNCTION_DEF(targets)
           }
           if(ui_clicked(sig))
           {
-            if(ctrls[ctrl_idx].d_cmd != D_CmdKind_Null)
-            {
-              d_cmd(ctrls[ctrl_idx].d_cmd, .entity = d_handle_from_entity(target));
-            }
-            if(ctrls[ctrl_idx].df_cmd != DF_CmdKind_Null)
-            {
-              df_cmd(ctrls[ctrl_idx].df_cmd, .entity = d_handle_from_entity(target));
-            }
+            df_cmd(ctrls[ctrl_idx].cmd, .entity = d_handle_from_entity(target));
           }
         }
       }
@@ -5646,7 +5638,7 @@ DF_VIEW_UI_FUNCTION_DEF(scheduler)
           if(ui_clicked(sig))
           {
             D_CmdKind cmd_kind = frozen ? D_CmdKind_ThawEntity : D_CmdKind_FreezeEntity;
-            d_cmd(cmd_kind, .entity = d_handle_from_entity(entity));
+            df_cmd(cmd_kind, .entity = d_handle_from_entity(entity));
           }
         }
         UI_TableCellSized(ui_pct(1, 0))
@@ -5669,14 +5661,14 @@ DF_VIEW_UI_FUNCTION_DEF(scheduler)
                 UI_TextAlignment(UI_TextAlign_Center)
                 if(ui_clicked(ui_buttonf("Detach")))
               {
-                d_cmd(D_CmdKind_Detach, .entity = d_handle_from_entity(entity));
+                df_cmd(D_CmdKind_Detach, .entity = d_handle_from_entity(entity));
               }
             }
             UI_TableCellSized(ui_em(2.25f, 1.f)) UI_FocusHot((row_is_selected && cursor.x == 3) ? UI_FocusKind_On : UI_FocusKind_Off)
             {
               if(ui_clicked(df_icon_buttonf(DF_IconKind_Redo, 0, "###retry")))
               {
-                d_cmd(D_CmdKind_Restart, .entity = d_handle_from_entity(entity));
+                df_cmd(D_CmdKind_Restart, .entity = d_handle_from_entity(entity));
               }
             }
             UI_TableCellSized(ui_em(2.25f, 1.f)) UI_FocusHot((row_is_selected && cursor.x == 4) ? UI_FocusKind_On : UI_FocusKind_Off)
@@ -5684,7 +5676,7 @@ DF_VIEW_UI_FUNCTION_DEF(scheduler)
               DF_Palette(DF_PaletteCode_NegativePopButton)
                 if(ui_clicked(df_icon_buttonf(DF_IconKind_X, 0, "###kill")))
               {
-                d_cmd(D_CmdKind_Kill, .entity = d_handle_from_entity(entity));
+                df_cmd(D_CmdKind_Kill, .entity = d_handle_from_entity(entity));
               }
             }
           }break;
@@ -6316,7 +6308,7 @@ DF_VIEW_CMD_FUNCTION_DEF(pending_file)
     for(D_CmdNode *cmd_node = pves->deferred_cmds.first; cmd_node != 0; cmd_node = cmd_node->next)
     {
       D_Cmd *cmd = &cmd_node->cmd;
-      d_push_cmd(cmd->spec, &cmd->params);
+      df_push_cmd(cmd->spec, &cmd->params);
     }
     arena_clear(pves->deferred_cmd_arena);
     MemoryZeroStruct(&pves->deferred_cmds);

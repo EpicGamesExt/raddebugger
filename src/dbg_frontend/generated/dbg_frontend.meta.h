@@ -9,6 +9,43 @@
 typedef enum DF_CmdKind
 {
 DF_CmdKind_Null,
+DF_CmdKind_LaunchAndRun,
+DF_CmdKind_LaunchAndInit,
+DF_CmdKind_Kill,
+DF_CmdKind_KillAll,
+DF_CmdKind_Detach,
+DF_CmdKind_Continue,
+DF_CmdKind_StepIntoInst,
+DF_CmdKind_StepOverInst,
+DF_CmdKind_StepIntoLine,
+DF_CmdKind_StepOverLine,
+DF_CmdKind_StepOut,
+DF_CmdKind_Halt,
+DF_CmdKind_SoftHaltRefresh,
+DF_CmdKind_SetThreadIP,
+DF_CmdKind_RunToLine,
+DF_CmdKind_RunToAddress,
+DF_CmdKind_Run,
+DF_CmdKind_Restart,
+DF_CmdKind_StepInto,
+DF_CmdKind_StepOver,
+DF_CmdKind_RunToCursor,
+DF_CmdKind_SetNextStatement,
+DF_CmdKind_SelectThread,
+DF_CmdKind_SelectUnwind,
+DF_CmdKind_UpOneFrame,
+DF_CmdKind_DownOneFrame,
+DF_CmdKind_FreezeThread,
+DF_CmdKind_ThawThread,
+DF_CmdKind_FreezeProcess,
+DF_CmdKind_ThawProcess,
+DF_CmdKind_FreezeMachine,
+DF_CmdKind_ThawMachine,
+DF_CmdKind_FreezeLocalMachine,
+DF_CmdKind_ThawLocalMachine,
+DF_CmdKind_FreezeEntity,
+DF_CmdKind_ThawEntity,
+DF_CmdKind_Attach,
 DF_CmdKind_Exit,
 DF_CmdKind_RunCommand,
 DF_CmdKind_Error,
@@ -550,7 +587,7 @@ extern String8 df_g_binding_version_remap_new_name_table[7];
 extern String8 df_g_icon_kind_text_table[69];
 extern String8 df_view_kind_name_lower_table[34];
 extern DF_ViewSpecInfo df_g_gfx_view_kind_spec_info_table[34];
-extern DF_IconKind df_cmd_kind_icon_kind_table[183];
+extern DF_IconKind df_cmd_kind_icon_kind_table[220];
 extern DF_IconKind df_entity_kind_icon_kind_table[30];
 extern D_CmdParamSlot df_g_cmd_param_slot_2_view_spec_src_map[7];
 extern String8 df_g_cmd_param_slot_2_view_spec_dst_map[7];
