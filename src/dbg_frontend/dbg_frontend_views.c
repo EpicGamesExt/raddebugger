@@ -1009,8 +1009,6 @@ df_watch_view_build(DF_View *view, DF_WatchViewState *ewv, B32 modifiable, U32 d
       if(state_dirty)
       {
         MemoryZeroStruct(&blocks);
-        D_EvalViewKey eval_view_key = df_eval_view_key_from_eval_watch_view(ewv);
-        D_EvalView *eval_view = d_eval_view_from_key(eval_view_key);
         String8 filter = str8(view->query_buffer, view->query_string_size);
         RDI_SectionKind fzy_target = RDI_SectionKind_UDTs;
         switch(ewv->fill_kind)

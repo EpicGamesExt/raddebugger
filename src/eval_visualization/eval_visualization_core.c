@@ -2,6 +2,11 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
+//~ rjf: Generated Code
+
+#include "generated/eval_visualization.meta.c"
+
+////////////////////////////////
 //~ rjf: Key Functions
 
 internal EV_Key
@@ -49,6 +54,53 @@ ev_hash_from_key(EV_Key key)
   };
   U64 hash = ev_hash_from_seed_string(key.parent_hash, str8((U8 *)data, sizeof(data)));
   return hash;
+}
+
+////////////////////////////////
+//~ rjf: Type Info Helpers
+
+//- rjf: type info -> expandability/editablity
+
+internal B32
+ev_type_key_is_expandable(E_TypeKey type_key)
+{
+  B32 result = 0;
+  for(E_TypeKey t = type_key; !result; t = e_type_unwrap(e_type_direct_from_key(e_type_unwrap(t))))
+  {
+    E_TypeKind kind = e_type_kind_from_key(t);
+    if(kind == E_TypeKind_Null || kind == E_TypeKind_Function)
+    {
+      break;
+    }
+    if(kind == E_TypeKind_Struct ||
+       kind == E_TypeKind_Union ||
+       kind == E_TypeKind_Class ||
+       kind == E_TypeKind_Array ||
+       kind == E_TypeKind_Enum)
+    {
+      result = 1;
+    }
+  }
+  return result;
+}
+
+internal B32
+ev_type_key_is_editable(E_TypeKey type_key)
+{
+  B32 result = 0;
+  for(E_TypeKey t = type_key; !result; t = e_type_unwrap(e_type_direct_from_key(e_type_unwrap(t))))
+  {
+    E_TypeKind kind = e_type_kind_from_key(t);
+    if(kind == E_TypeKind_Null || kind == E_TypeKind_Function)
+    {
+      break;
+    }
+    if((E_TypeKind_FirstBasic <= kind && kind <= E_TypeKind_LastBasic) || e_type_kind_is_pointer_or_ref(kind))
+    {
+      result = 1;
+    }
+  }
+  return result;
 }
 
 ////////////////////////////////
@@ -260,6 +312,15 @@ ev_view_rule_info_table_push(Arena *arena, EV_ViewRuleInfoTable *table, EV_ViewR
   SLLQueuePush(slot->first, slot->last, n);
   MemoryCopyStruct(&n->v, info);
   n->v.string = push_str8_copy(arena, n->v.string);
+}
+
+internal void
+ev_view_rule_info_table_push_builtins(Arena *arena, EV_ViewRuleInfoTable *table)
+{
+  for(EachEnumVal(EV_ViewRuleKind, kind))
+  {
+    ev_view_rule_info_table_push(arena, table, &ev_builtin_view_rule_info_table[kind]);
+  }
 }
 
 internal void
@@ -969,6 +1030,48 @@ ev_expr_string_from_row(Arena *arena, EV_Row *row)
       result = push_str8f(arena, ".%S", e_string_from_expr(arena, row->expr->last));
     }break;
   }
+  return result;
+}
+
+internal B32
+ev_row_is_expandable(EV_Row *row)
+{
+  B32 result = 0;
+  {
+    // rjf: determine if view rules force expandability
+    if(!result)
+    {
+      for(EV_ViewRuleNode *n = row->view_rules->first; n != 0; n = n->next)
+      {
+        EV_ViewRuleInfo *info = ev_view_rule_info_from_string(n->v.root->string);
+        if(info->flags & EV_ViewRuleInfoFlag_Expandable)
+        {
+          result = 1;
+          break;
+        }
+      }
+    }
+    
+    // rjf: determine if type info force expandability
+    if(!result)
+    {
+      Temp scratch = scratch_begin(0, 0);
+      E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, row->expr);
+      result = ev_type_key_is_expandable(irtree.type_key);
+      scratch_end(scratch);
+    }
+  }
+  return result;
+}
+
+internal B32
+ev_row_is_editable(EV_Row *row)
+{
+  B32 result = 0;
+  Temp scratch = scratch_begin(0, 0);
+  E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, row->expr);
+  result = ev_type_key_is_editable(irtree.type_key);
+  scratch_end(scratch);
   return result;
 }
 

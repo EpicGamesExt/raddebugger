@@ -1,8 +1,8 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-#ifndef EVAL_VISUALIZATION_H
-#define EVAL_VISUALIZATION_H
+#ifndef EVAL_VISUALIZATION_CORE_H
+#define EVAL_VISUALIZATION_CORE_H
 
 ////////////////////////////////
 //~ rjf: Key Type (Uniquely Refers To One Tree Node)
@@ -81,7 +81,7 @@ struct EV_View
 #define EV_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_NAME(name) ev_view_rule_expr_resolution__##name
 #define EV_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_DEF(name) internal EV_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_SIG(EV_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_NAME(name))
 #define EV_VIEW_RULE_BLOCK_PROD_FUNCTION_SIG(name) void name(Arena *arena,                                      \
-EV_View *eval_view,                                \
+EV_View *view,                                     \
 EV_Key parent_key,                                 \
 EV_Key key,                                        \
 EV_ExpandNode *expand_node,                        \
@@ -134,6 +134,11 @@ struct EV_ViewRuleInfoTable
   EV_ViewRuleInfoSlot *slots;
   U64 slots_count;
 };
+
+////////////////////////////////
+//~ rjf: Generated Code
+
+#include "generated/eval_visualization.meta.h"
 
 ////////////////////////////////
 //~ rjf: View Rule Instance Types
@@ -285,6 +290,13 @@ internal U64 ev_hash_from_seed_string(U64 seed, String8 string);
 internal U64 ev_hash_from_key(EV_Key key);
 
 ////////////////////////////////
+//~ rjf: Type Info Helpers
+
+//- rjf: type info -> expandability/editablity
+internal B32 ev_type_key_is_expandable(E_TypeKey type_key);
+internal B32 ev_type_key_is_editable(E_TypeKey type_key);
+
+////////////////////////////////
 //~ rjf: View Functions
 
 //- rjf: creation / deletion
@@ -302,6 +314,7 @@ internal void ev_key_set_view_rule(EV_View *view, EV_Key key, String8 view_rule_
 //~ rjf: View Rule Info Table Building / Selection / Lookups
 
 internal void ev_view_rule_info_table_push(Arena *arena, EV_ViewRuleInfoTable *table, EV_ViewRuleInfo *info);
+internal void ev_view_rule_info_table_push_builtins(Arena *arena, EV_ViewRuleInfoTable *table);
 internal void ev_select_view_rule_info_table(EV_ViewRuleInfoTable *table);
 internal EV_ViewRuleInfo *ev_view_rule_info_from_string(String8 string);
 
@@ -347,6 +360,8 @@ internal E_Expr *ev_expr_from_block_index(Arena *arena, EV_Block *block, U64 ind
 internal EV_Row *ev_row_list_push_new(Arena *arena, EV_View *view, EV_WindowedRowList *rows, EV_Block *block, EV_Key key, E_Expr *expr);
 internal EV_WindowedRowList ev_windowed_row_list_from_block_list(Arena *arena, EV_View *view, Rng1S64 visible_range, EV_BlockList *blocks);
 internal String8 ev_expr_string_from_row(Arena *arena, EV_Row *row);
+internal B32 ev_row_is_expandable(EV_Row *row);
+internal B32 ev_row_is_editable(EV_Row *row);
 
 ////////////////////////////////
 //~ rjf: Stringification
@@ -358,4 +373,4 @@ internal String8 ev_string_from_hresult_code(U32 code);
 internal String8 ev_string_from_simple_typed_eval(Arena *arena, EV_StringFlags flags, U32 radix, E_Eval eval);
 internal String8 ev_escaped_from_raw_string(Arena *arena, String8 raw);
 
-#endif // EVAL_VISUALIZATION_H
+#endif // EVAL_VISUALIZATION_CORE_H
