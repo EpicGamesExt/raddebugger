@@ -2514,15 +2514,15 @@ df_watch_view_build(DF_View *view, DF_WatchViewState *ewv, B32 modifiable, U32 d
               if(col->view_rule_size != 0)
               {
                 String8 col_view_rule = str8(col->view_rule_buffer, col->view_rule_size);
-                D_CfgTable col_cfg_table = {0};
-                d_cfg_table_push_unparsed_string(scratch.arena, &col_cfg_table, col_view_rule, D_CfgSrc_User);
-                for(D_CfgVal *val = col_cfg_table.first_val; val != 0 && val != &d_nil_cfg_val; val = val->linear_next)
+                EV_ViewRuleList *view_rules = ev_view_rule_list_from_string(scratch.arena, col_view_rule);
+                for(EV_ViewRuleNode *n = view_rules->first; n != 0; n = n->next)
                 {
-                  DF_ViewRuleSpec *spec = df_view_rule_spec_from_string(val->string);
+                  EV_ViewRule *vr = &n->v;
+                  DF_ViewRuleSpec *spec = df_view_rule_spec_from_string(vr->root->string);
                   if(spec != &df_nil_view_rule_spec && spec->info.flags & DF_ViewRuleSpecInfoFlag_RowUI)
                   {
                     cell_ui_hook = spec->info.row_ui;
-                    cell_ui_params = val->last->root;
+                    cell_ui_params = vr->root;
                   }
                 }
               }

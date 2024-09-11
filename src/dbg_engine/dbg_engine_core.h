@@ -5,7 +5,7 @@
 #define DBG_ENGINE_CORE_H
 
 ////////////////////////////////
-//~ rjf: Input State Types
+//~ rjf: Tick Input Types
 
 typedef struct D_Target D_Target;
 struct D_Target
@@ -1073,20 +1073,6 @@ internal void d_regs_copy_contents(Arena *arena, D_Regs *dst, D_Regs *src);
 internal D_Regs *d_regs_copy(Arena *arena, D_Regs *src);
 
 ////////////////////////////////
-//~ rjf: Sparse Tree Expansion State Data Structure
-
-//- rjf: keys
-internal D_ExpandKey d_expand_key_make(U64 parent_hash, U64 child_num);
-internal D_ExpandKey d_expand_key_zero(void);
-internal B32 d_expand_key_match(D_ExpandKey a, D_ExpandKey b);
-
-//- rjf: table
-internal void d_expand_tree_table_init(Arena *arena, D_ExpandTreeTable *table, U64 slot_count);
-internal D_ExpandNode *d_expand_node_from_key(D_ExpandTreeTable *table, D_ExpandKey key);
-internal B32 d_expand_key_is_set(D_ExpandTreeTable *table, D_ExpandKey key);
-internal void d_expand_set_expansion(Arena *arena, D_ExpandTreeTable *table, D_ExpandKey parent_key, D_ExpandKey key, B32 expanded);
-
-////////////////////////////////
 //~ rjf: Config Type Pure Functions
 
 internal void d_cfg_table_push_unparsed_string(Arena *arena, D_CfgTable *table, String8 string, D_CfgSrc source);
@@ -1323,22 +1309,6 @@ internal U128 d_key_from_eval_space_range(E_Space space, Rng1U64 range, B32 zero
 internal Rng1U64 d_whole_range_from_eval_space(E_Space space);
 
 ////////////////////////////////
-//~ rjf: Evaluation Views
-
-//- rjf: keys
-internal D_EvalViewKey d_eval_view_key_make(U64 v0, U64 v1);
-internal D_EvalViewKey d_eval_view_key_from_string(String8 string);
-internal D_EvalViewKey d_eval_view_key_from_stringf(char *fmt, ...);
-internal B32 d_eval_view_key_match(D_EvalViewKey a, D_EvalViewKey b);
-
-//- rjf: cache lookup
-internal D_EvalView *d_eval_view_from_key(D_EvalViewKey key);
-
-//- rjf: key -> view rules
-internal void d_eval_view_set_key_rule(D_EvalView *eval_view, D_ExpandKey key, String8 view_rule_string);
-internal String8 d_eval_view_rule_from_key(D_EvalView *eval_view, D_ExpandKey key);
-
-////////////////////////////////
 //~ rjf: Evaluation Visualization
 
 //- rjf: writing values back to child processes
@@ -1432,6 +1402,6 @@ internal B32 d_next_cmd(D_Cmd **cmd);
 //~ rjf: Main Layer Top-Level Calls
 
 internal void d_init(void);
-internal void d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_Scope *di_scope, F32 dt);
+internal CTRL_EventList d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_Scope *di_scope, F32 dt);
 
 #endif // DBG_ENGINE_CORE_H

@@ -138,154 +138,6 @@ d_regs_copy(Arena *arena, D_Regs *src)
 }
 
 ////////////////////////////////
-//~ rjf: Sparse Tree Expansion State Data Structure
-
-//- rjf: keys
-
-internal D_ExpandKey
-d_expand_key_make(U64 parent_hash, U64 child_num)
-{
-  D_ExpandKey key;
-  {
-    key.parent_hash = parent_hash;
-    key.child_num = child_num;
-  }
-  return key;
-}
-
-internal D_ExpandKey
-d_expand_key_zero(void)
-{
-  D_ExpandKey key = {0};
-  return key;
-}
-
-internal B32
-d_expand_key_match(D_ExpandKey a, D_ExpandKey b)
-{
-  return MemoryMatchStruct(&a, &b);
-}
-
-internal U64
-df_hash_from_expand_key(D_ExpandKey key)
-{
-  U64 data[] =
-  {
-    key.child_num,
-  };
-  U64 hash = d_hash_from_seed_string(key.parent_hash, str8((U8 *)data, sizeof(data)));
-  return hash;
-}
-
-//- rjf: table
-
-internal void
-d_expand_tree_table_init(Arena *arena, D_ExpandTreeTable *table, U64 slot_count)
-{
-  MemoryZeroStruct(table);
-  table->slots_count = slot_count;
-  table->slots = push_array(arena, D_ExpandSlot, table->slots_count);
-}
-
-internal D_ExpandNode *
-d_expand_node_from_key(D_ExpandTreeTable *table, D_ExpandKey key)
-{
-  U64 hash = df_hash_from_expand_key(key);
-  U64 slot_idx = hash%table->slots_count;
-  D_ExpandSlot *slot = &table->slots[slot_idx];
-  D_ExpandNode *node = 0;
-  for(D_ExpandNode *n = slot->first; n != 0; n = n->hash_next)
-  {
-    if(d_expand_key_match(n->key, key))
-    {
-      node = n;
-      break;
-    }
-  }
-  return node;
-}
-
-internal B32
-d_expand_key_is_set(D_ExpandTreeTable *table, D_ExpandKey key)
-{
-  D_ExpandNode *node = d_expand_node_from_key(table, key);
-  return (node != 0 && node->expanded);
-}
-
-internal void
-d_expand_set_expansion(Arena *arena, D_ExpandTreeTable *table, D_ExpandKey parent_key, D_ExpandKey key, B32 expanded)
-{
-  // rjf: map keys => nodes
-  D_ExpandNode *parent_node = d_expand_node_from_key(table, parent_key);
-  D_ExpandNode *node = d_expand_node_from_key(table, key);
-  
-  // rjf: make node if we don't have one, and we need one
-  if(node == 0 && expanded)
-  {
-    node = table->free_node;
-    if(node != 0)
-    {
-      table->free_node = table->free_node->next;
-      MemoryZeroStruct(node);
-    }
-    else
-    {
-      node = push_array(arena, D_ExpandNode, 1);
-    }
-    
-    // rjf: link into table
-    U64 hash = df_hash_from_expand_key(key);
-    U64 slot = hash % table->slots_count;
-    DLLPushBack_NP(table->slots[slot].first, table->slots[slot].last, node, hash_next, hash_prev);
-    
-    // rjf: link into parent
-    if(parent_node != 0)
-    {
-      D_ExpandNode *prev = 0;
-      for(D_ExpandNode *n = parent_node->first; n != 0; n = n->next)
-      {
-        if(n->key.child_num < key.child_num)
-        {
-          prev = n;
-        }
-        else
-        {
-          break;
-        }
-      }
-      DLLInsert_NP(parent_node->first, parent_node->last, prev, node, next, prev);
-      node->parent = parent_node;
-    }
-  }
-  
-  // rjf: fill
-  if(node != 0)
-  {
-    node->key = key;
-    node->expanded = expanded;
-  }
-  
-  // rjf: unlink node & free if we don't need it anymore
-  if(expanded == 0 && node != 0 && node->first == 0)
-  {
-    // rjf: unlink from table
-    U64 hash = df_hash_from_expand_key(key);
-    U64 slot = hash % table->slots_count;
-    DLLRemove_NP(table->slots[slot].first, table->slots[slot].last, node, hash_next, hash_prev);
-    
-    // rjf: unlink from tree
-    if(parent_node != 0)
-    {
-      DLLRemove_NP(parent_node->first, parent_node->last, node, next, prev);
-    }
-    
-    // rjf: free
-    node->next = table->free_node;
-    table->free_node = node;
-  }
-}
-
-////////////////////////////////
 //~ rjf: Config Type Functions
 
 internal void
@@ -3337,150 +3189,6 @@ d_whole_range_from_eval_space(E_Space space)
 }
 
 ////////////////////////////////
-//~ rjf: Evaluation Views
-
-#if !defined(BLAKE2_H)
-#define HAVE_SSE2
-#include "third_party/blake2/blake2.h"
-#include "third_party/blake2/blake2b.c"
-#endif
-
-internal D_EvalViewKey
-d_eval_view_key_make(U64 v0, U64 v1)
-{
-  D_EvalViewKey v = {v0, v1};
-  return v;
-}
-
-internal D_EvalViewKey
-d_eval_view_key_from_string(String8 string)
-{
-  D_EvalViewKey key = {0};
-  blake2b((U8 *)&key.u64[0], sizeof(key), string.str, string.size, 0, 0);
-  return key;
-}
-
-internal D_EvalViewKey
-d_eval_view_key_from_stringf(char *fmt, ...)
-{
-  Temp scratch = scratch_begin(0, 0);
-  va_list args;
-  va_start(args, fmt);
-  String8 string = push_str8fv(scratch.arena, fmt, args);
-  va_end(args);
-  D_EvalViewKey key = d_eval_view_key_from_string(string);
-  scratch_end(scratch);
-  return key;
-}
-
-internal B32
-d_eval_view_key_match(D_EvalViewKey a, D_EvalViewKey b)
-{
-  return MemoryMatchStruct(&a, &b);
-}
-
-internal D_EvalView *
-d_eval_view_from_key(D_EvalViewKey key)
-{
-  D_EvalView *eval_view = &d_nil_eval_view;
-  {
-    U64 slot_idx = key.u64[1]%d_state->eval_view_cache.slots_count;
-    D_EvalViewSlot *slot = &d_state->eval_view_cache.slots[slot_idx];
-    for(D_EvalView *v = slot->first; v != &d_nil_eval_view && v != 0; v = v->hash_next)
-    {
-      if(d_eval_view_key_match(key, v->key))
-      {
-        eval_view = v;
-        break;
-      }
-    }
-    if(eval_view == &d_nil_eval_view)
-    {
-      eval_view = push_array(d_state->arena, D_EvalView, 1);
-      DLLPushBack_NPZ(&d_nil_eval_view, slot->first, slot->last, eval_view, hash_next, hash_prev);
-      eval_view->key = key;
-      eval_view->arena = arena_alloc();
-      d_expand_tree_table_init(eval_view->arena, &eval_view->expand_tree_table, 256);
-      eval_view->view_rule_table.slot_count = 64;
-      eval_view->view_rule_table.slots = push_array(eval_view->arena, D_EvalViewRuleCacheSlot, eval_view->view_rule_table.slot_count);
-    }
-  }
-  return eval_view;
-}
-
-//- rjf: key -> view rules
-
-internal void
-d_eval_view_set_key_rule(D_EvalView *eval_view, D_ExpandKey key, String8 view_rule_string)
-{
-  //- rjf: key -> hash * slot idx * slot
-  String8 key_string = str8_struct(&key);
-  U64 hash = d_hash_from_string(key_string);
-  U64 slot_idx = hash%eval_view->view_rule_table.slot_count;
-  D_EvalViewRuleCacheSlot *slot = &eval_view->view_rule_table.slots[slot_idx];
-  
-  //- rjf: slot -> existing node
-  D_EvalViewRuleCacheNode *existing_node = 0;
-  for(D_EvalViewRuleCacheNode *n = slot->first; n != 0; n = n->hash_next)
-  {
-    if(d_expand_key_match(n->key, key))
-    {
-      existing_node = n;
-      break;
-    }
-  }
-  
-  //- rjf: existing node * new node -> node
-  D_EvalViewRuleCacheNode *node = existing_node;
-  if(node == 0)
-  {
-    node = push_array(eval_view->arena, D_EvalViewRuleCacheNode, 1);
-    DLLPushBack_NP(slot->first, slot->last, node, hash_next, hash_prev);
-    node->key = key;
-    node->buffer_cap = 512;
-    node->buffer = push_array(eval_view->arena, U8, node->buffer_cap);
-  }
-  
-  //- rjf: mutate node
-  if(node != 0)
-  {
-    node->buffer_string_size = ClampTop(view_rule_string.size, node->buffer_cap);
-    MemoryCopy(node->buffer, view_rule_string.str, node->buffer_string_size);
-  }
-}
-
-internal String8
-d_eval_view_rule_from_key(D_EvalView *eval_view, D_ExpandKey key)
-{
-  String8 result = {0};
-  
-  //- rjf: key -> hash * slot idx * slot
-  String8 key_string = str8_struct(&key);
-  U64 hash = d_hash_from_string(key_string);
-  U64 slot_idx = hash%eval_view->view_rule_table.slot_count;
-  D_EvalViewRuleCacheSlot *slot = &eval_view->view_rule_table.slots[slot_idx];
-  
-  //- rjf: slot -> existing node
-  D_EvalViewRuleCacheNode *existing_node = 0;
-  for(D_EvalViewRuleCacheNode *n = slot->first; n != 0; n = n->hash_next)
-  {
-    if(d_expand_key_match(n->key, key))
-    {
-      existing_node = n;
-      break;
-    }
-  }
-  
-  //- rjf: node -> result
-  if(existing_node != 0)
-  {
-    result = str8(existing_node->buffer, existing_node->buffer_string_size);
-  }
-  
-  return result;
-}
-
-////////////////////////////////
 //~ rjf: Evaluation View Visualization & Interaction
 
 //- rjf: writing values back to child processes
@@ -4505,10 +4213,11 @@ d_init(void)
   }
 }
 
-internal void
+internal CTRL_EventList
 d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_Scope *di_scope, F32 dt)
 {
   ProfBeginFunction();
+  CTRL_EventList result = {0};
   d_state->frame_index += 1;
   arena_clear(d_frame_arena());
   d_state->frame_eval_memread_endt_us = os_now_microseconds() + 5000;
@@ -4529,9 +4238,11 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
     U64 new_reg_gen = ctrl_reg_gen();
     
     //- rjf: consume & process events
-    CTRL_EventList events = ctrl_c2u_pop_events(scratch.arena);
-    ctrl_entity_store_apply_events(d_state->ctrl_entity_store, &events);
-    for(CTRL_EventNode *event_n = events.first; event_n != 0; event_n = event_n->next)
+    result = ctrl_c2u_pop_events(arena);
+    ctrl_entity_store_apply_events(d_state->ctrl_entity_store, &result);
+    for(CTRL_EventNode *event_n = result.first;
+        event_n != 0;
+        event_n = event_n->next)
     {
       CTRL_Event *event = &event_n->v;
       log_infof("ctrl_event:\n{\n");
@@ -5759,4 +5470,5 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
   }
   
   ProfEnd();
+  return result;
 }
