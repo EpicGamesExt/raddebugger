@@ -1172,8 +1172,8 @@ internal Vec4F32 d_hsva_from_entity(D_Entity *entity);
 internal Vec4F32 d_rgba_from_entity(D_Entity *entity);
 
 //- rjf: entity -> expansion tree keys
-internal D_ExpandKey d_expand_key_from_entity(D_Entity *entity);
-internal D_ExpandKey d_parent_expand_key_from_entity(D_Entity *entity);
+internal EV_Key d_ev_key_from_entity(D_Entity *entity);
+internal EV_Key d_parent_ev_key_from_entity(D_Entity *entity);
 
 //- rjf: entity -> evaluation
 internal D_EntityEval *d_eval_from_entity(Arena *arena, D_Entity *entity);
@@ -1459,7 +1459,7 @@ internal DI_KeyList d_push_active_dbgi_key_list(Arena *arena);
 internal D_EntityList d_push_active_target_list(Arena *arena);
 
 //- rjf: expand key based entity queries
-internal D_Entity *d_entity_from_expand_key_and_kind(D_ExpandKey key, D_EntityKind kind);
+internal D_Entity *d_entity_from_ev_key_and_kind(EV_Key key, D_EntityKind kind);
 
 //- rjf: per-run caches
 internal CTRL_Unwind d_query_cached_unwind_from_thread(D_Entity *thread);

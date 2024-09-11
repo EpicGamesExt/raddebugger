@@ -156,7 +156,7 @@ struct DF_TransientViewNode
 {
   DF_TransientViewNode *next;
   DF_TransientViewNode *prev;
-  D_ExpandKey key;
+  EV_Key key;
   DF_View *view;
   Arena *initial_params_arena;
   MD_Node *initial_params;
@@ -328,7 +328,7 @@ enum
 #define DF_VIEW_RULE_LINE_STRINGIZE_FUNCTION_NAME(name) df_view_rule_line_stringize__##name
 #define DF_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(name) internal DF_VIEW_RULE_LINE_STRINGIZE_FUNCTION_SIG(DF_VIEW_RULE_LINE_STRINGIZE_FUNCTION_NAME(name))
 
-#define DF_VIEW_RULE_ROW_UI_FUNCTION_SIG(name) void name(D_ExpandKey key, MD_Node *params, String8 string)
+#define DF_VIEW_RULE_ROW_UI_FUNCTION_SIG(name) void name(EV_Key key, MD_Node *params, String8 string)
 #define DF_VIEW_RULE_ROW_UI_FUNCTION_NAME(name) df_view_rule_row_ui__##name
 #define DF_VIEW_RULE_ROW_UI_FUNCTION_DEF(name) DF_VIEW_RULE_ROW_UI_FUNCTION_SIG(DF_VIEW_RULE_ROW_UI_FUNCTION_NAME(name))
 
@@ -617,6 +617,25 @@ struct DF_Window
 };
 
 ////////////////////////////////
+//~ rjf: Eval Visualization View Cache Types
+
+typedef struct DF_EvalVizViewCacheNode DF_EvalVizViewCacheNode;
+struct DF_EvalVizViewCacheNode
+{
+  DF_EvalVizViewCacheNode *next;
+  DF_EvalVizViewCacheNode *prev;
+  U64 key;
+  EV_View *v;
+};
+
+typedef struct DF_EvalVizViewCacheSlot DF_EvalVizViewCacheSlot;
+struct DF_EvalVizViewCacheSlot
+{
+  DF_EvalVizViewCacheNode *first;
+  DF_EvalVizViewCacheNode *last;
+};
+
+////////////////////////////////
 //~ rjf: Main Per-Process Graphical State
 
 typedef struct DF_State DF_State;
@@ -684,6 +703,11 @@ struct DF_State
   U64 window_count;
   B32 last_window_queued_save;
   D_Handle last_focused_window;
+  
+  // rjf: eval visualization view cache
+  U64 eval_viz_view_cache_slots_count;
+  DF_EvalVizViewCacheSlot *eval_viz_view_cache_slots;
+  DF_EvalVizViewCacheNode *eval_viz_view_cache_node_free;
   
   // rjf: view state
   DF_View *first_view;
@@ -881,7 +905,7 @@ internal void df_view_store_paramf(DF_View *view, String8 key, char *fmt, ...);
 ////////////////////////////////
 //~ rjf: Expand-Keyed Transient View Functions
 
-internal DF_TransientViewNode *df_transient_view_node_from_expand_key(DF_View *owner_view, D_ExpandKey key);
+internal DF_TransientViewNode *df_transient_view_node_from_ev_key(DF_View *owner_view, EV_Key key);
 
 ////////////////////////////////
 //~ rjf: Panel State Functions
@@ -900,10 +924,11 @@ internal DF_Window *df_window_from_os_handle(OS_Handle os);
 internal void df_window_frame(DF_Window *ws);
 
 ////////////////////////////////
-//~ rjf: Eval Viz
+//~ rjf: Eval Visualization
 
-internal F32 df_append_value_strings_from_eval(Arena *arena, D_EvalVizStringFlags flags, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size, S32 depth, E_Eval eval, E_Member *member, D_CfgTable *cfg_table, String8List *out);
-internal String8 df_value_string_from_eval(Arena *arena, D_EvalVizStringFlags flags, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size, E_Eval eval, E_Member *member, D_CfgTable *cfg_table);
+internal EV_View *df_ev_view_from_key(U64 key);
+internal F32 df_append_value_strings_from_eval(Arena *arena, D_EvalVizStringFlags flags, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size, S32 depth, E_Eval eval, E_Member *member, EV_ViewRuleList *view_rules, String8List *out);
+internal String8 df_value_string_from_eval(Arena *arena, D_EvalVizStringFlags flags, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size, E_Eval eval, E_Member *member, EV_ViewRuleList *view_rules);
 
 ////////////////////////////////
 //~ rjf: Hover Eval

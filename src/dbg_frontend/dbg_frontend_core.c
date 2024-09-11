@@ -898,20 +898,20 @@ df_view_store_paramf(DF_View *view, String8 key, char *fmt, ...)
 //~ rjf: Expand-Keyed Transient View Functions
 
 internal DF_TransientViewNode *
-df_transient_view_node_from_expand_key(DF_View *owner_view, D_ExpandKey key)
+df_transient_view_node_from_ev_key(DF_View *owner_view, EV_Key key)
 {
   if(owner_view->transient_view_slots_count == 0)
   {
     owner_view->transient_view_slots_count = 256;
     owner_view->transient_view_slots = push_array(owner_view->arena, DF_TransientViewSlot, owner_view->transient_view_slots_count);
   }
-  U64 hash = df_hash_from_expand_key(key);
+  U64 hash = ev_hash_from_key(key);
   U64 slot_idx = hash%owner_view->transient_view_slots_count;
   DF_TransientViewSlot *slot = &owner_view->transient_view_slots[slot_idx];
   DF_TransientViewNode *node = 0;
   for(DF_TransientViewNode *n = slot->first; n != 0; n = n->next)
   {
-    if(d_expand_key_match(n->key, key))
+    if(ev_key_match(n->key, key))
     {
       node = n;
       n->last_frame_index_touched = d_frame_index();
@@ -3890,7 +3890,7 @@ df_window_frame(DF_Window *ws)
         U64 thread_unwind_rip_vaddr = d_query_cached_rip_from_thread_unwind(thread, d_base_regs()->unwind_count);
         String8 expr = ws->hover_eval_string;
         E_Eval eval = e_eval_from_string(scratch.arena, expr);
-        D_CfgTable top_level_cfg_table = {0};
+        EV_ViewRuleList top_level_view_rules = {0};
         
         //- rjf: build if good
         if(!e_type_key_match(eval.type_key, e_type_key_zero()) && !ui_any_ctx_menu_is_open())
@@ -3900,14 +3900,14 @@ df_window_frame(DF_Window *ws)
           F32 row_height = floor_f32(ui_top_font_size()*2.8f);
           D_CfgTable cfg_table = {0};
           U64 expr_hash = d_hash_from_string(expr);
-          D_EvalViewKey eval_view_key = d_eval_view_key_from_stringf("eval_hover_%I64x", expr_hash);
-          D_EvalView *eval_view = d_eval_view_from_key(eval_view_key);
-          D_ExpandKey parent_key = d_expand_key_make(5381, 1);
-          D_ExpandKey key = d_expand_key_make(df_hash_from_expand_key(parent_key), 1);
-          D_EvalVizBlockList viz_blocks = d_eval_viz_block_list_from_eval_view_expr_keys(scratch.arena, eval_view, &top_level_cfg_table, expr, parent_key, key);
+          String8 ev_view_key_string = push_str8f(scratch.arena, "eval_hover_%I64x", expr_hash);
+          EV_View *ev_view = df_ev_view_from_key(d_hash_from_string(ev_view_key_string));
+          EV_Key parent_key = ev_key_make(5381, 1);
+          EV_Key key = ev_key_make(ev_hash_from_key(parent_key), 1);
+          EV_BlockList viz_blocks = ev_block_list_from_view_expr_keys(scratch.arena, ev_view, &top_level_view_rules, expr, parent_key, key);
           D_Entity *entity = d_entity_from_eval_space(eval.space);
           U32 default_radix = (entity->kind == D_EntityKind_Thread ? 16 : 10);
-          D_EvalVizWindowedRowList viz_rows = d_eval_viz_windowed_row_list_from_viz_block_list(scratch.arena, eval_view, r1s64(0, 50), &viz_blocks);
+          EV_WindowedRowList viz_rows = ev_windowed_row_list_from_block_list(scratch.arena, ev_view, r1s64(0, 50), &viz_blocks);
           
           //- rjf: animate
           {
@@ -3948,10 +3948,10 @@ df_window_frame(DF_Window *ws)
           F32 value_column_width_px = 30.f*ui_top_font_size();
           if(viz_rows.first != 0)
           {
-            D_EvalVizRow *row = viz_rows.first;
+            EV_Row *row = viz_rows.first;
             E_Eval row_eval = e_eval_from_expr(scratch.arena, row->expr);
-            String8 row_expr_string = d_expr_string_from_viz_row(scratch.arena, row);
-            String8 row_display_value = df_value_string_from_eval(scratch.arena, D_EvalVizStringFlag_ReadOnlyDisplayRules, default_radix, ui_top_font(), ui_top_font_size(), 500.f, row_eval, row->member, row->cfg_table);
+            String8 row_expr_string = ev_expr_string_from_row(scratch.arena, row);
+            String8 row_display_value = df_value_string_from_eval(scratch.arena, D_EvalVizStringFlag_ReadOnlyDisplayRules, default_radix, ui_top_font(), ui_top_font_size(), 500.f, row_eval, row->member, row->view_rules);
             expr_column_width_px = fnt_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, 0, row_expr_string).x + ui_top_font_size()*5.f;
             value_column_width_px = fnt_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, 0, row_display_value).x + ui_top_font_size()*5.f;
             F32 total_dim_px = (expr_column_width_px + value_column_width_px);
@@ -3994,15 +3994,15 @@ df_window_frame(DF_Window *ws)
           UI_Parent(hover_eval_box) UI_PrefHeight(ui_px(row_height, 1.f))
           {
             //- rjf: build rows
-            for(D_EvalVizRow *row = viz_rows.first; row != 0; row = row->next)
+            for(EV_Row *row = viz_rows.first; row != 0; row = row->next)
             {
               //- rjf: unpack row
               E_Eval row_eval = e_eval_from_expr(scratch.arena, row->expr);
-              String8 row_expr_string = d_expr_string_from_viz_row(scratch.arena, row);
-              String8 row_edit_value = df_value_string_from_eval(scratch.arena, 0, default_radix, ui_top_font(), ui_top_font_size(), 500.f, row_eval, row->member, row->cfg_table);
-              String8 row_display_value = df_value_string_from_eval(scratch.arena, D_EvalVizStringFlag_ReadOnlyDisplayRules, default_radix, ui_top_font(), ui_top_font_size(), 500.f, row_eval, row->member, row->cfg_table);
-              B32 row_is_editable = d_type_key_is_editable(row_eval.type_key);
-              B32 row_is_expandable = d_type_key_is_expandable(row_eval.type_key);
+              String8 row_expr_string = ev_expr_string_from_row(scratch.arena, row);
+              String8 row_edit_value = df_value_string_from_eval(scratch.arena, 0, default_radix, ui_top_font(), ui_top_font_size(), 500.f, row_eval, row->member, row->view_rules);
+              String8 row_display_value = df_value_string_from_eval(scratch.arena, D_EvalVizStringFlag_ReadOnlyDisplayRules, default_radix, ui_top_font(), ui_top_font_size(), 500.f, row_eval, row->member, row->view_rules);
+              B32 row_is_editable = ev_row_is_editable(row);
+              B32 row_is_expandable = ev_row_is_expandable(row);
               
               //- rjf: determine if row's data is fresh and/or bad
               B32 row_is_fresh = 0;
@@ -4046,13 +4046,13 @@ df_window_frame(DF_Window *ws)
                     UI_Flags(UI_BoxFlag_DrawSideLeft) ui_spacer(ui_em(1.5f, 1.f));
                   }
                 }
-                U64 row_hash = df_hash_from_expand_key(row->key);
-                B32 row_is_expanded = d_expand_key_is_set(&eval_view->expand_tree_table, row->key);
+                U64 row_hash = ev_hash_from_key(row->key);
+                B32 row_is_expanded = ev_expansion_from_key(ev_view, row->key);
                 if(row_is_expandable)
                   UI_PrefWidth(ui_em(1.5f, 1)) 
                   if(ui_pressed(ui_expanderf(row_is_expanded, "###%I64x_%I64x_is_expanded", row->key.parent_hash, row->key.child_num)))
                 {
-                  d_expand_set_expansion(eval_view->arena, &eval_view->expand_tree_table, row->parent_key, row->key, !row_is_expanded);
+                  ev_key_set_expansion(ev_view, row->parent_key, row->key, !row_is_expanded);
                 }
                 if(!row_is_expandable)
                 {
@@ -5944,10 +5944,42 @@ df_window_frame(DF_Window *ws)
 #endif
 
 ////////////////////////////////
-//~ rjf: Eval Viz
+//~ rjf: Eval Visualization
+
+internal EV_View *
+df_ev_view_from_key(U64 key)
+{
+  U64 slot_idx = key % df_state->eval_viz_view_cache_slots_count;
+  DF_EvalVizViewCacheNode *node = 0;
+  DF_EvalVizViewCacheSlot *slot = &df_state->eval_viz_view_cache_slots[slot_idx];
+  for(DF_EvalVizViewCacheNode *n = slot->first; n != 0; n = n->next)
+  {
+    if(n->key == key)
+    {
+      node = n;
+      break;
+    }
+  }
+  if(node == 0)
+  {
+    node = df_state->eval_viz_view_cache_node_free;
+    if(node)
+    {
+      SLLStackPop(df_state->eval_viz_view_cache_node_free);
+    }
+    else
+    {
+      node = push_array(df_state->arena, DF_EvalVizViewCacheNode, 1);
+    }
+    DLLPushBack(slot->first, slot->last, node);
+    node->key = key;
+    node->v = ev_view_alloc();
+  }
+  return node->v;
+}
 
 internal F32
-df_append_value_strings_from_eval(Arena *arena, D_EvalVizStringFlags flags, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size, S32 depth, E_Eval eval, E_Member *member, D_CfgTable *cfg_table, String8List *out)
+df_append_value_strings_from_eval(Arena *arena, D_EvalVizStringFlags flags, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size, S32 depth, E_Eval eval, E_Member *member, EV_ViewRuleList *view_rules, String8List *out)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(&arena, 1);
@@ -5955,17 +5987,18 @@ df_append_value_strings_from_eval(Arena *arena, D_EvalVizStringFlags flags, U32 
   
   //- rjf: unpack view rules
   U32 radix = default_radix;
-  D_CfgVal *dec_cfg = d_cfg_val_from_string(cfg_table, str8_lit("dec"));
-  D_CfgVal *hex_cfg = d_cfg_val_from_string(cfg_table, str8_lit("hex"));
-  D_CfgVal *bin_cfg = d_cfg_val_from_string(cfg_table, str8_lit("bin"));
-  D_CfgVal *oct_cfg = d_cfg_val_from_string(cfg_table, str8_lit("oct"));
-  U64 best_insertion_stamp = Max(dec_cfg->insertion_stamp, Max(hex_cfg->insertion_stamp, Max(bin_cfg->insertion_stamp, oct_cfg->insertion_stamp)));
-  if(dec_cfg != &d_nil_cfg_val && dec_cfg->insertion_stamp == best_insertion_stamp) { radix = 10; }
-  if(hex_cfg != &d_nil_cfg_val && hex_cfg->insertion_stamp == best_insertion_stamp) { radix = 16; }
-  if(bin_cfg != &d_nil_cfg_val && bin_cfg->insertion_stamp == best_insertion_stamp) { radix = 2; }
-  if(oct_cfg != &d_nil_cfg_val && oct_cfg->insertion_stamp == best_insertion_stamp) { radix = 8; }
-  B32 no_addr = (d_cfg_val_from_string(cfg_table, str8_lit("no_addr")) != &d_nil_cfg_val) && (flags & D_EvalVizStringFlag_ReadOnlyDisplayRules);
-  B32 has_array = (d_cfg_val_from_string(cfg_table, str8_lit("array")) != &d_nil_cfg_val);
+  B32 no_addr = 0;
+  B32 has_array = 0;
+  for(EV_ViewRuleNode *n = view_rules->first; n != 0; n = n->next)
+  {
+    if(0){}
+    else if(str8_match(n->v.root->string, str8_lit("dec"), 0)) {radix = 10;}
+    else if(str8_match(n->v.root->string, str8_lit("hex"), 0)) {radix = 16;}
+    else if(str8_match(n->v.root->string, str8_lit("bin"), 0)) {radix = 2; }
+    else if(str8_match(n->v.root->string, str8_lit("oct"), 0)) {radix = 8; }
+    else if(str8_match(n->v.root->string, str8_lit("no_addr"), 0)) {no_addr = 1;}
+    else if(str8_match(n->v.root->string, str8_lit("array"), 0)) {has_array = 1;}
+  }
   
   //- rjf: member evaluations -> display member info
   if(eval.mode == E_Mode_Null && !e_type_key_match(e_type_key_zero(), eval.type_key) && member != 0)
@@ -6082,7 +6115,7 @@ df_append_value_strings_from_eval(Arena *arena, D_EvalVizStringFlags flags, U32 
         {
           E_Expr *deref_expr = e_expr_ref_deref(scratch.arena, eval.expr);
           E_Eval deref_eval = e_eval_from_expr(scratch.arena, deref_expr);
-          space_taken += df_append_value_strings_from_eval(arena, flags, radix, font, font_size, max_size-space_taken, depth+1, deref_eval, 0, cfg_table, out);
+          space_taken += df_append_value_strings_from_eval(arena, flags, radix, font, font_size, max_size-space_taken, depth+1, deref_eval, 0, view_rules, out);
         }
         else
         {
@@ -6191,7 +6224,7 @@ df_append_value_strings_from_eval(Arena *arena, D_EvalVizStringFlags flags, U32 
           {
             E_Expr *element_expr = e_expr_ref_array_index(scratch.arena, eval.expr, idx);
             E_Eval element_eval = e_eval_from_expr(scratch.arena, element_expr);
-            space_taken += df_append_value_strings_from_eval(arena, flags, radix, font, font_size, max_size-space_taken, depth+1, element_eval, 0, cfg_table, out);
+            space_taken += df_append_value_strings_from_eval(arena, flags, radix, font, font_size, max_size-space_taken, depth+1, element_eval, 0, view_rules, out);
             if(idx+1 < array_count)
             {
               String8 comma = str8_lit(", ");
@@ -6241,20 +6274,19 @@ df_append_value_strings_from_eval(Arena *arena, D_EvalVizStringFlags flags, U32 
       if(depth < 4)
       {
         E_MemberArray data_members = e_type_data_members_from_key(scratch.arena, e_type_unwrap(eval.type_key));
-        E_MemberArray filtered_data_members = d_filtered_data_members_from_members_cfg_table(scratch.arena, data_members, cfg_table);
-        for(U64 member_idx = 0; member_idx < filtered_data_members.count && max_size > space_taken; member_idx += 1)
+        for(U64 member_idx = 0; member_idx < data_members.count && max_size > space_taken; member_idx += 1)
         {
-          E_Member *mem = &filtered_data_members.v[member_idx];
+          E_Member *mem = &data_members.v[member_idx];
           E_Expr *dot_expr = e_expr_ref_member_access(scratch.arena, eval.expr, mem->name);
           E_Eval dot_eval = e_eval_from_expr(scratch.arena, dot_expr);
-          space_taken += df_append_value_strings_from_eval(arena, flags, radix, font, font_size, max_size-space_taken, depth+1, dot_eval, 0, cfg_table, out);
-          if(member_idx+1 < filtered_data_members.count)
+          space_taken += df_append_value_strings_from_eval(arena, flags, radix, font, font_size, max_size-space_taken, depth+1, dot_eval, 0, view_rules, out);
+          if(member_idx+1 < data_members.count)
           {
             String8 comma = str8_lit(", ");
             space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, comma).x;
             str8_list_push(arena, out, comma);
           }
-          if(space_taken > max_size && member_idx+1 < filtered_data_members.count)
+          if(space_taken > max_size && member_idx+1 < data_members.count)
           {
             String8 ellipses = str8_lit("...");
             space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, ellipses).x;
@@ -6284,11 +6316,11 @@ df_append_value_strings_from_eval(Arena *arena, D_EvalVizStringFlags flags, U32 
 }
 
 internal String8
-df_value_string_from_eval(Arena *arena, D_EvalVizStringFlags flags, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size, E_Eval eval, E_Member *member, D_CfgTable *cfg_table)
+df_value_string_from_eval(Arena *arena, D_EvalVizStringFlags flags, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size, E_Eval eval, E_Member *member, EV_ViewRuleList *view_rules)
 {
   Temp scratch = scratch_begin(&arena, 1);
   String8List strs = {0};
-  df_append_value_strings_from_eval(scratch.arena, flags, default_radix, font, font_size, max_size, 0, eval, member, cfg_table, &strs);
+  df_append_value_strings_from_eval(scratch.arena, flags, default_radix, font, font_size, max_size, 0, eval, member, view_rules, &strs);
   String8 result = str8_list_join(arena, &strs, 0);
   scratch_end(scratch);
   return result;
@@ -7445,6 +7477,8 @@ df_init(CmdLine *cmdln)
   df_state->entity_ctx_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("_entity_ctx_menu_"));
   df_state->tab_ctx_menu_key    = ui_key_from_string(ui_key_zero(), str8_lit("_tab_ctx_menu_"));
   df_state->string_search_arena = arena_alloc();
+  df_state->eval_viz_view_cache_slots_count = 1024;
+  df_state->eval_viz_view_cache_slots = push_array(arena, DF_EvalVizViewCacheSlot, df_state->eval_viz_view_cache_slots_count);
   df_state->cfg_main_font_path_arena = arena_alloc();
   df_state->cfg_code_font_path_arena = arena_alloc();
   df_state->rich_hover_info_next_arena = arena_alloc();
@@ -8015,6 +8049,15 @@ df_frame(void)
     ctx->tls_base[0]       = d_query_cached_tls_base_vaddr_from_process_root_rip(process, tls_root_vaddr, rip_vaddr);
   }
   e_select_interpret_ctx(interpret_ctx);
+  
+  //////////////////////////////
+  //- rjf: build eval visualization view rule table
+  //
+  EV_ViewRuleInfoTable *view_rule_info_table = push_array(scratch.arena, EV_ViewRuleInfoTable, 1);
+  {
+    ev_view_rule_info_table_push_builtins(scratch.arena, view_rule_info_table);
+  }
+  ev_select_view_rule_info_table(view_rule_info_table);
   
   //////////////////////////////
   //- rjf: autosave if needed

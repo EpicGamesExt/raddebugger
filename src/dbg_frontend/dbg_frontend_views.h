@@ -105,8 +105,8 @@ typedef struct DF_WatchViewPoint DF_WatchViewPoint;
 struct DF_WatchViewPoint
 {
   S64 x;
-  D_ExpandKey parent_key;
-  D_ExpandKey key;
+  EV_Key parent_key;
+  EV_Key key;
 };
 
 typedef struct DF_WatchViewTextEditState DF_WatchViewTextEditState;
@@ -161,19 +161,16 @@ internal DF_CodeViewBuildResult df_code_view_build(Arena *arena, DF_View *view, 
 ////////////////////////////////
 //~ rjf: Watch View Functions
 
-//- rjf: eval watch view instance -> eval view key
-internal D_EvalViewKey df_eval_view_key_from_eval_watch_view(DF_WatchViewState *ewv);
-
 //- rjf: index -> column
 internal DF_WatchViewColumn *df_watch_view_column_from_x(DF_WatchViewState *wv, S64 index);
 
 //- rjf: watch view points <-> table coordinates
 internal B32 df_watch_view_point_match(DF_WatchViewPoint a, DF_WatchViewPoint b);
-internal DF_WatchViewPoint df_watch_view_point_from_tbl(D_EvalVizBlockList *blocks, Vec2S64 tbl);
-internal Vec2S64 df_tbl_from_watch_view_point(D_EvalVizBlockList *blocks, DF_WatchViewPoint pt);
+internal DF_WatchViewPoint df_watch_view_point_from_tbl(EV_BlockList *blocks, Vec2S64 tbl);
+internal Vec2S64 df_tbl_from_watch_view_point(EV_BlockList *blocks, DF_WatchViewPoint pt);
 
 //- rjf: table coordinates -> strings
-internal String8 df_string_from_eval_viz_row_column(Arena *arena, D_EvalView *ev, D_EvalVizRow *row, DF_WatchViewColumn *col, B32 editable, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size_px);
+internal String8 df_string_from_eval_viz_row_column(Arena *arena, EV_View *ev, EV_Row *row, DF_WatchViewColumn *col, B32 editable, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size_px);
 
 //- rjf: table coordinates -> text edit state
 internal DF_WatchViewTextEditState *df_watch_view_text_edit_state_from_pt(DF_WatchViewState *wv, DF_WatchViewPoint pt);

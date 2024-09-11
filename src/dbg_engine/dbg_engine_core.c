@@ -1002,18 +1002,18 @@ d_rgba_from_entity(D_Entity *entity)
 
 //- rjf: entity -> expansion tree keys
 
-internal D_ExpandKey
-d_expand_key_from_entity(D_Entity *entity)
+internal EV_Key
+d_ev_key_from_entity(D_Entity *entity)
 {
-  D_ExpandKey parent_key = d_parent_expand_key_from_entity(entity);
-  D_ExpandKey key = d_expand_key_make(df_hash_from_expand_key(parent_key), (U64)entity);
+  EV_Key parent_key = d_parent_ev_key_from_entity(entity);
+  EV_Key key = ev_key_make(ev_hash_from_key(parent_key), (U64)entity);
   return key;
 }
 
-internal D_ExpandKey
-d_parent_expand_key_from_entity(D_Entity *entity)
+internal EV_Key
+d_parent_ev_key_from_entity(D_Entity *entity)
 {
-  D_ExpandKey parent_key = d_expand_key_make(5381, (U64)entity);
+  EV_Key parent_key = ev_key_make(5381, (U64)entity);
   return parent_key;
 }
 
@@ -5438,14 +5438,14 @@ d_push_active_target_list(Arena *arena)
 //- rjf: expand key based entity queries
 
 internal D_Entity *
-d_entity_from_expand_key_and_kind(D_ExpandKey key, D_EntityKind kind)
+d_entity_from_ev_key_and_kind(EV_Key key, D_EntityKind kind)
 {
   D_Entity *result = &d_nil_entity;
   D_EntityList list = d_query_cached_entity_list_with_kind(kind);
   for(D_EntityNode *n = list.first; n != 0; n = n->next)
   {
     D_Entity *entity = n->entity;
-    if(d_expand_key_match(d_expand_key_from_entity(entity), key))
+    if(ev_key_match(d_ev_key_from_entity(entity), key))
     {
       result = entity;
       break;

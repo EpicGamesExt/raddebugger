@@ -185,7 +185,7 @@ ev_view_rule_from_key(EV_View *view, EV_Key key)
 }
 
 internal void
-ev_key_set_expansion(Arena *arena, EV_View *view, EV_Key parent_key, EV_Key key, B32 expanded)
+ev_key_set_expansion(EV_View *view, EV_Key parent_key, EV_Key key, B32 expanded)
 {
   // rjf: map keys => nodes
   EV_ExpandNode *parent_node = ev_expand_node_from_key(view, parent_key);
@@ -202,7 +202,7 @@ ev_key_set_expansion(Arena *arena, EV_View *view, EV_Key parent_key, EV_Key key,
     }
     else
     {
-      node = push_array(arena, EV_ExpandNode, 1);
+      node = push_array(view->arena, EV_ExpandNode, 1);
     }
     
     // rjf: link into table
@@ -437,6 +437,7 @@ ev_block_begin(Arena *arena, EV_BlockKind kind, EV_Key parent_key, EV_Key key, S
   n->v.key        = key;
   n->v.depth      = depth;
   n->v.expr       = &e_expr_nil;
+  n->v.view_rules = &ev_nil_view_rule_list;
   return &n->v;
 }
 

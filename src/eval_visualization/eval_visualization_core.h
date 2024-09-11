@@ -279,6 +279,7 @@ struct EV_WindowedRowList
 
 global read_only EV_ViewRuleInfo ev_nil_view_rule_info = {0};
 thread_static EV_ViewRuleInfoTable *ev_view_rule_info_table = 0;
+global read_only EV_ViewRuleList ev_nil_view_rule_list = {0};
 
 ////////////////////////////////
 //~ rjf: Key Functions
@@ -307,7 +308,7 @@ internal void ev_view_release(EV_View *view);
 internal EV_ExpandNode *ev_expand_node_from_key(EV_View *view, EV_Key key);
 internal B32 ev_expansion_from_key(EV_View *view, EV_Key key);
 internal String8 ev_view_rule_from_key(EV_View *view, EV_Key key);
-internal void ev_key_set_expansion(Arena *arena, EV_View *view, EV_Key parent_key, EV_Key key, B32 expanded);
+internal void ev_key_set_expansion(EV_View *view, EV_Key parent_key, EV_Key key, B32 expanded);
 internal void ev_key_set_view_rule(EV_View *view, EV_Key key, String8 view_rule_string);
 
 ////////////////////////////////
