@@ -654,8 +654,10 @@ struct DF_State
   // rjf: top-level state
   Arena *arena;
   B32 quit;
+  F64 time_in_seconds;
   
   // rjf: frame state
+  F32 frame_dt;
   U64 frame_index;
   Arena *frame_arenas[2];
   
@@ -745,6 +747,13 @@ struct DF_State
   Arena *rich_hover_info_current_arena;
   DF_RichHoverInfo rich_hover_info_next;
   DF_RichHoverInfo rich_hover_info_current;
+  
+  // rjf: config reading state
+  Arena *cfg_path_arenas[D_CfgSrc_COUNT];
+  String8 cfg_paths[D_CfgSrc_COUNT];
+  U64 cfg_cached_timestamp[D_CfgSrc_COUNT];
+  Arena *cfg_arena;
+  D_CfgTable cfg_table;
   
   // rjf: running theme state
   DF_Theme cfg_theme_target;
@@ -1025,7 +1034,14 @@ internal void df_request_frame(void);
 ////////////////////////////////
 //~ rjf: Main State Accessors
 
+//- rjf: per-frame arena
 internal Arena *df_frame_arena(void);
+
+//- rjf: config paths
+internal String8 df_cfg_path_from_src(D_CfgSrc src);
+
+//- rjf: config state
+internal D_CfgTable *df_cfg_table(void);
 
 ////////////////////////////////
 //~ rjf: Registers

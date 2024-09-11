@@ -102,45 +102,6 @@ struct D_LineListArray
 };
 
 ////////////////////////////////
-//~ rjf: Sparse Tree Expansion State Data Structure
-
-typedef struct D_ExpandKey D_ExpandKey;
-struct D_ExpandKey
-{
-  U64 parent_hash;
-  U64 child_num;
-};
-
-typedef struct D_ExpandNode D_ExpandNode;
-struct D_ExpandNode
-{
-  D_ExpandNode *hash_next;
-  D_ExpandNode *hash_prev;
-  D_ExpandNode *first;
-  D_ExpandNode *last;
-  D_ExpandNode *next;
-  D_ExpandNode *prev;
-  D_ExpandNode *parent;
-  D_ExpandKey key;
-  B32 expanded;
-};
-
-typedef struct D_ExpandSlot D_ExpandSlot;
-struct D_ExpandSlot
-{
-  D_ExpandNode *first;
-  D_ExpandNode *last;
-};
-
-typedef struct D_ExpandTreeTable D_ExpandTreeTable;
-struct D_ExpandTreeTable
-{
-  D_ExpandSlot *slots;
-  U64 slots_count;
-  D_ExpandNode *free_node;
-};
-
-////////////////////////////////
 //~ rjf: Entity Kind Flags
 
 typedef U32 D_EntityKindFlags;
@@ -189,33 +150,6 @@ typedef enum D_RunKind
   D_RunKind_COUNT
 }
 D_RunKind;
-
-////////////////////////////////
-//~ rjf: View Rule Hook Types
-
-typedef struct D_CfgTree D_CfgTree;
-typedef struct D_CfgVal D_CfgVal;
-typedef struct D_CfgTable D_CfgTable;
-typedef struct D_EvalView D_EvalView;
-typedef struct D_EvalVizBlockList D_EvalVizBlockList;
-#define D_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_SIG(name) E_Expr *name(Arena *arena, E_Expr *expr, MD_Node *params)
-#define D_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_NAME(name) d_core_view_rule_expr_resolution__##name
-#define D_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_DEF(name) internal D_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_SIG(D_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_NAME(name))
-#define D_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_SIG(name) void name(Arena *arena,                                    \
-D_EvalView *eval_view,                           \
-D_ExpandKey parent_key,                          \
-D_ExpandKey key,                                 \
-D_ExpandNode *expand_node,                       \
-String8 string,                                  \
-E_Expr *expr,                                    \
-D_CfgTable *cfg_table,                           \
-S32 depth,                                       \
-MD_Node *params,                                 \
-struct D_EvalVizBlockList *out)
-#define D_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_NAME(name) d_core_view_rule_viz_block_prod__##name
-#define D_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(name) internal D_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_SIG(D_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_NAME(name))
-typedef D_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_SIG(D_CoreViewRuleExprResolutionHookFunctionType);
-typedef D_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_SIG(D_CoreViewRuleVizBlockProdHookFunctionType);
 
 ////////////////////////////////
 //~ rjf: Generated Code
@@ -699,8 +633,6 @@ struct D_State
   Arena *arena;
   U64 frame_index;
   U64 frame_eval_memread_endt_us;
-  F64 time_in_seconds;
-  F32 dt;
   
   // rjf: frame info
   Arena *frame_arenas[2];
@@ -755,7 +687,7 @@ struct D_State
   U64 view_rule_spec_table_size;
   D_ViewRuleSpec **view_rule_spec_table;
   
-  // rjf: control thread user -> ctrl driving state
+  // rjf: user -> ctrl driving state
   Arena *ctrl_last_run_arena;
   D_RunKind ctrl_last_run_kind;
   U64 ctrl_last_run_frame_idx;
@@ -769,17 +701,10 @@ struct D_State
   Arena *ctrl_msg_arena;
   CTRL_MsgList ctrl_msgs;
   
-  // rjf: control thread ctrl -> user reading state
+  // rjf: ctrl -> user reading state
   CTRL_EntityStore *ctrl_entity_store;
   Arena *ctrl_stop_arena;
   CTRL_Event ctrl_last_stop_event;
-  
-  // rjf: config reading state
-  Arena *cfg_path_arenas[D_CfgSrc_COUNT];
-  String8 cfg_paths[D_CfgSrc_COUNT];
-  U64 cfg_cached_timestamp[D_CfgSrc_COUNT];
-  Arena *cfg_arena;
-  D_CfgTable cfg_table;
 };
 
 ////////////////////////////////
@@ -789,7 +714,6 @@ read_only global D_CmdSpec d_nil_cmd_spec = {0};
 read_only global D_ViewRuleSpec d_nil_core_view_rule_spec = {0};
 read_only global D_CfgTree d_nil_cfg_tree = {&d_nil_cfg_tree, D_CfgSrc_User, &md_nil_node};
 read_only global D_CfgVal d_nil_cfg_val = {&d_nil_cfg_val, &d_nil_cfg_val, &d_nil_cfg_tree, &d_nil_cfg_tree};
-read_only global D_CfgTable d_nil_cfg_table = {0, 0, 0, &d_nil_cfg_val, &d_nil_cfg_val};
 read_only global D_Entity d_nil_entity =
 {
   &d_nil_entity,
@@ -1084,10 +1008,8 @@ internal String8 d_eval_string_from_file_path(Arena *arena, String8 string);
 //~ rjf: Main State Accessors/Mutators
 
 //- rjf: frame data
-internal F32 d_dt(void);
 internal U64 d_frame_index(void);
 internal Arena *d_frame_arena(void);
-internal F64 d_time_in_seconds(void);
 
 //- rjf: registers
 internal D_Regs *d_regs(void);
@@ -1100,12 +1022,6 @@ internal D_Regs *d_pop_regs(void);
 internal D_RunKind d_ctrl_last_run_kind(void);
 internal U64 d_ctrl_last_run_frame_idx(void);
 internal B32 d_ctrl_targets_running(void);
-
-//- rjf: config paths
-internal String8 d_cfg_path_from_src(D_CfgSrc src);
-
-//- rjf: config state
-internal D_CfgTable *d_cfg_table(void);
 
 //- rjf: config serialization
 internal String8 d_cfg_escaped_from_raw_string(Arena *arena, String8 string);
@@ -1148,6 +1064,6 @@ internal B32 d_next_cmd(D_Cmd **cmd);
 //~ rjf: Main Layer Top-Level Calls
 
 internal void d_init(void);
-internal CTRL_EventList d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_Scope *di_scope, F32 dt);
+internal CTRL_EventList d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints);
 
 #endif // DBG_ENGINE_CORE_H

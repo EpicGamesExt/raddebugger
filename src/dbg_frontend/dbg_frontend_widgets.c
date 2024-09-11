@@ -15,7 +15,7 @@ df_loading_overlay(Rng2F32 rect, F32 loading_t, U64 progress_v, U64 progress_v_t
     F32 height = ui_top_font_size() * 1.f;
     F32 min_thickness = ui_top_font_size()/2;
     F32 trail = ui_top_font_size() * 4;
-    F32 t = pow_f32(sin_f32((F32)d_time_in_seconds() / 1.8f), 2.f);
+    F32 t = pow_f32(sin_f32((F32)df_state->time_in_seconds / 1.8f), 2.f);
     F64 v = 1.f - abs_f32(0.5f - t);
     
     // rjf: colors
@@ -1073,7 +1073,7 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
               {
                 color = d_rgba_from_entity(thread);
               }
-              if(d_ctrl_targets_running() && d_ctrl_last_run_frame_idx() < d_frame_index())
+              if(d_ctrl_targets_running() && d_ctrl_last_run_frame_idx() < df_state->frame_index)
               {
                 color.w *= 0.5f;
               }
@@ -1232,7 +1232,7 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
               {
                 color = d_rgba_from_entity(thread);
               }
-              if(d_ctrl_targets_running() && d_ctrl_last_run_frame_idx() < d_frame_index())
+              if(d_ctrl_targets_running() && d_ctrl_last_run_frame_idx() < df_state->frame_index)
               {
                 color.w *= 0.5f;
               }

@@ -52,7 +52,7 @@ df_view_is_project_filtered(DF_View *view)
   String8 view_project = view->project_path;
   if(view_project.size != 0)
   {
-    String8 current_project = d_cfg_path_from_src(D_CfgSrc_Project);
+    String8 current_project = df_cfg_path_from_src(D_CfgSrc_Project);
     result = !path_match_normalized(view_project, current_project);
   }
   return result;
@@ -819,7 +819,7 @@ df_view_equip_spec(DF_View *view, DF_ViewSpec *spec, String8 query, MD_Node *par
   if(spec->info.flags & DF_ViewSpecFlag_ProjectSpecific)
   {
     arena_clear(view->project_path_arena);
-    view->project_path = push_str8_copy(view->project_path_arena, d_cfg_path_from_src(D_CfgSrc_Project));
+    view->project_path = push_str8_copy(view->project_path_arena, df_cfg_path_from_src(D_CfgSrc_Project));
   }
   else
   {
@@ -941,7 +941,7 @@ df_transient_view_node_from_ev_key(DF_View *owner_view, EV_Key key)
     if(ev_key_match(n->key, key))
     {
       node = n;
-      n->last_frame_index_touched = d_frame_index();
+      n->last_frame_index_touched = df_state->frame_index;
       break;
     }
   }
@@ -957,7 +957,7 @@ df_transient_view_node_from_ev_key(DF_View *owner_view, EV_Key key)
     node->key = key;
     node->view = df_view_alloc();
     node->initial_params_arena = arena_alloc();
-    node->first_frame_index_touched = node->last_frame_index_touched = d_frame_index();
+    node->first_frame_index_touched = node->last_frame_index_touched = df_state->frame_index;
     DLLPushBack_NPZ(&df_nil_view, owner_view->first_transient, owner_view->last_transient, node->view, order_next, order_prev);
   }
   return node;
@@ -1139,7 +1139,7 @@ df_window_frame(DF_Window *ws)
   B32 hover_eval_is_open = (!confirm_open &&
                             ws->hover_eval_string.size != 0 &&
                             ws->hover_eval_first_frame_idx+20 < ws->hover_eval_last_frame_idx &&
-                            d_frame_index()-ws->hover_eval_last_frame_idx < 20);
+                            df_state->frame_index-ws->hover_eval_last_frame_idx < 20);
   if(!window_is_focused || confirm_open)
   {
     ws->menu_bar_key_held = 0;
@@ -1371,7 +1371,7 @@ df_window_frame(DF_Window *ws)
       }
       
       // rjf: begin & push initial stack values
-      ui_begin_build(ws->os, &ws->ui_events, &icon_info, &widget_palette_info, &animation_info, d_dt(), d_dt());
+      ui_begin_build(ws->os, &ws->ui_events, &icon_info, &widget_palette_info, &animation_info, df_state->frame_dt, df_state->frame_dt);
       ui_push_font(main_font);
       ui_push_font_size(main_font_size);
       ui_push_text_padding(main_font_size*0.3f);
@@ -1553,7 +1553,7 @@ df_window_frame(DF_Window *ws)
             }
             avg_ui_hash_chain_length = chain_length_sum / chain_count;
           }
-          ui_labelf("Target Hz: %.2f", 1.f/d_dt());
+          ui_labelf("Target Hz: %.2f", 1.f/df_state->frame_dt);
           ui_labelf("Ctrl Run Index: %I64u", ctrl_run_gen());
           ui_labelf("Ctrl Mem Gen Index: %I64u", ctrl_mem_gen());
           ui_labelf("Window %p", window);
@@ -2366,7 +2366,7 @@ df_window_frame(DF_Window *ws)
     //- rjf: build auto-complete lister
     //
     ProfScope("build autocomplete lister")
-      if(!ws->autocomp_force_closed && !ui_key_match(ws->autocomp_root_key, ui_key_zero()) && ws->autocomp_last_frame_idx+1 >= d_frame_index())
+      if(!ws->autocomp_force_closed && !ui_key_match(ws->autocomp_root_key, ui_key_zero()) && ws->autocomp_last_frame_idx+1 >= df_state->frame_index)
     {
       String8 query = str8(ws->autocomp_lister_query_buffer, ws->autocomp_lister_query_size);
       UI_Box *autocomp_root_box = ui_box_from_key(ws->autocomp_root_key);
@@ -2569,7 +2569,7 @@ df_window_frame(DF_Window *ws)
         {
           // rjf: animate target # of rows
           {
-            F32 rate = df_setting_val_from_code(DF_SettingCode_MenuAnimations).s32 ? (1 - pow_f32(2, (-60.f * d_dt()))) : 1.f;
+            F32 rate = df_setting_val_from_code(DF_SettingCode_MenuAnimations).s32 ? (1 - pow_f32(2, (-60.f * df_state->frame_dt))) : 1.f;
             F32 target = Min((F32)item_array.count, 16.f);
             if(abs_f32(target - ws->autocomp_num_visible_rows_t) > 0.01f)
             {
@@ -2584,7 +2584,7 @@ df_window_frame(DF_Window *ws)
           
           // rjf: animate open
           {
-            F32 rate = df_setting_val_from_code(DF_SettingCode_MenuAnimations).s32 ? 1 - pow_f32(2, (-60.f * d_dt())) : 1.f;
+            F32 rate = df_setting_val_from_code(DF_SettingCode_MenuAnimations).s32 ? 1 - pow_f32(2, (-60.f * df_state->frame_dt)) : 1.f;
             F32 diff = 1.f-ws->autocomp_open_t;
             ws->autocomp_open_t += diff*rate;
             if(abs_f32(diff) < 0.05f)
@@ -3139,7 +3139,7 @@ df_window_frame(DF_Window *ws)
           D_EntityList processes = d_query_cached_entity_list_with_kind(D_EntityKind_Process);
           B32 have_targets = targets.count != 0;
           B32 can_send_signal = !d_ctrl_targets_running();
-          B32 can_play  = (have_targets && (can_send_signal || d_ctrl_last_run_frame_idx()+4 > d_frame_index()));
+          B32 can_play  = (have_targets && (can_send_signal || d_ctrl_last_run_frame_idx()+4 > df_state->frame_index));
           B32 can_pause = (!can_send_signal);
           B32 can_stop  = (processes.count != 0);
           B32 can_step =  (processes.count != 0 && can_send_signal);
@@ -3396,7 +3396,7 @@ df_window_frame(DF_Window *ws)
             os_window_push_custom_title_bar_client_area(ws->os, user_box->rect);
             UI_Parent(user_box) UI_PrefWidth(ui_text_dim(10, 0)) UI_TextAlignment(UI_TextAlign_Center)
             {
-              String8 user_path = d_cfg_path_from_src(D_CfgSrc_User);
+              String8 user_path = df_cfg_path_from_src(D_CfgSrc_User);
               user_path = str8_chop_last_dot(user_path);
               DF_Font(DF_FontSlot_Icons)
                 UI_TextRasterFlags(df_raster_flags_from_slot(DF_FontSlot_Icons))
@@ -3430,7 +3430,7 @@ df_window_frame(DF_Window *ws)
             os_window_push_custom_title_bar_client_area(ws->os, prof_box->rect);
             UI_Parent(prof_box) UI_PrefWidth(ui_text_dim(10, 0)) UI_TextAlignment(UI_TextAlign_Center)
             {
-              String8 prof_path = d_cfg_path_from_src(D_CfgSrc_Project);
+              String8 prof_path = df_cfg_path_from_src(D_CfgSrc_Project);
               prof_path = str8_chop_last_dot(prof_path);
               DF_Font(DF_FontSlot_Icons)
                 ui_label(df_g_icon_kind_text_table[DF_IconKind_Briefcase]);
@@ -3490,7 +3490,7 @@ df_window_frame(DF_Window *ws)
     //
     ProfScope("build bottom bar")
     {
-      B32 is_running = d_ctrl_targets_running() && d_ctrl_last_run_frame_idx() < d_frame_index();
+      B32 is_running = d_ctrl_targets_running() && d_ctrl_last_run_frame_idx() < df_state->frame_index;
       CTRL_Event stop_event = d_ctrl_last_stop_event();
       UI_Palette *positive_scheme = df_palette_from_code(DF_PaletteCode_PositivePopButton);
       UI_Palette *running_scheme  = df_palette_from_code(DF_PaletteCode_NeutralPopButton);
@@ -3535,7 +3535,7 @@ df_window_frame(DF_Window *ws)
         // rjf: developer frame-time indicator
         if(DEV_updating_indicator)
         {
-          F32 animation_t = pow_f32(sin_f32(d_time_in_seconds()/2.f), 2.f);
+          F32 animation_t = pow_f32(sin_f32(df_state->time_in_seconds/2.f), 2.f);
           ui_spacer(ui_em(0.3f, 1.f));
           ui_spacer(ui_em(1.5f*animation_t, 1.f));
           UI_PrefWidth(ui_text_dim(10, 1)) ui_labelf("*");
@@ -3588,7 +3588,7 @@ df_window_frame(DF_Window *ws)
         // rjf: error visualization
         else if(ws->error_t >= 0.01f)
         {
-          ws->error_t -= d_dt()/8.f;
+          ws->error_t -= df_state->frame_dt/8.f;
           df_request_frame();
           String8 error_string = str8(ws->error_buffer, ws->error_string_size);
           if(error_string.size != 0)
@@ -3666,7 +3666,7 @@ df_window_frame(DF_Window *ws)
     //- rjf: animate query info
     //
     {
-      F32 rate = df_setting_val_from_code(DF_SettingCode_MenuAnimations).s32 ? 1 - pow_f32(2, (-60.f * d_dt())) : 1.f;
+      F32 rate = df_setting_val_from_code(DF_SettingCode_MenuAnimations).s32 ? 1 - pow_f32(2, (-60.f * df_state->frame_dt)) : 1.f;
       
       // rjf: animate query view selection transition
       {
@@ -3878,7 +3878,7 @@ df_window_frame(DF_Window *ws)
               abs_f32(view->scroll_pos.y.off) > 0.01f))
           {
             build_hover_eval = 0;
-            ws->hover_eval_first_frame_idx = d_frame_index();
+            ws->hover_eval_first_frame_idx = df_state->frame_index;
           }
         }
       }
@@ -3891,7 +3891,7 @@ df_window_frame(DF_Window *ws)
       }
       
       // rjf: reset animation, but request frames if we're waiting to open
-      if(ws->hover_eval_string.size != 0 && !hover_eval_is_open && ws->hover_eval_last_frame_idx < ws->hover_eval_first_frame_idx+20 && d_frame_index()-ws->hover_eval_last_frame_idx < 50)
+      if(ws->hover_eval_string.size != 0 && !hover_eval_is_open && ws->hover_eval_last_frame_idx < ws->hover_eval_first_frame_idx+20 && df_state->frame_index-ws->hover_eval_last_frame_idx < 50)
       {
         df_request_frame();
         ws->hover_eval_num_visible_rows_t = 0;
@@ -3940,7 +3940,7 @@ df_window_frame(DF_Window *ws)
           {
             // rjf: animate height
             {
-              F32 fish_rate = df_setting_val_from_code(DF_SettingCode_MenuAnimations).s32 ? 1 - pow_f32(2, (-60.f * d_dt())) : 1.f;
+              F32 fish_rate = df_setting_val_from_code(DF_SettingCode_MenuAnimations).s32 ? 1 - pow_f32(2, (-60.f * df_state->frame_dt)) : 1.f;
               F32 hover_eval_container_height_target = row_height * Min(30, viz_blocks.total_visual_row_count);
               ws->hover_eval_num_visible_rows_t += (hover_eval_container_height_target - ws->hover_eval_num_visible_rows_t) * fish_rate;
               if(abs_f32(hover_eval_container_height_target - ws->hover_eval_num_visible_rows_t) > 0.5f)
@@ -3955,7 +3955,7 @@ df_window_frame(DF_Window *ws)
             
             // rjf: animate open
             {
-              F32 fish_rate = df_setting_val_from_code(DF_SettingCode_MenuAnimations).s32 ? 1 - pow_f32(2, (-60.f * d_dt())) : 1.f;
+              F32 fish_rate = df_setting_val_from_code(DF_SettingCode_MenuAnimations).s32 ? 1 - pow_f32(2, (-60.f * df_state->frame_dt)) : 1.f;
               F32 diff = 1.f - ws->hover_eval_open_t;
               ws->hover_eval_open_t += diff*fish_rate;
               if(abs_f32(diff) < 0.01f)
@@ -4181,9 +4181,9 @@ df_window_frame(DF_Window *ws)
             UI_Signal hover_eval_sig = ui_signal_from_box(hover_eval_box);
             if(ui_mouse_over(hover_eval_sig))
             {
-              ws->hover_eval_last_frame_idx = d_frame_index();
+              ws->hover_eval_last_frame_idx = df_state->frame_index;
             }
-            else if(ws->hover_eval_last_frame_idx+2 < d_frame_index())
+            else if(ws->hover_eval_last_frame_idx+2 < df_state->frame_index)
             {
               df_request_frame();
             }
@@ -4483,7 +4483,7 @@ df_window_frame(DF_Window *ws)
     //- rjf: animate panels
     //
     {
-      F32 rate = df_setting_val_from_code(DF_SettingCode_MenuAnimations).s32 ? 1 - pow_f32(2, (-50.f * d_dt())) : 1.f;
+      F32 rate = df_setting_val_from_code(DF_SettingCode_MenuAnimations).s32 ? 1 - pow_f32(2, (-50.f * df_state->frame_dt)) : 1.f;
       Vec2F32 content_rect_dim = dim_2f32(content_rect);
       for(DF_Panel *panel = ws->root_panel; !df_panel_is_nil(panel); panel = df_panel_rec_df_pre(panel).next)
       {
@@ -5331,8 +5331,8 @@ df_window_frame(DF_Window *ws)
       Task start_task = {0, &df_nil_panel, ws->query_view_stack_top};
       Task *first_task = &start_task;
       Task *last_task = first_task;
-      F32 rate = 1 - pow_f32(2, (-10.f * d_dt()));
-      F32 fast_rate = 1 - pow_f32(2, (-40.f * d_dt()));
+      F32 rate = 1 - pow_f32(2, (-10.f * df_state->frame_dt));
+      F32 fast_rate = 1 - pow_f32(2, (-40.f * df_state->frame_dt));
       for(DF_Panel *panel = ws->root_panel;
           !df_panel_is_nil(panel);
           panel = df_panel_rec_df_pre(panel).next)
@@ -5457,7 +5457,7 @@ df_window_frame(DF_Window *ws)
   //////////////////////////////
   //- rjf: attach autocomp box to root, or hide if it has not been renewed
   //
-  if(!ui_box_is_nil(autocomp_box) && ws->autocomp_last_frame_idx+1 >= d_frame_index()+1)
+  if(!ui_box_is_nil(autocomp_box) && ws->autocomp_last_frame_idx+1 >= df_state->frame_index+1)
   {
     UI_Box *autocomp_root_box = ui_box_from_key(ws->autocomp_root_key);
     if(!ui_box_is_nil(autocomp_root_box))
@@ -5475,7 +5475,7 @@ df_window_frame(DF_Window *ws)
       }
     }
   }
-  else if(!ui_box_is_nil(autocomp_box) && ws->autocomp_last_frame_idx+1 < d_frame_index()+1)
+  else if(!ui_box_is_nil(autocomp_box) && ws->autocomp_last_frame_idx+1 < df_state->frame_index+1)
   {
     UI_Box *autocomp_root_box = ui_box_from_key(ws->autocomp_root_key);
     if(!ui_box_is_nil(autocomp_root_box))
@@ -5948,7 +5948,7 @@ df_window_frame(DF_Window *ws)
       dr_fancy_string_list_push(scratch.arena, &strs, &str3);
       DR_FancyRunList runs = dr_fancy_run_list_from_fancy_string_list(scratch.arena, 0, 0, &strs);
       FNT_Run trailer_run = fnt_push_run_from_string(scratch.arena, df_font_from_slot(DF_FontSlot_Main), 16.f, 0, 0, 0, str8_lit("..."));
-      F32 limit = 500.f + sin_f32(d_time_in_seconds()/10.f)*200.f;
+      F32 limit = 500.f + sin_f32(df_state->time_in_seconds/10.f)*200.f;
       dr_truncated_fancy_run_list(p, &runs, limit, trailer_run);
       dr_rect(r2f32p(p.x+limit, 0, p.x+limit+2.f, 1000), v4f32(1, 0, 0, 1), 0, 0, 0);
       df_request_frame();
@@ -6360,7 +6360,7 @@ internal void
 df_set_hover_eval(Vec2F32 pos, String8 file_path, TxtPt pt, U64 vaddr, String8 string)
 {
   DF_Window *window = df_window_from_handle(d_regs()->window);
-  if(window->hover_eval_last_frame_idx+1 < d_frame_index() &&
+  if(window->hover_eval_last_frame_idx+1 < df_state->frame_index &&
      ui_key_match(ui_active_key(UI_MouseButtonKind_Left), ui_key_zero()) &&
      ui_key_match(ui_active_key(UI_MouseButtonKind_Middle), ui_key_zero()) &&
      ui_key_match(ui_active_key(UI_MouseButtonKind_Right), ui_key_zero()))
@@ -6368,7 +6368,7 @@ df_set_hover_eval(Vec2F32 pos, String8 file_path, TxtPt pt, U64 vaddr, String8 s
     B32 is_new_string = !str8_match(window->hover_eval_string, string, 0);
     if(is_new_string)
     {
-      window->hover_eval_first_frame_idx = window->hover_eval_last_frame_idx = d_frame_index();
+      window->hover_eval_first_frame_idx = window->hover_eval_last_frame_idx = df_state->frame_index;
       arena_clear(window->hover_eval_arena);
       window->hover_eval_string = push_str8_copy(window->hover_eval_arena, string);
       window->hover_eval_file_path = push_str8_copy(window->hover_eval_arena, file_path);
@@ -6377,7 +6377,7 @@ df_set_hover_eval(Vec2F32 pos, String8 file_path, TxtPt pt, U64 vaddr, String8 s
       window->hover_eval_focused = 0;
     }
     window->hover_eval_spawn_pos = pos;
-    window->hover_eval_last_frame_idx = d_frame_index();
+    window->hover_eval_last_frame_idx = df_state->frame_index;
   }
 }
 
@@ -6619,7 +6619,7 @@ df_set_autocomp_lister_query(UI_Key root_key, DF_AutoCompListerParams *params, S
     window->autocomp_num_visible_rows_t = 0;
     window->autocomp_open_t = 0;
   }
-  if(window->autocomp_last_frame_idx+1 < d_frame_index())
+  if(window->autocomp_last_frame_idx+1 < df_state->frame_index)
   {
     window->autocomp_force_closed = 0;
     window->autocomp_num_visible_rows_t = 0;
@@ -6631,7 +6631,7 @@ df_set_autocomp_lister_query(UI_Key root_key, DF_AutoCompListerParams *params, S
   window->autocomp_lister_params.strings = str8_list_copy(window->autocomp_lister_params_arena, &window->autocomp_lister_params.strings);
   window->autocomp_lister_query_size = Min(query.size, sizeof(window->autocomp_lister_query_buffer));
   MemoryCopy(window->autocomp_lister_query_buffer, query.str, window->autocomp_lister_query_size);
-  window->autocomp_last_frame_idx = d_frame_index();
+  window->autocomp_last_frame_idx = df_state->frame_index;
 }
 
 ////////////////////////////////
@@ -7423,10 +7423,28 @@ df_request_frame(void)
 ////////////////////////////////
 //~ rjf: Main State Accessors
 
+//- rjf: per-frame arena
+
 internal Arena *
 df_frame_arena(void)
 {
   return df_state->frame_arenas[df_state->frame_index%ArrayCount(df_state->frame_arenas)];
+}
+
+//- rjf: config paths
+
+internal String8
+df_cfg_path_from_src(D_CfgSrc src)
+{
+  return df_state->cfg_paths[src];
+}
+
+//- rjf: config state
+
+internal D_CfgTable *
+df_cfg_table(void)
+{
+  return &df_state->cfg_table;
 }
 
 ////////////////////////////////
@@ -7628,12 +7646,12 @@ df_init(CmdLine *cmdln)
     String8 cfg_src_paths[D_CfgSrc_COUNT] = {user_cfg_path, project_cfg_path};
     for(D_CfgSrc src = (D_CfgSrc)0; src < D_CfgSrc_COUNT; src = (D_CfgSrc)(src+1))
     {
-      d_state->cfg_path_arenas[src] = arena_alloc();
+      df_state->cfg_path_arenas[src] = arena_alloc();
       df_cmd(d_cfg_src_load_cmd_kind_table[src], .file_path = path_normalized_from_string(scratch.arena, cfg_src_paths[src]));
     }
     
     // rjf: set up config table arena
-    d_state->cfg_arena = arena_alloc();
+    df_state->cfg_arena = arena_alloc();
     scratch_end(scratch);
   }
   
@@ -7724,6 +7742,13 @@ df_frame(void)
   local_persist S32 depth = 0;
   
   //////////////////////////////
+  //- rjf: do per-frame resets
+  //
+  arena_clear(df_frame_arena());
+  df_state->top_regs = &df_state->base_regs;
+  df_regs_copy_contents(df_frame_arena(), &df_state->top_regs->v, &df_state->top_regs->v);
+  
+  //////////////////////////////
   //- rjf: get events from the OS
   //
   OS_EventList events = {0};
@@ -7773,7 +7798,7 @@ df_frame(void)
   //////////////////////////////
   //- rjf: target Hz -> delta time
   //
-  F32 dt = 1.f/target_hz;
+  df_state->frame_dt = 1.f/target_hz;
   
   //////////////////////////////
   //- rjf: begin measuring actual per-frame work
@@ -8152,7 +8177,7 @@ df_frame(void)
   //- rjf: autosave if needed
   //
   {
-    df_state->seconds_until_autosave -= dt;
+    df_state->seconds_until_autosave -= df_state->frame_dt;
     if(df_state->seconds_until_autosave <= 0.f)
     {
       df_cmd(DF_CmdKind_WriteUserData);
@@ -8412,8 +8437,8 @@ df_frame(void)
             {
               if(load_cfg[src])
               {
-                arena_clear(d_state->cfg_path_arenas[src]);
-                d_state->cfg_paths[src] = push_str8_copy(d_state->cfg_path_arenas[src], new_path);
+                arena_clear(df_state->cfg_path_arenas[src]);
+                df_state->cfg_paths[src] = push_str8_copy(df_state->cfg_path_arenas[src], new_path);
               }
             }
           }
@@ -8424,7 +8449,7 @@ df_frame(void)
           {
             for(D_CfgSrc src = (D_CfgSrc)0; src < D_CfgSrc_COUNT; src = (D_CfgSrc)(src+1))
             {
-              String8 path = d_cfg_path_from_src(src);
+              String8 path = df_cfg_path_from_src(src);
               cfg_props[src] = os_properties_from_file_path(path);
             }
           }
@@ -8436,7 +8461,7 @@ df_frame(void)
           {
             for(D_CfgSrc src = (D_CfgSrc)0; src < D_CfgSrc_COUNT; src = (D_CfgSrc)(src+1))
             {
-              String8 path = d_cfg_path_from_src(src);
+              String8 path = df_cfg_path_from_src(src);
               OS_Handle file = os_file_open(OS_AccessFlag_ShareRead|OS_AccessFlag_Read, path);
               FileProperties props = os_properties_from_file(file);
               String8 data = os_string_from_file_range(scratch.arena, file, r1u64(0, props.size));
@@ -8466,7 +8491,7 @@ df_frame(void)
           {
             for(D_CfgSrc src = (D_CfgSrc)0; src < D_CfgSrc_COUNT; src = (D_CfgSrc)(src+1))
             {
-              cfg_load[src] = (load_cfg[src] && ((cfg_save[src] == 0 && d_state->cfg_cached_timestamp[src] != cfg_timestamps[src]) || cfg_props[src].created == 0));
+              cfg_load[src] = (load_cfg[src] && ((cfg_save[src] == 0 && df_state->cfg_cached_timestamp[src] != cfg_timestamps[src]) || cfg_props[src].created == 0));
               cfg_load_any = cfg_load_any || cfg_load[src];
             }
           }
@@ -8474,11 +8499,11 @@ df_frame(void)
           //- rjf: load => build new config table
           if(cfg_load_any)
           {
-            arena_clear(d_state->cfg_arena);
-            MemoryZeroStruct(&d_state->cfg_table);
+            arena_clear(df_state->cfg_arena);
+            MemoryZeroStruct(&df_state->cfg_table);
             for(D_CfgSrc src = (D_CfgSrc)0; src < D_CfgSrc_COUNT; src = (D_CfgSrc)(src+1))
             {
-              d_cfg_table_push_unparsed_string(d_state->cfg_arena, &d_state->cfg_table, cfg_data[src], src);
+              d_cfg_table_push_unparsed_string(df_state->cfg_arena, &df_state->cfg_table, cfg_data[src], src);
             }
           }
           
@@ -8496,7 +8521,7 @@ df_frame(void)
                 D_CmdKind cmd_kind = d_cfg_src_apply_cmd_kind_table[src];
                 D_CmdParams params = d_cmd_params_zero();
                 df_push_cmd(df_cmd_spec_from_kind(cmd_kind), &params);
-                d_state->cfg_cached_timestamp[src] = cfg_timestamps[src];
+                df_state->cfg_cached_timestamp[src] = cfg_timestamps[src];
               }
             }
           }
@@ -8526,7 +8551,7 @@ df_frame(void)
         case DF_CmdKind_ApplyUserData:
         case DF_CmdKind_ApplyProjectData:
         {
-          D_CfgTable *table = d_cfg_table();
+          D_CfgTable *table = df_cfg_table();
           OS_HandleArray monitors = os_push_monitors_array(scratch.arena);
           
           //- rjf: get config source
@@ -8541,7 +8566,7 @@ df_frame(void)
           }
           
           //- rjf: get paths
-          String8 cfg_path   = d_cfg_path_from_src(src);
+          String8 cfg_path   = df_cfg_path_from_src(src);
           String8 cfg_folder = str8_chop_last_slash(cfg_path);
           
           //- rjf: keep track of recent projects
@@ -9246,7 +9271,7 @@ df_frame(void)
                   try_u64_from_str8_c_rules(hex_string, &hex_val);
                   Vec4F32 color_rgba = rgba_from_u32((U32)hex_val);
                   df_state->cfg_theme_target.colors[color_code] = color_rgba;
-                  if(d_frame_index() <= 2)
+                  if(df_state->frame_index <= 2)
                   {
                     df_state->cfg_theme.colors[color_code] = color_rgba;
                   }
@@ -9404,7 +9429,7 @@ df_frame(void)
               break;
             }
           }
-          String8 path = d_cfg_path_from_src(src);
+          String8 path = df_cfg_path_from_src(src);
           String8List d_strs = d_cfg_strings_from_core(scratch.arena, path, src);
           String8List df_strs = df_cfg_strings_from_gfx(scratch.arena, path, src);
           String8 header = push_str8f(scratch.arena, "// raddbg %s file\n\n", d_cfg_src_string_table[src].str);
@@ -10492,7 +10517,7 @@ df_frame(void)
           for(D_CfgSrc src = (D_CfgSrc)0; src < D_CfgSrc_COUNT; src = (D_CfgSrc)(src+1))
           {
             DF_CmdKind write_cmd = d_cfg_src_write_cmd_kind_table[src];
-            df_cmd(write_cmd, .file_path = d_cfg_path_from_src(src));
+            df_cmd(write_cmd, .file_path = df_cfg_path_from_src(src));
           }
         }break;
         
@@ -12056,7 +12081,7 @@ df_frame(void)
   //////////////////////////////
   //- rjf: tick debug engine
   //
-  d_tick(scratch.arena, &targets, &breakpoints, di_scope, dt);
+  d_tick(scratch.arena, &targets, &breakpoints);
   
   //////////////////////////////
   //- rjf: apply new rich hover info
@@ -12071,7 +12096,7 @@ df_frame(void)
   //- rjf: animate confirmation
   //
   {
-    F32 rate = df_setting_val_from_code(DF_SettingCode_MenuAnimations).s32 ? 1 - pow_f32(2, (-10.f * d_dt())) : 1.f;
+    F32 rate = df_setting_val_from_code(DF_SettingCode_MenuAnimations).s32 ? 1 - pow_f32(2, (-10.f * df_state->frame_dt)) : 1.f;
     B32 confirm_open = df_state->confirm_active;
     df_state->confirm_t += rate * ((F32)!!confirm_open-df_state->confirm_t);
     if(abs_f32(df_state->confirm_t - (F32)!!confirm_open) > 0.005f)
@@ -12086,7 +12111,7 @@ df_frame(void)
   {
     DF_Theme *current = &df_state->cfg_theme;
     DF_Theme *target = &df_state->cfg_theme_target;
-    F32 rate = 1 - pow_f32(2, (-50.f * d_dt()));
+    F32 rate = 1 - pow_f32(2, (-50.f * df_state->frame_dt));
     for(DF_ThemeColor color = DF_ThemeColor_Null;
         color < DF_ThemeColor_COUNT;
         color = (DF_ThemeColor)(color+1))
@@ -12109,7 +12134,7 @@ df_frame(void)
   //- rjf: animate alive-transitions for entities
   //
   {
-    F32 rate = 1.f - pow_f32(2.f, -20.f*d_dt());
+    F32 rate = 1.f - pow_f32(2.f, -20.f*df_state->frame_dt);
     for(D_Entity *e = d_entity_root(); !d_entity_is_nil(e); e = d_entity_rec_depth_first_pre(e, d_entity_root()).next)
     {
       F32 diff = (1.f - e->alive_t);
@@ -12242,9 +12267,10 @@ df_frame(void)
   df_state->frame_time_us_history[df_state->frame_index%ArrayCount(df_state->frame_time_us_history)] = frame_time_us;
   
   //////////////////////////////
-  //- rjf: bump frame index
+  //- rjf: bump frame time counters
   //
   df_state->frame_index += 1;
+  df_state->time_in_seconds += df_state->frame_dt;
   
   di_scope_close(di_scope);
   scratch_end(scratch);

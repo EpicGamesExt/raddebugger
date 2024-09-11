@@ -3396,12 +3396,6 @@ d_eval_string_from_file_path(Arena *arena, String8 string)
 
 //- rjf: frame data
 
-internal F32
-d_dt(void)
-{
-  return d_state->dt;
-}
-
 internal U64
 d_frame_index(void)
 {
@@ -3412,12 +3406,6 @@ internal Arena *
 d_frame_arena(void)
 {
   return d_state->frame_arenas[d_state->frame_index%ArrayCount(d_state->frame_arenas)];
-}
-
-internal F64
-d_time_in_seconds(void)
-{
-  return d_state->time_in_seconds;
 }
 
 //- rjf: interaction registers
@@ -3476,22 +3464,6 @@ internal B32
 d_ctrl_targets_running(void)
 {
   return d_state->ctrl_is_running;
-}
-
-//- rjf: config paths
-
-internal String8
-d_cfg_path_from_src(D_CfgSrc src)
-{
-  return d_state->cfg_paths[src];
-}
-
-//- rjf: config state
-
-internal D_CfgTable *
-d_cfg_table(void)
-{
-  return &d_state->cfg_table;
 }
 
 //- rjf: config serialization
@@ -4156,7 +4128,7 @@ d_init(void)
 }
 
 internal CTRL_EventList
-d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_Scope *di_scope, F32 dt)
+d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(&arena, 1);
@@ -4164,8 +4136,6 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
   d_state->frame_index += 1;
   arena_clear(d_frame_arena());
   d_state->frame_eval_memread_endt_us = os_now_microseconds() + 5000;
-  d_state->dt = dt;
-  d_state->time_in_seconds += dt;
   d_state->top_regs = &d_state->base_regs;
   d_regs_copy_contents(d_frame_arena(), &d_state->top_regs->v, &d_state->top_regs->v);
   

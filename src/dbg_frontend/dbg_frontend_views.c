@@ -8306,8 +8306,8 @@ DF_VIEW_UI_FUNCTION_DEF(geo3d)
   //- rjf: animate camera
   //
   {
-    F32 fast_rate = 1 - pow_f32(2, (-60.f * d_dt()));
-    F32 slow_rate = 1 - pow_f32(2, (-30.f * d_dt()));
+    F32 fast_rate = 1 - pow_f32(2, (-60.f * df_state->frame_dt));
+    F32 slow_rate = 1 - pow_f32(2, (-30.f * df_state->frame_dt));
     state->zoom  += (zoom_target - state->zoom) * slow_rate;
     state->yaw   += (yaw_target - state->yaw) * fast_rate;
     state->pitch += (pitch_target - state->pitch) * fast_rate;
