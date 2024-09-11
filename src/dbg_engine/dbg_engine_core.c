@@ -77,28 +77,6 @@ d_handle_list_push(Arena *arena, D_HandleList *list, D_Handle handle)
   d_handle_list_push_node(list, n);
 }
 
-internal void
-d_handle_list_remove(D_HandleList *list, D_HandleNode *node)
-{
-  DLLRemove(list->first, list->last, node);
-  list->count -= 1;
-}
-
-internal D_HandleNode *
-d_handle_list_find(D_HandleList *list, D_Handle handle)
-{
-  D_HandleNode *result = 0;
-  for(D_HandleNode *n = list->first; n != 0; n = n->next)
-  {
-    if(d_handle_match(n->handle, handle))
-    {
-      result = n;
-      break;
-    }
-  }
-  return result;
-}
-
 internal D_HandleList
 d_handle_list_copy(Arena *arena, D_HandleList list)
 {
@@ -2925,20 +2903,6 @@ d_unwind_from_ctrl_unwind(Arena *arena, DI_Scope *di_scope, D_Entity *process, C
 ////////////////////////////////
 //~ rjf: Target Controls
 
-//- rjf: control message dispatching
-
-internal void
-d_push_ctrl_msg(CTRL_Msg *msg)
-{
-  CTRL_Msg *dst = ctrl_msg_list_push(d_state->ctrl_msg_arena, &d_state->ctrl_msgs);
-  ctrl_msg_deep_copy(d_state->ctrl_msg_arena, dst, msg);
-  if(d_state->ctrl_soft_halt_issued == 0 && d_ctrl_targets_running())
-  {
-    d_state->ctrl_soft_halt_issued = 1;
-    ctrl_halt();
-  }
-}
-
 //- rjf: stopped info from the control thread
 
 internal CTRL_Event
@@ -3764,14 +3728,6 @@ d_cfg_strings_from_core(Arena *arena, String8 root_path, D_CfgSrc source)
   return strs;
 }
 
-//- rjf: current path
-
-internal String8
-d_current_path(void)
-{
-  return d_state->current_path;
-}
-
 //- rjf: entity kind cache
 
 internal D_EntityList
@@ -4141,7 +4097,6 @@ d_init(void)
   d_state->entities_root = &d_nil_entity;
   d_state->entities_base = push_array(d_state->entities_arena, D_Entity, 0);
   d_state->entities_count = 0;
-  d_state->ctrl_msg_arena = arena_alloc();
   d_state->ctrl_entity_store = ctrl_entity_store_alloc();
   d_state->ctrl_stop_arena = arena_alloc();
   d_state->entities_root = d_entity_alloc(&d_nil_entity, D_EntityKind_Root);
@@ -4150,6 +4105,7 @@ d_init(void)
   d_state->view_rule_spec_table_size = 1024;
   d_state->view_rule_spec_table = push_array(arena, D_ViewRuleSpec *, d_state->view_rule_spec_table_size);
   d_state->top_regs = &d_state->base_regs;
+  d_state->ctrl_msg_arena = arena_alloc();
   
   // rjf: set up initial exception filtering rules
   for(CTRL_ExceptionCodeKind k = (CTRL_ExceptionCodeKind)0; k < CTRL_ExceptionCodeKind_COUNT; k = (CTRL_ExceptionCodeKind)(k+1))
@@ -4201,22 +4157,13 @@ d_init(void)
   
   // rjf: set up run state
   d_state->ctrl_last_run_arena = arena_alloc();
-  
-  // rjf: set up initial browse path
-  {
-    Temp scratch = scratch_begin(0, 0);
-    String8 current_path = os_get_current_path(scratch.arena);
-    String8 current_path_with_slash = push_str8f(scratch.arena, "%S/", current_path);
-    d_state->current_path_arena = arena_alloc();
-    d_state->current_path = push_str8_copy(d_state->current_path_arena, current_path_with_slash);
-    scratch_end(scratch);
-  }
 }
 
 internal CTRL_EventList
 d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_Scope *di_scope, F32 dt)
 {
   ProfBeginFunction();
+  Temp scratch = scratch_begin(&arena, 1);
   CTRL_EventList result = {0};
   d_state->frame_index += 1;
   arena_clear(d_frame_arena());
@@ -4231,8 +4178,6 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
   //
   ProfScope("sync with ctrl thread")
   {
-    Temp scratch = scratch_begin(&arena, 1);
-    
     //- rjf: grab next reggen/memgen
     U64 new_mem_gen = ctrl_mem_gen();
     U64 new_reg_gen = ctrl_reg_gen();
@@ -4632,8 +4577,6 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
       cache->table = 0;
       d_state->member_cache_reggen_idx = new_reg_gen;
     }
-    
-    scratch_end(scratch);
   }
   
   //////////////////////////////
@@ -4641,8 +4584,6 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
   //
   U128 ctrl_param_state_hash = {0};
   {
-    Temp scratch = scratch_begin(0, 0);
-    
     // rjf: build data strings of all param data
     String8List strings = {0};
     {
@@ -4666,8 +4607,6 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
     // rjf: join & hash to produce result
     String8 string = str8_list_join(scratch.arena, &strings, 0);
     blake2b((U8 *)&ctrl_param_state_hash.u64[0], sizeof(ctrl_param_state_hash), string.str, string.size, 0, 0);
-    
-    scratch_end(scratch);
   }
   
   //////////////////////////////
@@ -4732,7 +4671,6 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
   //
   ProfScope("sync with di parsers")
   {
-    Temp scratch = scratch_begin(&arena, 1);
     DI_EventList events = di_p2u_pop_events(scratch.arena, 0);
     for(DI_EventNode *n = events.first; n != 0; n = n->next)
     {
@@ -4755,7 +4693,6 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
         }break;
       }
     }
-    scratch_end(scratch);
   }
   
   //////////////////////////////
@@ -4776,13 +4713,11 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
   //////////////////////////////
   //- rjf: process top-level commands
   //
+  CTRL_MsgList ctrl_msgs = {0};
   ProfScope("process top-level commands")
   {
-    Temp scratch = scratch_begin(&arena, 1);
     for(D_Cmd *cmd = 0; d_next_cmd(&cmd);)
     {
-      temp_end(scratch);
-      
       // rjf: unpack command
       D_CmdParams params = cmd->params;
       D_CmdKind core_cmd_kind = d_cmd_kind_from_string(cmd->spec->info.string);
@@ -4863,13 +4798,13 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
               
               // rjf: push message to launch
               {
-                CTRL_Msg msg = {CTRL_MsgKind_Launch};
-                msg.path = path;
-                msg.cmd_line_string_list = cmdln_strings;
-                msg.env_inherit = 1;
-                MemoryCopyArray(msg.exception_code_filters, d_state->ctrl_exception_code_filters);
-                str8_list_push(scratch.arena, &msg.entry_points, entry);
-                d_push_ctrl_msg(&msg);
+                CTRL_Msg *msg = ctrl_msg_list_push(scratch.arena, &ctrl_msgs);
+                msg->kind = CTRL_MsgKind_Launch;
+                msg->path = path;
+                msg->cmd_line_string_list = cmdln_strings;
+                msg->env_inherit = 1;
+                MemoryCopyArray(msg->exception_code_filters, d_state->ctrl_exception_code_filters);
+                str8_list_push(scratch.arena, &msg->entry_points, entry);
               }
             }
             
@@ -4902,13 +4837,11 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
             for(D_EntityNode *n = processes.first; n != 0; n = n->next)
             {
               D_Entity *process = n->entity;
-              CTRL_Msg msg = {CTRL_MsgKind_Kill};
-              {
-                msg.exit_code = 1;
-                msg.entity = process->ctrl_handle;
-                MemoryCopyArray(msg.exception_code_filters, d_state->ctrl_exception_code_filters);
-              }
-              d_push_ctrl_msg(&msg);
+              CTRL_Msg *msg = ctrl_msg_list_push(scratch.arena, &ctrl_msgs);
+              msg->kind = CTRL_MsgKind_Kill;
+              msg->exit_code = 1;
+              msg->entity = process->ctrl_handle;
+              MemoryCopyArray(msg->exception_code_filters, d_state->ctrl_exception_code_filters);
             }
           }
           
@@ -4926,13 +4859,11 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
             for(D_EntityNode *n = processes.first; n != 0; n = n->next)
             {
               D_Entity *process = n->entity;
-              CTRL_Msg msg = {CTRL_MsgKind_Kill};
-              {
-                msg.exit_code = 1;
-                msg.entity = process->ctrl_handle;
-                MemoryCopyArray(msg.exception_code_filters, d_state->ctrl_exception_code_filters);
-              }
-              d_push_ctrl_msg(&msg);
+              CTRL_Msg *msg = ctrl_msg_list_push(scratch.arena, &ctrl_msgs);
+              msg->kind = CTRL_MsgKind_Kill;
+              msg->exit_code = 1;
+              msg->entity = process->ctrl_handle;
+              MemoryCopyArray(msg->exception_code_filters, d_state->ctrl_exception_code_filters);
             }
           }
           if(processes.count == 0)
@@ -4947,10 +4878,10 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
             D_Entity *entity = d_entity_from_handle(n->handle);
             if(entity->kind == D_EntityKind_Process)
             {
-              CTRL_Msg msg = {CTRL_MsgKind_Detach};
-              msg.entity = entity->ctrl_handle;
-              MemoryCopyArray(msg.exception_code_filters, d_state->ctrl_exception_code_filters);
-              d_push_ctrl_msg(&msg);
+              CTRL_Msg *msg = ctrl_msg_list_push(scratch.arena, &ctrl_msgs);
+              msg->kind   = CTRL_MsgKind_Detach;
+              msg->entity = entity->ctrl_handle;
+              MemoryCopyArray(msg->exception_code_filters, d_state->ctrl_exception_code_filters);
             }
           }
         }break;
@@ -5090,8 +5021,6 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
                 }
               }
             }
-            
-            scratch_end(scratch);
           }
         }break;
         
@@ -5349,9 +5278,9 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
             {
               CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, e->ctrl_handle);
               thread->is_frozen = should_freeze;
-              CTRL_Msg msg = {should_freeze ? CTRL_MsgKind_FreezeThread : CTRL_MsgKind_ThawThread};
-              msg.entity = thread->handle;
-              d_push_ctrl_msg(&msg);
+              CTRL_Msg *msg = ctrl_msg_list_push(scratch.arena, &ctrl_msgs);
+              msg->kind   = (should_freeze ? CTRL_MsgKind_FreezeThread : CTRL_MsgKind_ThawThread);
+              msg->entity = thread->handle;
             }
           }
         }break;
@@ -5362,10 +5291,10 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
           U64 pid = params.id;
           if(pid != 0)
           {
-            CTRL_Msg msg = {CTRL_MsgKind_Attach};
-            msg.entity_id = (U32)pid;
-            MemoryCopyArray(msg.exception_code_filters, d_state->ctrl_exception_code_filters);
-            d_push_ctrl_msg(&msg);
+            CTRL_Msg *msg = ctrl_msg_list_push(scratch.arena, &ctrl_msgs);
+            msg->kind      = CTRL_MsgKind_Attach;
+            msg->entity_id = (U32)pid;
+            MemoryCopyArray(msg->exception_code_filters, d_state->ctrl_exception_code_filters);
           }
         }break;
       }
@@ -5378,15 +5307,16 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
           d_state->ctrl_last_run_param_state_hash = ctrl_param_state_hash;
         }
         
-        // rjf: build run message
-        CTRL_Msg msg = {(run_kind == D_RunKind_Run || run_kind == D_RunKind_Step) ? CTRL_MsgKind_Run : CTRL_MsgKind_SingleStep};
+        // rjf: push & fill run message
+        CTRL_Msg *msg = ctrl_msg_list_push(scratch.arena, &ctrl_msgs);
         {
           CTRL_Entity *process = ctrl_entity_ancestor_from_kind(run_thread, CTRL_EntityKind_Process);
-          msg.run_flags  = run_flags;
-          msg.entity     = run_thread->handle;
-          msg.parent     = process->handle;
-          MemoryCopyArray(msg.exception_code_filters, d_state->ctrl_exception_code_filters);
-          MemoryCopyStruct(&msg.traps, &run_traps);
+          msg->kind = (run_kind == D_RunKind_Run || run_kind == D_RunKind_Step) ? CTRL_MsgKind_Run : CTRL_MsgKind_SingleStep;
+          msg->run_flags  = run_flags;
+          msg->entity     = run_thread->handle;
+          msg->parent     = process->handle;
+          MemoryCopyArray(msg->exception_code_filters, d_state->ctrl_exception_code_filters);
+          MemoryCopyStruct(&msg->traps, &run_traps);
           for(U64 idx = 0; idx < breakpoints->count; idx += 1)
           {
             // rjf: unpack user breakpoint entity
@@ -5402,7 +5332,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
                 ctrl_user_bp.string    = n->string;
                 ctrl_user_bp.pt        = bp->pt;
                 ctrl_user_bp.condition = bp->condition;
-                ctrl_user_breakpoint_list_push(scratch.arena, &msg.user_bps, &ctrl_user_bp);
+                ctrl_user_breakpoint_list_push(scratch.arena, &msg->user_bps, &ctrl_user_bp);
               }
             }
             
@@ -5412,7 +5342,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
               CTRL_UserBreakpoint ctrl_user_bp = {CTRL_UserBreakpointKind_VirtualAddress};
               ctrl_user_bp.u64       = bp->vaddr;
               ctrl_user_bp.condition = bp->condition;
-              ctrl_user_breakpoint_list_push(scratch.arena, &msg.user_bps, &ctrl_user_bp);
+              ctrl_user_breakpoint_list_push(scratch.arena, &msg->user_bps, &ctrl_user_bp);
             }
             
             // rjf: symbol name location -> add breakpoint for symbol name
@@ -5421,13 +5351,10 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
               CTRL_UserBreakpoint ctrl_user_bp = {CTRL_UserBreakpointKind_SymbolNameAndOffset};
               ctrl_user_bp.string    = bp->symbol_name;
               ctrl_user_bp.condition = bp->condition;
-              ctrl_user_breakpoint_list_push(scratch.arena, &msg.user_bps, &ctrl_user_bp);
+              ctrl_user_breakpoint_list_push(scratch.arena, &msg->user_bps, &ctrl_user_bp);
             }
           }
         }
-        
-        // rjf: push msg
-        d_push_ctrl_msg(&msg);
         
         // rjf: copy run traps to scratch (needed, if run_traps can be `d_state->ctrl_last_run_traps`)
         CTRL_TrapList run_traps_copy = ctrl_trap_list_copy(scratch.arena, &run_traps);
@@ -5446,7 +5373,6 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
         d_state->base_regs.v.inline_depth = 0;
       }
     }
-    scratch_end(scratch);
   }
   
   //////////////////////////////
@@ -5458,17 +5384,24 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, DI_
   }
   
   //////////////////////////////
-  //- rjf: send messages to control
+  //- rjf: push new control messages to queue - try to send queue to control,
+  // clear queue if successful (if not, we'll just keep them around until
+  // the next tick)
   //
-  if(d_state->ctrl_msgs.count != 0)
   {
-    if(ctrl_u2c_push_msgs(&d_state->ctrl_msgs, os_now_microseconds()+100))
+    CTRL_MsgList msgs_copy = ctrl_msg_list_deep_copy(d_state->ctrl_msg_arena, &ctrl_msgs);
+    ctrl_msg_list_concat_in_place(&d_state->ctrl_msgs, &msgs_copy);
+    if(d_state->ctrl_msgs.count != 0)
     {
-      MemoryZeroStruct(&d_state->ctrl_msgs);
-      arena_clear(d_state->ctrl_msg_arena);
+      if(ctrl_u2c_push_msgs(&d_state->ctrl_msgs, os_now_microseconds()+100))
+      {
+        MemoryZeroStruct(&d_state->ctrl_msgs);
+        arena_clear(d_state->ctrl_msg_arena);
+      }
     }
   }
   
   ProfEnd();
+  scratch_end(scratch);
   return result;
 }

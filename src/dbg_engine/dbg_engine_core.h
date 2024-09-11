@@ -808,31 +808,6 @@ struct D_EntityListCache
   D_EntityList list;
 };
 
-//- rjf: auto view rules hash table cache
-
-typedef struct D_AutoViewRuleNode D_AutoViewRuleNode;
-struct D_AutoViewRuleNode
-{
-  D_AutoViewRuleNode *next;
-  String8 type;
-  String8 view_rule;
-};
-
-typedef struct D_AutoViewRuleSlot D_AutoViewRuleSlot;
-struct D_AutoViewRuleSlot
-{
-  D_AutoViewRuleNode *first;
-  D_AutoViewRuleNode *last;
-};
-
-typedef struct D_AutoViewRuleMapCache D_AutoViewRuleMapCache;
-struct D_AutoViewRuleMapCache
-{
-  Arena *arena;
-  U64 slots_count;
-  D_AutoViewRuleSlot *slots;
-};
-
 //- rjf: per-thread unwind cache
 
 typedef struct D_UnwindCacheNode D_UnwindCacheNode;
@@ -969,7 +944,6 @@ struct D_State
   // rjf: entity query caches
   U64 kind_alloc_gens[D_EntityKind_COUNT];
   D_EntityListCache kind_caches[D_EntityKind_COUNT];
-  D_AutoViewRuleMapCache auto_view_rule_cache;
   
   // rjf: per-run caches
   D_UnwindCache unwind_cache;
@@ -1006,9 +980,9 @@ struct D_State
   U128 ctrl_last_run_param_state_hash;
   B32 ctrl_is_running;
   B32 ctrl_soft_halt_issued;
+  U64 ctrl_exception_code_filters[(CTRL_ExceptionCodeKind_COUNT+63)/64];
   Arena *ctrl_msg_arena;
   CTRL_MsgList ctrl_msgs;
-  U64 ctrl_exception_code_filters[(CTRL_ExceptionCodeKind_COUNT+63)/64];
   
   // rjf: control thread ctrl -> user reading state
   CTRL_EntityStore *ctrl_entity_store;
@@ -1021,10 +995,6 @@ struct D_State
   U64 cfg_cached_timestamp[D_CfgSrc_COUNT];
   Arena *cfg_arena;
   D_CfgTable cfg_table;
-  
-  // rjf: current path
-  Arena *current_path_arena;
-  String8 current_path;
 };
 
 ////////////////////////////////
@@ -1062,8 +1032,6 @@ internal D_Handle d_handle_zero(void);
 internal B32 d_handle_match(D_Handle a, D_Handle b);
 internal void d_handle_list_push_node(D_HandleList *list, D_HandleNode *node);
 internal void d_handle_list_push(Arena *arena, D_HandleList *list, D_Handle handle);
-internal void d_handle_list_remove(D_HandleList *list, D_HandleNode *node);
-internal D_HandleNode *d_handle_list_find(D_HandleList *list, D_Handle handle);
 internal D_HandleList d_handle_list_copy(Arena *arena, D_HandleList list);
 
 ////////////////////////////////
@@ -1285,9 +1253,6 @@ internal D_Unwind d_unwind_from_ctrl_unwind(Arena *arena, DI_Scope *di_scope, D_
 ////////////////////////////////
 //~ rjf: Target Controls
 
-//- rjf: control message dispatching
-internal void d_push_ctrl_msg(CTRL_Msg *msg);
-
 //- rjf: stopped info from the control thread
 internal CTRL_Event d_ctrl_last_stop_event(void);
 
@@ -1362,9 +1327,6 @@ internal D_CfgTable *d_cfg_table(void);
 internal String8 d_cfg_escaped_from_raw_string(Arena *arena, String8 string);
 internal String8 d_cfg_raw_from_escaped_string(Arena *arena, String8 string);
 internal String8List d_cfg_strings_from_core(Arena *arena, String8 root_path, D_CfgSrc source);
-
-//- rjf: current path
-internal String8 d_current_path(void);
 
 //- rjf: entity kind cache
 internal D_EntityList d_query_cached_entity_list_with_kind(D_EntityKind kind);

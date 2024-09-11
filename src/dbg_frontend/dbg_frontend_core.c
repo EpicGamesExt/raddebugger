@@ -10,6 +10,33 @@
 #include "generated/dbg_frontend.meta.c"
 
 ////////////////////////////////
+//~ rjf: Registers Type Pure Functions
+
+internal void
+df_regs_copy_contents(Arena *arena, DF_Regs *dst, DF_Regs *src)
+{
+  MemoryCopyStruct(dst, src);
+  dst->entity_list = d_handle_list_copy(arena, src->entity_list);
+  dst->file_path   = push_str8_copy(arena, src->file_path);
+  dst->lines       = d_line_list_copy(arena, &src->lines);
+  dst->dbgi_key    = di_key_copy(arena, &src->dbgi_key);
+  dst->string      = push_str8_copy(arena, src->string);
+  dst->params_tree = md_tree_copy(arena, src->params_tree);
+  if(dst->entity_list.count == 0 && !d_handle_match(d_handle_zero(), dst->entity))
+  {
+    d_handle_list_push(arena, &dst->entity_list, dst->entity);
+  }
+}
+
+internal DF_Regs *
+df_regs_copy(Arena *arena, DF_Regs *src)
+{
+  DF_Regs *dst = push_array(arena, DF_Regs, 1);
+  df_regs_copy_contents(arena, dst, src);
+  return dst;
+}
+
+////////////////////////////////
 //~ rjf: View Type Functions
 
 internal B32
@@ -3615,7 +3642,7 @@ df_window_frame(DF_Window *ws)
           }break;
           case D_CmdParamSlot_FilePath:
           {
-            default_query = path_normalized_from_string(scratch.arena, d_current_path());
+            default_query = path_normalized_from_string(scratch.arena, df_state->current_path);
             default_query = push_str8f(scratch.arena, "%S/", default_query);
           }break;
         }
@@ -7676,6 +7703,16 @@ df_init(CmdLine *cmdln)
     scratch_end(scratch);
   }
   
+  // rjf: set up initial browse path
+  {
+    Temp scratch = scratch_begin(0, 0);
+    String8 current_path = os_get_current_path(scratch.arena);
+    String8 current_path_with_slash = push_str8f(scratch.arena, "%S/", current_path);
+    df_state->current_path_arena = arena_alloc();
+    df_state->current_path = push_str8_copy(df_state->current_path_arena, current_path_with_slash);
+    scratch_end(scratch);
+  }
+  
   ProfEnd();
 }
 
@@ -9656,32 +9693,25 @@ df_frame(void)
         }break;
         
         //- rjf: undo/redo
-        case DF_CmdKind_Undo:
-        {
-        }break;
-        case DF_CmdKind_Redo:
-        {
-        }break;
+        case DF_CmdKind_Undo:{}break;
+        case DF_CmdKind_Redo:{}break;
         
         //- rjf: focus history
-        case DF_CmdKind_GoBack:
-        {
-        }break;
-        case DF_CmdKind_GoForward:
-        {
-        }break;
+        case DF_CmdKind_GoBack:{}break;
+        case DF_CmdKind_GoForward:{}break;
         
         //- rjf: files
         case DF_CmdKind_SetCurrentPath:
         {
-          arena_clear(d_state->current_path_arena);
-          d_state->current_path = push_str8_copy(d_state->current_path_arena, params->file_path);
+          arena_clear(df_state->current_path_arena);
+          df_state->current_path = push_str8_copy(df_state->current_path_arena, params->file_path);
         }break;
         
         //- rjf: override file links
         case DF_CmdKind_SetFileOverrideLinkSrc:
         case DF_CmdKind_SetFileOverrideLinkDst:
         {
+#if 0 // TODO(rjf): @msgs
           // rjf: unpack args
           D_Entity *map = d_entity_from_handle(params->entity);
           String8 path = path_normalized_from_string(scratch.arena, params->file_path);
@@ -9725,6 +9755,7 @@ df_frame(void)
           {
             d_entity_mark_for_deletion(map);
           }
+#endif
         }break;
         case DF_CmdKind_SetFileReplacementPath:
         {
@@ -9745,8 +9776,7 @@ df_frame(void)
           //- rjf: unpack
           String8 src_path = params->string;
           String8 dst_path = params->file_path;
-#if 0
-          // TODO(rjf):
+#if 0 // TODO(rjf): @msgs
           
           //- rjf: grab src file & chosen replacement
           D_Entity *file = d_entity_from_handle(params.entity);
@@ -9787,57 +9817,6 @@ df_frame(void)
         case DF_CmdKind_SetAutoViewRuleType:
         case DF_CmdKind_SetAutoViewRuleViewRule:
         {
-          D_Entity *map = d_entity_from_handle(params->entity);
-          if(d_entity_is_nil(map))
-          {
-            map = d_entity_alloc(d_entity_root(), D_EntityKind_AutoViewRule);
-            d_entity_equip_cfg_src(map, D_CfgSrc_Project);
-          }
-          D_Entity *src = d_entity_child_from_kind(map, D_EntityKind_Source);
-          if(d_entity_is_nil(src))
-          {
-            src = d_entity_alloc(map, D_EntityKind_Source);
-          }
-          D_Entity *dst = d_entity_child_from_kind(map, D_EntityKind_Dest);
-          if(d_entity_is_nil(dst))
-          {
-            dst = d_entity_alloc(map, D_EntityKind_Dest);
-          }
-          if(map->kind == D_EntityKind_AutoViewRule)
-          {
-            D_Entity *edit_child = (kind == DF_CmdKind_SetAutoViewRuleType ? src : dst);
-            d_entity_equip_name(edit_child, params->string);
-          }
-          if(src->string.size == 0 && dst->string.size == 0)
-          {
-            d_entity_mark_for_deletion(map);
-          }
-          {
-            D_AutoViewRuleMapCache *cache = &d_state->auto_view_rule_cache;
-            if(cache->arena == 0)
-            {
-              cache->arena = arena_alloc();
-            }
-            arena_clear(cache->arena);
-            cache->slots_count = 1024;
-            cache->slots = push_array(cache->arena, D_AutoViewRuleSlot, cache->slots_count);
-            D_EntityList maps = d_query_cached_entity_list_with_kind(D_EntityKind_AutoViewRule);
-            for(D_EntityNode *n = maps.first; n != 0; n = n->next)
-            {
-              D_Entity *map = n->entity;
-              D_Entity *src = d_entity_child_from_kind(map, D_EntityKind_Source);
-              D_Entity *dst = d_entity_child_from_kind(map, D_EntityKind_Dest);
-              String8 type = src->string;
-              String8 view_rule = dst->string;
-              U64 hash = d_hash_from_string(type);
-              U64 slot_idx = hash%cache->slots_count;
-              D_AutoViewRuleSlot *slot = &cache->slots[slot_idx];
-              D_AutoViewRuleNode *node = push_array(cache->arena, D_AutoViewRuleNode, 1);
-              node->type = push_str8_copy(cache->arena, type);
-              node->view_rule = push_str8_copy(cache->arena, view_rule);
-              SLLQueuePush(slot->first, slot->last, node);
-            }
-          }
         }break;
         
         //- rjf: panel removal

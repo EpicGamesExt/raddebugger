@@ -214,6 +214,35 @@ ctrl_msg_list_push(Arena *arena, CTRL_MsgList *list)
   return msg;
 }
 
+internal CTRL_MsgList
+ctrl_msg_list_deep_copy(Arena *arena, CTRL_MsgList *src)
+{
+  CTRL_MsgList dst = {0};
+  for(CTRL_MsgNode *n = src->first; n != 0; n = n->next)
+  {
+    CTRL_Msg *src_msg = &n->v;
+    CTRL_Msg *dst_msg = ctrl_msg_list_push(arena, &dst);
+    ctrl_msg_deep_copy(arena, dst_msg, src_msg);
+  }
+  return dst;
+}
+
+internal void
+ctrl_msg_list_concat_in_place(CTRL_MsgList *dst, CTRL_MsgList *src)
+{
+  if(dst->last && src->first)
+  {
+    dst->last->next = src->first;
+    dst->last = src->last;
+    dst->count += src->count;
+  }
+  else if(src->first)
+  {
+    MemoryCopyStruct(dst, src);
+  }
+  MemoryZeroStruct(src);
+}
+
 //- rjf: serialization
 
 internal String8

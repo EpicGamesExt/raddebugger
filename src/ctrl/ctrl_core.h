@@ -696,6 +696,8 @@ internal void ctrl_msg_deep_copy(Arena *arena, CTRL_Msg *dst, CTRL_Msg *src);
 
 //- rjf: list building
 internal CTRL_Msg *ctrl_msg_list_push(Arena *arena, CTRL_MsgList *list);
+internal CTRL_MsgList ctrl_msg_list_deep_copy(Arena *arena, CTRL_MsgList *src);
+internal void ctrl_msg_list_concat_in_place(CTRL_MsgList *dst, CTRL_MsgList *src);
 
 //- rjf: serialization
 internal String8 ctrl_serialized_string_from_msg_list(Arena *arena, CTRL_MsgList *msgs);

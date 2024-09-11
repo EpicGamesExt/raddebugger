@@ -760,6 +760,10 @@ struct DF_State
   
   // rjf: icon texture
   R_Handle icon_texture;
+  
+  // rjf: current path
+  Arena *current_path_arena;
+  String8 current_path;
 };
 
 ////////////////////////////////
@@ -808,6 +812,12 @@ global DF_State *df_state = 0;
 global DF_DragDropPayload df_drag_drop_payload = {0};
 global D_Handle df_last_drag_drop_panel = {0};
 global D_Handle df_last_drag_drop_prev_tab = {0};
+
+////////////////////////////////
+//~ rjf: Registers Type Pure Functions
+
+internal void df_regs_copy_contents(Arena *arena, DF_Regs *dst, DF_Regs *src);
+internal DF_Regs *df_regs_copy(Arena *arena, DF_Regs *src);
 
 ////////////////////////////////
 //~ rjf: View Type Functions
