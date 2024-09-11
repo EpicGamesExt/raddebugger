@@ -873,13 +873,6 @@ internal void d_entity_equip_vaddr(D_Entity *entity, U64 vaddr);
 internal void d_entity_equip_name(D_Entity *entity, String8 name);
 internal void d_entity_equip_namef(D_Entity *entity, char *fmt, ...);
 
-//- rjf: params tree equipment
-internal void d_entity_equip_params(D_Entity *entity, MD_Node *params);
-internal void d_entity_equip_param(D_Entity *entity, String8 key, String8 value);
-
-//- rjf: opening folders/files & maintaining the entity model of the filesystem
-internal D_Entity *d_entity_from_path(String8 path, D_EntityFromPathFlags flags);
-
 //- rjf: file path map override lookups
 internal String8List d_possible_overrides_from_file_path(Arena *arena, String8 file_path);
 

@@ -729,8 +729,9 @@ ctrl_entity_alloc(CTRL_EntityStore *store, CTRL_Entity *parent, CTRL_EntityKind 
       }
     }
     
-    // rjf: bump counter
+    // rjf: bump counters
     store->entity_kind_counts[kind] += 1;
+    store->entity_kind_alloc_gens[kind] += 1;
   }
   return entity;
 }

@@ -8262,17 +8262,31 @@ df_frame(void)
         //- rjf: exiting
         case DF_CmdKind_Exit:
         {
-          // rjf: save
+          // rjf: if control processes are live, but this is not force-confirmed, then
+          // get confirmation from user
+          CTRL_EntityList processes = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Process);
+          UI_Key key = ui_key_from_string(ui_key_zero(), str8_lit("lossy_exit_confirmation"));
+          if(processes.count != 0 && !params->force_confirm && !ui_key_match(df_state->confirm_key, key))
+          {
+            df_state->confirm_key = key;
+            df_state->confirm_active = 1;
+            arena_clear(df_state->confirm_arena);
+            MemoryZeroStruct(&df_state->confirm_cmds);
+            df_state->confirm_title = push_str8f(df_state->confirm_arena, "Are you sure you want to exit?");
+            df_state->confirm_desc = push_str8f(df_state->confirm_arena, "The debugger is still attached to %slive process%s.",
+                                                processes.count == 1 ? "a " : "",
+                                                processes.count == 1 ? ""   : "es");
+            D_CmdParams p = *params;
+            p.force_confirm = 1;
+            d_cmd_list_push(df_state->confirm_arena, &df_state->confirm_cmds, &p, df_cmd_spec_from_kind(DF_CmdKind_Exit));
+          }
+          
+          // rjf: otherwise, actually exit
+          else
           {
             df_cmd(DF_CmdKind_WriteUserData);
             df_cmd(DF_CmdKind_WriteProjectData);
-            df_state->last_window_queued_save = 1;
-          }
-          
-          // rjf: close all windows
-          for(DF_Window *window = df_state->first_window; window != 0; window = window->next)
-          {
-            df_cmd(DF_CmdKind_CloseWindow, .window = df_handle_from_window(window));
+            df_state->quit = 1;
           }
         }break;
         
@@ -8308,40 +8322,13 @@ df_frame(void)
           DF_Window *ws = df_window_from_handle(params->window);
           if(ws != 0)
           {
-            D_EntityList running_processes = d_query_cached_entity_list_with_kind(D_EntityKind_Process);
-            
-            // NOTE(rjf): if this is the last window, and targets are running, but
-            // this command is not force-confirmed, then we should query the user
-            // to ensure they want to close the debugger before exiting
-            UI_Key key = ui_key_from_string(ui_key_zero(), str8_lit("lossy_exit_confirmation"));
-            if(!ui_key_match(key, df_state->confirm_key) && running_processes.count != 0 && ws == df_state->first_window && ws == df_state->last_window && !params->force_confirm)
+            // rjf: is this the last window? -> exit
+            if(df_state->first_window == df_state->last_window && df_state->first_window == ws)
             {
-              df_state->confirm_key = key;
-              df_state->confirm_active = 1;
-              arena_clear(df_state->confirm_arena);
-              MemoryZeroStruct(&df_state->confirm_cmds);
-              df_state->confirm_title = push_str8f(df_state->confirm_arena, "Are you sure you want to exit?");
-              df_state->confirm_desc = push_str8f(df_state->confirm_arena, "The debugger is still attached to %slive process%s.",
-                                                  running_processes.count == 1 ? "a " : "",
-                                                  running_processes.count == 1 ? ""   : "es");
-              D_CmdParams p = df_cmd_params_from_window(ws);
-              p.force_confirm = 1;
-              d_cmd_list_push(df_state->confirm_arena, &df_state->confirm_cmds, &p, df_cmd_spec_from_kind(DF_CmdKind_CloseWindow));
+              df_cmd(DF_CmdKind_Exit);
             }
             
-            // NOTE(rjf): if this is the last window, and it is being closed, then
-            // we need to auto-save, and provide one last chance to process saving
-            // commands. after doing so, we can retry.
-            else if(ws == df_state->first_window && ws == df_state->last_window && df_state->last_window_queued_save == 0)
-            {
-              df_state->last_window_queued_save = 1;
-              df_cmd(DF_CmdKind_WriteUserData);
-              df_cmd(DF_CmdKind_WriteProjectData);
-              df_cmd(DF_CmdKind_CloseWindow, .force_confirm = 1, .window = df_handle_from_window(ws));
-            }
-            
-            // NOTE(rjf): if this is the last window and we've queued the final autosave,
-            // or if it's not the last window, then we're free to release everything.
+            // rjf: not the last window? -> just release this window
             else
             {
               // NOTE(rjf): we need to explicitly release all panel views, because views
@@ -10637,6 +10624,7 @@ df_frame(void)
             }
             
             // rjf: try to resolve name as a file
+#if 0 // TODO(rjf): @msgs
             D_Entity *file = &d_nil_entity;
             if(name_resolved == 0)
             {
@@ -10725,6 +10713,7 @@ df_frame(void)
               }
               name_resolved = !d_entity_is_nil(file) && !(file->flags & D_EntityFlag_IsMissing) && !(file->flags & D_EntityFlag_IsFolder);
             }
+#endif
             
             // rjf: process resolved info
             if(name_resolved == 0)
@@ -10759,6 +10748,7 @@ df_frame(void)
             }
             
             // rjf: name resolved to a file
+#if 0 // TODO(rjf): @msgs
             if(name_resolved != 0 && !d_entity_is_nil(file))
             {
               String8 path = d_full_path_from_entity(scratch.arena, file);
@@ -10767,6 +10757,7 @@ df_frame(void)
               p.text_point = txt_pt(1, 1);
               df_push_cmd(df_cmd_spec_from_kind(DF_CmdKind_FindCodeLocation), &p);
             }
+#endif
           }
         }break;
         
