@@ -2218,7 +2218,7 @@ df_watch_view_build(DF_View *view, DF_WatchViewState *ewv, B32 modifiable, U32 d
               U64 size = e_type_byte_size_from_key(row_eval.type_key);
               size = Min(size, 64);
               Rng1U64 vaddr_rng = r1u64(row_eval.value.u64, row_eval.value.u64+size);
-              CTRL_ProcessMemorySlice slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, space_entity->ctrl_machine_id, space_entity->ctrl_handle, vaddr_rng, 0);
+              CTRL_ProcessMemorySlice slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, space_entity->ctrl_handle, vaddr_rng, 0);
               for(U64 idx = 0; idx < (slice.data.size+63)/64; idx += 1)
               {
                 if(slice.byte_changed_flags[idx] != 0)
@@ -5616,7 +5616,7 @@ DF_VIEW_UI_FUNCTION_DEF(scheduler)
         idx += 1)
     {
       D_Entity *entity = items.v[idx].entity;
-      CTRL_Entity *entity_ctrl = ctrl_entity_from_machine_id_handle(d_state->ctrl_entity_store, entity->ctrl_machine_id, entity->ctrl_handle);
+      CTRL_Entity *entity_ctrl = ctrl_entity_from_handle(d_state->ctrl_entity_store, entity->ctrl_handle);
       B32 row_is_selected = (cursor.y == (S64)(idx+1));
       F32 depth = 0.f;
       if(query.size == 0) switch(entity->kind)

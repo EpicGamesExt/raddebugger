@@ -443,7 +443,7 @@ df_entity_tooltips(D_Entity *entity)
       }
       {
         CTRL_Event stop_event = d_ctrl_last_stop_event();
-        D_Entity *stopper_thread = d_entity_from_ctrl_handle(stop_event.machine_id, stop_event.entity);
+        D_Entity *stopper_thread = d_entity_from_ctrl_handle(stop_event.entity);
         if(stopper_thread == entity)
         {
           ui_spacer(ui_em(1.5f, 1.f));
@@ -587,7 +587,7 @@ df_entity_desc_button(D_Entity *entity, FuzzyMatchRangeList *name_matches, Strin
   if(entity->kind == D_EntityKind_Thread)
   {
     CTRL_Event stop_event = d_ctrl_last_stop_event();
-    D_Entity *stopped_thread = d_entity_from_ctrl_handle(stop_event.machine_id, stop_event.entity);
+    D_Entity *stopped_thread = d_entity_from_ctrl_handle(stop_event.entity);
     D_Entity *selected_thread = d_entity_from_handle(d_base_regs()->thread);
     if(selected_thread == entity)
     {
@@ -952,7 +952,7 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   U64 selected_thread_rip_unwind_vaddr = d_query_cached_rip_from_thread_unwind(selected_thread, d_regs()->unwind_count);
   D_Entity *selected_thread_module = d_module_from_process_vaddr(selected_thread_process, selected_thread_rip_unwind_vaddr);
   CTRL_Event stop_event = d_ctrl_last_stop_event();
-  D_Entity *stopper_thread = d_entity_from_ctrl_handle(stop_event.machine_id, stop_event.entity);
+  D_Entity *stopper_thread = d_entity_from_ctrl_handle(stop_event.entity);
   B32 is_focused = ui_is_focus_active();
   B32 ctrlified = (os_get_event_flags() & OS_EventFlag_Ctrl);
   Vec4F32 code_line_bgs[] =
@@ -1047,7 +1047,7 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             {
               continue;
             }
-            CTRL_Entity *thread_ctrl = ctrl_entity_from_machine_id_handle(d_state->ctrl_entity_store, thread->ctrl_machine_id, thread->ctrl_handle);
+            CTRL_Entity *thread_ctrl = ctrl_entity_from_handle(d_state->ctrl_entity_store, thread->ctrl_handle);
             U64 unwind_count = (thread == selected_thread) ? d_regs()->unwind_count : 0;
             U64 thread_rip_vaddr = d_query_cached_rip_from_thread_unwind(thread, unwind_count);
             D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
@@ -1206,7 +1206,7 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             {
               continue;
             }
-            CTRL_Entity *thread_ctrl = ctrl_entity_from_machine_id_handle(d_state->ctrl_entity_store, thread->ctrl_machine_id, thread->ctrl_handle);
+            CTRL_Entity *thread_ctrl = ctrl_entity_from_handle(d_state->ctrl_entity_store, thread->ctrl_handle);
             U64 unwind_count = (thread == selected_thread) ? d_regs()->unwind_count : 0;
             U64 thread_rip_vaddr = d_query_cached_rip_from_thread_unwind(thread, unwind_count);
             D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);

@@ -310,18 +310,17 @@ enum
   D_EntityFlag_DiesOnRunStop     = (1<<8),
   
   //- rjf: ctrl entity equipment
-  D_EntityFlag_HasCtrlMachineID  = (1<<9),
-  D_EntityFlag_HasCtrlHandle     = (1<<10),
-  D_EntityFlag_HasArch           = (1<<11),
-  D_EntityFlag_HasCtrlID         = (1<<12),
-  D_EntityFlag_HasStackBase      = (1<<13),
-  D_EntityFlag_HasTLSRoot        = (1<<14),
-  D_EntityFlag_HasVAddrRng       = (1<<15),
-  D_EntityFlag_HasVAddr          = (1<<16),
+  D_EntityFlag_HasCtrlHandle     = (1<<9),
+  D_EntityFlag_HasArch           = (1<<10),
+  D_EntityFlag_HasCtrlID         = (1<<11),
+  D_EntityFlag_HasStackBase      = (1<<12),
+  D_EntityFlag_HasTLSRoot        = (1<<13),
+  D_EntityFlag_HasVAddrRng       = (1<<14),
+  D_EntityFlag_HasVAddr          = (1<<15),
   
   //- rjf: file properties
-  D_EntityFlag_IsFolder          = (1<<17),
-  D_EntityFlag_IsMissing         = (1<<18),
+  D_EntityFlag_IsFolder          = (1<<16),
+  D_EntityFlag_IsMissing         = (1<<17),
   
   //- rjf: deletion
   D_EntityFlag_MarkedForDeletion = (1<<31),
@@ -357,8 +356,7 @@ struct D_Entity
   U64 timestamp;
   
   // rjf: ctrl equipment
-  CTRL_MachineID ctrl_machine_id;
-  DMN_Handle ctrl_handle;
+  CTRL_Handle ctrl_handle;
   Arch arch;
   U32 ctrl_id;
   U64 stack_base;
@@ -1002,8 +1000,7 @@ struct D_State
   Arena *ctrl_last_run_arena;
   D_RunKind ctrl_last_run_kind;
   U64 ctrl_last_run_frame_idx;
-  CTRL_MachineID ctrl_last_run_thread_machine_id;
-  DMN_Handle ctrl_last_run_thread_handle;
+  CTRL_Handle ctrl_last_run_thread_handle;
   CTRL_RunFlags ctrl_last_run_flags;
   CTRL_TrapList ctrl_last_run_traps;
   U128 ctrl_last_run_param_state_hash;
@@ -1203,8 +1200,7 @@ internal void d_entity_equip_cfg_src(D_Entity *entity, D_CfgSrc cfg_src);
 internal void d_entity_equip_timestamp(D_Entity *entity, U64 timestamp);
 
 //- rjf: control layer correllation equipment
-internal void d_entity_equip_ctrl_machine_id(D_Entity *entity, CTRL_MachineID machine_id);
-internal void d_entity_equip_ctrl_handle(D_Entity *entity, DMN_Handle handle);
+internal void d_entity_equip_ctrl_handle(D_Entity *entity, CTRL_Handle handle);
 internal void d_entity_equip_arch(D_Entity *entity, Arch arch);
 internal void d_entity_equip_ctrl_id(D_Entity *entity, U32 id);
 internal void d_entity_equip_stack_base(D_Entity *entity, U64 stack_base);
@@ -1230,7 +1226,7 @@ internal D_Entity *d_entity_root(void);
 internal D_EntityList d_push_entity_list_with_kind(Arena *arena, D_EntityKind kind);
 internal D_Entity *d_entity_from_id(D_EntityID id);
 internal D_Entity *d_machine_entity_from_machine_id(CTRL_MachineID machine_id);
-internal D_Entity *d_entity_from_ctrl_handle(CTRL_MachineID machine_id, DMN_Handle handle);
+internal D_Entity *d_entity_from_ctrl_handle(CTRL_Handle handle);
 internal D_Entity *d_entity_from_ctrl_id(CTRL_MachineID machine_id, U32 id);
 internal D_Entity *d_entity_from_name_and_kind(String8 string, D_EntityKind kind);
 

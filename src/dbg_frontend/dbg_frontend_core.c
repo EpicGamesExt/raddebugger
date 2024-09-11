@@ -1724,7 +1724,7 @@ df_window_frame(DF_Window *ws)
         DF_Palette(DF_PaletteCode_ImplicitButton)
       {
         D_Entity *entity = d_entity_from_handle(ws->entity_ctx_menu_entity);
-        CTRL_Entity *entity_ctrl = ctrl_entity_from_machine_id_handle(d_state->ctrl_entity_store, entity->ctrl_machine_id, entity->ctrl_handle);
+        CTRL_Entity *entity_ctrl = ctrl_entity_from_handle(d_state->ctrl_entity_store, entity->ctrl_handle);
         DF_IconKind entity_icon = df_entity_kind_icon_kind_table[entity->kind];
         D_EntityKindFlags kind_flags = d_entity_kind_flags_table[entity->kind];
         String8 display_name = d_display_string_from_entity(scratch.arena, entity);
@@ -4018,7 +4018,7 @@ df_window_frame(DF_Window *ws)
                     U64 size = e_type_byte_size_from_key(row_eval.type_key);
                     size = Min(size, 64);
                     Rng1U64 vaddr_rng = r1u64(row_eval.value.u64, row_eval.value.u64+size);
-                    CTRL_ProcessMemorySlice slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, space_entity->ctrl_machine_id, space_entity->ctrl_handle, vaddr_rng, 0);
+                    CTRL_ProcessMemorySlice slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, space_entity->ctrl_handle, vaddr_rng, 0);
                     for(U64 idx = 0; idx < (slice.data.size+63)/64; idx += 1)
                     {
                       if(slice.byte_changed_flags[idx] != 0)
@@ -7283,7 +7283,7 @@ df_stop_explanation_string_icon_from_ctrl_event(Arena *arena, CTRL_Event *event,
   DF_IconKind icon = DF_IconKind_Null;
   String8 explanation = {0};
   Temp scratch = scratch_begin(&arena, 1);
-  D_Entity *thread = d_entity_from_ctrl_handle(event->machine_id, event->entity);
+  D_Entity *thread = d_entity_from_ctrl_handle(event->entity);
   String8 thread_display_string = d_display_string_from_entity(scratch.arena, thread);
   String8 process_thread_string = thread_display_string;
   D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
@@ -7868,7 +7868,7 @@ df_frame(void)
   CTRL_Unwind unwind = d_query_cached_unwind_from_thread(thread);
   D_Entity *module = d_module_from_process_vaddr(process, rip_vaddr);
   U64 rip_voff = d_voff_from_vaddr(module, rip_vaddr);
-  U64 tls_root_vaddr = ctrl_query_cached_tls_root_vaddr_from_thread(d_state->ctrl_entity_store, thread->ctrl_machine_id, thread->ctrl_handle);
+  U64 tls_root_vaddr = ctrl_query_cached_tls_root_vaddr_from_thread(d_state->ctrl_entity_store, thread->ctrl_handle);
   D_EntityList all_modules = d_query_cached_entity_list_with_kind(D_EntityKind_Module);
   U64 eval_modules_count = Max(1, all_modules.count);
   E_Module *eval_modules = push_array(scratch.arena, E_Module, eval_modules_count);
