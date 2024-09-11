@@ -333,7 +333,7 @@ internal EV_ViewRuleInfo *
 ev_view_rule_info_from_string(String8 string)
 {
   EV_ViewRuleInfo *info = &ev_nil_view_rule_info;
-  U64 hash = ev_hash_from_seed_string(5381, info->string);
+  U64 hash = ev_hash_from_seed_string(5381, string);
   U64 slot_idx = hash%ev_view_rule_info_table->slots_count;
   EV_ViewRuleInfoSlot *slot = &ev_view_rule_info_table->slots[slot_idx];
   EV_ViewRuleInfoNode *node = 0;
