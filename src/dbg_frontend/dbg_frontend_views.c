@@ -2489,7 +2489,7 @@ df_watch_view_build(DF_View *view, DF_WatchViewState *ewv, B32 modifiable, U32 d
                     cell_ui_hook = value_ui_rule_spec->info.row_ui;
                     cell_ui_params = value_ui_rule_root;
                   }
-                  cell_can_edit = d_type_key_is_editable(cell_eval.type_key);
+                  cell_can_edit = ev_type_key_is_editable(cell_eval.type_key);
                 }break;
                 case DF_WatchViewColumnKind_Type:
                 {

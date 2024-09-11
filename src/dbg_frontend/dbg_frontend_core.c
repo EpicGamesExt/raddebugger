@@ -6025,7 +6025,7 @@ df_append_value_strings_from_eval(Arena *arena, D_EvalVizStringFlags flags, U32 
     default:
     {
       E_Eval value_eval = e_value_eval_from_eval(eval);
-      String8 string = d_string_from_simple_typed_eval(arena, flags, radix, value_eval);
+      String8 string = ev_string_from_simple_typed_eval(arena, flags, radix, value_eval);
       space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, string).x;
       str8_list_push(arena, out, string);
     }break;
@@ -6076,7 +6076,7 @@ df_append_value_strings_from_eval(Arena *arena, D_EvalVizStringFlags flags, U32 
           case 2: {string = str8_from_16(arena, str16_cstring((U16 *)string_buffer));}break;
           case 4: {string = str8_from_32(arena, str32_cstring((U32 *)string_buffer));}break;
         }
-        String8 string_escaped = d_escaped_from_raw_string(arena, string);
+        String8 string_escaped = ev_escaped_from_raw_string(arena, string);
         space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, string_escaped).x;
         space_taken += 2*fnt_dim_from_tag_size_string(font, font_size, 0, 0, str8_lit("\"")).x;
         str8_list_push(arena, out, str8_lit("\""));
@@ -6136,7 +6136,7 @@ df_append_value_strings_from_eval(Arena *arena, D_EvalVizStringFlags flags, U32 
           space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, ptr_prefix).x;
           str8_list_push(arena, out, ptr_prefix);
         }
-        String8 string = d_string_from_simple_typed_eval(arena, flags, radix, value_eval);
+        String8 string = ev_string_from_simple_typed_eval(arena, flags, radix, value_eval);
         space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, string).x;
         str8_list_push(arena, out, string);
         if(did_content)
@@ -6197,7 +6197,7 @@ df_append_value_strings_from_eval(Arena *arena, D_EvalVizStringFlags flags, U32 
           case 2: {string = str8_from_16(arena, str16_cstring((U16 *)string_buffer));}break;
           case 4: {string = str8_from_32(arena, str32_cstring((U32 *)string_buffer));}break;
         }
-        String8 string_escaped = d_escaped_from_raw_string(arena, string);
+        String8 string_escaped = ev_escaped_from_raw_string(arena, string);
         space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, string_escaped).x;
         space_taken += 2*fnt_dim_from_tag_size_string(font, font_size, 0, 0, str8_lit("\"")).x;
         str8_list_push(arena, out, str8_lit("\""));

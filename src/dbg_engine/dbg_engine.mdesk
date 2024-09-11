@@ -428,16 +428,10 @@ D_ViewRuleTable:
   COUNT,
 }
 
-@gen
-{
-  @expand(D_ViewRuleTable a) `$(a.xp == "x" -> "D_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_DEF(" .. a.name_lower .. ");")`;
-  @expand(D_ViewRuleTable a) `$(a.vb == "x" -> "D_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_DEF(" .. a.name_lower .. ");")`;
-}
-
 @data(D_ViewRuleSpecInfo) @c_file d_core_view_rule_spec_info_table:
 {
   @expand(D_ViewRuleTable a)
-    ```{str8_lit_comp("$(a.string)"), str8_lit_comp("$(a.display_name)"), str8_lit_comp("$(a.schema)"), str8_lit_comp("$(a.description)"), (D_ViewRuleSpecInfoFlag_Inherited*$(a.ih == "x"))|(D_ViewRuleSpecInfoFlag_Expandable*$(a.ex == "x"))|(D_ViewRuleSpecInfoFlag_ExprResolution*$(a.xp == "x"))|(D_ViewRuleSpecInfoFlag_VizBlockProd*$(a.vb == "x")), $(a.xp == "x" -> "D_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_NAME("..a.name_lower..")") $(a.xp != "x" -> 0), $(a.vb == "x" -> "D_VIEW_RULE_VIZ_BLOCK_PROD_FUNCTION_NAME("..a.name_lower..")") $(a.vb != "x" -> 0), }```;
+    ```{str8_lit_comp("$(a.string)"), str8_lit_comp("$(a.display_name)"), str8_lit_comp("$(a.schema)"), str8_lit_comp("$(a.description)"), (D_ViewRuleSpecInfoFlag_Inherited*$(a.ih == "x"))|(D_ViewRuleSpecInfoFlag_Expandable*$(a.ex == "x"))|(D_ViewRuleSpecInfoFlag_ExprResolution*$(a.xp == "x"))|(D_ViewRuleSpecInfoFlag_VizBlockProd*$(a.vb == "x")), }```;
 }
 
 ////////////////////////////////

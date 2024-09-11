@@ -280,8 +280,6 @@ struct D_ViewRuleSpecInfo
   String8 schema;
   String8 description;
   D_ViewRuleSpecInfoFlags flags;
-  D_CoreViewRuleExprResolutionHookFunctionType *expr_resolution;
-  D_CoreViewRuleVizBlockProdHookFunctionType *viz_block_prod;
 };
 
 typedef struct D_ViewRuleSpecInfoArray D_ViewRuleSpecInfoArray;
@@ -1347,60 +1345,11 @@ internal String8 d_eval_view_rule_from_key(D_EvalView *eval_view, D_ExpandKey ke
 ////////////////////////////////
 //~ rjf: Evaluation Visualization
 
-//- rjf: expr * view rule table -> expr
-internal E_Expr *d_expr_from_expr_cfg(Arena *arena, E_Expr *expr, D_CfgTable *cfg);
-
-//- rjf: evaluation value string builder helpers
-internal String8 d_string_from_ascii_value(Arena *arena, U8 val);
-internal String8 d_string_from_hresult_facility_code(U32 code);
-internal String8 d_string_from_hresult_code(U32 code);
-internal String8 d_string_from_simple_typed_eval(Arena *arena, D_EvalVizStringFlags flags, U32 radix, E_Eval eval);
-internal String8 d_escaped_from_raw_string(Arena *arena, String8 raw);
-
-//- rjf: type info -> expandability/editablity
-internal B32 d_type_key_is_expandable(E_TypeKey type_key);
-internal B32 d_type_key_is_editable(E_TypeKey type_key);
-
 //- rjf: writing values back to child processes
 internal B32 d_commit_eval_value_string(E_Eval dst_eval, String8 string);
 
-//- rjf: type helpers
-internal E_MemberArray d_filtered_data_members_from_members_cfg_table(Arena *arena, E_MemberArray members, D_CfgTable *cfg);
-internal D_EvalLinkBaseChunkList d_eval_link_base_chunk_list_from_eval(Arena *arena, E_TypeKey link_member_type_key, U64 link_member_off, E_Eval eval, U64 cap);
-internal D_EvalLinkBase d_eval_link_base_from_chunk_list_index(D_EvalLinkBaseChunkList *list, U64 idx);
-internal D_EvalLinkBaseArray d_eval_link_base_array_from_chunk_list(Arena *arena, D_EvalLinkBaseChunkList *chunks);
-
-//- rjf: viz block collection building
-internal D_EvalVizBlock *d_eval_viz_block_begin(Arena *arena, D_EvalVizBlockKind kind, D_ExpandKey parent_key, D_ExpandKey key, S32 depth);
-internal D_EvalVizBlock *d_eval_viz_block_split_and_continue(Arena *arena, D_EvalVizBlockList *list, D_EvalVizBlock *split_block, U64 split_idx);
-internal void d_eval_viz_block_end(D_EvalVizBlockList *list, D_EvalVizBlock *block);
-internal void d_append_expr_eval_viz_blocks__rec(Arena *arena, D_EvalView *view, D_ExpandKey parent_key, D_ExpandKey key, String8 string, E_Expr *expr, D_CfgTable *cfg_table, S32 depth, D_EvalVizBlockList *list_out);
-internal D_EvalVizBlockList d_eval_viz_block_list_from_eval_view_expr_keys(Arena *arena, D_EvalView *eval_view, D_CfgTable *cfg_table, String8 expr, D_ExpandKey parent_key, D_ExpandKey key);
-internal void d_eval_viz_block_list_concat__in_place(D_EvalVizBlockList *dst, D_EvalVizBlockList *to_push);
-
-//- rjf: viz block list <-> table coordinates
-internal S64 d_row_num_from_viz_block_list_key(D_EvalVizBlockList *blocks, D_ExpandKey key);
-internal D_ExpandKey d_key_from_viz_block_list_row_num(D_EvalVizBlockList *blocks, S64 row_num);
-internal D_ExpandKey d_parent_key_from_viz_block_list_row_num(D_EvalVizBlockList *blocks, S64 row_num);
-
-//- rjf: viz block * index -> expression
-internal E_Expr *d_expr_from_eval_viz_block_index(Arena *arena, D_EvalVizBlock *block, U64 index);
-
-//- rjf: viz row list building
-internal D_EvalVizRow *d_eval_viz_row_list_push_new(Arena *arena, D_EvalView *eval_view, D_EvalVizWindowedRowList *rows, D_EvalVizBlock *block, D_ExpandKey key, E_Expr *expr);
-internal D_EvalVizWindowedRowList d_eval_viz_windowed_row_list_from_viz_block_list(Arena *arena, D_EvalView *eval_view, Rng1S64 visible_range, D_EvalVizBlockList *blocks);
-
-//- rjf: viz row -> strings
-internal String8 d_expr_string_from_viz_row(Arena *arena, D_EvalVizRow *row);
-
-//- rjf: viz row -> expandability/editability
-internal B32 d_viz_row_is_expandable(D_EvalVizRow *row);
-internal B32 d_viz_row_is_editable(D_EvalVizRow *row);
-
 //- rjf: eval / view rule params tree info extraction
 internal U64 d_base_offset_from_eval(E_Eval eval);
-internal E_Value d_value_from_params(MD_Node *params);
-internal E_TypeKey d_type_key_from_params(MD_Node *params);
 internal E_Value d_value_from_params_key(MD_Node *params, String8 key);
 internal Rng1U64 d_range_from_eval_params(E_Eval eval, MD_Node *params);
 internal TXT_LangKind d_lang_kind_from_eval_params(E_Eval eval, MD_Node *params);
