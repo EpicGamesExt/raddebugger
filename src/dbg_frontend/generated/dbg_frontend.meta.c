@@ -28,6 +28,39 @@ DF_CmdKind_Null,
 DF_CmdKind_Null,
 };
 
+Rng1U64 df_reg_slot_range_table[29] =
+{
+{0},
+{OffsetOf(DF_Regs, machine), OffsetOf(DF_Regs, machine) + sizeof(D_Handle)},
+{OffsetOf(DF_Regs, module), OffsetOf(DF_Regs, module) + sizeof(D_Handle)},
+{OffsetOf(DF_Regs, process), OffsetOf(DF_Regs, process) + sizeof(D_Handle)},
+{OffsetOf(DF_Regs, thread), OffsetOf(DF_Regs, thread) + sizeof(D_Handle)},
+{OffsetOf(DF_Regs, window), OffsetOf(DF_Regs, window) + sizeof(D_Handle)},
+{OffsetOf(DF_Regs, panel), OffsetOf(DF_Regs, panel) + sizeof(D_Handle)},
+{OffsetOf(DF_Regs, view), OffsetOf(DF_Regs, view) + sizeof(D_Handle)},
+{OffsetOf(DF_Regs, prev_view), OffsetOf(DF_Regs, prev_view) + sizeof(D_Handle)},
+{OffsetOf(DF_Regs, dst_panel), OffsetOf(DF_Regs, dst_panel) + sizeof(D_Handle)},
+{OffsetOf(DF_Regs, entity), OffsetOf(DF_Regs, entity) + sizeof(D_Handle)},
+{OffsetOf(DF_Regs, entity_list), OffsetOf(DF_Regs, entity_list) + sizeof(D_HandleList)},
+{OffsetOf(DF_Regs, unwind_count), OffsetOf(DF_Regs, unwind_count) + sizeof(U64)},
+{OffsetOf(DF_Regs, inline_depth), OffsetOf(DF_Regs, inline_depth) + sizeof(U64)},
+{OffsetOf(DF_Regs, file_path), OffsetOf(DF_Regs, file_path) + sizeof(String8)},
+{OffsetOf(DF_Regs, cursor), OffsetOf(DF_Regs, cursor) + sizeof(TxtPt)},
+{OffsetOf(DF_Regs, mark), OffsetOf(DF_Regs, mark) + sizeof(TxtPt)},
+{OffsetOf(DF_Regs, text_key), OffsetOf(DF_Regs, text_key) + sizeof(U128)},
+{OffsetOf(DF_Regs, lang_kind), OffsetOf(DF_Regs, lang_kind) + sizeof(TXT_LangKind)},
+{OffsetOf(DF_Regs, lines), OffsetOf(DF_Regs, lines) + sizeof(D_LineList)},
+{OffsetOf(DF_Regs, dbgi_key), OffsetOf(DF_Regs, dbgi_key) + sizeof(DI_Key)},
+{OffsetOf(DF_Regs, vaddr_range), OffsetOf(DF_Regs, vaddr_range) + sizeof(Rng1U64)},
+{OffsetOf(DF_Regs, voff_range), OffsetOf(DF_Regs, voff_range) + sizeof(Rng1U64)},
+{OffsetOf(DF_Regs, pid), OffsetOf(DF_Regs, pid) + sizeof(U32)},
+{OffsetOf(DF_Regs, force_confirm), OffsetOf(DF_Regs, force_confirm) + sizeof(B32)},
+{OffsetOf(DF_Regs, prefer_disasm), OffsetOf(DF_Regs, prefer_disasm) + sizeof(B32)},
+{OffsetOf(DF_Regs, dir2), OffsetOf(DF_Regs, dir2) + sizeof(Dir2)},
+{OffsetOf(DF_Regs, string), OffsetOf(DF_Regs, string) + sizeof(String8)},
+{OffsetOf(DF_Regs, params_tree), OffsetOf(DF_Regs, params_tree) + sizeof(MD_Node *)},
+};
+
 D_CmdSpecInfo df_cmd_kind_spec_info_table[220] =
 {
 {0},

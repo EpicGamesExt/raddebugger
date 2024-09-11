@@ -6,6 +6,40 @@
 #ifndef DBG_FRONTEND_META_H
 #define DBG_FRONTEND_META_H
 
+typedef enum DF_RegSlot
+{
+DF_RegSlot_Null,
+DF_RegSlot_Machine,
+DF_RegSlot_Module,
+DF_RegSlot_Process,
+DF_RegSlot_Thread,
+DF_RegSlot_Window,
+DF_RegSlot_Panel,
+DF_RegSlot_View,
+DF_RegSlot_PrevView,
+DF_RegSlot_DstPanel,
+DF_RegSlot_Entity,
+DF_RegSlot_EntityList,
+DF_RegSlot_UnwindCount,
+DF_RegSlot_InlineDepth,
+DF_RegSlot_FilePath,
+DF_RegSlot_Cursor,
+DF_RegSlot_Mark,
+DF_RegSlot_TextKey,
+DF_RegSlot_LangKind,
+DF_RegSlot_Lines,
+DF_RegSlot_DbgiKey,
+DF_RegSlot_VaddrRange,
+DF_RegSlot_VoffRange,
+DF_RegSlot_PID,
+DF_RegSlot_ForceConfirm,
+DF_RegSlot_PreferDisasm,
+DF_RegSlot_Dir2,
+DF_RegSlot_String,
+DF_RegSlot_ParamsTree,
+DF_RegSlot_COUNT,
+} DF_RegSlot;
+
 typedef enum DF_CmdKind
 {
 DF_CmdKind_Null,
@@ -462,6 +496,69 @@ DF_SettingCode_HintCodeText,
 DF_SettingCode_COUNT,
 } DF_SettingCode;
 
+typedef struct DF_Regs DF_Regs;
+struct DF_Regs
+{
+D_Handle machine;
+D_Handle module;
+D_Handle process;
+D_Handle thread;
+D_Handle window;
+D_Handle panel;
+D_Handle view;
+D_Handle prev_view;
+D_Handle dst_panel;
+D_Handle entity;
+D_HandleList entity_list;
+U64 unwind_count;
+U64 inline_depth;
+String8 file_path;
+TxtPt cursor;
+TxtPt mark;
+U128 text_key;
+TXT_LangKind lang_kind;
+D_LineList lines;
+DI_Key dbgi_key;
+Rng1U64 vaddr_range;
+Rng1U64 voff_range;
+U32 pid;
+B32 force_confirm;
+B32 prefer_disasm;
+Dir2 dir2;
+String8 string;
+MD_Node * params_tree;
+};
+
+#define df_regs_lit_init_top \
+.machine = df_regs()->machine,\
+.module = df_regs()->module,\
+.process = df_regs()->process,\
+.thread = df_regs()->thread,\
+.window = df_regs()->window,\
+.panel = df_regs()->panel,\
+.view = df_regs()->view,\
+.prev_view = df_regs()->prev_view,\
+.dst_panel = df_regs()->dst_panel,\
+.entity = df_regs()->entity,\
+.entity_list = df_regs()->entity_list,\
+.unwind_count = df_regs()->unwind_count,\
+.inline_depth = df_regs()->inline_depth,\
+.file_path = df_regs()->file_path,\
+.cursor = df_regs()->cursor,\
+.mark = df_regs()->mark,\
+.text_key = df_regs()->text_key,\
+.lang_kind = df_regs()->lang_kind,\
+.lines = df_regs()->lines,\
+.dbgi_key = df_regs()->dbgi_key,\
+.vaddr_range = df_regs()->vaddr_range,\
+.voff_range = df_regs()->voff_range,\
+.pid = df_regs()->pid,\
+.force_confirm = df_regs()->force_confirm,\
+.prefer_disasm = df_regs()->prefer_disasm,\
+.dir2 = df_regs()->dir2,\
+.string = df_regs()->string,\
+.params_tree = df_regs()->params_tree,\
+
 DF_VIEW_SETUP_FUNCTION_DEF(null);
 DF_VIEW_SETUP_FUNCTION_DEF(empty);
 DF_VIEW_SETUP_FUNCTION_DEF(getting_started);
@@ -581,6 +678,7 @@ C_LINKAGE_BEGIN
 extern DF_CmdKind d_cfg_src_load_cmd_kind_table[4];
 extern DF_CmdKind d_cfg_src_write_cmd_kind_table[4];
 extern DF_CmdKind d_cfg_src_apply_cmd_kind_table[4];
+extern Rng1U64 df_reg_slot_range_table[29];
 extern DF_StringBindingPair df_g_default_binding_table[110];
 extern String8 df_g_binding_version_remap_old_name_table[7];
 extern String8 df_g_binding_version_remap_new_name_table[7];

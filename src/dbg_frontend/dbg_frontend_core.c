@@ -7394,6 +7394,54 @@ df_request_frame(void)
 }
 
 ////////////////////////////////
+//~ rjf: Main State Accessors
+
+internal Arena *
+df_frame_arena(void)
+{
+  return df_state->frame_arenas[df_state->frame_index%ArrayCount(df_state->frame_arenas)];
+}
+
+////////////////////////////////
+//~ rjf: Registers
+
+internal DF_Regs *
+df_regs(void)
+{
+  DF_Regs *regs = &df_state->top_regs->v;
+  return regs;
+}
+
+internal DF_Regs *
+df_base_regs(void)
+{
+  DF_Regs *regs = &df_state->base_regs.v;
+  return regs;
+}
+
+internal DF_Regs *
+df_push_regs(void)
+{
+  DF_Regs *top = df_regs();
+  DF_RegsNode *n = push_array(df_frame_arena(), DF_RegsNode, 1);
+  MemoryCopyStruct(&n->v, top);
+  SLLStackPush(df_state->top_regs, n);
+  return &n->v;
+}
+
+internal DF_Regs *
+df_pop_regs(void)
+{
+  DF_Regs *regs = &df_state->top_regs->v;
+  SLLStackPop(df_state->top_regs);
+  if(df_state->top_regs == 0)
+  {
+    df_state->top_regs = &df_state->base_regs;
+  }
+  return regs;
+}
+
+////////////////////////////////
 //~ rjf: Commands
 
 // TODO(rjf): @msgs temporary glue
@@ -7464,6 +7512,10 @@ df_init(CmdLine *cmdln)
   Arena *arena = arena_alloc();
   df_state = push_array(arena, DF_State, 1);
   df_state->arena = arena;
+  for(U64 idx = 0; idx < ArrayCount(df_state->frame_arenas); idx += 1)
+  {
+    df_state->frame_arenas[idx] = arena_alloc();
+  }
   df_state->num_frames_requested = 2;
   df_state->seconds_until_autosave = 0.5f;
   df_state->cmds_arena = arena_alloc();
@@ -7648,10 +7700,10 @@ df_frame(void)
   //
   // TODO(rjf): maximize target, given all windows and their monitors
   F32 target_hz = os_get_gfx_info()->default_refresh_rate;
-  if(df_state->frame_time_us_history_idx > 32)
+  if(df_state->frame_index > 32)
   {
     // rjf: calculate average frame time out of the last N
-    U64 num_frames_in_history = Min(ArrayCount(df_state->frame_time_us_history), df_state->frame_time_us_history_idx);
+    U64 num_frames_in_history = Min(ArrayCount(df_state->frame_time_us_history), df_state->frame_index);
     U64 frame_time_history_sum_us = 0;
     for(U64 idx = 0; idx < num_frames_in_history; idx += 1)
     {
@@ -12208,8 +12260,12 @@ df_frame(void)
   //
   U64 end_time_us = os_now_microseconds();
   U64 frame_time_us = end_time_us-begin_time_us;
-  df_state->frame_time_us_history[df_state->frame_time_us_history_idx%ArrayCount(df_state->frame_time_us_history)] = frame_time_us;
-  df_state->frame_time_us_history_idx += 1;
+  df_state->frame_time_us_history[df_state->frame_index%ArrayCount(df_state->frame_time_us_history)] = frame_time_us;
+  
+  //////////////////////////////
+  //- rjf: bump frame index
+  //
+  df_state->frame_index += 1;
   
   di_scope_close(di_scope);
   scratch_end(scratch);

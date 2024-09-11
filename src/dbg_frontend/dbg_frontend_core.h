@@ -405,6 +405,16 @@ struct DF_MsgKindInfo
 #include "generated/dbg_frontend.meta.h"
 
 ////////////////////////////////
+//~ rjf: Context Register Types
+
+typedef struct DF_RegsNode DF_RegsNode;
+struct DF_RegsNode
+{
+  DF_RegsNode *next;
+  DF_Regs v;
+};
+
+////////////////////////////////
 //~ rjf: Theme Types
 
 typedef struct DF_Theme DF_Theme;
@@ -641,9 +651,20 @@ struct DF_EvalVizViewCacheSlot
 typedef struct DF_State DF_State;
 struct DF_State
 {
-  // rjf: arenas
+  // rjf: top-level state
   Arena *arena;
   B32 quit;
+  
+  // rjf: frame state
+  U64 frame_index;
+  Arena *frame_arenas[2];
+  
+  // rjf: frame time history
+  U64 frame_time_us_history[64];
+  
+  // rjf: registers stack
+  DF_RegsNode base_regs;
+  DF_RegsNode *top_regs;
   
   // rjf: commands
   Arena *cmds_arena;
@@ -739,10 +760,6 @@ struct DF_State
   
   // rjf: icon texture
   R_Handle icon_texture;
-  
-  // rjf: frame time history
-  U64 frame_time_us_history[64];
-  U64 frame_time_us_history_idx;
 };
 
 ////////////////////////////////
@@ -994,6 +1011,20 @@ internal String8 df_stop_explanation_string_icon_from_ctrl_event(Arena *arena, C
 //~ rjf: Continuous Frame Requests
 
 internal void df_request_frame(void);
+
+////////////////////////////////
+//~ rjf: Main State Accessors
+
+internal Arena *df_frame_arena(void);
+
+////////////////////////////////
+//~ rjf: Registers
+
+internal DF_Regs *df_regs(void);
+internal DF_Regs *df_base_regs(void);
+internal DF_Regs *df_push_regs(void);
+internal DF_Regs *df_pop_regs(void);
+#define DF_RegsScope DeferLoop(df_push_regs(), df_pop_regs())
 
 ////////////////////////////////
 //~ rjf: Commands
