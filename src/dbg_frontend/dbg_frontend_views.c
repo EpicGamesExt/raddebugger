@@ -818,7 +818,7 @@ df_string_from_eval_viz_row_column(Arena *arena, EV_View *ev, EV_Row *row, DF_Wa
     case DF_WatchViewColumnKind_Value:
     {
       E_Eval eval = e_eval_from_expr(arena, row->expr);
-      result = df_value_string_from_eval(arena, !editable * D_EvalVizStringFlag_ReadOnlyDisplayRules, default_radix, font, font_size, max_size_px, eval, row->member, row->view_rules);
+      result = df_value_string_from_eval(arena, !editable * EV_StringFlag_ReadOnlyDisplayRules, default_radix, font, font_size, max_size_px, eval, row->member, row->view_rules);
     }break;
     case DF_WatchViewColumnKind_Type:
     {
@@ -842,7 +842,7 @@ df_string_from_eval_viz_row_column(Arena *arena, EV_View *ev, EV_Row *row, DF_Wa
     {
       E_Expr *expr = e_expr_ref_member_access(arena, row->expr, str8(col->string_buffer, col->string_size));
       E_Eval eval = e_eval_from_expr(arena, expr);
-      result = df_value_string_from_eval(arena, !editable * D_EvalVizStringFlag_ReadOnlyDisplayRules, default_radix, font, font_size, max_size_px, eval, row->member, row->view_rules);
+      result = df_value_string_from_eval(arena, !editable * EV_StringFlag_ReadOnlyDisplayRules, default_radix, font, font_size, max_size_px, eval, row->member, row->view_rules);
     }break;
   }
   if(col->dequote_string &&

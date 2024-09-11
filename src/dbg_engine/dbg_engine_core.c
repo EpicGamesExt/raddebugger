@@ -4151,10 +4151,6 @@ d_init(void)
     d_state->member_caches[idx].arena = arena_alloc();
   }
   
-  // rjf: set up eval view cache
-  d_state->eval_view_cache.slots_count = 4096;
-  d_state->eval_view_cache.slots = push_array(arena, D_EvalViewSlot, d_state->eval_view_cache.slots_count);
-  
   // rjf: set up run state
   d_state->ctrl_last_run_arena = arena_alloc();
 }

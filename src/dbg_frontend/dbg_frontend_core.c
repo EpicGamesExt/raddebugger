@@ -3978,7 +3978,7 @@ df_window_frame(DF_Window *ws)
             EV_Row *row = viz_rows.first;
             E_Eval row_eval = e_eval_from_expr(scratch.arena, row->expr);
             String8 row_expr_string = ev_expr_string_from_row(scratch.arena, row);
-            String8 row_display_value = df_value_string_from_eval(scratch.arena, D_EvalVizStringFlag_ReadOnlyDisplayRules, default_radix, ui_top_font(), ui_top_font_size(), 500.f, row_eval, row->member, row->view_rules);
+            String8 row_display_value = df_value_string_from_eval(scratch.arena, EV_StringFlag_ReadOnlyDisplayRules, default_radix, ui_top_font(), ui_top_font_size(), 500.f, row_eval, row->member, row->view_rules);
             expr_column_width_px = fnt_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, 0, row_expr_string).x + ui_top_font_size()*5.f;
             value_column_width_px = fnt_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, 0, row_display_value).x + ui_top_font_size()*5.f;
             F32 total_dim_px = (expr_column_width_px + value_column_width_px);
@@ -4027,7 +4027,7 @@ df_window_frame(DF_Window *ws)
               E_Eval row_eval = e_eval_from_expr(scratch.arena, row->expr);
               String8 row_expr_string = ev_expr_string_from_row(scratch.arena, row);
               String8 row_edit_value = df_value_string_from_eval(scratch.arena, 0, default_radix, ui_top_font(), ui_top_font_size(), 500.f, row_eval, row->member, row->view_rules);
-              String8 row_display_value = df_value_string_from_eval(scratch.arena, D_EvalVizStringFlag_ReadOnlyDisplayRules, default_radix, ui_top_font(), ui_top_font_size(), 500.f, row_eval, row->member, row->view_rules);
+              String8 row_display_value = df_value_string_from_eval(scratch.arena, EV_StringFlag_ReadOnlyDisplayRules, default_radix, ui_top_font(), ui_top_font_size(), 500.f, row_eval, row->member, row->view_rules);
               B32 row_is_editable = ev_row_is_editable(row);
               B32 row_is_expandable = ev_row_is_expandable(row);
               
@@ -6006,7 +6006,7 @@ df_ev_view_from_key(U64 key)
 }
 
 internal F32
-df_append_value_strings_from_eval(Arena *arena, D_EvalVizStringFlags flags, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size, S32 depth, E_Eval eval, E_Member *member, EV_ViewRuleList *view_rules, String8List *out)
+df_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size, S32 depth, E_Eval eval, E_Member *member, EV_ViewRuleList *view_rules, String8List *out)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(&arena, 1);
@@ -6126,7 +6126,7 @@ df_append_value_strings_from_eval(Arena *arena, D_EvalVizStringFlags flags, U32 
       if(!did_content && symbol_name.size == 0 &&
          ((type_kind == E_TypeKind_Ptr && direct_type_kind == E_TypeKind_Function) ||
           (type_kind == E_TypeKind_Function)) &&
-         (flags & D_EvalVizStringFlag_ReadOnlyDisplayRules))
+         (flags & EV_StringFlag_ReadOnlyDisplayRules))
       {
         did_content = 1;
         String8 string = str8_lit("???");
@@ -6135,7 +6135,7 @@ df_append_value_strings_from_eval(Arena *arena, D_EvalVizStringFlags flags, U32 
       }
       
       // rjf: descend for all other cases
-      if(!did_content && ptee_has_content && (flags & D_EvalVizStringFlag_ReadOnlyDisplayRules))
+      if(!did_content && ptee_has_content && (flags & EV_StringFlag_ReadOnlyDisplayRules))
       {
         did_content = 1;
         if(depth < 4)
@@ -6154,7 +6154,7 @@ df_append_value_strings_from_eval(Arena *arena, D_EvalVizStringFlags flags, U32 
       
       // rjf: push pointer value
       B32 did_ptr_value = 0;
-      if((!no_addr || !did_content) && ((flags & D_EvalVizStringFlag_ReadOnlyDisplayRules) || !did_string))
+      if((!no_addr || !did_content) && ((flags & EV_StringFlag_ReadOnlyDisplayRules) || !did_string))
       {
         did_ptr_value = 1;
         if(did_content)
@@ -6233,7 +6233,7 @@ df_append_value_strings_from_eval(Arena *arena, D_EvalVizStringFlags flags, U32 
       }
       
       // rjf: descend in all other cases
-      if(!did_content && (flags & D_EvalVizStringFlag_ReadOnlyDisplayRules))
+      if(!did_content && (flags & EV_StringFlag_ReadOnlyDisplayRules))
       {
         did_content = 1;
         
@@ -6343,7 +6343,7 @@ df_append_value_strings_from_eval(Arena *arena, D_EvalVizStringFlags flags, U32 
 }
 
 internal String8
-df_value_string_from_eval(Arena *arena, D_EvalVizStringFlags flags, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size, E_Eval eval, E_Member *member, EV_ViewRuleList *view_rules)
+df_value_string_from_eval(Arena *arena, EV_StringFlags flags, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size, E_Eval eval, E_Member *member, EV_ViewRuleList *view_rules)
 {
   Temp scratch = scratch_begin(&arena, 1);
   String8List strs = {0};
