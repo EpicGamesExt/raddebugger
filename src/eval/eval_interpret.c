@@ -121,7 +121,7 @@ e_interpret(String8 bytecode)
     {
       case E_IRExtKind_SetSpace:
       {
-        selected_space = imm.u128;
+        MemoryCopy(&selected_space, &imm, sizeof(selected_space));
       }break;
       
       case RDI_EvalOp_Stop:

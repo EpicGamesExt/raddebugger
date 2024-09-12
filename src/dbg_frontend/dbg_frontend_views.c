@@ -895,6 +895,8 @@ df_watch_view_column_alloc_(DF_WatchViewState *wv, DF_WatchViewColumnKind kind, 
   col->pct = pct;
   col->string_size = Min(sizeof(col->string_buffer), params->string.size);
   MemoryCopy(col->string_buffer, params->string.str, col->string_size);
+  col->display_string_size = Min(sizeof(col->display_string_buffer), params->display_string.size);
+  MemoryCopy(col->display_string_buffer, params->display_string.str, col->display_string_size);
   col->view_rule_size = Min(sizeof(col->view_rule_buffer), params->view_rule.size);
   MemoryCopy(col->view_rule_buffer, params->view_rule.str, col->view_rule_size);
   col->is_non_code = params->is_non_code;
@@ -1056,11 +1058,11 @@ df_watch_view_build(DF_View *view, DF_WatchViewState *ewv, B32 modifiable, U32 d
               {
                 E_MemberList bp_members = {0};
                 {
-                  e_member_list_push_new(scratch.arena, &bp_members, .name = str8_lit("Enabled"),  .off = 0,        .type_key = e_type_key_basic(E_TypeKind_S64));
-                  e_member_list_push_new(scratch.arena, &bp_members, .name = str8_lit("Hit Count"),.off = 0+8,      .type_key = e_type_key_basic(E_TypeKind_U64));
-                  e_member_list_push_new(scratch.arena, &bp_members, .name = str8_lit("Label"),    .off = 0+8+8,    .type_key = e_type_key_cons_ptr(arch_from_context(), e_type_key_basic(E_TypeKind_Char8)));
-                  e_member_list_push_new(scratch.arena, &bp_members, .name = str8_lit("Location"), .off = 0+8+8+8,  .type_key = e_type_key_cons_ptr(arch_from_context(), e_type_key_basic(E_TypeKind_Char8)));
-                  e_member_list_push_new(scratch.arena, &bp_members, .name = str8_lit("Condition"),.off = 0+8+8+8+8,.type_key = e_type_key_cons_ptr(arch_from_context(), e_type_key_basic(E_TypeKind_Char8)));
+                  e_member_list_push_new(scratch.arena, &bp_members, .name = str8_lit("enabled"),  .off = 0,        .type_key = e_type_key_basic(E_TypeKind_S64));
+                  e_member_list_push_new(scratch.arena, &bp_members, .name = str8_lit("hit_count"),.off = 0+8,      .type_key = e_type_key_basic(E_TypeKind_U64));
+                  e_member_list_push_new(scratch.arena, &bp_members, .name = str8_lit("label"),    .off = 0+8+8,    .type_key = e_type_key_cons_ptr(arch_from_context(), e_type_key_basic(E_TypeKind_Char8)));
+                  e_member_list_push_new(scratch.arena, &bp_members, .name = str8_lit("location"), .off = 0+8+8+8,  .type_key = e_type_key_cons_ptr(arch_from_context(), e_type_key_basic(E_TypeKind_Char8)));
+                  e_member_list_push_new(scratch.arena, &bp_members, .name = str8_lit("condition"),.off = 0+8+8+8+8,.type_key = e_type_key_cons_ptr(arch_from_context(), e_type_key_basic(E_TypeKind_Char8)));
                 }
                 E_MemberArray bp_members_array = e_member_array_from_list(scratch.arena, &bp_members);
                 E_TypeKey bp_type = e_type_key_cons(.arch = arch_from_context(), .kind = E_TypeKind_Struct, .name = str8_lit("Breakpoint"), .members = bp_members_array.v, .count = bp_members_array.count);
@@ -2098,19 +2100,22 @@ df_watch_view_build(DF_View *view, DF_WatchViewState *ewv, B32 modifiable, U32 d
       for(DF_WatchViewColumn *col = ewv->first_column; col != 0; col = col->next)
         UI_TableCell
       {
-        String8 name = {0};
-        switch(col->kind)
+        String8 name = str8(col->display_string_buffer, col->display_string_size);
+        if(name.size == 0)
         {
-          default:{}break;
-          case DF_WatchViewColumnKind_Expr:    {name = str8_lit("Expression");}break;
-          case DF_WatchViewColumnKind_Value:   {name = str8_lit("Value");}break;
-          case DF_WatchViewColumnKind_Type:    {name = str8_lit("Type");}break;
-          case DF_WatchViewColumnKind_ViewRule:{name = str8_lit("View Rule");}break;
-          case DF_WatchViewColumnKind_Module:  {name = str8_lit("Module");}break;
-          case DF_WatchViewColumnKind_Member:
+          switch(col->kind)
           {
-            name = str8(col->string_buffer, col->string_size);
-          }break;
+            default:{}break;
+            case DF_WatchViewColumnKind_Expr:    {name = str8_lit("Expression");}break;
+            case DF_WatchViewColumnKind_Value:   {name = str8_lit("Value");}break;
+            case DF_WatchViewColumnKind_Type:    {name = str8_lit("Type");}break;
+            case DF_WatchViewColumnKind_ViewRule:{name = str8_lit("View Rule");}break;
+            case DF_WatchViewColumnKind_Module:  {name = str8_lit("Module");}break;
+            case DF_WatchViewColumnKind_Member:
+            {
+              name = str8(col->string_buffer, col->string_size);
+            }break;
+          }
         }
         switch(col->kind)
         {
@@ -5469,11 +5474,11 @@ DF_VIEW_SETUP_FUNCTION_DEF(breakpoints)
 {
   DF_WatchViewState *wv = df_view_user_state(view, DF_WatchViewState);
   df_watch_view_init(wv, view, DF_WatchViewFillKind_Breakpoints);
-  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Member, 0.25f, .string = str8_lit("Label"), .dequote_string = 1, .is_non_code = 1);
-  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Member, 0.35f, .string = str8_lit("Location"), .dequote_string = 1, .is_non_code = 1);
-  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Member, 0.20f, .string = str8_lit("Condition"), .dequote_string = 1);
-  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Member, 0.10f, .string = str8_lit("Enabled"), .view_rule = str8_lit("checkbox"));
-  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Member, 0.10f, .string = str8_lit("Hit Count"));
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Member, 0.25f, .string = str8_lit("label"),     .display_string = str8_lit("Label"), .dequote_string = 1, .is_non_code = 1);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Member, 0.35f, .string = str8_lit("location"),  .display_string = str8_lit("Location"), .dequote_string = 1, .is_non_code = 1);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Member, 0.20f, .string = str8_lit("condition"), .display_string = str8_lit("Condition"), .dequote_string = 1);
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Member, 0.10f, .string = str8_lit("enabled"),   .display_string = str8_lit("Enabled"), .view_rule = str8_lit("checkbox"));
+  df_watch_view_column_alloc(wv, DF_WatchViewColumnKind_Member, 0.10f, .string = str8_lit("hit_count"), .display_string = str8_lit("Hit Count"));
 }
 DF_VIEW_CMD_FUNCTION_DEF(breakpoints){}
 DF_VIEW_UI_FUNCTION_DEF(breakpoints)
@@ -7065,7 +7070,7 @@ DF_VIEW_UI_FUNCTION_DEF(memory)
   //- rjf: unpack parameterization info
   //
   E_Eval eval = e_eval_from_string(scratch.arena, string);
-  if(u128_match(eval.space, u128_zero()))
+  if(eval.space.kind == 0)
   {
     eval.space = d_eval_space_from_entity(d_entity_from_handle(d_regs()->process));
   }

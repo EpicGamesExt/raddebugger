@@ -138,7 +138,8 @@ e_oplist_push_set_space(Arena *arena, E_OpList *list, E_Space space)
 {
   E_Op *node = push_array_no_zero(arena, E_Op, 1);
   node->opcode = E_IRExtKind_SetSpace;
-  node->value.u128 = space;
+  StaticAssert(sizeof(E_Space) <= sizeof(E_Value), space_size_check);
+  MemoryCopy(&node->value, &space, sizeof(space));
   SLLQueuePush(list->first, list->last, node);
   list->op_count += 1;
   list->encoded_size += 1 + sizeof(space);
@@ -266,7 +267,8 @@ internal E_IRNode *
 e_irtree_set_space(Arena *arena, E_Space space, E_IRNode *c)
 {
   E_IRNode *root = e_push_irnode(arena, E_IRExtKind_SetSpace);
-  root->value.u128 = space;
+  StaticAssert(sizeof(E_Space) <= sizeof(E_Value), space_size_check);
+  MemoryCopy(&root->value, &space, sizeof(space));
   e_irnode_push_child(root, c);
   return root;
 }
@@ -1264,13 +1266,14 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
     case E_ExprKind_LeafFilePath:
     {
       U128 key = fs_key_from_path_range(expr->string, r1u64(0, max_U64));
+      E_Space space = {E_SpaceKind_FileSystem, .u128 = key};
       U64 size = fs_size_from_path(expr->string);
       E_IRNode *base_offset = e_irtree_const_u(arena, 0);
-      E_IRNode *set_space = e_irtree_set_space(arena, key, base_offset);
+      E_IRNode *set_space = e_irtree_set_space(arena, space, base_offset);
       result.root     = set_space;
       result.type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), size);
       result.mode     = E_Mode_Offset;
-      result.space    = key;
+      result.space    = space;
     }break;
     
     //- rjf: types
@@ -1328,7 +1331,9 @@ e_append_oplist_from_irtree(Arena *arena, E_IRNode *root, E_OpList *out)
     
     case E_IRExtKind_SetSpace:
     {
-      e_oplist_push_set_space(arena, out, root->value.u128);
+      E_Space space = {0};
+      MemoryCopy(&space, &root->value, sizeof(space));
+      e_oplist_push_set_space(arena, out, space);
       for(E_IRNode *child = root->first;
           child != &e_irnode_nil;
           child = child->next)

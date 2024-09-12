@@ -2723,9 +2723,9 @@ internal D_Entity *
 d_entity_from_eval_space(E_Space space)
 {
   D_Entity *entity = &d_nil_entity;
-  if(space.u64[0] == 0 && space.u64[1] != 0)
+  if(space.u64_0 != 0)
   {
-    entity = (D_Entity *)space.u64[1];
+    entity = (D_Entity *)space.u64_0;
   }
   return entity;
 }
@@ -2734,7 +2734,7 @@ internal E_Space
 d_eval_space_from_entity(D_Entity *entity)
 {
   E_Space space = {0};
-  space.u64[1] = (U64)entity;
+  space.u64_0 = (U64)entity;
   return space;
 }
 
@@ -2750,7 +2750,7 @@ d_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
     //- rjf: nil-space -> fall back to file system
     case D_EntityKind_Nil:
     {
-      U128 key = space;
+      U128 key = space.u128;
       U128 hash = hs_hash_from_key(key, 0);
       HS_Scope *scope = hs_scope_open();
       {
@@ -2909,7 +2909,7 @@ d_key_from_eval_space_range(E_Space space, Rng1U64 range, B32 zero_terminated)
     //- rjf: nil space -> filesystem key encoded inside of `space`
     case D_EntityKind_Nil:
     {
-      result = space;
+      result = space.u128;
     }break;
     
     //- rjf: process space -> query 
@@ -2937,7 +2937,7 @@ d_whole_range_from_eval_space(E_Space space)
       U128 hash = {0};
       for(U64 idx = 0; idx < 2; idx += 1)
       {
-        hash = hs_hash_from_key(space, idx);
+        hash = hs_hash_from_key(space.u128, idx);
         if(!u128_match(hash, u128_zero()))
         {
           break;

@@ -4022,29 +4022,34 @@ internal B32
 ctrl_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
 {
   B32 result = 0;
-  CTRL_Entity *entity = (CTRL_Entity *)space.u64[1];
+  switch(space.kind)
   {
-    switch(entity->kind)
+    default:{}break;
+    case CTRL_EvalSpaceKind_Entity:
     {
-      default:{}break;
-      case CTRL_EntityKind_Process:
+      CTRL_Entity *entity = (CTRL_Entity *)space.u64_0;
+      switch(entity->kind)
       {
-        U64 read_size = dmn_process_read(entity->handle.dmn_handle, range, out);
-        result = (read_size == dim_1u64(range));
-      }break;
-      case CTRL_EntityKind_Thread:
-      {
-        Temp scratch = scratch_begin(0, 0);
-        U64 regs_size = regs_block_size_from_arch(entity->arch);
-        void *regs = ctrl_query_cached_reg_block_from_thread(scratch.arena, ctrl_state->ctrl_thread_entity_store, entity->handle);
-        Rng1U64 legal_range = r1u64(0, regs_size);
-        Rng1U64 read_range = intersect_1u64(legal_range, range);
-        U64 read_size = dim_1u64(read_range);
-        MemoryCopy(out, (U8 *)regs + read_range.min, read_size);
-        result = (read_size == dim_1u64(range));
-        scratch_end(scratch);
-      }break;
-    }
+        default:{}break;
+        case CTRL_EntityKind_Process:
+        {
+          U64 read_size = dmn_process_read(entity->handle.dmn_handle, range, out);
+          result = (read_size == dim_1u64(range));
+        }break;
+        case CTRL_EntityKind_Thread:
+        {
+          Temp scratch = scratch_begin(0, 0);
+          U64 regs_size = regs_block_size_from_arch(entity->arch);
+          void *regs = ctrl_query_cached_reg_block_from_thread(scratch.arena, ctrl_state->ctrl_thread_entity_store, entity->handle);
+          Rng1U64 legal_range = r1u64(0, regs_size);
+          Rng1U64 read_range = intersect_1u64(legal_range, range);
+          U64 read_size = dim_1u64(read_range);
+          MemoryCopy(out, (U8 *)regs + read_range.min, read_size);
+          result = (read_size == dim_1u64(range));
+          scratch_end(scratch);
+        }break;
+      }
+    }break;
   }
   return result;
 }
@@ -4921,7 +4926,8 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
                   eval_modules[eval_module_idx].arch        = arch;
                   eval_modules[eval_module_idx].rdi         = di_rdi_from_key(di_scope, &dbgi_key, max_U64);
                   eval_modules[eval_module_idx].vaddr_range = mod->vaddr_range;
-                  eval_modules[eval_module_idx].space.u64[1]= (U64)process;
+                  eval_modules[eval_module_idx].space       = e_space_make(CTRL_EvalSpaceKind_Entity);
+                  eval_modules[eval_module_idx].space.u64_0 = (U64)process;
                   if(mod == module)
                   {
                     eval_modules_primary = &eval_modules[eval_module_idx];
@@ -4953,7 +4959,8 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
               E_ParseCtx *ctx = &parse_ctx;
               ctx->ip_vaddr          = thread_rip_vaddr;
               ctx->ip_voff           = thread_rip_voff;
-              ctx->ip_thread_space.u64[1] = (U64)thread;
+              ctx->ip_thread_space   = e_space_make(CTRL_EvalSpaceKind_Entity);
+              ctx->ip_thread_space.u64_0 = (U64)thread;
               ctx->modules           = eval_modules;
               ctx->modules_count     = eval_modules_count;
               ctx->primary_module    = eval_modules_primary;
@@ -4978,7 +4985,8 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
               ctx->space_read    = ctrl_eval_space_read;
               ctx->primary_space = eval_modules_primary->space;
               ctx->reg_arch      = eval_modules_primary->arch;
-              ctx->reg_space.u64[1] = (U64)thread;
+              ctx->reg_space     = e_space_make(CTRL_EvalSpaceKind_Entity);
+              ctx->reg_space.u64_0 = (U64)thread;
               ctx->module_base   = push_array(temp.arena, U64, 1);
               ctx->module_base[0]= module->vaddr_range.min;
               ctx->tls_base      = push_array(temp.arena, U64, 1);

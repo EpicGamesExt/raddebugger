@@ -65,6 +65,7 @@ typedef struct DF_WatchViewColumnParams DF_WatchViewColumnParams;
 struct DF_WatchViewColumnParams
 {
   String8 string;
+  String8 display_string;
   String8 view_rule;
   B32 is_non_code;
   B32 dequote_string;
@@ -79,6 +80,8 @@ struct DF_WatchViewColumn
   F32 pct;
   U8 string_buffer[1024];
   U64 string_size;
+  U8 display_string_buffer[1024];
+  U64 display_string_size;
   U8 view_rule_buffer[1024];
   U64 view_rule_size;
   B32 is_non_code;

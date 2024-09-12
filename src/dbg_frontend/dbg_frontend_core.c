@@ -8092,11 +8092,11 @@ df_frame(void)
     {
       E_MemberList entity_members = {0};
       {
-        e_member_list_push_new(scratch.arena, &entity_members, .name = str8_lit("Enabled"),  .off = 0,        .type_key = e_type_key_basic(E_TypeKind_S64));
-        e_member_list_push_new(scratch.arena, &entity_members, .name = str8_lit("Hit Count"),.off = 0+8,      .type_key = e_type_key_basic(E_TypeKind_U64));
-        e_member_list_push_new(scratch.arena, &entity_members, .name = str8_lit("Label"),    .off = 0+8+8,    .type_key = e_type_key_cons_ptr(arch_from_context(), e_type_key_basic(E_TypeKind_Char8)));
-        e_member_list_push_new(scratch.arena, &entity_members, .name = str8_lit("Location"), .off = 0+8+8+8,  .type_key = e_type_key_cons_ptr(arch_from_context(), e_type_key_basic(E_TypeKind_Char8)));
-        e_member_list_push_new(scratch.arena, &entity_members, .name = str8_lit("Condition"),.off = 0+8+8+8+8,.type_key = e_type_key_cons_ptr(arch_from_context(), e_type_key_basic(E_TypeKind_Char8)));
+        e_member_list_push_new(scratch.arena, &entity_members, .name = str8_lit("enabled"),  .off = 0,        .type_key = e_type_key_basic(E_TypeKind_S64));
+        e_member_list_push_new(scratch.arena, &entity_members, .name = str8_lit("hit_count"),.off = 0+8,      .type_key = e_type_key_basic(E_TypeKind_U64));
+        e_member_list_push_new(scratch.arena, &entity_members, .name = str8_lit("label"),    .off = 0+8+8,    .type_key = e_type_key_cons_ptr(arch_from_context(), e_type_key_basic(E_TypeKind_Char8)));
+        e_member_list_push_new(scratch.arena, &entity_members, .name = str8_lit("location"), .off = 0+8+8+8,  .type_key = e_type_key_cons_ptr(arch_from_context(), e_type_key_basic(E_TypeKind_Char8)));
+        e_member_list_push_new(scratch.arena, &entity_members, .name = str8_lit("condition"),.off = 0+8+8+8+8,.type_key = e_type_key_cons_ptr(arch_from_context(), e_type_key_basic(E_TypeKind_Char8)));
       }
       E_MemberArray entity_members_array = e_member_array_from_list(scratch.arena, &entity_members);
       E_TypeKey entity_type = e_type_key_cons(.arch = arch_from_context(),

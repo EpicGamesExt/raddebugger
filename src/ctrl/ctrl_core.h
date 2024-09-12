@@ -260,6 +260,15 @@ struct CTRL_UserBreakpointList
 };
 
 ////////////////////////////////
+//~ rjf: Evaluation Spaces
+
+typedef U64 CTRL_EvalSpaceKind;
+enum
+{
+  CTRL_EvalSpaceKind_Entity,
+};
+
+////////////////////////////////
 //~ rjf: Generated Code
 
 #include "generated/ctrl.meta.h"

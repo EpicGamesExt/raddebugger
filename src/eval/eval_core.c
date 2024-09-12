@@ -155,3 +155,14 @@ e_msg_list_concat_in_place(E_MsgList *dst, E_MsgList *to_push)
   }
   MemoryZeroStruct(to_push);
 }
+
+////////////////////////////////
+//~ rjf: Space Functions
+
+internal E_Space
+e_space_make(E_SpaceKind kind)
+{
+  E_Space space = {0};
+  space.kind = kind;
+  return space;
+}

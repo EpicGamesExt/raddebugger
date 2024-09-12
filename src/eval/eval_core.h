@@ -78,8 +78,6 @@ struct E_OpInfo
 
 ////////////////////////////////
 //~ rjf: Evaluation Spaces
-
-typedef U128 E_Space;
 //
 // NOTE(rjf): Evaluations occur within the context of a "space". Each "space"
 // refers to a different offset/address-space, but it's a bit looser of a
@@ -90,6 +88,29 @@ typedef U128 E_Space;
 // Effectively, when considering the result of an evaluation, you use the
 // value for understanding a key *into* a space, e.g. 1+2 -> 3, in a null
 // space, or &foo, in the space of PID: 1234.
+
+typedef U64 E_SpaceKind;
+enum
+{
+  E_SpaceKind_Null,
+  E_SpaceKind_FileSystem,
+  E_SpaceKind_FirstUserDefined,
+};
+
+typedef struct E_Space E_Space;
+struct E_Space
+{
+  E_SpaceKind kind;
+  union
+  {
+    U64 u64s[3];
+    struct
+    {
+      U64 u64_0;
+      U128 u128;
+    };
+  };
+};
 
 ////////////////////////////////
 //~ rjf: Evaluation Modes
@@ -133,5 +154,10 @@ internal String8 e_escaped_from_raw_string(Arena *arena, String8 string);
 internal void e_msg(Arena *arena, E_MsgList *msgs, E_MsgKind kind, void *location, String8 text);
 internal void e_msgf(Arena *arena, E_MsgList *msgs, E_MsgKind kind, void *location, char *fmt, ...);
 internal void e_msg_list_concat_in_place(E_MsgList *dst, E_MsgList *to_push);
+
+////////////////////////////////
+//~ rjf: Space Functions
+
+internal E_Space e_space_make(E_SpaceKind kind);
 
 #endif // EVAL_CORE_H
