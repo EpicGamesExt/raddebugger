@@ -590,13 +590,14 @@ df_entity_desc_button(D_Entity *entity, FuzzyMatchRangeList *name_matches, Strin
   if(entity->kind == D_EntityKind_Thread)
   {
     CTRL_Event stop_event = d_ctrl_last_stop_event();
-    D_Entity *stopped_thread = d_entity_from_ctrl_handle(stop_event.entity);
-    D_Entity *selected_thread = d_entity_from_handle(d_base_regs()->thread);
-    if(selected_thread == entity)
+    CTRL_Entity *entity_ctrl = ctrl_entity_from_handle(d_state->ctrl_entity_store, entity->ctrl_handle);
+    CTRL_Entity *stopped_thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, stop_event.entity);
+    CTRL_Entity *selected_thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, df_base_regs()->thread);
+    if(selected_thread == entity_ctrl)
     {
       palette = df_palette_from_code(DF_PaletteCode_NeutralPopButton);
     }
-    if(stopped_thread == entity &&
+    if(stopped_thread == entity_ctrl &&
        (stop_event.cause == CTRL_EventCause_UserBreakpoint ||
         stop_event.cause == CTRL_EventCause_InterruptedByException ||
         stop_event.cause == CTRL_EventCause_InterruptedByTrap ||

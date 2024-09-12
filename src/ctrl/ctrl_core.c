@@ -824,6 +824,7 @@ internal CTRL_Entity *
 ctrl_entity_from_handle(CTRL_EntityStore *store, CTRL_Handle handle)
 {
   CTRL_Entity *entity = &ctrl_entity_nil;
+  if(!ctrl_handle_match(handle, ctrl_handle_zero()))
   {
     U64 hash = ctrl_hash_from_handle(handle);
     U64 slot_idx = hash%store->hash_slots_count;
@@ -944,6 +945,7 @@ ctrl_entity_list_from_kind(CTRL_EntityStore *store, CTRL_EntityKind kind)
   if(store->entity_kind_lists_gens[kind] != store->entity_kind_alloc_gens[kind])
   {
     arena_clear(store->entity_kind_lists_arenas[kind]);
+    MemoryZeroStruct(&store->entity_kind_lists[kind]);
     for(CTRL_Entity *e = store->root;
         e != &ctrl_entity_nil;
         e = ctrl_entity_rec_depth_first_pre(e, store->root).next)

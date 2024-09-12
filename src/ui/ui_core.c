@@ -810,6 +810,9 @@ ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, U
       next = n->lru_next;
       if(n->last_touched_build_index+1 < ui_state->build_index)
       {
+        U64 slot_idx = n->key.u64[0]%ui_state->anim_slots_count;
+        UI_AnimSlot *slot = &ui_state->anim_slots[slot_idx];
+        DLLRemove_NPZ(&ui_nil_anim_node, slot->first, slot->last, n, slot_next, slot_prev);;
         DLLRemove_NPZ(&ui_nil_anim_node, ui_state->lru_anim_node, ui_state->mru_anim_node, n, lru_next, lru_prev);
         SLLStackPush_N(ui_state->free_anim_node, n, slot_next);
       }
@@ -2941,7 +2944,6 @@ ui_signal_from_box(UI_Box *box)
       default_nav_parent->default_nav_focus_next_active_key = ui_key_zero();
     }
   }
-  
   
   ProfEnd();
   return sig;

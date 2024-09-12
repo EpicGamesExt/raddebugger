@@ -1582,7 +1582,7 @@ df_window_frame(DF_Window *ws)
         HS_Scope *hs_scope = hs_scope_open();
         TxtRng range = ws->code_ctx_menu_range;
         D_LineList lines = ws->code_ctx_menu_lines;
-        if(!txt_pt_match(range.min, range.max) && ui_clicked(df_cmd_spec_button(df_cmd_kind_info_table[DF_CmdKind_Copy].display_name)))
+        if(!txt_pt_match(range.min, range.max) && ui_clicked(df_cmd_spec_button(df_cmd_kind_info_table[DF_CmdKind_Copy].string)))
         {
           U128 hash = {0};
           TXT_TextInfo info = txt_text_info_from_key_lang(txt_scope, ws->code_ctx_menu_text_key, ws->code_ctx_menu_lang_kind, &hash);
@@ -1909,14 +1909,15 @@ df_window_frame(DF_Window *ws)
           {
             if(entity->kind == D_EntityKind_Thread)
             {
-              B32 is_selected = d_handle_match(d_base_regs()->thread, d_handle_from_entity(entity));
+              CTRL_Entity *entity_ctrl = ctrl_entity_from_handle(d_state->ctrl_entity_store, entity->ctrl_handle);
+              B32 is_selected = ctrl_handle_match(df_base_regs()->thread, entity_ctrl->handle);
               if(is_selected)
               {
                 df_icon_buttonf(DF_IconKind_Thread, 0, "[Selected]###select_entity");
               }
               else if(ui_clicked(df_icon_buttonf(DF_IconKind_Thread, 0, "Select###select_entity")))
               {
-                df_cmd(DF_CmdKind_SelectThread, .entity = d_handle_from_entity(entity));
+                df_cmd(DF_CmdKind_SelectThread, .thread = entity_ctrl->handle);
                 ui_ctx_menu_close();
               }
             }
@@ -10543,7 +10544,7 @@ df_frame(void)
           CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, df_regs()->thread);
           U64 unwind_index = df_regs()->unwind_count;
           U64 inline_depth = df_regs()->inline_depth;
-          if(thread->kind == D_EntityKind_Thread)
+          if(thread->kind == CTRL_EntityKind_Thread)
           {
             // rjf: grab rip
             U64 rip_vaddr = d_query_cached_rip_from_thread_unwind(thread, unwind_index);
@@ -12168,7 +12169,7 @@ df_frame(void)
     for(D_EntityNode *n = target_entities.first; n != 0; n = n->next, idx += 1)
     {
       D_Entity *src_target = n->entity;
-      D_Entity *src_target_exe   = d_entity_child_from_kind(src_target, D_EntityKind_Target);
+      D_Entity *src_target_exe   = d_entity_child_from_kind(src_target, D_EntityKind_Executable);
       D_Entity *src_target_args  = d_entity_child_from_kind(src_target, D_EntityKind_Arguments);
       D_Entity *src_target_wdir  = d_entity_child_from_kind(src_target, D_EntityKind_WorkingDirectory);
       D_Entity *src_target_entry = d_entity_child_from_kind(src_target, D_EntityKind_EntryPoint);
@@ -12231,14 +12232,15 @@ df_frame(void)
         // rjf: valid stop thread? -> select & snap
         if(thread != &ctrl_entity_nil)
         {
-          // TODO(rjf)
+          df_cmd(DF_CmdKind_SelectThread, .thread = thread->handle);
+          df_cmd(DF_CmdKind_FindThread, .thread = thread->handle);
         }
         
         // rjf: no stop-causing thread, but have selected thread? -> snap to selected
         CTRL_Entity *selected_thread = &ctrl_entity_nil; // TODO(rjf): ctrl_entity_from_handle(d_state->ctrl_entity_store, df_base_regs()->thread);
         if(thread == &ctrl_entity_nil && selected_thread != &ctrl_entity_nil)
         {
-          // TODO(rjf)
+          df_cmd(DF_CmdKind_FindThread);
         }
         
         // rjf: increment breakpoint hit counts
