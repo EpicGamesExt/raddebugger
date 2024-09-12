@@ -4861,7 +4861,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints)
                                ? D_CmdKind_StepIntoInst
                                : D_CmdKind_StepOverInst);
             }
-            d_cmd(step_cmd_kind);
+            d_cmd(step_cmd_kind, .entity = params.entity);
           }
           else if(!d_ctrl_targets_running())
           {
