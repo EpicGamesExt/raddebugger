@@ -42,6 +42,49 @@ struct D_BreakpointArray
 };
 
 ////////////////////////////////
+//~ rjf: Tick Output Types
+
+typedef enum D_EventKind
+{
+  D_EventKind_Null,
+  D_EventKind_Stop,
+  D_EventKind_COUNT
+}
+D_EventKind;
+
+typedef enum D_EventCause
+{
+  D_EventCause_Null,
+  D_EventCause_UserBreakpoint,
+  D_EventCause_COUNT
+}
+D_EventCause;
+
+typedef struct D_Event D_Event;
+struct D_Event
+{
+  D_EventKind kind;
+  D_EventCause cause;
+  CTRL_Handle thread;
+  U64 vaddr;
+};
+
+typedef struct D_EventNode D_EventNode;
+struct D_EventNode
+{
+  D_EventNode *next;
+  D_Event v;
+};
+
+typedef struct D_EventList D_EventList;
+struct D_EventList
+{
+  D_EventNode *first;
+  D_EventNode *last;
+  U64 count;
+};
+
+////////////////////////////////
 //~ rjf: Handles
 
 typedef struct D_Handle D_Handle;
@@ -1046,6 +1089,6 @@ internal B32 d_next_cmd(D_Cmd **cmd);
 //~ rjf: Main Layer Top-Level Calls
 
 internal void d_init(void);
-internal CTRL_EventList d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints);
+internal D_EventList d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints);
 
 #endif // DBG_ENGINE_CORE_H

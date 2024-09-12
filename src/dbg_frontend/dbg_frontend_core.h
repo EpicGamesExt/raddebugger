@@ -727,9 +727,6 @@ struct DF_State
   U64 view_rule_spec_table_size;
   DF_ViewRuleSpec **view_rule_spec_table;
   
-  // rjf: cmd param slot -> view spec rule table
-  DF_CmdParamSlotViewSpecRuleList cmd_param_slot_view_spec_table[D_CmdParamSlot_COUNT];
-  
   // rjf: windows
   DF_Window *first_window;
   DF_Window *last_window;

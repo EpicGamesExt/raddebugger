@@ -3859,12 +3859,12 @@ d_init(void)
   d_state->ctrl_last_run_arena = arena_alloc();
 }
 
-internal CTRL_EventList
+internal D_EventList
 d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(&arena, 1);
-  CTRL_EventList result = {0};
+  D_EventList result = {0};
   d_state->frame_index += 1;
   arena_clear(d_frame_arena());
   d_state->frame_eval_memread_endt_us = os_now_microseconds() + 5000;
@@ -3881,9 +3881,9 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints)
     U64 new_reg_gen = ctrl_reg_gen();
     
     //- rjf: consume & process events
-    result = ctrl_c2u_pop_events(arena);
-    ctrl_entity_store_apply_events(d_state->ctrl_entity_store, &result);
-    for(CTRL_EventNode *event_n = result.first;
+    CTRL_EventList events = ctrl_c2u_pop_events(scratch.arena);
+    ctrl_entity_store_apply_events(d_state->ctrl_entity_store, &events);
+    for(CTRL_EventNode *event_n = events.first;
         event_n != 0;
         event_n = event_n->next)
     {
@@ -3914,7 +3914,30 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints)
           B32 should_snap = !(d_state->ctrl_soft_halt_issued);
           d_state->ctrl_is_running = 0;
           d_state->ctrl_soft_halt_issued = 0;
-          D_Entity *stop_thread = d_entity_from_ctrl_handle(event->entity);
+          
+          // rjf: exception or unexpected trap -> push error
+          if(event->cause == CTRL_EventCause_InterruptedByException ||
+             event->cause == CTRL_EventCause_InterruptedByTrap)
+          {
+            log_user_error(str8_zero());
+          }
+          
+          // rjf: kill all entities which are marked to die on stop
+          {
+            D_Entity *request = d_entity_from_id(event->msg_id);
+            if(d_entity_is_nil(request))
+            {
+              for(D_Entity *entity = d_entity_root();
+                  !d_entity_is_nil(entity);
+                  entity = d_entity_rec_depth_first_pre(entity, d_entity_root()).next)
+              {
+                if(entity->flags & D_EntityFlag_DiesOnRunStop)
+                {
+                  d_entity_mark_for_deletion(entity);
+                }
+              }
+            }
+          }
           
           // rjf: gather stop info
           {
@@ -3923,6 +3946,26 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints)
             d_state->ctrl_last_stop_event.string = push_str8_copy(d_state->ctrl_stop_arena, d_state->ctrl_last_stop_event.string);
           }
           
+          // rjf: push stop event to caller, if this is not a soft-halt
+          if(should_snap)
+          {
+            D_EventCause cause = D_EventCause_Null;
+            switch(event->cause)
+            {
+              default:{}break;
+              case CTRL_EventCause_UserBreakpoint:{cause = D_EventCause_UserBreakpoint;}break;
+            }
+            D_EventNode *n = push_array(arena, D_EventNode, 1);
+            SLLQueuePush(result.first, result.last, n);
+            result.count += 1;
+            D_Event *evt = &n->v;
+            evt->kind = D_EventKind_Stop;
+            evt->cause = cause;
+            evt->vaddr = event->rip_vaddr;
+          }
+          
+#if 0 // TODO(rjf): @msgs
+          D_Entity *stop_thread = d_entity_from_ctrl_handle(event->entity);
           // rjf: select & snap to thread causing stop
           if(should_snap && stop_thread->kind == D_EntityKind_Thread)
           {
@@ -3931,7 +3974,6 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints)
           }
           
           // rjf: if no stop-causing thread, and if selected thread, snap to selected
-#if 0 // TODO(rjf): @msgs
           if(should_snap && d_entity_is_nil(stop_thread))
           {
             D_Entity *selected_thread = d_entity_from_handle(d_regs()->thread);
@@ -3940,7 +3982,6 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints)
               df_cmd(DF_CmdKind_FindThread, .thread = d_handle_from_entity(selected_thread));
             }
           }
-#endif
           
           // rjf: thread hit user breakpoint -> increment breakpoint hit count
           if(should_snap && event->cause == CTRL_EventCause_UserBreakpoint)
@@ -3981,30 +4022,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints)
               }
             }
           }
-          
-          // rjf: exception or unexpected trap -> push error
-          if(event->cause == CTRL_EventCause_InterruptedByException ||
-             event->cause == CTRL_EventCause_InterruptedByTrap)
-          {
-            log_user_error(str8_zero());
-          }
-          
-          // rjf: kill all entities which are marked to die on stop
-          {
-            D_Entity *request = d_entity_from_id(event->msg_id);
-            if(d_entity_is_nil(request))
-            {
-              for(D_Entity *entity = d_entity_root();
-                  !d_entity_is_nil(entity);
-                  entity = d_entity_rec_depth_first_pre(entity, d_entity_root()).next)
-              {
-                if(entity->flags & D_EntityFlag_DiesOnRunStop)
-                {
-                  d_entity_mark_for_deletion(entity);
-                }
-              }
-            }
-          }
+#endif
         }break;
         
         //- rjf: entity creation/deletion
@@ -4096,6 +4114,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints)
           // rjf: equip color
           d_entity_equip_color_rgba(entity, thread_color);
           
+#if 0 // TODO(rjf): @msgs
           // rjf: automatically select if we don't have a selected thread
           D_Entity *selected_thread = d_entity_from_handle(d_state->base_regs.v.thread);
           if(d_entity_is_nil(selected_thread))
@@ -4110,6 +4129,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints)
           {
             d_cmd(D_CmdKind_SelectThread, .entity = d_handle_from_entity(entity));
           }
+#endif
         }break;
         
         case CTRL_EventKind_NewModule:
@@ -4673,15 +4693,13 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints)
           ctrl_halt();
         }break;
         case D_CmdKind_SoftHaltRefresh:
+        if(d_ctrl_targets_running())
         {
-          if(d_ctrl_targets_running())
-          {
-            need_run   = 1;
-            run_kind   = d_state->ctrl_last_run_kind;
-            run_thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, d_state->ctrl_last_run_thread_handle);
-            run_flags  = d_state->ctrl_last_run_flags;
-            run_traps  = d_state->ctrl_last_run_traps;
-          }
+          need_run   = 1;
+          run_kind   = d_state->ctrl_last_run_kind;
+          run_thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, d_state->ctrl_last_run_thread_handle);
+          run_flags  = d_state->ctrl_last_run_flags;
+          run_traps  = d_state->ctrl_last_run_traps;
         }break;
         case D_CmdKind_SetThreadIP:
         {
@@ -4776,7 +4794,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints)
         case D_CmdKind_StepInto:
         case D_CmdKind_StepOver:
         {
-          D_EntityList processes = d_query_cached_entity_list_with_kind(D_EntityKind_Process);
+          CTRL_EntityList processes = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Process);
           if(processes.count != 0)
           {
             D_CmdKind step_cmd_kind = (cmd->kind == D_CmdKind_StepInto
@@ -4797,127 +4815,8 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints)
             d_cmd(D_CmdKind_LaunchAndInit, .entity_list = d_handle_list_from_entity_list(scratch.arena, targets));
           }
         }break;
-        case D_CmdKind_RunToCursor:
-        {
-          String8 file_path = d_regs()->file_path;
-          if(file_path.size != 0)
-          {
-            d_cmd(D_CmdKind_RunToLine, .file_path = file_path, .text_point = d_regs()->cursor);
-          }
-          else
-          {
-            d_cmd(D_CmdKind_RunToAddress, .vaddr = d_regs()->vaddr_range.min);
-          }
-        }break;
-        case D_CmdKind_SetNextStatement:
-        {
-          D_Entity *thread = d_entity_from_handle(d_regs()->thread);
-          String8 file_path = d_regs()->file_path;
-          U64 new_rip_vaddr = d_regs()->vaddr_range.min;
-          if(file_path.size != 0)
-          {
-            D_LineList *lines = &d_regs()->lines;
-            for(D_LineNode *n = lines->first; n != 0; n = n->next)
-            {
-              D_EntityList modules = d_modules_from_dbgi_key(scratch.arena, &n->v.dbgi_key);
-              D_Entity *module = d_module_from_thread_candidates(thread, &modules);
-              if(!d_entity_is_nil(module))
-              {
-                new_rip_vaddr = d_vaddr_from_voff(module, n->v.voff_range.min);
-                break;
-              }
-            }
-          }
-          d_cmd(D_CmdKind_SetThreadIP, .entity = d_handle_from_entity(thread), .vaddr = new_rip_vaddr);
-        }break;
-        
         
         //- rjf: debug control context management operations
-        case D_CmdKind_SelectThread:
-        {
-          D_Entity *thread = d_entity_from_handle(params.entity);
-          D_Entity *module = d_module_from_thread(thread);
-          D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
-          d_state->base_regs.v.unwind_count = 0;
-          d_state->base_regs.v.inline_depth = 0;
-          d_state->base_regs.v.thread = d_handle_from_entity(thread);
-          d_state->base_regs.v.module = d_handle_from_entity(module);
-          d_state->base_regs.v.process = d_handle_from_entity(process);
-#if 0 // TODO(rjf): @msgs
-          df_cmd(DF_CmdKind_FindThread, .thread = d_handle_from_entity(thread));
-#endif
-        }break;
-        case D_CmdKind_SelectUnwind:
-        {
-          DI_Scope *di_scope = di_scope_open();
-          D_Entity *thread = d_entity_from_handle(d_state->base_regs.v.thread);
-          D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
-          CTRL_Unwind base_unwind = d_query_cached_unwind_from_thread(thread);
-          D_Unwind rich_unwind = d_unwind_from_ctrl_unwind(scratch.arena, di_scope, process, &base_unwind);
-          if(params.unwind_index < rich_unwind.frames.concrete_frame_count)
-          {
-            D_UnwindFrame *frame = &rich_unwind.frames.v[params.unwind_index];
-            d_state->base_regs.v.unwind_count = params.unwind_index;
-            d_state->base_regs.v.inline_depth = 0;
-            if(params.inline_depth <= frame->inline_frame_count)
-            {
-              d_state->base_regs.v.inline_depth = params.inline_depth;
-            }
-          }
-#if 0 // TODO(rjf): @msgs
-          df_cmd(DF_CmdKind_FindThread, .thread = d_handle_from_entity(thread));
-#endif
-          di_scope_close(di_scope);
-        }break;
-        case D_CmdKind_UpOneFrame:
-        case D_CmdKind_DownOneFrame:
-        {
-          DI_Scope *di_scope = di_scope_open();
-          D_Entity *thread = d_entity_from_handle(d_state->base_regs.v.thread);
-          D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
-          CTRL_Unwind base_unwind = d_query_cached_unwind_from_thread(thread);
-          D_Unwind rich_unwind = d_unwind_from_ctrl_unwind(scratch.arena, di_scope, process, &base_unwind);
-          U64 crnt_unwind_idx = d_state->base_regs.v.unwind_count;
-          U64 crnt_inline_dpt = d_state->base_regs.v.inline_depth;
-          U64 next_unwind_idx = crnt_unwind_idx;
-          U64 next_inline_dpt = crnt_inline_dpt;
-          if(crnt_unwind_idx < rich_unwind.frames.concrete_frame_count)
-          {
-            D_UnwindFrame *f = &rich_unwind.frames.v[crnt_unwind_idx];
-            switch(cmd->kind)
-            {
-              default:{}break;
-              case D_CmdKind_UpOneFrame:
-              {
-                if(crnt_inline_dpt < f->inline_frame_count)
-                {
-                  next_inline_dpt += 1;
-                }
-                else if(crnt_unwind_idx > 0)
-                {
-                  next_unwind_idx -= 1;
-                  next_inline_dpt = 0;
-                }
-              }break;
-              case D_CmdKind_DownOneFrame:
-              {
-                if(crnt_inline_dpt > 0)
-                {
-                  next_inline_dpt -= 1;
-                }
-                else if(crnt_unwind_idx < rich_unwind.frames.concrete_frame_count)
-                {
-                  next_unwind_idx += 1;
-                  next_inline_dpt = (f+1)->inline_frame_count;
-                }
-              }break;
-            }
-          }
-          d_cmd(D_CmdKind_SelectUnwind,
-                .unwind_index = next_unwind_idx,
-                .inline_depth = next_inline_dpt);
-          di_scope_close(di_scope);
-        }break;
         case D_CmdKind_FreezeThread:
         case D_CmdKind_ThawThread:
         case D_CmdKind_FreezeProcess:
@@ -5068,6 +4967,11 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints)
     ctrl_msg_list_concat_in_place(&d_state->ctrl_msgs, &msgs_copy);
     if(d_state->ctrl_msgs.count != 0)
     {
+      if(!d_state->ctrl_soft_halt_issued && d_state->ctrl_is_running)
+      {
+        d_state->ctrl_soft_halt_issued = 1;
+        ctrl_halt();
+      }
       if(ctrl_u2c_push_msgs(&d_state->ctrl_msgs, os_now_microseconds()+100))
       {
         MemoryZeroStruct(&d_state->ctrl_msgs);

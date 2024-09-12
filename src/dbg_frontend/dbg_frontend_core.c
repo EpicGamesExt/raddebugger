@@ -11504,6 +11504,38 @@ df_frame(void)
           txt_scope_close(txt_scope);
           hs_scope_close(hs_scope);
         }break;
+        case DF_CmdKind_RunToCursor:
+        {
+          if(df_regs()->file_path.size != 0)
+          {
+            df_cmd(DF_CmdKind_RunToLine);
+          }
+          else
+          {
+            df_cmd(DF_CmdKind_RunToAddress);
+          }
+        }break;
+        case DF_CmdKind_SetNextStatement:
+        {
+          D_Entity *thread = d_entity_from_handle(df_regs()->thread);
+          String8 file_path = df_regs()->file_path;
+          U64 new_rip_vaddr = df_regs()->vaddr_range.min;
+          if(file_path.size != 0)
+          {
+            D_LineList *lines = &df_regs()->lines;
+            for(D_LineNode *n = lines->first; n != 0; n = n->next)
+            {
+              D_EntityList modules = d_modules_from_dbgi_key(scratch.arena, &n->v.dbgi_key);
+              D_Entity *module = d_module_from_thread_candidates(thread, &modules);
+              if(!d_entity_is_nil(module))
+              {
+                new_rip_vaddr = d_vaddr_from_voff(module, n->v.voff_range.min);
+                break;
+              }
+            }
+          }
+          d_cmd(D_CmdKind_SetThreadIP, .entity = d_handle_from_entity(thread), .vaddr = new_rip_vaddr);
+        }break;
         
         //- rjf: targets
         case DF_CmdKind_AddTarget:
@@ -11587,7 +11619,7 @@ df_frame(void)
           log_infof("\"#MARKER\"");
         }break;
         
-        //- rjf: OS events
+        //- rjf: os event passthrough
         case DF_CmdKind_OSEvent:
         {
           OS_Event *os_event = df_regs()->os_event;
@@ -11618,6 +11650,89 @@ df_frame(void)
             ui_event.timestamp_us = os_event->timestamp_us;
             ui_event_list_push(scratch.arena, &ws->ui_events, &ui_event);
           }
+        }break;
+        
+        //- rjf: debug control context management operations
+        case DF_CmdKind_SelectThread:
+        {
+          D_Entity *thread = d_entity_from_handle(df_regs()->thread);
+          D_Entity *module = d_module_from_thread(thread);
+          D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
+          df_state->base_regs.v.unwind_count = 0;
+          df_state->base_regs.v.inline_depth = 0;
+          df_state->base_regs.v.thread = d_handle_from_entity(thread);
+          df_state->base_regs.v.module = d_handle_from_entity(module);
+          df_state->base_regs.v.process = d_handle_from_entity(process);
+          df_cmd(DF_CmdKind_FindThread, .thread = d_handle_from_entity(thread));
+        }break;
+        case DF_CmdKind_SelectUnwind:
+        {
+          DI_Scope *di_scope = di_scope_open();
+          D_Entity *thread = d_entity_from_handle(df_base_regs()->thread);
+          D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
+          CTRL_Unwind base_unwind = d_query_cached_unwind_from_thread(thread);
+          D_Unwind rich_unwind = d_unwind_from_ctrl_unwind(scratch.arena, di_scope, process, &base_unwind);
+          if(df_regs()->unwind_count < rich_unwind.frames.concrete_frame_count)
+          {
+            D_UnwindFrame *frame = &rich_unwind.frames.v[df_regs()->unwind_count];
+            df_state->base_regs.v.unwind_count = df_regs()->unwind_count;
+            df_state->base_regs.v.inline_depth = 0;
+            if(df_regs()->inline_depth <= frame->inline_frame_count)
+            {
+              d_state->base_regs.v.inline_depth = df_regs()->inline_depth;
+            }
+          }
+          df_cmd(DF_CmdKind_FindThread, .thread = d_handle_from_entity(thread));
+          di_scope_close(di_scope);
+        }break;
+        case DF_CmdKind_UpOneFrame:
+        case DF_CmdKind_DownOneFrame:
+        {
+          DI_Scope *di_scope = di_scope_open();
+          D_Entity *thread = d_entity_from_handle(df_base_regs()->thread);
+          D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
+          CTRL_Unwind base_unwind = d_query_cached_unwind_from_thread(thread);
+          D_Unwind rich_unwind = d_unwind_from_ctrl_unwind(scratch.arena, di_scope, process, &base_unwind);
+          U64 crnt_unwind_idx = d_state->base_regs.v.unwind_count;
+          U64 crnt_inline_dpt = d_state->base_regs.v.inline_depth;
+          U64 next_unwind_idx = crnt_unwind_idx;
+          U64 next_inline_dpt = crnt_inline_dpt;
+          if(crnt_unwind_idx < rich_unwind.frames.concrete_frame_count)
+          {
+            D_UnwindFrame *f = &rich_unwind.frames.v[crnt_unwind_idx];
+            switch(kind)
+            {
+              default:{}break;
+              case DF_CmdKind_UpOneFrame:
+              {
+                if(crnt_inline_dpt < f->inline_frame_count)
+                {
+                  next_inline_dpt += 1;
+                }
+                else if(crnt_unwind_idx > 0)
+                {
+                  next_unwind_idx -= 1;
+                  next_inline_dpt = 0;
+                }
+              }break;
+              case DF_CmdKind_DownOneFrame:
+              {
+                if(crnt_inline_dpt > 0)
+                {
+                  next_inline_dpt -= 1;
+                }
+                else if(crnt_unwind_idx < rich_unwind.frames.concrete_frame_count)
+                {
+                  next_unwind_idx += 1;
+                  next_inline_dpt = (f+1)->inline_frame_count;
+                }
+              }break;
+            }
+          }
+          df_cmd(DF_CmdKind_SelectUnwind,
+                 .unwind_count = next_unwind_idx,
+                 .inline_depth = next_inline_dpt);
+          di_scope_close(di_scope);
         }break;
         
         //- rjf: meta controls
@@ -12101,7 +12216,43 @@ df_frame(void)
   //////////////////////////////
   //- rjf: tick debug engine
   //
-  d_tick(scratch.arena, &targets, &breakpoints);
+  D_EventList engine_events = d_tick(scratch.arena, &targets, &breakpoints);
+  
+  //////////////////////////////
+  //- rjf: process debug engine events
+  //
+  for(D_EventNode *n = engine_events.first; n != 0; n = n->next)
+  {
+    D_Event *evt = &n->v;
+    switch(evt->kind)
+    {
+      default:{}break;
+      case D_EventKind_Stop:
+      {
+        CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, evt->thread);
+        U64 vaddr = evt->vaddr;
+        
+        // rjf: valid stop thread? -> select & snap
+        if(thread != &ctrl_entity_nil)
+        {
+          // TODO(rjf)
+        }
+        
+        // rjf: no stop-causing thread, but have selected thread? -> snap to selected
+        CTRL_Entity *selected_thread = &ctrl_entity_nil; // TODO(rjf): ctrl_entity_from_handle(d_state->ctrl_entity_store, df_base_regs()->thread);
+        if(thread == &ctrl_entity_nil && selected_thread != &ctrl_entity_nil)
+        {
+          // TODO(rjf)
+        }
+        
+        // rjf: increment breakpoint hit counts
+        if(evt->cause == D_EventCause_UserBreakpoint)
+        {
+          
+        }
+      }break;
+    }
+  }
   
   //////////////////////////////
   //- rjf: apply new rich hover info
