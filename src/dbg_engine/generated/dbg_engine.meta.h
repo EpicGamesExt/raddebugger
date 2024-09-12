@@ -121,33 +121,6 @@ D_CmdKind_Attach,
 D_CmdKind_COUNT,
 } D_CmdKind;
 
-typedef enum D_CmdParamSlot
-{
-D_CmdParamSlot_Null,
-D_CmdParamSlot_Window,
-D_CmdParamSlot_Panel,
-D_CmdParamSlot_DestPanel,
-D_CmdParamSlot_PrevView,
-D_CmdParamSlot_View,
-D_CmdParamSlot_Entity,
-D_CmdParamSlot_EntityList,
-D_CmdParamSlot_String,
-D_CmdParamSlot_FilePath,
-D_CmdParamSlot_TextPoint,
-D_CmdParamSlot_ParamsTree,
-D_CmdParamSlot_OSEvent,
-D_CmdParamSlot_VirtualAddr,
-D_CmdParamSlot_VirtualOff,
-D_CmdParamSlot_Index,
-D_CmdParamSlot_ID,
-D_CmdParamSlot_PreferDisassembly,
-D_CmdParamSlot_ForceConfirm,
-D_CmdParamSlot_Dir2,
-D_CmdParamSlot_UnwindIndex,
-D_CmdParamSlot_InlineDepth,
-D_CmdParamSlot_COUNT,
-} D_CmdParamSlot;
-
 typedef enum D_ViewRuleKind
 {
 D_ViewRuleKind_Default,
@@ -205,32 +178,6 @@ B32 prefer_disasm;
 Dir2 dir2;
 String8 string;
 MD_Node * params_tree;
-};
-
-typedef struct D_CmdParams D_CmdParams;
-struct D_CmdParams
-{
-D_Handle window;
-D_Handle panel;
-D_Handle dest_panel;
-D_Handle prev_view;
-D_Handle view;
-D_Handle entity;
-D_HandleList entity_list;
-String8 string;
-String8 file_path;
-TxtPt text_point;
-MD_Node * params_tree;
-struct OS_Event * os_event;
-U64 vaddr;
-U64 voff;
-U64 index;
-U64 id;
-B32 prefer_dasm;
-B32 force_confirm;
-Dir2 dir2;
-U64 unwind_index;
-U64 inline_depth;
 };
 
 #define d_regs_lit_init_top \
@@ -294,7 +241,6 @@ extern String8 d_entity_kind_name_lower_plural_table[30];
 extern String8 d_entity_kind_name_label_table[30];
 extern D_EntityKindFlags d_entity_kind_flags_table[30];
 extern Rng1U64 d_reg_slot_range_table[29];
-extern Rng1U64 d_cmd_param_slot_range_table[22];
 
 C_LINKAGE_END
 

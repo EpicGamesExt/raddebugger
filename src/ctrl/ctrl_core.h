@@ -44,6 +44,7 @@ typedef enum CTRL_EntityKind
 {
   CTRL_EntityKind_Null,
   CTRL_EntityKind_Root,
+  
   CTRL_EntityKind_Machine,
   CTRL_EntityKind_Process,
   CTRL_EntityKind_Thread,
@@ -65,9 +66,11 @@ struct CTRL_Entity
   CTRL_EntityKind kind;
   Arch arch;
   B32 is_frozen;
+  U32 rgba;
   CTRL_Handle handle;
   U64 id;
   Rng1U64 vaddr_range;
+  U64 stack_base;
   U64 timestamp;
   String8 string;
 };
@@ -265,7 +268,7 @@ struct CTRL_UserBreakpointList
 typedef U64 CTRL_EvalSpaceKind;
 enum
 {
-  CTRL_EvalSpaceKind_Entity,
+  CTRL_EvalSpaceKind_Entity = E_SpaceKind_FirstUserDefined,
 };
 
 ////////////////////////////////
@@ -728,6 +731,8 @@ internal CTRL_Event ctrl_event_from_serialized_string(Arena *arena, String8 stri
 
 //- rjf: entity list data structures
 internal void ctrl_entity_list_push(Arena *arena, CTRL_EntityList *list, CTRL_Entity *entity);
+internal CTRL_EntityList ctrl_entity_list_from_handle_list(Arena *arena, CTRL_EntityStore *store, CTRL_HandleList *list);
+#define ctrl_entity_list_first(list) ((list)->first ? (list)->first->v : &ctrl_entity_nil)
 
 //- rjf: cache creation/destruction
 internal CTRL_EntityStore *ctrl_entity_store_alloc(void);

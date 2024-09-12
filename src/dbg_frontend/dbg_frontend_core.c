@@ -505,23 +505,6 @@ df_cmd_params_from_view(DF_Window *window, DF_Panel *panel, DF_View *view)
 
 #endif
 
-internal D_CmdParams
-df_cmd_params_copy(Arena *arena, D_CmdParams *src)
-{
-  D_CmdParams dst = {0};
-  MemoryCopyStruct(&dst, src);
-  dst.entity_list = d_handle_list_copy(arena, src->entity_list);
-  if(dst.entity_list.count == 0 && !d_handle_match(src->entity, d_handle_zero()))
-  {
-    d_handle_list_push(arena, &dst.entity_list, dst.entity);
-  }
-  dst.string = push_str8_copy(arena, src->string);
-  dst.file_path = push_str8_copy(arena, src->file_path);
-  if(src->params_tree != 0) {dst.params_tree = md_tree_copy(arena, src->params_tree);}
-  if(dst.params_tree == 0)  {dst.params_tree= &md_nil_node;}
-  return dst;
-}
-
 ////////////////////////////////
 //~ rjf: Global Cross-Window UI Interaction State Functions
 
@@ -1486,9 +1469,6 @@ df_window_frame(DF_Window *ws)
           Handle(window);
           Handle(panel);
           Handle(view);
-          Handle(module);
-          Handle(process);
-          Handle(thread);
 #undef Handle
           ui_labelf("file_path: \"%S\"", regs->file_path);
           ui_labelf("cursor: (L:%I64d, C:%I64d)", regs->cursor.line, regs->cursor.column);
@@ -1613,22 +1593,22 @@ df_window_frame(DF_Window *ws)
         }
         if(range.min.line == range.max.line && ui_clicked(df_icon_buttonf(DF_IconKind_RightArrow, 0, "Set Next Statement")))
         {
-          D_Entity *thread = d_entity_from_handle(df_regs()->thread);
+          CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, df_regs()->thread);
           U64 new_rip_vaddr = ws->code_ctx_menu_vaddr;
           if(ws->code_ctx_menu_file_path.size != 0)
           {
             for(D_LineNode *n = lines.first; n != 0; n = n->next)
             {
-              D_EntityList modules = d_modules_from_dbgi_key(scratch.arena, &n->v.dbgi_key);
-              D_Entity *module = d_module_from_thread_candidates(thread, &modules);
-              if(!d_entity_is_nil(module))
+              CTRL_EntityList modules = ctrl_modules_from_dbgi_key(scratch.arena, d_state->ctrl_entity_store, &n->v.dbgi_key);
+              CTRL_Entity *module = ctrl_module_from_thread_candidates(d_state->ctrl_entity_store, thread, &modules);
+              if(module != &ctrl_entity_nil)
               {
-                new_rip_vaddr = d_vaddr_from_voff(module, n->v.voff_range.min);
+                new_rip_vaddr = ctrl_vaddr_from_voff(module, n->v.voff_range.min);
                 break;
               }
             }
           }
-          df_cmd(DF_CmdKind_SetThreadIP, .thread = d_handle_from_entity(thread), .vaddr = new_rip_vaddr);
+          df_cmd(DF_CmdKind_SetThreadIP, .vaddr = new_rip_vaddr);
           ui_ctx_menu_close();
         }
         if(range.min.line == range.max.line && ui_clicked(df_icon_buttonf(DF_IconKind_Play, 0, "Run To Line")))
@@ -1699,19 +1679,19 @@ df_window_frame(DF_Window *ws)
         }
         if(ws->code_ctx_menu_file_path.size != 0 && range.min.line == range.max.line && ui_clicked(df_icon_buttonf(DF_IconKind_FileOutline, 0, "Go To Disassembly")))
         {
-          D_Entity *thread = d_entity_from_handle(df_regs()->thread);
+          CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, df_regs()->thread);
           U64 vaddr = 0;
           for(D_LineNode *n = lines.first; n != 0; n = n->next)
           {
-            D_EntityList modules = d_modules_from_dbgi_key(scratch.arena, &n->v.dbgi_key);
-            D_Entity *module = d_module_from_thread_candidates(thread, &modules);
-            if(!d_entity_is_nil(module))
+            CTRL_EntityList modules = ctrl_modules_from_dbgi_key(scratch.arena, d_state->ctrl_entity_store, &n->v.dbgi_key);
+            CTRL_Entity *module = ctrl_module_from_thread_candidates(d_state->ctrl_entity_store, thread, &modules);
+            if(module != &ctrl_entity_nil)
             {
-              vaddr = d_vaddr_from_voff(module, n->v.voff_range.min);
+              vaddr = ctrl_vaddr_from_voff(module, n->v.voff_range.min);
               break;
             }
           }
-          df_cmd(DF_CmdKind_FindCodeLocation, .entity = d_handle_from_entity(thread), .vaddr = vaddr);
+          df_cmd(DF_CmdKind_FindCodeLocation, .vaddr = vaddr);
           ui_ctx_menu_close();
         }
         hs_scope_close(hs_scope);
@@ -1953,7 +1933,8 @@ df_window_frame(DF_Window *ws)
             {
               if(ui_clicked(df_icon_buttonf(DF_IconKind_Clipboard, 0, "Copy Instruction Pointer Address")))
               {
-                U64 rip = d_query_cached_rip_from_thread(entity);
+                CTRL_Entity *entity_ctrl = ctrl_entity_from_handle(d_state->ctrl_entity_store, entity->ctrl_handle);
+                U64 rip = d_query_cached_rip_from_thread(entity_ctrl);
                 String8 string = push_str8f(scratch.arena, "0x%I64x", rip);
                 os_set_clipboard_text(string);
                 ui_ctx_menu_close();
@@ -1965,15 +1946,16 @@ df_window_frame(DF_Window *ws)
               if(ui_clicked(df_icon_buttonf(DF_IconKind_Clipboard, 0, "Copy Call Stack")))
               {
                 DI_Scope *di_scope = di_scope_open();
-                D_Entity *process = d_entity_ancestor_from_kind(entity, D_EntityKind_Process);
-                CTRL_Unwind base_unwind = d_query_cached_unwind_from_thread(entity);
+                CTRL_Entity *entity_ctrl = ctrl_entity_from_handle(d_state->ctrl_entity_store, entity->ctrl_handle);
+                CTRL_Entity *process = ctrl_entity_ancestor_from_kind(entity_ctrl, CTRL_EntityKind_Process);
+                CTRL_Unwind base_unwind = d_query_cached_unwind_from_thread(entity_ctrl);
                 D_Unwind rich_unwind = d_unwind_from_ctrl_unwind(scratch.arena, di_scope, process, &base_unwind);
                 String8List lines = {0};
                 for(U64 frame_idx = 0; frame_idx < rich_unwind.frames.concrete_frame_count; frame_idx += 1)
                 {
                   D_UnwindFrame *concrete_frame = &rich_unwind.frames.v[frame_idx];
                   U64 rip_vaddr = regs_rip_from_arch_block(entity->arch, concrete_frame->regs);
-                  D_Entity *module = d_module_from_process_vaddr(process, rip_vaddr);
+                  CTRL_Entity *module = ctrl_module_from_process_vaddr(process, rip_vaddr);
                   RDI_Parsed *rdi = concrete_frame->rdi;
                   RDI_Procedure *procedure = concrete_frame->procedure;
                   for(D_UnwindInlineFrame *inline_frame = concrete_frame->last_inline_frame;
@@ -1983,15 +1965,15 @@ df_window_frame(DF_Window *ws)
                     RDI_InlineSite *inline_site = inline_frame->inline_site;
                     String8 name = {0};
                     name.str = rdi_string_from_idx(rdi, inline_site->name_string_idx, &name.size);
-                    str8_list_pushf(scratch.arena, &lines, "0x%I64x: [inlined] \"%S\"%s%S", rip_vaddr, name, d_entity_is_nil(module) ? "" : " in ", module->string);
+                    str8_list_pushf(scratch.arena, &lines, "0x%I64x: [inlined] \"%S\"%s%S", rip_vaddr, name, module == &ctrl_entity_nil ? "" : " in ", module->string);
                   }
                   if(procedure != 0)
                   {
                     String8 name = {0};
                     name.str = rdi_name_from_procedure(rdi, procedure, &name.size);
-                    str8_list_pushf(scratch.arena, &lines, "0x%I64x: \"%S\"%s%S", rip_vaddr, name, d_entity_is_nil(module) ? "" : " in ", module->string);
+                    str8_list_pushf(scratch.arena, &lines, "0x%I64x: \"%S\"%s%S", rip_vaddr, name, module == &ctrl_entity_nil ? "" : " in ", module->string);
                   }
-                  else if(!d_entity_is_nil(module))
+                  else if(module != &ctrl_entity_nil)
                   {
                     str8_list_pushf(scratch.arena, &lines, "0x%I64x: [??? in %S]", rip_vaddr, module->string);
                   }
@@ -2348,12 +2330,12 @@ df_window_frame(DF_Window *ws)
         Temp scratch = scratch_begin(0, 0);
         
         //- rjf: unpack lister params
-        D_Entity *thread = d_entity_from_handle(d_base_regs()->thread);
-        U64 thread_rip_vaddr = d_query_cached_rip_from_thread_unwind(thread, d_base_regs()->unwind_count);
-        D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
-        D_Entity *module = d_module_from_process_vaddr(process, thread_rip_vaddr);
-        U64 thread_rip_voff = d_voff_from_vaddr(module, thread_rip_vaddr);
-        DI_Key dbgi_key = d_dbgi_key_from_module(module);
+        CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, df_base_regs()->thread);
+        U64 thread_rip_vaddr = d_query_cached_rip_from_thread_unwind(thread, df_base_regs()->unwind_count);
+        CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, CTRL_EntityKind_Process);
+        CTRL_Entity *module = ctrl_module_from_process_vaddr(process, thread_rip_vaddr);
+        U64 thread_rip_voff = ctrl_voff_from_vaddr(module, thread_rip_vaddr);
+        DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
         
         //- rjf: gather lister items
         DF_AutoCompListerItemChunkList item_list = {0};
@@ -2394,7 +2376,7 @@ df_window_frame(DF_Window *ws)
           //- rjf: gather registers
           if(ws->autocomp_lister_params.flags & DF_AutoCompListerFlag_Registers)
           {
-            Arch arch = d_arch_from_entity(thread);
+            Arch arch = thread->arch;
             U64 reg_names_count = regs_reg_code_count_from_arch(arch);
             U64 alias_names_count = regs_alias_code_count_from_arch(arch);
             String8 *reg_names = regs_reg_code_string_table_from_arch(arch);
@@ -3895,9 +3877,6 @@ df_window_frame(DF_Window *ws)
       {
         Temp scratch = scratch_begin(0, 0);
         DI_Scope *scope = di_scope_open();
-        D_Entity *thread = d_entity_from_handle(d_base_regs()->thread);
-        D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
-        U64 thread_unwind_rip_vaddr = d_query_cached_rip_from_thread_unwind(thread, d_base_regs()->unwind_count);
         String8 expr = ws->hover_eval_string;
         E_Eval eval = e_eval_from_string(scratch.arena, expr);
         EV_ViewRuleList top_level_view_rules = {0};
@@ -6055,8 +6034,8 @@ df_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
       E_Eval value_eval = e_value_eval_from_eval(eval);
       B32 ptee_has_content = (direct_type_kind != E_TypeKind_Null && direct_type_kind != E_TypeKind_Void);
       B32 ptee_has_string  = (E_TypeKind_Char8 <= direct_type_kind && direct_type_kind <= E_TypeKind_UChar32);
-      D_Entity *thread = d_entity_from_handle(df_regs()->thread);
-      D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
+      CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, df_regs()->thread);
+      CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, CTRL_EntityKind_Process);
       String8 symbol_name = d_symbol_name_from_process_vaddr(arena, process, value_eval.value.u64, 1);
       
       // rjf: special case: push strings for textual string content
@@ -8030,16 +8009,16 @@ df_frame(void)
   //////////////////////////////
   //- rjf: unpack eval-dependent info
   //
-  D_Entity *process = d_entity_from_handle(df_regs()->process);
-  D_Entity *thread = d_entity_from_handle(df_regs()->thread);
-  Arch arch = d_arch_from_entity(thread);
+  CTRL_Entity *process = ctrl_entity_from_handle(d_state->ctrl_entity_store, df_regs()->process);
+  CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, df_regs()->thread);
+  Arch arch = thread->arch;
   U64 unwind_count = df_regs()->unwind_count;
   U64 rip_vaddr = d_query_cached_rip_from_thread_unwind(thread, unwind_count);
   CTRL_Unwind unwind = d_query_cached_unwind_from_thread(thread);
-  D_Entity *module = d_module_from_process_vaddr(process, rip_vaddr);
-  U64 rip_voff = d_voff_from_vaddr(module, rip_vaddr);
-  U64 tls_root_vaddr = ctrl_query_cached_tls_root_vaddr_from_thread(d_state->ctrl_entity_store, thread->ctrl_handle);
-  D_EntityList all_modules = d_query_cached_entity_list_with_kind(D_EntityKind_Module);
+  CTRL_Entity *module = ctrl_module_from_process_vaddr(process, rip_vaddr);
+  U64 rip_voff = ctrl_voff_from_vaddr(module, rip_vaddr);
+  U64 tls_root_vaddr = ctrl_query_cached_tls_root_vaddr_from_thread(d_state->ctrl_entity_store, thread->handle);
+  CTRL_EntityList all_modules = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Module);
   U64 eval_modules_count = Max(1, all_modules.count);
   E_Module *eval_modules = push_array(scratch.arena, E_Module, eval_modules_count);
   E_Module *eval_modules_primary = &eval_modules[0];
@@ -8048,14 +8027,14 @@ df_frame(void)
   DI_Key primary_dbgi_key = {0};
   {
     U64 eval_module_idx = 0;
-    for(D_EntityNode *n = all_modules.first; n != 0; n = n->next, eval_module_idx += 1)
+    for(CTRL_EntityNode *n = all_modules.first; n != 0; n = n->next, eval_module_idx += 1)
     {
-      D_Entity *m = n->entity;
-      DI_Key dbgi_key = d_dbgi_key_from_module(m);
-      eval_modules[eval_module_idx].arch        = d_arch_from_entity(m);
+      CTRL_Entity *m = n->v;
+      DI_Key dbgi_key = ctrl_dbgi_key_from_module(m);
+      eval_modules[eval_module_idx].arch        = m->arch;
       eval_modules[eval_module_idx].rdi         = di_rdi_from_key(di_scope, &dbgi_key, 0);
-      eval_modules[eval_module_idx].vaddr_range = m->vaddr_rng;
-      eval_modules[eval_module_idx].space       = d_eval_space_from_entity(d_entity_ancestor_from_kind(m, D_EntityKind_Process));
+      eval_modules[eval_module_idx].vaddr_range = m->vaddr_range;
+      eval_modules[eval_module_idx].space       = d_eval_space_from_ctrl_entity(ctrl_entity_ancestor_from_kind(m, CTRL_EntityKind_Process));
       if(module == m)
       {
         eval_modules_primary = &eval_modules[eval_module_idx];
@@ -8069,12 +8048,12 @@ df_frame(void)
   Rng1U64 *rdis_vaddr_ranges = push_array(scratch.arena, Rng1U64, rdis_count);
   {
     U64 idx = 0;
-    for(D_EntityNode *n = all_modules.first; n != 0; n = n->next, idx += 1)
+    for(CTRL_EntityNode *n = all_modules.first; n != 0; n = n->next, idx += 1)
     {
-      DI_Key dbgi_key = d_dbgi_key_from_module(n->entity);
+      DI_Key dbgi_key = ctrl_dbgi_key_from_module(n->v);
       rdis[idx] = di_rdi_from_key(di_scope, &dbgi_key, 0);
-      rdis_vaddr_ranges[idx] = n->entity->vaddr_rng;
-      if(n->entity == module)
+      rdis_vaddr_ranges[idx] = n->v->vaddr_range;
+      if(n->v == module)
       {
         primary_dbgi_key = dbgi_key;
         rdis_primary_idx = idx;
@@ -8105,7 +8084,7 @@ df_frame(void)
     E_ParseCtx *ctx = parse_ctx;
     ctx->ip_vaddr          = rip_vaddr;
     ctx->ip_voff           = rip_voff;
-    ctx->ip_thread_space   = d_eval_space_from_entity(thread);
+    ctx->ip_thread_space   = d_eval_space_from_ctrl_entity(thread);
     ctx->modules           = eval_modules;
     ctx->modules_count     = eval_modules_count;
     ctx->primary_module    = eval_modules_primary;
@@ -8128,18 +8107,18 @@ df_frame(void)
     //- rjf: add macros for constants
     {
       // rjf: pid -> current process' ID
-      if(!d_entity_is_nil(process))
+      if(process != &ctrl_entity_nil)
       {
         E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafU64, 0);
-        expr->value.u64 = process->ctrl_id;
+        expr->value.u64 = process->id;
         e_string2expr_map_insert(scratch.arena, ctx->macro_map, str8_lit("pid"), expr);
       }
       
       // rjf: tid -> current thread's ID
-      if(!d_entity_is_nil(thread))
+      if(thread != &ctrl_entity_nil)
       {
         E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafU64, 0);
-        expr->value.u64 = thread->ctrl_id;
+        expr->value.u64 = thread->id;
         e_string2expr_map_insert(scratch.arena, ctx->macro_map, str8_lit("tid"), expr);
       }
     }
@@ -8211,10 +8190,10 @@ df_frame(void)
     ctx->space_write       = d_eval_space_write;
     ctx->primary_space     = eval_modules_primary->space;
     ctx->reg_arch          = eval_modules_primary->arch;
-    ctx->reg_space         = d_eval_space_from_entity(thread);
+    ctx->reg_space         = d_eval_space_from_ctrl_entity(thread);
     ctx->reg_unwind_count  = unwind_count;
     ctx->module_base       = push_array(scratch.arena, U64, 1);
-    ctx->module_base[0]    = module->vaddr_rng.min;
+    ctx->module_base[0]    = module->vaddr_range.min;
     ctx->tls_base          = push_array(scratch.arena, U64, 1);
     ctx->tls_base[0]       = d_query_cached_tls_base_vaddr_from_process_root_rip(process, tls_root_vaddr, rip_vaddr);
   }
@@ -8271,6 +8250,18 @@ df_frame(void)
           if(D_CmdKind_Null < (D_CmdKind)kind && (D_CmdKind)kind < D_CmdKind_COUNT)
           {
             D_CmdParams params = {0};
+            params.machine       = df_regs()->machine;
+            params.thread        = df_regs()->thread;
+            // TODO(rjf): @msgs params.entity        = ???;
+            // TODO(rjf): @msgs params.processes     = ???;
+            params.file_path     = df_regs()->file_path;
+            params.cursor        = df_regs()->cursor;
+            params.vaddr         = df_regs()->vaddr;
+            params.prefer_disasm = df_regs()->prefer_disasm;
+            params.pid           = df_regs()->pid;
+            // TODO(rjf): @msgs params.targets       = ???;
+            // TODO(rjf): @msgs
+#if 0
             params.window = df_regs()->window;
             params.panel  = df_regs()->panel;
             params.dest_panel = df_regs()->dst_panel;
@@ -8290,6 +8281,7 @@ df_frame(void)
             params.dir2 = df_regs()->dir2;
             params.unwind_index = df_regs()->unwind_count;
             params.inline_depth = df_regs()->inline_depth;
+#endif
             d_push_cmd((D_CmdKind)kind, &params);
           }
           
@@ -10548,7 +10540,7 @@ df_frame(void)
         for(DF_Window *ws = df_state->first_window; ws != 0; ws = ws->next)
         {
           DI_Scope *scope = di_scope_open();
-          D_Entity *thread = d_entity_from_handle(df_regs()->entity);
+          CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, df_regs()->thread);
           U64 unwind_index = df_regs()->unwind_count;
           U64 inline_depth = df_regs()->inline_depth;
           if(thread->kind == D_EntityKind_Thread)
@@ -10557,11 +10549,11 @@ df_frame(void)
             U64 rip_vaddr = d_query_cached_rip_from_thread_unwind(thread, unwind_index);
             
             // rjf: extract thread/rip info
-            D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
-            D_Entity *module = d_module_from_process_vaddr(process, rip_vaddr);
-            DI_Key dbgi_key = d_dbgi_key_from_module(module);
+            CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, CTRL_EntityKind_Process);
+            CTRL_Entity *module = ctrl_module_from_process_vaddr(process, rip_vaddr);
+            DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
             RDI_Parsed *rdi = di_rdi_from_key(scope, &dbgi_key, 0);
-            U64 rip_voff = d_voff_from_vaddr(module, rip_vaddr);
+            U64 rip_voff = ctrl_voff_from_vaddr(module, rip_vaddr);
             D_LineList lines = d_lines_from_dbgi_key_voff(scratch.arena, &dbgi_key, rip_voff);
             D_Line line = {0};
             {
@@ -10577,18 +10569,18 @@ df_frame(void)
             }
             
             // rjf: snap to resolved line
-            B32 missing_rip = (rip_vaddr == 0);
-            B32 dbgi_missing = (dbgi_key.min_timestamp == 0 || dbgi_key.path.size == 0);
-            B32 dbgi_pending = !dbgi_missing && rdi == &di_rdi_parsed_nil;
+            B32 missing_rip   = (rip_vaddr == 0);
+            B32 dbgi_missing  = (dbgi_key.min_timestamp == 0 || dbgi_key.path.size == 0);
+            B32 dbgi_pending  = !dbgi_missing && rdi == &di_rdi_parsed_nil;
             B32 has_line_info = (line.voff_range.max != 0);
-            B32 has_module = !d_entity_is_nil(module);
-            B32 has_dbg_info = has_module && !dbgi_missing;
+            B32 has_module    = (module != &ctrl_entity_nil);
+            B32 has_dbg_info  = has_module && !dbgi_missing;
             if(!dbgi_pending && (has_line_info || has_module))
             {
               df_cmd(DF_CmdKind_FindCodeLocation,
                      .file_path    = line.file_path,
                      .cursor       = line.pt,
-                     .entity       = d_handle_from_entity(thread),
+                     .process      = process->handle,
                      .voff         = rip_voff,
                      .vaddr        = rip_vaddr,
                      .unwind_count = unwind_index,
@@ -10599,9 +10591,10 @@ df_frame(void)
             if(!missing_rip && !dbgi_pending && !has_line_info && !has_module)
             {
               df_cmd(DF_CmdKind_FindCodeLocation,
-                     .entity = d_handle_from_entity(thread),
-                     .voff = rip_voff,
-                     .vaddr = rip_vaddr,
+                     .process      = process->handle,
+                     .module       = module->handle,
+                     .voff         = rip_voff,
+                     .vaddr        = rip_vaddr,
                      .unwind_count = unwind_index,
                      .inline_depth = inline_depth);
             }
@@ -10609,7 +10602,7 @@ df_frame(void)
             // rjf: retry on stopped, pending debug info
             if(!d_ctrl_targets_running() && (dbgi_pending || missing_rip))
             {
-              df_cmd(DF_CmdKind_FindThread, .entity = d_handle_from_entity(thread));
+              df_cmd(DF_CmdKind_FindThread, .thread = thread->handle);
             }
           }
           di_scope_close(scope);
@@ -10617,9 +10610,9 @@ df_frame(void)
         case DF_CmdKind_FindSelectedThread:
         for(DF_Window *ws = df_state->first_window; ws != 0; ws = ws->next)
         {
-          D_Entity *selected_thread = d_entity_from_handle(df_base_regs()->thread);
+          CTRL_Entity *selected_thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, df_base_regs()->thread);
           df_cmd(DF_CmdKind_FindThread,
-                 .entity = d_handle_from_entity(selected_thread),
+                 .thread       = selected_thread->handle,
                  .unwind_count = df_base_regs()->unwind_count,
                  .inline_depth = df_base_regs()->inline_depth);
         }break;
@@ -10755,23 +10748,24 @@ df_frame(void)
               D_LineList lines = d_lines_from_dbgi_key_voff(scratch.arena, &voff_dbgi_key, voff);
               if(lines.first != 0)
               {
-                D_Entity *process = &d_nil_entity;
+                CTRL_Entity *process = &ctrl_entity_nil;
                 U64 vaddr = 0;
                 if(voff_dbgi_key.path.size != 0)
                 {
-                  D_EntityList modules = d_modules_from_dbgi_key(scratch.arena, &voff_dbgi_key);
-                  D_Entity *module = d_first_entity_from_list(&modules);
-                  process = d_entity_ancestor_from_kind(module, D_EntityKind_Process);
-                  if(!d_entity_is_nil(process))
+                  CTRL_EntityList modules = ctrl_modules_from_dbgi_key(scratch.arena, d_state->ctrl_entity_store, &voff_dbgi_key);
+                  CTRL_Entity *module = ctrl_entity_list_first(&modules);
+                  process = ctrl_entity_ancestor_from_kind(module, CTRL_EntityKind_Process);
+                  if(process != &ctrl_entity_nil)
                   {
-                    vaddr = module->vaddr_rng.min + lines.first->v.voff_range.min;
+                    vaddr = module->vaddr_range.min + lines.first->v.voff_range.min;
                   }
                 }
                 df_cmd(DF_CmdKind_FindCodeLocation,
                        .file_path = lines.first->v.file_path,
                        .cursor    = lines.first->v.pt,
-                       .entity    = d_handle_from_entity(process),
-                       .vaddr     = module->vaddr_rng.min + lines.first->v.voff_range.min);
+                       .process   = process->handle,
+                       .module    = module->handle,
+                       .vaddr     = module->vaddr_range.min + lines.first->v.voff_range.min);
               }
             }
             
@@ -10908,27 +10902,27 @@ df_frame(void)
           // rjf: grab things to find. path * point, process * address, etc.
           String8 file_path = {0};
           TxtPt point = {0};
-          D_Entity *thread = &d_nil_entity;
-          D_Entity *process = &d_nil_entity;
+          CTRL_Entity *thread = &ctrl_entity_nil;
+          CTRL_Entity *process = &ctrl_entity_nil;
           U64 vaddr = 0;
           {
             file_path = df_regs()->file_path;
             point     = df_regs()->cursor;
-            thread    = d_entity_from_handle(df_regs()->thread);
-            process   = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
+            thread    = ctrl_entity_from_handle(d_state->ctrl_entity_store, df_regs()->thread);
+            process   = ctrl_entity_from_handle(d_state->ctrl_entity_store, df_regs()->process);
             vaddr     = df_regs()->vaddr;
           }
           
-          // rjf: given a src code location, and a process, if no vaddr is specified,
+          // rjf: given a src code location, if no vaddr is specified,
           // try to map the src coordinates to a vaddr via line info
-          if(vaddr == 0 && file_path.size != 0 && !d_entity_is_nil(process))
+          if(vaddr == 0 && file_path.size != 0)
           {
             D_LineList lines = d_lines_from_file_path_line_num(scratch.arena, file_path, point.line);
             for(D_LineNode *n = lines.first; n != 0; n = n->next)
             {
-              D_EntityList modules = d_modules_from_dbgi_key(scratch.arena, &n->v.dbgi_key);
-              D_Entity *module = d_module_from_thread_candidates(thread, &modules);
-              vaddr = d_vaddr_from_voff(module, n->v.voff_range.min);
+              CTRL_EntityList modules = ctrl_modules_from_dbgi_key(scratch.arena, d_state->ctrl_entity_store, &n->v.dbgi_key);
+              CTRL_Entity *module = ctrl_module_from_thread_candidates(d_state->ctrl_entity_store, thread, &modules);
+              vaddr = ctrl_vaddr_from_voff(module, n->v.voff_range.min);
               break;
             }
           }
@@ -11102,7 +11096,7 @@ df_frame(void)
           }
           
           // rjf: given the above, find disassembly location.
-          if(!d_entity_is_nil(process) && vaddr != 0)
+          if(process != &ctrl_entity_nil && vaddr != 0)
           {
             // rjf: determine which panel we will use to find the disasm loc -
             // we *cannot* use the same panel we used for source code, if any.
@@ -11139,7 +11133,7 @@ df_frame(void)
             if(!df_panel_is_nil(dst_panel))
             {
               dst_panel->selected_tab_view = df_handle_from_view(dst_view);
-              df_cmd(DF_CmdKind_GoToAddress, .entity = d_handle_from_entity(process), .vaddr = vaddr);
+              df_cmd(DF_CmdKind_GoToAddress, .process = process->handle, .vaddr = vaddr);
               df_cmd(cursor_snap_kind);
             }
           }
@@ -11517,7 +11511,7 @@ df_frame(void)
         }break;
         case DF_CmdKind_SetNextStatement:
         {
-          D_Entity *thread = d_entity_from_handle(df_regs()->thread);
+          CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, df_regs()->thread);
           String8 file_path = df_regs()->file_path;
           U64 new_rip_vaddr = df_regs()->vaddr_range.min;
           if(file_path.size != 0)
@@ -11525,16 +11519,16 @@ df_frame(void)
             D_LineList *lines = &df_regs()->lines;
             for(D_LineNode *n = lines->first; n != 0; n = n->next)
             {
-              D_EntityList modules = d_modules_from_dbgi_key(scratch.arena, &n->v.dbgi_key);
-              D_Entity *module = d_module_from_thread_candidates(thread, &modules);
-              if(!d_entity_is_nil(module))
+              CTRL_EntityList modules = ctrl_modules_from_dbgi_key(scratch.arena, d_state->ctrl_entity_store, &n->v.dbgi_key);
+              CTRL_Entity *module = ctrl_module_from_thread_candidates(d_state->ctrl_entity_store, thread, &modules);
+              if(module != &ctrl_entity_nil)
               {
-                new_rip_vaddr = d_vaddr_from_voff(module, n->v.voff_range.min);
+                new_rip_vaddr = ctrl_vaddr_from_voff(module, n->v.voff_range.min);
                 break;
               }
             }
           }
-          d_cmd(D_CmdKind_SetThreadIP, .entity = d_handle_from_entity(thread), .vaddr = new_rip_vaddr);
+          d_cmd(D_CmdKind_SetThreadIP, .vaddr = new_rip_vaddr);
         }break;
         
         //- rjf: targets
@@ -11655,21 +11649,23 @@ df_frame(void)
         //- rjf: debug control context management operations
         case DF_CmdKind_SelectThread:
         {
-          D_Entity *thread = d_entity_from_handle(df_regs()->thread);
-          D_Entity *module = d_module_from_thread(thread);
-          D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
+          CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, df_regs()->thread);
+          CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, CTRL_EntityKind_Process);
+          CTRL_Entity *module = ctrl_module_from_process_vaddr(process, ctrl_query_cached_rip_from_thread(d_state->ctrl_entity_store, thread->handle));
+          CTRL_Entity *machine = ctrl_entity_ancestor_from_kind(process, CTRL_EntityKind_Machine);
           df_state->base_regs.v.unwind_count = 0;
           df_state->base_regs.v.inline_depth = 0;
-          df_state->base_regs.v.thread = d_handle_from_entity(thread);
-          df_state->base_regs.v.module = d_handle_from_entity(module);
-          df_state->base_regs.v.process = d_handle_from_entity(process);
-          df_cmd(DF_CmdKind_FindThread, .thread = d_handle_from_entity(thread));
+          df_state->base_regs.v.thread  = thread->handle;
+          df_state->base_regs.v.module  = module->handle;
+          df_state->base_regs.v.process = process->handle;
+          df_state->base_regs.v.machine = machine->handle;
+          df_cmd(DF_CmdKind_FindThread, .thread = thread->handle);
         }break;
         case DF_CmdKind_SelectUnwind:
         {
           DI_Scope *di_scope = di_scope_open();
-          D_Entity *thread = d_entity_from_handle(df_base_regs()->thread);
-          D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
+          CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, df_base_regs()->thread);
+          CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, CTRL_EntityKind_Process);
           CTRL_Unwind base_unwind = d_query_cached_unwind_from_thread(thread);
           D_Unwind rich_unwind = d_unwind_from_ctrl_unwind(scratch.arena, di_scope, process, &base_unwind);
           if(df_regs()->unwind_count < rich_unwind.frames.concrete_frame_count)
@@ -11682,15 +11678,15 @@ df_frame(void)
               d_state->base_regs.v.inline_depth = df_regs()->inline_depth;
             }
           }
-          df_cmd(DF_CmdKind_FindThread, .thread = d_handle_from_entity(thread));
+          df_cmd(DF_CmdKind_FindThread, .thread = thread->handle);
           di_scope_close(di_scope);
         }break;
         case DF_CmdKind_UpOneFrame:
         case DF_CmdKind_DownOneFrame:
         {
           DI_Scope *di_scope = di_scope_open();
-          D_Entity *thread = d_entity_from_handle(df_base_regs()->thread);
-          D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
+          CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, df_base_regs()->thread);
+          CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, CTRL_EntityKind_Process);
           CTRL_Unwind base_unwind = d_query_cached_unwind_from_thread(thread);
           D_Unwind rich_unwind = d_unwind_from_ctrl_unwind(scratch.arena, di_scope, process, &base_unwind);
           U64 crnt_unwind_idx = d_state->base_regs.v.unwind_count;

@@ -539,6 +539,33 @@ struct D_CmdSpecInfoArray
 ////////////////////////////////
 //~ rjf: Command Types
 
+typedef struct D_CmdParams D_CmdParams;
+struct D_CmdParams
+{
+  CTRL_Handle machine;
+  CTRL_Handle thread;
+  CTRL_Handle entity;
+  CTRL_HandleList processes;
+  String8 file_path;
+  TxtPt cursor;
+  U64 vaddr;
+  B32 prefer_disasm;
+  U32 pid;
+  D_TargetArray targets;
+  //String8 string;
+  //String8 file_path;
+  //MD_Node * params_tree;
+  //U64 vaddr;
+  //U64 voff;
+  //U64 index;
+  //U64 id;
+  //B32 prefer_dasm;
+  //B32 force_confirm;
+  //Dir2 dir2;
+  //U64 unwind_index;
+  //U64 inline_depth;
+};
+
 typedef struct D_Cmd D_Cmd;
 struct D_Cmd
 {
@@ -585,7 +612,7 @@ struct D_UnwindCacheNode
   U64 reggen;
   U64 memgen;
   Arena *arena;
-  D_Handle thread;
+  CTRL_Handle thread;
   CTRL_Unwind unwind;
 };
 
@@ -610,7 +637,7 @@ typedef struct D_RunTLSBaseCacheNode D_RunTLSBaseCacheNode;
 struct D_RunTLSBaseCacheNode
 {
   D_RunTLSBaseCacheNode *hash_next;
-  D_Handle process;
+  CTRL_Handle process;
   U64 root_vaddr;
   U64 rip_vaddr;
   U64 tls_base_vaddr;
@@ -808,6 +835,9 @@ internal D_CmdParams d_cmd_params_zero(void);
 internal String8 d_cmd_params_apply_spec_query(Arena *arena, D_CmdParams *params, D_CmdSpec *spec, String8 query);
 #endif
 
+//- rjf: command parameters
+internal D_CmdParams d_cmd_params_copy(Arena *arena, D_CmdParams *src);
+
 //- rjf: command lists
 internal void d_cmd_list_push_new(Arena *arena, D_CmdList *cmds, D_CmdKind kind, D_CmdParams *params);
 
@@ -958,7 +988,7 @@ internal Rng1U64 d_vaddr_range_from_voff_range(D_Entity *module, Rng1U64 voff_rn
 
 //- rjf: voff|vaddr -> symbol lookups
 internal String8 d_symbol_name_from_dbgi_key_voff(Arena *arena, DI_Key *dbgi_key, U64 voff, B32 decorated);
-internal String8 d_symbol_name_from_process_vaddr(Arena *arena, D_Entity *process, U64 vaddr, B32 decorated);
+internal String8 d_symbol_name_from_process_vaddr(Arena *arena, CTRL_Entity *process, U64 vaddr, B32 decorated);
 
 //- rjf: symbol -> voff lookups
 internal U64 d_voff_from_dbgi_key_symbol_name(DI_Key *dbgi_key, String8 symbol_name);
@@ -975,13 +1005,17 @@ internal D_LineList d_lines_from_file_path_line_num(Arena *arena, String8 file_p
 //~ rjf: Process/Thread/Module Info Lookups
 
 internal D_Entity *d_module_from_process_vaddr(D_Entity *process, U64 vaddr);
+#if 0 // TODO(rjf): @msgs
 internal D_Entity *d_module_from_thread(D_Entity *thread);
-internal U64 d_tls_base_vaddr_from_process_root_rip(D_Entity *process, U64 root_vaddr, U64 rip_vaddr);
+#endif
+internal U64 d_tls_base_vaddr_from_process_root_rip(CTRL_Entity *process, U64 root_vaddr, U64 rip_vaddr);
 internal Arch d_arch_from_entity(D_Entity *entity);
 internal E_String2NumMap *d_push_locals_map_from_dbgi_key_voff(Arena *arena, DI_Scope *scope, DI_Key *dbgi_key, U64 voff);
 internal E_String2NumMap *d_push_member_map_from_dbgi_key_voff(Arena *arena, DI_Scope *scope, DI_Key *dbgi_key, U64 voff);
+#if 0 // TODO(rjf): @msgs
 internal D_Entity *d_module_from_thread_candidates(D_Entity *thread, D_EntityList *candidates);
-internal D_Unwind d_unwind_from_ctrl_unwind(Arena *arena, DI_Scope *di_scope, D_Entity *process, CTRL_Unwind *base_unwind);
+#endif
+internal D_Unwind d_unwind_from_ctrl_unwind(Arena *arena, DI_Scope *di_scope, CTRL_Entity *process, CTRL_Unwind *base_unwind);
 
 ////////////////////////////////
 //~ rjf: Target Controls
@@ -991,6 +1025,10 @@ internal CTRL_Event d_ctrl_last_stop_event(void);
 
 ////////////////////////////////
 //~ rjf: Evaluation Spaces
+
+//- rjf: ctrl entity <-> eval space
+internal CTRL_Entity *d_ctrl_entity_from_eval_space(E_Space space);
+internal E_Space d_eval_space_from_ctrl_entity(CTRL_Entity *entity);
 
 //- rjf: entity <-> eval space
 internal D_Entity *d_entity_from_eval_space(E_Space space);
@@ -1064,23 +1102,16 @@ internal D_EntityList d_push_active_target_list(Arena *arena);
 internal D_Entity *d_entity_from_ev_key_and_kind(EV_Key key, D_EntityKind kind);
 
 //- rjf: per-run caches
-internal CTRL_Unwind d_query_cached_unwind_from_thread(D_Entity *thread);
-internal U64 d_query_cached_rip_from_thread(D_Entity *thread);
-internal U64 d_query_cached_rip_from_thread_unwind(D_Entity *thread, U64 unwind_count);
-internal U64 d_query_cached_tls_base_vaddr_from_process_root_rip(D_Entity *process, U64 root_vaddr, U64 rip_vaddr);
+internal CTRL_Unwind d_query_cached_unwind_from_thread(CTRL_Entity *thread);
+internal U64 d_query_cached_rip_from_thread(CTRL_Entity *thread);
+internal U64 d_query_cached_rip_from_thread_unwind(CTRL_Entity *thread, U64 unwind_count);
+internal U64 d_query_cached_tls_base_vaddr_from_process_root_rip(CTRL_Entity *process, U64 root_vaddr, U64 rip_vaddr);
 internal E_String2NumMap *d_query_cached_locals_map_from_dbgi_key_voff(DI_Key *dbgi_key, U64 voff);
 internal E_String2NumMap *d_query_cached_member_map_from_dbgi_key_voff(DI_Key *dbgi_key, U64 voff);
 
 //- rjf: top-level command dispatch
 internal void d_push_cmd(D_CmdKind kind, D_CmdParams *params);
-#define d_cmd(kind, ...) d_push_cmd((kind),  \
-&(D_CmdParams)               \
-{                            \
-.window = d_regs()->window, \
-.panel  = d_regs()->panel,  \
-.view   = d_regs()->view,   \
-__VA_ARGS__                 \
-})
+#define d_cmd(kind, ...) d_push_cmd((kind), &(D_CmdParams){.thread = {0}, __VA_ARGS__})
 
 //- rjf: command iteration
 internal B32 d_next_cmd(D_Cmd **cmd);

@@ -276,6 +276,7 @@ D_CmdTable:     //               |        |              |                  |   
   COUNT,
 }
 
+/*
 @enum D_CmdParamSlot:
 {
   Null,
@@ -293,6 +294,7 @@ D_CmdTable:     //               |        |              |                  |   
   `{0}`,
   @expand(D_CmdParamSlotTable a) `{OffsetOf(D_CmdParams, $(a.name_lower)), OffsetOf(D_CmdParams, $(a.name_lower)) + sizeof($(a.c_type))}`,
 }
+*/
 
 ////////////////////////////////
 //~ rjf: Built-In View Rules

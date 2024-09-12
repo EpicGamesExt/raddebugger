@@ -5,6 +5,16 @@
 #define DBG_FRONTEND_CORE_H
 
 ////////////////////////////////
+//~ rjf: Evaluation Spaces
+
+typedef U64 DF_EvalSpaceKind;
+enum
+{
+  DF_EvalSpaceKind_CtrlEntity = E_SpaceKind_FirstUserDefined,
+  DF_EvalSpaceKind_CfgEntity,
+};
+
+////////////////////////////////
 //~ rjf: Binding Types
 
 typedef struct DF_Binding DF_Binding;
@@ -902,7 +912,6 @@ internal D_CmdParams df_cmd_params_from_window(DF_Window *window);
 internal D_CmdParams df_cmd_params_from_panel(DF_Window *window, DF_Panel *panel);
 internal D_CmdParams df_cmd_params_from_view(DF_Window *window, DF_Panel *panel, DF_View *view);
 #endif
-internal D_CmdParams df_cmd_params_copy(Arena *arena, D_CmdParams *src);
 
 ////////////////////////////////
 //~ rjf: Global Cross-Window UI Interaction State Functions

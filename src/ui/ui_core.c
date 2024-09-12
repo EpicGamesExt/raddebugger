@@ -2958,7 +2958,7 @@ ui_anim_(UI_Key key, UI_AnimParams *params)
   {
     U64 slot_idx = key.u64[0]%ui_state->anim_slots_count;
     UI_AnimSlot *slot = &ui_state->anim_slots[slot_idx];
-    for(UI_AnimNode *n = slot->first; n != &ui_nil_anim_node; n = n->slot_next)
+    for(UI_AnimNode *n = slot->first; n != &ui_nil_anim_node && n != 0; n = n->slot_next)
     {
       if(ui_key_match(n->key, key))
       {

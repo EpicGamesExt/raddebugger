@@ -215,32 +215,6 @@ Rng1U64 d_reg_slot_range_table[29] =
 {OffsetOf(D_Regs, params_tree), OffsetOf(D_Regs, params_tree) + sizeof(MD_Node *)},
 };
 
-Rng1U64 d_cmd_param_slot_range_table[22] =
-{
-{0},
-{OffsetOf(D_CmdParams, window), OffsetOf(D_CmdParams, window) + sizeof(D_Handle)},
-{OffsetOf(D_CmdParams, panel), OffsetOf(D_CmdParams, panel) + sizeof(D_Handle)},
-{OffsetOf(D_CmdParams, dest_panel), OffsetOf(D_CmdParams, dest_panel) + sizeof(D_Handle)},
-{OffsetOf(D_CmdParams, prev_view), OffsetOf(D_CmdParams, prev_view) + sizeof(D_Handle)},
-{OffsetOf(D_CmdParams, view), OffsetOf(D_CmdParams, view) + sizeof(D_Handle)},
-{OffsetOf(D_CmdParams, entity), OffsetOf(D_CmdParams, entity) + sizeof(D_Handle)},
-{OffsetOf(D_CmdParams, entity_list), OffsetOf(D_CmdParams, entity_list) + sizeof(D_HandleList)},
-{OffsetOf(D_CmdParams, string), OffsetOf(D_CmdParams, string) + sizeof(String8)},
-{OffsetOf(D_CmdParams, file_path), OffsetOf(D_CmdParams, file_path) + sizeof(String8)},
-{OffsetOf(D_CmdParams, text_point), OffsetOf(D_CmdParams, text_point) + sizeof(TxtPt)},
-{OffsetOf(D_CmdParams, params_tree), OffsetOf(D_CmdParams, params_tree) + sizeof(MD_Node *)},
-{OffsetOf(D_CmdParams, os_event), OffsetOf(D_CmdParams, os_event) + sizeof(struct OS_Event *)},
-{OffsetOf(D_CmdParams, vaddr), OffsetOf(D_CmdParams, vaddr) + sizeof(U64)},
-{OffsetOf(D_CmdParams, voff), OffsetOf(D_CmdParams, voff) + sizeof(U64)},
-{OffsetOf(D_CmdParams, index), OffsetOf(D_CmdParams, index) + sizeof(U64)},
-{OffsetOf(D_CmdParams, id), OffsetOf(D_CmdParams, id) + sizeof(U64)},
-{OffsetOf(D_CmdParams, prefer_dasm), OffsetOf(D_CmdParams, prefer_dasm) + sizeof(B32)},
-{OffsetOf(D_CmdParams, force_confirm), OffsetOf(D_CmdParams, force_confirm) + sizeof(B32)},
-{OffsetOf(D_CmdParams, dir2), OffsetOf(D_CmdParams, dir2) + sizeof(Dir2)},
-{OffsetOf(D_CmdParams, unwind_index), OffsetOf(D_CmdParams, unwind_index) + sizeof(U64)},
-{OffsetOf(D_CmdParams, inline_depth), OffsetOf(D_CmdParams, inline_depth) + sizeof(U64)},
-};
-
 D_ViewRuleSpecInfo d_core_view_rule_spec_info_table[21] =
 {
 {str8_lit_comp("default"), str8_lit_comp("Default"), str8_lit_comp(""), str8_lit_comp(""), (D_ViewRuleSpecInfoFlag_Inherited*0)|(D_ViewRuleSpecInfoFlag_Expandable*0)|(D_ViewRuleSpecInfoFlag_ExprResolution*0)|(D_ViewRuleSpecInfoFlag_VizBlockProd*1), },

@@ -35,10 +35,10 @@
 DF_RegTable:
 {
   // rjf: entity slots
-  {D_Handle         machine          Machine       }
-  {D_Handle         module           Module        }
-  {D_Handle         process          Process       }
-  {D_Handle         thread           Thread        }
+  {CTRL_Handle      machine          Machine       }
+  {CTRL_Handle      module           Module        }
+  {CTRL_Handle      process          Process       }
+  {CTRL_Handle      thread           Thread        }
   {D_Handle         window           Window        }
   {D_Handle         panel            Panel         }
   {D_Handle         view             View          }

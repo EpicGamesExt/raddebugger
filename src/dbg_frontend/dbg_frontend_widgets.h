@@ -43,7 +43,7 @@ struct DF_CodeSliceParams
   Rng1U64 *line_ranges;
   TXT_TokenArray *line_tokens;
   D_EntityList *line_bps;
-  D_EntityList *line_ips;
+  CTRL_EntityList *line_ips;
   D_EntityList *line_pins;
   U64 *line_vaddrs;
   D_LineList *line_infos;

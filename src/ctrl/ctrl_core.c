@@ -544,6 +544,18 @@ ctrl_entity_list_push(Arena *arena, CTRL_EntityList *list, CTRL_Entity *entity)
   list->count += 1;
 }
 
+internal CTRL_EntityList
+ctrl_entity_list_from_handle_list(Arena *arena, CTRL_EntityStore *store, CTRL_HandleList *list)
+{
+  CTRL_EntityList result = {0};
+  for(CTRL_HandleNode *n = list->first; n != 0; n = n->next)
+  {
+    CTRL_Entity *entity = ctrl_entity_from_handle(store, n->v);
+    ctrl_entity_list_push(arena, &result, entity);
+  }
+  return result;
+}
+
 //- rjf: cache creation/destruction
 
 internal CTRL_EntityStore *
@@ -1057,6 +1069,7 @@ ctrl_entity_store_apply_events(CTRL_EntityStore *store, CTRL_EventList *list)
       {
         CTRL_Entity *process = ctrl_entity_from_handle(store, event->parent);
         CTRL_Entity *thread = ctrl_entity_alloc(store, process, CTRL_EntityKind_Thread, event->arch, event->entity, (U64)event->entity_id);
+        thread->stack_base = event->stack_base;
         ctrl_query_cached_rip_from_thread(store, event->entity);
       }break;
       case CTRL_EventKind_EndThread:

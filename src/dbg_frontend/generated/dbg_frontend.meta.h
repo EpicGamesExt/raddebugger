@@ -501,10 +501,10 @@ DF_SettingCode_COUNT,
 typedef struct DF_Regs DF_Regs;
 struct DF_Regs
 {
-D_Handle machine;
-D_Handle module;
-D_Handle process;
-D_Handle thread;
+CTRL_Handle machine;
+CTRL_Handle module;
+CTRL_Handle process;
+CTRL_Handle thread;
 D_Handle window;
 D_Handle panel;
 D_Handle view;
