@@ -4007,9 +4007,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints)
             D_Entity *selected_thread = d_entity_from_handle(d_regs()->thread);
             if(!d_entity_is_nil(selected_thread))
             {
-              D_CmdParams params = d_cmd_params_zero();
-              params.entity = d_handle_from_entity(selected_thread);
-              df_push_cmd(d_cmd_spec_from_kind(DF_CmdKind_FindThread), &params);
+              df_cmd(DF_CmdKind_FindThread, .thread = d_handle_from_entity(selected_thread));
             }
           }
           
@@ -4915,7 +4913,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints)
           d_state->base_regs.v.thread = d_handle_from_entity(thread);
           d_state->base_regs.v.module = d_handle_from_entity(module);
           d_state->base_regs.v.process = d_handle_from_entity(process);
-          df_push_cmd(df_cmd_spec_from_kind(DF_CmdKind_FindThread), &params);
+          df_cmd(DF_CmdKind_FindThread, .thread = d_handle_from_entity(thread));
         }break;
         case D_CmdKind_SelectUnwind:
         {
@@ -4934,7 +4932,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints)
               d_state->base_regs.v.inline_depth = params.inline_depth;
             }
           }
-          df_push_cmd(df_cmd_spec_from_kind(DF_CmdKind_FindThread), &params);
+          df_cmd(DF_CmdKind_FindThread, .thread = d_handle_from_entity(thread));
           di_scope_close(di_scope);
         }break;
         case D_CmdKind_UpOneFrame:

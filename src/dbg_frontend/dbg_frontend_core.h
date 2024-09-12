@@ -411,7 +411,7 @@ typedef struct DF_Cmd DF_Cmd;
 struct DF_Cmd
 {
   D_CmdSpec *spec;
-  D_CmdParams params;
+  DF_Regs *regs;
 };
 
 typedef struct DF_CmdNode DF_CmdNode;
@@ -857,7 +857,7 @@ internal DF_Regs *df_regs_copy(Arena *arena, DF_Regs *src);
 ////////////////////////////////
 //~ rjf: Commands Type Functions
 
-internal void df_cmd_list_push_new(Arena *arena, DF_CmdList *cmds, D_CmdSpec *spec, D_CmdParams *params);
+internal void df_cmd_list_push_new(Arena *arena, DF_CmdList *cmds, D_CmdSpec *spec, DF_Regs *regs);
 
 ////////////////////////////////
 //~ rjf: View Type Functions
@@ -1079,9 +1079,11 @@ internal D_CfgTable *df_cfg_table(void);
 
 internal DF_Regs *df_regs(void);
 internal DF_Regs *df_base_regs(void);
-internal DF_Regs *df_push_regs(void);
+internal DF_Regs *df_push_regs_(DF_Regs *regs);
+#define df_push_regs(...) df_push_regs_(&(DF_Regs){df_regs_lit_init_top __VA_ARGS__})
 internal DF_Regs *df_pop_regs(void);
-#define DF_RegsScope DeferLoop(df_push_regs(), df_pop_regs())
+#define DF_RegsScope(...) DeferLoop(df_push_regs(__VA_ARGS__), df_pop_regs())
+internal void df_regs_fill_from_string(D_CmdSpec *spec, String8 string);
 
 ////////////////////////////////
 //~ rjf: Commands
@@ -1091,15 +1093,8 @@ internal D_CmdSpec *df_cmd_spec_from_kind(DF_CmdKind kind);
 internal DF_CmdKind df_cmd_kind_from_string(String8 string);
 
 //- rjf: pushing
-internal void df_push_cmd(D_CmdSpec *spec, D_CmdParams *params);
-#define df_cmd(kind, ...) df_push_cmd(df_cmd_spec_from_kind(kind), \
-&(D_CmdParams)               \
-{                            \
-.window = d_regs()->window, \
-.panel  = d_regs()->panel,  \
-.view   = d_regs()->view,   \
-__VA_ARGS__                 \
-})
+internal void df_push_cmd(D_CmdSpec *spec, DF_Regs *regs);
+#define df_cmd(kind, ...) df_push_cmd(df_cmd_spec_from_kind(kind), &(DF_Regs){df_regs_lit_init_top __VA_ARGS__})
 
 //- rjf: iterating
 internal B32 df_next_cmd(DF_Cmd **cmd);

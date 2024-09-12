@@ -59,6 +59,8 @@ DF_RegTable:
   {TXT_LangKind     lang_kind        LangKind      }
   {D_LineList       lines            Lines         }
   {DI_Key           dbgi_key         DbgiKey       }
+  {U64              vaddr            Vaddr         }
+  {U64              voff             Voff          }
   {Rng1U64          vaddr_range      VaddrRange    }
   {Rng1U64          voff_range       VoffRange     }
   

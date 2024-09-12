@@ -29,6 +29,8 @@ DF_RegSlot_TextKey,
 DF_RegSlot_LangKind,
 DF_RegSlot_Lines,
 DF_RegSlot_DbgiKey,
+DF_RegSlot_Vaddr,
+DF_RegSlot_Voff,
 DF_RegSlot_VaddrRange,
 DF_RegSlot_VoffRange,
 DF_RegSlot_PID,
@@ -519,6 +521,8 @@ U128 text_key;
 TXT_LangKind lang_kind;
 D_LineList lines;
 DI_Key dbgi_key;
+U64 vaddr;
+U64 voff;
 Rng1U64 vaddr_range;
 Rng1U64 voff_range;
 U32 pid;
@@ -550,6 +554,8 @@ MD_Node * params_tree;
 .lang_kind = df_regs()->lang_kind,\
 .lines = df_regs()->lines,\
 .dbgi_key = df_regs()->dbgi_key,\
+.vaddr = df_regs()->vaddr,\
+.voff = df_regs()->voff,\
 .vaddr_range = df_regs()->vaddr_range,\
 .voff_range = df_regs()->voff_range,\
 .pid = df_regs()->pid,\
@@ -678,7 +684,7 @@ C_LINKAGE_BEGIN
 extern DF_CmdKind d_cfg_src_load_cmd_kind_table[4];
 extern DF_CmdKind d_cfg_src_write_cmd_kind_table[4];
 extern DF_CmdKind d_cfg_src_apply_cmd_kind_table[4];
-extern Rng1U64 df_reg_slot_range_table[29];
+extern Rng1U64 df_reg_slot_range_table[31];
 extern DF_StringBindingPair df_g_default_binding_table[110];
 extern String8 df_g_binding_version_remap_old_name_table[7];
 extern String8 df_g_binding_version_remap_new_name_table[7];

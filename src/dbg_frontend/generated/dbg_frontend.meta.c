@@ -28,7 +28,7 @@ DF_CmdKind_Null,
 DF_CmdKind_Null,
 };
 
-Rng1U64 df_reg_slot_range_table[29] =
+Rng1U64 df_reg_slot_range_table[31] =
 {
 {0},
 {OffsetOf(DF_Regs, machine), OffsetOf(DF_Regs, machine) + sizeof(D_Handle)},
@@ -51,6 +51,8 @@ Rng1U64 df_reg_slot_range_table[29] =
 {OffsetOf(DF_Regs, lang_kind), OffsetOf(DF_Regs, lang_kind) + sizeof(TXT_LangKind)},
 {OffsetOf(DF_Regs, lines), OffsetOf(DF_Regs, lines) + sizeof(D_LineList)},
 {OffsetOf(DF_Regs, dbgi_key), OffsetOf(DF_Regs, dbgi_key) + sizeof(DI_Key)},
+{OffsetOf(DF_Regs, vaddr), OffsetOf(DF_Regs, vaddr) + sizeof(U64)},
+{OffsetOf(DF_Regs, voff), OffsetOf(DF_Regs, voff) + sizeof(U64)},
 {OffsetOf(DF_Regs, vaddr_range), OffsetOf(DF_Regs, vaddr_range) + sizeof(Rng1U64)},
 {OffsetOf(DF_Regs, voff_range), OffsetOf(DF_Regs, voff_range) + sizeof(Rng1U64)},
 {OffsetOf(DF_Regs, pid), OffsetOf(DF_Regs, pid) + sizeof(U32)},
