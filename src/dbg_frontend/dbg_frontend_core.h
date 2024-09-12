@@ -663,6 +663,8 @@ struct DF_State
   Arena *arena;
   B32 quit;
   F64 time_in_seconds;
+  Log *log;
+  String8 log_path;
   
   // rjf: frame state
   F32 frame_dt;

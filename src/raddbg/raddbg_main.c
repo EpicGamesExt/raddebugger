@@ -618,10 +618,6 @@ global U64 ipc_s2m_ring_read_pos = 0;
 global OS_Handle ipc_s2m_ring_mutex = {0};
 global OS_Handle ipc_s2m_ring_cv = {0};
 
-//- rjf: main thread log
-global Log *main_thread_log = 0;
-global String8 main_thread_log_path = {0};
-
 ////////////////////////////////
 //~ rjf: IPC Signaler Thread
 
@@ -672,37 +668,7 @@ internal CTRL_WAKEUP_FUNCTION_DEF(wakeup_hook_ctrl)
 internal B32
 frame(void)
 {
-  ProfBeginFunction();
-  Temp scratch = scratch_begin(0, 0);
-  
-  //- rjf: begin logging
-  if(main_thread_log == 0)
-  {
-    main_thread_log = log_alloc();
-    String8 user_program_data_path = os_get_process_info()->user_program_data_path;
-    String8 user_data_folder = push_str8f(scratch.arena, "%S/raddbg/logs", user_program_data_path);
-    main_thread_log_path = push_str8f(d_state->arena, "%S/ui_thread.raddbg_log", user_data_folder);
-    os_make_directory(user_data_folder);
-    os_write_data_to_file_path(main_thread_log_path, str8_zero());
-  }
-  log_select(main_thread_log);
-  log_scope_begin();
-  
-  //- rjf: do frontend frame
   df_frame();
-  
-  //- rjf: end logging
-  {
-    LogScopeResult log = log_scope_end(scratch.arena);
-    os_append_data_to_file_path(main_thread_log_path, log.strings[LogMsgKind_Info]);
-    if(log.strings[LogMsgKind_UserError].size != 0)
-    {
-      // TODO(rjf): @msgs
-    }
-  }
-  
-  scratch_end(scratch);
-  ProfEnd();
   return df_state->quit;
 }
 
