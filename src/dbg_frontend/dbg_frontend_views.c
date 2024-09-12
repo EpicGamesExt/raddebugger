@@ -21,7 +21,7 @@ df_code_view_init(DF_CodeViewState *cv, DF_View *view)
 internal void
 df_code_view_cmds(DF_View *view, DF_CodeViewState *cv, String8 text_data, TXT_TextInfo *text_info, DASM_LineArray *dasm_lines, Rng1U64 dasm_vaddr_range, DI_Key dasm_dbgi_key)
 {
-  for(D_Cmd *cmd = 0; df_next_cmd(&cmd);)
+  for(DF_Cmd *cmd = 0; df_next_cmd(&cmd);)
   {
     // rjf: mismatched window/panel => skip
     if(!d_handle_match(d_regs()->window, cmd->params.window) ||
@@ -4670,7 +4670,7 @@ DF_VIEW_CMD_FUNCTION_DEF(target)
   D_Entity *entity = d_entity_from_eval_string(string);
   
   // rjf: process commands
-  for(D_Cmd *cmd = 0; df_next_cmd(&cmd);)
+  for(DF_Cmd *cmd = 0; df_next_cmd(&cmd);)
   {
     // rjf: mismatched window/panel => skip
     if(!d_handle_match(d_regs()->window, cmd->params.window) ||
@@ -5155,7 +5155,7 @@ DF_VIEW_CMD_FUNCTION_DEF(file_path_map)
   DF_FilePathMapViewState *fpms = df_view_user_state(view, DF_FilePathMapViewState);
   
   // rjf: process commands
-  for(D_Cmd *cmd = 0; df_next_cmd(&cmd);)
+  for(DF_Cmd *cmd = 0; df_next_cmd(&cmd);)
   {
     // rjf: mismatched window/panel => skip
     if(!d_handle_match(d_regs()->window, cmd->params.window) ||
@@ -5788,7 +5788,7 @@ DF_VIEW_SETUP_FUNCTION_DEF(modules)
 DF_VIEW_CMD_FUNCTION_DEF(modules)
 {
   DF_ModulesViewState *mv = df_view_user_state(view, DF_ModulesViewState);
-  for(D_Cmd *cmd = 0; df_next_cmd(&cmd);)
+  for(DF_Cmd *cmd = 0; df_next_cmd(&cmd);)
   {
     // rjf: mismatched window/panel => skip
     if(!d_handle_match(d_regs()->window, cmd->params.window) ||
@@ -6240,7 +6240,7 @@ typedef struct DF_PendingFileViewState DF_PendingFileViewState;
 struct DF_PendingFileViewState
 {
   Arena *deferred_cmd_arena;
-  D_CmdList deferred_cmds;
+  DF_CmdList deferred_cmds;
 };
 
 DF_VIEW_SETUP_FUNCTION_DEF(pending_file)
@@ -6255,7 +6255,7 @@ DF_VIEW_CMD_FUNCTION_DEF(pending_file)
   DF_PendingFileViewState *pves = df_view_user_state(view, DF_PendingFileViewState);
   
   //- rjf: process commands
-  for(D_Cmd *cmd = 0; df_next_cmd(&cmd);)
+  for(DF_Cmd *cmd = 0; df_next_cmd(&cmd);)
   {
     // rjf: mismatched window/panel => skip
     if(!d_handle_match(d_regs()->window, cmd->params.window) ||
@@ -6276,7 +6276,7 @@ DF_VIEW_CMD_FUNCTION_DEF(pending_file)
       case DF_CmdKind_CenterCursor:
       case DF_CmdKind_ContainCursor:
       {
-        d_cmd_list_push(pves->deferred_cmd_arena, &pves->deferred_cmds, &cmd->params, cmd->spec);
+        df_cmd_list_push_new(pves->deferred_cmd_arena, &pves->deferred_cmds, cmd->spec, &cmd->params);
       }break;
     }
   }
@@ -6326,9 +6326,9 @@ DF_VIEW_CMD_FUNCTION_DEF(pending_file)
   //- rjf: if entity is ready, dispatch all deferred commands
   if(file_is_ready)
   {
-    for(D_CmdNode *cmd_node = pves->deferred_cmds.first; cmd_node != 0; cmd_node = cmd_node->next)
+    for(DF_CmdNode *cmd_node = pves->deferred_cmds.first; cmd_node != 0; cmd_node = cmd_node->next)
     {
-      D_Cmd *cmd = &cmd_node->cmd;
+      DF_Cmd *cmd = &cmd_node->cmd;
       df_push_cmd(cmd->spec, &cmd->params);
     }
     arena_clear(pves->deferred_cmd_arena);
@@ -6398,7 +6398,7 @@ DF_VIEW_CMD_FUNCTION_DEF(text)
   df_code_view_cmds(view, cv, data, &info, 0, r1u64(0, 0), di_key_zero());
   
   //- rjf: process code-file commands
-  for(D_Cmd *cmd = 0; df_next_cmd(&cmd);)
+  for(DF_Cmd *cmd = 0; df_next_cmd(&cmd);)
   {
     // rjf: mismatched window/panel => skip
     if(!d_handle_match(d_regs()->window, cmd->params.window) ||
@@ -6717,7 +6717,7 @@ DF_VIEW_CMD_FUNCTION_DEF(disasm)
   //////////////////////////////
   //- rjf: process disassembly-specific commands
   //
-  for(D_Cmd *cmd = 0; df_next_cmd(&cmd);)
+  for(DF_Cmd *cmd = 0; df_next_cmd(&cmd);)
   {
     D_CmdParams params = cmd->params;
     
@@ -7022,7 +7022,7 @@ DF_VIEW_SETUP_FUNCTION_DEF(memory)
 DF_VIEW_CMD_FUNCTION_DEF(memory)
 {
   DF_MemoryViewState *mv = df_view_user_state(view, DF_MemoryViewState);
-  for(D_Cmd *cmd = 0; df_next_cmd(&cmd);)
+  for(DF_Cmd *cmd = 0; df_next_cmd(&cmd);)
   {
     DF_CmdKind kind = df_cmd_kind_from_string(cmd->spec->info.string);
     D_CmdParams *params = &cmd->params;

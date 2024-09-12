@@ -390,10 +390,10 @@ d_cmd_params_apply_spec_query(Arena *arena, D_CmdParams *params, D_CmdSpec *spec
 //- rjf: command lists
 
 internal void
-d_cmd_list_push(Arena *arena, D_CmdList *cmds, D_CmdParams *params, D_CmdSpec *spec)
+d_cmd_list_push_new(Arena *arena, D_CmdList *cmds, D_CmdKind kind, D_CmdParams *params)
 {
   D_CmdNode *n = push_array(arena, D_CmdNode, 1);
-  n->cmd.spec = spec;
+  n->cmd.kind = kind;
   n->cmd.params = df_cmd_params_copy(arena, params);
   DLLPushBack(cmds->first, cmds->last, n);
   cmds->count += 1;
@@ -3823,9 +3823,9 @@ d_query_cached_member_map_from_dbgi_key_voff(DI_Key *dbgi_key, U64 voff)
 //- rjf: top-level command dispatch
 
 internal void
-d_push_cmd(D_CmdSpec *spec, D_CmdParams *params)
+d_push_cmd(D_CmdKind kind, D_CmdParams *params)
 {
-  d_cmd_list_push(d_state->cmds_arena, &d_state->cmds, params, spec);
+  d_cmd_list_push_new(d_state->cmds_arena, &d_state->cmds, kind, params);
 }
 
 //- rjf: command iteration
@@ -3998,9 +3998,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints)
           if(should_snap && stop_thread->kind == D_EntityKind_Thread)
           {
             log_infof("stop_thread: \"%S\"\n", d_display_string_from_entity(scratch.arena, stop_thread));
-            D_CmdParams params = d_cmd_params_zero();
-            params.entity = d_handle_from_entity(stop_thread);
-            d_push_cmd(d_cmd_spec_from_kind(D_CmdKind_SelectThread), &params);
+            d_cmd(D_CmdKind_SelectThread, .entity = d_handle_from_entity(stop_thread));
           }
           
           // rjf: if no stop-causing thread, and if selected thread, snap to selected
@@ -4181,9 +4179,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints)
           B32 do_initial_snap = (already_existing_processes.count == 1 && thread_idx_in_process == 0);
           if(do_initial_snap)
           {
-            D_CmdParams params = d_cmd_params_zero();
-            params.entity = d_handle_from_entity(entity);
-            d_push_cmd(d_cmd_spec_from_kind(D_CmdKind_SelectThread), &params);
+            d_cmd(D_CmdKind_SelectThread, .entity = d_handle_from_entity(entity));
           }
         }break;
         
@@ -4489,8 +4485,6 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints)
     {
       // rjf: unpack command
       D_CmdParams params = cmd->params;
-      D_CmdKind core_cmd_kind = d_cmd_kind_from_string(cmd->spec->info.string);
-      d_cmd_spec_counter_inc(cmd->spec);
       
       // rjf: prep ctrl running arguments
       B32 need_run = 0;
@@ -4500,7 +4494,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints)
       CTRL_TrapList run_traps = {0};
       
       // rjf: process command
-      switch(core_cmd_kind)
+      switch(cmd->kind)
       {
         default:{}break;
         
@@ -4581,7 +4575,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints)
             need_run = 1;
             run_kind = D_RunKind_Run;
             run_thread = &ctrl_entity_nil;
-            run_flags = (core_cmd_kind == D_CmdKind_LaunchAndInit) ? CTRL_RunFlag_StopOnEntryPoint : 0;
+            run_flags = (cmd->kind == D_CmdKind_LaunchAndInit) ? CTRL_RunFlag_StopOnEntryPoint : 0;
           }
           
           // rjf: no targets -> error
@@ -4700,7 +4694,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints)
           {
             B32 good = 1;
             CTRL_TrapList traps = {0};
-            switch(core_cmd_kind)
+            switch(cmd->kind)
             {
               default: break;
               case D_CmdKind_StepIntoInst: {}break;
@@ -4804,8 +4798,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints)
           D_Entity *loc = d_entity_alloc(bp, D_EntityKind_Location);
           d_entity_equip_name(loc, file_path);
           d_entity_equip_txt_pt(loc, point);
-          D_CmdParams p = d_cmd_params_zero();
-          d_push_cmd(d_cmd_spec_from_kind(D_CmdKind_Run), &p);
+          d_cmd(D_CmdKind_Run);
         }break;
         case D_CmdKind_RunToAddress:
         {
@@ -4814,8 +4807,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints)
           bp->flags |= D_EntityFlag_DiesOnRunStop;
           D_Entity *loc = d_entity_alloc(bp, D_EntityKind_Location);
           d_entity_equip_vaddr(loc, params.vaddr);
-          D_CmdParams p = d_cmd_params_zero();
-          d_push_cmd(d_cmd_spec_from_kind(D_CmdKind_Run), &p);
+          d_cmd(D_CmdKind_Run);
         }break;
         case D_CmdKind_Run:
         {
@@ -4823,21 +4815,17 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints)
           D_EntityList processes = d_query_cached_entity_list_with_kind(D_EntityKind_Process);
           if(processes.count != 0)
           {
-            D_CmdParams params = d_cmd_params_zero();
-            d_push_cmd(d_cmd_spec_from_kind(D_CmdKind_Continue), &params);
+            d_cmd(D_CmdKind_Continue);
           }
           else if(!d_ctrl_targets_running())
           {
-            d_push_cmd(d_cmd_spec_from_kind(D_CmdKind_LaunchAndRun), &params);
+            d_cmd(D_CmdKind_LaunchAndRun);
           }
         }break;
         case D_CmdKind_Restart:
         {
           // rjf: kill all
-          {
-            D_CmdParams params = d_cmd_params_zero();
-            d_push_cmd(d_cmd_spec_from_kind(D_CmdKind_KillAll), &params);
-          }
+          d_cmd(D_CmdKind_KillAll);
           
           // rjf: gather targets corresponding to all launched processes
           D_EntityList targets = {0};
@@ -4855,11 +4843,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints)
           }
           
           // rjf: re-launch targets
-          {
-            D_CmdParams params = d_cmd_params_zero();
-            params.entity_list = d_handle_list_from_entity_list(scratch.arena, targets);
-            d_push_cmd(d_cmd_spec_from_kind(D_CmdKind_LaunchAndRun), &params);
-          }
+          d_cmd(D_CmdKind_LaunchAndRun, .entity_list = d_handle_list_from_entity_list(scratch.arena, targets));
         }break;
         case D_CmdKind_StepInto:
         case D_CmdKind_StepOver:
@@ -4867,24 +4851,22 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints)
           D_EntityList processes = d_query_cached_entity_list_with_kind(D_EntityKind_Process);
           if(processes.count != 0)
           {
-            D_CmdKind step_cmd_kind = (core_cmd_kind == D_CmdKind_StepInto
+            D_CmdKind step_cmd_kind = (cmd->kind == D_CmdKind_StepInto
                                        ? D_CmdKind_StepIntoLine
                                        : D_CmdKind_StepOverLine);
             B32 prefer_dasm = params.prefer_dasm;
             if(prefer_dasm)
             {
-              step_cmd_kind = (core_cmd_kind == D_CmdKind_StepInto
+              step_cmd_kind = (cmd->kind == D_CmdKind_StepInto
                                ? D_CmdKind_StepIntoInst
                                : D_CmdKind_StepOverInst);
             }
-            d_push_cmd(d_cmd_spec_from_kind(step_cmd_kind), &params);
+            d_cmd(step_cmd_kind);
           }
           else if(!d_ctrl_targets_running())
           {
             D_EntityList targets = d_push_active_target_list(scratch.arena);
-            D_CmdParams p = params;
-            p.entity_list = d_handle_list_from_entity_list(scratch.arena, targets);
-            d_push_cmd(d_cmd_spec_from_kind(D_CmdKind_LaunchAndInit), &p);
+            d_cmd(D_CmdKind_LaunchAndInit, .entity_list = d_handle_list_from_entity_list(scratch.arena, targets));
           }
         }break;
         case D_CmdKind_RunToCursor:
@@ -4918,10 +4900,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints)
               }
             }
           }
-          D_CmdParams p = d_cmd_params_zero();
-          p.entity = d_handle_from_entity(thread);
-          p.vaddr = new_rip_vaddr;
-          d_push_cmd(d_cmd_spec_from_kind(D_CmdKind_SetThreadIP), &p);
+          d_cmd(D_CmdKind_SetThreadIP, .entity = d_handle_from_entity(thread), .vaddr = new_rip_vaddr);
         }break;
         
         
@@ -4973,7 +4952,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints)
           if(crnt_unwind_idx < rich_unwind.frames.concrete_frame_count)
           {
             D_UnwindFrame *f = &rich_unwind.frames.v[crnt_unwind_idx];
-            switch(core_cmd_kind)
+            switch(cmd->kind)
             {
               default:{}break;
               case D_CmdKind_UpOneFrame:
@@ -5002,10 +4981,9 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints)
               }break;
             }
           }
-          D_CmdParams p = params;
-          p.unwind_index = next_unwind_idx;
-          p.inline_depth = next_inline_dpt;
-          d_push_cmd(d_cmd_spec_from_kind(D_CmdKind_SelectUnwind), &p);
+          d_cmd(D_CmdKind_SelectUnwind,
+                .unwind_index = next_unwind_idx,
+                .inline_depth = next_inline_dpt);
           di_scope_close(di_scope);
         }break;
         case D_CmdKind_FreezeThread:
@@ -5015,31 +4993,27 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints)
         case D_CmdKind_FreezeMachine:
         case D_CmdKind_ThawMachine:
         {
-          D_CmdKind disptch_kind = ((core_cmd_kind == D_CmdKind_FreezeThread ||
-                                     core_cmd_kind == D_CmdKind_FreezeProcess ||
-                                     core_cmd_kind == D_CmdKind_FreezeMachine)
+          D_CmdKind disptch_kind = ((cmd->kind == D_CmdKind_FreezeThread ||
+                                     cmd->kind == D_CmdKind_FreezeProcess ||
+                                     cmd->kind == D_CmdKind_FreezeMachine)
                                     ? D_CmdKind_FreezeEntity
                                     : D_CmdKind_ThawEntity);
-          d_push_cmd(d_cmd_spec_from_kind(disptch_kind), &params);
+          d_push_cmd(disptch_kind, &params);
         }break;
         case D_CmdKind_FreezeLocalMachine:
         {
           CTRL_MachineID machine_id = CTRL_MachineID_Local;
-          D_CmdParams params = d_cmd_params_zero();
-          params.entity = d_handle_from_entity(d_machine_entity_from_machine_id(machine_id));
-          d_push_cmd(d_cmd_spec_from_kind(D_CmdKind_FreezeMachine), &params);
+          d_cmd(D_CmdKind_FreezeMachine, .entity = d_handle_from_entity(d_machine_entity_from_machine_id(machine_id)));
         }break;
         case D_CmdKind_ThawLocalMachine:
         {
           CTRL_MachineID machine_id = CTRL_MachineID_Local;
-          D_CmdParams params = d_cmd_params_zero();
-          params.entity = d_handle_from_entity(d_machine_entity_from_machine_id(machine_id));
-          d_push_cmd(d_cmd_spec_from_kind(D_CmdKind_ThawMachine), &params);
+          d_cmd(D_CmdKind_ThawMachine, .entity = d_handle_from_entity(d_machine_entity_from_machine_id(machine_id)));
         }break;
         case D_CmdKind_FreezeEntity:
         case D_CmdKind_ThawEntity:
         {
-          B32 should_freeze = (core_cmd_kind == D_CmdKind_FreezeEntity);
+          B32 should_freeze = (cmd->kind == D_CmdKind_FreezeEntity);
           D_Entity *root = d_entity_from_handle(params.entity);
           for(D_Entity *e = root; !d_entity_is_nil(e); e = d_entity_rec_depth_first_pre(e, root).next)
           {

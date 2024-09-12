@@ -10,7 +10,7 @@
 #include "generated/dbg_frontend.meta.c"
 
 ////////////////////////////////
-//~ rjf: Registers Type Pure Functions
+//~ rjf: Registers Type Functions
 
 internal void
 df_regs_copy_contents(Arena *arena, DF_Regs *dst, DF_Regs *src)
@@ -34,6 +34,19 @@ df_regs_copy(Arena *arena, DF_Regs *src)
   DF_Regs *dst = push_array(arena, DF_Regs, 1);
   df_regs_copy_contents(arena, dst, src);
   return dst;
+}
+
+////////////////////////////////
+//~ rjf: Commands Type Functions
+
+internal void
+df_cmd_list_push_new(Arena *arena, DF_CmdList *cmds, D_CmdSpec *spec, D_CmdParams *params)
+{
+  DF_CmdNode *n = push_array(arena, DF_CmdNode, 1);
+  n->cmd.spec = spec;
+  n->cmd.params = df_cmd_params_copy(arena, params);
+  DLLPushBack(cmds->first, cmds->last, n);
+  cmds->count += 1;
 }
 
 ////////////////////////////////
@@ -7518,18 +7531,18 @@ df_cmd_kind_from_string(String8 string)
 internal void
 df_push_cmd(D_CmdSpec *spec, D_CmdParams *params)
 {
-  d_cmd_list_push(df_state->cmds_arena, &df_state->cmds, params, spec);
+  df_cmd_list_push_new(df_state->cmds_arena, &df_state->cmds, spec, params);
 }
 
 //- rjf: iterating
 
 internal B32
-df_next_cmd(D_Cmd **cmd)
+df_next_cmd(DF_Cmd **cmd)
 {
-  D_CmdNode *start_node = df_state->cmds.first;
+  DF_CmdNode *start_node = df_state->cmds.first;
   if(cmd[0] != 0)
   {
-    start_node = CastFromMember(D_CmdNode, cmd, cmd[0]);
+    start_node = CastFromMember(DF_CmdNode, cmd, cmd[0]);
     start_node = start_node->next;
   }
   cmd[0] = 0;
@@ -8191,7 +8204,7 @@ df_frame(void)
   //
   B32 panel_reset_done = 0;
   {
-    for(D_Cmd *cmd = 0; df_next_cmd(&cmd);)
+    for(DF_Cmd *cmd = 0; df_next_cmd(&cmd);)
     {
       // rjf: unpack command
       D_CmdParams *params = &cmd->params;
@@ -8216,7 +8229,7 @@ df_frame(void)
           // rjf: try to run engine command
           if(D_CmdKind_Null < (D_CmdKind)kind && (D_CmdKind)kind < D_CmdKind_COUNT)
           {
-            d_push_cmd(cmd->spec, params);
+            d_push_cmd((D_CmdKind)kind, params);
           }
           
           // rjf: try to open tabs for "view driver" commands
@@ -8278,7 +8291,7 @@ df_frame(void)
                                                 processes.count == 1 ? ""   : "es");
             D_CmdParams p = *params;
             p.force_confirm = 1;
-            d_cmd_list_push(df_state->confirm_arena, &df_state->confirm_cmds, &p, df_cmd_spec_from_kind(DF_CmdKind_Exit));
+            df_cmd_list_push_new(df_state->confirm_arena, &df_state->confirm_cmds, df_cmd_spec_from_kind(DF_CmdKind_Exit), &p);
           }
           
           // rjf: otherwise, actually exit
@@ -8366,7 +8379,7 @@ df_frame(void)
         {
           df_state->confirm_active = 0;
           df_state->confirm_key = ui_key_zero();
-          for(D_CmdNode *n = df_state->confirm_cmds.first; n != 0; n = n->next)
+          for(DF_CmdNode *n = df_state->confirm_cmds.first; n != 0; n = n->next)
           {
             df_push_cmd(n->cmd.spec, &n->cmd.params);
           }

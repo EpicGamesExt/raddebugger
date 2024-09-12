@@ -497,8 +497,8 @@ struct D_CmdSpecInfoArray
 typedef struct D_Cmd D_Cmd;
 struct D_Cmd
 {
+  D_CmdKind kind;
   D_CmdParams params;
-  D_CmdSpec *spec;
 };
 
 typedef struct D_CmdNode D_CmdNode;
@@ -776,7 +776,7 @@ internal D_CmdParams d_cmd_params_zero(void);
 internal String8 d_cmd_params_apply_spec_query(Arena *arena, D_CmdParams *params, D_CmdSpec *spec, String8 query);
 
 //- rjf: command lists
-internal void d_cmd_list_push(Arena *arena, D_CmdList *cmds, D_CmdParams *params, D_CmdSpec *spec);
+internal void d_cmd_list_push_new(Arena *arena, D_CmdList *cmds, D_CmdKind kind, D_CmdParams *params);
 
 //- rjf: string -> core layer command kind
 internal D_CmdKind d_cmd_kind_from_string(String8 string);
@@ -1040,8 +1040,8 @@ internal E_String2NumMap *d_query_cached_locals_map_from_dbgi_key_voff(DI_Key *d
 internal E_String2NumMap *d_query_cached_member_map_from_dbgi_key_voff(DI_Key *dbgi_key, U64 voff);
 
 //- rjf: top-level command dispatch
-internal void d_push_cmd(D_CmdSpec *spec, D_CmdParams *params);
-#define d_cmd(kind, ...) d_push_cmd(d_cmd_spec_from_kind(kind),  \
+internal void d_push_cmd(D_CmdKind kind, D_CmdParams *params);
+#define d_cmd(kind, ...) d_push_cmd((kind),  \
 &(D_CmdParams)               \
 {                            \
 .window = d_regs()->window, \

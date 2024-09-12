@@ -405,6 +405,32 @@ struct DF_MsgKindInfo
 #include "generated/dbg_frontend.meta.h"
 
 ////////////////////////////////
+//~ rjf: Command Types
+
+typedef struct DF_Cmd DF_Cmd;
+struct DF_Cmd
+{
+  D_CmdSpec *spec;
+  D_CmdParams params;
+};
+
+typedef struct DF_CmdNode DF_CmdNode;
+struct DF_CmdNode
+{
+  DF_CmdNode *next;
+  DF_CmdNode *prev;
+  DF_Cmd cmd;
+};
+
+typedef struct DF_CmdList DF_CmdList;
+struct DF_CmdList
+{
+  DF_CmdNode *first;
+  DF_CmdNode *last;
+  U64 count;
+};
+
+////////////////////////////////
 //~ rjf: Context Register Types
 
 typedef struct DF_RegsNode DF_RegsNode;
@@ -670,7 +696,7 @@ struct DF_State
   
   // rjf: commands
   Arena *cmds_arena;
-  D_CmdList cmds;
+  DF_CmdList cmds;
   
   // rjf: frame request state
   U64 num_frames_requested;
@@ -700,7 +726,7 @@ struct DF_State
   B32 confirm_active;
   F32 confirm_t;
   Arena *confirm_arena;
-  D_CmdList confirm_cmds;
+  DF_CmdList confirm_cmds;
   String8 confirm_title;
   String8 confirm_desc;
   
@@ -823,10 +849,15 @@ global D_Handle df_last_drag_drop_panel = {0};
 global D_Handle df_last_drag_drop_prev_tab = {0};
 
 ////////////////////////////////
-//~ rjf: Registers Type Pure Functions
+//~ rjf: Registers Type Functions
 
 internal void df_regs_copy_contents(Arena *arena, DF_Regs *dst, DF_Regs *src);
 internal DF_Regs *df_regs_copy(Arena *arena, DF_Regs *src);
+
+////////////////////////////////
+//~ rjf: Commands Type Functions
+
+internal void df_cmd_list_push_new(Arena *arena, DF_CmdList *cmds, D_CmdSpec *spec, D_CmdParams *params);
 
 ////////////////////////////////
 //~ rjf: View Type Functions
@@ -1071,7 +1102,7 @@ __VA_ARGS__                 \
 })
 
 //- rjf: iterating
-internal B32 df_next_cmd(D_Cmd **cmd);
+internal B32 df_next_cmd(DF_Cmd **cmd);
 
 ////////////////////////////////
 //~ rjf: Main Layer Top-Level Calls
