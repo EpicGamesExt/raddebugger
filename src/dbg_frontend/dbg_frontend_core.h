@@ -44,7 +44,7 @@ struct DF_KeyMapNode
 {
   DF_KeyMapNode *hash_next;
   DF_KeyMapNode *hash_prev;
-  D_CmdSpec *spec;
+  String8 name;
   DF_Binding binding;
 };
 
@@ -125,19 +125,19 @@ struct DF_ViewSpecInfoArray
   U64 count;
 };
 
-typedef struct D_CmdParamSlotViewSpecRuleNode D_CmdParamSlotViewSpecRuleNode;
-struct D_CmdParamSlotViewSpecRuleNode
+typedef struct DF_CmdParamSlotViewSpecRuleNode DF_CmdParamSlotViewSpecRuleNode;
+struct DF_CmdParamSlotViewSpecRuleNode
 {
-  D_CmdParamSlotViewSpecRuleNode *next;
+  DF_CmdParamSlotViewSpecRuleNode *next;
   DF_ViewSpec *view_spec;
-  D_CmdSpec *cmd_spec;
+  String8 cmd_name;
 };
 
-typedef struct D_CmdParamSlotViewSpecRuleList D_CmdParamSlotViewSpecRuleList;
-struct D_CmdParamSlotViewSpecRuleList
+typedef struct DF_CmdParamSlotViewSpecRuleList DF_CmdParamSlotViewSpecRuleList;
+struct DF_CmdParamSlotViewSpecRuleList
 {
-  D_CmdParamSlotViewSpecRuleNode *first;
-  D_CmdParamSlotViewSpecRuleNode *last;
+  DF_CmdParamSlotViewSpecRuleNode *first;
+  DF_CmdParamSlotViewSpecRuleNode *last;
   U64 count;
 };
 
@@ -361,42 +361,24 @@ struct DF_ViewRuleSpec
 };
 
 ////////////////////////////////
-//~ rjf: Message Kind Metadata Types
+//~ rjf: Command Kind Types
 
-typedef U32 DF_MsgQueryFlags;
+typedef U32 DF_QueryFlags;
 enum
 {
-  DF_MsgQueryFlag_AllowFiles       = (1<<0),
-  DF_MsgQueryFlag_AllowFolders     = (1<<1),
-  DF_MsgQueryFlag_CodeInput        = (1<<2),
-  DF_MsgQueryFlag_KeepOldInput     = (1<<3),
-  DF_MsgQueryFlag_SelectOldInput   = (1<<4),
-  DF_MsgQueryFlag_Required         = (1<<5),
+  DF_QueryFlag_AllowFiles       = (1<<0),
+  DF_QueryFlag_AllowFolders     = (1<<1),
+  DF_QueryFlag_CodeInput        = (1<<2),
+  DF_QueryFlag_KeepOldInput     = (1<<3),
+  DF_QueryFlag_SelectOldInput   = (1<<4),
+  DF_QueryFlag_Required         = (1<<5),
 };
 
-typedef struct DF_MsgQuery DF_MsgQuery;
-struct DF_MsgQuery
-{
-  DF_MsgQueryFlags flags;
-  D_RegSlot slot;
-  D_EntityKind entity_kind;
-};
-
-typedef U32 DF_MsgKindFlags;
+typedef U32 DF_CmdKindFlags;
 enum
 {
-  DF_MsgKindFlag_ListInUI      = (1<<0),
-  DF_MsgKindFlag_ListInIPCDocs = (1<<1),
-};
-
-typedef struct DF_MsgKindInfo DF_MsgKindInfo;
-struct DF_MsgKindInfo
-{
-  String8 display_name;
-  String8 description;
-  String8 search_tags;
-  DF_MsgKindFlags flags;
-  DF_MsgQuery query;
+  DF_CmdKindFlag_ListInUI      = (1<<0),
+  DF_CmdKindFlag_ListInIPCDocs = (1<<1),
 };
 
 ////////////////////////////////
@@ -410,7 +392,7 @@ struct DF_MsgKindInfo
 typedef struct DF_Cmd DF_Cmd;
 struct DF_Cmd
 {
-  D_CmdSpec *spec;
+  String8 name;
   DF_Regs *regs;
 };
 
@@ -606,9 +588,9 @@ struct DF_Window
   
   // rjf: query view stack
   Arena *query_cmd_arena;
-  D_CmdSpec *query_cmd_spec;
-  U64 query_cmd_params_mask[(D_CmdParamSlot_COUNT + 63) / 64];
-  D_CmdParams query_cmd_params;
+  String8 query_cmd_name;
+  DF_Regs *query_cmd_regs;
+  U64 query_cmd_regs_mask[(DF_RegSlot_COUNT + 63) / 64];
   DF_View *query_view_stack_top;
   B32 query_view_selected;
   F32 query_view_selected_t;
@@ -712,8 +694,9 @@ struct DF_State
   U64 key_map_total_count;
   
   // rjf: bind change
+  Arena *bind_change_arena;
   B32 bind_change_active;
-  D_CmdSpec *bind_change_cmd_spec;
+  String8 bind_change_cmd_name;
   DF_Binding bind_change_binding;
   
   // rjf: top-level context menu keys
@@ -743,7 +726,7 @@ struct DF_State
   DF_ViewRuleSpec **view_rule_spec_table;
   
   // rjf: cmd param slot -> view spec rule table
-  D_CmdParamSlotViewSpecRuleList cmd_param_slot_view_spec_table[D_CmdParamSlot_COUNT];
+  DF_CmdParamSlotViewSpecRuleList cmd_param_slot_view_spec_table[D_CmdParamSlot_COUNT];
   
   // rjf: windows
   DF_Window *first_window;
@@ -804,6 +787,8 @@ struct DF_State
 ////////////////////////////////
 //~ rjf: Globals
 
+read_only global DF_CmdKindInfo df_nil_cmd_kind_info = {0};
+
 read_only global DF_ViewSpec df_nil_view_spec =
 {
   &df_nil_view_spec,
@@ -857,7 +842,7 @@ internal DF_Regs *df_regs_copy(Arena *arena, DF_Regs *src);
 ////////////////////////////////
 //~ rjf: Commands Type Functions
 
-internal void df_cmd_list_push_new(Arena *arena, DF_CmdList *cmds, D_CmdSpec *spec, DF_Regs *regs);
+internal void df_cmd_list_push_new(Arena *arena, DF_CmdList *cmds, String8 name, DF_Regs *regs);
 
 ////////////////////////////////
 //~ rjf: View Type Functions
@@ -912,11 +897,12 @@ internal DF_Window *df_window_from_handle(D_Handle handle);
 ////////////////////////////////
 //~ rjf: Command Parameters From Context
 
-internal D_CmdParams df_cmd_params_from_gfx(void);
 internal B32 df_prefer_dasm_from_window(DF_Window *window);
+#if 0 // TODO(rjf): @msgs
 internal D_CmdParams df_cmd_params_from_window(DF_Window *window);
 internal D_CmdParams df_cmd_params_from_panel(DF_Window *window, DF_Panel *panel);
 internal D_CmdParams df_cmd_params_from_view(DF_Window *window, DF_Panel *panel, DF_View *view);
+#endif
 internal D_CmdParams df_cmd_params_copy(Arena *arena, D_CmdParams *src);
 
 ////////////////////////////////
@@ -937,7 +923,6 @@ internal DF_RichHoverInfo df_get_rich_hover_info(void);
 internal void df_register_view_specs(DF_ViewSpecInfoArray specs);
 internal DF_ViewSpec *df_view_spec_from_string(String8 string);
 internal DF_ViewSpec *df_view_spec_from_kind(DF_ViewKind kind);
-internal DF_ViewSpec *df_view_spec_from_cmd_param_slot_spec(D_CmdParamSlot slot, D_CmdSpec *cmd_spec);
 
 ////////////////////////////////
 //~ rjf: View Rule Spec State Functions
@@ -1026,11 +1011,10 @@ internal String8 df_push_search_string(Arena *arena);
 //- rjf: keybindings
 internal OS_Key df_os_key_from_cfg_string(String8 string);
 internal void df_clear_bindings(void);
-internal DF_BindingList df_bindings_from_spec(Arena *arena, D_CmdSpec *spec);
-internal void df_bind_spec(D_CmdSpec *spec, DF_Binding binding);
-internal void df_unbind_spec(D_CmdSpec *spec, DF_Binding binding);
-internal D_CmdSpecList df_cmd_spec_list_from_binding(Arena *arena, DF_Binding binding);
-internal D_CmdSpecList df_cmd_spec_list_from_event_flags(Arena *arena, OS_EventFlags flags);
+internal DF_BindingList df_bindings_from_name(Arena *arena, String8 name);
+internal void df_bind_name(String8 name, DF_Binding binding);
+internal void df_unbind_name(String8 name, DF_Binding binding);
+internal String8List df_cmd_name_list_from_binding(Arena *arena, DF_Binding binding);
 
 //- rjf: colors
 internal Vec4F32 df_rgba_from_theme_color(DF_ThemeColor color);
@@ -1083,18 +1067,23 @@ internal DF_Regs *df_push_regs_(DF_Regs *regs);
 #define df_push_regs(...) df_push_regs_(&(DF_Regs){df_regs_lit_init_top __VA_ARGS__})
 internal DF_Regs *df_pop_regs(void);
 #define DF_RegsScope(...) DeferLoop(df_push_regs(__VA_ARGS__), df_pop_regs())
-internal void df_regs_fill_from_string(D_CmdSpec *spec, String8 string);
+internal void df_regs_fill_slot_from_string(DF_RegSlot slot, String8 string);
 
 ////////////////////////////////
 //~ rjf: Commands
 
 // TODO(rjf): @msgs temporary glue
+#if 0
 internal D_CmdSpec *df_cmd_spec_from_kind(DF_CmdKind kind);
+#endif
 internal DF_CmdKind df_cmd_kind_from_string(String8 string);
 
+//- rjf: name -> info
+internal DF_CmdKindInfo *df_cmd_kind_info_from_string(String8 string);
+
 //- rjf: pushing
-internal void df_push_cmd(D_CmdSpec *spec, DF_Regs *regs);
-#define df_cmd(kind, ...) df_push_cmd(df_cmd_spec_from_kind(kind), &(DF_Regs){df_regs_lit_init_top __VA_ARGS__})
+internal void df_push_cmd(String8 name, DF_Regs *regs);
+#define df_cmd(kind, ...) df_push_cmd(df_cmd_kind_info_table[kind].string, &(DF_Regs){df_regs_lit_init_top __VA_ARGS__})
 
 //- rjf: iterating
 internal B32 df_next_cmd(DF_Cmd **cmd);

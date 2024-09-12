@@ -39,6 +39,7 @@ DF_RegSlot_PreferDisasm,
 DF_RegSlot_Dir2,
 DF_RegSlot_String,
 DF_RegSlot_ParamsTree,
+DF_RegSlot_OSEvent,
 DF_RegSlot_COUNT,
 } DF_RegSlot;
 
@@ -531,6 +532,28 @@ B32 prefer_disasm;
 Dir2 dir2;
 String8 string;
 MD_Node * params_tree;
+OS_Event * os_event;
+};
+
+typedef struct DF_Query DF_Query;
+struct DF_Query
+{
+DF_QueryFlags flags;
+DF_RegSlot slot;
+String8 view_name;
+D_EntityKind entity_kind;
+};
+
+typedef struct DF_CmdKindInfo DF_CmdKindInfo;
+struct DF_CmdKindInfo
+{
+String8 string;
+String8 description;
+String8 search_tags;
+String8 display_name;
+DF_IconKind icon_kind;
+DF_CmdKindFlags flags;
+DF_Query query;
 };
 
 #define df_regs_lit_init_top \
@@ -564,6 +587,7 @@ MD_Node * params_tree;
 .dir2 = df_regs()->dir2,\
 .string = df_regs()->string,\
 .params_tree = df_regs()->params_tree,\
+.os_event = df_regs()->os_event,\
 
 DF_VIEW_SETUP_FUNCTION_DEF(null);
 DF_VIEW_SETUP_FUNCTION_DEF(empty);
@@ -684,18 +708,14 @@ C_LINKAGE_BEGIN
 extern DF_CmdKind d_cfg_src_load_cmd_kind_table[4];
 extern DF_CmdKind d_cfg_src_write_cmd_kind_table[4];
 extern DF_CmdKind d_cfg_src_apply_cmd_kind_table[4];
-extern Rng1U64 df_reg_slot_range_table[31];
+extern Rng1U64 df_reg_slot_range_table[32];
 extern DF_StringBindingPair df_g_default_binding_table[110];
 extern String8 df_g_binding_version_remap_old_name_table[7];
 extern String8 df_g_binding_version_remap_new_name_table[7];
 extern String8 df_g_icon_kind_text_table[69];
 extern String8 df_view_kind_name_lower_table[34];
 extern DF_ViewSpecInfo df_g_gfx_view_kind_spec_info_table[34];
-extern DF_IconKind df_cmd_kind_icon_kind_table[220];
 extern DF_IconKind df_entity_kind_icon_kind_table[30];
-extern D_CmdParamSlot df_g_cmd_param_slot_2_view_spec_src_map[7];
-extern String8 df_g_cmd_param_slot_2_view_spec_dst_map[7];
-extern String8 df_g_cmd_param_slot_2_view_spec_cmd_map[7];
 extern String8 df_g_theme_preset_display_string_table[9];
 extern String8 df_g_theme_preset_code_string_table[9];
 extern String8 df_g_theme_color_version_remap_old_name_table[22];

@@ -92,26 +92,26 @@ df_loading_overlay(Rng2F32 rect, F32 loading_t, U64 progress_v, U64 progress_v_t
 //~ rjf: UI Widgets: Fancy Buttons
 
 internal void
-df_cmd_binding_buttons(D_CmdSpec *spec)
+df_cmd_binding_buttons(String8 name)
 {
   Temp scratch = scratch_begin(0, 0);
-  DF_BindingList bindings = df_bindings_from_spec(scratch.arena, spec);
+  DF_BindingList bindings = df_bindings_from_name(scratch.arena, name);
   
   //- rjf: build buttons for each binding
   for(DF_BindingNode *n = bindings.first; n != 0; n = n->next)
   {
     DF_Binding binding = n->binding;
     B32 rebinding_active_for_this_binding = (df_state->bind_change_active &&
-                                             df_state->bind_change_cmd_spec == spec &&
+                                             str8_match(df_state->bind_change_cmd_name, name, 0) &&
                                              df_state->bind_change_binding.key == binding.key &&
                                              df_state->bind_change_binding.flags == binding.flags);
     
     //- rjf: grab all conflicts
-    D_CmdSpecList specs_with_binding = df_cmd_spec_list_from_binding(scratch.arena, binding);
+    String8List specs_with_binding = df_cmd_name_list_from_binding(scratch.arena, binding);
     B32 has_conflicts = 0;
-    for(D_CmdSpecNode *n = specs_with_binding.first; n != 0; n = n->next)
+    for(String8Node *n = specs_with_binding.first; n != 0; n = n->next)
     {
-      if(n->spec != spec)
+      if(!str8_match(n->string, name, 0))
       {
         has_conflicts = 1;
         break;
@@ -167,7 +167,7 @@ df_cmd_binding_buttons(D_CmdSpec *spec)
                                             UI_BoxFlag_DrawHotEffects|
                                             UI_BoxFlag_DrawBorder|
                                             UI_BoxFlag_DrawBackground,
-                                            "%S###bind_btn_%p_%x_%x", keybinding_str, spec, binding.key, binding.flags);
+                                            "%S###bind_btn_%S_%x_%x", keybinding_str, name, binding.key, binding.flags);
     
     //- rjf: interaction
     UI_Signal sig = ui_signal_from_box(box);
@@ -181,8 +181,9 @@ df_cmd_binding_buttons(D_CmdSpec *spec)
         }
         else
         {
+          arena_clear(df_state->bind_change_arena);
           df_state->bind_change_active = 1;
-          df_state->bind_change_cmd_spec = spec;
+          df_state->bind_change_cmd_name = push_str8_copy(df_state->bind_change_arena, name);
           df_state->bind_change_binding = binding;
         }
       }
@@ -195,11 +196,12 @@ df_cmd_binding_buttons(D_CmdSpec *spec)
       if(ui_hovering(sig) && has_conflicts) UI_Tooltip
       {
         UI_PrefWidth(ui_children_sum(1)) df_error_label(str8_lit("This binding conflicts with those for:"));
-        for(D_CmdSpecNode *n = specs_with_binding.first; n != 0; n = n->next)
+        for(String8Node *n = specs_with_binding.first; n != 0; n = n->next)
         {
-          if(n->spec != spec)
+          if(!str8_match(n->string, name, 0))
           {
-            ui_labelf("%S", n->spec->info.display_name);
+            DF_CmdKindInfo *info = df_cmd_kind_info_from_string(n->string);
+            ui_labelf("%S", info->display_name);
           }
         }
       }
@@ -217,7 +219,7 @@ df_cmd_binding_buttons(D_CmdSpec *spec)
       UI_Signal sig = df_icon_button(DF_IconKind_X, 0, str8_lit("###delete_binding"));
       if(ui_clicked(sig))
       {
-        df_unbind_spec(spec, binding);
+        df_unbind_name(name, binding);
         df_state->bind_change_active = 0;
       }
     }
@@ -231,7 +233,7 @@ df_cmd_binding_buttons(D_CmdSpec *spec)
   {
     UI_Palette *palette = ui_top_palette();
     B32 adding_new_binding = (df_state->bind_change_active &&
-                              df_state->bind_change_cmd_spec == spec &&
+                              str8_match(df_state->bind_change_cmd_name, name, 0) &&
                               df_state->bind_change_binding.key == OS_Key_Null &&
                               df_state->bind_change_binding.flags == 0);
     if(adding_new_binding)
@@ -258,8 +260,9 @@ df_cmd_binding_buttons(D_CmdSpec *spec)
     {
       if(!df_state->bind_change_active && ui_clicked(sig))
       {
+        arena_clear(df_state->bind_change_arena);
         df_state->bind_change_active = 1;
-        df_state->bind_change_cmd_spec = spec;
+        df_state->bind_change_cmd_name = push_str8_copy(df_state->bind_change_arena, name);
         MemoryZeroStruct(&df_state->bind_change_binding);
       }
       else if(df_state->bind_change_active && ui_clicked(sig))
@@ -282,8 +285,9 @@ df_menu_bar_button(String8 string)
 }
 
 internal UI_Signal
-df_cmd_spec_button(D_CmdSpec *spec)
+df_cmd_spec_button(String8 name)
 {
+  DF_CmdKindInfo *info = df_cmd_kind_info_from_string(name);
   ui_set_next_hover_cursor(OS_Cursor_HandPoint);
   ui_set_next_child_layout_axis(Axis2_X);
   UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_DrawBorder|
@@ -291,11 +295,10 @@ df_cmd_spec_button(D_CmdSpec *spec)
                                           UI_BoxFlag_DrawHotEffects|
                                           UI_BoxFlag_DrawActiveEffects|
                                           UI_BoxFlag_Clickable,
-                                          "###cmd_%p", spec);
+                                          "###cmd_%p", info);
   UI_Parent(box) UI_HeightFill UI_Padding(ui_em(1.f, 1.f))
   {
-    DF_CmdKind kind = df_cmd_kind_from_string(spec->info.string);
-    DF_IconKind canonical_icon = df_cmd_kind_icon_kind_table[kind];
+    DF_IconKind canonical_icon = info->icon_kind;
     if(canonical_icon != DF_IconKind_Null)
     {
       DF_Font(DF_FontSlot_Icons)
@@ -310,7 +313,7 @@ df_cmd_spec_button(D_CmdSpec *spec)
     {
       UI_Flags(UI_BoxFlag_DrawTextFastpathCodepoint)
         UI_FastpathCodepoint(box->fastpath_codepoint)
-        ui_label(spec->info.display_name);
+        ui_label(info->display_name);
       ui_spacer(ui_pct(1, 0));
       ui_set_next_flags(UI_BoxFlag_Clickable);
       ui_set_next_group_key(ui_key_zero());
@@ -319,7 +322,7 @@ df_cmd_spec_button(D_CmdSpec *spec)
         UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
         UI_FastpathCodepoint(0)
       {
-        df_cmd_binding_buttons(spec);
+        df_cmd_binding_buttons(name);
       }
     }
   }
@@ -328,17 +331,16 @@ df_cmd_spec_button(D_CmdSpec *spec)
 }
 
 internal void
-df_cmd_list_menu_buttons(U64 count, D_CmdSpec **cmd_specs, U32 *fastpath_codepoints)
+df_cmd_list_menu_buttons(U64 count, String8 *cmd_names, U32 *fastpath_codepoints)
 {
   Temp scratch = scratch_begin(0, 0);
   for(U64 idx = 0; idx < count; idx += 1)
   {
-    D_CmdSpec *spec = cmd_specs[idx];
     ui_set_next_fastpath_codepoint(fastpath_codepoints[idx]);
-    UI_Signal sig = df_cmd_spec_button(spec);
+    UI_Signal sig = df_cmd_spec_button(cmd_names[idx]);
     if(ui_clicked(sig))
     {
-      df_cmd(DF_CmdKind_RunCommand, .cmd_spec = spec);
+      df_cmd(DF_CmdKind_RunCommand, .string = cmd_names[idx]);
       ui_ctx_menu_close();
       DF_Window *window = df_window_from_handle(d_regs()->window);
       window->menu_bar_focused = 0;
@@ -793,7 +795,7 @@ df_src_loc_button(String8 file_path, TxtPt point)
   // rjf: click => find code location
   if(ui_clicked(sig))
   {
-    df_cmd(DF_CmdKind_FindCodeLocation, .file_path = file_path, .text_point = point);
+    df_cmd(DF_CmdKind_FindCodeLocation, .file_path = file_path, .cursor = point);
   }
   
   // rjf: hover => show full path
@@ -1476,7 +1478,7 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
         {
           df_cmd(DF_CmdKind_AddBreakpoint,
                  .file_path  = d_regs()->file_path,
-                 .text_point = txt_pt(line_num, 1),
+                 .cursor     = txt_pt(line_num, 1),
                  .vaddr      = params->line_vaddrs[line_idx]);
         }
       }
@@ -1879,7 +1881,7 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             df_cmd(DF_CmdKind_RelocateEntity,
                    .entity = d_handle_from_entity(dropped_entity),
                    .file_path  = d_regs()->file_path,
-                   .text_point = txt_pt(line_num, 1),
+                   .cursor = txt_pt(line_num, 1),
                    .vaddr      = line_vaddr);
           }break;
           case D_EntityKind_Thread:

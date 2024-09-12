@@ -237,62 +237,9 @@ d_line_list_copy(Arena *arena, D_LineList *list)
 ////////////////////////////////
 //~ rjf: Command Type Pure Functions
 
-//- rjf: specs
-
-internal B32
-d_cmd_spec_is_nil(D_CmdSpec *spec)
-{
-  return (spec == 0 || spec == &d_nil_cmd_spec);
-}
-
-internal void
-d_cmd_spec_list_push(Arena *arena, D_CmdSpecList *list, D_CmdSpec *spec)
-{
-  D_CmdSpecNode *n = push_array(arena, D_CmdSpecNode, 1);
-  n->spec = spec;
-  SLLQueuePush(list->first, list->last, n);
-  list->count += 1;
-}
-
-//- rjf: string -> command parsing
-
-internal String8
-d_cmd_name_part_from_string(String8 string)
-{
-  String8 result = string;
-  for(U64 idx = 0; idx <= string.size; idx += 1)
-  {
-    if(idx == string.size || char_is_space(string.str[idx]))
-    {
-      result = str8_prefix(string, idx);
-      break;
-    }
-  }
-  return result;
-}
-
-internal String8
-d_cmd_arg_part_from_string(String8 string)
-{
-  String8 result = str8_lit("");
-  B32 found_space = 0;
-  for(U64 idx = 0; idx <= string.size; idx += 1)
-  {
-    if(found_space && (idx == string.size || !char_is_space(string.str[idx])))
-    {
-      result = str8_skip(string, idx);
-      break;
-    }
-    else if(!found_space && (idx == string.size || char_is_space(string.str[idx])))
-    {
-      found_space = 1;
-    }
-  }
-  return result;
-}
-
 //- rjf: command parameter bundles
 
+#if 0 // TODO(rjf): @msgs
 internal D_CmdParams
 d_cmd_params_zero(void)
 {
@@ -386,6 +333,7 @@ d_cmd_params_apply_spec_query(Arena *arena, D_CmdParams *params, D_CmdSpec *spec
   }
   return error;
 }
+#endif
 
 //- rjf: command lists
 
@@ -397,23 +345,6 @@ d_cmd_list_push_new(Arena *arena, D_CmdList *cmds, D_CmdKind kind, D_CmdParams *
   n->cmd.params = df_cmd_params_copy(arena, params);
   DLLPushBack(cmds->first, cmds->last, n);
   cmds->count += 1;
-}
-
-//- rjf: string -> core layer command kind
-
-internal D_CmdKind
-d_cmd_kind_from_string(String8 string)
-{
-  D_CmdKind result = D_CmdKind_Null;
-  for(U64 idx = 0; idx < ArrayCount(d_core_cmd_kind_spec_info_table); idx += 1)
-  {
-    if(str8_match(string, d_core_cmd_kind_spec_info_table[idx].string, StringMatchFlag_CaseInsensitive))
-    {
-      result = (D_CmdKind)idx;
-      break;
-    }
-  }
-  return result;
 }
 
 ////////////////////////////////
@@ -1490,6 +1421,7 @@ d_entity_from_name_and_kind(String8 string, D_EntityKind kind)
 ////////////////////////////////
 //~ rjf: Command Stateful Functions
 
+#if 0 // TODO(rjf): @msgs
 internal void
 d_register_cmd_specs(D_CmdSpecInfoArray specs)
 {
@@ -1576,6 +1508,7 @@ d_push_cmd_spec_list(Arena *arena)
   }
   return list;
 }
+#endif
 
 ////////////////////////////////
 //~ rjf: View Rule Spec Stateful Functions
@@ -2906,6 +2839,8 @@ d_key_from_eval_space_range(E_Space space, Rng1U64 range, B32 zero_terminated)
   D_Entity *entity = d_entity_from_eval_space(space);
   switch(entity->kind)
   {
+    default:{}break;
+    
     //- rjf: nil space -> filesystem key encoded inside of `space`
     case D_EntityKind_Nil:
     {
@@ -2930,6 +2865,8 @@ d_whole_range_from_eval_space(E_Space space)
   D_Entity *entity = d_entity_from_eval_space(space);
   switch(entity->kind)
   {
+    default:{}break;
+    
     //- rjf: nil space -> filesystem key encoded inside of `space`
     case D_EntityKind_Nil:
     {
@@ -3875,8 +3812,6 @@ d_init(void)
   d_state->ctrl_entity_store = ctrl_entity_store_alloc();
   d_state->ctrl_stop_arena = arena_alloc();
   d_state->entities_root = d_entity_alloc(&d_nil_entity, D_EntityKind_Root);
-  d_state->cmd_spec_table_size = 1024;
-  d_state->cmd_spec_table = push_array(arena, D_CmdSpec *, d_state->cmd_spec_table_size);
   d_state->view_rule_spec_table_size = 1024;
   d_state->view_rule_spec_table = push_array(arena, D_ViewRuleSpec *, d_state->view_rule_spec_table_size);
   d_state->top_regs = &d_state->base_regs;
@@ -3896,12 +3831,6 @@ d_init(void)
     D_Entity *local_machine = d_entity_alloc(d_state->entities_root, D_EntityKind_Machine);
     d_entity_equip_ctrl_handle(local_machine, ctrl_handle_make(CTRL_MachineID_Local, dmn_handle_zero()));
     d_entity_equip_name(local_machine, str8_lit("This PC"));
-  }
-  
-  // rjf: register core commands
-  {
-    D_CmdSpecInfoArray array = {d_core_cmd_kind_spec_info_table, ArrayCount(d_core_cmd_kind_spec_info_table)};
-    d_register_cmd_specs(array);
   }
   
   // rjf: register core view rules
@@ -4002,6 +3931,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints)
           }
           
           // rjf: if no stop-causing thread, and if selected thread, snap to selected
+#if 0 // TODO(rjf): @msgs
           if(should_snap && d_entity_is_nil(stop_thread))
           {
             D_Entity *selected_thread = d_entity_from_handle(d_regs()->thread);
@@ -4010,6 +3940,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints)
               df_cmd(DF_CmdKind_FindThread, .thread = d_handle_from_entity(selected_thread));
             }
           }
+#endif
           
           // rjf: thread hit user breakpoint -> increment breakpoint hit count
           if(should_snap && event->cause == CTRL_EventCause_UserBreakpoint)
@@ -4809,7 +4740,6 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints)
         }break;
         case D_CmdKind_Run:
         {
-          D_CmdParams params = d_cmd_params_zero();
           D_EntityList processes = d_query_cached_entity_list_with_kind(D_EntityKind_Process);
           if(processes.count != 0)
           {
@@ -4913,7 +4843,9 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints)
           d_state->base_regs.v.thread = d_handle_from_entity(thread);
           d_state->base_regs.v.module = d_handle_from_entity(module);
           d_state->base_regs.v.process = d_handle_from_entity(process);
+#if 0 // TODO(rjf): @msgs
           df_cmd(DF_CmdKind_FindThread, .thread = d_handle_from_entity(thread));
+#endif
         }break;
         case D_CmdKind_SelectUnwind:
         {
@@ -4932,7 +4864,9 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints)
               d_state->base_regs.v.inline_depth = params.inline_depth;
             }
           }
+#if 0 // TODO(rjf): @msgs
           df_cmd(DF_CmdKind_FindThread, .thread = d_handle_from_entity(thread));
+#endif
           di_scope_close(di_scope);
         }break;
         case D_CmdKind_UpOneFrame:

@@ -140,8 +140,6 @@ D_CmdParamSlot_EntityList,
 D_CmdParamSlot_String,
 D_CmdParamSlot_FilePath,
 D_CmdParamSlot_TextPoint,
-D_CmdParamSlot_CmdSpec,
-D_CmdParamSlot_ViewSpec,
 D_CmdParamSlot_ParamsTree,
 D_CmdParamSlot_OSEvent,
 D_CmdParamSlot_VirtualAddr,
@@ -228,8 +226,6 @@ D_HandleList entity_list;
 String8 string;
 String8 file_path;
 TxtPt text_point;
-struct D_CmdSpec * cmd_spec;
-struct DF_ViewSpec * view_spec;
 MD_Node * params_tree;
 struct OS_Event * os_event;
 U64 vaddr;
@@ -304,7 +300,7 @@ extern String8 d_entity_kind_name_lower_plural_table[30];
 extern String8 d_entity_kind_name_label_table[30];
 extern D_EntityKindFlags d_entity_kind_flags_table[30];
 extern Rng1U64 d_reg_slot_range_table[29];
-extern Rng1U64 d_cmd_param_slot_range_table[24];
+extern Rng1U64 d_cmd_param_slot_range_table[22];
 
 C_LINKAGE_END
 

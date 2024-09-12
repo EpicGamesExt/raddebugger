@@ -914,26 +914,25 @@ entry_point(CmdLine *cmd_line)
               if(dst_window != 0)
               {
                 dst_window->window_temporarily_focused_ipc = 1;
-                String8 cmd_spec_string = d_cmd_name_part_from_string(msg);
-                D_CmdSpec *cmd_spec = d_cmd_spec_from_string(cmd_spec_string);
-                if(!d_cmd_spec_is_nil(cmd_spec))
+                U64 first_space_pos = str8_find_needle(msg, 0, str8_lit(" "), 0);
+                String8 cmd_kind_name_string = str8_prefix(msg, first_space_pos);
+                String8 cmd_args_string = str8_skip_chop_whitespace(str8_skip(msg, first_space_pos));
+                DF_CmdKindInfo *cmd_kind_info = df_cmd_kind_info_from_string(cmd_kind_name_string);
+                if(cmd_kind_info != &df_nil_cmd_kind_info) DF_RegsScope()
                 {
-                  D_CmdParams params = df_cmd_params_from_window(dst_window);
-                  String8 error = d_cmd_params_apply_spec_query(scratch.arena, &params, cmd_spec, d_cmd_arg_part_from_string(msg));
-                  if(error.size == 0)
+                  if(dst_window != df_window_from_handle(df_regs()->window))
                   {
-                    df_push_cmd(cmd_spec, &params);
-                    df_request_frame();
+                    df_regs()->window = df_handle_from_window(dst_window);
+                    df_regs()->panel  = df_handle_from_panel(dst_window->focused_panel);
+                    df_regs()->view   = dst_window->focused_panel->selected_tab_view;
                   }
-                  else
-                  {
-                    log_user_error(error);
-                    df_request_frame();
-                  }
+                  df_regs_fill_slot_from_string(cmd_kind_info->query.slot, cmd_args_string);
+                  df_push_cmd(cmd_kind_name_string, df_regs());
+                  df_request_frame();
                 }
                 else
                 {
-                  log_user_errorf("\"%S\" is not a command.", cmd_spec_string);
+                  log_user_errorf("\"%S\" is not a command.", cmd_kind_name_string);
                   df_request_frame();
                 }
               }
@@ -962,7 +961,7 @@ entry_point(CmdLine *cmd_line)
           if(jit_attach)
           {
             jit_attach = 0;
-            df_cmd(DF_CmdKind_Attach, .id = jit_pid);
+            df_cmd(DF_CmdKind_Attach, .pid = jit_pid);
           }
         }
       }

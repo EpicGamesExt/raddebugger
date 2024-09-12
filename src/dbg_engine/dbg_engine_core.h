@@ -415,6 +415,7 @@ struct D_RegsNode
 ////////////////////////////////
 //~ rjf: Command Specification Types
 
+#if 0
 typedef U32 D_CmdQueryFlags;
 enum
 {
@@ -490,6 +491,7 @@ struct D_CmdSpecInfoArray
   D_CmdSpecInfo *v;
   U64 count;
 };
+#endif
 
 ////////////////////////////////
 //~ rjf: Command Types
@@ -678,11 +680,6 @@ struct D_State
   D_RunLocalsCache member_caches[2];
   U64 member_cache_gen;
   
-  // rjf: command specification table
-  U64 total_registrar_count;
-  U64 cmd_spec_table_size;
-  D_CmdSpec **cmd_spec_table;
-  
   // rjf: view rule specification table
   U64 view_rule_spec_table_size;
   D_ViewRuleSpec **view_rule_spec_table;
@@ -710,7 +707,6 @@ struct D_State
 ////////////////////////////////
 //~ rjf: Globals
 
-read_only global D_CmdSpec d_nil_cmd_spec = {0};
 read_only global D_ViewRuleSpec d_nil_core_view_rule_spec = {0};
 read_only global D_CfgTree d_nil_cfg_tree = {&d_nil_cfg_tree, D_CfgSrc_User, &md_nil_node};
 read_only global D_CfgVal d_nil_cfg_val = {&d_nil_cfg_val, &d_nil_cfg_val, &d_nil_cfg_tree, &d_nil_cfg_tree};
@@ -763,23 +759,14 @@ internal D_LineList d_line_list_copy(Arena *arena, D_LineList *list);
 ////////////////////////////////
 //~ rjf: Command Type Pure Functions
 
-//- rjf: specs
-internal B32 d_cmd_spec_is_nil(D_CmdSpec *spec);
-internal void d_cmd_spec_list_push(Arena *arena, D_CmdSpecList *list, D_CmdSpec *spec);
-
-//- rjf: string -> command parsing
-internal String8 d_cmd_name_part_from_string(String8 string);
-internal String8 d_cmd_arg_part_from_string(String8 string);
-
 //- rjf: command parameter bundles
+#if 0 // TODO(rjf): @msgs
 internal D_CmdParams d_cmd_params_zero(void);
 internal String8 d_cmd_params_apply_spec_query(Arena *arena, D_CmdParams *params, D_CmdSpec *spec, String8 query);
+#endif
 
 //- rjf: command lists
 internal void d_cmd_list_push_new(Arena *arena, D_CmdList *cmds, D_CmdKind kind, D_CmdParams *params);
-
-//- rjf: string -> core layer command kind
-internal D_CmdKind d_cmd_kind_from_string(String8 string);
 
 ////////////////////////////////
 //~ rjf: Entity Type Pure Functions
@@ -888,11 +875,13 @@ internal D_Entity *d_entity_from_name_and_kind(String8 string, D_EntityKind kind
 ////////////////////////////////
 //~ rjf: Command Stateful Functions
 
+#if 0 // TODO(rjf): @msgs
 internal void d_register_cmd_specs(D_CmdSpecInfoArray specs);
 internal D_CmdSpec *d_cmd_spec_from_string(String8 string);
 internal D_CmdSpec *d_cmd_spec_from_kind(D_CmdKind kind);
 internal void d_cmd_spec_counter_inc(D_CmdSpec *spec);
 internal D_CmdSpecList d_push_cmd_spec_list(Arena *arena);
+#endif
 
 ////////////////////////////////
 //~ rjf: View Rule Spec Stateful Functions
