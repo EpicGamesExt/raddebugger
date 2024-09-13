@@ -144,8 +144,6 @@ struct E_Module
 //~ rjf: Basic Helper Functions
 
 internal U64 e_hash_from_string(U64 seed, String8 string);
-internal String8 e_raw_from_escaped_string(Arena *arena, String8 string);
-internal String8 e_escaped_from_raw_string(Arena *arena, String8 string);
 #define e_value_u64(v) (E_Value){.u64 = (v)}
 
 ////////////////////////////////

@@ -1359,12 +1359,6 @@ d_frame_index(void)
   return d_state->frame_index;
 }
 
-internal Arena *
-d_frame_arena(void)
-{
-  return d_state->frame_arenas[d_state->frame_index%ArrayCount(d_state->frame_arenas)];
-}
-
 //- rjf: control state
 
 internal D_RunKind
@@ -1383,79 +1377,6 @@ internal B32
 d_ctrl_targets_running(void)
 {
   return d_state->ctrl_is_running;
-}
-
-//- rjf: config serialization
-
-internal String8
-d_cfg_escaped_from_raw_string(Arena *arena, String8 string)
-{
-  Temp scratch = scratch_begin(&arena, 1);
-  String8List parts = {0};
-  U64 split_start_idx = 0;
-  for(U64 idx = 0; idx <= string.size; idx += 1)
-  {
-    U8 byte = (idx < string.size ? string.str[idx] : 0);
-    if(byte == 0 || byte == '\"' || byte == '\\')
-    {
-      String8 part = str8_substr(string, r1u64(split_start_idx, idx));
-      str8_list_push(scratch.arena, &parts, part);
-      switch(byte)
-      {
-        default:{}break;
-        case '\"':{str8_list_push(scratch.arena, &parts, str8_lit("\\\""));}break;
-        case '\\':{str8_list_push(scratch.arena, &parts, str8_lit("\\\\"));}break;
-      }
-      split_start_idx = idx+1;
-    }
-  }
-  StringJoin join = {0};
-  String8 result = str8_list_join(arena, &parts, &join);
-  scratch_end(scratch);
-  return result;
-}
-
-internal String8
-d_cfg_raw_from_escaped_string(Arena *arena, String8 string)
-{
-  Temp scratch = scratch_begin(&arena, 1);
-  String8List parts = {0};
-  U64 split_start_idx = 0;
-  U64 extra_advance = 0;
-  for(U64 idx = 0; idx <= string.size; ((idx += 1+extra_advance), extra_advance=0))
-  {
-    U8 byte = (idx < string.size ? string.str[idx] : 0);
-    if(byte == 0 || byte == '\\')
-    {
-      String8 part = str8_substr(string, r1u64(split_start_idx, idx));
-      str8_list_push(scratch.arena, &parts, part);
-      if(byte == '\\' && idx+1 < string.size)
-      {
-        switch(string.str[idx+1])
-        {
-          default:{}break;
-          case '"': {extra_advance = 1; str8_list_push(scratch.arena, &parts, str8_lit("\""));}break;
-          case '\\':{extra_advance = 1; str8_list_push(scratch.arena, &parts, str8_lit("\\"));}break;
-        }
-      }
-      split_start_idx = idx+1+extra_advance;
-    }
-  }
-  StringJoin join = {0};
-  String8 result = str8_list_join(arena, &parts, &join);
-  scratch_end(scratch);
-  return result;
-}
-
-internal String8List
-d_cfg_strings_from_core(Arena *arena, String8 root_path, D_CfgSrc source)
-{
-  ProfBeginFunction();
-  
-  String8List strs = {0};
-  
-  ProfEnd();
-  return strs;
 }
 
 //- rjf: active entity based queries
@@ -1757,10 +1678,6 @@ d_init(void)
   Arena *arena = arena_alloc();
   d_state = push_array(arena, D_State, 1);
   d_state->arena = arena;
-  for(U64 idx = 0; idx < ArrayCount(d_state->frame_arenas); idx += 1)
-  {
-    d_state->frame_arenas[idx] = arena_alloc();
-  }
   d_state->cmds_arena = arena_alloc();
   d_state->output_log_key = hs_hash_from_data(str8_lit("df_output_log_key"));
   d_state->ctrl_entity_store = ctrl_entity_store_alloc();
@@ -1802,7 +1719,6 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
   Temp scratch = scratch_begin(&arena, 1);
   D_EventList result = {0};
   d_state->frame_index += 1;
-  arena_clear(d_frame_arena());
   d_state->frame_eval_memread_endt_us = os_now_microseconds() + 5000;
   B32 ctrl_running_pre_tick = d_state->ctrl_is_running;
   

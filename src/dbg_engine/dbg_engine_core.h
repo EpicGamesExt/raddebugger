@@ -423,9 +423,6 @@ struct D_State
   U64 frame_index;
   U64 frame_eval_memread_endt_us;
   
-  // rjf: frame info
-  Arena *frame_arenas[2];
-  
   // rjf: commands
   Arena *cmds_arena;
   D_CmdList cmds;
@@ -577,17 +574,11 @@ internal CTRL_Event d_ctrl_last_stop_event(void);
 
 //- rjf: frame data
 internal U64 d_frame_index(void);
-internal Arena *d_frame_arena(void);
 
 //- rjf: control state
 internal D_RunKind d_ctrl_last_run_kind(void);
 internal U64 d_ctrl_last_run_frame_idx(void);
 internal B32 d_ctrl_targets_running(void);
-
-//- rjf: config serialization
-internal String8 d_cfg_escaped_from_raw_string(Arena *arena, String8 string);
-internal String8 d_cfg_raw_from_escaped_string(Arena *arena, String8 string);
-internal String8List d_cfg_strings_from_core(Arena *arena, String8 root_path, D_CfgSrc source);
 
 //- rjf: active entity based queries
 internal DI_KeyList d_push_active_dbgi_key_list(Arena *arena);

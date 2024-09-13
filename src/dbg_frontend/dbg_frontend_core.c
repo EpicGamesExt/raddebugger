@@ -1944,7 +1944,7 @@ d_commit_eval_value_string(E_Eval dst_eval, String8 string)
         {
           string = str8_chop(string, 1);
         }
-        commit_data = e_raw_from_escaped_string(scratch.arena, string);
+        commit_data = raw_from_escaped_str8(scratch.arena, string);
         commit_data.size += 1;
         if(type_kind == E_TypeKind_Ptr)
         {
@@ -2117,7 +2117,7 @@ d_file_path_from_eval_string(Arena *arena, String8 string)
     E_Eval eval = e_eval_from_string(scratch.arena, string);
     if(eval.expr->kind == E_ExprKind_LeafFilePath)
     {
-      result = d_cfg_raw_from_escaped_string(arena, eval.expr->string);
+      result = raw_from_escaped_str8(arena, eval.expr->string);
     }
     scratch_end(scratch);
   }
@@ -2128,7 +2128,7 @@ internal String8
 d_eval_string_from_file_path(Arena *arena, String8 string)
 {
   Temp scratch = scratch_begin(&arena, 1);
-  String8 string_escaped = d_cfg_escaped_from_raw_string(scratch.arena, string);
+  String8 string_escaped = escaped_from_raw_str8(scratch.arena, string);
   String8 result = push_str8f(arena, "file:\"%S\"", string_escaped);
   scratch_end(scratch);
   return result;
@@ -6379,7 +6379,7 @@ df_window_frame(DF_Window *ws)
             DF_View *view = df_selected_tab_from_panel(panel);
             df_regs()->panel = df_handle_from_panel(panel);
             df_regs()->view  = df_handle_from_view(view);
-            df_regs()->file_path = d_file_path_from_eval_string(d_frame_arena(), str8(view->query_buffer, view->query_string_size));
+            df_regs()->file_path = d_file_path_from_eval_string(df_frame_arena(), str8(view->query_buffer, view->query_string_size));
           }
           
           //- rjf: build view container
@@ -8494,7 +8494,7 @@ df_cfg_strings_from_gfx(Arena *arena, String8 root_path, D_CfgSrc source)
           }
           else
           {
-            entity_name_escaped = d_cfg_escaped_from_raw_string(arena, e->string);
+            entity_name_escaped = escaped_from_raw_str8(arena, e->string);
           }
           EntityInfoFlags info_flags = 0;
           if(entity_name_escaped.size != 0)        { info_flags |= EntityInfoFlag_HasName; }
@@ -8723,7 +8723,7 @@ df_cfg_strings_from_gfx(Arena *arena, String8 root_path, D_CfgSrc source)
                     query_raw = push_str8f(scratch.arena, "file:\"%S\"", query_file_path);
                   }
                 }
-                String8 query_sanitized = d_cfg_escaped_from_raw_string(scratch.arena, query_raw);
+                String8 query_sanitized = escaped_from_raw_str8(scratch.arena, query_raw);
                 str8_list_pushf(arena, &strs, "query:{\"%S\"} ", query_sanitized);
                 scratch_end(scratch);
               }
@@ -8921,8 +8921,8 @@ df_cfg_strings_from_gfx(Arena *arena, String8 root_path, D_CfgSrc source)
   //- rjf: serialize fonts
   if(source == D_CfgSrc_User)
   {
-    String8 code_font_path_escaped = d_cfg_escaped_from_raw_string(arena, df_state->cfg_code_font_path);
-    String8 main_font_path_escaped = d_cfg_escaped_from_raw_string(arena, df_state->cfg_main_font_path);
+    String8 code_font_path_escaped = escaped_from_raw_str8(arena, df_state->cfg_code_font_path);
+    String8 main_font_path_escaped = escaped_from_raw_str8(arena, df_state->cfg_main_font_path);
     str8_list_push(arena, &strs, str8_lit("/// fonts /////////////////////////////////////////////////////////////////////\n"));
     str8_list_push(arena, &strs, str8_lit("\n"));
     str8_list_pushf(arena, &strs, "code_font: \"%S\"\n", code_font_path_escaped);
@@ -10493,7 +10493,7 @@ df_frame(void)
                       // rjf: standalone string literals under an entity -> name
                       if(child->flags & MD_NodeFlag_StringLiteral && child->first == &md_nil_node)
                       {
-                        String8 string = d_cfg_raw_from_escaped_string(scratch.arena, child->string);
+                        String8 string = raw_from_escaped_str8(scratch.arena, child->string);
                         if(d_entity_kind_flags_table[t->entity->kind] & DF_EntityKindFlag_NameIsPath)
                         {
                           string = path_absolute_dst_from_relative_dst_src(scratch.arena, string, cfg_folder);
@@ -10504,7 +10504,7 @@ df_frame(void)
                       // rjf: standalone string literals under an entity, with a numeric child -> name & text location
                       if(child->flags & MD_NodeFlag_StringLiteral && child->first->flags & MD_NodeFlag_Numeric && child->first->first == &md_nil_node)
                       {
-                        String8 string = d_cfg_raw_from_escaped_string(scratch.arena, child->string);
+                        String8 string = raw_from_escaped_str8(scratch.arena, child->string);
                         if(d_entity_kind_flags_table[t->entity->kind] & DF_EntityKindFlag_NameIsPath)
                         {
                           string = path_absolute_dst_from_relative_dst_src(scratch.arena, string, cfg_folder);
@@ -10529,7 +10529,7 @@ df_frame(void)
                           str8_match(child->string, str8_lit("label"), StringMatchFlag_CaseInsensitive)) &&
                          child->first != &md_nil_node)
                       {
-                        String8 string = d_cfg_raw_from_escaped_string(scratch.arena, child->first->string);
+                        String8 string = raw_from_escaped_str8(scratch.arena, child->first->string);
                         if(d_entity_kind_flags_table[t->entity->kind] & DF_EntityKindFlag_NameIsPath)
                         {
                           string = path_absolute_dst_from_relative_dst_src(scratch.arena, string, cfg_folder);
@@ -10890,7 +10890,7 @@ df_frame(void)
                     String8 view_query = str8_lit("");
                     {
                       String8 escaped_query = md_child_from_string(op, str8_lit("query"), 0)->first->string;
-                      view_query = d_cfg_raw_from_escaped_string(scratch.arena, escaped_query);
+                      view_query = raw_from_escaped_str8(scratch.arena, escaped_query);
                     }
                     
                     // rjf: convert file queries from relative to absolute
@@ -11273,12 +11273,10 @@ df_frame(void)
             }
           }
           String8 path = df_cfg_path_from_src(src);
-          String8List d_strs = d_cfg_strings_from_core(scratch.arena, path, src);
           String8List df_strs = df_cfg_strings_from_gfx(scratch.arena, path, src);
           String8 header = push_str8f(scratch.arena, "// raddbg %s file\n\n", d_cfg_src_string_table[src].str);
           String8List strs = {0};
           str8_list_push(scratch.arena, &strs, header);
-          str8_list_concat_in_place(&strs, &d_strs);
           str8_list_concat_in_place(&strs, &df_strs);
           String8 data = str8_list_join(scratch.arena, &strs, 0);
           String8 data_indented = indented_from_string(scratch.arena, data);

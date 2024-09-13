@@ -2347,7 +2347,7 @@ df_watch_view_build(DF_View *view, DF_WatchViewState *ewv, B32 modifiable, U32 d
               df_push_regs();
               {
                 df_regs()->view      = df_handle_from_view(canvas_view);
-                df_regs()->file_path = d_file_path_from_eval_string(d_frame_arena(), str8(canvas_view->query_buffer, canvas_view->query_string_size));
+                df_regs()->file_path = d_file_path_from_eval_string(df_frame_arena(), str8(canvas_view->query_buffer, canvas_view->query_string_size));
               }
               
               //- rjf: build
@@ -6536,7 +6536,7 @@ DF_VIEW_UI_FUNCTION_DEF(text)
   //
   if(path.size != 0)
   {
-    df_regs()->lines = d_lines_from_file_path_line_num(d_frame_arena(), path, df_regs()->cursor.line);
+    df_regs()->lines = d_lines_from_file_path_line_num(df_frame_arena(), path, df_regs()->cursor.line);
   }
   
   //////////////////////////////
@@ -6887,7 +6887,7 @@ DF_VIEW_UI_FUNCTION_DEF(disasm)
     U64 off = dasm_line_array_code_off_from_idx(&dasm_info.lines, df_regs()->cursor.line-1);
     df_regs()->vaddr_range = r1u64(base_vaddr+off, base_vaddr+off);
     df_regs()->voff_range = ctrl_voff_range_from_vaddr_range(dasm_module, df_regs()->vaddr_range);
-    df_regs()->lines = d_lines_from_dbgi_key_voff(d_frame_arena(), &dbgi_key, df_regs()->voff_range.min);
+    df_regs()->lines = d_lines_from_dbgi_key_voff(df_frame_arena(), &dbgi_key, df_regs()->voff_range.min);
   }
   
   //////////////////////////////

@@ -332,6 +332,12 @@ internal String8 string_from_elapsed_time(Arena *arena, DateTime dt);
 internal String8 indented_from_string(Arena *arena, String8 string);
 
 ////////////////////////////////
+//~ rjf: Text Escaping
+
+internal String8 escaped_from_raw_str8(Arena *arena, String8 string);
+internal String8 raw_from_escaped_str8(Arena *arena, String8 string);
+
+////////////////////////////////
 //~ rjf: Text Wrapping
 
 internal String8List wrapped_lines_from_string(Arena *arena, String8 string, U64 first_line_max_width, U64 max_width, U64 wrap_indent);
