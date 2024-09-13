@@ -12216,6 +12216,27 @@ df_frame(void)
   D_EventList engine_events = d_tick(scratch.arena, &targets, &breakpoints);
   
   //////////////////////////////
+  //- rjf: no selected thread? -> try to snap to any existing thread
+  //
+  if(ctrl_entity_from_handle(d_state->ctrl_entity_store, df_base_regs()->thread) == &ctrl_entity_nil)
+  {
+    CTRL_Entity *process = ctrl_entity_from_handle(d_state->ctrl_entity_store, df_base_regs()->process);
+    if(process == &ctrl_entity_nil)
+    {
+      CTRL_EntityList all_processes = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Process);
+      if(all_processes.count != 0)
+      {
+        process = all_processes.first->v;
+      }
+    }
+    CTRL_Entity *new_thread = ctrl_entity_child_from_kind(process, CTRL_EntityKind_Thread);
+    if(new_thread != &ctrl_entity_nil)
+    {
+      df_cmd(DF_CmdKind_SelectThread, .thread = new_thread->handle);
+    }
+  }
+  
+  //////////////////////////////
   //- rjf: process debug engine events
   //
   for(D_EventNode *n = engine_events.first; n != 0; n = n->next)

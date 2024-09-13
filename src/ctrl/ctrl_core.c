@@ -801,6 +801,7 @@ ctrl_entity_release(CTRL_EntityStore *store, CTRL_Entity *entity)
       
       // rjf: dec counter
       store->entity_kind_counts[t->e->kind] -= 1;
+      store->entity_kind_alloc_gens[t->e->kind] += 1;
     }
     scratch_end(scratch);
   }
@@ -4190,7 +4191,8 @@ ctrl_thread__kill(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
       {
         done = 1;
       }
-      if(event->kind == DMN_EventKind_Halt)
+      if(event->kind == DMN_EventKind_Null ||
+         event->kind == DMN_EventKind_Error)
       {
         done = 1;
       }

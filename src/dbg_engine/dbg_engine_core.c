@@ -3939,6 +3939,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints)
   d_state->frame_eval_memread_endt_us = os_now_microseconds() + 5000;
   d_state->top_regs = &d_state->base_regs;
   d_regs_copy_contents(d_frame_arena(), &d_state->top_regs->v, &d_state->top_regs->v);
+  B32 ctrl_running_pre_tick = d_state->ctrl_is_running;
   
   //////////////////////////////
   //- rjf: sync with ctrl thread
@@ -5074,7 +5075,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints)
     ctrl_msg_list_concat_in_place(&d_state->ctrl_msgs, &msgs_copy);
     if(d_state->ctrl_msgs.count != 0)
     {
-      if(!d_state->ctrl_soft_halt_issued && d_state->ctrl_is_running)
+      if(!d_state->ctrl_soft_halt_issued && ctrl_running_pre_tick)
       {
         d_state->ctrl_soft_halt_issued = 1;
         ctrl_halt();
