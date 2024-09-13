@@ -199,7 +199,7 @@ rd_code_view_build(Arena *arena, RD_View *view, RD_CodeViewState *cv, RD_CodeVie
     // rjf: find visible breakpoints for source code
     ProfScope("find visible breakpoints")
     {
-      RD_EntityList bps = d_query_cached_entity_list_with_kind(RD_EntityKind_Breakpoint);
+      RD_EntityList bps = rd_query_cached_entity_list_with_kind(RD_EntityKind_Breakpoint);
       for(RD_EntityNode *n = bps.first; n != 0; n = n->next)
       {
         RD_Entity *bp = n->entity;
@@ -245,7 +245,7 @@ rd_code_view_build(Arena *arena, RD_View *view, RD_CodeViewState *cv, RD_CodeVie
     // rjf: find visible watch pins for source code
     ProfScope("find visible watch pins")
     {
-      RD_EntityList wps = d_query_cached_entity_list_with_kind(RD_EntityKind_WatchPin);
+      RD_EntityList wps = rd_query_cached_entity_list_with_kind(RD_EntityKind_WatchPin);
       for(RD_EntityNode *n = wps.first; n != 0; n = n->next)
       {
         RD_Entity *wp = n->entity;
@@ -297,7 +297,7 @@ rd_code_view_build(Arena *arena, RD_View *view, RD_CodeViewState *cv, RD_CodeVie
     // rjf: find breakpoints mapping to this disasm
     if(dasm_lines) ProfScope("find breakpoints mapping to this disassembly")
     {
-      RD_EntityList bps = d_query_cached_entity_list_with_kind(RD_EntityKind_Breakpoint);
+      RD_EntityList bps = rd_query_cached_entity_list_with_kind(RD_EntityKind_Breakpoint);
       for(RD_EntityNode *n = bps.first; n != 0; n = n->next)
       {
         RD_Entity *bp = n->entity;
@@ -319,7 +319,7 @@ rd_code_view_build(Arena *arena, RD_View *view, RD_CodeViewState *cv, RD_CodeVie
     // rjf: find watch pins mapping to this disasm
     if(dasm_lines) ProfScope("find watch pins mapping to this disassembly")
     {
-      RD_EntityList pins = d_query_cached_entity_list_with_kind(RD_EntityKind_WatchPin);
+      RD_EntityList pins = rd_query_cached_entity_list_with_kind(RD_EntityKind_WatchPin);
       for(RD_EntityNode *n = pins.first; n != 0; n = n->next)
       {
         RD_Entity *pin = n->entity;
@@ -1007,7 +1007,7 @@ rd_watch_view_build(RD_View *view, RD_WatchViewState *ewv, B32 modifiable, U32 d
           case RD_WatchViewFillKind_Watch:
           {
             mutable_entity_kind = RD_EntityKind_Watch;
-            RD_EntityList watches = d_query_cached_entity_list_with_kind(mutable_entity_kind);
+            RD_EntityList watches = rd_query_cached_entity_list_with_kind(mutable_entity_kind);
             for(RD_EntityNode *n = watches.first; n != 0; n = n->next)
             {
               RD_Entity *watch = n->entity;
@@ -1036,7 +1036,7 @@ rd_watch_view_build(RD_View *view, RD_WatchViewState *ewv, B32 modifiable, U32 d
           {
             mutable_entity_kind = RD_EntityKind_Breakpoint;
             ev_view_rule_list_push_string(scratch.arena, &top_level_view_rules, str8_lit("no_addr"));
-            RD_EntityList bps = d_query_cached_entity_list_with_kind(mutable_entity_kind);
+            RD_EntityList bps = rd_query_cached_entity_list_with_kind(mutable_entity_kind);
             for(RD_EntityNode *n = bps.first; n != 0; n = n->next)
             {
               RD_Entity *bp = n->entity;
@@ -1075,7 +1075,7 @@ rd_watch_view_build(RD_View *view, RD_WatchViewState *ewv, B32 modifiable, U32 d
           case RD_WatchViewFillKind_WatchPins:
           {
             mutable_entity_kind = RD_EntityKind_WatchPin;
-            RD_EntityList wps = d_query_cached_entity_list_with_kind(mutable_entity_kind);
+            RD_EntityList wps = rd_query_cached_entity_list_with_kind(mutable_entity_kind);
             for(RD_EntityNode *n = wps.first; n != 0; n = n->next)
             {
               RD_Entity *wp = n->entity;
@@ -1727,7 +1727,7 @@ rd_watch_view_build(RD_View *view, RD_WatchViewState *ewv, B32 modifiable, U32 d
                 if(modifiable)
                 {
                   RD_WatchViewPoint pt = rd_watch_view_point_from_tbl(&blocks, tbl);
-                  RD_Entity *watch = d_entity_from_ev_key_and_kind(pt.key, mutable_entity_kind);
+                  RD_Entity *watch = rd_entity_from_ev_key_and_kind(pt.key, mutable_entity_kind);
                   if(!rd_entity_is_nil(watch))
                   {
                     rd_entity_equip_name(watch, new_string);
@@ -1773,7 +1773,7 @@ rd_watch_view_build(RD_View *view, RD_WatchViewState *ewv, B32 modifiable, U32 d
                 {
                   RD_WatchViewPoint pt = rd_watch_view_point_from_tbl(&blocks, tbl);
                   ev_key_set_view_rule(eval_view, pt.key, new_string);
-                  RD_Entity *watch = d_entity_from_ev_key_and_kind(pt.key, mutable_entity_kind);
+                  RD_Entity *watch = rd_entity_from_ev_key_and_kind(pt.key, mutable_entity_kind);
                   RD_Entity *view_rule = rd_entity_child_from_kind(watch, RD_EntityKind_ViewRule);
                   if(new_string.size != 0 && rd_entity_is_nil(view_rule))
                   {
@@ -1857,14 +1857,14 @@ rd_watch_view_build(RD_View *view, RD_WatchViewState *ewv, B32 modifiable, U32 d
           {
             RD_WatchViewPoint fallback_pt_prev = rd_watch_view_point_from_tbl(&blocks, v2s64(0, y - 1));
             RD_WatchViewPoint fallback_pt_next = rd_watch_view_point_from_tbl(&blocks, v2s64(0, y + 1));
-            RD_Entity *watch = d_entity_from_ev_key_and_kind(pt.key, mutable_entity_kind);
+            RD_Entity *watch = rd_entity_from_ev_key_and_kind(pt.key, mutable_entity_kind);
             if(!rd_entity_is_nil(watch))
             {
               EV_Key new_cursor_key = empty_row_key;
               EV_Key new_cursor_parent_key = empty_row_parent_key;
               if((evt->delta_2s32.x < 0 || evt->delta_2s32.y < 0) && !ev_key_match(ev_key_zero(), fallback_pt_prev.key))
               {
-                RD_Entity *fallback_watch = d_entity_from_ev_key_and_kind(fallback_pt_prev.key, mutable_entity_kind);
+                RD_Entity *fallback_watch = rd_entity_from_ev_key_and_kind(fallback_pt_prev.key, mutable_entity_kind);
                 if(!rd_entity_is_nil(fallback_watch))
                 {
                   new_cursor_key = fallback_pt_prev.key;
@@ -1873,7 +1873,7 @@ rd_watch_view_build(RD_View *view, RD_WatchViewState *ewv, B32 modifiable, U32 d
               }
               else if(!ev_key_match(ev_key_zero(), fallback_pt_next.key))
               {
-                RD_Entity *fallback_watch = d_entity_from_ev_key_and_kind(fallback_pt_next.key, mutable_entity_kind);
+                RD_Entity *fallback_watch = rd_entity_from_ev_key_and_kind(fallback_pt_next.key, mutable_entity_kind);
                 if(!rd_entity_is_nil(fallback_watch))
                 {
                   new_cursor_key = fallback_pt_next.key;
@@ -1889,7 +1889,7 @@ rd_watch_view_build(RD_View *view, RD_WatchViewState *ewv, B32 modifiable, U32 d
           // rjf: view rule deletions
           else if(selection_tbl.min.x <= RD_WatchViewColumnKind_ViewRule && RD_WatchViewColumnKind_ViewRule <= selection_tbl.max.x)
           {
-            RD_Entity *watch = d_entity_from_ev_key_and_kind(pt.key, mutable_entity_kind);
+            RD_Entity *watch = rd_entity_from_ev_key_and_kind(pt.key, mutable_entity_kind);
             RD_Entity *view_rule = rd_entity_child_from_kind(watch, RD_EntityKind_ViewRule);
             rd_entity_mark_for_deletion(view_rule);
             ev_key_set_view_rule(eval_view, pt.key, str8_zero());
@@ -1992,16 +1992,16 @@ rd_watch_view_build(RD_View *view, RD_WatchViewState *ewv, B32 modifiable, U32 d
         EV_Key first_watch_key = ev_key_from_block_list_row_num(&blocks, selection_tbl.min.y);
         EV_Key reorder_group_prev_watch_key = ev_key_from_block_list_row_num(&blocks, selection_tbl.min.y - 1);
         EV_Key reorder_group_next_watch_key = ev_key_from_block_list_row_num(&blocks, selection_tbl.max.y + 1);
-        RD_Entity *reorder_group_prev = d_entity_from_ev_key_and_kind(reorder_group_prev_watch_key, mutable_entity_kind);
-        RD_Entity *reorder_group_next = d_entity_from_ev_key_and_kind(reorder_group_next_watch_key, mutable_entity_kind);
-        RD_Entity *first_watch = d_entity_from_ev_key_and_kind(first_watch_key, mutable_entity_kind);
+        RD_Entity *reorder_group_prev = rd_entity_from_ev_key_and_kind(reorder_group_prev_watch_key, mutable_entity_kind);
+        RD_Entity *reorder_group_next = rd_entity_from_ev_key_and_kind(reorder_group_next_watch_key, mutable_entity_kind);
+        RD_Entity *first_watch = rd_entity_from_ev_key_and_kind(first_watch_key, mutable_entity_kind);
         RD_Entity *last_watch = first_watch;
         if(!rd_entity_is_nil(first_watch))
         {
           for(S64 y = selection_tbl.min.y+1; y <= selection_tbl.max.y; y += 1)
           {
             EV_Key key = ev_key_from_block_list_row_num(&blocks, y);
-            RD_Entity *new_last = d_entity_from_ev_key_and_kind(key, mutable_entity_kind);
+            RD_Entity *new_last = rd_entity_from_ev_key_and_kind(key, mutable_entity_kind);
             if(!rd_entity_is_nil(new_last))
             {
               last_watch = new_last;
@@ -2911,8 +2911,8 @@ RD_VIEW_UI_FUNCTION_DEF(getting_started)
     UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
     UI_Padding(ui_pct(1, 0)) UI_Focus(UI_FocusKind_Null)
   {
-    RD_EntityList targets = d_push_active_target_list(scratch.arena);
-    RD_EntityList processes = d_query_cached_entity_list_with_kind(RD_EntityKind_Process);
+    RD_EntityList targets = rd_push_active_target_list(scratch.arena);
+    RD_EntityList processes = rd_query_cached_entity_list_with_kind(RD_EntityKind_Process);
     
     //- rjf: icon & info
     UI_Padding(ui_em(2.f, 1.f))
@@ -3952,7 +3952,7 @@ rd_process_info_list_from_query(Arena *arena, String8 query)
   U64 attached_process_count = 0;
   U32 *attached_process_pids = 0;
   {
-    RD_EntityList processes = d_query_cached_entity_list_with_kind(RD_EntityKind_Process);
+    RD_EntityList processes = rd_query_cached_entity_list_with_kind(RD_EntityKind_Process);
     attached_process_count = processes.count;
     attached_process_pids = push_array(scratch.arena, U32, attached_process_count);
     U64 idx = 0;
@@ -4266,7 +4266,7 @@ rd_entity_lister_item_list_from_needle(Arena *arena, RD_EntityKind kind, RD_Enti
 {
   Temp scratch = scratch_begin(&arena, 1);
   RD_EntityListerItemList result = {0};
-  RD_EntityList ent_list = d_query_cached_entity_list_with_kind(kind);
+  RD_EntityList ent_list = rd_query_cached_entity_list_with_kind(kind);
   for(RD_EntityNode *n = ent_list.first; n != 0; n = n->next)
   {
     RD_Entity *entity = n->entity;
@@ -4981,7 +4981,7 @@ RD_VIEW_UI_FUNCTION_DEF(targets)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
-  RD_EntityList targets_list = d_query_cached_entity_list_with_kind(RD_EntityKind_Target);
+  RD_EntityList targets_list = rd_query_cached_entity_list_with_kind(RD_EntityKind_Target);
   RD_EntityFuzzyItemArray targets = rd_entity_fuzzy_item_array_from_entity_list_needle(scratch.arena, &targets_list, string);
   F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
   
@@ -5194,7 +5194,7 @@ RD_VIEW_UI_FUNCTION_DEF(file_path_map)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
-  RD_EntityList maps_list = d_query_cached_entity_list_with_kind(RD_EntityKind_FilePathMap);
+  RD_EntityList maps_list = rd_query_cached_entity_list_with_kind(RD_EntityKind_FilePathMap);
   RD_EntityArray maps = rd_entity_array_from_list(scratch.arena, &maps_list);
   F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
   
@@ -5533,9 +5533,9 @@ RD_VIEW_UI_FUNCTION_DEF(scheduler)
   RD_SchedulerViewState *sv = rd_view_user_state(view, RD_SchedulerViewState);
   
   //- rjf: get entities
-  RD_EntityList machines  = d_query_cached_entity_list_with_kind(RD_EntityKind_Machine);
-  RD_EntityList processes = d_query_cached_entity_list_with_kind(RD_EntityKind_Process);
-  RD_EntityList threads   = d_query_cached_entity_list_with_kind(RD_EntityKind_Thread);
+  RD_EntityList machines  = rd_query_cached_entity_list_with_kind(RD_EntityKind_Machine);
+  RD_EntityList processes = rd_query_cached_entity_list_with_kind(RD_EntityKind_Process);
+  RD_EntityList threads   = rd_query_cached_entity_list_with_kind(RD_EntityKind_Thread);
   
   //- rjf: produce list of items; no query -> all entities, in tree; query -> only show threads
   RD_EntityFuzzyItemArray items = {0};
@@ -5843,8 +5843,8 @@ RD_VIEW_UI_FUNCTION_DEF(modules)
   F32 *col_pcts[] = {&mv->idx_col_pct, &mv->desc_col_pct, &mv->range_col_pct, &mv->dbg_col_pct};
   
   //- rjf: get entities
-  RD_EntityList processes = d_query_cached_entity_list_with_kind(RD_EntityKind_Process);
-  RD_EntityList modules = d_query_cached_entity_list_with_kind(RD_EntityKind_Module);
+  RD_EntityList processes = rd_query_cached_entity_list_with_kind(RD_EntityKind_Process);
+  RD_EntityList modules = rd_query_cached_entity_list_with_kind(RD_EntityKind_Module);
   
   //- rjf: make filtered item array
   RD_EntityFuzzyItemArray items = {0};

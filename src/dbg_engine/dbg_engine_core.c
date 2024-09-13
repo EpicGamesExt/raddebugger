@@ -1685,7 +1685,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
             MTX_Op op = {r1u64(0, 0xffffffffffffffffull), str8_lit("[new session]\n")};
             mtx_push_op(d_state->output_log_key, op);
 #if 0 // TODO(rjf): @msgs
-            RD_EntityList bps = d_query_cached_entity_list_with_kind(RD_EntityKind_Breakpoint);
+            RD_EntityList bps = rd_query_cached_entity_list_with_kind(RD_EntityKind_Breakpoint);
             for(RD_EntityNode *n = bps.first; n != 0; n = n->next)
             {
               n->entity->u64 = 0;
@@ -1719,7 +1719,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
           
           // rjf: find any pending thread names correllating with this TID -> equip name if found match
           {
-            RD_EntityList pending_thread_names = d_query_cached_entity_list_with_kind(RD_EntityKind_PendingThreadName);
+            RD_EntityList pending_thread_names = rd_query_cached_entity_list_with_kind(RD_EntityKind_PendingThreadName);
             for(RD_EntityNode *n = pending_thread_names.first; n != 0; n = n->next)
             {
               RD_Entity *pending_thread_name = n->entity;
@@ -1790,7 +1790,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
           // rjf: is first -> find target, equip process & module & first thread with target color
           if(is_first)
           {
-            RD_EntityList targets = d_query_cached_entity_list_with_kind(RD_EntityKind_Target);
+            RD_EntityList targets = rd_query_cached_entity_list_with_kind(RD_EntityKind_Target);
             for(RD_EntityNode *n = targets.first; n != 0; n = n->next)
             {
               RD_Entity *target = n->entity;
@@ -2357,7 +2357,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
           // rjf: gather targets corresponding to all launched processes
           RD_EntityList targets = {0};
           {
-            RD_EntityList processes = d_query_cached_entity_list_with_kind(RD_EntityKind_Process);
+            RD_EntityList processes = rd_query_cached_entity_list_with_kind(RD_EntityKind_Process);
             for(RD_EntityNode *n = processes.first; n != 0; n = n->next)
             {
               RD_Entity *process = n->entity;

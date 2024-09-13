@@ -1115,7 +1115,7 @@ rd_name_alloc(String8 string)
   // which is not undoable; the free lists we control, and are thus
   // trivially undoable)
   //
-  D_NameChunkNode *node = 0;
+  RD_NameChunkNode *node = 0;
   for(;node == 0;)
   {
     node = rd_state->free_name_chunks[bucket_idx];
@@ -1126,8 +1126,8 @@ rd_name_alloc(String8 string)
       if(bucket_idx == ArrayCount(rd_state->free_name_chunks)-1)
       {
         node = 0;
-        D_NameChunkNode *prev = 0;
-        for(D_NameChunkNode *n = rd_state->free_name_chunks[bucket_idx];
+        RD_NameChunkNode *prev = 0;
+        for(RD_NameChunkNode *n = rd_state->free_name_chunks[bucket_idx];
             n != 0;
             prev = n, n = n->next)
         {
@@ -1165,7 +1165,7 @@ rd_name_alloc(String8 string)
         chunk_size = u64_up_to_pow2(string.size);
       }
       U8 *chunk_memory = push_array(rd_state->arena, U8, chunk_size);
-      D_NameChunkNode *chunk = (D_NameChunkNode *)chunk_memory;
+      RD_NameChunkNode *chunk = (RD_NameChunkNode *)chunk_memory;
       SLLStackPush(rd_state->free_name_chunks[bucket_idx], chunk);
     }
   }
@@ -1181,7 +1181,7 @@ rd_name_release(String8 string)
 {
   if(string.size == 0) {return;}
   U64 bucket_idx = rd_name_bucket_idx_from_string_size(string.size);
-  D_NameChunkNode *node = (D_NameChunkNode *)string.str;
+  RD_NameChunkNode *node = (RD_NameChunkNode *)string.str;
   node->size = u64_up_to_pow2(string.size);
   SLLStackPush(rd_state->free_name_chunks[bucket_idx], node);
 }
@@ -1500,7 +1500,7 @@ rd_possible_overrides_from_file_path(Arena *arena, String8 file_path)
   PathStyle pth_style = PathStyle_Relative;
   String8List pth_parts = path_normalized_list_from_string(scratch.arena, file_path, &pth_style);
   {
-    RD_EntityList links = d_query_cached_entity_list_with_kind(RD_EntityKind_FilePathMap);
+    RD_EntityList links = rd_query_cached_entity_list_with_kind(RD_EntityKind_FilePathMap);
     for(RD_EntityNode *n = links.first; n != 0; n = n->next)
     {
       //- rjf: unpack link
@@ -1665,7 +1665,7 @@ internal RD_Entity *
 rd_entity_from_name_and_kind(String8 string, RD_EntityKind kind)
 {
   RD_Entity *result = &d_nil_entity;
-  RD_EntityList all_of_this_kind = d_query_cached_entity_list_with_kind(kind);
+  RD_EntityList all_of_this_kind = rd_query_cached_entity_list_with_kind(kind);
   for(RD_EntityNode *n = all_of_this_kind.first; n != 0; n = n->next)
   {
     if(str8_match(n->entity->string, string, 0))
@@ -2738,13 +2738,13 @@ rd_window_frame(RD_Window *ws)
   //- rjf: unpack context
   //
   B32 window_is_focused = os_window_is_focused(ws->os) || ws->window_temporarily_focused_ipc;
-  B32 confirm_open = rd_state->confirm_active;
+  B32 popup_open = rd_state->popup_active;
   B32 query_is_open = !rd_view_is_nil(ws->query_view_stack_top);
-  B32 hover_eval_is_open = (!confirm_open &&
+  B32 hover_eval_is_open = (!popup_open &&
                             ws->hover_eval_string.size != 0 &&
                             ws->hover_eval_first_frame_idx+20 < ws->hover_eval_last_frame_idx &&
                             rd_state->frame_index-ws->hover_eval_last_frame_idx < 20);
-  if(!window_is_focused || confirm_open)
+  if(!window_is_focused || popup_open)
   {
     ws->menu_bar_key_held = 0;
   }
@@ -3912,19 +3912,19 @@ rd_window_frame(RD_Window *ws)
     }
     
     ////////////////////////////
-    //- rjf: confirmation popup
+    //- rjf: popup
     //
     {
-      if(rd_state->confirm_t > 0.005f) UI_TextAlignment(UI_TextAlign_Center) UI_Focus(rd_state->confirm_active ? UI_FocusKind_Root : UI_FocusKind_Off)
+      if(rd_state->popup_t > 0.005f) UI_TextAlignment(UI_TextAlign_Center) UI_Focus(rd_state->popup_active ? UI_FocusKind_Root : UI_FocusKind_Off)
       {
         Vec2F32 window_dim = dim_2f32(window_rect);
         UI_Box *bg_box = &ui_g_nil_box;
         UI_Palette *palette = ui_build_palette(rd_palette_from_code(RD_PaletteCode_Floating));
-        palette->background.w *= rd_state->confirm_t;
+        palette->background.w *= rd_state->popup_t;
         UI_Rect(window_rect)
           UI_ChildLayoutAxis(Axis2_X)
           UI_Focus(UI_FocusKind_On)
-          UI_BlurSize(10*rd_state->confirm_t)
+          UI_BlurSize(10*rd_state->popup_t)
           UI_Palette(palette)
         {
           bg_box = ui_build_box_from_stringf(UI_BoxFlag_FixedSize|
@@ -3934,15 +3934,15 @@ rd_window_frame(RD_Window *ws)
                                              UI_BoxFlag_DefaultFocusNav|
                                              UI_BoxFlag_DisableFocusOverlay|
                                              UI_BoxFlag_DrawBackgroundBlur|
-                                             UI_BoxFlag_DrawBackground, "###confirm_popup_%p", ws);
+                                             UI_BoxFlag_DrawBackground, "###popup_%p", ws);
         }
-        if(rd_state->confirm_active) UI_Parent(bg_box) UI_Transparency(1-rd_state->confirm_t)
+        if(rd_state->popup_active) UI_Parent(bg_box) UI_Transparency(1-rd_state->popup_t)
         {
           ui_ctx_menu_close();
           UI_WidthFill UI_PrefHeight(ui_children_sum(1.f)) UI_Column UI_Padding(ui_pct(1, 0))
           {
-            UI_TextRasterFlags(rd_raster_flags_from_slot(RD_FontSlot_Main)) UI_FontSize(ui_top_font_size()*2.f) UI_PrefHeight(ui_em(3.f, 1.f)) ui_label(rd_state->confirm_title);
-            UI_PrefHeight(ui_em(3.f, 1.f)) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) ui_label(rd_state->confirm_desc);
+            UI_TextRasterFlags(rd_raster_flags_from_slot(RD_FontSlot_Main)) UI_FontSize(ui_top_font_size()*2.f) UI_PrefHeight(ui_em(3.f, 1.f)) ui_label(rd_state->popup_title);
+            UI_PrefHeight(ui_em(3.f, 1.f)) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) ui_label(rd_state->popup_desc);
             ui_spacer(ui_em(1.5f, 1.f));
             UI_Row UI_Padding(ui_pct(1.f, 0.f)) UI_WidthFill UI_PrefHeight(ui_em(5.f, 1.f))
             {
@@ -3951,13 +3951,13 @@ rd_window_frame(RD_Window *ws)
                 RD_Palette(RD_PaletteCode_NeutralPopButton)
                 if(ui_clicked(ui_buttonf("OK")) || (ui_key_match(bg_box->default_nav_focus_hot_key, ui_key_zero()) && ui_slot_press(UI_EventActionSlot_Accept)))
               {
-                rd_cmd(RD_CmdKind_ConfirmAccept);
+                rd_cmd(RD_CmdKind_PopupAccept);
               }
               UI_CornerRadius10(ui_top_font_size()*0.25f)
                 UI_CornerRadius11(ui_top_font_size()*0.25f)
                 if(ui_clicked(ui_buttonf("Cancel")) || ui_slot_press(UI_EventActionSlot_Cancel))
               {
-                rd_cmd(RD_CmdKind_ConfirmCancel);
+                rd_cmd(RD_CmdKind_PopupCancel);
               }
             }
             ui_spacer(ui_em(3.f, 1.f));
@@ -4503,7 +4503,7 @@ rd_window_frame(RD_Window *ws)
               Assert(ArrayCount(codepoints) == ArrayCount(cmds));
               rd_cmd_list_menu_buttons(ArrayCount(cmds), cmds, codepoints);
               RD_Palette(RD_PaletteCode_Floating) ui_divider(ui_em(1.f, 1.f));
-              RD_EntityList targets_list = d_query_cached_entity_list_with_kind(RD_EntityKind_Target);
+              RD_EntityList targets_list = rd_query_cached_entity_list_with_kind(RD_EntityKind_Target);
               for(RD_EntityNode *n = targets_list.first; n != 0; n = n->next)
               {
                 RD_Entity *target = n->entity;
@@ -4708,7 +4708,7 @@ rd_window_frame(RD_Window *ws)
             RD_Palette(RD_PaletteCode_NeutralPopButton)
           {
             Temp scratch = scratch_begin(0, 0);
-            RD_EntityList tasks = d_query_cached_entity_list_with_kind(RD_EntityKind_ConversionTask);
+            RD_EntityList tasks = rd_query_cached_entity_list_with_kind(RD_EntityKind_ConversionTask);
             for(RD_EntityNode *n = tasks.first; n != 0; n = n->next)
             {
               RD_Entity *task = n->entity;
@@ -4739,8 +4739,8 @@ rd_window_frame(RD_Window *ws)
           UI_FontSize(ui_top_font_size()*0.85f)
         {
           Temp scratch = scratch_begin(0, 0);
-          RD_EntityList targets = d_push_active_target_list(scratch.arena);
-          RD_EntityList processes = d_query_cached_entity_list_with_kind(RD_EntityKind_Process);
+          RD_EntityList targets = rd_push_active_target_list(scratch.arena);
+          RD_EntityList processes = rd_query_cached_entity_list_with_kind(RD_EntityKind_Process);
           B32 have_targets = targets.count != 0;
           B32 can_send_signal = !d_ctrl_targets_running();
           B32 can_play  = (have_targets && (can_send_signal || d_ctrl_last_run_frame_idx()+4 > rd_state->frame_index));
@@ -8531,7 +8531,7 @@ rd_cfg_strings_from_gfx(Arena *arena, String8 root_path, RD_CfgSrc source)
         continue;
       }
       B32 first = 1;
-      RD_EntityList entities = d_query_cached_entity_list_with_kind(k);
+      RD_EntityList entities = rd_query_cached_entity_list_with_kind(k);
       for(RD_EntityNode *n = entities.first; n != 0; n = n->next)
       {
         RD_Entity *entity = n->entity;
@@ -9199,10 +9199,10 @@ rd_cfg_path_from_src(RD_CfgSrc src)
 //- rjf: entity cache queries
 
 internal RD_EntityList
-d_query_cached_entity_list_with_kind(RD_EntityKind kind)
+rd_query_cached_entity_list_with_kind(RD_EntityKind kind)
 {
   ProfBeginFunction();
-  D_EntityListCache *cache = &rd_state->kind_caches[kind];
+  RD_EntityListCache *cache = &rd_state->kind_caches[kind];
   
   // rjf: build cached list if we're out-of-date
   if(cache->alloc_gen != rd_state->kind_alloc_gens[kind])
@@ -9223,10 +9223,10 @@ d_query_cached_entity_list_with_kind(RD_EntityKind kind)
 }
 
 internal RD_EntityList
-d_push_active_target_list(Arena *arena)
+rd_push_active_target_list(Arena *arena)
 {
   RD_EntityList active_targets = {0};
-  RD_EntityList all_targets = d_query_cached_entity_list_with_kind(RD_EntityKind_Target);
+  RD_EntityList all_targets = rd_query_cached_entity_list_with_kind(RD_EntityKind_Target);
   for(RD_EntityNode *n = all_targets.first; n != 0; n = n->next)
   {
     if(!n->entity->disabled)
@@ -9238,10 +9238,10 @@ d_push_active_target_list(Arena *arena)
 }
 
 internal RD_Entity *
-d_entity_from_ev_key_and_kind(EV_Key key, RD_EntityKind kind)
+rd_entity_from_ev_key_and_kind(EV_Key key, RD_EntityKind kind)
 {
   RD_Entity *result = &d_nil_entity;
-  RD_EntityList list = d_query_cached_entity_list_with_kind(kind);
+  RD_EntityList list = rd_query_cached_entity_list_with_kind(kind);
   for(RD_EntityNode *n = list.first; n != 0; n = n->next)
   {
     RD_Entity *entity = n->entity;
@@ -9497,7 +9497,7 @@ rd_init(CmdLine *cmdln)
   rd_state->entities_count = 0;
   rd_state->entities_root = rd_entity_alloc(&d_nil_entity, RD_EntityKind_Root);
   rd_state->key_map_arena = arena_alloc();
-  rd_state->confirm_arena = arena_alloc();
+  rd_state->popup_arena = arena_alloc();
   rd_state->view_spec_table_size = 256;
   rd_state->view_spec_table = push_array(arena, RD_ViewSpec *, rd_state->view_spec_table_size);
   rd_state->view_rule_spec_table_size = 1024;
@@ -9743,7 +9743,7 @@ rd_frame(void)
   //////////////////////////////
   //- rjf: bind change
   //
-  if(!rd_state->confirm_active && rd_state->bind_change_active)
+  if(!rd_state->popup_active && rd_state->bind_change_active)
   {
     if(os_key_press(&events, os_handle_zero(), 0, OS_Key_Esc))
     {
@@ -10044,7 +10044,7 @@ rd_frame(void)
       };
       for(U64 idx = 0; idx < ArrayCount(evallable_kinds); idx += 1)
       {
-        RD_EntityList entities = d_query_cached_entity_list_with_kind(evallable_kinds[idx]);
+        RD_EntityList entities = rd_query_cached_entity_list_with_kind(evallable_kinds[idx]);
         for(RD_EntityNode *n = entities.first; n != 0; n = n->next)
         {
           RD_Entity *entity = n->entity;
@@ -10062,7 +10062,7 @@ rd_frame(void)
     }
     
     //- rjf: add macros for all watches which define identifiers
-    RD_EntityList watches = d_query_cached_entity_list_with_kind(RD_EntityKind_Watch);
+    RD_EntityList watches = rd_query_cached_entity_list_with_kind(RD_EntityKind_Watch);
     for(RD_EntityNode *n = watches.first; n != 0; n = n->next)
     {
       RD_Entity *watch = n->entity;
@@ -10223,19 +10223,19 @@ rd_frame(void)
           // get confirmation from user
           CTRL_EntityList processes = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Process);
           UI_Key key = ui_key_from_string(ui_key_zero(), str8_lit("lossy_exit_confirmation"));
-          if(processes.count != 0 && !rd_regs()->force_confirm && !ui_key_match(rd_state->confirm_key, key))
+          if(processes.count != 0 && !rd_regs()->force_confirm && !ui_key_match(rd_state->popup_key, key))
           {
-            rd_state->confirm_key = key;
-            rd_state->confirm_active = 1;
-            arena_clear(rd_state->confirm_arena);
-            MemoryZeroStruct(&rd_state->confirm_cmds);
-            rd_state->confirm_title = push_str8f(rd_state->confirm_arena, "Are you sure you want to exit?");
-            rd_state->confirm_desc = push_str8f(rd_state->confirm_arena, "The debugger is still attached to %slive process%s.",
-                                                processes.count == 1 ? "a " : "",
-                                                processes.count == 1 ? ""   : "es");
+            rd_state->popup_key = key;
+            rd_state->popup_active = 1;
+            arena_clear(rd_state->popup_arena);
+            MemoryZeroStruct(&rd_state->popup_cmds);
+            rd_state->popup_title = push_str8f(rd_state->popup_arena, "Are you sure you want to exit?");
+            rd_state->popup_desc = push_str8f(rd_state->popup_arena, "The debugger is still attached to %slive process%s.",
+                                              processes.count == 1 ? "a " : "",
+                                              processes.count == 1 ? ""   : "es");
             RD_Regs *regs = rd_regs_copy(rd_frame_arena(), rd_regs());
             regs->force_confirm = 1;
-            rd_cmd_list_push_new(rd_state->confirm_arena, &rd_state->confirm_cmds, rd_cmd_kind_info_table[RD_CmdKind_Exit].string, regs);
+            rd_cmd_list_push_new(rd_state->popup_arena, &rd_state->popup_cmds, rd_cmd_kind_info_table[RD_CmdKind_Exit].string, regs);
           }
           
           // rjf: otherwise, actually exit
@@ -10307,19 +10307,19 @@ rd_frame(void)
         }break;
         
         //- rjf: confirmations
-        case RD_CmdKind_ConfirmAccept:
+        case RD_CmdKind_PopupAccept:
         {
-          rd_state->confirm_active = 0;
-          rd_state->confirm_key = ui_key_zero();
-          for(RD_CmdNode *n = rd_state->confirm_cmds.first; n != 0; n = n->next)
+          rd_state->popup_active = 0;
+          rd_state->popup_key = ui_key_zero();
+          for(RD_CmdNode *n = rd_state->popup_cmds.first; n != 0; n = n->next)
           {
             rd_push_cmd(n->cmd.name, n->cmd.regs);
           }
         }break;
-        case RD_CmdKind_ConfirmCancel:
+        case RD_CmdKind_PopupCancel:
         {
-          rd_state->confirm_active = 0;
-          rd_state->confirm_key = ui_key_zero();
+          rd_state->popup_active = 0;
+          rd_state->popup_key = ui_key_zero();
         }break;
         
         //- rjf: config path saving/loading/applying
@@ -10500,7 +10500,7 @@ rd_frame(void)
           //- rjf: keep track of recent projects
           if(src == RD_CfgSrc_Project)
           {
-            RD_EntityList recent_projects = d_query_cached_entity_list_with_kind(RD_EntityKind_RecentProject);
+            RD_EntityList recent_projects = rd_query_cached_entity_list_with_kind(RD_EntityKind_RecentProject);
             RD_Entity *recent_project = &d_nil_entity;
             for(RD_EntityNode *n = recent_projects.first; n != 0; n = n->next)
             {
@@ -10525,7 +10525,7 @@ rd_frame(void)
               RD_EntityKindFlags k_flags = rd_entity_kind_flags_table[k];
               if(k_flags & RD_EntityKindFlag_IsSerializedToConfig)
               {
-                RD_EntityList entities = d_query_cached_entity_list_with_kind(k);
+                RD_EntityList entities = rd_query_cached_entity_list_with_kind(k);
                 for(RD_EntityNode *n = entities.first; n != 0; n = n->next)
                 {
                   if(n->entity->cfg_src == src)
@@ -12580,7 +12580,7 @@ rd_frame(void)
                   // rjf: try to find root folder as if it's inside of a path we've already loaded
                   if(rd_entity_is_nil(root_folder))
                   {
-                    RD_EntityList all_files = d_query_cached_entity_list_with_kind(RD_EntityKind_File);
+                    RD_EntityList all_files = rd_query_cached_entity_list_with_kind(RD_EntityKind_File);
                     for(RD_EntityNode *n = all_files.first; n != 0; n = n->next)
                     {
                       if(n->entity->flags & RD_EntityFlag_IsFolder)
@@ -13239,7 +13239,7 @@ rd_frame(void)
           B32 removed_already_existing = 0;
           if(kind == RD_CmdKind_ToggleBreakpoint)
           {
-            RD_EntityList bps = d_query_cached_entity_list_with_kind(RD_EntityKind_Breakpoint);
+            RD_EntityList bps = rd_query_cached_entity_list_with_kind(RD_EntityKind_Breakpoint);
             for(RD_EntityNode *n = bps.first; n != 0; n = n->next)
             {
               RD_Entity *bp = n->entity;
@@ -13291,7 +13291,7 @@ rd_frame(void)
           B32 removed_already_existing = 0;
           if(kind == RD_CmdKind_ToggleWatchPin)
           {
-            RD_EntityList wps = d_query_cached_entity_list_with_kind(RD_EntityKind_WatchPin);
+            RD_EntityList wps = rd_query_cached_entity_list_with_kind(RD_EntityKind_WatchPin);
             for(RD_EntityNode *n = wps.first; n != 0; n = n->next)
             {
               RD_Entity *wp = n->entity;
@@ -13451,7 +13451,7 @@ rd_frame(void)
           RD_Entity *entity = rd_entity_from_handle(rd_regs()->entity);
           if(entity->kind == RD_EntityKind_Target)
           {
-            RD_EntityList all_targets = d_query_cached_entity_list_with_kind(RD_EntityKind_Target);
+            RD_EntityList all_targets = rd_query_cached_entity_list_with_kind(RD_EntityKind_Target);
             B32 is_selected = !entity->disabled;
             for(RD_EntityNode *n = all_targets.first; n != 0; n = n->next)
             {
@@ -14056,7 +14056,7 @@ rd_frame(void)
   //
   D_TargetArray targets = {0};
   {
-    RD_EntityList target_entities = d_query_cached_entity_list_with_kind(RD_EntityKind_Target);
+    RD_EntityList target_entities = rd_query_cached_entity_list_with_kind(RD_EntityKind_Target);
     targets.count = target_entities.count;
     targets.v = push_array(scratch.arena, D_Target, targets.count);
     U64 idx = 0;
@@ -14080,7 +14080,7 @@ rd_frame(void)
   //
   D_BreakpointArray breakpoints = {0};
   {
-    RD_EntityList bp_entities = d_query_cached_entity_list_with_kind(RD_EntityKind_Breakpoint);
+    RD_EntityList bp_entities = rd_query_cached_entity_list_with_kind(RD_EntityKind_Breakpoint);
     breakpoints.count = bp_entities.count;
     breakpoints.v = push_array(scratch.arena, D_Breakpoint, breakpoints.count);
     U64 idx = 0;
@@ -14181,7 +14181,7 @@ rd_frame(void)
         // rjf: increment breakpoint hit counts
         if(evt->cause == D_EventCause_UserBreakpoint)
         {
-          RD_EntityList user_bps = d_query_cached_entity_list_with_kind(RD_EntityKind_Breakpoint);
+          RD_EntityList user_bps = rd_query_cached_entity_list_with_kind(RD_EntityKind_Breakpoint);
           for(RD_EntityNode *n = user_bps.first; n != 0; n = n->next)
           {
             RD_Entity *bp = n->entity;
@@ -14221,9 +14221,9 @@ rd_frame(void)
   //
   {
     F32 rate = rd_setting_val_from_code(RD_SettingCode_MenuAnimations).s32 ? 1 - pow_f32(2, (-10.f * rd_state->frame_dt)) : 1.f;
-    B32 confirm_open = rd_state->confirm_active;
-    rd_state->confirm_t += rate * ((F32)!!confirm_open-rd_state->confirm_t);
-    if(abs_f32(rd_state->confirm_t - (F32)!!confirm_open) > 0.005f)
+    B32 popup_open = rd_state->popup_active;
+    rd_state->popup_t += rate * ((F32)!!popup_open-rd_state->popup_t);
+    if(abs_f32(rd_state->popup_t - (F32)!!popup_open) > 0.005f)
     {
       rd_request_frame();
     }

@@ -129,7 +129,7 @@ typedef enum MD_NodeKind
 }
 MD_NodeKind;
 
-typedef U64 MD_NodeFlags;
+typedef U32 MD_NodeFlags;
 enum
 {
   MD_NodeFlag_MaskSetDelimiters          = (0x3F<<0),
@@ -182,6 +182,16 @@ struct MD_Node
   
   // rjf: source code info
   U64 src_offset;
+  
+  // rjf: user-controlled generation number
+  //
+  // (unused by mdesk layer, but can be used by usage code to use MD_Node trees
+  // in a "retained mode" way, where stable generational handles can be formed
+  // to nodes)
+  U64 user_gen;
+  
+  // rjf: extra padding to 128 bytes
+  U64 _unused_[2];
 };
 
 typedef struct MD_NodeRec MD_NodeRec;

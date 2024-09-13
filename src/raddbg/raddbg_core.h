@@ -899,15 +899,15 @@ struct RD_EvalVizViewCacheSlot
 ////////////////////////////////
 //~ rjf: Main Per-Process Graphical State
 
-typedef struct D_NameChunkNode D_NameChunkNode;
-struct D_NameChunkNode
+typedef struct RD_NameChunkNode RD_NameChunkNode;
+struct RD_NameChunkNode
 {
-  D_NameChunkNode *next;
+  RD_NameChunkNode *next;
   U64 size;
 };
 
-typedef struct D_EntityListCache D_EntityListCache;
-struct D_EntityListCache
+typedef struct RD_EntityListCache RD_EntityListCache;
+struct RD_EntityListCache
 {
   Arena *arena;
   U64 alloc_gen;
@@ -917,39 +917,70 @@ struct D_EntityListCache
 typedef struct RD_State RD_State;
 struct RD_State
 {
-  // rjf: top-level state
+  // rjf: basics
   Arena *arena;
   B32 quit;
-  F64 time_in_seconds;
+  
+  // rjf: log
   Log *log;
   String8 log_path;
   
-  // rjf: frame state
-  F32 frame_dt;
+  // rjf: frame history info
   U64 frame_index;
   Arena *frame_arenas[2];
-  
-  // rjf: frame time history
   U64 frame_time_us_history[64];
+  U64 num_frames_requested;
+  F64 time_in_seconds;
+  
+  // rjf: frame parameters
+  F32 frame_dt;
   
   // rjf: registers stack
   RD_RegsNode base_regs;
   RD_RegsNode *top_regs;
   
+  // rjf: autosave state
+  F32 seconds_until_autosave;
+  
   // rjf: commands
   Arena *cmds_arena;
   RD_CmdList cmds;
   
-  // rjf: frame request state
-  U64 num_frames_requested;
+  // rjf: popup state
+  UI_Key popup_key;
+  B32 popup_active;
+  F32 popup_t;
+  Arena *popup_arena;
+  RD_CmdList popup_cmds;
+  String8 popup_title;
+  String8 popup_desc;
   
-  // rjf: autosave timer
-  F32 seconds_until_autosave;
+  // rjf: string search state
+  Arena *string_search_arena;
+  String8 string_search_string;
   
-  // rjf: name allocator
-  D_NameChunkNode *free_name_chunks[8];
+  // rjf: eval visualization view cache
+  U64 eval_viz_view_cache_slots_count;
+  RD_EvalVizViewCacheSlot *eval_viz_view_cache_slots;
+  RD_EvalVizViewCacheNode *eval_viz_view_cache_node_free;
+  
+  // rjf: contextual hover info
+  RD_Regs *hover_regs;
+  RD_Regs *next_hover_regs;
+  
+  // rjf: icon texture
+  R_Handle icon_texture;
+  
+  // rjf: current path
+  Arena *current_path_arena;
+  String8 current_path;
+  
+  //-
+  // TODO(rjf): TO BE ELIMINATED OR REPLACED VVVVVVVVVVVVVVVV
+  //-
   
   // rjf: entity state
+  RD_NameChunkNode *free_name_chunks[8];
   Arena *entities_arena;
   RD_Entity *entities_base;
   U64 entities_count;
@@ -961,7 +992,7 @@ struct RD_State
   
   // rjf: entity query caches
   U64 kind_alloc_gens[RD_EntityKind_COUNT];
-  D_EntityListCache kind_caches[RD_EntityKind_COUNT];
+  RD_EntityListCache kind_caches[RD_EntityKind_COUNT];
   
   // rjf: key map table
   Arena *key_map_arena;
@@ -981,19 +1012,6 @@ struct RD_State
   UI_Key entity_ctx_menu_key;
   UI_Key tab_ctx_menu_key;
   
-  // rjf: confirmation popup state
-  UI_Key confirm_key;
-  B32 confirm_active;
-  F32 confirm_t;
-  Arena *confirm_arena;
-  RD_CmdList confirm_cmds;
-  String8 confirm_title;
-  String8 confirm_desc;
-  
-  // rjf: string search state
-  Arena *string_search_arena;
-  String8 string_search_string;
-  
   // rjf: view specs
   U64 view_spec_table_size;
   RD_ViewSpec **view_spec_table;
@@ -1010,11 +1028,6 @@ struct RD_State
   B32 last_window_queued_save;
   RD_Handle last_focused_window;
   
-  // rjf: eval visualization view cache
-  U64 eval_viz_view_cache_slots_count;
-  RD_EvalVizViewCacheSlot *eval_viz_view_cache_slots;
-  RD_EvalVizViewCacheNode *eval_viz_view_cache_node_free;
-  
   // rjf: view state
   RD_View *first_view;
   RD_View *last_view;
@@ -1024,10 +1037,6 @@ struct RD_State
   
   // rjf: drag/drop state machine
   RD_DragDropState drag_drop_state;
-  
-  // rjf: rich hover info
-  RD_Regs *hover_regs;
-  RD_Regs *next_hover_regs;
   
   // rjf: config reading state
   Arena *cfg_path_arenas[RD_CfgSrc_COUNT];
@@ -1049,12 +1058,9 @@ struct RD_State
   // rjf: global settings
   RD_SettingVal cfg_setting_vals[RD_CfgSrc_COUNT][RD_SettingCode_COUNT];
   
-  // rjf: icon texture
-  R_Handle icon_texture;
-  
-  // rjf: current path
-  Arena *current_path_arena;
-  String8 current_path;
+  //-
+  // TODO(rjf): TO BE ELIMINATED OR REPLACED ^^^^^^^^^^^^^^^^^^
+  //-
 };
 
 ////////////////////////////////
@@ -1503,9 +1509,9 @@ internal Arena *rd_frame_arena(void);
 internal String8 rd_cfg_path_from_src(RD_CfgSrc src);
 
 //- rjf: entity cache queries
-internal RD_EntityList d_query_cached_entity_list_with_kind(RD_EntityKind kind);
-internal RD_EntityList d_push_active_target_list(Arena *arena);
-internal RD_Entity *d_entity_from_ev_key_and_kind(EV_Key key, RD_EntityKind kind);
+internal RD_EntityList rd_query_cached_entity_list_with_kind(RD_EntityKind kind);
+internal RD_EntityList rd_push_active_target_list(Arena *arena);
+internal RD_Entity *rd_entity_from_ev_key_and_kind(EV_Key key, RD_EntityKind kind);
 
 //- rjf: config state
 internal RD_CfgTable *rd_cfg_table(void);
