@@ -50,7 +50,7 @@
 // [ ] transient view timeout releasing
 //
 // [ ] save view column pcts; generalize to being a first-class thing in
-//     DF_View, e.g. by just having a string -> f32 store
+//     RD_View, e.g. by just having a string -> f32 store
 // [ ] decay arrays to pointers in pointer/value comparison
 // [ ] EVAL LOOKUP RULES -> currently going 0 -> rdis_count, but we need
 // to prioritize the primary rdi
@@ -471,7 +471,7 @@
 //     "blocks" vs. "canvas" vs. "expansion" - etc.
 // [x] @cleanup collapse DF_CfgNodes into just being MD trees, find another way
 //     to encode config source - don't need it at every node
-// [x] @cleanup in the frontend, we are starting to have to pass down "DF_Window"
+// [x] @cleanup in the frontend, we are starting to have to pass down "RD_Window"
 //     everywhere, because of per-window parameters (e.g. font rendering settings).
 //     this is really better solved by implicit thread-local parameters, similar to
 //     interaction registers, so that one window can "pick" all of the implicit
@@ -494,7 +494,7 @@
 #define GEO_INIT_MANUAL 1
 #define FNT_INIT_MANUAL 1
 #define D_INIT_MANUAL 1
-#define DF_INIT_MANUAL 1
+#define RD_INIT_MANUAL 1
 
 ////////////////////////////////
 //~ rjf: Includes
@@ -543,7 +543,7 @@
 #include "draw/draw.h"
 #include "ui/ui_inc.h"
 #include "dbg_engine/dbg_engine_inc.h"
-#include "dbg_frontend/dbg_frontend_inc.h"
+#include "raddbg/raddbg_inc.h"
 
 //- rjf: [c]
 #include "base/base_inc.c"
@@ -583,7 +583,7 @@
 #include "draw/draw.c"
 #include "ui/ui_inc.c"
 #include "dbg_engine/dbg_engine_inc.c"
-#include "dbg_frontend/dbg_frontend_inc.c"
+#include "raddbg/raddbg_inc.c"
 
 ////////////////////////////////
 //~ rjf: Top-Level Execution Types
@@ -668,8 +668,8 @@ internal CTRL_WAKEUP_FUNCTION_DEF(wakeup_hook_ctrl)
 internal B32
 frame(void)
 {
-  df_frame();
-  return df_state->quit;
+  rd_frame();
+  return rd_state->quit;
 }
 
 ////////////////////////////////
@@ -766,7 +766,7 @@ entry_point(CmdLine *cmd_line)
         geo_init();
         fnt_init();
         d_init();
-        df_init(cmd_line);
+        rd_init(cmd_line);
       }
       
       //- rjf: setup initial target from command line args
@@ -775,8 +775,8 @@ entry_point(CmdLine *cmd_line)
         if(args.node_count > 0 && args.first->string.size != 0)
         {
           Temp scratch = scratch_begin(0, 0);
-          DF_Entity *target = df_entity_alloc(df_entity_root(), DF_EntityKind_Target);
-          df_entity_equip_cfg_src(target, DF_CfgSrc_CommandLine);
+          RD_Entity *target = rd_entity_alloc(rd_entity_root(), RD_EntityKind_Target);
+          rd_entity_equip_cfg_src(target, RD_CfgSrc_CommandLine);
           String8List passthrough_args_list = {0};
           for(String8Node *n = args.first->next; n != 0; n = n->next)
           {
@@ -790,14 +790,14 @@ entry_point(CmdLine *cmd_line)
           if(args.first->string.size != 0)
           {
             String8 exe_name = args.first->string;
-            DF_Entity *exe = df_entity_alloc(target, DF_EntityKind_Executable);
+            RD_Entity *exe = rd_entity_alloc(target, RD_EntityKind_Executable);
             PathStyle style = path_style_from_str8(exe_name);
             if(style == PathStyle_Relative)
             {
               exe_name = push_str8f(scratch.arena, "%S/%S", current_path, exe_name);
               exe_name = path_normalized_from_string(scratch.arena, exe_name);
             }
-            df_entity_equip_name(exe, exe_name);
+            rd_entity_equip_name(exe, exe_name);
           }
           
           // rjf: equip working directory
@@ -805,8 +805,8 @@ entry_point(CmdLine *cmd_line)
           if(path_part_of_arg.size != 0)
           {
             String8 path = push_str8f(scratch.arena, "%S/", path_part_of_arg);
-            DF_Entity *wdir = df_entity_alloc(target, DF_EntityKind_WorkingDirectory);
-            df_entity_equip_name(wdir, path);
+            RD_Entity *wdir = rd_entity_alloc(target, RD_EntityKind_WorkingDirectory);
+            rd_entity_equip_name(wdir, path);
           }
           
           // rjf: equip args
@@ -814,8 +814,8 @@ entry_point(CmdLine *cmd_line)
           String8 args_str = str8_list_join(scratch.arena, &passthrough_args_list, &join);
           if(args_str.size != 0)
           {
-            DF_Entity *args_entity = df_entity_alloc(target, DF_EntityKind_Arguments);
-            df_entity_equip_name(args_entity, args_str);
+            RD_Entity *args_entity = rd_entity_alloc(target, RD_EntityKind_Arguments);
+            rd_entity_equip_name(args_entity, args_str);
           }
           scratch_end(scratch);
         }
@@ -868,8 +868,8 @@ entry_point(CmdLine *cmd_line)
             if(msg.size != 0)
             {
               log_infof("ipc_msg: \"%S\"", msg);
-              DF_Window *dst_window = df_state->first_window;
-              for(DF_Window *window = dst_window; window != 0; window = window->next)
+              RD_Window *dst_window = rd_state->first_window;
+              for(RD_Window *window = dst_window; window != 0; window = window->next)
               {
                 if(os_window_is_focused(window->os))
                 {
@@ -883,23 +883,23 @@ entry_point(CmdLine *cmd_line)
                 U64 first_space_pos = str8_find_needle(msg, 0, str8_lit(" "), 0);
                 String8 cmd_kind_name_string = str8_prefix(msg, first_space_pos);
                 String8 cmd_args_string = str8_skip_chop_whitespace(str8_skip(msg, first_space_pos));
-                DF_CmdKindInfo *cmd_kind_info = df_cmd_kind_info_from_string(cmd_kind_name_string);
-                if(cmd_kind_info != &df_nil_cmd_kind_info) DF_RegsScope()
+                RD_CmdKindInfo *cmd_kind_info = rd_cmd_kind_info_from_string(cmd_kind_name_string);
+                if(cmd_kind_info != &rd_nil_cmd_kind_info) RD_RegsScope()
                 {
-                  if(dst_window != df_window_from_handle(df_regs()->window))
+                  if(dst_window != rd_window_from_handle(rd_regs()->window))
                   {
-                    df_regs()->window = df_handle_from_window(dst_window);
-                    df_regs()->panel  = df_handle_from_panel(dst_window->focused_panel);
-                    df_regs()->view   = dst_window->focused_panel->selected_tab_view;
+                    rd_regs()->window = rd_handle_from_window(dst_window);
+                    rd_regs()->panel  = rd_handle_from_panel(dst_window->focused_panel);
+                    rd_regs()->view   = dst_window->focused_panel->selected_tab_view;
                   }
-                  df_regs_fill_slot_from_string(cmd_kind_info->query.slot, cmd_args_string);
-                  df_push_cmd(cmd_kind_name_string, df_regs());
-                  df_request_frame();
+                  rd_regs_fill_slot_from_string(cmd_kind_info->query.slot, cmd_args_string);
+                  rd_push_cmd(cmd_kind_name_string, rd_regs());
+                  rd_request_frame();
                 }
                 else
                 {
                   log_user_errorf("\"%S\" is not a command.", cmd_kind_name_string);
-                  df_request_frame();
+                  rd_request_frame();
                 }
               }
             }
@@ -913,21 +913,21 @@ entry_point(CmdLine *cmd_line)
           if(auto_run)
           {
             auto_run = 0;
-            df_cmd(DF_CmdKind_LaunchAndRun);
+            rd_cmd(RD_CmdKind_LaunchAndRun);
           }
           
           //- rjf: auto step
           if(auto_step)
           {
             auto_step = 0;
-            df_cmd(DF_CmdKind_StepInto);
+            rd_cmd(RD_CmdKind_StepInto);
           }
           
           //- rjf: jit attach
           if(jit_attach)
           {
             jit_attach = 0;
-            df_cmd(DF_CmdKind_Attach, .pid = jit_pid);
+            rd_cmd(RD_CmdKind_Attach, .pid = jit_pid);
           }
         }
       }

@@ -4,17 +4,17 @@
 ////////////////////////////////
 //~ rjf: Embedded Data
 
-@embed_file df_g_icon_font_bytes:         "../data/icons.ttf"
-@embed_file df_g_default_main_font_bytes: "../data/Roboto-Regular.ttf"
-@embed_file df_g_default_code_font_bytes: "../data/liberation-mono.ttf"
-//@embed_file df_g_default_code_font_bytes: "../data/Inconsolata-Regular.ttf"
-@embed_file df_g_icon_file_bytes:         "../data/logo.ico"
+@embed_file rd_icon_font_bytes:         "../data/icons.ttf"
+@embed_file rd_default_main_font_bytes: "../data/Roboto-Regular.ttf"
+@embed_file rd_default_code_font_bytes: "../data/liberation-mono.ttf"
+//@embed_file rd_default_code_font_bytes: "../data/Inconsolata-Regular.ttf"
+@embed_file rd_icon_file_bytes:         "../data/logo.ico"
 
 ////////////////////////////////
 //~ rjf: Config Sources
 
 @table(string, name, load_cmd, write_cmd, apply_cmd)
-DF_CfgSrcTable:
+RD_CfgSrcTable:
 {
   {"user"            User             OpenUser       WriteUserData       ApplyUserData    }
   {"project"         Project          OpenProject    WriteProjectData    ApplyProjectData }
@@ -22,30 +22,30 @@ DF_CfgSrcTable:
   {"transient"       Transient        Null           Null                Null             }
 }
 
-@enum DF_CfgSrc:
+@enum RD_CfgSrc:
 {
-  @expand(DF_CfgSrcTable a) `$(a.name)`,
+  @expand(RD_CfgSrcTable a) `$(a.name)`,
   COUNT,
 }
 
-@data(String8) d_cfg_src_string_table:
+@data(String8) rd_cfg_src_string_table:
 {
-  @expand(DF_CfgSrcTable a) `str8_lit_comp("$(a.string)")`,
+  @expand(RD_CfgSrcTable a) `str8_lit_comp("$(a.string)")`,
 }
 
-@data(DF_CmdKind) d_cfg_src_load_cmd_kind_table:
+@data(RD_CmdKind) rd_cfg_src_load_cmd_kind_table:
 {
-  @expand(DF_CfgSrcTable a) `DF_CmdKind_$(a.load_cmd)`,
+  @expand(RD_CfgSrcTable a) `RD_CmdKind_$(a.load_cmd)`,
 }
 
-@data(DF_CmdKind) d_cfg_src_write_cmd_kind_table:
+@data(RD_CmdKind) rd_cfg_src_write_cmd_kind_table:
 {
-  @expand(DF_CfgSrcTable a) `DF_CmdKind_$(a.write_cmd)`,
+  @expand(RD_CfgSrcTable a) `RD_CmdKind_$(a.write_cmd)`,
 }
 
-@data(DF_CmdKind) d_cfg_src_apply_cmd_kind_table:
+@data(RD_CmdKind) rd_cfg_src_apply_cmd_kind_table:
 {
-  @expand(DF_CfgSrcTable a) `DF_CmdKind_$(a.apply_cmd)`;
+  @expand(RD_CfgSrcTable a) `RD_CmdKind_$(a.apply_cmd)`;
 }
 
 ////////////////////////////////
@@ -58,7 +58,7 @@ DF_CfgSrcTable:
 //                                                                        operations________  names lt sz
 //                                                                       /..................\ /...\ |  |
 //                                                                       dl fz ed rn en cn dp nc np ul iz
-DF_EntityKindTable:
+RD_EntityKindTable:
 {
   {Nil                nil                   nils                          0  0  0  0  0  0  0  0  0  0  0                      "Label"             Null                   "Nil"                        }
   {Root               root                  roots                         0  0  0  0  0  0  0  0  0  0  0                      "Label"             Null                   "Root"                       }
@@ -120,55 +120,55 @@ DF_EntityKindTable:
   {ConversionFail     conversion_fail       conversion_fails              0  0  0  1  0  0  0  0  0  0  0                      "Label"             Null                   "Conversion Failure"         }
 }
 
-@enum DF_EntityKind:
+@enum RD_EntityKind:
 {
-  @expand(DF_EntityKindTable a) `$(a.name)`,
+  @expand(RD_EntityKindTable a) `$(a.name)`,
   COUNT,
 }
 
 @data(String8) d_entity_kind_display_string_table:
 {
-  @expand(DF_EntityKindTable a) `str8_lit_comp("$(a.display_string)")`,
+  @expand(RD_EntityKindTable a) `str8_lit_comp("$(a.display_string)")`,
 }
 
 @data(String8) d_entity_kind_name_lower_table:
 {
-  @expand(DF_EntityKindTable a) `str8_lit_comp("$(a.name_lower)")`,
+  @expand(RD_EntityKindTable a) `str8_lit_comp("$(a.name_lower)")`,
 }
 
 @data(String8) d_entity_kind_name_lower_plural_table:
 {
-  @expand(DF_EntityKindTable a) `str8_lit_comp("$(a.name_lower_plural)")`,
+  @expand(RD_EntityKindTable a) `str8_lit_comp("$(a.name_lower_plural)")`,
 }
 
 @data(String8) d_entity_kind_name_label_table:
 {
-  @expand(DF_EntityKindTable a) `str8_lit_comp("$(a.name_label)")`,
+  @expand(RD_EntityKindTable a) `str8_lit_comp("$(a.name_label)")`,
 }
 
-@data(DF_EntityKindFlags) d_entity_kind_flags_table:
+@data(RD_EntityKindFlags) rd_entity_kind_flags_table:
 {
-  @expand(DF_EntityKindTable a) `($(a.op_delete)*DF_EntityKindFlag_CanDelete) | ($(a.op_freeze)*DF_EntityKindFlag_CanFreeze) | ($(a.op_edit)*DF_EntityKindFlag_CanEdit) | ($(a.op_rename)*DF_EntityKindFlag_CanRename) | ($(a.op_enable)*DF_EntityKindFlag_CanEnable) | ($(a.op_cond)*DF_EntityKindFlag_CanCondition) | ($(a.op_dup)*DF_EntityKindFlag_CanDuplicate) | ($(a.name_is_code)*DF_EntityKindFlag_NameIsCode) | ($(a.name_is_path)*DF_EntityKindFlag_NameIsPath) | ($(a.user_lifetime)*DF_EntityKindFlag_UserDefinedLifetime) | ($(a.is_serialized)*DF_EntityKindFlag_IsSerializedToConfig)`,
+  @expand(RD_EntityKindTable a) `($(a.op_delete)*RD_EntityKindFlag_CanDelete) | ($(a.op_freeze)*RD_EntityKindFlag_CanFreeze) | ($(a.op_edit)*RD_EntityKindFlag_CanEdit) | ($(a.op_rename)*RD_EntityKindFlag_CanRename) | ($(a.op_enable)*RD_EntityKindFlag_CanEnable) | ($(a.op_cond)*RD_EntityKindFlag_CanCondition) | ($(a.op_dup)*RD_EntityKindFlag_CanDuplicate) | ($(a.name_is_code)*RD_EntityKindFlag_NameIsCode) | ($(a.name_is_path)*RD_EntityKindFlag_NameIsPath) | ($(a.user_lifetime)*RD_EntityKindFlag_UserDefinedLifetime) | ($(a.is_serialized)*RD_EntityKindFlag_IsSerializedToConfig)`,
 }
 
 ////////////////////////////////
 //~ rjf: Registers Type Table
 
 @table(c_type  name_lower  name)
-DF_RegTable:
+RD_RegTable:
 {
   // rjf: entity slots
   {CTRL_Handle      machine          Machine       }
   {CTRL_Handle      module           Module        }
   {CTRL_Handle      process          Process       }
   {CTRL_Handle      thread           Thread        }
-  {D_Handle         window           Window        }
-  {D_Handle         panel            Panel         }
-  {D_Handle         view             View          }
-  {D_Handle         prev_view        PrevView      }
-  {D_Handle         dst_panel        DstPanel      }
-  {D_Handle         entity           Entity        }
-  {D_HandleList     entity_list      EntityList    }
+  {RD_Handle         window           Window        }
+  {RD_Handle         panel            Panel         }
+  {RD_Handle         view             View          }
+  {RD_Handle         prev_view        PrevView      }
+  {RD_Handle         dst_panel        DstPanel      }
+  {RD_Handle         entity           Entity        }
+  {RD_HandleList     entity_list      EntityList    }
   
   // rjf: frame selection
   {U64              unwind_count     UnwindCount   }
@@ -197,28 +197,28 @@ DF_RegTable:
   {`OS_Event *`     os_event         OSEvent       }
 }
 
-@enum DF_RegSlot:
+@enum RD_RegSlot:
 {
   Null,
-  @expand(DF_RegTable a) `$(a.name)`,
+  @expand(RD_RegTable a) `$(a.name)`,
   COUNT,
 }
 
-@struct DF_Regs:
+@struct RD_Regs:
 {
-  @expand(DF_RegTable a) `$(a.c_type) $(a.name_lower)`
+  @expand(RD_RegTable a) `$(a.c_type) $(a.name_lower)`
 }
 
-@data(Rng1U64) df_reg_slot_range_table:
+@data(Rng1U64) rd_reg_slot_range_table:
 {
   `{0}`,
-  @expand(DF_RegTable a) `{OffsetOf(DF_Regs, $(a.name_lower)), OffsetOf(DF_Regs, $(a.name_lower)) + sizeof($(a.c_type))}`
+  @expand(RD_RegTable a) `{OffsetOf(RD_Regs, $(a.name_lower)), OffsetOf(RD_Regs, $(a.name_lower)) + sizeof($(a.c_type))}`
 }
 
 @gen
 {
-  `#define df_regs_lit_init_top \\`
-  @expand(DF_RegTable a) `.$(a.name_lower) = df_regs()->$(a.name_lower),\\`
+  `#define rd_regs_lit_init_top \\`
+  @expand(RD_RegTable a) `.$(a.name_lower) = rd_regs()->$(a.name_lower),\\`
     ``;
 }
 
@@ -228,7 +228,7 @@ DF_RegTable:
 @table(name                      ui_vis   ipc_docs_vis   q_slot       q_view  q_ent_kind  q_allow_files q_allow_folders  q_keep_oi   q_select_oi  q_is_code  q_required                     canonical_icon        string                        display_name                                  desc                                                                                                               search_tags                      )
 //    /                          |        |              |             \___                                                       _____________________________________/                    |                     |                             |                                             |                                                                                                                  |
 //   /                           |        |              |                 \                                                     /                                                          |                     |                             |                                             |                                                                                                                  |
-DF_CmdTable:    //               |        |              |                  |                                                   |                                                           |                     |                             |                                             |                                                                                                                  |
+RD_CmdTable:    //               |        |              |                  |                                                   |                                                           |                     |                             |                                             |                                                                                                                  |
 {
   //- rjf: exiting
   {Exit                           1        1              Null               null              Nil                0  0  0  0  0  0                                                           X                     "exit"                        "Exit"                                        "Exits the debugger."                                                                                              "quit,close,abort"               }
@@ -500,47 +500,47 @@ DF_CmdTable:    //               |        |              |                  |   
   {LogMarker                      1        1              Null               null              Nil                0  0  0  0  0  0                                                           Null                  "log_marker"                  "Log Marker"                                  "Logs a marker in the application log, to denote specific points in time within the log."                          ""                               }
 }
 
-@enum DF_CmdKind:
+@enum RD_CmdKind:
 {
   `Null`,
   @expand(D_CmdTable a) `$(a.name)`,
-  @expand(DF_CmdTable, a) `$(a.name)`,
+  @expand(RD_CmdTable, a) `$(a.name)`,
   COUNT,
 }
 
-@struct DF_Query:
+@struct RD_Query:
 {
-  `DF_QueryFlags flags`;
-  `DF_RegSlot slot`;
+  `RD_QueryFlags flags`;
+  `RD_RegSlot slot`;
   `String8 view_name`;
-  `DF_EntityKind entity_kind`;
+  `RD_EntityKind entity_kind`;
 }
 
-@struct DF_CmdKindInfo:
+@struct RD_CmdKindInfo:
 {
   `String8 string`;
   `String8 description`;
   `String8 search_tags`;
   `String8 display_name`;
-  `DF_IconKind icon_kind`;
-  `DF_CmdKindFlags flags`;
-  `DF_Query query`;
+  `RD_IconKind icon_kind`;
+  `RD_CmdKindFlags flags`;
+  `RD_Query query`;
 };
 
-@data(DF_CmdKindInfo) @c_file df_cmd_kind_info_table:
+@data(RD_CmdKindInfo) @c_file rd_cmd_kind_info_table:
 {
   `{0}`,
   @expand(D_CmdTable, a)
-    ```{ str8_lit_comp("$(a.string)"), str8_lit_comp("$(a.desc)"), str8_lit_comp("$(a.search_tags)"), str8_lit_comp("$(a.display_name)"), DF_IconKind_$(a.canonical_icon), (DF_CmdKindFlag_ListInUI*$(a.ui_vis))|(DF_CmdKindFlag_ListInIPCDocs*$(a.ipc_docs_vis)), {(DF_QueryFlag_AllowFiles*$(a.q_allow_files))|(DF_QueryFlag_AllowFolders*$(a.q_allow_folders))|(DF_QueryFlag_CodeInput*$(a.q_is_code))|(DF_QueryFlag_KeepOldInput*$(a.q_keep_oi))|(DF_QueryFlag_SelectOldInput*$(a.q_select_oi))|(DF_QueryFlag_Required*$(a.q_required)), DF_RegSlot_$(a.q_slot), str8_lit_comp("$(a.q_view != 'null' -> a.q_view)"), DF_EntityKind_$(a.q_ent_kind)}}```;
-  @expand(DF_CmdTable, a)
-    ```{ str8_lit_comp("$(a.string)"), str8_lit_comp("$(a.desc)"), str8_lit_comp("$(a.search_tags)"), str8_lit_comp("$(a.display_name)"), DF_IconKind_$(a.canonical_icon), (DF_CmdKindFlag_ListInUI*$(a.ui_vis))|(DF_CmdKindFlag_ListInIPCDocs*$(a.ipc_docs_vis)), {(DF_QueryFlag_AllowFiles*$(a.q_allow_files))|(DF_QueryFlag_AllowFolders*$(a.q_allow_folders))|(DF_QueryFlag_CodeInput*$(a.q_is_code))|(DF_QueryFlag_KeepOldInput*$(a.q_keep_oi))|(DF_QueryFlag_SelectOldInput*$(a.q_select_oi))|(DF_QueryFlag_Required*$(a.q_required)), DF_RegSlot_$(a.q_slot), str8_lit_comp("$(a.q_view != 'null' -> a.q_view)"), DF_EntityKind_$(a.q_ent_kind)}}```;
+    ```{ str8_lit_comp("$(a.string)"), str8_lit_comp("$(a.desc)"), str8_lit_comp("$(a.search_tags)"), str8_lit_comp("$(a.display_name)"), RD_IconKind_$(a.canonical_icon), (RD_CmdKindFlag_ListInUI*$(a.ui_vis))|(RD_CmdKindFlag_ListInIPCDocs*$(a.ipc_docs_vis)), {(RD_QueryFlag_AllowFiles*$(a.q_allow_files))|(RD_QueryFlag_AllowFolders*$(a.q_allow_folders))|(RD_QueryFlag_CodeInput*$(a.q_is_code))|(RD_QueryFlag_KeepOldInput*$(a.q_keep_oi))|(RD_QueryFlag_SelectOldInput*$(a.q_select_oi))|(RD_QueryFlag_Required*$(a.q_required)), RD_RegSlot_$(a.q_slot), str8_lit_comp("$(a.q_view != 'null' -> a.q_view)"), RD_EntityKind_$(a.q_ent_kind)}}```;
+  @expand(RD_CmdTable, a)
+    ```{ str8_lit_comp("$(a.string)"), str8_lit_comp("$(a.desc)"), str8_lit_comp("$(a.search_tags)"), str8_lit_comp("$(a.display_name)"), RD_IconKind_$(a.canonical_icon), (RD_CmdKindFlag_ListInUI*$(a.ui_vis))|(RD_CmdKindFlag_ListInIPCDocs*$(a.ipc_docs_vis)), {(RD_QueryFlag_AllowFiles*$(a.q_allow_files))|(RD_QueryFlag_AllowFolders*$(a.q_allow_folders))|(RD_QueryFlag_CodeInput*$(a.q_is_code))|(RD_QueryFlag_KeepOldInput*$(a.q_keep_oi))|(RD_QueryFlag_SelectOldInput*$(a.q_select_oi))|(RD_QueryFlag_Required*$(a.q_required)), RD_RegSlot_$(a.q_slot), str8_lit_comp("$(a.q_view != 'null' -> a.q_view)"), RD_EntityKind_$(a.q_ent_kind)}}```;
 }
 
 ////////////////////////////////
 //~ rjf: Default Bindings
 
 @table(name key ctrl shift alt)
-DF_DefaultBindingTable:
+RD_DefaultBindingTable:
 {
   //- rjf: low-level target control operations
   { "kill_all"                    F5        0        shift     0          }
@@ -703,16 +703,16 @@ DF_DefaultBindingTable:
   { "log_marker"                  M         ctrl     shift     alt        }
 }
 
-@data(DF_StringBindingPair) df_g_default_binding_table:
+@data(RD_StringBindingPair) rd_default_binding_table:
 {
-  @expand(DF_DefaultBindingTable a) ```{str8_lit_comp("$(a.name)"), {OS_Key_$(a.key), 0 $(a.ctrl != 0 -> `|OS_EventFlag_Ctrl`) $(a.shift != 0 -> `|OS_EventFlag_Shift`) $(a.alt != 0 -> `|OS_EventFlag_Alt`)}}```;
+  @expand(RD_DefaultBindingTable a) ```{str8_lit_comp("$(a.name)"), {OS_Key_$(a.key), 0 $(a.ctrl != 0 -> `|OS_EventFlag_Ctrl`) $(a.shift != 0 -> `|OS_EventFlag_Shift`) $(a.alt != 0 -> `|OS_EventFlag_Alt`)}}```;
 }
 
 ////////////////////////////////
 //~ rjf: Binding Version Remap Table
 
 @table(old_name new_name)
-DF_BindingVersionRemapTable:
+RD_BindingVersionRemapTable:
 {
   {"commands"     "run_command"}
   {"load_user"    "open_user"}
@@ -723,21 +723,21 @@ DF_BindingVersionRemapTable:
   {"function_breakpoint" "add_function_breakpoint"}
 }
 
-@data(String8) df_g_binding_version_remap_old_name_table:
+@data(String8) rd_binding_version_remap_old_name_table:
 {
-  @expand(DF_BindingVersionRemapTable a) `str8_lit_comp("$(a.old_name)")`
+  @expand(RD_BindingVersionRemapTable a) `str8_lit_comp("$(a.old_name)")`
 }
 
-@data(String8) df_g_binding_version_remap_new_name_table:
+@data(String8) rd_binding_version_remap_new_name_table:
 {
-  @expand(DF_BindingVersionRemapTable a) `str8_lit_comp("$(a.new_name)")`
+  @expand(RD_BindingVersionRemapTable a) `str8_lit_comp("$(a.new_name)")`
 }
 
 ////////////////////////////////
 //~ rjf: Icons
 
 @table(name, text)
-DF_IconTable:
+RD_IconTable:
 {
   (Null                     "")
   (FolderOpenOutline        "b")
@@ -810,22 +810,22 @@ DF_IconTable:
   (Dot                      "c")
 }
 
-@enum DF_IconKind:
+@enum RD_IconKind:
 {
-  @expand(DF_IconTable a) `$(a.name)`,
+  @expand(RD_IconTable a) `$(a.name)`,
   COUNT,
 }
 
-@data(String8) df_g_icon_kind_text_table:
+@data(String8) rd_icon_kind_text_table:
 {
-  @expand(DF_IconTable a) `str8_lit_comp("$(a.text)")`;
+  @expand(RD_IconTable a) `str8_lit_comp("$(a.text)")`;
 }
 
 ////////////////////////////////
 //~ rjf: Built-In View Rules
 
 @table(name               name_lower             display_name                 params_schema                                      icon            can_filter  filter_is_code  typing_automatically_filters             show_in_docs description)
-DF_ViewRuleTable:
+RD_ViewRuleTable:
 {
   //- rjf: basics
   { Empty                  empty                  ""                           ""                                                 Null            0 0 0      0 ""                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         }
@@ -876,34 +876,34 @@ DF_ViewRuleTable:
   { Geo3D                  geo3d                  "Geometry (3D)"              "x:{'count':expr, 'vtx':expr, 'vtx_size':expr}"    Binoculars      0 0 0      1 "Visualizes memory as 3D geometry."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        }
 }
 
-@enum DF_ViewRuleKind:
+@enum RD_ViewRuleKind:
 {
   Null,
-  @expand(DF_ViewRuleTable a) `$(a.name)`,
+  @expand(RD_ViewRuleTable a) `$(a.name)`,
   COUNT
 }
 
-@struct DF_ViewRuleInfo:
+@struct RD_ViewRuleInfo:
 {
   `String8 string`;
   `String8 description`;
   `String8 display_name`;
   `String8 params_schema`;
-  `DF_IconKind icon_kind`;
-  `DF_ViewRuleInfoFlags flags`;
-  `DF_ViewRuleUIFunctionType *ui`;
+  `RD_IconKind icon_kind`;
+  `RD_ViewRuleInfoFlags flags`;
+  `RD_ViewRuleUIFunctionType *ui`;
 };
 
 /*
 @gen
 {
-  @expand(DF_ViewRuleTable a) `DF_VIEW_RULE_UI_FUNCTION_DEF($(a.name_lower));`
+  @expand(RD_ViewRuleTable a) `RD_VIEW_RULE_UI_FUNCTION_DEF($(a.name_lower));`
 }
 
-@data(DF_ViewRuleInfo) df_view_rule_kind_info_table:
+@data(RD_ViewRuleInfo) rd_view_rule_kind_info_table:
 {
   `{0}`,
-  @expand(DF_ViewRuleTable a) `{str8_lit_comp("$(a.name_lower)"), str8_lit_comp("$(a.description)"), str8_lit_comp("$(a.display_name)"), str8_lit_comp("$(a.params_schema)"), DF_IconKind_$(a.icon), (DF_ViewRuleInfoFlag_ShowInDocs*$(a.show_in_docs)|DF_ViewRuleInfoFlag_CanFilter*$(a.can_filter)|DF_ViewRuleInfoFlag_FilterIsCode*$(a.filter_is_code)|DF_ViewRuleInfoFlag_TypingAutomaticallyFilters*$(a.typing_automatically_filters)), DF_VIEW_RULE_UI_FUNCTION_NAME($(a.name_lower))}`,
+  @expand(RD_ViewRuleTable a) `{str8_lit_comp("$(a.name_lower)"), str8_lit_comp("$(a.description)"), str8_lit_comp("$(a.display_name)"), str8_lit_comp("$(a.params_schema)"), RD_IconKind_$(a.icon), (RD_ViewRuleInfoFlag_ShowInDocs*$(a.show_in_docs)|RD_ViewRuleInfoFlag_CanFilter*$(a.can_filter)|RD_ViewRuleInfoFlag_FilterIsCode*$(a.filter_is_code)|RD_ViewRuleInfoFlag_TypingAutomaticallyFilters*$(a.typing_automatically_filters)), RD_VIEW_RULE_UI_FUNCTION_NAME($(a.name_lower))}`,
 }
 */
 
@@ -911,7 +911,7 @@ DF_ViewRuleTable:
 //~ rjf: Gfx Layer View Kinds
 
 @table(name               name_lower               display_string                 icon            parameterized_by_entity  project_specific can_serialize can_filter filter_is_code typing_automatically_filters inc_in_docs docs_desc)
-DF_ViewTable:
+RD_ViewTable:
 {
   //- rjf: basics
   { Null                   "null"                   ""                             Null            0 0 0 0 0 0      0 ""                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         }
@@ -964,35 +964,35 @@ DF_ViewTable:
   { Settings               "settings"               "Settings"                     Gear            0 0 1 1 0 1      1 "An interface to modify general settings for the debugger's appearance and behavior."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      }
 }
 
-@enum DF_ViewKind:
+@enum RD_ViewKind:
 {
-  @expand(DF_ViewTable a) `$(a.name)`,
+  @expand(RD_ViewTable a) `$(a.name)`,
   COUNT,
 }
 
 @gen
 {
-  @expand(DF_ViewTable a) `DF_VIEW_SETUP_FUNCTION_DEF($(a.name_lower));`;
-  @expand(DF_ViewTable a) `DF_VIEW_CMD_FUNCTION_DEF($(a.name_lower));`;
-  @expand(DF_ViewTable a) `DF_VIEW_UI_FUNCTION_DEF($(a.name_lower));`;
+  @expand(RD_ViewTable a) `RD_VIEW_SETUP_FUNCTION_DEF($(a.name_lower));`;
+  @expand(RD_ViewTable a) `RD_VIEW_CMD_FUNCTION_DEF($(a.name_lower));`;
+  @expand(RD_ViewTable a) `RD_VIEW_UI_FUNCTION_DEF($(a.name_lower));`;
 }
 
-@data(String8) df_view_kind_name_lower_table:
+@data(String8) rd_view_kind_name_lower_table:
 {
-  @expand(DF_ViewTable a) `str8_lit_comp("$(a.name_lower)")`
+  @expand(RD_ViewTable a) `str8_lit_comp("$(a.name_lower)")`
 }
 
-@data(DF_ViewSpecInfo) df_g_gfx_view_kind_spec_info_table:
+@data(RD_ViewSpecInfo) rd_gfx_view_kind_spec_info_table:
 {
-  @expand(DF_ViewTable a) ```{(0|$(a.parameterized_by_entity)*DF_ViewSpecFlag_ParameterizedByEntity|$(a.project_specific)*DF_ViewSpecFlag_ProjectSpecific|$(a.can_serialize)*DF_ViewSpecFlag_CanSerialize|$(a.can_filter)*DF_ViewSpecFlag_CanFilter|$(a.filter_is_code)*DF_ViewSpecFlag_FilterIsCode|$(a.typing_automatically_filters)*DF_ViewSpecFlag_TypingAutomaticallyFilters), str8_lit_comp("$(a.name_lower)"), str8_lit_comp("$(a.display_string)"), DF_IconKind_$(a.icon), DF_VIEW_SETUP_FUNCTION_NAME($(a.name_lower)), DF_VIEW_CMD_FUNCTION_NAME($(a.name_lower)), DF_VIEW_UI_FUNCTION_NAME($(a.name_lower))}```;
+  @expand(RD_ViewTable a) ```{(0|$(a.parameterized_by_entity)*RD_ViewSpecFlag_ParameterizedByEntity|$(a.project_specific)*RD_ViewSpecFlag_ProjectSpecific|$(a.can_serialize)*RD_ViewSpecFlag_CanSerialize|$(a.can_filter)*RD_ViewSpecFlag_CanFilter|$(a.filter_is_code)*RD_ViewSpecFlag_FilterIsCode|$(a.typing_automatically_filters)*RD_ViewSpecFlag_TypingAutomaticallyFilters), str8_lit_comp("$(a.name_lower)"), str8_lit_comp("$(a.display_string)"), RD_IconKind_$(a.icon), RD_VIEW_SETUP_FUNCTION_NAME($(a.name_lower)), RD_VIEW_CMD_FUNCTION_NAME($(a.name_lower)), RD_VIEW_UI_FUNCTION_NAME($(a.name_lower))}```;
 }
 
 ////////////////////////////////
 //~ rjf: Built-In Debug Engine Kind -> Icon Kind Table
 
-@data(DF_IconKind) df_entity_kind_icon_kind_table:
+@data(RD_IconKind) rd_entity_kind_icon_kind_table:
 {
-  @expand(DF_EntityKindTable a) `DF_IconKind_$(a.icon_kind)`,
+  @expand(RD_EntityKindTable a) `RD_IconKind_$(a.icon_kind)`,
 }
 
 ////////////////////////////////
@@ -1001,7 +1001,7 @@ DF_ViewTable:
 // NOTE(rjf): see @view_rule_info
 
 @table(string     vr  ls  ru  vu)
-DF_ViewRuleTable:
+RD_ViewRuleTable:
 {
   {"array"         -   -   -   -   }
   {"list"          x   -   -   -   }
@@ -1024,27 +1024,25 @@ DF_ViewRuleTable:
 @gen
 {
   ``;
-  @expand(DF_ViewRuleTable a)
-    `$(a.vr == "x" -> "DF_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_DEF(" .. a.name_lower .. ");")`;
-  @expand(DF_ViewRuleTable a)
-    `$(a.ls == "x" -> "DF_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(" .. a.name_lower .. ");")`;
-  @expand(DF_ViewRuleTable a)
-    `$(a.ru == "x" -> "DF_VIEW_RULE_ROW_UI_FUNCTION_DEF(" .. a.name_lower .. ");")`;
-  @expand(DF_ViewRuleTable a)
-    `$(a.bu == "x" -> "DF_GFX_VIEW_RULE_BLOCK_UI_FUNCTION_DEF(" .. a.name_lower .. ");")`;
+  @expand(RD_ViewRuleTable a)
+    `$(a.vr == "x" -> "RD_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_DEF(" .. a.name_lower .. ");")`;
+  @expand(RD_ViewRuleTable a)
+    `$(a.ls == "x" -> "RD_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(" .. a.name_lower .. ");")`;
+  @expand(RD_ViewRuleTable a)
+    `$(a.ru == "x" -> "RD_VIEW_RULE_ROW_UI_FUNCTION_DEF(" .. a.name_lower .. ");")`;
 }
 
-@data(DF_ViewRuleSpecInfo) @c_file df_g_gfx_view_rule_spec_info_table:
+@data(RD_ViewRuleSpecInfo) @c_file rd_gfx_view_rule_spec_info_table:
 {
-  @expand(DF_ViewRuleTable a)
-    ```{ str8_lit_comp("$(a.string)"), (DF_ViewRuleSpecInfoFlag_VizRowProd*$(a.vr == "x"))|(DF_ViewRuleSpecInfoFlag_LineStringize*$(a.ls == "x"))|(DF_ViewRuleSpecInfoFlag_RowUI*$(a.ru == "x"))|(DF_ViewRuleSpecInfoFlag_ViewUI*$(a.vu == "x")), $(a.vr == "x" -> "DF_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_NAME("..a.name_lower..")") $(a.vr != "x" -> 0), $(a.ls == "x" -> "DF_VIEW_RULE_LINE_STRINGIZE_FUNCTION_NAME("..a.name_lower..")") $(a.ls != "x" -> 0), $(a.ru == "x" -> "DF_VIEW_RULE_ROW_UI_FUNCTION_NAME("..a.name_lower..")") $(a.ru != "x" -> 0) }```;
+  @expand(RD_ViewRuleTable a)
+    ```{ str8_lit_comp("$(a.string)"), (RD_ViewRuleSpecInfoFlag_VizRowProd*$(a.vr == "x"))|(RD_ViewRuleSpecInfoFlag_LineStringize*$(a.ls == "x"))|(RD_ViewRuleSpecInfoFlag_RowUI*$(a.ru == "x"))|(RD_ViewRuleSpecInfoFlag_ViewUI*$(a.vu == "x")), $(a.vr == "x" -> "RD_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_NAME("..a.name_lower..")") $(a.vr != "x" -> 0), $(a.ls == "x" -> "RD_VIEW_RULE_LINE_STRINGIZE_FUNCTION_NAME("..a.name_lower..")") $(a.ls != "x" -> 0), $(a.ru == "x" -> "RD_VIEW_RULE_ROW_UI_FUNCTION_NAME("..a.name_lower..")") $(a.ru != "x" -> 0) }```;
 }
 
 ////////////////////////////////
 //~ rjf: Theme Tables
 
 @table(name_upper  name_lower  display_string)
-DF_ThemePresetTable:
+RD_ThemePresetTable:
 {
   { DefaultDark      default_dark     "Default (Dark)"    }
   { DefaultLight     default_light    "Default (Light)"   }
@@ -1058,7 +1056,7 @@ DF_ThemePresetTable:
 }
 
 @table(name                      display_name                        name_lower                             default_dark        default_light        vs_dark            vs_light            solarized_dark      solarized_light     handmade_hero       four_coder          far_manager         desc)
-DF_ThemeColorTable:
+RD_ThemeColorTable:
 {
   {Null                           "Null"                              null                                   0xff00ffff          0xff00ffff          0xff00ffff          0xff00ffff          0xff00ffff          0xff00ffff          0xff00ffff          0xff00ffff          0xff00ffff          ""}
   
@@ -1152,7 +1150,7 @@ DF_ThemeColorTable:
 }
 
 @table(old_name new_name)
-DF_ThemeColorVersionRemapTable:
+RD_ThemeColorVersionRemapTable:
 {
   {plain_text                          text}
   {plain_background                    base_background}
@@ -1178,67 +1176,67 @@ DF_ThemeColorVersionRemapTable:
   {action_background                   neutral_pop_button_background}
 }
 
-@enum DF_ThemeColor:
+@enum RD_ThemeColor:
 {
-  @expand(DF_ThemeColorTable a) `$(a.name)`,
+  @expand(RD_ThemeColorTable a) `$(a.name)`,
   COUNT,
 }
 
-@enum DF_ThemePreset:
+@enum RD_ThemePreset:
 {
-  @expand(DF_ThemePresetTable a) `$(a.name)`,
+  @expand(RD_ThemePresetTable a) `$(a.name)`,
   COUNT,
 }
 
-@data(String8) df_g_theme_preset_display_string_table:
+@data(String8) rd_theme_preset_display_string_table:
 {
-  @expand(DF_ThemePresetTable a) `str8_lit_comp("$(a.display_string)")`,
+  @expand(RD_ThemePresetTable a) `str8_lit_comp("$(a.display_string)")`,
 }
 
-@data(String8) df_g_theme_preset_code_string_table:
+@data(String8) rd_theme_preset_code_string_table:
 {
-  @expand(DF_ThemePresetTable a) `str8_lit_comp("$(a.name_lower)")`,
+  @expand(RD_ThemePresetTable a) `str8_lit_comp("$(a.name_lower)")`,
 }
 
-@data(String8) df_g_theme_color_version_remap_old_name_table:
+@data(String8) rd_theme_color_version_remap_old_name_table:
 {
-  @expand(DF_ThemeColorVersionRemapTable a) `str8_lit_comp("$(a.old_name)")`
+  @expand(RD_ThemeColorVersionRemapTable a) `str8_lit_comp("$(a.old_name)")`
 }
 
-@data(String8) df_g_theme_color_version_remap_new_name_table:
+@data(String8) rd_theme_color_version_remap_new_name_table:
 {
-  @expand(DF_ThemeColorVersionRemapTable a) `str8_lit_comp("$(a.new_name)")`
+  @expand(RD_ThemeColorVersionRemapTable a) `str8_lit_comp("$(a.new_name)")`
 }
 
-@data(Vec4F32) df_g_theme_preset_colors__default_dark:   {@expand(DF_ThemeColorTable a) `rgba_from_u32_lit_comp($(a.default_dark))`}
-@data(Vec4F32) df_g_theme_preset_colors__default_light:  {@expand(DF_ThemeColorTable a) `rgba_from_u32_lit_comp($(a.default_light))`}
-@data(Vec4F32) df_g_theme_preset_colors__vs_dark:        {@expand(DF_ThemeColorTable a) `rgba_from_u32_lit_comp($(a.vs_dark))`}
-@data(Vec4F32) df_g_theme_preset_colors__vs_light:       {@expand(DF_ThemeColorTable a) `rgba_from_u32_lit_comp($(a.vs_light))`}
-@data(Vec4F32) df_g_theme_preset_colors__solarized_dark: {@expand(DF_ThemeColorTable a) `rgba_from_u32_lit_comp($(a.solarized_dark))`,}
-@data(Vec4F32) df_g_theme_preset_colors__solarized_light:{@expand(DF_ThemeColorTable a) `rgba_from_u32_lit_comp($(a.solarized_light))`,}
-@data(Vec4F32) df_g_theme_preset_colors__handmade_hero:  {@expand(DF_ThemeColorTable a) `rgba_from_u32_lit_comp($(a.handmade_hero))`,}
-@data(Vec4F32) df_g_theme_preset_colors__four_coder:     {@expand(DF_ThemeColorTable a) `rgba_from_u32_lit_comp($(a.four_coder))`,}
-@data(Vec4F32) df_g_theme_preset_colors__far_manager:    {@expand(DF_ThemeColorTable a) `rgba_from_u32_lit_comp($(a.far_manager))`;}
-@data(`Vec4F32*`) df_g_theme_preset_colors_table:
+@data(Vec4F32) rd_theme_preset_colors__default_dark:   {@expand(RD_ThemeColorTable a) `rgba_from_u32_lit_comp($(a.default_dark))`}
+@data(Vec4F32) rd_theme_preset_colors__default_light:  {@expand(RD_ThemeColorTable a) `rgba_from_u32_lit_comp($(a.default_light))`}
+@data(Vec4F32) rd_theme_preset_colors__vs_dark:        {@expand(RD_ThemeColorTable a) `rgba_from_u32_lit_comp($(a.vs_dark))`}
+@data(Vec4F32) rd_theme_preset_colors__vs_light:       {@expand(RD_ThemeColorTable a) `rgba_from_u32_lit_comp($(a.vs_light))`}
+@data(Vec4F32) rd_theme_preset_colors__solarized_dark: {@expand(RD_ThemeColorTable a) `rgba_from_u32_lit_comp($(a.solarized_dark))`,}
+@data(Vec4F32) rd_theme_preset_colors__solarized_light:{@expand(RD_ThemeColorTable a) `rgba_from_u32_lit_comp($(a.solarized_light))`,}
+@data(Vec4F32) rd_theme_preset_colors__handmade_hero:  {@expand(RD_ThemeColorTable a) `rgba_from_u32_lit_comp($(a.handmade_hero))`,}
+@data(Vec4F32) rd_theme_preset_colors__four_coder:     {@expand(RD_ThemeColorTable a) `rgba_from_u32_lit_comp($(a.four_coder))`,}
+@data(Vec4F32) rd_theme_preset_colors__far_manager:    {@expand(RD_ThemeColorTable a) `rgba_from_u32_lit_comp($(a.far_manager))`;}
+@data(`Vec4F32*`) rd_theme_preset_colors_table:
 {
-  @expand(DF_ThemePresetTable a) `df_g_theme_preset_colors__$(a.name_lower)`,
+  @expand(RD_ThemePresetTable a) `rd_theme_preset_colors__$(a.name_lower)`,
 }
 
-@data(String8) df_g_theme_color_display_string_table:
+@data(String8) rd_theme_color_display_string_table:
 {
-  @expand(DF_ThemeColorTable a) `str8_lit_comp("$(a.display_name)")`
+  @expand(RD_ThemeColorTable a) `str8_lit_comp("$(a.display_name)")`
 }
 
-@data(String8) df_g_theme_color_cfg_string_table:
+@data(String8) rd_theme_color_cfg_string_table:
 {
-  @expand(DF_ThemeColorTable a) `str8_lit_comp("$(a.name_lower)")`
+  @expand(RD_ThemeColorTable a) `str8_lit_comp("$(a.name_lower)")`
 }
 
 ////////////////////////////////
 //~ rjf: Settings
 
 @table(name  name_lower  display_string  default_per_window  default_s32  s32_min  s32_max)
-DF_SettingTable:
+RD_SettingTable:
 {
   {HoverAnimations       hover_animations        "Hover Animations"        0            1    0  1  }
   {PressAnimations       press_animations        "Press Animations"        0            1    0  1  }
@@ -1261,35 +1259,35 @@ DF_SettingTable:
   {HintCodeText          hint_code_text          "Hint Code Text"          1            1    0  1  }
 }
 
-@enum DF_SettingCode:
+@enum RD_SettingCode:
 {
-  @expand(DF_SettingTable a) `$(a.name)`,
+  @expand(RD_SettingTable a) `$(a.name)`,
   COUNT
 }
 
-@data(String8) df_g_setting_code_display_string_table:
+@data(String8) rd_setting_code_display_string_table:
 {
-  @expand(DF_SettingTable a) `str8_lit_comp("$(a.display_string)")`
+  @expand(RD_SettingTable a) `str8_lit_comp("$(a.display_string)")`
 }
 
-@data(String8) df_g_setting_code_lower_string_table:
+@data(String8) rd_setting_code_lower_string_table:
 {
-  @expand(DF_SettingTable a) `str8_lit_comp("$(a.name_lower)")`
+  @expand(RD_SettingTable a) `str8_lit_comp("$(a.name_lower)")`
 }
 
-@data(B8) df_g_setting_code_default_is_per_window_table:
+@data(B8) rd_setting_code_default_is_per_window_table:
 {
-  @expand(DF_SettingTable a) `$(a.default_per_window)`
+  @expand(RD_SettingTable a) `$(a.default_per_window)`
 }
 
-@data(DF_SettingVal) df_g_setting_code_default_val_table:
+@data(RD_SettingVal) rd_setting_code_default_val_table:
 {
-  @expand(DF_SettingTable a) `{1, $(a.default_s32)}`
+  @expand(RD_SettingTable a) `{1, $(a.default_s32)}`
 }
 
-@data(Rng1S32) df_g_setting_code_s32_range_table:
+@data(Rng1S32) rd_setting_code_s32_range_table:
 {
-  @expand(DF_SettingTable a) `{$(a.s32_min), $(a.s32_max)}`
+  @expand(RD_SettingTable a) `{$(a.s32_min), $(a.s32_max)}`
 }
 
 ////////////////////////////////
@@ -1373,7 +1371,7 @@ raddbg_readme:
   @p "A list of debugger interfaces, which can occupy tabs, are below:";
   @unordered_list
   {
-    @expand(DF_ViewTable a) @p "$(a.inc_in_docs -> '`'..a.display_string..'` '..a.docs_desc)";
+    @expand(RD_ViewTable a) @p "$(a.inc_in_docs -> '`'..a.display_string..'` '..a.docs_desc)";
   }
   
   @subtitle "Commands";

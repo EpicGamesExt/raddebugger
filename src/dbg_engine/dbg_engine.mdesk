@@ -101,7 +101,7 @@ D_ViewRuleTable:
 //~ rjf: Developer Toggles
 
 @table(name)
-DF_DevToggleTable:
+D_DevToggleTable:
 {
   {telemetry_capture}
   {simulate_lag}
@@ -117,13 +117,13 @@ DF_DevToggleTable:
 
 @gen
 {
-  @expand(DF_DevToggleTable a) `global B32 DEV_$(a.name) = 0;`
+  @expand(D_DevToggleTable a) `global B32 DEV_$(a.name) = 0;`
 }
 
 @gen
 {
   `struct {B32 *value_ptr; String8 name;} DEV_toggle_table[] =`;
   `{`;
-    @expand(DF_DevToggleTable a) `{&DEV_$(a.name), str8_lit_comp("$(a.name)")},`
+    @expand(D_DevToggleTable a) `{&DEV_$(a.name), str8_lit_comp("$(a.name)")},`
       `};`;
 }

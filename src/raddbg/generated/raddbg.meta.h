@@ -3,597 +3,597 @@
 
 //- GENERATED CODE
 
-#ifndef DBG_FRONTEND_META_H
-#define DBG_FRONTEND_META_H
+#ifndef RADDBG_META_H
+#define RADDBG_META_H
 
-typedef enum DF_CfgSrc
+typedef enum RD_CfgSrc
 {
-DF_CfgSrc_User,
-DF_CfgSrc_Project,
-DF_CfgSrc_CommandLine,
-DF_CfgSrc_Transient,
-DF_CfgSrc_COUNT,
-} DF_CfgSrc;
+RD_CfgSrc_User,
+RD_CfgSrc_Project,
+RD_CfgSrc_CommandLine,
+RD_CfgSrc_Transient,
+RD_CfgSrc_COUNT,
+} RD_CfgSrc;
 
-typedef enum DF_EntityKind
+typedef enum RD_EntityKind
 {
-DF_EntityKind_Nil,
-DF_EntityKind_Root,
-DF_EntityKind_Machine,
-DF_EntityKind_File,
-DF_EntityKind_AutoViewRule,
-DF_EntityKind_FilePathMap,
-DF_EntityKind_WatchPin,
-DF_EntityKind_Watch,
-DF_EntityKind_ViewRule,
-DF_EntityKind_Breakpoint,
-DF_EntityKind_Condition,
-DF_EntityKind_Location,
-DF_EntityKind_Target,
-DF_EntityKind_Executable,
-DF_EntityKind_Arguments,
-DF_EntityKind_WorkingDirectory,
-DF_EntityKind_EntryPoint,
-DF_EntityKind_Window,
-DF_EntityKind_Panel,
-DF_EntityKind_View,
-DF_EntityKind_RecentProject,
-DF_EntityKind_Source,
-DF_EntityKind_Dest,
-DF_EntityKind_Process,
-DF_EntityKind_Thread,
-DF_EntityKind_Module,
-DF_EntityKind_PendingThreadName,
-DF_EntityKind_DebugInfoPath,
-DF_EntityKind_ConversionTask,
-DF_EntityKind_ConversionFail,
-DF_EntityKind_COUNT,
-} DF_EntityKind;
+RD_EntityKind_Nil,
+RD_EntityKind_Root,
+RD_EntityKind_Machine,
+RD_EntityKind_File,
+RD_EntityKind_AutoViewRule,
+RD_EntityKind_FilePathMap,
+RD_EntityKind_WatchPin,
+RD_EntityKind_Watch,
+RD_EntityKind_ViewRule,
+RD_EntityKind_Breakpoint,
+RD_EntityKind_Condition,
+RD_EntityKind_Location,
+RD_EntityKind_Target,
+RD_EntityKind_Executable,
+RD_EntityKind_Arguments,
+RD_EntityKind_WorkingDirectory,
+RD_EntityKind_EntryPoint,
+RD_EntityKind_Window,
+RD_EntityKind_Panel,
+RD_EntityKind_View,
+RD_EntityKind_RecentProject,
+RD_EntityKind_Source,
+RD_EntityKind_Dest,
+RD_EntityKind_Process,
+RD_EntityKind_Thread,
+RD_EntityKind_Module,
+RD_EntityKind_PendingThreadName,
+RD_EntityKind_DebugInfoPath,
+RD_EntityKind_ConversionTask,
+RD_EntityKind_ConversionFail,
+RD_EntityKind_COUNT,
+} RD_EntityKind;
 
-typedef enum DF_RegSlot
+typedef enum RD_RegSlot
 {
-DF_RegSlot_Null,
-DF_RegSlot_Machine,
-DF_RegSlot_Module,
-DF_RegSlot_Process,
-DF_RegSlot_Thread,
-DF_RegSlot_Window,
-DF_RegSlot_Panel,
-DF_RegSlot_View,
-DF_RegSlot_PrevView,
-DF_RegSlot_DstPanel,
-DF_RegSlot_Entity,
-DF_RegSlot_EntityList,
-DF_RegSlot_UnwindCount,
-DF_RegSlot_InlineDepth,
-DF_RegSlot_FilePath,
-DF_RegSlot_Cursor,
-DF_RegSlot_Mark,
-DF_RegSlot_TextKey,
-DF_RegSlot_LangKind,
-DF_RegSlot_Lines,
-DF_RegSlot_DbgiKey,
-DF_RegSlot_Vaddr,
-DF_RegSlot_Voff,
-DF_RegSlot_VaddrRange,
-DF_RegSlot_VoffRange,
-DF_RegSlot_PID,
-DF_RegSlot_ForceConfirm,
-DF_RegSlot_PreferDisasm,
-DF_RegSlot_Dir2,
-DF_RegSlot_String,
-DF_RegSlot_ParamsTree,
-DF_RegSlot_OSEvent,
-DF_RegSlot_COUNT,
-} DF_RegSlot;
+RD_RegSlot_Null,
+RD_RegSlot_Machine,
+RD_RegSlot_Module,
+RD_RegSlot_Process,
+RD_RegSlot_Thread,
+RD_RegSlot_Window,
+RD_RegSlot_Panel,
+RD_RegSlot_View,
+RD_RegSlot_PrevView,
+RD_RegSlot_DstPanel,
+RD_RegSlot_Entity,
+RD_RegSlot_EntityList,
+RD_RegSlot_UnwindCount,
+RD_RegSlot_InlineDepth,
+RD_RegSlot_FilePath,
+RD_RegSlot_Cursor,
+RD_RegSlot_Mark,
+RD_RegSlot_TextKey,
+RD_RegSlot_LangKind,
+RD_RegSlot_Lines,
+RD_RegSlot_DbgiKey,
+RD_RegSlot_Vaddr,
+RD_RegSlot_Voff,
+RD_RegSlot_VaddrRange,
+RD_RegSlot_VoffRange,
+RD_RegSlot_PID,
+RD_RegSlot_ForceConfirm,
+RD_RegSlot_PreferDisasm,
+RD_RegSlot_Dir2,
+RD_RegSlot_String,
+RD_RegSlot_ParamsTree,
+RD_RegSlot_OSEvent,
+RD_RegSlot_COUNT,
+} RD_RegSlot;
 
-typedef enum DF_CmdKind
+typedef enum RD_CmdKind
 {
-DF_CmdKind_Null,
-DF_CmdKind_LaunchAndRun,
-DF_CmdKind_LaunchAndInit,
-DF_CmdKind_Kill,
-DF_CmdKind_KillAll,
-DF_CmdKind_Detach,
-DF_CmdKind_Continue,
-DF_CmdKind_StepIntoInst,
-DF_CmdKind_StepOverInst,
-DF_CmdKind_StepIntoLine,
-DF_CmdKind_StepOverLine,
-DF_CmdKind_StepOut,
-DF_CmdKind_Halt,
-DF_CmdKind_SoftHaltRefresh,
-DF_CmdKind_SetThreadIP,
-DF_CmdKind_RunToLine,
-DF_CmdKind_RunToAddress,
-DF_CmdKind_Run,
-DF_CmdKind_Restart,
-DF_CmdKind_StepInto,
-DF_CmdKind_StepOver,
-DF_CmdKind_FreezeThread,
-DF_CmdKind_ThawThread,
-DF_CmdKind_FreezeProcess,
-DF_CmdKind_ThawProcess,
-DF_CmdKind_FreezeMachine,
-DF_CmdKind_ThawMachine,
-DF_CmdKind_FreezeLocalMachine,
-DF_CmdKind_ThawLocalMachine,
-DF_CmdKind_FreezeEntity,
-DF_CmdKind_ThawEntity,
-DF_CmdKind_Attach,
-DF_CmdKind_Exit,
-DF_CmdKind_RunCommand,
-DF_CmdKind_OSEvent,
-DF_CmdKind_SelectThread,
-DF_CmdKind_SelectUnwind,
-DF_CmdKind_UpOneFrame,
-DF_CmdKind_DownOneFrame,
-DF_CmdKind_IncUIFontScale,
-DF_CmdKind_DecUIFontScale,
-DF_CmdKind_IncCodeFontScale,
-DF_CmdKind_DecCodeFontScale,
-DF_CmdKind_OpenWindow,
-DF_CmdKind_CloseWindow,
-DF_CmdKind_ToggleFullscreen,
-DF_CmdKind_ConfirmAccept,
-DF_CmdKind_ConfirmCancel,
-DF_CmdKind_ResetToDefaultPanels,
-DF_CmdKind_ResetToCompactPanels,
-DF_CmdKind_NewPanelLeft,
-DF_CmdKind_NewPanelUp,
-DF_CmdKind_NewPanelRight,
-DF_CmdKind_NewPanelDown,
-DF_CmdKind_SplitPanel,
-DF_CmdKind_RotatePanelColumns,
-DF_CmdKind_NextPanel,
-DF_CmdKind_PrevPanel,
-DF_CmdKind_FocusPanel,
-DF_CmdKind_FocusPanelRight,
-DF_CmdKind_FocusPanelLeft,
-DF_CmdKind_FocusPanelUp,
-DF_CmdKind_FocusPanelDown,
-DF_CmdKind_Undo,
-DF_CmdKind_Redo,
-DF_CmdKind_GoBack,
-DF_CmdKind_GoForward,
-DF_CmdKind_ClosePanel,
-DF_CmdKind_NextTab,
-DF_CmdKind_PrevTab,
-DF_CmdKind_MoveTabRight,
-DF_CmdKind_MoveTabLeft,
-DF_CmdKind_OpenTab,
-DF_CmdKind_CloseTab,
-DF_CmdKind_MoveTab,
-DF_CmdKind_TabBarTop,
-DF_CmdKind_TabBarBottom,
-DF_CmdKind_SetCurrentPath,
-DF_CmdKind_Open,
-DF_CmdKind_Switch,
-DF_CmdKind_SwitchToPartnerFile,
-DF_CmdKind_GoToDisassembly,
-DF_CmdKind_GoToSource,
-DF_CmdKind_SetFileOverrideLinkSrc,
-DF_CmdKind_SetFileOverrideLinkDst,
-DF_CmdKind_SetFileReplacementPath,
-DF_CmdKind_SetAutoViewRuleType,
-DF_CmdKind_SetAutoViewRuleViewRule,
-DF_CmdKind_OpenUser,
-DF_CmdKind_OpenProject,
-DF_CmdKind_OpenRecentProject,
-DF_CmdKind_ApplyUserData,
-DF_CmdKind_ApplyProjectData,
-DF_CmdKind_WriteUserData,
-DF_CmdKind_WriteProjectData,
-DF_CmdKind_Edit,
-DF_CmdKind_Accept,
-DF_CmdKind_Cancel,
-DF_CmdKind_MoveLeft,
-DF_CmdKind_MoveRight,
-DF_CmdKind_MoveUp,
-DF_CmdKind_MoveDown,
-DF_CmdKind_MoveLeftSelect,
-DF_CmdKind_MoveRightSelect,
-DF_CmdKind_MoveUpSelect,
-DF_CmdKind_MoveDownSelect,
-DF_CmdKind_MoveLeftChunk,
-DF_CmdKind_MoveRightChunk,
-DF_CmdKind_MoveUpChunk,
-DF_CmdKind_MoveDownChunk,
-DF_CmdKind_MoveUpPage,
-DF_CmdKind_MoveDownPage,
-DF_CmdKind_MoveUpWhole,
-DF_CmdKind_MoveDownWhole,
-DF_CmdKind_MoveLeftChunkSelect,
-DF_CmdKind_MoveRightChunkSelect,
-DF_CmdKind_MoveUpChunkSelect,
-DF_CmdKind_MoveDownChunkSelect,
-DF_CmdKind_MoveUpPageSelect,
-DF_CmdKind_MoveDownPageSelect,
-DF_CmdKind_MoveUpWholeSelect,
-DF_CmdKind_MoveDownWholeSelect,
-DF_CmdKind_MoveUpReorder,
-DF_CmdKind_MoveDownReorder,
-DF_CmdKind_MoveHome,
-DF_CmdKind_MoveEnd,
-DF_CmdKind_MoveHomeSelect,
-DF_CmdKind_MoveEndSelect,
-DF_CmdKind_SelectAll,
-DF_CmdKind_DeleteSingle,
-DF_CmdKind_DeleteChunk,
-DF_CmdKind_BackspaceSingle,
-DF_CmdKind_BackspaceChunk,
-DF_CmdKind_Copy,
-DF_CmdKind_Cut,
-DF_CmdKind_Paste,
-DF_CmdKind_InsertText,
-DF_CmdKind_GoToLine,
-DF_CmdKind_GoToAddress,
-DF_CmdKind_CenterCursor,
-DF_CmdKind_ContainCursor,
-DF_CmdKind_FindTextForward,
-DF_CmdKind_FindTextBackward,
-DF_CmdKind_FindNext,
-DF_CmdKind_FindPrev,
-DF_CmdKind_FindThread,
-DF_CmdKind_FindSelectedThread,
-DF_CmdKind_GoToName,
-DF_CmdKind_GoToNameAtCursor,
-DF_CmdKind_ToggleWatchExpression,
-DF_CmdKind_ToggleWatchExpressionAtCursor,
-DF_CmdKind_ToggleWatchExpressionAtMouse,
-DF_CmdKind_SetColumns,
-DF_CmdKind_ToggleAddressVisibility,
-DF_CmdKind_ToggleCodeBytesVisibility,
-DF_CmdKind_EnableEntity,
-DF_CmdKind_DisableEntity,
-DF_CmdKind_RemoveEntity,
-DF_CmdKind_NameEntity,
-DF_CmdKind_EditEntity,
-DF_CmdKind_DuplicateEntity,
-DF_CmdKind_RelocateEntity,
-DF_CmdKind_AddBreakpoint,
-DF_CmdKind_AddAddressBreakpoint,
-DF_CmdKind_AddFunctionBreakpoint,
-DF_CmdKind_ToggleBreakpoint,
-DF_CmdKind_RemoveBreakpoint,
-DF_CmdKind_EnableBreakpoint,
-DF_CmdKind_DisableBreakpoint,
-DF_CmdKind_AddWatchPin,
-DF_CmdKind_ToggleWatchPin,
-DF_CmdKind_ToggleBreakpointAtCursor,
-DF_CmdKind_ToggleWatchPinAtCursor,
-DF_CmdKind_RunToCursor,
-DF_CmdKind_SetNextStatement,
-DF_CmdKind_AddTarget,
-DF_CmdKind_RemoveTarget,
-DF_CmdKind_EditTarget,
-DF_CmdKind_SelectTarget,
-DF_CmdKind_EnableTarget,
-DF_CmdKind_DisableTarget,
-DF_CmdKind_RegisterAsJITDebugger,
-DF_CmdKind_EntityRefFastPath,
-DF_CmdKind_SpawnEntityView,
-DF_CmdKind_FindCodeLocation,
-DF_CmdKind_Filter,
-DF_CmdKind_ApplyFilter,
-DF_CmdKind_ClearFilter,
-DF_CmdKind_GettingStarted,
-DF_CmdKind_Commands,
-DF_CmdKind_Target,
-DF_CmdKind_Targets,
-DF_CmdKind_FilePathMap,
-DF_CmdKind_AutoViewRules,
-DF_CmdKind_Breakpoints,
-DF_CmdKind_WatchPins,
-DF_CmdKind_Scheduler,
-DF_CmdKind_CallStack,
-DF_CmdKind_Modules,
-DF_CmdKind_Watch,
-DF_CmdKind_Locals,
-DF_CmdKind_Registers,
-DF_CmdKind_Globals,
-DF_CmdKind_ThreadLocals,
-DF_CmdKind_Types,
-DF_CmdKind_Procedures,
-DF_CmdKind_PendingFile,
-DF_CmdKind_Disassembly,
-DF_CmdKind_Output,
-DF_CmdKind_Memory,
-DF_CmdKind_ExceptionFilters,
-DF_CmdKind_Settings,
-DF_CmdKind_PickFile,
-DF_CmdKind_PickFolder,
-DF_CmdKind_PickFileOrFolder,
-DF_CmdKind_CompleteQuery,
-DF_CmdKind_CancelQuery,
-DF_CmdKind_ToggleDevMenu,
-DF_CmdKind_LogMarker,
-DF_CmdKind_COUNT,
-} DF_CmdKind;
+RD_CmdKind_Null,
+RD_CmdKind_LaunchAndRun,
+RD_CmdKind_LaunchAndInit,
+RD_CmdKind_Kill,
+RD_CmdKind_KillAll,
+RD_CmdKind_Detach,
+RD_CmdKind_Continue,
+RD_CmdKind_StepIntoInst,
+RD_CmdKind_StepOverInst,
+RD_CmdKind_StepIntoLine,
+RD_CmdKind_StepOverLine,
+RD_CmdKind_StepOut,
+RD_CmdKind_Halt,
+RD_CmdKind_SoftHaltRefresh,
+RD_CmdKind_SetThreadIP,
+RD_CmdKind_RunToLine,
+RD_CmdKind_RunToAddress,
+RD_CmdKind_Run,
+RD_CmdKind_Restart,
+RD_CmdKind_StepInto,
+RD_CmdKind_StepOver,
+RD_CmdKind_FreezeThread,
+RD_CmdKind_ThawThread,
+RD_CmdKind_FreezeProcess,
+RD_CmdKind_ThawProcess,
+RD_CmdKind_FreezeMachine,
+RD_CmdKind_ThawMachine,
+RD_CmdKind_FreezeLocalMachine,
+RD_CmdKind_ThawLocalMachine,
+RD_CmdKind_FreezeEntity,
+RD_CmdKind_ThawEntity,
+RD_CmdKind_Attach,
+RD_CmdKind_Exit,
+RD_CmdKind_RunCommand,
+RD_CmdKind_OSEvent,
+RD_CmdKind_SelectThread,
+RD_CmdKind_SelectUnwind,
+RD_CmdKind_UpOneFrame,
+RD_CmdKind_DownOneFrame,
+RD_CmdKind_IncUIFontScale,
+RD_CmdKind_DecUIFontScale,
+RD_CmdKind_IncCodeFontScale,
+RD_CmdKind_DecCodeFontScale,
+RD_CmdKind_OpenWindow,
+RD_CmdKind_CloseWindow,
+RD_CmdKind_ToggleFullscreen,
+RD_CmdKind_ConfirmAccept,
+RD_CmdKind_ConfirmCancel,
+RD_CmdKind_ResetToDefaultPanels,
+RD_CmdKind_ResetToCompactPanels,
+RD_CmdKind_NewPanelLeft,
+RD_CmdKind_NewPanelUp,
+RD_CmdKind_NewPanelRight,
+RD_CmdKind_NewPanelDown,
+RD_CmdKind_SplitPanel,
+RD_CmdKind_RotatePanelColumns,
+RD_CmdKind_NextPanel,
+RD_CmdKind_PrevPanel,
+RD_CmdKind_FocusPanel,
+RD_CmdKind_FocusPanelRight,
+RD_CmdKind_FocusPanelLeft,
+RD_CmdKind_FocusPanelUp,
+RD_CmdKind_FocusPanelDown,
+RD_CmdKind_Undo,
+RD_CmdKind_Redo,
+RD_CmdKind_GoBack,
+RD_CmdKind_GoForward,
+RD_CmdKind_ClosePanel,
+RD_CmdKind_NextTab,
+RD_CmdKind_PrevTab,
+RD_CmdKind_MoveTabRight,
+RD_CmdKind_MoveTabLeft,
+RD_CmdKind_OpenTab,
+RD_CmdKind_CloseTab,
+RD_CmdKind_MoveTab,
+RD_CmdKind_TabBarTop,
+RD_CmdKind_TabBarBottom,
+RD_CmdKind_SetCurrentPath,
+RD_CmdKind_Open,
+RD_CmdKind_Switch,
+RD_CmdKind_SwitchToPartnerFile,
+RD_CmdKind_GoToDisassembly,
+RD_CmdKind_GoToSource,
+RD_CmdKind_SetFileOverrideLinkSrc,
+RD_CmdKind_SetFileOverrideLinkDst,
+RD_CmdKind_SetFileReplacementPath,
+RD_CmdKind_SetAutoViewRuleType,
+RD_CmdKind_SetAutoViewRuleViewRule,
+RD_CmdKind_OpenUser,
+RD_CmdKind_OpenProject,
+RD_CmdKind_OpenRecentProject,
+RD_CmdKind_ApplyUserData,
+RD_CmdKind_ApplyProjectData,
+RD_CmdKind_WriteUserData,
+RD_CmdKind_WriteProjectData,
+RD_CmdKind_Edit,
+RD_CmdKind_Accept,
+RD_CmdKind_Cancel,
+RD_CmdKind_MoveLeft,
+RD_CmdKind_MoveRight,
+RD_CmdKind_MoveUp,
+RD_CmdKind_MoveDown,
+RD_CmdKind_MoveLeftSelect,
+RD_CmdKind_MoveRightSelect,
+RD_CmdKind_MoveUpSelect,
+RD_CmdKind_MoveDownSelect,
+RD_CmdKind_MoveLeftChunk,
+RD_CmdKind_MoveRightChunk,
+RD_CmdKind_MoveUpChunk,
+RD_CmdKind_MoveDownChunk,
+RD_CmdKind_MoveUpPage,
+RD_CmdKind_MoveDownPage,
+RD_CmdKind_MoveUpWhole,
+RD_CmdKind_MoveDownWhole,
+RD_CmdKind_MoveLeftChunkSelect,
+RD_CmdKind_MoveRightChunkSelect,
+RD_CmdKind_MoveUpChunkSelect,
+RD_CmdKind_MoveDownChunkSelect,
+RD_CmdKind_MoveUpPageSelect,
+RD_CmdKind_MoveDownPageSelect,
+RD_CmdKind_MoveUpWholeSelect,
+RD_CmdKind_MoveDownWholeSelect,
+RD_CmdKind_MoveUpReorder,
+RD_CmdKind_MoveDownReorder,
+RD_CmdKind_MoveHome,
+RD_CmdKind_MoveEnd,
+RD_CmdKind_MoveHomeSelect,
+RD_CmdKind_MoveEndSelect,
+RD_CmdKind_SelectAll,
+RD_CmdKind_DeleteSingle,
+RD_CmdKind_DeleteChunk,
+RD_CmdKind_BackspaceSingle,
+RD_CmdKind_BackspaceChunk,
+RD_CmdKind_Copy,
+RD_CmdKind_Cut,
+RD_CmdKind_Paste,
+RD_CmdKind_InsertText,
+RD_CmdKind_GoToLine,
+RD_CmdKind_GoToAddress,
+RD_CmdKind_CenterCursor,
+RD_CmdKind_ContainCursor,
+RD_CmdKind_FindTextForward,
+RD_CmdKind_FindTextBackward,
+RD_CmdKind_FindNext,
+RD_CmdKind_FindPrev,
+RD_CmdKind_FindThread,
+RD_CmdKind_FindSelectedThread,
+RD_CmdKind_GoToName,
+RD_CmdKind_GoToNameAtCursor,
+RD_CmdKind_ToggleWatchExpression,
+RD_CmdKind_ToggleWatchExpressionAtCursor,
+RD_CmdKind_ToggleWatchExpressionAtMouse,
+RD_CmdKind_SetColumns,
+RD_CmdKind_ToggleAddressVisibility,
+RD_CmdKind_ToggleCodeBytesVisibility,
+RD_CmdKind_EnableEntity,
+RD_CmdKind_DisableEntity,
+RD_CmdKind_RemoveEntity,
+RD_CmdKind_NameEntity,
+RD_CmdKind_EditEntity,
+RD_CmdKind_DuplicateEntity,
+RD_CmdKind_RelocateEntity,
+RD_CmdKind_AddBreakpoint,
+RD_CmdKind_AddAddressBreakpoint,
+RD_CmdKind_AddFunctionBreakpoint,
+RD_CmdKind_ToggleBreakpoint,
+RD_CmdKind_RemoveBreakpoint,
+RD_CmdKind_EnableBreakpoint,
+RD_CmdKind_DisableBreakpoint,
+RD_CmdKind_AddWatchPin,
+RD_CmdKind_ToggleWatchPin,
+RD_CmdKind_ToggleBreakpointAtCursor,
+RD_CmdKind_ToggleWatchPinAtCursor,
+RD_CmdKind_RunToCursor,
+RD_CmdKind_SetNextStatement,
+RD_CmdKind_AddTarget,
+RD_CmdKind_RemoveTarget,
+RD_CmdKind_EditTarget,
+RD_CmdKind_SelectTarget,
+RD_CmdKind_EnableTarget,
+RD_CmdKind_DisableTarget,
+RD_CmdKind_RegisterAsJITDebugger,
+RD_CmdKind_EntityRefFastPath,
+RD_CmdKind_SpawnEntityView,
+RD_CmdKind_FindCodeLocation,
+RD_CmdKind_Filter,
+RD_CmdKind_ApplyFilter,
+RD_CmdKind_ClearFilter,
+RD_CmdKind_GettingStarted,
+RD_CmdKind_Commands,
+RD_CmdKind_Target,
+RD_CmdKind_Targets,
+RD_CmdKind_FilePathMap,
+RD_CmdKind_AutoViewRules,
+RD_CmdKind_Breakpoints,
+RD_CmdKind_WatchPins,
+RD_CmdKind_Scheduler,
+RD_CmdKind_CallStack,
+RD_CmdKind_Modules,
+RD_CmdKind_Watch,
+RD_CmdKind_Locals,
+RD_CmdKind_Registers,
+RD_CmdKind_Globals,
+RD_CmdKind_ThreadLocals,
+RD_CmdKind_Types,
+RD_CmdKind_Procedures,
+RD_CmdKind_PendingFile,
+RD_CmdKind_Disassembly,
+RD_CmdKind_Output,
+RD_CmdKind_Memory,
+RD_CmdKind_ExceptionFilters,
+RD_CmdKind_Settings,
+RD_CmdKind_PickFile,
+RD_CmdKind_PickFolder,
+RD_CmdKind_PickFileOrFolder,
+RD_CmdKind_CompleteQuery,
+RD_CmdKind_CancelQuery,
+RD_CmdKind_ToggleDevMenu,
+RD_CmdKind_LogMarker,
+RD_CmdKind_COUNT,
+} RD_CmdKind;
 
-typedef enum DF_IconKind
+typedef enum RD_IconKind
 {
-DF_IconKind_Null,
-DF_IconKind_FolderOpenOutline,
-DF_IconKind_FolderClosedOutline,
-DF_IconKind_FolderOpenFilled,
-DF_IconKind_FolderClosedFilled,
-DF_IconKind_FileOutline,
-DF_IconKind_FileFilled,
-DF_IconKind_Play,
-DF_IconKind_PlayStepForward,
-DF_IconKind_Pause,
-DF_IconKind_Stop,
-DF_IconKind_Info,
-DF_IconKind_WarningSmall,
-DF_IconKind_WarningBig,
-DF_IconKind_Unlocked,
-DF_IconKind_Locked,
-DF_IconKind_LeftArrow,
-DF_IconKind_RightArrow,
-DF_IconKind_UpArrow,
-DF_IconKind_DownArrow,
-DF_IconKind_Gear,
-DF_IconKind_Pencil,
-DF_IconKind_Trash,
-DF_IconKind_Pin,
-DF_IconKind_RadioHollow,
-DF_IconKind_RadioFilled,
-DF_IconKind_CheckHollow,
-DF_IconKind_CheckFilled,
-DF_IconKind_LeftCaret,
-DF_IconKind_RightCaret,
-DF_IconKind_UpCaret,
-DF_IconKind_DownCaret,
-DF_IconKind_UpScroll,
-DF_IconKind_DownScroll,
-DF_IconKind_LeftScroll,
-DF_IconKind_RightScroll,
-DF_IconKind_Add,
-DF_IconKind_Minus,
-DF_IconKind_Thread,
-DF_IconKind_Threads,
-DF_IconKind_Machine,
-DF_IconKind_CircleFilled,
-DF_IconKind_X,
-DF_IconKind_Refresh,
-DF_IconKind_Undo,
-DF_IconKind_Redo,
-DF_IconKind_Save,
-DF_IconKind_Window,
-DF_IconKind_Target,
-DF_IconKind_Clipboard,
-DF_IconKind_Scheduler,
-DF_IconKind_Module,
-DF_IconKind_XSplit,
-DF_IconKind_YSplit,
-DF_IconKind_ClosePanel,
-DF_IconKind_StepInto,
-DF_IconKind_StepOver,
-DF_IconKind_StepOut,
-DF_IconKind_Find,
-DF_IconKind_Palette,
-DF_IconKind_Thumbnails,
-DF_IconKind_Glasses,
-DF_IconKind_Binoculars,
-DF_IconKind_List,
-DF_IconKind_Grid,
-DF_IconKind_QuestionMark,
-DF_IconKind_Person,
-DF_IconKind_Briefcase,
-DF_IconKind_Dot,
-DF_IconKind_COUNT,
-} DF_IconKind;
+RD_IconKind_Null,
+RD_IconKind_FolderOpenOutline,
+RD_IconKind_FolderClosedOutline,
+RD_IconKind_FolderOpenFilled,
+RD_IconKind_FolderClosedFilled,
+RD_IconKind_FileOutline,
+RD_IconKind_FileFilled,
+RD_IconKind_Play,
+RD_IconKind_PlayStepForward,
+RD_IconKind_Pause,
+RD_IconKind_Stop,
+RD_IconKind_Info,
+RD_IconKind_WarningSmall,
+RD_IconKind_WarningBig,
+RD_IconKind_Unlocked,
+RD_IconKind_Locked,
+RD_IconKind_LeftArrow,
+RD_IconKind_RightArrow,
+RD_IconKind_UpArrow,
+RD_IconKind_DownArrow,
+RD_IconKind_Gear,
+RD_IconKind_Pencil,
+RD_IconKind_Trash,
+RD_IconKind_Pin,
+RD_IconKind_RadioHollow,
+RD_IconKind_RadioFilled,
+RD_IconKind_CheckHollow,
+RD_IconKind_CheckFilled,
+RD_IconKind_LeftCaret,
+RD_IconKind_RightCaret,
+RD_IconKind_UpCaret,
+RD_IconKind_DownCaret,
+RD_IconKind_UpScroll,
+RD_IconKind_DownScroll,
+RD_IconKind_LeftScroll,
+RD_IconKind_RightScroll,
+RD_IconKind_Add,
+RD_IconKind_Minus,
+RD_IconKind_Thread,
+RD_IconKind_Threads,
+RD_IconKind_Machine,
+RD_IconKind_CircleFilled,
+RD_IconKind_X,
+RD_IconKind_Refresh,
+RD_IconKind_Undo,
+RD_IconKind_Redo,
+RD_IconKind_Save,
+RD_IconKind_Window,
+RD_IconKind_Target,
+RD_IconKind_Clipboard,
+RD_IconKind_Scheduler,
+RD_IconKind_Module,
+RD_IconKind_XSplit,
+RD_IconKind_YSplit,
+RD_IconKind_ClosePanel,
+RD_IconKind_StepInto,
+RD_IconKind_StepOver,
+RD_IconKind_StepOut,
+RD_IconKind_Find,
+RD_IconKind_Palette,
+RD_IconKind_Thumbnails,
+RD_IconKind_Glasses,
+RD_IconKind_Binoculars,
+RD_IconKind_List,
+RD_IconKind_Grid,
+RD_IconKind_QuestionMark,
+RD_IconKind_Person,
+RD_IconKind_Briefcase,
+RD_IconKind_Dot,
+RD_IconKind_COUNT,
+} RD_IconKind;
 
-typedef enum DF_ViewRuleKind
+typedef enum RD_ViewRuleKind
 {
-DF_ViewRuleKind_Null,
-DF_ViewRuleKind_Empty,
-DF_ViewRuleKind_GettingStarted,
-DF_ViewRuleKind_ExceptionFilters,
-DF_ViewRuleKind_Settings,
-DF_ViewRuleKind_PendingFile,
-DF_ViewRuleKind_Commands,
-DF_ViewRuleKind_FileSystem,
-DF_ViewRuleKind_SystemProcesses,
-DF_ViewRuleKind_EntityLister,
-DF_ViewRuleKind_SymbolLister,
-DF_ViewRuleKind_Watch,
-DF_ViewRuleKind_Locals,
-DF_ViewRuleKind_Registers,
-DF_ViewRuleKind_Globals,
-DF_ViewRuleKind_ThreadLocals,
-DF_ViewRuleKind_Types,
-DF_ViewRuleKind_Procedures,
-DF_ViewRuleKind_Targets,
-DF_ViewRuleKind_FilePathMap,
-DF_ViewRuleKind_AutoViewRules,
-DF_ViewRuleKind_Breakpoints,
-DF_ViewRuleKind_WatchPins,
-DF_ViewRuleKind_Scheduler,
-DF_ViewRuleKind_CallStack,
-DF_ViewRuleKind_Modules,
-DF_ViewRuleKind_Text,
-DF_ViewRuleKind_Disasm,
-DF_ViewRuleKind_Output,
-DF_ViewRuleKind_Memory,
-DF_ViewRuleKind_Bitmap,
-DF_ViewRuleKind_ColorRGBA,
-DF_ViewRuleKind_Geo3D,
-DF_ViewRuleKind_COUNT,
-} DF_ViewRuleKind;
+RD_ViewRuleKind_Null,
+RD_ViewRuleKind_Empty,
+RD_ViewRuleKind_GettingStarted,
+RD_ViewRuleKind_ExceptionFilters,
+RD_ViewRuleKind_Settings,
+RD_ViewRuleKind_PendingFile,
+RD_ViewRuleKind_Commands,
+RD_ViewRuleKind_FileSystem,
+RD_ViewRuleKind_SystemProcesses,
+RD_ViewRuleKind_EntityLister,
+RD_ViewRuleKind_SymbolLister,
+RD_ViewRuleKind_Watch,
+RD_ViewRuleKind_Locals,
+RD_ViewRuleKind_Registers,
+RD_ViewRuleKind_Globals,
+RD_ViewRuleKind_ThreadLocals,
+RD_ViewRuleKind_Types,
+RD_ViewRuleKind_Procedures,
+RD_ViewRuleKind_Targets,
+RD_ViewRuleKind_FilePathMap,
+RD_ViewRuleKind_AutoViewRules,
+RD_ViewRuleKind_Breakpoints,
+RD_ViewRuleKind_WatchPins,
+RD_ViewRuleKind_Scheduler,
+RD_ViewRuleKind_CallStack,
+RD_ViewRuleKind_Modules,
+RD_ViewRuleKind_Text,
+RD_ViewRuleKind_Disasm,
+RD_ViewRuleKind_Output,
+RD_ViewRuleKind_Memory,
+RD_ViewRuleKind_Bitmap,
+RD_ViewRuleKind_ColorRGBA,
+RD_ViewRuleKind_Geo3D,
+RD_ViewRuleKind_COUNT,
+} RD_ViewRuleKind;
 
-typedef enum DF_ViewKind
+typedef enum RD_ViewKind
 {
-DF_ViewKind_Null,
-DF_ViewKind_Empty,
-DF_ViewKind_GettingStarted,
-DF_ViewKind_Commands,
-DF_ViewKind_FileSystem,
-DF_ViewKind_SystemProcesses,
-DF_ViewKind_EntityLister,
-DF_ViewKind_SymbolLister,
-DF_ViewKind_Target,
-DF_ViewKind_Targets,
-DF_ViewKind_FilePathMap,
-DF_ViewKind_AutoViewRules,
-DF_ViewKind_Breakpoints,
-DF_ViewKind_WatchPins,
-DF_ViewKind_Scheduler,
-DF_ViewKind_CallStack,
-DF_ViewKind_Modules,
-DF_ViewKind_Watch,
-DF_ViewKind_Locals,
-DF_ViewKind_Registers,
-DF_ViewKind_Globals,
-DF_ViewKind_ThreadLocals,
-DF_ViewKind_Types,
-DF_ViewKind_Procedures,
-DF_ViewKind_PendingFile,
-DF_ViewKind_Text,
-DF_ViewKind_Disasm,
-DF_ViewKind_Output,
-DF_ViewKind_Memory,
-DF_ViewKind_Bitmap,
-DF_ViewKind_ColorRGBA,
-DF_ViewKind_Geo3D,
-DF_ViewKind_ExceptionFilters,
-DF_ViewKind_Settings,
-DF_ViewKind_COUNT,
-} DF_ViewKind;
+RD_ViewKind_Null,
+RD_ViewKind_Empty,
+RD_ViewKind_GettingStarted,
+RD_ViewKind_Commands,
+RD_ViewKind_FileSystem,
+RD_ViewKind_SystemProcesses,
+RD_ViewKind_EntityLister,
+RD_ViewKind_SymbolLister,
+RD_ViewKind_Target,
+RD_ViewKind_Targets,
+RD_ViewKind_FilePathMap,
+RD_ViewKind_AutoViewRules,
+RD_ViewKind_Breakpoints,
+RD_ViewKind_WatchPins,
+RD_ViewKind_Scheduler,
+RD_ViewKind_CallStack,
+RD_ViewKind_Modules,
+RD_ViewKind_Watch,
+RD_ViewKind_Locals,
+RD_ViewKind_Registers,
+RD_ViewKind_Globals,
+RD_ViewKind_ThreadLocals,
+RD_ViewKind_Types,
+RD_ViewKind_Procedures,
+RD_ViewKind_PendingFile,
+RD_ViewKind_Text,
+RD_ViewKind_Disasm,
+RD_ViewKind_Output,
+RD_ViewKind_Memory,
+RD_ViewKind_Bitmap,
+RD_ViewKind_ColorRGBA,
+RD_ViewKind_Geo3D,
+RD_ViewKind_ExceptionFilters,
+RD_ViewKind_Settings,
+RD_ViewKind_COUNT,
+} RD_ViewKind;
 
-typedef enum DF_ThemeColor
+typedef enum RD_ThemeColor
 {
-DF_ThemeColor_Null,
-DF_ThemeColor_Text,
-DF_ThemeColor_TextPositive,
-DF_ThemeColor_TextNegative,
-DF_ThemeColor_TextNeutral,
-DF_ThemeColor_TextWeak,
-DF_ThemeColor_Cursor,
-DF_ThemeColor_CursorInactive,
-DF_ThemeColor_Focus,
-DF_ThemeColor_Hover,
-DF_ThemeColor_DropShadow,
-DF_ThemeColor_DisabledOverlay,
-DF_ThemeColor_DropSiteOverlay,
-DF_ThemeColor_InactivePanelOverlay,
-DF_ThemeColor_SelectionOverlay,
-DF_ThemeColor_HighlightOverlay,
-DF_ThemeColor_HighlightOverlayError,
-DF_ThemeColor_BaseBackground,
-DF_ThemeColor_BaseBackgroundAlt,
-DF_ThemeColor_BaseBorder,
-DF_ThemeColor_MenuBarBackground,
-DF_ThemeColor_MenuBarBackgroundAlt,
-DF_ThemeColor_MenuBarBorder,
-DF_ThemeColor_FloatingBackground,
-DF_ThemeColor_FloatingBackgroundAlt,
-DF_ThemeColor_FloatingBorder,
-DF_ThemeColor_ImplicitButtonBackground,
-DF_ThemeColor_ImplicitButtonBorder,
-DF_ThemeColor_PlainButtonBackground,
-DF_ThemeColor_PlainButtonBorder,
-DF_ThemeColor_PositivePopButtonBackground,
-DF_ThemeColor_PositivePopButtonBorder,
-DF_ThemeColor_NegativePopButtonBackground,
-DF_ThemeColor_NegativePopButtonBorder,
-DF_ThemeColor_NeutralPopButtonBackground,
-DF_ThemeColor_NeutralPopButtonBorder,
-DF_ThemeColor_ScrollBarButtonBackground,
-DF_ThemeColor_ScrollBarButtonBorder,
-DF_ThemeColor_TabBackground,
-DF_ThemeColor_TabBorder,
-DF_ThemeColor_TabBackgroundInactive,
-DF_ThemeColor_TabBorderInactive,
-DF_ThemeColor_CodeDefault,
-DF_ThemeColor_CodeSymbol,
-DF_ThemeColor_CodeType,
-DF_ThemeColor_CodeLocal,
-DF_ThemeColor_CodeRegister,
-DF_ThemeColor_CodeKeyword,
-DF_ThemeColor_CodeDelimiterOperator,
-DF_ThemeColor_CodeNumeric,
-DF_ThemeColor_CodeNumericAltDigitGroup,
-DF_ThemeColor_CodeString,
-DF_ThemeColor_CodeMeta,
-DF_ThemeColor_CodeComment,
-DF_ThemeColor_CodeLineNumbers,
-DF_ThemeColor_CodeLineNumbersSelected,
-DF_ThemeColor_LineInfoBackground0,
-DF_ThemeColor_LineInfoBackground1,
-DF_ThemeColor_LineInfoBackground2,
-DF_ThemeColor_LineInfoBackground3,
-DF_ThemeColor_LineInfoBackground4,
-DF_ThemeColor_LineInfoBackground5,
-DF_ThemeColor_LineInfoBackground6,
-DF_ThemeColor_LineInfoBackground7,
-DF_ThemeColor_Thread0,
-DF_ThemeColor_Thread1,
-DF_ThemeColor_Thread2,
-DF_ThemeColor_Thread3,
-DF_ThemeColor_Thread4,
-DF_ThemeColor_Thread5,
-DF_ThemeColor_Thread6,
-DF_ThemeColor_Thread7,
-DF_ThemeColor_ThreadUnwound,
-DF_ThemeColor_ThreadError,
-DF_ThemeColor_Breakpoint,
-DF_ThemeColor_COUNT,
-} DF_ThemeColor;
+RD_ThemeColor_Null,
+RD_ThemeColor_Text,
+RD_ThemeColor_TextPositive,
+RD_ThemeColor_TextNegative,
+RD_ThemeColor_TextNeutral,
+RD_ThemeColor_TextWeak,
+RD_ThemeColor_Cursor,
+RD_ThemeColor_CursorInactive,
+RD_ThemeColor_Focus,
+RD_ThemeColor_Hover,
+RD_ThemeColor_DropShadow,
+RD_ThemeColor_DisabledOverlay,
+RD_ThemeColor_DropSiteOverlay,
+RD_ThemeColor_InactivePanelOverlay,
+RD_ThemeColor_SelectionOverlay,
+RD_ThemeColor_HighlightOverlay,
+RD_ThemeColor_HighlightOverlayError,
+RD_ThemeColor_BaseBackground,
+RD_ThemeColor_BaseBackgroundAlt,
+RD_ThemeColor_BaseBorder,
+RD_ThemeColor_MenuBarBackground,
+RD_ThemeColor_MenuBarBackgroundAlt,
+RD_ThemeColor_MenuBarBorder,
+RD_ThemeColor_FloatingBackground,
+RD_ThemeColor_FloatingBackgroundAlt,
+RD_ThemeColor_FloatingBorder,
+RD_ThemeColor_ImplicitButtonBackground,
+RD_ThemeColor_ImplicitButtonBorder,
+RD_ThemeColor_PlainButtonBackground,
+RD_ThemeColor_PlainButtonBorder,
+RD_ThemeColor_PositivePopButtonBackground,
+RD_ThemeColor_PositivePopButtonBorder,
+RD_ThemeColor_NegativePopButtonBackground,
+RD_ThemeColor_NegativePopButtonBorder,
+RD_ThemeColor_NeutralPopButtonBackground,
+RD_ThemeColor_NeutralPopButtonBorder,
+RD_ThemeColor_ScrollBarButtonBackground,
+RD_ThemeColor_ScrollBarButtonBorder,
+RD_ThemeColor_TabBackground,
+RD_ThemeColor_TabBorder,
+RD_ThemeColor_TabBackgroundInactive,
+RD_ThemeColor_TabBorderInactive,
+RD_ThemeColor_CodeDefault,
+RD_ThemeColor_CodeSymbol,
+RD_ThemeColor_CodeType,
+RD_ThemeColor_CodeLocal,
+RD_ThemeColor_CodeRegister,
+RD_ThemeColor_CodeKeyword,
+RD_ThemeColor_CodeDelimiterOperator,
+RD_ThemeColor_CodeNumeric,
+RD_ThemeColor_CodeNumericAltDigitGroup,
+RD_ThemeColor_CodeString,
+RD_ThemeColor_CodeMeta,
+RD_ThemeColor_CodeComment,
+RD_ThemeColor_CodeLineNumbers,
+RD_ThemeColor_CodeLineNumbersSelected,
+RD_ThemeColor_LineInfoBackground0,
+RD_ThemeColor_LineInfoBackground1,
+RD_ThemeColor_LineInfoBackground2,
+RD_ThemeColor_LineInfoBackground3,
+RD_ThemeColor_LineInfoBackground4,
+RD_ThemeColor_LineInfoBackground5,
+RD_ThemeColor_LineInfoBackground6,
+RD_ThemeColor_LineInfoBackground7,
+RD_ThemeColor_Thread0,
+RD_ThemeColor_Thread1,
+RD_ThemeColor_Thread2,
+RD_ThemeColor_Thread3,
+RD_ThemeColor_Thread4,
+RD_ThemeColor_Thread5,
+RD_ThemeColor_Thread6,
+RD_ThemeColor_Thread7,
+RD_ThemeColor_ThreadUnwound,
+RD_ThemeColor_ThreadError,
+RD_ThemeColor_Breakpoint,
+RD_ThemeColor_COUNT,
+} RD_ThemeColor;
 
-typedef enum DF_ThemePreset
+typedef enum RD_ThemePreset
 {
-DF_ThemePreset_DefaultDark,
-DF_ThemePreset_DefaultLight,
-DF_ThemePreset_VSDark,
-DF_ThemePreset_VSLight,
-DF_ThemePreset_SolarizedDark,
-DF_ThemePreset_SolarizedLight,
-DF_ThemePreset_HandmadeHero,
-DF_ThemePreset_FourCoder,
-DF_ThemePreset_FarManager,
-DF_ThemePreset_COUNT,
-} DF_ThemePreset;
+RD_ThemePreset_DefaultDark,
+RD_ThemePreset_DefaultLight,
+RD_ThemePreset_VSDark,
+RD_ThemePreset_VSLight,
+RD_ThemePreset_SolarizedDark,
+RD_ThemePreset_SolarizedLight,
+RD_ThemePreset_HandmadeHero,
+RD_ThemePreset_FourCoder,
+RD_ThemePreset_FarManager,
+RD_ThemePreset_COUNT,
+} RD_ThemePreset;
 
-typedef enum DF_SettingCode
+typedef enum RD_SettingCode
 {
-DF_SettingCode_HoverAnimations,
-DF_SettingCode_PressAnimations,
-DF_SettingCode_FocusAnimations,
-DF_SettingCode_TooltipAnimations,
-DF_SettingCode_MenuAnimations,
-DF_SettingCode_ScrollingAnimations,
-DF_SettingCode_BackgroundBlur,
-DF_SettingCode_ThreadLines,
-DF_SettingCode_BreakpointLines,
-DF_SettingCode_ThreadGlow,
-DF_SettingCode_BreakpointGlow,
-DF_SettingCode_OpaqueBackgrounds,
-DF_SettingCode_TabWidth,
-DF_SettingCode_MainFontSize,
-DF_SettingCode_CodeFontSize,
-DF_SettingCode_SmoothUIText,
-DF_SettingCode_SmoothCodeText,
-DF_SettingCode_HintUIText,
-DF_SettingCode_HintCodeText,
-DF_SettingCode_COUNT,
-} DF_SettingCode;
+RD_SettingCode_HoverAnimations,
+RD_SettingCode_PressAnimations,
+RD_SettingCode_FocusAnimations,
+RD_SettingCode_TooltipAnimations,
+RD_SettingCode_MenuAnimations,
+RD_SettingCode_ScrollingAnimations,
+RD_SettingCode_BackgroundBlur,
+RD_SettingCode_ThreadLines,
+RD_SettingCode_BreakpointLines,
+RD_SettingCode_ThreadGlow,
+RD_SettingCode_BreakpointGlow,
+RD_SettingCode_OpaqueBackgrounds,
+RD_SettingCode_TabWidth,
+RD_SettingCode_MainFontSize,
+RD_SettingCode_CodeFontSize,
+RD_SettingCode_SmoothUIText,
+RD_SettingCode_SmoothCodeText,
+RD_SettingCode_HintUIText,
+RD_SettingCode_HintCodeText,
+RD_SettingCode_COUNT,
+} RD_SettingCode;
 
-typedef struct DF_Regs DF_Regs;
-struct DF_Regs
+typedef struct RD_Regs RD_Regs;
+struct RD_Regs
 {
 CTRL_Handle machine;
 CTRL_Handle module;
 CTRL_Handle process;
 CTRL_Handle thread;
-D_Handle window;
-D_Handle panel;
-D_Handle view;
-D_Handle prev_view;
-D_Handle dst_panel;
-D_Handle entity;
-D_HandleList entity_list;
+RD_Handle window;
+RD_Handle panel;
+RD_Handle view;
+RD_Handle prev_view;
+RD_Handle dst_panel;
+RD_Handle entity;
+RD_HandleList entity_list;
 U64 unwind_count;
 U64 inline_depth;
 String8 file_path;
@@ -616,215 +616,215 @@ MD_Node * params_tree;
 OS_Event * os_event;
 };
 
-typedef struct DF_Query DF_Query;
-struct DF_Query
+typedef struct RD_Query RD_Query;
+struct RD_Query
 {
-DF_QueryFlags flags;
-DF_RegSlot slot;
+RD_QueryFlags flags;
+RD_RegSlot slot;
 String8 view_name;
-DF_EntityKind entity_kind;
+RD_EntityKind entity_kind;
 };
 
-typedef struct DF_CmdKindInfo DF_CmdKindInfo;
-struct DF_CmdKindInfo
+typedef struct RD_CmdKindInfo RD_CmdKindInfo;
+struct RD_CmdKindInfo
 {
 String8 string;
 String8 description;
 String8 search_tags;
 String8 display_name;
-DF_IconKind icon_kind;
-DF_CmdKindFlags flags;
-DF_Query query;
+RD_IconKind icon_kind;
+RD_CmdKindFlags flags;
+RD_Query query;
 };
 
-typedef struct DF_ViewRuleInfo DF_ViewRuleInfo;
-struct DF_ViewRuleInfo
+typedef struct RD_ViewRuleInfo RD_ViewRuleInfo;
+struct RD_ViewRuleInfo
 {
 String8 string;
 String8 description;
 String8 display_name;
 String8 params_schema;
-DF_IconKind icon_kind;
-DF_ViewRuleInfoFlags flags;
-DF_ViewRuleUIFunctionType *ui;
+RD_IconKind icon_kind;
+RD_ViewRuleInfoFlags flags;
+RD_ViewRuleUIFunctionType *ui;
 };
 
-#define df_regs_lit_init_top \
-.machine = df_regs()->machine,\
-.module = df_regs()->module,\
-.process = df_regs()->process,\
-.thread = df_regs()->thread,\
-.window = df_regs()->window,\
-.panel = df_regs()->panel,\
-.view = df_regs()->view,\
-.prev_view = df_regs()->prev_view,\
-.dst_panel = df_regs()->dst_panel,\
-.entity = df_regs()->entity,\
-.entity_list = df_regs()->entity_list,\
-.unwind_count = df_regs()->unwind_count,\
-.inline_depth = df_regs()->inline_depth,\
-.file_path = df_regs()->file_path,\
-.cursor = df_regs()->cursor,\
-.mark = df_regs()->mark,\
-.text_key = df_regs()->text_key,\
-.lang_kind = df_regs()->lang_kind,\
-.lines = df_regs()->lines,\
-.dbgi_key = df_regs()->dbgi_key,\
-.vaddr = df_regs()->vaddr,\
-.voff = df_regs()->voff,\
-.vaddr_range = df_regs()->vaddr_range,\
-.voff_range = df_regs()->voff_range,\
-.pid = df_regs()->pid,\
-.force_confirm = df_regs()->force_confirm,\
-.prefer_disasm = df_regs()->prefer_disasm,\
-.dir2 = df_regs()->dir2,\
-.string = df_regs()->string,\
-.params_tree = df_regs()->params_tree,\
-.os_event = df_regs()->os_event,\
+#define rd_regs_lit_init_top \
+.machine = rd_regs()->machine,\
+.module = rd_regs()->module,\
+.process = rd_regs()->process,\
+.thread = rd_regs()->thread,\
+.window = rd_regs()->window,\
+.panel = rd_regs()->panel,\
+.view = rd_regs()->view,\
+.prev_view = rd_regs()->prev_view,\
+.dst_panel = rd_regs()->dst_panel,\
+.entity = rd_regs()->entity,\
+.entity_list = rd_regs()->entity_list,\
+.unwind_count = rd_regs()->unwind_count,\
+.inline_depth = rd_regs()->inline_depth,\
+.file_path = rd_regs()->file_path,\
+.cursor = rd_regs()->cursor,\
+.mark = rd_regs()->mark,\
+.text_key = rd_regs()->text_key,\
+.lang_kind = rd_regs()->lang_kind,\
+.lines = rd_regs()->lines,\
+.dbgi_key = rd_regs()->dbgi_key,\
+.vaddr = rd_regs()->vaddr,\
+.voff = rd_regs()->voff,\
+.vaddr_range = rd_regs()->vaddr_range,\
+.voff_range = rd_regs()->voff_range,\
+.pid = rd_regs()->pid,\
+.force_confirm = rd_regs()->force_confirm,\
+.prefer_disasm = rd_regs()->prefer_disasm,\
+.dir2 = rd_regs()->dir2,\
+.string = rd_regs()->string,\
+.params_tree = rd_regs()->params_tree,\
+.os_event = rd_regs()->os_event,\
 
-DF_VIEW_SETUP_FUNCTION_DEF(null);
-DF_VIEW_SETUP_FUNCTION_DEF(empty);
-DF_VIEW_SETUP_FUNCTION_DEF(getting_started);
-DF_VIEW_SETUP_FUNCTION_DEF(commands);
-DF_VIEW_SETUP_FUNCTION_DEF(file_system);
-DF_VIEW_SETUP_FUNCTION_DEF(system_processes);
-DF_VIEW_SETUP_FUNCTION_DEF(entity_lister);
-DF_VIEW_SETUP_FUNCTION_DEF(symbol_lister);
-DF_VIEW_SETUP_FUNCTION_DEF(target);
-DF_VIEW_SETUP_FUNCTION_DEF(targets);
-DF_VIEW_SETUP_FUNCTION_DEF(file_path_map);
-DF_VIEW_SETUP_FUNCTION_DEF(auto_view_rules);
-DF_VIEW_SETUP_FUNCTION_DEF(breakpoints);
-DF_VIEW_SETUP_FUNCTION_DEF(watch_pins);
-DF_VIEW_SETUP_FUNCTION_DEF(scheduler);
-DF_VIEW_SETUP_FUNCTION_DEF(call_stack);
-DF_VIEW_SETUP_FUNCTION_DEF(modules);
-DF_VIEW_SETUP_FUNCTION_DEF(watch);
-DF_VIEW_SETUP_FUNCTION_DEF(locals);
-DF_VIEW_SETUP_FUNCTION_DEF(registers);
-DF_VIEW_SETUP_FUNCTION_DEF(globals);
-DF_VIEW_SETUP_FUNCTION_DEF(thread_locals);
-DF_VIEW_SETUP_FUNCTION_DEF(types);
-DF_VIEW_SETUP_FUNCTION_DEF(procedures);
-DF_VIEW_SETUP_FUNCTION_DEF(pending_file);
-DF_VIEW_SETUP_FUNCTION_DEF(text);
-DF_VIEW_SETUP_FUNCTION_DEF(disasm);
-DF_VIEW_SETUP_FUNCTION_DEF(output);
-DF_VIEW_SETUP_FUNCTION_DEF(memory);
-DF_VIEW_SETUP_FUNCTION_DEF(bitmap);
-DF_VIEW_SETUP_FUNCTION_DEF(color_rgba);
-DF_VIEW_SETUP_FUNCTION_DEF(geo3d);
-DF_VIEW_SETUP_FUNCTION_DEF(exception_filters);
-DF_VIEW_SETUP_FUNCTION_DEF(settings);
-DF_VIEW_CMD_FUNCTION_DEF(null);
-DF_VIEW_CMD_FUNCTION_DEF(empty);
-DF_VIEW_CMD_FUNCTION_DEF(getting_started);
-DF_VIEW_CMD_FUNCTION_DEF(commands);
-DF_VIEW_CMD_FUNCTION_DEF(file_system);
-DF_VIEW_CMD_FUNCTION_DEF(system_processes);
-DF_VIEW_CMD_FUNCTION_DEF(entity_lister);
-DF_VIEW_CMD_FUNCTION_DEF(symbol_lister);
-DF_VIEW_CMD_FUNCTION_DEF(target);
-DF_VIEW_CMD_FUNCTION_DEF(targets);
-DF_VIEW_CMD_FUNCTION_DEF(file_path_map);
-DF_VIEW_CMD_FUNCTION_DEF(auto_view_rules);
-DF_VIEW_CMD_FUNCTION_DEF(breakpoints);
-DF_VIEW_CMD_FUNCTION_DEF(watch_pins);
-DF_VIEW_CMD_FUNCTION_DEF(scheduler);
-DF_VIEW_CMD_FUNCTION_DEF(call_stack);
-DF_VIEW_CMD_FUNCTION_DEF(modules);
-DF_VIEW_CMD_FUNCTION_DEF(watch);
-DF_VIEW_CMD_FUNCTION_DEF(locals);
-DF_VIEW_CMD_FUNCTION_DEF(registers);
-DF_VIEW_CMD_FUNCTION_DEF(globals);
-DF_VIEW_CMD_FUNCTION_DEF(thread_locals);
-DF_VIEW_CMD_FUNCTION_DEF(types);
-DF_VIEW_CMD_FUNCTION_DEF(procedures);
-DF_VIEW_CMD_FUNCTION_DEF(pending_file);
-DF_VIEW_CMD_FUNCTION_DEF(text);
-DF_VIEW_CMD_FUNCTION_DEF(disasm);
-DF_VIEW_CMD_FUNCTION_DEF(output);
-DF_VIEW_CMD_FUNCTION_DEF(memory);
-DF_VIEW_CMD_FUNCTION_DEF(bitmap);
-DF_VIEW_CMD_FUNCTION_DEF(color_rgba);
-DF_VIEW_CMD_FUNCTION_DEF(geo3d);
-DF_VIEW_CMD_FUNCTION_DEF(exception_filters);
-DF_VIEW_CMD_FUNCTION_DEF(settings);
-DF_VIEW_UI_FUNCTION_DEF(null);
-DF_VIEW_UI_FUNCTION_DEF(empty);
-DF_VIEW_UI_FUNCTION_DEF(getting_started);
-DF_VIEW_UI_FUNCTION_DEF(commands);
-DF_VIEW_UI_FUNCTION_DEF(file_system);
-DF_VIEW_UI_FUNCTION_DEF(system_processes);
-DF_VIEW_UI_FUNCTION_DEF(entity_lister);
-DF_VIEW_UI_FUNCTION_DEF(symbol_lister);
-DF_VIEW_UI_FUNCTION_DEF(target);
-DF_VIEW_UI_FUNCTION_DEF(targets);
-DF_VIEW_UI_FUNCTION_DEF(file_path_map);
-DF_VIEW_UI_FUNCTION_DEF(auto_view_rules);
-DF_VIEW_UI_FUNCTION_DEF(breakpoints);
-DF_VIEW_UI_FUNCTION_DEF(watch_pins);
-DF_VIEW_UI_FUNCTION_DEF(scheduler);
-DF_VIEW_UI_FUNCTION_DEF(call_stack);
-DF_VIEW_UI_FUNCTION_DEF(modules);
-DF_VIEW_UI_FUNCTION_DEF(watch);
-DF_VIEW_UI_FUNCTION_DEF(locals);
-DF_VIEW_UI_FUNCTION_DEF(registers);
-DF_VIEW_UI_FUNCTION_DEF(globals);
-DF_VIEW_UI_FUNCTION_DEF(thread_locals);
-DF_VIEW_UI_FUNCTION_DEF(types);
-DF_VIEW_UI_FUNCTION_DEF(procedures);
-DF_VIEW_UI_FUNCTION_DEF(pending_file);
-DF_VIEW_UI_FUNCTION_DEF(text);
-DF_VIEW_UI_FUNCTION_DEF(disasm);
-DF_VIEW_UI_FUNCTION_DEF(output);
-DF_VIEW_UI_FUNCTION_DEF(memory);
-DF_VIEW_UI_FUNCTION_DEF(bitmap);
-DF_VIEW_UI_FUNCTION_DEF(color_rgba);
-DF_VIEW_UI_FUNCTION_DEF(geo3d);
-DF_VIEW_UI_FUNCTION_DEF(exception_filters);
-DF_VIEW_UI_FUNCTION_DEF(settings);
+RD_VIEW_SETUP_FUNCTION_DEF(null);
+RD_VIEW_SETUP_FUNCTION_DEF(empty);
+RD_VIEW_SETUP_FUNCTION_DEF(getting_started);
+RD_VIEW_SETUP_FUNCTION_DEF(commands);
+RD_VIEW_SETUP_FUNCTION_DEF(file_system);
+RD_VIEW_SETUP_FUNCTION_DEF(system_processes);
+RD_VIEW_SETUP_FUNCTION_DEF(entity_lister);
+RD_VIEW_SETUP_FUNCTION_DEF(symbol_lister);
+RD_VIEW_SETUP_FUNCTION_DEF(target);
+RD_VIEW_SETUP_FUNCTION_DEF(targets);
+RD_VIEW_SETUP_FUNCTION_DEF(file_path_map);
+RD_VIEW_SETUP_FUNCTION_DEF(auto_view_rules);
+RD_VIEW_SETUP_FUNCTION_DEF(breakpoints);
+RD_VIEW_SETUP_FUNCTION_DEF(watch_pins);
+RD_VIEW_SETUP_FUNCTION_DEF(scheduler);
+RD_VIEW_SETUP_FUNCTION_DEF(call_stack);
+RD_VIEW_SETUP_FUNCTION_DEF(modules);
+RD_VIEW_SETUP_FUNCTION_DEF(watch);
+RD_VIEW_SETUP_FUNCTION_DEF(locals);
+RD_VIEW_SETUP_FUNCTION_DEF(registers);
+RD_VIEW_SETUP_FUNCTION_DEF(globals);
+RD_VIEW_SETUP_FUNCTION_DEF(thread_locals);
+RD_VIEW_SETUP_FUNCTION_DEF(types);
+RD_VIEW_SETUP_FUNCTION_DEF(procedures);
+RD_VIEW_SETUP_FUNCTION_DEF(pending_file);
+RD_VIEW_SETUP_FUNCTION_DEF(text);
+RD_VIEW_SETUP_FUNCTION_DEF(disasm);
+RD_VIEW_SETUP_FUNCTION_DEF(output);
+RD_VIEW_SETUP_FUNCTION_DEF(memory);
+RD_VIEW_SETUP_FUNCTION_DEF(bitmap);
+RD_VIEW_SETUP_FUNCTION_DEF(color_rgba);
+RD_VIEW_SETUP_FUNCTION_DEF(geo3d);
+RD_VIEW_SETUP_FUNCTION_DEF(exception_filters);
+RD_VIEW_SETUP_FUNCTION_DEF(settings);
+RD_VIEW_CMD_FUNCTION_DEF(null);
+RD_VIEW_CMD_FUNCTION_DEF(empty);
+RD_VIEW_CMD_FUNCTION_DEF(getting_started);
+RD_VIEW_CMD_FUNCTION_DEF(commands);
+RD_VIEW_CMD_FUNCTION_DEF(file_system);
+RD_VIEW_CMD_FUNCTION_DEF(system_processes);
+RD_VIEW_CMD_FUNCTION_DEF(entity_lister);
+RD_VIEW_CMD_FUNCTION_DEF(symbol_lister);
+RD_VIEW_CMD_FUNCTION_DEF(target);
+RD_VIEW_CMD_FUNCTION_DEF(targets);
+RD_VIEW_CMD_FUNCTION_DEF(file_path_map);
+RD_VIEW_CMD_FUNCTION_DEF(auto_view_rules);
+RD_VIEW_CMD_FUNCTION_DEF(breakpoints);
+RD_VIEW_CMD_FUNCTION_DEF(watch_pins);
+RD_VIEW_CMD_FUNCTION_DEF(scheduler);
+RD_VIEW_CMD_FUNCTION_DEF(call_stack);
+RD_VIEW_CMD_FUNCTION_DEF(modules);
+RD_VIEW_CMD_FUNCTION_DEF(watch);
+RD_VIEW_CMD_FUNCTION_DEF(locals);
+RD_VIEW_CMD_FUNCTION_DEF(registers);
+RD_VIEW_CMD_FUNCTION_DEF(globals);
+RD_VIEW_CMD_FUNCTION_DEF(thread_locals);
+RD_VIEW_CMD_FUNCTION_DEF(types);
+RD_VIEW_CMD_FUNCTION_DEF(procedures);
+RD_VIEW_CMD_FUNCTION_DEF(pending_file);
+RD_VIEW_CMD_FUNCTION_DEF(text);
+RD_VIEW_CMD_FUNCTION_DEF(disasm);
+RD_VIEW_CMD_FUNCTION_DEF(output);
+RD_VIEW_CMD_FUNCTION_DEF(memory);
+RD_VIEW_CMD_FUNCTION_DEF(bitmap);
+RD_VIEW_CMD_FUNCTION_DEF(color_rgba);
+RD_VIEW_CMD_FUNCTION_DEF(geo3d);
+RD_VIEW_CMD_FUNCTION_DEF(exception_filters);
+RD_VIEW_CMD_FUNCTION_DEF(settings);
+RD_VIEW_UI_FUNCTION_DEF(null);
+RD_VIEW_UI_FUNCTION_DEF(empty);
+RD_VIEW_UI_FUNCTION_DEF(getting_started);
+RD_VIEW_UI_FUNCTION_DEF(commands);
+RD_VIEW_UI_FUNCTION_DEF(file_system);
+RD_VIEW_UI_FUNCTION_DEF(system_processes);
+RD_VIEW_UI_FUNCTION_DEF(entity_lister);
+RD_VIEW_UI_FUNCTION_DEF(symbol_lister);
+RD_VIEW_UI_FUNCTION_DEF(target);
+RD_VIEW_UI_FUNCTION_DEF(targets);
+RD_VIEW_UI_FUNCTION_DEF(file_path_map);
+RD_VIEW_UI_FUNCTION_DEF(auto_view_rules);
+RD_VIEW_UI_FUNCTION_DEF(breakpoints);
+RD_VIEW_UI_FUNCTION_DEF(watch_pins);
+RD_VIEW_UI_FUNCTION_DEF(scheduler);
+RD_VIEW_UI_FUNCTION_DEF(call_stack);
+RD_VIEW_UI_FUNCTION_DEF(modules);
+RD_VIEW_UI_FUNCTION_DEF(watch);
+RD_VIEW_UI_FUNCTION_DEF(locals);
+RD_VIEW_UI_FUNCTION_DEF(registers);
+RD_VIEW_UI_FUNCTION_DEF(globals);
+RD_VIEW_UI_FUNCTION_DEF(thread_locals);
+RD_VIEW_UI_FUNCTION_DEF(types);
+RD_VIEW_UI_FUNCTION_DEF(procedures);
+RD_VIEW_UI_FUNCTION_DEF(pending_file);
+RD_VIEW_UI_FUNCTION_DEF(text);
+RD_VIEW_UI_FUNCTION_DEF(disasm);
+RD_VIEW_UI_FUNCTION_DEF(output);
+RD_VIEW_UI_FUNCTION_DEF(memory);
+RD_VIEW_UI_FUNCTION_DEF(bitmap);
+RD_VIEW_UI_FUNCTION_DEF(color_rgba);
+RD_VIEW_UI_FUNCTION_DEF(geo3d);
+RD_VIEW_UI_FUNCTION_DEF(exception_filters);
+RD_VIEW_UI_FUNCTION_DEF(settings);
 
 C_LINKAGE_BEGIN
-extern String8 d_cfg_src_string_table[4];
-extern DF_CmdKind d_cfg_src_load_cmd_kind_table[4];
-extern DF_CmdKind d_cfg_src_write_cmd_kind_table[4];
-extern DF_CmdKind d_cfg_src_apply_cmd_kind_table[4];
+extern String8 rd_cfg_src_string_table[4];
+extern RD_CmdKind rd_cfg_src_load_cmd_kind_table[4];
+extern RD_CmdKind rd_cfg_src_write_cmd_kind_table[4];
+extern RD_CmdKind rd_cfg_src_apply_cmd_kind_table[4];
 extern String8 d_entity_kind_display_string_table[30];
 extern String8 d_entity_kind_name_lower_table[30];
 extern String8 d_entity_kind_name_lower_plural_table[30];
 extern String8 d_entity_kind_name_label_table[30];
-extern DF_EntityKindFlags d_entity_kind_flags_table[30];
-extern Rng1U64 df_reg_slot_range_table[32];
-extern DF_StringBindingPair df_g_default_binding_table[110];
-extern String8 df_g_binding_version_remap_old_name_table[7];
-extern String8 df_g_binding_version_remap_new_name_table[7];
-extern String8 df_g_icon_kind_text_table[69];
-extern String8 df_view_kind_name_lower_table[34];
-extern DF_ViewSpecInfo df_g_gfx_view_kind_spec_info_table[34];
-extern DF_IconKind df_entity_kind_icon_kind_table[30];
-extern String8 df_g_theme_preset_display_string_table[9];
-extern String8 df_g_theme_preset_code_string_table[9];
-extern String8 df_g_theme_color_version_remap_old_name_table[22];
-extern String8 df_g_theme_color_version_remap_new_name_table[22];
-extern Vec4F32 df_g_theme_preset_colors__default_dark[75];
-extern Vec4F32 df_g_theme_preset_colors__default_light[75];
-extern Vec4F32 df_g_theme_preset_colors__vs_dark[75];
-extern Vec4F32 df_g_theme_preset_colors__vs_light[75];
-extern Vec4F32 df_g_theme_preset_colors__solarized_dark[75];
-extern Vec4F32 df_g_theme_preset_colors__solarized_light[75];
-extern Vec4F32 df_g_theme_preset_colors__handmade_hero[75];
-extern Vec4F32 df_g_theme_preset_colors__four_coder[75];
-extern Vec4F32 df_g_theme_preset_colors__far_manager[75];
-extern Vec4F32* df_g_theme_preset_colors_table[9];
-extern String8 df_g_theme_color_display_string_table[75];
-extern String8 df_g_theme_color_cfg_string_table[75];
-extern String8 df_g_setting_code_display_string_table[19];
-extern String8 df_g_setting_code_lower_string_table[19];
-extern B8 df_g_setting_code_default_is_per_window_table[19];
-extern DF_SettingVal df_g_setting_code_default_val_table[19];
-extern Rng1S32 df_g_setting_code_s32_range_table[19];
-read_only global U8 df_g_icon_font_bytes__data[] =
+extern RD_EntityKindFlags rd_entity_kind_flags_table[30];
+extern Rng1U64 rd_reg_slot_range_table[32];
+extern RD_StringBindingPair rd_default_binding_table[110];
+extern String8 rd_binding_version_remap_old_name_table[7];
+extern String8 rd_binding_version_remap_new_name_table[7];
+extern String8 rd_icon_kind_text_table[69];
+extern String8 rd_view_kind_name_lower_table[34];
+extern RD_ViewSpecInfo rd_gfx_view_kind_spec_info_table[34];
+extern RD_IconKind rd_entity_kind_icon_kind_table[30];
+extern String8 rd_theme_preset_display_string_table[9];
+extern String8 rd_theme_preset_code_string_table[9];
+extern String8 rd_theme_color_version_remap_old_name_table[22];
+extern String8 rd_theme_color_version_remap_new_name_table[22];
+extern Vec4F32 rd_theme_preset_colors__default_dark[75];
+extern Vec4F32 rd_theme_preset_colors__default_light[75];
+extern Vec4F32 rd_theme_preset_colors__vs_dark[75];
+extern Vec4F32 rd_theme_preset_colors__vs_light[75];
+extern Vec4F32 rd_theme_preset_colors__solarized_dark[75];
+extern Vec4F32 rd_theme_preset_colors__solarized_light[75];
+extern Vec4F32 rd_theme_preset_colors__handmade_hero[75];
+extern Vec4F32 rd_theme_preset_colors__four_coder[75];
+extern Vec4F32 rd_theme_preset_colors__far_manager[75];
+extern Vec4F32* rd_theme_preset_colors_table[9];
+extern String8 rd_theme_color_display_string_table[75];
+extern String8 rd_theme_color_cfg_string_table[75];
+extern String8 rd_setting_code_display_string_table[19];
+extern String8 rd_setting_code_lower_string_table[19];
+extern B8 rd_setting_code_default_is_per_window_table[19];
+extern RD_SettingVal rd_setting_code_default_val_table[19];
+extern Rng1S32 rd_setting_code_s32_range_table[19];
+read_only global U8 rd_icon_font_bytes__data[] =
 {
 0x00,0x01,0x00,0x00,0x00,0x0f,0x00,0x80,0x00,0x03,0x00,0x70,0x47,0x53,0x55,0x42,0x20,0x8b,0x25,0x7a,0x00,0x00,0x00,0xfc,0x00,0x00,0x00,0x54,0x4f,0x53,0x2f,0x32,0x56,0x44,0x49,0xa0,0x00,0x00,0x01,0x50,0x00,0x00,0x00,0x60,0x63,0x6d,0x61,0x70,0x2a,0x09,0xe2,0xc2,0x00,0x00,0x01,0xb0,0x00,0x00,0x05,0xec,0x63,0x76,0x74,0x20,
 0x0e,0x5d,0x06,0x6d,0x00,0x00,0x53,0xc0,0x00,0x00,0x00,0x38,0x66,0x70,0x67,0x6d,0x62,0x31,0xfb,0x7b,0x00,0x00,0x53,0xf8,0x00,0x00,0x0e,0x0c,0x67,0x61,0x73,0x70,0x00,0x00,0x00,0x10,0x00,0x00,0x53,0xb8,0x00,0x00,0x00,0x08,0x67,0x6c,0x79,0x66,0x3f,0x82,0x6a,0x1b,0x00,0x00,0x07,0x9c,0x00,0x00,0x43,0x86,0x68,0x65,0x61,0x64,
@@ -1223,8 +1223,8 @@ read_only global U8 df_g_icon_font_bytes__data[] =
 0x00,0x01,0x04,0x40,0x88,0x63,0x54,0x58,0xb9,0x00,0x03,0x00,0x00,0x44,0x59,0x59,0x59,0x59,0x59,0xb3,0x10,0x06,0x01,0x0e,0x2a,0xb8,0x01,0xff,0x85,0xb0,0x04,0x8d,0xb1,0x02,0x00,0x44,0xb3,0x05,0x64,0x06,0x00,0x44,0x44,0x00,
 };
 
-read_only global String8 df_g_icon_font_bytes = {df_g_icon_font_bytes__data, sizeof(df_g_icon_font_bytes__data)};
-read_only global U8 df_g_default_main_font_bytes__data[] =
+read_only global String8 rd_icon_font_bytes = {rd_icon_font_bytes__data, sizeof(rd_icon_font_bytes__data)};
+read_only global U8 rd_default_main_font_bytes__data[] =
 {
 0x00,0x01,0x00,0x00,0x00,0x13,0x01,0x00,0x00,0x04,0x00,0x30,0x44,0x53,0x49,0x47,0x00,0x00,0x00,0x01,0x00,0x02,0x6b,0x84,0x00,0x00,0x00,0x08,0x47,0x44,0x45,0x46,0x18,0x60,0x18,0x61,0x00,0x00,0x01,0x3c,0x00,0x00,0x00,0x48,0x47,0x50,0x4f,0x53,0x15,0x2a,0x60,0x11,0x00,0x00,0x01,0x84,0x00,0x00,0x8b,0xa0,0x47,0x53,0x55,0x42,
 0xc8,0x26,0xca,0x04,0x00,0x00,0x8d,0x24,0x00,0x00,0x02,0x96,0x4f,0x53,0x2f,0x32,0xb8,0xa3,0x29,0xc5,0x00,0x00,0x8f,0xbc,0x00,0x00,0x00,0x60,0x63,0x6d,0x61,0x70,0x11,0xca,0x4e,0x34,0x00,0x00,0x90,0x1c,0x00,0x00,0x06,0xd6,0x63,0x76,0x74,0x20,0x07,0x19,0x19,0xc9,0x00,0x02,0x61,0xe4,0x00,0x00,0x00,0x26,0x66,0x70,0x67,0x6d,
@@ -3707,8 +3707,8 @@ read_only global U8 df_g_default_main_font_bytes__data[] =
 0x2b,0x00,0x00,0x00,0x00,0x00,0x00,0x01,0x00,0x00,0x00,0x00,
 };
 
-read_only global String8 df_g_default_main_font_bytes = {df_g_default_main_font_bytes__data, sizeof(df_g_default_main_font_bytes__data)};
-read_only global U8 df_g_default_code_font_bytes__data[] =
+read_only global String8 rd_default_main_font_bytes = {rd_default_main_font_bytes__data, sizeof(rd_default_main_font_bytes__data)};
+read_only global U8 rd_default_code_font_bytes__data[] =
 {
 0x00,0x01,0x00,0x00,0x00,0x10,0x01,0x00,0x00,0x04,0x00,0x00,0x46,0x46,0x54,0x4d,0x51,0x9f,0x15,0xb9,0x00,0x01,0xa6,0x6c,0x00,0x00,0x00,0x1c,0x47,0x44,0x45,0x46,0x02,0xd0,0x00,0x24,0x00,0x01,0xa6,0x44,0x00,0x00,0x00,0x28,0x4f,0x53,0x2f,0x32,0xf9,0x20,0x77,0x38,0x00,0x00,0x01,0x88,0x00,0x00,0x00,0x60,0x63,0x6d,0x61,0x70,
 0x56,0x8d,0x3a,0x45,0x00,0x00,0x07,0x34,0x00,0x00,0x06,0xd6,0x63,0x76,0x74,0x20,0x4d,0x16,0x5e,0xb5,0x00,0x00,0x19,0x80,0x00,0x00,0x02,0x3c,0x66,0x70,0x67,0x6d,0x73,0xd3,0x23,0xb0,0x00,0x00,0x0e,0x0c,0x00,0x00,0x07,0x05,0x67,0x61,0x73,0x70,0x00,0x18,0x00,0x09,0x00,0x01,0xa6,0x34,0x00,0x00,0x00,0x10,0x67,0x6c,0x79,0x66,
@@ -5403,8 +5403,8 @@ read_only global U8 df_g_default_code_font_bytes__data[] =
 0x00,0x00,0x00,0x00,0xca,0x9f,0x1d,0x63,
 };
 
-read_only global String8 df_g_default_code_font_bytes = {df_g_default_code_font_bytes__data, sizeof(df_g_default_code_font_bytes__data)};
-read_only global U8 df_g_icon_file_bytes__data[] =
+read_only global String8 rd_default_code_font_bytes = {rd_default_code_font_bytes__data, sizeof(rd_default_code_font_bytes__data)};
+read_only global U8 rd_icon_file_bytes__data[] =
 {
 0x00,0x00,0x01,0x00,0x01,0x00,0x00,0x00,0x00,0x00,0x01,0x00,0x20,0x00,0x02,0x1e,0x00,0x00,0x16,0x00,0x00,0x00,0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a,0x00,0x00,0x00,0x0d,0x49,0x48,0x44,0x52,0x00,0x00,0x01,0x00,0x00,0x00,0x01,0x00,0x08,0x06,0x00,0x00,0x00,0x5c,0x72,0xa8,0x66,0x00,0x00,0x1d,0xc9,0x49,0x44,0x41,0x54,0x78,
 0x9c,0xed,0xdd,0x7b,0x7c,0x14,0xe5,0xbd,0xc7,0xf1,0xcf,0x6e,0xb2,0x9b,0x04,0x12,0x20,0x10,0xae,0xe2,0x25,0x52,0x06,0x05,0xe5,0x12,0x14,0x6f,0xc7,0x56,0x99,0x5a,0xd4,0xaa,0xd5,0xda,0x8b,0xb7,0xa2,0x55,0x4f,0x6d,0x6b,0xab,0xb5,0xf6,0x72,0x7a,0xb1,0xb5,0x1e,0x41,0xce,0xd1,0xb6,0x5a,0x4f,0xeb,0xa9,0x56,0x8b,0x37,0xb4,0x5a,
@@ -5529,8 +5529,8 @@ read_only global U8 df_g_icon_file_bytes__data[] =
 0xd5,0x1b,0xff,0x0f,0x5c,0x56,0xd9,0x0b,0x64,0x90,0x3b,0x82,0x00,0x00,0x00,0x00,0x49,0x45,0x4e,0x44,0xae,0x42,0x60,0x82,
 };
 
-read_only global String8 df_g_icon_file_bytes = {df_g_icon_file_bytes__data, sizeof(df_g_icon_file_bytes__data)};
+read_only global String8 rd_icon_file_bytes = {rd_icon_file_bytes__data, sizeof(rd_icon_file_bytes__data)};
 
 C_LINKAGE_END
 
-#endif // DBG_FRONTEND_META_H
+#endif // RADDBG_META_H

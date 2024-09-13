@@ -78,8 +78,8 @@ main_thread_base_entry_point(void (*entry_point)(CmdLine *cmdline), char **argum
 #if defined(DBG_ENGINE_CORE_H) && !defined(D_INIT_MANUAL)
   d_init();
 #endif
-#if defined(DBG_FRONTEND_CORE_H) && !defined(DF_INIT_MANUAL)
-  df_init(&cmdline);
+#if defined(RADDBG_CORE_H) && !defined(RD_INIT_MANUAL)
+  rd_init(&cmdline);
 #endif
   
   //- rjf: call into entry point

@@ -951,7 +951,7 @@ d_lines_array_from_file_path_line_range(Arena *arena, String8 file_path, Rng1S64
   Temp scratch = scratch_begin(&arena, 1);
   DI_Scope *scope = di_scope_open();
   DI_KeyList dbgi_keys = d_push_active_dbgi_key_list(scratch.arena);
-  String8List overrides = d_possible_overrides_from_file_path(scratch.arena, file_path);
+  String8List overrides = rd_possible_overrides_from_file_path(scratch.arena, file_path);
   for(String8Node *override_n = overrides.first;
       override_n != 0;
       override_n = override_n->next)
@@ -1536,7 +1536,7 @@ d_init(void)
   d_state = push_array(arena, D_State, 1);
   d_state->arena = arena;
   d_state->cmds_arena = arena_alloc();
-  d_state->output_log_key = hs_hash_from_data(str8_lit("df_output_log_key"));
+  d_state->output_log_key = hs_hash_from_data(str8_lit("output_log_key"));
   d_state->ctrl_entity_store = ctrl_entity_store_alloc();
   d_state->ctrl_stop_arena = arena_alloc();
   d_state->view_rule_spec_table_size = 1024;
@@ -1632,16 +1632,16 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
           
           // rjf: kill all entities which are marked to die on stop
           {
-            DF_Entity *request = df_entity_from_id(event->msg_id);
-            if(df_entity_is_nil(request))
+            RD_Entity *request = rd_entity_from_id(event->msg_id);
+            if(rd_entity_is_nil(request))
             {
-              for(DF_Entity *entity = df_entity_root();
-                  !df_entity_is_nil(entity);
-                  entity = df_entity_rec_depth_first_pre(entity, df_entity_root()).next)
+              for(RD_Entity *entity = rd_entity_root();
+                  !rd_entity_is_nil(entity);
+                  entity = rd_entity_rec_depth_first_pre(entity, rd_entity_root()).next)
               {
-                if(entity->flags & DF_EntityFlag_DiesOnRunStop)
+                if(entity->flags & RD_EntityFlag_DiesOnRunStop)
                 {
-                  df_entity_mark_for_deletion(entity);
+                  rd_entity_mark_for_deletion(entity);
                 }
               }
             }
@@ -1685,8 +1685,8 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
             MTX_Op op = {r1u64(0, 0xffffffffffffffffull), str8_lit("[new session]\n")};
             mtx_push_op(d_state->output_log_key, op);
 #if 0 // TODO(rjf): @msgs
-            DF_EntityList bps = d_query_cached_entity_list_with_kind(DF_EntityKind_Breakpoint);
-            for(DF_EntityNode *n = bps.first; n != 0; n = n->next)
+            RD_EntityList bps = d_query_cached_entity_list_with_kind(RD_EntityKind_Breakpoint);
+            for(RD_EntityNode *n = bps.first; n != 0; n = n->next)
             {
               n->entity->u64 = 0;
             }
@@ -1694,39 +1694,39 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
           }
           
           // rjf: create entity
-          DF_Entity *machine = df_machine_entity_from_machine_id(event->entity.machine_id);
-          DF_Entity *entity = df_entity_alloc(machine, DF_EntityKind_Process);
-          df_entity_equip_u64(entity, event->msg_id);
-          df_entity_equip_ctrl_handle(entity, event->entity);
-          df_entity_equip_ctrl_id(entity, event->entity_id);
-          df_entity_equip_arch(entity, event->arch);
+          RD_Entity *machine = rd_machine_entity_from_machine_id(event->entity.machine_id);
+          RD_Entity *entity = rd_entity_alloc(machine, RD_EntityKind_Process);
+          rd_entity_equip_u64(entity, event->msg_id);
+          rd_entity_equip_ctrl_handle(entity, event->entity);
+          rd_entity_equip_ctrl_id(entity, event->entity_id);
+          rd_entity_equip_arch(entity, event->arch);
         }break;
         
         case CTRL_EventKind_NewThread:
         {
           // rjf: create entity
-          DF_Entity *parent = df_entity_from_ctrl_handle(event->parent);
-          DF_Entity *entity = df_entity_alloc(parent, DF_EntityKind_Thread);
-          df_entity_equip_ctrl_handle(entity, event->entity);
-          df_entity_equip_arch(entity, event->arch);
-          df_entity_equip_ctrl_id(entity, event->entity_id);
-          df_entity_equip_stack_base(entity, event->stack_base);
-          df_entity_equip_vaddr(entity, event->rip_vaddr);
+          RD_Entity *parent = rd_entity_from_ctrl_handle(event->parent);
+          RD_Entity *entity = rd_entity_alloc(parent, RD_EntityKind_Thread);
+          rd_entity_equip_ctrl_handle(entity, event->entity);
+          rd_entity_equip_arch(entity, event->arch);
+          rd_entity_equip_ctrl_id(entity, event->entity_id);
+          rd_entity_equip_stack_base(entity, event->stack_base);
+          rd_entity_equip_vaddr(entity, event->rip_vaddr);
           if(event->string.size != 0)
           {
-            df_entity_equip_name(entity, event->string);
+            rd_entity_equip_name(entity, event->string);
           }
           
           // rjf: find any pending thread names correllating with this TID -> equip name if found match
           {
-            DF_EntityList pending_thread_names = d_query_cached_entity_list_with_kind(DF_EntityKind_PendingThreadName);
-            for(DF_EntityNode *n = pending_thread_names.first; n != 0; n = n->next)
+            RD_EntityList pending_thread_names = d_query_cached_entity_list_with_kind(RD_EntityKind_PendingThreadName);
+            for(RD_EntityNode *n = pending_thread_names.first; n != 0; n = n->next)
             {
-              DF_Entity *pending_thread_name = n->entity;
+              RD_Entity *pending_thread_name = n->entity;
               if(event->entity.machine_id == pending_thread_name->ctrl_handle.machine_id && event->entity_id == pending_thread_name->ctrl_id)
               {
-                df_entity_mark_for_deletion(pending_thread_name);
-                df_entity_equip_name(entity, pending_thread_name->string);
+                rd_entity_mark_for_deletion(pending_thread_name);
+                rd_entity_equip_name(entity, pending_thread_name->string);
                 break;
               }
             }
@@ -1734,13 +1734,13 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
           
           // rjf: determine index in process
           U64 thread_idx_in_process = 0;
-          for(DF_Entity *child = parent->first; !df_entity_is_nil(child); child = child->next)
+          for(RD_Entity *child = parent->first; !rd_entity_is_nil(child); child = child->next)
           {
             if(child == entity)
             {
               break;
             }
-            if(child->kind == DF_EntityKind_Thread)
+            if(child->kind == RD_EntityKind_Thread)
             {
               thread_idx_in_process += 1;
             }
@@ -1749,63 +1749,63 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
           // rjf: build default thread color table
           Vec4F32 thread_colors[] =
           {
-            df_rgba_from_theme_color(DF_ThemeColor_Thread0),
-            df_rgba_from_theme_color(DF_ThemeColor_Thread1),
-            df_rgba_from_theme_color(DF_ThemeColor_Thread2),
-            df_rgba_from_theme_color(DF_ThemeColor_Thread3),
-            df_rgba_from_theme_color(DF_ThemeColor_Thread4),
-            df_rgba_from_theme_color(DF_ThemeColor_Thread5),
-            df_rgba_from_theme_color(DF_ThemeColor_Thread6),
-            df_rgba_from_theme_color(DF_ThemeColor_Thread7),
+            rd_rgba_from_theme_color(RD_ThemeColor_Thread0),
+            rd_rgba_from_theme_color(RD_ThemeColor_Thread1),
+            rd_rgba_from_theme_color(RD_ThemeColor_Thread2),
+            rd_rgba_from_theme_color(RD_ThemeColor_Thread3),
+            rd_rgba_from_theme_color(RD_ThemeColor_Thread4),
+            rd_rgba_from_theme_color(RD_ThemeColor_Thread5),
+            rd_rgba_from_theme_color(RD_ThemeColor_Thread6),
+            rd_rgba_from_theme_color(RD_ThemeColor_Thread7),
           };
           
           // rjf: pick color
           Vec4F32 thread_color = thread_colors[thread_idx_in_process % ArrayCount(thread_colors)];
           
           // rjf: equip color
-          df_entity_equip_color_rgba(entity, thread_color);
+          rd_entity_equip_color_rgba(entity, thread_color);
         }break;
         
         case CTRL_EventKind_NewModule:
         {
           // rjf: grab process
-          DF_Entity *parent = df_entity_from_ctrl_handle(event->parent);
+          RD_Entity *parent = rd_entity_from_ctrl_handle(event->parent);
           
           // rjf: determine if this is the first module
           B32 is_first = 0;
-          if(df_entity_is_nil(df_entity_child_from_kind(parent, DF_EntityKind_Module)))
+          if(rd_entity_is_nil(rd_entity_child_from_kind(parent, RD_EntityKind_Module)))
           {
             is_first = 1;
           }
           
           // rjf: create module entity
-          DF_Entity *module = df_entity_alloc(parent, DF_EntityKind_Module);
-          df_entity_equip_ctrl_handle(module, event->entity);
-          df_entity_equip_arch(module, event->arch);
-          df_entity_equip_name(module, event->string);
-          df_entity_equip_vaddr_rng(module, event->vaddr_rng);
-          df_entity_equip_vaddr(module, event->rip_vaddr);
-          df_entity_equip_timestamp(module, event->timestamp);
+          RD_Entity *module = rd_entity_alloc(parent, RD_EntityKind_Module);
+          rd_entity_equip_ctrl_handle(module, event->entity);
+          rd_entity_equip_arch(module, event->arch);
+          rd_entity_equip_name(module, event->string);
+          rd_entity_equip_vaddr_rng(module, event->vaddr_rng);
+          rd_entity_equip_vaddr(module, event->rip_vaddr);
+          rd_entity_equip_timestamp(module, event->timestamp);
           
           // rjf: is first -> find target, equip process & module & first thread with target color
           if(is_first)
           {
-            DF_EntityList targets = d_query_cached_entity_list_with_kind(DF_EntityKind_Target);
-            for(DF_EntityNode *n = targets.first; n != 0; n = n->next)
+            RD_EntityList targets = d_query_cached_entity_list_with_kind(RD_EntityKind_Target);
+            for(RD_EntityNode *n = targets.first; n != 0; n = n->next)
             {
-              DF_Entity *target = n->entity;
-              DF_Entity *exe = df_entity_child_from_kind(target, DF_EntityKind_Executable);
+              RD_Entity *target = n->entity;
+              RD_Entity *exe = rd_entity_child_from_kind(target, RD_EntityKind_Executable);
               String8 exe_name = exe->string;
               String8 exe_name_normalized = path_normalized_from_string(scratch.arena, exe_name);
               String8 module_name_normalized = path_normalized_from_string(scratch.arena, module->string);
               if(str8_match(exe_name_normalized, module_name_normalized, StringMatchFlag_CaseInsensitive) &&
-                 target->flags & DF_EntityFlag_HasColor)
+                 target->flags & RD_EntityFlag_HasColor)
               {
-                DF_Entity *first_thread = df_entity_child_from_kind(parent, DF_EntityKind_Thread);
-                Vec4F32 rgba = df_rgba_from_entity(target);
-                df_entity_equip_color_rgba(parent, rgba);
-                df_entity_equip_color_rgba(first_thread, rgba);
-                df_entity_equip_color_rgba(module, rgba);
+                RD_Entity *first_thread = rd_entity_child_from_kind(parent, RD_EntityKind_Thread);
+                Vec4F32 rgba = rd_rgba_from_entity(target);
+                rd_entity_equip_color_rgba(parent, rgba);
+                rd_entity_equip_color_rgba(first_thread, rgba);
+                rd_entity_equip_color_rgba(module, rgba);
                 break;
               }
             }
@@ -1815,34 +1815,34 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
         case CTRL_EventKind_EndProc:
         {
           U32 pid = event->entity_id;
-          DF_Entity *process = df_entity_from_ctrl_handle(event->entity);
-          df_entity_mark_for_deletion(process);
+          RD_Entity *process = rd_entity_from_ctrl_handle(event->entity);
+          rd_entity_mark_for_deletion(process);
         }break;
         
         case CTRL_EventKind_EndThread:
         {
-          DF_Entity *thread = df_entity_from_ctrl_handle(event->entity);
-          df_entity_mark_for_deletion(thread);
+          RD_Entity *thread = rd_entity_from_ctrl_handle(event->entity);
+          rd_entity_mark_for_deletion(thread);
         }break;
         
         case CTRL_EventKind_EndModule:
         {
-          DF_Entity *module = df_entity_from_ctrl_handle(event->entity);
-          df_entity_mark_for_deletion(module);
+          RD_Entity *module = rd_entity_from_ctrl_handle(event->entity);
+          rd_entity_mark_for_deletion(module);
         }break;
         
         //- rjf: debug info changes
         
         case CTRL_EventKind_ModuleDebugInfoPathChange:
         {
-          DF_Entity *module = df_entity_from_ctrl_handle(event->entity);
-          DF_Entity *debug_info = df_entity_child_from_kind(module, DF_EntityKind_DebugInfoPath);
-          if(df_entity_is_nil(debug_info))
+          RD_Entity *module = rd_entity_from_ctrl_handle(event->entity);
+          RD_Entity *debug_info = rd_entity_child_from_kind(module, RD_EntityKind_DebugInfoPath);
+          if(rd_entity_is_nil(debug_info))
           {
-            debug_info = df_entity_alloc(module, DF_EntityKind_DebugInfoPath);
+            debug_info = rd_entity_alloc(module, RD_EntityKind_DebugInfoPath);
           }
-          df_entity_equip_name(debug_info, event->string);
-          df_entity_equip_timestamp(debug_info, event->timestamp);
+          rd_entity_equip_name(debug_info, event->string);
+          rd_entity_equip_timestamp(debug_info, event->timestamp);
         }break;
         
         //- rjf: debug strings
@@ -1856,25 +1856,25 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
         case CTRL_EventKind_ThreadName:
         {
           String8 string = event->string;
-          DF_Entity *entity = df_entity_from_ctrl_handle(event->entity);
+          RD_Entity *entity = rd_entity_from_ctrl_handle(event->entity);
           if(event->entity_id != 0)
           {
-            entity = df_entity_from_ctrl_id(event->entity.machine_id, event->entity_id);
+            entity = rd_entity_from_ctrl_id(event->entity.machine_id, event->entity_id);
           }
-          if(df_entity_is_nil(entity))
+          if(rd_entity_is_nil(entity))
           {
-            DF_Entity *process = df_entity_from_ctrl_handle(event->parent);
-            if(!df_entity_is_nil(process))
+            RD_Entity *process = rd_entity_from_ctrl_handle(event->parent);
+            if(!rd_entity_is_nil(process))
             {
-              entity = df_entity_alloc(process, DF_EntityKind_PendingThreadName);
-              df_entity_equip_name(entity, string);
-              df_entity_equip_ctrl_handle(entity, ctrl_handle_make(event->entity.machine_id, dmn_handle_zero()));
-              df_entity_equip_ctrl_id(entity, event->entity_id);
+              entity = rd_entity_alloc(process, RD_EntityKind_PendingThreadName);
+              rd_entity_equip_name(entity, string);
+              rd_entity_equip_ctrl_handle(entity, ctrl_handle_make(event->entity.machine_id, dmn_handle_zero()));
+              rd_entity_equip_ctrl_id(entity, event->entity_id);
             }
           }
-          if(!df_entity_is_nil(entity))
+          if(!rd_entity_is_nil(entity))
           {
-            df_entity_equip_name(entity, string);
+            rd_entity_equip_name(entity, string);
           }
         }break;
         
@@ -2000,15 +2000,15 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
         default:{}break;
         case DI_EventKind_ConversionStarted:
         {
-          DF_Entity *task = df_entity_alloc(df_entity_root(), DF_EntityKind_ConversionTask);
-          df_entity_equip_name(task, event->string);
+          RD_Entity *task = rd_entity_alloc(rd_entity_root(), RD_EntityKind_ConversionTask);
+          rd_entity_equip_name(task, event->string);
         }break;
         case DI_EventKind_ConversionEnded:
         {
-          DF_Entity *task = df_entity_from_name_and_kind(event->string, DF_EntityKind_ConversionTask);
-          if(!df_entity_is_nil(task))
+          RD_Entity *task = rd_entity_from_name_and_kind(event->string, RD_EntityKind_ConversionTask);
+          if(!rd_entity_is_nil(task))
           {
-            df_entity_mark_for_deletion(task);
+            rd_entity_mark_for_deletion(task);
           }
         }break;
       }
@@ -2355,22 +2355,22 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
           
 #if 0 // TODO(rjf): @msgs
           // rjf: gather targets corresponding to all launched processes
-          DF_EntityList targets = {0};
+          RD_EntityList targets = {0};
           {
-            DF_EntityList processes = d_query_cached_entity_list_with_kind(DF_EntityKind_Process);
-            for(DF_EntityNode *n = processes.first; n != 0; n = n->next)
+            RD_EntityList processes = d_query_cached_entity_list_with_kind(RD_EntityKind_Process);
+            for(RD_EntityNode *n = processes.first; n != 0; n = n->next)
             {
-              DF_Entity *process = n->entity;
-              DF_Entity *target = df_entity_from_handle(process->entity_handle);
-              if(!df_entity_is_nil(target))
+              RD_Entity *process = n->entity;
+              RD_Entity *target = rd_entity_from_handle(process->entity_handle);
+              if(!rd_entity_is_nil(target))
               {
-                df_entity_list_push(scratch.arena, &targets, target);
+                rd_entity_list_push(scratch.arena, &targets, target);
               }
             }
           }
           
           // rjf: re-launch targets
-          d_cmd(D_CmdKind_LaunchAndRun, .entity_list = df_handle_list_from_entity_list(scratch.arena, targets));
+          d_cmd(D_CmdKind_LaunchAndRun, .entity_list = rd_handle_list_from_entity_list(scratch.arena, targets));
 #endif
         }break;
         case D_CmdKind_StepInto:
