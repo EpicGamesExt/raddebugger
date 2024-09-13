@@ -553,18 +553,15 @@ df_queue_drag_drop(void)
 }
 
 internal void
-df_set_rich_hover_info(DF_RichHoverInfo *info)
+df_set_hover_regs(void)
 {
-  arena_clear(df_state->rich_hover_info_next_arena);
-  MemoryCopyStruct(&df_state->rich_hover_info_next, info);
-  df_state->rich_hover_info_next.dbgi_key = di_key_copy(df_state->rich_hover_info_next_arena, &info->dbgi_key);
+  df_state->next_hover_regs = df_regs_copy(df_frame_arena(), df_regs());
 }
 
-internal DF_RichHoverInfo
-df_get_rich_hover_info(void)
+internal DF_Regs *
+df_get_hover_regs(void)
 {
-  DF_RichHoverInfo info = df_state->rich_hover_info_current;
-  return info;
+  return df_state->hover_regs;
 }
 
 ////////////////////////////////
@@ -7636,8 +7633,6 @@ df_init(CmdLine *cmdln)
   df_state->eval_viz_view_cache_slots = push_array(arena, DF_EvalVizViewCacheSlot, df_state->eval_viz_view_cache_slots_count);
   df_state->cfg_main_font_path_arena = arena_alloc();
   df_state->cfg_code_font_path_arena = arena_alloc();
-  df_state->rich_hover_info_next_arena = arena_alloc();
-  df_state->rich_hover_info_current_arena = arena_alloc();
   df_state->bind_change_arena = arena_alloc();
   df_state->top_regs = &df_state->base_regs;
   df_clear_bindings();
@@ -7785,6 +7780,15 @@ df_frame(void)
   arena_clear(df_frame_arena());
   df_state->top_regs = &df_state->base_regs;
   df_regs_copy_contents(df_frame_arena(), &df_state->top_regs->v, &df_state->top_regs->v);
+  if(df_state->next_hover_regs != 0)
+  {
+    df_state->hover_regs = df_regs_copy(df_frame_arena(), df_state->next_hover_regs);
+    df_state->next_hover_regs = 0;
+  }
+  else
+  {
+    df_state->hover_regs = push_array(df_frame_arena(), DF_Regs, 1);
+  }
   
   //////////////////////////////
   //- rjf: get events from the OS
@@ -12271,15 +12275,6 @@ df_frame(void)
       }break;
     }
   }
-  
-  //////////////////////////////
-  //- rjf: apply new rich hover info
-  //
-  arena_clear(df_state->rich_hover_info_current_arena);
-  MemoryCopyStruct(&df_state->rich_hover_info_current, &df_state->rich_hover_info_next);
-  df_state->rich_hover_info_current.dbgi_key = di_key_copy(df_state->rich_hover_info_current_arena, &df_state->rich_hover_info_current.dbgi_key);
-  arena_clear(df_state->rich_hover_info_next_arena);
-  MemoryZeroStruct(&df_state->rich_hover_info_next);
   
   //////////////////////////////
   //- rjf: animate confirmation

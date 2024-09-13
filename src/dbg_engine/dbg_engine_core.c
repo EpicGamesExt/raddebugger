@@ -1977,78 +1977,6 @@ d_trap_net_from_thread__step_into_line(Arena *arena, CTRL_Entity *thread)
 ////////////////////////////////
 //~ rjf: Modules & Debug Info Mappings
 
-//- rjf: module <=> debug info keys
-
-internal DI_Key
-d_dbgi_key_from_module(D_Entity *module)
-{
-  D_Entity *debug_info_path = d_entity_child_from_kind(module, D_EntityKind_DebugInfoPath);
-  DI_Key key = {debug_info_path->string, debug_info_path->timestamp};
-  return key;
-}
-
-internal D_EntityList
-d_modules_from_dbgi_key(Arena *arena, DI_Key *dbgi_key)
-{
-  D_EntityList list = {0};
-  D_EntityList all_modules = d_query_cached_entity_list_with_kind(D_EntityKind_Module);
-  for(D_EntityNode *n = all_modules.first; n != 0; n = n->next)
-  {
-    D_Entity *module = n->entity;
-    DI_Key module_dbgi_key = d_dbgi_key_from_module(module);
-    if(di_key_match(&module_dbgi_key, dbgi_key))
-    {
-      d_entity_list_push(arena, &list, module);
-    }
-  }
-  return list;
-}
-
-//- rjf: voff <=> vaddr
-
-internal U64
-d_base_vaddr_from_module(D_Entity *module)
-{
-  U64 module_base_vaddr = module->vaddr;
-  return module_base_vaddr;
-}
-
-internal U64
-d_voff_from_vaddr(D_Entity *module, U64 vaddr)
-{
-  U64 module_base_vaddr = d_base_vaddr_from_module(module);
-  U64 voff = vaddr - module_base_vaddr;
-  return voff;
-}
-
-internal U64
-d_vaddr_from_voff(D_Entity *module, U64 voff)
-{
-  U64 module_base_vaddr = d_base_vaddr_from_module(module);
-  U64 vaddr = voff + module_base_vaddr;
-  return vaddr;
-}
-
-internal Rng1U64
-d_voff_range_from_vaddr_range(D_Entity *module, Rng1U64 vaddr_rng)
-{
-  U64 rng_size = dim_1u64(vaddr_rng);
-  Rng1U64 voff_rng = {0};
-  voff_rng.min = d_voff_from_vaddr(module, vaddr_rng.min);
-  voff_rng.max = voff_rng.min + rng_size;
-  return voff_rng;
-}
-
-internal Rng1U64
-d_vaddr_range_from_voff_range(D_Entity *module, Rng1U64 voff_rng)
-{
-  U64 rng_size = dim_1u64(voff_rng);
-  Rng1U64 vaddr_rng = {0};
-  vaddr_rng.min = d_vaddr_from_voff(module, voff_rng.min);
-  vaddr_rng.max = vaddr_rng.min + rng_size;
-  return vaddr_rng;
-}
-
 ////////////////////////////////
 //~ rjf: Debug Info Lookups
 
@@ -3478,11 +3406,11 @@ internal DI_KeyList
 d_push_active_dbgi_key_list(Arena *arena)
 {
   DI_KeyList dbgis = {0};
-  D_EntityList modules = d_query_cached_entity_list_with_kind(D_EntityKind_Module);
-  for(D_EntityNode *n = modules.first; n != 0; n = n->next)
+  CTRL_EntityList modules = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Module);
+  for(CTRL_EntityNode *n = modules.first; n != 0; n = n->next)
   {
-    D_Entity *module = n->entity;
-    DI_Key key = d_dbgi_key_from_module(module);
+    CTRL_Entity *module = n->v;
+    DI_Key key = ctrl_dbgi_key_from_module(module);
     di_key_list_push(arena, &dbgis, &key);
   }
   return dbgis;

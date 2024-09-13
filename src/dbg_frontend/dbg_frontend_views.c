@@ -5759,6 +5759,7 @@ DF_VIEW_UI_FUNCTION_DEF(call_stack)
 ////////////////////////////////
 //~ rjf: modules @view_hook_impl
 
+#if 0 // TODO(rjf): @msgs
 typedef struct DF_ModulesViewState DF_ModulesViewState;
 struct DF_ModulesViewState
 {
@@ -5776,9 +5777,11 @@ struct DF_ModulesViewState
   F32 range_col_pct;
   F32 dbg_col_pct;
 };
+#endif
 
 DF_VIEW_SETUP_FUNCTION_DEF(modules)
 {
+#if 0 // TODO(rjf): @msgs
   DF_ModulesViewState *mv = df_view_user_state(view, DF_ModulesViewState);
   if(mv->initialized == 0)
   {
@@ -5788,10 +5791,12 @@ DF_VIEW_SETUP_FUNCTION_DEF(modules)
     mv->range_col_pct = 0.30f;
     mv->dbg_col_pct   = 0.50f;
   }
+#endif
 }
 
 DF_VIEW_CMD_FUNCTION_DEF(modules)
 {
+#if 0 // TODO(rjf): @msgs
   DF_ModulesViewState *mv = df_view_user_state(view, DF_ModulesViewState);
   for(DF_Cmd *cmd = 0; df_next_cmd(&cmd);)
   {
@@ -5822,10 +5827,12 @@ DF_VIEW_CMD_FUNCTION_DEF(modules)
       }break;
     }
   }
+#endif
 }
 
 DF_VIEW_UI_FUNCTION_DEF(modules)
 {
+#if 0 // TODO(rjf): @msgs
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   DI_Scope *scope = di_scope_open();
@@ -6090,6 +6097,7 @@ DF_VIEW_UI_FUNCTION_DEF(modules)
   di_scope_close(scope);
   scratch_end(scratch);
   ProfEnd();
+#endif
 }
 
 ////////////////////////////////

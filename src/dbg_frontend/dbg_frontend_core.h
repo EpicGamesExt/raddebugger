@@ -308,6 +308,7 @@ struct DF_DragDropPayload
 ////////////////////////////////
 //~ rjf: Rich Hover Types
 
+#if 0 // TODO(rjf): @msgs
 typedef struct DF_RichHoverInfo DF_RichHoverInfo;
 struct DF_RichHoverInfo
 {
@@ -317,6 +318,7 @@ struct DF_RichHoverInfo
   Rng1U64 voff_range;
   DI_Key dbgi_key;
 };
+#endif
 
 ////////////////////////////////
 //~ rjf: View Rule Spec Types
@@ -761,10 +763,8 @@ struct DF_State
   DF_DragDropState drag_drop_state;
   
   // rjf: rich hover info
-  Arena *rich_hover_info_next_arena;
-  Arena *rich_hover_info_current_arena;
-  DF_RichHoverInfo rich_hover_info_next;
-  DF_RichHoverInfo rich_hover_info_current;
+  DF_Regs *hover_regs;
+  DF_Regs *next_hover_regs;
   
   // rjf: config reading state
   Arena *cfg_path_arenas[D_CfgSrc_COUNT];
@@ -922,8 +922,8 @@ internal B32 df_drag_drop(DF_DragDropPayload *out_payload);
 internal void df_drag_kill(void);
 internal void df_queue_drag_drop(void);
 
-internal void df_set_rich_hover_info(DF_RichHoverInfo *info);
-internal DF_RichHoverInfo df_get_rich_hover_info(void);
+internal void df_set_hover_regs(void);
+internal DF_Regs *df_get_hover_regs(void);
 
 ////////////////////////////////
 //~ rjf: View Spec State Functions

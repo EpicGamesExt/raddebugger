@@ -950,20 +950,6 @@ internal CTRL_TrapList d_trap_net_from_thread__step_over_line(Arena *arena, CTRL
 internal CTRL_TrapList d_trap_net_from_thread__step_into_line(Arena *arena, CTRL_Entity *thread);
 
 ////////////////////////////////
-//~ rjf: Modules & Debug Info Mappings
-
-//- rjf: module <=> debug info keys
-internal DI_Key d_dbgi_key_from_module(D_Entity *module);
-internal D_EntityList d_modules_from_dbgi_key(Arena *arena, DI_Key *dbgi_key);
-
-//- rjf: voff <=> vaddr
-internal U64 d_base_vaddr_from_module(D_Entity *module);
-internal U64 d_voff_from_vaddr(D_Entity *module, U64 vaddr);
-internal U64 d_vaddr_from_voff(D_Entity *module, U64 voff);
-internal Rng1U64 d_voff_range_from_vaddr_range(D_Entity *module, Rng1U64 vaddr_rng);
-internal Rng1U64 d_vaddr_range_from_voff_range(D_Entity *module, Rng1U64 voff_rng);
-
-////////////////////////////////
 //~ rjf: Debug Info Lookups
 
 //- rjf: voff|vaddr -> symbol lookups

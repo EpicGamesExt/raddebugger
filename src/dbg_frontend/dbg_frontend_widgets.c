@@ -1963,23 +1963,22 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   //////////////////////////////
   //- rjf: mouse -> set global frontend hovered line info
   //
-#if 0 // TODO(rjf): @msgs
   if(ui_hovering(text_container_sig) && contains_1s64(params->line_num_range, mouse_pt.line) && (ui_mouse().x - text_container_box->rect.x0 < params->line_num_width_px + line_num_padding_px))
   {
     U64 line_slice_idx = mouse_pt.line-params->line_num_range.min;
     D_LineList *lines = &params->line_infos[line_slice_idx];
     if(lines->first != 0 && (df_regs()->file_path.size == 0 || lines->first->v.pt.line == mouse_pt.line))
     {
-      DF_RichHoverInfo info = {0};
-      info.process      = d_handle_from_entity(selected_thread_process);
-      info.vaddr_range  = d_vaddr_range_from_voff_range(selected_thread_module, lines->first->v.voff_range);
-      info.module       = d_handle_from_entity(selected_thread_module);
-      info.dbgi_key     = lines->first->v.dbgi_key;
-      info.voff_range   = lines->first->v.voff_range;
-      df_set_rich_hover_info(&info);
+      DF_RegsScope(.process     = selected_thread_process->handle,
+                   .vaddr_range = ctrl_vaddr_range_from_voff_range(selected_thread_module, lines->first->v.voff_range),
+                   .module      = selected_thread_module->handle,
+                   .dbgi_key    = lines->first->v.dbgi_key,
+                   .voff_range  = lines->first->v.voff_range)
+      {
+        df_set_hover_regs();
+      }
     }
   }
-#endif
   
   //////////////////////////////
   //- rjf: hover eval
@@ -2069,12 +2068,12 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   //
   UI_Parent(text_container_box) ProfScope("build line text") UI_Focus(UI_FocusKind_Off)
   {
-    DF_RichHoverInfo rich_hover = df_get_rich_hover_info();
-    Rng1U64 rich_hover_voff_range = rich_hover.voff_range;
-    if(rich_hover_voff_range.min == 0 && rich_hover_voff_range.max == 0)
+    DF_Regs *hover_regs = df_get_hover_regs();
+    Rng1U64 hover_voff_range = hover_regs->voff_range;
+    if(hover_voff_range.min == 0 && hover_voff_range.max == 0)
     {
-      D_Entity *module = d_entity_from_handle(rich_hover.module);
-      rich_hover_voff_range = d_voff_range_from_vaddr_range(module, rich_hover.vaddr_range);
+      CTRL_Entity *module = ctrl_entity_from_handle(d_state->ctrl_entity_store, hover_regs->module);
+      hover_voff_range = ctrl_voff_range_from_vaddr_range(module, hover_regs->vaddr_range);
     }
     ui_set_next_pref_height(ui_px(params->line_height_px*(dim_1s64(params->line_num_range)+1), 1.f));
     UI_WidthFill
@@ -2359,9 +2358,9 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
           for(D_LineNode *n = lines->first; n != 0; n = n->next)
           {
             if((n->v.pt.line == line_num || df_regs()->file_path.size == 0) &&
-               ((di_key_match(&n->v.dbgi_key, &rich_hover.dbgi_key) &&
-                 n->v.voff_range.min <= rich_hover_voff_range.min && rich_hover_voff_range.min < n->v.voff_range.max) ||
-                (params->line_vaddrs[line_idx] == rich_hover.vaddr_range.min && rich_hover.vaddr_range.min != 0)))
+               ((di_key_match(&n->v.dbgi_key, &hover_regs->dbgi_key) &&
+                 n->v.voff_range.min <= hover_voff_range.min && hover_voff_range.min < n->v.voff_range.max) ||
+                (params->line_vaddrs[line_idx] == hover_regs->vaddr_range.min && hover_regs->vaddr_range.min != 0)))
             {
               matches = 1;
               line_info_line_num = n->v.pt.line;
