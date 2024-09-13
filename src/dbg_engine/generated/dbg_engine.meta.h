@@ -50,40 +50,6 @@ D_EntityKind_ConversionFail,
 D_EntityKind_COUNT,
 } D_EntityKind;
 
-typedef enum D_RegSlot
-{
-D_RegSlot_Null,
-D_RegSlot_Machine,
-D_RegSlot_Module,
-D_RegSlot_Process,
-D_RegSlot_Thread,
-D_RegSlot_Window,
-D_RegSlot_Panel,
-D_RegSlot_View,
-D_RegSlot_PrevView,
-D_RegSlot_DstPanel,
-D_RegSlot_Entity,
-D_RegSlot_EntityList,
-D_RegSlot_UnwindCount,
-D_RegSlot_InlineDepth,
-D_RegSlot_FilePath,
-D_RegSlot_Cursor,
-D_RegSlot_Mark,
-D_RegSlot_TextKey,
-D_RegSlot_LangKind,
-D_RegSlot_Lines,
-D_RegSlot_DbgiKey,
-D_RegSlot_VaddrRange,
-D_RegSlot_VoffRange,
-D_RegSlot_PID,
-D_RegSlot_ForceConfirm,
-D_RegSlot_PreferDisasm,
-D_RegSlot_Dir2,
-D_RegSlot_String,
-D_RegSlot_ParamsTree,
-D_RegSlot_COUNT,
-} D_RegSlot;
-
 typedef enum D_CmdKind
 {
 D_CmdKind_Null,
@@ -147,69 +113,6 @@ D_ViewRuleKind_Geo3D,
 D_ViewRuleKind_COUNT,
 } D_ViewRuleKind;
 
-typedef struct D_Regs D_Regs;
-struct D_Regs
-{
-D_Handle machine;
-D_Handle module;
-D_Handle process;
-D_Handle thread;
-D_Handle window;
-D_Handle panel;
-D_Handle view;
-D_Handle prev_view;
-D_Handle dst_panel;
-D_Handle entity;
-D_HandleList entity_list;
-U64 unwind_count;
-U64 inline_depth;
-String8 file_path;
-TxtPt cursor;
-TxtPt mark;
-U128 text_key;
-TXT_LangKind lang_kind;
-D_LineList lines;
-DI_Key dbgi_key;
-Rng1U64 vaddr_range;
-Rng1U64 voff_range;
-U32 pid;
-B32 force_confirm;
-B32 prefer_disasm;
-Dir2 dir2;
-String8 string;
-MD_Node * params_tree;
-};
-
-#define d_regs_lit_init_top \
-.machine = d_regs()->machine,\
-.module = d_regs()->module,\
-.process = d_regs()->process,\
-.thread = d_regs()->thread,\
-.window = d_regs()->window,\
-.panel = d_regs()->panel,\
-.view = d_regs()->view,\
-.prev_view = d_regs()->prev_view,\
-.dst_panel = d_regs()->dst_panel,\
-.entity = d_regs()->entity,\
-.entity_list = d_regs()->entity_list,\
-.unwind_count = d_regs()->unwind_count,\
-.inline_depth = d_regs()->inline_depth,\
-.file_path = d_regs()->file_path,\
-.cursor = d_regs()->cursor,\
-.mark = d_regs()->mark,\
-.text_key = d_regs()->text_key,\
-.lang_kind = d_regs()->lang_kind,\
-.lines = d_regs()->lines,\
-.dbgi_key = d_regs()->dbgi_key,\
-.vaddr_range = d_regs()->vaddr_range,\
-.voff_range = d_regs()->voff_range,\
-.pid = d_regs()->pid,\
-.force_confirm = d_regs()->force_confirm,\
-.prefer_disasm = d_regs()->prefer_disasm,\
-.dir2 = d_regs()->dir2,\
-.string = d_regs()->string,\
-.params_tree = d_regs()->params_tree,\
-
 global B32 DEV_telemetry_capture = 0;
 global B32 DEV_simulate_lag = 0;
 global B32 DEV_draw_ui_text_pos = 0;
@@ -240,7 +143,6 @@ extern String8 d_entity_kind_name_lower_table[30];
 extern String8 d_entity_kind_name_lower_plural_table[30];
 extern String8 d_entity_kind_name_label_table[30];
 extern D_EntityKindFlags d_entity_kind_flags_table[30];
-extern Rng1U64 d_reg_slot_range_table[29];
 
 C_LINKAGE_END
 

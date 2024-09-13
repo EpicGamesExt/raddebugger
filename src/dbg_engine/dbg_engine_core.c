@@ -89,33 +89,6 @@ d_handle_list_copy(Arena *arena, D_HandleList list)
 }
 
 ////////////////////////////////
-//~ rjf: Registers Type Pure Functions
-
-internal void
-d_regs_copy_contents(Arena *arena, D_Regs *dst, D_Regs *src)
-{
-  MemoryCopyStruct(dst, src);
-  dst->entity_list = d_handle_list_copy(arena, src->entity_list);
-  dst->file_path   = push_str8_copy(arena, src->file_path);
-  dst->lines       = d_line_list_copy(arena, &src->lines);
-  dst->dbgi_key    = di_key_copy(arena, &src->dbgi_key);
-  dst->string      = push_str8_copy(arena, src->string);
-  dst->params_tree = md_tree_copy(arena, src->params_tree);
-  if(dst->entity_list.count == 0 && !d_handle_match(d_handle_zero(), dst->entity))
-  {
-    d_handle_list_push(arena, &dst->entity_list, dst->entity);
-  }
-}
-
-internal D_Regs *
-d_regs_copy(Arena *arena, D_Regs *src)
-{
-  D_Regs *dst = push_array(arena, D_Regs, 1);
-  d_regs_copy_contents(arena, dst, src);
-  return dst;
-}
-
-////////////////////////////////
 //~ rjf: Config Type Functions
 
 internal void
@@ -735,16 +708,16 @@ d_search_tags_from_entity(Arena *arena, D_Entity *entity)
   {
     Temp scratch = scratch_begin(&arena, 1);
     CTRL_Entity *entity_ctrl = ctrl_entity_from_handle(d_state->ctrl_entity_store, entity->ctrl_handle);
-    D_Entity *process = d_entity_ancestor_from_kind(entity, D_EntityKind_Process);
+    CTRL_Entity *process = ctrl_entity_ancestor_from_kind(entity_ctrl, D_EntityKind_Process);
     CTRL_Unwind unwind = d_query_cached_unwind_from_thread(entity_ctrl);
     String8List strings = {0};
     for(U64 frame_num = unwind.frames.count; frame_num > 0; frame_num -= 1)
     {
       CTRL_UnwindFrame *f = &unwind.frames.v[frame_num-1];
       U64 rip_vaddr = regs_rip_from_arch_block(entity->arch, f->regs);
-      D_Entity *module = d_module_from_process_vaddr(process, rip_vaddr);
-      U64 rip_voff = d_voff_from_vaddr(module, rip_vaddr);
-      DI_Key dbgi_key = d_dbgi_key_from_module(module);
+      CTRL_Entity *module = ctrl_module_from_process_vaddr(process, rip_vaddr);
+      U64 rip_voff = ctrl_voff_from_vaddr(module, rip_vaddr);
+      DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
       String8 procedure_name = d_symbol_name_from_dbgi_key_voff(scratch.arena, &dbgi_key, rip_voff, 0);
       if(procedure_name.size != 0)
       {
@@ -2469,6 +2442,7 @@ d_lines_from_file_path_line_num(Arena *arena, String8 file_path, S64 line_num)
 ////////////////////////////////
 //~ rjf: Process/Thread/Module Info Lookups
 
+#if 0 // TODO(rjf): @msgs
 internal D_Entity *
 d_module_from_process_vaddr(D_Entity *process, U64 vaddr)
 {
@@ -2484,7 +2458,6 @@ d_module_from_process_vaddr(D_Entity *process, U64 vaddr)
   return module;
 }
 
-#if 0 // TODO(rjf): @msgs
 internal D_Entity *
 d_module_from_thread(D_Entity *thread)
 {
@@ -2577,11 +2550,13 @@ d_tls_base_vaddr_from_process_root_rip(CTRL_Entity *process, U64 root_vaddr, U64
   return base_vaddr;
 }
 
+#if 0 // TODO(rjf): @msgs
 internal Arch
 d_arch_from_entity(D_Entity *entity)
 {
   return entity->arch;
 }
+#endif
 
 internal E_String2NumMap *
 d_push_locals_map_from_dbgi_key_voff(Arena *arena, DI_Scope *scope, DI_Key *dbgi_key, U64 voff)
@@ -3217,44 +3192,6 @@ d_frame_arena(void)
   return d_state->frame_arenas[d_state->frame_index%ArrayCount(d_state->frame_arenas)];
 }
 
-//- rjf: interaction registers
-
-internal D_Regs *
-d_regs(void)
-{
-  D_Regs *regs = &d_state->top_regs->v;
-  return regs;
-}
-
-internal D_Regs *
-d_base_regs(void)
-{
-  D_Regs *regs = &d_state->base_regs.v;
-  return regs;
-}
-
-internal D_Regs *
-d_push_regs(void)
-{
-  D_Regs *top = d_regs();
-  D_RegsNode *n = push_array(d_frame_arena(), D_RegsNode, 1);
-  MemoryCopyStruct(&n->v, top);
-  SLLStackPush(d_state->top_regs, n);
-  return &n->v;
-}
-
-internal D_Regs *
-d_pop_regs(void)
-{
-  D_Regs *regs = &d_state->top_regs->v;
-  SLLStackPop(d_state->top_regs);
-  if(d_state->top_regs == 0)
-  {
-    d_state->top_regs = &d_state->base_regs;
-  }
-  return regs;
-}
-
 //- rjf: control state
 
 internal D_RunKind
@@ -3883,7 +3820,6 @@ d_init(void)
   d_state->entities_root = d_entity_alloc(&d_nil_entity, D_EntityKind_Root);
   d_state->view_rule_spec_table_size = 1024;
   d_state->view_rule_spec_table = push_array(arena, D_ViewRuleSpec *, d_state->view_rule_spec_table_size);
-  d_state->top_regs = &d_state->base_regs;
   d_state->ctrl_msg_arena = arena_alloc();
   
   // rjf: set up initial exception filtering rules
@@ -3937,8 +3873,6 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints)
   d_state->frame_index += 1;
   arena_clear(d_frame_arena());
   d_state->frame_eval_memread_endt_us = os_now_microseconds() + 5000;
-  d_state->top_regs = &d_state->base_regs;
-  d_regs_copy_contents(d_frame_arena(), &d_state->top_regs->v, &d_state->top_regs->v);
   B32 ctrl_running_pre_tick = d_state->ctrl_is_running;
   
   //////////////////////////////
@@ -5049,10 +4983,6 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints)
         d_state->ctrl_last_run_flags             = run_flags;
         d_state->ctrl_last_run_traps             = ctrl_trap_list_copy(d_state->ctrl_last_run_arena, &run_traps_copy);
         d_state->ctrl_is_running                 = 1;
-        
-        // rjf: reset selected frame to top unwind
-        d_state->base_regs.v.unwind_count = 0;
-        d_state->base_regs.v.inline_depth = 0;
       }
     }
   }

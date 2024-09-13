@@ -128,101 +128,7 @@ D_EntityKindTable:
 }
 
 ////////////////////////////////
-//~ rjf: Registers Type Table
-
-@table(c_type  name_lower  name)
-D_RegTable:
-{
-  // rjf: entity slots
-  {D_Handle         machine          Machine       }
-  {D_Handle         module           Module        }
-  {D_Handle         process          Process       }
-  {D_Handle         thread           Thread        }
-  {D_Handle         window           Window        }
-  {D_Handle         panel            Panel         }
-  {D_Handle         view             View          }
-  {D_Handle         prev_view        PrevView      }
-  {D_Handle         dst_panel        DstPanel      }
-  {D_Handle         entity           Entity        }
-  {D_HandleList     entity_list      EntityList    }
-  
-  // rjf: frame selection
-  {U64              unwind_count     UnwindCount   }
-  {U64              inline_depth     InlineDepth   }
-  
-  // rjf: code / address location info
-  {String8          file_path        FilePath      }
-  {TxtPt            cursor           Cursor        }
-  {TxtPt            mark             Mark          }
-  {U128             text_key         TextKey       }
-  {TXT_LangKind     lang_kind        LangKind      }
-  {D_LineList       lines            Lines         }
-  {DI_Key           dbgi_key         DbgiKey       }
-  {Rng1U64          vaddr_range      VaddrRange    }
-  {Rng1U64          voff_range       VoffRange     }
-  
-  // rjf: general parameters
-  {U32              pid              PID           }
-  {B32              force_confirm    ForceConfirm  }
-  {B32              prefer_disasm    PreferDisasm  }
-  {Dir2             dir2             Dir2          }
-  {String8          string           String        }
-  {`MD_Node *`      params_tree      ParamsTree    }
-}
-
-@enum D_RegSlot:
-{
-  Null,
-  @expand(D_RegTable a) `$(a.name)`,
-  COUNT,
-}
-
-@struct D_Regs:
-{
-  @expand(D_RegTable a) `$(a.c_type) $(a.name_lower)`
-}
-
-@data(Rng1U64) d_reg_slot_range_table:
-{
-  `{0}`,
-  @expand(D_RegTable a) `{OffsetOf(D_Regs, $(a.name_lower)), OffsetOf(D_Regs, $(a.name_lower)) + sizeof($(a.c_type))}`
-}
-
-@gen
-{
-  `#define d_regs_lit_init_top \\`
-  @expand(D_RegTable a) `.$(a.name_lower) = d_regs()->$(a.name_lower),\\`
-    ``;
-}
-
-////////////////////////////////
 //~ rjf: Built-In Command Tables
-
-@table(name, name_lower, c_type)
-D_CmdParamSlotTable:
-{
-  {Window            window                `D_Handle`}
-  {Panel             panel                 `D_Handle`}
-  {DestPanel         dest_panel            `D_Handle`}
-  {PrevView          prev_view             `D_Handle`}
-  {View              view                  `D_Handle`}
-  {Entity            entity                `D_Handle`}
-  {EntityList        entity_list           `D_HandleList`}
-  {String            string                `String8`}
-  {FilePath          file_path             `String8`}
-  {TextPoint         text_point            `TxtPt`}
-  {ParamsTree        params_tree           `MD_Node *`}
-  {OSEvent           os_event              `struct OS_Event *`}
-  {VirtualAddr       vaddr                 `U64`}
-  {VirtualOff        voff                  `U64`}
-  {Index             index                 `U64`}
-  {ID                id                    `U64`}
-  {PreferDisassembly prefer_dasm           `B32`}
-  {ForceConfirm      force_confirm         `B32`}
-  {Dir2              dir2                  `Dir2`}
-  {UnwindIndex       unwind_index          `U64`}
-  {InlineDepth       inline_depth          `U64`}
-}
 
 @table(name                      ui_vis   ipc_docs_vis   q_slot       q_view  q_ent_kind  q_allow_files q_allow_folders  q_keep_oi   q_select_oi  q_is_code  q_required           canonical_icon        string                        display_name                                  desc                                                                                                               search_tags                      )
 //    /                          |        |              |             \___                                                       ____________________________________/           |                     |                             |                                             |                                                                                                                  |
@@ -275,26 +181,6 @@ D_CmdTable:     //               |        |              |                  |   
   @expand(D_CmdTable, a) `$(a.name)`,
   COUNT,
 }
-
-/*
-@enum D_CmdParamSlot:
-{
-  Null,
-  @expand(D_CmdParamSlotTable a) `$(a.name)`,
-  COUNT,
-}
-
-@struct D_CmdParams:
-{
-  @expand(D_CmdParamSlotTable a) `$(a.c_type) $(a.name_lower)`;
-}
-
-@data(Rng1U64) d_cmd_param_slot_range_table:
-{
-  `{0}`,
-  @expand(D_CmdParamSlotTable a) `{OffsetOf(D_CmdParams, $(a.name_lower)), OffsetOf(D_CmdParams, $(a.name_lower)) + sizeof($(a.c_type))}`,
-}
-*/
 
 ////////////////////////////////
 //~ rjf: Built-In View Rules

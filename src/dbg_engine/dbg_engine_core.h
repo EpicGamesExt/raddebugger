@@ -446,16 +446,6 @@ struct D_Unwind
 };
 
 ////////////////////////////////
-//~ rjf: Context Register Types
-
-typedef struct D_RegsNode D_RegsNode;
-struct D_RegsNode
-{
-  D_RegsNode *next;
-  D_Regs v;
-};
-
-////////////////////////////////
 //~ rjf: Command Specification Types
 
 #if 0
@@ -709,10 +699,6 @@ struct D_State
   // rjf: frame info
   Arena *frame_arenas[2];
   
-  // rjf: interaction registers
-  D_RegsNode base_regs;
-  D_RegsNode *top_regs;
-  
   // rjf: commands
   Arena *cmds_arena;
   D_CmdList cmds;
@@ -807,12 +793,6 @@ internal B32 d_handle_match(D_Handle a, D_Handle b);
 internal void d_handle_list_push_node(D_HandleList *list, D_HandleNode *node);
 internal void d_handle_list_push(Arena *arena, D_HandleList *list, D_Handle handle);
 internal D_HandleList d_handle_list_copy(Arena *arena, D_HandleList list);
-
-////////////////////////////////
-//~ rjf: Registers Type Pure Functions
-
-internal void d_regs_copy_contents(Arena *arena, D_Regs *dst, D_Regs *src);
-internal D_Regs *d_regs_copy(Arena *arena, D_Regs *src);
 
 ////////////////////////////////
 //~ rjf: Config Type Pure Functions
@@ -1004,12 +984,14 @@ internal D_LineList d_lines_from_file_path_line_num(Arena *arena, String8 file_p
 ////////////////////////////////
 //~ rjf: Process/Thread/Module Info Lookups
 
-internal D_Entity *d_module_from_process_vaddr(D_Entity *process, U64 vaddr);
 #if 0 // TODO(rjf): @msgs
+internal D_Entity *d_module_from_process_vaddr(D_Entity *process, U64 vaddr);
 internal D_Entity *d_module_from_thread(D_Entity *thread);
 #endif
 internal U64 d_tls_base_vaddr_from_process_root_rip(CTRL_Entity *process, U64 root_vaddr, U64 rip_vaddr);
+#if 0 // TODO(rjf): @msgs
 internal Arch d_arch_from_entity(D_Entity *entity);
+#endif
 internal E_String2NumMap *d_push_locals_map_from_dbgi_key_voff(Arena *arena, DI_Scope *scope, DI_Key *dbgi_key, U64 voff);
 internal E_String2NumMap *d_push_member_map_from_dbgi_key_voff(Arena *arena, DI_Scope *scope, DI_Key *dbgi_key, U64 voff);
 #if 0 // TODO(rjf): @msgs
@@ -1073,13 +1055,6 @@ internal String8 d_eval_string_from_file_path(Arena *arena, String8 string);
 //- rjf: frame data
 internal U64 d_frame_index(void);
 internal Arena *d_frame_arena(void);
-
-//- rjf: registers
-internal D_Regs *d_regs(void);
-internal D_Regs *d_base_regs(void);
-internal D_Regs *d_push_regs(void);
-internal D_Regs *d_pop_regs(void);
-#define D_RegsScope DeferLoop(d_push_regs(), d_pop_regs())
 
 //- rjf: control state
 internal D_RunKind d_ctrl_last_run_kind(void);

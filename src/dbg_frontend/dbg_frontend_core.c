@@ -1014,9 +1014,8 @@ df_window_open(Vec2F32 size, OS_Handle preferred_monitor, D_CfgSrc cfg_src)
   {
     os_window_set_monitor(window->os, preferred_monitor);
   }
-  if(df_state->first_window == 0) D_RegsScope
+  if(df_state->first_window == 0) DF_RegsScope(.window = df_handle_from_window(window))
   {
-    df_regs()->window = df_handle_from_window(window);
     DF_FontSlot english_font_slots[] = {DF_FontSlot_Main, DF_FontSlot_Code};
     DF_FontSlot icon_font_slot = DF_FontSlot_Icons;
     for(U64 idx = 0; idx < ArrayCount(english_font_slots); idx += 1)
@@ -11676,7 +11675,7 @@ df_frame(void)
             df_state->base_regs.v.inline_depth = 0;
             if(df_regs()->inline_depth <= frame->inline_frame_count)
             {
-              d_state->base_regs.v.inline_depth = df_regs()->inline_depth;
+              df_state->base_regs.v.inline_depth = df_regs()->inline_depth;
             }
           }
           df_cmd(DF_CmdKind_FindThread, .thread = thread->handle);
@@ -11690,8 +11689,8 @@ df_frame(void)
           CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, CTRL_EntityKind_Process);
           CTRL_Unwind base_unwind = d_query_cached_unwind_from_thread(thread);
           D_Unwind rich_unwind = d_unwind_from_ctrl_unwind(scratch.arena, di_scope, process, &base_unwind);
-          U64 crnt_unwind_idx = d_state->base_regs.v.unwind_count;
-          U64 crnt_inline_dpt = d_state->base_regs.v.inline_depth;
+          U64 crnt_unwind_idx = df_state->base_regs.v.unwind_count;
+          U64 crnt_inline_dpt = df_state->base_regs.v.inline_depth;
           U64 next_unwind_idx = crnt_unwind_idx;
           U64 next_inline_dpt = crnt_inline_dpt;
           if(crnt_unwind_idx < rich_unwind.frames.concrete_frame_count)

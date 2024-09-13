@@ -182,39 +182,6 @@ D_EntityKindFlags d_entity_kind_flags_table[30] =
 (0*D_EntityKindFlag_CanDelete) | (0*D_EntityKindFlag_CanFreeze) | (0*D_EntityKindFlag_CanEdit) | (1*D_EntityKindFlag_CanRename) | (0*D_EntityKindFlag_CanEnable) | (0*D_EntityKindFlag_CanCondition) | (0*D_EntityKindFlag_CanDuplicate) | (0*D_EntityKindFlag_NameIsCode) | (0*D_EntityKindFlag_NameIsPath) | (0*D_EntityKindFlag_UserDefinedLifetime) | (0*D_EntityKindFlag_IsSerializedToConfig),
 };
 
-Rng1U64 d_reg_slot_range_table[29] =
-{
-{0},
-{OffsetOf(D_Regs, machine), OffsetOf(D_Regs, machine) + sizeof(D_Handle)},
-{OffsetOf(D_Regs, module), OffsetOf(D_Regs, module) + sizeof(D_Handle)},
-{OffsetOf(D_Regs, process), OffsetOf(D_Regs, process) + sizeof(D_Handle)},
-{OffsetOf(D_Regs, thread), OffsetOf(D_Regs, thread) + sizeof(D_Handle)},
-{OffsetOf(D_Regs, window), OffsetOf(D_Regs, window) + sizeof(D_Handle)},
-{OffsetOf(D_Regs, panel), OffsetOf(D_Regs, panel) + sizeof(D_Handle)},
-{OffsetOf(D_Regs, view), OffsetOf(D_Regs, view) + sizeof(D_Handle)},
-{OffsetOf(D_Regs, prev_view), OffsetOf(D_Regs, prev_view) + sizeof(D_Handle)},
-{OffsetOf(D_Regs, dst_panel), OffsetOf(D_Regs, dst_panel) + sizeof(D_Handle)},
-{OffsetOf(D_Regs, entity), OffsetOf(D_Regs, entity) + sizeof(D_Handle)},
-{OffsetOf(D_Regs, entity_list), OffsetOf(D_Regs, entity_list) + sizeof(D_HandleList)},
-{OffsetOf(D_Regs, unwind_count), OffsetOf(D_Regs, unwind_count) + sizeof(U64)},
-{OffsetOf(D_Regs, inline_depth), OffsetOf(D_Regs, inline_depth) + sizeof(U64)},
-{OffsetOf(D_Regs, file_path), OffsetOf(D_Regs, file_path) + sizeof(String8)},
-{OffsetOf(D_Regs, cursor), OffsetOf(D_Regs, cursor) + sizeof(TxtPt)},
-{OffsetOf(D_Regs, mark), OffsetOf(D_Regs, mark) + sizeof(TxtPt)},
-{OffsetOf(D_Regs, text_key), OffsetOf(D_Regs, text_key) + sizeof(U128)},
-{OffsetOf(D_Regs, lang_kind), OffsetOf(D_Regs, lang_kind) + sizeof(TXT_LangKind)},
-{OffsetOf(D_Regs, lines), OffsetOf(D_Regs, lines) + sizeof(D_LineList)},
-{OffsetOf(D_Regs, dbgi_key), OffsetOf(D_Regs, dbgi_key) + sizeof(DI_Key)},
-{OffsetOf(D_Regs, vaddr_range), OffsetOf(D_Regs, vaddr_range) + sizeof(Rng1U64)},
-{OffsetOf(D_Regs, voff_range), OffsetOf(D_Regs, voff_range) + sizeof(Rng1U64)},
-{OffsetOf(D_Regs, pid), OffsetOf(D_Regs, pid) + sizeof(U32)},
-{OffsetOf(D_Regs, force_confirm), OffsetOf(D_Regs, force_confirm) + sizeof(B32)},
-{OffsetOf(D_Regs, prefer_disasm), OffsetOf(D_Regs, prefer_disasm) + sizeof(B32)},
-{OffsetOf(D_Regs, dir2), OffsetOf(D_Regs, dir2) + sizeof(Dir2)},
-{OffsetOf(D_Regs, string), OffsetOf(D_Regs, string) + sizeof(String8)},
-{OffsetOf(D_Regs, params_tree), OffsetOf(D_Regs, params_tree) + sizeof(MD_Node *)},
-};
-
 D_ViewRuleSpecInfo d_core_view_rule_spec_info_table[21] =
 {
 {str8_lit_comp("default"), str8_lit_comp("Default"), str8_lit_comp(""), str8_lit_comp(""), (D_ViewRuleSpecInfoFlag_Inherited*0)|(D_ViewRuleSpecInfoFlag_Expandable*0)|(D_ViewRuleSpecInfoFlag_ExprResolution*0)|(D_ViewRuleSpecInfoFlag_VizBlockProd*1), },

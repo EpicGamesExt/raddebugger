@@ -5710,11 +5710,11 @@ DF_VIEW_UI_FUNCTION_DEF(scheduler)
             UI_TableCellSized(ui_children_sum(1.f)) UI_FocusHot((row_is_selected && cursor.x >= 2) ? UI_FocusKind_On : UI_FocusKind_Off)
             {
               CTRL_Entity *entity_ctrl = ctrl_entity_from_handle(d_state->ctrl_entity_store, entity->ctrl_handle);
-              D_Entity *process = d_entity_ancestor_from_kind(entity, D_EntityKind_Process);
+              CTRL_Entity *process = ctrl_entity_ancestor_from_kind(entity_ctrl, D_EntityKind_Process);
               U64 rip_vaddr = d_query_cached_rip_from_thread(entity_ctrl);
-              D_Entity *module = d_module_from_process_vaddr(process, rip_vaddr);
-              U64 rip_voff = d_voff_from_vaddr(module, rip_vaddr);
-              DI_Key dbgi_key = d_dbgi_key_from_module(module);
+              CTRL_Entity *module = ctrl_module_from_process_vaddr(process, rip_vaddr);
+              U64 rip_voff = ctrl_voff_from_vaddr(module, rip_vaddr);
+              DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
               D_LineList lines = d_lines_from_dbgi_key_voff(scratch.arena, &dbgi_key, rip_voff);
               if(lines.first != 0)
               {
