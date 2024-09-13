@@ -390,7 +390,7 @@ DF_CmdTable:    //               |        |              |                  |   
   `DF_QueryFlags flags`;
   `DF_RegSlot slot`;
   `String8 view_name`;
-  `D_EntityKind entity_kind`;
+  `DF_EntityKind entity_kind`;
 }
 
 @struct DF_CmdKindInfo:
@@ -408,9 +408,9 @@ DF_CmdTable:    //               |        |              |                  |   
 {
   `{0}`,
   @expand(D_CmdTable, a)
-    ```{ str8_lit_comp("$(a.string)"), str8_lit_comp("$(a.desc)"), str8_lit_comp("$(a.search_tags)"), str8_lit_comp("$(a.display_name)"), DF_IconKind_$(a.canonical_icon), (DF_CmdKindFlag_ListInUI*$(a.ui_vis))|(DF_CmdKindFlag_ListInIPCDocs*$(a.ipc_docs_vis)), {(DF_QueryFlag_AllowFiles*$(a.q_allow_files))|(DF_QueryFlag_AllowFolders*$(a.q_allow_folders))|(DF_QueryFlag_CodeInput*$(a.q_is_code))|(DF_QueryFlag_KeepOldInput*$(a.q_keep_oi))|(DF_QueryFlag_SelectOldInput*$(a.q_select_oi))|(DF_QueryFlag_Required*$(a.q_required)), DF_RegSlot_$(a.q_slot), str8_lit_comp("$(a.q_view != 'null' -> a.q_view)"), D_EntityKind_$(a.q_ent_kind)}}```;
+    ```{ str8_lit_comp("$(a.string)"), str8_lit_comp("$(a.desc)"), str8_lit_comp("$(a.search_tags)"), str8_lit_comp("$(a.display_name)"), DF_IconKind_$(a.canonical_icon), (DF_CmdKindFlag_ListInUI*$(a.ui_vis))|(DF_CmdKindFlag_ListInIPCDocs*$(a.ipc_docs_vis)), {(DF_QueryFlag_AllowFiles*$(a.q_allow_files))|(DF_QueryFlag_AllowFolders*$(a.q_allow_folders))|(DF_QueryFlag_CodeInput*$(a.q_is_code))|(DF_QueryFlag_KeepOldInput*$(a.q_keep_oi))|(DF_QueryFlag_SelectOldInput*$(a.q_select_oi))|(DF_QueryFlag_Required*$(a.q_required)), DF_RegSlot_$(a.q_slot), str8_lit_comp("$(a.q_view != 'null' -> a.q_view)"), DF_EntityKind_$(a.q_ent_kind)}}```;
   @expand(DF_CmdTable, a)
-    ```{ str8_lit_comp("$(a.string)"), str8_lit_comp("$(a.desc)"), str8_lit_comp("$(a.search_tags)"), str8_lit_comp("$(a.display_name)"), DF_IconKind_$(a.canonical_icon), (DF_CmdKindFlag_ListInUI*$(a.ui_vis))|(DF_CmdKindFlag_ListInIPCDocs*$(a.ipc_docs_vis)), {(DF_QueryFlag_AllowFiles*$(a.q_allow_files))|(DF_QueryFlag_AllowFolders*$(a.q_allow_folders))|(DF_QueryFlag_CodeInput*$(a.q_is_code))|(DF_QueryFlag_KeepOldInput*$(a.q_keep_oi))|(DF_QueryFlag_SelectOldInput*$(a.q_select_oi))|(DF_QueryFlag_Required*$(a.q_required)), DF_RegSlot_$(a.q_slot), str8_lit_comp("$(a.q_view != 'null' -> a.q_view)"), D_EntityKind_$(a.q_ent_kind)}}```;
+    ```{ str8_lit_comp("$(a.string)"), str8_lit_comp("$(a.desc)"), str8_lit_comp("$(a.search_tags)"), str8_lit_comp("$(a.display_name)"), DF_IconKind_$(a.canonical_icon), (DF_CmdKindFlag_ListInUI*$(a.ui_vis))|(DF_CmdKindFlag_ListInIPCDocs*$(a.ipc_docs_vis)), {(DF_QueryFlag_AllowFiles*$(a.q_allow_files))|(DF_QueryFlag_AllowFolders*$(a.q_allow_folders))|(DF_QueryFlag_CodeInput*$(a.q_is_code))|(DF_QueryFlag_KeepOldInput*$(a.q_keep_oi))|(DF_QueryFlag_SelectOldInput*$(a.q_select_oi))|(DF_QueryFlag_Required*$(a.q_required)), DF_RegSlot_$(a.q_slot), str8_lit_comp("$(a.q_view != 'null' -> a.q_view)"), DF_EntityKind_$(a.q_ent_kind)}}```;
 }
 
 ////////////////////////////////
@@ -783,7 +783,7 @@ DF_ViewTable:
 
 @data(DF_IconKind) df_entity_kind_icon_kind_table:
 {
-  @expand(D_EntityKindTable a) `DF_IconKind_$(a.icon_kind)`,
+  @expand(DF_EntityKindTable a) `DF_IconKind_$(a.icon_kind)`,
 }
 
 ////////////////////////////////

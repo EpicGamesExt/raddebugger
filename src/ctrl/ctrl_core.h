@@ -230,6 +230,7 @@ struct CTRL_Spoof
 
 typedef enum CTRL_UserBreakpointKind
 {
+  CTRL_UserBreakpointKind_Null,
   CTRL_UserBreakpointKind_FileNameAndLineColNumber,
   CTRL_UserBreakpointKind_SymbolNameAndOffset,
   CTRL_UserBreakpointKind_VirtualAddress,

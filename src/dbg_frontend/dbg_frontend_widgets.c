@@ -421,13 +421,13 @@ df_entity_tooltips(DF_Entity *entity)
   DF_Palette(DF_PaletteCode_Floating) switch(entity->kind)
   {
     default:{}break;
-    case D_EntityKind_File:
+    case DF_EntityKind_File:
     UI_Tooltip UI_PrefWidth(ui_text_dim(10, 1))
     {
       String8 full_path = d_full_path_from_entity(scratch.arena, entity);
       ui_label(full_path);
     }break;
-    case D_EntityKind_Thread: UI_Flags(0)
+    case DF_EntityKind_Thread: UI_Flags(0)
       UI_Tooltip UI_PrefWidth(ui_text_dim(10, 1))
     {
       String8 display_string = d_display_string_from_entity(scratch.arena, entity);
@@ -539,7 +539,7 @@ df_entity_tooltips(DF_Entity *entity)
       }
       di_scope_close(di_scope);
     }break;
-    case D_EntityKind_Breakpoint: UI_Flags(0)
+    case DF_EntityKind_Breakpoint: UI_Flags(0)
       UI_Tooltip UI_PrefWidth(ui_text_dim(10, 1))
     {
       if(entity->flags & D_EntityFlag_HasColor)
@@ -550,7 +550,7 @@ df_entity_tooltips(DF_Entity *entity)
       UI_PrefWidth(ui_text_dim(10, 1)) ui_label(display_string);
       UI_PrefWidth(ui_children_sum(1)) UI_Row
       {
-        String8 stop_condition = d_entity_child_from_kind(entity, D_EntityKind_Condition)->string;
+        String8 stop_condition = d_entity_child_from_kind(entity, DF_EntityKind_Condition)->string;
         if(stop_condition.size == 0)
         {
           stop_condition = str8_lit("true");
@@ -566,7 +566,7 @@ df_entity_tooltips(DF_Entity *entity)
         UI_PrefWidth(ui_text_dim(10, 1)) DF_Font(DF_FontSlot_Code) df_code_label(1.f, 1, df_rgba_from_theme_color(DF_ThemeColor_CodeDefault), hit_count_text);
       }
     }break;
-    case D_EntityKind_WatchPin:
+    case DF_EntityKind_WatchPin:
     DF_Font(DF_FontSlot_Code)
       UI_Tooltip UI_PrefWidth(ui_text_dim(10, 1))
     {
@@ -587,7 +587,7 @@ df_entity_desc_button(DF_Entity *entity, FuzzyMatchRangeList *name_matches, Stri
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   UI_Palette *palette = ui_top_palette();
-  if(entity->kind == D_EntityKind_Thread)
+  if(entity->kind == DF_EntityKind_Thread)
   {
     CTRL_Event stop_event = d_ctrl_last_stop_event();
     CTRL_Entity *entity_ctrl = ctrl_entity_from_handle(d_state->ctrl_entity_store, entity->ctrl_handle);
@@ -610,7 +610,7 @@ df_entity_desc_button(DF_Entity *entity, FuzzyMatchRangeList *name_matches, Stri
   {
     palette = df_palette_from_code(DF_PaletteCode_NeutralPopButton);
   }
-  else if(entity->kind == D_EntityKind_Target && !entity->disabled)
+  else if(entity->kind == DF_EntityKind_Target && !entity->disabled)
   {
     palette = df_palette_from_code(DF_PaletteCode_NeutralPopButton);
   }
@@ -626,7 +626,7 @@ df_entity_desc_button(DF_Entity *entity, FuzzyMatchRangeList *name_matches, Stri
   //- rjf: build contents
   UI_Parent(box) UI_PrefWidth(ui_text_dim(10, 0)) UI_Padding(ui_em(1.f, 1.f))
   {
-    D_EntityKindFlags kind_flags = d_entity_kind_flags_table[entity->kind];
+    DF_EntityKindFlags kind_flags = d_entity_kind_flags_table[entity->kind];
     DF_IconKind icon = df_entity_kind_icon_kind_table[entity->kind];
     Vec4F32 entity_color = palette->colors[UI_ColorCode_Text];
     Vec4F32 entity_color_weak = palette->colors[UI_ColorCode_TextWeak];
@@ -662,10 +662,10 @@ df_entity_desc_button(DF_Entity *entity, FuzzyMatchRangeList *name_matches, Stri
     }
     String8 label = d_display_string_from_entity(scratch.arena, entity);
     UI_Palette(ui_build_palette(ui_top_palette(), .text = entity_color))
-      DF_Font(kind_flags&D_EntityKindFlag_NameIsCode ? DF_FontSlot_Code : DF_FontSlot_Main)
-      UI_Flags((entity->kind == D_EntityKind_Thread ||
-                entity->kind == D_EntityKind_Breakpoint ||
-                entity->kind == D_EntityKind_WatchPin)
+      DF_Font(kind_flags&DF_EntityKindFlag_NameIsCode ? DF_FontSlot_Code : DF_FontSlot_Main)
+      UI_Flags((entity->kind == DF_EntityKind_Thread ||
+                entity->kind == DF_EntityKind_Breakpoint ||
+                entity->kind == DF_EntityKind_WatchPin)
                ? UI_BoxFlag_DisableTruncatedHover
                : 0)
     {
@@ -675,16 +675,16 @@ df_entity_desc_button(DF_Entity *entity, FuzzyMatchRangeList *name_matches, Stri
         ui_box_equip_fuzzy_match_ranges(label_sig.box, name_matches);
       }
     }
-    if(entity->kind == D_EntityKind_Target) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_FontSize(ui_top_font_size()*0.95f)
+    if(entity->kind == DF_EntityKind_Target) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_FontSize(ui_top_font_size()*0.95f)
     {
-      DF_Entity *args = d_entity_child_from_kind(entity, D_EntityKind_Arguments);
+      DF_Entity *args = d_entity_child_from_kind(entity, DF_EntityKind_Arguments);
       ui_label(args->string);
     }
-    if(kind_flags & D_EntityKindFlag_CanEnable && entity->disabled) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_FontSize(ui_top_font_size()*0.95f) UI_HeightFill
+    if(kind_flags & DF_EntityKindFlag_CanEnable && entity->disabled) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_FontSize(ui_top_font_size()*0.95f) UI_HeightFill
     {
       ui_label(str8_lit("(Disabled)"));
     }
-    if(entity->kind == D_EntityKind_Thread)
+    if(entity->kind == DF_EntityKind_Thread)
       UI_FontSize(ui_top_font_size()*0.75f)
       DF_Font(DF_FontSlot_Code)
       UI_Palette(ui_build_palette(ui_top_palette(), .text = df_rgba_from_theme_color(DF_ThemeColor_CodeSymbol)))
@@ -1055,7 +1055,7 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             }
             U64 unwind_count = (thread == selected_thread) ? df_regs()->unwind_count : 0;
             U64 thread_rip_vaddr = d_query_cached_rip_from_thread_unwind(thread, unwind_count);
-            CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, D_EntityKind_Process);
+            CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
             CTRL_Entity *module = ctrl_module_from_process_vaddr(process, thread_rip_vaddr);
             DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
             U64 thread_rip_voff = ctrl_voff_from_vaddr(module, thread_rip_vaddr);
@@ -1215,7 +1215,7 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             }
             U64 unwind_count = (thread == selected_thread) ? df_regs()->unwind_count : 0;
             U64 thread_rip_vaddr = d_query_cached_rip_from_thread_unwind(thread, unwind_count);
-            CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, D_EntityKind_Process);
+            CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
             CTRL_Entity *module = ctrl_module_from_process_vaddr(process, thread_rip_vaddr);
             DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
             U64 thread_rip_voff = ctrl_voff_from_vaddr(module, thread_rip_vaddr);
@@ -1861,9 +1861,9 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
     {
       DF_DragDropPayload *payload = &df_drag_drop_payload;
       DF_Entity *entity = d_entity_from_handle(payload->entity);
-      if(entity->kind == D_EntityKind_Thread ||
-         entity->kind == D_EntityKind_WatchPin ||
-         entity->kind == D_EntityKind_Breakpoint)
+      if(entity->kind == DF_EntityKind_Thread ||
+         entity->kind == DF_EntityKind_WatchPin ||
+         entity->kind == DF_EntityKind_Breakpoint)
       {
         line_drag_entity = entity;
       }
@@ -1881,8 +1881,8 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
         switch(dropped_entity->kind)
         {
           default:{}break;
-          case D_EntityKind_Breakpoint:
-          case D_EntityKind_WatchPin:
+          case DF_EntityKind_Breakpoint:
+          case DF_EntityKind_WatchPin:
           {
             df_cmd(DF_CmdKind_RelocateEntity,
                    .entity = d_handle_from_entity(dropped_entity),
@@ -1890,7 +1890,7 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
                    .cursor = txt_pt(line_num, 1),
                    .vaddr      = line_vaddr);
           }break;
-          case D_EntityKind_Thread:
+          case DF_EntityKind_Thread:
           {
             CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, dropped_entity->ctrl_handle);
             U64 new_rip_vaddr = line_vaddr;

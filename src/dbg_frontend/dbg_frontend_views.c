@@ -199,11 +199,11 @@ df_code_view_build(Arena *arena, DF_View *view, DF_CodeViewState *cv, DF_CodeVie
     // rjf: find visible breakpoints for source code
     ProfScope("find visible breakpoints")
     {
-      D_EntityList bps = d_query_cached_entity_list_with_kind(D_EntityKind_Breakpoint);
+      D_EntityList bps = d_query_cached_entity_list_with_kind(DF_EntityKind_Breakpoint);
       for(D_EntityNode *n = bps.first; n != 0; n = n->next)
       {
         DF_Entity *bp = n->entity;
-        DF_Entity *loc = d_entity_child_from_kind(bp, D_EntityKind_Location);
+        DF_Entity *loc = d_entity_child_from_kind(bp, DF_EntityKind_Location);
         if(path_match_normalized(loc->string, df_regs()->file_path) &&
            visible_line_num_range.min <= loc->text_point.line && loc->text_point.line <= visible_line_num_range.max)
         {
@@ -245,11 +245,11 @@ df_code_view_build(Arena *arena, DF_View *view, DF_CodeViewState *cv, DF_CodeVie
     // rjf: find visible watch pins for source code
     ProfScope("find visible watch pins")
     {
-      D_EntityList wps = d_query_cached_entity_list_with_kind(D_EntityKind_WatchPin);
+      D_EntityList wps = d_query_cached_entity_list_with_kind(DF_EntityKind_WatchPin);
       for(D_EntityNode *n = wps.first; n != 0; n = n->next)
       {
         DF_Entity *wp = n->entity;
-        DF_Entity *loc = d_entity_child_from_kind(wp, D_EntityKind_Location);
+        DF_Entity *loc = d_entity_child_from_kind(wp, DF_EntityKind_Location);
         if(path_match_normalized(loc->string, df_regs()->file_path) &&
            visible_line_num_range.min <= loc->text_point.line && loc->text_point.line <= visible_line_num_range.max)
         {
@@ -297,11 +297,11 @@ df_code_view_build(Arena *arena, DF_View *view, DF_CodeViewState *cv, DF_CodeVie
     // rjf: find breakpoints mapping to this disasm
     if(dasm_lines) ProfScope("find breakpoints mapping to this disassembly")
     {
-      D_EntityList bps = d_query_cached_entity_list_with_kind(D_EntityKind_Breakpoint);
+      D_EntityList bps = d_query_cached_entity_list_with_kind(DF_EntityKind_Breakpoint);
       for(D_EntityNode *n = bps.first; n != 0; n = n->next)
       {
         DF_Entity *bp = n->entity;
-        DF_Entity *loc = d_entity_child_from_kind(bp, D_EntityKind_Location);
+        DF_Entity *loc = d_entity_child_from_kind(bp, DF_EntityKind_Location);
         if(loc->flags & D_EntityFlag_HasVAddr && contains_1u64(dasm_vaddr_range, loc->vaddr))
         {
           U64 off = loc->vaddr-dasm_vaddr_range.min;
@@ -319,11 +319,11 @@ df_code_view_build(Arena *arena, DF_View *view, DF_CodeViewState *cv, DF_CodeVie
     // rjf: find watch pins mapping to this disasm
     if(dasm_lines) ProfScope("find watch pins mapping to this disassembly")
     {
-      D_EntityList pins = d_query_cached_entity_list_with_kind(D_EntityKind_WatchPin);
+      D_EntityList pins = d_query_cached_entity_list_with_kind(DF_EntityKind_WatchPin);
       for(D_EntityNode *n = pins.first; n != 0; n = n->next)
       {
         DF_Entity *pin = n->entity;
-        DF_Entity *loc = d_entity_child_from_kind(pin, D_EntityKind_Location);
+        DF_Entity *loc = d_entity_child_from_kind(pin, DF_EntityKind_Location);
         if(loc->flags & D_EntityFlag_HasVAddr && contains_1u64(dasm_vaddr_range, loc->vaddr))
         {
           U64 off = loc->vaddr-dasm_vaddr_range.min;
@@ -943,7 +943,7 @@ df_watch_view_build(DF_View *view, DF_WatchViewState *ewv, B32 modifiable, U32 d
   String8 filter = str8(view->query_buffer, view->query_string_size);
   F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
   S64 num_possible_visible_rows = (S64)(dim_2f32(rect).y/row_height_px);
-  D_EntityKind mutable_entity_kind = D_EntityKind_Nil;
+  DF_EntityKind mutable_entity_kind = DF_EntityKind_Nil;
   F32 row_string_max_size_px = dim_2f32(rect).x;
   
   //////////////////////////////
@@ -1006,7 +1006,7 @@ df_watch_view_build(DF_View *view, DF_WatchViewState *ewv, B32 modifiable, U32 d
           default:
           case DF_WatchViewFillKind_Watch:
           {
-            mutable_entity_kind = D_EntityKind_Watch;
+            mutable_entity_kind = DF_EntityKind_Watch;
             D_EntityList watches = d_query_cached_entity_list_with_kind(mutable_entity_kind);
             for(D_EntityNode *n = watches.first; n != 0; n = n->next)
             {
@@ -1017,7 +1017,7 @@ df_watch_view_build(DF_View *view, DF_WatchViewState *ewv, B32 modifiable, U32 d
               }
               EV_Key parent_key = d_parent_ev_key_from_entity(watch);
               EV_Key key = d_ev_key_from_entity(watch);
-              DF_Entity *view_rule = d_entity_child_from_kind(watch, D_EntityKind_ViewRule);
+              DF_Entity *view_rule = d_entity_child_from_kind(watch, DF_EntityKind_ViewRule);
               ev_key_set_view_rule(eval_view, key, view_rule->string);
               String8 expr_string = watch->string;
               FuzzyMatchRangeList matches = fuzzy_match_find(scratch.arena, filter, expr_string);
@@ -1034,7 +1034,7 @@ df_watch_view_build(DF_View *view, DF_WatchViewState *ewv, B32 modifiable, U32 d
           //
           case DF_WatchViewFillKind_Breakpoints:
           {
-            mutable_entity_kind = D_EntityKind_Breakpoint;
+            mutable_entity_kind = DF_EntityKind_Breakpoint;
             ev_view_rule_list_push_string(scratch.arena, &top_level_view_rules, str8_lit("no_addr"));
             D_EntityList bps = d_query_cached_entity_list_with_kind(mutable_entity_kind);
             for(D_EntityNode *n = bps.first; n != 0; n = n->next)
@@ -1074,7 +1074,7 @@ df_watch_view_build(DF_View *view, DF_WatchViewState *ewv, B32 modifiable, U32 d
           //
           case DF_WatchViewFillKind_WatchPins:
           {
-            mutable_entity_kind = D_EntityKind_WatchPin;
+            mutable_entity_kind = DF_EntityKind_WatchPin;
             D_EntityList wps = d_query_cached_entity_list_with_kind(mutable_entity_kind);
             for(D_EntityNode *n = wps.first; n != 0; n = n->next)
             {
@@ -1774,10 +1774,10 @@ df_watch_view_build(DF_View *view, DF_WatchViewState *ewv, B32 modifiable, U32 d
                   DF_WatchViewPoint pt = df_watch_view_point_from_tbl(&blocks, tbl);
                   ev_key_set_view_rule(eval_view, pt.key, new_string);
                   DF_Entity *watch = d_entity_from_ev_key_and_kind(pt.key, mutable_entity_kind);
-                  DF_Entity *view_rule = d_entity_child_from_kind(watch, D_EntityKind_ViewRule);
+                  DF_Entity *view_rule = d_entity_child_from_kind(watch, DF_EntityKind_ViewRule);
                   if(new_string.size != 0 && d_entity_is_nil(view_rule))
                   {
-                    view_rule = d_entity_alloc(watch, D_EntityKind_ViewRule);
+                    view_rule = d_entity_alloc(watch, DF_EntityKind_ViewRule);
                   }
                   else if(new_string.size == 0 && !d_entity_is_nil(view_rule))
                   {
@@ -1890,7 +1890,7 @@ df_watch_view_build(DF_View *view, DF_WatchViewState *ewv, B32 modifiable, U32 d
           else if(selection_tbl.min.x <= DF_WatchViewColumnKind_ViewRule && DF_WatchViewColumnKind_ViewRule <= selection_tbl.max.x)
           {
             DF_Entity *watch = d_entity_from_ev_key_and_kind(pt.key, mutable_entity_kind);
-            DF_Entity *view_rule = d_entity_child_from_kind(watch, D_EntityKind_ViewRule);
+            DF_Entity *view_rule = d_entity_child_from_kind(watch, DF_EntityKind_ViewRule);
             d_entity_mark_for_deletion(view_rule);
             ev_key_set_view_rule(eval_view, pt.key, str8_zero());
           }
@@ -2218,7 +2218,7 @@ df_watch_view_build(DF_View *view, DF_WatchViewState *ewv, B32 modifiable, U32 d
           case E_Mode_Offset:
           {
             DF_Entity *space_entity = d_entity_from_eval_space(row_eval.space);
-            if(space_entity->kind == D_EntityKind_Process)
+            if(space_entity->kind == DF_EntityKind_Process)
             {
               U64 size = e_type_byte_size_from_key(row_eval.type_key);
               size = Min(size, 64);
@@ -2912,7 +2912,7 @@ DF_VIEW_UI_FUNCTION_DEF(getting_started)
     UI_Padding(ui_pct(1, 0)) UI_Focus(UI_FocusKind_Null)
   {
     D_EntityList targets = d_push_active_target_list(scratch.arena);
-    D_EntityList processes = d_query_cached_entity_list_with_kind(D_EntityKind_Process);
+    D_EntityList processes = d_query_cached_entity_list_with_kind(DF_EntityKind_Process);
     
     //- rjf: icon & info
     UI_Padding(ui_em(2.f, 1.f))
@@ -3952,7 +3952,7 @@ df_process_info_list_from_query(Arena *arena, String8 query)
   U64 attached_process_count = 0;
   U32 *attached_process_pids = 0;
   {
-    D_EntityList processes = d_query_cached_entity_list_with_kind(D_EntityKind_Process);
+    D_EntityList processes = d_query_cached_entity_list_with_kind(DF_EntityKind_Process);
     attached_process_count = processes.count;
     attached_process_pids = push_array(scratch.arena, U32, attached_process_count);
     U64 idx = 0;
@@ -4262,7 +4262,7 @@ struct DF_EntityListerItemArray
 };
 
 internal DF_EntityListerItemList
-df_entity_lister_item_list_from_needle(Arena *arena, D_EntityKind kind, D_EntityFlags omit_flags, String8 needle)
+df_entity_lister_item_list_from_needle(Arena *arena, DF_EntityKind kind, D_EntityFlags omit_flags, String8 needle)
 {
   Temp scratch = scratch_begin(&arena, 1);
   DF_EntityListerItemList result = {0};
@@ -4333,7 +4333,7 @@ DF_VIEW_UI_FUNCTION_DEF(entity_lister)
   Temp scratch = scratch_begin(0, 0);
   DF_Window *window = df_window_from_handle(df_regs()->window);
   DF_CmdKindInfo *cmd_kind_info = df_cmd_kind_info_from_string(window->query_cmd_name);
-  D_EntityKind entity_kind = cmd_kind_info->query.entity_kind;
+  DF_EntityKind entity_kind = cmd_kind_info->query.entity_kind;
   D_EntityFlags entity_flags_omit = D_EntityFlag_IsFolder;
   F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
   F32 scroll_bar_dim = floor_f32(ui_top_font_size()*1.5f);
@@ -4644,7 +4644,7 @@ struct DF_TargetViewState
   B32 initialized;
   
   // rjf: pick file kind
-  D_EntityKind pick_dst_kind;
+  DF_EntityKind pick_dst_kind;
   
   // rjf: selection cursor
   Vec2S64 cursor;
@@ -4691,7 +4691,7 @@ DF_VIEW_CMD_FUNCTION_DEF(target)
       {
         String8 pick_string = cmd->params.file_path;
         DF_Entity *storage_entity = entity;
-        if(tv->pick_dst_kind != D_EntityKind_Nil)
+        if(tv->pick_dst_kind != DF_EntityKind_Nil)
         {
           DF_Entity *child = d_entity_child_from_kind(entity, tv->pick_dst_kind);
           if(d_entity_is_nil(child))
@@ -4712,7 +4712,7 @@ DF_VIEW_UI_FUNCTION_DEF(target)
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   DF_Entity *entity = d_entity_from_eval_string(string);
-  D_EntityList custom_entry_points = d_push_entity_child_list_with_kind(scratch.arena, entity, D_EntityKind_EntryPoint);
+  D_EntityList custom_entry_points = d_push_entity_child_list_with_kind(scratch.arena, entity, DF_EntityKind_EntryPoint);
   F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
   
   //- rjf: grab state
@@ -4731,16 +4731,16 @@ DF_VIEW_UI_FUNCTION_DEF(target)
     B32 fill_with_folder;
     B32 use_code_font;
     String8 key;
-    D_EntityKind storage_child_kind;
+    DF_EntityKind storage_child_kind;
     String8 current_text;
   }
   kv_info[] =
   {
-    { 0, 0, 0, str8_lit("Label"),                D_EntityKind_Nil,              entity->string },
-    { 1, 0, 0, str8_lit("Executable"),           D_EntityKind_Executable,       d_entity_child_from_kind(entity, D_EntityKind_Executable)->string },
-    { 0, 0, 0, str8_lit("Arguments"),            D_EntityKind_Arguments,        d_entity_child_from_kind(entity, D_EntityKind_Arguments)->string },
-    { 0, 1, 0, str8_lit("Working Directory"),    D_EntityKind_WorkingDirectory, d_entity_child_from_kind(entity, D_EntityKind_WorkingDirectory)->string },
-    { 0, 0, 1, str8_lit("Entry Point Override"), D_EntityKind_EntryPoint,       d_entity_child_from_kind(entity, D_EntityKind_EntryPoint)->string },
+    { 0, 0, 0, str8_lit("Label"),                DF_EntityKind_Nil,              entity->string },
+    { 1, 0, 0, str8_lit("Executable"),           DF_EntityKind_Executable,       d_entity_child_from_kind(entity, DF_EntityKind_Executable)->string },
+    { 0, 0, 0, str8_lit("Arguments"),            DF_EntityKind_Arguments,        d_entity_child_from_kind(entity, DF_EntityKind_Arguments)->string },
+    { 0, 1, 0, str8_lit("Working Directory"),    DF_EntityKind_WorkingDirectory, d_entity_child_from_kind(entity, DF_EntityKind_WorkingDirectory)->string },
+    { 0, 0, 1, str8_lit("Entry Point Override"), DF_EntityKind_EntryPoint,       d_entity_child_from_kind(entity, DF_EntityKind_EntryPoint)->string },
   };
   
   //- rjf: take controls to start/end editing
@@ -4796,7 +4796,7 @@ DF_VIEW_UI_FUNCTION_DEF(target)
     scroll_list_params.item_range    = r1s64(0, (S64)ArrayCount(kv_info));
     scroll_list_params.cursor_min_is_empty_selection[Axis2_Y] = 1;
   }
-  D_EntityKind commit_storage_child_kind = D_EntityKind_Nil;
+  DF_EntityKind commit_storage_child_kind = DF_EntityKind_Nil;
   Vec2S64 next_cursor = tv->cursor;
   UI_ScrollListSignal scroll_list_sig = {0};
   UI_Focus(UI_FocusKind_On)
@@ -4825,7 +4825,7 @@ DF_VIEW_UI_FUNCTION_DEF(target)
         //- rjf: key (label)
         UI_TableCell UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
         {
-          if(kv_info[idx].storage_child_kind == D_EntityKind_EntryPoint)
+          if(kv_info[idx].storage_child_kind == DF_EntityKind_EntryPoint)
           {
             if(df_help_label(str8_lit("Custom Entry Point"))) UI_Tooltip
             {
@@ -4948,7 +4948,7 @@ DF_VIEW_UI_FUNCTION_DEF(target)
         }
         d_entity_equip_name(child, new_string);
       }break;
-      case D_EntityKind_Nil:
+      case DF_EntityKind_Nil:
       {
         d_entity_equip_name(entity, new_string);
       }break;
@@ -4981,7 +4981,7 @@ DF_VIEW_UI_FUNCTION_DEF(targets)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
-  D_EntityList targets_list = d_query_cached_entity_list_with_kind(D_EntityKind_Target);
+  D_EntityList targets_list = d_query_cached_entity_list_with_kind(DF_EntityKind_Target);
   D_EntityFuzzyItemArray targets = d_entity_fuzzy_item_array_from_entity_list_needle(scratch.arena, &targets_list, string);
   F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
   
@@ -5194,7 +5194,7 @@ DF_VIEW_UI_FUNCTION_DEF(file_path_map)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
-  D_EntityList maps_list = d_query_cached_entity_list_with_kind(D_EntityKind_FilePathMap);
+  D_EntityList maps_list = d_query_cached_entity_list_with_kind(DF_EntityKind_FilePathMap);
   D_EntityArray maps = d_entity_array_from_list(scratch.arena, &maps_list);
   F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
   
@@ -5284,8 +5284,8 @@ DF_VIEW_UI_FUNCTION_DEF(file_path_map)
     {
       U64 map_idx = row_idx-1;
       DF_Entity *map = (map_idx < maps.count ? maps.v[map_idx] : &d_nil_entity);
-      DF_Entity *map_src = d_entity_child_from_kind(map, D_EntityKind_Source);
-      DF_Entity *map_dst = d_entity_child_from_kind(map, D_EntityKind_Dest);
+      DF_Entity *map_src = d_entity_child_from_kind(map, DF_EntityKind_Source);
+      DF_Entity *map_dst = d_entity_child_from_kind(map, DF_EntityKind_Dest);
       String8 map_src_path = map_src->string;
       String8 map_dst_path = map_dst->string;
       B32 row_selected = (fpms->cursor.y == row_idx);
@@ -5533,9 +5533,9 @@ DF_VIEW_UI_FUNCTION_DEF(scheduler)
   DF_SchedulerViewState *sv = df_view_user_state(view, DF_SchedulerViewState);
   
   //- rjf: get entities
-  D_EntityList machines  = d_query_cached_entity_list_with_kind(D_EntityKind_Machine);
-  D_EntityList processes = d_query_cached_entity_list_with_kind(D_EntityKind_Process);
-  D_EntityList threads   = d_query_cached_entity_list_with_kind(D_EntityKind_Thread);
+  D_EntityList machines  = d_query_cached_entity_list_with_kind(DF_EntityKind_Machine);
+  D_EntityList processes = d_query_cached_entity_list_with_kind(DF_EntityKind_Process);
+  D_EntityList threads   = d_query_cached_entity_list_with_kind(DF_EntityKind_Thread);
   
   //- rjf: produce list of items; no query -> all entities, in tree; query -> only show threads
   D_EntityFuzzyItemArray items = {0};
@@ -5557,7 +5557,7 @@ DF_VIEW_UI_FUNCTION_DEF(scheduler)
           for(D_EntityNode *process_n = processes.first; process_n != 0; process_n = process_n->next)
           {
             DF_Entity *process = process_n->entity;
-            if(d_entity_ancestor_from_kind(process, D_EntityKind_Machine) != machine)
+            if(d_entity_ancestor_from_kind(process, DF_EntityKind_Machine) != machine)
             {
               continue;
             }
@@ -5566,7 +5566,7 @@ DF_VIEW_UI_FUNCTION_DEF(scheduler)
             for(D_EntityNode *thread_n = threads.first; thread_n != 0; thread_n = thread_n->next)
             {
               DF_Entity *thread = thread_n->entity;
-              if(d_entity_ancestor_from_kind(thread, D_EntityKind_Process) != process)
+              if(d_entity_ancestor_from_kind(thread, DF_EntityKind_Process) != process)
               {
                 continue;
               }
@@ -5631,17 +5631,17 @@ DF_VIEW_UI_FUNCTION_DEF(scheduler)
       if(query.size == 0) switch(entity->kind)
       {
         default:{}break;
-        case D_EntityKind_Machine:{depth = 0.f;}break;
-        case D_EntityKind_Process:{depth = 1.f;}break;
-        case D_EntityKind_Thread: {depth = 2.f;}break;
+        case DF_EntityKind_Machine:{depth = 0.f;}break;
+        case DF_EntityKind_Process:{depth = 1.f;}break;
+        case DF_EntityKind_Thread: {depth = 2.f;}break;
       }
       Rng1S64 desc_col_rng = r1s64(1, 1);
       switch(entity->kind)
       {
         default:{}break;
-        case D_EntityKind_Machine:{desc_col_rng = r1s64(1, 4);}break;
-        case D_EntityKind_Process:{desc_col_rng = r1s64(1, 1);}break;
-        case D_EntityKind_Thread: {desc_col_rng = r1s64(1, 1);}break;
+        case DF_EntityKind_Machine:{desc_col_rng = r1s64(1, 4);}break;
+        case DF_EntityKind_Process:{desc_col_rng = r1s64(1, 1);}break;
+        case DF_EntityKind_Thread: {desc_col_rng = r1s64(1, 1);}break;
       }
       UI_NamedTableVectorF("entity_row_%p", entity)
       {
@@ -5674,11 +5674,11 @@ DF_VIEW_UI_FUNCTION_DEF(scheduler)
         switch(entity->kind)
         {
           default:{}break;
-          case D_EntityKind_Machine:
+          case DF_EntityKind_Machine:
           {
             
           }break;
-          case D_EntityKind_Process:
+          case DF_EntityKind_Process:
           {
             UI_TableCellSized(ui_children_sum(1.f)) UI_FocusHot((row_is_selected && cursor.x == 2) ? UI_FocusKind_On : UI_FocusKind_Off)
             {
@@ -5705,12 +5705,12 @@ DF_VIEW_UI_FUNCTION_DEF(scheduler)
               }
             }
           }break;
-          case D_EntityKind_Thread:
+          case DF_EntityKind_Thread:
           {
             UI_TableCellSized(ui_children_sum(1.f)) UI_FocusHot((row_is_selected && cursor.x >= 2) ? UI_FocusKind_On : UI_FocusKind_Off)
             {
               CTRL_Entity *entity_ctrl = ctrl_entity_from_handle(d_state->ctrl_entity_store, entity->ctrl_handle);
-              CTRL_Entity *process = ctrl_entity_ancestor_from_kind(entity_ctrl, D_EntityKind_Process);
+              CTRL_Entity *process = ctrl_entity_ancestor_from_kind(entity_ctrl, DF_EntityKind_Process);
               U64 rip_vaddr = d_query_cached_rip_from_thread(entity_ctrl);
               CTRL_Entity *module = ctrl_module_from_process_vaddr(process, rip_vaddr);
               U64 rip_voff = ctrl_voff_from_vaddr(module, rip_vaddr);
@@ -5817,7 +5817,7 @@ DF_VIEW_CMD_FUNCTION_DEF(modules)
         Temp scratch = scratch_begin(0, 0);
         String8 pick_string = cmd->regs->file_path;
         DF_Entity *module = d_entity_from_handle(mv->pick_file_dst_entity);
-        if(module->kind == D_EntityKind_Module)
+        if(module->kind == DF_EntityKind_Module)
         {
           String8 exe_path = module->string;
           String8 dbg_path = pick_string;
@@ -5843,8 +5843,8 @@ DF_VIEW_UI_FUNCTION_DEF(modules)
   F32 *col_pcts[] = {&mv->idx_col_pct, &mv->desc_col_pct, &mv->range_col_pct, &mv->dbg_col_pct};
   
   //- rjf: get entities
-  D_EntityList processes = d_query_cached_entity_list_with_kind(D_EntityKind_Process);
-  D_EntityList modules = d_query_cached_entity_list_with_kind(D_EntityKind_Module);
+  D_EntityList processes = d_query_cached_entity_list_with_kind(DF_EntityKind_Process);
+  D_EntityList modules = d_query_cached_entity_list_with_kind(DF_EntityKind_Module);
   
   //- rjf: make filtered item array
   D_EntityFuzzyItemArray items = {0};
@@ -5863,7 +5863,7 @@ DF_VIEW_UI_FUNCTION_DEF(modules)
         for(D_EntityNode *module_n = modules.first; module_n != 0; module_n = module_n->next)
         {
           DF_Entity *module = module_n->entity;
-          if(d_entity_ancestor_from_kind(module, D_EntityKind_Process) != process)
+          if(d_entity_ancestor_from_kind(module, DF_EntityKind_Process) != process)
           {
             continue;
           }
@@ -5956,13 +5956,13 @@ DF_VIEW_UI_FUNCTION_DEF(modules)
     {
       DF_Entity *entity = items.v[idx].entity;
       B32 row_is_selected = (cursor.y == (S64)(idx+1));
-      idx_in_process += (entity->kind == D_EntityKind_Module);
+      idx_in_process += (entity->kind == DF_EntityKind_Module);
       if(visible_row_range.min <= idx && idx <= visible_row_range.max)
       {
         switch(entity->kind)
         {
           default:{}break;
-          case D_EntityKind_Process:
+          case DF_EntityKind_Process:
           {
             UI_NamedTableVectorF("process_%p", entity)
             {
@@ -5973,7 +5973,7 @@ DF_VIEW_UI_FUNCTION_DEF(modules)
             }
             idx_in_process = 0;
           }break;
-          case D_EntityKind_Module:
+          case DF_EntityKind_Module:
           UI_NamedTableVectorF("module_%p", entity)
           {
             UI_TableCell UI_TextAlignment(UI_TextAlign_Center) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
@@ -6750,15 +6750,15 @@ DF_VIEW_CMD_FUNCTION_DEF(disasm)
         {
           DF_Entity *entity = d_entity_from_handle(cmd->regs->entity);
           if(!d_entity_is_nil(entity) &&
-             (entity->kind == D_EntityKind_Process ||
-              entity->kind == D_EntityKind_Thread ||
-              entity->kind == D_EntityKind_Module))
+             (entity->kind == DF_EntityKind_Process ||
+              entity->kind == DF_EntityKind_Thread ||
+              entity->kind == DF_EntityKind_Module))
           {
             process = entity;
-            if(entity->kind == D_EntityKind_Thread ||
-               entity->kind == D_EntityKind_Module)
+            if(entity->kind == DF_EntityKind_Thread ||
+               entity->kind == DF_EntityKind_Module)
             {
-              process = d_entity_ancestor_from_kind(process, D_EntityKind_Process);
+              process = d_entity_ancestor_from_kind(process, DF_EntityKind_Process);
             }
           }
         }

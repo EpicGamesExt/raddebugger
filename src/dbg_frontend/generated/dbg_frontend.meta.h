@@ -540,7 +540,7 @@ struct DF_Query
 DF_QueryFlags flags;
 DF_RegSlot slot;
 String8 view_name;
-D_EntityKind entity_kind;
+DF_EntityKind entity_kind;
 };
 
 typedef struct DF_CmdKindInfo DF_CmdKindInfo;

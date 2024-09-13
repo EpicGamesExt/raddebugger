@@ -34,7 +34,7 @@ D_CfgSrcTable:
 //                                                                        operations________  names lt sz
 //                                                                       /..................\ /...\ |  |
 //                                                                       dl fz ed rn en cn dp nc np ul iz
-D_EntityKindTable:
+DF_EntityKindTable:
 {
   {Nil                nil                   nils                          0  0  0  0  0  0  0  0  0  0  0                      "Label"             Null                   "Nil"                        }
   {Root               root                  roots                         0  0  0  0  0  0  0  0  0  0  0                      "Label"             Null                   "Root"                       }
@@ -96,35 +96,35 @@ D_EntityKindTable:
   {ConversionFail     conversion_fail       conversion_fails              0  0  0  1  0  0  0  0  0  0  0                      "Label"             Null                   "Conversion Failure"         }
 }
 
-@enum D_EntityKind:
+@enum DF_EntityKind:
 {
-  @expand(D_EntityKindTable a) `$(a.name)`,
+  @expand(DF_EntityKindTable a) `$(a.name)`,
   COUNT,
 }
 
 @data(String8) d_entity_kind_display_string_table:
 {
-  @expand(D_EntityKindTable a) `str8_lit_comp("$(a.display_string)")`,
+  @expand(DF_EntityKindTable a) `str8_lit_comp("$(a.display_string)")`,
 }
 
 @data(String8) d_entity_kind_name_lower_table:
 {
-  @expand(D_EntityKindTable a) `str8_lit_comp("$(a.name_lower)")`,
+  @expand(DF_EntityKindTable a) `str8_lit_comp("$(a.name_lower)")`,
 }
 
 @data(String8) d_entity_kind_name_lower_plural_table:
 {
-  @expand(D_EntityKindTable a) `str8_lit_comp("$(a.name_lower_plural)")`,
+  @expand(DF_EntityKindTable a) `str8_lit_comp("$(a.name_lower_plural)")`,
 }
 
 @data(String8) d_entity_kind_name_label_table:
 {
-  @expand(D_EntityKindTable a) `str8_lit_comp("$(a.name_label)")`,
+  @expand(DF_EntityKindTable a) `str8_lit_comp("$(a.name_label)")`,
 }
 
-@data(D_EntityKindFlags) d_entity_kind_flags_table:
+@data(DF_EntityKindFlags) d_entity_kind_flags_table:
 {
-  @expand(D_EntityKindTable a) `($(a.op_delete)*D_EntityKindFlag_CanDelete) | ($(a.op_freeze)*D_EntityKindFlag_CanFreeze) | ($(a.op_edit)*D_EntityKindFlag_CanEdit) | ($(a.op_rename)*D_EntityKindFlag_CanRename) | ($(a.op_enable)*D_EntityKindFlag_CanEnable) | ($(a.op_cond)*D_EntityKindFlag_CanCondition) | ($(a.op_dup)*D_EntityKindFlag_CanDuplicate) | ($(a.name_is_code)*D_EntityKindFlag_NameIsCode) | ($(a.name_is_path)*D_EntityKindFlag_NameIsPath) | ($(a.user_lifetime)*D_EntityKindFlag_UserDefinedLifetime) | ($(a.is_serialized)*D_EntityKindFlag_IsSerializedToConfig)`,
+  @expand(DF_EntityKindTable a) `($(a.op_delete)*DF_EntityKindFlag_CanDelete) | ($(a.op_freeze)*DF_EntityKindFlag_CanFreeze) | ($(a.op_edit)*DF_EntityKindFlag_CanEdit) | ($(a.op_rename)*DF_EntityKindFlag_CanRename) | ($(a.op_enable)*DF_EntityKindFlag_CanEnable) | ($(a.op_cond)*DF_EntityKindFlag_CanCondition) | ($(a.op_dup)*DF_EntityKindFlag_CanDuplicate) | ($(a.name_is_code)*DF_EntityKindFlag_NameIsCode) | ($(a.name_is_path)*DF_EntityKindFlag_NameIsPath) | ($(a.user_lifetime)*DF_EntityKindFlag_UserDefinedLifetime) | ($(a.is_serialized)*DF_EntityKindFlag_IsSerializedToConfig)`,
 }
 
 ////////////////////////////////

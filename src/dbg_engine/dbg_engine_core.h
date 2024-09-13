@@ -41,6 +41,20 @@ struct D_BreakpointArray
   U64 count;
 };
 
+typedef struct D_PathMap D_PathMap;
+struct D_PathMap
+{
+  String8 src;
+  String8 dst;
+};
+
+typedef struct D_PathMapArray D_PathMapArray;
+struct D_PathMapArray
+{
+  D_PathMap *v;
+  U64 count;
+};
+
 ////////////////////////////////
 //~ rjf: Tick Output Types
 
@@ -147,27 +161,27 @@ struct D_LineListArray
 ////////////////////////////////
 //~ rjf: Entity Kind Flags
 
-typedef U32 D_EntityKindFlags;
+typedef U32 DF_EntityKindFlags;
 enum
 {
   //- rjf: allowed operations
-  D_EntityKindFlag_CanDelete                = (1<<0),
-  D_EntityKindFlag_CanFreeze                = (1<<1),
-  D_EntityKindFlag_CanEdit                  = (1<<2),
-  D_EntityKindFlag_CanRename                = (1<<3),
-  D_EntityKindFlag_CanEnable                = (1<<4),
-  D_EntityKindFlag_CanCondition             = (1<<5),
-  D_EntityKindFlag_CanDuplicate             = (1<<6),
+  DF_EntityKindFlag_CanDelete                = (1<<0),
+  DF_EntityKindFlag_CanFreeze                = (1<<1),
+  DF_EntityKindFlag_CanEdit                  = (1<<2),
+  DF_EntityKindFlag_CanRename                = (1<<3),
+  DF_EntityKindFlag_CanEnable                = (1<<4),
+  DF_EntityKindFlag_CanCondition             = (1<<5),
+  DF_EntityKindFlag_CanDuplicate             = (1<<6),
   
   //- rjf: name categorization
-  D_EntityKindFlag_NameIsCode               = (1<<7),
-  D_EntityKindFlag_NameIsPath               = (1<<8),
+  DF_EntityKindFlag_NameIsCode               = (1<<7),
+  DF_EntityKindFlag_NameIsPath               = (1<<8),
   
   //- rjf: lifetime categorization
-  D_EntityKindFlag_UserDefinedLifetime      = (1<<9),
+  DF_EntityKindFlag_UserDefinedLifetime      = (1<<9),
   
   //- rjf: serialization
-  D_EntityKindFlag_IsSerializedToConfig     = (1<<10),
+  DF_EntityKindFlag_IsSerializedToConfig     = (1<<10),
 };
 
 ////////////////////////////////
@@ -303,7 +317,7 @@ enum
   D_EntityFlag_MarkedForDeletion = (1<<31),
 };
 
-typedef U64 D_EntityID;
+typedef U64 DF_EntityID;
 
 typedef struct DF_Entity DF_Entity;
 struct DF_Entity
@@ -316,9 +330,9 @@ struct DF_Entity
   DF_Entity *parent;
   
   // rjf: metadata
-  D_EntityKind kind;
+  DF_EntityKind kind;
   D_EntityFlags flags;
-  D_EntityID id;
+  DF_EntityID id;
   U64 gen;
   U64 alloc_time_us;
   F32 alive_t;
@@ -464,7 +478,7 @@ typedef struct D_CmdQuery D_CmdQuery;
 struct D_CmdQuery
 {
   D_CmdParamSlot slot;
-  D_EntityKind entity_kind;
+  DF_EntityKind entity_kind;
   D_CmdQueryFlags flags;
 };
 
@@ -720,8 +734,8 @@ struct D_State
   U64 entities_active_count;
   
   // rjf: entity query caches
-  U64 kind_alloc_gens[D_EntityKind_COUNT];
-  D_EntityListCache kind_caches[D_EntityKind_COUNT];
+  U64 kind_alloc_gens[DF_EntityKind_COUNT];
+  D_EntityListCache kind_caches[DF_EntityKind_COUNT];
   
   // rjf: per-run caches
   D_UnwindCache unwind_cache;
@@ -747,6 +761,7 @@ struct D_State
   CTRL_Handle ctrl_last_run_thread_handle;
   CTRL_RunFlags ctrl_last_run_flags;
   CTRL_TrapList ctrl_last_run_traps;
+  D_BreakpointArray ctrl_last_run_extra_bps;
   U128 ctrl_last_run_param_state_hash;
   B32 ctrl_is_running;
   B32 ctrl_soft_halt_issued;
@@ -795,6 +810,16 @@ internal void d_handle_list_push(Arena *arena, D_HandleList *list, D_Handle hand
 internal D_HandleList d_handle_list_copy(Arena *arena, D_HandleList list);
 
 ////////////////////////////////
+//~ rjf: Breakpoints
+
+internal D_BreakpointArray d_breakpoint_array_copy(Arena *arena, D_BreakpointArray *src);
+
+////////////////////////////////
+//~ rjf: Path Map Application
+
+internal String8List d_possible_path_overrides_from_maps_path(Arena *arena, D_PathMapArray *path_maps, String8 file_path);
+
+////////////////////////////////
 //~ rjf: Config Type Pure Functions
 
 internal void d_cfg_table_push_unparsed_string(Arena *arena, D_CfgTable *table, String8 string, D_CfgSrc source);
@@ -835,10 +860,10 @@ internal D_EntityRec d_entity_rec_depth_first(DF_Entity *entity, DF_Entity *subt
 #define d_entity_rec_depth_first_post(entity, subtree_root) d_entity_rec_depth_first((entity), (subtree_root), OffsetOf(DF_Entity, prev), OffsetOf(DF_Entity, last))
 
 //- rjf: ancestor/child introspection
-internal DF_Entity *d_entity_child_from_kind(DF_Entity *entity, D_EntityKind kind);
-internal DF_Entity *d_entity_ancestor_from_kind(DF_Entity *entity, D_EntityKind kind);
-internal D_EntityList d_push_entity_child_list_with_kind(Arena *arena, DF_Entity *entity, D_EntityKind kind);
-internal DF_Entity *d_entity_child_from_string_and_kind(DF_Entity *parent, String8 string, D_EntityKind kind);
+internal DF_Entity *d_entity_child_from_kind(DF_Entity *entity, DF_EntityKind kind);
+internal DF_Entity *d_entity_ancestor_from_kind(DF_Entity *entity, DF_EntityKind kind);
+internal D_EntityList d_push_entity_child_list_with_kind(Arena *arena, DF_Entity *entity, DF_EntityKind kind);
+internal DF_Entity *d_entity_child_from_string_and_kind(DF_Entity *parent, String8 string, DF_EntityKind kind);
 
 //- rjf: entity list building
 internal void d_entity_list_push(Arena *arena, D_EntityList *list, DF_Entity *entity);
@@ -880,7 +905,7 @@ internal void d_name_release(String8 string);
 //~ rjf: Entity Stateful Functions
 
 //- rjf: entity allocation + tree forming
-internal DF_Entity *d_entity_alloc(DF_Entity *parent, D_EntityKind kind);
+internal DF_Entity *d_entity_alloc(DF_Entity *parent, DF_EntityKind kind);
 internal void d_entity_mark_for_deletion(DF_Entity *entity);
 internal void d_entity_release(DF_Entity *entity);
 internal void d_entity_change_parent(DF_Entity *entity, DF_Entity *old_parent, DF_Entity *new_parent, DF_Entity *prev_child);
@@ -912,12 +937,12 @@ internal String8List d_possible_overrides_from_file_path(Arena *arena, String8 f
 
 //- rjf: top-level state queries
 internal DF_Entity *d_entity_root(void);
-internal D_EntityList d_push_entity_list_with_kind(Arena *arena, D_EntityKind kind);
-internal DF_Entity *d_entity_from_id(D_EntityID id);
+internal D_EntityList d_push_entity_list_with_kind(Arena *arena, DF_EntityKind kind);
+internal DF_Entity *d_entity_from_id(DF_EntityID id);
 internal DF_Entity *d_machine_entity_from_machine_id(CTRL_MachineID machine_id);
 internal DF_Entity *d_entity_from_ctrl_handle(CTRL_Handle handle);
 internal DF_Entity *d_entity_from_ctrl_id(CTRL_MachineID machine_id, U32 id);
-internal DF_Entity *d_entity_from_name_and_kind(String8 string, D_EntityKind kind);
+internal DF_Entity *d_entity_from_name_and_kind(String8 string, DF_EntityKind kind);
 
 ////////////////////////////////
 //~ rjf: View Rule Spec Stateful Functions
@@ -1026,14 +1051,14 @@ internal String8 d_cfg_raw_from_escaped_string(Arena *arena, String8 string);
 internal String8List d_cfg_strings_from_core(Arena *arena, String8 root_path, D_CfgSrc source);
 
 //- rjf: entity kind cache
-internal D_EntityList d_query_cached_entity_list_with_kind(D_EntityKind kind);
+internal D_EntityList d_query_cached_entity_list_with_kind(DF_EntityKind kind);
 
 //- rjf: active entity based queries
 internal DI_KeyList d_push_active_dbgi_key_list(Arena *arena);
 internal D_EntityList d_push_active_target_list(Arena *arena);
 
 //- rjf: expand key based entity queries
-internal DF_Entity *d_entity_from_ev_key_and_kind(EV_Key key, D_EntityKind kind);
+internal DF_Entity *d_entity_from_ev_key_and_kind(EV_Key key, DF_EntityKind kind);
 
 //- rjf: per-run caches
 internal CTRL_Unwind d_query_cached_unwind_from_thread(CTRL_Entity *thread);
@@ -1054,6 +1079,6 @@ internal B32 d_next_cmd(D_Cmd **cmd);
 //~ rjf: Main Layer Top-Level Calls
 
 internal void d_init(void);
-internal D_EventList d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints);
+internal D_EventList d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_PathMapArray *path_maps);
 
 #endif // DBG_ENGINE_CORE_H
