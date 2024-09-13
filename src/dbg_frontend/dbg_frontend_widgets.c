@@ -1055,7 +1055,7 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             }
             U64 unwind_count = (thread == selected_thread) ? df_regs()->unwind_count : 0;
             U64 thread_rip_vaddr = d_query_cached_rip_from_thread_unwind(thread, unwind_count);
-            CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
+            CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, CTRL_EntityKind_Process);
             CTRL_Entity *module = ctrl_module_from_process_vaddr(process, thread_rip_vaddr);
             DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
             U64 thread_rip_voff = ctrl_voff_from_vaddr(module, thread_rip_vaddr);
@@ -1215,7 +1215,7 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             }
             U64 unwind_count = (thread == selected_thread) ? df_regs()->unwind_count : 0;
             U64 thread_rip_vaddr = d_query_cached_rip_from_thread_unwind(thread, unwind_count);
-            CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, DF_EntityKind_Process);
+            CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, CTRL_EntityKind_Process);
             CTRL_Entity *module = ctrl_module_from_process_vaddr(process, thread_rip_vaddr);
             DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
             U64 thread_rip_voff = ctrl_voff_from_vaddr(module, thread_rip_vaddr);
