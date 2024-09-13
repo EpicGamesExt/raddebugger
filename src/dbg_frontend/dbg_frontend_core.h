@@ -5,6 +5,62 @@
 #define DBG_FRONTEND_CORE_H
 
 ////////////////////////////////
+//~ rjf: Entity Kind Flags
+
+typedef U32 DF_EntityKindFlags;
+enum
+{
+  //- rjf: allowed operations
+  DF_EntityKindFlag_CanDelete                = (1<<0),
+  DF_EntityKindFlag_CanFreeze                = (1<<1),
+  DF_EntityKindFlag_CanEdit                  = (1<<2),
+  DF_EntityKindFlag_CanRename                = (1<<3),
+  DF_EntityKindFlag_CanEnable                = (1<<4),
+  DF_EntityKindFlag_CanCondition             = (1<<5),
+  DF_EntityKindFlag_CanDuplicate             = (1<<6),
+  
+  //- rjf: name categorization
+  DF_EntityKindFlag_NameIsCode               = (1<<7),
+  DF_EntityKindFlag_NameIsPath               = (1<<8),
+  
+  //- rjf: lifetime categorization
+  DF_EntityKindFlag_UserDefinedLifetime      = (1<<9),
+  
+  //- rjf: serialization
+  DF_EntityKindFlag_IsSerializedToConfig     = (1<<10),
+};
+
+////////////////////////////////
+//~ rjf: Entity Kind Flags
+
+typedef U32 DF_EntityFlags;
+enum
+{
+  //- rjf: allocationless, simple equipment
+  DF_EntityFlag_HasTextPoint      = (1<<0),
+  DF_EntityFlag_HasEntityHandle   = (1<<2),
+  DF_EntityFlag_HasU64            = (1<<4),
+  DF_EntityFlag_HasColor          = (1<<6),
+  DF_EntityFlag_DiesOnRunStop     = (1<<8),
+  
+  //- rjf: ctrl entity equipment
+  DF_EntityFlag_HasCtrlHandle     = (1<<9),
+  DF_EntityFlag_HasArch           = (1<<10),
+  DF_EntityFlag_HasCtrlID         = (1<<11),
+  DF_EntityFlag_HasStackBase      = (1<<12),
+  DF_EntityFlag_HasTLSRoot        = (1<<13),
+  DF_EntityFlag_HasVAddrRng       = (1<<14),
+  DF_EntityFlag_HasVAddr          = (1<<15),
+  
+  //- rjf: file properties
+  DF_EntityFlag_IsFolder          = (1<<16),
+  DF_EntityFlag_IsMissing         = (1<<17),
+  
+  //- rjf: deletion
+  DF_EntityFlag_MarkedForDeletion = (1<<31),
+};
+
+////////////////////////////////
 //~ rjf: Evaluation Spaces
 
 typedef U64 DF_EvalSpaceKind;
@@ -399,6 +455,114 @@ enum
 #include "generated/dbg_frontend.meta.h"
 
 ////////////////////////////////
+//~ rjf: Entity Types
+
+typedef U64 DF_EntityID;
+
+typedef struct DF_Entity DF_Entity;
+struct DF_Entity
+{
+  // rjf: tree links
+  DF_Entity *first;
+  DF_Entity *last;
+  DF_Entity *next;
+  DF_Entity *prev;
+  DF_Entity *parent;
+  
+  // rjf: metadata
+  DF_EntityKind kind;
+  DF_EntityFlags flags;
+  DF_EntityID id;
+  U64 gen;
+  U64 alloc_time_us;
+  F32 alive_t;
+  
+  // rjf: basic equipment
+  TxtPt text_point;
+  D_Handle entity_handle;
+  B32 disabled;
+  U64 u64;
+  Vec4F32 color_hsva;
+  D_CfgSrc cfg_src;
+  U64 timestamp;
+  
+  // rjf: ctrl equipment
+  CTRL_Handle ctrl_handle;
+  Arch arch;
+  U32 ctrl_id;
+  U64 stack_base;
+  Rng1U64 vaddr_rng;
+  U64 vaddr;
+  
+  // rjf: string equipment
+  String8 string;
+  
+  // rjf: parameter tree
+  Arena *params_arena;
+  MD_Node *params_root;
+};
+
+typedef struct DF_EntityNode DF_EntityNode;
+struct DF_EntityNode
+{
+  DF_EntityNode *next;
+  DF_Entity *entity;
+};
+
+typedef struct DF_EntityList DF_EntityList;
+struct DF_EntityList
+{
+  DF_EntityNode *first;
+  DF_EntityNode *last;
+  U64 count;
+};
+
+typedef struct DF_EntityArray DF_EntityArray;
+struct DF_EntityArray
+{
+  DF_Entity **v;
+  U64 count;
+};
+
+typedef struct DF_EntityRec DF_EntityRec;
+struct DF_EntityRec
+{
+  DF_Entity *next;
+  S32 push_count;
+  S32 pop_count;
+};
+
+////////////////////////////////
+//~ rjf: Entity Evaluation Types
+
+typedef struct DF_EntityEval DF_EntityEval;
+struct DF_EntityEval
+{
+  B64 enabled;
+  U64 hit_count;
+  U64 label_off;
+  U64 location_off;
+  U64 condition_off;
+};
+
+////////////////////////////////
+//~ rjf: Entity Fuzzy Listing Types
+
+typedef struct DF_EntityFuzzyItem DF_EntityFuzzyItem;
+struct DF_EntityFuzzyItem
+{
+  DF_Entity *entity;
+  FuzzyMatchRangeList matches;
+};
+
+typedef struct DF_EntityFuzzyItemArray DF_EntityFuzzyItemArray;
+struct DF_EntityFuzzyItemArray
+{
+  DF_EntityFuzzyItem *v;
+  U64 count;
+};
+
+////////////////////////////////
 //~ rjf: Command Types
 
 typedef struct DF_Cmd DF_Cmd;
@@ -668,6 +832,14 @@ struct DF_EvalVizViewCacheSlot
 ////////////////////////////////
 //~ rjf: Main Per-Process Graphical State
 
+typedef struct D_EntityListCache D_EntityListCache;
+struct D_EntityListCache
+{
+  Arena *arena;
+  U64 alloc_gen;
+  DF_EntityList list;
+};
+
 typedef struct DF_State DF_State;
 struct DF_State
 {
@@ -699,6 +871,20 @@ struct DF_State
   
   // rjf: autosave timer
   F32 seconds_until_autosave;
+  
+  // rjf: entity state
+  Arena *entities_arena;
+  DF_Entity *entities_base;
+  U64 entities_count;
+  U64 entities_id_gen;
+  DF_Entity *entities_root;
+  DF_Entity *entities_free[2]; // [0] -> normal lifetime, not user defined; [1] -> user defined lifetime (& thus undoable)
+  U64 entities_free_count;
+  U64 entities_active_count;
+  
+  // rjf: entity query caches
+  U64 kind_alloc_gens[DF_EntityKind_COUNT];
+  D_EntityListCache kind_caches[DF_EntityKind_COUNT];
   
   // rjf: key map table
   Arena *key_map_arena;
@@ -796,6 +982,15 @@ struct DF_State
 ////////////////////////////////
 //~ rjf: Globals
 
+read_only global DF_Entity d_nil_entity =
+{
+  &d_nil_entity,
+  &d_nil_entity,
+  &d_nil_entity,
+  &d_nil_entity,
+  &d_nil_entity,
+};
+
 read_only global DF_CmdKindInfo df_nil_cmd_kind_info = {0};
 
 read_only global DF_ViewSpec df_nil_view_spec =
@@ -852,6 +1047,59 @@ internal DF_Regs *df_regs_copy(Arena *arena, DF_Regs *src);
 //~ rjf: Commands Type Functions
 
 internal void df_cmd_list_push_new(Arena *arena, DF_CmdList *cmds, String8 name, DF_Regs *regs);
+
+////////////////////////////////
+//~ rjf: Entity Type Pure Functions
+
+//- rjf: nil
+internal B32 df_entity_is_nil(DF_Entity *entity);
+#define df_require_entity_nonnil(entity, if_nil_stmts) do{if(df_entity_is_nil(entity)){if_nil_stmts;}}while(0)
+
+//- rjf: handle <-> entity conversions
+internal U64 df_index_from_entity(DF_Entity *entity);
+internal D_Handle df_handle_from_entity(DF_Entity *entity);
+internal DF_Entity *df_entity_from_handle(D_Handle handle);
+internal D_HandleList df_handle_list_from_entity_list(Arena *arena, DF_EntityList entities);
+
+//- rjf: entity recursion iterators
+internal DF_EntityRec df_entity_rec_depth_first(DF_Entity *entity, DF_Entity *subtree_root, U64 sib_off, U64 child_off);
+#define df_entity_rec_depth_first_pre(entity, subtree_root)  df_entity_rec_depth_first((entity), (subtree_root), OffsetOf(DF_Entity, next), OffsetOf(DF_Entity, first))
+#define df_entity_rec_depth_first_post(entity, subtree_root) df_entity_rec_depth_first((entity), (subtree_root), OffsetOf(DF_Entity, prev), OffsetOf(DF_Entity, last))
+
+//- rjf: ancestor/child introspection
+internal DF_Entity *df_entity_child_from_kind(DF_Entity *entity, DF_EntityKind kind);
+internal DF_Entity *df_entity_ancestor_from_kind(DF_Entity *entity, DF_EntityKind kind);
+internal DF_EntityList df_push_entity_child_list_with_kind(Arena *arena, DF_Entity *entity, DF_EntityKind kind);
+internal DF_Entity *df_entity_child_from_string_and_kind(DF_Entity *parent, String8 string, DF_EntityKind kind);
+
+//- rjf: entity list building
+internal void df_entity_list_push(Arena *arena, DF_EntityList *list, DF_Entity *entity);
+internal DF_EntityArray df_entity_array_from_list(Arena *arena, DF_EntityList *list);
+#define df_first_entity_from_list(list) ((list)->first != 0 ? (list)->first->entity : &d_nil_entity)
+
+//- rjf: entity fuzzy list building
+internal DF_EntityFuzzyItemArray df_entity_fuzzy_item_array_from_entity_list_needle(Arena *arena, DF_EntityList *list, String8 needle);
+internal DF_EntityFuzzyItemArray df_entity_fuzzy_item_array_from_entity_array_needle(Arena *arena, DF_EntityArray *array, String8 needle);
+
+//- rjf: full path building, from file/folder entities
+internal String8 df_full_path_from_entity(Arena *arena, DF_Entity *entity);
+
+//- rjf: display string entities, for referencing entities in ui
+internal String8 df_display_string_from_entity(Arena *arena, DF_Entity *entity);
+
+//- rjf: extra search tag strings for fuzzy filtering entities
+internal String8 df_search_tags_from_entity(Arena *arena, DF_Entity *entity);
+
+//- rjf: entity -> color operations
+internal Vec4F32 df_hsva_from_entity(DF_Entity *entity);
+internal Vec4F32 df_rgba_from_entity(DF_Entity *entity);
+
+//- rjf: entity -> expansion tree keys
+internal EV_Key df_ev_key_from_entity(DF_Entity *entity);
+internal EV_Key df_parent_ev_key_from_entity(DF_Entity *entity);
+
+//- rjf: entity -> evaluation
+internal DF_EntityEval *df_eval_from_entity(Arena *arena, DF_Entity *entity);
 
 ////////////////////////////////
 //~ rjf: View Type Functions
@@ -924,6 +1172,92 @@ internal void df_queue_drag_drop(void);
 
 internal void df_set_hover_regs(void);
 internal DF_Regs *df_get_hover_regs(void);
+
+////////////////////////////////
+//~ rjf: Entity Stateful Functions
+
+//- rjf: entity allocation + tree forming
+internal DF_Entity *df_entity_alloc(DF_Entity *parent, DF_EntityKind kind);
+internal void df_entity_mark_for_deletion(DF_Entity *entity);
+internal void df_entity_release(DF_Entity *entity);
+internal void df_entity_change_parent(DF_Entity *entity, DF_Entity *old_parent, DF_Entity *new_parent, DF_Entity *prev_child);
+
+//- rjf: entity simple equipment
+internal void df_entity_equip_txt_pt(DF_Entity *entity, TxtPt point);
+internal void df_entity_equip_entity_handle(DF_Entity *entity, D_Handle handle);
+internal void df_entity_equip_disabled(DF_Entity *entity, B32 b32);
+internal void df_entity_equip_u64(DF_Entity *entity, U64 u64);
+internal void df_entity_equip_color_rgba(DF_Entity *entity, Vec4F32 rgba);
+internal void df_entity_equip_color_hsva(DF_Entity *entity, Vec4F32 hsva);
+internal void df_entity_equip_cfg_src(DF_Entity *entity, D_CfgSrc cfg_src);
+internal void df_entity_equip_timestamp(DF_Entity *entity, U64 timestamp);
+
+//- rjf: control layer correllation equipment
+internal void df_entity_equip_ctrl_handle(DF_Entity *entity, CTRL_Handle handle);
+internal void df_entity_equip_arch(DF_Entity *entity, Arch arch);
+internal void df_entity_equip_ctrl_id(DF_Entity *entity, U32 id);
+internal void df_entity_equip_stack_base(DF_Entity *entity, U64 stack_base);
+internal void df_entity_equip_vaddr_rng(DF_Entity *entity, Rng1U64 range);
+internal void df_entity_equip_vaddr(DF_Entity *entity, U64 vaddr);
+
+//- rjf: name equipment
+internal void df_entity_equip_name(DF_Entity *entity, String8 name);
+
+//- rjf: file path map override lookups
+internal String8List d_possible_overrides_from_file_path(Arena *arena, String8 file_path);
+
+//- rjf: top-level state queries
+internal DF_Entity *df_entity_root(void);
+internal DF_EntityList df_push_entity_list_with_kind(Arena *arena, DF_EntityKind kind);
+internal DF_Entity *df_entity_from_id(DF_EntityID id);
+internal DF_Entity *df_machine_entity_from_machine_id(CTRL_MachineID machine_id);
+internal DF_Entity *df_entity_from_ctrl_handle(CTRL_Handle handle);
+internal DF_Entity *df_entity_from_ctrl_id(CTRL_MachineID machine_id, U32 id);
+internal DF_Entity *df_entity_from_name_and_kind(String8 string, DF_EntityKind kind);
+
+////////////////////////////////
+//~ rjf: Evaluation Spaces
+
+//- rjf: ctrl entity <-> eval space
+internal CTRL_Entity *d_ctrl_entity_from_eval_space(E_Space space);
+internal E_Space d_eval_space_from_ctrl_entity(CTRL_Entity *entity);
+
+//- rjf: entity <-> eval space
+internal DF_Entity *d_entity_from_eval_space(E_Space space);
+internal E_Space d_eval_space_from_entity(DF_Entity *entity);
+
+//- rjf: eval space reads/writes
+internal B32 d_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range);
+internal B32 d_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range);
+
+//- rjf: asynchronous streamed reads -> hashes from spaces
+internal U128 d_key_from_eval_space_range(E_Space space, Rng1U64 range, B32 zero_terminated);
+
+//- rjf: space -> entire range
+internal Rng1U64 d_whole_range_from_eval_space(E_Space space);
+
+////////////////////////////////
+//~ rjf: Evaluation Visualization
+
+//- rjf: writing values back to child processes
+internal B32 d_commit_eval_value_string(E_Eval dst_eval, String8 string);
+
+//- rjf: eval / view rule params tree info extraction
+internal U64 d_base_offset_from_eval(E_Eval eval);
+internal E_Value d_value_from_params_key(MD_Node *params, String8 key);
+internal Rng1U64 d_range_from_eval_params(E_Eval eval, MD_Node *params);
+internal TXT_LangKind d_lang_kind_from_eval_params(E_Eval eval, MD_Node *params);
+internal Arch d_arch_from_eval_params(E_Eval eval, MD_Node *params);
+internal Vec2S32 d_dim2s32_from_eval_params(E_Eval eval, MD_Node *params);
+internal R_Tex2DFormat d_tex2dformat_from_eval_params(E_Eval eval, MD_Node *params);
+
+//- rjf: eval <-> entity
+internal DF_Entity *d_entity_from_eval_string(String8 string);
+internal String8 d_eval_string_from_entity(Arena *arena, DF_Entity *entity);
+
+//- rjf: eval <-> file path
+internal String8 d_file_path_from_eval_string(Arena *arena, String8 string);
+internal String8 d_eval_string_from_file_path(Arena *arena, String8 string);
 
 ////////////////////////////////
 //~ rjf: View Spec State Functions
@@ -1062,6 +1396,11 @@ internal Arena *df_frame_arena(void);
 
 //- rjf: config paths
 internal String8 df_cfg_path_from_src(D_CfgSrc src);
+
+//- rjf: entity cache queries
+internal DF_EntityList d_query_cached_entity_list_with_kind(DF_EntityKind kind);
+internal DF_EntityList d_push_active_target_list(Arena *arena);
+internal DF_Entity *d_entity_from_ev_key_and_kind(EV_Key key, DF_EntityKind kind);
 
 //- rjf: config state
 internal D_CfgTable *df_cfg_table(void);

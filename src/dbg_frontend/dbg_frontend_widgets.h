@@ -42,9 +42,9 @@ struct DF_CodeSliceParams
   String8 *line_text;
   Rng1U64 *line_ranges;
   TXT_TokenArray *line_tokens;
-  D_EntityList *line_bps;
+  DF_EntityList *line_bps;
   CTRL_EntityList *line_ips;
-  D_EntityList *line_pins;
+  DF_EntityList *line_pins;
   U64 *line_vaddrs;
   D_LineList *line_infos;
   DI_KeyList relevant_dbgi_keys;

@@ -15,41 +15,6 @@ D_CfgSrc_Transient,
 D_CfgSrc_COUNT,
 } D_CfgSrc;
 
-typedef enum DF_EntityKind
-{
-DF_EntityKind_Nil,
-DF_EntityKind_Root,
-DF_EntityKind_Machine,
-DF_EntityKind_File,
-DF_EntityKind_AutoViewRule,
-DF_EntityKind_FilePathMap,
-DF_EntityKind_WatchPin,
-DF_EntityKind_Watch,
-DF_EntityKind_ViewRule,
-DF_EntityKind_Breakpoint,
-DF_EntityKind_Condition,
-DF_EntityKind_Location,
-DF_EntityKind_Target,
-DF_EntityKind_Executable,
-DF_EntityKind_Arguments,
-DF_EntityKind_WorkingDirectory,
-DF_EntityKind_EntryPoint,
-DF_EntityKind_Window,
-DF_EntityKind_Panel,
-DF_EntityKind_View,
-DF_EntityKind_RecentProject,
-DF_EntityKind_Source,
-DF_EntityKind_Dest,
-DF_EntityKind_Process,
-DF_EntityKind_Thread,
-DF_EntityKind_Module,
-DF_EntityKind_PendingThreadName,
-DF_EntityKind_DebugInfoPath,
-DF_EntityKind_ConversionTask,
-DF_EntityKind_ConversionFail,
-DF_EntityKind_COUNT,
-} DF_EntityKind;
-
 typedef enum D_CmdKind
 {
 D_CmdKind_Null,
@@ -138,11 +103,6 @@ struct {B32 *value_ptr; String8 name;} DEV_toggle_table[] =
 };
 C_LINKAGE_BEGIN
 extern String8 d_cfg_src_string_table[4];
-extern String8 d_entity_kind_display_string_table[30];
-extern String8 d_entity_kind_name_lower_table[30];
-extern String8 d_entity_kind_name_lower_plural_table[30];
-extern String8 d_entity_kind_name_label_table[30];
-extern DF_EntityKindFlags d_entity_kind_flags_table[30];
 
 C_LINKAGE_END
 

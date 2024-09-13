@@ -338,467 +338,6 @@ d_cmd_list_push_new(Arena *arena, D_CmdList *cmds, D_CmdKind kind, D_CmdParams *
 }
 
 ////////////////////////////////
-//~ rjf: Entity Functions
-
-//- rjf: nil
-
-internal B32
-d_entity_is_nil(DF_Entity *entity)
-{
-  return (entity == 0 || entity == &d_nil_entity);
-}
-
-//- rjf: handle <-> entity conversions
-
-internal U64
-d_index_from_entity(DF_Entity *entity)
-{
-  return (U64)(entity - d_state->entities_base);
-}
-
-internal D_Handle
-d_handle_from_entity(DF_Entity *entity)
-{
-  D_Handle handle = d_handle_zero();
-  if(!d_entity_is_nil(entity))
-  {
-    handle.u64[0] = d_index_from_entity(entity);
-    handle.u64[1] = entity->gen;
-  }
-  return handle;
-}
-
-internal DF_Entity *
-d_entity_from_handle(D_Handle handle)
-{
-  DF_Entity *result = d_state->entities_base + handle.u64[0];
-  if(handle.u64[0] >= d_state->entities_count || result->gen != handle.u64[1])
-  {
-    result = &d_nil_entity;
-  }
-  return result;
-}
-
-internal D_EntityList
-d_entity_list_from_handle_list(Arena *arena, D_HandleList handles)
-{
-  D_EntityList result = {0};
-  for(D_HandleNode *n = handles.first; n != 0; n = n->next)
-  {
-    DF_Entity *entity = d_entity_from_handle(n->handle);
-    if(!d_entity_is_nil(entity))
-    {
-      d_entity_list_push(arena, &result, entity);
-    }
-  }
-  return result;
-}
-
-internal D_HandleList
-d_handle_list_from_entity_list(Arena *arena, D_EntityList entities)
-{
-  D_HandleList result = {0};
-  for(D_EntityNode *n = entities.first; n != 0; n = n->next)
-  {
-    D_Handle handle = d_handle_from_entity(n->entity);
-    d_handle_list_push(arena, &result, handle);
-  }
-  return result;
-}
-
-//- rjf: entity recursion iterators
-
-internal D_EntityRec
-d_entity_rec_depth_first(DF_Entity *entity, DF_Entity *subtree_root, U64 sib_off, U64 child_off)
-{
-  D_EntityRec result = {0};
-  if(!d_entity_is_nil(*MemberFromOffset(DF_Entity **, entity, child_off)))
-  {
-    result.next = *MemberFromOffset(DF_Entity **, entity, child_off);
-    result.push_count = 1;
-  }
-  else for(DF_Entity *parent = entity; parent != subtree_root && !d_entity_is_nil(parent); parent = parent->parent)
-  {
-    if(parent != subtree_root && !d_entity_is_nil(*MemberFromOffset(DF_Entity **, parent, sib_off)))
-    {
-      result.next = *MemberFromOffset(DF_Entity **, parent, sib_off);
-      break;
-    }
-    result.pop_count += 1;
-  }
-  return result;
-}
-
-//- rjf: ancestor/child introspection
-
-internal DF_Entity *
-d_entity_child_from_kind(DF_Entity *entity, DF_EntityKind kind)
-{
-  DF_Entity *result = &d_nil_entity;
-  for(DF_Entity *child = entity->first; !d_entity_is_nil(child); child = child->next)
-  {
-    if(child->kind == kind)
-    {
-      result = child;
-      break;
-    }
-  }
-  return result;
-}
-
-internal DF_Entity *
-d_entity_ancestor_from_kind(DF_Entity *entity, DF_EntityKind kind)
-{
-  DF_Entity *result = &d_nil_entity;
-  for(DF_Entity *p = entity->parent; !d_entity_is_nil(p); p = p->parent)
-  {
-    if(p->kind == kind)
-    {
-      result = p;
-      break;
-    }
-  }
-  return result;
-}
-
-internal D_EntityList
-d_push_entity_child_list_with_kind(Arena *arena, DF_Entity *entity, DF_EntityKind kind)
-{
-  D_EntityList result = {0};
-  for(DF_Entity *child = entity->first; !d_entity_is_nil(child); child = child->next)
-  {
-    if(child->kind == kind)
-    {
-      d_entity_list_push(arena, &result, child);
-    }
-  }
-  return result;
-}
-
-internal DF_Entity *
-d_entity_child_from_string_and_kind(DF_Entity *parent, String8 string, DF_EntityKind kind)
-{
-  DF_Entity *result = &d_nil_entity;
-  for(DF_Entity *child = parent->first; !d_entity_is_nil(child); child = child->next)
-  {
-    if(str8_match(child->string, string, 0) && child->kind == kind)
-    {
-      result = child;
-      break;
-    }
-  }
-  return result;
-}
-
-//- rjf: entity list building
-
-internal void
-d_entity_list_push(Arena *arena, D_EntityList *list, DF_Entity *entity)
-{
-  D_EntityNode *n = push_array(arena, D_EntityNode, 1);
-  n->entity = entity;
-  SLLQueuePush(list->first, list->last, n);
-  list->count += 1;
-}
-
-internal D_EntityArray
-d_entity_array_from_list(Arena *arena, D_EntityList *list)
-{
-  D_EntityArray result = {0};
-  result.count = list->count;
-  result.v = push_array(arena, DF_Entity *, result.count);
-  U64 idx = 0;
-  for(D_EntityNode *n = list->first; n != 0; n = n->next, idx += 1)
-  {
-    result.v[idx] = n->entity;
-  }
-  return result;
-}
-
-//- rjf: entity fuzzy list building
-
-internal D_EntityFuzzyItemArray
-d_entity_fuzzy_item_array_from_entity_list_needle(Arena *arena, D_EntityList *list, String8 needle)
-{
-  Temp scratch = scratch_begin(&arena, 1);
-  D_EntityArray array = d_entity_array_from_list(scratch.arena, list);
-  D_EntityFuzzyItemArray result = d_entity_fuzzy_item_array_from_entity_array_needle(arena, &array, needle);
-  return result;
-}
-
-internal D_EntityFuzzyItemArray
-d_entity_fuzzy_item_array_from_entity_array_needle(Arena *arena, D_EntityArray *array, String8 needle)
-{
-  Temp scratch = scratch_begin(&arena, 1);
-  D_EntityFuzzyItemArray result = {0};
-  result.count = array->count;
-  result.v = push_array(arena, D_EntityFuzzyItem, result.count);
-  U64 result_idx = 0;
-  for(U64 src_idx = 0; src_idx < array->count; src_idx += 1)
-  {
-    DF_Entity *entity = array->v[src_idx];
-    String8 display_string = d_display_string_from_entity(scratch.arena, entity);
-    FuzzyMatchRangeList matches = fuzzy_match_find(arena, needle, display_string);
-    if(matches.count >= matches.needle_part_count)
-    {
-      result.v[result_idx].entity = entity;
-      result.v[result_idx].matches = matches;
-      result_idx += 1;
-    }
-    else
-    {
-      String8 search_tags = d_search_tags_from_entity(scratch.arena, entity);
-      if(search_tags.size != 0)
-      {
-        FuzzyMatchRangeList tag_matches = fuzzy_match_find(scratch.arena, needle, search_tags);
-        if(tag_matches.count >= tag_matches.needle_part_count)
-        {
-          result.v[result_idx].entity = entity;
-          result.v[result_idx].matches = matches;
-          result_idx += 1;
-        }
-      }
-    }
-  }
-  result.count = result_idx;
-  scratch_end(scratch);
-  return result;
-}
-
-//- rjf: full path building, from file/folder entities
-
-internal String8
-d_full_path_from_entity(Arena *arena, DF_Entity *entity)
-{
-  String8 string = {0};
-  {
-    Temp scratch = scratch_begin(&arena, 1);
-    String8List strs = {0};
-    for(DF_Entity *e = entity; !d_entity_is_nil(e); e = e->parent)
-    {
-      if(e->kind == DF_EntityKind_File)
-      {
-        str8_list_push_front(scratch.arena, &strs, e->string);
-      }
-    }
-    StringJoin join = {0};
-    join.sep = str8_lit("/");
-    string = str8_list_join(arena, &strs, &join);
-    scratch_end(scratch);
-  }
-  return string;
-}
-
-//- rjf: display string entities, for referencing entities in ui
-
-internal String8
-d_display_string_from_entity(Arena *arena, DF_Entity *entity)
-{
-  String8 result = {0};
-  switch(entity->kind)
-  {
-    default:
-    {
-      if(entity->string.size != 0)
-      {
-        result = push_str8_copy(arena, entity->string);
-      }
-      else
-      {
-        String8 kind_string = d_entity_kind_display_string_table[entity->kind];
-        result = push_str8f(arena, "%S $%I64u", kind_string, entity->id);
-      }
-    }break;
-    
-    case DF_EntityKind_Target:
-    {
-      if(entity->string.size != 0)
-      {
-        result = push_str8_copy(arena, entity->string);
-      }
-      else
-      {
-        DF_Entity *exe = d_entity_child_from_kind(entity, DF_EntityKind_Executable);
-        result = push_str8_copy(arena, exe->string);
-      }
-    }break;
-    
-    case DF_EntityKind_Breakpoint:
-    {
-      if(entity->string.size != 0)
-      {
-        result = push_str8_copy(arena, entity->string);
-      }
-      else
-      {
-        DF_Entity *loc = d_entity_child_from_kind(entity, DF_EntityKind_Location);
-        if(loc->flags & D_EntityFlag_HasTextPoint)
-        {
-          result = push_str8f(arena, "%S:%I64d:%I64d", str8_skip_last_slash(loc->string), loc->text_point.line, loc->text_point.column);
-        }
-        else if(loc->flags & D_EntityFlag_HasVAddr)
-        {
-          result = str8_from_u64(arena, loc->vaddr, 16, 16, 0);
-        }
-        else if(loc->string.size != 0)
-        {
-          result = push_str8_copy(arena, loc->string);
-        }
-      }
-    }break;
-    
-    case DF_EntityKind_Process:
-    {
-      DF_Entity *main_mod_child = d_entity_child_from_kind(entity, DF_EntityKind_Module);
-      String8 main_mod_name = str8_skip_last_slash(main_mod_child->string);
-      result = push_str8f(arena, "%S%s%sPID: %i%s",
-                          main_mod_name,
-                          main_mod_name.size != 0 ? " " : "",
-                          main_mod_name.size != 0 ? "(" : "",
-                          entity->ctrl_id,
-                          main_mod_name.size != 0 ? ")" : "");
-    }break;
-    
-    case DF_EntityKind_Thread:
-    {
-      String8 name = entity->string;
-      if(name.size == 0)
-      {
-        DF_Entity *process = d_entity_ancestor_from_kind(entity, DF_EntityKind_Process);
-        DF_Entity *first_thread = d_entity_child_from_kind(process, DF_EntityKind_Thread);
-        if(first_thread == entity)
-        {
-          name = str8_lit("Main Thread");
-        }
-      }
-      result = push_str8f(arena, "%S%s%sTID: %i%s",
-                          name,
-                          name.size != 0 ? " " : "",
-                          name.size != 0 ? "(" : "",
-                          entity->ctrl_id,
-                          name.size != 0 ? ")" : "");
-    }break;
-    
-    case DF_EntityKind_Module:
-    {
-      result = push_str8_copy(arena, str8_skip_last_slash(entity->string));
-    }break;
-    
-    case DF_EntityKind_RecentProject:
-    {
-      result = push_str8_copy(arena, str8_skip_last_slash(entity->string));
-    }break;
-  }
-  return result;
-}
-
-//- rjf: extra search tag strings for fuzzy filtering entities
-
-internal String8
-d_search_tags_from_entity(Arena *arena, DF_Entity *entity)
-{
-  String8 result = {0};
-  if(entity->kind == DF_EntityKind_Thread)
-  {
-    Temp scratch = scratch_begin(&arena, 1);
-    CTRL_Entity *entity_ctrl = ctrl_entity_from_handle(d_state->ctrl_entity_store, entity->ctrl_handle);
-    CTRL_Entity *process = ctrl_entity_ancestor_from_kind(entity_ctrl, DF_EntityKind_Process);
-    CTRL_Unwind unwind = d_query_cached_unwind_from_thread(entity_ctrl);
-    String8List strings = {0};
-    for(U64 frame_num = unwind.frames.count; frame_num > 0; frame_num -= 1)
-    {
-      CTRL_UnwindFrame *f = &unwind.frames.v[frame_num-1];
-      U64 rip_vaddr = regs_rip_from_arch_block(entity->arch, f->regs);
-      CTRL_Entity *module = ctrl_module_from_process_vaddr(process, rip_vaddr);
-      U64 rip_voff = ctrl_voff_from_vaddr(module, rip_vaddr);
-      DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
-      String8 procedure_name = d_symbol_name_from_dbgi_key_voff(scratch.arena, &dbgi_key, rip_voff, 0);
-      if(procedure_name.size != 0)
-      {
-        str8_list_push(scratch.arena, &strings, procedure_name);
-      }
-    }
-    StringJoin join = {0};
-    join.sep = str8_lit(",");
-    result = str8_list_join(arena, &strings, &join);
-    scratch_end(scratch);
-  }
-  return result;
-}
-
-//- rjf: entity -> color operations
-
-internal Vec4F32
-d_hsva_from_entity(DF_Entity *entity)
-{
-  Vec4F32 result = {0};
-  if(entity->flags & D_EntityFlag_HasColor)
-  {
-    result = entity->color_hsva;
-  }
-  return result;
-}
-
-internal Vec4F32
-d_rgba_from_entity(DF_Entity *entity)
-{
-  Vec4F32 result = {0};
-  if(entity->flags & D_EntityFlag_HasColor)
-  {
-    Vec3F32 hsv = v3f32(entity->color_hsva.x, entity->color_hsva.y, entity->color_hsva.z);
-    Vec3F32 rgb = rgb_from_hsv(hsv);
-    result = v4f32(rgb.x, rgb.y, rgb.z, entity->color_hsva.w);
-  }
-  return result;
-}
-
-//- rjf: entity -> expansion tree keys
-
-internal EV_Key
-d_ev_key_from_entity(DF_Entity *entity)
-{
-  EV_Key parent_key = d_parent_ev_key_from_entity(entity);
-  EV_Key key = ev_key_make(ev_hash_from_key(parent_key), (U64)entity);
-  return key;
-}
-
-internal EV_Key
-d_parent_ev_key_from_entity(DF_Entity *entity)
-{
-  EV_Key parent_key = ev_key_make(5381, (U64)entity);
-  return parent_key;
-}
-
-//- rjf: entity -> evaluation
-
-internal D_EntityEval *
-d_eval_from_entity(Arena *arena, DF_Entity *entity)
-{
-  D_EntityEval *eval = push_array(arena, D_EntityEval, 1);
-  {
-    DF_Entity *loc = d_entity_child_from_kind(entity, DF_EntityKind_Location);
-    DF_Entity *cnd = d_entity_child_from_kind(entity, DF_EntityKind_Condition);
-    String8 label_string = push_str8_copy(arena, entity->string);
-    String8 loc_string = {0};
-    if(loc->flags & D_EntityFlag_HasTextPoint)
-    {
-      loc_string = push_str8f(arena, "%S:%I64u:%I64u", loc->string, loc->text_point.line, loc->text_point.column);
-    }
-    else if(loc->flags & D_EntityFlag_HasVAddr)
-    {
-      loc_string = push_str8f(arena, "0x%I64x", loc->vaddr);
-    }
-    String8 cnd_string = push_str8_copy(arena, cnd->string);
-    eval->enabled      = !entity->disabled;
-    eval->hit_count    = entity->u64;
-    eval->label_off    = (U64)((U8 *)label_string.str - (U8 *)eval);
-    eval->location_off = (U64)((U8 *)loc_string.str - (U8 *)eval);
-    eval->condition_off= (U64)((U8 *)cnd_string.str - (U8 *)eval);
-  }
-  return eval;
-}
-
-////////////////////////////////
 //~ rjf: Name Allocation
 
 internal U64
@@ -904,509 +443,6 @@ d_name_release(String8 string)
   D_NameChunkNode *node = (D_NameChunkNode *)string.str;
   node->size = u64_up_to_pow2(string.size);
   SLLStackPush(d_state->free_name_chunks[bucket_idx], node);
-}
-
-////////////////////////////////
-//~ rjf: Entity State Functions
-
-//- rjf: entity allocation + tree forming
-
-internal DF_Entity *
-d_entity_alloc(DF_Entity *parent, DF_EntityKind kind)
-{
-  B32 user_defined_lifetime = !!(d_entity_kind_flags_table[kind] & DF_EntityKindFlag_UserDefinedLifetime);
-  U64 free_list_idx = !!user_defined_lifetime;
-  if(d_entity_is_nil(parent)) { parent = d_state->entities_root; }
-  
-  // rjf: empty free list -> push new
-  if(!d_state->entities_free[free_list_idx])
-  {
-    DF_Entity *entity = push_array(d_state->entities_arena, DF_Entity, 1);
-    d_state->entities_count += 1;
-    d_state->entities_free_count += 1;
-    SLLStackPush(d_state->entities_free[free_list_idx], entity);
-  }
-  
-  // rjf: pop new entity off free-list
-  DF_Entity *entity = d_state->entities_free[free_list_idx];
-  SLLStackPop(d_state->entities_free[free_list_idx]);
-  d_state->entities_free_count -= 1;
-  d_state->entities_active_count += 1;
-  
-  // rjf: zero entity
-  {
-    U64 gen = entity->gen;
-    MemoryZeroStruct(entity);
-    entity->gen = gen;
-  }
-  
-  // rjf: set up alloc'd entity links
-  entity->first = entity->last = entity->next = entity->prev = entity->parent = &d_nil_entity;
-  entity->parent = parent;
-  
-  // rjf: stitch up parent links
-  if(d_entity_is_nil(parent))
-  {
-    d_state->entities_root = entity;
-  }
-  else
-  {
-    DLLPushBack_NPZ(&d_nil_entity, parent->first, parent->last, entity, next, prev);
-  }
-  
-  // rjf: fill out metadata
-  entity->kind = kind;
-  d_state->entities_id_gen += 1;
-  entity->id = d_state->entities_id_gen;
-  entity->gen += 1;
-  entity->alloc_time_us = os_now_microseconds();
-  entity->params_root = &md_nil_node;
-  
-  // rjf: initialize to deleted, record history, then "undelete" if this allocation can be undone
-  if(user_defined_lifetime)
-  {
-    // TODO(rjf)
-  }
-  
-  // rjf: dirtify caches
-  d_state->kind_alloc_gens[kind] += 1;
-  
-  // rjf: log
-  LogInfoNamedBlockF("new_entity")
-  {
-    log_infof("kind: \"%S\"\n", d_entity_kind_display_string_table[kind]);
-    log_infof("id: $0x%I64x\n", entity->id);
-  }
-  
-  return entity;
-}
-
-internal void
-d_entity_mark_for_deletion(DF_Entity *entity)
-{
-  if(!d_entity_is_nil(entity))
-  {
-    entity->flags |= D_EntityFlag_MarkedForDeletion;
-  }
-}
-
-internal void
-d_entity_release(DF_Entity *entity)
-{
-  Temp scratch = scratch_begin(0, 0);
-  
-  // rjf: unpack
-  U64 free_list_idx = !!(d_entity_kind_flags_table[entity->kind] & DF_EntityKindFlag_UserDefinedLifetime);
-  
-  // rjf: release whole tree
-  typedef struct Task Task;
-  struct Task
-  {
-    Task *next;
-    DF_Entity *e;
-  };
-  Task start_task = {0, entity};
-  Task *first_task = &start_task;
-  Task *last_task = &start_task;
-  for(Task *task = first_task; task != 0; task = task->next)
-  {
-    for(DF_Entity *child = task->e->first; !d_entity_is_nil(child); child = child->next)
-    {
-      Task *t = push_array(scratch.arena, Task, 1);
-      t->e = child;
-      SLLQueuePush(first_task, last_task, t);
-    }
-    LogInfoNamedBlockF("end_entity")
-    {
-      String8 name = d_display_string_from_entity(scratch.arena, task->e);
-      log_infof("kind: \"%S\"\n", d_entity_kind_display_string_table[task->e->kind]);
-      log_infof("id: $0x%I64x\n", task->e->id);
-      log_infof("display_string: \"%S\"\n", name);
-    }
-    SLLStackPush(d_state->entities_free[free_list_idx], task->e);
-    d_state->entities_free_count += 1;
-    d_state->entities_active_count -= 1;
-    task->e->gen += 1;
-    if(task->e->string.size != 0)
-    {
-      d_name_release(task->e->string);
-    }
-    if(task->e->params_arena != 0)
-    {
-      arena_release(task->e->params_arena);
-    }
-    d_state->kind_alloc_gens[task->e->kind] += 1;
-  }
-  
-  scratch_end(scratch);
-}
-
-internal void
-d_entity_change_parent(DF_Entity *entity, DF_Entity *old_parent, DF_Entity *new_parent, DF_Entity *prev_child)
-{
-  Assert(entity->parent == old_parent);
-  Assert(prev_child->parent == old_parent || d_entity_is_nil(prev_child));
-  
-  // rjf: fix up links
-  if(!d_entity_is_nil(old_parent))
-  {
-    DLLRemove_NPZ(&d_nil_entity, old_parent->first, old_parent->last, entity, next, prev);
-  }
-  if(!d_entity_is_nil(new_parent))
-  {
-    DLLInsert_NPZ(&d_nil_entity, new_parent->first, new_parent->last, prev_child, entity, next, prev);
-  }
-  entity->parent = new_parent;
-  
-  // rjf: notify
-  d_state->kind_alloc_gens[entity->kind] += 1;
-}
-
-//- rjf: entity simple equipment
-
-internal void
-d_entity_equip_txt_pt(DF_Entity *entity, TxtPt point)
-{
-  d_require_entity_nonnil(entity, return);
-  entity->text_point = point;
-  entity->flags |= D_EntityFlag_HasTextPoint;
-}
-
-internal void
-d_entity_equip_entity_handle(DF_Entity *entity, D_Handle handle)
-{
-  d_require_entity_nonnil(entity, return);
-  entity->entity_handle = handle;
-  entity->flags |= D_EntityFlag_HasEntityHandle;
-}
-
-internal void
-d_entity_equip_disabled(DF_Entity *entity, B32 value)
-{
-  d_require_entity_nonnil(entity, return);
-  entity->disabled = value;
-}
-
-internal void
-d_entity_equip_u64(DF_Entity *entity, U64 u64)
-{
-  d_require_entity_nonnil(entity, return);
-  entity->u64 = u64;
-  entity->flags |= D_EntityFlag_HasU64;
-}
-
-internal void
-d_entity_equip_color_rgba(DF_Entity *entity, Vec4F32 rgba)
-{
-  d_require_entity_nonnil(entity, return);
-  Vec3F32 rgb = v3f32(rgba.x, rgba.y, rgba.z);
-  Vec3F32 hsv = hsv_from_rgb(rgb);
-  Vec4F32 hsva = v4f32(hsv.x, hsv.y, hsv.z, rgba.w);
-  d_entity_equip_color_hsva(entity, hsva);
-}
-
-internal void
-d_entity_equip_color_hsva(DF_Entity *entity, Vec4F32 hsva)
-{
-  d_require_entity_nonnil(entity, return);
-  entity->color_hsva = hsva;
-  entity->flags |= D_EntityFlag_HasColor;
-}
-
-internal void
-d_entity_equip_cfg_src(DF_Entity *entity, D_CfgSrc cfg_src)
-{
-  d_require_entity_nonnil(entity, return);
-  entity->cfg_src = cfg_src;
-}
-
-internal void
-d_entity_equip_timestamp(DF_Entity *entity, U64 timestamp)
-{
-  d_require_entity_nonnil(entity, return);
-  entity->timestamp = timestamp;
-}
-
-//- rjf: control layer correllation equipment
-
-internal void
-d_entity_equip_ctrl_handle(DF_Entity *entity, CTRL_Handle handle)
-{
-  d_require_entity_nonnil(entity, return);
-  entity->ctrl_handle = handle;
-  entity->flags |= D_EntityFlag_HasCtrlHandle;
-}
-
-internal void
-d_entity_equip_arch(DF_Entity *entity, Arch arch)
-{
-  d_require_entity_nonnil(entity, return);
-  entity->arch = arch;
-  entity->flags |= D_EntityFlag_HasArch;
-}
-
-internal void
-d_entity_equip_ctrl_id(DF_Entity *entity, U32 id)
-{
-  d_require_entity_nonnil(entity, return);
-  entity->ctrl_id = id;
-  entity->flags |= D_EntityFlag_HasCtrlID;
-}
-
-internal void
-d_entity_equip_stack_base(DF_Entity *entity, U64 stack_base)
-{
-  d_require_entity_nonnil(entity, return);
-  entity->stack_base = stack_base;
-  entity->flags |= D_EntityFlag_HasStackBase;
-}
-
-internal void
-d_entity_equip_vaddr_rng(DF_Entity *entity, Rng1U64 range)
-{
-  d_require_entity_nonnil(entity, return);
-  entity->vaddr_rng = range;
-  entity->flags |= D_EntityFlag_HasVAddrRng;
-}
-
-internal void
-d_entity_equip_vaddr(DF_Entity *entity, U64 vaddr)
-{
-  d_require_entity_nonnil(entity, return);
-  entity->vaddr = vaddr;
-  entity->flags |= D_EntityFlag_HasVAddr;
-}
-
-//- rjf: name equipment
-
-internal void
-d_entity_equip_name(DF_Entity *entity, String8 name)
-{
-  d_require_entity_nonnil(entity, return);
-  if(entity->string.size != 0)
-  {
-    d_name_release(entity->string);
-  }
-  if(name.size != 0)
-  {
-    entity->string = d_name_alloc(name);
-  }
-  else
-  {
-    entity->string = str8_zero();
-  }
-}
-
-internal void
-d_entity_equip_namef(DF_Entity *entity, char *fmt, ...)
-{
-  Temp scratch = scratch_begin(0, 0);
-  va_list args;
-  va_start(args, fmt);
-  String8 string = push_str8fv(scratch.arena, fmt, args);
-  va_end(args);
-  d_entity_equip_name(entity, string);
-  scratch_end(scratch);
-}
-
-//- rjf: file path map override lookups
-
-internal String8List
-d_possible_overrides_from_file_path(Arena *arena, String8 file_path)
-{
-  // NOTE(rjf): This path, given some target file path, scans all file path map
-  // overrides, and collects the set of file paths which could've redirected
-  // to the target file path given the set of file path maps.
-  //
-  // For example, if I have a rule saying D:/devel/ maps to C:/devel/, and I
-  // feed in C:/devel/foo/bar.txt, then this path will construct
-  // D:/devel/foo/bar.txt, as a possible option.
-  //
-  // It will also preserve C:/devel/foo/bar.txt in the resultant list, so that
-  // overrideless files still work through this path, and both redirected
-  // files and non-redirected files can go through the same path.
-  //
-  String8List result = {0};
-  str8_list_push(arena, &result, file_path);
-  Temp scratch = scratch_begin(&arena, 1);
-  PathStyle pth_style = PathStyle_Relative;
-  String8List pth_parts = path_normalized_list_from_string(scratch.arena, file_path, &pth_style);
-  {
-    D_EntityList links = d_query_cached_entity_list_with_kind(DF_EntityKind_FilePathMap);
-    for(D_EntityNode *n = links.first; n != 0; n = n->next)
-    {
-      //- rjf: unpack link
-      DF_Entity *link = n->entity;
-      DF_Entity *src = d_entity_child_from_kind(link, DF_EntityKind_Source);
-      DF_Entity *dst = d_entity_child_from_kind(link, DF_EntityKind_Dest);
-      PathStyle src_style = PathStyle_Relative;
-      PathStyle dst_style = PathStyle_Relative;
-      String8List src_parts = path_normalized_list_from_string(scratch.arena, src->string, &src_style);
-      String8List dst_parts = path_normalized_list_from_string(scratch.arena, dst->string, &dst_style);
-      
-      //- rjf: determine if this link can possibly redirect to the target file path
-      B32 dst_redirects_to_pth = 0;
-      String8Node *non_redirected_pth_first = 0;
-      if(dst_style == pth_style && dst_parts.first != 0 && pth_parts.first != 0)
-      {
-        dst_redirects_to_pth = 1;
-        String8Node *dst_n = dst_parts.first;
-        String8Node *pth_n = pth_parts.first;
-        for(;dst_n != 0 && pth_n != 0; dst_n = dst_n->next, pth_n = pth_n->next)
-        {
-          if(!str8_match(dst_n->string, pth_n->string, StringMatchFlag_CaseInsensitive))
-          {
-            dst_redirects_to_pth = 0;
-            break;
-          }
-          non_redirected_pth_first = pth_n->next;
-        }
-      }
-      
-      //- rjf: if this link can redirect to this path via `src` -> `dst`, compute
-      // possible full source path, by taking `src` and appending non-redirected
-      // suffix (which did not show up in `dst`)
-      if(dst_redirects_to_pth)
-      {
-        String8List candidate_parts = src_parts;
-        for(String8Node *p = non_redirected_pth_first; p != 0; p = p->next)
-        {
-          str8_list_push(scratch.arena, &candidate_parts, p->string);
-        }
-        StringJoin join = {0};
-        join.sep = str8_lit("/");
-        String8 candidate_path = str8_list_join(arena, &candidate_parts, 0);
-        str8_list_push(arena, &result, candidate_path);
-      }
-    }
-  }
-  scratch_end(scratch);
-  return result;
-}
-
-//- rjf: top-level state queries
-
-internal DF_Entity *
-d_entity_root(void)
-{
-  return d_state->entities_root;
-}
-
-internal D_EntityList
-d_push_entity_list_with_kind(Arena *arena, DF_EntityKind kind)
-{
-  ProfBeginFunction();
-  D_EntityList result = {0};
-  for(DF_Entity *entity = d_state->entities_root;
-      !d_entity_is_nil(entity);
-      entity = d_entity_rec_depth_first_pre(entity, &d_nil_entity).next)
-  {
-    if(entity->kind == kind)
-    {
-      d_entity_list_push(arena, &result, entity);
-    }
-  }
-  ProfEnd();
-  return result;
-}
-
-internal DF_Entity *
-d_entity_from_id(DF_EntityID id)
-{
-  DF_Entity *result = &d_nil_entity;
-  for(DF_Entity *e = d_entity_root();
-      !d_entity_is_nil(e);
-      e = d_entity_rec_depth_first_pre(e, &d_nil_entity).next)
-  {
-    if(e->id == id)
-    {
-      result = e;
-      break;
-    }
-  }
-  return result;
-}
-
-internal DF_Entity *
-d_machine_entity_from_machine_id(CTRL_MachineID machine_id)
-{
-  DF_Entity *result = &d_nil_entity;
-  for(DF_Entity *e = d_entity_root();
-      !d_entity_is_nil(e);
-      e = d_entity_rec_depth_first_pre(e, &d_nil_entity).next)
-  {
-    if(e->kind == DF_EntityKind_Machine && e->ctrl_handle.machine_id == machine_id)
-    {
-      result = e;
-      break;
-    }
-  }
-  if(d_entity_is_nil(result))
-  {
-    result = d_entity_alloc(d_entity_root(), DF_EntityKind_Machine);
-    d_entity_equip_ctrl_handle(result, ctrl_handle_make(machine_id, dmn_handle_zero()));
-  }
-  return result;
-}
-
-internal DF_Entity *
-d_entity_from_ctrl_handle(CTRL_Handle handle)
-{
-  DF_Entity *result = &d_nil_entity;
-  if(handle.machine_id != 0 || handle.dmn_handle.u64[0] != 0)
-  {
-    for(DF_Entity *e = d_entity_root();
-        !d_entity_is_nil(e);
-        e = d_entity_rec_depth_first_pre(e, &d_nil_entity).next)
-    {
-      if(e->flags & D_EntityFlag_HasCtrlHandle &&
-         ctrl_handle_match(e->ctrl_handle, handle))
-      {
-        result = e;
-        break;
-      }
-    }
-  }
-  return result;
-}
-
-internal DF_Entity *
-d_entity_from_ctrl_id(CTRL_MachineID machine_id, U32 id)
-{
-  DF_Entity *result = &d_nil_entity;
-  if(id != 0)
-  {
-    for(DF_Entity *e = d_entity_root();
-        !d_entity_is_nil(e);
-        e = d_entity_rec_depth_first_pre(e, &d_nil_entity).next)
-    {
-      if(e->flags & D_EntityFlag_HasCtrlHandle &&
-         e->flags & D_EntityFlag_HasCtrlID &&
-         e->ctrl_handle.machine_id == machine_id &&
-         e->ctrl_id == id)
-      {
-        result = e;
-        break;
-      }
-    }
-  }
-  return result;
-}
-
-internal DF_Entity *
-d_entity_from_name_and_kind(String8 string, DF_EntityKind kind)
-{
-  DF_Entity *result = &d_nil_entity;
-  D_EntityList all_of_this_kind = d_query_cached_entity_list_with_kind(kind);
-  for(D_EntityNode *n = all_of_this_kind.first; n != 0; n = n->next)
-  {
-    if(str8_match(n->entity->string, string, 0))
-    {
-      result = n->entity;
-      break;
-    }
-  }
-  return result;
 }
 
 ////////////////////////////////
@@ -2424,531 +1460,6 @@ d_ctrl_last_stop_event(void)
 }
 
 ////////////////////////////////
-//~ rjf: Evaluation Context
-
-//- rjf: ctrl entity <-> eval space
-
-internal CTRL_Entity *
-d_ctrl_entity_from_eval_space(E_Space space)
-{
-  CTRL_Entity *entity = &ctrl_entity_nil;
-  // TODO(rjf): @msgs
-  return entity;
-}
-
-internal E_Space
-d_eval_space_from_ctrl_entity(CTRL_Entity *entity)
-{
-  E_Space space = {0};
-  // TODO(rjf): @msgs
-  return space;
-}
-
-//- rjf: entity <-> eval space
-
-internal DF_Entity *
-d_entity_from_eval_space(E_Space space)
-{
-  DF_Entity *entity = &d_nil_entity;
-  if(space.u64_0 != 0)
-  {
-    entity = (DF_Entity *)space.u64_0;
-  }
-  return entity;
-}
-
-internal E_Space
-d_eval_space_from_entity(DF_Entity *entity)
-{
-  E_Space space = {0};
-  space.u64_0 = (U64)entity;
-  return space;
-}
-
-//- rjf: eval space reads/writes
-
-internal B32
-d_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
-{
-  B32 result = 0;
-  switch(space.kind)
-  {
-    case E_SpaceKind_FileSystem:
-    {
-      
-    }break;
-    case DF_EvalSpaceKind_CtrlEntity:
-    {
-      
-    }break;
-    case DF_EvalSpaceKind_CfgEntity:
-    {
-      
-    }break;
-  }
-  
-#if 0 // TODO(rjf): @msgs
-  DF_Entity *entity = d_entity_from_eval_space(space);
-  switch(entity->kind)
-  {
-    //- rjf: nil-space -> fall back to file system
-    case DF_EntityKind_Nil:
-    {
-      U128 key = space.u128;
-      U128 hash = hs_hash_from_key(key, 0);
-      HS_Scope *scope = hs_scope_open();
-      {
-        String8 data = hs_data_from_hash(scope, hash);
-        Rng1U64 legal_range = r1u64(0, data.size);
-        Rng1U64 read_range = intersect_1u64(range, legal_range);
-        if(read_range.min < read_range.max)
-        {
-          result = 1;
-          MemoryCopy(out, data.str + read_range.min, dim_1u64(read_range));
-        }
-      }
-      hs_scope_close(scope);
-    }break;
-    
-    //- rjf: default -> evaluating a debugger entity; read from entity POD evaluation
-    default:
-    {
-      Temp scratch = scratch_begin(0, 0);
-      arena_push(scratch.arena, 0, 64);
-      U64 pos_min = arena_pos(scratch.arena);
-      D_EntityEval *eval = d_eval_from_entity(scratch.arena, entity);
-      U64 pos_opl = arena_pos(scratch.arena);
-      Rng1U64 legal_range = r1u64(0, pos_opl-pos_min);
-      if(contains_1u64(legal_range, range.min))
-      {
-        result = 1;
-        U64 range_dim = dim_1u64(range);
-        U64 bytes_to_read = Min(range_dim, (legal_range.max - range.min));
-        MemoryCopy(out, ((U8 *)eval) + range.min, bytes_to_read);
-        if(bytes_to_read < range_dim)
-        {
-          MemoryZero((U8 *)out + bytes_to_read, range_dim - bytes_to_read);
-        }
-      }
-      scratch_end(scratch);
-    }break;
-    
-    //- rjf: process -> reading process memory
-    case DF_EntityKind_Process:
-    {
-      Temp scratch = scratch_begin(0, 0);
-      CTRL_ProcessMemorySlice slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, entity->ctrl_handle, range, d_state->frame_eval_memread_endt_us);
-      String8 data = slice.data;
-      if(data.size == dim_1u64(range))
-      {
-        result = 1;
-        MemoryCopy(out, data.str, data.size);
-      }
-      scratch_end(scratch);
-    }break;
-    
-    //- rjf: thread -> reading from thread register block
-    case DF_EntityKind_Thread:
-    {
-      Temp scratch = scratch_begin(0, 0);
-      CTRL_Unwind unwind = d_query_cached_unwind_from_thread(entity);
-      U64 frame_idx = e_interpret_ctx->reg_unwind_count;
-      if(frame_idx < unwind.frames.count)
-      {
-        CTRL_UnwindFrame *f = &unwind.frames.v[frame_idx];
-        U64 regs_size = regs_block_size_from_arch(e_interpret_ctx->reg_arch);
-        Rng1U64 legal_range = r1u64(0, regs_size);
-        Rng1U64 read_range = intersect_1u64(legal_range, range);
-        U64 read_size = dim_1u64(read_range);
-        MemoryCopy(out, (U8 *)f->regs + read_range.min, read_size);
-        result = (read_size == dim_1u64(range));
-      }
-      scratch_end(scratch);
-    }break;
-  }
-#endif
-  return result;
-}
-
-internal B32
-d_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range)
-{
-  B32 result = 0;
-#if 0 // TODO(rjf): @msgs
-  DF_Entity *entity = d_entity_from_eval_space(space);
-  switch(entity->kind)
-  {
-    //- rjf: default -> making commits to entity evaluation
-    default:
-    {
-      Temp scratch = scratch_begin(0, 0);
-      D_EntityEval *eval = d_eval_from_entity(scratch.arena, entity);
-      U64 range_dim = dim_1u64(range);
-      if(range.min == OffsetOf(D_EntityEval, enabled) &&
-         range_dim >= 1)
-      {
-        result = 1;
-        B32 new_enabled = !!((U8 *)in)[0];
-        d_entity_equip_disabled(entity, !new_enabled);
-      }
-      else if(range.min == eval->label_off &&
-              range_dim >= 1)
-      {
-        result = 1;
-        String8 new_name = str8_cstring_capped((U8 *)in, (U8 *)in+range_dim);
-        d_entity_equip_name(entity, new_name);
-      }
-      else if(range.min == eval->condition_off &&
-              range_dim >= 1)
-      {
-        result = 1;
-        DF_Entity *condition = d_entity_child_from_kind(entity, DF_EntityKind_Condition);
-        if(d_entity_is_nil(condition))
-        {
-          condition = d_entity_alloc(entity, DF_EntityKind_Condition);
-        }
-        String8 new_name = str8_cstring_capped((U8 *)in, (U8 *)in+range_dim);
-        d_entity_equip_name(condition, new_name);
-      }
-      scratch_end(scratch);
-    }break;
-    
-    //- rjf: process -> commit to process memory
-    case DF_EntityKind_Process:
-    {
-      result = ctrl_process_write(entity->ctrl_handle, range, in);
-    }break;
-    
-    //- rjf: thread -> commit to thread's register block
-    case DF_EntityKind_Thread:
-    {
-      CTRL_Unwind unwind = d_query_cached_unwind_from_thread(entity);
-      U64 frame_idx = 0;
-      if(frame_idx < unwind.frames.count)
-      {
-        Temp scratch = scratch_begin(0, 0);
-        U64 regs_size = regs_block_size_from_arch(d_arch_from_entity(entity));
-        Rng1U64 legal_range = r1u64(0, regs_size);
-        Rng1U64 write_range = intersect_1u64(legal_range, range);
-        U64 write_size = dim_1u64(write_range);
-        CTRL_UnwindFrame *f = &unwind.frames.v[frame_idx];
-        void *new_regs = push_array(scratch.arena, U8, regs_size);
-        MemoryCopy(new_regs, f->regs, regs_size);
-        MemoryCopy((U8 *)new_regs + write_range.min, in, write_size);
-        result = ctrl_thread_write_reg_block(entity->ctrl_handle, new_regs);
-        scratch_end(scratch);
-      }
-    }break;
-  }
-#endif
-  return result;
-}
-
-//- rjf: asynchronous streamed reads -> hashes from spaces
-
-internal U128
-d_key_from_eval_space_range(E_Space space, Rng1U64 range, B32 zero_terminated)
-{
-  U128 result = {0};
-  DF_Entity *entity = d_entity_from_eval_space(space);
-  switch(entity->kind)
-  {
-    default:{}break;
-    
-    //- rjf: nil space -> filesystem key encoded inside of `space`
-    case DF_EntityKind_Nil:
-    {
-      result = space.u128;
-    }break;
-    
-    //- rjf: process space -> query 
-    case DF_EntityKind_Process:
-    {
-      result = ctrl_hash_store_key_from_process_vaddr_range(entity->ctrl_handle, range, zero_terminated);
-    }break;
-  }
-  return result;
-}
-
-//- rjf: space -> entire range
-
-internal Rng1U64
-d_whole_range_from_eval_space(E_Space space)
-{
-  // TODO(rjf): @msgs
-  Rng1U64 result = r1u64(0, 0);
-#if 0
-  DF_Entity *entity = d_entity_from_eval_space(space);
-  switch(entity->kind)
-  {
-    default:{}break;
-    
-    //- rjf: nil space -> filesystem key encoded inside of `space`
-    case DF_EntityKind_Nil:
-    {
-      HS_Scope *scope = hs_scope_open();
-      U128 hash = {0};
-      for(U64 idx = 0; idx < 2; idx += 1)
-      {
-        hash = hs_hash_from_key(space.u128, idx);
-        if(!u128_match(hash, u128_zero()))
-        {
-          break;
-        }
-      }
-      String8 data = hs_data_from_hash(scope, hash);
-      result = r1u64(0, data.size);
-      hs_scope_close(scope);
-    }break;
-    case DF_EntityKind_Process:
-    {
-      result = r1u64(0, 0x7FFFFFFFFFFFull);
-    }break;
-  }
-#endif
-  return result;
-}
-
-////////////////////////////////
-//~ rjf: Evaluation View Visualization & Interaction
-
-//- rjf: writing values back to child processes
-
-internal B32
-d_commit_eval_value_string(E_Eval dst_eval, String8 string)
-{
-  B32 result = 0;
-  if(dst_eval.mode == E_Mode_Offset)
-  {
-    Temp scratch = scratch_begin(0, 0);
-    E_TypeKey type_key = e_type_unwrap(dst_eval.type_key);
-    E_TypeKind type_kind = e_type_kind_from_key(type_key);
-    E_TypeKey direct_type_key = e_type_unwrap(e_type_direct_from_key(e_type_unwrap(dst_eval.type_key)));
-    E_TypeKind direct_type_kind = e_type_kind_from_key(direct_type_key);
-    String8 commit_data = {0};
-    B32 commit_at_ptr_dest = 0;
-    if(E_TypeKind_FirstBasic <= type_kind && type_kind <= E_TypeKind_LastBasic)
-    {
-      E_Eval src_eval = e_eval_from_string(scratch.arena, string);
-      commit_data = push_str8_copy(scratch.arena, str8_struct(&src_eval.value));
-      commit_data.size = Min(commit_data.size, e_type_byte_size_from_key(type_key));
-    }
-    else if(type_kind == E_TypeKind_Ptr || type_kind == E_TypeKind_Array)
-    {
-      E_Eval src_eval = e_eval_from_string(scratch.arena, string);
-      E_Eval src_eval_value = e_value_eval_from_eval(src_eval);
-      E_TypeKind src_eval_value_type_kind = e_type_kind_from_key(src_eval_value.type_key);
-      if(type_kind == E_TypeKind_Ptr &&
-         (e_type_kind_is_pointer_or_ref(src_eval_value_type_kind) ||
-          e_type_kind_is_integer(src_eval_value_type_kind)) &&
-         src_eval_value.value.u64 != 0 && src_eval_value.mode == E_Mode_Value)
-      {
-        commit_data = push_str8_copy(scratch.arena, str8_struct(&src_eval.value));
-        commit_data.size = Min(commit_data.size, e_type_byte_size_from_key(type_key));
-      }
-      else if(direct_type_kind == E_TypeKind_Char8 ||
-              direct_type_kind == E_TypeKind_UChar8 ||
-              e_type_kind_is_integer(direct_type_kind))
-      {
-        if(string.size >= 1 && string.str[0] == '"')
-        {
-          string = str8_skip(string, 1);
-        }
-        if(string.size >= 1 && string.str[string.size-1] == '"')
-        {
-          string = str8_chop(string, 1);
-        }
-        commit_data = e_raw_from_escaped_string(scratch.arena, string);
-        commit_data.size += 1;
-        if(type_kind == E_TypeKind_Ptr)
-        {
-          commit_at_ptr_dest = 1;
-        }
-      }
-    }
-    if(commit_data.size != 0 && e_type_byte_size_from_key(type_key) != 0)
-    {
-      U64 dst_offset = dst_eval.value.u64;
-      if(dst_eval.mode == E_Mode_Offset && commit_at_ptr_dest)
-      {
-        E_Eval dst_value_eval = e_value_eval_from_eval(dst_eval);
-        dst_offset = dst_value_eval.value.u64;
-      }
-      result = e_space_write(dst_eval.space, commit_data.str, r1u64(dst_offset, dst_offset + commit_data.size));
-    }
-    scratch_end(scratch);
-  }
-  return result;
-}
-
-//- rjf: view rule config tree info extraction
-
-internal U64
-d_base_offset_from_eval(E_Eval eval)
-{
-  if(e_type_kind_is_pointer_or_ref(e_type_kind_from_key(eval.type_key)))
-  {
-    eval = e_value_eval_from_eval(eval);
-  }
-  return eval.value.u64;
-}
-
-internal E_Value
-d_value_from_params_key(MD_Node *params, String8 key)
-{
-  Temp scratch = scratch_begin(0, 0);
-  MD_Node *key_node = md_child_from_string(params, key, 0);
-  String8 expr = md_string_from_children(scratch.arena, key_node);
-  E_Eval eval = e_eval_from_string(scratch.arena, expr);
-  E_Eval value_eval = e_value_eval_from_eval(eval);
-  scratch_end(scratch);
-  return value_eval.value;
-}
-
-internal Rng1U64
-d_range_from_eval_params(E_Eval eval, MD_Node *params)
-{
-  Temp scratch = scratch_begin(0, 0);
-  U64 size = d_value_from_params_key(params, str8_lit("size")).u64;
-  E_TypeKey type_key = e_type_unwrap(eval.type_key);
-  E_TypeKind type_kind = e_type_kind_from_key(type_key);
-  E_TypeKey direct_type_key = e_type_unwrap(e_type_direct_from_key(eval.type_key));
-  E_TypeKind direct_type_kind = e_type_kind_from_key(direct_type_key);
-  if(size == 0 && e_type_kind_is_pointer_or_ref(type_kind) && (direct_type_kind == E_TypeKind_Struct ||
-                                                               direct_type_kind == E_TypeKind_Union ||
-                                                               direct_type_kind == E_TypeKind_Class ||
-                                                               direct_type_kind == E_TypeKind_Array))
-  {
-    size = e_type_byte_size_from_key(e_type_direct_from_key(e_type_unwrap(eval.type_key)));
-  }
-  if(size == 0 && eval.mode == E_Mode_Offset && (type_kind == E_TypeKind_Struct ||
-                                                 type_kind == E_TypeKind_Union ||
-                                                 type_kind == E_TypeKind_Class ||
-                                                 type_kind == E_TypeKind_Array))
-  {
-    size = e_type_byte_size_from_key(e_type_unwrap(eval.type_key));
-  }
-  if(size == 0)
-  {
-    size = 16384;
-  }
-  Rng1U64 result = {0};
-  result.min = d_base_offset_from_eval(eval);
-  result.max = result.min + size;
-  scratch_end(scratch);
-  return result;
-}
-
-internal TXT_LangKind
-d_lang_kind_from_eval_params(E_Eval eval, MD_Node *params)
-{
-  TXT_LangKind lang_kind = TXT_LangKind_Null;
-  if(eval.expr->kind == E_ExprKind_LeafFilePath)
-  {
-    lang_kind = txt_lang_kind_from_extension(str8_skip_last_dot(eval.expr->string));
-  }
-  else
-  {
-    MD_Node *lang_node = md_child_from_string(params, str8_lit("lang"), 0);
-    String8 lang_kind_string = lang_node->first->string;
-    lang_kind = txt_lang_kind_from_extension(lang_kind_string);
-  }
-  return lang_kind;
-}
-
-internal Arch
-d_arch_from_eval_params(E_Eval eval, MD_Node *params)
-{
-  Arch arch = Arch_Null;
-  MD_Node *arch_node = md_child_from_string(params, str8_lit("arch"), 0);
-  String8 arch_kind_string = arch_node->first->string;
-  if(str8_match(arch_kind_string, str8_lit("x64"), StringMatchFlag_CaseInsensitive))
-  {
-    arch = Arch_x64;
-  }
-  return arch;
-}
-
-internal Vec2S32
-d_dim2s32_from_eval_params(E_Eval eval, MD_Node *params)
-{
-  Vec2S32 dim = v2s32(1, 1);
-  {
-    dim.x = d_value_from_params_key(params, str8_lit("w")).s32;
-    dim.y = d_value_from_params_key(params, str8_lit("h")).s32;
-  }
-  return dim;
-}
-
-internal R_Tex2DFormat
-d_tex2dformat_from_eval_params(E_Eval eval, MD_Node *params)
-{
-  R_Tex2DFormat result = R_Tex2DFormat_RGBA8;
-  {
-    MD_Node *fmt_node = md_child_from_string(params, str8_lit("fmt"), 0);
-    for(EachNonZeroEnumVal(R_Tex2DFormat, fmt))
-    {
-      if(str8_match(r_tex2d_format_display_string_table[fmt], fmt_node->first->string, StringMatchFlag_CaseInsensitive))
-      {
-        result = fmt;
-        break;
-      }
-    }
-  }
-  return result;
-}
-
-//- rjf: eval -> entity
-
-internal DF_Entity *
-d_entity_from_eval_string(String8 string)
-{
-  DF_Entity *entity = &d_nil_entity;
-  {
-    Temp scratch = scratch_begin(0, 0);
-    E_Eval eval = e_eval_from_string(scratch.arena, string);
-    entity = d_entity_from_eval_space(eval.space);
-    scratch_end(scratch);
-  }
-  return entity;
-}
-
-internal String8
-d_eval_string_from_entity(Arena *arena, DF_Entity *entity)
-{
-  String8 eval_string = push_str8f(arena, "macro:`$%I64u`", entity->id);
-  return eval_string;
-}
-
-//- rjf: eval <-> file path
-
-internal String8
-d_file_path_from_eval_string(Arena *arena, String8 string)
-{
-  String8 result = {0};
-  {
-    Temp scratch = scratch_begin(&arena, 1);
-    E_Eval eval = e_eval_from_string(scratch.arena, string);
-    if(eval.expr->kind == E_ExprKind_LeafFilePath)
-    {
-      result = d_cfg_raw_from_escaped_string(arena, eval.expr->string);
-    }
-    scratch_end(scratch);
-  }
-  return result;
-}
-
-internal String8
-d_eval_string_from_file_path(Arena *arena, String8 string)
-{
-  Temp scratch = scratch_begin(&arena, 1);
-  String8 string_escaped = d_cfg_escaped_from_raw_string(scratch.arena, string);
-  String8 result = push_str8f(arena, "file:\"%S\"", string_escaped);
-  scratch_end(scratch);
-  return result;
-}
-
-////////////////////////////////
 //~ rjf: Main State Accessors/Mutators
 
 //- rjf: frame data
@@ -3065,8 +1576,8 @@ d_cfg_strings_from_core(Arena *arena, String8 root_path, D_CfgSrc source)
         continue;
       }
       B32 first = 1;
-      D_EntityList entities = d_query_cached_entity_list_with_kind(k);
-      for(D_EntityNode *n = entities.first; n != 0; n = n->next)
+      DF_EntityList entities = d_query_cached_entity_list_with_kind(k);
+      for(DF_EntityNode *n = entities.first; n != 0; n = n->next)
       {
         DF_Entity *entity = n->entity;
         if(entity->cfg_src != source)
@@ -3082,12 +1593,12 @@ d_cfg_strings_from_core(Arena *arena, String8 root_path, D_CfgSrc source)
                           (int)Max(0, 79 - (title_name.size + 5)),
                           slashes);
         }
-        D_EntityRec rec = {0};
+        DF_EntityRec rec = {0};
         S64 depth = 0;
-        for(DF_Entity *e = entity; !d_entity_is_nil(e); e = rec.next)
+        for(DF_Entity *e = entity; !df_entity_is_nil(e); e = rec.next)
         {
           //- rjf: get next iteration
-          rec = d_entity_rec_depth_first_pre(e, entity);
+          rec = df_entity_rec_depth_first_pre(e, entity);
           
           //- rjf: unpack entity info
           typedef U32 EntityInfoFlags;
@@ -3115,10 +1626,10 @@ d_cfg_strings_from_core(Arena *arena, String8 root_path, D_CfgSrc source)
           EntityInfoFlags info_flags = 0;
           if(entity_name_escaped.size != 0)        { info_flags |= EntityInfoFlag_HasName; }
           if(!!e->disabled)                        { info_flags |= EntityInfoFlag_HasDisabled; }
-          if(e->flags & D_EntityFlag_HasTextPoint) { info_flags |= EntityInfoFlag_HasTxtPt; }
-          if(e->flags & D_EntityFlag_HasVAddr)     { info_flags |= EntityInfoFlag_HasVAddr; }
-          if(e->flags & D_EntityFlag_HasColor)     { info_flags |= EntityInfoFlag_HasColor; }
-          if(!d_entity_is_nil(e->first))           { info_flags |= EntityInfoFlag_HasChildren; }
+          if(e->flags & DF_EntityFlag_HasTextPoint) { info_flags |= EntityInfoFlag_HasTxtPt; }
+          if(e->flags & DF_EntityFlag_HasVAddr)     { info_flags |= EntityInfoFlag_HasVAddr; }
+          if(e->flags & DF_EntityFlag_HasColor)     { info_flags |= EntityInfoFlag_HasColor; }
+          if(!df_entity_is_nil(e->first))           { info_flags |= EntityInfoFlag_HasChildren; }
           
           //- rjf: write entity info
           B32 opened_brace = 0;
@@ -3141,18 +1652,18 @@ d_cfg_strings_from_core(Arena *arena, String8 root_path, D_CfgSrc source)
               {
                 str8_list_pushf(arena, &strs, "disabled: 1\n");
               }
-              if(e->flags & D_EntityFlag_HasColor)
+              if(e->flags & DF_EntityFlag_HasColor)
               {
-                Vec4F32 hsva = d_hsva_from_entity(e);
+                Vec4F32 hsva = df_hsva_from_entity(e);
                 Vec4F32 rgba = rgba_from_hsva(hsva);
                 U32 rgba_hex = u32_from_rgba(rgba);
                 str8_list_pushf(arena, &strs, "color: 0x%x\n", rgba_hex);
               }
-              if(e->flags & D_EntityFlag_HasTextPoint)
+              if(e->flags & DF_EntityFlag_HasTextPoint)
               {
                 str8_list_pushf(arena, &strs, "line: %I64d\n", e->text_point.line);
               }
-              if(e->flags & D_EntityFlag_HasVAddr)
+              if(e->flags & DF_EntityFlag_HasVAddr)
               {
                 str8_list_pushf(arena, &strs, "vaddr: (0x%I64x)\n", e->vaddr);
               }
@@ -3188,7 +1699,7 @@ d_cfg_strings_from_core(Arena *arena, String8 root_path, D_CfgSrc source)
           }
           
           // rjf: separate top-level entities with extra newline
-          if(d_entity_is_nil(rec.next) && (rec.pop_count != 0 || n->next == 0))
+          if(df_entity_is_nil(rec.next) && (rec.pop_count != 0 || n->next == 0))
           {
             str8_list_pushf(arena, &strs, "\n");
           }
@@ -3219,32 +1730,6 @@ d_cfg_strings_from_core(Arena *arena, String8 root_path, D_CfgSrc source)
   return strs;
 }
 
-//- rjf: entity kind cache
-
-internal D_EntityList
-d_query_cached_entity_list_with_kind(DF_EntityKind kind)
-{
-  ProfBeginFunction();
-  D_EntityListCache *cache = &d_state->kind_caches[kind];
-  
-  // rjf: build cached list if we're out-of-date
-  if(cache->alloc_gen != d_state->kind_alloc_gens[kind])
-  {
-    cache->alloc_gen = d_state->kind_alloc_gens[kind];
-    if(cache->arena == 0)
-    {
-      cache->arena = arena_alloc();
-    }
-    arena_clear(cache->arena);
-    cache->list = d_push_entity_list_with_kind(cache->arena, kind);
-  }
-  
-  // rjf: grab & return cached list
-  D_EntityList result = cache->list;
-  ProfEnd();
-  return result;
-}
-
 //- rjf: active entity based queries
 
 internal DI_KeyList
@@ -3259,40 +1744,6 @@ d_push_active_dbgi_key_list(Arena *arena)
     di_key_list_push(arena, &dbgis, &key);
   }
   return dbgis;
-}
-
-internal D_EntityList
-d_push_active_target_list(Arena *arena)
-{
-  D_EntityList active_targets = {0};
-  D_EntityList all_targets = d_query_cached_entity_list_with_kind(DF_EntityKind_Target);
-  for(D_EntityNode *n = all_targets.first; n != 0; n = n->next)
-  {
-    if(!n->entity->disabled)
-    {
-      d_entity_list_push(arena, &active_targets, n->entity);
-    }
-  }
-  return active_targets;
-}
-
-//- rjf: expand key based entity queries
-
-internal DF_Entity *
-d_entity_from_ev_key_and_kind(EV_Key key, DF_EntityKind kind)
-{
-  DF_Entity *result = &d_nil_entity;
-  D_EntityList list = d_query_cached_entity_list_with_kind(kind);
-  for(D_EntityNode *n = list.first; n != 0; n = n->next)
-  {
-    DF_Entity *entity = n->entity;
-    if(ev_key_match(d_ev_key_from_entity(entity), key))
-    {
-      result = entity;
-      break;
-    }
-  }
-  return result;
 }
 
 //- rjf: per-run caches
@@ -3584,13 +2035,8 @@ d_init(void)
   }
   d_state->cmds_arena = arena_alloc();
   d_state->output_log_key = hs_hash_from_data(str8_lit("df_output_log_key"));
-  d_state->entities_arena = arena_alloc(.reserve_size = GB(64), .commit_size = KB(64));
-  d_state->entities_root = &d_nil_entity;
-  d_state->entities_base = push_array(d_state->entities_arena, DF_Entity, 0);
-  d_state->entities_count = 0;
   d_state->ctrl_entity_store = ctrl_entity_store_alloc();
   d_state->ctrl_stop_arena = arena_alloc();
-  d_state->entities_root = d_entity_alloc(&d_nil_entity, DF_EntityKind_Root);
   d_state->view_rule_spec_table_size = 1024;
   d_state->view_rule_spec_table = push_array(arena, D_ViewRuleSpec *, d_state->view_rule_spec_table_size);
   d_state->ctrl_msg_arena = arena_alloc();
@@ -3602,13 +2048,6 @@ d_init(void)
     {
       d_state->ctrl_exception_code_filters[k/64] |= 1ull<<(k%64);
     }
-  }
-  
-  // rjf: set up initial entities
-  {
-    DF_Entity *local_machine = d_entity_alloc(d_state->entities_root, DF_EntityKind_Machine);
-    d_entity_equip_ctrl_handle(local_machine, ctrl_handle_make(CTRL_MachineID_Local, dmn_handle_zero()));
-    d_entity_equip_name(local_machine, str8_lit("This PC"));
   }
   
   // rjf: register core view rules
@@ -3701,16 +2140,16 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
           
           // rjf: kill all entities which are marked to die on stop
           {
-            DF_Entity *request = d_entity_from_id(event->msg_id);
-            if(d_entity_is_nil(request))
+            DF_Entity *request = df_entity_from_id(event->msg_id);
+            if(df_entity_is_nil(request))
             {
-              for(DF_Entity *entity = d_entity_root();
-                  !d_entity_is_nil(entity);
-                  entity = d_entity_rec_depth_first_pre(entity, d_entity_root()).next)
+              for(DF_Entity *entity = df_entity_root();
+                  !df_entity_is_nil(entity);
+                  entity = df_entity_rec_depth_first_pre(entity, df_entity_root()).next)
               {
-                if(entity->flags & D_EntityFlag_DiesOnRunStop)
+                if(entity->flags & DF_EntityFlag_DiesOnRunStop)
                 {
-                  d_entity_mark_for_deletion(entity);
+                  df_entity_mark_for_deletion(entity);
                 }
               }
             }
@@ -3754,8 +2193,8 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
             MTX_Op op = {r1u64(0, 0xffffffffffffffffull), str8_lit("[new session]\n")};
             mtx_push_op(d_state->output_log_key, op);
 #if 0 // TODO(rjf): @msgs
-            D_EntityList bps = d_query_cached_entity_list_with_kind(DF_EntityKind_Breakpoint);
-            for(D_EntityNode *n = bps.first; n != 0; n = n->next)
+            DF_EntityList bps = d_query_cached_entity_list_with_kind(DF_EntityKind_Breakpoint);
+            for(DF_EntityNode *n = bps.first; n != 0; n = n->next)
             {
               n->entity->u64 = 0;
             }
@@ -3763,39 +2202,39 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
           }
           
           // rjf: create entity
-          DF_Entity *machine = d_machine_entity_from_machine_id(event->entity.machine_id);
-          DF_Entity *entity = d_entity_alloc(machine, DF_EntityKind_Process);
-          d_entity_equip_u64(entity, event->msg_id);
-          d_entity_equip_ctrl_handle(entity, event->entity);
-          d_entity_equip_ctrl_id(entity, event->entity_id);
-          d_entity_equip_arch(entity, event->arch);
+          DF_Entity *machine = df_machine_entity_from_machine_id(event->entity.machine_id);
+          DF_Entity *entity = df_entity_alloc(machine, DF_EntityKind_Process);
+          df_entity_equip_u64(entity, event->msg_id);
+          df_entity_equip_ctrl_handle(entity, event->entity);
+          df_entity_equip_ctrl_id(entity, event->entity_id);
+          df_entity_equip_arch(entity, event->arch);
         }break;
         
         case CTRL_EventKind_NewThread:
         {
           // rjf: create entity
-          DF_Entity *parent = d_entity_from_ctrl_handle(event->parent);
-          DF_Entity *entity = d_entity_alloc(parent, DF_EntityKind_Thread);
-          d_entity_equip_ctrl_handle(entity, event->entity);
-          d_entity_equip_arch(entity, event->arch);
-          d_entity_equip_ctrl_id(entity, event->entity_id);
-          d_entity_equip_stack_base(entity, event->stack_base);
-          d_entity_equip_vaddr(entity, event->rip_vaddr);
+          DF_Entity *parent = df_entity_from_ctrl_handle(event->parent);
+          DF_Entity *entity = df_entity_alloc(parent, DF_EntityKind_Thread);
+          df_entity_equip_ctrl_handle(entity, event->entity);
+          df_entity_equip_arch(entity, event->arch);
+          df_entity_equip_ctrl_id(entity, event->entity_id);
+          df_entity_equip_stack_base(entity, event->stack_base);
+          df_entity_equip_vaddr(entity, event->rip_vaddr);
           if(event->string.size != 0)
           {
-            d_entity_equip_name(entity, event->string);
+            df_entity_equip_name(entity, event->string);
           }
           
           // rjf: find any pending thread names correllating with this TID -> equip name if found match
           {
-            D_EntityList pending_thread_names = d_query_cached_entity_list_with_kind(DF_EntityKind_PendingThreadName);
-            for(D_EntityNode *n = pending_thread_names.first; n != 0; n = n->next)
+            DF_EntityList pending_thread_names = d_query_cached_entity_list_with_kind(DF_EntityKind_PendingThreadName);
+            for(DF_EntityNode *n = pending_thread_names.first; n != 0; n = n->next)
             {
               DF_Entity *pending_thread_name = n->entity;
               if(event->entity.machine_id == pending_thread_name->ctrl_handle.machine_id && event->entity_id == pending_thread_name->ctrl_id)
               {
-                d_entity_mark_for_deletion(pending_thread_name);
-                d_entity_equip_name(entity, pending_thread_name->string);
+                df_entity_mark_for_deletion(pending_thread_name);
+                df_entity_equip_name(entity, pending_thread_name->string);
                 break;
               }
             }
@@ -3803,7 +2242,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
           
           // rjf: determine index in process
           U64 thread_idx_in_process = 0;
-          for(DF_Entity *child = parent->first; !d_entity_is_nil(child); child = child->next)
+          for(DF_Entity *child = parent->first; !df_entity_is_nil(child); child = child->next)
           {
             if(child == entity)
             {
@@ -3832,49 +2271,49 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
           Vec4F32 thread_color = thread_colors[thread_idx_in_process % ArrayCount(thread_colors)];
           
           // rjf: equip color
-          d_entity_equip_color_rgba(entity, thread_color);
+          df_entity_equip_color_rgba(entity, thread_color);
         }break;
         
         case CTRL_EventKind_NewModule:
         {
           // rjf: grab process
-          DF_Entity *parent = d_entity_from_ctrl_handle(event->parent);
+          DF_Entity *parent = df_entity_from_ctrl_handle(event->parent);
           
           // rjf: determine if this is the first module
           B32 is_first = 0;
-          if(d_entity_is_nil(d_entity_child_from_kind(parent, DF_EntityKind_Module)))
+          if(df_entity_is_nil(df_entity_child_from_kind(parent, DF_EntityKind_Module)))
           {
             is_first = 1;
           }
           
           // rjf: create module entity
-          DF_Entity *module = d_entity_alloc(parent, DF_EntityKind_Module);
-          d_entity_equip_ctrl_handle(module, event->entity);
-          d_entity_equip_arch(module, event->arch);
-          d_entity_equip_name(module, event->string);
-          d_entity_equip_vaddr_rng(module, event->vaddr_rng);
-          d_entity_equip_vaddr(module, event->rip_vaddr);
-          d_entity_equip_timestamp(module, event->timestamp);
+          DF_Entity *module = df_entity_alloc(parent, DF_EntityKind_Module);
+          df_entity_equip_ctrl_handle(module, event->entity);
+          df_entity_equip_arch(module, event->arch);
+          df_entity_equip_name(module, event->string);
+          df_entity_equip_vaddr_rng(module, event->vaddr_rng);
+          df_entity_equip_vaddr(module, event->rip_vaddr);
+          df_entity_equip_timestamp(module, event->timestamp);
           
           // rjf: is first -> find target, equip process & module & first thread with target color
           if(is_first)
           {
-            D_EntityList targets = d_query_cached_entity_list_with_kind(DF_EntityKind_Target);
-            for(D_EntityNode *n = targets.first; n != 0; n = n->next)
+            DF_EntityList targets = d_query_cached_entity_list_with_kind(DF_EntityKind_Target);
+            for(DF_EntityNode *n = targets.first; n != 0; n = n->next)
             {
               DF_Entity *target = n->entity;
-              DF_Entity *exe = d_entity_child_from_kind(target, DF_EntityKind_Executable);
+              DF_Entity *exe = df_entity_child_from_kind(target, DF_EntityKind_Executable);
               String8 exe_name = exe->string;
               String8 exe_name_normalized = path_normalized_from_string(scratch.arena, exe_name);
               String8 module_name_normalized = path_normalized_from_string(scratch.arena, module->string);
               if(str8_match(exe_name_normalized, module_name_normalized, StringMatchFlag_CaseInsensitive) &&
-                 target->flags & D_EntityFlag_HasColor)
+                 target->flags & DF_EntityFlag_HasColor)
               {
-                DF_Entity *first_thread = d_entity_child_from_kind(parent, DF_EntityKind_Thread);
-                Vec4F32 rgba = d_rgba_from_entity(target);
-                d_entity_equip_color_rgba(parent, rgba);
-                d_entity_equip_color_rgba(first_thread, rgba);
-                d_entity_equip_color_rgba(module, rgba);
+                DF_Entity *first_thread = df_entity_child_from_kind(parent, DF_EntityKind_Thread);
+                Vec4F32 rgba = df_rgba_from_entity(target);
+                df_entity_equip_color_rgba(parent, rgba);
+                df_entity_equip_color_rgba(first_thread, rgba);
+                df_entity_equip_color_rgba(module, rgba);
                 break;
               }
             }
@@ -3884,34 +2323,34 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
         case CTRL_EventKind_EndProc:
         {
           U32 pid = event->entity_id;
-          DF_Entity *process = d_entity_from_ctrl_handle(event->entity);
-          d_entity_mark_for_deletion(process);
+          DF_Entity *process = df_entity_from_ctrl_handle(event->entity);
+          df_entity_mark_for_deletion(process);
         }break;
         
         case CTRL_EventKind_EndThread:
         {
-          DF_Entity *thread = d_entity_from_ctrl_handle(event->entity);
-          d_entity_mark_for_deletion(thread);
+          DF_Entity *thread = df_entity_from_ctrl_handle(event->entity);
+          df_entity_mark_for_deletion(thread);
         }break;
         
         case CTRL_EventKind_EndModule:
         {
-          DF_Entity *module = d_entity_from_ctrl_handle(event->entity);
-          d_entity_mark_for_deletion(module);
+          DF_Entity *module = df_entity_from_ctrl_handle(event->entity);
+          df_entity_mark_for_deletion(module);
         }break;
         
         //- rjf: debug info changes
         
         case CTRL_EventKind_ModuleDebugInfoPathChange:
         {
-          DF_Entity *module = d_entity_from_ctrl_handle(event->entity);
-          DF_Entity *debug_info = d_entity_child_from_kind(module, DF_EntityKind_DebugInfoPath);
-          if(d_entity_is_nil(debug_info))
+          DF_Entity *module = df_entity_from_ctrl_handle(event->entity);
+          DF_Entity *debug_info = df_entity_child_from_kind(module, DF_EntityKind_DebugInfoPath);
+          if(df_entity_is_nil(debug_info))
           {
-            debug_info = d_entity_alloc(module, DF_EntityKind_DebugInfoPath);
+            debug_info = df_entity_alloc(module, DF_EntityKind_DebugInfoPath);
           }
-          d_entity_equip_name(debug_info, event->string);
-          d_entity_equip_timestamp(debug_info, event->timestamp);
+          df_entity_equip_name(debug_info, event->string);
+          df_entity_equip_timestamp(debug_info, event->timestamp);
         }break;
         
         //- rjf: debug strings
@@ -3925,25 +2364,25 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
         case CTRL_EventKind_ThreadName:
         {
           String8 string = event->string;
-          DF_Entity *entity = d_entity_from_ctrl_handle(event->entity);
+          DF_Entity *entity = df_entity_from_ctrl_handle(event->entity);
           if(event->entity_id != 0)
           {
-            entity = d_entity_from_ctrl_id(event->entity.machine_id, event->entity_id);
+            entity = df_entity_from_ctrl_id(event->entity.machine_id, event->entity_id);
           }
-          if(d_entity_is_nil(entity))
+          if(df_entity_is_nil(entity))
           {
-            DF_Entity *process = d_entity_from_ctrl_handle(event->parent);
-            if(!d_entity_is_nil(process))
+            DF_Entity *process = df_entity_from_ctrl_handle(event->parent);
+            if(!df_entity_is_nil(process))
             {
-              entity = d_entity_alloc(process, DF_EntityKind_PendingThreadName);
-              d_entity_equip_name(entity, string);
-              d_entity_equip_ctrl_handle(entity, ctrl_handle_make(event->entity.machine_id, dmn_handle_zero()));
-              d_entity_equip_ctrl_id(entity, event->entity_id);
+              entity = df_entity_alloc(process, DF_EntityKind_PendingThreadName);
+              df_entity_equip_name(entity, string);
+              df_entity_equip_ctrl_handle(entity, ctrl_handle_make(event->entity.machine_id, dmn_handle_zero()));
+              df_entity_equip_ctrl_id(entity, event->entity_id);
             }
           }
-          if(!d_entity_is_nil(entity))
+          if(!df_entity_is_nil(entity))
           {
-            d_entity_equip_name(entity, string);
+            df_entity_equip_name(entity, string);
           }
         }break;
         
@@ -4038,34 +2477,6 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
   }
   
   //////////////////////////////
-  //- rjf: eliminate entities that are marked for deletion
-  //
-  ProfScope("eliminate deleted entities")
-  {
-    for(DF_Entity *entity = d_entity_root(), *next = 0; !d_entity_is_nil(entity); entity = next)
-    {
-      next = d_entity_rec_depth_first_pre(entity, &d_nil_entity).next;
-      if(entity->flags & D_EntityFlag_MarkedForDeletion)
-      {
-        B32 undoable = (d_entity_kind_flags_table[entity->kind] & DF_EntityKindFlag_UserDefinedLifetime);
-        
-        // rjf: fixup next entity to iterate to
-        next = d_entity_rec_depth_first(entity, &d_nil_entity, OffsetOf(DF_Entity, next), OffsetOf(DF_Entity, next)).next;
-        
-        // rjf: eliminate root entity if we're freeing it
-        if(entity == d_state->entities_root)
-        {
-          d_state->entities_root = &d_nil_entity;
-        }
-        
-        // rjf: unhook & release this entity tree
-        d_entity_change_parent(entity, entity->parent, &d_nil_entity, &d_nil_entity);
-        d_entity_release(entity);
-      }
-    }
-  }
-  
-  //////////////////////////////
   //- rjf: garbage collect eliminated thread unwinds
   //
   for(U64 slot_idx = 0; slot_idx < d_state->unwind_cache.slots_count; slot_idx += 1)
@@ -4097,15 +2508,15 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
         default:{}break;
         case DI_EventKind_ConversionStarted:
         {
-          DF_Entity *task = d_entity_alloc(d_entity_root(), DF_EntityKind_ConversionTask);
-          d_entity_equip_name(task, event->string);
+          DF_Entity *task = df_entity_alloc(df_entity_root(), DF_EntityKind_ConversionTask);
+          df_entity_equip_name(task, event->string);
         }break;
         case DI_EventKind_ConversionEnded:
         {
-          DF_Entity *task = d_entity_from_name_and_kind(event->string, DF_EntityKind_ConversionTask);
-          if(!d_entity_is_nil(task))
+          DF_Entity *task = df_entity_from_name_and_kind(event->string, DF_EntityKind_ConversionTask);
+          if(!df_entity_is_nil(task))
           {
-            d_entity_mark_for_deletion(task);
+            df_entity_mark_for_deletion(task);
           }
         }break;
       }
@@ -4452,22 +2863,22 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
           
 #if 0 // TODO(rjf): @msgs
           // rjf: gather targets corresponding to all launched processes
-          D_EntityList targets = {0};
+          DF_EntityList targets = {0};
           {
-            D_EntityList processes = d_query_cached_entity_list_with_kind(DF_EntityKind_Process);
-            for(D_EntityNode *n = processes.first; n != 0; n = n->next)
+            DF_EntityList processes = d_query_cached_entity_list_with_kind(DF_EntityKind_Process);
+            for(DF_EntityNode *n = processes.first; n != 0; n = n->next)
             {
               DF_Entity *process = n->entity;
-              DF_Entity *target = d_entity_from_handle(process->entity_handle);
-              if(!d_entity_is_nil(target))
+              DF_Entity *target = df_entity_from_handle(process->entity_handle);
+              if(!df_entity_is_nil(target))
               {
-                d_entity_list_push(scratch.arena, &targets, target);
+                df_entity_list_push(scratch.arena, &targets, target);
               }
             }
           }
           
           // rjf: re-launch targets
-          d_cmd(D_CmdKind_LaunchAndRun, .entity_list = d_handle_list_from_entity_list(scratch.arena, targets));
+          d_cmd(D_CmdKind_LaunchAndRun, .entity_list = df_handle_list_from_entity_list(scratch.arena, targets));
 #endif
         }break;
         case D_CmdKind_StepInto:
