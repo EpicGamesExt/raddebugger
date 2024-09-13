@@ -507,7 +507,6 @@ internal String8List d_possible_path_overrides_from_maps_path(Arena *arena, D_Pa
 //~ rjf: Config Type Pure Functions
 
 internal void d_cfg_table_push_unparsed_string(Arena *arena, D_CfgTable *table, String8 string, D_CfgSrc source);
-internal D_CfgTable d_cfg_table_from_inheritance(Arena *arena, D_CfgTable *src);
 internal D_CfgVal *d_cfg_val_from_string(D_CfgTable *table, String8 string);
 
 ////////////////////////////////

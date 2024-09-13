@@ -376,6 +376,44 @@ DF_IconKind_Dot,
 DF_IconKind_COUNT,
 } DF_IconKind;
 
+typedef enum DF_ViewRuleKind
+{
+DF_ViewRuleKind_Null,
+DF_ViewRuleKind_Empty,
+DF_ViewRuleKind_GettingStarted,
+DF_ViewRuleKind_ExceptionFilters,
+DF_ViewRuleKind_Settings,
+DF_ViewRuleKind_PendingFile,
+DF_ViewRuleKind_Commands,
+DF_ViewRuleKind_FileSystem,
+DF_ViewRuleKind_SystemProcesses,
+DF_ViewRuleKind_EntityLister,
+DF_ViewRuleKind_SymbolLister,
+DF_ViewRuleKind_Watch,
+DF_ViewRuleKind_Locals,
+DF_ViewRuleKind_Registers,
+DF_ViewRuleKind_Globals,
+DF_ViewRuleKind_ThreadLocals,
+DF_ViewRuleKind_Types,
+DF_ViewRuleKind_Procedures,
+DF_ViewRuleKind_Targets,
+DF_ViewRuleKind_FilePathMap,
+DF_ViewRuleKind_AutoViewRules,
+DF_ViewRuleKind_Breakpoints,
+DF_ViewRuleKind_WatchPins,
+DF_ViewRuleKind_Scheduler,
+DF_ViewRuleKind_CallStack,
+DF_ViewRuleKind_Modules,
+DF_ViewRuleKind_Text,
+DF_ViewRuleKind_Disasm,
+DF_ViewRuleKind_Output,
+DF_ViewRuleKind_Memory,
+DF_ViewRuleKind_Bitmap,
+DF_ViewRuleKind_ColorRGBA,
+DF_ViewRuleKind_Geo3D,
+DF_ViewRuleKind_COUNT,
+} DF_ViewRuleKind;
+
 typedef enum DF_ViewKind
 {
 DF_ViewKind_Null,
@@ -590,6 +628,18 @@ DF_CmdKindFlags flags;
 DF_Query query;
 };
 
+typedef struct DF_ViewRuleInfo DF_ViewRuleInfo;
+struct DF_ViewRuleInfo
+{
+String8 string;
+String8 description;
+String8 display_name;
+String8 params_schema;
+DF_IconKind icon_kind;
+DF_ViewRuleInfoFlags flags;
+DF_ViewRuleUIFunctionType *ui;
+};
+
 #define df_regs_lit_init_top \
 .machine = df_regs()->machine,\
 .module = df_regs()->module,\
@@ -726,18 +776,6 @@ DF_VIEW_UI_FUNCTION_DEF(geo3d);
 DF_VIEW_UI_FUNCTION_DEF(exception_filters);
 DF_VIEW_UI_FUNCTION_DEF(settings);
 
-DF_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_DEF(list);
-DF_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_DEF(only);
-DF_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_DEF(omit);
-DF_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(dec);
-DF_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(bin);
-DF_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(oct);
-DF_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(hex);
-DF_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(only);
-DF_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(omit);
-DF_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(no_addr);
-DF_VIEW_RULE_ROW_UI_FUNCTION_DEF(checkbox);
-DF_VIEW_RULE_ROW_UI_FUNCTION_DEF(color_rgba);
 C_LINKAGE_BEGIN
 extern DF_CmdKind d_cfg_src_load_cmd_kind_table[4];
 extern DF_CmdKind d_cfg_src_write_cmd_kind_table[4];

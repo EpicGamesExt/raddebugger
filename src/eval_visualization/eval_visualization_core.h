@@ -178,7 +178,7 @@ EV_Key key,                                        \
 EV_ExpandNode *expand_node,                        \
 String8 string,                                    \
 E_Expr *expr,                                      \
-EV_ViewRuleList *view_rules,                \
+EV_ViewRuleList *view_rules,                       \
 MD_Node *view_params,                              \
 S32 depth,                                         \
 struct EV_BlockList *out)

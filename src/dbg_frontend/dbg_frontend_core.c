@@ -2135,6 +2135,19 @@ d_eval_string_from_file_path(Arena *arena, String8 string)
 }
 
 ////////////////////////////////
+//~ rjf: View Rule Kind Functions
+
+internal DF_ViewRuleInfo *
+df_view_rule_info_from_string(String8 string)
+{
+  DF_ViewRuleInfo *info = &df_nil_view_rule_info;
+  {
+    // TODO(rjf)
+  }
+  return info;
+}
+
+////////////////////////////////
 //~ rjf: View Spec State Functions
 
 internal void

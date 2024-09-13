@@ -152,8 +152,26 @@ typedef DF_VIEW_CMD_FUNCTION_SIG(DF_ViewCmdFunctionType);
 typedef DF_VIEW_UI_FUNCTION_SIG(DF_ViewUIFunctionType);
 
 ////////////////////////////////
+//~ rjf: View Rule Info Types
+
+typedef U32 DF_ViewRuleInfoFlags;
+enum
+{
+  DF_ViewRuleInfoFlag_ShowInDocs                 = (1<<0),
+  DF_ViewRuleInfoFlag_CanFilter                  = (1<<1),
+  DF_ViewRuleInfoFlag_FilterIsCode               = (1<<2),
+  DF_ViewRuleInfoFlag_TypingAutomaticallyFilters = (1<<3),
+};
+
+#define DF_VIEW_RULE_UI_FUNCTION_SIG(name) void name(DF_View *view, String8 string, MD_Node *params, Rng2F32 rect)
+#define DF_VIEW_RULE_UI_FUNCTION_NAME(name) df_view_rule_ui_##name
+#define DF_VIEW_RULE_UI_FUNCTION_DEF(name) internal DF_VIEW_RULE_UI_FUNCTION_SIG(DF_VIEW_RULE_UI_FUNCTION_NAME(name))
+typedef DF_VIEW_RULE_UI_FUNCTION_SIG(DF_ViewRuleUIFunctionType);
+
+////////////////////////////////
 //~ rjf: View Specification Types
 
+#if 1 // TODO(rjf): @msgs
 typedef U32 DF_ViewSpecFlags;
 enum
 {
@@ -206,6 +224,7 @@ struct DF_CmdParamSlotViewSpecRuleList
   DF_CmdParamSlotViewSpecRuleNode *last;
   U64 count;
 };
+#endif
 
 ////////////////////////////////
 //~ rjf: View Types
@@ -360,21 +379,6 @@ struct DF_DragDropPayload
   D_Handle entity;
   TxtPt text_point;
 };
-
-////////////////////////////////
-//~ rjf: Rich Hover Types
-
-#if 0 // TODO(rjf): @msgs
-typedef struct DF_RichHoverInfo DF_RichHoverInfo;
-struct DF_RichHoverInfo
-{
-  D_Handle process;
-  Rng1U64 vaddr_range;
-  D_Handle module;
-  Rng1U64 voff_range;
-  DI_Key dbgi_key;
-};
-#endif
 
 ////////////////////////////////
 //~ rjf: View Rule Spec Types
@@ -1004,6 +1008,8 @@ read_only global DF_Entity d_nil_entity =
 
 read_only global DF_CmdKindInfo df_nil_cmd_kind_info = {0};
 
+read_only global DF_ViewRuleInfo df_nil_view_rule_info = {0};
+
 read_only global DF_ViewSpec df_nil_view_spec =
 {
   &df_nil_view_spec,
@@ -1276,6 +1282,11 @@ internal String8 d_eval_string_from_entity(Arena *arena, DF_Entity *entity);
 //- rjf: eval <-> file path
 internal String8 d_file_path_from_eval_string(Arena *arena, String8 string);
 internal String8 d_eval_string_from_file_path(Arena *arena, String8 string);
+
+////////////////////////////////
+//~ rjf: View Rule Kind Functions
+
+internal DF_ViewRuleInfo *df_view_rule_info_from_string(String8 string);
 
 ////////////////////////////////
 //~ rjf: View Spec State Functions

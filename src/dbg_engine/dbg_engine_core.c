@@ -231,35 +231,6 @@ d_cfg_table_push_unparsed_string(Arena *arena, D_CfgTable *table, String8 string
   }
 }
 
-internal D_CfgTable
-d_cfg_table_from_inheritance(Arena *arena, D_CfgTable *src)
-{
-  D_CfgTable dst_ = {0};
-  D_CfgTable *dst = &dst_;
-  {
-    dst->slot_count = src->slot_count;
-    dst->slots = push_array(arena, D_CfgSlot, dst->slot_count);
-  }
-  for(D_CfgVal *src_val = src->first_val; src_val != 0 && src_val != &d_nil_cfg_val; src_val = src_val->linear_next)
-  {
-    D_ViewRuleSpec *spec = d_view_rule_spec_from_string(src_val->string);
-    if(spec->info.flags & D_ViewRuleSpecInfoFlag_Inherited)
-    {
-      U64 hash = d_hash_from_string(spec->info.string);
-      U64 dst_slot_idx = hash%dst->slot_count;
-      D_CfgSlot *dst_slot = &dst->slots[dst_slot_idx];
-      D_CfgVal *dst_val = push_array(arena, D_CfgVal, 1);
-      dst_val->first = src_val->first;
-      dst_val->last = src_val->last;
-      dst_val->string = src_val->string;
-      dst_val->insertion_stamp = dst->insertion_stamp_counter;
-      SLLStackPush_N(dst_slot->first, dst_val, hash_next);
-      dst->insertion_stamp_counter += 1;
-    }
-  }
-  return dst_;
-}
-
 internal D_CfgVal *
 d_cfg_val_from_string(D_CfgTable *table, String8 string)
 {
