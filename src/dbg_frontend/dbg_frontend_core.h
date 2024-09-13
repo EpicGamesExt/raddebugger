@@ -832,6 +832,13 @@ struct DF_EvalVizViewCacheSlot
 ////////////////////////////////
 //~ rjf: Main Per-Process Graphical State
 
+typedef struct D_NameChunkNode D_NameChunkNode;
+struct D_NameChunkNode
+{
+  D_NameChunkNode *next;
+  U64 size;
+};
+
 typedef struct D_EntityListCache D_EntityListCache;
 struct D_EntityListCache
 {
@@ -871,6 +878,9 @@ struct DF_State
   
   // rjf: autosave timer
   F32 seconds_until_autosave;
+  
+  // rjf: name allocator
+  D_NameChunkNode *free_name_chunks[8];
   
   // rjf: entity state
   Arena *entities_arena;
@@ -958,6 +968,7 @@ struct DF_State
   U64 cfg_cached_timestamp[D_CfgSrc_COUNT];
   Arena *cfg_arena;
   D_CfgTable cfg_table;
+  U64 ctrl_exception_code_filters[(CTRL_ExceptionCodeKind_COUNT+63)/64];
   
   // rjf: running theme state
   DF_Theme cfg_theme_target;
@@ -1172,6 +1183,13 @@ internal void df_queue_drag_drop(void);
 
 internal void df_set_hover_regs(void);
 internal DF_Regs *df_get_hover_regs(void);
+
+////////////////////////////////
+//~ rjf: Name Allocation
+
+internal U64 df_name_bucket_idx_from_string_size(U64 size);
+internal String8 df_name_alloc(String8 string);
+internal void df_name_release(String8 string);
 
 ////////////////////////////////
 //~ rjf: Entity Stateful Functions

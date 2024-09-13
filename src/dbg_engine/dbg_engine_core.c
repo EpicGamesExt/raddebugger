@@ -338,114 +338,6 @@ d_cmd_list_push_new(Arena *arena, D_CmdList *cmds, D_CmdKind kind, D_CmdParams *
 }
 
 ////////////////////////////////
-//~ rjf: Name Allocation
-
-internal U64
-d_name_bucket_idx_from_string_size(U64 size)
-{
-  U64 size_rounded = u64_up_to_pow2(size+1);
-  size_rounded = ClampBot((1<<4), size_rounded);
-  U64 bucket_idx = 0;
-  switch(size_rounded)
-  {
-    case 1<<4: {bucket_idx = 0;}break;
-    case 1<<5: {bucket_idx = 1;}break;
-    case 1<<6: {bucket_idx = 2;}break;
-    case 1<<7: {bucket_idx = 3;}break;
-    case 1<<8: {bucket_idx = 4;}break;
-    case 1<<9: {bucket_idx = 5;}break;
-    case 1<<10:{bucket_idx = 6;}break;
-    default:{bucket_idx = ArrayCount(d_state->free_name_chunks)-1;}break;
-  }
-  return bucket_idx;
-}
-
-internal String8
-d_name_alloc(String8 string)
-{
-  if(string.size == 0) {return str8_zero();}
-  U64 bucket_idx = d_name_bucket_idx_from_string_size(string.size);
-  
-  // rjf: loop -> find node, allocate if not there
-  //
-  // (we do a loop here so that all allocation logic goes through
-  // the same path, such that we *always* pull off a free list,
-  // rather than just using what was pushed onto an arena directly,
-  // which is not undoable; the free lists we control, and are thus
-  // trivially undoable)
-  //
-  D_NameChunkNode *node = 0;
-  for(;node == 0;)
-  {
-    node = d_state->free_name_chunks[bucket_idx];
-    
-    // rjf: pull from bucket free list
-    if(node != 0)
-    {
-      if(bucket_idx == ArrayCount(d_state->free_name_chunks)-1)
-      {
-        node = 0;
-        D_NameChunkNode *prev = 0;
-        for(D_NameChunkNode *n = d_state->free_name_chunks[bucket_idx];
-            n != 0;
-            prev = n, n = n->next)
-        {
-          if(n->size >= string.size+1)
-          {
-            if(prev == 0)
-            {
-              d_state->free_name_chunks[bucket_idx] = n->next;
-            }
-            else
-            {
-              prev->next = n->next;
-            }
-            node = n;
-            break;
-          }
-        }
-      }
-      else
-      {
-        SLLStackPop(d_state->free_name_chunks[bucket_idx]);
-      }
-    }
-    
-    // rjf: no found node -> allocate new, push onto associated free list
-    if(node == 0)
-    {
-      U64 chunk_size = 0;
-      if(bucket_idx < ArrayCount(d_state->free_name_chunks)-1)
-      {
-        chunk_size = 1<<(bucket_idx+4);
-      }
-      else
-      {
-        chunk_size = u64_up_to_pow2(string.size);
-      }
-      U8 *chunk_memory = push_array(d_state->arena, U8, chunk_size);
-      D_NameChunkNode *chunk = (D_NameChunkNode *)chunk_memory;
-      SLLStackPush(d_state->free_name_chunks[bucket_idx], chunk);
-    }
-  }
-  
-  // rjf: fill string & return
-  String8 allocated_string = str8((U8 *)node, string.size);
-  MemoryCopy((U8 *)node, string.str, string.size);
-  return allocated_string;
-}
-
-internal void
-d_name_release(String8 string)
-{
-  if(string.size == 0) {return;}
-  U64 bucket_idx = d_name_bucket_idx_from_string_size(string.size);
-  D_NameChunkNode *node = (D_NameChunkNode *)string.str;
-  node->size = u64_up_to_pow2(string.size);
-  SLLStackPush(d_state->free_name_chunks[bucket_idx], node);
-}
-
-////////////////////////////////
 //~ rjf: View Rule Spec Stateful Functions
 
 internal void
@@ -911,9 +803,6 @@ d_trap_net_from_thread__step_into_line(Arena *arena, CTRL_Entity *thread)
   scratch_end(scratch);
   return result;
 }
-
-////////////////////////////////
-//~ rjf: Modules & Debug Info Mappings
 
 ////////////////////////////////
 //~ rjf: Debug Info Lookups
@@ -1562,169 +1451,8 @@ internal String8List
 d_cfg_strings_from_core(Arena *arena, String8 root_path, D_CfgSrc source)
 {
   ProfBeginFunction();
-  local_persist char *spaces = "                                                                                ";
-  local_persist char *slashes= "////////////////////////////////////////////////////////////////////////////////";
+  
   String8List strs = {0};
-  
-  //- rjf: write all entities
-  {
-    for(EachEnumVal(DF_EntityKind, k))
-    {
-      DF_EntityKindFlags k_flags = d_entity_kind_flags_table[k];
-      if(!(k_flags & DF_EntityKindFlag_IsSerializedToConfig))
-      {
-        continue;
-      }
-      B32 first = 1;
-      DF_EntityList entities = d_query_cached_entity_list_with_kind(k);
-      for(DF_EntityNode *n = entities.first; n != 0; n = n->next)
-      {
-        DF_Entity *entity = n->entity;
-        if(entity->cfg_src != source)
-        {
-          continue;
-        }
-        if(first)
-        {
-          first = 0;
-          String8 title_name = d_entity_kind_name_lower_plural_table[k];
-          str8_list_pushf(arena, &strs, "/// %S %.*s\n\n",
-                          title_name,
-                          (int)Max(0, 79 - (title_name.size + 5)),
-                          slashes);
-        }
-        DF_EntityRec rec = {0};
-        S64 depth = 0;
-        for(DF_Entity *e = entity; !df_entity_is_nil(e); e = rec.next)
-        {
-          //- rjf: get next iteration
-          rec = df_entity_rec_depth_first_pre(e, entity);
-          
-          //- rjf: unpack entity info
-          typedef U32 EntityInfoFlags;
-          enum
-          {
-            EntityInfoFlag_HasName     = (1<<0),
-            EntityInfoFlag_HasDisabled = (1<<1),
-            EntityInfoFlag_HasTxtPt    = (1<<2),
-            EntityInfoFlag_HasVAddr    = (1<<3),
-            EntityInfoFlag_HasColor    = (1<<4),
-            EntityInfoFlag_HasChildren = (1<<5),
-          };
-          String8 entity_name_escaped = e->string;
-          if(d_entity_kind_flags_table[e->kind] & DF_EntityKindFlag_NameIsPath)
-          {
-            Temp scratch = scratch_begin(&arena, 1);
-            String8 path_normalized = path_normalized_from_string(scratch.arena, e->string);
-            entity_name_escaped = path_relative_dst_from_absolute_dst_src(arena, path_normalized, root_path);
-            scratch_end(scratch);
-          }
-          else
-          {
-            entity_name_escaped = d_cfg_escaped_from_raw_string(arena, e->string);
-          }
-          EntityInfoFlags info_flags = 0;
-          if(entity_name_escaped.size != 0)        { info_flags |= EntityInfoFlag_HasName; }
-          if(!!e->disabled)                        { info_flags |= EntityInfoFlag_HasDisabled; }
-          if(e->flags & DF_EntityFlag_HasTextPoint) { info_flags |= EntityInfoFlag_HasTxtPt; }
-          if(e->flags & DF_EntityFlag_HasVAddr)     { info_flags |= EntityInfoFlag_HasVAddr; }
-          if(e->flags & DF_EntityFlag_HasColor)     { info_flags |= EntityInfoFlag_HasColor; }
-          if(!df_entity_is_nil(e->first))           { info_flags |= EntityInfoFlag_HasChildren; }
-          
-          //- rjf: write entity info
-          B32 opened_brace = 0;
-          switch(info_flags)
-          {
-            //- rjf: default path -> entity has lots of stuff, so write all info generically
-            default:
-            {
-              opened_brace = 1;
-              
-              // rjf: write entity title
-              str8_list_pushf(arena, &strs, "%S:\n{\n", d_entity_kind_name_lower_table[e->kind]);
-              
-              // rjf: write this entity's info
-              if(entity_name_escaped.size != 0)
-              {
-                str8_list_pushf(arena, &strs, "name: \"%S\"\n", entity_name_escaped);
-              }
-              if(e->disabled)
-              {
-                str8_list_pushf(arena, &strs, "disabled: 1\n");
-              }
-              if(e->flags & DF_EntityFlag_HasColor)
-              {
-                Vec4F32 hsva = df_hsva_from_entity(e);
-                Vec4F32 rgba = rgba_from_hsva(hsva);
-                U32 rgba_hex = u32_from_rgba(rgba);
-                str8_list_pushf(arena, &strs, "color: 0x%x\n", rgba_hex);
-              }
-              if(e->flags & DF_EntityFlag_HasTextPoint)
-              {
-                str8_list_pushf(arena, &strs, "line: %I64d\n", e->text_point.line);
-              }
-              if(e->flags & DF_EntityFlag_HasVAddr)
-              {
-                str8_list_pushf(arena, &strs, "vaddr: (0x%I64x)\n", e->vaddr);
-              }
-            }break;
-            
-            //- rjf: single-line fast-paths
-            case EntityInfoFlag_HasName:
-            {str8_list_pushf(arena, &strs, "%S: \"%S\"\n", d_entity_kind_name_lower_table[e->kind], entity_name_escaped);}break;
-            case EntityInfoFlag_HasName|EntityInfoFlag_HasTxtPt:
-            {str8_list_pushf(arena, &strs, "%S: (\"%S\":%I64d)\n", d_entity_kind_name_lower_table[e->kind], entity_name_escaped, e->text_point.line);}break;
-            case EntityInfoFlag_HasVAddr:
-            {str8_list_pushf(arena, &strs, "%S: (0x%I64x)\n", d_entity_kind_name_lower_table[e->kind], e->vaddr);}break;
-            
-            //- rjf: empty
-            case 0:
-            {}break;
-          }
-          
-          // rjf: push
-          depth += rec.push_count;
-          
-          // rjf: pop
-          if(rec.push_count == 0)
-          {
-            for(S64 pop_idx = 0; pop_idx < rec.pop_count + opened_brace; pop_idx += 1)
-            {
-              if(depth > 0)
-              {
-                depth -= 1;
-              }
-              str8_list_pushf(arena, &strs, "}\n");
-            }
-          }
-          
-          // rjf: separate top-level entities with extra newline
-          if(df_entity_is_nil(rec.next) && (rec.pop_count != 0 || n->next == 0))
-          {
-            str8_list_pushf(arena, &strs, "\n");
-          }
-        }
-      }
-    }
-  }
-  
-  //- rjf: write exception code filters
-  if(source == D_CfgSrc_Project)
-  {
-    str8_list_push(arena, &strs, str8_lit("/// exception code filters ////////////////////////////////////////////////////\n"));
-    str8_list_push(arena, &strs, str8_lit("\n"));
-    str8_list_push(arena, &strs, str8_lit("exception_code_filters:\n"));
-    str8_list_push(arena, &strs, str8_lit("{\n"));
-    for(CTRL_ExceptionCodeKind k = (CTRL_ExceptionCodeKind)(CTRL_ExceptionCodeKind_Null+1);
-        k < CTRL_ExceptionCodeKind_COUNT;
-        k = (CTRL_ExceptionCodeKind)(k+1))
-    {
-      String8 name = ctrl_exception_code_kind_lowercase_code_string_table[k];
-      B32 value = !!(d_state->ctrl_exception_code_filters[k/64] & (1ull<<(k%64)));
-      str8_list_pushf(arena, &strs, "  %S: %i\n", name, value);
-    }
-    str8_list_push(arena, &strs, str8_lit("}\n\n"));
-  }
   
   ProfEnd();
   return strs;
@@ -2041,15 +1769,6 @@ d_init(void)
   d_state->view_rule_spec_table = push_array(arena, D_ViewRuleSpec *, d_state->view_rule_spec_table_size);
   d_state->ctrl_msg_arena = arena_alloc();
   
-  // rjf: set up initial exception filtering rules
-  for(CTRL_ExceptionCodeKind k = (CTRL_ExceptionCodeKind)0; k < CTRL_ExceptionCodeKind_COUNT; k = (CTRL_ExceptionCodeKind)(k+1))
-  {
-    if(ctrl_exception_code_kind_default_enable_table[k])
-    {
-      d_state->ctrl_exception_code_filters[k/64] |= 1ull<<(k%64);
-    }
-  }
-  
   // rjf: register core view rules
   {
     D_ViewRuleSpecInfoArray array = {d_core_view_rule_spec_info_table, ArrayCount(d_core_view_rule_spec_info_table)};
@@ -2077,7 +1796,7 @@ d_init(void)
 }
 
 internal D_EventList
-d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_PathMapArray *path_maps)
+d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_PathMapArray *path_maps, U64 exception_code_filters[(CTRL_ExceptionCodeKind_COUNT+63)/64])
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(&arena, 1);
@@ -2627,7 +2346,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
                 msg->path = working_directory;
                 msg->cmd_line_string_list = cmdln_strings;
                 msg->env_inherit = 1;
-                MemoryCopyArray(msg->exception_code_filters, d_state->ctrl_exception_code_filters);
+                MemoryCopyArray(msg->exception_code_filters, exception_code_filters);
                 str8_list_push(scratch.arena, &msg->entry_points, custom_entry_point_name);
                 msg->env_string_list = env;
               }
@@ -2666,7 +2385,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
               msg->kind = CTRL_MsgKind_Kill;
               msg->exit_code = 1;
               msg->entity = process->handle;
-              MemoryCopyArray(msg->exception_code_filters, d_state->ctrl_exception_code_filters);
+              MemoryCopyArray(msg->exception_code_filters, exception_code_filters);
             }
           }
           
@@ -2692,7 +2411,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
             CTRL_Msg *msg = ctrl_msg_list_push(scratch.arena, &ctrl_msgs);
             msg->kind   = CTRL_MsgKind_Detach;
             msg->entity = n->v->handle;
-            MemoryCopyArray(msg->exception_code_filters, d_state->ctrl_exception_code_filters);
+            MemoryCopyArray(msg->exception_code_filters, exception_code_filters);
           }
         }break;
         case D_CmdKind_Continue:
@@ -2956,7 +2675,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
             CTRL_Msg *msg = ctrl_msg_list_push(scratch.arena, &ctrl_msgs);
             msg->kind      = CTRL_MsgKind_Attach;
             msg->entity_id = pid;
-            MemoryCopyArray(msg->exception_code_filters, d_state->ctrl_exception_code_filters);
+            MemoryCopyArray(msg->exception_code_filters, exception_code_filters);
           }
         }break;
       }
@@ -2977,7 +2696,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
           msg->run_flags  = run_flags;
           msg->entity     = run_thread->handle;
           msg->parent     = process->handle;
-          MemoryCopyArray(msg->exception_code_filters, d_state->ctrl_exception_code_filters);
+          MemoryCopyArray(msg->exception_code_filters, exception_code_filters);
           MemoryCopyStruct(&msg->traps, &run_traps);
           D_BreakpointArray *bp_batches[] =
           {

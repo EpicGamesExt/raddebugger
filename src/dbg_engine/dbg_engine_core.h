@@ -415,17 +415,6 @@ struct D_RunLocalsCache
 ////////////////////////////////
 //~ rjf: Main State Types
 
-//- rjf: name allocator types
-
-typedef struct D_NameChunkNode D_NameChunkNode;
-struct D_NameChunkNode
-{
-  D_NameChunkNode *next;
-  U64 size;
-};
-
-//- rjf: core bundle state type
-
 typedef struct D_State D_State;
 struct D_State
 {
@@ -443,9 +432,6 @@ struct D_State
   
   // rjf: output log key
   U128 output_log_key;
-  
-  // rjf: name allocator
-  D_NameChunkNode *free_name_chunks[8];
   
   // rjf: per-run caches
   D_UnwindCache unwind_cache;
@@ -475,7 +461,6 @@ struct D_State
   U128 ctrl_last_run_param_state_hash;
   B32 ctrl_is_running;
   B32 ctrl_soft_halt_issued;
-  U64 ctrl_exception_code_filters[(CTRL_ExceptionCodeKind_COUNT+63)/64];
   Arena *ctrl_msg_arena;
   CTRL_MsgList ctrl_msgs;
   
@@ -541,13 +526,6 @@ internal D_CmdParams d_cmd_params_copy(Arena *arena, D_CmdParams *src);
 
 //- rjf: command lists
 internal void d_cmd_list_push_new(Arena *arena, D_CmdList *cmds, D_CmdKind kind, D_CmdParams *params);
-
-////////////////////////////////
-//~ rjf: Name Allocation
-
-internal U64 d_name_bucket_idx_from_string_size(U64 size);
-internal String8 d_name_alloc(String8 string);
-internal void d_name_release(String8 string);
 
 ////////////////////////////////
 //~ rjf: View Rule Spec Stateful Functions
@@ -633,6 +611,6 @@ internal B32 d_next_cmd(D_Cmd **cmd);
 //~ rjf: Main Layer Top-Level Calls
 
 internal void d_init(void);
-internal D_EventList d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_PathMapArray *path_maps);
+internal D_EventList d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_PathMapArray *path_maps, U64 exception_code_filters[(CTRL_ExceptionCodeKind_COUNT+63)/64]);
 
 #endif // DBG_ENGINE_CORE_H

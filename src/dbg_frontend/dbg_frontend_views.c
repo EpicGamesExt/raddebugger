@@ -8453,7 +8453,7 @@ DF_VIEW_UI_FUNCTION_DEF(exception_filters)
       }
       node->v[node->count].name = name;
       node->v[node->count].matches = matches;
-      node->v[node->count].is_enabled = !!(d_state->ctrl_exception_code_filters[k/64] & (1ull<<(k%64)));
+      node->v[node->count].is_enabled = !!(df_state->ctrl_exception_code_filters[k/64] & (1ull<<(k%64)));
       node->v[node->count].exception_code_kind = k;
       node->count += 1;
       opts_list.option_count += 1;
@@ -8505,11 +8505,11 @@ DF_VIEW_UI_FUNCTION_DEF(exception_filters)
           CTRL_ExceptionCodeKind k = opt->exception_code_kind;
           if(opt->is_enabled)
           {
-            d_state->ctrl_exception_code_filters[k/64] &= ~(1ull<<(k%64));
+            df_state->ctrl_exception_code_filters[k/64] &= ~(1ull<<(k%64));
           }
           else
           {
-            d_state->ctrl_exception_code_filters[k/64] |= (1ull<<(k%64));
+            df_state->ctrl_exception_code_filters[k/64] |= (1ull<<(k%64));
           }
         }
       }
