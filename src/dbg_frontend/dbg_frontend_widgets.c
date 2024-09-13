@@ -415,7 +415,7 @@ df_icon_buttonf(DF_IconKind kind, FuzzyMatchRangeList *matches, char *fmt, ...)
 }
 
 internal void
-df_entity_tooltips(D_Entity *entity)
+df_entity_tooltips(DF_Entity *entity)
 {
   Temp scratch = scratch_begin(0, 0);
   DF_Palette(DF_PaletteCode_Floating) switch(entity->kind)
@@ -446,7 +446,7 @@ df_entity_tooltips(D_Entity *entity)
       }
       {
         CTRL_Event stop_event = d_ctrl_last_stop_event();
-        D_Entity *stopper_thread = d_entity_from_ctrl_handle(stop_event.entity);
+        DF_Entity *stopper_thread = d_entity_from_ctrl_handle(stop_event.entity);
         if(stopper_thread == entity)
         {
           ui_spacer(ui_em(1.5f, 1.f));
@@ -582,7 +582,7 @@ df_entity_tooltips(D_Entity *entity)
 }
 
 internal UI_Signal
-df_entity_desc_button(D_Entity *entity, FuzzyMatchRangeList *name_matches, String8 fuzzy_query, B32 is_implicit)
+df_entity_desc_button(DF_Entity *entity, FuzzyMatchRangeList *name_matches, String8 fuzzy_query, B32 is_implicit)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
@@ -677,7 +677,7 @@ df_entity_desc_button(D_Entity *entity, FuzzyMatchRangeList *name_matches, Strin
     }
     if(entity->kind == D_EntityKind_Target) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_FontSize(ui_top_font_size()*0.95f)
     {
-      D_Entity *args = d_entity_child_from_kind(entity, D_EntityKind_Arguments);
+      DF_Entity *args = d_entity_child_from_kind(entity, D_EntityKind_Arguments);
       ui_label(args->string);
     }
     if(kind_flags & D_EntityKindFlag_CanEnable && entity->disabled) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_FontSize(ui_top_font_size()*0.95f) UI_HeightFill
@@ -1337,7 +1337,7 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
           //- rjf: build margin breakpoint ui
           for(D_EntityNode *n = line_bps.first; n != 0; n = n->next)
           {
-            D_Entity *bp = n->entity;
+            DF_Entity *bp = n->entity;
             Vec4F32 bp_color = df_rgba_from_theme_color(DF_ThemeColor_Breakpoint);
             if(bp->flags & D_EntityFlag_HasColor)
             {
@@ -1422,7 +1422,7 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
           //- rjf: build margin watch pin ui
           for(D_EntityNode *n = line_pins.first; n != 0; n = n->next)
           {
-            D_Entity *pin = n->entity;
+            DF_Entity *pin = n->entity;
             Vec4F32 color = df_rgba_from_theme_color(DF_ThemeColor_Text);
             if(pin->flags & D_EntityFlag_HasColor)
             {
@@ -1659,7 +1659,7 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
       {
         for(D_EntityNode *n = pins.first; n != 0; n = n->next)
         {
-          D_Entity *pin = n->entity;
+          DF_Entity *pin = n->entity;
           String8 pin_expr = pin->string;
           E_Eval eval = e_eval_from_string(scratch.arena, pin_expr);
           String8 eval_string = {0};
@@ -1787,7 +1787,7 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   UI_Signal priority_margin_container_sig = ui_signal_from_box(priority_margin_container_box);
   UI_Signal catchall_margin_container_sig = ui_signal_from_box(catchall_margin_container_box);
   UI_Signal text_container_sig = ui_signal_from_box(text_container_box);
-  D_Entity *line_drag_entity = &d_nil_entity;
+  DF_Entity *line_drag_entity = &d_nil_entity;
   {
     //- rjf: determine mouse drag range
     TxtRng mouse_drag_rng = txt_rng(mouse_pt, mouse_pt);
@@ -1860,7 +1860,7 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
     if(df_drag_is_active() && contains_2f32(clipped_top_container_rect, ui_mouse()))
     {
       DF_DragDropPayload *payload = &df_drag_drop_payload;
-      D_Entity *entity = d_entity_from_handle(payload->entity);
+      DF_Entity *entity = d_entity_from_handle(payload->entity);
       if(entity->kind == D_EntityKind_Thread ||
          entity->kind == D_EntityKind_WatchPin ||
          entity->kind == D_EntityKind_Breakpoint)
@@ -1874,7 +1874,7 @@ df_code_slice(DF_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
       DF_DragDropPayload payload = {0};
       if(!d_entity_is_nil(line_drag_entity) && df_drag_drop(&payload) && contains_1s64(params->line_num_range, mouse_pt.line))
       {
-        D_Entity *dropped_entity = line_drag_entity;
+        DF_Entity *dropped_entity = line_drag_entity;
         S64 line_num = mouse_pt.line;
         U64 line_idx = line_num - params->line_num_range.min;
         U64 line_vaddr = params->line_vaddrs[line_idx];

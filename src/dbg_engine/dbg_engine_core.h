@@ -305,15 +305,15 @@ enum
 
 typedef U64 D_EntityID;
 
-typedef struct D_Entity D_Entity;
-struct D_Entity
+typedef struct DF_Entity DF_Entity;
+struct DF_Entity
 {
   // rjf: tree links
-  D_Entity *first;
-  D_Entity *last;
-  D_Entity *next;
-  D_Entity *prev;
-  D_Entity *parent;
+  DF_Entity *first;
+  DF_Entity *last;
+  DF_Entity *next;
+  DF_Entity *prev;
+  DF_Entity *parent;
   
   // rjf: metadata
   D_EntityKind kind;
@@ -352,7 +352,7 @@ typedef struct D_EntityNode D_EntityNode;
 struct D_EntityNode
 {
   D_EntityNode *next;
-  D_Entity *entity;
+  DF_Entity *entity;
 };
 
 typedef struct D_EntityList D_EntityList;
@@ -366,14 +366,14 @@ struct D_EntityList
 typedef struct D_EntityArray D_EntityArray;
 struct D_EntityArray
 {
-  D_Entity **v;
+  DF_Entity **v;
   U64 count;
 };
 
 typedef struct D_EntityRec D_EntityRec;
 struct D_EntityRec
 {
-  D_Entity *next;
+  DF_Entity *next;
   S32 push_count;
   S32 pop_count;
 };
@@ -397,7 +397,7 @@ struct D_EntityEval
 typedef struct D_EntityFuzzyItem D_EntityFuzzyItem;
 struct D_EntityFuzzyItem
 {
-  D_Entity *entity;
+  DF_Entity *entity;
   FuzzyMatchRangeList matches;
 };
 
@@ -711,11 +711,11 @@ struct D_State
   
   // rjf: entity state
   Arena *entities_arena;
-  D_Entity *entities_base;
+  DF_Entity *entities_base;
   U64 entities_count;
   U64 entities_id_gen;
-  D_Entity *entities_root;
-  D_Entity *entities_free[2]; // [0] -> normal lifetime, not user defined; [1] -> user defined lifetime (& thus undoable)
+  DF_Entity *entities_root;
+  DF_Entity *entities_free[2]; // [0] -> normal lifetime, not user defined; [1] -> user defined lifetime (& thus undoable)
   U64 entities_free_count;
   U64 entities_active_count;
   
@@ -766,7 +766,7 @@ struct D_State
 read_only global D_ViewRuleSpec d_nil_core_view_rule_spec = {0};
 read_only global D_CfgTree d_nil_cfg_tree = {&d_nil_cfg_tree, D_CfgSrc_User, &md_nil_node};
 read_only global D_CfgVal d_nil_cfg_val = {&d_nil_cfg_val, &d_nil_cfg_val, &d_nil_cfg_tree, &d_nil_cfg_tree};
-read_only global D_Entity d_nil_entity =
+read_only global DF_Entity d_nil_entity =
 {
   &d_nil_entity,
   &d_nil_entity,
@@ -819,29 +819,29 @@ internal void d_cmd_list_push_new(Arena *arena, D_CmdList *cmds, D_CmdKind kind,
 //~ rjf: Entity Type Pure Functions
 
 //- rjf: nil
-internal B32 d_entity_is_nil(D_Entity *entity);
+internal B32 d_entity_is_nil(DF_Entity *entity);
 #define d_require_entity_nonnil(entity, if_nil_stmts) do{if(d_entity_is_nil(entity)){if_nil_stmts;}}while(0)
 
 //- rjf: handle <-> entity conversions
-internal U64 d_index_from_entity(D_Entity *entity);
-internal D_Handle d_handle_from_entity(D_Entity *entity);
-internal D_Entity *d_entity_from_handle(D_Handle handle);
+internal U64 d_index_from_entity(DF_Entity *entity);
+internal D_Handle d_handle_from_entity(DF_Entity *entity);
+internal DF_Entity *d_entity_from_handle(D_Handle handle);
 internal D_EntityList d_entity_list_from_handle_list(Arena *arena, D_HandleList handles);
 internal D_HandleList d_handle_list_from_entity_list(Arena *arena, D_EntityList entities);
 
 //- rjf: entity recursion iterators
-internal D_EntityRec d_entity_rec_depth_first(D_Entity *entity, D_Entity *subtree_root, U64 sib_off, U64 child_off);
-#define d_entity_rec_depth_first_pre(entity, subtree_root)  d_entity_rec_depth_first((entity), (subtree_root), OffsetOf(D_Entity, next), OffsetOf(D_Entity, first))
-#define d_entity_rec_depth_first_post(entity, subtree_root) d_entity_rec_depth_first((entity), (subtree_root), OffsetOf(D_Entity, prev), OffsetOf(D_Entity, last))
+internal D_EntityRec d_entity_rec_depth_first(DF_Entity *entity, DF_Entity *subtree_root, U64 sib_off, U64 child_off);
+#define d_entity_rec_depth_first_pre(entity, subtree_root)  d_entity_rec_depth_first((entity), (subtree_root), OffsetOf(DF_Entity, next), OffsetOf(DF_Entity, first))
+#define d_entity_rec_depth_first_post(entity, subtree_root) d_entity_rec_depth_first((entity), (subtree_root), OffsetOf(DF_Entity, prev), OffsetOf(DF_Entity, last))
 
 //- rjf: ancestor/child introspection
-internal D_Entity *d_entity_child_from_kind(D_Entity *entity, D_EntityKind kind);
-internal D_Entity *d_entity_ancestor_from_kind(D_Entity *entity, D_EntityKind kind);
-internal D_EntityList d_push_entity_child_list_with_kind(Arena *arena, D_Entity *entity, D_EntityKind kind);
-internal D_Entity *d_entity_child_from_string_and_kind(D_Entity *parent, String8 string, D_EntityKind kind);
+internal DF_Entity *d_entity_child_from_kind(DF_Entity *entity, D_EntityKind kind);
+internal DF_Entity *d_entity_ancestor_from_kind(DF_Entity *entity, D_EntityKind kind);
+internal D_EntityList d_push_entity_child_list_with_kind(Arena *arena, DF_Entity *entity, D_EntityKind kind);
+internal DF_Entity *d_entity_child_from_string_and_kind(DF_Entity *parent, String8 string, D_EntityKind kind);
 
 //- rjf: entity list building
-internal void d_entity_list_push(Arena *arena, D_EntityList *list, D_Entity *entity);
+internal void d_entity_list_push(Arena *arena, D_EntityList *list, DF_Entity *entity);
 internal D_EntityArray d_entity_array_from_list(Arena *arena, D_EntityList *list);
 #define d_first_entity_from_list(list) ((list)->first != 0 ? (list)->first->entity : &d_nil_entity)
 
@@ -850,24 +850,24 @@ internal D_EntityFuzzyItemArray d_entity_fuzzy_item_array_from_entity_list_needl
 internal D_EntityFuzzyItemArray d_entity_fuzzy_item_array_from_entity_array_needle(Arena *arena, D_EntityArray *array, String8 needle);
 
 //- rjf: full path building, from file/folder entities
-internal String8 d_full_path_from_entity(Arena *arena, D_Entity *entity);
+internal String8 d_full_path_from_entity(Arena *arena, DF_Entity *entity);
 
 //- rjf: display string entities, for referencing entities in ui
-internal String8 d_display_string_from_entity(Arena *arena, D_Entity *entity);
+internal String8 d_display_string_from_entity(Arena *arena, DF_Entity *entity);
 
 //- rjf: extra search tag strings for fuzzy filtering entities
-internal String8 d_search_tags_from_entity(Arena *arena, D_Entity *entity);
+internal String8 d_search_tags_from_entity(Arena *arena, DF_Entity *entity);
 
 //- rjf: entity -> color operations
-internal Vec4F32 d_hsva_from_entity(D_Entity *entity);
-internal Vec4F32 d_rgba_from_entity(D_Entity *entity);
+internal Vec4F32 d_hsva_from_entity(DF_Entity *entity);
+internal Vec4F32 d_rgba_from_entity(DF_Entity *entity);
 
 //- rjf: entity -> expansion tree keys
-internal EV_Key d_ev_key_from_entity(D_Entity *entity);
-internal EV_Key d_parent_ev_key_from_entity(D_Entity *entity);
+internal EV_Key d_ev_key_from_entity(DF_Entity *entity);
+internal EV_Key d_parent_ev_key_from_entity(DF_Entity *entity);
 
 //- rjf: entity -> evaluation
-internal D_EntityEval *d_eval_from_entity(Arena *arena, D_Entity *entity);
+internal D_EntityEval *d_eval_from_entity(Arena *arena, DF_Entity *entity);
 
 ////////////////////////////////
 //~ rjf: Name Allocation
@@ -880,44 +880,44 @@ internal void d_name_release(String8 string);
 //~ rjf: Entity Stateful Functions
 
 //- rjf: entity allocation + tree forming
-internal D_Entity *d_entity_alloc(D_Entity *parent, D_EntityKind kind);
-internal void d_entity_mark_for_deletion(D_Entity *entity);
-internal void d_entity_release(D_Entity *entity);
-internal void d_entity_change_parent(D_Entity *entity, D_Entity *old_parent, D_Entity *new_parent, D_Entity *prev_child);
+internal DF_Entity *d_entity_alloc(DF_Entity *parent, D_EntityKind kind);
+internal void d_entity_mark_for_deletion(DF_Entity *entity);
+internal void d_entity_release(DF_Entity *entity);
+internal void d_entity_change_parent(DF_Entity *entity, DF_Entity *old_parent, DF_Entity *new_parent, DF_Entity *prev_child);
 
 //- rjf: entity simple equipment
-internal void d_entity_equip_txt_pt(D_Entity *entity, TxtPt point);
-internal void d_entity_equip_entity_handle(D_Entity *entity, D_Handle handle);
-internal void d_entity_equip_disabled(D_Entity *entity, B32 b32);
-internal void d_entity_equip_u64(D_Entity *entity, U64 u64);
-internal void d_entity_equip_color_rgba(D_Entity *entity, Vec4F32 rgba);
-internal void d_entity_equip_color_hsva(D_Entity *entity, Vec4F32 hsva);
-internal void d_entity_equip_cfg_src(D_Entity *entity, D_CfgSrc cfg_src);
-internal void d_entity_equip_timestamp(D_Entity *entity, U64 timestamp);
+internal void d_entity_equip_txt_pt(DF_Entity *entity, TxtPt point);
+internal void d_entity_equip_entity_handle(DF_Entity *entity, D_Handle handle);
+internal void d_entity_equip_disabled(DF_Entity *entity, B32 b32);
+internal void d_entity_equip_u64(DF_Entity *entity, U64 u64);
+internal void d_entity_equip_color_rgba(DF_Entity *entity, Vec4F32 rgba);
+internal void d_entity_equip_color_hsva(DF_Entity *entity, Vec4F32 hsva);
+internal void d_entity_equip_cfg_src(DF_Entity *entity, D_CfgSrc cfg_src);
+internal void d_entity_equip_timestamp(DF_Entity *entity, U64 timestamp);
 
 //- rjf: control layer correllation equipment
-internal void d_entity_equip_ctrl_handle(D_Entity *entity, CTRL_Handle handle);
-internal void d_entity_equip_arch(D_Entity *entity, Arch arch);
-internal void d_entity_equip_ctrl_id(D_Entity *entity, U32 id);
-internal void d_entity_equip_stack_base(D_Entity *entity, U64 stack_base);
-internal void d_entity_equip_vaddr_rng(D_Entity *entity, Rng1U64 range);
-internal void d_entity_equip_vaddr(D_Entity *entity, U64 vaddr);
+internal void d_entity_equip_ctrl_handle(DF_Entity *entity, CTRL_Handle handle);
+internal void d_entity_equip_arch(DF_Entity *entity, Arch arch);
+internal void d_entity_equip_ctrl_id(DF_Entity *entity, U32 id);
+internal void d_entity_equip_stack_base(DF_Entity *entity, U64 stack_base);
+internal void d_entity_equip_vaddr_rng(DF_Entity *entity, Rng1U64 range);
+internal void d_entity_equip_vaddr(DF_Entity *entity, U64 vaddr);
 
 //- rjf: name equipment
-internal void d_entity_equip_name(D_Entity *entity, String8 name);
-internal void d_entity_equip_namef(D_Entity *entity, char *fmt, ...);
+internal void d_entity_equip_name(DF_Entity *entity, String8 name);
+internal void d_entity_equip_namef(DF_Entity *entity, char *fmt, ...);
 
 //- rjf: file path map override lookups
 internal String8List d_possible_overrides_from_file_path(Arena *arena, String8 file_path);
 
 //- rjf: top-level state queries
-internal D_Entity *d_entity_root(void);
+internal DF_Entity *d_entity_root(void);
 internal D_EntityList d_push_entity_list_with_kind(Arena *arena, D_EntityKind kind);
-internal D_Entity *d_entity_from_id(D_EntityID id);
-internal D_Entity *d_machine_entity_from_machine_id(CTRL_MachineID machine_id);
-internal D_Entity *d_entity_from_ctrl_handle(CTRL_Handle handle);
-internal D_Entity *d_entity_from_ctrl_id(CTRL_MachineID machine_id, U32 id);
-internal D_Entity *d_entity_from_name_and_kind(String8 string, D_EntityKind kind);
+internal DF_Entity *d_entity_from_id(D_EntityID id);
+internal DF_Entity *d_machine_entity_from_machine_id(CTRL_MachineID machine_id);
+internal DF_Entity *d_entity_from_ctrl_handle(CTRL_Handle handle);
+internal DF_Entity *d_entity_from_ctrl_id(CTRL_MachineID machine_id, U32 id);
+internal DF_Entity *d_entity_from_name_and_kind(String8 string, D_EntityKind kind);
 
 ////////////////////////////////
 //~ rjf: View Rule Spec Stateful Functions
@@ -972,8 +972,8 @@ internal CTRL_Entity *d_ctrl_entity_from_eval_space(E_Space space);
 internal E_Space d_eval_space_from_ctrl_entity(CTRL_Entity *entity);
 
 //- rjf: entity <-> eval space
-internal D_Entity *d_entity_from_eval_space(E_Space space);
-internal E_Space d_eval_space_from_entity(D_Entity *entity);
+internal DF_Entity *d_entity_from_eval_space(E_Space space);
+internal E_Space d_eval_space_from_entity(DF_Entity *entity);
 
 //- rjf: eval space reads/writes
 internal B32 d_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range);
@@ -1001,8 +1001,8 @@ internal Vec2S32 d_dim2s32_from_eval_params(E_Eval eval, MD_Node *params);
 internal R_Tex2DFormat d_tex2dformat_from_eval_params(E_Eval eval, MD_Node *params);
 
 //- rjf: eval <-> entity
-internal D_Entity *d_entity_from_eval_string(String8 string);
-internal String8 d_eval_string_from_entity(Arena *arena, D_Entity *entity);
+internal DF_Entity *d_entity_from_eval_string(String8 string);
+internal String8 d_eval_string_from_entity(Arena *arena, DF_Entity *entity);
 
 //- rjf: eval <-> file path
 internal String8 d_file_path_from_eval_string(Arena *arena, String8 string);
@@ -1033,7 +1033,7 @@ internal DI_KeyList d_push_active_dbgi_key_list(Arena *arena);
 internal D_EntityList d_push_active_target_list(Arena *arena);
 
 //- rjf: expand key based entity queries
-internal D_Entity *d_entity_from_ev_key_and_kind(EV_Key key, D_EntityKind kind);
+internal DF_Entity *d_entity_from_ev_key_and_kind(EV_Key key, D_EntityKind kind);
 
 //- rjf: per-run caches
 internal CTRL_Unwind d_query_cached_unwind_from_thread(CTRL_Entity *thread);

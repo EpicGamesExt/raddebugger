@@ -90,8 +90,8 @@ internal UI_Signal df_cmd_spec_button(String8 name);
 internal void df_cmd_list_menu_buttons(U64 count, String8 *cmd_names, U32 *fastpath_codepoints);
 internal UI_Signal df_icon_button(DF_IconKind kind, FuzzyMatchRangeList *matches, String8 string);
 internal UI_Signal df_icon_buttonf(DF_IconKind kind, FuzzyMatchRangeList *matches, char *fmt, ...);
-internal void df_entity_tooltips(D_Entity *entity);
-internal UI_Signal df_entity_desc_button(D_Entity *entity, FuzzyMatchRangeList *name_matches, String8 fuzzy_query, B32 is_implicit);
+internal void df_entity_tooltips(DF_Entity *entity);
+internal UI_Signal df_entity_desc_button(DF_Entity *entity, FuzzyMatchRangeList *name_matches, String8 fuzzy_query, B32 is_implicit);
 internal void df_src_loc_button(String8 file_path, TxtPt point);
 
 ////////////////////////////////

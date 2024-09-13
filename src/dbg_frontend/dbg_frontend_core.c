@@ -1109,7 +1109,7 @@ df_window_frame(DF_Window *ws)
         !df_view_is_nil(view);
         view = view->order_next)
     {
-      D_Entity *entity = d_entity_from_eval_string(str8(view->query_buffer, view->query_string_size));
+      DF_Entity *entity = d_entity_from_eval_string(str8(view->query_buffer, view->query_string_size));
       if(entity->flags & D_EntityFlag_MarkedForDeletion ||
          (d_entity_is_nil(entity) && view->spec->info.flags & DF_ViewSpecFlag_ParameterizedByEntity))
       {
@@ -1370,7 +1370,7 @@ df_window_frame(DF_Window *ws)
       Temp scratch = scratch_begin(0, 0);
       DF_DragDropPayload *payload = &df_drag_drop_payload;
       DF_Panel *panel = df_panel_from_handle(payload->panel);
-      D_Entity *entity = d_entity_from_handle(payload->entity);
+      DF_Entity *entity = d_entity_from_handle(payload->entity);
       DF_View *view = df_view_from_handle(payload->view);
       {
         //- rjf: tab dragging
@@ -1528,14 +1528,14 @@ df_window_frame(DF_Window *ws)
         D_EntityRec rec = {0};
         S32 indent = 0;
         UI_PrefWidth(ui_text_dim(10, 1)) ui_labelf("Entity Tree:");
-        for(D_Entity *e = d_entity_root(); !d_entity_is_nil(e); e = rec.next)
+        for(DF_Entity *e = d_entity_root(); !d_entity_is_nil(e); e = rec.next)
         {
           ui_set_next_pref_width(ui_children_sum(1));
           ui_set_next_pref_height(ui_children_sum(1));
           UI_Row
           {
             ui_spacer(ui_em(2.f*indent, 1.f));
-            D_Entity *dst = d_entity_from_handle(e->entity_handle);
+            DF_Entity *dst = d_entity_from_handle(e->entity_handle);
             if(!d_entity_is_nil(dst))
             {
               ui_labelf("[link] %S -> %S", e->string, dst->string);
@@ -1562,7 +1562,7 @@ df_window_frame(DF_Window *ws)
       //- rjf: auto-close entity ctx menu
       if(ui_ctx_menu_is_open(df_state->entity_ctx_menu_key))
       {
-        D_Entity *entity = d_entity_from_handle(ws->entity_ctx_menu_entity);
+        DF_Entity *entity = d_entity_from_handle(ws->entity_ctx_menu_entity);
         if(d_entity_is_nil(entity))
         {
           ui_ctx_menu_close();
@@ -1699,7 +1699,7 @@ df_window_frame(DF_Window *ws)
         UI_PrefWidth(ui_em(40.f, 1.f))
         DF_Palette(DF_PaletteCode_ImplicitButton)
       {
-        D_Entity *entity = d_entity_from_handle(ws->entity_ctx_menu_entity);
+        DF_Entity *entity = d_entity_from_handle(ws->entity_ctx_menu_entity);
         CTRL_Entity *entity_ctrl = ctrl_entity_from_handle(d_state->ctrl_entity_store, entity->ctrl_handle);
         DF_IconKind entity_icon = df_entity_kind_icon_kind_table[entity->kind];
         D_EntityKindFlags kind_flags = d_entity_kind_flags_table[entity->kind];
@@ -1751,7 +1751,7 @@ df_window_frame(DF_Window *ws)
           DF_Font(DF_FontSlot_Code)
           UI_TextPadding(ui_top_font_size()*1.5f)
         {
-          D_Entity *condition = d_entity_child_from_kind(entity, D_EntityKind_Condition);
+          DF_Entity *condition = d_entity_child_from_kind(entity, D_EntityKind_Condition);
           UI_Signal sig = df_line_editf(DF_LineEditFlag_Border|DF_LineEditFlag_CodeContents, 0, 0, &ws->entity_ctx_menu_input_cursor, &ws->entity_ctx_menu_input_mark, ws->entity_ctx_menu_input_buffer, sizeof(ws->entity_ctx_menu_input_buffer), &ws->entity_ctx_menu_input_size, 0, condition->string, "Condition###entity_cond_edit_%p", entity);
           if(ui_committed(sig))
           {
@@ -1774,7 +1774,7 @@ df_window_frame(DF_Window *ws)
         // rjf: exe editor
         if(entity->kind == D_EntityKind_Target) UI_TextPadding(ui_top_font_size()*1.5f)
         {
-          D_Entity *exe = d_entity_child_from_kind(entity, D_EntityKind_Executable);
+          DF_Entity *exe = d_entity_child_from_kind(entity, D_EntityKind_Executable);
           UI_Signal sig = df_line_editf(DF_LineEditFlag_Border, 0, 0, &ws->entity_ctx_menu_input_cursor, &ws->entity_ctx_menu_input_mark, ws->entity_ctx_menu_input_buffer, sizeof(ws->entity_ctx_menu_input_buffer), &ws->entity_ctx_menu_input_size, 0, exe->string, "Executable###entity_exe_edit_%p", entity);
           if(ui_committed(sig))
           {
@@ -1797,7 +1797,7 @@ df_window_frame(DF_Window *ws)
         // rjf: arguments editors
         if(entity->kind == D_EntityKind_Target) UI_TextPadding(ui_top_font_size()*1.5f)
         {
-          D_Entity *args = d_entity_child_from_kind(entity, D_EntityKind_Arguments);
+          DF_Entity *args = d_entity_child_from_kind(entity, D_EntityKind_Arguments);
           UI_Signal sig = df_line_editf(DF_LineEditFlag_Border, 0, 0, &ws->entity_ctx_menu_input_cursor, &ws->entity_ctx_menu_input_mark, ws->entity_ctx_menu_input_buffer, sizeof(ws->entity_ctx_menu_input_buffer), &ws->entity_ctx_menu_input_size, 0, args->string, "Arguments###entity_args_edit_%p", entity);
           if(ui_committed(sig))
           {
@@ -1882,7 +1882,7 @@ df_window_frame(DF_Window *ws)
         
         // rjf: go-to-location
         {
-          D_Entity *loc = d_entity_child_from_kind(entity, D_EntityKind_Location);
+          DF_Entity *loc = d_entity_child_from_kind(entity, D_EntityKind_Location);
           if(!d_entity_is_nil(loc) && ui_clicked(df_icon_buttonf(DF_IconKind_FileOutline, 0, "Go To Location")))
           {
             df_cmd(DF_CmdKind_FindCodeLocation,
@@ -2853,7 +2853,7 @@ df_window_frame(DF_Window *ws)
               D_EntityList targets_list = d_query_cached_entity_list_with_kind(D_EntityKind_Target);
               for(D_EntityNode *n = targets_list.first; n != 0; n = n->next)
               {
-                D_Entity *target = n->entity;
+                DF_Entity *target = n->entity;
                 UI_Palette *palette = ui_top_palette();
                 if(target->flags & D_EntityFlag_HasColor)
                 {
@@ -3058,7 +3058,7 @@ df_window_frame(DF_Window *ws)
             D_EntityList tasks = d_query_cached_entity_list_with_kind(D_EntityKind_ConversionTask);
             for(D_EntityNode *n = tasks.first; n != 0; n = n->next)
             {
-              D_Entity *task = n->entity;
+              DF_Entity *task = n->entity;
               if(task->alloc_time_us + 500000 < os_now_microseconds())
               {
                 String8 rdi_path = task->string;
@@ -3154,8 +3154,8 @@ df_window_frame(DF_Window *ws)
                   D_EntityList processes = d_query_cached_entity_list_with_kind(D_EntityKind_Process);
                   for(D_EntityNode *n = processes.first; n != 0; n = n->next)
                   {
-                    D_Entity *process = n->entity;
-                    D_Entity *target = d_entity_from_handle(process->entity_handle);
+                    DF_Entity *process = n->entity;
+                    DF_Entity *target = d_entity_from_handle(process->entity_handle);
                     if(!d_entity_is_nil(target))
                     {
                       String8 target_display_name = d_display_string_from_entity(scratch.arena, target);
@@ -3891,7 +3891,7 @@ df_window_frame(DF_Window *ws)
           EV_Key parent_key = ev_key_make(5381, 1);
           EV_Key key = ev_key_make(ev_hash_from_key(parent_key), 1);
           EV_BlockList viz_blocks = ev_block_list_from_view_expr_keys(scratch.arena, ev_view, &top_level_view_rules, expr, parent_key, key);
-          D_Entity *entity = d_entity_from_eval_space(eval.space);
+          DF_Entity *entity = d_entity_from_eval_space(eval.space);
           U32 default_radix = (entity->kind == D_EntityKind_Thread ? 16 : 10);
           EV_WindowedRowList viz_rows = ev_windowed_row_list_from_block_list(scratch.arena, ev_view, r1s64(0, 50), &viz_blocks);
           
@@ -3998,7 +3998,7 @@ df_window_frame(DF_Window *ws)
                 default:{}break;
                 case E_Mode_Offset:
                 {
-                  D_Entity *space_entity = d_entity_from_eval_space(row_eval.space);
+                  DF_Entity *space_entity = d_entity_from_eval_space(row_eval.space);
                   if(space_entity->kind == D_EntityKind_Process)
                   {
                     U64 size = e_type_byte_size_from_key(row_eval.type_key);
@@ -5230,7 +5230,7 @@ df_window_frame(DF_Window *ws)
               {
                 DF_Panel *src_panel = df_panel_from_handle(payload.panel);
                 DF_View *view = df_view_from_handle(payload.view);
-                D_Entity *entity = d_entity_from_handle(payload.entity);
+                DF_Entity *entity = d_entity_from_handle(payload.entity);
                 
                 // rjf: view drop
                 if(!df_view_is_nil(view))
@@ -7253,10 +7253,10 @@ df_stop_explanation_string_icon_from_ctrl_event(Arena *arena, CTRL_Event *event,
   DF_IconKind icon = DF_IconKind_Null;
   String8 explanation = {0};
   Temp scratch = scratch_begin(&arena, 1);
-  D_Entity *thread = d_entity_from_ctrl_handle(event->entity);
+  DF_Entity *thread = d_entity_from_ctrl_handle(event->entity);
   String8 thread_display_string = d_display_string_from_entity(scratch.arena, thread);
   String8 process_thread_string = thread_display_string;
-  D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
+  DF_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
   if(process->kind == D_EntityKind_Process)
   {
     String8 process_display_string = d_display_string_from_entity(scratch.arena, process);
@@ -8154,7 +8154,7 @@ df_frame(void)
         D_EntityList entities = d_query_cached_entity_list_with_kind(evallable_kinds[idx]);
         for(D_EntityNode *n = entities.first; n != 0; n = n->next)
         {
-          D_Entity *entity = n->entity;
+          DF_Entity *entity = n->entity;
           E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
           expr->space    = d_eval_space_from_entity(entity);
           expr->mode     = E_Mode_Offset;
@@ -8172,7 +8172,7 @@ df_frame(void)
     D_EntityList watches = d_query_cached_entity_list_with_kind(D_EntityKind_Watch);
     for(D_EntityNode *n = watches.first; n != 0; n = n->next)
     {
-      D_Entity *watch = n->entity;
+      DF_Entity *watch = n->entity;
       String8 expr = watch->string;
       E_TokenArray tokens   = e_token_array_from_text(scratch.arena, expr);
       E_Parse      parse    = e_parse_expr_from_text_tokens(scratch.arena, expr, &tokens);
@@ -8432,7 +8432,7 @@ df_frame(void)
         //- rjf: config path saving/loading/applying
         case DF_CmdKind_OpenRecentProject:
         {
-          D_Entity *entity = d_entity_from_handle(df_regs()->entity);
+          DF_Entity *entity = d_entity_from_handle(df_regs()->entity);
           if(entity->kind == D_EntityKind_RecentProject)
           {
             df_cmd(DF_CmdKind_OpenProject, .file_path = entity->string);
@@ -8608,7 +8608,7 @@ df_frame(void)
           if(src == D_CfgSrc_Project)
           {
             D_EntityList recent_projects = d_query_cached_entity_list_with_kind(D_EntityKind_RecentProject);
-            D_Entity *recent_project = &d_nil_entity;
+            DF_Entity *recent_project = &d_nil_entity;
             for(D_EntityNode *n = recent_projects.first; n != 0; n = n->next)
             {
               if(path_match_normalized(cfg_path, n->entity->string))
@@ -8660,7 +8660,7 @@ df_frame(void)
                   {
                     continue;
                   }
-                  D_Entity *entity = d_entity_alloc(d_entity_root(), k);
+                  DF_Entity *entity = d_entity_alloc(d_entity_root(), k);
                   d_entity_equip_cfg_src(entity, k_tree->source);
                   
                   // rjf: iterate config tree
@@ -8668,7 +8668,7 @@ df_frame(void)
                   struct Task
                   {
                     Task *next;
-                    D_Entity *entity;
+                    DF_Entity *entity;
                     MD_Node *n;
                   };
                   Task start_task = {0, entity, k_tree->root};
@@ -9761,7 +9761,7 @@ df_frame(void)
         {
 #if 0 // TODO(rjf): @msgs
           // rjf: unpack args
-          D_Entity *map = d_entity_from_handle(df_regs()->entity);
+          DF_Entity *map = d_entity_from_handle(df_regs()->entity);
           String8 path = path_normalized_from_string(scratch.arena, df_regs()->file_path);
           String8 path_folder = str8_chop_last_slash(path);
           String8 path_file = str8_skip_last_slash(path);
@@ -9772,7 +9772,7 @@ df_frame(void)
             default:{}break;
             case DF_CmdKind_SetFileOverrideLinkSrc:
             {
-              D_Entity *map_parent = (df_regs()->file_path.size != 0) ? d_entity_from_path(path_folder, D_EntityFromPathFlag_OpenAsNeeded|D_EntityFromPathFlag_OpenMissing) : d_entity_root();
+              DF_Entity *map_parent = (df_regs()->file_path.size != 0) ? d_entity_from_path(path_folder, D_EntityFromPathFlag_OpenAsNeeded|D_EntityFromPathFlag_OpenMissing) : d_entity_root();
               if(d_entity_is_nil(map))
               {
                 map = d_entity_alloc(map_parent, D_EntityKind_FilePathMap);
@@ -9789,7 +9789,7 @@ df_frame(void)
               {
                 map = d_entity_alloc(d_entity_root(), D_EntityKind_FilePathMap);
               }
-              D_Entity *map_dst_entity = &d_nil_entity;
+              DF_Entity *map_dst_entity = &d_nil_entity;
               if(df_regs()->file_path.size != 0)
               {
                 map_dst_entity = d_entity_from_path(path, D_EntityFromPathFlag_All);
@@ -9827,12 +9827,12 @@ df_frame(void)
 #if 0 // TODO(rjf): @msgs
           
           //- rjf: grab src file & chosen replacement
-          D_Entity *file = d_entity_from_handle(params.entity);
-          D_Entity *replacement = d_entity_from_path(params.file_path, D_EntityFromPathFlag_OpenAsNeeded|D_EntityFromPathFlag_OpenMissing);
+          DF_Entity *file = d_entity_from_handle(params.entity);
+          DF_Entity *replacement = d_entity_from_path(params.file_path, D_EntityFromPathFlag_OpenAsNeeded|D_EntityFromPathFlag_OpenMissing);
           
           //- rjf: find 
-          D_Entity *first_diff_src = file;
-          D_Entity *first_diff_dst = replacement;
+          DF_Entity *first_diff_src = file;
+          DF_Entity *first_diff_dst = replacement;
           for(;!d_entity_is_nil(first_diff_src) && !d_entity_is_nil(first_diff_dst);)
           {
             if(!str8_match(first_diff_src->string, first_diff_dst->string, StringMatchFlag_CaseInsensitive) ||
@@ -9850,7 +9850,7 @@ df_frame(void)
           //- rjf: override first different
           if(!d_entity_is_nil(first_diff_src) && !d_entity_is_nil(first_diff_dst))
           {
-            D_Entity *link = d_entity_child_from_string_and_kind(first_diff_src->parent, first_diff_src->name, D_EntityKind_FilePathMap);
+            DF_Entity *link = d_entity_child_from_string_and_kind(first_diff_src->parent, first_diff_src->name, D_EntityKind_FilePathMap);
             if(d_entity_is_nil(link))
             {
               link = d_entity_alloc(first_diff_src->parent, D_EntityKind_FilePathMap);
@@ -10013,7 +10013,7 @@ df_frame(void)
         {
           DF_Panel *panel = df_panel_from_handle(df_regs()->panel);
           DF_ViewSpec *spec = df_view_spec_from_string(df_regs()->string);
-          D_Entity *entity = &d_nil_entity;
+          DF_Entity *entity = &d_nil_entity;
           if(spec->info.flags & DF_ViewSpecFlag_ParameterizedByEntity)
           {
             entity = d_entity_from_handle(df_regs()->entity);
@@ -10112,7 +10112,7 @@ df_frame(void)
           for(DF_View *v = panel->first_tab_view; !df_view_is_nil(v); v = v->next)
           {
             if(df_view_is_project_filtered(v)) { continue; }
-            D_Entity *v_param_entity = d_entity_from_handle(v->params_entity);
+            DF_Entity *v_param_entity = d_entity_from_handle(v->params_entity);
             if(v_param_entity == d_entity_from_handle(df_regs()->entity))
             {
               panel->selected_tab_view = df_handle_from_view(v);
@@ -10650,10 +10650,10 @@ df_frame(void)
             
             // rjf: try to resolve name as a file
 #if 0 // TODO(rjf): @msgs
-            D_Entity *file = &d_nil_entity;
+            DF_Entity *file = &d_nil_entity;
             if(name_resolved == 0)
             {
-              D_Entity *src_entity = d_entity_from_handle(df_regs()->entity);
+              DF_Entity *src_entity = d_entity_from_handle(df_regs()->entity);
               String8 file_part_of_name = name;
               U64 quote_pos = str8_find_needle(name, 0, str8_lit("\""), 0);
               if(quote_pos < name.size)
@@ -10672,7 +10672,7 @@ df_frame(void)
                 if(folders.node_count != 0)
                 {
                   String8 first_folder_name = folders.first->string;
-                  D_Entity *root_folder = &d_nil_entity;
+                  DF_Entity *root_folder = &d_nil_entity;
                   
                   // rjf: try to find root folder as if it's an absolute path
                   if(d_entity_is_nil(root_folder))
@@ -10791,7 +10791,7 @@ df_frame(void)
         case DF_CmdKind_EditEntity:
         {
 #if 0 // TODO(rjf): @msgs
-          D_Entity *entity = d_entity_from_handle(df_regs()->entity);
+          DF_Entity *entity = d_entity_from_handle(df_regs()->entity);
           switch(entity->kind)
           {
             default: break;
@@ -10807,7 +10807,7 @@ df_frame(void)
         case DF_CmdKind_EditTarget:
         {
 #if 0 // TODO(rjf): @msgs
-          D_Entity *entity = d_entity_from_handle(df_regs()->entity);
+          DF_Entity *entity = d_entity_from_handle(df_regs()->entity);
           if(!d_entity_is_nil(entity) && entity->kind == D_EntityKind_Target)
           {
             df_push_cmd(df_cmd_spec_from_kind(DF_CmdKind_Target), params);
@@ -10822,7 +10822,7 @@ df_frame(void)
         //- rjf: catchall general entity activation paths (drag/drop, clicking)
         case DF_CmdKind_EntityRefFastPath:
         {
-          D_Entity *entity = d_entity_from_handle(df_regs()->entity);
+          DF_Entity *entity = d_entity_from_handle(df_regs()->entity);
           switch(entity->kind)
           {
             default:
@@ -10844,7 +10844,7 @@ df_frame(void)
 #if 0 // TODO(rjf): @msgs
           DF_Window *ws = df_window_from_handle(df_regs()->window);
           DF_Panel *panel = df_panel_from_handle(df_regs()->panel);
-          D_Entity *entity = d_entity_from_handle(df_regs()->entity);
+          DF_Entity *entity = d_entity_from_handle(df_regs()->entity);
           switch(entity->kind)
           {
             default:{}break;
@@ -11249,21 +11249,21 @@ df_frame(void)
         case DF_CmdKind_EnableBreakpoint:
         case DF_CmdKind_EnableTarget:
         {
-          D_Entity *entity = d_entity_from_handle(df_regs()->entity);
+          DF_Entity *entity = d_entity_from_handle(df_regs()->entity);
           d_entity_equip_disabled(entity, 0);
         }break;
         case DF_CmdKind_DisableEntity:
         case DF_CmdKind_DisableBreakpoint:
         case DF_CmdKind_DisableTarget:
         {
-          D_Entity *entity = d_entity_from_handle(df_regs()->entity);
+          DF_Entity *entity = d_entity_from_handle(df_regs()->entity);
           d_entity_equip_disabled(entity, 1);
         }break;
         case DF_CmdKind_RemoveEntity:
         case DF_CmdKind_RemoveBreakpoint:
         case DF_CmdKind_RemoveTarget:
         {
-          D_Entity *entity = d_entity_from_handle(df_regs()->entity);
+          DF_Entity *entity = d_entity_from_handle(df_regs()->entity);
           D_EntityKindFlags kind_flags = d_entity_kind_flags_table[entity->kind];
           if(kind_flags & D_EntityKindFlag_CanDelete)
           {
@@ -11272,29 +11272,29 @@ df_frame(void)
         }break;
         case DF_CmdKind_NameEntity:
         {
-          D_Entity *entity = d_entity_from_handle(df_regs()->entity);
+          DF_Entity *entity = d_entity_from_handle(df_regs()->entity);
           String8 string = df_regs()->string;
           d_entity_equip_name(entity, string);
         }break;
         case DF_CmdKind_DuplicateEntity:
         {
-          D_Entity *src = d_entity_from_handle(df_regs()->entity);
+          DF_Entity *src = d_entity_from_handle(df_regs()->entity);
           if(!d_entity_is_nil(src))
           {
             typedef struct Task Task;
             struct Task
             {
               Task *next;
-              D_Entity *src_n;
-              D_Entity *dst_parent;
+              DF_Entity *src_n;
+              DF_Entity *dst_parent;
             };
             Task starter_task = {0, src, src->parent};
             Task *first_task = &starter_task;
             Task *last_task = &starter_task;
             for(Task *task = first_task; task != 0; task = task->next)
             {
-              D_Entity *src_n = task->src_n;
-              D_Entity *dst_n = d_entity_alloc(task->dst_parent, task->src_n->kind);
+              DF_Entity *src_n = task->src_n;
+              DF_Entity *dst_n = d_entity_alloc(task->dst_parent, task->src_n->kind);
               if(src_n->flags & D_EntityFlag_HasTextPoint)    {d_entity_equip_txt_pt(dst_n, src_n->text_point);}
               if(src_n->flags & D_EntityFlag_HasU64)          {d_entity_equip_u64(dst_n, src_n->u64);}
               if(src_n->flags & D_EntityFlag_HasColor)        {d_entity_equip_color_hsva(dst_n, d_hsva_from_entity(src_n));}
@@ -11303,7 +11303,7 @@ df_frame(void)
               if(src_n->disabled)                             {d_entity_equip_disabled(dst_n, 1);}
               if(src_n->string.size != 0)                     {d_entity_equip_name(dst_n, src_n->string);}
               dst_n->cfg_src = src_n->cfg_src;
-              for(D_Entity *src_child = task->src_n->first; !d_entity_is_nil(src_child); src_child = src_child->next)
+              for(DF_Entity *src_child = task->src_n->first; !d_entity_is_nil(src_child); src_child = src_child->next)
               {
                 Task *child_task = push_array(scratch.arena, Task, 1);
                 child_task->src_n = src_child;
@@ -11315,8 +11315,8 @@ df_frame(void)
         }break;
         case DF_CmdKind_RelocateEntity:
         {
-          D_Entity *entity = d_entity_from_handle(df_regs()->entity);
-          D_Entity *location = d_entity_child_from_kind(entity, D_EntityKind_Location);
+          DF_Entity *entity = d_entity_from_handle(df_regs()->entity);
+          DF_Entity *location = d_entity_child_from_kind(entity, D_EntityKind_Location);
           if(d_entity_is_nil(location))
           {
             location = d_entity_alloc(entity, D_EntityKind_Location);
@@ -11351,8 +11351,8 @@ df_frame(void)
             D_EntityList bps = d_query_cached_entity_list_with_kind(D_EntityKind_Breakpoint);
             for(D_EntityNode *n = bps.first; n != 0; n = n->next)
             {
-              D_Entity *bp = n->entity;
-              D_Entity *loc = d_entity_child_from_kind(bp, D_EntityKind_Location);
+              DF_Entity *bp = n->entity;
+              DF_Entity *loc = d_entity_child_from_kind(bp, D_EntityKind_Location);
               if((loc->flags & D_EntityFlag_HasTextPoint && path_match_normalized(loc->string, file_path) && loc->text_point.line == pt.line) ||
                  (loc->flags & D_EntityFlag_HasVAddr && loc->vaddr == vaddr) ||
                  (!(loc->flags & D_EntityFlag_HasTextPoint) && str8_match(loc->string, string, 0)))
@@ -11365,9 +11365,9 @@ df_frame(void)
           }
           if(!removed_already_existing)
           {
-            D_Entity *bp = d_entity_alloc(d_entity_root(), D_EntityKind_Breakpoint);
+            DF_Entity *bp = d_entity_alloc(d_entity_root(), D_EntityKind_Breakpoint);
             d_entity_equip_cfg_src(bp, D_CfgSrc_Project);
-            D_Entity *loc = d_entity_alloc(bp, D_EntityKind_Location);
+            DF_Entity *loc = d_entity_alloc(bp, D_EntityKind_Location);
             if(file_path.size != 0 && pt.line != 0)
             {
               d_entity_equip_name(loc, file_path);
@@ -11403,8 +11403,8 @@ df_frame(void)
             D_EntityList wps = d_query_cached_entity_list_with_kind(D_EntityKind_WatchPin);
             for(D_EntityNode *n = wps.first; n != 0; n = n->next)
             {
-              D_Entity *wp = n->entity;
-              D_Entity *loc = d_entity_child_from_kind(wp, D_EntityKind_Location);
+              DF_Entity *wp = n->entity;
+              DF_Entity *loc = d_entity_child_from_kind(wp, D_EntityKind_Location);
               if((loc->flags & D_EntityFlag_HasTextPoint && path_match_normalized(loc->string, file_path) && loc->text_point.line == pt.line) ||
                  (loc->flags & D_EntityFlag_HasVAddr && loc->vaddr == vaddr) ||
                  (!(loc->flags & D_EntityFlag_HasTextPoint) && str8_match(loc->string, string, 0)))
@@ -11417,10 +11417,10 @@ df_frame(void)
           }
           if(!removed_already_existing)
           {
-            D_Entity *wp = d_entity_alloc(d_entity_root(), D_EntityKind_WatchPin);
+            DF_Entity *wp = d_entity_alloc(d_entity_root(), D_EntityKind_WatchPin);
             d_entity_equip_name(wp, string);
             d_entity_equip_cfg_src(wp, D_CfgSrc_Project);
-            D_Entity *loc = d_entity_alloc(wp, D_EntityKind_Location);
+            DF_Entity *loc = d_entity_alloc(wp, D_EntityKind_Location);
             if(file_path.size != 0 && pt.line != 0)
             {
               d_entity_equip_name(loc, file_path);
@@ -11437,10 +11437,10 @@ df_frame(void)
         case DF_CmdKind_ToggleWatchExpression:
         if(df_regs()->string.size != 0)
         {
-          D_Entity *existing_watch = d_entity_from_name_and_kind(df_regs()->string, D_EntityKind_Watch);
+          DF_Entity *existing_watch = d_entity_from_name_and_kind(df_regs()->string, D_EntityKind_Watch);
           if(d_entity_is_nil(existing_watch))
           {
-            D_Entity *watch = &d_nil_entity;
+            DF_Entity *watch = &d_nil_entity;
             watch = d_entity_alloc(d_entity_root(), D_EntityKind_Watch);
             d_entity_equip_cfg_src(watch, D_CfgSrc_Project);
             d_entity_equip_name(watch, df_regs()->string);
@@ -11539,17 +11539,17 @@ df_frame(void)
         case DF_CmdKind_AddTarget:
         {
           // rjf: build target
-          D_Entity *entity = &d_nil_entity;
+          DF_Entity *entity = &d_nil_entity;
           entity = d_entity_alloc(d_entity_root(), D_EntityKind_Target);
           d_entity_equip_disabled(entity, 1);
           d_entity_equip_cfg_src(entity, D_CfgSrc_Project);
-          D_Entity *exe = d_entity_alloc(entity, D_EntityKind_Executable);
+          DF_Entity *exe = d_entity_alloc(entity, D_EntityKind_Executable);
           d_entity_equip_name(exe, df_regs()->file_path);
           String8 working_dir = str8_chop_last_slash(df_regs()->file_path);
           if(working_dir.size != 0)
           {
             String8 working_dir_path = push_str8f(scratch.arena, "%S/", working_dir);
-            D_Entity *execution_path = d_entity_alloc(entity, D_EntityKind_WorkingDirectory);
+            DF_Entity *execution_path = d_entity_alloc(entity, D_EntityKind_WorkingDirectory);
             d_entity_equip_name(execution_path, working_dir_path);
           }
           df_cmd(DF_CmdKind_EditTarget, .entity = d_handle_from_entity(entity));
@@ -11557,14 +11557,14 @@ df_frame(void)
         }break;
         case DF_CmdKind_SelectTarget:
         {
-          D_Entity *entity = d_entity_from_handle(df_regs()->entity);
+          DF_Entity *entity = d_entity_from_handle(df_regs()->entity);
           if(entity->kind == D_EntityKind_Target)
           {
             D_EntityList all_targets = d_query_cached_entity_list_with_kind(D_EntityKind_Target);
             B32 is_selected = !entity->disabled;
             for(D_EntityNode *n = all_targets.first; n != 0; n = n->next)
             {
-              D_Entity *target = n->entity;
+              DF_Entity *target = n->entity;
               d_entity_equip_disabled(target, 1);
             }
             if(!is_selected)
@@ -12171,11 +12171,11 @@ df_frame(void)
     U64 idx = 0;
     for(D_EntityNode *n = target_entities.first; n != 0; n = n->next, idx += 1)
     {
-      D_Entity *src_target = n->entity;
-      D_Entity *src_target_exe   = d_entity_child_from_kind(src_target, D_EntityKind_Executable);
-      D_Entity *src_target_args  = d_entity_child_from_kind(src_target, D_EntityKind_Arguments);
-      D_Entity *src_target_wdir  = d_entity_child_from_kind(src_target, D_EntityKind_WorkingDirectory);
-      D_Entity *src_target_entry = d_entity_child_from_kind(src_target, D_EntityKind_EntryPoint);
+      DF_Entity *src_target = n->entity;
+      DF_Entity *src_target_exe   = d_entity_child_from_kind(src_target, D_EntityKind_Executable);
+      DF_Entity *src_target_args  = d_entity_child_from_kind(src_target, D_EntityKind_Arguments);
+      DF_Entity *src_target_wdir  = d_entity_child_from_kind(src_target, D_EntityKind_WorkingDirectory);
+      DF_Entity *src_target_entry = d_entity_child_from_kind(src_target, D_EntityKind_EntryPoint);
       D_Target *dst_target = &targets.v[idx];
       dst_target->exe                     = src_target_exe->string;
       dst_target->args                    = src_target_args->string;
@@ -12195,14 +12195,14 @@ df_frame(void)
     U64 idx = 0;
     for(D_EntityNode *n = bp_entities.first; n != 0; n = n->next)
     {
-      D_Entity *src_bp = n->entity;
+      DF_Entity *src_bp = n->entity;
       if(src_bp->disabled)
       {
         breakpoints.count -= 1;
         continue;
       }
-      D_Entity *src_bp_loc = d_entity_child_from_kind(src_bp, D_EntityKind_Location);
-      D_Entity *src_bp_cnd = d_entity_child_from_kind(src_bp, D_EntityKind_Condition);
+      DF_Entity *src_bp_loc = d_entity_child_from_kind(src_bp, D_EntityKind_Location);
+      DF_Entity *src_bp_cnd = d_entity_child_from_kind(src_bp, D_EntityKind_Condition);
       D_Breakpoint *dst_bp = &breakpoints.v[idx];
       dst_bp->file_path   = src_bp_loc->string;
       dst_bp->pt          = src_bp_loc->text_point;
@@ -12252,6 +12252,10 @@ df_frame(void)
       {
         CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, evt->thread);
         U64 vaddr = evt->vaddr;
+        CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, CTRL_EntityKind_Process);
+        CTRL_Entity *module = ctrl_module_from_process_vaddr(process, vaddr);
+        DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
+        U64 voff = ctrl_voff_from_vaddr(module, vaddr);
         
         // rjf: valid stop thread? -> select & snap
         if(thread != &ctrl_entity_nil)
@@ -12270,7 +12274,36 @@ df_frame(void)
         // rjf: increment breakpoint hit counts
         if(evt->cause == D_EventCause_UserBreakpoint)
         {
-          
+          D_EntityList user_bps = d_query_cached_entity_list_with_kind(D_EntityKind_Breakpoint);
+          for(D_EntityNode *n = user_bps.first; n != 0; n = n->next)
+          {
+            DF_Entity *bp = n->entity;
+            DF_Entity *loc = d_entity_child_from_kind(bp, D_EntityKind_Location);
+            D_LineList loc_lines = d_lines_from_file_path_line_num(scratch.arena, loc->string, loc->text_point.line);
+            if(loc_lines.first != 0)
+            {
+              for(D_LineNode *n = loc_lines.first; n != 0; n = n->next)
+              {
+                if(contains_1u64(n->v.voff_range, voff))
+                {
+                  bp->u64 += 1;
+                  break;
+                }
+              }
+            }
+            else if(loc->flags & D_EntityFlag_HasVAddr && vaddr == loc->vaddr)
+            {
+              bp->u64 += 1;
+            }
+            else if(loc->string.size != 0)
+            {
+              U64 symb_voff = d_voff_from_dbgi_key_symbol_name(&dbgi_key, loc->string);
+              if(symb_voff == voff)
+              {
+                bp->u64 += 1;
+              }
+            }
+          }
         }
       }break;
     }
@@ -12319,7 +12352,7 @@ df_frame(void)
   //
   {
     F32 rate = 1.f - pow_f32(2.f, -20.f*df_state->frame_dt);
-    for(D_Entity *e = d_entity_root(); !d_entity_is_nil(e); e = d_entity_rec_depth_first_pre(e, d_entity_root()).next)
+    for(DF_Entity *e = d_entity_root(); !d_entity_is_nil(e); e = d_entity_rec_depth_first_pre(e, d_entity_root()).next)
     {
       F32 diff = (1.f - e->alive_t);
       e->alive_t += diff * rate;

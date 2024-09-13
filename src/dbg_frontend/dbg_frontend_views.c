@@ -202,8 +202,8 @@ df_code_view_build(Arena *arena, DF_View *view, DF_CodeViewState *cv, DF_CodeVie
       D_EntityList bps = d_query_cached_entity_list_with_kind(D_EntityKind_Breakpoint);
       for(D_EntityNode *n = bps.first; n != 0; n = n->next)
       {
-        D_Entity *bp = n->entity;
-        D_Entity *loc = d_entity_child_from_kind(bp, D_EntityKind_Location);
+        DF_Entity *bp = n->entity;
+        DF_Entity *loc = d_entity_child_from_kind(bp, D_EntityKind_Location);
         if(path_match_normalized(loc->string, df_regs()->file_path) &&
            visible_line_num_range.min <= loc->text_point.line && loc->text_point.line <= visible_line_num_range.max)
         {
@@ -248,8 +248,8 @@ df_code_view_build(Arena *arena, DF_View *view, DF_CodeViewState *cv, DF_CodeVie
       D_EntityList wps = d_query_cached_entity_list_with_kind(D_EntityKind_WatchPin);
       for(D_EntityNode *n = wps.first; n != 0; n = n->next)
       {
-        D_Entity *wp = n->entity;
-        D_Entity *loc = d_entity_child_from_kind(wp, D_EntityKind_Location);
+        DF_Entity *wp = n->entity;
+        DF_Entity *loc = d_entity_child_from_kind(wp, D_EntityKind_Location);
         if(path_match_normalized(loc->string, df_regs()->file_path) &&
            visible_line_num_range.min <= loc->text_point.line && loc->text_point.line <= visible_line_num_range.max)
         {
@@ -300,8 +300,8 @@ df_code_view_build(Arena *arena, DF_View *view, DF_CodeViewState *cv, DF_CodeVie
       D_EntityList bps = d_query_cached_entity_list_with_kind(D_EntityKind_Breakpoint);
       for(D_EntityNode *n = bps.first; n != 0; n = n->next)
       {
-        D_Entity *bp = n->entity;
-        D_Entity *loc = d_entity_child_from_kind(bp, D_EntityKind_Location);
+        DF_Entity *bp = n->entity;
+        DF_Entity *loc = d_entity_child_from_kind(bp, D_EntityKind_Location);
         if(loc->flags & D_EntityFlag_HasVAddr && contains_1u64(dasm_vaddr_range, loc->vaddr))
         {
           U64 off = loc->vaddr-dasm_vaddr_range.min;
@@ -322,8 +322,8 @@ df_code_view_build(Arena *arena, DF_View *view, DF_CodeViewState *cv, DF_CodeVie
       D_EntityList pins = d_query_cached_entity_list_with_kind(D_EntityKind_WatchPin);
       for(D_EntityNode *n = pins.first; n != 0; n = n->next)
       {
-        D_Entity *pin = n->entity;
-        D_Entity *loc = d_entity_child_from_kind(pin, D_EntityKind_Location);
+        DF_Entity *pin = n->entity;
+        DF_Entity *loc = d_entity_child_from_kind(pin, D_EntityKind_Location);
         if(loc->flags & D_EntityFlag_HasVAddr && contains_1u64(dasm_vaddr_range, loc->vaddr))
         {
           U64 off = loc->vaddr-dasm_vaddr_range.min;
@@ -1010,14 +1010,14 @@ df_watch_view_build(DF_View *view, DF_WatchViewState *ewv, B32 modifiable, U32 d
             D_EntityList watches = d_query_cached_entity_list_with_kind(mutable_entity_kind);
             for(D_EntityNode *n = watches.first; n != 0; n = n->next)
             {
-              D_Entity *watch = n->entity;
+              DF_Entity *watch = n->entity;
               if(watch->flags & D_EntityFlag_MarkedForDeletion)
               {
                 continue;
               }
               EV_Key parent_key = d_parent_ev_key_from_entity(watch);
               EV_Key key = d_ev_key_from_entity(watch);
-              D_Entity *view_rule = d_entity_child_from_kind(watch, D_EntityKind_ViewRule);
+              DF_Entity *view_rule = d_entity_child_from_kind(watch, D_EntityKind_ViewRule);
               ev_key_set_view_rule(eval_view, key, view_rule->string);
               String8 expr_string = watch->string;
               FuzzyMatchRangeList matches = fuzzy_match_find(scratch.arena, filter, expr_string);
@@ -1039,7 +1039,7 @@ df_watch_view_build(DF_View *view, DF_WatchViewState *ewv, B32 modifiable, U32 d
             D_EntityList bps = d_query_cached_entity_list_with_kind(mutable_entity_kind);
             for(D_EntityNode *n = bps.first; n != 0; n = n->next)
             {
-              D_Entity *bp = n->entity;
+              DF_Entity *bp = n->entity;
               if(bp->flags & D_EntityFlag_MarkedForDeletion)
               {
                 continue;
@@ -1078,7 +1078,7 @@ df_watch_view_build(DF_View *view, DF_WatchViewState *ewv, B32 modifiable, U32 d
             D_EntityList wps = d_query_cached_entity_list_with_kind(mutable_entity_kind);
             for(D_EntityNode *n = wps.first; n != 0; n = n->next)
             {
-              D_Entity *wp = n->entity;
+              DF_Entity *wp = n->entity;
               if(wp->flags & D_EntityFlag_MarkedForDeletion)
               {
                 continue;
@@ -1727,7 +1727,7 @@ df_watch_view_build(DF_View *view, DF_WatchViewState *ewv, B32 modifiable, U32 d
                 if(modifiable)
                 {
                   DF_WatchViewPoint pt = df_watch_view_point_from_tbl(&blocks, tbl);
-                  D_Entity *watch = d_entity_from_ev_key_and_kind(pt.key, mutable_entity_kind);
+                  DF_Entity *watch = d_entity_from_ev_key_and_kind(pt.key, mutable_entity_kind);
                   if(!d_entity_is_nil(watch))
                   {
                     d_entity_equip_name(watch, new_string);
@@ -1773,8 +1773,8 @@ df_watch_view_build(DF_View *view, DF_WatchViewState *ewv, B32 modifiable, U32 d
                 {
                   DF_WatchViewPoint pt = df_watch_view_point_from_tbl(&blocks, tbl);
                   ev_key_set_view_rule(eval_view, pt.key, new_string);
-                  D_Entity *watch = d_entity_from_ev_key_and_kind(pt.key, mutable_entity_kind);
-                  D_Entity *view_rule = d_entity_child_from_kind(watch, D_EntityKind_ViewRule);
+                  DF_Entity *watch = d_entity_from_ev_key_and_kind(pt.key, mutable_entity_kind);
+                  DF_Entity *view_rule = d_entity_child_from_kind(watch, D_EntityKind_ViewRule);
                   if(new_string.size != 0 && d_entity_is_nil(view_rule))
                   {
                     view_rule = d_entity_alloc(watch, D_EntityKind_ViewRule);
@@ -1857,14 +1857,14 @@ df_watch_view_build(DF_View *view, DF_WatchViewState *ewv, B32 modifiable, U32 d
           {
             DF_WatchViewPoint fallback_pt_prev = df_watch_view_point_from_tbl(&blocks, v2s64(0, y - 1));
             DF_WatchViewPoint fallback_pt_next = df_watch_view_point_from_tbl(&blocks, v2s64(0, y + 1));
-            D_Entity *watch = d_entity_from_ev_key_and_kind(pt.key, mutable_entity_kind);
+            DF_Entity *watch = d_entity_from_ev_key_and_kind(pt.key, mutable_entity_kind);
             if(!d_entity_is_nil(watch))
             {
               EV_Key new_cursor_key = empty_row_key;
               EV_Key new_cursor_parent_key = empty_row_parent_key;
               if((evt->delta_2s32.x < 0 || evt->delta_2s32.y < 0) && !ev_key_match(ev_key_zero(), fallback_pt_prev.key))
               {
-                D_Entity *fallback_watch = d_entity_from_ev_key_and_kind(fallback_pt_prev.key, mutable_entity_kind);
+                DF_Entity *fallback_watch = d_entity_from_ev_key_and_kind(fallback_pt_prev.key, mutable_entity_kind);
                 if(!d_entity_is_nil(fallback_watch))
                 {
                   new_cursor_key = fallback_pt_prev.key;
@@ -1873,7 +1873,7 @@ df_watch_view_build(DF_View *view, DF_WatchViewState *ewv, B32 modifiable, U32 d
               }
               else if(!ev_key_match(ev_key_zero(), fallback_pt_next.key))
               {
-                D_Entity *fallback_watch = d_entity_from_ev_key_and_kind(fallback_pt_next.key, mutable_entity_kind);
+                DF_Entity *fallback_watch = d_entity_from_ev_key_and_kind(fallback_pt_next.key, mutable_entity_kind);
                 if(!d_entity_is_nil(fallback_watch))
                 {
                   new_cursor_key = fallback_pt_next.key;
@@ -1889,8 +1889,8 @@ df_watch_view_build(DF_View *view, DF_WatchViewState *ewv, B32 modifiable, U32 d
           // rjf: view rule deletions
           else if(selection_tbl.min.x <= DF_WatchViewColumnKind_ViewRule && DF_WatchViewColumnKind_ViewRule <= selection_tbl.max.x)
           {
-            D_Entity *watch = d_entity_from_ev_key_and_kind(pt.key, mutable_entity_kind);
-            D_Entity *view_rule = d_entity_child_from_kind(watch, D_EntityKind_ViewRule);
+            DF_Entity *watch = d_entity_from_ev_key_and_kind(pt.key, mutable_entity_kind);
+            DF_Entity *view_rule = d_entity_child_from_kind(watch, D_EntityKind_ViewRule);
             d_entity_mark_for_deletion(view_rule);
             ev_key_set_view_rule(eval_view, pt.key, str8_zero());
           }
@@ -1992,16 +1992,16 @@ df_watch_view_build(DF_View *view, DF_WatchViewState *ewv, B32 modifiable, U32 d
         EV_Key first_watch_key = ev_key_from_block_list_row_num(&blocks, selection_tbl.min.y);
         EV_Key reorder_group_prev_watch_key = ev_key_from_block_list_row_num(&blocks, selection_tbl.min.y - 1);
         EV_Key reorder_group_next_watch_key = ev_key_from_block_list_row_num(&blocks, selection_tbl.max.y + 1);
-        D_Entity *reorder_group_prev = d_entity_from_ev_key_and_kind(reorder_group_prev_watch_key, mutable_entity_kind);
-        D_Entity *reorder_group_next = d_entity_from_ev_key_and_kind(reorder_group_next_watch_key, mutable_entity_kind);
-        D_Entity *first_watch = d_entity_from_ev_key_and_kind(first_watch_key, mutable_entity_kind);
-        D_Entity *last_watch = first_watch;
+        DF_Entity *reorder_group_prev = d_entity_from_ev_key_and_kind(reorder_group_prev_watch_key, mutable_entity_kind);
+        DF_Entity *reorder_group_next = d_entity_from_ev_key_and_kind(reorder_group_next_watch_key, mutable_entity_kind);
+        DF_Entity *first_watch = d_entity_from_ev_key_and_kind(first_watch_key, mutable_entity_kind);
+        DF_Entity *last_watch = first_watch;
         if(!d_entity_is_nil(first_watch))
         {
           for(S64 y = selection_tbl.min.y+1; y <= selection_tbl.max.y; y += 1)
           {
             EV_Key key = ev_key_from_block_list_row_num(&blocks, y);
-            D_Entity *new_last = d_entity_from_ev_key_and_kind(key, mutable_entity_kind);
+            DF_Entity *new_last = d_entity_from_ev_key_and_kind(key, mutable_entity_kind);
             if(!d_entity_is_nil(new_last))
             {
               last_watch = new_last;
@@ -2217,7 +2217,7 @@ df_watch_view_build(DF_View *view, DF_WatchViewState *ewv, B32 modifiable, U32 d
           default:{}break;
           case E_Mode_Offset:
           {
-            D_Entity *space_entity = d_entity_from_eval_space(row_eval.space);
+            DF_Entity *space_entity = d_entity_from_eval_space(row_eval.space);
             if(space_entity->kind == D_EntityKind_Process)
             {
               U64 size = e_type_byte_size_from_key(row_eval.type_key);
@@ -2969,7 +2969,7 @@ DF_VIEW_UI_FUNCTION_DEF(getting_started)
         //- rjf: user has 1 target. build helper for launching it
         case 1:
         {
-          D_Entity *target = d_first_entity_from_list(&targets);
+          DF_Entity *target = d_first_entity_from_list(&targets);
           String8 target_full_path = target->string;
           String8 target_name = str8_skip_last_slash(target_full_path);
           UI_PrefHeight(ui_em(3.75f, 1.f))
@@ -3958,7 +3958,7 @@ df_process_info_list_from_query(Arena *arena, String8 query)
     U64 idx = 0;
     for(D_EntityNode *n = processes.first; n != 0; n = n->next, idx += 1)
     {
-      D_Entity *process = n->entity;
+      DF_Entity *process = n->entity;
       attached_process_pids[idx] = process->ctrl_id;
     }
   }
@@ -4235,7 +4235,7 @@ DF_VIEW_UI_FUNCTION_DEF(system_processes)
 typedef struct DF_EntityListerItem DF_EntityListerItem;
 struct DF_EntityListerItem
 {
-  D_Entity *entity;
+  DF_Entity *entity;
   FuzzyMatchRangeList name_match_ranges;
 };
 
@@ -4269,7 +4269,7 @@ df_entity_lister_item_list_from_needle(Arena *arena, D_EntityKind kind, D_Entity
   D_EntityList ent_list = d_query_cached_entity_list_with_kind(kind);
   for(D_EntityNode *n = ent_list.first; n != 0; n = n->next)
   {
-    D_Entity *entity = n->entity;
+    DF_Entity *entity = n->entity;
     if(!(entity->flags & omit_flags))
     {
       String8 display_string = d_display_string_from_entity(scratch.arena, entity);
@@ -4346,7 +4346,7 @@ DF_VIEW_UI_FUNCTION_DEF(entity_lister)
   };
   DF_EntityListerViewState *fev = df_view_user_state(view, DF_EntityListerViewState);
   D_Handle selected_entity_handle = fev->selected_entity_handle;
-  D_Entity *selected_entity = d_entity_from_handle(selected_entity_handle);
+  DF_Entity *selected_entity = d_entity_from_handle(selected_entity_handle);
   
   //- rjf: build filtered array of entities
   DF_EntityListerItemList ent_list = df_entity_lister_item_list_from_needle(scratch.arena, entity_kind, entity_flags_omit, string);
@@ -4356,7 +4356,7 @@ DF_VIEW_UI_FUNCTION_DEF(entity_lister)
   //- rjf: submit best match when hitting enter w/ no selection
   if(d_entity_is_nil(d_entity_from_handle(fev->selected_entity_handle)) && ent_arr.count != 0 && ui_slot_press(UI_EventActionSlot_Accept))
   {
-    D_Entity *ent = ent_arr.v[0].entity;
+    DF_Entity *ent = ent_arr.v[0].entity;
     df_cmd(DF_CmdKind_CompleteQuery, .entity = d_handle_from_entity(ent));
   }
   
@@ -4400,7 +4400,7 @@ DF_VIEW_UI_FUNCTION_DEF(entity_lister)
         idx += 1)
     {
       DF_EntityListerItem item = ent_arr.v[idx];
-      D_Entity *ent = item.entity;
+      DF_Entity *ent = item.entity;
       ui_set_next_hover_cursor(OS_Cursor_HandPoint);
       ui_set_next_child_layout_axis(Axis2_X);
       UI_Box *box = &ui_g_nil_box;
@@ -4669,7 +4669,7 @@ DF_VIEW_SETUP_FUNCTION_DEF(target)
 DF_VIEW_CMD_FUNCTION_DEF(target)
 {
   DF_TargetViewState *tv = df_view_user_state(view, DF_TargetViewState);
-  D_Entity *entity = d_entity_from_eval_string(string);
+  DF_Entity *entity = d_entity_from_eval_string(string);
 #if 0 // TODO(rjf): @msgs
   // rjf: process commands
   for(DF_Cmd *cmd = 0; df_next_cmd(&cmd);)
@@ -4690,10 +4690,10 @@ DF_VIEW_CMD_FUNCTION_DEF(target)
       case DF_CmdKind_PickFolder:
       {
         String8 pick_string = cmd->params.file_path;
-        D_Entity *storage_entity = entity;
+        DF_Entity *storage_entity = entity;
         if(tv->pick_dst_kind != D_EntityKind_Nil)
         {
-          D_Entity *child = d_entity_child_from_kind(entity, tv->pick_dst_kind);
+          DF_Entity *child = d_entity_child_from_kind(entity, tv->pick_dst_kind);
           if(d_entity_is_nil(child))
           {
             child = d_entity_alloc(entity, tv->pick_dst_kind);
@@ -4711,7 +4711,7 @@ DF_VIEW_UI_FUNCTION_DEF(target)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
-  D_Entity *entity = d_entity_from_eval_string(string);
+  DF_Entity *entity = d_entity_from_eval_string(string);
   D_EntityList custom_entry_points = d_push_entity_child_list_with_kind(scratch.arena, entity, D_EntityKind_EntryPoint);
   F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
   
@@ -4941,7 +4941,7 @@ DF_VIEW_UI_FUNCTION_DEF(target)
     {
       default:
       {
-        D_Entity *child = d_entity_child_from_kind(entity, commit_storage_child_kind);
+        DF_Entity *child = d_entity_child_from_kind(entity, commit_storage_child_kind);
         if(d_entity_is_nil(child))
         {
           child = d_entity_alloc(entity, commit_storage_child_kind);
@@ -5002,7 +5002,7 @@ DF_VIEW_UI_FUNCTION_DEF(targets)
   // NOTE(rjf): 0 => nothing, 1 => add new, 2 => first target
   Vec2S64 cursor = {0};
   {
-    D_Entity *selected_target = d_entity_from_handle(tv->selected_target_handle);
+    DF_Entity *selected_target = d_entity_from_handle(tv->selected_target_handle);
     for(U64 idx = 0; idx < targets.count; idx += 1)
     {
       if(selected_target == targets.v[idx].entity)
@@ -5057,7 +5057,7 @@ DF_VIEW_UI_FUNCTION_DEF(targets)
         row_idx += 1)
       UI_Row
     {
-      D_Entity *target = targets.v[row_idx-1].entity;
+      DF_Entity *target = targets.v[row_idx-1].entity;
       B32 row_selected = ((U64)cursor.y == row_idx+1);
       
       // rjf: enabled
@@ -5179,7 +5179,7 @@ DF_VIEW_CMD_FUNCTION_DEF(file_path_map)
       {
         String8 pick_string = cmd->regs->file_path;
         Side pick_side = fpms->pick_file_dst_side;
-        D_Entity *storage_entity = d_entity_from_handle(fpms->pick_file_dst_map);
+        DF_Entity *storage_entity = d_entity_from_handle(fpms->pick_file_dst_map);
         df_cmd(pick_side == Side_Min ?
                DF_CmdKind_SetFileOverrideLinkSrc :
                DF_CmdKind_SetFileOverrideLinkDst,
@@ -5283,9 +5283,9 @@ DF_VIEW_UI_FUNCTION_DEF(file_path_map)
         row_idx += 1) UI_TableVector
     {
       U64 map_idx = row_idx-1;
-      D_Entity *map = (map_idx < maps.count ? maps.v[map_idx] : &d_nil_entity);
-      D_Entity *map_src = d_entity_child_from_kind(map, D_EntityKind_Source);
-      D_Entity *map_dst = d_entity_child_from_kind(map, D_EntityKind_Dest);
+      DF_Entity *map = (map_idx < maps.count ? maps.v[map_idx] : &d_nil_entity);
+      DF_Entity *map_src = d_entity_child_from_kind(map, D_EntityKind_Source);
+      DF_Entity *map_dst = d_entity_child_from_kind(map, D_EntityKind_Dest);
       String8 map_src_path = map_src->string;
       String8 map_dst_path = map_dst->string;
       B32 row_selected = (fpms->cursor.y == row_idx);
@@ -5547,16 +5547,16 @@ DF_VIEW_UI_FUNCTION_DEF(scheduler)
       D_EntityArray entities = {0};
       {
         entities.count = machines.count+processes.count+threads.count;
-        entities.v = push_array_no_zero(scratch.arena, D_Entity *, entities.count);
+        entities.v = push_array_no_zero(scratch.arena, DF_Entity *, entities.count);
         U64 idx = 0;
         for(D_EntityNode *machine_n = machines.first; machine_n != 0; machine_n = machine_n->next)
         {
-          D_Entity *machine = machine_n->entity;
+          DF_Entity *machine = machine_n->entity;
           entities.v[idx] = machine;
           idx += 1;
           for(D_EntityNode *process_n = processes.first; process_n != 0; process_n = process_n->next)
           {
-            D_Entity *process = process_n->entity;
+            DF_Entity *process = process_n->entity;
             if(d_entity_ancestor_from_kind(process, D_EntityKind_Machine) != machine)
             {
               continue;
@@ -5565,7 +5565,7 @@ DF_VIEW_UI_FUNCTION_DEF(scheduler)
             idx += 1;
             for(D_EntityNode *thread_n = threads.first; thread_n != 0; thread_n = thread_n->next)
             {
-              D_Entity *thread = thread_n->entity;
+              DF_Entity *thread = thread_n->entity;
               if(d_entity_ancestor_from_kind(thread, D_EntityKind_Process) != process)
               {
                 continue;
@@ -5624,7 +5624,7 @@ DF_VIEW_UI_FUNCTION_DEF(scheduler)
         idx <= visible_row_range.max && idx < items.count;
         idx += 1)
     {
-      D_Entity *entity = items.v[idx].entity;
+      DF_Entity *entity = items.v[idx].entity;
       CTRL_Entity *entity_ctrl = ctrl_entity_from_handle(d_state->ctrl_entity_store, entity->ctrl_handle);
       B32 row_is_selected = (cursor.y == (S64)(idx+1));
       F32 depth = 0.f;
@@ -5816,7 +5816,7 @@ DF_VIEW_CMD_FUNCTION_DEF(modules)
       {
         Temp scratch = scratch_begin(0, 0);
         String8 pick_string = cmd->regs->file_path;
-        D_Entity *module = d_entity_from_handle(mv->pick_file_dst_entity);
+        DF_Entity *module = d_entity_from_handle(mv->pick_file_dst_entity);
         if(module->kind == D_EntityKind_Module)
         {
           String8 exe_path = module->string;
@@ -5853,16 +5853,16 @@ DF_VIEW_UI_FUNCTION_DEF(modules)
     D_EntityArray entities = {0};
     {
       entities.count = processes.count+modules.count;
-      entities.v = push_array_no_zero(scratch.arena, D_Entity *, entities.count);
+      entities.v = push_array_no_zero(scratch.arena, DF_Entity *, entities.count);
       U64 idx = 0;
       for(D_EntityNode *process_n = processes.first; process_n != 0; process_n = process_n->next)
       {
-        D_Entity *process = process_n->entity;
+        DF_Entity *process = process_n->entity;
         entities.v[idx] = process;
         idx += 1;
         for(D_EntityNode *module_n = modules.first; module_n != 0; module_n = module_n->next)
         {
-          D_Entity *module = module_n->entity;
+          DF_Entity *module = module_n->entity;
           if(d_entity_ancestor_from_kind(module, D_EntityKind_Process) != process)
           {
             continue;
@@ -5928,7 +5928,7 @@ DF_VIEW_UI_FUNCTION_DEF(modules)
   }
   
   //- rjf: build table
-  D_Entity *commit_module = &d_nil_entity;
+  DF_Entity *commit_module = &d_nil_entity;
   Rng1S64 visible_row_range = {0};
   UI_ScrollListParams scroll_list_params = {0};
   {
@@ -5954,7 +5954,7 @@ DF_VIEW_UI_FUNCTION_DEF(modules)
     U64 idx_in_process = 0;
     for(U64 idx = 0; idx < items.count; idx += 1)
     {
-      D_Entity *entity = items.v[idx].entity;
+      DF_Entity *entity = items.v[idx].entity;
       B32 row_is_selected = (cursor.y == (S64)(idx+1));
       idx_in_process += (entity->kind == D_EntityKind_Module);
       if(visible_row_range.min <= idx && idx <= visible_row_range.max)
@@ -6746,9 +6746,9 @@ DF_VIEW_CMD_FUNCTION_DEF(disasm)
       default: break;
       case DF_CmdKind_GoToAddress:
       {
-        D_Entity *process = &d_nil_entity;
+        DF_Entity *process = &d_nil_entity;
         {
-          D_Entity *entity = d_entity_from_handle(cmd->regs->entity);
+          DF_Entity *entity = d_entity_from_handle(cmd->regs->entity);
           if(!d_entity_is_nil(entity) &&
              (entity->kind == D_EntityKind_Process ||
               entity->kind == D_EntityKind_Thread ||
