@@ -6,6 +6,15 @@
 #ifndef DBG_FRONTEND_META_H
 #define DBG_FRONTEND_META_H
 
+typedef enum DF_CfgSrc
+{
+DF_CfgSrc_User,
+DF_CfgSrc_Project,
+DF_CfgSrc_CommandLine,
+DF_CfgSrc_Transient,
+DF_CfgSrc_COUNT,
+} DF_CfgSrc;
+
 typedef enum DF_EntityKind
 {
 DF_EntityKind_Nil,
@@ -777,6 +786,7 @@ DF_VIEW_UI_FUNCTION_DEF(exception_filters);
 DF_VIEW_UI_FUNCTION_DEF(settings);
 
 C_LINKAGE_BEGIN
+extern String8 d_cfg_src_string_table[4];
 extern DF_CmdKind d_cfg_src_load_cmd_kind_table[4];
 extern DF_CmdKind d_cfg_src_write_cmd_kind_table[4];
 extern DF_CmdKind d_cfg_src_apply_cmd_kind_table[4];

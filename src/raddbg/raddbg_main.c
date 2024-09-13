@@ -776,7 +776,7 @@ entry_point(CmdLine *cmd_line)
         {
           Temp scratch = scratch_begin(0, 0);
           DF_Entity *target = df_entity_alloc(df_entity_root(), DF_EntityKind_Target);
-          df_entity_equip_cfg_src(target, D_CfgSrc_CommandLine);
+          df_entity_equip_cfg_src(target, DF_CfgSrc_CommandLine);
           String8List passthrough_args_list = {0};
           for(String8Node *n = args.first->next; n != 0; n = n->next)
           {

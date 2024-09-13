@@ -1737,7 +1737,7 @@ df_watch_view_build(DF_View *view, DF_WatchViewState *ewv, B32 modifiable, U32 d
                   else if(editing_complete && new_string.size != 0 && ev_key_match(pt.key, empty_row_key))
                   {
                     watch = df_entity_alloc(df_entity_root(), mutable_entity_kind);
-                    df_entity_equip_cfg_src(watch, D_CfgSrc_Project);
+                    df_entity_equip_cfg_src(watch, DF_CfgSrc_Project);
                     df_entity_equip_name(watch, new_string);
                     EV_Key key = df_ev_key_from_entity(watch);
                     ev_key_set_view_rule(eval_view, key, str8_zero());
@@ -9039,7 +9039,7 @@ DF_VIEW_UI_FUNCTION_DEF(settings)
       S32 slider_s32_val = 0;
       F32 slider_pct = 0.f;
       UI_BoxFlags flags = UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawHotEffects|UI_BoxFlag_DrawActiveEffects;
-      DF_SettingVal *val_table = &df_state->cfg_setting_vals[D_CfgSrc_User][0];
+      DF_SettingVal *val_table = &df_state->cfg_setting_vals[DF_CfgSrc_User][0];
       switch(item->kind)
       {
         case DF_SettingsItemKind_COUNT:{}break;

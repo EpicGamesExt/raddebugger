@@ -4,6 +4,14 @@
 //- GENERATED CODE
 
 C_LINKAGE_BEGIN
+String8 d_cfg_src_string_table[4] =
+{
+str8_lit_comp("user"),
+str8_lit_comp("project"),
+str8_lit_comp("command_line"),
+str8_lit_comp("transient"),
+};
+
 DF_CmdKind d_cfg_src_load_cmd_kind_table[4] =
 {
 DF_CmdKind_OpenUser,

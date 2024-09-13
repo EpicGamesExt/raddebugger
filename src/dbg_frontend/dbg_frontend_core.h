@@ -5,6 +5,31 @@
 #define DBG_FRONTEND_CORE_H
 
 ////////////////////////////////
+//~ rjf: Handles
+
+typedef struct D_Handle D_Handle;
+struct D_Handle
+{
+  U64 u64[2];
+};
+
+typedef struct D_HandleNode D_HandleNode;
+struct D_HandleNode
+{
+  D_HandleNode *next;
+  D_HandleNode *prev;
+  D_Handle handle;
+};
+
+typedef struct D_HandleList D_HandleList;
+struct D_HandleList
+{
+  D_HandleNode *first;
+  D_HandleNode *last;
+  U64 count;
+};
+
+////////////////////////////////
 //~ rjf: Entity Kind Flags
 
 typedef U32 DF_EntityKindFlags;
@@ -31,7 +56,7 @@ enum
 };
 
 ////////////////////////////////
-//~ rjf: Entity Kind Flags
+//~ rjf: Entity Flags
 
 typedef U32 DF_EntityFlags;
 enum
@@ -459,6 +484,44 @@ enum
 #include "generated/dbg_frontend.meta.h"
 
 ////////////////////////////////
+//~ rjf: Config Types
+
+typedef struct D_CfgTree D_CfgTree;
+struct D_CfgTree
+{
+  D_CfgTree *next;
+  DF_CfgSrc source;
+  MD_Node *root;
+};
+
+typedef struct D_CfgVal D_CfgVal;
+struct D_CfgVal
+{
+  D_CfgVal *hash_next;
+  D_CfgVal *linear_next;
+  D_CfgTree *first;
+  D_CfgTree *last;
+  U64 insertion_stamp;
+  String8 string;
+};
+
+typedef struct D_CfgSlot D_CfgSlot;
+struct D_CfgSlot
+{
+  D_CfgVal *first;
+};
+
+typedef struct D_CfgTable D_CfgTable;
+struct D_CfgTable
+{
+  U64 slot_count;
+  D_CfgSlot *slots;
+  U64 insertion_stamp_counter;
+  D_CfgVal *first_val;
+  D_CfgVal *last_val;
+};
+
+////////////////////////////////
 //~ rjf: Entity Types
 
 typedef U64 DF_EntityID;
@@ -487,7 +550,7 @@ struct DF_Entity
   B32 disabled;
   U64 u64;
   Vec4F32 color_hsva;
-  D_CfgSrc cfg_src;
+  DF_CfgSrc cfg_src;
   U64 timestamp;
   
   // rjf: ctrl equipment
@@ -705,7 +768,7 @@ struct DF_Window
   DF_Window *prev;
   U64 gen;
   U64 frames_alive;
-  D_CfgSrc cfg_src;
+  DF_CfgSrc cfg_src;
   
   // rjf: top-level info & handles
   Arena *arena;
@@ -967,9 +1030,9 @@ struct DF_State
   DF_Regs *next_hover_regs;
   
   // rjf: config reading state
-  Arena *cfg_path_arenas[D_CfgSrc_COUNT];
-  String8 cfg_paths[D_CfgSrc_COUNT];
-  U64 cfg_cached_timestamp[D_CfgSrc_COUNT];
+  Arena *cfg_path_arenas[DF_CfgSrc_COUNT];
+  String8 cfg_paths[DF_CfgSrc_COUNT];
+  U64 cfg_cached_timestamp[DF_CfgSrc_COUNT];
   Arena *cfg_arena;
   D_CfgTable cfg_table;
   U64 ctrl_exception_code_filters[(CTRL_ExceptionCodeKind_COUNT+63)/64];
@@ -984,7 +1047,7 @@ struct DF_State
   FNT_Tag cfg_font_tags[DF_FontSlot_COUNT]; // derivative from font paths
   
   // rjf: global settings
-  DF_SettingVal cfg_setting_vals[D_CfgSrc_COUNT][DF_SettingCode_COUNT];
+  DF_SettingVal cfg_setting_vals[DF_CfgSrc_COUNT][DF_SettingCode_COUNT];
   
   // rjf: icon texture
   R_Handle icon_texture;
@@ -996,6 +1059,9 @@ struct DF_State
 
 ////////////////////////////////
 //~ rjf: Globals
+
+read_only global D_CfgTree d_nil_cfg_tree = {&d_nil_cfg_tree, DF_CfgSrc_User, &md_nil_node};
+read_only global D_CfgVal d_nil_cfg_val = {&d_nil_cfg_val, &d_nil_cfg_val, &d_nil_cfg_tree, &d_nil_cfg_tree};
 
 read_only global DF_Entity d_nil_entity =
 {
@@ -1053,6 +1119,21 @@ global DF_State *df_state = 0;
 global DF_DragDropPayload df_drag_drop_payload = {0};
 global D_Handle df_last_drag_drop_panel = {0};
 global D_Handle df_last_drag_drop_prev_tab = {0};
+
+////////////////////////////////
+//~ rjf: Handle Type Pure Functions
+
+internal D_Handle d_handle_zero(void);
+internal B32 d_handle_match(D_Handle a, D_Handle b);
+internal void d_handle_list_push_node(D_HandleList *list, D_HandleNode *node);
+internal void d_handle_list_push(Arena *arena, D_HandleList *list, D_Handle handle);
+internal D_HandleList d_handle_list_copy(Arena *arena, D_HandleList list);
+
+////////////////////////////////
+//~ rjf: Config Type Pure Functions
+
+internal void d_cfg_table_push_unparsed_string(Arena *arena, D_CfgTable *table, String8 string, DF_CfgSrc source);
+internal D_CfgVal *d_cfg_val_from_string(D_CfgTable *table, String8 string);
 
 ////////////////////////////////
 //~ rjf: Registers Type Functions
@@ -1213,7 +1294,7 @@ internal void df_entity_equip_disabled(DF_Entity *entity, B32 b32);
 internal void df_entity_equip_u64(DF_Entity *entity, U64 u64);
 internal void df_entity_equip_color_rgba(DF_Entity *entity, Vec4F32 rgba);
 internal void df_entity_equip_color_hsva(DF_Entity *entity, Vec4F32 hsva);
-internal void df_entity_equip_cfg_src(DF_Entity *entity, D_CfgSrc cfg_src);
+internal void df_entity_equip_cfg_src(DF_Entity *entity, DF_CfgSrc cfg_src);
 internal void df_entity_equip_timestamp(DF_Entity *entity, U64 timestamp);
 
 //- rjf: control layer correllation equipment
@@ -1340,7 +1421,7 @@ internal void df_panel_release_all_views(DF_Panel *panel);
 ////////////////////////////////
 //~ rjf: Window State Functions
 
-internal DF_Window *df_window_open(Vec2F32 size, OS_Handle preferred_monitor, D_CfgSrc cfg_src);
+internal DF_Window *df_window_open(Vec2F32 size, OS_Handle preferred_monitor, DF_CfgSrc cfg_src);
 
 internal DF_Window *df_window_from_os_handle(OS_Handle os);
 
@@ -1404,7 +1485,7 @@ internal DF_SettingVal df_setting_val_from_code(DF_SettingCode code);
 
 //- rjf: config serialization
 internal int df_qsort_compare__cfg_string_bindings(DF_StringBindingPair *a, DF_StringBindingPair *b);
-internal String8List df_cfg_strings_from_gfx(Arena *arena, String8 root_path, D_CfgSrc source);
+internal String8List df_cfg_strings_from_gfx(Arena *arena, String8 root_path, DF_CfgSrc source);
 
 ////////////////////////////////
 //~ rjf: Process Control Info Stringification
@@ -1424,7 +1505,7 @@ internal void df_request_frame(void);
 internal Arena *df_frame_arena(void);
 
 //- rjf: config paths
-internal String8 df_cfg_path_from_src(D_CfgSrc src);
+internal String8 df_cfg_path_from_src(DF_CfgSrc src);
 
 //- rjf: entity cache queries
 internal DF_EntityList d_query_cached_entity_list_with_kind(DF_EntityKind kind);

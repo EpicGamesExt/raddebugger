@@ -10,6 +10,120 @@
 #include "generated/dbg_frontend.meta.c"
 
 ////////////////////////////////
+//~ rjf: Handles
+
+internal D_Handle
+d_handle_zero(void)
+{
+  D_Handle result = {0};
+  return result;
+}
+
+internal B32
+d_handle_match(D_Handle a, D_Handle b)
+{
+  return (a.u64[0] == b.u64[0] && a.u64[1] == b.u64[1]);
+}
+
+internal void
+d_handle_list_push_node(D_HandleList *list, D_HandleNode *node)
+{
+  DLLPushBack(list->first, list->last, node);
+  list->count += 1;
+}
+
+internal void
+d_handle_list_push(Arena *arena, D_HandleList *list, D_Handle handle)
+{
+  D_HandleNode *n = push_array(arena, D_HandleNode, 1);
+  n->handle = handle;
+  d_handle_list_push_node(list, n);
+}
+
+internal D_HandleList
+d_handle_list_copy(Arena *arena, D_HandleList list)
+{
+  D_HandleList result = {0};
+  for(D_HandleNode *n = list.first; n != 0; n = n->next)
+  {
+    d_handle_list_push(arena, &result, n->handle);
+  }
+  return result;
+}
+
+////////////////////////////////
+//~ rjf: Config Type Functions
+
+internal void
+d_cfg_table_push_unparsed_string(Arena *arena, D_CfgTable *table, String8 string, DF_CfgSrc source)
+{
+  if(table->slot_count == 0)
+  {
+    table->slot_count = 64;
+    table->slots = push_array(arena, D_CfgSlot, table->slot_count);
+  }
+  MD_TokenizeResult tokenize = md_tokenize_from_text(arena, string);
+  MD_ParseResult parse = md_parse_from_text_tokens(arena, str8_lit(""), string, tokenize.tokens);
+  for(MD_EachNode(tln, parse.root->first)) if(tln->string.size != 0)
+  {
+    // rjf: map string -> hash*slot
+    String8 string = str8(tln->string.str, tln->string.size);
+    U64 hash = d_hash_from_string__case_insensitive(string);
+    U64 slot_idx = hash % table->slot_count;
+    D_CfgSlot *slot = &table->slots[slot_idx];
+    
+    // rjf: find existing value for this string
+    D_CfgVal *val = 0;
+    for(D_CfgVal *v = slot->first; v != 0; v = v->hash_next)
+    {
+      if(str8_match(v->string, string, StringMatchFlag_CaseInsensitive))
+      {
+        val = v;
+        break;
+      }
+    }
+    
+    // rjf: create new value if needed
+    if(val == 0)
+    {
+      val = push_array(arena, D_CfgVal, 1);
+      val->string = push_str8_copy(arena, string);
+      val->insertion_stamp = table->insertion_stamp_counter;
+      SLLStackPush_N(slot->first, val, hash_next);
+      SLLQueuePush_N(table->first_val, table->last_val, val, linear_next);
+      table->insertion_stamp_counter += 1;
+    }
+    
+    // rjf: create new node within this value
+    D_CfgTree *tree = push_array(arena, D_CfgTree, 1);
+    SLLQueuePush_NZ(&d_nil_cfg_tree, val->first, val->last, tree, next);
+    tree->source = source;
+    tree->root   = md_tree_copy(arena, tln);
+  }
+}
+
+internal D_CfgVal *
+d_cfg_val_from_string(D_CfgTable *table, String8 string)
+{
+  D_CfgVal *result = &d_nil_cfg_val;
+  if(table->slot_count != 0)
+  {
+    U64 hash = d_hash_from_string__case_insensitive(string);
+    U64 slot_idx = hash % table->slot_count;
+    D_CfgSlot *slot = &table->slots[slot_idx];
+    for(D_CfgVal *val = slot->first; val != 0; val = val->hash_next)
+    {
+      if(str8_match(val->string, string, StringMatchFlag_CaseInsensitive))
+      {
+        result = val;
+        break;
+      }
+    }
+  }
+  return result;
+}
+
+////////////////////////////////
 //~ rjf: Registers Type Functions
 
 internal void
@@ -399,7 +513,7 @@ df_search_tags_from_entity(Arena *arena, DF_Entity *entity)
   {
     Temp scratch = scratch_begin(&arena, 1);
     CTRL_Entity *entity_ctrl = ctrl_entity_from_handle(d_state->ctrl_entity_store, entity->ctrl_handle);
-    CTRL_Entity *process = ctrl_entity_ancestor_from_kind(entity_ctrl, DF_EntityKind_Process);
+    CTRL_Entity *process = ctrl_entity_ancestor_from_kind(entity_ctrl, CTRL_EntityKind_Process);
     CTRL_Unwind unwind = d_query_cached_unwind_from_thread(entity_ctrl);
     String8List strings = {0};
     for(U64 frame_num = unwind.frames.count; frame_num > 0; frame_num -= 1)
@@ -511,7 +625,7 @@ df_view_is_project_filtered(DF_View *view)
   String8 view_project = view->project_path;
   if(view_project.size != 0)
   {
-    String8 current_project = df_cfg_path_from_src(D_CfgSrc_Project);
+    String8 current_project = df_cfg_path_from_src(DF_CfgSrc_Project);
     result = !path_match_normalized(view_project, current_project);
   }
   return result;
@@ -1326,7 +1440,7 @@ df_entity_equip_color_hsva(DF_Entity *entity, Vec4F32 hsva)
 }
 
 internal void
-df_entity_equip_cfg_src(DF_Entity *entity, D_CfgSrc cfg_src)
+df_entity_equip_cfg_src(DF_Entity *entity, DF_CfgSrc cfg_src)
 {
   df_require_entity_nonnil(entity, return);
   entity->cfg_src = cfg_src;
@@ -1836,6 +1950,7 @@ internal U128
 d_key_from_eval_space_range(E_Space space, Rng1U64 range, B32 zero_terminated)
 {
   U128 result = {0};
+#if 0 // TODO(rjf):  @msgs
   DF_Entity *entity = d_entity_from_eval_space(space);
   switch(entity->kind)
   {
@@ -1853,6 +1968,7 @@ d_key_from_eval_space_range(E_Space space, Rng1U64 range, B32 zero_terminated)
       result = ctrl_hash_store_key_from_process_vaddr_range(entity->ctrl_handle, range, zero_terminated);
     }break;
   }
+#endif
   return result;
 }
 
@@ -2355,7 +2471,7 @@ df_view_equip_spec(DF_View *view, DF_ViewSpec *spec, String8 query, MD_Node *par
   if(spec->info.flags & DF_ViewSpecFlag_ProjectSpecific)
   {
     arena_clear(view->project_path_arena);
-    view->project_path = push_str8_copy(view->project_path_arena, df_cfg_path_from_src(D_CfgSrc_Project));
+    view->project_path = push_str8_copy(view->project_path_arena, df_cfg_path_from_src(DF_CfgSrc_Project));
   }
   else
   {
@@ -2549,7 +2665,7 @@ df_panel_release_all_views(DF_Panel *panel)
 //~ rjf: Window State Functions
 
 internal DF_Window *
-df_window_open(Vec2F32 size, OS_Handle preferred_monitor, D_CfgSrc cfg_src)
+df_window_open(Vec2F32 size, OS_Handle preferred_monitor, DF_CfgSrc cfg_src)
 {
   DF_Window *window = df_state->free_window;
   if(window != 0)
@@ -3408,9 +3524,9 @@ df_window_frame(DF_Window *ws)
         }
         
         // rjf: is command line only? -> make permanent
-        if(entity->cfg_src == D_CfgSrc_CommandLine && ui_clicked(df_icon_buttonf(DF_IconKind_Save, 0, "Save To Project")))
+        if(entity->cfg_src == DF_CfgSrc_CommandLine && ui_clicked(df_icon_buttonf(DF_IconKind_Save, 0, "Save To Project")))
         {
-          df_entity_equip_cfg_src(entity, D_CfgSrc_Project);
+          df_entity_equip_cfg_src(entity, DF_CfgSrc_Project);
         }
         
         // rjf: duplicate
@@ -4734,7 +4850,6 @@ df_window_frame(DF_Window *ws)
               {
                 ui_labelf("Restart all running targets:");
                 {
-                  DF_EntityList processes = d_query_cached_entity_list_with_kind(DF_EntityKind_Process);
                   for(DF_EntityNode *n = processes.first; n != 0; n = n->next)
                   {
                     DF_Entity *process = n->entity;
@@ -4930,7 +5045,7 @@ df_window_frame(DF_Window *ws)
             os_window_push_custom_title_bar_client_area(ws->os, user_box->rect);
             UI_Parent(user_box) UI_PrefWidth(ui_text_dim(10, 0)) UI_TextAlignment(UI_TextAlign_Center)
             {
-              String8 user_path = df_cfg_path_from_src(D_CfgSrc_User);
+              String8 user_path = df_cfg_path_from_src(DF_CfgSrc_User);
               user_path = str8_chop_last_dot(user_path);
               DF_Font(DF_FontSlot_Icons)
                 UI_TextRasterFlags(df_raster_flags_from_slot(DF_FontSlot_Icons))
@@ -4964,7 +5079,7 @@ df_window_frame(DF_Window *ws)
             os_window_push_custom_title_bar_client_area(ws->os, prof_box->rect);
             UI_Parent(prof_box) UI_PrefWidth(ui_text_dim(10, 0)) UI_TextAlignment(UI_TextAlign_Center)
             {
-              String8 prof_path = df_cfg_path_from_src(D_CfgSrc_Project);
+              String8 prof_path = df_cfg_path_from_src(DF_CfgSrc_Project);
               prof_path = str8_chop_last_dot(prof_path);
               DF_Font(DF_FontSlot_Icons)
                 ui_label(df_g_icon_kind_text_table[DF_IconKind_Briefcase]);
@@ -8424,7 +8539,7 @@ df_setting_val_from_code(DF_SettingCode code)
   }
   if(result.set == 0)
   {
-    for(EachEnumVal(D_CfgSrc, src))
+    for(EachEnumVal(DF_CfgSrc, src))
     {
       if(df_state->cfg_setting_vals[src][code].set)
       {
@@ -8445,7 +8560,7 @@ df_qsort_compare__cfg_string_bindings(DF_StringBindingPair *a, DF_StringBindingP
 }
 
 internal String8List
-df_cfg_strings_from_gfx(Arena *arena, String8 root_path, D_CfgSrc source)
+df_cfg_strings_from_gfx(Arena *arena, String8 root_path, DF_CfgSrc source)
 {
   ProfBeginFunction();
   local_persist char *spaces = "                                                                                ";
@@ -8595,7 +8710,7 @@ df_cfg_strings_from_gfx(Arena *arena, String8 root_path, D_CfgSrc source)
   }
   
   //- rjf: write exception code filters
-  if(source == D_CfgSrc_Project)
+  if(source == DF_CfgSrc_Project)
   {
     str8_list_push(arena, &strs, str8_lit("/// exception code filters ////////////////////////////////////////////////////\n"));
     str8_list_push(arena, &strs, str8_lit("\n"));
@@ -8819,7 +8934,7 @@ df_cfg_strings_from_gfx(Arena *arena, String8 root_path, D_CfgSrc source)
   }
   
   //- rjf: serialize keybindings
-  if(source == D_CfgSrc_User)
+  if(source == DF_CfgSrc_User)
   {
     Temp scratch = scratch_begin(&arena, 1);
     String8 indent_str = str8_lit("                                                                                                             ");
@@ -8873,7 +8988,7 @@ df_cfg_strings_from_gfx(Arena *arena, String8 root_path, D_CfgSrc source)
   }
   
   //- rjf: serialize theme colors
-  if(source == D_CfgSrc_User)
+  if(source == DF_CfgSrc_User)
   {
     // rjf: determine if this theme matches an existing preset
     B32 is_preset = 0;
@@ -8932,7 +9047,7 @@ df_cfg_strings_from_gfx(Arena *arena, String8 root_path, D_CfgSrc source)
   }
   
   //- rjf: serialize fonts
-  if(source == D_CfgSrc_User)
+  if(source == DF_CfgSrc_User)
   {
     String8 code_font_path_escaped = escaped_from_raw_str8(arena, df_state->cfg_code_font_path);
     String8 main_font_path_escaped = escaped_from_raw_str8(arena, df_state->cfg_main_font_path);
@@ -9122,7 +9237,7 @@ df_frame_arena(void)
 //- rjf: config paths
 
 internal String8
-df_cfg_path_from_src(D_CfgSrc src)
+df_cfg_path_from_src(DF_CfgSrc src)
 {
   return df_state->cfg_paths[src];
 }
@@ -9490,8 +9605,8 @@ df_init(CmdLine *cmdln)
     }
     
     // rjf: set up config path state
-    String8 cfg_src_paths[D_CfgSrc_COUNT] = {user_cfg_path, project_cfg_path};
-    for(D_CfgSrc src = (D_CfgSrc)0; src < D_CfgSrc_COUNT; src = (D_CfgSrc)(src+1))
+    String8 cfg_src_paths[DF_CfgSrc_COUNT] = {user_cfg_path, project_cfg_path};
+    for(DF_CfgSrc src = (DF_CfgSrc)0; src < DF_CfgSrc_COUNT; src = (DF_CfgSrc)(src+1))
     {
       df_state->cfg_path_arenas[src] = arena_alloc();
       df_cmd(d_cfg_src_load_cmd_kind_table[src], .file_path = path_normalized_from_string(scratch.arena, cfg_src_paths[src]));
@@ -9686,7 +9801,7 @@ df_frame(void)
       df_request_frame();
       df_unbind_name(df_state->bind_change_cmd_name, df_state->bind_change_binding);
       df_state->bind_change_active = 0;
-      df_cmd(d_cfg_src_write_cmd_kind_table[D_CfgSrc_User]);
+      df_cmd(d_cfg_src_write_cmd_kind_table[DF_CfgSrc_User]);
     }
     for(OS_Event *event = events.first, *next = 0; event != 0; event = next)
     {
@@ -9713,7 +9828,7 @@ df_frame(void)
         U32 codepoint = os_codepoint_from_event_flags_and_key(event->flags, event->key);
         os_text(&events, os_handle_zero(), codepoint);
         os_eat_event(&events, event);
-        df_cmd(d_cfg_src_write_cmd_kind_table[D_CfgSrc_User]);
+        df_cmd(d_cfg_src_write_cmd_kind_table[DF_CfgSrc_User]);
         df_request_frame();
         break;
       }
@@ -10187,7 +10302,7 @@ df_frame(void)
             originating_window = df_state->first_window;
           }
           OS_Handle preferred_monitor = {0};
-          DF_Window *new_ws = df_window_open(v2f32(1280, 720), preferred_monitor, D_CfgSrc_User);
+          DF_Window *new_ws = df_window_open(v2f32(1280, 720), preferred_monitor, DF_CfgSrc_User);
           if(originating_window)
           {
             MemoryCopy(new_ws->setting_vals, originating_window->setting_vals, sizeof(DF_SettingVal)*DF_SettingCode_COUNT);
@@ -10265,8 +10380,8 @@ df_frame(void)
         case DF_CmdKind_OpenUser:
         case DF_CmdKind_OpenProject:
         {
-          B32 load_cfg[D_CfgSrc_COUNT] = {0};
-          for(D_CfgSrc src = (D_CfgSrc)0; src < D_CfgSrc_COUNT; src = (D_CfgSrc)(src+1))
+          B32 load_cfg[DF_CfgSrc_COUNT] = {0};
+          for(DF_CfgSrc src = (DF_CfgSrc)0; src < DF_CfgSrc_COUNT; src = (DF_CfgSrc)(src+1))
           {
             load_cfg[src] = (kind == d_cfg_src_load_cmd_kind_table[src]);
           }
@@ -10294,7 +10409,7 @@ df_frame(void)
           //- rjf: set new config paths
           if(file_is_okay)
           {
-            for(D_CfgSrc src = (D_CfgSrc)0; src < D_CfgSrc_COUNT; src = (D_CfgSrc)(src+1))
+            for(DF_CfgSrc src = (DF_CfgSrc)0; src < DF_CfgSrc_COUNT; src = (DF_CfgSrc)(src+1))
             {
               if(load_cfg[src])
               {
@@ -10305,10 +10420,10 @@ df_frame(void)
           }
           
           //- rjf: get config file properties
-          FileProperties cfg_props[D_CfgSrc_COUNT] = {0};
+          FileProperties cfg_props[DF_CfgSrc_COUNT] = {0};
           if(file_is_okay)
           {
-            for(D_CfgSrc src = (D_CfgSrc)0; src < D_CfgSrc_COUNT; src = (D_CfgSrc)(src+1))
+            for(DF_CfgSrc src = (DF_CfgSrc)0; src < DF_CfgSrc_COUNT; src = (DF_CfgSrc)(src+1))
             {
               String8 path = df_cfg_path_from_src(src);
               cfg_props[src] = os_properties_from_file_path(path);
@@ -10316,11 +10431,11 @@ df_frame(void)
           }
           
           //- rjf: load files
-          String8 cfg_data[D_CfgSrc_COUNT] = {0};
-          U64 cfg_timestamps[D_CfgSrc_COUNT] = {0};
+          String8 cfg_data[DF_CfgSrc_COUNT] = {0};
+          U64 cfg_timestamps[DF_CfgSrc_COUNT] = {0};
           if(file_is_okay)
           {
-            for(D_CfgSrc src = (D_CfgSrc)0; src < D_CfgSrc_COUNT; src = (D_CfgSrc)(src+1))
+            for(DF_CfgSrc src = (DF_CfgSrc)0; src < DF_CfgSrc_COUNT; src = (DF_CfgSrc)(src+1))
             {
               String8 path = df_cfg_path_from_src(src);
               OS_Handle file = os_file_open(OS_AccessFlag_ShareRead|OS_AccessFlag_Read, path);
@@ -10336,21 +10451,21 @@ df_frame(void)
           }
           
           //- rjf: determine if we need to save config
-          B32 cfg_save[D_CfgSrc_COUNT] = {0};
+          B32 cfg_save[DF_CfgSrc_COUNT] = {0};
           if(file_is_okay)
           {
-            for(D_CfgSrc src = (D_CfgSrc)0; src < D_CfgSrc_COUNT; src = (D_CfgSrc)(src+1))
+            for(DF_CfgSrc src = (DF_CfgSrc)0; src < DF_CfgSrc_COUNT; src = (DF_CfgSrc)(src+1))
             {
               cfg_save[src] = (load_cfg[src] && cfg_props[src].created == 0);
             }
           }
           
           //- rjf: determine if we need to reload config
-          B32 cfg_load[D_CfgSrc_COUNT] = {0};
+          B32 cfg_load[DF_CfgSrc_COUNT] = {0};
           B32 cfg_load_any = 0;
           if(file_is_okay)
           {
-            for(D_CfgSrc src = (D_CfgSrc)0; src < D_CfgSrc_COUNT; src = (D_CfgSrc)(src+1))
+            for(DF_CfgSrc src = (DF_CfgSrc)0; src < DF_CfgSrc_COUNT; src = (DF_CfgSrc)(src+1))
             {
               cfg_load[src] = (load_cfg[src] && ((cfg_save[src] == 0 && df_state->cfg_cached_timestamp[src] != cfg_timestamps[src]) || cfg_props[src].created == 0));
               cfg_load_any = cfg_load_any || cfg_load[src];
@@ -10362,7 +10477,7 @@ df_frame(void)
           {
             arena_clear(df_state->cfg_arena);
             MemoryZeroStruct(&df_state->cfg_table);
-            for(D_CfgSrc src = (D_CfgSrc)0; src < D_CfgSrc_COUNT; src = (D_CfgSrc)(src+1))
+            for(DF_CfgSrc src = (DF_CfgSrc)0; src < DF_CfgSrc_COUNT; src = (DF_CfgSrc)(src+1))
             {
               d_cfg_table_push_unparsed_string(df_state->cfg_arena, &df_state->cfg_table, cfg_data[src], src);
             }
@@ -10375,7 +10490,7 @@ df_frame(void)
           //
           if(file_is_okay)
           {
-            for(D_CfgSrc src = (D_CfgSrc)0; src < D_CfgSrc_COUNT; src = (D_CfgSrc)(src+1))
+            for(DF_CfgSrc src = (DF_CfgSrc)0; src < DF_CfgSrc_COUNT; src = (DF_CfgSrc)(src+1))
             {
               if(cfg_load[src])
               {
@@ -10389,7 +10504,7 @@ df_frame(void)
           //- rjf: save => dispatch write
           if(file_is_okay)
           {
-            for(D_CfgSrc src = (D_CfgSrc)0; src < D_CfgSrc_COUNT; src = (D_CfgSrc)(src+1))
+            for(DF_CfgSrc src = (DF_CfgSrc)0; src < DF_CfgSrc_COUNT; src = (DF_CfgSrc)(src+1))
             {
               if(cfg_save[src])
               {
@@ -10414,8 +10529,8 @@ df_frame(void)
           OS_HandleArray monitors = os_push_monitors_array(scratch.arena);
           
           //- rjf: get config source
-          D_CfgSrc src = D_CfgSrc_User;
-          for(D_CfgSrc s = (D_CfgSrc)0; s < D_CfgSrc_COUNT; s = (D_CfgSrc)(s+1))
+          DF_CfgSrc src = DF_CfgSrc_User;
+          for(DF_CfgSrc s = (DF_CfgSrc)0; s < DF_CfgSrc_COUNT; s = (DF_CfgSrc)(s+1))
           {
             if(kind == d_cfg_src_apply_cmd_kind_table[s])
             {
@@ -10429,7 +10544,7 @@ df_frame(void)
           String8 cfg_folder = str8_chop_last_slash(cfg_path);
           
           //- rjf: keep track of recent projects
-          if(src == D_CfgSrc_Project)
+          if(src == DF_CfgSrc_Project)
           {
             DF_EntityList recent_projects = d_query_cached_entity_list_with_kind(DF_EntityKind_RecentProject);
             DF_Entity *recent_project = &d_nil_entity;
@@ -10445,7 +10560,7 @@ df_frame(void)
             {
               recent_project = df_entity_alloc(df_entity_root(), DF_EntityKind_RecentProject);
               df_entity_equip_name(recent_project, path_normalized_from_string(scratch.arena, cfg_path));
-              df_entity_equip_cfg_src(recent_project, D_CfgSrc_User);
+              df_entity_equip_cfg_src(recent_project, DF_CfgSrc_User);
             }
           }
           
@@ -10997,7 +11112,7 @@ df_frame(void)
           }
           
           //- rjf: apply keybindings
-          if(src == D_CfgSrc_User)
+          if(src == DF_CfgSrc_User)
           {
             df_clear_bindings();
           }
@@ -11208,7 +11323,7 @@ df_frame(void)
           }
           
           //- rjf: if config applied 0 settings, we need to do some sensible default
-          if(src == D_CfgSrc_User)
+          if(src == DF_CfgSrc_User)
           {
             for(EachEnumVal(DF_SettingCode, code))
             {
@@ -11220,12 +11335,12 @@ df_frame(void)
           }
           
           //- rjf: if config opened 0 windows, we need to do some sensible default
-          if(src == D_CfgSrc_User && windows->first == &d_nil_cfg_tree)
+          if(src == DF_CfgSrc_User && windows->first == &d_nil_cfg_tree)
           {
             OS_Handle preferred_monitor = os_primary_monitor();
             Vec2F32 monitor_dim = os_dim_from_monitor(preferred_monitor);
             Vec2F32 window_dim = v2f32(monitor_dim.x*4/5, monitor_dim.y*4/5);
-            DF_Window *ws = df_window_open(window_dim, preferred_monitor, D_CfgSrc_User);
+            DF_Window *ws = df_window_open(window_dim, preferred_monitor, DF_CfgSrc_User);
             if(monitor_dim.x < 1920)
             {
               df_cmd(DF_CmdKind_ResetToCompactPanels);
@@ -11237,7 +11352,7 @@ df_frame(void)
           }
           
           //- rjf: if config bound 0 keys, we need to do some sensible default
-          if(src == D_CfgSrc_User && df_state->key_map_total_count == 0)
+          if(src == DF_CfgSrc_User && df_state->key_map_total_count == 0)
           {
             for(U64 idx = 0; idx < ArrayCount(df_g_default_binding_table); idx += 1)
             {
@@ -11247,7 +11362,7 @@ df_frame(void)
           }
           
           //- rjf: always ensure that the meta controls have bindings
-          if(src == D_CfgSrc_User)
+          if(src == DF_CfgSrc_User)
           {
             struct
             {
@@ -11276,8 +11391,8 @@ df_frame(void)
         case DF_CmdKind_WriteUserData:
         case DF_CmdKind_WriteProjectData:
         {
-          D_CfgSrc src = D_CfgSrc_User;
-          for(D_CfgSrc s = (D_CfgSrc)0; s < D_CfgSrc_COUNT; s = (D_CfgSrc)(s+1))
+          DF_CfgSrc src = DF_CfgSrc_User;
+          for(DF_CfgSrc s = (DF_CfgSrc)0; s < DF_CfgSrc_COUNT; s = (DF_CfgSrc)(s+1))
           {
             if(kind == d_cfg_src_write_cmd_kind_table[s])
             {
@@ -12353,7 +12468,7 @@ df_frame(void)
           }
           
           // rjf: dispatch cfg saves
-          for(D_CfgSrc src = (D_CfgSrc)0; src < D_CfgSrc_COUNT; src = (D_CfgSrc)(src+1))
+          for(DF_CfgSrc src = (DF_CfgSrc)0; src < DF_CfgSrc_COUNT; src = (DF_CfgSrc)(src+1))
           {
             DF_CmdKind write_cmd = d_cfg_src_write_cmd_kind_table[src];
             df_cmd(write_cmd, .file_path = df_cfg_path_from_src(src));
@@ -13188,7 +13303,7 @@ df_frame(void)
           if(!removed_already_existing)
           {
             DF_Entity *bp = df_entity_alloc(df_entity_root(), DF_EntityKind_Breakpoint);
-            df_entity_equip_cfg_src(bp, D_CfgSrc_Project);
+            df_entity_equip_cfg_src(bp, DF_CfgSrc_Project);
             DF_Entity *loc = df_entity_alloc(bp, DF_EntityKind_Location);
             if(file_path.size != 0 && pt.line != 0)
             {
@@ -13241,7 +13356,7 @@ df_frame(void)
           {
             DF_Entity *wp = df_entity_alloc(df_entity_root(), DF_EntityKind_WatchPin);
             df_entity_equip_name(wp, string);
-            df_entity_equip_cfg_src(wp, D_CfgSrc_Project);
+            df_entity_equip_cfg_src(wp, DF_CfgSrc_Project);
             DF_Entity *loc = df_entity_alloc(wp, DF_EntityKind_Location);
             if(file_path.size != 0 && pt.line != 0)
             {
@@ -13264,7 +13379,7 @@ df_frame(void)
           {
             DF_Entity *watch = &d_nil_entity;
             watch = df_entity_alloc(df_entity_root(), DF_EntityKind_Watch);
-            df_entity_equip_cfg_src(watch, D_CfgSrc_Project);
+            df_entity_equip_cfg_src(watch, DF_CfgSrc_Project);
             df_entity_equip_name(watch, df_regs()->string);
           }
           else
@@ -13364,7 +13479,7 @@ df_frame(void)
           DF_Entity *entity = &d_nil_entity;
           entity = df_entity_alloc(df_entity_root(), DF_EntityKind_Target);
           df_entity_equip_disabled(entity, 1);
-          df_entity_equip_cfg_src(entity, D_CfgSrc_Project);
+          df_entity_equip_cfg_src(entity, DF_CfgSrc_Project);
           DF_Entity *exe = df_entity_alloc(entity, DF_EntityKind_Executable);
           df_entity_equip_name(exe, df_regs()->file_path);
           String8 working_dir = str8_chop_last_slash(df_regs()->file_path);

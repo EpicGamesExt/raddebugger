@@ -6,15 +6,6 @@
 #ifndef DBG_ENGINE_META_H
 #define DBG_ENGINE_META_H
 
-typedef enum D_CfgSrc
-{
-D_CfgSrc_User,
-D_CfgSrc_Project,
-D_CfgSrc_CommandLine,
-D_CfgSrc_Transient,
-D_CfgSrc_COUNT,
-} D_CfgSrc;
-
 typedef enum D_CmdKind
 {
 D_CmdKind_Null,
@@ -101,9 +92,4 @@ struct {B32 *value_ptr; String8 name;} DEV_toggle_table[] =
 {&DEV_scratch_mouse_draw, str8_lit_comp("scratch_mouse_draw")},
 {&DEV_updating_indicator, str8_lit_comp("updating_indicator")},
 };
-C_LINKAGE_BEGIN
-extern String8 d_cfg_src_string_table[4];
-
-C_LINKAGE_END
-
 #endif // DBG_ENGINE_META_H

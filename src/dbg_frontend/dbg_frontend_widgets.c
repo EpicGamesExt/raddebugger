@@ -606,7 +606,7 @@ df_entity_desc_button(DF_Entity *entity, FuzzyMatchRangeList *name_matches, Stri
       palette = df_palette_from_code(DF_PaletteCode_NegativePopButton);
     }
   }
-  if(entity->cfg_src == D_CfgSrc_CommandLine)
+  if(entity->cfg_src == DF_CfgSrc_CommandLine)
   {
     palette = df_palette_from_code(DF_PaletteCode_NeutralPopButton);
   }
@@ -642,7 +642,7 @@ df_entity_desc_button(DF_Entity *entity, FuzzyMatchRangeList *name_matches, Stri
       UI_PrefWidth(ui_em(1.875f, 1.f))
       UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
       ui_label(df_g_icon_kind_text_table[icon]);
-    if(entity->cfg_src == D_CfgSrc_CommandLine)
+    if(entity->cfg_src == DF_CfgSrc_CommandLine)
     {
       UI_TextAlignment(UI_TextAlign_Center)
         UI_PrefWidth(ui_em(1.875f, 1.f))

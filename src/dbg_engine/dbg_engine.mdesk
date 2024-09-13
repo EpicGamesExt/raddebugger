@@ -2,29 +2,6 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
-//~ rjf: Config Sources
-
-@table(string, name, load_cmd, write_cmd, apply_cmd)
-D_CfgSrcTable:
-{
-  {"user"            User             OpenUser       WriteUserData       ApplyUserData    }
-  {"project"         Project          OpenProject    WriteProjectData    ApplyProjectData }
-  {"command_line"    CommandLine      Null           Null                Null             }
-  {"transient"       Transient        Null           Null                Null             }
-}
-
-@enum D_CfgSrc:
-{
-  @expand(D_CfgSrcTable a) `$(a.name)`,
-  COUNT,
-}
-
-@data(String8) d_cfg_src_string_table:
-{
-  @expand(D_CfgSrcTable a) `str8_lit_comp("$(a.string)")`,
-}
-
-////////////////////////////////
 //~ rjf: Built-In Command Tables
 
 @table(name                      ui_vis   ipc_docs_vis   q_slot       q_view  q_ent_kind  q_allow_files q_allow_folders  q_keep_oi   q_select_oi  q_is_code  q_required           canonical_icon        string                        display_name                                  desc                                                                                                               search_tags                      )

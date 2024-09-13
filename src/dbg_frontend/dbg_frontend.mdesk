@@ -13,19 +13,39 @@
 ////////////////////////////////
 //~ rjf: Config Sources
 
+@table(string, name, load_cmd, write_cmd, apply_cmd)
+DF_CfgSrcTable:
+{
+  {"user"            User             OpenUser       WriteUserData       ApplyUserData    }
+  {"project"         Project          OpenProject    WriteProjectData    ApplyProjectData }
+  {"command_line"    CommandLine      Null           Null                Null             }
+  {"transient"       Transient        Null           Null                Null             }
+}
+
+@enum DF_CfgSrc:
+{
+  @expand(DF_CfgSrcTable a) `$(a.name)`,
+  COUNT,
+}
+
+@data(String8) d_cfg_src_string_table:
+{
+  @expand(DF_CfgSrcTable a) `str8_lit_comp("$(a.string)")`,
+}
+
 @data(DF_CmdKind) d_cfg_src_load_cmd_kind_table:
 {
-  @expand(D_CfgSrcTable a) `DF_CmdKind_$(a.load_cmd)`,
+  @expand(DF_CfgSrcTable a) `DF_CmdKind_$(a.load_cmd)`,
 }
 
 @data(DF_CmdKind) d_cfg_src_write_cmd_kind_table:
 {
-  @expand(D_CfgSrcTable a) `DF_CmdKind_$(a.write_cmd)`,
+  @expand(DF_CfgSrcTable a) `DF_CmdKind_$(a.write_cmd)`,
 }
 
 @data(DF_CmdKind) d_cfg_src_apply_cmd_kind_table:
 {
-  @expand(D_CfgSrcTable a) `DF_CmdKind_$(a.apply_cmd)`;
+  @expand(DF_CfgSrcTable a) `DF_CmdKind_$(a.apply_cmd)`;
 }
 
 ////////////////////////////////

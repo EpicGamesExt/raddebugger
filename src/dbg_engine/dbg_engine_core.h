@@ -99,31 +99,6 @@ struct D_EventList
 };
 
 ////////////////////////////////
-//~ rjf: Handles
-
-typedef struct D_Handle D_Handle;
-struct D_Handle
-{
-  U64 u64[2];
-};
-
-typedef struct D_HandleNode D_HandleNode;
-struct D_HandleNode
-{
-  D_HandleNode *next;
-  D_HandleNode *prev;
-  D_Handle handle;
-};
-
-typedef struct D_HandleList D_HandleList;
-struct D_HandleList
-{
-  D_HandleNode *first;
-  D_HandleNode *last;
-  U64 count;
-};
-
-////////////////////////////////
 //~ rjf: Line Info Types
 
 typedef struct D_Line D_Line;
@@ -174,44 +149,6 @@ D_RunKind;
 //~ rjf: Generated Code
 
 #include "dbg_engine/generated/dbg_engine.meta.h"
-
-////////////////////////////////
-//~ rjf: Config Types
-
-typedef struct D_CfgTree D_CfgTree;
-struct D_CfgTree
-{
-  D_CfgTree *next;
-  D_CfgSrc source;
-  MD_Node *root;
-};
-
-typedef struct D_CfgVal D_CfgVal;
-struct D_CfgVal
-{
-  D_CfgVal *hash_next;
-  D_CfgVal *linear_next;
-  D_CfgTree *first;
-  D_CfgTree *last;
-  U64 insertion_stamp;
-  String8 string;
-};
-
-typedef struct D_CfgSlot D_CfgSlot;
-struct D_CfgSlot
-{
-  D_CfgVal *first;
-};
-
-typedef struct D_CfgTable D_CfgTable;
-struct D_CfgTable
-{
-  U64 slot_count;
-  D_CfgSlot *slots;
-  U64 insertion_stamp_counter;
-  D_CfgVal *first_val;
-  D_CfgVal *last_val;
-};
 
 ////////////////////////////////
 //~ rjf: View Rules
@@ -471,9 +408,6 @@ struct D_State
 //~ rjf: Globals
 
 read_only global D_ViewRuleSpec d_nil_core_view_rule_spec = {0};
-read_only global D_CfgTree d_nil_cfg_tree = {&d_nil_cfg_tree, D_CfgSrc_User, &md_nil_node};
-read_only global D_CfgVal d_nil_cfg_val = {&d_nil_cfg_val, &d_nil_cfg_val, &d_nil_cfg_tree, &d_nil_cfg_tree};
-
 global D_State *d_state = 0;
 
 ////////////////////////////////
@@ -483,15 +417,6 @@ internal U64 d_hash_from_seed_string(U64 seed, String8 string);
 internal U64 d_hash_from_string(String8 string);
 internal U64 d_hash_from_seed_string__case_insensitive(U64 seed, String8 string);
 internal U64 d_hash_from_string__case_insensitive(String8 string);
-
-////////////////////////////////
-//~ rjf: Handle Type Pure Functions
-
-internal D_Handle d_handle_zero(void);
-internal B32 d_handle_match(D_Handle a, D_Handle b);
-internal void d_handle_list_push_node(D_HandleList *list, D_HandleNode *node);
-internal void d_handle_list_push(Arena *arena, D_HandleList *list, D_Handle handle);
-internal D_HandleList d_handle_list_copy(Arena *arena, D_HandleList list);
 
 ////////////////////////////////
 //~ rjf: Breakpoints
@@ -504,18 +429,12 @@ internal D_BreakpointArray d_breakpoint_array_copy(Arena *arena, D_BreakpointArr
 internal String8List d_possible_path_overrides_from_maps_path(Arena *arena, D_PathMapArray *path_maps, String8 file_path);
 
 ////////////////////////////////
-//~ rjf: Config Type Pure Functions
-
-internal void d_cfg_table_push_unparsed_string(Arena *arena, D_CfgTable *table, String8 string, D_CfgSrc source);
-internal D_CfgVal *d_cfg_val_from_string(D_CfgTable *table, String8 string);
-
-////////////////////////////////
 //~ rjf: Debug Info Extraction Type Pure Functions
 
 internal D_LineList d_line_list_copy(Arena *arena, D_LineList *list);
 
 ////////////////////////////////
-//~ rjf: Command Type Pure Functions
+//~ rjf: Command Type Functions
 
 //- rjf: command parameters
 internal D_CmdParams d_cmd_params_copy(Arena *arena, D_CmdParams *src);

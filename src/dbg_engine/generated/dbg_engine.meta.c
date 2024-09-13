@@ -4,14 +4,6 @@
 //- GENERATED CODE
 
 C_LINKAGE_BEGIN
-String8 d_cfg_src_string_table[4] =
-{
-str8_lit_comp("user"),
-str8_lit_comp("project"),
-str8_lit_comp("command_line"),
-str8_lit_comp("transient"),
-};
-
 D_ViewRuleSpecInfo d_core_view_rule_spec_info_table[21] =
 {
 {str8_lit_comp("default"), str8_lit_comp("Default"), str8_lit_comp(""), str8_lit_comp(""), (D_ViewRuleSpecInfoFlag_Inherited*0)|(D_ViewRuleSpecInfoFlag_Expandable*0)|(D_ViewRuleSpecInfoFlag_ExprResolution*0)|(D_ViewRuleSpecInfoFlag_VizBlockProd*1), },

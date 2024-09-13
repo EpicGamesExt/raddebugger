@@ -47,48 +47,6 @@ d_hash_from_string__case_insensitive(String8 string)
 }
 
 ////////////////////////////////
-//~ rjf: Handles
-
-internal D_Handle
-d_handle_zero(void)
-{
-  D_Handle result = {0};
-  return result;
-}
-
-internal B32
-d_handle_match(D_Handle a, D_Handle b)
-{
-  return (a.u64[0] == b.u64[0] && a.u64[1] == b.u64[1]);
-}
-
-internal void
-d_handle_list_push_node(D_HandleList *list, D_HandleNode *node)
-{
-  DLLPushBack(list->first, list->last, node);
-  list->count += 1;
-}
-
-internal void
-d_handle_list_push(Arena *arena, D_HandleList *list, D_Handle handle)
-{
-  D_HandleNode *n = push_array(arena, D_HandleNode, 1);
-  n->handle = handle;
-  d_handle_list_push_node(list, n);
-}
-
-internal D_HandleList
-d_handle_list_copy(Arena *arena, D_HandleList list)
-{
-  D_HandleList result = {0};
-  for(D_HandleNode *n = list.first; n != 0; n = n->next)
-  {
-    d_handle_list_push(arena, &result, n->handle);
-  }
-  return result;
-}
-
-////////////////////////////////
 //~ rjf: Breakpoints
 
 internal D_BreakpointArray
@@ -181,78 +139,6 @@ d_possible_path_overrides_from_maps_path(Arena *arena, D_PathMapArray *path_maps
 }
 
 ////////////////////////////////
-//~ rjf: Config Type Functions
-
-internal void
-d_cfg_table_push_unparsed_string(Arena *arena, D_CfgTable *table, String8 string, D_CfgSrc source)
-{
-  if(table->slot_count == 0)
-  {
-    table->slot_count = 64;
-    table->slots = push_array(arena, D_CfgSlot, table->slot_count);
-  }
-  MD_TokenizeResult tokenize = md_tokenize_from_text(arena, string);
-  MD_ParseResult parse = md_parse_from_text_tokens(arena, str8_lit(""), string, tokenize.tokens);
-  for(MD_EachNode(tln, parse.root->first)) if(tln->string.size != 0)
-  {
-    // rjf: map string -> hash*slot
-    String8 string = str8(tln->string.str, tln->string.size);
-    U64 hash = d_hash_from_string__case_insensitive(string);
-    U64 slot_idx = hash % table->slot_count;
-    D_CfgSlot *slot = &table->slots[slot_idx];
-    
-    // rjf: find existing value for this string
-    D_CfgVal *val = 0;
-    for(D_CfgVal *v = slot->first; v != 0; v = v->hash_next)
-    {
-      if(str8_match(v->string, string, StringMatchFlag_CaseInsensitive))
-      {
-        val = v;
-        break;
-      }
-    }
-    
-    // rjf: create new value if needed
-    if(val == 0)
-    {
-      val = push_array(arena, D_CfgVal, 1);
-      val->string = push_str8_copy(arena, string);
-      val->insertion_stamp = table->insertion_stamp_counter;
-      SLLStackPush_N(slot->first, val, hash_next);
-      SLLQueuePush_N(table->first_val, table->last_val, val, linear_next);
-      table->insertion_stamp_counter += 1;
-    }
-    
-    // rjf: create new node within this value
-    D_CfgTree *tree = push_array(arena, D_CfgTree, 1);
-    SLLQueuePush_NZ(&d_nil_cfg_tree, val->first, val->last, tree, next);
-    tree->source = source;
-    tree->root   = md_tree_copy(arena, tln);
-  }
-}
-
-internal D_CfgVal *
-d_cfg_val_from_string(D_CfgTable *table, String8 string)
-{
-  D_CfgVal *result = &d_nil_cfg_val;
-  if(table->slot_count != 0)
-  {
-    U64 hash = d_hash_from_string__case_insensitive(string);
-    U64 slot_idx = hash % table->slot_count;
-    D_CfgSlot *slot = &table->slots[slot_idx];
-    for(D_CfgVal *val = slot->first; val != 0; val = val->hash_next)
-    {
-      if(str8_match(val->string, string, StringMatchFlag_CaseInsensitive))
-      {
-        result = val;
-        break;
-      }
-    }
-  }
-  return result;
-}
-
-////////////////////////////////
 //~ rjf: Debug Info Extraction Type Pure Functions
 
 internal D_LineList
@@ -271,7 +157,7 @@ d_line_list_copy(Arena *arena, D_LineList *list)
 }
 
 ////////////////////////////////
-//~ rjf: Command Type Pure Functions
+//~ rjf: Command Type Functions
 
 //- rjf: command parameters
 
