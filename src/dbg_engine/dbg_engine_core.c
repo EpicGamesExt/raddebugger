@@ -210,104 +210,6 @@ d_line_list_copy(Arena *arena, D_LineList *list)
 ////////////////////////////////
 //~ rjf: Command Type Pure Functions
 
-//- rjf: command parameter bundles
-
-#if 0 // TODO(rjf): @msgs
-internal D_CmdParams
-d_cmd_params_zero(void)
-{
-  D_CmdParams p = {0};
-  return p;
-}
-
-internal String8
-d_cmd_params_apply_spec_query(Arena *arena, D_CmdParams *params, D_CmdSpec *spec, String8 query)
-{
-  String8 error = {0};
-  switch(spec->info.query.slot)
-  {
-    default:
-    case D_CmdParamSlot_String:
-    {
-      params->string = push_str8_copy(arena, query);
-    }break;
-    case D_CmdParamSlot_FilePath:
-    {
-      String8TxtPtPair pair = str8_txt_pt_pair_from_string(query);
-      params->file_path = push_str8_copy(arena, pair.string);
-      params->text_point = pair.pt;
-    }break;
-    case D_CmdParamSlot_TextPoint:
-    {
-      U64 v = 0;
-      if(try_u64_from_str8_c_rules(query, &v))
-      {
-        params->text_point.column = 1;
-        params->text_point.line = v;
-      }
-      else
-      {
-        error = str8_lit("Couldn't interpret as a line number.");
-      }
-    }break;
-    case D_CmdParamSlot_VirtualAddr: goto use_numeric_eval;
-    case D_CmdParamSlot_VirtualOff: goto use_numeric_eval;
-    case D_CmdParamSlot_Index: goto use_numeric_eval;
-    case D_CmdParamSlot_ID: goto use_numeric_eval;
-    use_numeric_eval:
-    {
-      Temp scratch = scratch_begin(&arena, 1);
-      E_Eval eval = e_eval_from_string(scratch.arena, query);
-      if(eval.msgs.max_kind == E_MsgKind_Null)
-      {
-        E_TypeKind eval_type_kind = e_type_kind_from_key(e_type_unwrap(eval.type_key));
-        if(eval_type_kind == E_TypeKind_Ptr ||
-           eval_type_kind == E_TypeKind_LRef ||
-           eval_type_kind == E_TypeKind_RRef)
-        {
-          eval = e_value_eval_from_eval(eval);
-        }
-        U64 u64 = eval.value.u64;
-        switch(spec->info.query.slot)
-        {
-          default:{}break;
-          case D_CmdParamSlot_VirtualAddr:
-          {
-            params->vaddr = u64;
-          }break;
-          case D_CmdParamSlot_VirtualOff:
-          {
-            params->voff = u64;
-          }break;
-          case D_CmdParamSlot_Index:
-          {
-            params->index = u64;
-          }break;
-          case D_CmdParamSlot_UnwindIndex:
-          {
-            params->unwind_index = u64;
-          }break;
-          case D_CmdParamSlot_InlineDepth:
-          {
-            params->inline_depth = u64;
-          }break;
-          case D_CmdParamSlot_ID:
-          {
-            params->id = u64;
-          }break;
-        }
-      }
-      else
-      {
-        error = push_str8f(scratch.arena, "Couldn't evaluate \"%S\" as an address.", query);
-      }
-      scratch_end(scratch);
-    }break;
-  }
-  return error;
-}
-#endif
-
 //- rjf: command parameters
 
 internal D_CmdParams
@@ -1416,98 +1318,6 @@ d_entity_from_name_and_kind(String8 string, D_EntityKind kind)
 }
 
 ////////////////////////////////
-//~ rjf: Command Stateful Functions
-
-#if 0 // TODO(rjf): @msgs
-internal void
-d_register_cmd_specs(D_CmdSpecInfoArray specs)
-{
-  U64 registrar_idx = d_state->total_registrar_count;
-  d_state->total_registrar_count += 1;
-  for(U64 idx = 0; idx < specs.count; idx += 1)
-  {
-    // rjf: extract info from array slot
-    D_CmdSpecInfo *info = &specs.v[idx];
-    
-    // rjf: skip empties
-    if(info->string.size == 0)
-    {
-      continue;
-    }
-    
-    // rjf: determine hash/slot
-    U64 hash = d_hash_from_string(info->string);
-    U64 slot = hash % d_state->cmd_spec_table_size;
-    
-    // rjf: allocate node & push
-    D_CmdSpec *spec = push_array(d_state->arena, D_CmdSpec, 1);
-    SLLStackPush_N(d_state->cmd_spec_table[slot], spec, hash_next);
-    
-    // rjf: fill node
-    D_CmdSpecInfo *info_copy = &spec->info;
-    info_copy->string                 = push_str8_copy(d_state->arena, info->string);
-    info_copy->description            = push_str8_copy(d_state->arena, info->description);
-    info_copy->search_tags            = push_str8_copy(d_state->arena, info->search_tags);
-    info_copy->display_name           = push_str8_copy(d_state->arena, info->display_name);
-    info_copy->flags                  = info->flags;
-    info_copy->query                  = info->query;
-    spec->registrar_index = registrar_idx;
-    spec->ordering_index = idx;
-  }
-}
-
-internal D_CmdSpec *
-d_cmd_spec_from_string(String8 string)
-{
-  D_CmdSpec *result = &d_nil_cmd_spec;
-  {
-    U64 hash = d_hash_from_string(string);
-    U64 slot = hash%d_state->cmd_spec_table_size;
-    for(D_CmdSpec *n = d_state->cmd_spec_table[slot]; n != 0; n = n->hash_next)
-    {
-      if(str8_match(n->info.string, string, 0))
-      {
-        result = n;
-        break;
-      }
-    }
-  }
-  return result;
-}
-
-internal D_CmdSpec *
-d_cmd_spec_from_kind(D_CmdKind kind)
-{
-  String8 string = d_core_cmd_kind_spec_info_table[kind].string;
-  D_CmdSpec *result = d_cmd_spec_from_string(string);
-  return result;
-}
-
-internal void
-d_cmd_spec_counter_inc(D_CmdSpec *spec)
-{
-  if(!d_cmd_spec_is_nil(spec))
-  {
-    spec->run_count += 1;
-  }
-}
-
-internal D_CmdSpecList
-d_push_cmd_spec_list(Arena *arena)
-{
-  D_CmdSpecList list = {0};
-  for(U64 idx = 0; idx < d_state->cmd_spec_table_size; idx += 1)
-  {
-    for(D_CmdSpec *spec = d_state->cmd_spec_table[idx]; spec != 0; spec = spec->hash_next)
-    {
-      d_cmd_spec_list_push(arena, &list, spec);
-    }
-  }
-  return list;
-}
-#endif
-
-////////////////////////////////
 //~ rjf: View Rule Spec Stateful Functions
 
 internal void
@@ -2370,31 +2180,6 @@ d_lines_from_file_path_line_num(Arena *arena, String8 file_path, S64 line_num)
 ////////////////////////////////
 //~ rjf: Process/Thread/Module Info Lookups
 
-#if 0 // TODO(rjf): @msgs
-internal D_Entity *
-d_module_from_process_vaddr(D_Entity *process, U64 vaddr)
-{
-  D_Entity *module = &d_nil_entity;
-  for(D_Entity *child = process->first; !d_entity_is_nil(child); child = child->next)
-  {
-    if(child->kind == D_EntityKind_Module && contains_1u64(child->vaddr_rng, vaddr))
-    {
-      module = child;
-      break;
-    }
-  }
-  return module;
-}
-
-internal D_Entity *
-d_module_from_thread(D_Entity *thread)
-{
-  D_Entity *process = thread->parent;
-  U64 rip = d_query_cached_rip_from_thread(thread);
-  return d_module_from_process_vaddr(process, rip);
-}
-#endif
-
 internal U64
 d_tls_base_vaddr_from_process_root_rip(CTRL_Entity *process, U64 root_vaddr, U64 rip_vaddr)
 {
@@ -2478,14 +2263,6 @@ d_tls_base_vaddr_from_process_root_rip(CTRL_Entity *process, U64 root_vaddr, U64
   return base_vaddr;
 }
 
-#if 0 // TODO(rjf): @msgs
-internal Arch
-d_arch_from_entity(D_Entity *entity)
-{
-  return entity->arch;
-}
-#endif
-
 internal E_String2NumMap *
 d_push_locals_map_from_dbgi_key_voff(Arena *arena, DI_Scope *scope, DI_Key *dbgi_key, U64 voff)
 {
@@ -2501,30 +2278,6 @@ d_push_member_map_from_dbgi_key_voff(Arena *arena, DI_Scope *scope, DI_Key *dbgi
   E_String2NumMap *result = e_push_member_map_from_rdi_voff(arena, rdi, voff);
   return result;
 }
-
-#if 0 // TODO(rjf): @msgs
-internal D_Entity *
-d_module_from_thread_candidates(D_Entity *thread, D_EntityList *candidates)
-{
-  D_Entity *src_module = d_module_from_thread(thread);
-  D_Entity *module = &d_nil_entity;
-  D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
-  for(D_EntityNode *n = candidates->first; n != 0; n = n->next)
-  {
-    D_Entity *candidate_module = n->entity;
-    D_Entity *candidate_process = d_entity_ancestor_from_kind(candidate_module, D_EntityKind_Process);
-    if(candidate_process == process)
-    {
-      module = candidate_module;
-    }
-    if(candidate_module == src_module)
-    {
-      break;
-    }
-  }
-  return module;
-}
-#endif
 
 internal D_Unwind
 d_unwind_from_ctrl_unwind(Arena *arena, DI_Scope *di_scope, CTRL_Entity *process, CTRL_Unwind *base_unwind)

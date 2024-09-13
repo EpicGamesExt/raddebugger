@@ -809,12 +809,6 @@ internal D_LineList d_line_list_copy(Arena *arena, D_LineList *list);
 ////////////////////////////////
 //~ rjf: Command Type Pure Functions
 
-//- rjf: command parameter bundles
-#if 0 // TODO(rjf): @msgs
-internal D_CmdParams d_cmd_params_zero(void);
-internal String8 d_cmd_params_apply_spec_query(Arena *arena, D_CmdParams *params, D_CmdSpec *spec, String8 query);
-#endif
-
 //- rjf: command parameters
 internal D_CmdParams d_cmd_params_copy(Arena *arena, D_CmdParams *src);
 
@@ -926,17 +920,6 @@ internal D_Entity *d_entity_from_ctrl_id(CTRL_MachineID machine_id, U32 id);
 internal D_Entity *d_entity_from_name_and_kind(String8 string, D_EntityKind kind);
 
 ////////////////////////////////
-//~ rjf: Command Stateful Functions
-
-#if 0 // TODO(rjf): @msgs
-internal void d_register_cmd_specs(D_CmdSpecInfoArray specs);
-internal D_CmdSpec *d_cmd_spec_from_string(String8 string);
-internal D_CmdSpec *d_cmd_spec_from_kind(D_CmdKind kind);
-internal void d_cmd_spec_counter_inc(D_CmdSpec *spec);
-internal D_CmdSpecList d_push_cmd_spec_list(Arena *arena);
-#endif
-
-////////////////////////////////
 //~ rjf: View Rule Spec Stateful Functions
 
 internal void d_register_view_rule_specs(D_ViewRuleSpecInfoArray specs);
@@ -970,19 +953,9 @@ internal D_LineList d_lines_from_file_path_line_num(Arena *arena, String8 file_p
 ////////////////////////////////
 //~ rjf: Process/Thread/Module Info Lookups
 
-#if 0 // TODO(rjf): @msgs
-internal D_Entity *d_module_from_process_vaddr(D_Entity *process, U64 vaddr);
-internal D_Entity *d_module_from_thread(D_Entity *thread);
-#endif
 internal U64 d_tls_base_vaddr_from_process_root_rip(CTRL_Entity *process, U64 root_vaddr, U64 rip_vaddr);
-#if 0 // TODO(rjf): @msgs
-internal Arch d_arch_from_entity(D_Entity *entity);
-#endif
 internal E_String2NumMap *d_push_locals_map_from_dbgi_key_voff(Arena *arena, DI_Scope *scope, DI_Key *dbgi_key, U64 voff);
 internal E_String2NumMap *d_push_member_map_from_dbgi_key_voff(Arena *arena, DI_Scope *scope, DI_Key *dbgi_key, U64 voff);
-#if 0 // TODO(rjf): @msgs
-internal D_Entity *d_module_from_thread_candidates(D_Entity *thread, D_EntityList *candidates);
-#endif
 internal D_Unwind d_unwind_from_ctrl_unwind(Arena *arena, DI_Scope *di_scope, CTRL_Entity *process, CTRL_Unwind *base_unwind);
 
 ////////////////////////////////
