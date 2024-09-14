@@ -198,6 +198,21 @@ md_push_node(Arena *arena, MD_NodeKind kind, MD_NodeFlags flags, String8 string,
 }
 
 internal void
+md_node_insert_child(MD_Node *parent, MD_Node *prev_child, MD_Node *node)
+{
+  node->parent = parent;
+  DLLInsert_NPZ(&md_nil_node, parent->first, parent->last, prev_child, node, next, prev);
+}
+
+internal void
+md_node_insert_tag(MD_Node *parent, MD_Node *prev_child, MD_Node *node)
+{
+  node->kind = MD_NodeKind_Tag;
+  node->parent = parent;
+  DLLInsert_NPZ(&md_nil_node, parent->first_tag, parent->last_tag, prev_child, node, next, prev);
+}
+
+internal void
 md_node_push_child(MD_Node *parent, MD_Node *node)
 {
   node->parent = parent;
@@ -207,8 +222,27 @@ md_node_push_child(MD_Node *parent, MD_Node *node)
 internal void
 md_node_push_tag(MD_Node *parent, MD_Node *node)
 {
+  node->kind = MD_NodeKind_Tag;
   node->parent = parent;
   DLLPushBack_NPZ(&md_nil_node, parent->first_tag, parent->last_tag, node, next, prev);
+}
+
+internal void
+md_unhook(MD_Node *node)
+{
+  MD_Node *parent = node->parent;
+  if(!md_node_is_nil(parent))
+  {
+    if(node->kind == MD_NodeKind_Tag)
+    {
+      DLLRemove_NPZ(&md_nil_node, parent->first_tag, parent->last_tag, node, next, prev);
+    }
+    else
+    {
+      DLLRemove_NPZ(&md_nil_node, parent->first, parent->last, node, next, prev);
+    }
+    node->parent = &md_nil_node;
+  }
 }
 
 //- rjf: tree introspection
