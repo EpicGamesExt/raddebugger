@@ -4661,11 +4661,7 @@ struct RD_TargetViewState
   F32 value_pct;
 };
 
-RD_VIEW_SETUP_FUNCTION_DEF(target)
-{
-  RD_TargetViewState *tv = rd_view_user_state(view, RD_TargetViewState);
-}
-
+RD_VIEW_SETUP_FUNCTION_DEF(target){}
 RD_VIEW_CMD_FUNCTION_DEF(target)
 {
   RD_TargetViewState *tv = rd_view_user_state(view, RD_TargetViewState);
@@ -5474,41 +5470,41 @@ RD_VIEW_UI_FUNCTION_DEF(auto_view_rules){}
 ////////////////////////////////
 //~ rjf: breakpoints @view_hook_impl
 
-RD_VIEW_SETUP_FUNCTION_DEF(breakpoints)
-{
-  RD_WatchViewState *wv = rd_view_user_state(view, RD_WatchViewState);
-  rd_watch_view_init(wv, view, RD_WatchViewFillKind_Breakpoints);
-  rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member, 0.25f, .string = str8_lit("label"),     .display_string = str8_lit("Label"), .dequote_string = 1, .is_non_code = 1);
-  rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member, 0.35f, .string = str8_lit("location"),  .display_string = str8_lit("Location"), .dequote_string = 1, .is_non_code = 1);
-  rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member, 0.20f, .string = str8_lit("condition"), .display_string = str8_lit("Condition"), .dequote_string = 1);
-  rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member, 0.10f, .string = str8_lit("enabled"),   .display_string = str8_lit("Enabled"), .view_rule = str8_lit("checkbox"));
-  rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member, 0.10f, .string = str8_lit("hit_count"), .display_string = str8_lit("Hit Count"));
-}
+RD_VIEW_SETUP_FUNCTION_DEF(breakpoints){}
 RD_VIEW_CMD_FUNCTION_DEF(breakpoints){}
 RD_VIEW_UI_FUNCTION_DEF(breakpoints)
 {
   ProfBeginFunction();
-  RD_WatchViewState *ewv = rd_view_user_state(view, RD_WatchViewState);
-  rd_watch_view_build(view, ewv, 0, 10, rect);
+  RD_WatchViewState *wv = rd_view_user_state(view, RD_WatchViewState);
+  if(!wv->initialized)
+  {
+    rd_watch_view_init(wv, view, RD_WatchViewFillKind_Breakpoints);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member, 0.25f, .string = str8_lit("label"),     .display_string = str8_lit("Label"), .dequote_string = 1, .is_non_code = 1);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member, 0.35f, .string = str8_lit("location"),  .display_string = str8_lit("Location"), .dequote_string = 1, .is_non_code = 1);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member, 0.20f, .string = str8_lit("condition"), .display_string = str8_lit("Condition"), .dequote_string = 1);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member, 0.10f, .string = str8_lit("enabled"),   .display_string = str8_lit("Enabled"), .view_rule = str8_lit("checkbox"));
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member, 0.10f, .string = str8_lit("hit_count"), .display_string = str8_lit("Hit Count"));
+  }
+  rd_watch_view_build(view, wv, 0, 10, rect);
   ProfEnd();
 }
 
 ////////////////////////////////
 //~ rjf: watch_pins @view_hook_impl
 
-RD_VIEW_SETUP_FUNCTION_DEF(watch_pins)
-{
-  RD_WatchViewState *wv = rd_view_user_state(view, RD_WatchViewState);
-  rd_watch_view_init(wv, view, RD_WatchViewFillKind_WatchPins);
-  rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member, 0.5f, .string = str8_lit("Label"), .dequote_string = 1, .is_non_code = 1);
-  rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member, 0.5f, .string = str8_lit("Location"), .dequote_string = 1, .is_non_code = 1);
-}
+RD_VIEW_SETUP_FUNCTION_DEF(watch_pins){}
 RD_VIEW_CMD_FUNCTION_DEF(watch_pins){}
 RD_VIEW_UI_FUNCTION_DEF(watch_pins)
 {
   ProfBeginFunction();
-  RD_WatchViewState *ewv = rd_view_user_state(view, RD_WatchViewState);
-  rd_watch_view_build(view, ewv, 0, 10, rect);
+  RD_WatchViewState *wv = rd_view_user_state(view, RD_WatchViewState);
+  if(!wv->initialized)
+  {
+    rd_watch_view_init(wv, view, RD_WatchViewFillKind_WatchPins);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member, 0.5f, .string = str8_lit("Label"), .dequote_string = 1, .is_non_code = 1);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member, 0.5f, .string = str8_lit("Location"), .dequote_string = 1, .is_non_code = 1);
+  }
+  rd_watch_view_build(view, wv, 0, 10, rect);
   ProfEnd();
 }
 
@@ -5739,19 +5735,19 @@ RD_VIEW_UI_FUNCTION_DEF(scheduler)
 ////////////////////////////////
 //~ rjf: call_stack @view_hook_impl
 
-RD_VIEW_SETUP_FUNCTION_DEF(call_stack)
-{
-  RD_WatchViewState *wv = rd_view_user_state(view, RD_WatchViewState);
-  rd_watch_view_init(wv, view, RD_WatchViewFillKind_CallStack);
-  rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_FrameSelection,  0.05f);
-  rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,  0.7f);
-  rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Module, 0.25f, .is_non_code = 1);
-}
+RD_VIEW_SETUP_FUNCTION_DEF(call_stack){}
 RD_VIEW_CMD_FUNCTION_DEF(call_stack){}
 RD_VIEW_UI_FUNCTION_DEF(call_stack)
 {
   ProfBeginFunction();
   RD_WatchViewState *wv = rd_view_user_state(view, RD_WatchViewState);
+  if(!wv->initialized)
+  {
+    rd_watch_view_init(wv, view, RD_WatchViewFillKind_CallStack);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_FrameSelection,  0.05f);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,  0.7f);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Module, 0.25f, .is_non_code = 1);
+  }
   rd_watch_view_build(view, wv, 0, 10, rect);
   ProfEnd();
 }
@@ -6103,41 +6099,41 @@ RD_VIEW_UI_FUNCTION_DEF(modules)
 ////////////////////////////////
 //~ rjf: watch @view_hook_impl
 
-RD_VIEW_SETUP_FUNCTION_DEF(watch)
-{
-  RD_WatchViewState *wv = rd_view_user_state(view, RD_WatchViewState);
-  rd_watch_view_init(wv, view, RD_WatchViewFillKind_Watch);
-  rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Expr,      0.25f);
-  rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,     0.3f);
-  rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Type,      0.15f);
-  rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_ViewRule,  0.30f);
-}
+RD_VIEW_SETUP_FUNCTION_DEF(watch){}
 RD_VIEW_CMD_FUNCTION_DEF(watch){}
 RD_VIEW_UI_FUNCTION_DEF(watch)
 {
   ProfBeginFunction();
-  RD_WatchViewState *ewv = rd_view_user_state(view, RD_WatchViewState);
-  rd_watch_view_build(view, ewv, 1*(view->query_string_size == 0), 10, rect);
+  RD_WatchViewState *wv = rd_view_user_state(view, RD_WatchViewState);
+  if(!wv->initialized)
+  {
+    rd_watch_view_init(wv, view, RD_WatchViewFillKind_Watch);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Expr,      0.25f);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,     0.3f);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Type,      0.15f);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_ViewRule,  0.30f);
+  }
+  rd_watch_view_build(view, wv, 1*(view->query_string_size == 0), 10, rect);
   ProfEnd();
 }
 
 ////////////////////////////////
 //~ rjf: locals @view_hook_impl
 
-RD_VIEW_SETUP_FUNCTION_DEF(locals)
-{
-  RD_WatchViewState *wv = rd_view_user_state(view, RD_WatchViewState);
-  rd_watch_view_init(wv, view, RD_WatchViewFillKind_Locals);
-  rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Expr,      0.25f);
-  rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,     0.3f);
-  rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Type,      0.15f);
-  rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_ViewRule,  0.30f);
-}
-RD_VIEW_CMD_FUNCTION_DEF(locals) {}
+RD_VIEW_SETUP_FUNCTION_DEF(locals){}
+RD_VIEW_CMD_FUNCTION_DEF(locals){}
 RD_VIEW_UI_FUNCTION_DEF(locals)
 {
   ProfBeginFunction();
   RD_WatchViewState *wv = rd_view_user_state(view, RD_WatchViewState);
+  if(!wv->initialized)
+  {
+    rd_watch_view_init(wv, view, RD_WatchViewFillKind_Locals);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Expr,      0.25f);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,     0.3f);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Type,      0.15f);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_ViewRule,  0.30f);
+  }
   rd_watch_view_build(view, wv, 0, 10, rect);
   ProfEnd();
 }
@@ -6145,20 +6141,20 @@ RD_VIEW_UI_FUNCTION_DEF(locals)
 ////////////////////////////////
 //~ rjf: registers @view_hook_impl
 
-RD_VIEW_SETUP_FUNCTION_DEF(registers)
-{
-  RD_WatchViewState *wv = rd_view_user_state(view, RD_WatchViewState);
-  rd_watch_view_init(wv, view, RD_WatchViewFillKind_Registers);
-  rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Expr,      0.25f);
-  rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,     0.3f);
-  rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Type,      0.15f);
-  rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_ViewRule,  0.30f);
-}
-RD_VIEW_CMD_FUNCTION_DEF(registers) {}
+RD_VIEW_SETUP_FUNCTION_DEF(registers){}
+RD_VIEW_CMD_FUNCTION_DEF(registers){}
 RD_VIEW_UI_FUNCTION_DEF(registers)
 {
   ProfBeginFunction();
   RD_WatchViewState *wv = rd_view_user_state(view, RD_WatchViewState);
+  if(!wv->initialized)
+  {
+    rd_watch_view_init(wv, view, RD_WatchViewFillKind_Registers);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Expr,      0.25f);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,     0.3f);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Type,      0.15f);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_ViewRule,  0.30f);
+  }
   rd_watch_view_build(view, wv, 0, 16, rect);
   ProfEnd();
 }
@@ -6166,83 +6162,83 @@ RD_VIEW_UI_FUNCTION_DEF(registers)
 ////////////////////////////////
 //~ rjf: globals @view_hook_impl
 
-RD_VIEW_SETUP_FUNCTION_DEF(globals)
-{
-  RD_WatchViewState *wv = rd_view_user_state(view, RD_WatchViewState);
-  rd_watch_view_init(wv, view, RD_WatchViewFillKind_Globals);
-  rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Expr,      0.25f);
-  rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,     0.3f);
-  rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Type,      0.15f);
-  rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_ViewRule,  0.30f);
-}
-RD_VIEW_CMD_FUNCTION_DEF(globals) {}
+RD_VIEW_SETUP_FUNCTION_DEF(globals){}
+RD_VIEW_CMD_FUNCTION_DEF(globals){}
 RD_VIEW_UI_FUNCTION_DEF(globals)
 {
   ProfBeginFunction();
-  RD_WatchViewState *ewv = rd_view_user_state(view, RD_WatchViewState);
-  rd_watch_view_build(view, ewv, 0, 10, rect);
+  RD_WatchViewState *wv = rd_view_user_state(view, RD_WatchViewState);
+  if(!wv->initialized)
+  {
+    rd_watch_view_init(wv, view, RD_WatchViewFillKind_Globals);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Expr,      0.25f);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,     0.3f);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Type,      0.15f);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_ViewRule,  0.30f);
+  }
+  rd_watch_view_build(view, wv, 0, 10, rect);
   ProfEnd();
 }
 
 ////////////////////////////////
 //~ rjf: thread_locals @view_hook_impl
 
-RD_VIEW_SETUP_FUNCTION_DEF(thread_locals)
-{
-  RD_WatchViewState *wv = rd_view_user_state(view, RD_WatchViewState);
-  rd_watch_view_init(wv, view, RD_WatchViewFillKind_ThreadLocals);
-  rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Expr,      0.25f);
-  rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,     0.3f);
-  rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Type,      0.15f);
-  rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_ViewRule,  0.30f);
-}
-RD_VIEW_CMD_FUNCTION_DEF(thread_locals) {}
+RD_VIEW_SETUP_FUNCTION_DEF(thread_locals){}
+RD_VIEW_CMD_FUNCTION_DEF(thread_locals){}
 RD_VIEW_UI_FUNCTION_DEF(thread_locals)
 {
   ProfBeginFunction();
-  RD_WatchViewState *ewv = rd_view_user_state(view, RD_WatchViewState);
-  rd_watch_view_build(view, ewv, 0, 10, rect);
+  RD_WatchViewState *wv = rd_view_user_state(view, RD_WatchViewState);
+  if(!wv->initialized)
+  {
+    rd_watch_view_init(wv, view, RD_WatchViewFillKind_ThreadLocals);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Expr,      0.25f);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,     0.3f);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Type,      0.15f);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_ViewRule,  0.30f);
+  }
+  rd_watch_view_build(view, wv, 0, 10, rect);
   ProfEnd();
 }
 
 ////////////////////////////////
 //~ rjf: types @view_hook_impl
 
-RD_VIEW_SETUP_FUNCTION_DEF(types)
-{
-  RD_WatchViewState *wv = rd_view_user_state(view, RD_WatchViewState);
-  rd_watch_view_init(wv, view, RD_WatchViewFillKind_Types);
-  rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Expr,      0.25f);
-  rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,     0.3f);
-  rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Type,      0.15f);
-  rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_ViewRule,  0.30f);
-}
-RD_VIEW_CMD_FUNCTION_DEF(types) {}
+RD_VIEW_SETUP_FUNCTION_DEF(types){}
+RD_VIEW_CMD_FUNCTION_DEF(types){}
 RD_VIEW_UI_FUNCTION_DEF(types)
 {
   ProfBeginFunction();
-  RD_WatchViewState *ewv = rd_view_user_state(view, RD_WatchViewState);
-  rd_watch_view_build(view, ewv, 0, 10, rect);
+  RD_WatchViewState *wv = rd_view_user_state(view, RD_WatchViewState);
+  if(!wv->initialized)
+  {
+    rd_watch_view_init(wv, view, RD_WatchViewFillKind_Types);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Expr,      0.25f);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,     0.3f);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Type,      0.15f);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_ViewRule,  0.30f);
+  }
+  rd_watch_view_build(view, wv, 0, 10, rect);
   ProfEnd();
 }
 
 ////////////////////////////////
 //~ rjf: procedures @view_hook_impl
 
-RD_VIEW_SETUP_FUNCTION_DEF(procedures)
-{
-  RD_WatchViewState *wv = rd_view_user_state(view, RD_WatchViewState);
-  rd_watch_view_init(wv, view, RD_WatchViewFillKind_Procedures);
-  rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Expr,      0.2f);
-  rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,     0.6f);
-  rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_ViewRule,  0.2f);
-}
-RD_VIEW_CMD_FUNCTION_DEF(procedures) {}
+RD_VIEW_SETUP_FUNCTION_DEF(procedures){}
+RD_VIEW_CMD_FUNCTION_DEF(procedures){}
 RD_VIEW_UI_FUNCTION_DEF(procedures)
 {
   ProfBeginFunction();
-  RD_WatchViewState *ewv = rd_view_user_state(view, RD_WatchViewState);
-  rd_watch_view_build(view, ewv, 0, 10, rect);
+  RD_WatchViewState *wv = rd_view_user_state(view, RD_WatchViewState);
+  if(!wv->initialized)
+  {
+    rd_watch_view_init(wv, view, RD_WatchViewFillKind_Procedures);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Expr,      0.2f);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,     0.6f);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_ViewRule,  0.2f);
+  }
+  rd_watch_view_build(view, wv, 0, 10, rect);
   ProfEnd();
 }
 
@@ -7058,10 +7054,7 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(memory)
   ev_block_end(out, vb);
 }
 
-RD_VIEW_SETUP_FUNCTION_DEF(memory)
-{
-  RD_MemoryViewState *mv = rd_view_user_state(view, RD_MemoryViewState);
-}
+RD_VIEW_SETUP_FUNCTION_DEF(memory){}
 
 RD_VIEW_CMD_FUNCTION_DEF(memory)
 {
