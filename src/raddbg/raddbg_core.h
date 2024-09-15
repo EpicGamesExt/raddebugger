@@ -943,8 +943,9 @@ struct RD_State
   F32 seconds_until_autosave;
   
   // rjf: commands
-  Arena *cmds_arena;
-  RD_CmdList cmds;
+  Arena *cmds_arenas[2];
+  RD_CmdList cmds[2];
+  U64 cmds_gen;
   
   // rjf: popup state
   UI_Key popup_key;

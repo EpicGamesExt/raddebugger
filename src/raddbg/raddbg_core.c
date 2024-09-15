@@ -1729,7 +1729,20 @@ rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
   {
     case E_SpaceKind_FileSystem:
     {
-      
+      U128 key = space.u128;
+      U128 hash = hs_hash_from_key(key, 0);
+      HS_Scope *scope = hs_scope_open();
+      {
+        String8 data = hs_data_from_hash(scope, hash);
+        Rng1U64 legal_range = r1u64(0, data.size);
+        Rng1U64 read_range = intersect_1u64(range, legal_range);
+        if(read_range.min < read_range.max)
+        {
+          result = 1;
+          MemoryCopy(out, data.str + read_range.min, dim_1u64(read_range));
+        }
+      }
+      hs_scope_close(scope);
     }break;
     case RD_EvalSpaceKind_CtrlEntity:
     {
@@ -1904,6 +1917,13 @@ internal U128
 rd_key_from_eval_space_range(E_Space space, Rng1U64 range, B32 zero_terminated)
 {
   U128 result = {0};
+  switch(space.kind)
+  {
+    case E_SpaceKind_FileSystem:
+    {
+      result = space.u128;
+    }break;
+  }
 #if 0 // TODO(rjf):  @msgs
   RD_Entity *entity = rd_entity_from_eval_space(space);
   switch(entity->kind)
@@ -9434,7 +9454,7 @@ rd_cmd_kind_info_from_string(String8 string)
 internal void
 rd_push_cmd(String8 name, RD_Regs *regs)
 {
-  rd_cmd_list_push_new(rd_state->cmds_arena, &rd_state->cmds, name, regs);
+  rd_cmd_list_push_new(rd_state->cmds_arenas[0], &rd_state->cmds[0], name, regs);
 }
 
 //- rjf: iterating
@@ -9442,7 +9462,8 @@ rd_push_cmd(String8 name, RD_Regs *regs)
 internal B32
 rd_next_cmd(RD_Cmd **cmd)
 {
-  RD_CmdNode *start_node = rd_state->cmds.first;
+  U64 slot = rd_state->cmds_gen%ArrayCount(rd_state->cmds);
+  RD_CmdNode *start_node = rd_state->cmds[slot].first;
   if(cmd[0] != 0)
   {
     start_node = CastFromMember(RD_CmdNode, cmd, cmd[0]);
@@ -9490,7 +9511,10 @@ rd_init(CmdLine *cmdln)
   }
   rd_state->num_frames_requested = 2;
   rd_state->seconds_until_autosave = 0.5f;
-  rd_state->cmds_arena = arena_alloc();
+  for(U64 idx = 0; idx < ArrayCount(rd_state->cmds_arenas); idx += 1)
+  {
+    rd_state->cmds_arenas[idx] = arena_alloc();
+  }
   rd_state->entities_arena = arena_alloc(.reserve_size = GB(64), .commit_size = KB(64));
   rd_state->entities_root = &d_nil_entity;
   rd_state->entities_base = push_array(rd_state->entities_arena, RD_Entity, 0);
@@ -10122,6 +10146,7 @@ rd_frame(void)
   //- rjf: process top-level graphical commands
   //
   B32 panel_reset_done = 0;
+  if(depth == 0)
   {
     for(RD_Cmd *cmd = 0; rd_next_cmd(&cmd);) RD_RegsScope()
     {
@@ -14044,11 +14069,51 @@ rd_frame(void)
   }
   
   //////////////////////////////
-  //- rjf: clear commands
+  //- rjf: rotate command slots, bump command gen counter
   //
+  // in this step, we rotate the ring buffer of command batches (command
+  // arenas & lists). when the cmds_gen (the position of the ring buffer)
+  // is even, the command queue is in a "read/write" mode, and this is uniquely
+  // usable by the core - this is done so that commands in the core can push
+  // other commands, and have those other commands processed on the same frame.
+  //
+  // in view code, however, they can only use the current command queue in a
+  // "read only" mode, because new commands pushed by those views must be
+  // processed first by the core. so, before calling into view code, the
+  // cmds_gen is incremented to be *odd*. this way, the views will *write*
+  // commands into the 0 slot, but *read* from the 1 slot (which will contain
+  // this frame's commands).
+  //
+  // after view code runs, the generation number is incremented back to even.
+  // the commands pushed by the view will be in the queue, and the core can
+  // treat that queue as r/w again.
+  //
+  if(depth == 0)
   {
-    arena_clear(rd_state->cmds_arena);
-    MemoryZeroStruct(&rd_state->cmds);
+    // rjf: rotate
+    {
+      Arena *first_arena = rd_state->cmds_arenas[0];
+      RD_CmdList first_cmds = rd_state->cmds[0];
+      MemoryCopy(rd_state->cmds_arenas,
+                 rd_state->cmds_arenas+1,
+                 sizeof(rd_state->cmds_arenas[0])*(ArrayCount(rd_state->cmds_arenas)-1));
+      MemoryCopy(rd_state->cmds,
+                 rd_state->cmds+1,
+                 sizeof(rd_state->cmds[0])*(ArrayCount(rd_state->cmds)-1));
+      rd_state->cmds_arenas[ArrayCount(rd_state->cmds_arenas)-1] = first_arena;
+      rd_state->cmds[ArrayCount(rd_state->cmds_arenas)-1] = first_cmds;
+    }
+    
+    // rjf: clear next batch
+    {
+      arena_clear(rd_state->cmds_arenas[0]);
+      MemoryZeroStruct(&rd_state->cmds[0]);
+    }
+    
+    // rjf: bump
+    {
+      rd_state->cmds_gen += 1;
+    }
   }
   
   //////////////////////////////
@@ -14423,6 +14488,14 @@ rd_frame(void)
   //
   rd_state->frame_index += 1;
   rd_state->time_in_seconds += rd_state->frame_dt;
+  
+  //////////////////////////////
+  //- rjf: bump command batch ring buffer generation
+  //
+  if(depth == 0)
+  {
+    rd_state->cmds_gen += 1;
+  }
   
   //////////////////////////////
   //- rjf: collect logs

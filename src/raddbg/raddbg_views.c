@@ -21,6 +21,36 @@ rd_code_view_init(RD_CodeViewState *cv, RD_View *view)
 internal void
 rd_code_view_cmds(RD_View *view, RD_CodeViewState *cv, String8 text_data, TXT_TextInfo *text_info, DASM_LineArray *dasm_lines, Rng1U64 dasm_vaddr_range, DI_Key dasm_dbgi_key)
 {
+  
+}
+
+internal RD_CodeViewBuildResult
+rd_code_view_build(Arena *arena, RD_View *view, RD_CodeViewState *cv, RD_CodeViewBuildFlags flags, Rng2F32 rect, String8 text_data, TXT_TextInfo *text_info, DASM_LineArray *dasm_lines, Rng1U64 dasm_vaddr_range, DI_Key dasm_dbgi_key)
+{
+  ProfBeginFunction();
+  Temp scratch = scratch_begin(&arena, 1);
+  HS_Scope *hs_scope = hs_scope_open();
+  TXT_Scope *txt_scope = txt_scope_open();
+  
+  //////////////////////////////
+  //- rjf: extract invariants
+  //
+  FNT_Tag code_font = rd_font_from_slot(RD_FontSlot_Code);
+  F32 code_font_size = rd_font_size_from_slot(RD_FontSlot_Code);
+  F32 code_tab_size = fnt_column_size_from_tag_size(code_font, code_font_size)*rd_setting_val_from_code(RD_SettingCode_TabWidth).s32;
+  FNT_Metrics code_font_metrics = fnt_metrics_from_tag_size(code_font, code_font_size);
+  F32 code_line_height = ceil_f32(fnt_line_height_from_metrics(&code_font_metrics) * 1.5f);
+  F32 big_glyph_advance = fnt_dim_from_tag_size_string(code_font, code_font_size, 0, 0, str8_lit("H")).x;
+  Vec2F32 panel_box_dim = dim_2f32(rect);
+  F32 scroll_bar_dim = floor_f32(ui_top_font_size()*1.5f);
+  Vec2F32 code_area_dim = v2f32(panel_box_dim.x - scroll_bar_dim, panel_box_dim.y - scroll_bar_dim);
+  S64 num_possible_visible_lines = (S64)(code_area_dim.y/code_line_height)+1;
+  CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->thread);
+  CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, CTRL_EntityKind_Process);
+  
+  //////////////////////////////
+  //- rjf: process commands
+  //
   for(RD_Cmd *cmd = 0; rd_next_cmd(&cmd);)
   {
     // rjf: mismatched window/panel => skip
@@ -63,31 +93,6 @@ rd_code_view_cmds(RD_View *view, RD_CodeViewState *cv, String8 text_data, TXT_Te
       }break;
     }
   }
-}
-
-internal RD_CodeViewBuildResult
-rd_code_view_build(Arena *arena, RD_View *view, RD_CodeViewState *cv, RD_CodeViewBuildFlags flags, Rng2F32 rect, String8 text_data, TXT_TextInfo *text_info, DASM_LineArray *dasm_lines, Rng1U64 dasm_vaddr_range, DI_Key dasm_dbgi_key)
-{
-  ProfBeginFunction();
-  Temp scratch = scratch_begin(&arena, 1);
-  HS_Scope *hs_scope = hs_scope_open();
-  TXT_Scope *txt_scope = txt_scope_open();
-  
-  //////////////////////////////
-  //- rjf: extract invariants
-  //
-  FNT_Tag code_font = rd_font_from_slot(RD_FontSlot_Code);
-  F32 code_font_size = rd_font_size_from_slot(RD_FontSlot_Code);
-  F32 code_tab_size = fnt_column_size_from_tag_size(code_font, code_font_size)*rd_setting_val_from_code(RD_SettingCode_TabWidth).s32;
-  FNT_Metrics code_font_metrics = fnt_metrics_from_tag_size(code_font, code_font_size);
-  F32 code_line_height = ceil_f32(fnt_line_height_from_metrics(&code_font_metrics) * 1.5f);
-  F32 big_glyph_advance = fnt_dim_from_tag_size_string(code_font, code_font_size, 0, 0, str8_lit("H")).x;
-  Vec2F32 panel_box_dim = dim_2f32(rect);
-  F32 scroll_bar_dim = floor_f32(ui_top_font_size()*1.5f);
-  Vec2F32 code_area_dim = v2f32(panel_box_dim.x - scroll_bar_dim, panel_box_dim.y - scroll_bar_dim);
-  S64 num_possible_visible_lines = (S64)(code_area_dim.y/code_line_height)+1;
-  CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->thread);
-  CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, CTRL_EntityKind_Process);
   
   //////////////////////////////
   //- rjf: determine visible line range / count
