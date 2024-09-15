@@ -1939,7 +1939,11 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
       for(CTRL_EntityNode *n = threads.first; n != 0; n = n->next)
       {
         CTRL_Entity *thread = n->v;
-        str8_list_push(scratch.arena, &strings, str8_struct(&thread->is_frozen));
+        if(thread->is_frozen)
+        {
+          str8_list_push(scratch.arena, &strings, str8_struct(&thread->id));
+          str8_list_push(scratch.arena, &strings, str8_struct(&thread->is_frozen));
+        }
       }
       for(U64 idx = 0; idx < breakpoints->count; idx += 1)
       {
