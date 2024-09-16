@@ -566,7 +566,7 @@ rd_code_view_build(Arena *arena, RD_View *view, RD_CodeViewState *cv, RD_CodeVie
     }
     
     //- rjf: ctrl+pressed? -> go to name
-    if(ui_pressed(sig.base) && sig.base.event_flags & OS_EventFlag_Ctrl)
+    if(ui_pressed(sig.base) && sig.base.event_flags & OS_Modifier_Ctrl)
     {
       ui_kill_action();
       rd_cmd(RD_CmdKind_GoToName, .string = txt_string_from_info_data_txt_rng(text_info, text_data, sig.mouse_expr_rng));
@@ -716,7 +716,7 @@ rd_code_view_build(Arena *arena, RD_View *view, RD_CodeViewState *cv, RD_CodeVie
     {
       for(UI_Event *evt = 0; ui_next_event(&evt);)
       {
-        if(evt->kind == UI_EventKind_Scroll && evt->modifiers & OS_EventFlag_Ctrl)
+        if(evt->kind == UI_EventKind_Scroll && evt->modifiers & OS_Modifier_Ctrl)
         {
           ui_eat_event(evt);
           if(evt->delta_2f32.y < 0)
@@ -1567,22 +1567,22 @@ rd_watch_view_build(RD_View *view, RD_WatchViewState *ewv, B32 modifiable, U32 d
             B32 is_expanded = ev_expansion_from_key(eval_view, row->key);
             ev_key_set_expansion(eval_view, row->parent_key, row->key, !is_expanded);
           }
-          RD_ViewRuleSpec *block_ui_rule_spec = &rd_nil_view_rule_spec;
-          MD_Node *block_ui_rule_root = &md_nil_node;
+          RD_ViewRuleInfo *view_rule_info = &rd_nil_view_rule_info;
+          MD_Node *view_rule_params_root = &md_nil_node;
           for(EV_ViewRuleNode *n = row->view_rules->first; n != 0; n = n->next)
           {
-            RD_ViewRuleSpec *spec = rd_view_rule_spec_from_string(n->v.root->string);
-            if(spec->info.flags & RD_ViewRuleSpecInfoFlag_ViewUI)
+            RD_ViewRuleInfo *info = rd_view_rule_info_from_string(n->v.root->string);
+            if(info->ui != 0)
             {
-              block_ui_rule_spec = spec;
-              block_ui_rule_root = n->v.root;
+              view_rule_info = info;
+              view_rule_params_root = n->v.root;
             }
           }
-          if(block_ui_rule_spec != &rd_nil_view_rule_spec)
+          if(view_rule_info != &rd_nil_view_rule_info)
           {
             rd_cmd(RD_CmdKind_OpenTab,
                    .string      = e_string_from_expr(scratch.arena, row->expr),
-                   .params_tree = block_ui_rule_root);
+                   .params_tree = view_rule_params_root);
           }
         }
       }
@@ -2170,22 +2170,15 @@ rd_watch_view_build(RD_View *view, RD_WatchViewState *ewv, B32 modifiable, U32 d
         B32 row_is_expandable = ev_row_is_expandable(row);
         B32 row_is_editable = ev_row_is_editable(row);
         B32 next_row_expanded = row_expanded;
-        RD_ViewRuleSpec *value_ui_rule_spec = &rd_nil_view_rule_spec;
-        MD_Node *value_ui_rule_root = &md_nil_node;
-        RD_ViewRuleSpec *block_ui_rule_spec = &rd_nil_view_rule_spec;
-        MD_Node *block_ui_rule_root = &md_nil_node;
+        RD_ViewRuleInfo *ui_view_rule_info = &rd_nil_view_rule_info;
+        MD_Node *ui_view_rule_params_root = &md_nil_node;
         for(EV_ViewRuleNode *n = row->view_rules->first; n != 0; n = n->next)
         {
-          RD_ViewRuleSpec *spec = rd_view_rule_spec_from_string(n->v.root->string);
-          if(spec->info.flags & RD_ViewRuleSpecInfoFlag_RowUI)
+          RD_ViewRuleInfo *info = rd_view_rule_info_from_string(n->v.root->string);
+          if(info->ui != 0)
           {
-            value_ui_rule_spec = spec;
-            value_ui_rule_root = n->v.root;
-          }
-          if(spec->info.flags & RD_ViewRuleSpecInfoFlag_ViewUI)
-          {
-            block_ui_rule_spec = spec;
-            block_ui_rule_root = n->v.root;
+            ui_view_rule_info = info;
+            ui_view_rule_params_root = n->v.root;
           }
         }
         
@@ -2245,8 +2238,8 @@ rd_watch_view_build(RD_View *view, RD_WatchViewState *ewv, B32 modifiable, U32 d
         UI_Box *row_box = ui_build_box_from_stringf(row_flags|
                                                     UI_BoxFlag_DrawSideBottom|
                                                     UI_BoxFlag_Clickable|
-                                                    ((block_ui_rule_spec == &rd_nil_view_rule_spec) * UI_BoxFlag_DisableFocusOverlay)|
-                                                    ((block_ui_rule_spec != &rd_nil_view_rule_spec) * UI_BoxFlag_Clip),
+                                                    ((ui_view_rule_info == &rd_nil_view_rule_info) * UI_BoxFlag_DisableFocusOverlay)|
+                                                    ((ui_view_rule_info != &rd_nil_view_rule_info) * UI_BoxFlag_Clip),
                                                     "row_%I64x", row_hash);
         ui_ts_vector_idx += 1;
         ui_ts_cell_idx = 0;
@@ -2254,25 +2247,24 @@ rd_watch_view_build(RD_View *view, RD_WatchViewState *ewv, B32 modifiable, U32 d
         ////////////////////////
         //- rjf: row with expand ui rule -> build large singular row for "escape hatch" ui
         //
-        if(block_ui_rule_spec != &rd_nil_view_rule_spec)
+        if(row->block_kind == EV_BlockKind_Canvas)
           UI_Parent(row_box) UI_FocusHot(row_selected ? UI_FocusKind_On : UI_FocusKind_Off)
         {
           //- rjf: build canvas row contents
-          if(block_ui_rule_spec->info.flags & RD_ViewRuleSpecInfoFlag_ViewUI)
+          if(ui_view_rule_info->ui != 0)
           {
             //- rjf: unpack
             RD_WatchViewPoint pt = {0, row->parent_key, row->key};
-            RD_ViewSpec *canvas_view_spec = rd_view_spec_from_string(block_ui_rule_spec->info.string);
             RD_TransientViewNode *canvas_view_node = rd_transient_view_node_from_ev_key(view, row->key);
             RD_View *canvas_view = canvas_view_node->view;
             String8 canvas_view_expr = e_string_from_expr(scratch.arena, row->expr);
             B32 need_new_spec = (!str8_match(str8(canvas_view->query_buffer, canvas_view->query_string_size), canvas_view_expr, 0) ||
-                                 !md_tree_match(canvas_view_node->initial_params, block_ui_rule_root, 0));
+                                 !md_tree_match(canvas_view_node->initial_params, ui_view_rule_params_root, 0));
             if(need_new_spec)
             {
               arena_clear(canvas_view_node->initial_params_arena);
-              canvas_view_node->initial_params = md_tree_copy(canvas_view_node->initial_params_arena, block_ui_rule_root);
-              rd_view_equip_spec(canvas_view, canvas_view_spec, canvas_view_expr, block_ui_rule_root);
+              canvas_view_node->initial_params = md_tree_copy(canvas_view_node->initial_params_arena, ui_view_rule_params_root);
+              rd_view_equip_spec(canvas_view, ui_view_rule_info, canvas_view_expr, ui_view_rule_params_root);
             }
             Vec2F32 canvas_dim = v2f32(scroll_list_params.dim_px.x - ui_top_font_size()*1.5f,
                                        (row->skipped_size_in_rows+row->size_in_rows+row->chopped_size_in_rows)*scroll_list_params.row_height_px);
@@ -2311,7 +2303,7 @@ rd_watch_view_build(RD_View *view, RD_WatchViewState *ewv, B32 modifiable, U32 d
               {
                 rd_cmd(RD_CmdKind_OpenTab,
                        .string      = e_string_from_expr(scratch.arena, row->expr),
-                       .params_tree = block_ui_rule_root);
+                       .params_tree = ui_view_rule_params_root);
               }
             }
             
@@ -2335,7 +2327,7 @@ rd_watch_view_build(RD_View *view, RD_WatchViewState *ewv, B32 modifiable, U32 d
               //- rjf: build
               UI_PermissionFlags(UI_PermissionFlag_Clicks|UI_PermissionFlag_ScrollX)
               {
-                canvas_view_spec->info.ui_hook(canvas_view, canvas_view->params_roots[canvas_view->params_read_gen%ArrayCount(canvas_view->params_roots)], str8(canvas_view->query_buffer, canvas_view->query_string_size), canvas_rect);
+                ui_view_rule_info->ui(canvas_view, str8(canvas_view->query_buffer, canvas_view->query_string_size), canvas_view->params_roots[canvas_view->params_read_gen%ArrayCount(canvas_view->params_roots)], canvas_rect);
               }
               
               //- rjf: pop interaction registers
@@ -2347,7 +2339,7 @@ rd_watch_view_build(RD_View *view, RD_WatchViewState *ewv, B32 modifiable, U32 d
         ////////////////////////
         //- rjf: build non-canvas row contents
         //
-        if(block_ui_rule_spec == &rd_nil_view_rule_spec) UI_Parent(row_box) UI_HeightFill
+        if(row->block_kind != EV_BlockKind_Canvas) UI_Parent(row_box) UI_HeightFill
         {
           //////////////////////
           //- rjf: draw start of cache lines in expansions
@@ -2404,7 +2396,7 @@ rd_watch_view_build(RD_View *view, RD_WatchViewState *ewv, B32 modifiable, U32 d
               String8 cell_error_string = {0};
               String8 cell_error_tooltip_string = {0};
               RD_AutoCompListerFlags cell_autocomp_flags = 0;
-              RD_ViewRuleRowUIFunctionType *cell_ui_hook = 0;
+              RD_ViewRuleUIFunctionType *cell_ui_hook = 0;
               MD_Node *cell_ui_params = &md_nil_node;
               Vec4F32 cell_base_color = ui_top_palette()->text;
               RD_IconKind cell_icon = RD_IconKind_Null;
@@ -2469,10 +2461,10 @@ rd_watch_view_build(RD_View *view, RD_WatchViewState *ewv, B32 modifiable, U32 d
                     cell_error_tooltip_string = str8_lit("Could not read memory successfully.");
                   }
                   cell_autocomp_flags = RD_AutoCompListerFlag_Locals;
-                  if(value_ui_rule_spec != &rd_nil_view_rule_spec && value_ui_rule_spec != 0)
+                  if(ui_view_rule_info->flags & RD_ViewRuleInfoFlag_CanFillValueCell)
                   {
-                    cell_ui_hook = value_ui_rule_spec->info.row_ui;
-                    cell_ui_params = value_ui_rule_root;
+                    cell_ui_hook = ui_view_rule_info->ui;
+                    cell_ui_params = ui_view_rule_params_root;
                   }
                   cell_can_edit = ev_type_key_is_editable(cell_eval.type_key);
                 }break;
@@ -2507,10 +2499,10 @@ rd_watch_view_build(RD_View *view, RD_WatchViewState *ewv, B32 modifiable, U32 d
                 for(EV_ViewRuleNode *n = view_rules->first; n != 0; n = n->next)
                 {
                   EV_ViewRule *vr = &n->v;
-                  RD_ViewRuleSpec *spec = rd_view_rule_spec_from_string(vr->root->string);
-                  if(spec != &rd_nil_view_rule_spec && spec->info.flags & RD_ViewRuleSpecInfoFlag_RowUI)
+                  RD_ViewRuleInfo *info = rd_view_rule_info_from_string(vr->root->string);
+                  if(info->flags & RD_ViewRuleInfoFlag_CanFillValueCell && info->ui != 0)
                   {
-                    cell_ui_hook = spec->info.row_ui;
+                    cell_ui_hook = info->ui;
                     cell_ui_params = vr->root;
                   }
                 }
@@ -2558,7 +2550,8 @@ rd_watch_view_build(RD_View *view, RD_WatchViewState *ewv, B32 modifiable, U32 d
                   UI_Parent(box)
                   {
                     String8 row_expr = e_string_from_expr(scratch.arena, row->expr);
-                    cell_ui_hook(row->key, cell_ui_params, row_expr);
+                    // TODO(rjf): @msgs
+                    // cell_ui_hook(row->key, cell_ui_params, row_expr);
                   }
                   sig = ui_signal_from_box(box);
                 }
@@ -2848,12 +2841,12 @@ rd_watch_view_build(RD_View *view, RD_WatchViewState *ewv, B32 modifiable, U32 d
 ////////////////////////////////
 //~ rjf: null @view_hook_impl
 
-RD_VIEW_UI_FUNCTION_DEF(null) {}
+RD_VIEW_RULE_UI_FUNCTION_DEF(null) {}
 
 ////////////////////////////////
 //~ rjf: empty @view_hook_impl
 
-RD_VIEW_UI_FUNCTION_DEF(empty)
+RD_VIEW_RULE_UI_FUNCTION_DEF(empty)
 {
   ui_set_next_flags(UI_BoxFlag_DefaultFocusNav);
   UI_Focus(UI_FocusKind_On) UI_WidthFill UI_HeightFill UI_NamedColumn(str8_lit("empty_view")) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
@@ -2878,7 +2871,7 @@ RD_VIEW_UI_FUNCTION_DEF(empty)
 ////////////////////////////////
 //~ rjf: getting_started @view_hook_impl
 
-RD_VIEW_UI_FUNCTION_DEF(getting_started)
+RD_VIEW_RULE_UI_FUNCTION_DEF(getting_started)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
@@ -3143,7 +3136,7 @@ rd_cmd_lister_item_array_sort_by_strength__in_place(RD_CmdListerItemArray array)
   quick_sort(array.v, array.count, sizeof(RD_CmdListerItem), rd_qsort_compare_cmd_lister__strength);
 }
 
-RD_VIEW_UI_FUNCTION_DEF(commands)
+RD_VIEW_RULE_UI_FUNCTION_DEF(commands)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
@@ -3466,7 +3459,7 @@ rd_qsort_compare_file_info__size(RD_FileInfo *a, RD_FileInfo *b)
           0);
 }
 
-RD_VIEW_UI_FUNCTION_DEF(file_system)
+RD_VIEW_RULE_UI_FUNCTION_DEF(file_system)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
@@ -4046,7 +4039,7 @@ rd_process_info_array_sort_by_strength__in_place(RD_ProcessInfoArray array)
   quick_sort(array.v, array.count, sizeof(RD_ProcessInfo), rd_qsort_compare_process_info);
 }
 
-RD_VIEW_UI_FUNCTION_DEF(system_processes)
+RD_VIEW_RULE_UI_FUNCTION_DEF(system_processes)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
@@ -4295,7 +4288,7 @@ rd_entity_lister_item_array_sort_by_strength__in_place(RD_EntityListerItemArray 
   quick_sort(array.v, array.count, sizeof(RD_EntityListerItem), rd_qsort_compare_entity_lister__strength);
 }
 
-RD_VIEW_UI_FUNCTION_DEF(entity_lister)
+RD_VIEW_RULE_UI_FUNCTION_DEF(entity_lister)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
@@ -4421,7 +4414,7 @@ RD_VIEW_UI_FUNCTION_DEF(entity_lister)
 ////////////////////////////////
 //~ rjf: symbol_lister @view_hook_impl
 
-RD_VIEW_UI_FUNCTION_DEF(symbol_lister)
+RD_VIEW_RULE_UI_FUNCTION_DEF(symbol_lister)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
@@ -4627,7 +4620,7 @@ struct RD_TargetViewState
   F32 value_pct;
 };
 
-RD_VIEW_UI_FUNCTION_DEF(target)
+RD_VIEW_RULE_UI_FUNCTION_DEF(target)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
@@ -4933,7 +4926,7 @@ RD_VIEW_UI_FUNCTION_DEF(target)
 ////////////////////////////////
 //~ rjf: targets @view_hook_impl
 
-RD_VIEW_UI_FUNCTION_DEF(targets)
+RD_VIEW_RULE_UI_FUNCTION_DEF(targets)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
@@ -5099,7 +5092,7 @@ struct RD_FilePathMapViewState
   F32 dst_column_pct;
 };
 
-RD_VIEW_UI_FUNCTION_DEF(file_path_map)
+RD_VIEW_RULE_UI_FUNCTION_DEF(file_path_map)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
@@ -5416,12 +5409,12 @@ RD_VIEW_UI_FUNCTION_DEF(file_path_map)
 ////////////////////////////////
 //~ rjf: auto_view_rules @view_hook_impl
 
-RD_VIEW_UI_FUNCTION_DEF(auto_view_rules){}
+RD_VIEW_RULE_UI_FUNCTION_DEF(auto_view_rules){}
 
 ////////////////////////////////
 //~ rjf: breakpoints @view_hook_impl
 
-RD_VIEW_UI_FUNCTION_DEF(breakpoints)
+RD_VIEW_RULE_UI_FUNCTION_DEF(breakpoints)
 {
   ProfBeginFunction();
   RD_WatchViewState *wv = rd_view_user_state(view, RD_WatchViewState);
@@ -5441,7 +5434,7 @@ RD_VIEW_UI_FUNCTION_DEF(breakpoints)
 ////////////////////////////////
 //~ rjf: watch_pins @view_hook_impl
 
-RD_VIEW_UI_FUNCTION_DEF(watch_pins)
+RD_VIEW_RULE_UI_FUNCTION_DEF(watch_pins)
 {
   ProfBeginFunction();
   RD_WatchViewState *wv = rd_view_user_state(view, RD_WatchViewState);
@@ -5458,7 +5451,7 @@ RD_VIEW_UI_FUNCTION_DEF(watch_pins)
 ////////////////////////////////
 //~ rjf: scheduler @view_hook_impl
 
-RD_VIEW_UI_FUNCTION_DEF(scheduler)
+RD_VIEW_RULE_UI_FUNCTION_DEF(scheduler)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
@@ -5680,7 +5673,7 @@ RD_VIEW_UI_FUNCTION_DEF(scheduler)
 ////////////////////////////////
 //~ rjf: call_stack @view_hook_impl
 
-RD_VIEW_UI_FUNCTION_DEF(call_stack)
+RD_VIEW_RULE_UI_FUNCTION_DEF(call_stack)
 {
   ProfBeginFunction();
   RD_WatchViewState *wv = rd_view_user_state(view, RD_WatchViewState);
@@ -5718,7 +5711,7 @@ struct RD_ModulesViewState
 };
 #endif
 
-RD_VIEW_UI_FUNCTION_DEF(modules)
+RD_VIEW_RULE_UI_FUNCTION_DEF(modules)
 {
 #if 0 // TODO(rjf): @msgs
   RD_ModulesViewState *mv = rd_view_user_state(view, RD_ModulesViewState);
@@ -6034,7 +6027,7 @@ RD_VIEW_UI_FUNCTION_DEF(modules)
 ////////////////////////////////
 //~ rjf: watch @view_hook_impl
 
-RD_VIEW_UI_FUNCTION_DEF(watch)
+RD_VIEW_RULE_UI_FUNCTION_DEF(watch)
 {
   ProfBeginFunction();
   RD_WatchViewState *wv = rd_view_user_state(view, RD_WatchViewState);
@@ -6053,7 +6046,7 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
 ////////////////////////////////
 //~ rjf: locals @view_hook_impl
 
-RD_VIEW_UI_FUNCTION_DEF(locals)
+RD_VIEW_RULE_UI_FUNCTION_DEF(locals)
 {
   ProfBeginFunction();
   RD_WatchViewState *wv = rd_view_user_state(view, RD_WatchViewState);
@@ -6072,7 +6065,7 @@ RD_VIEW_UI_FUNCTION_DEF(locals)
 ////////////////////////////////
 //~ rjf: registers @view_hook_impl
 
-RD_VIEW_UI_FUNCTION_DEF(registers)
+RD_VIEW_RULE_UI_FUNCTION_DEF(registers)
 {
   ProfBeginFunction();
   RD_WatchViewState *wv = rd_view_user_state(view, RD_WatchViewState);
@@ -6091,7 +6084,7 @@ RD_VIEW_UI_FUNCTION_DEF(registers)
 ////////////////////////////////
 //~ rjf: globals @view_hook_impl
 
-RD_VIEW_UI_FUNCTION_DEF(globals)
+RD_VIEW_RULE_UI_FUNCTION_DEF(globals)
 {
   ProfBeginFunction();
   RD_WatchViewState *wv = rd_view_user_state(view, RD_WatchViewState);
@@ -6110,7 +6103,7 @@ RD_VIEW_UI_FUNCTION_DEF(globals)
 ////////////////////////////////
 //~ rjf: thread_locals @view_hook_impl
 
-RD_VIEW_UI_FUNCTION_DEF(thread_locals)
+RD_VIEW_RULE_UI_FUNCTION_DEF(thread_locals)
 {
   ProfBeginFunction();
   RD_WatchViewState *wv = rd_view_user_state(view, RD_WatchViewState);
@@ -6129,7 +6122,7 @@ RD_VIEW_UI_FUNCTION_DEF(thread_locals)
 ////////////////////////////////
 //~ rjf: types @view_hook_impl
 
-RD_VIEW_UI_FUNCTION_DEF(types)
+RD_VIEW_RULE_UI_FUNCTION_DEF(types)
 {
   ProfBeginFunction();
   RD_WatchViewState *wv = rd_view_user_state(view, RD_WatchViewState);
@@ -6148,7 +6141,7 @@ RD_VIEW_UI_FUNCTION_DEF(types)
 ////////////////////////////////
 //~ rjf: procedures @view_hook_impl
 
-RD_VIEW_UI_FUNCTION_DEF(procedures)
+RD_VIEW_RULE_UI_FUNCTION_DEF(procedures)
 {
   ProfBeginFunction();
   RD_WatchViewState *wv = rd_view_user_state(view, RD_WatchViewState);
@@ -6173,7 +6166,7 @@ struct RD_PendingFileViewState
   RD_CmdList deferred_cmds;
 };
 
-RD_VIEW_UI_FUNCTION_DEF(pending_file)
+RD_VIEW_RULE_UI_FUNCTION_DEF(pending_file)
 {
   Temp scratch = scratch_begin(0, 0);
   RD_PendingFileViewState *pves = rd_view_user_state(view, RD_PendingFileViewState);
@@ -6218,7 +6211,7 @@ RD_VIEW_UI_FUNCTION_DEF(pending_file)
   Rng1U64 file_range = r1u64(0, 1024);
   U128 file_hash = fs_hash_from_path_range(file_path, file_range, 0);
   B32 file_is_ready = 0;
-  RD_ViewKind viewer_kind = RD_ViewKind_Text;
+  RD_ViewRuleKind viewer_kind = RD_ViewRuleKind_Text;
   {
     HS_Scope *hs_scope = hs_scope_open();
     String8 data = hs_data_from_hash(hs_scope, file_hash);
@@ -6245,11 +6238,11 @@ RD_VIEW_UI_FUNCTION_DEF(pending_file)
       file_is_ready = 1;
       if(num_utf8_bytes > num_unknown_bytes*4)
       {
-        viewer_kind = RD_ViewKind_Text;
+        viewer_kind = RD_ViewRuleKind_Text;
       }
       else
       {
-        viewer_kind = RD_ViewKind_Memory;
+        viewer_kind = RD_ViewRuleKind_Memory;
       }
     }
     hs_scope_close(hs_scope);
@@ -6275,19 +6268,19 @@ RD_VIEW_UI_FUNCTION_DEF(pending_file)
   }
   
   //- rjf: if entity is ready, replace this view with the correct one, if any viewer is specified
-  if(file_is_ready && viewer_kind != RD_ViewKind_Null)
+  if(file_is_ready && viewer_kind != RD_ViewRuleKind_Null)
   {
-    RD_ViewSpec *view_spec = rd_view_spec_from_string(params_copy->string);
-    if(view_spec == &rd_nil_view_spec)
+    RD_ViewRuleInfo *view_rule_info = rd_view_rule_info_from_string(params_copy->string);
+    if(view_rule_info == &rd_nil_view_rule_info)
     {
-      view_spec = rd_view_spec_from_kind(viewer_kind);
+      view_rule_info = rd_view_rule_info_from_kind(viewer_kind);
     }
     String8 query = rd_eval_string_from_file_path(scratch.arena, file_path);
-    rd_view_equip_spec(view, view_spec, query, params_copy);
+    rd_view_equip_spec(view, view_rule_info, query, params_copy);
   }
   
   //- rjf: if entity is ready, but we have no viewer for it, then just close this tab
-  if(file_is_ready && viewer_kind == RD_ViewKind_Null)
+  if(file_is_ready && viewer_kind == RD_ViewRuleKind_Null)
   {
     rd_cmd(RD_CmdKind_CloseTab);
   }
@@ -6309,7 +6302,7 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(text)
   ev_block_end(out, vb);
 }
 
-RD_VIEW_UI_FUNCTION_DEF(text)
+RD_VIEW_RULE_UI_FUNCTION_DEF(text)
 {
   RD_CodeViewState *cv = rd_view_user_state(view, RD_CodeViewState);
   rd_code_view_init(cv, view);
@@ -6551,7 +6544,7 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(disasm)
   ev_block_end(out, vb);
 }
 
-RD_VIEW_UI_FUNCTION_DEF(disasm)
+RD_VIEW_RULE_UI_FUNCTION_DEF(disasm)
 {
   RD_DisasmViewState *dv = rd_view_user_state(view, RD_DisasmViewState);
   if(dv->initialized == 0)
@@ -6757,7 +6750,7 @@ RD_VIEW_UI_FUNCTION_DEF(disasm)
 ////////////////////////////////
 //~ rjf: output @view_hook_impl
 
-RD_VIEW_UI_FUNCTION_DEF(output)
+RD_VIEW_RULE_UI_FUNCTION_DEF(output)
 {
   RD_CodeViewState *cv = rd_view_user_state(view, RD_CodeViewState);
   rd_code_view_init(cv, view);
@@ -6840,7 +6833,7 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(memory)
   ev_block_end(out, vb);
 }
 
-RD_VIEW_UI_FUNCTION_DEF(memory)
+RD_VIEW_RULE_UI_FUNCTION_DEF(memory)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
@@ -6851,11 +6844,12 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   //- rjf: unpack parameterization info
   //
   E_Eval eval = e_eval_from_string(scratch.arena, string);
+  Rng1U64 space_range = rd_range_from_eval_params(eval, params);
   if(eval.space.kind == 0)
   {
     eval.space = rd_eval_space_from_ctrl_entity(ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->process));
+    space_range = rd_whole_range_from_eval_space(eval.space);
   }
-  Rng1U64 space_range = rd_whole_range_from_eval_space(eval.space);
   U64 cursor          = rd_value_from_params_key(params, str8_lit("cursor_vaddr")).u64;
   U64 mark            = rd_value_from_params_key(params, str8_lit("mark_vaddr")).u64;
   U64 bytes_per_cell  = rd_value_from_params_key(params, str8_lit("bytes_per_cell")).u64;
@@ -7374,7 +7368,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
     {
       for(UI_Event *evt = 0; ui_next_event(&evt);)
       {
-        if(evt->kind == UI_EventKind_Scroll && evt->modifiers & OS_EventFlag_Ctrl)
+        if(evt->kind == UI_EventKind_Scroll && evt->modifiers & OS_Modifier_Ctrl)
         {
           ui_eat_event(evt);
           if(evt->delta_2f32.y < 0)
@@ -7735,7 +7729,7 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(bitmap)
   ev_block_end(out, vb);
 }
 
-RD_VIEW_UI_FUNCTION_DEF(bitmap)
+RD_VIEW_RULE_UI_FUNCTION_DEF(bitmap)
 {
   Temp scratch = scratch_begin(0, 0);
   HS_Scope *hs_scope = hs_scope_open();
@@ -7938,7 +7932,7 @@ RD_VIEW_UI_FUNCTION_DEF(bitmap)
 ////////////////////////////////
 //~ rjf: "checkbox"
 
-RD_VIEW_RULE_ROW_UI_FUNCTION_DEF(checkbox)
+RD_VIEW_RULE_UI_FUNCTION_DEF(checkbox)
 {
   Temp scratch = scratch_begin(0, 0);
   E_Eval eval = e_eval_from_string(scratch.arena, string);
@@ -7986,66 +7980,7 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(color_rgba)
   ev_block_end(out, vb);
 }
 
-RD_VIEW_RULE_ROW_UI_FUNCTION_DEF(color_rgba)
-{
-  Temp scratch = scratch_begin(0, 0);
-  E_Eval eval = e_eval_from_string(scratch.arena, string);
-  Vec4F32 rgba = rd_rgba_from_eval_params(eval, params);
-  Vec4F32 hsva = hsva_from_rgba(rgba);
-  
-  //- rjf: build text box
-  UI_Box *text_box = &ui_nil_box;
-  UI_WidthFill RD_Font(RD_FontSlot_Code)
-  {
-    text_box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
-    DR_FancyStringList fancy_strings = {0};
-    {
-      DR_FancyString open_paren = {ui_top_font(), str8_lit("("), ui_top_palette()->text, ui_top_font_size(), 0, 0};
-      DR_FancyString comma = {ui_top_font(), str8_lit(", "), ui_top_palette()->text, ui_top_font_size(), 0, 0};
-      DR_FancyString r_fstr = {ui_top_font(), push_str8f(scratch.arena, "%.2f", rgba.x), v4f32(1.f, 0.25f, 0.25f, 1.f), ui_top_font_size(), 4.f, 0};
-      DR_FancyString g_fstr = {ui_top_font(), push_str8f(scratch.arena, "%.2f", rgba.y), v4f32(0.25f, 1.f, 0.25f, 1.f), ui_top_font_size(), 4.f, 0};
-      DR_FancyString b_fstr = {ui_top_font(), push_str8f(scratch.arena, "%.2f", rgba.z), v4f32(0.25f, 0.25f, 1.f, 1.f), ui_top_font_size(), 4.f, 0};
-      DR_FancyString a_fstr = {ui_top_font(), push_str8f(scratch.arena, "%.2f", rgba.w), v4f32(1.f,   1.f,   1.f, 1.f), ui_top_font_size(), 4.f, 0};
-      DR_FancyString clse_paren = {ui_top_font(), str8_lit(")"), ui_top_palette()->text, ui_top_font_size(), 0, 0};
-      dr_fancy_string_list_push(scratch.arena, &fancy_strings, &open_paren);
-      dr_fancy_string_list_push(scratch.arena, &fancy_strings, &r_fstr);
-      dr_fancy_string_list_push(scratch.arena, &fancy_strings, &comma);
-      dr_fancy_string_list_push(scratch.arena, &fancy_strings, &g_fstr);
-      dr_fancy_string_list_push(scratch.arena, &fancy_strings, &comma);
-      dr_fancy_string_list_push(scratch.arena, &fancy_strings, &b_fstr);
-      dr_fancy_string_list_push(scratch.arena, &fancy_strings, &comma);
-      dr_fancy_string_list_push(scratch.arena, &fancy_strings, &a_fstr);
-      dr_fancy_string_list_push(scratch.arena, &fancy_strings, &clse_paren);
-    }
-    ui_box_equip_display_fancy_strings(text_box, &fancy_strings);
-  }
-  
-  //- rjf: build color box
-  UI_Box *color_box = &ui_nil_box;
-  UI_PrefWidth(ui_em(1.875f, 1.f)) UI_ChildLayoutAxis(Axis2_Y)
-  {
-    color_box = ui_build_box_from_stringf(UI_BoxFlag_Clickable, "color_box");
-    UI_Parent(color_box) UI_PrefHeight(ui_em(1.875f, 1.f)) UI_Padding(ui_pct(1, 0))
-    {
-      UI_Palette(ui_build_palette(ui_top_palette(), .background = rgba)) UI_CornerRadius(ui_top_font_size()*0.5f)
-        ui_build_box_from_key(UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawBorder, ui_key_zero());
-    }
-  }
-  
-  //- rjf: space
-  ui_spacer(ui_em(0.375f, 1.f));
-  
-  //- rjf: hover color box -> show components
-  UI_Signal sig = ui_signal_from_box(color_box);
-  if(ui_hovering(sig))
-  {
-    ui_do_color_tooltip_hsva(hsva);
-  }
-  
-  scratch_end(scratch);
-}
-
-RD_VIEW_UI_FUNCTION_DEF(color_rgba)
+RD_VIEW_RULE_UI_FUNCTION_DEF(color_rgba)
 {
   Temp scratch = scratch_begin(0, 0);
   Vec2F32 dim = dim_2f32(rect);
@@ -8053,38 +7988,96 @@ RD_VIEW_UI_FUNCTION_DEF(color_rgba)
   E_Eval eval = e_eval_from_string(scratch.arena, string);
   Vec4F32 rgba = rd_rgba_from_eval_params(eval, params);
   Vec4F32 hsva = hsva_from_rgba(rgba);
-  UI_WidthFill UI_HeightFill UI_Column UI_Padding(ui_px(padding, 1.f)) UI_Row UI_Padding(ui_pct(1.f, 0.f)) UI_HeightFill
+  
+  //- rjf: too small -> just show components
+  if(dim.y <= ui_top_font_size()*8.f)
   {
-    UI_PrefWidth(ui_px(dim.y - padding*2, 1.f))
+    //- rjf: build text box
+    UI_Box *text_box = &ui_nil_box;
+    UI_WidthFill RD_Font(RD_FontSlot_Code)
     {
-      UI_Signal sv_sig = ui_sat_val_pickerf(hsva.x, &hsva.y, &hsva.z, "sat_val_picker");
+      text_box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
+      DR_FancyStringList fancy_strings = {0};
+      {
+        DR_FancyString open_paren = {ui_top_font(), str8_lit("("), ui_top_palette()->text, ui_top_font_size(), 0, 0};
+        DR_FancyString comma = {ui_top_font(), str8_lit(", "), ui_top_palette()->text, ui_top_font_size(), 0, 0};
+        DR_FancyString r_fstr = {ui_top_font(), push_str8f(scratch.arena, "%.2f", rgba.x), v4f32(1.f, 0.25f, 0.25f, 1.f), ui_top_font_size(), 4.f, 0};
+        DR_FancyString g_fstr = {ui_top_font(), push_str8f(scratch.arena, "%.2f", rgba.y), v4f32(0.25f, 1.f, 0.25f, 1.f), ui_top_font_size(), 4.f, 0};
+        DR_FancyString b_fstr = {ui_top_font(), push_str8f(scratch.arena, "%.2f", rgba.z), v4f32(0.25f, 0.25f, 1.f, 1.f), ui_top_font_size(), 4.f, 0};
+        DR_FancyString a_fstr = {ui_top_font(), push_str8f(scratch.arena, "%.2f", rgba.w), v4f32(1.f,   1.f,   1.f, 1.f), ui_top_font_size(), 4.f, 0};
+        DR_FancyString clse_paren = {ui_top_font(), str8_lit(")"), ui_top_palette()->text, ui_top_font_size(), 0, 0};
+        dr_fancy_string_list_push(scratch.arena, &fancy_strings, &open_paren);
+        dr_fancy_string_list_push(scratch.arena, &fancy_strings, &r_fstr);
+        dr_fancy_string_list_push(scratch.arena, &fancy_strings, &comma);
+        dr_fancy_string_list_push(scratch.arena, &fancy_strings, &g_fstr);
+        dr_fancy_string_list_push(scratch.arena, &fancy_strings, &comma);
+        dr_fancy_string_list_push(scratch.arena, &fancy_strings, &b_fstr);
+        dr_fancy_string_list_push(scratch.arena, &fancy_strings, &comma);
+        dr_fancy_string_list_push(scratch.arena, &fancy_strings, &a_fstr);
+        dr_fancy_string_list_push(scratch.arena, &fancy_strings, &clse_paren);
+      }
+      ui_box_equip_display_fancy_strings(text_box, &fancy_strings);
     }
-    UI_PrefWidth(ui_em(3.f, 1.f))
+    
+    //- rjf: build color box
+    UI_Box *color_box = &ui_nil_box;
+    UI_PrefWidth(ui_em(1.875f, 1.f)) UI_ChildLayoutAxis(Axis2_Y)
     {
-      UI_Signal h_sig  = ui_hue_pickerf(&hsva.x, hsva.y, hsva.z, "hue_picker");
+      color_box = ui_build_box_from_stringf(UI_BoxFlag_Clickable, "color_box");
+      UI_Parent(color_box) UI_PrefHeight(ui_em(1.875f, 1.f)) UI_Padding(ui_pct(1, 0))
+      {
+        UI_Palette(ui_build_palette(ui_top_palette(), .background = rgba)) UI_CornerRadius(ui_top_font_size()*0.5f)
+          ui_build_box_from_key(UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawBorder, ui_key_zero());
+      }
     }
-    UI_PrefWidth(ui_children_sum(1)) UI_Column UI_PrefWidth(ui_text_dim(10, 1)) UI_PrefHeight(ui_em(2.f, 0.f)) RD_Font(RD_FontSlot_Code) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
+    
+    //- rjf: space
+    ui_spacer(ui_em(0.375f, 1.f));
+    
+    //- rjf: hover color box -> show components
+    UI_Signal sig = ui_signal_from_box(color_box);
+    if(ui_hovering(sig))
     {
-      ui_labelf("Hex");
-      ui_labelf("R");
-      ui_labelf("G");
-      ui_labelf("B");
-      ui_labelf("H");
-      ui_labelf("S");
-      ui_labelf("V");
-      ui_labelf("A");
+      ui_do_color_tooltip_hsva(hsva);
     }
-    UI_PrefWidth(ui_children_sum(1)) UI_Column UI_PrefWidth(ui_text_dim(10, 1)) UI_PrefHeight(ui_em(2.f, 0.f)) RD_Font(RD_FontSlot_Code)
+  }
+  
+  //- rjf: large enough -> full color picker
+  else
+  {
+    UI_WidthFill UI_HeightFill UI_Column UI_Padding(ui_px(padding, 1.f)) UI_Row UI_Padding(ui_pct(1.f, 0.f)) UI_HeightFill
     {
-      String8 hex_string = hex_string_from_rgba_4f32(scratch.arena, rgba);
-      ui_label(hex_string);
-      ui_labelf("%.2f", rgba.x);
-      ui_labelf("%.2f", rgba.y);
-      ui_labelf("%.2f", rgba.z);
-      ui_labelf("%.2f", hsva.x);
-      ui_labelf("%.2f", hsva.y);
-      ui_labelf("%.2f", hsva.z);
-      ui_labelf("%.2f", rgba.w);
+      UI_PrefWidth(ui_px(dim.y - padding*2, 1.f))
+      {
+        UI_Signal sv_sig = ui_sat_val_pickerf(hsva.x, &hsva.y, &hsva.z, "sat_val_picker");
+      }
+      UI_PrefWidth(ui_em(3.f, 1.f))
+      {
+        UI_Signal h_sig  = ui_hue_pickerf(&hsva.x, hsva.y, hsva.z, "hue_picker");
+      }
+      UI_PrefWidth(ui_children_sum(1)) UI_Column UI_PrefWidth(ui_text_dim(10, 1)) UI_PrefHeight(ui_em(2.f, 0.f)) RD_Font(RD_FontSlot_Code) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
+      {
+        ui_labelf("Hex");
+        ui_labelf("R");
+        ui_labelf("G");
+        ui_labelf("B");
+        ui_labelf("H");
+        ui_labelf("S");
+        ui_labelf("V");
+        ui_labelf("A");
+      }
+      UI_PrefWidth(ui_children_sum(1)) UI_Column UI_PrefWidth(ui_text_dim(10, 1)) UI_PrefHeight(ui_em(2.f, 0.f)) RD_Font(RD_FontSlot_Code)
+      {
+        String8 hex_string = hex_string_from_rgba_4f32(scratch.arena, rgba);
+        ui_label(hex_string);
+        ui_labelf("%.2f", rgba.x);
+        ui_labelf("%.2f", rgba.y);
+        ui_labelf("%.2f", rgba.z);
+        ui_labelf("%.2f", hsva.x);
+        ui_labelf("%.2f", hsva.y);
+        ui_labelf("%.2f", hsva.z);
+        ui_labelf("%.2f", rgba.w);
+      }
     }
   }
   scratch_end(scratch);
@@ -8151,7 +8144,7 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(geo3d)
   ev_block_end(out, vb);
 }
 
-RD_VIEW_UI_FUNCTION_DEF(geo3d)
+RD_VIEW_RULE_UI_FUNCTION_DEF(geo3d)
 {
   Temp scratch = scratch_begin(0, 0);
   GEO_Scope *geo_scope = geo_scope_open();
@@ -8267,7 +8260,7 @@ RD_VIEW_UI_FUNCTION_DEF(geo3d)
 ////////////////////////////////
 //~ rjf: exception_filters @view_hook_impl
 
-RD_VIEW_UI_FUNCTION_DEF(exception_filters)
+RD_VIEW_RULE_UI_FUNCTION_DEF(exception_filters)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
@@ -8474,7 +8467,7 @@ rd_qsort_compare_settings_item(RD_SettingsItem *a, RD_SettingsItem *b)
   return result;
 }
 
-RD_VIEW_UI_FUNCTION_DEF(settings)
+RD_VIEW_RULE_UI_FUNCTION_DEF(settings)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);

@@ -66,12 +66,12 @@ typedef enum OS_EventKind
 }
 OS_EventKind;
 
-typedef U32 OS_EventFlags;
+typedef U32 OS_Modifiers;
 enum
 {
-  OS_EventFlag_Ctrl  = (1<<0),
-  OS_EventFlag_Shift = (1<<1),
-  OS_EventFlag_Alt   = (1<<2),
+  OS_Modifier_Ctrl  = (1<<0),
+  OS_Modifier_Shift = (1<<1),
+  OS_Modifier_Alt   = (1<<2),
 };
 
 typedef struct OS_Event OS_Event;
@@ -82,7 +82,7 @@ struct OS_Event
   U64 timestamp_us;
   OS_Handle window;
   OS_EventKind kind;
-  OS_EventFlags flags;
+  OS_Modifiers modifiers;
   OS_Key key;
   B32 is_repeat;
   B32 right_sided;
@@ -110,11 +110,11 @@ internal B32 frame(void);
 //~ rjf: Event Functions (Helpers, Implemented Once)
 
 internal String8 os_string_from_event_kind(OS_EventKind kind);
-internal String8List os_string_list_from_event_flags(Arena *arena, OS_EventFlags flags);
-internal U32 os_codepoint_from_event_flags_and_key(OS_EventFlags flags, OS_Key key);
+internal String8List os_string_list_from_modifiers(Arena *arena, OS_Modifiers flags);
+internal U32 os_codepoint_from_modifiers_and_key(OS_Modifiers flags, OS_Key key);
 internal void os_eat_event(OS_EventList *events, OS_Event *event);
-internal B32  os_key_press(OS_EventList *events, OS_Handle window, OS_EventFlags flags, OS_Key key);
-internal B32  os_key_release(OS_EventList *events, OS_Handle window, OS_EventFlags flags, OS_Key key);
+internal B32  os_key_press(OS_EventList *events, OS_Handle window, OS_Modifiers modifiers, OS_Key key);
+internal B32  os_key_release(OS_EventList *events, OS_Handle window, OS_Modifiers modifiers, OS_Key key);
 internal B32  os_text(OS_EventList *events, OS_Handle window, U32 character);
 internal OS_EventList os_event_list_copy(Arena *arena, OS_EventList *src);
 internal void os_event_list_concat_in_place(OS_EventList *dst, OS_EventList *to_push);
@@ -173,7 +173,7 @@ internal Vec2F32        os_dim_from_monitor(OS_Handle monitor);
 
 internal void           os_send_wakeup_event(void);
 internal OS_EventList   os_get_events(Arena *arena, B32 wait);
-internal OS_EventFlags  os_get_event_flags(void);
+internal OS_Modifiers  os_get_modifiers(void);
 internal Vec2F32        os_mouse_from_window(OS_Handle window);
 
 ////////////////////////////////

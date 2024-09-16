@@ -303,10 +303,10 @@ os_get_events(Arena *arena, B32 wait)
       case KeyRelease:
       {
         // rjf: determine flags
-        OS_EventFlags flags = 0;
-        if(evt.xkey.state & ShiftMask)   { flags |= OS_EventFlag_Shift; }
-        if(evt.xkey.state & ControlMask) { flags |= OS_EventFlag_Ctrl; }
-        if(evt.xkey.state & Mod1Mask)    { flags |= OS_EventFlag_Alt; }
+        OS_Modifiers flags = 0;
+        if(evt.xkey.state & ShiftMask)   { flags |= OS_Modifier_Shift; }
+        if(evt.xkey.state & ControlMask) { flags |= OS_Modifier_Ctrl; }
+        if(evt.xkey.state & Mod1Mask)    { flags |= OS_Modifier_Alt; }
         
         // rjf: map keycode -> keysym
         U32 keysym = XLookupKeysym(&evt.xkey, 0);
@@ -374,10 +374,10 @@ os_get_events(Arena *arena, B32 wait)
       case ButtonRelease:
       {
         // rjf: determine flags
-        OS_EventFlags flags = 0;
-        if(evt.xbutton.state & ShiftMask)   { flags |= OS_EventFlag_Shift; }
-        if(evt.xbutton.state & ControlMask) { flags |= OS_EventFlag_Ctrl; }
-        if(evt.xbutton.state & Mod1Mask)    { flags |= OS_EventFlag_Alt; }
+        OS_Modifiers flags = 0;
+        if(evt.xbutton.state & ShiftMask)   { flags |= OS_Modifier_Shift; }
+        if(evt.xbutton.state & ControlMask) { flags |= OS_Modifier_Ctrl; }
+        if(evt.xbutton.state & Mod1Mask)    { flags |= OS_Modifier_Alt; }
         
         // rjf: map button -> OS_Key
         OS_Key key = OS_Key_Null;
@@ -442,8 +442,8 @@ os_get_events(Arena *arena, B32 wait)
   return evts;
 }
 
-internal OS_EventFlags
-os_get_event_flags(void)
+internal OS_Modifiers
+os_get_modifiers(void)
 {
   return 0;
 }

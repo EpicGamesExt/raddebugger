@@ -32,60 +32,60 @@ os_string_from_event_kind(OS_EventKind kind)
 }
 
 internal String8List
-os_string_list_from_event_flags(Arena *arena, OS_EventFlags flags)
+os_string_list_from_modifiers(Arena *arena, OS_Modifiers modifiers)
 {
   String8List result = {0};
-  String8 flag_strs[] = 
+  String8 modifier_strs[] = 
   {
     str8_lit("Ctrl"),
     str8_lit("Shift"),
     str8_lit("Alt"),
   };
-  str8_list_from_flags(arena, &result, flags, flag_strs, ArrayCount(flag_strs));
+  str8_list_from_flags(arena, &result, modifiers, modifier_strs, ArrayCount(modifier_strs));
   return result;
 }
 
 internal U32
-os_codepoint_from_event_flags_and_key(OS_EventFlags flags, OS_Key key)
+os_codepoint_from_modifiers_and_key(OS_Modifiers modifiers, OS_Key key)
 {
   U32 result = 0;
   
   // rjf: special-case map
-  local_persist read_only struct {U32 character; OS_Key key; OS_EventFlags flags;} map[] =
+  local_persist read_only struct {U32 character; OS_Key key; OS_Modifiers modifiers;} map[] =
   {
-    {'!', OS_Key_1, OS_EventFlag_Shift},
-    {'@', OS_Key_2, OS_EventFlag_Shift},
-    {'#', OS_Key_3, OS_EventFlag_Shift},
-    {'$', OS_Key_4, OS_EventFlag_Shift},
-    {'%', OS_Key_5, OS_EventFlag_Shift},
-    {'^', OS_Key_6, OS_EventFlag_Shift},
-    {'&', OS_Key_7, OS_EventFlag_Shift},
-    {'*', OS_Key_8, OS_EventFlag_Shift},
-    {'(', OS_Key_9, OS_EventFlag_Shift},
-    {')', OS_Key_0, OS_EventFlag_Shift},
-    {'_', OS_Key_Minus, OS_EventFlag_Shift},
-    {'_', OS_Key_Minus, OS_EventFlag_Shift},
+    {'!', OS_Key_1, OS_Modifier_Shift},
+    {'@', OS_Key_2, OS_Modifier_Shift},
+    {'#', OS_Key_3, OS_Modifier_Shift},
+    {'$', OS_Key_4, OS_Modifier_Shift},
+    {'%', OS_Key_5, OS_Modifier_Shift},
+    {'^', OS_Key_6, OS_Modifier_Shift},
+    {'&', OS_Key_7, OS_Modifier_Shift},
+    {'*', OS_Key_8, OS_Modifier_Shift},
+    {'(', OS_Key_9, OS_Modifier_Shift},
+    {')', OS_Key_0, OS_Modifier_Shift},
+    {'_', OS_Key_Minus, OS_Modifier_Shift},
+    {'_', OS_Key_Minus, OS_Modifier_Shift},
     {'-', OS_Key_Minus, 0},
     {'=', OS_Key_Equal, 0},
-    {'+', OS_Key_Equal, OS_EventFlag_Shift},
+    {'+', OS_Key_Equal, OS_Modifier_Shift},
     {'`', OS_Key_Tick, 0},
-    {'~', OS_Key_Tick, OS_EventFlag_Shift},
+    {'~', OS_Key_Tick, OS_Modifier_Shift},
     {'[', OS_Key_LeftBracket, 0},
     {']', OS_Key_RightBracket, 0},
-    {'{', OS_Key_LeftBracket, OS_EventFlag_Shift},
-    {'}', OS_Key_RightBracket, OS_EventFlag_Shift},
+    {'{', OS_Key_LeftBracket, OS_Modifier_Shift},
+    {'}', OS_Key_RightBracket, OS_Modifier_Shift},
     {'\\', OS_Key_BackSlash, 0},
-    {'|', OS_Key_BackSlash, OS_EventFlag_Shift},
+    {'|', OS_Key_BackSlash, OS_Modifier_Shift},
     {';', OS_Key_Semicolon, 0},
-    {':', OS_Key_Semicolon, OS_EventFlag_Shift},
+    {':', OS_Key_Semicolon, OS_Modifier_Shift},
     {'\'', OS_Key_Quote, 0},
-    {'"', OS_Key_Quote, OS_EventFlag_Shift},
+    {'"', OS_Key_Quote, OS_Modifier_Shift},
     {'.', OS_Key_Period, 0},
     {',', OS_Key_Comma, 0},
-    {'<', OS_Key_Period, OS_EventFlag_Shift},
-    {'>', OS_Key_Comma, OS_EventFlag_Shift},
+    {'<', OS_Key_Period, OS_Modifier_Shift},
+    {'>', OS_Key_Comma, OS_Modifier_Shift},
     {'/', OS_Key_Slash, 0},
-    {'?', OS_Key_Slash, OS_EventFlag_Shift},
+    {'?', OS_Key_Slash, OS_Modifier_Shift},
     {'a', OS_Key_A, 0},
     {'b', OS_Key_B, 0},
     {'c', OS_Key_C, 0},
@@ -112,32 +112,32 @@ os_codepoint_from_event_flags_and_key(OS_EventFlags flags, OS_Key key)
     {'x', OS_Key_X, 0},
     {'y', OS_Key_Y, 0},
     {'z', OS_Key_Z, 0},
-    {'A', OS_Key_A, OS_EventFlag_Shift},
-    {'B', OS_Key_B, OS_EventFlag_Shift},
-    {'C', OS_Key_C, OS_EventFlag_Shift},
-    {'D', OS_Key_D, OS_EventFlag_Shift},
-    {'E', OS_Key_E, OS_EventFlag_Shift},
-    {'F', OS_Key_F, OS_EventFlag_Shift},
-    {'G', OS_Key_G, OS_EventFlag_Shift},
-    {'H', OS_Key_H, OS_EventFlag_Shift},
-    {'I', OS_Key_I, OS_EventFlag_Shift},
-    {'J', OS_Key_J, OS_EventFlag_Shift},
-    {'K', OS_Key_K, OS_EventFlag_Shift},
-    {'L', OS_Key_L, OS_EventFlag_Shift},
-    {'M', OS_Key_M, OS_EventFlag_Shift},
-    {'N', OS_Key_N, OS_EventFlag_Shift},
-    {'O', OS_Key_O, OS_EventFlag_Shift},
-    {'P', OS_Key_P, OS_EventFlag_Shift},
-    {'Q', OS_Key_Q, OS_EventFlag_Shift},
-    {'R', OS_Key_R, OS_EventFlag_Shift},
-    {'S', OS_Key_S, OS_EventFlag_Shift},
-    {'T', OS_Key_T, OS_EventFlag_Shift},
-    {'U', OS_Key_U, OS_EventFlag_Shift},
-    {'V', OS_Key_V, OS_EventFlag_Shift},
-    {'W', OS_Key_W, OS_EventFlag_Shift},
-    {'X', OS_Key_X, OS_EventFlag_Shift},
-    {'Y', OS_Key_Y, OS_EventFlag_Shift},
-    {'Z', OS_Key_Z, OS_EventFlag_Shift},
+    {'A', OS_Key_A, OS_Modifier_Shift},
+    {'B', OS_Key_B, OS_Modifier_Shift},
+    {'C', OS_Key_C, OS_Modifier_Shift},
+    {'D', OS_Key_D, OS_Modifier_Shift},
+    {'E', OS_Key_E, OS_Modifier_Shift},
+    {'F', OS_Key_F, OS_Modifier_Shift},
+    {'G', OS_Key_G, OS_Modifier_Shift},
+    {'H', OS_Key_H, OS_Modifier_Shift},
+    {'I', OS_Key_I, OS_Modifier_Shift},
+    {'J', OS_Key_J, OS_Modifier_Shift},
+    {'K', OS_Key_K, OS_Modifier_Shift},
+    {'L', OS_Key_L, OS_Modifier_Shift},
+    {'M', OS_Key_M, OS_Modifier_Shift},
+    {'N', OS_Key_N, OS_Modifier_Shift},
+    {'O', OS_Key_O, OS_Modifier_Shift},
+    {'P', OS_Key_P, OS_Modifier_Shift},
+    {'Q', OS_Key_Q, OS_Modifier_Shift},
+    {'R', OS_Key_R, OS_Modifier_Shift},
+    {'S', OS_Key_S, OS_Modifier_Shift},
+    {'T', OS_Key_T, OS_Modifier_Shift},
+    {'U', OS_Key_U, OS_Modifier_Shift},
+    {'V', OS_Key_V, OS_Modifier_Shift},
+    {'W', OS_Key_W, OS_Modifier_Shift},
+    {'X', OS_Key_X, OS_Modifier_Shift},
+    {'Y', OS_Key_Y, OS_Modifier_Shift},
+    {'Z', OS_Key_Z, OS_Modifier_Shift},
   };
   
   // rjf: check numeric
@@ -149,7 +149,7 @@ os_codepoint_from_event_flags_and_key(OS_EventFlags flags, OS_Key key)
   // rjf: check special-case map
   for(U64 idx = 0; idx < ArrayCount(map); idx += 1)
   {
-    if(map[idx].key == key && map[idx].flags == flags)
+    if(map[idx].key == key && map[idx].modifiers == modifiers)
     {
       result = map[idx].character;
       break;
@@ -167,13 +167,13 @@ os_eat_event(OS_EventList *events, OS_Event *event)
 }
 
 internal B32
-os_key_press(OS_EventList *events, OS_Handle window, OS_EventFlags flags, OS_Key key)
+os_key_press(OS_EventList *events, OS_Handle window, OS_Modifiers modifiers, OS_Key key)
 {
   B32 result = 0;
   for(OS_Event *event = events->first; event != 0; event = event->next)
   {
     if((os_handle_match(event->window, window) || os_handle_match(window, os_handle_zero())) &&
-       event->kind == OS_EventKind_Press && event->key == key && event->flags == flags)
+       event->kind == OS_EventKind_Press && event->key == key && event->modifiers == modifiers)
     {
       result = 1;
       os_eat_event(events, event);
@@ -184,13 +184,13 @@ os_key_press(OS_EventList *events, OS_Handle window, OS_EventFlags flags, OS_Key
 }
 
 internal B32
-os_key_release(OS_EventList *events, OS_Handle window, OS_EventFlags flags, OS_Key key)
+os_key_release(OS_EventList *events, OS_Handle window, OS_Modifiers modifiers, OS_Key key)
 {
   B32 result = 0;
   for(OS_Event *event = events->first; event != 0; event = event->next)
   {
     if((os_handle_match(event->window, window) || os_handle_match(window, os_handle_zero())) &&
-       event->kind == OS_EventKind_Release && event->key == key && event->flags == flags)
+       event->kind == OS_EventKind_Release && event->key == key && event->modifiers == modifiers)
     {
       result = 1;
       os_eat_event(events, event);

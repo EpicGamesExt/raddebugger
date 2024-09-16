@@ -92,7 +92,7 @@ typedef struct RD_Binding RD_Binding;
 struct RD_Binding
 {
   OS_Key key;
-  OS_EventFlags flags;
+  OS_Modifiers modifiers;
 };
 
 typedef struct RD_BindingNode RD_BindingNode;
@@ -151,11 +151,6 @@ struct RD_SettingVal
 
 typedef struct RD_View RD_View;
 
-#define RD_VIEW_UI_FUNCTION_SIG(name) void name(RD_View *view, MD_Node *params, String8 string, Rng2F32 rect)
-#define RD_VIEW_UI_FUNCTION_NAME(name) rd_view_ui_##name
-#define RD_VIEW_UI_FUNCTION_DEF(name) internal RD_VIEW_UI_FUNCTION_SIG(RD_VIEW_UI_FUNCTION_NAME(name))
-typedef RD_VIEW_UI_FUNCTION_SIG(RD_ViewUIFunctionType);
-
 ////////////////////////////////
 //~ rjf: View Rule Info Types
 
@@ -166,52 +161,15 @@ enum
   RD_ViewRuleInfoFlag_CanFilter                  = (1<<1),
   RD_ViewRuleInfoFlag_FilterIsCode               = (1<<2),
   RD_ViewRuleInfoFlag_TypingAutomaticallyFilters = (1<<3),
+  RD_ViewRuleInfoFlag_CanUseInWatchTable         = (1<<4),
+  RD_ViewRuleInfoFlag_CanFillValueCell           = (1<<5),
+  RD_ViewRuleInfoFlag_CanExpand                  = (1<<6),
 };
 
 #define RD_VIEW_RULE_UI_FUNCTION_SIG(name) void name(RD_View *view, String8 string, MD_Node *params, Rng2F32 rect)
 #define RD_VIEW_RULE_UI_FUNCTION_NAME(name) rd_view_rule_ui_##name
 #define RD_VIEW_RULE_UI_FUNCTION_DEF(name) internal RD_VIEW_RULE_UI_FUNCTION_SIG(RD_VIEW_RULE_UI_FUNCTION_NAME(name))
 typedef RD_VIEW_RULE_UI_FUNCTION_SIG(RD_ViewRuleUIFunctionType);
-
-////////////////////////////////
-//~ rjf: View Specification Types
-
-#if 1 // TODO(rjf): @msgs
-typedef U32 RD_ViewSpecFlags;
-enum
-{
-  RD_ViewSpecFlag_ParameterizedByEntity      = (1<<0),
-  RD_ViewSpecFlag_ProjectSpecific            = (1<<1),
-  RD_ViewSpecFlag_CanSerialize               = (1<<2),
-  RD_ViewSpecFlag_CanFilter                  = (1<<3),
-  RD_ViewSpecFlag_FilterIsCode               = (1<<4),
-  RD_ViewSpecFlag_TypingAutomaticallyFilters = (1<<5),
-};
-
-typedef struct RD_ViewSpecInfo RD_ViewSpecInfo;
-struct RD_ViewSpecInfo
-{
-  RD_ViewSpecFlags flags;
-  String8 name;
-  String8 display_string;
-  U32 icon_kind;
-  RD_ViewUIFunctionType *ui_hook;
-};
-
-typedef struct RD_ViewSpec RD_ViewSpec;
-struct RD_ViewSpec
-{
-  RD_ViewSpec *hash_next;
-  RD_ViewSpecInfo info;
-};
-
-typedef struct RD_ViewSpecInfoArray RD_ViewSpecInfoArray;
-struct RD_ViewSpecInfoArray
-{
-  RD_ViewSpecInfo *v;
-  U64 count;
-};
-#endif
 
 ////////////////////////////////
 //~ rjf: View Types
@@ -259,7 +217,7 @@ struct RD_View
   RD_View *last_transient;
   
   // rjf: view specification info
-  RD_ViewSpec *spec;
+  struct RD_ViewRuleInfo *spec;
   
   // rjf: allocation info
   U64 generation;
@@ -365,53 +323,6 @@ struct RD_DragDropPayload
   RD_Handle view;
   RD_Handle entity;
   TxtPt text_point;
-};
-
-////////////////////////////////
-//~ rjf: View Rule Spec Types
-
-typedef U32 RD_ViewRuleSpecInfoFlags; // NOTE(rjf): see @view_rule_info
-enum
-{
-  RD_ViewRuleSpecInfoFlag_VizRowProd     = (1<<0),
-  RD_ViewRuleSpecInfoFlag_LineStringize  = (1<<1),
-  RD_ViewRuleSpecInfoFlag_RowUI          = (1<<2),
-  RD_ViewRuleSpecInfoFlag_ViewUI         = (1<<3),
-};
-
-#define RD_VIEW_RULE_LINE_STRINGIZE_FUNCTION_SIG(name) void name(void)
-#define RD_VIEW_RULE_LINE_STRINGIZE_FUNCTION_NAME(name) rd_view_rule_line_stringize__##name
-#define RD_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(name) internal RD_VIEW_RULE_LINE_STRINGIZE_FUNCTION_SIG(RD_VIEW_RULE_LINE_STRINGIZE_FUNCTION_NAME(name))
-
-#define RD_VIEW_RULE_ROW_UI_FUNCTION_SIG(name) void name(EV_Key key, MD_Node *params, String8 string)
-#define RD_VIEW_RULE_ROW_UI_FUNCTION_NAME(name) rd_view_rule_row_ui__##name
-#define RD_VIEW_RULE_ROW_UI_FUNCTION_DEF(name) RD_VIEW_RULE_ROW_UI_FUNCTION_SIG(RD_VIEW_RULE_ROW_UI_FUNCTION_NAME(name))
-
-typedef RD_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_SIG(RD_ViewRuleVizRowProdHookFunctionType);
-typedef RD_VIEW_RULE_LINE_STRINGIZE_FUNCTION_SIG(RD_ViewRuleLineStringizeHookFunctionType);
-typedef RD_VIEW_RULE_ROW_UI_FUNCTION_SIG(RD_ViewRuleRowUIFunctionType);
-
-typedef struct RD_ViewRuleSpecInfo RD_ViewRuleSpecInfo;
-struct RD_ViewRuleSpecInfo
-{
-  String8 string;
-  RD_ViewRuleSpecInfoFlags flags;
-  RD_ViewRuleLineStringizeHookFunctionType *line_stringize;
-  RD_ViewRuleRowUIFunctionType *row_ui;
-};
-
-typedef struct RD_ViewRuleSpecInfoArray RD_ViewRuleSpecInfoArray;
-struct RD_ViewRuleSpecInfoArray
-{
-  RD_ViewRuleSpecInfo *v;
-  U64 count;
-};
-
-typedef struct RD_ViewRuleSpec RD_ViewRuleSpec;
-struct RD_ViewRuleSpec
-{
-  RD_ViewRuleSpec *hash_next;
-  RD_ViewRuleSpecInfo info;
 };
 
 ////////////////////////////////
@@ -974,14 +885,6 @@ struct RD_State
   UI_Key entity_ctx_menu_key;
   UI_Key tab_ctx_menu_key;
   
-  // rjf: view specs
-  U64 view_spec_table_size;
-  RD_ViewSpec **view_spec_table;
-  
-  // rjf: view rule specs
-  U64 view_rule_spec_table_size;
-  RD_ViewRuleSpec **view_rule_spec_table;
-  
   // rjf: windows
   RD_Window *first_window;
   RD_Window *last_window;
@@ -1042,24 +945,7 @@ read_only global RD_Entity d_nil_entity =
 
 read_only global RD_CmdKindInfo rd_nil_cmd_kind_info = {0};
 
-read_only global RD_ViewRuleInfo rd_nil_view_rule_info = {0};
-
-read_only global RD_ViewSpec rd_nil_view_spec =
-{
-  &rd_nil_view_spec,
-  {
-    0,
-    {0},
-    {0},
-    RD_IconKind_Null,
-    RD_VIEW_UI_FUNCTION_NAME(null),
-  },
-};
-
-read_only global RD_ViewRuleSpec rd_nil_view_rule_spec =
-{
-  &rd_nil_view_rule_spec,
-};
+read_only global RD_ViewRuleInfo rd_nil_view_rule_info = {{0}, {0}, {0}, {0}, RD_IconKind_Null, 0, 0, RD_VIEW_RULE_UI_FUNCTION_NAME(null)};
 
 read_only global RD_View rd_nil_view =
 {
@@ -1069,7 +955,7 @@ read_only global RD_View rd_nil_view =
   &rd_nil_view,
   &rd_nil_view,
   &rd_nil_view,
-  &rd_nil_view_spec,
+  &rd_nil_view_rule_info,
 };
 
 read_only global RD_Panel rd_nil_panel =
@@ -1176,7 +1062,9 @@ internal RD_View *rd_view_from_handle(RD_Handle handle);
 ////////////////////////////////
 //~ rjf: View Spec Type Functions
 
-internal RD_ViewKind rd_view_kind_from_string(String8 string);
+internal RD_ViewRuleKind rd_view_rule_kind_from_string(String8 string);
+internal RD_ViewRuleInfo *rd_view_rule_info_from_kind(RD_ViewRuleKind kind);
+internal RD_ViewRuleInfo *rd_view_rule_info_from_string(String8 string);
 
 ////////////////////////////////
 //~ rjf: Panel Type Functions
@@ -1313,33 +1201,9 @@ internal Arch rd_arch_from_eval_params(E_Eval eval, MD_Node *params);
 internal Vec2S32 rd_dim2s32_from_eval_params(E_Eval eval, MD_Node *params);
 internal R_Tex2DFormat rd_tex2dformat_from_eval_params(E_Eval eval, MD_Node *params);
 
-//- rjf: eval <-> entity
-#if 0 // TODO(rjf): @msgs
-internal RD_Entity *rd_entity_from_eval_string(String8 string);
-internal String8 rd_eval_string_from_entity(Arena *arena, RD_Entity *entity);
-#endif
-
 //- rjf: eval <-> file path
 internal String8 rd_file_path_from_eval_string(Arena *arena, String8 string);
 internal String8 rd_eval_string_from_file_path(Arena *arena, String8 string);
-
-////////////////////////////////
-//~ rjf: View Rule Kind Functions
-
-internal RD_ViewRuleInfo *rd_view_rule_info_from_string(String8 string);
-
-////////////////////////////////
-//~ rjf: View Spec State Functions
-
-internal void rd_register_view_specs(RD_ViewSpecInfoArray specs);
-internal RD_ViewSpec *rd_view_spec_from_string(String8 string);
-internal RD_ViewSpec *rd_view_spec_from_kind(RD_ViewKind kind);
-
-////////////////////////////////
-//~ rjf: View Rule Spec State Functions
-
-internal void rd_register_view_rule_specs(RD_ViewRuleSpecInfoArray specs);
-internal RD_ViewRuleSpec *rd_view_rule_spec_from_string(String8 string);
 
 ////////////////////////////////
 //~ rjf: View State Functions
@@ -1349,7 +1213,7 @@ internal RD_View *rd_view_alloc(void);
 internal void rd_view_release(RD_View *view);
 
 //- rjf: equipment
-internal void rd_view_equip_spec(RD_View *view, RD_ViewSpec *spec, String8 query, MD_Node *params);
+internal void rd_view_equip_spec(RD_View *view, RD_ViewRuleInfo *spec, String8 query, MD_Node *params);
 internal void rd_view_equip_query(RD_View *view, String8 query);
 internal void rd_view_equip_loading_info(RD_View *view, B32 is_loading, U64 progress_v, U64 progress_target);
 
@@ -1488,13 +1352,8 @@ internal void rd_regs_fill_slot_from_string(RD_RegSlot slot, String8 string);
 ////////////////////////////////
 //~ rjf: Commands
 
-// TODO(rjf): @msgs temporary glue
-#if 0
-internal D_CmdSpec *rd_cmd_spec_from_kind(RD_CmdKind kind);
-#endif
-internal RD_CmdKind rd_cmd_kind_from_string(String8 string);
-
 //- rjf: name -> info
+internal RD_CmdKind rd_cmd_kind_from_string(String8 string);
 internal RD_CmdKindInfo *rd_cmd_kind_info_from_string(String8 string);
 
 //- rjf: pushing

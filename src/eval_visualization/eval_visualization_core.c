@@ -417,7 +417,7 @@ ev_expr_from_expr_view_rules(Arena *arena, E_Expr *expr, EV_ViewRuleList *view_r
   for(EV_ViewRuleNode *n = view_rules->first; n != 0; n = n->next)
   {
     EV_ViewRuleInfo *info = ev_view_rule_info_from_string(n->v.root->string);
-    if(info->flags & EV_ViewRuleInfoFlag_ExprResolution)
+    if(info->expr_resolution != 0)
     {
       expr = info->expr_resolution(arena, expr, n->v.root);
     }
@@ -501,7 +501,7 @@ ev_append_expr_blocks__rec(Arena *arena, EV_View *view, EV_Key parent_key, EV_Ke
     for(EV_ViewRuleNode *n = view_rules->first; n != 0; n = n->next)
     {
       EV_ViewRuleInfo *tln_info = ev_view_rule_info_from_string(n->v.root->string);
-      if(tln_info->flags & EV_ViewRuleInfoFlag_VizBlockProd)
+      if(tln_info->block_prod != 0)
       {
         block_prod_view_rule_info = tln_info;
         block_prod_view_rule_params = n->v.root;
@@ -863,6 +863,7 @@ ev_row_list_push_new(Arena *arena, EV_View *view, EV_WindowedRowList *rows, EV_B
   }
   
   // rjf: fill
+  row->block_kind   = block->kind;
   row->depth        = block->depth;
   row->parent_key   = block->parent_key;
   row->key          = key;

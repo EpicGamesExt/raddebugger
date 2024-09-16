@@ -113,5 +113,5 @@ EV_ViewRuleTable:
 @data(EV_ViewRuleInfo) @c_file ev_builtin_view_rule_info_table:
 {
   @expand(EV_ViewRuleTable a)
-    ```{str8_lit_comp("$(a.string)"), (EV_ViewRuleInfoFlag_Inherited*$(a.ih == "x"))|(EV_ViewRuleInfoFlag_Expandable*$(a.ex == "x"))|(EV_ViewRuleInfoFlag_ExprResolution*$(a.xp == "x"))|(EV_ViewRuleInfoFlag_VizBlockProd*$(a.vb == "x")), $(a.xp == "x" -> "EV_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_NAME("..a.name_lower..")") $(a.xp != "x" -> 0), $(a.vb == "x" -> "EV_VIEW_RULE_BLOCK_PROD_FUNCTION_NAME("..a.name_lower..")") $(a.vb != "x" -> 0), }```;
+    ```{str8_lit_comp("$(a.string)"), (EV_ViewRuleInfoFlag_Inherited*$(a.ih == "x"))|(EV_ViewRuleInfoFlag_Expandable*$(a.ex == "x")), $(a.xp == "x" -> "EV_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_NAME("..a.name_lower..")") $(a.xp != "x" -> 0), $(a.vb == "x" -> "EV_VIEW_RULE_BLOCK_PROD_FUNCTION_NAME("..a.name_lower..")") $(a.vb != "x" -> 0), }```;
 }

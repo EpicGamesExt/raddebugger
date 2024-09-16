@@ -495,7 +495,7 @@ ctrl_msg_list_from_serialized_string(Arena *arena, String8 string)
         read_off += str8_deserial_read_struct(string, read_off, &mei->hit_count);
         read_off += str8_deserial_read_struct(string, read_off, &mei->label.size);
         mei->label.str = push_array_no_zero(arena, U8, mei->label.size);
-        read_off += str8_deserial_read(string, read_off, mei->label.str, mei->location.size, 1);
+        read_off += str8_deserial_read(string, read_off, mei->label.str, mei->label.size, 1);
         read_off += str8_deserial_read_struct(string, read_off, &mei->location.size);
         mei->location.str = push_array_no_zero(arena, U8, mei->location.size);
         read_off += str8_deserial_read(string, read_off, mei->location.str, mei->location.size, 1);

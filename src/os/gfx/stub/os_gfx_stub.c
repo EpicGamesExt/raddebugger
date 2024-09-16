@@ -190,10 +190,10 @@ os_get_events(Arena *arena, B32 wait)
   return evts;
 }
 
-internal OS_EventFlags
-os_get_event_flags(void)
+internal OS_Modifiers
+os_get_modifiers(void)
 {
-  OS_EventFlags f = 0;
+  OS_Modifiers f = 0;
   return f;
 }
 

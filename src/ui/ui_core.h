@@ -140,7 +140,7 @@ struct UI_Event
   UI_EventFlags flags;
   UI_EventDeltaUnit delta_unit;
   OS_Key key;
-  OS_EventFlags modifiers;
+  OS_Modifiers modifiers;
   String8 string;
   String8List paths;
   Vec2F32 pos;
@@ -547,7 +547,7 @@ typedef struct UI_Signal UI_Signal;
 struct UI_Signal
 {
   UI_Box *box;
-  OS_EventFlags event_flags;
+  OS_Modifiers event_flags;
   Vec2S16 scroll;
   UI_SignalFlags f;
 };
@@ -795,8 +795,8 @@ internal B32 ui_next_event(UI_Event **ev);
 internal void ui_eat_event(UI_Event *ev);
 
 //- rjf: event consumption helpers
-internal B32 ui_key_press(OS_EventFlags mods, OS_Key key);
-internal B32 ui_key_release(OS_EventFlags mods, OS_Key key);
+internal B32 ui_key_press(OS_Modifiers mods, OS_Key key);
+internal B32 ui_key_release(OS_Modifiers mods, OS_Key key);
 internal B32 ui_text(U32 character);
 internal B32 ui_slot_press(UI_EventActionSlot slot);
 

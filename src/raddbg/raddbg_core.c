@@ -657,16 +657,36 @@ rd_view_from_handle(RD_Handle handle)
 ////////////////////////////////
 //~ rjf: View Spec Type Functions
 
-internal RD_ViewKind
-rd_view_kind_from_string(String8 string)
+internal RD_ViewRuleKind
+rd_view_rule_kind_from_string(String8 string)
 {
-  RD_ViewKind result = RD_ViewKind_Null;
-  for(U64 idx = 0; idx < ArrayCount(rd_gfx_view_kind_spec_info_table); idx += 1)
+  RD_ViewRuleKind kind = RD_ViewRuleKind_Null;
+  for(EachEnumVal(RD_ViewRuleKind, k))
   {
-    if(str8_match(string, rd_gfx_view_kind_spec_info_table[idx].name, StringMatchFlag_CaseInsensitive))
+    if(str8_match(string, rd_view_rule_kind_info_table[k].string, 0))
     {
-      result = (RD_ViewKind)idx;
+      kind = k;
       break;
+    }
+  }
+  return kind;
+}
+
+internal RD_ViewRuleInfo *
+rd_view_rule_info_from_kind(RD_ViewRuleKind kind)
+{
+  return &rd_view_rule_kind_info_table[kind];
+}
+
+internal RD_ViewRuleInfo *
+rd_view_rule_info_from_string(String8 string)
+{
+  RD_ViewRuleInfo *result = &rd_nil_view_rule_info;
+  {
+    RD_ViewRuleKind kind = rd_view_rule_kind_from_string(string);
+    if(kind != RD_ViewRuleKind_Null)
+    {
+      result = &rd_view_rule_kind_info_table[kind];
     }
   }
   return result;
@@ -896,7 +916,7 @@ rd_selected_tab_from_panel(RD_Panel *panel)
 internal RD_IconKind
 rd_icon_kind_from_view(RD_View *view)
 {
-  RD_IconKind result = view->spec->info.icon_kind;
+  RD_IconKind result = view->spec->icon_kind;
   return result;
 }
 
@@ -923,7 +943,7 @@ rd_title_fstrs_from_view(Arena *arena, RD_View *view, Vec4F32 primary_color, Vec
     DR_FancyString fstr1 =
     {
       rd_font_from_slot(RD_FontSlot_Main),
-      view->spec->info.display_string,
+      view->spec->display_name,
       primary_color,
       size,
     };
@@ -986,13 +1006,13 @@ rd_prefer_dasm_from_window(RD_Window *window)
 {
   RD_Panel *panel = window->focused_panel;
   RD_View *view = rd_selected_tab_from_panel(panel);
-  RD_ViewKind view_kind = rd_view_kind_from_string(view->spec->info.name);
+  RD_ViewRuleKind view_kind = rd_view_rule_kind_from_string(view->spec->string);
   B32 result = 0;
-  if(view_kind == RD_ViewKind_Disasm)
+  if(view_kind == RD_ViewRuleKind_Disasm)
   {
     result = 1;
   }
-  else if(view_kind == RD_ViewKind_Text)
+  else if(view_kind == RD_ViewRuleKind_Text)
   {
     result = 0;
   }
@@ -1003,12 +1023,12 @@ rd_prefer_dasm_from_window(RD_Window *window)
     for(RD_Panel *p = window->root_panel; !rd_panel_is_nil(p); p = rd_panel_rec_depth_first_pre(p).next)
     {
       RD_View *p_view = rd_selected_tab_from_panel(p);
-      RD_ViewKind p_view_kind = rd_view_kind_from_string(p_view->spec->info.name);
-      if(p_view_kind == RD_ViewKind_Text)
+      RD_ViewRuleKind p_view_kind = rd_view_rule_kind_from_string(p_view->spec->string);
+      if(p_view_kind == RD_ViewRuleKind_Text)
       {
         has_src = 1;
       }
-      if(p_view_kind == RD_ViewKind_Disasm)
+      if(p_view_kind == RD_ViewRuleKind_Disasm)
       {
         has_dasm = 1;
       }
@@ -2113,30 +2133,6 @@ rd_tex2dformat_from_eval_params(E_Eval eval, MD_Node *params)
   return result;
 }
 
-//- rjf: eval -> entity
-
-#if 0 // TODO(rjf): @msgs
-internal RD_Entity *
-rd_entity_from_eval_string(String8 string)
-{
-  RD_Entity *entity = &d_nil_entity;
-  {
-    Temp scratch = scratch_begin(0, 0);
-    E_Eval eval = e_eval_from_string(scratch.arena, string);
-    entity = rd_entity_from_eval_space(eval.space);
-    scratch_end(scratch);
-  }
-  return entity;
-}
-
-internal String8
-rd_eval_string_from_entity(Arena *arena, RD_Entity *entity)
-{
-  String8 eval_string = push_str8f(arena, "macro:`$%I64u`", entity->id);
-  return eval_string;
-}
-#endif
-
 //- rjf: eval <-> file path
 
 internal String8
@@ -2163,115 +2159,6 @@ rd_eval_string_from_file_path(Arena *arena, String8 string)
   String8 result = push_str8f(arena, "file:\"%S\"", string_escaped);
   scratch_end(scratch);
   return result;
-}
-
-////////////////////////////////
-//~ rjf: View Rule Kind Functions
-
-internal RD_ViewRuleInfo *
-rd_view_rule_info_from_string(String8 string)
-{
-  RD_ViewRuleInfo *info = &rd_nil_view_rule_info;
-  {
-    // TODO(rjf)
-  }
-  return info;
-}
-
-////////////////////////////////
-//~ rjf: View Spec State Functions
-
-internal void
-rd_register_view_specs(RD_ViewSpecInfoArray specs)
-{
-  for(U64 idx = 0; idx < specs.count; idx += 1)
-  {
-    RD_ViewSpecInfo *src_info = &specs.v[idx];
-    U64 hash = d_hash_from_string(src_info->name);
-    U64 slot_idx = hash%rd_state->view_spec_table_size;
-    RD_ViewSpec *spec = push_array(rd_state->arena, RD_ViewSpec, 1);
-    SLLStackPush_N(rd_state->view_spec_table[slot_idx], spec, hash_next);
-    MemoryCopyStruct(&spec->info, src_info);
-    spec->info.name = push_str8_copy(rd_state->arena, spec->info.name);
-    spec->info.display_string = push_str8_copy(rd_state->arena, spec->info.display_string);
-  }
-}
-
-internal RD_ViewSpec *
-rd_view_spec_from_string(String8 string)
-{
-  RD_ViewSpec *spec = &rd_nil_view_spec;
-  U64 hash = d_hash_from_string(string);
-  U64 slot_idx = hash%rd_state->view_spec_table_size;
-  for(RD_ViewSpec *s = rd_state->view_spec_table[slot_idx];
-      s != 0;
-      s = s->hash_next)
-  {
-    if(str8_match(s->info.name, string, 0))
-    {
-      spec = s;
-      break;
-    }
-  }
-  return spec;
-}
-
-internal RD_ViewSpec *
-rd_view_spec_from_kind(RD_ViewKind kind)
-{
-  RD_ViewSpec *spec = rd_view_spec_from_string(rd_gfx_view_kind_spec_info_table[kind].name);
-  return spec;
-}
-
-////////////////////////////////
-//~ rjf: View Rule Spec State Functions
-
-internal void
-rd_register_view_rule_specs(RD_ViewRuleSpecInfoArray specs)
-{
-  for(U64 idx = 0; idx < specs.count; idx += 1)
-  {
-    // rjf: extract info from array slot
-    RD_ViewRuleSpecInfo *info = &specs.v[idx];
-    
-    // rjf: skip empties
-    if(info->string.size == 0)
-    {
-      continue;
-    }
-    
-    // rjf: determine hash/slot
-    U64 hash = d_hash_from_string(info->string);
-    U64 slot_idx = hash%rd_state->view_rule_spec_table_size;
-    
-    // rjf: allocate node & push
-    RD_ViewRuleSpec *spec = push_array(rd_state->arena, RD_ViewRuleSpec, 1);
-    SLLStackPush_N(rd_state->view_rule_spec_table[slot_idx], spec, hash_next);
-    
-    // rjf: fill node
-    RD_ViewRuleSpecInfo *info_copy = &spec->info;
-    MemoryCopyStruct(info_copy, info);
-    info_copy->string         = push_str8_copy(rd_state->arena, info->string);
-  }
-}
-
-internal RD_ViewRuleSpec *
-rd_view_rule_spec_from_string(String8 string)
-{
-  RD_ViewRuleSpec *spec = &rd_nil_view_rule_spec;
-  {
-    U64 hash = d_hash_from_string(string);
-    U64 slot_idx = hash%rd_state->view_rule_spec_table_size;
-    for(RD_ViewRuleSpec *s = rd_state->view_rule_spec_table[slot_idx]; s != 0; s = s->hash_next)
-    {
-      if(str8_match(string, s->info.string, 0))
-      {
-        spec = s;
-        break;
-      }
-    }
-  }
-  return spec;
 }
 
 ////////////////////////////////
@@ -2302,7 +2189,7 @@ rd_view_alloc(void)
   
   // rjf: initialize
   view->arena = arena_alloc();
-  view->spec = &rd_nil_view_spec;
+  view->spec = &rd_nil_view_rule_info;
   view->project_path_arena = arena_alloc();
   view->project_path = str8_zero();
   for(U64 idx = 0; idx < ArrayCount(view->params_arenas); idx += 1)
@@ -2349,7 +2236,7 @@ rd_view_release(RD_View *view)
 //- rjf: equipment
 
 internal void
-rd_view_equip_spec(RD_View *view, RD_ViewSpec *spec, String8 query, MD_Node *params)
+rd_view_equip_spec(RD_View *view, RD_ViewRuleInfo *spec, String8 query, MD_Node *params)
 {
   // rjf: fill params tree
   for(U64 idx = 0; idx < ArrayCount(view->params_arenas); idx += 1)
@@ -2382,15 +2269,8 @@ rd_view_equip_spec(RD_View *view, RD_ViewSpec *spec, String8 query, MD_Node *par
   }
   MemoryZeroStruct(&view->scroll_pos);
   view->spec = spec;
-  if(spec->info.flags & RD_ViewSpecFlag_ProjectSpecific)
-  {
-    arena_clear(view->project_path_arena);
-    view->project_path = push_str8_copy(view->project_path_arena, rd_cfg_path_from_src(RD_CfgSrc_Project));
-  }
-  else
-  {
-    MemoryZeroStruct(&view->project_path);
-  }
+  arena_clear(view->project_path_arena);
+  view->project_path = push_str8_copy(view->project_path_arena, rd_cfg_path_from_src(RD_CfgSrc_Project));
   view->is_filtering = 0;
   view->is_filtering_t = 0;
 }
@@ -2996,9 +2876,8 @@ rd_window_frame(RD_Window *ws)
               UI_Box *view_preview_container = ui_build_box_from_stringf(UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground|UI_BoxFlag_Clip, "###view_preview_container");
               UI_Parent(view_preview_container) UI_Focus(UI_FocusKind_Off) UI_WidthFill
               {
-                RD_ViewSpec *view_spec = view->spec;
-                RD_ViewUIFunctionType *build_view_ui_function = view_spec->info.ui_hook;
-                build_view_ui_function(view, view->params_roots[view->params_read_gen%ArrayCount(view->params_roots)], str8(view->query_buffer, view->query_string_size), view_preview_container->rect);
+                RD_ViewRuleUIFunctionType *view_ui = view->spec->ui;
+                view_ui(view, str8(view->query_buffer, view->query_string_size), view->params_roots[view->params_read_gen%ArrayCount(view->params_roots)], view_preview_container->rect);
               }
             }
           }
@@ -3781,7 +3660,7 @@ rd_window_frame(RD_Window *ws)
         }
         
         // rjf: filter controls
-        if(view->spec->info.flags & RD_ViewSpecFlag_CanFilter)
+        if(view->spec->flags & RD_ViewRuleInfoFlag_CanFilter)
         {
           if(ui_clicked(rd_cmd_spec_button(rd_cmd_kind_info_table[RD_CmdKind_Filter].display_name)))
           {
@@ -3806,8 +3685,7 @@ rd_window_frame(RD_Window *ws)
         UI_TextPadding(ui_top_font_size()*1.5f) RD_Font(RD_FontSlot_Code)
         {
           Temp scratch = scratch_begin(0, 0);
-          D_ViewRuleSpec *core_vr_spec = d_view_rule_spec_from_string(view->spec->info.name);
-          String8 schema_string = core_vr_spec->info.schema;
+          String8 schema_string = view->spec->params_schema;
           MD_TokenizeResult schema_tokenize = md_tokenize_from_text(scratch.arena, schema_string);
           MD_ParseResult schema_parse = md_parse_from_text_tokens(scratch.arena, str8_zero(), schema_string, schema_tokenize.tokens);
           MD_Node *schema_root = schema_parse.root->first;
@@ -4597,7 +4475,7 @@ rd_window_frame(RD_Window *ws)
               {
                 ui_set_next_fastpath_codepoint(items[idx].codepoint);
                 B32 alt_fastpath_key = 0;
-                if(ui_key_press(OS_EventFlag_Alt, items[idx].key))
+                if(ui_key_press(OS_Modifier_Alt, items[idx].key))
                 {
                   alt_fastpath_key = 1;
                 }
@@ -5154,13 +5032,13 @@ rd_window_frame(RD_Window *ws)
         switch(missing_slot)
         {
           default:{}break;
-          case RD_RegSlot_Entity:{query_view_name = rd_view_kind_name_lower_table[RD_ViewKind_EntityLister];}break;
-          case RD_RegSlot_EntityList:{query_view_name = rd_view_kind_name_lower_table[RD_ViewKind_EntityLister];}break;
-          case RD_RegSlot_FilePath:{query_view_name = rd_view_kind_name_lower_table[RD_ViewKind_FileSystem];}break;
-          case RD_RegSlot_PID:{query_view_name = rd_view_kind_name_lower_table[RD_ViewKind_SystemProcesses];}break;
+          case RD_RegSlot_Entity:    {query_view_name = rd_view_rule_kind_info_table[RD_ViewRuleKind_EntityLister].string;}break;
+          case RD_RegSlot_EntityList:{query_view_name = rd_view_rule_kind_info_table[RD_ViewRuleKind_EntityLister].string;}break;
+          case RD_RegSlot_FilePath:  {query_view_name = rd_view_rule_kind_info_table[RD_ViewRuleKind_FileSystem].string;}break;
+          case RD_RegSlot_PID:       {query_view_name = rd_view_rule_kind_info_table[RD_ViewRuleKind_SystemProcesses].string;}break;
         }
       }
-      RD_ViewSpec *view_spec = rd_view_spec_from_string(query_view_name);
+      RD_ViewRuleInfo *view_spec = rd_view_rule_info_from_string(query_view_name);
       if(ws->query_view_stack_top->spec != view_spec ||
          rd_view_is_nil(ws->query_view_stack_top))
       {
@@ -5264,7 +5142,7 @@ rd_window_frame(RD_Window *ws)
                                             window_rect.y0 + query_container_margin,
                                             window_center.x + query_container_width/2 - (1-ws->query_view_t)*query_container_width/4,
                                             window_rect.y1 - query_container_margin);
-      if(ws->query_view_stack_top->spec == &rd_nil_view_spec)
+      if(ws->query_view_stack_top->spec == &rd_nil_view_rule_info)
       {
         query_container_rect.y1 = query_container_rect.y0 + query_line_edit_height;
       }
@@ -5353,9 +5231,8 @@ rd_window_frame(RD_Window *ws)
       //- rjf: build query view
       UI_Parent(query_container_box) UI_WidthFill UI_Focus(UI_FocusKind_Null)
       {
-        RD_ViewSpec *view_spec = view->spec;
-        RD_ViewUIFunctionType *build_view_ui_function = view_spec->info.ui_hook;
-        build_view_ui_function(view, view->params_roots[view->params_read_gen%ArrayCount(view->params_roots)], str8(view->query_buffer, view->query_string_size), query_container_content_rect);
+        RD_ViewRuleUIFunctionType *view_ui = view->spec->ui;
+        view_ui(view, str8(view->query_buffer, view->query_string_size), view->params_roots[view->params_read_gen%ArrayCount(view->params_roots)], query_container_content_rect);
       }
       
       //- rjf: query submission
@@ -6314,11 +6191,11 @@ rd_window_frame(RD_Window *ws)
                   ui_label(str8_lit("Filter"));
                 }
                 ui_spacer(ui_em(0.5f, 1.f));
-                RD_Font(view->spec->info.flags & RD_ViewSpecFlag_FilterIsCode ? RD_FontSlot_Code : RD_FontSlot_Main)
+                RD_Font(view->spec->flags & RD_ViewRuleInfoFlag_FilterIsCode ? RD_FontSlot_Code : RD_FontSlot_Main)
                   UI_Focus(view->is_filtering ? UI_FocusKind_On : UI_FocusKind_Off)
                   UI_TextPadding(ui_top_font_size()*0.5f)
                 {
-                  UI_Signal sig = rd_line_edit(RD_LineEditFlag_CodeContents*!!(view->spec->info.flags & RD_ViewSpecFlag_FilterIsCode),
+                  UI_Signal sig = rd_line_edit(RD_LineEditFlag_CodeContents*!!(view->spec->flags & RD_ViewRuleInfoFlag_FilterIsCode),
                                                0,
                                                0,
                                                &view->query_cursor,
@@ -6404,15 +6281,15 @@ rd_window_frame(RD_Window *ws)
           //- rjf: build empty view
           UI_Parent(view_container_box) if(rd_view_is_nil(rd_selected_tab_from_panel(panel)))
           {
-            RD_VIEW_UI_FUNCTION_NAME(empty)(&rd_nil_view, &md_nil_node, str8_zero(), content_rect);
+            RD_VIEW_RULE_UI_FUNCTION_NAME(empty)(&rd_nil_view, str8_zero(), &md_nil_node, content_rect);
           }
           
           //- rjf: build tab view
           UI_Parent(view_container_box) if(!rd_view_is_nil(rd_selected_tab_from_panel(panel)))
           {
             RD_View *view = rd_selected_tab_from_panel(panel);
-            RD_ViewUIFunctionType *build_view_ui_function = view->spec->info.ui_hook;
-            build_view_ui_function(view, view->params_roots[view->params_read_gen%ArrayCount(view->params_roots)], str8(view->query_buffer, view->query_string_size), content_rect);
+            RD_ViewRuleUIFunctionType *view_ui = view->spec->ui;
+            view_ui(view, str8(view->query_buffer, view->query_string_size), view->params_roots[view->params_read_gen%ArrayCount(view->params_roots)], content_rect);
           }
           
           //- rjf: pop interaction registers; commit if this is the selected view
@@ -6440,7 +6317,7 @@ rd_window_frame(RD_Window *ws)
         UI_Focus(UI_FocusKind_On)
         {
           RD_View *view = rd_selected_tab_from_panel(panel);
-          if(ui_is_focus_active() && view->spec->info.flags & RD_ViewSpecFlag_TypingAutomaticallyFilters && !view->is_filtering)
+          if(ui_is_focus_active() && view->spec->flags & RD_ViewRuleInfoFlag_TypingAutomaticallyFilters && !view->is_filtering)
           {
             for(UI_Event *evt = 0; ui_next_event(&evt);)
             {
@@ -6458,7 +6335,7 @@ rd_window_frame(RD_Window *ws)
               }
             }
           }
-          if(view->spec->info.flags & RD_ViewSpecFlag_CanFilter && (view->query_string_size != 0 || view->is_filtering) && ui_is_focus_active() && ui_slot_press(UI_EventActionSlot_Cancel))
+          if(view->spec->flags & RD_ViewRuleInfoFlag_CanFilter && (view->query_string_size != 0 || view->is_filtering) && ui_is_focus_active() && ui_slot_press(UI_EventActionSlot_Cancel))
           {
             rd_cmd(RD_CmdKind_ClearFilter, .view = rd_handle_from_view(view));
           }
@@ -6960,7 +6837,7 @@ rd_window_frame(RD_Window *ws)
     //
     for(UI_Event *evt = 0; ui_next_event(&evt);)
     {
-      if(evt->kind == UI_EventKind_Scroll && evt->modifiers & OS_EventFlag_Ctrl)
+      if(evt->kind == UI_EventKind_Scroll && evt->modifiers & OS_Modifier_Ctrl)
       {
         ui_eat_event(evt);
         if(evt->delta_2f32.y < 0)
@@ -8262,7 +8139,7 @@ rd_bind_name(String8 name, RD_Binding binding)
     RD_KeyMapNode *existing_node = 0;
     for(RD_KeyMapNode *n = rd_state->key_map_table[slot].first; n != 0; n = n->hash_next)
     {
-      if(str8_match(n->name, name, 0) && n->binding.key == binding.key && n->binding.flags == binding.flags)
+      if(str8_match(n->name, name, 0) && n->binding.key == binding.key && n->binding.modifiers == binding.modifiers)
       {
         existing_node = n;
         break;
@@ -8295,7 +8172,7 @@ rd_unbind_name(String8 name, RD_Binding binding)
   for(RD_KeyMapNode *n = rd_state->key_map_table[slot].first, *next = 0; n != 0; n = next)
   {
     next = n->hash_next;
-    if(str8_match(n->name, name, 0) && n->binding.key == binding.key && n->binding.flags == binding.flags)
+    if(str8_match(n->name, name, 0) && n->binding.key == binding.key && n->binding.modifiers == binding.modifiers)
     {
       DLLRemove_NP(rd_state->key_map_table[slot].first, rd_state->key_map_table[slot].last, n, hash_next, hash_prev);
       n->hash_next = rd_state->free_key_map_node;
@@ -8313,7 +8190,7 @@ rd_cmd_name_list_from_binding(Arena *arena, RD_Binding binding)
   {
     for(RD_KeyMapNode *n = rd_state->key_map_table[idx].first; n != 0; n = n->hash_next)
     {
-      if(n->binding.key == binding.key && n->binding.flags == binding.flags)
+      if(n->binding.key == binding.key && n->binding.modifiers == binding.modifiers)
       {
         str8_list_push(arena, &result, n->name);
       }
@@ -8706,10 +8583,9 @@ rd_cfg_strings_from_gfx(Arena *arena, String8 root_path, RD_CfgSrc source)
           // rjf: views
           for(RD_View *view = p->first_tab_view; !rd_view_is_nil(view); view = view->order_next)
           {
-            String8 view_string = view->spec->info.name;
+            String8 view_string = view->spec->string;
             
-            // rjf: serialize views which can be serialized
-            if(view->spec->info.flags & RD_ViewSpecFlag_CanSerialize)
+            // rjf: serialize views
             {
               str8_list_pushf(arena, &strs, "%.*s", indentation*2, indent_str.str);
               
@@ -8857,9 +8733,9 @@ rd_cfg_strings_from_gfx(Arena *arena, String8 root_path, RD_CfgSrc source)
       for(U64 idx = 0; idx < string_binding_pair_count; idx += 1)
       {
         RD_StringBindingPair *pair = string_binding_pairs + idx;
-        String8List event_flags_strings = os_string_list_from_event_flags(scratch.arena, pair->binding.flags);
+        String8List modifiers_strings = os_string_list_from_modifiers(scratch.arena, pair->binding.modifiers);
         StringJoin join = {str8_lit(""), str8_lit(" "), str8_lit("")};
-        String8 event_flags_string = str8_list_join(scratch.arena, &event_flags_strings, &join);
+        String8 event_flags_string = str8_list_join(scratch.arena, &modifiers_strings, &join);
         String8 key_string = push_str8_copy(scratch.arena, os_g_key_cfg_string_table[pair->binding.key]);
         for(U64 i = 0; i < event_flags_string.size; i += 1)
         {
@@ -9325,16 +9201,7 @@ rd_regs_fill_slot_from_string(RD_RegSlot slot, String8 string)
 ////////////////////////////////
 //~ rjf: Commands
 
-// TODO(rjf): @msgs temporary glue
-#if 0
-internal D_CmdSpec *
-rd_cmd_spec_from_kind(RD_CmdKind kind)
-{
-  String8 string = df_cmd_kind_spec_info_table[kind].string;
-  D_CmdSpec *result = d_cmd_spec_from_string(string);
-  return result;
-}
-#endif
+//- rjf: name -> info
 
 internal RD_CmdKind
 rd_cmd_kind_from_string(String8 string)
@@ -9350,8 +9217,6 @@ rd_cmd_kind_from_string(String8 string)
   }
   return result;
 }
-
-//- rjf: name -> info
 
 internal RD_CmdKindInfo *
 rd_cmd_kind_info_from_string(String8 string)
@@ -9441,10 +9306,12 @@ rd_init(CmdLine *cmdln)
   rd_state->entities_root = rd_entity_alloc(&d_nil_entity, RD_EntityKind_Root);
   rd_state->key_map_arena = arena_alloc();
   rd_state->popup_arena = arena_alloc();
+#if 0 // TODO(rjf): @msgs
   rd_state->view_spec_table_size = 256;
   rd_state->view_spec_table = push_array(arena, RD_ViewSpec *, rd_state->view_spec_table_size);
   rd_state->view_rule_spec_table_size = 1024;
   rd_state->view_rule_spec_table = push_array(arena, RD_ViewRuleSpec *, d_state->view_rule_spec_table_size);
+#endif
   rd_state->code_ctx_menu_key   = ui_key_from_string(ui_key_zero(), str8_lit("_code_ctx_menu_"));
   rd_state->entity_ctx_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("_entity_ctx_menu_"));
   rd_state->tab_ctx_menu_key    = ui_key_from_string(ui_key_zero(), str8_lit("_tab_ctx_menu_"));
@@ -9465,16 +9332,20 @@ rd_init(CmdLine *cmdln)
   }
   
   // rjf: register gfx layer views
+#if 0 // TODO(rjf): @msgs
   {
     RD_ViewSpecInfoArray array = {rd_gfx_view_kind_spec_info_table, ArrayCount(rd_gfx_view_kind_spec_info_table)};
     rd_register_view_specs(array);
   }
+#endif
   
   // rjf: register gfx layer view rules
+#if 0 // TODO(rjf): @msgs
   {
     RD_ViewRuleSpecInfoArray array = {rd_gfx_view_rule_spec_info_table, ArrayCount(rd_gfx_view_rule_spec_info_table)};
     rd_register_view_rule_specs(array);
   }
+#endif
   
   // rjf: set up user / project paths
   {
@@ -9718,11 +9589,11 @@ rd_frame(void)
         RD_Binding binding = zero_struct;
         {
           binding.key = event->key;
-          binding.flags = event->flags;
+          binding.modifiers = event->modifiers;
         }
         rd_unbind_name(rd_state->bind_change_cmd_name, rd_state->bind_change_binding);
         rd_bind_name(rd_state->bind_change_cmd_name, binding);
-        U32 codepoint = os_codepoint_from_event_flags_and_key(event->flags, event->key);
+        U32 codepoint = os_codepoint_from_modifiers_and_key(event->modifiers, event->key);
         os_text(&events, os_handle_zero(), codepoint);
         os_eat_event(&events, event);
         rd_cmd(rd_cfg_src_write_cmd_kind_table[RD_CfgSrc_User]);
@@ -9760,7 +9631,7 @@ rd_frame(void)
       
       //- rjf: try menu bar operations
       {
-        if(!take && event->kind == OS_EventKind_Press && event->key == OS_Key_Alt && event->flags == 0 && event->is_repeat == 0)
+        if(!take && event->kind == OS_EventKind_Press && event->key == OS_Key_Alt && event->modifiers == 0 && event->is_repeat == 0)
         {
           take = 1;
           rd_request_frame();
@@ -9768,19 +9639,19 @@ rd_frame(void)
           window->menu_bar_key_held = 1;
           window->menu_bar_focus_press_started = 1;
         }
-        if(!take && event->kind == OS_EventKind_Release && event->key == OS_Key_Alt && event->flags == 0 && event->is_repeat == 0)
+        if(!take && event->kind == OS_EventKind_Release && event->key == OS_Key_Alt && event->modifiers == 0 && event->is_repeat == 0)
         {
           take = 1;
           rd_request_frame();
           window->menu_bar_key_held = 0;
         }
-        if(window->menu_bar_focused && event->kind == OS_EventKind_Press && event->key == OS_Key_Alt && event->flags == 0 && event->is_repeat == 0)
+        if(window->menu_bar_focused && event->kind == OS_EventKind_Press && event->key == OS_Key_Alt && event->modifiers == 0 && event->is_repeat == 0)
         {
           take = 1;
           rd_request_frame();
           window->menu_bar_focused = 0;
         }
-        else if(window->menu_bar_focus_press_started && !window->menu_bar_focused && event->kind == OS_EventKind_Release && event->flags == 0 && event->key == OS_Key_Alt && event->is_repeat == 0)
+        else if(window->menu_bar_focus_press_started && !window->menu_bar_focused && event->kind == OS_EventKind_Release && event->modifiers == 0 && event->key == OS_Key_Alt && event->is_repeat == 0)
         {
           take = 1;
           rd_request_frame();
@@ -9798,14 +9669,14 @@ rd_frame(void)
       //- rjf: try hotkey presses
       if(!take && event->kind == OS_EventKind_Press)
       {
-        RD_Binding binding = {event->key, event->flags};
+        RD_Binding binding = {event->key, event->modifiers};
         String8List spec_candidates = rd_cmd_name_list_from_binding(scratch.arena, binding);
         if(spec_candidates.first != 0)
         {
           rd_cmd(RD_CmdKind_RunCommand, .string = spec_candidates.first->string);
-          U32 hit_char = os_codepoint_from_event_flags_and_key(event->flags, event->key);
+          U32 hit_char = os_codepoint_from_modifiers_and_key(event->modifiers, event->key);
           take = 1;
-          if(event->flags & OS_EventFlag_Alt)
+          if(event->modifiers & OS_Modifier_Alt)
           {
             window->menu_bar_focus_press_started = 0;
           }
@@ -9825,7 +9696,7 @@ rd_frame(void)
         rd_cmd(RD_CmdKind_InsertText, .string = insertion8);
         rd_request_frame();
         take = 1;
-        if(event->flags & OS_EventFlag_Alt)
+        if(event->modifiers & OS_Modifier_Alt)
         {
           window->menu_bar_focus_press_started = 0;
         }
@@ -9949,7 +9820,25 @@ rd_frame(void)
         for(RD_EntityNode *n = list.first; n != 0; n = n->next)
         {
           RD_Entity *entity = n->entity;
-          // TODO(rjf): @msgs
+          RD_Entity *loc = rd_entity_child_from_kind(entity, RD_EntityKind_Location);
+          RD_Entity *cnd = rd_entity_child_from_kind(entity, RD_EntityKind_Condition);
+          String8 label_string = push_str8_copy(scratch.arena, entity->string);
+          String8 loc_string = {0};
+          if(loc->flags & RD_EntityFlag_HasTextPoint)
+          {
+            loc_string = push_str8f(scratch.arena, "%S:%I64u:%I64u", loc->string, loc->text_point.line, loc->text_point.column);
+          }
+          else if(loc->flags & RD_EntityFlag_HasVAddr)
+          {
+            loc_string = push_str8f(scratch.arena, "0x%I64x", loc->vaddr);
+          }
+          String8 cnd_string = push_str8_copy(scratch.arena, cnd->string);
+          CTRL_MetaEvalInfo *mei = &rd_state->meta_eval_infos.v[meta_eval_info_idx];
+          mei->enabled   = !entity->disabled;
+          mei->hit_count = entity->u64;
+          mei->label     = label_string;
+          mei->location  = loc_string;
+          mei->condition = cnd_string;
           meta_eval_info_idx += 1;
         }
         switch(evallable_entity_kinds[idx])
@@ -10094,6 +9983,18 @@ rd_frame(void)
     EV_ViewRuleInfoTable *view_rule_info_table = push_array(scratch.arena, EV_ViewRuleInfoTable, 1);
     {
       ev_view_rule_info_table_push_builtins(scratch.arena, view_rule_info_table);
+      for(EachEnumVal(RD_ViewRuleKind, k))
+      {
+        RD_ViewRuleInfo *src_info = &rd_view_rule_kind_info_table[k];
+        if(src_info->flags & RD_ViewRuleInfoFlag_CanUseInWatchTable)
+        {
+          EV_ViewRuleInfo dst_info = {0};
+          dst_info.string     = src_info->string;
+          dst_info.flags      = src_info->flags & RD_ViewRuleInfoFlag_CanExpand ? EV_ViewRuleInfoFlag_Expandable : 0;
+          dst_info.block_prod = src_info->block_prod;
+          ev_view_rule_info_table_push(scratch.arena, view_rule_info_table, &dst_info);
+        }
+      }
     }
     ev_select_view_rule_info_table(view_rule_info_table);
     
@@ -10176,8 +10077,8 @@ rd_frame(void)
             }
             
             // rjf: try to open tabs for "view driver" commands
-            RD_ViewSpec *view_spec = rd_view_spec_from_string(cmd->name);
-            if(view_spec != &rd_nil_view_spec)
+            RD_ViewRuleInfo *view_rule_info = rd_view_rule_info_from_string(cmd->name);
+            if(view_rule_info != &rd_nil_view_rule_info)
             {
               rd_cmd(RD_CmdKind_OpenTab, .string = cmd->name);
             }
@@ -10933,8 +10834,8 @@ rd_frame(void)
                   RD_View *selected_view = &rd_nil_view;
                   for(MD_EachNode(op, n->first))
                   {
-                    RD_ViewSpec *view_spec = rd_view_spec_from_string(op->string);
-                    if(view_spec == &rd_nil_view_spec || has_panel_children != 0)
+                    RD_ViewRuleInfo *view_rule_info = rd_view_rule_info_from_string(op->string);
+                    if(view_rule_info == &rd_nil_view_rule_info || has_panel_children != 0)
                     {
                       continue;
                     }
@@ -10942,8 +10843,7 @@ rd_frame(void)
                     // rjf: allocate view & apply view-specific parameterizations
                     RD_View *view = &rd_nil_view;
                     B32 view_is_selected = 0;
-                    RD_ViewSpecFlags view_spec_flags = view_spec->info.flags;
-                    if(view_spec_flags & RD_ViewSpecFlag_CanSerialize)
+                    RD_ViewRuleInfoFlags view_rule_info_flags = view_rule_info->flags;
                     {
                       // rjf: allocate view
                       view = rd_view_alloc();
@@ -10979,7 +10879,7 @@ rd_frame(void)
                       }
                       
                       // rjf: set up view
-                      rd_view_equip_spec(view, view_spec, view_query, op);
+                      rd_view_equip_spec(view, view_rule_info, view_query, op);
                       if(project_path.size != 0)
                       {
                         arena_clear(view->project_path_arena);
@@ -11112,10 +11012,10 @@ rd_frame(void)
                 }
                 if(cmd_name.size != 0 && key != OS_Key_Null)
                 {
-                  OS_EventFlags flags = 0;
-                  if(!md_node_is_nil(ctrl_node))  { flags |= OS_EventFlag_Ctrl; }
-                  if(!md_node_is_nil(shift_node)) { flags |= OS_EventFlag_Shift; }
-                  if(!md_node_is_nil(alt_node))   { flags |= OS_EventFlag_Alt; }
+                  OS_Modifiers flags = 0;
+                  if(!md_node_is_nil(ctrl_node))  { flags |= OS_Modifier_Ctrl; }
+                  if(!md_node_is_nil(shift_node)) { flags |= OS_Modifier_Shift; }
+                  if(!md_node_is_nil(alt_node))   { flags |= OS_Modifier_Alt; }
                   RD_Binding binding = {key, flags};
                   rd_bind_name(cmd_name, binding);
                 }
@@ -12020,8 +11920,6 @@ rd_frame(void)
           {
             RD_Panel *panel = rd_panel_from_handle(rd_regs()->panel);
             RD_View *view = rd_selected_tab_from_panel(panel);
-            RD_ViewKind view_kind = rd_view_kind_from_string(view->spec->info.name);
-            if(view_kind == RD_ViewKind_Text)
             {
               String8 file_path      = rd_file_path_from_eval_string(scratch.arena, str8(view->query_buffer, view->query_string_size));
               String8 file_full_path = path_normalized_from_string(scratch.arena, file_path);
@@ -12108,29 +12006,29 @@ rd_frame(void)
               for(RD_View *view = panel->first_tab_view, *next = 0; !rd_view_is_nil(view); view = next)
               {
                 next = view->order_next;
-                RD_ViewKind view_kind = rd_view_kind_from_string(view->spec->info.name);
+                RD_ViewRuleKind view_rule_kind = rd_view_rule_kind_from_string(view->spec->string);
                 B32 needs_delete = 1;
-                switch(view_kind)
+                switch(view_rule_kind)
                 {
                   default:{}break;
-                  case RD_ViewKind_Watch:         {if(rd_view_is_nil(watch))               { needs_delete = 0; watch = view;} }break;
-                  case RD_ViewKind_Locals:        {if(rd_view_is_nil(locals))              { needs_delete = 0; locals = view;} }break;
-                  case RD_ViewKind_Registers:     {if(rd_view_is_nil(regs))                { needs_delete = 0; regs = view;} }break;
-                  case RD_ViewKind_Globals:       {if(rd_view_is_nil(globals))             { needs_delete = 0; globals = view;} }break;
-                  case RD_ViewKind_ThreadLocals:  {if(rd_view_is_nil(tlocals))             { needs_delete = 0; tlocals = view;} }break;
-                  case RD_ViewKind_Types:         {if(rd_view_is_nil(types))               { needs_delete = 0; types = view;} }break;
-                  case RD_ViewKind_Procedures:    {if(rd_view_is_nil(procs))               { needs_delete = 0; procs = view;} }break;
-                  case RD_ViewKind_CallStack:     {if(rd_view_is_nil(callstack))           { needs_delete = 0; callstack = view;} }break;
-                  case RD_ViewKind_Breakpoints:   {if(rd_view_is_nil(breakpoints))         { needs_delete = 0; breakpoints = view;} }break;
-                  case RD_ViewKind_WatchPins:     {if(rd_view_is_nil(watch_pins))          { needs_delete = 0; watch_pins = view;} }break;
-                  case RD_ViewKind_Output:        {if(rd_view_is_nil(output))              { needs_delete = 0; output = view;} }break;
-                  case RD_ViewKind_Targets:       {if(rd_view_is_nil(targets))             { needs_delete = 0; targets = view;} }break;
-                  case RD_ViewKind_Scheduler:     {if(rd_view_is_nil(scheduler))           { needs_delete = 0; scheduler = view;} }break;
-                  case RD_ViewKind_Modules:       {if(rd_view_is_nil(modules))             { needs_delete = 0; modules = view;} }break;
-                  case RD_ViewKind_Disasm:        {if(rd_view_is_nil(disasm))              { needs_delete = 0; disasm = view;} }break;
-                  case RD_ViewKind_Memory:        {if(rd_view_is_nil(memory))              { needs_delete = 0; memory = view;} }break;
-                  case RD_ViewKind_GettingStarted:{if(rd_view_is_nil(getting_started))     { needs_delete = 0; getting_started = view;} }break;
-                  case RD_ViewKind_Text:
+                  case RD_ViewRuleKind_Watch:         {if(rd_view_is_nil(watch))               { needs_delete = 0; watch = view;} }break;
+                  case RD_ViewRuleKind_Locals:        {if(rd_view_is_nil(locals))              { needs_delete = 0; locals = view;} }break;
+                  case RD_ViewRuleKind_Registers:     {if(rd_view_is_nil(regs))                { needs_delete = 0; regs = view;} }break;
+                  case RD_ViewRuleKind_Globals:       {if(rd_view_is_nil(globals))             { needs_delete = 0; globals = view;} }break;
+                  case RD_ViewRuleKind_ThreadLocals:  {if(rd_view_is_nil(tlocals))             { needs_delete = 0; tlocals = view;} }break;
+                  case RD_ViewRuleKind_Types:         {if(rd_view_is_nil(types))               { needs_delete = 0; types = view;} }break;
+                  case RD_ViewRuleKind_Procedures:    {if(rd_view_is_nil(procs))               { needs_delete = 0; procs = view;} }break;
+                  case RD_ViewRuleKind_CallStack:     {if(rd_view_is_nil(callstack))           { needs_delete = 0; callstack = view;} }break;
+                  case RD_ViewRuleKind_Breakpoints:   {if(rd_view_is_nil(breakpoints))         { needs_delete = 0; breakpoints = view;} }break;
+                  case RD_ViewRuleKind_WatchPins:     {if(rd_view_is_nil(watch_pins))          { needs_delete = 0; watch_pins = view;} }break;
+                  case RD_ViewRuleKind_Output:        {if(rd_view_is_nil(output))              { needs_delete = 0; output = view;} }break;
+                  case RD_ViewRuleKind_Targets:       {if(rd_view_is_nil(targets))             { needs_delete = 0; targets = view;} }break;
+                  case RD_ViewRuleKind_Scheduler:     {if(rd_view_is_nil(scheduler))           { needs_delete = 0; scheduler = view;} }break;
+                  case RD_ViewRuleKind_Modules:       {if(rd_view_is_nil(modules))             { needs_delete = 0; modules = view;} }break;
+                  case RD_ViewRuleKind_Disasm:        {if(rd_view_is_nil(disasm))              { needs_delete = 0; disasm = view;} }break;
+                  case RD_ViewRuleKind_Memory:        {if(rd_view_is_nil(memory))              { needs_delete = 0; memory = view;} }break;
+                  case RD_ViewRuleKind_GettingStarted:{if(rd_view_is_nil(getting_started))     { needs_delete = 0; getting_started = view;} }break;
+                  case RD_ViewRuleKind_Text:
                   {
                     needs_delete = 0;
                     rd_handle_list_push(scratch.arena, &code_views, rd_handle_from_view(view));
@@ -12162,87 +12060,87 @@ rd_frame(void)
             if(rd_view_is_nil(watch))
             {
               watch = rd_view_alloc();
-              rd_view_equip_spec(watch, rd_view_spec_from_kind(RD_ViewKind_Watch), str8_zero(), &md_nil_node);
+              rd_view_equip_spec(watch, rd_view_rule_info_from_kind(RD_ViewRuleKind_Watch), str8_zero(), &md_nil_node);
             }
             if(layout == Layout_Default && rd_view_is_nil(locals))
             {
               locals = rd_view_alloc();
-              rd_view_equip_spec(locals, rd_view_spec_from_kind(RD_ViewKind_Locals), str8_zero(), &md_nil_node);
+              rd_view_equip_spec(locals, rd_view_rule_info_from_kind(RD_ViewRuleKind_Locals), str8_zero(), &md_nil_node);
             }
             if(layout == Layout_Default && rd_view_is_nil(regs))
             {
               regs = rd_view_alloc();
-              rd_view_equip_spec(regs, rd_view_spec_from_kind(RD_ViewKind_Registers), str8_zero(), &md_nil_node);
+              rd_view_equip_spec(regs, rd_view_rule_info_from_kind(RD_ViewRuleKind_Registers), str8_zero(), &md_nil_node);
             }
             if(layout == Layout_Default && rd_view_is_nil(globals))
             {
               globals = rd_view_alloc();
-              rd_view_equip_spec(globals, rd_view_spec_from_kind(RD_ViewKind_Globals), str8_zero(), &md_nil_node);
+              rd_view_equip_spec(globals, rd_view_rule_info_from_kind(RD_ViewRuleKind_Globals), str8_zero(), &md_nil_node);
             }
             if(layout == Layout_Default && rd_view_is_nil(tlocals))
             {
               tlocals = rd_view_alloc();
-              rd_view_equip_spec(tlocals, rd_view_spec_from_kind(RD_ViewKind_ThreadLocals), str8_zero(), &md_nil_node);
+              rd_view_equip_spec(tlocals, rd_view_rule_info_from_kind(RD_ViewRuleKind_ThreadLocals), str8_zero(), &md_nil_node);
             }
             if(rd_view_is_nil(types))
             {
               types = rd_view_alloc();
-              rd_view_equip_spec(types, rd_view_spec_from_kind(RD_ViewKind_Types), str8_zero(), &md_nil_node);
+              rd_view_equip_spec(types, rd_view_rule_info_from_kind(RD_ViewRuleKind_Types), str8_zero(), &md_nil_node);
             }
             if(layout == Layout_Default && rd_view_is_nil(procs))
             {
               procs = rd_view_alloc();
-              rd_view_equip_spec(procs, rd_view_spec_from_kind(RD_ViewKind_Procedures), str8_zero(), &md_nil_node);
+              rd_view_equip_spec(procs, rd_view_rule_info_from_kind(RD_ViewRuleKind_Procedures), str8_zero(), &md_nil_node);
             }
             if(rd_view_is_nil(callstack))
             {
               callstack = rd_view_alloc();
-              rd_view_equip_spec(callstack, rd_view_spec_from_kind(RD_ViewKind_CallStack), str8_zero(), &md_nil_node);
+              rd_view_equip_spec(callstack, rd_view_rule_info_from_kind(RD_ViewRuleKind_CallStack), str8_zero(), &md_nil_node);
             }
             if(rd_view_is_nil(breakpoints))
             {
               breakpoints = rd_view_alloc();
-              rd_view_equip_spec(breakpoints, rd_view_spec_from_kind(RD_ViewKind_Breakpoints), str8_zero(), &md_nil_node);
+              rd_view_equip_spec(breakpoints, rd_view_rule_info_from_kind(RD_ViewRuleKind_Breakpoints), str8_zero(), &md_nil_node);
             }
             if(layout == Layout_Default && rd_view_is_nil(watch_pins))
             {
               watch_pins = rd_view_alloc();
-              rd_view_equip_spec(watch_pins, rd_view_spec_from_kind(RD_ViewKind_WatchPins), str8_zero(), &md_nil_node);
+              rd_view_equip_spec(watch_pins, rd_view_rule_info_from_kind(RD_ViewRuleKind_WatchPins), str8_zero(), &md_nil_node);
             }
             if(rd_view_is_nil(output))
             {
               output = rd_view_alloc();
-              rd_view_equip_spec(output, rd_view_spec_from_kind(RD_ViewKind_Output), str8_zero(), &md_nil_node);
+              rd_view_equip_spec(output, rd_view_rule_info_from_kind(RD_ViewRuleKind_Output), str8_zero(), &md_nil_node);
             }
             if(rd_view_is_nil(targets))
             {
               targets = rd_view_alloc();
-              rd_view_equip_spec(targets, rd_view_spec_from_kind(RD_ViewKind_Targets), str8_zero(), &md_nil_node);
+              rd_view_equip_spec(targets, rd_view_rule_info_from_kind(RD_ViewRuleKind_Targets), str8_zero(), &md_nil_node);
             }
             if(rd_view_is_nil(scheduler))
             {
               scheduler = rd_view_alloc();
-              rd_view_equip_spec(scheduler, rd_view_spec_from_kind(RD_ViewKind_Scheduler), str8_zero(), &md_nil_node);
+              rd_view_equip_spec(scheduler, rd_view_rule_info_from_kind(RD_ViewRuleKind_Scheduler), str8_zero(), &md_nil_node);
             }
             if(rd_view_is_nil(modules))
             {
               modules = rd_view_alloc();
-              rd_view_equip_spec(modules, rd_view_spec_from_kind(RD_ViewKind_Modules), str8_zero(), &md_nil_node);
+              rd_view_equip_spec(modules, rd_view_rule_info_from_kind(RD_ViewRuleKind_Modules), str8_zero(), &md_nil_node);
             }
             if(rd_view_is_nil(disasm))
             {
               disasm = rd_view_alloc();
-              rd_view_equip_spec(disasm, rd_view_spec_from_kind(RD_ViewKind_Disasm), str8_zero(), &md_nil_node);
+              rd_view_equip_spec(disasm, rd_view_rule_info_from_kind(RD_ViewRuleKind_Disasm), str8_zero(), &md_nil_node);
             }
             if(layout == Layout_Default && rd_view_is_nil(memory))
             {
               memory = rd_view_alloc();
-              rd_view_equip_spec(memory, rd_view_spec_from_kind(RD_ViewKind_Memory), str8_zero(), &md_nil_node);
+              rd_view_equip_spec(memory, rd_view_rule_info_from_kind(RD_ViewRuleKind_Memory), str8_zero(), &md_nil_node);
             }
             if(code_views.count == 0 && rd_view_is_nil(getting_started))
             {
               getting_started = rd_view_alloc();
-              rd_view_equip_spec(getting_started, rd_view_spec_from_kind(RD_ViewKind_GettingStarted), str8_zero(), &md_nil_node);
+              rd_view_equip_spec(getting_started, rd_view_rule_info_from_kind(RD_ViewRuleKind_GettingStarted), str8_zero(), &md_nil_node);
             }
             
             //- rjf: apply layout
@@ -12830,8 +12728,8 @@ rd_frame(void)
               {
                 if(rd_view_is_project_filtered(view)) { continue; }
                 String8 view_file_path = rd_file_path_from_eval_string(scratch.arena, str8(view->query_buffer, view->query_string_size));
-                RD_ViewKind view_kind = rd_view_kind_from_string(view->spec->info.name);
-                if((view_kind == RD_ViewKind_Text || view_kind == RD_ViewKind_PendingFile) &&
+                RD_ViewRuleKind view_kind = rd_view_rule_kind_from_string(view->spec->string);
+                if((view_kind == RD_ViewRuleKind_Text || view_kind == RD_ViewRuleKind_PendingFile) &&
                    path_match_normalized(view_file_path, file_path))
                 {
                   panel_w_this_src_code = panel;
@@ -12855,8 +12753,8 @@ rd_frame(void)
               for(RD_View *view = panel->first_tab_view; !rd_view_is_nil(view); view = view->order_next)
               {
                 if(rd_view_is_project_filtered(view)) { continue; }
-                RD_ViewKind view_kind = rd_view_kind_from_string(view->spec->info.name);
-                if(view_kind == RD_ViewKind_Text)
+                RD_ViewRuleKind view_kind = rd_view_rule_kind_from_string(view->spec->string);
+                if(view_kind == RD_ViewRuleKind_Text)
                 {
                   panel_w_any_src_code = panel;
                   break;
@@ -12876,8 +12774,8 @@ rd_frame(void)
               for(RD_View *view = panel->first_tab_view; !rd_view_is_nil(view); view = view->order_next)
               {
                 if(rd_view_is_project_filtered(view)) { continue; }
-                RD_ViewKind view_kind = rd_view_kind_from_string(view->spec->info.name);
-                if(view_kind == RD_ViewKind_Disasm && view->query_string_size == 0)
+                RD_ViewRuleKind view_kind = rd_view_rule_kind_from_string(view->spec->string);
+                if(view_kind == RD_ViewRuleKind_Disasm && view->query_string_size == 0)
                 {
                   panel_w_disasm = panel;
                   view_w_disasm = view;
@@ -12962,7 +12860,7 @@ rd_frame(void)
               {
                 RD_View *view = rd_view_alloc();
                 String8 file_path_query = rd_eval_string_from_file_path(scratch.arena, file_path);
-                rd_view_equip_spec(view, rd_view_spec_from_kind(RD_ViewKind_Text), file_path_query, &md_nil_node);
+                rd_view_equip_spec(view, rd_view_rule_info_from_kind(RD_ViewRuleKind_Text), file_path_query, &md_nil_node);
                 rd_panel_insert_tab_view(dst_panel, dst_panel->last_tab_view, view);
                 dst_view = view;
               }
@@ -13007,7 +12905,7 @@ rd_frame(void)
               if(!rd_panel_is_nil(dst_panel) && rd_view_is_nil(view_w_disasm))
               {
                 RD_View *view = rd_view_alloc();
-                rd_view_equip_spec(view, rd_view_spec_from_kind(RD_ViewKind_Disasm), str8_zero(), &md_nil_node);
+                rd_view_equip_spec(view, rd_view_rule_info_from_kind(RD_ViewRuleKind_Disasm), str8_zero(), &md_nil_node);
                 rd_panel_insert_tab_view(dst_panel, dst_panel->last_tab_view, view);
                 dst_view = view;
               }
@@ -13044,7 +12942,7 @@ rd_frame(void)
                 break;
               }
             }
-            if(view_is_tab && view->spec->info.flags & RD_ViewSpecFlag_CanFilter)
+            if(view_is_tab && view->spec->flags & RD_ViewRuleInfoFlag_CanFilter)
             {
               view->is_filtering ^= 1;
               view->query_cursor = txt_pt(1, 1+(S64)view->query_string_size);
@@ -13505,7 +13403,7 @@ rd_frame(void)
               }
               ui_event.kind         = kind;
               ui_event.key          = os_event->key;
-              ui_event.modifiers    = os_event->flags;
+              ui_event.modifiers    = os_event->modifiers;
               ui_event.string       = os_event->character ? str8_from_32(ui_build_arena(), str32(&os_event->character, 1)) : str8_zero();
               ui_event.paths        = str8_list_copy(ui_build_arena(), &os_event->strings);
               ui_event.pos          = os_event->pos;

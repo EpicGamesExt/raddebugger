@@ -104,7 +104,7 @@ rd_cmd_binding_buttons(String8 name)
     B32 rebinding_active_for_this_binding = (rd_state->bind_change_active &&
                                              str8_match(rd_state->bind_change_cmd_name, name, 0) &&
                                              rd_state->bind_change_binding.key == binding.key &&
-                                             rd_state->bind_change_binding.flags == binding.flags);
+                                             rd_state->bind_change_binding.modifiers == binding.modifiers);
     
     //- rjf: grab all conflicts
     String8List specs_with_binding = rd_cmd_name_list_from_binding(scratch.arena, binding);
@@ -123,7 +123,7 @@ rd_cmd_binding_buttons(String8 name)
     {
       if(binding.key != OS_Key_Null)
       {
-        String8List mods = os_string_list_from_event_flags(scratch.arena, binding.flags);
+        String8List mods = os_string_list_from_modifiers(scratch.arena, binding.modifiers);
         String8 key = os_g_key_display_string_table[binding.key];
         str8_list_push(scratch.arena, &mods, key);
         StringJoin join = {0};
@@ -167,7 +167,7 @@ rd_cmd_binding_buttons(String8 name)
                                             UI_BoxFlag_DrawHotEffects|
                                             UI_BoxFlag_DrawBorder|
                                             UI_BoxFlag_DrawBackground,
-                                            "%S###bind_btn_%S_%x_%x", keybinding_str, name, binding.key, binding.flags);
+                                            "%S###bind_btn_%S_%x_%x", keybinding_str, name, binding.key, binding.modifiers);
     
     //- rjf: interaction
     UI_Signal sig = ui_signal_from_box(box);
@@ -175,7 +175,7 @@ rd_cmd_binding_buttons(String8 name)
       // rjf: click => toggle activity
       if(!rd_state->bind_change_active && ui_clicked(sig))
       {
-        if((binding.key == OS_Key_Esc || binding.key == OS_Key_Delete) && binding.flags == 0)
+        if((binding.key == OS_Key_Esc || binding.key == OS_Key_Delete) && binding.modifiers == 0)
         {
           log_user_error(str8_lit("Cannot rebind; this command uses a reserved keybinding."));
         }
@@ -235,7 +235,7 @@ rd_cmd_binding_buttons(String8 name)
     B32 adding_new_binding = (rd_state->bind_change_active &&
                               str8_match(rd_state->bind_change_cmd_name, name, 0) &&
                               rd_state->bind_change_binding.key == OS_Key_Null &&
-                              rd_state->bind_change_binding.flags == 0);
+                              rd_state->bind_change_binding.modifiers == 0);
     if(adding_new_binding)
     {
       palette = ui_build_palette(ui_top_palette());
@@ -960,7 +960,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   CTRL_Event stop_event = d_ctrl_last_stop_event();
   CTRL_Entity *stopper_thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, stop_event.entity);
   B32 is_focused = ui_is_focus_active();
-  B32 ctrlified = (os_get_event_flags() & OS_EventFlag_Ctrl);
+  B32 ctrlified = (os_get_modifiers() & OS_Modifier_Ctrl);
   Vec4F32 code_line_bgs[] =
   {
     rd_rgba_from_theme_color(RD_ThemeColor_LineInfoBackground0),

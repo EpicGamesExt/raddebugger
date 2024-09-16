@@ -416,49 +416,11 @@ RD_ViewRuleKind_Disasm,
 RD_ViewRuleKind_Output,
 RD_ViewRuleKind_Memory,
 RD_ViewRuleKind_Bitmap,
+RD_ViewRuleKind_Checkbox,
 RD_ViewRuleKind_ColorRGBA,
 RD_ViewRuleKind_Geo3D,
 RD_ViewRuleKind_COUNT,
 } RD_ViewRuleKind;
-
-typedef enum RD_ViewKind
-{
-RD_ViewKind_Null,
-RD_ViewKind_Empty,
-RD_ViewKind_GettingStarted,
-RD_ViewKind_Commands,
-RD_ViewKind_FileSystem,
-RD_ViewKind_SystemProcesses,
-RD_ViewKind_EntityLister,
-RD_ViewKind_SymbolLister,
-RD_ViewKind_Target,
-RD_ViewKind_Targets,
-RD_ViewKind_FilePathMap,
-RD_ViewKind_AutoViewRules,
-RD_ViewKind_Breakpoints,
-RD_ViewKind_WatchPins,
-RD_ViewKind_Scheduler,
-RD_ViewKind_CallStack,
-RD_ViewKind_Modules,
-RD_ViewKind_Watch,
-RD_ViewKind_Locals,
-RD_ViewKind_Registers,
-RD_ViewKind_Globals,
-RD_ViewKind_ThreadLocals,
-RD_ViewKind_Types,
-RD_ViewKind_Procedures,
-RD_ViewKind_PendingFile,
-RD_ViewKind_Text,
-RD_ViewKind_Disasm,
-RD_ViewKind_Output,
-RD_ViewKind_Memory,
-RD_ViewKind_Bitmap,
-RD_ViewKind_ColorRGBA,
-RD_ViewKind_Geo3D,
-RD_ViewKind_ExceptionFilters,
-RD_ViewKind_Settings,
-RD_ViewKind_COUNT,
-} RD_ViewKind;
 
 typedef enum RD_ThemeColor
 {
@@ -644,6 +606,7 @@ String8 display_name;
 String8 params_schema;
 RD_IconKind icon_kind;
 RD_ViewRuleInfoFlags flags;
+EV_ViewRuleBlockProdHookFunctionType *block_prod;
 RD_ViewRuleUIFunctionType *ui;
 };
 
@@ -680,41 +643,47 @@ RD_ViewRuleUIFunctionType *ui;
 .params_tree = rd_regs()->params_tree,\
 .os_event = rd_regs()->os_event,\
 
-RD_VIEW_UI_FUNCTION_DEF(null);
-RD_VIEW_UI_FUNCTION_DEF(empty);
-RD_VIEW_UI_FUNCTION_DEF(getting_started);
-RD_VIEW_UI_FUNCTION_DEF(commands);
-RD_VIEW_UI_FUNCTION_DEF(file_system);
-RD_VIEW_UI_FUNCTION_DEF(system_processes);
-RD_VIEW_UI_FUNCTION_DEF(entity_lister);
-RD_VIEW_UI_FUNCTION_DEF(symbol_lister);
-RD_VIEW_UI_FUNCTION_DEF(target);
-RD_VIEW_UI_FUNCTION_DEF(targets);
-RD_VIEW_UI_FUNCTION_DEF(file_path_map);
-RD_VIEW_UI_FUNCTION_DEF(auto_view_rules);
-RD_VIEW_UI_FUNCTION_DEF(breakpoints);
-RD_VIEW_UI_FUNCTION_DEF(watch_pins);
-RD_VIEW_UI_FUNCTION_DEF(scheduler);
-RD_VIEW_UI_FUNCTION_DEF(call_stack);
-RD_VIEW_UI_FUNCTION_DEF(modules);
-RD_VIEW_UI_FUNCTION_DEF(watch);
-RD_VIEW_UI_FUNCTION_DEF(locals);
-RD_VIEW_UI_FUNCTION_DEF(registers);
-RD_VIEW_UI_FUNCTION_DEF(globals);
-RD_VIEW_UI_FUNCTION_DEF(thread_locals);
-RD_VIEW_UI_FUNCTION_DEF(types);
-RD_VIEW_UI_FUNCTION_DEF(procedures);
-RD_VIEW_UI_FUNCTION_DEF(pending_file);
-RD_VIEW_UI_FUNCTION_DEF(text);
-RD_VIEW_UI_FUNCTION_DEF(disasm);
-RD_VIEW_UI_FUNCTION_DEF(output);
-RD_VIEW_UI_FUNCTION_DEF(memory);
-RD_VIEW_UI_FUNCTION_DEF(bitmap);
-RD_VIEW_UI_FUNCTION_DEF(color_rgba);
-RD_VIEW_UI_FUNCTION_DEF(geo3d);
-RD_VIEW_UI_FUNCTION_DEF(exception_filters);
-RD_VIEW_UI_FUNCTION_DEF(settings);
-
+RD_VIEW_RULE_UI_FUNCTION_DEF(null);
+EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(text);
+EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(disasm);
+EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(memory);
+EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(bitmap);
+EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(checkbox);
+EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(color_rgba);
+EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(geo3d);
+RD_VIEW_RULE_UI_FUNCTION_DEF(empty);
+RD_VIEW_RULE_UI_FUNCTION_DEF(getting_started);
+RD_VIEW_RULE_UI_FUNCTION_DEF(exception_filters);
+RD_VIEW_RULE_UI_FUNCTION_DEF(settings);
+RD_VIEW_RULE_UI_FUNCTION_DEF(pending_file);
+RD_VIEW_RULE_UI_FUNCTION_DEF(commands);
+RD_VIEW_RULE_UI_FUNCTION_DEF(file_system);
+RD_VIEW_RULE_UI_FUNCTION_DEF(system_processes);
+RD_VIEW_RULE_UI_FUNCTION_DEF(entity_lister);
+RD_VIEW_RULE_UI_FUNCTION_DEF(symbol_lister);
+RD_VIEW_RULE_UI_FUNCTION_DEF(watch);
+RD_VIEW_RULE_UI_FUNCTION_DEF(locals);
+RD_VIEW_RULE_UI_FUNCTION_DEF(registers);
+RD_VIEW_RULE_UI_FUNCTION_DEF(globals);
+RD_VIEW_RULE_UI_FUNCTION_DEF(thread_locals);
+RD_VIEW_RULE_UI_FUNCTION_DEF(types);
+RD_VIEW_RULE_UI_FUNCTION_DEF(procedures);
+RD_VIEW_RULE_UI_FUNCTION_DEF(targets);
+RD_VIEW_RULE_UI_FUNCTION_DEF(file_path_map);
+RD_VIEW_RULE_UI_FUNCTION_DEF(auto_view_rules);
+RD_VIEW_RULE_UI_FUNCTION_DEF(breakpoints);
+RD_VIEW_RULE_UI_FUNCTION_DEF(watch_pins);
+RD_VIEW_RULE_UI_FUNCTION_DEF(scheduler);
+RD_VIEW_RULE_UI_FUNCTION_DEF(call_stack);
+RD_VIEW_RULE_UI_FUNCTION_DEF(modules);
+RD_VIEW_RULE_UI_FUNCTION_DEF(text);
+RD_VIEW_RULE_UI_FUNCTION_DEF(disasm);
+RD_VIEW_RULE_UI_FUNCTION_DEF(output);
+RD_VIEW_RULE_UI_FUNCTION_DEF(memory);
+RD_VIEW_RULE_UI_FUNCTION_DEF(bitmap);
+RD_VIEW_RULE_UI_FUNCTION_DEF(checkbox);
+RD_VIEW_RULE_UI_FUNCTION_DEF(color_rgba);
+RD_VIEW_RULE_UI_FUNCTION_DEF(geo3d);
 C_LINKAGE_BEGIN
 extern String8 rd_cfg_src_string_table[4];
 extern RD_CmdKind rd_cfg_src_load_cmd_kind_table[4];
@@ -730,8 +699,7 @@ extern RD_StringBindingPair rd_default_binding_table[110];
 extern String8 rd_binding_version_remap_old_name_table[7];
 extern String8 rd_binding_version_remap_new_name_table[7];
 extern String8 rd_icon_kind_text_table[69];
-extern String8 rd_view_kind_name_lower_table[34];
-extern RD_ViewSpecInfo rd_gfx_view_kind_spec_info_table[34];
+extern RD_ViewRuleInfo rd_view_rule_kind_info_table[34];
 extern RD_IconKind rd_entity_kind_icon_kind_table[30];
 extern String8 rd_theme_preset_display_string_table[9];
 extern String8 rd_theme_preset_code_string_table[9];

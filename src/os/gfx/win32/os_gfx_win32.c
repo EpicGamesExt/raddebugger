@@ -101,7 +101,7 @@ os_w32_push_event(OS_EventKind kind, OS_W32_Window *window)
 {
   OS_Event *result = os_event_list_push_new(os_w32_event_arena, &os_w32_event_list, kind);
   result->window = os_w32_handle_from_window(window);
-  result->flags = os_get_event_flags();
+  result->modifiers = os_get_modifiers();
   return result;
 }
 
@@ -475,9 +475,9 @@ os_w32_wnd_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
         event->repeat_count = lParam & bitmask16;
         event->is_repeat = is_repeat;
         event->right_sided = right_sided;
-        if(event->key == OS_Key_Alt   && event->flags & OS_EventFlag_Alt)   { event->flags &= ~OS_EventFlag_Alt; }
-        if(event->key == OS_Key_Ctrl  && event->flags & OS_EventFlag_Ctrl)  { event->flags &= ~OS_EventFlag_Ctrl; }
-        if(event->key == OS_Key_Shift && event->flags & OS_EventFlag_Shift) { event->flags &= ~OS_EventFlag_Shift; }
+        if(event->key == OS_Key_Alt   && event->modifiers & OS_Modifier_Alt)   { event->modifiers &= ~OS_Modifier_Alt; }
+        if(event->key == OS_Key_Ctrl  && event->modifiers & OS_Modifier_Ctrl)  { event->modifiers &= ~OS_Modifier_Ctrl; }
+        if(event->key == OS_Key_Shift && event->modifiers & OS_Modifier_Shift) { event->modifiers &= ~OS_Modifier_Shift; }
       }break;
       
       case WM_SYSCHAR:
@@ -493,7 +493,7 @@ os_w32_wnd_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
           OS_Event *event = os_w32_push_event(OS_EventKind_Text, window);
           if(lParam & bit29)
           {
-            event->flags |= OS_EventFlag_Alt;
+            event->modifiers |= OS_Modifier_Alt;
           }
           event->character = character;
         }
@@ -1393,23 +1393,23 @@ os_get_events(Arena *arena, B32 wait)
   return os_w32_event_list;
 }
 
-internal OS_EventFlags
-os_get_event_flags(void)
+internal OS_Modifiers
+os_get_modifiers(void)
 {
-  OS_EventFlags flags = 0;
+  OS_Modifiers modifiers = 0;
   if(GetKeyState(VK_CONTROL) & 0x8000)
   {
-    flags |= OS_EventFlag_Ctrl;
+    modifiers |= OS_Modifier_Ctrl;
   }
   if(GetKeyState(VK_SHIFT) & 0x8000)
   {
-    flags |= OS_EventFlag_Shift;
+    modifiers |= OS_Modifier_Shift;
   }
   if(GetKeyState(VK_MENU) & 0x8000)
   {
-    flags |= OS_EventFlag_Alt;
+    modifiers |= OS_Modifier_Alt;
   }
-  return(flags);
+  return modifiers;
 }
 
 internal Vec2F32

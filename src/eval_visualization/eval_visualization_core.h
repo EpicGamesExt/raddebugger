@@ -192,8 +192,6 @@ enum
 {
   EV_ViewRuleInfoFlag_Inherited      = (1<<0),
   EV_ViewRuleInfoFlag_Expandable     = (1<<1),
-  EV_ViewRuleInfoFlag_ExprResolution = (1<<2),
-  EV_ViewRuleInfoFlag_VizBlockProd   = (1<<3),
 };
 
 typedef struct EV_ViewRuleInfo EV_ViewRuleInfo;
@@ -246,6 +244,7 @@ struct EV_Row
   EV_Row *next;
   
   // rjf: block hierarchy info
+  EV_BlockKind block_kind;
   S32 depth;
   EV_Key parent_key;
   EV_Key key;

@@ -554,11 +554,11 @@ ui_next_event(UI_Event **ev)
       {
         good = 0;
       }
-      if(!(perms & UI_PermissionFlag_ScrollX) && (n->v.kind == UI_EventKind_Scroll) && (n->v.delta_2f32.x != 0 || n->v.modifiers & OS_EventFlag_Shift))
+      if(!(perms & UI_PermissionFlag_ScrollX) && (n->v.kind == UI_EventKind_Scroll) && (n->v.delta_2f32.x != 0 || n->v.modifiers & OS_Modifier_Shift))
       {
         good = 0;
       }
-      if(!(perms & UI_PermissionFlag_ScrollY) && (n->v.kind == UI_EventKind_Scroll) && n->v.delta_2f32.y != 0 && !(n->v.modifiers & OS_EventFlag_Shift))
+      if(!(perms & UI_PermissionFlag_ScrollY) && (n->v.kind == UI_EventKind_Scroll) && n->v.delta_2f32.y != 0 && !(n->v.modifiers & OS_Modifier_Shift))
       {
         good = 0;
       }
@@ -599,7 +599,7 @@ ui_eat_event(UI_Event *ev)
 //- rjf: event consumption helpers
 
 internal B32
-ui_key_press(OS_EventFlags mods, OS_Key key)
+ui_key_press(OS_Modifiers mods, OS_Key key)
 {
   B32 result = 0;
   for(UI_Event *evt = 0; ui_next_event(&evt);)
@@ -615,7 +615,7 @@ ui_key_press(OS_EventFlags mods, OS_Key key)
 }
 
 internal B32
-ui_key_release(OS_EventFlags mods, OS_Key key)
+ui_key_release(OS_Modifiers mods, OS_Key key)
 {
   B32 result = 0;
   for(UI_Event *evt = 0; ui_next_event(&evt);)
@@ -875,7 +875,7 @@ ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, U
             {
               nav_next = 1;
             }
-            if(ui_key_press(OS_EventFlag_Shift, OS_Key_Tab))
+            if(ui_key_press(OS_Modifier_Shift, OS_Key_Tab))
             {
               nav_prev = 1;
             }
@@ -2541,7 +2541,7 @@ ui_signal_from_box(UI_Box *box)
   ProfBeginFunction();
   B32 is_focus_hot = box->flags & UI_BoxFlag_FocusHot && !(box->flags & UI_BoxFlag_FocusHotDisabled);
   UI_Signal sig = {box};
-  sig.event_flags |= os_get_event_flags();
+  sig.event_flags |= os_get_modifiers();
   
   //////////////////////////////
   //- rjf: calculate possibly-clipped box rectangle
@@ -2712,11 +2712,11 @@ ui_signal_from_box(UI_Box *box)
     //- rjf: scrolling
     if(box->flags & UI_BoxFlag_Scroll &&
        evt->kind == UI_EventKind_Scroll &&
-       evt->modifiers != OS_EventFlag_Ctrl &&
+       evt->modifiers != OS_Modifier_Ctrl &&
        evt_mouse_in_bounds)
     {
       Vec2F32 delta = evt->delta_2f32;
-      if(evt->modifiers & OS_EventFlag_Shift)
+      if(evt->modifiers & OS_Modifier_Shift)
       {
         Swap(F32, delta.x, delta.y);
       }
@@ -2733,11 +2733,11 @@ ui_signal_from_box(UI_Box *box)
     //- rjf: view scrolling
     if(box->flags & UI_BoxFlag_ViewScroll && box->first_touched_build_index != box->last_touched_build_index &&
        evt->kind == UI_EventKind_Scroll &&
-       evt->modifiers != OS_EventFlag_Ctrl &&
+       evt->modifiers != OS_Modifier_Ctrl &&
        evt_mouse_in_bounds)
     {
       Vec2F32 delta = evt->delta_2f32;
-      if(evt->modifiers & OS_EventFlag_Shift)
+      if(evt->modifiers & OS_Modifier_Shift)
       {
         Swap(F32, delta.x, delta.y);
       }
