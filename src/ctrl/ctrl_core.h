@@ -743,6 +743,12 @@ internal void ctrl_user_breakpoint_list_push(Arena *arena, CTRL_UserBreakpointLi
 internal CTRL_UserBreakpointList ctrl_user_breakpoint_list_copy(Arena *arena, CTRL_UserBreakpointList *src);
 
 ////////////////////////////////
+//~ rjf: Meta Evaluation Type Functions
+
+internal CTRL_MetaEval *ctrl_meta_eval_from_info(Arena *arena, CTRL_MetaEvalInfo *info);
+internal CTRL_MetaEvalInfoArray ctrl_meta_eval_info_array_copy(Arena *arena, CTRL_MetaEvalInfoArray *src);
+
+////////////////////////////////
 //~ rjf: Message Type Functions
 
 //- rjf: deep copying

@@ -1033,10 +1033,12 @@ rd_watch_view_build(RD_View *view, RD_WatchViewState *ewv, B32 modifiable, U32 d
           //
           case RD_WatchViewFillKind_Breakpoints:
           {
+            E_TypeKey meta_eval_type = ctrl_meta_eval_type_key();
             mutable_entity_kind = RD_EntityKind_Breakpoint;
             ev_view_rule_list_push_string(scratch.arena, &top_level_view_rules, str8_lit("no_addr"));
             RD_EntityList bps = rd_query_cached_entity_list_with_kind(mutable_entity_kind);
-            for(RD_EntityNode *n = bps.first; n != 0; n = n->next)
+            U64 idx = rd_state->meta_eval_infos_bps_idx_range.min;
+            for(RD_EntityNode *n = bps.first; n != 0; n = n->next, idx += 1)
             {
               RD_Entity *bp = n->entity;
               if(bp->flags & RD_EntityFlag_MarkedForDeletion)
@@ -1049,21 +1051,9 @@ rd_watch_view_build(RD_View *view, RD_WatchViewState *ewv, B32 modifiable, U32 d
               FuzzyMatchRangeList matches = fuzzy_match_find(scratch.arena, filter, title);
               if(matches.count == matches.needle_part_count)
               {
-                E_MemberList bp_members = {0};
-                {
-                  e_member_list_push_new(scratch.arena, &bp_members, .name = str8_lit("enabled"),  .off = 0,        .type_key = e_type_key_basic(E_TypeKind_S64));
-                  e_member_list_push_new(scratch.arena, &bp_members, .name = str8_lit("hit_count"),.off = 0+8,      .type_key = e_type_key_basic(E_TypeKind_U64));
-                  e_member_list_push_new(scratch.arena, &bp_members, .name = str8_lit("label"),    .off = 0+8+8,    .type_key = e_type_key_cons_ptr(arch_from_context(), e_type_key_basic(E_TypeKind_Char8)));
-                  e_member_list_push_new(scratch.arena, &bp_members, .name = str8_lit("location"), .off = 0+8+8+8,  .type_key = e_type_key_cons_ptr(arch_from_context(), e_type_key_basic(E_TypeKind_Char8)));
-                  e_member_list_push_new(scratch.arena, &bp_members, .name = str8_lit("condition"),.off = 0+8+8+8+8,.type_key = e_type_key_cons_ptr(arch_from_context(), e_type_key_basic(E_TypeKind_Char8)));
-                }
-                E_MemberArray bp_members_array = e_member_array_from_list(scratch.arena, &bp_members);
-                E_TypeKey bp_type = e_type_key_cons(.arch = arch_from_context(), .kind = E_TypeKind_Struct, .name = str8_lit("Breakpoint"), .members = bp_members_array.v, .count = bp_members_array.count);
-                E_Expr *bp_expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
-                bp_expr->type_key = bp_type;
-                bp_expr->mode = E_Mode_Offset;
-                bp_expr->space = rd_eval_space_from_entity(bp);
-                ev_append_expr_blocks__rec(scratch.arena, eval_view, parent_key, key, title, bp_expr, &top_level_view_rules, 0, &blocks);
+                String8 expr_string = push_str8f(scratch.arena, "$%I64u", idx);
+                EV_BlockList watch_blocks = ev_block_list_from_view_expr_keys(scratch.arena, eval_view, &top_level_view_rules, expr_string, parent_key, key);
+                ev_block_list_concat__in_place(&blocks, &watch_blocks);
               }
             }
           }break;
@@ -1075,7 +1065,8 @@ rd_watch_view_build(RD_View *view, RD_WatchViewState *ewv, B32 modifiable, U32 d
           {
             mutable_entity_kind = RD_EntityKind_WatchPin;
             RD_EntityList wps = rd_query_cached_entity_list_with_kind(mutable_entity_kind);
-            for(RD_EntityNode *n = wps.first; n != 0; n = n->next)
+            U64 idx = rd_state->meta_eval_infos_wps_idx_range.min;
+            for(RD_EntityNode *n = wps.first; n != 0; n = n->next, idx += 1)
             {
               RD_Entity *wp = n->entity;
               if(wp->flags & RD_EntityFlag_MarkedForDeletion)
@@ -1088,17 +1079,9 @@ rd_watch_view_build(RD_View *view, RD_WatchViewState *ewv, B32 modifiable, U32 d
               FuzzyMatchRangeList matches = fuzzy_match_find(scratch.arena, filter, title);
               if(matches.count == matches.needle_part_count)
               {
-                E_MemberList wp_members = {0};
-                {
-                  e_member_list_push_new(scratch.arena, &wp_members, .name = str8_lit("Location"), .off = 0,  .type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_Char8), 256));
-                }
-                E_MemberArray wp_members_array = e_member_array_from_list(scratch.arena, &wp_members);
-                E_TypeKey wp_type = e_type_key_cons(.arch = arch_from_context(), .kind = E_TypeKind_Struct, .name = str8_lit("Watch Pin"), .members = wp_members_array.v, .count = wp_members_array.count);
-                E_Expr *wp_expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
-                wp_expr->type_key = wp_type;
-                wp_expr->mode = E_Mode_Offset;
-                wp_expr->space = rd_eval_space_from_entity(wp);
-                ev_append_expr_blocks__rec(scratch.arena, eval_view, parent_key, key, title, wp_expr, &top_level_view_rules, 0, &blocks);
+                String8 expr_string = push_str8f(scratch.arena, "$%I64u", idx);
+                EV_BlockList watch_blocks = ev_block_list_from_view_expr_keys(scratch.arena, eval_view, &top_level_view_rules, expr_string, parent_key, key);
+                ev_block_list_concat__in_place(&blocks, &watch_blocks);
               }
             }
           }break;
@@ -2216,13 +2199,13 @@ rd_watch_view_build(RD_View *view, RD_WatchViewState *ewv, B32 modifiable, U32 d
           default:{}break;
           case E_Mode_Offset:
           {
-            RD_Entity *space_entity = rd_entity_from_eval_space(row_eval.space);
-            if(space_entity->kind == RD_EntityKind_Process)
+            CTRL_Entity *space_entity = rd_ctrl_entity_from_eval_space(row_eval.space);
+            if(space_entity->kind == CTRL_EntityKind_Process)
             {
               U64 size = e_type_byte_size_from_key(row_eval.type_key);
               size = Min(size, 64);
               Rng1U64 vaddr_rng = r1u64(row_eval.value.u64, row_eval.value.u64+size);
-              CTRL_ProcessMemorySlice slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, space_entity->ctrl_handle, vaddr_rng, 0);
+              CTRL_ProcessMemorySlice slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, space_entity->handle, vaddr_rng, 0);
               for(U64 idx = 0; idx < (slice.data.size+63)/64; idx += 1)
               {
                 if(slice.byte_changed_flags[idx] != 0)
@@ -4648,11 +4631,11 @@ RD_VIEW_UI_FUNCTION_DEF(target)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
+#if 0 // TODO(rjf): @msgs
   RD_Entity *entity = rd_entity_from_eval_string(string);
   RD_EntityList custom_entry_points = rd_push_entity_child_list_with_kind(scratch.arena, entity, RD_EntityKind_EntryPoint);
   F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
   
-#if 0 // TODO(rjf): @msgs
   RD_TargetViewState *tv = rd_view_user_state(view, RD_TargetViewState);
   RD_Entity *entity = rd_entity_from_eval_string(string);
   // rjf: process commands
@@ -4688,7 +4671,6 @@ RD_VIEW_UI_FUNCTION_DEF(target)
       }break;
     }
   }
-#endif
   
   //- rjf: grab state
   RD_TargetViewState *tv = rd_view_user_state(view, RD_TargetViewState);
@@ -4943,6 +4925,7 @@ RD_VIEW_UI_FUNCTION_DEF(target)
   //- rjf: apply moves to selection
   tv->cursor = next_cursor;
   
+#endif
   scratch_end(scratch);
   ProfEnd();
 }

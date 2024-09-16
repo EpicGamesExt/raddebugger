@@ -186,6 +186,42 @@ ctrl_user_breakpoint_list_copy(Arena *arena, CTRL_UserBreakpointList *src)
 }
 
 ////////////////////////////////
+//~ rjf: Meta Evaluation Type Functions
+
+internal CTRL_MetaEval *
+ctrl_meta_eval_from_info(Arena *arena, CTRL_MetaEvalInfo *info)
+{
+  CTRL_MetaEval *eval = push_array(arena, CTRL_MetaEval, 1);
+  {
+    String8 label_string = push_str8_copy(arena, info->label);
+    String8 loc_string = push_str8_copy(arena, info->location);
+    String8 cnd_string = push_str8_copy(arena, info->condition);
+    eval->enabled      = info->enabled;
+    eval->hit_count    = info->hit_count;
+    eval->label_off    = (U64)((U8 *)label_string.str - (U8 *)eval);
+    eval->location_off = (U64)((U8 *)loc_string.str - (U8 *)eval);
+    eval->condition_off= (U64)((U8 *)cnd_string.str - (U8 *)eval);
+  }
+  return eval;
+}
+
+internal CTRL_MetaEvalInfoArray
+ctrl_meta_eval_info_array_copy(Arena *arena, CTRL_MetaEvalInfoArray *src)
+{
+  CTRL_MetaEvalInfoArray dst = {0};
+  dst.count = src->count;
+  dst.v = push_array(arena, CTRL_MetaEvalInfo, dst.count);
+  MemoryCopy(dst.v, src->v, sizeof(dst.v[0])*dst.count);
+  for(U64 idx = 0; idx < dst.count; idx += 1)
+  {
+    dst.v[idx].label    = push_str8_copy(arena, dst.v[idx].label);
+    dst.v[idx].location = push_str8_copy(arena, dst.v[idx].location);
+    dst.v[idx].condition= push_str8_copy(arena, dst.v[idx].condition);
+  }
+  return dst;
+}
+
+////////////////////////////////
 //~ rjf: Message Type Functions
 
 //- rjf: deep copying
@@ -200,6 +236,7 @@ ctrl_msg_deep_copy(Arena *arena, CTRL_Msg *dst, CTRL_Msg *src)
   dst->env_string_list      = str8_list_copy(arena, &src->env_string_list);
   dst->traps                = ctrl_trap_list_copy(arena, &src->traps);
   dst->user_bps             = ctrl_user_breakpoint_list_copy(arena, &src->user_bps);
+  dst->meta_eval_infos      = ctrl_meta_eval_info_array_copy(arena, &src->meta_eval_infos);
 }
 
 //- rjf: list building
@@ -321,6 +358,21 @@ ctrl_serialized_string_from_msg_list(Arena *arena, CTRL_MsgList *msgs)
         str8_serial_push_struct(scratch.arena, &msgs_srlzed, &bp->condition.size);
         str8_serial_push_data(scratch.arena, &msgs_srlzed, bp->condition.str, bp->condition.size);
       }
+      
+      // rjf: write meta-eval-info array
+      str8_serial_push_struct(scratch.arena, &msgs_srlzed, &msg->meta_eval_infos.count);
+      for(U64 idx = 0; idx < msg->meta_eval_infos.count; idx += 1)
+      {
+        CTRL_MetaEvalInfo *mei = &msg->meta_eval_infos.v[idx];
+        str8_serial_push_struct(scratch.arena, &msgs_srlzed, &mei->enabled);
+        str8_serial_push_struct(scratch.arena, &msgs_srlzed, &mei->hit_count);
+        str8_serial_push_struct(scratch.arena, &msgs_srlzed, &mei->label.size);
+        str8_serial_push_string(scratch.arena, &msgs_srlzed, mei->label);
+        str8_serial_push_struct(scratch.arena, &msgs_srlzed, &mei->location.size);
+        str8_serial_push_string(scratch.arena, &msgs_srlzed, mei->location);
+        str8_serial_push_struct(scratch.arena, &msgs_srlzed, &mei->condition.size);
+        str8_serial_push_string(scratch.arena, &msgs_srlzed, mei->condition);
+      }
     }
   }
   String8 string = str8_serial_end(arena, &msgs_srlzed);
@@ -431,6 +483,25 @@ ctrl_msg_list_from_serialized_string(Arena *arena, String8 string)
         read_off += str8_deserial_read_struct(string, read_off, &bp->condition.size);
         bp->condition.str = push_array_no_zero(arena, U8, bp->condition.size);
         read_off += str8_deserial_read(string, read_off, bp->condition.str, bp->condition.size, 1);
+      }
+      
+      // rjf: read meta-eval-info array
+      read_off += str8_deserial_read_struct(string, read_off, &msg->meta_eval_infos.count);
+      msg->meta_eval_infos.v = push_array(arena, CTRL_MetaEvalInfo, msg->meta_eval_infos.count);
+      for(U64 idx = 0; idx < msg->meta_eval_infos.count; idx += 1)
+      {
+        CTRL_MetaEvalInfo *mei = &msg->meta_eval_infos.v[idx];
+        read_off += str8_deserial_read_struct(string, read_off, &mei->enabled);
+        read_off += str8_deserial_read_struct(string, read_off, &mei->hit_count);
+        read_off += str8_deserial_read_struct(string, read_off, &mei->label.size);
+        mei->label.str = push_array_no_zero(arena, U8, mei->label.size);
+        read_off += str8_deserial_read(string, read_off, mei->label.str, mei->location.size, 1);
+        read_off += str8_deserial_read_struct(string, read_off, &mei->location.size);
+        mei->location.str = push_array_no_zero(arena, U8, mei->location.size);
+        read_off += str8_deserial_read(string, read_off, mei->location.str, mei->location.size, 1);
+        read_off += str8_deserial_read_struct(string, read_off, &mei->condition.size);
+        mei->condition.str = push_array_no_zero(arena, U8, mei->condition.size);
+        read_off += str8_deserial_read(string, read_off, mei->condition.str, mei->condition.size, 1);
       }
     }
   }

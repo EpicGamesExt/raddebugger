@@ -891,6 +891,11 @@ struct RD_State
   // rjf: frame parameters
   F32 frame_dt;
   
+  // rjf: meta evaluation info
+  CTRL_MetaEvalInfoArray meta_eval_infos;
+  Rng1U64 meta_eval_infos_bps_idx_range;
+  Rng1U64 meta_eval_infos_wps_idx_range;
+  
   // rjf: registers stack
   RD_RegsNode base_regs;
   RD_RegsNode *top_regs;
@@ -1283,10 +1288,6 @@ internal RD_Entity *rd_entity_from_name_and_kind(String8 string, RD_EntityKind k
 internal CTRL_Entity *rd_ctrl_entity_from_eval_space(E_Space space);
 internal E_Space rd_eval_space_from_ctrl_entity(CTRL_Entity *entity);
 
-//- rjf: entity <-> eval space
-internal RD_Entity *rd_entity_from_eval_space(E_Space space);
-internal E_Space rd_eval_space_from_entity(RD_Entity *entity);
-
 //- rjf: eval space reads/writes
 internal B32 rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range);
 internal B32 rd_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range);
@@ -1313,8 +1314,10 @@ internal Vec2S32 rd_dim2s32_from_eval_params(E_Eval eval, MD_Node *params);
 internal R_Tex2DFormat rd_tex2dformat_from_eval_params(E_Eval eval, MD_Node *params);
 
 //- rjf: eval <-> entity
+#if 0 // TODO(rjf): @msgs
 internal RD_Entity *rd_entity_from_eval_string(String8 string);
 internal String8 rd_eval_string_from_entity(Arena *arena, RD_Entity *entity);
+#endif
 
 //- rjf: eval <-> file path
 internal String8 rd_file_path_from_eval_string(Arena *arena, String8 string);
