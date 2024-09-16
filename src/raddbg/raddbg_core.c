@@ -10195,7 +10195,7 @@ rd_frame(void)
             RD_ViewRuleInfo *view_rule_info = rd_view_rule_info_from_string(cmd->name);
             if(view_rule_info != &rd_nil_view_rule_info)
             {
-              rd_cmd(RD_CmdKind_OpenTab, .string = cmd->name);
+              rd_cmd(RD_CmdKind_OpenTab, .params_tree = md_tree_from_string(scratch.arena, cmd->name)->first);
             }
           }break;
           
@@ -11911,33 +11911,11 @@ rd_frame(void)
           case RD_CmdKind_OpenTab:
           {
             RD_Panel *panel = rd_panel_from_handle(rd_regs()->panel);
-#if 0 // TODO(rjf): @msgs
-            RD_ViewSpec *spec = rd_view_spec_from_string(rd_regs()->string);
-            RD_Entity *entity = &d_nil_entity;
-            if(spec->info.flags & RD_ViewSpecFlag_ParameterizedByEntity)
-            {
-              entity = rd_entity_from_handle(rd_regs()->entity);
-            }
-            if(!rd_panel_is_nil(panel) && spec != &rd_nil_view_spec)
-            {
-              RD_View *view = rd_view_alloc();
-              String8 query = {0};
-              if(!rd_entity_is_nil(entity))
-              {
-                query = rd_eval_string_from_entity(scratch.arena, entity);
-              }
-              else if(rd_regs()->file_path.size != 0)
-              {
-                query = rd_eval_string_from_file_path(scratch.arena, rd_regs()->file_path);
-              }
-              else if(rd_regs()->string.size != 0)
-              {
-                query = rd_regs()->string;
-              }
-              rd_view_equip_spec(view, spec, query, rd_regs()->params_tree);
-              rd_panel_insert_tab_view(panel, panel->last_tab_view, view);
-            }
-#endif
+            RD_View *view = rd_view_alloc();
+            String8 query = rd_regs()->string;
+            RD_ViewRuleInfo *spec = rd_view_rule_info_from_string(rd_regs()->params_tree->string);
+            rd_view_equip_spec(view, spec, query, rd_regs()->params_tree);
+            rd_panel_insert_tab_view(panel, panel->last_tab_view, view);
           }break;
           case RD_CmdKind_CloseTab:
           {
@@ -11997,7 +11975,7 @@ rd_frame(void)
             FileProperties props = os_properties_from_file_path(path);
             if(props.created != 0)
             {
-              rd_cmd(RD_CmdKind_PendingFile);
+              rd_cmd(RD_CmdKind_PendingFile, .string = rd_eval_string_from_file_path(scratch.arena, path));
             }
             else
             {

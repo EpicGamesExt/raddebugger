@@ -6310,11 +6310,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(pending_file)
   //- rjf: if entity is ready, replace this view with the correct one, if any viewer is specified
   if(file_is_ready && viewer_kind != RD_ViewRuleKind_Null)
   {
-    RD_ViewRuleInfo *view_rule_info = rd_view_rule_info_from_string(params_copy->string);
-    if(view_rule_info == &rd_nil_view_rule_info)
-    {
-      view_rule_info = rd_view_rule_info_from_kind(viewer_kind);
-    }
+    RD_ViewRuleInfo *view_rule_info = rd_view_rule_info_from_kind(viewer_kind);
     String8 query = rd_eval_string_from_file_path(scratch.arena, file_path);
     RD_View *view = rd_view_from_handle(rd_regs()->view);
     rd_view_equip_spec(view, view_rule_info, query, params_copy);
