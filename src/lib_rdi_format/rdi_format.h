@@ -997,10 +997,10 @@ typedef RDI_U32_Table RDI_U32_NameMapBuckets;
 typedef RDI_U32_Table RDI_U32_NameMapNodes;
 #endif
 
-#define RDI_EVAL_CTRLBITS(decodeN,popN,pushN) ((decodeN) | ((popN) << 5) | ((pushN) << 7))
-#define RDI_DECODEN_FROM_CTRLBITS(ctrlbits)   ((ctrlbits) & 0x1f)
-#define RDI_POPN_FROM_CTRLBITS(ctrlbits)      (((ctrlbits) >> 5) & 0x3)
-#define RDI_PUSHN_FROM_CTRLBITS(ctrlbits)     (((ctrlbits) >> 7) & 0x1)
+#define RDI_EVAL_CTRLBITS(decodeN,popN,pushN) (((decodeN) << 8) | ((popN) << 4) | ((pushN) << 0))
+#define RDI_DECODEN_FROM_CTRLBITS(ctrlbits)   (((ctrlbits) >> 8) & 0xff)
+#define RDI_POPN_FROM_CTRLBITS(ctrlbits)      (((ctrlbits) >> 4) & 0xf)
+#define RDI_PUSHN_FROM_CTRLBITS(ctrlbits)     (((ctrlbits) >> 0) & 0xf)
 #define RDI_EncodeRegReadParam(reg,bytesize,bytepos) ((reg)|((bytesize)<<8)|((bytepos)<<16))
 
 typedef struct RDI_Header RDI_Header;
@@ -1361,6 +1361,6 @@ RDI_PROC RDI_U8 *rdi_explanation_string_from_eval_conversion_kind(RDI_EvalConver
 
 extern RDI_U16 rdi_section_element_size_table[37];
 extern RDI_U8 rdi_section_is_required_table[37];
-extern RDI_U8 rdi_eval_op_ctrlbits_table[49];
+extern RDI_U16 rdi_eval_op_ctrlbits_table[49];
 
 #endif // RDI_FORMAT_H

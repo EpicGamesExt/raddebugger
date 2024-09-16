@@ -67,14 +67,14 @@ e_interpret(String8 bytecode)
   {
     // rjf: consume next opcode
     RDI_EvalOp op = (RDI_EvalOp)*ptr;
-    U8 ctrlbits = 0;
+    U16 ctrlbits = 0;
     if(op < RDI_EvalOp_COUNT)
     {
       ctrlbits = rdi_eval_op_ctrlbits_table[op];
     }
     else switch(op)
     {
-      case E_IRExtKind_SetSpace:{ctrlbits = RDI_EVAL_CTRLBITS(16, 0, 0);}break;
+      case E_IRExtKind_SetSpace:{ctrlbits = RDI_EVAL_CTRLBITS(32, 0, 0);}break;
       default:
       {
         result.code = E_InterpretationCode_BadOp;

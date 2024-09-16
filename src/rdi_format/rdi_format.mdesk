@@ -1337,14 +1337,14 @@ RDI_EvalConversionKindTable:
 
 @gen(enums)
 ```
-#define RDI_EVAL_CTRLBITS(decodeN,popN,pushN) ((decodeN) | ((popN) << 5) | ((pushN) << 7))
-#define RDI_DECODEN_FROM_CTRLBITS(ctrlbits)   ((ctrlbits) & 0x1f)
-#define RDI_POPN_FROM_CTRLBITS(ctrlbits)      (((ctrlbits) >> 5) & 0x3)
-#define RDI_PUSHN_FROM_CTRLBITS(ctrlbits)     (((ctrlbits) >> 7) & 0x1)
+#define RDI_EVAL_CTRLBITS(decodeN,popN,pushN) (((decodeN) << 8) | ((popN) << 4) | ((pushN) << 0))
+#define RDI_DECODEN_FROM_CTRLBITS(ctrlbits)   (((ctrlbits) >> 8) & 0xff)
+#define RDI_POPN_FROM_CTRLBITS(ctrlbits)      (((ctrlbits) >> 4) & 0xf)
+#define RDI_PUSHN_FROM_CTRLBITS(ctrlbits)     (((ctrlbits) >> 0) & 0xf)
 #define RDI_EncodeRegReadParam(reg,bytesize,bytepos) ((reg)|((bytesize)<<8)|((bytepos)<<16))
 ```
 
-@data(RDI_U8) rdi_eval_op_ctrlbits_table:
+@data(RDI_U16) rdi_eval_op_ctrlbits_table:
 {
   @expand(RDI_EvalOpTable a) `RDI_EVAL_CTRLBITS($(a.num_decodes), $(a.num_pops), $(a.num_pushes))`;
 }

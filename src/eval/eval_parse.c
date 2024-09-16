@@ -1385,7 +1385,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
                         {
                           break;
                         }
-                        U8 ctrlbits = rdi_eval_op_ctrlbits_table[op];
+                        U16 ctrlbits = rdi_eval_op_ctrlbits_table[op];
                         U32 p_size = RDI_DECODEN_FROM_CTRLBITS(ctrlbits);
                         bytecode_size += 1+p_size;
                       }

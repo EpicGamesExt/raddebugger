@@ -970,7 +970,7 @@ rdim_scope_push_local(RDIM_Arena *arena, RDIM_ScopeChunkList *scopes, RDIM_Scope
 RDI_PROC void
 rdim_bytecode_push_op(RDIM_Arena *arena, RDIM_EvalBytecode *bytecode, RDI_EvalOp op, RDI_U64 p)
 {
-  RDI_U8 ctrlbits = rdi_eval_op_ctrlbits_table[op];
+  RDI_U16 ctrlbits = rdi_eval_op_ctrlbits_table[op];
   RDI_U32 p_size = RDI_DECODEN_FROM_CTRLBITS(ctrlbits);
   
   RDIM_EvalBytecodeOp *node = rdim_push_array(arena, RDIM_EvalBytecodeOp, 1);

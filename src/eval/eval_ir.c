@@ -78,7 +78,7 @@ e_select_ir_ctx(E_IRCtx *ctx)
 internal void
 e_oplist_push_op(Arena *arena, E_OpList *list, RDI_EvalOp opcode, E_Value value)
 {
-  U8 ctrlbits = rdi_eval_op_ctrlbits_table[opcode];
+  U16 ctrlbits = rdi_eval_op_ctrlbits_table[opcode];
   U32 p_size = RDI_DECODEN_FROM_CTRLBITS(ctrlbits);
   E_Op *node = push_array_no_zero(arena, E_Op, 1);
   node->opcode = opcode;
@@ -149,7 +149,7 @@ internal void
 e_oplist_push_string_literal(Arena *arena, E_OpList *list, String8 string)
 {
   RDI_EvalOp opcode = RDI_EvalOp_ConstString;
-  U8 ctrlbits = rdi_eval_op_ctrlbits_table[opcode];
+  U16 ctrlbits = rdi_eval_op_ctrlbits_table[opcode];
   U32 p_size = RDI_DECODEN_FROM_CTRLBITS(ctrlbits);
   E_Op *node = push_array_no_zero(arena, E_Op, 1);
   node->opcode = opcode;
@@ -1383,7 +1383,7 @@ e_append_oplist_from_irtree(Arena *arena, E_IRNode *root, E_OpList *out)
       else
       {
         // rjf: append ops for all children
-        U8 ctrlbits = rdi_eval_op_ctrlbits_table[op];
+        U16 ctrlbits = rdi_eval_op_ctrlbits_table[op];
         U64 child_count = RDI_POPN_FROM_CTRLBITS(ctrlbits);
         U64 idx = 0;
         for(E_IRNode *child = root->first;
@@ -1428,7 +1428,7 @@ e_bytecode_from_oplist(Arena *arena, E_OpList *oplist)
       default:
       {
         // rjf: compute bytecode advance
-        U8 ctrlbits = rdi_eval_op_ctrlbits_table[opcode];
+        U16 ctrlbits = rdi_eval_op_ctrlbits_table[opcode];
         U64 extra_byte_count = RDI_DECODEN_FROM_CTRLBITS(ctrlbits);
         U8 *next_ptr = ptr + 1 + extra_byte_count;
         Assert(next_ptr <= opl);
