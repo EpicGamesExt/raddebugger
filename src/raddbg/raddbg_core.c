@@ -2422,7 +2422,6 @@ rd_view_equip_spec(RD_View *view, RD_ViewSpec *spec, String8 query, MD_Node *par
   rd_view_equip_query(view, query);
   
   // rjf: initialize state for new view spec
-  RD_ViewSetupFunctionType *view_setup = spec->info.setup_hook;
   {
     for(RD_ArenaExt *ext = view->first_arena_ext; ext != 0; ext = ext->next)
     {
@@ -2453,7 +2452,6 @@ rd_view_equip_spec(RD_View *view, RD_ViewSpec *spec, String8 query, MD_Node *par
   }
   view->is_filtering = 0;
   view->is_filtering_t = 0;
-  view_setup(view, view->params_roots[view->params_read_gen%ArrayCount(view->params_roots)], str8(view->query_buffer, view->query_string_size));
 }
 
 internal void
@@ -2917,8 +2915,8 @@ rd_window_frame(RD_Window *ws)
   //////////////////////////////
   //- rjf: build UI
   //
-  UI_Box *autocomp_box = &ui_g_nil_box;
-  UI_Box *hover_eval_box = &ui_g_nil_box;
+  UI_Box *autocomp_box = &ui_nil_box;
+  UI_Box *hover_eval_box = &ui_nil_box;
   ProfScope("build UI")
   {
     ////////////////////////////
@@ -3908,7 +3906,7 @@ rd_window_frame(RD_Window *ws)
       if(rd_state->popup_t > 0.005f) UI_TextAlignment(UI_TextAlign_Center) UI_Focus(rd_state->popup_active ? UI_FocusKind_Root : UI_FocusKind_Off)
       {
         Vec2F32 window_dim = dim_2f32(window_rect);
-        UI_Box *bg_box = &ui_g_nil_box;
+        UI_Box *bg_box = &ui_nil_box;
         UI_Palette *palette = ui_build_palette(rd_palette_from_code(RD_PaletteCode_Floating));
         palette->background.w *= rd_state->popup_t;
         UI_Rect(window_rect)
@@ -5337,7 +5335,7 @@ rd_window_frame(RD_Window *ws)
                                                     query_container_rect.y1);
       
       //- rjf: build floating query view container
-      UI_Box *query_container_box = &ui_g_nil_box;
+      UI_Box *query_container_box = &ui_nil_box;
       UI_Rect(query_container_rect)
         UI_CornerRadius(ui_top_font_size()*0.2f)
         UI_ChildLayoutAxis(Axis2_Y)
@@ -5854,14 +5852,14 @@ rd_window_frame(RD_Window *ws)
               site_rect.p1.v[axis] = panel_rect.v[side].v[axis] + drop_site_minor_dim_px/2;
               
               // rjf: build
-              UI_Box *site_box = &ui_g_nil_box;
+              UI_Box *site_box = &ui_nil_box;
               {
                 UI_Rect(site_rect)
                 {
                   site_box = ui_build_box_from_key(UI_BoxFlag_DropSite, key);
                   ui_signal_from_box(site_box);
                 }
-                UI_Box *site_box_viz = &ui_g_nil_box;
+                UI_Box *site_box_viz = &ui_nil_box;
                 UI_Parent(site_box) UI_WidthFill UI_HeightFill
                   UI_Padding(ui_px(padding, 1.f))
                   UI_Column
@@ -5938,14 +5936,14 @@ rd_window_frame(RD_Window *ws)
             site_rect.p1.v[axis2_flip(split_axis)] += drop_site_major_dim_px/2;
             
             // rjf: build
-            UI_Box *site_box = &ui_g_nil_box;
+            UI_Box *site_box = &ui_nil_box;
             {
               UI_Rect(site_rect)
               {
                 site_box = ui_build_box_from_key(UI_BoxFlag_DropSite, key);
                 ui_signal_from_box(site_box);
               }
-              UI_Box *site_box_viz = &ui_g_nil_box;
+              UI_Box *site_box_viz = &ui_nil_box;
               UI_Parent(site_box) UI_WidthFill UI_HeightFill
                 UI_Padding(ui_px(padding, 1.f))
                 UI_Column
@@ -6236,14 +6234,14 @@ rd_window_frame(RD_Window *ws)
               {
                 continue;
               }
-              UI_Box *site_box = &ui_g_nil_box;
+              UI_Box *site_box = &ui_nil_box;
               {
                 UI_Rect(rect)
                 {
                   site_box = ui_build_box_from_key(UI_BoxFlag_DropSite, key);
                   ui_signal_from_box(site_box);
                 }
-                UI_Box *site_box_viz = &ui_g_nil_box;
+                UI_Box *site_box_viz = &ui_nil_box;
                 UI_Parent(site_box) UI_WidthFill UI_HeightFill
                   UI_Padding(ui_px(padding, 1.f))
                   UI_Column
@@ -6358,7 +6356,7 @@ rd_window_frame(RD_Window *ws)
             }
             if(view->is_filtering || view->is_filtering_t > 0.01f)
             {
-              UI_Box *filter_box = &ui_g_nil_box;
+              UI_Box *filter_box = &ui_nil_box;
               UI_Rect(filter_rect)
               {
                 ui_set_next_child_layout_axis(Axis2_X);
@@ -6416,7 +6414,7 @@ rd_window_frame(RD_Window *ws)
         //////////////////////////
         //- rjf: build panel container box
         //
-        UI_Box *panel_box = &ui_g_nil_box;
+        UI_Box *panel_box = &ui_nil_box;
         UI_Rect(content_rect) UI_ChildLayoutAxis(Axis2_Y) UI_CornerRadius(0) UI_Focus(UI_FocusKind_On)
         {
           UI_Key panel_key = rd_ui_key_from_panel(panel);
@@ -6432,10 +6430,10 @@ rd_window_frame(RD_Window *ws)
         //////////////////////////
         //- rjf: loading animation for stable view
         //
-        UI_Parent(panel_box)
+        UI_Box *loading_overlay_container = &ui_nil_box;
+        UI_Parent(panel_box) UI_WidthFill UI_HeightFill
         {
-          RD_View *view = rd_selected_tab_from_panel(panel);
-          rd_loading_overlay(panel_rect, view->loading_t, view->loading_progress_v, view->loading_progress_v_target);
+          loading_overlay_container = ui_build_box_from_key(UI_BoxFlag_FloatingX|UI_BoxFlag_FloatingY, ui_key_zero());
         }
         
         //////////////////////////
@@ -6455,7 +6453,7 @@ rd_window_frame(RD_Window *ws)
           }
           
           //- rjf: build view container
-          UI_Box *view_container_box = &ui_g_nil_box;
+          UI_Box *view_container_box = &ui_nil_box;
           UI_FixedWidth(dim_2f32(content_rect).x)
             UI_FixedHeight(dim_2f32(content_rect).y)
             UI_ChildLayoutAxis(Axis2_Y)
@@ -6482,6 +6480,17 @@ rd_window_frame(RD_Window *ws)
           if(ws->focused_panel == panel)
           {
             MemoryCopyStruct(rd_regs(), view_regs);
+          }
+        }
+        
+        ////////////////////////
+        //- rjf: loading? -> fill loading overlay container
+        //
+        {
+          RD_View *view = rd_selected_tab_from_panel(panel);
+          if(view->loading_t > 0.01f) UI_Parent(loading_overlay_container)
+          {
+            rd_loading_overlay(panel_rect, view->loading_t, view->loading_progress_v, view->loading_progress_v_target);
           }
         }
         
@@ -6541,7 +6550,7 @@ rd_window_frame(RD_Window *ws)
           
           // rjf: prep output data
           RD_View *next_selected_tab_view = rd_selected_tab_from_panel(panel);
-          UI_Box *tab_bar_box = &ui_g_nil_box;
+          UI_Box *tab_bar_box = &ui_nil_box;
           U64 drop_site_count = panel->tab_view_count+1;
           DropSite *drop_sites = push_array(scratch.arena, DropSite, drop_site_count);
           F32 drop_site_max_p = 0;
@@ -7147,7 +7156,7 @@ rd_window_frame(RD_Window *ws)
     for(UI_Box *box = ui_root_from_state(ws->ui); !ui_box_is_nil(box);)
     {
       // rjf: get recursion
-      UI_BoxRec rec = ui_box_rec_df_post(box, &ui_g_nil_box);
+      UI_BoxRec rec = ui_box_rec_df_post(box, &ui_nil_box);
       
       // rjf: sum to box heatmap
       if(DEV_draw_ui_box_heatmap)

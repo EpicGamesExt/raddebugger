@@ -161,11 +161,6 @@ struct RD_SettingVal
 
 typedef struct RD_View RD_View;
 
-#define RD_VIEW_SETUP_FUNCTION_SIG(name) void name(RD_View *view, MD_Node *params, String8 string)
-#define RD_VIEW_SETUP_FUNCTION_NAME(name) rd_view_setup_##name
-#define RD_VIEW_SETUP_FUNCTION_DEF(name) internal RD_VIEW_SETUP_FUNCTION_SIG(RD_VIEW_SETUP_FUNCTION_NAME(name))
-typedef RD_VIEW_SETUP_FUNCTION_SIG(RD_ViewSetupFunctionType);
-
 #define RD_VIEW_UI_FUNCTION_SIG(name) void name(RD_View *view, MD_Node *params, String8 string, Rng2F32 rect)
 #define RD_VIEW_UI_FUNCTION_NAME(name) rd_view_ui_##name
 #define RD_VIEW_UI_FUNCTION_DEF(name) internal RD_VIEW_UI_FUNCTION_SIG(RD_VIEW_UI_FUNCTION_NAME(name))
@@ -210,7 +205,6 @@ struct RD_ViewSpecInfo
   String8 name;
   String8 display_string;
   U32 icon_kind;
-  RD_ViewSetupFunctionType *setup_hook;
   RD_ViewUIFunctionType *ui_hook;
 };
 
@@ -1084,7 +1078,6 @@ read_only global RD_ViewSpec rd_nil_view_spec =
     {0},
     {0},
     RD_IconKind_Null,
-    RD_VIEW_SETUP_FUNCTION_NAME(null),
     RD_VIEW_UI_FUNCTION_NAME(null),
   },
 };

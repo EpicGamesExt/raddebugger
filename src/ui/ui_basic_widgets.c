@@ -1245,8 +1245,8 @@ ui_scroll_bar(Axis2 axis, UI_Size off_axis_size, UI_ScrollPt pt, Rng1S64 idx_ran
   UI_Signal space_before_sig = {0};
   UI_Signal space_after_sig = {0};
   UI_Signal scroller_sig = {0};
-  UI_Box *scroll_area_box = &ui_g_nil_box;
-  UI_Box *scroller_box = &ui_g_nil_box;
+  UI_Box *scroll_area_box = &ui_nil_box;
+  UI_Box *scroller_box = &ui_nil_box;
   UI_Parent(container_box)
   {
     ui_set_next_pref_size(axis, ui_pct(1, 0));
@@ -1464,14 +1464,14 @@ ui_scroll_list_begin(UI_ScrollListParams *params, UI_ScrollPt *scroll_pt, Vec2S6
   ui_scroll_list_scroll_idx_rng = scroll_row_idx_range;
   
   //- rjf: build top-level container
-  UI_Box *container_box = &ui_g_nil_box;
+  UI_Box *container_box = &ui_nil_box;
   UI_FixedWidth(params->dim_px.x) UI_FixedHeight(params->dim_px.y) UI_ChildLayoutAxis(Axis2_X)
   {
     container_box = ui_build_box_from_key(0, ui_key_zero());
   }
   
   //- rjf: build scrollable container
-  UI_Box *scrollable_container_box = &ui_g_nil_box;
+  UI_Box *scrollable_container_box = &ui_nil_box;
   UI_Parent(container_box) UI_ChildLayoutAxis(Axis2_Y) UI_FixedWidth(params->dim_px.x-ui_scroll_list_scroll_bar_dim_px) UI_FixedHeight(params->dim_px.y)
   {
     scrollable_container_box = ui_build_box_from_stringf(UI_BoxFlag_Clip|UI_BoxFlag_AllowOverflowY|UI_BoxFlag_Scroll, "###sp");

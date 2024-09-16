@@ -647,7 +647,7 @@ rd_entity_desc_button(RD_Entity *entity, FuzzyMatchRangeList *name_matches, Stri
       UI_TextAlignment(UI_TextAlign_Center)
         UI_PrefWidth(ui_em(1.875f, 1.f))
       {
-        UI_Box *info_box = &ui_g_nil_box;
+        UI_Box *info_box = &ui_nil_box;
         RD_Font(RD_FontSlot_Icons)
           UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Icons))
         {
@@ -977,7 +977,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   //////////////////////////////
   //- rjf: build top-level container
   //
-  UI_Box *top_container_box = &ui_g_nil_box;
+  UI_Box *top_container_box = &ui_nil_box;
   Rng2F32 clipped_top_container_rect = {0};
   {
     ui_set_next_child_layout_axis(Axis2_X);
@@ -1019,7 +1019,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   //////////////////////////////
   //- rjf: build priority margin
   //
-  UI_Box *priority_margin_container_box = &ui_g_nil_box;
+  UI_Box *priority_margin_container_box = &ui_nil_box;
   if(params->flags & RD_CodeSliceFlag_PriorityMargin) UI_Focus(UI_FocusKind_Off) UI_Parent(top_container_box) UI_Palette(margin_palette) ProfScope("build priority margins")
   {
     if(params->margin_float_off_px != 0)
@@ -1177,7 +1177,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   //////////////////////////////
   //- rjf: build catchall margin
   //
-  UI_Box *catchall_margin_container_box = &ui_g_nil_box;
+  UI_Box *catchall_margin_container_box = &ui_nil_box;
   if(params->flags & RD_CodeSliceFlag_CatchallMargin) UI_Focus(UI_FocusKind_Off) UI_Palette(margin_palette) UI_Parent(top_container_box) ProfScope("build catchall margins")
   {
     if(params->margin_float_off_px != 0)
@@ -1565,7 +1565,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   //////////////////////////////
   //- rjf: build main text container box, for mouse interaction on both lines & line numbers
   //
-  UI_Box *text_container_box = &ui_g_nil_box;
+  UI_Box *text_container_box = &ui_nil_box;
   UI_Parent(top_container_box) UI_Focus(UI_FocusKind_Off)
   {
     ui_set_next_hover_cursor(ctrlified ? OS_Cursor_HandPoint : OS_Cursor_IBar);
@@ -2945,7 +2945,7 @@ rd_line_edit(RD_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
   }
   
   //- rjf: build scrollable container box
-  UI_Box *scrollable_box = &ui_g_nil_box;
+  UI_Box *scrollable_box = &ui_nil_box;
   UI_Parent(box) UI_PrefWidth(ui_children_sum(0))
   {
     scrollable_box = ui_build_box_from_stringf(is_focus_active*(UI_BoxFlag_AllowOverflowX), "scroll_box_%p", edit_buffer);

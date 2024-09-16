@@ -7,7 +7,7 @@
 UI_StackTable:
 {
   //- rjf: parents
-  { Parent                             parent                       `UI_Box *`             `&ui_g_nil_box`                    }
+  { Parent                             parent                       `UI_Box *`             `&ui_nil_box`                    }
   
   //- rjf: layout params
   { ChildLayoutAxis                    child_layout_axis             Axis2                 `Axis2_X`                          }

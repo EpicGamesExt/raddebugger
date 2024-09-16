@@ -753,15 +753,15 @@ internal void ui_scroll_pt_clamp_idx(UI_ScrollPt *v, Rng1S64 range);
 ////////////////////////////////
 //~ rjf: Box Type Functions
 
-read_only global UI_Box ui_g_nil_box =
+read_only global UI_Box ui_nil_box =
 {
-  &ui_g_nil_box,
-  &ui_g_nil_box,
-  &ui_g_nil_box,
-  &ui_g_nil_box,
-  &ui_g_nil_box,
-  &ui_g_nil_box,
-  &ui_g_nil_box,
+  &ui_nil_box,
+  &ui_nil_box,
+  &ui_nil_box,
+  &ui_nil_box,
+  &ui_nil_box,
+  &ui_nil_box,
+  &ui_nil_box,
 };
 internal B32 ui_box_is_nil(UI_Box *box);
 internal UI_BoxRec ui_box_rec_df(UI_Box *box, UI_Box *root, U64 sib_member_off, U64 child_member_off);

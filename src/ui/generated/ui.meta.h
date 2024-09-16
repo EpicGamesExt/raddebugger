@@ -69,7 +69,7 @@ UI_TextPaddingNode text_padding_nil_stack_top;\
 UI_TextAlignmentNode text_alignment_nil_stack_top;\
 }
 #define UI_InitStackNils(state) \
-state->parent_nil_stack_top.v = &ui_g_nil_box;\
+state->parent_nil_stack_top.v = &ui_nil_box;\
 state->child_layout_axis_nil_stack_top.v = Axis2_X;\
 state->fixed_x_nil_stack_top.v = 0;\
 state->fixed_y_nil_stack_top.v = 0;\
@@ -133,7 +133,7 @@ struct { UI_TextPaddingNode *top; F32 bottom_val; UI_TextPaddingNode *free; B32 
 struct { UI_TextAlignmentNode *top; UI_TextAlign bottom_val; UI_TextAlignmentNode *free; B32 auto_pop; } text_alignment_stack;\
 }
 #define UI_InitStacks(state) \
-state->parent_stack.top = &state->parent_nil_stack_top; state->parent_stack.bottom_val = &ui_g_nil_box; state->parent_stack.free = 0; state->parent_stack.auto_pop = 0;\
+state->parent_stack.top = &state->parent_nil_stack_top; state->parent_stack.bottom_val = &ui_nil_box; state->parent_stack.free = 0; state->parent_stack.auto_pop = 0;\
 state->child_layout_axis_stack.top = &state->child_layout_axis_nil_stack_top; state->child_layout_axis_stack.bottom_val = Axis2_X; state->child_layout_axis_stack.free = 0; state->child_layout_axis_stack.auto_pop = 0;\
 state->fixed_x_stack.top = &state->fixed_x_nil_stack_top; state->fixed_x_stack.bottom_val = 0; state->fixed_x_stack.free = 0; state->fixed_x_stack.auto_pop = 0;\
 state->fixed_y_stack.top = &state->fixed_y_nil_stack_top; state->fixed_y_stack.bottom_val = 0; state->fixed_y_stack.free = 0; state->fixed_y_stack.auto_pop = 0;\

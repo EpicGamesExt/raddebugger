@@ -13,9 +13,9 @@ rd_code_view_init(RD_CodeViewState *cv, RD_View *view)
     cv->preferred_column = 1;
     cv->find_text_arena = rd_view_push_arena_ext(view);
     cv->center_cursor = 1;
+    rd_view_equip_loading_info(view, 1, 0, 0);
+    view->loading_t = view->loading_t_target = 1.f;
   }
-  rd_view_equip_loading_info(view, 1, 0, 0);
-  view->loading_t = view->loading_t_target = 1.f;
 }
 
 internal void
@@ -368,7 +368,7 @@ rd_code_view_build(Arena *arena, RD_View *view, RD_CodeViewState *cv, RD_CodeVie
   //////////////////////////////
   //- rjf: build container
   //
-  UI_Box *container_box = &ui_g_nil_box;
+  UI_Box *container_box = &ui_nil_box;
   {
     ui_set_next_pref_width(ui_px(code_area_dim.x, 1));
     ui_set_next_pref_height(ui_px(code_area_dim.y, 1));
@@ -2871,13 +2871,11 @@ rd_watch_view_build(RD_View *view, RD_WatchViewState *ewv, B32 modifiable, U32 d
 ////////////////////////////////
 //~ rjf: null @view_hook_impl
 
-RD_VIEW_SETUP_FUNCTION_DEF(null) {}
 RD_VIEW_UI_FUNCTION_DEF(null) {}
 
 ////////////////////////////////
 //~ rjf: empty @view_hook_impl
 
-RD_VIEW_SETUP_FUNCTION_DEF(empty) {}
 RD_VIEW_UI_FUNCTION_DEF(empty)
 {
   ui_set_next_flags(UI_BoxFlag_DefaultFocusNav);
@@ -2903,7 +2901,6 @@ RD_VIEW_UI_FUNCTION_DEF(empty)
 ////////////////////////////////
 //~ rjf: getting_started @view_hook_impl
 
-RD_VIEW_SETUP_FUNCTION_DEF(getting_started) {}
 RD_VIEW_UI_FUNCTION_DEF(getting_started)
 {
   ProfBeginFunction();
@@ -3169,7 +3166,6 @@ rd_cmd_lister_item_array_sort_by_strength__in_place(RD_CmdListerItemArray array)
   quick_sort(array.v, array.count, sizeof(RD_CmdListerItem), rd_qsort_compare_cmd_lister__strength);
 }
 
-RD_VIEW_SETUP_FUNCTION_DEF(commands) {}
 RD_VIEW_UI_FUNCTION_DEF(commands)
 {
   ProfBeginFunction();
@@ -3239,7 +3235,7 @@ RD_VIEW_UI_FUNCTION_DEF(commands)
       //- rjf: build row contents
       ui_set_next_hover_cursor(OS_Cursor_HandPoint);
       ui_set_next_child_layout_axis(Axis2_X);
-      UI_Box *box = &ui_g_nil_box;
+      UI_Box *box = &ui_nil_box;
       UI_Focus(cursor.y == row_idx+1 ? UI_FocusKind_On : UI_FocusKind_Off)
       {
         box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|
@@ -3279,7 +3275,7 @@ RD_VIEW_UI_FUNCTION_DEF(commands)
           String8 cmd_display_name = info->display_name;
           String8 cmd_desc = info->description;
           UI_Box *name_box = ui_build_box_from_stringf(UI_BoxFlag_DrawText, "%S##name_%S", cmd_display_name, info->string);
-          UI_Box *desc_box = &ui_g_nil_box;
+          UI_Box *desc_box = &ui_nil_box;
           UI_PrefHeight(ui_em(1.8f, 1.f)) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
           {
             desc_box = ui_build_box_from_stringf(UI_BoxFlag_DrawText, "%S##desc_%S", cmd_desc, info->string);
@@ -3493,7 +3489,6 @@ rd_qsort_compare_file_info__size(RD_FileInfo *a, RD_FileInfo *b)
           0);
 }
 
-RD_VIEW_SETUP_FUNCTION_DEF(file_system){}
 RD_VIEW_UI_FUNCTION_DEF(file_system)
 {
   ProfBeginFunction();
@@ -4074,7 +4069,6 @@ rd_process_info_array_sort_by_strength__in_place(RD_ProcessInfoArray array)
   quick_sort(array.v, array.count, sizeof(RD_ProcessInfo), rd_qsort_compare_process_info);
 }
 
-RD_VIEW_SETUP_FUNCTION_DEF(system_processes){}
 RD_VIEW_UI_FUNCTION_DEF(system_processes)
 {
   ProfBeginFunction();
@@ -4324,7 +4318,6 @@ rd_entity_lister_item_array_sort_by_strength__in_place(RD_EntityListerItemArray 
   quick_sort(array.v, array.count, sizeof(RD_EntityListerItem), rd_qsort_compare_entity_lister__strength);
 }
 
-RD_VIEW_SETUP_FUNCTION_DEF(entity_lister){}
 RD_VIEW_UI_FUNCTION_DEF(entity_lister)
 {
   ProfBeginFunction();
@@ -4401,7 +4394,7 @@ RD_VIEW_UI_FUNCTION_DEF(entity_lister)
       RD_Entity *ent = item.entity;
       ui_set_next_hover_cursor(OS_Cursor_HandPoint);
       ui_set_next_child_layout_axis(Axis2_X);
-      UI_Box *box = &ui_g_nil_box;
+      UI_Box *box = &ui_nil_box;
       UI_FocusHot(idx+1 == cursor.y ? UI_FocusKind_On : UI_FocusKind_Off)
       {
         box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|
@@ -4451,7 +4444,6 @@ RD_VIEW_UI_FUNCTION_DEF(entity_lister)
 ////////////////////////////////
 //~ rjf: symbol_lister @view_hook_impl
 
-RD_VIEW_SETUP_FUNCTION_DEF(symbol_lister){}
 RD_VIEW_UI_FUNCTION_DEF(symbol_lister)
 {
   ProfBeginFunction();
@@ -4658,7 +4650,6 @@ struct RD_TargetViewState
   F32 value_pct;
 };
 
-RD_VIEW_SETUP_FUNCTION_DEF(target){}
 RD_VIEW_UI_FUNCTION_DEF(target)
 {
   ProfBeginFunction();
@@ -4965,7 +4956,6 @@ RD_VIEW_UI_FUNCTION_DEF(target)
 ////////////////////////////////
 //~ rjf: targets @view_hook_impl
 
-RD_VIEW_SETUP_FUNCTION_DEF(targets){}
 RD_VIEW_UI_FUNCTION_DEF(targets)
 {
   ProfBeginFunction();
@@ -5132,17 +5122,6 @@ struct RD_FilePathMapViewState
   F32 dst_column_pct;
 };
 
-RD_VIEW_SETUP_FUNCTION_DEF(file_path_map)
-{
-  RD_FilePathMapViewState *fpms = rd_view_user_state(view, RD_FilePathMapViewState);
-  if(fpms->initialized == 0)
-  {
-    fpms->initialized = 1;
-    fpms->src_column_pct = 0.5f;
-    fpms->dst_column_pct = 0.5f;
-  }
-}
-
 RD_VIEW_UI_FUNCTION_DEF(file_path_map)
 {
   ProfBeginFunction();
@@ -5150,6 +5129,14 @@ RD_VIEW_UI_FUNCTION_DEF(file_path_map)
   RD_EntityList maps_list = rd_query_cached_entity_list_with_kind(RD_EntityKind_FilePathMap);
   RD_EntityArray maps = rd_entity_array_from_list(scratch.arena, &maps_list);
   F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
+  
+  RD_FilePathMapViewState *fpms = rd_view_user_state(view, RD_FilePathMapViewState);
+  if(fpms->initialized == 0)
+  {
+    fpms->initialized = 1;
+    fpms->src_column_pct = 0.5f;
+    fpms->dst_column_pct = 0.5f;
+  }
   
 #if 0 // TODO(rjf): @msgs
   RD_FilePathMapViewState *fpms = rd_view_user_state(view, RD_FilePathMapViewState);
@@ -5185,9 +5172,6 @@ RD_VIEW_UI_FUNCTION_DEF(file_path_map)
     }
   }
 #endif
-  
-  //- rjf: grab state
-  RD_FilePathMapViewState *fpms = rd_view_user_state(view, RD_FilePathMapViewState);
   
   //- rjf: take controls to start/end editing
   B32 edit_begin  = 0;
@@ -5455,13 +5439,11 @@ RD_VIEW_UI_FUNCTION_DEF(file_path_map)
 ////////////////////////////////
 //~ rjf: auto_view_rules @view_hook_impl
 
-RD_VIEW_SETUP_FUNCTION_DEF(auto_view_rules){}
 RD_VIEW_UI_FUNCTION_DEF(auto_view_rules){}
 
 ////////////////////////////////
 //~ rjf: breakpoints @view_hook_impl
 
-RD_VIEW_SETUP_FUNCTION_DEF(breakpoints){}
 RD_VIEW_UI_FUNCTION_DEF(breakpoints)
 {
   ProfBeginFunction();
@@ -5482,7 +5464,6 @@ RD_VIEW_UI_FUNCTION_DEF(breakpoints)
 ////////////////////////////////
 //~ rjf: watch_pins @view_hook_impl
 
-RD_VIEW_SETUP_FUNCTION_DEF(watch_pins){}
 RD_VIEW_UI_FUNCTION_DEF(watch_pins)
 {
   ProfBeginFunction();
@@ -5500,7 +5481,6 @@ RD_VIEW_UI_FUNCTION_DEF(watch_pins)
 ////////////////////////////////
 //~ rjf: scheduler @view_hook_impl
 
-RD_VIEW_SETUP_FUNCTION_DEF(scheduler) {}
 RD_VIEW_UI_FUNCTION_DEF(scheduler)
 {
   ProfBeginFunction();
@@ -5723,7 +5703,6 @@ RD_VIEW_UI_FUNCTION_DEF(scheduler)
 ////////////////////////////////
 //~ rjf: call_stack @view_hook_impl
 
-RD_VIEW_SETUP_FUNCTION_DEF(call_stack){}
 RD_VIEW_UI_FUNCTION_DEF(call_stack)
 {
   ProfBeginFunction();
@@ -5762,7 +5741,7 @@ struct RD_ModulesViewState
 };
 #endif
 
-RD_VIEW_SETUP_FUNCTION_DEF(modules)
+RD_VIEW_UI_FUNCTION_DEF(modules)
 {
 #if 0 // TODO(rjf): @msgs
   RD_ModulesViewState *mv = rd_view_user_state(view, RD_ModulesViewState);
@@ -5775,10 +5754,6 @@ RD_VIEW_SETUP_FUNCTION_DEF(modules)
     mv->dbg_col_pct   = 0.50f;
   }
 #endif
-}
-
-RD_VIEW_UI_FUNCTION_DEF(modules)
-{
 #if 0 // TODO(rjf): @msgs
   RD_ModulesViewState *mv = rd_view_user_state(view, RD_ModulesViewState);
   for(RD_Cmd *cmd = 0; rd_next_cmd(&cmd);)
@@ -6082,7 +6057,6 @@ RD_VIEW_UI_FUNCTION_DEF(modules)
 ////////////////////////////////
 //~ rjf: watch @view_hook_impl
 
-RD_VIEW_SETUP_FUNCTION_DEF(watch){}
 RD_VIEW_UI_FUNCTION_DEF(watch)
 {
   ProfBeginFunction();
@@ -6102,7 +6076,6 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
 ////////////////////////////////
 //~ rjf: locals @view_hook_impl
 
-RD_VIEW_SETUP_FUNCTION_DEF(locals){}
 RD_VIEW_UI_FUNCTION_DEF(locals)
 {
   ProfBeginFunction();
@@ -6122,7 +6095,6 @@ RD_VIEW_UI_FUNCTION_DEF(locals)
 ////////////////////////////////
 //~ rjf: registers @view_hook_impl
 
-RD_VIEW_SETUP_FUNCTION_DEF(registers){}
 RD_VIEW_UI_FUNCTION_DEF(registers)
 {
   ProfBeginFunction();
@@ -6142,7 +6114,6 @@ RD_VIEW_UI_FUNCTION_DEF(registers)
 ////////////////////////////////
 //~ rjf: globals @view_hook_impl
 
-RD_VIEW_SETUP_FUNCTION_DEF(globals){}
 RD_VIEW_UI_FUNCTION_DEF(globals)
 {
   ProfBeginFunction();
@@ -6162,7 +6133,6 @@ RD_VIEW_UI_FUNCTION_DEF(globals)
 ////////////////////////////////
 //~ rjf: thread_locals @view_hook_impl
 
-RD_VIEW_SETUP_FUNCTION_DEF(thread_locals){}
 RD_VIEW_UI_FUNCTION_DEF(thread_locals)
 {
   ProfBeginFunction();
@@ -6182,7 +6152,6 @@ RD_VIEW_UI_FUNCTION_DEF(thread_locals)
 ////////////////////////////////
 //~ rjf: types @view_hook_impl
 
-RD_VIEW_SETUP_FUNCTION_DEF(types){}
 RD_VIEW_UI_FUNCTION_DEF(types)
 {
   ProfBeginFunction();
@@ -6202,7 +6171,6 @@ RD_VIEW_UI_FUNCTION_DEF(types)
 ////////////////////////////////
 //~ rjf: procedures @view_hook_impl
 
-RD_VIEW_SETUP_FUNCTION_DEF(procedures){}
 RD_VIEW_UI_FUNCTION_DEF(procedures)
 {
   ProfBeginFunction();
@@ -6228,15 +6196,14 @@ struct RD_PendingFileViewState
   RD_CmdList deferred_cmds;
 };
 
-RD_VIEW_SETUP_FUNCTION_DEF(pending_file)
-{
-  RD_PendingFileViewState *pves = rd_view_user_state(view, RD_PendingFileViewState);
-  pves->deferred_cmd_arena = rd_view_push_arena_ext(view);
-}
 RD_VIEW_UI_FUNCTION_DEF(pending_file)
 {
   Temp scratch = scratch_begin(0, 0);
   RD_PendingFileViewState *pves = rd_view_user_state(view, RD_PendingFileViewState);
+  if(pves->deferred_cmd_arena == 0)
+  {
+    pves->deferred_cmd_arena = rd_view_push_arena_ext(view);
+  }
   view->loading_t = view->loading_t_target = 1.f;
   rd_request_frame();
   
@@ -6365,17 +6332,10 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(text)
   ev_block_end(out, vb);
 }
 
-RD_VIEW_SETUP_FUNCTION_DEF(text)
-{
-  RD_CodeViewState *cv = rd_view_user_state(view, RD_CodeViewState);
-  rd_code_view_init(cv, view);
-  rd_view_equip_loading_info(view, 1, 0, 0);
-  view->loading_t = view->loading_t_target = 1.f;
-}
-
 RD_VIEW_UI_FUNCTION_DEF(text)
 {
   RD_CodeViewState *cv = rd_view_user_state(view, RD_CodeViewState);
+  rd_code_view_init(cv, view);
   Temp scratch = scratch_begin(0, 0);
   HS_Scope *hs_scope = hs_scope_open();
   TXT_Scope *txt_scope = txt_scope_open();
@@ -6541,7 +6501,7 @@ RD_VIEW_UI_FUNCTION_DEF(text)
     {
       if(file_is_out_of_date)
       {
-        UI_Box *box = &ui_g_nil_box;
+        UI_Box *box = &ui_nil_box;
         UI_Palette(ui_build_palette(ui_top_palette(), .text = rd_rgba_from_theme_color(RD_ThemeColor_TextNegative)))
           RD_Font(RD_FontSlot_Icons)
         {
@@ -6614,7 +6574,7 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(disasm)
   ev_block_end(out, vb);
 }
 
-RD_VIEW_SETUP_FUNCTION_DEF(disasm)
+RD_VIEW_UI_FUNCTION_DEF(disasm)
 {
   RD_DisasmViewState *dv = rd_view_user_state(view, RD_DisasmViewState);
   if(dv->initialized == 0)
@@ -6625,11 +6585,6 @@ RD_VIEW_SETUP_FUNCTION_DEF(disasm)
     dv->style_flags = DASM_StyleFlag_Addresses|DASM_StyleFlag_SourceFilesNames|DASM_StyleFlag_SourceLines|DASM_StyleFlag_SymbolNames;
     rd_code_view_init(&dv->cv, view);
   }
-}
-
-RD_VIEW_UI_FUNCTION_DEF(disasm)
-{
-  RD_DisasmViewState *dv = rd_view_user_state(view, RD_DisasmViewState);
   RD_CodeViewState *cv = &dv->cv;
   Temp scratch = scratch_begin(0, 0);
   HS_Scope *hs_scope = hs_scope_open();
@@ -6825,14 +6780,10 @@ RD_VIEW_UI_FUNCTION_DEF(disasm)
 ////////////////////////////////
 //~ rjf: output @view_hook_impl
 
-RD_VIEW_SETUP_FUNCTION_DEF(output)
-{
-  RD_CodeViewState *cv = rd_view_user_state(view, RD_CodeViewState);
-  rd_code_view_init(cv, view);
-}
 RD_VIEW_UI_FUNCTION_DEF(output)
 {
   RD_CodeViewState *cv = rd_view_user_state(view, RD_CodeViewState);
+  rd_code_view_init(cv, view);
   Temp scratch = scratch_begin(0, 0);
   HS_Scope *hs_scope = hs_scope_open();
   TXT_Scope *txt_scope = txt_scope_open();
@@ -6912,7 +6863,6 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(memory)
   ev_block_end(out, vb);
 }
 
-RD_VIEW_SETUP_FUNCTION_DEF(memory){}
 RD_VIEW_UI_FUNCTION_DEF(memory)
 {
   ProfBeginFunction();
@@ -7293,7 +7243,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   //////////////////////////////
   //- rjf: build main container
   //
-  UI_Box *container_box = &ui_g_nil_box;
+  UI_Box *container_box = &ui_nil_box;
   {
     Vec2F32 dim = dim_2f32(rect);
     ui_set_next_fixed_width(dim.x);
@@ -7305,7 +7255,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   //////////////////////////////
   //- rjf: build header
   //
-  UI_Box *header_box = &ui_g_nil_box;
+  UI_Box *header_box = &ui_nil_box;
   UI_Parent(container_box)
   {
     UI_WidthFill UI_PrefHeight(ui_px(row_height_px, 1.f)) UI_Row
@@ -7355,7 +7305,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   //////////////////////////////
   //- rjf: build scrollable box
   //
-  UI_Box *scrollable_box = &ui_g_nil_box;
+  UI_Box *scrollable_box = &ui_nil_box;
   UI_Parent(container_box)
   {
     ui_set_next_fixed_x(content_rect.x0);
@@ -7375,8 +7325,8 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   //////////////////////////////
   //- rjf: build row container/overlay
   //
-  UI_Box *row_container_box = &ui_g_nil_box;
-  UI_Box *row_overlay_box = &ui_g_nil_box;
+  UI_Box *row_container_box = &ui_nil_box;
+  UI_Box *row_overlay_box = &ui_nil_box;
   UI_Parent(scrollable_box) UI_WidthFill UI_HeightFill
   {
     ui_set_next_child_layout_axis(Axis2_Y);
@@ -7629,7 +7579,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   //////////////////////////////
   //- rjf: build footer
   //
-  UI_Box *footer_box = &ui_g_nil_box;
+  UI_Box *footer_box = &ui_nil_box;
   UI_Parent(container_box)
   {
     ui_set_next_fixed_x(footer_rect.x0);
@@ -7808,11 +7758,6 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(bitmap)
   ev_block_end(out, vb);
 }
 
-RD_VIEW_SETUP_FUNCTION_DEF(bitmap)
-{
-  rd_view_equip_loading_info(view, 1, 0, 0);
-  view->loading_t = view->loading_t_target = 1.f;
-}
 RD_VIEW_UI_FUNCTION_DEF(bitmap)
 {
   Temp scratch = scratch_begin(0, 0);
@@ -7876,7 +7821,7 @@ RD_VIEW_UI_FUNCTION_DEF(bitmap)
   //////////////////////////////
   //- rjf: build canvas box
   //
-  UI_Box *canvas_box = &ui_g_nil_box;
+  UI_Box *canvas_box = &ui_nil_box;
   Vec2F32 canvas_dim = dim_2f32(rect);
   Rng2F32 canvas_rect = r2f32p(0, 0, canvas_dim.x, canvas_dim.y);
   UI_Rect(canvas_rect)
@@ -8072,7 +8017,7 @@ RD_VIEW_RULE_ROW_UI_FUNCTION_DEF(color_rgba)
   Vec4F32 hsva = hsva_from_rgba(rgba);
   
   //- rjf: build text box
-  UI_Box *text_box = &ui_g_nil_box;
+  UI_Box *text_box = &ui_nil_box;
   UI_WidthFill RD_Font(RD_FontSlot_Code)
   {
     text_box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
@@ -8099,7 +8044,7 @@ RD_VIEW_RULE_ROW_UI_FUNCTION_DEF(color_rgba)
   }
   
   //- rjf: build color box
-  UI_Box *color_box = &ui_g_nil_box;
+  UI_Box *color_box = &ui_nil_box;
   UI_PrefWidth(ui_em(1.875f, 1.f)) UI_ChildLayoutAxis(Axis2_Y)
   {
     color_box = ui_build_box_from_stringf(UI_BoxFlag_Clickable, "color_box");
@@ -8123,7 +8068,6 @@ RD_VIEW_RULE_ROW_UI_FUNCTION_DEF(color_rgba)
   scratch_end(scratch);
 }
 
-RD_VIEW_SETUP_FUNCTION_DEF(color_rgba) {}
 RD_VIEW_UI_FUNCTION_DEF(color_rgba)
 {
   Temp scratch = scratch_begin(0, 0);
@@ -8230,11 +8174,6 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(geo3d)
   ev_block_end(out, vb);
 }
 
-RD_VIEW_SETUP_FUNCTION_DEF(geo3d)
-{
-  rd_view_equip_loading_info(view, 1, 0, 0);
-  view->loading_t = view->loading_t_target = 1.f;
-}
 RD_VIEW_UI_FUNCTION_DEF(geo3d)
 {
   Temp scratch = scratch_begin(0, 0);
@@ -8306,7 +8245,7 @@ RD_VIEW_UI_FUNCTION_DEF(geo3d)
   if(count != 0 && !r_handle_match(idxs_buffer, r_handle_zero()) && !r_handle_match(vtxs_buffer, r_handle_zero()))
   {
     Vec2F32 dim = dim_2f32(rect);
-    UI_Box *box = &ui_g_nil_box;
+    UI_Box *box = &ui_nil_box;
     UI_FixedSize(dim)
     {
       box = ui_build_box_from_stringf(UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground|UI_BoxFlag_Clickable|UI_BoxFlag_Scroll, "geo_box");
@@ -8351,7 +8290,6 @@ RD_VIEW_UI_FUNCTION_DEF(geo3d)
 ////////////////////////////////
 //~ rjf: exception_filters @view_hook_impl
 
-RD_VIEW_SETUP_FUNCTION_DEF(exception_filters) {}
 RD_VIEW_UI_FUNCTION_DEF(exception_filters)
 {
   ProfBeginFunction();
@@ -8559,7 +8497,6 @@ rd_qsort_compare_settings_item(RD_SettingsItem *a, RD_SettingsItem *b)
   return result;
 }
 
-RD_VIEW_SETUP_FUNCTION_DEF(settings){}
 RD_VIEW_UI_FUNCTION_DEF(settings)
 {
   ProfBeginFunction();
@@ -9050,7 +8987,7 @@ RD_VIEW_UI_FUNCTION_DEF(settings)
       }
       
       //- rjf: build item widget
-      UI_Box *item_box = &ui_g_nil_box;
+      UI_Box *item_box = &ui_nil_box;
       UI_Row
       {
         if(query.size == 0 && item->kind != RD_SettingsItemKind_CategoryHeader)

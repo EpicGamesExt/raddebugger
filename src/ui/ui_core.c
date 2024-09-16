@@ -381,14 +381,14 @@ ui_scroll_pt_clamp_idx(UI_ScrollPt *v, Rng1S64 range)
 internal B32
 ui_box_is_nil(UI_Box *box)
 {
-  return box == 0 || box == &ui_g_nil_box;
+  return box == 0 || box == &ui_nil_box;
 }
 
 internal UI_BoxRec
 ui_box_rec_df(UI_Box *box, UI_Box *root, U64 sib_member_off, U64 child_member_off)
 {
   UI_BoxRec result = {0};
-  result.next = &ui_g_nil_box;
+  result.next = &ui_nil_box;
   if(!ui_box_is_nil(*MemberFromOffset(UI_Box **, box, child_member_off)))
   {
     result.next = *MemberFromOffset(UI_Box **, box, child_member_off);
@@ -765,7 +765,7 @@ internal UI_Box *
 ui_box_from_key(UI_Key key)
 {
   ProfBeginFunction();
-  UI_Box *result = &ui_g_nil_box;
+  UI_Box *result = &ui_nil_box;
   if(!ui_key_match(key, ui_key_zero()))
   {
     U64 slot = key.u64[0] % ui_state->box_table_size;
@@ -791,7 +791,7 @@ ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, U
   //- rjf: reset per-build ui state
   {
     UI_InitStacks(ui_state);
-    ui_state->root = &ui_g_nil_box;
+    ui_state->root = &ui_nil_box;
     ui_state->ctx_menu_touched_this_frame = 0;
     ui_state->is_animating = 0;
     ui_state->clipboard_copy_key = ui_key_zero();
@@ -942,7 +942,7 @@ ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, U
                 }
                 if(last_box == box)
                 {
-                  ui_box_list_push(scratch.arena, &next_focus_box_candidates, &ui_g_nil_box);
+                  ui_box_list_push(scratch.arena, &next_focus_box_candidates, &ui_nil_box);
                   break;
                 }
               }
@@ -965,7 +965,7 @@ ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, U
                   }
                 }
                 UI_Box *last_box = box;
-                UI_Box *root_descendant = &ui_g_nil_box;
+                UI_Box *root_descendant = &ui_nil_box;
                 if(box == nav_root && box == search_start)
                 {
                   for(UI_Box *d = box->last; !ui_box_is_nil(d); d = d->last)
@@ -974,7 +974,7 @@ ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, U
                     root_descendant = d;
                   }
                 }
-                UI_Box *prev_descendant = &ui_g_nil_box;
+                UI_Box *prev_descendant = &ui_nil_box;
                 for(UI_Box *d = box->prev; !ui_box_is_nil(d); d = d->last)
                 {
                   moved_in_axis[d->parent->child_layout_axis] += 1;
@@ -995,7 +995,7 @@ ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, U
                 }
                 if(box == last_box)
                 {
-                  ui_box_list_push(scratch.arena, &next_focus_box_candidates, &ui_g_nil_box);
+                  ui_box_list_push(scratch.arena, &next_focus_box_candidates, &ui_nil_box);
                   break;
                 }
               }
@@ -1179,7 +1179,7 @@ ui_end_build(void)
         if(box->last_touched_build_index < ui_state->build_index ||
            ui_key_match(box->key, ui_key_zero()))
         {
-          DLLRemove_NPZ(&ui_g_nil_box, ui_state->box_table[slot_idx].hash_first, ui_state->box_table[slot_idx].hash_last, box, hash_next, hash_prev);
+          DLLRemove_NPZ(&ui_nil_box, ui_state->box_table[slot_idx].hash_first, ui_state->box_table[slot_idx].hash_last, box, hash_next, hash_prev);
           SLLStackPush(ui_state->first_free_box, box);
         }
       }
@@ -1604,7 +1604,7 @@ ui_calc_sizes_upwards_dependent__in_place_rec(UI_Box *root, Axis2 axis)
     case UI_SizeKind_ParentPct:
     {
       // rjf: find parent that has a fixed size
-      UI_Box *fixed_parent = &ui_g_nil_box;
+      UI_Box *fixed_parent = &ui_nil_box;
       for(UI_Box *p = root->parent; !ui_box_is_nil(p); p = p->parent)
       {
         if(p->flags & (UI_BoxFlag_FixedWidth<<axis) ||
@@ -2182,7 +2182,7 @@ ui_build_box_from_key(UI_BoxFlags flags, UI_Key key)
   //- rjf: zero key on duplicate
   if(!box_first_frame && box->last_touched_build_index == ui_state->build_index)
   {
-    box = &ui_g_nil_box;
+    box = &ui_nil_box;
     key = ui_key_zero();
     box_first_frame = 1;
   }
@@ -2208,7 +2208,7 @@ ui_build_box_from_key(UI_BoxFlags flags, UI_Key key)
   
   //- rjf: zero out per-frame state
   {
-    box->first = box->last = box->next = box->prev = box->parent = &ui_g_nil_box;
+    box->first = box->last = box->next = box->prev = box->parent = &ui_nil_box;
     box->child_count = 0;
     box->flags = 0;
     box->hover_cursor = OS_Cursor_Pointer;
@@ -2220,13 +2220,13 @@ ui_build_box_from_key(UI_BoxFlags flags, UI_Key key)
   if(box_first_frame && !box_is_transient)
   {
     U64 slot = key.u64[0] % ui_state->box_table_size;
-    DLLInsert_NPZ(&ui_g_nil_box, ui_state->box_table[slot].hash_first, ui_state->box_table[slot].hash_last, ui_state->box_table[slot].hash_last, box, hash_next, hash_prev);
+    DLLInsert_NPZ(&ui_nil_box, ui_state->box_table[slot].hash_first, ui_state->box_table[slot].hash_last, ui_state->box_table[slot].hash_last, box, hash_next, hash_prev);
   }
   
   //- rjf: hook into per-frame tree structure
   if(!ui_box_is_nil(parent))
   {
-    DLLPushBack_NPZ(&ui_g_nil_box, parent->first, parent->last, box, next, prev);
+    DLLPushBack_NPZ(&ui_nil_box, parent->first, parent->last, box, next, prev);
     parent->child_count += 1;
     box->parent = parent;
   }
@@ -2337,7 +2337,7 @@ ui_build_box_from_key(UI_BoxFlags flags, UI_Key key)
 internal UI_Key
 ui_active_seed_key(void)
 {
-  UI_Box *keyed_ancestor = &ui_g_nil_box;
+  UI_Box *keyed_ancestor = &ui_nil_box;
   {
     for(UI_Box *p = ui_top_parent(); !ui_box_is_nil(p); p = p->parent)
     {
@@ -2923,7 +2923,7 @@ ui_signal_from_box(UI_Box *box)
   //////////////////////////////
   //- rjf: get default nav ancestor
   //
-  UI_Box *default_nav_parent = &ui_g_nil_box;
+  UI_Box *default_nav_parent = &ui_nil_box;
   for(UI_Box *p = ui_top_parent(); !ui_box_is_nil(p); p = p->parent)
   {
     if(p->flags & UI_BoxFlag_DefaultFocusNav)
