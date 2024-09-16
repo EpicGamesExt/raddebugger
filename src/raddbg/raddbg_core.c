@@ -12970,8 +12970,13 @@ rd_frame(void)
               {
                 disasm_view_prioritized = (rd_selected_tab_from_panel(dst_panel) == view_w_disasm);
                 dst_panel->selected_tab_view = rd_handle_from_view(dst_view);
-                rd_cmd(RD_CmdKind_GoToLine, .cursor = point);
-                rd_cmd(cursor_snap_kind);
+                rd_cmd(RD_CmdKind_GoToLine,
+                       .panel = rd_handle_from_panel(dst_panel),
+                       .view = rd_handle_from_view(dst_view),
+                       .cursor = point);
+                rd_cmd(cursor_snap_kind,
+                       .panel = rd_handle_from_panel(dst_panel),
+                       .view = rd_handle_from_view(dst_view));
                 panel_used_for_src_code = dst_panel;
               }
             }
@@ -13014,7 +13019,10 @@ rd_frame(void)
               if(!rd_panel_is_nil(dst_panel))
               {
                 dst_panel->selected_tab_view = rd_handle_from_view(dst_view);
-                rd_cmd(RD_CmdKind_GoToAddress, .process = process->handle, .vaddr = vaddr);
+                rd_cmd(RD_CmdKind_GoToAddress,
+                       .process = process->handle, .vaddr = vaddr,
+                       .panel = rd_handle_from_panel(dst_panel),
+                       .view = rd_handle_from_view(dst_view));
                 rd_cmd(cursor_snap_kind);
               }
             }
