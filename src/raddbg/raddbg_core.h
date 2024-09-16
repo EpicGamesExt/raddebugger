@@ -221,22 +221,6 @@ struct RD_ViewSpecInfoArray
   RD_ViewSpecInfo *v;
   U64 count;
 };
-
-typedef struct RD_CmdParamSlotViewSpecRuleNode RD_CmdParamSlotViewSpecRuleNode;
-struct RD_CmdParamSlotViewSpecRuleNode
-{
-  RD_CmdParamSlotViewSpecRuleNode *next;
-  RD_ViewSpec *view_spec;
-  String8 cmd_name;
-};
-
-typedef struct RD_CmdParamSlotViewSpecRuleList RD_CmdParamSlotViewSpecRuleList;
-struct RD_CmdParamSlotViewSpecRuleList
-{
-  RD_CmdParamSlotViewSpecRuleNode *first;
-  RD_CmdParamSlotViewSpecRuleNode *last;
-  U64 count;
-};
 #endif
 
 ////////////////////////////////
@@ -405,10 +389,6 @@ enum
   RD_ViewRuleSpecInfoFlag_ViewUI         = (1<<3),
 };
 
-#define RD_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_SIG(name) void name(void)
-#define RD_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_NAME(name) rd_view_rule_viz_row_prod__##name
-#define RD_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_DEF(name) internal RD_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_SIG(RD_VIEW_RULE_VIZ_ROW_PROD_FUNCTION_NAME(name))
-
 #define RD_VIEW_RULE_LINE_STRINGIZE_FUNCTION_SIG(name) void name(void)
 #define RD_VIEW_RULE_LINE_STRINGIZE_FUNCTION_NAME(name) rd_view_rule_line_stringize__##name
 #define RD_VIEW_RULE_LINE_STRINGIZE_FUNCTION_DEF(name) internal RD_VIEW_RULE_LINE_STRINGIZE_FUNCTION_SIG(RD_VIEW_RULE_LINE_STRINGIZE_FUNCTION_NAME(name))
@@ -426,7 +406,6 @@ struct RD_ViewRuleSpecInfo
 {
   String8 string;
   RD_ViewRuleSpecInfoFlags flags;
-  RD_ViewRuleVizRowProdHookFunctionType *viz_row_prod;
   RD_ViewRuleLineStringizeHookFunctionType *line_stringize;
   RD_ViewRuleRowUIFunctionType *row_ui;
 };

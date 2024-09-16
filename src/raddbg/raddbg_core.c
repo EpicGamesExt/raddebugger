@@ -13352,27 +13352,6 @@ rd_frame(void)
           }break;
           
           //- rjf: cursor operations
-#if 0 // TODO(rjf): @msgs these should no longer be necessary; "at cursor" -> just run the command with whatever the registers have
-          case RD_CmdKind_ToggleBreakpointAtCursor:
-          {
-            D_Regs *regs = rd_regs();
-            D_CmdParams p = d_cmd_params_zero();
-            p.file_path  = regs->file_path;
-            p.text_point = regs->cursor;
-            p.vaddr      = regs->vaddr_range.min;
-            rd_push_cmd(rd_cmd_spec_from_kind(RD_CmdKind_ToggleBreakpoint), &p);
-          }break;
-          case RD_CmdKind_ToggleWatchPinAtCursor:
-          {
-            D_Regs *regs = rd_regs();
-            D_CmdParams p = d_cmd_params_zero();
-            p.file_path  = regs->file_path;
-            p.text_point = regs->cursor;
-            p.vaddr      = regs->vaddr_range.min;
-            p.string     = rd_regs()->string;
-            rd_push_cmd(rd_cmd_spec_from_kind(RD_CmdKind_ToggleWatchPin), &p);
-          }break;
-#endif
           case RD_CmdKind_GoToNameAtCursor:
           case RD_CmdKind_ToggleWatchExpressionAtCursor:
           {
