@@ -150,8 +150,8 @@ struct RD_WatchViewState
 ////////////////////////////////
 //~ rjf: Code View Functions
 
-internal void rd_code_view_init(RD_CodeViewState *cv, RD_View *view);
-internal RD_CodeViewBuildResult rd_code_view_build(Arena *arena, RD_View *view, RD_CodeViewState *cv, RD_CodeViewBuildFlags flags, Rng2F32 rect, String8 text_data, TXT_TextInfo *text_info, DASM_LineArray *dasm_lines, Rng1U64 dasm_vaddr_range, DI_Key dasm_dbgi_key);
+internal void rd_code_view_init(RD_CodeViewState *cv);
+internal RD_CodeViewBuildResult rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags flags, Rng2F32 rect, String8 text_data, TXT_TextInfo *text_info, DASM_LineArray *dasm_lines, Rng1U64 dasm_vaddr_range, DI_Key dasm_dbgi_key);
 
 ////////////////////////////////
 //~ rjf: Watch View Functions
@@ -176,7 +176,7 @@ internal RD_WatchViewColumn *rd_watch_view_column_alloc_(RD_WatchViewState *wv, 
 internal void rd_watch_view_column_release(RD_WatchViewState *wv, RD_WatchViewColumn *col);
 
 //- rjf: watch view main hooks
-internal void rd_watch_view_init(RD_WatchViewState *ewv, RD_View *view, RD_WatchViewFillKind fill_kind);
-internal void rd_watch_view_build(RD_View *view, RD_WatchViewState *ewv, B32 modifiable, U32 default_radix, Rng2F32 rect);
+internal void rd_watch_view_init(RD_WatchViewState *ewv, RD_WatchViewFillKind fill_kind);
+internal void rd_watch_view_build(RD_WatchViewState *ewv, B32 modifiable, U32 default_radix, Rng2F32 rect);
 
 #endif // RADDBG_VIEWS_H

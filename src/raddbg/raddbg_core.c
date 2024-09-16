@@ -2289,6 +2289,10 @@ rd_view_equip_loading_info(RD_View *view, B32 is_loading, U64 progress_v, U64 pr
   view->loading_t_target = (F32)!!is_loading;
   view->loading_progress_v = progress_v;
   view->loading_progress_v_target = progress_target;
+  if(is_loading)
+  {
+    view->loading_t = view->loading_t_target;
+  }
 }
 
 //- rjf: user state extensions
@@ -2362,6 +2366,112 @@ rd_view_store_paramf(RD_View *view, String8 key, char *fmt, ...)
   va_start(args, fmt);
   String8 string = push_str8fv(scratch.arena, fmt, args);
   rd_view_store_param(view, key, string);
+  va_end(args);
+  scratch_end(scratch);
+}
+
+////////////////////////////////
+//~ rjf: View Building API
+
+//- rjf: view info extraction
+
+internal Arena *
+rd_view_arena(void)
+{
+  RD_View *view = rd_view_from_handle(rd_regs()->view);
+  return view->arena;
+}
+
+internal UI_ScrollPt2
+rd_view_scroll_pos(void)
+{
+  RD_View *view = rd_view_from_handle(rd_regs()->view);
+  return view->scroll_pos;
+}
+
+internal String8
+rd_view_expr_string(void)
+{
+  // TODO(rjf): @msgs filter and expr string need to be different
+  RD_View *view = rd_view_from_handle(rd_regs()->view);
+  String8 expr_string = str8(view->query_buffer, view->query_string_size);
+  return expr_string;
+}
+
+internal String8
+rd_view_filter(void)
+{
+  // TODO(rjf): @msgs filter and expr string need to be different
+  RD_View *view = rd_view_from_handle(rd_regs()->view);
+  String8 filter = str8(view->query_buffer, view->query_string_size);
+  return filter;
+}
+
+//- rjf: pushing/attaching view resources
+
+internal void *
+rd_view_state_by_size(U64 size)
+{
+  RD_View *view = rd_view_from_handle(rd_regs()->view);
+  void *result = rd_view_get_or_push_user_state(view, size);
+  return result;
+}
+
+internal Arena *
+rd_push_view_arena(void)
+{
+  RD_View *view = rd_view_from_handle(rd_regs()->view);
+  Arena *result = rd_view_push_arena_ext(view);
+  return result;
+}
+
+//- rjf: storing view-attached state
+
+internal void
+rd_store_view_expr_string(String8 string)
+{
+  // TODO(rjf): @msgs filter and expr string need to be different
+  RD_View *view = rd_view_from_handle(rd_regs()->view);
+  rd_view_equip_query(view, string);
+}
+
+internal void
+rd_store_view_filter(String8 string)
+{
+  // TODO(rjf): @msgs filter and expr string need to be different
+  RD_View *view = rd_view_from_handle(rd_regs()->view);
+  rd_view_equip_query(view, string);
+}
+
+internal void
+rd_store_view_loading_info(B32 is_loading, U64 progress_u64, U64 progress_u64_target)
+{
+  RD_View *view = rd_view_from_handle(rd_regs()->view);
+  rd_view_equip_loading_info(view, is_loading, progress_u64, progress_u64_target);
+}
+
+internal void
+rd_store_view_scroll_pos(UI_ScrollPt2 pos)
+{
+  RD_View *view = rd_view_from_handle(rd_regs()->view);
+  view->scroll_pos = pos;
+}
+
+internal void
+rd_store_view_param(String8 key, String8 value)
+{
+  RD_View *view = rd_view_from_handle(rd_regs()->view);
+  rd_view_store_param(view, key, value);
+}
+
+internal void
+rd_store_view_paramf(String8 key, char *fmt, ...)
+{
+  Temp scratch = scratch_begin(0, 0);
+  va_list args;
+  va_start(args, fmt);
+  String8 string = push_str8fv(scratch.arena, fmt, args);
+  rd_store_view_param(key, string);
   va_end(args);
   scratch_end(scratch);
 }
@@ -2877,7 +2987,7 @@ rd_window_frame(RD_Window *ws)
               UI_Parent(view_preview_container) UI_Focus(UI_FocusKind_Off) UI_WidthFill
               {
                 RD_ViewRuleUIFunctionType *view_ui = view->spec->ui;
-                view_ui(view, str8(view->query_buffer, view->query_string_size), view->params_roots[view->params_read_gen%ArrayCount(view->params_roots)], view_preview_container->rect);
+                view_ui(str8(view->query_buffer, view->query_string_size), view->params_roots[view->params_read_gen%ArrayCount(view->params_roots)], view_preview_container->rect);
               }
             }
           }
@@ -5230,9 +5340,10 @@ rd_window_frame(RD_Window *ws)
       
       //- rjf: build query view
       UI_Parent(query_container_box) UI_WidthFill UI_Focus(UI_FocusKind_Null)
+        RD_RegsScope(.view = rd_handle_from_view(view))
       {
         RD_ViewRuleUIFunctionType *view_ui = view->spec->ui;
-        view_ui(view, str8(view->query_buffer, view->query_string_size), view->params_roots[view->params_read_gen%ArrayCount(view->params_roots)], query_container_content_rect);
+        view_ui(str8(view->query_buffer, view->query_string_size), view->params_roots[view->params_read_gen%ArrayCount(view->params_roots)], query_container_content_rect);
       }
       
       //- rjf: query submission
@@ -6281,7 +6392,7 @@ rd_window_frame(RD_Window *ws)
           //- rjf: build empty view
           UI_Parent(view_container_box) if(rd_view_is_nil(rd_selected_tab_from_panel(panel)))
           {
-            RD_VIEW_RULE_UI_FUNCTION_NAME(empty)(&rd_nil_view, str8_zero(), &md_nil_node, content_rect);
+            RD_VIEW_RULE_UI_FUNCTION_NAME(empty)(str8_zero(), &md_nil_node, content_rect);
           }
           
           //- rjf: build tab view
@@ -6289,7 +6400,7 @@ rd_window_frame(RD_Window *ws)
           {
             RD_View *view = rd_selected_tab_from_panel(panel);
             RD_ViewRuleUIFunctionType *view_ui = view->spec->ui;
-            view_ui(view, str8(view->query_buffer, view->query_string_size), view->params_roots[view->params_read_gen%ArrayCount(view->params_roots)], content_rect);
+            view_ui(str8(view->query_buffer, view->query_string_size), view->params_roots[view->params_read_gen%ArrayCount(view->params_roots)], content_rect);
           }
           
           //- rjf: pop interaction registers; commit if this is the selected view
@@ -7452,6 +7563,10 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
     else if(str8_match(n->v.root->string, str8_lit("oct"), 0)) {radix = 8; }
     else if(str8_match(n->v.root->string, str8_lit("no_addr"), 0)) {no_addr = 1;}
     else if(str8_match(n->v.root->string, str8_lit("array"), 0)) {has_array = 1;}
+  }
+  if(eval.space.kind == CTRL_EvalSpaceKind_Meta)
+  {
+    no_addr = 1;
   }
   
   //- rjf: member evaluations -> display member info
@@ -13924,9 +14039,14 @@ rd_frame(void)
       targets.count = target_entities.count;
       targets.v = push_array(scratch.arena, D_Target, targets.count);
       U64 idx = 0;
-      for(RD_EntityNode *n = target_entities.first; n != 0; n = n->next, idx += 1)
+      for(RD_EntityNode *n = target_entities.first; n != 0; n = n->next)
       {
         RD_Entity *src_target = n->entity;
+        if(src_target->disabled)
+        {
+          targets.count -= 1;
+          continue;
+        }
         RD_Entity *src_target_exe   = rd_entity_child_from_kind(src_target, RD_EntityKind_Executable);
         RD_Entity *src_target_args  = rd_entity_child_from_kind(src_target, RD_EntityKind_Arguments);
         RD_Entity *src_target_wdir  = rd_entity_child_from_kind(src_target, RD_EntityKind_WorkingDirectory);
@@ -13936,6 +14056,7 @@ rd_frame(void)
         dst_target->args                    = src_target_args->string;
         dst_target->working_directory       = src_target_wdir->string;
         dst_target->custom_entry_point_name = src_target_entry->string;
+        idx += 1;
       }
     }
     

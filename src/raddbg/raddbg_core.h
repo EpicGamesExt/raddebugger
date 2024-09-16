@@ -166,7 +166,7 @@ enum
   RD_ViewRuleInfoFlag_CanExpand                  = (1<<6),
 };
 
-#define RD_VIEW_RULE_UI_FUNCTION_SIG(name) void name(RD_View *view, String8 string, MD_Node *params, Rng2F32 rect)
+#define RD_VIEW_RULE_UI_FUNCTION_SIG(name) void name(String8 string, MD_Node *params, Rng2F32 rect)
 #define RD_VIEW_RULE_UI_FUNCTION_NAME(name) rd_view_rule_ui_##name
 #define RD_VIEW_RULE_UI_FUNCTION_DEF(name) internal RD_VIEW_RULE_UI_FUNCTION_SIG(RD_VIEW_RULE_UI_FUNCTION_NAME(name))
 typedef RD_VIEW_RULE_UI_FUNCTION_SIG(RD_ViewRuleUIFunctionType);
@@ -1228,6 +1228,31 @@ internal void rd_view_store_paramf(RD_View *view, String8 key, char *fmt, ...);
 #define rd_view_store_param_f32(view, key, f32) rd_view_store_paramf((view), (key), "%ff", (f32))
 #define rd_view_store_param_s64(view, key, s64) rd_view_store_paramf((view), (key), "%I64d", (s64))
 #define rd_view_store_param_u64(view, key, u64) rd_view_store_paramf((view), (key), "0x%I64x", (u64))
+
+////////////////////////////////
+//~ rjf: View Building API
+
+//- rjf: view info extraction
+internal Arena *rd_view_arena(void);
+internal UI_ScrollPt2 rd_view_scroll_pos(void);
+internal String8 rd_view_expr_string(void);
+internal String8 rd_view_filter(void);
+
+//- rjf: pushing/attaching view resources
+internal void *rd_view_state_by_size(U64 size);
+#define rd_view_state(T) (T *)rd_view_state_by_size(sizeof(T))
+internal Arena *rd_push_view_arena(void);
+
+//- rjf: storing view-attached state
+internal void rd_store_view_expr_string(String8 string);
+internal void rd_store_view_filter(String8 string);
+internal void rd_store_view_loading_info(B32 is_loading, U64 progress_u64, U64 progress_u64_target);
+internal void rd_store_view_scroll_pos(UI_ScrollPt2 pos);
+internal void rd_store_view_param(String8 key, String8 value);
+internal void rd_store_view_paramf(String8 key, char *fmt, ...);
+#define rd_store_view_param_f32(key, f32) rd_store_view_paramf((key), "%ff", (f32))
+#define rd_store_view_param_s64(key, s64) rd_store_view_paramf((key), "%I64d", (s64))
+#define rd_store_view_param_u64(key, u64) rd_store_view_paramf((key), "0x%I64x", (u64))
 
 ////////////////////////////////
 //~ rjf: Expand-Keyed Transient View Functions

@@ -5,26 +5,30 @@
 //~ rjf: Code Views
 
 internal void
-rd_code_view_init(RD_CodeViewState *cv, RD_View *view)
+rd_code_view_init(RD_CodeViewState *cv)
 {
   if(cv->initialized == 0)
   {
     cv->initialized = 1;
     cv->preferred_column = 1;
-    cv->find_text_arena = rd_view_push_arena_ext(view);
+    cv->find_text_arena = rd_push_view_arena();
     cv->center_cursor = 1;
-    rd_view_equip_loading_info(view, 1, 0, 0);
-    view->loading_t = view->loading_t_target = 1.f;
+    rd_store_view_loading_info(1, 0, 0);
   }
 }
 
 internal RD_CodeViewBuildResult
-rd_code_view_build(Arena *arena, RD_View *view, RD_CodeViewState *cv, RD_CodeViewBuildFlags flags, Rng2F32 rect, String8 text_data, TXT_TextInfo *text_info, DASM_LineArray *dasm_lines, Rng1U64 dasm_vaddr_range, DI_Key dasm_dbgi_key)
+rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags flags, Rng2F32 rect, String8 text_data, TXT_TextInfo *text_info, DASM_LineArray *dasm_lines, Rng1U64 dasm_vaddr_range, DI_Key dasm_dbgi_key)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(&arena, 1);
   HS_Scope *hs_scope = hs_scope_open();
   TXT_Scope *txt_scope = txt_scope_open();
+  
+  //////////////////////////////
+  //- rjf: unpack state
+  //
+  UI_ScrollPt2 scroll_pos = rd_view_scroll_pos();
   
   //////////////////////////////
   //- rjf: extract invariants
@@ -91,10 +95,10 @@ rd_code_view_build(Arena *arena, RD_View *view, RD_CodeViewState *cv, RD_CodeVie
   //////////////////////////////
   //- rjf: determine visible line range / count
   //
-  Rng1S64 visible_line_num_range = r1s64(view->scroll_pos.y.idx + (S64)(view->scroll_pos.y.off) + 1 - !!(view->scroll_pos.y.off < 0),
-                                         view->scroll_pos.y.idx + (S64)(view->scroll_pos.y.off) + 1 + num_possible_visible_lines);
-  Rng1S64 target_visible_line_num_range = r1s64(view->scroll_pos.y.idx + 1,
-                                                view->scroll_pos.y.idx + 1 + num_possible_visible_lines);
+  Rng1S64 visible_line_num_range = r1s64(scroll_pos.y.idx + (S64)(scroll_pos.y.off) + 1 - !!(scroll_pos.y.off < 0),
+                                         scroll_pos.y.idx + (S64)(scroll_pos.y.off) + 1 + num_possible_visible_lines);
+  Rng1S64 target_visible_line_num_range = r1s64(scroll_pos.y.idx + 1,
+                                                scroll_pos.y.idx + 1 + num_possible_visible_lines);
   U64 visible_line_count = 0;
   {
     visible_line_num_range.min = Clamp(1, visible_line_num_range.min, (S64)text_info->lines_count);
@@ -181,7 +185,7 @@ rd_code_view_build(Arena *arena, RD_View *view, RD_CodeViewState *cv, RD_CodeVie
     code_slice_params.catchall_margin_width_px  = catchall_margin_width_px;
     code_slice_params.line_num_width_px         = line_num_width_px;
     code_slice_params.line_text_max_width_px    = (F32)line_size_x;
-    code_slice_params.margin_float_off_px       = view->scroll_pos.x.idx + view->scroll_pos.x.off;
+    code_slice_params.margin_float_off_px       = scroll_pos.x.idx + scroll_pos.x.off;
     
     // rjf: fill text info
     {
@@ -371,7 +375,7 @@ rd_code_view_build(Arena *arena, RD_View *view, RD_CodeViewState *cv, RD_CodeVie
                                               UI_BoxFlag_Scroll|
                                               UI_BoxFlag_AllowOverflowX|
                                               UI_BoxFlag_AllowOverflowY,
-                                              "###code_area_%p", view);
+                                              "###code_area");
   }
   
   //////////////////////////////
@@ -536,14 +540,14 @@ rd_code_view_build(Arena *arena, RD_View *view, RD_CodeViewState *cv, RD_CodeVie
   UI_Parent(container_box)
   {
     //- rjf: build fractional space
-    container_box->view_off.x = container_box->view_off_target.x = view->scroll_pos.x.idx + view->scroll_pos.x.off;
-    container_box->view_off.y = container_box->view_off_target.y = code_line_height*mod_f32(view->scroll_pos.y.off, 1.f) + code_line_height*(view->scroll_pos.y.off < 0) - code_line_height*(view->scroll_pos.y.off == -1.f && view->scroll_pos.y.idx == 1);
+    container_box->view_off.x = container_box->view_off_target.x = scroll_pos.x.idx + scroll_pos.x.off;
+    container_box->view_off.y = container_box->view_off_target.y = code_line_height*mod_f32(scroll_pos.y.off, 1.f) + code_line_height*(scroll_pos.y.off < 0) - code_line_height*(scroll_pos.y.off == -1.f && scroll_pos.y.idx == 1);
     
     //- rjf: build code slice
     RD_CodeSliceSignal sig = {0};
     UI_Focus(UI_FocusKind_On)
     {
-      sig = rd_code_slicef(&code_slice_params, &rd_regs()->cursor, &rd_regs()->mark, &cv->preferred_column, "txt_view_%p", view);
+      sig = rd_code_slicef(&code_slice_params, &rd_regs()->cursor, &rd_regs()->mark, &cv->preferred_column, "code_slice");
     }
     
     //- rjf: press code slice? -> focus panel
@@ -610,7 +614,7 @@ rd_code_view_build(Arena *arena, RD_View *view, RD_CodeViewState *cv, RD_CodeVie
       {
         S64 new_idx = (S64)(cursor_advance - code_area_dim.x/2);
         new_idx = Clamp(scroll_idx_rng[Axis2_X].min, new_idx, scroll_idx_rng[Axis2_X].max);
-        ui_scroll_pt_target_idx(&view->scroll_pos.x, new_idx);
+        ui_scroll_pt_target_idx(&scroll_pos.x, new_idx);
         snap[Axis2_X] = 0;
       }
       
@@ -618,7 +622,7 @@ rd_code_view_build(Arena *arena, RD_View *view, RD_CodeViewState *cv, RD_CodeVie
       {
         S64 new_idx = (rd_regs()->cursor.line-1) - num_possible_visible_lines/2 + 2;
         new_idx = Clamp(scroll_idx_rng[Axis2_Y].min, new_idx, scroll_idx_rng[Axis2_Y].max);
-        ui_scroll_pt_target_idx(&view->scroll_pos.y, new_idx);
+        ui_scroll_pt_target_idx(&scroll_pos.y, new_idx);
         snap[Axis2_Y] = 0;
       }
     }
@@ -630,8 +634,8 @@ rd_code_view_build(Arena *arena, RD_View *view, RD_CodeViewState *cv, RD_CodeVie
       S64 cursor_off = (S64)(fnt_dim_from_tag_size_string(code_font, code_font_size, 0, code_tab_size, str8_prefix(cursor_line, rd_regs()->cursor.column-1)).x + priority_margin_width_px + catchall_margin_width_px + line_num_width_px);
       Rng1S64 visible_pixel_range =
       {
-        view->scroll_pos.x.idx,
-        view->scroll_pos.x.idx + (S64)code_area_dim.x,
+        scroll_pos.x.idx,
+        scroll_pos.x.idx + (S64)code_area_dim.x,
       };
       Rng1S64 cursor_pixel_range =
       {
@@ -640,9 +644,9 @@ rd_code_view_build(Arena *arena, RD_View *view, RD_CodeViewState *cv, RD_CodeVie
       };
       S64 min_delta = Min(0, cursor_pixel_range.min - visible_pixel_range.min);
       S64 max_delta = Max(0, cursor_pixel_range.max - visible_pixel_range.max);
-      S64 new_idx = view->scroll_pos.x.idx+min_delta+max_delta;
+      S64 new_idx = scroll_pos.x.idx+min_delta+max_delta;
       new_idx = Clamp(scroll_idx_rng[Axis2_X].min, new_idx, scroll_idx_rng[Axis2_X].max);
-      ui_scroll_pt_target_idx(&view->scroll_pos.x, new_idx);
+      ui_scroll_pt_target_idx(&scroll_pos.x, new_idx);
     }
     
     // rjf: snap in Y
@@ -653,9 +657,9 @@ rd_code_view_build(Arena *arena, RD_View *view, RD_CodeViewState *cv, RD_CodeVie
       cursor_visibility_range.max = ClampBot(0, cursor_visibility_range.max);
       S64 min_delta = Min(0, cursor_visibility_range.min-(target_visible_line_num_range.min));
       S64 max_delta = Max(0, cursor_visibility_range.max-(target_visible_line_num_range.min+num_possible_visible_lines));
-      S64 new_idx = view->scroll_pos.y.idx+min_delta+max_delta;
+      S64 new_idx = scroll_pos.y.idx+min_delta+max_delta;
       new_idx = Clamp(0, new_idx, (S64)text_info->lines_count-1);
-      ui_scroll_pt_target_idx(&view->scroll_pos.y, new_idx);
+      ui_scroll_pt_target_idx(&scroll_pos.y, new_idx);
     }
   }
   
@@ -668,11 +672,11 @@ rd_code_view_build(Arena *arena, RD_View *view, RD_CodeViewState *cv, RD_CodeVie
     ui_set_next_fixed_width(panel_box_dim.x - scroll_bar_dim);
     ui_set_next_fixed_height(scroll_bar_dim);
     {
-      view->scroll_pos.x = ui_scroll_bar(Axis2_X,
-                                         ui_px(scroll_bar_dim, 1.f),
-                                         view->scroll_pos.x,
-                                         scroll_idx_rng[Axis2_X],
-                                         (S64)code_area_dim.x);
+      scroll_pos.x = ui_scroll_bar(Axis2_X,
+                                   ui_px(scroll_bar_dim, 1.f),
+                                   scroll_pos.x,
+                                   scroll_idx_rng[Axis2_X],
+                                   (S64)code_area_dim.x);
     }
   }
   
@@ -685,11 +689,11 @@ rd_code_view_build(Arena *arena, RD_View *view, RD_CodeViewState *cv, RD_CodeVie
     ui_set_next_fixed_width(scroll_bar_dim);
     ui_set_next_fixed_height(panel_box_dim.y - scroll_bar_dim);
     {
-      view->scroll_pos.y = ui_scroll_bar(Axis2_Y,
-                                         ui_px(scroll_bar_dim, 1.f),
-                                         view->scroll_pos.y,
-                                         scroll_idx_rng[Axis2_Y],
-                                         num_possible_visible_lines);
+      scroll_pos.y = ui_scroll_bar(Axis2_Y,
+                                   ui_px(scroll_bar_dim, 1.f),
+                                   scroll_pos.y,
+                                   scroll_idx_rng[Axis2_Y],
+                                   num_possible_visible_lines);
     }
   }
   
@@ -700,18 +704,18 @@ rd_code_view_build(Arena *arena, RD_View *view, RD_CodeViewState *cv, RD_CodeVie
     UI_Signal sig = ui_signal_from_box(container_box);
     if(sig.scroll.x != 0)
     {
-      S64 new_idx = view->scroll_pos.x.idx+sig.scroll.x*big_glyph_advance;
+      S64 new_idx = scroll_pos.x.idx+sig.scroll.x*big_glyph_advance;
       new_idx = clamp_1s64(scroll_idx_rng[Axis2_X], new_idx);
-      ui_scroll_pt_target_idx(&view->scroll_pos.x, new_idx);
+      ui_scroll_pt_target_idx(&scroll_pos.x, new_idx);
     }
     if(sig.scroll.y != 0)
     {
-      S64 new_idx = view->scroll_pos.y.idx + sig.scroll.y;
+      S64 new_idx = scroll_pos.y.idx + sig.scroll.y;
       new_idx = clamp_1s64(scroll_idx_rng[Axis2_Y], new_idx);
-      ui_scroll_pt_target_idx(&view->scroll_pos.y, new_idx);
+      ui_scroll_pt_target_idx(&scroll_pos.y, new_idx);
     }
-    ui_scroll_pt_clamp_idx(&view->scroll_pos.x, scroll_idx_rng[Axis2_X]);
-    ui_scroll_pt_clamp_idx(&view->scroll_pos.y, scroll_idx_rng[Axis2_Y]);
+    ui_scroll_pt_clamp_idx(&scroll_pos.x, scroll_idx_rng[Axis2_X]);
+    ui_scroll_pt_clamp_idx(&scroll_pos.y, scroll_idx_rng[Axis2_Y]);
     if(ui_mouse_over(sig))
     {
       for(UI_Event *evt = 0; ui_next_event(&evt);)
@@ -743,6 +747,11 @@ rd_code_view_build(Arena *arena, RD_View *view, RD_CodeViewState *cv, RD_CodeVie
       di_key_list_push(arena, &result.dbgi_keys, &copy);
     }
   }
+  
+  //////////////////////////////
+  //- rjf: store state
+  //
+  rd_store_view_scroll_pos(scroll_pos);
   
   txt_scope_close(txt_scope);
   hs_scope_close(hs_scope);
@@ -914,24 +923,25 @@ rd_watch_view_column_release(RD_WatchViewState *wv, RD_WatchViewColumn *col)
 //- rjf: watch view main hooks
 
 internal void
-rd_watch_view_init(RD_WatchViewState *ewv, RD_View *view, RD_WatchViewFillKind fill_kind)
+rd_watch_view_init(RD_WatchViewState *ewv, RD_WatchViewFillKind fill_kind)
 {
   if(ewv->initialized == 0)
   {
     ewv->initialized = 1;
     ewv->fill_kind = fill_kind;
-    ewv->column_arena = rd_view_push_arena_ext(view);
-    ewv->text_edit_arena = rd_view_push_arena_ext(view);
+    ewv->column_arena = rd_push_view_arena();
+    ewv->text_edit_arena = rd_push_view_arena();
   }
 }
 
 internal void
-rd_watch_view_build(RD_View *view, RD_WatchViewState *ewv, B32 modifiable, U32 default_radix, Rng2F32 rect)
+rd_watch_view_build(RD_WatchViewState *ewv, B32 modifiable, U32 default_radix, Rng2F32 rect)
 {
   ProfBeginFunction();
   DI_Scope *di_scope = di_scope_open();
   FZY_Scope *fzy_scope = fzy_scope_open();
   Temp scratch = scratch_begin(0, 0);
+  UI_ScrollPt2 scroll_pos = rd_view_scroll_pos();
   
   //////////////////////////////
   //- rjf: unpack arguments
@@ -939,7 +949,7 @@ rd_watch_view_build(RD_View *view, RD_WatchViewState *ewv, B32 modifiable, U32 d
   FNT_Tag code_font = rd_font_from_slot(RD_FontSlot_Code);
   String8 eval_view_key_string = push_str8f(scratch.arena, "eval_view_watch_%p", ewv);
   EV_View *eval_view = rd_ev_view_from_key(d_hash_from_string(eval_view_key_string));
-  String8 filter = str8(view->query_buffer, view->query_string_size);
+  String8 filter = rd_view_filter();
   F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
   S64 num_possible_visible_rows = (S64)(dim_2f32(rect).y/row_height_px);
   RD_EntityKind mutable_entity_kind = RD_EntityKind_Nil;
@@ -995,7 +1005,6 @@ rd_watch_view_build(RD_View *view, RD_WatchViewState *ewv, B32 modifiable, U32 d
       if(state_dirty)
       {
         MemoryZeroStruct(&blocks);
-        String8 filter = str8(view->query_buffer, view->query_string_size);
         RDI_SectionKind fzy_target = RDI_SectionKind_UDTs;
         switch(ewv->fill_kind)
         {
@@ -1250,7 +1259,7 @@ rd_watch_view_build(RD_View *view, RD_WatchViewState *ewv, B32 modifiable, U32 d
             EV_ExpandNode *root_node = ev_expand_node_from_key(eval_view, parent_key);
             
             //- rjf: query all filtered items from dbgi searching system
-            U128 fuzzy_search_key = {(U64)view, d_hash_from_string(str8_struct(&view))};
+            U128 fuzzy_search_key = {rd_regs()->view.u64[0], rd_regs()->view.u64[1]};
             B32 items_stale = 0;
             FZY_Params params = {fzy_target, dbgi_keys};
             FZY_ItemArray items = fzy_items_from_key_params_query(fzy_scope, fuzzy_search_key, &params, filter, endt_us, &items_stale);
@@ -1454,7 +1463,7 @@ rd_watch_view_build(RD_View *view, RD_WatchViewState *ewv, B32 modifiable, U32 d
         S64 cursor_item_idx = cursor_tbl.y-1;
         if(item_range.min <= cursor_item_idx && cursor_item_idx <= item_range.max)
         {
-          UI_ScrollPt *scroll_pt = &view->scroll_pos.y;
+          UI_ScrollPt *scroll_pt = &scroll_pos.y;
           
           //- rjf: compute visible row range
           Rng1S64 visible_row_range = r1s64(scroll_pt->idx + 0 - !!(scroll_pt->off < 0),
@@ -2064,7 +2073,7 @@ rd_watch_view_build(RD_View *view, RD_WatchViewState *ewv, B32 modifiable, U32 d
   }
   UI_ScrollListSignal scroll_list_sig = {0};
   UI_Focus(UI_FocusKind_On)
-    UI_ScrollList(&scroll_list_params, &view->scroll_pos.y,
+    UI_ScrollList(&scroll_list_params, &scroll_pos.y,
                   0,
                   0,
                   &visible_row_rng,
@@ -2238,8 +2247,8 @@ rd_watch_view_build(RD_View *view, RD_WatchViewState *ewv, B32 modifiable, U32 d
         UI_Box *row_box = ui_build_box_from_stringf(row_flags|
                                                     UI_BoxFlag_DrawSideBottom|
                                                     UI_BoxFlag_Clickable|
-                                                    ((ui_view_rule_info == &rd_nil_view_rule_info) * UI_BoxFlag_DisableFocusOverlay)|
-                                                    ((ui_view_rule_info != &rd_nil_view_rule_info) * UI_BoxFlag_Clip),
+                                                    ((row->block_kind != EV_BlockKind_Canvas) * UI_BoxFlag_DisableFocusOverlay)|
+                                                    ((row->block_kind == EV_BlockKind_Canvas) * UI_BoxFlag_Clip),
                                                     "row_%I64x", row_hash);
         ui_ts_vector_idx += 1;
         ui_ts_cell_idx = 0;
@@ -2255,6 +2264,7 @@ rd_watch_view_build(RD_View *view, RD_WatchViewState *ewv, B32 modifiable, U32 d
           {
             //- rjf: unpack
             RD_WatchViewPoint pt = {0, row->parent_key, row->key};
+            RD_View *view = rd_view_from_handle(rd_regs()->view);
             RD_TransientViewNode *canvas_view_node = rd_transient_view_node_from_ev_key(view, row->key);
             RD_View *canvas_view = canvas_view_node->view;
             String8 canvas_view_expr = e_string_from_expr(scratch.arena, row->expr);
@@ -2314,8 +2324,12 @@ rd_watch_view_build(RD_View *view, RD_WatchViewState *ewv, B32 modifiable, U32 d
             UI_Box *canvas_box = ui_build_box_from_stringf(UI_BoxFlag_FloatingY, "###canvas_%I64x", row_hash);
             UI_Parent(canvas_box) UI_WidthFill UI_HeightFill
             {
-              //- rjf: loading animation
-              rd_loading_overlay(canvas_rect, canvas_view->loading_t, canvas_view->loading_progress_v, canvas_view->loading_progress_v_target);
+              //- rjf: loading animation container
+              UI_Box *loading_overlay_container = &ui_nil_box;
+              UI_Parent(canvas_box) UI_WidthFill UI_HeightFill
+              {
+                loading_overlay_container = ui_build_box_from_key(UI_BoxFlag_FloatingX|UI_BoxFlag_FloatingY, ui_key_zero());
+              }
               
               //- rjf: push interaction registers, fill with per-view states
               rd_push_regs();
@@ -2327,7 +2341,13 @@ rd_watch_view_build(RD_View *view, RD_WatchViewState *ewv, B32 modifiable, U32 d
               //- rjf: build
               UI_PermissionFlags(UI_PermissionFlag_Clicks|UI_PermissionFlag_ScrollX)
               {
-                ui_view_rule_info->ui(canvas_view, str8(canvas_view->query_buffer, canvas_view->query_string_size), canvas_view->params_roots[canvas_view->params_read_gen%ArrayCount(canvas_view->params_roots)], canvas_rect);
+                ui_view_rule_info->ui(str8(canvas_view->query_buffer, canvas_view->query_string_size), canvas_view->params_roots[canvas_view->params_read_gen%ArrayCount(canvas_view->params_roots)], canvas_rect);
+              }
+              
+              //- rjf: loading overlay fill
+              UI_Parent(loading_overlay_container)
+              {
+                rd_loading_overlay(canvas_rect, canvas_view->loading_t, canvas_view->loading_progress_v, canvas_view->loading_progress_v_target);
               }
               
               //- rjf: pop interaction registers
@@ -2380,6 +2400,7 @@ rd_watch_view_build(RD_View *view, RD_WatchViewState *ewv, B32 modifiable, U32 d
           //
           {
             S64 x = 0;
+            F32 x_px = 0;
             for(RD_WatchViewColumn *col = ewv->first_column; col != 0; col = col->next, x += 1)
             {
               //- rjf: unpack cell info
@@ -2550,8 +2571,7 @@ rd_watch_view_build(RD_View *view, RD_WatchViewState *ewv, B32 modifiable, U32 d
                   UI_Parent(box)
                   {
                     String8 row_expr = e_string_from_expr(scratch.arena, row->expr);
-                    // TODO(rjf): @msgs
-                    // cell_ui_hook(row->key, cell_ui_params, row_expr);
+                    cell_ui_hook(row_expr, cell_ui_params, r2f32p(x_px, 0, x_px + col->pct*dim_2f32(rect).x, row_height_px));
                   }
                   sig = ui_signal_from_box(box);
                 }
@@ -2664,6 +2684,9 @@ rd_watch_view_build(RD_View *view, RD_WatchViewState *ewv, B32 modifiable, U32 d
                   UI_PrefWidth(ui_children_sum(1)) rd_error_label(cell_error_tooltip_string);
                 }
               }
+              
+              //- rjf: bump x pixel coordinate
+              x_px += col->pct*dim_2f32(rect).x;
               
               //- rjf: [DEV] hovering -> tooltips
               if(DEV_eval_compiler_tooltips && x == 0 && ui_hovering(sig)) UI_Tooltip RD_Font(RD_FontSlot_Code)
@@ -2832,6 +2855,7 @@ rd_watch_view_build(RD_View *view, RD_WatchViewState *ewv, B32 modifiable, U32 d
     rd_cmd(RD_CmdKind_FocusPanel);
   }
   
+  rd_store_view_scroll_pos(scroll_pos);
   scratch_end(scratch);
   fzy_scope_close(fzy_scope);
   di_scope_close(di_scope);
@@ -3147,7 +3171,8 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(commands)
   {
     U64 selected_cmd_hash;
   };
-  RD_CmdsViewState *cv = rd_view_user_state(view, RD_CmdsViewState);
+  UI_ScrollPt2 scroll_pos = rd_view_scroll_pos();
+  RD_CmdsViewState *cv = rd_view_state(RD_CmdsViewState);
   
   //- rjf: build filtered array of commands
   RD_CmdListerItemList cmd_list = rd_cmd_lister_item_list_from_needle(scratch.arena, string);
@@ -3187,7 +3212,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(commands)
   UI_ScrollListSignal scroll_list_sig = {0};
   UI_Focus(UI_FocusKind_On)
     UI_ScrollList(&scroll_list_params,
-                  &view->scroll_pos.y,
+                  &scroll_pos.y,
                   &cursor,
                   0,
                   &visible_row_range,
@@ -3285,6 +3310,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(commands)
     cv->selected_cmd_hash = 0;
   }
   
+  rd_store_view_scroll_pos(scroll_pos);
   scratch_end(scratch);
   ProfEnd();
 }
@@ -3476,13 +3502,14 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(file_system)
   B32 dir_selection = !!(cmd_kind_info->query.flags & RD_QueryFlag_AllowFolders);
   
   //- rjf: get extra state for this view
-  RD_FileSystemViewState *fs = rd_view_user_state(view, RD_FileSystemViewState);
+  UI_ScrollPt2 scroll_pos = rd_view_scroll_pos();
+  RD_FileSystemViewState *fs = rd_view_state(RD_FileSystemViewState);
   if(fs->initialized == 0)
   {
     fs->initialized = 1;
     fs->path_state_table_size = 256;
-    fs->path_state_table = push_array(view->arena, RD_FileSystemViewPathState *, fs->path_state_table_size);
-    fs->cached_files_arena = rd_view_push_arena_ext(view);
+    fs->path_state_table = push_array(rd_view_arena(), RD_FileSystemViewPathState *, fs->path_state_table_size);
+    fs->cached_files_arena = rd_push_view_arena();
     fs->col_pcts[0] = 0.60f;
     fs->col_pcts[1] = 0.20f;
     fs->col_pcts[2] = 0.20f;
@@ -3504,10 +3531,10 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(file_system)
     }
     if(ps == 0)
     {
-      ps = push_array(view->arena, RD_FileSystemViewPathState, 1);
+      ps = push_array(rd_view_arena(), RD_FileSystemViewPathState, 1);
       ps->hash_next = fs->path_state_table[slot];
       fs->path_state_table[slot] = ps;
-      ps->normalized_path = push_str8_copy(view->arena, key);
+      ps->normalized_path = push_str8_copy(rd_view_arena(), key);
     }
   }
   
@@ -3628,7 +3655,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(file_system)
       if(query_normalized_with_opt_slash_props.flags & FilePropertyFlag_IsFolder)
       {
         String8 new_path = push_str8f(scratch.arena, "%S%S/", path_query.path, path_query.search);
-        rd_view_equip_query(view, new_path);
+        rd_store_view_filter(new_path);
       }
       
       // rjf: is a file -> complete view
@@ -3652,7 +3679,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(file_system)
       {
         String8 existing_path = str8_chop_last_slash(path_query.path);
         String8 new_path = push_str8f(scratch.arena, "%S/%S/", existing_path, files[0].filename);
-        rd_view_equip_query(view, new_path);
+        rd_store_view_filter(new_path);
       }
       else
       {
@@ -3734,7 +3761,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(file_system)
   UI_ScrollListSignal scroll_list_sig = {0};
   UI_Focus(UI_FocusKind_On)
     UI_ScrollList(&scroll_list_params,
-                  &view->scroll_pos.y,
+                  &scroll_pos.y,
                   &ps->cursor,
                   0,
                   &visible_row_range,
@@ -3777,7 +3804,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(file_system)
         String8 new_path = str8_chop_last_slash(str8_chop_last_slash(path_query.path));
         new_path = path_normalized_from_string(scratch.arena, new_path);
         String8 new_cmd = push_str8f(scratch.arena, "%S%s", new_path, new_path.size != 0 ? "/" : "");
-        rd_view_equip_query(view, new_cmd);
+        rd_store_view_filter(new_cmd);
       }
     }
     
@@ -3794,7 +3821,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(file_system)
       UI_Signal file_sig = {0};
       UI_FocusHot(file_kb_focus ? UI_FocusKind_On : UI_FocusKind_Off)
       {
-        file_sig = ui_buttonf("##%S_%p", file->filename, view);
+        file_sig = ui_buttonf("##%S", file->filename);
       }
       
       // rjf: make content
@@ -3859,7 +3886,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(file_system)
         if(file->props.flags & FilePropertyFlag_IsFolder)
         {
           String8 new_cmd = push_str8f(scratch.arena, "%S%s", new_path, new_path.size != 0 ? "/" : "");
-          rd_view_equip_query(view, new_cmd);
+          rd_store_view_filter(new_cmd);
         }
         else
         {
@@ -3869,6 +3896,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(file_system)
     }
   }
   
+  rd_store_view_scroll_pos(scroll_pos);
   scratch_end(scratch);
   ProfEnd();
 }
@@ -4056,12 +4084,13 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(system_processes)
     String8 cached_process_arg;
     RD_ProcessInfoArray cached_process_array;
   };
-  RD_SystemProcessesViewState *sp = rd_view_user_state(view, RD_SystemProcessesViewState);
+  UI_ScrollPt2 scroll_pos = rd_view_scroll_pos();
+  RD_SystemProcessesViewState *sp = rd_view_state(RD_SystemProcessesViewState);
   if(sp->initialized == 0)
   {
     sp->initialized = 1;
     sp->need_initial_gather = 1;
-    sp->cached_process_arena = rd_view_push_arena_ext(view);
+    sp->cached_process_arena = rd_push_view_arena();
   }
   
   //- rjf: gather list of filtered process infos
@@ -4113,7 +4142,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(system_processes)
   UI_ScrollListSignal scroll_list_sig = {0};
   UI_Focus(UI_FocusKind_On)
     UI_ScrollList(&scroll_list_params,
-                  &view->scroll_pos.y,
+                  &scroll_pos.y,
                   &cursor,
                   0,
                   &visible_row_range,
@@ -4187,7 +4216,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(system_processes)
     }
   }
   
-  
+  rd_store_view_scroll_pos(scroll_pos);
   scratch_end(scratch);
   ProfEnd();
 }
@@ -4305,7 +4334,8 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(entity_lister)
   {
     RD_Handle selected_entity_handle;
   };
-  RD_EntityListerViewState *fev = rd_view_user_state(view, RD_EntityListerViewState);
+  UI_ScrollPt2 scroll_pos = rd_view_scroll_pos();
+  RD_EntityListerViewState *fev = rd_view_state(RD_EntityListerViewState);
   RD_Handle selected_entity_handle = fev->selected_entity_handle;
   RD_Entity *selected_entity = rd_entity_from_handle(selected_entity_handle);
   
@@ -4349,7 +4379,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(entity_lister)
   UI_ScrollListSignal scroll_list_sig = {0};
   UI_Focus(UI_FocusKind_On)
     UI_ScrollList(&scroll_list_params,
-                  &view->scroll_pos.y,
+                  &scroll_pos.y,
                   &cursor,
                   0,
                   &visible_row_range,
@@ -4407,6 +4437,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(entity_lister)
     fev->selected_entity_handle = (1 <= cursor.y && cursor.y <= ent_arr.count) ? rd_handle_from_entity(ent_arr.v[cursor.y-1].entity) : rd_handle_zero();
   }
   
+  rd_store_view_scroll_pos(scroll_pos);
   scratch_end(scratch);
   ProfEnd();
 }
@@ -4444,10 +4475,11 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(symbol_lister)
   {
     Vec2S64 cursor;
   };
-  RD_SymbolListerViewState *slv = rd_view_user_state(view, RD_SymbolListerViewState);
+  UI_ScrollPt2 scroll_pos = rd_view_scroll_pos();
+  RD_SymbolListerViewState *slv = rd_view_state(RD_SymbolListerViewState);
   
   //- rjf: query -> raddbg, filtered items
-  U128 fuzzy_search_key = {(U64)view, d_hash_from_string(str8_struct(&view))};
+  U128 fuzzy_search_key = {rd_regs()->view.u64[0], rd_regs()->view.u64[1]};
   B32 items_stale = 0;
   FZY_ItemArray items = fzy_items_from_key_params_query(fzy_scope, fuzzy_search_key, &fuzzy_search_params, string, endt_us, &items_stale);
   if(items_stale)
@@ -4496,7 +4528,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(symbol_lister)
   UI_ScrollListSignal scroll_list_sig = {0};
   UI_Focus(UI_FocusKind_On)
     UI_ScrollList(&scroll_list_params,
-                  &view->scroll_pos.y,
+                  &scroll_pos.y,
                   &slv->cursor,
                   0,
                   &visible_row_range,
@@ -4588,6 +4620,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(symbol_lister)
     }
   }
   
+  rd_store_view_scroll_pos(scroll_pos);
   fzy_scope_close(fzy_scope);
   di_scope_close(di_scope);
   scratch_end(scratch);
@@ -4629,7 +4662,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(target)
   RD_EntityList custom_entry_points = rd_push_entity_child_list_with_kind(scratch.arena, entity, RD_EntityKind_EntryPoint);
   F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
   
-  RD_TargetViewState *tv = rd_view_user_state(view, RD_TargetViewState);
+  RD_TargetViewState *tv = rd_view_state(RD_TargetViewState);
   RD_Entity *entity = rd_entity_from_eval_string(string);
   // rjf: process commands
   for(RD_Cmd *cmd = 0; rd_next_cmd(&cmd);)
@@ -4666,7 +4699,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(target)
   }
   
   //- rjf: grab state
-  RD_TargetViewState *tv = rd_view_user_state(view, RD_TargetViewState);
+  RD_TargetViewState *tv = rd_view_state(RD_TargetViewState);
   if(tv->initialized == 0)
   {
     tv->initialized = 1;
@@ -4751,7 +4784,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(target)
   UI_ScrollListSignal scroll_list_sig = {0};
   UI_Focus(UI_FocusKind_On)
     UI_ScrollList(&scroll_list_params,
-                  &view->scroll_pos.y,
+                  &scroll_pos.y,
                   tv->input_editing ? 0 : &tv->cursor,
                   0,
                   &visible_row_range,
@@ -4942,7 +4975,8 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(targets)
     RD_Handle selected_target_handle;
     S64 selected_column;
   };
-  RD_TargetsViewState *tv = rd_view_user_state(view, RD_TargetsViewState);
+  UI_ScrollPt2 scroll_pos = rd_view_scroll_pos();
+  RD_TargetsViewState *tv = rd_view_state(RD_TargetsViewState);
   
   //- rjf: determine table bounds
   Vec2S64 table_bounds = {5, (S64)targets.count+1};
@@ -4981,7 +5015,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(targets)
   UI_ScrollListSignal scroll_list_sig = {0};
   UI_Focus(UI_FocusKind_On)
     UI_ScrollList(&scroll_list_params,
-                  &view->scroll_pos.y,
+                  &scroll_pos.y,
                   &cursor,
                   0,
                   &visible_row_range,
@@ -5069,6 +5103,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(targets)
     tv->selected_add = (cursor.y == 1);
   }
   
+  rd_store_view_scroll_pos(scroll_pos);
   scratch_end(scratch);
   ProfEnd();
 }
@@ -5100,7 +5135,8 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(file_path_map)
   RD_EntityArray maps = rd_entity_array_from_list(scratch.arena, &maps_list);
   F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
   
-  RD_FilePathMapViewState *fpms = rd_view_user_state(view, RD_FilePathMapViewState);
+  RD_FilePathMapViewState *fpms = rd_view_state(RD_FilePathMapViewState);
+  UI_ScrollPt2 scroll_pos = rd_view_scroll_pos();
   if(fpms->initialized == 0)
   {
     fpms->initialized = 1;
@@ -5109,7 +5145,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(file_path_map)
   }
   
 #if 0 // TODO(rjf): @msgs
-  RD_FilePathMapViewState *fpms = rd_view_user_state(view, RD_FilePathMapViewState);
+  RD_FilePathMapViewState *fpms = rd_view_state(RD_FilePathMapViewState);
   
   // rjf: process commands
   for(RD_Cmd *cmd = 0; rd_next_cmd(&cmd);)
@@ -5199,7 +5235,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(file_path_map)
   UI_ScrollListSignal scroll_list_sig = {0};
   UI_Focus(UI_FocusKind_On)
     UI_ScrollList(&scroll_list_params,
-                  &view->scroll_pos.y,
+                  &scroll_pos.y,
                   fpms->input_editing ? 0 : &fpms->cursor,
                   0,
                   &visible_row_range,
@@ -5402,6 +5438,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(file_path_map)
   //- rjf: apply moves to selection
   fpms->cursor = next_cursor;
   
+  rd_store_view_scroll_pos(scroll_pos);
   scratch_end(scratch);
   ProfEnd();
 }
@@ -5417,17 +5454,17 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(auto_view_rules){}
 RD_VIEW_RULE_UI_FUNCTION_DEF(breakpoints)
 {
   ProfBeginFunction();
-  RD_WatchViewState *wv = rd_view_user_state(view, RD_WatchViewState);
+  RD_WatchViewState *wv = rd_view_state(RD_WatchViewState);
   if(!wv->initialized)
   {
-    rd_watch_view_init(wv, view, RD_WatchViewFillKind_Breakpoints);
+    rd_watch_view_init(wv, RD_WatchViewFillKind_Breakpoints);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member, 0.25f, .string = str8_lit("label"),     .display_string = str8_lit("Label"), .dequote_string = 1, .is_non_code = 1);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member, 0.35f, .string = str8_lit("location"),  .display_string = str8_lit("Location"), .dequote_string = 1, .is_non_code = 1);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member, 0.20f, .string = str8_lit("condition"), .display_string = str8_lit("Condition"), .dequote_string = 1);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member, 0.10f, .string = str8_lit("enabled"),   .display_string = str8_lit("Enabled"), .view_rule = str8_lit("checkbox"));
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member, 0.10f, .string = str8_lit("hit_count"), .display_string = str8_lit("Hit Count"));
   }
-  rd_watch_view_build(view, wv, 0, 10, rect);
+  rd_watch_view_build(wv, 0, 10, rect);
   ProfEnd();
 }
 
@@ -5437,14 +5474,14 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(breakpoints)
 RD_VIEW_RULE_UI_FUNCTION_DEF(watch_pins)
 {
   ProfBeginFunction();
-  RD_WatchViewState *wv = rd_view_user_state(view, RD_WatchViewState);
+  RD_WatchViewState *wv = rd_view_state(RD_WatchViewState);
   if(!wv->initialized)
   {
-    rd_watch_view_init(wv, view, RD_WatchViewFillKind_WatchPins);
+    rd_watch_view_init(wv, RD_WatchViewFillKind_WatchPins);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member, 0.5f, .string = str8_lit("Label"), .dequote_string = 1, .is_non_code = 1);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member, 0.5f, .string = str8_lit("Location"), .dequote_string = 1, .is_non_code = 1);
   }
-  rd_watch_view_build(view, wv, 0, 10, rect);
+  rd_watch_view_build(wv, 0, 10, rect);
   ProfEnd();
 }
 
@@ -5455,6 +5492,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(scheduler)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
+  UI_ScrollPt2 scroll_pos = rd_view_scroll_pos();
   String8 query = string;
   
   //- rjf: get state
@@ -5464,7 +5502,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(scheduler)
     RD_Handle selected_entity;
     S64 selected_column;
   };
-  RD_SchedulerViewState *sv = rd_view_user_state(view, RD_SchedulerViewState);
+  RD_SchedulerViewState *sv = rd_view_state(RD_SchedulerViewState);
   
   //- rjf: get entities
   RD_EntityList machines  = rd_query_cached_entity_list_with_kind(RD_EntityKind_Machine);
@@ -5545,7 +5583,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(scheduler)
   UI_ScrollListSignal scroll_list_sig = {0};
   UI_Focus(UI_FocusKind_On)
     UI_ScrollList(&scroll_list_params,
-                  &view->scroll_pos.y,
+                  &scroll_pos.y,
                   &cursor,
                   0,
                   &visible_row_range,
@@ -5666,6 +5704,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(scheduler)
   sv->selected_column = cursor.x;
   sv->selected_entity = (1 <= cursor.y && cursor.y <= items.count) ? rd_handle_from_entity(items.v[cursor.y-1].entity) : rd_handle_zero();
   
+  rd_store_view_scroll_pos(scroll_pos);
   scratch_end(scratch);
   ProfEnd();
 }
@@ -5676,15 +5715,15 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(scheduler)
 RD_VIEW_RULE_UI_FUNCTION_DEF(call_stack)
 {
   ProfBeginFunction();
-  RD_WatchViewState *wv = rd_view_user_state(view, RD_WatchViewState);
+  RD_WatchViewState *wv = rd_view_state(RD_WatchViewState);
   if(!wv->initialized)
   {
-    rd_watch_view_init(wv, view, RD_WatchViewFillKind_CallStack);
+    rd_watch_view_init(wv, RD_WatchViewFillKind_CallStack);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_FrameSelection,  0.05f);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,  0.7f);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Module, 0.25f, .is_non_code = 1);
   }
-  rd_watch_view_build(view, wv, 0, 10, rect);
+  rd_watch_view_build(wv, 0, 10, rect);
   ProfEnd();
 }
 
@@ -5714,7 +5753,7 @@ struct RD_ModulesViewState
 RD_VIEW_RULE_UI_FUNCTION_DEF(modules)
 {
 #if 0 // TODO(rjf): @msgs
-  RD_ModulesViewState *mv = rd_view_user_state(view, RD_ModulesViewState);
+  RD_ModulesViewState *mv = rd_view_state(RD_ModulesViewState);
   if(mv->initialized == 0)
   {
     mv->initialized = 1;
@@ -5725,7 +5764,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(modules)
   }
 #endif
 #if 0 // TODO(rjf): @msgs
-  RD_ModulesViewState *mv = rd_view_user_state(view, RD_ModulesViewState);
+  RD_ModulesViewState *mv = rd_view_state(RD_ModulesViewState);
   for(RD_Cmd *cmd = 0; rd_next_cmd(&cmd);)
   {
     // rjf: mismatched window/panel => skip
@@ -5763,7 +5802,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(modules)
   String8 query = str8(view->query_buffer, view->query_string_size);
   
   //- rjf: get state
-  RD_ModulesViewState *mv = rd_view_user_state(view, RD_ModulesViewState);
+  RD_ModulesViewState *mv = rd_view_state(RD_ModulesViewState);
   F32 *col_pcts[] = {&mv->idx_col_pct, &mv->desc_col_pct, &mv->range_col_pct, &mv->dbg_col_pct};
   
   //- rjf: get entities
@@ -5866,7 +5905,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(modules)
   UI_ScrollListSignal scroll_list_sig = {0};
   UI_Focus(UI_FocusKind_On)
     UI_ScrollList(&scroll_list_params,
-                  &view->scroll_pos.y,
+                  &scroll_pos.y,
                   mv->txt_editing ? 0 : &cursor,
                   0,
                   &visible_row_range,
@@ -6030,16 +6069,17 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(modules)
 RD_VIEW_RULE_UI_FUNCTION_DEF(watch)
 {
   ProfBeginFunction();
-  RD_WatchViewState *wv = rd_view_user_state(view, RD_WatchViewState);
+  RD_WatchViewState *wv = rd_view_state(RD_WatchViewState);
   if(!wv->initialized)
   {
-    rd_watch_view_init(wv, view, RD_WatchViewFillKind_Watch);
+    rd_watch_view_init(wv, RD_WatchViewFillKind_Watch);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Expr,      0.25f);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,     0.3f);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Type,      0.15f);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_ViewRule,  0.30f);
   }
-  rd_watch_view_build(view, wv, 1*(view->query_string_size == 0), 10, rect);
+  String8 filter = rd_view_filter();
+  rd_watch_view_build(wv, 1 * (filter.size == 0), 10, rect);
   ProfEnd();
 }
 
@@ -6049,16 +6089,16 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(watch)
 RD_VIEW_RULE_UI_FUNCTION_DEF(locals)
 {
   ProfBeginFunction();
-  RD_WatchViewState *wv = rd_view_user_state(view, RD_WatchViewState);
+  RD_WatchViewState *wv = rd_view_state(RD_WatchViewState);
   if(!wv->initialized)
   {
-    rd_watch_view_init(wv, view, RD_WatchViewFillKind_Locals);
+    rd_watch_view_init(wv, RD_WatchViewFillKind_Locals);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Expr,      0.25f);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,     0.3f);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Type,      0.15f);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_ViewRule,  0.30f);
   }
-  rd_watch_view_build(view, wv, 0, 10, rect);
+  rd_watch_view_build(wv, 0, 10, rect);
   ProfEnd();
 }
 
@@ -6068,16 +6108,16 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(locals)
 RD_VIEW_RULE_UI_FUNCTION_DEF(registers)
 {
   ProfBeginFunction();
-  RD_WatchViewState *wv = rd_view_user_state(view, RD_WatchViewState);
+  RD_WatchViewState *wv = rd_view_state(RD_WatchViewState);
   if(!wv->initialized)
   {
-    rd_watch_view_init(wv, view, RD_WatchViewFillKind_Registers);
+    rd_watch_view_init(wv, RD_WatchViewFillKind_Registers);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Expr,      0.25f);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,     0.3f);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Type,      0.15f);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_ViewRule,  0.30f);
   }
-  rd_watch_view_build(view, wv, 0, 16, rect);
+  rd_watch_view_build(wv, 0, 16, rect);
   ProfEnd();
 }
 
@@ -6087,16 +6127,16 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(registers)
 RD_VIEW_RULE_UI_FUNCTION_DEF(globals)
 {
   ProfBeginFunction();
-  RD_WatchViewState *wv = rd_view_user_state(view, RD_WatchViewState);
+  RD_WatchViewState *wv = rd_view_state(RD_WatchViewState);
   if(!wv->initialized)
   {
-    rd_watch_view_init(wv, view, RD_WatchViewFillKind_Globals);
+    rd_watch_view_init(wv, RD_WatchViewFillKind_Globals);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Expr,      0.25f);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,     0.3f);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Type,      0.15f);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_ViewRule,  0.30f);
   }
-  rd_watch_view_build(view, wv, 0, 10, rect);
+  rd_watch_view_build(wv, 0, 10, rect);
   ProfEnd();
 }
 
@@ -6106,16 +6146,16 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(globals)
 RD_VIEW_RULE_UI_FUNCTION_DEF(thread_locals)
 {
   ProfBeginFunction();
-  RD_WatchViewState *wv = rd_view_user_state(view, RD_WatchViewState);
+  RD_WatchViewState *wv = rd_view_state(RD_WatchViewState);
   if(!wv->initialized)
   {
-    rd_watch_view_init(wv, view, RD_WatchViewFillKind_ThreadLocals);
+    rd_watch_view_init(wv, RD_WatchViewFillKind_ThreadLocals);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Expr,      0.25f);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,     0.3f);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Type,      0.15f);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_ViewRule,  0.30f);
   }
-  rd_watch_view_build(view, wv, 0, 10, rect);
+  rd_watch_view_build(wv, 0, 10, rect);
   ProfEnd();
 }
 
@@ -6125,16 +6165,16 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(thread_locals)
 RD_VIEW_RULE_UI_FUNCTION_DEF(types)
 {
   ProfBeginFunction();
-  RD_WatchViewState *wv = rd_view_user_state(view, RD_WatchViewState);
+  RD_WatchViewState *wv = rd_view_state(RD_WatchViewState);
   if(!wv->initialized)
   {
-    rd_watch_view_init(wv, view, RD_WatchViewFillKind_Types);
+    rd_watch_view_init(wv, RD_WatchViewFillKind_Types);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Expr,      0.25f);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,     0.3f);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Type,      0.15f);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_ViewRule,  0.30f);
   }
-  rd_watch_view_build(view, wv, 0, 10, rect);
+  rd_watch_view_build(wv, 0, 10, rect);
   ProfEnd();
 }
 
@@ -6144,15 +6184,15 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(types)
 RD_VIEW_RULE_UI_FUNCTION_DEF(procedures)
 {
   ProfBeginFunction();
-  RD_WatchViewState *wv = rd_view_user_state(view, RD_WatchViewState);
+  RD_WatchViewState *wv = rd_view_state(RD_WatchViewState);
   if(!wv->initialized)
   {
-    rd_watch_view_init(wv, view, RD_WatchViewFillKind_Procedures);
+    rd_watch_view_init(wv, RD_WatchViewFillKind_Procedures);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Expr,      0.2f);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,     0.6f);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_ViewRule,  0.2f);
   }
-  rd_watch_view_build(view, wv, 0, 10, rect);
+  rd_watch_view_build(wv, 0, 10, rect);
   ProfEnd();
 }
 
@@ -6169,13 +6209,12 @@ struct RD_PendingFileViewState
 RD_VIEW_RULE_UI_FUNCTION_DEF(pending_file)
 {
   Temp scratch = scratch_begin(0, 0);
-  RD_PendingFileViewState *pves = rd_view_user_state(view, RD_PendingFileViewState);
+  RD_PendingFileViewState *pves = rd_view_state(RD_PendingFileViewState);
   if(pves->deferred_cmd_arena == 0)
   {
-    pves->deferred_cmd_arena = rd_view_push_arena_ext(view);
+    pves->deferred_cmd_arena = rd_push_view_arena();
   }
-  view->loading_t = view->loading_t_target = 1.f;
-  rd_request_frame();
+  rd_store_view_loading_info(1, 0, 0);
   
   //////////////////////////////
   //- rjf: process commands
@@ -6207,7 +6246,8 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(pending_file)
   }
   
   //- rjf: determine if file is ready, and which viewer to use
-  String8 file_path = rd_file_path_from_eval_string(scratch.arena, str8(view->query_buffer, view->query_string_size));
+  String8 expr_string = rd_view_expr_string();
+  String8 file_path = rd_file_path_from_eval_string(scratch.arena, expr_string);
   Rng1U64 file_range = r1u64(0, 1024);
   U128 file_hash = fs_hash_from_path_range(file_path, file_range, 0);
   B32 file_is_ready = 0;
@@ -6276,6 +6316,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(pending_file)
       view_rule_info = rd_view_rule_info_from_kind(viewer_kind);
     }
     String8 query = rd_eval_string_from_file_path(scratch.arena, file_path);
+    RD_View *view = rd_view_from_handle(rd_regs()->view);
     rd_view_equip_spec(view, view_rule_info, query, params_copy);
   }
   
@@ -6304,8 +6345,8 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(text)
 
 RD_VIEW_RULE_UI_FUNCTION_DEF(text)
 {
-  RD_CodeViewState *cv = rd_view_user_state(view, RD_CodeViewState);
-  rd_code_view_init(cv, view);
+  RD_CodeViewState *cv = rd_view_state(RD_CodeViewState);
+  rd_code_view_init(cv);
   Temp scratch = scratch_begin(0, 0);
   HS_Scope *hs_scope = hs_scope_open();
   TXT_Scope *txt_scope = txt_scope_open();
@@ -6316,24 +6357,6 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(text)
   F32 bottom_bar_height = ui_top_font_size()*2.f;
   Rng2F32 code_area_rect = r2f32p(rect.x0, rect.y0, rect.x1, rect.y1 - bottom_bar_height);
   Rng2F32 bottom_bar_rect = r2f32p(rect.x0, rect.y1 - bottom_bar_height, rect.x1, rect.y1);
-  
-  //////////////////////////////
-  //- rjf: unpack parameterization info
-  //
-  rd_regs()->cursor.line = rd_value_from_params_key(params, str8_lit("cursor_line")).s64;
-  rd_regs()->cursor.column = rd_value_from_params_key(params, str8_lit("cursor_column")).s64;
-  rd_regs()->mark.line = rd_value_from_params_key(params, str8_lit("mark_line")).s64;
-  rd_regs()->mark.column = rd_value_from_params_key(params, str8_lit("mark_column")).s64;
-  String8 path = rd_file_path_from_eval_string(scratch.arena, string);
-  E_Eval eval = e_eval_from_string(scratch.arena, string);
-  Rng1U64 range = rd_range_from_eval_params(eval, params);
-  rd_regs()->text_key = rd_key_from_eval_space_range(eval.space, range, 1);
-  rd_regs()->lang_kind = rd_lang_kind_from_eval_params(eval, params);
-  U128 hash = {0};
-  TXT_TextInfo info = txt_text_info_from_key_lang(txt_scope, rd_regs()->text_key, rd_regs()->lang_kind, &hash);
-  String8 data = hs_data_from_hash(hs_scope, hash);
-  B32 file_is_missing = (path.size != 0 && os_properties_from_file_path(path).modified == 0);
-  B32 key_has_data = !u128_match(hash, u128_zero()) && info.lines_count;
   
   //////////////////////////////
   //- rjf: process code-file commands
@@ -6356,7 +6379,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(text)
       // rjf: override file picking
       case RD_CmdKind_PickFile:
       {
-        String8 src = rd_file_path_from_eval_string(scratch.arena, str8(view->query_buffer, view->query_string_size));
+        String8 src = rd_file_path_from_eval_string(scratch.arena, rd_view_expr_string());
         String8 dst = cmd->regs->file_path;
         if(src.size != 0 && dst.size != 0)
         {
@@ -6364,12 +6387,29 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(text)
           rd_cmd(RD_CmdKind_SetFileReplacementPath, .string = src, .file_path = dst);
           
           // rjf: switch this view to viewing replacement file
-          view->query_string_size = Min(sizeof(view->query_buffer), dst.size);
-          MemoryCopy(view->query_buffer, dst.str, view->query_string_size);
+          rd_store_view_expr_string(rd_eval_string_from_file_path(scratch.arena, dst));
         }
       }break;
     }
   }
+  
+  //////////////////////////////
+  //- rjf: unpack parameterization info
+  //
+  rd_regs()->cursor.line = rd_value_from_params_key(params, str8_lit("cursor_line")).s64;
+  rd_regs()->cursor.column = rd_value_from_params_key(params, str8_lit("cursor_column")).s64;
+  rd_regs()->mark.line = rd_value_from_params_key(params, str8_lit("mark_line")).s64;
+  rd_regs()->mark.column = rd_value_from_params_key(params, str8_lit("mark_column")).s64;
+  String8 path = rd_file_path_from_eval_string(scratch.arena, string);
+  E_Eval eval = e_eval_from_string(scratch.arena, string);
+  Rng1U64 range = rd_range_from_eval_params(eval, params);
+  rd_regs()->text_key = rd_key_from_eval_space_range(eval.space, range, 1);
+  rd_regs()->lang_kind = rd_lang_kind_from_eval_params(eval, params);
+  U128 hash = {0};
+  TXT_TextInfo info = txt_text_info_from_key_lang(txt_scope, rd_regs()->text_key, rd_regs()->lang_kind, &hash);
+  String8 data = hs_data_from_hash(hs_scope, hash);
+  B32 file_is_missing = (path.size != 0 && os_properties_from_file_path(path).modified == 0);
+  B32 key_has_data = !u128_match(hash, u128_zero()) && info.lines_count;
   
   //////////////////////////////
   //- rjf: build missing file interface
@@ -6408,7 +6448,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(text)
   //
   if(!file_is_missing && info.lines_count == 0 && eval.msgs.max_kind == E_MsgKind_Null)
   {
-    rd_view_equip_loading_info(view, 1, info.bytes_processed, info.bytes_to_process);
+    rd_store_view_loading_info(1, info.bytes_processed, info.bytes_to_process);
   }
   
   //////////////////////////////
@@ -6417,7 +6457,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(text)
   DI_KeyList dbgi_keys = {0};
   if(!file_is_missing && key_has_data)
   {
-    RD_CodeViewBuildResult result = rd_code_view_build(scratch.arena, view, cv, RD_CodeViewBuildFlag_All, code_area_rect, data, &info, 0, r1u64(0, 0), di_key_zero());
+    RD_CodeViewBuildResult result = rd_code_view_build(scratch.arena, cv, RD_CodeViewBuildFlag_All, code_area_rect, data, &info, 0, r1u64(0, 0), di_key_zero());
     dbgi_keys = result.dbgi_keys;
   }
   
@@ -6509,10 +6549,10 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(text)
   //////////////////////////////
   //- rjf: store params
   //
-  rd_view_store_param_s64(view, str8_lit("cursor_line"), rd_regs()->cursor.line);
-  rd_view_store_param_s64(view, str8_lit("cursor_column"), rd_regs()->cursor.column);
-  rd_view_store_param_s64(view, str8_lit("mark_line"), rd_regs()->mark.line);
-  rd_view_store_param_s64(view, str8_lit("mark_column"), rd_regs()->mark.column);
+  rd_store_view_param_s64(str8_lit("cursor_line"), rd_regs()->cursor.line);
+  rd_store_view_param_s64(str8_lit("cursor_column"), rd_regs()->cursor.column);
+  rd_store_view_param_s64(str8_lit("mark_line"), rd_regs()->mark.line);
+  rd_store_view_param_s64(str8_lit("mark_column"), rd_regs()->mark.column);
   
   txt_scope_close(txt_scope);
   hs_scope_close(hs_scope);
@@ -6546,14 +6586,14 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(disasm)
 
 RD_VIEW_RULE_UI_FUNCTION_DEF(disasm)
 {
-  RD_DisasmViewState *dv = rd_view_user_state(view, RD_DisasmViewState);
+  RD_DisasmViewState *dv = rd_view_state(RD_DisasmViewState);
   if(dv->initialized == 0)
   {
     dv->initialized = 1;
     dv->cursor = txt_pt(1, 1);
     dv->mark = txt_pt(1, 1);
     dv->style_flags = DASM_StyleFlag_Addresses|DASM_StyleFlag_SourceFilesNames|DASM_StyleFlag_SourceLines|DASM_StyleFlag_SymbolNames;
-    rd_code_view_init(&dv->cv, view);
+    rd_code_view_init(&dv->cv);
   }
   RD_CodeViewState *cv = &dv->cv;
   Temp scratch = scratch_begin(0, 0);
@@ -6675,7 +6715,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(disasm)
   //
   if(is_loading && !d_ctrl_targets_running())
   {
-    rd_view_equip_loading_info(view, is_loading, 0, 0);
+    rd_store_view_loading_info(is_loading, 0, 0);
   }
   
   //////////////////////////////
@@ -6695,7 +6735,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(disasm)
   //
   if(!is_loading && has_disasm)
   {
-    rd_code_view_build(scratch.arena, view, cv, RD_CodeViewBuildFlag_All, code_area_rect, dasm_text_data, &dasm_text_info, &dasm_info.lines, range, dbgi_key);
+    rd_code_view_build(scratch.arena, cv, RD_CodeViewBuildFlag_All, code_area_rect, dasm_text_data, &dasm_text_info, &dasm_info.lines, range, dbgi_key);
   }
   
   //////////////////////////////
@@ -6752,8 +6792,8 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(disasm)
 
 RD_VIEW_RULE_UI_FUNCTION_DEF(output)
 {
-  RD_CodeViewState *cv = rd_view_user_state(view, RD_CodeViewState);
-  rd_code_view_init(cv, view);
+  RD_CodeViewState *cv = rd_view_state(RD_CodeViewState);
+  rd_code_view_init(cv);
   Temp scratch = scratch_begin(0, 0);
   HS_Scope *hs_scope = hs_scope_open();
   TXT_Scope *txt_scope = txt_scope_open();
@@ -6784,7 +6824,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(output)
   //- rjf: build code contents
   //
   {
-    rd_code_view_build(scratch.arena, view, cv, 0, code_area_rect, data, &info, 0, r1u64(0, 0), di_key_zero());
+    rd_code_view_build(scratch.arena, cv, 0, code_area_rect, data, &info, 0, r1u64(0, 0), di_key_zero());
   }
   
   //////////////////////////////
@@ -6838,7 +6878,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(memory)
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   HS_Scope *hs_scope = hs_scope_open();
-  RD_MemoryViewState *mv = rd_view_user_state(view, RD_MemoryViewState);
+  RD_MemoryViewState *mv = rd_view_state(RD_MemoryViewState);
   
   //////////////////////////////
   //- rjf: unpack parameterization info
@@ -6860,23 +6900,30 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(memory)
   }
   num_columns = ClampBot(1, num_columns);
   bytes_per_cell = ClampBot(1, bytes_per_cell);
+  UI_ScrollPt2 scroll_pos = rd_view_scroll_pos();
   
   //////////////////////////////
   //- rjf: process commands
   //
   for(RD_Cmd *cmd = 0; rd_next_cmd(&cmd);)
   {
+    // rjf: mismatched window/panel => skip
+    if(!rd_handle_match(rd_regs()->window, cmd->regs->window) ||
+       !rd_handle_match(rd_regs()->panel, cmd->regs->panel))
+    {
+      continue;
+    }
+    
+    // rjf: process
     RD_CmdKind kind = rd_cmd_kind_from_string(cmd->name);
     switch(kind)
     {
       default: break;
       case RD_CmdKind_CenterCursor:
-      if(rd_view_from_handle(cmd->regs->view) == view)
       {
         mv->center_cursor = 1;
       }break;
       case RD_CmdKind_ContainCursor:
-      if(rd_view_from_handle(cmd->regs->view) == view)
       {
         mv->contain_cursor = 1;
       }break;
@@ -6886,13 +6933,8 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(memory)
         // generally want to respond to those in thise view, so just skip any
         // go-to-address commands that haven't been *explicitly* parameterized
         // with this view.
-        if(rd_view_from_handle(cmd->regs->view) == view)
-        {
-          // TODO(rjf)
-        }
       }break;
       case RD_CmdKind_SetColumns:
-      if(rd_view_from_handle(cmd->regs->view) == view)
       {
         // TODO(rjf)
       }break;
@@ -6927,8 +6969,8 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(memory)
   S64 num_possible_visible_rows = 0;
   {
     num_possible_visible_rows = dim_2f32(content_rect).y/row_height_px;
-    viz_range_rows.min = view->scroll_pos.y.idx + (S64)view->scroll_pos.y.off - !!(view->scroll_pos.y.off<0);
-    viz_range_rows.max = view->scroll_pos.y.idx + (S64)view->scroll_pos.y.off + num_possible_visible_rows,
+    viz_range_rows.min = scroll_pos.y.idx + (S64)scroll_pos.y.off - !!(scroll_pos.y.off<0);
+    viz_range_rows.max = scroll_pos.y.idx + (S64)scroll_pos.y.off + num_possible_visible_rows,
     viz_range_rows.min = clamp_1s64(scroll_idx_rng, viz_range_rows.min);
     viz_range_rows.max = clamp_1s64(scroll_idx_rng, viz_range_rows.max);
     viz_range_bytes.min = viz_range_rows.min*num_columns;
@@ -7038,7 +7080,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(memory)
     S64 cursor_row_idx = cursor/num_columns;
     S64 new_idx = (cursor_row_idx-num_possible_visible_rows/2+1);
     new_idx = clamp_1s64(scroll_idx_rng, new_idx);
-    ui_scroll_pt_target_idx(&view->scroll_pos.y, new_idx);
+    ui_scroll_pt_target_idx(&scroll_pos.y, new_idx);
   }
   
   //////////////////////////////
@@ -7051,9 +7093,9 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(memory)
     Rng1S64 cursor_viz_range = r1s64(clamp_1s64(scroll_idx_rng, cursor_row_idx-2), clamp_1s64(scroll_idx_rng, cursor_row_idx+3));
     S64 min_delta = Min(0, cursor_viz_range.min-viz_range_rows.min);
     S64 max_delta = Max(0, cursor_viz_range.max-viz_range_rows.max);
-    S64 new_idx = view->scroll_pos.y.idx+min_delta+max_delta;
+    S64 new_idx = scroll_pos.y.idx+min_delta+max_delta;
     new_idx = clamp_1s64(scroll_idx_rng, new_idx);
-    ui_scroll_pt_target_idx(&view->scroll_pos.y, new_idx);
+    ui_scroll_pt_target_idx(&scroll_pos.y, new_idx);
   }
   
   //////////////////////////////
@@ -7220,7 +7262,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(memory)
     ui_set_next_fixed_width(dim.x);
     ui_set_next_fixed_height(dim.y);
     ui_set_next_child_layout_axis(Axis2_Y);
-    container_box = ui_build_box_from_stringf(0, "memory_view_container_%p", view);
+    container_box = ui_build_box_from_stringf(0, "memory_view_container");
   }
   
   //////////////////////////////
@@ -7265,11 +7307,11 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(memory)
     ui_set_next_fixed_width(scroll_bar_dim);
     ui_set_next_fixed_height(dim_2f32(content_rect).y);
     {
-      view->scroll_pos.y = ui_scroll_bar(Axis2_Y,
-                                         ui_px(scroll_bar_dim, 1.f),
-                                         view->scroll_pos.y,
-                                         scroll_idx_rng,
-                                         num_possible_visible_rows);
+      scroll_pos.y = ui_scroll_bar(Axis2_Y,
+                                   ui_px(scroll_bar_dim, 1.f),
+                                   scroll_pos.y,
+                                   scroll_idx_rng,
+                                   num_possible_visible_rows);
     }
   }
   
@@ -7289,8 +7331,8 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(memory)
                                                UI_BoxFlag_AllowOverflowX|
                                                UI_BoxFlag_AllowOverflowY,
                                                "scrollable_box");
-    container_box->view_off.x = container_box->view_off_target.x = view->scroll_pos.x.idx + view->scroll_pos.x.off;
-    scrollable_box->view_off.y = scrollable_box->view_off_target.y = floor_f32(row_height_px*mod_f32(view->scroll_pos.y.off, 1.f) + row_height_px*(view->scroll_pos.y.off < 0));
+    container_box->view_off.x = container_box->view_off_target.x = scroll_pos.x.idx + scroll_pos.x.off;
+    scrollable_box->view_off.y = scrollable_box->view_off_target.y = floor_f32(row_height_px*mod_f32(scroll_pos.y.off, 1.f) + row_height_px*(scroll_pos.y.off < 0));
   }
   
   //////////////////////////////
@@ -7601,19 +7643,20 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(memory)
     UI_Signal sig = ui_signal_from_box(scrollable_box);
     if(sig.scroll.y != 0)
     {
-      S64 new_idx = view->scroll_pos.y.idx + sig.scroll.y;
+      S64 new_idx = scroll_pos.y.idx + sig.scroll.y;
       new_idx = clamp_1s64(scroll_idx_rng, new_idx);
-      ui_scroll_pt_target_idx(&view->scroll_pos.y, new_idx);
+      ui_scroll_pt_target_idx(&scroll_pos.y, new_idx);
     }
   }
   
   //////////////////////////////
   //- rjf: save parameters
   //
-  rd_view_store_param_u64(view, str8_lit("cursor_vaddr"), cursor);
-  rd_view_store_param_u64(view, str8_lit("mark_vaddr"), mark);
-  rd_view_store_param_u64(view, str8_lit("bytes_per_cell"), bytes_per_cell);
-  rd_view_store_param_u64(view, str8_lit("num_columns"), num_columns);
+  rd_store_view_param_u64(str8_lit("cursor_vaddr"), cursor);
+  rd_store_view_param_u64(str8_lit("mark_vaddr"), mark);
+  rd_store_view_param_u64(str8_lit("bytes_per_cell"), bytes_per_cell);
+  rd_store_view_param_u64(str8_lit("num_columns"), num_columns);
+  rd_store_view_scroll_pos(scroll_pos);
   
   hs_scope_close(hs_scope);
   scratch_end(scratch);
@@ -7786,7 +7829,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(bitmap)
       r_handle_match(texture, r_handle_zero()) ||
       data.size == 0))
   {
-    rd_view_equip_loading_info(view, 1, 0, 0);
+    rd_store_view_loading_info(1, 0, 0);
   }
   
   //////////////////////////////
@@ -7797,7 +7840,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(bitmap)
   Rng2F32 canvas_rect = r2f32p(0, 0, canvas_dim.x, canvas_dim.y);
   UI_Rect(canvas_rect)
   {
-    canvas_box = ui_build_box_from_stringf(UI_BoxFlag_Clip|UI_BoxFlag_Clickable|UI_BoxFlag_Scroll, "bmp_canvas_%p", view);
+    canvas_box = ui_build_box_from_stringf(UI_BoxFlag_Clip|UI_BoxFlag_Clickable|UI_BoxFlag_Scroll, "bmp_canvas");
   }
   
   //////////////////////////////
@@ -7920,9 +7963,9 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(bitmap)
   //////////////////////////////
   //- rjf: store params
   //
-  rd_view_store_param_f32(view, str8_lit("zoom"), zoom);
-  rd_view_store_param_f32(view, str8_lit("x"), view_center_pos.x);
-  rd_view_store_param_f32(view, str8_lit("y"), view_center_pos.y);
+  rd_store_view_param_f32(str8_lit("zoom"), zoom);
+  rd_store_view_param_f32(str8_lit("x"), view_center_pos.x);
+  rd_store_view_param_f32(str8_lit("y"), view_center_pos.y);
   
   hs_scope_close(hs_scope);
   tex_scope_close(tex_scope);
@@ -8148,7 +8191,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(geo3d)
 {
   Temp scratch = scratch_begin(0, 0);
   GEO_Scope *geo_scope = geo_scope_open();
-  RD_Geo3DViewState *state = rd_view_user_state(view, RD_Geo3DViewState);
+  RD_Geo3DViewState *state = rd_view_state(RD_Geo3DViewState);
   
   //////////////////////////////
   //- rjf: unpack parameters
@@ -8179,7 +8222,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(geo3d)
      (r_handle_match(idxs_buffer, r_handle_zero()) ||
       r_handle_match(vtxs_buffer, r_handle_zero())))
   {
-    rd_view_equip_loading_info(view, 1, 0, 0);
+    rd_store_view_loading_info(1, 0, 0);
   }
   
   //////////////////////////////
@@ -8249,9 +8292,9 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(geo3d)
   //////////////////////////////
   //- rjf: commit parameters
   //
-  rd_view_store_param_f32(view, str8_lit("yaw"),   yaw_target);
-  rd_view_store_param_f32(view, str8_lit("pitch"), pitch_target);
-  rd_view_store_param_f32(view, str8_lit("zoom"),  zoom_target);
+  rd_store_view_param_f32(str8_lit("yaw"),   yaw_target);
+  rd_store_view_param_f32(str8_lit("pitch"), pitch_target);
+  rd_store_view_param_f32(str8_lit("zoom"),  zoom_target);
   
   geo_scope_close(geo_scope);
   scratch_end(scratch);
@@ -8265,6 +8308,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(exception_filters)
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
+  UI_ScrollPt2 scroll_pos = rd_view_scroll_pos();
   String8 query = string;
   
   //- rjf: get state
@@ -8273,7 +8317,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(exception_filters)
   {
     Vec2S64 cursor;
   };
-  RD_ExceptionFiltersViewState *sv = rd_view_user_state(view, RD_ExceptionFiltersViewState);
+  RD_ExceptionFiltersViewState *sv = rd_view_state(RD_ExceptionFiltersViewState);
   
   //- rjf: get list of options
   typedef struct RD_ExceptionFiltersOption RD_ExceptionFiltersOption;
@@ -8359,7 +8403,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(exception_filters)
   UI_ScrollListSignal scroll_list_sig = {0};
   UI_Focus(UI_FocusKind_On)
     UI_ScrollList(&scroll_list_params,
-                  &view->scroll_pos.y,
+                  &scroll_pos.y,
                   &sv->cursor,
                   0,
                   &visible_row_range,
@@ -8389,6 +8433,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(exception_filters)
     }
   }
   
+  rd_store_view_scroll_pos(scroll_pos);
   scratch_end(scratch);
   ProfEnd();
 }
@@ -8474,6 +8519,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(settings)
   F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
   String8 query = string;
   RD_Window *window = rd_window_from_handle(rd_regs()->window);
+  UI_ScrollPt2 scroll_pos = rd_view_scroll_pos();
   
   //////////////////////////////
   //- rjf: get state
@@ -8492,7 +8538,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(settings)
     RD_ThemePreset preset_apply_confirm;
     B32 category_opened[RD_SettingsItemKind_COUNT];
   };
-  RD_SettingsViewState *sv = rd_view_user_state(view, RD_SettingsViewState);
+  RD_SettingsViewState *sv = rd_view_state(RD_SettingsViewState);
   if(!sv->initialized)
   {
     sv->initialized = 1;
@@ -8893,7 +8939,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(settings)
   }
   UI_ScrollListSignal scroll_list_sig = {0};
   UI_Focus(UI_FocusKind_On)
-    UI_ScrollList(&scroll_list_params, &view->scroll_pos.y, &sv->cursor, 0, &visible_row_range, &scroll_list_sig)
+    UI_ScrollList(&scroll_list_params, &scroll_pos.y, &sv->cursor, 0, &visible_row_range, &scroll_list_sig)
     UI_Focus(UI_FocusKind_Null)
   {
     for(S64 row_num = visible_row_range.min; row_num <= visible_row_range.max && row_num < items.count; row_num += 1)
@@ -9079,6 +9125,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(settings)
     }
   }
   
+  rd_store_view_scroll_pos(scroll_pos);
   scratch_end(scratch);
   ProfEnd();
 }
