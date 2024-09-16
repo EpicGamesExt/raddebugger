@@ -972,6 +972,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   UI_Palette *margin_contents_palette = ui_build_palette(rd_palette_from_code(RD_PaletteCode_Floating));
   margin_contents_palette->background = v4f32(0, 0, 0, 0);
   F32 line_num_padding_px = ui_top_font_size()*1.f;
+  F32 entity_alive_t_rate = 1 - pow_f32(2, (-30.f * rd_state->frame_dt));
   
   //////////////////////////////
   //- rjf: build top-level container
@@ -1109,7 +1110,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             {
               RD_ThreadBoxDrawExtData *u = push_array(ui_build_arena(), RD_ThreadBoxDrawExtData, 1);
               u->thread_color = color;
-              u->alive_t      = ui_anim(ui_key_from_stringf(top_container_box->key, "###thread_alive_t_%p", thread), 1.f);
+              u->alive_t      = ui_anim(ui_key_from_stringf(top_container_box->key, "###thread_alive_t_%p", thread), 1.f, .rate = entity_alive_t_rate);
               u->is_selected  = (thread == selected_thread);
               u->is_frozen    = !!thread->is_frozen;
               u->do_lines     = rd_setting_val_from_code(RD_SettingCode_ThreadLines).s32;
@@ -1269,7 +1270,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             {
               RD_ThreadBoxDrawExtData *u = push_array(ui_build_arena(), RD_ThreadBoxDrawExtData, 1);
               u->thread_color = color;
-              u->alive_t      = ui_anim(ui_key_from_stringf(top_container_box->key, "###thread_alive_t_%p", thread), 1.f);
+              u->alive_t      = ui_anim(ui_key_from_stringf(top_container_box->key, "###thread_alive_t_%p", thread), 1.f, .rate = entity_alive_t_rate);
               u->is_selected  = (thread == selected_thread);
               u->is_frozen    = !!thread->is_frozen;
               ui_box_equip_custom_draw(thread_box, rd_thread_box_draw_extensions, u);
@@ -1352,7 +1353,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             RD_BreakpointBoxDrawExtData *bp_draw = push_array(ui_build_arena(), RD_BreakpointBoxDrawExtData, 1);
             {
               bp_draw->color    = bp_color;
-              bp_draw->alive_t  = bp->alive_t;
+              bp_draw->alive_t  = ui_anim(ui_key_from_stringf(ui_key_zero(), "bp_alive_t_%p", bp), 1.f, .rate = entity_alive_t_rate);
               bp_draw->do_lines = rd_setting_val_from_code(RD_SettingCode_BreakpointLines).s32;
               bp_draw->do_glow  = rd_setting_val_from_code(RD_SettingCode_BreakpointGlow).s32;
               if(rd_regs()->file_path.size != 0)

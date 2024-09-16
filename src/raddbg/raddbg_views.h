@@ -151,7 +151,6 @@ struct RD_WatchViewState
 //~ rjf: Code View Functions
 
 internal void rd_code_view_init(RD_CodeViewState *cv, RD_View *view);
-internal void rd_code_view_cmds(RD_View *view, RD_CodeViewState *cv, String8 text_data, TXT_TextInfo *text_info, DASM_LineArray *dasm_lines, Rng1U64 dasm_vaddr_range, DI_Key dasm_dbgi_key);
 internal RD_CodeViewBuildResult rd_code_view_build(Arena *arena, RD_View *view, RD_CodeViewState *cv, RD_CodeViewBuildFlags flags, Rng2F32 rect, String8 text_data, TXT_TextInfo *text_info, DASM_LineArray *dasm_lines, Rng1U64 dasm_vaddr_range, DI_Key dasm_dbgi_key);
 
 ////////////////////////////////

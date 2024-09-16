@@ -2842,36 +2842,6 @@ rd_window_frame(RD_Window *ws)
   rd_regs()->view   = ws->focused_panel->selected_tab_view;
   
   //////////////////////////////
-  //- rjf: process view-level commands on leaf panels
-  //
-  ProfScope("dispatch view-level commands")
-  {
-    for(RD_Panel *panel = ws->root_panel;
-        !rd_panel_is_nil(panel);
-        panel = rd_panel_rec_depth_first_pre(panel).next)
-    {
-      if(!rd_panel_is_nil(panel->first))
-      {
-        continue;
-      }
-      RD_View *view = rd_selected_tab_from_panel(panel);
-      if(!rd_view_is_nil(view))
-      {
-        rd_push_regs();
-        rd_regs()->panel = rd_handle_from_panel(panel);
-        rd_regs()->view  = rd_handle_from_view(view);
-        RD_ViewCmdFunctionType *do_view_cmds_function = view->spec->info.cmd_hook;
-        do_view_cmds_function(view, view->params_roots[view->params_read_gen%ArrayCount(view->params_roots)], str8(view->query_buffer, view->query_string_size));
-        RD_Regs *view_regs = rd_pop_regs();
-        if(panel == ws->focused_panel)
-        {
-          MemoryCopyStruct(rd_regs(), view_regs);
-        }
-      }
-    }
-  }
-  
-  //////////////////////////////
   //- rjf: compute ui palettes from theme
   //
   {
@@ -14283,22 +14253,6 @@ rd_frame(void)
       current->colors[color].y += (target->colors[color].y - current->colors[color].y) * rate;
       current->colors[color].z += (target->colors[color].z - current->colors[color].z) * rate;
       current->colors[color].w += (target->colors[color].w - current->colors[color].w) * rate;
-    }
-  }
-  
-  //////////////////////////////
-  //- rjf: animate alive-transitions for entities
-  //
-  {
-    F32 rate = 1.f - pow_f32(2.f, -20.f*rd_state->frame_dt);
-    for(RD_Entity *e = rd_entity_root(); !rd_entity_is_nil(e); e = rd_entity_rec_depth_first_pre(e, rd_entity_root()).next)
-    {
-      F32 diff = (1.f - e->alive_t);
-      e->alive_t += diff * rate;
-      if(diff >= 0.01f)
-      {
-        rd_request_frame();
-      }
     }
   }
   

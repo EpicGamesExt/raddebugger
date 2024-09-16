@@ -903,7 +903,7 @@ read_only global UI_AnimNode ui_nil_anim_node =
 };
 
 internal F32 ui_anim_(UI_Key key, UI_AnimParams *params);
-#define ui_anim(key, target_val, ...) ui_anim_((key), &(UI_AnimParams){.target = (target_val), __VA_ARGS__, .rate = (ui_state->default_animation_rate)})
+#define ui_anim(key, target_val, ...) ui_anim_((key), &(UI_AnimParams){.target = (target_val), .rate = (ui_state->default_animation_rate), __VA_ARGS__})
 
 ////////////////////////////////
 //~ rjf: Stacks

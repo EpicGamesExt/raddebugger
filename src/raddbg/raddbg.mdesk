@@ -973,7 +973,6 @@ RD_ViewTable:
 @gen
 {
   @expand(RD_ViewTable a) `RD_VIEW_SETUP_FUNCTION_DEF($(a.name_lower));`;
-  @expand(RD_ViewTable a) `RD_VIEW_CMD_FUNCTION_DEF($(a.name_lower));`;
   @expand(RD_ViewTable a) `RD_VIEW_UI_FUNCTION_DEF($(a.name_lower));`;
 }
 
@@ -984,7 +983,7 @@ RD_ViewTable:
 
 @data(RD_ViewSpecInfo) rd_gfx_view_kind_spec_info_table:
 {
-  @expand(RD_ViewTable a) ```{(0|$(a.parameterized_by_entity)*RD_ViewSpecFlag_ParameterizedByEntity|$(a.project_specific)*RD_ViewSpecFlag_ProjectSpecific|$(a.can_serialize)*RD_ViewSpecFlag_CanSerialize|$(a.can_filter)*RD_ViewSpecFlag_CanFilter|$(a.filter_is_code)*RD_ViewSpecFlag_FilterIsCode|$(a.typing_automatically_filters)*RD_ViewSpecFlag_TypingAutomaticallyFilters), str8_lit_comp("$(a.name_lower)"), str8_lit_comp("$(a.display_string)"), RD_IconKind_$(a.icon), RD_VIEW_SETUP_FUNCTION_NAME($(a.name_lower)), RD_VIEW_CMD_FUNCTION_NAME($(a.name_lower)), RD_VIEW_UI_FUNCTION_NAME($(a.name_lower))}```;
+  @expand(RD_ViewTable a) ```{(0|$(a.parameterized_by_entity)*RD_ViewSpecFlag_ParameterizedByEntity|$(a.project_specific)*RD_ViewSpecFlag_ProjectSpecific|$(a.can_serialize)*RD_ViewSpecFlag_CanSerialize|$(a.can_filter)*RD_ViewSpecFlag_CanFilter|$(a.filter_is_code)*RD_ViewSpecFlag_FilterIsCode|$(a.typing_automatically_filters)*RD_ViewSpecFlag_TypingAutomaticallyFilters), str8_lit_comp("$(a.name_lower)"), str8_lit_comp("$(a.display_string)"), RD_IconKind_$(a.icon), RD_VIEW_SETUP_FUNCTION_NAME($(a.name_lower)), RD_VIEW_UI_FUNCTION_NAME($(a.name_lower))}```;
 }
 
 ////////////////////////////////

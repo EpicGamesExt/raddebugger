@@ -2982,6 +2982,7 @@ ui_anim_(UI_Key key, UI_AnimParams *params)
       node->first_touched_build_index = ui_state->build_index;
       node->key = key;
       MemoryCopyStruct(&node->params, params);
+      node->current = params->initial;
       DLLPushBack_NPZ(&ui_nil_anim_node, slot->first, slot->last, node, slot_next, slot_prev);
     }
     else
@@ -2998,7 +2999,7 @@ ui_anim_(UI_Key key, UI_AnimParams *params)
   {
     node->params.epsilon = (node->params.target - node->params.initial) / 10000.f;
   }
-  return node->current;;
+  return node->current;
 }
 
 ////////////////////////////////

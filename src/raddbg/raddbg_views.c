@@ -2872,14 +2872,12 @@ rd_watch_view_build(RD_View *view, RD_WatchViewState *ewv, B32 modifiable, U32 d
 //~ rjf: null @view_hook_impl
 
 RD_VIEW_SETUP_FUNCTION_DEF(null) {}
-RD_VIEW_CMD_FUNCTION_DEF(null) {}
 RD_VIEW_UI_FUNCTION_DEF(null) {}
 
 ////////////////////////////////
 //~ rjf: empty @view_hook_impl
 
 RD_VIEW_SETUP_FUNCTION_DEF(empty) {}
-RD_VIEW_CMD_FUNCTION_DEF(empty) {}
 RD_VIEW_UI_FUNCTION_DEF(empty)
 {
   ui_set_next_flags(UI_BoxFlag_DefaultFocusNav);
@@ -2906,7 +2904,6 @@ RD_VIEW_UI_FUNCTION_DEF(empty)
 //~ rjf: getting_started @view_hook_impl
 
 RD_VIEW_SETUP_FUNCTION_DEF(getting_started) {}
-RD_VIEW_CMD_FUNCTION_DEF(getting_started) {}
 RD_VIEW_UI_FUNCTION_DEF(getting_started)
 {
   ProfBeginFunction();
@@ -3173,7 +3170,6 @@ rd_cmd_lister_item_array_sort_by_strength__in_place(RD_CmdListerItemArray array)
 }
 
 RD_VIEW_SETUP_FUNCTION_DEF(commands) {}
-RD_VIEW_CMD_FUNCTION_DEF(commands) {}
 RD_VIEW_UI_FUNCTION_DEF(commands)
 {
   ProfBeginFunction();
@@ -3498,7 +3494,6 @@ rd_qsort_compare_file_info__size(RD_FileInfo *a, RD_FileInfo *b)
 }
 
 RD_VIEW_SETUP_FUNCTION_DEF(file_system){}
-RD_VIEW_CMD_FUNCTION_DEF(file_system){}
 RD_VIEW_UI_FUNCTION_DEF(file_system)
 {
   ProfBeginFunction();
@@ -4080,7 +4075,6 @@ rd_process_info_array_sort_by_strength__in_place(RD_ProcessInfoArray array)
 }
 
 RD_VIEW_SETUP_FUNCTION_DEF(system_processes){}
-RD_VIEW_CMD_FUNCTION_DEF(system_processes){}
 RD_VIEW_UI_FUNCTION_DEF(system_processes)
 {
   ProfBeginFunction();
@@ -4331,7 +4325,6 @@ rd_entity_lister_item_array_sort_by_strength__in_place(RD_EntityListerItemArray 
 }
 
 RD_VIEW_SETUP_FUNCTION_DEF(entity_lister){}
-RD_VIEW_CMD_FUNCTION_DEF(entity_lister){}
 RD_VIEW_UI_FUNCTION_DEF(entity_lister)
 {
   ProfBeginFunction();
@@ -4459,7 +4452,6 @@ RD_VIEW_UI_FUNCTION_DEF(entity_lister)
 //~ rjf: symbol_lister @view_hook_impl
 
 RD_VIEW_SETUP_FUNCTION_DEF(symbol_lister){}
-RD_VIEW_CMD_FUNCTION_DEF(symbol_lister){}
 RD_VIEW_UI_FUNCTION_DEF(symbol_lister)
 {
   ProfBeginFunction();
@@ -4667,11 +4659,17 @@ struct RD_TargetViewState
 };
 
 RD_VIEW_SETUP_FUNCTION_DEF(target){}
-RD_VIEW_CMD_FUNCTION_DEF(target)
+RD_VIEW_UI_FUNCTION_DEF(target)
 {
+  ProfBeginFunction();
+  Temp scratch = scratch_begin(0, 0);
+  RD_Entity *entity = rd_entity_from_eval_string(string);
+  RD_EntityList custom_entry_points = rd_push_entity_child_list_with_kind(scratch.arena, entity, RD_EntityKind_EntryPoint);
+  F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
+  
+#if 0 // TODO(rjf): @msgs
   RD_TargetViewState *tv = rd_view_user_state(view, RD_TargetViewState);
   RD_Entity *entity = rd_entity_from_eval_string(string);
-#if 0 // TODO(rjf): @msgs
   // rjf: process commands
   for(RD_Cmd *cmd = 0; rd_next_cmd(&cmd);)
   {
@@ -4706,15 +4704,6 @@ RD_VIEW_CMD_FUNCTION_DEF(target)
     }
   }
 #endif
-}
-
-RD_VIEW_UI_FUNCTION_DEF(target)
-{
-  ProfBeginFunction();
-  Temp scratch = scratch_begin(0, 0);
-  RD_Entity *entity = rd_entity_from_eval_string(string);
-  RD_EntityList custom_entry_points = rd_push_entity_child_list_with_kind(scratch.arena, entity, RD_EntityKind_EntryPoint);
-  F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
   
   //- rjf: grab state
   RD_TargetViewState *tv = rd_view_user_state(view, RD_TargetViewState);
@@ -4977,7 +4966,6 @@ RD_VIEW_UI_FUNCTION_DEF(target)
 //~ rjf: targets @view_hook_impl
 
 RD_VIEW_SETUP_FUNCTION_DEF(targets){}
-RD_VIEW_CMD_FUNCTION_DEF(targets){}
 RD_VIEW_UI_FUNCTION_DEF(targets)
 {
   ProfBeginFunction();
@@ -5155,8 +5143,15 @@ RD_VIEW_SETUP_FUNCTION_DEF(file_path_map)
   }
 }
 
-RD_VIEW_CMD_FUNCTION_DEF(file_path_map)
+RD_VIEW_UI_FUNCTION_DEF(file_path_map)
 {
+  ProfBeginFunction();
+  Temp scratch = scratch_begin(0, 0);
+  RD_EntityList maps_list = rd_query_cached_entity_list_with_kind(RD_EntityKind_FilePathMap);
+  RD_EntityArray maps = rd_entity_array_from_list(scratch.arena, &maps_list);
+  F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
+  
+#if 0 // TODO(rjf): @msgs
   RD_FilePathMapViewState *fpms = rd_view_user_state(view, RD_FilePathMapViewState);
   
   // rjf: process commands
@@ -5189,15 +5184,7 @@ RD_VIEW_CMD_FUNCTION_DEF(file_path_map)
       }break;
     }
   }
-}
-
-RD_VIEW_UI_FUNCTION_DEF(file_path_map)
-{
-  ProfBeginFunction();
-  Temp scratch = scratch_begin(0, 0);
-  RD_EntityList maps_list = rd_query_cached_entity_list_with_kind(RD_EntityKind_FilePathMap);
-  RD_EntityArray maps = rd_entity_array_from_list(scratch.arena, &maps_list);
-  F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
+#endif
   
   //- rjf: grab state
   RD_FilePathMapViewState *fpms = rd_view_user_state(view, RD_FilePathMapViewState);
@@ -5469,14 +5456,12 @@ RD_VIEW_UI_FUNCTION_DEF(file_path_map)
 //~ rjf: auto_view_rules @view_hook_impl
 
 RD_VIEW_SETUP_FUNCTION_DEF(auto_view_rules){}
-RD_VIEW_CMD_FUNCTION_DEF(auto_view_rules){}
 RD_VIEW_UI_FUNCTION_DEF(auto_view_rules){}
 
 ////////////////////////////////
 //~ rjf: breakpoints @view_hook_impl
 
 RD_VIEW_SETUP_FUNCTION_DEF(breakpoints){}
-RD_VIEW_CMD_FUNCTION_DEF(breakpoints){}
 RD_VIEW_UI_FUNCTION_DEF(breakpoints)
 {
   ProfBeginFunction();
@@ -5498,7 +5483,6 @@ RD_VIEW_UI_FUNCTION_DEF(breakpoints)
 //~ rjf: watch_pins @view_hook_impl
 
 RD_VIEW_SETUP_FUNCTION_DEF(watch_pins){}
-RD_VIEW_CMD_FUNCTION_DEF(watch_pins){}
 RD_VIEW_UI_FUNCTION_DEF(watch_pins)
 {
   ProfBeginFunction();
@@ -5517,7 +5501,6 @@ RD_VIEW_UI_FUNCTION_DEF(watch_pins)
 //~ rjf: scheduler @view_hook_impl
 
 RD_VIEW_SETUP_FUNCTION_DEF(scheduler) {}
-RD_VIEW_CMD_FUNCTION_DEF(scheduler) {}
 RD_VIEW_UI_FUNCTION_DEF(scheduler)
 {
   ProfBeginFunction();
@@ -5741,7 +5724,6 @@ RD_VIEW_UI_FUNCTION_DEF(scheduler)
 //~ rjf: call_stack @view_hook_impl
 
 RD_VIEW_SETUP_FUNCTION_DEF(call_stack){}
-RD_VIEW_CMD_FUNCTION_DEF(call_stack){}
 RD_VIEW_UI_FUNCTION_DEF(call_stack)
 {
   ProfBeginFunction();
@@ -5795,7 +5777,7 @@ RD_VIEW_SETUP_FUNCTION_DEF(modules)
 #endif
 }
 
-RD_VIEW_CMD_FUNCTION_DEF(modules)
+RD_VIEW_UI_FUNCTION_DEF(modules)
 {
 #if 0 // TODO(rjf): @msgs
   RD_ModulesViewState *mv = rd_view_user_state(view, RD_ModulesViewState);
@@ -5829,10 +5811,6 @@ RD_VIEW_CMD_FUNCTION_DEF(modules)
     }
   }
 #endif
-}
-
-RD_VIEW_UI_FUNCTION_DEF(modules)
-{
 #if 0 // TODO(rjf): @msgs
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
@@ -6105,7 +6083,6 @@ RD_VIEW_UI_FUNCTION_DEF(modules)
 //~ rjf: watch @view_hook_impl
 
 RD_VIEW_SETUP_FUNCTION_DEF(watch){}
-RD_VIEW_CMD_FUNCTION_DEF(watch){}
 RD_VIEW_UI_FUNCTION_DEF(watch)
 {
   ProfBeginFunction();
@@ -6126,7 +6103,6 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
 //~ rjf: locals @view_hook_impl
 
 RD_VIEW_SETUP_FUNCTION_DEF(locals){}
-RD_VIEW_CMD_FUNCTION_DEF(locals){}
 RD_VIEW_UI_FUNCTION_DEF(locals)
 {
   ProfBeginFunction();
@@ -6147,7 +6123,6 @@ RD_VIEW_UI_FUNCTION_DEF(locals)
 //~ rjf: registers @view_hook_impl
 
 RD_VIEW_SETUP_FUNCTION_DEF(registers){}
-RD_VIEW_CMD_FUNCTION_DEF(registers){}
 RD_VIEW_UI_FUNCTION_DEF(registers)
 {
   ProfBeginFunction();
@@ -6168,7 +6143,6 @@ RD_VIEW_UI_FUNCTION_DEF(registers)
 //~ rjf: globals @view_hook_impl
 
 RD_VIEW_SETUP_FUNCTION_DEF(globals){}
-RD_VIEW_CMD_FUNCTION_DEF(globals){}
 RD_VIEW_UI_FUNCTION_DEF(globals)
 {
   ProfBeginFunction();
@@ -6189,7 +6163,6 @@ RD_VIEW_UI_FUNCTION_DEF(globals)
 //~ rjf: thread_locals @view_hook_impl
 
 RD_VIEW_SETUP_FUNCTION_DEF(thread_locals){}
-RD_VIEW_CMD_FUNCTION_DEF(thread_locals){}
 RD_VIEW_UI_FUNCTION_DEF(thread_locals)
 {
   ProfBeginFunction();
@@ -6210,7 +6183,6 @@ RD_VIEW_UI_FUNCTION_DEF(thread_locals)
 //~ rjf: types @view_hook_impl
 
 RD_VIEW_SETUP_FUNCTION_DEF(types){}
-RD_VIEW_CMD_FUNCTION_DEF(types){}
 RD_VIEW_UI_FUNCTION_DEF(types)
 {
   ProfBeginFunction();
@@ -6231,7 +6203,6 @@ RD_VIEW_UI_FUNCTION_DEF(types)
 //~ rjf: procedures @view_hook_impl
 
 RD_VIEW_SETUP_FUNCTION_DEF(procedures){}
-RD_VIEW_CMD_FUNCTION_DEF(procedures){}
 RD_VIEW_UI_FUNCTION_DEF(procedures)
 {
   ProfBeginFunction();
@@ -6262,13 +6233,16 @@ RD_VIEW_SETUP_FUNCTION_DEF(pending_file)
   RD_PendingFileViewState *pves = rd_view_user_state(view, RD_PendingFileViewState);
   pves->deferred_cmd_arena = rd_view_push_arena_ext(view);
 }
-
-RD_VIEW_CMD_FUNCTION_DEF(pending_file)
+RD_VIEW_UI_FUNCTION_DEF(pending_file)
 {
   Temp scratch = scratch_begin(0, 0);
   RD_PendingFileViewState *pves = rd_view_user_state(view, RD_PendingFileViewState);
+  view->loading_t = view->loading_t_target = 1.f;
+  rd_request_frame();
   
+  //////////////////////////////
   //- rjf: process commands
+  //
   for(RD_Cmd *cmd = 0; rd_next_cmd(&cmd);)
   {
     // rjf: mismatched window/panel => skip
@@ -6377,12 +6351,6 @@ RD_VIEW_CMD_FUNCTION_DEF(pending_file)
   scratch_end(scratch);
 }
 
-RD_VIEW_UI_FUNCTION_DEF(pending_file)
-{
-  view->loading_t = view->loading_t_target = 1.f;
-  rd_request_frame();
-}
-
 ////////////////////////////////
 //~ rjf: text @view_hook_impl
 
@@ -6403,62 +6371,6 @@ RD_VIEW_SETUP_FUNCTION_DEF(text)
   rd_code_view_init(cv, view);
   rd_view_equip_loading_info(view, 1, 0, 0);
   view->loading_t = view->loading_t_target = 1.f;
-}
-
-RD_VIEW_CMD_FUNCTION_DEF(text)
-{
-  RD_CodeViewState *cv = rd_view_user_state(view, RD_CodeViewState);
-  Temp scratch = scratch_begin(0, 0);
-  HS_Scope *hs_scope = hs_scope_open();
-  TXT_Scope *txt_scope = txt_scope_open();
-  E_Eval eval = e_eval_from_string(scratch.arena, string);
-  Rng1U64 range = rd_range_from_eval_params(eval, params);
-  rd_regs()->text_key = rd_key_from_eval_space_range(eval.space, range, 1);
-  rd_regs()->lang_kind = rd_lang_kind_from_eval_params(eval, params);
-  U128 hash = {0};
-  TXT_TextInfo info = txt_text_info_from_key_lang(txt_scope, rd_regs()->text_key, rd_regs()->lang_kind, &hash);
-  String8 data = hs_data_from_hash(hs_scope, hash);
-  
-  //- rjf: process general code-view commands
-  rd_code_view_cmds(view, cv, data, &info, 0, r1u64(0, 0), di_key_zero());
-  
-  //- rjf: process code-file commands
-  for(RD_Cmd *cmd = 0; rd_next_cmd(&cmd);)
-  {
-    // rjf: mismatched window/panel => skip
-    if(!rd_handle_match(rd_regs()->window, cmd->regs->window) ||
-       !rd_handle_match(rd_regs()->panel, cmd->regs->panel))
-    {
-      continue;
-    }
-    
-    // rjf: process
-    RD_CmdKind kind = rd_cmd_kind_from_string(cmd->name);
-    switch(kind)
-    {
-      default:{}break;
-      
-      // rjf: override file picking
-      case RD_CmdKind_PickFile:
-      {
-        String8 src = rd_file_path_from_eval_string(scratch.arena, str8(view->query_buffer, view->query_string_size));
-        String8 dst = cmd->regs->file_path;
-        if(src.size != 0 && dst.size != 0)
-        {
-          // rjf: record src -> dst mapping
-          rd_cmd(RD_CmdKind_SetFileReplacementPath, .string = src, .file_path = dst);
-          
-          // rjf: switch this view to viewing replacement file
-          view->query_string_size = Min(sizeof(view->query_buffer), dst.size);
-          MemoryCopy(view->query_buffer, dst.str, view->query_string_size);
-        }
-      }break;
-    }
-  }
-  
-  txt_scope_close(txt_scope);
-  hs_scope_close(hs_scope);
-  scratch_end(scratch);
 }
 
 RD_VIEW_UI_FUNCTION_DEF(text)
@@ -6492,6 +6404,42 @@ RD_VIEW_UI_FUNCTION_DEF(text)
   String8 data = hs_data_from_hash(hs_scope, hash);
   B32 file_is_missing = (path.size != 0 && os_properties_from_file_path(path).modified == 0);
   B32 key_has_data = !u128_match(hash, u128_zero()) && info.lines_count;
+  
+  //////////////////////////////
+  //- rjf: process code-file commands
+  //
+  for(RD_Cmd *cmd = 0; rd_next_cmd(&cmd);)
+  {
+    // rjf: mismatched window/panel => skip
+    if(!rd_handle_match(rd_regs()->window, cmd->regs->window) ||
+       !rd_handle_match(rd_regs()->panel, cmd->regs->panel))
+    {
+      continue;
+    }
+    
+    // rjf: process
+    RD_CmdKind kind = rd_cmd_kind_from_string(cmd->name);
+    switch(kind)
+    {
+      default:{}break;
+      
+      // rjf: override file picking
+      case RD_CmdKind_PickFile:
+      {
+        String8 src = rd_file_path_from_eval_string(scratch.arena, str8(view->query_buffer, view->query_string_size));
+        String8 dst = cmd->regs->file_path;
+        if(src.size != 0 && dst.size != 0)
+        {
+          // rjf: record src -> dst mapping
+          rd_cmd(RD_CmdKind_SetFileReplacementPath, .string = src, .file_path = dst);
+          
+          // rjf: switch this view to viewing replacement file
+          view->query_string_size = Min(sizeof(view->query_buffer), dst.size);
+          MemoryCopy(view->query_buffer, dst.str, view->query_string_size);
+        }
+      }break;
+    }
+  }
   
   //////////////////////////////
   //- rjf: build missing file interface
@@ -6679,125 +6627,6 @@ RD_VIEW_SETUP_FUNCTION_DEF(disasm)
   }
 }
 
-RD_VIEW_CMD_FUNCTION_DEF(disasm)
-{
-  RD_DisasmViewState *dv = rd_view_user_state(view, RD_DisasmViewState);
-  Temp scratch = scratch_begin(0, 0);
-  DASM_Scope *dasm_scope = dasm_scope_open();
-  HS_Scope *hs_scope = hs_scope_open();
-  TXT_Scope *txt_scope = txt_scope_open();
-  
-  //////////////////////////////
-  //- rjf: if disassembly views are not parameterized by anything, they
-  // automatically snap to the selected thread's RIP, rounded down to the
-  // nearest 16K boundary
-  //
-  B32 auto_selected_thread = 0;
-  if(string.size == 0)
-  {
-    auto_selected_thread = 1;
-    string = str8_lit("(rip.u64 & (~(0x4000 - 1))");
-  }
-  
-  //////////////////////////////
-  //- rjf: unpack parameterization info
-  //
-  E_Eval eval = e_eval_from_string(scratch.arena, string);
-  E_Space space = eval.space;
-  if(auto_selected_thread)
-  {
-    space = rd_eval_space_from_ctrl_entity(ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->process));
-  }
-  Rng1U64 range = rd_range_from_eval_params(eval, params);
-  Arch arch = rd_arch_from_eval_params(eval, params);
-  CTRL_Entity *space_entity = rd_ctrl_entity_from_eval_space(space);
-  CTRL_Entity *dasm_module = &ctrl_entity_nil;
-  DI_Key dbgi_key = {0};
-  U64 base_vaddr = 0;
-  switch(space_entity->kind)
-  {
-    default:{}break;
-    case CTRL_EntityKind_Process:
-    {
-      arch        = space_entity->arch;
-      dasm_module = ctrl_module_from_process_vaddr(space_entity, range.min);
-      dbgi_key    = ctrl_dbgi_key_from_module(dasm_module);
-      base_vaddr  = dasm_module->vaddr_range.min;
-    }break;
-  }
-  U128 dasm_key = rd_key_from_eval_space_range(space, range, 0);
-  U128 dasm_data_hash = {0};
-  DASM_Params dasm_params = {0};
-  {
-    dasm_params.vaddr       = range.min;
-    dasm_params.arch        = arch;
-    dasm_params.style_flags = dv->style_flags;
-    dasm_params.syntax      = DASM_Syntax_Intel;
-    dasm_params.base_vaddr  = base_vaddr;
-    dasm_params.dbgi_key    = dbgi_key;
-  }
-  DASM_Info dasm_info = dasm_info_from_key_params(dasm_scope, dasm_key, &dasm_params, &dasm_data_hash);
-  rd_regs()->text_key = dasm_info.text_key;
-  rd_regs()->lang_kind = txt_lang_kind_from_arch(arch);
-  U128 dasm_text_hash = {0};
-  TXT_TextInfo dasm_text_info = txt_text_info_from_key_lang(txt_scope, rd_regs()->text_key, rd_regs()->lang_kind, &dasm_text_hash);
-  String8 dasm_text_data = hs_data_from_hash(hs_scope, dasm_text_hash);
-  B32 has_disasm = (dasm_info.lines.count != 0 && dasm_text_info.lines_count != 0);
-  B32 is_loading = (!has_disasm && dim_1u64(range) != 0 && eval.msgs.max_kind == E_MsgKind_Null);
-  
-  //////////////////////////////
-  //- rjf: process general code-view commands
-  //
-  rd_code_view_cmds(view, &dv->cv, dasm_text_data, &dasm_text_info, &dasm_info.lines, range, dbgi_key);
-  
-  //////////////////////////////
-  //- rjf: process disassembly-specific commands
-  //
-  for(RD_Cmd *cmd = 0; rd_next_cmd(&cmd);)
-  {
-    // rjf: mismatched window/panel => skip
-    if(!rd_handle_match(rd_regs()->window, cmd->regs->window) ||
-       !rd_handle_match(rd_regs()->panel, cmd->regs->panel))
-    {
-      continue;
-    }
-    
-    // rjf: process
-    RD_CmdKind kind = rd_cmd_kind_from_string(cmd->name);
-    switch(kind)
-    {
-      default: break;
-      case RD_CmdKind_GoToAddress:
-      {
-        RD_Entity *process = &d_nil_entity;
-        {
-          RD_Entity *entity = rd_entity_from_handle(cmd->regs->entity);
-          if(!rd_entity_is_nil(entity) &&
-             (entity->kind == RD_EntityKind_Process ||
-              entity->kind == RD_EntityKind_Thread ||
-              entity->kind == RD_EntityKind_Module))
-          {
-            process = entity;
-            if(entity->kind == RD_EntityKind_Thread ||
-               entity->kind == RD_EntityKind_Module)
-            {
-              process = rd_entity_ancestor_from_kind(process, RD_EntityKind_Process);
-            }
-          }
-        }
-        dv->goto_vaddr = cmd->regs->vaddr;
-      }break;
-      case RD_CmdKind_ToggleCodeBytesVisibility: {dv->style_flags ^= DASM_StyleFlag_CodeBytes;}break;
-      case RD_CmdKind_ToggleAddressVisibility:   {dv->style_flags ^= DASM_StyleFlag_Addresses;}break;
-    }
-  }
-  
-  txt_scope_close(txt_scope);
-  hs_scope_close(hs_scope);
-  dasm_scope_close(dasm_scope);
-  scratch_end(scratch);
-}
-
 RD_VIEW_UI_FUNCTION_DEF(disasm)
 {
   RD_DisasmViewState *dv = rd_view_user_state(view, RD_DisasmViewState);
@@ -6873,6 +6702,48 @@ RD_VIEW_UI_FUNCTION_DEF(disasm)
   String8 dasm_text_data = hs_data_from_hash(hs_scope, dasm_text_hash);
   B32 has_disasm = (dasm_info.lines.count != 0 && dasm_text_info.lines_count != 0);
   B32 is_loading = (!has_disasm && dim_1u64(range) != 0 && eval.msgs.max_kind == E_MsgKind_Null);
+  
+  //////////////////////////////
+  //- rjf: process disassembly-specific commands
+  //
+  for(RD_Cmd *cmd = 0; rd_next_cmd(&cmd);)
+  {
+    // rjf: mismatched window/panel => skip
+    if(!rd_handle_match(rd_regs()->window, cmd->regs->window) ||
+       !rd_handle_match(rd_regs()->panel, cmd->regs->panel))
+    {
+      continue;
+    }
+    
+    // rjf: process
+    RD_CmdKind kind = rd_cmd_kind_from_string(cmd->name);
+    switch(kind)
+    {
+      default: break;
+      case RD_CmdKind_GoToAddress:
+      {
+        RD_Entity *process = &d_nil_entity;
+        {
+          RD_Entity *entity = rd_entity_from_handle(cmd->regs->entity);
+          if(!rd_entity_is_nil(entity) &&
+             (entity->kind == RD_EntityKind_Process ||
+              entity->kind == RD_EntityKind_Thread ||
+              entity->kind == RD_EntityKind_Module))
+          {
+            process = entity;
+            if(entity->kind == RD_EntityKind_Thread ||
+               entity->kind == RD_EntityKind_Module)
+            {
+              process = rd_entity_ancestor_from_kind(process, RD_EntityKind_Process);
+            }
+          }
+        }
+        dv->goto_vaddr = cmd->regs->vaddr;
+      }break;
+      case RD_CmdKind_ToggleCodeBytesVisibility: {dv->style_flags ^= DASM_StyleFlag_CodeBytes;}break;
+      case RD_CmdKind_ToggleAddressVisibility:   {dv->style_flags ^= DASM_StyleFlag_Addresses;}break;
+    }
+  }
   
   //////////////////////////////
   //- rjf: is loading -> equip view with loading information
@@ -6959,24 +6830,6 @@ RD_VIEW_SETUP_FUNCTION_DEF(output)
   RD_CodeViewState *cv = rd_view_user_state(view, RD_CodeViewState);
   rd_code_view_init(cv, view);
 }
-
-RD_VIEW_CMD_FUNCTION_DEF(output)
-{
-  RD_CodeViewState *cv = rd_view_user_state(view, RD_CodeViewState);
-  Temp scratch = scratch_begin(0, 0);
-  HS_Scope *hs_scope = hs_scope_open();
-  TXT_Scope *txt_scope = txt_scope_open();
-  rd_regs()->text_key = d_state->output_log_key;
-  rd_regs()->lang_kind = TXT_LangKind_Null;
-  U128 hash = {0};
-  TXT_TextInfo info = txt_text_info_from_key_lang(txt_scope, rd_regs()->text_key, rd_regs()->lang_kind, &hash);
-  String8 data = hs_data_from_hash(hs_scope, hash);
-  rd_code_view_cmds(view, cv, data, &info, 0, r1u64(0, 0), di_key_zero());
-  txt_scope_close(txt_scope);
-  hs_scope_close(hs_scope);
-  scratch_end(scratch);
-}
-
 RD_VIEW_UI_FUNCTION_DEF(output)
 {
   RD_CodeViewState *cv = rd_view_user_state(view, RD_CodeViewState);
@@ -7060,10 +6913,36 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(memory)
 }
 
 RD_VIEW_SETUP_FUNCTION_DEF(memory){}
-
-RD_VIEW_CMD_FUNCTION_DEF(memory)
+RD_VIEW_UI_FUNCTION_DEF(memory)
 {
+  ProfBeginFunction();
+  Temp scratch = scratch_begin(0, 0);
+  HS_Scope *hs_scope = hs_scope_open();
   RD_MemoryViewState *mv = rd_view_user_state(view, RD_MemoryViewState);
+  
+  //////////////////////////////
+  //- rjf: unpack parameterization info
+  //
+  E_Eval eval = e_eval_from_string(scratch.arena, string);
+  if(eval.space.kind == 0)
+  {
+    eval.space = rd_eval_space_from_ctrl_entity(ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->process));
+  }
+  Rng1U64 space_range = rd_whole_range_from_eval_space(eval.space);
+  U64 cursor          = rd_value_from_params_key(params, str8_lit("cursor_vaddr")).u64;
+  U64 mark            = rd_value_from_params_key(params, str8_lit("mark_vaddr")).u64;
+  U64 bytes_per_cell  = rd_value_from_params_key(params, str8_lit("bytes_per_cell")).u64;
+  U64 num_columns     = rd_value_from_params_key(params, str8_lit("num_columns")).u64;
+  if(num_columns == 0)
+  {
+    num_columns = 16;
+  }
+  num_columns = ClampBot(1, num_columns);
+  bytes_per_cell = ClampBot(1, bytes_per_cell);
+  
+  //////////////////////////////
+  //- rjf: process commands
+  //
   for(RD_Cmd *cmd = 0; rd_next_cmd(&cmd);)
   {
     RD_CmdKind kind = rd_cmd_kind_from_string(cmd->name);
@@ -7098,34 +6977,6 @@ RD_VIEW_CMD_FUNCTION_DEF(memory)
       }break;
     }
   }
-}
-
-RD_VIEW_UI_FUNCTION_DEF(memory)
-{
-  ProfBeginFunction();
-  Temp scratch = scratch_begin(0, 0);
-  HS_Scope *hs_scope = hs_scope_open();
-  RD_MemoryViewState *mv = rd_view_user_state(view, RD_MemoryViewState);
-  
-  //////////////////////////////
-  //- rjf: unpack parameterization info
-  //
-  E_Eval eval = e_eval_from_string(scratch.arena, string);
-  if(eval.space.kind == 0)
-  {
-    eval.space = rd_eval_space_from_ctrl_entity(ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->process));
-  }
-  Rng1U64 space_range = rd_whole_range_from_eval_space(eval.space);
-  U64 cursor          = rd_value_from_params_key(params, str8_lit("cursor_vaddr")).u64;
-  U64 mark            = rd_value_from_params_key(params, str8_lit("mark_vaddr")).u64;
-  U64 bytes_per_cell  = rd_value_from_params_key(params, str8_lit("bytes_per_cell")).u64;
-  U64 num_columns     = rd_value_from_params_key(params, str8_lit("num_columns")).u64;
-  if(num_columns == 0)
-  {
-    num_columns = 16;
-  }
-  num_columns = ClampBot(1, num_columns);
-  bytes_per_cell = ClampBot(1, bytes_per_cell);
   
   //////////////////////////////
   //- rjf: unpack visual params
@@ -7962,7 +7813,6 @@ RD_VIEW_SETUP_FUNCTION_DEF(bitmap)
   rd_view_equip_loading_info(view, 1, 0, 0);
   view->loading_t = view->loading_t_target = 1.f;
 }
-RD_VIEW_CMD_FUNCTION_DEF(bitmap) {}
 RD_VIEW_UI_FUNCTION_DEF(bitmap)
 {
   Temp scratch = scratch_begin(0, 0);
@@ -8274,7 +8124,6 @@ RD_VIEW_RULE_ROW_UI_FUNCTION_DEF(color_rgba)
 }
 
 RD_VIEW_SETUP_FUNCTION_DEF(color_rgba) {}
-RD_VIEW_CMD_FUNCTION_DEF(color_rgba) {}
 RD_VIEW_UI_FUNCTION_DEF(color_rgba)
 {
   Temp scratch = scratch_begin(0, 0);
@@ -8386,7 +8235,6 @@ RD_VIEW_SETUP_FUNCTION_DEF(geo3d)
   rd_view_equip_loading_info(view, 1, 0, 0);
   view->loading_t = view->loading_t_target = 1.f;
 }
-RD_VIEW_CMD_FUNCTION_DEF(geo3d) {}
 RD_VIEW_UI_FUNCTION_DEF(geo3d)
 {
   Temp scratch = scratch_begin(0, 0);
@@ -8504,7 +8352,6 @@ RD_VIEW_UI_FUNCTION_DEF(geo3d)
 //~ rjf: exception_filters @view_hook_impl
 
 RD_VIEW_SETUP_FUNCTION_DEF(exception_filters) {}
-RD_VIEW_CMD_FUNCTION_DEF(exception_filters) {}
 RD_VIEW_UI_FUNCTION_DEF(exception_filters)
 {
   ProfBeginFunction();
@@ -8713,7 +8560,6 @@ rd_qsort_compare_settings_item(RD_SettingsItem *a, RD_SettingsItem *b)
 }
 
 RD_VIEW_SETUP_FUNCTION_DEF(settings){}
-RD_VIEW_CMD_FUNCTION_DEF(settings){}
 RD_VIEW_UI_FUNCTION_DEF(settings)
 {
   ProfBeginFunction();
