@@ -86,16 +86,6 @@ enum
 };
 
 ////////////////////////////////
-//~ rjf: Evaluation Spaces
-
-typedef U64 RD_EvalSpaceKind;
-enum
-{
-  RD_EvalSpaceKind_CtrlEntity = E_SpaceKind_FirstUserDefined,
-  RD_EvalSpaceKind_CfgEntity,
-};
-
-////////////////////////////////
 //~ rjf: Binding Types
 
 typedef struct RD_Binding RD_Binding;

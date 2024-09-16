@@ -1744,11 +1744,11 @@ rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
       }
       hs_scope_close(scope);
     }break;
-    case RD_EvalSpaceKind_CtrlEntity:
+    case CTRL_EvalSpaceKind_Entity:
     {
       
     }break;
-    case RD_EvalSpaceKind_CfgEntity:
+    case CTRL_EvalSpaceKind_Meta:
     {
       
     }break;
@@ -14101,10 +14101,18 @@ rd_frame(void)
     }
     
     ////////////////////////////
+    //- rjf: gather meta eval infos
+    //
+    CTRL_MetaEvalInfoArray meta_eval_infos = {0};
+    {
+      // TODO(rjf): @msgs
+    }
+    
+    ////////////////////////////
     //- rjf: tick debug engine
     //
     U64 cmd_count_pre_tick = rd_state->cmds[0].count;
-    D_EventList engine_events = d_tick(scratch.arena, &targets, &breakpoints, &path_maps, exception_code_filters);
+    D_EventList engine_events = d_tick(scratch.arena, &targets, &breakpoints, &path_maps, exception_code_filters, &meta_eval_infos);
     
     ////////////////////////////
     //- rjf: no selected thread? -> try to snap to any existing thread

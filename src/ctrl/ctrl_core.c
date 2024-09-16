@@ -1128,6 +1128,31 @@ ctrl_entity_store_apply_events(CTRL_EntityStore *store, CTRL_EventList *list)
 }
 
 ////////////////////////////////
+//~ rjf: Meta-Eval Functions
+
+internal E_TypeKey
+ctrl_meta_eval_type_key(void)
+{
+  Temp scratch = scratch_begin(0, 0);
+  E_MemberList members = {0};
+  {
+    e_member_list_push_new(scratch.arena, &members, .name = str8_lit("enabled"),  .off = 0,        .type_key = e_type_key_basic(E_TypeKind_S64));
+    e_member_list_push_new(scratch.arena, &members, .name = str8_lit("hit_count"),.off = 0+8,      .type_key = e_type_key_basic(E_TypeKind_U64));
+    e_member_list_push_new(scratch.arena, &members, .name = str8_lit("label"),    .off = 0+8+8,    .type_key = e_type_key_cons_ptr(arch_from_context(), e_type_key_basic(E_TypeKind_Char8)));
+    e_member_list_push_new(scratch.arena, &members, .name = str8_lit("location"), .off = 0+8+8+8,  .type_key = e_type_key_cons_ptr(arch_from_context(), e_type_key_basic(E_TypeKind_Char8)));
+    e_member_list_push_new(scratch.arena, &members, .name = str8_lit("condition"),.off = 0+8+8+8+8,.type_key = e_type_key_cons_ptr(arch_from_context(), e_type_key_basic(E_TypeKind_Char8)));
+  }
+  E_MemberArray members_array = e_member_array_from_list(scratch.arena, &members);
+  E_TypeKey meta_eval_type_key = e_type_key_cons(.arch = arch_from_context(),
+                                                 .kind = E_TypeKind_Struct,
+                                                 .name = str8_lit("Meta"),
+                                                 .members = members_array.v,
+                                                 .count = members_array.count);
+  scratch_end(scratch);
+  return meta_eval_type_key;
+}
+
+////////////////////////////////
 //~ rjf: Main Layer Initialization
 
 internal void

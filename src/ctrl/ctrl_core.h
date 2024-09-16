@@ -264,12 +264,50 @@ struct CTRL_UserBreakpointList
 };
 
 ////////////////////////////////
+//~ rjf: Meta Evaluation Types
+
+typedef struct CTRL_MetaEvalInfo CTRL_MetaEvalInfo;
+struct CTRL_MetaEvalInfo
+{
+  B64 enabled;
+  U64 hit_count;
+  String8 label;
+  String8 location;
+  String8 condition;
+};
+
+typedef struct CTRL_MetaEvalInfoArray CTRL_MetaEvalInfoArray;
+struct CTRL_MetaEvalInfoArray
+{
+  CTRL_MetaEvalInfo *v;
+  U64 count;
+};
+
+typedef struct CTRL_MetaEval CTRL_MetaEval;
+struct CTRL_MetaEval
+{
+  B64 enabled;
+  U64 hit_count;
+  U64 label_off;
+  U64 location_off;
+  U64 condition_off;
+};
+
+typedef struct CTRL_MetaEvalArray CTRL_MetaEvalArray;
+struct CTRL_MetaEvalArray
+{
+  CTRL_MetaEval *v;
+  U64 count;
+};
+
+////////////////////////////////
 //~ rjf: Evaluation Spaces
 
 typedef U64 CTRL_EvalSpaceKind;
 enum
 {
   CTRL_EvalSpaceKind_Entity = E_SpaceKind_FirstUserDefined,
+  CTRL_EvalSpaceKind_Meta,
 };
 
 ////////////////////////////////
@@ -321,6 +359,7 @@ struct CTRL_Msg
   String8List env_string_list;
   CTRL_TrapList traps;
   CTRL_UserBreakpointList user_bps;
+  CTRL_MetaEvalInfoArray meta_eval_infos;
 };
 
 typedef struct CTRL_MsgNode CTRL_MsgNode;
@@ -637,6 +676,8 @@ struct CTRL_State
   DMN_EventNode *free_dmn_event_node;
   Arena *user_entry_point_arena;
   String8List user_entry_points;
+  Arena *user_meta_eval_arena;
+  CTRL_MetaEvalArray *user_meta_evals;
   U64 exception_code_filters[(CTRL_ExceptionCodeKind_COUNT+63)/64];
   U64 process_counter;
   
@@ -773,6 +814,11 @@ internal CTRL_EntityRec ctrl_entity_rec_depth_first(CTRL_Entity *entity, CTRL_En
 
 //- rjf: applying events to entity caches
 internal void ctrl_entity_store_apply_events(CTRL_EntityStore *store, CTRL_EventList *list);
+
+////////////////////////////////
+//~ rjf: Meta-Eval Functions
+
+internal E_TypeKey ctrl_meta_eval_type_key(void);
 
 ////////////////////////////////
 //~ rjf: Main Layer Initialization
