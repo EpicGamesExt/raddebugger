@@ -2041,6 +2041,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
   CTRL_MsgList ctrl_msgs = {0};
   ProfScope("process top-level commands")
   {
+    D_BreakpointArray run_extra_bps = {0};
     for(D_Cmd *cmd = 0; d_next_cmd(&cmd);)
     {
       // rjf: unpack command
@@ -2049,7 +2050,6 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
       // rjf: prep ctrl running arguments
       B32 need_run = 0;
       D_RunKind run_kind = D_RunKind_Run;
-      D_BreakpointArray run_extra_bps = {0};
       CTRL_Entity *run_thread = &ctrl_entity_nil;
       CTRL_RunFlags run_flags = 0;
       CTRL_TrapList run_traps = {0};
