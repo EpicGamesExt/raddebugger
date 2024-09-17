@@ -3062,7 +3062,7 @@ rd_cmd_lister_item_list_from_needle(Arena *arena, String8 needle)
 {
   Temp scratch = scratch_begin(&arena, 1);
   RD_CmdListerItemList result = {0};
-  // TODO(rjf): @msgs extend this with dynamically-registered command info
+  // TODO(rjf): extend this with dynamically-registered command info
   for(EachNonZeroEnumVal(RD_CmdKind, k))
   {
     RD_CmdKindInfo *info = &rd_cmd_kind_info_table[k];

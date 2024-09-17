@@ -2,35 +2,60 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
-//~ rjf: Frontend/UI Pass Tasks
+//~ rjf: 0.9.12 TODO notes
 //
+// [ ] remainder of @msgs pass:
+//  [ ] new universal ctx menu, hover, tooltips systems
+//  [ ] meta eval system
+//  [ ] target editor
+//  [ ] file path map editor
+//  [ ] modules view
+//  [ ] eval writing/committing
+//  [ ] collapse upstream state for theme/bindings/settings into entities; use cache accelerators if needed to make up difference
+//  [ ] collapse upstream state for windows/panels/tabs into entities; use downstream window/view resource cache to make up the difference
+//  [ ] entity <-> mdesk paths
+//  [ ] file path map building
+//  [ ] `switch` replacement (recent files history)
+//   [ ] resolving name as file or #include
+//  [ ] new `restart processes` path
+//  [ ] breakpoint hit count resetting
+//  [ ] remainder of @msgs
+// 
+// [ ] post-@msgs TODOs:
+//  [ ] output: add option for scroll-to-bottom - ensure this shows up in universal ctx menu
+//  [ ] universal ctx menu address/watch options; e.g. watch -> memory; watch -> add watch
+//  [ ] rich hover coverage; bitmap <-> geo <-> memory <-> disassembly <-> text; etc.
 // [ ] ensure "prefer_disasm" is calculated correctly - disassembly-focused
 //     stepping
 //
-// [ ] empty user file causing failure to launch
+// [ ] ensure the following issues are resolved with this new pass:
+//  [ ] empty user file causing failure to launch
+//  [ ] save view column pcts; generalize to being a first-class thing in
+//      RD_View, e.g. by just having a string -> f32 store
+//  [ ] decay arrays to pointers in pointer/value comparison
+//  [ ] EVAL LOOKUP RULES -> currently going 0 -> rdis_count, but we need
+//  to prioritize the primary rdi
+//  [ ] file overrides -> always pick most specific one! found with conflicting
+//      overrides, e.g. C:/devel/ -> D:/devel/, but also C:/devel/foo ->
+//      C:/devel/bar, etc.
+//  [ ] auto-scroll output window
+//  [ ] visualize all breakpoints everywhere - source view should show up in
+//      disasm, disasm should show up in source view, function should show up in
+//      both, etc.
+//    [ ] ** Function breakpoints should show up in the source listing. Without
+//        them being visible, it is confusing when you run and you stop there,
+//        because you're like "wait why did it stop" and then you later remember
+//        that's because there was a function breakpoint there.
+//  [ ] codebase readme pass
+//  [ ] debugger readme pass
+
+////////////////////////////////
+//~ rjf: Frontend/UI Pass Tasks
+//
 // [ ] transient view timeout releasing
-//
-// [ ] save view column pcts; generalize to being a first-class thing in
-//     RD_View, e.g. by just having a string -> f32 store
-// [ ] decay arrays to pointers in pointer/value comparison
-// [ ] EVAL LOOKUP RULES -> currently going 0 -> rdis_count, but we need
-// to prioritize the primary rdi
-//
-// [ ] file overrides -> always pick most specific one! found with conflicting
-//     overrides, e.g. C:/devel/ -> D:/devel/, but also C:/devel/foo ->
-//     C:/devel/bar, etc.
-//
-// [ ] auto-scroll output window
 // [ ] theme lister -> fonts & font sizes
 // [ ] "Browse..." buttons should adopt a more relevant starting search path,
 //     if possible
-// [ ] visualize all breakpoints everywhere - source view should show up in
-//     disasm, disasm should show up in source view, function should show up in
-//     both, etc.
-//  [ ] ** Function breakpoints should show up in the source listing. Without
-//      them being visible, it is confusing when you run and you stop there,
-//      because you're like "wait why did it stop" and then you later remember
-//      that's because there was a function breakpoint there.
 //
 // [ ] font lister
 // [ ] per-panel font size overrides
@@ -44,11 +69,6 @@
 //     threads you haven't? Or, there could even be a debugger-specific API
 //     that you use to tag them. Just some way that would make it easier to
 //     focus on your own threads.
-//
-// [ ] "concept key stack"; basically, any point in UI builder path has a stack
-//     of active "concept keys", which can be used to e.g. build context menus
-//     automatically (could just be a per-box attachment; right-click any
-//     point, search up the tree and see the concept keys)
 
 ////////////////////////////////
 //~ rjf: Hot, Medium Priority Tasks (Low-Hanging-Fruit Features, UI Jank, Cleanup)
