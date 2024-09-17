@@ -11966,7 +11966,9 @@ rd_frame(void)
             FileProperties props = os_properties_from_file_path(path);
             if(props.created != 0)
             {
-              rd_cmd(RD_CmdKind_PendingFile, .string = rd_eval_string_from_file_path(scratch.arena, path));
+              rd_cmd(RD_CmdKind_OpenTab,
+                     .string = rd_eval_string_from_file_path(scratch.arena, path),
+                     .params_tree = md_tree_from_string(scratch.arena, rd_view_rule_kind_info_table[RD_ViewRuleKind_PendingFile].string)->first);
             }
             else
             {

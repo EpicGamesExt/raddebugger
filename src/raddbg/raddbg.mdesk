@@ -83,7 +83,7 @@ RD_EntityKindTable:
   {ViewRule           view_rule             view_rules                    1  0  0  1  1  0  1  1  0  1  0                      "Expression"        Binoculars             "View Rule"                  }
   
   //- rjf: breakpoints
-  {Breakpoint         breakpoint            breakpoints                   1  0  0  1  1  1  1  0  0  1  1                      "Label"             CircleFilled           "Breakpoint"                 }
+  {Breakpoint         breakpoint            breakpoints                   1  0  0  1  1  1  1  1  0  1  1                      "Label"             CircleFilled           "Breakpoint"                 }
   {Condition          condition             conditions                    0  0  0  0  0  0  0  1  0  1  0                      "Expression"        CircleFilled           "Condition"                  }
   
   //- rjf: user-controlled locations (source, addresses, symbol names)
