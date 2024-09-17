@@ -10348,6 +10348,7 @@ rd_frame(void)
           CTRL_MetaEvalInfo *mei = &rd_state->meta_eval_infos.v[meta_eval_info_idx];
           mei->enabled   = !entity->disabled;
           mei->hit_count = entity->u64;
+          mei->color     = u32_from_rgba(rd_rgba_from_entity(entity));
           mei->label     = label_string;
           mei->location  = loc_string;
           mei->condition = cnd_string;
@@ -10366,6 +10367,10 @@ rd_frame(void)
         for(CTRL_EntityNode *n = list.first; n != 0; n = n->next)
         {
           CTRL_Entity *entity = n->v;
+          CTRL_MetaEvalInfo *mei = &rd_state->meta_eval_infos.v[meta_eval_info_idx];
+          mei->label = entity->string;
+          mei->id    = entity->id;
+          mei->color = entity->rgba;
           // TODO(rjf): @msgs
           meta_eval_info_idx += 1;
         }
@@ -10557,6 +10562,7 @@ rd_frame(void)
               params.thread        = rd_regs()->thread;
               // TODO(rjf): @msgs params.entity        = ???;
               // TODO(rjf): @msgs params.processes     = ???;
+              params.string        = rd_regs()->string;
               params.file_path     = rd_regs()->file_path;
               params.cursor        = rd_regs()->cursor;
               params.vaddr         = rd_regs()->vaddr;

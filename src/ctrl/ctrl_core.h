@@ -256,31 +256,11 @@ struct CTRL_UserBreakpointList
 ////////////////////////////////
 //~ rjf: Meta Evaluation Types
 
-typedef struct CTRL_MetaEvalInfo CTRL_MetaEvalInfo;
-struct CTRL_MetaEvalInfo
-{
-  B64 enabled;
-  U64 hit_count;
-  String8 label;
-  String8 location;
-  String8 condition;
-};
-
 typedef struct CTRL_MetaEvalInfoArray CTRL_MetaEvalInfoArray;
 struct CTRL_MetaEvalInfoArray
 {
   CTRL_MetaEvalInfo *v;
   U64 count;
-};
-
-typedef struct CTRL_MetaEval CTRL_MetaEval;
-struct CTRL_MetaEval
-{
-  B64 enabled;
-  U64 hit_count;
-  U64 label_off;
-  U64 location_off;
-  U64 condition_off;
 };
 
 typedef struct CTRL_MetaEvalArray CTRL_MetaEvalArray;

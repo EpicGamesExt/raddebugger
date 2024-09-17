@@ -6,6 +6,13 @@
 #ifndef CTRL_META_H
 #define CTRL_META_H
 
+typedef enum CTRL_MetaEvalDynamicKind
+{
+CTRL_MetaEvalDynamicKind_Null,
+CTRL_MetaEvalDynamicKind_String8,
+CTRL_MetaEvalDynamicKind_COUNT,
+} CTRL_MetaEvalDynamicKind;
+
 typedef enum CTRL_EntityKind
 {
 CTRL_EntityKind_Null,
@@ -62,7 +69,38 @@ CTRL_ExceptionCodeKind_Win32DirectXDebugLayer,
 CTRL_ExceptionCodeKind_COUNT,
 } CTRL_ExceptionCodeKind;
 
+typedef struct CTRL_MetaEvalInfo CTRL_MetaEvalInfo;
+struct CTRL_MetaEvalInfo
+{
+S32 enabled;
+S32 frozen;
+U64 hit_count;
+U64 id;
+U32 color;
+String8 label;
+String8 location;
+String8 condition;
+};
+
+typedef struct CTRL_MetaEval CTRL_MetaEval;
+struct CTRL_MetaEval
+{
+S32 enabled;
+S32 frozen;
+U64 hit_count;
+U64 id;
+U32 color;
+U64 label;
+U64 location;
+U64 condition;
+};
+
 C_LINKAGE_BEGIN
+extern String8 ctrl_meta_eval_member_name_table[8];
+extern Rng1U64 ctrl_meta_eval_info_member_range_table[8];
+extern Rng1U64 ctrl_meta_eval_member_range_table[8];
+extern E_TypeKind ctrl_meta_eval_member_type_kind_table[8];
+extern CTRL_MetaEvalDynamicKind ctrl_meta_eval_member_dynamic_kind_table[8];
 extern String8 ctrl_entity_kind_display_string_table[8];
 extern U32 ctrl_exception_code_kind_code_table[38];
 extern String8 ctrl_exception_code_kind_display_string_table[38];

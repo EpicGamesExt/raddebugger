@@ -193,14 +193,26 @@ ctrl_meta_eval_from_info(Arena *arena, CTRL_MetaEvalInfo *info)
 {
   CTRL_MetaEval *eval = push_array(arena, CTRL_MetaEval, 1);
   {
-    String8 label_string = push_str8_copy(arena, info->label);
-    String8 loc_string = push_str8_copy(arena, info->location);
-    String8 cnd_string = push_str8_copy(arena, info->condition);
-    eval->enabled      = info->enabled;
-    eval->hit_count    = info->hit_count;
-    eval->label_off    = (U64)((U8 *)label_string.str - (U8 *)eval);
-    eval->location_off = (U64)((U8 *)loc_string.str - (U8 *)eval);
-    eval->condition_off= (U64)((U8 *)cnd_string.str - (U8 *)eval);
+    for(U64 idx = 0; idx < ArrayCount(ctrl_meta_eval_info_member_range_table); idx += 1)
+    {
+      switch(ctrl_meta_eval_member_dynamic_kind_table[idx])
+      {
+        default:
+        case CTRL_MetaEvalDynamicKind_Null:
+        {
+          MemoryCopy((U8 *)eval + ctrl_meta_eval_member_range_table[idx].min,
+                     (U8 *)info + ctrl_meta_eval_info_member_range_table[idx].min,
+                     dim_1u64(ctrl_meta_eval_member_range_table[idx]));
+        }break;
+        case CTRL_MetaEvalDynamicKind_String8:
+        {
+          String8 string = *(String8 *)((U8 *)info + ctrl_meta_eval_info_member_range_table[idx].min);
+          String8 string_copy = push_str8_copy(arena, string);
+          U64 off = (string_copy.str - (U8 *)eval);
+          MemoryCopy((U8 *)eval + ctrl_meta_eval_member_range_table[idx].min, &off, sizeof(U64));
+        }break;
+      }
+    }
   }
   return eval;
 }
@@ -214,9 +226,19 @@ ctrl_meta_eval_info_array_copy(Arena *arena, CTRL_MetaEvalInfoArray *src)
   MemoryCopy(dst.v, src->v, sizeof(dst.v[0])*dst.count);
   for(U64 idx = 0; idx < dst.count; idx += 1)
   {
-    dst.v[idx].label    = push_str8_copy(arena, dst.v[idx].label);
-    dst.v[idx].location = push_str8_copy(arena, dst.v[idx].location);
-    dst.v[idx].condition= push_str8_copy(arena, dst.v[idx].condition);
+    for(U64 member_idx = 0; member_idx < ArrayCount(ctrl_meta_eval_info_member_range_table); member_idx += 1)
+    {
+      switch(ctrl_meta_eval_member_dynamic_kind_table[member_idx])
+      {
+        default:{}break;
+        case CTRL_MetaEvalDynamicKind_String8:
+        {
+          String8 string = *(String8 *)((U8 *)(&dst.v[idx]) + ctrl_meta_eval_info_member_range_table[member_idx].min);
+          String8 string_copy = push_str8_copy(arena, string);
+          MemoryCopy((U8 *)(&dst.v[idx]) + ctrl_meta_eval_info_member_range_table[member_idx].min, &string_copy, sizeof(String8));
+        }break;
+      }
+    }
   }
   return dst;
 }
@@ -364,14 +386,23 @@ ctrl_serialized_string_from_msg_list(Arena *arena, CTRL_MsgList *msgs)
       for(U64 idx = 0; idx < msg->meta_eval_infos.count; idx += 1)
       {
         CTRL_MetaEvalInfo *mei = &msg->meta_eval_infos.v[idx];
-        str8_serial_push_struct(scratch.arena, &msgs_srlzed, &mei->enabled);
-        str8_serial_push_struct(scratch.arena, &msgs_srlzed, &mei->hit_count);
-        str8_serial_push_struct(scratch.arena, &msgs_srlzed, &mei->label.size);
-        str8_serial_push_string(scratch.arena, &msgs_srlzed, mei->label);
-        str8_serial_push_struct(scratch.arena, &msgs_srlzed, &mei->location.size);
-        str8_serial_push_string(scratch.arena, &msgs_srlzed, mei->location);
-        str8_serial_push_struct(scratch.arena, &msgs_srlzed, &mei->condition.size);
-        str8_serial_push_string(scratch.arena, &msgs_srlzed, mei->condition);
+        for(U64 member_idx = 0; member_idx < ArrayCount(ctrl_meta_eval_info_member_range_table); member_idx += 1)
+        {
+          switch(ctrl_meta_eval_member_dynamic_kind_table[member_idx])
+          {
+            default:
+            case CTRL_MetaEvalDynamicKind_Null:
+            {
+              str8_serial_push_string(scratch.arena, &msgs_srlzed, str8((U8 *)mei + ctrl_meta_eval_info_member_range_table[member_idx].min, dim_1u64(ctrl_meta_eval_info_member_range_table[member_idx])));
+            }break;
+            case CTRL_MetaEvalDynamicKind_String8:
+            {
+              String8 string = *(String8 *)((U8 *)mei + ctrl_meta_eval_info_member_range_table[member_idx].min);
+              str8_serial_push_struct(scratch.arena, &msgs_srlzed, &string.size);
+              str8_serial_push_string(scratch.arena, &msgs_srlzed, string);
+            }break;
+          }
+        }
       }
     }
   }
@@ -491,17 +522,26 @@ ctrl_msg_list_from_serialized_string(Arena *arena, String8 string)
       for(U64 idx = 0; idx < msg->meta_eval_infos.count; idx += 1)
       {
         CTRL_MetaEvalInfo *mei = &msg->meta_eval_infos.v[idx];
-        read_off += str8_deserial_read_struct(string, read_off, &mei->enabled);
-        read_off += str8_deserial_read_struct(string, read_off, &mei->hit_count);
-        read_off += str8_deserial_read_struct(string, read_off, &mei->label.size);
-        mei->label.str = push_array_no_zero(arena, U8, mei->label.size);
-        read_off += str8_deserial_read(string, read_off, mei->label.str, mei->label.size, 1);
-        read_off += str8_deserial_read_struct(string, read_off, &mei->location.size);
-        mei->location.str = push_array_no_zero(arena, U8, mei->location.size);
-        read_off += str8_deserial_read(string, read_off, mei->location.str, mei->location.size, 1);
-        read_off += str8_deserial_read_struct(string, read_off, &mei->condition.size);
-        mei->condition.str = push_array_no_zero(arena, U8, mei->condition.size);
-        read_off += str8_deserial_read(string, read_off, mei->condition.str, mei->condition.size, 1);
+        for(U64 member_idx = 0; member_idx < ArrayCount(ctrl_meta_eval_info_member_range_table); member_idx += 1)
+        {
+          switch(ctrl_meta_eval_member_dynamic_kind_table[member_idx])
+          {
+            default:
+            case CTRL_MetaEvalDynamicKind_Null:
+            {
+              U64 size = dim_1u64(ctrl_meta_eval_info_member_range_table[member_idx]);
+              read_off += str8_deserial_read(string, read_off, (U8 *)mei + ctrl_meta_eval_info_member_range_table[member_idx].min, size, size);
+            }break;
+            case CTRL_MetaEvalDynamicKind_String8:
+            {
+              String8 str = {0};
+              read_off += str8_deserial_read_struct(string, read_off, &str.size);
+              str.str = push_array_no_zero(arena, U8, str.size);
+              read_off += str8_deserial_read(string, read_off, str.str, str.size, 1);
+              MemoryCopy((U8 *)mei + ctrl_meta_eval_info_member_range_table[member_idx].min, &str, sizeof(str));
+            }break;
+          }
+        }
       }
     }
   }
@@ -1145,6 +1185,11 @@ ctrl_entity_store_apply_events(CTRL_EntityStore *store, CTRL_EventList *list)
       {
         CTRL_Entity *process = ctrl_entity_from_handle(store, event->parent);
         CTRL_Entity *thread = ctrl_entity_alloc(store, process, CTRL_EntityKind_Thread, event->arch, event->entity, (U64)event->entity_id);
+        CTRL_Entity *first_thread = ctrl_entity_child_from_kind(process, CTRL_EntityKind_Thread);
+        if(first_thread == thread)
+        {
+          ctrl_entity_equip_string(store, thread, str8_lit("main_thread"));
+        }
         thread->stack_base = event->stack_base;
         ctrl_query_cached_rip_from_thread(store, event->entity);
       }break;
@@ -1183,6 +1228,11 @@ ctrl_entity_store_apply_events(CTRL_EntityStore *store, CTRL_EventList *list)
         ctrl_entity_equip_string(store, module, event->string);
         module->timestamp = event->timestamp;
         module->vaddr_range = event->vaddr_rng;
+        CTRL_Entity *first_module = ctrl_entity_child_from_kind(process, CTRL_EntityKind_Module);
+        if(first_module == module)
+        {
+          ctrl_entity_equip_string(store, process, str8_skip_last_slash(event->string));
+        }
         scratch_end(scratch);
       }break;
       case CTRL_EventKind_EndModule:
@@ -1214,11 +1264,19 @@ ctrl_meta_eval_type_key(void)
   Temp scratch = scratch_begin(0, 0);
   E_MemberList members = {0};
   {
-    e_member_list_push_new(scratch.arena, &members, .name = str8_lit("enabled"),  .off = 0,        .type_key = e_type_key_basic(E_TypeKind_S64));
-    e_member_list_push_new(scratch.arena, &members, .name = str8_lit("hit_count"),.off = 0+8,      .type_key = e_type_key_basic(E_TypeKind_U64));
-    e_member_list_push_new(scratch.arena, &members, .name = str8_lit("label"),    .off = 0+8+8,    .type_key = e_type_key_cons_ptr(arch_from_context(), e_type_key_basic(E_TypeKind_Char8)));
-    e_member_list_push_new(scratch.arena, &members, .name = str8_lit("location"), .off = 0+8+8+8,  .type_key = e_type_key_cons_ptr(arch_from_context(), e_type_key_basic(E_TypeKind_Char8)));
-    e_member_list_push_new(scratch.arena, &members, .name = str8_lit("condition"),.off = 0+8+8+8+8,.type_key = e_type_key_cons_ptr(arch_from_context(), e_type_key_basic(E_TypeKind_Char8)));
+    for(U64 idx = 0; idx < ArrayCount(ctrl_meta_eval_member_range_table); idx += 1)
+    {
+      E_TypeKey member_type_key = e_type_key_basic(ctrl_meta_eval_member_type_kind_table[idx]);
+      switch(ctrl_meta_eval_member_dynamic_kind_table[idx])
+      {
+        default:{}break;
+        case CTRL_MetaEvalDynamicKind_String8:
+        {
+          member_type_key = e_type_key_cons_ptr(arch_from_context(), e_type_key_basic(E_TypeKind_Char8));
+        }break;
+      }
+      e_member_list_push_new(scratch.arena, &members, .name = ctrl_meta_eval_member_name_table[idx], .off = ctrl_meta_eval_member_range_table[idx].min, .type_key = member_type_key);
+    }
   }
   E_MemberArray members_array = e_member_array_from_list(scratch.arena, &members);
   E_TypeKey meta_eval_type_key = e_type_key_cons(.arch = arch_from_context(),

@@ -2453,6 +2453,11 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
           CTRL_Entity *entity = ctrl_entity_from_handle(d_state->ctrl_entity_store, params->entity);
           entity->rgba = params->rgba;
         }break;
+        case D_CmdKind_SetEntityName:
+        {
+          CTRL_Entity *entity = ctrl_entity_from_handle(d_state->ctrl_entity_store, params->entity);
+          ctrl_entity_equip_string(d_state->ctrl_entity_store, entity, params->string);
+        }break;
         
         //- rjf: attaching
         case D_CmdKind_Attach:

@@ -233,6 +233,7 @@ struct D_CmdParams
   CTRL_Handle thread;
   CTRL_Handle entity;
   CTRL_HandleList processes;
+  String8 string;
   String8 file_path;
   TxtPt cursor;
   U64 vaddr;

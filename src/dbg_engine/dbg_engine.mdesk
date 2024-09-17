@@ -47,6 +47,7 @@ D_CmdTable:     //               |        |              |                  |   
   
   //- rjf: entity decoration
   {SetEntityColor                 0        0              Null               null              Nil                0  0  0  0  0  0                                                           Null                  "set_thread_color"            "Set Thread Color"                            "Sets the passed entity's color."                                                                                  ""                               }
+  {SetEntityName                  0        0              Null               null              Nil                0  0  0  0  0  0                                                           Null                  "set_thread_color"            "Set Thread Color"                            "Sets the passed entity's name."                                                                                   ""                               }
   
   //- rjf: attaching
   {Attach                         1        1              PID                null              Nil                0  0  0  0  0  1                                                           Null                  "attach"                      "Attach"                                      "Attaches to a process that is already running on the local machine."                                              ""                               }
