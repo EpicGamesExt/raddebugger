@@ -1050,12 +1050,13 @@ rd_drag_is_active(void)
 }
 
 internal void
-rd_drag_begin(void)
+rd_drag_begin(RD_RegSlot slot)
 {
   if(!rd_drag_is_active())
   {
     arena_clear(rd_state->drag_drop_arena);
     rd_state->drag_drop_regs = rd_regs_copy(rd_state->drag_drop_arena, rd_regs());
+    rd_state->drag_drop_regs_slot = slot;
     rd_state->drag_drop_state = RD_DragDropState_Dragging;
   }
 }
@@ -1079,15 +1080,29 @@ rd_drag_kill(void)
 }
 
 internal void
-rd_set_hover_regs(void)
+rd_set_hover_regs(RD_RegSlot slot)
 {
   rd_state->next_hover_regs = rd_regs_copy(rd_frame_arena(), rd_regs());
+  rd_state->next_hover_regs_slot = slot;
 }
 
 internal RD_Regs *
 rd_get_hover_regs(void)
 {
   return rd_state->hover_regs;
+}
+
+internal void
+rd_open_ctx_menu(UI_Key anchor_box_key, Vec2F32 anchor_box_off, RD_RegSlot slot)
+{
+  RD_Window *window = rd_window_from_handle(rd_regs()->window);
+  if(window != 0)
+  {
+    ui_ctx_menu_open(rd_state->ctx_menu_key, anchor_box_key, anchor_box_off);
+    arena_clear(window->ctx_menu_arena);
+    window->ctx_menu_regs = rd_regs_copy(window->ctx_menu_arena, rd_regs());
+    window->ctx_menu_regs_slot = slot;
+  }
 }
 
 ////////////////////////////////
@@ -1686,6 +1701,71 @@ rd_entity_from_name_and_kind(String8 string, RD_EntityKind kind)
       break;
     }
   }
+  return result;
+}
+
+////////////////////////////////
+//~ rjf: Control Entity Info Extraction
+
+internal Vec4F32
+rd_rgba_from_ctrl_entity(CTRL_Entity *entity)
+{
+  Vec4F32 result = rd_rgba_from_theme_color(RD_ThemeColor_Text);
+  if(entity->rgba != 0)
+  {
+    result = rgba_from_u32(entity->rgba);
+  }
+  if(entity->rgba == 0) switch(entity->kind)
+  {
+    default:{}break;
+    case CTRL_EntityKind_Thread:
+    {
+      CTRL_Entity *process = ctrl_entity_ancestor_from_kind(entity, CTRL_EntityKind_Process);
+      CTRL_Entity *main_thread = ctrl_entity_child_from_kind(process, CTRL_EntityKind_Thread);
+      if(main_thread != entity)
+      {
+        result = rd_rgba_from_theme_color(RD_ThemeColor_Thread1);
+      }
+      else
+      {
+        result = rd_rgba_from_theme_color(RD_ThemeColor_Thread0);
+      }
+    }break;
+  }
+  return result;
+}
+
+internal String8
+rd_name_from_ctrl_entity(Arena *arena, CTRL_Entity *entity)
+{
+  String8 string = entity->string;
+  if(string.size == 0)
+  {
+    string = str8_lit("unnamed");
+  }
+  return string;
+}
+
+internal DR_FancyStringList
+rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, Vec4F32 secondary_color, F32 size)
+{
+  DR_FancyStringList result = {0};
+  RD_IconKind icon_kind = RD_IconKind_Null;
+  Vec4F32 color = rd_rgba_from_ctrl_entity(entity);
+  switch(entity->kind)
+  {
+    default:{}break;
+    case CTRL_EntityKind_Thread:  {icon_kind = RD_IconKind_Thread;}break;
+    case CTRL_EntityKind_Process: {icon_kind = RD_IconKind_Threads;}break;
+    case CTRL_EntityKind_Module:  {icon_kind = RD_IconKind_Module;}break;
+  }
+  if(icon_kind != RD_IconKind_Null)
+  {
+    dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Icons), size, secondary_color, rd_icon_kind_text_table[icon_kind]);
+  }
+  dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), size, secondary_color, str8_lit(" "));
+  String8 name = rd_name_from_ctrl_entity(arena, entity);
+  dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), size, color, name);
   return result;
 }
 
@@ -2584,6 +2664,10 @@ rd_window_open(Vec2F32 size, OS_Handle preferred_monitor, RD_CfgSrc cfg_src)
   }
   window->r = r_window_equip(window->os);
   window->ui = ui_state_alloc();
+  window->ctx_menu_arena = arena_alloc();
+  window->ctx_menu_regs = push_array(window->ctx_menu_arena, RD_Regs, 1);
+  window->ctx_menu_input_buffer_size = KB(4);
+  window->ctx_menu_input_buffer = push_array(window->arena, U8, window->ctx_menu_input_buffer_size);
   window->code_ctx_menu_arena = arena_alloc();
   window->hover_eval_arena = arena_alloc();
   window->autocomp_lister_params_arena = arena_alloc();
@@ -2928,6 +3012,109 @@ rd_window_frame(RD_Window *ws)
     }
     
     ////////////////////////////
+    //- rjf: rich hover tooltips
+    //
+    if(rd_state->hover_regs_slot != RD_RegSlot_Null) UI_Tooltip
+    {
+      Temp scratch = scratch_begin(0, 0);
+      RD_Palette(RD_PaletteCode_Floating) switch(rd_state->hover_regs_slot)
+      {
+        default:{}break;
+        
+        //- rjf: thread tooltips
+        case RD_RegSlot_Thread:
+        {
+          // rjf: unpack
+          DI_Scope *di_scope = di_scope_open();
+          CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->thread);
+          U64 rip_vaddr = d_query_cached_rip_from_thread(thread);
+          Arch arch = thread->arch;
+          String8 arch_str = string_from_arch(arch);
+          DR_FancyStringList fstrs = rd_title_fstrs_from_ctrl_entity(scratch.arena, thread,
+                                                                     rd_rgba_from_theme_color(RD_ThemeColor_TextWeak),
+                                                                     ui_top_font_size());
+          
+          // TODO(rjf): @msgs show stop info (just icon or shortened description)
+          
+          // rjf: title
+          UI_PrefWidth(ui_children_sum(1)) UI_Row UI_PrefWidth(ui_text_dim(5, 1))
+          {
+            UI_Box *box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
+            ui_box_equip_display_fancy_strings(box, &fstrs);
+            ui_spacer(ui_em(0.5f, 1.f));
+            UI_FontSize(ui_top_font_size() - 1.f)
+              UI_CornerRadius(ui_top_font_size()*0.5f)
+              RD_Palette(RD_PaletteCode_NeutralPopButton)
+            {
+              UI_FlagsAdd(UI_BoxFlag_DrawTextWeak|UI_BoxFlag_DrawBorder) ui_label(arch_str);
+              ui_spacer(ui_em(0.5f, 1.f));
+              UI_FlagsAdd(UI_BoxFlag_DrawTextWeak|UI_BoxFlag_DrawBorder) ui_labelf("TID: %i", (U32)thread->id);
+            }
+          }
+          
+          ui_spacer(ui_em(1.5f, 1.f));
+          
+          // rjf: unwind
+          CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, CTRL_EntityKind_Process);
+          CTRL_Unwind base_unwind = d_query_cached_unwind_from_thread(thread);
+          D_Unwind rich_unwind = d_unwind_from_ctrl_unwind(scratch.arena, di_scope, process, &base_unwind);
+          for(U64 idx = 0; idx < rich_unwind.frames.concrete_frame_count; idx += 1)
+          {
+            D_UnwindFrame *f = &rich_unwind.frames.v[idx];
+            RDI_Parsed *rdi = f->rdi;
+            RDI_Procedure *procedure = f->procedure;
+            U64 rip_vaddr = regs_rip_from_arch_block(thread->arch, f->regs);
+            CTRL_Entity *module = ctrl_module_from_process_vaddr(process, rip_vaddr);
+            String8 module_name = module == &ctrl_entity_nil ? str8_lit("???") : str8_skip_last_slash(module->string);
+            
+            // rjf: inline frames
+            for(D_UnwindInlineFrame *fin = f->last_inline_frame; fin != 0; fin = fin->prev)
+              UI_PrefWidth(ui_children_sum(1)) UI_Row
+            {
+              String8 name = {0};
+              name.str = rdi_string_from_idx(rdi, fin->inline_site->name_string_idx, &name.size);
+              UI_TextAlignment(UI_TextAlign_Left) RD_Font(RD_FontSlot_Code) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_em(12.f, 1)) ui_labelf("0x%I64x", rip_vaddr);
+              RD_Font(RD_FontSlot_Code) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_text_dim(10, 1)) ui_label(str8_lit("[inlined]"));
+              if(name.size != 0)
+              {
+                RD_Font(RD_FontSlot_Code) UI_PrefWidth(ui_text_dim(10, 1))
+                {
+                  rd_code_label(1.f, 0, rd_rgba_from_theme_color(RD_ThemeColor_CodeSymbol), name);
+                }
+              }
+              else
+              {
+                RD_Font(RD_FontSlot_Code) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_text_dim(10, 1)) ui_labelf("[??? in %S]", module_name);
+              }
+            }
+            
+            // rjf: concrete frame
+            UI_PrefWidth(ui_children_sum(1)) UI_Row
+            {
+              String8 name = {0};
+              name.str = rdi_name_from_procedure(rdi, procedure, &name.size);
+              UI_TextAlignment(UI_TextAlign_Left) RD_Font(RD_FontSlot_Code) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_em(12.f, 1)) ui_labelf("0x%I64x", rip_vaddr);
+              if(name.size != 0)
+              {
+                RD_Font(RD_FontSlot_Code) UI_PrefWidth(ui_text_dim(10, 1))
+                {
+                  rd_code_label(1.f, 0, rd_rgba_from_theme_color(RD_ThemeColor_CodeSymbol), name);
+                }
+              }
+              else
+              {
+                RD_Font(RD_FontSlot_Code) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_text_dim(10, 1)) ui_labelf("[??? in %S]", module_name);
+              }
+            }
+          }
+          
+          di_scope_close(di_scope);
+        }break;
+      }
+      scratch_end(scratch);
+    }
+    
+    ////////////////////////////
     //- rjf: drag/drop visualization tooltips
     //
     if(rd_drag_is_active() && window_is_focused)
@@ -2941,7 +3128,7 @@ rd_window_frame(RD_Window *ws)
       RD_View *view = rd_view_from_handle(rd_state->drag_drop_regs->view);
       {
         //- rjf: tab dragging
-        if(!rd_view_is_nil(view))
+        if(rd_state->drag_drop_regs_slot == RD_RegSlot_View && !rd_view_is_nil(view))
         {
           UI_Size main_width = ui_top_pref_width();
           UI_Size main_height = ui_top_pref_height();
@@ -2987,7 +3174,7 @@ rd_window_frame(RD_Window *ws)
         }
         
         //- rjf: entity dragging
-        else if(!rd_entity_is_nil(entity)) UI_Tooltip
+        else if(rd_state->drag_drop_regs_slot == RD_RegSlot_Entity && !rd_entity_is_nil(entity)) UI_Tooltip
         {
           ui_set_next_pref_width(ui_children_sum(1));
           UI_Row UI_HeightFill
@@ -3119,7 +3306,21 @@ rd_window_frame(RD_Window *ws)
     }
     
     ////////////////////////////
+    //- rjf: top-level context menu
+    //
+    RD_Palette(RD_PaletteCode_Floating) UI_CtxMenu(rd_state->ctx_menu_key)
+      UI_PrefWidth(ui_em(40.f, 1.f))
+      RD_Palette(RD_PaletteCode_ImplicitButton)
+    {
+      Temp scratch = scratch_begin(0, 0);
+      
+      scratch_end(scratch);
+    }
+    
+    ////////////////////////////
     //- rjf: universal ctx menus
+    //
+    // TODO(rjf): @msgs to-be-gone:
     //
     RD_Palette(RD_PaletteCode_Floating)
     {
@@ -6613,7 +6814,7 @@ rd_window_frame(RD_Window *ws)
                     RD_RegsScope(.panel = rd_handle_from_panel(panel),
                                  .view = rd_handle_from_view(view))
                     {
-                      rd_drag_begin();
+                      rd_drag_begin(RD_RegSlot_View);
                     }
                   }
                   else if(ui_right_clicked(sig))
@@ -8324,26 +8525,6 @@ rd_theme_color_from_txt_token_kind(TXT_TokenKind kind)
   return color;
 }
 
-internal Vec4F32
-rd_rgba_from_thread(CTRL_Entity *thread)
-{
-  Vec4F32 result = rd_rgba_from_theme_color(RD_ThemeColor_Thread0);
-  if(thread->rgba != 0)
-  {
-    result = rgba_from_u32(thread->rgba);
-  }
-  else
-  {
-    CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, CTRL_EntityKind_Process);
-    CTRL_Entity *main_thread = ctrl_entity_child_from_kind(process, CTRL_EntityKind_Thread);
-    if(main_thread != thread)
-    {
-      result = rd_rgba_from_theme_color(RD_ThemeColor_Thread1);
-    }
-  }
-  return result;
-}
-
 //- rjf: code -> palette
 
 internal UI_Palette *
@@ -9426,6 +9607,7 @@ rd_init(CmdLine *cmdln)
   rd_state->entities_root = rd_entity_alloc(&d_nil_entity, RD_EntityKind_Root);
   rd_state->key_map_arena = arena_alloc();
   rd_state->popup_arena = arena_alloc();
+  rd_state->ctx_menu_key        = ui_key_from_string(ui_key_zero(), str8_lit("top_level_ctx_menu"));
   rd_state->code_ctx_menu_key   = ui_key_from_string(ui_key_zero(), str8_lit("_code_ctx_menu_"));
   rd_state->entity_ctx_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("_entity_ctx_menu_"));
   rd_state->tab_ctx_menu_key    = ui_key_from_string(ui_key_zero(), str8_lit("_tab_ctx_menu_"));
@@ -9590,11 +9772,13 @@ rd_frame(void)
   if(rd_state->next_hover_regs != 0)
   {
     rd_state->hover_regs = rd_regs_copy(rd_frame_arena(), rd_state->next_hover_regs);
+    rd_state->hover_regs_slot = rd_state->next_hover_regs_slot;
     rd_state->next_hover_regs = 0;
   }
   else
   {
     rd_state->hover_regs = push_array(rd_frame_arena(), RD_Regs, 1);
+    rd_state->hover_regs_slot = RD_RegSlot_Null;
   }
   
   //////////////////////////////
@@ -10288,6 +10472,7 @@ rd_frame(void)
                 r_window_unequip(ws->os, ws->r);
                 os_window_close(ws->os);
                 arena_release(ws->query_cmd_arena);
+                arena_release(ws->ctx_menu_arena);
                 arena_release(ws->code_ctx_menu_arena);
                 arena_release(ws->hover_eval_arena);
                 arena_release(ws->autocomp_lister_params_arena);

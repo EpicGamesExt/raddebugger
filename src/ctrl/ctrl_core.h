@@ -38,22 +38,12 @@ struct CTRL_HandleList
 };
 
 ////////////////////////////////
-//~ rjf: Entity Types
+//~ rjf: Generated Code
 
-typedef enum CTRL_EntityKind
-{
-  CTRL_EntityKind_Null,
-  CTRL_EntityKind_Root,
-  
-  CTRL_EntityKind_Machine,
-  CTRL_EntityKind_Process,
-  CTRL_EntityKind_Thread,
-  CTRL_EntityKind_Module,
-  CTRL_EntityKind_EntryPoint,
-  CTRL_EntityKind_DebugInfoPath,
-  CTRL_EntityKind_COUNT
-}
-CTRL_EntityKind;
+#include "generated/ctrl.meta.h"
+
+////////////////////////////////
+//~ rjf: Entity Types
 
 typedef struct CTRL_Entity CTRL_Entity;
 struct CTRL_Entity
@@ -309,11 +299,6 @@ enum
   CTRL_EvalSpaceKind_Entity = E_SpaceKind_FirstUserDefined,
   CTRL_EvalSpaceKind_Meta,
 };
-
-////////////////////////////////
-//~ rjf: Generated Code
-
-#include "generated/ctrl.meta.h"
 
 ////////////////////////////////
 //~ rjf: Message Types

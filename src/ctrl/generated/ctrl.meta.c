@@ -4,6 +4,18 @@
 //- GENERATED CODE
 
 C_LINKAGE_BEGIN
+String8 ctrl_entity_kind_display_string_table[8] =
+{
+{0},
+str8_lit_comp("Root"),
+str8_lit_comp("Machine"),
+str8_lit_comp("Process"),
+str8_lit_comp("Thread"),
+str8_lit_comp("Module"),
+str8_lit_comp("EntryPoint"),
+str8_lit_comp("DebugInfoPath"),
+};
+
 U32 ctrl_exception_code_kind_code_table[38] =
 {
 0,

@@ -756,7 +756,7 @@ rd_entity_desc_button(RD_Entity *entity, FuzzyMatchRangeList *name_matches, Stri
     // rjf: drag+drop
     else if(ui_dragging(sig) && !contains_2f32(box->rect, ui_mouse()))
     {
-      RD_RegsScope(.entity = rd_handle_from_entity(entity)) rd_drag_begin();
+      RD_RegsScope(.entity = rd_handle_from_entity(entity)) rd_drag_begin(RD_RegSlot_Entity);
     }
   }
   scratch_end(scratch);
@@ -1059,7 +1059,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             U64 thread_rip_voff = ctrl_voff_from_vaddr(module, thread_rip_vaddr);
             
             // rjf: thread info => color
-            Vec4F32 color = rd_rgba_from_thread(thread);
+            Vec4F32 color = rd_rgba_from_ctrl_entity(thread);
             {
               if(unwind_count != 0)
               {
@@ -1136,30 +1136,18 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
               }
             }
             
-            // rjf: hover tooltips
+            // rjf: interactions 
             if(ui_hovering(thread_sig) && !rd_drag_is_active())
             {
-              // TODO(rjf): @msgs rd_entity_tooltips(thread); set rich hover info here!!!
+              RD_RegsScope(.thread = thread->handle) rd_set_hover_regs(RD_RegSlot_Thread);
             }
-            
-            // rjf: ip right-click menu
             if(ui_right_clicked(thread_sig))
             {
-              // TODO(rjf): @msgs top-level regs-based ctx menu here!!!!
-              // RD_Handle handle = rd_handle_from_entity(thread);
-              // ui_ctx_menu_open(rd_state->entity_ctx_menu_key, thread_box->key, v2f32(0, thread_box->rect.y1-thread_box->rect.y0));
-              // RD_Window *window = rd_window_from_handle(rd_regs()->window);
-              // window->entity_ctx_menu_entity = handle;
+              RD_RegsScope(.thread = thread->handle) rd_open_ctx_menu(thread_box->key, v2f32(0, thread_box->rect.y1-thread_box->rect.y0), RD_RegSlot_Thread);
             }
-            
-            // rjf: drag start
             if(ui_dragging(thread_sig) && !contains_2f32(thread_box->rect, ui_mouse()))
             {
-              // TODO(rjf): @msgs top-level regs-based drag/drop here!!!
-              // RD_DragDropPayload payload = {0};
-              // payload.key = thread_box->key;
-              // payload.entity = rd_handle_from_entity(thread);
-              // rd_drag_begin(&payload);
+              RD_RegsScope(.thread = thread->handle) rd_drag_begin(RD_RegSlot_Thread);
             }
           }
         }
@@ -1215,7 +1203,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             U64 thread_rip_voff = ctrl_voff_from_vaddr(module, thread_rip_vaddr);
             
             // rjf: thread info => color
-            Vec4F32 color = rd_rgba_from_thread(thread);
+            Vec4F32 color = rd_rgba_from_ctrl_entity(thread);
             {
               if(unwind_count != 0)
               {
@@ -1290,37 +1278,23 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
               }
             }
             
-            // rjf: hover tooltips
+            // rjf: interactions
             if(ui_hovering(thread_sig) && !rd_drag_is_active())
             {
-              // TODO(rjf): @msgs rd_entity_tooltips(thread); set rich hover info here!!!
+              RD_RegsScope(.thread = thread->handle) rd_set_hover_regs(RD_RegSlot_Thread);
             }
-            
-            // rjf: ip right-click menu
             if(ui_right_clicked(thread_sig))
             {
-              // TODO(rjf): @msgs top-level regs-based ctx menu here!!!!
-              // RD_Handle handle = rd_handle_from_entity(thread);
-              // ui_ctx_menu_open(rd_state->entity_ctx_menu_key, thread_box->key, v2f32(0, thread_box->rect.y1-thread_box->rect.y0));
-              // RD_Window *window = rd_window_from_handle(rd_regs()->window);
-              // window->entity_ctx_menu_entity = handle;
+              RD_RegsScope(.thread = thread->handle) rd_open_ctx_menu(thread_box->key, v2f32(0, thread_box->rect.y1-thread_box->rect.y0), RD_RegSlot_Thread);
             }
-            
-            // rjf: double click => select
+            if(ui_dragging(thread_sig) && !contains_2f32(thread_box->rect, ui_mouse()))
+            {
+              RD_RegsScope(.thread = thread->handle) rd_drag_begin(RD_RegSlot_Thread);
+            }
             if(ui_double_clicked(thread_sig))
             {
               rd_cmd(RD_CmdKind_SelectThread, .thread = thread->handle);
               ui_kill_action();
-            }
-            
-            // rjf: drag start
-            if(ui_dragging(thread_sig) && !contains_2f32(thread_box->rect, ui_mouse()))
-            {
-              // TODO(rjf): @msgs top-level regs-based drag/drop here!!!
-              // RD_DragDropPayload payload = {0};
-              // payload.key = thread_box->key;
-              // payload.entity = rd_handle_from_entity(thread);
-              // rd_drag_begin(&payload);
             }
           }
           
@@ -1394,7 +1368,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             // rjf: drag start
             if(ui_dragging(bp_sig) && !contains_2f32(bp_box->rect, ui_mouse()))
             {
-              RD_RegsScope(.entity = rd_handle_from_entity(bp)) rd_drag_begin();
+              RD_RegsScope(.entity = rd_handle_from_entity(bp)) rd_drag_begin(RD_RegSlot_Entity);
             }
             
             // rjf: bp right-click menu
@@ -1450,7 +1424,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             // rjf: drag start
             if(ui_dragging(pin_sig) && !contains_2f32(pin_box->rect, ui_mouse()))
             {
-              RD_RegsScope(.entity = rd_handle_from_entity(pin)) rd_drag_begin();
+              RD_RegsScope(.entity = rd_handle_from_entity(pin)) rd_drag_begin(RD_RegSlot_Entity);
             }
             
             // rjf: watch right-click menu
@@ -1677,7 +1651,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
               UI_Signal sig = ui_buttonf("%S###pin_nub", rd_icon_kind_text_table[RD_IconKind_Pin]);
               if(ui_dragging(sig) && !contains_2f32(sig.box->rect, ui_mouse()))
               {
-                RD_RegsScope(.entity = rd_handle_from_entity(pin)) rd_drag_begin();
+                RD_RegsScope(.entity = rd_handle_from_entity(pin)) rd_drag_begin(RD_RegSlot_Entity);
               }
               if(ui_right_clicked(sig))
               {
@@ -1957,7 +1931,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
                    .dbgi_key    = lines->first->v.dbgi_key,
                    .voff_range  = lines->first->v.voff_range)
       {
-        rd_set_hover_regs();
+        rd_set_hover_regs(RD_RegSlot_Null);
       }
     }
   }

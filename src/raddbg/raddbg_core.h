@@ -648,6 +648,16 @@ struct RD_Window
   B32 menu_bar_key_held;
   B32 menu_bar_focus_press_started;
   
+  // rjf: context menu state
+  Arena *ctx_menu_arena;
+  RD_Regs *ctx_menu_regs;
+  RD_RegSlot ctx_menu_regs_slot;
+  U8 *ctx_menu_input_buffer;
+  U64 ctx_menu_input_buffer_size;
+  U64 ctx_menu_input_string_size;
+  TxtPt ctx_menu_input_cursor;
+  TxtPt ctx_menu_input_mark;
+  
   // rjf: code context menu state
   Arena *code_ctx_menu_arena;
   String8 code_ctx_menu_file_path;
@@ -696,7 +706,7 @@ struct RD_Window
   F32 query_view_selected_t;
   F32 query_view_t;
   
-  // rjf: hover eval stable state
+  // rjf: hover eval state
   B32 hover_eval_focused;
   TxtPt hover_eval_txt_cursor;
   TxtPt hover_eval_txt_mark;
@@ -705,12 +715,8 @@ struct RD_Window
   Arena *hover_eval_arena;
   Vec2F32 hover_eval_spawn_pos;
   String8 hover_eval_string;
-  
-  // rjf: hover eval timer
   U64 hover_eval_first_frame_idx;
   U64 hover_eval_last_frame_idx;
-  
-  // rjf: hover eval params
   String8 hover_eval_file_path;
   TxtPt hover_eval_file_pt;
   U64 hover_eval_vaddr;
@@ -829,7 +835,9 @@ struct RD_State
   
   // rjf: contextual hover info
   RD_Regs *hover_regs;
+  RD_RegSlot hover_regs_slot;
   RD_Regs *next_hover_regs;
+  RD_RegSlot next_hover_regs_slot;
   
   // rjf: icon texture
   R_Handle icon_texture;
@@ -838,9 +846,13 @@ struct RD_State
   Arena *current_path_arena;
   String8 current_path;
   
+  // rjf: fixed ui keys
+  UI_Key ctx_menu_key;
+  
   // rjf: drag/drop state
   Arena *drag_drop_arena;
   RD_Regs *drag_drop_regs;
+  RD_RegSlot drag_drop_regs_slot;
   RD_DragDropState drag_drop_state;
   
   //-
@@ -1103,12 +1115,14 @@ internal B32 rd_prefer_dasm_from_window(RD_Window *window);
 //~ rjf: Global Cross-Window UI Interaction State Functions
 
 internal B32 rd_drag_is_active(void);
-internal void rd_drag_begin(void);
+internal void rd_drag_begin(RD_RegSlot slot);
 internal B32 rd_drag_drop(void);
 internal void rd_drag_kill(void);
 
-internal void rd_set_hover_regs(void);
+internal void rd_set_hover_regs(RD_RegSlot slot);
 internal RD_Regs *rd_get_hover_regs(void);
+
+internal void rd_open_ctx_menu(UI_Key anchor_box_key, Vec2F32 anchor_box_off, RD_RegSlot slot);
 
 ////////////////////////////////
 //~ rjf: Name Allocation
@@ -1158,6 +1172,13 @@ internal RD_Entity *rd_machine_entity_from_machine_id(CTRL_MachineID machine_id)
 internal RD_Entity *rd_entity_from_ctrl_handle(CTRL_Handle handle);
 internal RD_Entity *rd_entity_from_ctrl_id(CTRL_MachineID machine_id, U32 id);
 internal RD_Entity *rd_entity_from_name_and_kind(String8 string, RD_EntityKind kind);
+
+////////////////////////////////
+//~ rjf: Control Entity Info Extraction
+
+internal Vec4F32 rd_rgba_from_ctrl_entity(CTRL_Entity *entity);
+internal String8 rd_name_from_ctrl_entity(Arena *arena, CTRL_Entity *entity);
+internal DR_FancyStringList rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, Vec4F32 secondary_color, F32 size);
 
 ////////////////////////////////
 //~ rjf: Evaluation Spaces
@@ -1309,7 +1330,6 @@ internal String8List rd_cmd_name_list_from_binding(Arena *arena, RD_Binding bind
 //- rjf: colors
 internal Vec4F32 rd_rgba_from_theme_color(RD_ThemeColor color);
 internal RD_ThemeColor rd_theme_color_from_txt_token_kind(TXT_TokenKind kind);
-internal Vec4F32 rd_rgba_from_thread(CTRL_Entity *thread);
 
 //- rjf: code -> palette
 internal UI_Palette *rd_palette_from_code(RD_PaletteCode code);
