@@ -52,8 +52,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
   for(RD_Cmd *cmd = 0; rd_next_cmd(&cmd);)
   {
     // rjf: mismatched window/panel => skip
-    if(!rd_handle_match(rd_regs()->window, cmd->regs->window) ||
-       !rd_handle_match(rd_regs()->panel, cmd->regs->panel))
+    if(!rd_handle_match(rd_regs()->view, cmd->regs->view))
     {
       continue;
     }
@@ -4665,8 +4664,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(target)
   for(RD_Cmd *cmd = 0; rd_next_cmd(&cmd);)
   {
     // rjf: mismatched window/panel => skip
-    if(!rd_handle_match(rd_regs()->window, cmd->params.window) ||
-       !rd_handle_match(rd_regs()->panel, cmd->params.panel))
+    if(!rd_handle_match(rd_regs()->view, cmd->regs->view))
     {
       continue;
     }
@@ -5148,8 +5146,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(file_path_map)
   for(RD_Cmd *cmd = 0; rd_next_cmd(&cmd);)
   {
     // rjf: mismatched window/panel => skip
-    if(!rd_handle_match(rd_regs()->window, cmd->regs->window) ||
-       !rd_handle_match(rd_regs()->panel, cmd->regs->panel))
+    if(!rd_handle_match(rd_regs()->view, cmd->regs->view))
     {
       continue;
     }
@@ -5765,8 +5762,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(modules)
   for(RD_Cmd *cmd = 0; rd_next_cmd(&cmd);)
   {
     // rjf: mismatched window/panel => skip
-    if(!rd_handle_match(rd_regs()->window, cmd->regs->window) ||
-       !rd_handle_match(rd_regs()->panel, cmd->regs->panel))
+    if(!rd_handle_match(rd_regs()->view, cmd->regs->view))
     {
       continue;
     }
@@ -6219,8 +6215,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(pending_file)
   for(RD_Cmd *cmd = 0; rd_next_cmd(&cmd);)
   {
     // rjf: mismatched window/panel => skip
-    if(!rd_handle_match(rd_regs()->window, cmd->regs->window) ||
-       !rd_handle_match(rd_regs()->panel, cmd->regs->panel))
+    if(!rd_handle_match(rd_regs()->view, cmd->regs->view))
     {
       continue;
     }
@@ -6357,8 +6352,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(text)
   for(RD_Cmd *cmd = 0; rd_next_cmd(&cmd);)
   {
     // rjf: mismatched window/panel => skip
-    if(!rd_handle_match(rd_regs()->window, cmd->regs->window) ||
-       !rd_handle_match(rd_regs()->panel, cmd->regs->panel))
+    if(!rd_handle_match(rd_regs()->view, cmd->regs->view))
     {
       continue;
     }
@@ -6667,8 +6661,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(disasm)
   for(RD_Cmd *cmd = 0; rd_next_cmd(&cmd);)
   {
     // rjf: mismatched window/panel => skip
-    if(!rd_handle_match(rd_regs()->window, cmd->regs->window) ||
-       !rd_handle_match(rd_regs()->panel, cmd->regs->panel))
+    if(!rd_handle_match(rd_regs()->view, cmd->regs->view))
     {
       continue;
     }
@@ -6901,8 +6894,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(memory)
   for(RD_Cmd *cmd = 0; rd_next_cmd(&cmd);)
   {
     // rjf: mismatched window/panel => skip
-    if(!rd_handle_match(rd_regs()->window, cmd->regs->window) ||
-       !rd_handle_match(rd_regs()->panel, cmd->regs->panel))
+    if(!rd_handle_match(rd_regs()->view, cmd->regs->view))
     {
       continue;
     }
