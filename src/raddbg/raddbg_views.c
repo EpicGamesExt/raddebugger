@@ -5455,7 +5455,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(breakpoints)
   if(!wv->initialized)
   {
     rd_watch_view_init(wv, RD_WatchViewFillKind_Breakpoints);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member, 0.25f, .string = str8_lit("label"),     .display_string = str8_lit("Label"), .dequote_string = 1, .is_non_code = 1);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member, 0.25f, .string = str8_lit("label"),     .display_string = str8_lit("Label"), .dequote_string = 1);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member, 0.35f, .string = str8_lit("location"),  .display_string = str8_lit("Location"), .dequote_string = 1, .is_non_code = 1);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member, 0.20f, .string = str8_lit("condition"), .display_string = str8_lit("Condition"), .dequote_string = 1);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member, 0.10f, .string = str8_lit("enabled"),   .display_string = str8_lit("Enabled"), .view_rule = str8_lit("checkbox"));
@@ -5475,7 +5475,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(watch_pins)
   if(!wv->initialized)
   {
     rd_watch_view_init(wv, RD_WatchViewFillKind_WatchPins);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member, 0.5f, .string = str8_lit("Label"), .dequote_string = 1, .is_non_code = 1);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member, 0.5f, .string = str8_lit("Label"), .dequote_string = 1);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member, 0.5f, .string = str8_lit("Location"), .dequote_string = 1, .is_non_code = 1);
   }
   rd_watch_view_build(wv, 0, 10, rect);

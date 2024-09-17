@@ -10186,7 +10186,7 @@ rd_frame(void)
             RD_ViewRuleInfo *view_rule_info = rd_view_rule_info_from_string(cmd->name);
             if(view_rule_info != &rd_nil_view_rule_info)
             {
-              rd_cmd(RD_CmdKind_OpenTab, .params_tree = md_tree_from_string(scratch.arena, cmd->name)->first);
+              rd_cmd(RD_CmdKind_OpenTab, .string = str8_zero(), .params_tree = md_tree_from_string(scratch.arena, cmd->name)->first);
             }
           }break;
           
