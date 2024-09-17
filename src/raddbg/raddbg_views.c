@@ -190,7 +190,9 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
     {
       S64 line_num = visible_line_num_range.min;
       U64 line_idx = visible_line_num_range.min-1;
-      for(U64 visible_line_idx = 0; visible_line_idx < visible_line_count; visible_line_idx += 1, line_idx += 1, line_num += 1)
+      for(U64 visible_line_idx = 0;
+          visible_line_idx < visible_line_count && line_idx < text_info->lines_count;
+          visible_line_idx += 1, line_idx += 1, line_num += 1)
       {
         code_slice_params.line_text[visible_line_idx]   = str8_substr(text_data, text_info->lines_ranges[line_idx]);
         code_slice_params.line_ranges[visible_line_idx] = text_info->lines_ranges[line_idx];
@@ -512,7 +514,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
   //////////////////////////////
   //- rjf: do goto line
   //
-  if(cv->goto_line_num != 0)
+  if(cv->goto_line_num != 0 && text_info->lines_count != 0)
   {
     S64 line_num = cv->goto_line_num;
     cv->goto_line_num = 0;
@@ -595,7 +597,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
   //
   {
     // rjf: contain => snap
-    if(cv->contain_cursor)
+    if(cv->contain_cursor && text_info->lines_count != 0)
     {
       cv->contain_cursor = 0;
       snap[Axis2_X] = 1;
@@ -603,7 +605,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
     }
     
     // rjf: center cursor
-    if(cv->center_cursor)
+    if(cv->center_cursor && text_info->lines_count != 0)
     {
       cv->center_cursor = 0;
       String8 cursor_line = str8_substr(text_data, text_info->lines_ranges[rd_regs()->cursor.line-1]);
@@ -6284,7 +6286,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(pending_file)
     hs_scope_close(hs_scope);
   }
   
-  //- rjf: if entity is ready, dispatch all deferred commands
+  //- rjf: if file is ready, dispatch all deferred commands
   if(file_is_ready)
   {
     for(RD_CmdNode *cmd_node = pves->deferred_cmds.first; cmd_node != 0; cmd_node = cmd_node->next)
@@ -6296,14 +6298,14 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(pending_file)
     MemoryZeroStruct(&pves->deferred_cmds);
   }
   
-  //- rjf: if entity is ready, move params tree to scratch for new command
+  //- rjf: if file is ready, move params tree to scratch for new command
   MD_Node *params_copy = &md_nil_node;
   if(file_is_ready)
   {
     params_copy = md_tree_copy(scratch.arena, params);
   }
   
-  //- rjf: if entity is ready, replace this view with the correct one, if any viewer is specified
+  //- rjf: if file is ready, replace this view with the correct one, if any viewer is specified
   if(file_is_ready && viewer_kind != RD_ViewRuleKind_Null)
   {
     RD_ViewRuleInfo *view_rule_info = rd_view_rule_info_from_kind(viewer_kind);
@@ -6446,7 +6448,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(text)
   //- rjf: build code contents
   //
   DI_KeyList dbgi_keys = {0};
-  if(!file_is_missing && key_has_data)
+  if(!file_is_missing)
   {
     RD_CodeViewBuildResult result = rd_code_view_build(scratch.arena, cv, RD_CodeViewBuildFlag_All, code_area_rect, data, &info, 0, r1u64(0, 0), di_key_zero());
     dbgi_keys = result.dbgi_keys;
