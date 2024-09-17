@@ -9421,12 +9421,6 @@ rd_init(CmdLine *cmdln)
   rd_state->entities_root = rd_entity_alloc(&d_nil_entity, RD_EntityKind_Root);
   rd_state->key_map_arena = arena_alloc();
   rd_state->popup_arena = arena_alloc();
-#if 0 // TODO(rjf): @msgs
-  rd_state->view_spec_table_size = 256;
-  rd_state->view_spec_table = push_array(arena, RD_ViewSpec *, rd_state->view_spec_table_size);
-  rd_state->view_rule_spec_table_size = 1024;
-  rd_state->view_rule_spec_table = push_array(arena, RD_ViewRuleSpec *, d_state->view_rule_spec_table_size);
-#endif
   rd_state->code_ctx_menu_key   = ui_key_from_string(ui_key_zero(), str8_lit("_code_ctx_menu_"));
   rd_state->entity_ctx_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("_entity_ctx_menu_"));
   rd_state->tab_ctx_menu_key    = ui_key_from_string(ui_key_zero(), str8_lit("_tab_ctx_menu_"));
@@ -9445,22 +9439,6 @@ rd_init(CmdLine *cmdln)
     rd_entity_equip_ctrl_handle(local_machine, ctrl_handle_make(CTRL_MachineID_Local, dmn_handle_zero()));
     rd_entity_equip_name(local_machine, str8_lit("This PC"));
   }
-  
-  // rjf: register gfx layer views
-#if 0 // TODO(rjf): @msgs
-  {
-    RD_ViewSpecInfoArray array = {rd_gfx_view_kind_spec_info_table, ArrayCount(rd_gfx_view_kind_spec_info_table)};
-    rd_register_view_specs(array);
-  }
-#endif
-  
-  // rjf: register gfx layer view rules
-#if 0 // TODO(rjf): @msgs
-  {
-    RD_ViewRuleSpecInfoArray array = {rd_gfx_view_rule_spec_info_table, ArrayCount(rd_gfx_view_rule_spec_info_table)};
-    rd_register_view_rule_specs(array);
-  }
-#endif
   
   // rjf: set up user / project paths
   {
@@ -14144,7 +14122,7 @@ rd_frame(void)
           }
           
           // rjf: no stop-causing thread, but have selected thread? -> snap to selected
-          CTRL_Entity *selected_thread = &ctrl_entity_nil; // TODO(rjf): ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_base_regs()->thread);
+          CTRL_Entity *selected_thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_base_regs()->thread);
           if(thread == &ctrl_entity_nil && selected_thread != &ctrl_entity_nil)
           {
             rd_cmd(RD_CmdKind_FindThread);

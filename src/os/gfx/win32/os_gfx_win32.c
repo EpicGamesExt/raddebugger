@@ -314,6 +314,9 @@ os_w32_vkey_from_os_key(OS_Key key)
       vkey_table[OS_Key_Num7] = VK_NUMPAD7;
       vkey_table[OS_Key_Num8] = VK_NUMPAD8;
       vkey_table[OS_Key_Num9] = VK_NUMPAD9;
+      vkey_table[OS_Key_LeftMouseButton] = VK_LBUTTON;
+      vkey_table[OS_Key_MiddleMouseButton] = VK_MBUTTON;
+      vkey_table[OS_Key_RightMouseButton] = VK_RBUTTON;
     }
     result = vkey_table[key];
   }
@@ -1410,6 +1413,18 @@ os_get_modifiers(void)
     modifiers |= OS_Modifier_Alt;
   }
   return modifiers;
+}
+
+internal B32
+os_key_is_down(OS_Key key)
+{
+  B32 down = 0;
+  WPARAM vkey = os_w32_vkey_from_os_key(key);
+  if(GetKeyState(vkey) & 0x8000)
+  {
+    down = 1;
+  }
+  return down;
 }
 
 internal Vec2F32

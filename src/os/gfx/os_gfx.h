@@ -173,7 +173,8 @@ internal Vec2F32        os_dim_from_monitor(OS_Handle monitor);
 
 internal void           os_send_wakeup_event(void);
 internal OS_EventList   os_get_events(Arena *arena, B32 wait);
-internal OS_Modifiers  os_get_modifiers(void);
+internal OS_Modifiers   os_get_modifiers(void);
+internal B32            os_key_is_down(OS_Key key);
 internal Vec2F32        os_mouse_from_window(OS_Handle window);
 
 ////////////////////////////////

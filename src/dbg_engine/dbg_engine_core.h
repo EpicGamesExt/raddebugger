@@ -394,6 +394,7 @@ struct D_State
   D_BreakpointArray ctrl_last_run_extra_bps;
   U128 ctrl_last_run_param_state_hash;
   B32 ctrl_is_running;
+  B32 ctrl_thread_run_state;
   B32 ctrl_soft_halt_issued;
   Arena *ctrl_msg_arena;
   CTRL_MsgList ctrl_msgs;

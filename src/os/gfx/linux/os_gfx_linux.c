@@ -448,6 +448,12 @@ os_get_modifiers(void)
   return 0;
 }
 
+internal B32
+os_key_is_down(OS_Key key)
+{
+  return 0;
+}
+
 internal Vec2F32
 os_mouse_from_window(OS_Handle handle)
 {

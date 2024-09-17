@@ -1577,7 +1577,6 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
   D_EventList result = {0};
   d_state->frame_index += 1;
   d_state->frame_eval_memread_endt_us = os_now_microseconds() + 5000;
-  B32 ctrl_running_pre_tick = d_state->ctrl_is_running;
   
   //////////////////////////////
   //- rjf: sync with ctrl thread
@@ -1615,12 +1614,14 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
         case CTRL_EventKind_Started:
         {
           d_state->ctrl_is_running = 1;
+          d_state->ctrl_thread_run_state = 1;
         }break;
         
         case CTRL_EventKind_Stopped:
         {
           B32 should_snap = !(d_state->ctrl_soft_halt_issued);
           d_state->ctrl_is_running = 0;
+          d_state->ctrl_thread_run_state = 0;
           d_state->ctrl_soft_halt_issued = 0;
           
           // rjf: exception or unexpected trap -> push error
@@ -1680,7 +1681,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
         {
           // rjf: the first process? -> clear session output & reset all bp hit counts
           CTRL_EntityList existing_processes = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Process);
-          if(existing_processes.count == 0)
+          if(existing_processes.count == 1)
           {
             MTX_Op op = {r1u64(0, 0xffffffffffffffffull), str8_lit("[new session]\n")};
             mtx_push_op(d_state->output_log_key, op);
@@ -2563,7 +2564,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
     ctrl_msg_list_concat_in_place(&d_state->ctrl_msgs, &msgs_copy);
     if(d_state->ctrl_msgs.count != 0)
     {
-      if(!d_state->ctrl_soft_halt_issued && ctrl_running_pre_tick)
+      if(!d_state->ctrl_soft_halt_issued && d_state->ctrl_thread_run_state)
       {
         d_state->ctrl_soft_halt_issued = 1;
         ctrl_halt();

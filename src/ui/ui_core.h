@@ -625,6 +625,9 @@ struct UI_State
   //- rjf: main arena
   Arena *arena;
   
+  //- rjf: fixed keys
+  UI_Key external_key;
+  
   //- rjf: build arenas
   Arena *build_arenas[2];
   U64 build_index;

@@ -424,6 +424,7 @@ ui_state_alloc(void)
   Arena *arena = arena_alloc();
   UI_State *ui = push_array(arena, UI_State, 1);
   ui->arena = arena;
+  ui->external_key = ui_key_from_string(ui_key_zero(), str8_lit("###external_interaction_key###"));
   ui->build_arenas[0] = arena_alloc();
   ui->build_arenas[1] = arena_alloc();
   ui->drag_state_arena = arena_alloc();
@@ -829,6 +830,19 @@ ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, U
     if(n->v.kind == UI_EventKind_MouseMove)
     {
       ui_state->last_time_mousemoved_us = os_now_microseconds();
+    }
+  }
+  
+  //- rjf: detect external press & holds
+  for(EachEnumVal(UI_MouseButtonKind, k))
+  {
+    if(ui_key_match(ui_state->active_box_key[k], ui_key_zero()) && os_key_is_down(OS_Key_LeftMouseButton+k))
+    {
+      ui_state->active_box_key[k] = ui_state->external_key;
+    }
+    else if(ui_key_match(ui_state->active_box_key[k], ui_state->external_key) && !os_key_is_down(OS_Key_LeftMouseButton+k))
+    {
+      ui_state->active_box_key[k] = ui_key_zero();
     }
   }
   
@@ -1435,6 +1449,7 @@ ui_end_build(void)
   }
   
   //- rjf: hover cursor
+  if(!ui_key_match(ui_state->active_box_key[UI_MouseButtonKind_Left], ui_state->external_key))
   {
     UI_Box *hot = ui_box_from_key(ui_state->hot_box_key);
     UI_Box *active = ui_box_from_key(ui_state->active_box_key[UI_MouseButtonKind_Left]);
