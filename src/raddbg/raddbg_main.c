@@ -4,22 +4,10 @@
 ////////////////////////////////
 //~ rjf: Frontend/UI Pass Tasks
 //
+// [ ] ensure "prefer_disasm" is calculated correctly - disassembly-focused
+//     stepping
+//
 // [ ] empty user file causing failure to launch
-//
-// [ ] frontend entities vs. engine entities
-//  - currently, the engine has entities like "watch", and the frontend
-//    has entities like "windows", "panels", and "views".
-//  - because "watch" entities ideally have a hierarchical relationship
-//    with windows, panels, and views (enabling things like drag/drop
-//    from watch window -> tab, or tab -> watch window, trivially), it
-//    would be much better if all entities could collapse into engine
-//    entities.
-//  - now, the frontend requires various specialized resources for things
-//    like windows, so what I am thinking is that the engine just controls
-//    all of the stateful windows/panel/view/watch mechanisms, and then
-//    the frontend pure-functionally queries stuff like os/r handles
-//    on-demand, and then prunes them, immediate-mode cache style.
-//
 // [ ] transient view timeout releasing
 //
 // [ ] save view column pcts; generalize to being a first-class thing in
@@ -478,6 +466,19 @@
 //    commands can just be a spec * regs, and then the push-command API can
 //    just have ways of overriding regs values explicitly, when the codepath
 //    needs to be opinionated about which things are affected by which commands
+// [x] frontend entities vs. engine entities
+//  - currently, the engine has entities like "watch", and the frontend
+//    has entities like "windows", "panels", and "views".
+//  - because "watch" entities ideally have a hierarchical relationship
+//    with windows, panels, and views (enabling things like drag/drop
+//    from watch window -> tab, or tab -> watch window, trivially), it
+//    would be much better if all entities could collapse into engine
+//    entities.
+//  - now, the frontend requires various specialized resources for things
+//    like windows, so what I am thinking is that the engine just controls
+//    all of the stateful windows/panel/view/watch mechanisms, and then
+//    the frontend pure-functionally queries stuff like os/r handles
+//    on-demand, and then prunes them, immediate-mode cache style.
 
 ////////////////////////////////
 //~ rjf: Build Options
