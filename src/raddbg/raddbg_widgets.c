@@ -756,10 +756,7 @@ rd_entity_desc_button(RD_Entity *entity, FuzzyMatchRangeList *name_matches, Stri
     // rjf: drag+drop
     else if(ui_dragging(sig) && !contains_2f32(box->rect, ui_mouse()))
     {
-      RD_DragDropPayload payload = {0};
-      payload.key = box->key;
-      payload.entity = rd_handle_from_entity(entity);
-      rd_drag_begin(&payload);
+      RD_RegsScope(.entity = rd_handle_from_entity(entity)) rd_drag_begin();
     }
   }
   scratch_end(scratch);
@@ -1405,9 +1402,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             // rjf: drag start
             if(ui_dragging(bp_sig) && !contains_2f32(bp_box->rect, ui_mouse()))
             {
-              RD_DragDropPayload payload = {0};
-              payload.entity = rd_handle_from_entity(bp);
-              rd_drag_begin(&payload);
+              RD_RegsScope(.entity = rd_handle_from_entity(bp)) rd_drag_begin();
             }
             
             // rjf: bp right-click menu
@@ -1463,9 +1458,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             // rjf: drag start
             if(ui_dragging(pin_sig) && !contains_2f32(pin_box->rect, ui_mouse()))
             {
-              RD_DragDropPayload payload = {0};
-              payload.entity = rd_handle_from_entity(pin);
-              rd_drag_begin(&payload);
+              RD_RegsScope(.entity = rd_handle_from_entity(pin)) rd_drag_begin();
             }
             
             // rjf: watch right-click menu
@@ -1692,9 +1685,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
               UI_Signal sig = ui_buttonf("%S###pin_nub", rd_icon_kind_text_table[RD_IconKind_Pin]);
               if(ui_dragging(sig) && !contains_2f32(sig.box->rect, ui_mouse()))
               {
-                RD_DragDropPayload payload = {0};
-                payload.entity = rd_handle_from_entity(pin);
-                rd_drag_begin(&payload);
+                RD_RegsScope(.entity = rd_handle_from_entity(pin)) rd_drag_begin();
               }
               if(ui_right_clicked(sig))
               {
@@ -1860,8 +1851,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
     // drop target
     if(rd_drag_is_active() && contains_2f32(clipped_top_container_rect, ui_mouse()))
     {
-      RD_DragDropPayload *payload = &rd_drag_drop_payload;
-      RD_Entity *entity = rd_entity_from_handle(payload->entity);
+      RD_Entity *entity = rd_entity_from_handle(rd_state->drag_drop_regs->entity);
       if(entity->kind == RD_EntityKind_Thread ||
          entity->kind == RD_EntityKind_WatchPin ||
          entity->kind == RD_EntityKind_Breakpoint)
@@ -1872,8 +1862,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
     
     //- rjf: drop target is dropped -> process
     {
-      RD_DragDropPayload payload = {0};
-      if(!rd_entity_is_nil(line_drag_entity) && rd_drag_drop(&payload) && contains_1s64(params->line_num_range, mouse_pt.line))
+      if(!rd_entity_is_nil(line_drag_entity) && rd_drag_drop() && contains_1s64(params->line_num_range, mouse_pt.line))
       {
         RD_Entity *dropped_entity = line_drag_entity;
         S64 line_num = mouse_pt.line;

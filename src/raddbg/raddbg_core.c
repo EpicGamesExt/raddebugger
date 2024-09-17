@@ -1050,25 +1050,24 @@ rd_drag_is_active(void)
 }
 
 internal void
-rd_drag_begin(RD_DragDropPayload *payload)
+rd_drag_begin(void)
 {
   if(!rd_drag_is_active())
   {
+    arena_clear(rd_state->drag_drop_arena);
+    rd_state->drag_drop_regs = rd_regs_copy(rd_state->drag_drop_arena, rd_regs());
     rd_state->drag_drop_state = RD_DragDropState_Dragging;
-    MemoryCopyStruct(&rd_drag_drop_payload, payload);
   }
 }
 
 internal B32
-rd_drag_drop(RD_DragDropPayload *out_payload)
+rd_drag_drop(void)
 {
   B32 result = 0;
   if(rd_state->drag_drop_state == RD_DragDropState_Dropping)
   {
     result = 1;
     rd_state->drag_drop_state = RD_DragDropState_Null;
-    MemoryCopyStruct(out_payload, &rd_drag_drop_payload);
-    MemoryZeroStruct(&rd_drag_drop_payload);
   }
   return result;
 }
@@ -1077,13 +1076,6 @@ internal void
 rd_drag_kill(void)
 {
   rd_state->drag_drop_state = RD_DragDropState_Null;
-  MemoryZeroStruct(&rd_drag_drop_payload);
-}
-
-internal void
-rd_queue_drag_drop(void)
-{
-  rd_state->drag_drop_state = RD_DragDropState_Dropping;
 }
 
 internal void
@@ -2938,14 +2930,15 @@ rd_window_frame(RD_Window *ws)
     ////////////////////////////
     //- rjf: drag/drop visualization tooltips
     //
-    B32 drag_active = rd_drag_is_active();
-    if(drag_active && window_is_focused)
+    if(rd_drag_is_active() && window_is_focused)
+      RD_RegsScope(.window = rd_state->drag_drop_regs->window,
+                   .panel = rd_state->drag_drop_regs->panel,
+                   .view = rd_state->drag_drop_regs->view)
     {
       Temp scratch = scratch_begin(0, 0);
-      RD_DragDropPayload *payload = &rd_drag_drop_payload;
-      RD_Panel *panel = rd_panel_from_handle(payload->panel);
-      RD_Entity *entity = rd_entity_from_handle(payload->entity);
-      RD_View *view = rd_view_from_handle(payload->view);
+      RD_Panel *panel = rd_panel_from_handle(rd_state->drag_drop_regs->panel);
+      RD_Entity *entity = rd_entity_from_handle(rd_state->drag_drop_regs->entity);
+      RD_View *view = rd_view_from_handle(rd_state->drag_drop_regs->view);
       {
         //- rjf: tab dragging
         if(!rd_view_is_nil(view))
@@ -5753,7 +5746,7 @@ rd_window_frame(RD_Window *ws)
       //- rjf: boundary tab-drag/drop sites
       //
       {
-        RD_View *drag_view = rd_view_from_handle(rd_drag_drop_payload.view);
+        RD_View *drag_view = rd_view_from_handle(rd_state->drag_drop_regs->view);
         if(rd_drag_is_active() && !rd_view_is_nil(drag_view))
         {
           //- rjf: params
@@ -5830,8 +5823,7 @@ rd_window_frame(RD_Window *ws)
               }
               
               // rjf: drop
-              RD_DragDropPayload payload = {0};
-              if(ui_key_match(site_box->key, ui_drop_hot_key()) && rd_drag_drop(&payload))
+              if(ui_key_match(site_box->key, ui_drop_hot_key()) && rd_drag_drop())
               {
                 Dir2 dir = (axis == Axis2_Y ? (side == Side_Min ? Dir2_Up : Dir2_Down) :
                             axis == Axis2_X ? (side == Side_Min ? Dir2_Left : Dir2_Right) :
@@ -5841,8 +5833,8 @@ rd_window_frame(RD_Window *ws)
                   RD_Panel *split_panel = panel;
                   rd_cmd(RD_CmdKind_SplitPanel,
                          .dst_panel  = rd_handle_from_panel(split_panel),
-                         .panel      = payload.panel,
-                         .view       = payload.view,
+                         .panel      = rd_state->drag_drop_regs->panel,
+                         .view       = rd_state->drag_drop_regs->view,
                          .dir2       = dir);
                 }
               }
@@ -5914,8 +5906,7 @@ rd_window_frame(RD_Window *ws)
             }
             
             // rjf: drop
-            RD_DragDropPayload payload = {0};
-            if(ui_key_match(site_box->key, ui_drop_hot_key()) && rd_drag_drop(&payload))
+            if(ui_key_match(site_box->key, ui_drop_hot_key()) && rd_drag_drop())
             {
               Dir2 dir = (panel->split_axis == Axis2_X ? Dir2_Left : Dir2_Up);
               RD_Panel *split_panel = child;
@@ -5926,8 +5917,8 @@ rd_window_frame(RD_Window *ws)
               }
               rd_cmd(RD_CmdKind_SplitPanel,
                      .dst_panel  = rd_handle_from_panel(split_panel),
-                     .panel      = payload.panel,
-                     .view       = payload.view,
+                     .panel      = rd_state->drag_drop_regs->panel,
+                     .view       = rd_state->drag_drop_regs->view,
                      .dir2       = dir);
             }
             
@@ -6095,7 +6086,7 @@ rd_window_frame(RD_Window *ws)
         //- rjf: build combined split+movetab drag/drop sites
         //
         {
-          RD_View *view = rd_view_from_handle(rd_drag_drop_payload.view);
+          RD_View *view = rd_view_from_handle(rd_state->drag_drop_regs->view);
           if(rd_drag_is_active() && !rd_view_is_nil(view) && contains_2f32(panel_rect, ui_mouse()))
           {
             F32 drop_site_dim_px = ceil_f32(ui_top_font_size()*7.f);
@@ -6213,23 +6204,22 @@ rd_window_frame(RD_Window *ws)
                   }
                 }
               }
-              RD_DragDropPayload payload = {0};
-              if(ui_key_match(site_box->key, ui_drop_hot_key()) && rd_drag_drop(&payload))
+              if(ui_key_match(site_box->key, ui_drop_hot_key()) && rd_drag_drop())
               {
                 if(dir != Dir2_Invalid)
                 {
                   rd_cmd(RD_CmdKind_SplitPanel,
                          .dst_panel = rd_handle_from_panel(panel),
-                         .panel = payload.panel,
-                         .view = payload.view,
+                         .panel = rd_state->drag_drop_regs->panel,
+                         .view = rd_state->drag_drop_regs->view,
                          .dir2 = dir);
                 }
                 else
                 {
                   rd_cmd(RD_CmdKind_MoveTab,
                          .dst_panel = rd_handle_from_panel(panel),
-                         .panel = payload.panel,
-                         .view = payload.view,
+                         .panel = rd_state->drag_drop_regs->panel,
+                         .view = rd_state->drag_drop_regs->view,
                          .prev_view = rd_handle_from_view(panel->last_tab_view));
                 }
               }
@@ -6519,7 +6509,7 @@ rd_window_frame(RD_Window *ws)
               if(rd_drag_is_active() && catchall_drop_site_hovered)
               {
                 RD_Panel *dst_panel = rd_panel_from_handle(rd_last_drag_drop_panel);
-                RD_View *drag_view = rd_view_from_handle(rd_drag_drop_payload.view);
+                RD_View *drag_view = rd_view_from_handle(rd_state->drag_drop_regs->view);
                 RD_View *dst_prev_view = rd_view_from_handle(rd_last_drag_drop_prev_tab);
                 if(dst_panel == panel &&
                    ((!rd_view_is_nil(view) && dst_prev_view == view->order_prev && drag_view != view && drag_view != view->order_prev) ||
@@ -6620,13 +6610,11 @@ rd_window_frame(RD_Window *ws)
                   }
                   else if(ui_dragging(sig) && !rd_drag_is_active() && length_2f32(ui_drag_delta()) > 10.f)
                   {
-                    RD_DragDropPayload payload = {0};
+                    RD_RegsScope(.panel = rd_handle_from_panel(panel),
+                                 .view = rd_handle_from_view(view))
                     {
-                      payload.key = sig.box->key;
-                      payload.panel = rd_handle_from_panel(panel);
-                      payload.view = rd_handle_from_view(view);
+                      rd_drag_begin();
                     }
-                    rd_drag_begin(&payload);
                   }
                   else if(ui_right_clicked(sig))
                   {
@@ -6711,7 +6699,7 @@ rd_window_frame(RD_Window *ws)
           // rjf: more precise drop-sites on tab bar
           {
             Vec2F32 mouse = ui_mouse();
-            RD_View *view = rd_view_from_handle(rd_drag_drop_payload.view);
+            RD_View *view = rd_view_from_handle(rd_state->drag_drop_regs->view);
             if(rd_drag_is_active() && window_is_focused && contains_2f32(panel_rect, mouse) && !rd_view_is_nil(view))
             {
               // rjf: mouse => hovered drop site
@@ -6741,7 +6729,7 @@ rd_window_frame(RD_Window *ws)
               }
               
               // rjf: vis
-              RD_Panel *drag_panel = rd_panel_from_handle(rd_drag_drop_payload.panel);
+              RD_Panel *drag_panel = rd_panel_from_handle(rd_state->drag_drop_regs->panel);
               if(!rd_view_is_nil(view) && active_drop_site != 0) 
               {
                 RD_Palette(RD_PaletteCode_DropSiteOverlay) UI_Rect(tab_bar_rect)
@@ -6749,11 +6737,10 @@ rd_window_frame(RD_Window *ws)
               }
               
               // rjf: drop
-              RD_DragDropPayload payload = rd_drag_drop_payload;
-              if(catchall_drop_site_hovered && (active_drop_site != 0 && rd_drag_drop(&payload)))
+              if(catchall_drop_site_hovered && (active_drop_site != 0 && rd_drag_drop()))
               {
-                RD_View *view = rd_view_from_handle(payload.view);
-                RD_Panel *src_panel = rd_panel_from_handle(payload.panel);
+                RD_View *view = rd_view_from_handle(rd_state->drag_drop_regs->view);
+                RD_Panel *src_panel = rd_panel_from_handle(rd_state->drag_drop_regs->panel);
                 if(!rd_panel_is_nil(panel) && !rd_view_is_nil(view))
                 {
                   rd_cmd(RD_CmdKind_MoveTab,
@@ -6781,8 +6768,7 @@ rd_window_frame(RD_Window *ws)
         {
           rd_last_drag_drop_panel = rd_handle_from_panel(panel);
           
-          RD_DragDropPayload *payload = &rd_drag_drop_payload;
-          RD_View *dragged_view = rd_view_from_handle(payload->view);
+          RD_View *dragged_view = rd_view_from_handle(rd_state->drag_drop_regs->view);
           B32 view_is_in_panel = 0;
           for(RD_View *view = panel->first_tab_view; !rd_view_is_nil(view); view = view->order_next)
           {
@@ -6804,12 +6790,11 @@ rd_window_frame(RD_Window *ws)
             
             // rjf: drop
             {
-              RD_DragDropPayload payload = {0};
-              if(rd_drag_drop(&payload))
+              if(rd_drag_drop())
               {
-                RD_Panel *src_panel = rd_panel_from_handle(payload.panel);
-                RD_View *view = rd_view_from_handle(payload.view);
-                RD_Entity *entity = rd_entity_from_handle(payload.entity);
+                RD_Panel *src_panel = rd_panel_from_handle(rd_state->drag_drop_regs->panel);
+                RD_View *view = rd_view_from_handle(rd_state->drag_drop_regs->view);
+                RD_Entity *entity = rd_entity_from_handle(rd_state->drag_drop_regs->entity);
                 
                 // rjf: view drop
                 if(!rd_view_is_nil(view))
@@ -6826,7 +6811,7 @@ rd_window_frame(RD_Window *ws)
                 {
                   rd_cmd(RD_CmdKind_SpawnEntityView,
                          .panel = rd_handle_from_panel(panel),
-                         .cursor = payload.text_point,
+                         .cursor = rd_state->drag_drop_regs->cursor,
                          .entity = rd_handle_from_entity(entity));
                 }
               }
@@ -9430,6 +9415,8 @@ rd_init(CmdLine *cmdln)
   rd_state->cfg_main_font_path_arena = arena_alloc();
   rd_state->cfg_code_font_path_arena = arena_alloc();
   rd_state->bind_change_arena = arena_alloc();
+  rd_state->drag_drop_arena = arena_alloc();
+  rd_state->drag_drop_regs = push_array(rd_state->drag_drop_arena, RD_Regs, 1);
   rd_state->top_regs = &rd_state->base_regs;
   rd_clear_bindings();
   
@@ -9714,6 +9701,12 @@ rd_frame(void)
         rd_regs()->view   = window->focused_panel->selected_tab_view;
       }
       B32 take = 0;
+      
+      //- rjf: try drag/drop drop-kickoff
+      if(rd_drag_is_active() && event->kind == OS_EventKind_Release && event->key == OS_Key_LeftMouseButton)
+      {
+        rd_state->drag_drop_state = RD_DragDropState_Dropping;
+      }
       
       //- rjf: try window close
       if(!take && event->kind == OS_EventKind_WindowClose && window != 0)
@@ -12393,7 +12386,6 @@ rd_frame(void)
             }
           }break;
           
-          
           //- rjf: thread finding
           case RD_CmdKind_FindThread:
           for(RD_Window *ws = rd_state->first_window; ws != 0; ws = ws->next)
@@ -14234,15 +14226,6 @@ rd_frame(void)
     }
   }
   
-  //////////////////////////////
-  //- rjf: queue drag drop (TODO(rjf): @msgs)
-  //
-  B32 queue_drag_drop = 0;
-  if(queue_drag_drop)
-  {
-    rd_queue_drag_drop();
-  }
-  
   ////////////////////////////
   //- rjf: rotate command slots, bump command gen counter
   //
@@ -14329,7 +14312,6 @@ rd_frame(void)
   if(rd_state->drag_drop_state == RD_DragDropState_Dropping)
   {
     rd_state->drag_drop_state = RD_DragDropState_Null;
-    MemoryZeroStruct(&rd_drag_drop_payload);
   }
   
   //////////////////////////////

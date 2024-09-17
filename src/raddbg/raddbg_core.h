@@ -315,16 +315,6 @@ typedef enum RD_DragDropState
 }
 RD_DragDropState;
 
-typedef struct RD_DragDropPayload RD_DragDropPayload;
-struct RD_DragDropPayload
-{
-  UI_Key key;
-  RD_Handle panel;
-  RD_Handle view;
-  RD_Handle entity;
-  TxtPt text_point;
-};
-
 ////////////////////////////////
 //~ rjf: Command Kind Types
 
@@ -848,6 +838,11 @@ struct RD_State
   Arena *current_path_arena;
   String8 current_path;
   
+  // rjf: drag/drop state
+  Arena *drag_drop_arena;
+  RD_Regs *drag_drop_regs;
+  RD_DragDropState drag_drop_state;
+  
   //-
   // TODO(rjf): TO BE ELIMINATED OR REPLACED VVVVVVVVVVVVVVVV
   //-
@@ -899,9 +894,6 @@ struct RD_State
   RD_View *free_view;
   U64 free_view_count;
   U64 allocated_view_count;
-  
-  // rjf: drag/drop state machine
-  RD_DragDropState drag_drop_state;
   
   // rjf: config reading state
   Arena *cfg_path_arenas[RD_CfgSrc_COUNT];
@@ -968,7 +960,6 @@ read_only global RD_Panel rd_nil_panel =
 };
 
 global RD_State *rd_state = 0;
-global RD_DragDropPayload rd_drag_drop_payload = {0};
 global RD_Handle rd_last_drag_drop_panel = {0};
 global RD_Handle rd_last_drag_drop_prev_tab = {0};
 
@@ -1112,10 +1103,9 @@ internal B32 rd_prefer_dasm_from_window(RD_Window *window);
 //~ rjf: Global Cross-Window UI Interaction State Functions
 
 internal B32 rd_drag_is_active(void);
-internal void rd_drag_begin(RD_DragDropPayload *payload);
-internal B32 rd_drag_drop(RD_DragDropPayload *out_payload);
+internal void rd_drag_begin(void);
+internal B32 rd_drag_drop(void);
 internal void rd_drag_kill(void);
-internal void rd_queue_drag_drop(void);
 
 internal void rd_set_hover_regs(void);
 internal RD_Regs *rd_get_hover_regs(void);
