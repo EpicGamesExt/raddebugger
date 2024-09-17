@@ -569,9 +569,13 @@ enum
   RD_AutoCompListerFlag_ViewRules     = (1<<2),
   RD_AutoCompListerFlag_ViewRuleParams= (1<<3),
   RD_AutoCompListerFlag_Members       = (1<<4),
-  RD_AutoCompListerFlag_Languages     = (1<<5),
-  RD_AutoCompListerFlag_Architectures = (1<<6),
-  RD_AutoCompListerFlag_Tex2DFormats  = (1<<7),
+  RD_AutoCompListerFlag_Globals       = (1<<5),
+  RD_AutoCompListerFlag_ThreadLocals  = (1<<6),
+  RD_AutoCompListerFlag_Procedures    = (1<<7),
+  RD_AutoCompListerFlag_Types         = (1<<8),
+  RD_AutoCompListerFlag_Languages     = (1<<9),
+  RD_AutoCompListerFlag_Architectures = (1<<10),
+  RD_AutoCompListerFlag_Tex2DFormats  = (1<<11),
 };
 
 typedef struct RD_AutoCompListerItem RD_AutoCompListerItem;
@@ -580,6 +584,7 @@ struct RD_AutoCompListerItem
   String8 string;
   String8 kind_string;
   FuzzyMatchRangeList matches;
+  U64 group;
 };
 
 typedef struct RD_AutoCompListerItemChunkNode RD_AutoCompListerItemChunkNode;

@@ -4088,6 +4088,22 @@ rd_window_frame(RD_Window *ws)
       if(!ui_box_is_nil(autocomp_root_box))
       {
         Temp scratch = scratch_begin(0, 0);
+        DI_Scope *di_scope = di_scope_open();
+        FZY_Scope *fzy_scope = fzy_scope_open();
+        DI_KeyList dbgi_keys_list = d_push_active_dbgi_key_list(scratch.arena);
+        DI_KeyArray dbgi_keys = di_key_array_from_list(scratch.arena, &dbgi_keys_list);
+        
+        //- rjf: grab rdis
+        U64 rdis_count = dbgi_keys.count;
+        RDI_Parsed **rdis = push_array(scratch.arena, RDI_Parsed *, rdis_count);
+        {
+          for(U64 idx = 0; idx < rdis_count; idx += 1)
+          {
+            RDI_Parsed *rdi = di_rdi_from_key(di_scope, &dbgi_keys.v[idx], 0);
+            RDI_TopLevelInfo *tli = rdi_element_from_name_idx(rdi, TopLevelInfo, 0);
+            rdis[idx] = rdi;
+          }
+        }
         
         //- rjf: unpack lister params
         CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_base_regs()->thread);
@@ -4199,7 +4215,195 @@ rd_window_frame(RD_Window *ws)
           //- rjf: gather members
           if(ws->autocomp_lister_params.flags & RD_AutoCompListerFlag_Members)
           {
-            
+            // TODO(rjf)
+          }
+          
+          //- rjf: gather globals
+          if(ws->autocomp_lister_params.flags & RD_AutoCompListerFlag_Globals && query.size != 0)
+          {
+            U128 fzy_key = {d_hash_from_string(str8_lit("autocomp_globals_fzy_key"))};
+            FZY_Params fzy_params =
+            {
+              RDI_SectionKind_GlobalVariables,
+              dbgi_keys,
+            };
+            B32 is_stale = 0;
+            FZY_ItemArray items = fzy_items_from_key_params_query(fzy_scope, fzy_key, &fzy_params, query, 0, &is_stale);
+            for(U64 idx = 0; idx < 20 && idx < items.count; idx += 1)
+            {
+              // rjf: determine dbgi/rdi to which this item belongs
+              DI_Key dbgi_key = {0};
+              RDI_Parsed *rdi = &di_rdi_parsed_nil;
+              U64 base_idx = 0;
+              {
+                for(U64 rdi_idx = 0; rdi_idx < rdis_count; rdi_idx += 1)
+                {
+                  U64 table_count = 0;
+                  rdi_section_raw_table_from_kind(rdis[rdi_idx], fzy_params.target, &table_count);
+                  if(base_idx <= items.v[idx].idx && items.v[idx].idx < base_idx + table_count)
+                  {
+                    dbgi_key = dbgi_keys.v[rdi_idx];
+                    rdi = rdis[rdi_idx];
+                    break;
+                  }
+                  base_idx += table_count;
+                }
+              }
+              
+              // rjf: unpack info
+              String8 name = fzy_item_string_from_rdi_target_element_idx(rdi, fzy_params.target, items.v[idx].idx-base_idx);
+              
+              // rjf: push item
+              RD_AutoCompListerItem item = {0};
+              {
+                item.string      = name;
+                item.kind_string = str8_lit("Global");
+                item.matches     = items.v[idx].match_ranges;
+                item.group       = 1;
+              }
+              rd_autocomp_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
+            }
+          }
+          
+          //- rjf: gather thread locals
+          if(ws->autocomp_lister_params.flags & RD_AutoCompListerFlag_ThreadLocals && query.size != 0)
+          {
+            U128 fzy_key = {d_hash_from_string(str8_lit("autocomp_tvars_fzy_key"))};
+            FZY_Params fzy_params =
+            {
+              RDI_SectionKind_ThreadVariables,
+              dbgi_keys,
+            };
+            B32 is_stale = 0;
+            FZY_ItemArray items = fzy_items_from_key_params_query(fzy_scope, fzy_key, &fzy_params, query, 0, &is_stale);
+            for(U64 idx = 0; idx < 20 && idx < items.count; idx += 1)
+            {
+              // rjf: determine dbgi/rdi to which this item belongs
+              DI_Key dbgi_key = {0};
+              RDI_Parsed *rdi = &di_rdi_parsed_nil;
+              U64 base_idx = 0;
+              {
+                for(U64 rdi_idx = 0; rdi_idx < rdis_count; rdi_idx += 1)
+                {
+                  U64 table_count = 0;
+                  rdi_section_raw_table_from_kind(rdis[rdi_idx], fzy_params.target, &table_count);
+                  if(base_idx <= items.v[idx].idx && items.v[idx].idx < base_idx + table_count)
+                  {
+                    dbgi_key = dbgi_keys.v[rdi_idx];
+                    rdi = rdis[rdi_idx];
+                    break;
+                  }
+                  base_idx += table_count;
+                }
+              }
+              
+              // rjf: unpack info
+              String8 name = fzy_item_string_from_rdi_target_element_idx(rdi, fzy_params.target, items.v[idx].idx-base_idx);
+              
+              // rjf: push item
+              RD_AutoCompListerItem item = {0};
+              {
+                item.string      = name;
+                item.kind_string = str8_lit("Thread Local");
+                item.matches     = items.v[idx].match_ranges;
+                item.group       = 1;
+              }
+              rd_autocomp_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
+            }
+          }
+          
+          //- rjf: gather procedures
+          if(ws->autocomp_lister_params.flags & RD_AutoCompListerFlag_Procedures && query.size != 0)
+          {
+            U128 fzy_key = {d_hash_from_string(str8_lit("autocomp_procedures_fzy_key"))};
+            FZY_Params fzy_params =
+            {
+              RDI_SectionKind_Procedures,
+              dbgi_keys,
+            };
+            B32 is_stale = 0;
+            FZY_ItemArray items = fzy_items_from_key_params_query(fzy_scope, fzy_key, &fzy_params, query, 0, &is_stale);
+            for(U64 idx = 0; idx < 20 && idx < items.count; idx += 1)
+            {
+              // rjf: determine dbgi/rdi to which this item belongs
+              DI_Key dbgi_key = {0};
+              RDI_Parsed *rdi = &di_rdi_parsed_nil;
+              U64 base_idx = 0;
+              {
+                for(U64 rdi_idx = 0; rdi_idx < rdis_count; rdi_idx += 1)
+                {
+                  U64 table_count = 0;
+                  rdi_section_raw_table_from_kind(rdis[rdi_idx], fzy_params.target, &table_count);
+                  if(base_idx <= items.v[idx].idx && items.v[idx].idx < base_idx + table_count)
+                  {
+                    dbgi_key = dbgi_keys.v[rdi_idx];
+                    rdi = rdis[rdi_idx];
+                    break;
+                  }
+                  base_idx += table_count;
+                }
+              }
+              
+              // rjf: unpack info
+              String8 name = fzy_item_string_from_rdi_target_element_idx(rdi, fzy_params.target, items.v[idx].idx-base_idx);
+              
+              // rjf: push item
+              RD_AutoCompListerItem item = {0};
+              {
+                item.string      = name;
+                item.kind_string = str8_lit("Procedure");
+                item.matches     = items.v[idx].match_ranges;
+                item.group       = 1;
+              }
+              rd_autocomp_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
+            }
+          }
+          
+          //- rjf: gather types
+          if(ws->autocomp_lister_params.flags & RD_AutoCompListerFlag_Types && query.size != 0)
+          {
+            U128 fzy_key = {d_hash_from_string(str8_lit("autocomp_types_fzy_key"))};
+            FZY_Params fzy_params =
+            {
+              RDI_SectionKind_UDTs,
+              dbgi_keys,
+            };
+            B32 is_stale = 0;
+            FZY_ItemArray items = fzy_items_from_key_params_query(fzy_scope, fzy_key, &fzy_params, query, 0, &is_stale);
+            for(U64 idx = 0; idx < 20 && idx < items.count; idx += 1)
+            {
+              // rjf: determine dbgi/rdi to which this item belongs
+              DI_Key dbgi_key = {0};
+              RDI_Parsed *rdi = &di_rdi_parsed_nil;
+              U64 base_idx = 0;
+              {
+                for(U64 rdi_idx = 0; rdi_idx < rdis_count; rdi_idx += 1)
+                {
+                  U64 table_count = 0;
+                  rdi_section_raw_table_from_kind(rdis[rdi_idx], fzy_params.target, &table_count);
+                  if(base_idx <= items.v[idx].idx && items.v[idx].idx < base_idx + table_count)
+                  {
+                    dbgi_key = dbgi_keys.v[rdi_idx];
+                    rdi = rdis[rdi_idx];
+                    break;
+                  }
+                  base_idx += table_count;
+                }
+              }
+              
+              // rjf: unpack info
+              String8 name = fzy_item_string_from_rdi_target_element_idx(rdi, fzy_params.target, items.v[idx].idx-base_idx);
+              
+              // rjf: push item
+              RD_AutoCompListerItem item = {0};
+              {
+                item.string      = name;
+                item.kind_string = str8_lit("Type");
+                item.matches     = items.v[idx].match_ranges;
+                item.group       = 1;
+              }
+              rd_autocomp_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
+            }
           }
           
           //- rjf: gather languages
@@ -4363,7 +4567,7 @@ rd_window_frame(RD_Window *ws)
               {
                 UI_WidthFill
                 {
-                  UI_Box *box = ui_label(item->string).box;
+                  UI_Box *box = rd_code_label(1.f, 0, ui_top_palette()->text, item->string);
                   ui_box_equip_fuzzy_match_ranges(box, &item->matches);
                 }
                 RD_Font(RD_FontSlot_Main)
@@ -4396,6 +4600,8 @@ rd_window_frame(RD_Window *ws)
           }
         }
         
+        fzy_scope_close(fzy_scope);
+        di_scope_close(di_scope);
         scratch_end(scratch);
       }
     }
@@ -8149,7 +8355,15 @@ internal int
 rd_autocomp_lister_item_qsort_compare(RD_AutoCompListerItem *a, RD_AutoCompListerItem *b)
 {
   int result = 0;
-  if(a->matches.count > b->matches.count)
+  if(a->group < b->group)
+  {
+    result = -1;
+  }
+  else if(a->group > b->group)
+  {
+    result = +1;
+  }
+  else if(a->matches.count > b->matches.count)
   {
     result = -1;
   }

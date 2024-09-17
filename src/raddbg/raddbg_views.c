@@ -2430,7 +2430,11 @@ rd_watch_view_build(RD_WatchViewState *ewv, B32 modifiable, U32 default_radix, R
                   {
                     cell_matches = fuzzy_match_find(scratch.arena, filter, ev_expr_string_from_row(scratch.arena, row));
                   }
-                  cell_autocomp_flags = RD_AutoCompListerFlag_Locals;
+                  cell_autocomp_flags = (RD_AutoCompListerFlag_Locals|
+                                         RD_AutoCompListerFlag_Procedures|
+                                         RD_AutoCompListerFlag_Globals|
+                                         RD_AutoCompListerFlag_ThreadLocals|
+                                         RD_AutoCompListerFlag_Types);
                   if(row->member != 0 && row->member->inheritance_key_chain.first != 0)
                   {
                     String8List inheritance_chain_type_names = {0};
@@ -4453,7 +4457,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(symbol_lister)
   FZY_Params fuzzy_search_params = {RDI_SectionKind_Procedures, dbgi_keys};
   U64 endt_us = os_now_microseconds()+200;
   
-  //- rjf: grab rdis, make type graphs for each
+  //- rjf: grab rdis
   U64 rdis_count = dbgi_keys.count;
   RDI_Parsed **rdis = push_array(scratch.arena, RDI_Parsed *, rdis_count);
   {
