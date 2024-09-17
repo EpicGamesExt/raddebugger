@@ -1745,7 +1745,10 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   UI_Signal priority_margin_container_sig = ui_signal_from_box(priority_margin_container_box);
   UI_Signal catchall_margin_container_sig = ui_signal_from_box(catchall_margin_container_box);
   UI_Signal text_container_sig = ui_signal_from_box(text_container_box);
+  B32 line_drag_drop = 0;
   RD_Entity *line_drag_entity = &d_nil_entity;
+  CTRL_Entity *line_drag_ctrl_entity = &ctrl_entity_nil;
+  Vec4F32 line_drag_drop_color = rd_rgba_from_theme_color(RD_ThemeColor_DropSiteOverlay);
   {
     //- rjf: determine mouse drag range
     TxtRng mouse_drag_rng = txt_rng(mouse_pt, mouse_pt);
@@ -1817,12 +1820,26 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
     // drop target
     if(rd_drag_is_active() && contains_2f32(clipped_top_container_rect, ui_mouse()))
     {
+      CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_state->drag_drop_regs->thread);
       RD_Entity *entity = rd_entity_from_handle(rd_state->drag_drop_regs->entity);
-      if(entity->kind == RD_EntityKind_Thread ||
-         entity->kind == RD_EntityKind_WatchPin ||
-         entity->kind == RD_EntityKind_Breakpoint)
+      if(rd_state->drag_drop_regs_slot == RD_RegSlot_Entity &&
+         (entity->kind == RD_EntityKind_WatchPin ||
+          entity->kind == RD_EntityKind_Breakpoint))
       {
+        line_drag_drop = 1;
         line_drag_entity = entity;
+        if(entity->flags & RD_EntityFlag_HasColor)
+        {
+          line_drag_drop_color = rd_rgba_from_entity(entity);
+          line_drag_drop_color.w *= 0.5f;
+        }
+      }
+      if(rd_state->drag_drop_regs_slot == RD_RegSlot_Thread)
+      {
+        line_drag_drop = 1;
+        line_drag_ctrl_entity = thread;
+        line_drag_drop_color = rd_rgba_from_ctrl_entity(thread);
+        line_drag_drop_color.w *= 0.5f;
       }
     }
     
@@ -1834,39 +1851,34 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
         S64 line_num = mouse_pt.line;
         U64 line_idx = line_num - params->line_num_range.min;
         U64 line_vaddr = params->line_vaddrs[line_idx];
-        switch(dropped_entity->kind)
+        rd_cmd(RD_CmdKind_RelocateEntity,
+               .entity     = rd_handle_from_entity(dropped_entity),
+               .file_path  = rd_regs()->file_path,
+               .cursor     = txt_pt(line_num, 1),
+               .vaddr      = line_vaddr);
+      }
+      if(line_drag_ctrl_entity != &ctrl_entity_nil && rd_drag_drop() && contains_1s64(params->line_num_range, mouse_pt.line))
+      {
+        S64 line_num = mouse_pt.line;
+        U64 line_idx = line_num - params->line_num_range.min;
+        U64 line_vaddr = params->line_vaddrs[line_idx];
+        CTRL_Entity *thread = line_drag_ctrl_entity;
+        U64 new_rip_vaddr = line_vaddr;
+        if(rd_regs()->file_path.size != 0)
         {
-          default:{}break;
-          case RD_EntityKind_Breakpoint:
-          case RD_EntityKind_WatchPin:
+          D_LineList *lines = &params->line_infos[line_idx];
+          for(D_LineNode *n = lines->first; n != 0; n = n->next)
           {
-            rd_cmd(RD_CmdKind_RelocateEntity,
-                   .entity = rd_handle_from_entity(dropped_entity),
-                   .file_path  = rd_regs()->file_path,
-                   .cursor = txt_pt(line_num, 1),
-                   .vaddr      = line_vaddr);
-          }break;
-          case RD_EntityKind_Thread:
-          {
-            CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, dropped_entity->ctrl_handle);
-            U64 new_rip_vaddr = line_vaddr;
-            if(rd_regs()->file_path.size != 0)
+            CTRL_EntityList modules = ctrl_modules_from_dbgi_key(scratch.arena, d_state->ctrl_entity_store, &n->v.dbgi_key);
+            CTRL_Entity *module = ctrl_module_from_thread_candidates(d_state->ctrl_entity_store, thread, &modules);
+            if(module != &ctrl_entity_nil)
             {
-              D_LineList *lines = &params->line_infos[line_idx];
-              for(D_LineNode *n = lines->first; n != 0; n = n->next)
-              {
-                CTRL_EntityList modules = ctrl_modules_from_dbgi_key(scratch.arena, d_state->ctrl_entity_store, &n->v.dbgi_key);
-                CTRL_Entity *module = ctrl_module_from_thread_candidates(d_state->ctrl_entity_store, thread, &modules);
-                if(module != &ctrl_entity_nil)
-                {
-                  new_rip_vaddr = ctrl_vaddr_from_voff(module, n->v.voff_range.min);
-                  break;
-                }
-              }
+              new_rip_vaddr = ctrl_vaddr_from_voff(module, n->v.voff_range.min);
+              break;
             }
-            rd_cmd(RD_CmdKind_SetThreadIP, .thread = thread->handle, .vaddr = new_rip_vaddr);
-          }break;
+          }
         }
+        rd_cmd(RD_CmdKind_SetThreadIP, .thread = thread->handle, .vaddr = new_rip_vaddr);
       }
     }
     
@@ -1955,19 +1967,14 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   }
   
   //////////////////////////////
-  //- rjf: dragging entity which applies to lines over this slice -> visualize
+  //- rjf: dragging/dropping which applies to lines over this slice -> visualize
   //
-  if(!rd_entity_is_nil(line_drag_entity) && contains_2f32(clipped_top_container_rect, ui_mouse()))
+  if(line_drag_drop && contains_2f32(clipped_top_container_rect, ui_mouse()))
   {
-    Vec4F32 color = rd_rgba_from_theme_color(RD_ThemeColor_DropSiteOverlay);
-    if(line_drag_entity->flags & RD_EntityFlag_HasColor)
-    {
-      color = rd_rgba_from_entity(line_drag_entity);
-      color.w /= 2;
-    }
     DR_Bucket *bucket = dr_bucket_make();
     D_BucketScope(bucket)
     {
+      Vec4F32 color = line_drag_drop_color;
       Rng2F32 drop_line_rect = r2f32p(top_container_box->rect.x0,
                                       top_container_box->rect.y0 + (mouse_pt.line - params->line_num_range.min) * params->line_height_px,
                                       top_container_box->rect.x1,

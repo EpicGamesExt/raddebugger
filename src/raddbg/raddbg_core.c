@@ -5948,7 +5948,7 @@ rd_window_frame(RD_Window *ws)
       //
       {
         RD_View *drag_view = rd_view_from_handle(rd_state->drag_drop_regs->view);
-        if(rd_drag_is_active() && !rd_view_is_nil(drag_view))
+        if(rd_drag_is_active() && rd_state->drag_drop_regs_slot == RD_RegSlot_View && !rd_view_is_nil(drag_view))
         {
           //- rjf: params
           F32 drop_site_major_dim_px = ceil_f32(ui_top_font_size()*7.f);
@@ -6288,7 +6288,7 @@ rd_window_frame(RD_Window *ws)
         //
         {
           RD_View *view = rd_view_from_handle(rd_state->drag_drop_regs->view);
-          if(rd_drag_is_active() && !rd_view_is_nil(view) && contains_2f32(panel_rect, ui_mouse()))
+          if(rd_drag_is_active() && rd_state->drag_drop_regs_slot == RD_RegSlot_View && !rd_view_is_nil(view) && contains_2f32(panel_rect, ui_mouse()))
           {
             F32 drop_site_dim_px = ceil_f32(ui_top_font_size()*7.f);
             Vec2F32 drop_site_half_dim = v2f32(drop_site_dim_px/2, drop_site_dim_px/2);
@@ -6707,7 +6707,7 @@ rd_window_frame(RD_Window *ws)
               
               // rjf: if before this tab is the prev-view of the current tab drag,
               // draw empty space
-              if(rd_drag_is_active() && catchall_drop_site_hovered)
+              if(rd_drag_is_active() && rd_state->drag_drop_regs_slot == RD_RegSlot_View && catchall_drop_site_hovered)
               {
                 RD_Panel *dst_panel = rd_panel_from_handle(rd_last_drag_drop_panel);
                 RD_View *drag_view = rd_view_from_handle(rd_state->drag_drop_regs->view);
@@ -6901,7 +6901,7 @@ rd_window_frame(RD_Window *ws)
           {
             Vec2F32 mouse = ui_mouse();
             RD_View *view = rd_view_from_handle(rd_state->drag_drop_regs->view);
-            if(rd_drag_is_active() && window_is_focused && contains_2f32(panel_rect, mouse) && !rd_view_is_nil(view))
+            if(rd_drag_is_active() && rd_state->drag_drop_regs_slot == RD_RegSlot_View && window_is_focused && contains_2f32(panel_rect, mouse) && !rd_view_is_nil(view))
             {
               // rjf: mouse => hovered drop site
               F32 min_distance = 0;
