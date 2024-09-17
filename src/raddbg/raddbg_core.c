@@ -8324,6 +8324,26 @@ rd_theme_color_from_txt_token_kind(TXT_TokenKind kind)
   return color;
 }
 
+internal Vec4F32
+rd_rgba_from_thread(CTRL_Entity *thread)
+{
+  Vec4F32 result = rd_rgba_from_theme_color(RD_ThemeColor_Thread0);
+  if(thread->rgba != 0)
+  {
+    result = rgba_from_u32(thread->rgba);
+  }
+  else
+  {
+    CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, CTRL_EntityKind_Process);
+    CTRL_Entity *main_thread = ctrl_entity_child_from_kind(process, CTRL_EntityKind_Thread);
+    if(main_thread != thread)
+    {
+      result = rd_rgba_from_theme_color(RD_ThemeColor_Thread1);
+    }
+  }
+  return result;
+}
+
 //- rjf: code -> palette
 
 internal UI_Palette *

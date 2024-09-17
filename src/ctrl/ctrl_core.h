@@ -404,9 +404,10 @@ typedef enum CTRL_EventKind
   //- rjf: debug info changes
   CTRL_EventKind_ModuleDebugInfoPathChange,
   
-  //- rjf: debug strings
+  //- rjf: debug strings / decorations
   CTRL_EventKind_DebugString,
   CTRL_EventKind_ThreadName,
+  CTRL_EventKind_ThreadColor,
   
   //- rjf: memory
   CTRL_EventKind_MemReserve,
@@ -461,6 +462,7 @@ struct CTRL_Event
   U64 tls_root;
   U64 timestamp;
   U32 exception_code;
+  U32 rgba;
   String8 string;
 };
 

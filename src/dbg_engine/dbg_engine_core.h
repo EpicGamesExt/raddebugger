@@ -238,6 +238,7 @@ struct D_CmdParams
   U64 vaddr;
   B32 prefer_disasm;
   U32 pid;
+  U32 rgba;
   D_TargetArray targets;
 };
 

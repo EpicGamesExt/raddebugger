@@ -562,6 +562,7 @@ ctrl_serialized_string_from_event(Arena *arena, CTRL_Event *event, U64 max)
     str8_serial_push_struct(scratch.arena, &srl, &event->stack_base);
     str8_serial_push_struct(scratch.arena, &srl, &event->tls_root);
     str8_serial_push_struct(scratch.arena, &srl, &event->timestamp);
+    str8_serial_push_struct(scratch.arena, &srl, &event->rgba);
     str8_serial_push_struct(scratch.arena, &srl, &event->exception_code);
     String8 string = event->string;
     string.size = Min(string.size, max-srl.total_size);
@@ -594,6 +595,7 @@ ctrl_event_from_serialized_string(Arena *arena, String8 string)
     read_off += str8_deserial_read_struct(string, read_off, &event.tls_root);
     read_off += str8_deserial_read_struct(string, read_off, &event.timestamp);
     read_off += str8_deserial_read_struct(string, read_off, &event.exception_code);
+    read_off += str8_deserial_read_struct(string, read_off, &event.rgba);
     read_off += str8_deserial_read_struct(string, read_off, &event.string.size);
     event.string.str = push_array_no_zero(arena, U8, event.string.size);
     read_off += str8_deserial_read(string, read_off, event.string.str, event.string.size, 1);
@@ -1155,6 +1157,11 @@ ctrl_entity_store_apply_events(CTRL_EntityStore *store, CTRL_EventList *list)
       {
         CTRL_Entity *thread = ctrl_entity_from_handle(store, event->entity);
         ctrl_entity_equip_string(store, thread, event->string);
+      }break;
+      case CTRL_EventKind_ThreadColor:
+      {
+        CTRL_Entity *thread = ctrl_entity_from_handle(store, event->entity);
+        thread->rgba = event->rgba;
       }break;
       case CTRL_EventKind_ThreadFrozen:
       {

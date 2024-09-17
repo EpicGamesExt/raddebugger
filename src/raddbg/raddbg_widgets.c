@@ -1059,7 +1059,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             U64 thread_rip_voff = ctrl_voff_from_vaddr(module, thread_rip_vaddr);
             
             // rjf: thread info => color
-            Vec4F32 color = rd_rgba_from_theme_color(RD_ThemeColor_Text);
+            Vec4F32 color = rd_rgba_from_thread(thread);
             {
               if(unwind_count != 0)
               {
@@ -1071,10 +1071,6 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
                        stop_event.cause == CTRL_EventCause_InterruptedByException))
               {
                 color = rd_rgba_from_theme_color(RD_ThemeColor_ThreadError);
-              }
-              else if(thread->rgba != 0)
-              {
-                color = rgba_from_u32(thread->rgba);
               }
               if(d_ctrl_targets_running() && d_ctrl_last_run_frame_idx() < rd_state->frame_index)
               {
@@ -1219,7 +1215,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             U64 thread_rip_voff = ctrl_voff_from_vaddr(module, thread_rip_vaddr);
             
             // rjf: thread info => color
-            Vec4F32 color = v4f32(1, 1, 1, 1);
+            Vec4F32 color = rd_rgba_from_thread(thread);
             {
               if(unwind_count != 0)
               {
@@ -1231,10 +1227,6 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
                        stop_event.cause == CTRL_EventCause_InterruptedByException))
               {
                 color = rd_rgba_from_theme_color(RD_ThemeColor_ThreadError);
-              }
-              else if(thread->rgba != 0)
-              {
-                color = rgba_from_u32(thread->rgba);
               }
               if(d_ctrl_targets_running() && d_ctrl_last_run_frame_idx() < rd_state->frame_index)
               {

@@ -2504,10 +2504,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, B32 modifiable, U32 default_radix, R
                   {
                     cell_icon = RD_IconKind_RightArrow;
                     CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->thread);
-                    if(thread->rgba != 0)
-                    {
-                      cell_base_color = rgba_from_u32(thread->rgba);
-                    }
+                    cell_base_color = rd_rgba_from_thread(thread);
                   }
                 }break;
               }
@@ -7193,7 +7190,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(memory)
         Annotation *annotation = push_array(scratch.arena, Annotation, 1);
         annotation->name_string = thread->string.size ? thread->string : push_str8f(scratch.arena, "TID: %I64u", thread->id);
         annotation->kind_string = str8_lit("Stack");
-        annotation->color = (thread->rgba != 0) ? rgba_from_u32(thread->rgba) : rd_rgba_from_theme_color(RD_ThemeColor_Text);
+        annotation->color = rd_rgba_from_thread(thread);
         annotation->vaddr_range = stack_vaddr_range;
         for(U64 vaddr = stack_vaddr_range_in_viz.min; vaddr < stack_vaddr_range_in_viz.max; vaddr += 1)
         {

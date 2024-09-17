@@ -1309,6 +1309,7 @@ internal String8List rd_cmd_name_list_from_binding(Arena *arena, RD_Binding bind
 //- rjf: colors
 internal Vec4F32 rd_rgba_from_theme_color(RD_ThemeColor color);
 internal RD_ThemeColor rd_theme_color_from_txt_token_kind(TXT_TokenKind kind);
+internal Vec4F32 rd_rgba_from_thread(CTRL_Entity *thread);
 
 //- rjf: code -> palette
 internal UI_Palette *rd_palette_from_code(RD_PaletteCode code);

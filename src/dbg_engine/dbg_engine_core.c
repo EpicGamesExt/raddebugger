@@ -2447,6 +2447,13 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
           }
         }break;
         
+        //- rjf: entity decoration
+        case D_CmdKind_SetEntityColor:
+        {
+          CTRL_Entity *entity = ctrl_entity_from_handle(d_state->ctrl_entity_store, params->entity);
+          entity->rgba = params->rgba;
+        }break;
+        
         //- rjf: attaching
         case D_CmdKind_Attach:
         {
