@@ -24,6 +24,7 @@ typedef struct OS_ProcessInfo OS_ProcessInfo;
 struct OS_ProcessInfo
 {
   U32 pid;
+  B32 large_pages_allowed;
   String8 binary_path;
   String8 initial_path;
   String8 user_program_data_path;

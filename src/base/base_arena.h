@@ -51,11 +51,18 @@ struct Temp
 };
 
 ////////////////////////////////
+//~ rjf: Global Defaults
+
+global U64 arena_default_reserve_size = MB(64);
+global U64 arena_default_commit_size  = KB(64);
+global ArenaFlags arena_default_flags = 0;
+
+////////////////////////////////
 //~ rjf: Arena Functions
 
 //- rjf: arena creation/destruction
 internal Arena *arena_alloc_(ArenaParams *params);
-#define arena_alloc(...) arena_alloc_(&(ArenaParams){.reserve_size = MB(64), .commit_size = KB(64), __VA_ARGS__})
+#define arena_alloc(...) arena_alloc_(&(ArenaParams){.reserve_size = arena_default_reserve_size, .commit_size = arena_default_commit_size, .flags = arena_default_flags, __VA_ARGS__})
 internal void arena_release(Arena *arena);
 
 //- rjf: arena push/pop/pos core functions

@@ -8371,6 +8371,14 @@ rd_autocomp_lister_item_qsort_compare(RD_AutoCompListerItem *a, RD_AutoCompListe
   {
     result = +1;
   }
+  else if(a->string.size < b->string.size)
+  {
+    result = -1;
+  }
+  else if(a->string.size > b->string.size)
+  {
+    result = +1;
+  }
   else
   {
     result = strncmp((char *)a->string.str, (char *)b->string.str, Min(a->string.size, b->string.size));
