@@ -54,12 +54,12 @@ struct FooBar
 
 //-
 
-Type String8__str_ptr_type = {TypeKind_Ptr, 0, sizeof(void *), &type_leaves[TypeKind_U8], {0}, str8_lit_comp("size")};
+Type String8__str_ptr_type = {TypeKind_Ptr, 0, sizeof(void *), type(U8), {0}, str8_lit_comp("size")};
 
 Member String8__members[] =
 {
-  {str8_lit_comp("str"),  &String8__str_ptr_type,     OffsetOf(String8, str)},
-  {str8_lit_comp("size"), &type_leaves[TypeKind_U64], OffsetOf(String8, size)},
+  {str8_lit_comp("str"),  &String8__str_ptr_type, OffsetOf(String8, str)},
+  {str8_lit_comp("size"), type(U64),              OffsetOf(String8, size)},
 };
 
 Type String8__type =
@@ -67,7 +67,7 @@ Type String8__type =
   TypeKind_Struct,
   0,
   sizeof(String8),
-  &type_leaves[0],
+  &type_nil,
   str8_lit_comp("String8"),
   {0},
   ArrayCount(String8__members),
@@ -90,7 +90,7 @@ Type String8Node__type =
   TypeKind_Struct,
   0,
   sizeof(String8Node),
-  &type_leaves[0],
+  &type_nil,
   str8_lit_comp("String8Node"),
   {0},
   ArrayCount(String8Node__members),
@@ -103,8 +103,8 @@ Member String8List__members[] =
 {
   {str8_lit_comp("first"),      &String8Node__ptr_type,     OffsetOf(String8List, first)},
   {str8_lit_comp("last"),       &String8Node__ptr_type,     OffsetOf(String8List, last), MemberFlag_DoNotSerialize},
-  {str8_lit_comp("node_count"), &type_leaves[TypeKind_U64], OffsetOf(String8List, node_count)},
-  {str8_lit_comp("total_size"), &type_leaves[TypeKind_U64], OffsetOf(String8List, total_size)},
+  {str8_lit_comp("node_count"), type(U64), OffsetOf(String8List, node_count)},
+  {str8_lit_comp("total_size"), type(U64), OffsetOf(String8List, total_size)},
 };
 
 Type String8List__type =
@@ -112,7 +112,7 @@ Type String8List__type =
   TypeKind_Struct,
   0,
   sizeof(String8List),
-  &type_leaves[0],
+  &type_nil,
   str8_lit_comp("String8List"),
   {0},
   ArrayCount(String8List__members),
@@ -123,10 +123,10 @@ Type String8List__type =
 
 Member FooBar__members[] =
 {
-  {str8_lit_comp("x"),    &type_leaves[TypeKind_U64], OffsetOf(FooBar, x)},
-  {str8_lit_comp("y"),    &type_leaves[TypeKind_U64], OffsetOf(FooBar, y)},
-  {str8_lit_comp("z"),    &type_leaves[TypeKind_U64], OffsetOf(FooBar, z)},
-  {str8_lit_comp("name"), type(String8),              OffsetOf(FooBar, name)},
+  {str8_lit_comp("x"),    type(U64),      OffsetOf(FooBar, x)},
+  {str8_lit_comp("y"),    type(U64),      OffsetOf(FooBar, y)},
+  {str8_lit_comp("z"),    type(U64),      OffsetOf(FooBar, z)},
+  {str8_lit_comp("name"), type(String8),  OffsetOf(FooBar, name)},
 };
 
 Type FooBar__type =
@@ -134,7 +134,7 @@ Type FooBar__type =
   TypeKind_Struct,
   0,
   sizeof(FooBar),
-  &type_leaves[0],
+  &type_nil,
   str8_lit_comp("FooBar"),
   {0},
   ArrayCount(FooBar__members),
@@ -146,23 +146,26 @@ entry_point(CmdLine *cmdline)
 {
   Arena *arena = arena_alloc();
   
-  String8List strs = {0};
-  str8_list_pushf(arena, &strs, "foobar: %i", 123);
-  str8_list_pushf(arena, &strs, "xyzxyzxyz");
-  str8_list_pushf(arena, &strs, "abc abc abc");
-  str8_list_pushf(arena, &strs, "123");
-  str8_list_pushf(arena, &strs, "456");
-  str8_list_pushf(arena, &strs, "789");
-  str8_list_pushf(arena, &strs, "111");
-  str8_list_pushf(arena, &strs, "222");
-  str8_list_pushf(arena, &strs, "333");
-  String8 strs_serialized = serialized_from_struct(arena, String8List, &strs);
+  FooBar foobar_in    = {1, 2, 3, str8_lit("foobar 123 hello world")};
+  String8 foobar_srlz = serialized_from_struct(arena, FooBar, &foobar_in);
+  FooBar foobar_out   = *struct_from_serialized(arena, FooBar, foobar_srlz);
   
-  String8 test_name = str8_lit("foobar 123");
-  String8 test_name_serialized = serialized_from_struct(arena, String8, &test_name);
+  String8List strs_in = {0};
+  str8_list_pushf(arena, &strs_in, "foobar: %i", 123);
+  str8_list_pushf(arena, &strs_in, "xyzxyzxyz");
+  str8_list_pushf(arena, &strs_in, "abc abc abc");
+  str8_list_pushf(arena, &strs_in, "123");
+  str8_list_pushf(arena, &strs_in, "456");
+  str8_list_pushf(arena, &strs_in, "789");
+  str8_list_pushf(arena, &strs_in, "111");
+  str8_list_pushf(arena, &strs_in, "222");
+  str8_list_pushf(arena, &strs_in, "333");
+  String8 strs_serialized = serialized_from_struct(arena, String8List, &strs_in);
+  String8List strs_out = *struct_from_serialized(arena, String8List, strs_serialized);
   
-  FooBar foobar = {1, 2, 3, str8_lit("foobar 123 hello world")};
-  String8 foobar_serialized = serialized_from_struct(arena, FooBar, &foobar);
+  String8 test_name_in   = str8_lit("foobar 123");
+  String8 test_name_srlz = serialized_from_struct(arena, String8, &test_name_in);
+  String8 test_name_out  = *struct_from_serialized(arena, String8, test_name_srlz);
   
   int x = 0;
   

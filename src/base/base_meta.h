@@ -138,9 +138,10 @@ struct Type
 typedef struct TypeSerializePtrRefInfo TypeSerializePtrRefInfo;
 struct TypeSerializePtrRefInfo
 {
-  Type *type;          // pointers to this
-  void *indexify_base; // can be indexified using this
-  String8 id_member;   // or ID'd via this member of the pointed-to-instance
+  Type *type;           // pointers to this
+  void *indexify_base;  // can be indexified using this
+  void *offsetify_base; // can be offsetified using this
+  void *nil_ptr;        // is terminal if matching 0 or this
 };
 
 typedef struct TypeSerializeParams TypeSerializeParams;
@@ -151,41 +152,61 @@ struct TypeSerializeParams
 };
 
 ////////////////////////////////
+//~ rjf: Type Name -> Type Info
+
+#define type(T) &(T##__type)
+
+////////////////////////////////
 //~ rjf: Globals
 
-read_only global Type type_leaves[] =
+read_only global Type type_nil   = {TypeKind_Null, 0, 0,           &type_nil};
+read_only global Type void__type = {TypeKind_Void, 0, 0,           &type_nil, str8_lit_comp("void")};
+read_only global Type U8__type   = {TypeKind_U8,   0, sizeof(U8),  &type_nil, str8_lit_comp("U8")};
+read_only global Type U16__type  = {TypeKind_U16,  0, sizeof(U16), &type_nil, str8_lit_comp("U16")};
+read_only global Type U32__type  = {TypeKind_U32,  0, sizeof(U32), &type_nil, str8_lit_comp("U32")};
+read_only global Type U64__type  = {TypeKind_U64,  0, sizeof(U64), &type_nil, str8_lit_comp("U64")};
+read_only global Type S8__type   = {TypeKind_S8,   0, sizeof(S8),  &type_nil, str8_lit_comp("S8")};
+read_only global Type S16__type  = {TypeKind_S16,  0, sizeof(S16), &type_nil, str8_lit_comp("S16")};
+read_only global Type S32__type  = {TypeKind_S32,  0, sizeof(S32), &type_nil, str8_lit_comp("S32")};
+read_only global Type S64__type  = {TypeKind_S64,  0, sizeof(S64), &type_nil, str8_lit_comp("S64")};
+read_only global Type B8__type   = {TypeKind_B8,   0, sizeof(B8),  &type_nil, str8_lit_comp("B8")};
+read_only global Type B16__type  = {TypeKind_B16,  0, sizeof(B16), &type_nil, str8_lit_comp("B16")};
+read_only global Type B32__type  = {TypeKind_B32,  0, sizeof(B32), &type_nil, str8_lit_comp("B32")};
+read_only global Type B64__type  = {TypeKind_B64,  0, sizeof(B64), &type_nil, str8_lit_comp("B64")};
+read_only global Type F32__type  = {TypeKind_F32,  0, sizeof(F32), &type_nil, str8_lit_comp("F32")};
+read_only global Type F64__type  = {TypeKind_F64,  0, sizeof(F64), &type_nil, str8_lit_comp("F64")};
+read_only global Type *type_leaves[] =
 {
-  {TypeKind_Null, 0, 0, &type_leaves[0], str8_lit_comp("null")},
-  {TypeKind_Void, 0, 0, &type_leaves[0], str8_lit_comp("void")},
-  {TypeKind_U8,   0, sizeof(U8),          &type_leaves[0], str8_lit_comp("U8")},
-  {TypeKind_U16,  0, sizeof(U16),         &type_leaves[0], str8_lit_comp("U16")},
-  {TypeKind_U32,  0, sizeof(U32),         &type_leaves[0], str8_lit_comp("U32")},
-  {TypeKind_U64,  0, sizeof(U64),         &type_leaves[0], str8_lit_comp("U64")},
-  {TypeKind_S8,   0, sizeof(S8),          &type_leaves[0], str8_lit_comp("S8")},
-  {TypeKind_S16,  0, sizeof(S16),         &type_leaves[0], str8_lit_comp("S16")},
-  {TypeKind_S32,  0, sizeof(S32),         &type_leaves[0], str8_lit_comp("S32")},
-  {TypeKind_S64,  0, sizeof(S64),         &type_leaves[0], str8_lit_comp("S64")},
-  {TypeKind_B8,   0, sizeof(B8),          &type_leaves[0], str8_lit_comp("B8")},
-  {TypeKind_B16,  0, sizeof(B16),         &type_leaves[0], str8_lit_comp("B16")},
-  {TypeKind_B32,  0, sizeof(B32),         &type_leaves[0], str8_lit_comp("B32")},
-  {TypeKind_B64,  0, sizeof(B64),         &type_leaves[0], str8_lit_comp("B64")},
-  {TypeKind_F32,  0, sizeof(F32),         &type_leaves[0], str8_lit_comp("F32")},
-  {TypeKind_F64,  0, sizeof(F64),         &type_leaves[0], str8_lit_comp("F64")},
+  &type_nil,
+  type(void),
+  type(U8),
+  type(U16),
+  type(U32),
+  type(U64),
+  type(S8),
+  type(S16),
+  type(S32),
+  type(S64),
+  type(B8),
+  type(B16),
+  type(B32),
+  type(B64),
+  type(F32),
+  type(F64),
 };
-read_only global Member member_nil = {{0}, &type_leaves[0]};
+read_only global Member member_nil = {{0}, &type_nil};
 
 ////////////////////////////////
 //~ rjf: Type Info Lookups
 
-#define type(T) &(T##__type)
 internal Member *member_from_name(Type *type, String8 name);
 
 ////////////////////////////////
 //~ rjf: Type Info * Instance Operations
 
-internal String8 serialized_from_typed_data(Arena *arena, Type *type, void *ptr, TypeSerializeParams *params);
-internal void *data_from_typed_serialized(Arena *arena, Type *type, String8 string, TypeSerializeParams *params);
-#define serialized_from_struct(arena, T, ptr, ...)         serialized_from_typed_data((arena), type(T), (ptr), &(TypeSerializeParams){.ptr_ref_infos = 0, __VA_ARGS__})
-#define struct_from_serialized(arena, T, string, ...) (T *)data_from_typed_serialized((arena), type(T), (string), &(TypeSerializeParams){.ptr_ref_infos = 0, __VA_ARGS__})
+internal String8 serialized_from_typed_data(Arena *arena, Type *type, String8 data, TypeSerializeParams *params);
+internal String8 deserialized_from_typed_data(Arena *arena, Type *type, String8 data, TypeSerializeParams *params);
+#define serialized_from_struct(arena, T, ptr, ...)         serialized_from_typed_data((arena), type(T), str8_struct(ptr), &(TypeSerializeParams){.ptr_ref_infos = 0, __VA_ARGS__})
+#define struct_from_serialized(arena, T, string, ...) (T *)deserialized_from_typed_data((arena), type(T), (string), &(TypeSerializeParams){.ptr_ref_infos = 0, __VA_ARGS__}).str
 
 #endif // BASE_META_H
