@@ -463,8 +463,10 @@ ctrl_msg_list_from_serialized_string(Arena *arena, String8 string)
       }
       
       // rjf: read meta-eval-info array
-      String8 meta_evals_srlzed = str8_skip(string, read_off);
-      msg->meta_evals = *struct_from_serialized(arena, CTRL_MetaEvalArray, meta_evals_srlzed);
+      String8 meta_evals_data = str8_skip(string, read_off);
+      U64 meta_evals_size = 0;
+      msg->meta_evals = *struct_from_serialized(arena, CTRL_MetaEvalArray, meta_evals_data, .advance_out = &meta_evals_size);
+      read_off += meta_evals_size;
 #if 0
       read_off += str8_deserial_read_struct(string, read_off, &msg->meta_eval_infos.count);
       msg->meta_eval_infos.v = push_array(arena, CTRL_MetaEvalInfo, msg->meta_eval_infos.count);

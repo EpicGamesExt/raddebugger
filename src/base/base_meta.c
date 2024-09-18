@@ -339,6 +339,10 @@ deserialized_from_typed_data(Arena *arena, Type *type, String8 data, TypeSeriali
         }break;
       }
     }
+    if(params->advance_out != 0)
+    {
+      params->advance_out[0] = read_off;
+    }
     scratch_end(scratch);
   }
   return result;

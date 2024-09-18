@@ -1860,10 +1860,10 @@ rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
     {
       CTRL_MetaEval *eval = &rd_state->meta_evals.v[space.u64_0];
       Temp scratch = scratch_begin(0, 0);
-      void *offsetify_base = arena_push(scratch.arena, 0, 64);
+      arena_push(scratch.arena, 0, 64);
+      void *offsetify_base = push_array(scratch.arena, U8, 0);
       U64 pos_min = arena_pos(scratch.arena);
-      TypeSerializePtrRefInfo str_ptr_ref_info = { type(U8), .offsetify_base =  offsetify_base};
-      String8 eval_srlzed = serialized_from_struct(scratch.arena, CTRL_MetaEval, eval, .ptr_ref_infos_count = 1, .ptr_ref_infos = &str_ptr_ref_info);
+      String8 eval_srlzed = serialized_from_struct(scratch.arena, CTRL_MetaEval, eval);
       U64 pos_opl = arena_pos(scratch.arena);
       Rng1U64 legal_range = r1u64(0, pos_opl-pos_min);
       if(contains_1u64(legal_range, range.min))

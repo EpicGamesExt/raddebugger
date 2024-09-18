@@ -140,6 +140,7 @@ struct TypeSerializePtrRefInfo
 typedef struct TypeSerializeParams TypeSerializeParams;
 struct TypeSerializeParams
 {
+  U64 *advance_out;
   TypeSerializePtrRefInfo *ptr_ref_infos;
   U64 ptr_ref_infos_count;
 };
