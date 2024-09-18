@@ -211,6 +211,10 @@ ctrl_meta_eval_from_info(Arena *arena, CTRL_MetaEvalInfo *info)
           U64 off = (string_copy.str - (U8 *)eval);
           MemoryCopy((U8 *)eval + ctrl_meta_eval_member_range_table[idx].min, &off, sizeof(U64));
         }break;
+        case CTRL_MetaEvalDynamicKind_FrameArray:
+        {
+          
+        }break;
       }
     }
   }

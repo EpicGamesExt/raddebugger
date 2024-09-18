@@ -15,5 +15,6 @@
 #include "base_thread_context.c"
 #include "base_command_line.c"
 #include "base_markup.c"
+#include "base_meta.c"
 #include "base_log.c"
 #include "base_entry_point.c"

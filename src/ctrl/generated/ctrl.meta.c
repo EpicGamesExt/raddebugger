@@ -4,7 +4,7 @@
 //- GENERATED CODE
 
 C_LINKAGE_BEGIN
-String8 ctrl_meta_eval_member_name_table[8] =
+String8 ctrl_meta_eval_member_name_table[9] =
 {
 str8_lit_comp("enabled"),
 str8_lit_comp("frozen"),
@@ -14,9 +14,10 @@ str8_lit_comp("color"),
 str8_lit_comp("label"),
 str8_lit_comp("location"),
 str8_lit_comp("condition"),
+str8_lit_comp("callstack"),
 };
 
-Rng1U64 ctrl_meta_eval_info_member_range_table[8] =
+Rng1U64 ctrl_meta_eval_info_member_range_table[9] =
 {
 {OffsetOf(CTRL_MetaEvalInfo, enabled), OffsetOf(CTRL_MetaEvalInfo, enabled) + sizeof(S32)},
 {OffsetOf(CTRL_MetaEvalInfo, frozen), OffsetOf(CTRL_MetaEvalInfo, frozen) + sizeof(S32)},
@@ -26,9 +27,10 @@ Rng1U64 ctrl_meta_eval_info_member_range_table[8] =
 {OffsetOf(CTRL_MetaEvalInfo, label), OffsetOf(CTRL_MetaEvalInfo, label) + sizeof(String8)},
 {OffsetOf(CTRL_MetaEvalInfo, location), OffsetOf(CTRL_MetaEvalInfo, location) + sizeof(String8)},
 {OffsetOf(CTRL_MetaEvalInfo, condition), OffsetOf(CTRL_MetaEvalInfo, condition) + sizeof(String8)},
+{OffsetOf(CTRL_MetaEvalInfo, callstack), OffsetOf(CTRL_MetaEvalInfo, callstack) + sizeof(CTRL_MetaEvalFrameArray)},
 };
 
-Rng1U64 ctrl_meta_eval_member_range_table[8] =
+Rng1U64 ctrl_meta_eval_member_range_table[9] =
 {
 {OffsetOf(CTRL_MetaEval, enabled), OffsetOf(CTRL_MetaEval, enabled) + sizeof(S32)},
 {OffsetOf(CTRL_MetaEval, frozen), OffsetOf(CTRL_MetaEval, frozen) + sizeof(S32)},
@@ -38,9 +40,10 @@ Rng1U64 ctrl_meta_eval_member_range_table[8] =
 {OffsetOf(CTRL_MetaEval, label), OffsetOf(CTRL_MetaEval, label) + sizeof(U64)},
 {OffsetOf(CTRL_MetaEval, location), OffsetOf(CTRL_MetaEval, location) + sizeof(U64)},
 {OffsetOf(CTRL_MetaEval, condition), OffsetOf(CTRL_MetaEval, condition) + sizeof(U64)},
+{OffsetOf(CTRL_MetaEval, callstack), OffsetOf(CTRL_MetaEval, callstack) + sizeof(U64)},
 };
 
-E_TypeKind ctrl_meta_eval_member_type_kind_table[8] =
+E_TypeKind ctrl_meta_eval_member_type_kind_table[9] =
 {
 E_TypeKind_S32,
 E_TypeKind_S32,
@@ -50,9 +53,10 @@ E_TypeKind_U32,
 E_TypeKind_U64,
 E_TypeKind_U64,
 E_TypeKind_U64,
+E_TypeKind_U64,
 };
 
-CTRL_MetaEvalDynamicKind ctrl_meta_eval_member_dynamic_kind_table[8] =
+CTRL_MetaEvalDynamicKind ctrl_meta_eval_member_dynamic_kind_table[9] =
 {
 CTRL_MetaEvalDynamicKind_Null,
 CTRL_MetaEvalDynamicKind_Null,
@@ -62,6 +66,7 @@ CTRL_MetaEvalDynamicKind_Null,
 CTRL_MetaEvalDynamicKind_String8,
 CTRL_MetaEvalDynamicKind_String8,
 CTRL_MetaEvalDynamicKind_String8,
+CTRL_MetaEvalDynamicKind_FrameArray,
 };
 
 String8 ctrl_entity_kind_display_string_table[8] =

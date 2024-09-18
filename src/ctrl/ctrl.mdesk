@@ -4,23 +4,31 @@
 ////////////////////////////////
 //~ rjf: Meta Evaluation Type Information
 
-@table(name  info_type    eval_type      dynamic)
+@table(name  info_type                    eval_type      dynamic_kind)
 CTRL_MetaEvalMemberTable:
 {
-  {enabled    S32          S32            }
-  {frozen     S32          S32            }
-  {hit_count  U64          U64            }
-  {id         U64          U64            }
-  {color      U32          U32            }
-  {label      String8      U64            x          }
-  {location   String8      U64            x          }
-  {condition  String8      U64            x          }
+  {enabled    S32                          S32            }
+  {frozen     S32                          S32            }
+  {hit_count  U64                          U64            }
+  {id         U64                          U64            }
+  {color      U32                          U32            }
+  {label      String8                      U64            String8    }
+  {location   String8                      U64            String8    }
+  {condition  String8                      U64            String8    }
+  {callstack  CTRL_MetaEvalFrameArray      U64            FrameArray }
+}
+
+@struct CTRL_MetaEvalFrameArray:
+{
+  `U64 *frames`;
+  `U64 count`;
 }
 
 @enum CTRL_MetaEvalDynamicKind:
 {
   Null,
   String8,
+  FrameArray,
   COUNT
 }
 
@@ -56,7 +64,7 @@ CTRL_MetaEvalMemberTable:
 
 @data(CTRL_MetaEvalDynamicKind) ctrl_meta_eval_member_dynamic_kind_table:
 {
-  @expand(CTRL_MetaEvalMemberTable a) `$(a.dynamic == 'x' -> 'CTRL_MetaEvalDynamicKind_'..a.info_type)$(a.dynamic == '' -> 'CTRL_MetaEvalDynamicKind_Null')`
+  @expand(CTRL_MetaEvalMemberTable a) `$(a.dynamic_kind != '' -> 'CTRL_MetaEvalDynamicKind_'..a.dynamic_kind)$(a.dynamic_kind == '' -> 'CTRL_MetaEvalDynamicKind_Null')`
 }
 
 ////////////////////////////////
