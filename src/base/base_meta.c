@@ -343,3 +343,13 @@ deserialized_from_typed_data(Arena *arena, Type *type, String8 data, TypeSeriali
   }
   return result;
 }
+
+internal String8
+deep_copy_from_typed_data(Arena *arena, Type *type, String8 data, TypeSerializeParams *params)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  String8 data_srlz = serialized_from_typed_data(scratch.arena, type, data, params);
+  String8 data_copy = deserialized_from_typed_data(arena, type, data_srlz, params);
+  scratch_end(scratch);
+  return data_copy;
+}

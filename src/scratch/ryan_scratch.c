@@ -52,75 +52,6 @@ struct FooBar
   String8 name;
 };
 
-//-
-
-Type String8__str_ptr_type = {TypeKind_Ptr, 0, sizeof(void *), type(U8), {0}, str8_lit_comp("size")};
-
-Member String8__members[] =
-{
-  {str8_lit_comp("str"),  &String8__str_ptr_type, OffsetOf(String8, str)},
-  {str8_lit_comp("size"), type(U64),              OffsetOf(String8, size)},
-};
-
-Type String8__type =
-{
-  TypeKind_Struct,
-  0,
-  sizeof(String8),
-  &type_nil,
-  str8_lit_comp("String8"),
-  {0},
-  ArrayCount(String8__members),
-  String8__members,
-};
-
-//-
-
-extern Type String8Node__type;
-Type String8Node__ptr_type = {TypeKind_Ptr, 0, sizeof(void *), &String8Node__type};
-
-Member String8Node__members[] =
-{
-  {str8_lit_comp("next"),   &String8Node__ptr_type,     OffsetOf(String8Node, next)},
-  {str8_lit_comp("string"), type(String8),              OffsetOf(String8Node, string)},
-};
-
-Type String8Node__type =
-{
-  TypeKind_Struct,
-  0,
-  sizeof(String8Node),
-  &type_nil,
-  str8_lit_comp("String8Node"),
-  {0},
-  ArrayCount(String8Node__members),
-  String8Node__members,
-};
-
-//-
-
-Member String8List__members[] =
-{
-  {str8_lit_comp("first"),      &String8Node__ptr_type,     OffsetOf(String8List, first)},
-  {str8_lit_comp("last"),       &String8Node__ptr_type,     OffsetOf(String8List, last), MemberFlag_DoNotSerialize},
-  {str8_lit_comp("node_count"), type(U64), OffsetOf(String8List, node_count)},
-  {str8_lit_comp("total_size"), type(U64), OffsetOf(String8List, total_size)},
-};
-
-Type String8List__type =
-{
-  TypeKind_Struct,
-  0,
-  sizeof(String8List),
-  &type_nil,
-  str8_lit_comp("String8List"),
-  {0},
-  ArrayCount(String8List__members),
-  String8List__members,
-};
-
-//-
-
 Member FooBar__members[] =
 {
   {str8_lit_comp("x"),    type(U64),      OffsetOf(FooBar, x)},
@@ -132,7 +63,6 @@ Member FooBar__members[] =
 Type FooBar__type =
 {
   TypeKind_Struct,
-  0,
   sizeof(FooBar),
   &type_nil,
   str8_lit_comp("FooBar"),

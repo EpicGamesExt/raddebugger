@@ -202,6 +202,7 @@ thread_static E_TypeState *e_type_state = 0;
 ////////////////////////////////
 //~ rjf: Type Kind Enum Functions
 
+internal E_TypeKind e_type_kind_from_base(TypeKind kind);
 internal E_TypeKind e_type_kind_from_rdi(RDI_TypeKind kind);
 internal E_MemberKind e_member_kind_from_rdi(RDI_MemberKind kind);
 internal RDI_EvalTypeGroup e_type_group_from_kind(E_TypeKind kind);
@@ -242,6 +243,7 @@ internal E_TypeKey e_type_key_cons_(E_ConsTypeParams *params);
 //- rjf: constructed type construction helpers
 internal E_TypeKey e_type_key_cons_array(E_TypeKey element_type_key, U64 count);
 internal E_TypeKey e_type_key_cons_ptr(Arch arch, E_TypeKey element_type_key);
+internal E_TypeKey e_type_key_cons_base(Type *type, String8 name);
 
 //- rjf: basic type key functions
 internal B32 e_type_key_match(E_TypeKey l, E_TypeKey r);

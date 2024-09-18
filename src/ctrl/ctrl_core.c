@@ -186,68 +186,6 @@ ctrl_user_breakpoint_list_copy(Arena *arena, CTRL_UserBreakpointList *src)
 }
 
 ////////////////////////////////
-//~ rjf: Meta Evaluation Type Functions
-
-internal CTRL_MetaEval *
-ctrl_meta_eval_from_info(Arena *arena, CTRL_MetaEvalInfo *info)
-{
-  CTRL_MetaEval *eval = push_array(arena, CTRL_MetaEval, 1);
-  {
-    for(U64 idx = 0; idx < ArrayCount(ctrl_meta_eval_info_member_range_table); idx += 1)
-    {
-      switch(ctrl_meta_eval_member_dynamic_kind_table[idx])
-      {
-        default:
-        case CTRL_MetaEvalDynamicKind_Null:
-        {
-          MemoryCopy((U8 *)eval + ctrl_meta_eval_member_range_table[idx].min,
-                     (U8 *)info + ctrl_meta_eval_info_member_range_table[idx].min,
-                     dim_1u64(ctrl_meta_eval_member_range_table[idx]));
-        }break;
-        case CTRL_MetaEvalDynamicKind_String8:
-        {
-          String8 string = *(String8 *)((U8 *)info + ctrl_meta_eval_info_member_range_table[idx].min);
-          String8 string_copy = push_str8_copy(arena, string);
-          U64 off = (string_copy.str - (U8 *)eval);
-          MemoryCopy((U8 *)eval + ctrl_meta_eval_member_range_table[idx].min, &off, sizeof(U64));
-        }break;
-        case CTRL_MetaEvalDynamicKind_FrameArray:
-        {
-          
-        }break;
-      }
-    }
-  }
-  return eval;
-}
-
-internal CTRL_MetaEvalInfoArray
-ctrl_meta_eval_info_array_copy(Arena *arena, CTRL_MetaEvalInfoArray *src)
-{
-  CTRL_MetaEvalInfoArray dst = {0};
-  dst.count = src->count;
-  dst.v = push_array(arena, CTRL_MetaEvalInfo, dst.count);
-  MemoryCopy(dst.v, src->v, sizeof(dst.v[0])*dst.count);
-  for(U64 idx = 0; idx < dst.count; idx += 1)
-  {
-    for(U64 member_idx = 0; member_idx < ArrayCount(ctrl_meta_eval_info_member_range_table); member_idx += 1)
-    {
-      switch(ctrl_meta_eval_member_dynamic_kind_table[member_idx])
-      {
-        default:{}break;
-        case CTRL_MetaEvalDynamicKind_String8:
-        {
-          String8 string = *(String8 *)((U8 *)(&dst.v[idx]) + ctrl_meta_eval_info_member_range_table[member_idx].min);
-          String8 string_copy = push_str8_copy(arena, string);
-          MemoryCopy((U8 *)(&dst.v[idx]) + ctrl_meta_eval_info_member_range_table[member_idx].min, &string_copy, sizeof(String8));
-        }break;
-      }
-    }
-  }
-  return dst;
-}
-
-////////////////////////////////
 //~ rjf: Message Type Functions
 
 //- rjf: deep copying
@@ -262,7 +200,7 @@ ctrl_msg_deep_copy(Arena *arena, CTRL_Msg *dst, CTRL_Msg *src)
   dst->env_string_list      = str8_list_copy(arena, &src->env_string_list);
   dst->traps                = ctrl_trap_list_copy(arena, &src->traps);
   dst->user_bps             = ctrl_user_breakpoint_list_copy(arena, &src->user_bps);
-  dst->meta_eval_infos      = ctrl_meta_eval_info_array_copy(arena, &src->meta_eval_infos);
+  dst->meta_evals           = *deep_copy_from_struct(arena, CTRL_MetaEvalArray, &src->meta_evals);
 }
 
 //- rjf: list building
@@ -386,6 +324,9 @@ ctrl_serialized_string_from_msg_list(Arena *arena, CTRL_MsgList *msgs)
       }
       
       // rjf: write meta-eval-info array
+      String8 meta_evals_srlzed = serialized_from_struct(scratch.arena, CTRL_MetaEvalArray, &msg->meta_evals);
+      str8_serial_push_string(scratch.arena, &msgs_srlzed, meta_evals_srlzed);
+#if 0
       str8_serial_push_struct(scratch.arena, &msgs_srlzed, &msg->meta_eval_infos.count);
       for(U64 idx = 0; idx < msg->meta_eval_infos.count; idx += 1)
       {
@@ -408,6 +349,7 @@ ctrl_serialized_string_from_msg_list(Arena *arena, CTRL_MsgList *msgs)
           }
         }
       }
+#endif
     }
   }
   String8 string = str8_serial_end(arena, &msgs_srlzed);
@@ -521,6 +463,9 @@ ctrl_msg_list_from_serialized_string(Arena *arena, String8 string)
       }
       
       // rjf: read meta-eval-info array
+      String8 meta_evals_srlzed = str8_skip(string, read_off);
+      msg->meta_evals = *struct_from_serialized(arena, CTRL_MetaEvalArray, meta_evals_srlzed);
+#if 0
       read_off += str8_deserial_read_struct(string, read_off, &msg->meta_eval_infos.count);
       msg->meta_eval_infos.v = push_array(arena, CTRL_MetaEvalInfo, msg->meta_eval_infos.count);
       for(U64 idx = 0; idx < msg->meta_eval_infos.count; idx += 1)
@@ -547,6 +492,7 @@ ctrl_msg_list_from_serialized_string(Arena *arena, String8 string)
           }
         }
       }
+#endif
     }
   }
   return msgs;
@@ -1257,39 +1203,6 @@ ctrl_entity_store_apply_events(CTRL_EntityStore *store, CTRL_EventList *list)
       }break;
     }
   }
-}
-
-////////////////////////////////
-//~ rjf: Meta-Eval Functions
-
-internal E_TypeKey
-ctrl_meta_eval_type_key(void)
-{
-  Temp scratch = scratch_begin(0, 0);
-  E_MemberList members = {0};
-  {
-    for(U64 idx = 0; idx < ArrayCount(ctrl_meta_eval_member_range_table); idx += 1)
-    {
-      E_TypeKey member_type_key = e_type_key_basic(ctrl_meta_eval_member_type_kind_table[idx]);
-      switch(ctrl_meta_eval_member_dynamic_kind_table[idx])
-      {
-        default:{}break;
-        case CTRL_MetaEvalDynamicKind_String8:
-        {
-          member_type_key = e_type_key_cons_ptr(arch_from_context(), e_type_key_basic(E_TypeKind_Char8));
-        }break;
-      }
-      e_member_list_push_new(scratch.arena, &members, .name = ctrl_meta_eval_member_name_table[idx], .off = ctrl_meta_eval_member_range_table[idx].min, .type_key = member_type_key);
-    }
-  }
-  E_MemberArray members_array = e_member_array_from_list(scratch.arena, &members);
-  E_TypeKey meta_eval_type_key = e_type_key_cons(.arch = arch_from_context(),
-                                                 .kind = E_TypeKind_Struct,
-                                                 .name = str8_lit("Meta"),
-                                                 .members = members_array.v,
-                                                 .count = members_array.count);
-  scratch_end(scratch);
-  return meta_eval_type_key;
 }
 
 ////////////////////////////////

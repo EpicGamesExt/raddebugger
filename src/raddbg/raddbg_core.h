@@ -804,9 +804,9 @@ struct RD_State
   F32 frame_dt;
   
   // rjf: meta evaluation info
-  CTRL_MetaEvalInfoArray meta_eval_infos;
-  Rng1U64 meta_eval_infos_bps_idx_range;
-  Rng1U64 meta_eval_infos_wps_idx_range;
+  CTRL_MetaEvalArray meta_evals;
+  Rng1U64 meta_evals_bps_idx_range;
+  Rng1U64 meta_evals_wps_idx_range;
   
   // rjf: registers stack
   RD_RegsNode base_regs;

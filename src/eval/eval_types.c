@@ -5,6 +5,37 @@
 //~ rjf: Type Kind Enum Functions
 
 internal E_TypeKind
+e_type_kind_from_base(TypeKind kind)
+{
+  E_TypeKind result = E_TypeKind_Null;
+  switch(kind)
+  {
+    default:{}break;
+    case TypeKind_Void:  {result = E_TypeKind_Void;}break;
+    case TypeKind_U8:    {result = E_TypeKind_U8;}break;
+    case TypeKind_U16:   {result = E_TypeKind_U16;}break;
+    case TypeKind_U32:   {result = E_TypeKind_U32;}break;
+    case TypeKind_U64:   {result = E_TypeKind_U64;}break;
+    case TypeKind_S8:    {result = E_TypeKind_S8;}break;
+    case TypeKind_S16:   {result = E_TypeKind_S16;}break;
+    case TypeKind_S32:   {result = E_TypeKind_S32;}break;
+    case TypeKind_S64:   {result = E_TypeKind_S64;}break;
+    case TypeKind_B8:    {result = E_TypeKind_S8;}break;
+    case TypeKind_B16:   {result = E_TypeKind_S16;}break;
+    case TypeKind_B32:   {result = E_TypeKind_S32;}break;
+    case TypeKind_B64:   {result = E_TypeKind_S64;}break;
+    case TypeKind_F32:   {result = E_TypeKind_F32;}break;
+    case TypeKind_F64:   {result = E_TypeKind_F64;}break;
+    case TypeKind_Ptr:   {result = E_TypeKind_Ptr;}break;
+    case TypeKind_Array: {result = E_TypeKind_Array;}break;
+    case TypeKind_Struct:{result = E_TypeKind_Struct;}break;
+    case TypeKind_Union: {result = E_TypeKind_Union;}break;
+    case TypeKind_Enum:  {result = E_TypeKind_Enum;}break;
+  }
+  return result;
+}
+
+internal E_TypeKind
 e_type_kind_from_rdi(RDI_TypeKind kind)
 {
   E_TypeKind result = E_TypeKind_Null;
@@ -402,6 +433,63 @@ e_type_key_cons_ptr(Arch arch, E_TypeKey element_type_key)
 {
   E_TypeKey key = e_type_key_cons(.arch = arch, .kind = E_TypeKind_Ptr, .direct_key = element_type_key);
   return key;
+}
+
+internal E_TypeKey
+e_type_key_cons_base(Type *type, String8 name)
+{
+  E_TypeKey result = e_type_key_zero();
+  switch(type->kind)
+  {
+    default:
+    if(TypeKind_FirstLeaf <= type->kind && type->kind <= TypeKind_LastLeaf)
+    {
+      E_TypeKind kind = e_type_kind_from_base(type->kind);
+      result = e_type_key_basic(kind);
+    }break;
+    case TypeKind_Struct:
+    {
+      Temp scratch = scratch_begin(0, 0);
+      E_MemberList members = {0};
+      for(U64 idx = 0; idx < type->count; idx += 1)
+      {
+        E_TypeKey member_type_key = e_type_key_cons_base(type->members[idx].type, str8_zero());
+        e_member_list_push_new(scratch.arena, &members, .name = type->members[idx].name, .off = type->members[idx].value, .type_key = member_type_key);
+      }
+      E_MemberArray members_array = e_member_array_from_list(scratch.arena, &members);
+      result = e_type_key_cons(.arch    = arch_from_context(),
+                               .kind    = E_TypeKind_Struct,
+                               .name    = name,
+                               .members = members_array.v,
+                               .count   = members_array.count);
+      scratch_end(scratch);
+    }break;
+  }
+  return result;
+#if 0
+  E_MemberList members = {0};
+  {
+    for(U64 idx = 0; idx < ArrayCount(ctrl_meta_eval_member_range_table); idx += 1)
+    {
+      E_TypeKey member_type_key = e_type_key_basic(ctrl_meta_eval_member_type_kind_table[idx]);
+      switch(ctrl_meta_eval_member_dynamic_kind_table[idx])
+      {
+        default:{}break;
+        case CTRL_MetaEvalDynamicKind_String8:
+        {
+          member_type_key = e_type_key_cons_ptr(arch_from_context(), e_type_key_basic(E_TypeKind_Char8));
+        }break;
+      }
+      e_member_list_push_new(scratch.arena, &members, .name = ctrl_meta_eval_member_name_table[idx], .off = ctrl_meta_eval_member_range_table[idx].min, .type_key = member_type_key);
+    }
+  }
+  E_MemberArray members_array = e_member_array_from_list(scratch.arena, &members);
+  E_TypeKey meta_eval_type_key = e_type_key_cons(.arch = arch_from_context(),
+                                                 .kind = E_TypeKind_Struct,
+                                                 .name = str8_lit("Meta"),
+                                                 .members = members_array.v,
+                                                 .count = members_array.count);
+#endif
 }
 
 //- rjf: basic type key functions

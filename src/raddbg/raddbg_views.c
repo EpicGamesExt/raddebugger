@@ -1043,11 +1043,11 @@ rd_watch_view_build(RD_WatchViewState *ewv, B32 modifiable, U32 default_radix, R
           //
           case RD_WatchViewFillKind_Breakpoints:
           {
-            E_TypeKey meta_eval_type = ctrl_meta_eval_type_key();
+            E_TypeKey meta_eval_type = e_type_key_cons_base(type(CTRL_MetaEval), str8_lit("debugger_entity"));
             mutable_entity_kind = RD_EntityKind_Breakpoint;
             ev_view_rule_list_push_string(scratch.arena, &top_level_view_rules, str8_lit("no_addr"));
             RD_EntityList bps = rd_query_cached_entity_list_with_kind(mutable_entity_kind);
-            U64 idx = rd_state->meta_eval_infos_bps_idx_range.min;
+            U64 idx = rd_state->meta_evals_bps_idx_range.min;
             for(RD_EntityNode *n = bps.first; n != 0; n = n->next, idx += 1)
             {
               RD_Entity *bp = n->entity;
@@ -1075,7 +1075,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, B32 modifiable, U32 default_radix, R
           {
             mutable_entity_kind = RD_EntityKind_WatchPin;
             RD_EntityList wps = rd_query_cached_entity_list_with_kind(mutable_entity_kind);
-            U64 idx = rd_state->meta_eval_infos_wps_idx_range.min;
+            U64 idx = rd_state->meta_evals_wps_idx_range.min;
             for(RD_EntityNode *n = wps.first; n != 0; n = n->next, idx += 1)
             {
               RD_Entity *wp = n->entity;

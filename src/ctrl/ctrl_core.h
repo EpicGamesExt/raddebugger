@@ -13,6 +13,49 @@ typedef U64 CTRL_MachineID;
 #define CTRL_MachineID_Local (1)
 
 ////////////////////////////////
+//~ rjf: Meta Evaluation Types
+
+//- rjf: meta evaluation instance
+typedef struct CTRL_MetaEval CTRL_MetaEval;
+struct CTRL_MetaEval
+{
+#define CTRL_MetaEval_MemberXList \
+X(B32, enabled)\
+X(B32, frozen)\
+X(U64, hit_count)\
+X(U64, id)\
+X(U32, color)\
+X(String8, label)\
+X(String8, location)\
+X(String8, condition)
+#define X(type, name) type name;
+  CTRL_MetaEval_MemberXList
+#undef X
+};
+struct_members(CTRL_MetaEval)
+{
+#define X(type, name) member_lit_comp(CTRL_MetaEval, type, name),
+  CTRL_MetaEval_MemberXList
+#undef X
+};
+struct_type(CTRL_MetaEval);
+
+//- rjf: meta evaluation array
+typedef struct CTRL_MetaEvalArray CTRL_MetaEvalArray;
+struct CTRL_MetaEvalArray
+{
+  CTRL_MetaEval *v;
+  U64 count;
+};
+ptr_type(CTRL_MetaEvalArray__v_ptr_type, type(CTRL_MetaEval), .count_delimiter_name = str8_lit_comp("count"));
+struct_members(CTRL_MetaEvalArray)
+{
+  {str8_lit_comp("v"), &CTRL_MetaEvalArray__v_ptr_type, OffsetOf(CTRL_MetaEvalArray, v)},
+  member_lit_comp(CTRL_MetaEvalArray, U64, count),
+};
+struct_type(CTRL_MetaEvalArray);
+
+////////////////////////////////
 //~ rjf: Entity Handle Types
 
 typedef struct CTRL_Handle CTRL_Handle;
@@ -254,23 +297,6 @@ struct CTRL_UserBreakpointList
 };
 
 ////////////////////////////////
-//~ rjf: Meta Evaluation Types
-
-typedef struct CTRL_MetaEvalInfoArray CTRL_MetaEvalInfoArray;
-struct CTRL_MetaEvalInfoArray
-{
-  CTRL_MetaEvalInfo *v;
-  U64 count;
-};
-
-typedef struct CTRL_MetaEvalArray CTRL_MetaEvalArray;
-struct CTRL_MetaEvalArray
-{
-  CTRL_MetaEval *v;
-  U64 count;
-};
-
-////////////////////////////////
 //~ rjf: Evaluation Spaces
 
 typedef U64 CTRL_EvalSpaceKind;
@@ -324,7 +350,7 @@ struct CTRL_Msg
   String8List env_string_list;
   CTRL_TrapList traps;
   CTRL_UserBreakpointList user_bps;
-  CTRL_MetaEvalInfoArray meta_eval_infos;
+  CTRL_MetaEvalArray meta_evals;
 };
 
 typedef struct CTRL_MsgNode CTRL_MsgNode;
@@ -710,12 +736,6 @@ internal void ctrl_user_breakpoint_list_push(Arena *arena, CTRL_UserBreakpointLi
 internal CTRL_UserBreakpointList ctrl_user_breakpoint_list_copy(Arena *arena, CTRL_UserBreakpointList *src);
 
 ////////////////////////////////
-//~ rjf: Meta Evaluation Type Functions
-
-internal CTRL_MetaEval *ctrl_meta_eval_from_info(Arena *arena, CTRL_MetaEvalInfo *info);
-internal CTRL_MetaEvalInfoArray ctrl_meta_eval_info_array_copy(Arena *arena, CTRL_MetaEvalInfoArray *src);
-
-////////////////////////////////
 //~ rjf: Message Type Functions
 
 //- rjf: deep copying
@@ -787,11 +807,6 @@ internal CTRL_EntityRec ctrl_entity_rec_depth_first(CTRL_Entity *entity, CTRL_En
 
 //- rjf: applying events to entity caches
 internal void ctrl_entity_store_apply_events(CTRL_EntityStore *store, CTRL_EventList *list);
-
-////////////////////////////////
-//~ rjf: Meta-Eval Functions
-
-internal E_TypeKey ctrl_meta_eval_type_key(void);
 
 ////////////////////////////////
 //~ rjf: Main Layer Initialization
