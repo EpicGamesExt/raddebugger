@@ -747,10 +747,10 @@ rd_entity_desc_button(RD_Entity *entity, FuzzyMatchRangeList *name_matches, Stri
     // rjf: right-click => context menu for this entity
     else if(ui_right_clicked(sig))
     {
-      RD_Handle handle = rd_handle_from_entity(entity);
-      RD_Window *window = rd_window_from_handle(rd_regs()->window);
-      ui_ctx_menu_open(rd_state->entity_ctx_menu_key, sig.box->key, v2f32(0, sig.box->rect.y1 - sig.box->rect.y0));
-      window->entity_ctx_menu_entity = handle;
+      // RD_Handle handle = rd_handle_from_entity(entity);
+      // RD_Window *window = rd_window_from_handle(rd_regs()->window);
+      // ui_ctx_menu_open(rd_state->entity_ctx_menu_key, sig.box->key, v2f32(0, sig.box->rect.y1 - sig.box->rect.y0));
+      // window->entity_ctx_menu_entity = handle;
     }
     
     // rjf: drag+drop
@@ -1374,10 +1374,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             // rjf: bp right-click menu
             if(ui_right_clicked(bp_sig))
             {
-              RD_Handle handle = rd_handle_from_entity(bp);
-              ui_ctx_menu_open(rd_state->entity_ctx_menu_key, bp_box->key, v2f32(0, bp_box->rect.y1-bp_box->rect.y0));
-              RD_Window *window = rd_window_from_handle(rd_regs()->window);
-              window->entity_ctx_menu_entity = handle;
+              RD_RegsScope(.entity = rd_handle_from_entity(bp)) rd_open_ctx_menu(bp_box->key, v2f32(0, bp_box->rect.y1-bp_box->rect.y0), RD_RegSlot_Entity);
             }
           }
           
@@ -1430,10 +1427,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             // rjf: watch right-click menu
             if(ui_right_clicked(pin_sig))
             {
-              RD_Handle handle = rd_handle_from_entity(pin);
-              ui_ctx_menu_open(rd_state->entity_ctx_menu_key, pin_box->key, v2f32(0, pin_box->rect.y1-pin_box->rect.y0));
-              RD_Window *window = rd_window_from_handle(rd_regs()->window);
-              window->entity_ctx_menu_entity = handle;
+              RD_RegsScope(.entity = rd_handle_from_entity(pin)) rd_open_ctx_menu(pin_box->key, v2f32(0, pin_box->rect.y1-pin_box->rect.y0), RD_RegSlot_Entity);
             }
           }
         }
@@ -1655,9 +1649,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
               }
               if(ui_right_clicked(sig))
               {
-                ui_ctx_menu_open(rd_state->entity_ctx_menu_key, sig.box->key, v2f32(0, sig.box->rect.y1-sig.box->rect.y0));
-                RD_Window *window = rd_window_from_handle(rd_regs()->window);
-                window->entity_ctx_menu_entity = rd_handle_from_entity(pin);
+                RD_RegsScope(.entity = rd_handle_from_entity(pin)) rd_open_ctx_menu(sig.box->key, v2f32(0, sig.box->rect.y1-sig.box->rect.y0), RD_RegSlot_Entity);
               }
             }
             rd_code_label(0.8f, 1, rd_rgba_from_theme_color(RD_ThemeColor_CodeDefault), pin_expr);

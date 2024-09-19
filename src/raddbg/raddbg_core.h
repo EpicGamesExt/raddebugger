@@ -663,30 +663,6 @@ struct RD_Window
   TxtPt ctx_menu_input_cursor;
   TxtPt ctx_menu_input_mark;
   
-  // rjf: code context menu state
-  Arena *code_ctx_menu_arena;
-  String8 code_ctx_menu_file_path;
-  U128 code_ctx_menu_text_key;
-  TXT_LangKind code_ctx_menu_lang_kind;
-  TxtRng code_ctx_menu_range;
-  U64 code_ctx_menu_vaddr;
-  D_LineList code_ctx_menu_lines;
-  
-  // rjf: entity context menu state
-  RD_Handle entity_ctx_menu_entity;
-  U8 entity_ctx_menu_input_buffer[1024];
-  U64 entity_ctx_menu_input_size;
-  TxtPt entity_ctx_menu_input_cursor;
-  TxtPt entity_ctx_menu_input_mark;
-  
-  // rjf: tab context menu state
-  RD_Handle tab_ctx_menu_panel;
-  RD_Handle tab_ctx_menu_view;
-  U8 tab_ctx_menu_input_buffer[1024];
-  U64 tab_ctx_menu_input_size;
-  TxtPt tab_ctx_menu_input_cursor;
-  TxtPt tab_ctx_menu_input_mark;
-  
   // rjf: autocomplete lister state
   U64 autocomp_last_frame_idx;
   B32 autocomp_force_closed;
@@ -891,11 +867,6 @@ struct RD_State
   B32 bind_change_active;
   String8 bind_change_cmd_name;
   RD_Binding bind_change_binding;
-  
-  // rjf: top-level context menu keys
-  UI_Key code_ctx_menu_key;
-  UI_Key entity_ctx_menu_key;
-  UI_Key tab_ctx_menu_key;
   
   // rjf: windows
   RD_Window *first_window;
