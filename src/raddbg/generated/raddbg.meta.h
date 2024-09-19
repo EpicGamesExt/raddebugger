@@ -57,6 +57,7 @@ RD_RegSlot_Machine,
 RD_RegSlot_Module,
 RD_RegSlot_Process,
 RD_RegSlot_Thread,
+RD_RegSlot_CtrlEntity,
 RD_RegSlot_Window,
 RD_RegSlot_Panel,
 RD_RegSlot_View,
@@ -549,6 +550,7 @@ CTRL_Handle machine;
 CTRL_Handle module;
 CTRL_Handle process;
 CTRL_Handle thread;
+CTRL_Handle ctrl_entity;
 RD_Handle window;
 RD_Handle panel;
 RD_Handle view;
@@ -617,6 +619,7 @@ RD_ViewRuleUIFunctionType *ui;
 .module = rd_regs()->module,\
 .process = rd_regs()->process,\
 .thread = rd_regs()->thread,\
+.ctrl_entity = rd_regs()->ctrl_entity,\
 .window = rd_regs()->window,\
 .panel = rd_regs()->panel,\
 .view = rd_regs()->view,\
@@ -696,7 +699,7 @@ extern String8 d_entity_kind_name_lower_table[30];
 extern String8 d_entity_kind_name_lower_plural_table[30];
 extern String8 d_entity_kind_name_label_table[30];
 extern RD_EntityKindFlags rd_entity_kind_flags_table[30];
-extern Rng1U64 rd_reg_slot_range_table[32];
+extern Rng1U64 rd_reg_slot_range_table[33];
 extern RD_StringBindingPair rd_default_binding_table[110];
 extern String8 rd_binding_version_remap_old_name_table[7];
 extern String8 rd_binding_version_remap_new_name_table[7];

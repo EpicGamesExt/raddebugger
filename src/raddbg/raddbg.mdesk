@@ -158,10 +158,11 @@ RD_EntityKindTable:
 RD_RegTable:
 {
   // rjf: entity slots
-  {CTRL_Handle      machine          Machine       }
-  {CTRL_Handle      module           Module        }
-  {CTRL_Handle      process          Process       }
-  {CTRL_Handle      thread           Thread        }
+  {CTRL_Handle       machine          Machine       }
+  {CTRL_Handle       module           Module        }
+  {CTRL_Handle       process          Process       }
+  {CTRL_Handle       thread           Thread        }
+  {CTRL_Handle       ctrl_entity      CtrlEntity    }
   {RD_Handle         window           Window        }
   {RD_Handle         panel            Panel         }
   {RD_Handle         view             View          }

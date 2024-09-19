@@ -3324,6 +3324,310 @@ rd_window_frame(RD_Window *ws)
       RD_Palette(RD_PaletteCode_ImplicitButton)
     {
       Temp scratch = scratch_begin(0, 0);
+      RD_Regs *regs = ws->ctx_menu_regs;
+      RD_RegSlot slot = ws->ctx_menu_regs_slot;
+      CTRL_Entity *ctrl_entity = &ctrl_entity_nil;
+      {
+        switch(slot)
+        {
+          default:{}break;
+          
+          //////////////////////
+          //- rjf: ctrl entities
+          //
+          case RD_RegSlot_Machine: ctrl_entity = ctrl_entity_from_handle(d_state->ctrl_entity_store, regs->machine); goto ctrl_entity_title;
+          case RD_RegSlot_Process: ctrl_entity = ctrl_entity_from_handle(d_state->ctrl_entity_store, regs->process); goto ctrl_entity_title;
+          case RD_RegSlot_Module:  ctrl_entity = ctrl_entity_from_handle(d_state->ctrl_entity_store, regs->module);  goto ctrl_entity_title;
+          case RD_RegSlot_Thread:  ctrl_entity = ctrl_entity_from_handle(d_state->ctrl_entity_store, regs->thread);  goto ctrl_entity_title;
+          ctrl_entity_title:;
+          {
+            //- rjf: title
+            UI_Row
+              UI_PrefWidth(ui_text_dim(5, 1))
+              UI_TextAlignment(UI_TextAlign_Center)
+              UI_TextPadding(ui_top_font_size()*1.5f)
+            {
+              DR_FancyStringList fstrs = rd_title_fstrs_from_ctrl_entity(scratch.arena, ctrl_entity, ui_top_palette()->text_weak, ui_top_font_size());
+              UI_Box *title_box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
+              ui_box_equip_display_fancy_strings(title_box, &fstrs);
+              if(ctrl_entity->kind == CTRL_EntityKind_Thread)
+              {
+                ui_spacer(ui_em(0.5f, 1.f));
+                UI_FontSize(ui_top_font_size() - 1.f)
+                  UI_CornerRadius(ui_top_font_size()*0.5f)
+                  RD_Palette(RD_PaletteCode_NeutralPopButton)
+                  UI_TextPadding(ui_top_font_size()*0.5f)
+                {
+                  UI_FlagsAdd(UI_BoxFlag_DrawTextWeak|UI_BoxFlag_DrawBorder) ui_label(string_from_arch(ctrl_entity->arch));
+                  ui_spacer(ui_em(0.5f, 1.f));
+                  UI_FlagsAdd(UI_BoxFlag_DrawTextWeak|UI_BoxFlag_DrawBorder) ui_labelf("TID: %i", (U32)ctrl_entity->id);
+                }
+              }
+            }
+            
+            RD_Palette(RD_PaletteCode_Floating) ui_divider(ui_em(1.f, 1.f));
+            
+            //- rjf: name editor
+            if(ctrl_entity->kind == CTRL_EntityKind_Thread) RD_Font(RD_FontSlot_Code) UI_TextPadding(ui_top_font_size()*1.5f)
+            {
+              UI_Signal sig = rd_line_editf(RD_LineEditFlag_Border|RD_LineEditFlag_CodeContents, 0, 0, &ws->ctx_menu_input_cursor, &ws->ctx_menu_input_mark, ws->ctx_menu_input_buffer, ws->ctx_menu_input_buffer_size, &ws->ctx_menu_input_string_size, 0, ctrl_entity->string, "Name###ctrl_entity_string_edit_%p", ctrl_entity);
+              if(ui_committed(sig))
+              {
+                rd_cmd(RD_CmdKind_SetEntityName, .ctrl_entity = ctrl_entity->handle, .string = str8(ws->ctx_menu_input_buffer, ws->ctx_menu_input_string_size));
+              }
+            }
+            
+            // rjf: copy name
+            if(ctrl_entity->kind == CTRL_EntityKind_Thread &&
+               ui_clicked(rd_icon_buttonf(RD_IconKind_Clipboard, 0, "Copy Name")))
+            {
+              os_set_clipboard_text(ctrl_entity->string);
+              ui_ctx_menu_close();
+            }
+            
+            // rjf: selection
+            if(ctrl_entity->kind == CTRL_EntityKind_Thread)
+            {
+              B32 is_selected = ctrl_handle_match(rd_base_regs()->thread, ctrl_entity->handle);
+              if(is_selected)
+              {
+                rd_icon_buttonf(RD_IconKind_Thread, 0, "[Selected]###select_entity");
+              }
+              else if(ui_clicked(rd_icon_buttonf(RD_IconKind_Thread, 0, "Select###select_entity")))
+              {
+                rd_cmd(RD_CmdKind_SelectThread, .thread = ctrl_entity->handle);
+                ui_ctx_menu_close();
+              }
+            }
+            
+            // rjf: freezing
+            if(ctrl_entity->kind == CTRL_EntityKind_Thread ||
+               ctrl_entity->kind == CTRL_EntityKind_Process ||
+               ctrl_entity->kind == CTRL_EntityKind_Machine)
+            {
+              B32 is_frozen = ctrl_entity_tree_is_frozen(ctrl_entity);
+              ui_set_next_palette(rd_palette_from_code(is_frozen ? RD_PaletteCode_NegativePopButton : RD_PaletteCode_PositivePopButton));
+              if(is_frozen && ui_clicked(rd_icon_buttonf(RD_IconKind_Locked, 0, "Thaw###freeze_thaw")))
+              {
+                rd_cmd(RD_CmdKind_ThawThread, .ctrl_entity = ctrl_entity->handle);
+              }
+              if(!is_frozen && ui_clicked(rd_icon_buttonf(RD_IconKind_Unlocked, 0, "Freeze###freeze_thaw")))
+              {
+                rd_cmd(RD_CmdKind_FreezeThread, .ctrl_entity = ctrl_entity->handle);
+              }
+            }
+            
+            // rjf: copy ID
+            if((ctrl_entity->kind == CTRL_EntityKind_Thread ||
+                ctrl_entity->kind == CTRL_EntityKind_Process) &&
+               ui_clicked(rd_icon_buttonf(RD_IconKind_Clipboard, 0, "Copy ID")))
+            {
+              String8 string = str8_from_u64(scratch.arena, ctrl_entity->id, 10, 0, 0);
+              os_set_clipboard_text(string);
+              ui_ctx_menu_close();
+            }
+            
+            // rjf: copy call stack
+            if(ctrl_entity->kind == CTRL_EntityKind_Thread)
+            {
+              if(ui_clicked(rd_icon_buttonf(RD_IconKind_Clipboard, 0, "Copy Call Stack")))
+              {
+                DI_Scope *di_scope = di_scope_open();
+                CTRL_Entity *process = ctrl_entity_ancestor_from_kind(ctrl_entity, CTRL_EntityKind_Process);
+                CTRL_Unwind base_unwind = d_query_cached_unwind_from_thread(ctrl_entity);
+                D_Unwind rich_unwind = d_unwind_from_ctrl_unwind(scratch.arena, di_scope, process, &base_unwind);
+                String8List lines = {0};
+                for(U64 frame_idx = 0; frame_idx < rich_unwind.frames.concrete_frame_count; frame_idx += 1)
+                {
+                  D_UnwindFrame *concrete_frame = &rich_unwind.frames.v[frame_idx];
+                  U64 rip_vaddr = regs_rip_from_arch_block(ctrl_entity->arch, concrete_frame->regs);
+                  CTRL_Entity *module = ctrl_module_from_process_vaddr(process, rip_vaddr);
+                  RDI_Parsed *rdi = concrete_frame->rdi;
+                  RDI_Procedure *procedure = concrete_frame->procedure;
+                  for(D_UnwindInlineFrame *inline_frame = concrete_frame->last_inline_frame;
+                      inline_frame != 0;
+                      inline_frame = inline_frame->prev)
+                  {
+                    RDI_InlineSite *inline_site = inline_frame->inline_site;
+                    String8 name = {0};
+                    name.str = rdi_string_from_idx(rdi, inline_site->name_string_idx, &name.size);
+                    str8_list_pushf(scratch.arena, &lines, "0x%I64x: [inlined] \"%S\"%s%S", rip_vaddr, name, module == &ctrl_entity_nil ? "" : " in ", module->string);
+                  }
+                  if(procedure != 0)
+                  {
+                    String8 name = {0};
+                    name.str = rdi_name_from_procedure(rdi, procedure, &name.size);
+                    str8_list_pushf(scratch.arena, &lines, "0x%I64x: \"%S\"%s%S", rip_vaddr, name, module == &ctrl_entity_nil ? "" : " in ", module->string);
+                  }
+                  else if(module != &ctrl_entity_nil)
+                  {
+                    str8_list_pushf(scratch.arena, &lines, "0x%I64x: [??? in %S]", rip_vaddr, module->string);
+                  }
+                  else
+                  {
+                    str8_list_pushf(scratch.arena, &lines, "0x%I64x: [??? in ???]", rip_vaddr);
+                  }
+                }
+                StringJoin join = {0};
+                join.sep = join.post = str8_lit("\n");
+                String8 text = str8_list_join(scratch.arena, &lines, &join);
+                os_set_clipboard_text(text);
+                ui_ctx_menu_close();
+                di_scope_close(di_scope);
+              }
+            }
+            
+            // rjf: find
+            if(ctrl_entity->kind == CTRL_EntityKind_Thread)
+            {
+              if(ui_clicked(rd_icon_buttonf(RD_IconKind_FileOutline, 0, "Find")))
+              {
+                rd_cmd(RD_CmdKind_FindThread, .thread = ctrl_entity->handle);
+                ui_ctx_menu_close();
+              }
+            }
+            
+            RD_Palette(RD_PaletteCode_Floating) ui_divider(ui_em(1.f, 1.f));
+            
+            // rjf: callstack
+            if(ctrl_entity->kind == CTRL_EntityKind_Thread) UI_TextPadding(ui_top_font_size()*1.5f)
+            {
+              DI_Scope *di_scope = di_scope_open();
+              CTRL_Entity *thread = ctrl_entity;
+              CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, CTRL_EntityKind_Process);
+              CTRL_Unwind base_unwind = d_query_cached_unwind_from_thread(thread);
+              D_Unwind rich_unwind = d_unwind_from_ctrl_unwind(scratch.arena, di_scope, process, &base_unwind);
+              for(U64 idx = 0; idx < rich_unwind.frames.concrete_frame_count; idx += 1)
+              {
+                D_UnwindFrame *f = &rich_unwind.frames.v[idx];
+                RDI_Parsed *rdi = f->rdi;
+                RDI_Procedure *procedure = f->procedure;
+                U64 rip_vaddr = regs_rip_from_arch_block(thread->arch, f->regs);
+                CTRL_Entity *module = ctrl_module_from_process_vaddr(process, rip_vaddr);
+                String8 module_name = module == &ctrl_entity_nil ? str8_lit("???") : str8_skip_last_slash(module->string);
+                
+                // rjf: inline frames
+                for(D_UnwindInlineFrame *fin = f->last_inline_frame; fin != 0; fin = fin->prev)
+                {
+                  UI_Box *row = ui_build_box_from_stringf(UI_BoxFlag_Clickable|UI_BoxFlag_ClickToFocus, "###callstack_row_%I64x", idx);
+                  UI_Signal sig = ui_signal_from_box(row);
+                  ui_push_parent(row);
+                  String8 name = {0};
+                  name.str = rdi_string_from_idx(rdi, fin->inline_site->name_string_idx, &name.size);
+                  UI_TextAlignment(UI_TextAlign_Left) RD_Font(RD_FontSlot_Code) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_em(16.f, 1)) ui_labelf("0x%I64x", rip_vaddr);
+                  RD_Font(RD_FontSlot_Code) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_text_dim(10, 1)) ui_label(str8_lit("[inlined]"));
+                  if(name.size != 0)
+                  {
+                    RD_Font(RD_FontSlot_Code) UI_PrefWidth(ui_text_dim(10, 1))
+                    {
+                      rd_code_label(1.f, 0, rd_rgba_from_theme_color(RD_ThemeColor_CodeSymbol), name);
+                    }
+                  }
+                  else
+                  {
+                    RD_Font(RD_FontSlot_Code) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_text_dim(10, 1)) ui_labelf("[??? in %S]", module_name);
+                  }
+                  ui_pop_parent();
+                }
+                
+                // rjf: concrete frame
+                {
+                  UI_Box *row = ui_build_box_from_stringf(UI_BoxFlag_Clickable|UI_BoxFlag_ClickToFocus, "###callstack_row_%I64x", idx);
+                  UI_Signal sig = ui_signal_from_box(row);
+                  ui_push_parent(row);
+                  String8 name = {0};
+                  name.str = rdi_name_from_procedure(rdi, procedure, &name.size);
+                  UI_TextAlignment(UI_TextAlign_Left) RD_Font(RD_FontSlot_Code) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_em(16.f, 1)) ui_labelf("0x%I64x", rip_vaddr);
+                  if(name.size != 0)
+                  {
+                    RD_Font(RD_FontSlot_Code) UI_PrefWidth(ui_text_dim(10, 1))
+                    {
+                      rd_code_label(1.f, 0, rd_rgba_from_theme_color(RD_ThemeColor_CodeSymbol), name);
+                    }
+                  }
+                  else
+                  {
+                    RD_Font(RD_FontSlot_Code) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_text_dim(10, 1)) ui_labelf("[??? in %S]", module_name);
+                  }
+                  ui_pop_parent();
+                }
+              }
+              di_scope_close(di_scope);
+            }
+            
+            // rjf: color editor
+#if 0
+            RD_Palette(RD_PaletteCode_Floating) ui_divider(ui_em(1.f, 1.f));
+            {
+              UI_Padding(ui_em(1.5f, 1.f))
+              {
+                ui_set_next_pref_height(ui_em(9.f, 1.f));
+                UI_Row UI_Padding(ui_pct(1, 0))
+                {
+                  UI_PrefWidth(ui_em(1.5f, 1.f)) UI_PrefHeight(ui_em(9.f, 1.f)) UI_Column UI_PrefHeight(ui_em(1.5f, 0.f))
+                  {
+                    Vec4F32 presets[] =
+                    {
+                      v4f32(1.0f, 0.2f, 0.1f, 1.0f),
+                      v4f32(1.0f, 0.8f, 0.2f, 1.0f),
+                      v4f32(0.3f, 0.8f, 0.2f, 1.0f),
+                      v4f32(0.1f, 0.8f, 0.4f, 1.0f),
+                      v4f32(0.1f, 0.6f, 0.8f, 1.0f),
+                      v4f32(0.5f, 0.3f, 0.8f, 1.0f),
+                      v4f32(0.8f, 0.3f, 0.5f, 1.0f),
+                    };
+                    UI_CornerRadius(ui_em(0.3f, 1.f).value)
+                      for(U64 preset_idx = 0; preset_idx < ArrayCount(presets); preset_idx += 1)
+                    {
+                      ui_set_next_hover_cursor(OS_Cursor_HandPoint);
+                      ui_set_next_palette(ui_build_palette(ui_top_palette(), .background = presets[preset_idx]));
+                      UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_DrawBackground|
+                                                              UI_BoxFlag_DrawBorder|
+                                                              UI_BoxFlag_Clickable|
+                                                              UI_BoxFlag_DrawHotEffects|
+                                                              UI_BoxFlag_DrawActiveEffects,
+                                                              "###color_preset_%i", (int)preset_idx);
+                      UI_Signal sig = ui_signal_from_box(box);
+                      if(ui_clicked(sig))
+                      {
+                        Vec3F32 hsv = hsv_from_rgb(v3f32(presets[preset_idx].x, presets[preset_idx].y, presets[preset_idx].z));
+                        Vec4F32 hsva = v4f32(hsv.x, hsv.y, hsv.z, 1);
+                        entity->color_hsva = hsva;
+                      }
+                      ui_spacer(ui_em(0.3f, 1.f));
+                    }
+                  }
+                  
+                  ui_spacer(ui_em(0.75f, 1.f));
+                  
+                  UI_PrefWidth(ui_em(9.f, 1.f)) UI_PrefHeight(ui_em(9.f, 1.f))
+                  {
+                    ui_sat_val_pickerf(entity->color_hsva.x, &entity->color_hsva.y, &entity->color_hsva.z, "###ent_satval_picker");
+                  }
+                  
+                  ui_spacer(ui_em(0.75f, 1.f));
+                  
+                  UI_PrefWidth(ui_em(1.5f, 1.f)) UI_PrefHeight(ui_em(9.f, 1.f))
+                    ui_hue_pickerf(&entity->color_hsva.x, entity->color_hsva.y, entity->color_hsva.z, "###ent_hue_picker");
+                }
+              }
+              
+              UI_Row UI_Padding(ui_pct(1, 0)) UI_PrefWidth(ui_em(16.f, 1.f)) UI_CornerRadius(8.f) UI_TextAlignment(UI_TextAlign_Center)
+                RD_Palette(RD_PaletteCode_Floating)
+              {
+                if(ui_clicked(rd_icon_buttonf(RD_IconKind_Trash, 0, "Remove Color###color_toggle")))
+                {
+                  entity->flags &= ~RD_EntityFlag_HasColor;
+                }
+              }
+              
+              ui_spacer(ui_em(1.5f, 1.f));
+            }
+#endif
+          }break;
+          
+        }
+      }
       
       scratch_end(scratch);
     }
@@ -10573,7 +10877,7 @@ rd_frame(void)
               D_CmdParams params = {0};
               params.machine       = rd_regs()->machine;
               params.thread        = rd_regs()->thread;
-              // TODO(rjf): @msgs params.entity        = ???;
+              params.entity        = rd_regs()->ctrl_entity;
               // TODO(rjf): @msgs params.processes     = ???;
               params.string        = rd_regs()->string;
               params.file_path     = rd_regs()->file_path;
