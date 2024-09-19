@@ -447,6 +447,16 @@ e_type_key_cons_base(Type *type, String8 name)
       E_TypeKind kind = e_type_kind_from_base(type->kind);
       result = e_type_key_basic(kind);
     }break;
+    case TypeKind_Ptr:
+    {
+      E_TypeKey direct_type = e_type_key_cons_base(type->direct, str8_zero());
+      result = e_type_key_cons_ptr(arch_from_context(), direct_type);
+    }break;
+    case TypeKind_Array:
+    {
+      E_TypeKey direct_type = e_type_key_cons_base(type->direct, str8_zero());
+      result = e_type_key_cons_array(direct_type, type->count);
+    }break;
     case TypeKind_Struct:
     {
       Temp scratch = scratch_begin(0, 0);
@@ -459,37 +469,13 @@ e_type_key_cons_base(Type *type, String8 name)
       E_MemberArray members_array = e_member_array_from_list(scratch.arena, &members);
       result = e_type_key_cons(.arch    = arch_from_context(),
                                .kind    = E_TypeKind_Struct,
-                               .name    = name,
+                               .name    = name.size ? name : type->name,
                                .members = members_array.v,
                                .count   = members_array.count);
       scratch_end(scratch);
     }break;
   }
   return result;
-#if 0
-  E_MemberList members = {0};
-  {
-    for(U64 idx = 0; idx < ArrayCount(ctrl_meta_eval_member_range_table); idx += 1)
-    {
-      E_TypeKey member_type_key = e_type_key_basic(ctrl_meta_eval_member_type_kind_table[idx]);
-      switch(ctrl_meta_eval_member_dynamic_kind_table[idx])
-      {
-        default:{}break;
-        case CTRL_MetaEvalDynamicKind_String8:
-        {
-          member_type_key = e_type_key_cons_ptr(arch_from_context(), e_type_key_basic(E_TypeKind_Char8));
-        }break;
-      }
-      e_member_list_push_new(scratch.arena, &members, .name = ctrl_meta_eval_member_name_table[idx], .off = ctrl_meta_eval_member_range_table[idx].min, .type_key = member_type_key);
-    }
-  }
-  E_MemberArray members_array = e_member_array_from_list(scratch.arena, &members);
-  E_TypeKey meta_eval_type_key = e_type_key_cons(.arch = arch_from_context(),
-                                                 .kind = E_TypeKind_Struct,
-                                                 .name = str8_lit("Meta"),
-                                                 .members = members_array.v,
-                                                 .count = members_array.count);
-#endif
 }
 
 //- rjf: basic type key functions

@@ -129,7 +129,7 @@ entry_point(CmdLine *cmdline)
     for(MG_FileParseNode *n = parses.first; n != 0; n = n->next)
     {
       MD_Node *file = n->v.root;
-      for(MD_EachNode(node, file->first))
+      for MD_EachNode(node, file->first)
       {
         MD_Node *table_tag = md_tag_from_string(node, str8_lit("table"), 0);
         if(!md_node_is_nil(table_tag))
@@ -154,7 +154,7 @@ entry_point(CmdLine *cmdline)
     MD_Node *file = n->v.root;
     String8 layer_key = mg_layer_key_from_path(file->string);
     MG_Layer *layer = mg_layer_from_key(layer_key);
-    for(MD_EachNode(node, file->first))
+    for MD_EachNode(node, file->first)
     {
       if(md_node_has_tag(node, str8_lit("option"), 0))
       {
@@ -220,7 +220,7 @@ entry_point(CmdLine *cmdline)
   for(MG_FileParseNode *n = parses.first; n != 0; n = n->next)
   {
     MD_Node *file = n->v.root;
-    for(MD_EachNode(node, file->first))
+    for MD_EachNode(node, file->first)
     {
       MD_Node *tag = md_tag_from_string(node, str8_lit("enum"), 0);
       if(!md_node_is_nil(tag))
@@ -267,7 +267,7 @@ entry_point(CmdLine *cmdline)
   for(MG_FileParseNode *n = parses.first; n != 0; n = n->next)
   {
     MD_Node *file = n->v.root;
-    for(MD_EachNode(node, file->first))
+    for MD_EachNode(node, file->first)
     {
       MD_Node *tag = md_tag_from_string(node, str8_lit("xlist"), 0);
       if(!md_node_is_nil(tag))
@@ -292,7 +292,7 @@ entry_point(CmdLine *cmdline)
   for(MG_FileParseNode *n = parses.first; n != 0; n = n->next)
   {
     MD_Node *file = n->v.root;
-    for(MD_EachNode(node, file->first))
+    for MD_EachNode(node, file->first)
     {
       if(md_node_has_tag(node, str8_lit("struct"), 0))
       {
@@ -317,7 +317,7 @@ entry_point(CmdLine *cmdline)
   for(MG_FileParseNode *n = parses.first; n != 0; n = n->next)
   {
     MD_Node *file = n->v.root;
-    for(MD_EachNode(node, file->first))
+    for MD_EachNode(node, file->first)
     {
       MD_Node *tag = md_tag_from_string(node, str8_lit("data"), 0);
       if(!md_node_is_nil(tag))
@@ -347,7 +347,7 @@ entry_point(CmdLine *cmdline)
   for(MG_FileParseNode *n = parses.first; n != 0; n = n->next)
   {
     MD_Node *file = n->v.root;
-    for(MD_EachNode(node, file->first))
+    for MD_EachNode(node, file->first)
     {
       MD_Node *tag = md_tag_from_string(node, str8_lit("enum2string_switch"), 0);
       if(!md_node_is_nil(tag))
@@ -380,7 +380,7 @@ entry_point(CmdLine *cmdline)
   for(MG_FileParseNode *n = parses.first; n != 0; n = n->next)
   {
     MD_Node *file = n->v.root;
-    for(MD_EachNode(node, file->first))
+    for MD_EachNode(node, file->first)
     {
       MD_Node *tag = md_tag_from_string(node, str8_lit("gen"), 0);
       if(!md_node_is_nil(tag))
@@ -412,7 +412,7 @@ entry_point(CmdLine *cmdline)
   for(MG_FileParseNode *n = parses.first; n != 0; n = n->next)
   {
     MD_Node *file = n->v.root;
-    for(MD_EachNode(node, file->first))
+    for MD_EachNode(node, file->first)
     {
       if(md_node_has_tag(node, str8_lit("embed_string"), 0))
       {
@@ -446,7 +446,7 @@ entry_point(CmdLine *cmdline)
   for(MG_FileParseNode *n = parses.first; n != 0; n = n->next)
   {
     MD_Node *file = n->v.root;
-    for(MD_EachNode(node, file->first))
+    for MD_EachNode(node, file->first)
     {
       //- rjf: generate markdown page
       if(md_node_has_tag(node, str8_lit("markdown"), 0))

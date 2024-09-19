@@ -849,9 +849,17 @@ rd_string_from_eval_viz_row_column(Arena *arena, EV_View *ev, EV_Row *row, RD_Wa
     }break;
     case RD_WatchViewColumnKind_Member:
     {
-      E_Expr *expr = e_expr_ref_member_access(arena, row->expr, str8(col->string_buffer, col->string_size));
+      Temp scratch = scratch_begin(&arena, 1);
+      String8 access_string = str8(col->string_buffer, col->string_size);
+      String8List accesses = str8_split(scratch.arena, access_string, (U8 *)".", 1, 0);
+      E_Expr *expr = row->expr;
+      for(String8Node *n = accesses.first; n != 0; n = n->next)
+      {
+        expr = e_expr_ref_member_access(arena, expr, n->string);
+      }
       E_Eval eval = e_eval_from_expr(arena, expr);
       result = rd_value_string_from_eval(arena, !editable * EV_StringFlag_ReadOnlyDisplayRules, default_radix, font, font_size, max_size_px, eval, row->member, row->view_rules);
+      scratch_end(scratch);
     }break;
   }
   if(col->dequote_string &&
@@ -1043,7 +1051,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, B32 modifiable, U32 default_radix, R
           //
           case RD_WatchViewFillKind_Breakpoints:
           {
-            E_TypeKey meta_eval_type = e_type_key_cons_base(type(CTRL_MetaEval), str8_lit("debugger_entity"));
+            E_TypeKey meta_eval_type = e_type_key_cons_base(type(CTRL_MetaEval), str8_lit("RADDBG_Entity"));
             mutable_entity_kind = RD_EntityKind_Breakpoint;
             ev_view_rule_list_push_string(scratch.arena, &top_level_view_rules, str8_lit("no_addr"));
             RD_EntityList bps = rd_query_cached_entity_list_with_kind(mutable_entity_kind);
@@ -1920,7 +1928,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, B32 modifiable, U32 default_radix, R
           default:{moved = 0;}break;
           case UI_EventDeltaUnit_Char:
           {
-            for(EachEnumVal(Axis2, axis))
+            for EachEnumVal(Axis2, axis)
             {
               cursor_tbl.v[axis] += delta.v[axis];
               if(cursor_tbl.v[axis] < cursor_tbl_range.min.v[axis])
@@ -1950,7 +1958,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, B32 modifiable, U32 default_radix, R
           }break;
           case UI_EventDeltaUnit_Whole:
           {
-            for(EachEnumVal(Axis2, axis))
+            for EachEnumVal(Axis2, axis)
             {
               cursor_tbl.v[axis] = (delta.v[axis]>0 ? cursor_tbl_range.max.v[axis] : delta.v[axis]<0 ? cursor_tbl_range.min.v[axis] + !!cursor_tbl_min_is_empty_selection[axis] : cursor_tbl.v[axis]);
             }
@@ -3063,7 +3071,7 @@ rd_cmd_lister_item_list_from_needle(Arena *arena, String8 needle)
   Temp scratch = scratch_begin(&arena, 1);
   RD_CmdListerItemList result = {0};
   // TODO(rjf): extend this with dynamically-registered command info
-  for(EachNonZeroEnumVal(RD_CmdKind, k))
+  for EachNonZeroEnumVal(RD_CmdKind, k)
   {
     RD_CmdKindInfo *info = &rd_cmd_kind_info_table[k];
     if(info->flags & RD_CmdKindFlag_ListInUI)
@@ -5458,11 +5466,11 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(breakpoints)
   if(!wv->initialized)
   {
     rd_watch_view_init(wv, RD_WatchViewFillKind_Breakpoints);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member, 0.25f, .string = str8_lit("label"),     .display_string = str8_lit("Label"), .dequote_string = 1);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member, 0.35f, .string = str8_lit("location"),  .display_string = str8_lit("Location"), .dequote_string = 1, .is_non_code = 1);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member, 0.20f, .string = str8_lit("condition"), .display_string = str8_lit("Condition"), .dequote_string = 1);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member, 0.10f, .string = str8_lit("enabled"),   .display_string = str8_lit("Enabled"), .view_rule = str8_lit("checkbox"));
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member, 0.10f, .string = str8_lit("hit_count"), .display_string = str8_lit("Hit Count"));
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member, 0.25f, .string = str8_lit("label.str"),    .display_string = str8_lit("Label"), .dequote_string = 1);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member, 0.35f, .string = str8_lit("location.str"), .display_string = str8_lit("Location"), .dequote_string = 1, .is_non_code = 1);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member, 0.20f, .string = str8_lit("condition.str"),.display_string = str8_lit("Condition"), .dequote_string = 1);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member, 0.10f, .string = str8_lit("enabled"),      .display_string = str8_lit("Enabled"), .view_rule = str8_lit("checkbox"));
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member, 0.10f, .string = str8_lit("hit_count"),    .display_string = str8_lit("Hit Count"));
   }
   rd_watch_view_build(wv, 0, 10, rect);
   ProfEnd();
@@ -7733,7 +7741,7 @@ internal UI_BOX_CUSTOM_DRAW(rd_bitmap_view_canvas_box_draw)
   F32 grid_cell_size_cvs = box->font_size*10.f;
   F32 grid_line_thickness_px = Max(2.f, box->font_size*0.1f);
   Vec4F32 grid_line_color = rd_rgba_from_theme_color(RD_ThemeColor_TextWeak);
-  for(EachEnumVal(Axis2, axis))
+  for EachEnumVal(Axis2, axis)
   {
     for(F32 v = rect_cvs.p0.v[axis] - mod_f32(rect_cvs.p0.v[axis], grid_cell_size_cvs);
         v < rect_cvs.p1.v[axis];
@@ -8558,7 +8566,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(settings)
     //- rjf: gather all global settings
     if(sv->category_opened[RD_SettingsItemKind_GlobalSetting] || query.size != 0)
     {
-      for(EachEnumVal(RD_SettingCode, code))
+      for EachEnumVal(RD_SettingCode, code)
       {
         if(rd_setting_code_default_is_per_window_table[code])
         {
@@ -8600,7 +8608,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(settings)
     //- rjf: gather all window settings
     if(sv->category_opened[RD_SettingsItemKind_WindowSetting] || query.size != 0)
     {
-      for(EachEnumVal(RD_SettingCode, code))
+      for EachEnumVal(RD_SettingCode, code)
       {
         if(!rd_setting_code_default_is_per_window_table[code])
         {
@@ -8642,7 +8650,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(settings)
     //- rjf: gather theme presets
     if(sv->category_opened[RD_SettingsItemKind_ThemePreset] || query.size != 0)
     {
-      for(EachEnumVal(RD_ThemePreset, preset))
+      for EachEnumVal(RD_ThemePreset, preset)
       {
         String8 kind_string = str8_lit("Theme Preset");
         String8 string = rd_theme_preset_display_string_table[preset];
@@ -8680,7 +8688,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(settings)
     //- rjf: gather all theme colors
     if(sv->category_opened[RD_SettingsItemKind_ThemeColor] || query.size != 0)
     {
-      for(EachNonZeroEnumVal(RD_ThemeColor, color))
+      for EachNonZeroEnumVal(RD_ThemeColor, color)
       {
         String8 kind_string = str8_lit("Theme Color");
         String8 string = rd_theme_color_display_string_table[color];

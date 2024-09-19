@@ -148,15 +148,15 @@ struct TypeSerializeParams
 ////////////////////////////////
 //~ rjf: Type Name -> Type Info
 
-#define type(T) &(T##__type)
+#define type(T) (&T##__type)
 
 ////////////////////////////////
 //~ rjf: Type Info Table Initializer Helpers
 
-#define member_lit_comp(S, T, m, ...) {str8_lit_comp(#m), type(T), OffsetOf(S, m), __VA_ARGS__}
+#define member_lit_comp(S, ti, m, ...) {str8_lit_comp(#m), (ti), OffsetOf(S, m), __VA_ARGS__}
 #define struct_members(S) read_only global Member S##__members[] =
 #define struct_type(S) read_only global Type S##__type = {TypeKind_Struct, sizeof(S), &type_nil, str8_lit_comp(#S), {0}, ArrayCount(S##__members), S##__members}
-#define ptr_type(name, t, ...) read_only global Type name = {TypeKind_Ptr, sizeof(void *), (t), __VA_ARGS__}
+#define ptr_type(name, ti, ...) read_only global Type name = {TypeKind_Ptr, sizeof(void *), (ti), __VA_ARGS__}
 
 ////////////////////////////////
 //~ rjf: Globals
@@ -244,6 +244,7 @@ Type String8List__type =
 //~ rjf: Type Info Lookups
 
 internal Member *member_from_name(Type *type, String8 name);
+#define EachMember(T, it) (Member *it = (type(T))->members; it != 0 && it < (type(T))->members + (type(T))->count; it += 1)
 
 ////////////////////////////////
 //~ rjf: Type Info * Instance Operations

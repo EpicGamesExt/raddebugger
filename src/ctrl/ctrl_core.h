@@ -28,13 +28,13 @@ X(U32, color)\
 X(String8, label)\
 X(String8, location)\
 X(String8, condition)
-#define X(type, name) type name;
+#define X(T, name) T name;
   CTRL_MetaEval_MemberXList
 #undef X
 };
 struct_members(CTRL_MetaEval)
 {
-#define X(type, name) member_lit_comp(CTRL_MetaEval, type, name),
+#define X(T, name) member_lit_comp(CTRL_MetaEval, type(T), name),
   CTRL_MetaEval_MemberXList
 #undef X
 };
@@ -51,7 +51,7 @@ ptr_type(CTRL_MetaEvalArray__v_ptr_type, type(CTRL_MetaEval), .count_delimiter_n
 struct_members(CTRL_MetaEvalArray)
 {
   {str8_lit_comp("v"), &CTRL_MetaEvalArray__v_ptr_type, OffsetOf(CTRL_MetaEvalArray, v)},
-  member_lit_comp(CTRL_MetaEvalArray, U64, count),
+  member_lit_comp(CTRL_MetaEvalArray, type(U64), count),
 };
 struct_type(CTRL_MetaEvalArray);
 

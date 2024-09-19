@@ -393,7 +393,7 @@ md_string_from_children(Arena *arena, MD_Node *root)
 {
   Temp scratch = scratch_begin(&arena, 1);
   String8List strs = {0};
-  for(MD_EachNode(child, root->first))
+  for MD_EachNode(child, root->first)
   {
     if(child->flags == child->prev->flags)
     {

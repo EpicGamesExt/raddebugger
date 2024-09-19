@@ -64,7 +64,7 @@ rd_cfg_table_push_unparsed_string(Arena *arena, RD_CfgTable *table, String8 stri
   }
   MD_TokenizeResult tokenize = md_tokenize_from_text(arena, string);
   MD_ParseResult parse = md_parse_from_text_tokens(arena, str8_lit(""), string, tokenize.tokens);
-  for(MD_EachNode(tln, parse.root->first)) if(tln->string.size != 0)
+  for MD_EachNode(tln, parse.root->first) if(tln->string.size != 0)
   {
     // rjf: map string -> hash*slot
     String8 string = str8(tln->string.str, tln->string.size);
@@ -661,7 +661,7 @@ internal RD_ViewRuleKind
 rd_view_rule_kind_from_string(String8 string)
 {
   RD_ViewRuleKind kind = RD_ViewRuleKind_Null;
-  for(EachEnumVal(RD_ViewRuleKind, k))
+  for EachEnumVal(RD_ViewRuleKind, k)
   {
     if(str8_match(string, rd_view_rule_kind_info_table[k].string, 0))
     {
@@ -1864,6 +1864,16 @@ rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
       void *offsetify_base = push_array(scratch.arena, U8, 0);
       U64 pos_min = arena_pos(scratch.arena);
       String8 eval_srlzed = serialized_from_struct(scratch.arena, CTRL_MetaEval, eval);
+      CTRL_MetaEval *eval_read = struct_from_serialized(scratch.arena, CTRL_MetaEval, eval_srlzed);
+      for EachMember(CTRL_MetaEval, m)
+      {
+        if(str8_match(m->type->name, str8_lit("String8"), 0))
+        {
+          U64 ptr_value = *(U64 *)((U8 *)eval_read + m->value);
+          U64 space_relative_ptr_value = ptr_value - (U64)eval_read;
+          *(U64 *)((U8 *)eval_read + m->value) = space_relative_ptr_value;
+        }
+      }
       U64 pos_opl = arena_pos(scratch.arena);
       Rng1U64 legal_range = r1u64(0, pos_opl-pos_min);
       if(contains_1u64(legal_range, range.min))
@@ -1871,7 +1881,7 @@ rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
         result = 1;
         U64 range_dim = dim_1u64(range);
         U64 bytes_to_read = Min(range_dim, (legal_range.max - range.min));
-        MemoryCopy(out, (eval_srlzed.str) + range.min, bytes_to_read);
+        MemoryCopy(out, ((U8 *)eval_read) + range.min, bytes_to_read);
         if(bytes_to_read < range_dim)
         {
           MemoryZero((U8 *)out + bytes_to_read, range_dim - bytes_to_read);
@@ -2194,7 +2204,7 @@ rd_tex2dformat_from_eval_params(E_Eval eval, MD_Node *params)
   R_Tex2DFormat result = R_Tex2DFormat_RGBA8;
   {
     MD_Node *fmt_node = md_child_from_string(params, str8_lit("fmt"), 0);
-    for(EachNonZeroEnumVal(R_Tex2DFormat, fmt))
+    for EachNonZeroEnumVal(R_Tex2DFormat, fmt)
     {
       if(str8_match(r_tex2d_format_display_string_table[fmt], fmt_node->first->string, StringMatchFlag_CaseInsensitive))
       {
@@ -2423,7 +2433,7 @@ rd_view_store_param(RD_View *view, String8 key, String8 value)
   String8 value_copy = push_str8_copy(new_params_arena, value);
   MD_TokenizeResult value_tokenize = md_tokenize_from_text(new_params_arena, value_copy);
   MD_ParseResult value_parse = md_parse_from_text_tokens(new_params_arena, str8_zero(), value_copy, value_tokenize.tokens);
-  for(MD_EachNode(child, value_parse.root->first))
+  for MD_EachNode(child, value_parse.root->first)
   {
     child->parent = key_node;
   }
@@ -2678,7 +2688,7 @@ rd_window_open(Vec2F32 size, OS_Handle preferred_monitor, RD_CfgSrc cfg_src)
   window->query_cmd_arena = arena_alloc();
   window->query_view_stack_top = &rd_nil_view;
   window->last_dpi = os_dpi_from_window(window->os);
-  for(EachEnumVal(RD_SettingCode, code))
+  for EachEnumVal(RD_SettingCode, code)
   {
     if(rd_setting_code_default_is_per_window_table[code])
     {
@@ -2854,7 +2864,7 @@ rd_window_frame(RD_Window *ws)
   //
   {
     RD_Theme *current = &rd_state->cfg_theme;
-    for(EachEnumVal(RD_PaletteCode, code))
+    for EachEnumVal(RD_PaletteCode, code)
     {
       ws->cfg_palettes[code].null       = v4f32(1, 0, 1, 1);
       ws->cfg_palettes[code].cursor     = current->colors[RD_ThemeColor_Cursor];
@@ -2910,7 +2920,7 @@ rd_window_frame(RD_Window *ws)
     ws->cfg_palettes[RD_PaletteCode_DropSiteOverlay].border     = current->colors[RD_ThemeColor_DropSiteOverlay];
     if(rd_setting_val_from_code(RD_SettingCode_OpaqueBackgrounds).s32)
     {
-      for(EachEnumVal(RD_PaletteCode, code))
+      for EachEnumVal(RD_PaletteCode, code)
       {
         if(ws->cfg_palettes[code].background.x != 0 ||
            ws->cfg_palettes[code].background.y != 0 ||
@@ -4000,7 +4010,7 @@ rd_window_frame(RD_Window *ws)
             {
               RD_Palette(RD_PaletteCode_Floating) ui_divider(ui_em(1.f, 1.f));
             }
-            for(MD_EachNode(key, schema_root->first))
+            for MD_EachNode(key, schema_root->first)
             {
               UI_Row
               {
@@ -4410,7 +4420,7 @@ rd_window_frame(RD_Window *ws)
           //- rjf: gather languages
           if(ws->autocomp_lister_params.flags & RD_AutoCompListerFlag_Languages)
           {
-            for(EachNonZeroEnumVal(TXT_LangKind, lang))
+            for EachNonZeroEnumVal(TXT_LangKind, lang)
             {
               RD_AutoCompListerItem item = {0};
               {
@@ -4428,7 +4438,7 @@ rd_window_frame(RD_Window *ws)
           //- rjf: gather architectures
           if(ws->autocomp_lister_params.flags & RD_AutoCompListerFlag_Architectures)
           {
-            for(EachNonZeroEnumVal(Arch, arch))
+            for EachNonZeroEnumVal(Arch, arch)
             {
               RD_AutoCompListerItem item = {0};
               {
@@ -4446,7 +4456,7 @@ rd_window_frame(RD_Window *ws)
           //- rjf: gather tex2dformats
           if(ws->autocomp_lister_params.flags & RD_AutoCompListerFlag_Tex2DFormats)
           {
-            for(EachEnumVal(R_Tex2DFormat, fmt))
+            for EachEnumVal(R_Tex2DFormat, fmt)
             {
               RD_AutoCompListerItem item = {0};
               {
@@ -5438,7 +5448,7 @@ rd_window_frame(RD_Window *ws)
       {
         UI_Palette *blended_scheme = push_array(ui_build_arena(), UI_Palette, 1);
         MemoryCopyStruct(blended_scheme, palette);
-        for(EachEnumVal(UI_ColorCode, code))
+        for EachEnumVal(UI_ColorCode, code)
         {
           for(U64 idx = 0; idx < 4; idx += 1)
           {
@@ -6171,7 +6181,7 @@ rd_window_frame(RD_Window *ws)
           {
             Vec2F32 panel_rect_center = center_2f32(panel_rect);
             Axis2 axis = axis2_flip(ws->root_panel->split_axis);
-            for(EachEnumVal(Side, side))
+            for EachEnumVal(Side, side)
             {
               UI_Key key = ui_key_from_stringf(ui_key_zero(), "root_extra_split_%i", side);
               Rng2F32 site_rect = panel_rect;
@@ -8006,7 +8016,9 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
       // rjf: unpack info about pointer destination
       E_Eval value_eval = e_value_eval_from_eval(eval);
       B32 ptee_has_content = (direct_type_kind != E_TypeKind_Null && direct_type_kind != E_TypeKind_Void);
-      B32 ptee_has_string  = (E_TypeKind_Char8 <= direct_type_kind && direct_type_kind <= E_TypeKind_UChar32);
+      B32 ptee_has_string  = ((E_TypeKind_Char8 <= direct_type_kind && direct_type_kind <= E_TypeKind_UChar32) ||
+                              direct_type_kind == E_TypeKind_S8 ||
+                              direct_type_kind == E_TypeKind_U8);
       CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->thread);
       CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, CTRL_EntityKind_Process);
       String8 symbol_name = d_symbol_name_from_process_vaddr(arena, process, value_eval.value.u64, 1);
@@ -8516,7 +8528,7 @@ rd_view_rule_autocomp_lister_params_from_input_cursor(Arena *arena, String8 stri
       {
         if(step == 0)
         {
-          for(MD_EachNode(child, schema_node->first))
+          for MD_EachNode(child, schema_node->first)
           {
             if(0){}
             else if(str8_match(child->string, str8_lit("expr"),           StringMatchFlag_CaseInsensitive)) {params.flags |= RD_AutoCompListerFlag_Locals;}
@@ -8833,7 +8845,7 @@ rd_setting_val_from_code(RD_SettingCode code)
   }
   if(result.set == 0)
   {
-    for(EachEnumVal(RD_CfgSrc, src))
+    for EachEnumVal(RD_CfgSrc, src)
     {
       if(rd_state->cfg_setting_vals[src][code].set)
       {
@@ -8863,7 +8875,7 @@ rd_cfg_strings_from_gfx(Arena *arena, String8 root_path, RD_CfgSrc source)
   
   //- rjf: write all entities
   {
-    for(EachEnumVal(RD_EntityKind, k))
+    for EachEnumVal(RD_EntityKind, k)
     {
       RD_EntityKindFlags k_flags = rd_entity_kind_flags_table[k];
       if(!(k_flags & RD_EntityKindFlag_IsSerializedToConfig))
@@ -9050,7 +9062,7 @@ rd_cfg_strings_from_gfx(Arena *arena, String8 root_path, RD_CfgSrc source)
       str8_list_pushf(arena, &strs, "  monitor: \"%S\"\n", monitor_name);
       str8_list_pushf(arena, &strs, "  size: (%i %i)\n", (int)size.x, (int)size.y);
       str8_list_pushf(arena, &strs, "  dpi: %f\n", os_dpi_from_window(window->os));
-      for(EachEnumVal(RD_SettingCode, code))
+      for EachEnumVal(RD_SettingCode, code)
       {
         RD_SettingVal current = window->setting_vals[code];
         if(current.set)
@@ -9354,7 +9366,7 @@ rd_cfg_strings_from_gfx(Arena *arena, String8 root_path, RD_CfgSrc source)
   //- rjf: serialize global settings
   {
     B32 first = 1;
-    for(EachEnumVal(RD_SettingCode, code))
+    for EachEnumVal(RD_SettingCode, code)
     {
       if(rd_setting_code_default_is_per_window_table[code])
       {
@@ -9389,7 +9401,7 @@ internal String8
 rd_string_from_exception_code(U32 code)
 {
   String8 string = {0};
-  for(EachNonZeroEnumVal(CTRL_ExceptionCodeKind, k))
+  for EachNonZeroEnumVal(CTRL_ExceptionCodeKind, k)
   {
     if(code == ctrl_exception_code_kind_code_table[k])
     {
@@ -10442,7 +10454,7 @@ rd_frame(void)
       
       //- rjf: add macros for meta evaluations
       {
-        E_TypeKey meta_eval_type_key = e_type_key_cons_base(type(CTRL_MetaEval), str8_lit("debugger_entity"));
+        E_TypeKey meta_eval_type_key = e_type_key_cons_base(type(CTRL_MetaEval), str8_lit("RADDBG_Entity"));
         for(U64 idx = 0; idx < rd_state->meta_evals.count; idx += 1)
         {
           CTRL_MetaEval *meval = &rd_state->meta_evals.v[idx];
@@ -10501,7 +10513,7 @@ rd_frame(void)
     EV_ViewRuleInfoTable *view_rule_info_table = push_array(scratch.arena, EV_ViewRuleInfoTable, 1);
     {
       ev_view_rule_info_table_push_builtins(scratch.arena, view_rule_info_table);
-      for(EachEnumVal(RD_ViewRuleKind, k))
+      for EachEnumVal(RD_ViewRuleKind, k)
       {
         RD_ViewRuleInfo *src_info = &rd_view_rule_kind_info_table[k];
         if(src_info->flags & RD_ViewRuleInfoFlag_CanUseInWatchTable)
@@ -10934,7 +10946,7 @@ rd_frame(void)
             
             //- rjf: eliminate all existing entities which are derived from config
             {
-              for(EachEnumVal(RD_EntityKind, k))
+              for EachEnumVal(RD_EntityKind, k)
               {
                 RD_EntityKindFlags k_flags = rd_entity_kind_flags_table[k];
                 if(k_flags & RD_EntityKindFlag_IsSerializedToConfig)
@@ -10953,7 +10965,7 @@ rd_frame(void)
             
             //- rjf: apply all entities
             {
-              for(EachEnumVal(RD_EntityKind, k))
+              for EachEnumVal(RD_EntityKind, k)
               {
                 RD_EntityKindFlags k_flags = rd_entity_kind_flags_table[k];
                 if(k_flags & RD_EntityKindFlag_IsSerializedToConfig)
@@ -10984,7 +10996,7 @@ rd_frame(void)
                     for(Task *t = first_task; t != 0; t = t->next)
                     {
                       MD_Node *node = t->n;
-                      for(MD_EachNode(child, node->first))
+                      for MD_EachNode(child, node->first)
                       {
                         // rjf: standalone string literals under an entity -> name
                         if(child->flags & MD_NodeFlag_StringLiteral && child->first == &md_nil_node)
@@ -11075,7 +11087,7 @@ rd_frame(void)
                         
                         // rjf: sub-entity -> create new task
                         RD_EntityKind sub_entity_kind = RD_EntityKind_Nil;
-                        for(EachEnumVal(RD_EntityKind, k2))
+                        for EachEnumVal(RD_EntityKind, k2)
                         {
                           if(child->flags & MD_NodeFlag_Identifier && child->first != &md_nil_node &&
                              (str8_match(child->string, d_entity_kind_name_lower_table[k2], StringMatchFlag_CaseInsensitive) ||
@@ -11102,7 +11114,7 @@ rd_frame(void)
                 table != &d_nil_cfg_tree;
                 table = table->next)
             {
-              for(MD_EachNode(rule, table->root->first))
+              for MD_EachNode(rule, table->root->first)
               {
                 String8 name = rule->string;
                 String8 val_string = rule->first->string;
@@ -11212,7 +11224,7 @@ rd_frame(void)
               F32 dpi = 0.f;
               RD_SettingVal setting_vals[RD_SettingCode_COUNT] = {0};
               {
-                for(MD_EachNode(n, window_tree->root->first))
+                for MD_EachNode(n, window_tree->root->first)
                 {
                   if(n->flags & MD_NodeFlag_Identifier &&
                      md_node_is_nil(n->first) &&
@@ -11271,7 +11283,7 @@ rd_frame(void)
                 MD_Node *dpi_node = md_child_from_string(window_tree->root, str8_lit("dpi"), 0);
                 String8 dpi_string = md_string_from_children(scratch.arena, dpi_node);
                 dpi = f64_from_str8(dpi_string);
-                for(EachEnumVal(RD_SettingCode, code))
+                for EachEnumVal(RD_SettingCode, code)
                 {
                   MD_Node *code_node = md_child_from_string(window_tree->root, rd_setting_code_lower_string_table[code], 0);
                   if(!md_node_is_nil(code_node))
@@ -11288,7 +11300,7 @@ rd_frame(void)
               // rjf: open window
               RD_Window *ws = rd_window_open(size, preferred_monitor, window_tree->source);
               if(dpi != 0.f) { ws->last_dpi = dpi; }
-              for(EachEnumVal(RD_SettingCode, code))
+              for EachEnumVal(RD_SettingCode, code)
               {
                 if(setting_vals[code].set == 0 && rd_setting_code_default_is_per_window_table[code])
                 {
@@ -11332,7 +11344,7 @@ rd_frame(void)
                 {
                   // rjf: determine if this panel has panel children
                   B32 has_panel_children = 0;
-                  for(MD_EachNode(child, n->first))
+                  for MD_EachNode(child, n->first)
                   {
                     if(child->flags & MD_NodeFlag_Numeric)
                     {
@@ -11342,7 +11354,7 @@ rd_frame(void)
                   }
                   
                   // rjf: apply panel options
-                  for(MD_EachNode(op, n->first))
+                  for MD_EachNode(op, n->first)
                   {
                     if(md_node_is_nil(op->first) && str8_match(op->string, str8_lit("tabs_on_bottom"), 0))
                     {
@@ -11352,7 +11364,7 @@ rd_frame(void)
                   
                   // rjf: apply panel views/tabs/commands
                   RD_View *selected_view = &rd_nil_view;
-                  for(MD_EachNode(op, n->first))
+                  for MD_EachNode(op, n->first)
                   {
                     RD_ViewRuleInfo *view_rule_info = rd_view_rule_info_from_string(op->string);
                     if(view_rule_info == &rd_nil_view_rule_info || has_panel_children != 0)
@@ -11488,14 +11500,14 @@ rd_frame(void)
                 keybinding_set != &d_nil_cfg_tree;
                 keybinding_set = keybinding_set->next)
             {
-              for(MD_EachNode(keybind, keybinding_set->root->first))
+              for MD_EachNode(keybind, keybinding_set->root->first)
               {
                 String8 cmd_name = {0};
                 OS_Key key = OS_Key_Null;
                 MD_Node *ctrl_node = &md_nil_node;
                 MD_Node *shift_node = &md_nil_node;
                 MD_Node *alt_node = &md_nil_node;
-                for(MD_EachNode(child, keybind->first))
+                for MD_EachNode(child, keybind->first)
                 {
                   if(str8_match(child->string, str8_lit("ctrl"), 0))
                   {
@@ -11578,7 +11590,7 @@ rd_frame(void)
                 colors_set != &d_nil_cfg_tree;
                 colors_set = colors_set->next)
             {
-              for(MD_EachNode(color, colors_set->root->first))
+              for MD_EachNode(color, colors_set->root->first)
               {
                 String8 saved_color_name = color->string;
                 String8List candidate_color_names = {0};
@@ -11671,7 +11683,7 @@ rd_frame(void)
             //- rjf: apply settings
             B8 setting_codes_hit[RD_SettingCode_COUNT] = {0};
             MemoryZero(&rd_state->cfg_setting_vals[src][0], sizeof(RD_SettingVal)*RD_SettingCode_COUNT);
-            for(EachEnumVal(RD_SettingCode, code))
+            for EachEnumVal(RD_SettingCode, code)
             {
               String8 name = rd_setting_code_lower_string_table[code];
               RD_CfgVal *code_cfg_val = rd_cfg_val_from_string(table, name);
@@ -11692,7 +11704,7 @@ rd_frame(void)
             //- rjf: if config applied 0 settings, we need to do some sensible default
             if(src == RD_CfgSrc_User)
             {
-              for(EachEnumVal(RD_SettingCode, code))
+              for EachEnumVal(RD_SettingCode, code)
               {
                 if(!setting_codes_hit[code])
                 {

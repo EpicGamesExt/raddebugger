@@ -317,7 +317,7 @@ ev_view_rule_info_table_push(Arena *arena, EV_ViewRuleInfoTable *table, EV_ViewR
 internal void
 ev_view_rule_info_table_push_builtins(Arena *arena, EV_ViewRuleInfoTable *table)
 {
-  for(EachEnumVal(EV_ViewRuleKind, kind))
+  for EachEnumVal(EV_ViewRuleKind, kind)
   {
     ev_view_rule_info_table_push(arena, table, &ev_builtin_view_rule_info_table[kind]);
   }
@@ -368,7 +368,7 @@ internal void
 ev_view_rule_list_push_string(Arena *arena, EV_ViewRuleList *list, String8 string)
 {
   MD_Node *root = md_tree_from_string(arena, string);
-  for(MD_EachNode(tln, root->first))
+  for MD_EachNode(tln, root->first)
   {
     ev_view_rule_list_push_tree(arena, list, tln);
   }

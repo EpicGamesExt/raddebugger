@@ -326,30 +326,6 @@ ctrl_serialized_string_from_msg_list(Arena *arena, CTRL_MsgList *msgs)
       // rjf: write meta-eval-info array
       String8 meta_evals_srlzed = serialized_from_struct(scratch.arena, CTRL_MetaEvalArray, &msg->meta_evals);
       str8_serial_push_string(scratch.arena, &msgs_srlzed, meta_evals_srlzed);
-#if 0
-      str8_serial_push_struct(scratch.arena, &msgs_srlzed, &msg->meta_eval_infos.count);
-      for(U64 idx = 0; idx < msg->meta_eval_infos.count; idx += 1)
-      {
-        CTRL_MetaEvalInfo *mei = &msg->meta_eval_infos.v[idx];
-        for(U64 member_idx = 0; member_idx < ArrayCount(ctrl_meta_eval_info_member_range_table); member_idx += 1)
-        {
-          switch(ctrl_meta_eval_member_dynamic_kind_table[member_idx])
-          {
-            default:
-            case CTRL_MetaEvalDynamicKind_Null:
-            {
-              str8_serial_push_string(scratch.arena, &msgs_srlzed, str8((U8 *)mei + ctrl_meta_eval_info_member_range_table[member_idx].min, dim_1u64(ctrl_meta_eval_info_member_range_table[member_idx])));
-            }break;
-            case CTRL_MetaEvalDynamicKind_String8:
-            {
-              String8 string = *(String8 *)((U8 *)mei + ctrl_meta_eval_info_member_range_table[member_idx].min);
-              str8_serial_push_struct(scratch.arena, &msgs_srlzed, &string.size);
-              str8_serial_push_string(scratch.arena, &msgs_srlzed, string);
-            }break;
-          }
-        }
-      }
-#endif
     }
   }
   String8 string = str8_serial_end(arena, &msgs_srlzed);
@@ -467,34 +443,6 @@ ctrl_msg_list_from_serialized_string(Arena *arena, String8 string)
       U64 meta_evals_size = 0;
       msg->meta_evals = *struct_from_serialized(arena, CTRL_MetaEvalArray, meta_evals_data, .advance_out = &meta_evals_size);
       read_off += meta_evals_size;
-#if 0
-      read_off += str8_deserial_read_struct(string, read_off, &msg->meta_eval_infos.count);
-      msg->meta_eval_infos.v = push_array(arena, CTRL_MetaEvalInfo, msg->meta_eval_infos.count);
-      for(U64 idx = 0; idx < msg->meta_eval_infos.count; idx += 1)
-      {
-        CTRL_MetaEvalInfo *mei = &msg->meta_eval_infos.v[idx];
-        for(U64 member_idx = 0; member_idx < ArrayCount(ctrl_meta_eval_info_member_range_table); member_idx += 1)
-        {
-          switch(ctrl_meta_eval_member_dynamic_kind_table[member_idx])
-          {
-            default:
-            case CTRL_MetaEvalDynamicKind_Null:
-            {
-              U64 size = dim_1u64(ctrl_meta_eval_info_member_range_table[member_idx]);
-              read_off += str8_deserial_read(string, read_off, (U8 *)mei + ctrl_meta_eval_info_member_range_table[member_idx].min, size, size);
-            }break;
-            case CTRL_MetaEvalDynamicKind_String8:
-            {
-              String8 str = {0};
-              read_off += str8_deserial_read_struct(string, read_off, &str.size);
-              str.str = push_array_no_zero(arena, U8, str.size);
-              read_off += str8_deserial_read(string, read_off, str.str, str.size, 1);
-              MemoryCopy((U8 *)mei + ctrl_meta_eval_info_member_range_table[member_idx].min, &str, sizeof(str));
-            }break;
-          }
-        }
-      }
-#endif
     }
   }
   return msgs;
@@ -631,7 +579,7 @@ ctrl_entity_store_alloc(void)
   store->arena = arena;
   store->hash_slots_count = 1024;
   store->hash_slots = push_array(arena, CTRL_EntityHashSlot, store->hash_slots_count);
-  for(EachEnumVal(CTRL_EntityKind, k))
+  for EachEnumVal(CTRL_EntityKind, k)
   {
     store->entity_kind_lists_arenas[k] = arena_alloc();
   }

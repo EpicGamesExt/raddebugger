@@ -754,7 +754,7 @@ ui_drop_hot_key(void)
 internal void
 ui_kill_action(void)
 {
-  for(EachEnumVal(UI_MouseButtonKind, k))
+  for EachEnumVal(UI_MouseButtonKind, k)
   {
     ui_state->active_box_key[k] = ui_key_zero();
   }
@@ -834,7 +834,7 @@ ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, U
   }
   
   //- rjf: detect external press & holds
-  for(EachEnumVal(UI_MouseButtonKind, k))
+  for EachEnumVal(UI_MouseButtonKind, k)
   {
     if(ui_key_match(ui_state->active_box_key[k], ui_key_zero()) && os_key_is_down(OS_Key_LeftMouseButton+k))
     {
@@ -1127,7 +1127,7 @@ ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, U
   //- rjf: reset hot if we don't have an active widget
   {
     B32 has_active = 0;
-    for(EachEnumVal(UI_MouseButtonKind, k))
+    for EachEnumVal(UI_MouseButtonKind, k)
     {
       if(!ui_key_match(ui_state->active_box_key[k], ui_key_zero()))
       {
@@ -1146,7 +1146,7 @@ ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, U
   }
   
   //- rjf: reset active if our active box is disabled
-  for(EachEnumVal(UI_MouseButtonKind, k))
+  for EachEnumVal(UI_MouseButtonKind, k)
   {
     if(!ui_key_match(ui_state->active_box_key[k], ui_key_zero()))
     {
@@ -1159,7 +1159,7 @@ ui_begin_build(OS_Handle window, UI_EventList *events, UI_IconInfo *icon_info, U
   }
   
   //- rjf: reset active keys if they have been pruned
-  for(EachEnumVal(UI_MouseButtonKind, k))
+  for EachEnumVal(UI_MouseButtonKind, k)
   {
     UI_Box *box = ui_box_from_key(ui_state->active_box_key[k]);
     if(ui_box_is_nil(box))
@@ -1495,7 +1495,7 @@ ui_end_build(void)
   //- rjf: hovering possibly-truncated drawn text -> store text
   {
     B32 inactive = 1;
-    for(EachEnumVal(UI_MouseButtonKind, k))
+    for EachEnumVal(UI_MouseButtonKind, k)
     {
       if(!ui_key_match(ui_key_zero(), ui_state->active_box_key[k]))
       {
@@ -2164,7 +2164,7 @@ ui_build_palette_(UI_Palette *base, UI_Palette *overrides)
   {
     MemoryCopyStruct(palette, base);
   }
-  for(EachEnumVal(UI_ColorCode, code))
+  for EachEnumVal(UI_ColorCode, code)
   {
     if(overrides->colors[code].x != 0 ||
        overrides->colors[code].y != 0 ||
@@ -2804,7 +2804,7 @@ ui_signal_from_box(UI_Box *box)
   //
   if(box->flags & UI_BoxFlag_MouseClickable)
   {
-    for(EachEnumVal(UI_MouseButtonKind, k))
+    for EachEnumVal(UI_MouseButtonKind, k)
     {
       if(ui_key_match(ui_state->active_box_key[k], box->key) ||
          sig.f & (UI_SignalFlag_LeftPressed<<k))
@@ -2819,7 +2819,7 @@ ui_signal_from_box(UI_Box *box)
   //
   if(box->flags & UI_BoxFlag_MouseClickable)
   {
-    for(EachEnumVal(UI_MouseButtonKind, k))
+    for EachEnumVal(UI_MouseButtonKind, k)
     {
       if(sig.f & (UI_SignalFlag_LeftDragging<<k) &&
          ui_key_match(ui_state->press_key_history[k][0], box->key) &&
@@ -2837,7 +2837,7 @@ ui_signal_from_box(UI_Box *box)
   //
   if(box->flags & UI_BoxFlag_MouseClickable)
   {
-    for(EachEnumVal(UI_MouseButtonKind, k))
+    for EachEnumVal(UI_MouseButtonKind, k)
     {
       if(sig.f & (UI_SignalFlag_LeftDragging<<k) &&
          ui_key_match(ui_state->press_key_history[k][0], box->key) &&
@@ -2889,7 +2889,7 @@ ui_signal_from_box(UI_Box *box)
      !contains_2f32(blacklist_rect, ui_state->mouse) &&
      !ui_key_match(ui_key_zero(), box->group_key))
   {
-    for(EachEnumVal(UI_MouseButtonKind, k))
+    for EachEnumVal(UI_MouseButtonKind, k)
     {
       UI_Box *active_box = ui_box_from_key(ui_state->active_box_key[k]);
       if(ui_key_match(box->group_key, active_box->group_key))

@@ -277,7 +277,7 @@ deserialized_from_typed_data(Arena *arena, Type *type, String8 data, TypeSeriali
             }
             
             // rjf: allocate buffer for pointer destination; write address into pointer value slot
-            U64 ptr_dest_buffer_size = count*t->type->direct->size;
+            U64 ptr_dest_buffer_size = (count+1)*t->type->direct->size;
             U8 *ptr_dest_buffer = push_array(arena, U8, ptr_dest_buffer_size);
             MemoryCopy(t->dst, &ptr_dest_buffer, sizeof(ptr_dest_buffer));
             

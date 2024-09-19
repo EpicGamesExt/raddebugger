@@ -263,7 +263,7 @@ internal MD_NodeFlags md_node_flags_from_token_flags(MD_TokenFlags flags);
 internal B32 md_node_is_nil(MD_Node *node);
 
 //- rjf: iteration
-#define MD_EachNode(it, first) MD_Node *it = first; !md_node_is_nil(it); it = it->next
+#define MD_EachNode(it, first) (MD_Node *it = first; !md_node_is_nil(it); it = it->next)
 internal MD_NodeRec md_node_rec_depth_first(MD_Node *node, MD_Node *subtree_root, U64 child_off, U64 sib_off);
 #define md_node_rec_depth_first_pre(node, subtree_root) md_node_rec_depth_first((node), (subtree_root), OffsetOf(MD_Node, first), OffsetOf(MD_Node, next))
 #define md_node_rec_depth_first_pre_rev(node, subtree_root) md_node_rec_depth_first((node), (subtree_root), OffsetOf(MD_Node, last), OffsetOf(MD_Node, prev))

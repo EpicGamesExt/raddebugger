@@ -4768,7 +4768,7 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
   TS_Ticket bake_type_nodes_ticket = ts_kickoff(p2r_bake_type_nodes_task__entry_point, 0, &bake_type_nodes_in);
   TS_Ticket bake_name_maps_tickets[RDI_NameMapKind_COUNT] = {0};
   {
-    for(EachNonZeroEnumVal(RDI_NameMapKind, k))
+    for EachNonZeroEnumVal(RDI_NameMapKind, k)
     {
       if(name_maps[k] == 0 || name_maps[k]->name_count == 0)
       {
@@ -4811,7 +4811,7 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
   RDIM_NameMapBakeResult name_map_bakes[RDI_NameMapKind_COUNT] = {0};
   ProfScope("name maps")
   {
-    for(EachNonZeroEnumVal(RDI_NameMapKind, k))
+    for EachNonZeroEnumVal(RDI_NameMapKind, k)
     {
       RDIM_NameMapBakeResult *bake = ts_join_struct(bake_name_maps_tickets[k], max_U64, RDIM_NameMapBakeResult);
       if(bake != 0)
@@ -4847,7 +4847,7 @@ p2r_compress(Arena *arena, P2R_Serialize2File *in)
     ctx.m_hashTable = push_array(arena, U16, 1<<ctx.m_tableSizeBits);
     
     //- rjf: compress, or just copy, all sections
-    for(EachEnumVal(RDI_SectionKind, k))
+    for EachEnumVal(RDI_SectionKind, k)
     {
       RDIM_SerializedSection *src = &in->bundle.sections[k];
       RDIM_SerializedSection *dst = &out->bundle.sections[k];

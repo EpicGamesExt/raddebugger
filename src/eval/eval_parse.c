@@ -1091,7 +1091,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
       void *location = 0;
       
       // rjf: try op table
-      for(EachNonZeroEnumVal(E_ExprKind, k))
+      for EachNonZeroEnumVal(E_ExprKind, k)
       {
         E_OpInfo *op_info = &e_expr_kind_op_info_table[k];
         if(op_info->kind == E_OpKind_UnaryPrefix && str8_match(op_info->pre, token_string, 0))
@@ -1940,7 +1940,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
       // rjf: first try to find a matching binary operator
       S64 binary_precedence = 0;
       E_ExprKind binary_kind = 0;
-      for(EachNonZeroEnumVal(E_ExprKind, k))
+      for EachNonZeroEnumVal(E_ExprKind, k)
       {
         E_OpInfo *op_info = &e_expr_kind_op_info_table[k];
         if(op_info->kind == E_OpKind_Binary && str8_match(op_info->sep, token_string, 0))

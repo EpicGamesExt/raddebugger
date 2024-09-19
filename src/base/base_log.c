@@ -88,7 +88,7 @@ log_scope_end(Arena *arena)
       SLLStackPop(log_active->top_scope);
       if(arena != 0)
       {
-        for(EachEnumVal(LogMsgKind, kind))
+        for EachEnumVal(LogMsgKind, kind)
         {
           Temp scratch = scratch_begin(&arena, 1);
           String8 result_unindented = str8_list_join(scratch.arena, &scope->strings[kind], 0);

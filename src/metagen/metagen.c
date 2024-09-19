@@ -517,7 +517,7 @@ mg_child_array_from_node(Arena *arena, MD_Node *node)
 {
   MG_NodeArray children = mg_node_array_make(arena, md_child_count_from_node(node));
   U64 idx = 0;
-  for(MD_EachNode(child, node->first))
+  for MD_EachNode(child, node->first)
   {
     children.v[idx] = child;
     idx += 1;
@@ -533,7 +533,7 @@ mg_node_grid_make_from_node(Arena *arena, MD_Node *root)
   // rjf: determine dimensions
   U64 row_count = md_child_count_from_node(root);
   U64 column_count = 0;
-  for(MD_EachNode(row, root->first))
+  for MD_EachNode(row, root->first)
   {
     U64 cell_count_this_row = md_child_count_from_node(row);
     column_count = Max(column_count, cell_count_this_row);
@@ -548,11 +548,11 @@ mg_node_grid_make_from_node(Arena *arena, MD_Node *root)
   // rjf: fill nodes
   {
     U64 y = 0;
-    for(MD_EachNode(row, root->first))
+    for MD_EachNode(row, root->first)
     {
       U64 x = 0;
       grid.row_parents.v[y] = row;
-      for(MD_EachNode(cell, row->first))
+      for MD_EachNode(cell, row->first)
       {
         grid.cells.v[x*grid.x_stride + y*grid.y_stride] = cell;
         x += 1;
@@ -622,7 +622,7 @@ mg_column_desc_array_from_tag(Arena *arena, MD_Node *tag)
   result.count = md_child_count_from_node(tag);
   result.v = push_array(arena, MG_ColumnDesc, result.count);
   U64 idx = 0;
-  for(MD_EachNode(hdr, tag->first))
+  for MD_EachNode(hdr, tag->first)
   {
     result.v[idx].name = push_str8_copy(arena, hdr->string);
     result.v[idx].kind = MG_ColumnKind_DirectCell;
@@ -1031,12 +1031,12 @@ mg_string_list_from_table_gen(Arena *arena, MG_Map grid_name_map, MG_Map grid_co
     str8_list_push(arena, &result, gen->string);
     str8_list_push(arena, &result, str8_lit("\n"));
   }
-  else for(MD_EachNode(strexpr_node, gen->first))
+  else for MD_EachNode(strexpr_node, gen->first)
   {
     // rjf: build task list
     MG_TableExpandTask *first_task = 0;
     MG_TableExpandTask *last_task = 0;
-    for(MD_EachNode(tag, strexpr_node->first_tag))
+    for MD_EachNode(tag, strexpr_node->first_tag)
     {
       if(str8_match(tag->string, str8_lit("expand"), 0))
       {
