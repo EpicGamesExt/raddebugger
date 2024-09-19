@@ -151,6 +151,13 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(default)
       EV_ViewRuleList *child_view_rules = ev_view_rule_list_from_inheritance(arena, view_rules);
       {
         String8 view_rule_string = ev_view_rule_from_key(view, child->key);
+        if(view_rule_string.size == 0)
+        {
+          Temp scratch = scratch_begin(&arena, 1);
+          E_IRTreeAndType irtree = e_irtree_and_type_from_expr(arena, child_expr);
+          view_rule_string = ev_auto_view_rule_from_type_key(irtree.type_key);
+          scratch_end(scratch);
+        }
         if(view_rule_string.size != 0)
         {
           ev_view_rule_list_push_string(arena, child_view_rules, view_rule_string);
@@ -219,6 +226,13 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(default)
       EV_ViewRuleList *child_view_rules = ev_view_rule_list_from_inheritance(arena, view_rules);
       {
         String8 view_rule_string = ev_view_rule_from_key(view, child->key);
+        if(view_rule_string.size == 0)
+        {
+          Temp scratch = scratch_begin(&arena, 1);
+          E_IRTreeAndType irtree = e_irtree_and_type_from_expr(arena, child_expr);
+          view_rule_string = ev_auto_view_rule_from_type_key(irtree.type_key);
+          scratch_end(scratch);
+        }
         if(view_rule_string.size != 0)
         {
           ev_view_rule_list_push_string(arena, child_view_rules, view_rule_string);
@@ -236,13 +250,21 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(default)
   //
   else if(e_type_kind_is_pointer_or_ref(type_kind) && e_type_kind_is_pointer_or_ref(direct_type_kind))
   {
-    // rjf: compute key
+    // rjf: compute key, compute expr
     EV_Key child_key = ev_key_make(ev_hash_from_key(key), 1);
+    E_Expr *child_expr = e_expr_ref_deref(arena, expr);
     
     // rjf: build child view rules
     EV_ViewRuleList *child_view_rules = ev_view_rule_list_from_inheritance(arena, view_rules);
     {
       String8 view_rule_string = ev_view_rule_from_key(view, child_key);
+      if(view_rule_string.size == 0)
+      {
+        Temp scratch = scratch_begin(&arena, 1);
+        E_IRTreeAndType irtree = e_irtree_and_type_from_expr(arena, child_expr);
+        view_rule_string = ev_auto_view_rule_from_type_key(irtree.type_key);
+        scratch_end(scratch);
+      }
       if(view_rule_string.size != 0)
       {
         ev_view_rule_list_push_string(arena, child_view_rules, view_rule_string);
@@ -250,7 +272,6 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(default)
     }
     
     // rjf: recurse for child
-    E_Expr *child_expr = e_expr_ref_deref(arena, expr);
     ev_append_expr_blocks__rec(arena, view, key, child_key, str8_zero(), child_expr, child_view_rules, depth, out);
   }
   

@@ -353,6 +353,67 @@ ev_view_rule_info_from_string(String8 string)
 }
 
 ////////////////////////////////
+//~ rjf: Automatic Type -> View Rule Table Building / Selection / Lookups
+
+internal void
+ev_auto_view_rule_table_push_new(Arena *arena, EV_AutoViewRuleTable *table, E_TypeKey type_key, String8 view_rule)
+{
+  if(table->slots_count == 0)
+  {
+    table->slots_count = 4096;
+    table->slots = push_array(arena, EV_AutoViewRuleSlot, table->slots_count);
+  }
+  U64 hash = e_hash_from_string(5381, str8_struct(&type_key));
+  U64 slot_idx = hash%ev_auto_view_rule_table->slots_count;
+  EV_AutoViewRuleSlot *slot = &ev_auto_view_rule_table->slots[slot_idx];
+  EV_AutoViewRuleNode *node = 0;
+  for(EV_AutoViewRuleNode *n = slot->first; n != 0; n = n->next)
+  {
+    if(e_type_match(n->key, type_key))
+    {
+      node = n;
+      break;
+    }
+  }
+  if(node == 0)
+  {
+    node = push_array(arena, EV_AutoViewRuleNode, 1);
+    node->key = type_key;
+    node->view_rule = push_str8_copy(arena, view_rule);
+    SLLQueuePush(slot->first, slot->last, node);
+  }
+}
+
+internal void
+ev_select_auto_view_rule_table(EV_AutoViewRuleTable *table)
+{
+  ev_auto_view_rule_table = table;
+}
+
+internal String8
+ev_auto_view_rule_from_type_key(E_TypeKey type_key)
+{
+  U64 hash = e_hash_from_string(5381, str8_struct(&type_key));
+  U64 slot_idx = hash%ev_auto_view_rule_table->slots_count;
+  EV_AutoViewRuleSlot *slot = &ev_auto_view_rule_table->slots[slot_idx];
+  EV_AutoViewRuleNode *node = 0;
+  for(EV_AutoViewRuleNode *n = slot->first; n != 0; n = n->next)
+  {
+    if(e_type_match(n->key, type_key))
+    {
+      node = n;
+      break;
+    }
+  }
+  String8 string = {0};
+  if(node != 0)
+  {
+    string = node->view_rule;
+  }
+  return string;
+}
+
+////////////////////////////////
 //~ rjf: View Rule Instance List Building
 
 internal void
@@ -562,6 +623,11 @@ ev_block_list_from_view_expr_keys(Arena *arena, EV_View *view, EV_ViewRuleList *
       }
     }
     String8 view_rule_string = ev_view_rule_from_key(view, key);
+    if(view_rule_string.size == 0)
+    {
+      E_IRTreeAndType irtree = e_irtree_and_type_from_expr(arena, parse.expr);
+      view_rule_string = ev_auto_view_rule_from_type_key(irtree.type_key);
+    }
     EV_ViewRuleList *view_rule_list = ev_view_rule_list_copy(arena, view_rules);
     for(String8Node *n = default_view_rules.first; n != 0; n = n->next)
     {
@@ -849,6 +915,13 @@ ev_row_list_push_new(Arena *arena, EV_View *view, EV_WindowedRowList *rows, EV_B
     {
       view_rules = ev_view_rule_list_from_inheritance(arena, block->view_rules);
       String8 row_view_rules = ev_view_rule_from_key(view, key);
+      if(row_view_rules.size == 0)
+      {
+        Temp scratch = scratch_begin(&arena, 1);
+        E_IRTreeAndType irtree = e_irtree_and_type_from_expr(arena, expr);
+        row_view_rules = ev_auto_view_rule_from_type_key(irtree.type_key);
+        scratch_end(scratch);
+      }
       if(row_view_rules.size != 0)
       {
         ev_view_rule_list_push_string(arena, view_rules, row_view_rules);

@@ -225,6 +225,32 @@ struct EV_ViewRuleInfoTable
 };
 
 ////////////////////////////////
+//~ rjf: Automatic Type -> View Rule Map Types
+
+typedef struct EV_AutoViewRuleNode EV_AutoViewRuleNode;
+struct EV_AutoViewRuleNode
+{
+  EV_AutoViewRuleNode *next;
+  E_TypeKey key;
+  String8 view_rule;
+};
+
+typedef struct EV_AutoViewRuleSlot EV_AutoViewRuleSlot;
+struct EV_AutoViewRuleSlot
+{
+  EV_AutoViewRuleNode *first;
+  EV_AutoViewRuleNode *last;
+  U64 count;
+};
+
+typedef struct EV_AutoViewRuleTable EV_AutoViewRuleTable;
+struct EV_AutoViewRuleTable
+{
+  EV_AutoViewRuleSlot *slots;
+  U64 slots_count;
+};
+
+////////////////////////////////
 //~ rjf: Generated Code
 
 #include "generated/eval_visualization.meta.h"
@@ -279,6 +305,7 @@ struct EV_WindowedRowList
 global read_only EV_ViewRuleInfo ev_nil_view_rule_info = {0};
 thread_static EV_ViewRuleInfoTable *ev_view_rule_info_table = 0;
 global read_only EV_ViewRuleList ev_nil_view_rule_list = {0};
+thread_static EV_AutoViewRuleTable *ev_auto_view_rule_table = 0;
 
 ////////////////////////////////
 //~ rjf: Key Functions
@@ -317,6 +344,13 @@ internal void ev_view_rule_info_table_push(Arena *arena, EV_ViewRuleInfoTable *t
 internal void ev_view_rule_info_table_push_builtins(Arena *arena, EV_ViewRuleInfoTable *table);
 internal void ev_select_view_rule_info_table(EV_ViewRuleInfoTable *table);
 internal EV_ViewRuleInfo *ev_view_rule_info_from_string(String8 string);
+
+////////////////////////////////
+//~ rjf: Automatic Type -> View Rule Table Building / Selection / Lookups
+
+internal void ev_auto_view_rule_table_push_new(Arena *arena, EV_AutoViewRuleTable *table, E_TypeKey type_key, String8 view_rule);
+internal void ev_select_auto_view_rule_table(EV_AutoViewRuleTable *table);
+internal String8 ev_auto_view_rule_from_type_key(E_TypeKey type_key);
 
 ////////////////////////////////
 //~ rjf: View Rule Instance List Building
