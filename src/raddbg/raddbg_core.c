@@ -1772,24 +1772,53 @@ rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, Vec4F32 secon
 ////////////////////////////////
 //~ rjf: Evaluation Spaces
 
+//- rjf: entity <-> eval space
+
+internal RD_Entity *
+rd_entity_from_eval_space(E_Space space)
+{
+  RD_Entity *entity = &d_nil_entity;
+  if(space.kind == RD_EvalSpaceKind_MetaEntity)
+  {
+    RD_Handle handle = {space.u64s[0], space.u64s[1]};
+    entity = rd_entity_from_handle(handle);
+  }
+  return entity;
+}
+
+internal E_Space
+rd_eval_space_from_entity(RD_Entity *entity)
+{
+  E_Space space = e_space_make(RD_EvalSpaceKind_MetaEntity);
+  RD_Handle handle = rd_handle_from_entity(entity);
+  space.u64s[0] = handle.u64[0];
+  space.u64s[1] = handle.u64[1];
+  return space;
+}
+
 //- rjf: ctrl entity <-> eval space
 
 internal CTRL_Entity *
 rd_ctrl_entity_from_eval_space(E_Space space)
 {
   CTRL_Entity *entity = &ctrl_entity_nil;
-  if(space.kind == CTRL_EvalSpaceKind_Entity)
+  if(space.kind == RD_EvalSpaceKind_CtrlEntity ||
+     space.kind == RD_EvalSpaceKind_MetaCtrlEntity)
   {
-    entity = (CTRL_Entity *)space.u64_0;
+    CTRL_Handle handle;
+    handle.machine_id = space.u64s[0];
+    handle.dmn_handle.u64[0] = space.u64s[1];
+    entity = ctrl_entity_from_handle(d_state->ctrl_entity_store, handle);
   }
   return entity;
 }
 
 internal E_Space
-rd_eval_space_from_ctrl_entity(CTRL_Entity *entity)
+rd_eval_space_from_ctrl_entity(CTRL_Entity *entity, E_SpaceKind kind)
 {
-  E_Space space = e_space_make(CTRL_EvalSpaceKind_Entity);
-  space.u64_0 = (U64)entity;
+  E_Space space = e_space_make(kind);
+  space.u64s[0] = entity->handle.machine_id;
+  space.u64s[1] = entity->handle.dmn_handle.u64[0];
   return space;
 }
 
@@ -1801,6 +1830,7 @@ rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
   B32 result = 0;
   switch(space.kind)
   {
+    //- rjf: filesystem reads
     case E_SpaceKind_FileSystem:
     {
       U128 key = space.u128;
@@ -1818,7 +1848,9 @@ rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
       }
       hs_scope_close(scope);
     }break;
-    case CTRL_EvalSpaceKind_Entity:
+    
+    //- rjf: interior control entity reads (inside process address space or thread register block)
+    case RD_EvalSpaceKind_CtrlEntity:
     {
       CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(space);
       switch(entity->kind)
@@ -1855,30 +1887,97 @@ rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
         }break;
       }
     }break;
-    case CTRL_EvalSpaceKind_Meta:
-    if(space.u64_0 < rd_state->meta_evals.count)
+    
+    //- rjf: meta reads (metadata about either control entities or debugger state)
+    case RD_EvalSpaceKind_MetaCtrlEntity:
+    case RD_EvalSpaceKind_MetaEntity:
     {
-      CTRL_MetaEval *eval = &rd_state->meta_evals.v[space.u64_0];
       Temp scratch = scratch_begin(0, 0);
+      CTRL_MetaEval *meval = push_array(scratch.arena, CTRL_MetaEval, 1);
+      
+      // rjf: ctrl entity -> produce meta eval
+      if(space.kind == RD_EvalSpaceKind_MetaCtrlEntity)
+      {
+        CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(space);
+        
+        // rjf: produce meta evaluation
+        meval->frozen    = entity->is_frozen;
+        meval->color     = entity->rgba;
+        meval->label     = entity->string;
+        meval->id        = entity->id;
+        if(entity->kind == CTRL_EntityKind_Thread)
+        {
+          DI_Scope *di_scope = di_scope_open();
+          CTRL_Entity *process = ctrl_entity_ancestor_from_kind(entity, CTRL_EntityKind_Process);
+          CTRL_Unwind base_unwind = d_query_cached_unwind_from_thread(entity);
+          D_Unwind rich_unwind = d_unwind_from_ctrl_unwind(scratch.arena, di_scope, process, &base_unwind);
+          meval->callstack.count = rich_unwind.frames.total_frame_count;
+          meval->callstack.v = push_array(scratch.arena, CTRL_MetaEvalFrame, meval->callstack.count);
+          U64 idx = 0;
+          for(U64 base_idx = 0; base_idx < rich_unwind.frames.concrete_frame_count; base_idx += 1)
+          {
+            U64 inline_idx = 0;
+            for(D_UnwindInlineFrame *f = rich_unwind.frames.v[base_idx].first_inline_frame; f != 0; f = f->next, inline_idx += 1)
+            {
+              meval->callstack.v[idx].vaddr = regs_rip_from_arch_block(entity->arch, rich_unwind.frames.v[base_idx].regs);
+              idx += 1;
+            }
+            meval->callstack.v[idx].vaddr = regs_rip_from_arch_block(entity->arch, rich_unwind.frames.v[base_idx].regs);
+            idx += 1;
+          }
+          di_scope_close(di_scope);
+        }
+      }
+      
+      // rjf: debugger entity -> produce meta eval
+      if(space.kind == RD_EvalSpaceKind_MetaEntity)
+      {
+        RD_Entity *entity = rd_entity_from_eval_space(space);
+        RD_Entity *loc = rd_entity_child_from_kind(entity, RD_EntityKind_Location);
+        RD_Entity *cnd = rd_entity_child_from_kind(entity, RD_EntityKind_Condition);
+        String8 label_string = push_str8_copy(scratch.arena, entity->string);
+        String8 loc_string = {0};
+        if(loc->flags & RD_EntityFlag_HasTextPoint)
+        {
+          loc_string = push_str8f(scratch.arena, "%S:%I64u:%I64u", loc->string, loc->text_point.line, loc->text_point.column);
+        }
+        else if(loc->flags & RD_EntityFlag_HasVAddr)
+        {
+          loc_string = push_str8f(scratch.arena, "0x%I64x", loc->vaddr);
+        }
+        String8 cnd_string = push_str8_copy(scratch.arena, cnd->string);
+        meval->enabled   = !entity->disabled;
+        meval->hit_count = entity->u64;
+        meval->color     = u32_from_rgba(rd_rgba_from_entity(entity));
+        meval->label     = label_string;
+        meval->location  = loc_string;
+        meval->condition = cnd_string;
+      }
+      
+      // rjf: copy meta evaluation to scratch arena, to form range of legal reads
       arena_push(scratch.arena, 0, 64);
-      void *offsetify_base = push_array(scratch.arena, U8, 0);
+      String8 meval_srlzed = serialized_from_struct(scratch.arena, CTRL_MetaEval, meval);
       U64 pos_min = arena_pos(scratch.arena);
-      String8 eval_srlzed = serialized_from_struct(scratch.arena, CTRL_MetaEval, eval);
-      CTRL_MetaEval *eval_read = struct_from_serialized(scratch.arena, CTRL_MetaEval, eval_srlzed);
-      struct_rebase_ptrs(CTRL_MetaEval, eval_read, eval_read);
+      CTRL_MetaEval *meval_read = struct_from_serialized(scratch.arena, CTRL_MetaEval, meval_srlzed);
       U64 pos_opl = arena_pos(scratch.arena);
+      
+      // rjf: rebase all pointer values in meta evaluation to be relative to base pointer
+      struct_rebase_ptrs(CTRL_MetaEval, meval_read, meval_read);
+      
+      // rjf: perform actual read
       Rng1U64 legal_range = r1u64(0, pos_opl-pos_min);
       if(contains_1u64(legal_range, range.min))
       {
         result = 1;
         U64 range_dim = dim_1u64(range);
         U64 bytes_to_read = Min(range_dim, (legal_range.max - range.min));
-        MemoryCopy(out, ((U8 *)eval_read) + range.min, bytes_to_read);
+        MemoryCopy(out, ((U8 *)meval_read) + range.min, bytes_to_read);
         if(bytes_to_read < range_dim)
         {
           MemoryZero((U8 *)out + bytes_to_read, range_dim - bytes_to_read);
         }
       }
+      
       scratch_end(scratch);
     }break;
   }
@@ -1971,7 +2070,7 @@ rd_key_from_eval_space_range(E_Space space, Rng1U64 range, B32 zero_terminated)
     {
       result = space.u128;
     }break;
-    case CTRL_EvalSpaceKind_Entity:
+    case RD_EvalSpaceKind_CtrlEntity:
     {
       CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(space);
       if(entity->kind == CTRL_EntityKind_Process)
@@ -2007,7 +2106,7 @@ rd_whole_range_from_eval_space(E_Space space)
       result = r1u64(0, data.size);
       hs_scope_close(scope);
     }break;
-    case CTRL_EvalSpaceKind_Entity:
+    case RD_EvalSpaceKind_CtrlEntity:
     {
       CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(space);
       if(entity->kind == CTRL_EntityKind_Process)
@@ -7805,7 +7904,8 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
     else if(str8_match(n->v.root->string, str8_lit("no_addr"), 0)) {no_addr = 1;}
     else if(str8_match(n->v.root->string, str8_lit("array"), 0)) {has_array = 1;}
   }
-  if(eval.space.kind == CTRL_EvalSpaceKind_Meta)
+  if(eval.space.kind == RD_EvalSpaceKind_MetaEntity ||
+     eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity)
   {
     no_addr = 1;
   }
@@ -10110,7 +10210,7 @@ rd_frame(void)
         eval_modules[eval_module_idx].arch        = m->arch;
         eval_modules[eval_module_idx].rdi         = di_rdi_from_key(di_scope, &dbgi_key, 0);
         eval_modules[eval_module_idx].vaddr_range = m->vaddr_range;
-        eval_modules[eval_module_idx].space       = rd_eval_space_from_ctrl_entity(ctrl_entity_ancestor_from_kind(m, CTRL_EntityKind_Process));
+        eval_modules[eval_module_idx].space       = rd_eval_space_from_ctrl_entity(ctrl_entity_ancestor_from_kind(m, CTRL_EntityKind_Process), RD_EvalSpaceKind_CtrlEntity);
         if(module == m)
         {
           eval_modules_primary = &eval_modules[eval_module_idx];
@@ -10138,114 +10238,6 @@ rd_frame(void)
     }
     
     ////////////////////////////
-    //- rjf: build meta eval infos
-    //
-    {
-      RD_EntityKind evallable_entity_kinds[] =
-      {
-        RD_EntityKind_Breakpoint,
-        RD_EntityKind_WatchPin,
-        RD_EntityKind_Target,
-      };
-      CTRL_EntityKind evallable_ctrl_entity_kinds[] =
-      {
-        CTRL_EntityKind_Machine,
-        CTRL_EntityKind_Process,
-        CTRL_EntityKind_Thread,
-        CTRL_EntityKind_Module,
-      };
-      U64 meta_eval_count = 0;
-      for(U64 idx = 0; idx < ArrayCount(evallable_entity_kinds); idx += 1)
-      {
-        RD_EntityList list = rd_query_cached_entity_list_with_kind(evallable_entity_kinds[idx]);
-        meta_eval_count += list.count;
-      }
-      for(U64 idx = 0; idx < ArrayCount(evallable_ctrl_entity_kinds); idx += 1)
-      {
-        CTRL_EntityList list = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, evallable_ctrl_entity_kinds[idx]);
-        meta_eval_count += list.count;
-      }
-      rd_state->meta_evals.count = meta_eval_count;
-      rd_state->meta_evals.v = push_array(scratch.arena, CTRL_MetaEval, rd_state->meta_evals.count);
-      U64 meta_eval_idx = 0;
-      for(U64 idx = 0; idx < ArrayCount(evallable_entity_kinds); idx += 1)
-      {
-        RD_EntityList list = rd_query_cached_entity_list_with_kind(evallable_entity_kinds[idx]);
-        switch(evallable_entity_kinds[idx])
-        {
-          default:{}break;
-          case RD_EntityKind_Breakpoint:{rd_state->meta_evals_bps_idx_range.min = idx;}break;
-          case RD_EntityKind_WatchPin:{rd_state->meta_evals_wps_idx_range.min = idx;}break;
-        }
-        for(RD_EntityNode *n = list.first; n != 0; n = n->next)
-        {
-          RD_Entity *entity = n->entity;
-          RD_Entity *loc = rd_entity_child_from_kind(entity, RD_EntityKind_Location);
-          RD_Entity *cnd = rd_entity_child_from_kind(entity, RD_EntityKind_Condition);
-          String8 label_string = push_str8_copy(scratch.arena, entity->string);
-          String8 loc_string = {0};
-          if(loc->flags & RD_EntityFlag_HasTextPoint)
-          {
-            loc_string = push_str8f(scratch.arena, "%S:%I64u:%I64u", loc->string, loc->text_point.line, loc->text_point.column);
-          }
-          else if(loc->flags & RD_EntityFlag_HasVAddr)
-          {
-            loc_string = push_str8f(scratch.arena, "0x%I64x", loc->vaddr);
-          }
-          String8 cnd_string = push_str8_copy(scratch.arena, cnd->string);
-          CTRL_MetaEval *meval = &rd_state->meta_evals.v[meta_eval_idx];
-          meval->enabled   = !entity->disabled;
-          meval->hit_count = entity->u64;
-          meval->color     = u32_from_rgba(rd_rgba_from_entity(entity));
-          meval->label     = label_string;
-          meval->location  = loc_string;
-          meval->condition = cnd_string;
-          meta_eval_idx += 1;
-        }
-        switch(evallable_entity_kinds[idx])
-        {
-          default:{}break;
-          case RD_EntityKind_Breakpoint:{rd_state->meta_evals_bps_idx_range.max = idx;}break;
-          case RD_EntityKind_WatchPin:{rd_state->meta_evals_wps_idx_range.max = idx;}break;
-        }
-      }
-      for(U64 idx = 0; idx < ArrayCount(evallable_ctrl_entity_kinds); idx += 1)
-      {
-        CTRL_EntityList list = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, evallable_ctrl_entity_kinds[idx]);
-        for(CTRL_EntityNode *n = list.first; n != 0; n = n->next)
-        {
-          CTRL_Entity *entity = n->v;
-          CTRL_MetaEval *meval = &rd_state->meta_evals.v[meta_eval_idx];
-          meval->frozen    = entity->is_frozen;
-          meval->color     = entity->rgba;
-          meval->label     = entity->string;
-          meval->id        = entity->id;
-          if(entity->kind == CTRL_EntityKind_Thread)
-          {
-            CTRL_Entity *process = ctrl_entity_ancestor_from_kind(entity, CTRL_EntityKind_Process);
-            CTRL_Unwind base_unwind = d_query_cached_unwind_from_thread(entity);
-            D_Unwind rich_unwind = d_unwind_from_ctrl_unwind(scratch.arena, di_scope, process, &base_unwind);
-            meval->callstack.count = rich_unwind.frames.total_frame_count;
-            meval->callstack.v = push_array(scratch.arena, CTRL_MetaEvalFrame, meval->callstack.count);
-            U64 idx = 0;
-            for(U64 base_idx = 0; base_idx < rich_unwind.frames.concrete_frame_count; base_idx += 1)
-            {
-              U64 inline_idx = 0;
-              for(D_UnwindInlineFrame *f = rich_unwind.frames.v[base_idx].first_inline_frame; f != 0; f = f->next, inline_idx += 1)
-              {
-                meval->callstack.v[idx].vaddr = regs_rip_from_arch_block(entity->arch, rich_unwind.frames.v[base_idx].regs);
-                idx += 1;
-              }
-              meval->callstack.v[idx].vaddr = regs_rip_from_arch_block(entity->arch, rich_unwind.frames.v[base_idx].regs);
-              idx += 1;
-            }
-          }
-          meta_eval_idx += 1;
-        }
-      }
-    }
-    
-    ////////////////////////////
     //- rjf: build eval type context
     //
     E_TypeCtx *type_ctx = push_array(scratch.arena, E_TypeCtx, 1);
@@ -10268,7 +10260,7 @@ rd_frame(void)
       E_ParseCtx *ctx = parse_ctx;
       ctx->ip_vaddr          = rip_vaddr;
       ctx->ip_voff           = rip_voff;
-      ctx->ip_thread_space   = rd_eval_space_from_ctrl_entity(thread);
+      ctx->ip_thread_space   = rd_eval_space_from_ctrl_entity(thread, RD_EvalSpaceKind_CtrlEntity);
       ctx->modules           = eval_modules;
       ctx->modules_count     = eval_modules_count;
       ctx->primary_module    = eval_modules_primary;
@@ -10284,36 +10276,64 @@ rd_frame(void)
     //
     E_IRCtx *ir_ctx = push_array(scratch.arena, E_IRCtx, 1);
     {
+      E_TypeKey meta_eval_type_key = e_type_key_cons_base(type(CTRL_MetaEval), str8_lit("RADDBG_Entity"));
       E_IRCtx *ctx = ir_ctx;
       ctx->macro_map     = push_array(scratch.arena, E_String2ExprMap, 1);
       ctx->macro_map[0]  = e_string2expr_map_make(scratch.arena, 512);
       
-      //- rjf: add macros for all evallable frontend entities
+      //- rjf: add macros for all evallable debugger frontend entities
       {
-        
+        RD_EntityKind evallable_kinds[] =
+        {
+          RD_EntityKind_Breakpoint,
+          RD_EntityKind_WatchPin,
+          RD_EntityKind_Target,
+        };
+        for EachElement(idx, evallable_kinds)
+        {
+          RD_EntityList list = rd_query_cached_entity_list_with_kind(evallable_kinds[idx]);
+          for(RD_EntityNode *n = list.first; n != 0; n = n->next)
+          {
+            RD_Entity *entity = n->entity;
+            E_Space space = rd_eval_space_from_entity(entity);
+            E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
+            expr->space    = space;
+            expr->mode     = E_Mode_Offset;
+            expr->type_key = meta_eval_type_key;
+            e_string2expr_map_insert(scratch.arena, ctx->macro_map, push_str8f(scratch.arena, "$%I64u", entity->id), expr);
+            if(entity->string.size != 0)
+            {
+              e_string2expr_map_insert(scratch.arena, ctx->macro_map, entity->string, expr);
+            }
+          }
+        }
       }
       
       //- rjf: add macros for all evallable control entities
       {
-        
-      }
-      
-      //- rjf: add macros for meta evaluations
-      {
-        E_TypeKey meta_eval_type_key = e_type_key_cons_base(type(CTRL_MetaEval), str8_lit("RADDBG_Entity"));
-        for(U64 idx = 0; idx < rd_state->meta_evals.count; idx += 1)
+        CTRL_EntityKind evallable_kinds[] =
         {
-          CTRL_MetaEval *meval = &rd_state->meta_evals.v[idx];
-          E_Space space = e_space_make(CTRL_EvalSpaceKind_Meta);
-          space.u64_0 = idx;
-          E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
-          expr->space    = space;
-          expr->mode     = E_Mode_Offset;
-          expr->type_key = meta_eval_type_key;
-          e_string2expr_map_insert(scratch.arena, ctx->macro_map, push_str8f(scratch.arena, "$%I64u", idx), expr);
-          if(meval->label.size != 0)
+          CTRL_EntityKind_Machine,
+          CTRL_EntityKind_Process,
+          CTRL_EntityKind_Thread,
+          CTRL_EntityKind_Module,
+        };
+        for EachElement(idx, evallable_kinds)
+        {
+          CTRL_EntityKind kind = evallable_kinds[idx];
+          CTRL_EntityList list = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, kind);
+          for(CTRL_EntityNode *n = list.first; n != 0; n = n->next)
           {
-            e_string2expr_map_insert(scratch.arena, ctx->macro_map, meval->label, expr);
+            CTRL_Entity *entity = n->v;
+            E_Space space = rd_eval_space_from_ctrl_entity(entity, RD_EvalSpaceKind_MetaCtrlEntity);
+            E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
+            expr->space    = space;
+            expr->mode     = E_Mode_Offset;
+            expr->type_key = meta_eval_type_key;
+            if(entity->string.size != 0)
+            {
+              e_string2expr_map_insert(scratch.arena, ctx->macro_map, entity->string, expr);
+            }
           }
         }
       }
@@ -10344,7 +10364,7 @@ rd_frame(void)
       ctx->space_write       = rd_eval_space_write;
       ctx->primary_space     = eval_modules_primary->space;
       ctx->reg_arch          = eval_modules_primary->arch;
-      ctx->reg_space         = rd_eval_space_from_ctrl_entity(thread);
+      ctx->reg_space         = rd_eval_space_from_ctrl_entity(thread, RD_EvalSpaceKind_CtrlEntity);
       ctx->reg_unwind_count  = unwind_count;
       ctx->module_base       = push_array(scratch.arena, U64, 1);
       ctx->module_base[0]    = module->vaddr_range.min;
@@ -14355,10 +14375,18 @@ rd_frame(void)
     }
     
     ////////////////////////////
+    //- rjf: gather meta evaluations
+    //
+    CTRL_MetaEvalArray meta_evals = {0};
+    {
+      // TODO(rjf): @msgs
+    }
+    
+    ////////////////////////////
     //- rjf: tick debug engine
     //
     U64 cmd_count_pre_tick = rd_state->cmds[0].count;
-    D_EventList engine_events = d_tick(scratch.arena, &targets, &breakpoints, &path_maps, exception_code_filters, &rd_state->meta_evals);
+    D_EventList engine_events = d_tick(scratch.arena, &targets, &breakpoints, &path_maps, exception_code_filters, &meta_evals);
     
     ////////////////////////////
     //- rjf: no selected thread? -> try to snap to any existing thread

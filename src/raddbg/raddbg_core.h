@@ -30,6 +30,17 @@ struct RD_HandleList
 };
 
 ////////////////////////////////
+//~ rjf: Evaluation Spaces
+
+typedef U64 RD_EvalSpaceKind;
+enum
+{
+  RD_EvalSpaceKind_CtrlEntity = E_SpaceKind_FirstUserDefined,
+  RD_EvalSpaceKind_MetaEntity,
+  RD_EvalSpaceKind_MetaCtrlEntity,
+};
+
+////////////////////////////////
 //~ rjf: Entity Kind Flags
 
 typedef U32 RD_EntityKindFlags;
@@ -779,11 +790,6 @@ struct RD_State
   // rjf: frame parameters
   F32 frame_dt;
   
-  // rjf: meta evaluation info
-  CTRL_MetaEvalArray meta_evals;
-  Rng1U64 meta_evals_bps_idx_range;
-  Rng1U64 meta_evals_wps_idx_range;
-  
   // rjf: registers stack
   RD_RegsNode base_regs;
   RD_RegsNode *top_regs;
@@ -1159,9 +1165,13 @@ internal DR_FancyStringList rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_E
 ////////////////////////////////
 //~ rjf: Evaluation Spaces
 
+//- rjf: entity <-> eval space
+internal RD_Entity *rd_entity_from_eval_space(E_Space space);
+internal E_Space rd_eval_space_from_entity(RD_Entity *entity);
+
 //- rjf: ctrl entity <-> eval space
 internal CTRL_Entity *rd_ctrl_entity_from_eval_space(E_Space space);
-internal E_Space rd_eval_space_from_ctrl_entity(CTRL_Entity *entity);
+internal E_Space rd_eval_space_from_ctrl_entity(CTRL_Entity *entity, E_SpaceKind kind);
 
 //- rjf: eval space reads/writes
 internal B32 rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range);

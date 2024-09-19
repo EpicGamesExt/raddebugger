@@ -1055,8 +1055,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, B32 modifiable, U32 default_radix, R
             mutable_entity_kind = RD_EntityKind_Breakpoint;
             ev_view_rule_list_push_string(scratch.arena, &top_level_view_rules, str8_lit("no_addr"));
             RD_EntityList bps = rd_query_cached_entity_list_with_kind(mutable_entity_kind);
-            U64 idx = rd_state->meta_evals_bps_idx_range.min;
-            for(RD_EntityNode *n = bps.first; n != 0; n = n->next, idx += 1)
+            for(RD_EntityNode *n = bps.first; n != 0; n = n->next)
             {
               RD_Entity *bp = n->entity;
               if(bp->flags & RD_EntityFlag_MarkedForDeletion)
@@ -1069,7 +1068,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, B32 modifiable, U32 default_radix, R
               FuzzyMatchRangeList matches = fuzzy_match_find(scratch.arena, filter, title);
               if(matches.count == matches.needle_part_count)
               {
-                String8 expr_string = push_str8f(scratch.arena, "$%I64u", idx);
+                String8 expr_string = push_str8f(scratch.arena, "$%I64u", bp->id);
                 EV_BlockList watch_blocks = ev_block_list_from_view_expr_keys(scratch.arena, eval_view, &top_level_view_rules, expr_string, parent_key, key);
                 ev_block_list_concat__in_place(&blocks, &watch_blocks);
               }
@@ -1083,8 +1082,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, B32 modifiable, U32 default_radix, R
           {
             mutable_entity_kind = RD_EntityKind_WatchPin;
             RD_EntityList wps = rd_query_cached_entity_list_with_kind(mutable_entity_kind);
-            U64 idx = rd_state->meta_evals_wps_idx_range.min;
-            for(RD_EntityNode *n = wps.first; n != 0; n = n->next, idx += 1)
+            for(RD_EntityNode *n = wps.first; n != 0; n = n->next)
             {
               RD_Entity *wp = n->entity;
               if(wp->flags & RD_EntityFlag_MarkedForDeletion)
@@ -1097,7 +1095,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, B32 modifiable, U32 default_radix, R
               FuzzyMatchRangeList matches = fuzzy_match_find(scratch.arena, filter, title);
               if(matches.count == matches.needle_part_count)
               {
-                String8 expr_string = push_str8f(scratch.arena, "$%I64u", idx);
+                String8 expr_string = push_str8f(scratch.arena, "$%I64u", wp->id);
                 EV_BlockList watch_blocks = ev_block_list_from_view_expr_keys(scratch.arena, eval_view, &top_level_view_rules, expr_string, parent_key, key);
                 ev_block_list_concat__in_place(&blocks, &watch_blocks);
               }
@@ -1170,7 +1168,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, B32 modifiable, U32 default_radix, R
                 E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafBytecode, 0);
                 expr->bytecode = bytecode;
                 expr->mode = E_Mode_Value;
-                expr->space = rd_eval_space_from_ctrl_entity(process);
+                expr->space = rd_eval_space_from_ctrl_entity(process, RD_EvalSpaceKind_CtrlEntity);
                 expr->type_key = type_key;
                 block->expr = expr;
                 block->visual_idx_range   = r1u64(row_idx, row_idx+1);
@@ -6630,7 +6628,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(disasm)
   E_Space space = eval.space;
   if(auto_selected_thread)
   {
-    space = rd_eval_space_from_ctrl_entity(ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->process));
+    space = rd_eval_space_from_ctrl_entity(ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->process), RD_EvalSpaceKind_CtrlEntity);
   }
   Rng1U64 range = rd_range_from_eval_params(eval, params);
   Arch arch = rd_arch_from_eval_params(eval, params);
@@ -6887,7 +6885,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(memory)
   Rng1U64 space_range = rd_range_from_eval_params(eval, params);
   if(eval.space.kind == 0)
   {
-    eval.space = rd_eval_space_from_ctrl_entity(ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->process));
+    eval.space = rd_eval_space_from_ctrl_entity(ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->process), RD_EvalSpaceKind_CtrlEntity);
     space_range = rd_whole_range_from_eval_space(eval.space);
   }
   U64 cursor          = rd_value_from_params_key(params, str8_lit("cursor_vaddr")).u64;

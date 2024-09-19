@@ -118,6 +118,8 @@
 #define DeferLoop(begin, end)        for(int _i_ = ((begin), 0); !_i_; _i_ += 1, (end))
 #define DeferLoopChecked(begin, end) for(int _i_ = 2 * !(begin); (_i_ == 2 ? ((end), 0) : !_i_); _i_ += 1, (end))
 
+#define EachIndex(it, count) (U64 it = 0; it < (count); it += 1)
+#define EachElement(it, array) (U64 it = 0; it < ArrayCount(array); it += 1)
 #define EachEnumVal(type, it) (type it = (type)0; it < type##_COUNT; it = (type)(it+1))
 #define EachNonZeroEnumVal(type, it) (type it = (type)1; it < type##_COUNT; it = (type)(it+1))
 
