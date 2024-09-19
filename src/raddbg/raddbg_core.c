@@ -10399,7 +10399,7 @@ rd_frame(void)
     //
     EV_AutoViewRuleTable *auto_view_rule_table = push_array(scratch.arena, EV_AutoViewRuleTable, 1);
     {
-      // TODO(rjf)
+      ev_auto_view_rule_table_push_new(scratch.arena, auto_view_rule_table, e_type_key_cons_base(type(CTRL_MetaEvalFrameArray), str8_zero()), str8_lit("slice"));
     }
     ev_select_auto_view_rule_table(auto_view_rule_table);
     

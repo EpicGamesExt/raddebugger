@@ -2511,7 +2511,8 @@ rd_watch_view_build(RD_WatchViewState *ewv, B32 modifiable, U32 default_radix, R
                   cell_autocomp_flags = RD_AutoCompListerFlag_ViewRules;
                   if(cell_pre_edit_string.size == 0)
                   {
-                    cell_ghost_text = ev_auto_view_rule_from_type_key(row_eval.type_key);
+                    E_IRTreeAndType raw_irtree = e_irtree_and_type_from_expr(scratch.arena, row->expr_raw);
+                    cell_ghost_text = ev_auto_view_rule_from_type_key(raw_irtree.type_key);
                   }
                 }break;
                 case RD_WatchViewColumnKind_FrameSelection:

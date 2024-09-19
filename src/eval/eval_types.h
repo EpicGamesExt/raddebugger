@@ -249,6 +249,7 @@ internal E_TypeKey e_type_key_cons_base(Type *type, String8 name);
 internal B32 e_type_key_match(E_TypeKey l, E_TypeKey r);
 
 //- rjf: key -> info extraction
+internal U64 e_hash_from_type_key(E_TypeKey key);
 internal E_TypeKind e_type_kind_from_key(E_TypeKey key);
 internal U64 e_type_byte_size_from_key(E_TypeKey key);
 internal E_Type *e_type_from_key(Arena *arena, E_TypeKey key);

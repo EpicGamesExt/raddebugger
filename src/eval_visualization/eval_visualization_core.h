@@ -126,6 +126,7 @@ struct EV_Block
   // rjf: evaluation info
   String8 string;
   E_Expr *expr;
+  E_Expr *expr_raw;
   
   // rjf: info about ranges that this block spans
   Rng1U64 visual_idx_range;
@@ -284,6 +285,7 @@ struct EV_Row
   String8 string;
   E_Member *member;
   E_Expr *expr;
+  E_Expr *expr_raw;
   
   // rjf: view rule attachments
   EV_ViewRuleList *view_rules;

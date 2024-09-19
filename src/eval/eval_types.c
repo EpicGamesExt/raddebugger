@@ -243,6 +243,7 @@ e_select_type_ctx(E_TypeCtx *ctx)
   }
   arena_pop_to(e_type_state->arena, e_type_state->arena_eval_start_pos);
   e_type_state->ctx = ctx;
+  e_type_state->cons_id_gen = 0;
   e_type_state->cons_content_slots_count = 256;
   e_type_state->cons_key_slots_count = 256;
   e_type_state->cons_content_slots = push_array(e_type_state->arena, E_ConsTypeSlot, e_type_state->cons_content_slots_count);
@@ -488,6 +489,50 @@ e_type_key_match(E_TypeKey l, E_TypeKey r)
 }
 
 //- rjf: key -> info extraction
+
+internal U64
+e_hash_from_type_key(E_TypeKey key)
+{
+  U64 hash = 0;
+  if(!e_type_key_match(e_type_key_zero(), key))
+  {
+    Temp scratch = scratch_begin(0, 0);
+    E_Type *type = e_type_from_key(scratch.arena, key);
+    String8List strings = {0};
+    str8_serial_begin(scratch.arena, &strings);
+    str8_serial_push_struct(scratch.arena, &strings, &type->kind);
+    str8_serial_push_struct(scratch.arena, &strings, &type->flags);
+    str8_serial_push_string(scratch.arena, &strings, type->name);
+    str8_serial_push_struct(scratch.arena, &strings, &type->byte_size);
+    str8_serial_push_struct(scratch.arena, &strings, &type->count);
+    str8_serial_push_struct(scratch.arena, &strings, &type->off);
+    U64 direct_hash = e_hash_from_type_key(type->direct_type_key);
+    U64 owner_hash = e_hash_from_type_key(type->direct_type_key);
+    str8_serial_push_struct(scratch.arena, &strings, &direct_hash);
+    str8_serial_push_struct(scratch.arena, &strings, &owner_hash);
+    if(type->param_type_keys != 0)
+    {
+      for EachIndex(idx, type->count)
+      {
+        U64 param_type_hash = e_hash_from_type_key(type->param_type_keys[idx]);
+        str8_serial_push_struct(scratch.arena, &strings, &param_type_hash);
+      }
+    }
+    else if(type->members != 0)
+    {
+      for EachIndex(idx, type->count)
+      {
+        U64 member_type_hash = e_hash_from_type_key(type->members[idx].type_key);
+        str8_serial_push_struct(scratch.arena, &strings, &type->members[idx].off);
+        str8_serial_push_struct(scratch.arena, &strings, &member_type_hash);
+      }
+    }
+    String8 string = str8_serial_end(scratch.arena, &strings);
+    hash = e_hash_from_string(5381, string);
+    scratch_end(scratch);
+  }
+  return hash;
+}
 
 internal E_TypeKind
 e_type_kind_from_key(E_TypeKey key)

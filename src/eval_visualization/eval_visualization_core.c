@@ -363,7 +363,7 @@ ev_auto_view_rule_table_push_new(Arena *arena, EV_AutoViewRuleTable *table, E_Ty
     table->slots_count = 4096;
     table->slots = push_array(arena, EV_AutoViewRuleSlot, table->slots_count);
   }
-  U64 hash = e_hash_from_string(5381, str8_struct(&type_key));
+  U64 hash = e_hash_from_type_key(type_key);
   U64 slot_idx = hash%table->slots_count;
   EV_AutoViewRuleSlot *slot = &table->slots[slot_idx];
   EV_AutoViewRuleNode *node = 0;
@@ -396,7 +396,7 @@ ev_auto_view_rule_from_type_key(E_TypeKey type_key)
   String8 string = {0};
   if(ev_auto_view_rule_table != 0 && ev_auto_view_rule_table->slots_count != 0)
   {
-    U64 hash = e_hash_from_string(5381, str8_struct(&type_key));
+    U64 hash = e_hash_from_type_key(type_key);
     U64 slot_idx = hash%ev_auto_view_rule_table->slots_count;
     EV_AutoViewRuleSlot *slot = &ev_auto_view_rule_table->slots[slot_idx];
     EV_AutoViewRuleNode *node = 0;
@@ -501,6 +501,7 @@ ev_block_begin(Arena *arena, EV_BlockKind kind, EV_Key parent_key, EV_Key key, S
   n->v.key        = key;
   n->v.depth      = depth;
   n->v.expr       = &e_expr_nil;
+  n->v.expr_raw   = &e_expr_nil;
   n->v.view_rules = &ev_nil_view_rule_list;
   return &n->v;
 }
@@ -514,6 +515,7 @@ ev_block_split_and_continue(Arena *arena, EV_BlockList *list, EV_Block *split_bl
   EV_Block *continue_block = ev_block_begin(arena, split_block->kind, split_block->parent_key, split_block->key, split_block->depth);
   continue_block->string            = split_block->string;
   continue_block->expr              = split_block->expr;
+  continue_block->expr_raw          = split_block->expr_raw;
   continue_block->visual_idx_range  = continue_block->semantic_idx_range = r1u64(split_idx+1, total_count);
   continue_block->view_rules        = split_block->view_rules;
   continue_block->members           = split_block->members;
@@ -540,6 +542,7 @@ ev_append_expr_blocks__rec(Arena *arena, EV_View *view, EV_Key parent_key, EV_Ke
   Temp scratch = scratch_begin(&arena, 1);
   
   //- rjf: apply expr resolution view rules
+  E_Expr *expr_raw = expr;
   expr = ev_expr_from_expr_view_rules(arena, expr, view_rules);
   
   //- rjf: determine if this key is expanded
@@ -551,6 +554,7 @@ ev_append_expr_blocks__rec(Arena *arena, EV_View *view, EV_Key parent_key, EV_Ke
     EV_Block *block = ev_block_begin(arena, EV_BlockKind_Root, parent_key, key, depth);
     block->string                      = string;
     block->expr                        = expr;
+    block->expr_raw                    = expr_raw;
     block->view_rules                  = view_rules;
     block->visual_idx_range            = r1u64(key.child_num-1, key.child_num+0);
     block->semantic_idx_range          = r1u64(key.child_num-1, key.child_num+0);
@@ -912,6 +916,7 @@ ev_row_list_push_new(Arena *arena, EV_View *view, EV_WindowedRowList *rows, EV_B
   
   // rjf: pick view rule list; resolve expression if needed
   EV_ViewRuleList *view_rules = 0;
+  E_Expr *expr_resolved = expr;
   switch(block->kind)
   {
     default:
@@ -929,7 +934,7 @@ ev_row_list_push_new(Arena *arena, EV_View *view, EV_WindowedRowList *rows, EV_B
       {
         ev_view_rule_list_push_string(arena, view_rules, row_view_rules);
       }
-      expr = ev_expr_from_expr_view_rules(arena, expr, view_rules);
+      expr_resolved = ev_expr_from_expr_view_rules(arena, expr, view_rules);
     }break;
     case EV_BlockKind_Root:
     case EV_BlockKind_Canvas:
@@ -945,7 +950,8 @@ ev_row_list_push_new(Arena *arena, EV_View *view, EV_WindowedRowList *rows, EV_B
   row->key          = key;
   row->size_in_rows = 1;
   row->string       = block->string;
-  row->expr         = expr;
+  row->expr         = expr_resolved;
+  row->expr_raw     = expr;
   if(row->expr->kind == E_ExprKind_MemberAccess)
   {
     Temp scratch = scratch_begin(&arena, 1);
@@ -1038,7 +1044,7 @@ ev_windowed_row_list_from_block_list(Arena *arena, EV_View *view, Rng1S64 visibl
       case EV_BlockKind_Null:
       case EV_BlockKind_Root:
       {
-        ev_row_list_push_new(arena, view, &list, block, block->key, block->expr);
+        ev_row_list_push_new(arena, view, &list, block, block->key, block->expr_raw);
       }break;
       
       //////////////////////////////
