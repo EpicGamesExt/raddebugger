@@ -1799,20 +1799,19 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
       {
         *cursor = *mark = mouse_pt;
       }
-      ui_ctx_menu_open(rd_state->code_ctx_menu_key, ui_key_zero(), sub_2f32(ui_mouse(), v2f32(2, 2)));
-      RD_Window *window = rd_window_from_handle(rd_regs()->window);
-      arena_clear(window->code_ctx_menu_arena);
-      window->code_ctx_menu_file_path = push_str8_copy(window->code_ctx_menu_arena, rd_regs()->file_path);
-      window->code_ctx_menu_text_key  = rd_regs()->text_key;
-      window->code_ctx_menu_lang_kind = rd_regs()->lang_kind;
-      window->code_ctx_menu_range     = txt_rng(*cursor, *mark);
+      U64 vaddr = 0;
+      D_LineList lines = {0};
       if(params->line_num_range.min <= cursor->line && cursor->line < params->line_num_range.max)
       {
-        window->code_ctx_menu_vaddr = params->line_vaddrs[cursor->line - params->line_num_range.min];
+        vaddr = params->line_vaddrs[cursor->line - params->line_num_range.min];
+        lines = params->line_infos[cursor->line - params->line_num_range.min];
       }
-      if(params->line_num_range.min <= cursor->line && cursor->line < params->line_num_range.max)
+      RD_RegsScope(.cursor = *cursor,
+                   .mark   = *mark,
+                   .vaddr  = vaddr,
+                   .lines  = lines)
       {
-        window->code_ctx_menu_lines = d_line_list_copy(window->code_ctx_menu_arena, &params->line_infos[cursor->line - params->line_num_range.min]);
+        rd_open_ctx_menu(ui_key_zero(), sub_2f32(ui_mouse(), v2f32(2, 2)), RD_RegSlot_Cursor);
       }
     }
     

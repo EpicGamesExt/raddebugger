@@ -3333,6 +3333,131 @@ rd_window_frame(RD_Window *ws)
           default:{}break;
           
           //////////////////////
+          //- rjf: source code locations
+          //
+          case RD_RegSlot_Cursor:
+          {
+            TXT_Scope *txt_scope = txt_scope_open();
+            HS_Scope *hs_scope = hs_scope_open();
+            TxtRng range = txt_rng(regs->cursor, regs->mark);
+            D_LineList lines = regs->lines;
+            if(!txt_pt_match(range.min, range.max) && ui_clicked(rd_cmd_spec_button(rd_cmd_kind_info_table[RD_CmdKind_Copy].string)))
+            {
+              U128 hash = {0};
+              TXT_TextInfo info = txt_text_info_from_key_lang(txt_scope, regs->text_key, regs->lang_kind, &hash);
+              String8 data = hs_data_from_hash(hs_scope, hash);
+              String8 copy_data = txt_string_from_info_data_txt_rng(&info, data, range);
+              os_set_clipboard_text(copy_data);
+              ui_ctx_menu_close();
+            }
+            if(range.min.line == range.max.line && ui_clicked(rd_icon_buttonf(RD_IconKind_RightArrow, 0, "Set Next Statement")))
+            {
+              CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->thread);
+              U64 new_rip_vaddr = regs->vaddr;
+              if(regs->file_path.size != 0)
+              {
+                for(D_LineNode *n = lines.first; n != 0; n = n->next)
+                {
+                  CTRL_EntityList modules = ctrl_modules_from_dbgi_key(scratch.arena, d_state->ctrl_entity_store, &n->v.dbgi_key);
+                  CTRL_Entity *module = ctrl_module_from_thread_candidates(d_state->ctrl_entity_store, thread, &modules);
+                  if(module != &ctrl_entity_nil)
+                  {
+                    new_rip_vaddr = ctrl_vaddr_from_voff(module, n->v.voff_range.min);
+                    break;
+                  }
+                }
+              }
+              rd_cmd(RD_CmdKind_SetThreadIP, .vaddr = new_rip_vaddr);
+              ui_ctx_menu_close();
+            }
+            if(range.min.line == range.max.line && ui_clicked(rd_icon_buttonf(RD_IconKind_Play, 0, "Run To Line")))
+            {
+              if(regs->file_path.size != 0)
+              {
+                rd_cmd(RD_CmdKind_RunToLine, .file_path = regs->file_path, .cursor = range.min);
+              }
+              else
+              {
+                rd_cmd(RD_CmdKind_RunToAddress, .vaddr = regs->vaddr);
+              }
+              ui_ctx_menu_close();
+            }
+            if(range.min.line == range.max.line && ui_clicked(rd_icon_buttonf(RD_IconKind_Null, 0, "Go To Name")))
+            {
+              U128 hash = {0};
+              TXT_TextInfo info = txt_text_info_from_key_lang(txt_scope, regs->text_key, regs->lang_kind, &hash);
+              String8 data = hs_data_from_hash(hs_scope, hash);
+              Rng1U64 expr_off_range = {0};
+              if(range.min.column != range.max.column)
+              {
+                expr_off_range = r1u64(txt_off_from_info_pt(&info, range.min), txt_off_from_info_pt(&info, range.max));
+              }
+              else
+              {
+                expr_off_range = txt_expr_off_range_from_info_data_pt(&info, data, range.min);
+              }
+              String8 expr = str8_substr(data, expr_off_range);
+              rd_cmd(RD_CmdKind_GoToName, .string = expr);
+              ui_ctx_menu_close();
+            }
+            if(range.min.line == range.max.line && ui_clicked(rd_icon_buttonf(RD_IconKind_CircleFilled, 0, "Toggle Breakpoint")))
+            {
+              rd_cmd(RD_CmdKind_ToggleBreakpoint,
+                     .file_path = regs->file_path,
+                     .cursor    = range.min,
+                     .vaddr     = regs->vaddr);
+              ui_ctx_menu_close();
+            }
+            if(range.min.line == range.max.line && ui_clicked(rd_icon_buttonf(RD_IconKind_Binoculars, 0, "Toggle Watch Expression")))
+            {
+              U128 hash = {0};
+              TXT_TextInfo info = txt_text_info_from_key_lang(txt_scope, regs->text_key, regs->lang_kind, &hash);
+              String8 data = hs_data_from_hash(hs_scope, hash);
+              Rng1U64 expr_off_range = {0};
+              if(range.min.column != range.max.column)
+              {
+                expr_off_range = r1u64(txt_off_from_info_pt(&info, range.min), txt_off_from_info_pt(&info, range.max));
+              }
+              else
+              {
+                expr_off_range = txt_expr_off_range_from_info_data_pt(&info, data, range.min);
+              }
+              String8 expr = str8_substr(data, expr_off_range);
+              rd_cmd(RD_CmdKind_ToggleWatchExpression, .string = expr);
+              ui_ctx_menu_close();
+            }
+            if(regs->file_path.size == 0 && range.min.line == range.max.line && ui_clicked(rd_icon_buttonf(RD_IconKind_FileOutline, 0, "Go To Source")))
+            {
+              if(lines.first != 0)
+              {
+                rd_cmd(RD_CmdKind_FindCodeLocation,
+                       .file_path = lines.first->v.file_path,
+                       .cursor    = lines.first->v.pt);
+              }
+              ui_ctx_menu_close();
+            }
+            if(regs->file_path.size != 0 && range.min.line == range.max.line && ui_clicked(rd_icon_buttonf(RD_IconKind_FileOutline, 0, "Go To Disassembly")))
+            {
+              CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->thread);
+              U64 vaddr = 0;
+              for(D_LineNode *n = lines.first; n != 0; n = n->next)
+              {
+                CTRL_EntityList modules = ctrl_modules_from_dbgi_key(scratch.arena, d_state->ctrl_entity_store, &n->v.dbgi_key);
+                CTRL_Entity *module = ctrl_module_from_thread_candidates(d_state->ctrl_entity_store, thread, &modules);
+                if(module != &ctrl_entity_nil)
+                {
+                  vaddr = ctrl_vaddr_from_voff(module, n->v.voff_range.min);
+                  break;
+                }
+              }
+              rd_cmd(RD_CmdKind_FindCodeLocation, .vaddr = vaddr);
+              ui_ctx_menu_close();
+            }
+            hs_scope_close(hs_scope);
+            txt_scope_close(txt_scope);
+          }break;
+          
+          //////////////////////
           //- rjf: tabs
           //
           case RD_RegSlot_View:
