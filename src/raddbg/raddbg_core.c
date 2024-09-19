@@ -10395,6 +10395,15 @@ rd_frame(void)
     ev_select_view_rule_info_table(view_rule_info_table);
     
     ////////////////////////////
+    //- rjf: build eval visualization auto-view-rule table
+    //
+    EV_AutoViewRuleTable *auto_view_rule_table = push_array(scratch.arena, EV_AutoViewRuleTable, 1);
+    {
+      // TODO(rjf)
+    }
+    ev_select_auto_view_rule_table(auto_view_rule_table);
+    
+    ////////////////////////////
     //- rjf: autosave if needed
     //
     {

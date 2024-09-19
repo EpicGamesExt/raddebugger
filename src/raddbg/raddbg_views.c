@@ -1594,7 +1594,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, B32 modifiable, U32 default_radix, R
               view_rule_params_root = n->v.root;
             }
           }
-          if(view_rule_info != &rd_nil_view_rule_info)
+          if(view_rule_info != &rd_nil_view_rule_info && row->block_kind == EV_BlockKind_Canvas)
           {
             rd_cmd(RD_CmdKind_OpenTab,
                    .string      = e_string_from_expr(scratch.arena, row->expr),
@@ -2428,6 +2428,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, B32 modifiable, U32 default_radix, R
               MD_Node *cell_ui_params = &md_nil_node;
               Vec4F32 cell_base_color = ui_top_palette()->text;
               RD_IconKind cell_icon = RD_IconKind_Null;
+              String8 cell_ghost_text = {0};
               switch(col->kind)
               {
                 default:{}break;
@@ -2508,6 +2509,10 @@ rd_watch_view_build(RD_WatchViewState *ewv, B32 modifiable, U32 default_radix, R
                 {
                   cell_can_edit = 1;
                   cell_autocomp_flags = RD_AutoCompListerFlag_ViewRules;
+                  if(cell_pre_edit_string.size == 0)
+                  {
+                    cell_ghost_text = ev_auto_view_rule_from_type_key(row_eval.type_key);
+                  }
                 }break;
                 case RD_WatchViewColumnKind_FrameSelection:
                 {
@@ -2608,7 +2613,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, B32 modifiable, U32 default_radix, R
                                       &cell_matches,
                                       &cell_edit_state->cursor, &cell_edit_state->mark, cell_edit_state->input_buffer, sizeof(cell_edit_state->input_buffer), &cell_edit_state->input_size, &next_row_expanded,
                                       cell_pre_edit_string,
-                                      "###%I64x_row_%I64x", x, row_hash);
+                                      "%S###%I64x_row_%I64x", cell_ghost_text, x, row_hash);
                   if(ui_is_focus_active() &&
                      selection_tbl.min.x == selection_tbl.max.x && selection_tbl.min.y == selection_tbl.max.y &&
                      txt_pt_match(cell_edit_state->cursor, cell_edit_state->mark))
