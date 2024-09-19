@@ -3333,6 +3333,129 @@ rd_window_frame(RD_Window *ws)
           default:{}break;
           
           //////////////////////
+          //- rjf: tabs
+          //
+          case RD_RegSlot_View:
+          {
+            RD_Panel *panel = rd_panel_from_handle(regs->panel);
+            RD_View *view = rd_view_from_handle(regs->view);
+            RD_IconKind view_icon = rd_icon_kind_from_view(view);
+            DR_FancyStringList fstrs = rd_title_fstrs_from_view(scratch.arena, view, ui_top_palette()->text, ui_top_palette()->text_weak, ui_top_font_size());
+            String8 file_path = rd_file_path_from_eval_string(scratch.arena, str8(view->query_buffer, view->query_string_size));
+            
+            // rjf: title
+            UI_Row
+            {
+              ui_spacer(ui_em(1.f, 1.f));
+              RD_Font(RD_FontSlot_Icons)
+                UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Icons))
+                UI_PrefWidth(ui_em(2.f, 1.f))
+                UI_PrefHeight(ui_pct(1, 0))
+                UI_TextAlignment(UI_TextAlign_Center)
+                UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
+                ui_label(rd_icon_kind_text_table[view_icon]);
+              UI_PrefWidth(ui_text_dim(10, 1))
+              {
+                UI_Box *name_box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
+                ui_box_equip_display_fancy_strings(name_box, &fstrs);
+              }
+            }
+            
+            RD_Palette(RD_PaletteCode_Floating) ui_divider(ui_em(1.f, 1.f));
+            
+            // rjf: copy name
+            if(ui_clicked(rd_icon_buttonf(RD_IconKind_Clipboard, 0, "Copy Name")))
+            {
+              os_set_clipboard_text(dr_string_from_fancy_string_list(scratch.arena, &fstrs));
+              ui_ctx_menu_close();
+            }
+            
+            // rjf: copy full path
+            if(file_path.size != 0)
+            {
+              UI_Signal copy_full_path_sig = rd_icon_buttonf(RD_IconKind_Clipboard, 0, "Copy Full Path");
+              String8 full_path = path_normalized_from_string(scratch.arena, file_path);
+              if(ui_clicked(copy_full_path_sig))
+              {
+                os_set_clipboard_text(full_path);
+                ui_ctx_menu_close();
+              }
+              if(ui_hovering(copy_full_path_sig)) UI_Tooltip
+              {
+                ui_label(full_path);
+              }
+            }
+            
+            // rjf: show in explorer
+            if(file_path.size != 0)
+            {
+              UI_Signal sig = rd_icon_buttonf(RD_IconKind_FolderClosedFilled, 0, "Show In Explorer");
+              if(ui_clicked(sig))
+              {
+                String8 full_path = path_normalized_from_string(scratch.arena, file_path);
+                os_show_in_filesystem_ui(full_path);
+                ui_ctx_menu_close();
+              }
+            }
+            
+            // rjf: filter controls
+            if(view->spec->flags & RD_ViewRuleInfoFlag_CanFilter)
+            {
+              if(ui_clicked(rd_cmd_spec_button(rd_cmd_kind_info_table[RD_CmdKind_Filter].display_name)))
+              {
+                rd_cmd(RD_CmdKind_Filter, .view = rd_handle_from_view(view));
+                ui_ctx_menu_close();
+              }
+              if(ui_clicked(rd_cmd_spec_button(rd_cmd_kind_info_table[RD_CmdKind_ClearFilter].display_name)))
+              {
+                rd_cmd(RD_CmdKind_ClearFilter, .view = rd_handle_from_view(view));
+                ui_ctx_menu_close();
+              }
+            }
+            
+            // rjf: close tab
+            if(ui_clicked(rd_icon_buttonf(RD_IconKind_X, 0, "Close Tab")))
+            {
+              rd_cmd(RD_CmdKind_CloseTab, .panel = rd_handle_from_panel(panel), .view = rd_handle_from_view(view));
+              ui_ctx_menu_close();
+            }
+            
+            // rjf: param tree editing
+            UI_TextPadding(ui_top_font_size()*1.5f) RD_Font(RD_FontSlot_Code)
+            {
+              Temp scratch = scratch_begin(0, 0);
+              String8 schema_string = view->spec->params_schema;
+              MD_TokenizeResult schema_tokenize = md_tokenize_from_text(scratch.arena, schema_string);
+              MD_ParseResult schema_parse = md_parse_from_text_tokens(scratch.arena, str8_zero(), schema_string, schema_tokenize.tokens);
+              MD_Node *schema_root = schema_parse.root->first;
+              if(!md_node_is_nil(schema_root))
+              {
+                if(!md_node_is_nil(schema_root->first))
+                {
+                  RD_Palette(RD_PaletteCode_Floating) ui_divider(ui_em(1.f, 1.f));
+                }
+                for MD_EachNode(key, schema_root->first)
+                {
+                  UI_Row
+                  {
+                    MD_Node *params = view->params_roots[view->params_write_gen%ArrayCount(view->params_roots)];
+                    MD_Node *param_tree = md_child_from_string(params, key->string, 0);
+                    String8 pre_edit_value = md_string_from_children(scratch.arena, param_tree);
+                    UI_PrefWidth(ui_em(10.f, 1.f)) ui_label(key->string);
+                    UI_Signal sig = rd_line_editf(RD_LineEditFlag_Border|RD_LineEditFlag_CodeContents, 0, 0, &ws->ctx_menu_input_cursor, &ws->ctx_menu_input_mark, ws->ctx_menu_input_buffer, ws->ctx_menu_input_buffer_size, &ws->ctx_menu_input_string_size, 0, pre_edit_value, "%S##view_param", key->string);
+                    if(ui_committed(sig))
+                    {
+                      String8 new_string = str8(ws->ctx_menu_input_buffer, ws->ctx_menu_input_string_size);
+                      rd_view_store_param(view, key->string, new_string);
+                    }
+                  }
+                }
+              }
+              scratch_end(scratch);
+            }
+          }break;
+          
+          //////////////////////
           //- rjf: ctrl entities
           //
           case RD_RegSlot_Machine: ctrl_entity = ctrl_entity_from_handle(d_state->ctrl_entity_store, regs->machine); goto ctrl_entity_title;
@@ -7340,9 +7463,11 @@ rd_window_frame(RD_Window *ws)
                   }
                   else if(ui_right_clicked(sig))
                   {
-                    ui_ctx_menu_open(rd_state->tab_ctx_menu_key, sig.box->key, v2f32(0, sig.box->rect.y1 - sig.box->rect.y0));
-                    ws->tab_ctx_menu_panel = rd_handle_from_panel(panel);
-                    ws->tab_ctx_menu_view = rd_handle_from_view(view);
+                    RD_RegsScope(.panel = rd_handle_from_panel(panel),
+                                 .view = rd_handle_from_view(view))
+                    {
+                      rd_open_ctx_menu(sig.box->key, v2f32(0, sig.box->rect.y1 - sig.box->rect.y0), RD_RegSlot_View);
+                    }
                   }
                   else if(ui_middle_clicked(sig))
                   {
