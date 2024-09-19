@@ -25,6 +25,55 @@ member_from_name(Type *type, String8 name)
 ////////////////////////////////
 //~ rjf: Type Info * Instance Operations
 
+internal void
+typed_data_rebase_ptrs(Type *type, String8 data, void *base_ptr)
+{
+  Temp scratch = scratch_begin(0, 0);
+  typedef struct RebaseTypeTask RebaseTypeTask;
+  struct RebaseTypeTask
+  {
+    RebaseTypeTask *next;
+    Type *type;
+    U8 *ptr;
+  };
+  RebaseTypeTask start_task = {0, type, data.str};
+  RebaseTypeTask *first_task = &start_task;
+  RebaseTypeTask *last_task = first_task;
+  for(RebaseTypeTask *t = first_task; t != 0; t = t->next)
+  {
+    switch(t->type->kind)
+    {
+      default:{}break;
+      case TypeKind_Ptr:
+      {
+        *(U64 *)t->ptr = ((U64)(*(U8 **)t->ptr - (U8 *)base_ptr));
+      }break;
+      case TypeKind_Array:
+      {
+        for(U64 idx = 0; idx < t->type->count; idx += 1)
+        {
+          RebaseTypeTask *task = push_array(scratch.arena, RebaseTypeTask, 1);
+          task->type = t->type->direct;
+          task->ptr  = t->ptr + t->type->direct->size * idx;
+          SLLQueuePush(first_task, last_task, task);
+        }
+      }break;
+      case TypeKind_Struct:
+      {
+        for(U64 idx = 0; idx < t->type->count; idx += 1)
+        {
+          Member *member = &t->type->members[idx];
+          RebaseTypeTask *task = push_array(scratch.arena, RebaseTypeTask, 1);
+          task->type = member->type;
+          task->ptr  = t->ptr + member->value;
+          SLLQueuePush(first_task, last_task, task);
+        }
+      }break;
+    }
+  }
+  scratch_end(scratch);
+}
+
 internal String8
 serialized_from_typed_data(Arena *arena, Type *type, String8 data, TypeSerializeParams *params)
 {
@@ -32,10 +81,10 @@ serialized_from_typed_data(Arena *arena, Type *type, String8 data, TypeSerialize
   String8List strings = {0};
   str8_serial_begin(scratch.arena, &strings);
   {
-    typedef struct Task Task;
-    struct Task
+    typedef struct SerializeTypeTask SerializeTypeTask;
+    struct SerializeTypeTask
     {
-      Task *next;
+      SerializeTypeTask *next;
       Type *type;
       U64 count;
       U8 *src;
@@ -43,10 +92,10 @@ serialized_from_typed_data(Arena *arena, Type *type, String8 data, TypeSerialize
       U8 *containing_ptr;
       B32 is_post_header;
     };
-    Task start_task = {0, type, 1, data.str};
-    Task *first_task = &start_task;
-    Task *last_task = first_task;
-    for(Task *t = first_task; t != 0; t = t->next)
+    SerializeTypeTask start_task = {0, type, 1, data.str};
+    SerializeTypeTask *first_task = &start_task;
+    SerializeTypeTask *last_task = first_task;
+    for(SerializeTypeTask *t = first_task; t != 0; t = t->next)
     {
       switch(t->type->kind)
       {
@@ -93,7 +142,7 @@ serialized_from_typed_data(Arena *arena, Type *type, String8 data, TypeSerialize
           // delimit our size, so push a new post-header task for pointer.
           else if(t->type->count_delimiter_name.size != 0 && !t->is_post_header)
           {
-            Task *task = push_array(scratch.arena, Task, 1);
+            SerializeTypeTask *task = push_array(scratch.arena, SerializeTypeTask, 1);
             task->type  = t->type;
             task->count = t->count;
             task->src   = t->src;
@@ -116,7 +165,7 @@ serialized_from_typed_data(Arena *arena, Type *type, String8 data, TypeSerialize
             }
             
             // rjf: push task
-            Task *task = push_array(scratch.arena, Task, 1);
+            SerializeTypeTask *task = push_array(scratch.arena, SerializeTypeTask, 1);
             task->type                 = t->type->direct;
             task->count                = count;
             task->src                  = *(void **)t->src;
@@ -129,7 +178,7 @@ serialized_from_typed_data(Arena *arena, Type *type, String8 data, TypeSerialize
         //- rjf: arrays -> descend to underlying type, + count
         case TypeKind_Array:
         {
-          Task *task = push_array(scratch.arena, Task, 1);
+          SerializeTypeTask *task = push_array(scratch.arena, SerializeTypeTask, 1);
           task->type  = t->type->direct;
           task->count = t->type->count;
           task->src   = t->src;
@@ -150,10 +199,10 @@ serialized_from_typed_data(Arena *arena, Type *type, String8 data, TypeSerialize
               {
                 continue;
               }
-              Task *task = push_array(scratch.arena, Task, 1);
+              SerializeTypeTask *task = push_array(scratch.arena, SerializeTypeTask, 1);
               task->type            = t->type->members[member_idx].type;
               task->count           = 1;
-              task->src             = t->src + t->type->members[member_idx].value;
+              task->src             = t->src + idx*t->type->size + t->type->members[member_idx].value;
               task->containing_type = t->type;
               task->containing_ptr  = t->src;
               SLLQueuePush(first_task, last_task, task);
@@ -164,7 +213,7 @@ serialized_from_typed_data(Arena *arena, Type *type, String8 data, TypeSerialize
         //- rjf: enum -> descend to basic type interpretation
         case TypeKind_Enum:
         {
-          Task *task = push_array(scratch.arena, Task, 1);
+          SerializeTypeTask *task = push_array(scratch.arena, SerializeTypeTask, 1);
           task->type  = t->type->direct;
           task->count = t->count;
           task->src   = t->src;
@@ -188,10 +237,10 @@ deserialized_from_typed_data(Arena *arena, Type *type, String8 data, TypeSeriali
   result.str  = push_array(arena, U8, result.size);
   {
     Temp scratch = scratch_begin(&arena, 1);
-    typedef struct Task Task;
-    struct Task
+    typedef struct DeserializeTypeTask DeserializeTypeTask;
+    struct DeserializeTypeTask
     {
-      Task *next;
+      DeserializeTypeTask *next;
       Type *type;
       U64 count;
       U8 *dst;
@@ -200,10 +249,10 @@ deserialized_from_typed_data(Arena *arena, Type *type, String8 data, TypeSeriali
       B32 is_post_header;
     };
     U64 read_off = 0;
-    Task start_task = {0, type, 1, result.str};
-    Task *first_task = &start_task;
-    Task *last_task = first_task;
-    for(Task *t = first_task; t != 0; t = t->next)
+    DeserializeTypeTask start_task = {0, type, 1, result.str};
+    DeserializeTypeTask *first_task = &start_task;
+    DeserializeTypeTask *last_task = first_task;
+    for(DeserializeTypeTask *t = first_task; t != 0; t = t->next)
     {
       U8 *t_src = data.str + read_off;
       switch(t->type->kind)
@@ -254,7 +303,7 @@ deserialized_from_typed_data(Arena *arena, Type *type, String8 data, TypeSeriali
           // delimit our size, so push a new post-header task for pointer.
           else if(t->type->count_delimiter_name.size != 0 && !t->is_post_header)
           {
-            Task *task = push_array(scratch.arena, Task, 1);
+            DeserializeTypeTask *task = push_array(scratch.arena, DeserializeTypeTask, 1);
             task->type  = t->type;
             task->count = t->count;
             task->dst   = t->dst;
@@ -282,7 +331,7 @@ deserialized_from_typed_data(Arena *arena, Type *type, String8 data, TypeSeriali
             MemoryCopy(t->dst, &ptr_dest_buffer, sizeof(ptr_dest_buffer));
             
             // rjf: push task
-            Task *task = push_array(scratch.arena, Task, 1);
+            DeserializeTypeTask *task = push_array(scratch.arena, DeserializeTypeTask, 1);
             task->type                 = t->type->direct;
             task->count                = count;
             task->dst                  = ptr_dest_buffer;
@@ -295,7 +344,7 @@ deserialized_from_typed_data(Arena *arena, Type *type, String8 data, TypeSeriali
         //- rjf: arrays -> descend to underlying type, + count
         case TypeKind_Array:
         {
-          Task *task = push_array(scratch.arena, Task, 1);
+          DeserializeTypeTask *task = push_array(scratch.arena, DeserializeTypeTask, 1);
           task->type  = t->type->direct;
           task->count = t->type->count;
           task->dst   = t->dst;
@@ -315,10 +364,10 @@ deserialized_from_typed_data(Arena *arena, Type *type, String8 data, TypeSeriali
               {
                 continue;
               }
-              Task *task = push_array(scratch.arena, Task, 1);
+              DeserializeTypeTask *task = push_array(scratch.arena, DeserializeTypeTask, 1);
               task->type            = t->type->members[member_idx].type;
               task->count           = 1;
-              task->dst             = t->dst + t->type->members[member_idx].value;
+              task->dst             = t->dst + idx*t->type->size + t->type->members[member_idx].value;
               task->containing_type = t->type;
               task->containing_ptr  = t->dst;
               SLLQueuePush(first_task, last_task, task);
@@ -329,7 +378,7 @@ deserialized_from_typed_data(Arena *arena, Type *type, String8 data, TypeSeriali
         //- rjf: enum -> descend to basic type interpretation
         case TypeKind_Enum:
         {
-          Task *task = push_array(scratch.arena, Task, 1);
+          DeserializeTypeTask *task = push_array(scratch.arena, DeserializeTypeTask, 1);
           task->type  = t->type->direct;
           task->count = t->count;
           task->dst   = t->dst;

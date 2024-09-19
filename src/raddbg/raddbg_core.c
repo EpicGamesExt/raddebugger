@@ -1865,15 +1865,7 @@ rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
       U64 pos_min = arena_pos(scratch.arena);
       String8 eval_srlzed = serialized_from_struct(scratch.arena, CTRL_MetaEval, eval);
       CTRL_MetaEval *eval_read = struct_from_serialized(scratch.arena, CTRL_MetaEval, eval_srlzed);
-      for EachMember(CTRL_MetaEval, m)
-      {
-        if(str8_match(m->type->name, str8_lit("String8"), 0))
-        {
-          U64 ptr_value = *(U64 *)((U8 *)eval_read + m->value);
-          U64 space_relative_ptr_value = ptr_value - (U64)eval_read;
-          *(U64 *)((U8 *)eval_read + m->value) = space_relative_ptr_value;
-        }
-      }
+      struct_rebase_ptrs(CTRL_MetaEval, eval_read, eval_read);
       U64 pos_opl = arena_pos(scratch.arena);
       Rng1U64 legal_range = r1u64(0, pos_opl-pos_min);
       if(contains_1u64(legal_range, range.min))
@@ -10228,6 +10220,26 @@ rd_frame(void)
           meval->color     = entity->rgba;
           meval->label     = entity->string;
           meval->id        = entity->id;
+          if(entity->kind == CTRL_EntityKind_Thread)
+          {
+            CTRL_Entity *process = ctrl_entity_ancestor_from_kind(entity, CTRL_EntityKind_Process);
+            CTRL_Unwind base_unwind = d_query_cached_unwind_from_thread(entity);
+            D_Unwind rich_unwind = d_unwind_from_ctrl_unwind(scratch.arena, di_scope, process, &base_unwind);
+            meval->callstack.count = rich_unwind.frames.total_frame_count;
+            meval->callstack.v = push_array(scratch.arena, CTRL_MetaEvalFrame, meval->callstack.count);
+            U64 idx = 0;
+            for(U64 base_idx = 0; base_idx < rich_unwind.frames.concrete_frame_count; base_idx += 1)
+            {
+              U64 inline_idx = 0;
+              for(D_UnwindInlineFrame *f = rich_unwind.frames.v[base_idx].first_inline_frame; f != 0; f = f->next, inline_idx += 1)
+              {
+                meval->callstack.v[idx].vaddr = regs_rip_from_arch_block(entity->arch, rich_unwind.frames.v[base_idx].regs);
+                idx += 1;
+              }
+              meval->callstack.v[idx].vaddr = regs_rip_from_arch_block(entity->arch, rich_unwind.frames.v[base_idx].regs);
+              idx += 1;
+            }
+          }
           meta_eval_idx += 1;
         }
       }
@@ -10276,23 +10288,14 @@ rd_frame(void)
       ctx->macro_map     = push_array(scratch.arena, E_String2ExprMap, 1);
       ctx->macro_map[0]  = e_string2expr_map_make(scratch.arena, 512);
       
-      //- rjf: add macros for constants
+      //- rjf: add macros for all evallable frontend entities
       {
-        // rjf: pid -> current process' ID
-        if(process != &ctrl_entity_nil)
-        {
-          E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafU64, 0);
-          expr->value.u64 = process->id;
-          e_string2expr_map_insert(scratch.arena, ctx->macro_map, str8_lit("pid"), expr);
-        }
         
-        // rjf: tid -> current thread's ID
-        if(thread != &ctrl_entity_nil)
-        {
-          E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafU64, 0);
-          expr->value.u64 = thread->id;
-          e_string2expr_map_insert(scratch.arena, ctx->macro_map, str8_lit("tid"), expr);
-        }
+      }
+      
+      //- rjf: add macros for all evallable control entities
+      {
+        
       }
       
       //- rjf: add macros for meta evaluations

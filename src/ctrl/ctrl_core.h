@@ -15,6 +15,31 @@ typedef U64 CTRL_MachineID;
 ////////////////////////////////
 //~ rjf: Meta Evaluation Types
 
+//- rjf: meta evaluation callstack
+typedef struct CTRL_MetaEvalFrame CTRL_MetaEvalFrame;
+struct CTRL_MetaEvalFrame
+{
+  U64 vaddr;
+};
+struct_members(CTRL_MetaEvalFrame)
+{
+  member_lit_comp(CTRL_MetaEvalFrame, type(U64), vaddr),
+};
+struct_type(CTRL_MetaEvalFrame);
+typedef struct CTRL_MetaEvalFrameArray CTRL_MetaEvalFrameArray;
+struct CTRL_MetaEvalFrameArray
+{
+  U64 count;
+  CTRL_MetaEvalFrame *v;
+};
+ptr_type(CTRL_MetaEvalFrameArray__v_ptr_type, type(CTRL_MetaEvalFrame), .count_delimiter_name = str8_lit_comp("count"));
+struct_members(CTRL_MetaEvalFrameArray)
+{
+  member_lit_comp(CTRL_MetaEvalFrameArray, type(U64), count),
+  {str8_lit_comp("v"), &CTRL_MetaEvalFrameArray__v_ptr_type, OffsetOf(CTRL_MetaEvalFrameArray, v)},
+};
+struct_type(CTRL_MetaEvalFrameArray);
+
 //- rjf: meta evaluation instance
 typedef struct CTRL_MetaEval CTRL_MetaEval;
 struct CTRL_MetaEval
@@ -27,7 +52,8 @@ X(U64, id)\
 X(U32, color)\
 X(String8, label)\
 X(String8, location)\
-X(String8, condition)
+X(String8, condition)\
+X(CTRL_MetaEvalFrameArray, callstack)
 #define X(T, name) T name;
   CTRL_MetaEval_MemberXList
 #undef X
