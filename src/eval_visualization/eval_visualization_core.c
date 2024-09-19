@@ -364,8 +364,8 @@ ev_auto_view_rule_table_push_new(Arena *arena, EV_AutoViewRuleTable *table, E_Ty
     table->slots = push_array(arena, EV_AutoViewRuleSlot, table->slots_count);
   }
   U64 hash = e_hash_from_string(5381, str8_struct(&type_key));
-  U64 slot_idx = hash%ev_auto_view_rule_table->slots_count;
-  EV_AutoViewRuleSlot *slot = &ev_auto_view_rule_table->slots[slot_idx];
+  U64 slot_idx = hash%table->slots_count;
+  EV_AutoViewRuleSlot *slot = &table->slots[slot_idx];
   EV_AutoViewRuleNode *node = 0;
   for(EV_AutoViewRuleNode *n = slot->first; n != 0; n = n->next)
   {
@@ -393,22 +393,25 @@ ev_select_auto_view_rule_table(EV_AutoViewRuleTable *table)
 internal String8
 ev_auto_view_rule_from_type_key(E_TypeKey type_key)
 {
-  U64 hash = e_hash_from_string(5381, str8_struct(&type_key));
-  U64 slot_idx = hash%ev_auto_view_rule_table->slots_count;
-  EV_AutoViewRuleSlot *slot = &ev_auto_view_rule_table->slots[slot_idx];
-  EV_AutoViewRuleNode *node = 0;
-  for(EV_AutoViewRuleNode *n = slot->first; n != 0; n = n->next)
-  {
-    if(e_type_match(n->key, type_key))
-    {
-      node = n;
-      break;
-    }
-  }
   String8 string = {0};
-  if(node != 0)
+  if(ev_auto_view_rule_table != 0 && ev_auto_view_rule_table->slots_count != 0)
   {
-    string = node->view_rule;
+    U64 hash = e_hash_from_string(5381, str8_struct(&type_key));
+    U64 slot_idx = hash%ev_auto_view_rule_table->slots_count;
+    EV_AutoViewRuleSlot *slot = &ev_auto_view_rule_table->slots[slot_idx];
+    EV_AutoViewRuleNode *node = 0;
+    for(EV_AutoViewRuleNode *n = slot->first; n != 0; n = n->next)
+    {
+      if(e_type_match(n->key, type_key))
+      {
+        node = n;
+        break;
+      }
+    }
+    if(node != 0)
+    {
+      string = node->view_rule;
+    }
   }
   return string;
 }
