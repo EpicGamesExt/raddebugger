@@ -1294,6 +1294,7 @@ rd_entity_mark_for_deletion(RD_Entity *entity)
   if(!rd_entity_is_nil(entity))
   {
     entity->flags |= RD_EntityFlag_MarkedForDeletion;
+    rd_state->kind_alloc_gens[entity->kind] += 1;
   }
 }
 
@@ -1596,7 +1597,7 @@ rd_push_entity_list_with_kind(Arena *arena, RD_EntityKind kind)
       !rd_entity_is_nil(entity);
       entity = rd_entity_rec_depth_first_pre(entity, &d_nil_entity).next)
   {
-    if(entity->kind == kind)
+    if(entity->kind == kind && !(entity->flags & RD_EntityFlag_MarkedForDeletion))
     {
       rd_entity_list_push(arena, &result, entity);
     }
@@ -7862,9 +7863,33 @@ rd_window_frame(RD_Window *ws)
 EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(rd_collection_block_prod)
 {
   //////////////////////////////
+  //- rjf: watches
+  //
+  if(str8_match(string, str8_lit("watches"), 0))
+  {
+    Temp scratch = scratch_begin(&arena, 1);
+    RD_EntityList watches = rd_query_cached_entity_list_with_kind(RD_EntityKind_Watch);
+    EV_ViewRuleList top_level_view_rules = {0};
+    for(RD_EntityNode *n = watches.first; n != 0; n = n->next)
+    {
+      RD_Entity *entity = n->entity;
+      String8 entity_expr_string = entity->string;
+      EV_Key entity_parent_key = rd_parent_ev_key_from_entity(entity);
+      EV_Key entity_key = rd_ev_key_from_entity(entity);
+      EV_BlockList blocks = ev_block_list_from_view_expr_keys(arena, view, str8_zero(), &top_level_view_rules, entity_expr_string, entity_parent_key, entity_key, depth);
+      FuzzyMatchRangeList matches = fuzzy_match_find(scratch.arena, filter, entity_expr_string);
+      if(blocks.total_semantic_row_count > 1 || matches.count == matches.needle_part_count)
+      {
+        ev_block_list_concat__in_place(out, &blocks);
+      }
+    }
+    scratch_end(scratch);
+  }
+  
+  //////////////////////////////
   //- rjf: targets
   //
-  if(str8_match(string, str8_lit("targets"), 0))
+  else if(str8_match(string, str8_lit("targets"), 0))
   {
     Temp scratch = scratch_begin(&arena, 1);
     RD_EntityList targets = rd_query_cached_entity_list_with_kind(RD_EntityKind_Target);
@@ -8535,6 +8560,14 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
         str8_list_push(arena, out, brace);
         space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, brace).x;
       }
+    }break;
+    
+    //- rjf: collections
+    case E_TypeKind_Collection:
+    {
+      String8 placeholder = str8_lit("{...}");
+      str8_list_push(arena, out, placeholder);
+      space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, placeholder).x;
     }break;
   }
   
@@ -10605,6 +10638,7 @@ rd_frame(void)
       {
         String8 collection_names[] =
         {
+          str8_lit_comp("watches"),
           str8_lit_comp("targets"),
           str8_lit_comp("breakpoints"),
           str8_lit_comp("watch_pins"),

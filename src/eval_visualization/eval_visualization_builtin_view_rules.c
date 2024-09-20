@@ -106,6 +106,7 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(default)
   ////////////////////////////
   //- rjf: unpack expression type info
   //
+  expr = ev_expr_from_expr_view_rules(arena, expr, view_rules);
   E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, expr);
   E_TypeKey type_key = e_type_unwrap(irtree.type_key);
   E_TypeKind type_kind = e_type_kind_from_key(type_key);
@@ -391,5 +392,83 @@ EV_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_DEF(cast)
 {
   E_TypeKey type_key = ev_type_key_from_params(params);
   expr = e_expr_ref_cast(arena, type_key, expr);
+  return expr;
+}
+
+////////////////////////////////
+//~ rjf: "only"
+
+EV_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_DEF(only)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, expr);
+  E_TypeKind type_kind = e_type_kind_from_key(irtree.type_key);
+  if(type_kind == E_TypeKind_Struct || type_kind == E_TypeKind_Union || type_kind == E_TypeKind_Class)
+  {
+    E_MemberArray current_members = e_type_data_members_from_key(scratch.arena, irtree.type_key);
+    E_MemberList new_members = {0};
+    for EachIndex(idx, current_members.count)
+    {
+      B32 include = 0;
+      for MD_EachNode(node, params->first)
+      {
+        if(str8_match(node->string, current_members.v[idx].name, 0))
+        {
+          include = 1;
+          break;
+        }
+      }
+      if(include)
+      {
+        e_member_list_push(scratch.arena, &new_members, &current_members.v[idx]);
+      }
+    }
+    E_MemberArray new_members_array = e_member_array_from_list(scratch.arena, &new_members);
+    String8 struct_name = e_type_string_from_key(scratch.arena, irtree.type_key);
+    E_TypeKey new_type = e_type_key_cons(.kind = E_TypeKind_Struct, .name = struct_name, .members = new_members_array.v, .count = new_members_array.count);
+    expr = e_expr_ref_addr(arena, expr);
+    expr = e_expr_ref_cast(arena, e_type_key_cons_ptr(e_type_state->ctx->primary_module->arch, new_type), expr);
+    expr = e_expr_ref_deref(arena, expr);
+  }
+  scratch_end(scratch);
+  return expr;
+}
+
+////////////////////////////////
+//~ rjf: "omit"
+
+EV_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_DEF(omit)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, expr);
+  E_TypeKind type_kind = e_type_kind_from_key(irtree.type_key);
+  if(type_kind == E_TypeKind_Struct || type_kind == E_TypeKind_Union || type_kind == E_TypeKind_Class)
+  {
+    E_MemberArray current_members = e_type_data_members_from_key(scratch.arena, irtree.type_key);
+    E_MemberList new_members = {0};
+    for EachIndex(idx, current_members.count)
+    {
+      B32 include = 1;
+      for MD_EachNode(node, params->first)
+      {
+        if(str8_match(node->string, current_members.v[idx].name, 0))
+        {
+          include = 0;
+          break;
+        }
+      }
+      if(include)
+      {
+        e_member_list_push(scratch.arena, &new_members, &current_members.v[idx]);
+      }
+    }
+    E_MemberArray new_members_array = e_member_array_from_list(scratch.arena, &new_members);
+    String8 struct_name = e_type_string_from_key(scratch.arena, irtree.type_key);
+    E_TypeKey new_type = e_type_key_cons(.kind = E_TypeKind_Struct, .name = struct_name, .members = new_members_array.v, .count = new_members_array.count);
+    expr = e_expr_ref_addr(arena, expr);
+    expr = e_expr_ref_cast(arena, e_type_key_cons_ptr(e_type_state->ctx->primary_module->arch, new_type), expr);
+    expr = e_expr_ref_deref(arena, expr);
+  }
+  scratch_end(scratch);
   return expr;
 }

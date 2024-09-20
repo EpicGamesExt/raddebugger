@@ -29,6 +29,7 @@
 //     stepping
 //
 // [ ] ensure the following issues are resolved with this new pass:
+//  [ ] mohit-reported callstack-frame-selection bug (with inlines)
 //  [ ] empty user file causing failure to launch
 //  [ ] save view column pcts; generalize to being a first-class thing in
 //      RD_View, e.g. by just having a string -> f32 store

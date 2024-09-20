@@ -509,7 +509,7 @@ internal EV_Block *
 ev_block_split_and_continue(Arena *arena, EV_BlockList *list, EV_Block *split_block, U64 split_idx)
 {
   U64 total_count = split_block->semantic_idx_range.max;
-  split_block->visual_idx_range.max = split_block->semantic_idx_range.max = split_idx;
+  split_block->visual_idx_range.max = split_block->semantic_idx_range.max = split_idx+1;
   ev_block_end(list, split_block);
   EV_Block *continue_block = ev_block_begin(arena, split_block->kind, split_block->parent_key, split_block->key, split_block->depth);
   continue_block->string            = split_block->string;
@@ -539,24 +539,9 @@ ev_append_expr_blocks__rec(Arena *arena, EV_View *view, String8 filter, EV_Key p
   ProfBeginFunction();
   Temp scratch = scratch_begin(&arena, 1);
   
-  //- rjf: apply expr resolution view rules
-  E_Expr *expr_raw = expr;
-  expr = ev_expr_from_expr_view_rules(arena, expr, view_rules);
-  
   //- rjf: determine if this key is expanded
   EV_ExpandNode *node = ev_expand_node_from_key(view, key);
   B32 parent_is_expanded = (node != 0 && node->expanded);
-  
-  //- rjf: push block for expression root
-  {
-    EV_Block *block = ev_block_begin(arena, EV_BlockKind_Root, parent_key, key, depth);
-    block->string                      = string;
-    block->expr                        = expr;
-    block->view_rules                  = view_rules;
-    block->visual_idx_range            = r1u64(key.child_num-1, key.child_num+0);
-    block->semantic_idx_range          = r1u64(key.child_num-1, key.child_num+0);
-    ev_block_end(list_out, block);
-  }
   
   //- rjf: determine view rule to generate children blocks
   EV_ViewRuleInfo *block_prod_view_rule_info = ev_view_rule_info_from_string(str8_lit("default"));
@@ -638,7 +623,23 @@ ev_block_list_from_view_expr_keys(Arena *arena, EV_View *view, String8 filter, E
       ev_view_rule_list_push_string(arena, view_rule_list, n->string);
     }
     ev_view_rule_list_push_string(arena, view_rule_list, view_rule_string);
-    ev_append_expr_blocks__rec(arena, view, filter, parent_key, key, expr, parse.expr, view_rule_list, depth, &blocks);
+    
+    //- rjf: apply expr resolution view rules
+    E_Expr *expr_resolved = ev_expr_from_expr_view_rules(arena, parse.expr, view_rule_list);
+    
+    //- rjf: push block for expression root
+    {
+      EV_Block *block = ev_block_begin(arena, EV_BlockKind_Root, parent_key, key, depth);
+      block->string                      = expr;
+      block->expr                        = expr_resolved;
+      block->view_rules                  = view_rule_list;
+      block->visual_idx_range            = r1u64(key.child_num-1, key.child_num+0);
+      block->semantic_idx_range          = r1u64(key.child_num-1, key.child_num+0);
+      ev_block_end(&blocks, block);
+    }
+    
+    //- rjf: push expansions for root
+    ev_append_expr_blocks__rec(arena, view, filter, parent_key, key, expr, expr_resolved, view_rule_list, depth, &blocks);
   }
   ProfEnd();
   return blocks;

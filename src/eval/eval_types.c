@@ -1486,7 +1486,7 @@ e_type_data_members_from_key(Arena *arena, E_TypeKey key)
   PaddingNode *first_padding = 0;
   PaddingNode *last_padding = 0;
   U64 padding_count = 0;
-  if(root_type_kind == E_TypeKind_Struct || root_type_kind == E_TypeKind_Class)
+  if((root_type_kind == E_TypeKind_Struct || root_type_kind == E_TypeKind_Class) && key.kind != E_TypeKeyKind_Cons)
   {
     for(U64 idx = 0; idx < members.count; idx += 1)
     {
