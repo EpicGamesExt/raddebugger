@@ -1782,6 +1782,7 @@ e_type_string_from_key(Arena *arena, E_TypeKey key)
   e_type_lhs_string_from_key(scratch.arena, key, &list, 0, 0);
   e_type_rhs_string_from_key(scratch.arena, key, &list, 0);
   String8 result = str8_list_join(arena, &list, 0);
+  result = str8_skip_chop_whitespace(result);
   scratch_end(scratch);
   return result;
 }

@@ -87,7 +87,7 @@ E_ExprKindTable:
   
   { Cast                 Null                1        "cast"              "("       ")"       "" }
   { Sizeof               UnaryPrefix         1        "sizeof"            "sizeof"  ""        "" }
-  { ByteSwap             UnaryPrefix         1        "bswap"             "bswap"   ."("       ")"}
+  { ByteSwap             UnaryPrefix         1        "bswap"             "bswap"   "("       ")"}
   
   { Neg                  UnaryPrefix         2        "-"                 "-"       ""        "" }
   { LogNot               UnaryPrefix         2        "!"                 "!"       ""        "" }
@@ -201,7 +201,7 @@ e_expr_kind_strings:
 
 @data(E_OpInfo) e_expr_kind_op_info_table:
 {
-  @expand(E_ExprKindTable a) `{ E_OpKind_$(a.op_kind), $(a.precedence), str8_lit_comp("$(a.op_pre)"), str8_lit_comp("$(a.op_sep)"), str8_lit_comp("$(a.op_post)") }`
+  @expand(E_ExprKindTable a) `{ E_OpKind_$(a.op_kind), $(a.precedence), str8_lit_comp("$(a.op_pre)"), str8_lit_comp("$(a.op_sep)"), str8_lit_comp("$(a.op_pos)") }`
 }
 
 @data(U8) e_kind_basic_byte_size_table:

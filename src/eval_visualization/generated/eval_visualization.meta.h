@@ -15,6 +15,10 @@ EV_ViewRuleKind_ByteSwap,
 EV_ViewRuleKind_Cast,
 EV_ViewRuleKind_Only,
 EV_ViewRuleKind_Omit,
+EV_ViewRuleKind_Bin,
+EV_ViewRuleKind_Oct,
+EV_ViewRuleKind_Dec,
+EV_ViewRuleKind_Hex,
 EV_ViewRuleKind_COUNT,
 } EV_ViewRuleKind;
 

@@ -743,11 +743,15 @@ e_append_strings_from_expr(Arena *arena, E_Expr *expr, String8List *out)
         op_info->post,
       };
       U64 idx = 0;
-      for(E_Expr *child = expr->first; child != &e_expr_nil; child = child->next, idx += 1)
+      for(E_Expr *child = expr->first;; child = child->next, idx += 1)
       {
         if(seps[idx].size != 0)
         {
           str8_list_push(arena, out, seps[idx]);
+        }
+        if(child == &e_expr_nil)
+        {
+          break;
         }
         E_OpInfo *child_op_info = &e_expr_kind_op_info_table[child->kind];
         B32 need_parens = (child_op_info->precedence > op_info->precedence);
