@@ -1933,6 +1933,10 @@ rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
       if(space.kind == RD_EvalSpaceKind_MetaEntity)
       {
         RD_Entity *entity = rd_entity_from_eval_space(space);
+        RD_Entity *exe = rd_entity_child_from_kind(entity, RD_EntityKind_Executable);
+        RD_Entity *args= rd_entity_child_from_kind(entity, RD_EntityKind_Arguments);
+        RD_Entity *wdir= rd_entity_child_from_kind(entity, RD_EntityKind_WorkingDirectory);
+        RD_Entity *entr= rd_entity_child_from_kind(entity, RD_EntityKind_EntryPoint);
         RD_Entity *loc = rd_entity_child_from_kind(entity, RD_EntityKind_Location);
         RD_Entity *cnd = rd_entity_child_from_kind(entity, RD_EntityKind_Condition);
         String8 label_string = push_str8_copy(scratch.arena, entity->string);
@@ -1950,6 +1954,10 @@ rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
         meval->hit_count = entity->u64;
         meval->color     = u32_from_rgba(rd_rgba_from_entity(entity));
         meval->label     = label_string;
+        meval->exe       = exe->string;
+        meval->args      = args->string;
+        meval->working_directory = wdir->string;
+        meval->entry_point = entr->string;
         meval->location  = loc_string;
         meval->condition = cnd_string;
       }
@@ -7854,9 +7862,109 @@ rd_window_frame(RD_Window *ws)
 EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(rd_collection_block_prod)
 {
   //////////////////////////////
+  //- rjf: targets
+  //
+  if(str8_match(string, str8_lit("targets"), 0))
+  {
+    Temp scratch = scratch_begin(&arena, 1);
+    RD_EntityList targets = rd_query_cached_entity_list_with_kind(RD_EntityKind_Target);
+    EV_ViewRuleList top_level_view_rules = {0};
+    for(RD_EntityNode *n = targets.first; n != 0; n = n->next)
+    {
+      RD_Entity *target = n->entity;
+      String8 target_expr_string = push_str8f(arena, "$%I64u", target->id);
+      EV_Key target_parent_key = key;
+      EV_Key target_key = ev_key_make(ev_hash_from_key(target_parent_key), target->id);
+      EV_BlockList blocks = ev_block_list_from_view_expr_keys(arena, view, str8_zero(), &top_level_view_rules, target_expr_string, target_parent_key, target_key, depth);
+      ev_block_list_concat__in_place(out, &blocks);
+    }
+    scratch_end(scratch);
+  }
+  
+  //////////////////////////////
+  //- rjf: breakpoints
+  //
+  else if(str8_match(string, str8_lit("breakpoints"), 0))
+  {
+    Temp scratch = scratch_begin(&arena, 1);
+    RD_EntityList bps = rd_query_cached_entity_list_with_kind(RD_EntityKind_Breakpoint);
+    EV_ViewRuleList top_level_view_rules = {0};
+    for(RD_EntityNode *n = bps.first; n != 0; n = n->next)
+    {
+      RD_Entity *bp = n->entity;
+      String8 bp_expr_string = push_str8f(arena, "$%I64u", bp->id);
+      EV_Key bp_parent_key = key;
+      EV_Key bp_key = ev_key_make(ev_hash_from_key(bp_parent_key), bp->id);
+      EV_BlockList blocks = ev_block_list_from_view_expr_keys(arena, view, str8_zero(), &top_level_view_rules, bp_expr_string, bp_parent_key, bp_key, depth);
+      ev_block_list_concat__in_place(out, &blocks);
+    }
+    scratch_end(scratch);
+  }
+  
+  //////////////////////////////
+  //- rjf: watch_pins
+  //
+  else if(str8_match(string, str8_lit("watch_pins"), 0))
+  {
+    Temp scratch = scratch_begin(&arena, 1);
+    RD_EntityList wps = rd_query_cached_entity_list_with_kind(RD_EntityKind_WatchPin);
+    EV_ViewRuleList top_level_view_rules = {0};
+    for(RD_EntityNode *n = wps.first; n != 0; n = n->next)
+    {
+      RD_Entity *wp = n->entity;
+      String8 wp_expr_string = push_str8f(arena, "$%I64u", wp->id);
+      EV_Key wp_parent_key = key;
+      EV_Key wp_key = ev_key_make(ev_hash_from_key(wp_parent_key), wp->id);
+      EV_BlockList blocks = ev_block_list_from_view_expr_keys(arena, view, str8_zero(), &top_level_view_rules, wp_expr_string, wp_parent_key, wp_key, depth);
+      ev_block_list_concat__in_place(out, &blocks);
+    }
+    scratch_end(scratch);
+  }
+  
+  //////////////////////////////
+  //- rjf: threads
+  //
+  else if(str8_match(string, str8_lit("threads"), 0))
+  {
+    Temp scratch = scratch_begin(&arena, 1);
+    CTRL_EntityList entities = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Thread);
+    EV_ViewRuleList top_level_view_rules = {0};
+    for(CTRL_EntityNode *n = entities.first; n != 0; n = n->next)
+    {
+      CTRL_Entity *entity = n->v;
+      String8 entity_expr_string = push_str8f(arena, "$_%I64x_%I64x", entity->handle.machine_id, entity->handle.dmn_handle.u64[0]);
+      EV_Key entity_parent_key = key;
+      EV_Key entity_key = ev_key_make(ev_hash_from_key(entity_parent_key), d_hash_from_string(entity_expr_string));
+      EV_BlockList blocks = ev_block_list_from_view_expr_keys(arena, view, str8_zero(), &top_level_view_rules, entity_expr_string, entity_parent_key, entity_key, depth);
+      ev_block_list_concat__in_place(out, &blocks);
+    }
+    scratch_end(scratch);
+  }
+  
+  //////////////////////////////
+  //- rjf: modules
+  //
+  else if(str8_match(string, str8_lit("modules"), 0))
+  {
+    Temp scratch = scratch_begin(&arena, 1);
+    CTRL_EntityList entities = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Module);
+    EV_ViewRuleList top_level_view_rules = {0};
+    for(CTRL_EntityNode *n = entities.first; n != 0; n = n->next)
+    {
+      CTRL_Entity *entity = n->v;
+      String8 entity_expr_string = push_str8f(arena, "$_%I64x_%I64x", entity->handle.machine_id, entity->handle.dmn_handle.u64[0]);
+      EV_Key entity_parent_key = key;
+      EV_Key entity_key = ev_key_make(ev_hash_from_key(entity_parent_key), d_hash_from_string(entity_expr_string));
+      EV_BlockList blocks = ev_block_list_from_view_expr_keys(arena, view, str8_zero(), &top_level_view_rules, entity_expr_string, entity_parent_key, entity_key, depth);
+      ev_block_list_concat__in_place(out, &blocks);
+    }
+    scratch_end(scratch);
+  }
+  
+  //////////////////////////////
   //- rjf: locals
   //
-  if(str8_match(string, str8_lit("locals"), 0))
+  else if(str8_match(string, str8_lit("locals"), 0))
   {
     Temp scratch = scratch_begin(&arena, 1);
     E_String2NumMapNodeArray nodes = e_string2num_map_node_array_from_map(scratch.arena, e_parse_ctx->locals_map);
@@ -7953,7 +8061,7 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(rd_collection_block_prod)
       EV_ExpandNode *root_node = ev_expand_node_from_key(view, key);
       
       //- rjf: query all filtered items from dbgi searching system
-      U128 fuzzy_search_key = {rd_regs()->view.u64[0], rd_regs()->view.u64[1]};
+      U128 fuzzy_search_key = {rd_regs()->view.u64[0], d_hash_from_seed_string(ev_hash_from_key(key), string)};
       B32 items_stale = 0;
       FZY_Params params = {fzy_target, dbgi_keys};
       FZY_ItemArray items = fzy_items_from_key_params_query(rd_state->frame_fzy_scope, fuzzy_search_key, &params, filter, endt_us, &items_stale);
@@ -8024,7 +8132,7 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(rd_collection_block_prod)
       }
       
       //- rjf: build blocks for all table items, split by sorted sub-expansions
-      EV_Block *last_vb = ev_block_begin(arena, EV_BlockKind_DebugInfoTable, parent_key, key, depth);
+      EV_Block *last_vb = ev_block_begin(arena, EV_BlockKind_DebugInfoTable, key, ev_key_make(ev_hash_from_key(key), 0), depth);
       {
         last_vb->visual_idx_range = last_vb->semantic_idx_range = r1u64(0, items.count);
         last_vb->fzy_target = fzy_target;
@@ -10486,7 +10594,7 @@ rd_frame(void)
     //- rjf: build eval IR context
     //
     E_TypeKey collection_type_key = e_type_key_cons(.kind = E_TypeKind_Collection, .name = str8_lit("collection"));
-    E_TypeKey meta_eval_type_key = e_type_key_cons_base(type(CTRL_MetaEval), str8_lit("entity"));
+    E_TypeKey meta_eval_type_key = e_type_key_cons_base(type(CTRL_MetaEval));
     E_IRCtx *ir_ctx = push_array(scratch.arena, E_IRCtx, 1);
     {
       E_IRCtx *ctx = ir_ctx;
@@ -10497,6 +10605,11 @@ rd_frame(void)
       {
         String8 collection_names[] =
         {
+          str8_lit_comp("targets"),
+          str8_lit_comp("breakpoints"),
+          str8_lit_comp("watch_pins"),
+          str8_lit_comp("threads"),
+          str8_lit_comp("modules"),
           str8_lit_comp("locals"),
           str8_lit_comp("registers"),
           str8_lit_comp("globals"),
@@ -10563,9 +10676,14 @@ rd_frame(void)
             expr->space    = space;
             expr->mode     = E_Mode_Offset;
             expr->type_key = meta_eval_type_key;
+            e_string2expr_map_insert(scratch.arena, ctx->macro_map, push_str8f(scratch.arena, "$_%I64x_%I64x", entity->handle.machine_id, entity->handle.dmn_handle.u64[0]), expr);
             if(entity->string.size != 0)
             {
               e_string2expr_map_insert(scratch.arena, ctx->macro_map, entity->string, expr);
+            }
+            if(kind == CTRL_EntityKind_Thread && ctrl_handle_match(rd_base_regs()->thread, entity->handle))
+            {
+              e_string2expr_map_insert(scratch.arena, ctx->macro_map, str8_lit("current_thread"), expr);
             }
           }
         }
@@ -10643,7 +10761,7 @@ rd_frame(void)
     //
     EV_AutoViewRuleTable *auto_view_rule_table = push_array(scratch.arena, EV_AutoViewRuleTable, 1);
     {
-      ev_auto_view_rule_table_push_new(scratch.arena, auto_view_rule_table, e_type_key_cons_base(type(CTRL_MetaEvalFrameArray), str8_zero()), str8_lit("slice"));
+      ev_auto_view_rule_table_push_new(scratch.arena, auto_view_rule_table, e_type_key_cons_base(type(CTRL_MetaEvalFrameArray)), str8_lit("slice"));
       ev_auto_view_rule_table_push_new(scratch.arena, auto_view_rule_table, collection_type_key, str8_lit("collection"));
     }
     ev_select_auto_view_rule_table(auto_view_rule_table);

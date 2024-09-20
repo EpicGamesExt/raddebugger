@@ -437,7 +437,7 @@ e_type_key_cons_ptr(Arch arch, E_TypeKey element_type_key)
 }
 
 internal E_TypeKey
-e_type_key_cons_base(Type *type, String8 name)
+e_type_key_cons_base(Type *type)
 {
   E_TypeKey result = e_type_key_zero();
   switch(type->kind)
@@ -450,12 +450,12 @@ e_type_key_cons_base(Type *type, String8 name)
     }break;
     case TypeKind_Ptr:
     {
-      E_TypeKey direct_type = e_type_key_cons_base(type->direct, str8_zero());
+      E_TypeKey direct_type = e_type_key_cons_base(type->direct);
       result = e_type_key_cons_ptr(arch_from_context(), direct_type);
     }break;
     case TypeKind_Array:
     {
-      E_TypeKey direct_type = e_type_key_cons_base(type->direct, str8_zero());
+      E_TypeKey direct_type = e_type_key_cons_base(type->direct);
       result = e_type_key_cons_array(direct_type, type->count);
     }break;
     case TypeKind_Struct:
@@ -464,13 +464,13 @@ e_type_key_cons_base(Type *type, String8 name)
       E_MemberList members = {0};
       for(U64 idx = 0; idx < type->count; idx += 1)
       {
-        E_TypeKey member_type_key = e_type_key_cons_base(type->members[idx].type, str8_zero());
+        E_TypeKey member_type_key = e_type_key_cons_base(type->members[idx].type);
         e_member_list_push_new(scratch.arena, &members, .name = type->members[idx].name, .off = type->members[idx].value, .type_key = member_type_key);
       }
       E_MemberArray members_array = e_member_array_from_list(scratch.arena, &members);
       result = e_type_key_cons(.arch    = arch_from_context(),
                                .kind    = E_TypeKind_Struct,
-                               .name    = name.size ? name : type->name,
+                               .name    = type->name,
                                .members = members_array.v,
                                .count   = members_array.count);
       scratch_end(scratch);

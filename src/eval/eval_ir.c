@@ -519,7 +519,8 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
       // rjf: look up member
       B32 r_found = 0;
       E_TypeKey r_type = zero_struct;
-      U32 r_off = 0;
+      U64 r_value = 0;
+      B32 r_is_constant_value = 0;
       {
         Temp scratch = scratch_begin(&arena, 1);
         E_MemberArray check_type_members = e_type_data_members_from_key(scratch.arena, check_type_key);
@@ -541,7 +542,34 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
         {
           r_found = 1;
           r_type = match->type_key;
-          r_off = match->off;
+          r_value = match->off;
+        }
+        if(match == 0)
+        {
+          E_Type *type = e_type_from_key(scratch.arena, check_type_key);
+          if(type->enum_vals != 0)
+          {
+            E_EnumVal *enum_val_match = 0;
+            for EachIndex(idx, type->count)
+            {
+              if(str8_match(type->enum_vals[idx].name, exprr->string, 0))
+              {
+                enum_val_match = &type->enum_vals[idx];
+                break;
+              }
+              else if(str8_match(type->enum_vals[idx].name, exprr->string, StringMatchFlag_CaseInsensitive))
+              {
+                enum_val_match = &type->enum_vals[idx];
+              }
+            }
+            if(enum_val_match != 0)
+            {
+              r_found = 1;
+              r_type = check_type_key;
+              r_value = enum_val_match->val;
+              r_is_constant_value = 1;
+            }
+          }
         }
         scratch_end(scratch);
       }
@@ -563,7 +591,8 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
       }
       else if(check_type_kind != E_TypeKind_Struct &&
               check_type_kind != E_TypeKind_Class &&
-              check_type_kind != E_TypeKind_Union)
+              check_type_kind != E_TypeKind_Union &&
+              check_type_kind != E_TypeKind_Enum)
       {
         e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, exprl->location, "Cannot perform member access on this type.");
         break;
@@ -583,11 +612,16 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
             new_tree = e_irtree_resolve_to_value(arena, l.space, l.mode, new_tree, l_restype);
             mode = E_Mode_Offset;
           }
-          if(r_off != 0)
+          if(r_value != 0 && !r_is_constant_value)
           {
-            E_IRNode *const_tree = e_irtree_const_u(arena, r_off);
+            E_IRNode *const_tree = e_irtree_const_u(arena, r_value);
             new_tree = e_irtree_binary_op_u(arena, RDI_EvalOp_Add, new_tree, const_tree);
           }
+        }
+        else if(r_is_constant_value)
+        {
+          new_tree = e_irtree_const_u(arena, r_value);
+          mode = E_Mode_Value;
         }
         
         // rjf: fill

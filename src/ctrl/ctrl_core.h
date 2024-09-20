@@ -51,6 +51,10 @@ X(U64, hit_count)\
 X(U64, id)\
 X(U32, color)\
 X(String8, label)\
+X(String8, exe)\
+X(String8, args)\
+X(String8, working_directory)\
+X(String8, entry_point)\
 X(String8, location)\
 X(String8, condition)\
 X(CTRL_MetaEvalFrameArray, callstack)

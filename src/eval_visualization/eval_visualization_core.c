@@ -62,7 +62,7 @@ ev_hash_from_key(EV_Key key)
 //- rjf: type info -> expandability/editablity
 
 internal B32
-ev_type_key_is_expandable(E_TypeKey type_key)
+ev_type_key_and_mode_is_expandable(E_TypeKey type_key, E_Mode mode)
 {
   B32 result = 0;
   for(E_TypeKey t = type_key; !result; t = e_type_unwrap(e_type_direct_from_key(e_type_unwrap(t))))
@@ -76,7 +76,7 @@ ev_type_key_is_expandable(E_TypeKey type_key)
        kind == E_TypeKind_Union ||
        kind == E_TypeKind_Class ||
        kind == E_TypeKind_Array ||
-       kind == E_TypeKind_Enum)
+       (kind == E_TypeKind_Enum && mode == E_Mode_Null))
     {
       result = 1;
     }
@@ -1135,7 +1135,7 @@ ev_row_is_expandable(EV_Row *row)
     {
       Temp scratch = scratch_begin(0, 0);
       E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, row->expr);
-      result = ev_type_key_is_expandable(irtree.type_key);
+      result = ev_type_key_and_mode_is_expandable(irtree.type_key, irtree.mode);
       scratch_end(scratch);
     }
   }

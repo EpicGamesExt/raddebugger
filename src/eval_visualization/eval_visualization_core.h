@@ -321,7 +321,7 @@ internal U64 ev_hash_from_key(EV_Key key);
 //~ rjf: Type Info Helpers
 
 //- rjf: type info -> expandability/editablity
-internal B32 ev_type_key_is_expandable(E_TypeKey type_key);
+internal B32 ev_type_key_and_mode_is_expandable(E_TypeKey type_key, E_Mode mode);
 internal B32 ev_type_key_is_editable(E_TypeKey type_key);
 
 ////////////////////////////////

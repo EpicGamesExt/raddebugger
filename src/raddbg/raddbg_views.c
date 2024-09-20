@@ -1051,7 +1051,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, B32 modifiable, U32 default_radix, R
           //
           case RD_WatchViewFillKind_Breakpoints:
           {
-            E_TypeKey meta_eval_type = e_type_key_cons_base(type(CTRL_MetaEval), str8_lit("RADDBG_Entity"));
+            E_TypeKey meta_eval_type = e_type_key_cons_base(type(CTRL_MetaEval));
             mutable_entity_kind = RD_EntityKind_Breakpoint;
             ev_view_rule_list_push_string(scratch.arena, &top_level_view_rules, str8_lit("no_addr"));
             RD_EntityList bps = rd_query_cached_entity_list_with_kind(mutable_entity_kind);
