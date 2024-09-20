@@ -165,7 +165,7 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(default)
       }
       
       // rjf: recurse for child
-      ev_append_expr_blocks__rec(arena, view, key, child->key, str8_zero(), child_expr, child_view_rules, depth, out);
+      ev_append_expr_blocks__rec(arena, view, filter, key, child->key, str8_zero(), child_expr, child_view_rules, depth, out);
     }
     ev_block_end(out, last_vb);
   }
@@ -240,7 +240,7 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(default)
       }
       
       // rjf: recurse for child
-      ev_append_expr_blocks__rec(arena, view, key, child->key, str8_zero(), child_expr, child_view_rules, depth, out);
+      ev_append_expr_blocks__rec(arena, view, filter, key, child->key, str8_zero(), child_expr, child_view_rules, depth, out);
     }
     ev_block_end(out, last_vb);
   }
@@ -272,7 +272,7 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(default)
     }
     
     // rjf: recurse for child
-    ev_append_expr_blocks__rec(arena, view, key, child_key, str8_zero(), child_expr, child_view_rules, depth, out);
+    ev_append_expr_blocks__rec(arena, view, filter, key, child_key, str8_zero(), child_expr, child_view_rules, depth, out);
   }
   
   scratch_end(scratch);

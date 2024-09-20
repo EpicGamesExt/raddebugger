@@ -71,6 +71,7 @@ E_TypeKindTable:
   {IncompleteEnum            "enum"                0    }
   {Bitfield                  ""                    0    }
   {Variadic                  ""                    0    }
+  {Collection                ""                    0    }
 }
 
 @table(name  op_kind  precedence  string  op_pre  op_sep  op_pos)

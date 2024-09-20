@@ -126,7 +126,6 @@ struct EV_Block
   // rjf: evaluation info
   String8 string;
   E_Expr *expr;
-  E_Expr *expr_raw;
   
   // rjf: info about ranges that this block spans
   Rng1U64 visual_idx_range;
@@ -174,6 +173,7 @@ struct EV_BlockArray
 #define EV_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_DEF(name) internal EV_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_SIG(EV_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_NAME(name))
 #define EV_VIEW_RULE_BLOCK_PROD_FUNCTION_SIG(name) void name(Arena *arena,                                      \
 EV_View *view,                                     \
+String8 filter,                                    \
 EV_Key parent_key,                                 \
 EV_Key key,                                        \
 EV_ExpandNode *expand_node,                        \
@@ -285,7 +285,6 @@ struct EV_Row
   String8 string;
   E_Member *member;
   E_Expr *expr;
-  E_Expr *expr_raw;
   
   // rjf: view rule attachments
   EV_ViewRuleList *view_rules;
@@ -374,8 +373,8 @@ internal E_Expr *ev_expr_from_expr_view_rules(Arena *arena, E_Expr *expr, EV_Vie
 internal EV_Block *ev_block_begin(Arena *arena, EV_BlockKind kind, EV_Key parent_key, EV_Key key, S32 depth);
 internal EV_Block *ev_block_split_and_continue(Arena *arena, EV_BlockList *list, EV_Block *split_block, U64 split_idx);
 internal void ev_block_end(EV_BlockList *list, EV_Block *block);
-internal void ev_append_expr_blocks__rec(Arena *arena, EV_View *view, EV_Key parent_key, EV_Key key, String8 string, E_Expr *expr, EV_ViewRuleList *view_rules, S32 depth, EV_BlockList *list_out);
-internal EV_BlockList ev_block_list_from_view_expr_keys(Arena *arena, EV_View *view, EV_ViewRuleList *view_rules, String8 expr, EV_Key parent_key, EV_Key key);
+internal void ev_append_expr_blocks__rec(Arena *arena, EV_View *view, String8 filter, EV_Key parent_key, EV_Key key, String8 string, E_Expr *expr, EV_ViewRuleList *view_rules, S32 depth, EV_BlockList *list_out);
+internal EV_BlockList ev_block_list_from_view_expr_keys(Arena *arena, EV_View *view, String8 filter, EV_ViewRuleList *view_rules, String8 expr, EV_Key parent_key, EV_Key key, S32 depth);
 internal void ev_block_list_concat__in_place(EV_BlockList *dst, EV_BlockList *to_push);
 
 ////////////////////////////////

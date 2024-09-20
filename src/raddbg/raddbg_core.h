@@ -38,6 +38,7 @@ enum
   RD_EvalSpaceKind_CtrlEntity = E_SpaceKind_FirstUserDefined,
   RD_EvalSpaceKind_MetaEntity,
   RD_EvalSpaceKind_MetaCtrlEntity,
+  RD_EvalSpaceKind_MetaCollection,
 };
 
 ////////////////////////////////
@@ -789,6 +790,8 @@ struct RD_State
   
   // rjf: frame parameters
   F32 frame_dt;
+  DI_Scope *frame_di_scope;
+  FZY_Scope *frame_fzy_scope;
   
   // rjf: registers stack
   RD_RegsNode base_regs;
@@ -1275,6 +1278,7 @@ internal void rd_window_frame(RD_Window *ws);
 ////////////////////////////////
 //~ rjf: Eval Visualization
 
+EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(rd_collection_block_prod);
 internal EV_View *rd_ev_view_from_key(U64 key);
 internal F32 rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size, S32 depth, E_Eval eval, E_Member *member, EV_ViewRuleList *view_rules, String8List *out);
 internal String8 rd_value_string_from_eval(Arena *arena, EV_StringFlags flags, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size, E_Eval eval, E_Member *member, EV_ViewRuleList *view_rules);

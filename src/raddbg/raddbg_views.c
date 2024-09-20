@@ -1040,7 +1040,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, B32 modifiable, U32 default_radix, R
               FuzzyMatchRangeList matches = fuzzy_match_find(scratch.arena, filter, expr_string);
               if(matches.count == matches.needle_part_count)
               {
-                EV_BlockList watch_blocks = ev_block_list_from_view_expr_keys(scratch.arena, eval_view, &top_level_view_rules, expr_string, parent_key, key);
+                EV_BlockList watch_blocks = ev_block_list_from_view_expr_keys(scratch.arena, eval_view, str8_zero(), &top_level_view_rules, expr_string, parent_key, key, 0);
                 ev_block_list_concat__in_place(&blocks, &watch_blocks);
               }
             }
@@ -1069,7 +1069,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, B32 modifiable, U32 default_radix, R
               if(matches.count == matches.needle_part_count)
               {
                 String8 expr_string = push_str8f(scratch.arena, "$%I64u", bp->id);
-                EV_BlockList watch_blocks = ev_block_list_from_view_expr_keys(scratch.arena, eval_view, &top_level_view_rules, expr_string, parent_key, key);
+                EV_BlockList watch_blocks = ev_block_list_from_view_expr_keys(scratch.arena, eval_view, str8_zero(), &top_level_view_rules, expr_string, parent_key, key, 0);
                 ev_block_list_concat__in_place(&blocks, &watch_blocks);
               }
             }
@@ -1096,7 +1096,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, B32 modifiable, U32 default_radix, R
               if(matches.count == matches.needle_part_count)
               {
                 String8 expr_string = push_str8f(scratch.arena, "$%I64u", wp->id);
-                EV_BlockList watch_blocks = ev_block_list_from_view_expr_keys(scratch.arena, eval_view, &top_level_view_rules, expr_string, parent_key, key);
+                EV_BlockList watch_blocks = ev_block_list_from_view_expr_keys(scratch.arena, eval_view, str8_zero(), &top_level_view_rules, expr_string, parent_key, key, 0);
                 ev_block_list_concat__in_place(&blocks, &watch_blocks);
               }
             }
@@ -1198,7 +1198,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, B32 modifiable, U32 default_radix, R
               {
                 EV_Key parent_key = ev_key_make(5381, 0);
                 EV_Key key = ev_key_make(ev_hash_from_key(parent_key), num);
-                EV_BlockList root_blocks = ev_block_list_from_view_expr_keys(scratch.arena, eval_view, &top_level_view_rules, root_expr_string, parent_key, key);
+                EV_BlockList root_blocks = ev_block_list_from_view_expr_keys(scratch.arena, eval_view, str8_zero(), &top_level_view_rules, root_expr_string, parent_key, key, 0);
                 ev_block_list_concat__in_place(&blocks, &root_blocks);
               }
             }
@@ -1210,7 +1210,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, B32 modifiable, U32 default_radix, R
               {
                 EV_Key parent_key = ev_key_make(5381, 0);
                 EV_Key key = ev_key_make(ev_hash_from_key(parent_key), num);
-                EV_BlockList root_blocks = ev_block_list_from_view_expr_keys(scratch.arena, eval_view, &top_level_view_rules, root_expr_string, parent_key, key);
+                EV_BlockList root_blocks = ev_block_list_from_view_expr_keys(scratch.arena, eval_view, str8_zero(), &top_level_view_rules, root_expr_string, parent_key, key, 0);
                 ev_block_list_concat__in_place(&blocks, &root_blocks);
               }
             }
@@ -1232,7 +1232,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, B32 modifiable, U32 default_radix, R
               {
                 EV_Key parent_key = ev_key_make(5381, 0);
                 EV_Key key = ev_key_make(ev_hash_from_key(parent_key), idx+1);
-                EV_BlockList root_blocks = ev_block_list_from_view_expr_keys(scratch.arena, eval_view, &top_level_view_rules, root_expr_string, parent_key, key);
+                EV_BlockList root_blocks = ev_block_list_from_view_expr_keys(scratch.arena, eval_view, str8_zero(), &top_level_view_rules, root_expr_string, parent_key, key, 0);
                 ev_block_list_concat__in_place(&blocks, &root_blocks);
               }
             }
@@ -1362,7 +1362,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, B32 modifiable, U32 default_radix, R
               }
               
               // rjf: recurse for child
-              ev_append_expr_blocks__rec(scratch.arena, eval_view, parent_key, sub_expand_keys[sub_expand_idx], str8_zero(), child_expr, child_view_rules, 0, &blocks);
+              ev_append_expr_blocks__rec(scratch.arena, eval_view, str8_zero(), parent_key, sub_expand_keys[sub_expand_idx], str8_zero(), child_expr, child_view_rules, 0, &blocks);
             }
             ev_block_end(&blocks, last_vb);
           }break;
@@ -2511,8 +2511,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, B32 modifiable, U32 default_radix, R
                   cell_autocomp_flags = RD_AutoCompListerFlag_ViewRules;
                   if(cell_pre_edit_string.size == 0)
                   {
-                    E_IRTreeAndType raw_irtree = e_irtree_and_type_from_expr(scratch.arena, row->expr_raw);
-                    cell_ghost_text = ev_auto_view_rule_from_type_key(raw_irtree.type_key);
+                    cell_ghost_text = ev_auto_view_rule_from_type_key(row_eval.type_key);
                   }
                 }break;
                 case RD_WatchViewColumnKind_FrameSelection:

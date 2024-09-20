@@ -506,15 +506,18 @@ e_hash_from_type_key(E_TypeKey key)
     str8_serial_push_struct(scratch.arena, &strings, &type->byte_size);
     str8_serial_push_struct(scratch.arena, &strings, &type->count);
     str8_serial_push_struct(scratch.arena, &strings, &type->off);
-    U64 direct_hash = e_hash_from_type_key(type->direct_type_key);
-    U64 owner_hash = e_hash_from_type_key(type->direct_type_key);
+    String8 direct_type_string = e_type_string_from_key(scratch.arena, type->direct_type_key);
+    String8 owner_type_string = e_type_string_from_key(scratch.arena, type->owner_type_key);
+    U64 direct_hash = e_hash_from_string(5381, direct_type_string);
+    U64 owner_hash = e_hash_from_string(5381, owner_type_string);
     str8_serial_push_struct(scratch.arena, &strings, &direct_hash);
     str8_serial_push_struct(scratch.arena, &strings, &owner_hash);
     if(type->param_type_keys != 0)
     {
       for EachIndex(idx, type->count)
       {
-        U64 param_type_hash = e_hash_from_type_key(type->param_type_keys[idx]);
+        String8 param_type_string = e_type_string_from_key(scratch.arena, type->param_type_keys[idx]);
+        U64 param_type_hash = e_hash_from_string(5381, param_type_string);
         str8_serial_push_struct(scratch.arena, &strings, &param_type_hash);
       }
     }
@@ -522,7 +525,8 @@ e_hash_from_type_key(E_TypeKey key)
     {
       for EachIndex(idx, type->count)
       {
-        U64 member_type_hash = e_hash_from_type_key(type->members[idx].type_key);
+        String8 member_type_string = e_type_string_from_key(scratch.arena, type->members[idx].type_key);
+        U64 member_type_hash = e_hash_from_string(5381, member_type_string);
         str8_serial_push_struct(scratch.arena, &strings, &type->members[idx].off);
         str8_serial_push_struct(scratch.arena, &strings, &member_type_hash);
       }

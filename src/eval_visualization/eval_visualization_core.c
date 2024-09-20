@@ -501,7 +501,6 @@ ev_block_begin(Arena *arena, EV_BlockKind kind, EV_Key parent_key, EV_Key key, S
   n->v.key        = key;
   n->v.depth      = depth;
   n->v.expr       = &e_expr_nil;
-  n->v.expr_raw   = &e_expr_nil;
   n->v.view_rules = &ev_nil_view_rule_list;
   return &n->v;
 }
@@ -515,7 +514,6 @@ ev_block_split_and_continue(Arena *arena, EV_BlockList *list, EV_Block *split_bl
   EV_Block *continue_block = ev_block_begin(arena, split_block->kind, split_block->parent_key, split_block->key, split_block->depth);
   continue_block->string            = split_block->string;
   continue_block->expr              = split_block->expr;
-  continue_block->expr_raw          = split_block->expr_raw;
   continue_block->visual_idx_range  = continue_block->semantic_idx_range = r1u64(split_idx+1, total_count);
   continue_block->view_rules        = split_block->view_rules;
   continue_block->members           = split_block->members;
@@ -536,7 +534,7 @@ ev_block_end(EV_BlockList *list, EV_Block *block)
 }
 
 internal void
-ev_append_expr_blocks__rec(Arena *arena, EV_View *view, EV_Key parent_key, EV_Key key, String8 string, E_Expr *expr, EV_ViewRuleList *view_rules, S32 depth, EV_BlockList *list_out)
+ev_append_expr_blocks__rec(Arena *arena, EV_View *view, String8 filter, EV_Key parent_key, EV_Key key, String8 string, E_Expr *expr, EV_ViewRuleList *view_rules, S32 depth, EV_BlockList *list_out)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(&arena, 1);
@@ -554,7 +552,6 @@ ev_append_expr_blocks__rec(Arena *arena, EV_View *view, EV_Key parent_key, EV_Ke
     EV_Block *block = ev_block_begin(arena, EV_BlockKind_Root, parent_key, key, depth);
     block->string                      = string;
     block->expr                        = expr;
-    block->expr_raw                    = expr_raw;
     block->view_rules                  = view_rules;
     block->visual_idx_range            = r1u64(key.child_num-1, key.child_num+0);
     block->semantic_idx_range          = r1u64(key.child_num-1, key.child_num+0);
@@ -581,7 +578,7 @@ ev_append_expr_blocks__rec(Arena *arena, EV_View *view, EV_Key parent_key, EV_Ke
   //- rjf: do view rule children block generation, if we have an applicable view rule
   if(parent_is_expanded && block_prod_view_rule_info != &ev_nil_view_rule_info)
   {
-    block_prod_view_rule_info->block_prod(arena, view, parent_key, key, node, string, expr, view_rules, block_prod_view_rule_params, depth+1, list_out);
+    block_prod_view_rule_info->block_prod(arena, view, filter, parent_key, key, node, string, expr, view_rules, block_prod_view_rule_params, depth+1, list_out);
   }
   
   scratch_end(scratch);
@@ -589,7 +586,7 @@ ev_append_expr_blocks__rec(Arena *arena, EV_View *view, EV_Key parent_key, EV_Ke
 }
 
 internal EV_BlockList
-ev_block_list_from_view_expr_keys(Arena *arena, EV_View *view, EV_ViewRuleList *view_rules, String8 expr, EV_Key parent_key, EV_Key key)
+ev_block_list_from_view_expr_keys(Arena *arena, EV_View *view, String8 filter, EV_ViewRuleList *view_rules, String8 expr, EV_Key parent_key, EV_Key key, S32 depth)
 {
   ProfBeginFunction();
   EV_BlockList blocks = {0};
@@ -641,7 +638,7 @@ ev_block_list_from_view_expr_keys(Arena *arena, EV_View *view, EV_ViewRuleList *
       ev_view_rule_list_push_string(arena, view_rule_list, n->string);
     }
     ev_view_rule_list_push_string(arena, view_rule_list, view_rule_string);
-    ev_append_expr_blocks__rec(arena, view, parent_key, key, expr, parse.expr, view_rule_list, 0, &blocks);
+    ev_append_expr_blocks__rec(arena, view, filter, parent_key, key, expr, parse.expr, view_rule_list, depth, &blocks);
   }
   ProfEnd();
   return blocks;
@@ -951,7 +948,6 @@ ev_row_list_push_new(Arena *arena, EV_View *view, EV_WindowedRowList *rows, EV_B
   row->size_in_rows = 1;
   row->string       = block->string;
   row->expr         = expr_resolved;
-  row->expr_raw     = expr;
   if(row->expr->kind == E_ExprKind_MemberAccess)
   {
     Temp scratch = scratch_begin(&arena, 1);
@@ -1044,7 +1040,7 @@ ev_windowed_row_list_from_block_list(Arena *arena, EV_View *view, Rng1S64 visibl
       case EV_BlockKind_Null:
       case EV_BlockKind_Root:
       {
-        ev_row_list_push_new(arena, view, &list, block, block->key, block->expr_raw);
+        ev_row_list_push_new(arena, view, &list, block, block->key, block->expr);
       }break;
       
       //////////////////////////////
@@ -1067,9 +1063,7 @@ ev_windowed_row_list_from_block_list(Arena *arena, EV_View *view, Rng1S64 visibl
       for(U64 idx = visible_idx_range.min; idx < visible_idx_range.max; idx += 1)
       {
         FZY_Item *item = &block->fzy_backing_items.v[idx];
-        EV_Key parent_key = block->parent_key;
-        EV_Key key = block->key;
-        key.child_num = block->fzy_backing_items.v[idx].idx;
+        EV_Key key = ev_key_make(ev_hash_from_key(block->parent_key), block->fzy_backing_items.v[idx].idx);
         E_Expr *row_expr = ev_expr_from_block_index(arena, block, idx);
         ev_row_list_push_new(arena, view, &list, block, key, row_expr);
       }break;
