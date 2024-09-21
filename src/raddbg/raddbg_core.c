@@ -7884,7 +7884,7 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(rd_collection_block_prod)
       String8 entity_expr_string = entity->string;
       EV_Key entity_parent_key = rd_parent_ev_key_from_entity(entity);
       EV_Key entity_key = rd_ev_key_from_entity(entity);
-      EV_BlockList blocks = ev_block_list_from_view_expr_keys(arena, view, str8_zero(), &top_level_view_rules, entity_expr_string, entity_parent_key, entity_key, depth);
+      EV_BlockList blocks = ev_block_list_from_view_expr_keys(arena, view, filter, &top_level_view_rules, entity_expr_string, entity_parent_key, entity_key, depth);
       FuzzyMatchRangeList matches = fuzzy_match_find(scratch.arena, filter, entity_expr_string);
       if(blocks.total_semantic_row_count > 1 || matches.count == matches.needle_part_count)
       {

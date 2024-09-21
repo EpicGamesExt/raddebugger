@@ -106,7 +106,6 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(default)
   ////////////////////////////
   //- rjf: unpack expression type info
   //
-  expr = ev_expr_from_expr_view_rules(arena, expr, view_rules);
   E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, expr);
   E_TypeKey type_key = e_type_unwrap(irtree.type_key);
   E_TypeKind type_kind = e_type_kind_from_key(type_key);
