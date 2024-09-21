@@ -184,6 +184,14 @@ read_only global Type B64__type  = {TypeKind_B64,  sizeof(B64), &type_nil, str8_
 read_only global Type F32__type  = {TypeKind_F32,  sizeof(F32), &type_nil, str8_lit_comp("F32")};
 read_only global Type F64__type  = {TypeKind_F64,  sizeof(F64), &type_nil, str8_lit_comp("F64")};
 
+//- rjf: Rng1U64
+struct_members(Rng1U64)
+{
+  member_lit_comp(Rng1U64, type(U64), min),
+  member_lit_comp(Rng1U64, type(U64), max),
+};
+struct_type(Rng1U64);
+
 //- rjf: String8
 Type String8__str_ptr_type = {TypeKind_Ptr, sizeof(void *), type(U8), {0}, str8_lit_comp("size")};
 Member String8__members[] =

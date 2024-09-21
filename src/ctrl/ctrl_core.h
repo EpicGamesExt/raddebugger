@@ -49,9 +49,11 @@ X(B32, enabled)\
 X(B32, frozen)\
 X(U64, hit_count)\
 X(U64, id)\
+X(Rng1U64, vaddr_range)\
 X(U32, color)\
 X(String8, label)\
 X(String8, exe)\
+X(String8, dbg)\
 X(String8, args)\
 X(String8, working_directory)\
 X(String8, entry_point)\

@@ -817,6 +817,12 @@ internal String8
 rd_string_from_eval_viz_row_column(Arena *arena, EV_View *ev, EV_Row *row, RD_WatchViewColumn *col, B32 editable, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size_px)
 {
   String8 result = {0};
+  EV_ViewRuleList *view_rules = row->view_rules;
+  if(col->view_rule_size != 0)
+  {
+    view_rules = ev_view_rule_list_copy(arena, row->view_rules);
+    ev_view_rule_list_push_string(arena, view_rules, str8(col->view_rule_buffer, col->view_rule_size));
+  }
   switch(col->kind)
   {
     default:{}break;
@@ -827,7 +833,7 @@ rd_string_from_eval_viz_row_column(Arena *arena, EV_View *ev, EV_Row *row, RD_Wa
     case RD_WatchViewColumnKind_Value:
     {
       E_Eval eval = e_eval_from_expr(arena, row->expr);
-      result = rd_value_string_from_eval(arena, !editable * EV_StringFlag_ReadOnlyDisplayRules, default_radix, font, font_size, max_size_px, eval, row->member, row->view_rules);
+      result = rd_value_string_from_eval(arena, !editable * EV_StringFlag_ReadOnlyDisplayRules, default_radix, font, font_size, max_size_px, eval, row->member, view_rules);
     }break;
     case RD_WatchViewColumnKind_Type:
     {
@@ -858,7 +864,7 @@ rd_string_from_eval_viz_row_column(Arena *arena, EV_View *ev, EV_Row *row, RD_Wa
         expr = e_expr_ref_member_access(arena, expr, n->string);
       }
       E_Eval eval = e_eval_from_expr(arena, expr);
-      result = rd_value_string_from_eval(arena, !editable * EV_StringFlag_ReadOnlyDisplayRules, default_radix, font, font_size, max_size_px, eval, row->member, row->view_rules);
+      result = rd_value_string_from_eval(arena, !editable * EV_StringFlag_ReadOnlyDisplayRules, default_radix, font, font_size, max_size_px, eval, row->member, view_rules);
       scratch_end(scratch);
     }break;
   }
@@ -868,6 +874,7 @@ rd_string_from_eval_viz_row_column(Arena *arena, EV_View *ev, EV_Row *row, RD_Wa
      result.str[result.size-1] == '"')
   {
     result = str8_skip(str8_chop(result, 1), 1);
+    result = raw_from_escaped_str8(arena, result);
   }
   return result;
 }
@@ -4986,6 +4993,24 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(target)
 RD_VIEW_RULE_UI_FUNCTION_DEF(targets)
 {
   ProfBeginFunction();
+  RD_WatchViewState *wv = rd_view_state(RD_WatchViewState);
+  if(!wv->initialized)
+  {
+    rd_watch_view_init(wv, RD_WatchViewFillKind_Breakpoints);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member, 0.25f, .string = str8_lit("label.str"),             .display_string = str8_lit("Label"),              .dequote_string = 1);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member, 0.35f, .string = str8_lit("exe.str"),               .display_string = str8_lit("Executable"),         .dequote_string = 1, .is_non_code = 1);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member, 0.20f, .string = str8_lit("args.str"),              .display_string = str8_lit("Arguments"),          .dequote_string = 1);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member, 0.10f, .string = str8_lit("working_directory.str"), .display_string = str8_lit("Working Directory "), .dequote_string = 1, .is_non_code = 1);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member, 0.10f, .string = str8_lit("entry_point.str"),       .display_string = str8_lit("Custom Entry Point"), .dequote_string = 1);
+  }
+  rd_watch_view_build(wv, str8_lit("targets"), str8_lit(""), 0, 10, rect);
+  ProfEnd();
+}
+
+#if 0 // TODO(rjf): @msgs
+RD_VIEW_RULE_UI_FUNCTION_DEF(targets)
+{
+  ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   RD_EntityList targets_list = rd_query_cached_entity_list_with_kind(RD_EntityKind_Target);
   RD_EntityFuzzyItemArray targets = rd_entity_fuzzy_item_array_from_entity_list_needle(scratch.arena, &targets_list, string);
@@ -5131,6 +5156,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(targets)
   scratch_end(scratch);
   ProfEnd();
 }
+#endif
 
 ////////////////////////////////
 //~ rjf: file_path_map @view_hook_impl
@@ -5753,6 +5779,22 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(call_stack)
 ////////////////////////////////
 //~ rjf: modules @view_hook_impl
 
+RD_VIEW_RULE_UI_FUNCTION_DEF(modules)
+{
+  ProfBeginFunction();
+  RD_WatchViewState *wv = rd_view_state(RD_WatchViewState);
+  if(!wv->initialized)
+  {
+    rd_watch_view_init(wv, RD_WatchViewFillKind_Breakpoints);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member, 0.20f, .string = str8_lit("label.str"),             .display_string = str8_lit("Name"),            .dequote_string = 1, .is_non_code = 1);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member, 0.30f, .string = str8_lit("exe.str"),               .display_string = str8_lit("Executable Path"), .dequote_string = 1, .is_non_code = 1);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member, 0.30f, .string = str8_lit("dbg.str"),               .display_string = str8_lit("Debug Info Path"), .dequote_string = 1, .is_non_code = 1);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member, 0.20f, .string = str8_lit("vaddr_range"),           .display_string = str8_lit("Address Range"),   .view_rule = str8_lit("hex"));
+  }
+  rd_watch_view_build(wv, str8_lit("modules"), str8_lit(""), 0, 10, rect);
+  ProfEnd();
+}
+
 #if 0 // TODO(rjf): @msgs
 typedef struct RD_ModulesViewState RD_ModulesViewState;
 struct RD_ModulesViewState
@@ -5771,11 +5813,9 @@ struct RD_ModulesViewState
   F32 range_col_pct;
   F32 dbg_col_pct;
 };
-#endif
 
 RD_VIEW_RULE_UI_FUNCTION_DEF(modules)
 {
-#if 0 // TODO(rjf): @msgs
   RD_ModulesViewState *mv = rd_view_state(RD_ModulesViewState);
   if(mv->initialized == 0)
   {
@@ -5785,8 +5825,6 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(modules)
     mv->range_col_pct = 0.30f;
     mv->dbg_col_pct   = 0.50f;
   }
-#endif
-#if 0 // TODO(rjf): @msgs
   RD_ModulesViewState *mv = rd_view_state(RD_ModulesViewState);
   for(RD_Cmd *cmd = 0; rd_next_cmd(&cmd);)
   {
@@ -5816,8 +5854,6 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(modules)
       }break;
     }
   }
-#endif
-#if 0 // TODO(rjf): @msgs
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   DI_Scope *scope = di_scope_open();
@@ -6082,8 +6118,8 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(modules)
   di_scope_close(scope);
   scratch_end(scratch);
   ProfEnd();
-#endif
 }
+#endif
 
 ////////////////////////////////
 //~ rjf: watch @view_hook_impl

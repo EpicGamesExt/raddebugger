@@ -48,8 +48,8 @@ typedef enum RD_WatchViewColumnKind
   RD_WatchViewColumnKind_Type,
   RD_WatchViewColumnKind_ViewRule,
   RD_WatchViewColumnKind_Module,
-  RD_WatchViewColumnKind_FrameSelection,
   RD_WatchViewColumnKind_Member,
+  RD_WatchViewColumnKind_FrameSelection,
   RD_WatchViewColumnKind_COUNT
 }
 RD_WatchViewColumnKind;

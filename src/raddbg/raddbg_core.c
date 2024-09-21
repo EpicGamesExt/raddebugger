@@ -1902,10 +1902,11 @@ rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
         CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(space);
         
         // rjf: produce meta evaluation
-        meval->frozen    = entity->is_frozen;
-        meval->color     = entity->rgba;
-        meval->label     = entity->string;
-        meval->id        = entity->id;
+        meval->frozen      = entity->is_frozen;
+        meval->vaddr_range = entity->vaddr_range;
+        meval->color       = entity->rgba;
+        meval->label       = entity->string;
+        meval->id          = entity->id;
         if(entity->kind == CTRL_EntityKind_Thread)
         {
           DI_Scope *di_scope = di_scope_open();
@@ -1927,6 +1928,13 @@ rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
             idx += 1;
           }
           di_scope_close(di_scope);
+        }
+        if(entity->kind == CTRL_EntityKind_Module)
+        {
+          DI_Key dbgi_key = ctrl_dbgi_key_from_module(entity);
+          meval->label = str8_skip_last_slash(entity->string);
+          meval->exe = path_normalized_from_string(scratch.arena, entity->string);
+          meval->dbg = path_normalized_from_string(scratch.arena, dbgi_key.path);
         }
       }
       
