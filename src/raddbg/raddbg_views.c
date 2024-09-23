@@ -849,9 +849,10 @@ rd_string_from_eval_viz_row_column(Arena *arena, EV_View *ev, EV_Row *row, RD_Wa
     case RD_WatchViewColumnKind_Module:
     {
       E_Eval eval = e_eval_from_expr(arena, row->expr);
+      E_Eval value_eval = e_value_eval_from_eval(eval);
       CTRL_Entity *process = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->process);
-      CTRL_Entity *module = ctrl_module_from_process_vaddr(process, eval.value.u64);
-      result = push_str8_copy(arena, module->string);
+      CTRL_Entity *module = ctrl_module_from_process_vaddr(process, value_eval.value.u64);
+      result = str8_skip_last_slash(module->string);
     }break;
     case RD_WatchViewColumnKind_Member:
     {
@@ -2311,12 +2312,15 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
           ////////////////////////
           //- rjf: canvas block row -> build singular row for "escape hatch" ui
           //
-          if(row->block_kind == EV_BlockKind_Canvas)
+          B32 did_row_build = 0;
+          if(!did_row_build && row->block_kind == EV_BlockKind_Canvas)
             UI_Parent(row_box) UI_FocusHot(row_selected ? UI_FocusKind_On : UI_FocusKind_Off)
           {
             //- rjf: build ui hook row contents
             if(ui_view_rule_info != &rd_nil_view_rule_info && ui_view_rule_info->ui != 0)
             {
+              did_row_build = 1;
+              
               //- rjf: unpack
               RD_WatchViewPoint pt = {0, row->parent_key, row->key};
               RD_View *view = rd_view_from_handle(rd_regs()->view);
@@ -2412,10 +2416,53 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
           }
           
           ////////////////////////
-          //- rjf: build non-canvas row contents
+          //- rjf: build button row
           //
-          if(row->block_kind != EV_BlockKind_Canvas) UI_Parent(row_box) UI_HeightFill
+          if(!did_row_build && row->depth == 0 && flags & RD_WatchViewFlag_RootButtons) UI_Parent(row_box) UI_HeightFill UI_FocusHot(row_selected ? UI_FocusKind_On : UI_FocusKind_Off)
           {
+            did_row_build = 1;
+            switch(row_eval.space.kind)
+            {
+              default:{did_row_build = 0;}break;
+              case RD_EvalSpaceKind_MetaEntity:
+              {
+                RD_Entity *entity = rd_entity_from_eval_space(row_eval.space);
+                UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|UI_BoxFlag_DrawHotEffects|UI_BoxFlag_DrawActiveEffects, "###entity_%p", entity);
+                UI_Parent(box)
+                {
+                  if(row_is_expandable) UI_PrefWidth(ui_em(2.f, 1.f)) UI_Focus(UI_FocusKind_Off)
+                  {
+                    if(ui_pressed(ui_expanderf(next_row_expanded, "###expand_%p", entity)))
+                    {
+                      next_row_expanded ^= 1;
+                    }
+                  }
+                  DR_FancyStringList fstrs = rd_title_fstrs_from_entity(scratch.arena, entity, rd_rgba_from_theme_color(RD_ThemeColor_TextWeak), ui_top_font_size());
+                  UI_Box *label = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
+                  ui_box_equip_display_fancy_strings(label, &fstrs);
+                }
+                UI_Signal sig = ui_signal_from_box(box);
+                if(ui_pressed(sig))
+                {
+                  RD_WatchViewPoint cell_pt = {0, row->parent_key, row->key};
+                  ewv->next_cursor = ewv->next_mark = cell_pt;
+                  pressed = 1;
+                }
+              }break;
+              case RD_EvalSpaceKind_MetaCtrlEntity:
+              {
+                
+              }break;
+            }
+          }
+          
+          ////////////////////////
+          //- rjf: build regular row contents in all other cases
+          //
+          if(!did_row_build) UI_Parent(row_box) UI_HeightFill
+          {
+            did_row_build = 1;
+            
             //////////////////////
             //- rjf: draw start of cache lines in expansions
             //
@@ -2895,14 +2942,14 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                 }
               }
             }
-            
-            //////////////////////
-            //- rjf: commit expansion state changes
-            //
-            if(next_row_expanded != row_expanded)
-            {
-              ev_key_set_expansion(eval_view, row->parent_key, row->key, next_row_expanded);
-            }
+          }
+          
+          //////////////////////
+          //- rjf: commit expansion state changes
+          //
+          if(next_row_expanded != row_expanded)
+          {
+            ev_key_set_expansion(eval_view, row->parent_key, row->key, next_row_expanded);
           }
         }
       }
@@ -5028,9 +5075,9 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(targets)
   {
     rd_watch_view_init(wv);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Expr,    0.30f, .display_string = str8_lit("Expression"));
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,   0.70f, .display_string = str8_lit("Value"),     .dequote_string = 1, .is_non_code = 1);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,   0.70f, .display_string = str8_lit("Value"));
   }
-  rd_watch_view_build(wv, RD_WatchViewFlag_NoHeader, str8_lit("targets"), str8_lit("collection, only:label exe args working_directory entry_point str"), 0, 10, rect);
+  rd_watch_view_build(wv, RD_WatchViewFlag_NoHeader|RD_WatchViewFlag_RootButtons, str8_lit("targets"), str8_lit("collection, only:label exe args working_directory entry_point str"), 0, 10, rect);
   ProfEnd();
 }
 
@@ -5799,7 +5846,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(call_stack)
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,  0.7f);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Module, 0.25f, .is_non_code = 1);
   }
-  rd_watch_view_build(wv, 0, str8_lit("current_thread.callstack.v"), str8_lit("cast:void**, array:current_thread.callstack.count"), 0, 10, rect);
+  rd_watch_view_build(wv, 0, str8_lit("current_thread.callstack.v"), str8_lit("array:current_thread.callstack.count"), 0, 10, rect);
   ProfEnd();
 }
 

@@ -45,6 +45,7 @@ typedef U32 RD_WatchViewFlags;
 enum
 {
   RD_WatchViewFlag_NoHeader    = (1<<0),
+  RD_WatchViewFlag_RootButtons = (1<<1),
 };
 
 typedef enum RD_WatchViewColumnKind

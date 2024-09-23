@@ -648,6 +648,18 @@ RD_ViewRuleUIFunctionType *ui;
 .params_tree = rd_regs()->params_tree,\
 .os_event = rd_regs()->os_event,\
 
+EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(watches);
+EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(targets);
+EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(breakpoints);
+EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(watch_pins);
+EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(threads);
+EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(modules);
+EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(locals);
+EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(registers);
+EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(globals);
+EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(thread_locals);
+EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(types);
+EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(procedures);
 RD_VIEW_RULE_UI_FUNCTION_DEF(null);
 EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(text);
 EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(disasm);
@@ -704,6 +716,8 @@ extern RD_StringBindingPair rd_default_binding_table[110];
 extern String8 rd_binding_version_remap_old_name_table[7];
 extern String8 rd_binding_version_remap_new_name_table[7];
 extern String8 rd_icon_kind_text_table[69];
+extern String8 rd_collection_name_table[12];
+extern EV_ViewRuleBlockProdHookFunctionType * rd_collection_block_prod_hook_function_table[12];
 extern RD_ViewRuleInfo rd_view_rule_kind_info_table[34];
 extern RD_IconKind rd_entity_kind_icon_kind_table[30];
 extern String8 rd_theme_preset_display_string_table[9];

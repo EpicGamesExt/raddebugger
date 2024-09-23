@@ -1156,6 +1156,11 @@ internal RD_Entity *rd_entity_from_ctrl_id(CTRL_MachineID machine_id, U32 id);
 internal RD_Entity *rd_entity_from_name_and_kind(String8 string, RD_EntityKind kind);
 
 ////////////////////////////////
+//~ rjf: Frontend Entity Info Extraction
+
+internal DR_FancyStringList rd_title_fstrs_from_entity(Arena *arena, RD_Entity *entity, Vec4F32 secondary_color, F32 size);
+
+////////////////////////////////
 //~ rjf: Control Entity Info Extraction
 
 internal Vec4F32 rd_rgba_from_ctrl_entity(CTRL_Entity *entity);
@@ -1275,7 +1280,7 @@ internal void rd_window_frame(RD_Window *ws);
 ////////////////////////////////
 //~ rjf: Eval Visualization
 
-EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(rd_collection_block_prod);
+internal void rd_ev_view_rule_block_prod_collection_debug_tables(Arena *arena, RDI_SectionKind target, EV_View *view, String8 filter, EV_Key parent_key, EV_Key key, EV_ExpandNode *expand_node, String8 string, E_Expr *expr, EV_ViewRuleList *view_rules, MD_Node *view_params, S32 depth, struct EV_BlockList *out);
 internal EV_View *rd_ev_view_from_key(U64 key);
 internal F32 rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size, S32 depth, E_Eval eval, E_Member *member, EV_ViewRuleList *view_rules, String8List *out);
 internal String8 rd_value_string_from_eval(Arena *arena, EV_StringFlags flags, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size, E_Eval eval, E_Member *member, EV_ViewRuleList *view_rules);

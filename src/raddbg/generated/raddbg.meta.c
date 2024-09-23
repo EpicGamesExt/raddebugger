@@ -675,6 +675,38 @@ str8_lit_comp("5"),
 str8_lit_comp("c"),
 };
 
+String8 rd_collection_name_table[12] =
+{
+str8_lit_comp("watches"),
+str8_lit_comp("targets"),
+str8_lit_comp("breakpoints"),
+str8_lit_comp("watch_pins"),
+str8_lit_comp("threads"),
+str8_lit_comp("modules"),
+str8_lit_comp("locals"),
+str8_lit_comp("registers"),
+str8_lit_comp("globals"),
+str8_lit_comp("thread_locals"),
+str8_lit_comp("types"),
+str8_lit_comp("procedures"),
+};
+
+EV_ViewRuleBlockProdHookFunctionType * rd_collection_block_prod_hook_function_table[12] =
+{
+EV_VIEW_RULE_BLOCK_PROD_FUNCTION_NAME(watches),
+EV_VIEW_RULE_BLOCK_PROD_FUNCTION_NAME(targets),
+EV_VIEW_RULE_BLOCK_PROD_FUNCTION_NAME(breakpoints),
+EV_VIEW_RULE_BLOCK_PROD_FUNCTION_NAME(watch_pins),
+EV_VIEW_RULE_BLOCK_PROD_FUNCTION_NAME(threads),
+EV_VIEW_RULE_BLOCK_PROD_FUNCTION_NAME(modules),
+EV_VIEW_RULE_BLOCK_PROD_FUNCTION_NAME(locals),
+EV_VIEW_RULE_BLOCK_PROD_FUNCTION_NAME(registers),
+EV_VIEW_RULE_BLOCK_PROD_FUNCTION_NAME(globals),
+EV_VIEW_RULE_BLOCK_PROD_FUNCTION_NAME(thread_locals),
+EV_VIEW_RULE_BLOCK_PROD_FUNCTION_NAME(types),
+EV_VIEW_RULE_BLOCK_PROD_FUNCTION_NAME(procedures),
+};
+
 RD_ViewRuleInfo rd_view_rule_kind_info_table[34] =
 {
 {{0}, {0}, {0}, {0}, RD_IconKind_Null, 0, 0, RD_VIEW_RULE_UI_FUNCTION_NAME(null)},
