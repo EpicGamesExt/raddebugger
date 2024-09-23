@@ -21,7 +21,7 @@ struct CTRL_MetaEvalFrame
 {
   U64 vaddr;
 };
-ptr_type(CTRL_MetaEvalFrame__vaddr_type, type(void), .is_external = 1, .size = sizeof(U64));
+ptr_type(CTRL_MetaEvalFrame__vaddr_type, type(void), .flags = TypeFlag_IsExternal, .size = sizeof(U64));
 struct_members(CTRL_MetaEvalFrame)
 {
   member_lit_comp(CTRL_MetaEvalFrame, &CTRL_MetaEvalFrame__vaddr_type, vaddr),
@@ -37,7 +37,7 @@ ptr_type(CTRL_MetaEvalFrameArray__v_ptr_type, &CTRL_MetaEvalFrame__vaddr_type, .
 struct_members(CTRL_MetaEvalFrameArray)
 {
   member_lit_comp(CTRL_MetaEvalFrameArray, type(U64), count),
-  {str8_lit_comp("v"), &CTRL_MetaEvalFrameArray__v_ptr_type, OffsetOf(CTRL_MetaEvalFrameArray, v)},
+  {str8_lit_comp("v"), {0}, &CTRL_MetaEvalFrameArray__v_ptr_type, OffsetOf(CTRL_MetaEvalFrameArray, v)},
 };
 struct_type(CTRL_MetaEvalFrameArray);
 
@@ -46,30 +46,34 @@ typedef struct CTRL_MetaEval CTRL_MetaEval;
 struct CTRL_MetaEval
 {
 #define CTRL_MetaEval_MemberXList \
-X(B32, enabled)\
-X(B32, frozen)\
-X(U64, hit_count)\
-X(U64, id)\
-X(Rng1U64, vaddr_range)\
-X(U32, color)\
-X(String8, label)\
-X(String8, exe)\
-X(String8, dbg)\
-X(String8, args)\
-X(String8, working_directory)\
-X(String8, entry_point)\
-X(String8, location)\
-X(String8, condition)\
-X(CTRL_MetaEvalFrameArray, callstack)
-#define X(T, name) T name;
+X(B32, enabled,         "Enabled")\
+X(B32, frozen,          "Frozen")\
+X(U64, hit_count,       "Hit Count")\
+X(U64, id,              "ID")\
+X(Rng1U64, vaddr_range, "Address Range")\
+X(U32, color,           "Color")\
+Y(String8, String8__code_type, label,       "Label")\
+X(String8, exe,         "Executable Path")\
+X(String8, dbg,         "Debug Info Path")\
+X(String8, args,        "Arguments")\
+X(String8, working_directory, "Working Directory")\
+Y(String8, String8__code_type, entry_point,       "Custom Entry Point")\
+X(String8, location,          "Location")\
+Y(String8, String8__code_type, condition,         "Condition")\
+X(CTRL_MetaEvalFrameArray, callstack, "Call Stack")
+#define X(T, name, pretty_name) T name;
+#define Y(T, ti, name, pretty_name) T name;
   CTRL_MetaEval_MemberXList
 #undef X
+#undef Y
 };
 struct_members(CTRL_MetaEval)
 {
-#define X(T, name) member_lit_comp(CTRL_MetaEval, type(T), name),
+#define X(T, name, pretty_name_) member_lit_comp(CTRL_MetaEval, type(T), name, .pretty_name = str8_lit_comp(pretty_name_)),
+#define Y(T, ti, name, pretty_name_) member_lit_comp(CTRL_MetaEval, &(ti), name, .pretty_name = str8_lit_comp(pretty_name_)),
   CTRL_MetaEval_MemberXList
 #undef X
+#undef Y
 };
 struct_type(CTRL_MetaEval);
 
@@ -83,7 +87,7 @@ struct CTRL_MetaEvalArray
 ptr_type(CTRL_MetaEvalArray__v_ptr_type, type(CTRL_MetaEval), .count_delimiter_name = str8_lit_comp("count"));
 struct_members(CTRL_MetaEvalArray)
 {
-  {str8_lit_comp("v"), &CTRL_MetaEvalArray__v_ptr_type, OffsetOf(CTRL_MetaEvalArray, v)},
+  {str8_lit_comp("v"), {0}, &CTRL_MetaEvalArray__v_ptr_type, OffsetOf(CTRL_MetaEvalArray, v)},
   member_lit_comp(CTRL_MetaEvalArray, type(U64), count),
 };
 struct_type(CTRL_MetaEvalArray);

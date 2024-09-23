@@ -877,6 +877,14 @@ rd_string_from_eval_viz_row_column(Arena *arena, EV_View *ev, EV_Row *row, RD_Wa
     result = str8_skip(str8_chop(result, 1), 1);
     result = raw_from_escaped_str8(arena, result);
   }
+  if(col->rangify_braces && result.size >= 2 &&
+     result.str[0] == '{' &&
+     result.str[result.size-1] == '}')
+  {
+    result = push_str8_copy(arena, result);
+    result.str[0] = '[';
+    result.str[result.size-1] = ')';
+  }
   return result;
 }
 
@@ -926,6 +934,7 @@ rd_watch_view_column_alloc_(RD_WatchViewState *wv, RD_WatchViewColumnKind kind, 
   MemoryCopy(col->view_rule_buffer, params->view_rule.str, col->view_rule_size);
   col->is_non_code = params->is_non_code;
   col->dequote_string = params->dequote_string;
+  col->rangify_braces = params->rangify_braces;
   return col;
 }
 
@@ -2232,6 +2241,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
           B32 row_selected = (selection_tbl.min.y <= (semantic_idx+1) && (semantic_idx+1) <= selection_tbl.max.y);
           B32 row_expanded = ev_expansion_from_key(eval_view, row->key);
           E_Eval row_eval = e_eval_from_expr(scratch.arena, row->expr);
+          E_Type *row_type = e_type_from_key(scratch.arena, row_eval.type_key);
           B32 row_is_expandable = ev_row_is_expandable(row);
           B32 row_is_editable = ev_row_is_editable(row);
           B32 next_row_expanded = row_expanded;
@@ -2428,9 +2438,9 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
               {
                 RD_Entity *entity = rd_entity_from_eval_space(row_eval.space);
                 UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|UI_BoxFlag_DrawHotEffects|UI_BoxFlag_DrawActiveEffects, "###entity_%p", entity);
-                UI_Parent(box)
+                UI_Parent(box) UI_Focus(UI_FocusKind_Null)
                 {
-                  if(row_is_expandable) UI_PrefWidth(ui_em(2.f, 1.f)) UI_Focus(UI_FocusKind_Off)
+                  if(row_is_expandable) UI_PrefWidth(ui_em(2.f, 1.f))
                   {
                     if(ui_pressed(ui_expanderf(next_row_expanded, "###expand_%p", entity)))
                     {
@@ -2440,6 +2450,12 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                   DR_FancyStringList fstrs = rd_title_fstrs_from_entity(scratch.arena, entity, rd_rgba_from_theme_color(RD_ThemeColor_TextWeak), ui_top_font_size());
                   UI_Box *label = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
                   ui_box_equip_display_fancy_strings(label, &fstrs);
+                  if(entity->kind == RD_EntityKind_Target) UI_PrefWidth(ui_em(3.f, 1.f))
+                  {
+                    rd_icon_buttonf(RD_IconKind_Play, 0, "###run");
+                    rd_icon_buttonf(RD_IconKind_StepInto, 0, "###step_into");
+                    rd_icon_buttonf(RD_IconKind_CheckHollow, 0, "###selected");
+                  }
                 }
                 UI_Signal sig = ui_signal_from_box(box);
                 if(ui_pressed(sig))
@@ -2653,12 +2669,23 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                   }
                 }
                 
+                //- rjf: determine if cell is code
+                B32 cell_is_code = !col->is_non_code;
+                if(flags & RD_WatchViewFlag_PrettyNameMembers && cell_is_code && row->member != 0 && row->member->pretty_name.size != 0 && col->kind == RD_WatchViewColumnKind_Expr)
+                {
+                  cell_is_code = 0;
+                }
+                if(col->kind == RD_WatchViewColumnKind_Value && row_type->flags & E_TypeFlag_IsCode)
+                {
+                  cell_is_code = 1;
+                }
+                
                 //- rjf: build cell
                 UI_Signal sig = {0};
                 UI_Palette(palette) UI_TableCell
                   UI_FocusHot(cell_selected ? UI_FocusKind_On : UI_FocusKind_Off)
                   UI_FocusActive((cell_selected && ewv->text_editing) ? UI_FocusKind_On : UI_FocusKind_Off)
-                  RD_Font(col->is_non_code ? RD_FontSlot_Main : RD_FontSlot_Code)
+                  RD_Font(cell_is_code ? RD_FontSlot_Code : RD_FontSlot_Main)
                   UI_FlagsAdd(cell_flags | (row->depth > 0 ? UI_BoxFlag_DrawTextWeak : 0))
                 {
                   // rjf: cell has errors? -> build error box
@@ -2698,7 +2725,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                   // rjf: build cell line edit
                   else
                   {
-                    sig = rd_line_editf((RD_LineEditFlag_CodeContents*(!col->is_non_code)|
+                    sig = rd_line_editf((RD_LineEditFlag_CodeContents*(!!cell_is_code)|
                                          RD_LineEditFlag_NoBackground|
                                          RD_LineEditFlag_DisableEdit*(!cell_can_edit)|
                                          RD_LineEditFlag_Expander*!!(x == 0 && row_is_expandable && col->kind == RD_WatchViewColumnKind_Expr)|
@@ -5075,9 +5102,14 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(targets)
   {
     rd_watch_view_init(wv);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Expr,    0.30f, .display_string = str8_lit("Expression"));
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,   0.70f, .display_string = str8_lit("Value"));
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,   0.70f, .display_string = str8_lit("Value"), .dequote_string = 1, .is_non_code = 1);
   }
-  rd_watch_view_build(wv, RD_WatchViewFlag_NoHeader|RD_WatchViewFlag_RootButtons, str8_lit("targets"), str8_lit("collection, only:label exe args working_directory entry_point str"), 0, 10, rect);
+  rd_watch_view_build(wv,
+                      RD_WatchViewFlag_NoHeader|
+                      RD_WatchViewFlag_RootButtons|
+                      RD_WatchViewFlag_PrettyNameMembers,
+                      str8_lit("targets"),
+                      str8_lit("only:label exe args working_directory entry_point str"), 0, 10, rect);
   ProfEnd();
 }
 
@@ -5863,7 +5895,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(modules)
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member, 0.20f, .string = str8_lit("label.str"),             .display_string = str8_lit("Name"),            .dequote_string = 1, .is_non_code = 1);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member, 0.30f, .string = str8_lit("exe.str"),               .display_string = str8_lit("Executable Path"), .dequote_string = 1, .is_non_code = 1);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member, 0.30f, .string = str8_lit("dbg.str"),               .display_string = str8_lit("Debug Info Path"), .dequote_string = 1, .is_non_code = 1);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member, 0.20f, .string = str8_lit("vaddr_range"),           .display_string = str8_lit("Address Range"),   .view_rule = str8_lit("hex"));
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member, 0.20f, .string = str8_lit("vaddr_range"),           .display_string = str8_lit("Address Range"),   .rangify_braces = 1, .view_rule = str8_lit("hex"));
   }
   rd_watch_view_build(wv, 0, str8_lit("modules"), str8_lit(""), 0, 10, rect);
   ProfEnd();

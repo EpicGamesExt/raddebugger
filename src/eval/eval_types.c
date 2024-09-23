@@ -453,9 +453,13 @@ e_type_key_cons_base(Type *type)
     {
       E_TypeKey direct_type = e_type_key_cons_base(type->direct);
       E_TypeFlags flags = 0;
-      if(type->is_external)
+      if(type->flags & TypeFlag_IsExternal)
       {
         flags |= E_TypeFlag_External;
+      }
+      if(type->flags & TypeFlag_IsCode)
+      {
+        flags |= E_TypeFlag_IsCode;
       }
       result = e_type_key_cons_ptr(arch_from_context(), direct_type, flags);
     }break;
@@ -471,7 +475,7 @@ e_type_key_cons_base(Type *type)
       for(U64 idx = 0; idx < type->count; idx += 1)
       {
         E_TypeKey member_type_key = e_type_key_cons_base(type->members[idx].type);
-        e_member_list_push_new(scratch.arena, &members, .name = type->members[idx].name, .off = type->members[idx].value, .type_key = member_type_key);
+        e_member_list_push_new(scratch.arena, &members, .name = type->members[idx].name, .off = type->members[idx].value, .type_key = member_type_key, .pretty_name = type->members[idx].pretty_name);
       }
       E_MemberArray members_array = e_member_array_from_list(scratch.arena, &members);
       result = e_type_key_cons(.arch    = arch_from_context(),

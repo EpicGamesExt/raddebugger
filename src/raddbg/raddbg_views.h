@@ -44,8 +44,9 @@ struct RD_CodeViewBuildResult
 typedef U32 RD_WatchViewFlags;
 enum
 {
-  RD_WatchViewFlag_NoHeader    = (1<<0),
-  RD_WatchViewFlag_RootButtons = (1<<1),
+  RD_WatchViewFlag_NoHeader          = (1<<0),
+  RD_WatchViewFlag_RootButtons       = (1<<1),
+  RD_WatchViewFlag_PrettyNameMembers = (1<<2),
 };
 
 typedef enum RD_WatchViewColumnKind
@@ -69,6 +70,7 @@ struct RD_WatchViewColumnParams
   String8 view_rule;
   B32 is_non_code;
   B32 dequote_string;
+  B32 rangify_braces;
 };
 
 typedef struct RD_WatchViewColumn RD_WatchViewColumn;
@@ -86,6 +88,7 @@ struct RD_WatchViewColumn
   U64 view_rule_size;
   B32 is_non_code;
   B32 dequote_string;
+  B32 rangify_braces;
 };
 
 typedef struct RD_WatchViewPoint RD_WatchViewPoint;

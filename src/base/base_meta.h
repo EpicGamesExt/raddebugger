@@ -97,6 +97,13 @@ typedef enum TypeKind
 }
 TypeKind;
 
+typedef U32 TypeFlags;
+enum
+{
+  TypeFlag_IsExternal = (1<<0),
+  TypeFlag_IsCode     = (1<<1),
+};
+
 typedef U32 MemberFlags;
 enum
 {
@@ -108,6 +115,7 @@ typedef struct Member Member;
 struct Member
 {
   String8 name;
+  String8 pretty_name;
   Type *type;
   U64 value;
   MemberFlags flags;
@@ -117,13 +125,13 @@ typedef struct Type Type;
 struct Type
 {
   TypeKind kind;
+  TypeFlags flags;
   U64 size;
   Type *direct;
   String8 name;
   String8 count_delimiter_name; // gathered from surrounding members, turns *->[1] into *->[N]
   U64 count;
   Member *members;
-  B32 is_external;
 };
 
 ////////////////////////////////
@@ -154,36 +162,36 @@ struct TypeSerializeParams
 ////////////////////////////////
 //~ rjf: Type Info Table Initializer Helpers
 
-#define member_lit_comp(S, ti, m, ...) {str8_lit_comp(#m), (ti), OffsetOf(S, m), __VA_ARGS__}
+#define member_lit_comp(S, ti, m, ...) {str8_lit_comp(#m), {0}, (ti), OffsetOf(S, m), __VA_ARGS__}
 #define struct_members(S) read_only global Member S##__members[] =
-#define struct_type(S) read_only global Type S##__type = {TypeKind_Struct, sizeof(S), &type_nil, str8_lit_comp(#S), {0}, ArrayCount(S##__members), S##__members}
-#define ptr_type(name, ti, ...) read_only global Type name = {TypeKind_Ptr, sizeof(void *), (ti), __VA_ARGS__}
+#define struct_type(S) read_only global Type S##__type = {TypeKind_Struct, 0, sizeof(S), &type_nil, str8_lit_comp(#S), {0}, ArrayCount(S##__members), S##__members}
+#define ptr_type(name, ti, ...) read_only global Type name = {TypeKind_Ptr, 0, sizeof(void *), (ti), __VA_ARGS__}
 
 ////////////////////////////////
 //~ rjf: Globals
 
-read_only global Type type_nil   = {TypeKind_Null, 0, &type_nil};
-read_only global Member member_nil = {{0}, &type_nil};
+read_only global Type type_nil   = {TypeKind_Null, 0, 0, &type_nil};
+read_only global Member member_nil = {{0}, {0}, &type_nil};
 
 ////////////////////////////////
 //~ rjf: Built-In Types
 
 //- rjf: leaves
-read_only global Type void__type = {TypeKind_Void, 0,           &type_nil, str8_lit_comp("void")};
-read_only global Type U8__type   = {TypeKind_U8,   sizeof(U8),  &type_nil, str8_lit_comp("U8")};
-read_only global Type U16__type  = {TypeKind_U16,  sizeof(U16), &type_nil, str8_lit_comp("U16")};
-read_only global Type U32__type  = {TypeKind_U32,  sizeof(U32), &type_nil, str8_lit_comp("U32")};
-read_only global Type U64__type  = {TypeKind_U64,  sizeof(U64), &type_nil, str8_lit_comp("U64")};
-read_only global Type S8__type   = {TypeKind_S8,   sizeof(S8),  &type_nil, str8_lit_comp("S8")};
-read_only global Type S16__type  = {TypeKind_S16,  sizeof(S16), &type_nil, str8_lit_comp("S16")};
-read_only global Type S32__type  = {TypeKind_S32,  sizeof(S32), &type_nil, str8_lit_comp("S32")};
-read_only global Type S64__type  = {TypeKind_S64,  sizeof(S64), &type_nil, str8_lit_comp("S64")};
-read_only global Type B8__type   = {TypeKind_B8,   sizeof(B8),  &type_nil, str8_lit_comp("B8")};
-read_only global Type B16__type  = {TypeKind_B16,  sizeof(B16), &type_nil, str8_lit_comp("B16")};
-read_only global Type B32__type  = {TypeKind_B32,  sizeof(B32), &type_nil, str8_lit_comp("B32")};
-read_only global Type B64__type  = {TypeKind_B64,  sizeof(B64), &type_nil, str8_lit_comp("B64")};
-read_only global Type F32__type  = {TypeKind_F32,  sizeof(F32), &type_nil, str8_lit_comp("F32")};
-read_only global Type F64__type  = {TypeKind_F64,  sizeof(F64), &type_nil, str8_lit_comp("F64")};
+read_only global Type void__type = {TypeKind_Void, 0, 0,           &type_nil, str8_lit_comp("void")};
+read_only global Type U8__type   = {TypeKind_U8,   0, sizeof(U8),  &type_nil, str8_lit_comp("U8")};
+read_only global Type U16__type  = {TypeKind_U16,  0, sizeof(U16), &type_nil, str8_lit_comp("U16")};
+read_only global Type U32__type  = {TypeKind_U32,  0, sizeof(U32), &type_nil, str8_lit_comp("U32")};
+read_only global Type U64__type  = {TypeKind_U64,  0, sizeof(U64), &type_nil, str8_lit_comp("U64")};
+read_only global Type S8__type   = {TypeKind_S8,   0, sizeof(S8),  &type_nil, str8_lit_comp("S8")};
+read_only global Type S16__type  = {TypeKind_S16,  0, sizeof(S16), &type_nil, str8_lit_comp("S16")};
+read_only global Type S32__type  = {TypeKind_S32,  0, sizeof(S32), &type_nil, str8_lit_comp("S32")};
+read_only global Type S64__type  = {TypeKind_S64,  0, sizeof(S64), &type_nil, str8_lit_comp("S64")};
+read_only global Type B8__type   = {TypeKind_B8,   0, sizeof(B8),  &type_nil, str8_lit_comp("B8")};
+read_only global Type B16__type  = {TypeKind_B16,  0, sizeof(B16), &type_nil, str8_lit_comp("B16")};
+read_only global Type B32__type  = {TypeKind_B32,  0, sizeof(B32), &type_nil, str8_lit_comp("B32")};
+read_only global Type B64__type  = {TypeKind_B64,  0, sizeof(B64), &type_nil, str8_lit_comp("B64")};
+read_only global Type F32__type  = {TypeKind_F32,  0, sizeof(F32), &type_nil, str8_lit_comp("F32")};
+read_only global Type F64__type  = {TypeKind_F64,  0, sizeof(F64), &type_nil, str8_lit_comp("F64")};
 
 //- rjf: Rng1U64
 struct_members(Rng1U64)
@@ -194,15 +202,16 @@ struct_members(Rng1U64)
 struct_type(Rng1U64);
 
 //- rjf: String8
-Type String8__str_ptr_type = {TypeKind_Ptr, sizeof(void *), type(U8), {0}, str8_lit_comp("size")};
+Type String8__str_ptr_type = {TypeKind_Ptr, 0, sizeof(void *), type(U8), {0}, str8_lit_comp("size")};
 Member String8__members[] =
 {
-  {str8_lit_comp("str"),  &String8__str_ptr_type, OffsetOf(String8, str)},
-  {str8_lit_comp("size"), type(U64),              OffsetOf(String8, size)},
+  {str8_lit_comp("str"),  {0}, &String8__str_ptr_type, OffsetOf(String8, str)},
+  {str8_lit_comp("size"), {0}, type(U64),              OffsetOf(String8, size)},
 };
 Type String8__type =
 {
   TypeKind_Struct,
+  0,
   sizeof(String8),
   &type_nil,
   str8_lit_comp("String8"),
@@ -211,17 +220,37 @@ Type String8__type =
   String8__members,
 };
 
+//- rjf: String8 (code contents)
+Type String8__code_str_ptr_type = {TypeKind_Ptr, TypeFlag_IsCode, sizeof(void *), type(U8), {0}, str8_lit_comp("size")};
+Member String8__code_members[] =
+{
+  {str8_lit_comp("str"),  {0}, &String8__code_str_ptr_type, OffsetOf(String8, str)},
+  {str8_lit_comp("size"), {0}, type(U64),                   OffsetOf(String8, size)},
+};
+Type String8__code_type =
+{
+  TypeKind_Struct,
+  0,
+  sizeof(String8),
+  &type_nil,
+  str8_lit_comp("String8"),
+  {0},
+  ArrayCount(String8__code_members),
+  String8__code_members,
+};
+
 //- rjf: String8Node
 extern Type String8Node__type;
-Type String8Node__ptr_type = {TypeKind_Ptr, sizeof(void *), &String8Node__type};
+Type String8Node__ptr_type = {TypeKind_Ptr, 0, sizeof(void *), &String8Node__type};
 Member String8Node__members[] =
 {
-  {str8_lit_comp("next"),   &String8Node__ptr_type,     OffsetOf(String8Node, next)},
-  {str8_lit_comp("string"), type(String8),              OffsetOf(String8Node, string)},
+  {str8_lit_comp("next"),   {0}, &String8Node__ptr_type,     OffsetOf(String8Node, next)},
+  {str8_lit_comp("string"), {0}, type(String8),              OffsetOf(String8Node, string)},
 };
 Type String8Node__type =
 {
   TypeKind_Struct,
+  0,
   sizeof(String8Node),
   &type_nil,
   str8_lit_comp("String8Node"),
@@ -233,14 +262,15 @@ Type String8Node__type =
 //- rjf: String8List
 Member String8List__members[] =
 {
-  {str8_lit_comp("first"),      &String8Node__ptr_type,     OffsetOf(String8List, first)},
-  {str8_lit_comp("last"),       &String8Node__ptr_type,     OffsetOf(String8List, last), MemberFlag_DoNotSerialize},
-  {str8_lit_comp("node_count"), type(U64), OffsetOf(String8List, node_count)},
-  {str8_lit_comp("total_size"), type(U64), OffsetOf(String8List, total_size)},
+  {str8_lit_comp("first"),      {0}, &String8Node__ptr_type,     OffsetOf(String8List, first)},
+  {str8_lit_comp("last"),       {0}, &String8Node__ptr_type,     OffsetOf(String8List, last), MemberFlag_DoNotSerialize},
+  {str8_lit_comp("node_count"), {0}, type(U64), OffsetOf(String8List, node_count)},
+  {str8_lit_comp("total_size"), {0}, type(U64), OffsetOf(String8List, total_size)},
 };
 Type String8List__type =
 {
   TypeKind_Struct,
+  0,
   sizeof(String8List),
   &type_nil,
   str8_lit_comp("String8List"),

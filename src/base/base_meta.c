@@ -45,7 +45,7 @@ typed_data_rebase_ptrs(Type *type, String8 data, void *base_ptr)
     {
       default:{}break;
       case TypeKind_Ptr:
-      if(!t->type->is_external)
+      if(!(t->type->flags & TypeFlag_IsExternal))
       {
         *(U64 *)t->ptr = ((U64)(*(U8 **)t->ptr - (U8 *)base_ptr));
       }break;

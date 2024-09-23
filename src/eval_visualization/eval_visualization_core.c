@@ -950,19 +950,6 @@ ev_row_list_push_new(Arena *arena, EV_View *view, EV_WindowedRowList *rows, EV_B
   row->size_in_rows = 1;
   row->string       = block->string;
   row->expr         = expr_resolved;
-  if(row->expr->kind == E_ExprKind_MemberAccess)
-  {
-    Temp scratch = scratch_begin(&arena, 1);
-    E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, row->expr->first);
-    E_TypeKey type = irtree.type_key;
-    E_MemberArray data_members = e_type_data_members_from_key(scratch.arena, type);
-    E_Member *member = e_type_member_from_array_name(&data_members, row->expr->last->string);
-    if(member != 0)
-    {
-      row->member = e_type_member_copy(arena, member);
-    }
-    scratch_end(scratch);
-  }
   row->view_rules = view_rules;
   return row;
 }
@@ -1081,7 +1068,11 @@ ev_windowed_row_list_from_block_list(Arena *arena, EV_View *view, Rng1S64 visibl
         {
           EV_Key key = ev_key_make(ev_hash_from_key(block->parent_key), idx+1);
           E_Expr *expr = ev_expr_from_block_index(arena, block, idx);
-          ev_row_list_push_new(arena, view, &list, block, key, expr);
+          EV_Row *row = ev_row_list_push_new(arena, view, &list, block, key, expr);
+          if(block->kind == EV_BlockKind_Members && idx < block->members.count)
+          {
+            row->member = e_type_member_copy(arena, &block->members.v[idx]);
+          }
         }
       }break;
     }
@@ -1125,7 +1116,14 @@ ev_expr_string_from_row(Arena *arena, EV_Row *row)
     }break;
     case E_ExprKind_MemberAccess:
     {
-      result = push_str8f(arena, ".%S", e_string_from_expr(arena, notable_expr->last));
+      if(row->member != 0 && row->member->pretty_name.size != 0)
+      {
+        result = push_str8_copy(arena, row->member->pretty_name);
+      }
+      else
+      {
+        result = push_str8f(arena, ".%S", e_string_from_expr(arena, notable_expr->last));
+      }
     }break;
   }
   return result;
