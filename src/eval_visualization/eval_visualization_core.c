@@ -527,7 +527,7 @@ internal void
 ev_block_end(EV_BlockList *list, EV_Block *block)
 {
   EV_BlockNode *n = CastFromMember(EV_BlockNode, v, block);
-  SLLQueuePush(list->first, list->last, n);
+  DLLPushBack(list->first, list->last, n);
   list->count += 1;
   list->total_visual_row_count += dim_1u64(block->visual_idx_range);
   list->total_semantic_row_count += dim_1u64(block->semantic_idx_range);
@@ -563,7 +563,8 @@ ev_append_expr_blocks__rec(Arena *arena, EV_View *view, String8 filter, EV_Key p
   //- rjf: do view rule children block generation, if we have an applicable view rule
   if(parent_is_expanded && block_prod_view_rule_info != &ev_nil_view_rule_info)
   {
-    block_prod_view_rule_info->block_prod(arena, view, filter, parent_key, key, node, string, expr, view_rules, block_prod_view_rule_params, depth+1, list_out);
+    E_Expr *expr_resolved = ev_expr_from_expr_view_rules(arena, expr, view_rules);
+    block_prod_view_rule_info->block_prod(arena, view, filter, parent_key, key, node, string, expr_resolved, view_rules, block_prod_view_rule_params, depth+1, list_out);
   }
   
   scratch_end(scratch);
@@ -639,7 +640,7 @@ ev_block_list_from_view_expr_keys(Arena *arena, EV_View *view, String8 filter, E
     }
     
     //- rjf: push expansions for root
-    ev_append_expr_blocks__rec(arena, view, filter, parent_key, key, expr, expr_resolved, view_rule_list, depth, &blocks);
+    ev_append_expr_blocks__rec(arena, view, filter, parent_key, key, expr, parse.expr, view_rule_list, depth, &blocks);
   }
   ProfEnd();
   return blocks;
@@ -1094,19 +1095,37 @@ internal String8
 ev_expr_string_from_row(Arena *arena, EV_Row *row)
 {
   String8 result = row->string;
-  if(result.size == 0) switch(row->expr->kind)
+  E_Expr *notable_expr = row->expr;
+  for(B32 good = 0; !good;)
+  {
+    switch(notable_expr->kind)
+    {
+      default:{good = 1;}break;
+      case E_ExprKind_Address:
+      case E_ExprKind_Deref:
+      case E_ExprKind_Cast:
+      {
+        notable_expr = notable_expr->last;
+      }break;
+      case E_ExprKind_Ref:
+      {
+        notable_expr = notable_expr->ref;
+      }break;
+    }
+  }
+  if(result.size == 0) switch(notable_expr->kind)
   {
     default:
     {
-      result = e_string_from_expr(arena, row->expr);
+      result = e_string_from_expr(arena, notable_expr);
     }break;
     case E_ExprKind_ArrayIndex:
     {
-      result = push_str8f(arena, "[%S]", e_string_from_expr(arena, row->expr->last));
+      result = push_str8f(arena, "[%S]", e_string_from_expr(arena, notable_expr->last));
     }break;
     case E_ExprKind_MemberAccess:
     {
-      result = push_str8f(arena, ".%S", e_string_from_expr(arena, row->expr->last));
+      result = push_str8f(arena, ".%S", e_string_from_expr(arena, notable_expr->last));
     }break;
   }
   return result;

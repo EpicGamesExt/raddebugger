@@ -7877,14 +7877,14 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(rd_collection_block_prod)
   {
     Temp scratch = scratch_begin(&arena, 1);
     RD_EntityList watches = rd_query_cached_entity_list_with_kind(RD_EntityKind_Watch);
-    EV_ViewRuleList top_level_view_rules = {0};
+    EV_ViewRuleList *view_rules_inherited = ev_view_rule_list_from_inheritance(arena, view_rules);
     for(RD_EntityNode *n = watches.first; n != 0; n = n->next)
     {
       RD_Entity *entity = n->entity;
       String8 entity_expr_string = entity->string;
       EV_Key entity_parent_key = rd_parent_ev_key_from_entity(entity);
       EV_Key entity_key = rd_ev_key_from_entity(entity);
-      EV_BlockList blocks = ev_block_list_from_view_expr_keys(arena, view, filter, &top_level_view_rules, entity_expr_string, entity_parent_key, entity_key, depth);
+      EV_BlockList blocks = ev_block_list_from_view_expr_keys(arena, view, filter, view_rules_inherited, entity_expr_string, entity_parent_key, entity_key, depth);
       FuzzyMatchRangeList matches = fuzzy_match_find(scratch.arena, filter, entity_expr_string);
       if(blocks.total_semantic_row_count > 1 || matches.count == matches.needle_part_count)
       {
@@ -7901,18 +7901,14 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(rd_collection_block_prod)
   {
     Temp scratch = scratch_begin(&arena, 1);
     RD_EntityList targets = rd_query_cached_entity_list_with_kind(RD_EntityKind_Target);
-    EV_ViewRuleList top_level_view_rules = {0};
-    EV_Key addnew_key = ev_key_make(ev_hash_from_key(key), 1);
-    EV_Block *addnew_block = ev_block_begin(arena, EV_BlockKind_Canvas, key, addnew_key, depth);
-    addnew_block->visual_idx_range = addnew_block->semantic_idx_range = r1u64(0, 1);
-    ev_block_end(out, addnew_block);
+    EV_ViewRuleList *view_rules_inherited = ev_view_rule_list_from_inheritance(arena, view_rules);
     for(RD_EntityNode *n = targets.first; n != 0; n = n->next)
     {
       RD_Entity *target = n->entity;
       String8 target_expr_string = push_str8f(arena, "$%I64u", target->id);
       EV_Key target_parent_key = key;
       EV_Key target_key = ev_key_make(ev_hash_from_key(target_parent_key), target->id);
-      EV_BlockList blocks = ev_block_list_from_view_expr_keys(arena, view, str8_zero(), &top_level_view_rules, target_expr_string, target_parent_key, target_key, depth);
+      EV_BlockList blocks = ev_block_list_from_view_expr_keys(arena, view, str8_zero(), view_rules_inherited, target_expr_string, target_parent_key, target_key, depth);
       ev_block_list_concat__in_place(out, &blocks);
     }
     scratch_end(scratch);
@@ -7925,14 +7921,14 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(rd_collection_block_prod)
   {
     Temp scratch = scratch_begin(&arena, 1);
     RD_EntityList bps = rd_query_cached_entity_list_with_kind(RD_EntityKind_Breakpoint);
-    EV_ViewRuleList top_level_view_rules = {0};
+    EV_ViewRuleList *view_rules_inherited = ev_view_rule_list_from_inheritance(arena, view_rules);
     for(RD_EntityNode *n = bps.first; n != 0; n = n->next)
     {
       RD_Entity *bp = n->entity;
       String8 bp_expr_string = push_str8f(arena, "$%I64u", bp->id);
       EV_Key bp_parent_key = key;
       EV_Key bp_key = ev_key_make(ev_hash_from_key(bp_parent_key), bp->id);
-      EV_BlockList blocks = ev_block_list_from_view_expr_keys(arena, view, str8_zero(), &top_level_view_rules, bp_expr_string, bp_parent_key, bp_key, depth);
+      EV_BlockList blocks = ev_block_list_from_view_expr_keys(arena, view, str8_zero(), view_rules_inherited, bp_expr_string, bp_parent_key, bp_key, depth);
       ev_block_list_concat__in_place(out, &blocks);
     }
     scratch_end(scratch);
@@ -7945,14 +7941,14 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(rd_collection_block_prod)
   {
     Temp scratch = scratch_begin(&arena, 1);
     RD_EntityList wps = rd_query_cached_entity_list_with_kind(RD_EntityKind_WatchPin);
-    EV_ViewRuleList top_level_view_rules = {0};
+    EV_ViewRuleList *view_rules_inherited = ev_view_rule_list_from_inheritance(arena, view_rules);
     for(RD_EntityNode *n = wps.first; n != 0; n = n->next)
     {
       RD_Entity *wp = n->entity;
       String8 wp_expr_string = push_str8f(arena, "$%I64u", wp->id);
       EV_Key wp_parent_key = key;
       EV_Key wp_key = ev_key_make(ev_hash_from_key(wp_parent_key), wp->id);
-      EV_BlockList blocks = ev_block_list_from_view_expr_keys(arena, view, str8_zero(), &top_level_view_rules, wp_expr_string, wp_parent_key, wp_key, depth);
+      EV_BlockList blocks = ev_block_list_from_view_expr_keys(arena, view, str8_zero(), view_rules_inherited, wp_expr_string, wp_parent_key, wp_key, depth);
       ev_block_list_concat__in_place(out, &blocks);
     }
     scratch_end(scratch);
@@ -7965,14 +7961,14 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(rd_collection_block_prod)
   {
     Temp scratch = scratch_begin(&arena, 1);
     CTRL_EntityList entities = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Thread);
-    EV_ViewRuleList top_level_view_rules = {0};
+    EV_ViewRuleList *view_rules_inherited = ev_view_rule_list_from_inheritance(arena, view_rules);
     for(CTRL_EntityNode *n = entities.first; n != 0; n = n->next)
     {
       CTRL_Entity *entity = n->v;
       String8 entity_expr_string = push_str8f(arena, "$_%I64x_%I64x", entity->handle.machine_id, entity->handle.dmn_handle.u64[0]);
       EV_Key entity_parent_key = key;
       EV_Key entity_key = ev_key_make(ev_hash_from_key(entity_parent_key), d_hash_from_string(entity_expr_string));
-      EV_BlockList blocks = ev_block_list_from_view_expr_keys(arena, view, str8_zero(), &top_level_view_rules, entity_expr_string, entity_parent_key, entity_key, depth);
+      EV_BlockList blocks = ev_block_list_from_view_expr_keys(arena, view, str8_zero(), view_rules_inherited, entity_expr_string, entity_parent_key, entity_key, depth);
       ev_block_list_concat__in_place(out, &blocks);
     }
     scratch_end(scratch);
@@ -7985,14 +7981,14 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(rd_collection_block_prod)
   {
     Temp scratch = scratch_begin(&arena, 1);
     CTRL_EntityList entities = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Module);
-    EV_ViewRuleList top_level_view_rules = {0};
+    EV_ViewRuleList *view_rules_inherited = ev_view_rule_list_from_inheritance(arena, view_rules);
     for(CTRL_EntityNode *n = entities.first; n != 0; n = n->next)
     {
       CTRL_Entity *entity = n->v;
       String8 entity_expr_string = push_str8f(arena, "$_%I64x_%I64x", entity->handle.machine_id, entity->handle.dmn_handle.u64[0]);
       EV_Key entity_parent_key = key;
       EV_Key entity_key = ev_key_make(ev_hash_from_key(entity_parent_key), d_hash_from_string(entity_expr_string));
-      EV_BlockList blocks = ev_block_list_from_view_expr_keys(arena, view, str8_zero(), &top_level_view_rules, entity_expr_string, entity_parent_key, entity_key, depth);
+      EV_BlockList blocks = ev_block_list_from_view_expr_keys(arena, view, str8_zero(), view_rules_inherited, entity_expr_string, entity_parent_key, entity_key, depth);
       ev_block_list_concat__in_place(out, &blocks);
     }
     scratch_end(scratch);
@@ -8006,7 +8002,7 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(rd_collection_block_prod)
     Temp scratch = scratch_begin(&arena, 1);
     E_String2NumMapNodeArray nodes = e_string2num_map_node_array_from_map(scratch.arena, e_parse_ctx->locals_map);
     e_string2num_map_node_array_sort__in_place(&nodes);
-    EV_ViewRuleList top_level_view_rules = {0};
+    EV_ViewRuleList *view_rules_inherited = ev_view_rule_list_from_inheritance(arena, view_rules);
     for(U64 idx = 0; idx < nodes.count; idx += 1)
     {
       E_String2NumMapNode *n = nodes.v[idx];
@@ -8016,7 +8012,7 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(rd_collection_block_prod)
       {
         EV_Key local_parent_key = key;
         EV_Key local_key = ev_key_make(ev_hash_from_key(local_parent_key), idx+1);
-        EV_BlockList root_blocks = ev_block_list_from_view_expr_keys(arena, view, str8_zero(), &top_level_view_rules, root_expr_string, local_parent_key, local_key, depth);
+        EV_BlockList root_blocks = ev_block_list_from_view_expr_keys(arena, view, str8_zero(), view_rules_inherited, root_expr_string, local_parent_key, local_key, depth);
         ev_block_list_concat__in_place(out, &root_blocks);
       }
     }
@@ -8036,8 +8032,8 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(rd_collection_block_prod)
     U64 alias_count = regs_alias_code_count_from_arch(arch);
     String8 *alias_strings = regs_alias_code_string_table_from_arch(arch);
     U64 num = 1;
-    EV_ViewRuleList top_level_view_rules = {0};
-    ev_view_rule_list_push_string(arena, &top_level_view_rules, str8_lit("hex"));
+    EV_ViewRuleList *view_rules_inherited = ev_view_rule_list_from_inheritance(arena, view_rules);
+    ev_view_rule_list_push_string(arena, view_rules_inherited, str8_lit("hex"));
     for(U64 reg_idx = 1; reg_idx < reg_count; reg_idx += 1, num += 1)
     {
       String8 root_expr_string = push_str8f(arena, "reg:%S", reg_strings[reg_idx]);
@@ -8046,7 +8042,7 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(rd_collection_block_prod)
       {
         EV_Key reg_parent_key = key;
         EV_Key reg_key = ev_key_make(ev_hash_from_key(reg_parent_key), num);
-        EV_BlockList root_blocks = ev_block_list_from_view_expr_keys(arena, view, str8_zero(), &top_level_view_rules, root_expr_string, reg_parent_key, reg_key, depth);
+        EV_BlockList root_blocks = ev_block_list_from_view_expr_keys(arena, view, str8_zero(), view_rules_inherited, root_expr_string, reg_parent_key, reg_key, depth);
         ev_block_list_concat__in_place(out, &root_blocks);
       }
     }
@@ -8058,7 +8054,7 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(rd_collection_block_prod)
       {
         EV_Key reg_parent_key = ev_key_make(5381, 0);
         EV_Key reg_key = ev_key_make(ev_hash_from_key(reg_parent_key), num);
-        EV_BlockList root_blocks = ev_block_list_from_view_expr_keys(arena, view, str8_zero(), &top_level_view_rules, root_expr_string, reg_parent_key, reg_key, depth);
+        EV_BlockList root_blocks = ev_block_list_from_view_expr_keys(arena, view, str8_zero(), view_rules_inherited, root_expr_string, reg_parent_key, reg_key, depth);
         ev_block_list_concat__in_place(out, &root_blocks);
       }
     }
@@ -8074,7 +8070,6 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(rd_collection_block_prod)
           str8_match(string, str8_lit("procedures"), 0))
   {
     Temp scratch = scratch_begin(&arena, 1);
-    EV_ViewRuleList top_level_view_rules = {0};
     RDI_SectionKind fzy_target = (str8_match(string, str8_lit("globals"), 0) ?       RDI_SectionKind_GlobalVariables :
                                   str8_match(string, str8_lit("thread_locals"), 0) ? RDI_SectionKind_ThreadVariables :
                                   str8_match(string, str8_lit("types"), 0) ?         RDI_SectionKind_UDTs :
@@ -8184,7 +8179,7 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(rd_collection_block_prod)
         last_vb = ev_block_split_and_continue(arena, out, last_vb, sub_expand_item_idxs[sub_expand_idx]);
         
         // rjf: build child view rules
-        EV_ViewRuleList *child_view_rules = ev_view_rule_list_from_inheritance(arena, &top_level_view_rules);
+        EV_ViewRuleList *child_view_rules = ev_view_rule_list_from_inheritance(arena, view_rules);
         {
           String8 view_rule_string = ev_view_rule_from_key(view, sub_expand_keys[sub_expand_idx]);
           if(view_rule_string.size != 0)
@@ -8555,7 +8550,8 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
         {
           E_Member *mem = &data_members.v[member_idx];
           E_Expr *dot_expr = e_expr_ref_member_access(scratch.arena, eval.expr, mem->name);
-          E_Eval dot_eval = e_eval_from_expr(scratch.arena, dot_expr);
+          E_Expr *dot_expr_resolved = ev_expr_from_expr_view_rules(scratch.arena, dot_expr, view_rules);
+          E_Eval dot_eval = e_eval_from_expr(scratch.arena, dot_expr_resolved);
           space_taken += rd_append_value_strings_from_eval(arena, flags, radix, font, font_size, max_size-space_taken, depth+1, dot_eval, 0, view_rules, out);
           if(member_idx+1 < data_members.count)
           {

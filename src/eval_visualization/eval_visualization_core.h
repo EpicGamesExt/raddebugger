@@ -143,6 +143,7 @@ typedef struct EV_BlockNode EV_BlockNode;
 struct EV_BlockNode
 {
   EV_BlockNode *next;
+  EV_BlockNode *prev;
   EV_Block v;
 };
 

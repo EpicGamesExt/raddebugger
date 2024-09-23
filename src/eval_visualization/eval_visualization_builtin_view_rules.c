@@ -423,8 +423,16 @@ EV_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_DEF(only)
       }
     }
     E_MemberArray new_members_array = e_member_array_from_list(scratch.arena, &new_members);
-    String8 struct_name = e_type_string_from_key(scratch.arena, irtree.type_key);
-    E_TypeKey new_type = e_type_key_cons(.kind = E_TypeKind_Struct, .name = struct_name, .members = new_members_array.v, .count = new_members_array.count);
+    E_TypeKey new_type = {0};
+    if(new_members_array.count == 1 && new_members_array.v[0].off == 0)
+    {
+      new_type = new_members_array.v[0].type_key;
+    }
+    else
+    {
+      String8 struct_name = e_type_string_from_key(scratch.arena, irtree.type_key);
+      new_type = e_type_key_cons(.kind = E_TypeKind_Struct, .name = struct_name, .members = new_members_array.v, .count = new_members_array.count);
+    }
     expr = e_expr_ref_addr(arena, expr);
     expr = e_expr_ref_cast(arena, e_type_key_cons_ptr(e_type_state->ctx->primary_module->arch, new_type, 0), expr);
     expr = e_expr_ref_deref(arena, expr);
@@ -462,8 +470,16 @@ EV_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_DEF(omit)
       }
     }
     E_MemberArray new_members_array = e_member_array_from_list(scratch.arena, &new_members);
-    String8 struct_name = e_type_string_from_key(scratch.arena, irtree.type_key);
-    E_TypeKey new_type = e_type_key_cons(.kind = E_TypeKind_Struct, .name = struct_name, .members = new_members_array.v, .count = new_members_array.count);
+    E_TypeKey new_type = {0};
+    if(new_members_array.count == 1 && new_members_array.v[0].off == 0)
+    {
+      new_type = new_members_array.v[0].type_key;
+    }
+    else
+    {
+      String8 struct_name = e_type_string_from_key(scratch.arena, irtree.type_key);
+      new_type = e_type_key_cons(.kind = E_TypeKind_Struct, .name = struct_name, .members = new_members_array.v, .count = new_members_array.count);
+    }
     expr = e_expr_ref_addr(arena, expr);
     expr = e_expr_ref_cast(arena, e_type_key_cons_ptr(e_type_state->ctx->primary_module->arch, new_type, 0), expr);
     expr = e_expr_ref_deref(arena, expr);

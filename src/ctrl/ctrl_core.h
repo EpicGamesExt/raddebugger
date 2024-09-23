@@ -33,7 +33,7 @@ struct CTRL_MetaEvalFrameArray
   U64 count;
   CTRL_MetaEvalFrame *v;
 };
-ptr_type(CTRL_MetaEvalFrameArray__v_ptr_type, type(CTRL_MetaEvalFrame), .count_delimiter_name = str8_lit_comp("count"));
+ptr_type(CTRL_MetaEvalFrameArray__v_ptr_type, &CTRL_MetaEvalFrame__vaddr_type, .count_delimiter_name = str8_lit_comp("count"));
 struct_members(CTRL_MetaEvalFrameArray)
 {
   member_lit_comp(CTRL_MetaEvalFrameArray, type(U64), count),
