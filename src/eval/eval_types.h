@@ -68,6 +68,7 @@ enum
 {
   E_TypeFlag_Const    = (1<<0),
   E_TypeFlag_Volatile = (1<<1),
+  E_TypeFlag_External = (1<<2),
 };
 
 typedef struct E_Member E_Member;
@@ -140,6 +141,7 @@ struct E_ConsTypeParams
 {
   Arch arch;
   E_TypeKind kind;
+  E_TypeFlags flags;
   String8 name;
   E_TypeKey direct_key;
   U64 count;
@@ -242,7 +244,7 @@ internal E_TypeKey e_type_key_cons_(E_ConsTypeParams *params);
 
 //- rjf: constructed type construction helpers
 internal E_TypeKey e_type_key_cons_array(E_TypeKey element_type_key, U64 count);
-internal E_TypeKey e_type_key_cons_ptr(Arch arch, E_TypeKey element_type_key);
+internal E_TypeKey e_type_key_cons_ptr(Arch arch, E_TypeKey element_type_key, E_TypeFlags flags);
 internal E_TypeKey e_type_key_cons_base(Type *type);
 
 //- rjf: basic type key functions

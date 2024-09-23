@@ -292,7 +292,7 @@ EV_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_DEF(array)
     E_Value count = ev_value_from_params(params);
     E_TypeKey element_type_key = e_type_ptee_from_key(type_key);
     E_TypeKey array_type_key = e_type_key_cons_array(element_type_key, count.u64);
-    E_TypeKey ptr_type_key = e_type_key_cons_ptr(e_type_state->ctx->primary_module->arch, array_type_key);
+    E_TypeKey ptr_type_key = e_type_key_cons_ptr(e_type_state->ctx->primary_module->arch, array_type_key, 0);
     expr = e_expr_ref_cast(arena, ptr_type_key, expr);
   }
   scratch_end(scratch);
@@ -351,7 +351,7 @@ EV_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_DEF(slice)
       String8 struct_name = e_type_string_from_key(scratch.arena, irtree.type_key);
       E_TypeKey element_type_key = e_type_ptee_from_key(base_ptr_member->type_key);
       E_TypeKey array_type_key = e_type_key_cons_array(element_type_key, count);
-      E_TypeKey sized_base_ptr_type_key = e_type_key_cons_ptr(e_type_state->ctx->primary_module->arch, array_type_key);
+      E_TypeKey sized_base_ptr_type_key = e_type_key_cons_ptr(e_type_state->ctx->primary_module->arch, array_type_key, 0);
       E_MemberList slice_type_members = {0};
       e_member_list_push(scratch.arena, &slice_type_members, count_member);
       e_member_list_push(scratch.arena, &slice_type_members, &(E_Member){.kind = E_MemberKind_DataField, .type_key = sized_base_ptr_type_key, .name = base_ptr_member->name, .off = base_ptr_member->off});
@@ -367,7 +367,7 @@ EV_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_DEF(slice)
     if(base_ptr_member != 0 && count_member != 0)
     {
       expr = e_expr_ref_addr(arena, expr);
-      expr = e_expr_ref_cast(arena, e_type_key_cons_ptr(e_type_state->ctx->primary_module->arch, slice_type_key), expr);
+      expr = e_expr_ref_cast(arena, e_type_key_cons_ptr(e_type_state->ctx->primary_module->arch, slice_type_key, 0), expr);
       expr = e_expr_ref_deref(arena, expr);
     }
   }
@@ -426,7 +426,7 @@ EV_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_DEF(only)
     String8 struct_name = e_type_string_from_key(scratch.arena, irtree.type_key);
     E_TypeKey new_type = e_type_key_cons(.kind = E_TypeKind_Struct, .name = struct_name, .members = new_members_array.v, .count = new_members_array.count);
     expr = e_expr_ref_addr(arena, expr);
-    expr = e_expr_ref_cast(arena, e_type_key_cons_ptr(e_type_state->ctx->primary_module->arch, new_type), expr);
+    expr = e_expr_ref_cast(arena, e_type_key_cons_ptr(e_type_state->ctx->primary_module->arch, new_type, 0), expr);
     expr = e_expr_ref_deref(arena, expr);
   }
   scratch_end(scratch);
@@ -465,7 +465,7 @@ EV_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_DEF(omit)
     String8 struct_name = e_type_string_from_key(scratch.arena, irtree.type_key);
     E_TypeKey new_type = e_type_key_cons(.kind = E_TypeKind_Struct, .name = struct_name, .members = new_members_array.v, .count = new_members_array.count);
     expr = e_expr_ref_addr(arena, expr);
-    expr = e_expr_ref_cast(arena, e_type_key_cons_ptr(e_type_state->ctx->primary_module->arch, new_type), expr);
+    expr = e_expr_ref_cast(arena, e_type_key_cons_ptr(e_type_state->ctx->primary_module->arch, new_type, 0), expr);
     expr = e_expr_ref_deref(arena, expr);
   }
   scratch_end(scratch);

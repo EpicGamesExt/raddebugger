@@ -100,7 +100,7 @@ TypeKind;
 typedef U32 MemberFlags;
 enum
 {
-  MemberFlag_DoNotSerialize = (1<<0),
+  MemberFlag_DoNotSerialize  = (1<<0),
 };
 
 typedef struct Type Type;
@@ -123,6 +123,7 @@ struct Type
   String8 count_delimiter_name; // gathered from surrounding members, turns *->[1] into *->[N]
   U64 count;
   Member *members;
+  B32 is_external;
 };
 
 ////////////////////////////////

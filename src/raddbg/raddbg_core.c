@@ -7902,6 +7902,10 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(rd_collection_block_prod)
     Temp scratch = scratch_begin(&arena, 1);
     RD_EntityList targets = rd_query_cached_entity_list_with_kind(RD_EntityKind_Target);
     EV_ViewRuleList top_level_view_rules = {0};
+    EV_Key addnew_key = ev_key_make(ev_hash_from_key(key), 1);
+    EV_Block *addnew_block = ev_block_begin(arena, EV_BlockKind_Canvas, key, addnew_key, depth);
+    addnew_block->visual_idx_range = addnew_block->semantic_idx_range = r1u64(0, 1);
+    ev_block_end(out, addnew_block);
     for(RD_EntityNode *n = targets.first; n != 0; n = n->next)
     {
       RD_Entity *target = n->entity;
@@ -8255,7 +8259,19 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
   if(eval.space.kind == RD_EvalSpaceKind_MetaEntity ||
      eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity)
   {
-    no_addr = 1;
+    E_TypeKind kind = e_type_kind_from_key(eval.type_key);
+    if(kind != E_TypeKind_Ptr)
+    {
+      no_addr = 1;
+    }
+    else
+    {
+      E_Type *type = e_type_from_key(scratch.arena, eval.type_key);
+      if(!(type->flags & E_TypeFlag_External))
+      {
+        no_addr = 1;
+      }
+    }
   }
   
   //- rjf: member evaluations -> display member info

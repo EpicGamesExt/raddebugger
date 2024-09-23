@@ -81,22 +81,6 @@ struct RD_WatchViewColumn
   B32 dequote_string;
 };
 
-typedef enum RD_WatchViewFillKind
-{
-  RD_WatchViewFillKind_Watch,
-  RD_WatchViewFillKind_Breakpoints,
-  RD_WatchViewFillKind_WatchPins,
-  RD_WatchViewFillKind_CallStack,
-  RD_WatchViewFillKind_Registers,
-  RD_WatchViewFillKind_Locals,
-  RD_WatchViewFillKind_Globals,
-  RD_WatchViewFillKind_ThreadLocals,
-  RD_WatchViewFillKind_Types,
-  RD_WatchViewFillKind_Procedures,
-  RD_WatchViewFillKind_COUNT
-}
-RD_WatchViewFillKind;
-
 typedef struct RD_WatchViewPoint RD_WatchViewPoint;
 struct RD_WatchViewPoint
 {
@@ -122,9 +106,6 @@ typedef struct RD_WatchViewState RD_WatchViewState;
 struct RD_WatchViewState
 {
   B32 initialized;
-  
-  // rjf: fill kinds (way that the contents of the watch view are computed)
-  RD_WatchViewFillKind fill_kind;
   
   // rjf: column state
   Arena *column_arena;
@@ -176,7 +157,7 @@ internal RD_WatchViewColumn *rd_watch_view_column_alloc_(RD_WatchViewState *wv, 
 internal void rd_watch_view_column_release(RD_WatchViewState *wv, RD_WatchViewColumn *col);
 
 //- rjf: watch view main hooks
-internal void rd_watch_view_init(RD_WatchViewState *ewv, RD_WatchViewFillKind fill_kind);
+internal void rd_watch_view_init(RD_WatchViewState *ewv);
 internal void rd_watch_view_build(RD_WatchViewState *ewv, String8 root_expr, String8 root_view_rule, B32 modifiable, U32 default_radix, Rng2F32 rect);
 
 #endif // RADDBG_VIEWS_H

@@ -21,9 +21,10 @@ struct CTRL_MetaEvalFrame
 {
   U64 vaddr;
 };
+ptr_type(CTRL_MetaEvalFrame__vaddr_type, type(void), .is_external = 1, .size = sizeof(U64));
 struct_members(CTRL_MetaEvalFrame)
 {
-  member_lit_comp(CTRL_MetaEvalFrame, type(U64), vaddr),
+  member_lit_comp(CTRL_MetaEvalFrame, &CTRL_MetaEvalFrame__vaddr_type, vaddr),
 };
 struct_type(CTRL_MetaEvalFrame);
 typedef struct CTRL_MetaEvalFrameArray CTRL_MetaEvalFrameArray;

@@ -45,6 +45,7 @@ typed_data_rebase_ptrs(Type *type, String8 data, void *base_ptr)
     {
       default:{}break;
       case TypeKind_Ptr:
+      if(!t->type->is_external)
       {
         *(U64 *)t->ptr = ((U64)(*(U8 **)t->ptr - (U8 *)base_ptr));
       }break;
@@ -106,7 +107,7 @@ serialized_from_typed_data(Arena *arena, Type *type, String8 data, TypeSerialize
           str8_serial_push_string(scratch.arena, &strings, str8(t->src, t->type->size*t->count));
         }break;
         
-        //- rjf: pointers -> try to interpret/understand pointer & read/write, otherwise skip
+        //- rjf: pointers -> try to interpret/understand pointer & read/write, otherwise just write as plain data
         case TypeKind_Ptr:
         {
           // rjf: unpack info about this pointer
@@ -172,6 +173,12 @@ serialized_from_typed_data(Arena *arena, Type *type, String8 data, TypeSerialize
             task->containing_type      = t->containing_type;
             task->containing_ptr       = t->containing_ptr;
             SLLQueuePush(first_task, last_task, task);
+          }
+          
+          // rjf: catch-all: write pointer value
+          else
+          {
+            str8_serial_push_string(scratch.arena, &strings, str8(t->src, t->type->size*t->count));
           }
         }break;
         
@@ -338,6 +345,13 @@ deserialized_from_typed_data(Arena *arena, Type *type, String8 data, TypeSeriali
             task->containing_type      = t->containing_type;
             task->containing_ptr       = t->containing_ptr;
             SLLQueuePush(first_task, last_task, task);
+          }
+          
+          // rjf: catch-all: read pointer value
+          else
+          {
+            MemoryCopy(t->dst, t_src, t->type->size*t->count);
+            read_off += t->type->size*t->count;
           }
         }break;
         

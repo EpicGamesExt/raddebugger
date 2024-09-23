@@ -159,11 +159,6 @@ struct RD_SettingVal
 };
 
 ////////////////////////////////
-//~ rjf: View Hook Function Types
-
-typedef struct RD_View RD_View;
-
-////////////////////////////////
 //~ rjf: View Rule Info Types
 
 typedef U32 RD_ViewRuleInfoFlags;
@@ -185,6 +180,8 @@ typedef RD_VIEW_RULE_UI_FUNCTION_SIG(RD_ViewRuleUIFunctionType);
 
 ////////////////////////////////
 //~ rjf: View Types
+
+typedef struct RD_View RD_View;
 
 typedef struct RD_ArenaExt RD_ArenaExt;
 struct RD_ArenaExt

@@ -329,6 +329,7 @@ internal B32
 e_cons_type_params_match(E_ConsTypeParams *l, E_ConsTypeParams *r)
 {
   B32 result = (l->kind == r->kind &&
+                l->flags == r->flags &&
                 str8_match(l->name, r->name, 0) &&
                 e_type_key_match(l->direct_key, r->direct_key) &&
                 l->count == r->count);
@@ -430,9 +431,9 @@ e_type_key_cons_array(E_TypeKey element_type_key, U64 count)
 }
 
 internal E_TypeKey
-e_type_key_cons_ptr(Arch arch, E_TypeKey element_type_key)
+e_type_key_cons_ptr(Arch arch, E_TypeKey element_type_key, E_TypeFlags flags)
 {
-  E_TypeKey key = e_type_key_cons(.arch = arch, .kind = E_TypeKind_Ptr, .direct_key = element_type_key);
+  E_TypeKey key = e_type_key_cons(.arch = arch, .kind = E_TypeKind_Ptr, .flags = flags, .direct_key = element_type_key);
   return key;
 }
 
@@ -451,7 +452,12 @@ e_type_key_cons_base(Type *type)
     case TypeKind_Ptr:
     {
       E_TypeKey direct_type = e_type_key_cons_base(type->direct);
-      result = e_type_key_cons_ptr(arch_from_context(), direct_type);
+      E_TypeFlags flags = 0;
+      if(type->is_external)
+      {
+        flags |= E_TypeFlag_External;
+      }
+      result = e_type_key_cons_ptr(arch_from_context(), direct_type, flags);
     }break;
     case TypeKind_Array:
     {
@@ -591,6 +597,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
           {
             type = push_array(arena, E_Type, 1);
             type->kind             = e_type_kind_from_key(node->key);
+            type->flags            = node->params.flags;
             type->name             = push_str8_copy(arena, node->params.name);
             type->direct_type_key  = node->params.direct_key;
             type->count            = node->params.count;
