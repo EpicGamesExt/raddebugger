@@ -36,8 +36,8 @@ struct CTRL_MetaEvalFrameArray
 ptr_type(CTRL_MetaEvalFrameArray__v_ptr_type, &CTRL_MetaEvalFrame__vaddr_type, .count_delimiter_name = str8_lit_comp("count"));
 struct_members(CTRL_MetaEvalFrameArray)
 {
-  member_lit_comp(CTRL_MetaEvalFrameArray, type(U64), count),
-  {str8_lit_comp("v"), {0}, &CTRL_MetaEvalFrameArray__v_ptr_type, OffsetOf(CTRL_MetaEvalFrameArray, v)},
+  member_lit_comp(CTRL_MetaEvalFrameArray, type(U64), count, .pretty_name = str8_lit_comp("Frame Count")),
+  {str8_lit_comp("v"), str8_lit_comp("Frame Addresses"), &CTRL_MetaEvalFrameArray__v_ptr_type, OffsetOf(CTRL_MetaEvalFrameArray, v)},
 };
 struct_type(CTRL_MetaEvalFrameArray);
 

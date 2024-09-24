@@ -1387,6 +1387,7 @@ e_type_member_copy(Arena *arena, E_Member *src)
   E_Member *dst = push_array(arena, E_Member, 1);
   MemoryCopyStruct(dst, src);
   dst->name = push_str8_copy(arena, src->name);
+  dst->pretty_name = push_str8_copy(arena, src->pretty_name);
   dst->inheritance_key_chain = e_type_key_list_copy(arena, &src->inheritance_key_chain);
   return dst;
 }

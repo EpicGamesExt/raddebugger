@@ -814,7 +814,7 @@ rd_tbl_from_watch_view_point(EV_BlockList *blocks, RD_WatchViewPoint pt)
 //- rjf: table coordinates -> strings
 
 internal String8
-rd_string_from_eval_viz_row_column(Arena *arena, EV_View *ev, EV_Row *row, RD_WatchViewColumn *col, B32 editable, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size_px)
+rd_string_from_eval_viz_row_column(Arena *arena, EV_View *ev, EV_Row *row, RD_WatchViewColumn *col, EV_StringFlags string_flags, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size_px)
 {
   String8 result = {0};
   EV_ViewRuleList *view_rules = row->view_rules;
@@ -828,12 +828,12 @@ rd_string_from_eval_viz_row_column(Arena *arena, EV_View *ev, EV_Row *row, RD_Wa
     default:{}break;
     case RD_WatchViewColumnKind_Expr:
     {
-      result = ev_expr_string_from_row(arena, row);
+      result = ev_expr_string_from_row(arena, row, string_flags);
     }break;
     case RD_WatchViewColumnKind_Value:
     {
       E_Eval eval = e_eval_from_expr(arena, row->expr);
-      result = rd_value_string_from_eval(arena, !editable * EV_StringFlag_ReadOnlyDisplayRules, default_radix, font, font_size, max_size_px, eval, row->member, view_rules);
+      result = rd_value_string_from_eval(arena, string_flags, default_radix, font, font_size, max_size_px, eval, row->member, view_rules);
     }break;
     case RD_WatchViewColumnKind_Type:
     {
@@ -865,7 +865,7 @@ rd_string_from_eval_viz_row_column(Arena *arena, EV_View *ev, EV_Row *row, RD_Wa
         expr = e_expr_ref_member_access(arena, expr, n->string);
       }
       E_Eval eval = e_eval_from_expr(arena, expr);
-      result = rd_value_string_from_eval(arena, !editable * EV_StringFlag_ReadOnlyDisplayRules, default_radix, font, font_size, max_size_px, eval, row->member, view_rules);
+      result = rd_value_string_from_eval(arena, string_flags, default_radix, font, font_size, max_size_px, eval, row->member, view_rules);
       scratch_end(scratch);
     }break;
   }
@@ -979,6 +979,11 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
   S64 num_possible_visible_rows = (S64)(dim_2f32(rect).y/row_height_px);
   RD_EntityKind mutable_entity_kind = RD_EntityKind_Nil;
   F32 row_string_max_size_px = dim_2f32(rect).x;
+  EV_StringFlags string_flags = 0;
+  if(flags & RD_WatchViewFlag_PrettyNameMembers)
+  {
+    string_flags |= EV_StringFlag_PrettyNames;
+  }
   
   //////////////////////////////
   //- rjf: root-level view rule which has a ui hook? call into that to build the UI
@@ -1601,7 +1606,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
           for(S64 x = selection_tbl.min.x; x <= selection_tbl.max.x; x += 1)
           {
             RD_WatchViewColumn *col = rd_watch_view_column_from_x(ewv, x);
-            String8 string = rd_string_from_eval_viz_row_column(scratch.arena, eval_view, row, col, 1, default_radix, ui_top_font(), ui_top_font_size(), row_string_max_size_px);
+            String8 string = rd_string_from_eval_viz_row_column(scratch.arena, eval_view, row, col, string_flags, default_radix, ui_top_font(), ui_top_font_size(), row_string_max_size_px);
             string.size = Min(string.size, sizeof(ewv->dummy_text_edit_state.input_buffer));
             RD_WatchViewPoint pt = {x, row->parent_key, row->key};
             U64 hash = ev_hash_from_key(pt.key);
@@ -1866,7 +1871,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
           for(S64 x = selection_tbl.min.x; x <= selection_tbl.max.x; x += 1)
           {
             RD_WatchViewColumn *col = rd_watch_view_column_from_x(ewv, x);
-            String8 cell_string = rd_string_from_eval_viz_row_column(scratch.arena, eval_view, row, col, 0, default_radix, ui_top_font(), ui_top_font_size(), row_string_max_size_px);
+            String8 cell_string = rd_string_from_eval_viz_row_column(scratch.arena, eval_view, row, col, string_flags|EV_StringFlag_ReadOnlyDisplayRules, default_radix, ui_top_font(), ui_top_font_size(), row_string_max_size_px);
             cell_string = str8_skip_chop_whitespace(cell_string);
             U64 comma_pos = str8_find_needle(cell_string, 0, str8_lit(","), 0);
             if(selection_tbl.min.x != selection_tbl.max.x || selection_tbl.min.y != selection_tbl.max.y)
@@ -2426,78 +2431,6 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
           }
           
           ////////////////////////
-          //- rjf: build button row
-          //
-          if(!did_row_build && row->depth == 0 && flags & RD_WatchViewFlag_RootButtons) UI_Parent(row_box) UI_HeightFill UI_FocusHot(row_selected ? UI_FocusKind_On : UI_FocusKind_Off)
-          {
-            did_row_build = 1;
-            switch(row_eval.space.kind)
-            {
-              default:{did_row_build = 0;}break;
-              case RD_EvalSpaceKind_MetaEntity:
-              {
-                RD_Entity *entity = rd_entity_from_eval_space(row_eval.space);
-                UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|UI_BoxFlag_DrawHotEffects|UI_BoxFlag_DrawActiveEffects, "###entity_%p", entity);
-                UI_Parent(box) UI_Focus(UI_FocusKind_Null)
-                {
-                  if(row_is_expandable) UI_PrefWidth(ui_em(2.f, 1.f))
-                  {
-                    if(ui_pressed(ui_expanderf(next_row_expanded, "###expand_%p", entity)))
-                    {
-                      next_row_expanded ^= 1;
-                    }
-                  }
-                  DR_FancyStringList fstrs = rd_title_fstrs_from_entity(scratch.arena, entity, rd_rgba_from_theme_color(RD_ThemeColor_TextWeak), ui_top_font_size());
-                  UI_Box *label = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
-                  ui_box_equip_display_fancy_strings(label, &fstrs);
-                  if(entity->kind == RD_EntityKind_Target) UI_PrefWidth(ui_em(3.f, 1.f))
-                  {
-                    rd_icon_buttonf(RD_IconKind_Play, 0, "###run");
-                    rd_icon_buttonf(RD_IconKind_StepInto, 0, "###step_into");
-                    rd_icon_buttonf(RD_IconKind_CheckHollow, 0, "###selected");
-                  }
-                }
-                UI_Signal sig = ui_signal_from_box(box);
-                if(ui_pressed(sig))
-                {
-                  RD_WatchViewPoint cell_pt = {0, row->parent_key, row->key};
-                  ewv->next_cursor = ewv->next_mark = cell_pt;
-                  pressed = 1;
-                }
-              }break;
-              case RD_EvalSpaceKind_MetaCtrlEntity:
-              {
-                CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(row_eval.space);
-                UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|UI_BoxFlag_DrawHotEffects|UI_BoxFlag_DrawActiveEffects, "###entity_%p", entity);
-                UI_Parent(box) UI_Focus(UI_FocusKind_Null)
-                {
-                  if(entity->kind == CTRL_EntityKind_Thread) UI_PrefWidth(ui_em(3.f, 1.f))
-                  {
-                    rd_icon_buttonf(RD_IconKind_Locked, 0, "###freeze");
-                  }
-                  if(row_is_expandable) UI_PrefWidth(ui_em(2.f, 1.f))
-                  {
-                    if(ui_pressed(ui_expanderf(next_row_expanded, "###expand_%p", entity)))
-                    {
-                      next_row_expanded ^= 1;
-                    }
-                  }
-                  DR_FancyStringList fstrs = rd_title_fstrs_from_ctrl_entity(scratch.arena, entity, rd_rgba_from_theme_color(RD_ThemeColor_TextWeak), ui_top_font_size());
-                  UI_Box *label = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
-                  ui_box_equip_display_fancy_strings(label, &fstrs);
-                }
-                UI_Signal sig = ui_signal_from_box(box);
-                if(ui_pressed(sig))
-                {
-                  RD_WatchViewPoint cell_pt = {0, row->parent_key, row->key};
-                  ewv->next_cursor = ewv->next_mark = cell_pt;
-                  pressed = 1;
-                }
-              }break;
-            }
-          }
-          
-          ////////////////////////
           //- rjf: build regular row contents in all other cases
           //
           if(!did_row_build) UI_Parent(row_box) UI_HeightFill
@@ -2550,7 +2483,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                 RD_WatchViewPoint cell_pt = {x, row->parent_key, row->key};
                 RD_WatchViewTextEditState *cell_edit_state = rd_watch_view_text_edit_state_from_pt(ewv, cell_pt);
                 B32 cell_selected = (row_selected && selection_tbl.min.x <= cell_pt.x && cell_pt.x <= selection_tbl.max.x);
-                String8 cell_pre_edit_string = rd_string_from_eval_viz_row_column(scratch.arena, eval_view, row, col, 0, default_radix, ui_top_font(), ui_top_font_size(), row_string_max_size_px);
+                String8 cell_pre_edit_string = rd_string_from_eval_viz_row_column(scratch.arena, eval_view, row, col, string_flags|EV_StringFlag_ReadOnlyDisplayRules, default_radix, ui_top_font(), ui_top_font_size(), row_string_max_size_px);
                 
                 //- rjf: unpack column-kind-specific info
                 E_Eval cell_eval = row_eval;
@@ -2573,7 +2506,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                     cell_can_edit = (row->depth == 0 && modifiable && filter.size == 0);
                     if(filter.size != 0)
                     {
-                      cell_matches = fuzzy_match_find(scratch.arena, filter, ev_expr_string_from_row(scratch.arena, row));
+                      cell_matches = fuzzy_match_find(scratch.arena, filter, ev_expr_string_from_row(scratch.arena, row, string_flags));
                     }
                     cell_autocomp_flags = (RD_AutoCompListerFlag_Locals|
                                            RD_AutoCompListerFlag_Procedures|
@@ -2629,7 +2562,11 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                     {
                       cell_error_tooltip_string = str8_lit("Could not read memory successfully.");
                     }
-                    cell_autocomp_flags = RD_AutoCompListerFlag_Locals;
+                    cell_autocomp_flags = (RD_AutoCompListerFlag_Locals|
+                                           RD_AutoCompListerFlag_Procedures|
+                                           RD_AutoCompListerFlag_Globals|
+                                           RD_AutoCompListerFlag_ThreadLocals|
+                                           RD_AutoCompListerFlag_Types);
                     if(ui_view_rule_info->flags & RD_ViewRuleInfoFlag_CanFillValueCell)
                     {
                       cell_ui_hook = ui_view_rule_info->ui;
@@ -2707,7 +2644,8 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                 
                 //- rjf: build cell
                 UI_Signal sig = {0};
-                UI_Palette(palette) UI_TableCell
+                UI_Palette(palette)
+                  UI_TableCell
                   UI_FocusHot(cell_selected ? UI_FocusKind_On : UI_FocusKind_Off)
                   UI_FocusActive((cell_selected && ewv->text_editing) ? UI_FocusKind_On : UI_FocusKind_Off)
                   RD_Font(cell_is_code ? RD_FontSlot_Code : RD_FontSlot_Main)
@@ -2852,7 +2790,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                 if(DEV_eval_compiler_tooltips && x == 0 && ui_hovering(sig)) UI_Tooltip RD_Font(RD_FontSlot_Code)
                 {
                   local_persist char *spaces = "                                                                        ";
-                  String8         string      = ev_expr_string_from_row(scratch.arena, row);
+                  String8         string      = ev_expr_string_from_row(scratch.arena, row, 0);
                   E_TokenArray    tokens      = e_token_array_from_text(scratch.arena, string);
                   E_Parse         parse       = e_parse_expr_from_text_tokens(scratch.arena, string, &tokens);
                   E_IRTreeAndType irtree      = e_irtree_and_type_from_expr(scratch.arena, parse.expr);
@@ -4791,6 +4729,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(symbol_lister)
 ////////////////////////////////
 //~ rjf: target @view_hook_impl
 
+#if 0
 typedef struct RD_TargetViewState RD_TargetViewState;
 struct RD_TargetViewState
 {
@@ -5115,6 +5054,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(target)
   scratch_end(scratch);
   ProfEnd();
 }
+#endif
 
 ////////////////////////////////
 //~ rjf: targets @view_hook_impl
@@ -5126,15 +5066,14 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(targets)
   if(!wv->initialized)
   {
     rd_watch_view_init(wv);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Expr,    0.30f, .display_string = str8_lit("Expression"));
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,   0.70f, .display_string = str8_lit("Value"), .dequote_string = 1, .is_non_code = 1);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member,      0.25f, .string = str8_lit("label.str"), .display_string = str8_lit("Label"),      .dequote_string = 1);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member,      0.35f, .string = str8_lit("exe.str"),   .display_string = str8_lit("Executable"), .dequote_string = 1, .is_non_code = 1);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member,      0.25f, .string = str8_lit("args.str"),  .display_string = str8_lit("Arguments"),  .dequote_string = 1, .is_non_code = 1);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_RunControl,  0.05f);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_StepControl, 0.05f);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_MoreControl, 0.05f);
   }
-  rd_watch_view_build(wv,
-                      RD_WatchViewFlag_NoHeader|
-                      RD_WatchViewFlag_RootButtons|
-                      RD_WatchViewFlag_PrettyNameMembers,
-                      str8_lit("targets"),
-                      str8_lit("only:label exe args working_directory entry_point str"), 0, 10, rect);
+  rd_watch_view_build(wv, 0, str8_lit("targets"), str8_lit(""), 1, 10, rect);
   ProfEnd();
 }
 
@@ -5675,15 +5614,11 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(scheduler)
   if(!wv->initialized)
   {
     rd_watch_view_init(wv);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Expr,    0.30f, .display_string = str8_lit("Expression"));
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,   0.70f, .display_string = str8_lit("Value"));
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_FreezeControl,  0.05f);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member,         0.25f, .string = str8_lit("label.str"), .display_string = str8_lit("Label"),      .dequote_string = 1);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member,         0.70f, .string = str8_lit("callstack.v"), .display_string = str8_lit("Call Stack"));
   }
-  rd_watch_view_build(wv,
-                      RD_WatchViewFlag_NoHeader|
-                      RD_WatchViewFlag_RootButtons|
-                      RD_WatchViewFlag_PrettyNameMembers,
-                      str8_lit("threads"),
-                      str8_lit("only:label str id frozen callstack v count"), 0, 10, rect);
+  rd_watch_view_build(wv, 0, str8_lit("threads"), str8_lit(""), 0, 10, rect);
   ProfEnd();
 }
 

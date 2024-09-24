@@ -1085,7 +1085,7 @@ ev_windowed_row_list_from_block_list(Arena *arena, EV_View *view, Rng1S64 visibl
 }
 
 internal String8
-ev_expr_string_from_row(Arena *arena, EV_Row *row)
+ev_expr_string_from_row(Arena *arena, EV_Row *row, EV_StringFlags flags)
 {
   String8 result = row->string;
   E_Expr *notable_expr = row->expr;
@@ -1118,7 +1118,7 @@ ev_expr_string_from_row(Arena *arena, EV_Row *row)
     }break;
     case E_ExprKind_MemberAccess:
     {
-      if(row->member != 0 && row->member->pretty_name.size != 0)
+      if(flags & EV_StringFlag_PrettyNames && row->member != 0 && row->member->pretty_name.size != 0)
       {
         result = push_str8_copy(arena, row->member->pretty_name);
       }

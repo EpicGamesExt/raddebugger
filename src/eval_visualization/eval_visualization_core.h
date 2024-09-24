@@ -264,6 +264,7 @@ typedef U32 EV_StringFlags;
 enum
 {
   EV_StringFlag_ReadOnlyDisplayRules = (1<<0),
+  EV_StringFlag_PrettyNames          = (1<<1),
 };
 
 typedef struct EV_Row EV_Row;
@@ -395,7 +396,7 @@ internal E_Expr *ev_expr_from_block_index(Arena *arena, EV_Block *block, U64 ind
 
 internal EV_Row *ev_row_list_push_new(Arena *arena, EV_View *view, EV_WindowedRowList *rows, EV_Block *block, EV_Key key, E_Expr *expr);
 internal EV_WindowedRowList ev_windowed_row_list_from_block_list(Arena *arena, EV_View *view, Rng1S64 visible_range, EV_BlockList *blocks);
-internal String8 ev_expr_string_from_row(Arena *arena, EV_Row *row);
+internal String8 ev_expr_string_from_row(Arena *arena, EV_Row *row, EV_StringFlags );
 internal B32 ev_row_is_expandable(EV_Row *row);
 internal B32 ev_row_is_editable(EV_Row *row);
 

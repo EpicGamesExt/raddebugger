@@ -5896,7 +5896,7 @@ rd_window_frame(RD_Window *ws)
           {
             EV_Row *row = viz_rows.first;
             E_Eval row_eval = e_eval_from_expr(scratch.arena, row->expr);
-            String8 row_expr_string = ev_expr_string_from_row(scratch.arena, row);
+            String8 row_expr_string = ev_expr_string_from_row(scratch.arena, row, 0);
             String8 row_display_value = rd_value_string_from_eval(scratch.arena, EV_StringFlag_ReadOnlyDisplayRules, default_radix, ui_top_font(), ui_top_font_size(), 500.f, row_eval, row->member, row->view_rules);
             expr_column_width_px = fnt_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, 0, row_expr_string).x + ui_top_font_size()*5.f;
             value_column_width_px = fnt_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, 0, row_display_value).x + ui_top_font_size()*5.f;
@@ -5944,7 +5944,7 @@ rd_window_frame(RD_Window *ws)
             {
               //- rjf: unpack row
               E_Eval row_eval = e_eval_from_expr(scratch.arena, row->expr);
-              String8 row_expr_string = ev_expr_string_from_row(scratch.arena, row);
+              String8 row_expr_string = ev_expr_string_from_row(scratch.arena, row, 0);
               String8 row_edit_value = rd_value_string_from_eval(scratch.arena, 0, default_radix, ui_top_font(), ui_top_font_size(), 500.f, row_eval, row->member, row->view_rules);
               String8 row_display_value = rd_value_string_from_eval(scratch.arena, EV_StringFlag_ReadOnlyDisplayRules, default_radix, ui_top_font(), ui_top_font_size(), 500.f, row_eval, row->member, row->view_rules);
               B32 row_is_editable = ev_row_is_editable(row);
@@ -7923,6 +7923,7 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(targets)
   Temp scratch = scratch_begin(&arena, 1);
   RD_EntityList targets = rd_query_cached_entity_list_with_kind(RD_EntityKind_Target);
   EV_ViewRuleList *view_rules_inherited = ev_view_rule_list_from_inheritance(arena, view_rules);
+  ev_view_rule_list_push_string(arena, view_rules_inherited, str8_lit("target"));
   for(RD_EntityNode *n = targets.first; n != 0; n = n->next)
   {
     RD_Entity *target = n->entity;
@@ -7974,6 +7975,7 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(threads)
   Temp scratch = scratch_begin(&arena, 1);
   CTRL_EntityList entities = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Thread);
   EV_ViewRuleList *view_rules_inherited = ev_view_rule_list_from_inheritance(arena, view_rules);
+  ev_view_rule_list_push_string(arena, view_rules_inherited, str8_lit("thread"));
   for(CTRL_EntityNode *n = entities.first; n != 0; n = n->next)
   {
     CTRL_Entity *entity = n->v;

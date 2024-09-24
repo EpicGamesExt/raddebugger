@@ -354,7 +354,7 @@ EV_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_DEF(slice)
       E_TypeKey sized_base_ptr_type_key = e_type_key_cons_ptr(e_type_state->ctx->primary_module->arch, array_type_key, 0);
       E_MemberList slice_type_members = {0};
       e_member_list_push(scratch.arena, &slice_type_members, count_member);
-      e_member_list_push(scratch.arena, &slice_type_members, &(E_Member){.kind = E_MemberKind_DataField, .type_key = sized_base_ptr_type_key, .name = base_ptr_member->name, .off = base_ptr_member->off});
+      e_member_list_push(scratch.arena, &slice_type_members, &(E_Member){.kind = E_MemberKind_DataField, .type_key = sized_base_ptr_type_key, .name = base_ptr_member->name, .pretty_name = base_ptr_member->pretty_name, .off = base_ptr_member->off});
       E_MemberArray slice_type_members_array = e_member_array_from_list(scratch.arena, &slice_type_members);
       slice_type_key = e_type_key_cons(.arch = e_type_state->ctx->primary_module->arch,
                                        .kind = E_TypeKind_Struct,
