@@ -450,6 +450,7 @@ fp_raster(Arena *arena, FP_Handle font_handle, F32 size, FP_RasterFlags flags, S
       }
     }
     atlas_dim.x -= right_side_bearing;
+    atlas_dim.x += 2;
     atlas_dim.x += 7;
     atlas_dim.x -= atlas_dim.x%8;
   }
