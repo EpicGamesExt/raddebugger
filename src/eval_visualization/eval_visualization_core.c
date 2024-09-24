@@ -478,6 +478,7 @@ ev_view_rule_list_copy(Arena *arena, EV_ViewRuleList *src)
 internal E_Expr *
 ev_expr_from_expr_view_rules(Arena *arena, E_Expr *expr, EV_ViewRuleList *view_rules)
 {
+  ProfBeginFunction();
   for(EV_ViewRuleNode *n = view_rules->first; n != 0; n = n->next)
   {
     EV_ViewRuleInfo *info = ev_view_rule_info_from_string(n->v.root->string);
@@ -486,6 +487,7 @@ ev_expr_from_expr_view_rules(Arena *arena, E_Expr *expr, EV_ViewRuleList *view_r
       expr = info->expr_resolution(arena, expr, n->v.root);
     }
   }
+  ProfEnd();
   return expr;
 }
 

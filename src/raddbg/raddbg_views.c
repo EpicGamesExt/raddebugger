@@ -2467,7 +2467,32 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
               }break;
               case RD_EvalSpaceKind_MetaCtrlEntity:
               {
-                
+                CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(row_eval.space);
+                UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|UI_BoxFlag_DrawHotEffects|UI_BoxFlag_DrawActiveEffects, "###entity_%p", entity);
+                UI_Parent(box) UI_Focus(UI_FocusKind_Null)
+                {
+                  if(entity->kind == CTRL_EntityKind_Thread) UI_PrefWidth(ui_em(3.f, 1.f))
+                  {
+                    rd_icon_buttonf(RD_IconKind_Locked, 0, "###freeze");
+                  }
+                  if(row_is_expandable) UI_PrefWidth(ui_em(2.f, 1.f))
+                  {
+                    if(ui_pressed(ui_expanderf(next_row_expanded, "###expand_%p", entity)))
+                    {
+                      next_row_expanded ^= 1;
+                    }
+                  }
+                  DR_FancyStringList fstrs = rd_title_fstrs_from_ctrl_entity(scratch.arena, entity, rd_rgba_from_theme_color(RD_ThemeColor_TextWeak), ui_top_font_size());
+                  UI_Box *label = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
+                  ui_box_equip_display_fancy_strings(label, &fstrs);
+                }
+                UI_Signal sig = ui_signal_from_box(box);
+                if(ui_pressed(sig))
+                {
+                  RD_WatchViewPoint cell_pt = {0, row->parent_key, row->key};
+                  ewv->next_cursor = ewv->next_mark = cell_pt;
+                  pressed = 1;
+                }
               }break;
             }
           }
@@ -5646,6 +5671,26 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(watch_pins)
 RD_VIEW_RULE_UI_FUNCTION_DEF(scheduler)
 {
   ProfBeginFunction();
+  RD_WatchViewState *wv = rd_view_state(RD_WatchViewState);
+  if(!wv->initialized)
+  {
+    rd_watch_view_init(wv);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Expr,    0.30f, .display_string = str8_lit("Expression"));
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,   0.70f, .display_string = str8_lit("Value"));
+  }
+  rd_watch_view_build(wv,
+                      RD_WatchViewFlag_NoHeader|
+                      RD_WatchViewFlag_RootButtons|
+                      RD_WatchViewFlag_PrettyNameMembers,
+                      str8_lit("threads"),
+                      str8_lit("only:label str id frozen callstack v count"), 0, 10, rect);
+  ProfEnd();
+}
+
+#if 0
+RD_VIEW_RULE_UI_FUNCTION_DEF(scheduler)
+{
+  ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   UI_ScrollPt2 scroll_pos = rd_view_scroll_pos();
   String8 query = string;
@@ -5863,6 +5908,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(scheduler)
   scratch_end(scratch);
   ProfEnd();
 }
+#endif
 
 ////////////////////////////////
 //~ rjf: call_stack @view_hook_impl
