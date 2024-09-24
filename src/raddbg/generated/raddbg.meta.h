@@ -496,6 +496,7 @@ RD_ThemeColor_Thread7,
 RD_ThemeColor_ThreadUnwound,
 RD_ThemeColor_ThreadError,
 RD_ThemeColor_Breakpoint,
+RD_ThemeColor_CacheLineBoundary,
 RD_ThemeColor_COUNT,
 } RD_ThemeColor;
 
@@ -718,18 +719,18 @@ extern String8 rd_theme_preset_display_string_table[9];
 extern String8 rd_theme_preset_code_string_table[9];
 extern String8 rd_theme_color_version_remap_old_name_table[22];
 extern String8 rd_theme_color_version_remap_new_name_table[22];
-extern Vec4F32 rd_theme_preset_colors__default_dark[75];
-extern Vec4F32 rd_theme_preset_colors__default_light[75];
-extern Vec4F32 rd_theme_preset_colors__vs_dark[75];
-extern Vec4F32 rd_theme_preset_colors__vs_light[75];
-extern Vec4F32 rd_theme_preset_colors__solarized_dark[75];
-extern Vec4F32 rd_theme_preset_colors__solarized_light[75];
-extern Vec4F32 rd_theme_preset_colors__handmade_hero[75];
-extern Vec4F32 rd_theme_preset_colors__four_coder[75];
-extern Vec4F32 rd_theme_preset_colors__far_manager[75];
+extern Vec4F32 rd_theme_preset_colors__default_dark[76];
+extern Vec4F32 rd_theme_preset_colors__default_light[76];
+extern Vec4F32 rd_theme_preset_colors__vs_dark[76];
+extern Vec4F32 rd_theme_preset_colors__vs_light[76];
+extern Vec4F32 rd_theme_preset_colors__solarized_dark[76];
+extern Vec4F32 rd_theme_preset_colors__solarized_light[76];
+extern Vec4F32 rd_theme_preset_colors__handmade_hero[76];
+extern Vec4F32 rd_theme_preset_colors__four_coder[76];
+extern Vec4F32 rd_theme_preset_colors__far_manager[76];
 extern Vec4F32* rd_theme_preset_colors_table[9];
-extern String8 rd_theme_color_display_string_table[75];
-extern String8 rd_theme_color_cfg_string_table[75];
+extern String8 rd_theme_color_display_string_table[76];
+extern String8 rd_theme_color_cfg_string_table[76];
 extern String8 rd_setting_code_display_string_table[19];
 extern String8 rd_setting_code_lower_string_table[19];
 extern B8 rd_setting_code_default_is_per_window_table[19];

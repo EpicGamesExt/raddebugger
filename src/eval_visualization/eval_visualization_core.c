@@ -960,7 +960,6 @@ internal EV_WindowedRowList
 ev_windowed_row_list_from_block_list(Arena *arena, EV_View *view, Rng1S64 visible_range, EV_BlockList *blocks)
 {
   ProfBeginFunction();
-  Temp scratch = scratch_begin(&arena, 1);
   
   //////////////////////////////
   //- rjf: produce windowed rows, per block
@@ -1079,7 +1078,6 @@ ev_windowed_row_list_from_block_list(Arena *arena, EV_View *view, Rng1S64 visibl
       }break;
     }
   }
-  scratch_end(scratch);
   ProfEnd();
   return list;
 }

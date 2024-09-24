@@ -1949,6 +1949,11 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
               palette = ui_build_palette(ui_top_palette(), .background = rd_rgba_from_theme_color(RD_ThemeColor_HighlightOverlay));
               row_flags |= UI_BoxFlag_DrawBackground;
             }
+            else if(semantic_idx & 1)
+            {
+              palette = ui_build_palette(ui_top_palette(), .background = rd_rgba_from_theme_color(RD_ThemeColor_BaseBackgroundAlt));
+              row_flags |= UI_BoxFlag_DrawBackground;
+            }
           }
           
           ////////////////////////
@@ -1960,7 +1965,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
           ui_set_next_pref_height(ui_px(scroll_list_params.row_height_px*row->size_in_rows, 1.f));
           ui_set_next_focus_hot(row_selected ? UI_FocusKind_On : UI_FocusKind_Off);
           UI_Box *row_box = ui_build_box_from_stringf(row_flags|
-                                                      UI_BoxFlag_DrawSideBottom|
+                                                      (!row->next) * UI_BoxFlag_DrawSideBottom|
                                                       UI_BoxFlag_Clickable|
                                                       ((row->block_kind != EV_BlockKind_Canvas) * UI_BoxFlag_DisableFocusOverlay)|
                                                       ((row->block_kind == EV_BlockKind_Canvas) * UI_BoxFlag_Clip),
@@ -2090,8 +2095,8 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
             {
               ui_set_next_fixed_x(0);
               ui_set_next_fixed_y(0);
-              ui_set_next_fixed_height(ui_top_font_size()*0.1f);
-              ui_set_next_palette(ui_build_palette(ui_top_palette(), .background = rd_rgba_from_theme_color(RD_ThemeColor_HighlightOverlay)));
+              ui_set_next_fixed_height(ui_top_font_size()*0.2f);
+              ui_set_next_palette(ui_build_palette(ui_top_palette(), .background = rd_rgba_from_theme_color(RD_ThemeColor_CacheLineBoundary)));
               ui_build_box_from_key(UI_BoxFlag_Floating|UI_BoxFlag_DrawBackground, ui_key_zero());
             }
             
@@ -2107,9 +2112,10 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
               if(next_off%64 != 0 && row_eval.value.u64/64 < next_off/64)
               {
                 ui_set_next_fixed_x(0);
-                ui_set_next_fixed_y(scroll_list_params.row_height_px - ui_top_font_size()*0.5f);
+                ui_set_next_fixed_y(scroll_list_params.row_height_px - ui_top_font_size()*1.f);
                 ui_set_next_fixed_height(ui_top_font_size()*1.f);
-                Vec4F32 boundary_color = rd_rgba_from_theme_color(RD_ThemeColor_HighlightOverlay);
+                Vec4F32 boundary_color = rd_rgba_from_theme_color(RD_ThemeColor_CacheLineBoundary);
+                boundary_color.w *= 0.5f;
                 ui_set_next_palette(ui_build_palette(ui_top_palette(), .background = boundary_color));
                 ui_build_box_from_key(UI_BoxFlag_Floating|UI_BoxFlag_DrawBackground, ui_key_zero());
               }

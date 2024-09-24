@@ -987,7 +987,7 @@ RD_ThemeColorTable:
   
   //- rjf: base ui container colors
   {BaseBackground                 "Base Background"                   base_background                        0x1b1b1bfe          0xccccccfe          0x1b1b1bfe          0xfefefefe          0x002a35fe          0xfcf5e2fe          0x0c0c0cfe          0x0c0c0cfe          0x000081fe          ""}
-  {BaseBackgroundAlt              "Base Background (Alternate)"       base_background_alt                    0x2b2b2bfe          0x2b2b2bfe          0x1b1b1bfe          0xe7e7e7fe          0x2b2b2bfe          0x2b2b2bfe          0x2b2b2bfe          0x2b2b2bfe          0x2b2b2bfe          ""}
+  {BaseBackgroundAlt              "Base Background (Alternate)"       base_background_alt                    0x222222fe          0x2b2b2bfe          0x1b1b1bfe          0xe7e7e7fe          0x2b2b2bfe          0x2b2b2bfe          0x2b2b2bfe          0x2b2b2bfe          0x2b2b2bfe          ""}
   {BaseBorder                     "Base Border"                       base_border                            0x3f3f3ffe          0xa4a4a4fe          0x3f3f3ffe          0xb6b6b6ff          0xfefefe3a          0xbebaabfe          0x423525fe          0x3f3f3ffe          0x0000fffe          ""}
   
   //- rjf: menu bar ui container colors
@@ -1054,6 +1054,7 @@ RD_ThemeColorTable:
   {ThreadUnwound                  "Thread (Unwound)"                  thread_unwound                         0xb2ccd8ff          0x49606aff          0xb2ccd8ff          0x49606aff          0xb2ccd8ff          0x49606aff          0xb2ccd8ff          0xb2ccd8ff          0xb2ccd8ff          ""}
   {ThreadError                    "Thread (Error)"                    thread_error                           0xb23219ff          0xb23219ff          0xb23219ff          0xb23219ff          0xb23219ff          0xb23218ff          0xb23219ff          0xb23219ff          0xb23219ff          ""}
   {Breakpoint                     "Breakpoint"                        breakpoint                             0xa72911ff          0xff2800ff          0xa72911ff          0xa72911ff          0xa72911ff          0xff684bff          0xa72911ff          0xa72911ff          0xff2800ff          ""}
+  {CacheLineBoundary              "Cache Line Boundary"               cache_line_boundary                    0x355b6eff          0xa6becaff          0x355b6eff          0x6e9db5ff          0x355b6eff          0xb2d3e3ff          0x15445cff          0x1b323eff          0x933100ff          ""}
 }
 
 @table(old_name new_name)

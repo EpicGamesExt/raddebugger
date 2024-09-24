@@ -2834,7 +2834,7 @@ internal UI_Signal
 rd_line_edit(RD_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size, U64 *edit_string_size_out, B32 *expanded_out, String8 pre_edit_value, String8 string)
 {
   //- rjf: unpack visual metrics
-  F32 expander_size_px = ui_top_font_size()*1.5f;
+  F32 expander_size_px = ui_top_font_size()*2.f;
   
   //- rjf: make key
   UI_Key key = ui_key_from_string(ui_active_seed_key(), string);
@@ -2864,9 +2864,10 @@ rd_line_edit(RD_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
                                       key);
   
   //- rjf: build indent
-  if(depth != 0) UI_Parent(box)
+  UI_Parent(box) for(S32 idx = 0; idx < depth; idx += 1)
   {
-    ui_spacer(ui_em(1.5f*depth, 1.f));
+    ui_set_next_flags(UI_BoxFlag_DrawSideLeft);
+    ui_spacer(ui_em(1.f, 1.f));
   }
   
   //- rjf: build expander
