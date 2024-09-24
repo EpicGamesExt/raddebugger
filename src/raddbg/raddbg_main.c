@@ -11,9 +11,6 @@
 //  [ ] file path map editor
 //  [ ] modules view
 //  [ ] eval writing/committing
-//  [ ] collapse upstream state for theme/bindings/settings into entities; use cache accelerators if needed to make up difference
-//  [ ] collapse upstream state for windows/panels/tabs into entities; use downstream window/view resource cache to make up the difference
-//  [ ] entity <-> mdesk paths
 //  [ ] file path map building
 //  [ ] `switch` replacement (recent files history)
 //   [ ] resolving name as file or #include
@@ -24,22 +21,18 @@
 // [ ] post-@msgs TODOs:
 //  [ ] output: add option for scroll-to-bottom - ensure this shows up in universal ctx menu
 //  [ ] universal ctx menu address/watch options; e.g. watch -> memory; watch -> add watch
-//  [ ] rich hover coverage; bitmap <-> geo <-> memory <-> disassembly <-> text; etc.
 // [ ] ensure "prefer_disasm" is calculated correctly - disassembly-focused
 //     stepping
 //
 // [ ] ensure the following issues are resolved with this new pass:
 //  [ ] mohit-reported callstack-frame-selection bug (with inlines)
 //  [ ] empty user file causing failure to launch
-//  [ ] save view column pcts; generalize to being a first-class thing in
-//      RD_View, e.g. by just having a string -> f32 store
 //  [ ] decay arrays to pointers in pointer/value comparison
 //  [ ] EVAL LOOKUP RULES -> currently going 0 -> rdis_count, but we need
 //  to prioritize the primary rdi
 //  [ ] file overrides -> always pick most specific one! found with conflicting
 //      overrides, e.g. C:/devel/ -> D:/devel/, but also C:/devel/foo ->
 //      C:/devel/bar, etc.
-//  [ ] auto-scroll output window
 //  [ ] visualize all breakpoints everywhere - source view should show up in
 //      disasm, disasm should show up in source view, function should show up in
 //      both, etc.
@@ -49,6 +42,17 @@
 //        that's because there was a function breakpoint there.
 //  [ ] codebase readme pass
 //  [ ] debugger readme pass
+
+////////////////////////////////
+//~ rjf: post-0.9.12 TODO notes
+//
+//  [ ] collapse upstream state for theme/bindings/settings into entities; use cache accelerators if needed to make up difference
+//  [ ] collapse upstream state for windows/panels/tabs into entities; use downstream window/view resource cache to make up the difference
+//  [ ] entity <-> mdesk paths
+//  [ ] rich hover coverage; bitmap <-> geo <-> memory <-> disassembly <-> text; etc.
+//  [ ] save view column pcts; generalize to being a first-class thing in
+//      RD_View, e.g. by just having a string -> f32 store
+//  [ ] auto-scroll output window
 
 ////////////////////////////////
 //~ rjf: Frontend/UI Pass Tasks
