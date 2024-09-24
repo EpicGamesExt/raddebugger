@@ -741,7 +741,7 @@ rd_entity_desc_button(RD_Entity *entity, FuzzyMatchRangeList *name_matches, Stri
     // rjf: click => fastpath for this entity
     if(ui_clicked(sig))
     {
-      rd_cmd(RD_CmdKind_EntityRefFastPath, .entity = rd_handle_from_entity(entity));
+      // TODO(rjf): rd_cmd(RD_CmdKind_EntityRefFastPath, .entity = rd_handle_from_entity(entity));
     }
     
     // rjf: right-click => context menu for this entity
@@ -1362,7 +1362,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             // rjf: click => remove breakpoint
             if(ui_clicked(bp_sig))
             {
-              rd_cmd(RD_CmdKind_RemoveBreakpoint, .entity = rd_handle_from_entity(bp));
+              rd_cmd(RD_CmdKind_RemoveEntity, .entity = rd_handle_from_entity(bp));
             }
             
             // rjf: drag start

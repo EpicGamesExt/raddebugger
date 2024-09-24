@@ -2612,7 +2612,7 @@ rd_view_scroll_pos(void)
 internal String8
 rd_view_expr_string(void)
 {
-  // TODO(rjf): @msgs filter and expr string need to be different
+  // TODO(rjf): @entity_simplification filter and expr string need to be different
   RD_View *view = rd_view_from_handle(rd_regs()->view);
   String8 expr_string = str8(view->query_buffer, view->query_string_size);
   return expr_string;
@@ -2621,7 +2621,7 @@ rd_view_expr_string(void)
 internal String8
 rd_view_filter(void)
 {
-  // TODO(rjf): @msgs filter and expr string need to be different
+  // TODO(rjf): @entity_simplification filter and expr string need to be different
   RD_View *view = rd_view_from_handle(rd_regs()->view);
   String8 filter = str8(view->query_buffer, view->query_string_size);
   return filter;
@@ -2650,7 +2650,7 @@ rd_push_view_arena(void)
 internal void
 rd_store_view_expr_string(String8 string)
 {
-  // TODO(rjf): @msgs filter and expr string need to be different
+  // TODO(rjf): @entity_simplification filter and expr string need to be different
   RD_View *view = rd_view_from_handle(rd_regs()->view);
   rd_view_equip_query(view, string);
 }
@@ -2658,7 +2658,7 @@ rd_store_view_expr_string(String8 string)
 internal void
 rd_store_view_filter(String8 string)
 {
-  // TODO(rjf): @msgs filter and expr string need to be different
+  // TODO(rjf): @entity_simplification filter and expr string need to be different
   RD_View *view = rd_view_from_handle(rd_regs()->view);
   rd_view_equip_query(view, string);
 }
@@ -2922,30 +2922,6 @@ rd_window_frame(RD_Window *ws)
   }
   ws->window_temporarily_focused_ipc = 0;
   ui_select_state(ws->ui);
-  
-  //////////////////////////////
-  //- rjf: auto-close tabs which have parameter entities that've been deleted
-  //
-#if 0 // TODO(rjf): @msgs
-  for(RD_Panel *panel = ws->root_panel;
-      !rd_panel_is_nil(panel);
-      panel = rd_panel_rec_depth_first_pre(panel).next)
-  {
-    for(RD_View *view = panel->first_tab_view;
-        !rd_view_is_nil(view);
-        view = view->order_next)
-    {
-      RD_Entity *entity = rd_entity_from_eval_string(str8(view->query_buffer, view->query_string_size));
-      if(entity->flags & RD_EntityFlag_MarkedForDeletion ||
-         (rd_entity_is_nil(entity) && view->spec->info.flags & RD_ViewSpecFlag_ParameterizedByEntity))
-      {
-        rd_cmd(RD_CmdKind_CloseTab,
-               .panel = rd_handle_from_panel(panel),
-               .view = rd_handle_from_view(view));
-      }
-    }
-  }
-#endif
   
   //////////////////////////////
   //- rjf: panels with no selected tabs? -> select.
@@ -4799,14 +4775,10 @@ rd_window_frame(RD_Window *ws)
               String8 cmds[] =
               {
                 rd_cmd_kind_info_table[RD_CmdKind_AddTarget].string,
-                rd_cmd_kind_info_table[RD_CmdKind_EditTarget].string,
-                rd_cmd_kind_info_table[RD_CmdKind_RemoveTarget].string,
               };
               U32 codepoints[] =
               {
                 'a',
-                'e',
-                'r',
               };
               Assert(ArrayCount(codepoints) == ArrayCount(cmds));
               rd_cmd_list_menu_buttons(ArrayCount(cmds), cmds, codepoints);
@@ -4825,9 +4797,12 @@ rd_window_frame(RD_Window *ws)
                 UI_Palette(palette) sig = rd_icon_buttonf(RD_IconKind_Target, 0, "%S##%p", target_name, target);
                 if(ui_clicked(sig))
                 {
+                  // TODO(rjf): @msgs
+#if 0
                   rd_cmd(RD_CmdKind_EditTarget, .entity = rd_handle_from_entity(target));
                   ui_ctx_menu_close();
                   ws->menu_bar_focused = 0;
+#endif
                 }
               }
               scratch_end(scratch);
@@ -7163,7 +7138,7 @@ rd_window_frame(RD_Window *ws)
         }
         
         //////////////////////////
-        //- rjf: less granular panel for tabs & entities drop-site
+        //- rjf: less granular panel-wide drop-site
         //
         if(catchall_drop_site_hovered)
         {
@@ -7195,25 +7170,13 @@ rd_window_frame(RD_Window *ws)
               {
                 RD_Panel *src_panel = rd_panel_from_handle(rd_state->drag_drop_regs->panel);
                 RD_View *view = rd_view_from_handle(rd_state->drag_drop_regs->view);
-                RD_Entity *entity = rd_entity_from_handle(rd_state->drag_drop_regs->entity);
-                
-                // rjf: view drop
-                if(!rd_view_is_nil(view))
+                if(rd_state->drag_drop_regs_slot == RD_RegSlot_View && !rd_view_is_nil(view))
                 {
                   rd_cmd(RD_CmdKind_MoveTab,
                          .prev_view = rd_handle_from_view(panel->last_tab_view),
                          .panel = rd_handle_from_panel(src_panel),
                          .dst_panel = rd_handle_from_panel(panel),
                          .view = rd_handle_from_view(view));
-                }
-                
-                // rjf: entity drop
-                if(!rd_entity_is_nil(entity))
-                {
-                  rd_cmd(RD_CmdKind_SpawnEntityView,
-                         .panel = rd_handle_from_panel(panel),
-                         .cursor = rd_state->drag_drop_regs->cursor,
-                         .entity = rd_handle_from_entity(entity));
                 }
               }
             }
@@ -13383,77 +13346,7 @@ rd_frame(void)
             }
           }break;
           
-          //- rjf: editors
-          case RD_CmdKind_EditEntity:
-          {
-#if 0 // TODO(rjf): @msgs
-            RD_Entity *entity = rd_entity_from_handle(rd_regs()->entity);
-            switch(entity->kind)
-            {
-              default: break;
-              case RD_EntityKind_Target:
-              {
-                rd_push_cmd(rd_cmd_spec_from_kind(RD_CmdKind_EditTarget), params);
-              }break;
-            }
-#endif
-          }break;
-          
-          //- rjf: targets
-          case RD_CmdKind_EditTarget:
-          {
-#if 0 // TODO(rjf): @msgs
-            RD_Entity *entity = rd_entity_from_handle(rd_regs()->entity);
-            if(!rd_entity_is_nil(entity) && entity->kind == RD_EntityKind_Target)
-            {
-              rd_push_cmd(rd_cmd_spec_from_kind(RD_CmdKind_Target), params);
-            }
-            else
-            {
-              log_user_errorf("Invalid target.");
-            }
-#endif
-          }break;
-          
-          //- rjf: catchall general entity activation paths (drag/drop, clicking)
-          case RD_CmdKind_EntityRefFastPath:
-          {
-            RD_Entity *entity = rd_entity_from_handle(rd_regs()->entity);
-            switch(entity->kind)
-            {
-              default:
-              {
-                rd_cmd(RD_CmdKind_SpawnEntityView, .entity = rd_handle_from_entity(entity));
-              }break;
-              case RD_EntityKind_Thread:
-              {
-                rd_cmd(RD_CmdKind_SelectThread, .entity = rd_handle_from_entity(entity));
-              }break;
-              case RD_EntityKind_Target:
-              {
-                rd_cmd(RD_CmdKind_SelectTarget, .entity = rd_handle_from_entity(entity));
-              }break;
-            }
-          }break;
-          case RD_CmdKind_SpawnEntityView:
-          {
-#if 0 // TODO(rjf): @msgs
-            RD_Window *ws = rd_window_from_handle(rd_regs()->window);
-            RD_Panel *panel = rd_panel_from_handle(rd_regs()->panel);
-            RD_Entity *entity = rd_entity_from_handle(rd_regs()->entity);
-            switch(entity->kind)
-            {
-              default:{}break;
-              
-              case RD_EntityKind_Target:
-              {
-                D_CmdParams params = df_cmd_params_from_panel(ws, panel);
-                params.entity = rd_handle_from_entity(entity);
-                rd_push_cmd(rd_cmd_spec_from_kind(RD_CmdKind_EditTarget), &params);
-              }break;
-            }
-#endif
-          }break;
+          //- rjf: snap-to-code-location
           case RD_CmdKind_FindCodeLocation:
           {
             // NOTE(rjf): This command is where a lot of high-level flow things
@@ -13864,8 +13757,6 @@ rd_frame(void)
             rd_entity_equip_disabled(entity, 1);
           }break;
           case RD_CmdKind_RemoveEntity:
-          case RD_CmdKind_RemoveBreakpoint:
-          case RD_CmdKind_RemoveTarget:
           {
             RD_Entity *entity = rd_entity_from_handle(rd_regs()->entity);
             RD_EntityKindFlags kind_flags = rd_entity_kind_flags_table[entity->kind];
@@ -14135,7 +14026,6 @@ rd_frame(void)
               RD_Entity *execution_path = rd_entity_alloc(entity, RD_EntityKind_WorkingDirectory);
               rd_entity_equip_name(execution_path, working_dir_path);
             }
-            rd_cmd(RD_CmdKind_EditTarget, .entity = rd_handle_from_entity(entity));
             rd_cmd(RD_CmdKind_SelectTarget, .entity = rd_handle_from_entity(entity));
           }break;
           case RD_CmdKind_SelectTarget:
