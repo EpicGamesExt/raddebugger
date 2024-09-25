@@ -543,7 +543,7 @@ ev2_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, String8 st
       for(EV_ViewRuleNode *n = t->view_rules->first; n != 0; n = n->next)
       {
         EV_ViewRuleInfo *info = ev_view_rule_info_from_string(n->v.root->string);
-        if(info->expr_expand_info != 0 && info->expr_expand_range_info != 0)
+        if(info->expr_expand_info != 0)
         {
           expand_view_rule_info = info;
           expand_params = n->v.root;
@@ -572,21 +572,24 @@ ev2_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, String8 st
       
       // rjf: iterate children expansions, recurse
       // TODO(rjf): need to iterate these in index order, rather than "child_num" (which needs to be renamed to "child_id") order
-      for(EV_ExpandNode *child = expand_node->first; child != 0; child = child->next)
+      if(expand_view_rule_info->expr_expand_range_info)
       {
-        U64 split_relative_idx = child->key.child_num - 1; // TODO(rjf): key -> index
-        EV_ExpandRangeInfo child_expand = expand_view_rule_info->expr_expand_range_info(arena, view, filter, t->expr, expand_params, r1u64(split_relative_idx, split_relative_idx+1), expand_info.user_data);
-        if(child_expand.row_exprs_count > 0)
+        for(EV_ExpandNode *child = expand_node->first; child != 0; child = child->next)
         {
-          EV_ViewRuleList *child_view_rules = ev_view_rule_list_from_inheritance(arena, t->view_rules);
-          // TODO(rjf): need to mix in child's view rules
-          Task *task = push_array(scratch.arena, Task, 1);
-          SLLQueuePush(first_task, last_task, task);
-          task->parent_block       = expansion_block;
-          task->expr               = child_expand.row_exprs[0];
-          task->key                = child->key;
-          task->view_rules         = child_view_rules;
-          task->split_relative_idx = split_relative_idx;
+          U64 split_relative_idx = child->key.child_num - 1; // TODO(rjf): key -> index
+          EV_ExpandRangeInfo child_expand = expand_view_rule_info->expr_expand_range_info(arena, view, filter, t->expr, expand_params, r1u64(split_relative_idx, split_relative_idx+1), expand_info.user_data);
+          if(child_expand.row_exprs_count > 0)
+          {
+            EV_ViewRuleList *child_view_rules = ev_view_rule_list_from_inheritance(arena, t->view_rules);
+            // TODO(rjf): need to mix in child's view rules
+            Task *task = push_array(scratch.arena, Task, 1);
+            SLLQueuePush(first_task, last_task, task);
+            task->parent_block       = expansion_block;
+            task->expr               = child_expand.row_exprs[0];
+            task->key                = child->key;
+            task->view_rules         = child_view_rules;
+            task->split_relative_idx = split_relative_idx;
+          }
         }
       }
     }

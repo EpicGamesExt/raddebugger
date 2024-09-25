@@ -836,12 +836,24 @@ RD_CollectionTable:
 
 @gen
 {
-  @expand(RD_CollectionTable a) `EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF($(a.name));`
+  @expand(RD_CollectionTable a) `EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF($(a.name));`;
+  @expand(RD_CollectionTable a) `EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF($(a.name));`;
+  @expand(RD_CollectionTable a) `EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF($(a.name));`;
 }
 
 @data(String8) rd_collection_name_table:
 {
   @expand(RD_CollectionTable a) `str8_lit_comp("$(a.name)")`
+}
+
+@data(`EV_ViewRuleExprExpandInfoHookFunctionType *`) rd_collection_expr_expand_info_hook_function_table:
+{
+  @expand(RD_CollectionTable a) `EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME($(a.name))`
+}
+
+@data(`EV_ViewRuleExprExpandRangeInfoHookFunctionType *`) rd_collection_expr_expand_range_info_hook_function_table:
+{
+  @expand(RD_CollectionTable a) `EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_NAME($(a.name))`
 }
 
 @data(`EV_ViewRuleBlockProdHookFunctionType *`) rd_collection_block_prod_hook_function_table:
