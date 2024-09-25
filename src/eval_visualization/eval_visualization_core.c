@@ -683,6 +683,9 @@ ev2_depth_from_block(EV2_Block *block)
   return depth;
 }
 
+////////////////////////////////
+//~ rjf: Block Coordinate Spaces (v2)
+
 internal EV2_BlockRangeList
 ev2_block_range_list_from_tree(Arena *arena, EV2_BlockTree *block_tree)
 {
@@ -697,6 +700,7 @@ ev2_block_range_list_from_tree(Arena *arena, EV2_BlockTree *block_tree)
       EV2_Block *next_child;
       Rng1U64 block_relative_range;
     };
+    U64 base_num = 1;
     BlockTask start_task = {0, block_tree->root, block_tree->root->first, r1u64(0, block_tree->root->visual_row_count)};
     for(BlockTask *t = &start_task; t != 0; t = t->next)
     {
@@ -712,8 +716,8 @@ ev2_block_range_list_from_tree(Arena *arena, EV2_BlockTree *block_tree)
       if(block_num_visual_rows != 0)
       {
         EV2_BlockRangeNode *n = push_array(arena, EV2_BlockRangeNode, 1);
-        n->v.block = t->block;
-        n->v.range = block_relative_range;
+        n->v.block    = t->block;
+        n->v.range    = block_relative_range;
         SLLQueuePush(list.first, list.last, n);
         list.count += 1;
       }
@@ -747,6 +751,65 @@ ev2_block_range_list_from_tree(Arena *arena, EV2_BlockTree *block_tree)
   return list;
 }
 
+internal EV2_BlockRange
+ev2_block_range_from_num(EV2_BlockRangeList *block_ranges, U64 num)
+{
+  EV2_BlockRange result = {&ev2_nil_block};
+  U64 base_num = 1;
+  for(EV2_BlockRangeNode *n = block_ranges->first; n != 0; n = n->next)
+  {
+    Rng1U64 global_range = r1u64(base_num, base_num + dim_1u64(n->v.range));
+    if(contains_1u64(global_range, num))
+    {
+      result = n->v;
+      break;
+    }
+  }
+  return result;
+}
+
+internal EV_Key
+ev2_key_from_num(EV2_BlockRangeList *block_ranges, U64 num)
+{
+  EV_Key key = {0};
+  U64 base_num = 1;
+  for(EV2_BlockRangeNode *n = block_ranges->first; n != 0; n = n->next)
+  {
+    U64 range_size = dim_1u64(n->v.range);
+    Rng1U64 global_range = r1u64(base_num, base_num + range_size);
+    if(contains_1u64(global_range, num))
+    {
+      U64 relative_num = (num - base_num) + 1;
+      U64 child_id     = n->v.block->expand_view_rule_info->expr_expand_id_from_num(relative_num, n->v.block->expand_view_rule_info_user_data);
+      EV_Key block_key = n->v.block->key;
+      key = ev_key_make(ev_hash_from_key(block_key), child_id);
+      break;
+    }
+    base_num += range_size;
+  }
+  return key;
+}
+
+internal U64
+ev2_num_from_key(EV2_BlockRangeList *block_ranges, EV_Key key)
+{
+  U64 result = 0;
+  U64 base_num = 1;
+  for(EV2_BlockRangeNode *n = block_ranges->first; n != 0; n = n->next)
+  {
+    U64 range_size = dim_1u64(n->v.range);
+    U64 hash = ev_hash_from_key(n->v.block->key);
+    if(hash == key.parent_hash)
+    {
+      U64 relative_num = n->v.block->expand_view_rule_info->expr_expand_num_from_id(relative_num, n->v.block->expand_view_rule_info_user_data);
+      result = (base_num - 1) + relative_num;
+      break;
+    }
+    base_num += range_size;
+  }
+  return result;
+}
+
 ////////////////////////////////
 //~ rjf: Row Building (v2)
 
@@ -755,7 +818,6 @@ ev2_windowed_row_list_from_block_range_list(Arena *arena, EV_View *view, String8
 {
   EV2_WindowedRowList rows = {0};
   {
-    Temp scratch = scratch_begin(&arena, 1);
     U64 visual_idx_off = 0;
     for(EV2_BlockRangeNode *n = block_ranges->first; n != 0; n = n->next)
     {
@@ -834,7 +896,6 @@ ev2_windowed_row_list_from_block_range_list(Arena *arena, EV_View *view, String8
         }
       }
     }
-    scratch_end(scratch);
   }
   return rows;
 }

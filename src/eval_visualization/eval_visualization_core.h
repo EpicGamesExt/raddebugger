@@ -512,7 +512,14 @@ internal E_Expr *ev_expr_from_expr_view_rules(Arena *arena, E_Expr *expr, EV_Vie
 internal EV2_BlockTree ev2_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, String8 string, E_Expr *expr, EV_ViewRuleList *view_rules);
 internal EV2_BlockTree ev2_block_tree_from_string(Arena *arena, EV_View *view, String8 filter, String8 string, EV_ViewRuleList *view_rules);
 internal U64 ev2_depth_from_block(EV2_Block *block);
+
+////////////////////////////////
+//~ rjf: Block Coordinate Spaces (v2)
+
 internal EV2_BlockRangeList ev2_block_range_list_from_tree(Arena *arena, EV2_BlockTree *block_tree);
+internal EV2_BlockRange ev2_block_range_from_num(EV2_BlockRangeList *block_ranges, U64 num);
+internal EV_Key ev2_key_from_num(EV2_BlockRangeList *block_ranges, U64 num);
+internal U64    ev2_num_from_key(EV2_BlockRangeList *block_ranges, EV_Key key);
 
 ////////////////////////////////
 //~ rjf: Row Building (v2)
