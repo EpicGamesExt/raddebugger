@@ -99,6 +99,113 @@ ev_arch_from_eval_params(E_Eval eval, MD_Node *params)
 ////////////////////////////////
 //~ rjf: default
 
+EV_VIEW_RULE_EXPR_EXPAND_FUNCTION_DEF(default)
+{
+  EV_ExpandResult result = {0};
+  Temp scratch = scratch_begin(&arena, 1);
+  
+  ////////////////////////////
+  //- rjf: unpack expression type info
+  //
+  E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, expr);
+  E_TypeKey type_key = e_type_unwrap(irtree.type_key);
+  E_TypeKind type_kind = e_type_kind_from_key(type_key);
+  E_TypeKey direct_type_key = e_type_unwrap(e_type_direct_from_key(type_key));
+  E_TypeKind direct_type_kind = e_type_kind_from_key(direct_type_key);
+  
+  ////////////////////////////
+  //- rjf: structs/unions/classes -> expansions generate rows for all members
+  //
+  if((type_kind == E_TypeKind_Struct ||
+      type_kind == E_TypeKind_Union ||
+      type_kind == E_TypeKind_Class) ||
+     (e_type_kind_is_pointer_or_ref(type_kind) && (direct_type_kind == E_TypeKind_Struct ||
+                                                   direct_type_kind == E_TypeKind_Union ||
+                                                   direct_type_kind == E_TypeKind_Class)))
+  {
+    E_MemberArray members = e_type_data_members_from_key__cached(e_type_kind_is_pointer_or_ref(type_kind) ? direct_type_key : type_key);
+    result.total_semantic_row_count = result.total_visual_row_count = members.count;
+    result.row_exprs_count = dim_1u64(idx_range);
+    result.row_exprs = push_array(arena, E_Expr *, result.row_exprs_count);
+    for EachIndex(row_expr_idx, result.row_exprs_count)
+    {
+      result.row_exprs[row_expr_idx] = &e_expr_nil;
+      U64 member_idx = idx_range.min + row_expr_idx;
+      if(member_idx < members.count)
+      {
+        E_Member *member = &members.v[member_idx];
+        result.row_exprs[row_expr_idx] = e_expr_ref_member_access(arena, expr, member->name);
+      }
+    }
+  }
+  
+  ////////////////////////////
+  //- rjf: enums -> expansions generate rows for all members
+  //
+  else if(type_kind == E_TypeKind_Enum ||
+          (e_type_kind_is_pointer_or_ref(type_kind) && direct_type_kind == E_TypeKind_Enum))
+  {
+    E_Type *type = e_type_from_key(arena, e_type_kind_is_pointer_or_ref(type_kind) ? direct_type_key : type_key);
+    result.total_semantic_row_count = result.total_visual_row_count = type->count;
+    result.row_exprs_count = dim_1u64(idx_range);
+    result.row_exprs = push_array(arena, E_Expr *, result.row_exprs_count);
+    for EachIndex(row_expr_idx, result.row_exprs_count)
+    {
+      result.row_exprs[row_expr_idx] = &e_expr_nil;
+      U64 enumval_idx = idx_range.min + row_expr_idx;
+      if(enumval_idx < type->count)
+      {
+        E_EnumVal *enumval = &type->enum_vals[enumval_idx];
+        result.row_exprs[row_expr_idx] = e_expr_ref_member_access(arena, expr, enumval->name);
+      }
+    }
+  }
+  
+  ////////////////////////////
+  //- rjf: arrays -> expansions generate rows for all elements
+  //
+  else if(type_kind == E_TypeKind_Array ||
+          (e_type_kind_is_pointer_or_ref(type_kind) && direct_type_kind == E_TypeKind_Array))
+  {
+    B32 need_extra_deref = e_type_kind_is_pointer_or_ref(type_kind);
+    E_Expr *array_expr = need_extra_deref ? e_expr_ref_deref(arena, expr) : expr;
+    E_Type *type = e_type_from_key(arena, need_extra_deref ? direct_type_key : type_key);
+    result.total_semantic_row_count = result.total_visual_row_count = type->count;
+    result.row_exprs_count = dim_1u64(idx_range);
+    result.row_exprs = push_array(arena, E_Expr *, result.row_exprs_count);
+    for EachIndex(row_expr_idx, result.row_exprs_count)
+    {
+      result.row_exprs[row_expr_idx] = &e_expr_nil;
+      U64 element_idx = idx_range.min + row_expr_idx;
+      if(element_idx < type->count)
+      {
+        result.row_exprs[row_expr_idx] = e_expr_ref_array_index(arena, array_expr, element_idx);
+      }
+    }
+  }
+  
+  ////////////////////////////
+  //- rjf: pointer-to-pointer -> expansions generate dereference
+  //
+  else if(e_type_kind_is_pointer_or_ref(type_kind) && e_type_kind_is_pointer_or_ref(direct_type_kind))
+  {
+    result.total_semantic_row_count = result.total_visual_row_count = 1;
+    result.row_exprs_count = dim_1u64(idx_range);
+    result.row_exprs = push_array(arena, E_Expr *, result.row_exprs_count);
+    for EachIndex(row_expr_idx, result.row_exprs_count)
+    {
+      result.row_exprs[row_expr_idx] = &e_expr_nil;
+      if(idx_range.min + row_expr_idx < 1)
+      {
+        result.row_exprs[row_expr_idx] = e_expr_ref_deref(arena, expr);
+      }
+    }
+  }
+  
+  scratch_end(scratch);
+  return result;
+}
+
 EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(default)
 {
   Temp scratch = scratch_begin(&arena, 1);

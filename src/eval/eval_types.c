@@ -248,6 +248,8 @@ e_select_type_ctx(E_TypeCtx *ctx)
   e_type_state->cons_key_slots_count = 256;
   e_type_state->cons_content_slots = push_array(e_type_state->arena, E_ConsTypeSlot, e_type_state->cons_content_slots_count);
   e_type_state->cons_key_slots = push_array(e_type_state->arena, E_ConsTypeSlot, e_type_state->cons_key_slots_count);
+  e_type_state->member_cache_slots_count = 256;
+  e_type_state->member_cache_slots = push_array(e_type_state->arena, E_MemberCacheSlot, e_type_state->member_cache_slots_count);
 }
 
 ////////////////////////////////
@@ -1819,4 +1821,75 @@ e_type_key_list_copy(Arena *arena, E_TypeKeyList *src)
     e_type_key_list_push(arena, &dst, n->v);
   }
   return dst;
+}
+
+////////////////////////////////
+//~ rjf: Cache Lookups
+
+internal E_MemberCacheNode *
+e_member_cache_node_from_type_key(E_TypeKey key)
+{
+  U64 hash = e_hash_from_string(5381, str8_struct(&key));
+  U64 slot_idx = hash%e_type_state->member_cache_slots_count;
+  E_MemberCacheSlot *slot = &e_type_state->member_cache_slots[slot_idx];
+  E_MemberCacheNode *node = 0;
+  for(E_MemberCacheNode *n = slot->first; n != 0; n = n->next)
+  {
+    if(e_type_key_match(n->key, key))
+    {
+      node = n;
+      break;
+    }
+  }
+  if(node == 0)
+  {
+    node = push_array(e_type_state->arena, E_MemberCacheNode, 1);
+    SLLQueuePush(slot->first, slot->last, node);
+    node->key = key;
+    node->members = e_type_data_members_from_key(e_type_state->arena, key);
+    node->member_hash_slots_count = node->members.count;
+    node->member_hash_slots = push_array(e_type_state->arena, E_MemberHashSlot, node->member_hash_slots_count);
+    for EachIndex(idx, node->members.count)
+    {
+      U64 hash = e_hash_from_string(5381, node->members.v[idx].name);
+      U64 slot_idx = hash%node->member_hash_slots_count;
+      E_MemberHashNode *n = push_array(e_type_state->arena, E_MemberHashNode, 1);
+      SLLQueuePush(node->member_hash_slots[slot_idx].first, node->member_hash_slots[slot_idx].last, n);
+      n->member_idx = idx;
+    }
+  }
+  return node;
+}
+
+internal E_MemberArray
+e_type_data_members_from_key__cached(E_TypeKey key)
+{
+  E_MemberArray members = {0};
+  E_MemberCacheNode *node = e_member_cache_node_from_type_key(key);
+  if(node != 0)
+  {
+    members = node->members;
+  }
+  return members;
+}
+
+internal E_Member
+e_type_member_from_key_name__cached(E_TypeKey key, String8 name)
+{
+  E_Member result = {0};
+  E_MemberCacheNode *node = e_member_cache_node_from_type_key(key);
+  if(node != 0)
+  {
+    U64 hash = e_hash_from_string(5381, name);
+    U64 slot_idx = hash%node->member_hash_slots_count;
+    for(E_MemberHashNode *n = node->member_hash_slots[slot_idx].first; n != 0; n = n->next)
+    {
+      if(str8_match(node->members.v[n->member_idx].name, name, 0))
+      {
+        result = node->members.v[n->member_idx];
+        break;
+      }
+    }
+  }
+  return result;
 }

@@ -138,6 +138,8 @@ struct E_Type
 ////////////////////////////////
 //~ rjf: Evaluation Context
 
+//- rjf: constructed type cache types
+
 typedef struct E_ConsTypeParams E_ConsTypeParams;
 struct E_ConsTypeParams
 {
@@ -167,6 +169,41 @@ struct E_ConsTypeSlot
   E_ConsTypeNode *last;
 };
 
+//- rjf: member lookup cache types
+
+typedef struct E_MemberHashNode E_MemberHashNode;
+struct E_MemberHashNode
+{
+  E_MemberHashNode *next;
+  U64 member_idx;
+};
+
+typedef struct E_MemberHashSlot E_MemberHashSlot;
+struct E_MemberHashSlot
+{
+  E_MemberHashNode *first;
+  E_MemberHashNode *last;
+};
+
+typedef struct E_MemberCacheNode E_MemberCacheNode;
+struct E_MemberCacheNode
+{
+  E_MemberCacheNode *next;
+  E_TypeKey key;
+  E_MemberArray members;
+  U64 member_hash_slots_count;
+  E_MemberHashSlot *member_hash_slots;
+};
+
+typedef struct E_MemberCacheSlot E_MemberCacheSlot;
+struct E_MemberCacheSlot
+{
+  E_MemberCacheNode *first;
+  E_MemberCacheNode *last;
+};
+
+//- rjf: context parameterization
+
 typedef struct E_TypeCtx E_TypeCtx;
 struct E_TypeCtx
 {
@@ -179,6 +216,8 @@ struct E_TypeCtx
   U64 modules_count;
   E_Module *primary_module;
 };
+
+//- rjf: stateful machine part of context (not provided by user)
 
 typedef struct E_TypeState E_TypeState;
 struct E_TypeState
@@ -195,6 +234,10 @@ struct E_TypeState
   U64 cons_key_slots_count;
   E_ConsTypeSlot *cons_content_slots;
   E_ConsTypeSlot *cons_key_slots;
+  
+  // rjf: member cache table
+  U64 member_cache_slots_count;
+  E_MemberCacheSlot *member_cache_slots;
 };
 
 ////////////////////////////////
@@ -275,5 +318,12 @@ internal String8 e_type_string_from_key(Arena *arena, E_TypeKey key);
 //- rjf: type key data structures
 internal void e_type_key_list_push(Arena *arena, E_TypeKeyList *list, E_TypeKey key);
 internal E_TypeKeyList e_type_key_list_copy(Arena *arena, E_TypeKeyList *src);
+
+////////////////////////////////
+//~ rjf: Cache Lookups
+
+internal E_MemberCacheNode *e_member_cache_node_from_type_key(E_TypeKey key);
+internal E_MemberArray e_type_data_members_from_key__cached(E_TypeKey key);
+internal E_Member e_type_member_from_key_name__cached(E_TypeKey key, String8 name);
 
 #endif // EVAL_TYPES_H

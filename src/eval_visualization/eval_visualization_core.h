@@ -99,6 +99,18 @@ struct EV_ViewRuleList
 };
 
 ////////////////////////////////
+//~ rjf: Expansion Hook Output
+
+typedef struct EV_ExpandResult EV_ExpandResult;
+struct EV_ExpandResult
+{
+  U64 total_semantic_row_count;
+  U64 total_visual_row_count;
+  U64 row_exprs_count;
+  E_Expr **row_exprs;
+};
+
+////////////////////////////////
 //~ rjf: Blocks
 
 typedef enum EV_BlockKind
@@ -157,21 +169,17 @@ struct EV_BlockList
   U64 total_semantic_row_count;
 };
 
-typedef struct EV_BlockArray EV_BlockArray;
-struct EV_BlockArray
-{
-  EV_Block *v;
-  U64 count;
-  U64 total_visual_row_count;
-  U64 total_semantic_row_count;
-};
-
 ////////////////////////////////
 //~ rjf: View Rule Info Types
 
 #define EV_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_SIG(name) E_Expr *name(Arena *arena, E_Expr *expr, MD_Node *params)
 #define EV_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_NAME(name) ev_view_rule_expr_resolution__##name
 #define EV_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_DEF(name) internal EV_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_SIG(EV_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_NAME(name))
+
+#define EV_VIEW_RULE_EXPR_EXPAND_FUNCTION_SIG(name) EV_ExpandResult name(Arena *arena, E_Expr *expr, MD_Node *params, Rng1U64 idx_range)
+#define EV_VIEW_RULE_EXPR_EXPAND_FUNCTION_NAME(name) ev_view_rule_expr_expand__##name
+#define EV_VIEW_RULE_EXPR_EXPAND_FUNCTION_DEF(name) internal EV_VIEW_RULE_EXPR_EXPAND_FUNCTION_SIG(EV_VIEW_RULE_EXPR_EXPAND_FUNCTION_NAME(name))
+
 #define EV_VIEW_RULE_BLOCK_PROD_FUNCTION_SIG(name) void name(Arena *arena,                                      \
 EV_View *view,                                     \
 String8 filter,                                    \
@@ -186,7 +194,9 @@ S32 depth,                                         \
 struct EV_BlockList *out)
 #define EV_VIEW_RULE_BLOCK_PROD_FUNCTION_NAME(name) ev_view_rule_block_prod__##name
 #define EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(name) internal EV_VIEW_RULE_BLOCK_PROD_FUNCTION_SIG(EV_VIEW_RULE_BLOCK_PROD_FUNCTION_NAME(name))
+
 typedef EV_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_SIG(EV_ViewRuleExprResolutionHookFunctionType);
+typedef EV_VIEW_RULE_EXPR_EXPAND_FUNCTION_SIG(EV_ViewRuleExprExpandHookFunctionType);
 typedef EV_VIEW_RULE_BLOCK_PROD_FUNCTION_SIG(EV_ViewRuleBlockProdHookFunctionType);
 
 typedef U32 EV_ViewRuleInfoFlags; // NOTE(rjf): see @view_rule_info
@@ -202,6 +212,7 @@ struct EV_ViewRuleInfo
   String8 string;
   EV_ViewRuleInfoFlags flags;
   EV_ViewRuleExprResolutionHookFunctionType *expr_resolution;
+  EV_ViewRuleExprExpandHookFunctionType *expr_expand;
   EV_ViewRuleBlockProdHookFunctionType *block_prod;
 };
 
