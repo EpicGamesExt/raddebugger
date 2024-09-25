@@ -103,6 +103,7 @@ EV_VIEW_RULE_EXPR_EXPAND_FUNCTION_DEF(default)
 {
   EV_ExpandResult result = {0};
   Temp scratch = scratch_begin(&arena, 1);
+  U64 needed_row_count = dim_1u64(idx_range);
   
   ////////////////////////////
   //- rjf: unpack expression type info
@@ -125,17 +126,16 @@ EV_VIEW_RULE_EXPR_EXPAND_FUNCTION_DEF(default)
   {
     E_MemberArray members = e_type_data_members_from_key__cached(e_type_kind_is_pointer_or_ref(type_kind) ? direct_type_key : type_key);
     result.total_semantic_row_count = result.total_visual_row_count = members.count;
-    result.row_exprs_count = dim_1u64(idx_range);
+    result.row_exprs_count = Min(needed_row_count, members.count);
     result.row_exprs = push_array(arena, E_Expr *, result.row_exprs_count);
+    result.row_members = push_array(arena, E_Member *, result.row_exprs_count);
+    result.row_exprs_num_visual_rows = push_array(arena, U64, result.row_exprs_count);
     for EachIndex(row_expr_idx, result.row_exprs_count)
     {
-      result.row_exprs[row_expr_idx] = &e_expr_nil;
-      U64 member_idx = idx_range.min + row_expr_idx;
-      if(member_idx < members.count)
-      {
-        E_Member *member = &members.v[member_idx];
-        result.row_exprs[row_expr_idx] = e_expr_ref_member_access(arena, expr, member->name);
-      }
+      E_Member *member = &members.v[idx_range.min + row_expr_idx];
+      result.row_exprs[row_expr_idx] = e_expr_ref_member_access(arena, expr, member->name);
+      result.row_members[row_expr_idx] = member;
+      result.row_exprs_num_visual_rows[row_expr_idx] = 1;
     }
   }
   
@@ -147,17 +147,16 @@ EV_VIEW_RULE_EXPR_EXPAND_FUNCTION_DEF(default)
   {
     E_Type *type = e_type_from_key(arena, e_type_kind_is_pointer_or_ref(type_kind) ? direct_type_key : type_key);
     result.total_semantic_row_count = result.total_visual_row_count = type->count;
-    result.row_exprs_count = dim_1u64(idx_range);
+    result.row_exprs_count = Min(needed_row_count, type->count);
     result.row_exprs = push_array(arena, E_Expr *, result.row_exprs_count);
+    result.row_members = push_array(arena, E_Member *, result.row_exprs_count);
+    result.row_exprs_num_visual_rows = push_array(arena, U64, result.row_exprs_count);
     for EachIndex(row_expr_idx, result.row_exprs_count)
     {
-      result.row_exprs[row_expr_idx] = &e_expr_nil;
-      U64 enumval_idx = idx_range.min + row_expr_idx;
-      if(enumval_idx < type->count)
-      {
-        E_EnumVal *enumval = &type->enum_vals[enumval_idx];
-        result.row_exprs[row_expr_idx] = e_expr_ref_member_access(arena, expr, enumval->name);
-      }
+      E_EnumVal *enumval = &type->enum_vals[idx_range.min + row_expr_idx];
+      result.row_exprs[row_expr_idx] = e_expr_ref_member_access(arena, expr, enumval->name);
+      result.row_members[row_expr_idx] = &e_member_nil;
+      result.row_exprs_num_visual_rows[row_expr_idx] = 1;
     }
   }
   
@@ -171,16 +170,15 @@ EV_VIEW_RULE_EXPR_EXPAND_FUNCTION_DEF(default)
     E_Expr *array_expr = need_extra_deref ? e_expr_ref_deref(arena, expr) : expr;
     E_Type *type = e_type_from_key(arena, need_extra_deref ? direct_type_key : type_key);
     result.total_semantic_row_count = result.total_visual_row_count = type->count;
-    result.row_exprs_count = dim_1u64(idx_range);
+    result.row_exprs_count = Min(needed_row_count, type->count);
     result.row_exprs = push_array(arena, E_Expr *, result.row_exprs_count);
+    result.row_members = push_array(arena, E_Member *, result.row_exprs_count);
+    result.row_exprs_num_visual_rows = push_array(arena, U64, result.row_exprs_count);
     for EachIndex(row_expr_idx, result.row_exprs_count)
     {
-      result.row_exprs[row_expr_idx] = &e_expr_nil;
-      U64 element_idx = idx_range.min + row_expr_idx;
-      if(element_idx < type->count)
-      {
-        result.row_exprs[row_expr_idx] = e_expr_ref_array_index(arena, array_expr, element_idx);
-      }
+      result.row_exprs[row_expr_idx] = e_expr_ref_array_index(arena, array_expr, idx_range.min + row_expr_idx);
+      result.row_members[row_expr_idx] = &e_member_nil;
+      result.row_exprs_num_visual_rows[row_expr_idx] = 1;
     }
   }
   
@@ -189,17 +187,13 @@ EV_VIEW_RULE_EXPR_EXPAND_FUNCTION_DEF(default)
   //
   else if(e_type_kind_is_pointer_or_ref(type_kind) && e_type_kind_is_pointer_or_ref(direct_type_kind))
   {
-    result.total_semantic_row_count = result.total_visual_row_count = 1;
-    result.row_exprs_count = dim_1u64(idx_range);
+    result.total_semantic_row_count = result.total_visual_row_count = result.row_exprs_count = 1;
     result.row_exprs = push_array(arena, E_Expr *, result.row_exprs_count);
-    for EachIndex(row_expr_idx, result.row_exprs_count)
-    {
-      result.row_exprs[row_expr_idx] = &e_expr_nil;
-      if(idx_range.min + row_expr_idx < 1)
-      {
-        result.row_exprs[row_expr_idx] = e_expr_ref_deref(arena, expr);
-      }
-    }
+    result.row_members = push_array(arena, E_Member *, result.row_exprs_count);
+    result.row_exprs_num_visual_rows = push_array(arena, U64, result.row_exprs_count);
+    result.row_exprs[0] = e_expr_ref_deref(arena, expr);
+    result.row_members[0] = &e_member_nil;
+    result.row_exprs_num_visual_rows[0] = 1;
   }
   
   scratch_end(scratch);

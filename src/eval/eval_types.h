@@ -243,6 +243,7 @@ struct E_TypeState
 ////////////////////////////////
 //~ rjf: Globals
 
+global read_only E_Member e_member_nil = {E_MemberKind_Null, zero_struct, {0}, {0}, 0, {0}};
 global read_only E_Type e_type_nil = {E_TypeKind_Null};
 thread_static E_TypeState *e_type_state = 0;
 

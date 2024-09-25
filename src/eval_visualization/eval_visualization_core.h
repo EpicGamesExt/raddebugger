@@ -108,6 +108,8 @@ struct EV_ExpandResult
   U64 total_visual_row_count;
   U64 row_exprs_count;
   E_Expr **row_exprs;
+  E_Member **row_members;
+  U64 *row_exprs_num_visual_rows;
 };
 
 ////////////////////////////////
@@ -238,6 +240,79 @@ struct EV_ViewRuleInfoTable
 };
 
 ////////////////////////////////
+//~ rjf: Blocks (v2)
+
+typedef struct EV2_Block EV2_Block;
+struct EV2_Block
+{
+  // rjf: links
+  EV2_Block *first;
+  EV2_Block *last;
+  EV2_Block *next;
+  EV2_Block *prev;
+  EV2_Block *parent;
+  
+  // rjf: key
+  EV_Key key;
+  
+  // rjf: split index, relative to parent's space
+  U64 split_relative_idx;
+  
+  // rjf: expression / visualization info
+  String8 string;
+  E_Expr *expr;
+  EV_ViewRuleList *view_rules;
+  EV_ViewRuleInfo *expand_view_rule_info;
+  MD_Node *expand_view_rule_params;
+  
+  // rjf: expansion info
+  U64 semantic_row_count;
+  U64 visual_row_count;
+};
+
+typedef struct EV2_BlockTree EV2_BlockTree;
+struct EV2_BlockTree
+{
+  EV2_Block *root;
+  U64 total_semantic_row_count;
+  U64 total_visual_row_count;
+};
+
+////////////////////////////////
+//~ rjf: Rows (v2)
+
+typedef struct EV2_Row EV2_Row;
+struct EV2_Row
+{
+  EV2_Row *next;
+  
+  // rjf: block hierarchy info
+  EV2_Block *block;
+  EV_Key key;
+  
+  // rjf: row size/scroll info
+  U64 visual_size;
+  U64 visual_size_skipped;
+  U64 visual_size_chopped;
+  
+  // rjf: expression / visualization info
+  String8 string;
+  E_Expr *expr;
+  E_Member *member;
+  EV_ViewRuleList *view_rules;
+};
+
+typedef struct EV2_WindowedRowList EV2_WindowedRowList;
+struct EV2_WindowedRowList
+{
+  EV2_Row *first;
+  EV2_Row *last;
+  U64 count;
+  U64 count_before_visual;
+  U64 count_before_semantic;
+};
+
+////////////////////////////////
 //~ rjf: Automatic Type -> View Rule Map Types
 
 typedef struct EV_AutoViewRuleNode EV_AutoViewRuleNode;
@@ -320,6 +395,7 @@ global read_only EV_ViewRuleInfo ev_nil_view_rule_info = {0};
 thread_static EV_ViewRuleInfoTable *ev_view_rule_info_table = 0;
 global read_only EV_ViewRuleList ev_nil_view_rule_list = {0};
 thread_static EV_AutoViewRuleTable *ev_auto_view_rule_table = 0;
+global read_only EV2_Block ev2_nil_block = {&ev2_nil_block, &ev2_nil_block, &ev2_nil_block, &ev2_nil_block, &ev2_nil_block, {0}, 0, {0}, &e_expr_nil, &ev_nil_view_rule_list, &ev_nil_view_rule_info};
 
 ////////////////////////////////
 //~ rjf: Key Functions
@@ -379,6 +455,12 @@ internal EV_ViewRuleList *ev_view_rule_list_copy(Arena *arena, EV_ViewRuleList *
 //~ rjf: View Rule Expression Resolution
 
 internal E_Expr *ev_expr_from_expr_view_rules(Arena *arena, E_Expr *expr, EV_ViewRuleList *view_rules);
+
+////////////////////////////////
+//~ rjf: Block Building (v2)
+
+internal EV2_BlockTree ev2_block_tree_from_expr(Arena *arena, EV_View *view, String8 string, E_Expr *expr, EV_ViewRuleList *view_rules);
+internal EV2_WindowedRowList ev2_windowed_row_list_from_block_tree(Arena *arena, EV_View *view, EV2_BlockTree *block_tree, Rng1U64 visible_range);
 
 ////////////////////////////////
 //~ rjf: Block Building

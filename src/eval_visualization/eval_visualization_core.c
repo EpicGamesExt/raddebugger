@@ -492,6 +492,195 @@ ev_expr_from_expr_view_rules(Arena *arena, E_Expr *expr, EV_ViewRuleList *view_r
 }
 
 ////////////////////////////////
+//~ rjf: Block Building (v2)
+
+internal EV2_BlockTree
+ev2_block_tree_from_expr(Arena *arena, EV_View *view, String8 string, E_Expr *expr, EV_ViewRuleList *view_rules)
+{
+  EV2_BlockTree tree = {&ev2_nil_block};
+  {
+    Temp scratch = scratch_begin(&arena, 1);
+    EV_ViewRuleInfo *default_expand_view_rule_info = ev_view_rule_info_from_string(str8_lit("default"));
+    
+    //- rjf: generate root block
+    tree.root = push_array(arena, EV2_Block, 1);
+    MemoryCopyStruct(tree.root, &ev2_nil_block);
+    tree.root->key        = ev_key_make(5381, 1);
+    tree.root->string     = string;
+    tree.root->expr       = expr;
+    tree.root->view_rules = view_rules;
+    tree.root->semantic_row_count = tree.root->visual_row_count = 1;
+    
+    //- rjf: iterate all expansions & generate blocks for each
+    typedef struct Task Task;
+    struct Task
+    {
+      Task *next;
+      EV2_Block *parent_block;
+      U64 split_relative_idx;
+    };
+    Task start_task = {0, tree.root, 1};
+    Task *first_task = &start_task;
+    Task *last_task = first_task;
+    for(Task *t = first_task; t != 0; t = t->next)
+    {
+      EV_ExpandNode *expand_node = ev_expand_node_from_key(view, t->parent_block->key);
+      
+      // rjf: skip if not expanded
+      if(!expand_node || !expand_node->expanded)
+      {
+        continue;
+      }
+      
+      // rjf: get expansion view rule info
+      EV_ViewRuleInfo *expand_view_rule_info = &ev_nil_view_rule_info;
+      MD_Node *expand_params = &md_nil_node;
+      for(EV_ViewRuleNode *n = t->parent_block->view_rules->first; n != 0; n = n->next)
+      {
+        EV_ViewRuleInfo *info = ev_view_rule_info_from_string(n->v.root->string);
+        if(info->expr_expand != 0)
+        {
+          expand_view_rule_info = info;
+          expand_params = n->v.root;
+        }
+      }
+      
+      // rjf: get expansion info
+      EV_ExpandResult expand_result = expand_view_rule_info->expr_expand(arena, t->parent_block->expr, expand_params, r1u64(0, 0));
+      
+      // rjf: generate block for expansion
+      EV2_Block *expansion_block = push_array(arena, EV2_Block, 1);
+      MemoryCopyStruct(expansion_block, &ev2_nil_block);
+      DLLPushBack(t->parent_block->first, t->parent_block->last, expansion_block);
+      expansion_block->parent                   = t->parent_block;
+      expansion_block->key                      = t->parent_block->key;
+      expansion_block->split_relative_idx       = t->split_relative_idx;
+      expansion_block->expr                     = t->parent_block->expr;
+      expansion_block->view_rules               = t->parent_block->view_rules;
+      expansion_block->expand_view_rule_info    = expand_view_rule_info;
+      expansion_block->expand_view_rule_params  = expand_params;
+      expansion_block->semantic_row_count       = expand_result.total_semantic_row_count;
+      expansion_block->visual_row_count         = expand_result.total_visual_row_count;
+      tree.total_semantic_row_count += expand_result.total_semantic_row_count;
+      tree.total_visual_row_count += expand_result.total_visual_row_count;
+      
+      // rjf: iterate children expansions, generate children blocks for each
+      // TODO(rjf): need to iterate these in index order, rather than "child_num" (which needs to be renamed to "child_id") order
+      for(EV_ExpandNode *child = expand_node->first; child != 0; child = child->next)
+      {
+        Task *task = push_array(scratch.arena, Task, 1);
+        SLLQueuePush(first_task, last_task, task);
+        task->parent_block       = expansion_block;
+        task->split_relative_idx = child->key.child_num - 1; // TODO(rjf): key -> index
+      }
+    }
+    scratch_end(scratch);
+  }
+  return tree;
+}
+
+internal EV2_WindowedRowList
+ev2_windowed_row_list_from_block_tree(Arena *arena, EV_View *view, EV2_BlockTree *block_tree, Rng1U64 visible_range)
+{
+  EV2_WindowedRowList rows = {0};
+  {
+    Temp scratch = scratch_begin(&arena, 1);
+    typedef struct BlockTask BlockTask;
+    struct BlockTask
+    {
+      BlockTask *next;
+      EV2_Block *block;
+      EV2_Block *next_child;
+      Rng1U64 block_relative_range;
+    };
+    U64 visual_idx_off = 0;
+    BlockTask start_task = {0, block_tree->root, block_tree->root->first, r1u64(0, block_tree->root->visual_row_count)};
+    for(BlockTask *t = &start_task; t != 0; t = t->next)
+    {
+      // rjf: get block-relative range, truncated by split position of next child
+      Rng1U64 block_relative_range = t->block_relative_range;
+      block_relative_range.max = Min(t->next_child->split_relative_idx, block_relative_range.max);
+      U64 block_num_visual_rows = dim_1u64(block_relative_range);
+      
+      // rjf: get global range of this block
+      Rng1U64 block_global_range = r1u64(visual_idx_off, visual_idx_off + block_num_visual_rows);
+      
+      // rjf: get skip/chop of global range
+      U64 num_skipped = 0;
+      U64 num_chopped = 0;
+      {
+        if(visible_range.min > block_global_range.min)
+        {
+          num_skipped = (visible_range.min - block_global_range.min);
+          num_skipped = Min(num_skipped, block_num_visual_rows);
+        }
+        if(visible_range.max < block_global_range.max)
+        {
+          num_chopped = (block_global_range.max - visible_range.max);
+          num_chopped = Min(num_chopped, block_num_visual_rows);
+        }
+      }
+      
+      // rjf: get block-relative *windowed* range
+      Rng1U64 block_relative_range__windowed = r1u64(block_relative_range.min + num_skipped,
+                                                     block_relative_range.max - num_chopped);
+      
+      // rjf: sum & advance
+      visual_idx_off += block_num_visual_rows;
+      
+      // rjf: generate rows before next splitting child
+      if(block_relative_range__windowed.max > block_relative_range__windowed.min)
+      {
+        EV_ExpandResult expand = t->block->expand_view_rule_info->expr_expand(arena, t->block->expr, t->block->expand_view_rule_params, block_relative_range__windowed);
+        for EachIndex(idx, expand.row_exprs_count)
+        {
+          U64 row_visual_size = expand.row_exprs_num_visual_rows[idx];
+          U64 child_id = block_relative_range.min + idx + 1; // TODO(rjf): index -> key
+          EV2_Row *row = push_array(arena, EV2_Row, 1);
+          SLLQueuePush(rows.first, rows.last, row);
+          row->block                = t->block;
+          row->key                  = ev_key_make(ev_hash_from_key(row->block->key), child_id);
+          row->visual_size          = row_visual_size;
+          row->visual_size_skipped  = 0; // TODO(rjf)
+          row->visual_size_chopped  = 0; // TODO(rjf)
+          row->string               = t->block->string;
+          row->expr                 = expand.row_exprs[idx];
+          row->member               = expand.row_members[idx];
+          row->view_rules           = ev_view_rule_list_from_inheritance(arena, t->block->view_rules);
+          // TODO(rjf): mix in view rules based on row's key, row's type
+        }
+      }
+      
+      // rjf: generate task for child, + for post-child parts of this block
+      if(t->next_child != &ev2_nil_block)
+      {
+        // rjf: generate task for child - do *before* remainder (descend block tree depth first)
+        BlockTask *child_task = push_array(scratch.arena, BlockTask, 1);
+        child_task->next = t->next;
+        t->next = child_task;
+        child_task->block = t->next_child;
+        child_task->next_child = t->next_child->first;
+        child_task->block_relative_range = r1u64(0, t->next_child->visual_row_count);
+        
+        // rjf: generate task for post-child rows, if any, after children
+        Rng1U64 remainder_range = r1u64(t->next_child->split_relative_idx, t->block_relative_range.max);
+        if(remainder_range.max > remainder_range.min)
+        {
+          BlockTask *remainder_task = push_array(scratch.arena, BlockTask, 1);
+          remainder_task->next = child_task->next;
+          child_task->next = remainder_task;
+          remainder_task->block = t->block;
+          remainder_task->next_child = t->next_child->next;
+          remainder_task->block_relative_range = remainder_range;
+        }
+      }
+    }
+    scratch_end(scratch);
+  }
+  return rows;
+}
+
+////////////////////////////////
 //~ rjf: Block Building
 
 internal EV_Block *
