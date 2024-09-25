@@ -517,7 +517,6 @@ internal EV2_BlockRangeList ev2_block_range_list_from_tree(Arena *arena, EV2_Blo
 ////////////////////////////////
 //~ rjf: Row Building (v2)
 
-internal EV2_WindowedRowList ev2_windowed_row_list_from_block_tree(Arena *arena, EV_View *view, String8 filter, EV2_BlockTree *block_tree, Rng1U64 visible_range);
 internal EV2_WindowedRowList ev2_windowed_row_list_from_block_range_list(Arena *arena, EV_View *view, String8 filter, EV2_BlockRangeList *block_ranges, Rng1U64 visible_range);
 internal String8 ev2_expr_string_from_row(Arena *arena, EV2_Row *row, EV_StringFlags flags);
 internal B32 ev2_row_is_expandable(EV2_Row *row);
