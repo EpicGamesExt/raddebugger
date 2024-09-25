@@ -185,7 +185,7 @@ internal E_String2ExprMap e_string2expr_map_make(Arena *arena, U64 slot_count);
 internal void e_string2expr_map_insert(Arena *arena, E_String2ExprMap *map, String8 string, E_Expr *expr);
 internal void e_string2expr_map_inc_poison(E_String2ExprMap *map, String8 string);
 internal void e_string2expr_map_dec_poison(E_String2ExprMap *map, String8 string);
-internal E_Expr *e_expr_from_string(E_String2ExprMap *map, String8 string);
+internal E_Expr *e_string2expr_lookup(E_String2ExprMap *map, String8 string);
 
 ////////////////////////////////
 //~ rjf: Debug-Info-Driven Map Building Functions
@@ -239,5 +239,6 @@ internal void e_push_leaf_ident_exprs_from_expr__in_place(Arena *arena, E_String
 internal E_Parse e_parse_type_from_text_tokens(Arena *arena, String8 text, E_TokenArray *tokens);
 internal E_Parse e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *tokens, S64 max_precedence);
 internal E_Parse e_parse_expr_from_text_tokens(Arena *arena, String8 text, E_TokenArray *tokens);
+internal E_Expr *e_parse_expr_from_text(Arena *arena, String8 text);
 
 #endif // EVAL_PARSE_H

@@ -99,11 +99,21 @@ ev_arch_from_eval_params(E_Eval eval, MD_Node *params)
 ////////////////////////////////
 //~ rjf: default
 
-EV_VIEW_RULE_EXPR_EXPAND_FUNCTION_DEF(default)
+typedef struct EV_DefaultExpandAccel EV_DefaultExpandAccel;
+struct EV_DefaultExpandAccel
 {
-  EV_ExpandResult result = {0};
+  E_MemberArray members;
+  E_EnumValArray enum_vals;
+  U64 array_count;
+  B32 array_need_extra_deref;
+  B32 is_ptr2ptr;
+};
+
+EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(default)
+{
   Temp scratch = scratch_begin(&arena, 1);
-  U64 needed_row_count = dim_1u64(idx_range);
+  U64 total_row_count = 0;
+  EV_DefaultExpandAccel *accel = push_array(arena, EV_DefaultExpandAccel, 1);
   
   ////////////////////////////
   //- rjf: unpack expression type info
@@ -124,19 +134,8 @@ EV_VIEW_RULE_EXPR_EXPAND_FUNCTION_DEF(default)
                                                    direct_type_kind == E_TypeKind_Union ||
                                                    direct_type_kind == E_TypeKind_Class)))
   {
-    E_MemberArray members = e_type_data_members_from_key__cached(e_type_kind_is_pointer_or_ref(type_kind) ? direct_type_key : type_key);
-    result.total_semantic_row_count = result.total_visual_row_count = members.count;
-    result.row_exprs_count = Min(needed_row_count, members.count);
-    result.row_exprs = push_array(arena, E_Expr *, result.row_exprs_count);
-    result.row_members = push_array(arena, E_Member *, result.row_exprs_count);
-    result.row_exprs_num_visual_rows = push_array(arena, U64, result.row_exprs_count);
-    for EachIndex(row_expr_idx, result.row_exprs_count)
-    {
-      E_Member *member = &members.v[idx_range.min + row_expr_idx];
-      result.row_exprs[row_expr_idx] = e_expr_ref_member_access(arena, expr, member->name);
-      result.row_members[row_expr_idx] = member;
-      result.row_exprs_num_visual_rows[row_expr_idx] = 1;
-    }
+    accel->members = e_type_data_members_from_key__cached(e_type_kind_is_pointer_or_ref(type_kind) ? direct_type_key : type_key);
+    total_row_count = accel->members.count;
   }
   
   ////////////////////////////
@@ -146,18 +145,9 @@ EV_VIEW_RULE_EXPR_EXPAND_FUNCTION_DEF(default)
           (e_type_kind_is_pointer_or_ref(type_kind) && direct_type_kind == E_TypeKind_Enum))
   {
     E_Type *type = e_type_from_key(arena, e_type_kind_is_pointer_or_ref(type_kind) ? direct_type_key : type_key);
-    result.total_semantic_row_count = result.total_visual_row_count = type->count;
-    result.row_exprs_count = Min(needed_row_count, type->count);
-    result.row_exprs = push_array(arena, E_Expr *, result.row_exprs_count);
-    result.row_members = push_array(arena, E_Member *, result.row_exprs_count);
-    result.row_exprs_num_visual_rows = push_array(arena, U64, result.row_exprs_count);
-    for EachIndex(row_expr_idx, result.row_exprs_count)
-    {
-      E_EnumVal *enumval = &type->enum_vals[idx_range.min + row_expr_idx];
-      result.row_exprs[row_expr_idx] = e_expr_ref_member_access(arena, expr, enumval->name);
-      result.row_members[row_expr_idx] = &e_member_nil;
-      result.row_exprs_num_visual_rows[row_expr_idx] = 1;
-    }
+    accel->enum_vals.v = type->enum_vals;
+    accel->enum_vals.count = type->count;
+    total_row_count = accel->enum_vals.count;
   }
   
   ////////////////////////////
@@ -169,8 +159,84 @@ EV_VIEW_RULE_EXPR_EXPAND_FUNCTION_DEF(default)
     B32 need_extra_deref = e_type_kind_is_pointer_or_ref(type_kind);
     E_Expr *array_expr = need_extra_deref ? e_expr_ref_deref(arena, expr) : expr;
     E_Type *type = e_type_from_key(arena, need_extra_deref ? direct_type_key : type_key);
-    result.total_semantic_row_count = result.total_visual_row_count = type->count;
-    result.row_exprs_count = Min(needed_row_count, type->count);
+    total_row_count = type->count;
+    accel->array_count = type->count;
+    accel->array_need_extra_deref = need_extra_deref;
+  }
+  
+  ////////////////////////////
+  //- rjf: pointer-to-pointer -> expansions generate dereference
+  //
+  else if(e_type_kind_is_pointer_or_ref(type_kind) && e_type_kind_is_pointer_or_ref(direct_type_kind))
+  {
+    total_row_count = 1;
+    accel->is_ptr2ptr = 1;
+  }
+  
+  ////////////////////////////
+  //- rjf: package result
+  //
+  EV_ExpandInfo result = {0};
+  {
+    result.user_data = accel;
+    result.total_semantic_row_count = result.total_visual_row_count = total_row_count;
+  }
+  
+  scratch_end(scratch);
+  return result;
+}
+
+EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(default)
+{
+  EV_DefaultExpandAccel *accel = (EV_DefaultExpandAccel *)user_data;
+  EV_ExpandRangeInfo result = {0};
+  U64 needed_row_count = dim_1u64(idx_range);
+  
+  ////////////////////////////
+  //- rjf: fill with members
+  //
+  if(accel->members.count != 0)
+  {
+    E_MemberArray *members = &accel->members;
+    result.row_exprs_count = Min(needed_row_count, members->count);
+    result.row_exprs = push_array(arena, E_Expr *, result.row_exprs_count);
+    result.row_members = push_array(arena, E_Member *, result.row_exprs_count);
+    result.row_exprs_num_visual_rows = push_array(arena, U64, result.row_exprs_count);
+    for EachIndex(row_expr_idx, result.row_exprs_count)
+    {
+      E_Member *member = &members->v[idx_range.min + row_expr_idx];
+      result.row_exprs[row_expr_idx] = e_expr_ref_member_access(arena, expr, member->name);
+      result.row_members[row_expr_idx] = member;
+      result.row_exprs_num_visual_rows[row_expr_idx] = 1;
+    }
+  }
+  
+  ////////////////////////////
+  //- rjf: fill with enum vals
+  //
+  else if(accel->enum_vals.count != 0)
+  {
+    E_EnumValArray *enumvals = &accel->enum_vals;
+    result.row_exprs_count = Min(needed_row_count, enumvals->count);
+    result.row_exprs = push_array(arena, E_Expr *, result.row_exprs_count);
+    result.row_members = push_array(arena, E_Member *, result.row_exprs_count);
+    result.row_exprs_num_visual_rows = push_array(arena, U64, result.row_exprs_count);
+    for EachIndex(row_expr_idx, result.row_exprs_count)
+    {
+      E_EnumVal *enumval = &enumvals->v[idx_range.min + row_expr_idx];
+      result.row_exprs[row_expr_idx] = e_expr_ref_member_access(arena, expr, enumval->name);
+      result.row_members[row_expr_idx] = &e_member_nil;
+      result.row_exprs_num_visual_rows[row_expr_idx] = 1;
+    }
+  }
+  
+  ////////////////////////////
+  //- rjf: fill with array indices
+  //
+  else if(accel->array_count != 0)
+  {
+    E_Expr *array_expr = accel->array_need_extra_deref ? e_expr_ref_deref(arena, expr) : expr;
+    result.row_exprs_count = Min(needed_row_count, accel->array_count);
     result.row_exprs = push_array(arena, E_Expr *, result.row_exprs_count);
     result.row_members = push_array(arena, E_Member *, result.row_exprs_count);
     result.row_exprs_num_visual_rows = push_array(arena, U64, result.row_exprs_count);
@@ -183,11 +249,11 @@ EV_VIEW_RULE_EXPR_EXPAND_FUNCTION_DEF(default)
   }
   
   ////////////////////////////
-  //- rjf: pointer-to-pointer -> expansions generate dereference
+  //- rjf: fill with ptr-to-ptr deref
   //
-  else if(e_type_kind_is_pointer_or_ref(type_kind) && e_type_kind_is_pointer_or_ref(direct_type_kind))
+  else if(accel->is_ptr2ptr)
   {
-    result.total_semantic_row_count = result.total_visual_row_count = result.row_exprs_count = 1;
+    result.row_exprs_count = 1;
     result.row_exprs = push_array(arena, E_Expr *, result.row_exprs_count);
     result.row_members = push_array(arena, E_Member *, result.row_exprs_count);
     result.row_exprs_num_visual_rows = push_array(arena, U64, result.row_exprs_count);
@@ -196,7 +262,6 @@ EV_VIEW_RULE_EXPR_EXPAND_FUNCTION_DEF(default)
     result.row_exprs_num_visual_rows[0] = 1;
   }
   
-  scratch_end(scratch);
   return result;
 }
 

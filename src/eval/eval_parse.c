@@ -190,7 +190,7 @@ e_string2expr_map_dec_poison(E_String2ExprMap *map, String8 string)
 }
 
 internal E_Expr *
-e_expr_from_string(E_String2ExprMap *map, String8 string)
+e_string2expr_lookup(E_String2ExprMap *map, String8 string)
 {
   E_Expr *expr = &e_expr_nil;
   if(map->slots_count != 0)
@@ -2065,4 +2065,14 @@ e_parse_expr_from_text_tokens(Arena *arena, String8 text, E_TokenArray *tokens)
 {
   E_Parse parse = e_parse_expr_from_text_tokens__prec(arena, text, tokens, e_max_precedence);
   return parse;
+}
+
+internal E_Expr *
+e_parse_expr_from_text(Arena *arena, String8 text)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  E_TokenArray tokens = e_token_array_from_text(scratch.arena, text);
+  E_Parse parse = e_parse_expr_from_text_tokens(arena, text, &tokens);
+  scratch_end(scratch);
+  return parse.expr;
 }

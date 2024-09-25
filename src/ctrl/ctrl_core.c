@@ -569,6 +569,22 @@ ctrl_entity_list_from_handle_list(Arena *arena, CTRL_EntityStore *store, CTRL_Ha
   return result;
 }
 
+//- rjf: entity array data structure
+
+internal CTRL_EntityArray
+ctrl_entity_array_from_list(Arena *arena, CTRL_EntityList *list)
+{
+  CTRL_EntityArray result = {0};
+  result.count = list->count;
+  result.v = push_array_no_zero(arena, CTRL_Entity *, result.count);
+  U64 idx = 0;
+  for(CTRL_EntityNode *n = list->first; n != 0; n = n->next, idx += 1)
+  {
+    result.v[idx] = n->v;
+  }
+  return result;
+}
+
 //- rjf: cache creation/destruction
 
 internal CTRL_EntityStore *

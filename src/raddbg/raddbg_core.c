@@ -5825,11 +5825,11 @@ rd_window_frame(RD_Window *ws)
           EV_View *ev_view = rd_ev_view_from_key(d_hash_from_string(ev_view_key_string));
           EV_Key parent_key = ev_key_make(5381, 1);
           EV_Key key = ev_key_make(ev_hash_from_key(parent_key), 1);
-          EV2_BlockTree block_tree = ev2_block_tree_from_string(scratch.arena, ev_view, expr, &top_level_view_rules);
+          EV2_BlockTree block_tree = ev2_block_tree_from_string(scratch.arena, ev_view, str8_zero(), expr, &top_level_view_rules);
           // EV_BlockList viz_blocks = ev_block_list_from_view_expr_keys(scratch.arena, ev_view, str8_zero(), &top_level_view_rules, expr, parent_key, key, 0);
           CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(eval.space);
           U32 default_radix = (entity->kind == CTRL_EntityKind_Thread ? 16 : 10);
-          EV2_WindowedRowList rows = ev2_windowed_row_list_from_block_tree(scratch.arena, ev_view, &block_tree, r1u64(0, 50));
+          EV2_WindowedRowList rows = ev2_windowed_row_list_from_block_tree(scratch.arena, ev_view, str8_zero(), &block_tree, r1u64(0, 50));
           // EV_WindowedRowList viz_rows = ev_windowed_row_list_from_block_list(scratch.arena, ev_view, r1s64(0, 50), &viz_blocks);
           
           //- rjf: animate
@@ -7863,6 +7863,55 @@ rd_window_frame(RD_Window *ws)
 ////////////////////////////////
 //~ rjf: Eval Visualization
 
+typedef struct RD_EntityExpandAccel RD_EntityExpandAccel;
+struct RD_EntityExpandAccel
+{
+  RD_EntityArray entities;
+};
+
+EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(watches)
+{
+  RD_EntityExpandAccel *accel = push_array(arena, RD_EntityExpandAccel, 1);
+  Temp scratch = scratch_begin(&arena, 1);
+  {
+    RD_EntityList entities = rd_query_cached_entity_list_with_kind(RD_EntityKind_Watch);
+    RD_EntityList entities_filtered = {0};
+    for(RD_EntityNode *n = entities.first; n != 0; n = n->next)
+    {
+      RD_Entity *entity = n->entity;
+      String8 entity_expr_string = entity->string;
+      FuzzyMatchRangeList matches = fuzzy_match_find(scratch.arena, filter, entity_expr_string);
+      if(matches.count == matches.needle_part_count)
+      {
+        rd_entity_list_push(scratch.arena, &entities_filtered, entity);
+      }
+    }
+    accel->entities = rd_entity_array_from_list(arena, &entities_filtered);
+  }
+  scratch_end(scratch);
+  EV_ExpandInfo info = {accel, accel->entities.count, accel->entities.count};
+  return info;
+}
+
+EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(watches)
+{
+  RD_EntityExpandAccel *accel = (RD_EntityExpandAccel *)user_data;
+  EV_ExpandRangeInfo result = {0};
+  {
+    U64 needed_row_count = dim_1u64(idx_range);
+    result.row_exprs_count = Min(needed_row_count, accel->entities.count);
+    result.row_exprs       = push_array(arena, E_Expr *, result.row_exprs_count);
+    result.row_members     = push_array(arena, E_Member *, result.row_exprs_count);
+    for EachIndex(row_expr_idx, result.row_exprs_count)
+    {
+      result.row_exprs[row_expr_idx] = e_parse_expr_from_text(arena, accel->entities.v[idx_range.min + row_expr_idx]->string);
+      result.row_members[row_expr_idx] = &e_member_nil;
+      result.row_exprs_num_visual_rows[row_expr_idx] = 1;
+    }
+  }
+  return result;
+}
+
 EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(watches)
 {
   Temp scratch = scratch_begin(&arena, 1);
@@ -8051,6 +8100,85 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(procedures)
 {
   rd_ev_view_rule_block_prod_collection_debug_tables(arena, RDI_SectionKind_Procedures, view, filter, parent_key, key, expand_node, string, expr, view_rules, view_params, depth, out);
 }
+
+internal EV_ExpandInfo      rd_ev_view_rule_expr_expand_info__meta_entities(Arena *arena, EV_View *view, String8 filter, E_Expr *expr, MD_Node *params, RD_EntityKind kind);
+internal EV_ExpandRangeInfo rd_ev_view_rule_expr_expand_range_info__meta_entities(Arena *arena, EV_View *view, String8 filter, E_Expr *expr, MD_Node *params, Rng1U64 idx_range, void *user_data, RD_EntityKind kind);
+internal EV_ExpandInfo      rd_ev_view_rule_expr_expand_info__meta_ctrl_entities(Arena *arena, EV_View *view, String8 filter, E_Expr *expr, MD_Node *params, CTRL_EntityKind kind);
+internal EV_ExpandRangeInfo rd_ev_view_rule_expr_expand_range_info__meta_ctrl_entities(Arena *arena, EV_View *view, String8 filter, E_Expr *expr, MD_Node *params, Rng1U64 idx_range, void *user_data, CTRL_EntityKind kind);
+
+#if 0
+internal EV_ExpandResult
+rd_ev_view_rule_expr_expand_meta_entities(Arena *arena, EV_View *view, String8 filter, E_Expr *expr, MD_Node *params, Rng1U64 idx_range, RD_EntityKind kind)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  U64 needed_row_count = dim_1u64(idx_range);
+  RD_EntityList entities = rd_query_cached_entity_list_with_kind(kind);
+  RD_EntityList entities_filtered = {0};
+  for(RD_EntityNode *n = entities.first; n != 0; n = n->next)
+  {
+    RD_Entity *entity = n->entity;
+    FuzzyMatchRangeList matches = fuzzy_match_find(scratch.arena, filter, entity->string);
+    if(matches.count == matches.needle_part_count)
+    {
+      rd_entity_list_push(scratch.arena, &entities_filtered, entity);
+    }
+  }
+  RD_EntityArray entities_filtered_array = rd_entity_array_from_list(scratch.arena, &entities_filtered);
+  EV_ExpandResult result = {0};
+  {
+    result.total_semantic_row_count = result.total_visual_row_count = entities_filtered_array.count;
+    result.row_exprs_count = Min(needed_row_count, entities_filtered_array.count);
+    result.row_exprs       = push_array(arena, E_Expr *, result.row_exprs_count);
+    result.row_members     = push_array(arena, E_Member *, result.row_exprs_count);
+    for EachIndex(row_expr_idx, result.row_exprs_count)
+    {
+      RD_Entity *entity = entities_filtered_array.v[idx_range.min + row_expr_idx];
+      String8 entity_expr_string = push_str8f(arena, "$%I64u", entity->id);
+      result.row_exprs[row_expr_idx] = e_parse_expr_from_text(arena, entity_expr_string);
+      result.row_members[row_expr_idx] = &e_member_nil;
+      result.row_exprs_num_visual_rows[row_expr_idx] = 1;
+    }
+  }
+  scratch_end(scratch);
+  return result;
+}
+
+internal EV_ExpandResult
+rd_ev_view_rule_expr_expand_meta_ctrl_entities(Arena *arena, EV_View *view, String8 filter, E_Expr *expr, MD_Node *params, Rng1U64 idx_range, CTRL_EntityKind kind)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  U64 needed_row_count = dim_1u64(idx_range);
+  CTRL_EntityList entities = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, kind);
+  CTRL_EntityList entities_filtered = {0};
+  for(CTRL_EntityNode *n = entities.first; n != 0; n = n->next)
+  {
+    CTRL_Entity *entity = n->v;
+    FuzzyMatchRangeList matches = fuzzy_match_find(scratch.arena, filter, entity->string);
+    if(matches.count == matches.needle_part_count)
+    {
+      ctrl_entity_list_push(scratch.arena, &entities_filtered, entity);
+    }
+  }
+  CTRL_EntityArray entities_filtered_array = ctrl_entity_array_from_list(scratch.arena, &entities_filtered);
+  EV_ExpandResult result = {0};
+  {
+    result.total_semantic_row_count = result.total_visual_row_count = entities_filtered_array.count;
+    result.row_exprs_count = Min(needed_row_count, entities_filtered_array.count);
+    result.row_exprs       = push_array(arena, E_Expr *, result.row_exprs_count);
+    result.row_members     = push_array(arena, E_Member *, result.row_exprs_count);
+    for EachIndex(row_expr_idx, result.row_exprs_count)
+    {
+      CTRL_Entity *entity = entities_filtered_array.v[idx_range.min + row_expr_idx];
+      String8 entity_expr_string = push_str8f(arena, "$_%I64x_%I64x", entity->handle.machine_id, entity->handle.dmn_handle.u64[0]);
+      result.row_exprs[row_expr_idx] = e_parse_expr_from_text(arena, entity_expr_string);
+      result.row_members[row_expr_idx] = &e_member_nil;
+      result.row_exprs_num_visual_rows[row_expr_idx] = 1;
+    }
+  }
+  scratch_end(scratch);
+  return result;
+}
+#endif
 
 internal void
 rd_ev_view_rule_block_prod_collection_debug_tables(Arena *arena, RDI_SectionKind target, EV_View *view, String8 filter, EV_Key parent_key, EV_Key key, EV_ExpandNode *expand_node, String8 string, E_Expr *expr, EV_ViewRuleList *view_rules, MD_Node *view_params, S32 depth, struct EV_BlockList *out)

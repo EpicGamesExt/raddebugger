@@ -160,6 +160,13 @@ struct CTRL_EntityList
   U64 count;
 };
 
+typedef struct CTRL_EntityArray CTRL_EntityArray;
+struct CTRL_EntityArray
+{
+  CTRL_Entity **v;
+  U64 count;
+};
+
 typedef struct CTRL_EntityRec CTRL_EntityRec;
 struct CTRL_EntityRec
 {
@@ -805,6 +812,9 @@ internal CTRL_Event ctrl_event_from_serialized_string(Arena *arena, String8 stri
 internal void ctrl_entity_list_push(Arena *arena, CTRL_EntityList *list, CTRL_Entity *entity);
 internal CTRL_EntityList ctrl_entity_list_from_handle_list(Arena *arena, CTRL_EntityStore *store, CTRL_HandleList *list);
 #define ctrl_entity_list_first(list) ((list)->first ? (list)->first->v : &ctrl_entity_nil)
+
+//- rjf: entity array data structure
+internal CTRL_EntityArray ctrl_entity_array_from_list(Arena *arena, CTRL_EntityList *list);
 
 //- rjf: cache creation/destruction
 internal CTRL_EntityStore *ctrl_entity_store_alloc(void);

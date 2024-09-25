@@ -1272,7 +1272,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
     //- rjf: leaf identifiers
     case E_ExprKind_LeafIdent:
     {
-      E_Expr *macro_expr = e_expr_from_string(e_ir_ctx->macro_map, expr->string);
+      E_Expr *macro_expr = e_string2expr_lookup(e_ir_ctx->macro_map, expr->string);
       if(macro_expr == &e_expr_nil)
       {
         e_msgf(arena, &result.msgs, E_MsgKind_ResolutionFailure, expr->location, "`%S` could not be found.", expr->string);
