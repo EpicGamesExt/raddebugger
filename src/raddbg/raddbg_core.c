@@ -5825,17 +5825,19 @@ rd_window_frame(RD_Window *ws)
           EV_View *ev_view = rd_ev_view_from_key(d_hash_from_string(ev_view_key_string));
           EV_Key parent_key = ev_key_make(5381, 1);
           EV_Key key = ev_key_make(ev_hash_from_key(parent_key), 1);
-          EV_BlockList viz_blocks = ev_block_list_from_view_expr_keys(scratch.arena, ev_view, str8_zero(), &top_level_view_rules, expr, parent_key, key, 0);
+          EV2_BlockTree block_tree = ev2_block_tree_from_string(scratch.arena, ev_view, expr, &top_level_view_rules);
+          // EV_BlockList viz_blocks = ev_block_list_from_view_expr_keys(scratch.arena, ev_view, str8_zero(), &top_level_view_rules, expr, parent_key, key, 0);
           CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(eval.space);
           U32 default_radix = (entity->kind == CTRL_EntityKind_Thread ? 16 : 10);
-          EV_WindowedRowList viz_rows = ev_windowed_row_list_from_block_list(scratch.arena, ev_view, r1s64(0, 50), &viz_blocks);
+          EV2_WindowedRowList rows = ev2_windowed_row_list_from_block_tree(scratch.arena, ev_view, &block_tree, r1u64(0, 50));
+          // EV_WindowedRowList viz_rows = ev_windowed_row_list_from_block_list(scratch.arena, ev_view, r1s64(0, 50), &viz_blocks);
           
           //- rjf: animate
           {
             // rjf: animate height
             {
               F32 fish_rate = rd_setting_val_from_code(RD_SettingCode_MenuAnimations).s32 ? 1 - pow_f32(2, (-60.f * rd_state->frame_dt)) : 1.f;
-              F32 hover_eval_container_height_target = row_height * Min(30, viz_blocks.total_visual_row_count);
+              F32 hover_eval_container_height_target = row_height * Min(30, block_tree.total_visual_row_count);
               ws->hover_eval_num_visible_rows_t += (hover_eval_container_height_target - ws->hover_eval_num_visible_rows_t) * fish_rate;
               if(abs_f32(hover_eval_container_height_target - ws->hover_eval_num_visible_rows_t) > 0.5f)
               {
@@ -5867,11 +5869,11 @@ rd_window_frame(RD_Window *ws)
           F32 width_px = 40.f*ui_top_font_size();
           F32 expr_column_width_px = 10.f*ui_top_font_size();
           F32 value_column_width_px = 30.f*ui_top_font_size();
-          if(viz_rows.first != 0)
+          if(rows.first != 0)
           {
-            EV_Row *row = viz_rows.first;
+            EV2_Row *row = rows.first;
             E_Eval row_eval = e_eval_from_expr(scratch.arena, row->expr);
-            String8 row_expr_string = ev_expr_string_from_row(scratch.arena, row, 0);
+            String8 row_expr_string = ev2_expr_string_from_row(scratch.arena, row, 0);
             String8 row_display_value = rd_value_string_from_eval(scratch.arena, EV_StringFlag_ReadOnlyDisplayRules, default_radix, ui_top_font(), ui_top_font_size(), 500.f, row_eval, row->member, row->view_rules);
             expr_column_width_px = fnt_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, 0, row_expr_string).x + ui_top_font_size()*5.f;
             value_column_width_px = fnt_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, 0, row_display_value).x + ui_top_font_size()*5.f;
@@ -5915,15 +5917,16 @@ rd_window_frame(RD_Window *ws)
           UI_Parent(hover_eval_box) UI_PrefHeight(ui_px(row_height, 1.f))
           {
             //- rjf: build rows
-            for(EV_Row *row = viz_rows.first; row != 0; row = row->next)
+            for(EV2_Row *row = rows.first; row != 0; row = row->next)
             {
               //- rjf: unpack row
+              U64 row_depth = ev2_depth_from_block(row->block);
               E_Eval row_eval = e_eval_from_expr(scratch.arena, row->expr);
-              String8 row_expr_string = ev_expr_string_from_row(scratch.arena, row, 0);
+              String8 row_expr_string = ev2_expr_string_from_row(scratch.arena, row, 0);
               String8 row_edit_value = rd_value_string_from_eval(scratch.arena, 0, default_radix, ui_top_font(), ui_top_font_size(), 500.f, row_eval, row->member, row->view_rules);
               String8 row_display_value = rd_value_string_from_eval(scratch.arena, EV_StringFlag_ReadOnlyDisplayRules, default_radix, ui_top_font(), ui_top_font_size(), 500.f, row_eval, row->member, row->view_rules);
-              B32 row_is_editable = ev_row_is_editable(row);
-              B32 row_is_expandable = ev_row_is_expandable(row);
+              B32 row_is_editable   = ev2_row_is_editable(row);
+              B32 row_is_expandable = ev2_row_is_expandable(row);
               
               //- rjf: determine if row's data is fresh and/or bad
               B32 row_is_fresh = 0;
@@ -5959,9 +5962,9 @@ rd_window_frame(RD_Window *ws)
               UI_WidthFill UI_Row
               {
                 ui_spacer(ui_em(0.75f, 1.f));
-                if(row->depth > 0)
+                if(row_depth > 0)
                 {
-                  for(S32 indent = 0; indent < row->depth; indent += 1)
+                  for(U64 indent = 0; indent < row_depth; indent += 1)
                   {
                     ui_spacer(ui_em(0.75f, 1.f));
                     UI_Flags(UI_BoxFlag_DrawSideLeft) ui_spacer(ui_em(1.5f, 1.f));
@@ -5973,7 +5976,7 @@ rd_window_frame(RD_Window *ws)
                   UI_PrefWidth(ui_em(1.5f, 1)) 
                   if(ui_pressed(ui_expanderf(row_is_expanded, "###%I64x_%I64x_is_expanded", row->key.parent_hash, row->key.child_num)))
                 {
-                  ev_key_set_expansion(ev_view, row->parent_key, row->key, !row_is_expanded);
+                  ev_key_set_expansion(ev_view, row->block->key, row->key, !row_is_expanded);
                 }
                 if(!row_is_expandable)
                 {
@@ -6023,7 +6026,7 @@ rd_window_frame(RD_Window *ws)
                     rd_code_label(1.f, 1, rd_rgba_from_theme_color(RD_ThemeColor_CodeDefault), row_display_value);
                   }
                 }
-                if(row == viz_rows.first)
+                if(row == rows.first)
                 {
                   UI_TextAlignment(UI_TextAlign_Center) UI_PrefWidth(ui_em(3.f, 1.f))
                     UI_CornerRadius00(0)

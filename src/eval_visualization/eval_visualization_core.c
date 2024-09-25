@@ -510,6 +510,8 @@ ev2_block_tree_from_expr(Arena *arena, EV_View *view, String8 string, E_Expr *ex
     tree.root->expr       = expr;
     tree.root->view_rules = view_rules;
     tree.root->semantic_row_count = tree.root->visual_row_count = 1;
+    tree.total_semantic_row_count += 1;
+    tree.total_visual_row_count += 1;
     
     //- rjf: iterate all expansions & generate blocks for each
     typedef struct Task Task;
@@ -517,14 +519,17 @@ ev2_block_tree_from_expr(Arena *arena, EV_View *view, String8 string, E_Expr *ex
     {
       Task *next;
       EV2_Block *parent_block;
+      E_Expr *expr;
+      EV_Key key;
+      EV_ViewRuleList *view_rules;
       U64 split_relative_idx;
     };
-    Task start_task = {0, tree.root, 1};
+    Task start_task = {0, tree.root, expr, tree.root->key, view_rules, 1};
     Task *first_task = &start_task;
     Task *last_task = first_task;
     for(Task *t = first_task; t != 0; t = t->next)
     {
-      EV_ExpandNode *expand_node = ev_expand_node_from_key(view, t->parent_block->key);
+      EV_ExpandNode *expand_node = ev_expand_node_from_key(view, t->key);
       
       // rjf: skip if not expanded
       if(!expand_node || !expand_node->expanded)
@@ -533,9 +538,9 @@ ev2_block_tree_from_expr(Arena *arena, EV_View *view, String8 string, E_Expr *ex
       }
       
       // rjf: get expansion view rule info
-      EV_ViewRuleInfo *expand_view_rule_info = &ev_nil_view_rule_info;
+      EV_ViewRuleInfo *expand_view_rule_info = default_expand_view_rule_info;
       MD_Node *expand_params = &md_nil_node;
-      for(EV_ViewRuleNode *n = t->parent_block->view_rules->first; n != 0; n = n->next)
+      for(EV_ViewRuleNode *n = t->view_rules->first; n != 0; n = n->next)
       {
         EV_ViewRuleInfo *info = ev_view_rule_info_from_string(n->v.root->string);
         if(info->expr_expand != 0)
@@ -546,17 +551,17 @@ ev2_block_tree_from_expr(Arena *arena, EV_View *view, String8 string, E_Expr *ex
       }
       
       // rjf: get expansion info
-      EV_ExpandResult expand_result = expand_view_rule_info->expr_expand(arena, t->parent_block->expr, expand_params, r1u64(0, 0));
+      EV_ExpandResult expand_result = expand_view_rule_info->expr_expand(arena, t->expr, expand_params, r1u64(0, 0));
       
       // rjf: generate block for expansion
       EV2_Block *expansion_block = push_array(arena, EV2_Block, 1);
       MemoryCopyStruct(expansion_block, &ev2_nil_block);
-      DLLPushBack(t->parent_block->first, t->parent_block->last, expansion_block);
+      DLLPushBack_NPZ(&ev2_nil_block, t->parent_block->first, t->parent_block->last, expansion_block, next, prev);
       expansion_block->parent                   = t->parent_block;
-      expansion_block->key                      = t->parent_block->key;
+      expansion_block->key                      = t->key;
       expansion_block->split_relative_idx       = t->split_relative_idx;
-      expansion_block->expr                     = t->parent_block->expr;
-      expansion_block->view_rules               = t->parent_block->view_rules;
+      expansion_block->expr                     = t->expr;
+      expansion_block->view_rules               = t->view_rules;
       expansion_block->expand_view_rule_info    = expand_view_rule_info;
       expansion_block->expand_view_rule_params  = expand_params;
       expansion_block->semantic_row_count       = expand_result.total_semantic_row_count;
@@ -564,19 +569,100 @@ ev2_block_tree_from_expr(Arena *arena, EV_View *view, String8 string, E_Expr *ex
       tree.total_semantic_row_count += expand_result.total_semantic_row_count;
       tree.total_visual_row_count += expand_result.total_visual_row_count;
       
-      // rjf: iterate children expansions, generate children blocks for each
+      // rjf: iterate children expansions, recurse
       // TODO(rjf): need to iterate these in index order, rather than "child_num" (which needs to be renamed to "child_id") order
       for(EV_ExpandNode *child = expand_node->first; child != 0; child = child->next)
       {
-        Task *task = push_array(scratch.arena, Task, 1);
-        SLLQueuePush(first_task, last_task, task);
-        task->parent_block       = expansion_block;
-        task->split_relative_idx = child->key.child_num - 1; // TODO(rjf): key -> index
+        U64 split_relative_idx = child->key.child_num - 1; // TODO(rjf): key -> index
+        EV_ExpandResult child_expand = expand_view_rule_info->expr_expand(arena, t->expr, expand_params, r1u64(split_relative_idx, split_relative_idx+1));
+        if(child_expand.row_exprs_count > 0)
+        {
+          EV_ViewRuleList *child_view_rules = ev_view_rule_list_from_inheritance(arena, t->view_rules);
+          // TODO(rjf): need to mix in child's view rules
+          Task *task = push_array(scratch.arena, Task, 1);
+          SLLQueuePush(first_task, last_task, task);
+          task->parent_block       = expansion_block;
+          task->expr               = child_expand.row_exprs[0];
+          task->key                = child->key;
+          task->view_rules         = child_view_rules;
+          task->split_relative_idx = split_relative_idx;
+        }
       }
     }
     scratch_end(scratch);
   }
   return tree;
+}
+
+internal EV2_BlockTree
+ev2_block_tree_from_string(Arena *arena, EV_View *view, String8 string, EV_ViewRuleList *view_rules)
+{
+  EV2_BlockTree tree = {0};
+  Temp scratch = scratch_begin(&arena, 1);
+  {
+    // rjf: parse expression
+    E_TokenArray tokens = e_token_array_from_text(scratch.arena, string);
+    E_Parse parse = e_parse_expr_from_text_tokens(arena, string, &tokens);
+    
+    // rjf: extract view rules, encoded via fastpaths in expression string
+    String8List fastpath_view_rules = {0};
+    {
+      U64 parse_opl = (parse.last_token >= tokens.v + tokens.count ? string.size : parse.last_token->range.min);
+      U64 comma_pos = str8_find_needle(string, parse_opl, str8_lit(","), 0);
+      U64 passthrough_pos = str8_find_needle(string, parse_opl, str8_lit("--"), 0);
+      if(comma_pos < string.size && comma_pos < passthrough_pos)
+      {
+        String8 comma_extension = str8_skip_chop_whitespace(str8_substr(string, r1u64(comma_pos+1, passthrough_pos)));
+        if(str8_match(comma_extension, str8_lit("x"), StringMatchFlag_CaseInsensitive))
+        {
+          str8_list_pushf(arena, &fastpath_view_rules, "hex");
+        }
+        else if(str8_match(comma_extension, str8_lit("b"), StringMatchFlag_CaseInsensitive))
+        {
+          str8_list_pushf(arena, &fastpath_view_rules, "bin");
+        }
+        else if(str8_match(comma_extension, str8_lit("o"), StringMatchFlag_CaseInsensitive))
+        {
+          str8_list_pushf(arena, &fastpath_view_rules, "oct");
+        }
+        else if(comma_extension.size != 0)
+        {
+          str8_list_pushf(arena, &fastpath_view_rules, "array:{%S}", comma_extension);
+        }
+      }
+      if(passthrough_pos < string.size)
+      {
+        String8 passthrough_view_rule = str8_skip_chop_whitespace(str8_skip(string, passthrough_pos+2));
+        if(passthrough_view_rule.size != 0)
+        {
+          str8_list_push(arena, &fastpath_view_rules, passthrough_view_rule);
+        }
+      }
+    }
+    
+    // rjf: build full list of view rules
+    EV_ViewRuleList *all_view_rules = ev_view_rule_list_copy(arena, view_rules);
+    for(String8Node *n = fastpath_view_rules.first; n != 0; n = n->next)
+    {
+      ev_view_rule_list_push_string(arena, all_view_rules, n->string);
+    }
+    
+    // rjf: produce tree
+    tree = ev2_block_tree_from_expr(arena, view, string, parse.expr, all_view_rules);
+  }
+  scratch_end(scratch);
+  return tree;
+}
+
+internal U64
+ev2_depth_from_block(EV2_Block *block)
+{
+  U64 depth = 0;
+  for(EV2_Block *b = block->parent; b != &ev2_nil_block; b = b->parent)
+  {
+    depth += 1;
+  }
+  return depth;
 }
 
 internal EV2_WindowedRowList
@@ -599,7 +685,10 @@ ev2_windowed_row_list_from_block_tree(Arena *arena, EV_View *view, EV2_BlockTree
     {
       // rjf: get block-relative range, truncated by split position of next child
       Rng1U64 block_relative_range = t->block_relative_range;
-      block_relative_range.max = Min(t->next_child->split_relative_idx, block_relative_range.max);
+      if(t->next_child != &ev2_nil_block)
+      {
+        block_relative_range.max = t->next_child->split_relative_idx+1;
+      }
       U64 block_num_visual_rows = dim_1u64(block_relative_range);
       
       // rjf: get global range of this block
@@ -627,27 +716,50 @@ ev2_windowed_row_list_from_block_tree(Arena *arena, EV_View *view, EV2_BlockTree
       
       // rjf: sum & advance
       visual_idx_off += block_num_visual_rows;
+      rows.count_before_visual += num_skipped;
       
       // rjf: generate rows before next splitting child
       if(block_relative_range__windowed.max > block_relative_range__windowed.min)
       {
-        EV_ExpandResult expand = t->block->expand_view_rule_info->expr_expand(arena, t->block->expr, t->block->expand_view_rule_params, block_relative_range__windowed);
-        for EachIndex(idx, expand.row_exprs_count)
+        // rjf: no expansion operator applied -> push row for block expression; pass through block info
+        if(t->block->expand_view_rule_info == &ev_nil_view_rule_info)
         {
-          U64 row_visual_size = expand.row_exprs_num_visual_rows[idx];
-          U64 child_id = block_relative_range.min + idx + 1; // TODO(rjf): index -> key
           EV2_Row *row = push_array(arena, EV2_Row, 1);
           SLLQueuePush(rows.first, rows.last, row);
+          rows.count += 1;
           row->block                = t->block;
-          row->key                  = ev_key_make(ev_hash_from_key(row->block->key), child_id);
-          row->visual_size          = row_visual_size;
+          row->key                  = t->block->key;
+          row->visual_size          = t->block->visual_row_count;
           row->visual_size_skipped  = 0; // TODO(rjf)
           row->visual_size_chopped  = 0; // TODO(rjf)
           row->string               = t->block->string;
-          row->expr                 = expand.row_exprs[idx];
-          row->member               = expand.row_members[idx];
-          row->view_rules           = ev_view_rule_list_from_inheritance(arena, t->block->view_rules);
-          // TODO(rjf): mix in view rules based on row's key, row's type
+          row->expr                 = t->block->expr;
+          row->member               = &e_member_nil;
+          row->view_rules           = t->block->view_rules;
+        }
+        
+        // rjf: expansion operator applied -> call, and add rows for all expressions in the viewable range
+        else
+        {
+          EV_ExpandResult expand = t->block->expand_view_rule_info->expr_expand(arena, t->block->expr, t->block->expand_view_rule_params, block_relative_range__windowed);
+          for EachIndex(idx, expand.row_exprs_count)
+          {
+            U64 row_visual_size = expand.row_exprs_num_visual_rows[idx];
+            U64 child_id = block_relative_range.min + idx + 1; // TODO(rjf): index -> key
+            EV2_Row *row = push_array(arena, EV2_Row, 1);
+            SLLQueuePush(rows.first, rows.last, row);
+            rows.count += 1;
+            row->block                = t->block;
+            row->key                  = ev_key_make(ev_hash_from_key(row->block->key), child_id);
+            row->visual_size          = row_visual_size;
+            row->visual_size_skipped  = 0; // TODO(rjf)
+            row->visual_size_chopped  = 0; // TODO(rjf)
+            row->string               = t->block->string;
+            row->expr                 = expand.row_exprs[idx];
+            row->member               = expand.row_members[idx];
+            row->view_rules           = ev_view_rule_list_from_inheritance(arena, t->block->view_rules);
+            // TODO(rjf): mix in view rules based on row's key, row's type
+          }
         }
       }
       
@@ -663,7 +775,7 @@ ev2_windowed_row_list_from_block_tree(Arena *arena, EV_View *view, EV2_BlockTree
         child_task->block_relative_range = r1u64(0, t->next_child->visual_row_count);
         
         // rjf: generate task for post-child rows, if any, after children
-        Rng1U64 remainder_range = r1u64(t->next_child->split_relative_idx, t->block_relative_range.max);
+        Rng1U64 remainder_range = r1u64(t->next_child->split_relative_idx+1, t->block_relative_range.max);
         if(remainder_range.max > remainder_range.min)
         {
           BlockTask *remainder_task = push_array(scratch.arena, BlockTask, 1);
@@ -678,6 +790,95 @@ ev2_windowed_row_list_from_block_tree(Arena *arena, EV_View *view, EV2_BlockTree
     scratch_end(scratch);
   }
   return rows;
+}
+
+internal String8
+ev2_expr_string_from_row(Arena *arena, EV2_Row *row, EV_StringFlags flags)
+{
+  String8 result = row->string;
+  E_Expr *notable_expr = row->expr;
+  for(B32 good = 0; !good;)
+  {
+    switch(notable_expr->kind)
+    {
+      default:{good = 1;}break;
+      case E_ExprKind_Address:
+      case E_ExprKind_Deref:
+      case E_ExprKind_Cast:
+      {
+        notable_expr = notable_expr->last;
+      }break;
+      case E_ExprKind_Ref:
+      {
+        notable_expr = notable_expr->ref;
+      }break;
+    }
+  }
+  if(result.size == 0) switch(notable_expr->kind)
+  {
+    default:
+    {
+      result = e_string_from_expr(arena, notable_expr);
+    }break;
+    case E_ExprKind_ArrayIndex:
+    {
+      result = push_str8f(arena, "[%S]", e_string_from_expr(arena, notable_expr->last));
+    }break;
+    case E_ExprKind_MemberAccess:
+    {
+      if(flags & EV_StringFlag_PrettyNames && row->member->pretty_name.size != 0)
+      {
+        result = push_str8_copy(arena, row->member->pretty_name);
+      }
+      else
+      {
+        result = push_str8f(arena, ".%S", e_string_from_expr(arena, notable_expr->last));
+      }
+    }break;
+  }
+  return result;
+}
+
+internal B32
+ev2_row_is_expandable(EV2_Row *row)
+{
+  B32 result = 0;
+  {
+    // rjf: determine if view rules force expandability
+    if(!result)
+    {
+      for(EV_ViewRuleNode *n = row->view_rules->first; n != 0; n = n->next)
+      {
+        EV_ViewRuleInfo *info = ev_view_rule_info_from_string(n->v.root->string);
+        if(info->flags & EV_ViewRuleInfoFlag_Expandable)
+        {
+          result = 1;
+          break;
+        }
+      }
+    }
+    
+    // rjf: determine if type info force expandability
+    if(!result)
+    {
+      Temp scratch = scratch_begin(0, 0);
+      E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, row->expr);
+      result = ev_type_key_and_mode_is_expandable(irtree.type_key, irtree.mode);
+      scratch_end(scratch);
+    }
+  }
+  return result;
+}
+
+internal B32
+ev2_row_is_editable(EV2_Row *row)
+{
+  B32 result = 0;
+  Temp scratch = scratch_begin(0, 0);
+  E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, row->expr);
+  result = ev_type_key_is_editable(irtree.type_key);
+  scratch_end(scratch);
+  return result;
 }
 
 ////////////////////////////////

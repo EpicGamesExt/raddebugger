@@ -460,7 +460,12 @@ internal E_Expr *ev_expr_from_expr_view_rules(Arena *arena, E_Expr *expr, EV_Vie
 //~ rjf: Block Building (v2)
 
 internal EV2_BlockTree ev2_block_tree_from_expr(Arena *arena, EV_View *view, String8 string, E_Expr *expr, EV_ViewRuleList *view_rules);
+internal EV2_BlockTree ev2_block_tree_from_string(Arena *arena, EV_View *view, String8 string, EV_ViewRuleList *view_rules);
+internal U64 ev2_depth_from_block(EV2_Block *block);
 internal EV2_WindowedRowList ev2_windowed_row_list_from_block_tree(Arena *arena, EV_View *view, EV2_BlockTree *block_tree, Rng1U64 visible_range);
+internal String8 ev2_expr_string_from_row(Arena *arena, EV2_Row *row, EV_StringFlags flags);
+internal B32 ev2_row_is_expandable(EV2_Row *row);
+internal B32 ev2_row_is_editable(EV2_Row *row);
 
 ////////////////////////////////
 //~ rjf: Block Building
