@@ -473,6 +473,19 @@ ev_view_rule_list_copy(Arena *arena, EV_ViewRuleList *src)
 }
 
 ////////////////////////////////
+//~ rjf: View Rule Expansion ID Spaces
+
+EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(identity)
+{
+  return num;
+}
+
+EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(identity)
+{
+  return id;
+}
+
+////////////////////////////////
 //~ rjf: View Rule Expression Resolution
 
 internal E_Expr *
@@ -576,7 +589,8 @@ ev2_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, String8 st
       {
         for(EV_ExpandNode *child = expand_node->first; child != 0; child = child->next)
         {
-          U64 split_relative_idx = child->key.child_num - 1; // TODO(rjf): key -> index
+          U64 split_num = expand_view_rule_info->expr_expand_num_from_id(child->key.child_num, expand_info.user_data);
+          U64 split_relative_idx = split_num - 1;
           EV_ExpandRangeInfo child_expand = expand_view_rule_info->expr_expand_range_info(arena, view, filter, t->expr, expand_params, r1u64(split_relative_idx, split_relative_idx+1), expand_info.user_data);
           if(child_expand.row_exprs_count > 0)
           {
@@ -669,6 +683,73 @@ ev2_depth_from_block(EV2_Block *block)
   return depth;
 }
 
+internal EV2_BlockRangeList
+ev2_block_range_list_from_tree(Arena *arena, EV2_BlockTree *block_tree)
+{
+  EV2_BlockRangeList list = {0};
+  {
+    Temp scratch = scratch_begin(&arena, 1);
+    typedef struct BlockTask BlockTask;
+    struct BlockTask
+    {
+      BlockTask *next;
+      EV2_Block *block;
+      EV2_Block *next_child;
+      Rng1U64 block_relative_range;
+    };
+    BlockTask start_task = {0, block_tree->root, block_tree->root->first, r1u64(0, block_tree->root->visual_row_count)};
+    for(BlockTask *t = &start_task; t != 0; t = t->next)
+    {
+      // rjf: get block-relative range, truncated by split position of next child
+      Rng1U64 block_relative_range = t->block_relative_range;
+      if(t->next_child != &ev2_nil_block)
+      {
+        block_relative_range.max = t->next_child->split_relative_idx+1;
+      }
+      U64 block_num_visual_rows = dim_1u64(block_relative_range);
+      
+      // rjf: generate range node 
+      if(block_num_visual_rows != 0)
+      {
+        EV2_BlockRangeNode *n = push_array(arena, EV2_BlockRangeNode, 1);
+        n->v.block = t->block;
+        n->v.range = block_relative_range;
+        SLLQueuePush(list.first, list.last, n);
+        list.count += 1;
+      }
+      
+      // rjf: generate task for child, + for post-child parts of this block
+      if(t->next_child != &ev2_nil_block)
+      {
+        // rjf: generate task for child - do *before* remainder (descend block tree depth first)
+        BlockTask *child_task = push_array(scratch.arena, BlockTask, 1);
+        child_task->next = t->next;
+        t->next = child_task;
+        child_task->block = t->next_child;
+        child_task->next_child = t->next_child->first;
+        child_task->block_relative_range = r1u64(0, t->next_child->visual_row_count);
+        
+        // rjf: generate task for post-child rows, if any, after children
+        Rng1U64 remainder_range = r1u64(t->next_child->split_relative_idx+1, t->block_relative_range.max);
+        if(remainder_range.max > remainder_range.min)
+        {
+          BlockTask *remainder_task = push_array(scratch.arena, BlockTask, 1);
+          remainder_task->next = child_task->next;
+          child_task->next = remainder_task;
+          remainder_task->block = t->block;
+          remainder_task->next_child = t->next_child->next;
+          remainder_task->block_relative_range = remainder_range;
+        }
+      }
+    }
+    scratch_end(scratch);
+  }
+  return list;
+}
+
+////////////////////////////////
+//~ rjf: Row Building (v2)
+
 internal EV2_WindowedRowList
 ev2_windowed_row_list_from_block_tree(Arena *arena, EV_View *view, String8 filter, EV2_BlockTree *block_tree, Rng1U64 visible_range)
 {
@@ -749,7 +830,8 @@ ev2_windowed_row_list_from_block_tree(Arena *arena, EV_View *view, String8 filte
           for EachIndex(idx, expand_range_info.row_exprs_count)
           {
             U64 row_visual_size = expand_range_info.row_exprs_num_visual_rows[idx];
-            U64 child_id = block_relative_range.min + idx + 1; // TODO(rjf): index -> key
+            U64 child_num = block_relative_range.min + idx + 1;
+            U64 child_id = t->block->expand_view_rule_info->expr_expand_id_from_num(child_num, t->block->expand_view_rule_info_user_data);
             EV2_Row *row = push_array(arena, EV2_Row, 1);
             SLLQueuePush(rows.first, rows.last, row);
             rows.count += 1;

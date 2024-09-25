@@ -121,5 +121,5 @@ EV_ViewRuleTable:
 @data(EV_ViewRuleInfo) @c_file ev_builtin_view_rule_info_table:
 {
   @expand(EV_ViewRuleTable a)
-    ```{str8_lit_comp("$(a.string)"), (EV_ViewRuleInfoFlag_Inherited*$(a.ih == "x"))|(EV_ViewRuleInfoFlag_Expandable*$(a.ex == "x")), $(a.xr == "x" -> "EV_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_NAME("..a.name_lower..")") $(a.xr != "x" -> 0), $(a.xe == "x" -> "EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME("..a.name_lower..")") $(a.xe != "x" -> 0), $(a.xe == "x" -> "EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_NAME("..a.name_lower..")") $(a.xe != "x" -> 0), $(a.vb == "x" -> "EV_VIEW_RULE_BLOCK_PROD_FUNCTION_NAME("..a.name_lower..")") $(a.vb != "x" -> 0), }```;
+    ```{str8_lit_comp("$(a.string)"), (EV_ViewRuleInfoFlag_Inherited*$(a.ih == "x"))|(EV_ViewRuleInfoFlag_Expandable*$(a.ex == "x")), $(a.xr == "x" -> "EV_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_NAME("..a.name_lower..")") $(a.xr != "x" -> 0), $(a.xe == "x" -> "EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME("..a.name_lower..")") $(a.xe != "x" -> 0), $(a.xe == "x" -> "EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_NAME("..a.name_lower..")") $(a.xe != "x" -> 0), EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_NAME(identity), EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_NAME(identity), $(a.vb == "x" -> "EV_VIEW_RULE_BLOCK_PROD_FUNCTION_NAME("..a.name_lower..")") $(a.vb != "x" -> 0), }```;
 }
