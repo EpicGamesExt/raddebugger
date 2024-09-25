@@ -5826,10 +5826,11 @@ rd_window_frame(RD_Window *ws)
           EV_Key parent_key = ev_key_make(5381, 1);
           EV_Key key = ev_key_make(ev_hash_from_key(parent_key), 1);
           EV2_BlockTree block_tree = ev2_block_tree_from_string(scratch.arena, ev_view, str8_zero(), expr, &top_level_view_rules);
+          EV2_BlockRangeList block_ranges = ev2_block_range_list_from_tree(scratch.arena, &block_tree);
           // EV_BlockList viz_blocks = ev_block_list_from_view_expr_keys(scratch.arena, ev_view, str8_zero(), &top_level_view_rules, expr, parent_key, key, 0);
           CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(eval.space);
           U32 default_radix = (entity->kind == CTRL_EntityKind_Thread ? 16 : 10);
-          EV2_WindowedRowList rows = ev2_windowed_row_list_from_block_tree(scratch.arena, ev_view, str8_zero(), &block_tree, r1u64(0, 50));
+          EV2_WindowedRowList rows = ev2_windowed_row_list_from_block_range_list(scratch.arena, ev_view, str8_zero(), &block_ranges, r1u64(0, 50));
           // EV_WindowedRowList viz_rows = ev_windowed_row_list_from_block_list(scratch.arena, ev_view, r1s64(0, 50), &viz_blocks);
           
           //- rjf: animate

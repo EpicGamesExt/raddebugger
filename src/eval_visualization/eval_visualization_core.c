@@ -878,6 +878,95 @@ ev2_windowed_row_list_from_block_tree(Arena *arena, EV_View *view, String8 filte
   return rows;
 }
 
+internal EV2_WindowedRowList
+ev2_windowed_row_list_from_block_range_list(Arena *arena, EV_View *view, String8 filter, EV2_BlockRangeList *block_ranges, Rng1U64 visible_range)
+{
+  EV2_WindowedRowList rows = {0};
+  {
+    Temp scratch = scratch_begin(&arena, 1);
+    U64 visual_idx_off = 0;
+    for(EV2_BlockRangeNode *n = block_ranges->first; n != 0; n = n->next)
+    {
+      // rjf: unpack this block/range pair
+      Rng1U64 block_relative_range = n->v.range;
+      U64 block_num_visual_rows = dim_1u64(block_relative_range);
+      Rng1U64 block_global_range = r1u64(visual_idx_off, visual_idx_off + block_num_visual_rows);
+      
+      // rjf: get skip/chop of global range
+      U64 num_skipped = 0;
+      U64 num_chopped = 0;
+      {
+        if(visible_range.min > block_global_range.min)
+        {
+          num_skipped = (visible_range.min - block_global_range.min);
+          num_skipped = Min(num_skipped, block_num_visual_rows);
+        }
+        if(visible_range.max < block_global_range.max)
+        {
+          num_chopped = (block_global_range.max - visible_range.max);
+          num_chopped = Min(num_chopped, block_num_visual_rows);
+        }
+      }
+      
+      // rjf: get block-relative *windowed* range
+      Rng1U64 block_relative_range__windowed = r1u64(block_relative_range.min + num_skipped,
+                                                     block_relative_range.max - num_chopped);
+      
+      // rjf: sum & advance
+      visual_idx_off += block_num_visual_rows;
+      rows.count_before_visual += num_skipped;
+      
+      // rjf: generate rows before next splitting child
+      if(block_relative_range__windowed.max > block_relative_range__windowed.min)
+      {
+        // rjf: no expansion operator applied -> push row for block expression; pass through block info
+        if(n->v.block->expand_view_rule_info == &ev_nil_view_rule_info)
+        {
+          EV2_Row *row = push_array(arena, EV2_Row, 1);
+          SLLQueuePush(rows.first, rows.last, row);
+          rows.count += 1;
+          row->block                = n->v.block;
+          row->key                  = n->v.block->key;
+          row->visual_size          = n->v.block->visual_row_count;
+          row->visual_size_skipped  = 0; // TODO(rjf)
+          row->visual_size_chopped  = 0; // TODO(rjf)
+          row->string               = n->v.block->string;
+          row->expr                 = n->v.block->expr;
+          row->member               = &e_member_nil;
+          row->view_rules           = n->v.block->view_rules;
+        }
+        
+        // rjf: expansion operator applied -> call, and add rows for all expressions in the viewable range
+        else
+        {
+          EV_ExpandRangeInfo expand_range_info = n->v.block->expand_view_rule_info->expr_expand_range_info(arena, view, filter, n->v.block->expr, n->v.block->expand_view_rule_params, block_relative_range__windowed, n->v.block->expand_view_rule_info_user_data);
+          for EachIndex(idx, expand_range_info.row_exprs_count)
+          {
+            U64 row_visual_size = expand_range_info.row_exprs_num_visual_rows[idx];
+            U64 child_num = block_relative_range.min + idx + 1;
+            U64 child_id = n->v.block->expand_view_rule_info->expr_expand_id_from_num(child_num, n->v.block->expand_view_rule_info_user_data);
+            EV2_Row *row = push_array(arena, EV2_Row, 1);
+            SLLQueuePush(rows.first, rows.last, row);
+            rows.count += 1;
+            row->block                = n->v.block;
+            row->key                  = ev_key_make(ev_hash_from_key(row->block->key), child_id);
+            row->visual_size          = row_visual_size;
+            row->visual_size_skipped  = 0; // TODO(rjf)
+            row->visual_size_chopped  = 0; // TODO(rjf)
+            row->string               = n->v.block->string;
+            row->expr                 = expand_range_info.row_exprs[idx];
+            row->member               = expand_range_info.row_members[idx];
+            row->view_rules           = ev_view_rule_list_from_inheritance(arena, n->v.block->view_rules);
+            // TODO(rjf): mix in view rules based on row's key, row's type
+          }
+        }
+      }
+    }
+    scratch_end(scratch);
+  }
+  return rows;
+}
+
 internal String8
 ev2_expr_string_from_row(Arena *arena, EV2_Row *row, EV_StringFlags flags)
 {
