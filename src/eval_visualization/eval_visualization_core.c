@@ -7,6 +7,36 @@
 #include "generated/eval_visualization.meta.c"
 
 ////////////////////////////////
+//~ rjf: Nil/Identity View Rule Hooks
+
+EV_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_DEF(identity)
+{
+  return expr;
+}
+
+EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(nil)
+{
+  EV_ExpandInfo info = {0};
+  return info;
+}
+
+EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(nil)
+{
+  EV_ExpandRangeInfo info = {0};
+  return info;
+}
+
+EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(identity)
+{
+  return num;
+}
+
+EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(identity)
+{
+  return id;
+}
+
+////////////////////////////////
 //~ rjf: Key Functions
 
 internal EV_Key
@@ -24,6 +54,13 @@ internal EV_Key
 ev_key_zero(void)
 {
   EV_Key key = {0};
+  return key;
+}
+
+internal EV_Key
+ev_key_root(void)
+{
+  EV_Key key = ev_key_make(5381, 1);
   return key;
 }
 
@@ -473,19 +510,6 @@ ev_view_rule_list_copy(Arena *arena, EV_ViewRuleList *src)
 }
 
 ////////////////////////////////
-//~ rjf: View Rule Expansion ID Spaces
-
-EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(identity)
-{
-  return num;
-}
-
-EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(identity)
-{
-  return id;
-}
-
-////////////////////////////////
 //~ rjf: View Rule Expression Resolution
 
 internal E_Expr *
@@ -518,13 +542,13 @@ ev2_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, String8 st
     //- rjf: generate root block
     tree.root = push_array(arena, EV2_Block, 1);
     MemoryCopyStruct(tree.root, &ev2_nil_block);
-    tree.root->key        = ev_key_make(5381, 1);
+    tree.root->key        = ev_key_root();
     tree.root->string     = string;
     tree.root->expr       = expr;
     tree.root->view_rules = view_rules;
-    tree.root->semantic_row_count = tree.root->visual_row_count = 1;
-    tree.total_semantic_row_count += 1;
-    tree.total_visual_row_count += 1;
+    tree.root->row_count  = 1;
+    tree.total_row_count += 1;
+    tree.total_item_count += 1;
     
     //- rjf: iterate all expansions & generate blocks for each
     typedef struct Task Task;
@@ -567,25 +591,29 @@ ev2_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, String8 st
       EV_ExpandInfo expand_info = expand_view_rule_info->expr_expand_info(arena, view, filter, t->expr, expand_params);
       
       // rjf: generate block for expansion
-      EV2_Block *expansion_block = push_array(arena, EV2_Block, 1);
-      MemoryCopyStruct(expansion_block, &ev2_nil_block);
-      DLLPushBack_NPZ(&ev2_nil_block, t->parent_block->first, t->parent_block->last, expansion_block, next, prev);
-      expansion_block->parent                   = t->parent_block;
-      expansion_block->key                      = t->key;
-      expansion_block->split_relative_idx       = t->split_relative_idx;
-      expansion_block->expr                     = t->expr;
-      expansion_block->view_rules               = t->view_rules;
-      expansion_block->expand_view_rule_info    = expand_view_rule_info;
-      expansion_block->expand_view_rule_params  = expand_params;
-      expansion_block->expand_view_rule_info_user_data = expand_info.user_data;
-      expansion_block->semantic_row_count       = expand_info.total_semantic_row_count;
-      expansion_block->visual_row_count         = expand_info.total_visual_row_count;
-      tree.total_semantic_row_count += expand_info.total_semantic_row_count;
-      tree.total_visual_row_count += expand_info.total_visual_row_count;
+      EV2_Block *expansion_block = &ev2_nil_block;
+      if(expand_info.row_count != 0)
+      {
+        expansion_block = push_array(arena, EV2_Block, 1);
+        MemoryCopyStruct(expansion_block, &ev2_nil_block);
+        DLLPushBack_NPZ(&ev2_nil_block, t->parent_block->first, t->parent_block->last, expansion_block, next, prev);
+        expansion_block->parent                   = t->parent_block;
+        expansion_block->key                      = t->key;
+        expansion_block->split_relative_idx       = t->split_relative_idx;
+        expansion_block->expr                     = t->expr;
+        expansion_block->view_rules               = t->view_rules;
+        expansion_block->expand_view_rule_info    = expand_view_rule_info;
+        expansion_block->expand_view_rule_params  = expand_params;
+        expansion_block->expand_view_rule_info_user_data = expand_info.user_data;
+        expansion_block->row_count                = expand_info.row_count;
+        expansion_block->single_item              = expand_info.single_item;
+        tree.total_row_count += expand_info.row_count;
+        tree.total_item_count += expand_info.single_item ? 1 : expand_info.row_count;
+      }
       
       // rjf: iterate children expansions, recurse
       // TODO(rjf): need to iterate these in index order, rather than "child_num" (which needs to be renamed to "child_id") order
-      if(expand_view_rule_info->expr_expand_range_info)
+      if(expand_info.row_count != 0 && expand_view_rule_info->expr_expand_range_info)
       {
         for(EV_ExpandNode *child = expand_node->first; child != 0; child = child->next)
         {
@@ -701,7 +729,7 @@ ev2_block_range_list_from_tree(Arena *arena, EV2_BlockTree *block_tree)
       Rng1U64 block_relative_range;
     };
     U64 base_num = 1;
-    BlockTask start_task = {0, block_tree->root, block_tree->root->first, r1u64(0, block_tree->root->visual_row_count)};
+    BlockTask start_task = {0, block_tree->root, block_tree->root->first, r1u64(0, block_tree->root->row_count)};
     for(BlockTask *t = &start_task; t != 0; t = t->next)
     {
       // rjf: get block-relative range, truncated by split position of next child
@@ -731,7 +759,7 @@ ev2_block_range_list_from_tree(Arena *arena, EV2_BlockTree *block_tree)
         t->next = child_task;
         child_task->block = t->next_child;
         child_task->next_child = t->next_child->first;
-        child_task->block_relative_range = r1u64(0, t->next_child->visual_row_count);
+        child_task->block_relative_range = r1u64(0, t->next_child->row_count);
         
         // rjf: generate task for post-child rows, if any, after children
         Rng1U64 remainder_range = r1u64(t->next_child->split_relative_idx+1, t->block_relative_range.max);
@@ -801,7 +829,7 @@ ev2_num_from_key(EV2_BlockRangeList *block_ranges, EV_Key key)
     U64 hash = ev_hash_from_key(n->v.block->key);
     if(hash == key.parent_hash)
     {
-      U64 relative_num = n->v.block->expand_view_rule_info->expr_expand_num_from_id(relative_num, n->v.block->expand_view_rule_info_user_data);
+      U64 relative_num = n->v.block->expand_view_rule_info->expr_expand_num_from_id(key.child_num, n->v.block->expand_view_rule_info_user_data);
       result = (base_num - 1) + relative_num;
       break;
     }
@@ -861,7 +889,7 @@ ev2_windowed_row_list_from_block_range_list(Arena *arena, EV_View *view, String8
           rows.count += 1;
           row->block                = n->v.block;
           row->key                  = n->v.block->key;
-          row->visual_size          = n->v.block->visual_row_count;
+          row->visual_size          = n->v.block->single_item ? n->v.block->row_count : 1;
           row->visual_size_skipped  = 0; // TODO(rjf)
           row->visual_size_chopped  = 0; // TODO(rjf)
           row->string               = n->v.block->string;
@@ -876,7 +904,6 @@ ev2_windowed_row_list_from_block_range_list(Arena *arena, EV_View *view, String8
           EV_ExpandRangeInfo expand_range_info = n->v.block->expand_view_rule_info->expr_expand_range_info(arena, view, filter, n->v.block->expr, n->v.block->expand_view_rule_params, block_relative_range__windowed, n->v.block->expand_view_rule_info_user_data);
           for EachIndex(idx, expand_range_info.row_exprs_count)
           {
-            U64 row_visual_size = expand_range_info.row_exprs_num_visual_rows[idx];
             U64 child_num = block_relative_range.min + idx + 1;
             U64 child_id = n->v.block->expand_view_rule_info->expr_expand_id_from_num(child_num, n->v.block->expand_view_rule_info_user_data);
             EV2_Row *row = push_array(arena, EV2_Row, 1);
@@ -884,7 +911,7 @@ ev2_windowed_row_list_from_block_range_list(Arena *arena, EV_View *view, String8
             rows.count += 1;
             row->block                = n->v.block;
             row->key                  = ev_key_make(ev_hash_from_key(row->block->key), child_id);
-            row->visual_size          = row_visual_size;
+            row->visual_size          = 1;
             row->visual_size_skipped  = 0; // TODO(rjf)
             row->visual_size_chopped  = 0; // TODO(rjf)
             row->string               = n->v.block->string;

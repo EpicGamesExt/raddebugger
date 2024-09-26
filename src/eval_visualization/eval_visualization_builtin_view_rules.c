@@ -179,7 +179,7 @@ EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(default)
   EV_ExpandInfo result = {0};
   {
     result.user_data = accel;
-    result.total_semantic_row_count = result.total_visual_row_count = total_row_count;
+    result.row_count = total_row_count;
   }
   
   scratch_end(scratch);
@@ -201,13 +201,11 @@ EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(default)
     result.row_exprs_count = Min(needed_row_count, members->count);
     result.row_exprs = push_array(arena, E_Expr *, result.row_exprs_count);
     result.row_members = push_array(arena, E_Member *, result.row_exprs_count);
-    result.row_exprs_num_visual_rows = push_array(arena, U64, result.row_exprs_count);
     for EachIndex(row_expr_idx, result.row_exprs_count)
     {
       E_Member *member = &members->v[idx_range.min + row_expr_idx];
       result.row_exprs[row_expr_idx] = e_expr_ref_member_access(arena, expr, member->name);
       result.row_members[row_expr_idx] = member;
-      result.row_exprs_num_visual_rows[row_expr_idx] = 1;
     }
   }
   
@@ -220,13 +218,11 @@ EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(default)
     result.row_exprs_count = Min(needed_row_count, enumvals->count);
     result.row_exprs = push_array(arena, E_Expr *, result.row_exprs_count);
     result.row_members = push_array(arena, E_Member *, result.row_exprs_count);
-    result.row_exprs_num_visual_rows = push_array(arena, U64, result.row_exprs_count);
     for EachIndex(row_expr_idx, result.row_exprs_count)
     {
       E_EnumVal *enumval = &enumvals->v[idx_range.min + row_expr_idx];
       result.row_exprs[row_expr_idx] = e_expr_ref_member_access(arena, expr, enumval->name);
       result.row_members[row_expr_idx] = &e_member_nil;
-      result.row_exprs_num_visual_rows[row_expr_idx] = 1;
     }
   }
   
@@ -239,12 +235,10 @@ EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(default)
     result.row_exprs_count = Min(needed_row_count, accel->array_count);
     result.row_exprs = push_array(arena, E_Expr *, result.row_exprs_count);
     result.row_members = push_array(arena, E_Member *, result.row_exprs_count);
-    result.row_exprs_num_visual_rows = push_array(arena, U64, result.row_exprs_count);
     for EachIndex(row_expr_idx, result.row_exprs_count)
     {
       result.row_exprs[row_expr_idx] = e_expr_ref_array_index(arena, array_expr, idx_range.min + row_expr_idx);
       result.row_members[row_expr_idx] = &e_member_nil;
-      result.row_exprs_num_visual_rows[row_expr_idx] = 1;
     }
   }
   
@@ -256,10 +250,8 @@ EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(default)
     result.row_exprs_count = 1;
     result.row_exprs = push_array(arena, E_Expr *, result.row_exprs_count);
     result.row_members = push_array(arena, E_Member *, result.row_exprs_count);
-    result.row_exprs_num_visual_rows = push_array(arena, U64, result.row_exprs_count);
     result.row_exprs[0] = e_expr_ref_deref(arena, expr);
     result.row_members[0] = &e_member_nil;
-    result.row_exprs_num_visual_rows[0] = 1;
   }
   
   return result;

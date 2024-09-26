@@ -164,8 +164,8 @@ typedef struct EV_ExpandInfo EV_ExpandInfo;
 struct EV_ExpandInfo
 {
   void *user_data;
-  U64 total_semantic_row_count;
-  U64 total_visual_row_count;
+  U64 row_count;
+  B32 single_item; // all rows form a single "item" - a singular, but large, row
 };
 
 typedef struct EV_ExpandRangeInfo EV_ExpandRangeInfo;
@@ -174,7 +174,6 @@ struct EV_ExpandRangeInfo
   U64 row_exprs_count;
   E_Expr **row_exprs;
   E_Member **row_members;
-  U64 *row_exprs_num_visual_rows;
 };
 
 #define EV_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_SIG(name) E_Expr *name(Arena *arena, E_Expr *expr, MD_Node *params)
@@ -288,16 +287,16 @@ struct EV2_Block
   void *expand_view_rule_info_user_data;
   
   // rjf: expansion info
-  U64 semantic_row_count;
-  U64 visual_row_count;
+  U64 row_count;
+  B32 single_item;
 };
 
 typedef struct EV2_BlockTree EV2_BlockTree;
 struct EV2_BlockTree
 {
   EV2_Block *root;
-  U64 total_semantic_row_count;
-  U64 total_visual_row_count;
+  U64 total_row_count;
+  U64 total_item_count;
 };
 
 typedef struct EV2_BlockRange EV2_BlockRange;
@@ -433,9 +432,27 @@ struct EV_WindowedRowList
 };
 
 ////////////////////////////////
+//~ rjf: Nil/Identity View Rule Hooks
+
+EV_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_DEF(identity);
+EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(nil);
+EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(nil);
+EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(identity);
+EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(identity);
+
+////////////////////////////////
 //~ rjf: Globals
 
-global read_only EV_ViewRuleInfo ev_nil_view_rule_info = {0};
+global read_only EV_ViewRuleInfo ev_nil_view_rule_info =
+{
+  {0},
+  0,
+  EV_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_NAME(identity),
+  EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME(nil),
+  EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_NAME(nil),
+  EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_NAME(identity),
+  EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_NAME(identity),
+};
 thread_static EV_ViewRuleInfoTable *ev_view_rule_info_table = 0;
 global read_only EV_ViewRuleList ev_nil_view_rule_list = {0};
 thread_static EV_AutoViewRuleTable *ev_auto_view_rule_table = 0;
@@ -446,6 +463,7 @@ global read_only EV2_Block ev2_nil_block = {&ev2_nil_block, &ev2_nil_block, &ev2
 
 internal EV_Key ev_key_make(U64 parent_hash, U64 child_num);
 internal EV_Key ev_key_zero(void);
+internal EV_Key ev_key_root(void);
 internal B32 ev_key_match(EV_Key a, EV_Key b);
 internal U64 ev_hash_from_seed_string(U64 seed, String8 string);
 internal U64 ev_hash_from_key(EV_Key key);
@@ -494,12 +512,6 @@ internal void ev_view_rule_list_push_string(Arena *arena, EV_ViewRuleList *list,
 internal EV_ViewRuleList *ev_view_rule_list_from_string(Arena *arena, String8 string);
 internal EV_ViewRuleList *ev_view_rule_list_from_inheritance(Arena *arena, EV_ViewRuleList *src);
 internal EV_ViewRuleList *ev_view_rule_list_copy(Arena *arena, EV_ViewRuleList *src);
-
-////////////////////////////////
-//~ rjf: View Rule Expansion ID Spaces
-
-EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(identity);
-EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(identity);
 
 ////////////////////////////////
 //~ rjf: View Rule Expression Resolution

@@ -5838,7 +5838,7 @@ rd_window_frame(RD_Window *ws)
             // rjf: animate height
             {
               F32 fish_rate = rd_setting_val_from_code(RD_SettingCode_MenuAnimations).s32 ? 1 - pow_f32(2, (-60.f * rd_state->frame_dt)) : 1.f;
-              F32 hover_eval_container_height_target = row_height * Min(30, block_tree.total_visual_row_count);
+              F32 hover_eval_container_height_target = row_height * Min(30, block_tree.total_row_count);
               ws->hover_eval_num_visible_rows_t += (hover_eval_container_height_target - ws->hover_eval_num_visible_rows_t) * fish_rate;
               if(abs_f32(hover_eval_container_height_target - ws->hover_eval_num_visible_rows_t) > 0.5f)
               {
@@ -7898,7 +7898,7 @@ EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(watches)
     accel->entities = rd_entity_array_from_list(arena, &entities_filtered);
   }
   scratch_end(scratch);
-  EV_ExpandInfo info = {accel, accel->entities.count, accel->entities.count};
+  EV_ExpandInfo info = {accel, accel->entities.count};
   return info;
 }
 
@@ -7915,7 +7915,6 @@ EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(watches)
     {
       result.row_exprs[row_expr_idx] = e_parse_expr_from_text(arena, accel->entities.v[idx_range.min + row_expr_idx]->string);
       result.row_members[row_expr_idx] = &e_member_nil;
-      result.row_exprs_num_visual_rows[row_expr_idx] = 1;
     }
   }
   return result;
@@ -7956,7 +7955,7 @@ EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(locals)
   }
   String8Array *accel = push_array(arena, String8Array, 1);
   *accel = str8_array_from_list(arena, &exprs_filtered);
-  EV_ExpandInfo info = {accel, accel->count, accel->count};
+  EV_ExpandInfo info = {accel, accel->count};
   scratch_end(scratch);
   return info;
 }
@@ -7974,7 +7973,6 @@ EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(locals)
     {
       result.row_exprs[row_expr_idx] = e_parse_expr_from_text(arena, accel->v[idx_range.min + row_expr_idx]);
       result.row_members[row_expr_idx] = &e_member_nil;
-      result.row_exprs_num_visual_rows[row_expr_idx] = 1;
     }
   }
   return result;
@@ -7995,7 +7993,7 @@ EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(registers)
   accel->v = push_array(arena, String8, accel->count);
   MemoryCopy(accel->v + 0,         reg_strings,   reg_count);
   MemoryCopy(accel->v + reg_count, alias_strings, alias_count);
-  EV_ExpandInfo info = {accel, accel->count, accel->count};
+  EV_ExpandInfo info = {accel, accel->count};
   return info;
 }
 
@@ -8013,7 +8011,6 @@ EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(registers)
       String8 string = push_str8f(arena, "reg:%S", accel->v[idx_range.min + row_expr_idx]);
       result.row_exprs[row_expr_idx] = e_parse_expr_from_text(arena, string);
       result.row_members[row_expr_idx] = &e_member_nil;
-      result.row_exprs_num_visual_rows[row_expr_idx] = 1;
     }
   }
   return result;
@@ -8241,7 +8238,7 @@ rd_ev_view_rule_expr_expand_info__meta_entities(Arena *arena, EV_View *view, Str
     accel->entities = rd_entity_array_from_list(arena, &entities_filtered);
   }
   scratch_end(scratch);
-  EV_ExpandInfo info = {accel, accel->entities.count, accel->entities.count};
+  EV_ExpandInfo info = {accel, accel->entities.count};
   return info;
 }
 
@@ -8260,7 +8257,6 @@ rd_ev_view_rule_expr_expand_range_info__meta_entities(Arena *arena, EV_View *vie
       String8 entity_expr_string = push_str8f(arena, "$%I64u", accel->entities.v[idx_range.min + row_expr_idx]->id);
       result.row_exprs[row_expr_idx] = e_parse_expr_from_text(arena, entity_expr_string);
       result.row_members[row_expr_idx] = &e_member_nil;
-      result.row_exprs_num_visual_rows[row_expr_idx] = 1;
     }
   }
   return result;
@@ -8286,7 +8282,7 @@ rd_ev_view_rule_expr_expand_info__meta_ctrl_entities(Arena *arena, EV_View *view
     accel->entities = ctrl_entity_array_from_list(arena, &entities_filtered);
   }
   scratch_end(scratch);
-  EV_ExpandInfo info = {accel, accel->entities.count, accel->entities.count};
+  EV_ExpandInfo info = {accel, accel->entities.count};
   return info;
 }
 
@@ -8306,7 +8302,6 @@ rd_ev_view_rule_expr_expand_range_info__meta_ctrl_entities(Arena *arena, EV_View
       String8 entity_expr_string = push_str8f(arena, "$_%I64x_%I64x", entity->handle.machine_id, entity->handle.dmn_handle.u64[0]);
       result.row_exprs[row_expr_idx] = e_parse_expr_from_text(arena, entity_expr_string);
       result.row_members[row_expr_idx] = &e_member_nil;
-      result.row_exprs_num_visual_rows[row_expr_idx] = 1;
     }
   }
   return result;
@@ -8349,7 +8344,7 @@ rd_ev_view_rule_expr_expand_info__debug_info_tables(Arena *arena, EV_View *view,
     
     scratch_end(scratch);
   }
-  EV_ExpandInfo info = {accel, accel->items.count, accel->items.count};
+  EV_ExpandInfo info = {accel, accel->items.count};
   return info;
 }
 
@@ -8457,7 +8452,6 @@ rd_ev_view_rule_expr_expand_range_info__debug_info_tables(Arena *arena, EV_View 
       // rjf: fill
       result.row_exprs[row_expr_idx] = item_expr;
       result.row_members[row_expr_idx] = &e_member_nil;
-      result.row_exprs_num_visual_rows[row_expr_idx] = 1;
     }
   }
   return result;

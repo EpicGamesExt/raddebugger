@@ -44,8 +44,7 @@ struct RD_CodeViewBuildResult
 typedef U32 RD_WatchViewFlags;
 enum
 {
-  RD_WatchViewFlag_NoHeader          = (1<<0),
-  RD_WatchViewFlag_PrettyNameMembers = (1<<1),
+  RD_WatchViewFlag_PrettyNameMembers = (1<<0),
 };
 
 typedef enum RD_WatchViewColumnKind
@@ -155,11 +154,11 @@ internal RD_WatchViewColumn *rd_watch_view_column_from_x(RD_WatchViewState *wv, 
 
 //- rjf: watch view points <-> table coordinates
 internal B32 rd_watch_view_point_match(RD_WatchViewPoint a, RD_WatchViewPoint b);
-internal RD_WatchViewPoint rd_watch_view_point_from_tbl(EV_BlockList *blocks, Vec2S64 tbl);
-internal Vec2S64 rd_tbl_from_watch_view_point(EV_BlockList *blocks, RD_WatchViewPoint pt);
+internal RD_WatchViewPoint rd_watch_view_point_from_tbl(EV2_BlockRangeList *block_ranges, Vec2S64 tbl);
+internal Vec2S64 rd_tbl_from_watch_view_point(EV2_BlockRangeList *block_ranges, RD_WatchViewPoint pt);
 
 //- rjf: table coordinates -> strings
-internal String8 rd_string_from_eval_viz_row_column(Arena *arena, EV_View *ev, EV_Row *row, RD_WatchViewColumn *col, EV_StringFlags string_flags, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size_px);
+internal String8 rd_string_from_eval_viz_row_column(Arena *arena, EV_View *ev, EV2_Row *row, RD_WatchViewColumn *col, EV_StringFlags string_flags, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size_px);
 
 //- rjf: table coordinates -> text edit state
 internal RD_WatchViewTextEditState *rd_watch_view_text_edit_state_from_pt(RD_WatchViewState *wv, RD_WatchViewPoint pt);
