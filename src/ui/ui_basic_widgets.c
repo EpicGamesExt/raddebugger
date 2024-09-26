@@ -1453,8 +1453,8 @@ ui_scroll_list_begin(UI_ScrollListParams *params, UI_ScrollPt *scroll_pt, Vec2S6
   //- rjf: determine ranges & limits
   Rng1S64 visible_row_range = r1s64(scroll_pt->idx + (S64)(scroll_pt->off) + 0 - !!(scroll_pt->off < 0),
                                     scroll_pt->idx + (S64)(scroll_pt->off) + 0 + num_possible_visible_rows + 1);
-  visible_row_range.min = clamp_1s64(scroll_row_idx_range, visible_row_range.min);
-  visible_row_range.max = clamp_1s64(scroll_row_idx_range, visible_row_range.max);
+  visible_row_range.min = clamp_1s64(params->item_range, visible_row_range.min);
+  visible_row_range.max = clamp_1s64(params->item_range, visible_row_range.max);
   *visible_row_range_out = visible_row_range;
   
   //- rjf: store thread-locals

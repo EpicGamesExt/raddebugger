@@ -1049,7 +1049,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
       {
         MemoryZeroStruct(&block_tree);
         MemoryZeroStruct(&block_ranges);
-        ev_key_set_expansion(eval_view, ev_key_zero(), ev_key_root(), 1);
+        ev_key_set_expansion(eval_view, ev_key_root(), ev_key_make(ev_hash_from_key(ev_key_root()), 1), 1);
         block_tree   = ev2_block_tree_from_string(scratch.arena, eval_view, filter, root_expr, top_level_view_rules);
         block_ranges = ev2_block_range_list_from_tree(scratch.arena, &block_tree);
 #if 0 // TODO(rjf): @blocks
@@ -1086,7 +1086,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
         for(EV2_BlockRangeNode *n = block_ranges.first; n != 0; n = n->next)
         {
           UI_ScrollListRowBlock block = {0};
-          block.row_count  = n->v.block->row_count;
+          block.row_count  = dim_1u64(n->v.range);
           block.item_count = n->v.block->single_item ? 1 : dim_1u64(n->v.range);
           ui_scroll_list_row_block_chunk_list_push(scratch.arena, &row_block_chunks, 256, &block);
         }
@@ -1859,7 +1859,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
       //
       EV2_WindowedRowList rows = {0};
       {
-        rows = ev2_windowed_row_list_from_block_range_list(scratch.arena, eval_view, filter, &block_ranges, r1u64(visible_row_rng.min, visible_row_rng.max + 1));
+        rows = ev2_windowed_row_list_from_block_range_list(scratch.arena, eval_view, filter, &block_ranges, r1u64(visible_row_rng.min, visible_row_rng.max+1));
       }
       
       ////////////////////////////
@@ -1867,15 +1867,15 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
       //
       ProfScope("build table")
       {
-        U64 semantic_idx = rows.count_before_semantic;
-        for(EV2_Row *row = rows.first; row != 0; row = row->next, semantic_idx += 1)
+        U64 semantic_num = rows.count_before_semantic + 1;
+        for(EV2_Row *row = rows.first; row != 0; row = row->next, semantic_num += 1)
         {
           ////////////////////////
           //- rjf: unpack row info
           //
           U64 row_hash = ev_hash_from_key(row->key);
           U64 row_depth = ev2_depth_from_block(row->block);
-          B32 row_selected = (selection_tbl.min.y <= (semantic_idx+1) && (semantic_idx+1) <= selection_tbl.max.y);
+          B32 row_selected = (selection_tbl.min.y <= semantic_num && semantic_num <= selection_tbl.max.y);
           B32 row_expanded = ev_expansion_from_key(eval_view, row->key);
           E_Eval row_eval = e_eval_from_expr(scratch.arena, row->expr);
           E_Type *row_type = e_type_from_key(scratch.arena, row_eval.type_key);
@@ -1933,7 +1933,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
               palette = ui_build_palette(ui_top_palette(), .background = rd_rgba_from_theme_color(RD_ThemeColor_HighlightOverlay));
               row_flags |= UI_BoxFlag_DrawBackground;
             }
-            else if(semantic_idx & 1)
+            else if(semantic_num & 1)
             {
               palette = ui_build_palette(ui_top_palette(), .background = rd_rgba_from_theme_color(RD_ThemeColor_BaseBackgroundAlt));
               row_flags |= UI_BoxFlag_DrawBackground;
@@ -2223,7 +2223,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                   }break;
                   case RD_WatchViewColumnKind_FrameSelection:
                   {
-                    if(semantic_idx == rd_regs()->unwind_count - rd_regs()->inline_depth)
+                    if(semantic_num - 1 == rd_regs()->unwind_count - rd_regs()->inline_depth)
                     {
                       cell_icon = RD_IconKind_RightArrow;
                       CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->thread);
@@ -2422,7 +2422,15 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                 //- rjf: bump x pixel coordinate
                 x_px += col->pct*dim_2f32(rect).x;
                 
-                //- rjf: [DEV] hovering -> tooltips
+                //- rjf: [DEV] hovering -> watch key tooltips
+                if(DEV_eval_watch_key_tooltips && ui_hovering(sig)) UI_Tooltip RD_Font(RD_FontSlot_Code)
+                {
+                  ui_labelf("Block Key:  {0x%I64x, %I64u}", row->block->key.parent_hash, row->block->key.child_num);
+                  ui_labelf("Row Key:    {0x%I64x, %I64u}", row->key.parent_hash, row->key.child_num);
+                  ui_labelf("Cursor Key: {0x%I64x, %I64u}", ewv->cursor.key.parent_hash, ewv->cursor.key.child_num);
+                }
+                
+                //- rjf: [DEV] hovering -> eval system tooltips
                 if(DEV_eval_compiler_tooltips && x == 0 && ui_hovering(sig)) UI_Tooltip RD_Font(RD_FontSlot_Code)
                 {
                   local_persist char *spaces = "                                                                        ";

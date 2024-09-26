@@ -7743,7 +7743,7 @@ rd_window_frame(RD_Window *ws)
           {
             Vec4F32 color = rd_rgba_from_theme_color(RD_ThemeColor_Focus);
             color.w *= 0.2f*b->focus_hot_t;
-            R_Rect2DInst *inst = dr_rect(b->rect, color, 0, 0, 1.f);
+            R_Rect2DInst *inst = dr_rect(b->rect, color, 0, 0, 0.f);
             MemoryCopyArray(inst->corner_radii, b->corner_radii);
           }
           
@@ -11166,9 +11166,14 @@ rd_frame(void)
       for EachElement(idx, rd_collection_name_table)
       {
         EV_ViewRuleInfo info = {0};
-        info.string     = rd_collection_name_table[idx];
-        info.flags      = EV_ViewRuleInfoFlag_Expandable;
-        info.block_prod = rd_collection_block_prod_hook_function_table[idx];
+        info.string                  = rd_collection_name_table[idx];
+        info.flags                   = EV_ViewRuleInfoFlag_Expandable;
+        info.expr_resolution         = EV_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_NAME(identity);
+        info.expr_expand_info        = rd_collection_expr_expand_info_hook_function_table[idx];;
+        info.expr_expand_range_info  = rd_collection_expr_expand_range_info_hook_function_table[idx];
+        info.expr_expand_id_from_num = EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_NAME(identity);
+        info.expr_expand_num_from_id = EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_NAME(identity);
+        info.block_prod              = rd_collection_block_prod_hook_function_table[idx];
         ev_view_rule_info_table_push(scratch.arena, view_rule_info_table, &info);
       }
       

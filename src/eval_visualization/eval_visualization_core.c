@@ -539,13 +539,21 @@ ev2_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, String8 st
     Temp scratch = scratch_begin(&arena, 1);
     EV_ViewRuleInfo *default_expand_view_rule_info = ev_view_rule_info_from_string(str8_lit("default"));
     
+    //- rjf: form complete set of view rules
+    EV_ViewRuleList *top_level_view_rules = ev_view_rule_list_copy(arena, view_rules);
+    {
+      E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, expr);
+      String8 auto_view_rule = ev_auto_view_rule_from_type_key(irtree.type_key);
+      ev_view_rule_list_push_string(arena, top_level_view_rules, auto_view_rule);
+    }
+    
     //- rjf: generate root block
     tree.root = push_array(arena, EV2_Block, 1);
     MemoryCopyStruct(tree.root, &ev2_nil_block);
     tree.root->key        = ev_key_root();
     tree.root->string     = string;
-    tree.root->expr       = expr;
-    tree.root->view_rules = view_rules;
+    tree.root->expr       = ev_expr_from_expr_view_rules(arena, expr, top_level_view_rules);
+    tree.root->view_rules = top_level_view_rules;
     tree.root->row_count  = 1;
     tree.total_row_count += 1;
     tree.total_item_count += 1;
@@ -557,16 +565,17 @@ ev2_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, String8 st
       Task *next;
       EV2_Block *parent_block;
       E_Expr *expr;
-      EV_Key key;
+      U64 child_id;
       EV_ViewRuleList *view_rules;
       U64 split_relative_idx;
     };
-    Task start_task = {0, tree.root, expr, tree.root->key, view_rules, 1};
+    Task start_task = {0, tree.root, expr, 1, top_level_view_rules, 0};
     Task *first_task = &start_task;
     Task *last_task = first_task;
     for(Task *t = first_task; t != 0; t = t->next)
     {
-      EV_ExpandNode *expand_node = ev_expand_node_from_key(view, t->key);
+      EV_Key key = ev_key_make(ev_hash_from_key(t->parent_block->key), t->child_id);
+      EV_ExpandNode *expand_node = ev_expand_node_from_key(view, key);
       
       // rjf: skip if not expanded
       if(!expand_node || !expand_node->expanded)
@@ -598,7 +607,7 @@ ev2_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, String8 st
         MemoryCopyStruct(expansion_block, &ev2_nil_block);
         DLLPushBack_NPZ(&ev2_nil_block, t->parent_block->first, t->parent_block->last, expansion_block, next, prev);
         expansion_block->parent                   = t->parent_block;
-        expansion_block->key                      = t->key;
+        expansion_block->key                      = key;
         expansion_block->split_relative_idx       = t->split_relative_idx;
         expansion_block->expr                     = t->expr;
         expansion_block->view_rules               = t->view_rules;
@@ -628,7 +637,7 @@ ev2_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, String8 st
             SLLQueuePush(first_task, last_task, task);
             task->parent_block       = expansion_block;
             task->expr               = child_expand.row_exprs[0];
-            task->key                = child->key;
+            task->child_id           = child->key.child_num;
             task->view_rules         = child_view_rules;
             task->split_relative_idx = split_relative_idx;
           }
@@ -807,7 +816,7 @@ ev2_key_from_num(EV2_BlockRangeList *block_ranges, U64 num)
     Rng1U64 global_range = r1u64(base_num, base_num + range_size);
     if(contains_1u64(global_range, num))
     {
-      U64 relative_num = (num - base_num) + 1;
+      U64 relative_num = (num - base_num) + n->v.range.min + 1;
       U64 child_id     = n->v.block->expand_view_rule_info->expr_expand_id_from_num(relative_num, n->v.block->expand_view_rule_info_user_data);
       EV_Key block_key = n->v.block->key;
       key = ev_key_make(ev_hash_from_key(block_key), child_id);
@@ -825,15 +834,17 @@ ev2_num_from_key(EV2_BlockRangeList *block_ranges, EV_Key key)
   U64 base_num = 1;
   for(EV2_BlockRangeNode *n = block_ranges->first; n != 0; n = n->next)
   {
-    U64 range_size = dim_1u64(n->v.range);
     U64 hash = ev_hash_from_key(n->v.block->key);
     if(hash == key.parent_hash)
     {
       U64 relative_num = n->v.block->expand_view_rule_info->expr_expand_num_from_id(key.child_num, n->v.block->expand_view_rule_info_user_data);
-      result = (base_num - 1) + relative_num;
-      break;
+      if(contains_1u64(n->v.range, relative_num-1))
+      {
+        result = base_num + (relative_num - 1 - n->v.range.min);
+        break;
+      }
     }
-    base_num += range_size;
+    base_num += dim_1u64(n->v.range);
   }
   return result;
 }
@@ -877,6 +888,10 @@ ev2_windowed_row_list_from_block_range_list(Arena *arena, EV_View *view, String8
       // rjf: sum & advance
       visual_idx_off += block_num_visual_rows;
       rows.count_before_visual += num_skipped;
+      if(block_num_visual_rows != 0 && num_skipped != 0)
+      {
+        rows.count_before_semantic += n->v.block->single_item ? 1 : num_skipped;
+      }
       
       // rjf: generate rows before next splitting child
       if(block_relative_range__windowed.max > block_relative_range__windowed.min)
@@ -888,7 +903,7 @@ ev2_windowed_row_list_from_block_range_list(Arena *arena, EV_View *view, String8
           SLLQueuePush(rows.first, rows.last, row);
           rows.count += 1;
           row->block                = n->v.block;
-          row->key                  = n->v.block->key;
+          row->key                  = ev_key_make(ev_hash_from_key(row->block->key), 1);
           row->visual_size          = n->v.block->single_item ? n->v.block->row_count : 1;
           row->visual_size_skipped  = 0; // TODO(rjf)
           row->visual_size_chopped  = 0; // TODO(rjf)
@@ -904,7 +919,7 @@ ev2_windowed_row_list_from_block_range_list(Arena *arena, EV_View *view, String8
           EV_ExpandRangeInfo expand_range_info = n->v.block->expand_view_rule_info->expr_expand_range_info(arena, view, filter, n->v.block->expr, n->v.block->expand_view_rule_params, block_relative_range__windowed, n->v.block->expand_view_rule_info_user_data);
           for EachIndex(idx, expand_range_info.row_exprs_count)
           {
-            U64 child_num = block_relative_range.min + idx + 1;
+            U64 child_num = block_relative_range.min + num_skipped + idx + 1;
             U64 child_id = n->v.block->expand_view_rule_info->expr_expand_id_from_num(child_num, n->v.block->expand_view_rule_info_user_data);
             EV2_Row *row = push_array(arena, EV2_Row, 1);
             SLLQueuePush(rows.first, rows.last, row);
