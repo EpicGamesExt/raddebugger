@@ -1462,12 +1462,15 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                     RD_Entity *entity = collection_info.entity;
                     if(!rd_entity_is_nil(entity) || editing_complete)
                     {
-                      if(rd_entity_is_nil(entity))
+                      if(rd_entity_is_nil(entity) && new_string.size != 0)
                       {
                         entity = rd_entity_alloc(rd_entity_root(), collection_info.kind);
+                        rd_entity_equip_cfg_src(entity, RD_CfgSrc_Project);
                       }
-                      rd_entity_equip_cfg_src(entity, RD_CfgSrc_Project);
-                      rd_entity_equip_name(entity, new_string);
+                      if(!rd_entity_is_nil(entity))
+                      {
+                        rd_entity_equip_name(entity, new_string);
+                      }
                       state_dirty = 1;
                       snap_to_cursor = 1;
                     }
@@ -1632,27 +1635,31 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
               {}break;
               default:
               case RD_WatchViewColumnKind_Expr:
+              if(tbl.y != 0)
               {
                 RD_WatchViewCollectionInfo collection_info = rd_collection_info_from_num(&block_ranges, tbl.y);
                 if(collection_info.kind != RD_EntityKind_Nil)
                 {
                   RD_Entity *entity = collection_info.entity;
-                  rd_entity_mark_for_deletion(entity);
-                  U64 deleted_id = collection_info.key.child_id;
-                  U64 deleted_num = collection_info.block->expand_view_rule_info->expr_expand_num_from_id(deleted_id, collection_info.block->expand_view_rule_info_user_data);
-                  if(deleted_num != 0)
+                  if(!rd_entity_is_nil(entity))
                   {
-                    U64 fallback_id_next = collection_info.block->expand_view_rule_info->expr_expand_id_from_num(deleted_num+1, collection_info.block->expand_view_rule_info_user_data);
-                    U64 fallback_id_prev = collection_info.block->expand_view_rule_info->expr_expand_id_from_num(deleted_num-1, collection_info.block->expand_view_rule_info_user_data);
-                    EV_Key parent_key = collection_info.block->key;
-                    EV_Key key = ev_key_make(collection_info.key.parent_hash, fallback_id_next ? fallback_id_next : fallback_id_prev);
-                    if(key.child_id == 0)
+                    rd_entity_mark_for_deletion(entity);
+                    U64 deleted_id = collection_info.key.child_id;
+                    U64 deleted_num = collection_info.block->expand_view_rule_info->expr_expand_num_from_id(deleted_id, collection_info.block->expand_view_rule_info_user_data);
+                    if(deleted_num != 0)
                     {
-                      key = collection_info.block->key;
-                      parent_key = collection_info.block->parent->key;
+                      U64 fallback_id_next = collection_info.block->expand_view_rule_info->expr_expand_id_from_num(deleted_num+1, collection_info.block->expand_view_rule_info_user_data);
+                      U64 fallback_id_prev = collection_info.block->expand_view_rule_info->expr_expand_id_from_num(deleted_num-1, collection_info.block->expand_view_rule_info_user_data);
+                      EV_Key parent_key = collection_info.block->key;
+                      EV_Key key = ev_key_make(collection_info.key.parent_hash, fallback_id_next ? fallback_id_next : fallback_id_prev);
+                      if(key.child_id == 0)
+                      {
+                        key = collection_info.block->key;
+                        parent_key = collection_info.block->parent->key;
+                      }
+                      RD_WatchViewPoint new_pt = {0, parent_key, key};
+                      ewv->cursor = ewv->mark = ewv->next_cursor = ewv->next_mark = new_pt;
                     }
-                    RD_WatchViewPoint new_pt = {0, parent_key, key};
-                    ewv->cursor = ewv->mark = ewv->next_cursor = ewv->next_mark = new_pt;
                   }
                 }
               }break;
