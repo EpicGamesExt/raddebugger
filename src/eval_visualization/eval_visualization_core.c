@@ -737,7 +737,7 @@ ev2_block_range_list_from_tree(Arena *arena, EV2_BlockTree *block_tree)
       EV2_Block *next_child;
       Rng1U64 block_relative_range;
     };
-    U64 base_num = 1;
+    U64 base_num = 0;
     BlockTask start_task = {0, block_tree->root, block_tree->root->first, r1u64(0, block_tree->root->row_count)};
     for(BlockTask *t = &start_task; t != 0; t = t->next)
     {
@@ -792,15 +792,17 @@ internal EV2_BlockRange
 ev2_block_range_from_num(EV2_BlockRangeList *block_ranges, U64 num)
 {
   EV2_BlockRange result = {&ev2_nil_block};
-  U64 base_num = 1;
+  U64 base_num = 0;
   for(EV2_BlockRangeNode *n = block_ranges->first; n != 0; n = n->next)
   {
-    Rng1U64 global_range = r1u64(base_num, base_num + dim_1u64(n->v.range));
+    U64 range_size = dim_1u64(n->v.range);
+    Rng1U64 global_range = r1u64(base_num, base_num + range_size);
     if(contains_1u64(global_range, num))
     {
       result = n->v;
       break;
     }
+    base_num += range_size;
   }
   return result;
 }
@@ -813,7 +815,7 @@ ev2_key_from_num(EV2_BlockRangeList *block_ranges, U64 num)
   {
     key = ev_key_make(ev_hash_from_key(ev_key_root()), 1);
   }
-  U64 base_num = 1;
+  U64 base_num = 0;
   for(EV2_BlockRangeNode *n = block_ranges->first; n != 0; n = n->next)
   {
     U64 range_size = dim_1u64(n->v.range);
@@ -834,8 +836,8 @@ ev2_key_from_num(EV2_BlockRangeList *block_ranges, U64 num)
 internal U64
 ev2_num_from_key(EV2_BlockRangeList *block_ranges, EV_Key key)
 {
-  U64 result = 1;
-  U64 base_num = 1;
+  U64 result = 0;
+  U64 base_num = 0;
   for(EV2_BlockRangeNode *n = block_ranges->first; n != 0; n = n->next)
   {
     U64 hash = ev_hash_from_key(n->v.block->key);

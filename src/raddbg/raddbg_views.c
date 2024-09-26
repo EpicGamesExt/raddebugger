@@ -797,8 +797,8 @@ rd_watch_view_point_from_tbl(EV2_BlockRangeList *block_ranges, Vec2S64 tbl)
 {
   RD_WatchViewPoint pt = zero_struct;
   pt.x           = tbl.x;
-  pt.key         = ev2_key_from_num(block_ranges, (U64)tbl.y + 1);
-  pt.parent_key  = ev2_block_range_from_num(block_ranges, (U64)tbl.y + 1).block->key;
+  pt.key         = ev2_key_from_num(block_ranges, (U64)tbl.y);
+  pt.parent_key  = ev2_block_range_from_num(block_ranges, (U64)tbl.y).block->key;
   return pt;
 }
 
@@ -807,7 +807,7 @@ rd_tbl_from_watch_view_point(EV2_BlockRangeList *block_ranges, RD_WatchViewPoint
 {
   Vec2S64 tbl = {0};
   tbl.x = pt.x;
-  tbl.y = (S64)ev2_num_from_key(block_ranges, pt.key) - 1;
+  tbl.y = (S64)ev2_num_from_key(block_ranges, pt.key);
   return tbl;
 }
 
@@ -1688,36 +1688,167 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
       if(!ewv->text_editing && evt->flags & UI_EventFlag_Reorder)
       {
         taken = 1;
-        EV_Key first_watch_key = ev2_key_from_num(&block_ranges, selection_tbl.min.y);
-        EV_Key reorder_group_prev_watch_key = ev2_key_from_num(&block_ranges, selection_tbl.min.y - 1);
-        EV_Key reorder_group_next_watch_key = ev2_key_from_num(&block_ranges, selection_tbl.max.y + 1);
-        RD_Entity *reorder_group_prev = rd_entity_from_ev_key_and_kind(reorder_group_prev_watch_key, mutable_entity_kind);
-        RD_Entity *reorder_group_next = rd_entity_from_ev_key_and_kind(reorder_group_next_watch_key, mutable_entity_kind);
-        RD_Entity *first_watch = rd_entity_from_ev_key_and_kind(first_watch_key, mutable_entity_kind);
-        RD_Entity *last_watch = first_watch;
-        if(!rd_entity_is_nil(first_watch))
+        if(filter.size == 0)
         {
-          for(S64 y = selection_tbl.min.y+1; y <= selection_tbl.max.y; y += 1)
+          // rjf: determine blocks of each endpoint of the table selection
+          EV2_Block *selection_endpoint_blocks[2] =
           {
-            EV_Key key = ev2_key_from_num(&block_ranges, y);
-            RD_Entity *new_last = rd_entity_from_ev_key_and_kind(key, mutable_entity_kind);
-            if(!rd_entity_is_nil(new_last))
+            ev2_block_range_from_num(&block_ranges, selection_tbl.min.y).block,
+            ev2_block_range_from_num(&block_ranges, selection_tbl.max.y).block,
+          };
+          
+          // rjf: pick shallowest block within which we can do reordering
+          U64 selection_depths[2] =
+          {
+            ev2_depth_from_block(selection_endpoint_blocks[0]),
+            ev2_depth_from_block(selection_endpoint_blocks[1]),
+          };
+          EV2_Block *selection_block = (selection_depths[1] < selection_depths[0]
+                                        ? selection_endpoint_blocks[1]
+                                        : selection_endpoint_blocks[0]);
+          
+          // rjf: find selection keys within the block in which we are doing reordering
+          EV_Key selection_keys_in_block[2] = {0};
+          {
+            for EachElement(idx, selection_endpoint_blocks)
             {
-              last_watch = new_last;
+              EV2_Block *endpoint_block = selection_endpoint_blocks[idx];
+              if(endpoint_block == selection_block)
+              {
+                selection_keys_in_block[idx] = ev2_key_from_num(&block_ranges, selection_tbl.v[idx].y);
+              }
+              else
+              {
+                for(;endpoint_block->parent != selection_block && endpoint_block != &ev2_nil_block;)
+                {
+                  endpoint_block = endpoint_block->parent;
+                }
+                if(endpoint_block->parent == selection_block)
+                {
+                  selection_keys_in_block[idx] = endpoint_block->key;
+                }
+              }
+            }
+            EV_Key fallback_key = {0};
+            for EachElement(idx, selection_endpoint_blocks)
+            {
+              if(!ev_key_match(selection_keys_in_block[idx], ev_key_zero()))
+              {
+                fallback_key = selection_keys_in_block[idx];
+              }
+            }
+            for EachElement(idx, selection_endpoint_blocks)
+            {
+              if(ev_key_match(selection_keys_in_block[idx], ev_key_zero()))
+              {
+                selection_keys_in_block[idx] = fallback_key;
+              }
             }
           }
-        }
-        if(evt->delta_2s32.y < 0 && !rd_entity_is_nil(first_watch) && !rd_entity_is_nil(reorder_group_prev))
-        {
-          state_dirty = 1;
-          snap_to_cursor = 1;
-          rd_entity_change_parent(reorder_group_prev, reorder_group_prev->parent, reorder_group_prev->parent, last_watch);
-        }
-        if(evt->delta_2s32.y > 0 && !rd_entity_is_nil(last_watch) && !rd_entity_is_nil(reorder_group_next))
-        {
-          state_dirty = 1;
-          snap_to_cursor = 1;
-          rd_entity_change_parent(reorder_group_next, reorder_group_next->parent, reorder_group_next->parent, reorder_group_prev);
+          
+          // rjf: map selection keys to child numbers
+          U64 selection_numbers[2] =
+          {
+            selection_block->expand_view_rule_info->expr_expand_num_from_id(selection_keys_in_block[0].child_num, selection_block->expand_view_rule_info_user_data),
+            selection_block->expand_view_rule_info->expr_expand_num_from_id(selection_keys_in_block[1].child_num, selection_block->expand_view_rule_info_user_data),
+          };
+          
+          // rjf: determine collection info for the block
+          RD_EntityKind collection_entity_kind = RD_EntityKind_Nil;
+          E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, selection_block->expr);
+          E_Type *type = e_type_from_key(scratch.arena, irtree.type_key);
+          for EachElement(idx, rd_collection_name_table)
+          {
+            if(str8_match(type->name, rd_collection_name_table[idx], 0))
+            {
+              collection_entity_kind = rd_collection_entity_kind_table[idx];
+              break;
+            }
+          }
+          
+          // rjf: map selection endpoints to entities
+          RD_Entity *first_entity = &d_nil_entity;
+          RD_Entity *last_entity = &d_nil_entity;
+          if(collection_entity_kind != RD_EntityKind_Nil)
+          {
+            RD_EntityList entities_list = rd_query_cached_entity_list_with_kind(collection_entity_kind);
+            RD_EntityArray entities = rd_entity_array_from_list(scratch.arena, &entities_list);
+            if(0 < selection_numbers[0] && selection_numbers[0] <= entities.count && 
+               0 < selection_numbers[1] && selection_numbers[1] <= entities.count)
+            {
+              first_entity = entities.v[Min(selection_numbers[0], selection_numbers[1]) - 1];
+              last_entity  = entities.v[Max(selection_numbers[0], selection_numbers[1]) - 1];
+            }
+          }
+          
+          // rjf: reorder
+          if(!rd_entity_is_nil(first_entity) && !rd_entity_is_nil(last_entity))
+          {
+            RD_Entity *first_entity_prev = &d_nil_entity;
+            RD_Entity *last_entity_next  = &d_nil_entity;
+            for(RD_Entity *prev = first_entity->prev; !rd_entity_is_nil(prev); prev = prev->prev)
+            {
+              if(prev->kind == collection_entity_kind)
+              {
+                first_entity_prev = prev;
+                break;
+              }
+            }
+            for(RD_Entity *next = last_entity->next; !rd_entity_is_nil(next); next = next->next)
+            {
+              if(next->kind == collection_entity_kind)
+              {
+                last_entity_next = next;
+                break;
+              }
+            }
+            if(evt->delta_2s32.y < 0 && !rd_entity_is_nil(first_entity) && !rd_entity_is_nil(first_entity_prev))
+            {
+              state_dirty = 1;
+              snap_to_cursor = 1;
+              rd_entity_change_parent(first_entity_prev, first_entity_prev->parent, first_entity_prev->parent, last_entity);
+            }
+            if(evt->delta_2s32.y > 0 && !rd_entity_is_nil(last_entity) && !rd_entity_is_nil(last_entity_next))
+            {
+              state_dirty = 1;
+              snap_to_cursor = 1;
+              rd_entity_change_parent(last_entity_next, last_entity_next->parent, last_entity_next->parent, first_entity_prev);
+            }
+          }
+          
+#if 0 // TODO(rjf): @blocks
+          EV_Key first_watch_key = ev2_key_from_num(&block_ranges, selection_tbl.min.y);
+          EV_Key reorder_group_prev_watch_key = ev2_key_from_num(&block_ranges, selection_tbl.min.y - 1);
+          EV_Key reorder_group_next_watch_key = ev2_key_from_num(&block_ranges, selection_tbl.max.y + 1);
+          RD_Entity *reorder_group_prev = rd_entity_from_ev_key_and_kind(reorder_group_prev_watch_key, mutable_entity_kind);
+          RD_Entity *reorder_group_next = rd_entity_from_ev_key_and_kind(reorder_group_next_watch_key, mutable_entity_kind);
+          RD_Entity *first_watch = rd_entity_from_ev_key_and_kind(first_watch_key, mutable_entity_kind);
+          RD_Entity *last_watch = first_watch;
+          if(!rd_entity_is_nil(first_watch))
+          {
+            for(S64 y = selection_tbl.min.y+1; y <= selection_tbl.max.y; y += 1)
+            {
+              EV_Key key = ev2_key_from_num(&block_ranges, y);
+              RD_Entity *new_last = rd_entity_from_ev_key_and_kind(key, mutable_entity_kind);
+              if(!rd_entity_is_nil(new_last))
+              {
+                last_watch = new_last;
+              }
+            }
+          }
+          if(evt->delta_2s32.y < 0 && !rd_entity_is_nil(first_watch) && !rd_entity_is_nil(reorder_group_prev))
+          {
+            state_dirty = 1;
+            snap_to_cursor = 1;
+            rd_entity_change_parent(reorder_group_prev, reorder_group_prev->parent, reorder_group_prev->parent, last_watch);
+          }
+          if(evt->delta_2s32.y > 0 && !rd_entity_is_nil(last_watch) && !rd_entity_is_nil(reorder_group_next))
+          {
+            state_dirty = 1;
+            snap_to_cursor = 1;
+            rd_entity_change_parent(reorder_group_next, reorder_group_next->parent, reorder_group_next->parent, reorder_group_prev);
+          }
+#endif
         }
       }
       
@@ -1798,8 +1929,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
       ProfScope("build table")
       {
         U64 global_row_idx = rows.count_before_semantic;
-        U64 global_row_num = global_row_idx+1;
-        for(EV2_Row *row = rows.first; row != 0; row = row->next, global_row_idx += 1, global_row_num += 1)
+        for(EV2_Row *row = rows.first; row != 0; row = row->next, global_row_idx += 1)
         {
           ////////////////////////
           //- rjf: unpack row info

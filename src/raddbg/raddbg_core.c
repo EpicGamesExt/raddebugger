@@ -7920,14 +7920,23 @@ EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(watches)
   return result;
 }
 
+EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(watches)    { return rd_ev_view_rule_expr_id_from_num__meta_entities(num, user_data, RD_EntityKind_Watch); }
+EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(watches)    { return rd_ev_view_rule_expr_num_from_id__meta_entities(id,  user_data, RD_EntityKind_Watch); }
+
 //- rjf: meta entities
 
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(targets)           { return rd_ev_view_rule_expr_expand_info__meta_entities(arena, view, filter, expr, params, RD_EntityKind_Target); }
 EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(targets)     { return rd_ev_view_rule_expr_expand_range_info__meta_entities(arena, view, filter, expr, params, idx_range, user_data, RD_EntityKind_Target); }
+EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(targets)    { return rd_ev_view_rule_expr_id_from_num__meta_entities(num, user_data, RD_EntityKind_Target); }
+EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(targets)    { return rd_ev_view_rule_expr_num_from_id__meta_entities(id,  user_data, RD_EntityKind_Target); }
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(breakpoints)       { return rd_ev_view_rule_expr_expand_info__meta_entities(arena, view, filter, expr, params, RD_EntityKind_Breakpoint); }
 EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(breakpoints) { return rd_ev_view_rule_expr_expand_range_info__meta_entities(arena, view, filter, expr, params, idx_range, user_data, RD_EntityKind_Breakpoint); }
+EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(breakpoints){ return rd_ev_view_rule_expr_id_from_num__meta_entities(num, user_data, RD_EntityKind_Breakpoint); }
+EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(breakpoints){ return rd_ev_view_rule_expr_num_from_id__meta_entities(id,  user_data, RD_EntityKind_Breakpoint); }
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(watch_pins)        { return rd_ev_view_rule_expr_expand_info__meta_entities(arena, view, filter, expr, params, RD_EntityKind_WatchPin); }
 EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(watch_pins)  { return rd_ev_view_rule_expr_expand_range_info__meta_entities(arena, view, filter, expr, params, idx_range, user_data, RD_EntityKind_WatchPin); }
+EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(watch_pins) { return rd_ev_view_rule_expr_id_from_num__meta_entities(num, user_data, RD_EntityKind_WatchPin); }
+EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(watch_pins) { return rd_ev_view_rule_expr_num_from_id__meta_entities(id,  user_data, RD_EntityKind_WatchPin); }
 
 //- rjf: meta ctrl entities
 
@@ -8020,12 +8029,20 @@ EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(registers)
 
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(globals)               {return rd_ev_view_rule_expr_expand_info__debug_info_tables(arena, view, filter, expr, params, RDI_SectionKind_GlobalVariables);}
 EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(globals)         {return rd_ev_view_rule_expr_expand_range_info__debug_info_tables(arena, view, filter, expr, params, idx_range, user_data, RDI_SectionKind_GlobalVariables);}
+EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(globals)        {return rd_ev_view_rule_expr_id_from_num__debug_info_tables(num, user_data, RDI_SectionKind_GlobalVariables); }
+EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(globals)        {return rd_ev_view_rule_expr_num_from_id__debug_info_tables(id,  user_data, RDI_SectionKind_GlobalVariables); }
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(thread_locals)         {return rd_ev_view_rule_expr_expand_info__debug_info_tables(arena, view, filter, expr, params, RDI_SectionKind_ThreadVariables);}
 EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(thread_locals)   {return rd_ev_view_rule_expr_expand_range_info__debug_info_tables(arena, view, filter, expr, params, idx_range, user_data, RDI_SectionKind_ThreadVariables);}
+EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(thread_locals)  {return rd_ev_view_rule_expr_id_from_num__debug_info_tables(num, user_data, RDI_SectionKind_ThreadVariables); }
+EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(thread_locals)  {return rd_ev_view_rule_expr_num_from_id__debug_info_tables(id,  user_data, RDI_SectionKind_ThreadVariables); }
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(types)                 {return rd_ev_view_rule_expr_expand_info__debug_info_tables(arena, view, filter, expr, params, RDI_SectionKind_UDTs);}
 EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(types)           {return rd_ev_view_rule_expr_expand_range_info__debug_info_tables(arena, view, filter, expr, params, idx_range, user_data, RDI_SectionKind_UDTs);}
+EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(types)          {return rd_ev_view_rule_expr_id_from_num__debug_info_tables(num, user_data, RDI_SectionKind_UDTs); }
+EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(types)          {return rd_ev_view_rule_expr_num_from_id__debug_info_tables(id,  user_data, RDI_SectionKind_UDTs); }
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(procedures)            {return rd_ev_view_rule_expr_expand_info__debug_info_tables(arena, view, filter, expr, params, RDI_SectionKind_Procedures);}
 EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(procedures)      {return rd_ev_view_rule_expr_expand_range_info__debug_info_tables(arena, view, filter, expr, params, idx_range, user_data, RDI_SectionKind_Procedures);}
+EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(procedures)     {return rd_ev_view_rule_expr_id_from_num__debug_info_tables(num, user_data, RDI_SectionKind_Procedures); }
+EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(procedures)     {return rd_ev_view_rule_expr_num_from_id__debug_info_tables(id,  user_data, RDI_SectionKind_Procedures); }
 
 //- TODO(rjf): OLD VVVVVVVVVVVVVVVVVVVVVVVVVV
 
@@ -8262,6 +8279,35 @@ rd_ev_view_rule_expr_expand_range_info__meta_entities(Arena *arena, EV_View *vie
   return result;
 }
 
+internal U64
+rd_ev_view_rule_expr_id_from_num__meta_entities(U64 num, void *user_data, RD_EntityKind kind)
+{
+  U64 id = 0;
+  RD_EntityExpandAccel *accel = (RD_EntityExpandAccel *)user_data;
+  if(0 < num && num <= accel->entities.count)
+  {
+    id = accel->entities.v[num-1]->id;
+  }
+  return id;
+}
+
+internal U64
+rd_ev_view_rule_expr_num_from_id__meta_entities(U64 id, void *user_data, RD_EntityKind kind)
+{
+  RD_Entity *entity = rd_entity_from_id(id);
+  RD_EntityExpandAccel *accel = (RD_EntityExpandAccel *)user_data;
+  U64 num = 0;
+  for(U64 idx = 0; idx < accel->entities.count; idx += 1)
+  {
+    if(accel->entities.v[idx]->id == id)
+    {
+      num = idx+1;
+      break;
+    }
+  }
+  return num;
+}
+
 internal EV_ExpandInfo
 rd_ev_view_rule_expr_expand_info__meta_ctrl_entities(Arena *arena, EV_View *view, String8 filter, E_Expr *expr, MD_Node *params, CTRL_EntityKind kind)
 {
@@ -8455,6 +8501,18 @@ rd_ev_view_rule_expr_expand_range_info__debug_info_tables(Arena *arena, EV_View 
     }
   }
   return result;
+}
+
+internal U64
+rd_ev_view_rule_expr_id_from_num__debug_info_tables(U64 num, void *user_data, RDI_SectionKind section)
+{
+  return num;
+}
+
+internal U64
+rd_ev_view_rule_expr_num_from_id__debug_info_tables(U64 num, void *user_data, RDI_SectionKind section)
+{
+  return num;
 }
 
 internal void
@@ -11171,8 +11229,8 @@ rd_frame(void)
         info.expr_resolution         = EV_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_NAME(identity);
         info.expr_expand_info        = rd_collection_expr_expand_info_hook_function_table[idx];;
         info.expr_expand_range_info  = rd_collection_expr_expand_range_info_hook_function_table[idx];
-        info.expr_expand_id_from_num = EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_NAME(identity);
-        info.expr_expand_num_from_id = EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_NAME(identity);
+        info.expr_expand_id_from_num = rd_collection_expr_expand_id_from_num_hook_function_table[idx];
+        info.expr_expand_num_from_id = rd_collection_expr_expand_num_from_id_hook_function_table[idx];
         info.block_prod              = rd_collection_block_prod_hook_function_table[idx];
         ev_view_rule_info_table_push(scratch.arena, view_rule_info_table, &info);
       }

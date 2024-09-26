@@ -817,33 +817,40 @@ RD_IconTable:
 ////////////////////////////////
 //~ rjf: Collections
 
-@table(name)
+@table(name        entity_kind      id_space)
 RD_CollectionTable:
 {
-  {watches}
-  {targets}
-  {breakpoints}
-  {watch_pins}
-  {threads}
-  {modules}
-  {locals}
-  {registers}
-  {globals}
-  {thread_locals}
-  {types}
-  {procedures}
+  {watches          Watch            x}
+  {targets          Target           x}
+  {breakpoints      Breakpoint       x}
+  {watch_pins       WatchPin         x}
+  {threads          Nil              -}
+  {modules          Nil              -}
+  {locals           Nil              -}
+  {registers        Nil              -}
+  {globals          Nil              x}
+  {thread_locals    Nil              x}
+  {types            Nil              x}
+  {procedures       Nil              x}
 }
 
 @gen
 {
   @expand(RD_CollectionTable a) `EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF($(a.name));`;
   @expand(RD_CollectionTable a) `EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF($(a.name));`;
+  @expand(RD_CollectionTable a) `$(a.id_space == x -> "EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF("..a.name..");")`;
+  @expand(RD_CollectionTable a) `$(a.id_space == x -> "EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF("..a.name..");")`;
   @expand(RD_CollectionTable a) `EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF($(a.name));`;
 }
 
 @data(String8) rd_collection_name_table:
 {
   @expand(RD_CollectionTable a) `str8_lit_comp("$(a.name)")`
+}
+
+@data(RD_EntityKind) rd_collection_entity_kind_table:
+{
+  @expand(RD_CollectionTable a) `RD_EntityKind_$(a.entity_kind)`,
 }
 
 @data(`EV_ViewRuleExprExpandInfoHookFunctionType *`) rd_collection_expr_expand_info_hook_function_table:
@@ -854,6 +861,16 @@ RD_CollectionTable:
 @data(`EV_ViewRuleExprExpandRangeInfoHookFunctionType *`) rd_collection_expr_expand_range_info_hook_function_table:
 {
   @expand(RD_CollectionTable a) `EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_NAME($(a.name))`
+}
+
+@data(`EV_ViewRuleExprExpandIDFromNumHookFunctionType *`) rd_collection_expr_expand_id_from_num_hook_function_table:
+{
+  @expand(RD_CollectionTable a) `EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_NAME($(a.id_space == x -> a.name)$(a.id_space != x -> identity))`
+}
+
+@data(`EV_ViewRuleExprExpandIDFromNumHookFunctionType *`) rd_collection_expr_expand_num_from_id_hook_function_table:
+{
+  @expand(RD_CollectionTable a) `EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_NAME($(a.id_space == x -> a.name)$(a.id_space != x -> identity))`
 }
 
 @data(`EV_ViewRuleBlockProdHookFunctionType *`) rd_collection_block_prod_hook_function_table:

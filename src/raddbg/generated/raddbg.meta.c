@@ -685,6 +685,22 @@ str8_lit_comp("types"),
 str8_lit_comp("procedures"),
 };
 
+RD_EntityKind rd_collection_entity_kind_table[12] =
+{
+RD_EntityKind_Watch,
+RD_EntityKind_Target,
+RD_EntityKind_Breakpoint,
+RD_EntityKind_WatchPin,
+RD_EntityKind_Nil,
+RD_EntityKind_Nil,
+RD_EntityKind_Nil,
+RD_EntityKind_Nil,
+RD_EntityKind_Nil,
+RD_EntityKind_Nil,
+RD_EntityKind_Nil,
+RD_EntityKind_Nil,
+};
+
 EV_ViewRuleExprExpandInfoHookFunctionType * rd_collection_expr_expand_info_hook_function_table[12] =
 {
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME(watches),
@@ -715,6 +731,38 @@ EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_NAME(globals),
 EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_NAME(thread_locals),
 EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_NAME(types),
 EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_NAME(procedures),
+};
+
+EV_ViewRuleExprExpandIDFromNumHookFunctionType * rd_collection_expr_expand_id_from_num_hook_function_table[12] =
+{
+EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_NAME(watches),
+EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_NAME(targets),
+EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_NAME(breakpoints),
+EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_NAME(watch_pins),
+EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_NAME(identity),
+EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_NAME(identity),
+EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_NAME(identity),
+EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_NAME(identity),
+EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_NAME(globals),
+EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_NAME(thread_locals),
+EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_NAME(types),
+EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_NAME(procedures),
+};
+
+EV_ViewRuleExprExpandIDFromNumHookFunctionType * rd_collection_expr_expand_num_from_id_hook_function_table[12] =
+{
+EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_NAME(watches),
+EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_NAME(targets),
+EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_NAME(breakpoints),
+EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_NAME(watch_pins),
+EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_NAME(identity),
+EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_NAME(identity),
+EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_NAME(identity),
+EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_NAME(identity),
+EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_NAME(globals),
+EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_NAME(thread_locals),
+EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_NAME(types),
+EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_NAME(procedures),
 };
 
 EV_ViewRuleBlockProdHookFunctionType * rd_collection_block_prod_hook_function_table[12] =
