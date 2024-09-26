@@ -11,7 +11,7 @@ typedef struct EV_Key EV_Key;
 struct EV_Key
 {
   U64 parent_hash;
-  U64 child_num;
+  U64 child_id;
 };
 
 ////////////////////////////////
@@ -461,7 +461,7 @@ global read_only EV2_Block ev2_nil_block = {&ev2_nil_block, &ev2_nil_block, &ev2
 ////////////////////////////////
 //~ rjf: Key Functions
 
-internal EV_Key ev_key_make(U64 parent_hash, U64 child_num);
+internal EV_Key ev_key_make(U64 parent_hash, U64 child_id);
 internal EV_Key ev_key_zero(void);
 internal EV_Key ev_key_root(void);
 internal B32 ev_key_match(EV_Key a, EV_Key b);

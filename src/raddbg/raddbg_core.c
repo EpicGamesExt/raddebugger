@@ -5975,7 +5975,7 @@ rd_window_frame(RD_Window *ws)
                 B32 row_is_expanded = ev_expansion_from_key(ev_view, row->key);
                 if(row_is_expandable)
                   UI_PrefWidth(ui_em(1.5f, 1)) 
-                  if(ui_pressed(ui_expanderf(row_is_expanded, "###%I64x_%I64x_is_expanded", row->key.parent_hash, row->key.child_num)))
+                  if(ui_pressed(ui_expanderf(row_is_expanded, "###%I64x_%I64x_is_expanded", row->key.parent_hash, row->key.child_id)))
                 {
                   ev_key_set_expansion(ev_view, row->block->key, row->key, !row_is_expanded);
                 }
@@ -8506,12 +8506,20 @@ rd_ev_view_rule_expr_expand_range_info__debug_info_tables(Arena *arena, EV_View 
 internal U64
 rd_ev_view_rule_expr_id_from_num__debug_info_tables(U64 num, void *user_data, RDI_SectionKind section)
 {
-  return num;
+  RD_DebugInfoTableExpandAccel *accel = (RD_DebugInfoTableExpandAccel *)user_data;
+  U64 id = 0;
+  if(0 < num && num <= accel->items.count)
+  {
+    id = accel->items.v[num-1].idx+1;
+  }
+  return id;
 }
 
 internal U64
-rd_ev_view_rule_expr_num_from_id__debug_info_tables(U64 num, void *user_data, RDI_SectionKind section)
+rd_ev_view_rule_expr_num_from_id__debug_info_tables(U64 id, void *user_data, RDI_SectionKind section)
 {
+  RD_DebugInfoTableExpandAccel *accel = (RD_DebugInfoTableExpandAccel *)user_data;
+  U64 num = fzy_item_num_from_array_element_idx__linear_search(&accel->items, id-1);
   return num;
 }
 
@@ -8571,7 +8579,7 @@ rd_ev_view_rule_block_prod_collection_debug_tables(Arena *arena, RDI_SectionKind
       U64 idx = 0;
       for(EV_ExpandNode *child = root_node->first; child != 0; child = child->next)
       {
-        U64 item_num = fzy_item_num_from_array_element_idx__linear_search(&items, child->key.child_num);
+        U64 item_num = fzy_item_num_from_array_element_idx__linear_search(&items, child->key.child_id);
         if(item_num != 0)
         {
           sub_expand_keys[idx] = child->key;
@@ -8712,7 +8720,7 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
   }
   
   //- rjf: member evaluations -> display member info
-  if(eval.mode == E_Mode_Null && !e_type_key_match(e_type_key_zero(), eval.type_key) && member != 0)
+  if(eval.mode == E_Mode_Null && !e_type_key_match(e_type_key_zero(), eval.type_key) && member != &e_member_nil)
   {
     U64 member_byte_size = e_type_byte_size_from_key(eval.type_key);
     String8 offset_string = str8_from_u64(arena, member->off, radix, 0, 0);

@@ -1749,8 +1749,8 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
           // rjf: map selection keys to child numbers
           U64 selection_numbers[2] =
           {
-            selection_block->expand_view_rule_info->expr_expand_num_from_id(selection_keys_in_block[0].child_num, selection_block->expand_view_rule_info_user_data),
-            selection_block->expand_view_rule_info->expr_expand_num_from_id(selection_keys_in_block[1].child_num, selection_block->expand_view_rule_info_user_data),
+            selection_block->expand_view_rule_info->expr_expand_num_from_id(selection_keys_in_block[0].child_id, selection_block->expand_view_rule_info_user_data),
+            selection_block->expand_view_rule_info->expr_expand_num_from_id(selection_keys_in_block[1].child_id, selection_block->expand_view_rule_info_user_data),
           };
           
           // rjf: determine collection info for the block
@@ -1949,7 +1949,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
           B32 next_row_expanded = row_expanded;
           RD_ViewRuleInfo *ui_view_rule_info = rd_view_rule_info_from_string(row->block->expand_view_rule_info->string);
           MD_Node *ui_view_rule_params_root = row->block->expand_view_rule_params;
-          if(ui_view_rule_info->ui == 0)
+          if(ui_view_rule_info->ui == 0 || !(ui_view_rule_info->flags & RD_ViewRuleInfoFlag_CanUseInWatchTable))
           {
             ui_view_rule_info = &rd_nil_view_rule_info;
             ui_view_rule_params_root = &md_nil_node;
@@ -2231,9 +2231,9 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
               //////////////////////
               //- rjf: draw start of cache lines in expansions
               //
+              U64 row_offset = row_eval.value.u64;
               if((row_eval.mode == E_Mode_Offset || row_eval.mode == E_Mode_Null) &&
-                 row_eval.value.u64%64 == 0 && row_depth > 0 &&
-                 !row_expanded)
+                 row_offset%64 == 0 && row_depth > 0 && !row_expanded)
               {
                 ui_set_next_fixed_x(0);
                 ui_set_next_fixed_y(0);
@@ -2585,9 +2585,9 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                   //- rjf: [DEV] hovering -> watch key tooltips
                   if(DEV_eval_watch_key_tooltips && ui_hovering(sig)) UI_Tooltip RD_Font(RD_FontSlot_Code)
                   {
-                    ui_labelf("Block Key:  {0x%I64x, %I64u}", row->block->key.parent_hash, row->block->key.child_num);
-                    ui_labelf("Row Key:    {0x%I64x, %I64u}", row->key.parent_hash, row->key.child_num);
-                    ui_labelf("Cursor Key: {0x%I64x, %I64u}", ewv->cursor.key.parent_hash, ewv->cursor.key.child_num);
+                    ui_labelf("Block Key:  {0x%I64x, %I64u}", row->block->key.parent_hash, row->block->key.child_id);
+                    ui_labelf("Row Key:    {0x%I64x, %I64u}", row->key.parent_hash, row->key.child_id);
+                    ui_labelf("Cursor Key: {0x%I64x, %I64u}", ewv->cursor.key.parent_hash, ewv->cursor.key.child_id);
                     ui_spacer(ui_em(1.f, 1.f));
                     ui_labelf("Cursor Table Coordinates: {%I64u, %I64u}", selection_tbl.min.x, selection_tbl.min.y);
                   }

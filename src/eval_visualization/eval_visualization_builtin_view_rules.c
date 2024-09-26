@@ -294,8 +294,8 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(default)
     for(EV_ExpandNode *child = expand_node->first; child != 0; child = child->next)
     {
       // rjf: unpack expansion info; skip out-of-bounds splits
-      U64 child_num = child->key.child_num;
-      U64 child_idx = child_num-1;
+      U64 child_id = child->key.child_id;
+      U64 child_idx = child_id-1;
       E_Expr *child_expr = ev_expr_from_block_index(arena, last_vb, child_idx);
       if(child_idx >= last_vb->semantic_idx_range.max)
       {
@@ -369,8 +369,8 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(default)
     for(EV_ExpandNode *child = expand_node->first; child != 0; child = child->next)
     {
       // rjf: unpack expansion info; skip out-of-bounds splits
-      U64 child_num = child->key.child_num;
-      U64 child_idx = child_num-1;
+      U64 child_id = child->key.child_id;
+      U64 child_idx = child_id-1;
       E_Expr *child_expr = ev_expr_from_block_index(arena, last_vb, child_idx);
       if(child_idx >= last_vb->semantic_idx_range.max)
       {
