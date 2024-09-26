@@ -809,6 +809,10 @@ internal EV_Key
 ev2_key_from_num(EV2_BlockRangeList *block_ranges, U64 num)
 {
   EV_Key key = {0};
+  if(block_ranges->first)
+  {
+    key = ev_key_make(ev_hash_from_key(ev_key_root()), 1);
+  }
   U64 base_num = 1;
   for(EV2_BlockRangeNode *n = block_ranges->first; n != 0; n = n->next)
   {
@@ -830,7 +834,7 @@ ev2_key_from_num(EV2_BlockRangeList *block_ranges, U64 num)
 internal U64
 ev2_num_from_key(EV2_BlockRangeList *block_ranges, EV_Key key)
 {
-  U64 result = 0;
+  U64 result = 1;
   U64 base_num = 1;
   for(EV2_BlockRangeNode *n = block_ranges->first; n != 0; n = n->next)
   {
