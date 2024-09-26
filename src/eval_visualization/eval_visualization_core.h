@@ -166,6 +166,7 @@ struct EV_ExpandInfo
   void *user_data;
   U64 row_count;
   B32 single_item; // all rows form a single "item" - a singular, but large, row
+  B32 add_new_row; // also supports an 'add new row', as the final row, within `row_count`
 };
 
 typedef struct EV_ExpandRangeInfo EV_ExpandRangeInfo;
