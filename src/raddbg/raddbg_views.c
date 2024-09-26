@@ -1621,6 +1621,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
         taken = 1;
         state_dirty = 1;
         snap_to_cursor = 1;
+        RD_WatchViewPoint next_cursor_pt = {0};
         for(S64 y = selection_tbl.min.y; y <= selection_tbl.max.y; y += 1)
         {
           for(S64 x = selection_tbl.min.x; x <= selection_tbl.max.x; x += 1)
@@ -1643,7 +1644,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                   RD_Entity *entity = collection_info.entity;
                   if(!rd_entity_is_nil(entity))
                   {
-                    rd_entity_mark_for_deletion(entity);
+                    rd_cmd(RD_CmdKind_RemoveEntity, .entity = rd_handle_from_entity(entity));
                     U64 deleted_id = collection_info.key.child_id;
                     U64 deleted_num = collection_info.block->expand_view_rule_info->expr_expand_num_from_id(deleted_id, collection_info.block->expand_view_rule_info_user_data);
                     if(deleted_num != 0)
@@ -1658,7 +1659,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                         parent_key = collection_info.block->parent->key;
                       }
                       RD_WatchViewPoint new_pt = {0, parent_key, key};
-                      ewv->cursor = ewv->mark = ewv->next_cursor = ewv->next_mark = new_pt;
+                      next_cursor_pt = new_pt;
                     }
                   }
                 }
@@ -1721,6 +1722,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
 #endif
           }
         }
+        ewv->cursor = ewv->mark = ewv->next_cursor = ewv->next_mark = next_cursor_pt;
       }
       
       //////////////////////////
