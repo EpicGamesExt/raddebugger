@@ -1161,7 +1161,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
       //
       if(snap_to_cursor)
       {
-        Rng1S64 item_range = r1s64(0, 1 + block_tree.total_row_count);
+        Rng1S64 item_range = r1s64(0, block_tree.total_row_count);
         Rng1S64 scroll_row_idx_range = r1s64(item_range.min, ClampBot(item_range.min, item_range.max-1));
         S64 cursor_item_idx = cursor_tbl.y-1;
         if(item_range.min <= cursor_item_idx && cursor_item_idx <= item_range.max)
@@ -1170,18 +1170,18 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
           
           //- rjf: compute visible row range
           Rng1S64 visible_row_range = r1s64(scroll_pt->idx + 0 - !!(scroll_pt->off < 0),
-                                            scroll_pt->idx + 0 + num_possible_visible_rows + 1);
+                                            scroll_pt->idx + 0 + num_possible_visible_rows);
           
           //- rjf: compute cursor row range from cursor item
           Rng1S64 cursor_visibility_row_range = {0};
           if(row_blocks.count == 0)
           {
-            cursor_visibility_row_range = r1s64(cursor_item_idx-1, cursor_item_idx+3);
+            cursor_visibility_row_range = r1s64(cursor_item_idx-2, cursor_item_idx+3);
           }
           else
           {
-            cursor_visibility_row_range.min = (S64)ui_scroll_list_row_from_item(&row_blocks, (U64)cursor_item_idx);
-            cursor_visibility_row_range.max = cursor_visibility_row_range.min + 4;
+            cursor_visibility_row_range.min = (S64)ui_scroll_list_row_from_item(&row_blocks, (U64)cursor_item_idx) - 1;
+            cursor_visibility_row_range.max = cursor_visibility_row_range.min + 3;
           }
           
           //- rjf: compute deltas & apply
