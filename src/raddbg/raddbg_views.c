@@ -811,7 +811,39 @@ rd_tbl_from_watch_view_point(EV2_BlockRangeList *block_ranges, RD_WatchViewPoint
   return tbl;
 }
 
-//- rjf: table coordinates -> strings
+//- rjf: table coordinates -> entities in collectons
+
+internal RD_WatchViewCollectionInfo
+rd_collection_info_from_num(EV2_BlockRangeList *block_ranges, S64 num)
+{
+  Temp scratch = scratch_begin(0, 0);
+  EV2_Block *block = ev2_block_range_from_num(block_ranges, num).block;
+  EV_Key key = ev2_key_from_num(block_ranges, num);
+  U64 block_relative_num = block->expand_view_rule_info->expr_expand_num_from_id(key.child_id, block->expand_view_rule_info_user_data);
+  RD_EntityKind collection_entity_kind = RD_EntityKind_Nil;
+  E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, block->expr);
+  E_Type *type = e_type_from_key(scratch.arena, irtree.type_key);
+  for EachElement(idx, rd_collection_name_table)
+  {
+    if(str8_match(type->name, rd_collection_name_table[idx], 0))
+    {
+      collection_entity_kind = rd_collection_entity_kind_table[idx];
+      break;
+    }
+  }
+  RD_EntityList entities_list = rd_query_cached_entity_list_with_kind(collection_entity_kind);
+  RD_EntityArray entities = rd_entity_array_from_list(scratch.arena, &entities_list);
+  RD_Entity *entity = &d_nil_entity;
+  if(0 < block_relative_num && block_relative_num <= entities.count)
+  {
+    entity = entities.v[block_relative_num-1];
+  }
+  RD_WatchViewCollectionInfo info = {block, key, collection_entity_kind, entity};
+  scratch_end(scratch);
+  return info;
+}
+
+//- rjf: row/column -> strings
 
 internal String8
 rd_string_from_eval_viz_row_column(Arena *arena, EV_View *ev, EV2_Row *row, RD_WatchViewColumn *col, EV_StringFlags string_flags, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size_px)
@@ -977,7 +1009,6 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
   String8 filter = rd_view_filter();
   F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
   S64 num_possible_visible_rows = (S64)(dim_2f32(rect).y/row_height_px);
-  RD_EntityKind mutable_entity_kind = RD_EntityKind_Nil;
   F32 row_string_max_size_px = dim_2f32(rect).x;
   EV_StringFlags string_flags = 0;
   if(flags & RD_WatchViewFlag_PrettyNameMembers)
@@ -1425,6 +1456,23 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                 case RD_WatchViewColumnKind_Expr:
                 if(modifiable && filter.size == 0)
                 {
+                  RD_WatchViewCollectionInfo collection_info = rd_collection_info_from_num(&block_ranges, tbl.y);
+                  if(collection_info.kind != RD_EntityKind_Nil)
+                  {
+                    RD_Entity *entity = collection_info.entity;
+                    if(!rd_entity_is_nil(entity) || editing_complete)
+                    {
+                      if(rd_entity_is_nil(entity))
+                      {
+                        entity = rd_entity_alloc(rd_entity_root(), collection_info.kind);
+                      }
+                      rd_entity_equip_cfg_src(entity, RD_CfgSrc_Project);
+                      rd_entity_equip_name(entity, new_string);
+                      state_dirty = 1;
+                      snap_to_cursor = 1;
+                    }
+                  }
+#if 0 // TODO(rjf): @blocks
                   RD_WatchViewPoint pt = rd_watch_view_point_from_tbl(&block_ranges, tbl);
                   RD_Entity *watch = rd_entity_from_ev_key_and_kind(pt.key, mutable_entity_kind);
                   if(!rd_entity_is_nil(watch))
@@ -1443,6 +1491,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                     state_dirty = 1;
                     snap_to_cursor = 1;
                   }
+#endif
                 }break;
                 case RD_WatchViewColumnKind_Member:
                 case RD_WatchViewColumnKind_Value:
@@ -1472,6 +1521,27 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                 {
                   RD_WatchViewPoint pt = rd_watch_view_point_from_tbl(&block_ranges, tbl);
                   ev_key_set_view_rule(eval_view, pt.key, new_string);
+                  RD_WatchViewCollectionInfo collection_info = rd_collection_info_from_num(&block_ranges, tbl.y);
+                  if(collection_info.kind != RD_EntityKind_Nil)
+                  {
+                    RD_Entity *entity = collection_info.entity;
+                    RD_Entity *view_rule = rd_entity_child_from_kind(entity, RD_EntityKind_ViewRule);
+                    if(rd_entity_is_nil(view_rule) && new_string.size != 0)
+                    {
+                      view_rule = rd_entity_alloc(entity, RD_EntityKind_ViewRule);
+                    }
+                    else if(!rd_entity_is_nil(view_rule) && new_string.size == 0)
+                    {
+                      rd_entity_mark_for_deletion(view_rule);
+                    }
+                    if(new_string.size != 0)
+                    {
+                      rd_entity_equip_name(view_rule, new_string);
+                    }
+                    state_dirty = 1;
+                    snap_to_cursor = 1;
+                  }
+#if 0 // TODO(rjf): @msgs
                   RD_Entity *watch = rd_entity_from_ev_key_and_kind(pt.key, mutable_entity_kind);
                   RD_Entity *view_rule = rd_entity_child_from_kind(watch, RD_EntityKind_ViewRule);
                   if(new_string.size != 0 && rd_entity_is_nil(view_rule))
@@ -1488,6 +1558,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                   }
                   state_dirty = 1;
                   snap_to_cursor = 1;
+#endif
                 }break;
               }
             }
@@ -1549,49 +1620,98 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
         snap_to_cursor = 1;
         for(S64 y = selection_tbl.min.y; y <= selection_tbl.max.y; y += 1)
         {
-          RD_WatchViewPoint pt = rd_watch_view_point_from_tbl(&block_ranges, v2s64(0, y));
-          
-          // rjf: row deletions
-          if(selection_tbl.min.x <= 0)
+          for(S64 x = selection_tbl.min.x; x <= selection_tbl.max.x; x += 1)
           {
-            RD_WatchViewPoint fallback_pt_prev = rd_watch_view_point_from_tbl(&block_ranges, v2s64(0, y - 1));
-            RD_WatchViewPoint fallback_pt_next = rd_watch_view_point_from_tbl(&block_ranges, v2s64(0, y + 1));
-            RD_Entity *watch = rd_entity_from_ev_key_and_kind(pt.key, mutable_entity_kind);
-            if(!rd_entity_is_nil(watch))
+            Vec2S64 tbl = v2s64(x, y);
+            RD_WatchViewPoint pt = rd_watch_view_point_from_tbl(&block_ranges, tbl);
+            RD_WatchViewColumn *col = rd_watch_view_column_from_x(ewv, x);
+            switch(col->kind)
             {
-              EV_Key new_cursor_key = empty_row_key;
-              EV_Key new_cursor_parent_key = empty_row_parent_key;
-              if((evt->delta_2s32.x < 0 || evt->delta_2s32.y < 0) && !ev_key_match(ev_key_zero(), fallback_pt_prev.key))
+              case RD_WatchViewColumnKind_Value:
+              case RD_WatchViewColumnKind_Type:
+              {}break;
+              default:
+              case RD_WatchViewColumnKind_Expr:
               {
-                RD_Entity *fallback_watch = rd_entity_from_ev_key_and_kind(fallback_pt_prev.key, mutable_entity_kind);
-                if(!rd_entity_is_nil(fallback_watch))
+                RD_WatchViewCollectionInfo collection_info = rd_collection_info_from_num(&block_ranges, tbl.y);
+                if(collection_info.kind != RD_EntityKind_Nil)
                 {
-                  new_cursor_key = fallback_pt_prev.key;
-                  new_cursor_parent_key = rd_parent_ev_key_from_entity(fallback_watch);
+                  RD_Entity *entity = collection_info.entity;
+                  rd_entity_mark_for_deletion(entity);
+                  U64 deleted_id = collection_info.key.child_id;
+                  U64 deleted_num = collection_info.block->expand_view_rule_info->expr_expand_num_from_id(deleted_id, collection_info.block->expand_view_rule_info_user_data);
+                  if(deleted_num != 0)
+                  {
+                    U64 fallback_id_next = collection_info.block->expand_view_rule_info->expr_expand_id_from_num(deleted_num+1, collection_info.block->expand_view_rule_info_user_data);
+                    U64 fallback_id_prev = collection_info.block->expand_view_rule_info->expr_expand_id_from_num(deleted_num-1, collection_info.block->expand_view_rule_info_user_data);
+                    EV_Key parent_key = collection_info.block->key;
+                    EV_Key key = ev_key_make(collection_info.key.parent_hash, fallback_id_next ? fallback_id_next : fallback_id_prev);
+                    if(key.child_id == 0)
+                    {
+                      key = collection_info.block->key;
+                      parent_key = collection_info.block->parent->key;
+                    }
+                    RD_WatchViewPoint new_pt = {0, parent_key, key};
+                    ewv->cursor = ewv->mark = ewv->next_cursor = ewv->next_mark = new_pt;
+                  }
                 }
-              }
-              else if(!ev_key_match(ev_key_zero(), fallback_pt_next.key))
+              }break;
+              case RD_WatchViewColumnKind_ViewRule:
               {
-                RD_Entity *fallback_watch = rd_entity_from_ev_key_and_kind(fallback_pt_next.key, mutable_entity_kind);
-                if(!rd_entity_is_nil(fallback_watch))
+                RD_WatchViewCollectionInfo collection_info = rd_collection_info_from_num(&block_ranges, tbl.y);
+                if(collection_info.kind != RD_EntityKind_Nil)
                 {
-                  new_cursor_key = fallback_pt_next.key;
-                  new_cursor_parent_key = rd_parent_ev_key_from_entity(fallback_watch);
+                  RD_Entity *entity = collection_info.entity;
+                  RD_Entity *view_rule = rd_entity_child_from_kind(entity, RD_EntityKind_ViewRule);
+                  rd_entity_mark_for_deletion(view_rule);
                 }
-              }
-              RD_WatchViewPoint new_cursor_pt = {0, new_cursor_parent_key, new_cursor_key};
-              rd_entity_mark_for_deletion(watch);
-              ewv->cursor = ewv->mark = ewv->next_cursor = ewv->next_mark = new_cursor_pt;
+              }break;
             }
-          }
-          
-          // rjf: view rule deletions
-          else if(selection_tbl.min.x <= RD_WatchViewColumnKind_ViewRule && RD_WatchViewColumnKind_ViewRule <= selection_tbl.max.x)
-          {
-            RD_Entity *watch = rd_entity_from_ev_key_and_kind(pt.key, mutable_entity_kind);
-            RD_Entity *view_rule = rd_entity_child_from_kind(watch, RD_EntityKind_ViewRule);
-            rd_entity_mark_for_deletion(view_rule);
-            ev_key_set_view_rule(eval_view, pt.key, str8_zero());
+            
+#if 0 // TODO(rjf): @msgs
+            // rjf: row deletions
+            if(selection_tbl.min.x <= 0)
+            {
+              RD_WatchViewPoint fallback_pt_prev = rd_watch_view_point_from_tbl(&block_ranges, v2s64(0, y - 1));
+              RD_WatchViewPoint fallback_pt_next = rd_watch_view_point_from_tbl(&block_ranges, v2s64(0, y + 1));
+              RD_Entity *watch = rd_entity_from_ev_key_and_kind(pt.key, mutable_entity_kind);
+              if(!rd_entity_is_nil(watch))
+              {
+                EV_Key new_cursor_key = empty_row_key;
+                EV_Key new_cursor_parent_key = empty_row_parent_key;
+                if((evt->delta_2s32.x < 0 || evt->delta_2s32.y < 0) && !ev_key_match(ev_key_zero(), fallback_pt_prev.key))
+                {
+                  RD_Entity *fallback_watch = rd_entity_from_ev_key_and_kind(fallback_pt_prev.key, mutable_entity_kind);
+                  if(!rd_entity_is_nil(fallback_watch))
+                  {
+                    new_cursor_key = fallback_pt_prev.key;
+                    new_cursor_parent_key = rd_parent_ev_key_from_entity(fallback_watch);
+                  }
+                }
+                else if(!ev_key_match(ev_key_zero(), fallback_pt_next.key))
+                {
+                  RD_Entity *fallback_watch = rd_entity_from_ev_key_and_kind(fallback_pt_next.key, mutable_entity_kind);
+                  if(!rd_entity_is_nil(fallback_watch))
+                  {
+                    new_cursor_key = fallback_pt_next.key;
+                    new_cursor_parent_key = rd_parent_ev_key_from_entity(fallback_watch);
+                  }
+                }
+                RD_WatchViewPoint new_cursor_pt = {0, new_cursor_parent_key, new_cursor_key};
+                rd_entity_mark_for_deletion(watch);
+                ewv->cursor = ewv->mark = ewv->next_cursor = ewv->next_mark = new_cursor_pt;
+              }
+            }
+            
+            // rjf: view rule deletions
+            else if(selection_tbl.min.x <= RD_WatchViewColumnKind_ViewRule && RD_WatchViewColumnKind_ViewRule <= selection_tbl.max.x)
+            {
+              RD_Entity *watch = rd_entity_from_ev_key_and_kind(pt.key, mutable_entity_kind);
+              RD_Entity *view_rule = rd_entity_child_from_kind(watch, RD_EntityKind_ViewRule);
+              rd_entity_mark_for_deletion(view_rule);
+              ev_key_set_view_rule(eval_view, pt.key, str8_zero());
+            }
+#endif
           }
         }
       }

@@ -1023,7 +1023,7 @@ ev2_windowed_row_list_from_block_range_list(Arena *arena, EV_View *view, String8
             row->visual_size          = 1;
             row->visual_size_skipped  = 0; // TODO(rjf)
             row->visual_size_chopped  = 0; // TODO(rjf)
-            row->string               = n->v.block->string;
+            row->string               = expand_range_info.row_strings[idx];
             row->expr                 = row_expr__resolved;
             row->member               = expand_range_info.row_members[idx];
             row->view_rules           = row_view_rules;

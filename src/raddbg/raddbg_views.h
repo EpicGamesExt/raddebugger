@@ -101,6 +101,15 @@ struct RD_WatchViewPoint
   EV_Key key;
 };
 
+typedef struct RD_WatchViewCollectionInfo RD_WatchViewCollectionInfo;
+struct RD_WatchViewCollectionInfo
+{
+  EV2_Block *block;
+  EV_Key key;
+  RD_EntityKind kind;
+  RD_Entity *entity;
+};
+
 typedef struct RD_WatchViewTextEditState RD_WatchViewTextEditState;
 struct RD_WatchViewTextEditState
 {
@@ -157,7 +166,10 @@ internal B32 rd_watch_view_point_match(RD_WatchViewPoint a, RD_WatchViewPoint b)
 internal RD_WatchViewPoint rd_watch_view_point_from_tbl(EV2_BlockRangeList *block_ranges, Vec2S64 tbl);
 internal Vec2S64 rd_tbl_from_watch_view_point(EV2_BlockRangeList *block_ranges, RD_WatchViewPoint pt);
 
-//- rjf: table coordinates -> strings
+//- rjf: table coordinates -> entities in collectons
+internal RD_WatchViewCollectionInfo rd_collection_info_from_num(EV2_BlockRangeList *block_ranges, S64 num);
+
+//- rjf: row/column -> strings
 internal String8 rd_string_from_eval_viz_row_column(Arena *arena, EV_View *ev, EV2_Row *row, RD_WatchViewColumn *col, EV_StringFlags string_flags, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size_px);
 
 //- rjf: table coordinates -> text edit state

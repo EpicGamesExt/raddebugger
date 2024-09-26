@@ -7920,6 +7920,7 @@ EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(watches)
     U64 needed_row_count = dim_1u64(idx_range);
     result.row_exprs_count = Min(needed_row_count, accel->entities.count+1);
     result.row_exprs       = push_array(arena, E_Expr *, result.row_exprs_count);
+    result.row_strings     = push_array(arena, String8, result.row_exprs_count);
     result.row_members     = push_array(arena, E_Member *, result.row_exprs_count);
     for EachIndex(row_expr_idx, result.row_exprs_count)
     {
@@ -7927,6 +7928,7 @@ EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(watches)
       if(entity_idx < accel->entities.count)
       {
         result.row_exprs[row_expr_idx] = e_parse_expr_from_text(arena, accel->entities.v[entity_idx]->string);
+        result.row_strings[row_expr_idx] = accel->entities.v[entity_idx]->string;
       }
       else
       {
@@ -7995,6 +7997,7 @@ EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(locals)
     U64 needed_row_count = dim_1u64(idx_range);
     result.row_exprs_count = Min(needed_row_count, accel->count);
     result.row_exprs       = push_array(arena, E_Expr *, result.row_exprs_count);
+    result.row_strings     = push_array(arena, String8, result.row_exprs_count);
     result.row_members     = push_array(arena, E_Member *, result.row_exprs_count);
     for EachIndex(row_expr_idx, result.row_exprs_count)
     {
@@ -8032,6 +8035,7 @@ EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(registers)
     U64 needed_row_count = dim_1u64(idx_range);
     result.row_exprs_count = Min(needed_row_count, accel->count);
     result.row_exprs       = push_array(arena, E_Expr *, result.row_exprs_count);
+    result.row_strings     = push_array(arena, String8, result.row_exprs_count);
     result.row_members     = push_array(arena, E_Member *, result.row_exprs_count);
     for EachIndex(row_expr_idx, result.row_exprs_count)
     {
@@ -8286,6 +8290,7 @@ rd_ev_view_rule_expr_expand_range_info__meta_entities(Arena *arena, EV_View *vie
     U64 needed_row_count = dim_1u64(idx_range);
     result.row_exprs_count = Min(needed_row_count, accel->entities.count);
     result.row_exprs       = push_array(arena, E_Expr *, result.row_exprs_count);
+    result.row_strings     = push_array(arena, String8, result.row_exprs_count);
     result.row_members     = push_array(arena, E_Member *, result.row_exprs_count);
     for EachIndex(row_expr_idx, result.row_exprs_count)
     {
@@ -8369,6 +8374,7 @@ rd_ev_view_rule_expr_expand_range_info__meta_ctrl_entities(Arena *arena, EV_View
     U64 needed_row_count = dim_1u64(idx_range);
     result.row_exprs_count = Min(needed_row_count, accel->entities.count);
     result.row_exprs       = push_array(arena, E_Expr *, result.row_exprs_count);
+    result.row_strings     = push_array(arena, String8, result.row_exprs_count);
     result.row_members     = push_array(arena, E_Member *, result.row_exprs_count);
     for EachIndex(row_expr_idx, result.row_exprs_count)
     {
@@ -8431,6 +8437,7 @@ rd_ev_view_rule_expr_expand_range_info__debug_info_tables(Arena *arena, EV_View 
     U64 needed_row_count = dim_1u64(idx_range);
     result.row_exprs_count = Min(needed_row_count, accel->items.count);
     result.row_exprs       = push_array(arena, E_Expr *, result.row_exprs_count);
+    result.row_strings     = push_array(arena, String8, result.row_exprs_count);
     result.row_members     = push_array(arena, E_Member *, result.row_exprs_count);
     for EachIndex(row_expr_idx, result.row_exprs_count)
     {
