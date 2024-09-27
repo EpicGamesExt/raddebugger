@@ -843,6 +843,41 @@ rd_collection_info_from_num(EV_BlockRangeList *block_ranges, S64 num)
   return info;
 }
 
+//- rjf: row -> kind
+
+internal RD_WatchViewRowKind
+rd_watch_view_row_kind_from_row(RD_WatchViewFlags flags, EV_Row *row)
+{
+  Temp scratch = scratch_begin(0, 0);
+  RD_ViewRuleInfo *ui_view_rule_info = rd_view_rule_info_from_string(row->block->expand_view_rule_info->string);
+  MD_Node *ui_view_rule_params_root = row->block->expand_view_rule_params;
+  if(ui_view_rule_info->ui == 0 || !(ui_view_rule_info->flags & RD_ViewRuleInfoFlag_CanUseInWatchTable))
+  {
+    ui_view_rule_info = &rd_nil_view_rule_info;
+    ui_view_rule_params_root = &md_nil_node;
+  }
+  E_Eval row_eval = e_eval_from_expr(scratch.arena, row->expr);
+  RD_Entity *row_meta_entity = rd_entity_from_eval_space(row_eval.space);
+  RD_WatchViewRowKind row_kind = RD_WatchViewRowKind_Normal;
+  if(ev_key_match(row->block->key, ev_key_root()))
+  {
+    row_kind = RD_WatchViewRowKind_Header;
+  }
+  else if(ui_view_rule_info != &rd_nil_view_rule_info && ui_view_rule_info->ui != 0)
+  {
+    row_kind = RD_WatchViewRowKind_Canvas;
+  }
+  else if(flags & RD_WatchViewFlag_PrettyEntityRows &&
+          row_eval.space.kind == RD_EvalSpaceKind_MetaEntity &&
+          !rd_entity_is_nil(row_meta_entity) &&
+          row_eval.value.u64 == 0 && e_type_kind_from_key(row_eval.type_key) == E_TypeKind_Struct)
+  {
+    row_kind = RD_WatchViewRowKind_PrettyEntityControls;
+  }
+  scratch_end(scratch);
+  return row_kind;
+}
+
 //- rjf: row/column -> strings
 
 internal String8
@@ -1156,9 +1191,37 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
       //////////////////////////
       //- rjf: stable cursor state * blocks -> 2D table coordinates
       //
+      EV_WindowedRowList mark_rows = {0};
+      Rng2S64 cursor_tbl_range = {0};
       {
+        // rjf: compute 2d table coordinates
         cursor_tbl = rd_tbl_from_watch_view_point(&block_ranges, ewv->cursor);
         mark_tbl = rd_tbl_from_watch_view_point(&block_ranges, ewv->mark);
+        
+        // rjf: compute row at initial selection point (or just cursor point)
+        mark_rows = ev_windowed_row_list_from_block_range_list(scratch.arena, eval_view, filter, &block_ranges, r1u64(ui_scroll_list_row_from_item(&row_blocks, mark_tbl.y),
+                                                                                                                      ui_scroll_list_row_from_item(&row_blocks, mark_tbl.y)+1));
+        
+        // rjf: compute legal coordinate range, given selection-defining row
+        U64 num_x_positions = ewv->column_count;
+        if(mark_rows.first != 0)
+        {
+          RD_WatchViewRowKind row_kind = rd_watch_view_row_kind_from_row(flags, mark_rows.first);
+          if(row_kind == RD_WatchViewRowKind_PrettyEntityControls)
+          {
+            num_x_positions = 2;
+          }
+        }
+        cursor_tbl_range = r2s64(v2s64(0, 0), v2s64(num_x_positions-1, block_tree.total_item_count-1));
+        
+        // rjf: clamp x positions of cursor/mark tbl
+        for EachEnumVal(Axis2, axis)
+        {
+          cursor_tbl.v[axis] = clamp_1s64(r1s64(cursor_tbl_range.min.v[axis], cursor_tbl_range.max.v[axis]), cursor_tbl.v[axis]);
+          mark_tbl.v[axis] = clamp_1s64(r1s64(cursor_tbl_range.min.v[axis], cursor_tbl_range.max.v[axis]), mark_tbl.v[axis]);
+        }
+        
+        // rjf: form selection range table coordinates
         selection_tbl = r2s64p(Min(cursor_tbl.x, mark_tbl.x), Min(cursor_tbl.y, mark_tbl.y),
                                Max(cursor_tbl.x, mark_tbl.x), Max(cursor_tbl.y, mark_tbl.y));
       }
@@ -1272,54 +1335,108 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
       }
       
       //////////////////////////
-      //- rjf: [table] do cell-granularity expansions / tab-opens
+      //- rjf: [table] do cell-granularity 'accept' operations (expansions / tab-opens / etc.)
       //
       if(!ewv->text_editing && evt->slot == UI_EventActionSlot_Accept)
       {
+        taken = 1;
         EV_WindowedRowList rows = ev_windowed_row_list_from_block_range_list(scratch.arena, eval_view, filter, &block_ranges, r1u64(ui_scroll_list_row_from_item(&row_blocks, selection_tbl.min.y),
                                                                                                                                     ui_scroll_list_row_from_item(&row_blocks, selection_tbl.max.y)+1));
         EV_Row *row = rows.first;
         for(S64 y = selection_tbl.min.y; y <= selection_tbl.max.y && row != 0; y += 1, row = row->next)
         {
-          if(selection_tbl.min.x <= 0 && ev_row_is_expandable(row))
+          RD_WatchViewRowKind row_kind = rd_watch_view_row_kind_from_row(flags, row);
+          for(S64 x = selection_tbl.min.x; x <= selection_tbl.max.x; x += 1)
           {
-            B32 is_expanded = ev_expansion_from_key(eval_view, row->key);
-            ev_key_set_expansion(eval_view, row->block->key, row->key, !is_expanded);
-            taken = 1;
-          }
-          RD_ViewRuleInfo *view_rule_info = &rd_nil_view_rule_info;
-          MD_Node *view_rule_params_root = &md_nil_node;
-          for(EV_ViewRuleNode *n = row->view_rules->first; n != 0; n = n->next)
-          {
-            RD_ViewRuleInfo *info = rd_view_rule_info_from_string(n->v.root->string);
-            if(info->ui != 0)
+            //- rjf: determine operation for this cell
+            typedef enum OpKind
             {
-              view_rule_info = info;
-              view_rule_params_root = n->v.root;
+              OpKind_Null,
+              OpKind_DoExpand,
+              OpKind_GoToLocation,
+              OpKind_DoTabOpen,
+            }
+            OpKind;
+            OpKind kind = OpKind_DoExpand;
+            switch(row_kind)
+            {
+              default:{}break;
+              
+              //- rjf: normal row -> do operation depending on column
+              case RD_WatchViewRowKind_Normal:
+              {
+                RD_WatchViewColumn *col = rd_watch_view_column_from_x(ewv, x);
+                switch(col->kind)
+                {
+                  default:{}break;
+                  case RD_WatchViewColumnKind_Expr: {kind = OpKind_DoExpand;}break;
+                  case RD_WatchViewColumnKind_Value:{kind = OpKind_GoToLocation;}break;
+                }
+              }break;
+              
+              //- rjf: canvas row -> open tab
+              case RD_WatchViewRowKind_Canvas:
+              if(selection_tbl.min.x == selection_tbl.max.x &&
+                 selection_tbl.min.y == selection_tbl.max.y)
+              {
+                kind = OpKind_DoTabOpen;
+              }break;
+              
+              //- rjf: entity controls -> do operation depending on extra control selection
+              case RD_WatchViewRowKind_PrettyEntityControls:
+              {
+                if(selection_tbl.min.x != 0 || selection_tbl.max.x != 0)
+                {
+                  kind = OpKind_Null;
+                }
+              }break;
+            }
+            
+            //- rjf: perform operation
+            switch(kind)
+            {
+              default:{}break;
+              case OpKind_DoExpand:
+              {
+                B32 is_expanded = ev_expansion_from_key(eval_view, row->key);
+                ev_key_set_expansion(eval_view, row->block->key, row->key, !is_expanded);
+              }break;
+              case OpKind_GoToLocation:
+              {
+                
+              }break;
+              case OpKind_DoTabOpen:
+              {
+                RD_ViewRuleInfo *view_rule_info = &rd_nil_view_rule_info;
+                MD_Node *view_rule_params_root = &md_nil_node;
+                for(EV_ViewRuleNode *n = row->view_rules->first; n != 0; n = n->next)
+                {
+                  RD_ViewRuleInfo *info = rd_view_rule_info_from_string(n->v.root->string);
+                  if(info->ui != 0)
+                  {
+                    view_rule_info = info;
+                    view_rule_params_root = n->v.root;
+                  }
+                }
+                rd_cmd(RD_CmdKind_OpenTab,
+                       .string      = e_string_from_expr(scratch.arena, row->expr),
+                       .params_tree = view_rule_params_root);
+              }break;
             }
           }
-#if 0 // TODO(rjf): @blocks
-          if(view_rule_info != &rd_nil_view_rule_info && row->block_kind == EV_BlockKind_Canvas)
-          {
-            rd_cmd(RD_CmdKind_OpenTab,
-                   .string      = e_string_from_expr(scratch.arena, row->expr),
-                   .params_tree = view_rule_params_root);
-            taken = 1;
-          }
-#endif
         }
       }
       
       //////////////////////////
       //- rjf: [table] do cell-granularity go-to-locations / frame selections
       //
+#if 0 // TODO(rjf): @blocks
       if(!ewv->text_editing && evt->slot == UI_EventActionSlot_Accept &&
          selection_tbl.min.x == selection_tbl.max.x &&
          selection_tbl.min.y == selection_tbl.max.y &&
          selection_tbl.min.x == 1)
       {
         taken = 1;
-#if 0 // TODO(rjf): @blocks
         EV_WindowedRowList rows = ev_windowed_row_list_from_block_list(scratch.arena, eval_view, r1s64(ui_scroll_list_row_from_item(&row_blocks, selection_tbl.min.y-1),
                                                                                                        ui_scroll_list_row_from_item(&row_blocks, selection_tbl.max.y-1)+1), &blocks);
         EV_Row *row = rows.first;
@@ -1356,8 +1473,8 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                  .unwind_count = frame_row->unwind_idx,
                  .inline_depth = frame_row->inline_depth);
         }
-#endif
       }
+#endif
       
       //////////////////////////
       //- rjf: [text] apply textual edits
@@ -1501,24 +1618,6 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                     state_dirty = 1;
                     snap_to_cursor = 1;
                   }
-#if 0 // TODO(rjf): @msgs
-                  RD_Entity *watch = rd_entity_from_ev_key_and_kind(pt.key, mutable_entity_kind);
-                  RD_Entity *view_rule = rd_entity_child_from_kind(watch, RD_EntityKind_ViewRule);
-                  if(new_string.size != 0 && rd_entity_is_nil(view_rule))
-                  {
-                    view_rule = rd_entity_alloc(watch, RD_EntityKind_ViewRule);
-                  }
-                  else if(new_string.size == 0 && !rd_entity_is_nil(view_rule))
-                  {
-                    rd_entity_mark_for_deletion(view_rule);
-                  }
-                  if(new_string.size != 0)
-                  {
-                    rd_entity_equip_name(view_rule, new_string);
-                  }
-                  state_dirty = 1;
-                  snap_to_cursor = 1;
-#endif
                 }break;
               }
             }
@@ -1636,51 +1735,6 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                 ev_key_set_view_rule(eval_view, collection_info.key, str8_zero());
               }break;
             }
-            
-#if 0 // TODO(rjf): @msgs
-            // rjf: row deletions
-            if(selection_tbl.min.x <= 0)
-            {
-              RD_WatchViewPoint fallback_pt_prev = rd_watch_view_point_from_tbl(&block_ranges, v2s64(0, y - 1));
-              RD_WatchViewPoint fallback_pt_next = rd_watch_view_point_from_tbl(&block_ranges, v2s64(0, y + 1));
-              RD_Entity *watch = rd_entity_from_ev_key_and_kind(pt.key, mutable_entity_kind);
-              if(!rd_entity_is_nil(watch))
-              {
-                EV_Key new_cursor_key = empty_row_key;
-                EV_Key new_cursor_parent_key = empty_row_parent_key;
-                if((evt->delta_2s32.x < 0 || evt->delta_2s32.y < 0) && !ev_key_match(ev_key_zero(), fallback_pt_prev.key))
-                {
-                  RD_Entity *fallback_watch = rd_entity_from_ev_key_and_kind(fallback_pt_prev.key, mutable_entity_kind);
-                  if(!rd_entity_is_nil(fallback_watch))
-                  {
-                    new_cursor_key = fallback_pt_prev.key;
-                    new_cursor_parent_key = rd_parent_ev_key_from_entity(fallback_watch);
-                  }
-                }
-                else if(!ev_key_match(ev_key_zero(), fallback_pt_next.key))
-                {
-                  RD_Entity *fallback_watch = rd_entity_from_ev_key_and_kind(fallback_pt_next.key, mutable_entity_kind);
-                  if(!rd_entity_is_nil(fallback_watch))
-                  {
-                    new_cursor_key = fallback_pt_next.key;
-                    new_cursor_parent_key = rd_parent_ev_key_from_entity(fallback_watch);
-                  }
-                }
-                RD_WatchViewPoint new_cursor_pt = {0, new_cursor_parent_key, new_cursor_key};
-                rd_entity_mark_for_deletion(watch);
-                ewv->cursor = ewv->mark = ewv->next_cursor = ewv->next_mark = new_cursor_pt;
-              }
-            }
-            
-            // rjf: view rule deletions
-            else if(selection_tbl.min.x <= RD_WatchViewColumnKind_ViewRule && RD_WatchViewColumnKind_ViewRule <= selection_tbl.max.x)
-            {
-              RD_Entity *watch = rd_entity_from_ev_key_and_kind(pt.key, mutable_entity_kind);
-              RD_Entity *view_rule = rd_entity_child_from_kind(watch, RD_EntityKind_ViewRule);
-              rd_entity_mark_for_deletion(view_rule);
-              ev_key_set_view_rule(eval_view, pt.key, str8_zero());
-            }
-#endif
           }
         }
         for(RD_EntityNode *n = entities_to_remove.first; n != 0; n = n->next)
@@ -1699,7 +1753,6 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
       if(!ewv->text_editing && !(evt->flags & UI_EventFlag_Delete) && !(evt->flags & UI_EventFlag_Reorder))
       {
         B32 cursor_tbl_min_is_empty_selection[Axis2_COUNT] = {0, 1};
-        Rng2S64 cursor_tbl_range = r2s64(v2s64(0, 0), v2s64(ewv->column_count-1, block_tree.total_item_count-1));
         Vec2S32 delta = evt->delta_2s32;
         if(evt->flags & UI_EventFlag_PickSelectSide && !MemoryMatchStruct(&selection_tbl.min, &selection_tbl.max))
         {
@@ -1956,7 +2009,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
       scroll_list_params.flags         = UI_ScrollListFlag_All;
       scroll_list_params.row_height_px = floor_f32(ui_top_font_size()*2.5f);
       scroll_list_params.dim_px        = dim_2f32(rect);
-      scroll_list_params.cursor_range  = r2s64(v2s64(0, 0), v2s64(3, block_tree.total_item_count));
+      scroll_list_params.cursor_range  = r2s64(v2s64(0, 0), v2s64(ewv->column_count-1, block_tree.total_item_count));
       scroll_list_params.item_range    = r1s64(0, block_tree.total_row_count);
       scroll_list_params.cursor_min_is_empty_selection[Axis2_Y] = 0;
       scroll_list_params.row_blocks    = row_blocks;
@@ -2018,33 +2071,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
             ui_view_rule_info = &rd_nil_view_rule_info;
             ui_view_rule_params_root = &md_nil_node;
           }
-          
-          ////////////////////////
-          //- rjf: choose kind of row
-          //
-          typedef enum RowKind
-          {
-            RowKind_Normal,
-            RowKind_Header,
-            RowKind_Canvas,
-            RowKind_PrettyEntityControls,
-          }
-          RowKind;
-          RowKind row_kind = RowKind_Normal;
-          if(ev_key_match(row->block->key, ev_key_root()))
-          {
-            row_kind = RowKind_Header;
-          }
-          else if(ui_view_rule_info != &rd_nil_view_rule_info && ui_view_rule_info->ui != 0)
-          {
-            row_kind = RowKind_Canvas;
-          }
-          else if(row_eval.space.kind == RD_EvalSpaceKind_MetaEntity &&
-                  !rd_entity_is_nil(row_meta_entity) &&
-                  row_eval.value.u64 == 0 && row_type->kind == E_TypeKind_Struct)
-          {
-            row_kind = RowKind_PrettyEntityControls;
-          }
+          RD_WatchViewRowKind row_kind = rd_watch_view_row_kind_from_row(flags, row);
           
           ////////////////////////
           //- rjf: determine if row's data is fresh and/or bad
@@ -2097,9 +2124,10 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
             switch(row_kind)
             {
               default:{}break;
-              case RowKind_Normal:{row_flags |= UI_BoxFlag_DisableFocusOverlay;}break;
-              case RowKind_Header:{row_flags |= UI_BoxFlag_DrawSideBottom|UI_BoxFlag_DisableFocusOverlay;}break;
-              case RowKind_Canvas:{row_flags |= UI_BoxFlag_Clip|UI_BoxFlag_DrawBorder;}break;
+              case RD_WatchViewRowKind_Normal:{row_flags |= UI_BoxFlag_DisableFocusOverlay;}break;
+              case RD_WatchViewRowKind_Header:{row_flags |= UI_BoxFlag_DrawSideBottom|UI_BoxFlag_DisableFocusOverlay;}break;
+              case RD_WatchViewRowKind_Canvas:{row_flags |= UI_BoxFlag_Clip|UI_BoxFlag_DrawBorder;}break;
+              case RD_WatchViewRowKind_PrettyEntityControls:{row_flags |= UI_BoxFlag_DisableFocusOverlay;}break;
             }
           }
           
@@ -2123,7 +2151,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
             ////////////////////
             //- rjf: header row
             //
-            case RowKind_Header:
+            case RD_WatchViewRowKind_Header:
             {
               UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
               {
@@ -2196,7 +2224,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
             ////////////////////
             //- rjf: canvas row
             //
-            case RowKind_Canvas:
+            case RD_WatchViewRowKind_Canvas:
             UI_FocusHot(row_selected ? UI_FocusKind_On : UI_FocusKind_Off)
             {
               //- rjf: unpack
@@ -2295,34 +2323,52 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
             ////////////////////
             //- rjf: pretty entity controls row
             //
-            case RowKind_PrettyEntityControls:
+            case RD_WatchViewRowKind_PrettyEntityControls:
             {
+              //- rjf: unpack
               RD_Entity *entity = row_meta_entity;
+              B32 entity_box_selected = (row_selected);
+              
+              //- rjf: build entity box
               ui_set_next_hover_cursor(OS_Cursor_HandPoint);
-              UI_Box *entity_box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|
-                                                             UI_BoxFlag_DrawBorder|
-                                                             UI_BoxFlag_DrawBackground|
-                                                             UI_BoxFlag_DrawHotEffects|
-                                                             UI_BoxFlag_DrawActiveEffects,
-                                                             "###entity_%p", entity);
-              UI_Parent(entity_box)
+              UI_Box *entity_box = &ui_nil_box;
+              UI_FocusHot(entity_box_selected ? UI_FocusKind_On : UI_FocusKind_Off)
               {
-                UI_PrefWidth(ui_em(2.f, 1.f)) if(ui_pressed(ui_expander(row_expanded, str8_lit("###expanded"))))
-                {
-                  next_row_expanded = !row_expanded;
-                }
-                DR_FancyStringList fstrs = rd_title_fstrs_from_entity(scratch.arena, entity, ui_top_palette()->text_weak, ui_top_font_size());
-                UI_Box *title_box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
-                ui_box_equip_display_fancy_strings(title_box, &fstrs);
+                entity_box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|
+                                                       UI_BoxFlag_DrawBorder|
+                                                       UI_BoxFlag_DrawBackground|
+                                                       UI_BoxFlag_DrawHotEffects|
+                                                       UI_BoxFlag_DrawActiveEffects,
+                                                       "###entity_%p", entity);
               }
-              UI_Signal sig = ui_signal_from_box(entity_box);
+              {
+                UI_Parent(entity_box)
+                {
+                  UI_PrefWidth(ui_em(2.f, 1.f)) if(ui_pressed(ui_expander(row_expanded, str8_lit("###expanded"))))
+                  {
+                    next_row_expanded = !row_expanded;
+                  }
+                  DR_FancyStringList fstrs = rd_title_fstrs_from_entity(scratch.arena, entity, ui_top_palette()->text_weak, ui_top_font_size());
+                  UI_Box *title_box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
+                  ui_box_equip_display_fancy_strings(title_box, &fstrs);
+                }
+                UI_Signal sig = ui_signal_from_box(entity_box);
+              }
+              
+              //- rjf: build extra entity controls
+              UI_PrefWidth(ui_em(3.f, 1.f))
+              {
+                UI_FocusHot(row_selected && selection_tbl.min.x <= 1 && 1 <= selection_tbl.max.x ? UI_FocusKind_On : UI_FocusKind_Off) rd_icon_buttonf(RD_IconKind_Play,        0, "###run");
+                UI_FocusHot(row_selected && selection_tbl.min.x <= 2 && 2 <= selection_tbl.max.x ? UI_FocusKind_On : UI_FocusKind_Off) rd_icon_buttonf(RD_IconKind_StepInto,    0, "###step_into");
+                UI_FocusHot(row_selected && selection_tbl.min.x <= 3 && 3 <= selection_tbl.max.x ? UI_FocusKind_On : UI_FocusKind_Off) rd_icon_buttonf(RD_IconKind_CheckHollow, 0, "###select");
+              }
             }break;
             
             ////////////////////
             //- rjf: normal row
             //
             default:
-            case RowKind_Normal:
+            case RD_WatchViewRowKind_Normal:
             UI_HeightFill
             {
               //////////////////////
@@ -5040,7 +5086,6 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(scheduler)
   if(!wv->initialized)
   {
     rd_watch_view_init(wv);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_FreezeControl,  0.05f);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member,         0.25f, .string = str8_lit("label.str"), .display_string = str8_lit("Label"),      .dequote_string = 1);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member,         0.70f, .string = str8_lit("callstack.v"), .display_string = str8_lit("Call Stack"));
   }
