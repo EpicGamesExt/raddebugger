@@ -48,7 +48,7 @@ commands =
   //- rjf: fkey command slots (change locally but do not commit)
   .f1 = { .win = "build raddbg telemetry",                                                                                       .linux = "", .out = "*compilation*", .footer_panel = true, .save_dirty_files = true, .cursor_at_end = false, },
   .f2 = { .win = "build rdi_from_pdb",                                                                                           .linux = "", .out = "*compilation*", .footer_panel = true, .save_dirty_files = true, .cursor_at_end = false, },
-  .f3 = { .win = "pushd build && raddbg.exe --user:local_dev.raddbg_user --project:local_dev.raddbg_project --auto_run  && popd",.linux = "", .out = "*compilation*", .footer_panel = true, .save_dirty_files = true, .cursor_at_end = false, },
+  .f3 = { .win = "pushd build && raddbg.exe --user:local_dev.raddbg_user --project:local_dev.raddbg_project --xuto_run  && popd",.linux = "", .out = "*compilation*", .footer_panel = true, .save_dirty_files = true, .cursor_at_end = false, },
   
   //- rjf: local target builds
   .build_raddbg                = { .win = "build raddbg",                .linux = "", .out = "*compilation*", .footer_panel = true, .save_dirty_files = true, .cursor_at_end = false, },

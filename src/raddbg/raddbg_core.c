@@ -1712,6 +1712,9 @@ internal DR_FancyStringList
 rd_title_fstrs_from_entity(Arena *arena, RD_Entity *entity, Vec4F32 secondary_color, F32 size)
 {
   DR_FancyStringList result = {0};
+  RD_Entity *exe  = rd_entity_child_from_kind(entity, RD_EntityKind_Executable);
+  RD_Entity *args = rd_entity_child_from_kind(entity, RD_EntityKind_Arguments);
+  RD_Entity *loc  = rd_entity_child_from_kind(entity, RD_EntityKind_Location);
   RD_IconKind icon_kind = rd_entity_kind_icon_kind_table[entity->kind];
   Vec4F32 color = rd_rgba_from_theme_color(RD_ThemeColor_Text);
   if(icon_kind != RD_IconKind_Null)
@@ -1721,16 +1724,78 @@ rd_title_fstrs_from_entity(Arena *arena, RD_Entity *entity, Vec4F32 secondary_co
   dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), size, secondary_color, str8_lit(" "));
   String8 name = entity->string;
   B32 name_is_code = 1;
-  if(name.size == 0)
+  String8 location = {0};
+  B32 location_is_code = 0;
+  String8 exe_name = {0};
+  String8 args_string = {0};
+  if(!rd_entity_is_nil(exe))
   {
-    RD_Entity *exe = rd_entity_child_from_kind(entity, RD_EntityKind_Executable);
-    if(!rd_entity_is_nil(exe))
+    exe_name = str8_skip_last_slash(exe->string);
+  }
+  if(!rd_entity_is_nil(args))
+  {
+    args_string = args->string;
+  }
+  if(!rd_entity_is_nil(loc))
+  {
+    if(loc->string.size != 0 && loc->flags & RD_EntityFlag_HasTextPoint)
     {
-      name = str8_skip_last_slash(exe->string);
-      name_is_code = 0;
+      location = push_str8f(arena, "%S:%I64d:%I64d", loc->string, loc->text_point.line, loc->text_point.column);
+      location_is_code = 0;
+    }
+    else if(loc->string.size != 0)
+    {
+      location = loc->string;
     }
   }
-  dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(name_is_code ? RD_FontSlot_Code : RD_FontSlot_Main), size, color, name);
+  B32 extra = 0;
+  F32 size_extrafied = size;
+  Vec4F32 color_extrafied = color;
+  if(name.size != 0)
+  {
+    dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(name_is_code ? RD_FontSlot_Code : RD_FontSlot_Main), size, color, name);
+    extra = 1;
+    size_extrafied = size*0.95f;
+    color_extrafied = secondary_color;
+  }
+  if(location.size != 0)
+  {
+    if(extra)
+    {
+      dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), size, v4f32(0, 0, 0, 0), str8_lit(" "));
+    }
+    dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(location_is_code ? RD_FontSlot_Code : RD_FontSlot_Main), size_extrafied, color_extrafied, location);
+    extra = 1;
+    size_extrafied = size*0.95f;
+    color_extrafied = secondary_color;
+  }
+  if(exe_name.size != 0)
+  {
+    if(extra)
+    {
+      dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), size, v4f32(0, 0, 0, 0), str8_lit(" "));
+    }
+    dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Main), size_extrafied, color_extrafied, exe_name);
+    extra = 1;
+    size_extrafied = size*0.95f;
+    color_extrafied = secondary_color;
+  }
+  if(args_string.size != 0)
+  {
+    if(extra)
+    {
+      dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), size, v4f32(0, 0, 0, 0), str8_lit(" "));
+    }
+    dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Main), size_extrafied, color_extrafied, args_string);
+    extra = 1;
+    size_extrafied = size*0.95f;
+    color_extrafied = secondary_color;
+  }
+  if(entity->kind == RD_EntityKind_Target && entity->disabled)
+  {
+    dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), size, v4f32(0, 0, 0, 0), str8_lit(" "));
+    dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Main), size*0.95f, secondary_color, str8_lit("(Disabled)"));
+  }
   return result;
 }
 
@@ -8532,7 +8597,7 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
       if(!did_content && ptee_has_content && (flags & EV_StringFlag_ReadOnlyDisplayRules))
       {
         did_content = 1;
-        if(depth < 4)
+        if(depth < 3)
         {
           E_Expr *deref_expr = e_expr_ref_deref(scratch.arena, eval.expr);
           E_Eval deref_eval = e_eval_from_expr(scratch.arena, deref_expr);
@@ -8640,7 +8705,7 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
         }
         
         // rjf: build contents
-        if(depth < 4)
+        if(depth < 3)
         {
           for(U64 idx = 0; idx < array_count && max_size > space_taken; idx += 1)
           {
@@ -8693,7 +8758,7 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
       }
       
       // rjf: content
-      if(depth < 4)
+      if(depth < 3)
       {
         E_MemberArray data_members = e_type_data_members_from_key(scratch.arena, e_type_unwrap(eval.type_key));
         for(U64 member_idx = 0; member_idx < data_members.count && max_size > space_taken; member_idx += 1)
@@ -13924,6 +13989,22 @@ rd_frame(void)
           }break;
           
           //- rjf: general entity operations
+          case RD_CmdKind_SelectEntity:
+          case RD_CmdKind_SelectTarget:
+          {
+            RD_Entity *entity = rd_entity_from_handle(rd_regs()->entity);
+            RD_EntityList all_of_the_same_kind = rd_query_cached_entity_list_with_kind(entity->kind);
+            B32 is_selected = !entity->disabled;
+            for(RD_EntityNode *n = all_of_the_same_kind.first; n != 0; n = n->next)
+            {
+              RD_Entity *e = n->entity;
+              rd_entity_equip_disabled(e, 1);
+            }
+            if(!is_selected)
+            {
+              rd_entity_equip_disabled(entity, 0);
+            }
+          }break;
           case RD_CmdKind_EnableEntity:
           case RD_CmdKind_EnableBreakpoint:
           case RD_CmdKind_EnableTarget:
@@ -14209,24 +14290,6 @@ rd_frame(void)
               rd_entity_equip_name(execution_path, working_dir_path);
             }
             rd_cmd(RD_CmdKind_SelectTarget, .entity = rd_handle_from_entity(entity));
-          }break;
-          case RD_CmdKind_SelectTarget:
-          {
-            RD_Entity *entity = rd_entity_from_handle(rd_regs()->entity);
-            if(entity->kind == RD_EntityKind_Target)
-            {
-              RD_EntityList all_targets = rd_query_cached_entity_list_with_kind(RD_EntityKind_Target);
-              B32 is_selected = !entity->disabled;
-              for(RD_EntityNode *n = all_targets.first; n != 0; n = n->next)
-              {
-                RD_Entity *target = n->entity;
-                rd_entity_equip_disabled(target, 1);
-              }
-              if(!is_selected)
-              {
-                rd_entity_equip_disabled(entity, 0);
-              }
-            }
           }break;
           
           //- rjf: jit-debugger registration
@@ -14981,6 +15044,30 @@ rd_frame(void)
                   bp->u64 += 1;
                 }
               }
+            }
+          }
+          
+          // rjf: focus window if none focused
+          B32 any_window_is_focused = 0;
+          for(RD_Window *window = rd_state->first_window; window != 0; window = window->next)
+          {
+            if(os_window_is_focused(window->os))
+            {
+              any_window_is_focused = 1;
+              break;
+            }
+          }
+          if(!any_window_is_focused)
+          {
+            RD_Window *window = rd_window_from_handle(rd_state->last_focused_window);
+            if(window == 0)
+            {
+              window = rd_state->first_window;
+            }
+            if(window != 0)
+            {
+              os_window_bring_to_front(window->os);
+              os_window_focus(window->os);
             }
           }
         }break;

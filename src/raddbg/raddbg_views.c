@@ -1392,10 +1392,23 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
               
               //- rjf: entity controls -> do operation depending on extra control selection
               case RD_WatchViewRowKind_PrettyEntityControls:
+              if(selection_tbl.min.x != 1 || selection_tbl.max.x != 1)
               {
-                if(selection_tbl.min.x != 1 || selection_tbl.max.x != 1)
+                kind = OpKind_Null;
+                E_Eval row_eval = e_eval_from_expr(scratch.arena, row->expr);
+                RD_Entity *row_entity = rd_entity_from_eval_space(row_eval.space);
+                U64 row_ctrl_idx = 1;
+                for EachIndex(idx, row_ctrls_count)
                 {
-                  kind = OpKind_Null;
+                  RD_WatchViewRowCtrl *ctrl = &row_ctrls[idx];
+                  if(ctrl->entity_kind == row_entity->kind)
+                  {
+                    if(selection_tbl.min.x <= row_ctrl_idx+1 && row_ctrl_idx+1 <= selection_tbl.max.x)
+                    {
+                      rd_cmd(ctrl->kind, .entity = rd_handle_from_entity(row_entity));
+                    }
+                    row_ctrl_idx += 1;
+                  }
                 }
               }break;
             }
@@ -2337,10 +2350,17 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
               RD_Entity *entity = row_meta_entity;
               B32 entity_box_selected = (row_selected && selection_tbl.min.x <= 1 && 1 <= selection_tbl.max.x);
               
+              //- rjf: pick palette
+              UI_Palette *palette = ui_top_palette();
+              if(entity->kind == RD_EntityKind_Target && !entity->disabled)
+              {
+                palette = rd_palette_from_code(RD_PaletteCode_NeutralPopButton);
+              }
+              
               //- rjf: build entity box
               ui_set_next_hover_cursor(OS_Cursor_HandPoint);
               UI_Box *entity_box = &ui_nil_box;
-              UI_FocusHot(entity_box_selected ? UI_FocusKind_On : UI_FocusKind_Off)
+              UI_FocusHot(entity_box_selected ? UI_FocusKind_On : UI_FocusKind_Off) UI_Palette(palette)
               {
                 entity_box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|
                                                        UI_BoxFlag_DrawBorder|
@@ -2361,6 +2381,13 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                   ui_box_equip_display_fancy_strings(title_box, &fstrs);
                 }
                 UI_Signal sig = ui_signal_from_box(entity_box);
+                if(ui_clicked(sig))
+                {
+                  if(entity->kind == RD_EntityKind_Target)
+                  {
+                    rd_cmd(RD_CmdKind_SelectEntity, .entity = rd_handle_from_entity(entity));
+                  }
+                }
               }
               
               //- rjf: build extra entity controls
@@ -2374,7 +2401,10 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                   {
                     UI_FocusHot(row_selected && selection_tbl.min.x <= ctrl_idx+1 && ctrl_idx+1 <= selection_tbl.max.x ? UI_FocusKind_On : UI_FocusKind_Off)
                     {
-                      rd_icon_buttonf(rd_cmd_kind_info_table[ctrl->kind].icon_kind, 0, "###row_ctrl_%I64x", idx);
+                      if(ui_clicked(rd_icon_buttonf(rd_cmd_kind_info_table[ctrl->kind].icon_kind, 0, "###row_ctrl_%I64x", idx)))
+                      {
+                        rd_cmd(ctrl->kind, .entity = rd_handle_from_entity(entity));
+                      }
                     }
                     ctrl_idx += 1;
                   }
