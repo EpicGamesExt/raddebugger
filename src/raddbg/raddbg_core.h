@@ -931,7 +931,18 @@ read_only global RD_Entity d_nil_entity =
 
 read_only global RD_CmdKindInfo rd_nil_cmd_kind_info = {0};
 
-read_only global RD_ViewRuleInfo rd_nil_view_rule_info = {{0}, {0}, {0}, {0}, RD_IconKind_Null, 0, 0, RD_VIEW_RULE_UI_FUNCTION_NAME(null)};
+read_only global RD_ViewRuleInfo rd_nil_view_rule_info =
+{
+  {0},
+  {0},
+  {0},
+  {0},
+  RD_IconKind_Null,
+  0,
+  0,
+  EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME(nil),
+  RD_VIEW_RULE_UI_FUNCTION_NAME(null)
+};
 
 read_only global RD_View rd_nil_view =
 {

@@ -2162,7 +2162,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
               default:{}break;
               case RowKind_Normal:{row_flags |= UI_BoxFlag_DisableFocusOverlay;}break;
               case RowKind_Header:{row_flags |= UI_BoxFlag_DrawSideBottom|UI_BoxFlag_DisableFocusOverlay;}break;
-              case RowKind_Canvas:{row_flags |= UI_BoxFlag_Clip;}break;
+              case RowKind_Canvas:{row_flags |= UI_BoxFlag_Clip|UI_BoxFlag_DrawBorder;}break;
             }
           }
           
@@ -5616,6 +5616,14 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(text)
   ev_block_end(out, vb);
 }
 
+EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(text)
+{
+  EV_ExpandInfo info = {0};
+  info.row_count = 8;
+  info.single_item = 1;
+  return info;
+}
+
 RD_VIEW_RULE_UI_FUNCTION_DEF(text)
 {
   RD_CodeViewState *cv = rd_view_state(RD_CodeViewState);
@@ -5854,6 +5862,14 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(disasm)
   vb->semantic_idx_range = r1u64(0, 1);
   vb->view_rules         = view_rules;
   ev_block_end(out, vb);
+}
+
+EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(disasm)
+{
+  EV_ExpandInfo info = {0};
+  info.row_count = 8;
+  info.single_item = 1;
+  return info;
 }
 
 RD_VIEW_RULE_UI_FUNCTION_DEF(disasm)
@@ -6142,6 +6158,14 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(memory)
   vb->semantic_idx_range = r1u64(0, 1);
   vb->view_rules         = view_rules;
   ev_block_end(out, vb);
+}
+
+EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(memory)
+{
+  EV_ExpandInfo info = {0};
+  info.row_count = 16;
+  info.single_item = 1;
+  return info;
 }
 
 RD_VIEW_RULE_UI_FUNCTION_DEF(memory)
@@ -6947,6 +6971,14 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(graph)
   ev_block_end(out, vb);
 }
 
+EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(graph)
+{
+  EV_ExpandInfo info = {0};
+  info.row_count = 8;
+  info.single_item = 1;
+  return info;
+}
+
 ////////////////////////////////
 //~ rjf: bitmap @view_hook_impl
 
@@ -7040,6 +7072,14 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(bitmap)
   vb->semantic_idx_range = r1u64(0, 1);
   vb->view_rules         = view_rules;
   ev_block_end(out, vb);
+}
+
+EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(bitmap)
+{
+  EV_ExpandInfo info = {0};
+  info.row_count = 8;
+  info.single_item = 1;
+  return info;
 }
 
 RD_VIEW_RULE_UI_FUNCTION_DEF(bitmap)
@@ -7293,6 +7333,14 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(color_rgba)
   ev_block_end(out, vb);
 }
 
+EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(color_rgba)
+{
+  EV_ExpandInfo info = {0};
+  info.row_count = 8;
+  info.single_item = 1;
+  return info;
+}
+
 RD_VIEW_RULE_UI_FUNCTION_DEF(color_rgba)
 {
   Temp scratch = scratch_begin(0, 0);
@@ -7455,6 +7503,14 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(geo3d)
   vb->semantic_idx_range = r1u64(0, 1);
   vb->view_rules         = view_rules;
   ev_block_end(out, vb);
+}
+
+EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(geo3d)
+{
+  EV_ExpandInfo info = {0};
+  info.row_count = 16;
+  info.single_item = 1;
+  return info;
 }
 
 RD_VIEW_RULE_UI_FUNCTION_DEF(geo3d)

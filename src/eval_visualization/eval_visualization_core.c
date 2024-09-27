@@ -970,8 +970,11 @@ ev2_windowed_row_list_from_block_range_list(Arena *arena, EV_View *view, String8
       // rjf: generate rows before next splitting child
       if(block_relative_range__windowed.max > block_relative_range__windowed.min)
       {
+        // rjf: get info about expansion range
+        EV_ExpandRangeInfo expand_range_info = n->v.block->expand_view_rule_info->expr_expand_range_info(arena, view, filter, n->v.block->expr, n->v.block->expand_view_rule_params, block_relative_range__windowed, n->v.block->expand_view_rule_info_user_data);
+        
         // rjf: no expansion operator applied -> push row for block expression; pass through block info
-        if(n->v.block->expand_view_rule_info == &ev_nil_view_rule_info)
+        if(expand_range_info.row_exprs_count == 0)
         {
           EV2_Row *row = push_array(arena, EV2_Row, 1);
           SLLQueuePush(rows.first, rows.last, row);
@@ -990,7 +993,6 @@ ev2_windowed_row_list_from_block_range_list(Arena *arena, EV_View *view, String8
         // rjf: expansion operator applied -> call, and add rows for all expressions in the viewable range
         else
         {
-          EV_ExpandRangeInfo expand_range_info = n->v.block->expand_view_rule_info->expr_expand_range_info(arena, view, filter, n->v.block->expr, n->v.block->expand_view_rule_params, block_relative_range__windowed, n->v.block->expand_view_rule_info_user_data);
           for EachIndex(idx, expand_range_info.row_exprs_count)
           {
             U64 child_num = block_relative_range.min + num_skipped + idx + 1;
