@@ -1050,6 +1050,14 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
   {
     string_flags |= EV_StringFlag_PrettyNames;
   }
+  RD_WatchViewRowCtrl row_ctrls_[] =
+  {
+    {RD_EntityKind_Target, RD_CmdKind_LaunchAndRun  },
+    {RD_EntityKind_Target, RD_CmdKind_LaunchAndInit },
+    {RD_EntityKind_Target, RD_CmdKind_SelectEntity  },
+  };
+  RD_WatchViewRowCtrl *row_ctrls = row_ctrls_;
+  U64 row_ctrls_count = ArrayCount(row_ctrls_);
   
   //////////////////////////////
   //- rjf: root-level view rule which has a ui hook? call into that to build the UI
@@ -1203,16 +1211,16 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                                                                                                                       ui_scroll_list_row_from_item(&row_blocks, mark_tbl.y)+1));
         
         // rjf: compute legal coordinate range, given selection-defining row
-        U64 num_x_positions = ewv->column_count;
+        Rng1S64 cursor_x_range = r1s64(0, ewv->column_count-1);
         if(mark_rows.first != 0)
         {
           RD_WatchViewRowKind row_kind = rd_watch_view_row_kind_from_row(flags, mark_rows.first);
           if(row_kind == RD_WatchViewRowKind_PrettyEntityControls)
           {
-            num_x_positions = 2;
+            cursor_x_range = r1s64(1, 1+row_ctrls_count);
           }
         }
-        cursor_tbl_range = r2s64(v2s64(0, 0), v2s64(num_x_positions-1, block_tree.total_item_count-1));
+        cursor_tbl_range = r2s64(v2s64(cursor_x_range.min, 0), v2s64(cursor_x_range.max, block_tree.total_item_count-1));
         
         // rjf: clamp x positions of cursor/mark tbl
         for EachEnumVal(Axis2, axis)
@@ -1385,7 +1393,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
               //- rjf: entity controls -> do operation depending on extra control selection
               case RD_WatchViewRowKind_PrettyEntityControls:
               {
-                if(selection_tbl.min.x != 0 || selection_tbl.max.x != 0)
+                if(selection_tbl.min.x != 1 || selection_tbl.max.x != 1)
                 {
                   kind = OpKind_Null;
                 }
@@ -2327,7 +2335,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
             {
               //- rjf: unpack
               RD_Entity *entity = row_meta_entity;
-              B32 entity_box_selected = (row_selected);
+              B32 entity_box_selected = (row_selected && selection_tbl.min.x <= 1 && 1 <= selection_tbl.max.x);
               
               //- rjf: build entity box
               ui_set_next_hover_cursor(OS_Cursor_HandPoint);
@@ -2358,9 +2366,19 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
               //- rjf: build extra entity controls
               UI_PrefWidth(ui_em(3.f, 1.f))
               {
-                UI_FocusHot(row_selected && selection_tbl.min.x <= 1 && 1 <= selection_tbl.max.x ? UI_FocusKind_On : UI_FocusKind_Off) rd_icon_buttonf(RD_IconKind_Play,        0, "###run");
-                UI_FocusHot(row_selected && selection_tbl.min.x <= 2 && 2 <= selection_tbl.max.x ? UI_FocusKind_On : UI_FocusKind_Off) rd_icon_buttonf(RD_IconKind_StepInto,    0, "###step_into");
-                UI_FocusHot(row_selected && selection_tbl.min.x <= 3 && 3 <= selection_tbl.max.x ? UI_FocusKind_On : UI_FocusKind_Off) rd_icon_buttonf(RD_IconKind_CheckHollow, 0, "###select");
+                U64 ctrl_idx = 1;
+                for EachIndex(idx, row_ctrls_count)
+                {
+                  RD_WatchViewRowCtrl *ctrl = &row_ctrls[idx];
+                  if(ctrl->entity_kind == entity->kind)
+                  {
+                    UI_FocusHot(row_selected && selection_tbl.min.x <= ctrl_idx+1 && ctrl_idx+1 <= selection_tbl.max.x ? UI_FocusKind_On : UI_FocusKind_Off)
+                    {
+                      rd_icon_buttonf(rd_cmd_kind_info_table[ctrl->kind].icon_kind, 0, "###row_ctrl_%I64x", idx);
+                    }
+                    ctrl_idx += 1;
+                  }
+                }
               }
             }break;
             

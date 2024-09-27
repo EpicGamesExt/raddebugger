@@ -47,10 +47,6 @@ enum
   RD_WatchViewFlag_PrettyNameMembers       = (1<<0),
   RD_WatchViewFlag_PrettyEntityRows        = (1<<1),
   RD_WatchViewFlag_DisableCacheLines       = (1<<2),
-  
-  RD_WatchViewFlag_PrettyCtrlRun           = (1<<3),
-  RD_WatchViewFlag_PrettyCtrlStepInto      = (1<<4),
-  RD_WatchViewFlag_PrettyCtrlSelect        = (1<<5),
 };
 
 typedef enum RD_WatchViewColumnKind
@@ -93,6 +89,13 @@ struct RD_WatchViewColumn
   B32 is_non_code;
   B32 dequote_string;
   B32 rangify_braces;
+};
+
+typedef struct RD_WatchViewRowCtrl RD_WatchViewRowCtrl;
+struct RD_WatchViewRowCtrl
+{
+  RD_EntityKind entity_kind;
+  RD_CmdKind kind;
 };
 
 typedef enum RD_WatchViewRowKind

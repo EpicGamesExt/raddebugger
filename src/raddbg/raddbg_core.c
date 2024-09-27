@@ -5162,25 +5162,11 @@ rd_window_frame(RD_Window *ws)
           }
           
           //- rjf: step over button
-          UI_TextAlignment(UI_TextAlign_Center) UI_Flags(can_step ? 0 : UI_BoxFlag_Disabled)
+          UI_TextAlignment(UI_TextAlign_Center)
           {
             UI_Signal sig = ui_button(rd_icon_kind_text_table[RD_IconKind_StepOver]);
             os_window_push_custom_title_bar_client_area(ws->os, sig.box->rect);
-            if(ui_hovering(sig) && !can_step && can_pause)
-            {
-              UI_Tooltip
-                RD_Font(RD_FontSlot_Main)
-                UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Main))
-                ui_labelf("Disabled: Running");
-            }
-            if(ui_hovering(sig) && !can_step && !can_stop)
-            {
-              UI_Tooltip
-                RD_Font(RD_FontSlot_Main)
-                UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Main))
-                ui_labelf("Disabled: No processes are running");
-            }
-            if(ui_hovering(sig) && can_step)
+            if(ui_hovering(sig))
             {
               UI_Tooltip
                 RD_Font(RD_FontSlot_Main)
@@ -5194,25 +5180,11 @@ rd_window_frame(RD_Window *ws)
           }
           
           //- rjf: step into button
-          UI_TextAlignment(UI_TextAlign_Center) UI_Flags(can_step ? 0 : UI_BoxFlag_Disabled)
+          UI_TextAlignment(UI_TextAlign_Center)
           {
             UI_Signal sig = ui_button(rd_icon_kind_text_table[RD_IconKind_StepInto]);
             os_window_push_custom_title_bar_client_area(ws->os, sig.box->rect);
-            if(ui_hovering(sig) && !can_step && can_pause)
-            {
-              UI_Tooltip
-                RD_Font(RD_FontSlot_Main)
-                UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Main))
-                ui_labelf("Disabled: Running");
-            }
-            if(ui_hovering(sig) && !can_step && !can_stop)
-            {
-              UI_Tooltip
-                RD_Font(RD_FontSlot_Main)
-                UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Main))
-                ui_labelf("Disabled: No processes are running");
-            }
-            if(ui_hovering(sig) && can_step)
+            if(ui_hovering(sig))
             {
               UI_Tooltip
                 RD_Font(RD_FontSlot_Main)
