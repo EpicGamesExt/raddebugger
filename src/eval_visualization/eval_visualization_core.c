@@ -589,7 +589,7 @@ ev2_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, String8 st
       for(EV_ViewRuleNode *n = t->view_rules->first; n != 0; n = n->next)
       {
         EV_ViewRuleInfo *info = ev_view_rule_info_from_string(n->v.root->string);
-        if(info->expr_expand_info != 0)
+        if(info->expr_expand_info != 0 && info->expr_expand_info != EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME(nil))
         {
           expand_view_rule_info = info;
           expand_params = n->v.root;
