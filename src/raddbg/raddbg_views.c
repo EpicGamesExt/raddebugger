@@ -1192,9 +1192,10 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
       //
       if(snap_to_cursor)
       {
-        Rng1S64 item_range = r1s64(0, block_tree.total_row_count);
-        Rng1S64 scroll_row_idx_range = r1s64(item_range.min, ClampBot(item_range.min, item_range.max-1));
-        S64 cursor_item_idx = cursor_tbl.y-1;
+        Rng1S64 item_range = r1s64(0, block_tree.total_item_count);
+        Rng1S64 row_range  = r1s64(0, block_tree.total_row_count);
+        Rng1S64 scroll_row_idx_range = r1s64(row_range.min, ClampBot(row_range.min, row_range.max-1));
+        S64 cursor_item_idx = cursor_tbl.y;
         if(item_range.min <= cursor_item_idx && cursor_item_idx <= item_range.max)
         {
           UI_ScrollPt *scroll_pt = &scroll_pos.y;
@@ -1454,7 +1455,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
               {
                 default:{}break;
                 case RD_WatchViewColumnKind_Expr:
-                if(modifiable && filter.size == 0)
+                if(modifiable)
                 {
                   RD_WatchViewCollectionInfo collection_info = rd_collection_info_from_num(&block_ranges, tbl.y);
                   if(collection_info.kind != RD_EntityKind_Nil)
@@ -1623,6 +1624,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
         snap_to_cursor = 1;
         RD_EntityList entities_to_remove = {0};
         RD_WatchViewPoint next_cursor_pt = {0};
+        B32 next_cursor_set = 0;
         for(S64 y = selection_tbl.min.y; y <= selection_tbl.max.y; y += 1)
         {
           for(S64 x = selection_tbl.min.x; x <= selection_tbl.max.x; x += 1)
@@ -1661,6 +1663,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                       }
                       RD_WatchViewPoint new_pt = {0, parent_key, key};
                       next_cursor_pt = new_pt;
+                      next_cursor_set = 1;
                     }
                   }
                 }
@@ -1674,6 +1677,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                   RD_Entity *view_rule = rd_entity_child_from_kind(entity, RD_EntityKind_ViewRule);
                   rd_entity_mark_for_deletion(view_rule);
                 }
+                ev_key_set_view_rule(eval_view, collection_info.key, str8_zero());
               }break;
             }
             
@@ -1727,7 +1731,10 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
         {
           rd_entity_mark_for_deletion(n->entity);
         }
-        ewv->cursor = ewv->mark = ewv->next_cursor = ewv->next_mark = next_cursor_pt;
+        if(next_cursor_set)
+        {
+          ewv->cursor = ewv->mark = ewv->next_cursor = ewv->next_mark = next_cursor_pt;
+        }
       }
       
       //////////////////////////
@@ -1736,7 +1743,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
       if(!ewv->text_editing && !(evt->flags & UI_EventFlag_Delete) && !(evt->flags & UI_EventFlag_Reorder))
       {
         B32 cursor_tbl_min_is_empty_selection[Axis2_COUNT] = {0, 1};
-        Rng2S64 cursor_tbl_range = r2s64(v2s64(0, 0), v2s64(ewv->column_count-1, block_tree.total_row_count-1));
+        Rng2S64 cursor_tbl_range = r2s64(v2s64(0, 0), v2s64(ewv->column_count-1, block_tree.total_item_count-1));
         Vec2S32 delta = evt->delta_2s32;
         if(evt->flags & UI_EventFlag_PickSelectSide && !MemoryMatchStruct(&selection_tbl.min, &selection_tbl.max))
         {

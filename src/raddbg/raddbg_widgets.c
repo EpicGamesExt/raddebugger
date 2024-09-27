@@ -3212,7 +3212,7 @@ rd_line_edit(RD_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
   
   //- rjf: focus cursor
   {
-    F32 visible_dim_px = dim_2f32(box->rect).x;
+    F32 visible_dim_px = dim_2f32(box->rect).x - expander_size_px - ui_top_font_size()*depth;
     if(visible_dim_px != 0)
     {
       Rng1F32 cursor_range_px  = r1f32(cursor_off-ui_top_font_size()*2.f, cursor_off+ui_top_font_size()*2.f);

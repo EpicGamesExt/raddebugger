@@ -248,7 +248,7 @@ rd_entity_child_from_kind(RD_Entity *entity, RD_EntityKind kind)
   RD_Entity *result = &d_nil_entity;
   for(RD_Entity *child = entity->first; !rd_entity_is_nil(child); child = child->next)
   {
-    if(child->kind == kind)
+    if(!(child->flags & RD_EntityFlag_MarkedForDeletion) && child->kind == kind)
     {
       result = child;
       break;
@@ -7921,14 +7921,18 @@ EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(watches)
     result.row_exprs_count = Min(needed_row_count, accel->entities.count+1);
     result.row_exprs       = push_array(arena, E_Expr *, result.row_exprs_count);
     result.row_strings     = push_array(arena, String8, result.row_exprs_count);
+    result.row_view_rules  = push_array(arena, String8, result.row_exprs_count);
     result.row_members     = push_array(arena, E_Member *, result.row_exprs_count);
     for EachIndex(row_expr_idx, result.row_exprs_count)
     {
       U64 entity_idx = idx_range.min + row_expr_idx;
       if(entity_idx < accel->entities.count)
       {
-        result.row_exprs[row_expr_idx] = e_parse_expr_from_text(arena, accel->entities.v[entity_idx]->string);
-        result.row_strings[row_expr_idx] = accel->entities.v[entity_idx]->string;
+        RD_Entity *entity = accel->entities.v[entity_idx];
+        RD_Entity *view_rule = rd_entity_child_from_kind(entity, RD_EntityKind_ViewRule);
+        result.row_exprs[row_expr_idx] = e_parse_expr_from_text(arena, entity->string);
+        result.row_strings[row_expr_idx] = entity->string;
+        result.row_view_rules[row_expr_idx] = view_rule->string;
       }
       else
       {
@@ -7998,6 +8002,7 @@ EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(locals)
     result.row_exprs_count = Min(needed_row_count, accel->count);
     result.row_exprs       = push_array(arena, E_Expr *, result.row_exprs_count);
     result.row_strings     = push_array(arena, String8, result.row_exprs_count);
+    result.row_view_rules  = push_array(arena, String8, result.row_exprs_count);
     result.row_members     = push_array(arena, E_Member *, result.row_exprs_count);
     for EachIndex(row_expr_idx, result.row_exprs_count)
     {
@@ -8036,6 +8041,7 @@ EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(registers)
     result.row_exprs_count = Min(needed_row_count, accel->count);
     result.row_exprs       = push_array(arena, E_Expr *, result.row_exprs_count);
     result.row_strings     = push_array(arena, String8, result.row_exprs_count);
+    result.row_view_rules  = push_array(arena, String8, result.row_exprs_count);
     result.row_members     = push_array(arena, E_Member *, result.row_exprs_count);
     for EachIndex(row_expr_idx, result.row_exprs_count)
     {
@@ -8291,6 +8297,7 @@ rd_ev_view_rule_expr_expand_range_info__meta_entities(Arena *arena, EV_View *vie
     result.row_exprs_count = Min(needed_row_count, accel->entities.count);
     result.row_exprs       = push_array(arena, E_Expr *, result.row_exprs_count);
     result.row_strings     = push_array(arena, String8, result.row_exprs_count);
+    result.row_view_rules  = push_array(arena, String8, result.row_exprs_count);
     result.row_members     = push_array(arena, E_Member *, result.row_exprs_count);
     for EachIndex(row_expr_idx, result.row_exprs_count)
     {
@@ -8375,6 +8382,7 @@ rd_ev_view_rule_expr_expand_range_info__meta_ctrl_entities(Arena *arena, EV_View
     result.row_exprs_count = Min(needed_row_count, accel->entities.count);
     result.row_exprs       = push_array(arena, E_Expr *, result.row_exprs_count);
     result.row_strings     = push_array(arena, String8, result.row_exprs_count);
+    result.row_view_rules  = push_array(arena, String8, result.row_exprs_count);
     result.row_members     = push_array(arena, E_Member *, result.row_exprs_count);
     for EachIndex(row_expr_idx, result.row_exprs_count)
     {
@@ -8438,6 +8446,7 @@ rd_ev_view_rule_expr_expand_range_info__debug_info_tables(Arena *arena, EV_View 
     result.row_exprs_count = Min(needed_row_count, accel->items.count);
     result.row_exprs       = push_array(arena, E_Expr *, result.row_exprs_count);
     result.row_strings     = push_array(arena, String8, result.row_exprs_count);
+    result.row_view_rules  = push_array(arena, String8, result.row_exprs_count);
     result.row_members     = push_array(arena, E_Member *, result.row_exprs_count);
     for EachIndex(row_expr_idx, result.row_exprs_count)
     {

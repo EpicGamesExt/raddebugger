@@ -174,6 +174,7 @@ struct EV_ExpandRangeInfo
 {
   U64 row_exprs_count;
   String8 *row_strings;
+  String8 *row_view_rules;
   E_Expr **row_exprs;
   E_Member **row_members;
 };

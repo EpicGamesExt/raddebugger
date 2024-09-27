@@ -805,7 +805,6 @@ ev2_block_range_list_from_tree(Arena *arena, EV2_BlockTree *block_tree)
       EV2_Block *next_child;
       Rng1U64 block_relative_range;
     };
-    U64 base_num = 0;
     BlockTask start_task = {0, block_tree->root, block_tree->root->first, r1u64(0, block_tree->root->row_count)};
     for(BlockTask *t = &start_task; t != 0; t = t->next)
     {
@@ -821,8 +820,8 @@ ev2_block_range_list_from_tree(Arena *arena, EV2_BlockTree *block_tree)
       if(block_num_visual_rows != 0)
       {
         EV2_BlockRangeNode *n = push_array(arena, EV2_BlockRangeNode, 1);
-        n->v.block    = t->block;
-        n->v.range    = block_relative_range;
+        n->v.block = t->block;
+        n->v.range = block_relative_range;
         SLLQueuePush(list.first, list.last, n);
         list.count += 1;
       }
@@ -863,7 +862,7 @@ ev2_block_range_from_num(EV2_BlockRangeList *block_ranges, U64 num)
   U64 base_num = 0;
   for(EV2_BlockRangeNode *n = block_ranges->first; n != 0; n = n->next)
   {
-    U64 range_size = dim_1u64(n->v.range);
+    U64 range_size = n->v.block->single_item ? 1 : dim_1u64(n->v.range);
     Rng1U64 global_range = r1u64(base_num, base_num + range_size);
     if(contains_1u64(global_range, num))
     {
@@ -886,7 +885,7 @@ ev2_key_from_num(EV2_BlockRangeList *block_ranges, U64 num)
   U64 base_num = 0;
   for(EV2_BlockRangeNode *n = block_ranges->first; n != 0; n = n->next)
   {
-    U64 range_size = dim_1u64(n->v.range);
+    U64 range_size = n->v.block->single_item ? 1 : dim_1u64(n->v.range);
     Rng1U64 global_range = r1u64(base_num, base_num + range_size);
     if(contains_1u64(global_range, num))
     {
@@ -912,13 +911,14 @@ ev2_num_from_key(EV2_BlockRangeList *block_ranges, EV_Key key)
     if(hash == key.parent_hash)
     {
       U64 relative_num = n->v.block->expand_view_rule_info->expr_expand_num_from_id(key.child_id, n->v.block->expand_view_rule_info_user_data);
-      if(contains_1u64(n->v.range, relative_num-1))
+      Rng1U64 num_range = r1u64(n->v.range.min, n->v.block->single_item ? (n->v.range.min+1) : n->v.range.max);
+      if(contains_1u64(num_range, relative_num-1))
       {
         result = base_num + (relative_num - 1 - n->v.range.min);
         break;
       }
     }
-    base_num += dim_1u64(n->v.range);
+    base_num += n->v.block->single_item ? 1 : dim_1u64(n->v.range);
   }
   return result;
 }
@@ -964,7 +964,17 @@ ev2_windowed_row_list_from_block_range_list(Arena *arena, EV_View *view, String8
       rows.count_before_visual += num_skipped;
       if(block_num_visual_rows != 0 && num_skipped != 0)
       {
-        rows.count_before_semantic += n->v.block->single_item ? 1 : num_skipped;
+        if(n->v.block->single_item)
+        {
+          if(num_skipped >= block_num_visual_rows)
+          {
+            rows.count_before_semantic += 1;
+          }
+        }
+        else
+        {
+          rows.count_before_semantic += num_skipped;
+        }
       }
       
       // rjf: generate rows before next splitting child
@@ -981,9 +991,9 @@ ev2_windowed_row_list_from_block_range_list(Arena *arena, EV_View *view, String8
           rows.count += 1;
           row->block                = n->v.block;
           row->key                  = ev_key_make(ev_hash_from_key(row->block->key), 1);
-          row->visual_size          = n->v.block->single_item ? n->v.block->row_count : 1;
-          row->visual_size_skipped  = 0; // TODO(rjf)
-          row->visual_size_chopped  = 0; // TODO(rjf)
+          row->visual_size          = n->v.block->single_item ? (n->v.block->row_count - (num_skipped + num_chopped)) : 1;
+          row->visual_size_skipped  = num_skipped;
+          row->visual_size_chopped  = num_chopped;
           row->string               = n->v.block->string;
           row->expr                 = n->v.block->expr;
           row->member               = &e_member_nil;
@@ -1023,12 +1033,16 @@ ev2_windowed_row_list_from_block_range_list(Arena *arena, EV_View *view, String8
             row->block                = n->v.block;
             row->key                  = row_key;
             row->visual_size          = 1;
-            row->visual_size_skipped  = 0; // TODO(rjf)
-            row->visual_size_chopped  = 0; // TODO(rjf)
+            row->visual_size_skipped  = 0;
+            row->visual_size_chopped  = 0;
             row->string               = expand_range_info.row_strings[idx];
             row->expr                 = row_expr__resolved;
             row->member               = expand_range_info.row_members[idx];
             row->view_rules           = row_view_rules;
+            if(expand_range_info.row_view_rules[idx].size != 0)
+            {
+              ev_key_set_view_rule(view, row->key, expand_range_info.row_view_rules[idx]);
+            }
           }
         }
       }

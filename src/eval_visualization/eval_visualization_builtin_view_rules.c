@@ -201,6 +201,7 @@ EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(default)
     result.row_exprs_count = Min(needed_row_count, members->count);
     result.row_exprs = push_array(arena, E_Expr *, result.row_exprs_count);
     result.row_strings = push_array(arena, String8, result.row_exprs_count);
+    result.row_view_rules  = push_array(arena, String8, result.row_exprs_count);
     result.row_members = push_array(arena, E_Member *, result.row_exprs_count);
     for EachIndex(row_expr_idx, result.row_exprs_count)
     {
@@ -219,6 +220,7 @@ EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(default)
     result.row_exprs_count = Min(needed_row_count, enumvals->count);
     result.row_exprs = push_array(arena, E_Expr *, result.row_exprs_count);
     result.row_strings = push_array(arena, String8, result.row_exprs_count);
+    result.row_view_rules  = push_array(arena, String8, result.row_exprs_count);
     result.row_members = push_array(arena, E_Member *, result.row_exprs_count);
     for EachIndex(row_expr_idx, result.row_exprs_count)
     {
@@ -237,6 +239,7 @@ EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(default)
     result.row_exprs_count = Min(needed_row_count, accel->array_count);
     result.row_exprs = push_array(arena, E_Expr *, result.row_exprs_count);
     result.row_strings = push_array(arena, String8, result.row_exprs_count);
+    result.row_view_rules  = push_array(arena, String8, result.row_exprs_count);
     result.row_members = push_array(arena, E_Member *, result.row_exprs_count);
     for EachIndex(row_expr_idx, result.row_exprs_count)
     {
@@ -253,6 +256,7 @@ EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(default)
     result.row_exprs_count = 1;
     result.row_exprs = push_array(arena, E_Expr *, result.row_exprs_count);
     result.row_strings = push_array(arena, String8, result.row_exprs_count);
+    result.row_view_rules = push_array(arena, String8, result.row_exprs_count);
     result.row_members = push_array(arena, E_Member *, result.row_exprs_count);
     result.row_exprs[0] = e_expr_ref_deref(arena, expr);
     result.row_members[0] = &e_member_nil;
