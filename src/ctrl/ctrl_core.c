@@ -2563,10 +2563,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_Handle process_handle, CT
       {
         U64 raw_frame_base = frame_reg->u64;
         U64 adjusted_frame_base = raw_frame_base - frame_off*16;
-        if(adjusted_frame_base < raw_frame_base)
-        {
-          frame_base = adjusted_frame_base;
-        }
+        frame_base = adjusted_frame_base;
       }
       
       //- rjf: apply opcodes
