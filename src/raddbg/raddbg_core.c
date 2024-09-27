@@ -8573,6 +8573,7 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
       
       // rjf: special case: push strings for symbols
       if(!did_content && symbol_name.size != 0 &&
+         flags & EV_StringFlag_ReadOnlyDisplayRules &&
          ((type_kind == E_TypeKind_Ptr && direct_type_kind == E_TypeKind_Void) ||
           (type_kind == E_TypeKind_Ptr && direct_type_kind == E_TypeKind_Function) ||
           (type_kind == E_TypeKind_Function)))
@@ -8584,6 +8585,7 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
       
       // rjf: special case: need symbol name, don't have one
       if(!did_content && symbol_name.size == 0 &&
+         flags & EV_StringFlag_ReadOnlyDisplayRules &&
          ((type_kind == E_TypeKind_Ptr && direct_type_kind == E_TypeKind_Function) ||
           (type_kind == E_TypeKind_Function)) &&
          (flags & EV_StringFlag_ReadOnlyDisplayRules))
