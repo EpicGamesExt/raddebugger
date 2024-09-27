@@ -1083,31 +1083,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
         ev_key_set_expansion(eval_view, ev_key_root(), ev_key_make(ev_hash_from_key(ev_key_root()), 1), 1);
         block_tree   = ev2_block_tree_from_string(scratch.arena, eval_view, filter, root_expr, top_level_view_rules);
         block_ranges = ev2_block_range_list_from_tree(scratch.arena, &block_tree);
-#if 0 // TODO(rjf): @blocks
-        EV_Key root_parent_key = ev_key_make(5381, 0);
-        EV_Key root_key = ev_key_make(ev_hash_from_key(root_parent_key), 1);
-        ev_key_set_expansion(eval_view, root_parent_key, root_key, 1);
-        blocks = ev_block_list_from_view_expr_keys(scratch.arena, eval_view, filter, top_level_view_rules, root_expr, root_parent_key, root_key, -1);
-        blocks.first = blocks.first->next;
-        blocks.count -= 1;
-        blocks.total_visual_row_count -= 1;
-        blocks.total_semantic_row_count -= 1;
-#endif
       }
-      
-      //////////////////////////
-      //- rjf: does this eval watch view allow mutation? -> add extra block for editable empty row
-      //
-      EV_Key empty_row_parent_key = ev_key_make(max_U64, max_U64);
-      EV_Key empty_row_key = ev_key_make(ev_hash_from_key(empty_row_parent_key), 1);
-#if 0 // TODO(rjf): @blocks
-      if(state_dirty && modifiable && filter.size == 0)
-      {
-        EV_Block *b = ev_block_begin(scratch.arena, EV_BlockKind_Null, empty_row_parent_key, empty_row_key, 0);
-        b->visual_idx_range = b->semantic_idx_range = r1u64(0, 1);
-        ev_block_end(&blocks, b);
-      }
-#endif
       
       //////////////////////////
       //- rjf: block ranges -> ui row blocks
@@ -1476,26 +1452,6 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                       snap_to_cursor = 1;
                     }
                   }
-#if 0 // TODO(rjf): @blocks
-                  RD_WatchViewPoint pt = rd_watch_view_point_from_tbl(&block_ranges, tbl);
-                  RD_Entity *watch = rd_entity_from_ev_key_and_kind(pt.key, mutable_entity_kind);
-                  if(!rd_entity_is_nil(watch))
-                  {
-                    rd_entity_equip_name(watch, new_string);
-                    state_dirty = 1;
-                    snap_to_cursor = 1;
-                  }
-                  else if(editing_complete && new_string.size != 0 && ev_key_match(pt.key, empty_row_key))
-                  {
-                    watch = rd_entity_alloc(rd_entity_root(), mutable_entity_kind);
-                    rd_entity_equip_cfg_src(watch, RD_CfgSrc_Project);
-                    rd_entity_equip_name(watch, new_string);
-                    EV_Key key = rd_ev_key_from_entity(watch);
-                    ev_key_set_view_rule(eval_view, key, str8_zero());
-                    state_dirty = 1;
-                    snap_to_cursor = 1;
-                  }
-#endif
                 }break;
                 case RD_WatchViewColumnKind_Member:
                 case RD_WatchViewColumnKind_Value:
@@ -1956,40 +1912,6 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
               rd_entity_change_parent(last_entity_next, last_entity_next->parent, last_entity_next->parent, first_entity_prev);
             }
           }
-          
-#if 0 // TODO(rjf): @blocks
-          EV_Key first_watch_key = ev2_key_from_num(&block_ranges, selection_tbl.min.y);
-          EV_Key reorder_group_prev_watch_key = ev2_key_from_num(&block_ranges, selection_tbl.min.y - 1);
-          EV_Key reorder_group_next_watch_key = ev2_key_from_num(&block_ranges, selection_tbl.max.y + 1);
-          RD_Entity *reorder_group_prev = rd_entity_from_ev_key_and_kind(reorder_group_prev_watch_key, mutable_entity_kind);
-          RD_Entity *reorder_group_next = rd_entity_from_ev_key_and_kind(reorder_group_next_watch_key, mutable_entity_kind);
-          RD_Entity *first_watch = rd_entity_from_ev_key_and_kind(first_watch_key, mutable_entity_kind);
-          RD_Entity *last_watch = first_watch;
-          if(!rd_entity_is_nil(first_watch))
-          {
-            for(S64 y = selection_tbl.min.y+1; y <= selection_tbl.max.y; y += 1)
-            {
-              EV_Key key = ev2_key_from_num(&block_ranges, y);
-              RD_Entity *new_last = rd_entity_from_ev_key_and_kind(key, mutable_entity_kind);
-              if(!rd_entity_is_nil(new_last))
-              {
-                last_watch = new_last;
-              }
-            }
-          }
-          if(evt->delta_2s32.y < 0 && !rd_entity_is_nil(first_watch) && !rd_entity_is_nil(reorder_group_prev))
-          {
-            state_dirty = 1;
-            snap_to_cursor = 1;
-            rd_entity_change_parent(reorder_group_prev, reorder_group_prev->parent, reorder_group_prev->parent, last_watch);
-          }
-          if(evt->delta_2s32.y > 0 && !rd_entity_is_nil(last_watch) && !rd_entity_is_nil(reorder_group_next))
-          {
-            state_dirty = 1;
-            snap_to_cursor = 1;
-            rd_entity_change_parent(reorder_group_next, reorder_group_next->parent, reorder_group_next->parent, reorder_group_prev);
-          }
-#endif
         }
       }
       
@@ -5612,6 +5534,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(pending_file)
 ////////////////////////////////
 //~ rjf: text @view_hook_impl
 
+#if 0 // TODO(rjf): @blocks
 EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(text)
 {
   EV_Block *vb = ev_block_begin(arena, EV_BlockKind_Canvas, key, ev_key_make(ev_hash_from_key(key), 1), depth);
@@ -5622,6 +5545,7 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(text)
   vb->view_rules         = view_rules;
   ev_block_end(out, vb);
 }
+#endif
 
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(text)
 {
@@ -5860,6 +5784,7 @@ struct RD_DisasmViewState
   RD_CodeViewState cv;
 };
 
+#if 0 // TODO(rjf): @blocks
 EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(disasm)
 {
   EV_Block *vb = ev_block_begin(arena, EV_BlockKind_Canvas, key, ev_key_make(ev_hash_from_key(key), 1), depth);
@@ -5870,6 +5795,7 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(disasm)
   vb->view_rules         = view_rules;
   ev_block_end(out, vb);
 }
+#endif
 
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(disasm)
 {
@@ -6156,6 +6082,7 @@ struct RD_MemoryViewState
   B32 contain_cursor;
 };
 
+#if 0 // TODO(rjf): @blocks
 EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(memory)
 {
   EV_Block *vb = ev_block_begin(arena, EV_BlockKind_Canvas, key, ev_key_make(ev_hash_from_key(key), 1), depth);
@@ -6166,6 +6093,7 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(memory)
   vb->view_rules         = view_rules;
   ev_block_end(out, vb);
 }
+#endif
 
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(memory)
 {
@@ -6967,6 +6895,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(memory)
 ////////////////////////////////
 //~ rjf: "graph"
 
+#if 0 // TODO(rjf): @blocks
 EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(graph)
 {
   EV_Block *vb = ev_block_begin(arena, EV_BlockKind_Canvas, key, ev_key_make(ev_hash_from_key(key), 1), depth);
@@ -6977,6 +6906,7 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(graph)
   vb->view_rules         = view_rules;
   ev_block_end(out, vb);
 }
+#endif
 
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(graph)
 {
@@ -7070,6 +7000,7 @@ internal UI_BOX_CUSTOM_DRAW(rd_bitmap_view_canvas_box_draw)
   }
 }
 
+#if 0 // TODO(rjf): @blocks
 EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(bitmap)
 {
   EV_Block *vb = ev_block_begin(arena, EV_BlockKind_Canvas, key, ev_key_make(ev_hash_from_key(key), 1), depth);
@@ -7080,6 +7011,7 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(bitmap)
   vb->view_rules         = view_rules;
   ev_block_end(out, vb);
 }
+#endif
 
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(bitmap)
 {
@@ -7329,6 +7261,7 @@ rd_rgba_from_eval_params(E_Eval eval, MD_Node *params)
   return rgba;
 }
 
+#if 0 // TODO(rjf): @blocks
 EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(color_rgba)
 {
   EV_Block *vb = ev_block_begin(arena, EV_BlockKind_Canvas, key, ev_key_make(ev_hash_from_key(key), 1), depth);
@@ -7339,6 +7272,7 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(color_rgba)
   vb->view_rules         = view_rules;
   ev_block_end(out, vb);
 }
+#endif
 
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(color_rgba)
 {
@@ -7501,6 +7435,7 @@ internal UI_BOX_CUSTOM_DRAW(rd_geo3d_box_draw)
   dr_mesh(draw_data->vertex_buffer, draw_data->index_buffer, R_GeoTopologyKind_Triangles, R_GeoVertexFlag_TexCoord|R_GeoVertexFlag_Normals|R_GeoVertexFlag_RGB, r_handle_zero(), mat_4x4f32(1.f));
 }
 
+#if 0 // TODO(rjf): @blocks
 EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(geo3d)
 {
   EV_Block *vb = ev_block_begin(arena, EV_BlockKind_Canvas, key, ev_key_make(ev_hash_from_key(key), 1), depth);
@@ -7511,6 +7446,7 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(geo3d)
   vb->view_rules         = view_rules;
   ev_block_end(out, vb);
 }
+#endif
 
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(geo3d)
 {

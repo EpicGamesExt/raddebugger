@@ -873,10 +873,12 @@ RD_CollectionTable:
   @expand(RD_CollectionTable a) `EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_NAME($(a.id_space == x -> a.name)$(a.id_space != x -> identity))`
 }
 
+/* @blocks
 @data(`EV_ViewRuleBlockProdHookFunctionType *`) rd_collection_block_prod_hook_function_table:
 {
   @expand(RD_CollectionTable a) `EV_VIEW_RULE_BLOCK_PROD_FUNCTION_NAME($(a.name))`
 }
+*/
 
 ////////////////////////////////
 //~ rjf: View Rules
@@ -949,7 +951,7 @@ RD_ViewRuleTable:
   `String8 params_schema`;
   `RD_IconKind icon_kind`;
   `RD_ViewRuleInfoFlags flags`;
-  `EV_ViewRuleBlockProdHookFunctionType *block_prod`;
+  // TODO(rjf): @blocks `EV_ViewRuleBlockProdHookFunctionType *block_prod`;
   `EV_ViewRuleExprExpandInfoHookFunctionType *expr_expand_info`;
   `RD_ViewRuleUIFunctionType *ui`;
 }
@@ -957,15 +959,15 @@ RD_ViewRuleTable:
 @gen
 {
   `RD_VIEW_RULE_UI_FUNCTION_DEF(null);`,
-  @expand(RD_ViewRuleTable a) `$(a.can_use_in_watch_table != 0 -> "EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(" .. a.name_lower .. ");")`,
+  // @blocks @expand(RD_ViewRuleTable a) `$(a.can_use_in_watch_table != 0 -> "EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(" .. a.name_lower .. ");")`,
   @expand(RD_ViewRuleTable a) `$(a.can_use_in_watch_table != 0 && a.can_expand != 0 -> "EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(" .. a.name_lower .. ");")`,
   @expand(RD_ViewRuleTable a) `RD_VIEW_RULE_UI_FUNCTION_DEF($(a.name_lower));`,
 }
 
 @data(RD_ViewRuleInfo) rd_view_rule_kind_info_table:
 {
-  `{{0}, {0}, {0}, {0}, RD_IconKind_Null, 0, 0, EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME(nil), RD_VIEW_RULE_UI_FUNCTION_NAME(null)}`,
-  @expand(RD_ViewRuleTable a) `{str8_lit_comp("$(a.name_lower)"), str8_lit_comp("$(a.description)"), str8_lit_comp("$(a.display_name)"), str8_lit_comp("$(a.params_schema)"), RD_IconKind_$(a.icon), (RD_ViewRuleInfoFlag_ShowInDocs*$(a.show_in_docs)|RD_ViewRuleInfoFlag_CanFilter*$(a.can_filter)|RD_ViewRuleInfoFlag_FilterIsCode*$(a.filter_is_code)|RD_ViewRuleInfoFlag_TypingAutomaticallyFilters*$(a.typing_automatically_filters)|RD_ViewRuleInfoFlag_CanUseInWatchTable*$(a.can_use_in_watch_table)|RD_ViewRuleInfoFlag_CanFillValueCell*$(a.can_fill_value_cell)|RD_ViewRuleInfoFlag_CanExpand*$(a.can_expand)), $(a.can_expand != 0 -> "EV_VIEW_RULE_BLOCK_PROD_FUNCTION_NAME(" .. a.name_lower .. ")") $(a.can_expand == 0 -> 0), $(a.can_expand != 0 -> "EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME(" .. a.name_lower .. ")") $(a.can_expand == 0 -> "EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME(nil)"), RD_VIEW_RULE_UI_FUNCTION_NAME($(a.name_lower))}`,
+  `{{0}, {0}, {0}, {0}, RD_IconKind_Null, 0, EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME(nil), RD_VIEW_RULE_UI_FUNCTION_NAME(null)}`,
+  @expand(RD_ViewRuleTable a) `{str8_lit_comp("$(a.name_lower)"), str8_lit_comp("$(a.description)"), str8_lit_comp("$(a.display_name)"), str8_lit_comp("$(a.params_schema)"), RD_IconKind_$(a.icon), (RD_ViewRuleInfoFlag_ShowInDocs*$(a.show_in_docs)|RD_ViewRuleInfoFlag_CanFilter*$(a.can_filter)|RD_ViewRuleInfoFlag_FilterIsCode*$(a.filter_is_code)|RD_ViewRuleInfoFlag_TypingAutomaticallyFilters*$(a.typing_automatically_filters)|RD_ViewRuleInfoFlag_CanUseInWatchTable*$(a.can_use_in_watch_table)|RD_ViewRuleInfoFlag_CanFillValueCell*$(a.can_fill_value_cell)|RD_ViewRuleInfoFlag_CanExpand*$(a.can_expand)), $(a.can_expand != 0 -> "EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME(" .. a.name_lower .. ")") $(a.can_expand == 0 -> "EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME(nil)"), RD_VIEW_RULE_UI_FUNCTION_NAME($(a.name_lower))}`,
 }
 
 ////////////////////////////////

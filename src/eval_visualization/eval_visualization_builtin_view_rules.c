@@ -265,6 +265,7 @@ EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(default)
   return result;
 }
 
+#if 0 // TODO(rjf): @blocks
 EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(default)
 {
   Temp scratch = scratch_begin(&arena, 1);
@@ -443,6 +444,7 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(default)
   
   scratch_end(scratch);
 }
+#endif
 
 ////////////////////////////////
 //~ rjf: "array"

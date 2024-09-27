@@ -199,6 +199,7 @@ struct EV_ExpandRangeInfo
 #define EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_NAME(name) ev_view_rule_expr_expand_num_from_id_##name
 #define EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(name) internal EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_SIG(EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_NAME(name))
 
+#if 0 // TODO(rjf): @blocks
 #define EV_VIEW_RULE_BLOCK_PROD_FUNCTION_SIG(name) void name(Arena *arena,                                      \
 EV_View *view,                                     \
 String8 filter,                                    \
@@ -213,13 +214,16 @@ S32 depth,                                         \
 struct EV_BlockList *out)
 #define EV_VIEW_RULE_BLOCK_PROD_FUNCTION_NAME(name) ev_view_rule_block_prod__##name
 #define EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(name) internal EV_VIEW_RULE_BLOCK_PROD_FUNCTION_SIG(EV_VIEW_RULE_BLOCK_PROD_FUNCTION_NAME(name))
+#endif
 
 typedef EV_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_SIG(EV_ViewRuleExprResolutionHookFunctionType);
 typedef EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_SIG(EV_ViewRuleExprExpandInfoHookFunctionType);
 typedef EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_SIG(EV_ViewRuleExprExpandRangeInfoHookFunctionType);
 typedef EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_SIG(EV_ViewRuleExprExpandIDFromNumHookFunctionType);
 typedef EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_SIG(EV_ViewRuleExprExpandNumFromIDHookFunctionType);
+#if 0 // TODO(rjf): @blocks
 typedef EV_VIEW_RULE_BLOCK_PROD_FUNCTION_SIG(EV_ViewRuleBlockProdHookFunctionType);
+#endif
 
 typedef U32 EV_ViewRuleInfoFlags; // NOTE(rjf): see @view_rule_info
 enum
@@ -238,7 +242,9 @@ struct EV_ViewRuleInfo
   EV_ViewRuleExprExpandRangeInfoHookFunctionType *expr_expand_range_info;
   EV_ViewRuleExprExpandIDFromNumHookFunctionType *expr_expand_id_from_num;
   EV_ViewRuleExprExpandIDFromNumHookFunctionType *expr_expand_num_from_id;
+#if 0 // TODO(rjf): @blocks
   EV_ViewRuleBlockProdHookFunctionType *block_prod;
+#endif
 };
 
 typedef struct EV_ViewRuleInfoNode EV_ViewRuleInfoNode;
@@ -547,33 +553,41 @@ internal B32 ev2_row_is_editable(EV2_Row *row);
 ////////////////////////////////
 //~ rjf: Block Building
 
+#if 0 // TODO(rjf): @blocks
 internal EV_Block *ev_block_begin(Arena *arena, EV_BlockKind kind, EV_Key parent_key, EV_Key key, S32 depth);
 internal EV_Block *ev_block_split_and_continue(Arena *arena, EV_BlockList *list, EV_Block *split_block, U64 split_idx);
 internal void ev_block_end(EV_BlockList *list, EV_Block *block);
 internal void ev_append_expr_blocks__rec(Arena *arena, EV_View *view, String8 filter, EV_Key parent_key, EV_Key key, String8 string, E_Expr *expr, EV_ViewRuleList *view_rules, S32 depth, EV_BlockList *list_out);
 internal EV_BlockList ev_block_list_from_view_expr_keys(Arena *arena, EV_View *view, String8 filter, EV_ViewRuleList *view_rules, String8 expr, EV_Key parent_key, EV_Key key, S32 depth);
 internal void ev_block_list_concat__in_place(EV_BlockList *dst, EV_BlockList *to_push);
+#endif
 
 ////////////////////////////////
 //~ rjf: Block List <-> Row Coordinates
 
+#if 0 // TODO(rjf): @blocks
 internal S64 ev_row_num_from_block_list_key(EV_BlockList *blocks, EV_Key key);
 internal EV_Key ev_key_from_block_list_row_num(EV_BlockList *blocks, S64 row_num);
 internal EV_Key ev_parent_key_from_block_list_row_num(EV_BlockList *blocks, S64 row_num);
+#endif
 
 ////////////////////////////////
 //~ rjf: Block * Index -> Expressions
 
+#if 0 // TODO(rjf): @blocks
 internal E_Expr *ev_expr_from_block_index(Arena *arena, EV_Block *block, U64 index);
+#endif
 
 ////////////////////////////////
 //~ rjf: Row Lists
 
+#if 0 // TODO(rjf): @blocks
 internal EV_Row *ev_row_list_push_new(Arena *arena, EV_View *view, EV_WindowedRowList *rows, EV_Block *block, EV_Key key, E_Expr *expr);
 internal EV_WindowedRowList ev_windowed_row_list_from_block_list(Arena *arena, EV_View *view, Rng1S64 visible_range, EV_BlockList *blocks);
 internal String8 ev_expr_string_from_row(Arena *arena, EV_Row *row, EV_StringFlags );
 internal B32 ev_row_is_expandable(EV_Row *row);
 internal B32 ev_row_is_editable(EV_Row *row);
+#endif
 
 ////////////////////////////////
 //~ rjf: Stringification

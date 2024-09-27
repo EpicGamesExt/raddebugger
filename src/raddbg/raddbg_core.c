@@ -8074,6 +8074,7 @@ EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(procedures)     {return rd_ev_
 
 //- TODO(rjf): OLD VVVVVVVVVVVVVVVVVVVVVVVVVV
 
+#if 0 // TODO(rjf): @blocks
 EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(watches)
 {
   Temp scratch = scratch_begin(&arena, 1);
@@ -8262,6 +8263,7 @@ EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(procedures)
 {
   rd_ev_view_rule_block_prod_collection_debug_tables(arena, RDI_SectionKind_Procedures, view, filter, parent_key, key, expand_node, string, expr, view_rules, view_params, depth, out);
 }
+#endif
 
 internal EV_ExpandInfo
 rd_ev_view_rule_expr_expand_info__meta_entities(Arena *arena, EV_View *view, String8 filter, E_Expr *expr, MD_Node *params, RD_EntityKind kind)
@@ -8567,6 +8569,7 @@ rd_ev_view_rule_expr_num_from_id__debug_info_tables(U64 id, void *user_data, RDI
   return num;
 }
 
+#if 0 // TODO(rjf): @blocks
 internal void
 rd_ev_view_rule_block_prod_collection_debug_tables(Arena *arena, RDI_SectionKind target, EV_View *view, String8 filter, EV_Key parent_key, EV_Key key, EV_ExpandNode *expand_node, String8 string, E_Expr *expr, EV_ViewRuleList *view_rules, MD_Node *view_params, S32 depth, struct EV_BlockList *out)
 {
@@ -8691,6 +8694,7 @@ rd_ev_view_rule_block_prod_collection_debug_tables(Arena *arena, RDI_SectionKind
   }
   scratch_end(scratch);
 }
+#endif
 
 internal EV_View *
 rd_ev_view_from_key(U64 key)
@@ -11283,7 +11287,6 @@ rd_frame(void)
         info.expr_expand_range_info  = rd_collection_expr_expand_range_info_hook_function_table[idx];
         info.expr_expand_id_from_num = rd_collection_expr_expand_id_from_num_hook_function_table[idx];
         info.expr_expand_num_from_id = rd_collection_expr_expand_num_from_id_hook_function_table[idx];
-        info.block_prod              = rd_collection_block_prod_hook_function_table[idx];
         ev_view_rule_info_table_push(scratch.arena, view_rule_info_table, &info);
       }
       
@@ -11301,7 +11304,6 @@ rd_frame(void)
           dst_info.expr_expand_range_info  = EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_NAME(nil);
           dst_info.expr_expand_id_from_num = EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_NAME(identity);
           dst_info.expr_expand_num_from_id = EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_NAME(identity);
-          dst_info.block_prod              = src_info->block_prod;
           ev_view_rule_info_table_push(scratch.arena, view_rule_info_table, &dst_info);
         }
       }

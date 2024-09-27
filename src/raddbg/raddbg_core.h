@@ -939,7 +939,6 @@ read_only global RD_ViewRuleInfo rd_nil_view_rule_info =
   {0},
   RD_IconKind_Null,
   0,
-  0,
   EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME(nil),
   RD_VIEW_RULE_UI_FUNCTION_NAME(null)
 };
@@ -1304,7 +1303,10 @@ internal EV_ExpandRangeInfo rd_ev_view_rule_expr_expand_range_info__debug_info_t
 internal U64                rd_ev_view_rule_expr_id_from_num__debug_info_tables(U64 num, void *user_data, RDI_SectionKind section);
 internal U64                rd_ev_view_rule_expr_num_from_id__debug_info_tables(U64 id, void *user_data, RDI_SectionKind section);
 
+#if 0 // TODO(rjf): @blocks
 internal void rd_ev_view_rule_block_prod_collection_debug_tables(Arena *arena, RDI_SectionKind target, EV_View *view, String8 filter, EV_Key parent_key, EV_Key key, EV_ExpandNode *expand_node, String8 string, E_Expr *expr, EV_ViewRuleList *view_rules, MD_Node *view_params, S32 depth, struct EV_BlockList *out);
+#endif
+
 internal EV_View *rd_ev_view_from_key(U64 key);
 internal F32 rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size, S32 depth, E_Eval eval, E_Member *member, EV_ViewRuleList *view_rules, String8List *out);
 internal String8 rd_value_string_from_eval(Arena *arena, EV_StringFlags flags, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size, E_Eval eval, E_Member *member, EV_ViewRuleList *view_rules);

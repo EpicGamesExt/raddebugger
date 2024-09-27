@@ -1143,6 +1143,7 @@ ev2_row_is_editable(EV2_Row *row)
 ////////////////////////////////
 //~ rjf: Block Building
 
+#if 0 // TODO(rjf): @blocks
 internal EV_Block *
 ev_block_begin(Arena *arena, EV_BlockKind kind, EV_Key parent_key, EV_Key key, S32 depth)
 {
@@ -1314,10 +1315,12 @@ ev_block_list_concat__in_place(EV_BlockList *dst, EV_BlockList *to_push)
   }
   MemoryZeroStruct(to_push);
 }
+#endif
 
 ////////////////////////////////
 //~ rjf: Block List <-> Row Coordinates
 
+#if 0 // TODO(rjf): @blocks
 internal S64
 ev_row_num_from_block_list_key(EV_BlockList *blocks, EV_Key key)
 {
@@ -1416,10 +1419,12 @@ ev_parent_key_from_block_list_row_num(EV_BlockList *blocks, S64 row_num)
   }
   return key;
 }
+#endif
 
 ////////////////////////////////
 //~ rjf: Block * Index -> Expressions
 
+#if 0 // TODO(rjf): @blocks
 internal E_Expr *
 ev_expr_from_block_index(Arena *arena, EV_Block *block, U64 index)
 {
@@ -1552,10 +1557,12 @@ ev_expr_from_block_index(Arena *arena, EV_Block *block, U64 index)
   }
   return result;
 }
+#endif
 
 ////////////////////////////////
 //~ rjf: Row Lists
 
+#if 0 // TODO(rjf): @blocks
 internal EV_Row *
 ev_row_list_push_new(Arena *arena, EV_View *view, EV_WindowedRowList *rows, EV_Block *block, EV_Key key, E_Expr *expr)
 {
@@ -1819,6 +1826,7 @@ ev_row_is_editable(EV_Row *row)
   scratch_end(scratch);
   return result;
 }
+#endif
 
 ////////////////////////////////
 //~ rjf: Stringification
