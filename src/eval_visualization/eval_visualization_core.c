@@ -529,12 +529,12 @@ ev_expr_from_expr_view_rules(Arena *arena, E_Expr *expr, EV_ViewRuleList *view_r
 }
 
 ////////////////////////////////
-//~ rjf: Block Building (v2)
+//~ rjf: Block Building
 
-internal EV2_BlockTree
-ev2_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, String8 string, E_Expr *expr, EV_ViewRuleList *view_rules)
+internal EV_BlockTree
+ev_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, String8 string, E_Expr *expr, EV_ViewRuleList *view_rules)
 {
-  EV2_BlockTree tree = {&ev2_nil_block};
+  EV_BlockTree tree = {&ev_nil_block};
   {
     Temp scratch = scratch_begin(&arena, 1);
     EV_ViewRuleInfo *default_expand_view_rule_info = ev_view_rule_info_from_string(str8_lit("default"));
@@ -548,8 +548,8 @@ ev2_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, String8 st
     }
     
     //- rjf: generate root block
-    tree.root = push_array(arena, EV2_Block, 1);
-    MemoryCopyStruct(tree.root, &ev2_nil_block);
+    tree.root = push_array(arena, EV_Block, 1);
+    MemoryCopyStruct(tree.root, &ev_nil_block);
     tree.root->key        = ev_key_root();
     tree.root->string     = string;
     tree.root->expr       = ev_expr_from_expr_view_rules(arena, expr, top_level_view_rules);
@@ -563,7 +563,7 @@ ev2_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, String8 st
     struct Task
     {
       Task *next;
-      EV2_Block *parent_block;
+      EV_Block *parent_block;
       E_Expr *expr;
       U64 child_id;
       EV_ViewRuleList *view_rules;
@@ -600,12 +600,12 @@ ev2_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, String8 st
       EV_ExpandInfo expand_info = expand_view_rule_info->expr_expand_info(arena, view, filter, t->expr, expand_params);
       
       // rjf: generate block for expansion
-      EV2_Block *expansion_block = &ev2_nil_block;
+      EV_Block *expansion_block = &ev_nil_block;
       if(expand_info.row_count != 0)
       {
-        expansion_block = push_array(arena, EV2_Block, 1);
-        MemoryCopyStruct(expansion_block, &ev2_nil_block);
-        DLLPushBack_NPZ(&ev2_nil_block, t->parent_block->first, t->parent_block->last, expansion_block, next, prev);
+        expansion_block = push_array(arena, EV_Block, 1);
+        MemoryCopyStruct(expansion_block, &ev_nil_block);
+        DLLPushBack_NPZ(&ev_nil_block, t->parent_block->first, t->parent_block->last, expansion_block, next, prev);
         expansion_block->parent                   = t->parent_block;
         expansion_block->key                      = key;
         expansion_block->split_relative_idx       = t->split_relative_idx;
@@ -717,10 +717,10 @@ ev2_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, String8 st
   return tree;
 }
 
-internal EV2_BlockTree
-ev2_block_tree_from_string(Arena *arena, EV_View *view, String8 filter, String8 string, EV_ViewRuleList *view_rules)
+internal EV_BlockTree
+ev_block_tree_from_string(Arena *arena, EV_View *view, String8 filter, String8 string, EV_ViewRuleList *view_rules)
 {
-  EV2_BlockTree tree = {0};
+  EV_BlockTree tree = {0};
   Temp scratch = scratch_begin(&arena, 1);
   {
     // rjf: parse expression
@@ -771,17 +771,17 @@ ev2_block_tree_from_string(Arena *arena, EV_View *view, String8 filter, String8 
     }
     
     // rjf: produce tree
-    tree = ev2_block_tree_from_expr(arena, view, filter, string, parse.expr, all_view_rules);
+    tree = ev_block_tree_from_expr(arena, view, filter, string, parse.expr, all_view_rules);
   }
   scratch_end(scratch);
   return tree;
 }
 
 internal U64
-ev2_depth_from_block(EV2_Block *block)
+ev_depth_from_block(EV_Block *block)
 {
   U64 depth = 0;
-  for(EV2_Block *b = block->parent; b != &ev2_nil_block; b = b->parent)
+  for(EV_Block *b = block->parent; b != &ev_nil_block; b = b->parent)
   {
     depth += 1;
   }
@@ -789,20 +789,20 @@ ev2_depth_from_block(EV2_Block *block)
 }
 
 ////////////////////////////////
-//~ rjf: Block Coordinate Spaces (v2)
+//~ rjf: Block Coordinate Spaces
 
-internal EV2_BlockRangeList
-ev2_block_range_list_from_tree(Arena *arena, EV2_BlockTree *block_tree)
+internal EV_BlockRangeList
+ev_block_range_list_from_tree(Arena *arena, EV_BlockTree *block_tree)
 {
-  EV2_BlockRangeList list = {0};
+  EV_BlockRangeList list = {0};
   {
     Temp scratch = scratch_begin(&arena, 1);
     typedef struct BlockTask BlockTask;
     struct BlockTask
     {
       BlockTask *next;
-      EV2_Block *block;
-      EV2_Block *next_child;
+      EV_Block *block;
+      EV_Block *next_child;
       Rng1U64 block_relative_range;
     };
     BlockTask start_task = {0, block_tree->root, block_tree->root->first, r1u64(0, block_tree->root->row_count)};
@@ -810,7 +810,7 @@ ev2_block_range_list_from_tree(Arena *arena, EV2_BlockTree *block_tree)
     {
       // rjf: get block-relative range, truncated by split position of next child
       Rng1U64 block_relative_range = t->block_relative_range;
-      if(t->next_child != &ev2_nil_block)
+      if(t->next_child != &ev_nil_block)
       {
         block_relative_range.max = t->next_child->split_relative_idx+1;
       }
@@ -819,7 +819,7 @@ ev2_block_range_list_from_tree(Arena *arena, EV2_BlockTree *block_tree)
       // rjf: generate range node 
       if(block_num_visual_rows != 0)
       {
-        EV2_BlockRangeNode *n = push_array(arena, EV2_BlockRangeNode, 1);
+        EV_BlockRangeNode *n = push_array(arena, EV_BlockRangeNode, 1);
         n->v.block = t->block;
         n->v.range = block_relative_range;
         SLLQueuePush(list.first, list.last, n);
@@ -827,7 +827,7 @@ ev2_block_range_list_from_tree(Arena *arena, EV2_BlockTree *block_tree)
       }
       
       // rjf: generate task for child, + for post-child parts of this block
-      if(t->next_child != &ev2_nil_block)
+      if(t->next_child != &ev_nil_block)
       {
         // rjf: generate task for child - do *before* remainder (descend block tree depth first)
         BlockTask *child_task = push_array(scratch.arena, BlockTask, 1);
@@ -855,12 +855,12 @@ ev2_block_range_list_from_tree(Arena *arena, EV2_BlockTree *block_tree)
   return list;
 }
 
-internal EV2_BlockRange
-ev2_block_range_from_num(EV2_BlockRangeList *block_ranges, U64 num)
+internal EV_BlockRange
+ev_block_range_from_num(EV_BlockRangeList *block_ranges, U64 num)
 {
-  EV2_BlockRange result = {&ev2_nil_block};
+  EV_BlockRange result = {&ev_nil_block};
   U64 base_num = 0;
-  for(EV2_BlockRangeNode *n = block_ranges->first; n != 0; n = n->next)
+  for(EV_BlockRangeNode *n = block_ranges->first; n != 0; n = n->next)
   {
     U64 range_size = n->v.block->single_item ? 1 : dim_1u64(n->v.range);
     Rng1U64 global_range = r1u64(base_num, base_num + range_size);
@@ -875,7 +875,7 @@ ev2_block_range_from_num(EV2_BlockRangeList *block_ranges, U64 num)
 }
 
 internal EV_Key
-ev2_key_from_num(EV2_BlockRangeList *block_ranges, U64 num)
+ev_key_from_num(EV_BlockRangeList *block_ranges, U64 num)
 {
   EV_Key key = {0};
   if(block_ranges->first)
@@ -883,7 +883,7 @@ ev2_key_from_num(EV2_BlockRangeList *block_ranges, U64 num)
     key = ev_key_make(ev_hash_from_key(ev_key_root()), 1);
   }
   U64 base_num = 0;
-  for(EV2_BlockRangeNode *n = block_ranges->first; n != 0; n = n->next)
+  for(EV_BlockRangeNode *n = block_ranges->first; n != 0; n = n->next)
   {
     U64 range_size = n->v.block->single_item ? 1 : dim_1u64(n->v.range);
     Rng1U64 global_range = r1u64(base_num, base_num + range_size);
@@ -901,11 +901,11 @@ ev2_key_from_num(EV2_BlockRangeList *block_ranges, U64 num)
 }
 
 internal U64
-ev2_num_from_key(EV2_BlockRangeList *block_ranges, EV_Key key)
+ev_num_from_key(EV_BlockRangeList *block_ranges, EV_Key key)
 {
   U64 result = 0;
   U64 base_num = 0;
-  for(EV2_BlockRangeNode *n = block_ranges->first; n != 0; n = n->next)
+  for(EV_BlockRangeNode *n = block_ranges->first; n != 0; n = n->next)
   {
     U64 hash = ev_hash_from_key(n->v.block->key);
     if(hash == key.parent_hash)
@@ -924,15 +924,15 @@ ev2_num_from_key(EV2_BlockRangeList *block_ranges, EV_Key key)
 }
 
 ////////////////////////////////
-//~ rjf: Row Building (v2)
+//~ rjf: Row Building
 
-internal EV2_WindowedRowList
-ev2_windowed_row_list_from_block_range_list(Arena *arena, EV_View *view, String8 filter, EV2_BlockRangeList *block_ranges, Rng1U64 visible_range)
+internal EV_WindowedRowList
+ev_windowed_row_list_from_block_range_list(Arena *arena, EV_View *view, String8 filter, EV_BlockRangeList *block_ranges, Rng1U64 visible_range)
 {
-  EV2_WindowedRowList rows = {0};
+  EV_WindowedRowList rows = {0};
   {
     U64 visual_idx_off = 0;
-    for(EV2_BlockRangeNode *n = block_ranges->first; n != 0; n = n->next)
+    for(EV_BlockRangeNode *n = block_ranges->first; n != 0; n = n->next)
     {
       // rjf: unpack this block/range pair
       Rng1U64 block_relative_range = n->v.range;
@@ -986,7 +986,7 @@ ev2_windowed_row_list_from_block_range_list(Arena *arena, EV_View *view, String8
         // rjf: no expansion operator applied -> push row for block expression; pass through block info
         if(expand_range_info.row_exprs_count == 0)
         {
-          EV2_Row *row = push_array(arena, EV2_Row, 1);
+          EV_Row *row = push_array(arena, EV_Row, 1);
           SLLQueuePush(rows.first, rows.last, row);
           rows.count += 1;
           row->block                = n->v.block;
@@ -1027,7 +1027,7 @@ ev2_windowed_row_list_from_block_range_list(Arena *arena, EV_View *view, String8
               scratch_end(scratch);
             }
             E_Expr *row_expr__resolved = ev_expr_from_expr_view_rules(arena, row_expr, row_view_rules);
-            EV2_Row *row = push_array(arena, EV2_Row, 1);
+            EV_Row *row = push_array(arena, EV_Row, 1);
             SLLQueuePush(rows.first, rows.last, row);
             rows.count += 1;
             row->block                = n->v.block;
@@ -1049,693 +1049,6 @@ ev2_windowed_row_list_from_block_range_list(Arena *arena, EV_View *view, String8
     }
   }
   return rows;
-}
-
-internal String8
-ev2_expr_string_from_row(Arena *arena, EV2_Row *row, EV_StringFlags flags)
-{
-  String8 result = row->string;
-  E_Expr *notable_expr = row->expr;
-  for(B32 good = 0; !good;)
-  {
-    switch(notable_expr->kind)
-    {
-      default:{good = 1;}break;
-      case E_ExprKind_Address:
-      case E_ExprKind_Deref:
-      case E_ExprKind_Cast:
-      {
-        notable_expr = notable_expr->last;
-      }break;
-      case E_ExprKind_Ref:
-      {
-        notable_expr = notable_expr->ref;
-      }break;
-    }
-  }
-  if(result.size == 0) switch(notable_expr->kind)
-  {
-    default:
-    {
-      result = e_string_from_expr(arena, notable_expr);
-    }break;
-    case E_ExprKind_ArrayIndex:
-    {
-      result = push_str8f(arena, "[%S]", e_string_from_expr(arena, notable_expr->last));
-    }break;
-    case E_ExprKind_MemberAccess:
-    {
-      if(flags & EV_StringFlag_PrettyNames && row->member->pretty_name.size != 0)
-      {
-        result = push_str8_copy(arena, row->member->pretty_name);
-      }
-      else
-      {
-        result = push_str8f(arena, ".%S", e_string_from_expr(arena, notable_expr->last));
-      }
-    }break;
-  }
-  return result;
-}
-
-internal B32
-ev2_row_is_expandable(EV2_Row *row)
-{
-  B32 result = 0;
-  {
-    // rjf: determine if view rules force expandability
-    if(!result)
-    {
-      for(EV_ViewRuleNode *n = row->view_rules->first; n != 0; n = n->next)
-      {
-        EV_ViewRuleInfo *info = ev_view_rule_info_from_string(n->v.root->string);
-        if(info->flags & EV_ViewRuleInfoFlag_Expandable)
-        {
-          result = 1;
-          break;
-        }
-      }
-    }
-    
-    // rjf: determine if type info force expandability
-    if(!result)
-    {
-      Temp scratch = scratch_begin(0, 0);
-      E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, row->expr);
-      result = ev_type_key_and_mode_is_expandable(irtree.type_key, irtree.mode);
-      scratch_end(scratch);
-    }
-  }
-  return result;
-}
-
-internal B32
-ev2_row_is_editable(EV2_Row *row)
-{
-  B32 result = 0;
-  Temp scratch = scratch_begin(0, 0);
-  E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, row->expr);
-  result = ev_type_key_is_editable(irtree.type_key);
-  scratch_end(scratch);
-  return result;
-}
-
-////////////////////////////////
-//~ rjf: Block Building
-
-#if 0 // TODO(rjf): @blocks
-internal EV_Block *
-ev_block_begin(Arena *arena, EV_BlockKind kind, EV_Key parent_key, EV_Key key, S32 depth)
-{
-  EV_BlockNode *n = push_array(arena, EV_BlockNode, 1);
-  n->v.kind       = kind;
-  n->v.parent_key = parent_key;
-  n->v.key        = key;
-  n->v.depth      = depth;
-  n->v.expr       = &e_expr_nil;
-  n->v.view_rules = &ev_nil_view_rule_list;
-  return &n->v;
-}
-
-internal EV_Block *
-ev_block_split_and_continue(Arena *arena, EV_BlockList *list, EV_Block *split_block, U64 split_idx)
-{
-  U64 total_count = split_block->semantic_idx_range.max;
-  split_block->visual_idx_range.max = split_block->semantic_idx_range.max = split_idx+1;
-  ev_block_end(list, split_block);
-  EV_Block *continue_block = ev_block_begin(arena, split_block->kind, split_block->parent_key, split_block->key, split_block->depth);
-  continue_block->string            = split_block->string;
-  continue_block->expr              = split_block->expr;
-  continue_block->visual_idx_range  = continue_block->semantic_idx_range = r1u64(split_idx+1, total_count);
-  continue_block->view_rules        = split_block->view_rules;
-  continue_block->members           = split_block->members;
-  continue_block->enum_vals         = split_block->enum_vals;
-  continue_block->fzy_target        = split_block->fzy_target;
-  continue_block->fzy_backing_items = split_block->fzy_backing_items;
-  return continue_block;
-}
-
-internal void
-ev_block_end(EV_BlockList *list, EV_Block *block)
-{
-  EV_BlockNode *n = CastFromMember(EV_BlockNode, v, block);
-  DLLPushBack(list->first, list->last, n);
-  list->count += 1;
-  list->total_visual_row_count += dim_1u64(block->visual_idx_range);
-  list->total_semantic_row_count += dim_1u64(block->semantic_idx_range);
-}
-
-internal void
-ev_append_expr_blocks__rec(Arena *arena, EV_View *view, String8 filter, EV_Key parent_key, EV_Key key, String8 string, E_Expr *expr, EV_ViewRuleList *view_rules, S32 depth, EV_BlockList *list_out)
-{
-  ProfBeginFunction();
-  Temp scratch = scratch_begin(&arena, 1);
-  
-  //- rjf: determine if this key is expanded
-  EV_ExpandNode *node = ev_expand_node_from_key(view, key);
-  B32 parent_is_expanded = (node != 0 && node->expanded);
-  
-  //- rjf: determine view rule to generate children blocks
-  EV_ViewRuleInfo *block_prod_view_rule_info = ev_view_rule_info_from_string(str8_lit("default"));
-  MD_Node *block_prod_view_rule_params = &md_nil_node;
-  if(parent_is_expanded)
-  {
-    for(EV_ViewRuleNode *n = view_rules->first; n != 0; n = n->next)
-    {
-      EV_ViewRuleInfo *tln_info = ev_view_rule_info_from_string(n->v.root->string);
-      if(tln_info->block_prod != 0)
-      {
-        block_prod_view_rule_info = tln_info;
-        block_prod_view_rule_params = n->v.root;
-        break;
-      }
-    }
-  }
-  
-  //- rjf: do view rule children block generation, if we have an applicable view rule
-  if(parent_is_expanded && block_prod_view_rule_info != &ev_nil_view_rule_info)
-  {
-    E_Expr *expr_resolved = ev_expr_from_expr_view_rules(arena, expr, view_rules);
-    block_prod_view_rule_info->block_prod(arena, view, filter, parent_key, key, node, string, expr_resolved, view_rules, block_prod_view_rule_params, depth+1, list_out);
-  }
-  
-  scratch_end(scratch);
-  ProfEnd();
-}
-
-internal EV_BlockList
-ev_block_list_from_view_expr_keys(Arena *arena, EV_View *view, String8 filter, EV_ViewRuleList *view_rules, String8 expr, EV_Key parent_key, EV_Key key, S32 depth)
-{
-  ProfBeginFunction();
-  EV_BlockList blocks = {0};
-  {
-    E_TokenArray tokens = e_token_array_from_text(arena, expr);
-    E_Parse parse = e_parse_expr_from_text_tokens(arena, expr, &tokens);
-    U64 parse_opl = parse.last_token >= tokens.v + tokens.count ? expr.size : parse.last_token->range.min;
-    U64 expr_comma_pos = str8_find_needle(expr, parse_opl, str8_lit(","), 0);
-    U64 passthrough_pos = str8_find_needle(expr, parse_opl, str8_lit("--"), 0);
-    String8List default_view_rules = {0};
-    if(expr_comma_pos < expr.size && expr_comma_pos < passthrough_pos)
-    {
-      String8 expr_extension = str8_substr(expr, r1u64(expr_comma_pos+1, passthrough_pos));
-      expr_extension = str8_skip_chop_whitespace(expr_extension);
-      if(str8_match(expr_extension, str8_lit("x"), StringMatchFlag_CaseInsensitive))
-      {
-        str8_list_pushf(arena, &default_view_rules, "hex");
-      }
-      else if(str8_match(expr_extension, str8_lit("b"), StringMatchFlag_CaseInsensitive))
-      {
-        str8_list_pushf(arena, &default_view_rules, "bin");
-      }
-      else if(str8_match(expr_extension, str8_lit("o"), StringMatchFlag_CaseInsensitive))
-      {
-        str8_list_pushf(arena, &default_view_rules, "oct");
-      }
-      else if(expr_extension.size != 0)
-      {
-        str8_list_pushf(arena, &default_view_rules, "array:{%S}", expr_extension);
-      }
-    }
-    if(passthrough_pos < expr.size)
-    {
-      String8 passthrough_view_rule = str8_skip_chop_whitespace(str8_skip(expr, passthrough_pos+2));
-      if(passthrough_view_rule.size != 0)
-      {
-        str8_list_push(arena, &default_view_rules, passthrough_view_rule);
-      }
-    }
-    String8 view_rule_string = ev_view_rule_from_key(view, key);
-    if(view_rule_string.size == 0)
-    {
-      E_IRTreeAndType irtree = e_irtree_and_type_from_expr(arena, parse.expr);
-      view_rule_string = ev_auto_view_rule_from_type_key(irtree.type_key);
-    }
-    EV_ViewRuleList *view_rule_list = ev_view_rule_list_copy(arena, view_rules);
-    for(String8Node *n = default_view_rules.first; n != 0; n = n->next)
-    {
-      ev_view_rule_list_push_string(arena, view_rule_list, n->string);
-    }
-    ev_view_rule_list_push_string(arena, view_rule_list, view_rule_string);
-    
-    //- rjf: apply expr resolution view rules
-    E_Expr *expr_resolved = ev_expr_from_expr_view_rules(arena, parse.expr, view_rule_list);
-    
-    //- rjf: push block for expression root
-    {
-      EV_Block *block = ev_block_begin(arena, EV_BlockKind_Root, parent_key, key, depth);
-      block->string                      = expr;
-      block->expr                        = expr_resolved;
-      block->view_rules                  = view_rule_list;
-      block->visual_idx_range            = r1u64(key.child_id-1, key.child_id+0);
-      block->semantic_idx_range          = r1u64(key.child_id-1, key.child_id+0);
-      ev_block_end(&blocks, block);
-    }
-    
-    //- rjf: push expansions for root
-    ev_append_expr_blocks__rec(arena, view, filter, parent_key, key, expr, parse.expr, view_rule_list, depth, &blocks);
-  }
-  ProfEnd();
-  return blocks;
-}
-
-internal void
-ev_block_list_concat__in_place(EV_BlockList *dst, EV_BlockList *to_push)
-{
-  if(dst->last == 0)
-  {
-    *dst = *to_push;
-  }
-  else if(to_push->first != 0)
-  {
-    dst->last->next = to_push->first;
-    dst->last = to_push->last;
-    dst->count += to_push->count;
-    dst->total_visual_row_count += to_push->total_visual_row_count;
-    dst->total_semantic_row_count += to_push->total_semantic_row_count;
-  }
-  MemoryZeroStruct(to_push);
-}
-#endif
-
-////////////////////////////////
-//~ rjf: Block List <-> Row Coordinates
-
-#if 0 // TODO(rjf): @blocks
-internal S64
-ev_row_num_from_block_list_key(EV_BlockList *blocks, EV_Key key)
-{
-  S64 row_num = 1;
-  B32 found = 0;
-  for(EV_BlockNode *n = blocks->first; n != 0; n = n->next)
-  {
-    EV_Block *block = &n->v;
-    if(key.parent_hash == block->key.parent_hash)
-    {
-      B32 this_block_contains_this_key = 0;
-      {
-        if(block->fzy_backing_items.v != 0)
-        {
-          U64 item_num = fzy_item_num_from_array_element_idx__linear_search(&block->fzy_backing_items, key.child_id);
-          this_block_contains_this_key = (item_num != 0 && contains_1u64(block->semantic_idx_range, item_num-1));
-        }
-        else
-        {
-          this_block_contains_this_key = (block->semantic_idx_range.min+1 <= key.child_id && key.child_id < block->semantic_idx_range.max+1);
-        }
-      }
-      if(this_block_contains_this_key)
-      {
-        found = 1;
-        if(block->fzy_backing_items.v != 0)
-        {
-          U64 item_num = fzy_item_num_from_array_element_idx__linear_search(&block->fzy_backing_items, key.child_id);
-          row_num += item_num-1-block->semantic_idx_range.min;
-        }
-        else
-        {
-          row_num += key.child_id-1-block->semantic_idx_range.min;
-        }
-        break;
-      }
-    }
-    if(!found)
-    {
-      row_num += (S64)dim_1u64(block->semantic_idx_range);
-    }
-  }
-  if(!found)
-  {
-    row_num = 0;
-  }
-  return row_num;
-}
-
-internal EV_Key
-ev_key_from_block_list_row_num(EV_BlockList *blocks, S64 row_num)
-{
-  EV_Key key = {0};
-  S64 scan_y = 1;
-  for(EV_BlockNode *n = blocks->first; n != 0; n = n->next)
-  {
-    EV_Block *vb = &n->v;
-    Rng1S64 vb_row_num_range = r1s64(scan_y, scan_y + (S64)dim_1u64(vb->semantic_idx_range));
-    if(contains_1s64(vb_row_num_range, row_num))
-    {
-      key = vb->key;
-      if(vb->fzy_backing_items.v != 0)
-      {
-        U64 item_idx = (U64)((row_num - vb_row_num_range.min) + vb->semantic_idx_range.min);
-        if(item_idx < vb->fzy_backing_items.count)
-        {
-          key.child_id = vb->fzy_backing_items.v[item_idx].idx;
-        }
-      }
-      else
-      {
-        key.child_id = vb->semantic_idx_range.min + (row_num - vb_row_num_range.min) + 1;
-      }
-      break;
-    }
-    scan_y += dim_1s64(vb_row_num_range);
-  }
-  return key;
-}
-
-internal EV_Key
-ev_parent_key_from_block_list_row_num(EV_BlockList *blocks, S64 row_num)
-{
-  EV_Key key = {0};
-  S64 scan_y = 1;
-  for(EV_BlockNode *n = blocks->first; n != 0; n = n->next)
-  {
-    EV_Block *vb = &n->v;
-    Rng1S64 vb_row_num_range = r1s64(scan_y, scan_y + (S64)dim_1u64(vb->semantic_idx_range));
-    if(contains_1s64(vb_row_num_range, row_num))
-    {
-      key = vb->parent_key;
-      break;
-    }
-    scan_y += dim_1s64(vb_row_num_range);
-  }
-  return key;
-}
-#endif
-
-////////////////////////////////
-//~ rjf: Block * Index -> Expressions
-
-#if 0 // TODO(rjf): @blocks
-internal E_Expr *
-ev_expr_from_block_index(Arena *arena, EV_Block *block, U64 index)
-{
-  E_Expr *result = block->expr;
-  switch(block->kind)
-  {
-    default:{}break;
-    case EV_BlockKind_Members:
-    {
-      E_MemberArray *members = &block->members;
-      if(index < members->count)
-      {
-        E_Member *member = &members->v[index];
-        E_Expr *dot_expr = e_expr_ref_member_access(arena, block->expr, member->name);
-        result = dot_expr;
-      }
-    }break;
-    case EV_BlockKind_EnumMembers:
-    {
-      E_EnumValArray *enum_vals = &block->enum_vals;
-      if(index < enum_vals->count)
-      {
-        E_EnumVal *val = &enum_vals->v[index];
-        E_Expr *dot_expr = e_expr_ref_member_access(arena, block->expr, val->name);
-        result = dot_expr;
-      }
-    }break;
-    case EV_BlockKind_Elements:
-    {
-      E_Expr *idx_expr = e_expr_ref_array_index(arena, block->expr, index);
-      result = idx_expr;
-    }break;
-    case EV_BlockKind_DebugInfoTable:
-    {
-      // rjf: unpack row info
-      FZY_Item *item = &block->fzy_backing_items.v[index];
-      EV_Key parent_key = block->parent_key;
-      EV_Key key = block->key;
-      key.child_id = block->fzy_backing_items.v[index].idx;
-      
-      // rjf: determine module to which this item belongs
-      E_Module *module = e_parse_ctx->primary_module;
-      U64 base_idx = 0;
-      {
-        for(U64 module_idx = 0; module_idx < e_parse_ctx->modules_count; module_idx += 1)
-        {
-          U64 all_items_count = 0;
-          rdi_section_raw_table_from_kind(e_parse_ctx->modules[module_idx].rdi, block->fzy_target, &all_items_count);
-          if(base_idx <= item->idx && item->idx < base_idx + all_items_count)
-          {
-            module = &e_parse_ctx->modules[module_idx];
-            break;
-          }
-          base_idx += all_items_count;
-        }
-      }
-      
-      // rjf: build expr
-      E_Expr *item_expr = &e_expr_nil;
-      {
-        RDI_SectionKind section = block->fzy_target;
-        U64 element_idx = block->fzy_backing_items.v[index].idx - base_idx;
-        switch(section)
-        {
-          default:{}break;
-          case RDI_SectionKind_Procedures:
-          {
-            RDI_Procedure *procedure = rdi_element_from_name_idx(module->rdi, Procedures, element_idx);
-            RDI_Scope *scope = rdi_element_from_name_idx(module->rdi, Scopes, procedure->root_scope_idx);
-            U64 voff = *rdi_element_from_name_idx(module->rdi, ScopeVOffData, scope->voff_range_first);
-            E_OpList oplist = {0};
-            e_oplist_push_op(arena, &oplist, RDI_EvalOp_ModuleOff, e_value_u64(voff));
-            String8 bytecode = e_bytecode_from_oplist(arena, &oplist);
-            U32 type_idx = procedure->type_idx;
-            RDI_TypeNode *type_node = rdi_element_from_name_idx(module->rdi, TypeNodes, type_idx);
-            E_TypeKey type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), type_idx, (U32)(module - e_parse_ctx->modules));
-            item_expr = e_push_expr(arena, E_ExprKind_LeafBytecode, 0);
-            item_expr->mode     = E_Mode_Value;
-            item_expr->space    = module->space;
-            item_expr->type_key = type_key;
-            item_expr->bytecode = bytecode;
-            item_expr->string.str = rdi_string_from_idx(module->rdi, procedure->name_string_idx, &item_expr->string.size);
-          }break;
-          case RDI_SectionKind_GlobalVariables:
-          {
-            RDI_GlobalVariable *gvar = rdi_element_from_name_idx(module->rdi, GlobalVariables, element_idx);
-            U64 voff = gvar->voff;
-            E_OpList oplist = {0};
-            e_oplist_push_op(arena, &oplist, RDI_EvalOp_ModuleOff, e_value_u64(voff));
-            String8 bytecode = e_bytecode_from_oplist(arena, &oplist);
-            U32 type_idx = gvar->type_idx;
-            RDI_TypeNode *type_node = rdi_element_from_name_idx(module->rdi, TypeNodes, type_idx);
-            E_TypeKey type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), type_idx, (U32)(module - e_parse_ctx->modules));
-            item_expr = e_push_expr(arena, E_ExprKind_LeafBytecode, 0);
-            item_expr->mode     = E_Mode_Offset;
-            item_expr->space    = module->space;
-            item_expr->type_key = type_key;
-            item_expr->bytecode = bytecode;
-            item_expr->string.str = rdi_string_from_idx(module->rdi, gvar->name_string_idx, &item_expr->string.size);
-          }break;
-          case RDI_SectionKind_ThreadVariables:
-          {
-            RDI_ThreadVariable *tvar = rdi_element_from_name_idx(module->rdi, ThreadVariables, element_idx);
-            E_OpList oplist = {0};
-            e_oplist_push_op(arena, &oplist, RDI_EvalOp_TLSOff, e_value_u64(tvar->tls_off));
-            String8 bytecode = e_bytecode_from_oplist(arena, &oplist);
-            U32 type_idx = tvar->type_idx;
-            RDI_TypeNode *type_node = rdi_element_from_name_idx(module->rdi, TypeNodes, type_idx);
-            E_TypeKey type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), type_idx, (U32)(module - e_parse_ctx->modules));
-            item_expr = e_push_expr(arena, E_ExprKind_LeafBytecode, 0);
-            item_expr->mode     = E_Mode_Offset;
-            item_expr->space    = module->space;
-            item_expr->type_key = type_key;
-            item_expr->bytecode = bytecode;
-            item_expr->string.str = rdi_string_from_idx(module->rdi, tvar->name_string_idx, &item_expr->string.size);
-          }break;
-          case RDI_SectionKind_UDTs:
-          {
-            RDI_UDT *udt = rdi_element_from_name_idx(module->rdi, UDTs, element_idx);
-            RDI_TypeNode *type_node = rdi_element_from_name_idx(module->rdi, TypeNodes, udt->self_type_idx);
-            E_TypeKey type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), udt->self_type_idx, (U32)(module - e_parse_ctx->modules));
-            item_expr = e_push_expr(arena, E_ExprKind_TypeIdent, 0);
-            item_expr->type_key = type_key;
-          }break;
-        }
-      }
-      
-      result = item_expr;
-    }break;
-  }
-  return result;
-}
-#endif
-
-////////////////////////////////
-//~ rjf: Row Lists
-
-#if 0 // TODO(rjf): @blocks
-internal EV_Row *
-ev_row_list_push_new(Arena *arena, EV_View *view, EV_WindowedRowList *rows, EV_Block *block, EV_Key key, E_Expr *expr)
-{
-  // rjf: push
-  EV_Row *row = push_array(arena, EV_Row, 1);
-  SLLQueuePush(rows->first, rows->last, row);
-  rows->count += 1;
-  
-  // rjf: pick view rule list; resolve expression if needed
-  EV_ViewRuleList *view_rules = 0;
-  E_Expr *expr_resolved = expr;
-  switch(block->kind)
-  {
-    default:
-    {
-      view_rules = ev_view_rule_list_from_inheritance(arena, block->view_rules);
-      String8 row_view_rules = ev_view_rule_from_key(view, key);
-      if(row_view_rules.size == 0)
-      {
-        Temp scratch = scratch_begin(&arena, 1);
-        E_IRTreeAndType irtree = e_irtree_and_type_from_expr(arena, expr);
-        row_view_rules = ev_auto_view_rule_from_type_key(irtree.type_key);
-        scratch_end(scratch);
-      }
-      if(row_view_rules.size != 0)
-      {
-        ev_view_rule_list_push_string(arena, view_rules, row_view_rules);
-      }
-      expr_resolved = ev_expr_from_expr_view_rules(arena, expr, view_rules);
-    }break;
-    case EV_BlockKind_Root:
-    case EV_BlockKind_Canvas:
-    {
-      view_rules = block->view_rules;
-    }break;
-  }
-  
-  // rjf: fill
-  row->block_kind   = block->kind;
-  row->depth        = block->depth;
-  row->parent_key   = block->parent_key;
-  row->key          = key;
-  row->size_in_rows = 1;
-  row->string       = block->string;
-  row->expr         = expr_resolved;
-  row->view_rules = view_rules;
-  return row;
-}
-
-internal EV_WindowedRowList
-ev_windowed_row_list_from_block_list(Arena *arena, EV_View *view, Rng1S64 visible_range, EV_BlockList *blocks)
-{
-  ProfBeginFunction();
-  
-  //////////////////////////////
-  //- rjf: produce windowed rows, per block
-  //
-  U64 visual_idx_off = 0;
-  U64 semantic_idx_off = 0;
-  EV_WindowedRowList list = {0};
-  for(EV_BlockNode *n = blocks->first; n != 0; n = n->next)
-  {
-    EV_Block *block = &n->v;
-    
-    //////////////////////////////
-    //- rjf: extract block info
-    //
-    U64 block_num_visual_rows     = dim_1u64(block->visual_idx_range);
-    U64 block_num_semantic_rows   = dim_1u64(block->semantic_idx_range);
-    Rng1S64 block_visual_range    = r1s64(visual_idx_off, visual_idx_off + block_num_visual_rows);
-    Rng1S64 block_semantic_range  = r1s64(semantic_idx_off, semantic_idx_off + block_num_semantic_rows);
-    
-    //////////////////////////////
-    //- rjf: get skip/chop of block's index range
-    //
-    U64 num_skipped_visual = 0;
-    U64 num_chopped_visual = 0;
-    {
-      if(visible_range.min > block_visual_range.min)
-      {
-        num_skipped_visual = (visible_range.min - block_visual_range.min);
-        num_skipped_visual = Min(num_skipped_visual, block_num_visual_rows);
-      }
-      if(visible_range.max < block_visual_range.max)
-      {
-        num_chopped_visual = (block_visual_range.max - visible_range.max);
-        num_chopped_visual = Min(num_chopped_visual, block_num_visual_rows);
-      }
-    }
-    
-    //////////////////////////////
-    //- rjf: get visible idx range & invisible counts
-    //
-    Rng1U64 visible_idx_range = block->visual_idx_range;
-    {
-      visible_idx_range.min += num_skipped_visual;
-      visible_idx_range.max -= num_chopped_visual;
-    }
-    
-    //////////////////////////////
-    //- rjf: sum & advance
-    //
-    list.count_before_visual += num_skipped_visual;
-    if(block_num_visual_rows != 0)
-    {
-      list.count_before_semantic += block_num_semantic_rows * num_skipped_visual / block_num_visual_rows;
-    }
-    visual_idx_off += block_num_visual_rows;
-    semantic_idx_off += block_num_semantic_rows;
-    
-    //////////////////////////////
-    //- rjf: produce rows, depending on block's kind
-    //
-    if(visible_idx_range.max > visible_idx_range.min) switch(block->kind)
-    {
-      default:{}break;
-      
-      //////////////////////////////
-      //- rjf: single rows, piping in info from the originating block
-      //
-      case EV_BlockKind_Null:
-      case EV_BlockKind_Root:
-      {
-        ev_row_list_push_new(arena, view, &list, block, block->key, block->expr);
-      }break;
-      
-      //////////////////////////////
-      //- rjf: canvas -> produce blank row, sized by the idx range specified in the block
-      //
-      case EV_BlockKind_Canvas:
-      if(num_skipped_visual < block_num_visual_rows)
-      {
-        EV_Key key = ev_key_make(ev_hash_from_key(block->parent_key), 1);
-        EV_Row *row = ev_row_list_push_new(arena, view, &list, block, key, block->expr);
-        row->size_in_rows        = dim_1u64(intersect_1u64(visible_idx_range, r1u64(0, dim_1u64(block->visual_idx_range))));
-        row->skipped_size_in_rows= (visible_idx_range.min > block->visual_idx_range.min) ? visible_idx_range.min - block->visual_idx_range.min : 0;
-        row->chopped_size_in_rows= (visible_idx_range.max < block->visual_idx_range.max) ? block->visual_idx_range.max - visible_idx_range.max : 0;
-      }break;
-      
-      //////////////////////////////
-      //- rjf: all elements of a debug info table -> produce rows for visible range
-      //
-      case EV_BlockKind_DebugInfoTable:
-      for(U64 idx = visible_idx_range.min; idx < visible_idx_range.max; idx += 1)
-      {
-        FZY_Item *item = &block->fzy_backing_items.v[idx];
-        EV_Key key = ev_key_make(ev_hash_from_key(block->parent_key), block->fzy_backing_items.v[idx].idx);
-        E_Expr *row_expr = ev_expr_from_block_index(arena, block, idx);
-        ev_row_list_push_new(arena, view, &list, block, key, row_expr);
-      }break;
-      
-      //////////////////////////////
-      //- rjf: members/elements/enum-members
-      //
-      case EV_BlockKind_Members:
-      case EV_BlockKind_EnumMembers:
-      case EV_BlockKind_Elements:
-      {
-        for(U64 idx = visible_idx_range.min; idx < visible_idx_range.max; idx += 1)
-        {
-          EV_Key key = ev_key_make(ev_hash_from_key(block->parent_key), idx+1);
-          E_Expr *expr = ev_expr_from_block_index(arena, block, idx);
-          EV_Row *row = ev_row_list_push_new(arena, view, &list, block, key, expr);
-          if(block->kind == EV_BlockKind_Members && idx < block->members.count)
-          {
-            row->member = e_type_member_copy(arena, &block->members.v[idx]);
-          }
-        }
-      }break;
-    }
-  }
-  ProfEnd();
-  return list;
 }
 
 internal String8
@@ -1772,7 +1085,7 @@ ev_expr_string_from_row(Arena *arena, EV_Row *row, EV_StringFlags flags)
     }break;
     case E_ExprKind_MemberAccess:
     {
-      if(flags & EV_StringFlag_PrettyNames && row->member != 0 && row->member->pretty_name.size != 0)
+      if(flags & EV_StringFlag_PrettyNames && row->member->pretty_name.size != 0)
       {
         result = push_str8_copy(arena, row->member->pretty_name);
       }
@@ -1826,7 +1139,6 @@ ev_row_is_editable(EV_Row *row)
   scratch_end(scratch);
   return result;
 }
-#endif
 
 ////////////////////////////////
 //~ rjf: Stringification

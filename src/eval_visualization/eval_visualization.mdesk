@@ -115,7 +115,6 @@ EV_ViewRuleTable:
   @expand(EV_ViewRuleTable a) `$(a.xr == "x" -> "EV_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_DEF(" .. a.name_lower .. ");")`;
   @expand(EV_ViewRuleTable a) `$(a.xe == "x" -> "EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(" .. a.name_lower .. ");")`;
   @expand(EV_ViewRuleTable a) `$(a.xe == "x" -> "EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(" .. a.name_lower .. ");")`;
-  // @blocks @expand(EV_ViewRuleTable a) `$(a.vb == "x" -> "EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(" .. a.name_lower .. ");")`;
 }
 
 @data(EV_ViewRuleInfo) @c_file ev_builtin_view_rule_info_table:

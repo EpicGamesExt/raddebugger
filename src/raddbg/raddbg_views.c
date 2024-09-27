@@ -793,32 +793,32 @@ rd_watch_view_point_match(RD_WatchViewPoint a, RD_WatchViewPoint b)
 }
 
 internal RD_WatchViewPoint
-rd_watch_view_point_from_tbl(EV2_BlockRangeList *block_ranges, Vec2S64 tbl)
+rd_watch_view_point_from_tbl(EV_BlockRangeList *block_ranges, Vec2S64 tbl)
 {
   RD_WatchViewPoint pt = zero_struct;
   pt.x           = tbl.x;
-  pt.key         = ev2_key_from_num(block_ranges, (U64)tbl.y);
-  pt.parent_key  = ev2_block_range_from_num(block_ranges, (U64)tbl.y).block->key;
+  pt.key         = ev_key_from_num(block_ranges, (U64)tbl.y);
+  pt.parent_key  = ev_block_range_from_num(block_ranges, (U64)tbl.y).block->key;
   return pt;
 }
 
 internal Vec2S64
-rd_tbl_from_watch_view_point(EV2_BlockRangeList *block_ranges, RD_WatchViewPoint pt)
+rd_tbl_from_watch_view_point(EV_BlockRangeList *block_ranges, RD_WatchViewPoint pt)
 {
   Vec2S64 tbl = {0};
   tbl.x = pt.x;
-  tbl.y = (S64)ev2_num_from_key(block_ranges, pt.key);
+  tbl.y = (S64)ev_num_from_key(block_ranges, pt.key);
   return tbl;
 }
 
 //- rjf: table coordinates -> entities in collectons
 
 internal RD_WatchViewCollectionInfo
-rd_collection_info_from_num(EV2_BlockRangeList *block_ranges, S64 num)
+rd_collection_info_from_num(EV_BlockRangeList *block_ranges, S64 num)
 {
   Temp scratch = scratch_begin(0, 0);
-  EV2_Block *block = ev2_block_range_from_num(block_ranges, num).block;
-  EV_Key key = ev2_key_from_num(block_ranges, num);
+  EV_Block *block = ev_block_range_from_num(block_ranges, num).block;
+  EV_Key key = ev_key_from_num(block_ranges, num);
   U64 block_relative_num = block->expand_view_rule_info->expr_expand_num_from_id(key.child_id, block->expand_view_rule_info_user_data);
   RD_EntityKind collection_entity_kind = RD_EntityKind_Nil;
   E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, block->expr);
@@ -846,7 +846,7 @@ rd_collection_info_from_num(EV2_BlockRangeList *block_ranges, S64 num)
 //- rjf: row/column -> strings
 
 internal String8
-rd_string_from_eval_viz_row_column(Arena *arena, EV_View *ev, EV2_Row *row, RD_WatchViewColumn *col, EV_StringFlags string_flags, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size_px)
+rd_string_from_eval_viz_row_column(Arena *arena, EV_View *ev, EV_Row *row, RD_WatchViewColumn *col, EV_StringFlags string_flags, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size_px)
 {
   String8 result = {0};
   EV_ViewRuleList *view_rules = row->view_rules;
@@ -860,7 +860,7 @@ rd_string_from_eval_viz_row_column(Arena *arena, EV_View *ev, EV2_Row *row, RD_W
     default:{}break;
     case RD_WatchViewColumnKind_Expr:
     {
-      result = ev2_expr_string_from_row(arena, row, string_flags);
+      result = ev_expr_string_from_row(arena, row, string_flags);
     }break;
     case RD_WatchViewColumnKind_Value:
     {
@@ -1059,8 +1059,8 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
   //////////////////////////////
   //- rjf: consume events & perform navigations/edits - calculate state
   //
-  EV2_BlockTree block_tree = {0};
-  EV2_BlockRangeList block_ranges = {0};
+  EV_BlockTree block_tree = {0};
+  EV_BlockRangeList block_ranges = {0};
   UI_ScrollListRowBlockArray row_blocks = {0};
   Vec2S64 cursor_tbl = {0};
   Vec2S64 mark_tbl = {0};
@@ -1081,8 +1081,8 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
         MemoryZeroStruct(&block_tree);
         MemoryZeroStruct(&block_ranges);
         ev_key_set_expansion(eval_view, ev_key_root(), ev_key_make(ev_hash_from_key(ev_key_root()), 1), 1);
-        block_tree   = ev2_block_tree_from_string(scratch.arena, eval_view, filter, root_expr, top_level_view_rules);
-        block_ranges = ev2_block_range_list_from_tree(scratch.arena, &block_tree);
+        block_tree   = ev_block_tree_from_string(scratch.arena, eval_view, filter, root_expr, top_level_view_rules);
+        block_ranges = ev_block_range_list_from_tree(scratch.arena, &block_tree);
       }
       
       //////////////////////////
@@ -1090,7 +1090,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
       //
       {
         UI_ScrollListRowBlockChunkList row_block_chunks = {0};
-        for(EV2_BlockRangeNode *n = block_ranges.first; n != 0; n = n->next)
+        for(EV_BlockRangeNode *n = block_ranges.first; n != 0; n = n->next)
         {
           UI_ScrollListRowBlock block = {0};
           block.row_count  = dim_1u64(n->v.range);
@@ -1245,9 +1245,9 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
         ewv->text_edit_state_slots_count = u64_up_to_pow2(selection_dim.y+1);
         ewv->text_edit_state_slots_count = Max(ewv->text_edit_state_slots_count, 64);
         ewv->text_edit_state_slots = push_array(ewv->text_edit_arena, RD_WatchViewTextEditState*, ewv->text_edit_state_slots_count);
-        EV2_WindowedRowList rows = ev2_windowed_row_list_from_block_range_list(scratch.arena, eval_view, filter, &block_ranges, r1u64(ui_scroll_list_row_from_item(&row_blocks, selection_tbl.min.y),
-                                                                                                                                      ui_scroll_list_row_from_item(&row_blocks, selection_tbl.max.y)+1));
-        EV2_Row *row = rows.first;
+        EV_WindowedRowList rows = ev_windowed_row_list_from_block_range_list(scratch.arena, eval_view, filter, &block_ranges, r1u64(ui_scroll_list_row_from_item(&row_blocks, selection_tbl.min.y),
+                                                                                                                                    ui_scroll_list_row_from_item(&row_blocks, selection_tbl.max.y)+1));
+        EV_Row *row = rows.first;
         for(S64 y = selection_tbl.min.y; y <= selection_tbl.max.y; y += 1, row = row->next)
         {
           for(S64 x = selection_tbl.min.x; x <= selection_tbl.max.x; x += 1)
@@ -1276,12 +1276,12 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
       //
       if(!ewv->text_editing && evt->slot == UI_EventActionSlot_Accept)
       {
-        EV2_WindowedRowList rows = ev2_windowed_row_list_from_block_range_list(scratch.arena, eval_view, filter, &block_ranges, r1u64(ui_scroll_list_row_from_item(&row_blocks, selection_tbl.min.y),
-                                                                                                                                      ui_scroll_list_row_from_item(&row_blocks, selection_tbl.max.y)+1));
-        EV2_Row *row = rows.first;
+        EV_WindowedRowList rows = ev_windowed_row_list_from_block_range_list(scratch.arena, eval_view, filter, &block_ranges, r1u64(ui_scroll_list_row_from_item(&row_blocks, selection_tbl.min.y),
+                                                                                                                                    ui_scroll_list_row_from_item(&row_blocks, selection_tbl.max.y)+1));
+        EV_Row *row = rows.first;
         for(S64 y = selection_tbl.min.y; y <= selection_tbl.max.y && row != 0; y += 1, row = row->next)
         {
-          if(selection_tbl.min.x <= 0 && ev2_row_is_expandable(row))
+          if(selection_tbl.min.x <= 0 && ev_row_is_expandable(row))
           {
             B32 is_expanded = ev_expansion_from_key(eval_view, row->key);
             ev_key_set_expansion(eval_view, row->block->key, row->key, !is_expanded);
@@ -1457,8 +1457,8 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                 case RD_WatchViewColumnKind_Value:
                 if(editing_complete && evt->slot != UI_EventActionSlot_Cancel)
                 {
-                  EV2_WindowedRowList rows = ev2_windowed_row_list_from_block_range_list(scratch.arena, eval_view, filter, &block_ranges, r1u64(ui_scroll_list_row_from_item(&row_blocks, y),
-                                                                                                                                                ui_scroll_list_row_from_item(&row_blocks, y)+1));
+                  EV_WindowedRowList rows = ev_windowed_row_list_from_block_range_list(scratch.arena, eval_view, filter, &block_ranges, r1u64(ui_scroll_list_row_from_item(&row_blocks, y),
+                                                                                                                                              ui_scroll_list_row_from_item(&row_blocks, y)+1));
                   B32 success = 0;
                   if(rows.first != 0)
                   {
@@ -1537,9 +1537,9 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
       {
         taken = 1;
         String8List strs = {0};
-        EV2_WindowedRowList rows = ev2_windowed_row_list_from_block_range_list(scratch.arena, eval_view, filter, &block_ranges, r1u64(ui_scroll_list_row_from_item(&row_blocks, selection_tbl.min.y),
-                                                                                                                                      ui_scroll_list_row_from_item(&row_blocks, selection_tbl.max.y)+1));
-        EV2_Row *row = rows.first;
+        EV_WindowedRowList rows = ev_windowed_row_list_from_block_range_list(scratch.arena, eval_view, filter, &block_ranges, r1u64(ui_scroll_list_row_from_item(&row_blocks, selection_tbl.min.y),
+                                                                                                                                    ui_scroll_list_row_from_item(&row_blocks, selection_tbl.max.y)+1));
+        EV_Row *row = rows.first;
         for(S64 y = selection_tbl.min.y; y <= selection_tbl.max.y && row != 0; y += 1, row = row->next)
         {
           for(S64 x = selection_tbl.min.x; x <= selection_tbl.max.x; x += 1)
@@ -1788,35 +1788,35 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
         if(filter.size == 0)
         {
           // rjf: determine blocks of each endpoint of the table selection
-          EV2_Block *selection_endpoint_blocks[2] =
+          EV_Block *selection_endpoint_blocks[2] =
           {
-            ev2_block_range_from_num(&block_ranges, selection_tbl.min.y).block,
-            ev2_block_range_from_num(&block_ranges, selection_tbl.max.y).block,
+            ev_block_range_from_num(&block_ranges, selection_tbl.min.y).block,
+            ev_block_range_from_num(&block_ranges, selection_tbl.max.y).block,
           };
           
           // rjf: pick shallowest block within which we can do reordering
           U64 selection_depths[2] =
           {
-            ev2_depth_from_block(selection_endpoint_blocks[0]),
-            ev2_depth_from_block(selection_endpoint_blocks[1]),
+            ev_depth_from_block(selection_endpoint_blocks[0]),
+            ev_depth_from_block(selection_endpoint_blocks[1]),
           };
-          EV2_Block *selection_block = (selection_depths[1] < selection_depths[0]
-                                        ? selection_endpoint_blocks[1]
-                                        : selection_endpoint_blocks[0]);
+          EV_Block *selection_block = (selection_depths[1] < selection_depths[0]
+                                       ? selection_endpoint_blocks[1]
+                                       : selection_endpoint_blocks[0]);
           
           // rjf: find selection keys within the block in which we are doing reordering
           EV_Key selection_keys_in_block[2] = {0};
           {
             for EachElement(idx, selection_endpoint_blocks)
             {
-              EV2_Block *endpoint_block = selection_endpoint_blocks[idx];
+              EV_Block *endpoint_block = selection_endpoint_blocks[idx];
               if(endpoint_block == selection_block)
               {
-                selection_keys_in_block[idx] = ev2_key_from_num(&block_ranges, selection_tbl.v[idx].y);
+                selection_keys_in_block[idx] = ev_key_from_num(&block_ranges, selection_tbl.v[idx].y);
               }
               else
               {
-                for(;endpoint_block->parent != selection_block && endpoint_block != &ev2_nil_block;)
+                for(;endpoint_block->parent != selection_block && endpoint_block != &ev_nil_block;)
                 {
                   endpoint_block = endpoint_block->parent;
                 }
@@ -1981,9 +1981,9 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
       ////////////////////////////
       //- rjf: viz blocks -> rows
       //
-      EV2_WindowedRowList rows = {0};
+      EV_WindowedRowList rows = {0};
       {
-        rows = ev2_windowed_row_list_from_block_range_list(scratch.arena, eval_view, filter, &block_ranges, r1u64(visible_row_rng.min, visible_row_rng.max+1));
+        rows = ev_windowed_row_list_from_block_range_list(scratch.arena, eval_view, filter, &block_ranges, r1u64(visible_row_rng.min, visible_row_rng.max+1));
       }
       
       ////////////////////////////
@@ -1992,13 +1992,13 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
       ProfScope("build table")
       {
         U64 global_row_idx = rows.count_before_semantic;
-        for(EV2_Row *row = rows.first; row != 0; row = row->next, global_row_idx += 1)
+        for(EV_Row *row = rows.first; row != 0; row = row->next, global_row_idx += 1)
         {
           ////////////////////////
           //- rjf: unpack row info
           //
           U64 row_hash = ev_hash_from_key(row->key);
-          U64 row_depth = ev2_depth_from_block(row->block);
+          U64 row_depth = ev_depth_from_block(row->block);
           if(row_depth > 0)
           {
             row_depth -= 1;
@@ -2007,8 +2007,8 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
           B32 row_expanded = ev_expansion_from_key(eval_view, row->key);
           E_Eval row_eval = e_eval_from_expr(scratch.arena, row->expr);
           E_Type *row_type = e_type_from_key(scratch.arena, row_eval.type_key);
-          B32 row_is_expandable = ev2_row_is_expandable(row);
-          B32 row_is_editable = ev2_row_is_editable(row);
+          B32 row_is_expandable = ev_row_is_expandable(row);
+          B32 row_is_editable = ev_row_is_editable(row);
           B32 next_row_expanded = row_expanded;
           RD_ViewRuleInfo *ui_view_rule_info = rd_view_rule_info_from_string(row->block->expand_view_rule_info->string);
           MD_Node *ui_view_rule_params_root = row->block->expand_view_rule_params;
@@ -2361,7 +2361,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                       cell_can_edit = (row_depth == 0 && modifiable && filter.size == 0);
                       if(filter.size != 0)
                       {
-                        cell_matches = fuzzy_match_find(scratch.arena, filter, ev2_expr_string_from_row(scratch.arena, row, string_flags));
+                        cell_matches = fuzzy_match_find(scratch.arena, filter, ev_expr_string_from_row(scratch.arena, row, string_flags));
                       }
                       cell_autocomp_flags = (RD_AutoCompListerFlag_Locals|
                                              RD_AutoCompListerFlag_Procedures|
@@ -2659,7 +2659,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                   if(DEV_eval_compiler_tooltips && x == 0 && ui_hovering(sig)) UI_Tooltip RD_Font(RD_FontSlot_Code)
                   {
                     local_persist char *spaces = "                                                                        ";
-                    String8         string      = ev2_expr_string_from_row(scratch.arena, row, 0);
+                    String8         string      = ev_expr_string_from_row(scratch.arena, row, 0);
                     E_TokenArray    tokens      = e_token_array_from_text(scratch.arena, string);
                     E_Parse         parse       = e_parse_expr_from_text_tokens(scratch.arena, string, &tokens);
                     E_IRTreeAndType irtree      = e_irtree_and_type_from_expr(scratch.arena, parse.expr);
@@ -5534,19 +5534,6 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(pending_file)
 ////////////////////////////////
 //~ rjf: text @view_hook_impl
 
-#if 0 // TODO(rjf): @blocks
-EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(text)
-{
-  EV_Block *vb = ev_block_begin(arena, EV_BlockKind_Canvas, key, ev_key_make(ev_hash_from_key(key), 1), depth);
-  vb->string             = string;
-  vb->expr               = expr;
-  vb->visual_idx_range   = r1u64(0, 8);
-  vb->semantic_idx_range = r1u64(0, 1);
-  vb->view_rules         = view_rules;
-  ev_block_end(out, vb);
-}
-#endif
-
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(text)
 {
   EV_ExpandInfo info = {0};
@@ -5783,19 +5770,6 @@ struct RD_DisasmViewState
   U64 goto_vaddr;
   RD_CodeViewState cv;
 };
-
-#if 0 // TODO(rjf): @blocks
-EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(disasm)
-{
-  EV_Block *vb = ev_block_begin(arena, EV_BlockKind_Canvas, key, ev_key_make(ev_hash_from_key(key), 1), depth);
-  vb->string             = string;
-  vb->expr               = expr;
-  vb->visual_idx_range   = r1u64(0, 8);
-  vb->semantic_idx_range = r1u64(0, 1);
-  vb->view_rules         = view_rules;
-  ev_block_end(out, vb);
-}
-#endif
 
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(disasm)
 {
@@ -6081,19 +6055,6 @@ struct RD_MemoryViewState
   B32 center_cursor;
   B32 contain_cursor;
 };
-
-#if 0 // TODO(rjf): @blocks
-EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(memory)
-{
-  EV_Block *vb = ev_block_begin(arena, EV_BlockKind_Canvas, key, ev_key_make(ev_hash_from_key(key), 1), depth);
-  vb->string             = string;
-  vb->expr               = expr;
-  vb->visual_idx_range   = r1u64(0, 16);
-  vb->semantic_idx_range = r1u64(0, 1);
-  vb->view_rules         = view_rules;
-  ev_block_end(out, vb);
-}
-#endif
 
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(memory)
 {
@@ -6895,19 +6856,6 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(memory)
 ////////////////////////////////
 //~ rjf: "graph"
 
-#if 0 // TODO(rjf): @blocks
-EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(graph)
-{
-  EV_Block *vb = ev_block_begin(arena, EV_BlockKind_Canvas, key, ev_key_make(ev_hash_from_key(key), 1), depth);
-  vb->string             = string;
-  vb->expr               = expr;
-  vb->visual_idx_range   = r1u64(0, 8);
-  vb->semantic_idx_range = r1u64(0, 1);
-  vb->view_rules         = view_rules;
-  ev_block_end(out, vb);
-}
-#endif
-
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(graph)
 {
   EV_ExpandInfo info = {0};
@@ -6999,19 +6947,6 @@ internal UI_BOX_CUSTOM_DRAW(rd_bitmap_view_canvas_box_draw)
     }
   }
 }
-
-#if 0 // TODO(rjf): @blocks
-EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(bitmap)
-{
-  EV_Block *vb = ev_block_begin(arena, EV_BlockKind_Canvas, key, ev_key_make(ev_hash_from_key(key), 1), depth);
-  vb->string             = string;
-  vb->expr               = expr;
-  vb->visual_idx_range   = r1u64(0, 8);
-  vb->semantic_idx_range = r1u64(0, 1);
-  vb->view_rules         = view_rules;
-  ev_block_end(out, vb);
-}
-#endif
 
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(bitmap)
 {
@@ -7261,19 +7196,6 @@ rd_rgba_from_eval_params(E_Eval eval, MD_Node *params)
   return rgba;
 }
 
-#if 0 // TODO(rjf): @blocks
-EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(color_rgba)
-{
-  EV_Block *vb = ev_block_begin(arena, EV_BlockKind_Canvas, key, ev_key_make(ev_hash_from_key(key), 1), depth);
-  vb->string             = string;
-  vb->expr               = expr;
-  vb->visual_idx_range   = r1u64(0, 8);
-  vb->semantic_idx_range = r1u64(0, 1);
-  vb->view_rules         = view_rules;
-  ev_block_end(out, vb);
-}
-#endif
-
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(color_rgba)
 {
   EV_ExpandInfo info = {0};
@@ -7434,19 +7356,6 @@ internal UI_BOX_CUSTOM_DRAW(rd_geo3d_box_draw)
   pass->clip = clip;
   dr_mesh(draw_data->vertex_buffer, draw_data->index_buffer, R_GeoTopologyKind_Triangles, R_GeoVertexFlag_TexCoord|R_GeoVertexFlag_Normals|R_GeoVertexFlag_RGB, r_handle_zero(), mat_4x4f32(1.f));
 }
-
-#if 0 // TODO(rjf): @blocks
-EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF(geo3d)
-{
-  EV_Block *vb = ev_block_begin(arena, EV_BlockKind_Canvas, key, ev_key_make(ev_hash_from_key(key), 1), depth);
-  vb->string             = string;
-  vb->expr               = expr;
-  vb->visual_idx_range   = r1u64(0, 16);
-  vb->semantic_idx_range = r1u64(0, 1);
-  vb->view_rules         = view_rules;
-  ev_block_end(out, vb);
-}
-#endif
 
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(geo3d)
 {
