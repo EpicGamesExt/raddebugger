@@ -569,7 +569,7 @@ ev2_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, String8 st
       EV_ViewRuleList *view_rules;
       U64 split_relative_idx;
     };
-    Task start_task = {0, tree.root, expr, 1, top_level_view_rules, 0};
+    Task start_task = {0, tree.root, tree.root->expr, 1, top_level_view_rules, 0};
     Task *first_task = &start_task;
     Task *last_task = first_task;
     for(Task *t = first_task; t != 0; t = t->next)
