@@ -1413,8 +1413,7 @@ ev_string_from_simple_typed_eval(Arena *arena, EV_StringFlags flags, U32 radix, 
     case E_TypeKind_U32:
     case E_TypeKind_U64:
     {
-      U64 min_digits = (radix == 16) ? type_byte_size*2 : 0;
-      result = str8_from_u64(arena, eval.value.u64, radix, min_digits, digit_group_separator);
+      result = str8_from_u64(arena, eval.value.u64, radix, 0, digit_group_separator);
     }break;
     
     case E_TypeKind_U128:

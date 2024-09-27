@@ -189,7 +189,9 @@ RDI_PROC RDI_Procedure *rdi_procedure_from_voff(RDI_Parsed *rdi, RDI_U64 voff);
 RDI_PROC RDI_U64 rdi_first_voff_from_scope(RDI_Parsed *rdi, RDI_Scope *scope);
 RDI_PROC RDI_U64 rdi_opl_voff_from_scope(RDI_Parsed *rdi, RDI_Scope *scope);
 RDI_PROC RDI_Scope *rdi_scope_from_voff(RDI_Parsed *rdi, RDI_U64 voff);
+RDI_PROC RDI_Scope *rdi_parent_from_scope(RDI_Parsed *rdi, RDI_Scope *scope);
 RDI_PROC RDI_Procedure *rdi_procedure_from_scope(RDI_Parsed *rdi, RDI_Scope *scope);
+RDI_PROC RDI_InlineSite *rdi_inline_site_from_scope(RDI_Parsed *rdi, RDI_Scope *scope);
 
 //- global variables
 RDI_PROC RDI_GlobalVariable *rdi_global_variable_from_voff(RDI_Parsed *rdi, RDI_U64 voff);

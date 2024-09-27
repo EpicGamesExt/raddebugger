@@ -2016,6 +2016,7 @@ rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
             for(D_UnwindInlineFrame *f = rich_unwind.frames.v[base_idx].first_inline_frame; f != 0; f = f->next, inline_idx += 1)
             {
               meval->callstack.v[idx].vaddr = regs_rip_from_arch_block(entity->arch, rich_unwind.frames.v[base_idx].regs);
+              meval->callstack.v[idx].inline_depth = inline_idx + 1;
               idx += 1;
             }
             meval->callstack.v[idx].vaddr = regs_rip_from_arch_block(entity->arch, rich_unwind.frames.v[base_idx].regs);

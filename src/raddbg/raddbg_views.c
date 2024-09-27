@@ -913,14 +913,6 @@ rd_string_from_eval_viz_row_column(Arena *arena, EV_View *ev, EV_Row *row, RD_Wa
     {
       result = ev_view_rule_from_key(ev, row->key);
     }break;
-    case RD_WatchViewColumnKind_Module:
-    {
-      E_Eval eval = e_eval_from_expr(arena, row->expr);
-      E_Eval value_eval = e_value_eval_from_eval(eval);
-      CTRL_Entity *process = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->process);
-      CTRL_Entity *module = ctrl_module_from_process_vaddr(process, value_eval.value.u64);
-      result = str8_skip_last_slash(module->string);
-    }break;
     case RD_WatchViewColumnKind_Member:
     {
       Temp scratch = scratch_begin(&arena, 1);
@@ -933,6 +925,91 @@ rd_string_from_eval_viz_row_column(Arena *arena, EV_View *ev, EV_Row *row, RD_Wa
       }
       E_Eval eval = e_eval_from_expr(arena, expr);
       result = rd_value_string_from_eval(arena, string_flags, default_radix, font, font_size, max_size_px, eval, row->member, view_rules);
+      scratch_end(scratch);
+    }break;
+    case RD_WatchViewColumnKind_Module:
+    {
+      E_Eval eval = e_eval_from_expr(arena, row->expr);
+      E_Eval value_eval = e_value_eval_from_eval(eval);
+      CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(eval.space);
+      CTRL_Entity *process = ctrl_process_from_entity(entity);
+      CTRL_Entity *module = ctrl_module_from_process_vaddr(process, value_eval.value.u64);
+      result = push_str8_copy(arena, str8_skip_last_slash(module->string));
+    }break;
+    case RD_WatchViewColumnKind_CallStackFrame:
+    {
+      Temp scratch = scratch_begin(&arena, 1);
+      DI_Scope *di_scope = di_scope_open();
+      E_Eval eval = e_eval_from_expr(arena, row->expr);
+      E_Expr *vaddr_expr = e_expr_ref_member_access(scratch.arena, row->expr, str8_lit("vaddr"));
+      E_Expr *depth_expr = e_expr_ref_member_access(scratch.arena, row->expr, str8_lit("inline_depth"));
+      E_Eval vaddr_eval = e_eval_from_expr(scratch.arena, vaddr_expr);
+      E_Eval depth_eval = e_eval_from_expr(scratch.arena, depth_expr);
+      E_Eval vaddr_value_eval = e_value_eval_from_eval(vaddr_eval);
+      E_Eval depth_value_eval = e_value_eval_from_eval(depth_eval);
+      U64 vaddr = vaddr_value_eval.value.u64;
+      U64 depth = depth_value_eval.value.u64;
+      CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(eval.space);
+      CTRL_Entity *process = ctrl_process_from_entity(entity);
+      CTRL_Entity *module = ctrl_module_from_process_vaddr(process, vaddr);
+      DI_Key dbgi = ctrl_dbgi_key_from_module(module);
+      RDI_Parsed *rdi = di_rdi_from_key(di_scope, &dbgi, 0);
+      if(rdi != &di_rdi_parsed_nil)
+      {
+        U64 voff = ctrl_voff_from_vaddr(module, vaddr);
+        RDI_Scope *scope = rdi_scope_from_voff(rdi, voff);
+        RDI_Procedure *procedure = rdi_procedure_from_scope(rdi, scope);
+        RDI_InlineSite *inline_site = rdi_inline_site_from_scope(rdi, scope);
+        for(U64 d = 0; d < depth;)
+        {
+          scope = rdi_parent_from_scope(rdi, scope);
+          inline_site = rdi_inline_site_from_scope(rdi, scope);
+          if(scope->inline_site_idx != 0)
+          {
+            d += 1;
+          }
+          if(scope->parent_scope_idx == 0)
+          {
+            break;
+          }
+        }
+        if(inline_site->name_string_idx != 0 || inline_site->type_idx != 0)
+        {
+          String8List parts = {0};
+          E_TypeKey type = e_type_key_ext(E_TypeKind_Function, inline_site->type_idx, e_parse_ctx_module_idx_from_rdi(rdi));
+          String8 name = {0};
+          name.str = rdi_string_from_idx(rdi, inline_site->name_string_idx, &name.size);
+          String8List type_lhs_parts = {0};
+          e_type_lhs_string_from_key(scratch.arena, type, &type_lhs_parts, 0, 0);
+          String8List type_rhs_parts = {0};
+          e_type_rhs_string_from_key(scratch.arena, type, &type_rhs_parts, 0);
+          str8_list_pushf(scratch.arena, &parts, "[inlined] ");
+          str8_list_concat_in_place(&parts, &type_lhs_parts);
+          str8_list_push(scratch.arena, &parts, name);
+          str8_list_concat_in_place(&parts, &type_rhs_parts);
+          result = str8_list_join(arena, &parts, 0);
+        }
+        else if(procedure->name_string_idx != 0 || procedure->type_idx != 0)
+        {
+          String8List parts = {0};
+          E_TypeKey type = e_type_key_ext(E_TypeKind_Function, procedure->type_idx, e_parse_ctx_module_idx_from_rdi(rdi));
+          String8 name = {0};
+          name.str = rdi_string_from_idx(rdi, procedure->name_string_idx, &name.size);
+          String8List type_lhs_parts = {0};
+          e_type_lhs_string_from_key(scratch.arena, type, &type_lhs_parts, 0, 0);
+          String8List type_rhs_parts = {0};
+          e_type_rhs_string_from_key(scratch.arena, type, &type_rhs_parts, 0);
+          str8_list_concat_in_place(&parts, &type_lhs_parts);
+          str8_list_push(scratch.arena, &parts, name);
+          str8_list_concat_in_place(&parts, &type_rhs_parts);
+          result = str8_list_join(arena, &parts, 0);
+        }
+        else
+        {
+          result = str8_lit("???");
+        }
+      }
+      di_scope_close(di_scope);
       scratch_end(scratch);
     }break;
   }
@@ -2189,7 +2266,6 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                       case RD_WatchViewColumnKind_Value:   {name = str8_lit("Value");}break;
                       case RD_WatchViewColumnKind_Type:    {name = str8_lit("Type");}break;
                       case RD_WatchViewColumnKind_ViewRule:{name = str8_lit("View Rule");}break;
-                      case RD_WatchViewColumnKind_Module:  {name = str8_lit("Module");}break;
                       case RD_WatchViewColumnKind_Member:
                       {
                         name = str8(col->string_buffer, col->string_size);
@@ -2583,7 +2659,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                         cell_ghost_text = ev_auto_view_rule_from_type_key(row_eval.type_key);
                       }
                     }break;
-                    case RD_WatchViewColumnKind_FrameSelection:
+                    case RD_WatchViewColumnKind_CallStackFrameSelection:
                     {
 #if 0 // TODO(rjf): @blocks
                       if(semantic_num - 1 == rd_regs()->unwind_count - rd_regs()->inline_depth)
@@ -5381,11 +5457,12 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(call_stack)
   if(!wv->initialized)
   {
     rd_watch_view_init(wv);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_FrameSelection,  0.05f);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,  0.7f);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Module, 0.25f, .is_non_code = 1);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_CallStackFrameSelection, 0.05f);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_CallStackFrame,          0.50f, .display_string = str8_lit("Symbol"), .dequote_string = 1);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member,                  0.20f, .string = str8_lit("vaddr"), .display_string = str8_lit("Address"));
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Module,                  0.25f, .string = str8_lit("module.str"), .display_string = str8_lit("Module"), .dequote_string = 1, .is_non_code = 1);
   }
-  rd_watch_view_build(wv, 0, str8_lit("current_thread.callstack.v"), str8_lit("array:current_thread.callstack.count"), 0, 10, rect);
+  rd_watch_view_build(wv, 0, str8_lit("current_thread.callstack.v"), str8_lit("array:current_thread.callstack.count, hex"), 0, 10, rect);
   ProfEnd();
 }
 

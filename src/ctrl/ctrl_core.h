@@ -20,11 +20,13 @@ typedef struct CTRL_MetaEvalFrame CTRL_MetaEvalFrame;
 struct CTRL_MetaEvalFrame
 {
   U64 vaddr;
+  U64 inline_depth;
 };
 ptr_type(CTRL_MetaEvalFrame__vaddr_type, type(void), .flags = TypeFlag_IsExternal, .size = sizeof(U64));
 struct_members(CTRL_MetaEvalFrame)
 {
-  member_lit_comp(CTRL_MetaEvalFrame, &CTRL_MetaEvalFrame__vaddr_type, vaddr),
+  member_lit_comp(CTRL_MetaEvalFrame, type(U64), vaddr),
+  member_lit_comp(CTRL_MetaEvalFrame, type(U64), inline_depth),
 };
 struct_type(CTRL_MetaEvalFrame);
 typedef struct CTRL_MetaEvalFrameArray CTRL_MetaEvalFrameArray;
@@ -33,7 +35,7 @@ struct CTRL_MetaEvalFrameArray
   U64 count;
   CTRL_MetaEvalFrame *v;
 };
-ptr_type(CTRL_MetaEvalFrameArray__v_ptr_type, &CTRL_MetaEvalFrame__vaddr_type, .count_delimiter_name = str8_lit_comp("count"));
+ptr_type(CTRL_MetaEvalFrameArray__v_ptr_type, type(CTRL_MetaEvalFrame), .count_delimiter_name = str8_lit_comp("count"));
 struct_members(CTRL_MetaEvalFrameArray)
 {
   member_lit_comp(CTRL_MetaEvalFrameArray, type(U64), count, .pretty_name = str8_lit_comp("Frame Count")),
@@ -836,6 +838,7 @@ internal void ctrl_entity_equip_string(CTRL_EntityStore *store, CTRL_Entity *ent
 internal CTRL_Entity *ctrl_entity_from_handle(CTRL_EntityStore *store, CTRL_Handle handle);
 internal CTRL_Entity *ctrl_entity_child_from_kind(CTRL_Entity *parent, CTRL_EntityKind kind);
 internal CTRL_Entity *ctrl_entity_ancestor_from_kind(CTRL_Entity *entity, CTRL_EntityKind kind);
+internal CTRL_Entity *ctrl_process_from_entity(CTRL_Entity *entity);
 internal CTRL_Entity *ctrl_module_from_process_vaddr(CTRL_Entity *process, U64 vaddr);
 internal DI_Key ctrl_dbgi_key_from_module(CTRL_Entity *module);
 internal CTRL_EntityList ctrl_modules_from_dbgi_key(Arena *arena, CTRL_EntityStore *store, DI_Key *dbgi_key);

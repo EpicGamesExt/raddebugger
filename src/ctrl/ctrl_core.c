@@ -905,6 +905,21 @@ ctrl_entity_ancestor_from_kind(CTRL_Entity *entity, CTRL_EntityKind kind)
 }
 
 internal CTRL_Entity *
+ctrl_process_from_entity(CTRL_Entity *entity)
+{
+  CTRL_Entity *result = &ctrl_entity_nil;
+  if(entity->kind == CTRL_EntityKind_Process)
+  {
+    result = entity;
+  }
+  else
+  {
+    result = ctrl_entity_ancestor_from_kind(entity, CTRL_EntityKind_Process);
+  }
+  return result;
+}
+
+internal CTRL_Entity *
 ctrl_module_from_process_vaddr(CTRL_Entity *process, U64 vaddr)
 {
   CTRL_Entity *result = &ctrl_entity_nil;

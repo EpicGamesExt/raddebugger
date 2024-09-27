@@ -636,11 +636,25 @@ rdi_scope_from_voff(RDI_Parsed *rdi, RDI_U64 voff)
   return scope;
 }
 
+RDI_PROC RDI_Scope *
+rdi_parent_from_scope(RDI_Parsed *rdi, RDI_Scope *scope)
+{
+  RDI_Scope *parent = rdi_element_from_name_idx(rdi, Scopes, scope->parent_scope_idx);
+  return parent;
+}
+
 RDI_PROC RDI_Procedure *
 rdi_procedure_from_scope(RDI_Parsed *rdi, RDI_Scope *scope)
 {
   RDI_Procedure *procedure = rdi_element_from_name_idx(rdi, Procedures, scope->proc_idx);
   return procedure;
+}
+
+RDI_PROC RDI_InlineSite *
+rdi_inline_site_from_scope(RDI_Parsed *rdi, RDI_Scope *scope)
+{
+  RDI_InlineSite *inline_site = rdi_element_from_name_idx(rdi, InlineSites, scope->inline_site_idx);
+  return inline_site;
 }
 
 //- global variables
