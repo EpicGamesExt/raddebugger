@@ -45,6 +45,8 @@ typedef U32 RD_WatchViewFlags;
 enum
 {
   RD_WatchViewFlag_PrettyNameMembers = (1<<0),
+  RD_WatchViewFlag_PrettyEntityRows  = (1<<1),
+  RD_WatchViewFlag_DisableCacheLines = (1<<2),
 };
 
 typedef enum RD_WatchViewColumnKind

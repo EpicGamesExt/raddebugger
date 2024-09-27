@@ -2007,6 +2007,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
           B32 row_expanded = ev_expansion_from_key(eval_view, row->key);
           E_Eval row_eval = e_eval_from_expr(scratch.arena, row->expr);
           E_Type *row_type = e_type_from_key(scratch.arena, row_eval.type_key);
+          RD_Entity *row_meta_entity = rd_entity_from_eval_space(row_eval.space);
           B32 row_is_expandable = ev_row_is_expandable(row);
           B32 row_is_editable = ev_row_is_editable(row);
           B32 next_row_expanded = row_expanded;
@@ -2026,6 +2027,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
             RowKind_Normal,
             RowKind_Header,
             RowKind_Canvas,
+            RowKind_PrettyEntityControls,
           }
           RowKind;
           RowKind row_kind = RowKind_Normal;
@@ -2036,6 +2038,12 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
           else if(ui_view_rule_info != &rd_nil_view_rule_info && ui_view_rule_info->ui != 0)
           {
             row_kind = RowKind_Canvas;
+          }
+          else if(row_eval.space.kind == RD_EvalSpaceKind_MetaEntity &&
+                  !rd_entity_is_nil(row_meta_entity) &&
+                  row_eval.value.u64 == 0 && row_type->kind == E_TypeKind_Struct)
+          {
+            row_kind = RowKind_PrettyEntityControls;
           }
           
           ////////////////////////
@@ -2285,6 +2293,32 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
             }break;
             
             ////////////////////
+            //- rjf: pretty entity controls row
+            //
+            case RowKind_PrettyEntityControls:
+            {
+              RD_Entity *entity = row_meta_entity;
+              ui_set_next_hover_cursor(OS_Cursor_HandPoint);
+              UI_Box *entity_box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|
+                                                             UI_BoxFlag_DrawBorder|
+                                                             UI_BoxFlag_DrawBackground|
+                                                             UI_BoxFlag_DrawHotEffects|
+                                                             UI_BoxFlag_DrawActiveEffects,
+                                                             "###entity_%p", entity);
+              UI_Parent(entity_box)
+              {
+                UI_PrefWidth(ui_em(2.f, 1.f)) if(ui_pressed(ui_expander(row_expanded, str8_lit("###expanded"))))
+                {
+                  next_row_expanded = !row_expanded;
+                }
+                DR_FancyStringList fstrs = rd_title_fstrs_from_entity(scratch.arena, entity, ui_top_palette()->text_weak, ui_top_font_size());
+                UI_Box *title_box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
+                ui_box_equip_display_fancy_strings(title_box, &fstrs);
+              }
+              UI_Signal sig = ui_signal_from_box(entity_box);
+            }break;
+            
+            ////////////////////
             //- rjf: normal row
             //
             default:
@@ -2294,35 +2328,41 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
               //////////////////////
               //- rjf: draw start of cache lines in expansions
               //
-              U64 row_offset = row_eval.value.u64;
-              if((row_eval.mode == E_Mode_Offset || row_eval.mode == E_Mode_Null) &&
-                 row_offset%64 == 0 && row_depth > 0 && !row_expanded)
+              if(!(flags & RD_WatchViewFlag_DisableCacheLines))
               {
-                ui_set_next_fixed_x(0);
-                ui_set_next_fixed_y(0);
-                ui_set_next_fixed_height(ui_top_font_size()*0.2f);
-                ui_set_next_palette(ui_build_palette(ui_top_palette(), .background = rd_rgba_from_theme_color(RD_ThemeColor_CacheLineBoundary)));
-                ui_build_box_from_key(UI_BoxFlag_Floating|UI_BoxFlag_DrawBackground, ui_key_zero());
+                U64 row_offset = row_eval.value.u64;
+                if((row_eval.mode == E_Mode_Offset || row_eval.mode == E_Mode_Null) &&
+                   row_offset%64 == 0 && row_depth > 0 && !row_expanded)
+                {
+                  ui_set_next_fixed_x(0);
+                  ui_set_next_fixed_y(0);
+                  ui_set_next_fixed_height(ui_top_font_size()*0.2f);
+                  ui_set_next_palette(ui_build_palette(ui_top_palette(), .background = rd_rgba_from_theme_color(RD_ThemeColor_CacheLineBoundary)));
+                  ui_build_box_from_key(UI_BoxFlag_Floating|UI_BoxFlag_DrawBackground, ui_key_zero());
+                }
               }
               
               //////////////////////
               //- rjf: draw mid-row cache line boundaries in expansions
               //
-              if((row_eval.mode == E_Mode_Offset || row_eval.mode == E_Mode_Null) &&
-                 row_eval.value.u64%64 != 0 &&
-                 row_depth > 0 &&
-                 !row_expanded)
+              if(!(flags & RD_WatchViewFlag_DisableCacheLines))
               {
-                U64 next_off = (row_eval.value.u64 + e_type_byte_size_from_key(row_eval.type_key));
-                if(next_off%64 != 0 && row_eval.value.u64/64 < next_off/64)
+                if((row_eval.mode == E_Mode_Offset || row_eval.mode == E_Mode_Null) &&
+                   row_eval.value.u64%64 != 0 &&
+                   row_depth > 0 &&
+                   !row_expanded)
                 {
-                  ui_set_next_fixed_x(0);
-                  ui_set_next_fixed_y(scroll_list_params.row_height_px - ui_top_font_size()*1.f);
-                  ui_set_next_fixed_height(ui_top_font_size()*1.f);
-                  Vec4F32 boundary_color = rd_rgba_from_theme_color(RD_ThemeColor_CacheLineBoundary);
-                  boundary_color.w *= 0.5f;
-                  ui_set_next_palette(ui_build_palette(ui_top_palette(), .background = boundary_color));
-                  ui_build_box_from_key(UI_BoxFlag_Floating|UI_BoxFlag_DrawBackground, ui_key_zero());
+                  U64 next_off = (row_eval.value.u64 + e_type_byte_size_from_key(row_eval.type_key));
+                  if(next_off%64 != 0 && row_eval.value.u64/64 < next_off/64)
+                  {
+                    ui_set_next_fixed_x(0);
+                    ui_set_next_fixed_y(scroll_list_params.row_height_px - ui_top_font_size()*1.f);
+                    ui_set_next_fixed_height(ui_top_font_size()*1.f);
+                    Vec4F32 boundary_color = rd_rgba_from_theme_color(RD_ThemeColor_CacheLineBoundary);
+                    boundary_color.w *= 0.5f;
+                    ui_set_next_palette(ui_build_palette(ui_top_palette(), .background = boundary_color));
+                    ui_build_box_from_key(UI_BoxFlag_Floating|UI_BoxFlag_DrawBackground, ui_key_zero());
+                  }
                 }
               }
               
@@ -4606,14 +4646,11 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(targets)
   if(!wv->initialized)
   {
     rd_watch_view_init(wv);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member,      0.25f, .string = str8_lit("label.str"), .display_string = str8_lit("Label"),      .dequote_string = 1);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member,      0.35f, .string = str8_lit("exe.str"),   .display_string = str8_lit("Executable"), .dequote_string = 1, .is_non_code = 1);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member,      0.25f, .string = str8_lit("args.str"),  .display_string = str8_lit("Arguments"),  .dequote_string = 1, .is_non_code = 1);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_RunControl,  0.05f);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_StepControl, 0.05f);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_MoreControl, 0.05f);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Expr,       0.25f);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,      0.75f, .dequote_string = 1, .is_non_code = 1);
   }
-  rd_watch_view_build(wv, 0, str8_lit("targets"), str8_lit(""), 1, 10, rect);
+  rd_watch_view_build(wv, RD_WatchViewFlag_PrettyNameMembers|RD_WatchViewFlag_PrettyEntityRows|RD_WatchViewFlag_DisableCacheLines,
+                      str8_lit("targets"), str8_lit("only: label exe args working_directory entry_point str"), 1, 10, rect);
   ProfEnd();
 }
 
