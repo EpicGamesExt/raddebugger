@@ -25,7 +25,7 @@ struct CTRL_MetaEvalFrame
 ptr_type(CTRL_MetaEvalFrame__vaddr_type, type(void), .flags = TypeFlag_IsExternal, .size = sizeof(U64));
 struct_members(CTRL_MetaEvalFrame)
 {
-  member_lit_comp(CTRL_MetaEvalFrame, type(U64), vaddr),
+  member_lit_comp(CTRL_MetaEvalFrame, &CTRL_MetaEvalFrame__vaddr_type, vaddr),
   member_lit_comp(CTRL_MetaEvalFrame, type(U64), inline_depth),
 };
 struct_type(CTRL_MetaEvalFrame);

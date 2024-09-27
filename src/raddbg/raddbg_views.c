@@ -843,6 +843,61 @@ rd_collection_info_from_num(EV_BlockRangeList *block_ranges, S64 num)
   return info;
 }
 
+internal RD_WatchViewCallStackFrameInfo
+rd_callstack_frame_info_from_num(EV_BlockRangeList *block_ranges, S64 num)
+{
+  Temp scratch = scratch_begin(0, 0);
+  DI_Scope *di_scope = di_scope_open();
+  EV_Block *block = ev_block_range_from_num(block_ranges, num).block;
+  CTRL_Entity *thread = &ctrl_entity_nil;
+  for(E_Expr *expr = block->expr, *next = &e_expr_nil; expr != &e_expr_nil; expr = next)
+  {
+    next = &e_expr_nil;
+    switch(expr->kind)
+    {
+      default:{}break;
+      case E_ExprKind_Ref:{next = expr->ref;}break;
+      case E_ExprKind_Cast:{next = expr->last;}break;
+      case E_ExprKind_MemberAccess:{next = expr->first;}break;
+      case E_ExprKind_ArrayIndex:{next = expr->first;}break;
+      case E_ExprKind_LeafIdent:
+      {
+        E_Eval eval = e_eval_from_expr(scratch.arena, expr);
+        CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(eval.space);
+        if(entity->kind == CTRL_EntityKind_Thread)
+        {
+          thread = entity;
+          goto done;
+        }
+      }break;
+    }
+  }
+  done:;
+  RD_WatchViewCallStackFrameInfo info = {thread};
+  if(thread != &ctrl_entity_nil)
+  {
+    EV_Key key = ev_key_from_num(block_ranges, num);
+    U64 block_relative_num = block->expand_view_rule_info->expr_expand_num_from_id(key.child_id, block->expand_view_rule_info_user_data);
+    CTRL_Unwind base_unwind = d_query_cached_unwind_from_thread(thread);
+    D_Unwind rich_unwind = d_unwind_from_ctrl_unwind(scratch.arena, di_scope, ctrl_entity_ancestor_from_kind(thread, CTRL_EntityKind_Process), &base_unwind);
+    U64 frame_num = 1;
+    for(U64 base_frame_idx = 0; base_frame_idx < rich_unwind.frames.concrete_frame_count; base_frame_idx += 1, frame_num += 1)
+    {
+      if(frame_num <= block_relative_num && block_relative_num < frame_num+1+rich_unwind.frames.v[base_frame_idx].inline_frame_count)
+      {
+        info.thread = thread;
+        info.unwind_index = base_frame_idx;
+        info.inline_depth = block_relative_num - frame_num;
+        break;
+      }
+      frame_num += rich_unwind.frames.v[base_frame_idx].inline_frame_count;
+    }
+  }
+  di_scope_close(di_scope);
+  scratch_end(scratch);
+  return info;
+}
+
 //- rjf: row -> kind
 
 internal RD_WatchViewRowKind
@@ -923,6 +978,7 @@ rd_string_from_eval_viz_row_column(Arena *arena, EV_View *ev, EV_Row *row, RD_Wa
       {
         expr = e_expr_ref_member_access(arena, expr, n->string);
       }
+      expr = ev_expr_from_expr_view_rules(scratch.arena, expr, view_rules);
       E_Eval eval = e_eval_from_expr(arena, expr);
       result = rd_value_string_from_eval(arena, string_flags, default_radix, font, font_size, max_size_px, eval, row->member, view_rules);
       scratch_end(scratch);
@@ -1430,7 +1486,11 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
         EV_Row *row = rows.first;
         for(S64 y = selection_tbl.min.y; y <= selection_tbl.max.y && row != 0; y += 1, row = row->next)
         {
+          // rjf: unpack row info
           RD_WatchViewRowKind row_kind = rd_watch_view_row_kind_from_row(flags, row);
+          RD_WatchViewCallStackFrameInfo callstack_frame_info = rd_callstack_frame_info_from_num(&block_ranges, y);
+          
+          // rjf: loop through X selections and perform operations for each
           for(S64 x = selection_tbl.min.x; x <= selection_tbl.max.x; x += 1)
           {
             //- rjf: determine operation for this cell
@@ -1439,11 +1499,16 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
               OpKind_Null,
               OpKind_DoExpand,
               OpKind_GoToLocation,
+              OpKind_SelectUnwind,
               OpKind_DoTabOpen,
             }
             OpKind;
             OpKind kind = OpKind_DoExpand;
-            switch(row_kind)
+            if(callstack_frame_info.thread != &ctrl_entity_nil)
+            {
+              kind = OpKind_SelectUnwind;
+            }
+            else switch(row_kind)
             {
               default:{}break;
               
@@ -1502,6 +1567,13 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
               case OpKind_GoToLocation:
               {
                 
+              }break;
+              case OpKind_SelectUnwind:
+              {
+                rd_cmd(RD_CmdKind_SelectThread, .thread = callstack_frame_info.thread->handle);
+                rd_cmd(RD_CmdKind_SelectUnwind,
+                       .unwind_count = callstack_frame_info.unwind_index,
+                       .inline_depth = callstack_frame_info.inline_depth);
               }break;
               case OpKind_DoTabOpen:
               {
@@ -2195,8 +2267,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                     row_is_fresh = 1;
                   }
                   if(slice.byte_bad_flags[idx] != 0)
-                  {
-                    row_is_bad = 1;
+                  {row_is_bad = 1;
                   }
                 }
               }
@@ -2661,14 +2732,14 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                     }break;
                     case RD_WatchViewColumnKind_CallStackFrameSelection:
                     {
-#if 0 // TODO(rjf): @blocks
-                      if(semantic_num - 1 == rd_regs()->unwind_count - rd_regs()->inline_depth)
+                      RD_WatchViewCallStackFrameInfo callstack_frame_info = rd_callstack_frame_info_from_num(&block_ranges, global_row_idx);
+                      if(ctrl_handle_match(callstack_frame_info.thread->handle, rd_regs()->thread) &&
+                         callstack_frame_info.unwind_index == rd_regs()->unwind_count &&
+                         callstack_frame_info.inline_depth == rd_regs()->inline_depth)
                       {
                         cell_icon = RD_IconKind_RightArrow;
-                        CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->thread);
-                        cell_base_color = rd_rgba_from_ctrl_entity(thread);
+                        cell_base_color = rd_rgba_from_ctrl_entity(callstack_frame_info.thread);
                       }
-#endif
                     }break;
                   }
                   
@@ -2801,46 +2872,50 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                       pressed = 1;
                     }
                     
-                    // rjf: double-click -> start editing
-                    if(ui_double_clicked(sig) && cell_can_edit)
+                    // rjf: double-click actions
+                    if(ui_double_clicked(sig))
                     {
                       ui_kill_action();
-                      rd_cmd(RD_CmdKind_Edit);
-                    }
-                    
-                    // rjf: double-click, not editable -> go-to-location
-                    if(ui_double_clicked(sig) && !cell_can_edit)
-                    {
-                      U64 vaddr = cell_eval.value.u64;
-                      CTRL_Entity *process = rd_ctrl_entity_from_eval_space(cell_eval.space);
-                      CTRL_Entity *module = ctrl_module_from_process_vaddr(process, vaddr);
-                      DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
-                      U64 voff = ctrl_voff_from_vaddr(module, vaddr);
-                      D_LineList lines = d_lines_from_dbgi_key_voff(scratch.arena, &dbgi_key, voff);
-                      String8 file_path = {0};
-                      TxtPt pt = {0};
-                      if(lines.first != 0)
+                      
+                      // rjf: has callstack info? -> select unwind
+                      RD_WatchViewCallStackFrameInfo callstack_frame_info = rd_callstack_frame_info_from_num(&block_ranges, global_row_idx);
+                      if(callstack_frame_info.thread != &ctrl_entity_nil)
                       {
-                        file_path = lines.first->v.file_path;
-                        pt        = lines.first->v.pt;
+                        rd_cmd(RD_CmdKind_SelectThread, .thread = callstack_frame_info.thread->handle);
+                        rd_cmd(RD_CmdKind_SelectUnwind,
+                               .unwind_count = callstack_frame_info.unwind_index,
+                               .inline_depth = callstack_frame_info.inline_depth);
                       }
-                      rd_cmd(RD_CmdKind_FindCodeLocation,
-                             .process    = process->handle,
-                             .vaddr      = vaddr,
-                             .file_path  = file_path,
-                             .cursor     = pt);
+                      
+                      // rjf: can edit? -> begin editing
+                      else if(cell_can_edit)
+                      {
+                        rd_cmd(RD_CmdKind_Edit);
+                      }
+                      
+                      // rjf: cannot edit, has addr info? -> go to address
+                      else
+                      {
+                        U64 vaddr = cell_eval.value.u64;
+                        CTRL_Entity *process = rd_ctrl_entity_from_eval_space(cell_eval.space);
+                        CTRL_Entity *module = ctrl_module_from_process_vaddr(process, vaddr);
+                        DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
+                        U64 voff = ctrl_voff_from_vaddr(module, vaddr);
+                        D_LineList lines = d_lines_from_dbgi_key_voff(scratch.arena, &dbgi_key, voff);
+                        String8 file_path = {0};
+                        TxtPt pt = {0};
+                        if(lines.first != 0)
+                        {
+                          file_path = lines.first->v.file_path;
+                          pt        = lines.first->v.pt;
+                        }
+                        rd_cmd(RD_CmdKind_FindCodeLocation,
+                               .process    = process->handle,
+                               .vaddr      = vaddr,
+                               .file_path  = file_path,
+                               .cursor     = pt);
+                      }
                     }
-                    
-                    // rjf: double-click, not editable, callstack frame -> select frame
-#if 0 // TODO(rjf): @blocks
-                    if(ui_double_clicked(sig) && !cell_can_edit && semantic_idx < frame_rows_count)
-                    {
-                      FrameRow *frame_row = &frame_rows[semantic_idx];
-                      rd_cmd(RD_CmdKind_SelectUnwind,
-                             .unwind_count = frame_row->unwind_idx,
-                             .inline_depth = frame_row->inline_depth);
-                    }
-#endif
                     
                     // rjf: hovering with inheritance string -> show tooltip
                     if(ui_hovering(sig) && cell_inheritance_string.size != 0) UI_Tooltip
@@ -5459,7 +5534,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(call_stack)
     rd_watch_view_init(wv);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_CallStackFrameSelection, 0.05f);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_CallStackFrame,          0.50f, .display_string = str8_lit("Symbol"), .dequote_string = 1);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member,                  0.20f, .string = str8_lit("vaddr"), .display_string = str8_lit("Address"));
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member,                  0.20f, .string = str8_lit("vaddr"), .display_string = str8_lit("Address"), .view_rule = str8_lit("cast:U64"));
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Module,                  0.25f, .string = str8_lit("module.str"), .display_string = str8_lit("Module"), .dequote_string = 1, .is_non_code = 1);
   }
   rd_watch_view_build(wv, 0, str8_lit("current_thread.callstack.v"), str8_lit("array:current_thread.callstack.count, hex"), 0, 10, rect);

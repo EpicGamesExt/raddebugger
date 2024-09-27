@@ -125,6 +125,14 @@ struct RD_WatchViewCollectionInfo
   RD_Entity *entity;
 };
 
+typedef struct RD_WatchViewCallStackFrameInfo RD_WatchViewCallStackFrameInfo;
+struct RD_WatchViewCallStackFrameInfo
+{
+  CTRL_Entity *thread;
+  U64 unwind_index;
+  U64 inline_depth;
+};
+
 typedef struct RD_WatchViewTextEditState RD_WatchViewTextEditState;
 struct RD_WatchViewTextEditState
 {
@@ -181,8 +189,9 @@ internal B32 rd_watch_view_point_match(RD_WatchViewPoint a, RD_WatchViewPoint b)
 internal RD_WatchViewPoint rd_watch_view_point_from_tbl(EV_BlockRangeList *block_ranges, Vec2S64 tbl);
 internal Vec2S64 rd_tbl_from_watch_view_point(EV_BlockRangeList *block_ranges, RD_WatchViewPoint pt);
 
-//- rjf: table coordinates -> entities in collectons
+//- rjf: table coordinates -> backing information
 internal RD_WatchViewCollectionInfo rd_collection_info_from_num(EV_BlockRangeList *block_ranges, S64 num);
+internal RD_WatchViewCallStackFrameInfo rd_callstack_frame_info_from_num(EV_BlockRangeList *block_ranges, S64 num);
 
 //- rjf: row -> kind
 internal RD_WatchViewRowKind rd_watch_view_row_kind_from_row(RD_WatchViewFlags flags, EV_Row *row);
