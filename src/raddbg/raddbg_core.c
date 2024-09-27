@@ -8597,7 +8597,7 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
       if(!did_content && ptee_has_content && (flags & EV_StringFlag_ReadOnlyDisplayRules))
       {
         did_content = 1;
-        if(depth < 3)
+        if(depth < 4)
         {
           E_Expr *deref_expr = e_expr_ref_deref(scratch.arena, eval.expr);
           E_Eval deref_eval = e_eval_from_expr(scratch.arena, deref_expr);
@@ -8705,7 +8705,7 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
         }
         
         // rjf: build contents
-        if(depth < 3)
+        if(depth < 4)
         {
           for(U64 idx = 0; idx < array_count && max_size > space_taken; idx += 1)
           {
@@ -8758,7 +8758,7 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
       }
       
       // rjf: content
-      if(depth < 3)
+      if(depth < 4)
       {
         E_MemberArray data_members = e_type_data_members_from_key(scratch.arena, e_type_unwrap(eval.type_key));
         for(U64 member_idx = 0; member_idx < data_members.count && max_size > space_taken; member_idx += 1)

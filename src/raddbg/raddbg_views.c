@@ -2385,7 +2385,9 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                 {
                   if(entity->kind == RD_EntityKind_Target)
                   {
-                    rd_cmd(RD_CmdKind_SelectEntity, .entity = rd_handle_from_entity(entity));
+                    rd_cmd(sig.event_flags & OS_Modifier_Ctrl && entity->disabled  ? RD_CmdKind_EnableEntity :
+                           sig.event_flags & OS_Modifier_Ctrl && !entity->disabled ? RD_CmdKind_DisableEntity :
+                           RD_CmdKind_SelectEntity, .entity = rd_handle_from_entity(entity));
                   }
                 }
               }
@@ -2401,7 +2403,12 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                   {
                     UI_FocusHot(row_selected && selection_tbl.min.x <= ctrl_idx+1 && ctrl_idx+1 <= selection_tbl.max.x ? UI_FocusKind_On : UI_FocusKind_Off)
                     {
-                      if(ui_clicked(rd_icon_buttonf(rd_cmd_kind_info_table[ctrl->kind].icon_kind, 0, "###row_ctrl_%I64x", idx)))
+                      RD_IconKind icon_kind = rd_cmd_kind_info_table[ctrl->kind].icon_kind;
+                      if(ctrl->kind == RD_CmdKind_SelectEntity)
+                      {
+                        icon_kind = entity->disabled ? RD_IconKind_CheckHollow : RD_IconKind_CheckFilled;
+                      }
+                      if(ui_clicked(rd_icon_buttonf(icon_kind, 0, "###row_ctrl_%I64x", idx)))
                       {
                         rd_cmd(ctrl->kind, .entity = rd_handle_from_entity(entity));
                       }
