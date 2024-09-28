@@ -1694,7 +1694,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
             }
             
             // rjf: implicit local lookup -> attach member access node
-            if(atom_implicit_member_name.size != 0)
+            if(atom_implicit_member_name.size != 0 && atom != &e_expr_nil)
             {
               E_Expr *member_container = atom;
               E_Expr *member_expr = e_push_expr(arena, E_ExprKind_LeafMember, atom_implicit_member_name.str);
