@@ -25,6 +25,7 @@
 //     stepping
 //
 // [ ] ensure the following issues are resolved with this new pass:
+//  [ ] global evaluation across DLL boundaries
 //  [ ] mohit-reported callstack-frame-selection bug (with inlines)
 //  [ ] empty user file causing failure to launch
 //  [ ] decay arrays to pointers in pointer/value comparison

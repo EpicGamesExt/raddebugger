@@ -7931,89 +7931,25 @@ struct RD_CtrlEntityExpandAccel
 
 //- rjf: watches
 
-EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(watches)
-{
-  RD_EntityExpandAccel *accel = push_array(arena, RD_EntityExpandAccel, 1);
-  Temp scratch = scratch_begin(&arena, 1);
-  {
-    RD_EntityList entities = rd_query_cached_entity_list_with_kind(RD_EntityKind_Watch);
-    RD_EntityList entities_filtered = {0};
-    for(RD_EntityNode *n = entities.first; n != 0; n = n->next)
-    {
-      RD_Entity *entity = n->entity;
-      String8 entity_expr_string = entity->string;
-      B32 is_collection = 0;
-      for EachElement(idx, rd_collection_name_table)
-      {
-        if(str8_match(entity_expr_string, rd_collection_name_table[idx], 0))
-        {
-          is_collection = 1;
-          break;
-        }
-      }
-      FuzzyMatchRangeList matches = fuzzy_match_find(scratch.arena, filter, entity_expr_string);
-      if(is_collection || matches.count == matches.needle_part_count)
-      {
-        rd_entity_list_push(scratch.arena, &entities_filtered, entity);
-      }
-    }
-    accel->entities = rd_entity_array_from_list(arena, &entities_filtered);
-  }
-  scratch_end(scratch);
-  EV_ExpandInfo info = {accel, accel->entities.count + 1};
-  info.add_new_row = 1;
-  return info;
-}
-
-EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(watches)
-{
-  RD_EntityExpandAccel *accel = (RD_EntityExpandAccel *)user_data;
-  EV_ExpandRangeInfo result = {0};
-  {
-    U64 needed_row_count = dim_1u64(idx_range);
-    result.row_exprs_count = Min(needed_row_count, accel->entities.count+1);
-    result.row_exprs       = push_array(arena, E_Expr *, result.row_exprs_count);
-    result.row_strings     = push_array(arena, String8, result.row_exprs_count);
-    result.row_view_rules  = push_array(arena, String8, result.row_exprs_count);
-    result.row_members     = push_array(arena, E_Member *, result.row_exprs_count);
-    for EachIndex(row_expr_idx, result.row_exprs_count)
-    {
-      U64 entity_idx = idx_range.min + row_expr_idx;
-      if(entity_idx < accel->entities.count)
-      {
-        RD_Entity *entity = accel->entities.v[entity_idx];
-        RD_Entity *view_rule = rd_entity_child_from_kind(entity, RD_EntityKind_ViewRule);
-        result.row_exprs[row_expr_idx] = e_parse_expr_from_text(arena, entity->string);
-        result.row_strings[row_expr_idx] = entity->string;
-        result.row_view_rules[row_expr_idx] = view_rule->string;
-      }
-      else
-      {
-        result.row_exprs[row_expr_idx] = &e_expr_nil;
-      }
-      result.row_members[row_expr_idx] = &e_member_nil;
-    }
-  }
-  return result;
-}
-
-EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(watches)    { return rd_ev_view_rule_expr_id_from_num__meta_entities(num, user_data, RD_EntityKind_Watch); }
-EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(watches)    { return rd_ev_view_rule_expr_num_from_id__meta_entities(id,  user_data, RD_EntityKind_Watch); }
+EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(watches)           { return rd_ev_view_rule_expr_expand_info__meta_entities(arena, view, filter, expr, params, RD_EntityKind_Watch); }
+EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(watches)     { return rd_ev_view_rule_expr_expand_range_info__meta_entities(arena, view, filter, expr, params, idx_range, user_data, RD_EntityKind_Watch, 0); }
+EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(watches)    { return rd_ev_view_rule_expr_id_from_num__meta_entities(num, user_data, RD_EntityKind_Watch, 0); }
+EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(watches)    { return rd_ev_view_rule_expr_num_from_id__meta_entities(id,  user_data, RD_EntityKind_Watch, 0); }
 
 //- rjf: meta entities
 
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(targets)           { return rd_ev_view_rule_expr_expand_info__meta_entities(arena, view, filter, expr, params, RD_EntityKind_Target); }
-EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(targets)     { return rd_ev_view_rule_expr_expand_range_info__meta_entities(arena, view, filter, expr, params, idx_range, user_data, RD_EntityKind_Target); }
-EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(targets)    { return rd_ev_view_rule_expr_id_from_num__meta_entities(num, user_data, RD_EntityKind_Target); }
-EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(targets)    { return rd_ev_view_rule_expr_num_from_id__meta_entities(id,  user_data, RD_EntityKind_Target); }
+EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(targets)     { return rd_ev_view_rule_expr_expand_range_info__meta_entities(arena, view, filter, expr, params, idx_range, user_data, RD_EntityKind_Target, 1); }
+EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(targets)    { return rd_ev_view_rule_expr_id_from_num__meta_entities(num, user_data, RD_EntityKind_Target, 1); }
+EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(targets)    { return rd_ev_view_rule_expr_num_from_id__meta_entities(id,  user_data, RD_EntityKind_Target, 1); }
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(breakpoints)       { return rd_ev_view_rule_expr_expand_info__meta_entities(arena, view, filter, expr, params, RD_EntityKind_Breakpoint); }
-EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(breakpoints) { return rd_ev_view_rule_expr_expand_range_info__meta_entities(arena, view, filter, expr, params, idx_range, user_data, RD_EntityKind_Breakpoint); }
-EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(breakpoints){ return rd_ev_view_rule_expr_id_from_num__meta_entities(num, user_data, RD_EntityKind_Breakpoint); }
-EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(breakpoints){ return rd_ev_view_rule_expr_num_from_id__meta_entities(id,  user_data, RD_EntityKind_Breakpoint); }
+EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(breakpoints) { return rd_ev_view_rule_expr_expand_range_info__meta_entities(arena, view, filter, expr, params, idx_range, user_data, RD_EntityKind_Breakpoint, 1); }
+EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(breakpoints){ return rd_ev_view_rule_expr_id_from_num__meta_entities(num, user_data, RD_EntityKind_Breakpoint, 1); }
+EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(breakpoints){ return rd_ev_view_rule_expr_num_from_id__meta_entities(id,  user_data, RD_EntityKind_Breakpoint, 1); }
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(watch_pins)        { return rd_ev_view_rule_expr_expand_info__meta_entities(arena, view, filter, expr, params, RD_EntityKind_WatchPin); }
-EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(watch_pins)  { return rd_ev_view_rule_expr_expand_range_info__meta_entities(arena, view, filter, expr, params, idx_range, user_data, RD_EntityKind_WatchPin); }
-EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(watch_pins) { return rd_ev_view_rule_expr_id_from_num__meta_entities(num, user_data, RD_EntityKind_WatchPin); }
-EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(watch_pins) { return rd_ev_view_rule_expr_num_from_id__meta_entities(id,  user_data, RD_EntityKind_WatchPin); }
+EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(watch_pins)  { return rd_ev_view_rule_expr_expand_range_info__meta_entities(arena, view, filter, expr, params, idx_range, user_data, RD_EntityKind_WatchPin, 1); }
+EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(watch_pins) { return rd_ev_view_rule_expr_id_from_num__meta_entities(num, user_data, RD_EntityKind_WatchPin, 1); }
+EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(watch_pins) { return rd_ev_view_rule_expr_num_from_id__meta_entities(id,  user_data, RD_EntityKind_WatchPin, 1); }
 
 //- rjf: meta ctrl entities
 
@@ -8136,8 +8072,18 @@ rd_ev_view_rule_expr_expand_info__meta_entities(Arena *arena, EV_View *view, Str
     for(RD_EntityNode *n = entities.first; n != 0; n = n->next)
     {
       RD_Entity *entity = n->entity;
-      FuzzyMatchRangeList matches = fuzzy_match_find(scratch.arena, filter, entity->string);
-      if(matches.count == matches.needle_part_count)
+      String8 entity_expr_string = entity->string;
+      B32 is_collection = 0;
+      for EachElement(idx, rd_collection_name_table)
+      {
+        if(str8_match(entity_expr_string, rd_collection_name_table[idx], 0))
+        {
+          is_collection = 1;
+          break;
+        }
+      }
+      FuzzyMatchRangeList matches = fuzzy_match_find(scratch.arena, filter, entity_expr_string);
+      if(is_collection || matches.count == matches.needle_part_count)
       {
         rd_entity_list_push(scratch.arena, &entities_filtered, entity);
       }
@@ -8145,26 +8091,45 @@ rd_ev_view_rule_expr_expand_info__meta_entities(Arena *arena, EV_View *view, Str
     accel->entities = rd_entity_array_from_list(arena, &entities_filtered);
   }
   scratch_end(scratch);
-  EV_ExpandInfo info = {accel, accel->entities.count};
+  EV_ExpandInfo info = {accel, accel->entities.count + 1};
+  info.add_new_row = 1;
   return info;
 }
 
 internal EV_ExpandRangeInfo
-rd_ev_view_rule_expr_expand_range_info__meta_entities(Arena *arena, EV_View *view, String8 filter, E_Expr *expr, MD_Node *params, Rng1U64 idx_range, void *user_data, RD_EntityKind kind)
+rd_ev_view_rule_expr_expand_range_info__meta_entities(Arena *arena, EV_View *view, String8 filter, E_Expr *expr, MD_Node *params, Rng1U64 idx_range, void *user_data, RD_EntityKind kind, B32 add_new_at_top)
 {
   RD_EntityExpandAccel *accel = (RD_EntityExpandAccel *)user_data;
   EV_ExpandRangeInfo result = {0};
   {
+    U64 entities_base_idx = (U64)!!add_new_at_top;
     U64 needed_row_count = dim_1u64(idx_range);
-    result.row_exprs_count = Min(needed_row_count, accel->entities.count);
+    result.row_exprs_count = Min(needed_row_count, accel->entities.count+1);
     result.row_exprs       = push_array(arena, E_Expr *, result.row_exprs_count);
     result.row_strings     = push_array(arena, String8, result.row_exprs_count);
     result.row_view_rules  = push_array(arena, String8, result.row_exprs_count);
     result.row_members     = push_array(arena, E_Member *, result.row_exprs_count);
     for EachIndex(row_expr_idx, result.row_exprs_count)
     {
-      String8 entity_expr_string = push_str8f(arena, "$%I64u", accel->entities.v[idx_range.min + row_expr_idx]->id);
-      result.row_exprs[row_expr_idx] = e_parse_expr_from_text(arena, entity_expr_string);
+      U64 child_idx = idx_range.min + row_expr_idx;
+      RD_Entity *entity = &d_nil_entity;
+      if(entities_base_idx <= child_idx && child_idx < entities_base_idx+accel->entities.count)
+      {
+        entity = accel->entities.v[child_idx-entities_base_idx];
+      }
+      if(!rd_entity_is_nil(entity))
+      {
+        String8 entity_expr_string = (kind == RD_EntityKind_Watch ? entity->string : push_str8f(arena, "$%I64u", entity->id));
+        if(kind == RD_EntityKind_Watch)
+        {
+          result.row_strings[row_expr_idx] = entity_expr_string;
+        }
+        result.row_exprs[row_expr_idx] = e_parse_expr_from_text(arena, entity_expr_string);
+      }
+      else
+      {
+        result.row_exprs[row_expr_idx] = &e_expr_nil;
+      }
       result.row_members[row_expr_idx] = &e_member_nil;
     }
   }
@@ -8172,15 +8137,16 @@ rd_ev_view_rule_expr_expand_range_info__meta_entities(Arena *arena, EV_View *vie
 }
 
 internal U64
-rd_ev_view_rule_expr_id_from_num__meta_entities(U64 num, void *user_data, RD_EntityKind kind)
+rd_ev_view_rule_expr_id_from_num__meta_entities(U64 num, void *user_data, RD_EntityKind kind, B32 add_new_at_top)
 {
   U64 id = 0;
   RD_EntityExpandAccel *accel = (RD_EntityExpandAccel *)user_data;
-  if(0 < num && num <= accel->entities.count)
+  U64 entities_base_idx = (U64)!!add_new_at_top;
+  if(entities_base_idx+1 <= num && num < entities_base_idx+accel->entities.count+1)
   {
-    id = accel->entities.v[num-1]->id;
+    id = accel->entities.v[num-(entities_base_idx+1)]->id;
   }
-  if(num == accel->entities.count+1)
+  else
   {
     id = max_U64;
   }
@@ -8188,23 +8154,21 @@ rd_ev_view_rule_expr_id_from_num__meta_entities(U64 num, void *user_data, RD_Ent
 }
 
 internal U64
-rd_ev_view_rule_expr_num_from_id__meta_entities(U64 id, void *user_data, RD_EntityKind kind)
+rd_ev_view_rule_expr_num_from_id__meta_entities(U64 id, void *user_data, RD_EntityKind kind, B32 add_new_at_top)
 {
   RD_EntityExpandAccel *accel = (RD_EntityExpandAccel *)user_data;
   U64 num = 0;
+  U64 entities_base_idx = (U64)!!add_new_at_top;
   if(id == max_U64)
   {
-    num = accel->entities.count+1;
+    num = add_new_at_top ? 1 : entities_base_idx + accel->entities.count + 1;
   }
-  else
+  else for(U64 idx = 0; idx < accel->entities.count; idx += 1)
   {
-    for(U64 idx = 0; idx < accel->entities.count; idx += 1)
+    if(accel->entities.v[idx]->id == id)
     {
-      if(accel->entities.v[idx]->id == id)
-      {
-        num = idx+1;
-        break;
-      }
+      num = entities_base_idx+idx+1;
+      break;
     }
   }
   return num;

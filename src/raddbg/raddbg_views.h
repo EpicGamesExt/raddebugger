@@ -44,9 +44,10 @@ struct RD_CodeViewBuildResult
 typedef U32 RD_WatchViewFlags;
 enum
 {
-  RD_WatchViewFlag_PrettyNameMembers       = (1<<0),
-  RD_WatchViewFlag_PrettyEntityRows        = (1<<1),
-  RD_WatchViewFlag_DisableCacheLines       = (1<<2),
+  RD_WatchViewFlag_NoHeader                = (1<<0),
+  RD_WatchViewFlag_PrettyNameMembers       = (1<<1),
+  RD_WatchViewFlag_PrettyEntityRows        = (1<<2),
+  RD_WatchViewFlag_DisableCacheLines       = (1<<3),
 };
 
 typedef enum RD_WatchViewColumnKind
@@ -116,21 +117,14 @@ struct RD_WatchViewPoint
   EV_Key key;
 };
 
-typedef struct RD_WatchViewCollectionInfo RD_WatchViewCollectionInfo;
-struct RD_WatchViewCollectionInfo
+typedef struct RD_WatchViewRowInfo RD_WatchViewRowInfo;
+struct RD_WatchViewRowInfo
 {
-  EV_Block *block;
-  EV_Key key;
-  RD_EntityKind kind;
-  RD_Entity *entity;
-};
-
-typedef struct RD_WatchViewCallStackFrameInfo RD_WatchViewCallStackFrameInfo;
-struct RD_WatchViewCallStackFrameInfo
-{
-  CTRL_Entity *thread;
-  U64 unwind_index;
-  U64 inline_depth;
+  RD_EntityKind collection_entity_kind;
+  RD_Entity *collection_entity;
+  CTRL_Entity *callstack_thread;
+  U64 callstack_unwind_index;
+  U64 callstack_inline_depth;
 };
 
 typedef struct RD_WatchViewTextEditState RD_WatchViewTextEditState;
@@ -189,12 +183,11 @@ internal B32 rd_watch_view_point_match(RD_WatchViewPoint a, RD_WatchViewPoint b)
 internal RD_WatchViewPoint rd_watch_view_point_from_tbl(EV_BlockRangeList *block_ranges, Vec2S64 tbl);
 internal Vec2S64 rd_tbl_from_watch_view_point(EV_BlockRangeList *block_ranges, RD_WatchViewPoint pt);
 
-//- rjf: table coordinates -> backing information
-internal RD_WatchViewCollectionInfo rd_collection_info_from_num(EV_BlockRangeList *block_ranges, S64 num);
-internal RD_WatchViewCallStackFrameInfo rd_callstack_frame_info_from_num(EV_BlockRangeList *block_ranges, S64 num);
+//- rjf: row -> context info
+internal RD_WatchViewRowInfo rd_watch_view_row_info_from_row(EV_Row *row);
 
-//- rjf: row -> kind
-internal RD_WatchViewRowKind rd_watch_view_row_kind_from_row(RD_WatchViewFlags flags, EV_Row *row);
+//- rjf: watch view flags & row & row info -> row kind
+internal RD_WatchViewRowKind rd_watch_view_row_kind_from_flags_row_info(RD_WatchViewFlags flags, EV_Row *row, RD_WatchViewRowInfo *info);
 
 //- rjf: row/column -> strings
 internal String8 rd_string_from_eval_viz_row_column(Arena *arena, EV_View *ev, EV_Row *row, RD_WatchViewColumn *col, EV_StringFlags string_flags, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size_px);

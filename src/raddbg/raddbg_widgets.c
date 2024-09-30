@@ -2855,6 +2855,7 @@ rd_line_edit(RD_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
     ui_set_next_hover_cursor(OS_Cursor_IBar);
   }
   UI_Box *box = ui_build_box_from_key(UI_BoxFlag_MouseClickable|
+                                      (!!(flags & RD_LineEditFlag_KeyboardClickable)*UI_BoxFlag_KeyboardClickable)|
                                       UI_BoxFlag_ClickToFocus|
                                       UI_BoxFlag_DrawHotEffects|
                                       (!(flags & RD_LineEditFlag_NoBackground)*UI_BoxFlag_DrawBackground)|
