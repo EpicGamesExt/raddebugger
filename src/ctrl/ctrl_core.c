@@ -5648,9 +5648,13 @@ ctrl_mem_stream_thread__entry_point(void *p)
     
     //- rjf: read successful -> submit to hash store
     U128 hash = {0};
-    if(got_task && range_base != 0)
+    if(got_task && range_base != 0 && pre_read_mem_gen == post_read_mem_gen)
     {
       hash = hs_submit_data(key, &range_arena, str8((U8*)range_base, zero_terminated_size));
+    }
+    else if(range_arena != 0)
+    {
+      arena_release(range_arena);
     }
     
     //- rjf: commit hash to cache

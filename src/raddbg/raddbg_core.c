@@ -7943,13 +7943,13 @@ EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(targets)     { return rd_ev_vie
 EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(targets)    { return rd_ev_view_rule_expr_id_from_num__meta_entities(num, user_data, RD_EntityKind_Target, 1); }
 EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(targets)    { return rd_ev_view_rule_expr_num_from_id__meta_entities(id,  user_data, RD_EntityKind_Target, 1); }
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(breakpoints)       { return rd_ev_view_rule_expr_expand_info__meta_entities(arena, view, filter, expr, params, RD_EntityKind_Breakpoint); }
-EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(breakpoints) { return rd_ev_view_rule_expr_expand_range_info__meta_entities(arena, view, filter, expr, params, idx_range, user_data, RD_EntityKind_Breakpoint, 1); }
-EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(breakpoints){ return rd_ev_view_rule_expr_id_from_num__meta_entities(num, user_data, RD_EntityKind_Breakpoint, 1); }
-EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(breakpoints){ return rd_ev_view_rule_expr_num_from_id__meta_entities(id,  user_data, RD_EntityKind_Breakpoint, 1); }
+EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(breakpoints) { return rd_ev_view_rule_expr_expand_range_info__meta_entities(arena, view, filter, expr, params, idx_range, user_data, RD_EntityKind_Breakpoint, 0); }
+EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(breakpoints){ return rd_ev_view_rule_expr_id_from_num__meta_entities(num, user_data, RD_EntityKind_Breakpoint, 0); }
+EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(breakpoints){ return rd_ev_view_rule_expr_num_from_id__meta_entities(id,  user_data, RD_EntityKind_Breakpoint, 0); }
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(watch_pins)        { return rd_ev_view_rule_expr_expand_info__meta_entities(arena, view, filter, expr, params, RD_EntityKind_WatchPin); }
-EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(watch_pins)  { return rd_ev_view_rule_expr_expand_range_info__meta_entities(arena, view, filter, expr, params, idx_range, user_data, RD_EntityKind_WatchPin, 1); }
-EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(watch_pins) { return rd_ev_view_rule_expr_id_from_num__meta_entities(num, user_data, RD_EntityKind_WatchPin, 1); }
-EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(watch_pins) { return rd_ev_view_rule_expr_num_from_id__meta_entities(id,  user_data, RD_EntityKind_WatchPin, 1); }
+EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(watch_pins)  { return rd_ev_view_rule_expr_expand_range_info__meta_entities(arena, view, filter, expr, params, idx_range, user_data, RD_EntityKind_WatchPin, 0); }
+EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(watch_pins) { return rd_ev_view_rule_expr_id_from_num__meta_entities(num, user_data, RD_EntityKind_WatchPin, 0); }
+EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(watch_pins) { return rd_ev_view_rule_expr_num_from_id__meta_entities(id,  user_data, RD_EntityKind_WatchPin, 0); }
 
 //- rjf: meta ctrl entities
 
@@ -8219,6 +8219,18 @@ rd_ev_view_rule_expr_expand_range_info__meta_ctrl_entities(Arena *arena, EV_View
     }
   }
   return result;
+}
+
+internal U64
+rd_ev_view_rule_expr_id_from_num__meta_ctrl_entities(U64 num, void *user_data, CTRL_EntityKind kind)
+{
+  
+}
+
+internal U64
+rd_ev_view_rule_expr_num_from_id__meta_ctrl_entities(U64 id, void *user_data, CTRL_EntityKind kind)
+{
+  
 }
 
 typedef struct RD_DebugInfoTableExpandAccel RD_DebugInfoTableExpandAccel;
@@ -10928,6 +10940,14 @@ rd_frame(void)
             if(kind == CTRL_EntityKind_Thread && ctrl_handle_match(rd_base_regs()->thread, entity->handle))
             {
               e_string2expr_map_insert(scratch.arena, ctx->macro_map, str8_lit("current_thread"), expr);
+            }
+            if(kind == CTRL_EntityKind_Process && ctrl_handle_match(rd_base_regs()->process, entity->handle))
+            {
+              e_string2expr_map_insert(scratch.arena, ctx->macro_map, str8_lit("current_process"), expr);
+            }
+            if(kind == CTRL_EntityKind_Module && ctrl_handle_match(rd_base_regs()->module, entity->handle))
+            {
+              e_string2expr_map_insert(scratch.arena, ctx->macro_map, str8_lit("current_module"), expr);
             }
           }
         }

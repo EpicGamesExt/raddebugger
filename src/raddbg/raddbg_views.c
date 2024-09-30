@@ -840,8 +840,9 @@ rd_watch_view_row_info_from_row(EV_Row *row)
       }
     }
     
-    // rjf: extract collection entity,if any
+    // rjf: extract collection entities, if any
     RD_Entity *entity = rd_entity_from_id(key.child_id);
+    CTRL_Entity *ctrl_entity = &ctrl_entity_nil;
     
     // rjf: extract callstack thread, if any
     CTRL_Entity *thread = &ctrl_entity_nil;
@@ -893,6 +894,7 @@ rd_watch_view_row_info_from_row(EV_Row *row)
     // rjf: fill
     info.collection_entity_kind = collection_entity_kind;
     info.collection_entity      = entity;
+    info.collection_ctrl_entity = ctrl_entity;
     info.callstack_thread       = thread;
     info.callstack_unwind_index = unwind_count;
     info.callstack_inline_depth = inline_depth;
@@ -2413,7 +2415,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
               if(rd_entity_is_nil(entity) && collection_entity_kind == RD_EntityKind_Target)
                 UI_Palette(palette)
               {
-                ui_set_next_focus_hot(entity_box_selected ? UI_FocusKind_On : UI_FocusKind_Off);
+                ui_set_next_focus_hot(row_selected ? UI_FocusKind_On : UI_FocusKind_Off);
                 if(ui_clicked(rd_cmd_spec_button(rd_cmd_kind_info_table[RD_CmdKind_AddTarget].string)))
                 {
                   rd_cmd(RD_CmdKind_RunCommand, .string = rd_cmd_kind_info_table[RD_CmdKind_AddTarget].string);
@@ -5224,10 +5226,11 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(scheduler)
   if(!wv->initialized)
   {
     rd_watch_view_init(wv);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member,         0.25f, .string = str8_lit("label.str"), .display_string = str8_lit("Label"),      .dequote_string = 1);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member,         0.70f, .string = str8_lit("callstack.v"), .display_string = str8_lit("Call Stack"));
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Expr,       0.25f);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,      0.75f);
   }
-  rd_watch_view_build(wv, 0, str8_lit("threads"), str8_lit(""), 0, 10, rect);
+  rd_watch_view_build(wv, RD_WatchViewFlag_NoHeader|RD_WatchViewFlag_PrettyNameMembers|RD_WatchViewFlag_PrettyEntityRows|RD_WatchViewFlag_DisableCacheLines,
+                      str8_lit("threads"), str8_lit("only: label str id callstack v count vaddr inline_depth"), 0, 10, rect);
   ProfEnd();
 }
 

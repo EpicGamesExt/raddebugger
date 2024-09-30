@@ -15,7 +15,8 @@ typedef U64 CTRL_MachineID;
 ////////////////////////////////
 //~ rjf: Meta Evaluation Types
 
-//- rjf: meta evaluation callstack
+//- rjf: meta evaluation callstack types
+
 typedef struct CTRL_MetaEvalFrame CTRL_MetaEvalFrame;
 struct CTRL_MetaEvalFrame
 {
@@ -43,7 +44,8 @@ struct_members(CTRL_MetaEvalFrameArray)
 };
 struct_type(CTRL_MetaEvalFrameArray);
 
-//- rjf: meta evaluation instance
+//- rjf: meta evaluation instance types
+
 typedef struct CTRL_MetaEval CTRL_MetaEval;
 struct CTRL_MetaEval
 {
@@ -80,6 +82,7 @@ struct_members(CTRL_MetaEval)
 struct_type(CTRL_MetaEval);
 
 //- rjf: meta evaluation array
+
 typedef struct CTRL_MetaEvalArray CTRL_MetaEvalArray;
 struct CTRL_MetaEvalArray
 {

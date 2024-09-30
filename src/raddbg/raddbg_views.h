@@ -122,6 +122,7 @@ struct RD_WatchViewRowInfo
 {
   RD_EntityKind collection_entity_kind;
   RD_Entity *collection_entity;
+  CTRL_Entity *collection_ctrl_entity;
   CTRL_Entity *callstack_thread;
   U64 callstack_unwind_index;
   U64 callstack_inline_depth;
