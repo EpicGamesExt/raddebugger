@@ -1708,6 +1708,21 @@ rd_entity_from_name_and_kind(String8 string, RD_EntityKind kind)
 ////////////////////////////////
 //~ rjf: Frontend Entity Info Extraction
 
+internal D_Target
+rd_d_target_from_entity(RD_Entity *entity)
+{
+  RD_Entity *src_target_exe   = rd_entity_child_from_kind(entity, RD_EntityKind_Executable);
+  RD_Entity *src_target_args  = rd_entity_child_from_kind(entity, RD_EntityKind_Arguments);
+  RD_Entity *src_target_wdir  = rd_entity_child_from_kind(entity, RD_EntityKind_WorkingDirectory);
+  RD_Entity *src_target_entry = rd_entity_child_from_kind(entity, RD_EntityKind_EntryPoint);
+  D_Target target = {0};
+  target.exe                     = src_target_exe->string;
+  target.args                    = src_target_args->string;
+  target.working_directory       = src_target_wdir->string;
+  target.custom_entry_point_name = src_target_entry->string;
+  return target;
+}
+
 internal DR_FancyStringList
 rd_title_fstrs_from_entity(Arena *arena, RD_Entity *entity, Vec4F32 secondary_color, F32 size)
 {
@@ -11085,6 +11100,7 @@ rd_frame(void)
             // rjf: try to run engine command
             if(D_CmdKind_Null < (D_CmdKind)kind && (D_CmdKind)kind < D_CmdKind_COUNT)
             {
+              RD_Entity *entity = rd_entity_from_handle(rd_regs()->entity);
               D_CmdParams params = {0};
               params.machine       = rd_regs()->machine;
               params.thread        = rd_regs()->thread;
@@ -11096,7 +11112,12 @@ rd_frame(void)
               params.vaddr         = rd_regs()->vaddr;
               params.prefer_disasm = rd_regs()->prefer_disasm;
               params.pid           = rd_regs()->pid;
-              // TODO(rjf): @msgs params.targets       = ???;
+              if(entity->kind == RD_EntityKind_Target)
+              {
+                params.targets.count = 1;
+                params.targets.v = push_array(scratch.arena, D_Target, params.targets.count);
+                params.targets.v[0] = rd_d_target_from_entity(entity);
+              }
               // TODO(rjf): @msgs
 #if 0
               params.window = rd_regs()->window;
@@ -14890,15 +14911,7 @@ rd_frame(void)
           targets.count -= 1;
           continue;
         }
-        RD_Entity *src_target_exe   = rd_entity_child_from_kind(src_target, RD_EntityKind_Executable);
-        RD_Entity *src_target_args  = rd_entity_child_from_kind(src_target, RD_EntityKind_Arguments);
-        RD_Entity *src_target_wdir  = rd_entity_child_from_kind(src_target, RD_EntityKind_WorkingDirectory);
-        RD_Entity *src_target_entry = rd_entity_child_from_kind(src_target, RD_EntityKind_EntryPoint);
-        D_Target *dst_target = &targets.v[idx];
-        dst_target->exe                     = src_target_exe->string;
-        dst_target->args                    = src_target_args->string;
-        dst_target->working_directory       = src_target_wdir->string;
-        dst_target->custom_entry_point_name = src_target_entry->string;
+        targets.v[idx] = rd_d_target_from_entity(src_target);
         idx += 1;
       }
     }

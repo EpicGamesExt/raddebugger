@@ -2555,9 +2555,19 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                       {
                         icon_kind = entity->disabled ? RD_IconKind_CheckHollow : RD_IconKind_CheckFilled;
                       }
-                      if(ui_clicked(rd_icon_buttonf(icon_kind, 0, "###row_ctrl_%I64x", idx)))
+                      UI_Signal sig = rd_icon_buttonf(icon_kind, 0, "###row_ctrl_%I64x", idx);
+                      if(ui_clicked(sig))
                       {
-                        rd_cmd(ctrl->kind, .entity = rd_handle_from_entity(entity));
+                        if(ctrl->kind == RD_CmdKind_SelectEntity)
+                        {
+                          rd_cmd(sig.event_flags & OS_Modifier_Ctrl && entity->disabled  ? RD_CmdKind_EnableEntity :
+                                 sig.event_flags & OS_Modifier_Ctrl && !entity->disabled ? RD_CmdKind_DisableEntity :
+                                 RD_CmdKind_SelectEntity, .entity = rd_handle_from_entity(entity));
+                        }
+                        else
+                        {
+                          rd_cmd(ctrl->kind, .entity = rd_handle_from_entity(entity));
+                        }
                       }
                     }
                     ctrl_idx += 1;

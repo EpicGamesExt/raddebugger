@@ -1168,6 +1168,7 @@ internal RD_Entity *rd_entity_from_name_and_kind(String8 string, RD_EntityKind k
 ////////////////////////////////
 //~ rjf: Frontend Entity Info Extraction
 
+internal D_Target rd_d_target_from_entity(RD_Entity *entity);
 internal DR_FancyStringList rd_title_fstrs_from_entity(Arena *arena, RD_Entity *entity, Vec4F32 secondary_color, F32 size);
 
 ////////////////////////////////
