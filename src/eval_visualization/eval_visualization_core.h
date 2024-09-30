@@ -291,6 +291,7 @@ struct EV_AutoViewRuleNode
   EV_AutoViewRuleNode *next;
   E_TypeKey key;
   String8 view_rule;
+  B32 is_required;
 };
 
 typedef struct EV_AutoViewRuleSlot EV_AutoViewRuleSlot;
@@ -392,9 +393,9 @@ internal EV_ViewRuleInfo *ev_view_rule_info_from_string(String8 string);
 ////////////////////////////////
 //~ rjf: Automatic Type -> View Rule Table Building / Selection / Lookups
 
-internal void ev_auto_view_rule_table_push_new(Arena *arena, EV_AutoViewRuleTable *table, E_TypeKey type_key, String8 view_rule);
+internal void ev_auto_view_rule_table_push_new(Arena *arena, EV_AutoViewRuleTable *table, E_TypeKey type_key, String8 view_rule, B32 is_required);
 internal void ev_select_auto_view_rule_table(EV_AutoViewRuleTable *table);
-internal String8 ev_auto_view_rule_from_type_key(E_TypeKey type_key);
+internal EV_ViewRuleList *ev_auto_view_rules_from_type_key(Arena *arena, E_TypeKey type_key, B32 gather_required, B32 gather_optional);
 
 ////////////////////////////////
 //~ rjf: View Rule Instance List Building
@@ -404,6 +405,7 @@ internal void ev_view_rule_list_push_string(Arena *arena, EV_ViewRuleList *list,
 internal EV_ViewRuleList *ev_view_rule_list_from_string(Arena *arena, String8 string);
 internal EV_ViewRuleList *ev_view_rule_list_from_inheritance(Arena *arena, EV_ViewRuleList *src);
 internal EV_ViewRuleList *ev_view_rule_list_copy(Arena *arena, EV_ViewRuleList *src);
+internal void ev_view_rule_list_concat_in_place(EV_ViewRuleList *dst, EV_ViewRuleList **src);
 
 ////////////////////////////////
 //~ rjf: View Rule Expression Resolution

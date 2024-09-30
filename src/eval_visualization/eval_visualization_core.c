@@ -393,7 +393,7 @@ ev_view_rule_info_from_string(String8 string)
 //~ rjf: Automatic Type -> View Rule Table Building / Selection / Lookups
 
 internal void
-ev_auto_view_rule_table_push_new(Arena *arena, EV_AutoViewRuleTable *table, E_TypeKey type_key, String8 view_rule)
+ev_auto_view_rule_table_push_new(Arena *arena, EV_AutoViewRuleTable *table, E_TypeKey type_key, String8 view_rule, B32 is_required)
 {
   if(table->slots_count == 0)
   {
@@ -417,6 +417,7 @@ ev_auto_view_rule_table_push_new(Arena *arena, EV_AutoViewRuleTable *table, E_Ty
     node = push_array(arena, EV_AutoViewRuleNode, 1);
     node->key = type_key;
     node->view_rule = push_str8_copy(arena, view_rule);
+    node->is_required = is_required;
     SLLQueuePush(slot->first, slot->last, node);
   }
 }
@@ -427,10 +428,10 @@ ev_select_auto_view_rule_table(EV_AutoViewRuleTable *table)
   ev_auto_view_rule_table = table;
 }
 
-internal String8
-ev_auto_view_rule_from_type_key(E_TypeKey type_key)
+internal EV_ViewRuleList *
+ev_auto_view_rules_from_type_key(Arena *arena, E_TypeKey type_key, B32 gather_required, B32 gather_optional)
 {
-  String8 string = {0};
+  EV_ViewRuleList *result = &ev_nil_view_rule_list;
   if(ev_auto_view_rule_table != 0 && ev_auto_view_rule_table->slots_count != 0)
   {
     U64 hash = e_hash_from_type_key(type_key);
@@ -439,18 +440,17 @@ ev_auto_view_rule_from_type_key(E_TypeKey type_key)
     EV_AutoViewRuleNode *node = 0;
     for(EV_AutoViewRuleNode *n = slot->first; n != 0; n = n->next)
     {
-      if(e_type_match(n->key, type_key))
+      if(e_type_match(n->key, type_key) && ((n->is_required && gather_required) || (!n->is_required && gather_optional)))
       {
-        node = n;
-        break;
+        if(result == &ev_nil_view_rule_list)
+        {
+          result = push_array(arena, EV_ViewRuleList, 1);
+        }
+        ev_view_rule_list_push_string(arena, result, n->view_rule);
       }
     }
-    if(node != 0)
-    {
-      string = node->view_rule;
-    }
   }
-  return string;
+  return result;
 }
 
 ////////////////////////////////
@@ -468,10 +468,13 @@ ev_view_rule_list_push_tree(Arena *arena, EV_ViewRuleList *list, MD_Node *root)
 internal void
 ev_view_rule_list_push_string(Arena *arena, EV_ViewRuleList *list, String8 string)
 {
-  MD_Node *root = md_tree_from_string(arena, string);
-  for MD_EachNode(tln, root->first)
+  if(string.size != 0)
   {
-    ev_view_rule_list_push_tree(arena, list, tln);
+    MD_Node *root = md_tree_from_string(arena, string);
+    for MD_EachNode(tln, root->first)
+    {
+      ev_view_rule_list_push_tree(arena, list, tln);
+    }
   }
 }
 
@@ -509,6 +512,22 @@ ev_view_rule_list_copy(Arena *arena, EV_ViewRuleList *src)
   return dst;
 }
 
+internal void
+ev_view_rule_list_concat_in_place(EV_ViewRuleList *dst, EV_ViewRuleList **src)
+{
+  if(dst->first && src[0] != &ev_nil_view_rule_list && src[0]->first)
+  {
+    dst->last->next = src[0]->first;
+    dst->last = src[0]->last;
+    dst->count += src[0]->count;
+  }
+  else if(!dst->first)
+  {
+    MemoryCopyStruct(dst, *src);
+  }
+  *src = &ev_nil_view_rule_list;
+}
+
 ////////////////////////////////
 //~ rjf: View Rule Expression Resolution
 
@@ -543,8 +562,8 @@ ev_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, String8 str
     EV_ViewRuleList *top_level_view_rules = ev_view_rule_list_copy(arena, view_rules);
     {
       E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, expr);
-      String8 auto_view_rule = ev_auto_view_rule_from_type_key(irtree.type_key);
-      ev_view_rule_list_push_string(arena, top_level_view_rules, auto_view_rule);
+      EV_ViewRuleList *auto_view_rules = ev_auto_view_rules_from_type_key(arena, irtree.type_key, 1, 1);
+      ev_view_rule_list_concat_in_place(top_level_view_rules, &auto_view_rules);
     }
     
     //- rjf: generate root block
@@ -684,19 +703,12 @@ ev_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, String8 str
             E_Expr *child_expr = child_expand.row_exprs[0];
             EV_ViewRuleList *child_view_rules = ev_view_rule_list_from_inheritance(arena, t->view_rules);
             String8 child_view_rule_string = ev_view_rule_from_key(view, child_key);
-            if(child_view_rule_string.size != 0)
-            {
-              ev_view_rule_list_push_string(arena, child_view_rules, child_view_rule_string);
-            }
-            else
+            ev_view_rule_list_push_string(arena, child_view_rules, child_view_rule_string);
             {
               Temp scratch = scratch_begin(&arena, 1);
               E_IRTreeAndType child_irtree = e_irtree_and_type_from_expr(scratch.arena, child_expr);
-              String8 child_auto_view_rule_string = ev_auto_view_rule_from_type_key(child_irtree.type_key);
-              if(child_auto_view_rule_string.size != 0)
-              {
-                ev_view_rule_list_push_string(arena, child_view_rules, child_auto_view_rule_string);
-              }
+              EV_ViewRuleList *child_auto_view_rules = ev_auto_view_rules_from_type_key(arena, child_irtree.type_key, 1, child_view_rule_string.size == 0);
+              ev_view_rule_list_concat_in_place(child_view_rules, &child_auto_view_rules);
               scratch_end(scratch);
             }
             E_Expr *child_expr__resolved = ev_expr_from_expr_view_rules(arena, child_expr, child_view_rules);
@@ -1011,19 +1023,12 @@ ev_windowed_row_list_from_block_range_list(Arena *arena, EV_View *view, String8 
             E_Expr *row_expr = expand_range_info.row_exprs[idx];
             EV_ViewRuleList *row_view_rules = ev_view_rule_list_from_inheritance(arena, n->v.block->view_rules);
             String8 row_view_rule_string = ev_view_rule_from_key(view, row_key);
-            if(row_view_rule_string.size != 0)
-            {
-              ev_view_rule_list_push_string(arena, row_view_rules, row_view_rule_string);
-            }
-            else
+            ev_view_rule_list_push_string(arena, row_view_rules, row_view_rule_string);
             {
               Temp scratch = scratch_begin(&arena, 1);
               E_IRTreeAndType row_irtree = e_irtree_and_type_from_expr(scratch.arena, row_expr);
-              String8 row_auto_view_rule_string = ev_auto_view_rule_from_type_key(row_irtree.type_key);
-              if(row_auto_view_rule_string.size != 0)
-              {
-                ev_view_rule_list_push_string(arena, row_view_rules, row_auto_view_rule_string);
-              }
+              EV_ViewRuleList *row_auto_view_rules = ev_auto_view_rules_from_type_key(arena, row_irtree.type_key, 1, row_view_rule_string.size == 0);
+              ev_view_rule_list_concat_in_place(row_view_rules, &row_auto_view_rules);
               scratch_end(scratch);
             }
             E_Expr *row_expr__resolved = ev_expr_from_expr_view_rules(arena, row_expr, row_view_rules);

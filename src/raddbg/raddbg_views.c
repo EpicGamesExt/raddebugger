@@ -2662,7 +2662,13 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                       cell_autocomp_flags = RD_AutoCompListerFlag_ViewRules;
                       if(cell_pre_edit_string.size == 0)
                       {
-                        cell_ghost_text = ev_auto_view_rule_from_type_key(row_eval.type_key);
+                        EV_ViewRuleList *auto_view_rules = ev_auto_view_rules_from_type_key(scratch.arena, row_eval.type_key, 0, 1);
+                        String8List strings = {0};
+                        for(EV_ViewRuleNode *n = auto_view_rules->first; n != 0; n = n->next)
+                        {
+                          str8_list_push(scratch.arena, &strings, n->v.root->string);
+                        }
+                        cell_ghost_text = str8_list_join(scratch.arena, &strings, &(StringJoin){.sep = str8_lit(", ")});
                       }
                     }break;
                     case RD_WatchViewColumnKind_CallStackFrameSelection:

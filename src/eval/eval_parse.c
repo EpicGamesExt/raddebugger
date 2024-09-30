@@ -873,7 +873,7 @@ e_leaf_type_from_name(String8 name)
     {
       key = e_type_key_basic(E_TypeKind_UChar32);
     }
-    else if(Case("u64") || Case("uint64") || Case("uint64_t") || Case("U64"))
+    else if(Case("u64") || Case("uint64") || Case("uint64_t") || Case("U64") || Case("size_t"))
     {
       key = e_type_key_basic(E_TypeKind_U64);
     }
@@ -901,7 +901,7 @@ e_leaf_type_from_name(String8 name)
     {
       key = e_type_key_basic(E_TypeKind_Char32);
     }
-    else if(Case("s64") || Case("b64") || Case("B64") || Case("i64") || Case("int64") || Case("int64_t") || Case("S64"))
+    else if(Case("s64") || Case("b64") || Case("B64") || Case("i64") || Case("int64") || Case("int64_t") || Case("S64") || Case("ssize_t"))
     {
       key = e_type_key_basic(E_TypeKind_S64);
     }

@@ -1293,8 +1293,7 @@ d_query_cached_unwind_from_thread(CTRL_Entity *thread)
       node->arena = arena_alloc();
       node->thread = handle;
     }
-    if(node->reggen != reg_gen ||
-       node->memgen != mem_gen)
+    if(!d_state->ctrl_is_running && (node->reggen != reg_gen || node->memgen != mem_gen))
     {
       CTRL_Unwind new_unwind = ctrl_unwind_from_thread(scratch.arena, d_state->ctrl_entity_store, thread->handle, os_now_microseconds()+100);
       if(!(new_unwind.flags & (CTRL_UnwindFlag_Error|CTRL_UnwindFlag_Stale)) && new_unwind.frames.count != 0)
@@ -1576,7 +1575,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
   Temp scratch = scratch_begin(&arena, 1);
   D_EventList result = {0};
   d_state->frame_index += 1;
-  d_state->frame_eval_memread_endt_us = os_now_microseconds() + 5000;
+  d_state->frame_eval_memread_endt_us = os_now_microseconds() + 1000;
   
   //////////////////////////////
   //- rjf: sync with ctrl thread

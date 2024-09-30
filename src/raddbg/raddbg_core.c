@@ -10891,6 +10891,12 @@ rd_frame(void)
           RD_EntityKind_WatchPin,
           RD_EntityKind_Target,
         };
+        E_TypeKey evallable_kind_types[] =
+        {
+          e_type_key_cons_base(type(CTRL_BreakpointMetaEval)),
+          e_type_key_cons_base(type(CTRL_PinMetaEval)),
+          e_type_key_cons_base(type(CTRL_TargetMetaEval)),
+        };
         for EachElement(idx, evallable_kinds)
         {
           RD_EntityList list = rd_query_cached_entity_list_with_kind(evallable_kinds[idx]);
@@ -10901,7 +10907,7 @@ rd_frame(void)
             E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
             expr->space    = space;
             expr->mode     = E_Mode_Offset;
-            expr->type_key = meta_eval_type_key;
+            expr->type_key = evallable_kind_types[idx];
             e_string2expr_map_insert(scratch.arena, ctx->macro_map, push_str8f(scratch.arena, "$%I64u", entity->id), expr);
             if(entity->string.size != 0)
             {
@@ -10920,6 +10926,13 @@ rd_frame(void)
           CTRL_EntityKind_Thread,
           CTRL_EntityKind_Module,
         };
+        E_TypeKey evallable_kind_types[] =
+        {
+          e_type_key_cons_base(type(CTRL_MachineMetaEval)),
+          e_type_key_cons_base(type(CTRL_ProcessMetaEval)),
+          e_type_key_cons_base(type(CTRL_ThreadMetaEval)),
+          e_type_key_cons_base(type(CTRL_ModuleMetaEval)),
+        };
         for EachElement(idx, evallable_kinds)
         {
           CTRL_EntityKind kind = evallable_kinds[idx];
@@ -10931,7 +10944,7 @@ rd_frame(void)
             E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
             expr->space    = space;
             expr->mode     = E_Mode_Offset;
-            expr->type_key = meta_eval_type_key;
+            expr->type_key = evallable_kind_types[idx];
             e_string2expr_map_insert(scratch.arena, ctx->macro_map, push_str8f(scratch.arena, "$_%I64x_%I64x", entity->handle.machine_id, entity->handle.dmn_handle.u64[0]), expr);
             if(entity->string.size != 0)
             {
@@ -11034,10 +11047,10 @@ rd_frame(void)
     //
     EV_AutoViewRuleTable *auto_view_rule_table = push_array(scratch.arena, EV_AutoViewRuleTable, 1);
     {
-      ev_auto_view_rule_table_push_new(scratch.arena, auto_view_rule_table, e_type_key_cons_base(type(CTRL_MetaEvalFrameArray)), str8_lit("slice"));
+      ev_auto_view_rule_table_push_new(scratch.arena, auto_view_rule_table, e_type_key_cons_base(type(CTRL_MetaEvalFrameArray)), str8_lit("slice"), 1);
       for EachElement(idx, rd_collection_name_table)
       {
-        ev_auto_view_rule_table_push_new(scratch.arena, auto_view_rule_table, collection_type_keys[idx], rd_collection_name_table[idx]);
+        ev_auto_view_rule_table_push_new(scratch.arena, auto_view_rule_table, collection_type_keys[idx], rd_collection_name_table[idx], 1);
       }
     }
     ev_select_auto_view_rule_table(auto_view_rule_table);
