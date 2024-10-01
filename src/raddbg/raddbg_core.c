@@ -6855,8 +6855,7 @@ rd_window_frame(RD_Window *ws)
                                             UI_BoxFlag_Clip|
                                             UI_BoxFlag_DrawBorder|
                                             UI_BoxFlag_DisableFocusOverlay|
-                                            ((ws->focused_panel != panel)*UI_BoxFlag_DisableFocusBorder)|
-                                            ((ws->focused_panel != panel)*UI_BoxFlag_DrawOverlay),
+                                            ((ws->focused_panel != panel)*UI_BoxFlag_DisableFocusBorder),
                                             panel_key);
         }
         
@@ -7827,6 +7826,13 @@ rd_window_frame(RD_Window *ws)
           if(b->flags & UI_BoxFlag_Clip)
           {
             dr_pop_clip();
+          }
+          
+          // rjf: draw overlay
+          if(b->flags & UI_BoxFlag_DrawOverlay)
+          {
+            R_Rect2DInst *inst = dr_rect(b->rect, b->palette->colors[UI_ColorCode_Overlay], 0, 0, 1.f);
+            MemoryCopyArray(inst->corner_radii, b->corner_radii);
           }
           
           // rjf: draw border

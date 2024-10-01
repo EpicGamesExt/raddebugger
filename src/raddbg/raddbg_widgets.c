@@ -816,6 +816,7 @@ struct RD_ThreadBoxDrawExtData
   Vec4F32 thread_color;
   F32 progress_t;
   F32 alive_t;
+  F32 hover_t;
   B32 is_selected;
   B32 is_frozen;
   B32 do_lines;
@@ -849,6 +850,20 @@ internal UI_BOX_CUSTOM_DRAW(rd_thread_box_draw_extensions)
                    box->rect.y0 + (box->rect.y1-box->rect.y0)*u->progress_t),
             weak_thread_color,
             0, 0, 1);
+  }
+  
+  // rjf: draw rich hover fill
+  if(u->hover_t > 0.001f)
+  {
+    Vec4F32 weak_thread_color = u->thread_color;
+    weak_thread_color.w *= 0.5f*u->hover_t;
+    R_Rect2DInst *inst = dr_rect(r2f32p(box->parent->parent->parent->rect.x0,
+                                        box->parent->rect.y0,
+                                        box->parent->parent->parent->rect.x0 + ui_top_font_size()*22.f*u->hover_t,
+                                        box->parent->rect.y1),
+                                 v4f32(0, 0, 0, 0),
+                                 0, 0, 1);
+    inst->colors[Corner_00] = inst->colors[Corner_01] = weak_thread_color;
   }
   
   // rjf: draw slight fill on selected thread
@@ -971,6 +986,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   margin_contents_palette->background = v4f32(0, 0, 0, 0);
   F32 line_num_padding_px = ui_top_font_size()*1.f;
   F32 entity_alive_t_rate = 1 - pow_f32(2, (-30.f * rd_state->frame_dt));
+  F32 entity_hover_t_rate = 1 - pow_f32(2, (-20.f * rd_state->frame_dt));
   
   //////////////////////////////
   //- rjf: build top-level container
@@ -1101,10 +1117,13 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             UI_Signal thread_sig = ui_signal_from_box(thread_box);
             
             // rjf: custom draw
-            {
+            {RD_Regs *hover_regs = rd_get_hover_regs();
+              B32 is_hovering = (ctrl_handle_match(hover_regs->thread, thread->handle) &&
+                                 rd_state->hover_regs_slot == RD_RegSlot_Thread);
               RD_ThreadBoxDrawExtData *u = push_array(ui_build_arena(), RD_ThreadBoxDrawExtData, 1);
               u->thread_color = color;
               u->alive_t      = ui_anim(ui_key_from_stringf(top_container_box->key, "###thread_alive_t_%p", thread), 1.f, .rate = entity_alive_t_rate);
+              u->hover_t      = ui_anim(ui_key_from_stringf(top_container_box->key, "###thread_hover_t_%p", thread), (F32)!!is_hovering, .rate = entity_hover_t_rate);
               u->is_selected  = (thread == selected_thread);
               u->is_frozen    = !!thread->is_frozen;
               u->do_lines     = rd_setting_val_from_code(RD_SettingCode_ThreadLines).s32;
@@ -1246,9 +1265,13 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             
             // rjf: custom draw
             {
+              RD_Regs *hover_regs = rd_get_hover_regs();
+              B32 is_hovering = (ctrl_handle_match(hover_regs->thread, thread->handle) &&
+                                 rd_state->hover_regs_slot == RD_RegSlot_Thread);
               RD_ThreadBoxDrawExtData *u = push_array(ui_build_arena(), RD_ThreadBoxDrawExtData, 1);
               u->thread_color = color;
               u->alive_t      = ui_anim(ui_key_from_stringf(top_container_box->key, "###thread_alive_t_%p", thread), 1.f, .rate = entity_alive_t_rate);
+              u->hover_t      = ui_anim(ui_key_from_stringf(top_container_box->key, "###thread_hover_t_%p", thread), (F32)!!is_hovering, .rate = entity_hover_t_rate);
               u->is_selected  = (thread == selected_thread);
               u->is_frozen    = !!thread->is_frozen;
               ui_box_equip_custom_draw(thread_box, rd_thread_box_draw_extensions, u);

@@ -1195,6 +1195,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
   FZY_Scope *fzy_scope = fzy_scope_open();
   Temp scratch = scratch_begin(0, 0);
   UI_ScrollPt2 scroll_pos = rd_view_scroll_pos();
+  F32 entity_hover_t_rate = 1 - pow_f32(2, (-20.f * rd_state->frame_dt));
   
   //////////////////////////////
   //- rjf: unpack arguments
@@ -2463,6 +2464,11 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
               RD_Entity *entity = row_info.collection_entity;
               CTRL_Entity *ctrl_entity = row_info.collection_ctrl_entity;
               B32 entity_box_selected = (row_selected && selection_tbl.min.x <= 1 && 1 <= selection_tbl.max.x);
+              B32 is_hovering = ((rd_handle_match(rd_state->hover_regs->entity, rd_handle_from_entity(entity)) &&
+                                  rd_state->hover_regs_slot == RD_RegSlot_Entity) ||
+                                 (ctrl_handle_match(rd_state->hover_regs->thread, ctrl_entity->handle) && rd_state->hover_regs_slot == RD_RegSlot_Thread) ||
+                                 (ctrl_handle_match(rd_state->hover_regs->module, ctrl_entity->handle) && rd_state->hover_regs_slot == RD_RegSlot_Module) ||
+                                 (ctrl_handle_match(rd_state->hover_regs->process, ctrl_entity->handle) && rd_state->hover_regs_slot == RD_RegSlot_Process));
               
               //- rjf: pick palette
               UI_Palette *palette = ui_top_palette();
@@ -2499,6 +2505,16 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                 {
                   fstrs = rd_title_fstrs_from_ctrl_entity(scratch.arena, ctrl_entity, ui_top_palette()->text_weak, ui_top_font_size(), 1);
                 }
+                F32 hover_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "###entity_hover_t_%p_%p", entity, ctrl_entity), (F32)!!is_hovering, .rate = entity_hover_t_rate);
+                if(!rd_entity_is_nil(entity))
+                {
+                  palette->overlay = rd_rgba_from_entity(entity);
+                }
+                else if(ctrl_entity != &ctrl_entity_nil)
+                {
+                  palette->overlay = rd_rgba_from_ctrl_entity(ctrl_entity);
+                }
+                palette->overlay.w *= 0.3f*hover_t;
                 
                 //- rjf: build
                 ui_set_next_hover_cursor(OS_Cursor_HandPoint);
@@ -2507,21 +2523,37 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                 {
                   entity_box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|
                                                          UI_BoxFlag_DrawBorder|
+                                                         UI_BoxFlag_DrawOverlay|
                                                          UI_BoxFlag_DrawBackground|
                                                          UI_BoxFlag_DrawHotEffects|
                                                          UI_BoxFlag_DrawActiveEffects,
                                                          "###entity_%p_%p", entity, ctrl_entity);
                 }
                 {
-                  UI_Parent(entity_box)
+                  UI_Parent(entity_box) RD_RegsScope(.entity = rd_handle_from_entity(entity))
                   {
+                    RD_RegSlot slot = RD_RegSlot_Entity;
+                    switch(ctrl_entity->kind)
+                    {
+                      case CTRL_EntityKind_Thread:{slot = RD_RegSlot_Thread; rd_regs()->thread = ctrl_entity->handle;}break;
+                      case CTRL_EntityKind_Process:{slot = RD_RegSlot_Process; rd_regs()->process = ctrl_entity->handle;}break;
+                      case CTRL_EntityKind_Module:{slot = RD_RegSlot_Module; rd_regs()->module = ctrl_entity->handle;}break;
+                    }
                     UI_PrefWidth(ui_em(2.f, 1.f)) if(ui_pressed(ui_expander(row_expanded, str8_lit("###expanded"))))
                     {
                       next_row_expanded = !row_expanded;
                     }
-                    UI_Box *title_box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
+                    UI_Box *title_box = ui_build_box_from_key(UI_BoxFlag_DrawText|UI_BoxFlag_DisableTruncatedHover, ui_key_zero());
                     ui_box_equip_display_fancy_strings(title_box, &fstrs);
                     UI_Signal sig = ui_signal_from_box(entity_box);
+                    if(ui_hovering(sig)) 
+                    {
+                      rd_set_hover_regs(slot);
+                    }
+                    if(ui_dragging(sig) && !contains_2f32(sig.box->rect, ui_mouse()))
+                    {
+                      rd_drag_begin(slot);
+                    }
                     if(ui_clicked(sig))
                     {
                       if(entity->kind == RD_EntityKind_Target)

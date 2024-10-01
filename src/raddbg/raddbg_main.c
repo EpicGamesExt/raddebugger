@@ -47,6 +47,8 @@
 ////////////////////////////////
 //~ rjf: post-0.9.12 TODO notes
 //
+//  [ ] (reported by forrest) 'set-next-statement' -> prioritize current
+//      module/symbol, in cases where one line maps to many voffs
 //  [ ] collapse upstream state for theme/bindings/settings into entities; use cache accelerators if needed to make up difference
 //  [ ] collapse upstream state for windows/panels/tabs into entities; use downstream window/view resource cache to make up the difference
 //  [ ] entity <-> mdesk paths
