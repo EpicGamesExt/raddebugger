@@ -1089,6 +1089,10 @@ rd_string_from_eval_viz_row_column(Arena *arena, EV_View *ev, EV_Row *row, RD_Wa
           result = str8_lit("???");
         }
       }
+      else
+      {
+        result = str8_lit("???");
+      }
       di_scope_close(di_scope);
       scratch_end(scratch);
     }break;
@@ -1209,9 +1213,10 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
   }
   RD_WatchViewRowCtrl row_ctrls_[] =
   {
-    {RD_EntityKind_Target, RD_CmdKind_LaunchAndRun  },
-    {RD_EntityKind_Target, RD_CmdKind_LaunchAndInit },
-    {RD_EntityKind_Target, RD_CmdKind_SelectEntity  },
+    {RD_EntityKind_Target, CTRL_EntityKind_Null,   RD_CmdKind_LaunchAndRun  },
+    {RD_EntityKind_Target, CTRL_EntityKind_Null,   RD_CmdKind_LaunchAndInit },
+    {RD_EntityKind_Target, CTRL_EntityKind_Null,   RD_CmdKind_SelectEntity  },
+    {RD_EntityKind_Nil,    CTRL_EntityKind_Thread, RD_CmdKind_FreezeThread  },
   };
   RD_WatchViewRowCtrl *row_ctrls = row_ctrls_;
   U64 row_ctrls_count = ArrayCount(row_ctrls_);
@@ -1375,7 +1380,16 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
           RD_WatchViewRowKind row_kind = rd_watch_view_row_kind_from_flags_row_info(flags, mark_rows.first, &row_info);
           if(row_kind == RD_WatchViewRowKind_PrettyEntityControls)
           {
-            cursor_x_range = r1s64(1, 1+row_ctrls_count);
+            U64 row_ctrl_count = 0;
+            for EachIndex(idx, row_ctrls_count)
+            {
+              if(row_ctrls[idx].entity_kind == row_info.collection_entity->kind &&
+                 row_ctrls[idx].ctrl_entity_kind == row_info.collection_ctrl_entity->kind)
+              {
+                row_ctrl_count += 1;
+              }
+            }
+            cursor_x_range = r1s64(1, 1+row_ctrl_count);
           }
         }
         cursor_tbl_range = r2s64(v2s64(cursor_x_range.min, 0), v2s64(cursor_x_range.max, block_tree.total_item_count-1));
@@ -1540,7 +1554,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                 }
               }break;
               case RD_WatchViewRowKind_PrettyEntityControls:
-              if(!rd_entity_is_nil(row_info.collection_entity) && selection_tbl.min.x == 1 && selection_tbl.max.x == 1)
+              if((!rd_entity_is_nil(row_info.collection_entity) || row_info.collection_ctrl_entity != &ctrl_entity_nil) && selection_tbl.min.x == 1 && selection_tbl.max.x == 1)
               {
                 kind = OpKind_DoExpand;
               }break;
@@ -2157,6 +2171,23 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
           B32 row_selected = (selection_tbl.min.y <= global_row_idx && global_row_idx <= selection_tbl.max.y);
           B32 row_expanded = ev_expansion_from_key(eval_view, row->key);
           E_Eval row_eval = e_eval_from_expr(scratch.arena, row->expr);
+          CTRL_Entity *row_ctrl_entity = rd_ctrl_entity_from_eval_space(row_eval.space);
+          CTRL_Entity *row_module = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->module);
+          switch(row_ctrl_entity->kind)
+          {
+            default:
+            case CTRL_EntityKind_Process:
+            if(row_eval.mode == E_Mode_Offset)
+            {
+              row_module = ctrl_module_from_process_vaddr(row_ctrl_entity, row_eval.value.u64);
+            }break;
+            case CTRL_EntityKind_Thread:
+            if(row_eval.mode == E_Mode_Value)
+            {
+              CTRL_Entity *process = ctrl_process_from_entity(row_ctrl_entity);
+              row_module = ctrl_module_from_process_vaddr(process, row_eval.value.u64);
+            }break;
+          }
           E_Type *row_type = e_type_from_key(scratch.arena, row_eval.type_key);
           B32 row_is_expandable = ev_row_is_expandable(row);
           B32 row_is_editable = ev_row_is_editable(row);
@@ -2243,7 +2274,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
           //////////////////////
           //- rjf: build row contents
           //
-          UI_Parent(row_box) switch(row_kind)
+          RD_RegsScope(.module = row_module->handle) UI_Parent(row_box) switch(row_kind)
           {
             ////////////////////
             //- rjf: header row
@@ -2434,6 +2465,10 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
               {
                 palette = rd_palette_from_code(RD_PaletteCode_NeutralPopButton);
               }
+              if(ctrl_entity->kind == RD_EntityKind_Thread && ctrl_handle_match(ctrl_entity->handle, rd_regs()->thread))
+              {
+                palette = rd_palette_from_code(RD_PaletteCode_NeutralPopButton);
+              }
               
               //- rjf: build add-new buttons
               if(rd_entity_is_nil(entity) && collection_entity_kind == RD_EntityKind_Target)
@@ -2447,8 +2482,20 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
               }
               
               //- rjf: build entity box
-              if(!rd_entity_is_nil(entity))
+              if(!rd_entity_is_nil(entity) || ctrl_entity != &ctrl_entity_nil)
               {
+                //- rjf: unpack entity info
+                DR_FancyStringList fstrs = {0};
+                if(!rd_entity_is_nil(entity))
+                {
+                  fstrs = rd_title_fstrs_from_entity(scratch.arena, entity, ui_top_palette()->text_weak, ui_top_font_size());
+                }
+                else if(ctrl_entity != &ctrl_entity_nil)
+                {
+                  fstrs = rd_title_fstrs_from_ctrl_entity(scratch.arena, ctrl_entity, ui_top_palette()->text_weak, ui_top_font_size(), 1);
+                }
+                
+                //- rjf: build
                 ui_set_next_hover_cursor(OS_Cursor_HandPoint);
                 UI_Box *entity_box = &ui_nil_box;
                 UI_FocusHot(entity_box_selected ? UI_FocusKind_On : UI_FocusKind_Off) UI_Palette(palette)
@@ -2458,7 +2505,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                                                          UI_BoxFlag_DrawBackground|
                                                          UI_BoxFlag_DrawHotEffects|
                                                          UI_BoxFlag_DrawActiveEffects,
-                                                         "###entity_%p", entity);
+                                                         "###entity_%p_%p", entity, ctrl_entity);
                 }
                 {
                   UI_Parent(entity_box)
@@ -2467,7 +2514,6 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                     {
                       next_row_expanded = !row_expanded;
                     }
-                    DR_FancyStringList fstrs = rd_title_fstrs_from_entity(scratch.arena, entity, ui_top_palette()->text_weak, ui_top_font_size());
                     UI_Box *title_box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
                     ui_box_equip_display_fancy_strings(title_box, &fstrs);
                     UI_Signal sig = ui_signal_from_box(entity_box);
@@ -2490,70 +2536,47 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                   for EachIndex(idx, row_ctrls_count)
                   {
                     RD_WatchViewRowCtrl *ctrl = &row_ctrls[idx];
-                    if(ctrl->entity_kind == entity->kind)
+                    if(ctrl->entity_kind == entity->kind &&
+                       ctrl->ctrl_entity_kind == ctrl_entity->kind)
                     {
                       UI_FocusHot(row_selected && selection_tbl.min.x <= ctrl_idx+1 && ctrl_idx+1 <= selection_tbl.max.x ? UI_FocusKind_On : UI_FocusKind_Off)
                       {
+                        B32 is_frozen = ctrl_entity_tree_is_frozen(ctrl_entity);
                         RD_IconKind icon_kind = rd_cmd_kind_info_table[ctrl->kind].icon_kind;
+                        UI_Palette *palette = ui_top_palette();
                         if(ctrl->kind == RD_CmdKind_SelectEntity)
                         {
                           icon_kind = entity->disabled ? RD_IconKind_CheckHollow : RD_IconKind_CheckFilled;
                         }
-                        UI_Signal sig = rd_icon_buttonf(icon_kind, 0, "###row_ctrl_%I64x", idx);
-                        if(ui_clicked(sig))
+                        if(ctrl->kind == RD_CmdKind_FreezeThread)
                         {
-                          if(ctrl->kind == RD_CmdKind_SelectEntity)
+                          icon_kind = is_frozen ? RD_IconKind_Locked : RD_IconKind_Unlocked;
+                          palette = rd_palette_from_code(is_frozen ? RD_PaletteCode_NegativePopButton : RD_PaletteCode_PositivePopButton);
+                        }
+                        UI_Palette(palette)
+                        {
+                          UI_Signal sig = rd_icon_buttonf(icon_kind, 0, "###row_ctrl_%I64x", idx);
+                          if(ui_clicked(sig))
                           {
-                            rd_cmd(sig.event_flags & OS_Modifier_Ctrl && entity->disabled  ? RD_CmdKind_EnableEntity :
-                                   sig.event_flags & OS_Modifier_Ctrl && !entity->disabled ? RD_CmdKind_DisableEntity :
-                                   RD_CmdKind_SelectEntity, .entity = rd_handle_from_entity(entity));
-                          }
-                          else
-                          {
-                            rd_cmd(ctrl->kind, .entity = rd_handle_from_entity(entity));
+                            if(ctrl->kind == RD_CmdKind_SelectEntity)
+                            {
+                              rd_cmd(sig.event_flags & OS_Modifier_Ctrl && entity->disabled  ? RD_CmdKind_EnableEntity :
+                                     sig.event_flags & OS_Modifier_Ctrl && !entity->disabled ? RD_CmdKind_DisableEntity :
+                                     RD_CmdKind_SelectEntity, .entity = rd_handle_from_entity(entity));
+                            }
+                            else if(ctrl->kind == RD_CmdKind_FreezeThread)
+                            {
+                              rd_cmd(is_frozen ? RD_CmdKind_ThawThread : RD_CmdKind_FreezeThread,
+                                     .ctrl_entity = ctrl_entity->handle);
+                            }
+                            else
+                            {
+                              rd_cmd(ctrl->kind, .entity = rd_handle_from_entity(entity));
+                            }
                           }
                         }
                       }
                       ctrl_idx += 1;
-                    }
-                  }
-                }
-              }
-              
-              //- rjf: build ctrl entity box
-              if(ctrl_entity != &ctrl_entity_nil)
-              {
-                ui_set_next_hover_cursor(OS_Cursor_HandPoint);
-                UI_Box *entity_box = &ui_nil_box;
-                UI_FocusHot(entity_box_selected ? UI_FocusKind_On : UI_FocusKind_Off) UI_Palette(palette)
-                {
-                  entity_box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|
-                                                         UI_BoxFlag_DrawBorder|
-                                                         UI_BoxFlag_DrawBackground|
-                                                         UI_BoxFlag_DrawHotEffects|
-                                                         UI_BoxFlag_DrawActiveEffects,
-                                                         "###entity_%p", ctrl_entity);
-                }
-                {
-                  UI_Parent(entity_box)
-                  {
-                    // rjf: build expander, title
-                    UI_PrefWidth(ui_em(2.f, 1.f)) if(ui_pressed(ui_expander(row_expanded, str8_lit("###expanded"))))
-                    {
-                      next_row_expanded = !row_expanded;
-                    }
-                    DR_FancyStringList fstrs = rd_title_fstrs_from_ctrl_entity(scratch.arena, ctrl_entity, ui_top_palette()->text_weak, ui_top_font_size());
-                    UI_Box *title_box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
-                    ui_box_equip_display_fancy_strings(title_box, &fstrs);
-                    UI_Signal sig = ui_signal_from_box(entity_box);
-                    if(ui_clicked(sig))
-                    {
-                      if(entity->kind == RD_EntityKind_Target)
-                      {
-                        rd_cmd(sig.event_flags & OS_Modifier_Ctrl && entity->disabled  ? RD_CmdKind_EnableEntity :
-                               sig.event_flags & OS_Modifier_Ctrl && !entity->disabled ? RD_CmdKind_DisableEntity :
-                               RD_CmdKind_SelectEntity, .entity = rd_handle_from_entity(entity));
-                      }
                     }
                   }
                 }
@@ -6170,22 +6193,6 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(disasm)
       default: break;
       case RD_CmdKind_GoToAddress:
       {
-        RD_Entity *process = &d_nil_entity;
-        {
-          RD_Entity *entity = rd_entity_from_handle(cmd->regs->entity);
-          if(!rd_entity_is_nil(entity) &&
-             (entity->kind == RD_EntityKind_Process ||
-              entity->kind == RD_EntityKind_Thread ||
-              entity->kind == RD_EntityKind_Module))
-          {
-            process = entity;
-            if(entity->kind == RD_EntityKind_Thread ||
-               entity->kind == RD_EntityKind_Module)
-            {
-              process = rd_entity_ancestor_from_kind(process, RD_EntityKind_Process);
-            }
-          }
-        }
         dv->goto_vaddr = cmd->regs->vaddr;
       }break;
       case RD_CmdKind_ToggleCodeBytesVisibility: {dv->style_flags ^= DASM_StyleFlag_CodeBytes;}break;
@@ -6204,13 +6211,16 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(disasm)
   //////////////////////////////
   //- rjf: do goto vaddr
   //
-  if(!is_loading && has_disasm && dv->goto_vaddr != 0)
+  if(!is_loading && has_disasm && dv->goto_vaddr != 0 && contains_1u64(range, dv->goto_vaddr))
   {
     U64 vaddr = dv->goto_vaddr;
-    dv->goto_vaddr = 0;
     U64 line_idx = dasm_line_array_idx_from_code_off__linear_scan(&dasm_info.lines, vaddr-range.min);
-    S64 line_num = (S64)(line_idx+1);
-    cv->goto_line_num = line_num;
+    if(line_idx < dasm_info.lines.count)
+    {
+      S64 line_num = (S64)(line_idx+1);
+      dv->goto_vaddr = 0;
+      cv->goto_line_num = line_num;
+    }
   }
   
   //////////////////////////////

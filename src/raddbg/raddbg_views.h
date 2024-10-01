@@ -97,6 +97,7 @@ typedef struct RD_WatchViewRowCtrl RD_WatchViewRowCtrl;
 struct RD_WatchViewRowCtrl
 {
   RD_EntityKind entity_kind;
+  CTRL_EntityKind ctrl_entity_kind;
   RD_CmdKind kind;
 };
 

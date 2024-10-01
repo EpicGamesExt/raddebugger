@@ -1857,7 +1857,7 @@ rd_name_from_ctrl_entity(Arena *arena, CTRL_Entity *entity)
 }
 
 internal DR_FancyStringList
-rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, Vec4F32 secondary_color, F32 size)
+rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, Vec4F32 secondary_color, F32 size, B32 include_extras)
 {
   DR_FancyStringList result = {0};
   RD_IconKind icon_kind = RD_IconKind_Null;
@@ -1874,9 +1874,24 @@ rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, Vec4F32 secon
     dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Icons), size, secondary_color, rd_icon_kind_text_table[icon_kind]);
   }
   dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), size, secondary_color, str8_lit(" "));
+  if(entity->kind == CTRL_EntityKind_Thread)
+  {
+    CTRL_EntityList processes = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Process);
+    if(processes.count > 1)
+    {
+      CTRL_Entity *process = ctrl_entity_ancestor_from_kind(entity, CTRL_EntityKind_Process);
+      String8 process_name = rd_name_from_ctrl_entity(arena, process);
+      Vec4F32 process_color = rd_rgba_from_ctrl_entity(process);
+      if(process_name.size != 0)
+      {
+        dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), size, process_color, process_name);
+        dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), size, secondary_color, str8_lit(" / "));
+      }
+    }
+  }
   String8 name = rd_name_from_ctrl_entity(arena, entity);
   dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), size, color, name);
-  if(entity->kind == CTRL_EntityKind_Thread)
+  if(entity->kind == CTRL_EntityKind_Thread && include_extras)
   {
     F32 ext_size = size*0.95f;
     dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), size, secondary_color, str8_lit(" "));
@@ -3274,7 +3289,7 @@ rd_window_frame(RD_Window *ws)
           String8 arch_str = string_from_arch(arch);
           DR_FancyStringList fstrs = rd_title_fstrs_from_ctrl_entity(scratch.arena, thread,
                                                                      rd_rgba_from_theme_color(RD_ThemeColor_TextWeak),
-                                                                     ui_top_font_size());
+                                                                     ui_top_font_size(), 0);
           
           // TODO(rjf): @msgs show stop info (just icon or shortened description)
           
@@ -3826,7 +3841,7 @@ rd_window_frame(RD_Window *ws)
               UI_TextAlignment(UI_TextAlign_Center)
               UI_TextPadding(ui_top_font_size()*1.5f)
             {
-              DR_FancyStringList fstrs = rd_title_fstrs_from_ctrl_entity(scratch.arena, ctrl_entity, ui_top_palette()->text_weak, ui_top_font_size());
+              DR_FancyStringList fstrs = rd_title_fstrs_from_ctrl_entity(scratch.arena, ctrl_entity, ui_top_palette()->text_weak, ui_top_font_size(), 0);
               UI_Box *title_box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
               ui_box_equip_display_fancy_strings(title_box, &fstrs);
               if(ctrl_entity->kind == CTRL_EntityKind_Thread)
@@ -13493,6 +13508,7 @@ rd_frame(void)
               }
               
               // rjf: retry on stopped, pending debug info
+              // TODO(rjf): CANNOT RETRY IN THIS WAY, NEED TO DEFER TO NEXT FRAME
               if(!d_ctrl_targets_running() && (dbgi_pending || missing_rip))
               {
                 rd_cmd(RD_CmdKind_FindThread, .thread = thread->handle);
@@ -14476,6 +14492,9 @@ rd_frame(void)
             if(rd_regs()->unwind_count < rich_unwind.frames.concrete_frame_count)
             {
               D_UnwindFrame *frame = &rich_unwind.frames.v[rd_regs()->unwind_count];
+              U64 rip_vaddr = regs_rip_from_arch_block(thread->arch, frame->regs);
+              CTRL_Entity *module = ctrl_module_from_process_vaddr(process, rip_vaddr);
+              rd_state->base_regs.v.module = module->handle;
               rd_state->base_regs.v.unwind_count = rd_regs()->unwind_count;
               rd_state->base_regs.v.inline_depth = 0;
               if(rd_regs()->inline_depth <= frame->inline_frame_count)

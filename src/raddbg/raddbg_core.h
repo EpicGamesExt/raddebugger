@@ -1176,7 +1176,7 @@ internal DR_FancyStringList rd_title_fstrs_from_entity(Arena *arena, RD_Entity *
 
 internal Vec4F32 rd_rgba_from_ctrl_entity(CTRL_Entity *entity);
 internal String8 rd_name_from_ctrl_entity(Arena *arena, CTRL_Entity *entity);
-internal DR_FancyStringList rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, Vec4F32 secondary_color, F32 size);
+internal DR_FancyStringList rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, Vec4F32 secondary_color, F32 size, B32 include_extras);
 
 ////////////////////////////////
 //~ rjf: Evaluation Spaces
