@@ -463,6 +463,10 @@ e_type_key_cons_base(Type *type)
       {
         flags |= E_TypeFlag_IsCode;
       }
+      if(type->flags & TypeFlag_IsPath)
+      {
+        flags |= E_TypeFlag_IsPath;
+      }
       result = e_type_key_cons_ptr(arch_from_context(), direct_type, flags);
     }break;
     case TypeKind_Array:

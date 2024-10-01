@@ -1853,6 +1853,10 @@ rd_name_from_ctrl_entity(Arena *arena, CTRL_Entity *entity)
   {
     string = str8_lit("unnamed");
   }
+  if(entity->kind == CTRL_EntityKind_Module)
+  {
+    string = str8_skip_last_slash(string);
+  }
   return string;
 }
 

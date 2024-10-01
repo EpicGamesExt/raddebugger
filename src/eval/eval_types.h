@@ -70,6 +70,7 @@ enum
   E_TypeFlag_Volatile = (1<<1),
   E_TypeFlag_External = (1<<2),
   E_TypeFlag_IsCode   = (1<<3),
+  E_TypeFlag_IsPath   = (1<<4),
 };
 
 typedef struct E_Member E_Member;

@@ -102,6 +102,7 @@ enum
 {
   TypeFlag_IsExternal = (1<<0),
   TypeFlag_IsCode     = (1<<1),
+  TypeFlag_IsPath     = (1<<2),
 };
 
 typedef U32 MemberFlags;
@@ -203,42 +204,31 @@ struct_members(Rng1U64)
 struct_type(Rng1U64);
 
 //- rjf: String8
-Type String8__str_ptr_type = {TypeKind_Ptr, 0, sizeof(void *), type(U8), {0}, str8_lit_comp("size")};
-Member String8__members[] =
+ptr_type(String8__str_ptr_type, type(U8), str8_lit_comp("size"));
+struct_members(String8)
 {
-  {str8_lit_comp("str"),  {0}, &String8__str_ptr_type, OffsetOf(String8, str)},
-  {str8_lit_comp("size"), {0}, type(U64),              OffsetOf(String8, size)},
+  member_lit_comp(String8, &String8__str_ptr_type, str),
+  member_lit_comp(String8, type(U64),              size),
 };
-Type String8__type =
-{
-  TypeKind_Struct,
-  0,
-  sizeof(String8),
-  &type_nil,
-  str8_lit_comp("String8"),
-  {0},
-  ArrayCount(String8__members),
-  String8__members,
-};
+struct_type(String8);
 
-//- rjf: String8 (code contents)
-Type String8__code_str_ptr_type = {TypeKind_Ptr, TypeFlag_IsCode, sizeof(void *), type(U8), {0}, str8_lit_comp("size")};
-Member String8__code_members[] =
+//- rjf: String8 (Code)
+ptr_type(String8_Code__str_ptr_type, type(U8), str8_lit_comp("size"), .flags = TypeFlag_IsCode);
+struct_members(String8_Code)
 {
-  {str8_lit_comp("str"),  {0}, &String8__code_str_ptr_type, OffsetOf(String8, str)},
-  {str8_lit_comp("size"), {0}, type(U64),                   OffsetOf(String8, size)},
+  member_lit_comp(String8, &String8_Code__str_ptr_type, str),
+  member_lit_comp(String8, type(U64),                   size),
 };
-Type String8__code_type =
+named_struct_type(String8_Code, String8);
+
+//- rjf: String8 (Path)
+ptr_type(String8_Path__str_ptr_type, type(U8), str8_lit_comp("size"), .flags = TypeFlag_IsPath);
+struct_members(String8_Path)
 {
-  TypeKind_Struct,
-  0,
-  sizeof(String8),
-  &type_nil,
-  str8_lit_comp("String8"),
-  {0},
-  ArrayCount(String8__code_members),
-  String8__code_members,
+  member_lit_comp(String8, &String8_Path__str_ptr_type, str),
+  member_lit_comp(String8, type(U64),                   size),
 };
+named_struct_type(String8_Path, String8);
 
 //- rjf: String8Node
 extern Type String8Node__type;

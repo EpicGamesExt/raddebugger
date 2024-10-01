@@ -1217,6 +1217,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
     {RD_EntityKind_Target, CTRL_EntityKind_Null,   RD_CmdKind_LaunchAndInit },
     {RD_EntityKind_Target, CTRL_EntityKind_Null,   RD_CmdKind_SelectEntity  },
     {RD_EntityKind_Nil,    CTRL_EntityKind_Thread, RD_CmdKind_FreezeThread  },
+    {RD_EntityKind_Nil,    CTRL_EntityKind_Thread, RD_CmdKind_SelectThread  },
   };
   RD_WatchViewRowCtrl *row_ctrls = row_ctrls_;
   U64 row_ctrls_count = ArrayCount(row_ctrls_);
@@ -2381,7 +2382,8 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
               //- rjf: peek clicks in canvas region, mark clicked
               for(UI_Event *evt = 0; ui_next_event(&evt);)
               {
-                if(evt->kind == UI_EventKind_Press && evt->key == OS_Key_LeftMouseButton && contains_2f32(canvas_rect, evt->pos))
+                if(evt->kind == UI_EventKind_Press && evt->key == OS_Key_LeftMouseButton && contains_2f32(canvas_rect, evt->pos) &&
+                   contains_2f32(rect, evt->pos))
                 {
                   pressed = 1;
                   break;
@@ -2468,7 +2470,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
               {
                 palette = rd_palette_from_code(RD_PaletteCode_NeutralPopButton);
               }
-              if(ctrl_entity->kind == RD_EntityKind_Thread && ctrl_handle_match(ctrl_entity->handle, rd_regs()->thread))
+              if(ctrl_entity->kind == CTRL_EntityKind_Thread && ctrl_handle_match(ctrl_entity->handle, rd_regs()->thread))
               {
                 palette = rd_palette_from_code(RD_PaletteCode_NeutralPopButton);
               }
@@ -2528,6 +2530,10 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                                sig.event_flags & OS_Modifier_Ctrl && !entity->disabled ? RD_CmdKind_DisableEntity :
                                RD_CmdKind_SelectEntity, .entity = rd_handle_from_entity(entity));
                       }
+                      if(ctrl_entity->kind == CTRL_EntityKind_Thread)
+                      {
+                        rd_cmd(RD_CmdKind_SelectThread, .thread = ctrl_entity->handle);
+                      }
                     }
                   }
                 }
@@ -2551,6 +2557,10 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                         {
                           icon_kind = entity->disabled ? RD_IconKind_CheckHollow : RD_IconKind_CheckFilled;
                         }
+                        if(ctrl->kind == RD_CmdKind_SelectThread)
+                        {
+                          icon_kind = (ctrl_handle_match(ctrl_entity->handle, rd_base_regs()->thread) ? RD_IconKind_CheckFilled : RD_IconKind_CheckHollow);
+                        }
                         if(ctrl->kind == RD_CmdKind_FreezeThread)
                         {
                           icon_kind = is_frozen ? RD_IconKind_Locked : RD_IconKind_Unlocked;
@@ -2566,6 +2576,10 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                               rd_cmd(sig.event_flags & OS_Modifier_Ctrl && entity->disabled  ? RD_CmdKind_EnableEntity :
                                      sig.event_flags & OS_Modifier_Ctrl && !entity->disabled ? RD_CmdKind_DisableEntity :
                                      RD_CmdKind_SelectEntity, .entity = rd_handle_from_entity(entity));
+                            }
+                            else if(ctrl->kind == RD_CmdKind_SelectThread)
+                            {
+                              rd_cmd(RD_CmdKind_SelectThread, .thread = ctrl_entity->handle);
                             }
                             else if(ctrl->kind == RD_CmdKind_FreezeThread)
                             {
@@ -2810,6 +2824,10 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                   if(col->kind == RD_WatchViewColumnKind_Value && row_type->flags & E_TypeFlag_IsCode)
                   {
                     cell_is_code = 1;
+                  }
+                  if(col->kind == RD_WatchViewColumnKind_Value && row_type->flags & E_TypeFlag_IsPath)
+                  {
+                    cell_is_code = 0;
                   }
                   
                   //- rjf: build cell
