@@ -831,18 +831,35 @@ rd_watch_view_row_info_from_row(EV_Row *row)
     
     // rjf: determine collection entity kind, if any
     RD_EntityKind collection_entity_kind = RD_EntityKind_Nil;
+    CTRL_EntityKind collection_ctrl_entity_kind = CTRL_EntityKind_Null;
     for EachElement(idx, rd_collection_name_table)
     {
       if(str8_match(type->name, rd_collection_name_table[idx], 0))
       {
         collection_entity_kind = rd_collection_entity_kind_table[idx];
+        collection_ctrl_entity_kind = rd_collection_ctrl_entity_kind_table[idx];
         break;
       }
     }
     
-    // rjf: extract collection entities, if any
-    RD_Entity *entity = rd_entity_from_id(key.child_id);
+    // rjf: extract collection entity, if any
+    RD_Entity *entity = &d_nil_entity;
+    if(collection_entity_kind != RD_EntityKind_Nil)
+    {
+      entity = rd_entity_from_id(key.child_id);
+    }
+    
+    // rjf: extract collection
     CTRL_Entity *ctrl_entity = &ctrl_entity_nil;
+    if(collection_ctrl_entity_kind != CTRL_EntityKind_Null && block->expand_view_rule_info_user_data != 0)
+    {
+      U64 block_relative_num = block->expand_view_rule_info->expr_expand_num_from_id(key.child_id, block->expand_view_rule_info_user_data);
+      RD_CtrlEntityExpandAccel *accel = block->expand_view_rule_info_user_data;
+      if(1 <= block_relative_num && block_relative_num <= accel->entities.count)
+      {
+        ctrl_entity = accel->entities.v[block_relative_num-1];
+      }
+    }
     
     // rjf: extract callstack thread, if any
     CTRL_Entity *thread = &ctrl_entity_nil;
@@ -892,12 +909,13 @@ rd_watch_view_row_info_from_row(EV_Row *row)
     }
     
     // rjf: fill
-    info.collection_entity_kind = collection_entity_kind;
-    info.collection_entity      = entity;
-    info.collection_ctrl_entity = ctrl_entity;
-    info.callstack_thread       = thread;
-    info.callstack_unwind_index = unwind_count;
-    info.callstack_inline_depth = inline_depth;
+    info.collection_entity_kind      = collection_entity_kind;
+    info.collection_entity           = entity;
+    info.collection_ctrl_entity_kind = collection_ctrl_entity_kind;
+    info.collection_ctrl_entity      = ctrl_entity;
+    info.callstack_thread            = thread;
+    info.callstack_unwind_index      = unwind_count;
+    info.callstack_inline_depth      = inline_depth;
     
     di_scope_close(di_scope);
     scratch_end(scratch);
@@ -928,6 +946,10 @@ rd_watch_view_row_kind_from_flags_row_info(RD_WatchViewFlags flags, EV_Row *row,
     row_kind = RD_WatchViewRowKind_Canvas;
   }
   else if(flags & RD_WatchViewFlag_PrettyEntityRows && info->collection_entity_kind != RD_EntityKind_Nil)
+  {
+    row_kind = RD_WatchViewRowKind_PrettyEntityControls;
+  }
+  else if(flags & RD_WatchViewFlag_PrettyEntityRows && info->collection_ctrl_entity_kind != CTRL_EntityKind_Null)
   {
     row_kind = RD_WatchViewRowKind_PrettyEntityControls;
   }
@@ -2401,7 +2423,9 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
             {
               //- rjf: unpack
               RD_EntityKind collection_entity_kind = row_info.collection_entity_kind;
+              CTRL_EntityKind collection_ctrl_entity_kind = row_info.collection_ctrl_entity_kind;
               RD_Entity *entity = row_info.collection_entity;
+              CTRL_Entity *ctrl_entity = row_info.collection_ctrl_entity;
               B32 entity_box_selected = (row_selected && selection_tbl.min.x <= 1 && 1 <= selection_tbl.max.x);
               
               //- rjf: pick palette
@@ -2439,25 +2463,21 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                 {
                   UI_Parent(entity_box)
                   {
-                    // rjf: build expander, title
-                    if(!rd_entity_is_nil(entity))
+                    UI_PrefWidth(ui_em(2.f, 1.f)) if(ui_pressed(ui_expander(row_expanded, str8_lit("###expanded"))))
                     {
-                      UI_PrefWidth(ui_em(2.f, 1.f)) if(ui_pressed(ui_expander(row_expanded, str8_lit("###expanded"))))
+                      next_row_expanded = !row_expanded;
+                    }
+                    DR_FancyStringList fstrs = rd_title_fstrs_from_entity(scratch.arena, entity, ui_top_palette()->text_weak, ui_top_font_size());
+                    UI_Box *title_box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
+                    ui_box_equip_display_fancy_strings(title_box, &fstrs);
+                    UI_Signal sig = ui_signal_from_box(entity_box);
+                    if(ui_clicked(sig))
+                    {
+                      if(entity->kind == RD_EntityKind_Target)
                       {
-                        next_row_expanded = !row_expanded;
-                      }
-                      DR_FancyStringList fstrs = rd_title_fstrs_from_entity(scratch.arena, entity, ui_top_palette()->text_weak, ui_top_font_size());
-                      UI_Box *title_box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
-                      ui_box_equip_display_fancy_strings(title_box, &fstrs);
-                      UI_Signal sig = ui_signal_from_box(entity_box);
-                      if(ui_clicked(sig))
-                      {
-                        if(entity->kind == RD_EntityKind_Target)
-                        {
-                          rd_cmd(sig.event_flags & OS_Modifier_Ctrl && entity->disabled  ? RD_CmdKind_EnableEntity :
-                                 sig.event_flags & OS_Modifier_Ctrl && !entity->disabled ? RD_CmdKind_DisableEntity :
-                                 RD_CmdKind_SelectEntity, .entity = rd_handle_from_entity(entity));
-                        }
+                        rd_cmd(sig.event_flags & OS_Modifier_Ctrl && entity->disabled  ? RD_CmdKind_EnableEntity :
+                               sig.event_flags & OS_Modifier_Ctrl && !entity->disabled ? RD_CmdKind_DisableEntity :
+                               RD_CmdKind_SelectEntity, .entity = rd_handle_from_entity(entity));
                       }
                     }
                   }
@@ -2495,6 +2515,45 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                         }
                       }
                       ctrl_idx += 1;
+                    }
+                  }
+                }
+              }
+              
+              //- rjf: build ctrl entity box
+              if(ctrl_entity != &ctrl_entity_nil)
+              {
+                ui_set_next_hover_cursor(OS_Cursor_HandPoint);
+                UI_Box *entity_box = &ui_nil_box;
+                UI_FocusHot(entity_box_selected ? UI_FocusKind_On : UI_FocusKind_Off) UI_Palette(palette)
+                {
+                  entity_box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|
+                                                         UI_BoxFlag_DrawBorder|
+                                                         UI_BoxFlag_DrawBackground|
+                                                         UI_BoxFlag_DrawHotEffects|
+                                                         UI_BoxFlag_DrawActiveEffects,
+                                                         "###entity_%p", ctrl_entity);
+                }
+                {
+                  UI_Parent(entity_box)
+                  {
+                    // rjf: build expander, title
+                    UI_PrefWidth(ui_em(2.f, 1.f)) if(ui_pressed(ui_expander(row_expanded, str8_lit("###expanded"))))
+                    {
+                      next_row_expanded = !row_expanded;
+                    }
+                    DR_FancyStringList fstrs = rd_title_fstrs_from_ctrl_entity(scratch.arena, ctrl_entity, ui_top_palette()->text_weak, ui_top_font_size());
+                    UI_Box *title_box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
+                    ui_box_equip_display_fancy_strings(title_box, &fstrs);
+                    UI_Signal sig = ui_signal_from_box(entity_box);
+                    if(ui_clicked(sig))
+                    {
+                      if(entity->kind == RD_EntityKind_Target)
+                      {
+                        rd_cmd(sig.event_flags & OS_Modifier_Ctrl && entity->disabled  ? RD_CmdKind_EnableEntity :
+                               sig.event_flags & OS_Modifier_Ctrl && !entity->disabled ? RD_CmdKind_DisableEntity :
+                               RD_CmdKind_SelectEntity, .entity = rd_handle_from_entity(entity));
+                      }
                     }
                   }
                 }

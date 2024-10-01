@@ -818,21 +818,21 @@ RD_IconTable:
 ////////////////////////////////
 //~ rjf: Collections
 
-@table(name        entity_kind      id_space)
+@table(name        entity_kind      ctrl_entity_kind  id_space)
 RD_CollectionTable:
 {
-  {watches          Watch            x}
-  {targets          Target           x}
-  {breakpoints      Breakpoint       x}
-  {watch_pins       WatchPin         x}
-  {threads          Nil              -}
-  {modules          Nil              -}
-  {locals           Nil              -}
-  {registers        Nil              -}
-  {globals          Nil              x}
-  {thread_locals    Nil              x}
-  {types            Nil              x}
-  {procedures       Nil              x}
+  {watches          Watch            Null              x}
+  {targets          Target           Null              x}
+  {breakpoints      Breakpoint       Null              x}
+  {watch_pins       WatchPin         Null              x}
+  {threads          Nil              Thread            x}
+  {modules          Nil              Module            x}
+  {locals           Nil              Null              -}
+  {registers        Nil              Null              -}
+  {globals          Nil              Null              x}
+  {thread_locals    Nil              Null              x}
+  {types            Nil              Null              x}
+  {procedures       Nil              Null              x}
 }
 
 @gen
@@ -852,6 +852,11 @@ RD_CollectionTable:
 @data(RD_EntityKind) rd_collection_entity_kind_table:
 {
   @expand(RD_CollectionTable a) `RD_EntityKind_$(a.entity_kind)`,
+}
+
+@data(CTRL_EntityKind) rd_collection_ctrl_entity_kind_table:
+{
+  @expand(RD_CollectionTable a) `CTRL_EntityKind_$(a.ctrl_entity_kind)`,
 }
 
 @data(`EV_ViewRuleExprExpandInfoHookFunctionType *`) rd_collection_expr_expand_info_hook_function_table:

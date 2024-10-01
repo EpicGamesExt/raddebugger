@@ -1876,6 +1876,44 @@ rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, Vec4F32 secon
   dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), size, secondary_color, str8_lit(" "));
   String8 name = rd_name_from_ctrl_entity(arena, entity);
   dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), size, color, name);
+  if(entity->kind == CTRL_EntityKind_Thread)
+  {
+    F32 ext_size = size*0.95f;
+    dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), size, secondary_color, str8_lit(" "));
+    DI_Scope *di_scope = di_scope_open();
+    CTRL_Entity *process = ctrl_entity_ancestor_from_kind(entity, CTRL_EntityKind_Process);
+    Arch arch = entity->arch;
+    CTRL_Unwind unwind = d_query_cached_unwind_from_thread(entity);
+    for(U64 idx = 0, limit = 6; idx < unwind.frames.count && idx < limit; idx += 1)
+    {
+      CTRL_UnwindFrame *f = &unwind.frames.v[unwind.frames.count - 1 - idx];
+      U64 rip_vaddr = regs_rip_from_arch_block(arch, f->regs);
+      CTRL_Entity *module = ctrl_module_from_process_vaddr(process, rip_vaddr);
+      U64 rip_voff = ctrl_voff_from_vaddr(module, rip_vaddr);
+      DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
+      RDI_Parsed *rdi = di_rdi_from_key(di_scope, &dbgi_key, 0);
+      if(rdi != &di_rdi_parsed_nil)
+      {
+        RDI_Procedure *procedure = rdi_procedure_from_voff(rdi, rip_voff);
+        String8 name = {0};
+        name.str = rdi_string_from_idx(rdi, procedure->name_string_idx, &name.size);
+        name = push_str8_copy(arena, name);
+        if(name.size != 0)
+        {
+          dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), ext_size, rd_rgba_from_theme_color(RD_ThemeColor_CodeSymbol), name);
+          if(idx+1 < unwind.frames.count)
+          {
+            dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), ext_size, secondary_color, str8_lit(" > "));
+            if(idx+1 == limit)
+            {
+              dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), ext_size, secondary_color, str8_lit("..."));
+            }
+          }
+        }
+      }
+    }
+    di_scope_close(di_scope);
+  }
   return result;
 }
 
@@ -7955,8 +7993,12 @@ EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(watch_pins) { return rd_ev_vie
 
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(threads)           { return rd_ev_view_rule_expr_expand_info__meta_ctrl_entities(arena, view, filter, expr, params, CTRL_EntityKind_Thread); }
 EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(threads)     { return rd_ev_view_rule_expr_expand_range_info__meta_ctrl_entities(arena, view, filter, expr, params, idx_range, user_data, CTRL_EntityKind_Thread); }
+EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(threads)    { return rd_ev_view_rule_expr_id_from_num__meta_ctrl_entities(num, user_data, CTRL_EntityKind_Thread); }
+EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(threads)    { return rd_ev_view_rule_expr_num_from_id__meta_ctrl_entities(id, user_data, CTRL_EntityKind_Thread); }
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(modules)           { return rd_ev_view_rule_expr_expand_info__meta_ctrl_entities(arena, view, filter, expr, params, CTRL_EntityKind_Module); }
 EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(modules)     { return rd_ev_view_rule_expr_expand_range_info__meta_ctrl_entities(arena, view, filter, expr, params, idx_range, user_data, CTRL_EntityKind_Module); }
+EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(modules)    { return rd_ev_view_rule_expr_id_from_num__meta_ctrl_entities(num, user_data, CTRL_EntityKind_Module); }
+EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(modules)    { return rd_ev_view_rule_expr_num_from_id__meta_ctrl_entities(id, user_data, CTRL_EntityKind_Module); }
 
 //- rjf: locals
 
@@ -8224,13 +8266,33 @@ rd_ev_view_rule_expr_expand_range_info__meta_ctrl_entities(Arena *arena, EV_View
 internal U64
 rd_ev_view_rule_expr_id_from_num__meta_ctrl_entities(U64 num, void *user_data, CTRL_EntityKind kind)
 {
-  
+  RD_CtrlEntityExpandAccel *accel = (RD_CtrlEntityExpandAccel *)user_data;
+  U64 id = 0;
+  if(1 <= num && num <= accel->entities.count)
+  {
+    id = d_hash_from_string(str8_struct(&accel->entities.v[num-1]->handle));
+  }
+  return id;
 }
 
 internal U64
 rd_ev_view_rule_expr_num_from_id__meta_ctrl_entities(U64 id, void *user_data, CTRL_EntityKind kind)
 {
-  
+  RD_CtrlEntityExpandAccel *accel = (RD_CtrlEntityExpandAccel *)user_data;
+  U64 num = 0;
+  if(id != 0)
+  {
+    for EachIndex(idx, accel->entities.count)
+    {
+      U64 idx_id = d_hash_from_string(str8_struct(&accel->entities.v[idx]->handle));
+      if(idx_id == id)
+      {
+        num = idx+1;
+        break;
+      }
+    }
+  }
+  return num;
 }
 
 typedef struct RD_DebugInfoTableExpandAccel RD_DebugInfoTableExpandAccel;
