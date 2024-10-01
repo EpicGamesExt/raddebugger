@@ -3302,10 +3302,13 @@ rd_window_frame(RD_Window *ws)
     ////////////////////////////
     //- rjf: rich hover tooltips
     //
-    if(rd_state->hover_regs_slot != RD_RegSlot_Null) UI_Tooltip
+    if(rd_state->hover_regs_slot != RD_RegSlot_Null ||
+       (rd_state->drag_drop_regs_slot != RD_RegSlot_Null && rd_drag_is_active()))
     {
       Temp scratch = scratch_begin(0, 0);
-      RD_Palette(RD_PaletteCode_Floating) switch(rd_state->hover_regs_slot)
+      RD_RegSlot slot = ((rd_state->drag_drop_regs_slot != RD_RegSlot_Null && rd_drag_is_active()) ? rd_state->drag_drop_regs_slot : rd_state->hover_regs_slot);
+      RD_Regs *regs = (((rd_state->drag_drop_regs_slot != RD_RegSlot_Null && rd_drag_is_active()) ? rd_state->drag_drop_regs : rd_state->hover_regs));
+      UI_Tooltip RD_Palette(RD_PaletteCode_Floating) switch(slot)
       {
         default:{}break;
         
@@ -3314,7 +3317,7 @@ rd_window_frame(RD_Window *ws)
         {
           // rjf: unpack
           DI_Scope *di_scope = di_scope_open();
-          CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->thread);
+          CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, regs->thread);
           U64 rip_vaddr = d_query_cached_rip_from_thread(thread);
           Arch arch = thread->arch;
           String8 arch_str = string_from_arch(arch);
