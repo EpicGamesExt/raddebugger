@@ -1864,21 +1864,31 @@ internal DR_FancyStringList
 rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, Vec4F32 secondary_color, F32 size, B32 include_extras)
 {
   DR_FancyStringList result = {0};
-  RD_IconKind icon_kind = RD_IconKind_Null;
+  
+  //- rjf: unpack entity info
+  F32 extras_size = size*0.95f;
   Vec4F32 color = rd_rgba_from_ctrl_entity(entity);
+  String8 name = rd_name_from_ctrl_entity(arena, entity);
+  RD_IconKind icon_kind = RD_IconKind_Null;
+  B32 name_is_code = 0;
   switch(entity->kind)
   {
     default:{}break;
-    case CTRL_EntityKind_Thread:  {icon_kind = RD_IconKind_Thread;}break;
+    case CTRL_EntityKind_Thread:  {icon_kind = RD_IconKind_Thread; name_is_code = 1;}break;
     case CTRL_EntityKind_Process: {icon_kind = RD_IconKind_Threads;}break;
     case CTRL_EntityKind_Module:  {icon_kind = RD_IconKind_Module;}break;
   }
+  
+  //- rjf: push icon
   if(icon_kind != RD_IconKind_Null)
   {
     dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Icons), size, secondary_color, rd_icon_kind_text_table[icon_kind]);
+    dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), size, secondary_color, str8_lit(" "));
   }
-  dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), size, secondary_color, str8_lit(" "));
-  if(entity->kind == CTRL_EntityKind_Thread || entity->kind == CTRL_EntityKind_Module)
+  
+  //- rjf: push containing process prefix
+  if(entity->kind == CTRL_EntityKind_Thread ||
+     entity->kind == CTRL_EntityKind_Module)
   {
     CTRL_EntityList processes = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Process);
     if(processes.count > 1)
@@ -1893,12 +1903,13 @@ rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, Vec4F32 secon
       }
     }
   }
-  B32 name_is_code = (entity->kind == CTRL_EntityKind_Thread);
-  String8 name = rd_name_from_ctrl_entity(arena, entity);
+  
+  //- rjf: push name
   dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(name_is_code ? RD_FontSlot_Code : RD_FontSlot_Main), size, color, name);
+  
+  //- rjf: threads get callstack extras
   if(entity->kind == CTRL_EntityKind_Thread && include_extras)
   {
-    F32 ext_size = size*0.95f;
     dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), size, secondary_color, str8_lit(" "));
     DI_Scope *di_scope = di_scope_open();
     CTRL_Entity *process = ctrl_entity_ancestor_from_kind(entity, CTRL_EntityKind_Process);
@@ -1920,13 +1931,13 @@ rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, Vec4F32 secon
         name = push_str8_copy(arena, name);
         if(name.size != 0)
         {
-          dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), ext_size, rd_rgba_from_theme_color(RD_ThemeColor_CodeSymbol), name);
+          dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), extras_size, rd_rgba_from_theme_color(RD_ThemeColor_CodeSymbol), name);
           if(idx+1 < unwind.frames.count)
           {
-            dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), ext_size, secondary_color, str8_lit(" > "));
+            dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), extras_size, secondary_color, str8_lit(" > "));
             if(idx+1 == limit)
             {
-              dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), ext_size, secondary_color, str8_lit("..."));
+              dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), extras_size, secondary_color, str8_lit("..."));
             }
           }
         }
@@ -1934,6 +1945,21 @@ rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, Vec4F32 secon
     }
     di_scope_close(di_scope);
   }
+  
+  //- rjf: modules get debug info status extras
+  if(entity->kind == CTRL_EntityKind_Module && include_extras)
+  {
+    DI_Scope *di_scope = di_scope_open();
+    DI_Key dbgi_key = ctrl_dbgi_key_from_module(entity);
+    RDI_Parsed *rdi = di_rdi_from_key(di_scope, &dbgi_key, 0);
+    if(rdi->raw_data_size == 0)
+    {
+      dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), size, secondary_color, str8_lit(" "));
+      dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Main), extras_size, secondary_color, str8_lit("(Symbols not found)"));
+    }
+    di_scope_close(di_scope);
+  }
+  
   return result;
 }
 
