@@ -17,9 +17,9 @@ typedef U64 CTRL_MachineID;
 
 //- rjf: styled string types
 
-ptr_type(CTRL_PlainString8__str_ptr_type, type(U8), .flags = 0, .count_delimiter_name = str8_lit_comp("size"));
-ptr_type(CTRL_CodeString8__str_ptr_type, type(U8),  .flags = TypeFlag_IsCode, .count_delimiter_name = str8_lit_comp("size"));
-ptr_type(CTRL_PathString8__str_ptr_type, type(U8),  .flags = TypeFlag_IsPath, .count_delimiter_name = str8_lit_comp("size"));
+ptr_type(CTRL_PlainString8__str_ptr_type, type(U8), .flags = TypeFlag_IsPlainText,.count_delimiter_name = str8_lit_comp("size"));
+ptr_type(CTRL_CodeString8__str_ptr_type, type(U8),  .flags = TypeFlag_IsCodeText, .count_delimiter_name = str8_lit_comp("size"));
+ptr_type(CTRL_PathString8__str_ptr_type, type(U8),  .flags = TypeFlag_IsPathText, .count_delimiter_name = str8_lit_comp("size"));
 Member CTRL_PlainString8__members[] =
 {
   member_lit_comp(String8, &CTRL_PlainString8__str_ptr_type, str,  .pretty_name = str8_lit_comp("Contents")),

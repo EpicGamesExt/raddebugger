@@ -100,9 +100,10 @@ TypeKind;
 typedef U32 TypeFlags;
 enum
 {
-  TypeFlag_IsExternal = (1<<0),
-  TypeFlag_IsCode     = (1<<1),
-  TypeFlag_IsPath     = (1<<2),
+  TypeFlag_IsExternal  = (1<<0),
+  TypeFlag_IsPlainText = (1<<1),
+  TypeFlag_IsCodeText  = (1<<2),
+  TypeFlag_IsPathText  = (1<<3),
 };
 
 typedef U32 MemberFlags;
@@ -211,24 +212,6 @@ struct_members(String8)
   member_lit_comp(String8, type(U64),              size),
 };
 struct_type(String8);
-
-//- rjf: String8 (Code)
-ptr_type(String8_Code__str_ptr_type, type(U8), str8_lit_comp("size"), .flags = TypeFlag_IsCode);
-struct_members(String8_Code)
-{
-  member_lit_comp(String8, &String8_Code__str_ptr_type, str),
-  member_lit_comp(String8, type(U64),                   size),
-};
-named_struct_type(String8_Code, String8);
-
-//- rjf: String8 (Path)
-ptr_type(String8_Path__str_ptr_type, type(U8), str8_lit_comp("size"), .flags = TypeFlag_IsPath);
-struct_members(String8_Path)
-{
-  member_lit_comp(String8, &String8_Path__str_ptr_type, str),
-  member_lit_comp(String8, type(U64),                   size),
-};
-named_struct_type(String8_Path, String8);
 
 //- rjf: String8Node
 extern Type String8Node__type;

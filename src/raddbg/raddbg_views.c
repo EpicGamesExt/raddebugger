@@ -2815,19 +2815,30 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                     }
                   }
                   
-                  //- rjf: determine if cell is code
+                  //- rjf: determine if cell needs code styling
                   B32 cell_is_code = !col->is_non_code;
-                  if(flags & RD_WatchViewFlag_PrettyNameMembers && cell_is_code && row->member != 0 && row->member->pretty_name.size != 0 && col->kind == RD_WatchViewColumnKind_Expr)
+                  switch(col->kind)
                   {
-                    cell_is_code = 0;
-                  }
-                  if(col->kind == RD_WatchViewColumnKind_Value && row_type->flags & E_TypeFlag_IsCode)
-                  {
-                    cell_is_code = 1;
-                  }
-                  if(col->kind == RD_WatchViewColumnKind_Value && row_type->flags & E_TypeFlag_IsPath)
-                  {
-                    cell_is_code = 0;
+                    case RD_WatchViewColumnKind_Expr:
+                    {
+                      cell_is_code = 1;
+                      if(row->member != 0 && row->member->pretty_name.size != 0 && flags & RD_WatchViewFlag_PrettyNameMembers)
+                      {
+                        cell_is_code = 0;
+                      }
+                    }break;
+                    case RD_WatchViewColumnKind_Value:
+                    {
+                      if(row_type->flags & E_TypeFlag_IsCodeText)
+                      {
+                        cell_is_code = 1;
+                      }
+                      else if(row_type->flags & E_TypeFlag_IsPathText ||
+                              row_type->flags & E_TypeFlag_IsPlainText)
+                      {
+                        cell_is_code = 0;
+                      }
+                    }break;
                   }
                   
                   //- rjf: build cell
@@ -4942,7 +4953,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(targets)
   {
     rd_watch_view_init(wv);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Expr,       0.25f);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,      0.75f, .dequote_string = 1, .is_non_code = 1);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,      0.75f, .dequote_string = 1, .is_non_code = 0);
   }
   rd_watch_view_build(wv, RD_WatchViewFlag_NoHeader|RD_WatchViewFlag_PrettyNameMembers|RD_WatchViewFlag_PrettyEntityRows|RD_WatchViewFlag_DisableCacheLines,
                       str8_lit("targets"), str8_lit("only: label exe args working_directory entry_point str"), 1, 10, rect);
@@ -5596,7 +5607,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(modules)
   {
     rd_watch_view_init(wv);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Expr,       0.25f);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,      0.75f);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,      0.75f, .dequote_string = 1);
   }
   rd_watch_view_build(wv, RD_WatchViewFlag_NoHeader|RD_WatchViewFlag_PrettyNameMembers|RD_WatchViewFlag_PrettyEntityRows|RD_WatchViewFlag_DisableCacheLines,
                       str8_lit("modules"), str8_lit("only: exe dbg str vaddr_range min max"), 0, 16, rect);

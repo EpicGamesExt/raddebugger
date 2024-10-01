@@ -455,18 +455,10 @@ e_type_key_cons_base(Type *type)
     {
       E_TypeKey direct_type = e_type_key_cons_base(type->direct);
       E_TypeFlags flags = 0;
-      if(type->flags & TypeFlag_IsExternal)
-      {
-        flags |= E_TypeFlag_External;
-      }
-      if(type->flags & TypeFlag_IsCode)
-      {
-        flags |= E_TypeFlag_IsCode;
-      }
-      if(type->flags & TypeFlag_IsPath)
-      {
-        flags |= E_TypeFlag_IsPath;
-      }
+      if(type->flags & TypeFlag_IsExternal) { flags |= E_TypeFlag_External; }
+      if(type->flags & TypeFlag_IsPlainText){ flags |= E_TypeFlag_IsPlainText; }
+      if(type->flags & TypeFlag_IsCodeText) { flags |= E_TypeFlag_IsCodeText; }
+      if(type->flags & TypeFlag_IsPathText) { flags |= E_TypeFlag_IsPathText; }
       result = e_type_key_cons_ptr(arch_from_context(), direct_type, flags);
     }break;
     case TypeKind_Array:
