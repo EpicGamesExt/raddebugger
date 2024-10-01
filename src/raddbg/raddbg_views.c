@@ -2173,20 +2173,23 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
           E_Eval row_eval = e_eval_from_expr(scratch.arena, row->expr);
           CTRL_Entity *row_ctrl_entity = rd_ctrl_entity_from_eval_space(row_eval.space);
           CTRL_Entity *row_module = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->module);
-          switch(row_ctrl_entity->kind)
+          if(row_eval.space.kind == RD_EvalSpaceKind_CtrlEntity)
           {
-            default:
-            case CTRL_EntityKind_Process:
-            if(row_eval.mode == E_Mode_Offset)
+            switch(row_ctrl_entity->kind)
             {
-              row_module = ctrl_module_from_process_vaddr(row_ctrl_entity, row_eval.value.u64);
-            }break;
-            case CTRL_EntityKind_Thread:
-            if(row_eval.mode == E_Mode_Value)
-            {
-              CTRL_Entity *process = ctrl_process_from_entity(row_ctrl_entity);
-              row_module = ctrl_module_from_process_vaddr(process, row_eval.value.u64);
-            }break;
+              default:
+              case CTRL_EntityKind_Process:
+              if(row_eval.mode == E_Mode_Offset)
+              {
+                row_module = ctrl_module_from_process_vaddr(row_ctrl_entity, row_eval.value.u64);
+              }break;
+              case CTRL_EntityKind_Thread:
+              if(row_eval.mode == E_Mode_Value)
+              {
+                CTRL_Entity *process = ctrl_process_from_entity(row_ctrl_entity);
+                row_module = ctrl_module_from_process_vaddr(process, row_eval.value.u64);
+              }break;
+            }
           }
           E_Type *row_type = e_type_from_key(scratch.arena, row_eval.type_key);
           B32 row_is_expandable = ev_row_is_expandable(row);
@@ -5574,12 +5577,11 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(modules)
   if(!wv->initialized)
   {
     rd_watch_view_init(wv);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member, 0.20f, .string = str8_lit("label.str"),             .display_string = str8_lit("Name"),            .dequote_string = 1, .is_non_code = 1);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member, 0.30f, .string = str8_lit("exe.str"),               .display_string = str8_lit("Executable Path"), .dequote_string = 1, .is_non_code = 1);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member, 0.30f, .string = str8_lit("dbg.str"),               .display_string = str8_lit("Debug Info Path"), .dequote_string = 1, .is_non_code = 1);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member, 0.20f, .string = str8_lit("vaddr_range"),           .display_string = str8_lit("Address Range"),   .rangify_braces = 1, .view_rule = str8_lit("hex"));
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Expr,       0.25f);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,      0.75f);
   }
-  rd_watch_view_build(wv, 0, str8_lit("modules"), str8_lit(""), 0, 10, rect);
+  rd_watch_view_build(wv, RD_WatchViewFlag_NoHeader|RD_WatchViewFlag_PrettyNameMembers|RD_WatchViewFlag_PrettyEntityRows|RD_WatchViewFlag_DisableCacheLines,
+                      str8_lit("modules"), str8_lit("only: exe dbg str vaddr_range min max"), 0, 16, rect);
   ProfEnd();
 }
 

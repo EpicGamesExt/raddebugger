@@ -1874,7 +1874,7 @@ rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, Vec4F32 secon
     dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Icons), size, secondary_color, rd_icon_kind_text_table[icon_kind]);
   }
   dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), size, secondary_color, str8_lit(" "));
-  if(entity->kind == CTRL_EntityKind_Thread)
+  if(entity->kind == CTRL_EntityKind_Thread || entity->kind == CTRL_EntityKind_Module)
   {
     CTRL_EntityList processes = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Process);
     if(processes.count > 1)
@@ -1889,8 +1889,9 @@ rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, Vec4F32 secon
       }
     }
   }
+  B32 name_is_code = (entity->kind == CTRL_EntityKind_Thread);
   String8 name = rd_name_from_ctrl_entity(arena, entity);
-  dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), size, color, name);
+  dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(name_is_code ? RD_FontSlot_Code : RD_FontSlot_Main), size, color, name);
   if(entity->kind == CTRL_EntityKind_Thread && include_extras)
   {
     F32 ext_size = size*0.95f;

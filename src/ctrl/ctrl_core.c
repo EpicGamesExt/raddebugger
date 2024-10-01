@@ -3969,7 +3969,7 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
       CTRL_Handle process_handle = ctrl_handle_make(CTRL_MachineID_Local, event->process);
       CTRL_Handle module_handle = ctrl_handle_make(CTRL_MachineID_Local, event->module);
       CTRL_Event *out_evt1 = ctrl_event_list_push(scratch.arena, &evts);
-      String8 module_path = event->string;
+      String8 module_path = path_normalized_from_string(scratch.arena, event->string);
       U64 exe_timestamp = os_properties_from_file_path(module_path).modified;
       ctrl_thread__module_open(process_handle, module_handle, r1u64(event->address, event->address+event->size), module_path);
       out_evt1->kind       = CTRL_EventKind_NewModule;
