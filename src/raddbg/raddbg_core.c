@@ -12889,34 +12889,42 @@ rd_frame(void)
           case RD_CmdKind_NextTab:
           {
             RD_Panel *panel = rd_panel_from_handle(rd_regs()->panel);
-            RD_View *view = rd_selected_tab_from_panel(panel);
-            RD_View *next_view = view;
-            for(RD_View *v = view; !rd_view_is_nil(v); v = rd_view_is_nil(v->order_next) ? panel->first_tab_view : v->order_next)
+            RD_View *start_view = rd_selected_tab_from_panel(panel);
+            RD_View *next_view = start_view;
+            U64 idx = 0;
+            for(RD_View *v = start_view; !rd_view_is_nil(v); v = (rd_view_is_nil(v->order_next) ? panel->first_tab_view : v->order_next), idx += 1)
             {
-              if(!rd_view_is_project_filtered(v) && v != view)
+              if(v == start_view && idx != 0)
+              {
+                break;
+              }
+              if(!rd_view_is_project_filtered(v) && v != start_view)
               {
                 next_view = v;
                 break;
               }
             }
-            view = next_view;
-            panel->selected_tab_view = rd_handle_from_view(view);
+            panel->selected_tab_view = rd_handle_from_view(next_view);
           }break;
           case RD_CmdKind_PrevTab:
           {
             RD_Panel *panel = rd_panel_from_handle(rd_regs()->panel);
-            RD_View *view = rd_selected_tab_from_panel(panel);
-            RD_View *next_view = view;
-            for(RD_View *v = view; !rd_view_is_nil(v); v = rd_view_is_nil(v->order_prev) ? panel->last_tab_view : v->order_prev)
+            RD_View *start_view = rd_selected_tab_from_panel(panel);
+            RD_View *next_view = start_view;
+            U64 idx = 0;
+            for(RD_View *v = start_view; !rd_view_is_nil(v); v = (rd_view_is_nil(v->order_prev) ? panel->last_tab_view : v->order_prev), idx += 1)
             {
-              if(!rd_view_is_project_filtered(v) && v != view)
+              if(v == start_view && idx != 0)
+              {
+                break;
+              }
+              if(!rd_view_is_project_filtered(v) && v != start_view)
               {
                 next_view = v;
                 break;
               }
             }
-            view = next_view;
-            panel->selected_tab_view = rd_handle_from_view(view);
+            panel->selected_tab_view = rd_handle_from_view(next_view);
           }break;
           case RD_CmdKind_MoveTabRight:
           case RD_CmdKind_MoveTabLeft:

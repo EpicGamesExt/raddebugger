@@ -5315,7 +5315,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(scheduler)
   {
     rd_watch_view_init(wv);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Expr,       0.25f);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,      0.75f);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,      0.75f, .dequote_string = 1);
   }
   rd_watch_view_build(wv, RD_WatchViewFlag_NoHeader|RD_WatchViewFlag_PrettyNameMembers|RD_WatchViewFlag_PrettyEntityRows|RD_WatchViewFlag_DisableCacheLines,
                       str8_lit("threads"), str8_lit("only: label str id callstack v count vaddr inline_depth"), 0, 10, rect);
