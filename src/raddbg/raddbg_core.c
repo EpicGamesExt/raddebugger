@@ -3300,7 +3300,7 @@ rd_window_frame(RD_Window *ws)
     }
     
     ////////////////////////////
-    //- rjf: rich hover tooltips
+    //- rjf: rich hover, drag/drop tooltips
     //
     if(rd_state->hover_regs_slot != RD_RegSlot_Null ||
        (rd_state->drag_drop_regs_slot != RD_RegSlot_Null && rd_drag_is_active()))
@@ -3308,20 +3308,26 @@ rd_window_frame(RD_Window *ws)
       Temp scratch = scratch_begin(0, 0);
       RD_RegSlot slot = ((rd_state->drag_drop_regs_slot != RD_RegSlot_Null && rd_drag_is_active()) ? rd_state->drag_drop_regs_slot : rd_state->hover_regs_slot);
       RD_Regs *regs = (((rd_state->drag_drop_regs_slot != RD_RegSlot_Null && rd_drag_is_active()) ? rd_state->drag_drop_regs : rd_state->hover_regs));
+      CTRL_Entity *ctrl_entity = &ctrl_entity_nil;
       UI_Tooltip RD_Palette(RD_PaletteCode_Floating) switch(slot)
       {
         default:{}break;
         
-        //- rjf: thread tooltips
-        case RD_RegSlot_Thread:
+        ////////////////////////
+        //- rjf: control entity tooltips
+        //
+        case RD_RegSlot_Machine:   {ctrl_entity = ctrl_entity_from_handle(d_state->ctrl_entity_store, regs->machine);     }goto ctrl_entity_tooltip;
+        case RD_RegSlot_Process:   {ctrl_entity = ctrl_entity_from_handle(d_state->ctrl_entity_store, regs->process);     }goto ctrl_entity_tooltip;
+        case RD_RegSlot_Module:    {ctrl_entity = ctrl_entity_from_handle(d_state->ctrl_entity_store, regs->module);      }goto ctrl_entity_tooltip;
+        case RD_RegSlot_Thread:    {ctrl_entity = ctrl_entity_from_handle(d_state->ctrl_entity_store, regs->thread);      }goto ctrl_entity_tooltip;
+        case RD_RegSlot_CtrlEntity:{ctrl_entity = ctrl_entity_from_handle(d_state->ctrl_entity_store, regs->ctrl_entity); }goto ctrl_entity_tooltip;
+        ctrl_entity_tooltip:;
         {
           // rjf: unpack
           DI_Scope *di_scope = di_scope_open();
-          CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, regs->thread);
-          U64 rip_vaddr = d_query_cached_rip_from_thread(thread);
-          Arch arch = thread->arch;
+          Arch arch = ctrl_entity->arch;
           String8 arch_str = string_from_arch(arch);
-          DR_FancyStringList fstrs = rd_title_fstrs_from_ctrl_entity(scratch.arena, thread,
+          DR_FancyStringList fstrs = rd_title_fstrs_from_ctrl_entity(scratch.arena, ctrl_entity,
                                                                      rd_rgba_from_theme_color(RD_ThemeColor_TextWeak),
                                                                      ui_top_font_size(), 0);
           
@@ -3339,62 +3345,85 @@ rd_window_frame(RD_Window *ws)
             {
               UI_FlagsAdd(UI_BoxFlag_DrawTextWeak|UI_BoxFlag_DrawBorder) ui_label(arch_str);
               ui_spacer(ui_em(0.5f, 1.f));
-              UI_FlagsAdd(UI_BoxFlag_DrawTextWeak|UI_BoxFlag_DrawBorder) ui_labelf("TID: %i", (U32)thread->id);
+              if(ctrl_entity->kind == CTRL_EntityKind_Thread ||
+                 ctrl_entity->kind == CTRL_EntityKind_Process)
+              {
+                UI_FlagsAdd(UI_BoxFlag_DrawTextWeak|UI_BoxFlag_DrawBorder) ui_labelf("ID: %i", (U32)ctrl_entity->id);
+              }
             }
           }
           
-          ui_spacer(ui_em(1.5f, 1.f));
+          // rjf: debug info status
+          if(ctrl_entity->kind == CTRL_EntityKind_Module) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
+          {
+            DI_Scope *di_scope = di_scope_open();
+            DI_Key dbgi_key = ctrl_dbgi_key_from_module(ctrl_entity);
+            RDI_Parsed *rdi = di_rdi_from_key(di_scope, &dbgi_key, 0);
+            if(rdi->raw_data_size != 0)
+            {
+              ui_labelf("Symbols successfully loaded from %S", dbgi_key.path);
+            }
+            else
+            {
+              ui_labelf("Symbols not found at %S", dbgi_key.path);
+            }
+            di_scope_close(di_scope);
+          }
           
           // rjf: unwind
-          CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, CTRL_EntityKind_Process);
-          CTRL_Unwind base_unwind = d_query_cached_unwind_from_thread(thread);
-          D_Unwind rich_unwind = d_unwind_from_ctrl_unwind(scratch.arena, di_scope, process, &base_unwind);
-          for(U64 idx = 0; idx < rich_unwind.frames.concrete_frame_count; idx += 1)
+          if(ctrl_entity->kind == CTRL_EntityKind_Thread)
           {
-            D_UnwindFrame *f = &rich_unwind.frames.v[idx];
-            RDI_Parsed *rdi = f->rdi;
-            RDI_Procedure *procedure = f->procedure;
-            U64 rip_vaddr = regs_rip_from_arch_block(thread->arch, f->regs);
-            CTRL_Entity *module = ctrl_module_from_process_vaddr(process, rip_vaddr);
-            String8 module_name = module == &ctrl_entity_nil ? str8_lit("???") : str8_skip_last_slash(module->string);
-            
-            // rjf: inline frames
-            for(D_UnwindInlineFrame *fin = f->last_inline_frame; fin != 0; fin = fin->prev)
+            ui_spacer(ui_em(1.5f, 1.f));
+            CTRL_Entity *process = ctrl_entity_ancestor_from_kind(ctrl_entity, CTRL_EntityKind_Process);
+            CTRL_Unwind base_unwind = d_query_cached_unwind_from_thread(ctrl_entity);
+            D_Unwind rich_unwind = d_unwind_from_ctrl_unwind(scratch.arena, di_scope, process, &base_unwind);
+            for(U64 idx = 0; idx < rich_unwind.frames.concrete_frame_count; idx += 1)
+            {
+              D_UnwindFrame *f = &rich_unwind.frames.v[idx];
+              RDI_Parsed *rdi = f->rdi;
+              RDI_Procedure *procedure = f->procedure;
+              U64 rip_vaddr = regs_rip_from_arch_block(arch, f->regs);
+              CTRL_Entity *module = ctrl_module_from_process_vaddr(process, rip_vaddr);
+              String8 module_name = module == &ctrl_entity_nil ? str8_lit("???") : str8_skip_last_slash(module->string);
+              
+              // rjf: inline frames
+              for(D_UnwindInlineFrame *fin = f->last_inline_frame; fin != 0; fin = fin->prev)
+                UI_PrefWidth(ui_children_sum(1)) UI_Row
+              {
+                String8 name = {0};
+                name.str = rdi_string_from_idx(rdi, fin->inline_site->name_string_idx, &name.size);
+                UI_TextAlignment(UI_TextAlign_Left) RD_Font(RD_FontSlot_Code) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_em(12.f, 1)) ui_labelf("0x%I64x", rip_vaddr);
+                RD_Font(RD_FontSlot_Code) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_text_dim(10, 1)) ui_label(str8_lit("[inlined]"));
+                if(name.size != 0)
+                {
+                  RD_Font(RD_FontSlot_Code) UI_PrefWidth(ui_text_dim(10, 1))
+                  {
+                    rd_code_label(1.f, 0, rd_rgba_from_theme_color(RD_ThemeColor_CodeSymbol), name);
+                  }
+                }
+                else
+                {
+                  RD_Font(RD_FontSlot_Code) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_text_dim(10, 1)) ui_labelf("[??? in %S]", module_name);
+                }
+              }
+              
+              // rjf: concrete frame
               UI_PrefWidth(ui_children_sum(1)) UI_Row
-            {
-              String8 name = {0};
-              name.str = rdi_string_from_idx(rdi, fin->inline_site->name_string_idx, &name.size);
-              UI_TextAlignment(UI_TextAlign_Left) RD_Font(RD_FontSlot_Code) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_em(12.f, 1)) ui_labelf("0x%I64x", rip_vaddr);
-              RD_Font(RD_FontSlot_Code) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_text_dim(10, 1)) ui_label(str8_lit("[inlined]"));
-              if(name.size != 0)
               {
-                RD_Font(RD_FontSlot_Code) UI_PrefWidth(ui_text_dim(10, 1))
+                String8 name = {0};
+                name.str = rdi_name_from_procedure(rdi, procedure, &name.size);
+                UI_TextAlignment(UI_TextAlign_Left) RD_Font(RD_FontSlot_Code) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_em(12.f, 1)) ui_labelf("0x%I64x", rip_vaddr);
+                if(name.size != 0)
                 {
-                  rd_code_label(1.f, 0, rd_rgba_from_theme_color(RD_ThemeColor_CodeSymbol), name);
+                  RD_Font(RD_FontSlot_Code) UI_PrefWidth(ui_text_dim(10, 1))
+                  {
+                    rd_code_label(1.f, 0, rd_rgba_from_theme_color(RD_ThemeColor_CodeSymbol), name);
+                  }
                 }
-              }
-              else
-              {
-                RD_Font(RD_FontSlot_Code) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_text_dim(10, 1)) ui_labelf("[??? in %S]", module_name);
-              }
-            }
-            
-            // rjf: concrete frame
-            UI_PrefWidth(ui_children_sum(1)) UI_Row
-            {
-              String8 name = {0};
-              name.str = rdi_name_from_procedure(rdi, procedure, &name.size);
-              UI_TextAlignment(UI_TextAlign_Left) RD_Font(RD_FontSlot_Code) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_em(12.f, 1)) ui_labelf("0x%I64x", rip_vaddr);
-              if(name.size != 0)
-              {
-                RD_Font(RD_FontSlot_Code) UI_PrefWidth(ui_text_dim(10, 1))
+                else
                 {
-                  rd_code_label(1.f, 0, rd_rgba_from_theme_color(RD_ThemeColor_CodeSymbol), name);
+                  RD_Font(RD_FontSlot_Code) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_text_dim(10, 1)) ui_labelf("[??? in %S]", module_name);
                 }
-              }
-              else
-              {
-                RD_Font(RD_FontSlot_Code) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_text_dim(10, 1)) ui_labelf("[??? in %S]", module_name);
               }
             }
           }
@@ -3502,13 +3531,33 @@ rd_window_frame(RD_Window *ws)
         
         ui_divider(ui_em(1.f, 1.f));
         
-        //- rjf: draw current interaction regs
+        //- rjf: draw registers
+        ui_labelf("hover_reg_slot: %i", rd_state->hover_regs_slot);
+        struct
         {
-          RD_Regs *regs = rd_regs();
+          String8 name;
+          RD_Regs *regs;
+        }
+        regs_info[] =
+        {
+          {str8_lit("regs"),       rd_regs()},
+          {str8_lit("hover_regs"), rd_state->hover_regs},
+        };
+        for EachElement(idx, regs_info)
+        {
+          ui_divider(ui_em(1.f, 1.f));
+          ui_label(regs_info[idx].name);
+          RD_Regs *regs = regs_info[idx].regs;
 #define Handle(name) ui_labelf("%s: [0x%I64x, 0x%I64x]", #name, (regs->name).u64[0], (regs->name).u64[1])
           Handle(window);
           Handle(panel);
           Handle(view);
+#undef Handle
+#define Handle(name) ui_labelf("%s: [0x%I64x, 0x%I64x]", #name, (regs->name).machine_id, (regs->name).dmn_handle.u64[0])
+          Handle(machine);
+          Handle(process);
+          Handle(module);
+          Handle(thread);
 #undef Handle
           ui_labelf("file_path: \"%S\"", regs->file_path);
           ui_labelf("cursor: (L:%I64d, C:%I64d)", regs->cursor.line, regs->cursor.column);

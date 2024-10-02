@@ -2471,14 +2471,14 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                                  (ctrl_handle_match(rd_state->hover_regs->process, ctrl_entity->handle) && rd_state->hover_regs_slot == RD_RegSlot_Process));
               
               //- rjf: pick palette
-              UI_Palette *palette = ui_top_palette();
+              UI_Palette *palette = ui_build_palette(ui_top_palette());
               if(entity->kind == RD_EntityKind_Target && !entity->disabled)
               {
-                palette = rd_palette_from_code(RD_PaletteCode_NeutralPopButton);
+                palette = ui_build_palette(rd_palette_from_code(RD_PaletteCode_NeutralPopButton));
               }
               if(ctrl_entity->kind == CTRL_EntityKind_Thread && ctrl_handle_match(ctrl_entity->handle, rd_regs()->thread))
               {
-                palette = rd_palette_from_code(RD_PaletteCode_NeutralPopButton);
+                palette = ui_build_palette(rd_palette_from_code(RD_PaletteCode_NeutralPopButton));
               }
               
               //- rjf: build add-new buttons
@@ -2505,7 +2505,8 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                 {
                   fstrs = rd_title_fstrs_from_ctrl_entity(scratch.arena, ctrl_entity, ui_top_palette()->text_weak, ui_top_font_size(), 1);
                 }
-                F32 hover_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "###entity_hover_t_%p_%p", entity, ctrl_entity), (F32)!!is_hovering, .rate = entity_hover_t_rate);
+                UI_Key hover_t_key = ui_key_from_stringf(ui_key_zero(), "entity_hover_t_%p_%p", entity, ctrl_entity);
+                F32 hover_t = ui_anim(hover_t_key, (F32)!!is_hovering, .rate = entity_hover_t_rate);
                 if(!rd_entity_is_nil(entity))
                 {
                   palette->overlay = rd_rgba_from_entity(entity);
@@ -2535,9 +2536,10 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                     RD_RegSlot slot = RD_RegSlot_Entity;
                     switch(ctrl_entity->kind)
                     {
-                      case CTRL_EntityKind_Thread:{slot = RD_RegSlot_Thread; rd_regs()->thread = ctrl_entity->handle;}break;
+                      default:{}break;
+                      case CTRL_EntityKind_Thread: {slot = RD_RegSlot_Thread; rd_regs()->thread = ctrl_entity->handle;}break;
                       case CTRL_EntityKind_Process:{slot = RD_RegSlot_Process; rd_regs()->process = ctrl_entity->handle;}break;
-                      case CTRL_EntityKind_Module:{slot = RD_RegSlot_Module; rd_regs()->module = ctrl_entity->handle;}break;
+                      case CTRL_EntityKind_Module: {slot = RD_RegSlot_Module; rd_regs()->module = ctrl_entity->handle;}break;
                     }
                     UI_PrefWidth(ui_em(2.f, 1.f)) if(ui_pressed(ui_expander(row_expanded, str8_lit("###expanded"))))
                     {
@@ -2549,6 +2551,10 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                     if(ui_hovering(sig)) 
                     {
                       rd_set_hover_regs(slot);
+                    }
+                    if(ui_right_clicked(sig))
+                    {
+                      rd_open_ctx_menu(entity_box->key, v2f32(0, dim_2f32(entity_box->rect).y), slot);
                     }
                     if(ui_dragging(sig) && !contains_2f32(sig.box->rect, ui_mouse()))
                     {
