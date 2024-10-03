@@ -1380,7 +1380,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             // rjf: bp hovering
             if(ui_hovering(bp_sig) && !rd_drag_is_active())
             {
-              rd_entity_tooltips(bp);
+              RD_RegsScope(.entity = rd_handle_from_entity(bp)) rd_set_hover_regs(RD_RegSlot_Entity);
             }
             
             // rjf: click => remove breakpoint
@@ -1433,7 +1433,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             // rjf: watch hovering
             if(ui_hovering(pin_sig) && !rd_drag_is_active())
             {
-              rd_entity_tooltips(pin);
+              RD_RegsScope(.entity = rd_handle_from_entity(pin)) rd_set_hover_regs(RD_RegSlot_Entity);
             }
             
             // rjf: click => remove pin

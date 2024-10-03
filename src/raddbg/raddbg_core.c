@@ -3314,6 +3314,23 @@ rd_window_frame(RD_Window *ws)
         default:{}break;
         
         ////////////////////////
+        //- rjf: frontend entity tooltips
+        //
+        case RD_RegSlot_Entity:
+        {
+          // rjf: unpack
+          RD_Entity *entity = rd_entity_from_handle(regs->entity);
+          DR_FancyStringList fstrs = rd_title_fstrs_from_entity(scratch.arena, entity, rd_rgba_from_theme_color(RD_ThemeColor_TextWeak), ui_top_font_size());
+          
+          // rjf: title
+          UI_PrefWidth(ui_children_sum(1)) UI_Row UI_PrefWidth(ui_text_dim(5, 1))
+          {
+            UI_Box *box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
+            ui_box_equip_display_fancy_strings(box, &fstrs);
+          }
+        }break;
+        
+        ////////////////////////
         //- rjf: control entity tooltips
         //
         case RD_RegSlot_Machine:   {ctrl_entity = ctrl_entity_from_handle(d_state->ctrl_entity_store, regs->machine);     }goto ctrl_entity_tooltip;
@@ -3490,22 +3507,6 @@ rd_window_frame(RD_Window *ws)
                 view_ui(str8(view->query_buffer, view->query_string_size), view->params_roots[view->params_read_gen%ArrayCount(view->params_roots)], view_preview_container->rect);
               }
             }
-          }
-        }
-        
-        //- rjf: entity dragging
-        else if(rd_state->drag_drop_regs_slot == RD_RegSlot_Entity && !rd_entity_is_nil(entity)) UI_Tooltip
-        {
-          ui_set_next_pref_width(ui_children_sum(1));
-          UI_Row UI_HeightFill
-          {
-            String8 display_name = rd_display_string_from_entity(scratch.arena, entity);
-            RD_IconKind icon_kind = rd_entity_kind_icon_kind_table[entity->kind];
-            RD_Font(RD_FontSlot_Icons)
-              UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Icons))
-              UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
-              ui_label(rd_icon_kind_text_table[icon_kind]);
-            ui_label(display_name);
           }
         }
       }
