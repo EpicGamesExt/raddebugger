@@ -23,26 +23,31 @@ Below is an example batch script that you can run as administrator to collect du
 ```
 @echo off
 
-REM Custom dump flags retrieved by executing ".dump /mf test.dump" in WinDbg then opening it
+REM Global custom dump flags 0 by default because that's safest for confidentiality and saves the most space
+REM RadDbg custom dump flags retrieved by executing ".dump /mf test.dump" in WinDbg then opening it
 REM TODO: RAD Studios, feel free to customize the dump flags here however you want
-SET RADDBG_CRASH_DUMP_FLAGS=0x641826
+SET RADDBG_CRASH_DUMPS_FLAGS=0x641826
 SET /P RADDBG_CRASH_DUMPS="Where would you like to place crash dumps for raddbg (Default: %%LOCALAPPDATA%%\CrashDumps)? " || SET RADDBG_CRASH_DUMPS=%%LOCALAPPDATA%%\CrashDumps
-SET /P GLOBAL_CRASH_DUMPS="Where would you like to place crash dumps for other apps by default (Default: %%LOCALAPPDATA%%\NUL, won't store dumps)? " || SET GLOBAL_CRASH_DUMPS=%%LOCALAPPDATA%%\NUL
+SET /P GLOBAL_CRASH_DUMPS="Where would you like to place crash dumps for other apps by default (Default: %%LOCALAPPDATA%%\CrashDumps)? " || SET GLOBAL_CRASH_DUMPS=%%LOCALAPPDATA%%\CrashDumps
+SET /P GLOBAL_CRASH_DUMPS_FLAGS="What CustomDumpFlags would you like to use for other apps by default (Default: 0)? " || SET GLOBAL_CRASH_DUMPS_FLAGS=0
 
 ECHO.
 ECHO Changing registry settings for HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps!
 ECHO.
 ECHO Setting Global Crash Dump Directory to %GLOBAL_CRASH_DUMPS%...
+echo Using CustomDump Strategy with CustomDumpFlags = %GLOBAL_CRASH_DUMPS_FLAGS%
+REG ADD "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps" /v DumpType /t REG_DWORD /d 0
 REG ADD "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps" /v DumpFolder /t REG_EXPAND_SZ /d %GLOBAL_CRASH_DUMPS%
+REG ADD "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps" /v CustomDumpFlags /t REG_DWORD /d %GLOBAL_CRASH_DUMPS_FLAGS%
 
 ECHO.
 ECHO Setting RADDBG Crash Dump Directory to %RADDBG_CRASH_DUMPS%...
-ECHO Using CustomDump Strategy with CustomDumpFlags = %RADDBG_CRASH_DUMP_FLAGS%
+ECHO Using CustomDump Strategy with CustomDumpFlags = %RADDBG_CRASH_DUMPS_FLAGS%
 FOR %%F in (raddbg.exe, rdi_from_pdb.exe, rdi_breakpad_from_pdb.exe, rdi_dump.exe) DO (
 ECHO.
 ECHO Setting Crash Dump Settings for %%F...
 REG ADD "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps\%%F" /v DumpType /t REG_DWORD /d 0
-REG ADD "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps\%%F" /v CustomDumpFlags /t REG_DWORD /d %RADDBG_CRASH_DUMP_FLAGS%
+REG ADD "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps\%%F" /v CustomDumpFlags /t REG_DWORD /d %RADDBG_CRASH_DUMPS_FLAGS%
 REG ADD "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps\%%F" /v DumpFolder /t REG_EXPAND_SZ /d %RADDBG_CRASH_DUMPS%
 )
 ```
