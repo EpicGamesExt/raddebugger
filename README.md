@@ -31,6 +31,12 @@ REG ADD "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\Windows Error Reporting\L
 )
 ```
 In addition, you should ``ZIP`` the crash dump using ``7-zip`` or similar software.
+Keep in mind that ``CustomDumpFlags`` in this script includes memory info because
+it helps when debugging crashes so either go to [MINIDUMP\_TYPE](
+https://learn.microsoft.com/en-us/windows/win32/api/minidumpapiset/ne-minidumpapiset-minidump_type)
+and change ``CustomDumpFlags`` to your liking or don't work on anything personal or sensitive with ``raddbg``
+with these settings. If you ``ZIP`` the dump, you can also encrypt it with a password and then post
+the password in the bug report as a minor security measure against web scrapers.
 
 You can download pre-built binaries for the debugger
 [here](https://github.com/EpicGames/raddebugger/releases).
