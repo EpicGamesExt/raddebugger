@@ -18,16 +18,32 @@ used), instructions to reproduce, test executables, and so on.
 
 You can automatically generate local dumps on Windows for all executables
 or specific executables by following [MSDN's Collecting User-Mode Dumps](
-https://learn.microsoft.com/en-us/windows/win32/wer/collecting-user-mode-dump://learn.microsoft.com/en-us/windows/win32/wer/collecting-user-mode-dumps). Below is an example batch script that you can run as administrator to collect dumps automatically for the debugger.
+https://learn.microsoft.com/en-us/windows/win32/wer/collecting-user-mode-dumps).
+Below is an example batch script that you can run as administrator to collect dumps automatically for the debugger.
 ```
 @echo off
-REM You can find the dumps later in the default location %LOCALAPPDATA%\CrashDumps
-FOR %%F in (raddbg.exe, rdi_from_pdb.exe, rdi_breakpad_from_pdb.exe, rdi_dump.exe) DO (
+
 REM Custom dump flags retrieved by executing ".dump /mf test.dump" in WinDbg then opening it
 REM TODO: RAD Studios, feel free to customize the dump flags here however you want
-REG ADD "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps\%%F"
+SET RADDBG_CRASH_DUMP_FLAGS=0x641826
+SET /P RADDBG_CRASH_DUMPS="Where would you like to place crash dumps for raddbg (Default: %%LOCALAPPDATA%%\CrashDumps)? " || SET RADDBG_CRASH_DUMPS=%%LOCALAPPDATA%%\CrashDumps
+SET /P GLOBAL_CRASH_DUMPS="Where would you like to place crash dumps for other apps by default (Default: NUL)? " || SET GLOBAL_CRASH_DUMPS=NUL
+
+ECHO.
+ECHO Changing registry settings for HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps!
+ECHO.
+ECHO Setting Global Crash Dump Directory to %GLOBAL_CRASH_DUMPS%...
+REG ADD "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps" /v DumpLocation /t REG_EXPAND_SZ /d %GLOBAL_CRASH_DUMPS%
+
+ECHO.
+ECHO Setting RADDBG Crash Dump Directory to %RADDBG_CRASH_DUMPS%...
+ECHO Using CustomDump Strategy with CustomDumpFlags = %RADDBG_CRASH_DUMP_FLAGS%
+FOR %%F in (raddbg.exe, rdi_from_pdb.exe, rdi_breakpad_from_pdb.exe, rdi_dump.exe) DO (
+ECHO.
+ECHO Setting Crash Dump Settings for %%F...
 REG ADD "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps\%%F" /v DumpType /t REG_DWORD /d 0
-REG ADD "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps\%%F" /v CustomDumpFlags /t REG_DWORD /d 0x641826
+REG ADD "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps\%%F" /v CustomDumpFlags /t REG_DWORD /d %RADDBG_CRASH_DUMP_FLAGS%
+REG ADD "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps\%%F" /v DumpLocation /t REG_EXPAND_SZ /d %RADDBG_CRASH_DUMPS%
 )
 ```
 In addition, you should ``ZIP`` the crash dump using ``7-zip`` or similar software.
