@@ -27,13 +27,13 @@ REM Custom dump flags retrieved by executing ".dump /mf test.dump" in WinDbg the
 REM TODO: RAD Studios, feel free to customize the dump flags here however you want
 SET RADDBG_CRASH_DUMP_FLAGS=0x641826
 SET /P RADDBG_CRASH_DUMPS="Where would you like to place crash dumps for raddbg (Default: %%LOCALAPPDATA%%\CrashDumps)? " || SET RADDBG_CRASH_DUMPS=%%LOCALAPPDATA%%\CrashDumps
-SET /P GLOBAL_CRASH_DUMPS="Where would you like to place crash dumps for other apps by default (Default: NUL)? " || SET GLOBAL_CRASH_DUMPS=NUL
+SET /P GLOBAL_CRASH_DUMPS="Where would you like to place crash dumps for other apps by default (Default: %%LOCALAPPDATA%%\NUL, won't store dumps)? " || SET GLOBAL_CRASH_DUMPS=%%LOCALAPPDATA%%\NUL
 
 ECHO.
 ECHO Changing registry settings for HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps!
 ECHO.
 ECHO Setting Global Crash Dump Directory to %GLOBAL_CRASH_DUMPS%...
-REG ADD "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps" /v DumpLocation /t REG_EXPAND_SZ /d %GLOBAL_CRASH_DUMPS%
+REG ADD "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps" /v DumpFolder /t REG_EXPAND_SZ /d %GLOBAL_CRASH_DUMPS%
 
 ECHO.
 ECHO Setting RADDBG Crash Dump Directory to %RADDBG_CRASH_DUMPS%...
@@ -43,7 +43,7 @@ ECHO.
 ECHO Setting Crash Dump Settings for %%F...
 REG ADD "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps\%%F" /v DumpType /t REG_DWORD /d 0
 REG ADD "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps\%%F" /v CustomDumpFlags /t REG_DWORD /d %RADDBG_CRASH_DUMP_FLAGS%
-REG ADD "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps\%%F" /v DumpLocation /t REG_EXPAND_SZ /d %RADDBG_CRASH_DUMPS%
+REG ADD "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps\%%F" /v DumpFolder /t REG_EXPAND_SZ /d %RADDBG_CRASH_DUMPS%
 )
 ```
 In addition, you should ``ZIP`` the crash dump using ``7-zip`` or similar software.
