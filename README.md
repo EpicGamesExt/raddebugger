@@ -16,6 +16,22 @@ proof, it'd greatly help out if you submitted the issues you find here, along
 with any information you can gather, like dump files (along with the build you
 used), instructions to reproduce, test executables, and so on.
 
+You can automatically generate local dumps on Windows for all executables
+or specific executables by following [MSDN's Collecting User-Mode Dumps](
+https://learn.microsoft.com/en-us/windows/win32/wer/collecting-user-mode-dump://learn.microsoft.com/en-us/windows/win32/wer/collecting-user-mode-dumps). Below is an example batch script to collect dumps for the debugger.
+```
+@echo off
+REM You can find the dumps later in the default location %LOCALAPPDATA%\CrashDumps
+FOR %%F in (raddbg.exe, rdi_from_pdb.exe, rdi_breakpad_from_pdb.exe, rdi_dump.exe) DO (
+REM Custom dump flags retrieved by executing ".dump /mf test.dump" in WinDbg then opening it
+REM TODO: RAD Studios, feel free to customize the dump flags here however you want
+REG ADD "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps\%%F"
+REG ADD "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps\%%F" /v DumpType /t REG_DWORD /d 0
+REG ADD "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps\%%F" /v CustomDumpFlags /t REG_DWORD /d 0x641826
+)
+```
+In addition, you should ``ZIP`` the crash dump using ``7-zip`` or similar software.
+
 You can download pre-built binaries for the debugger
 [here](https://github.com/EpicGames/raddebugger/releases).
 
