@@ -18,7 +18,7 @@ used), instructions to reproduce, test executables, and so on.
 
 You can automatically generate local dumps on Windows for all executables
 or specific executables by following [MSDN's Collecting User-Mode Dumps](
-https://learn.microsoft.com/en-us/windows/win32/wer/collecting-user-mode-dump://learn.microsoft.com/en-us/windows/win32/wer/collecting-user-mode-dumps). Below is an example batch script to collect dumps for the debugger.
+https://learn.microsoft.com/en-us/windows/win32/wer/collecting-user-mode-dump://learn.microsoft.com/en-us/windows/win32/wer/collecting-user-mode-dumps). Below is an example batch script that you can run as administrator to collect dumps automatically for the debugger.
 ```
 @echo off
 REM You can find the dumps later in the default location %LOCALAPPDATA%\CrashDumps
