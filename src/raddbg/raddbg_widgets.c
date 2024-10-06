@@ -899,6 +899,7 @@ struct RD_BreakpointBoxDrawExtData
 {
   Vec4F32 color;
   F32 alive_t;
+  F32 hover_t;
   F32 remap_px_delta;
   B32 do_lines;
   B32 do_glow;
@@ -918,6 +919,20 @@ internal UI_BOX_CUSTOM_DRAW(rd_bp_box_draw_extensions)
                                  v4f32(u->color.x, u->color.y, u->color.z, 0),
                                  0, 0, 1.f);
     inst->colors[Corner_00] = inst->colors[Corner_01] = u->color;
+  }
+  
+  // rjf: draw rich hover fill
+  if(u->hover_t > 0.001f)
+  {
+    Vec4F32 weak_color = u->color;
+    weak_color.w *= 0.5f*u->hover_t;
+    R_Rect2DInst *inst = dr_rect(r2f32p(box->parent->parent->parent->rect.x0,
+                                        box->parent->rect.y0,
+                                        box->parent->parent->parent->rect.x0 + ui_top_font_size()*22.f*u->hover_t,
+                                        box->parent->rect.y1),
+                                 v4f32(0, 0, 0, 0),
+                                 0, 0, 1);
+    inst->colors[Corner_00] = inst->colors[Corner_01] = weak_color;
   }
   
   // rjf: draw slight fill
@@ -1117,7 +1132,8 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             UI_Signal thread_sig = ui_signal_from_box(thread_box);
             
             // rjf: custom draw
-            {RD_Regs *hover_regs = rd_get_hover_regs();
+            {
+              RD_Regs *hover_regs = rd_get_hover_regs();
               B32 is_hovering = (ctrl_handle_match(hover_regs->thread, thread->handle) &&
                                  rd_state->hover_regs_slot == RD_RegSlot_Thread);
               RD_ThreadBoxDrawExtData *u = push_array(ui_build_arena(), RD_ThreadBoxDrawExtData, 1);
@@ -1339,8 +1355,11 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             // rjf: prep custom rendering data
             RD_BreakpointBoxDrawExtData *bp_draw = push_array(ui_build_arena(), RD_BreakpointBoxDrawExtData, 1);
             {
+              RD_Regs *hover_regs = rd_get_hover_regs();
+              B32 is_hovering = (rd_entity_from_handle(hover_regs->entity) == bp && rd_state->hover_regs_slot == RD_RegSlot_Entity);
               bp_draw->color    = bp_color;
               bp_draw->alive_t  = ui_anim(ui_key_from_stringf(ui_key_zero(), "bp_alive_t_%p", bp), 1.f, .rate = entity_alive_t_rate);
+              bp_draw->hover_t  = ui_anim(ui_key_from_stringf(ui_key_zero(), "bp_hover_t_%p", bp), (F32)!!is_hovering, .rate = entity_hover_t_rate);
               bp_draw->do_lines = rd_setting_val_from_code(RD_SettingCode_BreakpointLines).s32;
               bp_draw->do_glow  = rd_setting_val_from_code(RD_SettingCode_BreakpointGlow).s32;
               if(rd_regs()->file_path.size != 0)
@@ -1366,9 +1385,6 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             ui_set_next_palette(ui_build_palette(ui_top_palette(), .text = bp_color));
             ui_set_next_text_alignment(UI_TextAlign_Center);
             UI_Box *bp_box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|
-                                                       UI_BoxFlag_DrawActiveEffects|
-                                                       UI_BoxFlag_DrawHotEffects|
-                                                       UI_BoxFlag_DrawBorder|
                                                        UI_BoxFlag_Clickable*!!(params->flags & RD_CodeSliceFlag_Clickable)|
                                                        UI_BoxFlag_DisableTextTrunc,
                                                        "%S##bp_%p",

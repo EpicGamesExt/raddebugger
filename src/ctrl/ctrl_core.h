@@ -113,6 +113,7 @@ struct_members(CTRL_BreakpointMetaEval)
   member_lit_comp(CTRL_MetaEval, type(U32),              color,     .pretty_name = str8_lit_comp("Color")),
   member_lit_comp(CTRL_MetaEval, type(U64),              hit_count, .pretty_name = str8_lit_comp("Hit Count")),
   member_lit_comp(CTRL_MetaEval, type(CTRL_CodeString8), label,     .pretty_name = str8_lit_comp("Label")),
+  member_lit_comp(CTRL_MetaEval, type(CTRL_CodeString8), condition, .pretty_name = str8_lit_comp("Condition")),
   member_lit_comp(CTRL_MetaEval, type(CTRL_PlainString8),location,  .pretty_name = str8_lit_comp("Location")),
 };
 
