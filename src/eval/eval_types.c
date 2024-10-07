@@ -1479,7 +1479,7 @@ e_type_data_members_from_key(Arena *arena, E_TypeKey key)
   }
   
   //- rjf: sort array by offset if needed
-  if(members_need_offset_sort)
+  if(members_need_offset_sort && (root_type_kind == E_TypeKind_Struct || root_type_kind == E_TypeKind_Class) && key.kind != E_TypeKeyKind_Cons)
   {
     quick_sort(members.v, members.count, sizeof(E_Member), e_type_qsort_compare_members_offset);
   }

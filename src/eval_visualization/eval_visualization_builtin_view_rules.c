@@ -393,20 +393,15 @@ EV_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_DEF(only)
   {
     E_MemberArray current_members = e_type_data_members_from_key(scratch.arena, irtree.type_key);
     E_MemberList new_members = {0};
-    for EachIndex(idx, current_members.count)
+    for MD_EachNode(node, params->first)
     {
-      B32 include = 0;
-      for MD_EachNode(node, params->first)
+      for EachIndex(idx, current_members.count)
       {
         if(str8_match(node->string, current_members.v[idx].name, 0))
         {
-          include = 1;
+          e_member_list_push(scratch.arena, &new_members, &current_members.v[idx]);
           break;
         }
-      }
-      if(include)
-      {
-        e_member_list_push(scratch.arena, &new_members, &current_members.v[idx]);
       }
     }
     E_MemberArray new_members_array = e_member_array_from_list(scratch.arena, &new_members);
