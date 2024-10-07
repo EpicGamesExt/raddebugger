@@ -10708,6 +10708,8 @@ rd_frame(void)
     rd_state->frame_di_scope = di_scope_open();
     rd_state->frame_fzy_scope = fzy_scope_open();
   }
+  B32 allow_text_hotkeys = !rd_state->text_edit_mode;
+  rd_state->text_edit_mode = 0;
   
   //////////////////////////////
   //- rjf: get events from the OS
@@ -10806,7 +10808,7 @@ rd_frame(void)
         rd_unbind_name(rd_state->bind_change_cmd_name, rd_state->bind_change_binding);
         rd_bind_name(rd_state->bind_change_cmd_name, binding);
         U32 codepoint = os_codepoint_from_modifiers_and_key(event->modifiers, event->key);
-        os_text(&events, os_handle_zero(), codepoint);
+        os_text(&events, event->window, codepoint);
         os_eat_event(&events, event);
         rd_cmd(rd_cfg_src_write_cmd_kind_table[RD_CfgSrc_User]);
         rd_request_frame();
@@ -10891,12 +10893,20 @@ rd_frame(void)
         String8List spec_candidates = rd_cmd_name_list_from_binding(scratch.arena, binding);
         if(spec_candidates.first != 0)
         {
-          rd_cmd(RD_CmdKind_RunCommand, .string = spec_candidates.first->string);
           U32 hit_char = os_codepoint_from_modifiers_and_key(event->modifiers, event->key);
-          take = 1;
-          if(event->modifiers & OS_Modifier_Alt)
+          if(hit_char == 0 || allow_text_hotkeys)
           {
-            window->menu_bar_focus_press_started = 0;
+            rd_cmd(RD_CmdKind_RunCommand, .string = spec_candidates.first->string);
+            if(allow_text_hotkeys)
+            {
+              os_text(&events, event->window, hit_char);
+              next = event->next;
+            }
+            take = 1;
+            if(event->modifiers & OS_Modifier_Alt)
+            {
+              window->menu_bar_focus_press_started = 0;
+            }
           }
         }
         else if(OS_Key_F1 <= event->key && event->key <= OS_Key_F19)

@@ -3028,6 +3028,7 @@ rd_line_edit(RD_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
   if(!(flags & RD_LineEditFlag_DisableEdit) && (is_focus_active || focus_started))
   {
     Temp scratch = scratch_begin(0, 0);
+    rd_state->text_edit_mode = 1;
     for(UI_Event *evt = 0; ui_next_event(&evt);)
     {
       String8 edit_string = str8(edit_buffer, edit_string_size_out[0]);

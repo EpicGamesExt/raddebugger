@@ -1584,6 +1584,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
         B32 editing_complete = ((evt->kind == UI_EventKind_Press && (evt->slot == UI_EventActionSlot_Cancel || evt->slot == UI_EventActionSlot_Accept)) ||
                                 (evt->kind == UI_EventKind_Navigate && evt->delta_2s32.y != 0) ||
                                 cursor_rugpull);
+        rd_state->text_edit_mode = 1;
         if(editing_complete ||
            ((evt->kind == UI_EventKind_Edit ||
              evt->kind == UI_EventKind_Navigate ||

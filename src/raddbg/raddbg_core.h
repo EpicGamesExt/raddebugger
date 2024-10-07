@@ -811,6 +811,9 @@ struct RD_State
   String8 popup_title;
   String8 popup_desc;
   
+  // rjf: text editing mode state
+  B32 text_edit_mode;
+  
   // rjf: string search state
   Arena *string_search_arena;
   String8 string_search_string;
