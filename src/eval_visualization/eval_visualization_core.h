@@ -403,6 +403,7 @@ internal EV_ViewRuleList *ev_auto_view_rules_from_type_key(Arena *arena, E_TypeK
 internal void ev_view_rule_list_push_tree(Arena *arena, EV_ViewRuleList *list, MD_Node *root);
 internal void ev_view_rule_list_push_string(Arena *arena, EV_ViewRuleList *list, String8 string);
 internal EV_ViewRuleList *ev_view_rule_list_from_string(Arena *arena, String8 string);
+internal EV_ViewRuleList *ev_view_rule_list_from_expr_fastpaths(Arena *arena, String8 string);
 internal EV_ViewRuleList *ev_view_rule_list_from_inheritance(Arena *arena, EV_ViewRuleList *src);
 internal EV_ViewRuleList *ev_view_rule_list_copy(Arena *arena, EV_ViewRuleList *src);
 internal void ev_view_rule_list_concat_in_place(EV_ViewRuleList *dst, EV_ViewRuleList **src);
