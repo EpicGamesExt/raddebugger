@@ -2482,6 +2482,15 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                   rd_cmd(RD_CmdKind_RunCommand, .string = rd_cmd_kind_info_table[RD_CmdKind_AddFunctionBreakpoint].string);
                 }
               }
+              if(rd_entity_is_nil(entity) && collection_entity_kind == RD_EntityKind_WatchPin)
+                UI_Palette(palette)
+              {
+                ui_set_next_focus_hot(row_selected && selection_tbl.min.x == 1 ? UI_FocusKind_On : UI_FocusKind_Off);
+                if(ui_clicked(rd_cmd_spec_button(rd_cmd_kind_info_table[RD_CmdKind_AddWatchPin].string)))
+                {
+                  rd_cmd(RD_CmdKind_RunCommand, .string = rd_cmd_kind_info_table[RD_CmdKind_AddWatchPin].string);
+                }
+              }
               
               //- rjf: build entity box
               if(!rd_entity_is_nil(entity) || ctrl_entity != &ctrl_entity_nil)

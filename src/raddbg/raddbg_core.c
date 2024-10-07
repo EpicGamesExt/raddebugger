@@ -6937,9 +6937,13 @@ rd_window_frame(RD_Window *ws)
           rd_push_regs();
           {
             RD_View *view = rd_selected_tab_from_panel(panel);
+            String8 view_file_path = rd_file_path_from_eval_string(rd_frame_arena(), str8(view->query_buffer, view->query_string_size));
             rd_regs()->panel = rd_handle_from_panel(panel);
             rd_regs()->view  = rd_handle_from_view(view);
-            rd_regs()->file_path = rd_file_path_from_eval_string(rd_frame_arena(), str8(view->query_buffer, view->query_string_size));
+            if(view_file_path.size != 0)
+            {
+              rd_regs()->file_path = view_file_path;
+            }
           }
           
           //- rjf: build view container
@@ -8095,9 +8099,9 @@ EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(breakpoints) { return rd_ev_vie
 EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(breakpoints){ return rd_ev_view_rule_expr_id_from_num__meta_entities(num, user_data, RD_EntityKind_Breakpoint, 1); }
 EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(breakpoints){ return rd_ev_view_rule_expr_num_from_id__meta_entities(id,  user_data, RD_EntityKind_Breakpoint, 1); }
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(watch_pins)        { return rd_ev_view_rule_expr_expand_info__meta_entities(arena, view, filter, expr, params, RD_EntityKind_WatchPin); }
-EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(watch_pins)  { return rd_ev_view_rule_expr_expand_range_info__meta_entities(arena, view, filter, expr, params, idx_range, user_data, RD_EntityKind_WatchPin, 0); }
-EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(watch_pins) { return rd_ev_view_rule_expr_id_from_num__meta_entities(num, user_data, RD_EntityKind_WatchPin, 0); }
-EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(watch_pins) { return rd_ev_view_rule_expr_num_from_id__meta_entities(id,  user_data, RD_EntityKind_WatchPin, 0); }
+EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(watch_pins)  { return rd_ev_view_rule_expr_expand_range_info__meta_entities(arena, view, filter, expr, params, idx_range, user_data, RD_EntityKind_WatchPin, 1); }
+EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(watch_pins) { return rd_ev_view_rule_expr_id_from_num__meta_entities(num, user_data, RD_EntityKind_WatchPin, 1); }
+EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(watch_pins) { return rd_ev_view_rule_expr_num_from_id__meta_entities(id,  user_data, RD_EntityKind_WatchPin, 1); }
 
 //- rjf: meta ctrl entities
 
@@ -11082,7 +11086,7 @@ rd_frame(void)
             expr->mode     = E_Mode_Offset;
             expr->type_key = evallable_kind_types[idx];
             e_string2expr_map_insert(scratch.arena, ctx->macro_map, push_str8f(scratch.arena, "$%I64u", entity->id), expr);
-            if(entity->string.size != 0)
+            if(entity->string.size != 0 && entity->kind != RD_EntityKind_WatchPin)
             {
               e_string2expr_map_insert(scratch.arena, ctx->macro_map, entity->string, expr);
             }
