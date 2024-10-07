@@ -8279,6 +8279,7 @@ rd_ev_view_rule_expr_expand_range_info__meta_entities(Arena *arena, EV_View *vie
           result.row_strings[row_expr_idx] = entity_expr_string;
         }
         result.row_exprs[row_expr_idx] = e_parse_expr_from_text(arena, entity_expr_string);
+        result.row_view_rules[row_expr_idx] = rd_entity_child_from_kind(entity, RD_EntityKind_ViewRule)->string;
       }
       else
       {
