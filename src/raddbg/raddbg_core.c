@@ -10609,6 +10609,35 @@ rd_init(CmdLine *cmdln)
     U8 *opl = ptr+data.size;
     
     // rjf: read header
+#pragma pack(push, 1)
+    typedef struct ICO_Header ICO_Header;
+    struct ICO_Header
+    {
+      U16 reserved_padding; // must be 0
+      U16 image_type; // if 1 -> ICO, if 2 -> CUR
+      U16 num_images;
+    };
+    typedef struct ICO_Entry ICO_Entry;
+    struct ICO_Entry
+    {
+      U8 image_width_px;
+      U8 image_height_px;
+      U8 num_colors;
+      U8 reserved_padding; // should be 0
+      union
+      {
+        U16 ico_color_planes; // in ICO
+        U16 cur_hotspot_x_px; // in CUR
+      };
+      union
+      {
+        U16 ico_bits_per_pixel; // in ICO
+        U16 cur_hotspot_y_px;   // in CUR
+      };
+      U32 image_data_size;
+      U32 image_data_off;
+    };
+#pragma pack(pop)
     ICO_Header hdr = {0};
     if(ptr+sizeof(hdr) < opl)
     {
