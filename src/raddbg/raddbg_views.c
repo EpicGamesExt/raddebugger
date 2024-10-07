@@ -1567,6 +1567,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
             {
               default:{taken = 0;}break;
               case OpKind_DoExpand:
+              if(ev_row_is_expandable(row))
               {
                 B32 is_expanded = ev_expansion_from_key(eval_view, row->key);
                 ev_key_set_expansion(eval_view, row->block->key, row->key, !is_expanded);
