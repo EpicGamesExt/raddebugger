@@ -8315,7 +8315,7 @@ rd_ev_view_rule_expr_num_from_id__meta_entities(U64 id, void *user_data, RD_Enti
   U64 entities_base_idx = (U64)!!add_new_at_top;
   if(id == max_U64)
   {
-    num = add_new_at_top ? 1 : entities_base_idx + accel->entities.count + 1;
+    num = add_new_at_top ? 1 : (entities_base_idx + accel->entities.count + 1);
   }
   else for(U64 idx = 0; idx < accel->entities.count; idx += 1)
   {

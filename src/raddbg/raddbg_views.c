@@ -1992,13 +1992,6 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
             }
           }
           
-          // rjf: map selection keys to child numbers
-          U64 selection_numbers[2] =
-          {
-            selection_block->expand_view_rule_info->expr_expand_num_from_id(selection_keys_in_block[0].child_id, selection_block->expand_view_rule_info_user_data),
-            selection_block->expand_view_rule_info->expr_expand_num_from_id(selection_keys_in_block[1].child_id, selection_block->expand_view_rule_info_user_data),
-          };
-          
           // rjf: determine collection info for the block
           RD_EntityKind collection_entity_kind = RD_EntityKind_Nil;
           E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, selection_block->expr);
@@ -2017,14 +2010,8 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
           RD_Entity *last_entity = &d_nil_entity;
           if(collection_entity_kind != RD_EntityKind_Nil)
           {
-            RD_EntityList entities_list = rd_query_cached_entity_list_with_kind(collection_entity_kind);
-            RD_EntityArray entities = rd_entity_array_from_list(scratch.arena, &entities_list);
-            if(0 < selection_numbers[0] && selection_numbers[0] <= entities.count && 
-               0 < selection_numbers[1] && selection_numbers[1] <= entities.count)
-            {
-              first_entity = entities.v[Min(selection_numbers[0], selection_numbers[1]) - 1];
-              last_entity  = entities.v[Max(selection_numbers[0], selection_numbers[1]) - 1];
-            }
+            first_entity = rd_entity_from_id(selection_keys_in_block[0].child_id);
+            last_entity  = rd_entity_from_id(selection_keys_in_block[1].child_id);
           }
           
           // rjf: reorder
