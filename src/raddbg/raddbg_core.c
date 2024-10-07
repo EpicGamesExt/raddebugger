@@ -3355,8 +3355,6 @@ rd_window_frame(RD_Window *ws)
                                                                      rd_rgba_from_theme_color(RD_ThemeColor_TextWeak),
                                                                      ui_top_font_size(), 0);
           
-          // TODO(rjf): @msgs show stop info (just icon or shortened description)
-          
           // rjf: title
           UI_PrefWidth(ui_children_sum(1)) UI_Row UI_PrefWidth(ui_text_dim(5, 1))
           {
@@ -11883,12 +11881,12 @@ rd_frame(void)
                 if(!md_node_is_nil(code_font_node))
                 {
                   arena_clear(rd_state->cfg_code_font_path_arena);
-                  rd_state->cfg_code_font_path = push_str8_copy(rd_state->cfg_code_font_path_arena, code_font_relative_path);
+                  rd_state->cfg_code_font_path = raw_from_escaped_str8(rd_state->cfg_code_font_path_arena, code_font_relative_path);
                 }
                 if(!md_node_is_nil(main_font_node))
                 {
                   arena_clear(rd_state->cfg_main_font_path_arena);
-                  rd_state->cfg_main_font_path = push_str8_copy(rd_state->cfg_main_font_path_arena, main_font_relative_path);
+                  rd_state->cfg_main_font_path = raw_from_escaped_str8(rd_state->cfg_main_font_path_arena, main_font_relative_path);
                 }
                 String8 code_font_path = path_absolute_dst_from_relative_dst_src(scratch.arena, code_font_relative_path, cfg_folder);
                 String8 main_font_path = path_absolute_dst_from_relative_dst_src(scratch.arena, main_font_relative_path, cfg_folder);
