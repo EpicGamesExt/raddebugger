@@ -1240,7 +1240,7 @@ typedef struct DWARF_LocListsParsed{
 ////////////////////////////////
 //~ Dwarf Decode Helpers
 
-#define DWARF_LEB128_ADV(p,o,s) do{ for(;; (p)+=1){\
+#define DWARF_LEB128_ADV(p,o,s) do{ (s)=1; for(;; (p)+=1){\
 if ((p) == (o))         { (s)=0;  break; }   \
 if (((*(p))&0x80) == 0) { (p)+=1; break; }   \
 } }while(0)

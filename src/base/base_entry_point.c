@@ -118,6 +118,10 @@ update(void)
 #if defined(TEXTURE_CACHE_H)
   tex_user_clock_tick();
 #endif
+#if OS_FEATURE_GRAPHICAL
   B32 result = frame();
+#else
+  B32 result = 0;
+#endif
   return result;
 }

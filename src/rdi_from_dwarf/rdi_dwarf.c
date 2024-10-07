@@ -1070,6 +1070,9 @@ static DWARF_FormDecodeRules
 dwarf_form_decode_rule(DWARF_AttributeForm form, U64 address_size, U64 offset_size){
   DWARF_FormDecodeRules result = {0};
   switch (form){
+    case DWARF_AttributeForm_null:
+    case DWARF_AttributeForm_indirect:{}break;
+    
     case DWARF_AttributeForm_addr: result.size = address_size; break;
     case DWARF_AttributeForm_addrx: result.uleb128 = 1; break;
     case DWARF_AttributeForm_addrx1: result.size = 1; break;
@@ -1286,6 +1289,7 @@ static String8
 dwarf_string_from_section_code(DWARF_SectionCode sec_code){
   String8 result = str8_lit("unrecognized_section_code");
   switch (sec_code){
+    case DWARF_SectionCode_COUNT:{}break;
 #define X(Nc,Vf,N0,N1,N2) case DWARF_SectionCode_##Nc: result = str8_lit(#Nc); break;
     DWARF_SectionNameXList(X,0,0)
 #undef X

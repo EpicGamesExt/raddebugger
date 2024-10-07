@@ -2854,6 +2854,11 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                       palette = ui_build_palette(ui_top_palette(), .text = rd_rgba_from_theme_color(RD_ThemeColor_TextNegative), .text_weak = rd_rgba_from_theme_color(RD_ThemeColor_TextNegative), .background = rd_rgba_from_theme_color(RD_ThemeColor_HighlightOverlayError));
                       cell_flags |= UI_BoxFlag_DrawBackground;
                     }
+                    else if(cell_inheritance_string.size != 0)
+                    {
+                      palette = ui_build_palette(ui_top_palette(), .background = rd_rgba_from_theme_color(RD_ThemeColor_HighlightOverlay));
+                      cell_flags |= UI_BoxFlag_DrawBackground;
+                    }
                     else
                     {
                       palette = ui_build_palette(ui_top_palette(), .text = cell_base_color);
@@ -2864,6 +2869,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                   B32 cell_is_code = !col->is_non_code;
                   switch(col->kind)
                   {
+                    default:{}break;
                     case RD_WatchViewColumnKind_Expr:
                     {
                       cell_is_code = 1;
@@ -2893,8 +2899,10 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                     UI_FocusHot(cell_selected ? UI_FocusKind_On : UI_FocusKind_Off)
                     UI_FocusActive((cell_selected && ewv->text_editing) ? UI_FocusKind_On : UI_FocusKind_Off)
                     RD_Font(cell_is_code ? RD_FontSlot_Code : RD_FontSlot_Main)
-                    UI_FlagsAdd(cell_flags | (row_depth > 0 ? UI_BoxFlag_DrawTextWeak : 0))
+                    UI_FlagsAdd(row_depth > 0 ? UI_BoxFlag_DrawTextWeak : 0)
                   {
+                    ui_set_next_flags(ui_top_flags() | cell_flags);
+                    
                     // rjf: cell has errors? -> build error box
                     if(cell_error_string.size != 0) RD_Font(RD_FontSlot_Main)
                     {
@@ -3019,7 +3027,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                     // rjf: hovering with inheritance string -> show tooltip
                     if(ui_hovering(sig) && cell_inheritance_string.size != 0) UI_Tooltip
                     {
-                      UI_PrefWidth(ui_children_sum(1)) UI_Row UI_PrefWidth(ui_text_dim(1, 1))
+                      UI_PrefWidth(ui_children_sum(1)) UI_Row UI_PrefWidth(ui_text_dim(1, 1)) UI_TextPadding(0)
                       {
                         ui_labelf("Inherited from ");
                         RD_Font(RD_FontSlot_Code) rd_code_label(1.f, 0, rd_rgba_from_theme_color(RD_ThemeColor_CodeDefault), cell_inheritance_string);

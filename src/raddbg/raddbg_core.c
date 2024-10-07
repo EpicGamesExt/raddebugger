@@ -562,6 +562,7 @@ rd_rgba_from_entity(RD_Entity *entity)
   }
   else switch(entity->kind)
   {
+    default:{}break;
     case RD_EntityKind_Breakpoint:
     {
       result = rd_rgba_from_theme_color(RD_ThemeColor_Breakpoint);

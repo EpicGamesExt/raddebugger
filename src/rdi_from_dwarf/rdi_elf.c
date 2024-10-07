@@ -476,6 +476,8 @@ elf_sym_array_from_data(Arena *arena, ELF_Class elf_class, String8 data){
   ELF_Sym64 *symbols = 0;
   U64 count = 0;
   switch (elf_class){
+    default:{}break;
+    
     case ELF_Class_32:
     {
       count = data.size/sizeof(ELF_Sym32);

@@ -841,7 +841,6 @@ RD_CollectionTable:
   @expand(RD_CollectionTable a) `EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF($(a.name));`;
   @expand(RD_CollectionTable a) `$(a.id_space == x -> "EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF("..a.name..");")`;
   @expand(RD_CollectionTable a) `$(a.id_space == x -> "EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF("..a.name..");")`;
-  @expand(RD_CollectionTable a) `EV_VIEW_RULE_BLOCK_PROD_FUNCTION_DEF($(a.name));`;
 }
 
 @data(String8) rd_collection_name_table:
