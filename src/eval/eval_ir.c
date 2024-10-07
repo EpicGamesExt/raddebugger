@@ -918,8 +918,8 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
       E_IRTreeAndType r_tree = e_irtree_and_type_from_expr(arena, r_expr);
       e_msg_list_concat_in_place(&result.msgs, &l_tree.msgs);
       e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
-      E_TypeKey l_type = e_type_unwrap(l_tree.type_key);
-      E_TypeKey r_type = e_type_unwrap(r_tree.type_key);
+      E_TypeKey l_type = e_type_unwrap_enum(e_type_unwrap(l_tree.type_key));
+      E_TypeKey r_type = e_type_unwrap_enum(e_type_unwrap(r_tree.type_key));
       E_TypeKind l_type_kind = e_type_kind_from_key(l_type);
       E_TypeKind r_type_kind = e_type_kind_from_key(r_type);
       if(l_type.kind == E_TypeKeyKind_Reg)

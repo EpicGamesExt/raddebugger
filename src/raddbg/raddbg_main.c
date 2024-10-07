@@ -6,6 +6,7 @@
 //
 // [ ] remainder of @msgs pass:
 //  [ ] new universal ctx menu, hover, tooltips systems
+//  [ ] fix memory view
 //  [ ] meta eval system
 //  [ ] target editor
 //  [ ] file path map editor
@@ -29,8 +30,6 @@
 //  [ ] mohit-reported callstack-frame-selection bug (with inlines)
 //  [ ] empty user file causing failure to launch
 //  [ ] decay arrays to pointers in pointer/value comparison
-//  [ ] EVAL LOOKUP RULES -> currently going 0 -> rdis_count, but we need
-//  to prioritize the primary rdi
 //  [ ] file overrides -> always pick most specific one! found with conflicting
 //      overrides, e.g. C:/devel/ -> D:/devel/, but also C:/devel/foo ->
 //      C:/devel/bar, etc.
@@ -41,12 +40,14 @@
 //        them being visible, it is confusing when you run and you stop there,
 //        because you're like "wait why did it stop" and then you later remember
 //        that's because there was a function breakpoint there.
-//  [ ] codebase readme pass
 //  [ ] debugger readme pass
+//  [x] codebase readme pass
 
 ////////////////////////////////
 //~ rjf: post-0.9.12 TODO notes
 //
+//  [ ] EVAL LOOKUP RULES -> currently going 0 -> rdis_count, but we need
+//  to prioritize the primary rdi
 //  [ ] (reported by forrest) 'set-next-statement' -> prioritize current
 //      module/symbol, in cases where one line maps to many voffs
 //  [ ] collapse upstream state for theme/bindings/settings into entities; use cache accelerators if needed to make up difference
