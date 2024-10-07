@@ -1874,7 +1874,7 @@ e_type_member_from_key_name__cached(E_TypeKey key, String8 name)
 {
   E_Member result = {0};
   E_MemberCacheNode *node = e_member_cache_node_from_type_key(key);
-  if(node != 0)
+  if(node != 0 && node->member_hash_slots_count != 0)
   {
     U64 hash = e_hash_from_string(5381, name);
     U64 slot_idx = hash%node->member_hash_slots_count;

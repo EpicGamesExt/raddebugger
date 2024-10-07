@@ -134,7 +134,9 @@ EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(default)
                                                    direct_type_kind == E_TypeKind_Union ||
                                                    direct_type_kind == E_TypeKind_Class)))
   {
-    accel->members = e_type_data_members_from_key__cached(e_type_kind_is_pointer_or_ref(type_kind) ? direct_type_key : type_key);
+    E_TypeKey struct_type_key = e_type_kind_is_pointer_or_ref(type_kind) ? direct_type_key : type_key;
+    E_Type *struct_type = e_type_from_key(scratch.arena, struct_type_key);
+    accel->members = e_type_data_members_from_key__cached(struct_type_key);
     total_row_count = accel->members.count;
   }
   
@@ -297,7 +299,7 @@ EV_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_DEF(slice)
   if(type_kind == E_TypeKind_Struct || type_kind == E_TypeKind_Class)
   {
     // rjf: unpack members
-    E_MemberArray members = e_type_data_members_from_key(scratch.arena, irtree.type_key);
+    E_MemberArray members = e_type_data_members_from_key__cached(irtree.type_key);
     
     // rjf: choose base pointer & count members
     E_Member *base_ptr_member = 0;
@@ -391,7 +393,7 @@ EV_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_DEF(only)
   E_TypeKind type_kind = e_type_kind_from_key(irtree.type_key);
   if(type_kind == E_TypeKind_Struct || type_kind == E_TypeKind_Union || type_kind == E_TypeKind_Class)
   {
-    E_MemberArray current_members = e_type_data_members_from_key(scratch.arena, irtree.type_key);
+    E_MemberArray current_members = e_type_data_members_from_key__cached(irtree.type_key);
     E_MemberList new_members = {0};
     for MD_EachNode(node, params->first)
     {
@@ -433,7 +435,7 @@ EV_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_DEF(omit)
   E_TypeKind type_kind = e_type_kind_from_key(irtree.type_key);
   if(type_kind == E_TypeKind_Struct || type_kind == E_TypeKind_Union || type_kind == E_TypeKind_Class)
   {
-    E_MemberArray current_members = e_type_data_members_from_key(scratch.arena, irtree.type_key);
+    E_MemberArray current_members = e_type_data_members_from_key__cached(irtree.type_key);
     E_MemberList new_members = {0};
     for EachIndex(idx, current_members.count)
     {

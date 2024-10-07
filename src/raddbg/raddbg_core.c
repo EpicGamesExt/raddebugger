@@ -8932,7 +8932,7 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
       // rjf: content
       if(depth < 4)
       {
-        E_MemberArray data_members = e_type_data_members_from_key(scratch.arena, e_type_unwrap(eval.type_key));
+        E_MemberArray data_members = e_type_data_members_from_key__cached(e_type_unwrap(eval.type_key));
         for(U64 member_idx = 0; member_idx < data_members.count && max_size > space_taken; member_idx += 1)
         {
           E_Member *mem = &data_members.v[member_idx];

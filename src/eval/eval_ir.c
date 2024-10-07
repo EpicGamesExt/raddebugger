@@ -523,28 +523,14 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
       B32 r_is_constant_value = 0;
       {
         Temp scratch = scratch_begin(&arena, 1);
-        E_MemberArray check_type_members = e_type_data_members_from_key(scratch.arena, check_type_key);
-        E_Member *match = 0;
-        for(U64 member_idx = 0; member_idx < check_type_members.count; member_idx += 1)
-        {
-          E_Member *member = &check_type_members.v[member_idx];
-          if(str8_match(member->name, exprr->string, 0))
-          {
-            match = member;
-            break;
-          }
-          else if(str8_match(member->name, exprr->string, StringMatchFlag_CaseInsensitive))
-          {
-            match = member;
-          }
-        }
-        if(match != 0)
+        E_Member match = e_type_member_from_key_name__cached(check_type_key, exprr->string);
+        if(match.kind != E_MemberKind_Null)
         {
           r_found = 1;
-          r_type = match->type_key;
-          r_value = match->off;
+          r_type = match.type_key;
+          r_value = match.off;
         }
-        if(match == 0)
+        if(match.kind == E_MemberKind_Null)
         {
           E_Type *type = e_type_from_key(scratch.arena, check_type_key);
           if(type->enum_vals != 0)
