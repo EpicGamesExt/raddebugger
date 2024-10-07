@@ -1294,7 +1294,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
               
               // rjf: fill out progress t (progress into range of current line's
               // voff range)
-              if(rd_regs()->file_path.size != 0 && params->line_infos[line_idx].first != 0)
+              if(params->line_vaddrs[line_idx] == 0 && params->line_infos[line_idx].first != 0)
               {
                 D_LineList *lines = &params->line_infos[line_idx];
                 D_Line *line = 0;
@@ -1362,7 +1362,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
               bp_draw->hover_t  = ui_anim(ui_key_from_stringf(ui_key_zero(), "bp_hover_t_%p", bp), (F32)!!is_hovering, .rate = entity_hover_t_rate);
               bp_draw->do_lines = rd_setting_val_from_code(RD_SettingCode_BreakpointLines).s32;
               bp_draw->do_glow  = rd_setting_val_from_code(RD_SettingCode_BreakpointGlow).s32;
-              if(rd_regs()->file_path.size != 0)
+              if(params->line_vaddrs[line_idx] == 0)
               {
                 D_LineList *lines = &params->line_infos[line_idx];
                 for(D_LineNode *n = lines->first; n != 0; n = n->next)
@@ -1477,8 +1477,8 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
         if(ui_clicked(line_margin_sig))
         {
           rd_cmd(RD_CmdKind_AddBreakpoint,
-                 .file_path  = rd_regs()->file_path,
-                 .cursor     = txt_pt(line_num, 1),
+                 .file_path  = params->line_vaddrs[line_idx] ? str8_zero() : rd_regs()->file_path,
+                 .cursor     = params->line_vaddrs[line_idx] ? txt_pt(0, 0) : txt_pt(line_num, 1),
                  .vaddr      = params->line_vaddrs[line_idx]);
         }
       }
@@ -1522,7 +1522,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
           {
             if(n->v.dbgi_key.min_timestamp >= best_stamp)
             {
-              has_line_info = (n->v.pt.line == line_num || rd_regs()->file_path.size == 0);
+              has_line_info = (n->v.pt.line == line_num || params->line_vaddrs[line_idx] != 0);
               line_info_line_num = n->v.pt.line;
               best_stamp = n->v.dbgi_key.min_timestamp;
             }
@@ -1895,7 +1895,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
         U64 line_vaddr = params->line_vaddrs[line_idx];
         CTRL_Entity *thread = line_drag_ctrl_entity;
         U64 new_rip_vaddr = line_vaddr;
-        if(rd_regs()->file_path.size != 0)
+        if(params->line_vaddrs[line_idx] == 0)
         {
           D_LineList *lines = &params->line_infos[line_idx];
           for(D_LineNode *n = lines->first; n != 0; n = n->next)
@@ -1966,7 +1966,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   {
     U64 line_slice_idx = mouse_pt.line-params->line_num_range.min;
     D_LineList *lines = &params->line_infos[line_slice_idx];
-    if(lines->first != 0 && (rd_regs()->file_path.size == 0 || lines->first->v.pt.line == mouse_pt.line))
+    if(lines->first != 0 && (params->line_vaddrs[line_slice_idx] != 0 || lines->first->v.pt.line == mouse_pt.line))
     {
       RD_RegsScope(.process     = selected_thread_process->handle,
                    .vaddr_range = ctrl_vaddr_range_from_voff_range(selected_thread_module, lines->first->v.voff_range),
@@ -2351,7 +2351,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
           D_LineList *lines = &params->line_infos[line_idx];
           for(D_LineNode *n = lines->first; n != 0; n = n->next)
           {
-            if((n->v.pt.line == line_num || rd_regs()->file_path.size == 0) &&
+            if((n->v.pt.line == line_num || params->line_vaddrs[line_idx] != 0) &&
                ((di_key_match(&n->v.dbgi_key, &hover_regs->dbgi_key) &&
                  n->v.voff_range.min <= hover_voff_range.min && hover_voff_range.min < n->v.voff_range.max) ||
                 (params->line_vaddrs[line_idx] == hover_regs->vaddr_range.min && hover_regs->vaddr_range.min != 0)))

@@ -11333,7 +11333,7 @@ rd_frame(void)
             // rjf: command simply executes - just no-op in this layer
             if(!(info->query.flags & RD_QueryFlag_Required))
             {
-              rd_push_cmd(cmd->regs->string, rd_regs());
+              RD_RegsScope(.string = str8_zero()) rd_push_cmd(cmd->regs->string, rd_regs());
             }
             
             // rjf: command has required query -> prep query
@@ -14310,41 +14310,44 @@ rd_frame(void)
             TxtPt pt = rd_regs()->cursor;
             String8 string = rd_regs()->string;
             U64 vaddr = rd_regs()->vaddr;
-            B32 removed_already_existing = 0;
-            if(kind == RD_CmdKind_ToggleBreakpoint)
+            if(file_path.size != 0 || string.size != 0 || vaddr != 0)
             {
-              RD_EntityList bps = rd_query_cached_entity_list_with_kind(RD_EntityKind_Breakpoint);
-              for(RD_EntityNode *n = bps.first; n != 0; n = n->next)
+              B32 removed_already_existing = 0;
+              if(kind == RD_CmdKind_ToggleBreakpoint)
               {
-                RD_Entity *bp = n->entity;
-                RD_Entity *loc = rd_entity_child_from_kind(bp, RD_EntityKind_Location);
-                if((loc->flags & RD_EntityFlag_HasTextPoint && path_match_normalized(loc->string, file_path) && loc->text_point.line == pt.line) ||
-                   (loc->flags & RD_EntityFlag_HasVAddr && loc->vaddr == vaddr) ||
-                   (!(loc->flags & RD_EntityFlag_HasTextPoint) && str8_match(loc->string, string, 0)))
+                RD_EntityList bps = rd_query_cached_entity_list_with_kind(RD_EntityKind_Breakpoint);
+                for(RD_EntityNode *n = bps.first; n != 0; n = n->next)
                 {
-                  rd_entity_mark_for_deletion(bp);
-                  removed_already_existing = 1;
-                  break;
+                  RD_Entity *bp = n->entity;
+                  RD_Entity *loc = rd_entity_child_from_kind(bp, RD_EntityKind_Location);
+                  if((loc->flags & RD_EntityFlag_HasTextPoint && path_match_normalized(loc->string, file_path) && loc->text_point.line == pt.line) ||
+                     (loc->flags & RD_EntityFlag_HasVAddr && loc->vaddr == vaddr) ||
+                     (!(loc->flags & RD_EntityFlag_HasTextPoint) && str8_match(loc->string, string, 0)))
+                  {
+                    rd_entity_mark_for_deletion(bp);
+                    removed_already_existing = 1;
+                    break;
+                  }
                 }
               }
-            }
-            if(!removed_already_existing)
-            {
-              RD_Entity *bp = rd_entity_alloc(rd_entity_root(), RD_EntityKind_Breakpoint);
-              rd_entity_equip_cfg_src(bp, RD_CfgSrc_Project);
-              RD_Entity *loc = rd_entity_alloc(bp, RD_EntityKind_Location);
-              if(file_path.size != 0 && pt.line != 0)
+              if(!removed_already_existing)
               {
-                rd_entity_equip_name(loc, file_path);
-                rd_entity_equip_txt_pt(loc, pt);
-              }
-              else if(string.size != 0)
-              {
-                rd_entity_equip_name(loc, string);
-              }
-              else if(vaddr != 0)
-              {
-                rd_entity_equip_vaddr(loc, vaddr);
+                RD_Entity *bp = rd_entity_alloc(rd_entity_root(), RD_EntityKind_Breakpoint);
+                rd_entity_equip_cfg_src(bp, RD_CfgSrc_Project);
+                RD_Entity *loc = rd_entity_alloc(bp, RD_EntityKind_Location);
+                if(vaddr != 0)
+                {
+                  rd_entity_equip_vaddr(loc, vaddr);
+                }
+                else if(string.size != 0)
+                {
+                  rd_entity_equip_name(loc, string);
+                }
+                else if(file_path.size != 0 && pt.line != 0)
+                {
+                  rd_entity_equip_name(loc, file_path);
+                  rd_entity_equip_txt_pt(loc, pt);
+                }
               }
             }
           }break;

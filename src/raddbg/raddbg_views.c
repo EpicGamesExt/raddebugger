@@ -201,7 +201,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
     }
     
     // rjf: find visible breakpoints for source code
-    ProfScope("find visible breakpoints")
+    if(!dasm_lines) ProfScope("find visible breakpoints for source code")
     {
       RD_EntityList bps = rd_query_cached_entity_list_with_kind(RD_EntityKind_Breakpoint);
       for(RD_EntityNode *n = bps.first; n != 0; n = n->next)
@@ -218,7 +218,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
     }
     
     // rjf: find live threads mapping to source code
-    ProfScope("find live threads mapping to this file")
+    if(!dasm_lines) ProfScope("find live threads mapping to this file")
     {
       String8 file_path = rd_regs()->file_path;
       CTRL_Entity *selected_thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->thread);
@@ -247,7 +247,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
     }
     
     // rjf: find visible watch pins for source code
-    ProfScope("find visible watch pins")
+    if(!dasm_lines) ProfScope("find visible watch pins for source code")
     {
       RD_EntityList wps = rd_query_cached_entity_list_with_kind(RD_EntityKind_WatchPin);
       for(RD_EntityNode *n = wps.first; n != 0; n = n->next)
@@ -264,7 +264,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
     }
     
     // rjf: find all src -> dasm info
-    ProfScope("find all src -> dasm info")
+    if(!dasm_lines) ProfScope("find all src -> dasm info for source code")
     {
       String8 file_path = rd_regs()->file_path;
       D_LineListArray lines_array = d_lines_array_from_file_path_line_range(scratch.arena, file_path, visible_line_num_range);
@@ -5980,10 +5980,11 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(text)
   //////////////////////////////
   //- rjf: unpack parameterization info
   //
-  rd_regs()->cursor.line = rd_value_from_params_key(params, str8_lit("cursor_line")).s64;
+  rd_regs()->vaddr         = 0;
+  rd_regs()->cursor.line   = rd_value_from_params_key(params, str8_lit("cursor_line")).s64;
   rd_regs()->cursor.column = rd_value_from_params_key(params, str8_lit("cursor_column")).s64;
-  rd_regs()->mark.line = rd_value_from_params_key(params, str8_lit("mark_line")).s64;
-  rd_regs()->mark.column = rd_value_from_params_key(params, str8_lit("mark_column")).s64;
+  rd_regs()->mark.line     = rd_value_from_params_key(params, str8_lit("mark_line")).s64;
+  rd_regs()->mark.column   = rd_value_from_params_key(params, str8_lit("mark_column")).s64;
   String8 path = rd_file_path_from_eval_string(scratch.arena, string);
   E_Eval eval = e_eval_from_string(scratch.arena, string);
   Rng1U64 range = rd_range_from_eval_params(eval, params);
@@ -6200,6 +6201,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(disasm)
   F32 bottom_bar_height = ui_top_font_size()*2.f;
   Rng2F32 code_area_rect = r2f32p(rect.x0, rect.y0, rect.x1, rect.y1 - bottom_bar_height);
   Rng2F32 bottom_bar_rect = r2f32p(rect.x0, rect.y1 - bottom_bar_height, rect.x1, rect.y1);
+  rd_regs()->file_path = str8_zero();
   rd_regs()->cursor = dv->cursor;
   rd_regs()->mark = dv->mark;
   
@@ -6311,6 +6313,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(disasm)
   if(!is_loading && has_disasm)
   {
     U64 off = dasm_line_array_code_off_from_idx(&dasm_info.lines, rd_regs()->cursor.line-1);
+    rd_regs()->vaddr = base_vaddr+off;
     rd_regs()->vaddr_range = r1u64(base_vaddr+off, base_vaddr+off);
     rd_regs()->voff_range = ctrl_voff_range_from_vaddr_range(dasm_module, rd_regs()->vaddr_range);
     rd_regs()->lines = d_lines_from_dbgi_key_voff(rd_frame_arena(), &dbgi_key, rd_regs()->voff_range.min);
@@ -6373,6 +6376,16 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(output)
   Rng2F32 bottom_bar_rect = r2f32p(rect.x0, rect.y1 - bottom_bar_height, rect.x1, rect.y1);
   
   //////////////////////////////
+  //- rjf: unpack parameterization info
+  //
+  rd_regs()->file_path     = str8_zero();
+  rd_regs()->vaddr         = 0;
+  rd_regs()->cursor.line   = rd_value_from_params_key(params, str8_lit("cursor_line")).s64;
+  rd_regs()->cursor.column = rd_value_from_params_key(params, str8_lit("cursor_column")).s64;
+  rd_regs()->mark.line     = rd_value_from_params_key(params, str8_lit("mark_line")).s64;
+  rd_regs()->mark.column   = rd_value_from_params_key(params, str8_lit("mark_column")).s64;
+  
+  //////////////////////////////
   //- rjf: unpack text info
   //
   U128 key = d_state->output_log_key;
@@ -6413,6 +6426,14 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(output)
       ui_labelf("(read only)");
     }
   }
+  
+  //////////////////////////////
+  //- rjf: store params
+  //
+  rd_store_view_param_s64(str8_lit("cursor_line"), rd_regs()->cursor.line);
+  rd_store_view_param_s64(str8_lit("cursor_column"), rd_regs()->cursor.column);
+  rd_store_view_param_s64(str8_lit("mark_line"), rd_regs()->mark.line);
+  rd_store_view_param_s64(str8_lit("mark_column"), rd_regs()->mark.column);
   
   txt_scope_close(txt_scope);
   hs_scope_close(hs_scope);
