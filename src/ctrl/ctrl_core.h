@@ -130,7 +130,7 @@ struct_members(CTRL_PinMetaEval)
 {
   member_lit_comp(CTRL_MetaEval, type(CTRL_CodeString8), label,              .pretty_name = str8_lit_comp("Expression")),
   member_lit_comp(CTRL_MetaEval, type(U32),              color,              .pretty_name = str8_lit_comp("Color")),
-  member_lit_comp(CTRL_MetaEval, type(String8),          location,           .pretty_name = str8_lit_comp("Location")),
+  member_lit_comp(CTRL_MetaEval, type(CTRL_PathString8), location,           .pretty_name = str8_lit_comp("Location")),
 };
 
 struct_members(CTRL_MachineMetaEval)

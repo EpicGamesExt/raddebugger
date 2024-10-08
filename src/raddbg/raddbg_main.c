@@ -8,20 +8,14 @@
 //  [ ] new universal ctx menu, hover, tooltips systems
 //  [ ] fix memory view
 //  [ ] meta eval system
-//  [ ] target editor
 //  [ ] file path map editor
-//  [ ] modules view
-//  [ ] eval writing/committing
 //  [ ] file path map building
 //  [ ] `switch` replacement (recent files history)
 //   [ ] resolving name as file or #include
 //  [ ] new `restart processes` path
-//  [ ] breakpoint hit count resetting
 //  [ ] remainder of @msgs
 // 
 // [ ] post-@msgs TODOs:
-//  [ ] output: add option for scroll-to-bottom - ensure this shows up in universal ctx menu
-//  [ ] universal ctx menu address/watch options; e.g. watch -> memory; watch -> add watch
 // [ ] ensure "prefer_disasm" is calculated correctly - disassembly-focused
 //     stepping
 //
@@ -41,11 +35,18 @@
 //        because you're like "wait why did it stop" and then you later remember
 //        that's because there was a function breakpoint there.
 //  [ ] debugger readme pass
+//
 //  [x] codebase readme pass
+//  [x] target editor
+//  [x] modules view
+//  [x] eval writing/committing
+//  [x] breakpoint hit count resetting
 
 ////////////////////////////////
 //~ rjf: post-0.9.12 TODO notes
 //
+//  [ ] output: add option for scroll-to-bottom - ensure this shows up in universal ctx menu
+//  [ ] universal ctx menu address/watch options; e.g. watch -> memory; watch -> add watch
 //  [ ] EVAL LOOKUP RULES -> currently going 0 -> rdis_count, but we need
 //  to prioritize the primary rdi
 //  [ ] (reported by forrest) 'set-next-statement' -> prioritize current

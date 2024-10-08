@@ -1749,6 +1749,7 @@ rd_title_fstrs_from_entity(Arena *arena, RD_Entity *entity, Vec4F32 secondary_co
   RD_Entity *exe  = rd_entity_child_from_kind(entity, RD_EntityKind_Executable);
   RD_Entity *args = rd_entity_child_from_kind(entity, RD_EntityKind_Arguments);
   RD_Entity *loc  = rd_entity_child_from_kind(entity, RD_EntityKind_Location);
+  RD_Entity *cnd  = rd_entity_child_from_kind(entity, RD_EntityKind_Condition);
   RD_IconKind icon_kind = rd_entity_kind_icon_kind_table[entity->kind];
   Vec4F32 color = rd_rgba_from_theme_color(RD_ThemeColor_Text);
   if(icon_kind != RD_IconKind_Null)
@@ -1760,16 +1761,9 @@ rd_title_fstrs_from_entity(Arena *arena, RD_Entity *entity, Vec4F32 secondary_co
   B32 name_is_code = 1;
   String8 location = {0};
   B32 location_is_code = 0;
-  String8 exe_name = {0};
-  String8 args_string = {0};
-  if(!rd_entity_is_nil(exe))
-  {
-    exe_name = str8_skip_last_slash(exe->string);
-  }
-  if(!rd_entity_is_nil(args))
-  {
-    args_string = args->string;
-  }
+  String8 exe_name = str8_skip_last_slash(exe->string);
+  String8 args_string = args->string;
+  String8 cnd_string = cnd->string;
   if(!rd_entity_is_nil(loc))
   {
     if(loc->string.size != 0 && loc->flags & RD_EntityFlag_HasTextPoint)
@@ -1825,10 +1819,25 @@ rd_title_fstrs_from_entity(Arena *arena, RD_Entity *entity, Vec4F32 secondary_co
     size_extrafied = size*0.95f;
     color_extrafied = secondary_color;
   }
+  if(cnd_string.size != 0)
+  {
+    dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), size, color_extrafied, str8_lit(" if "));
+    RD_Font(RD_FontSlot_Code) UI_FontSize(size_extrafied)
+    {
+      DR_FancyStringList cnd_fstrs = rd_fancy_string_list_from_code_string(arena, 1.f, 0.f, color_extrafied, cnd_string);
+      dr_fancy_string_list_concat_in_place(&result, &cnd_fstrs);
+    }
+  }
   if(entity->kind == RD_EntityKind_Target && entity->disabled)
   {
     dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), size, v4f32(0, 0, 0, 0), str8_lit(" "));
     dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Main), size*0.95f, secondary_color, str8_lit("(Disabled)"));
+  }
+  if(entity->kind == RD_EntityKind_Breakpoint)
+  {
+    dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), size, v4f32(0, 0, 0, 0), str8_lit(" "));
+    String8 string = push_str8f(arena, "(%I64u hit%s)", entity->u64, entity->u64 == 1 ? "" : "s");
+    dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Main), size_extrafied, secondary_color, string);
   }
   return result;
 }
@@ -2286,79 +2295,33 @@ rd_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range)
     }break;
     case RD_EvalSpaceKind_MetaCtrlEntity:
     {
-      
-    }break;
-  }
-  return result;
-#if 0 // TODO(rjf): @msgs
-  B32 result = 0;
-  RD_Entity *entity = rd_entity_from_eval_space(space);
-  switch(entity->kind)
-  {
-    //- rjf: default -> making commits to entity evaluation
-    default:
-    {
       Temp scratch = scratch_begin(0, 0);
-      RD_EntityEval *eval = rd_eval_from_entity(scratch.arena, entity);
-      U64 range_dim = dim_1u64(range);
-      if(range.min == OffsetOf(RD_EntityEval, enabled) &&
-         range_dim >= 1)
-      {
-        result = 1;
-        B32 new_enabled = !!((U8 *)in)[0];
-        rd_entity_equip_disabled(entity, !new_enabled);
-      }
-      else if(range.min == eval->label_off &&
-              range_dim >= 1)
-      {
-        result = 1;
-        String8 new_name = str8_cstring_capped((U8 *)in, (U8 *)in+range_dim);
-        rd_entity_equip_name(entity, new_name);
-      }
-      else if(range.min == eval->condition_off &&
-              range_dim >= 1)
-      {
-        result = 1;
-        RD_Entity *condition = rd_entity_child_from_kind(entity, RD_EntityKind_Condition);
-        if(rd_entity_is_nil(condition))
-        {
-          condition = rd_entity_alloc(entity, RD_EntityKind_Condition);
-        }
-        String8 new_name = str8_cstring_capped((U8 *)in, (U8 *)in+range_dim);
-        rd_entity_equip_name(condition, new_name);
-      }
+      
+      // rjf: get entity, produce meta-eval
+      CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(space);
+      CTRL_MetaEval *meval = rd_ctrl_meta_eval_from_ctrl_entity(scratch.arena, entity);
+      
+      // rjf: copy meta evaluation to scratch arena, to form range of legal reads
+      arena_push(scratch.arena, 0, 64);
+      String8 meval_srlzed = serialized_from_struct(scratch.arena, CTRL_MetaEval, meval);
+      U64 pos_min = arena_pos(scratch.arena);
+      CTRL_MetaEval *meval_read = struct_from_serialized(scratch.arena, CTRL_MetaEval, meval_srlzed);
+      U64 pos_opl = arena_pos(scratch.arena);
+      
+      // rjf: rebase all pointer values in meta evaluation to be relative to base pointer
+      struct_rebase_ptrs(CTRL_MetaEval, meval_read, meval_read);
+      
+      // rjf: perform write to entity
+      if(0){}
+#define FlatMemberCase(name) else if(range.min == OffsetOf(CTRL_MetaEval, name) && dim_1u64(range) <= sizeof(meval_read->name))
+#define StringMemberCase(name) else if(range.min == (U64)meval_read->name.str)
+      StringMemberCase(label) {result = 1; ctrl_entity_equip_string(d_state->ctrl_entity_store, entity, str8_cstring_capped(in, (U8 *)in + 4096));}
+#undef FlatMemberCase
+#undef StringMemberCase
       scratch_end(scratch);
     }break;
-    
-    //- rjf: process -> commit to process memory
-    case RD_EntityKind_Process:
-    {
-      result = ctrl_process_write(entity->ctrl_handle, range, in);
-    }break;
-    
-    //- rjf: thread -> commit to thread's register block
-    case RD_EntityKind_Thread:
-    {
-      CTRL_Unwind unwind = d_query_cached_unwind_from_thread(entity);
-      U64 frame_idx = 0;
-      if(frame_idx < unwind.frames.count)
-      {
-        Temp scratch = scratch_begin(0, 0);
-        U64 regs_size = regs_block_size_from_arch(d_arch_from_entity(entity));
-        Rng1U64 legal_range = r1u64(0, regs_size);
-        Rng1U64 write_range = intersect_1u64(legal_range, range);
-        U64 write_size = dim_1u64(write_range);
-        CTRL_UnwindFrame *f = &unwind.frames.v[frame_idx];
-        void *new_regs = push_array(scratch.arena, U8, regs_size);
-        MemoryCopy(new_regs, f->regs, regs_size);
-        MemoryCopy((U8 *)new_regs + write_range.min, in, write_size);
-        result = ctrl_thread_write_reg_block(entity->ctrl_handle, new_regs);
-        scratch_end(scratch);
-      }
-    }break;
   }
   return result;
-#endif
 }
 
 //- rjf: asynchronous streamed reads -> hashes from spaces
