@@ -1332,7 +1332,7 @@ ui_end_build(void)
         // rjf: grab states informing animation
         B32 is_hot            = ui_key_match(box->key, ui_state->hot_box_key);
         B32 is_active         = ui_key_match(box->key, ui_state->active_box_key[UI_MouseButtonKind_Left]);
-        B32 is_disabled       = !!(box->flags & UI_BoxFlag_Disabled) && (box->first_disabled_build_index+10 < ui_state->build_index ||
+        B32 is_disabled       = !!(box->flags & UI_BoxFlag_Disabled) && (box->first_disabled_build_index+2 < ui_state->build_index ||
                                                                          box->first_touched_build_index == box->first_disabled_build_index);
         B32 is_focus_hot      = !!(box->flags & UI_BoxFlag_FocusHot) && !(box->flags & UI_BoxFlag_FocusHotDisabled);
         B32 is_focus_active   = !!(box->flags & UI_BoxFlag_FocusActive) && !(box->flags & UI_BoxFlag_FocusActiveDisabled);
