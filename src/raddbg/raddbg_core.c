@@ -15318,6 +15318,19 @@ rd_frame(void)
       switch(evt->kind)
       {
         default:{}break;
+        case D_EventKind_ProcessBegin:
+        {
+          // rjf: reset breakpoint hit counts
+          CTRL_EntityList processes = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Process);
+          if(processes.count == 1)
+          {
+            RD_EntityList bps = rd_query_cached_entity_list_with_kind(RD_EntityKind_Breakpoint);
+            for(RD_EntityNode *n = bps.first; n != 0; n = n->next)
+            {
+              n->entity->u64 = 0;
+            }
+          }
+        }break;
         case D_EventKind_Stop:
         {
           CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, evt->thread);

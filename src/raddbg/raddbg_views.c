@@ -1833,6 +1833,16 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
               }
               ev_key_set_view_rule(eval_view, row->key, str8_zero());
             }
+            else if(tbl.y != 0 && (col->kind == RD_WatchViewColumnKind_Value || col->kind == RD_WatchViewColumnKind_Member) && row_kind == RD_WatchViewRowKind_Normal)
+            {
+              E_Expr *expr = row->expr;
+              if(col->kind == RD_WatchViewColumnKind_Member)
+              {
+                expr = e_expr_ref_member_access(scratch.arena, expr, str8(col->string_buffer, col->string_size));
+              }
+              E_Eval dst_eval = e_eval_from_expr(scratch.arena, expr);
+              rd_commit_eval_value_string(dst_eval, str8_zero());
+            }
           }
         }
         for(RD_EntityNode *n = entities_to_remove.first; n != 0; n = n->next)

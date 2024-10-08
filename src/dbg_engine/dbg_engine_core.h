@@ -61,6 +61,7 @@ struct D_PathMapArray
 typedef enum D_EventKind
 {
   D_EventKind_Null,
+  D_EventKind_ProcessBegin,
   D_EventKind_Stop,
   D_EventKind_COUNT
 }
