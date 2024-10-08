@@ -181,8 +181,14 @@ os_window_set_maximized(OS_Handle handle, B32 maximized)
   if(os_handle_match(handle, os_handle_zero())) {return;}
 }
 
+internal B32
+os_window_is_minimized(OS_Handle window)
+{
+  if(os_handle_match(handle, os_handle_zero())) {return 0;}
+}
+
 internal void
-os_window_minimize(OS_Handle handle)
+os_window_set_minimized(OS_Handle window, B32 minimized)
 {
   if(os_handle_match(handle, os_handle_zero())) {return;}
 }

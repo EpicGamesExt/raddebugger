@@ -5,7 +5,7 @@
 //~ rjf: Build Options
 
 #define BUILD_TITLE "ryan_scratch"
-// #define OS_FEATURE_GRAPHICAL 1
+#define OS_FEATURE_GRAPHICAL 1
 
 ////////////////////////////////
 //~ rjf: Includes
@@ -41,88 +41,44 @@
 #include "pdb/pdb_stringize.c"
 
 ////////////////////////////////
-//~ rjf: Entry Point
+//~ rjf: Entry Points
 
-typedef struct FooBar FooBar;
-struct FooBar
+internal B32
+frame(void)
 {
-  U64 x;
-  U64 y;
-  U64 z;
-  String8 name;
-};
-
-Member FooBar__members[] =
-{
-  {str8_lit_comp("x"),    type(U64),      OffsetOf(FooBar, x)},
-  {str8_lit_comp("y"),    type(U64),      OffsetOf(FooBar, y)},
-  {str8_lit_comp("z"),    type(U64),      OffsetOf(FooBar, z)},
-  {str8_lit_comp("name"), type(String8),  OffsetOf(FooBar, name)},
-};
-
-Type FooBar__type =
-{
-  TypeKind_Struct,
-  sizeof(FooBar),
-  &type_nil,
-  str8_lit_comp("FooBar"),
-  {0},
-  ArrayCount(FooBar__members),
-  FooBar__members,
-};
+  B32 quit = 0;
+  Temp scratch = scratch_begin(0, 0);
+  OS_EventList events = os_get_events(scratch.arena, 0);
+  for(OS_Event *ev = events.first; ev != 0; ev = ev->next)
+  {
+    if(ev->kind != OS_EventKind_MouseMove)
+    {
+      String8 string = push_str8f(scratch.arena, "%S (%S)\n", os_string_from_event_kind(ev->kind), os_g_key_display_string_table[ev->key]);
+      printf("%.*s", str8_varg(string));
+      OutputDebugStringA((char *)string.str);
+      fflush(stdout);
+    }
+    if(ev->kind == OS_EventKind_Press && ev->key == OS_Key_X)
+    {
+      *(int *)0 = 0;
+    }
+  }
+  for(OS_Event *ev = events.first; ev != 0; ev = ev->next)
+  {
+    if(ev->kind == OS_EventKind_WindowClose)
+    {
+      quit = 1;
+      break;
+    }
+  }
+  scratch_end(scratch);
+  return quit;
+}
 
 internal void
 entry_point(CmdLine *cmdline)
 {
-  Arena *arena = arena_alloc();
-  
-  FooBar foobar_in    = {1, 2, 3, str8_lit("foobar 123 hello world")};
-  String8 foobar_srlz = serialized_from_struct(arena, FooBar, &foobar_in);
-  FooBar foobar_out   = *struct_from_serialized(arena, FooBar, foobar_srlz);
-  
-  String8List strs_in = {0};
-  str8_list_pushf(arena, &strs_in, "foobar: %i", 123);
-  str8_list_pushf(arena, &strs_in, "xyzxyzxyz");
-  str8_list_pushf(arena, &strs_in, "abc abc abc");
-  str8_list_pushf(arena, &strs_in, "123");
-  str8_list_pushf(arena, &strs_in, "456");
-  str8_list_pushf(arena, &strs_in, "789");
-  str8_list_pushf(arena, &strs_in, "111");
-  str8_list_pushf(arena, &strs_in, "222");
-  str8_list_pushf(arena, &strs_in, "333");
-  String8 strs_serialized = serialized_from_struct(arena, String8List, &strs_in);
-  String8List strs_out = *struct_from_serialized(arena, String8List, strs_serialized);
-  
-  String8 test_name_in   = str8_lit("foobar 123");
-  String8 test_name_srlz = serialized_from_struct(arena, String8, &test_name_in);
-  String8 test_name_out  = *struct_from_serialized(arena, String8, test_name_srlz);
-  
-  int x = 0;
-  
-#if 0
   OS_Handle window = os_window_open(v2f32(1280, 720), 0, str8_lit("Window"));
   os_window_first_paint(window);
-  for(B32 quit = 0; !quit;)
-  {
-    Temp scratch = scratch_begin(0, 0);
-    OS_EventList events = os_get_events(scratch.arena, 0);
-    for(OS_Event *ev = events.first; ev != 0; ev = ev->next)
-    {
-      if(ev->kind != OS_EventKind_MouseMove)
-      {
-        printf("%.*s (%.*s)\n", str8_varg(os_string_from_event_kind(ev->kind)), str8_varg(os_g_key_display_string_table[ev->key]));
-        fflush(stdout);
-      }
-    }
-    for(OS_Event *ev = events.first; ev != 0; ev = ev->next)
-    {
-      if(ev->kind == OS_EventKind_WindowClose)
-      {
-        quit = 1;
-        break;
-      }
-    }
-    scratch_end(scratch);
-  }
-#endif
+  for(;!update(););
 }

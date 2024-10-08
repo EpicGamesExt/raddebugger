@@ -1177,13 +1177,30 @@ os_window_set_maximized(OS_Handle handle, B32 maximized)
   }
 }
 
+internal B32
+os_window_is_minimized(OS_Handle handle)
+{
+  B32 result = 0;
+  OS_W32_Window *window = os_w32_window_from_handle(handle);
+  if(window)
+  {
+    result = !!(IsIconic(window->hwnd));
+  }
+  return result;
+}
+
 internal void
-os_window_minimize(OS_Handle handle)
+os_window_set_minimized(OS_Handle handle, B32 minimized)
 {
   OS_W32_Window *window = os_w32_window_from_handle(handle);
   if(window != 0)
   {
-    ShowWindow(window->hwnd, SW_MINIMIZE);
+    switch(minimized)
+    {
+      default:
+      case 0:{ShowWindow(window->hwnd, SW_RESTORE);}break;
+      case 1:{ShowWindow(window->hwnd, SW_MINIMIZE);}break;
+    }
   }
 }
 

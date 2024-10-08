@@ -83,8 +83,14 @@ os_window_set_maximized(OS_Handle window, B32 maximized)
 {
 }
 
+internal B32
+os_window_is_minimized(OS_Handle window)
+{
+  return 0;
+}
+
 internal void
-os_window_minimize(OS_Handle window)
+os_window_set_minimized(OS_Handle window, B32 minimized)
 {
 }
 

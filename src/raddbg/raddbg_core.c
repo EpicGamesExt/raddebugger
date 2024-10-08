@@ -5549,7 +5549,7 @@ rd_window_frame(RD_Window *ws)
             }
             if(ui_clicked(min_sig))
             {
-              os_window_minimize(ws->os);
+              os_window_set_minimized(ws->os, 1);
             }
             if(ui_clicked(max_sig))
             {
@@ -15311,6 +15311,7 @@ rd_frame(void)
             }
             if(window != 0)
             {
+              os_window_set_minimized(window->os, 0);
               os_window_bring_to_front(window->os);
               os_window_focus(window->os);
             }
