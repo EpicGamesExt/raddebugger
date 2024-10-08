@@ -1002,7 +1002,7 @@ rd_string_from_eval_viz_row_column(Arena *arena, EV_View *ev, EV_Row *row, RD_Wa
       {
         expr = e_expr_ref_member_access(arena, expr, n->string);
       }
-      expr = ev_expr_from_expr_view_rules(scratch.arena, expr, view_rules);
+      expr = ev_resolved_from_expr(scratch.arena, expr, view_rules);
       E_Eval eval = e_eval_from_expr(arena, expr);
       result = rd_value_string_from_eval(arena, string_flags, default_radix, font, font_size, max_size_px, eval, row->member, view_rules);
       scratch_end(scratch);

@@ -8937,7 +8937,7 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
         {
           E_Member *mem = &data_members.v[member_idx];
           E_Expr *dot_expr = e_expr_ref_member_access(scratch.arena, eval.expr, mem->name);
-          E_Expr *dot_expr_resolved = ev_expr_from_expr_view_rules(scratch.arena, dot_expr, view_rules);
+          E_Expr *dot_expr_resolved = ev_resolved_from_expr(scratch.arena, dot_expr, view_rules);
           E_Eval dot_eval = e_eval_from_expr(scratch.arena, dot_expr_resolved);
           space_taken += rd_append_value_strings_from_eval(arena, flags, radix, font, font_size, max_size-space_taken, depth+1, dot_eval, 0, view_rules, out);
           if(member_idx+1 < data_members.count)

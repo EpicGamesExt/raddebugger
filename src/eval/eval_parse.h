@@ -53,6 +53,7 @@ struct E_Expr
   E_Expr *first;
   E_Expr *last;
   E_Expr *next;
+  E_Expr *prev;
   E_Expr *ref;
   void *location;
   E_ExprKind kind;
@@ -214,8 +215,9 @@ internal U32 e_parse_ctx_module_idx_from_rdi(RDI_Parsed *rdi);
 //~ rjf: Expression Tree Building Functions
 
 internal E_Expr *e_push_expr(Arena *arena, E_ExprKind kind, void *location);
+internal void e_expr_insert_child(E_Expr *parent, E_Expr *prev, E_Expr *child);
 internal void e_expr_push_child(E_Expr *parent, E_Expr *child);
-
+internal void e_expr_remove_child(E_Expr *parent, E_Expr *child);
 internal E_Expr *e_expr_ref(Arena *arena, E_Expr *ref);
 internal E_Expr *e_expr_ref_addr(Arena *arena, E_Expr *rhs);
 internal E_Expr *e_expr_ref_member_access(Arena *arena, E_Expr *lhs, String8 member_name);

@@ -135,7 +135,6 @@ EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(default)
                                                    direct_type_kind == E_TypeKind_Class)))
   {
     E_TypeKey struct_type_key = e_type_kind_is_pointer_or_ref(type_kind) ? direct_type_key : type_key;
-    E_Type *struct_type = e_type_from_key(scratch.arena, struct_type_key);
     accel->members = e_type_data_members_from_key__cached(struct_type_key);
     total_row_count = accel->members.count;
   }

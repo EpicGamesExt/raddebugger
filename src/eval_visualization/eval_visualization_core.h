@@ -409,9 +409,9 @@ internal EV_ViewRuleList *ev_view_rule_list_copy(Arena *arena, EV_ViewRuleList *
 internal void ev_view_rule_list_concat_in_place(EV_ViewRuleList *dst, EV_ViewRuleList **src);
 
 ////////////////////////////////
-//~ rjf: View Rule Expression Resolution
+//~ rjf: Expression Resolution (Dynamic Overrides, View Rule Application)
 
-internal E_Expr *ev_expr_from_expr_view_rules(Arena *arena, E_Expr *expr, EV_ViewRuleList *view_rules);
+internal E_Expr *ev_resolved_from_expr(Arena *arena, E_Expr *expr, EV_ViewRuleList *view_rules);
 
 ////////////////////////////////
 //~ rjf: Block Building

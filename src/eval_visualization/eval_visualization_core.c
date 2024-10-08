@@ -585,12 +585,74 @@ ev_view_rule_list_concat_in_place(EV_ViewRuleList *dst, EV_ViewRuleList **src)
 }
 
 ////////////////////////////////
-//~ rjf: View Rule Expression Resolution
+//~ rjf: Expression Resolution (Dynamic Overrides, View Rule Application)
 
 internal E_Expr *
-ev_expr_from_expr_view_rules(Arena *arena, E_Expr *expr, EV_ViewRuleList *view_rules)
+ev_resolved_from_expr(Arena *arena, E_Expr *expr, EV_ViewRuleList *view_rules)
 {
   ProfBeginFunction();
+  {
+    Temp scratch = scratch_begin(&arena, 1);
+    E_Eval eval = e_eval_from_expr(scratch.arena, expr);
+    E_TypeKey type_key = eval.type_key;
+    E_TypeKind type_kind = e_type_kind_from_key(type_key);
+    E_TypeKey ptee_type_key = e_type_unwrap(e_type_direct_from_key(e_type_unwrap(type_key)));
+    E_TypeKind ptee_type_kind = e_type_kind_from_key(ptee_type_key);
+    if(ptee_type_kind == E_TypeKind_Struct || ptee_type_kind == E_TypeKind_Class)
+    {
+      E_Type *ptee_type = e_type_from_key(scratch.arena, ptee_type_key);
+      B32 has_vtable = 0;
+      for(U64 idx = 0; idx < ptee_type->count; idx += 1)
+      {
+        if(ptee_type->members[idx].kind == E_MemberKind_VirtualMethod)
+        {
+          has_vtable = 1;
+          break;
+        }
+      }
+      if(has_vtable)
+      {
+        U64 ptr_vaddr = eval.value.u64;
+        U64 addr_size = e_type_byte_size_from_key(e_type_unwrap(type_key));
+        U64 class_base_vaddr = 0;
+        U64 vtable_vaddr = 0;
+        if(e_space_read(eval.space, &class_base_vaddr, r1u64(ptr_vaddr, ptr_vaddr+addr_size)) &&
+           e_space_read(eval.space, &vtable_vaddr, r1u64(class_base_vaddr, class_base_vaddr+addr_size)))
+        {
+          Arch arch = e_type_state->ctx->primary_module->arch;
+          U32 rdi_idx = 0;
+          RDI_Parsed *rdi = 0;
+          U64 module_base = 0;
+          for(U64 idx = 0; idx < e_type_state->ctx->modules_count; idx += 1)
+          {
+            if(contains_1u64(e_type_state->ctx->modules[idx].vaddr_range, vtable_vaddr))
+            {
+              arch = e_type_state->ctx->modules[idx].arch;
+              rdi_idx = (U32)idx;
+              rdi = e_type_state->ctx->modules[idx].rdi;
+              module_base = e_type_state->ctx->modules[idx].vaddr_range.min;
+              break;
+            }
+          }
+          if(rdi != 0)
+          {
+            U64 vtable_voff = vtable_vaddr - module_base;
+            U64 global_idx = rdi_vmap_idx_from_section_kind_voff(rdi, RDI_SectionKind_GlobalVMap, vtable_voff);
+            RDI_GlobalVariable *global_var = rdi_element_from_name_idx(rdi, GlobalVariables, global_idx);
+            if(global_var->link_flags & RDI_LinkFlag_TypeScoped)
+            {
+              RDI_UDT *udt = rdi_element_from_name_idx(rdi, UDTs, global_var->container_idx);
+              RDI_TypeNode *type = rdi_element_from_name_idx(rdi, TypeNodes, udt->self_type_idx);
+              E_TypeKey derived_type_key = e_type_key_ext(e_type_kind_from_rdi(type->kind), udt->self_type_idx, rdi_idx);
+              E_TypeKey ptr_to_derived_type_key = e_type_key_cons_ptr(arch, derived_type_key, 0);
+              expr = e_expr_ref_cast(arena, ptr_to_derived_type_key, expr);
+            }
+          }
+        }
+      }
+    }
+    scratch_end(scratch);
+  }
   for(EV_ViewRuleNode *n = view_rules->first; n != 0; n = n->next)
   {
     EV_ViewRuleInfo *info = ev_view_rule_info_from_string(n->v.root->string);
@@ -627,7 +689,7 @@ ev_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, String8 str
     MemoryCopyStruct(tree.root, &ev_nil_block);
     tree.root->key        = ev_key_root();
     tree.root->string     = string;
-    tree.root->expr       = ev_expr_from_expr_view_rules(arena, expr, top_level_view_rules);
+    tree.root->expr       = ev_resolved_from_expr(arena, expr, top_level_view_rules);
     tree.root->view_rules = top_level_view_rules;
     tree.root->row_count  = 1;
     tree.total_row_count += 1;
@@ -772,7 +834,7 @@ ev_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, String8 str
               ev_view_rule_list_concat_in_place(child_view_rules, &child_auto_view_rules);
               scratch_end(scratch);
             }
-            E_Expr *child_expr__resolved = ev_expr_from_expr_view_rules(arena, child_expr, child_view_rules);
+            E_Expr *child_expr__resolved = ev_resolved_from_expr(arena, child_expr, child_view_rules);
             // TODO(rjf): need to mix in child's view rules
             Task *task = push_array(scratch.arena, Task, 1);
             SLLQueuePush(first_task, last_task, task);
@@ -1054,7 +1116,7 @@ ev_windowed_row_list_from_block_range_list(Arena *arena, EV_View *view, String8 
               ev_view_rule_list_concat_in_place(row_view_rules, &row_auto_view_rules);
               scratch_end(scratch);
             }
-            E_Expr *row_expr__resolved = ev_expr_from_expr_view_rules(arena, row_expr, row_view_rules);
+            E_Expr *row_expr__resolved = ev_resolved_from_expr(arena, row_expr, row_view_rules);
             EV_Row *row = push_array(arena, EV_Row, 1);
             SLLQueuePush(rows.first, rows.last, row);
             rows.count += 1;

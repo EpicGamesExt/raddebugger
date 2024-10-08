@@ -649,9 +649,21 @@ e_push_expr(Arena *arena, E_ExprKind kind, void *location)
 }
 
 internal void
+e_expr_insert_child(E_Expr *parent, E_Expr *prev, E_Expr *child)
+{
+  DLLInsert_NPZ(&e_expr_nil, parent->first, parent->last, prev, child, next, prev);
+}
+
+internal void
 e_expr_push_child(E_Expr *parent, E_Expr *child)
 {
-  SLLQueuePush_NZ(&e_expr_nil, parent->first, parent->last, child, next);
+  DLLPushBack_NPZ(&e_expr_nil, parent->first, parent->last, child, next, prev);
+}
+
+internal void
+e_expr_remove_child(E_Expr *parent, E_Expr *child)
+{
+  DLLRemove_NPZ(&e_expr_nil, parent->first, parent->last, child, next, prev);
 }
 
 internal E_Expr *
