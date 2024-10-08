@@ -6062,7 +6062,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(text)
   //- rjf: build code contents
   //
   DI_KeyList dbgi_keys = {0};
-  if(!file_is_missing)
+  if(!file_is_missing && info.lines_count != 0)
   {
     RD_CodeViewBuildResult result = rd_code_view_build(scratch.arena, cv, RD_CodeViewBuildFlag_All, code_area_rect, data, &info, 0, r1u64(0, 0), di_key_zero());
     dbgi_keys = result.dbgi_keys;
@@ -6176,6 +6176,9 @@ struct RD_DisasmViewState
   TxtPt cursor;
   TxtPt mark;
   DASM_StyleFlags style_flags;
+  CTRL_Handle temp_look_process;
+  U64 temp_look_vaddr;
+  U64 temp_look_run_gen;
   U64 goto_vaddr;
   RD_CodeViewState cv;
 };
@@ -6207,14 +6210,26 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(disasm)
   
   //////////////////////////////
   //- rjf: if disassembly views are not parameterized by anything, they
-  // automatically snap to the selected thread's RIP, rounded down to the
+  // automatically snap to the selected thread's RIP, OR the "temp look
+  // address" (commanded by go-to-disasm or go-to-address), rounded down to the
   // nearest 16K boundary
   //
-  B32 auto_selected_thread = 0;
+  B32 auto_selected = 0;
+  E_Space auto_space = {0};
   if(string.size == 0)
   {
-    auto_selected_thread = 1;
-    string = str8_lit("(rip.u64 & (~(0x4000 - 1))");
+    if(dv->temp_look_vaddr != 0 && dv->temp_look_run_gen == ctrl_run_gen())
+    {
+      auto_selected = 1;
+      auto_space = rd_eval_space_from_ctrl_entity(ctrl_entity_from_handle(d_state->ctrl_entity_store, dv->temp_look_process), RD_EvalSpaceKind_CtrlEntity);
+      string = push_str8f(scratch.arena, "(0x%I64x & (~(0x4000 - 1)))", dv->temp_look_vaddr);
+    }
+    else
+    {
+      auto_selected = 1;
+      auto_space = rd_eval_space_from_ctrl_entity(ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->process), RD_EvalSpaceKind_CtrlEntity);
+      string = str8_lit("(rip.u64 & (~(0x4000 - 1))");
+    }
   }
   
   //////////////////////////////
@@ -6228,13 +6243,41 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(disasm)
   rd_regs()->mark = dv->mark;
   
   //////////////////////////////
+  //- rjf: process disassembly-specific commands
+  //
+  for(RD_Cmd *cmd = 0; rd_next_cmd(&cmd);)
+  {
+    // rjf: mismatched window/panel => skip
+    if(!rd_handle_match(rd_regs()->view, cmd->regs->view))
+    {
+      continue;
+    }
+    
+    // rjf: process
+    RD_CmdKind kind = rd_cmd_kind_from_string(cmd->name);
+    switch(kind)
+    {
+      default: break;
+      case RD_CmdKind_GoToAddress:
+      {
+        dv->temp_look_process = cmd->regs->process;
+        dv->temp_look_vaddr   = cmd->regs->vaddr;
+        dv->temp_look_run_gen = ctrl_run_gen();
+        dv->goto_vaddr        = cmd->regs->vaddr;
+      }break;
+      case RD_CmdKind_ToggleCodeBytesVisibility: {dv->style_flags ^= DASM_StyleFlag_CodeBytes;}break;
+      case RD_CmdKind_ToggleAddressVisibility:   {dv->style_flags ^= DASM_StyleFlag_Addresses;}break;
+    }
+  }
+  
+  //////////////////////////////
   //- rjf: unpack parameterization info
   //
   E_Eval eval = e_eval_from_string(scratch.arena, string);
   E_Space space = eval.space;
-  if(auto_selected_thread)
+  if(auto_selected)
   {
-    space = rd_eval_space_from_ctrl_entity(ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->process), RD_EvalSpaceKind_CtrlEntity);
+    space = auto_space;
   }
   Rng1U64 range = rd_range_from_eval_params(eval, params);
   Arch arch = rd_arch_from_eval_params(eval, params);
@@ -6272,31 +6315,6 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(disasm)
   String8 dasm_text_data = hs_data_from_hash(hs_scope, dasm_text_hash);
   B32 has_disasm = (dasm_info.lines.count != 0 && dasm_text_info.lines_count != 0);
   B32 is_loading = (!has_disasm && dim_1u64(range) != 0 && eval.msgs.max_kind == E_MsgKind_Null);
-  
-  //////////////////////////////
-  //- rjf: process disassembly-specific commands
-  //
-  for(RD_Cmd *cmd = 0; rd_next_cmd(&cmd);)
-  {
-    // rjf: mismatched window/panel => skip
-    if(!rd_handle_match(rd_regs()->view, cmd->regs->view))
-    {
-      continue;
-    }
-    
-    // rjf: process
-    RD_CmdKind kind = rd_cmd_kind_from_string(cmd->name);
-    switch(kind)
-    {
-      default: break;
-      case RD_CmdKind_GoToAddress:
-      {
-        dv->goto_vaddr = cmd->regs->vaddr;
-      }break;
-      case RD_CmdKind_ToggleCodeBytesVisibility: {dv->style_flags ^= DASM_StyleFlag_CodeBytes;}break;
-      case RD_CmdKind_ToggleAddressVisibility:   {dv->style_flags ^= DASM_StyleFlag_Addresses;}break;
-    }
-  }
   
   //////////////////////////////
   //- rjf: is loading -> equip view with loading information
