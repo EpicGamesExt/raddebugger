@@ -6290,7 +6290,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(disasm)
     default:{}break;
     case CTRL_EntityKind_Process:
     {
-      arch        = space_entity->arch;
+      if(arch == Arch_Null) { arch = space_entity->arch; }
       dasm_module = ctrl_module_from_process_vaddr(space_entity, range.min);
       dbgi_key    = ctrl_dbgi_key_from_module(dasm_module);
       base_vaddr  = dasm_module->vaddr_range.min;
@@ -6314,7 +6314,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(disasm)
   TXT_TextInfo dasm_text_info = txt_text_info_from_key_lang(txt_scope, rd_regs()->text_key, rd_regs()->lang_kind, &dasm_text_hash);
   String8 dasm_text_data = hs_data_from_hash(hs_scope, dasm_text_hash);
   B32 has_disasm = (dasm_info.lines.count != 0 && dasm_text_info.lines_count != 0);
-  B32 is_loading = (!has_disasm && dim_1u64(range) != 0 && eval.msgs.max_kind == E_MsgKind_Null);
+  B32 is_loading = (!has_disasm && dim_1u64(range) != 0 && eval.msgs.max_kind == E_MsgKind_Null && (space.kind != RD_EvalSpaceKind_CtrlEntity || space_entity != &ctrl_entity_nil));
   
   //////////////////////////////
   //- rjf: is loading -> equip view with loading information
