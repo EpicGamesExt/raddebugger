@@ -1193,7 +1193,7 @@ internal void
 os_window_set_minimized(OS_Handle handle, B32 minimized)
 {
   OS_W32_Window *window = os_w32_window_from_handle(handle);
-  if(window != 0)
+  if(window != 0 && minimized != os_window_is_minimized(handle))
   {
     switch(minimized)
     {

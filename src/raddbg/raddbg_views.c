@@ -6370,9 +6370,17 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(disasm)
 ////////////////////////////////
 //~ rjf: output @view_hook_impl
 
+typedef struct RD_OutputViewState RD_OutputViewState;
+struct RD_OutputViewState
+{
+  U128 last_hash;
+  RD_CodeViewState cv;
+};
+
 RD_VIEW_RULE_UI_FUNCTION_DEF(output)
 {
-  RD_CodeViewState *cv = rd_view_state(RD_CodeViewState);
+  RD_OutputViewState *ov = rd_view_state(RD_OutputViewState);
+  RD_CodeViewState *cv = &ov->cv;
   rd_code_view_init(cv);
   Temp scratch = scratch_begin(0, 0);
   HS_Scope *hs_scope = hs_scope_open();
@@ -6408,6 +6416,16 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(output)
   {
     info.lines_count = 1;
     info.lines_ranges = &empty_range;
+  }
+  
+  //////////////////////////////
+  //- rjf: scroll-to-bottom
+  //
+  if(!u128_match(hash, ov->last_hash))
+  {
+    ov->last_hash     = hash;
+    cv->goto_line_num = info.lines_count;
+    cv->contain_cursor= 1;
   }
   
   //////////////////////////////
