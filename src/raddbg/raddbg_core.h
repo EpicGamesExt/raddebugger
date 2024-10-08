@@ -1134,6 +1134,7 @@ internal RD_Entity *rd_entity_alloc(RD_Entity *parent, RD_EntityKind kind);
 internal void rd_entity_mark_for_deletion(RD_Entity *entity);
 internal void rd_entity_release(RD_Entity *entity);
 internal void rd_entity_change_parent(RD_Entity *entity, RD_Entity *old_parent, RD_Entity *new_parent, RD_Entity *prev_child);
+internal RD_Entity *rd_entity_child_from_kind_or_alloc(RD_Entity *entity, RD_EntityKind kind);
 
 //- rjf: entity simple equipment
 internal void rd_entity_equip_txt_pt(RD_Entity *entity, TxtPt point);
@@ -1191,6 +1192,10 @@ internal E_Space rd_eval_space_from_entity(RD_Entity *entity);
 //- rjf: ctrl entity <-> eval space
 internal CTRL_Entity *rd_ctrl_entity_from_eval_space(E_Space space);
 internal E_Space rd_eval_space_from_ctrl_entity(CTRL_Entity *entity, E_SpaceKind kind);
+
+//- rjf: entity -> meta eval
+internal CTRL_MetaEval *rd_ctrl_meta_eval_from_entity(Arena *arena, RD_Entity *entity);
+internal CTRL_MetaEval *rd_ctrl_meta_eval_from_ctrl_entity(Arena *arena, CTRL_Entity *entity);
 
 //- rjf: eval space reads/writes
 internal B32 rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range);

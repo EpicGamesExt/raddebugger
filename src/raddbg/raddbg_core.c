@@ -1378,6 +1378,17 @@ rd_entity_change_parent(RD_Entity *entity, RD_Entity *old_parent, RD_Entity *new
   rd_state->kind_alloc_gens[entity->kind] += 1;
 }
 
+internal RD_Entity *
+rd_entity_child_from_kind_or_alloc(RD_Entity *entity, RD_EntityKind kind)
+{
+  RD_Entity *child = rd_entity_child_from_kind(entity, kind);
+  if(rd_entity_is_nil(child))
+  {
+    child = rd_entity_alloc(entity, kind);
+  }
+  return child;
+}
+
 //- rjf: entity simple equipment
 
 internal void
@@ -2024,12 +2035,92 @@ rd_eval_space_from_ctrl_entity(CTRL_Entity *entity, E_SpaceKind kind)
   return space;
 }
 
+//- rjf: entity -> meta eval
+
+internal CTRL_MetaEval *
+rd_ctrl_meta_eval_from_entity(Arena *arena, RD_Entity *entity)
+{
+  CTRL_MetaEval *meval = push_array(arena, CTRL_MetaEval, 1);
+  RD_Entity *exe = rd_entity_child_from_kind(entity, RD_EntityKind_Executable);
+  RD_Entity *args= rd_entity_child_from_kind(entity, RD_EntityKind_Arguments);
+  RD_Entity *wdir= rd_entity_child_from_kind(entity, RD_EntityKind_WorkingDirectory);
+  RD_Entity *entr= rd_entity_child_from_kind(entity, RD_EntityKind_EntryPoint);
+  RD_Entity *loc = rd_entity_child_from_kind(entity, RD_EntityKind_Location);
+  RD_Entity *cnd = rd_entity_child_from_kind(entity, RD_EntityKind_Condition);
+  String8 label_string = push_str8_copy(arena, entity->string);
+  String8 loc_string = {0};
+  if(loc->flags & RD_EntityFlag_HasTextPoint)
+  {
+    loc_string = push_str8f(arena, "%S:%I64u:%I64u", loc->string, loc->text_point.line, loc->text_point.column);
+  }
+  else if(loc->flags & RD_EntityFlag_HasVAddr)
+  {
+    loc_string = push_str8f(arena, "0x%I64x", loc->vaddr);
+  }
+  String8 cnd_string = push_str8_copy(arena, cnd->string);
+  meval->enabled   = !entity->disabled;
+  meval->hit_count = entity->u64;
+  meval->color     = u32_from_rgba(rd_rgba_from_entity(entity));
+  meval->label     = label_string;
+  meval->exe       = exe->string;
+  meval->args      = args->string;
+  meval->working_directory = wdir->string;
+  meval->entry_point = entr->string;
+  meval->location  = loc_string;
+  meval->condition = cnd_string;
+  return meval;
+}
+
+internal CTRL_MetaEval *
+rd_ctrl_meta_eval_from_ctrl_entity(Arena *arena, CTRL_Entity *entity)
+{
+  CTRL_MetaEval *meval = push_array(arena, CTRL_MetaEval, 1);
+  meval->frozen      = entity->is_frozen;
+  meval->vaddr_range = entity->vaddr_range;
+  meval->color       = entity->rgba;
+  meval->label       = entity->string;
+  meval->id          = entity->id;
+  if(entity->kind == CTRL_EntityKind_Thread)
+  {
+    DI_Scope *di_scope = di_scope_open();
+    CTRL_Entity *process = ctrl_entity_ancestor_from_kind(entity, CTRL_EntityKind_Process);
+    CTRL_Unwind base_unwind = d_query_cached_unwind_from_thread(entity);
+    D_Unwind rich_unwind = d_unwind_from_ctrl_unwind(arena, di_scope, process, &base_unwind);
+    meval->callstack.count = rich_unwind.frames.total_frame_count;
+    meval->callstack.v = push_array(arena, CTRL_MetaEvalFrame, meval->callstack.count);
+    U64 idx = 0;
+    for(U64 base_idx = 0; base_idx < rich_unwind.frames.concrete_frame_count; base_idx += 1)
+    {
+      U64 inline_idx = 0;
+      for(D_UnwindInlineFrame *f = rich_unwind.frames.v[base_idx].first_inline_frame; f != 0; f = f->next, inline_idx += 1)
+      {
+        meval->callstack.v[idx].vaddr = regs_rip_from_arch_block(entity->arch, rich_unwind.frames.v[base_idx].regs);
+        meval->callstack.v[idx].inline_depth = inline_idx + 1;
+        idx += 1;
+      }
+      meval->callstack.v[idx].vaddr = regs_rip_from_arch_block(entity->arch, rich_unwind.frames.v[base_idx].regs);
+      idx += 1;
+    }
+    di_scope_close(di_scope);
+  }
+  if(entity->kind == CTRL_EntityKind_Module)
+  {
+    DI_Key dbgi_key = ctrl_dbgi_key_from_module(entity);
+    meval->label = str8_skip_last_slash(entity->string);
+    meval->exe = path_normalized_from_string(arena, entity->string);
+    meval->dbg = path_normalized_from_string(arena, dbgi_key.path);
+  }
+  return meval;
+}
+
 //- rjf: eval space reads/writes
 
 internal B32
 rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
 {
+  Temp scratch = scratch_begin(0, 0);
   B32 result = 0;
+  CTRL_MetaEval *meval = 0;
   switch(space.kind)
   {
     //- rjf: filesystem reads
@@ -2091,88 +2182,10 @@ rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
     }break;
     
     //- rjf: meta reads (metadata about either control entities or debugger state)
-    case RD_EvalSpaceKind_MetaCtrlEntity:
-    case RD_EvalSpaceKind_MetaEntity:
+    case RD_EvalSpaceKind_MetaCtrlEntity: meval = rd_ctrl_meta_eval_from_ctrl_entity(scratch.arena, rd_ctrl_entity_from_eval_space(space)); goto meta_eval;
+    case RD_EvalSpaceKind_MetaEntity: meval = rd_ctrl_meta_eval_from_entity(scratch.arena, rd_entity_from_eval_space(space)); goto meta_eval;
+    meta_eval:;
     {
-      Temp scratch = scratch_begin(0, 0);
-      CTRL_MetaEval *meval = push_array(scratch.arena, CTRL_MetaEval, 1);
-      
-      // rjf: ctrl entity -> produce meta eval
-      if(space.kind == RD_EvalSpaceKind_MetaCtrlEntity)
-      {
-        CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(space);
-        
-        // rjf: produce meta evaluation
-        meval->frozen      = entity->is_frozen;
-        meval->vaddr_range = entity->vaddr_range;
-        meval->color       = entity->rgba;
-        meval->label       = entity->string;
-        meval->id          = entity->id;
-        if(entity->kind == CTRL_EntityKind_Thread)
-        {
-          DI_Scope *di_scope = di_scope_open();
-          CTRL_Entity *process = ctrl_entity_ancestor_from_kind(entity, CTRL_EntityKind_Process);
-          CTRL_Unwind base_unwind = d_query_cached_unwind_from_thread(entity);
-          D_Unwind rich_unwind = d_unwind_from_ctrl_unwind(scratch.arena, di_scope, process, &base_unwind);
-          meval->callstack.count = rich_unwind.frames.total_frame_count;
-          meval->callstack.v = push_array(scratch.arena, CTRL_MetaEvalFrame, meval->callstack.count);
-          U64 idx = 0;
-          for(U64 base_idx = 0; base_idx < rich_unwind.frames.concrete_frame_count; base_idx += 1)
-          {
-            U64 inline_idx = 0;
-            for(D_UnwindInlineFrame *f = rich_unwind.frames.v[base_idx].first_inline_frame; f != 0; f = f->next, inline_idx += 1)
-            {
-              meval->callstack.v[idx].vaddr = regs_rip_from_arch_block(entity->arch, rich_unwind.frames.v[base_idx].regs);
-              meval->callstack.v[idx].inline_depth = inline_idx + 1;
-              idx += 1;
-            }
-            meval->callstack.v[idx].vaddr = regs_rip_from_arch_block(entity->arch, rich_unwind.frames.v[base_idx].regs);
-            idx += 1;
-          }
-          di_scope_close(di_scope);
-        }
-        if(entity->kind == CTRL_EntityKind_Module)
-        {
-          DI_Key dbgi_key = ctrl_dbgi_key_from_module(entity);
-          meval->label = str8_skip_last_slash(entity->string);
-          meval->exe = path_normalized_from_string(scratch.arena, entity->string);
-          meval->dbg = path_normalized_from_string(scratch.arena, dbgi_key.path);
-        }
-      }
-      
-      // rjf: debugger entity -> produce meta eval
-      if(space.kind == RD_EvalSpaceKind_MetaEntity)
-      {
-        RD_Entity *entity = rd_entity_from_eval_space(space);
-        RD_Entity *exe = rd_entity_child_from_kind(entity, RD_EntityKind_Executable);
-        RD_Entity *args= rd_entity_child_from_kind(entity, RD_EntityKind_Arguments);
-        RD_Entity *wdir= rd_entity_child_from_kind(entity, RD_EntityKind_WorkingDirectory);
-        RD_Entity *entr= rd_entity_child_from_kind(entity, RD_EntityKind_EntryPoint);
-        RD_Entity *loc = rd_entity_child_from_kind(entity, RD_EntityKind_Location);
-        RD_Entity *cnd = rd_entity_child_from_kind(entity, RD_EntityKind_Condition);
-        String8 label_string = push_str8_copy(scratch.arena, entity->string);
-        String8 loc_string = {0};
-        if(loc->flags & RD_EntityFlag_HasTextPoint)
-        {
-          loc_string = push_str8f(scratch.arena, "%S:%I64u:%I64u", loc->string, loc->text_point.line, loc->text_point.column);
-        }
-        else if(loc->flags & RD_EntityFlag_HasVAddr)
-        {
-          loc_string = push_str8f(scratch.arena, "0x%I64x", loc->vaddr);
-        }
-        String8 cnd_string = push_str8_copy(scratch.arena, cnd->string);
-        meval->enabled   = !entity->disabled;
-        meval->hit_count = entity->u64;
-        meval->color     = u32_from_rgba(rd_rgba_from_entity(entity));
-        meval->label     = label_string;
-        meval->exe       = exe->string;
-        meval->args      = args->string;
-        meval->working_directory = wdir->string;
-        meval->entry_point = entr->string;
-        meval->location  = loc_string;
-        meval->condition = cnd_string;
-      }
-      
       // rjf: copy meta evaluation to scratch arena, to form range of legal reads
       arena_push(scratch.arena, 0, 64);
       String8 meval_srlzed = serialized_from_struct(scratch.arena, CTRL_MetaEval, meval);
@@ -2196,10 +2209,9 @@ rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
           MemoryZero((U8 *)out + bytes_to_read, range_dim - bytes_to_read);
         }
       }
-      
-      scratch_end(scratch);
     }break;
   }
+  scratch_end(scratch);
   return result;
 }
 
@@ -2207,7 +2219,79 @@ internal B32
 rd_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range)
 {
   B32 result = 0;
+  switch(space.kind)
+  {
+    default:{}break;
+    
+    //- rjf: interior control entity writes (inside process address space or
+    // thread register block)
+    case RD_EvalSpaceKind_CtrlEntity:
+    {
+      CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(space);
+      switch(entity->kind)
+      {
+        default:{}break;
+        case CTRL_EntityKind_Process:
+        {
+          result = ctrl_process_write(entity->handle, range, in);
+        }break;
+        case CTRL_EntityKind_Thread:
+        {
+          Temp scratch = scratch_begin(0, 0);
+          U64 regs_size = regs_block_size_from_arch(entity->arch);
+          Rng1U64 legal_range = r1u64(0, regs_size);
+          Rng1U64 write_range = intersect_1u64(legal_range, range);
+          U64 write_size = dim_1u64(write_range);
+          void *new_regs = ctrl_query_cached_reg_block_from_thread(scratch.arena, d_state->ctrl_entity_store, entity->handle);
+          MemoryCopy((U8 *)new_regs + write_range.min, in, write_size);
+          result = ctrl_thread_write_reg_block(entity->handle, new_regs);
+          scratch_end(scratch);
+        }break;
+      }
+    }break;
+    
+    //- rjf: meta-entity writes
+    case RD_EvalSpaceKind_MetaEntity:
+    {
+      Temp scratch = scratch_begin(0, 0);
+      
+      // rjf: get entity, produce meta-eval
+      RD_Entity *entity = rd_entity_from_eval_space(space);
+      CTRL_MetaEval *meval = rd_ctrl_meta_eval_from_entity(scratch.arena, entity);
+      
+      // rjf: copy meta evaluation to scratch arena, to form range of legal reads
+      arena_push(scratch.arena, 0, 64);
+      String8 meval_srlzed = serialized_from_struct(scratch.arena, CTRL_MetaEval, meval);
+      U64 pos_min = arena_pos(scratch.arena);
+      CTRL_MetaEval *meval_read = struct_from_serialized(scratch.arena, CTRL_MetaEval, meval_srlzed);
+      U64 pos_opl = arena_pos(scratch.arena);
+      
+      // rjf: rebase all pointer values in meta evaluation to be relative to base pointer
+      struct_rebase_ptrs(CTRL_MetaEval, meval_read, meval_read);
+      
+      // rjf: perform write to entity
+      if(0){}
+#define FlatMemberCase(name) else if(range.min == OffsetOf(CTRL_MetaEval, name) && dim_1u64(range) <= sizeof(meval_read->name))
+#define StringMemberCase(name) else if(range.min == (U64)meval_read->name.str)
+      FlatMemberCase(enabled)             {result = 1; rd_entity_equip_disabled(entity, !!((U8 *)in)[0]);}
+      StringMemberCase(label)             {result = 1; rd_entity_equip_name(entity, str8_cstring_capped(in, (U8 *)in + 4096));}
+      StringMemberCase(exe)               {result = 1; rd_entity_equip_name(rd_entity_child_from_kind_or_alloc(entity, RD_EntityKind_Executable), str8_cstring_capped(in, (U8 *)in + 4096));}
+      StringMemberCase(args)              {result = 1; rd_entity_equip_name(rd_entity_child_from_kind_or_alloc(entity, RD_EntityKind_Arguments), str8_cstring_capped(in, (U8 *)in + 4096));}
+      StringMemberCase(working_directory) {result = 1; rd_entity_equip_name(rd_entity_child_from_kind_or_alloc(entity, RD_EntityKind_WorkingDirectory), str8_cstring_capped(in, (U8 *)in + 4096));}
+      StringMemberCase(entry_point)       {result = 1; rd_entity_equip_name(rd_entity_child_from_kind_or_alloc(entity, RD_EntityKind_EntryPoint), str8_cstring_capped(in, (U8 *)in + 4096));}
+      StringMemberCase(condition)         {result = 1; rd_entity_equip_name(rd_entity_child_from_kind_or_alloc(entity, RD_EntityKind_Condition), str8_cstring_capped(in, (U8 *)in + 4096));}
+#undef FlatMemberCase
+#undef StringMemberCase
+      scratch_end(scratch);
+    }break;
+    case RD_EvalSpaceKind_MetaCtrlEntity:
+    {
+      
+    }break;
+  }
+  return result;
 #if 0 // TODO(rjf): @msgs
+  B32 result = 0;
   RD_Entity *entity = rd_entity_from_eval_space(space);
   switch(entity->kind)
   {
@@ -2273,8 +2357,8 @@ rd_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range)
       }
     }break;
   }
-#endif
   return result;
+#endif
 }
 
 //- rjf: asynchronous streamed reads -> hashes from spaces
