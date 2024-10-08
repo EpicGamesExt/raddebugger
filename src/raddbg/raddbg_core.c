@@ -2416,7 +2416,7 @@ rd_commit_eval_value_string(E_Eval dst_eval, String8 string)
       if(type_kind == E_TypeKind_Ptr &&
          (e_type_kind_is_pointer_or_ref(src_eval_value_type_kind) ||
           e_type_kind_is_integer(src_eval_value_type_kind)) &&
-         src_eval_value.value.u64 != 0 && src_eval_value.mode == E_Mode_Value)
+         src_eval_value.mode == E_Mode_Value)
       {
         commit_data = push_str8_copy(scratch.arena, str8_struct(&src_eval.value));
         commit_data.size = Min(commit_data.size, e_type_byte_size_from_key(type_key));
@@ -3443,10 +3443,13 @@ rd_window_frame(RD_Window *ws)
           // rjf: unwind
           if(ctrl_entity->kind == CTRL_EntityKind_Thread)
           {
-            ui_spacer(ui_em(1.5f, 1.f));
             CTRL_Entity *process = ctrl_entity_ancestor_from_kind(ctrl_entity, CTRL_EntityKind_Process);
             CTRL_Unwind base_unwind = d_query_cached_unwind_from_thread(ctrl_entity);
             D_Unwind rich_unwind = d_unwind_from_ctrl_unwind(scratch.arena, di_scope, process, &base_unwind);
+            if(rich_unwind.frames.concrete_frame_count != 0)
+            {
+              ui_spacer(ui_em(1.5f, 1.f));
+            }
             for(U64 idx = 0; idx < rich_unwind.frames.concrete_frame_count; idx += 1)
             {
               D_UnwindFrame *f = &rich_unwind.frames.v[idx];
@@ -4717,6 +4720,86 @@ rd_window_frame(RD_Window *ws)
               }
             }
           }
+          
+          //- rjf: gather files
+          if(0)
+          {
+            if(ws->autocomp_lister_params.flags & RD_AutoCompListerFlag_Files)
+            {
+              // rjf: find containing directory in query
+              String8 dir_str_in_input = {0};
+              for(U64 i = 0; i < query.size; i += 1)
+              {
+                String8 substr1 = str8_substr(query, r1u64(i, i+1));
+                String8 substr2 = str8_substr(query, r1u64(i, i+2));
+                String8 substr3 = str8_substr(query, r1u64(i, i+3));
+                if(str8_match(substr1, str8_lit("/"), StringMatchFlag_SlashInsensitive))
+                {
+                  dir_str_in_input = str8_substr(query, r1u64(i, query.size));
+                }
+                else if(i != 0 && str8_match(substr2, str8_lit(":/"), StringMatchFlag_SlashInsensitive))
+                {
+                  dir_str_in_input = str8_substr(query, r1u64(i-1, query.size));
+                }
+                else if(str8_match(substr2, str8_lit("./"), StringMatchFlag_SlashInsensitive))
+                {
+                  dir_str_in_input = str8_substr(query, r1u64(i, query.size));
+                }
+                else if(str8_match(substr3, str8_lit("../"), StringMatchFlag_SlashInsensitive))
+                {
+                  dir_str_in_input = str8_substr(query, r1u64(i, query.size));
+                }
+                if(dir_str_in_input.size != 0)
+                {
+                  break;
+                }
+              }
+              
+              // rjf: use query string to form various parts of search space
+              String8 prefix = {0};
+              String8 path = {0};
+              String8 search = {0};
+              if(dir_str_in_input.size != 0)
+              {
+                String8 dir = dir_str_in_input;
+                String8 search = {0};
+                U64 one_past_last_slash = dir.size;
+                for(U64 i = 0; i < dir_str_in_input.size; i += 1)
+                {
+                  if(dir_str_in_input.str[i] == '/' || dir_str_in_input.str[i] == '\\')
+                  {
+                    one_past_last_slash = i+1;
+                  }
+                }
+                dir.size = one_past_last_slash;
+                search = str8_substr(dir_str_in_input, r1u64(one_past_last_slash, dir_str_in_input.size));
+                path = dir;
+                search = search;
+                prefix = str8_substr(query, r1u64(0, path.str - query.str));
+              }
+              
+              // rjf: get current files, filtered
+              B32 dir_selection = 1;
+              OS_FileIter *it = os_file_iter_begin(scratch.arena, path, 0);
+              for(OS_FileInfo info = {0}; os_file_iter_next(scratch.arena, it, &info);)
+              {
+                FuzzyMatchRangeList match_ranges = fuzzy_match_find(scratch.arena, search, info.name);
+                B32 fits_search = (search.size == 0 || match_ranges.count == match_ranges.needle_part_count);
+                B32 fits_dir_only = !!(info.props.flags & FilePropertyFlag_IsFolder) || !dir_selection;
+                if(fits_search && fits_dir_only)
+                {
+                  RD_AutoCompListerItem item = {0};
+                  {
+                    item.string      = info.name;
+                    item.kind_string = str8_lit("File");
+                    item.matches     = match_ranges;
+                  }
+                  rd_autocomp_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
+                }
+              }
+              os_file_iter_end(it);
+            }
+          }
         }
         
         //- rjf: lister item list -> sorted array
@@ -5297,7 +5380,7 @@ rd_window_frame(RD_Window *ws)
           RD_EntityList processes = rd_query_cached_entity_list_with_kind(RD_EntityKind_Process);
           B32 have_targets = targets.count != 0;
           B32 can_send_signal = !d_ctrl_targets_running();
-          B32 can_play  = (have_targets && (can_send_signal || d_ctrl_last_run_frame_idx()+4 > rd_state->frame_index));
+          B32 can_play  = (have_targets && (can_send_signal || d_ctrl_last_run_frame_idx()+4 > d_frame_index()));
           B32 can_pause = (!can_send_signal);
           B32 can_stop  = (processes.count != 0);
           B32 can_step =  (processes.count != 0 && can_send_signal);
@@ -5619,7 +5702,7 @@ rd_window_frame(RD_Window *ws)
     //
     ProfScope("build bottom bar")
     {
-      B32 is_running = d_ctrl_targets_running() && d_ctrl_last_run_frame_idx() < rd_state->frame_index;
+      B32 is_running = d_ctrl_targets_running() && d_ctrl_last_run_frame_idx() < d_frame_index();
       CTRL_Event stop_event = d_ctrl_last_stop_event();
       UI_Palette *positive_scheme = rd_palette_from_code(RD_PaletteCode_PositivePopButton);
       UI_Palette *running_scheme  = rd_palette_from_code(RD_PaletteCode_NeutralPopButton);
@@ -11025,6 +11108,7 @@ rd_frame(void)
   //////////////////////////////
   //- rjf: loop - consume events in core, tick engine, and repeat
   //
+  CTRL_Handle find_thread_retry = {0};
   for(U64 cmd_process_loop_idx = 0; cmd_process_loop_idx < 3; cmd_process_loop_idx += 1)
   {
     ////////////////////////////
@@ -13703,10 +13787,9 @@ rd_frame(void)
               }
               
               // rjf: retry on stopped, pending debug info
-              // TODO(rjf): CANNOT RETRY IN THIS WAY, NEED TO DEFER TO NEXT FRAME
               if(!d_ctrl_targets_running() && (dbgi_pending || missing_rip))
               {
-                rd_cmd(RD_CmdKind_FindThread, .thread = thread->handle);
+                find_thread_retry = thread->handle;
               }
             }
             di_scope_close(scope);
@@ -14678,7 +14761,7 @@ rd_frame(void)
             rd_state->base_regs.v.module  = module->handle;
             rd_state->base_regs.v.process = process->handle;
             rd_state->base_regs.v.machine = machine->handle;
-            rd_cmd(RD_CmdKind_FindThread, .thread = thread->handle);
+            rd_cmd(RD_CmdKind_FindThread, .thread = thread->handle, .unwind_count = 0, .inline_depth = 0);
           }break;
           case RD_CmdKind_SelectUnwind:
           {
@@ -14700,7 +14783,7 @@ rd_frame(void)
                 rd_state->base_regs.v.inline_depth = rd_regs()->inline_depth;
               }
             }
-            rd_cmd(RD_CmdKind_FindThread, .thread = thread->handle);
+            rd_cmd(RD_CmdKind_FindThread, .thread = thread->handle, .unwind_count = rd_state->base_regs.v.unwind_count, .inline_depth = rd_state->base_regs.v.inline_depth);
             di_scope_close(di_scope);
           }break;
           case RD_CmdKind_UpOneFrame:
@@ -15302,19 +15385,27 @@ rd_frame(void)
           CTRL_Entity *module = ctrl_module_from_process_vaddr(process, vaddr);
           DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
           U64 voff = ctrl_voff_from_vaddr(module, vaddr);
+          U64 test_cached_vaddr = ctrl_query_cached_rip_from_thread(d_state->ctrl_entity_store, thread->handle);
           
           // rjf: valid stop thread? -> select & snap
-          if(thread != &ctrl_entity_nil)
+          if(thread != &ctrl_entity_nil && evt->cause != D_EventCause_Halt)
           {
             rd_cmd(RD_CmdKind_SelectThread, .thread = thread->handle);
-            rd_cmd(RD_CmdKind_FindThread, .thread = thread->handle);
           }
           
           // rjf: no stop-causing thread, but have selected thread? -> snap to selected
           CTRL_Entity *selected_thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_base_regs()->thread);
-          if(thread == &ctrl_entity_nil && selected_thread != &ctrl_entity_nil)
+          if((evt->cause == D_EventCause_Halt || thread == &ctrl_entity_nil) && selected_thread != &ctrl_entity_nil)
           {
-            rd_cmd(RD_CmdKind_FindThread);
+            rd_cmd(RD_CmdKind_SelectThread, .thread = selected_thread->handle);
+          }
+          
+          // rjf: no stop-causing thread, but don't have selected thread? -> snap to first available thread
+          if(thread == &ctrl_entity_nil && selected_thread == &ctrl_entity_nil)
+          {
+            CTRL_EntityList threads = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Thread);
+            CTRL_Entity *first_available_thread = ctrl_entity_list_first(&threads);
+            rd_cmd(RD_CmdKind_SelectThread, .thread = first_available_thread->handle);
           }
           
           // rjf: increment breakpoint hit counts
@@ -15387,6 +15478,14 @@ rd_frame(void)
     {
       break;
     }
+  }
+  
+  //////////////////////////////
+  //- rjf: retry find-thread
+  //
+  if(!ctrl_handle_match(ctrl_handle_zero(), find_thread_retry))
+  {
+    rd_cmd(RD_CmdKind_FindThread, .thread = find_thread_retry);
   }
   
   //////////////////////////////

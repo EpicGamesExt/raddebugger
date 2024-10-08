@@ -71,6 +71,7 @@ typedef enum D_EventCause
 {
   D_EventCause_Null,
   D_EventCause_UserBreakpoint,
+  D_EventCause_Halt,
   D_EventCause_COUNT
 }
 D_EventCause;

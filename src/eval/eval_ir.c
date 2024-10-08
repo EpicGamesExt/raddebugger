@@ -535,17 +535,18 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
           E_Type *type = e_type_from_key(scratch.arena, check_type_key);
           if(type->enum_vals != 0)
           {
+            String8 lookup_string = exprr->string;
+            String8 lookup_string_append_1 = push_str8f(scratch.arena, "%S_%S", type->name, lookup_string);
+            String8 lookup_string_append_2 = push_str8f(scratch.arena, "%S%S", type->name, lookup_string);
             E_EnumVal *enum_val_match = 0;
             for EachIndex(idx, type->count)
             {
-              if(str8_match(type->enum_vals[idx].name, exprr->string, 0))
+              if(str8_match(type->enum_vals[idx].name, lookup_string, 0) ||
+                 str8_match(type->enum_vals[idx].name, lookup_string_append_1, 0) ||
+                 str8_match(type->enum_vals[idx].name, lookup_string_append_2, 0))
               {
                 enum_val_match = &type->enum_vals[idx];
                 break;
-              }
-              else if(str8_match(type->enum_vals[idx].name, exprr->string, StringMatchFlag_CaseInsensitive))
-              {
-                enum_val_match = &type->enum_vals[idx];
               }
             }
             if(enum_val_match != 0)

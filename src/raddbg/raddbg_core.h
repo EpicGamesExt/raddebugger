@@ -585,6 +585,7 @@ enum
   RD_AutoCompListerFlag_Languages     = (1<<9),
   RD_AutoCompListerFlag_Architectures = (1<<10),
   RD_AutoCompListerFlag_Tex2DFormats  = (1<<11),
+  RD_AutoCompListerFlag_Files         = (1<<12),
 };
 
 typedef struct RD_AutoCompListerItem RD_AutoCompListerItem;

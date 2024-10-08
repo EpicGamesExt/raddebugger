@@ -1313,6 +1313,7 @@ ctrl_calc_hash_store_key_from_process_vaddr_range(CTRL_Handle process, Rng1U64 r
 internal U128
 ctrl_stored_hash_from_process_vaddr_range(CTRL_Handle process, Rng1U64 range, B32 zero_terminated, B32 *out_is_stale, U64 endt_us)
 {
+  ProfBeginFunction();
   U128 result = {0};
   U64 size = dim_1u64(range);
   U64 pre_mem_gen = dmn_mem_gen();
@@ -1465,6 +1466,7 @@ ctrl_stored_hash_from_process_vaddr_range(CTRL_Handle process, Rng1U64 range, B3
   {
     out_is_stale[0] = 1;
   }
+  ProfEnd();
   return result;
 }
 
@@ -1483,6 +1485,7 @@ ctrl_hash_store_key_from_process_vaddr_range(CTRL_Handle process, Rng1U64 range,
 internal CTRL_ProcessMemorySlice
 ctrl_query_cached_data_from_process_vaddr_range(Arena *arena, CTRL_Handle process, Rng1U64 range, U64 endt_us)
 {
+  ProfBeginFunction();
   CTRL_ProcessMemorySlice result = {0};
   if(range.max > range.min &&
      dim_1u64(range) <= MB(256) &&
@@ -1501,16 +1504,19 @@ ctrl_query_cached_data_from_process_vaddr_range(Arena *arena, CTRL_Handle proces
     U128 *page_last_hashes = push_array(scratch.arena, U128, page_count);
     
     //- rjf: gather hashes & last-hashes for each page
-    for(U64 page_idx = 0; page_idx < page_count; page_idx += 1)
+    ProfScope("gather hashes & last-hashes for each page")
     {
-      U64 page_base_vaddr = page_range.min + page_idx*page_size;
-      U128 page_key = ctrl_calc_hash_store_key_from_process_vaddr_range(process, r1u64(page_base_vaddr, page_base_vaddr+page_size), 0);
-      B32 page_is_stale = 0;
-      U128 page_hash = ctrl_stored_hash_from_process_vaddr_range(process, r1u64(page_base_vaddr, page_base_vaddr+page_size), 0, &page_is_stale, endt_us);
-      U128 page_last_hash = hs_hash_from_key(page_key, 1);
-      result.stale = (result.stale || page_is_stale);
-      page_hashes[page_idx] = page_hash;
-      page_last_hashes[page_idx] = page_last_hash;
+      for(U64 page_idx = 0; page_idx < page_count; page_idx += 1)
+      {
+        U64 page_base_vaddr = page_range.min + page_idx*page_size;
+        U128 page_key = ctrl_calc_hash_store_key_from_process_vaddr_range(process, r1u64(page_base_vaddr, page_base_vaddr+page_size), 0);
+        B32 page_is_stale = 0;
+        U128 page_hash = ctrl_stored_hash_from_process_vaddr_range(process, r1u64(page_base_vaddr, page_base_vaddr+page_size), 0, &page_is_stale, endt_us);
+        U128 page_last_hash = hs_hash_from_key(page_key, 1);
+        result.stale = (result.stale || page_is_stale);
+        page_hashes[page_idx] = page_hash;
+        page_last_hashes[page_idx] = page_last_hash;
+      }
     }
     
     //- rjf: setup output buffers
@@ -1519,6 +1525,7 @@ ctrl_query_cached_data_from_process_vaddr_range(Arena *arena, CTRL_Handle proces
     U64 *byte_changed_flags = push_array(arena, U64, (dim_1u64(range)+63)/64);
     
     //- rjf: iterate pages, fill output
+    ProfScope("iterate pages, fill output")
     {
       U64 write_off = 0;
       for(U64 page_idx = 0; page_idx < page_count; page_idx += 1)
@@ -1543,23 +1550,22 @@ ctrl_query_cached_data_from_process_vaddr_range(Arena *arena, CTRL_Handle proces
         
         // rjf; if this page's data doesn't fill the entire range, mark
         // missing bytes as bad
-        if(data.size < page_size)
+        if(data.size < page_size) ProfScope("mark missing bytes as bad")
         {
-          for(U64 invalid_vaddr = data_vaddr_range.min+data.size;
-              invalid_vaddr < data_vaddr_range.min + page_size;
+          Rng1U64 invalid_range = r1u64(data_vaddr_range.min+data.size, data_vaddr_range.min + page_size);
+          Rng1U64 in_range_invalid_range = intersect_1u64(invalid_range, range);
+          for(U64 invalid_vaddr = in_range_invalid_range.min;
+              invalid_vaddr < in_range_invalid_range.max;
               invalid_vaddr += 1)
           {
-            if(contains_1u64(range, invalid_vaddr))
-            {
-              U64 idx_in_range = invalid_vaddr-range.min;
-              byte_bad_flags[idx_in_range/64] |= (1ull<<(idx_in_range%64));
-            }
+            U64 idx_in_range = invalid_vaddr - range.min;
+            byte_bad_flags[idx_in_range/64] |= (1ull<<(idx_in_range%64));
           }
         }
         
         // rjf: if this page's hash & last_hash don't match, diff each byte &
         // fill out changed flags
-        if(!u128_match(page_hashes[page_idx], page_last_hashes[page_idx]))
+        if(!u128_match(page_hashes[page_idx], page_last_hashes[page_idx])) ProfScope("hashes don't match; diff each byte")
         {
           String8 last_data = hs_data_from_hash(scope, page_last_hashes[page_idx]);
           String8 in_range_last_data = last_data;
@@ -1616,6 +1622,7 @@ ctrl_query_cached_data_from_process_vaddr_range(Arena *arena, CTRL_Handle proces
     hs_scope_close(scope);
     scratch_end(scratch);
   }
+  ProfEnd();
   return result;
 }
 
@@ -5602,7 +5609,8 @@ ctrl_mem_stream_thread__entry_point(void *p)
         range_base = push_array_no_zero(range_arena, U8, range_size);
         U64 bytes_read = 0;
         U64 retry_count = 0;
-        for(Rng1U64 vaddr_range_clamped_retry = vaddr_range_clamped; retry_count < 64; retry_count += 1)
+        U64 retry_limit = (zero_terminated ? 64 : 0);
+        for(Rng1U64 vaddr_range_clamped_retry = vaddr_range_clamped; retry_count <= retry_limit; retry_count += 1)
         {
           bytes_read = dmn_process_read(process.dmn_handle, vaddr_range_clamped_retry, range_base);
           if(bytes_read == 0 && vaddr_range_clamped_retry.max > vaddr_range_clamped_retry.min)

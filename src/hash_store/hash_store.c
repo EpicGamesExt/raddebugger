@@ -271,6 +271,7 @@ hs_hash_from_key(U128 key, U64 rewind_count)
 internal String8
 hs_data_from_hash(HS_Scope *scope, U128 hash)
 {
+  ProfBeginFunction();
   String8 result = {0};
   U64 slot_idx = hash.u64[1]%hs_shared->slots_count;
   U64 stripe_idx = slot_idx%hs_shared->stripes_count;
@@ -288,6 +289,7 @@ hs_data_from_hash(HS_Scope *scope, U128 hash)
       }
     }
   }
+  ProfEnd();
   return result;
 }
 

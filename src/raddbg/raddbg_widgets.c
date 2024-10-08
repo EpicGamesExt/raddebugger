@@ -984,7 +984,9 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   CTRL_Entity *selected_thread_process = ctrl_entity_ancestor_from_kind(selected_thread, CTRL_EntityKind_Process);
   U64 selected_thread_rip_unwind_vaddr = d_query_cached_rip_from_thread_unwind(selected_thread, rd_regs()->unwind_count);
   CTRL_Entity *selected_thread_module = ctrl_module_from_process_vaddr(selected_thread_process, selected_thread_rip_unwind_vaddr);
-  F32 selected_thread_module_alive_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "###module_alive_t_%p", selected_thread_module), 1.f);
+  F32 selected_thread_alive_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "###selected_thread_alive_t_%p", selected_thread), 1.f);
+  F32 selected_thread_module_alive_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "###selected_thread_module_alive_t_%p", selected_thread_module), 1.f);
+  F32 selected_thread_arch_alive_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "###selected_thread_arch_alive_t_%i", selected_thread->arch), 1.f);
   CTRL_Event stop_event = d_ctrl_last_stop_event();
   CTRL_Entity *stopper_thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, stop_event.entity);
   B32 is_focused = ui_is_focus_active();
@@ -1104,7 +1106,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
               {
                 color = rd_rgba_from_theme_color(RD_ThemeColor_ThreadError);
               }
-              if(d_ctrl_targets_running() && d_ctrl_last_run_frame_idx() < rd_state->frame_index)
+              if(d_ctrl_targets_running() && d_ctrl_last_run_frame_idx() < d_frame_index())
               {
                 color.w *= 0.5f;
               }
@@ -1252,7 +1254,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
               {
                 color = rd_rgba_from_theme_color(RD_ThemeColor_ThreadError);
               }
-              if(d_ctrl_targets_running() && d_ctrl_last_run_frame_idx() < rd_state->frame_index)
+              if(d_ctrl_targets_running() && d_ctrl_last_run_frame_idx() < d_frame_index())
               {
                 color.w *= 0.5f;
               }
@@ -1516,7 +1518,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
         {
           U64 best_stamp = 0;
           S64 line_info_line_num = 0;
-          F32 line_info_t = selected_thread_module_alive_t;
+          F32 line_info_t = 0;
           D_LineList *lines = &params->line_infos[line_idx];
           for(D_LineNode *n = lines->first; n != 0; n = n->next)
           {
@@ -1525,6 +1527,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
               has_line_info = (n->v.pt.line == line_num || params->line_vaddrs[line_idx] != 0);
               line_info_line_num = n->v.pt.line;
               best_stamp = n->v.dbgi_key.min_timestamp;
+              line_info_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "dbgi_alive_t_%S", n->v.dbgi_key.path), 1.f);
             }
           }
           if(has_line_info)
@@ -2145,6 +2148,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
                   for(DI_KeyNode *n = params->relevant_dbgi_keys.first; n != 0; n = n->next)
                   {
                     DI_Key dbgi_key = n->v;
+                    UI_Key dbgi_anim_key = ui_key_from_stringf(ui_key_zero(), "###dbgi_alive_t_%S", dbgi_key.path);
                     if(!mapped_special && token->kind == TXT_TokenKind_Identifier)
                     {
                       U64 voff = d_voff_from_dbgi_key_symbol_name(&dbgi_key, token_string);
@@ -2152,7 +2156,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
                       {
                         mapped_special = 1;
                         new_color_kind = RD_ThemeColor_CodeSymbol;
-                        mix_t = selected_thread_module_alive_t;
+                        mix_t = ui_anim(dbgi_anim_key, 1.f);
                       }
                     }
                     if(!mapped_special && token->kind == TXT_TokenKind_Identifier)
@@ -2162,7 +2166,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
                       {
                         mapped_special = 1;
                         new_color_kind = RD_ThemeColor_CodeType;
-                        mix_t = selected_thread_module_alive_t;
+                        mix_t = ui_anim(dbgi_anim_key, 1.f);
                       }
                     }
                     break;
@@ -2194,7 +2198,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
                     {
                       mapped_special = 1;
                       new_color_kind = RD_ThemeColor_CodeRegister;
-                      mix_t = selected_thread_module_alive_t;
+                      mix_t = selected_thread_arch_alive_t;
                     }
                   }
                   if(!mapped_special)
@@ -2204,7 +2208,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
                     {
                       mapped_special = 1;
                       new_color_kind = RD_ThemeColor_CodeRegister;
-                      mix_t = selected_thread_module_alive_t;
+                      mix_t = selected_thread_arch_alive_t;
                     }
                   }
                 }

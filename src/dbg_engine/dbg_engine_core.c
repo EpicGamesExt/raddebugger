@@ -1661,6 +1661,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
             switch(event->cause)
             {
               default:{}break;
+              case CTRL_EventCause_InterruptedByHalt:{cause = D_EventCause_Halt;}break;
               case CTRL_EventCause_UserBreakpoint:{cause = D_EventCause_UserBreakpoint;}break;
             }
             D_EventNode *n = push_array(arena, D_EventNode, 1);
