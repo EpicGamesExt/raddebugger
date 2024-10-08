@@ -389,10 +389,18 @@ EV_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_DEF(only)
 {
   Temp scratch = scratch_begin(&arena, 1);
   E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, expr);
-  E_TypeKind type_kind = e_type_kind_from_key(irtree.type_key);
-  if(type_kind == E_TypeKind_Struct || type_kind == E_TypeKind_Union || type_kind == E_TypeKind_Class)
+  E_TypeKey type_key = irtree.type_key;
+  E_TypeKind type_kind = e_type_kind_from_key(type_key);
+  E_TypeKey direct_type_key = e_type_direct_from_key(type_key);
+  E_TypeKind direct_type_kind = e_type_kind_from_key(direct_type_key);
+  B32 is_ptr = e_type_kind_is_pointer_or_ref(type_kind);
+  E_TypeKey struct_type_key = is_ptr ? direct_type_key : type_key;
+  E_TypeKind struct_type_kind = is_ptr ? direct_type_kind : type_kind;
+  if(struct_type_kind == E_TypeKind_Struct ||
+     struct_type_kind == E_TypeKind_Union ||
+     struct_type_kind == E_TypeKind_Class)
   {
-    E_MemberArray current_members = e_type_data_members_from_key__cached(irtree.type_key);
+    E_MemberArray current_members = e_type_data_members_from_key__cached(struct_type_key);
     E_MemberList new_members = {0};
     for MD_EachNode(node, params->first)
     {
@@ -413,12 +421,18 @@ EV_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_DEF(only)
     }
     else
     {
-      String8 struct_name = e_type_string_from_key(scratch.arena, irtree.type_key);
+      String8 struct_name = e_type_string_from_key(scratch.arena, struct_type_key);
       new_type = e_type_key_cons(.kind = E_TypeKind_Struct, .name = struct_name, .members = new_members_array.v, .count = new_members_array.count);
     }
-    expr = e_expr_ref_addr(arena, expr);
+    if(!is_ptr)
+    {
+      expr = e_expr_ref_addr(arena, expr);
+    }
     expr = e_expr_ref_cast(arena, e_type_key_cons_ptr(e_type_state->ctx->primary_module->arch, new_type, 0), expr);
-    expr = e_expr_ref_deref(arena, expr);
+    if(!is_ptr)
+    {
+      expr = e_expr_ref_deref(arena, expr);
+    }
   }
   scratch_end(scratch);
   return expr;
@@ -431,10 +445,18 @@ EV_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_DEF(omit)
 {
   Temp scratch = scratch_begin(&arena, 1);
   E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, expr);
-  E_TypeKind type_kind = e_type_kind_from_key(irtree.type_key);
-  if(type_kind == E_TypeKind_Struct || type_kind == E_TypeKind_Union || type_kind == E_TypeKind_Class)
+  E_TypeKey type_key = irtree.type_key;
+  E_TypeKind type_kind = e_type_kind_from_key(type_key);
+  E_TypeKey direct_type_key = e_type_direct_from_key(type_key);
+  E_TypeKind direct_type_kind = e_type_kind_from_key(direct_type_key);
+  B32 is_ptr = e_type_kind_is_pointer_or_ref(type_kind);
+  E_TypeKey struct_type_key = is_ptr ? direct_type_key : type_key;
+  E_TypeKind struct_type_kind = is_ptr ? direct_type_kind : type_kind;
+  if(struct_type_kind == E_TypeKind_Struct ||
+     struct_type_kind == E_TypeKind_Union ||
+     struct_type_kind == E_TypeKind_Class)
   {
-    E_MemberArray current_members = e_type_data_members_from_key__cached(irtree.type_key);
+    E_MemberArray current_members = e_type_data_members_from_key__cached(struct_type_key);
     E_MemberList new_members = {0};
     for EachIndex(idx, current_members.count)
     {
@@ -454,18 +476,17 @@ EV_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_DEF(omit)
     }
     E_MemberArray new_members_array = e_member_array_from_list(scratch.arena, &new_members);
     E_TypeKey new_type = {0};
-    if(new_members_array.count == 1 && new_members_array.v[0].off == 0)
+    String8 struct_name = e_type_string_from_key(scratch.arena, struct_type_key);
+    new_type = e_type_key_cons(.kind = E_TypeKind_Struct, .name = struct_name, .members = new_members_array.v, .count = new_members_array.count);
+    if(!is_ptr)
     {
-      new_type = new_members_array.v[0].type_key;
+      expr = e_expr_ref_addr(arena, expr);
     }
-    else
-    {
-      String8 struct_name = e_type_string_from_key(scratch.arena, irtree.type_key);
-      new_type = e_type_key_cons(.kind = E_TypeKind_Struct, .name = struct_name, .members = new_members_array.v, .count = new_members_array.count);
-    }
-    expr = e_expr_ref_addr(arena, expr);
     expr = e_expr_ref_cast(arena, e_type_key_cons_ptr(e_type_state->ctx->primary_module->arch, new_type, 0), expr);
-    expr = e_expr_ref_deref(arena, expr);
+    if(!is_ptr)
+    {
+      expr = e_expr_ref_deref(arena, expr);
+    }
   }
   scratch_end(scratch);
   return expr;
