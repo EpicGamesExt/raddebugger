@@ -1844,7 +1844,7 @@ rd_title_fstrs_from_entity(Arena *arena, RD_Entity *entity, Vec4F32 secondary_co
       dr_fancy_string_list_concat_in_place(&result, &cnd_fstrs);
     }
   }
-  if(entity->kind == RD_EntityKind_Target && entity->disabled)
+  if((entity->kind == RD_EntityKind_Target || entity->kind == RD_EntityKind_Breakpoint) && entity->disabled)
   {
     dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), size, v4f32(0, 0, 0, 0), str8_lit(" "));
     dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Main), size*0.95f, secondary_color, str8_lit("(Disabled)"));

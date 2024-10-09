@@ -1401,8 +1401,14 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
               RD_RegsScope(.entity = rd_handle_from_entity(bp)) rd_set_hover_regs(RD_RegSlot_Entity);
             }
             
+            // rjf: shift+click => enable breakpoint
+            if(ui_clicked(bp_sig) && bp_sig.event_flags & OS_Modifier_Shift)
+            {
+              rd_cmd(bp->disabled ? RD_CmdKind_EnableEntity : RD_CmdKind_DisableEntity, .entity = rd_handle_from_entity(bp));
+            }
+            
             // rjf: click => remove breakpoint
-            if(ui_clicked(bp_sig))
+            if(ui_clicked(bp_sig) && bp_sig.event_flags == 0)
             {
               rd_cmd(RD_CmdKind_RemoveEntity, .entity = rd_handle_from_entity(bp));
             }
