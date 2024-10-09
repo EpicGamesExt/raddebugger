@@ -216,7 +216,7 @@ internal R_Handle
 tex_texture_from_key_topology(TEX_Scope *scope, U128 key, TEX_Topology topology, U128 *hash_out)
 {
   R_Handle handle = {0};
-  for(U64 rewind_idx = 0; rewind_idx < 2; rewind_idx += 1)
+  for(U64 rewind_idx = 0; rewind_idx < HS_KEY_HASH_HISTORY_COUNT; rewind_idx += 1)
   {
     U128 hash = hs_hash_from_key(key, rewind_idx);
     handle = tex_texture_from_hash_topology(scope, hash, topology);

@@ -7,12 +7,14 @@
 ////////////////////////////////
 //~ rjf: Cache Types
 
+#define HS_KEY_HASH_HISTORY_COUNT 64
+
 typedef struct HS_KeyNode HS_KeyNode;
 struct HS_KeyNode
 {
   HS_KeyNode *next;
   U128 key;
-  U128 hash_history[2];
+  U128 hash_history[HS_KEY_HASH_HISTORY_COUNT];
   U64 hash_history_gen;
 };
 

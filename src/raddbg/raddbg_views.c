@@ -395,16 +395,12 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
     //- rjf: find text (forward)
     if(cv->find_text_fwd.size != 0)
     {
-      Temp scratch = scratch_begin(0, 0);
       B32 found = 0;
       B32 first = 1;
       S64 line_num_start = rd_regs()->cursor.line;
       S64 line_num_last = (S64)text_info->lines_count;
-      for(S64 line_num = line_num_start;; first = 0)
+      for(S64 line_num = line_num_start; 1 <= line_num && line_num <= line_num_last; first = 0)
       {
-        // rjf: pop scratch
-        temp_end(scratch);
-        
         // rjf: gather line info
         String8 line_string = str8_substr(text_data, text_info->lines_ranges[line_num-1]);
         U64 search_start = 0;
@@ -442,22 +438,17 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
       {
         log_user_errorf("Could not find \"%S\"", cv->find_text_fwd);
       }
-      scratch_end(scratch);
     }
     
     //- rjf: find text (backward)
     if(cv->find_text_bwd.size != 0)
     {
-      Temp scratch = scratch_begin(0, 0);
       B32 found = 0;
       B32 first = 1;
       S64 line_num_start = rd_regs()->cursor.line;
       S64 line_num_last = (S64)text_info->lines_count;
-      for(S64 line_num = line_num_start;; first = 0)
+      for(S64 line_num = line_num_start; 1 <= line_num && line_num <= line_num_last; first = 0)
       {
-        // rjf: pop scratch
-        temp_end(scratch);
-        
         // rjf: gather line info
         String8 line_string = str8_substr(text_data, text_info->lines_ranges[line_num-1]);
         if(rd_regs()->cursor.line == line_num && first)
@@ -503,7 +494,6 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
       {
         log_user_errorf("Could not find \"%S\"", cv->find_text_bwd);
       }
-      scratch_end(scratch);
     }
     
     MemoryZeroStruct(&cv->find_text_fwd);
@@ -6062,7 +6052,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(text)
   //- rjf: build code contents
   //
   DI_KeyList dbgi_keys = {0};
-  if(!file_is_missing && info.lines_count != 0)
+  if(!file_is_missing)
   {
     RD_CodeViewBuildResult result = rd_code_view_build(scratch.arena, cv, RD_CodeViewBuildFlag_All, code_area_rect, data, &info, 0, r1u64(0, 0), di_key_zero());
     dbgi_keys = result.dbgi_keys;

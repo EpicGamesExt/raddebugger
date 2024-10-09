@@ -11109,6 +11109,7 @@ rd_frame(void)
   //- rjf: loop - consume events in core, tick engine, and repeat
   //
   CTRL_Handle find_thread_retry = {0};
+  RD_Cmd *cmd = 0;
   for(U64 cmd_process_loop_idx = 0; cmd_process_loop_idx < 3; cmd_process_loop_idx += 1)
   {
     ////////////////////////////
@@ -11422,7 +11423,7 @@ rd_frame(void)
     B32 panel_reset_done = 0;
     if(depth == 0)
     {
-      for(RD_Cmd *cmd = 0; rd_next_cmd(&cmd);) RD_RegsScope()
+      for(;rd_next_cmd(&cmd);) RD_RegsScope()
       {
         // rjf: unpack command
         RD_CmdKind kind = rd_cmd_kind_from_string(cmd->name);

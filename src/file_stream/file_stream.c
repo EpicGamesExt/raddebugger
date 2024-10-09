@@ -85,7 +85,7 @@ fs_hash_from_path_range(String8 path, Rng1U64 range, U64 endt_us)
   
   //- rjf: loop through key -> hash history; obtain most recent hash for this key
   U128 result = {0};
-  for(U64 rewind_idx = 0; rewind_idx < 2; rewind_idx += 1)
+  for(U64 rewind_idx = 0; rewind_idx < HS_KEY_HASH_HISTORY_COUNT; rewind_idx += 1)
   {
     result = hs_hash_from_key(key, rewind_idx);
     

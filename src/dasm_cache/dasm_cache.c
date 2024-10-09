@@ -432,7 +432,7 @@ internal DASM_Info
 dasm_info_from_key_params(DASM_Scope *scope, U128 key, DASM_Params *params, U128 *hash_out)
 {
   DASM_Info result = {0};
-  for(U64 rewind_idx = 0; rewind_idx < 2; rewind_idx += 1)
+  for(U64 rewind_idx = 0; rewind_idx < HS_KEY_HASH_HISTORY_COUNT; rewind_idx += 1)
   {
     U128 hash = hs_hash_from_key(key, rewind_idx);
     result = dasm_info_from_hash_params(scope, hash, params);
