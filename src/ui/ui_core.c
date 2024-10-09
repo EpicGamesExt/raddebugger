@@ -3014,6 +3014,10 @@ ui_anim_(UI_Key key, UI_AnimParams *params)
   {
     node->params.epsilon = 0.01f;
   }
+  if(node->params.rate == 1)
+  {
+    node->current = node->params.target;
+  }
   return node->current;
 }
 

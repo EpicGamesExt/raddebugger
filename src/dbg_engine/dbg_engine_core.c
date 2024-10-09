@@ -1695,13 +1695,6 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
           rd_entity_equip_ctrl_handle(entity, event->entity);
           rd_entity_equip_ctrl_id(entity, event->entity_id);
           rd_entity_equip_arch(entity, event->arch);
-          
-          // rjf: report
-          D_EventNode *n = push_array(arena, D_EventNode, 1);
-          SLLQueuePush(result.first, result.last, n);
-          result.count += 1;
-          D_Event *evt = &n->v;
-          evt->kind = D_EventKind_ProcessBegin;
         }break;
         
         case CTRL_EventKind_NewThread:

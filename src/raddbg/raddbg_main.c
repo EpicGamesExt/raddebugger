@@ -5,6 +5,7 @@
 //~ rjf: 0.9.12 TODO notes
 //
 // [ ] remainder of @msgs pass:
+//  [ ] entity listers - kill-specific-process, etc.
 //  [ ] new universal ctx menu, hover, tooltips systems
 //  [ ] fix memory view
 //  [ ] meta eval system
@@ -41,6 +42,19 @@
 //  [x] modules view
 //  [x] eval writing/committing
 //  [x] breakpoint hit count resetting
+//  [x] reset bp hit counts - not just on NewProcess, but on RUN! because
+//      we are now evaluating them on the control thread...
+//  [x] fix bug where text info is evicted, and switching back to a tab scrolls
+//      to the top
+// [x] reset bp hit counts - not just on NewProcess, but on RUN! because
+//     we are now evaluating them on the control thread...
+// [x] fix bug where text info is evicted, and switching back to a tab scrolls
+//     to the top
+// [x] targets view
+// [x] ensure launch controls parameterize commands correctly)
+// [x] ensure ctrl+click
+// [x] scheduler view
+// [x] eval committing
 
 ////////////////////////////////
 //~ rjf: post-0.9.12 TODO notes

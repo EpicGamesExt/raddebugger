@@ -1187,7 +1187,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
   FZY_Scope *fzy_scope = fzy_scope_open();
   Temp scratch = scratch_begin(0, 0);
   UI_ScrollPt2 scroll_pos = rd_view_scroll_pos();
-  F32 entity_hover_t_rate = 1 - pow_f32(2, (-20.f * rd_state->frame_dt));
+  F32 entity_hover_t_rate = rd_setting_val_from_code(RD_SettingCode_HoverAnimations).s32 ? (1 - pow_f32(2, (-20.f * rd_state->frame_dt))) : 1.f;
   
   //////////////////////////////
   //- rjf: unpack arguments
@@ -2604,9 +2604,13 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                         B32 is_frozen = ctrl_entity_tree_is_frozen(ctrl_entity);
                         RD_IconKind icon_kind = rd_cmd_kind_info_table[ctrl->kind].icon_kind;
                         UI_Palette *palette = ui_top_palette();
-                        if(ctrl->kind == RD_CmdKind_SelectEntity || ctrl->kind == RD_CmdKind_EnableEntity)
+                        if(ctrl->kind == RD_CmdKind_SelectEntity)
                         {
                           icon_kind = entity->disabled ? RD_IconKind_RadioHollow : RD_IconKind_RadioFilled;
+                        }
+                        if(ctrl->kind == RD_CmdKind_EnableEntity)
+                        {
+                          icon_kind = entity->disabled ? RD_IconKind_CheckHollow : RD_IconKind_CheckFilled;
                         }
                         if(ctrl->kind == RD_CmdKind_SelectThread)
                         {
