@@ -401,6 +401,17 @@ type_coverage_eval_tests(void){
   TestFunction *function = mule_get_module_function("dll_type_eval_tests");
   function();
   
+  int abc = 0;
+  for(int i = 0; i < 1000; i += 1)
+  {
+    if(i == 500)
+    {
+      abc+= 1;
+    }
+    int a = i + abc;
+    int b = a*5;
+  }
+  
   int x = (int)(Anonymous_D);
 }
 

@@ -12716,11 +12716,11 @@ rd_frame(void)
               RD_Window *ws = rd_window_open(window_dim, preferred_monitor, RD_CfgSrc_User);
               if(monitor_dim.x < 1920)
               {
-                rd_cmd(RD_CmdKind_ResetToCompactPanels);
+                rd_cmd(RD_CmdKind_ResetToCompactPanels, .window = rd_handle_from_window(ws));
               }
               else
               {
-                rd_cmd(RD_CmdKind_ResetToDefaultPanels);
+                rd_cmd(RD_CmdKind_ResetToDefaultPanels, .window = rd_handle_from_window(ws));
               }
             }
             
@@ -14461,6 +14461,13 @@ rd_frame(void)
             if(!(info->query.flags & RD_QueryFlag_KeepOldInput))
             {
               rd_cmd(RD_CmdKind_CancelQuery);
+            }
+            
+            // rjf: unset command register slot, if we keep old input (and thus need
+            // to re-query user)
+            if(info->query.flags & RD_QueryFlag_KeepOldInput)
+            {
+              ws->query_cmd_regs_mask[slot/64] &= ~(1ull<<(slot%64));
             }
             
             // rjf: push command if possible
