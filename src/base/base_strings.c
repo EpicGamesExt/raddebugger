@@ -1692,11 +1692,8 @@ raw_from_escaped_str8(Arena *arena, String8 string)
       }
       String8 replace_string = push_str8_copy(scratch.arena, str8(&replace_byte, 1));
       str8_list_push(scratch.arena, &strs, replace_string);
-      if(replace_byte == '\\' || replace_byte == '"' || replace_byte == '\'')
-      {
-        idx += 1;
-        start += 1;
-      }
+      idx += 1;
+      start += 1;
     }
   }
   String8 result = str8_list_join(arena, &strs, 0);

@@ -2425,15 +2425,24 @@ rd_commit_eval_value_string(E_Eval dst_eval, String8 string)
               direct_type_kind == E_TypeKind_UChar8 ||
               e_type_kind_is_integer(direct_type_kind))
       {
+        B32 is_quoted = 0;
         if(string.size >= 1 && string.str[0] == '"')
         {
           string = str8_skip(string, 1);
+          is_quoted = 1;
         }
         if(string.size >= 1 && string.str[string.size-1] == '"')
         {
           string = str8_chop(string, 1);
         }
-        commit_data = raw_from_escaped_str8(scratch.arena, string);
+        if(is_quoted)
+        {
+          commit_data = raw_from_escaped_str8(scratch.arena, string);
+        }
+        else
+        {
+          commit_data = push_str8_copy(scratch.arena, string);
+        }
         commit_data.size += 1;
         if(type_kind == E_TypeKind_Ptr)
         {
@@ -4325,9 +4334,11 @@ rd_window_frame(RD_Window *ws)
     //- rjf: build auto-complete lister
     //
     ProfScope("build autocomplete lister")
-      if(!ws->autocomp_force_closed && !ui_key_match(ws->autocomp_root_key, ui_key_zero()) && ws->autocomp_last_frame_idx+1 >= rd_state->frame_index)
+      if(!ui_key_match(ws->autocomp_root_key, ui_key_zero()) && ws->autocomp_last_frame_idx+1 >= rd_state->frame_index)
     {
-      String8 query = str8(ws->autocomp_lister_query_buffer, ws->autocomp_lister_query_size);
+      String8 input = str8(ws->autocomp_lister_input_buffer, ws->autocomp_lister_input_size);
+      String8 query_word = rd_autocomp_query_word_from_input_string_off(input, ws->autocomp_cursor_off);
+      String8 query_path = rd_autocomp_query_path_from_input_string_off(input, ws->autocomp_cursor_off);
       UI_Box *autocomp_root_box = ui_box_from_key(ws->autocomp_root_key);
       if(!ui_box_is_nil(autocomp_root_box))
       {
@@ -4371,9 +4382,9 @@ rd_window_frame(RD_Window *ws)
               {
                 item.string      = n->string;
                 item.kind_string = str8_lit("Local");
-                item.matches     = fuzzy_match_find(scratch.arena, query, n->string);
+                item.matches     = fuzzy_match_find(scratch.arena, query_word, n->string);
               }
-              if(query.size == 0 || item.matches.count != 0)
+              if(query_word.size == 0 || item.matches.count != 0)
               {
                 rd_autocomp_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
               }
@@ -4384,9 +4395,9 @@ rd_window_frame(RD_Window *ws)
               {
                 item.string      = n->string;
                 item.kind_string = str8_lit("Local (Member)");
-                item.matches     = fuzzy_match_find(scratch.arena, query, n->string);
+                item.matches     = fuzzy_match_find(scratch.arena, query_word, n->string);
               }
-              if(query.size == 0 || item.matches.count != 0)
+              if(query_word.size == 0 || item.matches.count != 0)
               {
                 rd_autocomp_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
               }
@@ -4409,9 +4420,9 @@ rd_window_frame(RD_Window *ws)
                 {
                   item.string      = reg_names[idx];
                   item.kind_string = str8_lit("Register");
-                  item.matches     = fuzzy_match_find(scratch.arena, query, reg_names[idx]);
+                  item.matches     = fuzzy_match_find(scratch.arena, query_word, reg_names[idx]);
                 }
-                if(query.size == 0 || item.matches.count != 0)
+                if(query_word.size == 0 || item.matches.count != 0)
                 {
                   rd_autocomp_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
                 }
@@ -4425,9 +4436,9 @@ rd_window_frame(RD_Window *ws)
                 {
                   item.string      = alias_names[idx];
                   item.kind_string = str8_lit("Reg. Alias");
-                  item.matches     = fuzzy_match_find(scratch.arena, query, alias_names[idx]);
+                  item.matches     = fuzzy_match_find(scratch.arena, query_word, alias_names[idx]);
                 }
-                if(query.size == 0 || item.matches.count != 0)
+                if(query_word.size == 0 || item.matches.count != 0)
                 {
                   rd_autocomp_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
                 }
@@ -4446,9 +4457,9 @@ rd_window_frame(RD_Window *ws)
                 {
                   item.string      = spec->info.string;
                   item.kind_string = str8_lit("View Rule");
-                  item.matches     = fuzzy_match_find(scratch.arena, query, spec->info.string);
+                  item.matches     = fuzzy_match_find(scratch.arena, query_word, spec->info.string);
                 }
-                if(query.size == 0 || item.matches.count != 0)
+                if(query_word.size == 0 || item.matches.count != 0)
                 {
                   rd_autocomp_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
                 }
@@ -4463,7 +4474,7 @@ rd_window_frame(RD_Window *ws)
           }
           
           //- rjf: gather globals
-          if(ws->autocomp_lister_params.flags & RD_AutoCompListerFlag_Globals && query.size != 0)
+          if(ws->autocomp_lister_params.flags & RD_AutoCompListerFlag_Globals && query_word.size != 0)
           {
             U128 fzy_key = {d_hash_from_string(str8_lit("autocomp_globals_fzy_key"))};
             FZY_Params fzy_params =
@@ -4472,7 +4483,7 @@ rd_window_frame(RD_Window *ws)
               dbgi_keys,
             };
             B32 is_stale = 0;
-            FZY_ItemArray items = fzy_items_from_key_params_query(fzy_scope, fzy_key, &fzy_params, query, 0, &is_stale);
+            FZY_ItemArray items = fzy_items_from_key_params_query(fzy_scope, fzy_key, &fzy_params, query_word, 0, &is_stale);
             for(U64 idx = 0; idx < 20 && idx < items.count; idx += 1)
             {
               // rjf: determine dbgi/rdi to which this item belongs
@@ -4510,7 +4521,7 @@ rd_window_frame(RD_Window *ws)
           }
           
           //- rjf: gather thread locals
-          if(ws->autocomp_lister_params.flags & RD_AutoCompListerFlag_ThreadLocals && query.size != 0)
+          if(ws->autocomp_lister_params.flags & RD_AutoCompListerFlag_ThreadLocals && query_word.size != 0)
           {
             U128 fzy_key = {d_hash_from_string(str8_lit("autocomp_tvars_fzy_key"))};
             FZY_Params fzy_params =
@@ -4519,7 +4530,7 @@ rd_window_frame(RD_Window *ws)
               dbgi_keys,
             };
             B32 is_stale = 0;
-            FZY_ItemArray items = fzy_items_from_key_params_query(fzy_scope, fzy_key, &fzy_params, query, 0, &is_stale);
+            FZY_ItemArray items = fzy_items_from_key_params_query(fzy_scope, fzy_key, &fzy_params, query_word, 0, &is_stale);
             for(U64 idx = 0; idx < 20 && idx < items.count; idx += 1)
             {
               // rjf: determine dbgi/rdi to which this item belongs
@@ -4557,7 +4568,7 @@ rd_window_frame(RD_Window *ws)
           }
           
           //- rjf: gather procedures
-          if(ws->autocomp_lister_params.flags & RD_AutoCompListerFlag_Procedures && query.size != 0)
+          if(ws->autocomp_lister_params.flags & RD_AutoCompListerFlag_Procedures && query_word.size != 0)
           {
             U128 fzy_key = {d_hash_from_string(str8_lit("autocomp_procedures_fzy_key"))};
             FZY_Params fzy_params =
@@ -4566,7 +4577,7 @@ rd_window_frame(RD_Window *ws)
               dbgi_keys,
             };
             B32 is_stale = 0;
-            FZY_ItemArray items = fzy_items_from_key_params_query(fzy_scope, fzy_key, &fzy_params, query, 0, &is_stale);
+            FZY_ItemArray items = fzy_items_from_key_params_query(fzy_scope, fzy_key, &fzy_params, query_word, 0, &is_stale);
             for(U64 idx = 0; idx < 20 && idx < items.count; idx += 1)
             {
               // rjf: determine dbgi/rdi to which this item belongs
@@ -4604,7 +4615,7 @@ rd_window_frame(RD_Window *ws)
           }
           
           //- rjf: gather types
-          if(ws->autocomp_lister_params.flags & RD_AutoCompListerFlag_Types && query.size != 0)
+          if(ws->autocomp_lister_params.flags & RD_AutoCompListerFlag_Types && query_word.size != 0)
           {
             U128 fzy_key = {d_hash_from_string(str8_lit("autocomp_types_fzy_key"))};
             FZY_Params fzy_params =
@@ -4613,7 +4624,7 @@ rd_window_frame(RD_Window *ws)
               dbgi_keys,
             };
             B32 is_stale = 0;
-            FZY_ItemArray items = fzy_items_from_key_params_query(fzy_scope, fzy_key, &fzy_params, query, 0, &is_stale);
+            FZY_ItemArray items = fzy_items_from_key_params_query(fzy_scope, fzy_key, &fzy_params, query_word, 0, &is_stale);
             for(U64 idx = 0; idx < 20 && idx < items.count; idx += 1)
             {
               // rjf: determine dbgi/rdi to which this item belongs
@@ -4659,9 +4670,9 @@ rd_window_frame(RD_Window *ws)
               {
                 item.string      = txt_extension_from_lang_kind(lang);
                 item.kind_string = str8_lit("Language");
-                item.matches     = fuzzy_match_find(scratch.arena, query, item.string);
+                item.matches     = fuzzy_match_find(scratch.arena, query_word, item.string);
               }
-              if(item.string.size != 0 && (query.size == 0 || item.matches.count != 0))
+              if(item.string.size != 0 && (query_word.size == 0 || item.matches.count != 0))
               {
                 rd_autocomp_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
               }
@@ -4677,9 +4688,9 @@ rd_window_frame(RD_Window *ws)
               {
                 item.string      = string_from_arch(arch);
                 item.kind_string = str8_lit("Arch");
-                item.matches     = fuzzy_match_find(scratch.arena, query, item.string);
+                item.matches     = fuzzy_match_find(scratch.arena, query_word, item.string);
               }
-              if(query.size == 0 || item.matches.count != 0)
+              if(query_word.size == 0 || item.matches.count != 0)
               {
                 rd_autocomp_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
               }
@@ -4695,9 +4706,9 @@ rd_window_frame(RD_Window *ws)
               {
                 item.string      = lower_from_str8(scratch.arena, r_tex2d_format_display_string_table[fmt]);
                 item.kind_string = str8_lit("Format");
-                item.matches     = fuzzy_match_find(scratch.arena, query, item.string);
+                item.matches     = fuzzy_match_find(scratch.arena, query_word, item.string);
               }
-              if(query.size == 0 || item.matches.count != 0)
+              if(query_word.size == 0 || item.matches.count != 0)
               {
                 rd_autocomp_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
               }
@@ -4714,9 +4725,9 @@ rd_window_frame(RD_Window *ws)
               {
                 item.string      = string;
                 item.kind_string = str8_lit("Parameter");
-                item.matches     = fuzzy_match_find(scratch.arena, query, item.string);
+                item.matches     = fuzzy_match_find(scratch.arena, query_word, item.string);
               }
-              if(query.size == 0 || item.matches.count != 0)
+              if(query_word.size == 0 || item.matches.count != 0)
               {
                 rd_autocomp_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
               }
@@ -4724,83 +4735,79 @@ rd_window_frame(RD_Window *ws)
           }
           
           //- rjf: gather files
-          if(0)
+          if(ws->autocomp_lister_params.flags & RD_AutoCompListerFlag_Files)
           {
-            if(ws->autocomp_lister_params.flags & RD_AutoCompListerFlag_Files)
+            // rjf: find containing directory in query_path
+            String8 dir_str_in_input = {0};
+            for(U64 i = 0; i < query_path.size; i += 1)
             {
-              // rjf: find containing directory in query
-              String8 dir_str_in_input = {0};
-              for(U64 i = 0; i < query.size; i += 1)
+              String8 substr1 = str8_substr(query_path, r1u64(i, i+1));
+              String8 substr2 = str8_substr(query_path, r1u64(i, i+2));
+              String8 substr3 = str8_substr(query_path, r1u64(i, i+3));
+              if(str8_match(substr1, str8_lit("/"), StringMatchFlag_SlashInsensitive))
               {
-                String8 substr1 = str8_substr(query, r1u64(i, i+1));
-                String8 substr2 = str8_substr(query, r1u64(i, i+2));
-                String8 substr3 = str8_substr(query, r1u64(i, i+3));
-                if(str8_match(substr1, str8_lit("/"), StringMatchFlag_SlashInsensitive))
-                {
-                  dir_str_in_input = str8_substr(query, r1u64(i, query.size));
-                }
-                else if(i != 0 && str8_match(substr2, str8_lit(":/"), StringMatchFlag_SlashInsensitive))
-                {
-                  dir_str_in_input = str8_substr(query, r1u64(i-1, query.size));
-                }
-                else if(str8_match(substr2, str8_lit("./"), StringMatchFlag_SlashInsensitive))
-                {
-                  dir_str_in_input = str8_substr(query, r1u64(i, query.size));
-                }
-                else if(str8_match(substr3, str8_lit("../"), StringMatchFlag_SlashInsensitive))
-                {
-                  dir_str_in_input = str8_substr(query, r1u64(i, query.size));
-                }
-                if(dir_str_in_input.size != 0)
-                {
-                  break;
-                }
+                dir_str_in_input = str8_substr(query_path, r1u64(i, query_path.size));
               }
-              
-              // rjf: use query string to form various parts of search space
-              String8 prefix = {0};
-              String8 path = {0};
-              String8 search = {0};
+              else if(i != 0 && str8_match(substr2, str8_lit(":/"), StringMatchFlag_SlashInsensitive))
+              {
+                dir_str_in_input = str8_substr(query_path, r1u64(i-1, query_path.size));
+              }
+              else if(str8_match(substr2, str8_lit("./"), StringMatchFlag_SlashInsensitive))
+              {
+                dir_str_in_input = str8_substr(query_path, r1u64(i, query_path.size));
+              }
+              else if(str8_match(substr3, str8_lit("../"), StringMatchFlag_SlashInsensitive))
+              {
+                dir_str_in_input = str8_substr(query_path, r1u64(i, query_path.size));
+              }
               if(dir_str_in_input.size != 0)
               {
-                String8 dir = dir_str_in_input;
-                String8 search = {0};
-                U64 one_past_last_slash = dir.size;
-                for(U64 i = 0; i < dir_str_in_input.size; i += 1)
-                {
-                  if(dir_str_in_input.str[i] == '/' || dir_str_in_input.str[i] == '\\')
-                  {
-                    one_past_last_slash = i+1;
-                  }
-                }
-                dir.size = one_past_last_slash;
-                search = str8_substr(dir_str_in_input, r1u64(one_past_last_slash, dir_str_in_input.size));
-                path = dir;
-                search = search;
-                prefix = str8_substr(query, r1u64(0, path.str - query.str));
+                break;
               }
-              
-              // rjf: get current files, filtered
-              B32 dir_selection = 1;
-              OS_FileIter *it = os_file_iter_begin(scratch.arena, path, 0);
-              for(OS_FileInfo info = {0}; os_file_iter_next(scratch.arena, it, &info);)
-              {
-                FuzzyMatchRangeList match_ranges = fuzzy_match_find(scratch.arena, search, info.name);
-                B32 fits_search = (search.size == 0 || match_ranges.count == match_ranges.needle_part_count);
-                B32 fits_dir_only = !!(info.props.flags & FilePropertyFlag_IsFolder) || !dir_selection;
-                if(fits_search && fits_dir_only)
-                {
-                  RD_AutoCompListerItem item = {0};
-                  {
-                    item.string      = info.name;
-                    item.kind_string = str8_lit("File");
-                    item.matches     = match_ranges;
-                  }
-                  rd_autocomp_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
-                }
-              }
-              os_file_iter_end(it);
             }
+            
+            // rjf: use query_path string to form various parts of search space
+            String8 prefix = {0};
+            String8 path = {0};
+            String8 search = {0};
+            if(dir_str_in_input.size != 0)
+            {
+              String8 dir = dir_str_in_input;
+              U64 one_past_last_slash = dir.size;
+              for(U64 i = 0; i < dir_str_in_input.size; i += 1)
+              {
+                if(dir_str_in_input.str[i] == '/' || dir_str_in_input.str[i] == '\\')
+                {
+                  one_past_last_slash = i+1;
+                }
+              }
+              dir.size = one_past_last_slash;
+              path = dir;
+              search = str8_substr(dir_str_in_input, r1u64(one_past_last_slash, dir_str_in_input.size));
+              prefix = str8_substr(query_path, r1u64(0, path.str - query_path.str));
+            }
+            
+            // rjf: get current files, filtered
+            B32 allow_dirs = 1;
+            OS_FileIter *it = os_file_iter_begin(scratch.arena, path, 0);
+            for(OS_FileInfo info = {0}; os_file_iter_next(scratch.arena, it, &info);)
+            {
+              FuzzyMatchRangeList match_ranges = fuzzy_match_find(scratch.arena, search, info.name);
+              B32 fits_search = (search.size == 0 || match_ranges.count == match_ranges.needle_part_count);
+              B32 fits_dir_only = (allow_dirs || !(info.props.flags & FilePropertyFlag_IsFolder));
+              if(fits_search && fits_dir_only)
+              {
+                RD_AutoCompListerItem item = {0};
+                {
+                  item.string      = info.props.flags & FilePropertyFlag_IsFolder ? push_str8f(scratch.arena, "%S/", info.name) : info.name;
+                  item.kind_string = info.props.flags & FilePropertyFlag_IsFolder ? str8_lit("Folder") : str8_lit("File");
+                  item.matches     = match_ranges;
+                  item.is_non_code = 1;
+                }
+                rd_autocomp_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
+              }
+            }
+            os_file_iter_end(it);
           }
         }
         
@@ -4868,9 +4875,9 @@ rd_window_frame(RD_Window *ws)
                                                      UI_BoxFlag_DrawDropShadow|
                                                      UI_BoxFlag_DrawBackground,
                                                      "autocomp_box");
-            if(ws->autocomp_query_dirty)
+            if(ws->autocomp_input_dirty)
             {
-              ws->autocomp_query_dirty = 0;
+              ws->autocomp_input_dirty = 0;
               autocomp_box->default_nav_focus_hot_key = autocomp_box->default_nav_focus_active_key = autocomp_box->default_nav_focus_next_hot_key = autocomp_box->default_nav_focus_next_active_key = ui_key_zero();
             }
           }
@@ -4889,9 +4896,9 @@ rd_window_frame(RD_Window *ws)
               UI_Box *item_box = ui_build_box_from_stringf(UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawHotEffects|UI_BoxFlag_DrawActiveEffects|UI_BoxFlag_MouseClickable, "autocomp_%I64x", idx);
               UI_Parent(item_box) UI_Padding(ui_em(1.f, 1.f))
               {
-                UI_WidthFill
+                UI_WidthFill RD_Font(item->is_non_code ? RD_FontSlot_Main : RD_FontSlot_Code)
                 {
-                  UI_Box *box = rd_code_label(1.f, 0, ui_top_palette()->text, item->string);
+                  UI_Box *box = item->is_non_code ? ui_label(item->string).box : rd_code_label(1.f, 0, ui_top_palette()->text, item->string);
                   ui_box_equip_fuzzy_match_ranges(box, &item->matches);
                 }
                 RD_Font(RD_FontSlot_Main)
@@ -4905,7 +4912,7 @@ rd_window_frame(RD_Window *ws)
                 UI_Event move_back_evt = zero_struct;
                 move_back_evt.kind = UI_EventKind_Navigate;
                 move_back_evt.flags = UI_EventFlag_KeepMark;
-                move_back_evt.delta_2s32.x = -(S32)query.size;
+                move_back_evt.delta_2s32.x = -(S32)query_word.size;
                 ui_event_list_push(ui_build_arena(), &ws->ui_events, &move_back_evt);
                 UI_Event paste_evt = zero_struct;
                 paste_evt.kind = UI_EventKind_Text;
@@ -9245,6 +9252,40 @@ rd_autocomp_query_word_from_input_string_off(String8 input, U64 cursor_off)
   return query;
 }
 
+internal String8
+rd_autocomp_query_path_from_input_string_off(String8 input, U64 cursor_off)
+{
+  // rjf: find start of path
+  U64 path_start_off = 0;
+  {
+    B32 single_quoted = 0;
+    B32 double_quoted = 0;
+    for(U64 off = 0; off < input.size && off < cursor_off; off += 1)
+    {
+      if(input.str[off] == '\'')
+      {
+        single_quoted ^= 1;
+      }
+      if(input.str[off] == '\"')
+      {
+        double_quoted ^= 1;
+      }
+      if(char_is_space(input.str[off]) && !single_quoted && !double_quoted)
+      {
+        path_start_off = off+1;
+      }
+    }
+  }
+  
+  // rjf: form path
+  String8 path = str8_skip(str8_prefix(input, cursor_off), path_start_off);
+  if(path.size >= 1 && path.str[0] == '"')  { path = str8_skip(path, 1); }
+  if(path.size >= 1 && path.str[0] == '\'') { path = str8_skip(path, 1); }
+  if(path.size >= 1 && path.str[path.size-1] == '"')  { path = str8_chop(path, 1); }
+  if(path.size >= 1 && path.str[path.size-1] == '\'') { path = str8_chop(path, 1); }
+  return path;
+}
+
 internal RD_AutoCompListerParams
 rd_view_rule_autocomp_lister_params_from_input_cursor(Arena *arena, String8 string, U64 cursor_off)
 {
@@ -9391,26 +9432,18 @@ internal void
 rd_set_autocomp_lister_query(UI_Key root_key, RD_AutoCompListerParams *params, String8 input, U64 cursor_off)
 {
   RD_Window *window = rd_window_from_handle(rd_regs()->window);
-  String8 query = rd_autocomp_query_word_from_input_string_off(input, cursor_off);
-  String8 current_query = str8(window->autocomp_lister_query_buffer, window->autocomp_lister_query_size);
   if(cursor_off != window->autocomp_cursor_off)
   {
-    window->autocomp_query_dirty = 1;
+    window->autocomp_input_dirty = 1;
     window->autocomp_cursor_off = cursor_off;
-  }
-  if(!str8_match(query, current_query, 0))
-  {
-    window->autocomp_force_closed = 0;
   }
   if(!ui_key_match(window->autocomp_root_key, root_key))
   {
-    window->autocomp_force_closed = 0;
     window->autocomp_num_visible_rows_t = 0;
     window->autocomp_open_t = 0;
   }
   if(window->autocomp_last_frame_idx+1 < rd_state->frame_index)
   {
-    window->autocomp_force_closed = 0;
     window->autocomp_num_visible_rows_t = 0;
     window->autocomp_open_t = 0;
   }
@@ -9418,8 +9451,8 @@ rd_set_autocomp_lister_query(UI_Key root_key, RD_AutoCompListerParams *params, S
   arena_clear(window->autocomp_lister_params_arena);
   MemoryCopyStruct(&window->autocomp_lister_params, params);
   window->autocomp_lister_params.strings = str8_list_copy(window->autocomp_lister_params_arena, &window->autocomp_lister_params.strings);
-  window->autocomp_lister_query_size = Min(query.size, sizeof(window->autocomp_lister_query_buffer));
-  MemoryCopy(window->autocomp_lister_query_buffer, query.str, window->autocomp_lister_query_size);
+  window->autocomp_lister_input_size = Min(input.size, sizeof(window->autocomp_lister_input_buffer));
+  MemoryCopy(window->autocomp_lister_input_buffer, input.str, window->autocomp_lister_input_size);
   window->autocomp_last_frame_idx = rd_state->frame_index;
 }
 
@@ -13150,6 +13183,10 @@ rd_frame(void)
                 if(ws->focused_panel == panel)
                 {
                   ws->focused_panel = next;
+                  for(RD_Panel *grandchild = ws->focused_panel; !rd_panel_is_nil(grandchild); grandchild = grandchild->first)
+                  {
+                    ws->focused_panel = grandchild;
+                  }
                 }
                 for(RD_Panel *child = parent->first; !rd_panel_is_nil(child); child = child->next)
                 {

@@ -595,6 +595,7 @@ struct RD_AutoCompListerItem
   String8 kind_string;
   FuzzyMatchRangeList matches;
   U64 group;
+  B32 is_non_code;
 };
 
 typedef struct RD_AutoCompListerItemChunkNode RD_AutoCompListerItemChunkNode;
@@ -675,14 +676,13 @@ struct RD_Window
   
   // rjf: autocomplete lister state
   U64 autocomp_last_frame_idx;
-  B32 autocomp_force_closed;
-  B32 autocomp_query_dirty;
+  B32 autocomp_input_dirty;
   UI_Key autocomp_root_key;
   Arena *autocomp_lister_params_arena;
   RD_AutoCompListerParams autocomp_lister_params;
   U64 autocomp_cursor_off;
-  U8 autocomp_lister_query_buffer[1024];
-  U64 autocomp_lister_query_size;
+  U8 autocomp_lister_input_buffer[1024];
+  U64 autocomp_lister_input_size;
   F32 autocomp_open_t;
   F32 autocomp_num_visible_rows_t;
   S64 autocomp_cursor_num;
@@ -1333,6 +1333,7 @@ internal int rd_autocomp_lister_item_qsort_compare(RD_AutoCompListerItem *a, RD_
 internal void rd_autocomp_lister_item_array_sort__in_place(RD_AutoCompListerItemArray *array);
 
 internal String8 rd_autocomp_query_word_from_input_string_off(String8 input, U64 cursor_off);
+internal String8 rd_autocomp_query_path_from_input_string_off(String8 input, U64 cursor_off);
 internal RD_AutoCompListerParams rd_view_rule_autocomp_lister_params_from_input_cursor(Arena *arena, String8 string, U64 cursor_off);
 internal void rd_set_autocomp_lister_query(UI_Key root_key, RD_AutoCompListerParams *params, String8 input, U64 cursor_off);
 

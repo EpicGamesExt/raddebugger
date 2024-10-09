@@ -2735,8 +2735,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                                              RD_AutoCompListerFlag_Procedures|
                                              RD_AutoCompListerFlag_Globals|
                                              RD_AutoCompListerFlag_ThreadLocals|
-                                             RD_AutoCompListerFlag_Types|
-                                             RD_AutoCompListerFlag_Files);
+                                             RD_AutoCompListerFlag_Types);
                       if(row->member != 0 && row->member->inheritance_key_chain.first != 0)
                       {
                         String8List inheritance_chain_type_names = {0};
@@ -2790,8 +2789,11 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                                              RD_AutoCompListerFlag_Procedures|
                                              RD_AutoCompListerFlag_Globals|
                                              RD_AutoCompListerFlag_ThreadLocals|
-                                             RD_AutoCompListerFlag_Types|
-                                             RD_AutoCompListerFlag_Files);
+                                             RD_AutoCompListerFlag_Types);
+                      if(row_type->flags & E_TypeFlag_IsPathText)
+                      {
+                        cell_autocomp_flags = RD_AutoCompListerFlag_Files;
+                      }
                       if(ui_view_rule_info->flags & RD_ViewRuleInfoFlag_CanFillValueCell)
                       {
                         cell_ui_hook = ui_view_rule_info->ui;
