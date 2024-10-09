@@ -15405,11 +15405,21 @@ rd_frame(void)
     }
     
     ////////////////////////////
-    //- rjf: gather breakpoints
+    //- rjf: gather breakpoints & meta-evals (for the engine, meta-evals can only be referenced by breakpoints)
     //
     D_BreakpointArray breakpoints = {0};
-    ProfScope("gather breakpoints")
+    CTRL_MetaEvalArray meta_evals = {0};
+    ProfScope("gather breakpoints & meta-evals")
     {
+      typedef struct MetaEvalNode MetaEvalNode;
+      struct MetaEvalNode
+      {
+        MetaEvalNode *next;
+        CTRL_MetaEval *meval;
+      };
+      U64 meval_count = 0;
+      MetaEvalNode *first_meval = 0;
+      MetaEvalNode *last_meval = 0;
       RD_EntityList bp_entities = rd_query_cached_entity_list_with_kind(RD_EntityKind_Breakpoint);
       breakpoints.count = bp_entities.count;
       breakpoints.v = push_array(scratch.arena, D_Breakpoint, breakpoints.count);
@@ -15424,63 +15434,27 @@ rd_frame(void)
         }
         RD_Entity *src_bp_loc = rd_entity_child_from_kind(src_bp, RD_EntityKind_Location);
         RD_Entity *src_bp_cnd = rd_entity_child_from_kind(src_bp, RD_EntityKind_Condition);
-        D_Breakpoint *dst_bp = &breakpoints.v[idx];
-        dst_bp->file_path   = src_bp_loc->string;
-        dst_bp->pt          = src_bp_loc->text_point;
-        dst_bp->symbol_name = src_bp_loc->string;
-        dst_bp->vaddr       = src_bp_loc->vaddr;
-        dst_bp->condition   = src_bp_cnd->string;
-        idx += 1;
-      }
-    }
-    
-    ////////////////////////////
-    //- rjf: gather path maps
-    //
-    D_PathMapArray path_maps = {0};
-    {
-      // TODO(rjf): @msgs
-    }
-    
-    ////////////////////////////
-    //- rjf: gather exception code filters
-    //
-    U64 exception_code_filters[(CTRL_ExceptionCodeKind_COUNT+63)/64] = {0};
-    {
-      // TODO(rjf): @msgs
-    }
-    
-    ////////////////////////////
-    //- rjf: gather needed meta evaluations
-    //
-    CTRL_MetaEvalArray meta_evals = {0};
-    ProfScope("gather needed meta evaluations")
-    {
-      typedef struct MetaEvalNode MetaEvalNode;
-      struct MetaEvalNode
-      {
-        MetaEvalNode *next;
-        CTRL_MetaEval *meval;
-      };
-      
-      //- rjf: walk all breakpoints, gather touched meta-evals
-      U64 meval_count = 0;
-      MetaEvalNode *first_meval = 0;
-      MetaEvalNode *last_meval = 0;
-      for EachIndex(idx, breakpoints.count)
-      {
-        if(breakpoints.v[idx].condition.size != 0)
+        
+        //- rjf: walk conditional breakpoint expression tree - for each leaf identifier,
+        // determine if it resolves to a meta-evaluation. if it does, compute the meta
+        // evaluation data & store.
+        //
+        // for many conditions, we can statically-disqualify the breakpoint, if it only
+        // references frontend-controlled meta-evaluation state. in such cases, we just
+        // want to never send the user breakpoint to the control thread, since it cannot
+        // be hit anyways. so in this pass, we can also gather information about whether
+        // or not it is 'static', w.r.t. the control thread.
+        //
+        B32 is_static_for_ctrl_thread = 0;
+        if(src_bp_cnd->string.size != 0)
         {
-          //- rjf: walk conditional breakpoint expression tree - for each leaf identifier,
-          // determine if it resolves to a meta-evaluation. if it does, compute the meta
-          // evaluation data & store
           typedef struct ExprWalkTask ExprWalkTask;
           struct ExprWalkTask
           {
             ExprWalkTask *next;
             E_Expr *expr;
           };
-          E_Expr *expr = e_parse_expr_from_text(scratch.arena, breakpoints.v[idx].condition);
+          E_Expr *expr = e_parse_expr_from_text(scratch.arena, src_bp_cnd->string);
           ExprWalkTask start_task = {0, expr};
           ExprWalkTask *first_task = &start_task;
           for(ExprWalkTask *t = first_task; t != 0; t = t->next)
@@ -15493,9 +15467,11 @@ rd_frame(void)
                 E_Eval eval = e_eval_from_expr(scratch.arena, macro_expr);
                 switch(eval.space.kind)
                 {
-                  default:{}break;
+                  default:{is_static_for_ctrl_thread = 0;}break;
+                  case E_SpaceKind_Null:
                   case RD_EvalSpaceKind_MetaEntity:
                   {
+                    is_static_for_ctrl_thread = 1;
                     RD_Entity *entity = rd_entity_from_eval_space(eval.space);
                     if(!rd_entity_is_nil(entity))
                     {
@@ -15517,9 +15493,39 @@ rd_frame(void)
             }
           }
         }
+        
+        //- rjf: if this breakpoint is conditioned & static for the control thread, then
+        // we can evaluate this condition early, and decide whether or not to send this
+        // breakpoint.
+        B32 is_statically_disqualified = 0;
+        if(is_static_for_ctrl_thread)
+        {
+          E_Eval eval = e_eval_from_string(scratch.arena, src_bp_cnd->string);
+          E_Eval value_eval = e_value_eval_from_eval(eval);
+          if(value_eval.value.u64 == 0)
+          {
+            is_statically_disqualified = 1;
+          }
+        }
+        
+        //- rjf: statically disqualified? -> skip
+        if(is_statically_disqualified)
+        {
+          breakpoints.count -= 1;
+          continue;
+        }
+        
+        //- rjf: fill breakpoint
+        D_Breakpoint *dst_bp = &breakpoints.v[idx];
+        dst_bp->file_path   = src_bp_loc->string;
+        dst_bp->pt          = src_bp_loc->text_point;
+        dst_bp->symbol_name = src_bp_loc->string;
+        dst_bp->vaddr       = src_bp_loc->vaddr;
+        dst_bp->condition   = src_bp_cnd->string;
+        idx += 1;
       }
       
-      //- rjf: list -> array
+      //- rjf: meta-eval list -> array
       meta_evals.count = meval_count;
       meta_evals.v = push_array(scratch.arena, CTRL_MetaEval, meta_evals.count);
       {
@@ -15530,6 +15536,22 @@ rd_frame(void)
           idx += 1;
         }
       }
+    }
+    
+    ////////////////////////////
+    //- rjf: gather path maps
+    //
+    D_PathMapArray path_maps = {0};
+    {
+      // TODO(rjf): @msgs
+    }
+    
+    ////////////////////////////
+    //- rjf: gather exception code filters
+    //
+    U64 exception_code_filters[(CTRL_ExceptionCodeKind_COUNT+63)/64] = {0};
+    {
+      // TODO(rjf): @msgs
     }
     
     ////////////////////////////
