@@ -1204,9 +1204,12 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
   }
   RD_WatchViewRowCtrl row_ctrls_[] =
   {
-    {RD_EntityKind_Target, CTRL_EntityKind_Null,   RD_CmdKind_LaunchAndRun  },
-    {RD_EntityKind_Target, CTRL_EntityKind_Null,   RD_CmdKind_LaunchAndInit },
-    {RD_EntityKind_Target, CTRL_EntityKind_Null,   RD_CmdKind_SelectEntity  },
+    {RD_EntityKind_Target,     CTRL_EntityKind_Null,   RD_CmdKind_LaunchAndRun  },
+    {RD_EntityKind_Target,     CTRL_EntityKind_Null,   RD_CmdKind_LaunchAndInit },
+    {RD_EntityKind_Target,     CTRL_EntityKind_Null,   RD_CmdKind_SelectEntity  },
+    {RD_EntityKind_Target,     CTRL_EntityKind_Null,   RD_CmdKind_RemoveEntity  },
+    {RD_EntityKind_Breakpoint, CTRL_EntityKind_Null,   RD_CmdKind_EnableEntity  },
+    {RD_EntityKind_Breakpoint, CTRL_EntityKind_Null,   RD_CmdKind_RemoveEntity  },
     {RD_EntityKind_Nil,    CTRL_EntityKind_Thread, RD_CmdKind_FreezeThread  },
     {RD_EntityKind_Nil,    CTRL_EntityKind_Thread, RD_CmdKind_SelectThread  },
   };
@@ -2599,7 +2602,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                         B32 is_frozen = ctrl_entity_tree_is_frozen(ctrl_entity);
                         RD_IconKind icon_kind = rd_cmd_kind_info_table[ctrl->kind].icon_kind;
                         UI_Palette *palette = ui_top_palette();
-                        if(ctrl->kind == RD_CmdKind_SelectEntity)
+                        if(ctrl->kind == RD_CmdKind_SelectEntity || ctrl->kind == RD_CmdKind_EnableEntity)
                         {
                           icon_kind = entity->disabled ? RD_IconKind_CheckHollow : RD_IconKind_CheckFilled;
                         }
@@ -2622,6 +2625,10 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                               rd_cmd(sig.event_flags & OS_Modifier_Ctrl && entity->disabled  ? RD_CmdKind_EnableEntity :
                                      sig.event_flags & OS_Modifier_Ctrl && !entity->disabled ? RD_CmdKind_DisableEntity :
                                      RD_CmdKind_SelectEntity, .entity = rd_handle_from_entity(entity));
+                            }
+                            else if(ctrl->kind == RD_CmdKind_EnableEntity)
+                            {
+                              rd_cmd(entity->disabled  ? RD_CmdKind_EnableEntity : RD_CmdKind_DisableEntity, .entity = rd_handle_from_entity(entity));
                             }
                             else if(ctrl->kind == RD_CmdKind_SelectThread)
                             {
@@ -5371,7 +5378,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(breakpoints)
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,      0.75f, .dequote_string = 1);
   }
   rd_watch_view_build(wv, RD_WatchViewFlag_NoHeader|RD_WatchViewFlag_PrettyNameMembers|RD_WatchViewFlag_PrettyEntityRows|RD_WatchViewFlag_DisableCacheLines,
-                      str8_lit("breakpoints"), str8_lit("only: label condition str hit_count location"), 0, 10, rect);
+                      str8_lit("breakpoints"), str8_lit("only: label condition str hit_count source_location address_location function_location"), 0, 10, rect);
   ProfEnd();
 }
 
@@ -6525,6 +6532,10 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(memory)
   {
     eval.space = rd_eval_space_from_ctrl_entity(ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->process), RD_EvalSpaceKind_CtrlEntity);
     space_range = rd_whole_range_from_eval_space(eval.space);
+    if(dim_1u64(space_range) == 0)
+    {
+      space_range = r1u64(0, 0x7FFFFFFFFFFFull);
+    }
   }
   U64 cursor          = rd_value_from_params_key(params, str8_lit("cursor_vaddr")).u64;
   U64 mark            = rd_value_from_params_key(params, str8_lit("mark_vaddr")).u64;
@@ -6564,10 +6575,8 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(memory)
       }break;
       case RD_CmdKind_GoToAddress:
       {
-        // NOTE(rjf): go-to-address occurs with disassembly snaps, and we don't
-        // generally want to respond to those in thise view, so just skip any
-        // go-to-address commands that haven't been *explicitly* parameterized
-        // with this view.
+        cursor = mark = cmd->regs->vaddr;
+        mv->center_cursor = 1;
       }break;
       case RD_CmdKind_SetColumns:
       {
@@ -6594,7 +6603,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(memory)
   //////////////////////////////
   //- rjf: determine legal scroll range
   //
-  Rng1S64 scroll_idx_rng = r1s64(0, space_range.max/num_columns);
+  Rng1S64 scroll_idx_rng = r1s64(0, dim_1u64(space_range)/num_columns);
   
   //////////////////////////////
   //- rjf: determine info about visible range of rows
@@ -6608,12 +6617,13 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(memory)
     viz_range_rows.max = scroll_pos.y.idx + (S64)scroll_pos.y.off + num_possible_visible_rows,
     viz_range_rows.min = clamp_1s64(scroll_idx_rng, viz_range_rows.min);
     viz_range_rows.max = clamp_1s64(scroll_idx_rng, viz_range_rows.max);
-    viz_range_bytes.min = viz_range_rows.min*num_columns;
-    viz_range_bytes.max = (viz_range_rows.max+1)*num_columns+1;
+    viz_range_bytes.min = space_range.min + viz_range_rows.min*num_columns;
+    viz_range_bytes.max = space_range.min + (viz_range_rows.max+1)*num_columns+1;
     if(viz_range_bytes.min > viz_range_bytes.max)
     {
       Swap(U64, viz_range_bytes.min, viz_range_bytes.max);
     }
+    viz_range_bytes = intersect_1u64(space_range, viz_range_bytes);
   }
   
   //////////////////////////////
@@ -6670,7 +6680,6 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(memory)
         cell_delta.y = ClampBot(cell_delta.y, (S64)-(next_cursor/num_columns));
         next_cursor += cell_delta.x;
         next_cursor += cell_delta.y*num_columns;
-        next_cursor = ClampTop(0x7FFFFFFFFFFFull, next_cursor);
       }
       if(good_action && evt->flags & UI_EventFlag_PickSelectSide && cursor != mark)
       {
@@ -6702,6 +6711,10 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(memory)
   //
   {
     Rng1U64 cursor_valid_rng = space_range;
+    if(cursor_valid_rng.max != 0)
+    {
+      cursor_valid_rng.max -= 1;
+    }
     cursor = clamp_1u64(cursor_valid_rng, cursor);
     mark = clamp_1u64(cursor_valid_rng, mark);
   }
@@ -7071,7 +7084,8 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(memory)
     UI_WidthFill UI_PrefHeight(ui_px(row_height_px, 1.f))
       for(S64 row_idx = viz_range_rows.min; row_idx <= viz_range_rows.max; row_idx += 1)
     {
-      Rng1U64 row_range_bytes = r1u64(row_idx*num_columns, (row_idx+1)*num_columns);
+      Rng1U64 row_range_bytes = r1u64(viz_range_bytes.min + row_idx*num_columns,
+                                      viz_range_bytes.min + (row_idx+1)*num_columns);
       B32 row_is_boundary = 0;
       Vec4F32 row_boundary_color = {0};
       if(row_range_bytes.min%64 == 0)
@@ -7096,77 +7110,94 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(memory)
         {
           for(U64 col_idx = 0; col_idx < num_columns; col_idx += 1)
           {
+            // rjf: unpack information about this slot
             U64 visible_byte_idx = (row_idx-viz_range_rows.min)*num_columns + col_idx;
             U64 global_byte_idx = viz_range_bytes.min+visible_byte_idx;
             U64 global_byte_num = global_byte_idx+1;
-            U8 byte_value = visible_memory[visible_byte_idx];
-            Annotation *annotation = visible_memory_annotations[visible_byte_idx].first;
-            UI_BoxFlags cell_flags = 0;
-            Vec4F32 cell_border_rgba = {0};
-            Vec4F32 cell_bg_rgba = {0};
-            if(global_byte_num == mouse_hover_byte_num)
+            
+            // rjf: build space, if this cell is out-of-range
+            if(global_byte_idx >= viz_range_bytes.max)
             {
-              cell_flags |= UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawSideTop|UI_BoxFlag_DrawSideBottom|UI_BoxFlag_DrawSideLeft|UI_BoxFlag_DrawSideRight;
-              cell_border_rgba = rd_rgba_from_theme_color(RD_ThemeColor_Hover);
+              ui_build_box_from_key(0, ui_key_zero());
             }
-            if(annotation != 0)
+            
+            // rjf: build actual cell
+            else
             {
-              cell_flags |= UI_BoxFlag_DrawBackground;
-              cell_bg_rgba = annotation->color;
-              if(contains_1u64(annotation->vaddr_range, mouse_hover_byte_num-1))
+              // rjf: unpack byte info
+              U8 byte_value = visible_memory[visible_byte_idx];
+              Annotation *annotation = visible_memory_annotations[visible_byte_idx].first;
+              
+              // rjf: unpack visual cell info
+              UI_BoxFlags cell_flags = 0;
+              Vec4F32 cell_border_rgba = {0};
+              Vec4F32 cell_bg_rgba = {0};
+              if(global_byte_num == mouse_hover_byte_num)
               {
-                cell_bg_rgba.w *= 0.15f;
+                cell_flags |= UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawSideTop|UI_BoxFlag_DrawSideBottom|UI_BoxFlag_DrawSideLeft|UI_BoxFlag_DrawSideRight;
+                cell_border_rgba = rd_rgba_from_theme_color(RD_ThemeColor_Hover);
               }
-              else
+              if(annotation != 0)
               {
-                cell_bg_rgba.w *= 0.08f;
-              }
-            }
-            if(selection.min <= global_byte_idx && global_byte_idx <= selection.max)
-            {
-              cell_flags |= UI_BoxFlag_DrawBackground;
-              cell_bg_rgba = rd_rgba_from_theme_color(RD_ThemeColor_SelectionOverlay);
-            }
-            ui_set_next_palette(ui_build_palette(ui_top_palette(), .background = cell_bg_rgba));
-            UI_Box *cell_box = ui_build_box_from_key(UI_BoxFlag_DrawText|cell_flags, ui_key_zero());
-            ui_box_equip_display_fancy_strings(cell_box, &byte_fancy_strings[byte_value]);
-            {
-              F32 off = 0;
-              for(Annotation *a = annotation; a != 0; a = a->next)
-              {
-                if(global_byte_idx == a->vaddr_range.min) UI_Parent(row_overlay_box)
+                cell_flags |= UI_BoxFlag_DrawBackground;
+                cell_bg_rgba = annotation->color;
+                if(contains_1u64(annotation->vaddr_range, mouse_hover_byte_num-1))
                 {
-                  ui_set_next_palette(ui_build_palette(ui_top_palette(), .background = annotation->color));
-                  ui_set_next_fixed_x(big_glyph_advance*18.f + col_idx*cell_width_px + -cell_width_px/8.f + off);
-                  ui_set_next_fixed_y((row_idx-viz_range_rows.min)*row_height_px + -cell_width_px/8.f);
-                  ui_set_next_fixed_width(cell_width_px/4.f);
-                  ui_set_next_fixed_height(cell_width_px/4.f);
-                  ui_set_next_corner_radius_00(cell_width_px/8.f);
-                  ui_set_next_corner_radius_01(cell_width_px/8.f);
-                  ui_set_next_corner_radius_10(cell_width_px/8.f);
-                  ui_set_next_corner_radius_11(cell_width_px/8.f);
-                  ui_build_box_from_key(UI_BoxFlag_Floating|UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawDropShadow, ui_key_zero());
-                  off += cell_width_px/8.f + cell_width_px/16.f;
+                  cell_bg_rgba.w *= 0.15f;
+                }
+                else
+                {
+                  cell_bg_rgba.w *= 0.08f;
                 }
               }
-            }
-            if(annotation != 0 && mouse_hover_byte_num == global_byte_num) UI_Tooltip UI_FontSize(ui_top_font_size()) UI_PrefHeight(ui_px(ui_top_font_size()*1.75f, 1.f))
-            {
-              for(Annotation *a = annotation; a != 0; a = a->next)
+              if(selection.min <= global_byte_idx && global_byte_idx <= selection.max)
               {
-                UI_PrefWidth(ui_children_sum(1)) UI_Row UI_PrefWidth(ui_text_dim(10, 1))
+                cell_flags |= UI_BoxFlag_DrawBackground;
+                cell_bg_rgba = rd_rgba_from_theme_color(RD_ThemeColor_SelectionOverlay);
+              }
+              
+              // rjf: build
+              ui_set_next_palette(ui_build_palette(ui_top_palette(), .background = cell_bg_rgba));
+              UI_Box *cell_box = ui_build_box_from_key(UI_BoxFlag_DrawText|cell_flags, ui_key_zero());
+              ui_box_equip_display_fancy_strings(cell_box, &byte_fancy_strings[byte_value]);
+              {
+                F32 off = 0;
+                for(Annotation *a = annotation; a != 0; a = a->next)
                 {
-                  RD_Font(RD_FontSlot_Code) ui_label(a->name_string);
-                  RD_Font(RD_FontSlot_Main) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) ui_label(a->kind_string);
+                  if(global_byte_idx == a->vaddr_range.min) UI_Parent(row_overlay_box)
+                  {
+                    ui_set_next_palette(ui_build_palette(ui_top_palette(), .background = annotation->color));
+                    ui_set_next_fixed_x(big_glyph_advance*18.f + col_idx*cell_width_px + -cell_width_px/8.f + off);
+                    ui_set_next_fixed_y((row_idx-viz_range_rows.min)*row_height_px + -cell_width_px/8.f);
+                    ui_set_next_fixed_width(cell_width_px/4.f);
+                    ui_set_next_fixed_height(cell_width_px/4.f);
+                    ui_set_next_corner_radius_00(cell_width_px/8.f);
+                    ui_set_next_corner_radius_01(cell_width_px/8.f);
+                    ui_set_next_corner_radius_10(cell_width_px/8.f);
+                    ui_set_next_corner_radius_11(cell_width_px/8.f);
+                    ui_build_box_from_key(UI_BoxFlag_Floating|UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawDropShadow, ui_key_zero());
+                    off += cell_width_px/8.f + cell_width_px/16.f;
+                  }
                 }
-                if(a->type_string.size != 0)
+              }
+              if(annotation != 0 && mouse_hover_byte_num == global_byte_num) UI_Tooltip UI_FontSize(ui_top_font_size()) UI_PrefHeight(ui_px(ui_top_font_size()*1.75f, 1.f))
+              {
+                for(Annotation *a = annotation; a != 0; a = a->next)
                 {
-                  rd_code_label(1.f, 1, rd_rgba_from_theme_color(RD_ThemeColor_CodeType), a->type_string);
-                }
-                UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) ui_label(str8_from_memory_size(scratch.arena, dim_1u64(a->vaddr_range)));
-                if(a->next != 0)
-                {
-                  ui_spacer(ui_em(1.5f, 1.f));
+                  UI_PrefWidth(ui_children_sum(1)) UI_Row UI_PrefWidth(ui_text_dim(10, 1))
+                  {
+                    RD_Font(RD_FontSlot_Code) ui_label(a->name_string);
+                    RD_Font(RD_FontSlot_Main) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) ui_label(a->kind_string);
+                  }
+                  if(a->type_string.size != 0)
+                  {
+                    rd_code_label(1.f, 1, rd_rgba_from_theme_color(RD_ThemeColor_CodeType), a->type_string);
+                  }
+                  UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) ui_label(str8_from_memory_size(scratch.arena, dim_1u64(a->vaddr_range)));
+                  if(a->next != 0)
+                  {
+                    ui_spacer(ui_em(1.5f, 1.f));
+                  }
                 }
               }
             }
@@ -7176,16 +7207,22 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(memory)
         UI_WidthFill
         {
           MemoryZero(row_ascii_buffer, num_columns);
+          U64 num_bytes_this_row = 0;
           for(U64 col_idx = 0; col_idx < num_columns; col_idx += 1)
           {
-            U8 byte_value = visible_memory[(row_idx-viz_range_rows.min)*num_columns + col_idx];
-            row_ascii_buffer[col_idx] = byte_value;
-            if(byte_value <= 32 || 127 < byte_value)
+            U64 visible_byte_idx = (row_idx-viz_range_rows.min)*num_columns + col_idx;
+            if(visible_byte_idx < visible_memory_size)
             {
-              row_ascii_buffer[col_idx] = '.';
+              U8 byte_value = visible_memory[visible_byte_idx];
+              row_ascii_buffer[col_idx] = byte_value;
+              if(byte_value <= 32 || 127 < byte_value)
+              {
+                row_ascii_buffer[col_idx] = '.';
+              }
+              num_bytes_this_row += 1;
             }
           }
-          String8 ascii_text = str8(row_ascii_buffer, num_columns);
+          String8 ascii_text = str8(row_ascii_buffer, num_bytes_this_row);
           UI_Box *ascii_box = ui_build_box_from_stringf(UI_BoxFlag_DrawText, "%S###ascii_row_%I64x", ascii_text, row_range_bytes.min);
           if(selection.max >= row_range_bytes.min && selection.min < row_range_bytes.max)
           {

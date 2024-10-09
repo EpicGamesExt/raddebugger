@@ -5598,7 +5598,8 @@ ctrl_mem_stream_thread__entry_point(void *p)
     if(got_task && pre_read_mem_gen != preexisting_mem_gen)
     {
       range_size = dim_1u64(vaddr_range_clamped);
-      U64 arena_size = AlignPow2(range_size + ARENA_HEADER_SIZE, os_get_system_info()->page_size);
+      U64 page_size = os_get_system_info()->page_size;
+      U64 arena_size = AlignPow2(range_size + ARENA_HEADER_SIZE, page_size);
       range_arena = arena_alloc(.reserve_size = range_size+ARENA_HEADER_SIZE, .commit_size = range_size+ARENA_HEADER_SIZE);
       if(range_arena == 0)
       {
@@ -5609,14 +5610,17 @@ ctrl_mem_stream_thread__entry_point(void *p)
         range_base = push_array_no_zero(range_arena, U8, range_size);
         U64 bytes_read = 0;
         U64 retry_count = 0;
-        U64 retry_limit = (zero_terminated ? 64 : 0);
-        for(Rng1U64 vaddr_range_clamped_retry = vaddr_range_clamped; retry_count <= retry_limit; retry_count += 1)
+        U64 retry_limit = range_size > page_size ? 64 : 0;
+        for(Rng1U64 vaddr_range_clamped_retry = vaddr_range_clamped;
+            retry_count <= retry_limit;
+            retry_count += 1)
         {
           bytes_read = dmn_process_read(process.dmn_handle, vaddr_range_clamped_retry, range_base);
           if(bytes_read == 0 && vaddr_range_clamped_retry.max > vaddr_range_clamped_retry.min)
           {
             U64 diff = (vaddr_range_clamped_retry.max-vaddr_range_clamped_retry.min)/2;
             vaddr_range_clamped_retry.max -= diff;
+            vaddr_range_clamped_retry.max = AlignDownPow2(vaddr_range_clamped_retry.max, page_size);
             if(diff == 0)
             {
               break;

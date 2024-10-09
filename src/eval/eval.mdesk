@@ -117,6 +117,7 @@ E_ExprKindTable:
   { LeafBytecode         Null                0        "bytecode"          ""        ""        "" }
   { LeafMember           Null                0        "member"            ""        ""        "" }
   { LeafStringLiteral    Null                0        "string_literal"    ""        ""        "" }
+  { LeafBool             Null                0        "B32"               ""        ""        "" }
   { LeafU64              Null                0        "U64"               ""        ""        "" }
   { LeafF64              Null                0        "F64"               ""        ""        "" }
   { LeafF32              Null                0        "F32"               ""        ""        "" }

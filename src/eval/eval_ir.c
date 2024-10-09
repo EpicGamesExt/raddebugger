@@ -1221,6 +1221,14 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
       result.mode     = E_Mode_Value;
     }break;
     
+    //- rjf: leaf bools
+    case E_ExprKind_LeafBool:
+    {
+      result.root     = e_irtree_const_u(arena, expr->value.u64);
+      result.type_key = expr->type_key;
+      result.mode     = E_Mode_Value;
+    }break;
+    
     //- rjf: leaf U64s
     case E_ExprKind_LeafU64:
     {

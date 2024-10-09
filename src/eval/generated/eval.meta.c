@@ -14,7 +14,7 @@ str8_lit_comp("CharLiteral"),
 str8_lit_comp("Symbol"),
 };
 
-String8 e_expr_kind_strings[45] =
+String8 e_expr_kind_strings[46] =
 {
 str8_lit_comp("Nil"),
 str8_lit_comp("Ref"),
@@ -50,6 +50,7 @@ str8_lit_comp("Ternary"),
 str8_lit_comp("LeafBytecode"),
 str8_lit_comp("LeafMember"),
 str8_lit_comp("LeafStringLiteral"),
+str8_lit_comp("LeafBool"),
 str8_lit_comp("LeafU64"),
 str8_lit_comp("LeafF64"),
 str8_lit_comp("LeafF32"),
@@ -78,7 +79,7 @@ str8_lit_comp("Insufficient evaluation machine stack space."),
 str8_lit_comp("Malformed bytecode."),
 };
 
-E_OpInfo e_expr_kind_op_info_table[45] =
+E_OpInfo e_expr_kind_op_info_table[46] =
 {
 { E_OpKind_Null, 0, str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("") },
 { E_OpKind_Null, 0, str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("") },
@@ -111,6 +112,7 @@ E_OpInfo e_expr_kind_op_info_table[45] =
 { E_OpKind_Binary, 11, str8_lit_comp(""), str8_lit_comp("&&"), str8_lit_comp("") },
 { E_OpKind_Binary, 12, str8_lit_comp(""), str8_lit_comp("||"), str8_lit_comp("") },
 { E_OpKind_Null, 0, str8_lit_comp(""), str8_lit_comp("?"), str8_lit_comp(":") },
+{ E_OpKind_Null, 0, str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("") },
 { E_OpKind_Null, 0, str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("") },
 { E_OpKind_Null, 0, str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("") },
 { E_OpKind_Null, 0, str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("") },

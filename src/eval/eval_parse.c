@@ -789,6 +789,7 @@ e_append_strings_from_expr(Arena *arena, E_Expr *expr, String8List *out)
       str8_list_pushf(arena, out, "\"%S\"", expr->string);
     }break;
     case E_ExprKind_LeafU64:
+    case E_ExprKind_LeafBool:
     {
       str8_list_pushf(arena, out, "%I64u", expr->value.u64);
     }break;
@@ -1297,12 +1298,14 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
         case E_TokenKind_Identifier:
         {
           B32 mapped_identifier = 0;
+          B32 identifier_is_constant_value = 0;
           B32 identifier_type_is_possibly_dynamically_overridden = 0;
           B32 identifier_looks_like_type_expr = 0;
           RDI_LocationKind        loc_kind = RDI_LocationKind_NULL;
           RDI_LocationReg         loc_reg = {0};
           RDI_LocationRegPlusU16  loc_reg_u16 = {0};
           String8                 loc_bytecode = {0};
+          U64                     constant_value = 0;
           REGS_RegCode            reg_code = 0;
           REGS_AliasCode          alias_code = 0;
           E_TypeKey               type_key = zero_struct;
@@ -1589,6 +1592,22 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
             }
           }
           
+          //- rjf: try basic constants
+          if(mapped_identifier == 0 && str8_match(token_string, str8_lit("true"), 0))
+          {
+            mapped_identifier = 1;
+            identifier_is_constant_value = 1;
+            type_key = e_type_key_basic(E_TypeKind_Bool);
+            constant_value = 1;
+          }
+          if(mapped_identifier == 0 && str8_match(token_string, str8_lit("false"), 0))
+          {
+            mapped_identifier = 1;
+            identifier_is_constant_value = 1;
+            type_key = e_type_key_basic(E_TypeKind_Bool);
+            constant_value = 0;
+          }
+          
           //- rjf: attach on map
           if(mapped_identifier != 0)
           {
@@ -1599,7 +1618,13 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
             {
               default:
               {
-                if(identifier_looks_like_type_expr)
+                if(identifier_is_constant_value)
+                {
+                  atom = e_push_expr(arena, E_ExprKind_LeafBool, token_string.str);
+                  atom->value.u64 = constant_value;
+                  atom->type_key  = type_key;
+                }
+                else if(identifier_looks_like_type_expr)
                 {
                   E_TokenArray type_parse_tokens = e_token_array_make_first_opl(it-1, it_opl);
                   E_Parse type_parse = e_parse_type_from_text_tokens(arena, text, &type_parse_tokens);

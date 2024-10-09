@@ -1774,6 +1774,12 @@ rd_title_fstrs_from_entity(Arena *arena, RD_Entity *entity, Vec4F32 secondary_co
     else if(loc->string.size != 0)
     {
       location = loc->string;
+      location_is_code = 1;
+    }
+    else if(loc->flags & RD_EntityFlag_HasVAddr)
+    {
+      location = push_str8f(arena, "0x%I64x", loc->vaddr);
+      location_is_code = 1;
     }
   }
   B32 extra = 0;
@@ -1792,7 +1798,17 @@ rd_title_fstrs_from_entity(Arena *arena, RD_Entity *entity, Vec4F32 secondary_co
     {
       dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), size, v4f32(0, 0, 0, 0), str8_lit(" "));
     }
-    dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(location_is_code ? RD_FontSlot_Code : RD_FontSlot_Main), size_extrafied, color_extrafied, location);
+    if(location_is_code)
+    {
+      DR_FancyStringList loc_fstrs = {0};
+      RD_Font(RD_FontSlot_Code)
+        loc_fstrs = rd_fancy_string_list_from_code_string(arena, 1.f, 0, color_extrafied, location);
+      dr_fancy_string_list_concat_in_place(&result, &loc_fstrs);
+    }
+    else
+    {
+      dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Main), size_extrafied, color_extrafied, location);
+    }
     extra = 1;
     size_extrafied = size*0.95f;
     color_extrafied = secondary_color;
@@ -2057,14 +2073,20 @@ rd_ctrl_meta_eval_from_entity(Arena *arena, RD_Entity *entity)
   RD_Entity *loc = rd_entity_child_from_kind(entity, RD_EntityKind_Location);
   RD_Entity *cnd = rd_entity_child_from_kind(entity, RD_EntityKind_Condition);
   String8 label_string = push_str8_copy(arena, entity->string);
-  String8 loc_string = {0};
+  String8 src_loc_string = {0};
+  String8 vaddr_loc_string = {0};
+  String8 function_loc_string = {0};
   if(loc->flags & RD_EntityFlag_HasTextPoint)
   {
-    loc_string = push_str8f(arena, "%S:%I64u:%I64u", loc->string, loc->text_point.line, loc->text_point.column);
+    src_loc_string = push_str8f(arena, "%S:%I64u:%I64u", loc->string, loc->text_point.line, loc->text_point.column);
   }
   else if(loc->flags & RD_EntityFlag_HasVAddr)
   {
-    loc_string = push_str8f(arena, "0x%I64x", loc->vaddr);
+    vaddr_loc_string = push_str8f(arena, "0x%I64x", loc->vaddr);
+  }
+  else if(loc->string.size != 0)
+  {
+    function_loc_string = push_str8_copy(arena, loc->string);
   }
   String8 cnd_string = push_str8_copy(arena, cnd->string);
   meval->enabled   = !entity->disabled;
@@ -2075,7 +2097,9 @@ rd_ctrl_meta_eval_from_entity(Arena *arena, RD_Entity *entity)
   meval->args      = args->string;
   meval->working_directory = wdir->string;
   meval->entry_point = entr->string;
-  meval->location  = loc_string;
+  meval->source_location = src_loc_string;
+  meval->address_location = vaddr_loc_string;
+  meval->function_location = function_loc_string;
   meval->condition = cnd_string;
   return meval;
 }
@@ -2289,6 +2313,24 @@ rd_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range)
       StringMemberCase(working_directory) {result = 1; rd_entity_equip_name(rd_entity_child_from_kind_or_alloc(entity, RD_EntityKind_WorkingDirectory), str8_cstring_capped(in, (U8 *)in + 4096));}
       StringMemberCase(entry_point)       {result = 1; rd_entity_equip_name(rd_entity_child_from_kind_or_alloc(entity, RD_EntityKind_EntryPoint), str8_cstring_capped(in, (U8 *)in + 4096));}
       StringMemberCase(condition)         {result = 1; rd_entity_equip_name(rd_entity_child_from_kind_or_alloc(entity, RD_EntityKind_Condition), str8_cstring_capped(in, (U8 *)in + 4096));}
+      StringMemberCase(source_location)
+      {
+        result = 1;
+        String8TxtPtPair src_loc = str8_txt_pt_pair_from_string(str8_cstring_capped(in, (U8 *)in + 4096));
+        RD_Entity *loc = rd_entity_child_from_kind_or_alloc(entity, RD_EntityKind_Location);
+        rd_entity_equip_name(loc, src_loc.string);
+        rd_entity_equip_txt_pt(loc, src_loc.pt);
+      }
+      StringMemberCase(address_location)
+      {
+      }
+      StringMemberCase(function_location)
+      {
+        result = 1;
+        RD_Entity *loc = rd_entity_child_from_kind_or_alloc(entity, RD_EntityKind_Location);
+        loc->flags &= ~RD_EntityFlag_HasTextPoint;
+        rd_entity_equip_name(loc, str8_cstring_capped(in, (U8 *)in + 4096));
+      }
 #undef FlatMemberCase
 #undef StringMemberCase
       scratch_end(scratch);
@@ -2413,17 +2455,9 @@ rd_commit_eval_value_string(E_Eval dst_eval, String8 string)
       E_Eval src_eval = e_eval_from_string(scratch.arena, string);
       E_Eval src_eval_value = e_value_eval_from_eval(src_eval);
       E_TypeKind src_eval_value_type_kind = e_type_kind_from_key(src_eval_value.type_key);
-      if(type_kind == E_TypeKind_Ptr &&
-         (e_type_kind_is_pointer_or_ref(src_eval_value_type_kind) ||
-          e_type_kind_is_integer(src_eval_value_type_kind)) &&
-         src_eval_value.mode == E_Mode_Value)
-      {
-        commit_data = push_str8_copy(scratch.arena, str8_struct(&src_eval.value));
-        commit_data.size = Min(commit_data.size, e_type_byte_size_from_key(type_key));
-      }
-      else if(direct_type_kind == E_TypeKind_Char8 ||
-              direct_type_kind == E_TypeKind_UChar8 ||
-              e_type_kind_is_integer(direct_type_kind))
+      if(direct_type_kind == E_TypeKind_Char8 ||
+         direct_type_kind == E_TypeKind_UChar8 ||
+         e_type_kind_is_integer(direct_type_kind))
       {
         B32 is_quoted = 0;
         if(string.size >= 1 && string.str[0] == '"')
@@ -2448,6 +2482,15 @@ rd_commit_eval_value_string(E_Eval dst_eval, String8 string)
         {
           commit_at_ptr_dest = 1;
         }
+      }
+      else if(type_kind == E_TypeKind_Ptr &&
+              (e_type_kind_is_pointer_or_ref(src_eval_value_type_kind) ||
+               e_type_kind_is_integer(src_eval_value_type_kind)) &&
+              src_eval_value.mode == E_Mode_Value)
+      {
+        commit_data = push_str8_copy(scratch.arena, str8_struct(&src_eval.value));
+        commit_data.size = Min(commit_data.size, e_type_byte_size_from_key(src_eval.type_key));
+        commit_data.size = Min(commit_data.size, e_type_byte_size_from_key(type_key));
       }
     }
     if(commit_data.size != 0 && e_type_byte_size_from_key(type_key) != 0)
@@ -3373,7 +3416,7 @@ rd_window_frame(RD_Window *ws)
       RD_RegSlot slot = ((rd_state->drag_drop_regs_slot != RD_RegSlot_Null && rd_drag_is_active()) ? rd_state->drag_drop_regs_slot : rd_state->hover_regs_slot);
       RD_Regs *regs = (((rd_state->drag_drop_regs_slot != RD_RegSlot_Null && rd_drag_is_active()) ? rd_state->drag_drop_regs : rd_state->hover_regs));
       CTRL_Entity *ctrl_entity = &ctrl_entity_nil;
-      UI_Tooltip RD_Palette(RD_PaletteCode_Floating) switch(slot)
+      RD_Palette(RD_PaletteCode_Floating) switch(slot)
       {
         default:{}break;
         
@@ -3381,6 +3424,7 @@ rd_window_frame(RD_Window *ws)
         //- rjf: frontend entity tooltips
         //
         case RD_RegSlot_Entity:
+        UI_Tooltip
         {
           // rjf: unpack
           RD_Entity *entity = rd_entity_from_handle(regs->entity);
@@ -3403,6 +3447,7 @@ rd_window_frame(RD_Window *ws)
         case RD_RegSlot_Thread:    {ctrl_entity = ctrl_entity_from_handle(d_state->ctrl_entity_store, regs->thread);      }goto ctrl_entity_tooltip;
         case RD_RegSlot_CtrlEntity:{ctrl_entity = ctrl_entity_from_handle(d_state->ctrl_entity_store, regs->ctrl_entity); }goto ctrl_entity_tooltip;
         ctrl_entity_tooltip:;
+        UI_Tooltip
         {
           // rjf: unpack
           DI_Scope *di_scope = di_scope_open();
@@ -3980,10 +4025,11 @@ rd_window_frame(RD_Window *ws)
           //////////////////////
           //- rjf: ctrl entities
           //
-          case RD_RegSlot_Machine: ctrl_entity = ctrl_entity_from_handle(d_state->ctrl_entity_store, regs->machine); goto ctrl_entity_title;
-          case RD_RegSlot_Process: ctrl_entity = ctrl_entity_from_handle(d_state->ctrl_entity_store, regs->process); goto ctrl_entity_title;
-          case RD_RegSlot_Module:  ctrl_entity = ctrl_entity_from_handle(d_state->ctrl_entity_store, regs->module);  goto ctrl_entity_title;
-          case RD_RegSlot_Thread:  ctrl_entity = ctrl_entity_from_handle(d_state->ctrl_entity_store, regs->thread);  goto ctrl_entity_title;
+          case RD_RegSlot_Machine:     ctrl_entity = ctrl_entity_from_handle(d_state->ctrl_entity_store, regs->machine);     goto ctrl_entity_title;
+          case RD_RegSlot_Process:     ctrl_entity = ctrl_entity_from_handle(d_state->ctrl_entity_store, regs->process);     goto ctrl_entity_title;
+          case RD_RegSlot_Module:      ctrl_entity = ctrl_entity_from_handle(d_state->ctrl_entity_store, regs->module);      goto ctrl_entity_title;
+          case RD_RegSlot_Thread:      ctrl_entity = ctrl_entity_from_handle(d_state->ctrl_entity_store, regs->thread);      goto ctrl_entity_title;
+          case RD_RegSlot_CtrlEntity:  ctrl_entity = ctrl_entity_from_handle(d_state->ctrl_entity_store, regs->ctrl_entity); goto ctrl_entity_title;
           ctrl_entity_title:;
           {
             //- rjf: title
@@ -4269,6 +4315,38 @@ rd_window_frame(RD_Window *ws)
               ui_spacer(ui_em(1.5f, 1.f));
             }
 #endif
+          }break;
+          
+          //////////////////////
+          //- rjf: frontend entities
+          //
+          case RD_RegSlot_Entity:
+          {
+            RD_Entity *entity = rd_entity_from_handle(regs->entity);
+            
+            //- rjf: title
+            UI_Row
+              UI_PrefWidth(ui_text_dim(5, 1))
+              UI_TextAlignment(UI_TextAlign_Center)
+              UI_TextPadding(ui_top_font_size()*1.5f)
+            {
+              DR_FancyStringList fstrs = rd_title_fstrs_from_entity(scratch.arena, entity, ui_top_palette()->text_weak, ui_top_font_size());
+              UI_Box *title_box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
+              ui_box_equip_display_fancy_strings(title_box, &fstrs);
+              if(ctrl_entity->kind == CTRL_EntityKind_Thread)
+              {
+                ui_spacer(ui_em(0.5f, 1.f));
+                UI_FontSize(ui_top_font_size() - 1.f)
+                  UI_CornerRadius(ui_top_font_size()*0.5f)
+                  RD_Palette(RD_PaletteCode_NeutralPopButton)
+                  UI_TextPadding(ui_top_font_size()*0.5f)
+                {
+                  UI_FlagsAdd(UI_BoxFlag_DrawTextWeak|UI_BoxFlag_DrawBorder) ui_label(string_from_arch(ctrl_entity->arch));
+                  ui_spacer(ui_em(0.5f, 1.f));
+                  UI_FlagsAdd(UI_BoxFlag_DrawTextWeak|UI_BoxFlag_DrawBorder) ui_labelf("TID: %i", (U32)ctrl_entity->id);
+                }
+              }
+            }
           }break;
           
         }
@@ -9789,8 +9867,8 @@ rd_cfg_strings_from_gfx(Arena *arena, String8 root_path, RD_CfgSrc source)
             entity_name_escaped = escaped_from_raw_str8(arena, e->string);
           }
           EntityInfoFlags info_flags = 0;
-          if(entity_name_escaped.size != 0)        { info_flags |= EntityInfoFlag_HasName; }
-          if(!!e->disabled)                        { info_flags |= EntityInfoFlag_HasDisabled; }
+          if(entity_name_escaped.size != 0)         { info_flags |= EntityInfoFlag_HasName; }
+          if(!!e->disabled)                         { info_flags |= EntityInfoFlag_HasDisabled; }
           if(e->flags & RD_EntityFlag_HasTextPoint) { info_flags |= EntityInfoFlag_HasTxtPt; }
           if(e->flags & RD_EntityFlag_HasVAddr)     { info_flags |= EntityInfoFlag_HasVAddr; }
           if(e->flags & RD_EntityFlag_HasColor)     { info_flags |= EntityInfoFlag_HasColor; }
@@ -14570,9 +14648,12 @@ rd_frame(void)
             }
           }break;
           case RD_CmdKind_AddAddressBreakpoint:
+          {
+            rd_cmd(RD_CmdKind_AddBreakpoint, .string = str8_zero());
+          }break;
           case RD_CmdKind_AddFunctionBreakpoint:
           {
-            rd_cmd(RD_CmdKind_AddBreakpoint);
+            rd_cmd(RD_CmdKind_AddBreakpoint, .vaddr = 0);
           }break;
           
           //- rjf: watch pins

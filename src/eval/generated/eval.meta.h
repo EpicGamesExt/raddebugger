@@ -125,6 +125,7 @@ E_ExprKind_Ternary,
 E_ExprKind_LeafBytecode,
 E_ExprKind_LeafMember,
 E_ExprKind_LeafStringLiteral,
+E_ExprKind_LeafBool,
 E_ExprKind_LeafU64,
 E_ExprKind_LeafF64,
 E_ExprKind_LeafF32,
@@ -157,9 +158,9 @@ E_InterpretationCode_COUNT,
 
 C_LINKAGE_BEGIN
 extern String8 e_token_kind_strings[6];
-extern String8 e_expr_kind_strings[45];
+extern String8 e_expr_kind_strings[46];
 extern String8 e_interpretation_code_display_strings[11];
-extern E_OpInfo e_expr_kind_op_info_table[45];
+extern E_OpInfo e_expr_kind_op_info_table[46];
 extern U8 e_kind_basic_byte_size_table[56];
 extern String8 e_kind_basic_string_table[56];
 

@@ -86,7 +86,9 @@ Y(String8, type(CTRL_PathString8),  dbg,               "Debug Info Path")\
 Y(String8, type(CTRL_PlainString8), args,              "Arguments")\
 Y(String8, type(CTRL_PathString8),  working_directory, "Working Directory")\
 Y(String8, type(CTRL_CodeString8),  entry_point,       "Custom Entry Point")\
-Y(String8, type(CTRL_PlainString8), location,          "Location")\
+Y(String8, type(CTRL_PathString8),  source_location,   "Source Location")\
+Y(String8, type(CTRL_CodeString8),  function_location, "Function Location")\
+Y(String8, type(CTRL_CodeString8),  address_location,  "Address Location")\
 Y(String8, type(CTRL_CodeString8),  condition,         "Condition")\
 X(CTRL_MetaEvalFrameArray, callstack, "Call Stack")
 #define X(T, name, pretty_name) T name;
@@ -109,12 +111,14 @@ struct_type(CTRL_MetaEval);
 
 struct_members(CTRL_BreakpointMetaEval)
 {
-  member_lit_comp(CTRL_MetaEval, type(B32),              enabled,   .pretty_name = str8_lit_comp("Enabled")),
-  member_lit_comp(CTRL_MetaEval, type(U32),              color,     .pretty_name = str8_lit_comp("Color")),
-  member_lit_comp(CTRL_MetaEval, type(U64),              hit_count, .pretty_name = str8_lit_comp("Hit Count")),
-  member_lit_comp(CTRL_MetaEval, type(CTRL_CodeString8), label,     .pretty_name = str8_lit_comp("Label")),
-  member_lit_comp(CTRL_MetaEval, type(CTRL_CodeString8), condition, .pretty_name = str8_lit_comp("Condition")),
-  member_lit_comp(CTRL_MetaEval, type(CTRL_PlainString8),location,  .pretty_name = str8_lit_comp("Location")),
+  member_lit_comp(CTRL_MetaEval, type(B32),              enabled,           .pretty_name = str8_lit_comp("Enabled")),
+  member_lit_comp(CTRL_MetaEval, type(U32),              color,             .pretty_name = str8_lit_comp("Color")),
+  member_lit_comp(CTRL_MetaEval, type(U64),              hit_count,         .pretty_name = str8_lit_comp("Hit Count")),
+  member_lit_comp(CTRL_MetaEval, type(CTRL_CodeString8), label,             .pretty_name = str8_lit_comp("Label")),
+  member_lit_comp(CTRL_MetaEval, type(CTRL_CodeString8), condition,         .pretty_name = str8_lit_comp("Condition")),
+  member_lit_comp(CTRL_MetaEval, type(CTRL_PathString8), source_location,   .pretty_name = str8_lit_comp("Source Location")),
+  member_lit_comp(CTRL_MetaEval, type(CTRL_CodeString8), function_location, .pretty_name = str8_lit_comp("Function Location")),
+  member_lit_comp(CTRL_MetaEval, type(CTRL_CodeString8), address_location,  .pretty_name = str8_lit_comp("Address Location")),
 };
 
 struct_members(CTRL_TargetMetaEval)
@@ -130,7 +134,8 @@ struct_members(CTRL_PinMetaEval)
 {
   member_lit_comp(CTRL_MetaEval, type(CTRL_CodeString8), label,              .pretty_name = str8_lit_comp("Expression")),
   member_lit_comp(CTRL_MetaEval, type(U32),              color,              .pretty_name = str8_lit_comp("Color")),
-  member_lit_comp(CTRL_MetaEval, type(CTRL_PathString8), location,           .pretty_name = str8_lit_comp("Location")),
+  member_lit_comp(CTRL_MetaEval, type(CTRL_PathString8), source_location,    .pretty_name = str8_lit_comp("Source Location")),
+  member_lit_comp(CTRL_MetaEval, type(CTRL_CodeString8), address_location,   .pretty_name = str8_lit_comp("Address Location")),
 };
 
 struct_members(CTRL_MachineMetaEval)
