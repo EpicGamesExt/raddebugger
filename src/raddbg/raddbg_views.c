@@ -5992,12 +5992,13 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(text)
   //////////////////////////////
   //- rjf: unpack parameterization info
   //
+  String8 path = rd_file_path_from_eval_string(rd_frame_arena(), string);
+  rd_regs()->file_path     = path;
   rd_regs()->vaddr         = 0;
   rd_regs()->cursor.line   = rd_value_from_params_key(params, str8_lit("cursor_line")).s64;
   rd_regs()->cursor.column = rd_value_from_params_key(params, str8_lit("cursor_column")).s64;
   rd_regs()->mark.line     = rd_value_from_params_key(params, str8_lit("mark_line")).s64;
   rd_regs()->mark.column   = rd_value_from_params_key(params, str8_lit("mark_column")).s64;
-  String8 path = rd_file_path_from_eval_string(scratch.arena, string);
   E_Eval eval = e_eval_from_string(scratch.arena, string);
   Rng1U64 range = rd_range_from_eval_params(eval, params);
   rd_regs()->text_key = rd_key_from_eval_space_range(eval.space, range, 1);
