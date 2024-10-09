@@ -15505,17 +15505,6 @@ rd_frame(void)
                       meval_count += 1;
                     }
                   }break;
-                  case RD_EvalSpaceKind_MetaCtrlEntity:
-                  {
-                    CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(eval.space);
-                    if(entity != &ctrl_entity_nil)
-                    {
-                      MetaEvalNode *meval_node = push_array(scratch.arena, MetaEvalNode, 1);
-                      meval_node->meval = rd_ctrl_meta_eval_from_ctrl_entity(scratch.arena, entity);
-                      SLLQueuePush(first_meval, last_meval, meval_node);
-                      meval_count += 1;
-                    }
-                  }break;
                 }
               }
             }
