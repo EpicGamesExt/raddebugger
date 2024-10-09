@@ -15393,6 +15393,7 @@ rd_frame(void)
     //- rjf: gather targets
     //
     D_TargetArray targets = {0};
+    ProfScope("gather targets")
     {
       RD_EntityList target_entities = rd_query_cached_entity_list_with_kind(RD_EntityKind_Target);
       targets.count = target_entities.count;
@@ -15415,6 +15416,7 @@ rd_frame(void)
     //- rjf: gather breakpoints
     //
     D_BreakpointArray breakpoints = {0};
+    ProfScope("gather breakpoints")
     {
       RD_EntityList bp_entities = rd_query_cached_entity_list_with_kind(RD_EntityKind_Breakpoint);
       breakpoints.count = bp_entities.count;
@@ -15457,11 +15459,96 @@ rd_frame(void)
     }
     
     ////////////////////////////
-    //- rjf: gather meta evaluations
+    //- rjf: gather needed meta evaluations
     //
     CTRL_MetaEvalArray meta_evals = {0};
+    ProfScope("gather needed meta evaluations")
     {
-      // TODO(rjf): @msgs
+      typedef struct MetaEvalNode MetaEvalNode;
+      struct MetaEvalNode
+      {
+        MetaEvalNode *next;
+        CTRL_MetaEval *meval;
+      };
+      
+      //- rjf: walk all breakpoints, gather touched meta-evals
+      U64 meval_count = 0;
+      MetaEvalNode *first_meval = 0;
+      MetaEvalNode *last_meval = 0;
+      for EachIndex(idx, breakpoints.count)
+      {
+        if(breakpoints.v[idx].condition.size != 0)
+        {
+          //- rjf: walk conditional breakpoint expression tree - for each leaf identifier,
+          // determine if it resolves to a meta-evaluation. if it does, compute the meta
+          // evaluation data & store
+          typedef struct ExprWalkTask ExprWalkTask;
+          struct ExprWalkTask
+          {
+            ExprWalkTask *next;
+            E_Expr *expr;
+          };
+          E_Expr *expr = e_parse_expr_from_text(scratch.arena, breakpoints.v[idx].condition);
+          ExprWalkTask start_task = {0, expr};
+          ExprWalkTask *first_task = &start_task;
+          for(ExprWalkTask *t = first_task; t != 0; t = t->next)
+          {
+            if(t->expr->kind == E_ExprKind_LeafIdent)
+            {
+              E_Expr *macro_expr = e_string2expr_lookup(e_ir_ctx->macro_map, t->expr->string);
+              if(macro_expr != &e_expr_nil)
+              {
+                E_Eval eval = e_eval_from_expr(scratch.arena, macro_expr);
+                switch(eval.space.kind)
+                {
+                  default:{}break;
+                  case RD_EvalSpaceKind_MetaEntity:
+                  {
+                    RD_Entity *entity = rd_entity_from_eval_space(eval.space);
+                    if(!rd_entity_is_nil(entity))
+                    {
+                      MetaEvalNode *meval_node = push_array(scratch.arena, MetaEvalNode, 1);
+                      meval_node->meval = rd_ctrl_meta_eval_from_entity(scratch.arena, entity);
+                      SLLQueuePush(first_meval, last_meval, meval_node);
+                      meval_count += 1;
+                    }
+                  }break;
+                  case RD_EvalSpaceKind_MetaCtrlEntity:
+                  {
+                    CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(eval.space);
+                    if(entity != &ctrl_entity_nil)
+                    {
+                      MetaEvalNode *meval_node = push_array(scratch.arena, MetaEvalNode, 1);
+                      meval_node->meval = rd_ctrl_meta_eval_from_ctrl_entity(scratch.arena, entity);
+                      SLLQueuePush(first_meval, last_meval, meval_node);
+                      meval_count += 1;
+                    }
+                  }break;
+                }
+              }
+            }
+            for(E_Expr *child = t->expr->first; child != &e_expr_nil; child = child->next)
+            {
+              ExprWalkTask *task = push_array(scratch.arena, ExprWalkTask, 1);
+              task->expr = child;
+              task->next = t->next;
+              t->next = task;
+            }
+          }
+        }
+      }
+      
+      //- rjf: list -> array
+      meta_evals.count = meval_count;
+      meta_evals.v = push_array(scratch.arena, CTRL_MetaEval, meta_evals.count);
+      {
+        U64 idx = 0;
+        for(MetaEvalNode *n = first_meval; n != 0; n = n->next)
+        {
+          MemoryCopyStruct(&meta_evals.v[idx], n->meval);
+          idx += 1;
+        }
+      }
     }
     
     ////////////////////////////

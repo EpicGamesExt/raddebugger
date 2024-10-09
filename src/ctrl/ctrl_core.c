@@ -1260,6 +1260,7 @@ ctrl_init(void)
   ctrl_state->ctrl_thread_entity_store = ctrl_entity_store_alloc();
   ctrl_state->dmn_event_arena = arena_alloc();
   ctrl_state->user_entry_point_arena = arena_alloc();
+  ctrl_state->user_meta_eval_arena = arena_alloc();
   for(CTRL_ExceptionCodeKind k = (CTRL_ExceptionCodeKind)0; k < CTRL_ExceptionCodeKind_COUNT; k = (CTRL_ExceptionCodeKind)(k+1))
   {
     if(ctrl_exception_code_kind_default_enable_table[k])
@@ -3190,7 +3191,15 @@ ctrl_thread__entry_point(void *p)
         {
           log_infof("user2ctrl_msg:{kind:\"%S\"}\n", ctrl_string_from_msg_kind(msg->kind));
         }
-        MemoryCopyArray(ctrl_state->exception_code_filters, msg->exception_code_filters);
+        
+        //- rjf: unpack per-message parameterizations & store
+        {
+          MemoryCopyArray(ctrl_state->exception_code_filters, msg->exception_code_filters);
+          arena_clear(ctrl_state->user_meta_eval_arena);
+          ctrl_state->user_meta_evals = *deep_copy_from_struct(ctrl_state->user_meta_eval_arena, CTRL_MetaEvalArray, &msg->meta_evals);
+        }
+        
+        //- rjf: process message
         switch(msg->kind)
         {
           case CTRL_MsgKind_Null:
@@ -4104,6 +4113,8 @@ ctrl_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
   switch(space.kind)
   {
     default:{}break;
+    
+    //- rjf: intra-entity reads (process memory or thread registers)
     case CTRL_EvalSpaceKind_Entity:
     {
       CTRL_Entity *entity = (CTRL_Entity *)space.u64_0;
@@ -4128,6 +4139,42 @@ ctrl_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
           scratch_end(scratch);
         }break;
       }
+    }break;
+    
+    //- rjf: meta evaluations
+    case CTRL_EvalSpaceKind_Meta:
+    {
+      Temp scratch = scratch_begin(0, 0);
+      U64 meta_eval_idx = space.u64s[0];
+      if(meta_eval_idx < ctrl_state->user_meta_evals.count)
+      {
+        CTRL_MetaEval *meval = &ctrl_state->user_meta_evals.v[meta_eval_idx];
+        
+        // rjf: copy meta evaluation to scratch arena, to form range of legal reads
+        arena_push(scratch.arena, 0, 64);
+        String8 meval_srlzed = serialized_from_struct(scratch.arena, CTRL_MetaEval, meval);
+        U64 pos_min = arena_pos(scratch.arena);
+        CTRL_MetaEval *meval_read = struct_from_serialized(scratch.arena, CTRL_MetaEval, meval_srlzed);
+        U64 pos_opl = arena_pos(scratch.arena);
+        
+        // rjf: rebase all pointer values in meta evaluation to be relative to base pointer
+        struct_rebase_ptrs(CTRL_MetaEval, meval_read, meval_read);
+        
+        // rjf: perform actual read
+        Rng1U64 legal_range = r1u64(0, pos_opl-pos_min);
+        if(contains_1u64(legal_range, range.min))
+        {
+          result = 1;
+          U64 range_dim = dim_1u64(range);
+          U64 bytes_to_read = Min(range_dim, (legal_range.max - range.min));
+          MemoryCopy(out, ((U8 *)meval_read) + range.min, bytes_to_read);
+          if(bytes_to_read < range_dim)
+          {
+            MemoryZero((U8 *)out + bytes_to_read, range_dim - bytes_to_read);
+          }
+        }
+      }
+      scratch_end(scratch);
     }break;
   }
   return result;
@@ -5031,6 +5078,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
               ctx->modules_count     = eval_modules_count;
               ctx->primary_module    = eval_modules_primary;
             }
+            e_select_type_ctx(&type_ctx);
             
             // rjf: build eval parse context
             E_ParseCtx parse_ctx = zero_struct;
@@ -5049,13 +5097,26 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
               ctx->locals_map    = e_push_locals_map_from_rdi_voff(temp.arena, eval_modules_primary->rdi, thread_rip_voff);
               ctx->member_map    = e_push_member_map_from_rdi_voff(temp.arena, eval_modules_primary->rdi, thread_rip_voff);
             }
+            e_select_parse_ctx(&parse_ctx);
             
             // rjf: build eval IR context
             E_IRCtx ir_ctx = zero_struct;
             {
-              // TODO(rjf): pipe this here from frontend
-              ir_ctx.macro_map = &e_string2expr_map_nil;
+              E_IRCtx *ctx = &ir_ctx;
+              ctx->macro_map     = push_array(temp.arena, E_String2ExprMap, 1);
+              ctx->macro_map[0]  = e_string2expr_map_make(temp.arena, 512);
+              E_TypeKey meval_type_key = e_type_key_cons_base(type(CTRL_MetaEval));
+              for EachIndex(idx, ctrl_state->user_meta_evals.count)
+              {
+                E_Space space = e_space_make(CTRL_EvalSpaceKind_Meta);
+                E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
+                expr->space    = space;
+                expr->mode     = E_Mode_Offset;
+                expr->type_key = meval_type_key;
+                e_string2expr_map_insert(temp.arena, ctx->macro_map, ctrl_state->user_meta_evals.v[idx].label, expr);
+              }
             }
+            e_select_ir_ctx(&ir_ctx);
             
             // rjf: build eval interpretation context
             E_InterpretCtx interpret_ctx = zero_struct;
@@ -5071,11 +5132,6 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
               ctx->module_base[0]= module->vaddr_range.min;
               ctx->tls_base      = push_array(temp.arena, U64, 1);
             }
-            
-            // rjf: equip contexts
-            e_select_type_ctx(&type_ctx);
-            e_select_parse_ctx(&parse_ctx);
-            e_select_ir_ctx(&ir_ctx);
             e_select_interpret_ctx(&interpret_ctx);
             
             // rjf: evaluate

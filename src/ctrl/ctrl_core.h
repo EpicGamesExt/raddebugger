@@ -817,7 +817,7 @@ struct CTRL_State
   Arena *user_entry_point_arena;
   String8List user_entry_points;
   Arena *user_meta_eval_arena;
-  CTRL_MetaEvalArray *user_meta_evals;
+  CTRL_MetaEvalArray user_meta_evals;
   U64 exception_code_filters[(CTRL_ExceptionCodeKind_COUNT+63)/64];
   U64 process_counter;
   
