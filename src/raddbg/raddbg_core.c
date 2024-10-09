@@ -13358,6 +13358,14 @@ rd_frame(void)
               }
             }
           }break;
+          case RD_CmdKind_GoToDisassembly:
+          {
+            // TODO(rjf): @msgs
+          }break;
+          case RD_CmdKind_GoToSource:
+          {
+            // TODO(rjf): @msgs
+          }break;
           
           //- rjf: panel built-in layout builds
           case RD_CmdKind_ResetToDefaultPanels:
