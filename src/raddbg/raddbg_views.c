@@ -2604,11 +2604,11 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                         UI_Palette *palette = ui_top_palette();
                         if(ctrl->kind == RD_CmdKind_SelectEntity || ctrl->kind == RD_CmdKind_EnableEntity)
                         {
-                          icon_kind = entity->disabled ? RD_IconKind_CheckHollow : RD_IconKind_CheckFilled;
+                          icon_kind = entity->disabled ? RD_IconKind_RadioHollow : RD_IconKind_RadioFilled;
                         }
                         if(ctrl->kind == RD_CmdKind_SelectThread)
                         {
-                          icon_kind = (ctrl_handle_match(ctrl_entity->handle, rd_base_regs()->thread) ? RD_IconKind_CheckFilled : RD_IconKind_CheckHollow);
+                          icon_kind = (ctrl_handle_match(ctrl_entity->handle, rd_base_regs()->thread) ? RD_IconKind_RadioFilled : RD_IconKind_RadioHollow);
                         }
                         if(ctrl->kind == RD_CmdKind_FreezeThread)
                         {
