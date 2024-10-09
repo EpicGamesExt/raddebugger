@@ -3818,7 +3818,9 @@ rd_window_frame(RD_Window *ws)
               {
                 rd_cmd(RD_CmdKind_FindCodeLocation,
                        .file_path = lines.first->v.file_path,
-                       .cursor    = lines.first->v.pt);
+                       .cursor    = lines.first->v.pt,
+                       .vaddr     = 0,
+                       .process   = ctrl_handle_zero());
               }
               ui_ctx_menu_close();
             }

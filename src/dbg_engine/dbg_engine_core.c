@@ -149,6 +149,7 @@ d_line_list_copy(Arena *arena, D_LineList *list)
   {
     D_LineNode *dst_n = push_array(arena, D_LineNode, 1);
     MemoryCopyStruct(dst_n, src_n);
+    dst_n->v.file_path = push_str8_copy(arena, dst_n->v.file_path);
     dst_n->v.dbgi_key = di_key_copy(arena, &src_n->v.dbgi_key);
     SLLQueuePush(dst.first, dst.last, dst_n);
     dst.count += 1;
