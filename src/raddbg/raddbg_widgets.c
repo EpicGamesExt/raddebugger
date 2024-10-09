@@ -857,9 +857,9 @@ internal UI_BOX_CUSTOM_DRAW(rd_thread_box_draw_extensions)
   {
     Vec4F32 weak_thread_color = u->thread_color;
     weak_thread_color.w *= 0.5f*u->hover_t;
-    R_Rect2DInst *inst = dr_rect(r2f32p(box->parent->parent->parent->rect.x0,
+    R_Rect2DInst *inst = dr_rect(r2f32p(box->rect.x0,
                                         box->parent->rect.y0,
-                                        box->parent->parent->parent->rect.x0 + ui_top_font_size()*22.f*u->hover_t,
+                                        box->rect.x0 + ui_top_font_size()*22.f*u->hover_t,
                                         box->parent->rect.y1),
                                  v4f32(0, 0, 0, 0),
                                  0, 0, 1);
@@ -871,9 +871,9 @@ internal UI_BOX_CUSTOM_DRAW(rd_thread_box_draw_extensions)
   {
     Vec4F32 weak_thread_color = u->thread_color;
     weak_thread_color.w *= 0.3f;
-    R_Rect2DInst *inst = dr_rect(r2f32p(box->parent->parent->parent->rect.x0,
+    R_Rect2DInst *inst = dr_rect(r2f32p(box->rect.x0,
                                         box->parent->rect.y0,
-                                        box->parent->parent->parent->rect.x0 + ui_top_font_size()*22.f*u->alive_t,
+                                        box->rect.x0 + ui_top_font_size()*22.f*u->alive_t,
                                         box->parent->rect.y1),
                                  v4f32(0, 0, 0, 0),
                                  0, 0, 1);
@@ -926,9 +926,9 @@ internal UI_BOX_CUSTOM_DRAW(rd_bp_box_draw_extensions)
   {
     Vec4F32 weak_color = u->color;
     weak_color.w *= 0.5f*u->hover_t;
-    R_Rect2DInst *inst = dr_rect(r2f32p(box->parent->parent->parent->rect.x0,
+    R_Rect2DInst *inst = dr_rect(r2f32p(box->rect.x0,
                                         box->parent->rect.y0,
-                                        box->parent->parent->parent->rect.x0 + ui_top_font_size()*22.f*u->hover_t,
+                                        box->rect.x0 + ui_top_font_size()*22.f*u->hover_t,
                                         box->parent->rect.y1),
                                  v4f32(0, 0, 0, 0),
                                  0, 0, 1);
@@ -940,9 +940,9 @@ internal UI_BOX_CUSTOM_DRAW(rd_bp_box_draw_extensions)
   {
     Vec4F32 weak_thread_color = u->color;
     weak_thread_color.w *= 0.3f;
-    R_Rect2DInst *inst = dr_rect(r2f32p(box->parent->parent->parent->rect.x0,
+    R_Rect2DInst *inst = dr_rect(r2f32p(box->rect.x0,
                                         box->parent->rect.y0,
-                                        box->parent->parent->parent->rect.x0 + ui_top_font_size()*22.f*u->alive_t,
+                                        box->rect.x0 + ui_top_font_size()*22.f*u->alive_t,
                                         box->parent->rect.y1),
                                  v4f32(0, 0, 0, 0),
                                  0, 0, 1);

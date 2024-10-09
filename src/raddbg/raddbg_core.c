@@ -11554,6 +11554,20 @@ rd_frame(void)
         switch(kind)
         {
           //- rjf: default cases
+          case RD_CmdKind_Run:
+          case RD_CmdKind_LaunchAndRun:
+          case RD_CmdKind_LaunchAndInit:
+          {
+            CTRL_EntityList processes = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Process);
+            if(processes.count == 0)
+            {
+              RD_EntityList bps = rd_query_cached_entity_list_with_kind(RD_EntityKind_Breakpoint);
+              for(RD_EntityNode *n = bps.first; n != 0; n = n->next)
+              {
+                n->entity->u64 = 0;
+              }
+            }
+          } // fallthrough
           default:
           {
             // rjf: try to run engine command
@@ -11577,28 +11591,6 @@ rd_frame(void)
                 params.targets.v = push_array(scratch.arena, D_Target, params.targets.count);
                 params.targets.v[0] = rd_d_target_from_entity(entity);
               }
-              // TODO(rjf): @msgs
-#if 0
-              params.window = rd_regs()->window;
-              params.panel  = rd_regs()->panel;
-              params.dest_panel = rd_regs()->dst_panel;
-              params.prev_view = rd_regs()->prev_view;
-              params.view = rd_regs()->view;
-              params.entity = rd_regs()->entity;
-              params.entity_list = rd_regs()->entity_list;
-              params.string = rd_regs()->string;
-              params.file_path = rd_regs()->file_path;
-              params.text_point = rd_regs()->cursor;
-              params.params_tree = rd_regs()->params_tree;
-              params.vaddr = rd_regs()->vaddr;
-              params.voff = rd_regs()->voff;
-              params.id = rd_regs()->pid;
-              params.prefer_dasm = rd_regs()->prefer_disasm;
-              params.force_confirm = rd_regs()->force_confirm;
-              params.dir2 = rd_regs()->dir2;
-              params.unwind_index = rd_regs()->unwind_count;
-              params.inline_depth = rd_regs()->inline_depth;
-#endif
               d_push_cmd((D_CmdKind)kind, &params);
             }
             
@@ -15587,19 +15579,6 @@ rd_frame(void)
       switch(evt->kind)
       {
         default:{}break;
-        case D_EventKind_ProcessBegin:
-        {
-          // rjf: reset breakpoint hit counts
-          CTRL_EntityList processes = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Process);
-          if(processes.count == 1)
-          {
-            RD_EntityList bps = rd_query_cached_entity_list_with_kind(RD_EntityKind_Breakpoint);
-            for(RD_EntityNode *n = bps.first; n != 0; n = n->next)
-            {
-              n->entity->u64 = 0;
-            }
-          }
-        }break;
         case D_EventKind_Stop:
         {
           CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, evt->thread);

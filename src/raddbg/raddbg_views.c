@@ -585,6 +585,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
   //////////////////////////////
   //- rjf: apply post-build view snapping rules
   //
+  if(text_info->lines_count != 0)
   {
     // rjf: contain => snap
     if(cv->contain_cursor && text_info->lines_count != 0)
@@ -691,6 +692,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
   //////////////////////////////
   //- rjf: top-level container interaction (scrolling)
   //
+  if(text_info->lines_count != 0)
   {
     UI_Signal sig = ui_signal_from_box(container_box);
     if(sig.scroll.x != 0)
