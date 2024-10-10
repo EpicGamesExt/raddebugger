@@ -1164,6 +1164,7 @@ internal void rd_entity_equip_vaddr(RD_Entity *entity, U64 vaddr);
 internal void rd_entity_equip_name(RD_Entity *entity, String8 name);
 
 //- rjf: file path map override lookups
+internal String8 rd_mapped_from_file_path(Arena *arena, String8 file_path);
 internal String8List rd_possible_overrides_from_file_path(Arena *arena, String8 file_path);
 
 //- rjf: top-level state queries

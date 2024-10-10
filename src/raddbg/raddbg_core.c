@@ -1526,6 +1526,58 @@ rd_entity_equip_name(RD_Entity *entity, String8 name)
 
 //- rjf: file path map override lookups
 
+internal String8
+rd_mapped_from_file_path(Arena *arena, String8 file_path)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  String8 file_path__normalized = path_normalized_from_string(scratch.arena, file_path);
+  String8List file_path_parts = str8_split_path(scratch.arena, file_path__normalized);
+  RD_EntityList maps = rd_query_cached_entity_list_with_kind(RD_EntityKind_FilePathMap);
+  String8 best_map_dst = {0};
+  U64 best_map_match_length = max_U64;
+  String8Node *best_map_remaining_suffix_first = 0;
+  for(RD_EntityNode *n = maps.first; n != 0; n = n->next)
+  {
+    String8 map_src = rd_entity_child_from_kind(n->entity, RD_EntityKind_Source)->string;
+    String8 map_src__normalized = path_normalized_from_string(scratch.arena, map_src);
+    String8List map_src_parts = str8_split_path(scratch.arena, map_src__normalized);
+    B32 matches = 1;
+    U64 match_length = 0;
+    String8Node *file_path_part_n = file_path_parts.first;
+    for(String8Node *map_src_n = map_src_parts.first;
+        map_src_n != 0 && file_path_part_n != 0;
+        map_src_n = map_src_n->next, file_path_part_n = file_path_part_n->next)
+    {
+      if(!str8_match(map_src_n->string, file_path_part_n->string, 0))
+      {
+        matches = 0;
+        break;
+      }
+      match_length += 1;
+    }
+    if(matches && match_length < best_map_match_length)
+    {
+      best_map_match_length = match_length;
+      best_map_dst = rd_entity_child_from_kind(n->entity, RD_EntityKind_Dest)->string;
+      best_map_remaining_suffix_first = file_path_part_n;
+    }
+  }
+  String8 result = file_path;
+  if(best_map_dst.size != 0)
+  {
+    String8 best_map_dst__normalized = path_normalized_from_string(scratch.arena, best_map_dst);
+    String8List best_map_dst_parts = str8_split_path(scratch.arena, best_map_dst__normalized);
+    for(String8Node *n = best_map_remaining_suffix_first; n != 0; n = n->next)
+    {
+      str8_list_push(scratch.arena, &best_map_dst_parts, n->string);
+    }
+    StringJoin join = {.sep = str8_lit("/")};
+    result = str8_list_join(arena, &best_map_dst_parts, &join);
+  }
+  scratch_end(scratch);
+  return result;
+}
+
 internal String8List
 rd_possible_overrides_from_file_path(Arena *arena, String8 file_path)
 {
@@ -14279,7 +14331,7 @@ rd_frame(void)
             CTRL_Entity *process = &ctrl_entity_nil;
             U64 vaddr = 0;
             {
-              file_path = rd_regs()->file_path;
+              file_path = rd_mapped_from_file_path(scratch.arena, rd_regs()->file_path);
               point     = rd_regs()->cursor;
               thread    = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->thread);
               process   = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->process);
