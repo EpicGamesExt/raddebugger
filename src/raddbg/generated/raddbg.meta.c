@@ -310,10 +310,10 @@ RD_CmdKindInfo rd_cmd_kind_info_table[214] =
 { str8_lit_comp("focus_panel_left"), str8_lit_comp("Focuses a panel leftward of the currently focused panel."), str8_lit_comp(""), str8_lit_comp("Focus Panel Left"), RD_IconKind_LeftArrow, (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), RD_EntityKind_Nil}},
 { str8_lit_comp("focus_panel_up"), str8_lit_comp("Focuses a panel upward of the currently focused panel."), str8_lit_comp(""), str8_lit_comp("Focus Panel Up"), RD_IconKind_UpArrow, (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), RD_EntityKind_Nil}},
 { str8_lit_comp("focus_panel_down"), str8_lit_comp("Focuses a panel downward of the currently focused panel."), str8_lit_comp(""), str8_lit_comp("Focus Panel Down"), RD_IconKind_DownArrow, (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), RD_EntityKind_Nil}},
-{ str8_lit_comp("undo"), str8_lit_comp("Undoes the previous action."), str8_lit_comp(""), str8_lit_comp("Undo"), RD_IconKind_Undo, (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), RD_EntityKind_Nil}},
-{ str8_lit_comp("redo"), str8_lit_comp("Redoes the first previously undone action."), str8_lit_comp(""), str8_lit_comp("Redo"), RD_IconKind_Redo, (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), RD_EntityKind_Nil}},
-{ str8_lit_comp("go_back"), str8_lit_comp("Returns to the previously selected panel and tab in recorded history."), str8_lit_comp(""), str8_lit_comp("Go Back"), RD_IconKind_LeftArrow, (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), RD_EntityKind_Nil}},
-{ str8_lit_comp("go_forward"), str8_lit_comp("Returns to the next selected panel and tab in recorded history."), str8_lit_comp(""), str8_lit_comp("Go Forward"), RD_IconKind_RightArrow, (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), RD_EntityKind_Nil}},
+{ str8_lit_comp("undo"), str8_lit_comp("Undoes the previous action."), str8_lit_comp(""), str8_lit_comp("Undo"), RD_IconKind_Undo, (RD_CmdKindFlag_ListInUI*0)|(RD_CmdKindFlag_ListInIPCDocs*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), RD_EntityKind_Nil}},
+{ str8_lit_comp("redo"), str8_lit_comp("Redoes the first previously undone action."), str8_lit_comp(""), str8_lit_comp("Redo"), RD_IconKind_Redo, (RD_CmdKindFlag_ListInUI*0)|(RD_CmdKindFlag_ListInIPCDocs*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), RD_EntityKind_Nil}},
+{ str8_lit_comp("go_back"), str8_lit_comp("Returns to the previously selected panel and tab in recorded history."), str8_lit_comp(""), str8_lit_comp("Go Back"), RD_IconKind_LeftArrow, (RD_CmdKindFlag_ListInUI*0)|(RD_CmdKindFlag_ListInIPCDocs*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), RD_EntityKind_Nil}},
+{ str8_lit_comp("go_forward"), str8_lit_comp("Returns to the next selected panel and tab in recorded history."), str8_lit_comp(""), str8_lit_comp("Go Forward"), RD_IconKind_RightArrow, (RD_CmdKindFlag_ListInUI*0)|(RD_CmdKindFlag_ListInIPCDocs*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), RD_EntityKind_Nil}},
 { str8_lit_comp("close_panel"), str8_lit_comp("Closes the currently active panel."), str8_lit_comp(""), str8_lit_comp("Close Panel"), RD_IconKind_ClosePanel, (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), RD_EntityKind_Nil}},
 { str8_lit_comp("next_tab"), str8_lit_comp("Focuses the next tab on the active panel."), str8_lit_comp(""), str8_lit_comp("Focus Next Tab"), RD_IconKind_RightArrow, (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), RD_EntityKind_Nil}},
 { str8_lit_comp("prev_tab"), str8_lit_comp("Focuses the previous tab on the active panel."), str8_lit_comp(""), str8_lit_comp("Focus Previous Tab"), RD_IconKind_LeftArrow, (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), RD_EntityKind_Nil}},
@@ -495,7 +495,7 @@ RD_StringBindingPair rd_default_binding_table[110] =
 {str8_lit_comp("redo"), {OS_Key_Y, 0 |OS_Modifier_Ctrl  }},
 {str8_lit_comp("go_back"), {OS_Key_Left, 0   |OS_Modifier_Alt}},
 {str8_lit_comp("go_forward"), {OS_Key_Right, 0   |OS_Modifier_Alt}},
-{str8_lit_comp("close_panel"), {OS_Key_P, 0 |OS_Modifier_Ctrl |OS_Modifier_Shift }},
+{str8_lit_comp("close_panel"), {OS_Key_P, 0 |OS_Modifier_Ctrl |OS_Modifier_Shift |OS_Modifier_Alt}},
 {str8_lit_comp("next_tab"), {OS_Key_PageDown, 0 |OS_Modifier_Ctrl  }},
 {str8_lit_comp("prev_tab"), {OS_Key_PageUp, 0 |OS_Modifier_Ctrl  }},
 {str8_lit_comp("next_tab"), {OS_Key_Tab, 0 |OS_Modifier_Ctrl  }},
@@ -670,12 +670,13 @@ str8_lit_comp("5"),
 str8_lit_comp("c"),
 };
 
-String8 rd_collection_name_table[12] =
+String8 rd_collection_name_table[13] =
 {
 str8_lit_comp("watches"),
 str8_lit_comp("targets"),
 str8_lit_comp("breakpoints"),
 str8_lit_comp("watch_pins"),
+str8_lit_comp("file_path_maps"),
 str8_lit_comp("threads"),
 str8_lit_comp("modules"),
 str8_lit_comp("locals"),
@@ -686,12 +687,13 @@ str8_lit_comp("types"),
 str8_lit_comp("procedures"),
 };
 
-RD_EntityKind rd_collection_entity_kind_table[12] =
+RD_EntityKind rd_collection_entity_kind_table[13] =
 {
 RD_EntityKind_Watch,
 RD_EntityKind_Target,
 RD_EntityKind_Breakpoint,
 RD_EntityKind_WatchPin,
+RD_EntityKind_FilePathMap,
 RD_EntityKind_Nil,
 RD_EntityKind_Nil,
 RD_EntityKind_Nil,
@@ -702,8 +704,9 @@ RD_EntityKind_Nil,
 RD_EntityKind_Nil,
 };
 
-CTRL_EntityKind rd_collection_ctrl_entity_kind_table[12] =
+CTRL_EntityKind rd_collection_ctrl_entity_kind_table[13] =
 {
+CTRL_EntityKind_Null,
 CTRL_EntityKind_Null,
 CTRL_EntityKind_Null,
 CTRL_EntityKind_Null,
@@ -718,12 +721,13 @@ CTRL_EntityKind_Null,
 CTRL_EntityKind_Null,
 };
 
-EV_ViewRuleExprExpandInfoHookFunctionType * rd_collection_expr_expand_info_hook_function_table[12] =
+EV_ViewRuleExprExpandInfoHookFunctionType * rd_collection_expr_expand_info_hook_function_table[13] =
 {
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME(watches),
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME(targets),
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME(breakpoints),
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME(watch_pins),
+EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME(file_path_maps),
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME(threads),
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME(modules),
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME(locals),
@@ -734,12 +738,13 @@ EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME(types),
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME(procedures),
 };
 
-EV_ViewRuleExprExpandRangeInfoHookFunctionType * rd_collection_expr_expand_range_info_hook_function_table[12] =
+EV_ViewRuleExprExpandRangeInfoHookFunctionType * rd_collection_expr_expand_range_info_hook_function_table[13] =
 {
 EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_NAME(watches),
 EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_NAME(targets),
 EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_NAME(breakpoints),
 EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_NAME(watch_pins),
+EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_NAME(file_path_maps),
 EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_NAME(threads),
 EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_NAME(modules),
 EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_NAME(locals),
@@ -750,12 +755,13 @@ EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_NAME(types),
 EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_NAME(procedures),
 };
 
-EV_ViewRuleExprExpandIDFromNumHookFunctionType * rd_collection_expr_expand_id_from_num_hook_function_table[12] =
+EV_ViewRuleExprExpandIDFromNumHookFunctionType * rd_collection_expr_expand_id_from_num_hook_function_table[13] =
 {
 EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_NAME(watches),
 EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_NAME(targets),
 EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_NAME(breakpoints),
 EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_NAME(watch_pins),
+EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_NAME(file_path_maps),
 EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_NAME(threads),
 EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_NAME(modules),
 EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_NAME(identity),
@@ -766,12 +772,13 @@ EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_NAME(types),
 EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_NAME(procedures),
 };
 
-EV_ViewRuleExprExpandIDFromNumHookFunctionType * rd_collection_expr_expand_num_from_id_hook_function_table[12] =
+EV_ViewRuleExprExpandIDFromNumHookFunctionType * rd_collection_expr_expand_num_from_id_hook_function_table[13] =
 {
 EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_NAME(watches),
 EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_NAME(targets),
 EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_NAME(breakpoints),
 EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_NAME(watch_pins),
+EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_NAME(file_path_maps),
 EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_NAME(threads),
 EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_NAME(modules),
 EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_NAME(identity),

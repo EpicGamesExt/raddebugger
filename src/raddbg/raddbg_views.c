@@ -5034,6 +5034,22 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(targets)
 ////////////////////////////////
 //~ rjf: file_path_map @view_hook_impl
 
+RD_VIEW_RULE_UI_FUNCTION_DEF(file_path_map)
+{
+  ProfBeginFunction();
+  RD_WatchViewState *wv = rd_view_state(RD_WatchViewState);
+  if(!wv->initialized)
+  {
+    rd_watch_view_init(wv);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Expr,       0.25f);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,      0.75f, .dequote_string = 1);
+  }
+  rd_watch_view_build(wv, RD_WatchViewFlag_NoHeader|RD_WatchViewFlag_PrettyNameMembers|RD_WatchViewFlag_PrettyEntityRows|RD_WatchViewFlag_DisableCacheLines,
+                      str8_lit("file_path_maps"), str8_lit("only: source_path destination_path str"), 0, 10, rect);
+  ProfEnd();
+}
+
+#if 0 // TODO(rjf): @msgs
 typedef struct RD_FilePathMapViewState RD_FilePathMapViewState;
 struct RD_FilePathMapViewState
 {
@@ -5364,6 +5380,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(file_path_map)
   scratch_end(scratch);
   ProfEnd();
 }
+#endif
 
 ////////////////////////////////
 //~ rjf: auto_view_rules @view_hook_impl

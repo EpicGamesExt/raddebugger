@@ -283,12 +283,12 @@ RD_CmdTable:    //               |        |              |                  |   
   {FocusPanelDown                 1        1              Null               null              Nil                0  0  0  0  0  0                                                           DownArrow             "focus_panel_down"            "Focus Panel Down"                            "Focuses a panel downward of the currently focused panel."                                                         ""                               }
   
   //- rjf: undo/redo
-  {Undo                           1        1              Null               null              Nil                0  0  0  0  0  0                                                           Undo                  "undo"                        "Undo"                                        "Undoes the previous action."                                                                                      ""                               }
-  {Redo                           1        1              Null               null              Nil                0  0  0  0  0  0                                                           Redo                  "redo"                        "Redo"                                        "Redoes the first previously undone action."                                                                       ""                               }
+  {Undo                           0        0              Null               null              Nil                0  0  0  0  0  0                                                           Undo                  "undo"                        "Undo"                                        "Undoes the previous action."                                                                                      ""                               }
+  {Redo                           0        0              Null               null              Nil                0  0  0  0  0  0                                                           Redo                  "redo"                        "Redo"                                        "Redoes the first previously undone action."                                                                       ""                               }
   
   //- rjf: focus history
-  {GoBack                         1        1              Null               null              Nil                0  0  0  0  0  0                                                           LeftArrow             "go_back"                     "Go Back"                                     "Returns to the previously selected panel and tab in recorded history."                                            ""                               }
-  {GoForward                      1        1              Null               null              Nil                0  0  0  0  0  0                                                           RightArrow            "go_forward"                  "Go Forward"                                  "Returns to the next selected panel and tab in recorded history."                                                  ""                               }
+  {GoBack                         0        0              Null               null              Nil                0  0  0  0  0  0                                                           LeftArrow             "go_back"                     "Go Back"                                     "Returns to the previously selected panel and tab in recorded history."                                            ""                               }
+  {GoForward                      0        0              Null               null              Nil                0  0  0  0  0  0                                                           RightArrow            "go_forward"                  "Go Forward"                                  "Returns to the next selected panel and tab in recorded history."                                                  ""                               }
   
   //- rjf: panel removal
   {ClosePanel                     1        1              Null               null              Nil                0  0  0  0  0  0                                                           ClosePanel            "close_panel"                 "Close Panel"                                 "Closes the currently active panel."                                                                               ""                               }
@@ -587,7 +587,7 @@ RD_DefaultBindingTable:
   { "go_forward"                  Right     0        0         alt        }
   
   //- rjf: panel removal
-  { "close_panel"                 P         ctrl     shift     0          }
+  { "close_panel"                 P         ctrl     shift     alt        }
   
   //- rjf: panel tab
   { "next_tab"                    PageDown  ctrl     0         0          }
@@ -825,6 +825,7 @@ RD_CollectionTable:
   {targets          Target           Null              x}
   {breakpoints      Breakpoint       Null              x}
   {watch_pins       WatchPin         Null              x}
+  {file_path_maps   FilePathMap      Null              x}
   {threads          Nil              Thread            x}
   {modules          Nil              Module            x}
   {locals           Nil              Null              -}

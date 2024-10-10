@@ -552,7 +552,7 @@ os_w32_wnd_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
           U64 name_size = DragQueryFile(drop, idx, 0, 0) + 1;
           U8 *name_ptr = push_array(os_w32_event_arena, U8, name_size);
           DragQueryFile(drop, idx, (char *)name_ptr, name_size);
-          str8_list_push(os_w32_event_arena, &event->strings, str8(name_ptr, name_size));
+          str8_list_push(os_w32_event_arena, &event->strings, str8(name_ptr, name_size - 1));
         }
         DragFinish(drop);
       }break;

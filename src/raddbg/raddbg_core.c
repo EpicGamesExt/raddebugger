@@ -3088,6 +3088,7 @@ rd_window_open(Vec2F32 size, OS_Handle preferred_monitor, RD_CfgSrc cfg_src)
   window->ctx_menu_regs = push_array(window->ctx_menu_arena, RD_Regs, 1);
   window->ctx_menu_input_buffer_size = KB(4);
   window->ctx_menu_input_buffer = push_array(window->arena, U8, window->ctx_menu_input_buffer_size);
+  window->drop_completion_arena = arena_alloc();
   window->hover_eval_arena = arena_alloc();
   window->autocomp_lister_params_arena = arena_alloc();
   window->free_panel = &rd_nil_panel;
@@ -3757,7 +3758,7 @@ rd_window_frame(RD_Window *ws)
     }
     
     ////////////////////////////
-    //- rjf: top-level context menu
+    //- rjf: top-level registers context menu
     //
     RD_Palette(RD_PaletteCode_Floating) UI_CtxMenu(rd_state->ctx_menu_key)
       UI_PrefWidth(ui_em(40.f, 1.f))
@@ -4353,6 +4354,47 @@ rd_window_frame(RD_Window *ws)
       }
       
       scratch_end(scratch);
+    }
+    
+    ////////////////////////////
+    //- rjf: drop-completion context menu
+    //
+    if(ws->drop_completion_paths.node_count != 0)
+    {
+      RD_Palette(RD_PaletteCode_Floating) UI_CtxMenu(rd_state->drop_completion_key)
+        RD_Palette(RD_PaletteCode_ImplicitButton)
+        UI_PrefWidth(ui_em(40.f, 1.f))
+      {
+        UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
+          for(String8Node *n = ws->drop_completion_paths.first; n != 0; n = n->next)
+        {
+          UI_Row UI_Padding(ui_em(1.f, 1.f))
+          {
+            UI_PrefWidth(ui_em(2.f, 1.f)) RD_Font(RD_FontSlot_Icons) ui_label(rd_icon_kind_text_table[RD_IconKind_FileOutline]);
+            UI_PrefWidth(ui_text_dim(10, 1)) ui_label(n->string);
+          }
+        }
+        RD_Palette(RD_PaletteCode_Floating) ui_divider(ui_em(1.f, 1.f));
+        if(ui_clicked(rd_icon_buttonf(RD_IconKind_Target, 0, "Add File%s As Target%s",
+                                      (ws->drop_completion_paths.node_count > 1) ? "s" : "",
+                                      (ws->drop_completion_paths.node_count > 1) ? "s" : "")))
+        {
+          for(String8Node *n = ws->drop_completion_paths.first; n != 0; n = n->next)
+          {
+            rd_cmd(RD_CmdKind_AddTarget, .file_path = n->string);
+          }
+          ui_ctx_menu_close();
+        }
+        if(ui_clicked(rd_icon_buttonf(RD_IconKind_Target, 0, "View File%s",
+                                      (ws->drop_completion_paths.node_count > 1) ? "s" : "")))
+        {
+          for(String8Node *n = ws->drop_completion_paths.first; n != 0; n = n->next)
+          {
+            rd_cmd(RD_CmdKind_Open, .file_path = n->string);
+          }
+          ui_ctx_menu_close();
+        }
+      }
     }
     
     ////////////////////////////
@@ -5114,8 +5156,10 @@ rd_window_frame(RD_Window *ws)
             {
               String8 cmds[] =
               {
-                rd_cmd_kind_info_table[RD_CmdKind_NewPanelRight].string,
+                rd_cmd_kind_info_table[RD_CmdKind_NewPanelUp].string,
                 rd_cmd_kind_info_table[RD_CmdKind_NewPanelDown].string,
+                rd_cmd_kind_info_table[RD_CmdKind_NewPanelRight].string,
+                rd_cmd_kind_info_table[RD_CmdKind_NewPanelLeft].string,
                 rd_cmd_kind_info_table[RD_CmdKind_ClosePanel].string,
                 rd_cmd_kind_info_table[RD_CmdKind_RotatePanelColumns].string,
                 rd_cmd_kind_info_table[RD_CmdKind_NextPanel].string,
@@ -5130,8 +5174,10 @@ rd_window_frame(RD_Window *ws)
               };
               U32 codepoints[] =
               {
-                'r',
+                'u',
                 'd',
+                'r',
+                'l',
                 'x',
                 'c',
                 'n',
@@ -7606,17 +7652,35 @@ rd_window_frame(RD_Window *ws)
         //////////////////////////
         //- rjf: accept file drops
         //
-        for(UI_Event *evt = 0; ui_next_event(&evt);)
         {
-          if(evt->kind == UI_EventKind_FileDrop && contains_2f32(content_rect, evt->pos))
+          for(UI_Event *evt = 0; ui_next_event(&evt);)
           {
-            for(String8Node *n = evt->paths.first; n != 0; n = n->next)
+            if(evt->kind == UI_EventKind_FileDrop && contains_2f32(content_rect, evt->pos))
             {
-              Temp scratch = scratch_begin(0, 0);
-              rd_cmd(RD_CmdKind_Open, .file_path = path_normalized_from_string(scratch.arena, n->string));
-              scratch_end(scratch);
+              B32 need_drop_completion = 0;
+              arena_clear(ws->drop_completion_arena);
+              MemoryZeroStruct(&ws->drop_completion_paths);
+              for(String8Node *n = evt->paths.first; n != 0; n = n->next)
+              {
+                Temp scratch = scratch_begin(0, 0);
+                String8 path = path_normalized_from_string(scratch.arena, n->string);
+                if(str8_match(str8_skip_last_dot(path), str8_lit("exe"), StringMatchFlag_CaseInsensitive))
+                {
+                  str8_list_push(ws->drop_completion_arena, &ws->drop_completion_paths, push_str8_copy(ws->drop_completion_arena, path));
+                  need_drop_completion = 1;
+                }
+                else
+                {
+                  rd_cmd(RD_CmdKind_Open, .file_path = path);
+                }
+                scratch_end(scratch);
+              }
+              if(need_drop_completion)
+              {
+                ui_ctx_menu_open(rd_state->drop_completion_key, ui_key_zero(), evt->pos);
+              }
+              ui_eat_event(evt);
             }
-            ui_eat_event(evt);
           }
         }
       }
@@ -8299,27 +8363,28 @@ struct RD_CtrlEntityExpandAccel
   CTRL_EntityArray entities;
 };
 
-//- rjf: watches
-
-EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(watches)           { return rd_ev_view_rule_expr_expand_info__meta_entities(arena, view, filter, expr, params, RD_EntityKind_Watch); }
-EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(watches)     { return rd_ev_view_rule_expr_expand_range_info__meta_entities(arena, view, filter, expr, params, idx_range, user_data, RD_EntityKind_Watch, 0); }
-EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(watches)    { return rd_ev_view_rule_expr_id_from_num__meta_entities(num, user_data, RD_EntityKind_Watch, 0); }
-EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(watches)    { return rd_ev_view_rule_expr_num_from_id__meta_entities(id,  user_data, RD_EntityKind_Watch, 0); }
-
 //- rjf: meta entities
 
-EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(targets)           { return rd_ev_view_rule_expr_expand_info__meta_entities(arena, view, filter, expr, params, RD_EntityKind_Target); }
-EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(targets)     { return rd_ev_view_rule_expr_expand_range_info__meta_entities(arena, view, filter, expr, params, idx_range, user_data, RD_EntityKind_Target, 1); }
-EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(targets)    { return rd_ev_view_rule_expr_id_from_num__meta_entities(num, user_data, RD_EntityKind_Target, 1); }
-EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(targets)    { return rd_ev_view_rule_expr_num_from_id__meta_entities(id,  user_data, RD_EntityKind_Target, 1); }
-EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(breakpoints)       { return rd_ev_view_rule_expr_expand_info__meta_entities(arena, view, filter, expr, params, RD_EntityKind_Breakpoint); }
-EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(breakpoints) { return rd_ev_view_rule_expr_expand_range_info__meta_entities(arena, view, filter, expr, params, idx_range, user_data, RD_EntityKind_Breakpoint, 1); }
-EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(breakpoints){ return rd_ev_view_rule_expr_id_from_num__meta_entities(num, user_data, RD_EntityKind_Breakpoint, 1); }
-EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(breakpoints){ return rd_ev_view_rule_expr_num_from_id__meta_entities(id,  user_data, RD_EntityKind_Breakpoint, 1); }
-EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(watch_pins)        { return rd_ev_view_rule_expr_expand_info__meta_entities(arena, view, filter, expr, params, RD_EntityKind_WatchPin); }
-EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(watch_pins)  { return rd_ev_view_rule_expr_expand_range_info__meta_entities(arena, view, filter, expr, params, idx_range, user_data, RD_EntityKind_WatchPin, 1); }
-EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(watch_pins) { return rd_ev_view_rule_expr_id_from_num__meta_entities(num, user_data, RD_EntityKind_WatchPin, 1); }
-EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(watch_pins) { return rd_ev_view_rule_expr_num_from_id__meta_entities(id,  user_data, RD_EntityKind_WatchPin, 1); }
+EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(watches)               { return rd_ev_view_rule_expr_expand_info__meta_entities(arena, view, filter, expr, params, RD_EntityKind_Watch); }
+EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(watches)         { return rd_ev_view_rule_expr_expand_range_info__meta_entities(arena, view, filter, expr, params, idx_range, user_data, RD_EntityKind_Watch, 0); }
+EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(watches)        { return rd_ev_view_rule_expr_id_from_num__meta_entities(num, user_data, RD_EntityKind_Watch, 0); }
+EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(watches)        { return rd_ev_view_rule_expr_num_from_id__meta_entities(id,  user_data, RD_EntityKind_Watch, 0); }
+EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(targets)               { return rd_ev_view_rule_expr_expand_info__meta_entities(arena, view, filter, expr, params, RD_EntityKind_Target); }
+EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(targets)         { return rd_ev_view_rule_expr_expand_range_info__meta_entities(arena, view, filter, expr, params, idx_range, user_data, RD_EntityKind_Target, 1); }
+EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(targets)        { return rd_ev_view_rule_expr_id_from_num__meta_entities(num, user_data, RD_EntityKind_Target, 1); }
+EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(targets)        { return rd_ev_view_rule_expr_num_from_id__meta_entities(id,  user_data, RD_EntityKind_Target, 1); }
+EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(breakpoints)           { return rd_ev_view_rule_expr_expand_info__meta_entities(arena, view, filter, expr, params, RD_EntityKind_Breakpoint); }
+EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(breakpoints)     { return rd_ev_view_rule_expr_expand_range_info__meta_entities(arena, view, filter, expr, params, idx_range, user_data, RD_EntityKind_Breakpoint, 1); }
+EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(breakpoints)    { return rd_ev_view_rule_expr_id_from_num__meta_entities(num, user_data, RD_EntityKind_Breakpoint, 1); }
+EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(breakpoints)    { return rd_ev_view_rule_expr_num_from_id__meta_entities(id,  user_data, RD_EntityKind_Breakpoint, 1); }
+EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(watch_pins)            { return rd_ev_view_rule_expr_expand_info__meta_entities(arena, view, filter, expr, params, RD_EntityKind_WatchPin); }
+EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(watch_pins)      { return rd_ev_view_rule_expr_expand_range_info__meta_entities(arena, view, filter, expr, params, idx_range, user_data, RD_EntityKind_WatchPin, 1); }
+EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(watch_pins)     { return rd_ev_view_rule_expr_id_from_num__meta_entities(num, user_data, RD_EntityKind_WatchPin, 1); }
+EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(watch_pins)     { return rd_ev_view_rule_expr_num_from_id__meta_entities(id,  user_data, RD_EntityKind_WatchPin, 1); }
+EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(file_path_maps)        { return rd_ev_view_rule_expr_expand_info__meta_entities(arena, view, filter, expr, params, RD_EntityKind_FilePathMap); }
+EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(file_path_maps)  { return rd_ev_view_rule_expr_expand_range_info__meta_entities(arena, view, filter, expr, params, idx_range, user_data, RD_EntityKind_FilePathMap, 1); }
+EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(file_path_maps) { return rd_ev_view_rule_expr_id_from_num__meta_entities(num, user_data, RD_EntityKind_FilePathMap, 1); }
+EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(file_path_maps) { return rd_ev_view_rule_expr_num_from_id__meta_entities(id,  user_data, RD_EntityKind_FilePathMap, 1); }
 
 //- rjf: meta ctrl entities
 
@@ -10778,7 +10843,8 @@ rd_init(CmdLine *cmdln)
   rd_state->entities_root = rd_entity_alloc(&d_nil_entity, RD_EntityKind_Root);
   rd_state->key_map_arena = arena_alloc();
   rd_state->popup_arena = arena_alloc();
-  rd_state->ctx_menu_key        = ui_key_from_string(ui_key_zero(), str8_lit("top_level_ctx_menu"));
+  rd_state->ctx_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("top_level_ctx_menu"));
+  rd_state->drop_completion_key = ui_key_from_string(ui_key_zero(), str8_lit("drop_completion_ctx_menu"));
   rd_state->string_search_arena = arena_alloc();
   rd_state->eval_viz_view_cache_slots_count = 1024;
   rd_state->eval_viz_view_cache_slots = push_array(arena, RD_EvalVizViewCacheSlot, rd_state->eval_viz_view_cache_slots_count);
@@ -11352,12 +11418,14 @@ rd_frame(void)
           RD_EntityKind_Breakpoint,
           RD_EntityKind_WatchPin,
           RD_EntityKind_Target,
+          RD_EntityKind_FilePathMap,
         };
         E_TypeKey evallable_kind_types[] =
         {
           e_type_key_cons_base(type(CTRL_BreakpointMetaEval)),
           e_type_key_cons_base(type(CTRL_PinMetaEval)),
           e_type_key_cons_base(type(CTRL_TargetMetaEval)),
+          e_type_key_cons_base(type(CTRL_FilePathMapMetaEval)),
         };
         for EachElement(idx, evallable_kinds)
         {
@@ -11701,6 +11769,7 @@ rd_frame(void)
                 os_window_close(ws->os);
                 arena_release(ws->query_cmd_arena);
                 arena_release(ws->ctx_menu_arena);
+                arena_release(ws->drop_completion_arena);
                 arena_release(ws->hover_eval_arena);
                 arena_release(ws->autocomp_lister_params_arena);
                 arena_release(ws->arena);

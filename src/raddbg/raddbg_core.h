@@ -674,6 +674,10 @@ struct RD_Window
   TxtPt ctx_menu_input_cursor;
   TxtPt ctx_menu_input_mark;
   
+  // rjf: drop-completion state
+  Arena *drop_completion_arena;
+  String8List drop_completion_paths;
+  
   // rjf: autocomplete lister state
   U64 autocomp_last_frame_idx;
   B32 autocomp_input_dirty;
@@ -838,6 +842,7 @@ struct RD_State
   String8 current_path;
   
   // rjf: fixed ui keys
+  UI_Key drop_completion_key;
   UI_Key ctx_menu_key;
   
   // rjf: drag/drop state
