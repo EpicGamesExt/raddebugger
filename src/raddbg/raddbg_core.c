@@ -14145,6 +14145,7 @@ rd_frame(void)
               if(!missing_rip && !dbgi_pending && !has_line_info && !has_module)
               {
                 rd_cmd(RD_CmdKind_FindCodeLocation,
+                       .file_path    = str8_zero(),
                        .process      = process->handle,
                        .module       = module->handle,
                        .voff         = rip_voff,

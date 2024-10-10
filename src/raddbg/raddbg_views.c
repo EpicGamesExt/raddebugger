@@ -6996,7 +6996,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(memory)
       UI_FontSize(font_size)
       UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
     {
-      UI_PrefWidth(ui_px(big_glyph_advance*18.f, 1.f)) ui_labelf("Address");
+      UI_PrefWidth(ui_px(big_glyph_advance*20.f, 1.f)) ui_labelf("Address");
       UI_PrefWidth(ui_px(cell_width_px, 1.f))
         UI_TextAlignment(UI_TextAlign_Center)
       {
@@ -7085,7 +7085,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(memory)
       // rjf: try from cells
       if(mouse_hover_byte_num == 0)
       {
-        U64 col_idx = ClampBot(mouse_rel.x-big_glyph_advance*18.f, 0)/cell_width_px;
+        U64 col_idx = ClampBot(mouse_rel.x-big_glyph_advance*20.f, 0)/cell_width_px;
         if(col_idx < num_columns)
         {
           mouse_hover_byte_num = viz_range_bytes.min + row_idx*num_columns + col_idx + 1;
@@ -7095,7 +7095,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(memory)
       // rjf: try from ascii
       if(mouse_hover_byte_num == 0)
       {
-        U64 col_idx = ClampBot(mouse_rel.x - (big_glyph_advance*18.f + cell_width_px*num_columns + big_glyph_advance*1.5f), 0)/big_glyph_advance;
+        U64 col_idx = ClampBot(mouse_rel.x - (big_glyph_advance*20.f + cell_width_px*num_columns + big_glyph_advance*1.5f), 0)/big_glyph_advance;
         col_idx = ClampTop(col_idx, num_columns-1);
         mouse_hover_byte_num = viz_range_bytes.min + row_idx*num_columns + col_idx + 1;
       }
@@ -7117,6 +7117,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(memory)
         mv->contain_cursor = 1;
       }
       cursor = mouse_hover_byte_num-1;
+      cursor = clamp_1u64(space_range, cursor);
       if(ui_pressed(sig))
       {
         mark = cursor;
@@ -7154,25 +7155,29 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(memory)
     UI_WidthFill UI_PrefHeight(ui_px(row_height_px, 1.f))
       for(S64 row_idx = viz_range_rows.min; row_idx <= viz_range_rows.max; row_idx += 1)
     {
-      Rng1U64 row_range_bytes = r1u64(viz_range_bytes.min + row_idx*num_columns,
-                                      viz_range_bytes.min + (row_idx+1)*num_columns);
+      Rng1U64 row_range_bytes = r1u64(space_range.min + row_idx*num_columns,
+                                      space_range.min + (row_idx+1)*num_columns);
+      if(row_range_bytes.min >= space_range.max)
+      {
+        break;
+      }
       B32 row_is_boundary = 0;
-      Vec4F32 row_boundary_color = {0};
       if(row_range_bytes.min%64 == 0)
       {
         row_is_boundary = 1;
-        row_boundary_color = rd_rgba_from_theme_color(RD_ThemeColor_BaseBorder);
+        Vec4F32 row_boundary_color = rd_rgba_from_theme_color(RD_ThemeColor_CacheLineBoundary);
+        ui_set_next_palette(ui_build_palette(ui_top_palette(), .border = row_boundary_color));
       }
       UI_Box *row = ui_build_box_from_stringf(UI_BoxFlag_DrawSideTop*!!row_is_boundary, "row_%I64x", row_range_bytes.min);
       UI_Parent(row)
       {
-        UI_PrefWidth(ui_px(big_glyph_advance*18.f, 1.f))
+        UI_PrefWidth(ui_px(big_glyph_advance*20.f, 1.f))
         {
           if(!(selection.max >= row_range_bytes.min && selection.min < row_range_bytes.max))
           {
             ui_set_next_flags(UI_BoxFlag_DrawTextWeak);
           }
-          ui_labelf("%016I64X", row_range_bytes.min);
+          ui_labelf("0x%016I64X", row_range_bytes.min);
         }
         UI_PrefWidth(ui_px(cell_width_px, 1.f))
           UI_TextAlignment(UI_TextAlign_Center)
@@ -7237,7 +7242,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(memory)
                   if(global_byte_idx == a->vaddr_range.min) UI_Parent(row_overlay_box)
                   {
                     ui_set_next_palette(ui_build_palette(ui_top_palette(), .background = annotation->color));
-                    ui_set_next_fixed_x(big_glyph_advance*18.f + col_idx*cell_width_px + -cell_width_px/8.f + off);
+                    ui_set_next_fixed_x(big_glyph_advance*20.f + col_idx*cell_width_px + -cell_width_px/8.f + off);
                     ui_set_next_fixed_y((row_idx-viz_range_rows.min)*row_height_px + -cell_width_px/8.f);
                     ui_set_next_fixed_width(cell_width_px/4.f);
                     ui_set_next_fixed_height(cell_width_px/4.f);
