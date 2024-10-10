@@ -6436,15 +6436,15 @@ rd_window_frame(RD_Window *ws)
           
           //- rjf: calculate width
           F32 width_px = 40.f*ui_top_font_size();
-          F32 expr_column_width_px = 10.f*ui_top_font_size();
-          F32 value_column_width_px = 30.f*ui_top_font_size();
+          F32 expr_column_width_px = 15.f*ui_top_font_size();
+          F32 value_column_width_px = 25.f*ui_top_font_size();
           if(rows.first != 0)
           {
             EV_Row *row = rows.first;
             E_Eval row_eval = e_eval_from_expr(scratch.arena, row->expr);
             String8 row_expr_string = ev_expr_string_from_row(scratch.arena, row, 0);
             String8 row_display_value = rd_value_string_from_eval(scratch.arena, EV_StringFlag_ReadOnlyDisplayRules, default_radix, ui_top_font(), ui_top_font_size(), 500.f, row_eval, row->member, row->view_rules);
-            expr_column_width_px = fnt_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, 0, row_expr_string).x + ui_top_font_size()*5.f;
+            expr_column_width_px = fnt_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, 0, row_expr_string).x + ui_top_font_size()*10.f;
             value_column_width_px = fnt_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, 0, row_display_value).x + ui_top_font_size()*5.f;
             F32 total_dim_px = (expr_column_width_px + value_column_width_px);
             width_px = Min(80.f*ui_top_font_size(), total_dim_px*1.5f);
@@ -6530,26 +6530,26 @@ rd_window_frame(RD_Window *ws)
               //- rjf: build row
               UI_WidthFill UI_Row
               {
-                ui_spacer(ui_em(0.75f, 1.f));
+                ui_spacer(ui_em(0.5f, 1.f));
                 if(row_depth > 0)
                 {
                   for(U64 indent = 0; indent < row_depth; indent += 1)
                   {
-                    ui_spacer(ui_em(0.75f, 1.f));
-                    UI_Flags(UI_BoxFlag_DrawSideLeft) ui_spacer(ui_em(1.5f, 1.f));
+                    ui_spacer(ui_em(0.5f, 1.f));
+                    UI_Flags(UI_BoxFlag_DrawSideLeft) ui_spacer(ui_em(1.f, 1.f));
                   }
                 }
                 U64 row_hash = ev_hash_from_key(row->key);
                 B32 row_is_expanded = ev_expansion_from_key(ev_view, row->key);
                 if(row_is_expandable)
-                  UI_PrefWidth(ui_em(1.5f, 1)) 
+                  UI_PrefWidth(ui_em(1.f, 1)) 
                   if(ui_pressed(ui_expanderf(row_is_expanded, "###%I64x_%I64x_is_expanded", row->key.parent_hash, row->key.child_id)))
                 {
                   ev_key_set_expansion(ev_view, row->block->key, row->key, !row_is_expanded);
                 }
                 if(!row_is_expandable)
                 {
-                  UI_PrefWidth(ui_em(1.5f, 1))
+                  UI_PrefWidth(ui_em(1.f, 1))
                     UI_Flags(UI_BoxFlag_DrawTextWeak)
                     RD_Font(RD_FontSlot_Icons)
                     ui_label(rd_icon_kind_text_table[RD_IconKind_Dot]);
@@ -10924,6 +10924,8 @@ rd_init(CmdLine *cmdln)
   Arena *arena = arena_alloc();
   rd_state = push_array(arena, RD_State, 1);
   rd_state->arena = arena;
+  rd_state->quit_after_success = (cmd_line_has_flag(cmdln, str8_lit("quit_after_success")) ||
+                                  cmd_line_has_flag(cmdln, str8_lit("q")));
   for(U64 idx = 0; idx < ArrayCount(rd_state->frame_arenas); idx += 1)
   {
     rd_state->frame_arenas[idx] = arena_alloc();
@@ -15775,7 +15777,16 @@ rd_frame(void)
     //
     D_PathMapArray path_maps = {0};
     {
-      // TODO(rjf): @msgs
+      RD_EntityList maps = rd_query_cached_entity_list_with_kind(RD_EntityKind_FilePathMap);
+      path_maps.count = maps.count;
+      path_maps.v = push_array(scratch.arena, D_PathMap, path_maps.count);
+      U64 idx = 0;
+      for(RD_EntityNode *n = maps.first; n != 0; n = n->next, idx += 1)
+      {
+        RD_Entity *map = n->entity;
+        path_maps.v[idx].src = rd_entity_child_from_kind(map, RD_EntityKind_Source)->string;
+        path_maps.v[idx].dst = rd_entity_child_from_kind(map, RD_EntityKind_Dest)->string;
+      }
     }
     
     ////////////////////////////
@@ -15822,6 +15833,15 @@ rd_frame(void)
       switch(evt->kind)
       {
         default:{}break;
+        case D_EventKind_ProcessEnd:
+        if(rd_state->quit_after_success)
+        {
+          CTRL_EntityList processes = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Process);
+          if(evt->code == 0 && processes.count == 0)
+          {
+            rd_cmd(RD_CmdKind_Exit);
+          }
+        }break;
         case D_EventKind_Stop:
         {
           CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, evt->thread);

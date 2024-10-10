@@ -61,6 +61,7 @@ struct D_PathMapArray
 typedef enum D_EventKind
 {
   D_EventKind_Null,
+  D_EventKind_ProcessEnd,
   D_EventKind_Stop,
   D_EventKind_COUNT
 }
@@ -82,6 +83,7 @@ struct D_Event
   D_EventCause cause;
   CTRL_Handle thread;
   U64 vaddr;
+  U64 code;
 };
 
 typedef struct D_EventNode D_EventNode;
@@ -474,6 +476,7 @@ internal U64 d_type_num_from_dbgi_key_name(DI_Key *dbgi_key, String8 name);
 internal D_LineList d_lines_from_dbgi_key_voff(Arena *arena, DI_Key *dbgi_key, U64 voff);
 
 //- rjf: file:line -> line info
+// TODO(rjf): this depends on file path maps, needs to move
 internal D_LineListArray d_lines_array_from_file_path_line_range(Arena *arena, String8 file_path, Rng1S64 line_num_range);
 internal D_LineList d_lines_from_file_path_line_num(Arena *arena, String8 file_path, S64 line_num);
 

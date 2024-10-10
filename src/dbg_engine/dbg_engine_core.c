@@ -941,6 +941,8 @@ d_lines_from_dbgi_key_voff(Arena *arena, DI_Key *dbgi_key, U64 voff)
 
 //- rjf: file:line -> line info
 
+// TODO(rjf): this depends on file path maps, needs to move
+
 internal D_LineListArray
 d_lines_array_from_file_path_line_range(Arena *arena, String8 file_path, Rng1S64 line_num_range)
 {
@@ -1812,6 +1814,14 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
           U32 pid = event->entity_id;
           RD_Entity *process = rd_entity_from_ctrl_handle(event->entity);
           rd_entity_mark_for_deletion(process);
+          
+          // rjf: report
+          D_EventNode *n = push_array(arena, D_EventNode, 1);
+          SLLQueuePush(result.first, result.last, n);
+          result.count += 1;
+          D_Event *evt = &n->v;
+          evt->kind = D_EventKind_ProcessEnd;
+          evt->code = event->u64_code;
         }break;
         
         case CTRL_EventKind_EndThread:

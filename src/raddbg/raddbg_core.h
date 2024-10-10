@@ -778,6 +778,7 @@ struct RD_State
   // rjf: basics
   Arena *arena;
   B32 quit;
+  B32 quit_after_success;
   
   // rjf: log
   Log *log;
