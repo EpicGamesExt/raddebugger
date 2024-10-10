@@ -7,7 +7,6 @@
 // [ ] remainder of @msgs pass:
 //  [ ] entity listers - kill-specific-process, etc.
 //  [ ] new universal ctx menu, hover, tooltips systems
-//  [ ] fix memory view
 //  [ ] `switch` replacement (recent files history)
 //   [ ] resolving name as file or #include
 //  [ ] new `restart processes` path
@@ -27,31 +26,6 @@
 //        because you're like "wait why did it stop" and then you later remember
 //        that's because there was a function breakpoint there.
 //  [ ] debugger readme pass
-//
-//
-//
-//  [x] codebase readme pass
-//  [x] target editor
-//  [x] modules view
-//  [x] eval writing/committing
-//  [x] breakpoint hit count resetting
-//  [x] reset bp hit counts - not just on NewProcess, but on RUN! because
-//      we are now evaluating them on the control thread...
-//  [x] fix bug where text info is evicted, and switching back to a tab scrolls
-//      to the top
-// [x] reset bp hit counts - not just on NewProcess, but on RUN! because
-//     we are now evaluating them on the control thread...
-// [x] fix bug where text info is evicted, and switching back to a tab scrolls
-//     to the top
-// [x] targets view
-// [x] ensure launch controls parameterize commands correctly)
-// [x] ensure ctrl+click
-// [x] scheduler view
-// [x] eval committing
-//  [x] fix registers
-//  [x] file overrides -> always pick most specific one! found with conflicting
-//      overrides, e.g. C:/devel/ -> D:/devel/, but also C:/devel/foo ->
-//      C:/devel/bar, etc.
 
 ////////////////////////////////
 //~ rjf: post-0.9.12 TODO notes
@@ -525,6 +499,29 @@
 //  [x] file path map editor
 //  [x] file path map building
 //  [x] meta eval system
+//  [x] codebase readme pass
+//  [x] target editor
+//  [x] modules view
+//  [x] eval writing/committing
+//  [x] breakpoint hit count resetting
+//  [x] reset bp hit counts - not just on NewProcess, but on RUN! because
+//      we are now evaluating them on the control thread...
+//  [x] fix bug where text info is evicted, and switching back to a tab scrolls
+//      to the top
+// [x] reset bp hit counts - not just on NewProcess, but on RUN! because
+//     we are now evaluating them on the control thread...
+// [x] fix bug where text info is evicted, and switching back to a tab scrolls
+//     to the top
+// [x] targets view
+// [x] ensure launch controls parameterize commands correctly)
+// [x] ensure ctrl+click
+// [x] scheduler view
+// [x] eval committing
+//  [x] fix registers
+//  [x] file overrides -> always pick most specific one! found with conflicting
+//      overrides, e.g. C:/devel/ -> D:/devel/, but also C:/devel/foo ->
+//      C:/devel/bar, etc.
+//  [x] fix memory view
 
 ////////////////////////////////
 //~ rjf: Build Options
