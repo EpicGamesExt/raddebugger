@@ -432,12 +432,11 @@ fp_raster(Arena *arena, FP_Handle font_handle, F32 size, FP_RasterFlags flags, S
   F32 right_side_bearing = 0;
   if(font.face != 0)
   {
-    atlas_dim.y = (S16)ceil_f32((96.f/72.f) * size * (font_metrics.ascent + font_metrics.descent) / design_units_per_em);
+    atlas_dim.y = (S16)ceil_f32((96.f/72.f) * size * (font_metrics.ascent + font_metrics.descent) / design_units_per_em) + 1;
     for(U64 idx = 0; idx < glyphs_count; idx += 1)
     {
       DWRITE_GLYPH_METRICS *glyph_metrics = glyphs_metrics + idx;
       F32 glyph_advance_width         = (96.f/72.f) * size * glyph_metrics->advanceWidth       / design_units_per_em;
-      F32 glyph_advance_height        = (96.f/72.f) * size * glyph_metrics->advanceHeight      / design_units_per_em;
       advance += glyph_advance_width;
       atlas_dim.x = Max(atlas_dim.x, (S16)(advance+1));
       if(idx == 0)
@@ -480,7 +479,7 @@ fp_raster(Arena *arena, FP_Handle font_handle, F32 size, FP_RasterFlags flags, S
   Vec2F32 draw_p = {0, (F32)atlas_dim.y};
   if(font.face != 0)
   {
-    F32 descent = (96.f/72.f)*size * font_metrics.descent / design_units_per_em;
+    F32 descent = floor_f32((96.f/72.f)*size * font_metrics.descent / design_units_per_em);
     draw_p.y -= descent;
   }
   DWRITE_GLYPH_RUN glyph_run = {0};

@@ -1750,6 +1750,8 @@ rd_title_fstrs_from_entity(Arena *arena, RD_Entity *entity, Vec4F32 secondary_co
   RD_Entity *args = rd_entity_child_from_kind(entity, RD_EntityKind_Arguments);
   RD_Entity *loc  = rd_entity_child_from_kind(entity, RD_EntityKind_Location);
   RD_Entity *cnd  = rd_entity_child_from_kind(entity, RD_EntityKind_Condition);
+  RD_Entity *src  = rd_entity_child_from_kind(entity, RD_EntityKind_Source);
+  RD_Entity *dst  = rd_entity_child_from_kind(entity, RD_EntityKind_Dest);
   RD_IconKind icon_kind = rd_entity_kind_icon_kind_table[entity->kind];
   Vec4F32 color = rd_rgba_from_theme_color(RD_ThemeColor_Text);
   if(icon_kind != RD_IconKind_Null)
@@ -1843,6 +1845,14 @@ rd_title_fstrs_from_entity(Arena *arena, RD_Entity *entity, Vec4F32 secondary_co
       DR_FancyStringList cnd_fstrs = rd_fancy_string_list_from_code_string(arena, 1.f, 0.f, color_extrafied, cnd_string);
       dr_fancy_string_list_concat_in_place(&result, &cnd_fstrs);
     }
+  }
+  if(!rd_entity_is_nil(src) && !rd_entity_is_nil(dst))
+  {
+    dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Main), size, color, src->string);
+    dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), size, v4f32(0, 0, 0, 0), str8_lit(" "));
+    dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Icons), size, secondary_color, rd_icon_kind_text_table[RD_IconKind_RightArrow]);
+    dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), size, v4f32(0, 0, 0, 0), str8_lit(" "));
+    dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Main), size, color, dst->string);
   }
   if((entity->kind == RD_EntityKind_Target || entity->kind == RD_EntityKind_Breakpoint) && entity->disabled)
   {
@@ -2072,6 +2082,8 @@ rd_ctrl_meta_eval_from_entity(Arena *arena, RD_Entity *entity)
   RD_Entity *entr= rd_entity_child_from_kind(entity, RD_EntityKind_EntryPoint);
   RD_Entity *loc = rd_entity_child_from_kind(entity, RD_EntityKind_Location);
   RD_Entity *cnd = rd_entity_child_from_kind(entity, RD_EntityKind_Condition);
+  RD_Entity *src = rd_entity_child_from_kind(entity, RD_EntityKind_Source);
+  RD_Entity *dst = rd_entity_child_from_kind(entity, RD_EntityKind_Dest);
   String8 label_string = push_str8_copy(arena, entity->string);
   String8 src_loc_string = {0};
   String8 vaddr_loc_string = {0};
@@ -2100,6 +2112,8 @@ rd_ctrl_meta_eval_from_entity(Arena *arena, RD_Entity *entity)
   meval->source_location = src_loc_string;
   meval->address_location = vaddr_loc_string;
   meval->function_location = function_loc_string;
+  meval->source_path = src->string;
+  meval->destination_path = dst->string;
   meval->condition = cnd_string;
   return meval;
 }
@@ -2312,6 +2326,8 @@ rd_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range)
       StringMemberCase(args)              {result = 1; rd_entity_equip_name(rd_entity_child_from_kind_or_alloc(entity, RD_EntityKind_Arguments), str8_cstring_capped(in, (U8 *)in + 4096));}
       StringMemberCase(working_directory) {result = 1; rd_entity_equip_name(rd_entity_child_from_kind_or_alloc(entity, RD_EntityKind_WorkingDirectory), str8_cstring_capped(in, (U8 *)in + 4096));}
       StringMemberCase(entry_point)       {result = 1; rd_entity_equip_name(rd_entity_child_from_kind_or_alloc(entity, RD_EntityKind_EntryPoint), str8_cstring_capped(in, (U8 *)in + 4096));}
+      StringMemberCase(source_path)       {result = 1; rd_entity_equip_name(rd_entity_child_from_kind_or_alloc(entity, RD_EntityKind_Source), str8_cstring_capped(in, (U8 *)in + 4096));}
+      StringMemberCase(destination_path)  {result = 1; rd_entity_equip_name(rd_entity_child_from_kind_or_alloc(entity, RD_EntityKind_Dest), str8_cstring_capped(in, (U8 *)in + 4096));}
       StringMemberCase(condition)         {result = 1; rd_entity_equip_name(rd_entity_child_from_kind_or_alloc(entity, RD_EntityKind_Condition), str8_cstring_capped(in, (U8 *)in + 4096));}
       StringMemberCase(source_location)
       {
@@ -11675,7 +11691,7 @@ rd_frame(void)
           {
             RD_CmdKindInfo *info = rd_cmd_kind_info_from_string(cmd->regs->string);
             
-            // rjf: command simply executes - just no-op in this layer
+            // rjf: command does not have a query - simply execute with the current registers
             if(!(info->query.flags & RD_QueryFlag_Required))
             {
               RD_RegsScope(.string = str8_zero()) rd_push_cmd(cmd->regs->string, rd_regs());
@@ -13195,6 +13211,59 @@ rd_frame(void)
             //- rjf: unpack
             String8 src_path = rd_regs()->string;
             String8 dst_path = rd_regs()->file_path;
+            String8 src_path__normalized = path_normalized_from_string(scratch.arena, src_path);
+            String8 dst_path__normalized = path_normalized_from_string(scratch.arena, dst_path);
+            String8List src_path_parts = str8_split_path(scratch.arena, src_path__normalized);
+            String8List dst_path_parts = str8_split_path(scratch.arena, dst_path__normalized);
+            
+            //- rjf: reverse path parts
+            String8List src_path_parts__reversed = {0};
+            String8List dst_path_parts__reversed = {0};
+            for(String8Node *n = src_path_parts.first; n != 0; n = n->next)
+            {
+              str8_list_push_front(scratch.arena, &src_path_parts__reversed, n->string);
+            }
+            for(String8Node *n = dst_path_parts.first; n != 0; n = n->next)
+            {
+              str8_list_push_front(scratch.arena, &dst_path_parts__reversed, n->string);
+            }
+            
+            //- rjf: trace from each path upwards, in lock-step, to find the first difference
+            // between the paths
+            String8Node *first_diff_src = src_path_parts__reversed.first;
+            String8Node *first_diff_dst = dst_path_parts__reversed.first;
+            for(;first_diff_src != 0 && first_diff_dst != 0;)
+            {
+              if(!str8_match(first_diff_src->string, first_diff_dst->string, StringMatchFlag_CaseInsensitive))
+              {
+                break;
+              }
+              first_diff_src = first_diff_src->next;
+              first_diff_dst = first_diff_dst->next;
+            }
+            
+            //- rjf: form final map paths
+            String8List map_src_parts = {0};
+            String8List map_dst_parts = {0};
+            for(String8Node *n = first_diff_src; n != 0; n = n->next)
+            {
+              str8_list_push_front(scratch.arena, &map_src_parts, n->string);
+            }
+            for(String8Node *n = first_diff_dst; n != 0; n = n->next)
+            {
+              str8_list_push_front(scratch.arena, &map_dst_parts, n->string);
+            }
+            StringJoin map_join = {.sep = str8_lit("/")};
+            String8 map_src = str8_list_join(scratch.arena, &map_src_parts, &map_join);
+            String8 map_dst = str8_list_join(scratch.arena, &map_dst_parts, &map_join);
+            
+            //- rjf: store as file path map entity
+            RD_Entity *map = rd_entity_alloc(rd_entity_root(), RD_EntityKind_FilePathMap);
+            RD_Entity *src = rd_entity_alloc(map, RD_EntityKind_Source);
+            RD_Entity *dst = rd_entity_alloc(map, RD_EntityKind_Dest);
+            rd_entity_equip_name(src, map_src);
+            rd_entity_equip_name(dst, map_dst);
+            
 #if 0 // TODO(rjf): @msgs
             
             //- rjf: grab src file & chosen replacement

@@ -951,6 +951,28 @@ rd_watch_view_row_kind_from_flags_row_info(RD_WatchViewFlags flags, EV_Row *row,
 
 //- rjf: row/column -> strings
 
+internal E_Expr *
+rd_expr_from_watch_view_row_column(Arena *arena, EV_View *ev_view, EV_Row *row, RD_WatchViewColumn *col)
+{
+  E_Expr *expr = row->expr;
+  switch(col->kind)
+  {
+    default:{}break;
+    case RD_WatchViewColumnKind_Member:
+    {
+      Temp scratch = scratch_begin(&arena, 1);
+      String8 access_string = str8(col->string_buffer, col->string_size);
+      String8List accesses = str8_split(scratch.arena, access_string, (U8 *)".", 1, 0);
+      for(String8Node *n = accesses.first; n != 0; n = n->next)
+      {
+        expr = e_expr_ref_member_access(arena, expr, n->string);
+      }
+      scratch_end(scratch);
+    }break;
+  }
+  return expr;
+}
+
 internal String8
 rd_string_from_eval_viz_row_column(Arena *arena, EV_View *ev, EV_Row *row, RD_WatchViewColumn *col, EV_StringFlags string_flags, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size_px)
 {
@@ -961,6 +983,7 @@ rd_string_from_eval_viz_row_column(Arena *arena, EV_View *ev, EV_Row *row, RD_Wa
     view_rules = ev_view_rule_list_copy(arena, row->view_rules);
     ev_view_rule_list_push_string(arena, view_rules, str8(col->view_rule_buffer, col->view_rule_size));
   }
+  E_Expr *row_col_expr = rd_expr_from_watch_view_row_column(arena, ev, row, col);
   switch(col->kind)
   {
     default:{}break;
@@ -969,13 +992,14 @@ rd_string_from_eval_viz_row_column(Arena *arena, EV_View *ev, EV_Row *row, RD_Wa
       result = ev_expr_string_from_row(arena, row, string_flags);
     }break;
     case RD_WatchViewColumnKind_Value:
+    case RD_WatchViewColumnKind_Member:
     {
-      E_Eval eval = e_eval_from_expr(arena, row->expr);
+      E_Eval eval = e_eval_from_expr(arena, row_col_expr);
       result = rd_value_string_from_eval(arena, string_flags, default_radix, font, font_size, max_size_px, eval, row->member, view_rules);
     }break;
     case RD_WatchViewColumnKind_Type:
     {
-      E_IRTreeAndType irtree = e_irtree_and_type_from_expr(arena, row->expr);
+      E_IRTreeAndType irtree = e_irtree_and_type_from_expr(arena, row_col_expr);
       E_TypeKey type_key = irtree.type_key;
       result = !e_type_key_match(type_key, e_type_key_zero()) ? e_type_string_from_key(arena, type_key) : str8_zero();
       result = str8_skip_chop_whitespace(result);
@@ -984,24 +1008,9 @@ rd_string_from_eval_viz_row_column(Arena *arena, EV_View *ev, EV_Row *row, RD_Wa
     {
       result = ev_view_rule_from_key(ev, row->key);
     }break;
-    case RD_WatchViewColumnKind_Member:
-    {
-      Temp scratch = scratch_begin(&arena, 1);
-      String8 access_string = str8(col->string_buffer, col->string_size);
-      String8List accesses = str8_split(scratch.arena, access_string, (U8 *)".", 1, 0);
-      E_Expr *expr = row->expr;
-      for(String8Node *n = accesses.first; n != 0; n = n->next)
-      {
-        expr = e_expr_ref_member_access(arena, expr, n->string);
-      }
-      expr = ev_resolved_from_expr(scratch.arena, expr, view_rules);
-      E_Eval eval = e_eval_from_expr(arena, expr);
-      result = rd_value_string_from_eval(arena, string_flags, default_radix, font, font_size, max_size_px, eval, row->member, view_rules);
-      scratch_end(scratch);
-    }break;
     case RD_WatchViewColumnKind_Module:
     {
-      E_Eval eval = e_eval_from_expr(arena, row->expr);
+      E_Eval eval = e_eval_from_expr(arena, row_col_expr);
       E_Eval value_eval = e_value_eval_from_eval(eval);
       CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(eval.space);
       CTRL_Entity *process = ctrl_process_from_entity(entity);
@@ -1012,9 +1021,9 @@ rd_string_from_eval_viz_row_column(Arena *arena, EV_View *ev, EV_Row *row, RD_Wa
     {
       Temp scratch = scratch_begin(&arena, 1);
       DI_Scope *di_scope = di_scope_open();
-      E_Eval eval = e_eval_from_expr(arena, row->expr);
-      E_Expr *vaddr_expr = e_expr_ref_member_access(scratch.arena, row->expr, str8_lit("vaddr"));
-      E_Expr *depth_expr = e_expr_ref_member_access(scratch.arena, row->expr, str8_lit("inline_depth"));
+      E_Eval eval = e_eval_from_expr(arena, row_col_expr);
+      E_Expr *vaddr_expr = e_expr_ref_member_access(scratch.arena, row_col_expr, str8_lit("vaddr"));
+      E_Expr *depth_expr = e_expr_ref_member_access(scratch.arena, row_col_expr, str8_lit("inline_depth"));
       E_Eval vaddr_eval = e_eval_from_expr(scratch.arena, vaddr_expr);
       E_Eval depth_eval = e_eval_from_expr(scratch.arena, depth_expr);
       E_Eval vaddr_value_eval = e_value_eval_from_eval(vaddr_eval);
@@ -1212,6 +1221,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
     {RD_EntityKind_Target,     CTRL_EntityKind_Null,   RD_CmdKind_RemoveEntity  },
     {RD_EntityKind_Breakpoint, CTRL_EntityKind_Null,   RD_CmdKind_EnableEntity  },
     {RD_EntityKind_Breakpoint, CTRL_EntityKind_Null,   RD_CmdKind_RemoveEntity  },
+    {RD_EntityKind_FilePathMap,CTRL_EntityKind_Null,   RD_CmdKind_RemoveEntity  },
     {RD_EntityKind_Nil,    CTRL_EntityKind_Thread, RD_CmdKind_FreezeThread  },
     {RD_EntityKind_Nil,    CTRL_EntityKind_Thread, RD_CmdKind_SelectThread  },
   };
@@ -1680,11 +1690,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                   B32 success = 0;
                   if(rows.first != 0)
                   {
-                    E_Expr *expr = rows.first->expr;
-                    if(col->kind == RD_WatchViewColumnKind_Member)
-                    {
-                      expr = e_expr_ref_member_access(scratch.arena, expr, str8(col->string_buffer, col->string_size));
-                    }
+                    E_Expr *expr = rd_expr_from_watch_view_row_column(scratch.arena, eval_view, row, col);
                     E_Eval dst_eval = e_eval_from_expr(scratch.arena, expr);
                     success = rd_commit_eval_value_string(dst_eval, new_string);
                   }
@@ -1830,11 +1836,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
             }
             else if(tbl.y != 0 && (col->kind == RD_WatchViewColumnKind_Value || col->kind == RD_WatchViewColumnKind_Member) && row_kind == RD_WatchViewRowKind_Normal)
             {
-              E_Expr *expr = row->expr;
-              if(col->kind == RD_WatchViewColumnKind_Member)
-              {
-                expr = e_expr_ref_member_access(scratch.arena, expr, str8(col->string_buffer, col->string_size));
-              }
+              E_Expr *expr = rd_expr_from_watch_view_row_column(scratch.arena, eval_view, row, col);
               E_Eval dst_eval = e_eval_from_expr(scratch.arena, expr);
               rd_commit_eval_value_string(dst_eval, str8_zero());
             }
@@ -2179,7 +2181,6 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
           }
           E_Type *row_type = e_type_from_key(scratch.arena, row_eval.type_key);
           B32 row_is_expandable = ev_row_is_expandable(row);
-          B32 row_is_editable = ev_row_is_editable(row);
           B32 next_row_expanded = row_expanded;
           RD_ViewRuleInfo *ui_view_rule_info = rd_view_rule_info_from_string(row->block->expand_view_rule_info->string);
           MD_Node *ui_view_rule_params_root = row->block->expand_view_rule_params;
@@ -2312,6 +2313,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                         ui_spacer(ui_em(1.5f, 1));
                         RD_Font(RD_FontSlot_Code) ui_labelf("only:(member_1 ... member_n)");
                         UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) ui_label_multiline(max_width, str8_lit("Specifies that only the specified members should appear in struct, union, or class evaluations."));
+                        ui_spacer(ui_em(1.5f, 1));
                         RD_Font(RD_FontSlot_Code) ui_labelf("list:(next_link_member_name)");
                         UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) ui_label_multiline(max_width, str8_lit("Specifies that some struct, union, or class forms the top of a linked list, with next_link_member_name being the member which points at the next element in the list."));
                         ui_spacer(ui_em(1.5f, 1));
@@ -2496,6 +2498,15 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                 if(ui_clicked(rd_cmd_spec_button(rd_cmd_kind_info_table[RD_CmdKind_AddWatchPin].string)))
                 {
                   rd_cmd(RD_CmdKind_RunCommand, .string = rd_cmd_kind_info_table[RD_CmdKind_AddWatchPin].string);
+                }
+              }
+              if(rd_entity_is_nil(entity) && collection_entity_kind == RD_EntityKind_FilePathMap)
+                UI_Palette(palette)
+              {
+                ui_set_next_focus_hot(row_selected ? UI_FocusKind_On : UI_FocusKind_Off);
+                if(ui_clicked(rd_icon_buttonf(RD_IconKind_Add, 0, "Add New")))
+                {
+                  rd_entity_alloc(rd_entity_root(), RD_EntityKind_FilePathMap);
                 }
               }
               
@@ -2723,6 +2734,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                   
                   //- rjf: unpack column-kind-specific info
                   E_Eval cell_eval = row_eval;
+                  E_Type *cell_type = row_type;
                   B32 cell_can_edit = 0;
                   FuzzyMatchRangeList cell_matches = {0};
                   String8 cell_inheritance_string = {0};
@@ -2772,7 +2784,9 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                     }goto value_cell;
                     case RD_WatchViewColumnKind_Member:
                     {
-                      cell_eval = e_member_eval_from_eval_member_name(cell_eval, str8(col->string_buffer, col->string_size));
+                      E_Expr *expr = rd_expr_from_watch_view_row_column(scratch.arena, eval_view, row, col);
+                      cell_eval = e_eval_from_expr(scratch.arena, expr);
+                      cell_type = e_type_from_key(scratch.arena, cell_eval.type_key);
                     }goto value_cell;
                     value_cell:;
                     {
@@ -2803,7 +2817,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                                              RD_AutoCompListerFlag_Globals|
                                              RD_AutoCompListerFlag_ThreadLocals|
                                              RD_AutoCompListerFlag_Types);
-                      if(row_type->flags & E_TypeFlag_IsPathText)
+                      if(cell_type->flags & E_TypeFlag_IsPathText)
                       {
                         cell_autocomp_flags = RD_AutoCompListerFlag_Files;
                       }
@@ -2897,13 +2911,14 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                       }
                     }break;
                     case RD_WatchViewColumnKind_Value:
+                    case RD_WatchViewColumnKind_Member:
                     {
-                      if(row_type->flags & E_TypeFlag_IsCodeText)
+                      if(cell_type->flags & E_TypeFlag_IsCodeText)
                       {
                         cell_is_code = 1;
                       }
-                      else if(row_type->flags & E_TypeFlag_IsPathText ||
-                              row_type->flags & E_TypeFlag_IsPlainText)
+                      else if(cell_type->flags & E_TypeFlag_IsPathText ||
+                              cell_type->flags & E_TypeFlag_IsPlainText)
                       {
                         cell_is_code = 0;
                       }
@@ -5042,10 +5057,10 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(file_path_map)
   {
     rd_watch_view_init(wv);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Expr,       0.25f);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,      0.75f, .dequote_string = 1);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,      0.75f, .dequote_string = 1, .is_non_code = 0);
   }
   rd_watch_view_build(wv, RD_WatchViewFlag_NoHeader|RD_WatchViewFlag_PrettyNameMembers|RD_WatchViewFlag_PrettyEntityRows|RD_WatchViewFlag_DisableCacheLines,
-                      str8_lit("file_path_maps"), str8_lit("only: source_path destination_path str"), 0, 10, rect);
+                      str8_lit("file_path_maps"), str8_lit("only: source_path destination_path str"), 1, 10, rect);
   ProfEnd();
 }
 
