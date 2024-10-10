@@ -441,13 +441,9 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
       {
         switch(l.mode)
         {
-          // rjf: null (types) -> just resolve to new type
-          case E_Mode_Null:
-          {
-          }break;
-          
           // rjf: offsets -> read from base offset
           default:
+          case E_Mode_Null:
           case E_Mode_Offset:
           {
             // rjf: ops to compute the offset
@@ -590,20 +586,17 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
         // rjf: build tree
         E_IRNode *new_tree = l.root;
         E_Mode mode = l.mode;
-        if(l.root != &e_irnode_nil)
+        if(l_restype_kind == E_TypeKind_Ptr ||
+           l_restype_kind == E_TypeKind_LRef ||
+           l_restype_kind == E_TypeKind_RRef)
         {
-          if(l_restype_kind == E_TypeKind_Ptr ||
-             l_restype_kind == E_TypeKind_LRef ||
-             l_restype_kind == E_TypeKind_RRef)
-          {
-            new_tree = e_irtree_resolve_to_value(arena, l.space, l.mode, new_tree, l_restype);
-            mode = E_Mode_Offset;
-          }
-          if(r_value != 0 && !r_is_constant_value)
-          {
-            E_IRNode *const_tree = e_irtree_const_u(arena, r_value);
-            new_tree = e_irtree_binary_op_u(arena, RDI_EvalOp_Add, new_tree, const_tree);
-          }
+          new_tree = e_irtree_resolve_to_value(arena, l.space, l.mode, new_tree, l_restype);
+          mode = E_Mode_Offset;
+        }
+        if(r_value != 0 && !r_is_constant_value)
+        {
+          E_IRNode *const_tree = e_irtree_const_u(arena, r_value);
+          new_tree = e_irtree_binary_op_u(arena, RDI_EvalOp_Add, new_tree, const_tree);
         }
         else if(r_is_constant_value)
         {
@@ -815,7 +808,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
       e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
       
       // rjf: fill output
-      result.root     = &e_irnode_nil;
+      result.root     = e_irtree_const_u(arena, 0);
       result.type_key = r_tree.type_key;
       result.mode     = E_Mode_Null;
       result.space    = r_tree.space;
@@ -1323,7 +1316,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
     //- rjf: types
     case E_ExprKind_TypeIdent:
     {
-      result.root = &e_irnode_nil;
+      result.root = e_irtree_const_u(arena, 0);
       result.type_key = expr->type_key;
       result.mode = E_Mode_Null;
       result.space = expr->space;

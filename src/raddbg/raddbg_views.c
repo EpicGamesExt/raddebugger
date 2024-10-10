@@ -2673,7 +2673,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
               {
                 U64 row_offset = row_eval.value.u64;
                 if((row_eval.mode == E_Mode_Offset || row_eval.mode == E_Mode_Null) &&
-                   row_offset%64 == 0 && row_depth > 0 && !row_expanded)
+                   row_offset%64 == 0 && row_depth > 0)
                 {
                   ui_set_next_fixed_x(0);
                   ui_set_next_fixed_y(0);

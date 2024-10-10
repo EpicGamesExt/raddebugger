@@ -1078,6 +1078,20 @@ ev_windowed_row_list_from_block_range_list(Arena *arena, EV_View *view, String8 
         // rjf: no expansion operator applied -> push row for block expression; pass through block info
         if(expand_range_info.row_exprs_count == 0)
         {
+          E_Member *member = &e_member_nil;
+          if(n->v.block->expr->kind == E_ExprKind_MemberAccess)
+          {
+            Temp scratch = scratch_begin(&arena, 1);
+            E_IRTreeAndType lhs_irtree = e_irtree_and_type_from_expr(scratch.arena, n->v.block->expr->first);
+            E_TypeKey lhs_type_key = lhs_irtree.type_key;
+            E_Member expr_member = e_type_member_from_key_name__cached(lhs_type_key, n->v.block->expr->last->string);
+            if(expr_member.kind != E_MemberKind_Null)
+            {
+              member = push_array(arena, E_Member, 1);
+              MemoryCopyStruct(member, &expr_member);
+            }
+            scratch_end(scratch);
+          }
           EV_Row *row = push_array(arena, EV_Row, 1);
           SLLQueuePush(rows.first, rows.last, row);
           rows.count += 1;
@@ -1088,7 +1102,7 @@ ev_windowed_row_list_from_block_range_list(Arena *arena, EV_View *view, String8 
           row->visual_size_chopped  = num_chopped;
           row->string               = n->v.block->string;
           row->expr                 = n->v.block->expr;
-          row->member               = &e_member_nil;
+          row->member               = member;
           row->view_rules           = n->v.block->view_rules;
         }
         
@@ -1129,6 +1143,22 @@ ev_windowed_row_list_from_block_range_list(Arena *arena, EV_View *view, String8 
             row->expr                 = row_expr__resolved;
             row->member               = expand_range_info.row_members[idx];
             row->view_rules           = row_view_rules;
+            if(row->member == &e_member_nil || row->member == 0)
+            {
+              if(row->expr->kind == E_ExprKind_MemberAccess)
+              {
+                Temp scratch = scratch_begin(&arena, 1);
+                E_IRTreeAndType lhs_irtree = e_irtree_and_type_from_expr(scratch.arena, row->expr->first);
+                E_TypeKey lhs_type_key = lhs_irtree.type_key;
+                E_Member expr_member = e_type_member_from_key_name__cached(lhs_type_key, row->expr->last->string);
+                if(expr_member.kind != E_MemberKind_Null)
+                {
+                  row->member = push_array(arena, E_Member, 1);
+                  MemoryCopyStruct(row->member, &expr_member);
+                }
+                scratch_end(scratch);
+              }
+            }
             if(expand_range_info.row_view_rules[idx].size != 0)
             {
               ev_key_set_view_rule(view, row->key, expand_range_info.row_view_rules[idx]);
