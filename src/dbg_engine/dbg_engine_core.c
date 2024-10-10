@@ -129,7 +129,7 @@ d_possible_path_overrides_from_maps_path(Arena *arena, D_PathMapArray *path_maps
         }
         StringJoin join = {0};
         join.sep = str8_lit("/");
-        String8 candidate_path = str8_list_join(arena, &candidate_parts, 0);
+        String8 candidate_path = str8_list_join(arena, &candidate_parts, &join);
         str8_list_push(arena, &result, candidate_path);
       }
     }

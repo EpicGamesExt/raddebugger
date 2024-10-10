@@ -6072,6 +6072,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(text)
   String8 path = rd_file_path_from_eval_string(rd_frame_arena(), string);
   rd_regs()->file_path     = path;
   rd_regs()->vaddr         = 0;
+  rd_regs()->prefer_disasm = 0;
   rd_regs()->cursor.line   = rd_value_from_params_key(params, str8_lit("cursor_line")).s64;
   rd_regs()->cursor.column = rd_value_from_params_key(params, str8_lit("cursor_column")).s64;
   rd_regs()->mark.line     = rd_value_from_params_key(params, str8_lit("mark_line")).s64;
@@ -6421,6 +6422,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(disasm)
   if(!is_loading && has_disasm)
   {
     U64 off = dasm_line_array_code_off_from_idx(&dasm_info.lines, rd_regs()->cursor.line-1);
+    rd_regs()->prefer_disasm = 1;
     rd_regs()->vaddr = range.min+off;
     rd_regs()->vaddr_range = r1u64(range.min+off, range.min+off);
     rd_regs()->voff_range = ctrl_voff_range_from_vaddr_range(dasm_module, rd_regs()->vaddr_range);
