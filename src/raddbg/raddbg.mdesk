@@ -73,7 +73,7 @@ RD_EntityKindTable:
   {AutoViewRule       auto_view_rule        auto_view_rules               0  0  0  0  0  0  0  0  0  1  1                      "Label"             Binoculars             "Auto View Rule"             }
   
   //- rjf: file path maps
-  {FilePathMap        file_path_map         file_path_maps                0  0  0  0  0  0  0  0  0  0  1                      "Label"             FileOutline            "File Path Map"              }
+  {FilePathMap        file_path_map         file_path_maps                1  0  0  0  0  0  0  0  0  0  1                      "Label"             FileOutline            "File Path Map"              }
   
   //- rjf: watch pins
   {WatchPin           watch_pin             watch_pins                    1  0  0  1  0  0  1  1  0  1  1                      "Expression"        Pin                    "Watch Pin"                  }
@@ -430,7 +430,7 @@ RD_CmdTable:    //               |        |              |                  |   
   {DisableBreakpoint              1        1              Entity             null              Breakpoint         0  0  0  0  0  1                                                           CheckHollow           "disable_breakpoint"          "Disable Breakpoint"                          "Disables a breakpoint."                                                                                           ""                               }
   
   //- rjf: watch pins
-  {AddWatchPin                    1        1              String             null              Nil                0  0  0  0  1  1                                                           Binoculars            "add_watch_pin"               "Add Watch Pin"                               "Places a watch pin at a given location (file path and line number or address)."                                   ""                               }
+  {AddWatchPin                    1        1              String             null              Nil                0  0  0  0  1  1                                                           Pin                   "add_watch_pin"               "Add Watch Pin"                               "Places a watch pin at a given location (file path and line number or address)."                                   ""                               }
   {ToggleWatchPin                 1        0              String             null              Nil                0  0  0  0  1  1                                                           Binoculars            "toggle_watch_pin"            "Toggle Watch Pin"                            "Places or removes a watch pin at a given location (file path and line number or address)."                        ""                               }
   
   //- rjf: cursor operations

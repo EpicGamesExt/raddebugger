@@ -2504,7 +2504,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                 UI_Palette(palette)
               {
                 ui_set_next_focus_hot(row_selected ? UI_FocusKind_On : UI_FocusKind_Off);
-                if(ui_clicked(rd_icon_buttonf(RD_IconKind_Add, 0, "Add New")))
+                if(ui_clicked(rd_icon_buttonf(RD_IconKind_FileOutline, 0, "Add File Path Map")))
                 {
                   rd_entity_alloc(rd_entity_root(), RD_EntityKind_FilePathMap);
                 }
