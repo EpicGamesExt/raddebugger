@@ -15841,6 +15841,10 @@ rd_frame(void)
           {
             rd_cmd(RD_CmdKind_Exit);
           }
+          else if(evt->code != 0)
+          {
+            rd_state->quit_after_success = 0;
+          }
         }break;
         case D_EventKind_Stop:
         {

@@ -1117,6 +1117,8 @@ entry_point(CmdLine *cmd_line)
                                     "This will step into all targets after the debugger initially starts.\n\n"
                                     "--auto_run\n"
                                     "This will run all targets after the debugger initially starts.\n\n"
+                                    "--quit_after_success (or -q)\n"
+                                    "This will close the debugger automatically after all processes exit, if they all exited successfully (with code 0), and ran with no interruptions.\n\n"
                                     "--ipc <command>\n"
                                     "This will launch the debugger in the non-graphical IPC mode, which is used to communicate with another running instance of the debugger. The debugger instance will launch, send the specified command, then immediately terminate. This may be used by editors or other programs to control the debugger.\n\n"));
     }break;
