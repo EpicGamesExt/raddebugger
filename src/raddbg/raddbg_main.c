@@ -8,26 +8,17 @@
 //  [ ] entity listers - kill-specific-process, etc.
 //  [ ] new universal ctx menu, hover, tooltips systems
 //  [ ] fix memory view
-//  [ ] meta eval system
-//  [ ] file path map editor
-//  [ ] file path map building
 //  [ ] `switch` replacement (recent files history)
 //   [ ] resolving name as file or #include
 //  [ ] new `restart processes` path
 //  [ ] remainder of @msgs
 // 
 // [ ] post-@msgs TODOs:
-// [ ] ensure "prefer_disasm" is calculated correctly - disassembly-focused
-//     stepping
-//
 // [ ] ensure the following issues are resolved with this new pass:
 //  [ ] global evaluation across DLL boundaries
 //  [ ] mohit-reported callstack-frame-selection bug (with inlines)
 //  [ ] empty user file causing failure to launch
 //  [ ] decay arrays to pointers in pointer/value comparison
-//  [ ] file overrides -> always pick most specific one! found with conflicting
-//      overrides, e.g. C:/devel/ -> D:/devel/, but also C:/devel/foo ->
-//      C:/devel/bar, etc.
 //  [ ] visualize all breakpoints everywhere - source view should show up in
 //      disasm, disasm should show up in source view, function should show up in
 //      both, etc.
@@ -36,6 +27,8 @@
 //        because you're like "wait why did it stop" and then you later remember
 //        that's because there was a function breakpoint there.
 //  [ ] debugger readme pass
+//
+//
 //
 //  [x] codebase readme pass
 //  [x] target editor
@@ -55,6 +48,10 @@
 // [x] ensure ctrl+click
 // [x] scheduler view
 // [x] eval committing
+//  [x] fix registers
+//  [x] file overrides -> always pick most specific one! found with conflicting
+//      overrides, e.g. C:/devel/ -> D:/devel/, but also C:/devel/foo ->
+//      C:/devel/bar, etc.
 
 ////////////////////////////////
 //~ rjf: post-0.9.12 TODO notes
@@ -523,6 +520,11 @@
 //    all of the stateful windows/panel/view/watch mechanisms, and then
 //    the frontend pure-functionally queries stuff like os/r handles
 //    on-demand, and then prunes them, immediate-mode cache style.
+// [x] ensure "prefer_disasm" is calculated correctly - disassembly-focused
+//     stepping
+//  [x] file path map editor
+//  [x] file path map building
+//  [x] meta eval system
 
 ////////////////////////////////
 //~ rjf: Build Options

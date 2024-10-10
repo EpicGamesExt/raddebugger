@@ -8554,18 +8554,34 @@ EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(locals)
 
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(registers)
 {
+  Temp scratch = scratch_begin(&arena, 1);
   CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->thread);
   Arch arch = thread->arch;
   U64 reg_count     = regs_reg_code_count_from_arch(arch);
   U64 alias_count   = regs_alias_code_count_from_arch(arch);
   String8 *reg_strings   = regs_reg_code_string_table_from_arch(arch);
   String8 *alias_strings = regs_alias_code_string_table_from_arch(arch);
+  String8List exprs_list = {0};
+  for(U64 idx = 1; idx < reg_count; idx += 1)
+  {
+    FuzzyMatchRangeList matches = fuzzy_match_find(scratch.arena, filter, reg_strings[idx]);
+    if(matches.count == matches.needle_part_count)
+    {
+      str8_list_push(scratch.arena, &exprs_list, reg_strings[idx]);
+    }
+  }
+  for(U64 idx = 1; idx < alias_count; idx += 1)
+  {
+    FuzzyMatchRangeList matches = fuzzy_match_find(scratch.arena, filter, alias_strings[idx]);
+    if(matches.count == matches.needle_part_count)
+    {
+      str8_list_push(scratch.arena, &exprs_list, alias_strings[idx]);
+    }
+  }
   String8Array *accel = push_array(arena, String8Array, 1);
-  accel->count = reg_count + alias_count;
-  accel->v = push_array(arena, String8, accel->count);
-  MemoryCopy(accel->v + 0,         reg_strings,   reg_count);
-  MemoryCopy(accel->v + reg_count, alias_strings, alias_count);
+  *accel = str8_array_from_list(arena, &exprs_list);
   EV_ExpandInfo info = {accel, accel->count};
+  scratch_end(scratch);
   return info;
 }
 
