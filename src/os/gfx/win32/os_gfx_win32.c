@@ -543,7 +543,6 @@ os_w32_wnd_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
         HDROP drop = (HDROP)wParam;
         POINT drop_pt = {0};
         DragQueryPoint(drop, &drop_pt);
-        ScreenToClient(window->hwnd, &drop_pt);
         U64 num_files_dropped = DragQueryFile(drop, 0xffffffff, 0, 0);
         OS_Event *event = os_w32_push_event(OS_EventKind_FileDrop, window);
         event->pos = v2f32((F32)drop_pt.x, (F32)drop_pt.y);

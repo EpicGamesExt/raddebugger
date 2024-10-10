@@ -1530,49 +1530,52 @@ internal String8
 rd_mapped_from_file_path(Arena *arena, String8 file_path)
 {
   Temp scratch = scratch_begin(&arena, 1);
-  String8 file_path__normalized = path_normalized_from_string(scratch.arena, file_path);
-  String8List file_path_parts = str8_split_path(scratch.arena, file_path__normalized);
-  RD_EntityList maps = rd_query_cached_entity_list_with_kind(RD_EntityKind_FilePathMap);
-  String8 best_map_dst = {0};
-  U64 best_map_match_length = max_U64;
-  String8Node *best_map_remaining_suffix_first = 0;
-  for(RD_EntityNode *n = maps.first; n != 0; n = n->next)
-  {
-    String8 map_src = rd_entity_child_from_kind(n->entity, RD_EntityKind_Source)->string;
-    String8 map_src__normalized = path_normalized_from_string(scratch.arena, map_src);
-    String8List map_src_parts = str8_split_path(scratch.arena, map_src__normalized);
-    B32 matches = 1;
-    U64 match_length = 0;
-    String8Node *file_path_part_n = file_path_parts.first;
-    for(String8Node *map_src_n = map_src_parts.first;
-        map_src_n != 0 && file_path_part_n != 0;
-        map_src_n = map_src_n->next, file_path_part_n = file_path_part_n->next)
-    {
-      if(!str8_match(map_src_n->string, file_path_part_n->string, 0))
-      {
-        matches = 0;
-        break;
-      }
-      match_length += 1;
-    }
-    if(matches && match_length < best_map_match_length)
-    {
-      best_map_match_length = match_length;
-      best_map_dst = rd_entity_child_from_kind(n->entity, RD_EntityKind_Dest)->string;
-      best_map_remaining_suffix_first = file_path_part_n;
-    }
-  }
   String8 result = file_path;
-  if(best_map_dst.size != 0)
+  if(file_path.size != 0)
   {
-    String8 best_map_dst__normalized = path_normalized_from_string(scratch.arena, best_map_dst);
-    String8List best_map_dst_parts = str8_split_path(scratch.arena, best_map_dst__normalized);
-    for(String8Node *n = best_map_remaining_suffix_first; n != 0; n = n->next)
+    String8 file_path__normalized = path_normalized_from_string(scratch.arena, file_path);
+    String8List file_path_parts = str8_split_path(scratch.arena, file_path__normalized);
+    RD_EntityList maps = rd_query_cached_entity_list_with_kind(RD_EntityKind_FilePathMap);
+    String8 best_map_dst = {0};
+    U64 best_map_match_length = max_U64;
+    String8Node *best_map_remaining_suffix_first = 0;
+    for(RD_EntityNode *n = maps.first; n != 0; n = n->next)
     {
-      str8_list_push(scratch.arena, &best_map_dst_parts, n->string);
+      String8 map_src = rd_entity_child_from_kind(n->entity, RD_EntityKind_Source)->string;
+      String8 map_src__normalized = path_normalized_from_string(scratch.arena, map_src);
+      String8List map_src_parts = str8_split_path(scratch.arena, map_src__normalized);
+      B32 matches = 1;
+      U64 match_length = 0;
+      String8Node *file_path_part_n = file_path_parts.first;
+      for(String8Node *map_src_n = map_src_parts.first;
+          map_src_n != 0 && file_path_part_n != 0;
+          map_src_n = map_src_n->next, file_path_part_n = file_path_part_n->next)
+      {
+        if(!str8_match(map_src_n->string, file_path_part_n->string, 0))
+        {
+          matches = 0;
+          break;
+        }
+        match_length += 1;
+      }
+      if(matches && match_length < best_map_match_length)
+      {
+        best_map_match_length = match_length;
+        best_map_dst = rd_entity_child_from_kind(n->entity, RD_EntityKind_Dest)->string;
+        best_map_remaining_suffix_first = file_path_part_n;
+      }
     }
-    StringJoin join = {.sep = str8_lit("/")};
-    result = str8_list_join(arena, &best_map_dst_parts, &join);
+    if(best_map_dst.size != 0)
+    {
+      String8 best_map_dst__normalized = path_normalized_from_string(scratch.arena, best_map_dst);
+      String8List best_map_dst_parts = str8_split_path(scratch.arena, best_map_dst__normalized);
+      for(String8Node *n = best_map_remaining_suffix_first; n != 0; n = n->next)
+      {
+        str8_list_push(scratch.arena, &best_map_dst_parts, n->string);
+      }
+      StringJoin join = {.sep = str8_lit("/")};
+      result = str8_list_join(arena, &best_map_dst_parts, &join);
+    }
   }
   scratch_end(scratch);
   return result;
@@ -4452,6 +4455,44 @@ rd_window_frame(RD_Window *ws)
             rd_cmd(RD_CmdKind_AddTarget, .file_path = n->string);
           }
           ui_ctx_menu_close();
+        }
+        if(ws->drop_completion_paths.node_count == 1)
+        {
+          if(ui_clicked(rd_icon_buttonf(RD_IconKind_Play, 0, "Add File%s As Target%s And Run",
+                                        (ws->drop_completion_paths.node_count > 1) ? "s" : "",
+                                        (ws->drop_completion_paths.node_count > 1) ? "s" : "")))
+          {
+            for(String8Node *n = ws->drop_completion_paths.first; n != 0; n = n->next)
+            {
+              rd_cmd(RD_CmdKind_AddTarget, .file_path = n->string);
+            }
+            CTRL_EntityList processes = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Process);
+            if(processes.count != 0)
+            {
+              rd_cmd(RD_CmdKind_KillAll);
+            }
+            rd_cmd(RD_CmdKind_Run);
+            ui_ctx_menu_close();
+          }
+        }
+        if(ws->drop_completion_paths.node_count == 1)
+        {
+          if(ui_clicked(rd_icon_buttonf(RD_IconKind_StepInto, 0, "Add File%s As Target%s And Step Into",
+                                        (ws->drop_completion_paths.node_count > 1) ? "s" : "",
+                                        (ws->drop_completion_paths.node_count > 1) ? "s" : "")))
+          {
+            for(String8Node *n = ws->drop_completion_paths.first; n != 0; n = n->next)
+            {
+              rd_cmd(RD_CmdKind_AddTarget, .file_path = n->string);
+            }
+            CTRL_EntityList processes = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Process);
+            if(processes.count != 0)
+            {
+              rd_cmd(RD_CmdKind_KillAll);
+            }
+            rd_cmd(RD_CmdKind_StepInto);
+            ui_ctx_menu_close();
+          }
         }
         if(ui_clicked(rd_icon_buttonf(RD_IconKind_Target, 0, "View File%s",
                                       (ws->drop_completion_paths.node_count > 1) ? "s" : "")))
@@ -14968,7 +15009,7 @@ rd_frame(void)
                 }
               }
             }
-            d_cmd(D_CmdKind_SetThreadIP, .vaddr = new_rip_vaddr);
+            rd_cmd(RD_CmdKind_SetThreadIP, .vaddr = new_rip_vaddr);
           }break;
           
           //- rjf: targets
