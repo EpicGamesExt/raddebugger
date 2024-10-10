@@ -348,6 +348,7 @@ di_open(DI_Key *key)
 internal void
 di_close(DI_Key *key)
 {
+  ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   if(key->path.size != 0)
   {
@@ -405,6 +406,7 @@ di_close(DI_Key *key)
       }
     }
   }
+  ProfEnd();
   scratch_end(scratch);
 }
 

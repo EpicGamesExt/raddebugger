@@ -5724,7 +5724,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(call_stack)
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member,                  0.20f, .string = str8_lit("vaddr"), .display_string = str8_lit("Address"), .view_rule = str8_lit("cast:U64"));
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Module,                  0.25f, .string = str8_lit("module.str"), .display_string = str8_lit("Module"), .dequote_string = 1, .is_non_code = 1);
   }
-  rd_watch_view_build(wv, 0, str8_lit("current_thread.callstack.v"), str8_lit("array:current_thread.callstack.count, hex"), 0, 10, rect);
+  rd_watch_view_build(wv, 0, str8_lit("thread:current_thread.callstack.v"), str8_lit("array:'thread:current_thread.callstack.count', hex"), 0, 10, rect);
   ProfEnd();
 }
 
