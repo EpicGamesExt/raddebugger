@@ -47,6 +47,12 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
   CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, CTRL_EntityKind_Process);
   
   //////////////////////////////
+  //- rjf: unpack information about the viewed source file, if any
+  //
+  String8 file_path = rd_regs()->file_path;
+  String8List file_path_possible_overrides = rd_possible_overrides_from_file_path(scratch.arena, file_path);
+  
+  //////////////////////////////
   //- rjf: process commands
   //
   for(RD_Cmd *cmd = 0; rd_next_cmd(&cmd);)
@@ -208,11 +214,19 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
       {
         RD_Entity *bp = n->entity;
         RD_Entity *loc = rd_entity_child_from_kind(bp, RD_EntityKind_Location);
-        if(path_match_normalized(loc->string, rd_regs()->file_path) &&
-           visible_line_num_range.min <= loc->text_point.line && loc->text_point.line <= visible_line_num_range.max)
+        if(visible_line_num_range.min <= loc->text_point.line && loc->text_point.line <= visible_line_num_range.max)
         {
-          U64 slice_line_idx = (loc->text_point.line-visible_line_num_range.min);
-          rd_entity_list_push(scratch.arena, &code_slice_params.line_bps[slice_line_idx], bp);
+          for(String8Node *override_n = file_path_possible_overrides.first;
+              override_n != 0;
+              override_n = override_n->next)
+          {
+            if(path_match_normalized(loc->string, override_n->string))
+            {
+              U64 slice_line_idx = (loc->text_point.line-visible_line_num_range.min);
+              rd_entity_list_push(scratch.arena, &code_slice_params.line_bps[slice_line_idx], bp);
+              break;
+            }
+          }
         }
       }
     }
@@ -220,7 +234,6 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
     // rjf: find live threads mapping to source code
     if(!dasm_lines) ProfScope("find live threads mapping to this file")
     {
-      String8 file_path = rd_regs()->file_path;
       CTRL_Entity *selected_thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->thread);
       CTRL_EntityList threads = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Thread);
       for(CTRL_EntityNode *thread_n = threads.first; thread_n != 0; thread_n = thread_n->next)
@@ -237,10 +250,19 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
         D_LineList lines = d_lines_from_dbgi_key_voff(scratch.arena, &dbgi_key, rip_voff);
         for(D_LineNode *n = lines.first; n != 0; n = n->next)
         {
-          if(path_match_normalized(n->v.file_path, file_path) && visible_line_num_range.min <= n->v.pt.line && n->v.pt.line <= visible_line_num_range.max)
+          if(visible_line_num_range.min <= n->v.pt.line && n->v.pt.line <= visible_line_num_range.max)
           {
-            U64 slice_line_idx = n->v.pt.line-visible_line_num_range.min;
-            ctrl_entity_list_push(scratch.arena, &code_slice_params.line_ips[slice_line_idx], thread);
+            for(String8Node *override_n = file_path_possible_overrides.first;
+                override_n != 0;
+                override_n = override_n->next)
+            {
+              if(path_match_normalized(n->v.file_path, override_n->string))
+              {
+                U64 slice_line_idx = n->v.pt.line-visible_line_num_range.min;
+                ctrl_entity_list_push(scratch.arena, &code_slice_params.line_ips[slice_line_idx], thread);
+                break;
+              }
+            }
           }
         }
       }
@@ -254,11 +276,19 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
       {
         RD_Entity *wp = n->entity;
         RD_Entity *loc = rd_entity_child_from_kind(wp, RD_EntityKind_Location);
-        if(path_match_normalized(loc->string, rd_regs()->file_path) &&
-           visible_line_num_range.min <= loc->text_point.line && loc->text_point.line <= visible_line_num_range.max)
+        if(visible_line_num_range.min <= loc->text_point.line && loc->text_point.line <= visible_line_num_range.max)
         {
-          U64 slice_line_idx = (loc->text_point.line-visible_line_num_range.min);
-          rd_entity_list_push(scratch.arena, &code_slice_params.line_pins[slice_line_idx], wp);
+          for(String8Node *override_n = file_path_possible_overrides.first;
+              override_n != 0;
+              override_n = override_n->next)
+          {
+            if(path_match_normalized(loc->string, override_n->string))
+            {
+              U64 slice_line_idx = (loc->text_point.line-visible_line_num_range.min);
+              rd_entity_list_push(scratch.arena, &code_slice_params.line_pins[slice_line_idx], wp);
+              break;
+            }
+          }
         }
       }
     }
@@ -6391,8 +6421,8 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(disasm)
   if(!is_loading && has_disasm)
   {
     U64 off = dasm_line_array_code_off_from_idx(&dasm_info.lines, rd_regs()->cursor.line-1);
-    rd_regs()->vaddr = base_vaddr+off;
-    rd_regs()->vaddr_range = r1u64(base_vaddr+off, base_vaddr+off);
+    rd_regs()->vaddr = range.min+off;
+    rd_regs()->vaddr_range = r1u64(range.min+off, range.min+off);
     rd_regs()->voff_range = ctrl_voff_range_from_vaddr_range(dasm_module, rd_regs()->vaddr_range);
     rd_regs()->lines = d_lines_from_dbgi_key_voff(rd_frame_arena(), &dbgi_key, rd_regs()->voff_range.min);
   }
