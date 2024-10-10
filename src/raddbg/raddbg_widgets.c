@@ -1127,8 +1127,6 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             ui_set_next_text_alignment(UI_TextAlign_Center);
             UI_Key thread_box_key = ui_key_from_stringf(top_container_box->key, "###ip_%I64x_%p", line_num, thread);
             UI_Box *thread_box = ui_build_box_from_key(UI_BoxFlag_DisableTextTrunc|
-                                                       UI_BoxFlag_DrawHotEffects|
-                                                       UI_BoxFlag_DrawBorder|
                                                        UI_BoxFlag_Clickable*!!(params->flags & RD_CodeSliceFlag_Clickable)|
                                                        UI_BoxFlag_DrawText,
                                                        thread_box_key);
@@ -1277,8 +1275,6 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             ui_set_next_text_alignment(UI_TextAlign_Center);
             UI_Key thread_box_key = ui_key_from_stringf(top_container_box->key, "###ip_%I64x_catchall_%p", line_num, thread);
             UI_Box *thread_box = ui_build_box_from_key(UI_BoxFlag_DisableTextTrunc|
-                                                       UI_BoxFlag_DrawHotEffects|
-                                                       UI_BoxFlag_DrawBorder|
                                                        UI_BoxFlag_Clickable*!!(params->flags & RD_CodeSliceFlag_Clickable)|
                                                        UI_BoxFlag_DrawText,
                                                        thread_box_key);
@@ -1391,8 +1387,6 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             ui_set_next_palette(ui_build_palette(ui_top_palette(), .text = bp_color));
             ui_set_next_text_alignment(UI_TextAlign_Center);
             UI_Box *bp_box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|
-                                                       UI_BoxFlag_DrawHotEffects|
-                                                       UI_BoxFlag_DrawBorder|
                                                        UI_BoxFlag_Clickable*!!(params->flags & RD_CodeSliceFlag_Clickable)|
                                                        UI_BoxFlag_DisableTextTrunc,
                                                        "%S##bp_%p",
@@ -1450,9 +1444,6 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             ui_set_next_palette(ui_build_palette(ui_top_palette(), .text = color));
             ui_set_next_text_alignment(UI_TextAlign_Center);
             UI_Box *pin_box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|
-                                                        UI_BoxFlag_DrawActiveEffects|
-                                                        UI_BoxFlag_DrawHotEffects|
-                                                        UI_BoxFlag_DrawBorder|
                                                         UI_BoxFlag_Clickable*!!(params->flags & RD_CodeSliceFlag_Clickable)|
                                                         UI_BoxFlag_DisableTextTrunc,
                                                         "%S##watch_%p",
@@ -1899,8 +1890,8 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
         U64 line_vaddr = params->line_vaddrs[line_idx];
         rd_cmd(RD_CmdKind_RelocateEntity,
                .entity     = rd_handle_from_entity(dropped_entity),
-               .file_path  = rd_regs()->file_path,
-               .cursor     = txt_pt(line_num, 1),
+               .file_path  = line_vaddr == 0 ? rd_regs()->file_path : str8_zero(),
+               .cursor     = line_vaddr == 0 ? txt_pt(line_num, 1) : txt_pt(0, 0),
                .vaddr      = line_vaddr);
       }
       if(line_drag_ctrl_entity != &ctrl_entity_nil && rd_drag_drop() && contains_1s64(params->line_num_range, mouse_pt.line))

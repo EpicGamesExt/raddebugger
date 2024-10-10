@@ -5402,7 +5402,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(watch_pins)
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,      0.75f, .dequote_string = 1);
   }
   rd_watch_view_build(wv, RD_WatchViewFlag_NoHeader|RD_WatchViewFlag_PrettyNameMembers|RD_WatchViewFlag_PrettyEntityRows|RD_WatchViewFlag_DisableCacheLines,
-                      str8_lit("watch_pins"), str8_lit("only: label location str"), 0, 10, rect);
+                      str8_lit("watch_pins"), str8_lit("only: label source_location address_location str"), 0, 10, rect);
   ProfEnd();
 }
 

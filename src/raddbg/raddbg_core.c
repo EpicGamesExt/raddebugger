@@ -14590,6 +14590,7 @@ rd_frame(void)
             if(rd_regs()->vaddr != 0)
             {
               rd_entity_equip_vaddr(location, rd_regs()->vaddr);
+              rd_entity_equip_name(location, str8_zero());
             }
             if(rd_regs()->file_path.size != 0)
             {
@@ -14671,9 +14672,9 @@ rd_frame(void)
               {
                 RD_Entity *wp = n->entity;
                 RD_Entity *loc = rd_entity_child_from_kind(wp, RD_EntityKind_Location);
-                if((loc->flags & RD_EntityFlag_HasTextPoint && path_match_normalized(loc->string, file_path) && loc->text_point.line == pt.line) ||
-                   (loc->flags & RD_EntityFlag_HasVAddr && loc->vaddr == vaddr) ||
-                   (!(loc->flags & RD_EntityFlag_HasTextPoint) && str8_match(loc->string, string, 0)))
+                if(str8_match(wp->string, string, 0) &&
+                   ((loc->flags & RD_EntityFlag_HasTextPoint && path_match_normalized(loc->string, file_path) && loc->text_point.line == pt.line) ||
+                    (loc->flags & RD_EntityFlag_HasVAddr && loc->vaddr == vaddr)))
                 {
                   rd_entity_mark_for_deletion(wp);
                   removed_already_existing = 1;

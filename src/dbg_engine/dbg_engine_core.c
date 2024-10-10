@@ -2515,7 +2515,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
               }
               
               // rjf: virtual address location -> add breakpoint for address
-              if(bp->vaddr != 0)
+              else if(bp->vaddr != 0)
               {
                 CTRL_UserBreakpoint ctrl_user_bp = {CTRL_UserBreakpointKind_VirtualAddress};
                 ctrl_user_bp.u64       = bp->vaddr;
@@ -2524,7 +2524,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
               }
               
               // rjf: symbol name location -> add breakpoint for symbol name
-              if(bp->symbol_name.size != 0)
+              else if(bp->symbol_name.size != 0)
               {
                 CTRL_UserBreakpoint ctrl_user_bp = {CTRL_UserBreakpointKind_SymbolNameAndOffset};
                 ctrl_user_bp.string    = bp->symbol_name;
