@@ -157,8 +157,8 @@ struct_members(CTRL_ModuleMetaEval)
 {
   member_lit_comp(CTRL_MetaEval, type(U32),              color,       .pretty_name = str8_lit_comp("Color")),
   member_lit_comp(CTRL_MetaEval, type(CTRL_CodeString8), label,       .pretty_name = str8_lit_comp("Name")),
-  member_lit_comp(CTRL_MetaEval, type(CTRL_PlainString8),exe,         .pretty_name = str8_lit_comp("Executable Path")),
-  member_lit_comp(CTRL_MetaEval, type(CTRL_PlainString8),dbg,         .pretty_name = str8_lit_comp("Debug Info Path")),
+  member_lit_comp(CTRL_MetaEval, type(CTRL_PathString8), exe,         .pretty_name = str8_lit_comp("Executable Path")),
+  member_lit_comp(CTRL_MetaEval, type(CTRL_PathString8), dbg,         .pretty_name = str8_lit_comp("Debug Info Path")),
   member_lit_comp(CTRL_MetaEval, type(Rng1U64),          vaddr_range, .pretty_name = str8_lit_comp("Address Range")),
 };
 

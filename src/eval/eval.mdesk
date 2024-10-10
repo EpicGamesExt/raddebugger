@@ -52,14 +52,14 @@ E_TypeKindTable:
   {ComplexF64                "ComplexF64"          16   }
   {ComplexF80                "ComplexF80"          20   }
   {ComplexF128               "ComplexF128"         32   }
-  {Modifier                  ""                    0    }
-  {Ptr                       ""                    0    }
-  {LRef                      ""                    0    }
-  {RRef                      ""                    0    }
-  {Array                     ""                    0    }
-  {Function                  ""                    0    }
-  {Method                    ""                    0    }
-  {MemberPtr                 ""                    0    }
+  {Modifier                  "modifier"            0    }
+  {Ptr                       "ptr"                 0    }
+  {LRef                      "lref"                0    }
+  {RRef                      "rref"                0    }
+  {Array                     "array"               0    }
+  {Function                  "function"            0    }
+  {Method                    "method"              0    }
+  {MemberPtr                 "member_ptr"          0    }
   {Struct                    "struct"              0    }
   {Class                     "class"               0    }
   {Union                     "union"               0    }
@@ -69,9 +69,9 @@ E_TypeKindTable:
   {IncompleteUnion           "union"               0    }
   {IncompleteClass           "class"               0    }
   {IncompleteEnum            "enum"                0    }
-  {Bitfield                  ""                    0    }
-  {Variadic                  ""                    0    }
-  {Collection                ""                    0    }
+  {Bitfield                  "bitfield"            0    }
+  {Variadic                  "variadic"            0    }
+  {Collection                "collection"          0    }
 }
 
 @table(name  op_kind  precedence  string  op_pre  op_sep  op_pos)
@@ -87,6 +87,7 @@ E_ExprKindTable:
   
   { Cast                 Null                1        "cast"              "("       ")"       "" }
   { Sizeof               UnaryPrefix         1        "sizeof"            "sizeof"  ""        "" }
+  { Typeof               UnaryPrefix         1        "typeof"            "typeof"  ""        "" }
   { ByteSwap             UnaryPrefix         1        "bswap"             "bswap"   "("       ")"}
   
   { Neg                  UnaryPrefix         2        "-"                 "-"       ""        "" }

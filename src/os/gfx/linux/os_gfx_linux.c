@@ -492,3 +492,9 @@ os_show_in_filesystem_ui(String8 path)
 {
   
 }
+
+internal void
+os_open_in_browser(String8 url)
+{
+  
+}

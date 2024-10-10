@@ -1542,3 +1542,12 @@ os_show_in_filesystem_ui(String8 path)
   }
   scratch_end(scratch);
 }
+
+internal void
+os_open_in_browser(String8 url)
+{
+  Temp scratch = scratch_begin(0, 0);
+  String16 url16 = str16_from_8(scratch.arena, url);
+  ShellExecuteW(0, L"open", (WCHAR *)url16.str, 0, 0, SW_SHOWNORMAL);
+  scratch_end(scratch);
+}

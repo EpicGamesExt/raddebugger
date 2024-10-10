@@ -14,7 +14,7 @@ str8_lit_comp("CharLiteral"),
 str8_lit_comp("Symbol"),
 };
 
-String8 e_expr_kind_strings[46] =
+String8 e_expr_kind_strings[47] =
 {
 str8_lit_comp("Nil"),
 str8_lit_comp("Ref"),
@@ -24,6 +24,7 @@ str8_lit_comp("Deref"),
 str8_lit_comp("Address"),
 str8_lit_comp("Cast"),
 str8_lit_comp("Sizeof"),
+str8_lit_comp("Typeof"),
 str8_lit_comp("ByteSwap"),
 str8_lit_comp("Neg"),
 str8_lit_comp("LogNot"),
@@ -79,7 +80,7 @@ str8_lit_comp("Insufficient evaluation machine stack space."),
 str8_lit_comp("Malformed bytecode."),
 };
 
-E_OpInfo e_expr_kind_op_info_table[46] =
+E_OpInfo e_expr_kind_op_info_table[47] =
 {
 { E_OpKind_Null, 0, str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("") },
 { E_OpKind_Null, 0, str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("") },
@@ -89,6 +90,7 @@ E_OpInfo e_expr_kind_op_info_table[46] =
 { E_OpKind_UnaryPrefix, 2, str8_lit_comp("&"), str8_lit_comp(""), str8_lit_comp("") },
 { E_OpKind_Null, 1, str8_lit_comp("("), str8_lit_comp(")"), str8_lit_comp("") },
 { E_OpKind_UnaryPrefix, 1, str8_lit_comp("sizeof"), str8_lit_comp(""), str8_lit_comp("") },
+{ E_OpKind_UnaryPrefix, 1, str8_lit_comp("typeof"), str8_lit_comp(""), str8_lit_comp("") },
 { E_OpKind_UnaryPrefix, 1, str8_lit_comp("bswap"), str8_lit_comp("("), str8_lit_comp(")") },
 { E_OpKind_UnaryPrefix, 2, str8_lit_comp("-"), str8_lit_comp(""), str8_lit_comp("") },
 { E_OpKind_UnaryPrefix, 2, str8_lit_comp("!"), str8_lit_comp(""), str8_lit_comp("") },
@@ -227,14 +229,14 @@ str8_lit_comp("ComplexF32"),
 str8_lit_comp("ComplexF64"),
 str8_lit_comp("ComplexF80"),
 str8_lit_comp("ComplexF128"),
-str8_lit_comp(""),
-str8_lit_comp(""),
-str8_lit_comp(""),
-str8_lit_comp(""),
-str8_lit_comp(""),
-str8_lit_comp(""),
-str8_lit_comp(""),
-str8_lit_comp(""),
+str8_lit_comp("modifier"),
+str8_lit_comp("ptr"),
+str8_lit_comp("lref"),
+str8_lit_comp("rref"),
+str8_lit_comp("array"),
+str8_lit_comp("function"),
+str8_lit_comp("method"),
+str8_lit_comp("member_ptr"),
 str8_lit_comp("struct"),
 str8_lit_comp("class"),
 str8_lit_comp("union"),
@@ -244,9 +246,9 @@ str8_lit_comp("struct"),
 str8_lit_comp("union"),
 str8_lit_comp("class"),
 str8_lit_comp("enum"),
-str8_lit_comp(""),
-str8_lit_comp(""),
-str8_lit_comp(""),
+str8_lit_comp("bitfield"),
+str8_lit_comp("variadic"),
+str8_lit_comp("collection"),
 };
 
 C_LINKAGE_END

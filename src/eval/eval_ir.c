@@ -806,6 +806,21 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
       }
     }break;
     
+    //- rjf: typeof
+    case E_ExprKind_Typeof:
+    {
+      // rjf: evaluate operand tree
+      E_Expr *r_expr = expr->first;
+      E_IRTreeAndType r_tree = e_irtree_and_type_from_expr(arena, r_expr);
+      e_msg_list_concat_in_place(&result.msgs, &r_tree.msgs);
+      
+      // rjf: fill output
+      result.root     = &e_irnode_nil;
+      result.type_key = r_tree.type_key;
+      result.mode     = E_Mode_Null;
+      result.space    = r_tree.space;
+    }break;
+    
     //- rjf: byteswap
     case E_ExprKind_ByteSwap:
     {

@@ -5293,6 +5293,7 @@ rd_window_frame(RD_Window *ws)
             {
               UI_Row UI_TextAlignment(UI_TextAlign_Center) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
                 ui_label(str8_lit(BUILD_TITLE_STRING_LITERAL));
+              ui_spacer(ui_em(1.f, 1.f));
               UI_PrefHeight(ui_children_sum(1)) UI_Row UI_Padding(ui_pct(1, 0))
               {
                 R_Handle texture = rd_state->icon_texture;
@@ -5301,7 +5302,7 @@ rd_window_frame(RD_Window *ws)
                   UI_PrefHeight(ui_px(ui_top_font_size()*10.f, 1.f))
                   ui_image(texture, R_Tex2DSampleKind_Linear, r2f32p(0, 0, texture_dim.x, texture_dim.y), v4f32(1, 1, 1, 1), 0, str8_lit(""));
               }
-              ui_spacer(ui_em(0.25f, 1.f));
+              ui_spacer(ui_em(1.f, 1.f));
               UI_Row
                 UI_PrefWidth(ui_text_dim(10, 1))
                 UI_TextAlignment(UI_TextAlign_Center)
@@ -5312,20 +5313,19 @@ rd_window_frame(RD_Window *ws)
                   UI_TextAlignment(UI_TextAlign_Center)
                   rd_cmd_binding_buttons(rd_cmd_kind_info_table[RD_CmdKind_RunCommand].string);
               }
-              ui_spacer(ui_em(0.25f, 1.f));
-              UI_Row UI_TextAlignment(UI_TextAlign_Center) ui_label(str8_lit("Submit issues to the GitHub at:"));
-              UI_TextAlignment(UI_TextAlign_Center)
+              ui_spacer(ui_em(1.f, 1.f));
+              RD_Palette(RD_PaletteCode_NeutralPopButton)
+                UI_Row UI_Padding(ui_pct(1, 0)) UI_TextAlignment(UI_TextAlign_Center) UI_PrefWidth(ui_text_dim(10, 1))
+                UI_CornerRadius(ui_top_font_size()*0.5f)
               {
-                UI_Signal url_sig = ui_buttonf("github.com/EpicGames/raddebugger");
-                if(ui_hovering(url_sig)) UI_Tooltip
+                String8 url = str8_lit("https://github.com/EpicGamesExt/raddebugger/issues");
+                UI_Signal sig = ui_button(str8_lit("Submit Request, Issue, or Bug Report"));
+                if(ui_clicked(sig))
                 {
-                  ui_labelf("Copy To Clipboard");
-                }
-                if(ui_clicked(url_sig))
-                {
-                  os_set_clipboard_text(str8_lit("https://github.com/EpicGames/raddebugger"));
+                  os_open_in_browser(url);
                 }
               }
+              ui_spacer(ui_em(0.5f, 1.f));
             }
             
             // rjf: buttons

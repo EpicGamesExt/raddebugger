@@ -192,5 +192,6 @@ internal void           os_graphical_message(B32 error, String8 title, String8 m
 //~ rjf: @os_hooks Shell Operations
 
 internal void           os_show_in_filesystem_ui(String8 path);
+internal void           os_open_in_browser(String8 url);
 
 #endif // OS_GFX_H
