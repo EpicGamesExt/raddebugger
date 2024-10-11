@@ -318,7 +318,7 @@ rd_cmd_spec_button(String8 name)
       ui_set_next_flags(UI_BoxFlag_Clickable);
       ui_set_next_group_key(ui_key_zero());
       UI_PrefWidth(ui_children_sum(1))
-        UI_Column UI_Padding(ui_em(0.5f, 1.f)) UI_FontSize(ui_top_font_size()*0.95f) UI_HeightFill
+        UI_FontSize(ui_top_font_size()*0.95f) UI_HeightFill
         UI_NamedRow(str8_lit("###bindings"))
         UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
         UI_FastpathCodepoint(0)

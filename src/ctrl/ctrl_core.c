@@ -601,7 +601,10 @@ ctrl_entity_store_alloc(void)
   }
   CTRL_Entity *root = store->root = ctrl_entity_alloc(store, &ctrl_entity_nil, CTRL_EntityKind_Root, Arch_Null, ctrl_handle_zero(), 0);
   CTRL_Entity *local_machine = ctrl_entity_alloc(store, root, CTRL_EntityKind_Machine, arch_from_context(), ctrl_handle_make(CTRL_MachineID_Local, dmn_handle_zero()), 0);
-  (void)local_machine;
+  Temp scratch = scratch_begin(0, 0);
+  String8 local_machine_name = push_str8f(scratch.arena, "This PC (%S)", os_get_system_info()->machine_name);
+  ctrl_entity_equip_string(store, local_machine, local_machine_name);
+  scratch_end(scratch);
   return store;
 }
 

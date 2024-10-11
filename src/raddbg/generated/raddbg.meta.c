@@ -672,15 +672,19 @@ str8_lit_comp("5"),
 str8_lit_comp("c"),
 };
 
-String8 rd_collection_name_table[13] =
+String8 rd_collection_name_table[17] =
 {
 str8_lit_comp("watches"),
 str8_lit_comp("targets"),
 str8_lit_comp("breakpoints"),
 str8_lit_comp("watch_pins"),
 str8_lit_comp("file_path_maps"),
+str8_lit_comp("machines"),
+str8_lit_comp("processes"),
 str8_lit_comp("threads"),
 str8_lit_comp("modules"),
+str8_lit_comp("machine"),
+str8_lit_comp("process"),
 str8_lit_comp("locals"),
 str8_lit_comp("registers"),
 str8_lit_comp("globals"),
@@ -689,7 +693,7 @@ str8_lit_comp("types"),
 str8_lit_comp("procedures"),
 };
 
-RD_EntityKind rd_collection_entity_kind_table[13] =
+RD_EntityKind rd_collection_entity_kind_table[17] =
 {
 RD_EntityKind_Watch,
 RD_EntityKind_Target,
@@ -704,15 +708,21 @@ RD_EntityKind_Nil,
 RD_EntityKind_Nil,
 RD_EntityKind_Nil,
 RD_EntityKind_Nil,
+RD_EntityKind_Nil,
+RD_EntityKind_Nil,
+RD_EntityKind_Nil,
+RD_EntityKind_Nil,
 };
 
-CTRL_EntityKind rd_collection_ctrl_entity_kind_table[13] =
+CTRL_EntityKind rd_collection_ctrl_entity_kind_table[17] =
 {
 CTRL_EntityKind_Null,
 CTRL_EntityKind_Null,
 CTRL_EntityKind_Null,
 CTRL_EntityKind_Null,
 CTRL_EntityKind_Null,
+CTRL_EntityKind_Machine,
+CTRL_EntityKind_Process,
 CTRL_EntityKind_Thread,
 CTRL_EntityKind_Module,
 CTRL_EntityKind_Null,
@@ -721,17 +731,23 @@ CTRL_EntityKind_Null,
 CTRL_EntityKind_Null,
 CTRL_EntityKind_Null,
 CTRL_EntityKind_Null,
+CTRL_EntityKind_Null,
+CTRL_EntityKind_Null,
 };
 
-EV_ViewRuleExprExpandInfoHookFunctionType * rd_collection_expr_expand_info_hook_function_table[13] =
+EV_ViewRuleExprExpandInfoHookFunctionType * rd_collection_expr_expand_info_hook_function_table[17] =
 {
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME(watches),
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME(targets),
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME(breakpoints),
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME(watch_pins),
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME(file_path_maps),
+EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME(machines),
+EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME(processes),
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME(threads),
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME(modules),
+EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME(machine),
+EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME(process),
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME(locals),
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME(registers),
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME(globals),
@@ -740,15 +756,19 @@ EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME(types),
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME(procedures),
 };
 
-EV_ViewRuleExprExpandRangeInfoHookFunctionType * rd_collection_expr_expand_range_info_hook_function_table[13] =
+EV_ViewRuleExprExpandRangeInfoHookFunctionType * rd_collection_expr_expand_range_info_hook_function_table[17] =
 {
 EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_NAME(watches),
 EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_NAME(targets),
 EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_NAME(breakpoints),
 EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_NAME(watch_pins),
 EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_NAME(file_path_maps),
+EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_NAME(machines),
+EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_NAME(processes),
 EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_NAME(threads),
 EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_NAME(modules),
+EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_NAME(machine),
+EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_NAME(process),
 EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_NAME(locals),
 EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_NAME(registers),
 EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_NAME(globals),
@@ -757,15 +777,19 @@ EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_NAME(types),
 EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_NAME(procedures),
 };
 
-EV_ViewRuleExprExpandIDFromNumHookFunctionType * rd_collection_expr_expand_id_from_num_hook_function_table[13] =
+EV_ViewRuleExprExpandIDFromNumHookFunctionType * rd_collection_expr_expand_id_from_num_hook_function_table[17] =
 {
 EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_NAME(watches),
 EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_NAME(targets),
 EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_NAME(breakpoints),
 EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_NAME(watch_pins),
 EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_NAME(file_path_maps),
+EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_NAME(machines),
+EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_NAME(processes),
 EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_NAME(threads),
 EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_NAME(modules),
+EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_NAME(machine),
+EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_NAME(process),
 EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_NAME(identity),
 EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_NAME(identity),
 EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_NAME(globals),
@@ -774,15 +798,19 @@ EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_NAME(types),
 EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_NAME(procedures),
 };
 
-EV_ViewRuleExprExpandIDFromNumHookFunctionType * rd_collection_expr_expand_num_from_id_hook_function_table[13] =
+EV_ViewRuleExprExpandIDFromNumHookFunctionType * rd_collection_expr_expand_num_from_id_hook_function_table[17] =
 {
 EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_NAME(watches),
 EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_NAME(targets),
 EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_NAME(breakpoints),
 EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_NAME(watch_pins),
 EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_NAME(file_path_maps),
+EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_NAME(machines),
+EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_NAME(processes),
 EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_NAME(threads),
 EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_NAME(modules),
+EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_NAME(machine),
+EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_NAME(process),
 EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_NAME(identity),
 EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_NAME(identity),
 EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_NAME(globals),

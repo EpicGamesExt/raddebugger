@@ -2234,7 +2234,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
             case E_Mode_Offset:
             {
               CTRL_Entity *space_entity = rd_ctrl_entity_from_eval_space(row_eval.space);
-              if(space_entity->kind == CTRL_EntityKind_Process)
+              if(row_eval.space.kind == RD_EvalSpaceKind_CtrlEntity && space_entity->kind == CTRL_EntityKind_Process)
               {
                 U64 size = e_type_byte_size_from_key(row_eval.type_key);
                 size = Min(size, 64);

@@ -823,13 +823,24 @@ RD_IconTable:
 @table(name        entity_kind      ctrl_entity_kind  id_space)
 RD_CollectionTable:
 {
+  //- rjf: frontend entity groups
   {watches          Watch            Null              x}
   {targets          Target           Null              x}
   {breakpoints      Breakpoint       Null              x}
   {watch_pins       WatchPin         Null              x}
   {file_path_maps   FilePathMap      Null              x}
+  
+  //- rjf: control entity groups
+  {machines         Nil              Machine           x}
+  {processes        Nil              Process           x}
   {threads          Nil              Thread            x}
   {modules          Nil              Module            x}
+  
+  //- rjf: control entity hierarchies
+  {machine          Nil              Null              x}
+  {process          Nil              Null              x}
+  
+  //- rjf: debug info / architecture watch tables
   {locals           Nil              Null              -}
   {registers        Nil              Null              -}
   {globals          Nil              Null              x}

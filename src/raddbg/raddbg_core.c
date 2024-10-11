@@ -8514,8 +8514,16 @@ EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(file_path_maps)  { return rd_ev
 EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(file_path_maps) { return rd_ev_view_rule_expr_id_from_num__meta_entities(num, user_data, RD_EntityKind_FilePathMap, 1); }
 EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(file_path_maps) { return rd_ev_view_rule_expr_num_from_id__meta_entities(id,  user_data, RD_EntityKind_FilePathMap, 1); }
 
-//- rjf: meta ctrl entities
+//- rjf: control entity groups
 
+EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(machines)         { return rd_ev_view_rule_expr_expand_info__meta_ctrl_entities(arena, view, filter, expr, params, CTRL_EntityKind_Machine); }
+EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(machines)   { return rd_ev_view_rule_expr_expand_range_info__meta_ctrl_entities(arena, view, filter, expr, params, idx_range, user_data, CTRL_EntityKind_Machine); }
+EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(machines)  { return rd_ev_view_rule_expr_id_from_num__meta_ctrl_entities(num, user_data, CTRL_EntityKind_Machine); }
+EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(machines)  { return rd_ev_view_rule_expr_num_from_id__meta_ctrl_entities(id, user_data, CTRL_EntityKind_Machine); }
+EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(processes)         { return rd_ev_view_rule_expr_expand_info__meta_ctrl_entities(arena, view, filter, expr, params, CTRL_EntityKind_Process); }
+EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(processes)   { return rd_ev_view_rule_expr_expand_range_info__meta_ctrl_entities(arena, view, filter, expr, params, idx_range, user_data, CTRL_EntityKind_Process); }
+EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(processes)  { return rd_ev_view_rule_expr_id_from_num__meta_ctrl_entities(num, user_data, CTRL_EntityKind_Process); }
+EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(processes)  { return rd_ev_view_rule_expr_num_from_id__meta_ctrl_entities(id, user_data, CTRL_EntityKind_Process); }
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(threads)           { return rd_ev_view_rule_expr_expand_info__meta_ctrl_entities(arena, view, filter, expr, params, CTRL_EntityKind_Thread); }
 EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(threads)     { return rd_ev_view_rule_expr_expand_range_info__meta_ctrl_entities(arena, view, filter, expr, params, idx_range, user_data, CTRL_EntityKind_Thread); }
 EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(threads)    { return rd_ev_view_rule_expr_id_from_num__meta_ctrl_entities(num, user_data, CTRL_EntityKind_Thread); }
@@ -8524,6 +8532,136 @@ EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(modules)           { return rd_ev_vie
 EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(modules)     { return rd_ev_view_rule_expr_expand_range_info__meta_ctrl_entities(arena, view, filter, expr, params, idx_range, user_data, CTRL_EntityKind_Module); }
 EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(modules)    { return rd_ev_view_rule_expr_id_from_num__meta_ctrl_entities(num, user_data, CTRL_EntityKind_Module); }
 EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(modules)    { return rd_ev_view_rule_expr_num_from_id__meta_ctrl_entities(id, user_data, CTRL_EntityKind_Module); }
+
+//- rjf: control entity hierarchies
+
+EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(machine)
+{
+  EV_ExpandInfo info = {0};
+  Temp scratch = scratch_begin(&arena, 1);
+  E_Eval eval = e_eval_from_expr(scratch.arena, expr);
+  CTRL_Entity *machine = rd_ctrl_entity_from_eval_space(eval.space);
+  if(machine->kind == CTRL_EntityKind_Machine)
+  {
+    CTRL_EntityList processes = {0};
+    for(CTRL_Entity *child = machine->first; child != &ctrl_entity_nil; child = child->next)
+    {
+      if(child->kind == CTRL_EntityKind_Process)
+      {
+        ctrl_entity_list_push(scratch.arena, &processes, child);
+      }
+    }
+    CTRL_EntityArray *processes_array = push_array(arena, CTRL_EntityArray, 1);
+    *processes_array = ctrl_entity_array_from_list(arena, &processes);
+    info.user_data = processes_array;
+    info.row_count = processes.count;
+  }
+  scratch_end(scratch);
+  return info;
+}
+
+EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(machine)
+{
+  EV_ExpandRangeInfo info = {0};
+  {
+    CTRL_EntityArray *processes = (CTRL_EntityArray *)user_data;
+    if(processes != 0)
+    {
+      info.row_exprs_count = dim_1u64(idx_range);
+      info.row_strings     = push_array(arena, String8,    info.row_exprs_count);
+      info.row_view_rules  = push_array(arena, String8,    info.row_exprs_count);
+      info.row_exprs       = push_array(arena, E_Expr *,   info.row_exprs_count);
+      info.row_members     = push_array(arena, E_Member *, info.row_exprs_count);
+      U64 row_expr_idx = 0;
+      for(U64 idx = idx_range.min; idx < idx_range.max; idx += 1, row_expr_idx += 1)
+      {
+        CTRL_Entity *process = processes->v[idx];
+        E_Expr *expr = e_push_expr(arena, E_ExprKind_LeafOffset, 0);
+        expr->space    = rd_eval_space_from_ctrl_entity(process, RD_EvalSpaceKind_MetaCtrlEntity);
+        expr->mode     = E_Mode_Offset;
+        expr->type_key = e_type_key_cons_base(type(CTRL_ProcessMetaEval));;
+        info.row_strings[idx] = process->string;
+        info.row_exprs[idx]   = expr;
+        info.row_members[idx] = &e_member_nil;
+      }
+    }
+  }
+  return info;
+}
+
+EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(machine)
+{
+  return num;
+}
+
+EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(machine)
+{
+  return id;
+}
+
+EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(process)
+{
+  EV_ExpandInfo info = {0};
+  Temp scratch = scratch_begin(&arena, 1);
+  E_Eval eval = e_eval_from_expr(scratch.arena, expr);
+  CTRL_Entity *process = rd_ctrl_entity_from_eval_space(eval.space);
+  if(process->kind == CTRL_EntityKind_Process)
+  {
+    CTRL_EntityList threads = {0};
+    for(CTRL_Entity *child = process->first; child != &ctrl_entity_nil; child = child->next)
+    {
+      if(child->kind == CTRL_EntityKind_Thread)
+      {
+        ctrl_entity_list_push(scratch.arena, &threads, child);
+      }
+    }
+    CTRL_EntityArray *threads_array = push_array(arena, CTRL_EntityArray, 1);
+    *threads_array = ctrl_entity_array_from_list(arena, &threads);
+    info.user_data = threads_array;
+    info.row_count = threads.count;
+  }
+  scratch_end(scratch);
+  return info;
+}
+
+EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(process)
+{
+  EV_ExpandRangeInfo info = {0};
+  {
+    CTRL_EntityArray *threads = (CTRL_EntityArray *)user_data;
+    if(threads != 0)
+    {
+      info.row_exprs_count = dim_1u64(idx_range);
+      info.row_strings     = push_array(arena, String8,    info.row_exprs_count);
+      info.row_view_rules  = push_array(arena, String8,    info.row_exprs_count);
+      info.row_exprs       = push_array(arena, E_Expr *,   info.row_exprs_count);
+      info.row_members     = push_array(arena, E_Member *, info.row_exprs_count);
+      U64 row_expr_idx = 0;
+      for(U64 idx = idx_range.min; idx < idx_range.max; idx += 1, row_expr_idx += 1)
+      {
+        CTRL_Entity *thread = threads->v[idx];
+        E_Expr *expr = e_push_expr(arena, E_ExprKind_LeafOffset, 0);
+        expr->space    = rd_eval_space_from_ctrl_entity(thread, RD_EvalSpaceKind_MetaCtrlEntity);
+        expr->mode     = E_Mode_Offset;
+        expr->type_key = e_type_key_cons_base(type(CTRL_ThreadMetaEval));;
+        info.row_strings[idx] = thread->string;
+        info.row_exprs[idx]   = expr;
+        info.row_members[idx] = &e_member_nil;
+      }
+    }
+  }
+  return info;
+}
+
+EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(process)
+{
+  return num;
+}
+
+EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(process)
+{
+  return id;
+}
 
 //- rjf: locals
 
@@ -11724,6 +11862,8 @@ rd_frame(void)
     EV_AutoViewRuleTable *auto_view_rule_table = push_array(scratch.arena, EV_AutoViewRuleTable, 1);
     {
       ev_auto_view_rule_table_push_new(scratch.arena, auto_view_rule_table, e_type_key_cons_base(type(CTRL_MetaEvalFrameArray)), str8_lit("slice"), 1);
+      ev_auto_view_rule_table_push_new(scratch.arena, auto_view_rule_table, e_type_key_cons_base(type(CTRL_MachineMetaEval)),    str8_lit("machine"), 1);
+      ev_auto_view_rule_table_push_new(scratch.arena, auto_view_rule_table, e_type_key_cons_base(type(CTRL_ProcessMetaEval)),    str8_lit("process"), 1);
       for EachElement(idx, rd_collection_name_table)
       {
         ev_auto_view_rule_table_push_new(scratch.arena, auto_view_rule_table, collection_type_keys[idx], rd_collection_name_table[idx], 1);
