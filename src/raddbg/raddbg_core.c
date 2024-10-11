@@ -9140,7 +9140,7 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
         did_string = 1;
         U64 string_memory_addr = value_eval.value.u64;
         U64 element_size = e_type_byte_size_from_key(direct_type_key);
-        U64 string_buffer_size = 1024;
+        U64 string_buffer_size = 256;
         U8 *string_buffer = push_array(arena, U8, string_buffer_size);
         for(U64 try_size = string_buffer_size; try_size >= 16; try_size /= 2)
         {
@@ -9237,7 +9237,7 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
     {
       // rjf: unpack type info
       E_Type *eval_type = e_type_from_key(scratch.arena, e_type_unwrap(eval.type_key));
-      E_TypeKey direct_type_key = eval_type->direct_type_key;
+      E_TypeKey direct_type_key = e_type_unwrap(eval_type->direct_type_key);
       E_TypeKind direct_type_kind = e_type_kind_from_key(direct_type_key);
       U64 array_count = eval_type->count;
       
@@ -9252,7 +9252,7 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
       {
         U64 element_size = e_type_byte_size_from_key(direct_type_key);
         did_content = 1;
-        U64 string_buffer_size = 1024;
+        U64 string_buffer_size = 256;
         U8 *string_buffer = push_array(arena, U8, string_buffer_size);
         switch(eval.mode)
         {
