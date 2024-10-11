@@ -357,6 +357,7 @@ struct PE_IntelPdata
 
 #define PE_CODEVIEW_PDB20_MAGIC 0x3031424e
 #define PE_CODEVIEW_PDB70_MAGIC 0x53445352
+#define PE_CODEVIEW_RDI_MAGIC   '0IDR' 
 
 typedef struct PE_CvHeaderPDB20 PE_CvHeaderPDB20;
 struct PE_CvHeaderPDB20
@@ -374,6 +375,14 @@ struct PE_CvHeaderPDB70
   U32 magic;
   OS_Guid guid;
   U32 age;
+  // file name packed after struct
+};
+
+typedef struct PE_CvHeaderRDI PE_CvHeaderRDI;
+struct PE_CvHeaderRDI
+{
+  U32 magic;
+  OS_Guid guid;
   // file name packed after struct
 };
 
@@ -737,8 +746,9 @@ struct PE_BinInfo
 ////////////////////////////////
 //~ rjf: Basic Enum Functions
 
-internal U32 pe_slot_count_from_unwind_op_code(PE_UnwindOpCode opcode);
-internal String8 pe_string_from_windows_subsystem(PE_WindowsSubsystem subsystem);
+internal U32                 pe_slot_count_from_unwind_op_code(PE_UnwindOpCode opcode);
+internal String8             pe_string_from_subsystem(PE_WindowsSubsystem subsystem);
+internal PE_WindowsSubsystem pe_subsystem_from_string(String8 string);
 
 ////////////////////////////////
 //~ rjf: Parser Functions
@@ -748,13 +758,14 @@ internal PE_BinInfo pe_bin_info_from_data(Arena *arena, String8 data);
 ////////////////////////////////
 //~ rjf: Helpers
 
-internal U64 pe_intel_pdata_off_from_voff__binary_search(String8 data, PE_BinInfo *bin, U64 voff);
-internal void *pe_ptr_from_voff(String8 data, PE_BinInfo *bin, U64 voff);
-internal U64 pe_section_num_from_voff(String8 data, PE_BinInfo *bin, U64 voff);
-internal void *pe_ptr_from_section_num(String8 data, PE_BinInfo *bin, U64 n);
-internal U64 pe_foff_from_voff(String8 data, PE_BinInfo *bin, U64 voff);
+internal U64                   pe_intel_pdata_off_from_voff__binary_search(String8 data, PE_BinInfo *bin, U64 voff);
+internal void *                pe_ptr_from_voff(String8 data, PE_BinInfo *bin, U64 voff);
+internal U64                   pe_section_num_from_voff(String8 data, PE_BinInfo *bin, U64 voff);
+internal void *                pe_ptr_from_section_num(String8 data, PE_BinInfo *bin, U64 n);
+internal U64                   pe_foff_from_voff(String8 data, PE_BinInfo *bin, U64 voff);
 internal PE_BaseRelocBlockList pe_base_reloc_block_list_from_bin(Arena *arena, String8 data, PE_BinInfo *bin);
-internal Rng1U64 pe_tls_rng_from_bin_base_vaddr(String8 data, PE_BinInfo *bin, U64 base_vaddr);
+internal Rng1U64               pe_tls_rng_from_bin_base_vaddr(String8 data, PE_BinInfo *bin, U64 base_vaddr);
+internal String8Array          pe_get_entry_point_names(COFF_MachineType machine, PE_WindowsSubsystem subsystem, PE_ImageFileCharacteristics file_characteristics);
 
 ////////////////////////////////
 //~ Resource Helpers
@@ -769,5 +780,16 @@ internal PE_ResourceNode * pe_resource_dir_search_node(PE_ResourceDir *dir, COFF
 internal PE_Resource *     pe_resource_dir_search(PE_ResourceDir *dir, COFF_ResourceID id);
 internal PE_ResourceArray  pe_resource_list_to_array(Arena *arena, PE_ResourceList *list);
 internal PE_ResourceDir *  pe_resource_table_from_directory_data(Arena *arena, String8 data);
+
+////////////////////////////////
+//~ Debug Directory
+
+internal String8 pe_make_debug_header_pdb70(Arena *arena, OS_Guid guid, U32 age, String8 pdb_path);
+internal String8 pe_make_debug_header_rdi(Arena *arena, OS_Guid guid, String8 rdi_path);
+
+////////////////////////////////
+//~ Image Checksum
+
+internal U32 pe_compute_checksum(U8 *buffer, U64 buffer_size);
 
 #endif // PE_H
