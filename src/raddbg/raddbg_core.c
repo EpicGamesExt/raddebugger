@@ -11913,6 +11913,20 @@ rd_frame(void)
               os_window_set_fullscreen(window->os, !os_window_is_fullscreen(window->os));
             }
           }break;
+          case RD_CmdKind_BringToFront:
+          {
+            RD_Window *last_focused_window = rd_window_from_handle(rd_state->last_focused_window);
+            for(RD_Window *w = rd_state->first_window; w != 0; w = w->next)
+            {
+              os_window_set_minimized(w->os, 0);
+              os_window_focus(last_focused_window->os);
+              //os_window_bring_to_front(w->os);
+            }
+            if(last_focused_window != 0)
+            {
+              os_window_focus(last_focused_window->os);
+            }
+          }break;
           
           //- rjf: confirmations
           case RD_CmdKind_PopupAccept:

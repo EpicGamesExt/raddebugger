@@ -1014,6 +1014,7 @@ rd_string_from_eval_viz_row_column(Arena *arena, EV_View *ev, EV_Row *row, RD_Wa
     ev_view_rule_list_push_string(arena, view_rules, str8(col->view_rule_buffer, col->view_rule_size));
   }
   E_Expr *row_col_expr = rd_expr_from_watch_view_row_column(arena, ev, row, col);
+  row_col_expr = ev_resolved_from_expr(arena, row_col_expr, view_rules);
   switch(col->kind)
   {
     default:{}break;
