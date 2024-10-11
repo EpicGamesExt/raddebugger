@@ -371,6 +371,37 @@ struct CTRL_Unwind
 };
 
 ////////////////////////////////
+//~ rjf: Call Stack Types
+
+typedef struct CTRL_CallStackInlineFrame CTRL_CallStackInlineFrame;
+struct CTRL_CallStackInlineFrame
+{
+  CTRL_CallStackInlineFrame *next;
+  CTRL_CallStackInlineFrame *prev;
+  RDI_InlineSite *inline_site;
+};
+
+typedef struct CTRL_CallStackFrame CTRL_CallStackFrame;
+struct CTRL_CallStackFrame
+{
+  CTRL_CallStackInlineFrame *first_inline_frame;
+  CTRL_CallStackInlineFrame *last_inline_frame;
+  U64 inline_frame_count;
+  void *regs;
+  RDI_Parsed *rdi;
+  RDI_Procedure *procedure;
+};
+
+typedef struct CTRL_CallStack CTRL_CallStack;
+struct CTRL_CallStack
+{
+  CTRL_CallStackFrame *frames;
+  U64 concrete_frame_count;
+  U64 inline_frame_count;
+  U64 total_frame_count;
+};
+
+////////////////////////////////
 //~ rjf: Trap Types
 
 typedef U32 CTRL_TrapFlags;
@@ -1033,6 +1064,11 @@ internal CTRL_UnwindStepResult ctrl_unwind_step(CTRL_EntityStore *store, CTRL_Ha
 
 //- rjf: abstracted full unwind
 internal CTRL_Unwind ctrl_unwind_from_thread(Arena *arena, CTRL_EntityStore *store, CTRL_Handle thread, U64 endt_us);
+
+////////////////////////////////
+//~ rjf: Call Stack Building Functions
+
+internal CTRL_CallStack ctrl_call_stack_from_unwind(Arena *arena, DI_Scope *di_scope, CTRL_Entity *process, CTRL_Unwind *base_unwind);
 
 ////////////////////////////////
 //~ rjf: Halting All Attached Processes

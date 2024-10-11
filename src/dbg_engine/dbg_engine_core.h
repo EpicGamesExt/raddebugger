@@ -190,43 +190,6 @@ struct D_ViewRuleSpec
 };
 
 ////////////////////////////////
-//~ rjf: Rich (Including Inline) Unwind Types
-
-typedef struct D_UnwindInlineFrame D_UnwindInlineFrame;
-struct D_UnwindInlineFrame
-{
-  D_UnwindInlineFrame *next;
-  D_UnwindInlineFrame *prev;
-  RDI_InlineSite *inline_site;
-};
-
-typedef struct D_UnwindFrame D_UnwindFrame;
-struct D_UnwindFrame
-{
-  D_UnwindInlineFrame *first_inline_frame;
-  D_UnwindInlineFrame *last_inline_frame;
-  U64 inline_frame_count;
-  void *regs;
-  RDI_Parsed *rdi;
-  RDI_Procedure *procedure;
-};
-
-typedef struct D_UnwindFrameArray D_UnwindFrameArray;
-struct D_UnwindFrameArray
-{
-  D_UnwindFrame *v;
-  U64 concrete_frame_count;
-  U64 inline_frame_count;
-  U64 total_frame_count;
-};
-
-typedef struct D_Unwind D_Unwind;
-struct D_Unwind
-{
-  D_UnwindFrameArray frames;
-};
-
-////////////////////////////////
 //~ rjf: Command Types
 
 typedef struct D_CmdParams D_CmdParams;
@@ -484,9 +447,6 @@ internal D_LineList d_lines_from_file_path_line_num(Arena *arena, String8 file_p
 //~ rjf: Process/Thread/Module Info Lookups
 
 internal U64 d_tls_base_vaddr_from_process_root_rip(CTRL_Entity *process, U64 root_vaddr, U64 rip_vaddr);
-internal E_String2NumMap *d_push_locals_map_from_dbgi_key_voff(Arena *arena, DI_Scope *scope, DI_Key *dbgi_key, U64 voff);
-internal E_String2NumMap *d_push_member_map_from_dbgi_key_voff(Arena *arena, DI_Scope *scope, DI_Key *dbgi_key, U64 voff);
-internal D_Unwind d_unwind_from_ctrl_unwind(Arena *arena, DI_Scope *di_scope, CTRL_Entity *process, CTRL_Unwind *base_unwind);
 
 ////////////////////////////////
 //~ rjf: Target Controls

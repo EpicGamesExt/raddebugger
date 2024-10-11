@@ -916,17 +916,17 @@ rd_watch_view_row_info_from_row(EV_Row *row)
     {
       U64 block_relative_num = block->expand_view_rule_info->expr_expand_num_from_id(key.child_id, block->expand_view_rule_info_user_data);
       CTRL_Unwind base_unwind = d_query_cached_unwind_from_thread(thread);
-      D_Unwind rich_unwind = d_unwind_from_ctrl_unwind(scratch.arena, di_scope, ctrl_entity_ancestor_from_kind(thread, CTRL_EntityKind_Process), &base_unwind);
+      CTRL_CallStack rich_unwind = ctrl_call_stack_from_unwind(scratch.arena, di_scope, ctrl_entity_ancestor_from_kind(thread, CTRL_EntityKind_Process), &base_unwind);
       U64 frame_num = 1;
-      for(U64 base_frame_idx = 0; base_frame_idx < rich_unwind.frames.concrete_frame_count; base_frame_idx += 1, frame_num += 1)
+      for(U64 base_frame_idx = 0; base_frame_idx < rich_unwind.concrete_frame_count; base_frame_idx += 1, frame_num += 1)
       {
-        if(frame_num <= block_relative_num && block_relative_num < frame_num+1+rich_unwind.frames.v[base_frame_idx].inline_frame_count)
+        if(frame_num <= block_relative_num && block_relative_num < frame_num+1+rich_unwind.frames[base_frame_idx].inline_frame_count)
         {
           unwind_count = base_frame_idx;
           inline_depth = block_relative_num - frame_num;
           break;
         }
-        frame_num += rich_unwind.frames.v[base_frame_idx].inline_frame_count;
+        frame_num += rich_unwind.frames[base_frame_idx].inline_frame_count;
       }
     }
     
@@ -3065,26 +3065,33 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                       }
                       
                       // rjf: cannot edit, has addr info? -> go to address
-                      else
+                      else if(row_kind == RD_WatchViewRowKind_Normal &&
+                              (col->kind == RD_WatchViewColumnKind_Value ||
+                               col->kind == RD_WatchViewColumnKind_Member) &&
+                              cell_eval.space.kind == RD_EvalSpaceKind_CtrlEntity)
                       {
-                        U64 vaddr = cell_eval.value.u64;
-                        CTRL_Entity *process = rd_ctrl_entity_from_eval_space(cell_eval.space);
-                        CTRL_Entity *module = ctrl_module_from_process_vaddr(process, vaddr);
-                        DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
-                        U64 voff = ctrl_voff_from_vaddr(module, vaddr);
-                        D_LineList lines = d_lines_from_dbgi_key_voff(scratch.arena, &dbgi_key, voff);
-                        String8 file_path = {0};
-                        TxtPt pt = {0};
-                        if(lines.first != 0)
+                        CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(cell_eval.space);
+                        CTRL_Entity *process = ctrl_process_from_entity(entity);
+                        if(process != &ctrl_entity_nil)
                         {
-                          file_path = lines.first->v.file_path;
-                          pt        = lines.first->v.pt;
+                          U64 vaddr = cell_eval.value.u64;
+                          CTRL_Entity *module = ctrl_module_from_process_vaddr(process, vaddr);
+                          DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
+                          U64 voff = ctrl_voff_from_vaddr(module, vaddr);
+                          D_LineList lines = d_lines_from_dbgi_key_voff(scratch.arena, &dbgi_key, voff);
+                          String8 file_path = {0};
+                          TxtPt pt = {0};
+                          if(lines.first != 0)
+                          {
+                            file_path = lines.first->v.file_path;
+                            pt        = lines.first->v.pt;
+                          }
+                          rd_cmd(RD_CmdKind_FindCodeLocation,
+                                 .process    = process->handle,
+                                 .vaddr      = vaddr,
+                                 .file_path  = file_path,
+                                 .cursor     = pt);
                         }
-                        rd_cmd(RD_CmdKind_FindCodeLocation,
-                               .process    = process->handle,
-                               .vaddr      = vaddr,
-                               .file_path  = file_path,
-                               .cursor     = pt);
                       }
                     }
                     

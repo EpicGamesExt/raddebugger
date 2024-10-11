@@ -488,10 +488,10 @@ rd_entity_tooltips(RD_Entity *entity)
       DI_Scope *di_scope = di_scope_open();
       CTRL_Entity *process = ctrl_entity_ancestor_from_kind(entity_ctrl, CTRL_EntityKind_Process);
       CTRL_Unwind base_unwind = d_query_cached_unwind_from_thread(entity_ctrl);
-      D_Unwind rich_unwind = d_unwind_from_ctrl_unwind(scratch.arena, di_scope, process, &base_unwind);
-      for(U64 idx = 0; idx < rich_unwind.frames.concrete_frame_count; idx += 1)
+      CTRL_CallStack rich_unwind = ctrl_call_stack_from_unwind(scratch.arena, di_scope, process, &base_unwind);
+      for(U64 idx = 0; idx < rich_unwind.concrete_frame_count; idx += 1)
       {
-        D_UnwindFrame *f = &rich_unwind.frames.v[idx];
+        CTRL_CallStackFrame *f = &rich_unwind.frames[idx];
         RDI_Parsed *rdi = f->rdi;
         RDI_Procedure *procedure = f->procedure;
         U64 rip_vaddr = regs_rip_from_arch_block(entity->arch, f->regs);
@@ -499,7 +499,7 @@ rd_entity_tooltips(RD_Entity *entity)
         String8 module_name = module == &ctrl_entity_nil ? str8_lit("???") : str8_skip_last_slash(module->string);
         
         // rjf: inline frames
-        for(D_UnwindInlineFrame *fin = f->last_inline_frame; fin != 0; fin = fin->prev)
+        for(CTRL_CallStackInlineFrame *fin = f->last_inline_frame; fin != 0; fin = fin->prev)
           UI_PrefWidth(ui_children_sum(1)) UI_Row
         {
           String8 name = {0};

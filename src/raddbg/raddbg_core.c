@@ -1902,13 +1902,27 @@ rd_title_fstrs_from_entity(Arena *arena, RD_Entity *entity, Vec4F32 secondary_co
       dr_fancy_string_list_concat_in_place(&result, &cnd_fstrs);
     }
   }
-  if(!rd_entity_is_nil(src) && !rd_entity_is_nil(dst))
+  if(entity->kind == RD_EntityKind_FilePathMap)
   {
-    dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Main), size, color, src->string);
+    String8 src_string = src->string;
+    Vec4F32 src_color = color;
+    String8 dst_string = dst->string;
+    Vec4F32 dst_color = color;
+    if(src_string.size == 0)
+    {
+      src_string = str8_lit("no path");
+      src_color = secondary_color;
+    }
+    if(dst_string.size == 0)
+    {
+      dst_string = str8_lit("no path");
+      dst_color = secondary_color;
+    }
+    dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Main), size, src_color, src_string);
     dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), size, v4f32(0, 0, 0, 0), str8_lit(" "));
     dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Icons), size, secondary_color, rd_icon_kind_text_table[RD_IconKind_RightArrow]);
     dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), size, v4f32(0, 0, 0, 0), str8_lit(" "));
-    dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Main), size, color, dst->string);
+    dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Main), size, dst_color, dst_string);
   }
   if((entity->kind == RD_EntityKind_Target || entity->kind == RD_EntityKind_Breakpoint) && entity->disabled)
   {
@@ -2131,6 +2145,7 @@ rd_eval_space_from_ctrl_entity(CTRL_Entity *entity, E_SpaceKind kind)
 internal CTRL_MetaEval *
 rd_ctrl_meta_eval_from_entity(Arena *arena, RD_Entity *entity)
 {
+  ProfBeginFunction();
   CTRL_MetaEval *meval = push_array(arena, CTRL_MetaEval, 1);
   RD_Entity *exe = rd_entity_child_from_kind(entity, RD_EntityKind_Executable);
   RD_Entity *args= rd_entity_child_from_kind(entity, RD_EntityKind_Arguments);
@@ -2171,12 +2186,14 @@ rd_ctrl_meta_eval_from_entity(Arena *arena, RD_Entity *entity)
   meval->source_path = src->string;
   meval->destination_path = dst->string;
   meval->condition = cnd_string;
+  ProfEnd();
   return meval;
 }
 
 internal CTRL_MetaEval *
 rd_ctrl_meta_eval_from_ctrl_entity(Arena *arena, CTRL_Entity *entity)
 {
+  ProfBeginFunction();
   CTRL_MetaEval *meval = push_array(arena, CTRL_MetaEval, 1);
   meval->frozen      = entity->is_frozen;
   meval->vaddr_range = entity->vaddr_range;
@@ -2188,20 +2205,20 @@ rd_ctrl_meta_eval_from_ctrl_entity(Arena *arena, CTRL_Entity *entity)
     DI_Scope *di_scope = di_scope_open();
     CTRL_Entity *process = ctrl_entity_ancestor_from_kind(entity, CTRL_EntityKind_Process);
     CTRL_Unwind base_unwind = d_query_cached_unwind_from_thread(entity);
-    D_Unwind rich_unwind = d_unwind_from_ctrl_unwind(arena, di_scope, process, &base_unwind);
-    meval->callstack.count = rich_unwind.frames.total_frame_count;
+    CTRL_CallStack rich_unwind = ctrl_call_stack_from_unwind(arena, di_scope, process, &base_unwind);
+    meval->callstack.count = rich_unwind.total_frame_count;
     meval->callstack.v = push_array(arena, CTRL_MetaEvalFrame, meval->callstack.count);
     U64 idx = 0;
-    for(U64 base_idx = 0; base_idx < rich_unwind.frames.concrete_frame_count; base_idx += 1)
+    for(U64 base_idx = 0; base_idx < rich_unwind.concrete_frame_count; base_idx += 1)
     {
       U64 inline_idx = 0;
-      for(D_UnwindInlineFrame *f = rich_unwind.frames.v[base_idx].first_inline_frame; f != 0; f = f->next, inline_idx += 1)
+      for(CTRL_CallStackInlineFrame *f = rich_unwind.frames[base_idx].first_inline_frame; f != 0; f = f->next, inline_idx += 1)
       {
-        meval->callstack.v[idx].vaddr = regs_rip_from_arch_block(entity->arch, rich_unwind.frames.v[base_idx].regs);
+        meval->callstack.v[idx].vaddr = regs_rip_from_arch_block(entity->arch, rich_unwind.frames[base_idx].regs);
         meval->callstack.v[idx].inline_depth = inline_idx + 1;
         idx += 1;
       }
-      meval->callstack.v[idx].vaddr = regs_rip_from_arch_block(entity->arch, rich_unwind.frames.v[base_idx].regs);
+      meval->callstack.v[idx].vaddr = regs_rip_from_arch_block(entity->arch, rich_unwind.frames[base_idx].regs);
       idx += 1;
     }
     di_scope_close(di_scope);
@@ -2213,6 +2230,7 @@ rd_ctrl_meta_eval_from_ctrl_entity(Arena *arena, CTRL_Entity *entity)
     meval->exe = path_normalized_from_string(arena, entity->string);
     meval->dbg = path_normalized_from_string(arena, dbgi_key.path);
   }
+  ProfEnd();
   return meval;
 }
 
@@ -3572,14 +3590,14 @@ rd_window_frame(RD_Window *ws)
           {
             CTRL_Entity *process = ctrl_entity_ancestor_from_kind(ctrl_entity, CTRL_EntityKind_Process);
             CTRL_Unwind base_unwind = d_query_cached_unwind_from_thread(ctrl_entity);
-            D_Unwind rich_unwind = d_unwind_from_ctrl_unwind(scratch.arena, di_scope, process, &base_unwind);
-            if(rich_unwind.frames.concrete_frame_count != 0)
+            CTRL_CallStack rich_unwind = ctrl_call_stack_from_unwind(scratch.arena, di_scope, process, &base_unwind);
+            if(rich_unwind.concrete_frame_count != 0)
             {
               ui_spacer(ui_em(1.5f, 1.f));
             }
-            for(U64 idx = 0; idx < rich_unwind.frames.concrete_frame_count; idx += 1)
+            for(U64 idx = 0; idx < rich_unwind.concrete_frame_count; idx += 1)
             {
-              D_UnwindFrame *f = &rich_unwind.frames.v[idx];
+              CTRL_CallStackFrame *f = &rich_unwind.frames[idx];
               RDI_Parsed *rdi = f->rdi;
               RDI_Procedure *procedure = f->procedure;
               U64 rip_vaddr = regs_rip_from_arch_block(arch, f->regs);
@@ -3587,7 +3605,7 @@ rd_window_frame(RD_Window *ws)
               String8 module_name = module == &ctrl_entity_nil ? str8_lit("???") : str8_skip_last_slash(module->string);
               
               // rjf: inline frames
-              for(D_UnwindInlineFrame *fin = f->last_inline_frame; fin != 0; fin = fin->prev)
+              for(CTRL_CallStackInlineFrame *fin = f->last_inline_frame; fin != 0; fin = fin->prev)
                 UI_PrefWidth(ui_children_sum(1)) UI_Row
               {
                 String8 name = {0};
@@ -4199,16 +4217,16 @@ rd_window_frame(RD_Window *ws)
                 DI_Scope *di_scope = di_scope_open();
                 CTRL_Entity *process = ctrl_entity_ancestor_from_kind(ctrl_entity, CTRL_EntityKind_Process);
                 CTRL_Unwind base_unwind = d_query_cached_unwind_from_thread(ctrl_entity);
-                D_Unwind rich_unwind = d_unwind_from_ctrl_unwind(scratch.arena, di_scope, process, &base_unwind);
+                CTRL_CallStack rich_unwind = ctrl_call_stack_from_unwind(scratch.arena, di_scope, process, &base_unwind);
                 String8List lines = {0};
-                for(U64 frame_idx = 0; frame_idx < rich_unwind.frames.concrete_frame_count; frame_idx += 1)
+                for(U64 frame_idx = 0; frame_idx < rich_unwind.concrete_frame_count; frame_idx += 1)
                 {
-                  D_UnwindFrame *concrete_frame = &rich_unwind.frames.v[frame_idx];
+                  CTRL_CallStackFrame *concrete_frame = &rich_unwind.frames[frame_idx];
                   U64 rip_vaddr = regs_rip_from_arch_block(ctrl_entity->arch, concrete_frame->regs);
                   CTRL_Entity *module = ctrl_module_from_process_vaddr(process, rip_vaddr);
                   RDI_Parsed *rdi = concrete_frame->rdi;
                   RDI_Procedure *procedure = concrete_frame->procedure;
-                  for(D_UnwindInlineFrame *inline_frame = concrete_frame->last_inline_frame;
+                  for(CTRL_CallStackInlineFrame *inline_frame = concrete_frame->last_inline_frame;
                       inline_frame != 0;
                       inline_frame = inline_frame->prev)
                   {
@@ -4260,10 +4278,10 @@ rd_window_frame(RD_Window *ws)
               CTRL_Entity *thread = ctrl_entity;
               CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, CTRL_EntityKind_Process);
               CTRL_Unwind base_unwind = d_query_cached_unwind_from_thread(thread);
-              D_Unwind rich_unwind = d_unwind_from_ctrl_unwind(scratch.arena, di_scope, process, &base_unwind);
-              for(U64 idx = 0; idx < rich_unwind.frames.concrete_frame_count; idx += 1)
+              CTRL_CallStack rich_unwind = ctrl_call_stack_from_unwind(scratch.arena, di_scope, process, &base_unwind);
+              for(U64 idx = 0; idx < rich_unwind.concrete_frame_count; idx += 1)
               {
-                D_UnwindFrame *f = &rich_unwind.frames.v[idx];
+                CTRL_CallStackFrame *f = &rich_unwind.frames[idx];
                 RDI_Parsed *rdi = f->rdi;
                 RDI_Procedure *procedure = f->procedure;
                 U64 rip_vaddr = regs_rip_from_arch_block(thread->arch, f->regs);
@@ -4271,7 +4289,7 @@ rd_window_frame(RD_Window *ws)
                 String8 module_name = module == &ctrl_entity_nil ? str8_lit("???") : str8_skip_last_slash(module->string);
                 
                 // rjf: inline frames
-                for(D_UnwindInlineFrame *fin = f->last_inline_frame; fin != 0; fin = fin->prev)
+                for(CTRL_CallStackInlineFrame *fin = f->last_inline_frame; fin != 0; fin = fin->prev)
                 {
                   UI_Box *row = ui_build_box_from_stringf(UI_BoxFlag_Clickable|UI_BoxFlag_ClickToFocus, "###callstack_row_%I64x", idx);
                   UI_Signal sig = ui_signal_from_box(row);
@@ -15162,10 +15180,10 @@ rd_frame(void)
             CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_base_regs()->thread);
             CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, CTRL_EntityKind_Process);
             CTRL_Unwind base_unwind = d_query_cached_unwind_from_thread(thread);
-            D_Unwind rich_unwind = d_unwind_from_ctrl_unwind(scratch.arena, di_scope, process, &base_unwind);
-            if(rd_regs()->unwind_count < rich_unwind.frames.concrete_frame_count)
+            CTRL_CallStack rich_unwind = ctrl_call_stack_from_unwind(scratch.arena, di_scope, process, &base_unwind);
+            if(rd_regs()->unwind_count < rich_unwind.concrete_frame_count)
             {
-              D_UnwindFrame *frame = &rich_unwind.frames.v[rd_regs()->unwind_count];
+              CTRL_CallStackFrame *frame = &rich_unwind.frames[rd_regs()->unwind_count];
               U64 rip_vaddr = regs_rip_from_arch_block(thread->arch, frame->regs);
               CTRL_Entity *module = ctrl_module_from_process_vaddr(process, rip_vaddr);
               rd_state->base_regs.v.module = module->handle;
@@ -15186,14 +15204,14 @@ rd_frame(void)
             CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_base_regs()->thread);
             CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, CTRL_EntityKind_Process);
             CTRL_Unwind base_unwind = d_query_cached_unwind_from_thread(thread);
-            D_Unwind rich_unwind = d_unwind_from_ctrl_unwind(scratch.arena, di_scope, process, &base_unwind);
+            CTRL_CallStack rich_unwind = ctrl_call_stack_from_unwind(scratch.arena, di_scope, process, &base_unwind);
             U64 crnt_unwind_idx = rd_state->base_regs.v.unwind_count;
             U64 crnt_inline_dpt = rd_state->base_regs.v.inline_depth;
             U64 next_unwind_idx = crnt_unwind_idx;
             U64 next_inline_dpt = crnt_inline_dpt;
-            if(crnt_unwind_idx < rich_unwind.frames.concrete_frame_count)
+            if(crnt_unwind_idx < rich_unwind.concrete_frame_count)
             {
-              D_UnwindFrame *f = &rich_unwind.frames.v[crnt_unwind_idx];
+              CTRL_CallStackFrame *f = &rich_unwind.frames[crnt_unwind_idx];
               switch(kind)
               {
                 default:{}break;
@@ -15215,7 +15233,7 @@ rd_frame(void)
                   {
                     next_inline_dpt -= 1;
                   }
-                  else if(crnt_unwind_idx < rich_unwind.frames.concrete_frame_count)
+                  else if(crnt_unwind_idx < rich_unwind.concrete_frame_count)
                   {
                     next_unwind_idx += 1;
                     next_inline_dpt = (f+1)->inline_frame_count;

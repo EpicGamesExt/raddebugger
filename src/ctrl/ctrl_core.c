@@ -2979,6 +2979,50 @@ ctrl_unwind_from_thread(Arena *arena, CTRL_EntityStore *store, CTRL_Handle threa
 }
 
 ////////////////////////////////
+//~ rjf: Call Stack Building Functions
+
+internal CTRL_CallStack
+ctrl_call_stack_from_unwind(Arena *arena, DI_Scope *di_scope, CTRL_Entity *process, CTRL_Unwind *base_unwind)
+{
+  Arch arch = process->arch;
+  CTRL_CallStack result = {0};
+  result.concrete_frame_count = base_unwind->frames.count;
+  result.total_frame_count = result.concrete_frame_count;
+  result.frames = push_array(arena, CTRL_CallStackFrame, result.concrete_frame_count);
+  for(U64 idx = 0; idx < result.concrete_frame_count; idx += 1)
+  {
+    CTRL_UnwindFrame *src = &base_unwind->frames.v[idx];
+    CTRL_CallStackFrame *dst = &result.frames[idx];
+    U64 rip_vaddr = regs_rip_from_arch_block(arch, src->regs);
+    CTRL_Entity *module = ctrl_module_from_process_vaddr(process, rip_vaddr);
+    U64 rip_voff = ctrl_voff_from_vaddr(module, rip_vaddr);
+    DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
+    RDI_Parsed *rdi = di_rdi_from_key(di_scope, &dbgi_key, 0);
+    RDI_Scope *scope = rdi_scope_from_voff(rdi, rip_voff);
+    
+    // rjf: fill concrete frame info
+    dst->regs = src->regs;
+    dst->rdi = rdi;
+    dst->procedure = rdi_element_from_name_idx(rdi, Procedures, scope->proc_idx);
+    
+    // rjf: push inline frames
+    for(RDI_Scope *s = scope;
+        s->inline_site_idx != 0;
+        s = rdi_element_from_name_idx(rdi, Scopes, s->parent_scope_idx))
+    {
+      RDI_InlineSite *site = rdi_element_from_name_idx(rdi, InlineSites, s->inline_site_idx);
+      CTRL_CallStackInlineFrame *inline_frame = push_array(arena, CTRL_CallStackInlineFrame, 1);
+      DLLPushFront(dst->first_inline_frame, dst->last_inline_frame, inline_frame);
+      inline_frame->inline_site = site;
+      dst->inline_frame_count += 1;
+      result.inline_frame_count += 1;
+      result.total_frame_count += 1;
+    }
+  }
+  return result;
+}
+
+////////////////////////////////
 //~ rjf: Halting All Attached Processes
 
 internal void

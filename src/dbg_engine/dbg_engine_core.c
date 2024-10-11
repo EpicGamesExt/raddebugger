@@ -1140,63 +1140,6 @@ d_tls_base_vaddr_from_process_root_rip(CTRL_Entity *process, U64 root_vaddr, U64
   return base_vaddr;
 }
 
-internal E_String2NumMap *
-d_push_locals_map_from_dbgi_key_voff(Arena *arena, DI_Scope *scope, DI_Key *dbgi_key, U64 voff)
-{
-  RDI_Parsed *rdi = di_rdi_from_key(scope, dbgi_key, 0);
-  E_String2NumMap *result = e_push_locals_map_from_rdi_voff(arena, rdi, voff);
-  return result;
-}
-
-internal E_String2NumMap *
-d_push_member_map_from_dbgi_key_voff(Arena *arena, DI_Scope *scope, DI_Key *dbgi_key, U64 voff)
-{
-  RDI_Parsed *rdi = di_rdi_from_key(scope, dbgi_key, 0);
-  E_String2NumMap *result = e_push_member_map_from_rdi_voff(arena, rdi, voff);
-  return result;
-}
-
-internal D_Unwind
-d_unwind_from_ctrl_unwind(Arena *arena, DI_Scope *di_scope, CTRL_Entity *process, CTRL_Unwind *base_unwind)
-{
-  Arch arch = process->arch;
-  D_Unwind result = {0};
-  result.frames.concrete_frame_count = base_unwind->frames.count;
-  result.frames.total_frame_count = result.frames.concrete_frame_count;
-  result.frames.v = push_array(arena, D_UnwindFrame, result.frames.concrete_frame_count);
-  for(U64 idx = 0; idx < result.frames.concrete_frame_count; idx += 1)
-  {
-    CTRL_UnwindFrame *src = &base_unwind->frames.v[idx];
-    D_UnwindFrame *dst = &result.frames.v[idx];
-    U64 rip_vaddr = regs_rip_from_arch_block(arch, src->regs);
-    CTRL_Entity *module = ctrl_module_from_process_vaddr(process, rip_vaddr);
-    U64 rip_voff = ctrl_voff_from_vaddr(module, rip_vaddr);
-    DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
-    RDI_Parsed *rdi = di_rdi_from_key(di_scope, &dbgi_key, 0);
-    RDI_Scope *scope = rdi_scope_from_voff(rdi, rip_voff);
-    
-    // rjf: fill concrete frame info
-    dst->regs = src->regs;
-    dst->rdi = rdi;
-    dst->procedure = rdi_element_from_name_idx(rdi, Procedures, scope->proc_idx);
-    
-    // rjf: push inline frames
-    for(RDI_Scope *s = scope;
-        s->inline_site_idx != 0;
-        s = rdi_element_from_name_idx(rdi, Scopes, s->parent_scope_idx))
-    {
-      RDI_InlineSite *site = rdi_element_from_name_idx(rdi, InlineSites, s->inline_site_idx);
-      D_UnwindInlineFrame *inline_frame = push_array(arena, D_UnwindInlineFrame, 1);
-      DLLPushFront(dst->first_inline_frame, dst->last_inline_frame, inline_frame);
-      inline_frame->inline_site = site;
-      dst->inline_frame_count += 1;
-      result.frames.inline_frame_count += 1;
-      result.frames.total_frame_count += 1;
-    }
-  }
-  return result;
-}
-
 ////////////////////////////////
 //~ rjf: Target Controls
 
@@ -1421,7 +1364,8 @@ d_query_cached_locals_map_from_dbgi_key_voff(DI_Key *dbgi_key, U64 voff)
     if(node == 0)
     {
       DI_Scope *scope = di_scope_open();
-      E_String2NumMap *map = d_push_locals_map_from_dbgi_key_voff(cache->arena, scope, dbgi_key, voff);
+      RDI_Parsed *rdi = di_rdi_from_key(scope, dbgi_key, 0);
+      E_String2NumMap *map = e_push_locals_map_from_rdi_voff(cache->arena, rdi, voff);
       if(map->slots_count != 0)
       {
         node = push_array(cache->arena, D_RunLocalsCacheNode, 1);
@@ -1474,7 +1418,8 @@ d_query_cached_member_map_from_dbgi_key_voff(DI_Key *dbgi_key, U64 voff)
     if(node == 0)
     {
       DI_Scope *scope = di_scope_open();
-      E_String2NumMap *map = d_push_member_map_from_dbgi_key_voff(cache->arena, scope, dbgi_key, voff);
+      RDI_Parsed *rdi = di_rdi_from_key(scope, dbgi_key, 0);
+      E_String2NumMap *map = e_push_member_map_from_rdi_voff(cache->arena, rdi, voff);
       if(map->slots_count != 0)
       {
         node = push_array(cache->arena, D_RunLocalsCacheNode, 1);
