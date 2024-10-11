@@ -2148,23 +2148,26 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
         {
           B32 good_to_run = 0;
           CTRL_EntityList threads = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Thread);
-          for(CTRL_EntityNode *n = threads.first; n != 0; n = n->next)
+          if(threads.count > 0)
           {
-            if(!n->v->is_frozen)
+            for(CTRL_EntityNode *n = threads.first; n != 0; n = n->next)
             {
-              good_to_run = 1;
-              break;
+              if(!n->v->is_frozen)
+              {
+                good_to_run = 1;
+                break;
+              }
             }
-          }
-          if(good_to_run)
-          {
-            need_run = 1;
-            run_kind = D_RunKind_Run;
-            run_thread = &ctrl_entity_nil;
-          }
-          else
-          {
-            log_user_error(str8_lit("Cannot run with all threads frozen."));
+            if(good_to_run)
+            {
+              need_run = 1;
+              run_kind = D_RunKind_Run;
+              run_thread = &ctrl_entity_nil;
+            }
+            else
+            {
+              log_user_error(str8_lit("Cannot run with all threads frozen."));
+            }
           }
         }break;
         case D_CmdKind_StepIntoInst:
@@ -2174,7 +2177,11 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
         case D_CmdKind_StepOut:
         {
           CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, params->thread);
-          if(d_ctrl_targets_running())
+          if(thread == &ctrl_entity_nil)
+          {
+            log_user_error(str8_lit("Must have a selected thread to step."));
+          }
+          else if(d_ctrl_targets_running())
           {
             if(d_ctrl_last_run_kind() == D_RunKind_Run)
             {

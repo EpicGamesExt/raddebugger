@@ -5533,10 +5533,12 @@ ctrl_thread__single_step(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
   }
   
   //- rjf: single step
+  DMN_Handle thread = msg->entity.dmn_handle;
+  B32 thread_is_valid = !dmn_handle_match(thread, dmn_handle_zero());
   DMN_Event *stop_event = 0;
   CTRL_EventCause stop_cause = CTRL_EventCause_Null;
+  if(thread_is_valid)
   {
-    DMN_Handle thread = msg->entity.dmn_handle;
     U64 thread_pre_rip = dmn_rip_from_thread(thread);
     U64 thread_post_rip = thread_pre_rip;
     for(B32 done = 0; done == 0;)
@@ -5570,17 +5572,19 @@ ctrl_thread__single_step(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
   }
   
   //- rjf: record stop
-  if(stop_event != 0)
   {
     CTRL_EventList evts = {0};
     CTRL_Event *event = ctrl_event_list_push(scratch.arena, &evts);
     event->kind = CTRL_EventKind_Stopped;
     event->cause = stop_cause;
-    event->entity = ctrl_handle_make(CTRL_MachineID_Local, stop_event->thread);
-    event->parent = ctrl_handle_make(CTRL_MachineID_Local, stop_event->process);
-    event->exception_code = stop_event->code;
-    event->vaddr_rng = r1u64(stop_event->address, stop_event->address);
-    event->rip_vaddr = stop_event->instruction_pointer;
+    if(stop_event != 0)
+    {
+      event->entity = ctrl_handle_make(CTRL_MachineID_Local, stop_event->thread);
+      event->parent = ctrl_handle_make(CTRL_MachineID_Local, stop_event->process);
+      event->exception_code = stop_event->code;
+      event->vaddr_rng = r1u64(stop_event->address, stop_event->address);
+      event->rip_vaddr = stop_event->instruction_pointer;
+    }
     ctrl_c2u_push_events(&evts);
   }
   
