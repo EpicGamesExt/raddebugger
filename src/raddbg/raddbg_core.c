@@ -135,6 +135,7 @@ rd_regs_copy_contents(Arena *arena, RD_Regs *dst, RD_Regs *src)
   dst->lines       = d_line_list_copy(arena, &src->lines);
   dst->dbgi_key    = di_key_copy(arena, &src->dbgi_key);
   dst->string      = push_str8_copy(arena, src->string);
+  dst->cmd_name    = push_str8_copy(arena, src->cmd_name);
   dst->params_tree = md_tree_copy(arena, src->params_tree);
   if(dst->entity_list.count == 0 && !rd_handle_match(rd_handle_zero(), dst->entity))
   {
@@ -2007,7 +2008,7 @@ rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, Vec4F32 secon
       Vec4F32 process_color = rd_rgba_from_ctrl_entity(process);
       if(process_name.size != 0)
       {
-        dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), size, process_color, process_name);
+        dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Main), size, process_color, process_name);
         dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), size, secondary_color, str8_lit(" / "));
       }
     }
@@ -5860,7 +5861,7 @@ rd_window_frame(RD_Window *ws)
             UI_Signal user_sig = ui_signal_from_box(user_box);
             if(ui_clicked(user_sig))
             {
-              rd_cmd(RD_CmdKind_RunCommand, .string = rd_cmd_kind_info_table[RD_CmdKind_OpenUser].string);
+              rd_cmd(RD_CmdKind_RunCommand, .cmd_name = rd_cmd_kind_info_table[RD_CmdKind_OpenUser].string);
             }
           }
           
@@ -5893,7 +5894,7 @@ rd_window_frame(RD_Window *ws)
             UI_Signal prof_sig = ui_signal_from_box(prof_box);
             if(ui_clicked(prof_sig))
             {
-              rd_cmd(RD_CmdKind_RunCommand, .string = rd_cmd_kind_info_table[RD_CmdKind_OpenProject].string);
+              rd_cmd(RD_CmdKind_RunCommand, .cmd_name = rd_cmd_kind_info_table[RD_CmdKind_OpenProject].string);
             }
           }
           
@@ -11362,7 +11363,7 @@ rd_frame(void)
           U32 hit_char = os_codepoint_from_modifiers_and_key(event->modifiers, event->key);
           if(hit_char == 0 || allow_text_hotkeys)
           {
-            rd_cmd(RD_CmdKind_RunCommand, .string = spec_candidates.first->string);
+            rd_cmd(RD_CmdKind_RunCommand, .cmd_name = spec_candidates.first->string);
             if(allow_text_hotkeys)
             {
               os_text(&events, event->window, hit_char);
@@ -11800,12 +11801,12 @@ rd_frame(void)
           //- rjf: command fast path
           case RD_CmdKind_RunCommand:
           {
-            RD_CmdKindInfo *info = rd_cmd_kind_info_from_string(cmd->regs->string);
+            RD_CmdKindInfo *info = rd_cmd_kind_info_from_string(cmd->regs->cmd_name);
             
             // rjf: command does not have a query - simply execute with the current registers
             if(!(info->query.flags & RD_QueryFlag_Required))
             {
-              RD_RegsScope(.string = str8_zero()) rd_push_cmd(cmd->regs->string, rd_regs());
+              RD_RegsScope(.cmd_name = str8_zero()) rd_push_cmd(cmd->regs->cmd_name, rd_regs());
             }
             
             // rjf: command has required query -> prep query
@@ -11815,7 +11816,7 @@ rd_frame(void)
               if(window != 0)
               {
                 arena_clear(window->query_cmd_arena);
-                window->query_cmd_name = push_str8_copy(window->query_cmd_arena, cmd->regs->string);
+                window->query_cmd_name = push_str8_copy(window->query_cmd_arena, cmd->regs->cmd_name);
                 window->query_cmd_regs = rd_regs_copy(window->query_cmd_arena, rd_regs());
                 MemoryZeroArray(window->query_cmd_regs_mask);
                 window->query_view_selected = 1;
@@ -11920,7 +11921,6 @@ rd_frame(void)
             {
               os_window_set_minimized(w->os, 0);
               os_window_focus(last_focused_window->os);
-              //os_window_bring_to_front(w->os);
             }
             if(last_focused_window != 0)
             {

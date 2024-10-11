@@ -83,6 +83,7 @@ RD_RegSlot_ForceConfirm,
 RD_RegSlot_PreferDisasm,
 RD_RegSlot_Dir2,
 RD_RegSlot_String,
+RD_RegSlot_CmdName,
 RD_RegSlot_ParamsTree,
 RD_RegSlot_OSEvent,
 RD_RegSlot_COUNT,
@@ -573,6 +574,7 @@ B32 force_confirm;
 B32 prefer_disasm;
 Dir2 dir2;
 String8 string;
+String8 cmd_name;
 MD_Node * params_tree;
 OS_Event * os_event;
 };
@@ -642,6 +644,7 @@ RD_ViewRuleUIFunctionType *ui;
 .prefer_disasm = rd_regs()->prefer_disasm,\
 .dir2 = rd_regs()->dir2,\
 .string = rd_regs()->string,\
+.cmd_name = rd_regs()->cmd_name,\
 .params_tree = rd_regs()->params_tree,\
 .os_event = rd_regs()->os_event,\
 
@@ -743,7 +746,7 @@ extern String8 d_entity_kind_name_lower_table[30];
 extern String8 d_entity_kind_name_lower_plural_table[30];
 extern String8 d_entity_kind_name_label_table[30];
 extern RD_EntityKindFlags rd_entity_kind_flags_table[30];
-extern Rng1U64 rd_reg_slot_range_table[33];
+extern Rng1U64 rd_reg_slot_range_table[34];
 extern RD_StringBindingPair rd_default_binding_table[110];
 extern String8 rd_binding_version_remap_old_name_table[7];
 extern String8 rd_binding_version_remap_new_name_table[7];

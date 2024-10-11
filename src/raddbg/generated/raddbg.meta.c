@@ -206,7 +206,7 @@ RD_EntityKindFlags rd_entity_kind_flags_table[30] =
 (0*RD_EntityKindFlag_CanDelete) | (0*RD_EntityKindFlag_CanFreeze) | (0*RD_EntityKindFlag_CanEdit) | (1*RD_EntityKindFlag_CanRename) | (0*RD_EntityKindFlag_CanEnable) | (0*RD_EntityKindFlag_CanCondition) | (0*RD_EntityKindFlag_CanDuplicate) | (0*RD_EntityKindFlag_NameIsCode) | (0*RD_EntityKindFlag_NameIsPath) | (0*RD_EntityKindFlag_UserDefinedLifetime) | (0*RD_EntityKindFlag_IsSerializedToConfig),
 };
 
-Rng1U64 rd_reg_slot_range_table[33] =
+Rng1U64 rd_reg_slot_range_table[34] =
 {
 {0},
 {OffsetOf(RD_Regs, machine), OffsetOf(RD_Regs, machine) + sizeof(CTRL_Handle)},
@@ -239,6 +239,7 @@ Rng1U64 rd_reg_slot_range_table[33] =
 {OffsetOf(RD_Regs, prefer_disasm), OffsetOf(RD_Regs, prefer_disasm) + sizeof(B32)},
 {OffsetOf(RD_Regs, dir2), OffsetOf(RD_Regs, dir2) + sizeof(Dir2)},
 {OffsetOf(RD_Regs, string), OffsetOf(RD_Regs, string) + sizeof(String8)},
+{OffsetOf(RD_Regs, cmd_name), OffsetOf(RD_Regs, cmd_name) + sizeof(String8)},
 {OffsetOf(RD_Regs, params_tree), OffsetOf(RD_Regs, params_tree) + sizeof(MD_Node *)},
 {OffsetOf(RD_Regs, os_event), OffsetOf(RD_Regs, os_event) + sizeof(OS_Event *)},
 };
@@ -280,7 +281,7 @@ RD_CmdKindInfo rd_cmd_kind_info_table[215] =
 { str8_lit_comp("set_entity_name"), str8_lit_comp("Sets the passed entity's name."), str8_lit_comp(""), str8_lit_comp("Set Entity Name"), RD_IconKind_Null, (RD_CmdKindFlag_ListInUI*0)|(RD_CmdKindFlag_ListInIPCDocs*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), RD_EntityKind_Nil}},
 { str8_lit_comp("attach"), str8_lit_comp("Attaches to a process that is already running on the local machine."), str8_lit_comp(""), str8_lit_comp("Attach"), RD_IconKind_Null, (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Required*1), RD_RegSlot_PID, str8_lit_comp(""), RD_EntityKind_Nil}},
 { str8_lit_comp("exit"), str8_lit_comp("Exits the debugger."), str8_lit_comp("quit,close,abort"), str8_lit_comp("Exit"), RD_IconKind_X, (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), RD_EntityKind_Nil}},
-{ str8_lit_comp("run_command"), str8_lit_comp("Runs a command from the command palette."), str8_lit_comp("help,cmd"), str8_lit_comp("Run Command"), RD_IconKind_Null, (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Required*1), RD_RegSlot_String, str8_lit_comp("commands"), RD_EntityKind_Nil}},
+{ str8_lit_comp("run_command"), str8_lit_comp("Runs a command from the command palette."), str8_lit_comp("help,cmd"), str8_lit_comp("Run Command"), RD_IconKind_Null, (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Required*1), RD_RegSlot_CmdName, str8_lit_comp("commands"), RD_EntityKind_Nil}},
 { str8_lit_comp("os_event"), str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("OS Event"), RD_IconKind_Null, (RD_CmdKindFlag_ListInUI*0)|(RD_CmdKindFlag_ListInIPCDocs*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), RD_EntityKind_Nil}},
 { str8_lit_comp("select_thread"), str8_lit_comp("Selects a thread."), str8_lit_comp(""), str8_lit_comp("Select Thread"), RD_IconKind_Null, (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Required*1), RD_RegSlot_Entity, str8_lit_comp(""), RD_EntityKind_Thread}},
 { str8_lit_comp("select_unwind"), str8_lit_comp("Selects an unwind frame number for the selected thread."), str8_lit_comp(""), str8_lit_comp("Select Unwind"), RD_IconKind_Null, (RD_CmdKindFlag_ListInUI*0)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), RD_EntityKind_Nil}},

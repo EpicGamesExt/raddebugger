@@ -2505,7 +2505,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                 ui_set_next_focus_hot(row_selected ? UI_FocusKind_On : UI_FocusKind_Off);
                 if(ui_clicked(rd_cmd_spec_button(rd_cmd_kind_info_table[RD_CmdKind_AddTarget].string)))
                 {
-                  rd_cmd(RD_CmdKind_RunCommand, .string = rd_cmd_kind_info_table[RD_CmdKind_AddTarget].string);
+                  rd_cmd(RD_CmdKind_RunCommand, .cmd_name = rd_cmd_kind_info_table[RD_CmdKind_AddTarget].string);
                 }
               }
               if(rd_entity_is_nil(entity) && collection_entity_kind == RD_EntityKind_Breakpoint)
@@ -2514,12 +2514,12 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                 ui_set_next_focus_hot(row_selected && selection_tbl.min.x == 1 ? UI_FocusKind_On : UI_FocusKind_Off);
                 if(ui_clicked(rd_cmd_spec_button(rd_cmd_kind_info_table[RD_CmdKind_AddAddressBreakpoint].string)))
                 {
-                  rd_cmd(RD_CmdKind_RunCommand, .string = rd_cmd_kind_info_table[RD_CmdKind_AddAddressBreakpoint].string);
+                  rd_cmd(RD_CmdKind_RunCommand, .cmd_name = rd_cmd_kind_info_table[RD_CmdKind_AddAddressBreakpoint].string);
                 }
                 ui_set_next_focus_hot(row_selected && selection_tbl.min.x == 2 ? UI_FocusKind_On : UI_FocusKind_Off);
                 if(ui_clicked(rd_cmd_spec_button(rd_cmd_kind_info_table[RD_CmdKind_AddFunctionBreakpoint].string)))
                 {
-                  rd_cmd(RD_CmdKind_RunCommand, .string = rd_cmd_kind_info_table[RD_CmdKind_AddFunctionBreakpoint].string);
+                  rd_cmd(RD_CmdKind_RunCommand, .cmd_name = rd_cmd_kind_info_table[RD_CmdKind_AddFunctionBreakpoint].string);
                 }
               }
               if(rd_entity_is_nil(entity) && collection_entity_kind == RD_EntityKind_WatchPin)
@@ -2528,7 +2528,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                 ui_set_next_focus_hot(row_selected && selection_tbl.min.x == 1 ? UI_FocusKind_On : UI_FocusKind_Off);
                 if(ui_clicked(rd_cmd_spec_button(rd_cmd_kind_info_table[RD_CmdKind_AddWatchPin].string)))
                 {
-                  rd_cmd(RD_CmdKind_RunCommand, .string = rd_cmd_kind_info_table[RD_CmdKind_AddWatchPin].string);
+                  rd_cmd(RD_CmdKind_RunCommand, .cmd_name = rd_cmd_kind_info_table[RD_CmdKind_AddWatchPin].string);
                 }
               }
               if(rd_entity_is_nil(entity) && collection_entity_kind == RD_EntityKind_FilePathMap)
@@ -3387,7 +3387,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(getting_started)
             RD_Palette(RD_PaletteCode_NeutralPopButton)
             if(ui_clicked(rd_icon_buttonf(RD_IconKind_Add, 0, "Add Target")))
           {
-            rd_cmd(RD_CmdKind_RunCommand, .string = rd_cmd_kind_info_table[RD_CmdKind_AddTarget].string);
+            rd_cmd(RD_CmdKind_RunCommand, .cmd_name = rd_cmd_kind_info_table[RD_CmdKind_AddTarget].string);
           }
         }break;
         
@@ -3614,7 +3614,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(commands)
   //- rjf: submit best match when hitting enter w/ no selection
   if(cv->selected_cmd_hash == 0 && ui_slot_press(UI_EventActionSlot_Accept))
   {
-    rd_cmd(RD_CmdKind_CompleteQuery, .string = (cmd_array.count > 0 ? cmd_array.v[0].cmd_name : str8_zero()));
+    rd_cmd(RD_CmdKind_CompleteQuery, .cmd_name = (cmd_array.count > 0 ? cmd_array.v[0].cmd_name : str8_zero()));
   }
   
   //- rjf: selected kind -> cursor
@@ -3727,7 +3727,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(commands)
       UI_Signal sig = ui_signal_from_box(box);
       if(ui_clicked(sig))
       {
-        rd_cmd(RD_CmdKind_CompleteQuery, .string = item->cmd_name);
+        rd_cmd(RD_CmdKind_CompleteQuery, .cmd_name = item->cmd_name);
       }
     }
   }
@@ -6114,7 +6114,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(text)
         UI_TextAlignment(UI_TextAlign_Center)
         if(ui_clicked(ui_buttonf("Find alternative...")))
       {
-        rd_cmd(RD_CmdKind_RunCommand, .string = rd_cmd_kind_info_table[RD_CmdKind_PickFile].string);
+        rd_cmd(RD_CmdKind_RunCommand, .cmd_name = rd_cmd_kind_info_table[RD_CmdKind_PickFile].string);
       }
       scratch_end(scratch);
     }

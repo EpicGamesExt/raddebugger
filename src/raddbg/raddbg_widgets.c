@@ -341,7 +341,7 @@ rd_cmd_list_menu_buttons(U64 count, String8 *cmd_names, U32 *fastpath_codepoints
     UI_Signal sig = rd_cmd_spec_button(cmd_names[idx]);
     if(ui_clicked(sig))
     {
-      rd_cmd(RD_CmdKind_RunCommand, .string = cmd_names[idx]);
+      rd_cmd(RD_CmdKind_RunCommand, .cmd_name = cmd_names[idx]);
       ui_ctx_menu_close();
       RD_Window *window = rd_window_from_handle(rd_regs()->window);
       window->menu_bar_focused = 0;

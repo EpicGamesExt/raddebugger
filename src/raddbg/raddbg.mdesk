@@ -194,6 +194,7 @@ RD_RegTable:
   {B32              prefer_disasm    PreferDisasm  }
   {Dir2             dir2             Dir2          }
   {String8          string           String        }
+  {String8          cmd_name         CmdName       }
   {`MD_Node *`      params_tree      ParamsTree    }
   {`OS_Event *`     os_event         OSEvent       }
 }
@@ -235,7 +236,7 @@ RD_CmdTable:    //               |        |              |                  |   
   {Exit                           1        1              Null               null              Nil                0  0  0  0  0  0                                                           X                     "exit"                        "Exit"                                        "Exits the debugger."                                                                                              "quit,close,abort"               }
   
   //- rjf: command runner
-  {RunCommand                     1        1              String             commands          Nil                0  0  0  0  0  1                                                           Null                  "run_command"                 "Run Command"                                 "Runs a command from the command palette."                                                                         "help,cmd"                       }
+  {RunCommand                     1        1              CmdName            commands          Nil                0  0  0  0  0  1                                                           Null                  "run_command"                 "Run Command"                                 "Runs a command from the command palette."                                                                         "help,cmd"                       }
   
   //- rjf: os event passthrough
   {OSEvent                        0        0              Null               null              Nil                0  0  0  0  0  0                                                           Null                  "os_event"                    "OS Event"                                    ""                                                                                                                 ""                               }
