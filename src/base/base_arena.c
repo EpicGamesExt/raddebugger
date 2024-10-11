@@ -103,13 +103,21 @@ arena_push(Arena *arena, U64 size, U64 align)
   }
   
   // rjf: commit new pages, if needed
-  if(current->cmt < pos_pst && !(current->flags & ArenaFlag_LargePages))
+  if(current->cmt < pos_pst)
   {
     U64 cmt_pst_aligned = pos_pst + current->cmt_size-1;
     cmt_pst_aligned -= cmt_pst_aligned%current->cmt_size;
     U64 cmt_pst_clamped = ClampTop(cmt_pst_aligned, current->res);
     U64 cmt_size = cmt_pst_clamped - current->cmt;
-    os_commit((U8 *)current + current->cmt, cmt_size);
+    U8 *cmt_ptr = (U8 *)current + current->cmt;
+    if(current->flags & ArenaFlag_LargePages)
+    {
+      os_commit_large(cmt_ptr, cmt_size);
+    }
+    else
+    {
+      os_commit(cmt_ptr, cmt_size);
+    }
     current->cmt = cmt_pst_clamped;
   }
   
