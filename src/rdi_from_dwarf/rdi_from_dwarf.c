@@ -436,7 +436,7 @@ entry_point(CmdLine *cmd_line)
   
 #define PARSE_CHECK_ERROR(p,fmt,...) do{ if ((p) == 0){ \
 successful_parse = 0; \
-fprintf(stdout, "error(parsing): " fmt "\n", __VA_ARGS__); \
+fprintf(stdout, "error(parsing): " fmt "\n",##__VA_ARGS__); \
 } }while(0)
   
   // parse elf
