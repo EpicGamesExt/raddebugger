@@ -16,48 +16,8 @@ proof, it'd greatly help out if you submitted the issues you find here, along
 with any information you can gather, like dump files (along with the build you
 used), instructions to reproduce, test executables, and so on.
 
-You can automatically generate local dumps on Windows for all executables
-or specific executables by following [MSDN's Collecting User-Mode Dumps](
-https://learn.microsoft.com/en-us/windows/win32/wer/collecting-user-mode-dumps).
-Below is an example batch script that you can run as administrator to collect dumps automatically for the debugger.
-```
-@echo off
-
-REM Global custom dump flags 0 by default because that's safest for confidentiality and saves the most space
-REM RadDbg custom dump flags retrieved by executing ".dump /mf test.dump" in WinDbg then opening it
-REM TODO: RAD Studios, feel free to customize the dump flags here however you want
-SET RADDBG_CRASH_DUMPS_FLAGS=0x641826
-SET /P RADDBG_CRASH_DUMPS="Where would you like to place crash dumps for raddbg (Default: %%LOCALAPPDATA%%\CrashDumps)? " || SET RADDBG_CRASH_DUMPS=%%LOCALAPPDATA%%\CrashDumps
-SET /P GLOBAL_CRASH_DUMPS="Where would you like to place crash dumps for other apps by default (Default: %%LOCALAPPDATA%%\CrashDumps)? " || SET GLOBAL_CRASH_DUMPS=%%LOCALAPPDATA%%\CrashDumps
-SET /P GLOBAL_CRASH_DUMPS_FLAGS="What CustomDumpFlags would you like to use for other apps by default (Default: 0)? " || SET GLOBAL_CRASH_DUMPS_FLAGS=0
-
-ECHO.
-ECHO Changing registry settings for HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps!
-ECHO.
-ECHO Setting Global Crash Dump Directory to %GLOBAL_CRASH_DUMPS%...
-echo Using CustomDump Strategy with CustomDumpFlags = %GLOBAL_CRASH_DUMPS_FLAGS%
-REG ADD "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps" /v DumpType /t REG_DWORD /d 0
-REG ADD "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps" /v DumpFolder /t REG_EXPAND_SZ /d %GLOBAL_CRASH_DUMPS%
-REG ADD "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps" /v CustomDumpFlags /t REG_DWORD /d %GLOBAL_CRASH_DUMPS_FLAGS%
-
-ECHO.
-ECHO Setting RADDBG Crash Dump Directory to %RADDBG_CRASH_DUMPS%...
-ECHO Using CustomDump Strategy with CustomDumpFlags = %RADDBG_CRASH_DUMPS_FLAGS%
-FOR %%F in (raddbg.exe, rdi_from_pdb.exe, rdi_breakpad_from_pdb.exe, rdi_dump.exe) DO (
-ECHO.
-ECHO Setting Crash Dump Settings for %%F...
-REG ADD "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps\%%F" /v DumpType /t REG_DWORD /d 0
-REG ADD "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps\%%F" /v CustomDumpFlags /t REG_DWORD /d %RADDBG_CRASH_DUMPS_FLAGS%
-REG ADD "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps\%%F" /v DumpFolder /t REG_EXPAND_SZ /d %RADDBG_CRASH_DUMPS%
-)
-```
-In addition, you should ``ZIP`` the crash dump using ``7-zip`` or similar software.
-Keep in mind that ``CustomDumpFlags`` in this script includes memory info because
-it helps when debugging crashes so either go to [MINIDUMP\_TYPE](
-https://learn.microsoft.com/en-us/windows/win32/api/minidumpapiset/ne-minidumpapiset-minidump_type)
-and change ``CustomDumpFlags`` to your liking or don't work on anything personal or sensitive with ``raddbg``
-with these settings. If you ``ZIP`` the dump, you can also encrypt it with a password and then post
-the password in the bug report as a minor security measure against web scrapers.
+Dump files can be generated when ``RadDdg.exe`` crashes by opening task manager,
+right clicking on the ``RadDbg.exe`` process and selecting "Create Memory Dump from File".
 
 You can download pre-built binaries for the debugger
 [here](https://github.com/EpicGames/raddebugger/releases).
