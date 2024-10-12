@@ -851,6 +851,9 @@ rd_watch_view_row_info_from_row(EV_Row *row)
     E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, block->expr);
     E_Type *type = e_type_from_key(scratch.arena, irtree.type_key);
     
+    // rjf: evaluate row
+    E_Eval row_eval = e_eval_from_expr(scratch.arena, row->expr);
+    
     // rjf: determine collection entity kind, if any
     RD_EntityKind collection_entity_kind = RD_EntityKind_Nil;
     CTRL_EntityKind collection_ctrl_entity_kind = CTRL_EntityKind_Null;
@@ -864,14 +867,14 @@ rd_watch_view_row_info_from_row(EV_Row *row)
       }
     }
     
-    // rjf: extract collection entity, if any
+    // rjf: extract frontend entity, if any
     RD_Entity *entity = &d_nil_entity;
     if(collection_entity_kind != RD_EntityKind_Nil)
     {
       entity = rd_entity_from_id(key.child_id);
     }
     
-    // rjf: extract collection
+    // rjf: extract control entity, if any
     CTRL_Entity *ctrl_entity = &ctrl_entity_nil;
     if(collection_ctrl_entity_kind != CTRL_EntityKind_Null && block->expand_view_rule_info_user_data != 0)
     {
@@ -881,6 +884,10 @@ rd_watch_view_row_info_from_row(EV_Row *row)
       {
         ctrl_entity = accel->entities.v[block_relative_num-1];
       }
+    }
+    else if(row_eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity)
+    {
+      ctrl_entity = rd_ctrl_entity_from_eval_space(row_eval.space);
     }
     
     // rjf: extract callstack thread, if any
@@ -959,6 +966,9 @@ rd_watch_view_row_kind_from_flags_row_info(RD_WatchViewFlags flags, EV_Row *row,
     ui_view_rule_params_root = &md_nil_node;
   }
   RD_WatchViewRowKind row_kind = RD_WatchViewRowKind_Normal;
+  E_Eval row_eval = e_eval_from_expr(scratch.arena, row->expr);
+  E_TypeKey row_type_key = row_eval.type_key;
+  E_TypeKind row_type_kind = e_type_kind_from_key(row_type_key);
   if(ev_key_match(row->block->key, ev_key_root()))
   {
     row_kind = RD_WatchViewRowKind_Header;
@@ -967,11 +977,10 @@ rd_watch_view_row_kind_from_flags_row_info(RD_WatchViewFlags flags, EV_Row *row,
   {
     row_kind = RD_WatchViewRowKind_Canvas;
   }
-  else if(flags & RD_WatchViewFlag_PrettyEntityRows && info->collection_entity_kind != RD_EntityKind_Nil)
-  {
-    row_kind = RD_WatchViewRowKind_PrettyEntityControls;
-  }
-  else if(flags & RD_WatchViewFlag_PrettyEntityRows && info->collection_ctrl_entity_kind != CTRL_EntityKind_Null)
+  else if(flags & RD_WatchViewFlag_PrettyEntityRows &&
+          ((row_eval.value.u64 == 0 && row_type_kind == E_TypeKind_Struct) ||
+           info->collection_entity_kind != RD_EntityKind_Nil ||
+           info->collection_ctrl_entity_kind != CTRL_EntityKind_Null))
   {
     row_kind = RD_WatchViewRowKind_PrettyEntityControls;
   }
@@ -1000,6 +1009,11 @@ rd_expr_from_watch_view_row_column(Arena *arena, EV_View *ev_view, EV_Row *row, 
       scratch_end(scratch);
     }break;
   }
+  if(col->view_rule_size != 0)
+  {
+    EV_ViewRuleList *view_rules = ev_view_rule_list_from_string(arena, str8(col->view_rule_buffer, col->view_rule_size));
+    expr = ev_resolved_from_expr(arena, expr, view_rules);
+  }
   return expr;
 }
 
@@ -1007,14 +1021,7 @@ internal String8
 rd_string_from_eval_viz_row_column(Arena *arena, EV_View *ev, EV_Row *row, RD_WatchViewColumn *col, EV_StringFlags string_flags, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size_px)
 {
   String8 result = {0};
-  EV_ViewRuleList *view_rules = row->view_rules;
-  if(col->view_rule_size != 0)
-  {
-    view_rules = ev_view_rule_list_copy(arena, row->view_rules);
-    ev_view_rule_list_push_string(arena, view_rules, str8(col->view_rule_buffer, col->view_rule_size));
-  }
   E_Expr *row_col_expr = rd_expr_from_watch_view_row_column(arena, ev, row, col);
-  row_col_expr = ev_resolved_from_expr(arena, row_col_expr, view_rules);
   switch(col->kind)
   {
     default:{}break;
@@ -1025,6 +1032,12 @@ rd_string_from_eval_viz_row_column(Arena *arena, EV_View *ev, EV_Row *row, RD_Wa
     case RD_WatchViewColumnKind_Value:
     case RD_WatchViewColumnKind_Member:
     {
+      EV_ViewRuleList *view_rules = row->view_rules;
+      if(col->view_rule_size != 0)
+      {
+        view_rules = ev_view_rule_list_copy(arena, row->view_rules);
+        ev_view_rule_list_push_string(arena, view_rules, str8(col->view_rule_buffer, col->view_rule_size));
+      }
       E_Eval eval = e_eval_from_expr(arena, row_col_expr);
       result = rd_value_string_from_eval(arena, string_flags, default_radix, font, font_size, max_size_px, eval, row->member, view_rules);
     }break;
@@ -1253,8 +1266,10 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
     {RD_EntityKind_Breakpoint, CTRL_EntityKind_Null,   RD_CmdKind_EnableEntity  },
     {RD_EntityKind_Breakpoint, CTRL_EntityKind_Null,   RD_CmdKind_RemoveEntity  },
     {RD_EntityKind_FilePathMap,CTRL_EntityKind_Null,   RD_CmdKind_RemoveEntity  },
-    {RD_EntityKind_Nil,    CTRL_EntityKind_Thread, RD_CmdKind_FreezeThread  },
-    {RD_EntityKind_Nil,    CTRL_EntityKind_Thread, RD_CmdKind_SelectThread  },
+    {RD_EntityKind_Nil, CTRL_EntityKind_Machine, RD_CmdKind_FreezeEntity  },
+    {RD_EntityKind_Nil, CTRL_EntityKind_Process, RD_CmdKind_FreezeEntity  },
+    {RD_EntityKind_Nil, CTRL_EntityKind_Thread,  RD_CmdKind_SelectThread  },
+    {RD_EntityKind_Nil, CTRL_EntityKind_Thread,  RD_CmdKind_FreezeEntity  },
   };
   RD_WatchViewRowCtrl *row_ctrls = row_ctrls_;
   U64 row_ctrls_count = ArrayCount(row_ctrls_);
@@ -2498,6 +2513,13 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                 palette = ui_build_palette(rd_palette_from_code(RD_PaletteCode_NeutralPopButton));
               }
               
+              //- rjf: build indentation
+              for(U64 idx = 0; idx < row_depth; idx += 1)
+              {
+                ui_set_next_flags(UI_BoxFlag_DrawSideLeft);
+                ui_spacer(ui_em(1.f, 1.f));
+              }
+              
               //- rjf: build add-new buttons
               if(rd_entity_is_nil(entity) && collection_entity_kind == RD_EntityKind_Target)
                 UI_Palette(palette)
@@ -2658,7 +2680,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                         {
                           icon_kind = (ctrl_handle_match(ctrl_entity->handle, rd_base_regs()->thread) ? RD_IconKind_RadioFilled : RD_IconKind_RadioHollow);
                         }
-                        if(ctrl->kind == RD_CmdKind_FreezeThread)
+                        if(ctrl->kind == RD_CmdKind_FreezeEntity)
                         {
                           icon_kind = is_frozen ? RD_IconKind_Locked : RD_IconKind_Unlocked;
                           palette = rd_palette_from_code(is_frozen ? RD_PaletteCode_NegativePopButton : RD_PaletteCode_PositivePopButton);
@@ -2682,9 +2704,9 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                             {
                               rd_cmd(RD_CmdKind_SelectThread, .thread = ctrl_entity->handle);
                             }
-                            else if(ctrl->kind == RD_CmdKind_FreezeThread)
+                            else if(ctrl->kind == RD_CmdKind_FreezeEntity)
                             {
-                              rd_cmd(is_frozen ? RD_CmdKind_ThawThread : RD_CmdKind_FreezeThread,
+                              rd_cmd(is_frozen ? RD_CmdKind_ThawEntity : RD_CmdKind_FreezeEntity,
                                      .ctrl_entity = ctrl_entity->handle);
                             }
                             else
@@ -5490,7 +5512,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(scheduler)
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,      0.75f, .dequote_string = 1);
   }
   rd_watch_view_build(wv, RD_WatchViewFlag_NoHeader|RD_WatchViewFlag_PrettyNameMembers|RD_WatchViewFlag_PrettyEntityRows|RD_WatchViewFlag_DisableCacheLines,
-                      str8_lit("threads"), str8_lit("only: label str id callstack v count vaddr inline_depth"), 0, 10, rect);
+                      str8_lit("machines"), str8_lit("only: label str id callstack v count vaddr inline_depth"), 0, 10, rect);
   ProfEnd();
 }
 

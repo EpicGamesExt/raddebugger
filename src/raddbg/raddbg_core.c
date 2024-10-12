@@ -1998,8 +1998,9 @@ rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, Vec4F32 secon
   switch(entity->kind)
   {
     default:{}break;
-    case CTRL_EntityKind_Thread:  {icon_kind = RD_IconKind_Thread; name_is_code = 1;}break;
+    case CTRL_EntityKind_Machine: {icon_kind = RD_IconKind_Machine;}break;
     case CTRL_EntityKind_Process: {icon_kind = RD_IconKind_Threads;}break;
+    case CTRL_EntityKind_Thread:  {icon_kind = RD_IconKind_Thread; name_is_code = 1;}break;
     case CTRL_EntityKind_Module:  {icon_kind = RD_IconKind_Module;}break;
   }
   
@@ -8580,9 +8581,9 @@ EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(machine)
         expr->space    = rd_eval_space_from_ctrl_entity(process, RD_EvalSpaceKind_MetaCtrlEntity);
         expr->mode     = E_Mode_Offset;
         expr->type_key = e_type_key_cons_base(type(CTRL_ProcessMetaEval));;
-        info.row_strings[idx] = process->string;
-        info.row_exprs[idx]   = expr;
-        info.row_members[idx] = &e_member_nil;
+        info.row_strings[row_expr_idx] = process->string;
+        info.row_exprs[row_expr_idx]   = expr;
+        info.row_members[row_expr_idx] = &e_member_nil;
       }
     }
   }
@@ -8644,9 +8645,9 @@ EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(process)
         expr->space    = rd_eval_space_from_ctrl_entity(thread, RD_EvalSpaceKind_MetaCtrlEntity);
         expr->mode     = E_Mode_Offset;
         expr->type_key = e_type_key_cons_base(type(CTRL_ThreadMetaEval));;
-        info.row_strings[idx] = thread->string;
-        info.row_exprs[idx]   = expr;
-        info.row_members[idx] = &e_member_nil;
+        info.row_strings[row_expr_idx] = thread->string;
+        info.row_exprs[row_expr_idx]   = expr;
+        info.row_members[row_expr_idx] = &e_member_nil;
       }
     }
   }
