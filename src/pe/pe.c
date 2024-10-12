@@ -25,28 +25,48 @@ pe_slot_count_from_unwind_op_code(PE_UnwindOpCode opcode)
   return result;
 }
 
-internal String8
-pe_string_from_windows_subsystem(PE_WindowsSubsystem subsystem)
+read_only struct
 {
-  String8 result = {0};
-  switch(subsystem)
-  {
-    default:{}break;
-    case PE_WindowsSubsystem_UNKNOWN:                  result = str8_lit("UNKNOWN"); break;
-    case PE_WindowsSubsystem_NATIVE:                   result = str8_lit("NATIVE"); break;
-    case PE_WindowsSubsystem_WINDOWS_GUI:              result = str8_lit("WINDOWS_GUI"); break;
-    case PE_WindowsSubsystem_WINDOWS_CUI:              result = str8_lit("WINDOWS_CUI"); break;
-    case PE_WindowsSubsystem_OS2_CUI:                  result = str8_lit("OS2_CUI"); break;
-    case PE_WindowsSubsystem_POSIX_CUI:                result = str8_lit("POSIX_CUI"); break;
-    case PE_WindowsSubsystem_NATIVE_WINDOWS:           result = str8_lit("NATIVE_WINDOWS"); break;
-    case PE_WindowsSubsystem_WINDOWS_CE_GUI:           result = str8_lit("WINDOWS_CE_GUID"); break;
-    case PE_WindowsSubsystem_EFI_APPLICATION:          result = str8_lit("EFI_APPLICATION"); break;
-    case PE_WindowsSubsystem_EFI_BOOT_SERVICE_DRIVER:  result = str8_lit("EFI_BOOT_SERVICE_DRIVER"); break;
-    case PE_WindowsSubsystem_EFI_ROM:                  result = str8_lit("EFI_ROM"); break;
-    case PE_WindowsSubsystem_XBOX:                     result = str8_lit("XBOX"); break;
-    case PE_WindowsSubsystem_WINDOWS_BOOT_APPLICATION: result = str8_lit("WINDOWS_BOOT_APPLICATION"); break;
+  String8             string;
+  PE_WindowsSubsystem type;
+} g_pe_subsystem_map[] = {
+  { str8_lit_comp(""),                         PE_WindowsSubsystem_UNKNOWN                  },
+  { str8_lit_comp("native"),                   PE_WindowsSubsystem_NATIVE                   },
+  { str8_lit_comp("windows"),                  PE_WindowsSubsystem_WINDOWS_GUI              },
+  { str8_lit_comp("console"),                  PE_WindowsSubsystem_WINDOWS_CUI              },
+  { str8_lit_comp("os2_cui"),                  PE_WindowsSubsystem_OS2_CUI                  },
+  { str8_lit_comp("posix"),                    PE_WindowsSubsystem_POSIX_CUI                },
+  { str8_lit_comp("native_windows"),           PE_WindowsSubsystem_NATIVE_WINDOWS           },
+  { str8_lit_comp("windows_ce_gui"),           PE_WindowsSubsystem_WINDOWS_CE_GUI           },
+  { str8_lit_comp("efi_application"),          PE_WindowsSubsystem_EFI_APPLICATION          },
+  { str8_lit_comp("efi_boot_service_driver"),  PE_WindowsSubsystem_EFI_BOOT_SERVICE_DRIVER  },
+  { str8_lit_comp("efi_runtime_driver"),       PE_WindowsSubsystem_EFI_RUNTIME_DRIVER       },
+  { str8_lit_comp("efi_rom"),                  PE_WindowsSubsystem_EFI_ROM                  },
+  { str8_lit_comp("xbox"),                     PE_WindowsSubsystem_XBOX                     },
+  { str8_lit_comp("windows_boot_application"), PE_WindowsSubsystem_WINDOWS_BOOT_APPLICATION },
+};
+StaticAssert(ArrayCount(g_pe_subsystem_map) == PE_WindowsSubsystem_COUNT, g_pe_subsystem_map_count_check);
+
+internal String8
+pe_string_from_subsystem(PE_WindowsSubsystem subsystem)
+{
+  for (U64 i = 0; i < ArrayCount(g_pe_subsystem_map); i += 1) {
+    if (g_pe_subsystem_map[i].type == subsystem) {
+      return g_pe_subsystem_map[i].string;
+    }
   }
-  return result;
+  return str8(0,0);
+}
+
+internal PE_WindowsSubsystem
+pe_subsystem_from_string(String8 string)
+{
+  for (U64 i = 0; i < ArrayCount(g_pe_subsystem_map); i += 1) {
+    if (str8_match(g_pe_subsystem_map[i].string, string, StringMatchFlag_CaseInsensitive)) {
+      return g_pe_subsystem_map[i].type;
+    }
+  }
+  return PE_WindowsSubsystem_UNKNOWN;
 }
 
 ////////////////////////////////
@@ -548,6 +568,74 @@ pe_tls_rng_from_bin_base_vaddr(String8 data, PE_BinInfo *bin, U64 base_vaddr)
   return result;
 }
 
+internal String8Array
+pe_get_entry_point_names(COFF_MachineType            machine,
+                         PE_WindowsSubsystem         subsystem,
+                         PE_ImageFileCharacteristics file_characteristics)
+{
+  String8Array entry_point_names = {0};
+  
+  if (file_characteristics & PE_ImageFileCharacteristic_FILE_DLL) {
+    if (machine == COFF_MachineType_X86) {
+      read_only static String8 dll_entry_point_arr[] = {
+        str8_lit_comp("__DllMainCRTStartup@12"),
+      };
+
+      entry_point_names.v = &dll_entry_point_arr[0];
+      entry_point_names.count = ArrayCount(dll_entry_point_arr);
+    } else {
+      read_only static String8 dll_entry_point_arr[] = {
+        str8_lit_comp("_DllMainCRTStartup"),
+      };
+
+      entry_point_names.v = &dll_entry_point_arr[0];
+      entry_point_names.count = ArrayCount(dll_entry_point_arr);
+    }
+  } else {
+    switch (subsystem) {
+    case PE_WindowsSubsystem_UNKNOWN: break;
+    case PE_WindowsSubsystem_WINDOWS_GUI: {
+      read_only static String8 gui_entry_point_arr[] = {
+        str8_lit_comp("WinMain"),
+        str8_lit_comp("wWinMain"),
+        str8_lit_comp("WinMainCRTStartup"),
+        str8_lit_comp("wWinMainCRTStartup"),
+      };
+
+      entry_point_names.v = &gui_entry_point_arr[0];
+      entry_point_names.count = ArrayCount(gui_entry_point_arr);
+    } break;
+    case PE_WindowsSubsystem_WINDOWS_CUI: {
+      read_only static String8 cui_entry_point_arr[] = {
+        str8_lit_comp("main"),
+        str8_lit_comp("wmain"),
+        str8_lit_comp("mainCRTStartup"),
+        str8_lit_comp("wmainCRTStartup"),
+      };
+
+      entry_point_names.v = &cui_entry_point_arr[0];
+      entry_point_names.count = ArrayCount(cui_entry_point_arr);
+    } break;
+    case PE_WindowsSubsystem_NATIVE:
+    case PE_WindowsSubsystem_OS2_CUI:
+    case PE_WindowsSubsystem_POSIX_CUI:
+    case PE_WindowsSubsystem_NATIVE_WINDOWS:
+    case PE_WindowsSubsystem_WINDOWS_CE_GUI:
+    case PE_WindowsSubsystem_EFI_APPLICATION:
+    case PE_WindowsSubsystem_EFI_BOOT_SERVICE_DRIVER:
+    case PE_WindowsSubsystem_EFI_RUNTIME_DRIVER:
+    case PE_WindowsSubsystem_EFI_ROM:
+    case PE_WindowsSubsystem_XBOX:
+    case PE_WindowsSubsystem_WINDOWS_BOOT_APPLICATION: {
+      // TODO
+	  NotImplemented;
+    } break;
+    }
+  }
+
+  return entry_point_names;
+}
+
 ////////////////////////////////
 
 internal B32
@@ -813,3 +901,67 @@ pe_resource_table_from_directory_data(Arena *arena, String8 data)
   scratch_end(scratch);
   return bottom_frame->table;
 }
+
+////////////////////////////////
+//~ Debug Directory
+
+internal String8
+pe_make_debug_header_pdb70(Arena *arena, OS_Guid guid, U32 age, String8 pdb_path)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  
+  PE_CvHeaderPDB70 header = {0};
+  header.magic 			  = PE_CODEVIEW_PDB70_MAGIC;
+  header.guid  			  = guid;
+  header.age   			  = age;
+  
+  String8List cv_list = {0};
+  str8_serial_begin(scratch.arena, &cv_list);
+  str8_serial_push_struct(scratch.arena, &cv_list, &header);
+  str8_serial_push_cstr(scratch.arena, &cv_list, pdb_path);
+  
+  String8 cv_data = str8_serial_end(arena, &cv_list);
+
+  scratch_end(scratch);
+  return cv_data;
+}
+
+internal String8
+pe_make_debug_header_rdi(Arena *arena, OS_Guid guid, String8 rdi_path)
+{
+  Temp scratch = scratch_begin(&arena,1);
+
+  PE_CvHeaderRDI header = {0};
+  header.magic          = PE_CODEVIEW_RDI_MAGIC;
+  header.guid           = guid;
+
+  String8List list = {0};
+  str8_serial_begin(scratch.arena, &list);
+  str8_serial_push_struct(scratch.arena, &list, &header);
+  str8_serial_push_cstr(scratch.arena, &list, rdi_path);
+
+  String8 cv_data = str8_serial_end(arena, &list);
+
+  scratch_end(scratch);
+  return cv_data;
+}
+
+////////////////////////////////
+//~ Image Checksum
+
+internal U32 
+pe_compute_checksum(U8 *buffer, U64 buffer_size)
+{
+  // https://bytepointer.com/resources/microsoft_pe_checksum_algo_distilled.htm
+  U32 hash = 0;
+  for (U16 *ptr16 = (U16*)buffer, *opl16 = (U16*)(buffer + buffer_size);
+       ptr16 < opl16;
+       ptr16 += 1) {
+    hash += *ptr16;
+    hash = (hash >> 16) + (hash & 0xffff);
+  }
+  hash = (U16)(((hash >> 16) + hash) & 0xffff);
+  hash += buffer_size;
+  return hash;
+}
+
