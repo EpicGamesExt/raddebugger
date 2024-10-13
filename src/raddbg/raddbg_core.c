@@ -10729,6 +10729,10 @@ rd_stop_explanation_string_icon_from_ctrl_event(Arena *arena, CTRL_Event *event,
             explanation = str8_lit("Stopped");
           }
         }break;
+        case CTRL_EventCause_EntryPoint:
+        {
+          explanation = str8_lit("Stopped at entry point");
+        }break;
         case CTRL_EventCause_UserBreakpoint:
         {
           if(!rd_entity_is_nil(thread))

@@ -711,11 +711,15 @@ ev_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, String8 str
     Task *last_task = first_task;
     for(Task *t = first_task; t != 0; t = t->next)
     {
+      // rjf: get task key
       EV_Key key = ev_key_make(ev_hash_from_key(t->parent_block->key), t->child_id);
+      
+      // rjf: obtain expansion node
       EV_ExpandNode *expand_node = ev_expand_node_from_key(view, key);
+      B32 is_expanded = (expand_node != 0 && expand_node->expanded);
       
       // rjf: skip if not expanded
-      if(!expand_node || !expand_node->expanded)
+      if(!is_expanded)
       {
         continue;
       }
@@ -759,7 +763,7 @@ ev_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, String8 str
       
       // rjf: iterate children expansions, recurse
       // TODO(rjf): need to iterate these in index order, rather than "child_id" (which needs to be renamed to "child_id") order
-      if(expand_info.row_count != 0 && expand_view_rule_info->expr_expand_range_info)
+      if(expand_node != 0 && expand_info.row_count != 0 && expand_view_rule_info->expr_expand_range_info)
       {
         // rjf: count children
         U64 child_count = 0;

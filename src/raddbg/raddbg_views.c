@@ -1267,6 +1267,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
     {RD_EntityKind_Breakpoint, CTRL_EntityKind_Null,   RD_CmdKind_RemoveEntity  },
     {RD_EntityKind_FilePathMap,CTRL_EntityKind_Null,   RD_CmdKind_RemoveEntity  },
     {RD_EntityKind_Nil, CTRL_EntityKind_Machine, RD_CmdKind_FreezeEntity  },
+    {RD_EntityKind_Nil, CTRL_EntityKind_Process, RD_CmdKind_Kill  },
     {RD_EntityKind_Nil, CTRL_EntityKind_Process, RD_CmdKind_FreezeEntity  },
     {RD_EntityKind_Nil, CTRL_EntityKind_Thread,  RD_CmdKind_SelectThread  },
     {RD_EntityKind_Nil, CTRL_EntityKind_Thread,  RD_CmdKind_FreezeEntity  },
@@ -2508,9 +2509,13 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
               {
                 palette = ui_build_palette(rd_palette_from_code(RD_PaletteCode_NeutralPopButton));
               }
-              if(ctrl_entity->kind == CTRL_EntityKind_Thread && ctrl_handle_match(ctrl_entity->handle, rd_regs()->thread))
+              else if(ctrl_entity->kind == CTRL_EntityKind_Thread && ctrl_handle_match(ctrl_entity->handle, rd_regs()->thread))
               {
                 palette = ui_build_palette(rd_palette_from_code(RD_PaletteCode_NeutralPopButton));
+              }
+              else
+              {
+                palette->background = v4f32(0, 0, 0, 0);
               }
               
               //- rjf: build indentation
@@ -2600,9 +2605,10 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                 UI_FocusHot(entity_box_selected ? UI_FocusKind_On : UI_FocusKind_Off) UI_Palette(palette)
                 {
                   entity_box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|
-                                                         UI_BoxFlag_DrawBorder|
                                                          UI_BoxFlag_DrawOverlay|
                                                          UI_BoxFlag_DrawBackground|
+                                                         UI_BoxFlag_DrawSideLeft|
+                                                         UI_BoxFlag_DrawBorder|
                                                          UI_BoxFlag_DrawHotEffects|
                                                          UI_BoxFlag_DrawActiveEffects,
                                                          "###entity_%p_%p", entity, ctrl_entity);
