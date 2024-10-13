@@ -443,7 +443,7 @@ internal B32 ev_row_is_editable(EV_Row *row);
 internal String8 ev_string_from_ascii_value(Arena *arena, U8 val);
 internal String8 ev_string_from_hresult_facility_code(U32 code);
 internal String8 ev_string_from_hresult_code(U32 code);
-internal String8 ev_string_from_simple_typed_eval(Arena *arena, EV_StringFlags flags, U32 radix, E_Eval eval);
+internal String8 ev_string_from_simple_typed_eval(Arena *arena, EV_StringFlags flags, U32 radix, U32 min_digits, E_Eval eval);
 internal String8 ev_escaped_from_raw_string(Arena *arena, String8 raw);
 
 #endif // EVAL_VISUALIZATION_CORE_H

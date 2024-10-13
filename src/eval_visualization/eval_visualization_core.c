@@ -1449,7 +1449,7 @@ ev_string_from_hresult_code(U32 code)
 }
 
 internal String8
-ev_string_from_simple_typed_eval(Arena *arena, EV_StringFlags flags, U32 radix, E_Eval eval)
+ev_string_from_simple_typed_eval(Arena *arena, EV_StringFlags flags, U32 radix, U32 min_digits, E_Eval eval)
 {
   String8 result = {0};
   E_TypeKey type_key = e_type_unwrap(eval.type_key);
@@ -1466,7 +1466,7 @@ ev_string_from_simple_typed_eval(Arena *arena, EV_StringFlags flags, U32 radix, 
     
     case E_TypeKind_Handle:
     {
-      result = str8_from_s64(arena, eval.value.s64, radix, 0, digit_group_separator);
+      result = str8_from_s64(arena, eval.value.s64, radix, min_digits, digit_group_separator);
     }break;
     
     case E_TypeKind_HResult:
@@ -1478,7 +1478,7 @@ ev_string_from_simple_typed_eval(Arena *arena, EV_StringFlags flags, U32 radix, 
         U32 is_error   = !!(hresult_value & (1ull<<31));
         U32 error_code = (hresult_value);
         U32 facility   = (hresult_value & 0x7ff0000) >> 16;
-        String8 value_string = str8_from_s64(scratch.arena, eval.value.u64, radix, 0, digit_group_separator);
+        String8 value_string = str8_from_s64(scratch.arena, eval.value.u64, radix, min_digits, digit_group_separator);
         String8 facility_string = ev_string_from_hresult_facility_code(facility);
         String8 error_string = ev_string_from_hresult_code(error_code);
         result = push_str8f(arena, "%S%s%s%S%s%s%S%s",
@@ -1494,7 +1494,7 @@ ev_string_from_simple_typed_eval(Arena *arena, EV_StringFlags flags, U32 radix, 
       }
       else
       {
-        result = str8_from_s64(arena, eval.value.u64, radix, 0, digit_group_separator);
+        result = str8_from_s64(arena, eval.value.u64, radix, min_digits, digit_group_separator);
       }
     }break;
     
@@ -1510,7 +1510,7 @@ ev_string_from_simple_typed_eval(Arena *arena, EV_StringFlags flags, U32 radix, 
       {
         if(flags & EV_StringFlag_ReadOnlyDisplayRules)
         {
-          String8 imm_string = str8_from_s64(arena, eval.value.s64, radix, 0, digit_group_separator);
+          String8 imm_string = str8_from_s64(arena, eval.value.s64, radix, min_digits, digit_group_separator);
           result = push_str8f(arena, "'%S' (%S)", char_str, imm_string);
         }
         else
@@ -1520,7 +1520,7 @@ ev_string_from_simple_typed_eval(Arena *arena, EV_StringFlags flags, U32 radix, 
       }
       else
       {
-        result = str8_from_s64(arena, eval.value.s64, radix, 0, digit_group_separator);
+        result = str8_from_s64(arena, eval.value.s64, radix, min_digits, digit_group_separator);
       }
     }break;
     
@@ -1529,7 +1529,7 @@ ev_string_from_simple_typed_eval(Arena *arena, EV_StringFlags flags, U32 radix, 
     case E_TypeKind_S32:
     case E_TypeKind_S64:
     {
-      result = str8_from_s64(arena, eval.value.s64, radix, 0, digit_group_separator);
+      result = str8_from_s64(arena, eval.value.s64, radix, min_digits, digit_group_separator);
     }break;
     
     case E_TypeKind_U8:
@@ -1537,13 +1537,12 @@ ev_string_from_simple_typed_eval(Arena *arena, EV_StringFlags flags, U32 radix, 
     case E_TypeKind_U32:
     case E_TypeKind_U64:
     {
-      result = str8_from_u64(arena, eval.value.u64, radix, 0, digit_group_separator);
+      result = str8_from_u64(arena, eval.value.u64, radix, min_digits, digit_group_separator);
     }break;
     
     case E_TypeKind_U128:
     {
       Temp scratch = scratch_begin(&arena, 1);
-      U64 min_digits = (radix == 16) ? type_byte_size*2 : 0;
       String8 upper64 = str8_from_u64(scratch.arena, eval.value.u128.u64[0], radix, min_digits, digit_group_separator);
       String8 lower64 = str8_from_u64(scratch.arena, eval.value.u128.u64[1], radix, min_digits, digit_group_separator);
       result = push_str8f(arena, "%S:%S", upper64, lower64);

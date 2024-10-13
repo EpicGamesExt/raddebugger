@@ -9189,6 +9189,7 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
   
   //- rjf: unpack view rules
   U32 radix = default_radix;
+  U32 min_digits = 0;
   B32 no_addr = 0;
   B32 has_array = 0;
   for(EV_ViewRuleNode *n = view_rules->first; n != 0; n = n->next)
@@ -9200,6 +9201,13 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
     else if(str8_match(n->v.root->string, str8_lit("oct"), 0)) {radix = 8; }
     else if(str8_match(n->v.root->string, str8_lit("no_addr"), 0)) {no_addr = 1;}
     else if(str8_match(n->v.root->string, str8_lit("array"), 0)) {has_array = 1;}
+    else if(str8_match(n->v.root->string, str8_lit("digits"), 0))
+    {
+      String8 expr = md_string_from_children(scratch.arena, n->v.root);
+      E_Eval eval = e_eval_from_string(scratch.arena, expr);
+      E_Eval value_eval = e_value_eval_from_eval(eval);
+      min_digits = (U32)value_eval.value.u64;
+    }
   }
   if(eval.space.kind == RD_EvalSpaceKind_MetaEntity ||
      eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity)
@@ -9244,7 +9252,7 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
     default:
     {
       E_Eval value_eval = e_value_eval_from_eval(eval);
-      String8 string = ev_string_from_simple_typed_eval(arena, flags, radix, value_eval);
+      String8 string = ev_string_from_simple_typed_eval(arena, flags, radix, min_digits, value_eval);
       space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, string).x;
       str8_list_push(arena, out, string);
     }break;
@@ -9359,7 +9367,7 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
           space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, ptr_prefix).x;
           str8_list_push(arena, out, ptr_prefix);
         }
-        String8 string = ev_string_from_simple_typed_eval(arena, flags, radix, value_eval);
+        String8 string = ev_string_from_simple_typed_eval(arena, flags, radix, min_digits, value_eval);
         space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, string).x;
         str8_list_push(arena, out, string);
         if(did_content)
