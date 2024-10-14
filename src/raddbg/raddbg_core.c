@@ -13869,30 +13869,45 @@ rd_frame(void)
           }break;
           case RD_CmdKind_Switch:
           {
-            // TODO(rjf): @msgs
-#if 0
-            B32 already_opened = 0;
-            RD_Panel *panel = rd_panel_from_handle(rd_regs()->panel);
-            for(RD_View *v = panel->first_tab_view; !rd_view_is_nil(v); v = v->next)
+            RD_Window *ws = rd_window_from_handle(rd_regs()->window);
+            RD_Panel *src_panel = rd_panel_from_handle(rd_regs()->panel);
+            RD_View *src_view = rd_view_from_handle(rd_regs()->view);
+            RD_ViewRuleKind src_view_kind = rd_view_rule_kind_from_string(src_view->spec->string);
+            RD_Entity *recent_file = rd_entity_from_handle(rd_regs()->entity);
+            String8 recent_file_path = recent_file->string;
+            RD_Panel *existing_panel = &rd_nil_panel;
+            RD_View *existing_view = &rd_nil_view;
+            for(RD_Panel *panel = ws->root_panel; !rd_panel_is_nil(panel); panel = rd_panel_rec_depth_first_pre(panel).next)
             {
-              if(rd_view_is_project_filtered(v)) { continue; }
-              RD_Entity *v_param_entity = rd_entity_from_handle(v->params_entity);
-              if(v_param_entity == rd_entity_from_handle(rd_regs()->entity))
+              if(!rd_panel_is_nil(panel->first))
               {
-                panel->selected_tab_view = rd_handle_from_view(v);
-                already_opened = 1;
-                break;
+                continue;
+              }
+              for(RD_View *v = panel->first_tab_view; !rd_view_is_nil(v); v = v->order_next)
+              {
+                if(rd_view_is_project_filtered(v)) { continue; }
+                String8 v_path = rd_file_path_from_eval_string(scratch.arena, str8(v->query_buffer, v->query_string_size));
+                RD_ViewRuleKind v_kind = rd_view_rule_kind_from_string(v->spec->string);
+                if(str8_match(v_path, recent_file_path, StringMatchFlag_CaseInsensitive) && v_kind == src_view_kind)
+                {
+                  existing_panel = panel;
+                  existing_view = v;
+                  goto done_existing_view_search__switch;
+                }
               }
             }
-            if(already_opened == 0)
+            done_existing_view_search__switch:;
+            if(rd_view_is_nil(existing_view))
             {
-              D_CmdParams p = params;
-              p.window = rd_handle_from_window(ws);
-              p.panel = rd_handle_from_panel(ws->focused_panel);
-              p.entity = rd_regs()->entity;
-              d_cmd_list_push(arena, cmds, &p, d_cmd_spec_from_kind(D_CmdKind_PendingFile));
+              rd_cmd(RD_CmdKind_OpenTab,
+                     .string = rd_eval_string_from_file_path(scratch.arena, recent_file_path),
+                     .params_tree = md_tree_from_string(scratch.arena, src_view->spec->string)->first);
             }
-#endif
+            else
+            {
+              rd_cmd(RD_CmdKind_FocusPanel, .panel = rd_handle_from_panel(existing_panel));
+              existing_panel->selected_tab_view = rd_handle_from_view(existing_view);
+            }
           }break;
           case RD_CmdKind_SwitchToPartnerFile:
           {
