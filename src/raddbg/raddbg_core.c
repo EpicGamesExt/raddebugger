@@ -13938,10 +13938,16 @@ rd_frame(void)
                   FileProperties candidate_props = os_properties_from_file_path(candidate_path);
                   if(candidate_props.modified != 0)
                   {
-                    // TODO(rjf):
-                    //D_CmdParams p = df_cmd_params_from_panel(ws, panel);
-                    //p.entity = rd_handle_from_entity(candidate);
-                    //d_cmd_list_push(arena, cmds, &p, d_cmd_spec_from_kind(D_CmdKind_Switch));
+                    RD_Entity *recent_file = rd_entity_from_name_and_kind(candidate_path, RD_EntityKind_RecentFile);
+                    if(!rd_entity_is_nil(recent_file))
+                    {
+                      rd_cmd(RD_CmdKind_Switch, .entity = rd_handle_from_entity(recent_file));
+                    }
+                    else
+                    {
+                      rd_cmd(RD_CmdKind_RecordFileInProject, .file_path = candidate_path);
+                      rd_cmd(RD_CmdKind_OpenTab, .string = rd_eval_string_from_file_path(scratch.arena, candidate_path), .params_tree = md_tree_from_string(scratch.arena, view->spec->string)->first);
+                    }
                     break;
                   }
                 }
