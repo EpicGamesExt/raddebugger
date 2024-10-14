@@ -6,9 +6,6 @@
 //
 // [ ] remainder of @msgs pass:
 //  [ ] entity listers - kill-specific-process, etc.
-//  [ ] new universal ctx menu, hover, tooltips systems
-//  [ ] `switch` replacement (recent files history)
-//   [ ] resolving name as file or #include
 //  [ ] new `restart processes` path
 //  [ ] remainder of @msgs
 // 
@@ -521,6 +518,9 @@
 //     given types, just query if no other view rule is present, & autofill
 //     when editing)
 //  [x] decay arrays to pointers in pointer/value comparison
+//  [x] new universal ctx menu, hover, tooltips systems
+//  [x] `switch` replacement (recent files history)
+//   [x] resolving name as file or #include
 
 ////////////////////////////////
 //~ rjf: Build Options

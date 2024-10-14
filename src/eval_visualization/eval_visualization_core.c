@@ -714,7 +714,7 @@ ev_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, String8 str
       // rjf: get task key
       EV_Key key = ev_key_make(ev_hash_from_key(t->parent_block->key), t->child_id);
       
-      // rjf: obtain expansion node
+      // rjf: obtain expansion node & expansion state
       EV_ExpandNode *expand_node = ev_expand_node_from_key(view, key);
       B32 is_expanded = (expand_node != 0 && expand_node->expanded);
       
@@ -762,7 +762,6 @@ ev_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, String8 str
       }
       
       // rjf: iterate children expansions, recurse
-      // TODO(rjf): need to iterate these in index order, rather than "child_id" (which needs to be renamed to "child_id") order
       if(expand_node != 0 && expand_info.row_count != 0 && expand_view_rule_info->expr_expand_range_info)
       {
         // rjf: count children
@@ -839,7 +838,6 @@ ev_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, String8 str
               scratch_end(scratch);
             }
             E_Expr *child_expr__resolved = ev_resolved_from_expr(arena, child_expr, child_view_rules);
-            // TODO(rjf): need to mix in child's view rules
             Task *task = push_array(scratch.arena, Task, 1);
             SLLQueuePush(first_task, last_task, task);
             task->parent_block       = expansion_block;

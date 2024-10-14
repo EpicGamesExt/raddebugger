@@ -149,8 +149,8 @@ typedef EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_SIG(EV_ViewRuleExprExpandN
 typedef U32 EV_ViewRuleInfoFlags; // NOTE(rjf): see @view_rule_info
 enum
 {
-  EV_ViewRuleInfoFlag_Inherited         = (1<<0),
-  EV_ViewRuleInfoFlag_Expandable        = (1<<1),
+  EV_ViewRuleInfoFlag_Inherited           = (1<<0),
+  EV_ViewRuleInfoFlag_Expandable          = (1<<1),
 };
 
 typedef struct EV_ViewRuleInfo EV_ViewRuleInfo;

@@ -1540,7 +1540,6 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
          (selection_tbl.min.y != 0 || selection_tbl.min.y != 0))
       {
         Vec2S64 selection_dim = dim_2s64(selection_tbl);
-        ewv->text_editing = 1;
         arena_clear(ewv->text_edit_arena);
         ewv->text_edit_state_slots_count = u64_up_to_pow2(selection_dim.y+1);
         ewv->text_edit_state_slots_count = Max(ewv->text_edit_state_slots_count, 64);
@@ -1550,23 +1549,29 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
         EV_Row *row = rows.first;
         for(S64 y = selection_tbl.min.y; y <= selection_tbl.max.y; y += 1, row = row->next)
         {
-          for(S64 x = selection_tbl.min.x; x <= selection_tbl.max.x; x += 1)
+          RD_WatchViewRowInfo row_info = rd_watch_view_row_info_from_row(row);
+          RD_WatchViewRowKind row_kind = rd_watch_view_row_kind_from_flags_row_info(flags, row, &row_info);
+          if(row_kind == RD_WatchViewRowKind_Normal)
           {
-            RD_WatchViewColumn *col = rd_watch_view_column_from_x(ewv, x);
-            String8 string = rd_string_from_eval_viz_row_column(scratch.arena, eval_view, row, col, string_flags, default_radix, ui_top_font(), ui_top_font_size(), row_string_max_size_px);
-            string.size = Min(string.size, sizeof(ewv->dummy_text_edit_state.input_buffer));
-            RD_WatchViewPoint pt = {x, row->block->key, row->key};
-            U64 hash = ev_hash_from_key(pt.key);
-            U64 slot_idx = hash%ewv->text_edit_state_slots_count;
-            RD_WatchViewTextEditState *edit_state = push_array(ewv->text_edit_arena, RD_WatchViewTextEditState, 1);
-            SLLStackPush_N(ewv->text_edit_state_slots[slot_idx], edit_state, pt_hash_next);
-            edit_state->pt = pt;
-            edit_state->cursor = txt_pt(1, string.size+1);
-            edit_state->mark = txt_pt(1, 1);
-            edit_state->input_size = string.size;
-            MemoryCopy(edit_state->input_buffer, string.str, string.size);
-            edit_state->initial_size = string.size;
-            MemoryCopy(edit_state->initial_buffer, string.str, string.size);
+            ewv->text_editing = 1;
+            for(S64 x = selection_tbl.min.x; x <= selection_tbl.max.x; x += 1)
+            {
+              RD_WatchViewColumn *col = rd_watch_view_column_from_x(ewv, x);
+              String8 string = rd_string_from_eval_viz_row_column(scratch.arena, eval_view, row, col, string_flags, default_radix, ui_top_font(), ui_top_font_size(), row_string_max_size_px);
+              string.size = Min(string.size, sizeof(ewv->dummy_text_edit_state.input_buffer));
+              RD_WatchViewPoint pt = {x, row->block->key, row->key};
+              U64 hash = ev_hash_from_key(pt.key);
+              U64 slot_idx = hash%ewv->text_edit_state_slots_count;
+              RD_WatchViewTextEditState *edit_state = push_array(ewv->text_edit_arena, RD_WatchViewTextEditState, 1);
+              SLLStackPush_N(ewv->text_edit_state_slots[slot_idx], edit_state, pt_hash_next);
+              edit_state->pt = pt;
+              edit_state->cursor = txt_pt(1, string.size+1);
+              edit_state->mark = txt_pt(1, 1);
+              edit_state->input_size = string.size;
+              MemoryCopy(edit_state->input_buffer, string.str, string.size);
+              edit_state->initial_size = string.size;
+              MemoryCopy(edit_state->initial_buffer, string.str, string.size);
+            }
           }
         }
       }
@@ -2601,6 +2606,8 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                 {
                   fstrs = rd_title_fstrs_from_ctrl_entity(scratch.arena, ctrl_entity, ui_top_palette()->text_weak, ui_top_font_size(), 1);
                 }
+                String8 fstrs_string = dr_string_from_fancy_string_list(scratch.arena, &fstrs);
+                FuzzyMatchRangeList fstrs_matches = fuzzy_match_find(scratch.arena, filter, fstrs_string);
                 UI_Key hover_t_key = ui_key_from_stringf(ui_key_zero(), "entity_hover_t_%p_%p", entity, ctrl_entity);
                 F32 hover_t = ui_anim(hover_t_key, (F32)!!is_hovering, .rate = entity_hover_t_rate);
                 if(!rd_entity_is_nil(entity))
@@ -2651,6 +2658,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                     }
                     UI_Box *title_box = ui_build_box_from_key(UI_BoxFlag_DrawText|UI_BoxFlag_DisableTruncatedHover, ui_key_zero());
                     ui_box_equip_display_fancy_strings(title_box, &fstrs);
+                    ui_box_equip_fuzzy_match_ranges(title_box, &fstrs_matches);
                     UI_Signal sig = ui_signal_from_box(entity_box);
                     if(ui_hovering(sig)) 
                     {

@@ -8615,8 +8615,8 @@ EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(auto_view_rules){ return rd_ev
 
 //- rjf: control entity groups
 
-EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(machines)         { return rd_ev_view_rule_expr_expand_info__meta_ctrl_entities(arena, view, filter, expr, params, CTRL_EntityKind_Machine); }
-EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(machines)   { return rd_ev_view_rule_expr_expand_range_info__meta_ctrl_entities(arena, view, filter, expr, params, idx_range, user_data, CTRL_EntityKind_Machine); }
+EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(machines)         { return rd_ev_view_rule_expr_expand_info__meta_ctrl_entities(arena, view, str8_zero(), expr, params, CTRL_EntityKind_Machine); }
+EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(machines)   { return rd_ev_view_rule_expr_expand_range_info__meta_ctrl_entities(arena, view, str8_zero(), expr, params, idx_range, user_data, CTRL_EntityKind_Machine); }
 EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(machines)  { return rd_ev_view_rule_expr_id_from_num__meta_ctrl_entities(num, user_data, CTRL_EntityKind_Machine); }
 EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(machines)  { return rd_ev_view_rule_expr_num_from_id__meta_ctrl_entities(id, user_data, CTRL_EntityKind_Machine); }
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(processes)         { return rd_ev_view_rule_expr_expand_info__meta_ctrl_entities(arena, view, filter, expr, params, CTRL_EntityKind_Process); }
@@ -8634,7 +8634,7 @@ EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(modules)    { return rd_ev_vie
 
 //- rjf: control entity hierarchies
 
-EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(machine)
+EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(scheduler_machine)
 {
   EV_ExpandInfo info = {0};
   Temp scratch = scratch_begin(&arena, 1);
@@ -8659,7 +8659,7 @@ EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(machine)
   return info;
 }
 
-EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(machine)
+EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(scheduler_machine)
 {
   EV_ExpandRangeInfo info = {0};
   {
@@ -8688,17 +8688,17 @@ EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(machine)
   return info;
 }
 
-EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(machine)
+EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(scheduler_machine)
 {
   return num;
 }
 
-EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(machine)
+EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(scheduler_machine)
 {
   return id;
 }
 
-EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(process)
+EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(scheduler_process)
 {
   EV_ExpandInfo info = {0};
   Temp scratch = scratch_begin(&arena, 1);
@@ -8711,7 +8711,39 @@ EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(process)
     {
       if(child->kind == CTRL_EntityKind_Thread)
       {
-        ctrl_entity_list_push(scratch.arena, &threads, child);
+        B32 is_in_filter = 1;
+        if(filter.size != 0)
+        {
+          is_in_filter = 0;
+          FuzzyMatchRangeList matches = fuzzy_match_find(scratch.arena, filter, child->string);
+          if(matches.count == matches.needle_part_count)
+          {
+            is_in_filter = 1;
+          }
+          else
+          {
+            DI_Scope *di_scope = di_scope_open();
+            CTRL_Unwind unwind = d_query_cached_unwind_from_thread(child);
+            CTRL_CallStack call_stack = ctrl_call_stack_from_unwind(scratch.arena, di_scope, process, &unwind);
+            for(U64 idx = 0; idx < call_stack.concrete_frame_count && idx < 5; idx += 1)
+            {
+              CTRL_CallStackFrame *f = &call_stack.frames[idx];
+              String8 name = {0};
+              name.str = rdi_string_from_idx(f->rdi, f->procedure->name_string_idx, &name.size);
+              FuzzyMatchRangeList matches = fuzzy_match_find(scratch.arena, filter, name);
+              if(matches.count == matches.needle_part_count)
+              {
+                is_in_filter = 1;
+                break;
+              }
+            }
+            di_scope_close(di_scope);
+          }
+        }
+        if(is_in_filter)
+        {
+          ctrl_entity_list_push(scratch.arena, &threads, child);
+        }
       }
     }
     CTRL_EntityArray *threads_array = push_array(arena, CTRL_EntityArray, 1);
@@ -8723,7 +8755,7 @@ EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(process)
   return info;
 }
 
-EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(process)
+EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(scheduler_process)
 {
   EV_ExpandRangeInfo info = {0};
   {
@@ -8752,12 +8784,12 @@ EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(process)
   return info;
 }
 
-EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(process)
+EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(scheduler_process)
 {
   return num;
 }
 
-EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(process)
+EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(scheduler_process)
 {
   return id;
 }
@@ -8902,8 +8934,22 @@ rd_ev_view_rule_expr_expand_info__meta_entities(Arena *arena, EV_View *view, Str
           break;
         }
       }
-      FuzzyMatchRangeList matches = fuzzy_match_find(scratch.arena, filter, entity_expr_string);
-      if(is_collection || matches.count == matches.needle_part_count)
+      B32 is_in_filter = 1;
+      if(!is_collection && filter.size != 0)
+      {
+        RD_Entity *loc  = rd_entity_child_from_kind(entity, RD_EntityKind_Location);
+        RD_Entity *exe  = rd_entity_child_from_kind(entity, RD_EntityKind_Executable);
+        RD_Entity *args = rd_entity_child_from_kind(entity, RD_EntityKind_Arguments);
+        FuzzyMatchRangeList expr_matches = fuzzy_match_find(scratch.arena, filter, entity_expr_string);
+        FuzzyMatchRangeList loc_matches  = fuzzy_match_find(scratch.arena, filter, loc->string);
+        FuzzyMatchRangeList exe_matches  = fuzzy_match_find(scratch.arena, filter, exe->string);
+        FuzzyMatchRangeList args_matches = fuzzy_match_find(scratch.arena, filter, args->string);
+        is_in_filter = (expr_matches.count == expr_matches.needle_part_count ||
+                        loc_matches.count  == loc_matches.needle_part_count ||
+                        exe_matches.count  == exe_matches.needle_part_count ||
+                        args_matches.count == args_matches.needle_part_count);
+      }
+      if(is_collection || is_in_filter)
       {
         rd_entity_list_push(scratch.arena, &entities_filtered, entity);
       }
@@ -9006,8 +9052,17 @@ rd_ev_view_rule_expr_expand_info__meta_ctrl_entities(Arena *arena, EV_View *view
     for(CTRL_EntityNode *n = entities.first; n != 0; n = n->next)
     {
       CTRL_Entity *entity = n->v;
-      FuzzyMatchRangeList matches = fuzzy_match_find(scratch.arena, filter, entity->string);
-      if(matches.count == matches.needle_part_count)
+      B32 is_in_filter = 1;
+      if(filter.size != 0)
+      {
+        is_in_filter = 0;
+        FuzzyMatchRangeList matches = fuzzy_match_find(scratch.arena, filter, entity->string);
+        if(matches.count == matches.needle_part_count)
+        {
+          is_in_filter = 1;
+        }
+      }
+      if(is_in_filter)
       {
         ctrl_entity_list_push(scratch.arena, &entities_filtered, entity);
       }
@@ -11977,8 +12032,8 @@ rd_frame(void)
     EV_AutoViewRuleTable *auto_view_rule_table = push_array(scratch.arena, EV_AutoViewRuleTable, 1);
     {
       ev_auto_view_rule_table_push_new(scratch.arena, auto_view_rule_table, e_type_key_cons_base(type(CTRL_MetaEvalFrameArray)), str8_lit("slice"), 1);
-      ev_auto_view_rule_table_push_new(scratch.arena, auto_view_rule_table, e_type_key_cons_base(type(CTRL_MachineMetaEval)),    str8_lit("machine"), 1);
-      ev_auto_view_rule_table_push_new(scratch.arena, auto_view_rule_table, e_type_key_cons_base(type(CTRL_ProcessMetaEval)),    str8_lit("process"), 1);
+      ev_auto_view_rule_table_push_new(scratch.arena, auto_view_rule_table, e_type_key_cons_base(type(CTRL_MachineMetaEval)),    str8_lit("scheduler_machine"), 1);
+      ev_auto_view_rule_table_push_new(scratch.arena, auto_view_rule_table, e_type_key_cons_base(type(CTRL_ProcessMetaEval)),    str8_lit("scheduler_process"), 1);
       for EachElement(idx, rd_collection_name_table)
       {
         ev_auto_view_rule_table_push_new(scratch.arena, auto_view_rule_table, collection_type_keys[idx], rd_collection_name_table[idx], 1);

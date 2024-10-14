@@ -829,30 +829,30 @@ RD_IconTable:
 RD_CollectionTable:
 {
   //- rjf: frontend entity groups
-  {watches          Watch            Null              x}
-  {targets          Target           Null              x}
-  {breakpoints      Breakpoint       Null              x}
-  {watch_pins       WatchPin         Null              x}
-  {file_path_maps   FilePathMap      Null              x}
-  {auto_view_rules  AutoViewRule     Null              x}
+  {watches                        Watch            Null              x}
+  {targets                        Target           Null              x}
+  {breakpoints                    Breakpoint       Null              x}
+  {watch_pins                     WatchPin         Null              x}
+  {file_path_maps                 FilePathMap      Null              x}
+  {auto_view_rules                AutoViewRule     Null              x}
   
   //- rjf: control entity groups
-  {machines         Nil              Machine           x}
-  {processes        Nil              Process           x}
-  {threads          Nil              Thread            x}
-  {modules          Nil              Module            x}
+  {machines                       Nil              Machine           x}
+  {processes                      Nil              Process           x}
+  {threads                        Nil              Thread            x}
+  {modules                        Nil              Module            x}
   
-  //- rjf: control entity hierarchies
-  {machine          Nil              Null              x}
-  {process          Nil              Null              x}
+  //- rjf: scheduling control entity hierarchies
+  {scheduler_machine              Nil              Null              x}
+  {scheduler_process              Nil              Null              x}
   
   //- rjf: debug info / architecture watch tables
-  {locals           Nil              Null              -}
-  {registers        Nil              Null              -}
-  {globals          Nil              Null              x}
-  {thread_locals    Nil              Null              x}
-  {types            Nil              Null              x}
-  {procedures       Nil              Null              x}
+  {locals                         Nil              Null              -}
+  {registers                      Nil              Null              -}
+  {globals                        Nil              Null              x}
+  {thread_locals                  Nil              Null              x}
+  {types                          Nil              Null              x}
+  {procedures                     Nil              Null              x}
 }
 
 @gen
