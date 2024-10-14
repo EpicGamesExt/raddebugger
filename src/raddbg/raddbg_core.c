@@ -10401,7 +10401,11 @@ rd_cfg_strings_from_gfx(Arena *arena, String8 root_path, RD_CfgSrc source)
             EntityInfoFlag_HasChildren = (1<<5),
           };
           String8 entity_name_escaped = e->string;
-          if(rd_entity_kind_flags_table[e->kind] & RD_EntityKindFlag_NameIsPath)
+          // TODO(rjf): @hack - hardcoding in the "EntityKind_Location" here - this is because
+          // i am assuming an entity *kind* can 'know' about the 'pathness' of a string. this is
+          // not the case. post-0.9.12 i need to fix this.
+          if(rd_entity_kind_flags_table[e->kind] & RD_EntityKindFlag_NameIsPath &&
+             (e->kind != RD_EntityKind_Location || e->flags & RD_EntityFlag_HasTextPoint))
           {
             Temp scratch = scratch_begin(&arena, 1);
             String8 path_normalized = path_normalized_from_string(scratch.arena, e->string);
@@ -12588,7 +12592,11 @@ rd_frame(void)
                         if(child->flags & MD_NodeFlag_StringLiteral && child->first == &md_nil_node)
                         {
                           String8 string = raw_from_escaped_str8(scratch.arena, child->string);
-                          if(rd_entity_kind_flags_table[t->entity->kind] & RD_EntityKindFlag_NameIsPath)
+                          // TODO(rjf): @hack - hardcoding in the "EntityKind_Location" here - this is because
+                          // i am assuming an entity *kind* can 'know' about the 'pathness' of a string. this is
+                          // not the case. post-0.9.12 i need to fix this.
+                          if(rd_entity_kind_flags_table[t->entity->kind] & RD_EntityKindFlag_NameIsPath &&
+                             t->entity->kind != RD_EntityKind_Location)
                           {
                             string = path_absolute_dst_from_relative_dst_src(scratch.arena, string, cfg_folder);
                           }
@@ -12624,7 +12632,11 @@ rd_frame(void)
                            child->first != &md_nil_node)
                         {
                           String8 string = raw_from_escaped_str8(scratch.arena, child->first->string);
-                          if(rd_entity_kind_flags_table[t->entity->kind] & RD_EntityKindFlag_NameIsPath)
+                          // TODO(rjf): @hack - hardcoding in the "EntityKind_Location" here - this is because
+                          // i am assuming an entity *kind* can 'know' about the 'pathness' of a string. this is
+                          // not the case. post-0.9.12 i need to fix this.
+                          if(rd_entity_kind_flags_table[t->entity->kind] & RD_EntityKindFlag_NameIsPath &&
+                             (t->entity->kind != RD_EntityKind_Location || !md_node_is_nil(md_child_from_string(node, str8_lit("line"), 0))))
                           {
                             string = path_absolute_dst_from_relative_dst_src(scratch.arena, string, cfg_folder);
                           }
