@@ -171,6 +171,7 @@ enum
   RD_ViewRuleInfoFlag_CanUseInWatchTable         = (1<<4),
   RD_ViewRuleInfoFlag_CanFillValueCell           = (1<<5),
   RD_ViewRuleInfoFlag_CanExpand                  = (1<<6),
+  RD_ViewRuleInfoFlag_ProjectFiltered            = (1<<7),
 };
 
 #define RD_VIEW_RULE_UI_FUNCTION_SIG(name) void name(String8 string, MD_Node *params, Rng2F32 rect)

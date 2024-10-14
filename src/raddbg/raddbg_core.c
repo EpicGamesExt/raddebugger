@@ -634,8 +634,21 @@ rd_view_is_project_filtered(RD_View *view)
   String8 view_project = view->project_path;
   if(view_project.size != 0)
   {
-    String8 current_project = rd_cfg_path_from_src(RD_CfgSrc_Project);
-    result = !path_match_normalized(view_project, current_project);
+    RD_ViewRuleKind kind = rd_view_rule_kind_from_string(view->spec->string);
+    // TODO(rjf): @hack hack hack - this should be completely determined if the view
+    // is parameterized by an expression, but that is currently the same string as the
+    // query, and so we can't rely on that. when query expressions are separated from
+    // filter strings, we can rely on that here.
+    if((kind == RD_ViewRuleKind_Text ||
+        kind == RD_ViewRuleKind_Disasm ||
+        kind == RD_ViewRuleKind_Memory ||
+        kind == RD_ViewRuleKind_Bitmap ||
+        kind == RD_ViewRuleKind_Geo3D) &&
+       view->query_string_size != 0)
+    {
+      String8 current_project = rd_cfg_path_from_src(RD_CfgSrc_Project);
+      result = !path_match_normalized(view_project, current_project);
+    }
   }
   return result;
 }

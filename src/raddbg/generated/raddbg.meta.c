@@ -580,7 +580,7 @@ RD_StringBindingPair rd_default_binding_table[110] =
 {str8_lit_comp("log_marker"), {OS_Key_M, 0 |OS_Modifier_Ctrl |OS_Modifier_Shift |OS_Modifier_Alt}},
 };
 
-String8 rd_binding_version_remap_old_name_table[7] =
+String8 rd_binding_version_remap_old_name_table[8] =
 {
 str8_lit_comp("commands"),
 str8_lit_comp("load_user"),
@@ -589,9 +589,10 @@ str8_lit_comp("load_project"),
 str8_lit_comp("open_profile"),
 str8_lit_comp("address_breakpoint"),
 str8_lit_comp("function_breakpoint"),
+str8_lit_comp("toggle_breakpoint_cursor"),
 };
 
-String8 rd_binding_version_remap_new_name_table[7] =
+String8 rd_binding_version_remap_new_name_table[8] =
 {
 str8_lit_comp("run_command"),
 str8_lit_comp("open_user"),
@@ -600,6 +601,7 @@ str8_lit_comp("open_project"),
 str8_lit_comp("open_project"),
 str8_lit_comp("add_address_breakpoint"),
 str8_lit_comp("add_function_breakpoint"),
+str8_lit_comp("toggle_breakpoint"),
 };
 
 String8 rd_icon_kind_text_table[69] =

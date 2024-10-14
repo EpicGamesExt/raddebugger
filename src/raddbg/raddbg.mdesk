@@ -717,6 +717,8 @@ RD_BindingVersionRemapTable:
   {"open_profile" "open_project"}
   {"address_breakpoint" "add_address_breakpoint"}
   {"function_breakpoint" "add_function_breakpoint"}
+  {"toggle_breakpoint_cursor" "toggle_breakpoint"}
+  
 }
 
 @data(String8) rd_binding_version_remap_old_name_table:
