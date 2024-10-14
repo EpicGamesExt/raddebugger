@@ -2308,28 +2308,8 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
         }break;
         case D_CmdKind_Restart:
         {
-          // rjf: kill all
           d_cmd(D_CmdKind_KillAll);
-          
-#if 0 // TODO(rjf): @msgs
-          // rjf: gather targets corresponding to all launched processes
-          RD_EntityList targets = {0};
-          {
-            RD_EntityList processes = rd_query_cached_entity_list_with_kind(RD_EntityKind_Process);
-            for(RD_EntityNode *n = processes.first; n != 0; n = n->next)
-            {
-              RD_Entity *process = n->entity;
-              RD_Entity *target = rd_entity_from_handle(process->entity_handle);
-              if(!rd_entity_is_nil(target))
-              {
-                rd_entity_list_push(scratch.arena, &targets, target);
-              }
-            }
-          }
-          
-          // rjf: re-launch targets
-          d_cmd(D_CmdKind_LaunchAndRun, .entity_list = rd_handle_list_from_entity_list(scratch.arena, targets));
-#endif
+          d_cmd(D_CmdKind_LaunchAndRun);
         }break;
         case D_CmdKind_StepInto:
         case D_CmdKind_StepOver:

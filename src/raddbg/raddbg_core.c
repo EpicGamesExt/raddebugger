@@ -2506,6 +2506,15 @@ rd_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range)
       }
       StringMemberCase(address_location)
       {
+        U64 vaddr = 0;
+        if(try_u64_from_str8_c_rules(str8_cstring_capped(in, (U8 *)in + 4096), &vaddr))
+        {
+          RD_Entity *loc = rd_entity_child_from_kind_or_alloc(entity, RD_EntityKind_Location);
+          rd_entity_equip_vaddr(loc, vaddr);
+          rd_entity_equip_name(loc, str8_zero());
+          loc->flags &= ~RD_EntityFlag_HasTextPoint;
+          result = 1;
+        }
       }
       StringMemberCase(function_location)
       {

@@ -5,7 +5,6 @@
 //~ rjf: 0.9.12 TODO notes
 //
 // [ ] remainder of @msgs pass:
-//  [ ] entity listers - kill-specific-process, etc.
 //  [ ] new `restart processes` path
 //  [ ] remainder of @msgs
 // 
@@ -521,6 +520,7 @@
 //  [x] new universal ctx menu, hover, tooltips systems
 //  [x] `switch` replacement (recent files history)
 //   [x] resolving name as file or #include
+//  [x] entity listers - kill-specific-process, etc.
 
 ////////////////////////////////
 //~ rjf: Build Options
