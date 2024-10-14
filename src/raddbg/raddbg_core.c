@@ -11988,7 +11988,10 @@ rd_frame(void)
         E_TokenArray tokens = e_token_array_from_text(scratch.arena, type_string);
         E_Parse type_parse = e_parse_type_from_text_tokens(scratch.arena, type_string, &tokens);
         E_TypeKey type_key = e_type_from_expr(type_parse.expr);
-        ev_auto_view_rule_table_push_new(scratch.arena, auto_view_rule_table, type_key, view_rule_string, 0);
+        if(!e_type_key_match(e_type_key_zero(), type_key))
+        {
+          ev_auto_view_rule_table_push_new(scratch.arena, auto_view_rule_table, type_key, view_rule_string, 0);
+        }
       }
     }
     ev_select_auto_view_rule_table(auto_view_rule_table);
