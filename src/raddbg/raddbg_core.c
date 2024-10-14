@@ -11964,6 +11964,8 @@ rd_frame(void)
           case RD_CmdKind_Run:
           case RD_CmdKind_LaunchAndRun:
           case RD_CmdKind_LaunchAndInit:
+          case RD_CmdKind_StepInto:
+          case RD_CmdKind_StepOver:
           {
             CTRL_EntityList processes = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Process);
             if(processes.count == 0)
@@ -13477,57 +13479,6 @@ rd_frame(void)
             arena_clear(rd_state->current_path_arena);
             rd_state->current_path = push_str8_copy(rd_state->current_path_arena, rd_regs()->file_path);
           }break;
-          
-          //- rjf: override file links
-          case RD_CmdKind_SetFileOverrideLinkSrc:
-          case RD_CmdKind_SetFileOverrideLinkDst:
-          {
-#if 0 // TODO(rjf): @msgs
-            // rjf: unpack args
-            RD_Entity *map = rd_entity_from_handle(rd_regs()->entity);
-            String8 path = path_normalized_from_string(scratch.arena, rd_regs()->file_path);
-            String8 path_folder = str8_chop_last_slash(path);
-            String8 path_file = str8_skip_last_slash(path);
-            
-            // rjf: src -> move map & commit name; dst -> open destination file & refer to it in map
-            switch(kind)
-            {
-              default:{}break;
-              case RD_CmdKind_SetFileOverrideLinkSrc:
-              {
-                RD_Entity *map_parent = (rd_regs()->file_path.size != 0) ? d_entity_from_path(path_folder, D_EntityFromPathFlag_OpenAsNeeded|D_EntityFromPathFlag_OpenMissing) : rd_entity_root();
-                if(rd_entity_is_nil(map))
-                {
-                  map = rd_entity_alloc(map_parent, RD_EntityKind_FilePathMap);
-                }
-                else
-                {
-                  rd_entity_change_parent(map, map->parent, map_parent, &d_nil_entity);
-                }
-                rd_entity_equip_name(map, path_file);
-              }break;
-              case RD_CmdKind_SetFileOverrideLinkDst:
-              {
-                if(rd_entity_is_nil(map))
-                {
-                  map = rd_entity_alloc(rd_entity_root(), RD_EntityKind_FilePathMap);
-                }
-                RD_Entity *map_dst_entity = &d_nil_entity;
-                if(rd_regs()->file_path.size != 0)
-                {
-                  map_dst_entity = d_entity_from_path(path, D_EntityFromPathFlag_All);
-                }
-                rd_entity_equip_entity_handle(map, rd_handle_from_entity(map_dst_entity));
-              }break;
-            }
-            
-            // rjf: empty src/dest -> delete
-            if(!rd_entity_is_nil(map) && map->string.size == 0 && rd_entity_is_nil(rd_entity_from_handle(map->entity_handle)))
-            {
-              rd_entity_mark_for_deletion(map);
-            }
-#endif
-          }break;
           case RD_CmdKind_SetFileReplacementPath:
           {
             // NOTE(rjf):
@@ -13599,42 +13550,6 @@ rd_frame(void)
             RD_Entity *dst = rd_entity_alloc(map, RD_EntityKind_Dest);
             rd_entity_equip_name(src, map_src);
             rd_entity_equip_name(dst, map_dst);
-            
-#if 0 // TODO(rjf): @msgs
-            
-            //- rjf: grab src file & chosen replacement
-            RD_Entity *file = rd_entity_from_handle(params.entity);
-            RD_Entity *replacement = d_entity_from_path(params.file_path, D_EntityFromPathFlag_OpenAsNeeded|D_EntityFromPathFlag_OpenMissing);
-            
-            //- rjf: find 
-            RD_Entity *first_diff_src = file;
-            RD_Entity *first_diff_dst = replacement;
-            for(;!rd_entity_is_nil(first_diff_src) && !rd_entity_is_nil(first_diff_dst);)
-            {
-              if(!str8_match(first_diff_src->string, first_diff_dst->string, StringMatchFlag_CaseInsensitive) ||
-                 first_diff_src->parent->kind != RD_EntityKind_File ||
-                 first_diff_src->parent->parent->kind != RD_EntityKind_File ||
-                 first_diff_dst->parent->kind != RD_EntityKind_File ||
-                 first_diff_dst->parent->parent->kind != RD_EntityKind_File)
-              {
-                break;
-              }
-              first_diff_src = first_diff_src->parent;
-              first_diff_dst = first_diff_dst->parent;
-            }
-            
-            //- rjf: override first different
-            if(!rd_entity_is_nil(first_diff_src) && !rd_entity_is_nil(first_diff_dst))
-            {
-              RD_Entity *link = rd_entity_child_from_string_and_kind(first_diff_src->parent, first_diff_src->name, RD_EntityKind_FilePathMap);
-              if(rd_entity_is_nil(link))
-              {
-                link = rd_entity_alloc(first_diff_src->parent, RD_EntityKind_FilePathMap);
-                rd_entity_equip_name(link, first_diff_src->name);
-              }
-              rd_entity_equip_entity_handle(link, rd_handle_from_entity(first_diff_dst));
-            }
-#endif
           }break;
           
           //- rjf: auto view rules
@@ -16036,7 +15951,7 @@ rd_frame(void)
     //
     U64 exception_code_filters[(CTRL_ExceptionCodeKind_COUNT+63)/64] = {0};
     {
-      // TODO(rjf): @msgs
+      MemoryCopyArray(exception_code_filters, rd_state->ctrl_exception_code_filters);
     }
     
     ////////////////////////////

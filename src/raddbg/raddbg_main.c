@@ -14,18 +14,11 @@
 // 
 // [ ] post-@msgs TODOs:
 // [ ] ensure the following issues are resolved with this new pass:
-//  [ ] global evaluation across DLL boundaries
-//  [ ] mohit-reported callstack-frame-selection bug (with inlines)
 //  [ ] empty user file causing failure to launch
 //  [ ] decay arrays to pointers in pointer/value comparison
-//  [ ] visualize all breakpoints everywhere - source view should show up in
-//      disasm, disasm should show up in source view, function should show up in
-//      both, etc.
-//    [ ] ** Function breakpoints should show up in the source listing. Without
-//        them being visible, it is confusing when you run and you stop there,
-//        because you're like "wait why did it stop" and then you later remember
-//        that's because there was a function breakpoint there.
 //  [ ] debugger readme pass
+//  [x] global evaluation across DLL boundaries
+//  [x] mohit-reported callstack-frame-selection bug (with inlines)
 
 ////////////////////////////////
 //~ rjf: post-0.9.12 TODO notes
@@ -44,6 +37,13 @@
 //  [ ] save view column pcts; generalize to being a first-class thing in
 //      RD_View, e.g. by just having a string -> f32 store
 //  [ ] auto-scroll output window
+//  [ ] visualize all breakpoints everywhere - source view should show up in
+//      disasm, disasm should show up in source view, function should show up in
+//      both, etc.
+//    [ ] ** Function breakpoints should show up in the source listing. Without
+//        them being visible, it is confusing when you run and you stop there,
+//        because you're like "wait why did it stop" and then you later remember
+//        that's because there was a function breakpoint there.
 
 ////////////////////////////////
 //~ rjf: Frontend/UI Pass Tasks
