@@ -755,6 +755,25 @@ struct RD_EvalVizViewCacheSlot
 };
 
 ////////////////////////////////
+//~ rjf: Meta Evaluation Cache Types
+
+typedef struct RD_CtrlEntityMetaEvalCacheNode RD_CtrlEntityMetaEvalCacheNode;
+struct RD_CtrlEntityMetaEvalCacheNode
+{
+  RD_CtrlEntityMetaEvalCacheNode *next;
+  CTRL_Handle handle;
+  CTRL_MetaEval *meval;
+  Rng1U64 range;
+};
+
+typedef struct RD_CtrlEntityMetaEvalCacheSlot RD_CtrlEntityMetaEvalCacheSlot;
+struct RD_CtrlEntityMetaEvalCacheSlot
+{
+  RD_CtrlEntityMetaEvalCacheNode *first;
+  RD_CtrlEntityMetaEvalCacheNode *last;
+};
+
+////////////////////////////////
 //~ rjf: Main Per-Process Graphical State
 
 typedef struct RD_NameChunkNode RD_NameChunkNode;
@@ -828,6 +847,10 @@ struct RD_State
   U64 eval_viz_view_cache_slots_count;
   RD_EvalVizViewCacheSlot *eval_viz_view_cache_slots;
   RD_EvalVizViewCacheNode *eval_viz_view_cache_node_free;
+  
+  // rjf: ctrl entity meta eval cache
+  U64 ctrl_entity_meval_cache_slots_count;
+  RD_CtrlEntityMetaEvalCacheSlot *ctrl_entity_meval_cache_slots;
   
   // rjf: contextual hover info
   RD_Regs *hover_regs;

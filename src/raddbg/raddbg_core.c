@@ -2242,7 +2242,8 @@ rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
 {
   Temp scratch = scratch_begin(0, 0);
   B32 result = 0;
-  CTRL_MetaEval *meval = 0;
+  CTRL_MetaEval *meval_read = 0;
+  Rng1U64 meval_legal_range = {0};
   switch(space.kind)
   {
     //- rjf: filesystem reads
@@ -2304,27 +2305,64 @@ rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
     }break;
     
     //- rjf: meta reads (metadata about either control entities or debugger state)
-    case RD_EvalSpaceKind_MetaCtrlEntity: meval = rd_ctrl_meta_eval_from_ctrl_entity(scratch.arena, rd_ctrl_entity_from_eval_space(space)); goto meta_eval;
-    case RD_EvalSpaceKind_MetaEntity: meval = rd_ctrl_meta_eval_from_entity(scratch.arena, rd_entity_from_eval_space(space)); goto meta_eval;
-    meta_eval:;
+    case RD_EvalSpaceKind_MetaCtrlEntity:
     {
+      CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(space);
+      U64 hash = ctrl_hash_from_handle(entity->handle);
+      U64 slot_idx = hash%rd_state->ctrl_entity_meval_cache_slots_count;
+      RD_CtrlEntityMetaEvalCacheSlot *slot = &rd_state->ctrl_entity_meval_cache_slots[slot_idx];
+      RD_CtrlEntityMetaEvalCacheNode *node = 0;
+      for(RD_CtrlEntityMetaEvalCacheNode *n = slot->first; n != 0; n = n->next)
+      {
+        if(ctrl_handle_match(n->handle, entity->handle))
+        {
+          node = n;
+          break;
+        }
+      }
+      if(!node)
+      {
+        CTRL_MetaEval *meval = rd_ctrl_meta_eval_from_ctrl_entity(scratch.arena, entity);
+        String8 meval_srlzed = serialized_from_struct(scratch.arena, CTRL_MetaEval, meval);
+        U64 pos_min = arena_pos(rd_frame_arena());
+        arena_push(rd_frame_arena(), 0, 64);
+        CTRL_MetaEval *meval_read = struct_from_serialized(rd_frame_arena(), CTRL_MetaEval, meval_srlzed);
+        struct_rebase_ptrs(CTRL_MetaEval, meval_read, meval_read);
+        U64 pos_opl = arena_pos(scratch.arena);
+        node = push_array(rd_frame_arena(), RD_CtrlEntityMetaEvalCacheNode, 1);
+        SLLQueuePush(slot->first, slot->last, node);
+        node->handle = entity->handle;
+        node->meval  = meval_read;
+        node->range  = r1u64(0, pos_opl-pos_min);
+      }
+      meval_read = node->meval;
+      meval_legal_range = node->range;
+    }goto meta_eval;
+    case RD_EvalSpaceKind_MetaEntity:
+    {
+      // rjf: calculate meta evaluation
+      CTRL_MetaEval *meval = rd_ctrl_meta_eval_from_entity(scratch.arena, rd_entity_from_eval_space(space));
+      
       // rjf: copy meta evaluation to scratch arena, to form range of legal reads
       arena_push(scratch.arena, 0, 64);
       String8 meval_srlzed = serialized_from_struct(scratch.arena, CTRL_MetaEval, meval);
       U64 pos_min = arena_pos(scratch.arena);
-      CTRL_MetaEval *meval_read = struct_from_serialized(scratch.arena, CTRL_MetaEval, meval_srlzed);
+      meval_read = struct_from_serialized(scratch.arena, CTRL_MetaEval, meval_srlzed);
       U64 pos_opl = arena_pos(scratch.arena);
       
       // rjf: rebase all pointer values in meta evaluation to be relative to base pointer
       struct_rebase_ptrs(CTRL_MetaEval, meval_read, meval_read);
       
-      // rjf: perform actual read
-      Rng1U64 legal_range = r1u64(0, pos_opl-pos_min);
-      if(contains_1u64(legal_range, range.min))
+      // rjf: form legal range
+      meval_legal_range = r1u64(0, pos_opl-pos_min);
+    }goto meta_eval;
+    meta_eval:;
+    {
+      if(contains_1u64(meval_legal_range, range.min))
       {
         result = 1;
         U64 range_dim = dim_1u64(range);
-        U64 bytes_to_read = Min(range_dim, (legal_range.max - range.min));
+        U64 bytes_to_read = Min(range_dim, (meval_legal_range.max - range.min));
         MemoryCopy(out, ((U8 *)meval_read) + range.min, bytes_to_read);
         if(bytes_to_read < range_dim)
         {
@@ -11346,6 +11384,8 @@ rd_frame(void)
   }
   B32 allow_text_hotkeys = !rd_state->text_edit_mode;
   rd_state->text_edit_mode = 0;
+  rd_state->ctrl_entity_meval_cache_slots_count = 1024;
+  rd_state->ctrl_entity_meval_cache_slots = push_array(rd_frame_arena(), RD_CtrlEntityMetaEvalCacheSlot, rd_state->ctrl_entity_meval_cache_slots_count);
   
   //////////////////////////////
   //- rjf: get events from the OS

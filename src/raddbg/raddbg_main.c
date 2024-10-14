@@ -30,6 +30,7 @@
 ////////////////////////////////
 //~ rjf: post-0.9.12 TODO notes
 //
+//  [ ] investigate false exceptions, being reported while stepping through init code
 //  [ ] output: add option for scroll-to-bottom - ensure this shows up in universal ctx menu
 //  [ ] universal ctx menu address/watch options; e.g. watch -> memory; watch -> add watch
 //  [ ] EVAL LOOKUP RULES -> currently going 0 -> rdis_count, but we need

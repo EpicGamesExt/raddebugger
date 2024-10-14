@@ -1020,6 +1020,7 @@ rd_expr_from_watch_view_row_column(Arena *arena, EV_View *ev_view, EV_Row *row, 
 internal String8
 rd_string_from_eval_viz_row_column(Arena *arena, EV_View *ev, EV_Row *row, RD_WatchViewColumn *col, EV_StringFlags string_flags, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size_px)
 {
+  ProfBeginFunction();
   String8 result = {0};
   E_Expr *row_col_expr = rd_expr_from_watch_view_row_column(arena, ev, row, col);
   switch(col->kind)
@@ -1158,6 +1159,7 @@ rd_string_from_eval_viz_row_column(Arena *arena, EV_View *ev, EV_Row *row, RD_Wa
     result.str[0] = '[';
     result.str[result.size-1] = ')';
   }
+  ProfEnd();
   return result;
 }
 
@@ -2197,6 +2199,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
           ////////////////////////
           //- rjf: unpack row info
           //
+          ProfBegin("unpack row info");
           U64 row_hash = ev_hash_from_key(row->key);
           U64 row_depth = ev_depth_from_block(row->block);
           if(row_depth > 0)
@@ -2238,10 +2241,12 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
           }
           RD_WatchViewRowInfo row_info = rd_watch_view_row_info_from_row(row);
           RD_WatchViewRowKind row_kind = rd_watch_view_row_kind_from_flags_row_info(flags, row, &row_info);
+          ProfEnd();
           
           ////////////////////////
           //- rjf: determine if row's data is fresh and/or bad
           //
+          ProfBegin("determine if row's data is fresh and/or bad");
           B32 row_is_fresh = 0;
           B32 row_is_bad = 0;
           switch(row_eval.mode)
@@ -2269,10 +2274,12 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
               }
             }break;
           }
+          ProfEnd();
           
           ////////////////////////
           //- rjf: determine row's flags & color palette
           //
+          ProfBegin("determine row's flags & color palette");
           UI_BoxFlags row_flags = 0;
           UI_Palette *palette = ui_top_palette();
           {
@@ -2295,6 +2302,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
               case RD_WatchViewRowKind_PrettyEntityControls:{row_flags |= UI_BoxFlag_DisableFocusOverlay;}break;
             }
           }
+          ProfEnd();
           
           ////////////////////////
           //- rjf: build row box
@@ -2317,6 +2325,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
             //- rjf: header row
             //
             case RD_WatchViewRowKind_Header:
+            ProfScope("header row")
             {
               UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
               {
@@ -2390,7 +2399,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
             //- rjf: canvas row
             //
             case RD_WatchViewRowKind_Canvas:
-            UI_FocusHot(row_selected ? UI_FocusKind_On : UI_FocusKind_Off)
+            ProfScope("canvas row") UI_FocusHot(row_selected ? UI_FocusKind_On : UI_FocusKind_Off)
             {
               //- rjf: unpack
               RD_WatchViewPoint pt = {0, row->block->key, row->key};
@@ -2490,6 +2499,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
             //- rjf: pretty entity controls row
             //
             case RD_WatchViewRowKind_PrettyEntityControls:
+            ProfScope("pretty entity controls row")
             {
               //- rjf: unpack
               RD_EntityKind collection_entity_kind = row_info.collection_entity_kind;
@@ -2734,7 +2744,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
             //
             default:
             case RD_WatchViewRowKind_Normal:
-            UI_HeightFill
+            ProfScope("normal row") UI_HeightFill
             {
               //////////////////////
               //- rjf: draw start of cache lines in expansions
@@ -2780,6 +2790,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
               //////////////////////
               //- rjf: build all columns
               //
+              ProfScope("build all columns")
               {
                 S64 x = 0;
                 F32 x_px = 0;
@@ -2792,6 +2803,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                   String8 cell_pre_edit_string = rd_string_from_eval_viz_row_column(scratch.arena, eval_view, row, col, string_flags|EV_StringFlag_ReadOnlyDisplayRules, default_radix, ui_top_font(), ui_top_font_size(), row_string_max_size_px);
                   
                   //- rjf: unpack column-kind-specific info
+                  ProfBegin("unpack column-kind-specific info");
                   E_Eval cell_eval = row_eval;
                   E_Type *cell_type = row_type;
                   B32 cell_can_edit = 0;
@@ -2917,8 +2929,10 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                       }
                     }break;
                   }
+                  ProfEnd();
                   
                   //- rjf: apply column-specified view rules
+                  ProfBegin("apply column-specified view rules");
                   if(col->view_rule_size != 0)
                   {
                     String8 col_view_rule = str8(col->view_rule_buffer, col->view_rule_size);
@@ -2934,8 +2948,10 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                       }
                     }
                   }
+                  ProfEnd();
                   
                   //- rjf: determine cell's palette
+                  ProfBegin("determine cell's palette");
                   UI_BoxFlags cell_flags = 0;
                   UI_Palette *palette = ui_top_palette();
                   {
@@ -2955,6 +2971,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                       palette = ui_build_palette(ui_top_palette(), .text = cell_base_color);
                     }
                   }
+                  ProfEnd();
                   
                   //- rjf: determine if cell needs code styling
                   B32 cell_is_code = !col->is_non_code;
@@ -2986,7 +3003,8 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                   
                   //- rjf: build cell
                   UI_Signal sig = {0};
-                  UI_Palette(palette)
+                  ProfScope("build cell")
+                    UI_Palette(palette)
                     UI_TableCell
                     UI_FocusHot(cell_selected ? UI_FocusKind_On : UI_FocusKind_Off)
                     UI_FocusActive((cell_selected && ewv->text_editing) ? UI_FocusKind_On : UI_FocusKind_Off)
