@@ -1363,20 +1363,22 @@ rd_entity_change_parent(RD_Entity *entity, RD_Entity *old_parent, RD_Entity *new
 {
   Assert(entity->parent == old_parent);
   Assert(prev_child->parent == old_parent || rd_entity_is_nil(prev_child));
-  
-  // rjf: fix up links
-  if(!rd_entity_is_nil(old_parent))
+  if(prev_child != entity)
   {
-    DLLRemove_NPZ(&d_nil_entity, old_parent->first, old_parent->last, entity, next, prev);
+    // rjf: fix up links
+    if(!rd_entity_is_nil(old_parent))
+    {
+      DLLRemove_NPZ(&d_nil_entity, old_parent->first, old_parent->last, entity, next, prev);
+    }
+    if(!rd_entity_is_nil(new_parent))
+    {
+      DLLInsert_NPZ(&d_nil_entity, new_parent->first, new_parent->last, prev_child, entity, next, prev);
+    }
+    entity->parent = new_parent;
+    
+    // rjf: notify
+    rd_state->kind_alloc_gens[entity->kind] += 1;
   }
-  if(!rd_entity_is_nil(new_parent))
-  {
-    DLLInsert_NPZ(&d_nil_entity, new_parent->first, new_parent->last, prev_child, entity, next, prev);
-  }
-  entity->parent = new_parent;
-  
-  // rjf: notify
-  rd_state->kind_alloc_gens[entity->kind] += 1;
 }
 
 internal RD_Entity *
@@ -3955,6 +3957,10 @@ rd_window_frame(RD_Window *ws)
           //
           case RD_RegSlot_Cursor:
           {
+            // TODO(rjf): with new registers-based commands, all of this can be deduplicated with the
+            // command-based path, but I am holding off on that until post 0.9.12 - these should be
+            // able to just all push commands for their corresponding actions
+            //
             TXT_Scope *txt_scope = txt_scope_open();
             HS_Scope *hs_scope = hs_scope_open();
             TxtRng range = txt_rng(regs->cursor, regs->mark);
@@ -5509,29 +5515,6 @@ rd_window_frame(RD_Window *ws)
               };
               Assert(ArrayCount(codepoints) == ArrayCount(cmds));
               rd_cmd_list_menu_buttons(ArrayCount(cmds), cmds, codepoints);
-              RD_Palette(RD_PaletteCode_Floating) ui_divider(ui_em(1.f, 1.f));
-              RD_EntityList targets_list = rd_query_cached_entity_list_with_kind(RD_EntityKind_Target);
-              for(RD_EntityNode *n = targets_list.first; n != 0; n = n->next)
-              {
-                RD_Entity *target = n->entity;
-                UI_Palette *palette = ui_top_palette();
-                if(target->flags & RD_EntityFlag_HasColor)
-                {
-                  palette = ui_build_palette(ui_top_palette(), .text = rd_rgba_from_entity(target));
-                }
-                String8 target_name = rd_display_string_from_entity(scratch.arena, target);
-                UI_Signal sig = {0};
-                UI_Palette(palette) sig = rd_icon_buttonf(RD_IconKind_Target, 0, "%S##%p", target_name, target);
-                if(ui_clicked(sig))
-                {
-                  // TODO(rjf): @msgs
-#if 0
-                  rd_cmd(RD_CmdKind_EditTarget, .entity = rd_handle_from_entity(target));
-                  ui_ctx_menu_close();
-                  ws->menu_bar_focused = 0;
-#endif
-                }
-              }
               scratch_end(scratch);
             }
             
@@ -13874,6 +13857,7 @@ rd_frame(void)
             FileProperties props = os_properties_from_file_path(path);
             if(props.created != 0)
             {
+              rd_cmd(RD_CmdKind_RecordFileInProject);
               rd_cmd(RD_CmdKind_OpenTab,
                      .string = rd_eval_string_from_file_path(scratch.arena, path),
                      .params_tree = md_tree_from_string(scratch.arena, rd_view_rule_kind_info_table[RD_ViewRuleKind_PendingFile].string)->first);
@@ -13949,13 +13933,63 @@ rd_frame(void)
               }
             }
           }break;
+          case RD_CmdKind_RecordFileInProject:
+          if(rd_regs()->file_path.size != 0)
+          {
+            String8 path = path_normalized_from_string(scratch.arena, rd_regs()->file_path);
+            RD_EntityList recent_files = rd_query_cached_entity_list_with_kind(RD_EntityKind_RecentFile);
+            if(recent_files.count >= 256)
+            {
+              rd_entity_mark_for_deletion(recent_files.first->entity);
+            }
+            RD_Entity *existing_recent_file = &d_nil_entity;
+            for(RD_EntityNode *n = recent_files.first; n != 0; n = n->next)
+            {
+              if(str8_match(n->entity->string, path, StringMatchFlag_CaseInsensitive))
+              {
+                existing_recent_file = n->entity;
+                break;
+              }
+            }
+            if(rd_entity_is_nil(existing_recent_file))
+            {
+              RD_Entity *recent_file = rd_entity_alloc(rd_entity_root(), RD_EntityKind_RecentFile);
+              rd_entity_equip_name(recent_file, path);
+              rd_entity_equip_cfg_src(recent_file, RD_CfgSrc_Project);
+            }
+            else
+            {
+              rd_entity_change_parent(existing_recent_file, rd_entity_root(), rd_entity_root(), rd_entity_root()->last);
+            }
+          }break;
+          
+          //- rjf: source <-> disasm
           case RD_CmdKind_GoToDisassembly:
           {
-            // TODO(rjf): @msgs
+            CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->thread);
+            U64 vaddr = 0;
+            for(D_LineNode *n = rd_regs()->lines.first; n != 0; n = n->next)
+            {
+              CTRL_EntityList modules = ctrl_modules_from_dbgi_key(scratch.arena, d_state->ctrl_entity_store, &n->v.dbgi_key);
+              CTRL_Entity *module = ctrl_module_from_thread_candidates(d_state->ctrl_entity_store, thread, &modules);
+              if(module != &ctrl_entity_nil)
+              {
+                vaddr = ctrl_vaddr_from_voff(module, n->v.voff_range.min);
+                break;
+              }
+            }
+            rd_cmd(RD_CmdKind_FindCodeLocation, .vaddr = vaddr);
           }break;
           case RD_CmdKind_GoToSource:
           {
-            // TODO(rjf): @msgs
+            if(rd_regs()->lines.first != 0)
+            {
+              rd_cmd(RD_CmdKind_FindCodeLocation,
+                     .file_path = rd_regs()->lines.first->v.file_path,
+                     .cursor    = rd_regs()->lines.first->v.pt,
+                     .vaddr     = 0,
+                     .process   = ctrl_handle_zero());
+            }
           }break;
           
           //- rjf: panel built-in layout builds
@@ -14674,46 +14708,62 @@ rd_frame(void)
               }
             }
             
-            // rjf: find a panel that already has *any* code open
+            // rjf: find a panel that already has *any* code open (prioritize largest)
             RD_Panel *panel_w_any_src_code = &rd_nil_panel;
-            for(RD_Panel *panel = ws->root_panel; !rd_panel_is_nil(panel); panel = rd_panel_rec_depth_first_pre(panel).next)
             {
-              if(!rd_panel_is_nil(panel->first))
+              Rng2F32 root_rect = os_client_rect_from_window(ws->os);
+              F32 best_panel_area = 0;
+              for(RD_Panel *panel = ws->root_panel; !rd_panel_is_nil(panel); panel = rd_panel_rec_depth_first_pre(panel).next)
               {
-                continue;
-              }
-              for(RD_View *view = panel->first_tab_view; !rd_view_is_nil(view); view = view->order_next)
-              {
-                if(rd_view_is_project_filtered(view)) { continue; }
-                RD_ViewRuleKind view_kind = rd_view_rule_kind_from_string(view->spec->string);
-                if(view_kind == RD_ViewRuleKind_Text)
+                if(!rd_panel_is_nil(panel->first))
                 {
-                  panel_w_any_src_code = panel;
-                  break;
+                  continue;
+                }
+                Rng2F32 panel_rect = rd_target_rect_from_panel(root_rect, ws->root_panel, panel);
+                Vec2F32 panel_rect_dim = dim_2f32(panel_rect);
+                F32 panel_area = panel_rect_dim.x*panel_rect_dim.y;
+                for(RD_View *view = panel->first_tab_view; !rd_view_is_nil(view); view = view->order_next)
+                {
+                  if(rd_view_is_project_filtered(view)) { continue; }
+                  RD_ViewRuleKind view_kind = rd_view_rule_kind_from_string(view->spec->string);
+                  if(view_kind == RD_ViewRuleKind_Text && panel_area > best_panel_area)
+                  {
+                    panel_w_any_src_code = panel;
+                    best_panel_area = panel_area;
+                    break;
+                  }
                 }
               }
             }
             
-            // rjf: try to find panel/view pair that has disassembly open
+            // rjf: try to find panel/view pair that has disassembly open (prioritize largest)
             RD_Panel *panel_w_disasm = &rd_nil_panel;
             RD_View *view_w_disasm = &rd_nil_view;
-            for(RD_Panel *panel = ws->root_panel; !rd_panel_is_nil(panel); panel = rd_panel_rec_depth_first_pre(panel).next)
             {
-              if(!rd_panel_is_nil(panel->first))
+              Rng2F32 root_rect = os_client_rect_from_window(ws->os);
+              F32 best_panel_area = 0;
+              for(RD_Panel *panel = ws->root_panel; !rd_panel_is_nil(panel); panel = rd_panel_rec_depth_first_pre(panel).next)
               {
-                continue;
-              }
-              for(RD_View *view = panel->first_tab_view; !rd_view_is_nil(view); view = view->order_next)
-              {
-                if(rd_view_is_project_filtered(view)) { continue; }
-                RD_ViewRuleKind view_kind = rd_view_rule_kind_from_string(view->spec->string);
-                if(view_kind == RD_ViewRuleKind_Disasm && view->query_string_size == 0)
+                if(!rd_panel_is_nil(panel->first))
                 {
-                  panel_w_disasm = panel;
-                  view_w_disasm = view;
-                  if(view == rd_selected_tab_from_panel(panel))
+                  continue;
+                }
+                Rng2F32 panel_rect = rd_target_rect_from_panel(root_rect, ws->root_panel, panel);
+                Vec2F32 panel_rect_dim = dim_2f32(panel_rect);
+                F32 panel_area = panel_rect_dim.x*panel_rect_dim.y;
+                for(RD_View *view = panel->first_tab_view; !rd_view_is_nil(view); view = view->order_next)
+                {
+                  if(rd_view_is_project_filtered(view)) { continue; }
+                  RD_ViewRuleKind view_kind = rd_view_rule_kind_from_string(view->spec->string);
+                  if(view_kind == RD_ViewRuleKind_Disasm && view->query_string_size == 0 && panel_area > best_panel_area)
                   {
-                    break;
+                    panel_w_disasm = panel;
+                    view_w_disasm = view;
+                    best_panel_area = panel_area;
+                    if(view == rd_selected_tab_from_panel(panel))
+                    {
+                      break;
+                    }
                   }
                 }
               }
@@ -14818,6 +14868,9 @@ rd_frame(void)
                        .view = rd_handle_from_view(dst_view));
                 panel_used_for_src_code = dst_panel;
               }
+              
+              // rjf: record
+              rd_cmd(RD_CmdKind_RecordFileInProject, .file_path = file_path);
             }
             
             // rjf: given the above, find disassembly location.
@@ -16380,6 +16433,15 @@ rd_frame(void)
   }
   
   //////////////////////////////
+  //- rjf: close scopes
+  //
+  if(depth == 0)
+  {
+    di_scope_close(rd_state->frame_di_scope);
+    fzy_scope_close(rd_state->frame_fzy_scope);
+  }
+  
+  //////////////////////////////
   //- rjf: submit rendering to all windows
   //
   {
@@ -16477,15 +16539,6 @@ rd_frame(void)
         w->error_t = 1.f;
       }
     }
-  }
-  
-  //////////////////////////////
-  //- rjf: close scopes
-  //
-  if(depth == 0)
-  {
-    di_scope_close(rd_state->frame_di_scope);
-    fzy_scope_close(rd_state->frame_fzy_scope);
   }
   
   scratch_end(scratch);

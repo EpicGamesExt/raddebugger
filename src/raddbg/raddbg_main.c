@@ -15,7 +15,6 @@
 // [ ] post-@msgs TODOs:
 // [ ] ensure the following issues are resolved with this new pass:
 //  [ ] empty user file causing failure to launch
-//  [ ] decay arrays to pointers in pointer/value comparison
 //  [ ] debugger readme pass
 
 ////////////////////////////////
@@ -521,6 +520,7 @@
 // [x] @feature types -> auto view rules (don't statefully fill view rules
 //     given types, just query if no other view rule is present, & autofill
 //     when editing)
+//  [x] decay arrays to pointers in pointer/value comparison
 
 ////////////////////////////////
 //~ rjf: Build Options

@@ -360,7 +360,6 @@ e_irtree_convert_hi(Arena *arena, E_IRNode *c, E_TypeKey out, E_TypeKey in)
 internal E_IRNode *
 e_irtree_resolve_to_value(Arena *arena, E_Space from_space, E_Mode from_mode, E_IRNode *tree, E_TypeKey type_key)
 {
-  // TODO(rjf): @spaces double check that this path is working for register spaces
   E_IRNode *result = tree;
   if(from_mode == E_Mode_Offset)
   {
@@ -981,11 +980,11 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
       }
       else if(kind == E_ExprKind_EqEq)
       {
-        if(l_type_kind == E_TypeKind_Array && r_type_kind == E_TypeKind_Ptr)
+        if(l_type_kind == E_TypeKind_Array && (r_type_kind == E_TypeKind_Ptr || r_is_decay))
         {
           arith_path = E_ArithPath_PtrArrayCompare;
         }
-        if(r_type_kind == E_TypeKind_Array && l_type_kind == E_TypeKind_Ptr)
+        if(r_type_kind == E_TypeKind_Array && (l_type_kind == E_TypeKind_Ptr || l_is_decay))
         {
           arith_path = E_ArithPath_PtrArrayCompare;
         }
@@ -1114,10 +1113,12 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
         case E_ArithPath_PtrArrayCompare:
         {
           // rjf: map l/r to pointer/array
+          B32 ptr_is_decay = l_is_decay;
           E_IRTreeAndType *ptr_tree = &l_tree;
           E_IRTreeAndType *arr_tree = &r_tree;
-          if(l_type_kind == E_TypeKind_Array)
+          if(l_type_kind == E_TypeKind_Array && l_tree.mode == E_Mode_Value)
           {
+            ptr_is_decay = r_is_decay;
             ptr_tree = &r_tree;
             arr_tree = &l_tree;
           }
@@ -1125,6 +1126,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
           // rjf: resolve pointer to value, sized same as array
           E_IRNode *ptr_root = ptr_tree->root;
           E_IRNode *arr_root = arr_tree->root;
+          if(!ptr_is_decay)
           {
             ptr_root = e_irtree_resolve_to_value(arena, ptr_tree->space, ptr_tree->mode, ptr_tree->root, ptr_tree->type_key);
           }

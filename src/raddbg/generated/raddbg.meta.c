@@ -36,7 +36,7 @@ RD_CmdKind_Null,
 RD_CmdKind_Null,
 };
 
-String8 d_entity_kind_display_string_table[30] =
+String8 d_entity_kind_display_string_table[31] =
 {
 str8_lit_comp("Nil"),
 str8_lit_comp("Root"),
@@ -59,6 +59,7 @@ str8_lit_comp("Window"),
 str8_lit_comp("Panel"),
 str8_lit_comp("View"),
 str8_lit_comp("Recent Project"),
+str8_lit_comp("Recent File"),
 str8_lit_comp("Source"),
 str8_lit_comp("Destination"),
 str8_lit_comp("Process"),
@@ -70,7 +71,7 @@ str8_lit_comp("Conversion Task"),
 str8_lit_comp("Conversion Failure"),
 };
 
-String8 d_entity_kind_name_lower_table[30] =
+String8 d_entity_kind_name_lower_table[31] =
 {
 str8_lit_comp("nil"),
 str8_lit_comp("root"),
@@ -93,6 +94,7 @@ str8_lit_comp("window"),
 str8_lit_comp("panel"),
 str8_lit_comp("view"),
 str8_lit_comp("recent_project"),
+str8_lit_comp("recent_file"),
 str8_lit_comp("source"),
 str8_lit_comp("dest"),
 str8_lit_comp("process"),
@@ -104,7 +106,7 @@ str8_lit_comp("conversion_task"),
 str8_lit_comp("conversion_fail"),
 };
 
-String8 d_entity_kind_name_lower_plural_table[30] =
+String8 d_entity_kind_name_lower_plural_table[31] =
 {
 str8_lit_comp("nils"),
 str8_lit_comp("roots"),
@@ -127,6 +129,7 @@ str8_lit_comp("windows"),
 str8_lit_comp("panels"),
 str8_lit_comp("views"),
 str8_lit_comp("recent_projects"),
+str8_lit_comp("recent_files"),
 str8_lit_comp("sources"),
 str8_lit_comp("dests"),
 str8_lit_comp("processes"),
@@ -138,7 +141,7 @@ str8_lit_comp("conversion_tasks"),
 str8_lit_comp("conversion_fails"),
 };
 
-String8 d_entity_kind_name_label_table[30] =
+String8 d_entity_kind_name_label_table[31] =
 {
 str8_lit_comp("Label"),
 str8_lit_comp("Label"),
@@ -163,6 +166,7 @@ str8_lit_comp("Label"),
 str8_lit_comp("Path"),
 str8_lit_comp("Path"),
 str8_lit_comp("Path"),
+str8_lit_comp("Path"),
 str8_lit_comp("Label"),
 str8_lit_comp("Label"),
 str8_lit_comp("Label"),
@@ -172,7 +176,7 @@ str8_lit_comp("Label"),
 str8_lit_comp("Label"),
 };
 
-RD_EntityKindFlags rd_entity_kind_flags_table[30] =
+RD_EntityKindFlags rd_entity_kind_flags_table[31] =
 {
 (0*RD_EntityKindFlag_CanDelete) | (0*RD_EntityKindFlag_CanFreeze) | (0*RD_EntityKindFlag_CanEdit) | (0*RD_EntityKindFlag_CanRename) | (0*RD_EntityKindFlag_CanEnable) | (0*RD_EntityKindFlag_CanCondition) | (0*RD_EntityKindFlag_CanDuplicate) | (0*RD_EntityKindFlag_NameIsCode) | (0*RD_EntityKindFlag_NameIsPath) | (0*RD_EntityKindFlag_UserDefinedLifetime) | (0*RD_EntityKindFlag_IsSerializedToConfig),
 (0*RD_EntityKindFlag_CanDelete) | (0*RD_EntityKindFlag_CanFreeze) | (0*RD_EntityKindFlag_CanEdit) | (0*RD_EntityKindFlag_CanRename) | (0*RD_EntityKindFlag_CanEnable) | (0*RD_EntityKindFlag_CanCondition) | (0*RD_EntityKindFlag_CanDuplicate) | (0*RD_EntityKindFlag_NameIsCode) | (0*RD_EntityKindFlag_NameIsPath) | (0*RD_EntityKindFlag_UserDefinedLifetime) | (0*RD_EntityKindFlag_IsSerializedToConfig),
@@ -194,6 +198,7 @@ RD_EntityKindFlags rd_entity_kind_flags_table[30] =
 (1*RD_EntityKindFlag_CanDelete) | (0*RD_EntityKindFlag_CanFreeze) | (0*RD_EntityKindFlag_CanEdit) | (0*RD_EntityKindFlag_CanRename) | (0*RD_EntityKindFlag_CanEnable) | (0*RD_EntityKindFlag_CanCondition) | (1*RD_EntityKindFlag_CanDuplicate) | (0*RD_EntityKindFlag_NameIsCode) | (0*RD_EntityKindFlag_NameIsPath) | (1*RD_EntityKindFlag_UserDefinedLifetime) | (1*RD_EntityKindFlag_IsSerializedToConfig),
 (1*RD_EntityKindFlag_CanDelete) | (0*RD_EntityKindFlag_CanFreeze) | (0*RD_EntityKindFlag_CanEdit) | (0*RD_EntityKindFlag_CanRename) | (0*RD_EntityKindFlag_CanEnable) | (0*RD_EntityKindFlag_CanCondition) | (1*RD_EntityKindFlag_CanDuplicate) | (0*RD_EntityKindFlag_NameIsCode) | (0*RD_EntityKindFlag_NameIsPath) | (1*RD_EntityKindFlag_UserDefinedLifetime) | (1*RD_EntityKindFlag_IsSerializedToConfig),
 (1*RD_EntityKindFlag_CanDelete) | (0*RD_EntityKindFlag_CanFreeze) | (0*RD_EntityKindFlag_CanEdit) | (0*RD_EntityKindFlag_CanRename) | (0*RD_EntityKindFlag_CanEnable) | (0*RD_EntityKindFlag_CanCondition) | (1*RD_EntityKindFlag_CanDuplicate) | (0*RD_EntityKindFlag_NameIsCode) | (0*RD_EntityKindFlag_NameIsPath) | (1*RD_EntityKindFlag_UserDefinedLifetime) | (1*RD_EntityKindFlag_IsSerializedToConfig),
+(0*RD_EntityKindFlag_CanDelete) | (0*RD_EntityKindFlag_CanFreeze) | (0*RD_EntityKindFlag_CanEdit) | (0*RD_EntityKindFlag_CanRename) | (0*RD_EntityKindFlag_CanEnable) | (0*RD_EntityKindFlag_CanCondition) | (0*RD_EntityKindFlag_CanDuplicate) | (0*RD_EntityKindFlag_NameIsCode) | (1*RD_EntityKindFlag_NameIsPath) | (0*RD_EntityKindFlag_UserDefinedLifetime) | (1*RD_EntityKindFlag_IsSerializedToConfig),
 (0*RD_EntityKindFlag_CanDelete) | (0*RD_EntityKindFlag_CanFreeze) | (0*RD_EntityKindFlag_CanEdit) | (0*RD_EntityKindFlag_CanRename) | (0*RD_EntityKindFlag_CanEnable) | (0*RD_EntityKindFlag_CanCondition) | (0*RD_EntityKindFlag_CanDuplicate) | (0*RD_EntityKindFlag_NameIsCode) | (1*RD_EntityKindFlag_NameIsPath) | (0*RD_EntityKindFlag_UserDefinedLifetime) | (1*RD_EntityKindFlag_IsSerializedToConfig),
 (0*RD_EntityKindFlag_CanDelete) | (0*RD_EntityKindFlag_CanFreeze) | (0*RD_EntityKindFlag_CanEdit) | (0*RD_EntityKindFlag_CanRename) | (0*RD_EntityKindFlag_CanEnable) | (0*RD_EntityKindFlag_CanCondition) | (0*RD_EntityKindFlag_CanDuplicate) | (0*RD_EntityKindFlag_NameIsCode) | (0*RD_EntityKindFlag_NameIsPath) | (0*RD_EntityKindFlag_UserDefinedLifetime) | (0*RD_EntityKindFlag_IsSerializedToConfig),
 (0*RD_EntityKindFlag_CanDelete) | (0*RD_EntityKindFlag_CanFreeze) | (0*RD_EntityKindFlag_CanEdit) | (0*RD_EntityKindFlag_CanRename) | (0*RD_EntityKindFlag_CanEnable) | (0*RD_EntityKindFlag_CanCondition) | (0*RD_EntityKindFlag_CanDuplicate) | (0*RD_EntityKindFlag_NameIsCode) | (0*RD_EntityKindFlag_NameIsPath) | (0*RD_EntityKindFlag_UserDefinedLifetime) | (0*RD_EntityKindFlag_IsSerializedToConfig),
@@ -244,7 +249,7 @@ Rng1U64 rd_reg_slot_range_table[34] =
 {OffsetOf(RD_Regs, os_event), OffsetOf(RD_Regs, os_event) + sizeof(OS_Event *)},
 };
 
-RD_CmdKindInfo rd_cmd_kind_info_table[216] =
+RD_CmdKindInfo rd_cmd_kind_info_table[217] =
 {
 {0},
 { str8_lit_comp("launch_and_run"), str8_lit_comp("Starts debugging a new instance of a target, then runs."), str8_lit_comp("launch,start,run,target"), str8_lit_comp("Launch and Run"), RD_IconKind_Play, (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Required*1), RD_RegSlot_EntityList, str8_lit_comp(""), RD_EntityKind_Target}},
@@ -328,8 +333,9 @@ RD_CmdKindInfo rd_cmd_kind_info_table[216] =
 { str8_lit_comp("tab_bar_bottom"), str8_lit_comp("Anchors a panel's tab bar to the bottom of the panel."), str8_lit_comp(""), str8_lit_comp("Anchor Tab Bar To Bottom"), RD_IconKind_DownArrow, (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), RD_EntityKind_Nil}},
 { str8_lit_comp("set_current_path"), str8_lit_comp("Sets the debugger's current path, which is used as a starting point when browsing for files."), str8_lit_comp(""), str8_lit_comp("Set Current Path"), RD_IconKind_FileOutline, (RD_CmdKindFlag_ListInUI*0)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), RD_EntityKind_Nil}},
 { str8_lit_comp("open"), str8_lit_comp("Opens a file."), str8_lit_comp("code,source,file"), str8_lit_comp("Open"), RD_IconKind_FileOutline, (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*1)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Required*1), RD_RegSlot_FilePath, str8_lit_comp(""), RD_EntityKind_Nil}},
-{ str8_lit_comp("switch"), str8_lit_comp("Switches to a loaded file."), str8_lit_comp("code,source,file"), str8_lit_comp("Switch"), RD_IconKind_FileOutline, (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Required*1), RD_RegSlot_Entity, str8_lit_comp(""), RD_EntityKind_File}},
+{ str8_lit_comp("switch"), str8_lit_comp("Switches to a recent file."), str8_lit_comp("code,source,file"), str8_lit_comp("Switch"), RD_IconKind_FileOutline, (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Required*1), RD_RegSlot_Entity, str8_lit_comp(""), RD_EntityKind_RecentFile}},
 { str8_lit_comp("switch_to_partner_file"), str8_lit_comp("Switches to the focused file's partner; or from header to implementation or vice versa."), str8_lit_comp("code,source,file"), str8_lit_comp("Switch To Partner File"), RD_IconKind_FileOutline, (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), RD_EntityKind_Nil}},
+{ str8_lit_comp("record_file_in_project"), str8_lit_comp("Records the passed file path as a recent file in the currently loaded project."), str8_lit_comp(""), str8_lit_comp("Record File In Project"), RD_IconKind_FileOutline, (RD_CmdKindFlag_ListInUI*0)|(RD_CmdKindFlag_ListInIPCDocs*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), RD_EntityKind_Nil}},
 { str8_lit_comp("go_to_disassembly"), str8_lit_comp("Goes to the disassembly, if any, for a given source code line."), str8_lit_comp("code,source,disassembly,disasm"), str8_lit_comp("Go To Disassembly"), RD_IconKind_Glasses, (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), RD_EntityKind_Nil}},
 { str8_lit_comp("go_to_source"), str8_lit_comp("Goes to the source code, if any, for a given disassembly line."), str8_lit_comp("code,source,disassembly,disasm"), str8_lit_comp("Go To Source"), RD_IconKind_FileOutline, (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), RD_EntityKind_Nil}},
 { str8_lit_comp("set_file_override_link_src"), str8_lit_comp("Sets the source path for an override file link."), str8_lit_comp(""), str8_lit_comp("Set File Override Link Source"), RD_IconKind_Null, (RD_CmdKindFlag_ListInUI*0)|(RD_CmdKindFlag_ListInIPCDocs*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), RD_EntityKind_Nil}},
@@ -865,7 +871,7 @@ RD_ViewRuleInfo rd_view_rule_kind_info_table[34] =
 {str8_lit_comp("geo3d"), str8_lit_comp("Visualizes memory as 3D geometry."), str8_lit_comp("Geometry (3D)"), str8_lit_comp("x:{'count':expr, 'vtx':expr, 'vtx_size':expr}"), RD_IconKind_Binoculars, (RD_ViewRuleInfoFlag_ShowInDocs*1|RD_ViewRuleInfoFlag_CanFilter*0|RD_ViewRuleInfoFlag_FilterIsCode*0|RD_ViewRuleInfoFlag_TypingAutomaticallyFilters*0|RD_ViewRuleInfoFlag_CanUseInWatchTable*1|RD_ViewRuleInfoFlag_CanFillValueCell*0|RD_ViewRuleInfoFlag_CanExpand*1), EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME(geo3d) , RD_VIEW_RULE_UI_FUNCTION_NAME(geo3d)},
 };
 
-RD_IconKind rd_entity_kind_icon_kind_table[30] =
+RD_IconKind rd_entity_kind_icon_kind_table[31] =
 {
 RD_IconKind_Null,
 RD_IconKind_Null,
@@ -888,6 +894,7 @@ RD_IconKind_Window,
 RD_IconKind_XSplit,
 RD_IconKind_Null,
 RD_IconKind_Briefcase,
+RD_IconKind_FileOutline,
 RD_IconKind_Null,
 RD_IconKind_Null,
 RD_IconKind_Threads,

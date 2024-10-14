@@ -104,6 +104,9 @@ RD_EntityKindTable:
   //- rjf: recent projects
   {RecentProject      recent_project        recent_projects               0  0  0  0  0  0  0  0  1  0  1                      "Path"              Briefcase              "Recent Project"             }
   
+  //- rjf: recent files
+  {RecentFile         recent_file           recent_files                  0  0  0  0  0  0  0  0  1  0  1                      "Path"              FileOutline            "Recent File"                }
+  
   //- rjf: src -> dst mapping
   {Source             source                sources                       0  0  0  0  0  0  0  0  0  0  0                      "Path"              Null                   "Source"                     }
   {Dest               dest                  dests                         0  0  0  0  0  0  0  0  0  0  0                      "Path"              Null                   "Destination"                }
@@ -309,8 +312,9 @@ RD_CmdTable:    //               |        |              |                  |   
   //- rjf: files
   {SetCurrentPath                 0        1              Null               null              Nil                0  0  0  0  0  0                                                           FileOutline           "set_current_path"            "Set Current Path"                            "Sets the debugger's current path, which is used as a starting point when browsing for files."                     ""                               }
   {Open                           1        1              FilePath           null              Nil                1  0  0  0  0  1                                                           FileOutline           "open"                        "Open"                                        "Opens a file."                                                                                                    "code,source,file"               }
-  {Switch                         1        1              Entity             null              File               0  0  0  0  0  1                                                           FileOutline           "switch"                      "Switch"                                      "Switches to a loaded file."                                                                                       "code,source,file"               }
+  {Switch                         1        1              Entity             null              RecentFile         0  0  0  0  0  1                                                           FileOutline           "switch"                      "Switch"                                      "Switches to a recent file."                                                                                       "code,source,file"               }
   {SwitchToPartnerFile            1        1              Null               null              Nil                0  0  0  0  0  0                                                           FileOutline           "switch_to_partner_file"      "Switch To Partner File"                      "Switches to the focused file's partner; or from header to implementation or vice versa."                          "code,source,file"               }
+  {RecordFileInProject            0        0              Null               null              Nil                0  0  0  0  0  0                                                           FileOutline           "record_file_in_project"      "Record File In Project"                      "Records the passed file path as a recent file in the currently loaded project."                                   ""                               }
   
   //- rjf: source <-> disasm
   {GoToDisassembly                1        1              Null               null              Nil                0  0  0  0  0  0                                                           Glasses               "go_to_disassembly"           "Go To Disassembly"                           "Goes to the disassembly, if any, for a given source code line."                                                   "code,source,disassembly,disasm" }
