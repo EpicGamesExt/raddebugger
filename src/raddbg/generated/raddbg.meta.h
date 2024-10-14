@@ -179,11 +179,7 @@ RD_CmdKind_SwitchToPartnerFile,
 RD_CmdKind_RecordFileInProject,
 RD_CmdKind_GoToDisassembly,
 RD_CmdKind_GoToSource,
-RD_CmdKind_SetFileOverrideLinkSrc,
-RD_CmdKind_SetFileOverrideLinkDst,
 RD_CmdKind_SetFileReplacementPath,
-RD_CmdKind_SetAutoViewRuleType,
-RD_CmdKind_SetAutoViewRuleViewRule,
 RD_CmdKind_OpenUser,
 RD_CmdKind_OpenProject,
 RD_CmdKind_OpenRecentProject,
@@ -398,6 +394,7 @@ RD_ViewRuleKind_Commands,
 RD_ViewRuleKind_FileSystem,
 RD_ViewRuleKind_SystemProcesses,
 RD_ViewRuleKind_EntityLister,
+RD_ViewRuleKind_CtrlEntityLister,
 RD_ViewRuleKind_SymbolLister,
 RD_ViewRuleKind_Watch,
 RD_ViewRuleKind_Locals,
@@ -589,6 +586,7 @@ RD_QueryFlags flags;
 RD_RegSlot slot;
 String8 view_name;
 RD_EntityKind entity_kind;
+CTRL_EntityKind ctrl_entity_kind;
 };
 
 typedef struct RD_CmdKindInfo RD_CmdKindInfo;
@@ -735,6 +733,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(commands);
 RD_VIEW_RULE_UI_FUNCTION_DEF(file_system);
 RD_VIEW_RULE_UI_FUNCTION_DEF(system_processes);
 RD_VIEW_RULE_UI_FUNCTION_DEF(entity_lister);
+RD_VIEW_RULE_UI_FUNCTION_DEF(ctrl_entity_lister);
 RD_VIEW_RULE_UI_FUNCTION_DEF(symbol_lister);
 RD_VIEW_RULE_UI_FUNCTION_DEF(watch);
 RD_VIEW_RULE_UI_FUNCTION_DEF(locals);
@@ -781,7 +780,7 @@ extern EV_ViewRuleExprExpandInfoHookFunctionType * rd_collection_expr_expand_inf
 extern EV_ViewRuleExprExpandRangeInfoHookFunctionType * rd_collection_expr_expand_range_info_hook_function_table[18];
 extern EV_ViewRuleExprExpandIDFromNumHookFunctionType * rd_collection_expr_expand_id_from_num_hook_function_table[18];
 extern EV_ViewRuleExprExpandIDFromNumHookFunctionType * rd_collection_expr_expand_num_from_id_hook_function_table[18];
-extern RD_ViewRuleInfo rd_view_rule_kind_info_table[34];
+extern RD_ViewRuleInfo rd_view_rule_kind_info_table[35];
 extern RD_IconKind rd_entity_kind_icon_kind_table[31];
 extern String8 rd_theme_preset_display_string_table[9];
 extern String8 rd_theme_preset_code_string_table[9];

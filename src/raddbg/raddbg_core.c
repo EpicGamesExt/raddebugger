@@ -1819,6 +1819,10 @@ rd_title_fstrs_from_entity(Arena *arena, RD_Entity *entity, Vec4F32 secondary_co
   dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), size, secondary_color, str8_lit(" "));
   String8 name = entity->string;
   B32 name_is_code = 1;
+  if(rd_entity_kind_flags_table[entity->kind] & RD_EntityKindFlag_NameIsPath)
+  {
+    name_is_code = 0;
+  }
   String8 location = {0};
   B32 location_is_code = 0;
   String8 exe_name = str8_skip_last_slash(exe->string);
@@ -1938,7 +1942,7 @@ rd_title_fstrs_from_entity(Arena *arena, RD_Entity *entity, Vec4F32 secondary_co
     {
       src_string = str8_lit("(type)");
       src_color = secondary_color;
-      dr_fancy_string_list_push_new(arena, &src_fstrs, rd_font_from_slot(RD_FontSlot_Main), size, color_extrafied, src_string);
+      dr_fancy_string_list_push_new(arena, &src_fstrs, rd_font_from_slot(RD_FontSlot_Main), size, src_color, src_string);
     }
     else RD_Font(RD_FontSlot_Code)
     {
@@ -1948,7 +1952,7 @@ rd_title_fstrs_from_entity(Arena *arena, RD_Entity *entity, Vec4F32 secondary_co
     {
       dst_string = str8_lit("(view rule)");
       dst_color = secondary_color;
-      dr_fancy_string_list_push_new(arena, &dst_fstrs, rd_font_from_slot(RD_FontSlot_Main), size, color_extrafied, dst_string);
+      dr_fancy_string_list_push_new(arena, &dst_fstrs, rd_font_from_slot(RD_FontSlot_Main), size, dst_color, dst_string);
     }
     else RD_Font(RD_FontSlot_Code)
     {
@@ -6191,6 +6195,11 @@ rd_window_frame(RD_Window *ws)
         switch(missing_slot)
         {
           default:{}break;
+          case RD_RegSlot_Thread:
+          case RD_RegSlot_Module:
+          case RD_RegSlot_Process:
+          case RD_RegSlot_Machine:
+          case RD_RegSlot_CtrlEntity:{query_view_name = rd_view_rule_kind_info_table[RD_ViewRuleKind_CtrlEntityLister].string;}break;
           case RD_RegSlot_Entity:    {query_view_name = rd_view_rule_kind_info_table[RD_ViewRuleKind_EntityLister].string;}break;
           case RD_RegSlot_EntityList:{query_view_name = rd_view_rule_kind_info_table[RD_ViewRuleKind_EntityLister].string;}break;
           case RD_RegSlot_FilePath:  {query_view_name = rd_view_rule_kind_info_table[RD_ViewRuleKind_FileSystem].string;}break;
@@ -12124,9 +12133,9 @@ rd_frame(void)
               RD_Entity *entity = rd_entity_from_handle(rd_regs()->entity);
               D_CmdParams params = {0};
               params.machine       = rd_regs()->machine;
+              params.process       = rd_regs()->process;
               params.thread        = rd_regs()->thread;
               params.entity        = rd_regs()->ctrl_entity;
-              // TODO(rjf): @msgs params.processes     = ???;
               params.string        = rd_regs()->string;
               params.file_path     = rd_regs()->file_path;
               params.cursor        = rd_regs()->cursor;
@@ -13689,12 +13698,6 @@ rd_frame(void)
             RD_Entity *dst = rd_entity_alloc(map, RD_EntityKind_Dest);
             rd_entity_equip_name(src, map_src);
             rd_entity_equip_name(dst, map_dst);
-          }break;
-          
-          //- rjf: auto view rules
-          case RD_CmdKind_SetAutoViewRuleType:
-          case RD_CmdKind_SetAutoViewRuleViewRule:
-          {
           }break;
           
           //- rjf: panel removal

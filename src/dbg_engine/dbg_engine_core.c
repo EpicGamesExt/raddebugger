@@ -167,7 +167,6 @@ d_cmd_params_copy(Arena *arena, D_CmdParams *src)
 {
   D_CmdParams dst = {0};
   MemoryCopyStruct(&dst, src);
-  dst.processes = ctrl_handle_list_copy(arena, &dst.processes);
   dst.file_path = push_str8_copy(arena, dst.file_path);
   dst.targets.v = push_array(arena, D_Target, dst.targets.count);
   MemoryCopy(dst.targets.v, src->targets.v, sizeof(D_Target)*dst.targets.count);
@@ -2095,51 +2094,46 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
         }break;
         case D_CmdKind_Kill:
         {
-          CTRL_EntityList processes = ctrl_entity_list_from_handle_list(scratch.arena, d_state->ctrl_entity_store, &params->processes);
-          
-          // rjf: no processes => kill everything
-          if(processes.count == 0)
+          CTRL_Entity *process = ctrl_entity_from_handle(d_state->ctrl_entity_store, params->process);
+          if(process == &ctrl_entity_nil)
           {
-            processes = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Process);
+            log_user_error(str8_lit("Cannot kill; no process was specified."));
           }
-          
-          // rjf: kill processes
-          if(processes.count != 0)
+          else
           {
-            for(CTRL_EntityNode *n = processes.first; n != 0; n = n->next)
-            {
-              CTRL_Entity *process = n->v;
-              CTRL_Msg *msg = ctrl_msg_list_push(scratch.arena, &ctrl_msgs);
-              msg->kind = CTRL_MsgKind_Kill;
-              msg->exit_code = 1;
-              msg->entity = process->handle;
-              MemoryCopyArray(msg->exception_code_filters, exception_code_filters);
-              MemoryCopyStruct(&msg->meta_evals, meta_evals);
-            }
-          }
-          
-          // rjf: no processes -> error
-          if(processes.count == 0)
-          {
-            log_user_error(str8_lit("No attached running processes exist; cannot kill."));
+            CTRL_Msg *msg = ctrl_msg_list_push(scratch.arena, &ctrl_msgs);
+            msg->kind = CTRL_MsgKind_Kill;
+            msg->exit_code = 1;
+            msg->entity = process->handle;
+            MemoryCopyArray(msg->exception_code_filters, exception_code_filters);
+            MemoryCopyStruct(&msg->meta_evals, meta_evals);
           }
         }break;
         case D_CmdKind_KillAll:
         {
-          d_cmd(D_CmdKind_Kill);
+          CTRL_EntityList processes = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Process);
+          for(CTRL_EntityNode *n = processes.first; n != 0; n = n->next)
+          {
+            CTRL_Msg *msg = ctrl_msg_list_push(scratch.arena, &ctrl_msgs);
+            msg->kind = CTRL_MsgKind_Kill;
+            msg->exit_code = 1;
+            msg->entity = n->v->handle;
+            MemoryCopyArray(msg->exception_code_filters, exception_code_filters);
+            MemoryCopyStruct(&msg->meta_evals, meta_evals);
+          }
         }break;
         case D_CmdKind_Detach:
         {
-          CTRL_EntityList processes = ctrl_entity_list_from_handle_list(scratch.arena, d_state->ctrl_entity_store, &params->processes);
-          if(processes.count == 0)
+          CTRL_Entity *process = ctrl_entity_from_handle(d_state->ctrl_entity_store, params->process);
+          if(process == &ctrl_entity_nil)
           {
             log_user_error(str8_lit("Cannot detach; no process specified."));
           }
-          else for(CTRL_EntityNode *n = processes.first; n != 0; n = n->next)
+          else
           {
             CTRL_Msg *msg = ctrl_msg_list_push(scratch.arena, &ctrl_msgs);
             msg->kind   = CTRL_MsgKind_Detach;
-            msg->entity = n->v->handle;
+            msg->entity = process->handle;
             MemoryCopyArray(msg->exception_code_filters, exception_code_filters);
             MemoryCopyStruct(&msg->meta_evals, meta_evals);
           }

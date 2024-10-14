@@ -196,9 +196,9 @@ typedef struct D_CmdParams D_CmdParams;
 struct D_CmdParams
 {
   CTRL_Handle machine;
+  CTRL_Handle process;
   CTRL_Handle thread;
   CTRL_Handle entity;
-  CTRL_HandleList processes;
   String8 string;
   String8 file_path;
   TxtPt cursor;

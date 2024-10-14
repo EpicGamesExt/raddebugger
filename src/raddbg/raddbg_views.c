@@ -4768,8 +4768,9 @@ rd_entity_lister_item_list_from_needle(Arena *arena, RD_EntityKind kind, RD_Enti
     RD_Entity *entity = n->entity;
     if(!(entity->flags & omit_flags))
     {
-      String8 display_string = rd_display_string_from_entity(scratch.arena, entity);
-      FuzzyMatchRangeList match_rngs = fuzzy_match_find(arena, needle, display_string);
+      DR_FancyStringList title_fstrs = rd_title_fstrs_from_entity(scratch.arena, entity, v4f32(0, 0, 0, 0), 0);
+      String8 title_string = dr_string_from_fancy_string_list(scratch.arena, &title_fstrs);
+      FuzzyMatchRangeList match_rngs = fuzzy_match_find(arena, needle, title_string);
       if(match_rngs.count != 0 || needle.size == 0)
       {
         RD_EntityListerItemNode *item_n = push_array(arena, RD_EntityListerItemNode, 1);
@@ -4908,26 +4909,12 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(entity_lister)
                                         UI_BoxFlag_DrawActiveEffects,
                                         "###ent_btn_%p", ent);
       }
-      UI_Parent(box)
+      UI_Parent(box) UI_WidthFill UI_Padding(ui_em(1.f, 1.f))
       {
-        RD_IconKind icon_kind = rd_entity_kind_icon_kind_table[ent->kind];
-        if(icon_kind != RD_IconKind_Null)
-        {
-          UI_TextAlignment(UI_TextAlign_Center)
-            RD_Font(RD_FontSlot_Icons)
-            UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Icons))
-            UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
-            UI_PrefWidth(ui_text_dim(10, 1))
-            ui_label(rd_icon_kind_text_table[icon_kind]);
-        }
-        String8 display_string = rd_display_string_from_entity(scratch.arena, ent);
-        Vec4F32 color = rd_rgba_from_entity(ent);
-        if(color.w != 0)
-        {
-          ui_set_next_palette(ui_build_palette(ui_top_palette(), .text = color));
-        }
-        UI_Box *name_label = ui_build_box_from_stringf(UI_BoxFlag_DrawText, "%S##label_%p", display_string, ent);
-        ui_box_equip_fuzzy_match_ranges(name_label, &item.name_match_ranges);
+        DR_FancyStringList title_fstrs = rd_title_fstrs_from_entity(scratch.arena, ent, ui_top_palette()->text_weak, ui_top_font_size());
+        UI_Box *title_box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
+        ui_box_equip_display_fancy_strings(title_box, &title_fstrs);
+        ui_box_equip_fuzzy_match_ranges(title_box, &item.name_match_ranges);
       }
       if(ui_clicked(ui_signal_from_box(box)))
       {
@@ -4939,6 +4926,232 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(entity_lister)
   //- rjf: selected entity num -> handle
   {
     fev->selected_entity_handle = (1 <= cursor.y && cursor.y <= ent_arr.count) ? rd_handle_from_entity(ent_arr.v[cursor.y-1].entity) : rd_handle_zero();
+  }
+  
+  rd_store_view_scroll_pos(scroll_pos);
+  scratch_end(scratch);
+  ProfEnd();
+}
+
+////////////////////////////////
+//~ rjf: ctrl_entity_lister @view_hook_impl
+
+typedef struct RD_CtrlEntityListerItem RD_CtrlEntityListerItem;
+struct RD_CtrlEntityListerItem
+{
+  CTRL_Entity *entity;
+  FuzzyMatchRangeList name_match_ranges;
+};
+
+typedef struct RD_CtrlEntityListerItemNode RD_CtrlEntityListerItemNode;
+struct RD_CtrlEntityListerItemNode
+{
+  RD_CtrlEntityListerItemNode *next;
+  RD_CtrlEntityListerItem item;
+};
+
+typedef struct RD_CtrlEntityListerItemList RD_CtrlEntityListerItemList;
+struct RD_CtrlEntityListerItemList
+{
+  RD_CtrlEntityListerItemNode *first;
+  RD_CtrlEntityListerItemNode *last;
+  U64 count;
+};
+
+typedef struct RD_CtrlEntityListerItemArray RD_CtrlEntityListerItemArray;
+struct RD_CtrlEntityListerItemArray
+{
+  RD_CtrlEntityListerItem *v;
+  U64 count;
+};
+
+internal RD_CtrlEntityListerItemList
+rd_ctrl_entity_lister_item_list_from_needle(Arena *arena, CTRL_EntityKind kind, String8 needle)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  RD_CtrlEntityListerItemList result = {0};
+  CTRL_EntityList ent_list = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, kind);
+  for(CTRL_EntityNode *n = ent_list.first; n != 0; n = n->next)
+  {
+    CTRL_Entity *entity = n->v;
+    DR_FancyStringList title_fstrs = rd_title_fstrs_from_ctrl_entity(scratch.arena, entity, v4f32(0, 0, 0, 0), 0, 0);
+    String8 title_fstrs_text = dr_string_from_fancy_string_list(scratch.arena, &title_fstrs);
+    FuzzyMatchRangeList match_rngs = fuzzy_match_find(arena, needle, title_fstrs_text);
+    if(match_rngs.count == match_rngs.needle_part_count || needle.size == 0)
+    {
+      RD_CtrlEntityListerItemNode *item_n = push_array(arena, RD_CtrlEntityListerItemNode, 1);
+      item_n->item.entity = entity;
+      item_n->item.name_match_ranges = match_rngs;
+      SLLQueuePush(result.first, result.last, item_n);
+      result.count += 1;
+    }
+  }
+  scratch_end(scratch);
+  return result;
+}
+
+internal RD_CtrlEntityListerItemArray
+rd_ctrl_entity_lister_item_array_from_list(Arena *arena, RD_CtrlEntityListerItemList list)
+{
+  RD_CtrlEntityListerItemArray result = {0};
+  result.count = list.count;
+  result.v = push_array(arena, RD_CtrlEntityListerItem, result.count);
+  {
+    U64 idx = 0;
+    for(RD_CtrlEntityListerItemNode *n = list.first; n != 0; n = n->next, idx += 1)
+    {
+      result.v[idx] = n->item;
+    }
+  }
+  return result;
+}
+
+internal int
+rd_qsort_compare_ctrl_entity_lister__strength(RD_CtrlEntityListerItem *a, RD_CtrlEntityListerItem *b)
+{
+  int result = 0;
+  if(a->name_match_ranges.count > b->name_match_ranges.count)
+  {
+    result = -1;
+  }
+  else if(a->name_match_ranges.count < b->name_match_ranges.count)
+  {
+    result = +1;
+  }
+  return result;
+}
+
+internal void
+rd_ctrl_entity_lister_item_array_sort_by_strength__in_place(RD_CtrlEntityListerItemArray array)
+{
+  quick_sort(array.v, array.count, sizeof(RD_CtrlEntityListerItem), rd_qsort_compare_ctrl_entity_lister__strength);
+}
+
+RD_VIEW_RULE_UI_FUNCTION_DEF(ctrl_entity_lister)
+{
+  ProfBeginFunction();
+  Temp scratch = scratch_begin(0, 0);
+  RD_Window *window = rd_window_from_handle(rd_regs()->window);
+  RD_CmdKindInfo *cmd_kind_info = rd_cmd_kind_info_from_string(window->query_cmd_name);
+  CTRL_EntityKind entity_kind = cmd_kind_info->query.ctrl_entity_kind;
+  F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
+  F32 scroll_bar_dim = floor_f32(ui_top_font_size()*1.5f);
+  
+  //- rjf: grab state
+  typedef struct RD_CtrlEntityListerViewState RD_CtrlEntityListerViewState;
+  struct RD_CtrlEntityListerViewState
+  {
+    CTRL_Handle selected_entity_handle;
+  };
+  UI_ScrollPt2 scroll_pos = rd_view_scroll_pos();
+  RD_CtrlEntityListerViewState *fev = rd_view_state(RD_CtrlEntityListerViewState);
+  CTRL_Handle selected_entity_handle = fev->selected_entity_handle;
+  CTRL_Entity *selected_entity = ctrl_entity_from_handle(d_state->ctrl_entity_store, selected_entity_handle);
+  
+  //- rjf: build filtered array of entities
+  RD_CtrlEntityListerItemList ent_list = rd_ctrl_entity_lister_item_list_from_needle(scratch.arena, entity_kind, string);
+  RD_CtrlEntityListerItemArray ent_arr = rd_ctrl_entity_lister_item_array_from_list(scratch.arena, ent_list);
+  rd_ctrl_entity_lister_item_array_sort_by_strength__in_place(ent_arr);
+  
+  //- rjf: submit best match when hitting enter w/ no selection
+  if(ctrl_entity_from_handle(d_state->ctrl_entity_store, fev->selected_entity_handle) == &ctrl_entity_nil && ent_arr.count != 0 && ui_slot_press(UI_EventActionSlot_Accept))
+  {
+    CTRL_Entity *ent = ent_arr.v[0].entity;
+    RD_RegsScope()
+    {
+      switch(ent->kind)
+      {
+        default:{}break;
+        case CTRL_EntityKind_Machine:{rd_regs()->machine = ent->handle;}break;
+        case CTRL_EntityKind_Process:{rd_regs()->process = ent->handle;}break;
+        case CTRL_EntityKind_Thread: {rd_regs()->thread = ent->handle;}break;
+        case CTRL_EntityKind_Module: {rd_regs()->module = ent->handle;}break;
+      }
+      rd_cmd(RD_CmdKind_CompleteQuery, .ctrl_entity = ent->handle);
+    }
+  }
+  
+  //- rjf: selected entity -> cursor
+  Vec2S64 cursor = {0};
+  {
+    for(U64 idx = 0; idx < ent_arr.count; idx += 1)
+    {
+      if(ent_arr.v[idx].entity == selected_entity)
+      {
+        cursor.y = (S64)(idx+1);
+        break;
+      }
+    }
+  }
+  
+  //- rjf: build list
+  Rng1S64 visible_row_range = {0};
+  UI_ScrollListParams scroll_list_params = {0};
+  {
+    Vec2F32 content_dim = dim_2f32(rect);
+    scroll_list_params.flags         = UI_ScrollListFlag_All;
+    scroll_list_params.row_height_px = row_height_px;
+    scroll_list_params.dim_px        = v2f32(content_dim.x, content_dim.y);
+    scroll_list_params.cursor_range  = r2s64(v2s64(0, 0), v2s64(0, ent_arr.count));
+    scroll_list_params.item_range    = r1s64(0, ent_arr.count);
+    scroll_list_params.cursor_min_is_empty_selection[Axis2_Y] = 1;
+  }
+  UI_ScrollListSignal scroll_list_sig = {0};
+  UI_Focus(UI_FocusKind_On)
+    UI_ScrollList(&scroll_list_params,
+                  &scroll_pos.y,
+                  &cursor,
+                  0,
+                  &visible_row_range,
+                  &scroll_list_sig)
+    UI_Focus(UI_FocusKind_Null)
+  {
+    for(S64 idx = visible_row_range.min;
+        idx <= visible_row_range.max && idx < ent_arr.count;
+        idx += 1)
+    {
+      RD_CtrlEntityListerItem item = ent_arr.v[idx];
+      CTRL_Entity *ent = item.entity;
+      ui_set_next_hover_cursor(OS_Cursor_HandPoint);
+      ui_set_next_child_layout_axis(Axis2_X);
+      UI_Box *box = &ui_nil_box;
+      UI_FocusHot(idx+1 == cursor.y ? UI_FocusKind_On : UI_FocusKind_Off)
+      {
+        box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|
+                                        UI_BoxFlag_DrawBorder|
+                                        UI_BoxFlag_DrawBackground|
+                                        UI_BoxFlag_DrawHotEffects|
+                                        UI_BoxFlag_DrawActiveEffects,
+                                        "###ent_btn_%p", ent);
+      }
+      UI_Parent(box) UI_WidthFill UI_Padding(ui_em(1.f, 1.f))
+      {
+        DR_FancyStringList title_fstrs = rd_title_fstrs_from_ctrl_entity(scratch.arena, ent, ui_top_palette()->text_weak, ui_top_font_size(), 1);
+        UI_Box *title_box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
+        ui_box_equip_display_fancy_strings(title_box, &title_fstrs);
+        ui_box_equip_fuzzy_match_ranges(title_box, &item.name_match_ranges);
+      }
+      if(ui_clicked(ui_signal_from_box(box)))
+      {
+        RD_RegsScope()
+        {
+          switch(ent->kind)
+          {
+            default:{}break;
+            case CTRL_EntityKind_Machine:{rd_regs()->machine = ent->handle;}break;
+            case CTRL_EntityKind_Process:{rd_regs()->process = ent->handle;}break;
+            case CTRL_EntityKind_Thread: {rd_regs()->thread = ent->handle;}break;
+            case CTRL_EntityKind_Module: {rd_regs()->module = ent->handle;}break;
+          }
+          rd_cmd(RD_CmdKind_CompleteQuery, .ctrl_entity = ent->handle);
+        }
+      }
+    }
+  }
+  
+  //- rjf: selected entity num -> handle
+  {
+    fev->selected_entity_handle = (1 <= cursor.y && cursor.y <= ent_arr.count) ? (ent_arr.v[cursor.y-1].entity->handle) : ctrl_handle_zero();
   }
   
   rd_store_view_scroll_pos(scroll_pos);
