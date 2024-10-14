@@ -3938,7 +3938,7 @@ rd_window_frame(RD_Window *ws)
     //- rjf: top-level registers context menu
     //
     RD_Palette(RD_PaletteCode_Floating) UI_CtxMenu(rd_state->ctx_menu_key)
-      UI_PrefWidth(ui_em(40.f, 1.f))
+      UI_PrefWidth(ui_em(50.f, 1.f))
       RD_Palette(RD_PaletteCode_ImplicitButton)
     {
       Temp scratch = scratch_begin(0, 0);
@@ -4246,8 +4246,8 @@ rd_window_frame(RD_Window *ws)
               }
             }
             
-            // rjf: copy name
-            if(ui_clicked(rd_icon_buttonf(RD_IconKind_Clipboard, 0, "Copy Name")))
+            // rjf: copy full path
+            if(ctrl_entity->kind == CTRL_EntityKind_Module) if(ui_clicked(rd_icon_buttonf(RD_IconKind_Clipboard, 0, "Copy Full Path")))
             {
               os_set_clipboard_text(ctrl_entity->string);
               ui_ctx_menu_close();
@@ -4501,6 +4501,7 @@ rd_window_frame(RD_Window *ws)
           case RD_RegSlot_Entity:
           {
             RD_Entity *entity = rd_entity_from_handle(regs->entity);
+            RD_EntityKindFlags kind_flags = rd_entity_kind_flags_table[entity->kind];
             
             //- rjf: title
             UI_Row
@@ -4523,6 +4524,28 @@ rd_window_frame(RD_Window *ws)
                   ui_spacer(ui_em(0.5f, 1.f));
                   UI_FlagsAdd(UI_BoxFlag_DrawTextWeak|UI_BoxFlag_DrawBorder) ui_labelf("TID: %i", (U32)ctrl_entity->id);
                 }
+              }
+            }
+            
+            RD_Palette(RD_PaletteCode_Floating) ui_divider(ui_em(1.f, 1.f));
+            
+            //- rjf: name editor
+            if(kind_flags & RD_EntityKindFlag_CanRename) RD_Font(RD_FontSlot_Code) UI_TextPadding(ui_top_font_size()*1.5f)
+            {
+              UI_Signal sig = rd_line_editf(RD_LineEditFlag_Border|RD_LineEditFlag_CodeContents, 0, 0, &ws->ctx_menu_input_cursor, &ws->ctx_menu_input_mark, ws->ctx_menu_input_buffer, ws->ctx_menu_input_buffer_size, &ws->ctx_menu_input_string_size, 0, entity->string, "Name###entity_string_edit_%p", ctrl_entity);
+              if(ui_committed(sig))
+              {
+                rd_cmd(RD_CmdKind_NameEntity, .entity = regs->entity, .string = str8(ws->ctx_menu_input_buffer, ws->ctx_menu_input_string_size));
+              }
+            }
+            
+            //- rjf: condition editor
+            if(kind_flags & RD_EntityKindFlag_CanCondition) RD_Font(RD_FontSlot_Code) UI_TextPadding(ui_top_font_size()*1.5f)
+            {
+              UI_Signal sig = rd_line_editf(RD_LineEditFlag_Border|RD_LineEditFlag_CodeContents, 0, 0, &ws->ctx_menu_input_cursor, &ws->ctx_menu_input_mark, ws->ctx_menu_input_buffer, ws->ctx_menu_input_buffer_size, &ws->ctx_menu_input_string_size, 0, rd_entity_child_from_kind(entity, RD_EntityKind_Condition)->string, "Condition###entity_condition_edit_%p", entity);
+              if(ui_committed(sig))
+              {
+                rd_cmd(RD_CmdKind_ConditionEntity, .entity = regs->entity, .string = str8(ws->ctx_menu_input_buffer, ws->ctx_menu_input_string_size));
               }
             }
           }break;
@@ -14997,6 +15020,21 @@ rd_frame(void)
             RD_Entity *entity = rd_entity_from_handle(rd_regs()->entity);
             String8 string = rd_regs()->string;
             rd_entity_equip_name(entity, string);
+          }break;
+          case RD_CmdKind_ConditionEntity:
+          {
+            RD_Entity *entity = rd_entity_from_handle(rd_regs()->entity);
+            String8 string = rd_regs()->string;
+            if(string.size != 0)
+            {
+              RD_Entity *child = rd_entity_child_from_kind_or_alloc(entity, RD_EntityKind_Condition);
+              rd_entity_equip_name(child, string);
+            }
+            else
+            {
+              RD_Entity *child = rd_entity_child_from_kind(entity, RD_EntityKind_Condition);
+              rd_entity_mark_for_deletion(child);
+            }
           }break;
           case RD_CmdKind_DuplicateEntity:
           {

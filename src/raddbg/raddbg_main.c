@@ -214,10 +214,6 @@
 ////////////////////////////////
 //~ rjf: Cold, Unsorted Notes (Deferred Until Existing Lists Mostly Exhausted)
 //
-// [ ] @feature types -> auto view rules (don't statefully fill view rules
-//     given types, just query if no other view rule is present, & autofill
-//     when editing)
-//
 // [ ] @feature disasm view improvement features
 //  [ ] visualize jump destinations in disasm
 //
@@ -522,6 +518,9 @@
 // [x] @feature entity views: filtering & reordering
 // [x] @feature eval system -> somehow evaluate breakpoint hit counts? "meta"
 //     variables?
+// [x] @feature types -> auto view rules (don't statefully fill view rules
+//     given types, just query if no other view rule is present, & autofill
+//     when editing)
 
 ////////////////////////////////
 //~ rjf: Build Options
