@@ -398,6 +398,55 @@ EV_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_DEF(cast)
 }
 
 ////////////////////////////////
+//~ rjf: "wrap"
+
+EV_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_DEF(wrap)
+{
+  String8 wrap_string = md_string_from_children(arena, params);
+  E_Expr *wrap_expr = e_parse_expr_from_text(arena, wrap_string);
+  E_Expr *new_root_expr = wrap_expr;
+  if(wrap_expr != &e_expr_nil)
+  {
+    Temp scratch = scratch_begin(&arena, 1);
+    typedef struct Task Task;
+    struct Task
+    {
+      Task *next;
+      E_Expr *parent;
+      E_Expr *expr;
+    };
+    Task start_task = {0, &e_expr_nil, wrap_expr};
+    Task *first_task = &start_task;
+    Task *last_task = first_task;
+    for(Task *t = first_task; t != 0; t = t->next)
+    {
+      if(t->expr->kind == E_ExprKind_LeafIdent && str8_match(t->expr->string, str8_lit("$expr"), 0))
+      {
+        E_Expr *original_expr_ref = e_expr_ref(arena, expr);
+        if(t->parent != &e_expr_nil)
+        {
+          e_expr_insert_child(t->parent, t->expr, original_expr_ref);
+          e_expr_remove_child(t->parent, t->expr);
+        }
+        else
+        {
+          new_root_expr = original_expr_ref;
+        }
+      }
+      else for(E_Expr *child = t->expr->first; child != &e_expr_nil; child = child->next)
+      {
+        Task *task = push_array(scratch.arena, Task, 1);
+        SLLQueuePush(first_task, last_task, task);
+        task->parent = t->expr;
+        task->expr = child;
+      }
+    }
+    scratch_end(scratch);
+  }
+  return new_root_expr;
+}
+
+////////////////////////////////
 //~ rjf: "only"
 
 EV_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_DEF(only)
