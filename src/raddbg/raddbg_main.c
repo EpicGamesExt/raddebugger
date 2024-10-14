@@ -3,19 +3,15 @@
 
 ////////////////////////////////
 //~ rjf: 0.9.12 TODO notes
-//
-// [ ] remainder of @msgs pass:
-//  [ ] new `restart processes` path
-//  [ ] remainder of @msgs
 // 
 // [ ] post-@msgs TODOs:
 // [ ] ensure the following issues are resolved with this new pass:
-//  [ ] empty user file causing failure to launch
 //  [ ] debugger readme pass
 
 ////////////////////////////////
 //~ rjf: post-0.9.12 TODO notes
 //
+//  [ ] linked list view rule
 //  [ ] investigate false exceptions, being reported while stepping through init code
 //  [ ] output: add option for scroll-to-bottom - ensure this shows up in universal ctx menu
 //  [ ] universal ctx menu address/watch options; e.g. watch -> memory; watch -> add watch
@@ -521,6 +517,10 @@
 //  [x] `switch` replacement (recent files history)
 //   [x] resolving name as file or #include
 //  [x] entity listers - kill-specific-process, etc.
+// [x] remainder of @msgs pass:
+//  [x] new `restart processes` path
+//  [x] remainder of @msgs
+//  [x] empty user file causing failure to launch
 
 ////////////////////////////////
 //~ rjf: Build Options

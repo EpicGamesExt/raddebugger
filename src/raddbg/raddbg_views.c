@@ -2376,9 +2376,11 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                         RD_Font(RD_FontSlot_Code) ui_labelf("only:(member_1 ... member_n)");
                         UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) ui_label_multiline(max_width, str8_lit("Specifies that only the specified members should appear in struct, union, or class evaluations."));
                         ui_spacer(ui_em(1.5f, 1));
+#if 0 // TODO(rjf): disabling until post-0.9.12
                         RD_Font(RD_FontSlot_Code) ui_labelf("list:(next_link_member_name)");
                         UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) ui_label_multiline(max_width, str8_lit("Specifies that some struct, union, or class forms the top of a linked list, with next_link_member_name being the member which points at the next element in the list."));
                         ui_spacer(ui_em(1.5f, 1));
+#endif
                         RD_Font(RD_FontSlot_Code) ui_labelf("dec");
                         UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) ui_label_multiline(max_width, str8_lit("Specifies that all integral evaluations should appear in base-10 form."));
                         ui_spacer(ui_em(1.5f, 1));
@@ -3513,9 +3515,10 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(getting_started)
       UI_PrefWidth(ui_text_dim(10, 1))
       UI_TextAlignment(UI_TextAlign_Center)
       UI_Padding(ui_pct(1, 0))
+      RD_Palette(RD_PaletteCode_Floating)
     {
       ui_labelf("use");
-      UI_Flags(UI_BoxFlag_DrawBorder) UI_TextAlignment(UI_TextAlign_Center) rd_cmd_binding_buttons(rd_cmd_kind_info_table[RD_CmdKind_RunCommand].string);
+      UI_TextAlignment(UI_TextAlign_Center) rd_cmd_binding_buttons(rd_cmd_kind_info_table[RD_CmdKind_RunCommand].string);
       ui_labelf("to open command menu");
     }
   }

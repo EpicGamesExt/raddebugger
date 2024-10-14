@@ -12326,10 +12326,17 @@ rd_frame(void)
           case RD_CmdKind_OpenUser:
           case RD_CmdKind_OpenProject:
           {
+            // TODO(rjf): dear lord this is so overcomplicated, this needs to be collapsed down & simplified ASAP
+            
             B32 load_cfg[RD_CfgSrc_COUNT] = {0};
+            RD_CfgSrc cfg_src = (RD_CfgSrc)0;
             for(RD_CfgSrc src = (RD_CfgSrc)0; src < RD_CfgSrc_COUNT; src = (RD_CfgSrc)(src+1))
             {
               load_cfg[src] = (kind == rd_cfg_src_load_cmd_kind_table[src]);
+              if(load_cfg[src])
+              {
+                cfg_src = src;
+              }
             }
             
             //- rjf: normalize path
@@ -12347,7 +12354,7 @@ rd_frame(void)
             
             //- rjf: investigate file path/data
             B32 file_is_okay = 1;
-            if(props.modified != 0 && data.size != 0 && !str8_match(str8_prefix(data, 9), str8_lit("// raddbg"), 0))
+            if(props.modified != 0 && data.size != 0 && !str8_match(str8_prefix(data, 9), str8_lit("// raddbg"), 0) && rd_state->cfg_cached_timestamp[cfg_src] != 0)
             {
               file_is_okay = 0;
             }
@@ -12387,7 +12394,7 @@ rd_frame(void)
                 OS_Handle file = os_file_open(OS_AccessFlag_ShareRead|OS_AccessFlag_Read, path);
                 FileProperties props = os_properties_from_file(file);
                 String8 data = os_string_from_file_range(scratch.arena, file, r1u64(0, props.size));
-                if(data.size != 0)
+                if(props.modified != 0)
                 {
                   cfg_data[src] = data;
                   cfg_timestamps[src] = props.modified;
