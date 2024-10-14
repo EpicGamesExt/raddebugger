@@ -9102,7 +9102,7 @@ rd_ev_view_rule_expr_expand_range_info__debug_info_tables(Arena *arena, EV_View 
             RDI_Scope *scope = rdi_element_from_name_idx(module->rdi, Scopes, procedure->root_scope_idx);
             U64 voff = *rdi_element_from_name_idx(module->rdi, ScopeVOffData, scope->voff_range_first);
             E_OpList oplist = {0};
-            e_oplist_push_op(arena, &oplist, RDI_EvalOp_ModuleOff, e_value_u64(voff));
+            e_oplist_push_op(arena, &oplist, RDI_EvalOp_ConstU64, e_value_u64(module->vaddr_range.min + voff));
             String8 bytecode = e_bytecode_from_oplist(arena, &oplist);
             U32 type_idx = procedure->type_idx;
             RDI_TypeNode *type_node = rdi_element_from_name_idx(module->rdi, TypeNodes, type_idx);
@@ -9119,7 +9119,7 @@ rd_ev_view_rule_expr_expand_range_info__debug_info_tables(Arena *arena, EV_View 
             RDI_GlobalVariable *gvar = rdi_element_from_name_idx(module->rdi, GlobalVariables, element_idx);
             U64 voff = gvar->voff;
             E_OpList oplist = {0};
-            e_oplist_push_op(arena, &oplist, RDI_EvalOp_ModuleOff, e_value_u64(voff));
+            e_oplist_push_op(arena, &oplist, RDI_EvalOp_ConstU64, e_value_u64(module->vaddr_range.min + voff));
             String8 bytecode = e_bytecode_from_oplist(arena, &oplist);
             U32 type_idx = gvar->type_idx;
             RDI_TypeNode *type_node = rdi_element_from_name_idx(module->rdi, TypeNodes, type_idx);

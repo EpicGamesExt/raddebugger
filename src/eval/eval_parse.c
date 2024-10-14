@@ -1483,7 +1483,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
                 U32 match_idx = matches[matches_count-1];
                 RDI_GlobalVariable *global_var = rdi_element_from_name_idx(rdi, GlobalVariables, match_idx);
                 E_OpList oplist = {0};
-                e_oplist_push_op(arena, &oplist, RDI_EvalOp_ModuleOff, e_value_u64(global_var->voff));
+                e_oplist_push_op(arena, &oplist, RDI_EvalOp_ConstU64, e_value_u64(module->vaddr_range.min + global_var->voff));
                 loc_kind = RDI_LocationKind_AddrBytecodeStream;
                 loc_bytecode = e_bytecode_from_oplist(arena, &oplist);
                 U32 type_idx = global_var->type_idx;
@@ -1565,7 +1565,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
                 RDI_Scope *scope = rdi_element_from_name_idx(rdi, Scopes, procedure->root_scope_idx);
                 U64 voff = *rdi_element_from_name_idx(rdi, ScopeVOffData, scope->voff_range_first);
                 E_OpList oplist = {0};
-                e_oplist_push_op(arena, &oplist, RDI_EvalOp_ModuleOff, e_value_u64(voff));
+                e_oplist_push_op(arena, &oplist, RDI_EvalOp_ConstU64, e_value_u64(module->vaddr_range.min + voff));
                 loc_kind = RDI_LocationKind_ValBytecodeStream;
                 loc_bytecode = e_bytecode_from_oplist(arena, &oplist);
                 U32 type_idx = procedure->type_idx;

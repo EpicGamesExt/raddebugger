@@ -31,6 +31,11 @@ struct Basics
   int d;
 };
 
+static OnlyInModule only_in_module_global =
+{
+  1, 2, 3, "foobar",
+};
+
 thread_var float tls_a = 1.015625f;
 thread_var int   tls_b = -100;
 
@@ -39,6 +44,9 @@ dll_tls_eval_test(void)
 {
   tls_a *= 1.5f;
   tls_b *= -2;
+  only_in_module_global.x += 1;
+  only_in_module_global.y += 2;
+  only_in_module_global.z += 3;
 }
 
 export_function void
