@@ -288,6 +288,21 @@ EV_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_DEF(array)
 }
 
 ////////////////////////////////
+//~ rjf: "list"
+
+EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(list)
+{
+  EV_ExpandInfo info = {0};
+  return info;
+}
+
+EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(list)
+{
+  EV_ExpandRangeInfo info = {0};
+  return info;
+}
+
+////////////////////////////////
 //~ rjf: "slice"
 
 EV_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_DEF(slice)
