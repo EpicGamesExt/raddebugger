@@ -17,8 +17,6 @@
 //  [ ] empty user file causing failure to launch
 //  [ ] decay arrays to pointers in pointer/value comparison
 //  [ ] debugger readme pass
-//  [x] global evaluation across DLL boundaries
-//  [x] mohit-reported callstack-frame-selection bug (with inlines)
 
 ////////////////////////////////
 //~ rjf: post-0.9.12 TODO notes
@@ -36,7 +34,6 @@
 //  [ ] rich hover coverage; bitmap <-> geo <-> memory <-> disassembly <-> text; etc.
 //  [ ] save view column pcts; generalize to being a first-class thing in
 //      RD_View, e.g. by just having a string -> f32 store
-//  [ ] auto-scroll output window
 //  [ ] visualize all breakpoints everywhere - source view should show up in
 //      disasm, disasm should show up in source view, function should show up in
 //      both, etc.
@@ -200,7 +197,6 @@
 // [ ] @feature processor/data breakpoints
 // [ ] @feature automatically snap to search matches when searching source files
 // [ ] automatically start search query with selected text
-// [ ] @feature entity views: filtering & reordering
 
 ////////////////////////////////
 //~ rjf: Cold, Clean-up Tasks That Probably Only Ryan Notices
@@ -221,8 +217,6 @@
 // [ ] @feature types -> auto view rules (don't statefully fill view rules
 //     given types, just query if no other view rule is present, & autofill
 //     when editing)
-// [ ] @feature eval system -> somehow evaluate breakpoint hit counts? "meta"
-//     variables?
 //
 // [ ] @feature disasm view improvement features
 //  [ ] visualize jump destinations in disasm
@@ -523,6 +517,11 @@
 //      overrides, e.g. C:/devel/ -> D:/devel/, but also C:/devel/foo ->
 //      C:/devel/bar, etc.
 //  [x] fix memory view
+//  [x] global evaluation across DLL boundaries
+//  [x] mohit-reported callstack-frame-selection bug (with inlines)
+// [x] @feature entity views: filtering & reordering
+// [x] @feature eval system -> somehow evaluate breakpoint hit counts? "meta"
+//     variables?
 
 ////////////////////////////////
 //~ rjf: Build Options

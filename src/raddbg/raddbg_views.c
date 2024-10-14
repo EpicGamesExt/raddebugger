@@ -1261,13 +1261,14 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
   }
   RD_WatchViewRowCtrl row_ctrls_[] =
   {
-    {RD_EntityKind_Target,     CTRL_EntityKind_Null,   RD_CmdKind_LaunchAndRun  },
-    {RD_EntityKind_Target,     CTRL_EntityKind_Null,   RD_CmdKind_LaunchAndInit },
-    {RD_EntityKind_Target,     CTRL_EntityKind_Null,   RD_CmdKind_SelectEntity  },
-    {RD_EntityKind_Target,     CTRL_EntityKind_Null,   RD_CmdKind_RemoveEntity  },
-    {RD_EntityKind_Breakpoint, CTRL_EntityKind_Null,   RD_CmdKind_EnableEntity  },
-    {RD_EntityKind_Breakpoint, CTRL_EntityKind_Null,   RD_CmdKind_RemoveEntity  },
-    {RD_EntityKind_FilePathMap,CTRL_EntityKind_Null,   RD_CmdKind_RemoveEntity  },
+    {RD_EntityKind_Target,      CTRL_EntityKind_Null,   RD_CmdKind_LaunchAndRun  },
+    {RD_EntityKind_Target,      CTRL_EntityKind_Null,   RD_CmdKind_LaunchAndInit },
+    {RD_EntityKind_Target,      CTRL_EntityKind_Null,   RD_CmdKind_SelectEntity  },
+    {RD_EntityKind_Target,      CTRL_EntityKind_Null,   RD_CmdKind_RemoveEntity  },
+    {RD_EntityKind_Breakpoint,  CTRL_EntityKind_Null,   RD_CmdKind_EnableEntity  },
+    {RD_EntityKind_Breakpoint,  CTRL_EntityKind_Null,   RD_CmdKind_RemoveEntity  },
+    {RD_EntityKind_FilePathMap, CTRL_EntityKind_Null,   RD_CmdKind_RemoveEntity  },
+    {RD_EntityKind_AutoViewRule,CTRL_EntityKind_Null,   RD_CmdKind_RemoveEntity  },
     {RD_EntityKind_Nil, CTRL_EntityKind_Machine, RD_CmdKind_FreezeEntity  },
     {RD_EntityKind_Nil, CTRL_EntityKind_Process, RD_CmdKind_Kill  },
     {RD_EntityKind_Nil, CTRL_EntityKind_Process, RD_CmdKind_FreezeEntity  },
@@ -2577,6 +2578,15 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                   rd_entity_alloc(rd_entity_root(), RD_EntityKind_FilePathMap);
                 }
               }
+              if(rd_entity_is_nil(entity) && collection_entity_kind == RD_EntityKind_AutoViewRule)
+                UI_Palette(palette)
+              {
+                ui_set_next_focus_hot(row_selected ? UI_FocusKind_On : UI_FocusKind_Off);
+                if(ui_clicked(rd_icon_buttonf(RD_IconKind_Binoculars, 0, "Add Auto View Rule")))
+                {
+                  rd_entity_alloc(rd_entity_root(), RD_EntityKind_AutoViewRule);
+                }
+              }
               
               //- rjf: build entity box
               if(!rd_entity_is_nil(entity) || ctrl_entity != &ctrl_entity_nil)
@@ -2630,6 +2640,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                     switch(ctrl_entity->kind)
                     {
                       default:{}break;
+                      case CTRL_EntityKind_Machine:{slot = RD_RegSlot_Machine; rd_regs()->machine = ctrl_entity->handle;}break;
                       case CTRL_EntityKind_Thread: {slot = RD_RegSlot_Thread; rd_regs()->thread = ctrl_entity->handle;}break;
                       case CTRL_EntityKind_Process:{slot = RD_RegSlot_Process; rd_regs()->process = ctrl_entity->handle;}break;
                       case CTRL_EntityKind_Module: {slot = RD_RegSlot_Module; rd_regs()->module = ctrl_entity->handle;}break;
@@ -5151,7 +5162,20 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(file_path_map)
 ////////////////////////////////
 //~ rjf: auto_view_rules @view_hook_impl
 
-RD_VIEW_RULE_UI_FUNCTION_DEF(auto_view_rules){}
+RD_VIEW_RULE_UI_FUNCTION_DEF(auto_view_rules)
+{
+  ProfBeginFunction();
+  RD_WatchViewState *wv = rd_view_state(RD_WatchViewState);
+  if(!wv->initialized)
+  {
+    rd_watch_view_init(wv);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Expr,       0.25f);
+    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,      0.75f, .dequote_string = 1, .is_non_code = 0);
+  }
+  rd_watch_view_build(wv, RD_WatchViewFlag_NoHeader|RD_WatchViewFlag_PrettyNameMembers|RD_WatchViewFlag_PrettyEntityRows|RD_WatchViewFlag_DisableCacheLines,
+                      str8_lit("auto_view_rules"), str8_lit("only: type view_rule str"), 1, 10, rect);
+  ProfEnd();
+}
 
 ////////////////////////////////
 //~ rjf: breakpoints @view_hook_impl

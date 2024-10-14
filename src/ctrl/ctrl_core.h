@@ -91,6 +91,8 @@ Y(String8, type(CTRL_CodeString8),  function_location, "Function Location")\
 Y(String8, type(CTRL_CodeString8),  address_location,  "Address Location")\
 Y(String8, type(CTRL_PathString8),  source_path,       "Source Path")\
 Y(String8, type(CTRL_PathString8),  destination_path,  "Destination Path")\
+Y(String8, type(CTRL_CodeString8),  type,              "Type")\
+Y(String8, type(CTRL_CodeString8),  view_rule,         "View Rule")\
 Y(String8, type(CTRL_CodeString8),  condition,         "Condition")\
 X(CTRL_MetaEvalFrameArray, callstack, "Call Stack")
 #define X(T, name, pretty_name) T name;
@@ -146,6 +148,12 @@ struct_members(CTRL_FilePathMapMetaEval)
   member_lit_comp(CTRL_MetaEval, type(CTRL_PathString8), destination_path,   .pretty_name = str8_lit_comp("Destination Path")),
 };
 
+struct_members(CTRL_AutoViewRuleMetaEval)
+{
+  member_lit_comp(CTRL_MetaEval, type(CTRL_CodeString8), type,        .pretty_name = str8_lit_comp("Type")),
+  member_lit_comp(CTRL_MetaEval, type(CTRL_CodeString8), view_rule,   .pretty_name = str8_lit_comp("View Rule")),
+};
+
 struct_members(CTRL_MachineMetaEval)
 {
   member_lit_comp(CTRL_MetaEval, type(B32),              frozen,    .pretty_name = str8_lit_comp("Frozen")),
@@ -179,14 +187,15 @@ struct_members(CTRL_ThreadMetaEval)
   member_lit_comp(CTRL_MetaEval, type(CTRL_MetaEvalFrameArray), callstack, .pretty_name = str8_lit_comp("Call Stack")),
 };
 
-named_struct_type(CTRL_BreakpointMetaEval, CTRL_MetaEval, .name = str8_lit_comp("breakpoint"));
-named_struct_type(CTRL_TargetMetaEval,     CTRL_MetaEval, .name = str8_lit_comp("target"));
-named_struct_type(CTRL_PinMetaEval,        CTRL_MetaEval, .name = str8_lit_comp("pin"));
-named_struct_type(CTRL_FilePathMapMetaEval,CTRL_MetaEval, .name = str8_lit_comp("file_path_map"));
-named_struct_type(CTRL_MachineMetaEval,    CTRL_MetaEval, .name = str8_lit_comp("machine"));
-named_struct_type(CTRL_ProcessMetaEval,    CTRL_MetaEval, .name = str8_lit_comp("process"));
-named_struct_type(CTRL_ModuleMetaEval,     CTRL_MetaEval, .name = str8_lit_comp("module"));
-named_struct_type(CTRL_ThreadMetaEval,     CTRL_MetaEval, .name = str8_lit_comp("thread"));
+named_struct_type(CTRL_BreakpointMetaEval,  CTRL_MetaEval, .name = str8_lit_comp("breakpoint"));
+named_struct_type(CTRL_TargetMetaEval,      CTRL_MetaEval, .name = str8_lit_comp("target"));
+named_struct_type(CTRL_PinMetaEval,         CTRL_MetaEval, .name = str8_lit_comp("pin"));
+named_struct_type(CTRL_FilePathMapMetaEval, CTRL_MetaEval, .name = str8_lit_comp("file_path_map"));
+named_struct_type(CTRL_AutoViewRuleMetaEval,CTRL_MetaEval, .name = str8_lit_comp("auto_view_rule"));
+named_struct_type(CTRL_MachineMetaEval,     CTRL_MetaEval, .name = str8_lit_comp("machine"));
+named_struct_type(CTRL_ProcessMetaEval,     CTRL_MetaEval, .name = str8_lit_comp("process"));
+named_struct_type(CTRL_ModuleMetaEval,      CTRL_MetaEval, .name = str8_lit_comp("module"));
+named_struct_type(CTRL_ThreadMetaEval,      CTRL_MetaEval, .name = str8_lit_comp("thread"));
 
 //- rjf: meta evaluation array
 

@@ -1910,12 +1910,12 @@ rd_title_fstrs_from_entity(Arena *arena, RD_Entity *entity, Vec4F32 secondary_co
     Vec4F32 dst_color = color;
     if(src_string.size == 0)
     {
-      src_string = str8_lit("no path");
+      src_string = str8_lit("(source path)");
       src_color = secondary_color;
     }
     if(dst_string.size == 0)
     {
-      dst_string = str8_lit("no path");
+      dst_string = str8_lit("(destination path)");
       dst_color = secondary_color;
     }
     dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Main), size, src_color, src_string);
@@ -1923,6 +1923,40 @@ rd_title_fstrs_from_entity(Arena *arena, RD_Entity *entity, Vec4F32 secondary_co
     dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Icons), size, secondary_color, rd_icon_kind_text_table[RD_IconKind_RightArrow]);
     dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), size, v4f32(0, 0, 0, 0), str8_lit(" "));
     dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Main), size, dst_color, dst_string);
+  }
+  if(entity->kind == RD_EntityKind_AutoViewRule)
+  {
+    String8 src_string = src->string;
+    Vec4F32 src_color = color;
+    String8 dst_string = dst->string;
+    Vec4F32 dst_color = color;
+    DR_FancyStringList src_fstrs = {0};
+    DR_FancyStringList dst_fstrs = {0};
+    if(src_string.size == 0)
+    {
+      src_string = str8_lit("(type)");
+      src_color = secondary_color;
+      dr_fancy_string_list_push_new(arena, &src_fstrs, rd_font_from_slot(RD_FontSlot_Main), size, color_extrafied, src_string);
+    }
+    else RD_Font(RD_FontSlot_Code)
+    {
+      src_fstrs = rd_fancy_string_list_from_code_string(arena, 1.f, 0, src_color, src_string);
+    }
+    if(dst_string.size == 0)
+    {
+      dst_string = str8_lit("(view rule)");
+      dst_color = secondary_color;
+      dr_fancy_string_list_push_new(arena, &dst_fstrs, rd_font_from_slot(RD_FontSlot_Main), size, color_extrafied, dst_string);
+    }
+    else RD_Font(RD_FontSlot_Code)
+    {
+      dst_fstrs = rd_fancy_string_list_from_code_string(arena, 1.f, 0, dst_color, dst_string);
+    }
+    dr_fancy_string_list_concat_in_place(&result, &src_fstrs);
+    dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), size, v4f32(0, 0, 0, 0), str8_lit(" "));
+    dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Icons), size, secondary_color, rd_icon_kind_text_table[RD_IconKind_RightArrow]);
+    dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), size, v4f32(0, 0, 0, 0), str8_lit(" "));
+    dr_fancy_string_list_concat_in_place(&result, &dst_fstrs);
   }
   if((entity->kind == RD_EntityKind_Target || entity->kind == RD_EntityKind_Breakpoint) && entity->disabled)
   {
@@ -2184,9 +2218,21 @@ rd_ctrl_meta_eval_from_entity(Arena *arena, RD_Entity *entity)
   meval->source_location = src_loc_string;
   meval->address_location = vaddr_loc_string;
   meval->function_location = function_loc_string;
-  meval->source_path = src->string;
-  meval->destination_path = dst->string;
   meval->condition = cnd_string;
+  switch(entity->kind)
+  {
+    default:{}break;
+    case RD_EntityKind_FilePathMap:
+    {
+      meval->source_path = src->string;
+      meval->destination_path = dst->string;
+    }break;
+    case RD_EntityKind_AutoViewRule:
+    {
+      meval->type      = src->string;
+      meval->view_rule = dst->string;
+    }break;
+  }
   ProfEnd();
   return meval;
 }
@@ -2441,6 +2487,8 @@ rd_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range)
       StringMemberCase(entry_point)       {result = 1; rd_entity_equip_name(rd_entity_child_from_kind_or_alloc(entity, RD_EntityKind_EntryPoint), str8_cstring_capped(in, (U8 *)in + 4096));}
       StringMemberCase(source_path)       {result = 1; rd_entity_equip_name(rd_entity_child_from_kind_or_alloc(entity, RD_EntityKind_Source), str8_cstring_capped(in, (U8 *)in + 4096));}
       StringMemberCase(destination_path)  {result = 1; rd_entity_equip_name(rd_entity_child_from_kind_or_alloc(entity, RD_EntityKind_Dest), str8_cstring_capped(in, (U8 *)in + 4096));}
+      StringMemberCase(type)              {result = 1; rd_entity_equip_name(rd_entity_child_from_kind_or_alloc(entity, RD_EntityKind_Source), str8_cstring_capped(in, (U8 *)in + 4096));}
+      StringMemberCase(view_rule)         {result = 1; rd_entity_equip_name(rd_entity_child_from_kind_or_alloc(entity, RD_EntityKind_Dest), str8_cstring_capped(in, (U8 *)in + 4096));}
       StringMemberCase(condition)         {result = 1; rd_entity_equip_name(rd_entity_child_from_kind_or_alloc(entity, RD_EntityKind_Condition), str8_cstring_capped(in, (U8 *)in + 4096));}
       StringMemberCase(source_location)
       {
@@ -4098,14 +4146,14 @@ rd_window_frame(RD_Window *ws)
             // rjf: filter controls
             if(view->spec->flags & RD_ViewRuleInfoFlag_CanFilter)
             {
-              if(ui_clicked(rd_cmd_spec_button(rd_cmd_kind_info_table[RD_CmdKind_Filter].display_name)))
+              if(ui_clicked(rd_cmd_spec_button(rd_cmd_kind_info_table[RD_CmdKind_Filter].string)))
               {
-                rd_cmd(RD_CmdKind_Filter, .view = rd_handle_from_view(view));
+                rd_cmd(RD_CmdKind_Filter, .panel = rd_handle_from_panel(panel), .view = rd_handle_from_view(view));
                 ui_ctx_menu_close();
               }
-              if(ui_clicked(rd_cmd_spec_button(rd_cmd_kind_info_table[RD_CmdKind_ClearFilter].display_name)))
+              if(ui_clicked(rd_cmd_spec_button(rd_cmd_kind_info_table[RD_CmdKind_ClearFilter].string)))
               {
-                rd_cmd(RD_CmdKind_ClearFilter, .view = rd_handle_from_view(view));
+                rd_cmd(RD_CmdKind_ClearFilter, .panel = rd_handle_from_panel(panel), .view = rd_handle_from_view(view));
                 ui_ctx_menu_close();
               }
             }
@@ -4199,43 +4247,10 @@ rd_window_frame(RD_Window *ws)
             }
             
             // rjf: copy name
-            if(ctrl_entity->kind == CTRL_EntityKind_Thread &&
-               ui_clicked(rd_icon_buttonf(RD_IconKind_Clipboard, 0, "Copy Name")))
+            if(ui_clicked(rd_icon_buttonf(RD_IconKind_Clipboard, 0, "Copy Name")))
             {
               os_set_clipboard_text(ctrl_entity->string);
               ui_ctx_menu_close();
-            }
-            
-            // rjf: selection
-            if(ctrl_entity->kind == CTRL_EntityKind_Thread)
-            {
-              B32 is_selected = ctrl_handle_match(rd_base_regs()->thread, ctrl_entity->handle);
-              if(is_selected)
-              {
-                rd_icon_buttonf(RD_IconKind_Thread, 0, "[Selected]###select_entity");
-              }
-              else if(ui_clicked(rd_icon_buttonf(RD_IconKind_Thread, 0, "Select###select_entity")))
-              {
-                rd_cmd(RD_CmdKind_SelectThread, .thread = ctrl_entity->handle);
-                ui_ctx_menu_close();
-              }
-            }
-            
-            // rjf: freezing
-            if(ctrl_entity->kind == CTRL_EntityKind_Thread ||
-               ctrl_entity->kind == CTRL_EntityKind_Process ||
-               ctrl_entity->kind == CTRL_EntityKind_Machine)
-            {
-              B32 is_frozen = ctrl_entity_tree_is_frozen(ctrl_entity);
-              ui_set_next_palette(rd_palette_from_code(is_frozen ? RD_PaletteCode_NegativePopButton : RD_PaletteCode_PositivePopButton));
-              if(is_frozen && ui_clicked(rd_icon_buttonf(RD_IconKind_Locked, 0, "Thaw###freeze_thaw")))
-              {
-                rd_cmd(RD_CmdKind_ThawThread, .ctrl_entity = ctrl_entity->handle);
-              }
-              if(!is_frozen && ui_clicked(rd_icon_buttonf(RD_IconKind_Unlocked, 0, "Freeze###freeze_thaw")))
-              {
-                rd_cmd(RD_CmdKind_FreezeThread, .ctrl_entity = ctrl_entity->handle);
-              }
             }
             
             // rjf: copy ID
@@ -4308,9 +4323,41 @@ rd_window_frame(RD_Window *ws)
               }
             }
             
-            RD_Palette(RD_PaletteCode_Floating) ui_divider(ui_em(1.f, 1.f));
+            // rjf: selection
+            if(ctrl_entity->kind == CTRL_EntityKind_Thread)
+            {
+              B32 is_selected = ctrl_handle_match(rd_base_regs()->thread, ctrl_entity->handle);
+              if(is_selected)
+              {
+                rd_icon_buttonf(RD_IconKind_Thread, 0, "[Selected]###select_entity");
+              }
+              else if(ui_clicked(rd_icon_buttonf(RD_IconKind_Thread, 0, "Select###select_entity")))
+              {
+                rd_cmd(RD_CmdKind_SelectThread, .thread = ctrl_entity->handle);
+                ui_ctx_menu_close();
+              }
+            }
+            
+            // rjf: freezing
+            if(ctrl_entity->kind == CTRL_EntityKind_Thread ||
+               ctrl_entity->kind == CTRL_EntityKind_Process ||
+               ctrl_entity->kind == CTRL_EntityKind_Machine)
+            {
+              B32 is_frozen = ctrl_entity_tree_is_frozen(ctrl_entity);
+              ui_set_next_palette(rd_palette_from_code(is_frozen ? RD_PaletteCode_NegativePopButton : RD_PaletteCode_PositivePopButton));
+              if(is_frozen && ui_clicked(rd_icon_buttonf(RD_IconKind_Locked, 0, "Thaw###freeze_thaw")))
+              {
+                rd_cmd(RD_CmdKind_ThawThread, .ctrl_entity = ctrl_entity->handle);
+              }
+              if(!is_frozen && ui_clicked(rd_icon_buttonf(RD_IconKind_Unlocked, 0, "Freeze###freeze_thaw")))
+              {
+                rd_cmd(RD_CmdKind_FreezeThread, .ctrl_entity = ctrl_entity->handle);
+              }
+            }
             
             // rjf: callstack
+#if 0
+            RD_Palette(RD_PaletteCode_Floating) ui_divider(ui_em(1.f, 1.f));
             if(ctrl_entity->kind == CTRL_EntityKind_Thread) UI_TextPadding(ui_top_font_size()*1.5f)
             {
               DI_Scope *di_scope = di_scope_open();
@@ -4375,6 +4422,7 @@ rd_window_frame(RD_Window *ws)
               }
               di_scope_close(di_scope);
             }
+#endif
             
             // rjf: color editor
 #if 0
@@ -5387,6 +5435,7 @@ rd_window_frame(RD_Window *ws)
                 rd_cmd_kind_info_table[RD_CmdKind_Breakpoints].string,
                 rd_cmd_kind_info_table[RD_CmdKind_WatchPins].string,
                 rd_cmd_kind_info_table[RD_CmdKind_FilePathMap].string,
+                rd_cmd_kind_info_table[RD_CmdKind_AutoViewRules].string,
                 rd_cmd_kind_info_table[RD_CmdKind_Settings].string,
                 rd_cmd_kind_info_table[RD_CmdKind_ExceptionFilters].string,
                 rd_cmd_kind_info_table[RD_CmdKind_GettingStarted].string,
@@ -5410,6 +5459,7 @@ rd_window_frame(RD_Window *ws)
                 'b',
                 'h',
                 'p',
+                'v',
                 'e',
                 'g',
                 0,
@@ -8552,6 +8602,10 @@ EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(file_path_maps)        { return rd_ev
 EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(file_path_maps)  { return rd_ev_view_rule_expr_expand_range_info__meta_entities(arena, view, filter, expr, params, idx_range, user_data, RD_EntityKind_FilePathMap, 1); }
 EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(file_path_maps) { return rd_ev_view_rule_expr_id_from_num__meta_entities(num, user_data, RD_EntityKind_FilePathMap, 1); }
 EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(file_path_maps) { return rd_ev_view_rule_expr_num_from_id__meta_entities(id,  user_data, RD_EntityKind_FilePathMap, 1); }
+EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(auto_view_rules)       { return rd_ev_view_rule_expr_expand_info__meta_entities(arena, view, filter, expr, params, RD_EntityKind_AutoViewRule); }
+EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(auto_view_rules) { return rd_ev_view_rule_expr_expand_range_info__meta_entities(arena, view, filter, expr, params, idx_range, user_data, RD_EntityKind_AutoViewRule, 1); }
+EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(auto_view_rules){ return rd_ev_view_rule_expr_id_from_num__meta_entities(num, user_data, RD_EntityKind_AutoViewRule, 1); }
+EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(auto_view_rules){ return rd_ev_view_rule_expr_num_from_id__meta_entities(id,  user_data, RD_EntityKind_AutoViewRule, 1); }
 
 //- rjf: control entity groups
 
@@ -11756,6 +11810,7 @@ rd_frame(void)
           RD_EntityKind_WatchPin,
           RD_EntityKind_Target,
           RD_EntityKind_FilePathMap,
+          RD_EntityKind_AutoViewRule,
         };
         E_TypeKey evallable_kind_types[] =
         {
@@ -11763,6 +11818,7 @@ rd_frame(void)
           e_type_key_cons_base(type(CTRL_PinMetaEval)),
           e_type_key_cons_base(type(CTRL_TargetMetaEval)),
           e_type_key_cons_base(type(CTRL_FilePathMapMetaEval)),
+          e_type_key_cons_base(type(CTRL_AutoViewRuleMetaEval)),
         };
         for EachElement(idx, evallable_kinds)
         {
@@ -11920,6 +11976,19 @@ rd_frame(void)
       for EachElement(idx, rd_collection_name_table)
       {
         ev_auto_view_rule_table_push_new(scratch.arena, auto_view_rule_table, collection_type_keys[idx], rd_collection_name_table[idx], 1);
+      }
+      RD_EntityList auto_view_rules = rd_query_cached_entity_list_with_kind(RD_EntityKind_AutoViewRule);
+      for(RD_EntityNode *n = auto_view_rules.first; n != 0; n = n->next)
+      {
+        RD_Entity *rule = n->entity;
+        RD_Entity *src = rd_entity_child_from_kind(rule, RD_EntityKind_Source);
+        RD_Entity *dst = rd_entity_child_from_kind(rule, RD_EntityKind_Dest);
+        String8 type_string = src->string;
+        String8 view_rule_string = dst->string;
+        E_TokenArray tokens = e_token_array_from_text(scratch.arena, type_string);
+        E_Parse type_parse = e_parse_type_from_text_tokens(scratch.arena, type_string, &tokens);
+        E_TypeKey type_key = e_type_from_expr(type_parse.expr);
+        ev_auto_view_rule_table_push_new(scratch.arena, auto_view_rule_table, type_key, view_rule_string, 0);
       }
     }
     ev_select_auto_view_rule_table(auto_view_rule_table);

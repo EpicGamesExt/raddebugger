@@ -829,6 +829,7 @@ RD_CollectionTable:
   {breakpoints      Breakpoint       Null              x}
   {watch_pins       WatchPin         Null              x}
   {file_path_maps   FilePathMap      Null              x}
+  {auto_view_rules  AutoViewRule     Null              x}
   
   //- rjf: control entity groups
   {machines         Nil              Machine           x}
