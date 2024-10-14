@@ -8894,16 +8894,19 @@ DF_VIEW_UI_FUNCTION_DEF(Settings)
       
       //- rjf: interact
       UI_Signal sig = ui_signal_from_box(item_box);
-      if(item->kind == DF_SettingsItemKind_ThemeColor && ui_clicked(sig))
+      if(item->kind == DF_SettingsItemKind_ThemeColor && ui_pressed(sig))
       {
-        Vec3F32 rgb = v3f32(rgba.x, rgba.y, rgba.z);
-        Vec3F32 hsv = hsv_from_rgb(rgb);
-        Vec4F32 hsva = v4f32(hsv.x, hsv.y, hsv.z, rgba.w);
-        ui_ctx_menu_open(color_ctx_menu_keys[item->color], item_box->key, v2f32(0, dim_2f32(item_box->rect).y));
-        sv->color_ctx_menu_color = item->color;
-        sv->color_ctx_menu_color_hsva = v4f32(hsv.x, hsv.y, hsv.z, rgba.w);
-        DF_CmdParams p = df_cmd_params_from_panel(ws, panel);
-        df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FocusPanel));
+        if(!ui_ctx_menu_is_open(color_ctx_menu_keys[item->color]))
+        {
+          Vec3F32 rgb = v3f32(rgba.x, rgba.y, rgba.z);
+          Vec3F32 hsv = hsv_from_rgb(rgb);
+          Vec4F32 hsva = v4f32(hsv.x, hsv.y, hsv.z, rgba.w);
+          ui_ctx_menu_open(color_ctx_menu_keys[item->color], item_box->key, v2f32(0, dim_2f32(item_box->rect).y));
+          sv->color_ctx_menu_color = item->color;
+          sv->color_ctx_menu_color_hsva = v4f32(hsv.x, hsv.y, hsv.z, rgba.w);
+          DF_CmdParams p = df_cmd_params_from_panel(ws, panel);
+          df_push_cmd__root(&p, df_cmd_spec_from_core_cmd_kind(DF_CoreCmdKind_FocusPanel));
+        }
       }
       if((item->kind == DF_SettingsItemKind_GlobalSetting || item->kind == DF_SettingsItemKind_WindowSetting) &&
          is_toggler && ui_clicked(sig))
