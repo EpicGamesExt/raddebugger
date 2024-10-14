@@ -1830,6 +1830,11 @@ rd_title_fstrs_from_entity(Arena *arena, RD_Entity *entity, Vec4F32 secondary_co
     dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Icons), size, secondary_color, rd_icon_kind_text_table[icon_kind]);
   }
   dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), size, secondary_color, str8_lit(" "));
+  if(entity->kind == RD_EntityKind_Target && entity->cfg_src == RD_CfgSrc_CommandLine)
+  {
+    dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Icons), size, rd_rgba_from_theme_color(RD_ThemeColor_TextNegative), rd_icon_kind_text_table[RD_IconKind_Info]);
+    dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), size, secondary_color, str8_lit(" "));
+  }
   String8 name = entity->string;
   B32 name_is_code = 1;
   if(rd_entity_kind_flags_table[entity->kind] & RD_EntityKindFlag_NameIsPath)
@@ -3642,6 +3647,12 @@ rd_window_frame(RD_Window *ws)
             UI_Box *box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
             ui_box_equip_display_fancy_strings(box, &fstrs);
           }
+          
+          // rjf: temporary target -> display
+          if(entity->kind == RD_EntityKind_Target && entity->cfg_src == RD_CfgSrc_CommandLine)
+          {
+            UI_Flags(UI_BoxFlag_DrawTextWeak) ui_label(str8_lit("Specified on the command line; will not be saved."));
+          }
         }break;
         
         ////////////////////////
@@ -4578,6 +4589,15 @@ rd_window_frame(RD_Window *ws)
               if(ui_committed(sig))
               {
                 rd_cmd(RD_CmdKind_ConditionEntity, .entity = regs->entity, .string = str8(ws->ctx_menu_input_buffer, ws->ctx_menu_input_string_size));
+              }
+            }
+            
+            //- rjf: name editor
+            if(entity->cfg_src == RD_CfgSrc_CommandLine)
+            {
+              if(ui_clicked(rd_icon_buttonf(RD_IconKind_Save, 0, "Save To Project")))
+              {
+                rd_entity_equip_cfg_src(entity, RD_CfgSrc_Project);
               }
             }
           }break;

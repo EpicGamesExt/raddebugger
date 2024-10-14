@@ -2,13 +2,6 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
-//~ rjf: 0.9.12 TODO notes
-// 
-// [ ] post-@msgs TODOs:
-// [ ] ensure the following issues are resolved with this new pass:
-//  [ ] debugger readme pass
-
-////////////////////////////////
 //~ rjf: post-0.9.12 TODO notes
 //
 //  [ ] linked list view rule
@@ -521,6 +514,9 @@
 //  [x] new `restart processes` path
 //  [x] remainder of @msgs
 //  [x] empty user file causing failure to launch
+// [x] post-@msgs TODOs:
+// [x] ensure the following issues are resolved with this new pass:
+//  [x] debugger readme pass
 
 ////////////////////////////////
 //~ rjf: Build Options
@@ -1114,9 +1110,9 @@ entry_point(CmdLine *cmd_line)
                                     "--project:<path>\n"
                                     "Use to specify the location of a project file which should be used. Project files are used to store settings for users and projects. If this file does not exist, it will be created as necessary. This file will be autosaved as project-related changes are made.\n\n"
                                     "--auto_step\n"
-                                    "This will step into all targets after the debugger initially starts.\n\n"
+                                    "This will step into all active targets after the debugger initially starts.\n\n"
                                     "--auto_run\n"
-                                    "This will run all targets after the debugger initially starts.\n\n"
+                                    "This will run all active targets after the debugger initially starts.\n\n"
                                     "--quit_after_success (or -q)\n"
                                     "This will close the debugger automatically after all processes exit, if they all exited successfully (with code 0), and ran with no interruptions.\n\n"
                                     "--ipc <command>\n"

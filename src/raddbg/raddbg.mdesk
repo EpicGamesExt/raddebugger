@@ -1273,7 +1273,7 @@ raddbg_readme:
     @p "**F9**: Toggle Breakpoint At Cursor";
     @p "**Ctrl + Comma**: Focus Next Panel";
     @p "**Ctrl + Shift + Comma**: Focus Previous Panel";
-    @p "**Ctrl + Shift + Alt + Arrow Key**: Focus Panel In Direction";
+    @p "**Ctrl + Alt + Arrow Key**: Focus Panel In Direction";
     @p "**Ctrl + Tab**: Focus Next Tab";
     @p "**Ctrl + Shift + Tab**: Focus Previous Tab";
     @p "**Ctrl + W**: Close Tab";
@@ -1285,38 +1285,39 @@ raddbg_readme:
   {
     @p "`array:16`: Visualize a pointer as pointing to a 16-element array.";
     @p "`array:(count*2)`: Visualize a pointer as pointing to a `count*2`-element array.";
-    @p "`list:next`: Visualize a linked list flatly, where each node has a `next` pointer, which points to the next node in the list.";
+    // @p "`list:next`: Visualize a linked list flatly, where each node has a `next` pointer, which points to the next node in the list.";
     @p "`hex`: Visualize numeric literals as base-16 (hexadecimal).";
     @p "`dec`: Visualize numeric literals as base-10 (decimal).";
     @p "`oct`: Visualize numeric literals as base-8 (octal).";
     @p "`bin`: Visualize numeric literals as base-2 (binary).";
     @p "`omit:(foo bar baz)`: Prohibits members named `foo`, `bar`, and `baz` from being displayed.";
     @p "`only:(foo bar baz)`: Only allows members named `foo`, `bar`, and `baz` to be displayed.";
+    @p "`slice`: Attempts to interpret a structure evaluation as encoding a slice, with a base pointer and an integer delimiting the number of elements to which the pointer points.";
   }
   @p "Multiple view rules can be specified on one line, so they can be combined like so:";
-  @p "```list:next, hex, omit:next```";
+  @p "```array:16, hex, only: {x, y, z}```";
   @p "For more information, see the 'View Rules' section.";
   
   @subtitle "Command-Line Usage";
-  @p "When run normally, either by launching through a file explorer or running from a command line without arguments, `raddbg` will open a new instance of the debugger. But it also supports a number of command line options for a number of other purposes. These options are specified with a `-` or `--` prefix, followed by the name of the option, and if the option requires a parameter, followed by a `:` or `=`, followed by the parameter's content. A list of the possible options follows:";
+  @p "When run normally, either by launching through a file explorer or running from a command line without arguments, `raddbg` will open a new instance of the debugger, and await further operations. But it also supports a number of command line options for a number of other purposes. These options are specified with a `-` or `--` prefix, followed by the name of the option, and if the option requires a parameter, followed by a `:` or `=`, followed by the parameter's content. A list of the possible options follows:";
   @unordered_list
   {
     @p "`--help` Displays a help menu which documents the possible command line options.";
-    @p "`--user:<path>` Specifies a path to the user file which the debugger should use instead of the default. The default user file is stored at `%appdata%/raddbg/default.raddbg_user`. For more information on user files, read the 'User & Profile Files' section.";
-    @p "`--project:<path>` Specifies a path to the project file which the debugger should use instead of the default. The default project file is stored at `%appdata%/raddbg/default.raddbg_project`. For more information on project files, read the 'User & Project Files' section.";
-    @p "`--auto_run` Specifies that the debugger should immediately run its selected targets upon launching.";
-    @p "`--auto_step` Specifies that the debugger should immediately step into its selected targets upon launching.";
-    //@p "`--ipc` Specifies that the launched debugger instance is for communicating a command to another instance of the debugger. In this mode, any non-argument command line contents will be used to express a command. For more information on commands, read the 'Commands' section. For more information on driving another debugger instance with this argument, read the 'Driving Another Debugger Instance' section."
+    @p "`--user:<path>` Use to specify the location of a user file which should be used. User files are used to store settings for users, including window and panel setups, path mapping, and visual settings. If this file does not exist, it will be created as necessary. This file will be autosaved as user-related changes are made. For more information on user files, read the 'User & Profile Files' section.";
+    @p "`--project:<path>` Use to specify the location of a project file which should be used. Project files are used to store settings for users and projects. If this file does not exist, it will be created as necessary. This file will be autosaved as project-related changes are made. For more information on project files, read the 'User & Project Files' section.";
+    @p "`--auto_step` This will step into all active targets after the debugger initially starts.";
+    @p "`--auto_run` This will run all active targets after the debugger initially starts.";
+    @p "`--quit_after_success` (or `-q`) This will close the debugger automatically after all processes exit, if they all exited successfully (with code 0), and ran with no interruptions..";
+    @p "`--ipc` This will launch the debugger in the non-graphical IPC mode, which is used to communicate with another running instance of the debugger. The debugger instance will launch, send the specified command, then immediately terminate. This may be used by editors or other programs to control the debugger. For more information on commands, read the 'Commands' section. For more information on driving another debugger instance with this argument, read the 'Driving Another Debugger Instance' section."
   }
-  @p "On the command line, non-options (meaning any command line arguments *not* prefixed with a `-` or `--`) can also be specified. with normal usage, they are interpreted as the command line for a target (see the 'Targets' section)."
-    // add when --ipc support is ready: "When driving another debugger instance (using the `--ipc` argument), this additional command line text is used to encode a debugger command.";
-    @p "The debugger will stop parsing `-` and `--` prefixes as arguments after seeing a standalone `--`, *or* after seeing the first non-option argument, when reading the command line left-to-right. Some examples of command line usage and their interpretations are below:";
+  @p "On the command line, non-options (meaning any command line arguments *not* prefixed with a `-` or `--`) can also be specified. with normal usage, they are interpreted as the command line for a target (see the 'Targets' section). When driving another debugger instance (using the `--ipc` argument), this additional command line text is used to encode a debugger command.";
+  @p "The debugger will stop parsing `-` and `--` prefixes as arguments after seeing a standalone `--`, *or* after seeing the first non-option argument, when reading the command line left-to-right. Some examples of command line usage and their interpretations are below:";
   @unordered_list
   {
     @p "`raddbg --foo --bar --a:b --c=d test.exe` All options are used to configure `raddbg`. `test.exe` is interpreted as a target executable. `b` is interpreted as the parameter for the `a` option. `d` is interpreted as the parameter for the `c` option.";
     @p "`raddbg test.exe --foo --bar` `test.exe` is interpreted as a target executable. `--foo --bar` is interpreted as arguments for `test.exe`, and thus are *not* used to configure `raddbg`.";
     @p "`raddbg -- test.exe` `test.exe` is interpreted as a target executable.";
-    //@p "`raddbg --ipc find_code_location \"c:/foo/bar/baz.c:123:1\"` `--ipc` configures `raddbg` to drive another instance of `raddbg`. The remainder of the text is interpreted as a command.";
+    @p "`raddbg --ipc find_code_location \"c:/foo/bar/baz.c:123:1\"` `--ipc` configures `raddbg` to drive another instance of `raddbg`. The remainder of the text is interpreted as a command.";
     @p "`raddbg \"C:/path with spaces/test.exe\" --foo --bar` A target is formed from the `test.exe` path, and `--foo --bar` are interpreted as arguments to the `test.exe` target.";
   }
   
@@ -1326,17 +1327,17 @@ raddbg_readme:
   @p "A list of debugger interfaces, which can occupy tabs, are below:";
   @unordered_list
   {
-    @expand(RD_ViewTable a) @p "$(a.inc_in_docs -> '`'..a.display_string..'` '..a.docs_desc)";
+    @expand(RD_ViewRuleTable a) @p "$(a.show_in_docs -> '`'..a.display_name..'` '..a.description)";
   }
   
   @subtitle "Commands";
-  @p "The debugger is operated with *commands*. Commands may be manually executed in the debugger UI through the `Commands` menu (which you can open either in the `View` menu bar list, or by using the keybinding, which is F1 by default). Operations in the debugger UI are implemented with commands, so if it's ever unclear how to accomplish some operation through the UI, a useful fallback is searching for and running the command through the command menu.";
-  //@p "Commands are also how a debugger instance launched with `--ipc` may communicate with a primary debugger instance.";
-  //@p "A list of commands, how they're referred to textually (for the purposes of `--ipc` debugger instances), and their descriptions are below:";
-  @p "A list of commands and their descriptions are below:";
+  @p "The debugger is operated with *commands*. Commands may be manually executed in the debugger UI through the `Commands` menu, which you can open with the `Run Command` keybinding, which is F1 by default). Operations in the debugger UI are implemented with commands, so if it's ever unclear how to accomplish some operation through the UI, a useful fallback is searching for and running the command through the command menu.";
+  @p "Commands are also how a debugger instance launched with `--ipc` may communicate with a primary debugger instance.";
+  @p "A list of commands, how they're referred to textually (for the purposes of `--ipc` debugger instances), and their descriptions are below:";
   @unordered_list
   {
     @expand(D_CmdTable a) @p "$(a.ipc_docs_vis == 1 -> '`'..a.display_name..'` '..'(`'..a.string..'`) '..a.desc)";
+    @expand(RD_CmdTable a) @p "$(a.ipc_docs_vis == 1 -> '`'..a.display_name..'` '..'(`'..a.string..'`) '..a.desc)";
   }
   
   @subtitle "Targets";
@@ -1345,7 +1346,7 @@ raddbg_readme:
   @p "Targets created through command line usage are temporary, meaning they are not persistently saved across runs of the debugger. To change this, you can right click the command-line-created target in the `Targets` view, and click `Save To Project`. After doing so, the target will be restored across runs, and will no longer need to be specified on the command-line.";
   
   @subtitle "View Rules";
-  @p "*View Rules* are used to transform the way that evaluations in the debugger are visualized. An evaluation is produced by taking an expression string - for instance, the name of a variable - and using debug info and information from an attached process' live runtime (memory, registers, and so on) to interpret it.";
+  @p "*View rules* are used to transform the way that evaluations in the debugger are visualized. An evaluation is produced by taking an expression string - for instance, the name of a variable - and using debug info and information from an attached process' live runtime (memory, registers, and so on) to interpret it.";
   @p "Evaluations may be visualized in a variety of ways. A 64-bit unsigned integer may be visualized as a textual representation of the value with a radix of 10. A 32-bit floating-point value may be visualized as a textual representation of the value. An array of 32-bit floating-point values can be visualized as a list of textual representations of those values.";
   @p "But all of these cases may be visualized in a number of other ways, as well. A 64-bit unsigned integer may be more usefully represented with a radix of 16, 8, or 2. An array of 32-bit floating-point values may encode the R, G, B, and A components of a color, or vertex positions for 3D geometry, or samples for a waveform. An array of bytes may encode raw pixel data for an image, or image data in a compressed format. A struct may have several members which are not useful to look at all the time. A struct may form the head of a linked list, and a flat linked list representation may be more preferable than the traditional watch view representation, which adds an additional layer of hierarchical nesting with the expansion of each 'next' pointer in a linked list. When designing the debugger, we felt that the traditional memory view and watch view representations of data in a debugged-process were not sufficient. View rules were added to the traditional watch view structure to allow per-row specification of extra visualization parameters.";
   @p "View rules are specified with the name of a view rule, and depending on the view rule, a `:`, followed by parameters for the view rule. These parameters may be whitespace delimited, but importantly, multiple view rules may be specified per-row in a watch view. To explicitly separate the parameters of one view rule from the name of another - for instance, in a case like `array:16 bin`, where `bin` will not be interpreted as a view rule, but as a parameter of `array` - then commas and semicolons may be used to separate the two view rules (`array:16, bin`), or parentheses/braces/brackets may also be used to explicitly delimit the view rule parameters (`array:(16) bin`).";
@@ -1367,6 +1368,6 @@ raddbg_readme:
   @p "The *project file* defaultly stores targets, breakpoints, watch pins, and exception code filters.";
   @p "Because both can be hand-edited, however, if you want to store something normally stored in a user file in a project file, or vice versa, this can be done by hand transferring the textual data from one file to another. There is no path in the debugger's UI to support this transfer, currently, although this is planned.";
   
-  //@subtitle "Driving Another Debugger Instance";
-  //@p "When the debugger is launched with the `--ipc` command-line argument, it does not launch another instance of the graphical debugger. Instead, it launches, sends a string encoding a command to a running instance of the graphical debugger, and then terminates. The set of commands which can be sent are identical to those which can be run from the debugger's UI itself, but these commands must be encoded textually (through the other command-line arguments). These commands are described in the 'Commands' section.";
+  @subtitle "Driving Another Debugger Instance";
+  @p "When the debugger is launched with the `--ipc` command-line argument, it does not launch another instance of the graphical debugger. Instead, it launches, sends a string encoding a command to a running instance of the graphical debugger, and then terminates. The set of commands which can be sent are identical to those which can be run from the debugger's UI itself, but these commands must be encoded textually (through the other command-line arguments). These commands are described in the 'Commands' section.";
 }
