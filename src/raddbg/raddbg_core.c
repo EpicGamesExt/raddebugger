@@ -14473,7 +14473,7 @@ rd_frame(void)
               // rjf: try to resolve name as a symbol
               U64 voff = 0;
               DI_Key voff_dbgi_key = {0};
-              if(name_resolved == 0)
+              if(!name_resolved)
               {
                 DI_KeyList keys = d_push_active_dbgi_key_list(scratch.arena);
                 for(DI_KeyNode *n = keys.first; n != 0; n = n->next)
@@ -14490,6 +14490,49 @@ rd_frame(void)
               }
               
               // rjf: try to resolve name as a file
+              String8 file_path = {0};
+              if(!name_resolved)
+              {
+                // rjf: unpack quoted portion of string
+                String8 file_part_of_name = name;
+                U64 quote_pos = str8_find_needle(name, 0, str8_lit("\""), 0);
+                if(quote_pos < name.size)
+                {
+                  file_part_of_name = str8_skip(name, quote_pos+1);
+                  U64 ender_quote_pos = str8_find_needle(file_part_of_name, 0, str8_lit("\""), 0);
+                  file_part_of_name = str8_prefix(file_part_of_name, ender_quote_pos);
+                }
+                String8List search_parts = str8_split_path(scratch.arena, file_part_of_name);
+                
+                // rjf: get source path
+                RD_View *src_view = rd_view_from_handle(rd_regs()->view);
+                String8 src_file_path = rd_file_path_from_eval_string(scratch.arena, str8(src_view->query_buffer, src_view->query_string_size));
+                String8List src_file_parts = str8_split_path(scratch.arena, src_file_path);
+                
+                // rjf: search for actual file
+                Temp temp = temp_begin(scratch.arena);
+                for(String8Node *n = src_file_parts.first; n != 0; n = n->next)
+                {
+                  temp_end(temp);
+                  String8List try_path_parts = {0};
+                  for(String8Node *src_n = src_file_parts.first; src_n != n && src_n != 0; src_n = src_n->next)
+                  {
+                    str8_list_push(temp.arena, &try_path_parts, src_n->string);
+                  }
+                  for(String8Node *try_n = search_parts.first; try_n != 0; try_n = try_n->next)
+                  {
+                    str8_list_push(temp.arena, &try_path_parts, try_n->string);
+                  }
+                  String8 try_path = str8_list_join(temp.arena, &try_path_parts, &(StringJoin){.sep = str8_lit("/")});
+                  FileProperties try_props = os_properties_from_file_path(try_path);
+                  if(try_props.modified != 0)
+                  {
+                    name_resolved = 1;
+                    file_path = try_path;
+                    break;
+                  }
+                }
+              }
 #if 0 // TODO(rjf): @msgs
               RD_Entity *file = &d_nil_entity;
               if(name_resolved == 0)
@@ -14582,13 +14625,13 @@ rd_frame(void)
 #endif
               
               // rjf: process resolved info
-              if(name_resolved == 0)
+              if(!name_resolved)
               {
                 log_user_errorf("`%S` could not be found.", name);
               }
               
               // rjf: name resolved to voff * dbg info
-              if(name_resolved != 0 && voff != 0)
+              if(name_resolved && voff != 0)
               {
                 D_LineList lines = d_lines_from_dbgi_key_voff(scratch.arena, &voff_dbgi_key, voff);
                 if(lines.first != 0)
@@ -14614,17 +14657,11 @@ rd_frame(void)
                 }
               }
               
-              // rjf: name resolved to a file
-#if 0 // TODO(rjf): @msgs
-              if(name_resolved != 0 && !rd_entity_is_nil(file))
+              // rjf: name resolved to a file path
+              if(name_resolved && file_path.size != 0)
               {
-                String8 path = rd_full_path_from_entity(scratch.arena, file);
-                D_CmdParams p = *params;
-                p.file_path = path;
-                p.text_point = txt_pt(1, 1);
-                rd_push_cmd(rd_cmd_spec_from_kind(RD_CmdKind_FindCodeLocation), &p);
+                rd_cmd(RD_CmdKind_FindCodeLocation, .file_path = file_path, .cursor = txt_pt(1, 1), .vaddr = 0);
               }
-#endif
             }
           }break;
           
