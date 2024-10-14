@@ -44,10 +44,10 @@ struct RD_CodeViewBuildResult
 typedef U32 RD_WatchViewFlags;
 enum
 {
-  RD_WatchViewFlag_NoHeader                = (1<<0),
-  RD_WatchViewFlag_PrettyNameMembers       = (1<<1),
-  RD_WatchViewFlag_PrettyEntityRows        = (1<<2),
-  RD_WatchViewFlag_DisableCacheLines       = (1<<3),
+  RD_WatchViewFlag_NoHeader                   = (1<<0),
+  RD_WatchViewFlag_PrettyNameMembers          = (1<<1),
+  RD_WatchViewFlag_PrettyEntityRows           = (1<<2),
+  RD_WatchViewFlag_DisableCacheLines          = (1<<3),
 };
 
 typedef enum RD_WatchViewColumnKind

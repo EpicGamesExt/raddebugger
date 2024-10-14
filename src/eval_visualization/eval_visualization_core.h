@@ -108,6 +108,7 @@ struct EV_ExpandInfo
   U64 row_count;
   B32 single_item; // all rows form a single "item" - a singular, but large, row
   B32 add_new_row; // also supports an 'add new row', as the final row, within `row_count`
+  B32 rows_default_expanded;
 };
 
 typedef struct EV_ExpandRangeInfo EV_ExpandRangeInfo;
@@ -216,6 +217,7 @@ struct EV_Block
   // rjf: expansion info
   U64 row_count;
   B32 single_item;
+  B32 rows_default_expanded;
 };
 
 typedef struct EV_BlockTree EV_BlockTree;

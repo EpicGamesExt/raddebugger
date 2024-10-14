@@ -2652,7 +2652,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                       case CTRL_EntityKind_Process:{slot = RD_RegSlot_Process; rd_regs()->process = ctrl_entity->handle;}break;
                       case CTRL_EntityKind_Module: {slot = RD_RegSlot_Module; rd_regs()->module = ctrl_entity->handle;}break;
                     }
-                    UI_PrefWidth(ui_em(2.f, 1.f)) if(ui_pressed(ui_expander(row_expanded, str8_lit("###expanded"))))
+                    UI_PrefWidth(ui_em(2.f, 1.f)) if(ui_pressed(ui_expander(row->block->rows_default_expanded ? !row_expanded : row_expanded, str8_lit("###expanded"))))
                     {
                       next_row_expanded = !row_expanded;
                     }

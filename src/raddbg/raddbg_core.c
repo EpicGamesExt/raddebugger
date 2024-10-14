@@ -6657,7 +6657,7 @@ rd_window_frame(RD_Window *ws)
                 B32 row_is_expanded = ev_expansion_from_key(ev_view, row->key);
                 if(row_is_expandable)
                   UI_PrefWidth(ui_em(1.f, 1)) 
-                  if(ui_pressed(ui_expanderf(row_is_expanded, "###%I64x_%I64x_is_expanded", row->key.parent_hash, row->key.child_id)))
+                  if(ui_pressed(ui_expanderf(row->block->rows_default_expanded ? !row_is_expanded : row_is_expanded, "###%I64x_%I64x_is_expanded", row->key.parent_hash, row->key.child_id)))
                 {
                   ev_key_set_expansion(ev_view, row->block->key, row->key, !row_is_expanded);
                 }
@@ -8654,6 +8654,7 @@ EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(scheduler_machine)
     *processes_array = ctrl_entity_array_from_list(arena, &processes);
     info.user_data = processes_array;
     info.row_count = processes.count;
+    info.rows_default_expanded = 1;
   }
   scratch_end(scratch);
   return info;
@@ -9071,6 +9072,11 @@ rd_ev_view_rule_expr_expand_info__meta_ctrl_entities(Arena *arena, EV_View *view
   }
   scratch_end(scratch);
   EV_ExpandInfo info = {accel, accel->entities.count};
+  // TODO(rjf): hack
+  if(kind == CTRL_EntityKind_Machine)
+  {
+    info.rows_default_expanded = 1;
+  }
   return info;
 }
 
