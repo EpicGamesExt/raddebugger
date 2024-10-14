@@ -31,13 +31,61 @@ struct PTG_Link
   U32 to;
 };
 
+typedef struct PTG_NodeChunkNode PTG_NodeChunkNode;
+struct PTG_NodeChunkNode
+{
+  PTG_NodeChunkNode *next;
+  PTG_Node *v;
+  U64 count;
+  U64 cap;
+};
+
+typedef struct PTG_NodeChunkList PTG_NodeChunkList;
+struct PTG_NodeChunkList
+{
+  PTG_NodeChunkNode *first;
+  PTG_NodeChunkNode *last;
+  U64 chunk_count;
+  U64 total_count;
+};
+
+typedef struct PTG_NodeArray PTG_NodeArray;
+struct PTG_NodeArray
+{
+  PTG_Node *v;
+  U64 count;
+};
+
+typedef struct PTG_LinkChunkNode PTG_LinkChunkNode;
+struct PTG_LinkChunkNode
+{
+  PTG_LinkChunkNode *next;
+  PTG_Link *v;
+  U64 count;
+  U64 cap;
+};
+
+typedef struct PTG_LinkChunkList PTG_LinkChunkList;
+struct PTG_LinkChunkList
+{
+  PTG_LinkChunkNode *first;
+  PTG_LinkChunkNode *last;
+  U64 chunk_count;
+  U64 total_count;
+};
+
+typedef struct PTG_LinkArray PTG_LinkArray;
+struct PTG_LinkArray
+{
+  PTG_Link *v;
+  U64 count;
+};
+
 typedef struct PTG_Graph PTG_Graph;
 struct PTG_Graph
 {
-  PTG_Node *nodes;
-  U64 nodes_count;
-  PTG_Link *links;
-  U64 links_count;
+  PTG_NodeArray nodes;
+  PTG_LinkArray links;
 };
 
 typedef struct PTG_GraphNode PTG_GraphNode;
@@ -58,8 +106,7 @@ struct PTG_GraphNode
   B32 is_working;
   
   // rjf: content
-  Arena *node_arena;
-  Arena *link_arena;
+  Arena *arena;
   PTG_Graph graph;
 };
 

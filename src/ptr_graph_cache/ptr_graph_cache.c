@@ -191,6 +191,13 @@ ptg_builder_thread__entry_point(void *p)
       }
     }
     
+    //- rjf: do task
+    if(got_task)
+    {
+      
+    }
+    
+    
     //- rjf: commit results to cache
     if(got_task) OS_MutexScopeW(stripe->rw_mutex)
     {
@@ -255,8 +262,7 @@ ptg_evictor_thread__entry_point(void *p)
              n->is_working == 0)
           {
             DLLRemove(slot->first, slot->last, n);
-            arena_clear(n->node_arena);
-            arena_clear(n->link_arena);
+            arena_clear(n->arena);
             SLLStackPush(stripe->free_node, n);
           }
         }
