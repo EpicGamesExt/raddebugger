@@ -1129,7 +1129,7 @@ rdim_bake_vmap_from_markers(RDIM_Arena *arena, RDIM_VMapMarker *markers, RDIM_So
   
   //- rjf: fill output vmap entries
   RDI_U32 vmap_count_raw = marker_count - 1 + extra_vmap_entry;
-  RDI_VMapEntry *vmap = rdim_push_array_no_zero(arena, RDI_VMapEntry, vmap_count_raw + 1);
+  RDI_VMapEntry *vmap = rdim_push_array(arena, RDI_VMapEntry, vmap_count_raw + 1);
   RDI_U32 vmap_entry_count_pass_1 = 0;
   {
     typedef struct RDIM_VMapRangeTracker RDIM_VMapRangeTracker;
@@ -3057,7 +3057,7 @@ rdim_bake_global_vmap(RDIM_Arena *arena, RDIM_SymbolChunkList *src)
     RDIM_Temp scratch = rdim_scratch_begin(&arena, 1);
     
     //- rjf: allocate keys/markers
-    RDI_U64 marker_count = src->total_count*2;
+    RDI_U64 marker_count = src->total_count*2 + 2;
     RDIM_SortKey    *keys    = rdim_push_array_no_zero(scratch.arena, RDIM_SortKey, marker_count);
     RDIM_VMapMarker *markers = rdim_push_array_no_zero(scratch.arena, RDIM_VMapMarker, marker_count);
     
