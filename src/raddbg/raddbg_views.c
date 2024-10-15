@@ -6037,13 +6037,13 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(disasm)
     {
       auto_selected = 1;
       auto_space = rd_eval_space_from_ctrl_entity(ctrl_entity_from_handle(d_state->ctrl_entity_store, dv->temp_look_process), RD_EvalSpaceKind_CtrlEntity);
-      string = push_str8f(scratch.arena, "(0x%I64x & (~(0x4000 - 1))) + 1", dv->temp_look_vaddr);
+      string = push_str8f(scratch.arena, "(0x%I64x & (~(0x1000 - 1)))", dv->temp_look_vaddr);
     }
     else
     {
       auto_selected = 1;
       auto_space = rd_eval_space_from_ctrl_entity(ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->process), RD_EvalSpaceKind_CtrlEntity);
-      string = str8_lit("(rip.u64 & (~(0x4000 - 1))) + 1");
+      string = str8_lit("(rip.u64 & (~(0x1000 - 1)))");
     }
   }
   
