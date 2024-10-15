@@ -7,7 +7,11 @@
 ////////////////////////////////
 //~ rjf: Constants
 
-#define ARENA_HEADER_SIZE 64
+#if ARENA_FREE_LIST
+# define ARENA_HEADER_SIZE 128
+#else
+# define ARENA_HEADER_SIZE 64
+#endif
 
 ////////////////////////////////
 //~ rjf: Types
@@ -40,6 +44,10 @@ struct Arena
   U64 pos;
   U64 cmt;
   U64 res;
+#if ARENA_FREE_LIST
+  U64 free_size;
+  Arena *free_last;
+#endif
 };
 StaticAssert(sizeof(Arena) <= ARENA_HEADER_SIZE, arena_header_size_check);
 
