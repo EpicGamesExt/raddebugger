@@ -31,6 +31,7 @@
 #include "msf/msf.h"
 #include "msf/msf_parse.h"
 #include "pdb/pdb.h"
+#include "pdb/pdb_parse.h"
 #include "pdb/pdb_stringize.h"
 #include "rdi_from_pdb.h"
 
@@ -45,6 +46,7 @@
 #include "msf/msf.c"
 #include "msf/msf_parse.c"
 #include "pdb/pdb.c"
+#include "pdb/pdb_parse.c"
 #include "pdb/pdb_stringize.c"
 #include "rdi_from_pdb.c"
 
