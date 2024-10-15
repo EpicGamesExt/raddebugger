@@ -2089,7 +2089,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
           // rjf: no targets -> error
           if(targets_to_launch->count == 0)
           {
-            log_user_error(str8_lit("No active targets exist; cannot launch. You must select target first."));
+            log_user_error(str8_lit("No active targets exist; cannot launch. You must select a target first."));
           }
         }break;
         case D_CmdKind_Kill:

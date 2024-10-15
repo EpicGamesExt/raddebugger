@@ -1206,8 +1206,8 @@ RD_SettingTable:
   {BreakpointGlow        breakpoint_glow         "Breakpoint Glow"         0            1    0  1  }
   {OpaqueBackgrounds     opaque_backgrounds      "Opaque Backgrounds"      0            0    0  1  }
   {TabWidth              tab_width               "Tab Width"               0            4    1  32 }
-  {MainFontSize          main_font_size          "Main Font Size"          1            12   6  72 }
-  {CodeFontSize          code_font_size          "Code Font Size"          1            12   6  72 }
+  {MainFontSize          main_font_size          "Main Font Size"          1            11   6  72 }
+  {CodeFontSize          code_font_size          "Code Font Size"          1            11   6  72 }
   {SmoothUIText          smooth_ui_text          "Smooth UI Text"          1            1    0  1  }
   {SmoothCodeText        smooth_code_text        "Smooth Code Text"        1            0    0  1  }
   {HintUIText            hint_ui_text            "Hint UI Text"            1            1    0  1  }
