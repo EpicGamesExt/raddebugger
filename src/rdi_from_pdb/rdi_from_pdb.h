@@ -109,8 +109,8 @@ typedef struct P2R_C13StreamParseIn P2R_C13StreamParseIn;
 struct P2R_C13StreamParseIn
 {
   String8 data;
-  PDB_Strtbl *strtbl;
-  PDB_CoffSectionArray *coff_sections;
+  String8 strtbl;
+  COFF_SectionHeaderArray coff_sections;
 };
 
 //- rjf: comp unit parsing
@@ -127,7 +127,7 @@ typedef struct P2R_CompUnitContributionsParseIn P2R_CompUnitContributionsParseIn
 struct P2R_CompUnitContributionsParseIn
 {
   String8 data;
-  PDB_CoffSectionArray *coff_sections;
+  COFF_SectionHeaderArray coff_sections;
 };
 
 ////////////////////////////////
@@ -174,7 +174,7 @@ typedef struct P2R_UnitConvertIn P2R_UnitConvertIn;
 struct P2R_UnitConvertIn
 {
   PDB_Strtbl *pdb_strtbl;
-  PDB_CoffSectionArray *coff_sections;
+  COFF_SectionHeaderArray coff_sections;
   PDB_CompUnitArray *comp_units;
   PDB_CompUnitContributionArray *comp_unit_contributions;
   CV_SymParsed **comp_unit_syms;
@@ -196,7 +196,7 @@ typedef struct P2R_LinkNameMapBuildIn P2R_LinkNameMapBuildIn;
 struct P2R_LinkNameMapBuildIn
 {
   CV_SymParsed *sym;
-  PDB_CoffSectionArray *coff_sections;
+  COFF_SectionHeaderArray coff_sections;
   P2R_LinkNameMap *link_name_map;
 };
 
@@ -249,7 +249,7 @@ typedef struct P2R_SymbolStreamConvertIn P2R_SymbolStreamConvertIn;
 struct P2R_SymbolStreamConvertIn
 {
   RDI_Arch arch;
-  PDB_CoffSectionArray *coff_sections;
+  COFF_SectionHeaderArray coff_sections;
   PDB_TpiHashParsed *tpi_hash;
   CV_LeafParsed *tpi_leaf;
   CV_LeafParsed *ipi_leaf;

@@ -742,7 +742,7 @@ internal TS_TASK_FUNCTION_DEF(p2r_units_convert_task__entry_point)
           case CV_SymKind_GPROC32:
           {
             CV_SymProc32 *proc32 = (CV_SymProc32 *)sym_header_struct_base;
-            COFF_SectionHeader *section = (0 < proc32->sec && proc32->sec <= in->coff_sections->count) ? &in->coff_sections->sections[proc32->sec-1] : 0;
+            COFF_SectionHeader *section = (0 < proc32->sec && proc32->sec <= in->coff_sections.count) ? &in->coff_sections.v[proc32->sec-1] : 0;
             if(section != 0)
             {
               base_voff = section->voff + proc32->off;
@@ -1064,7 +1064,7 @@ internal TS_TASK_FUNCTION_DEF(p2r_link_name_map_build_task__entry_point)
         // rjf: unpack sym
         CV_SymPub32 *pub32 = (CV_SymPub32 *)sym_first;
         String8 name = str8_cstring_capped(pub32+1, sym_opl);
-        COFF_SectionHeader *section = (0 < pub32->sec && pub32->sec <= in->coff_sections->count) ? &in->coff_sections->sections[pub32->sec-1] : 0;
+        COFF_SectionHeader *section = (0 < pub32->sec && pub32->sec <= in->coff_sections.count) ? &in->coff_sections.v[pub32->sec-1] : 0;
         U64 voff = 0;
         if(section != 0)
         {
@@ -2317,7 +2317,7 @@ internal TS_TASK_FUNCTION_DEF(p2r_symbol_stream_convert_task__entry_point)
               scope->parent_scope = top_scope;
               scope->symbol = top_scope->symbol;
             }
-            COFF_SectionHeader *section = (0 < block32->sec && block32->sec <= in->coff_sections->count) ? &in->coff_sections->sections[block32->sec-1] : 0;
+            COFF_SectionHeader *section = (0 < block32->sec && block32->sec <= in->coff_sections.count) ? &in->coff_sections.v[block32->sec-1] : 0;
             if(section != 0)
             {
               U64 voff_first = section->voff + block32->off;
@@ -2344,7 +2344,7 @@ internal TS_TASK_FUNCTION_DEF(p2r_symbol_stream_convert_task__entry_point)
           // rjf: unpack sym
           CV_SymData32 *data32 = (CV_SymData32 *)sym_header_struct_base;
           String8 name = str8_cstring_capped(data32+1, sym_data_opl);
-          COFF_SectionHeader *section = (0 < data32->sec && data32->sec <= in->coff_sections->count) ? &in->coff_sections->sections[data32->sec-1] : 0;
+          COFF_SectionHeader *section = (0 < data32->sec && data32->sec <= in->coff_sections.count) ? &in->coff_sections.v[data32->sec-1] : 0;
           U64 voff = (section ? section->voff : 0) + data32->off;
           
           // rjf: determine if this is an exact duplicate global
@@ -2427,7 +2427,7 @@ internal TS_TASK_FUNCTION_DEF(p2r_symbol_stream_convert_task__entry_point)
           //       no parent.
           RDIM_Scope *procedure_root_scope = rdim_scope_chunk_list_push(arena, &sym_scopes, sym_scopes_chunk_cap);
           {
-            COFF_SectionHeader *section = (0 < proc32->sec && proc32->sec <= in->coff_sections->count) ? &in->coff_sections->sections[proc32->sec-1] : 0;
+            COFF_SectionHeader *section = (0 < proc32->sec && proc32->sec <= in->coff_sections.count) ? &in->coff_sections.v[proc32->sec-1] : 0;
             if(section != 0)
             {
               U64 voff_first = section->voff + proc32->off;
@@ -2672,7 +2672,7 @@ internal TS_TASK_FUNCTION_DEF(p2r_symbol_stream_convert_task__entry_point)
           CV_SymDefrangeRegister *defrange_register = (CV_SymDefrangeRegister*)sym_header_struct_base;
           CV_Reg cv_reg = defrange_register->reg;
           CV_LvarAddrRange *range = &defrange_register->range;
-          COFF_SectionHeader *range_section = (0 < range->sec && range->sec <= in->coff_sections->count) ? &in->coff_sections->sections[range->sec-1] : 0;
+          COFF_SectionHeader *range_section = (0 < range->sec && range->sec <= in->coff_sections.count) ? &in->coff_sections.v[range->sec-1] : 0;
           CV_LvarAddrGap *gaps = (CV_LvarAddrGap*)(defrange_register+1);
           U64 gap_count = ((U8*)sym_data_opl - (U8*)gaps) / sizeof(*gaps);
           RDI_RegCode reg_code = p2r_rdi_reg_code_from_cv_reg_code(in->arch, cv_reg);
@@ -2711,7 +2711,7 @@ internal TS_TASK_FUNCTION_DEF(p2r_symbol_stream_convert_task__entry_point)
           // rjf: unpack sym
           CV_SymDefrangeFramepointerRel *defrange_fprel = (CV_SymDefrangeFramepointerRel*)sym_header_struct_base;
           CV_LvarAddrRange *range = &defrange_fprel->range;
-          COFF_SectionHeader *range_section = (0 < range->sec && range->sec <= in->coff_sections->count) ? &in->coff_sections->sections[range->sec-1] : 0;
+          COFF_SectionHeader *range_section = (0 < range->sec && range->sec <= in->coff_sections.count) ? &in->coff_sections.v[range->sec-1] : 0;
           CV_LvarAddrGap *gaps = (CV_LvarAddrGap*)(defrange_fprel + 1);
           U64 gap_count = ((U8*)sym_data_opl - (U8*)gaps) / sizeof(*gaps);
           
@@ -2744,7 +2744,7 @@ internal TS_TASK_FUNCTION_DEF(p2r_symbol_stream_convert_task__entry_point)
           CV_SymDefrangeSubfieldRegister *defrange_subfield_register = (CV_SymDefrangeSubfieldRegister*)sym_header_struct_base;
           CV_Reg cv_reg = defrange_subfield_register->reg;
           CV_LvarAddrRange *range = &defrange_subfield_register->range;
-          COFF_SectionHeader *range_section = (0 < range->sec && range->sec <= in->coff_sections->count) ? &in->coff_sections->sections[range->sec-1] : 0;
+          COFF_SectionHeader *range_section = (0 < range->sec && range->sec <= in->coff_sections.count) ? &in->coff_sections.v[range->sec-1] : 0;
           CV_LvarAddrGap *gaps = (CV_LvarAddrGap*)(defrange_subfield_register + 1);
           U64 gap_count = ((U8*)sym_data_opl - (U8*)gaps) / sizeof(*gaps);
           RDI_RegCode reg_code = p2r_rdi_reg_code_from_cv_reg_code(in->arch, cv_reg);
@@ -2818,7 +2818,7 @@ internal TS_TASK_FUNCTION_DEF(p2r_symbol_stream_convert_task__entry_point)
           CV_Reg cv_reg = defrange_register_rel->reg;
           RDI_RegCode reg_code = p2r_rdi_reg_code_from_cv_reg_code(in->arch, cv_reg);
           CV_LvarAddrRange *range = &defrange_register_rel->range;
-          COFF_SectionHeader *range_section = (0 < range->sec && range->sec <= in->coff_sections->count) ? &in->coff_sections->sections[range->sec-1] : 0;
+          COFF_SectionHeader *range_section = (0 < range->sec && range->sec <= in->coff_sections.count) ? &in->coff_sections.v[range->sec-1] : 0;
           CV_LvarAddrGap *gaps = (CV_LvarAddrGap*)(defrange_register_rel + 1);
           U64 gap_count = ((U8*)sym_data_opl - (U8*)gaps) / sizeof(*gaps);
           
@@ -2863,7 +2863,7 @@ internal TS_TASK_FUNCTION_DEF(p2r_symbol_stream_convert_task__entry_point)
             void       *raw_leaf  = rec_data.str + sizeof(U16);
             
             // rjf: extract method inline info
-            if(rec_range.hdr.kind == CV_LeafIDKind_MFUNC_ID &&
+            if(rec_range.hdr.kind == CV_LeafKind_MFUNC_ID &&
                rec_range.hdr.size >= sizeof(CV_LeafMFuncId))
             {
               CV_LeafMFuncId *mfunc_id = (CV_LeafMFuncId*)raw_leaf;
@@ -2873,7 +2873,7 @@ internal TS_TASK_FUNCTION_DEF(p2r_symbol_stream_convert_task__entry_point)
             }
             
             // rjf: extract non-method function inline info
-            else if(rec_range.hdr.kind == CV_LeafIDKind_FUNC_ID &&
+            else if(rec_range.hdr.kind == CV_LeafKind_FUNC_ID &&
                     rec_range.hdr.size >= sizeof(CV_LeafFuncId))
             {
               CV_LeafFuncId *func_id = (CV_LeafFuncId*)raw_leaf;
@@ -3090,7 +3090,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
   if(msf != 0) ProfScope("parse PDB auth_guid & named streams table")
   {
     Temp scratch = scratch_begin(&arena, 1);
-    String8 info_data = msf_data_from_stream(msf, PDB_FixedStream_PdbInfo);
+    String8 info_data = msf_data_from_stream(msf, PDB_FixedStream_Info);
     PDB_Info *info = pdb_info_from_data(scratch.arena, info_data);
     named_streams = pdb_named_stream_table_from_info(arena, info);
     MemoryCopyStruct(&auth_guid, &info->auth_guid);
@@ -3101,11 +3101,13 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
   //- rjf: parse PDB strtbl
   //
   PDB_Strtbl *strtbl = 0;
+  String8 raw_strtbl = str8_zero();
   if(named_streams != 0) ProfScope("parse PDB strtbl")
   {
-    MSF_StreamNumber strtbl_sn = named_streams->sn[PDB_NamedStream_STRTABLE];
+    MSF_StreamNumber strtbl_sn = named_streams->sn[PDB_NamedStream_StringTable];
     String8 strtbl_data = msf_data_from_stream(msf, strtbl_sn);
     strtbl = pdb_strtbl_from_data(arena, strtbl_data);
+    raw_strtbl = str8_substr(strtbl_data, rng_1u64(strtbl->strblock_min, strtbl->strblock_max));
   }
   
   //////////////////////////////////////////////////////////////
@@ -3141,14 +3143,12 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
   //////////////////////////////////////////////////////////////
   //- rjf: parse coff sections
   //
-  PDB_CoffSectionArray *coff_sections = 0;
-  U64 coff_section_count = 0;
+  COFF_SectionHeaderArray coff_sections = {0};
   if(dbi != 0) ProfScope("parse coff sections")
   {
     MSF_StreamNumber section_stream = dbi->dbg_streams[PDB_DbiStream_SECTION_HEADER];
     String8 section_data = msf_data_from_stream(msf, section_stream);
     coff_sections = pdb_coff_section_array_from_data(arena, section_data);
-    coff_section_count = coff_sections->count;
   }
   
   //////////////////////////////////////////////////////////////
@@ -3276,7 +3276,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
       sym_tasks_inputs[idx].data = pdb_data_from_unit_range(msf, unit, PDB_DbiCompUnitRange_Symbols);
       sym_tasks_tickets[idx]     = ts_kickoff(p2r_symbol_stream_parse_task__entry_point, 0, &sym_tasks_inputs[idx]);
       c13_tasks_inputs[idx].data          = pdb_data_from_unit_range(msf, unit, PDB_DbiCompUnitRange_C13);
-      c13_tasks_inputs[idx].strtbl        = strtbl;
+      c13_tasks_inputs[idx].strtbl        = raw_strtbl;
       c13_tasks_inputs[idx].coff_sections = coff_sections;
       c13_tasks_tickets[idx]              = ts_kickoff(p2r_c13_stream_parse_task__entry_point, 0, &c13_tasks_inputs[idx]);
     }
@@ -3293,10 +3293,9 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
   //- rjf: calculate EXE's max voff
   //
   U64 exe_voff_max = 0;
-  if(coff_sections != 0)
   {
-    COFF_SectionHeader *coff_sec_ptr = coff_sections->sections;
-    COFF_SectionHeader *coff_ptr_opl = coff_sec_ptr + coff_section_count;
+    COFF_SectionHeader *coff_sec_ptr = coff_sections.v;
+    COFF_SectionHeader *coff_ptr_opl = coff_sec_ptr + coff_sections.count;
     for(;coff_sec_ptr < coff_ptr_opl; coff_sec_ptr += 1)
     {
       U64 sec_voff_max = coff_sec_ptr->voff + coff_sec_ptr->vsize;
@@ -3357,10 +3356,10 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
   //- rjf: build binary sections list
   //
   RDIM_BinarySectionList binary_sections = {0};
-  if(coff_sections != 0) ProfScope("build binary section list")
+  ProfScope("build binary section list")
   {
-    COFF_SectionHeader *coff_ptr = coff_sections->sections;
-    COFF_SectionHeader *coff_opl = coff_ptr + coff_section_count;
+    COFF_SectionHeader *coff_ptr = coff_sections.v;
+    COFF_SectionHeader *coff_opl = coff_ptr + coff_sections.count;
     for(;coff_ptr < coff_opl; coff_ptr += 1)
     {
       char *name_first = (char*)coff_ptr->name;

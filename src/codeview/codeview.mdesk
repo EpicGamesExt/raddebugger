@@ -246,7 +246,7 @@ cv_string_from_arch:
   {MANTYPREF                                     -                                  0x1028}
   {UNAMESPACE_ST                                 -                                  0x1029}
   {ST_MAX                                        -                                  0x1100}
-  {OBJNAME                                       Objname                            0x1101}
+  {OBJNAME                                       ObjName                            0x1101}
   {THUNK32                                       Thunk32                            0x1102}
   {BLOCK32                                       Block32                            0x1103}
   {WITH32                                        -                                  0x1104}
@@ -462,6 +462,7 @@ CV_BasicTypeTable:
 @table(name  header_type_name  val)
 CV_LeafKindTable:
 {
+  {NOTYPE                        -                            0x0000}
   {MODIFIER_16t                  -                            0x0001}
   {POINTER_16t                   -                            0x0002}
   {ARRAY_16t                     -                            0x0003}
@@ -586,6 +587,13 @@ CV_LeafKindTable:
   {VECTOR                        -                            0x151b}
   {MATRIX                        -                            0x151c}
   {VFTABLE                       -                            0x151d}
+  {FUNC_ID                       FuncId                       0x1601}
+  {MFUNC_ID						 MFuncId                      0x1602}
+  {BUILDINFO                     BuildInfo                    0x1603}
+  {SUBSTR_LIST                   SubstrList                   0x1604}
+  {STRING_ID                     StringId                     0x1605}
+  {UDT_SRC_LINE                  UDTSrcLine                   0x1606}
+  {UDT_MOD_SRC_LINE              UDTModSrcLine                0x1607}
   {CLASS2                        Struct2                      0x1608}
   {STRUCT2                       Struct2                      0x1609}
 }
