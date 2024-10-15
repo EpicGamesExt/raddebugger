@@ -4,6 +4,18 @@
 ////////////////////////////////
 //~ rjf: post-0.9.12 TODO notes
 //
+// [ ] double click on breakpoints/watch-pins/etc. to go to location
+// [ ] auto view rule templates (?)
+// [ ] single-line visualization busted with auto-view-rules applied, it seems...
+//     not showing member variables, just commas, check w/ mohit
+// [ ] auto-view-rules likely should apply at each level in the expression
+//     tree
+// [ ] `slice` view rule - extend to support begin/end style as well
+// [ ] disasm starting address - need to use debug info for more correct
+//     results...
+//
+//
+//
 //  [ ] linked list view rule
 //  [ ] investigate false exceptions, being reported while stepping through init code
 //  [ ] output: add option for scroll-to-bottom - ensure this shows up in universal ctx menu
