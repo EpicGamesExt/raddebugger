@@ -688,7 +688,8 @@ RDI_LanguageTable:
   {NULL        0}
   {C           1}
   {CPlusPlus   2}
-  {COUNT       3}
+  {Masm        3}
+  {COUNT       4}
 }
 
 @enum(RDI_U32) RDI_Language:
@@ -766,6 +767,7 @@ RDI_TypeKindTable:
   //-
   {Bitfield             0xF000     0                                             }
   {Variadic             0xF001     0                                             }
+  {Count                0xF002     0                                             }
 }
 
 @table(name value)

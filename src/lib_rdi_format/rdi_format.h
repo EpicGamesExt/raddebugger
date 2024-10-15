@@ -306,7 +306,8 @@ typedef enum RDI_LanguageEnum
 RDI_Language_NULL       = 0,
 RDI_Language_C          = 1,
 RDI_Language_CPlusPlus  = 2,
-RDI_Language_COUNT      = 3,
+RDI_Language_Masm       = 3,
+RDI_Language_COUNT      = 4,
 } RDI_LanguageEnum;
 
 typedef RDI_U16 RDI_TypeKind;
@@ -367,6 +368,7 @@ RDI_TypeKind_IncompleteClass      = 0x2007,
 RDI_TypeKind_IncompleteEnum       = 0x2008,
 RDI_TypeKind_Bitfield             = 0xF000,
 RDI_TypeKind_Variadic             = 0xF001,
+RDI_TypeKind_Count                = 0xF002,
 RDI_TypeKind_FirstBuiltIn         = RDI_TypeKind_Void,
 RDI_TypeKind_LastBuiltIn          = RDI_TypeKind_ComplexF128,
 RDI_TypeKind_FirstConstructed     = RDI_TypeKind_Modifier,
@@ -655,6 +657,7 @@ X(RDI_U32, line_map_voff_base_idx)\
 X(NULL)\
 X(C)\
 X(CPlusPlus)\
+X(Masm)\
 X(COUNT)\
 
 #define RDI_TypeKind_XList \
@@ -713,6 +716,7 @@ X(IncompleteClass)\
 X(IncompleteEnum)\
 X(Bitfield)\
 X(Variadic)\
+X(Count)\
 
 #define RDI_TypeModifierFlags_XList \
 X(Const)\
