@@ -152,6 +152,47 @@ os_string_from_file_range(Arena *arena, OS_Handle file, Rng1U64 range)
 }
 
 ////////////////////////////////
+//~ rjf: Process Launcher Helpers
+
+internal OS_Handle
+os_cmd_line_launch(String8 string)
+{
+  Temp scratch = scratch_begin(0, 0);
+  U8 split_chars[] = {' '};
+  String8List parts = str8_split(scratch.arena, string, split_chars, ArrayCount(split_chars), 0);
+  OS_Handle handle = {0};
+  if(parts.node_count != 0)
+  {
+    String8 exe = parts.first->string;
+    String8 exe_folder = str8_chop_last_slash(exe);
+    if(exe_folder.size == 0)
+    {
+      exe_folder = os_get_current_path(scratch.arena);
+    }
+    OS_ProcessLaunchParams params = {0};
+    params.cmd_line = parts;
+    params.path = exe_folder;
+    params.inherit_env = 1;
+    handle = os_process_launch(&params);
+  }
+  scratch_end(scratch);
+  return handle;
+}
+
+internal OS_Handle
+os_cmd_line_launchf(char *fmt, ...)
+{
+  Temp scratch = scratch_begin(0, 0);
+  va_list args;
+  va_start(args, fmt);
+  String8 string = push_str8fv(scratch.arena, fmt, args);
+  OS_Handle result = os_cmd_line_launch(string);
+  va_end(args);
+  scratch_end(scratch);
+  return result;
+}
+
+////////////////////////////////
 //~ rjf: GUID Helpers (Helpers, Implemented Once)
 
 internal String8

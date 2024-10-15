@@ -166,6 +166,12 @@ internal S64            os_file_id_compare(OS_FileID a, OS_FileID b);
 internal String8        os_string_from_file_range(Arena *arena, OS_Handle file, Rng1U64 range);
 
 ////////////////////////////////
+//~ rjf: Process Launcher Helpers
+
+internal OS_Handle os_cmd_line_launch(String8 string);
+internal OS_Handle os_cmd_line_launchf(char *fmt, ...);
+
+////////////////////////////////
 //~ rjf: GUID Helpers (Helpers, Implemented Once)
 
 internal String8 os_string_from_guid(Arena *arena, OS_Guid guid);
