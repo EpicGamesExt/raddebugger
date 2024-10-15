@@ -1050,6 +1050,7 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
               ptr_root = e_irtree_resolve_to_value(arena, ptr_tree->space, ptr_tree->mode, ptr_root, ptr_tree->type_key);
             }
             E_IRNode *int_root = int_tree->root;
+            int_root = e_irtree_resolve_to_value(arena, int_tree->space, int_tree->mode, int_root, int_tree->type_key);
             if(direct_type_size > 1)
             {
               E_IRNode *const_root = e_irtree_const_u(arena, direct_type_size);
