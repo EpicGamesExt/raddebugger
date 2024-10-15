@@ -3295,6 +3295,8 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
         ui_labelf("U16:");
         ui_labelf("U32:");
         ui_labelf("U64:");
+        ui_labelf("F32:");
+        ui_labelf("F64:");
       }
       UI_PrefWidth(ui_em(45.f, 1.f)) UI_HeightFill UI_Column
         UI_PrefHeight(ui_em(2.f, 0.f))
@@ -3305,14 +3307,20 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
           U64 as_u16 = 0;
           U64 as_u32 = 0;
           U64 as_u64 = 0;
+          F32 as_f32 = 0;
+          F64 as_f64 = 0;
           e_space_read(eval.space, &as_u64, r1u64(cursor_base_vaddr, cursor_base_vaddr+1));
-          as_u32 = *(U32 *)&as_u64;
-          as_u16 = *(U16 *)&as_u64;
-          as_u8  =  *(U8 *)&as_u64;
+          memcpy(&as_u8, &as_u64, sizeof(as_u8));
+          memcpy(&as_u16, &as_u64, sizeof(as_u16));
+          memcpy(&as_u32, &as_u64, sizeof(as_u32));
+          memcpy(&as_f32, &as_u64, sizeof(as_f32));
+          memcpy(&as_f64, &as_u64, sizeof(as_f64));
           ui_labelf("%02X (%I64u)",  as_u8,  as_u8);
           ui_labelf("%04X (%I64u)",  as_u16, as_u16);
           ui_labelf("%08X (%I64u)",  as_u32, as_u32);
           ui_labelf("%016I64X (%I64u)", as_u64, as_u64);
+          ui_labelf("%+.8e (%+.6a)",  as_f32, as_f32);
+          ui_labelf("%+.17e (%+.13a)",  as_f64, as_f64);
         }
       }
     }
