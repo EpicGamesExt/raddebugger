@@ -44,6 +44,7 @@ enum
   OS_AccessFlag_Append     = (1<<3),
   OS_AccessFlag_ShareRead  = (1<<4),
   OS_AccessFlag_ShareWrite = (1<<5),
+  OS_AccessFlag_Inherited  = (1<<6),
 };
 
 ////////////////////////////////
@@ -80,19 +81,6 @@ struct OS_FileID
 };
 
 ////////////////////////////////
-//~ rjf: Process Launch Parameters
-
-typedef struct OS_ProcessLaunchParams OS_ProcessLaunchParams;
-struct OS_ProcessLaunchParams
-{
-  String8List cmd_line;
-  String8 path;
-  String8List env;
-  B32 inherit_env;
-  B32 consoleless;
-};
-
-////////////////////////////////
 //~ rjf: Handle Type
 
 typedef struct OS_Handle OS_Handle;
@@ -121,6 +109,20 @@ struct OS_HandleArray
 {
   OS_Handle *v;
   U64 count;
+};
+
+////////////////////////////////
+//~ rjf: Process Launch Parameters
+
+typedef struct OS_ProcessLaunchParams OS_ProcessLaunchParams;
+struct OS_ProcessLaunchParams
+{
+  String8List cmd_line;
+  String8 path;
+  String8List env;
+  B32 inherit_env;
+  B32 consoleless;
+  OS_Handle stdout_file;
 };
 
 ////////////////////////////////

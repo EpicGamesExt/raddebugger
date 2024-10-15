@@ -44,59 +44,83 @@ entry_point(CmdLine *cmdline)
   B32 good = 1;
   String8List out = {0};
   {
-    name = str8_lit("PDB -> RDI determinism");
-    OS_HandleList processes = {0};
-    String8List rdi_paths = {0};
+    name = str8_lit("pdb2rdi_determinism");
     U64 num_repeats_per_pdb = 4;
     String8 pdb_paths[] =
     {
       str8_lit_comp("odintest/test.pdb"),
+      str8_lit_comp("mule_main.pdb"),
     };
     for EachElement(pdb_idx, pdb_paths)
     {
+      // rjf: unpack paths, make output directory
       String8 pdb_path = path_normalized_from_string(arena, pdb_paths[pdb_idx]);
       String8 pdb_folder = str8_chop_last_slash(pdb_path);
-      String8 repeat_folder = push_str8f(arena, "%S/pdb2rdi_determinism", pdb_folder);
+      String8 repeat_folder = push_str8f(arena, "%S/%S", pdb_folder, name);
       os_make_directory(repeat_folder);
-      for EachIndex(repeat_idx, num_repeats_per_pdb)
+      
+      // rjf: generate all RDIs
+      String8List rdi_paths = {0};
       {
-        String8 rdi_path = push_str8f(arena, "%S/repeat_%I64u.rdi", repeat_folder, repeat_idx);
-        str8_list_push(arena, &rdi_paths, rdi_path);
-        os_handle_list_push(arena, &processes, os_cmd_line_launchf("rdi_from_pdb --pdb:%S --out:%S", pdb_path, rdi_path));
+        OS_HandleList processes = {0};
+        for EachIndex(repeat_idx, num_repeats_per_pdb)
+        {
+          String8 rdi_path = push_str8f(arena, "%S/repeat_%I64u.rdi", repeat_folder, repeat_idx);
+          str8_list_push(arena, &rdi_paths, rdi_path);
+          os_handle_list_push(arena, &processes, os_cmd_line_launchf("rdi_from_pdb --pdb:%S --out:%S", pdb_path, rdi_path));
+        }
+        for(OS_HandleNode *n = processes.first; n != 0; n = n->next)
+        {
+          os_process_join(n->v, max_U64);
+        }
       }
-    };
-    for(OS_HandleNode *n = processes.first; n != 0; n = n->next)
-    {
-      os_process_join(n->v, max_U64);
-    }
-    U64 hashes_count = rdi_paths.node_count;
-    U128 *hashes = push_array(arena, U128, hashes_count);
-    String8 *paths = push_array(arena, String8, hashes_count);
-    {
-      U64 idx = 0;
-      for(String8Node *n = rdi_paths.first; n != 0; n = n->next, idx += 1)
+      
+      // rjf: generate all dumps
       {
-        String8 path = n->string;
-        String8 data = os_data_from_file_path(arena, path);
-        hashes[idx] = hs_hash_from_data(data);
-        paths[idx] = path;
+        OS_HandleList processes = {0};
+        for(String8Node *n = rdi_paths.first; n != 0; n = n->next)
+        {
+          String8 rdi_path = n->string;
+          String8 dump_path = push_str8f(arena, "%S.dump", rdi_path);
+          os_handle_list_push(arena, &processes, os_cmd_line_launchf("rdi_dump %S > %S", rdi_path, dump_path));
+        }
       }
-    }
-    B32 matches = 1;
-    for EachIndex(idx, hashes_count)
-    {
-      if(!u128_match(hashes[idx], hashes[0]))
+      
+      // rjf: gather all hashes/paths
+      U64 hashes_count = rdi_paths.node_count;
+      U128 *hashes = push_array(arena, U128, hashes_count);
+      String8 *paths = push_array(arena, String8, hashes_count);
       {
-        matches = 0;
-        break;
+        U64 idx = 0;
+        for(String8Node *n = rdi_paths.first; n != 0; n = n->next, idx += 1)
+        {
+          String8 path = n->string;
+          String8 data = os_data_from_file_path(arena, path);
+          hashes[idx] = hs_hash_from_data(data);
+          paths[idx] = path;
+        }
       }
-    }
-    if(!matches)
-    {
-      good = 0;
+      
+      // rjf: determine if all hashes match
+      B32 matches = 1;
       for EachIndex(idx, hashes_count)
       {
-        str8_list_pushf(arena, &out, " [%I64u] (%S): 0x%I64x:%I64x\n", idx, paths[idx], hashes[idx].u64[0], hashes[idx].u64[1]);
+        if(!u128_match(hashes[idx], hashes[0]))
+        {
+          matches = 0;
+          break;
+        }
+      }
+      
+      // rjf: output bad case info
+      if(!matches)
+      {
+        good = 0;
+        str8_list_pushf(arena, &out, "  pdb[%I64u] \"%S\"\n", pdb_idx, pdb_path);
+        for EachIndex(idx, hashes_count)
+        {
+          str8_list_pushf(arena, &out, "    rdi[%I64u] \"%S\": 0x%I64x:%I64x\n", idx, paths[idx], hashes[idx].u64[0], hashes[idx].u64[1]);
+        }
       }
     }
   }
@@ -104,7 +128,7 @@ entry_point(CmdLine *cmdline)
   //////////////////////////////
   //- rjf: dump results
   //
-  fprintf(stderr, "[%s] %.*s\n", good ? "." : "X", str8_varg(name));
+  fprintf(stderr, "[%s] \"%.*s\"\n", good ? "." : "X", str8_varg(name));
   if(!good)
   {
     for(String8Node *n = out.first; n != 0; n = n->next)

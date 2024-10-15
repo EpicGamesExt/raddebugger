@@ -293,14 +293,19 @@ os_file_open(OS_AccessFlags flags, String8 path)
   DWORD access_flags = 0;
   DWORD share_mode = 0;
   DWORD creation_disposition = OPEN_EXISTING;
+  SECURITY_ATTRIBUTES security_attributes = {sizeof(security_attributes), 0, 0};
   if(flags & OS_AccessFlag_Read)    {access_flags |= GENERIC_READ;}
   if(flags & OS_AccessFlag_Write)   {access_flags |= GENERIC_WRITE;}
   if(flags & OS_AccessFlag_Execute) {access_flags |= GENERIC_EXECUTE;}
   if(flags & OS_AccessFlag_ShareRead)  {share_mode |= FILE_SHARE_READ;}
   if(flags & OS_AccessFlag_ShareWrite) {share_mode |= FILE_SHARE_WRITE|FILE_SHARE_DELETE;}
   if(flags & OS_AccessFlag_Write)   {creation_disposition = CREATE_ALWAYS;}
-  if(flags & OS_AccessFlag_Append)  {creation_disposition = OPEN_ALWAYS;}
-  HANDLE file = CreateFileW((WCHAR *)path16.str, access_flags, share_mode, 0, creation_disposition, FILE_ATTRIBUTE_NORMAL, 0);
+  if(flags & OS_AccessFlag_Append)  {creation_disposition = OPEN_ALWAYS; access_flags |= FILE_APPEND_DATA; }
+  if(flags & OS_AccessFlag_Inherited)
+  {
+    security_attributes.bInheritHandle = 1;
+  }
+  HANDLE file = CreateFileW((WCHAR *)path16.str, access_flags, share_mode, &security_attributes, creation_disposition, FILE_ATTRIBUTE_NORMAL, 0);
   if(file != INVALID_HANDLE_VALUE)
   {
     result.u64[0] = (U64)file;
@@ -926,9 +931,17 @@ os_process_launch(OS_ProcessLaunchParams *params)
   }
   
   //- rjf: launch
+  BOOL inherit_handles = 0;
   STARTUPINFOW startup_info = {sizeof(startup_info)};
+  if(!os_handle_match(params->stdout_file, os_handle_zero()))
+  {
+    HANDLE stdout_handle = (HANDLE)params->stdout_file.u64[0];
+    startup_info.hStdOutput = stdout_handle;
+    startup_info.dwFlags |= STARTF_USESTDHANDLES;
+    inherit_handles = 1;
+  }
   PROCESS_INFORMATION process_info = {0};
-  if(CreateProcessW(0, (WCHAR*)cmd16.str, 0, 0, 0, creation_flags, use_null_env_arg ? 0 : (WCHAR*)env16.str, (WCHAR*)dir16.str, &startup_info, &process_info))
+  if(CreateProcessW(0, (WCHAR*)cmd16.str, 0, 0, inherit_handles, creation_flags, use_null_env_arg ? 0 : (WCHAR*)env16.str, (WCHAR*)dir16.str, &startup_info, &process_info))
   {
     result.u64[0] = (U64)process_info.hProcess;
     CloseHandle(process_info.hThread);
