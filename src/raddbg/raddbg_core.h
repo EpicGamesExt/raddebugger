@@ -792,6 +792,14 @@ struct RD_EntityListCache
   RD_EntityList list;
 };
 
+typedef struct RD_AmbiguousPathNode RD_AmbiguousPathNode;
+struct RD_AmbiguousPathNode
+{
+  RD_AmbiguousPathNode *next;
+  String8 name;
+  String8List paths;
+};
+
 typedef struct RD_State RD_State;
 struct RD_State
 {
@@ -815,6 +823,10 @@ struct RD_State
   F32 frame_dt;
   DI_Scope *frame_di_scope;
   FZY_Scope *frame_fzy_scope;
+  
+  // rjf: ambiguous path table
+  U64 ambiguous_path_slots_count;
+  RD_AmbiguousPathNode **ambiguous_path_slots;
   
   // rjf: registers stack
   RD_RegsNode base_regs;

@@ -949,17 +949,108 @@ rd_title_fstrs_from_view(Arena *arena, RD_View *view, Vec4F32 primary_color, Vec
   Temp scratch = scratch_begin(&arena, 1);
   String8 query = str8(view->query_buffer, view->query_string_size);
   String8 file_path = rd_file_path_from_eval_string(scratch.arena, query);
+  
+  //- rjf: query is file path - do specific file name strings
   if(file_path.size != 0)
   {
+    // rjf: compute disambiguated file name
+    String8List qualifiers = {0};
+    String8 file_name = str8_skip_last_slash(file_path);
+    if(rd_state->ambiguous_path_slots_count != 0)
+    {
+      U64 hash = d_hash_from_string__case_insensitive(file_name);
+      U64 slot_idx = hash%rd_state->ambiguous_path_slots_count;
+      RD_AmbiguousPathNode *node = 0;
+      {
+        for(RD_AmbiguousPathNode *n = rd_state->ambiguous_path_slots[slot_idx];
+            n != 0;
+            n = n->next)
+        {
+          if(str8_match(n->name, file_name, StringMatchFlag_CaseInsensitive))
+          {
+            node = n;
+            break;
+          }
+        }
+      }
+      if(node != 0 && node->paths.node_count > 1)
+      {
+        // rjf: get all colliding paths
+        String8Array collisions = str8_array_from_list(scratch.arena, &node->paths);
+        
+        // rjf: get all reversed path parts for each collision
+        String8List *collision_parts_reversed = push_array(scratch.arena, String8List, collisions.count);
+        for EachIndex(idx, collisions.count)
+        {
+          String8List parts = str8_split_path(scratch.arena, collisions.v[idx]);
+          for(String8Node *n = parts.first; n != 0; n = n->next)
+          {
+            str8_list_push_front(scratch.arena, &collision_parts_reversed[idx], n->string);
+          }
+        }
+        
+        // rjf: get the search path & its reversed parts
+        String8List parts = str8_split_path(scratch.arena, file_path);
+        String8List parts_reversed = {0};
+        for(String8Node *n = parts.first; n != 0; n = n->next)
+        {
+          str8_list_push_front(scratch.arena, &parts_reversed, n->string);
+        }
+        
+        // rjf: iterate all collision part reversed lists, in lock-step with
+        // search path; disqualify until we only have one path remaining; gather
+        // qualifiers
+        {
+          U64 num_collisions_left = collisions.count;
+          String8Node **collision_nodes = push_array(scratch.arena, String8Node *, collisions.count);
+          for EachIndex(idx, collisions.count)
+          {
+            collision_nodes[idx] = collision_parts_reversed[idx].first;
+          }
+          for(String8Node *n = parts_reversed.first; num_collisions_left > 1 && n != 0; n = n->next)
+          {
+            B32 part_is_qualifier = 0;
+            for EachIndex(idx, collisions.count)
+            {
+              if(collision_nodes[idx] != 0 && !str8_match(collision_nodes[idx]->string, n->string, StringMatchFlag_CaseInsensitive))
+              {
+                collision_nodes[idx] = 0;
+                num_collisions_left -= 1;
+                part_is_qualifier = 1;
+              }
+              else if(collision_nodes[idx] != 0)
+              {
+                collision_nodes[idx] = collision_nodes[idx]->next;
+              }
+            }
+            if(part_is_qualifier)
+            {
+              str8_list_push_front(scratch.arena, &qualifiers, n->string);
+            }
+          }
+        }
+      }
+    }
+    
+    // rjf: push qualifiers
+    for(String8Node *n = qualifiers.first; n != 0; n = n->next)
+    {
+      String8 string = push_str8f(arena, "<%S> ", n->string);
+      dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Main), size*0.95f, secondary_color, string);
+    }
+    
+    // rjf: push file name
     DR_FancyString fstr =
     {
       rd_font_from_slot(RD_FontSlot_Main),
-      push_str8_copy(arena, str8_skip_last_slash(file_path)),
+      push_str8_copy(arena, file_name),
       primary_color,
       size,
     };
     dr_fancy_string_list_push(arena, &result, &fstr);
   }
+  
+  //- rjf: query is not file path - do general case, for view rule & expression
   else
   {
     DR_FancyString fstr1 =
@@ -16503,6 +16594,55 @@ rd_frame(void)
     {
       rd_state->cmds_gen += 1;
     }
+  }
+  
+  //////////////////////////////
+  //- rjf: compute all ambiguous paths from view titles
+  //
+  {
+    Temp scratch = scratch_begin(0, 0);
+    rd_state->ambiguous_path_slots_count = 512;
+    rd_state->ambiguous_path_slots = push_array(rd_frame_arena(), RD_AmbiguousPathNode *, rd_state->ambiguous_path_slots_count);
+    for(RD_Window *w = rd_state->first_window; w != 0; w = w->next)
+    {
+      for(RD_Panel *p = w->root_panel; !rd_panel_is_nil(p); p = rd_panel_rec_depth_first_pre(p).next)
+      {
+        for(RD_View *v = p->first_tab_view; !rd_view_is_nil(v); v = v->order_next)
+        {
+          if(rd_view_is_project_filtered(v))
+          {
+            continue;
+          }
+          String8 eval_string = str8(v->query_buffer, v->query_string_size);
+          String8 file_path = rd_file_path_from_eval_string(scratch.arena, eval_string);
+          if(file_path.size != 0)
+          {
+            String8 name = str8_skip_last_slash(file_path);
+            U64 hash = d_hash_from_string__case_insensitive(name);
+            U64 slot_idx = hash%rd_state->ambiguous_path_slots_count;
+            RD_AmbiguousPathNode *node = 0;
+            for(RD_AmbiguousPathNode *n = rd_state->ambiguous_path_slots[slot_idx];
+                n != 0;
+                n = n->next)
+            {
+              if(str8_match(n->name, name, StringMatchFlag_CaseInsensitive))
+              {
+                node = n;
+                break;
+              }
+            }
+            if(node == 0)
+            {
+              node = push_array(rd_frame_arena(), RD_AmbiguousPathNode, 1);
+              SLLStackPush(rd_state->ambiguous_path_slots[slot_idx], node);
+              node->name = push_str8_copy(rd_frame_arena(), name);
+            }
+            str8_list_push(rd_frame_arena(), &node->paths, push_str8_copy(rd_frame_arena(), file_path));
+          }
+        }
+      }
+    }
+    scratch_end(scratch);
   }
   
   //////////////////////////////
