@@ -3481,7 +3481,7 @@ rdim_bake_inline_sites(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM
 {
   RDIM_InlineSiteBakeResult result = {0};
   {
-    result.inline_sites_count = src->total_count;
+    result.inline_sites_count = src->total_count+1;
     result.inline_sites = rdim_push_array(arena, RDI_InlineSite, result.inline_sites_count+1);
     RDI_U64 dst_idx = 1;
     for(RDIM_InlineSiteChunkNode *n = src->first; n != 0; n = n->next)
