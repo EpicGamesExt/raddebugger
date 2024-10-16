@@ -1011,7 +1011,7 @@ X(C11, 2)\
 X(C13, 4)\
 X(RESERVED, 5)
 
-typedef U16 CV_Signature;
+typedef U32 CV_Signature;
 typedef enum CV_SignatureEnum
 {
 #define X(N,c) CV_Signature_##N = c,

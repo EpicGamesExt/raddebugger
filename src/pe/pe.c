@@ -628,7 +628,6 @@ pe_get_entry_point_names(COFF_MachineType            machine,
     case PE_WindowsSubsystem_XBOX:
     case PE_WindowsSubsystem_WINDOWS_BOOT_APPLICATION: {
       // TODO
-	  NotImplemented;
     } break;
     }
   }
