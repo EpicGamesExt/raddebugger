@@ -3510,7 +3510,6 @@ rdim_bake_file_paths(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings, RDIM_B
 RDI_PROC RDIM_StringBakeResult
 rdim_bake_strings(RDIM_Arena *arena, RDIM_BakeStringMapTight *strings)
 {
-  RDIM_BakeSectionList sections = {0};
   RDI_U32 *str_offs = rdim_push_array_no_zero(arena, RDI_U32, strings->total_count + 1);
   RDI_U32 off_cursor = 0;
   {

@@ -40,7 +40,7 @@ ts_init(void)
   ts_shared->u2t_ring_base = push_array_no_zero(arena, U8, ts_shared->u2t_ring_size);
   ts_shared->u2t_ring_mutex = os_mutex_alloc();
   ts_shared->u2t_ring_cv = os_condition_variable_alloc();
-  ts_shared->task_threads_count = os_get_system_info()->logical_processor_count-1;
+  ts_shared->task_threads_count = Max(1, os_get_system_info()->logical_processor_count-1);
   ts_shared->task_threads = push_array(arena, TS_TaskThread, ts_shared->task_threads_count);
   for(U64 idx = 0; idx < ts_shared->task_threads_count; idx += 1)
   {

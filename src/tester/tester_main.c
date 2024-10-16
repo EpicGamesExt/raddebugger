@@ -48,7 +48,7 @@ entry_point(CmdLine *cmdline)
     U64 num_repeats_per_pdb = 4;
     String8 pdb_paths[] =
     {
-      str8_lit_comp("odintest/test.pdb"),
+      // str8_lit_comp("odintest/test.pdb"),
       str8_lit_comp("mule_main.pdb"),
     };
     for EachElement(pdb_idx, pdb_paths)
@@ -61,13 +61,14 @@ entry_point(CmdLine *cmdline)
       
       // rjf: generate all RDIs
       String8List rdi_paths = {0};
+      String8List dump_paths = {0};
       {
         OS_HandleList processes = {0};
         for EachIndex(repeat_idx, num_repeats_per_pdb)
         {
           String8 rdi_path = push_str8f(arena, "%S/repeat_%I64u.rdi", repeat_folder, repeat_idx);
           str8_list_push(arena, &rdi_paths, rdi_path);
-          os_handle_list_push(arena, &processes, os_cmd_line_launchf("rdi_from_pdb --pdb:%S --out:%S", pdb_path, rdi_path));
+          os_handle_list_push(arena, &processes, os_cmd_line_launchf("rdi_from_pdb --pdb:%S --out:%S > %S/repeat_%I64u.dump", pdb_path, rdi_path, repeat_folder, repeat_idx));
         }
         for(OS_HandleNode *n = processes.first; n != 0; n = n->next)
         {
@@ -82,30 +83,60 @@ entry_point(CmdLine *cmdline)
         {
           String8 rdi_path = n->string;
           String8 dump_path = push_str8f(arena, "%S.dump", rdi_path);
+          str8_list_push(arena, &dump_paths, dump_path);
           os_handle_list_push(arena, &processes, os_cmd_line_launchf("rdi_dump %S > %S", rdi_path, dump_path));
+        }
+        for(OS_HandleNode *n = processes.first; n != 0; n = n->next)
+        {
+          os_process_join(n->v, max_U64);
         }
       }
       
       // rjf: gather all hashes/paths
-      U64 hashes_count = rdi_paths.node_count;
-      U128 *hashes = push_array(arena, U128, hashes_count);
-      String8 *paths = push_array(arena, String8, hashes_count);
+      U64 rdi_hashes_count = rdi_paths.node_count;
+      U128 *rdi_hashes = push_array(arena, U128, rdi_hashes_count);
+      String8 *rdi_paths_array = push_array(arena, String8, rdi_hashes_count);
+      U64 dump_hashes_count = dump_paths.node_count;
+      U128 *dump_hashes = push_array(arena, U128, dump_hashes_count);
+      String8 *dump_paths_array = push_array(arena, String8, dump_hashes_count);
       {
         U64 idx = 0;
         for(String8Node *n = rdi_paths.first; n != 0; n = n->next, idx += 1)
         {
+          Temp scratch = scratch_begin(0, 0);
           String8 path = n->string;
-          String8 data = os_data_from_file_path(arena, path);
-          hashes[idx] = hs_hash_from_data(data);
-          paths[idx] = path;
+          String8 data = os_data_from_file_path(scratch.arena, path);
+          rdi_hashes[idx] = hs_hash_from_data(data);
+          rdi_paths_array[idx] = path;
+          scratch_end(scratch);
+        }
+      }
+      {
+        U64 idx = 0;
+        for(String8Node *n = dump_paths.first; n != 0; n = n->next, idx += 1)
+        {
+          Temp scratch = scratch_begin(0, 0);
+          String8 path = n->string;
+          String8 data = os_data_from_file_path(scratch.arena, path);
+          dump_hashes[idx] = hs_hash_from_data(data);
+          dump_paths_array[idx] = path;
+          scratch_end(scratch);
         }
       }
       
       // rjf: determine if all hashes match
       B32 matches = 1;
-      for EachIndex(idx, hashes_count)
+      for EachIndex(idx, rdi_hashes_count)
       {
-        if(!u128_match(hashes[idx], hashes[0]))
+        if(!u128_match(rdi_hashes[idx], rdi_hashes[0]))
+        {
+          matches = 0;
+          break;
+        }
+      }
+      for EachIndex(idx, dump_hashes_count)
+      {
+        if(!u128_match(dump_hashes[idx], dump_hashes[0]))
         {
           matches = 0;
           break;
@@ -117,9 +148,13 @@ entry_point(CmdLine *cmdline)
       {
         good = 0;
         str8_list_pushf(arena, &out, "  pdb[%I64u] \"%S\"\n", pdb_idx, pdb_path);
-        for EachIndex(idx, hashes_count)
+        for EachIndex(idx, rdi_hashes_count)
         {
-          str8_list_pushf(arena, &out, "    rdi[%I64u] \"%S\": 0x%I64x:%I64x\n", idx, paths[idx], hashes[idx].u64[0], hashes[idx].u64[1]);
+          str8_list_pushf(arena, &out, "    rdi[%I64u] \"%S\": 0x%I64x:%I64x\n", idx, rdi_paths_array[idx], rdi_hashes[idx].u64[0], rdi_hashes[idx].u64[1]);
+        }
+        for EachIndex(idx, dump_hashes_count)
+        {
+          str8_list_pushf(arena, &out, "    dump[%I64u] \"%S\": 0x%I64x:%I64x\n", idx, dump_paths_array[idx], dump_hashes[idx].u64[0], dump_hashes[idx].u64[1]);
         }
       }
     }

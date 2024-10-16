@@ -4,6 +4,8 @@
 ////////////////////////////////
 //~ rjf: post-0.9.12 TODO notes
 //
+// [ ] per-target stdout/stderr file output paths
+//
 // [ ] double click on breakpoints/watch-pins/etc. to go to location
 // [ ] auto view rule templates (?)
 // [ ] single-line visualization busted with auto-view-rules applied, it seems...

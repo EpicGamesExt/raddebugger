@@ -4488,7 +4488,7 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
     }
     
     // rjf: UDTs
-    ProfScope("kick off udts string map build tasks")
+    if(0) ProfScope("kick off udts string map build tasks")
     {
       U64 items_per_task = 4096;
       U64 num_tasks = (in_params->udts.total_count+items_per_task-1)/items_per_task;
@@ -4520,7 +4520,7 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
     }
     
     // rjf: symbols
-    ProfScope("kick off symbols string map build tasks")
+    if(0) ProfScope("kick off symbols string map build tasks")
     {
       RDIM_SymbolChunkList *symbol_lists[] =
       {
@@ -4561,7 +4561,7 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
     }
     
     // rjf: scope chunks
-    ProfScope("kick off scope chunks string map build tasks")
+    if(0) ProfScope("kick off scope chunks string map build tasks")
     {
       U64 items_per_task = 4096;
       U64 num_tasks = (in_params->scopes.total_count+items_per_task-1)/items_per_task;
@@ -4619,6 +4619,38 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
   }
   
   //////////////////////////////
+  //- rjf: [DEBUG] dump unsorted *per-thread* loose string maps
+  //
+#if 0
+  {
+    U64 slots_count = bake_string_map_topology.slots_count;
+    RDIM_BakeStringMapLoose **maps = bake_string_maps__in_progress;
+    U64 maps_count = ts_thread_count();
+    for EachIndex(map_idx, maps_count)
+    {
+      RDIM_BakeStringMapLoose *map = maps[map_idx];
+      if(map && map->slots != 0)
+      {
+        for EachIndex(slot_idx, slots_count)
+        {
+          RDIM_BakeStringChunkList *slot = map->slots[slot_idx];
+          if(slot != 0)
+          {
+            for(RDIM_BakeStringChunkNode *n = slot->first; n != 0; n = n->next)
+            {
+              for EachIndex(idx, n->count)
+              {
+                printf("string: %.*s\n", str8_varg(n->v[idx].string));
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+#endif
+  
+  //////////////////////////////
   //- rjf: produce joined string map
   //
   RDIM_BakeStringMapLoose *unsorted_bake_string_map = rdim_bake_string_map_loose_make(arena, &bake_string_map_topology);
@@ -4652,6 +4684,35 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
     rdim_bake_string_map_loose_push_binary_sections(arena, &bake_string_map_topology, unsorted_bake_string_map, &in_params->binary_sections);
     rdim_bake_string_map_loose_push_path_tree(arena, &bake_string_map_topology, unsorted_bake_string_map, path_tree);
   }
+  
+  //////////////////////////////
+  //- rjf: [DEBUG] dump unsorted *joined* loose string map
+  //
+#if 0
+  {
+    U64 string_idx = 0;
+    U64 slots_count = bake_string_map_topology.slots_count;
+    RDIM_BakeStringMapLoose *map = unsorted_bake_string_map;
+    if(map && map->slots != 0)
+    {
+      for EachIndex(slot_idx, slots_count)
+      {
+        RDIM_BakeStringChunkList *slot = map->slots[slot_idx];
+        if(slot != 0)
+        {
+          for(RDIM_BakeStringChunkNode *n = slot->first; n != 0; n = n->next)
+          {
+            for EachIndex(idx, n->count)
+            {
+              printf("string: %.*s\n", str8_varg(n->v[idx].string));
+              string_idx += 1;
+            }
+          }
+        }
+      }
+    }
+  }
+#endif
   
   //////////////////////////////
   //- rjf: kick off string map sorting tasks
@@ -4692,6 +4753,35 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
   RDIM_BakeStringMapLoose *sorted_bake_string_map = sorted_bake_string_map__in_progress;
   
   //////////////////////////////
+  //- rjf: [DEBUG] dump sorted, joined loose string map
+  //
+#if 0
+  {
+    U64 string_idx = 0;
+    U64 slots_count = bake_string_map_topology.slots_count;
+    RDIM_BakeStringMapLoose *map = sorted_bake_string_map;
+    if(map && map->slots != 0)
+    {
+      for EachIndex(slot_idx, slots_count)
+      {
+        RDIM_BakeStringChunkList *slot = map->slots[slot_idx];
+        if(slot != 0)
+        {
+          for(RDIM_BakeStringChunkNode *n = slot->first; n != 0; n = n->next)
+          {
+            for EachIndex(idx, n->count)
+            {
+              printf("string: %.*s\n", str8_varg(n->v[idx].string));
+              string_idx += 1;
+            }
+          }
+        }
+      }
+    }
+  }
+#endif
+  
+  //////////////////////////////
   //- rjf: build finalized string map
   //
   ProfBegin("build finalized string map base indices");
@@ -4700,6 +4790,25 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
   ProfBegin("build finalized string map");
   RDIM_BakeStringMapTight bake_strings = rdim_bake_string_map_tight_from_loose(arena, &bake_string_map_topology, &bake_string_map_base_idxes, sorted_bake_string_map);
   ProfEnd();
+  
+  //////////////////////////////
+  //- rjf: [DEBUG] dump sorted, joined tight string map
+  //
+#if 0
+  {
+    for EachIndex(slot_idx, bake_strings.slots_count)
+    {
+      RDIM_BakeStringChunkList *slot = &bake_strings.slots[slot_idx];
+      for(RDIM_BakeStringChunkNode *n = slot->first; n != 0; n = n->next)
+      {
+        for EachIndex(idx, n->count)
+        {
+          printf("string: %.*s\n", str8_varg(n->v[idx].string));
+        }
+      }
+    }
+  }
+#endif
   
   //////////////////////////////
   //- rjf: kick off pass 2 tasks

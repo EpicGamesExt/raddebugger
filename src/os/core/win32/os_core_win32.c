@@ -294,13 +294,13 @@ os_file_open(OS_AccessFlags flags, String8 path)
   DWORD share_mode = 0;
   DWORD creation_disposition = OPEN_EXISTING;
   SECURITY_ATTRIBUTES security_attributes = {sizeof(security_attributes), 0, 0};
-  if(flags & OS_AccessFlag_Read)    {access_flags |= GENERIC_READ;}
-  if(flags & OS_AccessFlag_Write)   {access_flags |= GENERIC_WRITE;}
-  if(flags & OS_AccessFlag_Execute) {access_flags |= GENERIC_EXECUTE;}
+  if(flags & OS_AccessFlag_Read)       {access_flags |= GENERIC_READ;}
+  if(flags & OS_AccessFlag_Write)      {access_flags |= GENERIC_WRITE;}
+  if(flags & OS_AccessFlag_Execute)    {access_flags |= GENERIC_EXECUTE;}
   if(flags & OS_AccessFlag_ShareRead)  {share_mode |= FILE_SHARE_READ;}
   if(flags & OS_AccessFlag_ShareWrite) {share_mode |= FILE_SHARE_WRITE|FILE_SHARE_DELETE;}
-  if(flags & OS_AccessFlag_Write)   {creation_disposition = CREATE_ALWAYS;}
-  if(flags & OS_AccessFlag_Append)  {creation_disposition = OPEN_ALWAYS; access_flags |= FILE_APPEND_DATA; }
+  if(flags & OS_AccessFlag_Write)      {creation_disposition = CREATE_ALWAYS;}
+  if(flags & OS_AccessFlag_Append)     {creation_disposition = OPEN_ALWAYS; access_flags |= FILE_APPEND_DATA; }
   if(flags & OS_AccessFlag_Inherited)
   {
     security_attributes.bInheritHandle = 1;

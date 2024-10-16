@@ -193,6 +193,8 @@ os_cmd_line_launch(String8 string)
     OS_Handle stdout_handle = {0};
     if(stdout_path.size != 0)
     {
+      OS_Handle file = os_file_open(OS_AccessFlag_Write|OS_AccessFlag_Read, stdout_path);
+      os_file_close(file);
       stdout_handle = os_file_open(OS_AccessFlag_Write|OS_AccessFlag_Append|OS_AccessFlag_ShareRead|OS_AccessFlag_ShareWrite|OS_AccessFlag_Inherited, stdout_path);
     }
     
@@ -210,6 +212,14 @@ os_cmd_line_launch(String8 string)
     params.inherit_env = 1;
     params.stdout_file = stdout_handle;
     handle = os_process_launch(&params);
+    
+    // rjf: close stdout handle
+    {
+      if(stdout_path.size != 0)
+      {
+        os_file_close(stdout_handle);
+      }
+    }
   }
   scratch_end(scratch);
   return handle;
