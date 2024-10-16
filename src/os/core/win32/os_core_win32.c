@@ -1362,8 +1362,12 @@ win32_exception_filter(EXCEPTION_POINTERS* exception_ptrs)
       HANDLE thread = GetCurrentThread();
       CONTEXT* context = exception_ptrs->ContextRecord;
       
+      WCHAR module_path[MAX_PATH];
+      GetModuleFileNameW(NULL, module_path, ArrayCount(module_path));
+      PathRemoveFileSpecW(module_path);
+      
       dbg_SymSetOptions(SYMOPT_EXACT_SYMBOLS | SYMOPT_FAIL_CRITICAL_ERRORS | SYMOPT_LOAD_LINES | SYMOPT_UNDNAME);
-      if(dbg_SymInitializeW(process, L"", TRUE))
+      if(dbg_SymInitializeW(process, module_path, TRUE))
       {
         // check that raddbg.pdb file is good
         B32 raddbg_pdb_valid = 0;
