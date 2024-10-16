@@ -4639,7 +4639,7 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
             {
               for EachIndex(idx, n->count)
               {
-                printf("string: %.*s\n", str8_varg(n->v[idx].string));
+                printf("string: \"%.*s\"\n", str8_varg(n->v[idx].string));
               }
             }
           }

@@ -45,7 +45,7 @@ entry_point(CmdLine *cmdline)
   String8List out = {0};
   {
     name = str8_lit("pdb2rdi_determinism");
-    U64 num_repeats_per_pdb = 4;
+    U64 num_repeats_per_pdb = 16;
     String8 pdb_paths[] =
     {
       // str8_lit_comp("odintest/test.pdb"),

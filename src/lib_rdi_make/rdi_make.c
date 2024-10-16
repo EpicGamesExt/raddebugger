@@ -1345,7 +1345,7 @@ rdim_bake_string_chunk_list_sorted_from_unsorted(RDIM_Arena *arena, RDIM_BakeStr
       // build new sort tasks for buckets with many elements
       {
         RDI_U64 write_idx = 0;
-        for(U64 bucket_idx = 0; bucket_idx < 256; bucket_idx += 1)
+        for(RDI_U64 bucket_idx = 0; bucket_idx < 256; bucket_idx += 1)
         {
           // rjf: write each chunk node's array into original array, detect if there is size left to sort
           RDI_U64 bucket_base_idx = write_idx;
@@ -1378,6 +1378,57 @@ rdim_bake_string_chunk_list_sorted_from_unsorted(RDIM_Arena *arena, RDIM_BakeStr
     }
     scratch_end(scratch);
   }
+  
+  //- rjf: iterate sorted chunk node, remove duplicates, count # to pop
+  RDI_U64 num_to_pop = 0;
+  RDI_U64 arena_pos_pre_pop = rdim_arena_pos(arena);
+  if(dst.first != 0)
+  {
+    RDI_U64 last_idx = 0;
+    for(RDI_U64 idx = 1; idx < dst.first->count; idx += 1)
+    {
+      if(rdim_str8_match(dst.first->v[last_idx].string, dst.first->v[idx].string, 0))
+      {
+        rdim_memzero_struct(&dst.first->v[idx]);
+        num_to_pop += 1;
+      }
+      else
+      {
+        last_idx = idx;
+      }
+    }
+  }
+  
+  //- rjf: iterate sorted chunk node, make non-empty elements contiguous
+  if(num_to_pop != 0)
+  {
+    RDI_U64 last_idx = 0;
+    for(RDI_U64 idx = 1; idx < dst.first->count; idx += 1)
+    {
+      if(dst.first->v[idx].string.RDIM_String8_SizeMember == 0 &&
+         dst.first->v[idx].hash == 0)
+      {
+        last_idx = idx;
+      }
+      else if(last_idx != 0 && last_idx != idx)
+      {
+        rdim_memcpy_struct(&dst.first->v[last_idx], &dst.first->v[idx]);
+        rdim_memzero_struct(&dst.first->v[idx]);
+        idx = last_idx;
+        last_idx = 0;
+      }
+    }
+    
+    //- rjf: pop extras
+    if(num_to_pop != 0)
+    {
+      rdim_arena_pop_to(arena, arena_pos_pre_pop - num_to_pop*sizeof(dst.first->v[0]));
+      dst.first->count -= num_to_pop;
+      dst.first->cap -= num_to_pop;
+      dst.total_count -= num_to_pop;
+    }
+  }
+  
   
   return dst;
 }
