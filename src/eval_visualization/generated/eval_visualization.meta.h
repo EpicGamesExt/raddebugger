@@ -21,6 +21,7 @@ EV_ViewRuleKind_Bin,
 EV_ViewRuleKind_Oct,
 EV_ViewRuleKind_Dec,
 EV_ViewRuleKind_Hex,
+EV_ViewRuleKind_NoAddress,
 EV_ViewRuleKind_COUNT,
 } EV_ViewRuleKind;
 

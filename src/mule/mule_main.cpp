@@ -412,6 +412,26 @@ type_coverage_eval_tests(void){
     int b = a*5;
   }
   
+  char *names[] =
+  {
+    "samwise gamgee", "mithrandir", "grima wormtongue", "theodred", "theoden", "eomer", "eowyn",
+    "arwen", "sauron", "baggins", "proudfoot", "hardbottle", "bag end", "hobbiton",
+    "bree", "imladris", "isengard", "moria", "mount doom", "helm's deep", "bracegirdle",
+    "buckleberry ferry", "amun sul", "frodo", "bilbo", "buckland", "fangorn", "elrond",
+    "numenor", "treebeard", "shadowfax", "brego", "erod", "azufel", "dunedain",
+    "saruman", "aragorn", "gandalf", "meriadoc brandybuck", "peregrine took", "faramir", "boromir",
+    "ecthelion", "denethor", "mithrandil", "isildur", "haldir", "elessar", "elendil",
+    "dead marsh", "rohan", "gondor", "anarion", "earendil", "cirith ungol", "minas morghul",
+    "minas tirith", "barad-dur", "rivendell", "pellenor", "ithilien", "anduril", "narsil",
+    "edoras", "mordor", "osgiliath",
+  };
+  
+  for(int i = 0; i < sizeof(names)/sizeof(names[0]); i += 1)
+  {
+    OutputDebugStringA(names[i]);
+    OutputDebugStringA("\n");
+  }
+  
   int x = (int)(Anonymous_D);
 }
 

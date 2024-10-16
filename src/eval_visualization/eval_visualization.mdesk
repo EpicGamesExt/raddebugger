@@ -104,6 +104,7 @@ EV_ViewRuleTable:
   {x  Oct        oct         "oct"                        x   -   -   -                    "Display In Octal"            x       ""                                                             "Specifies that all numeric values should be shown in base 8 (octal)."                                                                                                       }
   {x  Dec        dec         "dec"                        x   -   -   -                    "Display In Decimal"          x       ""                                                             "Specifies that all numeric values should be shown in base 10 (decimal)."                                                                                                    }
   {x  Hex        hex         "hex"                        x   -   -   -                    "Display In Hexadecimal"      x       ""                                                             "Specifies that all numeric values should be shown in base 16 (hexadecimal)."                                                                                                }
+  {x  NoAddress  no_addr     "no_addr"                    x   -   -   -                    "Omit Addresses"              x       ""                                                             "Specifies that addresses should be omitted from visualizations, if possible."                                                                                               }
 }
 
 @enum EV_ViewRuleKind:
