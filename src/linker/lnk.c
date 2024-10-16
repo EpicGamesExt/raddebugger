@@ -4087,20 +4087,24 @@ lnk_run(int argc, char **argv)
           ProfEnd();
         }
 
-        switch (config->guid_type) {
-        case LNK_DebugInfoGuid_Null: break;
-        case Lnk_DebugInfoGuid_ImageBlake3: {
-          ProfBegin("Hash Image With Blake3");
-          LNK_Symbol *guid_symbol = lnk_symbol_table_searchf(symtab, LNK_SymbolScopeFlag_Internal, LNK_CV_HEADER_GUID_SYMBOL_NAME);
-          U64         guid_foff   = lnk_file_off_from_symbol(sect_id_map, guid_symbol);
+        LNK_Symbol *guid_symbol = lnk_symbol_table_searchf(symtab, LNK_SymbolScopeFlag_Internal, LNK_CV_HEADER_GUID_SYMBOL_NAME);
+        if (guid_symbol) {
+          Assert(build_debug_info);
 
-          U128 hash = lnk_blake3_hash_parallel(tp, 128, image_data);
+          switch (config->guid_type) {
+          case LNK_DebugInfoGuid_Null: break;
+          case Lnk_DebugInfoGuid_ImageBlake3: {
+            ProfBegin("Hash Image With Blake3");
 
-          OS_Guid *guid_ptr = (OS_Guid *)(image_data.str + guid_foff);
-          MemoryCopy(guid_ptr, hash.u64, sizeof(hash.u64));
+            U128 hash = lnk_blake3_hash_parallel(tp, 128, image_data);
 
-          ProfEnd();
-        } break;
+            U64      guid_foff = lnk_file_off_from_symbol(sect_id_map, guid_symbol);
+            OS_Guid *guid_ptr  = (OS_Guid *)(image_data.str + guid_foff);
+            MemoryCopy(guid_ptr, hash.u64, sizeof(hash.u64));
+
+            ProfEnd();
+          } break;
+          }
         }
 
         LNK_WriteThreadContext *ctx = push_array(scratch.arena, LNK_WriteThreadContext, 1);
