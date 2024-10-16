@@ -2858,7 +2858,7 @@ rd_range_from_eval_params(E_Eval eval, MD_Node *params)
   }
   if(size == 0)
   {
-    size = KB(64);
+    size = KB(16);
   }
   Rng1U64 result = {0};
   result.min = rd_base_offset_from_eval(eval);
