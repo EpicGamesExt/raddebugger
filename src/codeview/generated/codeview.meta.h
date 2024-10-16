@@ -381,6 +381,7 @@ CV_BasicType_PTR = 0xf0,
 typedef U16 CV_LeafKind;
 typedef enum CV_LeafKindEnum
 {
+CV_LeafKind_NOTYPE = 0x0000,
 CV_LeafKind_MODIFIER_16t = 0x0001,
 CV_LeafKind_POINTER_16t = 0x0002,
 CV_LeafKind_ARRAY_16t = 0x0003,
@@ -505,6 +506,13 @@ CV_LeafKind_BINTERFACE = 0x151a,
 CV_LeafKind_VECTOR = 0x151b,
 CV_LeafKind_MATRIX = 0x151c,
 CV_LeafKind_VFTABLE = 0x151d,
+CV_LeafKind_FUNC_ID = 0x1601,
+CV_LeafKind_MFUNC_ID = 0x1602,
+CV_LeafKind_BUILDINFO = 0x1603,
+CV_LeafKind_SUBSTR_LIST = 0x1604,
+CV_LeafKind_STRING_ID = 0x1605,
+CV_LeafKind_UDT_SRC_LINE = 0x1606,
+CV_LeafKind_UDT_MOD_SRC_LINE = 0x1607,
 CV_LeafKind_CLASS2 = 0x1608,
 CV_LeafKind_STRUCT2 = 0x1609,
 } CV_LeafKindEnum;

@@ -158,6 +158,45 @@ like remote debugging, porting to different architectures, further improving
 the debugger's features (like improving the visualization engine), and so on.
 But for now, we're mostly focused on those first two phases.
 
+---
+
+# The RAD Linker
+
+The RAD Linker is a new performance linker for generating x64 PE/COFF binaries. It is designed to be very fast when creating gigantic executables. It generates standard PDB files for debugging, but it can also optionally create RAD Debugger debug info too (useful for huge executables that otherwise create broken PDBs that overflow internal 32-bit tables).
+
+The RAD Linker is primarily optimized to handle huge linking projects - in our test cases (where debug info is multiple gigabytes), we see 50% faster link times. 
+
+The command line syntax is fully compatible with MSVC and you can get a full list of implemented switches from `/help`.
+
+Our current designed-for use case for the linker is to help with the compile-debug cycle of huge projects. We don't yet have support for dead-code-elimination or link-time-optimizations, but these features are on the road map.
+
+By default, the RAD linker spawns as many threads as there are cores, so if you plan to run multiple linkers in parallel, you can limit the number of thread workers via `/rad_workers`.
+
+We also have support for large memory pages, which, when enabled, reduce link time by
+another 25%. To link with large pages, you need to explicitly request them via `/rad_large_pages`. Large pages are off by default, since Windows support for large pages is a bit buggy - we recommend they only be used in Docker or VM images where the environment is reset after each link. In a standard Windows environment, using large pages otherwise will fragment memory quickly forcing a reboot. We are working on a Linux port of the linker that will be able to build with large pages robustly.
+
+## Short Term Roadmap
+- Porting linker to Linux (for Windows executables, just running on Linux).
+- Debug info features
+  - Get DWARF debug info converter up-and-running.
+  - Smooth out rough edges in RADDBGI builder.
+  - Improve build speed further (especially for tiny and mid sizes projects).
+- Other features to come
+  - Dead-code-elimination via `/opt:ref`.
+  - Link Time Optimizations with the help of clang (we won't support LTCG from MSVC compiler since it is undocumented).
+
+## To build the RAD Linker
+- Setup development environment, [see](#Development-Setup-Instructions)
+- Run `build linker release` or if you have clang installed `build linker release clang`. We favor latter option for better code generation.
+
+If build was successful linker executable will be placed in `build` folder under `radlink.exe`.
+
+## Benchmarks
+
+![AMD Ryzen Threadripper PRO 3995WX 64-Cores, 256 GiB RAM (Windows x64)](https://github.com/user-attachments/assets/39d95fdf-9f0b-45d3-9fb8-90d8ac624168)
+
+---
+
 ## Top-Level Directory Descriptions
 
 - `data`: Small binary files which are used when building, either to embed

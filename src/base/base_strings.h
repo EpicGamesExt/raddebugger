@@ -86,6 +86,7 @@ enum
 
 typedef enum PathStyle
 {
+  PathStyle_Null,
   PathStyle_Relative,
   PathStyle_WindowsAbsolute,
   PathStyle_UnixAbsolute,

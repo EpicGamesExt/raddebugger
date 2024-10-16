@@ -58,6 +58,10 @@ arena_alloc_(ArenaParams *params)
   arena->pos = ARENA_HEADER_SIZE;
   arena->cmt = commit_size;
   arena->res = reserve_size;
+#if ARENA_FREE_LIST
+  arena->free_size = 0;
+  arena->free_last = 0;
+#endif
   AsanPoisonMemoryRegion(base, commit_size);
   AsanUnpoisonMemoryRegion(base, ARENA_HEADER_SIZE);
   return arena;
@@ -85,18 +89,45 @@ arena_push(Arena *arena, U64 size, U64 align)
   // rjf: chain, if needed
   if(current->res < pos_pst && !(arena->flags & ArenaFlag_NoChain))
   {
-    U64 res_size = current->res_size;
-    U64 cmt_size = current->cmt_size;
-    if(size + ARENA_HEADER_SIZE > res_size)
+    Arena *new_block = 0;
+
+#if ARENA_FREE_LIST
+    Arena *prev_block;
+    for(new_block = arena->free_last, prev_block = 0; new_block != 0; prev_block = new_block, new_block = new_block->prev)
     {
-      res_size = size + ARENA_HEADER_SIZE;
-      cmt_size = size + ARENA_HEADER_SIZE;
+      if(new_block->res >= AlignPow2(size, align))
+      {
+        if(prev_block)
+        {
+          prev_block->prev = new_block->prev;
+        }
+        else
+        {
+          arena->free_last = new_block->prev;
+        }
+        arena->free_size -= new_block->res_size;
+		AsanUnpoisonMemoryRegion((U8*)new_block + ARENA_HEADER_SIZE, new_block->res_size - ARENA_HEADER_SIZE);
+        break;
+      }
     }
-    Arena *new_block = arena_alloc(.reserve_size = res_size,
-                                   .commit_size = cmt_size,
-                                   .flags = current->flags);
-    new_block->base_pos = current->base_pos + current->res;
-    SLLStackPush_N(arena->current, new_block, prev);
+#endif
+
+    if(new_block == 0)
+    {
+      U64 res_size = current->res_size;
+      U64 cmt_size = current->cmt_size;
+      if(size + ARENA_HEADER_SIZE > res_size)
+      {
+        res_size = size + ARENA_HEADER_SIZE;
+        cmt_size = size + ARENA_HEADER_SIZE;
+      }
+      new_block = arena_alloc(.reserve_size = res_size,
+                              .commit_size = cmt_size,
+                              .flags = current->flags);
+      new_block->base_pos = current->base_pos + current->res;
+      SLLStackPush_N(arena->current, new_block, prev);
+    }
+
     current = new_block;
     pos_pre = AlignPow2(current->pos, align);
     pos_pst = pos_pre + size;
@@ -155,11 +186,23 @@ arena_pop_to(Arena *arena, U64 pos)
 {
   U64 big_pos = ClampBot(ARENA_HEADER_SIZE, pos);
   Arena *current = arena->current;
+
+#if ARENA_FREE_LIST
+  for(Arena *prev = 0; current->base_pos >= big_pos; current = prev)
+  {
+    prev = current->prev;
+    current->pos = ARENA_HEADER_SIZE;
+    arena->free_size += current->res_size;
+    SLLStackPush_N(arena->free_last, current, prev);
+    AsanPoisonMemoryRegion((U8*)current + ARENA_HEADER_SIZE, current->res_size - ARENA_HEADER_SIZE);
+  }
+#else
   for(Arena *prev = 0; current->base_pos >= big_pos; current = prev)
   {
     prev = current->prev;
     os_release(current, current->res);
   }
+#endif
   arena->current = current;
   U64 new_pos = big_pos - current->base_pos;
   AssertAlways(new_pos <= current->pos);

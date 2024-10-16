@@ -9,9 +9,15 @@
 ////////////////////////////////
 //~ rjf: CodeView Format Shared Types
 
-typedef U32 CV_TypeId;
-typedef U32 CV_ItemId;
+#define CV_TypeIndex_Max max_U32
+typedef U32 CV_TypeIndex;
+typedef CV_TypeIndex CV_TypeId;
+typedef CV_TypeIndex CV_ItemId;
+
+#define CV_ModIndex_Max     max_U16
+#define CV_ModIndex_Invalid CV_ModIndex_Max
 typedef U16 CV_ModIndex;
+
 typedef U16 CV_SectionIndex;
 typedef U16 CV_Reg;
 
@@ -1005,7 +1011,7 @@ X(C11, 2)\
 X(C13, 4)\
 X(RESERVED, 5)
 
-typedef U16 CV_Signature;
+typedef U32 CV_Signature;
 typedef enum CV_SignatureEnum
 {
 #define X(N,c) CV_Signature_##N = c,
@@ -1252,8 +1258,8 @@ struct CV_SymAnnotation
 
 //- (SymKind: OBJNAME)
 
-typedef struct CV_SymObjname CV_SymObjname;
-struct CV_SymObjname
+typedef struct CV_SymObjName CV_SymObjName;
+struct CV_SymObjName
 {
   U32 sig;
   // U8[] name (null terminated)
@@ -1374,19 +1380,19 @@ struct CV_SymData32
 
 //- (SymKind: PUB32)
 
-typedef U32 CV_PubFlags;
+typedef U32 CV_Pub32Flags;
 enum
 {
-  CV_PubFlag_Code        = (1 << 0),
-  CV_PubFlag_Function    = (1 << 1),
-  CV_PubFlag_ManagedCode = (1 << 2),
-  CV_PubFlag_MSIL        = (1 << 3),
+  CV_Pub32Flag_Code        = (1 << 0),
+  CV_Pub32Flag_Function    = (1 << 1),
+  CV_Pub32Flag_ManagedCode = (1 << 2),
+  CV_Pub32Flag_MSIL        = (1 << 3),
 };
 
 typedef struct CV_SymPub32 CV_SymPub32;
 struct CV_SymPub32
 {
-  CV_PubFlags flags;
+  CV_Pub32Flags flags;
   U32 off;
   CV_SectionIndex sec;
   // U8[] name (null terminated)
@@ -1695,6 +1701,24 @@ struct CV_SymDiscarded
 };
 
 //- (SymKind: COMPILE3)
+typedef U32 CV_Compile3Flags;
+enum
+{
+  CV_Compile3Flag_EC             = (1 << 8),
+  CV_Compile3Flag_NoDbgInfo      = (1 << 9),
+  CV_Compile3Flag_LTCG           = (1 << 10),
+  CV_Compile3Flag_NoDataAlign    = (1 << 11),
+  CV_Compile3Flag_ManagedPresent = (1 << 12),
+  CV_Compile3Flag_SecurityChecks = (1 << 13),
+  CV_Compile3Flag_HotPatch       = (1 << 14),
+  CV_Compile3Flag_CVTCIL         = (1 << 15),
+  CV_Compile3Flag_MSILModule     = (1 << 16),
+  CV_Compile3Flag_SDL            = (1 << 17),
+  CV_Compile3Flag_PGO            = (1 << 18),
+  CV_Compile3Flag_EXP            = (1 << 19),
+
+  CV_Compile3Flag_Language_Shift = 0, CV_Compile3Flag_Language_Mask = 0xff,
+};
 
 typedef U32 CV_Compile3Flags;
 #define CV_Compile3Flags_ExtractLanguage(f)        (((f)    )&0xFF)
@@ -1802,6 +1826,8 @@ struct CV_SymDefrangeFramepointerRel
 };
 
 //- (SymKind: DEFRANGE_SUBFIELD_REGISTER)
+
+#define CV_DefrangeSubfieldRegister_ExtractParentOffset(x) ((x) & 0x1FFF)
 
 typedef struct CV_SymDefrangeSubfieldRegister CV_SymDefrangeSubfieldRegister;
 struct CV_SymDefrangeSubfieldRegister
@@ -2056,24 +2082,6 @@ struct CV_SymInlinees
 //   (type info)
 //
 
-#define CV_LeafIDKindXList(X) \
-X(FUNC_ID, 0x1601)\
-X(MFUNC_ID, 0x1602)\
-X(BUILDINFO, 0x1603)\
-X(SUBSTR_LIST, 0x1604)\
-X(STRING_ID, 0x1605)\
-X(UDT_SRC_LINE, 0x1606)\
-X(UDT_MOD_SRC_LINE, 0x1607)
-
-typedef U16 CV_LeafIDKind;
-typedef enum CV_LeafIDKindEnum
-{
-#define X(N,c) CV_LeafIDKind_##N = c,
-  CV_LeafIDKindXList(X)
-#undef X
-}
-CV_LeafIDKindEnum;
-
 #define CV_TypeId_Variadic 0
 
 #define CV_BasicPointerKindXList(X) \
@@ -2285,8 +2293,16 @@ struct CV_LeafPreComp
 {
   U32 start_index;
   U32 count;
-  U32 signature;
+  U32 sig;
   // U8[] name (null terminated)
+};
+
+//- (LeafKind; END_PRECOMP)
+
+typedef struct CV_LeafEndPreComp CV_LeafEndPreComp;
+struct CV_LeafEndPreComp
+{
+  U32 sig;
 };
 
 //- (LeafKind: TYPESERVER)
@@ -3004,6 +3020,7 @@ typedef struct CV_C13InlineeLinesParsed CV_C13InlineeLinesParsed;
 struct CV_C13InlineeLinesParsed
 {
   CV_ItemId inlinee;
+  U32 file_off;
   String8 file_name;
   U32 first_source_ln;
   U32 extra_file_count;
@@ -3067,6 +3084,7 @@ internal U64 cv_hash_from_string(String8 string);
 internal U64 cv_hash_from_item_id(CV_ItemId item_id);
 
 internal CV_NumericParsed cv_numeric_from_data_range(U8 *first, U8 *opl);
+internal U64 cv_read_numeric(String8 data, U64 offset, CV_NumericParsed *out);
 
 internal B32 cv_numeric_fits_in_u64(CV_NumericParsed *num);
 internal B32 cv_numeric_fits_in_s64(CV_NumericParsed *num);
@@ -3098,8 +3116,6 @@ internal CV_LeafParsed *cv_leaf_from_data(Arena *arena, String8 leaf_data, CV_Ty
 ////////////////////////////////
 //~ CodeView C13 Parser Functions
 
-typedef struct PDB_Strtbl PDB_Strtbl;
-typedef struct PDB_CoffSectionArray PDB_CoffSectionArray;
-internal CV_C13Parsed *cv_c13_parsed_from_data(Arena *arena, String8 c13_data, struct PDB_Strtbl *strtbl, struct PDB_CoffSectionArray *sections);
+internal CV_C13Parsed *cv_c13_parsed_from_data(Arena *arena, String8 c13_data, String8 strtbl, COFF_SectionHeaderArray sections);
 
 #endif // CODEVIEW_H

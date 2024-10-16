@@ -447,6 +447,7 @@ String8 result = str8_lit("<Unknown CV_LeafKind>");
 switch(v)
 {
 default:{}break;
+case CV_LeafKind_NOTYPE:{result = str8_lit("NOTYPE");}break;
 case CV_LeafKind_MODIFIER_16t:{result = str8_lit("MODIFIER_16t");}break;
 case CV_LeafKind_POINTER_16t:{result = str8_lit("POINTER_16t");}break;
 case CV_LeafKind_ARRAY_16t:{result = str8_lit("ARRAY_16t");}break;
@@ -571,6 +572,13 @@ case CV_LeafKind_BINTERFACE:{result = str8_lit("BINTERFACE");}break;
 case CV_LeafKind_VECTOR:{result = str8_lit("VECTOR");}break;
 case CV_LeafKind_MATRIX:{result = str8_lit("MATRIX");}break;
 case CV_LeafKind_VFTABLE:{result = str8_lit("VFTABLE");}break;
+case CV_LeafKind_FUNC_ID:{result = str8_lit("FUNC_ID");}break;
+case CV_LeafKind_MFUNC_ID:{result = str8_lit("MFUNC_ID");}break;
+case CV_LeafKind_BUILDINFO:{result = str8_lit("BUILDINFO");}break;
+case CV_LeafKind_SUBSTR_LIST:{result = str8_lit("SUBSTR_LIST");}break;
+case CV_LeafKind_STRING_ID:{result = str8_lit("STRING_ID");}break;
+case CV_LeafKind_UDT_SRC_LINE:{result = str8_lit("UDT_SRC_LINE");}break;
+case CV_LeafKind_UDT_MOD_SRC_LINE:{result = str8_lit("UDT_MOD_SRC_LINE");}break;
 case CV_LeafKind_CLASS2:{result = str8_lit("CLASS2");}break;
 case CV_LeafKind_STRUCT2:{result = str8_lit("STRUCT2");}break;
 }
@@ -592,7 +600,7 @@ case CV_SymKind_OEM:{result = sizeof(CV_SymOEM);}break;
 case CV_SymKind_VFTABLE32:{result = sizeof(CV_SymVPath32);}break;
 case CV_SymKind_FRAMEPROC:{result = sizeof(CV_SymFrameproc);}break;
 case CV_SymKind_ANNOTATION:{result = sizeof(CV_SymAnnotation);}break;
-case CV_SymKind_OBJNAME:{result = sizeof(CV_SymObjname);}break;
+case CV_SymKind_OBJNAME:{result = sizeof(CV_SymObjName);}break;
 case CV_SymKind_THUNK32:{result = sizeof(CV_SymThunk32);}break;
 case CV_SymKind_BLOCK32:{result = sizeof(CV_SymBlock32);}break;
 case CV_SymKind_LABEL32:{result = sizeof(CV_SymLabel32);}break;
@@ -696,6 +704,13 @@ case CV_LeafKind_ONEMETHOD:{result = sizeof(CV_LeafOneMethod);}break;
 case CV_LeafKind_NESTTYPEEX:{result = sizeof(CV_LeafNestTypeEx);}break;
 case CV_LeafKind_TYPESERVER2:{result = sizeof(CV_LeafTypeServer2);}break;
 case CV_LeafKind_INTERFACE:{result = sizeof(CV_LeafStruct);}break;
+case CV_LeafKind_FUNC_ID:{result = sizeof(CV_LeafFuncId);}break;
+case CV_LeafKind_MFUNC_ID:{result = sizeof(CV_LeafMFuncId);}break;
+case CV_LeafKind_BUILDINFO:{result = sizeof(CV_LeafBuildInfo);}break;
+case CV_LeafKind_SUBSTR_LIST:{result = sizeof(CV_LeafSubstrList);}break;
+case CV_LeafKind_STRING_ID:{result = sizeof(CV_LeafStringId);}break;
+case CV_LeafKind_UDT_SRC_LINE:{result = sizeof(CV_LeafUDTSrcLine);}break;
+case CV_LeafKind_UDT_MOD_SRC_LINE:{result = sizeof(CV_LeafUDTModSrcLine);}break;
 case CV_LeafKind_CLASS2:{result = sizeof(CV_LeafStruct2);}break;
 case CV_LeafKind_STRUCT2:{result = sizeof(CV_LeafStruct2);}break;
 }

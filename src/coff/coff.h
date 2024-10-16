@@ -556,6 +556,11 @@ typedef U32 COFF_FeatFlags;
 
 #define COFF_RES_ALIGN 4u
 
+read_only U8 g_coff_res_magic[] = {
+  0x00, 0x00, 0x00, 0x00, 0x20, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0xFF, 0xFF, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+};
+
 typedef struct COFF_ResourceHeaderPrefix
 {
   U32 data_size;
@@ -643,14 +648,12 @@ typedef struct COFF_ResourceDirEntry
 
 ////////////////////////////////
 
-// !<arch>\n
-#define COFF_ARCHIVE_SIG 0x0A3E686372613C21ULL
-// !<thin>\n
-#define COFF_THIN_ARCHIVE_SIG 0xA3E6E6968743C21ULL
+read_only global U8 g_coff_archive_sig[8]      = "!<arch>\n";
+read_only global U8 g_coff_thin_archive_sig[8] = "!<thin>\n";
 
+#define COFF_ARCHIVE_ALIGN               2
 #define COFF_ARCHIVE_MAX_SHORT_NAME_SIZE 15
-
-#define COFF_ARCHIVE_ALIGN 2
+#define COFF_ARCHIVE_MEMBER_HEADER_SIZE  60
 
 typedef struct COFF_ArchiveMemberHeader
 {
@@ -818,6 +821,14 @@ typedef struct COFF_ArchiveParse
 } COFF_ArchiveParse;
 
 ////////////////////////////////
+
+typedef struct COFF_SectionHeaderArray
+{
+  U64 count;
+  COFF_SectionHeader *v;
+} COFF_SectionHeaderArray;
+
+////////////////////////////////
 //~ rjf: Globals
 
 read_only global COFF_SectionHeader coff_section_header_nil = {0};
@@ -844,17 +855,47 @@ internal COFF_Symbol32Array  coff_symbol_array_from_data(Arena *arena, String8 d
 internal COFF_Symbol16Node * coff_symbol16_list_push(Arena *arena, COFF_Symbol16List *list, COFF_Symbol16 symbol);
 internal COFF_RelocInfo      coff_reloc_info_from_section_header(String8 data, COFF_SectionHeader *header);
 
-internal U64     coff_word_size_from_machine(COFF_MachineType machine);
+internal U64 coff_word_size_from_machine(COFF_MachineType machine);
+internal U64 coff_default_exe_base_from_machine(COFF_MachineType machine);
+internal U64 coff_default_dll_base_from_machine(COFF_MachineType machine);
+
 internal String8 coff_make_import_lookup(Arena *arena, U16 hint, String8 name);
 internal U32     coff_make_ordinal_32(U16 hint);
 internal U64     coff_make_ordinal_64(U16 hint);
 
+internal String8 coff_make_import_header_by_name(Arena                *arena,
+                                                 String8               dll_name,
+                                                 COFF_MachineType      machine,
+                                                 COFF_TimeStamp        time_stamp,
+                                                 String8               name,
+                                                 U16                   hint,
+                                                 COFF_ImportHeaderType type);
+internal String8 coff_make_import_header_by_ordinal(Arena                *arena,
+                                                    String8               dll_name,
+                                                    COFF_MachineType      machine,
+                                                    COFF_TimeStamp        time_stamp,
+                                                    U16                   ordinal,
+                                                    COFF_ImportHeaderType type);
+
+
 internal B32               coff_resource_id_is_equal(COFF_ResourceID a, COFF_ResourceID b);
 internal COFF_ResourceID   coff_resource_id_copy(Arena *arena, COFF_ResourceID id);
+internal U64               coff_sizeof_resource_id(COFF_ResourceID id);
 internal COFF_ResourceID   coff_convert_resource_id(Arena *arena, COFF_ResourceID_16 *id_16);
 internal U64               coff_read_resource_id(String8 res, U64 off, COFF_ResourceID_16 *id_out);
 internal U64               coff_read_resource(String8 data, U64 off, Arena *arena, COFF_Resource *res_out);
 internal COFF_ResourceList coff_resource_list_from_data(Arena *arena, String8 data);
+
+internal void        coff_write_resource_id(Arena *arena, String8List *srl, COFF_ResourceID id);
+internal String8List coff_write_resource(Arena          *arena,
+                                         COFF_ResourceID type,
+                                         COFF_ResourceID name,
+                                         U32             data_version,
+                                         COFF_ResourceMemoryFlags memory_flags,
+                                         U16             language_id,
+                                         U32             version,
+                                         U32             characteristics,
+                                         String8         data);
 
 internal COFF_DataType      coff_data_type_from_data(String8 data);
 internal B32                coff_is_import(String8 data);
@@ -875,8 +916,15 @@ internal COFF_ArchiveParse  coff_thin_archive_from_data(Arena *arena, String8 da
 internal COFF_ArchiveType   coff_archive_type_from_data(String8 data);
 internal COFF_ArchiveParse  coff_archive_parse_from_data(Arena *arena, String8 data);
 
+////////////////////////////////
+// String <-> Enum
+
 internal String8 coff_string_from_comdat_select_type(COFF_ComdatSelectType select);
 internal String8 coff_string_from_machine_type(COFF_MachineType machine);
 internal String8 coff_string_from_section_flags(Arena *arena, COFF_SectionFlags flags);
+internal String8 coff_string_from_import_header_type(COFF_ImportHeaderType type);
+
+internal COFF_MachineType coff_machine_from_string(String8 string);
+internal COFF_ImportHeaderType coff_import_header_type_from_string(String8 name);
 
 #endif //COFF_H
