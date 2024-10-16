@@ -4097,6 +4097,7 @@ lnk_run(int argc, char **argv)
             ProfBegin("Hash Image With Blake3");
 
             U128 hash = lnk_blake3_hash_parallel(tp, 128, image_data);
+            MemoryCopy(&config->guid, hash.u64, sizeof(hash.u64));
 
             U64      guid_foff = lnk_file_off_from_symbol(sect_id_map, guid_symbol);
             OS_Guid *guid_ptr  = (OS_Guid *)(image_data.str + guid_foff);
