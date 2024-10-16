@@ -16,6 +16,9 @@ proof, it'd greatly help out if you submitted the issues you find here, along
 with any information you can gather, like dump files (along with the build you
 used), instructions to reproduce, test executables, and so on.
 
+Dump files can be generated when ``RadDdg.exe`` crashes by opening task manager,
+right clicking on the ``RadDbg.exe`` process and selecting "Create Memory Dump from File".
+
 You can download pre-built binaries for the debugger
 [here](https://github.com/EpicGamesExt/raddebugger/releases).
 
