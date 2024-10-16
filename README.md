@@ -187,9 +187,9 @@ another 25%. To link with large pages, you need to explicitly request them via `
 
 ## To build the RAD Linker
 - Setup development environment, [see](#Development-Setup-Instructions)
-- Run `build linker release` or if you have clang installed `build linker release clang`. We favor latter option for better code generation.
+- Run `build radlink release` or if you have clang installed `build radlink release clang`. We favor latter option for better code generation.
 
-If build was successful linker executable will be placed in `build` folder under `radlink.exe`.
+If build was successful linker executable is placed in `build` folder under `radlink.exe`.
 
 ## Benchmarks
 
