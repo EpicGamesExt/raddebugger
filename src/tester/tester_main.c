@@ -68,7 +68,7 @@ entry_point(CmdLine *cmdline)
         {
           String8 rdi_path = push_str8f(arena, "%S/repeat_%I64u.rdi", repeat_folder, repeat_idx);
           str8_list_push(arena, &rdi_paths, rdi_path);
-          os_handle_list_push(arena, &processes, os_cmd_line_launchf("rdi_from_pdb --pdb:%S --out:%S > %S/repeat_%I64u.dump", pdb_path, rdi_path, repeat_folder, repeat_idx));
+          os_handle_list_push(arena, &processes, os_cmd_line_launchf("rdi_from_pdb --deterministic --pdb:%S --out:%S", pdb_path, rdi_path));
         }
         for(OS_HandleNode *n = processes.first; n != 0; n = n->next)
         {

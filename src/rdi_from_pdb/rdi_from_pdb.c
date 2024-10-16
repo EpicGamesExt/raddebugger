@@ -95,7 +95,7 @@ p2r_user2convert_from_cmdln(Arena *arena, CmdLine *cmdline)
     }
   }
   
-  //- rjf: define string -> flag bits
+  //- rjf: define string -> section flag bits
 #define FlagNameMapXList \
 Case("sections",            BinarySections)\
 Case("units",               Units)\
@@ -114,7 +114,7 @@ Case("type_name_map",       TypeNameMap)\
 Case("link_name_map",       LinkNameProcedureNameMap)\
 Case("source_path_name_map",NormalSourcePathNameMap)\
   
-  //- rjf: get flags
+  //- rjf: get section flags
   {
     result->flags = P2R_ConvertFlag_All;
     String8List only_names = cmd_line_strings(cmdline, str8_lit("only"));
@@ -139,6 +139,14 @@ Case("source_path_name_map",NormalSourcePathNameMap)\
         FlagNameMapXList;
 #undef Case
       }
+    }
+  }
+  
+  //- rjf: get other flags
+  {
+    if(cmd_line_has_flag(cmdline, str8_lit("deterministic")))
+    {
+      result->flags |= P2R_ConvertFlag_Deterministic;
     }
   }
   
@@ -3349,7 +3357,10 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
     top_level_info.exe_name      = str8_skip_last_slash(in->input_exe_name);
     top_level_info.exe_hash      = exe_hash;
     top_level_info.voff_max      = exe_voff_max;
-    top_level_info.producer_name = str8_lit(BUILD_TITLE_STRING_LITERAL);
+    if(!(in->flags & P2R_ConvertFlag_Deterministic))
+    {
+      top_level_info.producer_name = str8_lit(BUILD_TITLE_STRING_LITERAL);
+    }
   }
   
   //////////////////////////////////////////////////////////////

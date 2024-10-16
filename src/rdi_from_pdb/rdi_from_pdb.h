@@ -28,6 +28,7 @@ enum
   P2R_ConvertFlag_TypeNameMap             = (1<<15),
   P2R_ConvertFlag_LinkNameProcedureNameMap= (1<<16),
   P2R_ConvertFlag_NormalSourcePathNameMap = (1<<17),
+  P2R_ConvertFlag_Deterministic           = (1<<18),
   P2R_ConvertFlag_All = 0xffffffff,
 };
 
