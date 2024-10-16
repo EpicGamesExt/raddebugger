@@ -9488,11 +9488,29 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
       CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, CTRL_EntityKind_Process);
       String8 symbol_name = d_symbol_name_from_process_vaddr(arena, process, value_eval.value.u64, 1);
       
+      // rjf: push pointer value
+      B32 did_ptr_value = 0;
+      if(!no_addr || value_eval.value.u64 == 0)
+      {
+        did_ptr_value = 1;
+        String8 string = ev_string_from_simple_typed_eval(arena, flags, radix, min_digits, value_eval);
+        space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, string).x;
+        str8_list_push(arena, out, string);
+      }
+      
       // rjf: special case: push strings for textual string content
+      B32 did_arrow = 0;
       B32 did_content = 0;
       B32 did_string = 0;
       if(!did_content && ptee_has_string && !has_array)
       {
+        if(did_ptr_value && !did_arrow)
+        {
+          did_arrow = 1;
+          String8 arrow = str8_lit(" -> ");
+          space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, arrow).x;
+          str8_list_push(arena, out, arrow);
+        }
         did_content = 1;
         did_string = 1;
         U64 string_memory_addr = value_eval.value.u64;
@@ -9524,24 +9542,39 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
       }
       
       // rjf: special case: push strings for symbols
-      if(!did_content && symbol_name.size != 0 &&
+      if(value_eval.value.u64 != 0 &&
+         !did_content && symbol_name.size != 0 &&
          flags & EV_StringFlag_ReadOnlyDisplayRules &&
          ((type_kind == E_TypeKind_Ptr && direct_type_kind == E_TypeKind_Void) ||
           (type_kind == E_TypeKind_Ptr && direct_type_kind == E_TypeKind_Function) ||
           (type_kind == E_TypeKind_Function)))
       {
+        if(did_ptr_value && !did_arrow)
+        {
+          did_arrow = 1;
+          String8 arrow = str8_lit(" -> ");
+          space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, arrow).x;
+          str8_list_push(arena, out, arrow);
+        }
         did_content = 1;
         str8_list_push(arena, out, symbol_name);
         space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, symbol_name).x;
       }
       
       // rjf: special case: need symbol name, don't have one
-      if(!did_content && symbol_name.size == 0 &&
+      if(value_eval.value.u64 != 0 &&
+         !did_content && symbol_name.size == 0 &&
          flags & EV_StringFlag_ReadOnlyDisplayRules &&
          ((type_kind == E_TypeKind_Ptr && direct_type_kind == E_TypeKind_Function) ||
           (type_kind == E_TypeKind_Function)) &&
          (flags & EV_StringFlag_ReadOnlyDisplayRules))
       {
+        if(did_ptr_value)
+        {
+          String8 arrow = str8_lit(" -> ");
+          space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, arrow).x;
+          str8_list_push(arena, out, arrow);
+        }
         did_content = 1;
         String8 string = str8_lit("???");
         str8_list_push(arena, out, string);
@@ -9549,8 +9582,15 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
       }
       
       // rjf: descend for all other cases
-      if(!did_content && ptee_has_content && (flags & EV_StringFlag_ReadOnlyDisplayRules))
+      if(value_eval.value.u64 != 0 && !did_content && ptee_has_content && (flags & EV_StringFlag_ReadOnlyDisplayRules))
       {
+        if(did_ptr_value && !did_arrow)
+        {
+          did_arrow = 1;
+          String8 arrow = str8_lit(" -> ");
+          space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, arrow).x;
+          str8_list_push(arena, out, arrow);
+        }
         did_content = 1;
         if(depth < 4)
         {
@@ -9563,28 +9603,6 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
           String8 ellipses = str8_lit("...");
           str8_list_push(arena, out, ellipses);
           space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, ellipses).x;
-        }
-      }
-      
-      // rjf: push pointer value
-      B32 did_ptr_value = 0;
-      if((!no_addr || !did_content) && ((flags & EV_StringFlag_ReadOnlyDisplayRules) || !did_string))
-      {
-        did_ptr_value = 1;
-        if(did_content)
-        {
-          String8 ptr_prefix = str8_lit(" (");
-          space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, ptr_prefix).x;
-          str8_list_push(arena, out, ptr_prefix);
-        }
-        String8 string = ev_string_from_simple_typed_eval(arena, flags, radix, min_digits, value_eval);
-        space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, string).x;
-        str8_list_push(arena, out, string);
-        if(did_content)
-        {
-          String8 close = str8_lit(")");
-          space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, close).x;
-          str8_list_push(arena, out, close);
         }
       }
     }break;
@@ -14752,12 +14770,17 @@ rd_frame(void)
             CTRL_Entity *thread = &ctrl_entity_nil;
             CTRL_Entity *process = &ctrl_entity_nil;
             U64 vaddr = 0;
+            B32 require_disasm_snap = 0;
             {
               file_path = rd_mapped_from_file_path(scratch.arena, rd_regs()->file_path);
               point     = rd_regs()->cursor;
               thread    = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->thread);
               process   = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->process);
               vaddr     = rd_regs()->vaddr;
+              if(file_path.size == 0)
+              {
+                require_disasm_snap = 1;
+              }
             }
             
             // rjf: given a src code location, if no vaddr is specified,
@@ -14844,16 +14867,19 @@ rd_frame(void)
                 Rng2F32 panel_rect = rd_target_rect_from_panel(root_rect, ws->root_panel, panel);
                 Vec2F32 panel_rect_dim = dim_2f32(panel_rect);
                 F32 panel_area = panel_rect_dim.x*panel_rect_dim.y;
+                RD_View *panel_selected_tab = rd_selected_tab_from_panel(panel);
                 for(RD_View *view = panel->first_tab_view; !rd_view_is_nil(view); view = view->order_next)
                 {
                   if(rd_view_is_project_filtered(view)) { continue; }
                   RD_ViewRuleKind view_kind = rd_view_rule_kind_from_string(view->spec->string);
-                  if(view_kind == RD_ViewRuleKind_Disasm && view->query_string_size == 0 && panel_area > best_panel_area)
+                  B32 view_is_selected = (view == panel_selected_tab);
+                  if(view_kind == RD_ViewRuleKind_Disasm && view->query_string_size == 0 && panel_area > best_panel_area &&
+                     (view_is_selected || require_disasm_snap))
                   {
                     panel_w_disasm = panel;
                     view_w_disasm = view;
                     best_panel_area = panel_area;
-                    if(view == rd_selected_tab_from_panel(panel))
+                    if(view_is_selected)
                     {
                       break;
                     }
