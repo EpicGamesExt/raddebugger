@@ -4488,7 +4488,7 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
     }
     
     // rjf: UDTs
-    if(0) ProfScope("kick off udts string map build tasks")
+    ProfScope("kick off udts string map build tasks")
     {
       U64 items_per_task = 4096;
       U64 num_tasks = (in_params->udts.total_count+items_per_task-1)/items_per_task;
@@ -4520,7 +4520,7 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
     }
     
     // rjf: symbols
-    if(0) ProfScope("kick off symbols string map build tasks")
+    ProfScope("kick off symbols string map build tasks")
     {
       RDIM_SymbolChunkList *symbol_lists[] =
       {
@@ -4561,7 +4561,7 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
     }
     
     // rjf: scope chunks
-    if(0) ProfScope("kick off scope chunks string map build tasks")
+    ProfScope("kick off scope chunks string map build tasks")
     {
       U64 items_per_task = 4096;
       U64 num_tasks = (in_params->scopes.total_count+items_per_task-1)/items_per_task;
