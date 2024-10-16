@@ -4639,7 +4639,7 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
             {
               for EachIndex(idx, n->count)
               {
-                printf("string: \"%.*s\"\n", str8_varg(n->v[idx].string));
+                printf("slot[%I64u]: string: %.*s (hash 0x%I64x)\n", slot_idx, str8_varg(n->v[idx].string), n->v[idx].hash);
               }
             }
           }
@@ -4703,7 +4703,7 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
           {
             for EachIndex(idx, n->count)
             {
-              printf("string: %.*s\n", str8_varg(n->v[idx].string));
+              printf("slot[%I64u]: string: %.*s (hash 0x%I64x)\n", slot_idx, str8_varg(n->v[idx].string), n->v[idx].hash);
               string_idx += 1;
             }
           }
@@ -4770,7 +4770,7 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
           {
             for EachIndex(idx, n->count)
             {
-              printf("string: %.*s\n", str8_varg(n->v[idx].string));
+              printf("slot[%I64u]: string: %.*s (hash 0x%I64x)\n", slot_idx, str8_varg(n->v[idx].string), n->v[idx].hash);
               string_idx += 1;
             }
           }
