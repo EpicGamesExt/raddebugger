@@ -366,27 +366,29 @@ os_file_write(OS_Handle file, Rng1U64 rng, void *data)
   HANDLE win_handle = (HANDLE)file.u64[0];
   U64 src_off = 0;
   U64 dst_off = rng.min;
-  U64 bytes_to_write_total = rng.max-rng.min;
-  U64 total_bytes_written = 0;
-  for(;src_off < bytes_to_write_total;)
+  U64 total_write_size = dim_1u64(rng);
+  for(;;)
   {
-    void *bytes_src = (void *)((U8 *)data + src_off);
-    U64 bytes_to_write_64 = (bytes_to_write_total-src_off);
-    U32 bytes_to_write_32 = u32_from_u64_saturate(bytes_to_write_64);
-    U32 bytes_written = 0;
+    void *bytes_src = (U8 *)data + src_off;
+    U64 bytes_left = total_write_size - src_off;
+    DWORD write_size = Min(MB(1), bytes_left);
+    DWORD bytes_written = 0;
     OVERLAPPED overlapped = {0};
-    overlapped.Offset     = (dst_off&0x00000000ffffffffull);
+    overlapped.Offset = (dst_off&0x00000000ffffffffull);
     overlapped.OffsetHigh = (dst_off&0xffffffff00000000ull) >> 32;
-    BOOL success = WriteFile(win_handle, bytes_src, bytes_to_write_32, (DWORD *)&bytes_written, &overlapped);
+    BOOL success = WriteFile(win_handle, bytes_src, write_size, &bytes_written, &overlapped);
     if(success == 0)
     {
       break;
     }
     src_off += bytes_written;
     dst_off += bytes_written;
-    total_bytes_written += bytes_written;
+    if(bytes_left == 0)
+    {
+      break;
+    }
   }
-  return total_bytes_written;
+  return src_off;
 }
 
 internal B32
