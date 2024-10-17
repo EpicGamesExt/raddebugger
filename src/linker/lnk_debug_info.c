@@ -4398,6 +4398,25 @@ THREAD_POOL_TASK_FUNC(lnk_convert_line_tables_to_rdi_task)
 }
 
 internal
+THREAD_POOL_TASK_FUNC(lnk_build_inlinee_lines_accels_task)
+{
+  ProfBeginFunction();
+  Temp scratch = scratch_begin(&arena, 1);
+
+  LNK_ConvertUnitToRDITask *task    = raw_task;
+  CV_DebugS                 debug_s = task->debug_s_arr[task_id];
+
+  String8List                   raw_inlinee_lines   = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_InlineeLines);
+  CV_C13InlineeLinesParsedList  inlinee_lines       = cv_c13_inlinee_lines_from_sub_sections(arena, raw_inlinee_lines);
+  CV_InlineeLinesAccel         *inlinee_lines_accel = cv_c13_make_inlinee_lines_accel(arena, inlinee_lines);
+
+  task->inlinee_lines_accel_arr[task_id] = inlinee_lines_accel;
+
+  scratch_end(scratch);
+  ProfEnd();
+}
+
+internal
 THREAD_POOL_TASK_FUNC(lnk_convert_symbols_to_rdi_task)
 {
   ProfBeginFunction();
@@ -4917,7 +4936,7 @@ THREAD_POOL_TASK_FUNC(lnk_convert_symbols_to_rdi_task)
     } break;
     case CV_SymKind_INLINESITE: {
       CV_SymInlineSite *sym_inline_site = (CV_SymInlineSite *) symbol.data.str;
-      String8           binary_annots   = str8((U8 *) (sym_inline_site + 1), symbol.data.size - sizeof(*sym_inline_site));
+      String8           binary_annots   = str8_skip(symbol.data, sizeof(*sym_inline_site));
 
       U64 parent_voff = 0;
       if (scope_stack != 0) {
@@ -4972,7 +4991,7 @@ THREAD_POOL_TASK_FUNC(lnk_convert_symbols_to_rdi_task)
       
       inline_site->convert_ref.ud0 = binary_annots_parsed.lines;
       inline_site->convert_ref.ud1 = binary_annots_parsed.lines_count;
-      inline_site->convert_ref.ud2 = task_id;
+      inline_site->convert_ref.ud2 = symbols_input.obj_idx;
 
       // fill out scope
       RDIB_Scope *scope = rdib_scope_chunk_list_push(arena, &task->scopes[worker_id], task->symbol_chunk_cap);
@@ -5208,6 +5227,7 @@ lnk_build_rad_debug_info(TP_Context               *tp,
     udt_name_buckets     = lnk_udt_name_hash_table_from_debug_t(tp, tp_arena, types[CV_TypeIndexSource_TPI], &udt_name_buckets_cap);
     ProfEnd();
 
+
     ProfBegin("Convert CodeView types to RDIB Types");
     LNK_ConvertTypesToRDI task         = {0};
     task.types                         = types;
@@ -5347,6 +5367,11 @@ lnk_build_rad_debug_info(TP_Context               *tp,
 
     ProfBegin("Convert Line Tables");
     tp_for_parallel(tp, tp_arena, obj_count, lnk_convert_line_tables_to_rdi_task, &task);
+    ProfEnd();
+
+    ProfBegin("Build Inlinee Lines Accels");
+    task.inlinee_lines_accel_arr = push_array(scratch.arena, CV_InlineeLinesAccel *, obj_count);
+    tp_for_parallel(tp, tp_arena, obj_count, lnk_build_inlinee_lines_accels_task, &task);
     ProfEnd();
 
     ProfBegin("Convert Symbols");
