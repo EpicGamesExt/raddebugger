@@ -5988,7 +5988,7 @@ rd_window_frame(RD_Window *ws)
               UI_Tooltip
                 RD_Font(RD_FontSlot_Main)
                 UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Main))
-                ui_labelf("Halt all target processes");
+                ui_labelf("Halt all attached processes");
             }
             if(ui_clicked(sig))
             {
@@ -6017,11 +6017,11 @@ rd_window_frame(RD_Window *ws)
               UI_Tooltip
                 RD_Font(RD_FontSlot_Main)
                 UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Main))
-                ui_labelf("Kill all target processes");
+                ui_labelf("Kill all attached processes");
             }
             if(ui_clicked(sig))
             {
-              rd_cmd(RD_CmdKind_Kill);
+              rd_cmd(RD_CmdKind_KillAll);
             }
           }
           
