@@ -142,11 +142,17 @@ typedef struct
 
 typedef struct
 {
-  String8    *path_arr;
-  String8    *msf_data_arr;
-  Rng1U64   **external_ti_ranges;
-  CV_DebugT **external_leaves;
-  B8         *is_corrupted;
+  String8Array   data_arr;
+  MSF_Parsed   **msf_parse_arr;
+} LNK_MsfParsedFromDataTask;
+
+typedef struct
+{
+  CV_TypeServerInfo  *ts_info_arr;
+  MSF_Parsed        **msf_parse_arr;
+  Rng1U64           **external_ti_ranges;
+  CV_DebugT         **external_leaves;
+  B8                 *is_corrupted;
 } LNK_GetExternalLeavesTask;
 
 ////////////////////////////////

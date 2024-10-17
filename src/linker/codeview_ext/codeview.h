@@ -207,10 +207,23 @@ typedef struct CV_UDTInfo
 
 typedef struct CV_TypeServerInfo
 {
-  String8   name;
-  COFF_Guid sig;
-  U32       age;
+  String8 name;
+  OS_Guid sig;
+  U32     age;
 } CV_TypeServerInfo;
+
+typedef struct CV_TypeServerInfoNode
+{
+  struct CV_TypeServerInfoNode *next;
+  CV_TypeServerInfo             data;
+} CV_TypeServerInfoNode;
+
+typedef struct CV_TypeServerInfoList
+{
+  CV_TypeServerInfoNode *first;
+  CV_TypeServerInfoNode *last;
+  U64                    count;
+} CV_TypeServerInfoList;
 
 typedef struct CV_PrecompInfo
 {

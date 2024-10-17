@@ -275,28 +275,51 @@ lnk_do_debug_info_discard(CV_DebugS *debug_s_arr, CV_SymbolListArray *parsed_sym
 }
 
 internal
+THREAD_POOL_TASK_FUNC(lnk_msf_parsed_from_data_task)
+{
+  ProfBeginFunction();
+  LNK_MsfParsedFromDataTask *task = raw_task;
+  // TODO: pick Info, TPI and IPI to flattten to make sure we don't waste compute on throw-away streams
+  task->msf_parse_arr[task_id] = msf_parsed_from_data(arena, task->data_arr.v[task_id]);
+  ProfEnd();
+}
+
+internal MSF_Parsed **
+lnk_msf_parsed_from_data_parallel(TP_Arena *arena, TP_Context *tp, String8Array data_arr)
+{
+  ProfBeginFunction();
+  LNK_MsfParsedFromDataTask task = {0};
+  task.data_arr                  = data_arr;
+  task.msf_parse_arr             = push_array_no_zero(arena->v[0], MSF_Parsed *, data_arr.count);
+  tp_for_parallel(tp, arena, data_arr.count, lnk_msf_parsed_from_data_task, &task);
+  ProfEnd();
+  return task.msf_parse_arr;
+}
+
+internal
 THREAD_POOL_TASK_FUNC(lnk_get_external_leaves_task)
 {
   ProfBeginFunction();
 
-  LNK_GetExternalLeavesTask *task = raw_task;
-
-  U64 ts_idx = task_id;
+  U64                        ts_idx    = task_id;
+  LNK_GetExternalLeavesTask *task      = raw_task;
+  MSF_Parsed                *msf_parse = task->msf_parse_arr[ts_idx];
 
   task->external_ti_ranges[ts_idx] = push_array_no_zero(arena, Rng1U64, CV_TypeIndexSource_COUNT);
   task->external_leaves[ts_idx]    = push_array_no_zero(arena, CV_DebugT, CV_TypeIndexSource_COUNT);
   task->is_corrupted[ts_idx]       = 1;
 
-  // TODO: pick TPI and IPI to flattten to make sure we don't waste compute on throw-away streams
-  MSF_Parsed *msf_parse = msf_parsed_from_data(arena, task->msf_data_arr[ts_idx]);
-
   if (msf_parse) {
-    PDB_TypeServerParse tpi_parse, ipi_parse;
-    PDB_OpenTypeServerError tpi_error = pdb_type_server_parse_from_data(msf_parse->streams[PDB_FixedStream_Tpi], &tpi_parse);
-    PDB_OpenTypeServerError ipi_error = pdb_type_server_parse_from_data(msf_parse->streams[PDB_FixedStream_Ipi], &ipi_parse);
+    PDB_OpenTypeServerError tpi_error = PDB_OpenTypeServerError_UNKNOWN;
+    PDB_OpenTypeServerError ipi_error = PDB_OpenTypeServerError_UNKNOWN;   
 
-    if (tpi_error == PDB_OpenTypeServerError_OK &&
-        ipi_error == PDB_OpenTypeServerError_OK) {
+    PDB_TypeServerParse tpi_parse, ipi_parse;
+    if (PDB_FixedStream_Tpi < msf_parse->stream_count && PDB_FixedStream_Ipi < msf_parse->stream_count) {
+      tpi_error = pdb_type_server_parse_from_data(msf_parse->streams[PDB_FixedStream_Tpi], &tpi_parse);
+      ipi_error = pdb_type_server_parse_from_data(msf_parse->streams[PDB_FixedStream_Ipi], &ipi_parse);
+    }
+
+    if (tpi_error == PDB_OpenTypeServerError_OK && ipi_error == PDB_OpenTypeServerError_OK) {
       task->is_corrupted[ts_idx] = 0;
 
       task->external_ti_ranges[ts_idx][CV_TypeIndexSource_NULL] = rng_1u64(0,0);
@@ -308,15 +331,12 @@ THREAD_POOL_TASK_FUNC(lnk_get_external_leaves_task)
       task->external_leaves[ts_idx][CV_TypeIndexSource_IPI] = cv_debug_t_from_data(arena, ipi_parse.leaf_data, PDB_LEAF_ALIGN);
     } else {
       if (tpi_error != PDB_OpenTypeServerError_OK) {
-        lnk_error(LNK_Error_UnableToOpenTypeServer, "failed to open TPI in %S, reson %S", task->path_arr[ts_idx], pdb_string_from_open_type_server_error(tpi_error));
+        lnk_error(LNK_Error_UnableToOpenTypeServer, "failed to open TPI in %S, reson %S", task->ts_info_arr[ts_idx].name, pdb_string_from_open_type_server_error(tpi_error));
       }
       if (ipi_error != PDB_OpenTypeServerError_OK) {
-        lnk_error(LNK_Error_UnableToOpenTypeServer, "failed to open IPI in %S, reason %S", task->path_arr[ts_idx], pdb_string_from_open_type_server_error(ipi_error));
+        lnk_error(LNK_Error_UnableToOpenTypeServer, "failed to open IPI in %S, reason %S", task->ts_info_arr[ts_idx].name, pdb_string_from_open_type_server_error(ipi_error));
       }
     }
-  } else {
-    MemoryZeroTyped(task->external_ti_ranges[ts_idx], CV_TypeIndexSource_COUNT);
-    MemoryZeroTyped(task->external_leaves[ts_idx], CV_TypeIndexSource_COUNT);
   }
 
   ProfEnd();
@@ -537,18 +557,20 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, String8List lib_dir
   CV_DebugT *merged_debug_t_p_arr = lnk_merge_debug_t_and_debug_p(tp_arena->v[0], internal_count, internal_debug_t_arr, internal_debug_p_arr);
 
   ProfBegin("Analyze & Read External Type Server Files");
-  String8Array type_server_path_arr;
+  String8Array ts_path_arr;
   Rng1U64    **external_ti_ranges;
   CV_DebugT  **external_leaves;
   U64         *obj_to_ts_idx_arr = push_array_no_zero(tp_arena->v[0], U64, external_count);
   U64List     *ts_to_obj_arr     = push_array(tp_arena->v[0], U64List, external_count);
   {
-    HashTable  *type_server_path_ht = hash_table_init(scratch.arena, 256);
-    HashTable  *ignored_path_ht     = hash_table_init(scratch.arena, 256);
-    String8List type_server_path_list; MemoryZeroStruct(&type_server_path_list);
+    HashTable             *type_server_path_ht   = hash_table_init(scratch.arena, 256);
+    HashTable             *ignored_path_ht       = hash_table_init(scratch.arena, 256);
+    CV_TypeServerInfoList  ts_info_list = {0};
 
     // push null
-    str8_list_pushf(scratch.arena, &type_server_path_list, "");
+    CV_TypeServerInfoNode *null_ts_info = push_array(scratch.arena, CV_TypeServerInfoNode, 1);
+    SLLQueuePush(ts_info_list.first, ts_info_list.last, null_ts_info);
+    ++ts_info_list.count;
 
     for (U64 obj_idx = 0; obj_idx < external_count; ++obj_idx) {
       // first leaf always type server
@@ -620,9 +642,20 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, String8List lib_dir
                           present->obj->path);
           }
         } else {
-          U64 ts_idx = type_server_path_list.node_count;
+          U64 ts_idx = ts_info_list.count;
+
+          // when we search matches on disk we store path on scratch,
+          // make path copy in case we need it for error reporting
           path = push_str8_copy(tp_arena->v[0], path);
-          str8_list_push(scratch.arena, &type_server_path_list, path);
+
+          // fill out type server info we read from obj
+          CV_TypeServerInfoNode *ts_info_node = push_array(scratch.arena, CV_TypeServerInfoNode, 1);
+          ts_info_node->data                  = ts;
+          ts_info_node->data.name             = path;
+
+          // push to type server info list
+          SLLQueuePush(ts_info_list.first, ts_info_list.last, ts_info_node);
+          ts_info_list.count += 1;
           
           // wire obj to type server
           obj_to_ts_idx_arr[obj_idx] = ts_idx;
@@ -642,25 +675,69 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, String8List lib_dir
       }
     }
 
-    // read type servers from disk in parallel
-    type_server_path_arr = str8_array_from_list(tp_arena->v[0], &type_server_path_list);
+    // type server info list -> array
+    ts_path_arr.count              = ts_info_list.count;
+    ts_path_arr.v                  = push_array(tp_arena->v[0], String8, ts_info_list.count);
+    CV_TypeServerInfo *ts_info_arr = push_array(scratch.arena, CV_TypeServerInfo, ts_info_list.count);
+    {
+      U64 idx = 0;
+      for (CV_TypeServerInfoNode *n = ts_info_list.first; n != 0; n = n->next, ++idx) {
+        ts_path_arr.v[idx] = n->data.name;
+        ts_info_arr[idx]   = n->data;
+      }
+    }
 
+    // read type servers from disk in parallel
     {
       ProfBegin("Read External Type Servers");
-      String8Array msf_data_arr = os_data_from_file_path_parallel(tp, scratch.arena, type_server_path_arr);
+      String8Array msf_data_arr = os_data_from_file_path_parallel(tp, scratch.arena, ts_path_arr);
       ProfEnd();
 
-      ProfBeginDynamic("Open External Type Servers [Count %llu]", type_server_path_arr.count);
-      LNK_GetExternalLeavesTask task;
-      task.path_arr           = type_server_path_arr.v;
-      task.msf_data_arr       = msf_data_arr.v; 
-      task.external_ti_ranges = push_array_no_zero(tp_arena->v[0], Rng1U64 *, msf_data_arr.count);
-      task.external_leaves    = push_array_no_zero(tp_arena->v[0], CV_DebugT *, msf_data_arr.count);
-      task.is_corrupted       = push_array_no_zero(scratch.arena, B8, msf_data_arr.count);
+      MSF_Parsed **msf_parse_arr = lnk_msf_parsed_from_data_parallel(tp_arena, tp, msf_data_arr);
+
+      ProfBegin("Error check type servers");
+      for (U64 ts_idx = 0; ts_idx < msf_data_arr.count; ++ts_idx) {
+        MSF_Parsed *msf_parse = msf_parse_arr[ts_idx];
+
+        B32 do_debug_info_discard = 0;
+
+        if (!msf_parse) {
+          do_debug_info_discard = 1;
+        } else {
+          PDB_InfoParse info_parse = {0};
+          pdb_info_parse_from_data(msf_parse->streams[PDB_FixedStream_Info], &info_parse);
+          if (!MemoryMatchStruct(&info_parse.guid, &ts_info_arr[ts_idx].sig)) {
+            Temp scratch = scratch_begin(0,0);
+            String8 expected_sig_str = os_string_from_guid(scratch.arena, ts_info_arr[ts_idx].sig);
+            String8 on_disk_sig_str  = os_string_from_guid(scratch.arena, info_parse.guid);
+            lnk_error(LNK_Warning_MismatchedTypeServerSignature, "%S: signature mismatch in type server read from disk, expected %S, got %S",
+                ts_info_arr[ts_idx].name, expected_sig_str, on_disk_sig_str);
+            scratch_end(scratch);
+
+            do_debug_info_discard = 1;
+          }
+        }
+
+        if (do_debug_info_discard) {
+          U64List obj_idx_list = ts_to_obj_arr[ts_idx];
+          for (U64Node *obj_idx_n = obj_idx_list.first; obj_idx_n != 0; obj_idx_n = obj_idx_n->next) {
+            lnk_do_debug_info_discard(external_debug_s_arr, external_parsed_symbols, obj_idx_n->data);
+          }
+        }
+      }
+      ProfEnd();
+
+      ProfBeginDynamic("Open External Type Servers [Count %llu]", ts_path_arr.count);
+      LNK_GetExternalLeavesTask task = {0};
+      task.ts_info_arr               = ts_info_arr;
+      task.msf_parse_arr             = msf_parse_arr;
+      task.external_ti_ranges        = push_array_no_zero(tp_arena->v[0], Rng1U64 *, msf_data_arr.count);
+      task.external_leaves           = push_array_no_zero(tp_arena->v[0], CV_DebugT *, msf_data_arr.count);
+      task.is_corrupted              = push_array_no_zero(scratch.arena, B8, msf_data_arr.count);
       tp_for_parallel(tp, tp_arena, msf_data_arr.count, lnk_get_external_leaves_task, &task);
       ProfEnd();
 
-      String8List unopen_type_server_list; MemoryZeroStruct(&unopen_type_server_list);
+      String8List unopen_type_server_list = {0};
 
       // discard debug info that depends on the missing type server 
       for (U64 ts_idx = 1; ts_idx < msf_data_arr.count; ++ts_idx) {
@@ -676,7 +753,7 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, String8List lib_dir
       for (U64 ts_idx = 1; ts_idx < msf_data_arr.count; ++ts_idx) {
         if (task.is_corrupted[ts_idx]) {
           U64List obj_idx_list = ts_to_obj_arr[ts_idx];
-          str8_list_pushf(scratch.arena, &unopen_type_server_list, "\t%S\n", type_server_path_arr.v[ts_idx]);
+          str8_list_pushf(scratch.arena, &unopen_type_server_list, "\t%S\n", ts_path_arr.v[ts_idx]);
           str8_list_pushf(scratch.arena, &unopen_type_server_list, "\t\tDependent obj(s):\n");
           for (U64Node *obj_idx_node = obj_idx_list.first; obj_idx_node != 0; obj_idx_node = obj_idx_node->next) {
             String8 obj_path = external_obj_arr[obj_idx_node->data].path;
@@ -704,8 +781,8 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, String8List lib_dir
   cv.count                             = obj_count;
   cv.internal_count                    = internal_count;
   cv.external_count                    = external_count;
-  cv.type_server_count                 = type_server_path_arr.count;
-  cv.type_server_path_arr              = type_server_path_arr.v;
+  cv.type_server_count                 = ts_path_arr.count;
+  cv.type_server_path_arr              = ts_path_arr.v;
   cv.ts_to_obj_arr                     = ts_to_obj_arr;
   cv.obj_arr                           = sorted_obj_arr;
   cv.pch_arr                           = pch_arr;

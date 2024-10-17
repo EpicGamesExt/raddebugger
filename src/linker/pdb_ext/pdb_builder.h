@@ -150,6 +150,15 @@ typedef struct
 ////////////////////////////////
 // Info
 
+typedef struct PDB_InfoParse
+{
+  PDB_TpiVersion   version;
+  COFF_TimeStamp   time_stamp;
+  U32              age;
+  OS_Guid          guid;
+  String8          extra_info;
+} PDB_InfoParse;
+
 typedef struct PDB_InfoContext
 {
   Arena            *arena;
@@ -356,6 +365,7 @@ internal OS_Guid          pdb_get_guid(PDB_Context *pdb);
 // Info
 
 internal PDB_InfoContext * pdb_info_alloc(U32 age, COFF_TimeStamp time_stamp, OS_Guid guid);
+internal void              pdb_info_parse_from_data(String8 data, PDB_InfoParse *parse_out);
 internal PDB_InfoContext * pdb_info_open(MSF_Context *msf, MSF_StreamNumber sn);
 internal void              pdb_info_build(PDB_InfoContext *info, MSF_Context *msf, MSF_StreamNumber sn);
 internal void              pdb_info_release(PDB_InfoContext **info_ptr);
