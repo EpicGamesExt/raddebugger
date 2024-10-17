@@ -2638,8 +2638,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                                                          UI_BoxFlag_DrawBackground|
                                                          UI_BoxFlag_DrawSideLeft|
                                                          UI_BoxFlag_DrawBorder|
-                                                         UI_BoxFlag_DrawHotEffects|
-                                                         UI_BoxFlag_DrawActiveEffects,
+                                                         UI_BoxFlag_DrawHotEffects,
                                                          "###entity_%p_%p", entity, ctrl_entity);
                 }
                 {
@@ -2674,7 +2673,13 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                     {
                       rd_drag_begin(slot);
                     }
-                    if(ui_clicked(sig))
+                    if(ui_pressed(sig))
+                    {
+                      RD_WatchViewPoint cell_pt = {1, row->block->key, row->key};
+                      ewv->next_cursor = ewv->next_mark = cell_pt;
+                      pressed = 1;
+                    }
+                    if(ui_double_clicked(sig))
                     {
                       if(entity->kind == RD_EntityKind_Target)
                       {
@@ -2685,6 +2690,15 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                       if(ctrl_entity->kind == CTRL_EntityKind_Thread)
                       {
                         rd_cmd(RD_CmdKind_SelectThread, .thread = ctrl_entity->handle);
+                      }
+                      if(entity->kind == RD_EntityKind_Breakpoint ||
+                         entity->kind == RD_EntityKind_WatchPin)
+                      {
+                        RD_Entity *loc = rd_entity_child_from_kind(entity, RD_EntityKind_Location);
+                        rd_cmd(RD_CmdKind_FindCodeLocation,
+                               .file_path = (loc->flags & RD_EntityFlag_HasTextPoint) ? loc->string : str8_zero(),
+                               .cursor = loc->text_point,
+                               .vaddr = loc->vaddr);
                       }
                     }
                   }
