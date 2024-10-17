@@ -4302,6 +4302,11 @@ ctrl_thread__launch(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
   }
   U32 id = dmn_ctrl_launch(ctrl_ctx, &params);
   
+  //- rjf: close stdout/stderr/stdin files
+  os_file_close(stdout_handle);
+  os_file_close(stderr_handle);
+  os_file_close(stdin_handle);
+  
   //- rjf: record (id -> entry points), so that we know custom entry points for this PID
   for(String8Node *n = msg->entry_points.first; n != 0; n = n->next)
   {
