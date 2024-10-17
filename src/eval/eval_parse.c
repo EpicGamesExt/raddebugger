@@ -1018,6 +1018,12 @@ e_parse_type_from_text_tokens(Arena *arena, String8 text, E_TokenArray *tokens)
     if(token.kind == E_TokenKind_Identifier)
     {
       String8 token_string = str8_substr(text, token.range);
+      if(token_string.size >= 2 &&
+         token_string.str[0] == '`' &&
+         token_string.str[token_string.size-1] == '`')
+      {
+        token_string = str8_substr(token_string, r1u64(1, token_string.size-1));
+      }
       E_TypeKey type_key = e_leaf_type_from_name(token_string);
       if(!e_type_key_match(e_type_key_zero(), type_key))
       {

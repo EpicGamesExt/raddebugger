@@ -2798,7 +2798,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                   if(next_off%64 != 0 && row_eval.value.u64/64 < next_off/64)
                   {
                     ui_set_next_fixed_x(0);
-                    ui_set_next_fixed_y(scroll_list_params.row_height_px - ui_top_font_size()*1.f);
+                    ui_set_next_fixed_y(scroll_list_params.row_height_px - ui_top_font_size()*0.5f);
                     ui_set_next_fixed_height(ui_top_font_size()*1.f);
                     Vec4F32 boundary_color = rd_rgba_from_theme_color(RD_ThemeColor_CacheLineBoundary);
                     boundary_color.w *= 0.5f;
