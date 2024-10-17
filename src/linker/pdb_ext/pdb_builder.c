@@ -1662,23 +1662,11 @@ pdb_info_alloc(U32 age, COFF_TimeStamp time_stamp, OS_Guid guid)
   return info;
 }
 
-internal PDB_InfoContext *
-pdb_info_open(MSF_Context *msf, MSF_StreamNumber sn)
+internal void
+pdb_info_parse_from_data(String8 data, PDB_InfoParse *parse_out)
 {
-  ProfBeginFunction();
-  Temp scratch = scratch_begin(0,0);
-
-  COFF_TimeStamp   time_stamp      = 0;
-  U32              age             = 0;
-  OS_Guid          guid            = {0};
-  PDB_FeatureFlags flags           = 0;
-  PDB_HashTable    named_stream_ht = {0};
-  
-  U64     info_size = msf_stream_get_size(msf, sn);
-  String8 info_data = msf_stream_read_block(scratch.arena, msf, sn, info_size);
-
   PDB_InfoVersion version = 0;
-  str8_deserial_read_struct(info_data, 0, &version);
+  str8_deserial_read_struct(data, 0, &version);
 
   switch (version) {
   case PDB_InfoVersion_VC70: {
@@ -1686,23 +1674,55 @@ pdb_info_open(MSF_Context *msf, MSF_StreamNumber sn)
 
     // read header
     PDB_InfoHeaderV70 header;
-    cursor += str8_deserial_read_struct(info_data, cursor, &header);
+    cursor += str8_deserial_read_struct(data, cursor, &header);
 
-    time_stamp = header.time_stamp;
-    age        = header.age;
-    guid       = header.guid;
+    parse_out->version    = version;
+    parse_out->time_stamp = header.time_stamp;
+    parse_out->age        = header.age;
+    parse_out->guid       = header.guid;
+    parse_out->extra_info = str8_skip(data, cursor);
+  } break;
+  case PDB_InfoVersion_VC2:
+  case PDB_InfoVersion_VC4:
+  case PDB_InfoVersion_VC41:
+  case PDB_InfoVersion_VC50:
+  case PDB_InfoVersion_VC98:
+  case PDB_InfoVersion_VC70_DEP:
+  case PDB_InfoVersion_VC80:
+  case PDB_InfoVersion_VC110:
+  case PDB_InfoVersion_VC140: {
+      NotImplemented;
+  } break;
+  default: Assert(!"invalid info stream version"); break;
+  }
+}
 
+internal PDB_InfoContext *
+pdb_info_open(MSF_Context *msf, MSF_StreamNumber sn)
+{
+  ProfBeginFunction();
+  Temp scratch = scratch_begin(0,0);
+  
+  U64     info_size = msf_stream_get_size(msf, sn);
+  String8 info_data = msf_stream_read_block(scratch.arena, msf, sn, info_size);
+    
+  PDB_InfoParse parse = {0};
+  pdb_info_parse_from_data(info_data, &parse);
+
+  PDB_FeatureFlags flags           = 0;
+  PDB_HashTable    named_stream_ht = {0};
+  if (parse.version == PDB_InfoVersion_VC70) {
     // open named stream hash table
-    String8 named_stream_ht_data = str8_skip(info_data, cursor);
+    U64 cursor = 0;
     U64 named_stream_ht_size = 0;
-    PDB_HashTableParseError named_stream_ht_error = pdb_named_stream_ht_from_data(&named_stream_ht, named_stream_ht_data, &named_stream_ht_size);
+    PDB_HashTableParseError named_stream_ht_error = pdb_named_stream_ht_from_data(&named_stream_ht, parse.extra_info, &named_stream_ht_size);
     if (named_stream_ht_error == PDB_HashTableParseError_OK) {
       cursor += named_stream_ht_size;
-      
+
       // read PDB features
       while (cursor < info_data.size) {
         PDB_FeatureSig sig = 0;
-        cursor += str8_deserial_read_struct(info_data, cursor, &sig);
+        cursor += str8_deserial_read_struct(parse.extra_info, cursor, &sig);
         switch (sig) {
         case PDB_FeatureSig_NULL: break;
         case PDB_FeatureSig_VC140: {
@@ -1720,21 +1740,8 @@ pdb_info_open(MSF_Context *msf, MSF_StreamNumber sn)
     } else {
       Assert(!"unable to open named stream hash table");
     }
-  } break;
-  case PDB_InfoVersion_VC2:
-  case PDB_InfoVersion_VC4:
-  case PDB_InfoVersion_VC41:
-  case PDB_InfoVersion_VC50:
-  case PDB_InfoVersion_VC98:
-  case PDB_InfoVersion_VC70_DEP:
-  case PDB_InfoVersion_VC80:
-  case PDB_InfoVersion_VC110:
-  case PDB_InfoVersion_VC140: {
-      NotImplemented;
-  } break;
-  default: Assert(!"invalid info stream version"); break;
   }
-    
+
   // open string table
   PDB_StringTable strtab = {0};
   MSF_StreamNumber strtab_sn = pdb_find_named_stream(&named_stream_ht, PDB_NAMES_STREAM_NAME);
@@ -1757,9 +1764,9 @@ pdb_info_open(MSF_Context *msf, MSF_StreamNumber sn)
   Arena *arena = arena_alloc();
   PDB_InfoContext *info = push_array_no_zero(arena, PDB_InfoContext, 1);
   info->arena               = arena;
-  info->time_stamp          = time_stamp;
-  info->age                 = age;
-  info->guid                = guid;
+  info->time_stamp          = parse.time_stamp;
+  info->age                 = parse.age;
+  info->guid                = parse.guid;
   info->flags               = flags;
   info->named_stream_ht     = named_stream_ht;
   info->src_header_block_ht = src_header_block_ht;

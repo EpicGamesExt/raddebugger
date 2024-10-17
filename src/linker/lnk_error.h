@@ -60,6 +60,7 @@ typedef enum
   LNK_Warning_InvalidNatvisFileExt,
   LNK_Warning_LargePages,
   LNK_Warning_LargePagesNotEnabled,
+  LNK_Warning_MismatchedTypeServerSignature,
   LNK_Warning_MissingExternalTypeServer,
   LNK_Warning_MultipleDebugTAndDebugP,
   LNK_Warning_MultipleExternalTypeServers,
