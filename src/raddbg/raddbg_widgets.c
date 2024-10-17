@@ -1770,7 +1770,8 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
       TXT_Token *line_token = &line_tokens->v[line_token_idx];
       if(contains_1u64(line_token->range, mouse_pt_off))
       {
-        mouse_token_rng = txt_rng(txt_pt(mouse_pt.line, 1+line_token->range.min-line_range.min), txt_pt(mouse_pt.line, 1+line_token->range.max-line_range.min));
+        Rng1U64 line_token_range_clamped = intersect_1u64(line_token->range, line_range);
+        mouse_token_rng = txt_rng(txt_pt(mouse_pt.line, 1+line_token_range_clamped.min-line_range.min), txt_pt(mouse_pt.line, 1+line_token_range_clamped.max-line_range.min));
         break;
       }
     }
