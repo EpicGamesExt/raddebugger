@@ -4,11 +4,9 @@
 ////////////////////////////////
 //~ rjf: post-0.9.12 TODO notes
 //
-// [ ] fix quote input in quoteless watch window value editors
 // [ ] fix light themes
 //
 //
-// [ ] double click on breakpoints/watch-pins/etc. to go to location
 // [ ] auto view rule templates (?)
 // [ ] single-line visualization busted with auto-view-rules applied, it seems...
 //     not showing member variables, just commas, check w/ mohit
@@ -534,6 +532,8 @@
 // [x] ensure the following issues are resolved with this new pass:
 //  [x] debugger readme pass
 // [x] per-target stdout/stderr file output paths
+// [x] fix quote input in quoteless watch window value editors
+// [x] double click on breakpoints/watch-pins/etc. to go to location
 
 ////////////////////////////////
 //~ rjf: Build Options
