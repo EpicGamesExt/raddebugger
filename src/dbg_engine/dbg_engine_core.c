@@ -2381,6 +2381,14 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
               msg->entity = e->handle;
             }
           }
+          if(d_ctrl_targets_running())
+          {
+            need_run   = 1;
+            run_kind   = d_state->ctrl_last_run_kind;
+            run_thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, d_state->ctrl_last_run_thread_handle);
+            run_flags  = d_state->ctrl_last_run_flags;
+            run_traps  = d_state->ctrl_last_run_traps;
+          }
         }break;
         
         //- rjf: entity decoration

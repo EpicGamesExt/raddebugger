@@ -5952,19 +5952,7 @@ rd_window_frame(RD_Window *ws)
                 RD_Font(RD_FontSlot_Main)
                 UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Main))
               {
-                ui_labelf("Restart all running targets:");
-                {
-                  for(RD_EntityNode *n = processes.first; n != 0; n = n->next)
-                  {
-                    RD_Entity *process = n->entity;
-                    RD_Entity *target = rd_entity_from_handle(process->entity_handle);
-                    if(!rd_entity_is_nil(target))
-                    {
-                      String8 target_display_name = rd_display_string_from_entity(scratch.arena, target);
-                      ui_label(target_display_name);
-                    }
-                  }
-                }
+                ui_labelf("Restart");
               }
             }
             if(ui_clicked(sig))
@@ -6029,16 +6017,26 @@ rd_window_frame(RD_Window *ws)
           }
           
           //- rjf: step over button
-          UI_TextAlignment(UI_TextAlign_Center)
+          UI_TextAlignment(UI_TextAlign_Center) UI_Flags((can_play ? 0 : UI_BoxFlag_Disabled))
           {
             UI_Signal sig = ui_button(rd_icon_kind_text_table[RD_IconKind_StepOver]);
             os_window_push_custom_title_bar_client_area(ws->os, sig.box->rect);
             if(ui_hovering(sig))
             {
-              UI_Tooltip
-                RD_Font(RD_FontSlot_Main)
-                UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Main))
-                ui_labelf("Step Over");
+              if(can_play)
+              {
+                UI_Tooltip
+                  RD_Font(RD_FontSlot_Main)
+                  UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Main))
+                  ui_labelf("Step Over");
+              }
+              else
+              {
+                UI_Tooltip
+                  RD_Font(RD_FontSlot_Main)
+                  UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Main))
+                  ui_labelf("Disabled: %s", have_targets ? "Targets are currently running" : "No active targets exist");
+              }
             }
             if(ui_clicked(sig))
             {
@@ -6047,16 +6045,26 @@ rd_window_frame(RD_Window *ws)
           }
           
           //- rjf: step into button
-          UI_TextAlignment(UI_TextAlign_Center)
+          UI_TextAlignment(UI_TextAlign_Center) UI_Flags((can_play ? 0 : UI_BoxFlag_Disabled))
           {
             UI_Signal sig = ui_button(rd_icon_kind_text_table[RD_IconKind_StepInto]);
             os_window_push_custom_title_bar_client_area(ws->os, sig.box->rect);
             if(ui_hovering(sig))
             {
-              UI_Tooltip
-                RD_Font(RD_FontSlot_Main)
-                UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Main))
-                ui_labelf("Step Into");
+              if(can_play)
+              {
+                UI_Tooltip
+                  RD_Font(RD_FontSlot_Main)
+                  UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Main))
+                  ui_labelf("Step Over");
+              }
+              else
+              {
+                UI_Tooltip
+                  RD_Font(RD_FontSlot_Main)
+                  UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Main))
+                  ui_labelf("Disabled: %s", have_targets ? "Targets are currently running" : "No active targets exist");
+              }
             }
             if(ui_clicked(sig))
             {
