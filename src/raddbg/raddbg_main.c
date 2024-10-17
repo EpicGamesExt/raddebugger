@@ -5,6 +5,8 @@
 //~ rjf: post-0.9.12 TODO notes
 //
 // [ ] fix light themes
+// [ ] make `array` view rule work with actual array types, to change their
+//     size dynamically
 //
 //
 // [ ] auto view rule templates (?)
