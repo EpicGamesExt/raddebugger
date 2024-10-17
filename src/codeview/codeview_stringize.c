@@ -2328,3 +2328,15 @@ cv_stringize_c13_parsed(Arena *arena, String8List *out, CV_C13Parsed *c13){
     str8_list_push(arena, out, str8_lit("\n"));
   }
 }
+
+internal String8
+cv_string_from_inline_range_kind(CV_InlineRangeKind kind)
+{
+  String8 result = str8_zero();
+  switch (kind) {
+  case CV_InlineRangeKind_Expr: result = str8_lit("Expr"); break;
+  case CV_InlineRangeKind_Stmt: result = str8_lit("Stmt"); break;
+  }
+  return result;
+}
+

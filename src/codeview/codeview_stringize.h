@@ -79,4 +79,6 @@ internal void cv_stringize_leaf_array(Arena *arena, String8List *out,
 
 internal void cv_stringize_c13_parsed(Arena *arena, String8List *out, CV_C13Parsed *c13);
 
+internal String8 cv_string_from_inline_range_kind(CV_InlineRangeKind kind);
+
 #endif // CODEVIEW_STRINGIZE_H
