@@ -1255,7 +1255,7 @@ internal Rng1U64 rd_whole_range_from_eval_space(E_Space space);
 //~ rjf: Evaluation Visualization
 
 //- rjf: writing values back to child processes
-internal B32 rd_commit_eval_value_string(E_Eval dst_eval, String8 string);
+internal B32 rd_commit_eval_value_string(E_Eval dst_eval, String8 string, B32 string_needs_unescaping);
 
 //- rjf: eval / view rule params tree info extraction
 internal U64 rd_base_offset_from_eval(E_Eval eval);

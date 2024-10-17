@@ -1747,7 +1747,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                   {
                     E_Expr *expr = rd_expr_from_watch_view_row_column(scratch.arena, eval_view, row, col);
                     E_Eval dst_eval = e_eval_from_expr(scratch.arena, expr);
-                    success = rd_commit_eval_value_string(dst_eval, new_string);
+                    success = rd_commit_eval_value_string(dst_eval, new_string, !col->dequote_string);
                   }
                   if(!success)
                   {
@@ -1893,7 +1893,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
             {
               E_Expr *expr = rd_expr_from_watch_view_row_column(scratch.arena, eval_view, row, col);
               E_Eval dst_eval = e_eval_from_expr(scratch.arena, expr);
-              rd_commit_eval_value_string(dst_eval, str8_zero());
+              rd_commit_eval_value_string(dst_eval, str8_zero(), 0);
             }
           }
         }
@@ -7473,7 +7473,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(checkbox)
   E_Eval value_eval = e_value_eval_from_eval(eval);
   if(ui_clicked(rd_icon_buttonf(value_eval.value.u64 == 0 ? RD_IconKind_CheckHollow : RD_IconKind_CheckFilled, 0, "###check")))
   {
-    rd_commit_eval_value_string(eval, value_eval.value.u64 == 0 ? str8_lit("1") : str8_lit("0"));
+    rd_commit_eval_value_string(eval, value_eval.value.u64 == 0 ? str8_lit("1") : str8_lit("0"), 0);
   }
   scratch_end(scratch);
 }

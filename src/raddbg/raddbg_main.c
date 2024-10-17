@@ -5,6 +5,7 @@
 //~ rjf: post-0.9.12 TODO notes
 //
 // [ ] fix quote input in quoteless watch window value editors
+// [ ] fix light themes
 //
 //
 // [ ] double click on breakpoints/watch-pins/etc. to go to location

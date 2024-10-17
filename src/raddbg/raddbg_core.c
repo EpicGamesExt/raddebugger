@@ -2748,7 +2748,7 @@ rd_whole_range_from_eval_space(E_Space space)
 //- rjf: writing values back to child processes
 
 internal B32
-rd_commit_eval_value_string(E_Eval dst_eval, String8 string)
+rd_commit_eval_value_string(E_Eval dst_eval, String8 string, B32 string_needs_unescaping)
 {
   B32 result = 0;
   if(dst_eval.mode == E_Mode_Offset)
@@ -2776,14 +2776,17 @@ rd_commit_eval_value_string(E_Eval dst_eval, String8 string)
          e_type_kind_is_integer(direct_type_kind))
       {
         B32 is_quoted = 0;
-        if(string.size >= 1 && string.str[0] == '"')
+        if(string_needs_unescaping)
         {
-          string = str8_skip(string, 1);
-          is_quoted = 1;
-        }
-        if(string.size >= 1 && string.str[string.size-1] == '"')
-        {
-          string = str8_chop(string, 1);
+          if(string.size >= 1 && string.str[0] == '"')
+          {
+            string = str8_skip(string, 1);
+            is_quoted = 1;
+          }
+          if(string.size >= 1 && string.str[string.size-1] == '"')
+          {
+            string = str8_chop(string, 1);
+          }
         }
         if(is_quoted)
         {
@@ -6850,7 +6853,7 @@ rd_window_frame(RD_Window *ws)
                     if(ui_committed(sig))
                     {
                       String8 commit_string = str8(ws->hover_eval_txt_buffer, ws->hover_eval_txt_size);
-                      B32 success = rd_commit_eval_value_string(row_eval, commit_string);
+                      B32 success = rd_commit_eval_value_string(row_eval, commit_string, 1);
                       if(success == 0)
                       {
                         log_user_error(str8_lit("Could not commit value successfully."));
