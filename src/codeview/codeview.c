@@ -193,7 +193,7 @@ cv_decode_inline_annot_u32(String8 data, U64 offset, U32 *out_value)
     }
     
     // 2 bytes
-    else if((header & 0xC0) == 0x80 && cursor+2 <= data.size)
+    else if((header & 0xC0) == 0x80 && cursor+1 <= data.size)
     {
       U8 second_byte;
       cursor += str8_deserial_read_struct(data, cursor, &second_byte);
