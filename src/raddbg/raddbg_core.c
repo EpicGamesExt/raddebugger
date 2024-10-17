@@ -11295,14 +11295,18 @@ rd_regs_fill_slot_from_string(RD_RegSlot slot, String8 string)
   {
     default:
     case RD_RegSlot_String:
-    {
-      rd_regs()->string = push_str8_copy(rd_frame_arena(), string);
-    }break;
     case RD_RegSlot_FilePath:
     {
       String8TxtPtPair pair = str8_txt_pt_pair_from_string(string);
-      rd_regs()->file_path = push_str8_copy(rd_frame_arena(), pair.string);
-      rd_regs()->cursor = pair.pt;
+      if(pair.pt.line == 0)
+      {
+        rd_regs()->string = push_str8_copy(rd_frame_arena(), string);
+      }
+      else
+      {
+        rd_regs()->file_path = push_str8_copy(rd_frame_arena(), pair.string);
+        rd_regs()->cursor = pair.pt;
+      }
     }break;
     case RD_RegSlot_Cursor:
     {
