@@ -93,8 +93,11 @@ RD_EntityKindTable:
   {Target             target                targets                       1  0  1  1  1  0  1  0  0  1  1                      "Label"             Target                 "Target"                     }
   {Executable         executable            executables                   0  0  0  0  0  0  0  0  1  1  0                      "Executable"        Null                   "Executable"                 }
   {Arguments          arguments             argumentses                   0  0  0  0  0  0  0  0  0  1  0                      "Arguments"         Null                   "Arguments"                  }
-  {WorkingDirectory   working_directory     working_directories           0  0  0  0  0  0  0  0  1  1  0                      "Execution Path"    Null                   "Working Directory"          }
+  {WorkingDirectory   working_directory     working_directories           0  0  0  0  0  0  0  0  1  1  0                      "Path"              Null                   "Working Directory"          }
   {EntryPoint         entry_point           entry_points                  0  0  0  0  0  0  0  0  0  1  0                      "Symbol Name"       Null                   "Entry Point"                }
+  {StdoutPath         stdout_path           stdout_paths                  0  0  0  0  0  0  0  0  1  1  0                      "Path"              Null                   "Standard Output Path"       }
+  {StderrPath         stderr_path           stderr_paths                  0  0  0  0  0  0  0  0  1  1  0                      "Path"              Null                   "Standard Error Path"        }
+  {StdinPath          stdin_path            stdin_paths                   0  0  0  0  0  0  0  0  1  1  0                      "Path"              Null                   "Standard Input Path"        }
   
   //- rjf: frontend containers (windows, panels, views)
   {Window             window                windows                       1  0  0  0  0  0  1  0  0  1  1                      "Label"             Window                 "Window"                     }

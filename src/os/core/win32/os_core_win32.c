@@ -942,6 +942,20 @@ os_process_launch(OS_ProcessLaunchParams *params)
     startup_info.dwFlags |= STARTF_USESTDHANDLES;
     inherit_handles = 1;
   }
+  if(!os_handle_match(params->stderr_file, os_handle_zero()))
+  {
+    HANDLE stderr_handle = (HANDLE)params->stderr_file.u64[0];
+    startup_info.hStdError = stderr_handle;
+    startup_info.dwFlags |= STARTF_USESTDHANDLES;
+    inherit_handles = 1;
+  }
+  if(!os_handle_match(params->stdin_file, os_handle_zero()))
+  {
+    HANDLE stdin_handle = (HANDLE)params->stdin_file.u64[0];
+    startup_info.hStdInput = stdin_handle;
+    startup_info.dwFlags |= STARTF_USESTDHANDLES;
+    inherit_handles = 1;
+  }
   PROCESS_INFORMATION process_info = {0};
   if(CreateProcessW(0, (WCHAR*)cmd16.str, 0, 0, inherit_handles, creation_flags, use_null_env_arg ? 0 : (WCHAR*)env16.str, (WCHAR*)dir16.str, &startup_info, &process_info))
   {

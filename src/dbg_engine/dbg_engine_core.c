@@ -2031,6 +2031,9 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
               String8 args                    = str8_skip_chop_whitespace(target->args);
               String8 working_directory       = str8_skip_chop_whitespace(target->working_directory);
               String8 custom_entry_point_name = str8_skip_chop_whitespace(target->custom_entry_point_name);
+              String8 stdout_path             = str8_skip_chop_whitespace(target->stdout_path);
+              String8 stderr_path             = str8_skip_chop_whitespace(target->stderr_path);
+              String8 stdin_path              = str8_skip_chop_whitespace(target->stdin_path);
               String8List env                 = target->env;
               if(working_directory.size == 0)
               {
@@ -2071,6 +2074,9 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
                 msg->kind = CTRL_MsgKind_Launch;
                 msg->path = working_directory;
                 msg->cmd_line_string_list = cmdln_strings;
+                msg->stdout_path = stdout_path;
+                msg->stderr_path = stderr_path;
+                msg->stdin_path  = stdin_path;
                 msg->env_inherit = 1;
                 MemoryCopyArray(msg->exception_code_filters, exception_code_filters);
                 MemoryCopyStruct(&msg->meta_evals, meta_evals);

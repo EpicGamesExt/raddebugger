@@ -86,6 +86,9 @@ Y(String8, type(CTRL_PathString8),  dbg,               "Debug Info Path")\
 Y(String8, type(CTRL_PlainString8), args,              "Arguments")\
 Y(String8, type(CTRL_PathString8),  working_directory, "Working Directory")\
 Y(String8, type(CTRL_CodeString8),  entry_point,       "Custom Entry Point")\
+Y(String8, type(CTRL_PathString8),  stdout_path,       "Standard Output Path")\
+Y(String8, type(CTRL_PathString8),  stderr_path,       "Standard Error Path")\
+Y(String8, type(CTRL_PathString8),  stdin_path,        "Standard Input Path")\
 Y(String8, type(CTRL_PathString8),  source_location,   "Source Location")\
 Y(String8, type(CTRL_CodeString8),  function_location, "Function Location")\
 Y(String8, type(CTRL_CodeString8),  address_location,  "Address Location")\
@@ -132,6 +135,9 @@ struct_members(CTRL_TargetMetaEval)
   member_lit_comp(CTRL_MetaEval, type(CTRL_PlainString8),args,               .pretty_name = str8_lit_comp("Arguments")),
   member_lit_comp(CTRL_MetaEval, type(CTRL_PathString8), working_directory,  .pretty_name = str8_lit_comp("Working Directory")),
   member_lit_comp(CTRL_MetaEval, type(CTRL_CodeString8), entry_point,        .pretty_name = str8_lit_comp("Custom Entry Point")),
+  member_lit_comp(CTRL_MetaEval, type(CTRL_PathString8), stdout_path,        .pretty_name = str8_lit_comp("Standard Output Path")),
+  member_lit_comp(CTRL_MetaEval, type(CTRL_PathString8), stderr_path,        .pretty_name = str8_lit_comp("Standard Error Path")),
+  member_lit_comp(CTRL_MetaEval, type(CTRL_PathString8), stdin_path,         .pretty_name = str8_lit_comp("Standard Input Path")),
 };
 
 struct_members(CTRL_PinMetaEval)
@@ -544,6 +550,9 @@ struct CTRL_Msg
   String8List entry_points;
   String8List cmd_line_string_list;
   String8List env_string_list;
+  String8 stdout_path;
+  String8 stderr_path;
+  String8 stdin_path;
   CTRL_TrapList traps;
   CTRL_UserBreakpointList user_bps;
   CTRL_MetaEvalArray meta_evals;

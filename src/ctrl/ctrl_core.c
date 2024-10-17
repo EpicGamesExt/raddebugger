@@ -300,6 +300,14 @@ ctrl_serialized_string_from_msg_list(Arena *arena, CTRL_MsgList *msgs)
         str8_serial_push_data(scratch.arena, &msgs_srlzed, n->string.str, n->string.size);
       }
       
+      // rjf: write stdout/stderr/stdin paths
+      str8_serial_push_struct(scratch.arena, &msgs_srlzed, &msg->stdout_path.size);
+      str8_serial_push_string(scratch.arena, &msgs_srlzed, msg->stdout_path);
+      str8_serial_push_struct(scratch.arena, &msgs_srlzed, &msg->stderr_path.size);
+      str8_serial_push_string(scratch.arena, &msgs_srlzed, msg->stderr_path);
+      str8_serial_push_struct(scratch.arena, &msgs_srlzed, &msg->stdin_path.size);
+      str8_serial_push_string(scratch.arena, &msgs_srlzed, msg->stdin_path);
+      
       // rjf: write trap list
       str8_serial_push_struct(scratch.arena, &msgs_srlzed, &msg->traps.count);
       for(CTRL_TrapNode *n = msg->traps.first; n != 0; n = n->next)
@@ -404,6 +412,17 @@ ctrl_msg_list_from_serialized_string(Arena *arena, String8 string)
         read_off += str8_deserial_read(string, read_off, env_str.str, env_str.size, 1);
         str8_list_push(arena, &msg->env_string_list, env_str);
       }
+      
+      // rjf: read stdout/stderr/stdin paths
+      read_off += str8_deserial_read_struct(string, read_off, &msg->stdout_path.size);
+      msg->stdout_path.str = push_array(arena, U8, msg->stdout_path.size);
+      read_off += str8_deserial_read(string, read_off, msg->stdout_path.str, msg->stdout_path.size, 1);
+      read_off += str8_deserial_read_struct(string, read_off, &msg->stderr_path.size);
+      msg->stderr_path.str = push_array(arena, U8, msg->stderr_path.size);
+      read_off += str8_deserial_read(string, read_off, msg->stderr_path.str, msg->stderr_path.size, 1);
+      read_off += str8_deserial_read_struct(string, read_off, &msg->stdin_path.size);
+      msg->stdin_path.str = push_array(arena, U8, msg->stdin_path.size);
+      read_off += str8_deserial_read(string, read_off, msg->stdin_path.str, msg->stdin_path.size, 1);
       
       // rjf: read trap list
       U64 trap_count = 0;
@@ -4249,13 +4268,37 @@ ctrl_thread__end_and_flush_info_log(void)
 internal void
 ctrl_thread__launch(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
 {
+  //- rjf: obtain stdout/stderr/stdin handles
+  OS_Handle stdout_handle = {0};
+  OS_Handle stderr_handle = {0};
+  OS_Handle stdin_handle  = {0};
+  if(msg->stdout_path.size != 0)
+  {
+    OS_Handle f = os_file_open(OS_AccessFlag_Write|OS_AccessFlag_Read, msg->stdout_path);
+    os_file_close(f);
+    stdout_handle = os_file_open(OS_AccessFlag_Write|OS_AccessFlag_Append|OS_AccessFlag_ShareRead|OS_AccessFlag_ShareWrite|OS_AccessFlag_Inherited, msg->stdout_path);
+  }
+  if(msg->stderr_path.size != 0)
+  {
+    OS_Handle f = os_file_open(OS_AccessFlag_Write|OS_AccessFlag_Read, msg->stderr_path);
+    os_file_close(f);
+    stderr_handle = os_file_open(OS_AccessFlag_Write|OS_AccessFlag_Append|OS_AccessFlag_ShareRead|OS_AccessFlag_ShareWrite|OS_AccessFlag_Inherited, msg->stderr_path);
+  }
+  if(msg->stdin_path.size != 0)
+  {
+    stdin_handle = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead|OS_AccessFlag_ShareWrite|OS_AccessFlag_Inherited, msg->stdin_path);
+  }
+  
   //- rjf: launch
   OS_ProcessLaunchParams params = {0};
   {
-    params.cmd_line    = msg->cmd_line_string_list;
-    params.path        = msg->path;
-    params.env         = msg->env_string_list;
-    params.inherit_env = msg->env_inherit;
+    params.cmd_line      = msg->cmd_line_string_list;
+    params.path          = msg->path;
+    params.env           = msg->env_string_list;
+    params.inherit_env   = msg->env_inherit;
+    params.stdout_file   = stdout_handle;
+    params.stderr_file   = stderr_handle;
+    params.stdin_file    = stdin_handle;
   }
   U32 id = dmn_ctrl_launch(ctrl_ctx, &params);
   

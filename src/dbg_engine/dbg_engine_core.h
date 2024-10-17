@@ -14,6 +14,9 @@ struct D_Target
   String8 args;
   String8 working_directory;
   String8 custom_entry_point_name;
+  String8 stdout_path;
+  String8 stderr_path;
+  String8 stdin_path;
   String8List env;
 };
 

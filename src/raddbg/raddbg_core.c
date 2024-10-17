@@ -1895,12 +1895,18 @@ rd_d_target_from_entity(RD_Entity *entity)
   RD_Entity *src_target_exe   = rd_entity_child_from_kind(entity, RD_EntityKind_Executable);
   RD_Entity *src_target_args  = rd_entity_child_from_kind(entity, RD_EntityKind_Arguments);
   RD_Entity *src_target_wdir  = rd_entity_child_from_kind(entity, RD_EntityKind_WorkingDirectory);
+  RD_Entity *src_target_stdo  = rd_entity_child_from_kind(entity, RD_EntityKind_StdoutPath);
+  RD_Entity *src_target_stde  = rd_entity_child_from_kind(entity, RD_EntityKind_StderrPath);
+  RD_Entity *src_target_stdi  = rd_entity_child_from_kind(entity, RD_EntityKind_StdinPath);
   RD_Entity *src_target_entry = rd_entity_child_from_kind(entity, RD_EntityKind_EntryPoint);
   D_Target target = {0};
   target.exe                     = src_target_exe->string;
   target.args                    = src_target_args->string;
   target.working_directory       = src_target_wdir->string;
   target.custom_entry_point_name = src_target_entry->string;
+  target.stdout_path             = src_target_stdo->string;
+  target.stderr_path             = src_target_stde->string;
+  target.stdin_path              = src_target_stdi->string;
   return target;
 }
 
@@ -2301,6 +2307,9 @@ rd_ctrl_meta_eval_from_entity(Arena *arena, RD_Entity *entity)
   RD_Entity *args= rd_entity_child_from_kind(entity, RD_EntityKind_Arguments);
   RD_Entity *wdir= rd_entity_child_from_kind(entity, RD_EntityKind_WorkingDirectory);
   RD_Entity *entr= rd_entity_child_from_kind(entity, RD_EntityKind_EntryPoint);
+  RD_Entity *stdo= rd_entity_child_from_kind(entity, RD_EntityKind_StdoutPath);
+  RD_Entity *stde= rd_entity_child_from_kind(entity, RD_EntityKind_StderrPath);
+  RD_Entity *stdi= rd_entity_child_from_kind(entity, RD_EntityKind_StdinPath);
   RD_Entity *loc = rd_entity_child_from_kind(entity, RD_EntityKind_Location);
   RD_Entity *cnd = rd_entity_child_from_kind(entity, RD_EntityKind_Condition);
   RD_Entity *src = rd_entity_child_from_kind(entity, RD_EntityKind_Source);
@@ -2330,6 +2339,9 @@ rd_ctrl_meta_eval_from_entity(Arena *arena, RD_Entity *entity)
   meval->args      = args->string;
   meval->working_directory = wdir->string;
   meval->entry_point = entr->string;
+  meval->stdout_path = stdo->string;
+  meval->stderr_path = stde->string;
+  meval->stdin_path  = stdi->string;
   meval->source_location = src_loc_string;
   meval->address_location = vaddr_loc_string;
   meval->function_location = function_loc_string;
@@ -2600,6 +2612,9 @@ rd_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range)
       StringMemberCase(args)              {result = 1; rd_entity_equip_name(rd_entity_child_from_kind_or_alloc(entity, RD_EntityKind_Arguments), str8_cstring_capped(in, (U8 *)in + 4096));}
       StringMemberCase(working_directory) {result = 1; rd_entity_equip_name(rd_entity_child_from_kind_or_alloc(entity, RD_EntityKind_WorkingDirectory), str8_cstring_capped(in, (U8 *)in + 4096));}
       StringMemberCase(entry_point)       {result = 1; rd_entity_equip_name(rd_entity_child_from_kind_or_alloc(entity, RD_EntityKind_EntryPoint), str8_cstring_capped(in, (U8 *)in + 4096));}
+      StringMemberCase(stdout_path)       {result = 1; rd_entity_equip_name(rd_entity_child_from_kind_or_alloc(entity, RD_EntityKind_StdoutPath), str8_cstring_capped(in, (U8 *)in + 4096));}
+      StringMemberCase(stderr_path)       {result = 1; rd_entity_equip_name(rd_entity_child_from_kind_or_alloc(entity, RD_EntityKind_StderrPath), str8_cstring_capped(in, (U8 *)in + 4096));}
+      StringMemberCase(stdin_path)        {result = 1; rd_entity_equip_name(rd_entity_child_from_kind_or_alloc(entity, RD_EntityKind_StdinPath), str8_cstring_capped(in, (U8 *)in + 4096));}
       StringMemberCase(source_path)       {result = 1; rd_entity_equip_name(rd_entity_child_from_kind_or_alloc(entity, RD_EntityKind_Source), str8_cstring_capped(in, (U8 *)in + 4096));}
       StringMemberCase(destination_path)  {result = 1; rd_entity_equip_name(rd_entity_child_from_kind_or_alloc(entity, RD_EntityKind_Dest), str8_cstring_capped(in, (U8 *)in + 4096));}
       StringMemberCase(type)              {result = 1; rd_entity_equip_name(rd_entity_child_from_kind_or_alloc(entity, RD_EntityKind_Source), str8_cstring_capped(in, (U8 *)in + 4096));}

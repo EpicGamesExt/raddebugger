@@ -123,6 +123,8 @@ struct OS_ProcessLaunchParams
   B32 inherit_env;
   B32 consoleless;
   OS_Handle stdout_file;
+  OS_Handle stderr_file;
+  OS_Handle stdin_file;
 };
 
 ////////////////////////////////

@@ -1256,11 +1256,33 @@ dmn_ctrl_launch(DMN_CtrlCtx *ctx, OS_ProcessLaunchParams *params)
     String16 env16 = str16_from_8(scratch.arena, env);
     
     //- rjf: launch
-    DWORD access_flags = CREATE_UNICODE_ENVIRONMENT|DEBUG_PROCESS;
+    DWORD creation_flags = CREATE_UNICODE_ENVIRONMENT|DEBUG_PROCESS;
+    BOOL inherit_handles = 0;
     STARTUPINFOW startup_info = {sizeof(startup_info)};
+    if(!os_handle_match(params->stdout_file, os_handle_zero()))
+    {
+      HANDLE stdout_handle = (HANDLE)params->stdout_file.u64[0];
+      startup_info.hStdOutput = stdout_handle;
+      startup_info.dwFlags |= STARTF_USESTDHANDLES;
+      inherit_handles = 1;
+    }
+    if(!os_handle_match(params->stderr_file, os_handle_zero()))
+    {
+      HANDLE stderr_handle = (HANDLE)params->stderr_file.u64[0];
+      startup_info.hStdError = stderr_handle;
+      startup_info.dwFlags |= STARTF_USESTDHANDLES;
+      inherit_handles = 1;
+    }
+    if(!os_handle_match(params->stdin_file, os_handle_zero()))
+    {
+      HANDLE stdin_handle = (HANDLE)params->stdin_file.u64[0];
+      startup_info.hStdInput = stdin_handle;
+      startup_info.dwFlags |= STARTF_USESTDHANDLES;
+      inherit_handles = 1;
+    }
     PROCESS_INFORMATION process_info = {0};
     AllocConsole();
-    if(CreateProcessW(0, (WCHAR*)cmd16.str, 0, 0, 1, access_flags, (WCHAR*)env16.str, (WCHAR*)dir16.str, &startup_info, &process_info))
+    if(CreateProcessW(0, (WCHAR*)cmd16.str, 0, 0, 1, creation_flags, (WCHAR*)env16.str, (WCHAR*)dir16.str, &startup_info, &process_info))
     {
       // check if we are 32-bit app, and just close it immediately
       BOOL is_wow = 0;

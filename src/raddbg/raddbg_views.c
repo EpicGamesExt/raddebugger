@@ -5361,7 +5361,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(targets)
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,      0.75f, .dequote_string = 1, .is_non_code = 0);
   }
   rd_watch_view_build(wv, RD_WatchViewFlag_NoHeader|RD_WatchViewFlag_PrettyNameMembers|RD_WatchViewFlag_PrettyEntityRows|RD_WatchViewFlag_DisableCacheLines,
-                      str8_lit("targets"), str8_lit("only: label exe args working_directory entry_point str"), 1, 10, rect);
+                      str8_lit("targets"), str8_lit("only: label exe args working_directory entry_point stdout_path stderr_path stdin_path str"), 1, 10, rect);
   ProfEnd();
 }
 
@@ -5823,6 +5823,10 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(text)
   rd_regs()->cursor.column = rd_value_from_params_key(params, str8_lit("cursor_column")).s64;
   rd_regs()->mark.line     = rd_value_from_params_key(params, str8_lit("mark_line")).s64;
   rd_regs()->mark.column   = rd_value_from_params_key(params, str8_lit("mark_column")).s64;
+  if(rd_regs()->cursor.line == 0)   { rd_regs()->cursor.line = 1; }
+  if(rd_regs()->cursor.column == 0) { rd_regs()->cursor.column = 1; }
+  if(rd_regs()->mark.line == 0)   { rd_regs()->mark.line = 1; }
+  if(rd_regs()->mark.column == 0) { rd_regs()->mark.column = 1; }
   E_Eval eval = e_eval_from_string(scratch.arena, string);
   Rng1U64 range = rd_range_from_eval_params(eval, params);
   rd_regs()->text_key = rd_key_from_eval_space_range(eval.space, range, 1);
