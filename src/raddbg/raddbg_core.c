@@ -16357,7 +16357,7 @@ rd_frame(void)
     ////////////////////////////
     //- rjf: no selected thread? -> try to snap to any existing thread
     //
-    if(ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_base_regs()->thread) == &ctrl_entity_nil)
+    if(!d_ctrl_targets_running() && ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_base_regs()->thread) == &ctrl_entity_nil)
     {
       CTRL_Entity *process = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_base_regs()->process);
       if(process == &ctrl_entity_nil)

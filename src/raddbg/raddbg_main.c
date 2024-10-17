@@ -6,7 +6,6 @@
 //
 // [ ] fix quote input in quoteless watch window value editors
 //
-// [ ] per-target stdout/stderr file output paths
 //
 // [ ] double click on breakpoints/watch-pins/etc. to go to location
 // [ ] auto view rule templates (?)
@@ -533,6 +532,7 @@
 // [x] post-@msgs TODOs:
 // [x] ensure the following issues are resolved with this new pass:
 //  [x] debugger readme pass
+// [x] per-target stdout/stderr file output paths
 
 ////////////////////////////////
 //~ rjf: Build Options
