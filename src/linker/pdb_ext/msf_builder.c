@@ -21,7 +21,7 @@ msf_page_data_list_push(Arena *arena, MSF_PageDataList *list, MSF_UInt page_size
     // we can make API for stream allocation to let user 
     // choose between zeroed and dirty allocations
     //
-    U8 *data = push_array(arena, U8, data_size);
+    U8 *data = push_array_aligned(arena, U8, data_size, page_size);
 
     // init node
     MSF_PageDataNode *node = push_array_no_zero(arena, MSF_PageDataNode, 1);
