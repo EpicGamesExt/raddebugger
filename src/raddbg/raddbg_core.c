@@ -14152,7 +14152,7 @@ rd_frame(void)
             {
               rd_cmd(RD_CmdKind_OpenTab,
                      .string = rd_eval_string_from_file_path(scratch.arena, recent_file_path),
-                     .params_tree = md_tree_from_string(scratch.arena, src_view->spec->string)->first);
+                     .params_tree = md_tree_from_string(scratch.arena, rd_view_rule_kind_info_table[RD_ViewRuleKind_PendingFile].string)->first);
             }
             else
             {
