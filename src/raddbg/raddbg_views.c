@@ -1327,7 +1327,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
   Vec2S64 cursor_tbl = {0};
   Vec2S64 mark_tbl = {0};
   Rng2S64 selection_tbl = {0};
-  if(!is_top_level_hook) UI_Focus(UI_FocusKind_On)
+  if(!is_top_level_hook) ProfScope("consume events & perform navigations/edits - calculate state") UI_Focus(UI_FocusKind_On)
   {
     B32 state_dirty = 1;
     B32 snap_to_cursor = 0;
@@ -1338,7 +1338,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
       //////////////////////////
       //- rjf: state -> viz blocks
       //
-      if(state_dirty)
+      if(state_dirty) ProfScope("state -> viz blocks")
       {
         MemoryZeroStruct(&block_tree);
         MemoryZeroStruct(&block_ranges);
@@ -1350,6 +1350,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
       //////////////////////////
       //- rjf: block ranges -> ui row blocks
       //
+      ProfScope("block ranges -> ui row blocks")
       {
         UI_ScrollListRowBlockChunkList row_block_chunks = {0};
         for(EV_BlockRangeNode *n = block_ranges.first; n != 0; n = n->next)
@@ -2140,7 +2141,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
   //- rjf: build ui
   //
   B32 pressed = 0;
-  if(!is_top_level_hook)
+  if(!is_top_level_hook) ProfScope("build ui")
   {
     F32 **col_pcts = push_array(scratch.arena, F32*, ewv->column_count);
     {
@@ -5375,7 +5376,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(targets)
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,      0.75f, .dequote_string = 1, .is_non_code = 0);
   }
   rd_watch_view_build(wv, RD_WatchViewFlag_NoHeader|RD_WatchViewFlag_PrettyNameMembers|RD_WatchViewFlag_PrettyEntityRows|RD_WatchViewFlag_DisableCacheLines,
-                      str8_lit("targets"), str8_lit("only: label exe args working_directory entry_point stdout_path stderr_path stdin_path str"), 1, 10, rect);
+                      str8_lit("collection:targets"), str8_lit("only: label exe args working_directory entry_point stdout_path stderr_path stdin_path str"), 1, 10, rect);
   ProfEnd();
 }
 
@@ -5393,7 +5394,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(file_path_map)
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,      0.75f, .dequote_string = 1, .is_non_code = 0);
   }
   rd_watch_view_build(wv, RD_WatchViewFlag_NoHeader|RD_WatchViewFlag_PrettyNameMembers|RD_WatchViewFlag_PrettyEntityRows|RD_WatchViewFlag_DisableCacheLines,
-                      str8_lit("file_path_maps"), str8_lit("only: source_path destination_path str"), 1, 10, rect);
+                      str8_lit("collection:file_path_maps"), str8_lit("only: source_path destination_path str"), 1, 10, rect);
   ProfEnd();
 }
 
@@ -5411,7 +5412,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(auto_view_rules)
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,      0.75f, .dequote_string = 1, .is_non_code = 0);
   }
   rd_watch_view_build(wv, RD_WatchViewFlag_NoHeader|RD_WatchViewFlag_PrettyNameMembers|RD_WatchViewFlag_PrettyEntityRows|RD_WatchViewFlag_DisableCacheLines,
-                      str8_lit("auto_view_rules"), str8_lit("only: type view_rule str"), 1, 10, rect);
+                      str8_lit("collection:auto_view_rules"), str8_lit("only: type view_rule str"), 1, 10, rect);
   ProfEnd();
 }
 
@@ -5429,7 +5430,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(breakpoints)
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,      0.75f, .dequote_string = 1);
   }
   rd_watch_view_build(wv, RD_WatchViewFlag_NoHeader|RD_WatchViewFlag_PrettyNameMembers|RD_WatchViewFlag_PrettyEntityRows|RD_WatchViewFlag_DisableCacheLines,
-                      str8_lit("breakpoints"), str8_lit("only: label condition str hit_count source_location address_location function_location"), 0, 10, rect);
+                      str8_lit("collection:breakpoints"), str8_lit("only: label condition str hit_count source_location address_location function_location"), 0, 10, rect);
   ProfEnd();
 }
 
@@ -5447,7 +5448,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(watch_pins)
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,      0.75f, .dequote_string = 1);
   }
   rd_watch_view_build(wv, RD_WatchViewFlag_NoHeader|RD_WatchViewFlag_PrettyNameMembers|RD_WatchViewFlag_PrettyEntityRows|RD_WatchViewFlag_DisableCacheLines,
-                      str8_lit("watch_pins"), str8_lit("only: label source_location address_location str"), 0, 10, rect);
+                      str8_lit("collection:watch_pins"), str8_lit("only: label source_location address_location str"), 0, 10, rect);
   ProfEnd();
 }
 
@@ -5465,7 +5466,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(scheduler)
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,      0.75f, .dequote_string = 1);
   }
   rd_watch_view_build(wv, RD_WatchViewFlag_NoHeader|RD_WatchViewFlag_PrettyNameMembers|RD_WatchViewFlag_PrettyEntityRows|RD_WatchViewFlag_DisableCacheLines,
-                      str8_lit("machines"), str8_lit("only: label str id callstack v count vaddr inline_depth"), 0, 10, rect);
+                      str8_lit("collection:machines"), str8_lit("only: label str id callstack v count vaddr inline_depth"), 0, 10, rect);
   ProfEnd();
 }
 
@@ -5502,7 +5503,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(modules)
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,      0.75f, .dequote_string = 1);
   }
   rd_watch_view_build(wv, RD_WatchViewFlag_NoHeader|RD_WatchViewFlag_PrettyNameMembers|RD_WatchViewFlag_PrettyEntityRows|RD_WatchViewFlag_DisableCacheLines,
-                      str8_lit("modules"), str8_lit("only: exe dbg str vaddr_range min max"), 0, 16, rect);
+                      str8_lit("collection:modules"), str8_lit("only: exe dbg str vaddr_range min max"), 0, 16, rect);
   ProfEnd();
 }
 
@@ -5521,7 +5522,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(watch)
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Type,      0.15f);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_ViewRule,  0.30f);
   }
-  rd_watch_view_build(wv, 0, str8_lit("watches"), str8_lit(""), 1, 10, rect);
+  rd_watch_view_build(wv, 0, str8_lit("collection:watches"), str8_lit(""), 1, 10, rect);
   ProfEnd();
 }
 
@@ -5540,7 +5541,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(locals)
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Type,      0.15f);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_ViewRule,  0.30f);
   }
-  rd_watch_view_build(wv, 0, str8_lit("locals"), str8_lit(""), 0, 10, rect);
+  rd_watch_view_build(wv, 0, str8_lit("collection:locals"), str8_lit(""), 0, 10, rect);
   ProfEnd();
 }
 
@@ -5559,7 +5560,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(registers)
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Type,      0.15f);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_ViewRule,  0.30f);
   }
-  rd_watch_view_build(wv, 0, str8_lit("registers"), str8_lit("hex"), 0, 16, rect);
+  rd_watch_view_build(wv, 0, str8_lit("collection:registers"), str8_lit("hex"), 0, 16, rect);
   ProfEnd();
 }
 
@@ -5578,7 +5579,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(globals)
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Type,      0.15f);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_ViewRule,  0.30f);
   }
-  rd_watch_view_build(wv, 0, str8_lit("globals"), str8_lit(""), 0, 10, rect);
+  rd_watch_view_build(wv, 0, str8_lit("collection:globals"), str8_lit(""), 0, 10, rect);
   ProfEnd();
 }
 
@@ -5597,7 +5598,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(thread_locals)
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Type,      0.15f);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_ViewRule,  0.30f);
   }
-  rd_watch_view_build(wv, 0, str8_lit("thread_locals"), str8_lit(""), 0, 10, rect);
+  rd_watch_view_build(wv, 0, str8_lit("collection:thread_locals"), str8_lit(""), 0, 10, rect);
   ProfEnd();
 }
 
@@ -5616,7 +5617,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(types)
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Type,      0.15f);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_ViewRule,  0.30f);
   }
-  rd_watch_view_build(wv, 0, str8_lit("types"), str8_lit(""), 0, 10, rect);
+  rd_watch_view_build(wv, 0, str8_lit("collection:types"), str8_lit(""), 0, 10, rect);
   ProfEnd();
 }
 
@@ -5634,7 +5635,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(procedures)
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,     0.6f);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_ViewRule,  0.2f);
   }
-  rd_watch_view_build(wv, 0, str8_lit("procedures"), str8_lit(""), 0, 10, rect);
+  rd_watch_view_build(wv, 0, str8_lit("collection:procedures"), str8_lit(""), 0, 10, rect);
   ProfEnd();
 }
 

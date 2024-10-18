@@ -565,6 +565,7 @@ e_type_kind_from_key(E_TypeKey key)
 internal E_Type *
 e_type_from_key(Arena *arena, E_TypeKey key)
 {
+  ProfBeginFunction();
   E_Type *type = &e_type_nil;
   U64 reg_byte_count = 0;
   {
@@ -1115,6 +1116,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
       }break;
     }
   }
+  ProfEnd();
   return type;
 }
 

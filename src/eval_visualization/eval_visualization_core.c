@@ -671,6 +671,7 @@ ev_resolved_from_expr(Arena *arena, E_Expr *expr, EV_ViewRuleList *view_rules)
 internal EV_BlockTree
 ev_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, String8 string, E_Expr *expr, EV_ViewRuleList *view_rules)
 {
+  ProfBeginFunction();
   EV_BlockTree tree = {&ev_nil_block};
   {
     Temp scratch = scratch_begin(&arena, 1);
@@ -874,12 +875,14 @@ ev_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, String8 str
     }
     scratch_end(scratch);
   }
+  ProfEnd();
   return tree;
 }
 
 internal EV_BlockTree
 ev_block_tree_from_string(Arena *arena, EV_View *view, String8 filter, String8 string, EV_ViewRuleList *view_rules)
 {
+  ProfBeginFunction();
   EV_BlockTree tree = {0};
   Temp scratch = scratch_begin(&arena, 1);
   {
@@ -891,6 +894,7 @@ ev_block_tree_from_string(Arena *arena, EV_View *view, String8 filter, String8 s
     tree = ev_block_tree_from_expr(arena, view, filter, string, parse.expr, all_view_rules);
   }
   scratch_end(scratch);
+  ProfEnd();
   return tree;
 }
 
