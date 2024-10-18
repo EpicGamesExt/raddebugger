@@ -3472,7 +3472,13 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
   U64 pdatas_count = 0;
   U64 entry_point_voff = 0;
   Rng1U64 tls_vaddr_range = {0};
-  String8 builtin_debug_info_path = {0};
+  U32 pdb_dbg_time = 0;
+  U32 pdb_dbg_age = 0;
+  OS_Guid pdb_dbg_guid = {0};
+  String8 pdb_dbg_path = str8_zero();
+  U32 rdi_dbg_time = 0;
+  OS_Guid rdi_dbg_guid = {0};
+  String8 rdi_dbg_path = str8_zero();
   ProfScope("unpack relevant PE info")
   {
     B32 is_valid = 1;
@@ -3608,65 +3614,62 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
       tls_vaddr_range = r1u64(tls_header.index_address, tls_header.index_address+sizeof(U32));
       
       // rjf: grab data about debug info
-      U32 dbg_time = 0;
-      U32 dbg_age = 0;
-      OS_Guid dbg_guid = {0};
+
       if(data_dir_count > PE_DataDirectoryIndex_DEBUG)
       {
         // rjf: read data dir
         PE_DataDirectory dir = {0};
         dmn_process_read_struct(process.dmn_handle, vaddr_range.min + opt_ext_off_range.min + reported_data_dir_offset + sizeof(PE_DataDirectory)*PE_DataDirectoryIndex_DEBUG, &dir);
         
-        // rjf: read debug directory
-        PE_DebugDirectory dbg_data = {0};
-        dmn_process_read_struct(process.dmn_handle, vaddr_range.min+(U64)dir.virt_off, &dbg_data);
-        
-        // rjf: extract external file info from codeview header
-        if(dbg_data.type == PE_DebugDirectoryType_CODEVIEW)
+        U64 dbg_dir_count = dir.virt_size / sizeof(PE_DebugDirectory);
+        for(U64 dbg_dir_idx = 0; dbg_dir_idx < dbg_dir_count; dbg_dir_idx += 1)
         {
-          U64 dbg_path_off = 0;
-          U64 dbg_path_size = 0;
-          U64 cv_offset = dbg_data.voff;
-          U32 cv_magic = 0;
-          dmn_process_read_struct(process.dmn_handle, vaddr_range.min+cv_offset, &cv_magic);
-          switch(cv_magic)
+          // rjf: read debug directory
+          U64 dir_addr = vaddr_range.min + dir.virt_off + dbg_dir_idx * sizeof(PE_DebugDirectory);
+          PE_DebugDirectory dbg_data = {0};
+          dmn_process_read_struct(process.dmn_handle, dir_addr, &dbg_data);
+          
+          // rjf: extract external file info from codeview header
+          if(dbg_data.type == PE_DebugDirectoryType_CODEVIEW)
           {
-            default:break;
-            case PE_CODEVIEW_PDB20_MAGIC:
+            U32 cv_magic = 0;
+            dmn_process_read_struct(process.dmn_handle, vaddr_range.min + dbg_data.voff, &cv_magic);
+            switch(cv_magic)
             {
-              PE_CvHeaderPDB20 cv = {0};
-              dmn_process_read_struct(process.dmn_handle, vaddr_range.min+cv_offset, &cv);
-              dbg_time = cv.time;
-              dbg_age = cv.age;
-              dbg_path_off = cv_offset + sizeof(cv);
-            }break;
-            case PE_CODEVIEW_PDB70_MAGIC:
-            {
-              PE_CvHeaderPDB70 cv = {0};
-              dmn_process_read_struct(process.dmn_handle, vaddr_range.min+cv_offset, &cv);
-              dbg_guid = cv.guid;
-              dbg_age = cv.age;
-              dbg_path_off = cv_offset + sizeof(cv);
-            }break;
-          }
-          if(dbg_path_off > 0)
-          {
-            Temp scratch = scratch_begin(0, 0);
-            String8List parts = {0};
-            for(U64 off = dbg_path_off;; off += 256)
-            {
-              U8 bytes[256] = {0};
-              dmn_process_read(process.dmn_handle, r1u64(vaddr_range.min+off, vaddr_range.min+off+sizeof(bytes)), bytes);
-              U64 size = cstring8_length(&bytes[0]);
-              String8 part = str8(bytes, size);
-              str8_list_push(scratch.arena, &parts, part);
-              if(size < sizeof(bytes))
+              default:break;
+              case PE_CODEVIEW_PDB20_MAGIC:
               {
-                break;
-              }
+                PE_CvHeaderPDB20 cv;
+                U64 read_size = dmn_process_read_struct(process.dmn_handle, vaddr_range.min+dbg_data.voff, &cv);
+                if(read_size == sizeof(cv))
+                {
+                  pdb_dbg_time = cv.time;
+                  pdb_dbg_age = cv.age;
+                  pdb_dbg_path = dmn_process_read_cstring(arena, process.dmn_handle, vaddr_range.min + dbg_data.voff + sizeof(cv));
+                }
+              }break;
+              case PE_CODEVIEW_PDB70_MAGIC:
+              {
+                PE_CvHeaderPDB70 cv;
+                U64 read_size = dmn_process_read_struct(process.dmn_handle, vaddr_range.min + dbg_data.voff, &cv);
+                if(read_size == sizeof(cv))
+                {
+                  pdb_dbg_guid = cv.guid;
+                  pdb_dbg_age = cv.age;
+                  pdb_dbg_path = dmn_process_read_cstring(arena, process.dmn_handle, vaddr_range.min + dbg_data.voff + sizeof(cv));
+                }
+              }break;
+              case PE_CODEVIEW_RDI_MAGIC:
+              {
+                PE_CvHeaderRDI cv;
+                U64 read_size = dmn_process_read_struct(process.dmn_handle, vaddr_range.min + dbg_data.voff, &cv);
+                if(read_size == sizeof(cv))
+                {
+                  rdi_dbg_guid = cv.guid;
+                  rdi_dbg_path = dmn_process_read_cstring(arena, process.dmn_handle, vaddr_range.min + dbg_data.voff + sizeof(cv));
+                }
+              }break;
             }
-            builtin_debug_info_path = str8_list_join(arena, &parts, 0);
-            scratch_end(scratch);
           }
         }
       }
@@ -3676,16 +3679,22 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
   //////////////////////////////
   //- rjf: pick default initial debug info path
   //
-  String8 initial_debug_info_path = builtin_debug_info_path;
+  String8 initial_debug_info_path = str8_zero();
   {
     Temp scratch = scratch_begin(0, 0);
     String8 exe_folder = str8_chop_last_slash(path);
-    String8 builtin_debug_info_path__absolute = builtin_debug_info_path;
-    String8 builtin_debug_info_path__relative = push_str8f(scratch.arena, "%S/%S", exe_folder, builtin_debug_info_path);
+    String8 rdi_path__absolute = rdi_dbg_path; 
+    String8 rdi_path__relative = push_str8f(scratch.arena, "%S/%S", exe_folder, rdi_dbg_path);
+    String8 pdb_path__absolute = pdb_dbg_path;
+    String8 pdb_path__relative = push_str8f(scratch.arena, "%S/%S", exe_folder, pdb_dbg_path);
     String8 dbg_path_candidates[] =
     {
-      /* inferred (treated as relative): */ builtin_debug_info_path__relative,
-      /* inferred (treated as absolute): */ builtin_debug_info_path__absolute,
+      /* inferred (treated as absolute): */ rdi_path__absolute,
+      /* inferred (treated as relative): */ rdi_path__relative,
+      /* inferred (treated as absolute): */ pdb_path__absolute,
+      /* inferred (treated as relative): */ pdb_path__relative,
+      /* "foo.exe" -> "foo.rdi"          */ push_str8f(scratch.arena, "%S.rdi", str8_chop_last_dot(path)),
+      /* "foo.exe" -> "foo.exe.rdi"      */ push_str8f(scratch.arena, "%S.rdi", path),
       /* "foo.exe" -> "foo.pdb"          */ push_str8f(scratch.arena, "%S.pdb", str8_chop_last_dot(path)),
       /* "foo.exe" -> "foo.exe.pdb"      */ push_str8f(scratch.arena, "%S.pdb", path),
     };
