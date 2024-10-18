@@ -1801,7 +1801,7 @@ cv_dedup_symbol_ptr_array(TP_Context *tp, CV_SymbolPtrArray *symbols)
   }
   ProfEnd();
 
-  Assert(unique_symbol_count < symbols->count);
+  Assert(unique_symbol_count <= symbols->count);
   symbols->count = unique_symbol_count;
 
   ProfBeginDynamic("Sort [Count %llu]", symbols->count);
