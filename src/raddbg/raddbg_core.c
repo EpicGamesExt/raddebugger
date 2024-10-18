@@ -11309,7 +11309,7 @@ rd_regs_fill_slot_from_string(RD_RegSlot slot, String8 string)
     case RD_RegSlot_FilePath:
     {
       String8TxtPtPair pair = str8_txt_pt_pair_from_string(string);
-      if(pair.pt.line == 0)
+      if(pair.pt.line == 0 || slot == RD_RegSlot_String)
       {
         rd_regs()->string = push_str8_copy(rd_frame_arena(), string);
       }
