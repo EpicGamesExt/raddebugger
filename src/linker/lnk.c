@@ -3841,7 +3841,7 @@ lnk_run(int argc, char **argv)
 
             // cleanup disk
             os_delete_file_at_path(linker_manifest_path);
-            if (config->delete_manifest) {
+            if (config->delete_manifest == LNK_SwitchState_Yes) {
               os_delete_file_at_path(manifest_path);
             }
           }
