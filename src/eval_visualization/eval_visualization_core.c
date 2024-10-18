@@ -1595,15 +1595,16 @@ ev_string_from_simple_typed_eval(Arena *arena, EV_StringFlags flags, U32 radix, 
           break;
         }
       }
+      String8 numeric_value_string = str8_from_u64(scratch.arena, eval.value.u64, radix, min_digits, digit_group_separator);
       if(flags & EV_StringFlag_ReadOnlyDisplayRules)
       {
         if(constant_name.size != 0)
         {
-          result = push_str8f(arena, "0x%I64x (%S)", eval.value.u64, constant_name);
+          result = push_str8f(arena, "%S (%S)", numeric_value_string, constant_name);
         }
         else
         {
-          result = push_str8f(arena, "0x%I64x (%I64u)", eval.value.u64, eval.value.u64);
+          result = push_str8_copy(arena, numeric_value_string);
         }
       }
       else if(constant_name.size != 0)
@@ -1612,7 +1613,7 @@ ev_string_from_simple_typed_eval(Arena *arena, EV_StringFlags flags, U32 radix, 
       }
       else
       {
-        result = push_str8f(arena, "0x%I64x (%I64u)", eval.value.u64, eval.value.u64);
+        result = push_str8_copy(arena, numeric_value_string);
       }
       scratch_end(scratch);
     }break;
