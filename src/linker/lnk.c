@@ -311,7 +311,7 @@ lnk_make_linker_manifest(Arena      *arena,
 }
 
 internal void
-lnk_merge_manifest_files(Arena *arena, String8 mt_path, String8 manifest_name, String8 output_name, String8List manifest_path_list)
+lnk_merge_manifest_files(Arena *arena, String8 mt_path, String8 manifest_name, String8List manifest_path_list)
 {
   ProfBeginFunction();
   
@@ -328,7 +328,7 @@ lnk_merge_manifest_files(Arena *arena, String8 mt_path, String8 manifest_name, S
     str8_list_pushf(arena, &invoke_cmd_line, "-manifest");
     str8_list_push(arena, &invoke_cmd_line, full_path);
   }
-  str8_list_pushf(arena, &invoke_cmd_line, "-out:%S", output_name);
+  str8_list_pushf(arena, &invoke_cmd_line, "-out:%S", manifest_name);
   str8_list_pushf(arena, &invoke_cmd_line, "-nologo");
   
   OS_ProcessLaunchParams launch_opts = {0};
@@ -3824,7 +3824,7 @@ l.count += 1;                                                \
               str8_list_push(tp_arena->v[0], &input_manifest_path_list, linker_manifest_path);
               
               String8 merged_manifest_path = push_str8f(scratch.arena, "%S.manifest.merged", config->manifest_name);
-              lnk_merge_manifest_files(tp_arena->v[0], config->mt_path, config->manifest_name, merged_manifest_path, input_manifest_path_list);
+              lnk_merge_manifest_files(tp_arena->v[0], config->mt_path, merged_manifest_path, input_manifest_path_list);
               
               if (config->manifest_opt == LNK_ManifestOpt_Embed) {
                 // TODO: currently we convert manifest to res and parse res again, this unnecessary instead push manifest 
