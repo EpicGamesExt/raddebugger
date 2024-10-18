@@ -506,11 +506,15 @@ internal void
 pdb_strtab_alloc(PDB_StringTable *strtab, U32 max)
 {
   ProfBeginFunction();
+  
+  U64 bucket_max  = (U64)((F64)max * 1.3);
+  bucket_max     += 1; // reserve space for null string
+  
   strtab->arena         = arena_alloc();
   strtab->version       = 1;
   strtab->size          = 0;
   strtab->bucket_count  = 0;
-  strtab->bucket_max    = (U64)((F64)max * 1.3);
+  strtab->bucket_max    = bucket_max;
   strtab->ibucket_array = push_array(strtab->arena, U32, strtab->bucket_max);
   MemorySet(strtab->ibucket_array, 0xff, sizeof(strtab->ibucket_array[0]) * strtab->bucket_max);
   strtab->bucket_array = push_array(strtab->arena, PDB_StringTableBucket *, strtab->bucket_max);
