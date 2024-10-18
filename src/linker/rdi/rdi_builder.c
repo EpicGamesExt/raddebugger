@@ -1764,13 +1764,23 @@ rdib_idx_from_path_tree(RDIB_PathTree *tree, String8 path)
 {
   Temp scratch = scratch_begin(0,0);
 
+  // redirect to special nil string
+  if (path.size == 0) {
+    path = RDIB_PATH_TREE_NIL_STRING;
+  }
+
+  // begin traverse from tree root
   RDIB_PathTreeNode *curr_sub_path = tree->root;
-  String8List        sub_paths     = str8_split_by_string_chars(scratch.arena, path, str8_lit("/\\"), 0);
+
+  // split path & resolve dots
+  String8List sub_paths = str8_split_path(scratch.arena, path);
+  str8_path_list_resolve_dots_in_place(&sub_paths, path_style_from_str8(path));
+
   for (String8Node *n = sub_paths.first; n != 0; n = n->next) {
     // scan children sub-path match
     RDIB_PathTreeNode *sub_child;
     for (sub_child = curr_sub_path->first_child; sub_child != 0; sub_child = sub_child->next_sibling) {
-      if (str8_match(sub_child->sub_path, n->string, StringMatchFlag_CaseInsensitive)) {
+      if (str8_match(sub_child->sub_path, n->string, 0)) {
         break;
       }
     }
@@ -1780,13 +1790,16 @@ rdib_idx_from_path_tree(RDIB_PathTree *tree, String8 path)
       break;
     }
 
-    // descend
+    // descend to sub directory
     curr_sub_path = sub_child;
   }
 
-  U64 idx = max_U64;
-  if (curr_sub_path != 0) {
+  // did we find source file?
+  U64 idx = 0;
+  if (curr_sub_path != 0 && curr_sub_path->src_file != 0) {
     idx = curr_sub_path->node_idx;
+  } else {
+    Assert(!"unable to find source file path");
   }
 
   scratch_end(scratch);
@@ -2147,7 +2160,7 @@ rdib_string_map_sort_buckets(TP_Context *tp, RDIB_StringMapBucket **buckets, U64
   ProfEnd();
 
   // sort correctness check on element index
-#if 1
+#if 0
   {
     for (U64 i = 1; i < bucket_count; ++i) {
       RDIB_StringMapBucket *prev = buckets[i - 1];
@@ -3818,8 +3831,7 @@ rdib_build_path_tree(Arena                 *arena,
   Temp scratch = scratch_begin(&arena, 1);
 
   RDIB_PathTree *tree = rdib_path_tree_init(arena, worker_count);
-
-  rdib_path_tree_insert(arena, tree, str8_lit("<nil>"), null_src_file);
+  rdib_path_tree_insert(arena, tree, RDIB_PATH_TREE_NIL_STRING, null_src_file);
 
   ProfBegin("Units");
   for (U64 ichunk = 0; ichunk < unit_chunk_count; ++ichunk) {
@@ -3839,7 +3851,7 @@ rdib_build_path_tree(Arena                 *arena,
     RDIB_SourceFileChunk *chunk = src_file_chunks[chunk_idx];
     for (U64 i = 0; i < chunk->count; ++i) {
       RDIB_SourceFile *src_file = chunk->v + i;
-      rdib_path_tree_insert(arena, tree, src_file->normal_full_path, src_file);
+      rdib_path_tree_insert(arena, tree, src_file->file_path, src_file);
     }
   }
   ProfEnd();

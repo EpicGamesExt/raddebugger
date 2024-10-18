@@ -708,6 +708,8 @@ typedef struct
 
 ////////////////////////////////
 
+#define RDIB_PATH_TREE_NIL_STRING str8_lit("<nil>")
+
 typedef struct RDIB_PathTreeNode
 {
   struct RDIB_PathTreeNode *parent;
