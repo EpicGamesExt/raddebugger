@@ -841,35 +841,38 @@ ev_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, String8 str
         {
           continue;
         }
-        EV_ExpandRangeInfo child_expand = expand_view_rule_info->expr_expand_range_info(arena, view, filter, t->expr, expand_params, r1u64(split_relative_idx, split_relative_idx+1), expand_info.user_data);
-        if(child_expand.row_exprs_count > 0)
+        if(expand_info.rows_default_expanded || ev_expansion_from_key(view, child_keys[idx]))
         {
-          EV_Key child_key = child_keys[idx];
-          E_Expr *child_expr = child_expand.row_exprs[0];
-          EV_ViewRuleList *child_view_rules = ev_view_rule_list_from_inheritance(arena, t->view_rules);
-          String8 child_view_rule_string = ev_view_rule_from_key(view, child_key);
-          ev_view_rule_list_push_string(arena, child_view_rules, child_view_rule_string);
-          if(child_expand.row_strings[0].size != 0)
+          EV_ExpandRangeInfo child_expand = expand_view_rule_info->expr_expand_range_info(arena, view, filter, t->expr, expand_params, r1u64(split_relative_idx, split_relative_idx+1), expand_info.user_data);
+          if(child_expand.row_exprs_count > 0)
           {
-            EV_ViewRuleList *fastpath_view_rules = ev_view_rule_list_from_expr_fastpaths(arena, child_expand.row_strings[0]);
-            ev_view_rule_list_concat_in_place(child_view_rules, &fastpath_view_rules);
+            EV_Key child_key = child_keys[idx];
+            E_Expr *child_expr = child_expand.row_exprs[0];
+            EV_ViewRuleList *child_view_rules = ev_view_rule_list_from_inheritance(arena, t->view_rules);
+            String8 child_view_rule_string = ev_view_rule_from_key(view, child_key);
+            ev_view_rule_list_push_string(arena, child_view_rules, child_view_rule_string);
+            if(child_expand.row_strings[0].size != 0)
+            {
+              EV_ViewRuleList *fastpath_view_rules = ev_view_rule_list_from_expr_fastpaths(arena, child_expand.row_strings[0]);
+              ev_view_rule_list_concat_in_place(child_view_rules, &fastpath_view_rules);
+            }
+            {
+              Temp scratch = scratch_begin(&arena, 1);
+              E_IRTreeAndType child_irtree = e_irtree_and_type_from_expr(scratch.arena, child_expr);
+              EV_ViewRuleList *child_auto_view_rules = ev_auto_view_rules_from_type_key(arena, child_irtree.type_key, 1, child_view_rule_string.size == 0);
+              ev_view_rule_list_concat_in_place(child_view_rules, &child_auto_view_rules);
+              scratch_end(scratch);
+            }
+            E_Expr *child_expr__resolved = ev_resolved_from_expr(arena, child_expr, child_view_rules);
+            Task *task = push_array(scratch.arena, Task, 1);
+            SLLQueuePush(first_task, last_task, task);
+            task->parent_block       = expansion_block;
+            task->expr               = child_expr__resolved;
+            task->child_id           = child_key.child_id;
+            task->view_rules         = child_view_rules;
+            task->split_relative_idx = split_relative_idx;
+            task->default_expanded   = expand_info.rows_default_expanded;
           }
-          {
-            Temp scratch = scratch_begin(&arena, 1);
-            E_IRTreeAndType child_irtree = e_irtree_and_type_from_expr(scratch.arena, child_expr);
-            EV_ViewRuleList *child_auto_view_rules = ev_auto_view_rules_from_type_key(arena, child_irtree.type_key, 1, child_view_rule_string.size == 0);
-            ev_view_rule_list_concat_in_place(child_view_rules, &child_auto_view_rules);
-            scratch_end(scratch);
-          }
-          E_Expr *child_expr__resolved = ev_resolved_from_expr(arena, child_expr, child_view_rules);
-          Task *task = push_array(scratch.arena, Task, 1);
-          SLLQueuePush(first_task, last_task, task);
-          task->parent_block       = expansion_block;
-          task->expr               = child_expr__resolved;
-          task->child_id           = child_key.child_id;
-          task->view_rules         = child_view_rules;
-          task->split_relative_idx = split_relative_idx;
-          task->default_expanded   = expand_info.rows_default_expanded;
         }
       }
     }
