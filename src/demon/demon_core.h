@@ -226,6 +226,7 @@ internal U64 dmn_process_read(DMN_Handle process, Rng1U64 range, void *dst);
 internal B32 dmn_process_write(DMN_Handle process, Rng1U64 range, void *src);
 #define dmn_process_read_struct(process, vaddr, ptr) dmn_process_read((process), r1u64((vaddr), (vaddr)+(sizeof(*ptr))), ptr)
 #define dmn_process_write_struct(process, vaddr, ptr) dmn_process_write((process), r1u64((vaddr), (vaddr)+(sizeof(*ptr))), ptr)
+internal String8 dmn_process_read_cstring(Arena *arena, DMN_Handle process, U64 addr);
 
 //- rjf: threads
 internal Arch dmn_arch_from_thread(DMN_Handle handle);
