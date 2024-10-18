@@ -310,8 +310,8 @@ lnk_make_linker_manifest(Arena      *arena,
   return srl;
 }
 
-internal String8
-lnk_merge_manifest_files(Arena *arena, String8 mt_path, String8 manifest_name, String8List manifest_path_list)
+internal void
+lnk_merge_manifest_files(Arena *arena, String8 mt_path, String8 manifest_name, String8 output_name, String8List manifest_path_list)
 {
   ProfBeginFunction();
 
@@ -328,7 +328,7 @@ lnk_merge_manifest_files(Arena *arena, String8 mt_path, String8 manifest_name, S
     str8_list_pushf(arena, &invoke_cmd_line, "-manifest");
     str8_list_push(arena, &invoke_cmd_line, full_path);
   }
-  str8_list_pushf(arena, &invoke_cmd_line, "-out:%S", manifest_name);
+  str8_list_pushf(arena, &invoke_cmd_line, "-out:%S", output_name);
   str8_list_pushf(arena, &invoke_cmd_line, "-nologo");
 
   OS_ProcessLaunchParams launch_opts = {0};
@@ -351,7 +351,6 @@ lnk_merge_manifest_files(Arena *arena, String8 mt_path, String8 manifest_name, S
 
   scratch_end(scratch);
   ProfEnd();
-  return manifest_name;
 } 
 internal String8
 lnk_res_from_data(Arena *arena, String8 data)
@@ -3824,25 +3823,26 @@ lnk_run(int argc, char **argv)
             lnk_write_data_list_to_file_path(linker_manifest_path, linker_manifest_data_list);
             str8_list_push(tp_arena->v[0], &input_manifest_path_list, linker_manifest_path);
 
-            String8 manifest_path = lnk_merge_manifest_files(tp_arena->v[0], config->mt_path, config->manifest_name, input_manifest_path_list);
+            String8 merged_manifest_path = push_str8f(scratch.arena, "%S.manifest.merged", config->manifest_name);
+            lnk_merge_manifest_files(tp_arena->v[0], config->mt_path, config->manifest_name, merged_manifest_path, input_manifest_path_list);
 
             if (config->manifest_opt == LNK_ManifestOpt_Embed) {
               // TODO: currently we convert manifest to res and parse res again, this unnecessary instead push manifest 
               // resource to the tree directly
 
-              String8 manifest_data = os_data_from_file_path(scratch.arena, manifest_path);
+              String8 manifest_data = os_data_from_file_path(scratch.arena, merged_manifest_path);
               if (manifest_data.size == 0) {
-                lnk_error(LNK_Error_Mt, "unable to locate manifest to embed on disk, path \"%S\"", manifest_path);
+                lnk_error(LNK_Error_Mt, "unable to locate manifest to embed on disk, path \"%S\"", merged_manifest_path);
               }
               String8 manifest_res = lnk_res_from_data(tp_arena->v[0], manifest_data);
               str8_list_push(tp_arena->v[0], &res_data_list, manifest_res);
-              str8_list_push(tp_arena->v[0], &res_path_list, manifest_path);
+              str8_list_push(tp_arena->v[0], &res_path_list, merged_manifest_path);
             }
 
             // cleanup disk
             os_delete_file_at_path(linker_manifest_path);
             if (config->delete_manifest == LNK_SwitchState_Yes) {
-              os_delete_file_at_path(manifest_path);
+              os_delete_file_at_path(merged_manifest_path);
             }
           }
         }
