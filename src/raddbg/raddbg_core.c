@@ -2760,7 +2760,8 @@ rd_commit_eval_value_string(E_Eval dst_eval, String8 string, B32 string_needs_un
     E_TypeKind direct_type_kind = e_type_kind_from_key(direct_type_key);
     String8 commit_data = {0};
     B32 commit_at_ptr_dest = 0;
-    if(E_TypeKind_FirstBasic <= type_kind && type_kind <= E_TypeKind_LastBasic)
+    if((E_TypeKind_FirstBasic <= type_kind && type_kind <= E_TypeKind_LastBasic) ||
+       type_kind == E_TypeKind_Enum)
     {
       E_Eval src_eval = e_eval_from_string(scratch.arena, string);
       commit_data = push_str8_copy(scratch.arena, str8_struct(&src_eval.value));
