@@ -1945,72 +1945,73 @@ lnk_build_base_relocs(TP_Context       *tp,
   }
 
   ProfEnd();
-  
-  // push storage for section
-  LNK_Section *base_reloc_sect   = lnk_section_table_push(st, str8_lit(".reloc"), LNK_RELOC_SECTION_FLAGS);
-  LNK_Symbol  *base_reloc_symbol = lnk_make_defined_symbol_chunk(symtab->arena, str8_lit(LNK_BASE_RELOC_SYMBOL_NAME), LNK_DefinedSymbolVisibility_Internal, 0, base_reloc_sect->root, 0, 0, 0);
-  lnk_symbol_table_push(symtab, base_reloc_symbol);
 
-  ProfBegin("Page List -> Array");
-  LNK_BaseRelocPageArray page_arr = lnk_base_reloc_page_array_from_list(base_reloc_sect->arena, *main_page_list);
-  ProfEnd();
+  if (main_page_list->count > 0) {
+    LNK_Section *base_reloc_sect = lnk_section_table_push(st, str8_lit(".reloc"), LNK_RELOC_SECTION_FLAGS);
+    LNK_Symbol *base_reloc_symbol = lnk_make_defined_symbol_chunk(symtab->arena, str8_lit(LNK_BASE_RELOC_SYMBOL_NAME), LNK_DefinedSymbolVisibility_Internal, 0, base_reloc_sect->root, 0, 0, 0);
+    lnk_symbol_table_push(symtab, base_reloc_symbol);
 
-  ProfBegin("Sort Pages on VOFF");
-  lnk_base_reloc_page_array_sort(page_arr);
-  ProfEnd();
+    ProfBegin("Page List -> Array");
+    LNK_BaseRelocPageArray page_arr = lnk_base_reloc_page_array_from_list(base_reloc_sect->arena, *main_page_list);
+    ProfEnd();
+    
+    ProfBegin("Sort Pages on VOFF");
+    lnk_base_reloc_page_array_sort(page_arr);
+    ProfEnd();
 
-  HashTable *voff_ht = hash_table_init(tp_arena->v[0], page_size);
-  
-  ProfBegin("Serialize Pages");
-  for (U64 page_idx = 0; page_idx < page_arr.count; ++page_idx) {
-    LNK_BaseRelocPage *page = &page_arr.v[page_idx];
+    HashTable *voff_ht = hash_table_init(tp_arena->v[0], page_size);
+    
+    ProfBegin("Serialize Pages");
+    for (U64 page_idx = 0; page_idx < page_arr.count; ++page_idx) {
+      LNK_BaseRelocPage *page = &page_arr.v[page_idx];
 
-    // push buffer
-    U64 buf_align = sizeof(U32);
-    U64 buf_size  = AlignPow2(sizeof(U32)*2 + sizeof(U16)*page->entries.count, buf_align);
-    U8 *buf       = push_array_no_zero(base_reloc_sect->arena, U8, buf_size);
+      // push buffer
+      U64 buf_align = sizeof(U32);
+      U64 buf_size  = AlignPow2(sizeof(U32)*2 + sizeof(U16)*page->entries.count, buf_align);
+      U8 *buf       = push_array_no_zero(base_reloc_sect->arena, U8, buf_size);
 
-    // setup pointers into buffer
-    U32 *page_voff_ptr  = (U32*)buf;
-    U32 *block_size_ptr = page_voff_ptr + 1;
-    U16 *reloc_arr_base = (U16*)(block_size_ptr + 1);
-    U16 *reloc_arr_ptr  = reloc_arr_base;
+      // setup pointers into buffer
+      U32 *page_voff_ptr  = (U32*)buf;
+      U32 *block_size_ptr = page_voff_ptr + 1;
+      U16 *reloc_arr_base = (U16*)(block_size_ptr + 1);
+      U16 *reloc_arr_ptr  = reloc_arr_base;
 
-    // write reloc array
-    for (U64Node *i = page->entries.first; i != 0; i = i->next) {
-      // was base reloc entry made?
-      if (hash_table_search_u64(voff_ht, i->data)) {
-        continue;
+      // write reloc array
+      for (U64Node *i = page->entries.first; i != 0; i = i->next) {
+        // was base reloc entry made?
+        if (hash_table_search_u64(voff_ht, i->data)) {
+          continue;
+        }
+        hash_table_push_u64_u64(tp_arena->v[0], voff_ht, i->data, 0);
+
+        // write entry
+        U64 rel_off = i->data - page->voff;
+        Assert(rel_off <= page_size);
+        *reloc_arr_ptr++ = PE_BaseRelocMake(PE_BaseRelocKind_DIR64, rel_off);
       }
-      hash_table_push_u64_u64(tp_arena->v[0], voff_ht, i->data, 0);
 
-      // write entry
-      U64 rel_off = i->data - page->voff;
-      Assert(rel_off <= page_size);
-      *reloc_arr_ptr++ = PE_BaseRelocMake(PE_BaseRelocKind_DIR64, rel_off);
+      // write pad
+      U64 pad_reloc_count = AlignPadPow2(page->entries.count, sizeof(reloc_arr_ptr[0]));
+      MemoryZeroTyped(reloc_arr_ptr, pad_reloc_count); // fill pad with PE_BaseRelocKind_ABSOLUTE
+      reloc_arr_ptr += pad_reloc_count;
+
+      // compute block size
+      U64 reloc_arr_size = (U64)((U8*)reloc_arr_ptr - (U8*)reloc_arr_base);
+      U64 block_size     = sizeof(*page_voff_ptr) + sizeof(*block_size_ptr) + reloc_arr_size;
+      
+      // write header
+      *page_voff_ptr  = safe_cast_u32(page->voff);
+      *block_size_ptr = safe_cast_u32(block_size);
+      Assert(*block_size_ptr <= buf_size);
+      
+      // push page chunk
+      lnk_section_push_chunk_raw(base_reloc_sect, base_reloc_sect->root, buf, block_size, str8(0,0));
+
+      // purge voffs for next run
+      hash_table_purge(voff_ht);
     }
-
-    // write pad
-    U64 pad_reloc_count = AlignPadPow2(page->entries.count, sizeof(reloc_arr_ptr[0]));
-    MemoryZeroTyped(reloc_arr_ptr, pad_reloc_count); // fill pad with PE_BaseRelocKind_ABSOLUTE
-    reloc_arr_ptr += pad_reloc_count;
-
-    // compute block size
-    U64 reloc_arr_size = (U64)((U8*)reloc_arr_ptr - (U8*)reloc_arr_base);
-    U64 block_size     = sizeof(*page_voff_ptr) + sizeof(*block_size_ptr) + reloc_arr_size;
-    
-    // write header
-    *page_voff_ptr  = safe_cast_u32(page->voff);
-    *block_size_ptr = safe_cast_u32(block_size);
-    Assert(*block_size_ptr <= buf_size);
-    
-    // push page chunk
-    lnk_section_push_chunk_raw(base_reloc_sect, base_reloc_sect->root, buf, block_size, str8(0,0));
-
-    // purge voffs for next run
-    hash_table_purge(voff_ht);
+    ProfEnd();
   }
-  ProfEnd();
 
   tp_temp_end(temp);
   ProfEnd();
