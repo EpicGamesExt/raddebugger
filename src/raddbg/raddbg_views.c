@@ -1088,23 +1088,36 @@ rd_string_from_eval_viz_row_column(Arena *arena, EV_View *ev, EV_Row *row, RD_Wa
       RDI_Parsed *rdi = di_rdi_from_key(di_scope, &dbgi, 0);
       if(rdi != &di_rdi_parsed_nil)
       {
-        U64 voff = ctrl_voff_from_vaddr(module, vaddr);
-        RDI_Scope *scope = rdi_scope_from_voff(rdi, voff);
-        RDI_Procedure *procedure = rdi_procedure_from_scope(rdi, scope);
-        RDI_InlineSite *inline_site = rdi_inline_site_from_scope(rdi, scope);
-        for(U64 d = 0; d < depth;)
+        typedef struct ScopeTask ScopeTask;
+        struct ScopeTask
         {
-          scope = rdi_parent_from_scope(rdi, scope);
-          inline_site = rdi_inline_site_from_scope(rdi, scope);
-          if(scope->inline_site_idx != 0)
+          ScopeTask *next;
+          RDI_Scope *scope;
+        };
+        U64 voff = ctrl_voff_from_vaddr(module, vaddr);
+        RDI_Scope *root_scope = rdi_scope_from_voff(rdi, voff);
+        ScopeTask start_task = {0, root_scope};
+        ScopeTask *first_task = &start_task;
+        ScopeTask *last_task = &start_task;
+        for(;root_scope->parent_scope_idx != 0;)
+        {
+          root_scope = rdi_parent_from_scope(rdi, root_scope);
+          ScopeTask *t = push_array(scratch.arena, ScopeTask, 1);
+          SLLQueuePushFront(first_task, last_task, t);
+          t->scope = root_scope;
+        }
+        RDI_Scope *scope = root_scope;
+        U64 idx = 0;
+        for(ScopeTask *t = first_task; t != 0; t = t->next, idx += 1)
+        {
+          if(idx == depth)
           {
-            d += 1;
-          }
-          if(scope->parent_scope_idx == 0)
-          {
+            scope = t->scope;
             break;
           }
         }
+        RDI_Procedure *procedure = rdi_procedure_from_scope(rdi, scope);
+        RDI_InlineSite *inline_site = rdi_inline_site_from_scope(rdi, scope);
         if(inline_site->name_string_idx != 0 || inline_site->type_idx != 0)
         {
           String8List parts = {0};
