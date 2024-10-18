@@ -951,6 +951,7 @@ d_lines_array_from_file_path_line_range(Arena *arena, String8 file_path, Rng1S64
     array.v = push_array(arena, D_LineList, array.count);
   }
   Temp scratch = scratch_begin(&arena, 1);
+  U64 *lines_num_voffs = push_array(scratch.arena, U64, array.count);
   DI_Scope *scope = di_scope_open();
   DI_KeyList dbgi_keys = d_push_active_dbgi_key_list(scratch.arena);
   String8List overrides = rd_possible_overrides_from_file_path(scratch.arena, file_path);
@@ -971,7 +972,7 @@ d_lines_array_from_file_path_line_range(Arena *arena, String8 file_path, Rng1S64
       // rjf: file_path_normalized * rdi -> src_id
       B32 good_src_id = 0;
       U32 src_id = 0;
-      if(rdi != &di_rdi_parsed_nil)
+      if(rdi != &di_rdi_parsed_nil) ProfScope("file_path_normalized * rdi -> src_id")
       {
         RDI_NameMap *mapptr = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_NormalSourcePaths);
         RDI_ParsedNameMap map = {0};
@@ -990,7 +991,7 @@ d_lines_array_from_file_path_line_range(Arena *arena, String8 file_path, Rng1S64
       }
       
       // rjf: good src-id -> look up line info for visible range
-      if(good_src_id)
+      if(good_src_id) ProfScope("good src-id -> look up line info for visible range")
       {
         RDI_SourceFile *src = rdi_element_from_name_idx(rdi, SourceFiles, src_id);
         RDI_SourceLineMap *src_line_map = rdi_element_from_name_idx(rdi, SourceLineMaps, src->source_line_map_idx);
@@ -1004,7 +1005,7 @@ d_lines_array_from_file_path_line_range(Arena *arena, String8 file_path, Rng1S64
           D_LineList *list = &array.v[line_idx];
           U32 voff_count = 0;
           U64 *voffs = rdi_line_voffs_from_num(&line_map, u32_from_u64_saturate((U64)line_num), &voff_count);
-          for(U64 idx = 0; idx < voff_count; idx += 1)
+          if(lines_num_voffs[line_idx] < 8) ProfScope("iterate voffs (%i)", voff_count) for(U64 idx = 0; idx < voff_count; idx += 1)
           {
             U64 base_voff = voffs[idx];
             U64 unit_idx = rdi_vmap_idx_from_section_kind_voff(rdi, RDI_SectionKind_UnitVMap, base_voff);
@@ -1024,6 +1025,11 @@ d_lines_array_from_file_path_line_range(Arena *arena, String8 file_path, Rng1S64
               n->v.dbgi_key = key;
               SLLQueuePush(list->first, list->last, n);
               list->count += 1;
+              lines_num_voffs[line_idx] += 1;
+              if(lines_num_voffs[line_idx] >= 8)
+              {
+                break;
+              }
             }
           }
         }

@@ -1027,11 +1027,13 @@ rd_string_from_eval_viz_row_column(Arena *arena, EV_View *ev, EV_Row *row, RD_Wa
   {
     default:{}break;
     case RD_WatchViewColumnKind_Expr:
+    ProfScope("expr cell string")
     {
       result = ev_expr_string_from_row(arena, row, string_flags);
     }break;
     case RD_WatchViewColumnKind_Value:
     case RD_WatchViewColumnKind_Member:
+    ProfScope("value/member cell string")
     {
       EV_ViewRuleList *view_rules = row->view_rules;
       if(col->view_rule_size != 0)
@@ -1043,6 +1045,7 @@ rd_string_from_eval_viz_row_column(Arena *arena, EV_View *ev, EV_Row *row, RD_Wa
       result = rd_value_string_from_eval(arena, string_flags, default_radix, font, font_size, max_size_px, eval, row->member, view_rules);
     }break;
     case RD_WatchViewColumnKind_Type:
+    ProfScope("type cell string")
     {
       E_IRTreeAndType irtree = e_irtree_and_type_from_expr(arena, row_col_expr);
       E_TypeKey type_key = irtree.type_key;
@@ -1050,10 +1053,12 @@ rd_string_from_eval_viz_row_column(Arena *arena, EV_View *ev, EV_Row *row, RD_Wa
       result = str8_skip_chop_whitespace(result);
     }break;
     case RD_WatchViewColumnKind_ViewRule:
+    ProfScope("view rule cell string")
     {
       result = ev_view_rule_from_key(ev, row->key);
     }break;
     case RD_WatchViewColumnKind_Module:
+    ProfScope("module cell string")
     {
       E_Eval eval = e_eval_from_expr(arena, row_col_expr);
       E_Eval value_eval = e_value_eval_from_eval(eval);
@@ -1063,6 +1068,7 @@ rd_string_from_eval_viz_row_column(Arena *arena, EV_View *ev, EV_Row *row, RD_Wa
       result = push_str8_copy(arena, str8_skip_last_slash(module->string));
     }break;
     case RD_WatchViewColumnKind_CallStackFrame:
+    ProfScope("call stack frame cell string")
     {
       Temp scratch = scratch_begin(&arena, 1);
       DI_Scope *di_scope = di_scope_open();
@@ -2232,7 +2238,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
               if(row_eval.mode == E_Mode_Value)
               {
                 CTRL_Entity *process = ctrl_process_from_entity(row_ctrl_entity);
-                row_module = ctrl_module_from_process_vaddr(process, row_eval.value.u64);
+                row_module = ctrl_module_from_process_vaddr(process, d_query_cached_rip_from_thread(row_ctrl_entity));
               }break;
             }
           }

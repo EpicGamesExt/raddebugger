@@ -14141,39 +14141,42 @@ rd_frame(void)
             RD_View *src_view = rd_view_from_handle(rd_regs()->view);
             RD_ViewRuleKind src_view_kind = rd_view_rule_kind_from_string(src_view->spec->string);
             RD_Entity *recent_file = rd_entity_from_handle(rd_regs()->entity);
-            String8 recent_file_path = recent_file->string;
-            RD_Panel *existing_panel = &rd_nil_panel;
-            RD_View *existing_view = &rd_nil_view;
-            for(RD_Panel *panel = ws->root_panel; !rd_panel_is_nil(panel); panel = rd_panel_rec_depth_first_pre(panel).next)
+            if(!rd_entity_is_nil(recent_file))
             {
-              if(!rd_panel_is_nil(panel->first))
+              String8 recent_file_path = recent_file->string;
+              RD_Panel *existing_panel = &rd_nil_panel;
+              RD_View *existing_view = &rd_nil_view;
+              for(RD_Panel *panel = ws->root_panel; !rd_panel_is_nil(panel); panel = rd_panel_rec_depth_first_pre(panel).next)
               {
-                continue;
-              }
-              for(RD_View *v = panel->first_tab_view; !rd_view_is_nil(v); v = v->order_next)
-              {
-                if(rd_view_is_project_filtered(v)) { continue; }
-                String8 v_path = rd_file_path_from_eval_string(scratch.arena, str8(v->query_buffer, v->query_string_size));
-                RD_ViewRuleKind v_kind = rd_view_rule_kind_from_string(v->spec->string);
-                if(str8_match(v_path, recent_file_path, StringMatchFlag_CaseInsensitive) && v_kind == src_view_kind)
+                if(!rd_panel_is_nil(panel->first))
                 {
-                  existing_panel = panel;
-                  existing_view = v;
-                  goto done_existing_view_search__switch;
+                  continue;
+                }
+                for(RD_View *v = panel->first_tab_view; !rd_view_is_nil(v); v = v->order_next)
+                {
+                  if(rd_view_is_project_filtered(v)) { continue; }
+                  String8 v_path = rd_file_path_from_eval_string(scratch.arena, str8(v->query_buffer, v->query_string_size));
+                  RD_ViewRuleKind v_kind = rd_view_rule_kind_from_string(v->spec->string);
+                  if(str8_match(v_path, recent_file_path, StringMatchFlag_CaseInsensitive) && v_kind == src_view_kind)
+                  {
+                    existing_panel = panel;
+                    existing_view = v;
+                    goto done_existing_view_search__switch;
+                  }
                 }
               }
-            }
-            done_existing_view_search__switch:;
-            if(rd_view_is_nil(existing_view))
-            {
-              rd_cmd(RD_CmdKind_OpenTab,
-                     .string = rd_eval_string_from_file_path(scratch.arena, recent_file_path),
-                     .params_tree = md_tree_from_string(scratch.arena, rd_view_rule_kind_info_table[RD_ViewRuleKind_PendingFile].string)->first);
-            }
-            else
-            {
-              rd_cmd(RD_CmdKind_FocusPanel, .panel = rd_handle_from_panel(existing_panel));
-              existing_panel->selected_tab_view = rd_handle_from_view(existing_view);
+              done_existing_view_search__switch:;
+              if(rd_view_is_nil(existing_view))
+              {
+                rd_cmd(RD_CmdKind_OpenTab,
+                       .string = rd_eval_string_from_file_path(scratch.arena, recent_file_path),
+                       .params_tree = md_tree_from_string(scratch.arena, rd_view_rule_kind_info_table[RD_ViewRuleKind_PendingFile].string)->first);
+              }
+              else
+              {
+                rd_cmd(RD_CmdKind_FocusPanel, .panel = rd_handle_from_panel(existing_panel));
+                existing_panel->selected_tab_view = rd_handle_from_view(existing_view);
+              }
             }
           }break;
           case RD_CmdKind_SwitchToPartnerFile:
