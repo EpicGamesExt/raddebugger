@@ -3382,6 +3382,11 @@ lnk_run(int argc, char **argv)
             config->dll_characteristics |= PE_DllCharacteristic_TERMINAL_SERVER_AWARE;
           }
         }
+
+        // do we have a subsystem?
+        if (config->subsystem == PE_WindowsSubsystem_UNKNOWN) {
+          lnk_error(LNK_Error_NoSubsystem, "unknown subsystem, please use /SUBSYSTEM to set subsytem type you need");
+        }
       
         if (config->subsystem_ver.major == 0 && config->subsystem_ver.minor == 0) {
           // subsystem version not specified, set default values
