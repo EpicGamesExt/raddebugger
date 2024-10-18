@@ -219,6 +219,9 @@ rdi_stringize_file_path(Arena *arena, String8List *out, RDI_Parsed *rdi, RDI_Fil
 internal void
 rdi_stringize_source_file(Arena *arena, String8List *out, RDI_Parsed *rdi, RDI_SourceFile *source_file, U32 indent_level)
 {
+  // file path node idx
+  str8_list_pushf(arena, out, "%.*sfile_path_node_idx: %u\n", indent_level, rdi_stringize_spaces, source_file->file_path_node_idx);
+
   // normal source path
   String8 path = {0};
   path.str = rdi_string_from_idx(rdi, source_file->normal_full_path_string_idx, &path.size);
