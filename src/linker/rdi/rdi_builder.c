@@ -4806,11 +4806,6 @@ rdib_data_sections_from_line_tables(TP_Context            *tp,
   U64 line_table_cursor      = 0;
   U64 line_table_voff_cursor = 0;
   U64 line_table_line_cursor = 0;
-  //U64 line_table_col_cursor  = 0;
-
-  // fill out null line table
-  MemoryZeroStruct(&line_tables_rdi[line_table_cursor]);
-  ++line_table_cursor;
 
   for (U64 chunk_idx = 0; chunk_idx < chunk_count; ++chunk_idx) {
     RDIB_LineTableChunk *chunk = chunks[chunk_idx];
@@ -4824,17 +4819,15 @@ rdib_data_sections_from_line_tables(TP_Context            *tp,
 
         dst->voffs_base_idx = line_table_voff_cursor;
         dst->lines_base_idx = line_table_line_cursor;
-        dst->cols_base_idx  = 0; //line_table_cols_cursor;
+        dst->cols_base_idx  = 0;
         dst->lines_count    = task.out_line_table_counts[src_idx] - 1;
-        dst->cols_count     = 0; //src->col_count;
+        dst->cols_count     = 0;
 
         str8_list_push(arena->v[0], &line_table_voffs_sect.data, str8_array(task.out_line_table_voffs[src_idx], task.out_line_table_counts[src_idx]));
         str8_list_push(arena->v[0], &line_table_lines_sect.data, str8_array(task.out_line_table_lines[src_idx], task.out_line_table_counts[src_idx]));
-        //str8_list_push(arena->v[0], &line_table_cols_sect.data, str8_array(task.out_line_table_cols[src_idx], task.out_line_table_col_counts[src_idx]));
 
         line_table_voff_cursor += task.out_line_table_counts[src_idx];
         line_table_line_cursor += task.out_line_table_counts[src_idx];
-        //line_table_col_cursor += task.out_line_table_col_counts[src_idx];
 
         line_table_cursor += 1;
       } else {
@@ -4983,12 +4976,12 @@ rdib_init_input(Arena *arena)
 
     // Unit
     null_unit->arch             = RDI_Arch_NULL;
-    null_unit->unit_name        = str8_lit("");
-    null_unit->compiler_name    = str8_lit("");
-    null_unit->source_file      = str8_lit("");
-    null_unit->object_file      = str8_lit("");
-    null_unit->archive_file     = str8_lit("");
-    null_unit->build_path       = str8_lit("");
+    null_unit->unit_name        = str8_zero();
+    null_unit->compiler_name    = str8_zero();
+    null_unit->source_file      = str8_zero();
+    null_unit->object_file      = str8_zero();
+    null_unit->archive_file     = str8_zero();
+    null_unit->build_path       = str8_zero();
     null_unit->virt_range_count = 1;
     null_unit->virt_ranges      = push_array(arena, Rng1U64, 1);
     null_unit->virt_ranges[0]   = rng_1u64(0,0);
@@ -5165,7 +5158,7 @@ rdib_finish(TP_Context *tp, TP_Arena *arena, RDIB_Input *input)
   //U64                  udt_chunk_count     = struct_chunk_count + union_chunk_count + enum_chunk_count;
 
   ProfBegin("Assign Type Indices");
-  U64 total_type_node_count = 0;
+  U64 total_type_node_count = 1;
   {
     struct TypeNode {
       struct TypeNode *next;
@@ -5173,18 +5166,18 @@ rdib_finish(TP_Context *tp, TP_Arena *arena, RDIB_Input *input)
     };
     struct TypeNode *stack      = 0;
     struct TypeNode *free_nodes = 0;
-#define push_node(t) do {                                \
-if (((RDIB_Type*)(t))->kind == RDI_TypeKindExt_VirtualTable) break;    \
-  struct TypeNode *n;                                  \
-  if (free_nodes == 0) {                               \
-    n = push_array(scratch.arena, struct TypeNode, 1); \
-  } else {                                             \
-    n = free_nodes;                                    \
-    SLLStackPop(free_nodes);                           \
-  }                                                    \
-  Assert(t);                                           \
-  n->type = t;                                         \
-  SLLStackPush(stack, n);                              \
+#define push_node(t) do {                                           \
+if (((RDIB_Type*)(t))->kind == RDI_TypeKindExt_VirtualTable) break; \
+  struct TypeNode *n;                                               \
+  if (free_nodes == 0) {                                            \
+    n = push_array(scratch.arena, struct TypeNode, 1);              \
+  } else {                                                          \
+    n = free_nodes;                                                 \
+    SLLStackPop(free_nodes);                                        \
+  }                                                                 \
+  Assert(t);                                                        \
+  n->type = t;                                                      \
+  SLLStackPush(stack, n);                                           \
 } while (0)
 
     for (U64 chunk_idx = 0; chunk_idx < all_types.count; ++chunk_idx) {
@@ -5255,7 +5248,7 @@ if (((RDIB_Type*)(t))->kind == RDI_TypeKindExt_VirtualTable) break;    \
 
         for (struct TypeNode *cursor = stack; cursor != 0; cursor = cursor->next) {
           // was this type visisted?
-          if (cursor->type->final_idx == 0) {
+          if (cursor->type != input->null_type && cursor->type->final_idx == 0) {
             cursor->type->final_idx = total_type_node_count;
             ++total_type_node_count;
           }

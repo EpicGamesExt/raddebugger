@@ -3180,10 +3180,10 @@ THREAD_POOL_TASK_FUNC(lnk_build_udt_name_hash_table_task)
           U64     bucket_idx = best_idx;
 
           if (new_bucket == 0) {
-            new_bucket           = push_array(arena, LNK_UDTNameBucket, 1);
-            new_bucket->name     = name;
-            new_bucket->leaf_idx = leaf_idx;
+            new_bucket = push_array(arena, LNK_UDTNameBucket, 1);
           }
+          new_bucket->name = name;
+          new_bucket->leaf_idx = leaf_idx;
           
           B32 is_inserted_or_updated = 0;
           do {
@@ -3284,9 +3284,11 @@ lnk_push_converted_codeview_type(Arena *arena, RDIB_TypeChunkList *list, RDIB_Ty
 {
   RDIB_Type *type = rdib_type_chunk_list_push(arena, list, 8196);
   type->final_idx = 0;
-  type->itype = itype;
+  type->itype     = itype;
+
   Assert(itype_map[itype] == 0);
   itype_map[itype] = type;
+
   return type;
 }
 
@@ -3413,35 +3415,40 @@ lnk_push_basic_itypes(Arena *arena, RDIB_DataModel data_model, RDIB_Type **itype
 internal RDIB_TypeRef
 lnk_rdib_type_from_itype(LNK_ConvertTypesToRDI *task, CV_TypeIndex itype)
 {
-  if (itype < CV_MinComplexTypeIndex) {
-    // Check for supported CodeView pointer formats:
-    //  - near 64 bit
-    //  - 64 bit
-    //  - 32 bit
-    AssertAlways((itype >> 8) == /* near   */ 0x1 ||
-                 (itype >> 8) == /* 64 bit */ 0x6 ||
-                 (itype >> 8) == /* 32 bit */ 0x4 ||
-                 (itype >> 8) == 0);
+  RDIB_TypeRef result    = &task->tpi_itype_map[0];
+  Rng1U64      tpi_range = task->itype_ranges[CV_TypeIndexSource_TPI];
+
+  if (itype < tpi_range.min) {
+    // check for supported CodeView pointer formats:
+    AssertAlways(BitExtract(itype, 8, 8) == /* near   */  0x1 ||
+                 BitExtract(itype, 8, 8) == /* 32 bit */  0x4 ||
+                 BitExtract(itype, 8, 8) == /* 64 bit */  0x6 ||
+                 BitExtract(itype, 8, 8) == /* regular */ 0x0);
   }
 
-  RDIB_TypeRef ref = &task->tpi_itype_map[0];
-  if (itype < task->itype_ranges[CV_TypeIndexSource_TPI].max) {
+  if (itype < tpi_range.max) {
     CV_TypeIndex final_itype = itype;
-    if (itype > task->itype_ranges[CV_TypeIndexSource_TPI].min) {
-      CV_Leaf leaf = cv_debug_t_get_leaf(task->types[CV_TypeIndexSource_TPI], itype - task->itype_ranges[CV_TypeIndexSource_TPI].min);
+
+    // try to resovle forward reference (defn might be missing)
+    if (itype >= tpi_range.min) {
+      U64     leaf_idx = itype - tpi_range.min;
+      CV_Leaf leaf     = cv_debug_t_get_leaf(task->types[CV_TypeIndexSource_TPI], leaf_idx);
       if (cv_is_udt(leaf.kind)) {
         CV_UDTInfo udt_info = cv_get_udt_info(leaf.kind, leaf.data);
         if (udt_info.props & CV_TypeProp_FwdRef) {
-          String8 name = cv_name_from_udt_info(udt_info);
-          final_itype = lnk_udt_name_hash_table_lookup_itype(task->udt_name_buckets, task->udt_name_bucket_cap, name);
+          String8      name           = cv_name_from_udt_info(udt_info);
+          CV_TypeIndex resolved_itype = lnk_udt_name_hash_table_lookup_itype(task->udt_name_buckets, task->udt_name_bucket_cap, name);
+          if (resolved_itype != 0) {
+            final_itype = resolved_itype;
+          }
         }
       }
     }
 
-    ref = &task->tpi_itype_map[final_itype];
+    result = &task->tpi_itype_map[final_itype];
   }
 
-  return ref;
+  return result;
 }
 
 internal RDI_MemberKind
