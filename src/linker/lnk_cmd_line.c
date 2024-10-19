@@ -202,7 +202,7 @@ lnk_unwrap_rsp(Arena *arena, String8List arg_list)
 
       if (os_file_path_exists(name)) {
         // read rsp from disk
-        String8 file = os_data_from_file_path(scratch.arena, name);
+        String8 file = lnk_read_data_from_file_path(scratch.arena, name);
         
         // parse rsp
         String8List rsp_args = lnk_arg_list_parse_windows_rules(scratch.arena, file);

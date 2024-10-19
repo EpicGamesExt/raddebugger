@@ -1487,6 +1487,9 @@ lnk_config_from_cmd_line(Arena *arena, String8List raw_cmd_line)
           for (U64 ilog = 0; ilog < LNK_Log_Count; ilog += 1) {
             lnk_set_log_status((LNK_LogType)ilog, 1);
           }
+        } else if (str8_match(cmd->value_strings.first->string, str8_lit("io"), StringMatchFlag_CaseInsensitive)) {
+          lnk_set_log_status(LNK_Log_IO_Read, 1);
+          lnk_set_log_status(LNK_Log_IO_Write, 1);
         } else {
           LNK_LogType log_type = lnk_log_type_from_string(cmd->value_strings.first->string);
           if (log_type == LNK_Log_Null) {

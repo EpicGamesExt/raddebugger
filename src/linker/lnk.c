@@ -118,6 +118,7 @@
 #include "lnk_error.h"
 #include "lnk_log.h"
 #include "lnk_timer.h"
+#include "lnk_io.h"
 #include "lnk_cmd_line.h"
 #include "lnk_config.h"
 #include "lnk_chunk.h"
@@ -135,6 +136,7 @@
 #include "lnk_error.c"
 #include "lnk_log.c"
 #include "lnk_timer.c"
+#include "lnk_io.c"
 #include "lnk_cmd_line.c"
 #include "lnk_config.c"
 #include "lnk_chunk.c"
@@ -213,41 +215,6 @@ lnk_input_import_compar(const void *raw_a, const void *raw_b)
 }
 
 ////////////////////////////////
-
-internal void
-lnk_write_data_list_to_file_path(String8 path, String8List data)
-{
-#if PROFILE_TELEMETRY
-  {
-    Temp scratch = scratch_begin(0, 0);
-    String8 size_str = str8_from_memory_size2(scratch.arena, data.total_size);
-    ProfBeginDynamic("Write %.*s to %.*s", str8_varg(size_str), str8_varg(path));
-    scratch_end(scratch);
-  }
-#endif
-  B32 is_written = os_write_data_list_to_file_path(path, data);
-  if (is_written) {
-    if (lnk_get_log_status(LNK_Log_IO)) {
-      Temp scratch = scratch_begin(0,0);
-      String8 size_str = str8_from_memory_size2(scratch.arena, data.total_size);
-      lnk_log(LNK_Log_IO, "File \"%S\" %S written", path, size_str);
-      scratch_end(scratch);
-    }
-  } else {
-    lnk_error(LNK_Error_NoAccess, "don't have access to write to %S", path);
-  }
-  ProfEnd();
-}
-
-internal void
-lnk_write_data_to_file_path(String8 path, String8 data)
-{
-  Temp scratch = scratch_begin(0,0);
-  String8List data_list = {0};
-  str8_list_push(scratch.arena, &data_list, data);
-  lnk_write_data_list_to_file_path(path, data_list);
-  scratch_end(scratch);
-}
 
 internal String8
 lnk_make_full_path(Arena *arena, String8 work_dir, PathStyle system_path_style, String8 path)
@@ -396,7 +363,7 @@ lnk_manifest_from_inputs(Arena       *arena,
     lnk_merge_manifest_files(mt_path, merged_manifest_path, input_manifest_path_list);
 
     // read mt.exe output from disk
-    manifest_data = os_data_from_file_path(arena, merged_manifest_path);
+    manifest_data = lnk_read_data_from_file_path(arena, merged_manifest_path);
     if (manifest_data.size == 0) {
       lnk_error(LNK_Error_Mt, "unable to find mt.exe output manifest on disk, expected path \"%S\"", merged_manifest_path);
     }
@@ -1194,7 +1161,7 @@ THREAD_POOL_TASK_FUNC(lnk_load_thin_objs_task)
 {
   LNK_InputObj *input = ((LNK_InputObj **)raw_task)[task_id];
   if (input->is_thin) {
-    input->data = os_data_from_file_path(arena, input->path);
+    input->data = lnk_read_data_from_file_path(arena, input->path);
     input->has_disk_read_failed = (input->data.size == 0);
   }
 }
@@ -3760,7 +3727,7 @@ l.count += 1;                                                \
             {
               ProfBegin("Disk Read Libs");
               String8Array path_arr  = str8_array_from_list(scratch.arena, &unique_input_lib_list);
-              String8Array data_arr  = os_data_from_file_path_parallel(tp, tp_arena->v[0], path_arr);
+              String8Array data_arr  = lnk_read_data_from_file_path_parallel(tp, tp_arena->v[0], path_arr);
               ProfEnd();
               
               ProfBegin("Lib Init");
@@ -3851,7 +3818,7 @@ l.count += 1;                                                \
           
           ProfBegin("Load .res files from disk");
           for (String8Node *node = config->input_list[LNK_Input_Res].first; node != 0; node = node->next) {
-            String8 res_data = os_data_from_file_path(scratch.arena, node->string);
+            String8 res_data = lnk_read_data_from_file_path(scratch.arena, node->string);
             if (res_data.size > 0) {
               if (pe_is_res(res_data)) {
                 str8_list_push(scratch.arena, &res_data_list, res_data);

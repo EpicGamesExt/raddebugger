@@ -690,7 +690,7 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, String8List lib_dir
     // read type servers from disk in parallel
     {
       ProfBegin("Read External Type Servers");
-      String8Array msf_data_arr = os_data_from_file_path_parallel(tp, scratch.arena, ts_path_arr);
+      String8Array msf_data_arr = lnk_read_data_from_file_path_parallel(tp, scratch.arena, ts_path_arr);
       ProfEnd();
 
       MSF_Parsed **msf_parse_arr = lnk_msf_parsed_from_data_parallel(tp_arena, tp, msf_data_arr);
@@ -3098,7 +3098,7 @@ lnk_build_pdb(TP_Context               *tp,
   ProfBegin("Build NatVis");
   {
     String8Array natvis_file_path_arr = str8_array_from_list(scratch.arena, &natvis_list);
-    String8Array natvis_file_data_arr = os_data_from_file_path_parallel(tp, scratch.arena, natvis_file_path_arr);
+    String8Array natvis_file_data_arr = lnk_read_data_from_file_path_parallel(tp, scratch.arena, natvis_file_path_arr);
 
     for (U64 i = 0; i < natvis_file_data_arr.count; ++i) {
       String8 natvis_file_path = natvis_file_path_arr.v[i];

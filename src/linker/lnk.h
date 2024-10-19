@@ -238,9 +238,6 @@ internal LNK_InputImportList lnk_list_from_input_import_arr(LNK_InputImport **ar
 ////////////////////////////////
 // Helpers
 
-internal void lnk_write_data_list_to_file_path(String8 path, String8List list);
-internal void lnk_write_data_to_file_path(String8 path, String8 data);
-
 internal String8 lnk_make_full_path(Arena *arena, String8 work_dir, PathStyle system_path_style, String8 path);
 
 internal String8 lnk_get_lib_name(String8 path);
