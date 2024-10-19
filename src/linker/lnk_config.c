@@ -125,7 +125,6 @@ read_only struct
   { LNK_CmdSwitch_Rad_Debug,                   "RAD_DEBUG",                       "[:NO]", "Emit RAD debug info file."                                                  },
   { LNK_CmdSwitch_Rad_DebugName,               "RAD_DEBUG_NAME",                  ":FILENAME", "Sets file name for RAD debug info file."                                },
   { LNK_CmdSwitch_Rad_DelayBind,               "RAD_DELAY_BIND",                  "[:NO]", ""                                                                           },
-  { LNK_CmdSwitch_Rad_DeleteManifest,          "RAD_DELETE_MANIFEST",             "[:NO]", ""                                                                           },
   { LNK_CmdSwitch_Rad_DoMerge,                 "RAD_DO_MERGE",                    "[:NO]", ""                                                                           },
   { LNK_CmdSwitch_Rad_EnvLib,                  "RAD_ENV_LIB",                     "[:NO]", ""                                                                           },
   { LNK_CmdSwitch_Rad_Exe,                     "RAD_EXE",                         "[:NO]", ""                                                                           },
@@ -472,16 +471,13 @@ lnk_get_mt_path(Arena *arena)
 #pragma comment(lib, "shlwapi.lib")
 #include <shlwapi.h>
 
-  String8 mt_path = str8(0,0);
-  local_persist wchar_t raw_mt_path[MAX_PATH + 1] = L"mt.exe";
-  B32 is_mt_found = PathFindOnPathW(&raw_mt_path[0], 0);
-  if (is_mt_found) {
-    String16 mt_path_16 = str16_cstring(&raw_mt_path[0]);
-    mt_path = str8_from_16(arena, mt_path_16);
-    mt_path = path_convert_slashes(arena, mt_path, PathStyle_WindowsAbsolute);
-  } else {
-    lnk_error(LNK_Error_Cmdl, "mt.exe not found, please specify path with /RAD_MT_PATH or run vcvarsall.bat");
-  }
+  local_persist wchar_t raw_mt_path[MAX_PATH*2] = L"mt.exe";
+  PathFindOnPathW(&raw_mt_path[0], 0);
+
+  String16 mt_path_16 = str16_cstring_capped(&raw_mt_path[0], raw_mt_path + sizeof(raw_mt_path));
+  String8  mt_path    = str8_from_16(arena, mt_path_16);
+  
+  mt_path = path_convert_slashes(arena, mt_path, PathStyle_WindowsAbsolute);
 
 #undef OS_WINDOWS
 #define OS_WINDOWS 1
@@ -870,17 +866,16 @@ lnk_config_from_cmd_line(Arena *arena, String8List raw_cmd_line)
   lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_PathStyle, "system");
   lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_SectVirtOff, "0x1000");
   lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_Workers, "%u", os_get_system_info()->logical_processor_count);
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Manifest, "embed");
   lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_TargetOs, "windows");
-  //lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_Log, "debug");
   lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_SymbolTableCapDefined, "0x3ffff");
   lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_SymbolTableCapInternal, "0x1000");
   lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_SymbolTableCapWeak, "0x3ffff");
   lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_SymbolTableCapLib, "0x3ffff");
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_DeleteManifest, "");
 
-#if !BUILD_DEBUG
-  //lnk_cmd_line_push_optionf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_SuppressError, "37");
+#if BUILD_DEBUG
+  lnk_cmd_line_push_optionf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_Log, "debug");
+#else
+  lnk_cmd_line_push_optionf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_SuppressError, "37");
 #endif
 
   if (!lnk_cmd_line_has_switch(cmd_line, LNK_CmdSwitch_Rad_MtPath)) {
@@ -1135,9 +1130,6 @@ lnk_config_from_cmd_line(Arena *arena, String8List raw_cmd_line)
         if (param_arr.count > 0) {
           if (str8_match(param_arr.v[0], str8_lit("embed"), StringMatchFlag_CaseInsensitive)) {
             config->manifest_opt = LNK_ManifestOpt_Embed;
-            if (config->delete_manifest == LNK_SwitchState_Null) {
-              config->delete_manifest = 1;
-            }
 
             if (param_arr.count == 1) {
               if (lnk_cmd_line_has_switch(cmd_line, LNK_CmdSwitch_Dll)) {
@@ -1175,13 +1167,17 @@ lnk_config_from_cmd_line(Arena *arena, String8List raw_cmd_line)
           lnk_error_cmd_switch_invalid_param_count(LNK_Error_Cmdl, cmd_switch);
         }
       } else if (cmd->value_strings.node_count == 0) {
-        config->manifest_opt = LNK_ManifestOpt_Embed;
+        config->manifest_opt = LNK_ManifestOpt_WriteToFile;
       }
     } break;
 
     case LNK_CmdSwitch_ManifestDependency: {
       String8List manifest_dependency_list = str8_list_copy(arena, &cmd->value_strings);
       str8_list_concat_in_place(&config->manifest_dependency_list, &manifest_dependency_list);
+
+      if (config->manifest_opt == LNK_ManifestOpt_Null) {
+        config->manifest_opt = LNK_ManifestOpt_WriteToFile;
+      }
     } break;
 
     case LNK_CmdSwitch_ManifestFile: {
@@ -1419,10 +1415,6 @@ lnk_config_from_cmd_line(Arena *arena, String8List raw_cmd_line)
       lnk_cmd_switch_set_flag_64(cmd->value_strings, cmd_switch, &config->flags, LNK_ConfigFlag_DelayBind);
     } break;
 
-    case LNK_CmdSwitch_Rad_DeleteManifest: {
-      lnk_cmd_switch_parse_flag(cmd->value_strings, cmd_switch, &config->delete_manifest);
-    } break;
-
     case LNK_CmdSwitch_Rad_DoMerge: {
       lnk_cmd_switch_set_flag_64(cmd->value_strings, cmd_switch, &config->flags, LNK_ConfigFlag_Merge);
     } break;
@@ -1611,14 +1603,7 @@ lnk_config_from_cmd_line(Arena *arena, String8List raw_cmd_line)
 
   // :manifest_input
   if (lnk_cmd_line_has_switch(cmd_line, LNK_CmdSwitch_ManifestInput)) {
-    switch (config->manifest_opt) {
-    case LNK_ManifestOpt_Null: {
-      lnk_error_cmd_switch(LNK_Error_Cmdl, LNK_CmdSwitch_ManifestInput, "missing /MANIFEST:EMBED");
-    } break;
-    case LNK_ManifestOpt_No: {
-      lnk_error_cmd_switch(LNK_Warning_Cmdl, LNK_CmdSwitch_ManifestInput, "missing /MANIFEST:EMBED, ignoring inputs");
-    } break;
-    case LNK_ManifestOpt_Embed: {
+    if (config->manifest_opt == LNK_ManifestOpt_Embed) {
       for (LNK_CmdOption *cmd = cmd_line.first_option; cmd != 0; cmd = cmd->next) {
         LNK_CmdSwitchType cmd_switch = lnk_cmd_switch_type_from_string(cmd->string);
         if (cmd_switch == LNK_CmdSwitch_ManifestInput) {
@@ -1626,7 +1611,8 @@ lnk_config_from_cmd_line(Arena *arena, String8List raw_cmd_line)
           str8_list_concat_in_place(&config->input_list[LNK_Input_Manifest], &manifest_list);
         }
       }
-    } break;
+    } else {
+      lnk_error_cmd_switch(LNK_Error_Cmdl, LNK_CmdSwitch_ManifestInput, "missing /MANIFEST:EMBED");
     }
   }
 
@@ -1754,7 +1740,7 @@ lnk_config_from_cmd_line(Arena *arena, String8List raw_cmd_line)
 
   // handle empty /MANIFESTFILE
   if (!lnk_cmd_line_has_switch(cmd_line, LNK_CmdSwitch_ManifestFile)) {
-    config->manifest_name = make_file_path_with_ext(arena, config->image_name, str8_lit("manifest"));
+    config->manifest_name = push_str8f(arena, "%S.manifest", config->image_name);
   }
 
   if (lnk_get_log_status(LNK_Log_Debug)) {

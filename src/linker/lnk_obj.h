@@ -151,7 +151,7 @@ typedef struct
 
 typedef struct
 {
-  LNK_Obj     **in_arr;
+  LNK_ObjNode  *in_arr;
   String8List  *out_arr;
   Rng1U64      *range_arr;
 } LNK_ManifestDependencyCollector;

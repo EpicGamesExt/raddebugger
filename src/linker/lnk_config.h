@@ -123,7 +123,6 @@ typedef enum
   LNK_CmdSwitch_Rad_Debug,
   LNK_CmdSwitch_Rad_DebugName,
   LNK_CmdSwitch_Rad_DelayBind,
-  LNK_CmdSwitch_Rad_DeleteManifest,
   LNK_CmdSwitch_Rad_DoMerge,
   LNK_CmdSwitch_Rad_EnvLib,
   LNK_CmdSwitch_Rad_Exe,
@@ -205,8 +204,9 @@ typedef U32 LNK_GuardFlags;
 typedef enum
 {
   LNK_ManifestOpt_Null,
+  LNK_ManifestOpt_WriteToFile,
   LNK_ManifestOpt_Embed,
-  LNK_ManifestOpt_No
+  LNK_ManifestOpt_No,
 } LNK_ManifestOpt;
 
 typedef struct LNK_AltNameList
@@ -273,7 +273,6 @@ typedef struct LNK_Config
   String8List                 disallow_lib_list;
   String8List                 delay_load_dll_list;
   String8List                 natvis_list;
-  LNK_SwitchState             delete_manifest;
   String8                     manifest_name;
   B32                         manifest_uac;
   String8                     manifest_level;

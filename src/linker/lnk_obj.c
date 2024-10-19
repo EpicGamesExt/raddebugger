@@ -259,11 +259,11 @@ THREAD_POOL_TASK_FUNC(lnk_manifest_dependency_collector)
   Rng1U64                          range = task->range_arr[task_id];
   String8List                     *list  = &task->out_arr[task_id];
 
-  LNK_Obj **obj_ptr = &task->in_arr[range.min];
-  LNK_Obj **obj_opl = &task->in_arr[range.max];
+  LNK_ObjNode *obj_ptr = &task->in_arr[range.min];
+  LNK_ObjNode *obj_opl = &task->in_arr[range.max];
 
   for (; obj_ptr < obj_opl; obj_ptr += 1) {
-    LNK_Obj           *obj  = *obj_ptr;
+    LNK_Obj           *obj  = &obj_ptr->data;
     LNK_DirectiveList *dirs = &obj->directive_info.v[LNK_Directive_ManifestDependency];
     for (LNK_Directive *dir = dirs->first; dir != 0; dir = dir->next) {
       String8List dep = str8_list_copy(arena, &dir->value_list);
@@ -273,14 +273,14 @@ THREAD_POOL_TASK_FUNC(lnk_manifest_dependency_collector)
 }
 
 internal String8List
-lnk_collect_manifest_dependency_list(TP_Context *tp, TP_Arena *arena, LNK_Obj **obj_arr, U64 obj_count)
+lnk_collect_manifest_dependency_list(TP_Context *tp, TP_Arena *arena, LNK_ObjNodeArray obj_node_arr)
 {
-  Temp scratch = scratch_begin(0,0);
+  Temp scratch = scratch_begin(arena->v, arena->count);
 
   LNK_ManifestDependencyCollector task_data = {0};
-  task_data.in_arr                          = obj_arr;
+  task_data.in_arr                          = obj_node_arr.v;
   task_data.out_arr                         = push_array(scratch.arena, String8List, tp->worker_count);
-  task_data.range_arr                       = tp_divide_work(scratch.arena, obj_count, tp->worker_count);
+  task_data.range_arr                       = tp_divide_work(scratch.arena, obj_node_arr.count, tp->worker_count);
   tp_for_parallel(tp, arena, tp->worker_count, lnk_manifest_dependency_collector, &task_data);
 
   String8List result = str8_list_arr_concat(task_data.out_arr, tp->worker_count);

@@ -270,21 +270,27 @@ lnk_make_full_path(Arena *arena, String8 work_dir, PathStyle system_path_style, 
 
 ////////////////////////////////
 
-internal String8List
+internal String8
 lnk_make_linker_manifest(Arena      *arena,
                          B32         manifest_uac,
                          String8     manifest_level,
                          String8     manifest_ui_access,
                          String8List manifest_dependency_list)
 {
+  // TODO: we write a temp file with manifest attributes collected from obj directives and command line switches
+  // so we can pass file to mt.exe or llvm-mt.exe, when we have our own tool for merging manifest we can switch
+  // to writing manifest file in memory to skip roun-trip to disk
+
+  Temp scratch = scratch_begin(&arena, 1);
+
   String8List srl = {0};
-  str8_serial_begin(arena, &srl);
-  str8_serial_push_string(arena, &srl, str8_lit(
+  str8_serial_begin(scratch.arena, &srl);
+  str8_serial_push_string(scratch.arena, &srl, str8_lit(
                                                 "<?xml version=\"1.0\" standalone=\"yes\"?>\n"
                                                 "<assembly xmlns=\"urn:schemas-microsoft-com:asm.v1\"\n"
                                                 "          manifestVersion=\"1.0\">\n"));
   if (manifest_uac) {
-    String8 uac = push_str8f(arena,
+    String8 uac = push_str8f(scratch.arena,
                              "   <trustInfo>\n"
                              "     <security>\n"
                              "       <requestedPrivileges>\n"
@@ -294,64 +300,119 @@ lnk_make_linker_manifest(Arena      *arena,
                              "   </trustInfo>\n",
                              manifest_level,
                              manifest_ui_access);
-    str8_serial_push_string(arena, &srl, uac);
+    str8_serial_push_string(scratch.arena, &srl, uac);
   }
   for (String8Node *node = manifest_dependency_list.first; node != 0; node = node->next) {
-    String8 dep = push_str8f(arena, 
+    String8 dep = push_str8f(scratch.arena, 
                              " <dependency>\n"
                              "   <dependentAssembly>\n"
                              "     <assemblyIdentity %S/>\n"
                              "   </dependentAssembly>\n"
                              " </dependency>\n",
                              node->string);
-    str8_serial_push_string(arena, &srl, dep);
+    str8_serial_push_string(scratch.arena, &srl, dep);
   }
-  str8_serial_push_string(arena, &srl, str8_lit("</assembly>\n"));
-  return srl;
+  str8_serial_push_string(scratch.arena, &srl, str8_lit("</assembly>\n"));
+
+  String8 result = str8_list_join(arena, &srl, 0);
+
+  scratch_end(scratch);
+  return result;
 }
 
 internal void
-lnk_merge_manifest_files(Arena *arena, String8 mt_path, String8 manifest_name, String8List manifest_path_list)
+lnk_merge_manifest_files(String8 mt_path, String8 out_name, String8List manifest_path_list)
 {
   ProfBeginFunction();
-  
-  Temp scratch = scratch_begin(&arena,1);
+  Temp scratch = scratch_begin(0,0);
   
   String8List invoke_cmd_line = {0};
-  str8_list_push(arena, &invoke_cmd_line, mt_path);
-  String8 work_dir = os_get_current_path(arena);
+  str8_list_push(scratch.arena, &invoke_cmd_line, mt_path);
+  str8_list_pushf(scratch.arena, &invoke_cmd_line, "-out:%S", out_name);
+  str8_list_pushf(scratch.arena, &invoke_cmd_line, "-nologo");
+
+  // register input manifest files on command line
+  String8 work_dir = os_get_current_path(scratch.arena);
   for (String8Node *man_node = manifest_path_list.first;
        man_node != 0;
        man_node = man_node->next) {
-    String8 full_path = path_absolute_dst_from_relative_dst_src(arena, man_node->string, work_dir);
-    full_path = path_convert_slashes(arena, full_path, PathStyle_UnixAbsolute);
-    str8_list_pushf(arena, &invoke_cmd_line, "-manifest");
-    str8_list_push(arena, &invoke_cmd_line, full_path);
+    // resolve relativ path inputs
+    String8 full_path = path_absolute_dst_from_relative_dst_src(scratch.arena, man_node->string, work_dir);
+
+    // normalize slashes
+    full_path = path_convert_slashes(scratch.arena, full_path, PathStyle_UnixAbsolute);
+
+    // push input to command line
+    str8_list_pushf(scratch.arena, &invoke_cmd_line, "-manifest");
+    str8_list_push(scratch.arena, &invoke_cmd_line, full_path);
   }
-  str8_list_pushf(arena, &invoke_cmd_line, "-out:%S", manifest_name);
-  str8_list_pushf(arena, &invoke_cmd_line, "-nologo");
   
+  // launch mt.exe with our command line
   OS_ProcessLaunchParams launch_opts = {0};
   launch_opts.cmd_line               = invoke_cmd_line;
   launch_opts.path                   = str8_chop_last_slash(mt_path);
   launch_opts.inherit_env            = 1;
   launch_opts.consoleless            = 1;
-  
   OS_Handle mt_handle = os_process_launch(&launch_opts);
-  if (!os_handle_match(mt_handle, os_handle_zero())) {
-    if (os_process_join(mt_handle, max_U64)) {
-      if (!os_file_path_exists(manifest_name)) {
-        lnk_error(LNK_Error_Mt, "something went wrong, manifest was not written to \"%S\"", manifest_name);
-      }
-    }
-    os_process_detach(mt_handle);
+  if (os_handle_match(mt_handle, os_handle_zero())) {
+    lnk_error(LNK_Error_Mt, "unable to start process: %S", mt_path);
   } else {
-    lnk_error(LNK_Error_Mt, "unable to start process for %S", mt_path);
+    os_process_join(mt_handle, max_U64);
+    os_process_detach(mt_handle);
   }
   
   scratch_end(scratch);
   ProfEnd();
 } 
+
+internal String8
+lnk_manifest_from_inputs(Arena       *arena,
+                         String8      mt_path,
+                         String8      manifest_name,
+                         B32          manifest_uac,
+                         String8      manifest_level,
+                         String8      manifest_ui_access,
+                         String8List  input_manifest_path_list,
+                         String8List  deps_list)
+{
+  String8 manifest_data;
+
+  if (input_manifest_path_list.node_count > 0) {
+    ProfBegin("Merge Manifests");
+    Temp scratch = scratch_begin(&arena, 1);
+    
+    String8 linker_manifest = lnk_make_linker_manifest(scratch.arena, manifest_uac, manifest_level, manifest_ui_access, deps_list);
+
+    // write linker manifest to temp file
+    String8 linker_manifest_path = push_str8f(scratch.arena, "%S.manifest.temp", manifest_name);
+    lnk_write_data_to_file_path(linker_manifest_path, linker_manifest);
+
+    // push linker manifest
+    str8_list_push(scratch.arena, &input_manifest_path_list, linker_manifest_path);
+
+    // launch mt.exe to merge input manifests
+    String8 merged_manifest_path = push_str8f(scratch.arena, "%S.manifest.merged", manifest_name);
+    lnk_merge_manifest_files(mt_path, merged_manifest_path, input_manifest_path_list);
+
+    // read mt.exe output from disk
+    manifest_data = os_data_from_file_path(arena, merged_manifest_path);
+    if (manifest_data.size == 0) {
+      lnk_error(LNK_Error_Mt, "unable to find mt.exe output manifest on disk, expected path \"%S\"", merged_manifest_path);
+    }
+
+    // cleanup disk
+    os_delete_file_at_path(linker_manifest_path);
+    os_delete_file_at_path(merged_manifest_path);
+
+    scratch_end(scratch);
+    ProfEnd();
+  } else {
+    manifest_data = lnk_make_linker_manifest(arena, manifest_uac, manifest_level, manifest_ui_access, deps_list);
+  }
+
+  return manifest_data;
+}
+
 internal String8
 lnk_res_from_data(Arena *arena, String8 data)
 {
@@ -3203,6 +3264,8 @@ l.count += 1;                                                \
   // inputs
   String8List         include_symbol_list               = config->include_symbol_list;
   String8List         input_disallow_lib_list           = config->disallow_lib_list;
+  String8List         input_manifest_path_list          = str8_list_copy(tp_arena->v[0], &config->input_list[LNK_Input_Manifest]);
+  String8List         manifest_dep_list                 = str8_list_copy(scratch.arena, &config->manifest_dependency_list);
   LNK_AltNameList     alt_name_list                     = config->alt_name_list;
   LNK_InputLibList    input_libs[LNK_InputSource_Count] = {0};
   LNK_InputObjList    input_obj_list                    = {0};
@@ -3564,7 +3627,7 @@ l.count += 1;                                                \
         case State_InputObjs: {
           ProfBegin("Input Objs [Count %llu]", input_obj_list.count);
           
-          ProfBegin("Gather Objs");
+          ProfBegin("Collect Obj Paths");
           LNK_InputObjList unique_obj_input_list = {0};
           for (LNK_InputObj *input = input_obj_list.first, *next; input != 0; input = next) {
             next = input->next;
@@ -3636,12 +3699,16 @@ l.count += 1;                                                \
             }
           }
           ProfEnd();
+
+          // collect manifest dependencies
+          String8List obj_dep_list = lnk_collect_manifest_dependency_list(tp, tp_arena, obj_node_arr);
+          str8_list_concat_in_place(&manifest_dep_list, &obj_dep_list);
           
-          // gather libs for input
+          // collect libs for input
           LNK_InputLibList lib_list = lnk_collect_default_lib_obj_arr(tp, tp_arena, obj_node_arr); // TODO: put these on temp arena
           str8_list_concat_in_place(&input_libs[LNK_InputSource_Obj], &lib_list);
           
-          // gather symbols for input
+          // collect symbols for input
           LNK_SymbolList new_defn_list  = lnk_run_symbol_collector(tp, tp_arena, obj_node_arr, LNK_Symbol_DefinedExtern);
           LNK_SymbolList new_weak_list  = lnk_run_symbol_collector(tp, tp_arena, obj_node_arr, LNK_Symbol_Weak);
           LNK_SymbolList new_undef_list = lnk_run_symbol_collector(tp, tp_arena, obj_node_arr, LNK_Symbol_Undefined); // TODO: allocate these on temp arena
@@ -3778,77 +3845,60 @@ l.count += 1;                                                \
           String8List res_data_list = {0};
           String8List res_path_list = {0};
           
-          ProfBegin("Build * Resources *");
-          {
-            // load .res from disk
-            for (String8Node *node = config->input_list[LNK_Input_Res].first; node != 0; node = node->next) {
-              String8 res_data = os_data_from_file_path(tp_arena->v[0], node->string);
-              if (res_data.size > 0) {
-                if (pe_is_res(res_data)) {
-                  String8 stable_res_path = lnk_make_full_path(tp_arena->v[0], config->work_dir, config->path_style, node->string);
-                  str8_list_push(scratch.arena, &res_path_list, stable_res_path);
-                  str8_list_push(tp_arena->v[0], &res_data_list, res_data);
-                } else {
-                  lnk_error(LNK_Error_IllData, "file is not of RES format: %S", node->string);
-                }
+          // do we have manifest deps passed through pragma alone?
+          LNK_ManifestOpt manifest_opt = config->manifest_opt;
+          if (manifest_dep_list.node_count > 0 && manifest_opt == LNK_ManifestOpt_Null) {
+            manifest_opt = LNK_ManifestOpt_Embed;
+          }
+
+          switch (manifest_opt) {
+          case LNK_ManifestOpt_Embed: {
+            ProfBegin("Embed Manifest");
+            // TODO: currently we convert manifest to res and parse res again, this unnecessary instead push manifest 
+            // resource to the tree directly
+            String8 manifest_data = lnk_manifest_from_inputs(scratch.arena, config->mt_path, config->manifest_name, config->manifest_uac, config->manifest_level, config->manifest_ui_access, input_manifest_path_list, manifest_dep_list);
+            String8 manifest_res = lnk_res_from_data(scratch.arena, manifest_data);
+            str8_list_push(scratch.arena, &res_data_list, manifest_res);
+            str8_list_push(scratch.arena, &res_path_list, str8_lit("* Manifest *"));
+            ProfEnd();
+          } break;
+          case LNK_ManifestOpt_WriteToFile: {
+            ProfBeginDynamic("Write Manifest To: %.*s", str8_varg(config->manifest_name));
+            Temp temp = temp_begin(scratch.arena);
+            String8 manifest_data = lnk_manifest_from_inputs(temp.arena, config->mt_path, config->manifest_name, config->manifest_uac, config->manifest_level, config->manifest_ui_access, input_manifest_path_list, manifest_dep_list);
+            lnk_write_data_to_file_path(config->manifest_name, manifest_data);
+            temp_end(temp);
+            ProfEnd();
+          } break;
+          case LNK_ManifestOpt_Null: {
+            Assert(input_manifest_path_list.node_count == 0);
+            Assert(manifest_dep_list.node_count == 0);
+          } break;
+          case LNK_ManifestOpt_No: {
+            // omit manifest generation
+          } break;
+          }
+          
+          ProfBegin("Load .res files from disk");
+          for (String8Node *node = config->input_list[LNK_Input_Res].first; node != 0; node = node->next) {
+            String8 res_data = os_data_from_file_path(scratch.arena, node->string);
+            if (res_data.size > 0) {
+              if (pe_is_res(res_data)) {
+                str8_list_push(scratch.arena, &res_data_list, res_data);
+                String8 stable_res_path = lnk_make_full_path(scratch.arena, config->work_dir, config->path_style, node->string);
+                str8_list_push(scratch.arena, &res_path_list, stable_res_path);
               } else {
-                lnk_error(LNK_Error_FileNotFound, "unable to open res file: %S", node->string);
+                lnk_error(LNK_Error_LoadRes, "file is not of RES format: %S", node->string);
               }
+            } else {
+              lnk_error(LNK_Error_LoadRes, "unable to open res file: %S", node->string);
             }
           }
           ProfEnd();
           
-          // handle manifest
-          ProfBegin("Manifest");
-          {
-            LNK_Obj     **obj_arr      = lnk_obj_arr_from_list(scratch.arena, obj_list);
-            String8List   obj_dep_list = lnk_collect_manifest_dependency_list(tp, tp_arena, obj_arr, obj_list.count);
-            String8List   cmd_dep_list = str8_list_copy(scratch.arena, &config->manifest_dependency_list);
-            
-            String8List dep_list = {0};
-            str8_list_concat_in_place(&dep_list, &obj_dep_list);
-            str8_list_concat_in_place(&dep_list, &cmd_dep_list);
-            
-            B32 create_manifest = config->input_list[LNK_Input_Manifest].node_count > 0 ||
-              dep_list.node_count > 0 ||
-              config->manifest_opt == LNK_ManifestOpt_Embed;
-            if (create_manifest) {
-              String8List input_manifest_path_list = str8_list_copy(tp_arena->v[0], &config->input_list[LNK_Input_Manifest]);
-              
-              // TODO: we write a temp file with manifest attributes collected from obj directives and command line switches
-              // so we can pass file to mt.exe or llvm-mt.exe, when we have our own tool for merging manifest we can switch
-              // to writing manifest file in memory to skip roun-trip to disk
-              String8List linker_manifest_data_list = lnk_make_linker_manifest(tp_arena->v[0], config->manifest_uac, config->manifest_level, config->manifest_ui_access, dep_list);
-              String8 linker_manifest_path = push_str8f(scratch.arena, "%S.manifest.temp", config->manifest_name);
-              lnk_write_data_list_to_file_path(linker_manifest_path, linker_manifest_data_list);
-              str8_list_push(tp_arena->v[0], &input_manifest_path_list, linker_manifest_path);
-              
-              String8 merged_manifest_path = push_str8f(scratch.arena, "%S.manifest.merged", config->manifest_name);
-              lnk_merge_manifest_files(tp_arena->v[0], config->mt_path, merged_manifest_path, input_manifest_path_list);
-              
-              if (config->manifest_opt == LNK_ManifestOpt_Embed) {
-                // TODO: currently we convert manifest to res and parse res again, this unnecessary instead push manifest 
-                // resource to the tree directly
-                
-                String8 manifest_data = os_data_from_file_path(scratch.arena, merged_manifest_path);
-                if (manifest_data.size == 0) {
-                  lnk_error(LNK_Error_Mt, "unable to locate manifest to embed on disk, path \"%S\"", merged_manifest_path);
-                }
-                String8 manifest_res = lnk_res_from_data(tp_arena->v[0], manifest_data);
-                str8_list_push(tp_arena->v[0], &res_data_list, manifest_res);
-                str8_list_push(tp_arena->v[0], &res_path_list, merged_manifest_path);
-              }
-              
-              // cleanup disk
-              os_delete_file_at_path(linker_manifest_path);
-              if (config->delete_manifest == LNK_SwitchState_Yes) {
-                os_delete_file_at_path(merged_manifest_path);
-              }
-            }
-          }
-          ProfEnd(); // Manifest
-          
           if (res_data_list.node_count > 0) {
+            ProfBegin("Build * Resources *");
+
             String8 obj_name = str8_lit("* Resources *");
             String8 obj_data = lnk_obj_from_res_file_list(tp,
                                                           tp_arena->v[0],
@@ -3861,11 +3911,13 @@ l.count += 1;                                                \
                                                           config->work_dir,
                                                           config->path_style,
                                                           obj_name);
-            
+
             LNK_InputObj *input = lnk_input_obj_list_push(scratch.arena, &input_obj_list);
-            input->dedup_id = obj_name;
-            input->path     = obj_name;
-            input->data     = obj_data;
+            input->dedup_id     = obj_name;
+            input->path         = obj_name;
+            input->data         = obj_data;
+
+            ProfEnd();
           }
         } break;
         case State_BuildAndInputLinkerObj: {
@@ -4002,7 +4054,7 @@ l.count += 1;                                                \
           // remove empty section headers from output image
           lnk_section_table_remove_empties(st, symtab);
           
-          // gather output sections
+          // collect output sections
           LNK_SectionArray out_sect_arr = lnk_section_table_get_output_sections(scratch.arena, st);
           
           // push back null section where we store image header
@@ -4258,6 +4310,13 @@ l.count += 1;                                                \
       entry_search_attempts += 1;
       continue;
     }
+    if (unresolved_undef_list.count) {
+      if (report_unresolved_symbols) {
+        report_unresolved_symbols = 0;
+        state_list_push(scratch.arena, state_list, State_ReportUnresolvedSymbols);
+        continue;
+      }
+    }
     if (build_res_obj) {
       build_res_obj = 0;
       state_list_push(scratch.arena, state_list, State_BuildAndInputResObj);
@@ -4268,21 +4327,14 @@ l.count += 1;                                                \
       state_list_push(scratch.arena, state_list, State_BuildAndInputLinkerObj);
       continue;
     }
-    if (check_unused_delay_loads) {
-      check_unused_delay_loads = 0;
-      state_list_push(scratch.arena, state_list, State_CheckUnusedDelayLoads);
-      continue;
-    }
-    if (unresolved_undef_list.count) {
-      if (report_unresolved_symbols) {
-        report_unresolved_symbols = 0;
-        state_list_push(scratch.arena, state_list, State_ReportUnresolvedSymbols);
-        continue;
-      }
-    }
     if (do_comdat_rewire) {
       do_comdat_rewire = 0;
       state_list_push(scratch.arena, state_list, State_RewireComdats);
+      continue;
+    }
+    if (check_unused_delay_loads) {
+      check_unused_delay_loads = 0;
+      state_list_push(scratch.arena, state_list, State_CheckUnusedDelayLoads);
       continue;
     }
     
