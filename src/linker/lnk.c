@@ -3257,7 +3257,7 @@ l.count += 1;                                                \
   // state
   LNK_SymbolTable     *symtab                           = lnk_symbol_table_alloc_ex(config->symbol_table_cap_defined, config->symbol_table_cap_internal, config->symbol_table_cap_weak, config->symbol_table_cap_lib);
   LNK_SectionTable    *st                               = lnk_init_section_table(symtab, config->section_virt_off, config->sect_align, config->file_align);
-  LNK_ImportTable     *imptab_regular                   = 0;
+  LNK_ImportTable     *imptab_static                    = 0;
   LNK_ImportTable     *imptab_delayed                   = 0;
   LNK_ExportTable     *exptab                           = lnk_export_table_alloc();
   HashTable           *disallow_lib_ht                  = hash_table_init(scratch.arena, 0x100);
@@ -3560,17 +3560,17 @@ l.count += 1;                                                \
                 func = lnk_import_table_push_func_delayed(imptab_delayed, symtab, dll, import_header);
               }
             } else {
-              if (!imptab_regular) {
+              if (!imptab_static) {
                 Assert(config->machine != COFF_MachineType_UNKNOWN);
-                imptab_regular = lnk_import_table_alloc_regular(st, symtab, config->machine);
+                imptab_static = lnk_import_table_alloc_static(st, symtab, config->machine);
               }
-              LNK_ImportDLL *dll = lnk_import_table_search_dll(imptab_regular, import_header->dll_name);
+              LNK_ImportDLL *dll = lnk_import_table_search_dll(imptab_static, import_header->dll_name);
               if (!dll) {
-                dll = lnk_import_table_push_dll_regular(imptab_regular, symtab, import_header->dll_name, import_header->machine);
+                dll = lnk_import_table_push_dll_static(imptab_static, symtab, import_header->dll_name, import_header->machine);
               }
               LNK_ImportFunc *func = lnk_import_table_search_func(dll, import_header->func_name);
               if (!func) {
-                func = lnk_import_table_push_func_regular(imptab_regular, symtab, dll, import_header);
+                func = lnk_import_table_push_func_static(imptab_static, symtab, dll, import_header);
               }
             }
           }
@@ -4394,7 +4394,7 @@ l.count += 1;                                                \
   //lnk_section_table_release(&st);
   //lnk_symbol_table_release(&symtab);
   //lnk_export_table_release(&export_table);
-  //lnk_import_table_release(&imptab_regular);
+  //lnk_import_table_release(&imptab_static);
   //lnk_import_table_release(&imptab_delayed);
   //tp_arena_release(&tp_arena);
   

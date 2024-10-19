@@ -2,7 +2,7 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 internal LNK_ImportTable *
-lnk_import_table_alloc_regular(LNK_SectionTable *st, LNK_SymbolTable *symtab, COFF_MachineType machine)
+lnk_import_table_alloc_static(LNK_SectionTable *st, LNK_SymbolTable *symtab, COFF_MachineType machine)
 {
   ProfBeginFunction();
   
@@ -178,7 +178,7 @@ lnk_import_table_search_func(LNK_ImportDLL *dll, String8 name)
 }
 
 internal LNK_ImportDLL *
-lnk_import_table_push_dll_regular(LNK_ImportTable *imptab, LNK_SymbolTable *symtab, String8 dll_name, COFF_MachineType machine)
+lnk_import_table_push_dll_static(LNK_ImportTable *imptab, LNK_SymbolTable *symtab, String8 dll_name, COFF_MachineType machine)
 {
   ProfBeginFunction();
 
@@ -401,7 +401,7 @@ lnk_import_table_push_dll_delayed(LNK_ImportTable *imptab, LNK_SymbolTable *symt
 }
 
 internal LNK_ImportFunc *
-lnk_import_table_push_func_regular(LNK_ImportTable *imptab, LNK_SymbolTable *symtab, LNK_ImportDLL *dll, COFF_ImportHeader *header)
+lnk_import_table_push_func_static(LNK_ImportTable *imptab, LNK_SymbolTable *symtab, LNK_ImportDLL *dll, COFF_ImportHeader *header)
 {
   ProfBeginFunction();
   
@@ -438,7 +438,7 @@ lnk_import_table_push_func_regular(LNK_ImportTable *imptab, LNK_SymbolTable *sym
     LNK_Chunk *int_chunk = lnk_section_push_chunk_data(data_sect, int_table_chunk, int_data, str8_zero());
     
     // create symbol for lookup chunk
-    String8 int_symbol_name = push_str8f(symtab->arena, "regular.%S.%S.name", dll->name, header->func_name);
+    String8 int_symbol_name = push_str8f(symtab->arena, "static.%S.%S.name", dll->name, header->func_name);
     LNK_Symbol *int_symbol = lnk_make_defined_symbol_chunk(symtab->arena, int_symbol_name, LNK_DefinedSymbolVisibility_Internal, 0, int_chunk, 0, 0, 0);
     lnk_symbol_table_push(symtab, int_symbol);
     
@@ -464,7 +464,7 @@ lnk_import_table_push_func_regular(LNK_ImportTable *imptab, LNK_SymbolTable *sym
   } break;
   }
   
-  String8 ilt_symbol_name = push_str8f(symtab->arena, "regular.%S.%S.ilt", dll->name, header->func_name);
+  String8 ilt_symbol_name = push_str8f(symtab->arena, "static.%S.%S.ilt", dll->name, header->func_name);
   String8 iat_symbol_name = push_str8f(symtab->arena, "__imp_%S", header->func_name);
   LNK_Symbol *ilt_symbol = lnk_make_defined_symbol_chunk(symtab->arena, ilt_symbol_name, LNK_DefinedSymbolVisibility_Internal, 0, ilt_chunk, 0, 0, 0);
   LNK_Symbol *iat_symbol = lnk_make_defined_symbol_chunk(symtab->arena, iat_symbol_name, LNK_DefinedSymbolVisibility_Extern, 0, iat_chunk, 0, 0, 0);
