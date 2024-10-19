@@ -193,7 +193,7 @@ If build was successful linker executable is placed in `build` folder under `rad
 
 ## Benchmarks
 
-![AMD Ryzen Threadripper PRO 3995WX 64-Cores, 256 GiB RAM (Windows x64)](https://github.com/user-attachments/assets/39d95fdf-9f0b-45d3-9fb8-90d8ac624168)
+![AMD Ryzen Threadripper PRO 3995WX 64-Cores, 256 GiB RAM (Windows x64)](https://github.com/user-attachments/assets/a95b382a-76b4-4a4c-b809-b61fe25e667a)
 
 ---
 
