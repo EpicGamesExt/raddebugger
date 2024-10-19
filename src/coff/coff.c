@@ -550,6 +550,39 @@ coff_make_import_header_by_ordinal(Arena                *arena,
 }
 
 ////////////////////////////////
+//~ Resources
+
+internal String8
+coff_resource_string_from_str16(Arena *arena, String16 string)
+{
+  AssertAlways(string.size <= max_U16);
+  U16 size16 = (U16)string.size;
+
+  U16 *buffer = push_array_no_zero(arena, U16, size16 + 1);
+  MemoryCopy(buffer + 0, &size16,    sizeof(size16));
+  MemoryCopy(buffer + 1, string.str, size16 * sizeof(string.str[0]));
+
+  return str8_array(buffer, size16 + 1);
+}
+
+internal String8
+coff_resource_string_from_str8(Arena *arena, String8 string)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  String16 string16 = str16_from_8(scratch.arena, string);
+  String8 result = coff_resource_string_from_str16(arena, string16);
+  scratch_end(scratch);
+  return result;
+}
+
+internal String8
+coff_resource_number_from_u16(Arena *arena, U16 number)
+{
+  U16 *buffer = push_array_no_zero(arena, U16, 2);
+  buffer[0] = max_U16;
+  buffer[1] = number;
+  return str8_array(buffer, 2);
+}
 
 internal B32
 coff_resource_id_is_equal(COFF_ResourceID a, COFF_ResourceID b)
@@ -567,47 +600,9 @@ coff_resource_id_is_equal(COFF_ResourceID a, COFF_ResourceID b)
 }
 
 internal COFF_ResourceID
-coff_resource_id_copy(Arena *arena, COFF_ResourceID id)
+coff_utf8_resource_id_from_utf16(Arena *arena, COFF_ResourceID_16 *id_16)
 {
-  COFF_ResourceID result = zero_struct;
-  switch (id.type) {
-    case COFF_ResourceIDType_NULL: break;
-    case COFF_ResourceIDType_NUMBER: {
-      result.type = COFF_ResourceIDType_NUMBER;
-      result.u.number = id.u.number;
-    } break;
-    case COFF_ResourceIDType_STRING: {
-      result.type = COFF_ResourceIDType_STRING;
-      result.u.string = id.u.string;
-    } break;
-    default: Assert(!"invalid resource id type");
-  }
-  return result;
-}
-
-internal U64
-coff_sizeof_resource_id(COFF_ResourceID id)
-{
-  U64 size = 0;
-  switch (id.type) {
-  case COFF_ResourceIDType_NULL: break;
-  case COFF_ResourceIDType_NUMBER: {
-    size += sizeof(U16);
-    size += sizeof(U16);
-  } break;
-  case COFF_ResourceIDType_STRING: {
-    size += sizeof(U16);
-    size += (id.u.string.size + /* null: */1) * sizeof(U16);
-  } break;
-  default: InvalidPath;
-  }
-  return AlignPow2(size, COFF_RES_ALIGN);
-}
-
-internal COFF_ResourceID
-coff_convert_resource_id(Arena *arena, COFF_ResourceID_16 *id_16)
-{
-  COFF_ResourceID id;
+  COFF_ResourceID id = {0};
   id.type = id_16->type;
   switch (id_16->type) {
     case COFF_ResourceIDType_NULL: break;
@@ -617,23 +612,22 @@ coff_convert_resource_id(Arena *arena, COFF_ResourceID_16 *id_16)
     case COFF_ResourceIDType_STRING: {
       id.u.string = str8_from_16(arena, id_16->u.string);
     } break;
-    default: Assert(!"invalid resource id type");
+    default: InvalidPath;
   }
   return id;
 }
 
 internal U64
-coff_read_resource_id(String8 data, U64 off, COFF_ResourceID_16 *id_out)
+coff_read_resource_id_utf16(String8 data, U64 off, COFF_ResourceID_16 *id_out)
 {
   U64 cursor = off;
   
   U16 flag = 0;
   str8_deserial_read_struct(data, cursor, &flag);
   
-  B32 is_number = flag == max_U16;
-  if (is_number) {
-    cursor += sizeof(flag);
+  if (flag == max_U16) {
     id_out->type = COFF_ResourceIDType_NUMBER;
+    cursor += sizeof(flag);
     cursor += str8_deserial_read_struct(data, cursor, &id_out->u.number);
   } else {
     id_out->type = COFF_ResourceIDType_STRING;
@@ -641,93 +635,81 @@ coff_read_resource_id(String8 data, U64 off, COFF_ResourceID_16 *id_out)
   }
   
   U64 read_size = cursor - off;
+  read_size     = AlignPow2(read_size, COFF_RES_ALIGN);
   return read_size;
 }
 
 internal U64
 coff_read_resource(String8 raw_res, U64 off, Arena *arena, COFF_Resource *res_out)
 {
-  // parse header
-  COFF_ResourceHeaderPrefix prefix; MemoryZeroStruct(&prefix);
-  U64 cursor = str8_deserial_read_struct(raw_res, off, &prefix);
-  String8 header_data = str8_substr(raw_res, rng_1u64(off, off + prefix.header_size));
+  String8 raw_header    = str8_skip(raw_res, off);
+  U64     header_cursor = 0;
+
+  // prefix
+  COFF_ResourceHeaderPrefix prefix = {0};
+  header_cursor += str8_deserial_read_struct(raw_header, header_cursor, &prefix);
+
+  Assert(prefix.header_size >= sizeof(COFF_ResourceHeaderPrefix));
+  raw_header = str8_prefix(raw_header, prefix.header_size);
+
+  // header
+  COFF_ResourceID_16 type_16 = {0};
+  COFF_ResourceID_16 name_16 = {0};
+  header_cursor += coff_read_resource_id_utf16(raw_header, header_cursor, &type_16);
+  header_cursor += coff_read_resource_id_utf16(raw_header, header_cursor, &name_16);
+  header_cursor += str8_deserial_read_struct(raw_header, header_cursor, &res_out->data_version);
+  header_cursor += str8_deserial_read_struct(raw_header, header_cursor, &res_out->memory_flags);
+  header_cursor += str8_deserial_read_struct(raw_header, header_cursor, &res_out->language_id);
+  header_cursor += str8_deserial_read_struct(raw_header, header_cursor, &res_out->version);
+  header_cursor += str8_deserial_read_struct(raw_header, header_cursor, &res_out->characteristics);
+  Assert(prefix.header_size == header_cursor);
+
+  // convert utf-16 resource ids to utf-8
+  res_out->type = coff_utf8_resource_id_from_utf16(arena, &type_16);
+  res_out->name = coff_utf8_resource_id_from_utf16(arena, &name_16);
+
+  // read data
+  U64 data_read_size = str8_deserial_read_block(raw_res, off + prefix.header_size, prefix.data_size, &res_out->data);
+  Assert(prefix.data_size == data_read_size);
   
-  COFF_ResourceID_16 type_16; MemoryZeroStruct(&type_16);
-  cursor += coff_read_resource_id(header_data, cursor, &type_16);
-  cursor = AlignPow2(cursor, COFF_RES_ALIGN);
-  
-  COFF_ResourceID_16 name_16; MemoryZeroStruct(&name_16);
-  cursor += coff_read_resource_id(header_data, cursor, &name_16);
-  cursor = AlignPow2(cursor, COFF_RES_ALIGN);
-  
-  U32 data_version = 0;
-  cursor += str8_deserial_read_struct(header_data, cursor, &data_version);
-  
-  COFF_ResourceMemoryFlags memory_flags = 0;
-  cursor += str8_deserial_read_struct(header_data, cursor, &memory_flags);
-  
-  U16 language_id = 0;
-  cursor += str8_deserial_read_struct(header_data, cursor, &language_id);
-  
-  U32 version = 0;
-  cursor += str8_deserial_read_struct(header_data, cursor, &version);
-  
-  U32 characteristics = 0;
-  cursor += str8_deserial_read_struct(header_data, cursor, &characteristics);
-  
-  String8 data;
-  cursor += str8_deserial_read_block(raw_res, off + prefix.header_size, prefix.data_size, &data);
-  
-  // was resource parsed?
-  Assert(cursor >= prefix.data_size + prefix.header_size);
-  
-  // fill out result
-  res_out->type         = coff_convert_resource_id(arena, &type_16);
-  res_out->name         = coff_convert_resource_id(arena, &name_16);
-  res_out->language_id  = language_id;
-  res_out->data_version = data_version;
-  res_out->version      = version;
-  res_out->memory_flags = memory_flags;
-  res_out->data         = data;
-  
-  U64 resource_size = AlignPow2(prefix.data_size + prefix.header_size, COFF_RES_ALIGN);
-  return resource_size;
+  // compute read size
+  U64 read_size = Max(prefix.header_size, sizeof(prefix)) + AlignPow2(prefix.data_size, COFF_RES_ALIGN);
+  return read_size;
 }
 
 internal COFF_ResourceList
 coff_resource_list_from_data(Arena *arena, String8 data)
 {
-  COFF_ResourceList list; MemoryZeroStruct(&list);
-  for (U64 cursor = 0, stride; cursor < data.size; cursor += stride) {
+  COFF_ResourceList list = {0};
+  U64 cursor;
+  for (cursor = 0 ; cursor < data.size; ) {
     COFF_ResourceNode *node = push_array(arena, COFF_ResourceNode, 1);
-    stride = coff_read_resource(data, cursor, arena, &node->data);
-    list.count += 1;
+    cursor += coff_read_resource(data, cursor, arena, &node->data);
     SLLQueuePush(list.first, list.last, node);
+    ++list.count;
   }
+  Assert(cursor == data.size);
   return list;
 }
 
-internal void
-coff_write_resource_id(Arena *arena, String8List *srl, COFF_ResourceID id)
+internal String8
+coff_write_resource_id(Arena *arena, COFF_ResourceID id)
 {
+  String8 result = str8_zero();
   switch (id.type) {
   case COFF_ResourceIDType_NULL: break;
   case COFF_ResourceIDType_NUMBER: {
-    str8_serial_push_u16(arena, srl, max_U16);
-    str8_serial_push_u16(arena, srl, id.u.number);
+    result = coff_resource_number_from_u16(arena, id.u.number);
   } break;
   case COFF_ResourceIDType_STRING: {
-    String16 str16 = str16_from_8(arena, id.u.string);
-    Assert(str16.size <= max_U16);
-    str8_serial_push_u16(arena, srl, str16.size);
-    str8_serial_push_data(arena, srl, str16.str, str16.size);
+    result = coff_resource_string_from_str8(arena, id.u.string);
   } break;
   default: InvalidPath;
   }
-  str8_serial_push_align(arena, srl, COFF_RES_ALIGN);
+  return result;
 }
 
-internal String8List
+internal String8
 coff_write_resource(Arena          *arena,
                     COFF_ResourceID type,
                     COFF_ResourceID name,
@@ -738,34 +720,43 @@ coff_write_resource(Arena          *arena,
                     U32             characteristics,
                     String8         data)
 {
-  U64 header_size = sizeof(COFF_ResourceHeaderPrefix) +
-                    coff_sizeof_resource_id(type) +
-                    coff_sizeof_resource_id(name) +
-                    sizeof(data_version) +
-                    sizeof(memory_flags) +
-                    sizeof(language_id) +
-                    sizeof(version) +
-                    sizeof(characteristics);
+  Temp scratch = scratch_begin(&arena, 1);
 
-  COFF_ResourceHeaderPrefix *header = push_array(arena, COFF_ResourceHeaderPrefix, 1);
-  header->data_size   = safe_cast_u32(data.size);
-  header->header_size = safe_cast_u32(header_size);
+  String8List list = {0};
 
-  String8List srl = {0};
-  str8_serial_begin(arena, &srl);
-  str8_serial_push_data(arena, &srl, &g_coff_res_magic[0], sizeof(g_coff_res_magic));
-  str8_serial_push_data(arena, &srl, header, sizeof(*header));
-  coff_write_resource_id(arena, &srl, type);
-  coff_write_resource_id(arena, &srl, name);
-  str8_serial_push_u32(arena, &srl, data_version);
-  str8_serial_push_u16(arena, &srl, memory_flags);
-  str8_serial_push_u16(arena, &srl, language_id);
-  str8_serial_push_u32(arena, &srl, version);
-  str8_serial_push_u32(arena, &srl, characteristics);
-  str8_serial_push_string(arena, &srl, data);
-  str8_serial_push_align(arena, &srl, COFF_RES_ALIGN);
+  COFF_ResourceHeaderPrefix *prefix      = push_array(scratch.arena, COFF_ResourceHeaderPrefix, 1);
+  String8                    packed_type = coff_write_resource_id(scratch.arena, type);
+  String8                    packed_name = coff_write_resource_id(scratch.arena, name);
 
-  return srl;
+  // prefix + header
+  str8_list_push(scratch.arena, &list, str8_struct(prefix));
+  str8_list_push(scratch.arena, &list, packed_type);
+  str8_list_push(scratch.arena, &list, packed_name);
+  str8_list_push(scratch.arena, &list, str8_struct(&data_version));
+  str8_list_push(scratch.arena, &list, str8_struct(&memory_flags));
+  str8_list_push(scratch.arena, &list, str8_struct(&language_id));
+  str8_list_push(scratch.arena, &list, str8_struct(&version));
+  str8_list_push(scratch.arena, &list, str8_struct(&characteristics));
+
+  prefix->data_size   = safe_cast_u32(data.size);
+  prefix->header_size = safe_cast_u32(list.total_size);
+
+  // data
+  str8_list_push(scratch.arena, &list, data);
+
+  // magic
+  str8_list_push_front(scratch.arena, &list, str8_array_fixed(g_coff_res_magic));
+
+  // align
+  U64 align_size = AlignPow2(list.total_size, COFF_RES_ALIGN) - list.total_size;
+  U8 *align      = push_array(scratch.arena, U8, align_size);
+  str8_list_push(scratch.arena, &list, str8(align, align_size));
+
+  // join
+  String8 res = str8_list_join(arena, &list, 0);
+
+  scratch_end(scratch);
+  return res;
 }
 
 ////////////////////////////////
@@ -777,12 +768,10 @@ coff_data_type_from_data(String8 data)
   if (is_big_obj) {
     return COFF_DataType_BIG_OBJ;
   }
-  
   B32 is_import = coff_is_import(data);
   if (is_import) {
     return COFF_DataType_IMPORT;
   }
-  
   return COFF_DataType_OBJ;
 }
 

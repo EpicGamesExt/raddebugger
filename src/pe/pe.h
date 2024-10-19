@@ -452,8 +452,6 @@ struct PE_TLSHeader64
   U32 characteristics;   // COFF_SectionFlags but only align flags are used.
 };
 
-#define PE_RES_ALIGN 4u
-
 global read_only U8 PE_RES_MAGIC[] =
 {
   0x00, 0x00, 0x00, 0x00,
@@ -780,6 +778,8 @@ internal PE_ResourceNode * pe_resource_dir_search_node(PE_ResourceDir *dir, COFF
 internal PE_Resource *     pe_resource_dir_search(PE_ResourceDir *dir, COFF_ResourceID id);
 internal PE_ResourceArray  pe_resource_list_to_array(Arena *arena, PE_ResourceList *list);
 internal PE_ResourceDir *  pe_resource_table_from_directory_data(Arena *arena, String8 data);
+
+internal String8 pe_make_manifest_resource(Arena *arena, U32 resource_id, String8 manifest_data);
 
 ////////////////////////////////
 //~ Debug Directory

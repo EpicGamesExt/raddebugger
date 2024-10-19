@@ -180,7 +180,7 @@ lnk_input_import_arr_from_list(Arena *arena, LNK_InputImportList list)
 internal LNK_InputImportList
 lnk_list_from_input_import_arr(LNK_InputImport **arr, U64 count)
 {
-  LNK_InputImportList list; MemoryZeroStruct(&list);
+  LNK_InputImportList list = {0};
   for (U64 i = 0; i < count; i += 1) {
     SLLQueuePush(list.first, list.last, arr[i]);
     list.count += 1;
@@ -218,12 +218,13 @@ internal void
 lnk_write_data_list_to_file_path(String8 path, String8List data)
 {
 #if PROFILE_TELEMETRY
-  Temp scratch = scratch_begin(0, 0);
-  String8 size_str = str8_from_memory_size2(scratch.arena, data.total_size);
-  ProfBeginDynamic("Write %.*s to %.*s", str8_varg(size_str), str8_varg(path));
-  scratch_end(scratch);
+  {
+    Temp scratch = scratch_begin(0, 0);
+    String8 size_str = str8_from_memory_size2(scratch.arena, data.total_size);
+    ProfBeginDynamic("Write %.*s to %.*s", str8_varg(size_str), str8_varg(path));
+    scratch_end(scratch);
+  }
 #endif
-  
   B32 is_written = os_write_data_list_to_file_path(path, data);
   if (is_written) {
     if (lnk_get_log_status(LNK_Log_IO)) {
@@ -256,7 +257,7 @@ lnk_make_full_path(Arena *arena, String8 work_dir, PathStyle system_path_style, 
   PathStyle path_style = path_style_from_str8(path);
   if (path_style == PathStyle_Relative) {
     Temp scratch = scratch_begin(&arena, 1);
-    String8List list; MemoryZeroStruct(&list);
+    String8List list = {0};
     str8_list_push(scratch.arena, &list, work_dir);
     str8_list_push(scratch.arena, &list, path);
     result = str8_path_list_join_by_style(arena, &list, system_path_style);
@@ -326,10 +327,10 @@ lnk_merge_manifest_files(String8 mt_path, String8 out_name, String8List manifest
   ProfBeginFunction();
   Temp scratch = scratch_begin(0,0);
   
-  String8List invoke_cmd_line = {0};
-  str8_list_push(scratch.arena, &invoke_cmd_line, mt_path);
-  str8_list_pushf(scratch.arena, &invoke_cmd_line, "-out:%S", out_name);
-  str8_list_pushf(scratch.arena, &invoke_cmd_line, "-nologo");
+  String8List cmd_line = {0};
+  str8_list_push(scratch.arena, &cmd_line, mt_path);
+  str8_list_pushf(scratch.arena, &cmd_line, "-out:%S", out_name);
+  str8_list_pushf(scratch.arena, &cmd_line, "-nologo");
 
   // register input manifest files on command line
   String8 work_dir = os_get_current_path(scratch.arena);
@@ -343,13 +344,13 @@ lnk_merge_manifest_files(String8 mt_path, String8 out_name, String8List manifest
     full_path = path_convert_slashes(scratch.arena, full_path, PathStyle_UnixAbsolute);
 
     // push input to command line
-    str8_list_pushf(scratch.arena, &invoke_cmd_line, "-manifest");
-    str8_list_push(scratch.arena, &invoke_cmd_line, full_path);
+    str8_list_pushf(scratch.arena, &cmd_line, "-manifest");
+    str8_list_push(scratch.arena, &cmd_line, full_path);
   }
   
   // launch mt.exe with our command line
   OS_ProcessLaunchParams launch_opts = {0};
-  launch_opts.cmd_line               = invoke_cmd_line;
+  launch_opts.cmd_line               = cmd_line;
   launch_opts.path                   = str8_chop_last_slash(mt_path);
   launch_opts.inherit_env            = 1;
   launch_opts.consoleless            = 1;
@@ -413,26 +414,6 @@ lnk_manifest_from_inputs(Arena       *arena,
   return manifest_data;
 }
 
-internal String8
-lnk_res_from_data(Arena *arena, String8 data)
-{
-  Temp scratch = scratch_begin(&arena, 1);
-  
-  COFF_ResourceID type;
-  type.type = COFF_ResourceIDType_NUMBER;
-  type.u.number = PE_ResourceKind_MANIFEST;
-  
-  COFF_ResourceID name;
-  name.type = COFF_ResourceIDType_NUMBER;
-  name.u.number = 1;
-  
-  String8List res_list = coff_write_resource(arena, type, name, 1, 0, 1033, 0, 0, data);
-  String8 res_data = str8_serial_end(arena, &res_list);
-  
-  scratch_end(scratch);
-  return res_data;
-}
-
 ////////////////////////////////
 
 internal int
@@ -461,167 +442,156 @@ internal void
 lnk_serialize_pe_resource_tree(LNK_SectionTable *st, LNK_SymbolTable *symtab, PE_ResourceDir *root_dir)
 {
   ProfBeginFunction();
-  
-  static const U64 ALIGN = 4;
-  
-  struct stack_s {
-    struct stack_s *next;
-    U64 arr_idx;
-    U64 res_idx[2];
-    PE_ResourceArray res_arr[2];
-    LNK_Chunk *coff_entry_array_chunk;
-    LNK_Chunk *coff_entry_chunk;
-  };
-  
   Temp scratch = scratch_begin(0, 0);
   
-  LNK_Section *dir_sect = lnk_section_table_push(st, str8_lit(".rsrc$01"), LNK_RSRC_SECTION_FLAGS);
+  LNK_Section *dir_sect  = lnk_section_table_push(st, str8_lit(".rsrc$01"), LNK_RSRC_SECTION_FLAGS);
   LNK_Section *data_sect = lnk_section_table_push(st, str8_lit(".rsrc$02"), LNK_RSRC_SECTION_FLAGS);
   
-  LNK_Chunk *dir_tree_chunk = lnk_section_push_chunk_list(dir_sect, dir_sect->root, str8(0,0));
-  LNK_Chunk *dir_data_chunk = lnk_section_push_chunk_list(dir_sect, dir_sect->root, str8(0,0));
-  LNK_Chunk *dir_string_chunk = lnk_section_push_chunk_list(dir_sect, dir_sect->root, str8(0,0));
-  
+  LNK_Chunk *dir_tree_chunk   = lnk_section_push_chunk_list(dir_sect, dir_sect->root, str8_zero());
+  LNK_Chunk *dir_data_chunk   = lnk_section_push_chunk_list(dir_sect, dir_sect->root, str8_zero());
+  LNK_Chunk *dir_string_chunk = lnk_section_push_chunk_list(dir_sect, dir_sect->root, str8_zero());
+
   dir_tree_chunk->sort_idx   = str8_lit("a");
   dir_string_chunk->sort_idx = str8_lit("b");
   dir_data_chunk->sort_idx   = str8_lit("c");
   
-  PE_Resource root_wrapper; MemoryZeroStruct(&root_wrapper);
-  root_wrapper.id.type = COFF_ResourceIDType_NUMBER;
+  PE_Resource root_wrapper = {0};
+  root_wrapper.id.type     = COFF_ResourceIDType_NUMBER;
   root_wrapper.id.u.number = 0;
-  root_wrapper.kind = PE_ResDataKind_DIR;
-  root_wrapper.u.dir = root_dir;
+  root_wrapper.kind        = PE_ResDataKind_DIR;
+  root_wrapper.u.dir       = root_dir;
   
-  struct stack_s *stack = push_array(scratch.arena, struct stack_s, 1);
+  struct Stack {
+    struct Stack     *next;
+    U64               arr_idx;
+    U64               res_idx[2];
+    PE_ResourceArray  res_arr[2];
+    LNK_Chunk        *coff_entry_array_chunk;
+    LNK_Chunk        *coff_entry_chunk;
+  };
+  struct Stack *stack     = push_array(scratch.arena, struct Stack, 1);
   stack->res_arr[0].count = 1;
-  stack->res_arr[0].v = &root_wrapper;
+  stack->res_arr[0].v     = &root_wrapper;
   
-  U64 res_counter = 0;
+  U64 total_res_count = 0;
   
   while (stack) {
     while (stack->arr_idx < ArrayCount(stack->res_arr)) {
       while (stack->res_idx[stack->arr_idx] < stack->res_arr[stack->arr_idx].count) {
         PE_Resource *res = &stack->res_arr[stack->arr_idx].v[stack->res_idx[stack->arr_idx]];
-        stack->res_idx[stack->arr_idx] += 1;
+        ++stack->res_idx[stack->arr_idx];
         
-        String8 flag_name = push_str8f(symtab->arena, "flag_%u", res_counter);
-        String8 offset_name = push_str8f(symtab->arena, "offset_%u", res_counter);
-        ++res_counter;
+        String8 flag_name   = push_str8f(symtab->arena, "flag_%u",   total_res_count);
+        String8 offset_name = push_str8f(symtab->arena, "offset_%u", total_res_count);
+        ++total_res_count;
         
         if (stack->coff_entry_array_chunk) {
           COFF_ResourceDirEntry *entry = push_array(dir_sect->arena, COFF_ResourceDirEntry, 1);
-          stack->coff_entry_chunk = lnk_section_push_chunk_data(dir_sect, stack->coff_entry_array_chunk, str8_struct(entry), str8(0,0));
+          stack->coff_entry_chunk      = lnk_section_push_chunk_data(dir_sect, stack->coff_entry_array_chunk, str8_struct(entry), str8_zero());
           
           switch (res->id.type) {
-            case COFF_ResourceIDType_NUMBER: {
-              entry->name.id = res->id.u.number;
-            } break;
-            case COFF_ResourceIDType_STRING: {
-              // TODO: we can make string table smaller by reusing offsets for same strings
-              
-              // not sure why high bit has to be turned on here since number id and string id entries are
-              // in separate arrays but windows doesn't treat name offset like string without this bit.
-              entry->name.offset |= (1 << 31);
-              
-              // convert name to utf-16
-              String16 name16 = str16_from_8(dir_sect->arena, res->id.u.string);
-              
-              // build name string
-              U64 name16_byte_size = name16.size * sizeof(U16);
-              U64 buffer_size = /* char count: */ sizeof(U16) + name16_byte_size;
-              U8 *buffer = push_array_no_zero(dir_sect->arena, U8, buffer_size);
-              *(U16*)buffer = name16.size;
-              MemoryCopy(buffer + sizeof(U16), name16.str, name16_byte_size);
-              
-              // push string table chunk
-              String8 name_data = str8(buffer, buffer_size);
-              LNK_Chunk *name_chunk = lnk_section_push_chunk_data(dir_sect, dir_string_chunk, name_data, str8(0,0));
-              
-              // push name chunk symbol
-              LNK_Symbol *name_symbol = lnk_make_defined_symbol_chunk(symtab->arena, str8_lit("COFF_RESOURCE_ID_STRING"), LNK_DefinedSymbolVisibility_Static, 0, name_chunk, 0, 0, 0);
-              lnk_section_push_reloc(dir_sect, stack->coff_entry_chunk, LNK_Reloc_SECT_REL, OffsetOf(COFF_ResourceDirEntry, name.offset), name_symbol);
-            } break;
-            case COFF_ResourceIDType_NULL: break;
-            default: InvalidPath;
+          case COFF_ResourceIDType_NUMBER: {
+            entry->name.id = res->id.u.number;
+          } break;
+
+          case COFF_ResourceIDType_STRING: {
+            // TODO: we can make string table smaller by reusing offsets for same strings
+            
+            // not sure why high bit has to be turned on here since number id and string id entries are
+            // in separate arrays but windows doesn't treat name offset like string without this bit.
+            entry->name.offset |= (1 << 31);
+            
+            // make chunk and symbol
+            String8     res_name    = coff_resource_string_from_str8(dir_sect->arena, res->id.u.string);
+            LNK_Chunk  *name_chunk  = lnk_section_push_chunk_data(dir_sect, dir_string_chunk, res_name, str8_zero());
+            LNK_Symbol *name_symbol = lnk_make_defined_symbol_chunk(symtab->arena, str8_lit("COFF_RESOURCE_ID_STRING"), LNK_DefinedSymbolVisibility_Static, 0, name_chunk, 0, 0, 0);
+
+            // patch COFF_ResourceDirEntry.name.offset
+            lnk_section_push_reloc(dir_sect, stack->coff_entry_chunk, LNK_Reloc_SECT_REL, OffsetOf(COFF_ResourceDirEntry, name.offset), name_symbol);
+          } break;
+
+          case COFF_ResourceIDType_NULL: break;
+
+          default: InvalidPath;
           }
         }
         
         switch (res->kind) {
-          case PE_ResDataKind_DIR: {
-            // initialize directory header
-            COFF_ResourceDirTable *dir_header = push_array(dir_sect->arena, COFF_ResourceDirTable, 1);
-            dir_header->characteristics = res->u.dir->characteristics;
-            dir_header->time_stamp = res->u.dir->time_stamp;
-            dir_header->major_version = res->u.dir->major_version;
-            dir_header->minor_version = res->u.dir->minor_version;
-            dir_header->name_entry_count = res->u.dir->named_list.count;
-            dir_header->id_entry_count = res->u.dir->id_list.count;
-            
-            // push sub directory chunk layout
-            LNK_Chunk *dir_node_chunk = lnk_section_push_chunk_list(dir_sect, dir_tree_chunk, str8(0,0));
-            dir_node_chunk->align = ALIGN;
-            LNK_Chunk *dir_header_chunk = lnk_section_push_chunk_data(dir_sect, dir_node_chunk, str8_struct(dir_header), str8(0,0));
-            LNK_Chunk *entry_array_chunk = lnk_section_push_chunk_list(dir_sect, dir_node_chunk, str8(0,0));
-            lnk_chunk_set_debugf(dir_sect->arena, dir_header_chunk, "DIR_HEADER_CHUNK");
-            lnk_chunk_set_debugf(dir_sect->arena, entry_array_chunk, "DIR_ENTRY_ARRAY_CHUNK");
-            
-            // push symbols to patch coff entry
-            LNK_Symbol *flag_symbol = lnk_make_defined_symbol_va(symtab->arena, flag_name, LNK_DefinedSymbolVisibility_Internal, 0, COFF_RESOURCE_SUB_DIR_FLAG);
-            LNK_Symbol *offset_symbol = lnk_make_defined_symbol_chunk(symtab->arena, offset_name, LNK_DefinedSymbolVisibility_Internal, 0, dir_header_chunk, 0, 0, 0);
-            lnk_symbol_table_push(symtab, flag_symbol); // set high bit to indicate directory
-            lnk_symbol_table_push(symtab, offset_symbol); // write offset for this directory
-            
-            // patch resource dir header
-            if (stack->coff_entry_chunk) {
-              lnk_section_push_reloc(dir_sect, stack->coff_entry_chunk, LNK_Reloc_ADDR_32, OffsetOf(COFF_ResourceDirEntry, id.data_entry_offset), flag_symbol);
-              lnk_section_push_reloc(dir_sect, stack->coff_entry_chunk, LNK_Reloc_SECT_REL, OffsetOf(COFF_ResourceDirEntry, id.data_entry_offset), offset_symbol);
-            }
-            
-            // sort entries by id
-            PE_ResourceArray named_array = pe_resource_list_to_array(scratch.arena, &res->u.dir->named_list);
-            PE_ResourceArray id_array = pe_resource_list_to_array(scratch.arena, &res->u.dir->id_list);
-            radsort(named_array.v, named_array.count, lnk_res_string_id_is_before);
-            radsort(id_array.v, id_array.count, lnk_res_number_id_is_before);
-            
-            // frame for sub directory
-            struct stack_s *frame = push_array(scratch.arena, struct stack_s, 1);
-            frame->coff_entry_array_chunk = entry_array_chunk;
-            frame->res_arr[0] = named_array;
-            frame->res_arr[1] = id_array;
-            SLLStackPush(stack, frame);
-          } goto yeild; // recurse to sub directory
-          
-          case PE_ResDataKind_COFF_RESOURCE: {
-            COFF_ResourceDataEntry *coff_resource_data_entry = push_array(dir_sect->arena, COFF_ResourceDataEntry, 1);
-            coff_resource_data_entry->data_size = res->u.coff_res.data.size;
-            coff_resource_data_entry->data_voff = 0; // relocated
-            coff_resource_data_entry->code_page = 0; // TODO: whats this for? (lld-link writes zero)
-            
-            // push layout chunks
-            LNK_Chunk *coff_resource_data_entry_chunk = lnk_section_push_chunk_data(dir_sect, dir_data_chunk, str8_struct(coff_resource_data_entry), str8(0,0));
-            LNK_Chunk *resource_data_chunk = lnk_section_push_chunk_data(data_sect, data_sect->root, res->u.coff_res.data, str8(0,0));
-            
-            // windows errors out on unaligned data
-            coff_resource_data_entry_chunk->align = ALIGN;
-            resource_data_chunk->align = ALIGN;
-            
-            // relocate data
-            String8 resource_data_symbol_name = push_str8f(symtab->arena, "$R%06X", res_counter);
-            LNK_Symbol *resource_data_symbol = lnk_make_defined_symbol_chunk(symtab->arena, resource_data_symbol_name, LNK_DefinedSymbolVisibility_Static, 0, resource_data_chunk, 0, 0, 0);
-            lnk_section_push_reloc(dir_sect, coff_resource_data_entry_chunk, LNK_Reloc_VIRT_OFF_32, OffsetOf(COFF_ResourceDataEntry, data_voff), resource_data_symbol);
-            
-            // push symbol for data offset relocation
-            LNK_Symbol *coff_data_offset_symbol = lnk_make_defined_symbol_chunk(symtab->arena, offset_name, LNK_DefinedSymbolVisibility_Internal, 0, coff_resource_data_entry_chunk, 0, 0, 0);
-            lnk_symbol_table_push(symtab, coff_data_offset_symbol);
-            
-            Assert(stack->coff_entry_chunk);
-            lnk_section_push_reloc(dir_sect, stack->coff_entry_chunk, LNK_Reloc_SECT_REL, OffsetOf(COFF_ResourceDirEntry, id.data_entry_offset), coff_data_offset_symbol);
-          } break;
-          
-          case PE_ResDataKind_NULL: break;
-          
-          // we must not have this resource node here, it is used to represent on-disk version of entry
-          case PE_ResDataKind_COFF_LEAF: InvalidPath;
+        case PE_ResDataKind_DIR: {
+          // initialize directory header
+          COFF_ResourceDirTable *dir_header = push_array(dir_sect->arena, COFF_ResourceDirTable, 1);
+          dir_header->characteristics       = res->u.dir->characteristics;
+          dir_header->time_stamp            = res->u.dir->time_stamp;
+          dir_header->major_version         = res->u.dir->major_version;
+          dir_header->minor_version         = res->u.dir->minor_version;
+          dir_header->name_entry_count      = res->u.dir->named_list.count;
+          dir_header->id_entry_count        = res->u.dir->id_list.count;
+
+          // push sub directory chunk layout
+          LNK_Chunk *dir_node_chunk = lnk_section_push_chunk_list(dir_sect, dir_tree_chunk, str8_zero());
+          dir_node_chunk->align     = COFF_RES_ALIGN;
+          LNK_Chunk *dir_header_chunk  = lnk_section_push_chunk_data(dir_sect, dir_node_chunk, str8_struct(dir_header), str8_zero());
+          LNK_Chunk *entry_array_chunk = lnk_section_push_chunk_list(dir_sect, dir_node_chunk, str8_zero());
+          lnk_chunk_set_debugf(dir_sect->arena, dir_header_chunk,  "DIR_HEADER_CHUNK");
+          lnk_chunk_set_debugf(dir_sect->arena, entry_array_chunk, "DIR_ENTRY_ARRAY_CHUNK");
+
+          // push symbols to patch coff entry
+          LNK_Symbol *flag_symbol   = lnk_make_defined_symbol_va(symtab->arena, flag_name, LNK_DefinedSymbolVisibility_Internal, 0, COFF_RESOURCE_SUB_DIR_FLAG);
+          LNK_Symbol *offset_symbol = lnk_make_defined_symbol_chunk(symtab->arena, offset_name, LNK_DefinedSymbolVisibility_Internal, 0, dir_header_chunk, 0, 0, 0);
+          lnk_symbol_table_push(symtab, flag_symbol); // set high bit to indicate directory
+          lnk_symbol_table_push(symtab, offset_symbol); // write offset for this directory
+
+          // patch resource dir header
+          if (stack->coff_entry_chunk) {
+            lnk_section_push_reloc(dir_sect, stack->coff_entry_chunk, LNK_Reloc_ADDR_32, OffsetOf(COFF_ResourceDirEntry, id.data_entry_offset), flag_symbol);
+            lnk_section_push_reloc(dir_sect, stack->coff_entry_chunk, LNK_Reloc_SECT_REL, OffsetOf(COFF_ResourceDirEntry, id.data_entry_offset), offset_symbol);
+          }
+
+          // sort entries by id
+          PE_ResourceArray named_array = pe_resource_list_to_array(scratch.arena, &res->u.dir->named_list);
+          PE_ResourceArray id_array    = pe_resource_list_to_array(scratch.arena, &res->u.dir->id_list);
+          radsort(named_array.v, named_array.count, lnk_res_string_id_is_before);
+          radsort(id_array.v, id_array.count, lnk_res_number_id_is_before);
+
+          // frame for sub directory
+          struct Stack *frame           = push_array(scratch.arena, struct Stack, 1);
+          frame->coff_entry_array_chunk = entry_array_chunk;
+          frame->res_arr[0]             = named_array;
+          frame->res_arr[1]             = id_array;
+          SLLStackPush(stack, frame);
+        } goto yeild; // recurse to sub directory
+
+        case PE_ResDataKind_COFF_RESOURCE: {
+          COFF_ResourceDataEntry *coff_resource_data_entry = push_array(dir_sect->arena, COFF_ResourceDataEntry, 1);
+          coff_resource_data_entry->data_size              = res->u.coff_res.data.size;
+          coff_resource_data_entry->data_voff              = 0; // relocated
+          coff_resource_data_entry->code_page              = 0; // TODO: whats this for? (lld-link writes zero)
+
+          // push layout chunks
+          LNK_Chunk *coff_resource_data_entry_chunk = lnk_section_push_chunk_data(dir_sect, dir_data_chunk, str8_struct(coff_resource_data_entry), str8_zero());
+          LNK_Chunk *resource_data_chunk            = lnk_section_push_chunk_data(data_sect, data_sect->root, res->u.coff_res.data, str8_zero());
+
+          // windows errors out on unaligned data
+          coff_resource_data_entry_chunk->align = COFF_RES_ALIGN;
+          resource_data_chunk->align            = COFF_RES_ALIGN;
+
+          // relocate data
+          String8     resource_data_symbol_name = push_str8f(symtab->arena, "$R%06X", total_res_count);
+          LNK_Symbol *resource_data_symbol      = lnk_make_defined_symbol_chunk(symtab->arena, resource_data_symbol_name, LNK_DefinedSymbolVisibility_Static, 0, resource_data_chunk, 0, 0, 0);
+          lnk_section_push_reloc(dir_sect, coff_resource_data_entry_chunk, LNK_Reloc_VIRT_OFF_32, OffsetOf(COFF_ResourceDataEntry, data_voff), resource_data_symbol);
+
+          // push symbol for data offset relocation
+          LNK_Symbol *coff_data_offset_symbol = lnk_make_defined_symbol_chunk(symtab->arena, offset_name, LNK_DefinedSymbolVisibility_Internal, 0, coff_resource_data_entry_chunk, 0, 0, 0);
+          lnk_symbol_table_push(symtab, coff_data_offset_symbol);
+
+          Assert(stack->coff_entry_chunk);
+          lnk_section_push_reloc(dir_sect, stack->coff_entry_chunk, LNK_Reloc_SECT_REL, OffsetOf(COFF_ResourceDirEntry, id.data_entry_offset), coff_data_offset_symbol);
+        } break;
+
+        case PE_ResDataKind_NULL: break;
+
+        // we must not have this resource node here, it is used to represent on-disk version of entry
+        case PE_ResDataKind_COFF_LEAF: InvalidPath;
         }
       }
       ++stack->arr_idx;
@@ -731,7 +701,7 @@ lnk_add_resource_debug_s(LNK_SectionTable *st,
   
   LNK_Section *debug_s = lnk_section_table_push(st, str8_lit(".debug$S"), LNK_DEBUG_SECTION_FLAGS);
   String8 sub_sect_data = str8_serial_end(debug_s->arena, &sub_sect_srl);
-  lnk_section_push_chunk_data(debug_s, debug_s->root, sub_sect_data, str8(0,0));
+  lnk_section_push_chunk_data(debug_s, debug_s->root, sub_sect_data, str8_zero());
   
   scratch_end(scratch);
   ProfEnd();
@@ -882,10 +852,10 @@ lnk_make_res_obj(TP_Context       *tp,
       reloc_sect->emit_header = 0;
       
       // push chunk layout for relocations
-      LNK_Chunk *reloc_array_chunk = lnk_section_push_chunk_list(reloc_sect, reloc_sect->root, str8(0,0));
+      LNK_Chunk *reloc_array_chunk = lnk_section_push_chunk_list(reloc_sect, reloc_sect->root, str8_zero());
       for (COFF_RelocNode *i = coff_reloc_list.first; i != 0; i = i->next) {
         String8 reloc_data = push_str8_copy(reloc_sect->arena, str8_struct(&i->data));
-        lnk_section_push_chunk_data(reloc_sect, reloc_array_chunk, reloc_data, str8(0,0));
+        lnk_section_push_chunk_data(reloc_sect, reloc_array_chunk, reloc_data, str8_zero());
       }
       
       // emit symbols for coff section header patch
@@ -908,7 +878,7 @@ lnk_make_res_obj(TP_Context       *tp,
     str8_serial_push_struct(scratch.arena, &srl, &i->data);
   }
   String8     coff_symbol_table_data   = str8_serial_end(scratch.arena, &srl);
-  LNK_Chunk  *coff_symbol_table_chunk  = lnk_section_push_chunk_data(misc_sect, misc_sect->root, coff_symbol_table_data, str8(0,0));
+  LNK_Chunk  *coff_symbol_table_chunk  = lnk_section_push_chunk_data(misc_sect, misc_sect->root, coff_symbol_table_data, str8_zero());
   LNK_Symbol *coff_symbol_table_symbol = lnk_make_defined_symbol_chunk(symtab->arena, str8_lit("COFF_SYMBOL_TABLE"), LNK_DefinedSymbolVisibility_Internal, 0, coff_symbol_table_chunk, 0, 0, 0);
   lnk_symbol_table_push(symtab, coff_symbol_table_symbol);
   
@@ -929,7 +899,7 @@ lnk_make_res_obj(TP_Context       *tp,
     
     // push coff header chunk
     String8    coff_header_data  = str8_struct(coff_header);
-    LNK_Chunk *coff_header_chunk = lnk_section_push_chunk_data(header_sect, header_sect->root, coff_header_data, str8(0,0));
+    LNK_Chunk *coff_header_chunk = lnk_section_push_chunk_data(header_sect, header_sect->root, coff_header_data, str8_zero());
     
     // relocate coff header fields
     lnk_section_push_reloc_undefined(header_sect, coff_header_chunk, LNK_Reloc_ADDR_32, OffsetOf(COFF_Header, section_count), str8_lit(LNK_COFF_SECT_HEADER_COUNT_SYMBOL_NAME), LNK_SymbolScopeFlag_Internal);
@@ -943,7 +913,7 @@ lnk_make_res_obj(TP_Context       *tp,
   
   // build section headers
   {
-    LNK_Chunk *coff_section_header_array_chunk = lnk_section_push_chunk_list(header_sect, header_sect->root, str8(0,0));
+    LNK_Chunk *coff_section_header_array_chunk = lnk_section_push_chunk_list(header_sect, header_sect->root, str8_zero());
     for (LNK_SectionNode *sect_node = st->list.first; sect_node != 0; sect_node = sect_node->next) {
       if (sect_node == st->null_sect) continue;
       if (!sect_node->data.emit_header) continue;
@@ -965,7 +935,7 @@ lnk_make_res_obj(TP_Context       *tp,
       
       // push section header chunk
       String8    coff_sect_header_data  = str8_struct(coff_sect_header);
-      String8    sort_index             = lnk_make_section_sort_index(header_sect->arena, str8(0,0), 0, sect->isect);
+      String8    sort_index             = lnk_make_section_sort_index(header_sect->arena, str8_zero(), 0, sect->isect);
       LNK_Chunk *coff_sect_header_chunk = lnk_section_push_chunk_data(header_sect, coff_section_header_array_chunk, coff_sect_header_data, sort_index);
       lnk_chunk_set_debugf(header_sect->arena, coff_sect_header_chunk, "%S", sect->name);
       
@@ -1091,7 +1061,7 @@ lnk_make_linker_coff_obj(TP_Context       *tp,
     coff_header->section_count = 0;
     coff_header->time_stamp = time_stamp;
     
-    LNK_Chunk *coff_header_chunk = lnk_section_push_chunk_raw(header_sect, header_sect->root, coff_header, sizeof(*coff_header), str8(0,0));
+    LNK_Chunk *coff_header_chunk = lnk_section_push_chunk_raw(header_sect, header_sect->root, coff_header, sizeof(*coff_header), str8_zero());
     lnk_section_push_reloc_undefined(header_sect, coff_header_chunk, LNK_Reloc_ADDR_32, OffsetOf(COFF_Header, section_count), str8_lit(LNK_COFF_SECT_HEADER_COUNT_SYMBOL_NAME), LNK_SymbolScopeFlag_Internal);
   }
   
@@ -1147,7 +1117,7 @@ lnk_make_linker_coff_obj(TP_Context       *tp,
     
     // push debug info to section
     String8 debug_s_data = str8_list_join(debug_s_sect->arena, &debug_s_data_list, 0);
-    lnk_section_push_chunk_data(debug_s_sect, debug_s_sect->root, debug_s_data, str8(0,0));
+    lnk_section_push_chunk_data(debug_s_sect, debug_s_sect->root, debug_s_data, str8_zero());
   }
   
   {
@@ -1158,7 +1128,7 @@ lnk_make_linker_coff_obj(TP_Context       *tp,
       lnk_symbol_table_push(symtab, sect_symbol);
     }
     
-    LNK_Chunk *coff_section_header_array_chunk = lnk_section_push_chunk_list(header_sect, header_sect->root, str8(0,0));
+    LNK_Chunk *coff_section_header_array_chunk = lnk_section_push_chunk_list(header_sect, header_sect->root, str8_zero());
     for (LNK_SectionNode *sect_node = st->list.first; sect_node != NULL; sect_node = sect_node->next) {
       if (sect_node == st->null_sect) continue;
       if (!sect_node->data.emit_header) continue;
@@ -1179,7 +1149,7 @@ lnk_make_linker_coff_obj(TP_Context       *tp,
       coff_sect_header->reloc_count = 0; // relocated
       
       // push section header chunk
-      String8 sort_index = lnk_make_section_sort_index(header_sect->arena, str8(0,0), 0, sect->isect);
+      String8 sort_index = lnk_make_section_sort_index(header_sect->arena, str8_zero(), 0, sect->isect);
       LNK_Chunk *coff_sect_header_chunk = lnk_section_push_chunk_raw(header_sect, coff_section_header_array_chunk, coff_sect_header, sizeof(*coff_sect_header), sort_index);
       lnk_chunk_set_debugf(header_sect->arena, coff_sect_header_chunk, "%S", sect->name);
       
@@ -1458,7 +1428,7 @@ lnk_push_pe_debug_data_directory(LNK_Section           *sect,
   //dir->size            = 0; // relocated through 'symbol'
   
   // push chunk
-  LNK_Chunk *dir_entry_chunk = lnk_section_push_chunk_data(sect, dir_array_chunk, str8_struct(dir), str8(0,0));
+  LNK_Chunk *dir_entry_chunk = lnk_section_push_chunk_data(sect, dir_array_chunk, str8_struct(dir), str8_zero());
   lnk_chunk_set_debugf(sect->arena, dir_entry_chunk, "DebugDirectory[%u]", type);
   
   // push debug directory relocs
@@ -1512,7 +1482,7 @@ lnk_build_debug_rdi(LNK_SectionTable *st,
   
   // push chunks
   String8    debug_rdi       = pe_make_debug_header_rdi(rdi_sect->arena, guid, rdi_path);
-  LNK_Chunk *debug_rdi_chunk = lnk_section_push_chunk_data(rdi_sect, rdi_sect->root, debug_rdi, str8(0,0)); lnk_chunk_set_debugf(rdi_sect->arena, debug_rdi, LNK_CV_HEADER_RDI_SYMBOL_NAME);
+  LNK_Chunk *debug_rdi_chunk = lnk_section_push_chunk_data(rdi_sect, rdi_sect->root, debug_rdi, str8_zero()); lnk_chunk_set_debugf(rdi_sect->arena, debug_rdi, LNK_CV_HEADER_RDI_SYMBOL_NAME);
   
   // push symbols
   LNK_Symbol *debug_rdi_symbol = lnk_make_defined_symbol_chunk(symtab->arena, str8_lit(LNK_CV_HEADER_RDI_SYMBOL_NAME), LNK_DefinedSymbolVisibility_Internal, 0, debug_rdi_chunk, 0, 0, 0);
@@ -1554,26 +1524,26 @@ lnk_build_guard_tables(TP_Context       *tp,
     if (has_guard_flags) {
       LNK_SymbolArray symbol_arr = lnk_symbol_array_from_list(scratch.arena, obj->symbol_list);
       if (guard_flags & LNK_Guard_Cf) {
-        LNK_ChunkList gfids_list = lnk_obj_search_chunks(scratch.arena, obj, str8_lit(".gfids"), str8(0,0), 1);
+        LNK_ChunkList gfids_list = lnk_obj_search_chunks(scratch.arena, obj, str8_lit(".gfids"), str8_zero(), 1);
         for (LNK_ChunkNode *node = gfids_list.first; node != 0; node = node->next) {
           Assert(node->data->type == LNK_Chunk_Leaf);
           lnk_push_coff_symbols_from_data(scratch.arena, &guard_symbol_list_table[GUARD_FIDS], node->data->u.leaf, symbol_arr);
         }
-        LNK_ChunkList giats_list = lnk_obj_search_chunks(scratch.arena, obj, str8_lit(".giats"), str8(0,0), 1);
+        LNK_ChunkList giats_list = lnk_obj_search_chunks(scratch.arena, obj, str8_lit(".giats"), str8_zero(), 1);
         for (LNK_ChunkNode *node = giats_list.first; node != 0; node = node->next) {
           Assert(node->data->type == LNK_Chunk_Leaf);
           lnk_push_coff_symbols_from_data(scratch.arena, &guard_symbol_list_table[GUARD_IATS], node->data->u.leaf, symbol_arr);
         }
       }
       if (guard_flags & LNK_Guard_LongJmp) {
-        LNK_ChunkList gljmp_list = lnk_obj_search_chunks(scratch.arena, obj, str8_lit(".gljmp"), str8(0,0), 1);
+        LNK_ChunkList gljmp_list = lnk_obj_search_chunks(scratch.arena, obj, str8_lit(".gljmp"), str8_zero(), 1);
         for (LNK_ChunkNode *node = gljmp_list.first; node != 0; node = node->next) {
           Assert(node->data->type == LNK_Chunk_Leaf);
           lnk_push_coff_symbols_from_data(scratch.arena, &guard_symbol_list_table[GUARD_LJMP], node->data->u.leaf, symbol_arr);
         }
       }
       if (guard_flags & LNK_Guard_EhCont) {
-        LNK_ChunkList gehcont_list = lnk_obj_search_chunks(scratch.arena, obj, str8_lit(".gehcont"), str8(0,0), 1);
+        LNK_ChunkList gehcont_list = lnk_obj_search_chunks(scratch.arena, obj, str8_lit(".gehcont"), str8_zero(), 1);
         for (LNK_ChunkNode *node = gehcont_list.first; node != 0; node = node->next) {
           Assert(node->data->type == LNK_Chunk_Leaf);
           lnk_push_coff_symbols_from_data(scratch.arena, &guard_symbol_list_table[GUARD_EHCONT], node->data->u.leaf, symbol_arr);
@@ -1732,10 +1702,10 @@ lnk_build_guard_tables(TP_Context       *tp,
   String8 gehcont_data = lnk_build_guard_data(gehcont_sect->arena, guard_voff_arr_table[GUARD_EHCONT], entry_stride);
   
   // push guard data
-  lnk_section_push_chunk_data(gfids_sect, gfids_array_chunk, gfids_data, str8(0,0));
-  lnk_section_push_chunk_data(giats_sect, giats_array_chunk, giats_data, str8(0,0));
-  lnk_section_push_chunk_data(gljmp_sect, gljmp_array_chunk, gljmp_data, str8(0,0));
-  lnk_section_push_chunk_data(gehcont_sect, gehcont_array_chunk, gehcont_data, str8(0,0));
+  lnk_section_push_chunk_data(gfids_sect, gfids_array_chunk, gfids_data, str8_zero());
+  lnk_section_push_chunk_data(giats_sect, giats_array_chunk, giats_data, str8_zero());
+  lnk_section_push_chunk_data(gljmp_sect, gljmp_array_chunk, gljmp_data, str8_zero());
+  lnk_section_push_chunk_data(gehcont_sect, gehcont_array_chunk, gehcont_data, str8_zero());
   
   LNK_Symbol *gflags_symbol = lnk_symbol_table_search(symtab, LNK_SymbolScopeFlag_Main, str8_lit(LNK_GUARD_FLAGS_SYMBOL_NAME));
   LNK_Symbol *gfids_table_symbol = lnk_symbol_table_search(symtab, LNK_SymbolScopeFlag_Main, str8_lit(LNK_GUARD_FIDS_TABLE_SYMBOL_NAME));
@@ -2065,7 +2035,7 @@ lnk_build_base_relocs(TP_Context       *tp,
       Assert(*block_size_ptr <= buf_size);
       
       // push page chunk
-      lnk_section_push_chunk_raw(base_reloc_sect, base_reloc_sect->root, buf, block_size, str8(0,0));
+      lnk_section_push_chunk_raw(base_reloc_sect, base_reloc_sect->root, buf, block_size, str8_zero());
       
       // purge voffs for next run
       hash_table_purge(voff_ht);
@@ -2102,9 +2072,9 @@ lnk_build_dos_header(LNK_SymbolTable *symtab, LNK_Section *header_sect, LNK_Chun
   MemoryZeroArray(dos_header->reserved2);
   dos_header->coff_file_offset      = 0; // :coff_file_offset
   
-  LNK_Chunk *dos_chunk         = lnk_section_push_chunk_list(header_sect, parent_chunk, str8(0,0));
-  LNK_Chunk *dos_header_chunk  = lnk_section_push_chunk_raw(header_sect, dos_chunk, dos_header, sizeof(*dos_header), str8(0,0));
-  LNK_Chunk *dos_program_chunk = lnk_section_push_chunk_data(header_sect, dos_chunk, pe_dos_program, str8(0,0));
+  LNK_Chunk *dos_chunk         = lnk_section_push_chunk_list(header_sect, parent_chunk, str8_zero());
+  LNK_Chunk *dos_header_chunk  = lnk_section_push_chunk_raw(header_sect, dos_chunk, dos_header, sizeof(*dos_header), str8_zero());
+  LNK_Chunk *dos_program_chunk = lnk_section_push_chunk_data(header_sect, dos_chunk, pe_dos_program, str8_zero());
   lnk_chunk_set_debugf(header_sect->arena, dos_chunk, "DOS Header & Stub");
   lnk_chunk_set_debugf(header_sect->arena, dos_header_chunk, LNK_DOS_HEADER_SYMBOL_NAME);
   lnk_chunk_set_debugf(header_sect->arena, dos_program_chunk, LNK_DOS_PROGRAM_SYMBOL_NAME);
@@ -2126,7 +2096,7 @@ lnk_build_pe_magic(LNK_SymbolTable *symtab, LNK_Section *header_sect, LNK_Chunk 
   U32 *pe_magic = push_array_no_zero(header_sect->arena, U32, 1);
   *pe_magic = PE_MAGIC;
   
-  LNK_Chunk *pe_magic_chunk = lnk_section_push_chunk_raw(header_sect, parent, pe_magic, sizeof(*pe_magic), str8(0,0));
+  LNK_Chunk *pe_magic_chunk = lnk_section_push_chunk_raw(header_sect, parent, pe_magic, sizeof(*pe_magic), str8_zero());
   lnk_chunk_set_debugf(header_sect->arena, pe_magic_chunk, LNK_PE_MAGIC_SYMBOL_NAME);
   
   LNK_Symbol *pe_magic_symbol = lnk_make_defined_symbol_chunk(symtab->arena, str8_lit(LNK_PE_MAGIC_SYMBOL_NAME), LNK_DefinedSymbolVisibility_Internal, 0, pe_magic_chunk, 0, 0, 0);
@@ -2148,7 +2118,7 @@ lnk_build_coff_file_header(LNK_SymbolTable *symtab, LNK_Section *header_sect, LN
   file_header->optional_header_size = 0; // :optional_header_size
   file_header->flags                = file_characteristics;
   
-  LNK_Chunk *file_header_chunk = lnk_section_push_chunk_raw(header_sect, parent, file_header, sizeof(*file_header), str8(0,0));
+  LNK_Chunk *file_header_chunk = lnk_section_push_chunk_raw(header_sect, parent, file_header, sizeof(*file_header), str8_zero());
   lnk_chunk_set_debugf(header_sect->arena, file_header_chunk, LNK_COFF_HEADER_SYMBOL_NAME);
   
   LNK_Symbol *file_header_symbol = lnk_make_defined_symbol_chunk(symtab->arena, str8_lit(LNK_COFF_HEADER_SYMBOL_NAME), LNK_DefinedSymbolVisibility_Internal, 0, file_header_chunk, 0, 0, 0);
@@ -2217,7 +2187,7 @@ lnk_build_pe_optional_header_x64(LNK_SymbolTable       *symtab,
   opt_header->data_dir_count          = 0; // :data_dir_count
   
   // push chunk
-  LNK_Chunk *opt_header_chunk = lnk_section_push_chunk_raw(header_sect, parent, opt_header, sizeof(*opt_header), str8(0,0));
+  LNK_Chunk *opt_header_chunk = lnk_section_push_chunk_raw(header_sect, parent, opt_header, sizeof(*opt_header), str8_zero());
   lnk_chunk_set_debugf(header_sect->arena, opt_header_chunk, LNK_PE_OPT_HEADER_SYMBOL_NAME);
   
   // define optional header symbol
@@ -2298,7 +2268,7 @@ lnk_build_pe_directories(LNK_SymbolTable *symtab, LNK_Section *header_sect, LNK_
   U64 directory_count = PE_DataDirectoryIndex_COUNT;
   PE_DataDirectory *directory_array = push_array(header_sect->arena, PE_DataDirectory, directory_count);
   
-  LNK_Chunk *directory_array_chunk = lnk_section_push_chunk_raw(header_sect, parent, directory_array, sizeof(directory_array[0])*directory_count, str8(0,0));
+  LNK_Chunk *directory_array_chunk = lnk_section_push_chunk_raw(header_sect, parent, directory_array, sizeof(directory_array[0])*directory_count, str8_zero());
   lnk_chunk_set_debugf(header_sect->arena, directory_array_chunk, LNK_PE_DIRECTORY_ARRAY_SYMBOL_NAME);
   
   // define PE directory symbols
@@ -2339,7 +2309,7 @@ lnk_build_coff_section_table(LNK_SymbolTable *symtab, LNK_Section *header_sect, 
   }
   
   // push COFF header array chunk
-  LNK_Chunk *coff_header_array_chunk = lnk_section_push_chunk_list(header_sect, parent_chunk, str8(0,0));
+  LNK_Chunk *coff_header_array_chunk = lnk_section_push_chunk_list(header_sect, parent_chunk, str8_zero());
   lnk_chunk_set_debugf(header_sect->arena, coff_header_array_chunk, LNK_COFF_SECT_HEADER_ARRAY_SYMBOL_NAME);
   
   // define symbol for COFF header array
@@ -2374,7 +2344,7 @@ lnk_build_coff_section_table(LNK_SymbolTable *symtab, LNK_Section *header_sect, 
     coff_header->flags       = sect->flags;
     
     // push chunk
-    LNK_Chunk *coff_header_chunk = lnk_section_push_chunk_raw(header_sect, coff_header_array_chunk, coff_header, sizeof(*coff_header), str8(0,0));
+    LNK_Chunk *coff_header_chunk = lnk_section_push_chunk_raw(header_sect, coff_header_array_chunk, coff_header, sizeof(*coff_header), str8_zero());
     
     // :vsize
     lnk_section_push_reloc_undefined(header_sect, coff_header_chunk, LNK_Reloc_CHUNK_SIZE_VIRT_32, OffsetOf(COFF_SectionHeader, vsize), sect->name, LNK_SymbolScopeFlag_Internal);
@@ -2412,7 +2382,7 @@ lnk_build_win32_image_header(LNK_SymbolTable     *symtab,
   // header sections must be written first
   Assert(header_sect->id == 0); 
   
-  LNK_Chunk *win32_header_chunk     = lnk_section_push_chunk_list(header_sect, parent_chunk      , str8(0,0)    );
+  LNK_Chunk *win32_header_chunk     = lnk_section_push_chunk_list(header_sect, parent_chunk      , str8_zero()    );
   LNK_Chunk *dos_chunk              = lnk_section_push_chunk_list(header_sect, win32_header_chunk, str8_lit("a"));
   LNK_Chunk *nt_chunk               = lnk_section_push_chunk_list(header_sect, win32_header_chunk, str8_lit("b"));
   LNK_Chunk *pe_magic_chunk         = lnk_section_push_chunk_list(header_sect, nt_chunk          , str8_lit("a"));
@@ -3752,7 +3722,7 @@ l.count += 1;                                                \
               
               // search disk for library
               String8List match_list    = os_file_search(scratch.arena, config->lib_dir_list, path);
-              String8     absolute_path = match_list.node_count ? match_list.first->string : str8(0,0);
+              String8     absolute_path = match_list.node_count ? match_list.first->string : str8_zero();
               
               // default to first match
               if (lnk_is_lib_loaded(default_lib_ht, loaded_lib_ht, input_source, absolute_path)) {
@@ -3857,7 +3827,7 @@ l.count += 1;                                                \
             // TODO: currently we convert manifest to res and parse res again, this unnecessary instead push manifest 
             // resource to the tree directly
             String8 manifest_data = lnk_manifest_from_inputs(scratch.arena, config->mt_path, config->manifest_name, config->manifest_uac, config->manifest_level, config->manifest_ui_access, input_manifest_path_list, manifest_dep_list);
-            String8 manifest_res = lnk_res_from_data(scratch.arena, manifest_data);
+            String8 manifest_res  = pe_make_manifest_resource(scratch.arena, *config->manifest_resource_id, manifest_data);
             str8_list_push(scratch.arena, &res_data_list, manifest_res);
             str8_list_push(scratch.arena, &res_path_list, str8_lit("* Manifest *"));
             ProfEnd();
@@ -4004,8 +3974,8 @@ l.count += 1;                                                \
           
           // push debug directory layout chunks
           LNK_Section *debug_sect            = lnk_section_table_search(st, str8_lit(".rdata"));
-          LNK_Chunk   *debug_chunk           = lnk_section_push_chunk_list(debug_sect, debug_sect->root, str8(0,0));
-          LNK_Chunk   *debug_dir_array_chunk = lnk_section_push_chunk_list(debug_sect, debug_chunk, str8(0,0));
+          LNK_Chunk   *debug_chunk           = lnk_section_push_chunk_list(debug_sect, debug_sect->root, str8_zero());
+          LNK_Chunk   *debug_dir_array_chunk = lnk_section_push_chunk_list(debug_sect, debug_chunk, str8_zero());
           
           // push symbols for PE directory patch
           LNK_Symbol *dir_array_symbol = lnk_make_defined_symbol_chunk(symtab->arena, str8_lit(LNK_DEBUG_DIR_SYMBOL_NAME), LNK_DefinedSymbolVisibility_Internal, 0, debug_dir_array_chunk, 0, 0, 0);
@@ -4578,7 +4548,7 @@ lnk_dump_resource_dir_(COFF_ResourceID dir_id, PE_ResourceDir *dir)
 {
   Temp scratch = scratch_begin(0, 0);
   
-  SYMS_String8 dir_id_syms = syms_str8(0,0);
+  SYMS_String8 dir_id_syms = syms_str8_zero();
   if (dir_id.type == COFF_ResourceIDType_NUMBER) {
     dir_id_syms = syms_pe_resource_type_to_string(dir_id.u.number);
   }
@@ -4612,7 +4582,7 @@ lnk_dump_resource_dir_(COFF_ResourceID dir_id, PE_ResourceDir *dir)
         } break;
         case PE_ResData_COFF_RESOURCE: {
           SYMS_String8 id_syms = syms_coff_resource_id_to_string(scratch.arena, res->id);
-          SYMS_String8 type_syms = syms_str8(0,0);
+          SYMS_String8 type_syms = syms_str8_zero();
           if (res->u.coff_res.type.type == COFF_ResourceIDType_NUMBER) {
             type_syms = syms_pe_resource_type_to_string(res->u.coff_res.type.u.number);
           }

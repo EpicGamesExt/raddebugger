@@ -247,7 +247,7 @@ typedef struct LNK_Config
   U64                         pdb_page_size;
   U64                         worker_count;
   U64                         function_pad_min;
-  U64                         manifest_resource_id;
+  U64                        *manifest_resource_id;
   Version                     link_ver;
   Version                     os_ver;
   Version                     image_ver;

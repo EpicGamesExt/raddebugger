@@ -832,7 +832,7 @@ lnk_config_from_cmd_line(Arena *arena, String8List raw_cmd_line)
   
   // parse command line
   String8List unwrapped_cmd_line = lnk_unwrap_rsp(scratch.arena, raw_cmd_line);
-  LNK_CmdLine cmd_line = lnk_cmd_line_parse_windows_rules(scratch.arena, unwrapped_cmd_line);
+  LNK_CmdLine cmd_line           = lnk_cmd_line_parse_windows_rules(scratch.arena, unwrapped_cmd_line);
   
   // setup default flags
   lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Align, "%u", KB(4));
@@ -1132,25 +1132,21 @@ lnk_config_from_cmd_line(Arena *arena, String8List raw_cmd_line)
             config->manifest_opt = LNK_ManifestOpt_Embed;
 
             if (param_arr.count == 1) {
-              if (lnk_cmd_line_has_switch(cmd_line, LNK_CmdSwitch_Dll)) {
-                config->manifest_resource_id = 2;
-              } else {
-                config->manifest_resource_id = 1;
-              }
+              config->manifest_resource_id = 0;
             } else if (param_arr.count > 1) {
               // parse resource id
               if (str8_match(param_arr.v[1], str8_lit("id="), StringMatchFlag_RightSideSloppy|StringMatchFlag_CaseInsensitive)) {
-                String8List res_id_list = str8_split_by_string_chars(scratch.arena, param_arr.v[1], str8_lit("="), 0);
-                String8Array res_id_arr = str8_array_from_list(scratch.arena, &res_id_list);
+                String8List  res_id_list = str8_split_by_string_chars(scratch.arena, param_arr.v[1], str8_lit("="), 0);
+                String8Array res_id_arr  = str8_array_from_list(scratch.arena, &res_id_list);
                 if (res_id_arr.count == 2) {
                   U64 resource_id;
                   if (try_u64_from_str8_c_rules(res_id_arr.v[1], &resource_id)) {
-                    config->manifest_resource_id = resource_id;
+                    config->manifest_resource_id = push_u64(arena, resource_id);
                   } else {
                     lnk_error_cmd_switch(LNK_Error_Cmdl, cmd_switch, "unable to parse resource_id \"%S\"", res_id_arr.v[1]);
                   }
                 } else {
-                  lnk_error_cmd_switch(LNK_Error_Cmdl, cmd_switch, "invalid syntax expected form ID=resource_id but got \"%S\"", param_arr.v[1]);
+                  lnk_error_cmd_switch(LNK_Error_Cmdl, cmd_switch, "invalid syntax expected form ID=# but got \"%S\"", param_arr.v[1]);
                 }
               } else {
                 lnk_error_cmd_switch_invalid_param(LNK_Error_Cmdl, cmd_switch, param_arr.v[0]);
@@ -1168,6 +1164,8 @@ lnk_config_from_cmd_line(Arena *arena, String8List raw_cmd_line)
         }
       } else if (cmd->value_strings.node_count == 0) {
         config->manifest_opt = LNK_ManifestOpt_WriteToFile;
+      } else {
+        lnk_error_cmd_switch_invalid_param_count(LNK_Error_Cmdl, cmd_switch);
       }
     } break;
 
@@ -1613,6 +1611,15 @@ lnk_config_from_cmd_line(Arena *arena, String8List raw_cmd_line)
       }
     } else {
       lnk_error_cmd_switch(LNK_Error_Cmdl, LNK_CmdSwitch_ManifestInput, "missing /MANIFEST:EMBED");
+    }
+  }
+
+  // set default manifest resource id
+  if (config->manifest_resource_id == 0) {
+    if (config->file_characteristics & PE_ImageFileCharacteristic_FILE_DLL) {
+      config->manifest_resource_id = push_u64(arena, 2);
+    } else {
+      config->manifest_resource_id = push_u64(arena, 1);
     }
   }
 

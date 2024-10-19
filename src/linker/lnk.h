@@ -254,7 +254,6 @@ internal void    lnk_push_loaded_lib(Arena *arena, HashTable *default_lib_ht, Ha
 
 internal String8 lnk_make_linker_manifest(Arena *arena, B32 manifest_uac, String8 manifest_level, String8 manifest_ui_access, String8List manifest_dependency_list);
 internal void    lnk_merge_manifest_files(String8 mt_path, String8 out_name, String8List manifest_path_list);
-internal String8 lnk_res_from_data(Arena *arena, String8 data);
 
 ////////////////////////////////
 // Resources

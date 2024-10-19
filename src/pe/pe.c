@@ -901,6 +901,21 @@ pe_resource_table_from_directory_data(Arena *arena, String8 data)
   return bottom_frame->table;
 }
 
+internal String8
+pe_make_manifest_resource(Arena *arena, U32 resource_id, String8 manifest_data)
+{
+  COFF_ResourceID type = {0};
+  type.type            = COFF_ResourceIDType_NUMBER;
+  type.u.number        = PE_ResourceKind_MANIFEST;
+
+  COFF_ResourceID id = {0};
+  id.type            = COFF_ResourceIDType_NUMBER;
+  id.u.number        = resource_id;
+
+  String8 res = coff_write_resource(arena, type, id, 1, 0, 1033, 0, 0, manifest_data);
+  return res;
+}
+
 ////////////////////////////////
 //~ Debug Directory
 

@@ -608,10 +608,11 @@ typedef struct COFF_Resource
 {
   COFF_ResourceID type;
   COFF_ResourceID name;
-  U16 language_id;
   U32 data_version;
-  U32 version;
   COFF_ResourceMemoryFlags memory_flags;
+  U16 language_id;
+  U32 version;
+  U32 characteristics;
   String8 data;
 } COFF_Resource;
 
@@ -877,25 +878,24 @@ internal String8 coff_make_import_header_by_ordinal(Arena                *arena,
                                                     U16                   ordinal,
                                                     COFF_ImportHeaderType type);
 
+////////////////////////////////
+//~ Resources
 
-internal B32               coff_resource_id_is_equal(COFF_ResourceID a, COFF_ResourceID b);
-internal COFF_ResourceID   coff_resource_id_copy(Arena *arena, COFF_ResourceID id);
-internal U64               coff_sizeof_resource_id(COFF_ResourceID id);
-internal COFF_ResourceID   coff_convert_resource_id(Arena *arena, COFF_ResourceID_16 *id_16);
-internal U64               coff_read_resource_id(String8 res, U64 off, COFF_ResourceID_16 *id_out);
+internal String8 coff_resource_string_from_str16(Arena *arena, String16 string);
+internal String8 coff_resource_string_from_str8(Arena *arena, String8 string);
+internal String8 coff_resource_number_from_u16(Arena *arena, U16 number);
+
+internal B32              coff_resource_id_is_equal(COFF_ResourceID a, COFF_ResourceID b);
+internal COFF_ResourceID  coff_utf8_resource_id_from_utf16(Arena *arena, COFF_ResourceID_16 *id_16);
+
+internal U64               coff_read_resource_id_utf16(String8 res, U64 off, COFF_ResourceID_16 *id_out);
 internal U64               coff_read_resource(String8 data, U64 off, Arena *arena, COFF_Resource *res_out);
 internal COFF_ResourceList coff_resource_list_from_data(Arena *arena, String8 data);
 
-internal void        coff_write_resource_id(Arena *arena, String8List *srl, COFF_ResourceID id);
-internal String8List coff_write_resource(Arena          *arena,
-                                         COFF_ResourceID type,
-                                         COFF_ResourceID name,
-                                         U32             data_version,
-                                         COFF_ResourceMemoryFlags memory_flags,
-                                         U16             language_id,
-                                         U32             version,
-                                         U32             characteristics,
-                                         String8         data);
+internal String8 coff_write_resource_id(Arena *arena, COFF_ResourceID id);
+internal String8 coff_write_resource(Arena *arena, COFF_ResourceID type, COFF_ResourceID name, U32 data_version, COFF_ResourceMemoryFlags memory_flags, U16 language_id, U32 version, U32 characteristics, String8 data);
+
+////////////////////////////////
 
 internal COFF_DataType      coff_data_type_from_data(String8 data);
 internal B32                coff_is_import(String8 data);
