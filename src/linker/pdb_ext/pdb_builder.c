@@ -2522,12 +2522,6 @@ gsi_push_many_list(PDB_GsiContext *gsi, U64 count, U32 *hash_arr, CV_SymbolList 
   MemoryZeroStruct(list);
 }
 
-internal void
-gsi_push_many_and_remove_duplicates(TP_Context *tp, CV_SymbolList *list)
-{
-
-}
-
 internal CV_SymbolNode *
 gsi_search(PDB_GsiContext *gsi, CV_Symbol *symbol)
 {
