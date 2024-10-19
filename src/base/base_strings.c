@@ -215,12 +215,23 @@ str32_cstring(U32 *c){
 internal String8
 str8_cstring_capped(void *cstr, void *cap)
 {
-  char *ptr = (char*)cstr;
-  char *opl = (char*)cap;
+  char *ptr = cstr;
+  char *opl = cap;
   for (;ptr < opl && *ptr != 0; ptr += 1);
   U64 size = (U64)(ptr - (char *)cstr);
-  String8 result = {(U8*)cstr, size};
-  return(result);
+  String8 result = str8((U8*)cstr, size);
+  return result;
+}
+
+internal String16
+str16_cstring_capped(void *cstr, void *cap)
+{
+  U16 *ptr = cstr;
+  U16 *opl = cap;
+  for (;ptr < opl && *ptr != 0; ptr += 1);
+  U64 size = (U64)(ptr - (U16 *)cstr);
+  String16 result = str16(cstr, size);
+  return result;
 }
 
 ////////////////////////////////
