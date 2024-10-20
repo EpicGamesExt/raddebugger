@@ -1177,29 +1177,26 @@ internal U64
 rdib_sizeof_type(RDIB_Type *type)
 {
   U64 size = 0;
-
-  RDIB_Type *curr = type;
-  while (curr->kind == RDI_TypeKind_Modifier) {
-    curr = curr->modifier.type_ref;
-  }
-
-  if (RDI_TypeKind_FirstBuiltIn <= curr->kind && curr->kind < RDI_TypeKind_LastBuiltIn) {
-    size = curr->builtin.size;
-  } else if (curr->kind == RDI_TypeKind_Ptr || curr->kind == RDI_TypeKind_LRef || curr->kind == RDI_TypeKind_RRef) {
-    size = curr->ptr.size;
-  } else if (curr->kind == RDI_TypeKind_Struct || curr->kind == RDI_TypeKind_Class ||
-             curr->kind == RDI_TypeKind_IncompleteStruct || curr->kind == RDI_TypeKind_IncompleteClass) {
-    size = curr->udt.struct_type.size;
-  } else if (curr->kind == RDI_TypeKind_Union || curr->kind == RDI_TypeKind_IncompleteUnion) {
-    size = curr->udt.union_type.size;
-  } else if (curr->kind == RDI_TypeKind_Enum || curr->kind == RDI_TypeKind_IncompleteEnum) {
-    size = rdib_sizeof_type(curr->udt.enum_type.base_type);
-  } else if (curr->kind == RDI_TypeKind_Bitfield) {
-    size = rdib_sizeof_type(curr->bitfield.value_type);
+  if (RDI_TypeKind_FirstBuiltIn <= type->kind && type->kind < RDI_TypeKind_LastBuiltIn) {
+    size = type->builtin.size;
+  } else if (type->kind == RDI_TypeKind_Modifier) {
+    size = rdib_sizeof_type(type->modifier.type_ref);
+  } else if (type->kind == RDI_TypeKind_Ptr || type->kind == RDI_TypeKind_LRef || type->kind == RDI_TypeKind_RRef) {
+    size = type->ptr.size;
+  } else if (type->kind == RDI_TypeKind_Struct || type->kind == RDI_TypeKind_Class ||
+             type->kind == RDI_TypeKind_IncompleteStruct || type->kind == RDI_TypeKind_IncompleteClass) {
+    size = type->udt.struct_type.size;
+  } else if (type->kind == RDI_TypeKind_Union || type->kind == RDI_TypeKind_IncompleteUnion) {
+    size = type->udt.union_type.size;
+  } else if (type->kind == RDI_TypeKind_Enum || type->kind == RDI_TypeKind_IncompleteEnum) {
+    size = rdib_sizeof_type(type->udt.enum_type.base_type);
+  } else if (type->kind == RDI_TypeKind_Bitfield) {
+    size = rdib_sizeof_type(type->bitfield.value_type);
+  } else if (type->kind == RDI_TypeKind_Array) {
+    size = type->array.size;
   } else {
     Assert(!"error: type doens't have a size");
   }
-
   return size;
 }
 
