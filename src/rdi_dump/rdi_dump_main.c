@@ -174,10 +174,10 @@ entry_point(CmdLine *cmd_line)
     }
     
     //- rjf: TOP LEVEL INFO
+    RDI_TopLevelInfo *tli = rdi_element_from_name_idx(rdi, TopLevelInfo, 0);
     if(dump_flags & DumpFlag_TopLevelInfo)
     {
       str8_list_pushf(arena, &dump, "# TOP LEVEL INFO:\n");
-      RDI_TopLevelInfo *tli = rdi_element_from_name_idx(rdi, TopLevelInfo, 0);
       rdi_stringize_top_level_info(arena, &dump, rdi, tli, 1);
       str8_list_push(arena, &dump, str8_lit("\n"));
     }
@@ -407,7 +407,7 @@ entry_point(CmdLine *cmd_line)
       {
         if(scopes[idx].parent_scope_idx == 0)
         {
-          rdi_stringize_scope(arena, &dump, rdi, &scope_bundle, &scopes[idx], 1);
+          rdi_stringize_scope(arena, &dump, rdi, tli->arch, &scope_bundle, &scopes[idx], 1);
         }
       }
       str8_list_push(arena, &dump, str8_lit("\n"));

@@ -459,6 +459,16 @@ RDI_RegCodeX64Table:
   @expand(RDI_RegCodeX64Table a) `$(a.name .. =>10) = $(a.value)`
 }
 
+@xlist RDI_RegCodeX86_XList:
+{
+  @expand(RDI_RegCodeX86Table a) `$(a.name), $(a.value)`
+}
+
+@xlist RDI_RegCodeX64_XList:
+{
+  @expand(RDI_RegCodeX64Table a) `$(a.name), $(a.value)`
+}
+
 ////////////////////////////////
 //~ rjf: Top-Level Info Type Tables
 

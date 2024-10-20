@@ -5,6 +5,40 @@
 //~ rjf: RDI Enum -> String Functions
 
 internal String8
+rdi_string_from_reg_code_x86(U64 reg_code)
+{
+#define X(name, value) case RDI_RegCodeX86_##name: return str8_lit(#name);
+  switch (reg_code) {
+    RDI_RegCodeX86_XList
+  }
+#undef X
+  return str8_lit("");
+}
+
+internal String8
+rdi_string_from_reg_code_x64(U64 reg_code)
+{
+#define X(name, value) case RDI_RegCodeX64_##name: return str8_lit(#name);
+  switch (reg_code) {
+    RDI_RegCodeX64_XList
+  }
+#undef X
+  return str8_lit("");
+}
+
+internal String8
+rdi_string_from_reg_code(RDI_Arch arch, U64 reg_code)
+{
+  switch (arch) {
+  case RDI_Arch_NULL: break;
+  case RDI_Arch_X86: return rdi_string_from_reg_code_x86(reg_code);
+  case RDI_Arch_X64: return rdi_string_from_reg_code_x64(reg_code);
+  default: InvalidPath;
+  }
+  return str8_lit("");
+}
+
+internal String8
 rdi_string_from_data_section_kind(RDI_SectionKind v)
 {
   String8 result = str8_lit("<invalid RDI_SectionKind>");
@@ -126,6 +160,21 @@ rdi_stringize_link_flags(Arena *arena, String8List *out, RDI_LinkFlags flags)
 #define X(name) if(flags & RDI_LinkFlag_##name) { str8_list_push(arena, out, str8_lit(#name " ")); }
   RDI_LinkFlags_XList;
 #undef X
+}
+
+////////////////////////////////
+
+internal String8
+rdi_format_reg_code(Arena *arena, RDI_Arch arch, U64 reg_code)
+{
+  String8 result = {0};
+  String8 reg_name = rdi_string_from_reg_code(arch, reg_code);
+  if (reg_name.size) {
+    result = push_str8f(arena, "%S", reg_name, reg_code);
+  } else {
+    result = push_str8f(arena, "??? (%llu)", reg_code);
+  }
+  return result;
 }
 
 ////////////////////////////////
@@ -585,9 +634,10 @@ rdi_stringize_procedure(Arena *arena, String8List *out, RDI_Parsed *rdi,
 }
 
 internal void
-rdi_stringize_scope(Arena *arena, String8List *out, RDI_Parsed *rdi,
+rdi_stringize_scope(Arena *arena, String8List *out, RDI_Parsed *rdi, RDI_Arch arch,
                     RDI_ScopeBundle *bundle, RDI_Scope *scope, U32 indent_level)
 {
+  Temp scratch = scratch_begin(&arena, 1);
   
   U32 this_idx = (U32)(scope - bundle->scopes);
   
@@ -720,8 +770,8 @@ rdi_stringize_scope(Arena *arena, String8List *out, RDI_Parsed *rdi,
                   }
                   else{
                     RDI_LocationRegPlusU16 *loc = (RDI_LocationRegPlusU16*)loc_base_ptr;
-                    str8_list_pushf(arena, out, "AddrRegPlusU16(reg: %u, off: %u)\n",
-                                    loc->reg_code, loc->offset);
+                    str8_list_pushf(arena, out, "AddrRegPlusU16(reg: %S, off: %u)\n",
+                                    rdi_format_reg_code(scratch.arena, arch, loc->reg_code), loc->offset);
                   }
                 }break;
                 
@@ -732,8 +782,8 @@ rdi_stringize_scope(Arena *arena, String8List *out, RDI_Parsed *rdi,
                   }
                   else{
                     RDI_LocationRegPlusU16 *loc = (RDI_LocationRegPlusU16*)loc_base_ptr;
-                    str8_list_pushf(arena, out, "AddrAddrRegisterPlusU16(reg: %u, off: %u)\n",
-                                    loc->reg_code, loc->offset);
+                    str8_list_pushf(arena, out, "AddrAddrRegisterPlusU16(reg: %S, off: %u)\n",
+                                    rdi_format_reg_code(scratch.arena, arch, loc->reg_code), loc->offset);
                   }
                 }break;
                 
@@ -744,7 +794,7 @@ rdi_stringize_scope(Arena *arena, String8List *out, RDI_Parsed *rdi,
                   }
                   else{
                     RDI_LocationReg *loc = (RDI_LocationReg*)loc_base_ptr;
-                    str8_list_pushf(arena, out, "ValReg(reg: %u)\n", loc->reg_code);
+                    str8_list_pushf(arena, out, "ValReg(reg: %S)\n", rdi_format_reg_code(scratch.arena, arch, loc->reg_code));
                   }
                 }break;
               }
@@ -769,7 +819,7 @@ rdi_stringize_scope(Arena *arena, String8List *out, RDI_Parsed *rdi,
     }
     
     // stringize child
-    rdi_stringize_scope(arena, out, rdi, bundle, child_scope, indent_level + 1);
+    rdi_stringize_scope(arena, out, rdi, arch, bundle, child_scope, indent_level + 1);
     
     // increment iterator
     child = child_scope->next_sibling_scope_idx;
@@ -777,6 +827,8 @@ rdi_stringize_scope(Arena *arena, String8List *out, RDI_Parsed *rdi,
   
   str8_list_pushf(arena, out, "%.*s[/%u]\n",
                   indent_level, rdi_stringize_spaces, this_idx);
+
+  scratch_end(scratch);
 }
 
 internal void
