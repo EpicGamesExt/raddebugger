@@ -455,7 +455,7 @@ txt_token_array_from_string__c_cpp(Arena *arena, U64 *bytes_processed_counter, S
             B32 found = 0;
             for(U64 idx = 0; idx < ArrayCount(c_cpp_multichar_symbol_strings); idx += 1)
             {
-              if(str8_match(str8_substr(string, r1u64(off, off+c_cpp_multichar_symbol_strings[idx].size)),
+              if(str8_match(str8_substr(token_string, r1u64(off, off+c_cpp_multichar_symbol_strings[idx].size)),
                             c_cpp_multichar_symbol_strings[idx],
                             0))
               {
@@ -741,7 +741,7 @@ txt_token_array_from_string__odin(Arena *arena, U64 *bytes_processed_counter, St
             B32 found = 0;
             for(U64 idx = 0; idx < ArrayCount(odin_multichar_symbol_strings); idx += 1)
             {
-              if(str8_match(str8_substr(string, r1u64(off, off+odin_multichar_symbol_strings[idx].size)),
+              if(str8_match(str8_substr(token_string, r1u64(off, off+odin_multichar_symbol_strings[idx].size)),
                             odin_multichar_symbol_strings[idx],
                             0))
               {
@@ -1026,7 +1026,7 @@ txt_token_array_from_string__jai(Arena *arena, U64 *bytes_processed_counter, Str
             B32 found = 0;
             for(U64 idx = 0; idx < ArrayCount(jai_multichar_symbol_strings); idx += 1)
             {
-              if(str8_match(str8_substr(string, r1u64(off, off+jai_multichar_symbol_strings[idx].size)),
+              if(str8_match(str8_substr(token_string, r1u64(off, off+jai_multichar_symbol_strings[idx].size)),
                             jai_multichar_symbol_strings[idx],
                             0))
               {
@@ -1317,7 +1317,7 @@ txt_token_array_from_string__zig(Arena *arena, U64 *bytes_processed_counter, Str
             B32 found = 0;
             for(U64 idx = 0; idx < ArrayCount(zig_multichar_symbol_strings); idx += 1)
             {
-              if(str8_match(str8_substr(string, r1u64(off, off+zig_multichar_symbol_strings[idx].size)),
+              if(str8_match(str8_substr(token_string, r1u64(off, off+zig_multichar_symbol_strings[idx].size)),
                             zig_multichar_symbol_strings[idx],
                             0))
               {
