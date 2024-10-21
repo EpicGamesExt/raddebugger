@@ -389,6 +389,7 @@ e_token_array_from_text(Arena *arena, String8 text)
   E_TokenKind active_token_kind = E_TokenKind_Null;
   B32 active_token_kind_started_with_tick = 0;
   B32 escaped = 0;
+  B32 exp = 0;
   for(U64 idx = 0, advance = 0; idx <= text.size; idx += advance)
   {
     U8 byte      = (idx+0 < text.size) ? text.str[idx+0] : 0;
@@ -486,10 +487,16 @@ e_token_array_from_text(Arena *arena, String8 text)
       }break;
       case E_TokenKind_Numeric:
       {
-        if(!char_is_alpha(byte) && !char_is_digit(byte, 10) && byte != '.' && byte != ':')
+        if(exp && byte == '+' || byte == '-'){}
+        else if(!char_is_alpha(byte) && !char_is_digit(byte, 10) && byte != '.' && byte != ':')
         {
           advance = 0;
           token_formed = 1;
+        }
+        else
+        {
+          exp = 0;
+          exp = (byte == 'e');
         }
       }break;
       case E_TokenKind_StringLiteral:

@@ -90,6 +90,7 @@ E_ExprKindTable:
   { Typeof               UnaryPrefix         1        "typeof"            "typeof"  "("       ")"}
   { ByteSwap             UnaryPrefix         1        "bswap"             "bswap"   "("       ")"}
   
+  { Pos                  UnaryPrefix         2        "+"                 "+"       ""        "" }
   { Neg                  UnaryPrefix         2        "-"                 "-"       ""        "" }
   { LogNot               UnaryPrefix         2        "!"                 "!"       ""        "" }
   { BitNot               UnaryPrefix         2        "~"                 "~"       ""        "" }

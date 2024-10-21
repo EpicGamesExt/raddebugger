@@ -696,27 +696,28 @@ f64_from_str8(String8 string)
   {
     // rjf: find starting pos of numeric string, as well as sign
     F64 sign = +1.0;
-    //U64 first_numeric = 0;
     if(string.str[0] == '-')
     {
-      //first_numeric = 1;
       sign = -1.0;
     }
     else if(string.str[0] == '+')
     {
-      //first_numeric = 1;
       sign = 1.0;
     }
     
     // rjf: gather numerics
     U64 num_valid_chars = 0;
     char buffer[64];
+    B32 exp = 0;
     for(U64 idx = 0; idx < string.size && num_valid_chars < sizeof(buffer)-1; idx += 1)
     {
-      if(char_is_digit(string.str[idx], 10) || string.str[idx] == '.')
+      if(char_is_digit(string.str[idx], 10) || string.str[idx] == '.' || string.str[idx] == 'e' ||
+         (exp && (string.str[idx] == '+' || string.str[idx] == '-')))
       {
         buffer[num_valid_chars] = string.str[idx];
         num_valid_chars += 1;
+        exp = 0;
+        exp = (string.str[idx] == 'e');
       }
     }
     

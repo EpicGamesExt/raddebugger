@@ -846,6 +846,10 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
     }break;
     
     //- rjf: unary operations
+    case E_ExprKind_Pos:
+    {
+      result = e_irtree_and_type_from_expr(arena, expr->first);
+    }break;
     case E_ExprKind_Neg:
     case E_ExprKind_LogNot:
     case E_ExprKind_BitNot:
