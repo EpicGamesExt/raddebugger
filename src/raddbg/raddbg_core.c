@@ -1683,6 +1683,10 @@ rd_mapped_from_file_path(Arena *arena, String8 file_path)
       StringJoin join = {.sep = str8_lit("/")};
       result = str8_list_join(arena, &best_map_dst_parts, &join);
     }
+    else
+    {
+      result = path_normalized_from_string(arena, result);
+    }
   }
   scratch_end(scratch);
   return result;
@@ -2956,8 +2960,7 @@ rd_file_path_from_eval_string(Arena *arena, String8 string)
     E_Eval eval = e_eval_from_string(scratch.arena, string);
     if(eval.expr->kind == E_ExprKind_LeafFilePath)
     {
-      result = raw_from_escaped_str8(scratch.arena, eval.expr->string);
-      result = path_normalized_from_string(arena, result);
+      result = raw_from_escaped_str8(arena, eval.expr->string);
     }
     scratch_end(scratch);
   }
@@ -2968,8 +2971,7 @@ internal String8
 rd_eval_string_from_file_path(Arena *arena, String8 string)
 {
   Temp scratch = scratch_begin(&arena, 1);
-  String8 string_normalized = path_normalized_from_string(scratch.arena, string);
-  String8 string_escaped = escaped_from_raw_str8(scratch.arena, string_normalized);
+  String8 string_escaped = escaped_from_raw_str8(scratch.arena, string);
   String8 result = push_str8f(arena, "file:\"%S\"", string_escaped);
   scratch_end(scratch);
   return result;
