@@ -303,9 +303,9 @@ rdi_line_info_idx_from_voff(RDI_ParsedLineTable *line_info, RDI_U64 voff)
 {
   RDI_U64 count = 0;
   RDI_U64 result = rdi_line_info_idx_range_from_voff(line_info, voff, &count);
-  for(RDI_U64 idx = 0; idx < count && result+idx < line_info->count; idx += 1)
+  for(RDI_S64 idx = count-1; idx >= 0; idx -= 1)
   {
-    if(line_info->lines[result+idx].file_idx != 0)
+    if(result + idx < line_info->count && line_info->lines[result+idx].file_idx != 0)
     {
       result += idx;
       break;
