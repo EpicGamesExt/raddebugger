@@ -3617,11 +3617,11 @@ l.count += 1;                                                \
             // is obj machine compatible? 
             if (obj->machine != COFF_MachineType_UNKNOWN && // obj with unknown machine type is compatible with any other machine type
                 config->machine != obj->machine) {
-              lnk_error(LNK_Error_IncompatibleObj,
-                        "conflicting machine types expected %S but got %S in obj %S",
-                        coff_string_from_machine_type(config->machine),
-                        coff_string_from_machine_type(obj->machine),
-                        obj->path);
+              lnk_error_obj(LNK_Error_IncompatibleObj,
+                            obj,
+                            "conflicting machine types expected %S but got %S",
+                            coff_string_from_machine_type(config->machine),
+                            coff_string_from_machine_type(obj->machine));
             }
           }
           ProfEnd();

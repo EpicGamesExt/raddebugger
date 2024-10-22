@@ -1196,6 +1196,7 @@ read_only struct
 } g_coff_machine_map[] = {
   { str8_lit_comp(""),          COFF_MachineType_UNKNOWN   },
   { str8_lit_comp("X86"),       COFF_MachineType_X86       },
+  { str8_lit_comp("AMD64"),     COFF_MachineType_X64       },
   { str8_lit_comp("X64"),       COFF_MachineType_X64       },
   { str8_lit_comp("AM33"),      COFF_MachineType_AM33      },
   { str8_lit_comp("ARM"),       COFF_MachineType_ARM       },
@@ -1248,10 +1249,12 @@ coff_string_from_comdat_select_type(COFF_ComdatSelectType select)
 internal String8
 coff_string_from_machine_type(COFF_MachineType machine)
 {
-  Assert(machine < ArrayCount(g_coff_machine_map));
-  Assert(machine == g_coff_machine_map[machine].machine);
-  String8 string = g_coff_machine_map[machine].string;
-  return string;
+  for (U64 i = 0; i < ArrayCount(g_coff_machine_map); ++i) {
+    if (g_coff_machine_map[i].machine == machine) {
+      return g_coff_machine_map[i].string;
+    }
+  }
+  return str8_zero();
 }
 
 internal String8
