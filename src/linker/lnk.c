@@ -957,7 +957,7 @@ lnk_obj_from_res_file_list(TP_Context       *tp,
                            String8           obj_name)
 {
   ProfBeginFunction();
-  Temp scratch = scratch_begin(0,0);
+  Temp scratch = scratch_begin(&arena,1);
   
   Assert(res_data_list.node_count == res_path_list.node_count);
   

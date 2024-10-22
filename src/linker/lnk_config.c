@@ -923,7 +923,7 @@ lnk_config_from_cmd_line(Arena *arena, String8List raw_cmd_line)
 
   LNK_Config *config    = push_array(arena, LNK_Config, 1);
   config->raw_cmd_line  = raw_cmd_line;
-  config->work_dir      = os_get_current_path(scratch.arena);
+  config->work_dir      = os_get_current_path(arena);
   config->build_imp_lib = 1;
   config->build_exp     = 1;
 
