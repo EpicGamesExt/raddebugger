@@ -93,6 +93,7 @@ read_only struct
   { LNK_CmdSwitch_NotImplemented,     "ORDER",                "", ""                                                                                                      },
   { LNK_CmdSwitch_Out,                "OUT",                  ":FILENAME", ""                                                                                             },
   { LNK_CmdSwitch_Pdb,                "PDB",                  ":FILENAME", ""                                                                                             },
+  { LNK_CmdSwitch_PdbAltPath,         "PDBALTPATH",           "", ""                                                                                                      },
   { LNK_CmdSwitch_NotImplemented,     "PDBSTRIPPED",          "", ""                                                                                                      },
   { LNK_CmdSwitch_PdbPageSize,        "PDBPAGESIZE",          ":#", "Page size must be power of two"                                                                      },
   { LNK_CmdSwitch_NotImplemented,     "PROFILE",              "", ""                                                                                                      },
@@ -124,6 +125,7 @@ read_only struct
   { LNK_CmdSwitch_Rad_CheckUnusedDelayLoadDll, "RAD_CHECK_UNUSED_DELAY_LOAD_DLL", "[:NO]", ""                                                                           },
   { LNK_CmdSwitch_Rad_Debug,                   "RAD_DEBUG",                       "[:NO]", "Emit RAD debug info file."                                                  },
   { LNK_CmdSwitch_Rad_DebugName,               "RAD_DEBUG_NAME",                  ":FILENAME", "Sets file name for RAD debug info file."                                },
+  { LNK_CmdSwitch_Rad_DebugAltPath,            "RAD_DEBUGALTPATH",                "", ""                                                                               },
   { LNK_CmdSwitch_Rad_DelayBind,               "RAD_DELAY_BIND",                  "[:NO]", ""                                                                           },
   { LNK_CmdSwitch_Rad_DoMerge,                 "RAD_DO_MERGE",                    "[:NO]", ""                                                                           },
   { LNK_CmdSwitch_Rad_EnvLib,                  "RAD_ENV_LIB",                     "[:NO]", ""                                                                           },
@@ -824,6 +826,39 @@ lnk_print_help(void)
 
 ////////////////////////////////
 
+internal String8
+lnk_expand_env_vars_windows(Arena *arena, HashTable *env_vars, String8 string)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+
+  String8List list = {0};
+  for (U64 i = 0; i < string.size; ) {
+    U64 open  = str8_find_needle(string, i,      str8_lit("%"), 0);
+    U64 close = str8_find_needle(string, open+1, str8_lit("%"), 0);
+
+    String8 text = str8_substr(string, rng_1u64(i, open));
+    str8_list_push(scratch.arena, &list, text);
+    i += text.size;
+
+    if (open < close) {
+      String8       env_var_name = str8_substr(string, rng_1u64(open+1, close));
+      KeyValuePair *match        = hash_table_search_path(env_vars, env_var_name);
+      if (match) {
+        str8_list_push(scratch.arena, &list, match->value_string);
+        i = close+1;
+      } else {
+        str8_list_pushf(scratch.arena, &list, "%%%S", env_var_name);
+        i = close;
+      }
+    }
+  }
+
+  String8 result = str8_list_join(arena, &list, 0);
+
+  scratch_end(scratch);
+  return result;
+}
+
 internal LNK_Config *
 lnk_config_from_cmd_line(Arena *arena, String8List raw_cmd_line)
 {
@@ -849,6 +884,7 @@ lnk_config_from_cmd_line(Arena *arena, String8List raw_cmd_line)
   lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_ManifestUac, "\"level='asInvoker' uiAccess='false'\"");
   lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_NxCompat, "");
   lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_LargeAddressAware, "");
+  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_PdbAltPath, "%%_RAD_PDB_PATH%%");
   lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_PdbPageSize, "%u", KB(4));
   lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Stack, "%u,%u", MB(1), KB(1));
   lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_TimeStamp, "%u", os_get_process_start_time_unix());
@@ -871,6 +907,7 @@ lnk_config_from_cmd_line(Arena *arena, String8List raw_cmd_line)
   lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_SymbolTableCapInternal, "0x1000");
   lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_SymbolTableCapWeak, "0x3ffff");
   lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_SymbolTableCapLib, "0x3ffff");
+  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_DebugAltPath, "%%_RAD_RDI_PATH%%");
 
 #if BUILD_DEBUG
   lnk_cmd_line_push_optionf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_Log, "debug");
@@ -1310,6 +1347,11 @@ lnk_config_from_cmd_line(Arena *arena, String8List raw_cmd_line)
       lnk_cmd_switch_parse_string_copy(arena, cmd->value_strings, cmd_switch, &config->pdb_name);
     } break;
 
+    case LNK_CmdSwitch_PdbAltPath: {
+      // see :PdbAltPath
+      lnk_cmd_switch_parse_string_copy(arena, cmd->value_strings, cmd_switch, &config->pdb_alt_path);
+    } break;
+
     case LNK_CmdSwitch_PdbPageSize: {
       U64 page_size;
       if (lnk_cmd_switch_parse_u64(cmd->value_strings, cmd_switch, &page_size, LNK_ParseU64Flag_CheckPow2)) {
@@ -1406,7 +1448,12 @@ lnk_config_from_cmd_line(Arena *arena, String8List raw_cmd_line)
       lnk_cmd_switch_parse_flag(cmd->value_strings, cmd_switch, &config->rad_debug);
     } break;
     case LNK_CmdSwitch_Rad_DebugName: {
+      // :Rad_DebugAltPath
       lnk_cmd_switch_parse_string_copy(arena, cmd->value_strings, cmd_switch, &config->rad_debug_name);
+    } break;
+
+    case LNK_CmdSwitch_Rad_DebugAltPath: {
+      lnk_cmd_switch_parse_string_copy(arena, cmd->value_strings, cmd_switch, &config->rad_debug_alt_path);
     } break;
 
     case LNK_CmdSwitch_Rad_DelayBind: {
@@ -1654,27 +1701,6 @@ lnk_config_from_cmd_line(Arena *arena, String8List raw_cmd_line)
     config->flags &= ~LNK_ConfigFlag_DelayBind;
   }
   
-  // gather lib paths from enviroment string
-  if (config->flags & LNK_ConfigFlag_EnvLib) {
-#if OS_WINDOWS
-    OS_ProcessInfo *process_info = os_get_process_info();
-    for (String8Node *node = process_info->environment.first; node != 0; node = node->next) {
-      String8List var_list = str8_split_by_string_chars(scratch.arena, node->string, str8_lit("="), 0);
-      if (var_list.node_count != 2) {
-        continue;
-      }
-      String8 key = var_list.first->string;
-      String8 val = var_list.last->string;
-      if (str8_match(key, str8_lit("Lib"), StringMatchFlag_CaseInsensitive) || 
-          str8_match(key, str8_lit("LibPath"), StringMatchFlag_CaseInsensitive)) {
-        String8List val_list = str8_split_by_string_chars(scratch.arena, val, str8_lit(";"), 0);
-        String8List val_list_copy = str8_list_copy(arena, &val_list);
-        str8_list_concat_in_place(&config->lib_dir_list, &val_list_copy);
-      }
-    }
-#endif
-  }
-  
   // set flags for /OPT
   {
     // these flags remove and merge inline functions and methods defined in class,
@@ -1752,6 +1778,58 @@ lnk_config_from_cmd_line(Arena *arena, String8List raw_cmd_line)
   if (!lnk_cmd_line_has_switch(cmd_line, LNK_CmdSwitch_ManifestFile)) {
     config->manifest_name = push_str8f(arena, "%S.manifest", config->image_name);
   }
+
+  // collect env vars
+  HashTable *env_vars = hash_table_init(scratch.arena, 512);
+  {
+#if OS_WINDOWS
+    OS_ProcessInfo *process_info = os_get_process_info();
+    for (String8Node *node = process_info->environment.first; node != 0; node = node->next) {
+      String8List list = str8_split_by_string_chars(scratch.arena, node->string, str8_lit("="), 0);
+
+      String8 key = list.first->string;
+      String8 val = str8_zero();
+      if (list.node_count == 2) {
+        val = list.last->string;
+      } else if (list.node_count > 2) {
+        U64 sep_idx = str8_find_needle(node->string, node->string.size, str8_lit("="), 0);
+        val = str8_skip(node->string, sep_idx+1);
+      }
+
+      hash_table_push_path_string(scratch.arena, env_vars, key, val);
+    }
+#endif
+  }
+
+  // define linker env vars
+  hash_table_push_path_string(scratch.arena, env_vars, str8_lit("_pdb"),          str8_skip_last_slash(config->pdb_name));
+  hash_table_push_path_string(scratch.arena, env_vars, str8_lit("_ext"),          str8_skip_last_dot(config->image_name));
+  hash_table_push_path_string(scratch.arena, env_vars, str8_lit("_rad_pdb_path"), config->pdb_name);
+  hash_table_push_path_string(scratch.arena, env_vars, str8_lit("_rad_rdi"),      str8_skip_last_slash(config->rad_debug_name));
+  hash_table_push_path_string(scratch.arena, env_vars, str8_lit("_rad_rdi_path"), config->rad_debug_name);
+
+  // collect LIB and LIBPATH
+  if (config->flags & LNK_ConfigFlag_EnvLib) {
+    KeyValuePair *lib = hash_table_search_path(env_vars, str8_lit("lib"));
+    if (lib) {
+      String8List val_list      = str8_split_by_string_chars(scratch.arena, lib->value_string, str8_lit(";"), 0);
+      String8List val_list_copy = str8_list_copy(arena, &val_list);
+      str8_list_concat_in_place(&config->lib_dir_list, &val_list_copy);
+    }
+
+    KeyValuePair *lib_path = hash_table_search_path(env_vars, str8_lit("libpath"));
+    if (lib_path) {
+      String8List val_list      = str8_split_by_string_chars(scratch.arena, lib->value_string, str8_lit(";"), 0);
+      String8List val_list_copy = str8_list_copy(arena, &val_list);
+      str8_list_concat_in_place(&config->lib_dir_list, &val_list_copy);
+    }
+  }
+  
+  // :PdbAltPath
+  config->pdb_alt_path = lnk_expand_env_vars_windows(arena, env_vars, config->pdb_alt_path);
+
+  // :Rad_DebugAltPath
+  config->rad_debug_alt_path = lnk_expand_env_vars_windows(arena, env_vars, config->rad_debug_alt_path);
 
   if (lnk_get_log_status(LNK_Log_Debug)) {
     String8 full_cmd_line = str8_list_join(scratch.arena, &raw_cmd_line, &(StringJoin){ .sep = str8_lit_comp(" ") });

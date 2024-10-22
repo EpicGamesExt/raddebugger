@@ -47,6 +47,7 @@ typedef enum
   LNK_CmdSwitch_Opt,
   LNK_CmdSwitch_Out,
   LNK_CmdSwitch_Pdb,
+  LNK_CmdSwitch_PdbAltPath,
   LNK_CmdSwitch_PdbPageSize,
   LNK_CmdSwitch_Stack,
   LNK_CmdSwitch_SubSystem,
@@ -122,6 +123,7 @@ typedef enum
   LNK_CmdSwitch_Rad_CheckUnusedDelayLoadDll,
   LNK_CmdSwitch_Rad_Debug,
   LNK_CmdSwitch_Rad_DebugName,
+  LNK_CmdSwitch_Rad_DebugAltPath,
   LNK_CmdSwitch_Rad_DelayBind,
   LNK_CmdSwitch_Rad_DoMerge,
   LNK_CmdSwitch_Rad_EnvLib,
@@ -267,6 +269,7 @@ typedef struct LNK_Config
   String8                     imp_lib_name;
   String8List                 raw_cmd_line;
   String8                     pdb_name;
+  String8                     pdb_alt_path;
   String8                     mt_path;
   String8List                 input_list[LNK_Input_Count];
   String8List                 input_default_lib_list;
@@ -280,6 +283,7 @@ typedef struct LNK_Config
   String8List                 manifest_dependency_list;
   LNK_SwitchState             rad_debug;
   String8                     rad_debug_name;
+  String8                     rad_debug_alt_path;
   String8List                 include_symbol_list;
   LNK_AltNameList             alt_name_list;
   U64                         symbol_table_cap_defined;
