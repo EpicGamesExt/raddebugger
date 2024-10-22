@@ -1628,7 +1628,7 @@ cv_string_hash_table_lookup(CV_StringHashTable ht, String8 string)
       return ht.buckets[idx];
     }
 
-    idx = (idx + 1 % ht.bucket_cap);
+    idx = (idx + 1) % ht.bucket_cap;
   } while (idx != best_idx);
 
   return 0;
