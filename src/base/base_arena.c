@@ -124,9 +124,9 @@ arena_push(Arena *arena, U64 size, U64 align)
       new_block = arena_alloc(.reserve_size = res_size,
                               .commit_size  = cmt_size,
                               .flags        = current->flags);
-      new_block->base_pos = current->base_pos + current->res;  
     }
-    
+
+    new_block->base_pos = current->base_pos + current->res;
     SLLStackPush_N(arena->current, new_block, prev);
 
     current = new_block;
