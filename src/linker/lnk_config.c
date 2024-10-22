@@ -85,8 +85,8 @@ read_only struct
   { LNK_CmdSwitch_NotImplemented,     "NOASSEMBLY",           "", ""                                                                                                      },
   { LNK_CmdSwitch_NoDefaultLib,       "NODEFAULTLIB",         ":LIBNAME", ""                                                                                              },
   { LNK_CmdSwitch_NotImplemented,     "NOENTRY",              "", ""                                                                                                      },
-  { LNK_CmdSwitch_NotImplemented,     "NOEXP",                "", ""                                                                                                      },
-  { LNK_CmdSwitch_NotImplemented,     "NOIMPLIB",             "", ""                                                                                                      },
+  { LNK_CmdSwitch_NoExp,              "NOEXP",                "", ".exp is not supported."                                                                                },
+  { LNK_CmdSwitch_NoImpLib,           "NOIMPLIB",             "", ""                                                                                                      },
   { LNK_CmdSwitch_NoLogo,             "NOLOGO",               "", ""                                                                                                      },
   { LNK_CmdSwitch_NxCompat,           "NXCOMPAT",             "[:NO]", ""                                                                                                 },
   { LNK_CmdSwitch_Opt,                "OPT",                  "", ""                                                                                                      },
@@ -911,8 +911,9 @@ lnk_config_from_cmd_line(Arena *arena, String8List raw_cmd_line)
 
 #if BUILD_DEBUG
   lnk_cmd_line_push_optionf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_Log, "debug");
+  lnk_cmd_line_push_optionf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_Log, "io_write");
 #else
-  lnk_cmd_line_push_optionf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_SuppressError, "37");
+  lnk_cmd_line_push_optionf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_SuppressError, "%u", LNK_Error_InvalidTypeIndex);
 #endif
 
   if (!lnk_cmd_line_has_switch(cmd_line, LNK_CmdSwitch_Rad_MtPath)) {
@@ -920,9 +921,11 @@ lnk_config_from_cmd_line(Arena *arena, String8List raw_cmd_line)
     lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_MtPath, "%S", mt_path);
   }
 
-  LNK_Config *config   = push_array(arena, LNK_Config, 1);
-  config->raw_cmd_line = raw_cmd_line;
-  config->work_dir     = os_get_current_path(scratch.arena);
+  LNK_Config *config    = push_array(arena, LNK_Config, 1);
+  config->raw_cmd_line  = raw_cmd_line;
+  config->work_dir      = os_get_current_path(scratch.arena);
+  config->build_imp_lib = 1;
+  config->build_exp     = 1;
 
   // process command line switches
   for (LNK_CmdOption *cmd = cmd_line.first_option; cmd != 0; cmd = cmd->next) {
@@ -1295,6 +1298,14 @@ lnk_config_from_cmd_line(Arena *arena, String8List raw_cmd_line)
     case LNK_CmdSwitch_NoDefaultLib: {
       String8List no_default_lib_list = str8_list_copy(arena, &cmd->value_strings);
       str8_list_concat_in_place(&config->disallow_lib_list, &no_default_lib_list);
+    } break;
+
+    case LNK_CmdSwitch_NoExp: {
+      config->build_exp = 0;
+    } break;
+
+    case LNK_CmdSwitch_NoImpLib: {
+      config->build_imp_lib = 0;
     } break;
 
     case LNK_CmdSwitch_NoLogo: {

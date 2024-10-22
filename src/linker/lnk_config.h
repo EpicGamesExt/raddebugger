@@ -42,6 +42,8 @@ typedef enum
   LNK_CmdSwitch_ManifestUac,
   LNK_CmdSwitch_Natvis,
   LNK_CmdSwitch_NoDefaultLib,
+  LNK_CmdSwitch_NoExp,
+  LNK_CmdSwitch_NoImpLib,
   LNK_CmdSwitch_NoLogo,
   LNK_CmdSwitch_NxCompat,
   LNK_CmdSwitch_Opt,
@@ -96,8 +98,6 @@ typedef enum
   LNK_CmdSwitch_Midl,
   LNK_CmdSwitch_NoAssembly,
   LNK_CmdSwitch_NoEntry,
-  LNK_CmdSwitch_NoExp,
-  LNK_CmdSwitch_NoImpLib,
   LNK_CmdSwitch_Order,
   LNK_CmdSwitch_PdbStripped,
   LNK_CmdSwitch_Profile,
@@ -290,6 +290,8 @@ typedef struct LNK_Config
   U64                         symbol_table_cap_internal;
   U64                         symbol_table_cap_weak;
   U64                         symbol_table_cap_lib;
+  B32                         build_imp_lib;
+  B32                         build_exp;
 } LNK_Config;
 
 typedef enum
