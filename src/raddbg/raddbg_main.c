@@ -18,22 +18,27 @@
 // [ ] disasm starting address - need to use debug info for more correct
 //     results...
 //
-//
-//
 //  [ ] linked list view rule
+//
 //  [ ] investigate false exceptions, being reported while stepping through init code
 //  [ ] output: add option for scroll-to-bottom - ensure this shows up in universal ctx menu
-//  [ ] universal ctx menu address/watch options; e.g. watch -> memory; watch -> add watch
+//
 //  [ ] EVAL LOOKUP RULES -> currently going 0 -> rdis_count, but we need
 //  to prioritize the primary rdi
+//
 //  [ ] (reported by forrest) 'set-next-statement' -> prioritize current
 //      module/symbol, in cases where one line maps to many voffs
+//
 //  [ ] collapse upstream state for theme/bindings/settings into entities; use cache accelerators if needed to make up difference
 //  [ ] collapse upstream state for windows/panels/tabs into entities; use downstream window/view resource cache to make up the difference
 //  [ ] entity <-> mdesk paths
+//
+//  [ ] universal ctx menu address/watch options; e.g. watch -> memory; watch -> add watch
 //  [ ] rich hover coverage; bitmap <-> geo <-> memory <-> disassembly <-> text; etc.
+//
 //  [ ] save view column pcts; generalize to being a first-class thing in
 //      RD_View, e.g. by just having a string -> f32 store
+//
 //  [ ] visualize all breakpoints everywhere - source view should show up in
 //      disasm, disasm should show up in source view, function should show up in
 //      both, etc.

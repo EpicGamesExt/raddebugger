@@ -5716,7 +5716,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(pending_file)
   {
     HS_Scope *hs_scope = hs_scope_open();
     String8 data = hs_data_from_hash(hs_scope, file_hash);
-    if(data.size != 0)
+    if(!u128_match(file_hash, u128_zero()))
     {
       U64 num_utf8_bytes = 0;
       U64 num_unknown_bytes = 0;
@@ -5737,7 +5737,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(pending_file)
         }
       }
       file_is_ready = 1;
-      if(num_utf8_bytes > num_unknown_bytes*4)
+      if(num_utf8_bytes > num_unknown_bytes*4 || num_unknown_bytes == 0)
       {
         viewer_kind = RD_ViewRuleKind_Text;
       }

@@ -2168,7 +2168,7 @@ txt_parse_thread__entry_point(void *p)
     //- rjf: data -> text info
     Arena *info_arena = 0;
     TXT_TextInfo info = {0};
-    if(got_task && data.size != 0)
+    if(got_task && !u128_match(hash, u128_zero()))
     {
       info_arena = arena_alloc();
       

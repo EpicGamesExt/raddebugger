@@ -1734,9 +1734,8 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
     mouse_pt = txt_pt(line_num, column);
     
     // rjf: clamp
-    if(dim_1s64(params->line_num_range) > 0)
     {
-      U64 last_line_size = params->line_text[dim_1s64(params->line_num_range)-1].size;
+      U64 last_line_size = params->line_text[dim_1s64(params->line_num_range)].size;
       TxtRng legal_pt_rng = txt_rng(txt_pt(params->line_num_range.min, 1),
                                     txt_pt(params->line_num_range.max, last_line_size+1));
       if(txt_pt_less_than(mouse_pt, legal_pt_rng.min))
@@ -1748,10 +1747,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
         mouse_pt = legal_pt_rng.max;
       }
     }
-    else
-    {
-      mouse_pt = txt_pt(1, 1);
-    }
+    
     result.mouse_pt = mouse_pt;
   }
   
