@@ -2780,6 +2780,10 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                               rd_cmd(is_frozen ? RD_CmdKind_ThawEntity : RD_CmdKind_FreezeEntity,
                                      .ctrl_entity = ctrl_entity->handle);
                             }
+                            else if(ctrl->kind == RD_CmdKind_Kill)
+                            {
+                              rd_cmd(RD_CmdKind_Kill, .process = ctrl_entity->handle);
+                            }
                             else
                             {
                               rd_cmd(ctrl->kind, .entity = rd_handle_from_entity(entity));
