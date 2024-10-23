@@ -98,9 +98,10 @@ cmd_line_from_string_list(Arena *arena, String8List command_line)
     next = node->next;
     String8 option_name = node->string;
     
-    // NOTE(rjf): Look at -- or - at the start of an argument to determine if it's
-    // a flag option. All arguments after a single "--" (with no trailing string
-    // on the command line will be considered as input files.
+    // NOTE(rjf): Look at --, -, or / (only on Windows) at the start of an
+    // argument to determine if it's a flag option. All arguments after a
+    // single "--" (with no trailing string on the command line will be
+    // considered as input files.
     B32 is_option = 1;
     if(after_passthrough_option == 0)
     {
@@ -114,6 +115,11 @@ cmd_line_from_string_list(Arena *arena, String8List command_line)
         option_name = str8_skip(option_name, 2);
       }
       else if(str8_match(str8_prefix(node->string, 1), str8_lit("-"), 0))
+      {
+        option_name = str8_skip(option_name, 1);
+      }
+      else if(operating_system_from_context() == OperatingSystem_Windows &&
+              str8_match(str8_prefix(node->string, 1), str8_lit("/"), 0))
       {
         option_name = str8_skip(option_name, 1);
       }
