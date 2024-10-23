@@ -841,6 +841,7 @@ internal B32                        coff_is_big_obj(String8 data);
 internal B32                        coff_is_obj(String8 data);
 internal COFF_HeaderInfo            coff_header_info_from_data(String8 data);
 internal U64                        coff_align_size_from_section_flags(COFF_SectionFlags flags);
+internal COFF_SectionFlags          coff_section_flag_from_align_size(U64 align);
 internal COFF_SymbolValueInterpType coff_interp_symbol(COFF_Symbol32 *symbol);
 
 internal U64                 coff_foff_from_voff(COFF_SectionHeader *sections, U64 section_count, U64 voff);

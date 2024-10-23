@@ -143,6 +143,30 @@ coff_align_size_from_section_flags(COFF_SectionFlags flags)
   return align;
 }
 
+internal COFF_SectionFlags
+coff_section_flag_from_align_size(U64 align)
+{
+  COFF_SectionFlags flags = 0;
+  switch (align) {
+  case 1:    flags = COFF_SectionAlign_1BYTES;    break;
+  case 2:    flags = COFF_SectionAlign_2BYTES;    break;
+  case 4:    flags = COFF_SectionAlign_4BYTES;    break;
+  case 8:    flags = COFF_SectionAlign_8BYTES;    break;
+  case 16:   flags = COFF_SectionAlign_16BYTES;   break;
+  case 32:   flags = COFF_SectionAlign_32BYTES;   break;
+  case 64:   flags = COFF_SectionAlign_64BYTES;   break;
+  case 128:  flags = COFF_SectionAlign_128BYTES;  break;
+  case 256:  flags = COFF_SectionAlign_256BYTES;  break;
+  case 512:  flags = COFF_SectionAlign_512BYTES;  break;
+  case 1024: flags = COFF_SectionAlign_1024BYTES; break;
+  case 2048: flags = COFF_SectionAlign_2048BYTES; break;
+  case 4096: flags = COFF_SectionAlign_4096BYTES; break;
+  case 8192: flags = COFF_SectionAlign_8192BYTES; break;
+  }
+  flags <<= COFF_SectionFlag_ALIGN_SHIFT;
+  return flags;
+}
+
 internal COFF_SymbolValueInterpType
 coff_interp_symbol(COFF_Symbol32 *symbol)
 {
@@ -235,6 +259,9 @@ coff_parse_section_name(String8 full_name, String8 *name_out, String8 *postfix_o
   //    H: Clang extension produced with /debug:ghash, array of type hashes
   *name_out = full_name;
   *postfix_out = str8_lit("");
+  if (str8_match(full_name, str8_lit(".tls"), 0)) {
+      int x = 0;
+  }
   for (U64 i = 0; i < full_name.size; ++i) {
     if (full_name.str[i] == '$') {
       *name_out = str8(full_name.str, i);
