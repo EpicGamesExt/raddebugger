@@ -38,6 +38,22 @@ entry_point(CmdLine *cmdline)
   Arena *arena = arena_alloc();
   
   //////////////////////////////
+  //- rjf: unpack command line
+  //
+  String8 test_data_folder_path = cmd_line_string(cmdline, str8_lit("test_data"));
+  if(test_data_folder_path.size == 0)
+  {
+    fprintf(stderr, "error(input): The test data folder path was not specified. Specify the path when running the program, like: %.*s --test_data:C:/foo/bar/baz\n", str8_varg(cmdline->exe_name));
+    os_abort(1);
+  }
+  
+  //////////////////////////////
+  //- rjf: make artifacts directory
+  //
+  String8 artifacts_path = path_normalized_from_string(arena, str8_lit("./tester_artifacts"));
+  os_make_directory(artifacts_path);
+  
+  //////////////////////////////
   //- rjf: PDB -> RDI determinism
   //
   String8 name = {0};
@@ -48,15 +64,14 @@ entry_point(CmdLine *cmdline)
     U64 num_repeats_per_pdb = 32;
     String8 pdb_paths[] =
     {
-      // str8_lit_comp("odintest/test.pdb"),
-      str8_lit_comp("mule_main.pdb"),
+      push_str8f(arena, "%S/mule_main/mule_main.pdb", test_data_folder_path),
+      push_str8f(arena, "%S/mule_main/mule_module.pdb", test_data_folder_path),
     };
     for EachElement(pdb_idx, pdb_paths)
     {
       // rjf: unpack paths, make output directory
       String8 pdb_path = path_normalized_from_string(arena, pdb_paths[pdb_idx]);
-      String8 pdb_folder = str8_chop_last_slash(pdb_path);
-      String8 repeat_folder = push_str8f(arena, "%S/%S", pdb_folder, name);
+      String8 repeat_folder = push_str8f(arena, "%S/%S", artifacts_path, name);
       os_make_directory(repeat_folder);
       
       // rjf: generate all RDIs
