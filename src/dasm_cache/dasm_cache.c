@@ -41,7 +41,14 @@ dasm_inst_from_code(Arena *arena, Arch arch, U64 vaddr, String8 code, DASM_Synta
         ZydisDecodedOperand *first_visible_op = (zinst.info.operand_count_visible > 0 ? &zinst.operands[0] : 0);
         ZydisDecodedOperand *first_op = (zinst.info.operand_count > 0 ? &zinst.operands[0] : 0);
         ZydisDecodedOperand *second_op = (zinst.info.operand_count > 1 ? &zinst.operands[1] : 0);
-        if(first_visible_op != 0)
+        if(first_visible_op != 0 && 
+           (first_visible_op->encoding == ZYDIS_OPERAND_ENCODING_JIMM8 ||
+            first_visible_op->encoding == ZYDIS_OPERAND_ENCODING_JIMM16 ||
+            first_visible_op->encoding == ZYDIS_OPERAND_ENCODING_JIMM32 ||
+            first_visible_op->encoding == ZYDIS_OPERAND_ENCODING_JIMM64 ||
+            first_visible_op->encoding == ZYDIS_OPERAND_ENCODING_JIMM16_32_64 ||
+            first_visible_op->encoding == ZYDIS_OPERAND_ENCODING_JIMM32_32_64 ||
+            first_visible_op->encoding == ZYDIS_OPERAND_ENCODING_JIMM16_32_32))
         {
           ZydisCalcAbsoluteAddress(&zinst.info, first_visible_op, vaddr, &jump_dest_vaddr);
         }
