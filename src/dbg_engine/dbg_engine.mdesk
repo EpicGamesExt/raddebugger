@@ -107,7 +107,6 @@ D_ViewRuleTable:
 @table(name)
 D_DevToggleTable:
 {
-  {telemetry_capture}
   {simulate_lag}
   {draw_ui_text_pos}
   {draw_ui_focus_debug}

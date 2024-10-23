@@ -5874,7 +5874,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(text)
   //////////////////////////////
   //- rjf: build missing file interface
   //
-  if(file_is_missing && !key_has_data)
+  if(file_is_missing && !u128_match(hash, u128_zero()))
   {
     UI_WidthFill UI_HeightFill UI_Column UI_Padding(ui_pct(1, 0))
     {

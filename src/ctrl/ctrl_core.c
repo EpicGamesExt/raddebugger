@@ -3614,7 +3614,6 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
       tls_vaddr_range = r1u64(tls_header.index_address, tls_header.index_address+sizeof(U32));
       
       // rjf: grab data about debug info
-
       if(data_dir_count > PE_DataDirectoryIndex_DEBUG)
       {
         // rjf: read data dir
@@ -3683,27 +3682,28 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
   {
     Temp scratch = scratch_begin(0, 0);
     String8 exe_folder = str8_chop_last_slash(path);
-    String8 rdi_path__absolute = rdi_dbg_path; 
-    String8 rdi_path__relative = push_str8f(scratch.arena, "%S/%S", exe_folder, rdi_dbg_path);
-    String8 pdb_path__absolute = pdb_dbg_path;
-    String8 pdb_path__relative = push_str8f(scratch.arena, "%S/%S", exe_folder, pdb_dbg_path);
-    String8 dbg_path_candidates[] =
+    String8List dbg_path_candidates = {0};
+    if(rdi_dbg_path.size != 0)
     {
-      /* inferred (treated as absolute): */ rdi_path__absolute,
-      /* inferred (treated as relative): */ rdi_path__relative,
-      /* inferred (treated as absolute): */ pdb_path__absolute,
-      /* inferred (treated as relative): */ pdb_path__relative,
-      /* "foo.exe" -> "foo.rdi"          */ push_str8f(scratch.arena, "%S.rdi", str8_chop_last_dot(path)),
-      /* "foo.exe" -> "foo.exe.rdi"      */ push_str8f(scratch.arena, "%S.rdi", path),
-      /* "foo.exe" -> "foo.pdb"          */ push_str8f(scratch.arena, "%S.pdb", str8_chop_last_dot(path)),
-      /* "foo.exe" -> "foo.exe.pdb"      */ push_str8f(scratch.arena, "%S.pdb", path),
-    };
-    for(U64 idx = 0; idx < ArrayCount(dbg_path_candidates); idx += 1)
+      str8_list_push(scratch.arena,  &dbg_path_candidates, rdi_dbg_path);
+      str8_list_pushf(scratch.arena, &dbg_path_candidates, "%S/%S", exe_folder, rdi_dbg_path);
+    }
+    if(pdb_dbg_path.size != 0)
     {
-      FileProperties props = os_properties_from_file_path(dbg_path_candidates[idx]);
+      str8_list_push(scratch.arena,  &dbg_path_candidates, pdb_dbg_path);
+      str8_list_pushf(scratch.arena, &dbg_path_candidates, "%S/%S", exe_folder, pdb_dbg_path);
+    }
+    str8_list_pushf(scratch.arena, &dbg_path_candidates, "%S.pdb", str8_chop_last_dot(path));
+    str8_list_pushf(scratch.arena, &dbg_path_candidates, "%S.pdb", path);
+    str8_list_pushf(scratch.arena, &dbg_path_candidates, "%S.rdi", str8_chop_last_dot(path));
+    str8_list_pushf(scratch.arena, &dbg_path_candidates, "%S.rdi", path);
+    for(String8Node *n = dbg_path_candidates.first; n != 0; n = n->next)
+    {
+      String8 candidate_path = n->string;
+      FileProperties props = os_properties_from_file_path(candidate_path);
       if(props.modified != 0 && props.size != 0)
       {
-        initial_debug_info_path = push_str8_copy(arena, dbg_path_candidates[idx]);
+        initial_debug_info_path = push_str8_copy(arena, candidate_path);
         break;
       }
     }

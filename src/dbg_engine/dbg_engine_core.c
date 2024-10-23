@@ -1975,21 +1975,6 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
   }
   
   //////////////////////////////
-  //- rjf: start/stop telemetry captures
-  //
-  ProfScope("start/stop telemetry captures")
-  {
-    if(!ProfIsCapturing() && DEV_telemetry_capture)
-    {
-      ProfBeginCapture("raddbg");
-    }
-    if(ProfIsCapturing() && !DEV_telemetry_capture)
-    {
-      ProfEndCapture();
-    }
-  }
-  
-  //////////////////////////////
   //- rjf: process top-level commands
   //
   CTRL_MsgList ctrl_msgs = {0};

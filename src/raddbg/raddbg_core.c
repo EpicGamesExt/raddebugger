@@ -3962,6 +3962,16 @@ rd_window_frame(RD_Window *ws)
       ui_set_next_flags(UI_BoxFlag_ViewScrollY|UI_BoxFlag_AllowOverflowY|UI_BoxFlag_ViewClamp);
       UI_PaneF(r2f32p(30, 30, 30+ui_top_font_size()*100, ui_top_font_size()*150), "###dev_ctx_menu")
       {
+        //- rjf: capture
+        if(!ProfIsCapturing() && ui_clicked(ui_buttonf("Begin Profiler Capture###prof_cap")))
+        {
+          ProfBeginCapture("raddbg");
+        }
+        else if(ProfIsCapturing() && ui_clicked(ui_buttonf("End Profiler Capture###prof_cap")))
+        {
+          ProfEndCapture();
+        }
+        
         //- rjf: toggles
         for(U64 idx = 0; idx < ArrayCount(DEV_toggle_table); idx += 1)
         {
@@ -16566,7 +16576,7 @@ rd_frame(void)
   //////////////////////////////
   //- rjf: capture is active? -> keep rendering
   //
-  if(ProfIsCapturing() || DEV_telemetry_capture)
+  if(ProfIsCapturing())
   {
     rd_request_frame();
   }
