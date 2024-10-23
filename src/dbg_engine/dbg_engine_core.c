@@ -2108,16 +2108,11 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
         }break;
         case D_CmdKind_KillAll:
         {
-          CTRL_EntityList processes = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Process);
-          for(CTRL_EntityNode *n = processes.first; n != 0; n = n->next)
-          {
-            CTRL_Msg *msg = ctrl_msg_list_push(scratch.arena, &ctrl_msgs);
-            msg->kind = CTRL_MsgKind_Kill;
-            msg->exit_code = 1;
-            msg->entity = n->v->handle;
-            MemoryCopyArray(msg->exception_code_filters, exception_code_filters);
-            MemoryCopyStruct(&msg->meta_evals, meta_evals);
-          }
+          CTRL_Msg *msg = ctrl_msg_list_push(scratch.arena, &ctrl_msgs);
+          msg->kind = CTRL_MsgKind_KillAll;
+          msg->exit_code = 1;
+          MemoryCopyArray(msg->exception_code_filters, exception_code_filters);
+          MemoryCopyStruct(&msg->meta_evals, meta_evals);
         }break;
         case D_CmdKind_Detach:
         {
@@ -2305,8 +2300,12 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
         }break;
         case D_CmdKind_Restart:
         {
-          d_cmd(D_CmdKind_KillAll);
-          d_cmd(D_CmdKind_LaunchAndRun);
+          CTRL_EntityList processes = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Process);
+          if(processes.count != 0)
+          {
+            d_cmd(D_CmdKind_KillAll);
+            d_cmd(D_CmdKind_LaunchAndRun);
+          }
         }break;
         case D_CmdKind_StepInto:
         case D_CmdKind_StepOver:

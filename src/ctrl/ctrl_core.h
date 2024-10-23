@@ -517,6 +517,7 @@ typedef enum CTRL_MsgKind
   CTRL_MsgKind_Launch,
   CTRL_MsgKind_Attach,
   CTRL_MsgKind_Kill,
+  CTRL_MsgKind_KillAll,
   CTRL_MsgKind_Detach,
   CTRL_MsgKind_Run,
   CTRL_MsgKind_SingleStep,
@@ -1141,6 +1142,7 @@ internal void ctrl_thread__end_and_flush_info_log(void);
 internal void ctrl_thread__launch(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg);
 internal void ctrl_thread__attach(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg);
 internal void ctrl_thread__kill(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg);
+internal void ctrl_thread__kill_all(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg);
 internal void ctrl_thread__detach(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg);
 internal void ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg);
 internal void ctrl_thread__single_step(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg);

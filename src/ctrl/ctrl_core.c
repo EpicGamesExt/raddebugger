@@ -81,6 +81,7 @@ ctrl_string_from_msg_kind(CTRL_MsgKind kind)
     case CTRL_MsgKind_Launch:                    {result = str8_lit("Launch");}break;
     case CTRL_MsgKind_Attach:                    {result = str8_lit("Attach");}break;
     case CTRL_MsgKind_Kill:                      {result = str8_lit("Kill");}break;
+    case CTRL_MsgKind_KillAll:                   {result = str8_lit("KillAll");}break;
     case CTRL_MsgKind_Detach:                    {result = str8_lit("Detach");}break;
     case CTRL_MsgKind_Run:                       {result = str8_lit("Run");}break;
     case CTRL_MsgKind_SingleStep:                {result = str8_lit("SingleStep");}break;
@@ -3250,8 +3251,7 @@ ctrl_thread__entry_point(void *p)
     //- rjf: process messages
     DMN_CtrlExclusiveAccessScope
     {
-      B32 done = 0;
-      for(CTRL_MsgNode *msg_n = msgs.first; msg_n != 0 && done == 0; msg_n = msg_n->next)
+      for(CTRL_MsgNode *msg_n = msgs.first; msg_n != 0; msg_n = msg_n->next)
       {
         CTRL_Msg *msg = &msg_n->v;
         {
@@ -3275,9 +3275,10 @@ ctrl_thread__entry_point(void *p)
           case CTRL_MsgKind_Launch:            {ctrl_thread__launch              (ctrl_ctx, msg);}break;
           case CTRL_MsgKind_Attach:            {ctrl_thread__attach              (ctrl_ctx, msg);}break;
           case CTRL_MsgKind_Kill:              {ctrl_thread__kill                (ctrl_ctx, msg);}break;
+          case CTRL_MsgKind_KillAll:           {ctrl_thread__kill_all            (ctrl_ctx, msg);}break;
           case CTRL_MsgKind_Detach:            {ctrl_thread__detach              (ctrl_ctx, msg);}break;
-          case CTRL_MsgKind_Run:               {ctrl_thread__run                 (ctrl_ctx, msg); done = 1;}break;
-          case CTRL_MsgKind_SingleStep:        {ctrl_thread__single_step         (ctrl_ctx, msg); done = 1;}break;
+          case CTRL_MsgKind_Run:               {ctrl_thread__run                 (ctrl_ctx, msg);}break;
+          case CTRL_MsgKind_SingleStep:        {ctrl_thread__single_step         (ctrl_ctx, msg);}break;
           
           //- rjf: configuration
           case CTRL_MsgKind_SetUserEntryPoints:
@@ -4391,6 +4392,7 @@ ctrl_thread__kill(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
   B32 kill_worked = dmn_ctrl_kill(ctrl_ctx, process, exit_code);
   
   //- rjf: wait for process to be dead
+  CTRL_EventCause cause = CTRL_EventCause_Finished;
   if(kill_worked)
   {
     DMN_RunCtrls run_ctrls = {0};
@@ -4401,12 +4403,102 @@ ctrl_thread__kill(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
     for(B32 done = 0; done == 0;)
     {
       DMN_Event *event = ctrl_thread__next_dmn_event(scratch.arena, ctrl_ctx, msg, &run_ctrls, 0);
-      if(event->kind == DMN_EventKind_ExitProcess && dmn_handle_match(event->process, process))
+      switch(event->kind)
       {
-        done = 1;
+        default:{}break;
+        case DMN_EventKind_ExitProcess:
+        if(dmn_handle_match(event->process, process))
+        {
+          done = 1;
+        }break;
+        case DMN_EventKind_Error:{done = 1; cause = CTRL_EventCause_Error;}break;
+        case DMN_EventKind_Halt: {done = 1; cause = CTRL_EventCause_InterruptedByHalt;}break;
       }
-      if(event->kind == DMN_EventKind_Null ||
-         event->kind == DMN_EventKind_Error)
+    }
+  }
+  
+  //- rjf: record stop
+  {
+    CTRL_EventList evts = {0};
+    CTRL_Event *event = ctrl_event_list_push(scratch.arena, &evts);
+    event->kind       = CTRL_EventKind_Stopped;
+    event->cause      = cause;
+    event->msg_id     = msg->msg_id;
+    if(kill_worked)
+    {
+      event->entity = msg->entity;
+    }
+    ctrl_c2u_push_events(&evts);
+  }
+  
+  scratch_end(scratch);
+  ProfEnd();
+}
+
+internal void
+ctrl_thread__kill_all(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
+{
+  ProfBeginFunction();
+  Temp scratch = scratch_begin(0, 0);
+  U32 exit_code = msg->exit_code;
+  
+  //- rjf: gather all currently existing processes
+  CTRL_EntityList initial_processes = ctrl_entity_list_from_kind(ctrl_state->ctrl_thread_entity_store, CTRL_EntityKind_Process);
+  typedef struct Task Task;
+  struct Task
+  {
+    Task *next;
+    Task *prev;
+    CTRL_Entity *process;
+  };
+  Task *first_task = 0;
+  Task *last_task = 0;
+  for(CTRL_EntityNode *n = initial_processes.first; n != 0; n = n->next)
+  {
+    Task *t = push_array(scratch.arena, Task, 1);
+    t->process = n->v;
+    DLLPushBack(first_task, last_task, t);
+  }
+  
+  //- rjf: kill processes as needed, wait for all processes to be dead
+  CTRL_EventCause cause = CTRL_EventCause_Finished;
+  if(first_task != 0)
+  {
+    DMN_RunCtrls run_ctrls = {0};
+    for(B32 done = 0; !done;)
+    {
+      // rjf: kill remaining processes
+      for(Task *t = first_task, *next = 0; t != 0; t = next)
+      {
+        next = t->next;
+        B32 kill_worked = dmn_ctrl_kill(ctrl_ctx, t->process->handle.dmn_handle, exit_code);
+        if(kill_worked)
+        {
+          DLLRemove(first_task, last_task, t);
+        }
+      }
+      
+      // rjf: get next event
+      DMN_Event *event = ctrl_thread__next_dmn_event(scratch.arena, ctrl_ctx, msg, &run_ctrls, 0);
+      
+      // rjf: process event
+      switch(event->kind)
+      {
+        default:{}break;
+        case DMN_EventKind_CreateProcess:
+        {
+          CTRL_Entity *new_process = ctrl_entity_from_handle(ctrl_state->ctrl_thread_entity_store, ctrl_handle_make(CTRL_MachineID_Local, event->process));
+          Task *t = push_array(scratch.arena, Task, 1);
+          t->process = new_process;
+          DLLPushBack(first_task, last_task, t);
+        }break;
+        case DMN_EventKind_Error:{done = 1; cause = CTRL_EventCause_Error;}break;
+        case DMN_EventKind_Halt: {done = 1; cause = CTRL_EventCause_InterruptedByHalt;}break;
+      }
+      
+      // rjf: end if all processes are gone
+      CTRL_EntityList processes = ctrl_entity_list_from_kind(ctrl_state->ctrl_thread_entity_store, CTRL_EntityKind_Process);
+      if(processes.count == 0)
       {
         done = 1;
       }
@@ -4418,12 +4510,8 @@ ctrl_thread__kill(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
     CTRL_EventList evts = {0};
     CTRL_Event *event = ctrl_event_list_push(scratch.arena, &evts);
     event->kind       = CTRL_EventKind_Stopped;
-    event->cause      = CTRL_EventCause_Finished;
+    event->cause      = cause;
     event->msg_id     = msg->msg_id;
-    if(kill_worked)
-    {
-      event->entity = msg->entity;
-    }
     ctrl_c2u_push_events(&evts);
   }
   
@@ -4623,6 +4711,12 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
         switch(event->kind)
         {
           default:{}break;
+          case DMN_EventKind_ExitThread:
+          if(dmn_handle_match(event->thread, thread))
+          {
+            stop_cause = CTRL_EventCause_Error;
+            goto stop;
+          }break;
           case DMN_EventKind_Error:      stop_cause = CTRL_EventCause_Error; goto stop;
           case DMN_EventKind_Exception:  stop_cause = CTRL_EventCause_InterruptedByException; goto stop;
           case DMN_EventKind_Trap:       stop_cause = CTRL_EventCause_InterruptedByTrap; goto stop;
