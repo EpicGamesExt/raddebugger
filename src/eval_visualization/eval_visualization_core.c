@@ -1533,7 +1533,7 @@ ev_string_from_simple_typed_eval(Arena *arena, EV_StringFlags flags, U32 radix, 
     case E_TypeKind_UChar16:
     case E_TypeKind_UChar32:
     {
-      B32 type_is_unsigned = (type_kind <= E_TypeKind_UChar8 && type_kind <= E_TypeKind_UChar32);
+      B32 type_is_unsigned = (E_TypeKind_UChar8 <= type_kind && type_kind <= E_TypeKind_UChar32);
       String8 char_str = ev_string_from_ascii_value(arena, eval.value.s64);
       if(char_str.size != 0)
       {
