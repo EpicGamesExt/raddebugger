@@ -876,14 +876,12 @@ lnk_config_from_cmd_line(Arena *arena, String8List raw_cmd_line)
   if (lnk_cmd_line_has_switch(cmd_line, LNK_CmdSwitch_Dll)) {
     lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_SubSystem, "%S", pe_string_from_subsystem(PE_WindowsSubsystem_WINDOWS_GUI));
   }
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Heap, "%u,%u", MB(1), KB(4));
   lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_HighEntropyVa, "");
   lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_ManifestUac, "\"level='asInvoker' uiAccess='false'\"");
   lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_NxCompat, "");
   lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_LargeAddressAware, "");
   lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_PdbAltPath, "%%_RAD_PDB_PATH%%");
   lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_PdbPageSize, "%u", KB(4));
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Stack, "%u,%u", MB(1), KB(1));
   lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_TimeStamp, "%u", os_get_process_start_time_unix());
   lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_Age, "%u", 1);
   lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_CheckUnusedDelayLoadDll, "");
@@ -923,6 +921,10 @@ lnk_config_from_cmd_line(Arena *arena, String8List raw_cmd_line)
   config->work_dir      = os_get_current_path(arena);
   config->build_imp_lib = 1;
   config->build_exp     = 1;
+  config->heap_reserve  = MB(1);
+  config->heap_commit   = KB(1);
+  config->stack_reserve = MB(1);
+  config->stack_commit  = KB(1);
 
   // process command line switches
   for (LNK_CmdOption *cmd = cmd_line.first_option; cmd != 0; cmd = cmd->next) {
