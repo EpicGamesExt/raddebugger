@@ -873,9 +873,6 @@ lnk_config_from_cmd_line(Arena *arena, String8List raw_cmd_line)
   lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Align, "%u", KB(4));
   lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Debug, "none");
   lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_FileAlign, "%u", 512);
-  if (!lnk_cmd_line_has_switch(cmd_line, LNK_CmdSwitch_Fixed)) {
-    lnk_cmd_line_push_optionf(scratch.arena, &cmd_line, LNK_CmdSwitch_DynamicBase, "");
-  }
   if (lnk_cmd_line_has_switch(cmd_line, LNK_CmdSwitch_Dll)) {
     lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_SubSystem, "%S", pe_string_from_subsystem(PE_WindowsSubsystem_WINDOWS_GUI));
   }
@@ -1752,6 +1749,11 @@ lnk_config_from_cmd_line(Arena *arena, String8List raw_cmd_line)
   if (config->flags & LNK_ConfigFlag_Fixed) {
     config->file_characteristics |= PE_ImageFileCharacteristic_STRIPPED;
     config->dll_characteristics &= ~PE_DllCharacteristic_DYNAMIC_BASE;
+  }
+  // if we don't have a fixed image and dynamic base switch 
+  // was omitted we make image with dynamic base
+  else if (!lnk_cmd_line_has_switch(cmd_line, LNK_CmdSwitch_DynamicBase)) {
+    config->dll_characteristics |= PE_DllCharacteristic_DYNAMIC_BASE;
   }
   
   // set flag for /guard
