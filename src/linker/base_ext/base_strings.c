@@ -76,15 +76,15 @@ str8_compar_ignore_case(const void *a, const void *b)
 }
 
 internal int
-str8_compar_case_sensetive(const void *a, const void *b)
+str8_compar_case_sensitive(const void *a, const void *b)
 {
   return str8_compar(*(String8*)a, *(String8*)b, 0);
 }
 
 internal int
-str8_is_before_case_sensetive(const void *a, const void *b)
+str8_is_before_case_sensitive(const void *a, const void *b)
 {
-  int cmp = str8_compar_case_sensetive(a, b);
+  int cmp = str8_compar_case_sensitive(a, b);
   return cmp < 0;
 }
 

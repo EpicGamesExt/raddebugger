@@ -300,7 +300,7 @@ lnk_section_table_push(LNK_SectionTable *st, String8 name, COFF_SectionFlags fla
   B32 found = 0;
   for (LNK_SectionNode *curr = sect_list->first, *prev = NULL; curr != NULL; prev = curr, curr = curr->next) {
     LNK_Section *sect = &curr->data;
-    int cmp = str8_compar_case_sensetive(&sort_index, &sect->sort_index);
+    int cmp = str8_compar_case_sensitive(&sort_index, &sect->sort_index);
     if (cmp < 0) {
       if (prev == NULL) {
         SLLQueuePushFront(sect_list->first, sect_list->last, sect_node);

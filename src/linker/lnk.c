@@ -197,7 +197,7 @@ lnk_input_import_is_before(void *raw_a, void *raw_b)
   LNK_InputImport **b = raw_b;
   int cmp = str8_compar_ignore_case(&(*a)->import_header.dll_name, &(*b)->import_header.dll_name);
   if (cmp == 0) {
-    cmp = str8_compar_case_sensetive(&(*a)->import_header.func_name, &(*b)->import_header.func_name);
+    cmp = str8_compar_case_sensitive(&(*a)->import_header.func_name, &(*b)->import_header.func_name);
   }
   return cmp < 0;
 }
@@ -209,7 +209,7 @@ lnk_input_import_compar(const void *raw_a, const void *raw_b)
   const LNK_InputImport **b = (const LNK_InputImport **) raw_b;
   int cmp = str8_compar_ignore_case(&(*a)->import_header.dll_name, &(*b)->import_header.dll_name);
   if (cmp == 0) {
-    cmp = str8_compar_case_sensetive(&(*a)->import_header.func_name, &(*b)->import_header.func_name);
+    cmp = str8_compar_case_sensitive(&(*a)->import_header.func_name, &(*b)->import_header.func_name);
   }
   return cmp;
 }
@@ -390,7 +390,7 @@ lnk_res_string_id_is_before(void *raw_a, void *raw_b)
   PE_Resource *b = raw_b;
   Assert(a->id.type == COFF_ResourceIDType_STRING);
   Assert(b->id.type == COFF_ResourceIDType_STRING);
-  int is_before = str8_is_before_case_sensetive(&a->id.u.string, &b->id.u.string);
+  int is_before = str8_is_before_case_sensitive(&a->id.u.string, &b->id.u.string);
   return is_before;
 }
 

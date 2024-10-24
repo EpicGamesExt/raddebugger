@@ -6,7 +6,7 @@ lnk_export_name_compar(const void *a_, const void *b_)
 {
   const LNK_Export *a = (const LNK_Export *)a_;
   const LNK_Export *b = (const LNK_Export *)b_;
-  return str8_compar_case_sensetive(&a->name, &b->name);
+  return str8_compar_case_sensitive(&a->name, &b->name);
 }
 
 int

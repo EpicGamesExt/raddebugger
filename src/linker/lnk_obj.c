@@ -61,7 +61,7 @@ lnk_input_obj_compar(const void *raw_a, const void *raw_b)
 {
   const LNK_InputObj **a = (const LNK_InputObj **) raw_a;
   const LNK_InputObj **b = (const LNK_InputObj **) raw_b;
-  int cmp = str8_compar_case_sensetive(&(*a)->path, &(*b)->path);
+  int cmp = str8_compar_case_sensitive(&(*a)->path, &(*b)->path);
   return cmp;
 }
 
@@ -70,7 +70,7 @@ lnk_input_obj_compar_is_before(void *raw_a, void *raw_b)
 {
   LNK_InputObj **a = raw_a;
   LNK_InputObj **b = raw_b;
-  int cmp = str8_compar_case_sensetive(&(*a)->path, &(*b)->path);
+  int cmp = str8_compar_case_sensitive(&(*a)->path, &(*b)->path);
   int is_before = cmp < 0;
   return is_before;
 }

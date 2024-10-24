@@ -74,7 +74,7 @@ lnk_lib_symbol_name_compar(const void *raw_a, const void *raw_b)
 {
   const LNK_Symbol *sa = (const LNK_Symbol *)raw_a;
   const LNK_Symbol *sb = (const LNK_Symbol *)raw_b;
-  return str8_compar_case_sensetive(&sa->name, &sb->name);
+  return str8_compar_case_sensitive(&sa->name, &sb->name);
 }
 
 int

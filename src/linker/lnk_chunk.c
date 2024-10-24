@@ -65,7 +65,7 @@ lnk_chunk_sort_index_is_before(void *raw_a, void *raw_b)
   LNK_ChunkPtr *b = raw_b;
           
   // sort on section postfix
-  int cmp = str8_compar_case_sensetive(&(*a)->sort_idx, &(*b)->sort_idx);
+  int cmp = str8_compar_case_sensitive(&(*a)->sort_idx, &(*b)->sort_idx);
 
   // sort on obj position on command line
   if (cmp == 0) {
