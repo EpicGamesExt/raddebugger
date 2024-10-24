@@ -3850,6 +3850,7 @@ rd_window_frame(RD_Window *ws)
               {
                 String8 name = {0};
                 name.str = rdi_string_from_idx(rdi, fin->inline_site->name_string_idx, &name.size);
+                name.size = Min(512, name.size);
                 UI_TextAlignment(UI_TextAlign_Left) RD_Font(RD_FontSlot_Code) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_em(12.f, 1)) ui_labelf("0x%I64x", rip_vaddr);
                 RD_Font(RD_FontSlot_Code) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_text_dim(10, 1)) ui_label(str8_lit("[inlined]"));
                 if(name.size != 0)
@@ -3870,6 +3871,7 @@ rd_window_frame(RD_Window *ws)
               {
                 String8 name = {0};
                 name.str = rdi_name_from_procedure(rdi, procedure, &name.size);
+                name.size = Min(512, name.size);
                 UI_TextAlignment(UI_TextAlign_Left) RD_Font(RD_FontSlot_Code) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_em(12.f, 1)) ui_labelf("0x%I64x", rip_vaddr);
                 if(name.size != 0)
                 {
