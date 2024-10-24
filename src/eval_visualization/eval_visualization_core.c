@@ -1533,12 +1533,15 @@ ev_string_from_simple_typed_eval(Arena *arena, EV_StringFlags flags, U32 radix, 
     case E_TypeKind_UChar16:
     case E_TypeKind_UChar32:
     {
+      B32 type_is_unsigned = (type_kind <= E_TypeKind_UChar8 && type_kind <= E_TypeKind_UChar32);
       String8 char_str = ev_string_from_ascii_value(arena, eval.value.s64);
       if(char_str.size != 0)
       {
         if(flags & EV_StringFlag_ReadOnlyDisplayRules)
         {
-          String8 imm_string = str8_from_s64(arena, eval.value.s64, radix, min_digits, digit_group_separator);
+          String8 imm_string = (type_is_unsigned
+                                ? str8_from_u64(arena, eval.value.u64, radix, min_digits, digit_group_separator)
+                                : str8_from_s64(arena, eval.value.s64, radix, min_digits, digit_group_separator));
           result = push_str8f(arena, "'%S' (%S)", char_str, imm_string);
         }
         else
@@ -1548,7 +1551,9 @@ ev_string_from_simple_typed_eval(Arena *arena, EV_StringFlags flags, U32 radix, 
       }
       else
       {
-        result = str8_from_s64(arena, eval.value.s64, radix, min_digits, digit_group_separator);
+        result = (type_is_unsigned
+                  ? str8_from_u64(arena, eval.value.u64, radix, min_digits, digit_group_separator)
+                  : str8_from_s64(arena, eval.value.s64, radix, min_digits, digit_group_separator));
       }
     }break;
     
