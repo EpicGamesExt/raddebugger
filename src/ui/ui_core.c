@@ -1252,12 +1252,18 @@ ui_end_build(void)
       Rng2F32 window_rect = os_client_rect_from_window(ui_window());
       Vec2F32 window_dim = dim_2f32(window_rect);
       Rng2F32 root_rect = root->rect;
-      Vec2F32 shift =
+      Vec2F32 shift_down =
       {
         -ClampBot(0, root_rect.x1 - window_rect.x1) * (force_contain[idx]),
         -ClampBot(0, root_rect.y1 - window_rect.y1) * (force_contain[idx]),
       };
-      Rng2F32 new_root_rect = shift_2f32(root_rect, shift);
+      Rng2F32 new_root_rect = shift_2f32(root_rect, shift_down);
+      Vec2F32 shift_up =
+      {
+        ClampBot(0, window_rect.x0 - new_root_rect.x0) * (force_contain[idx]),
+        ClampBot(0, window_rect.y0 - new_root_rect.y0) * (force_contain[idx]),
+      };
+      new_root_rect = shift_2f32(new_root_rect, shift_up);
       root->fixed_position = new_root_rect.p0;
       root->fixed_size = dim_2f32(new_root_rect);
       root->rect = new_root_rect;
