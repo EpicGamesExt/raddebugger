@@ -279,8 +279,8 @@ few_params1(Pair *pairs, int count, Function_No_Params_Type *no_params_type){
 }
 
 static void
-type_coverage_eval_tests(void){
-  
+type_coverage_eval_tests(void)
+{
   Basics basics = {-1, 1, -2, 2, -4, 4, -8, 8, 1.5f, 1.50000000000001};
   Basics_Stdint basics_stdint = {-1, 1, -2, 2, -4, 4, -8, 8, 1.5f, 1.50000000000001};
   
@@ -431,6 +431,10 @@ type_coverage_eval_tests(void){
     OutputDebugStringA(names[i]);
     OutputDebugStringA("\n");
   }
+  
+  const int32_t x1 = 3;
+  const int32_t y1 = -10;
+  const int32_t z1 = x1 + y1;
   
   int x = (int)(Anonymous_D);
 }

@@ -1377,6 +1377,7 @@ txt_token_array_from_string__disasm_x64_intel(Arena *arena, U64 *bytes_processed
     B32 string_is_char = 0;
     S32 brace_nest = 0;
     S32 paren_nest = 0;
+    S32 string_tick_nest = 0;
     for(U64 advance = 0; off <= string.size; off += advance)
     {
       U8 byte      = (off+0 < string.size) ? string.str[off+0] : 0;
@@ -1424,6 +1425,13 @@ txt_token_array_from_string__disasm_x64_intel(Arena *arena, U64 *bytes_processed
             active_token_kind = TXT_TokenKind_String;
             advance = 1;
             string_is_char = 0;
+          }
+          else if(byte == '`')
+          {
+            active_token_start_off = off;
+            active_token_kind = TXT_TokenKind_String;
+            advance = 1;
+            string_tick_nest += 1;
           }
           else if(('0' <= byte && byte <= '9') || (byte == '.' && '0' <= next_byte && next_byte <= '9'))
           {
@@ -1479,11 +1487,20 @@ txt_token_array_from_string__disasm_x64_intel(Arena *arena, U64 *bytes_processed
         }break;
         case TXT_TokenKind_String:
         {
-          U8 ender_byte = string_is_char ? '\'' : '"';
+          U8 ender_byte = (string_tick_nest > 0 ? '\'' :
+                           string_is_char ? '\''
+                           : '"');
           if(!escaped && byte == ender_byte)
           {
-            ender_found = 1;
-            advance = 1;
+            if(string_tick_nest > 0)
+            {
+              string_tick_nest -= 1;
+            }
+            if(string_tick_nest == 0)
+            {
+              ender_found = 1;
+              advance = 1;
+            }
           }
           else if(escaped)
           {
@@ -1494,6 +1511,10 @@ txt_token_array_from_string__disasm_x64_intel(Arena *arena, U64 *bytes_processed
           {
             escaped = 1;
             advance = 1;
+          }
+          else if(string_tick_nest > 0 && byte == '`')
+          {
+            string_tick_nest += 1;
           }
           else
           {
