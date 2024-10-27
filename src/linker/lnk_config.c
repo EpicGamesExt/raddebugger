@@ -789,7 +789,7 @@ lnk_print_help(void)
   Temp scratch = scratch_begin(0,0);
 
   fprintf(stdout, "--- Help -------------------------------------------------------\n");
-  fprintf(stdout, "  %s\n", BUILD_VERSION_STRING);
+  fprintf(stdout, "  %s\n", BUILD_TITLE);
   fprintf(stdout, "\n");
   fprintf(stdout, "  Usage: rad-link.exe [Options] [Files] [@rsp]\n");
   fprintf(stdout, "\n");

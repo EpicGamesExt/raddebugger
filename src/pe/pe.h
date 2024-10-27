@@ -399,7 +399,7 @@ struct PE_ImportEntry
 typedef struct PE_DelayedImportEntry PE_DelayedImportEntry;
 struct PE_DelayedImportEntry
 {
-  // According to PE/COFF spec this field is unused and should be set zero,
+  // According to COFF/PE spec this field is unused and should be set zero,
   // but when I compile mule with MSVC 2019 this is set to 1.
   U32 attributes;
   U32 name_voff;                       // Name of the DLL
