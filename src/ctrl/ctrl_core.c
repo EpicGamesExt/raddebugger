@@ -271,6 +271,7 @@ ctrl_serialized_string_from_msg_list(Arena *arena, CTRL_MsgList *msgs)
       str8_serial_push_struct(scratch.arena, &msgs_srlzed, &msg->entity_id);
       str8_serial_push_struct(scratch.arena, &msgs_srlzed, &msg->exit_code);
       str8_serial_push_struct(scratch.arena, &msgs_srlzed, &msg->env_inherit);
+      str8_serial_push_struct(scratch.arena, &msgs_srlzed, &msg->debug_subprocesses);
       str8_serial_push_array (scratch.arena, &msgs_srlzed, &msg->exception_code_filters[0], ArrayCount(msg->exception_code_filters));
       
       // rjf: write path string
@@ -371,6 +372,7 @@ ctrl_msg_list_from_serialized_string(Arena *arena, String8 string)
       read_off += str8_deserial_read_struct(string, read_off, &msg->entity_id);
       read_off += str8_deserial_read_struct(string, read_off, &msg->exit_code);
       read_off += str8_deserial_read_struct(string, read_off, &msg->env_inherit);
+      read_off += str8_deserial_read_struct(string, read_off, &msg->debug_subprocesses);
       read_off += str8_deserial_read_array (string, read_off, &msg->exception_code_filters[0], ArrayCount(msg->exception_code_filters));
       
       // rjf: read path string
@@ -4359,13 +4361,14 @@ ctrl_thread__launch(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
   //- rjf: launch
   OS_ProcessLaunchParams params = {0};
   {
-    params.cmd_line      = msg->cmd_line_string_list;
-    params.path          = msg->path;
-    params.env           = msg->env_string_list;
-    params.inherit_env   = msg->env_inherit;
-    params.stdout_file   = stdout_handle;
-    params.stderr_file   = stderr_handle;
-    params.stdin_file    = stdin_handle;
+    params.cmd_line           = msg->cmd_line_string_list;
+    params.path               = msg->path;
+    params.env                = msg->env_string_list;
+    params.inherit_env        = msg->env_inherit;
+    params.debug_subprocesses = msg->debug_subprocesses;
+    params.stdout_file        = stdout_handle;
+    params.stderr_file        = stderr_handle;
+    params.stdin_file         = stdin_handle;
   }
   U32 id = dmn_ctrl_launch(ctrl_ctx, &params);
   

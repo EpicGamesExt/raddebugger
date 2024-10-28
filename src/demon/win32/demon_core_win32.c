@@ -1256,7 +1256,15 @@ dmn_ctrl_launch(DMN_CtrlCtx *ctx, OS_ProcessLaunchParams *params)
     String16 env16 = str16_from_8(scratch.arena, env);
     
     //- rjf: launch
-    DWORD creation_flags = CREATE_UNICODE_ENVIRONMENT|DEBUG_PROCESS;
+    DWORD creation_flags = CREATE_UNICODE_ENVIRONMENT;
+    if(params->debug_subprocesses)
+    {
+      creation_flags |= DEBUG_PROCESS;
+    }
+    else
+    {
+      creation_flags |= DEBUG_ONLY_THIS_PROCESS;
+    }
     BOOL inherit_handles = 0;
     STARTUPINFOW startup_info = {sizeof(startup_info)};
     if(!os_handle_match(params->stdout_file, os_handle_zero()))

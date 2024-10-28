@@ -546,6 +546,7 @@ struct CTRL_Msg
   U32 entity_id;
   U32 exit_code;
   B32 env_inherit;
+  B32 debug_subprocesses;
   U64 exception_code_filters[(CTRL_ExceptionCodeKind_COUNT+63)/64];
   String8 path;
   String8List entry_points;

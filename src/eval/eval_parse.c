@@ -1364,7 +1364,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
           }
           
           //- rjf: try members
-          if(mapped_identifier == 0 && (resolution_qualifier.size == 0 || str8_match(resolution_qualifier, str8_lit("member"), 0)))
+          if(mapped_identifier == 0 && (resolution_qualifier.size == 0 || str8_match(resolution_qualifier, str8_lit("member"), 0))) ProfScope("try to map name as member")
           {
             U64 data_member_num = e_num_from_string(e_parse_ctx->member_map, token_string);
             if(data_member_num != 0)
@@ -1375,7 +1375,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
           }
           
           //- rjf: try locals
-          if(mapped_identifier == 0 && (resolution_qualifier.size == 0 || str8_match(resolution_qualifier, str8_lit("local"), 0)))
+          if(mapped_identifier == 0 && (resolution_qualifier.size == 0 || str8_match(resolution_qualifier, str8_lit("local"), 0))) ProfScope("try to map name as local")
           {
             E_Module *module = e_parse_ctx->primary_module;
             RDI_Parsed *rdi = module->rdi;
@@ -1439,7 +1439,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
           }
           
           //- rjf: try registers
-          if(mapped_identifier == 0 && (resolution_qualifier.size == 0 || str8_match(resolution_qualifier, str8_lit("reg"), 0)))
+          if(mapped_identifier == 0 && (resolution_qualifier.size == 0 || str8_match(resolution_qualifier, str8_lit("reg"), 0))) ProfScope("try to map name as register")
           {
             U64 reg_num = e_num_from_string(e_parse_ctx->regs_map, token_string);
             if(reg_num != 0)
@@ -1453,7 +1453,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
           }
           
           //- rjf: try register aliases
-          if(mapped_identifier == 0 && (resolution_qualifier.size == 0 || str8_match(resolution_qualifier, str8_lit("reg"), 0)))
+          if(mapped_identifier == 0 && (resolution_qualifier.size == 0 || str8_match(resolution_qualifier, str8_lit("reg"), 0))) ProfScope("try to map name as register alias")
           {
             U64 alias_num = e_num_from_string(e_parse_ctx->reg_alias_map, token_string);
             if(alias_num != 0)
@@ -1467,7 +1467,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
           }
           
           //- rjf: try global variables
-          if(mapped_identifier == 0 && (resolution_qualifier.size == 0 || str8_match(resolution_qualifier, str8_lit("global"), 0)))
+          if(mapped_identifier == 0 && (resolution_qualifier.size == 0 || str8_match(resolution_qualifier, str8_lit("global"), 0))) ProfScope("try to map name as global variable")
           {
             for(U64 module_idx = 0; module_idx < e_parse_ctx->modules_count; module_idx += 1)
             {
@@ -1511,7 +1511,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
           }
           
           //- rjf: try thread variables
-          if(mapped_identifier == 0 && (resolution_qualifier.size == 0 || str8_match(resolution_qualifier, str8_lit("thread_variable"), 0)))
+          if(mapped_identifier == 0 && (resolution_qualifier.size == 0 || str8_match(resolution_qualifier, str8_lit("thread_variable"), 0))) ProfScope("try to map name as thread variable")
           {
             for(U64 module_idx = 0; module_idx < e_parse_ctx->modules_count; module_idx += 1)
             {
@@ -1551,7 +1551,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
           }
           
           //- rjf: try procedures
-          if(mapped_identifier == 0 && (resolution_qualifier.size == 0 || str8_match(resolution_qualifier, str8_lit("procedure"), 0)))
+          if(mapped_identifier == 0 && (resolution_qualifier.size == 0 || str8_match(resolution_qualifier, str8_lit("procedure"), 0))) ProfScope("try to map name as procedure")
           {
             for(U64 module_idx = 0; module_idx < e_parse_ctx->modules_count; module_idx += 1)
             {
@@ -1593,7 +1593,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
           }
           
           //- rjf: try types
-          if(mapped_identifier == 0 && (resolution_qualifier.size == 0 || str8_match(resolution_qualifier, str8_lit("type"), 0)))
+          if(mapped_identifier == 0 && (resolution_qualifier.size == 0 || str8_match(resolution_qualifier, str8_lit("type"), 0))) ProfScope("try to map name as type")
           {
             type_key = e_leaf_type_from_name(token_string);
             if(!e_type_key_match(e_type_key_zero(), type_key))
@@ -1622,7 +1622,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
           }
           
           //- rjf: attach on map
-          if(mapped_identifier != 0)
+          if(mapped_identifier != 0) ProfScope("attach on map")
           {
             it += 1;
             
@@ -2113,7 +2113,9 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
 internal E_Parse
 e_parse_expr_from_text_tokens(Arena *arena, String8 text, E_TokenArray *tokens)
 {
+  ProfBegin("parse '%.*s'", str8_varg(text));
   E_Parse parse = e_parse_expr_from_text_tokens__prec(arena, text, tokens, e_max_precedence);
+  ProfEnd();
   return parse;
 }
 

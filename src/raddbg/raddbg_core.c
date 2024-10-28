@@ -8800,10 +8800,10 @@ EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(auto_view_rules){ return rd_ev
 
 //- rjf: control entity groups
 
-EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(machines)         { return rd_ev_view_rule_expr_expand_info__meta_ctrl_entities(arena, view, str8_zero(), expr, params, CTRL_EntityKind_Machine); }
-EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(machines)   { return rd_ev_view_rule_expr_expand_range_info__meta_ctrl_entities(arena, view, str8_zero(), expr, params, idx_range, user_data, CTRL_EntityKind_Machine); }
-EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(machines)  { return rd_ev_view_rule_expr_id_from_num__meta_ctrl_entities(num, user_data, CTRL_EntityKind_Machine); }
-EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(machines)  { return rd_ev_view_rule_expr_num_from_id__meta_ctrl_entities(id, user_data, CTRL_EntityKind_Machine); }
+EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(machines)          { return rd_ev_view_rule_expr_expand_info__meta_ctrl_entities(arena, view, str8_zero(), expr, params, CTRL_EntityKind_Machine); }
+EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(machines)    { return rd_ev_view_rule_expr_expand_range_info__meta_ctrl_entities(arena, view, str8_zero(), expr, params, idx_range, user_data, CTRL_EntityKind_Machine); }
+EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(machines)   { return rd_ev_view_rule_expr_id_from_num__meta_ctrl_entities(num, user_data, CTRL_EntityKind_Machine); }
+EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(machines)   { return rd_ev_view_rule_expr_num_from_id__meta_ctrl_entities(id, user_data, CTRL_EntityKind_Machine); }
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(processes)         { return rd_ev_view_rule_expr_expand_info__meta_ctrl_entities(arena, view, filter, expr, params, CTRL_EntityKind_Process); }
 EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(processes)   { return rd_ev_view_rule_expr_expand_range_info__meta_ctrl_entities(arena, view, filter, expr, params, idx_range, user_data, CTRL_EntityKind_Process); }
 EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(processes)  { return rd_ev_view_rule_expr_id_from_num__meta_ctrl_entities(num, user_data, CTRL_EntityKind_Process); }
@@ -9171,7 +9171,7 @@ rd_ev_view_rule_expr_expand_range_info__meta_entities(Arena *arena, EV_View *vie
       }
       if(!rd_entity_is_nil(entity))
       {
-        String8 entity_expr_string = (kind == RD_EntityKind_Watch ? entity->string : push_str8f(arena, "$%I64u", entity->id));
+        String8 entity_expr_string = (kind == RD_EntityKind_Watch ? entity->string : push_str8f(arena, "entity:$%I64u", entity->id));
         if(kind == RD_EntityKind_Watch)
         {
           result.row_strings[row_expr_idx] = entity_expr_string;
@@ -9280,7 +9280,7 @@ rd_ev_view_rule_expr_expand_range_info__meta_ctrl_entities(Arena *arena, EV_View
     for EachIndex(row_expr_idx, result.row_exprs_count)
     {
       CTRL_Entity *entity = accel->entities.v[idx_range.min + row_expr_idx];
-      String8 entity_expr_string = push_str8f(arena, "$_%I64x_%I64x", entity->handle.machine_id, entity->handle.dmn_handle.u64[0]);
+      String8 entity_expr_string = push_str8f(arena, "ctrl_entity:$_%I64x_%I64x", entity->handle.machine_id, entity->handle.dmn_handle.u64[0]);
       result.row_exprs[row_expr_idx] = e_parse_expr_from_text(arena, entity_expr_string);
       result.row_members[row_expr_idx] = &e_member_nil;
     }

@@ -484,6 +484,7 @@ rdi_parsed_from_name_map(RDI_Parsed *rdi, RDI_NameMap *mapptr, RDI_ParsedNameMap
 RDI_PROC RDI_NameMapNode*
 rdi_name_map_lookup(RDI_Parsed *p, RDI_ParsedNameMap *map, RDI_U8 *str, RDI_U64 len)
 {
+  ProfBeginFunction();
   RDI_NameMapNode *result = 0;
   if(map->bucket_count > 0)
   {
@@ -520,6 +521,7 @@ rdi_name_map_lookup(RDI_Parsed *p, RDI_ParsedNameMap *map, RDI_U8 *str, RDI_U64 
       
     }
   }
+  ProfEnd();
   return result;
 }
 
