@@ -160,7 +160,9 @@ txt_token_array_from_list(Arena *arena, TXT_TokenList *list)
 internal TXT_TokenArray
 txt_token_array_from_string__c_cpp(Arena *arena, U64 *bytes_processed_counter, String8 string)
 {
+  ProfBeginFunction();
   Temp scratch = scratch_begin(&arena, 1);
+  U64 chunk_size = Clamp(8, string.size/8, 4096);
   
   //- rjf: generate token list
   TXT_TokenChunkList tokens = {0};
@@ -234,7 +236,7 @@ txt_token_array_from_string__c_cpp(Arena *arena, U64 *bytes_processed_counter, S
         else
         {
           TXT_Token token = {TXT_TokenKind_Error, r1u64(idx, idx+1)};
-          txt_token_chunk_list_push(scratch.arena, &tokens, 4096, &token);
+          txt_token_chunk_list_push(scratch.arena, &tokens, chunk_size, &token);
         }
       }
       
@@ -420,7 +422,7 @@ txt_token_array_from_string__c_cpp(Arena *arena, U64 *bytes_processed_counter, S
               break;
             }
           }
-          txt_token_chunk_list_push(scratch.arena, &tokens, 4096, &token);
+          txt_token_chunk_list_push(scratch.arena, &tokens, chunk_size, &token);
         }
         
         // rjf: split symbols by maximum-munch-rule
@@ -462,7 +464,7 @@ txt_token_array_from_string__c_cpp(Arena *arena, U64 *bytes_processed_counter, S
                 found = 1;
                 next_off = off + c_cpp_multichar_symbol_strings[idx].size;
                 TXT_Token token = {TXT_TokenKind_Symbol, r1u64(active_token_start_idx+off, active_token_start_idx+next_off)};
-                txt_token_chunk_list_push(scratch.arena, &tokens, 4096, &token);
+                txt_token_chunk_list_push(scratch.arena, &tokens, chunk_size, &token);
                 break;
               }
             }
@@ -470,7 +472,7 @@ txt_token_array_from_string__c_cpp(Arena *arena, U64 *bytes_processed_counter, S
             {
               next_off = off+1;
               TXT_Token token = {TXT_TokenKind_Symbol, r1u64(active_token_start_idx+off, active_token_start_idx+next_off)};
-              txt_token_chunk_list_push(scratch.arena, &tokens, 4096, &token);
+              txt_token_chunk_list_push(scratch.arena, &tokens, chunk_size, &token);
             }
           }
         }
@@ -478,7 +480,7 @@ txt_token_array_from_string__c_cpp(Arena *arena, U64 *bytes_processed_counter, S
         // rjf: all other tokens
         else
         {
-          txt_token_chunk_list_push(scratch.arena, &tokens, 4096, &token);
+          txt_token_chunk_list_push(scratch.arena, &tokens, chunk_size, &token);
         }
         
         // rjf: increment by ender padding
@@ -497,6 +499,7 @@ txt_token_array_from_string__c_cpp(Arena *arena, U64 *bytes_processed_counter, S
   //- rjf: token list -> token array
   TXT_TokenArray result = txt_token_array_from_chunk_list(arena, &tokens);
   scratch_end(scratch);
+  ProfEnd();
   return result;
 }
 

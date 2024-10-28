@@ -2697,6 +2697,7 @@ rd_help_label(String8 string)
 internal DR_FancyStringList
 rd_fancy_string_list_from_code_string(Arena *arena, F32 alpha, B32 indirection_size_change, Vec4F32 base_color, String8 string)
 {
+  ProfBeginFunction();
   Temp scratch = scratch_begin(&arena, 1);
   DR_FancyStringList fancy_strings = {0};
   TXT_TokenArray tokens = txt_token_array_from_string__c_cpp(scratch.arena, 0, string);
@@ -2857,6 +2858,7 @@ rd_fancy_string_list_from_code_string(Arena *arena, F32 alpha, B32 indirection_s
     indirection_counter = ClampBot(0, indirection_counter);
   }
   scratch_end(scratch);
+  ProfEnd();
   return fancy_strings;
 }
 
@@ -2877,6 +2879,8 @@ rd_code_label(F32 alpha, B32 indirection_size_change, Vec4F32 base_color, String
 internal UI_Signal
 rd_line_edit(RD_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size, U64 *edit_string_size_out, B32 *expanded_out, String8 pre_edit_value, String8 string)
 {
+  ProfBeginFunction();
+  
   //- rjf: unpack visual metrics
   F32 expander_size_px = ui_top_font_size()*2.f;
   
@@ -3282,6 +3286,7 @@ rd_line_edit(RD_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
   if(is_auto_focus_hot) { ui_pop_focus_hot(); }
   if(is_auto_focus_active) { ui_pop_focus_active(); }
   
+  ProfEnd();
   return sig;
 }
 

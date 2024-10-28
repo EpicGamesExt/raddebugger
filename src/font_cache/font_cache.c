@@ -575,46 +575,48 @@ fnt_push_run_from_string(Arena *arena, FNT_Tag tag, F32 size, F32 base_align_px,
   FNT_Hash2StyleRasterCacheNode *hash2style_node = fnt_hash2style_from_tag_size_flags(tag, size, flags);
   
   //- rjf: decode string & produce run pieces
-  B32 first = 1;
   FNT_PieceChunkList piece_chunks = {0};
   Vec2F32 dim = {0};
   B32 font_handle_mapped_on_miss = 0;
   FP_Handle font_handle = {0};
   U64 piece_substring_start_idx = 0;
-  for(U64 idx = 0; idx < string.size; first = 0)
+  U64 piece_substring_end_idx = 0;
+  for(U64 idx = 0; idx <= string.size;)
   {
     //- rjf: decode next codepoint & get piece substring, or continuation rule
-    String8 piece_substring;
+    U8 byte = (idx < string.size ? string.str[idx] : 0);
     B32 need_another_codepoint = 0;
-    switch(utf8_class[string.str[idx]>>3])
+    if(byte == 0)
+    {
+      idx += 1;
+    }
+    else switch(utf8_class[byte>>3])
     {
       case 1:
       {
-        piece_substring.str = &string.str[idx];
-        piece_substring.size = 1;
         idx += 1;
+        piece_substring_end_idx += 1;
+        need_another_codepoint = 0;
       }break;
       default:
       {
         UnicodeDecode decode = utf8_decode(string.str+idx, string.size-idx);
         idx += decode.inc;
-        if(decode.inc == 0) { break; }
-        piece_substring.str = string.str + piece_substring_start_idx;
-        piece_substring.size = decode.inc;
-        // NOTE(rjf): assuming 1 codepoint per piece for now.
+        piece_substring_end_idx += decode.inc;
+        need_another_codepoint = 0;
       }break;
     }
     
-    //- rjf: need another codepoint? -> continue
-    if(need_another_codepoint)
+    //- rjf: need another codepoint, or have no substring? -> continue
+    if(need_another_codepoint || piece_substring_end_idx == piece_substring_start_idx)
     {
       continue;
     }
     
-    //- rjf: do not need another codepoint? -> bump piece start idx
-    {
-      piece_substring_start_idx = idx;
-    }
+    //- rjf: do not need another codepoint? -> grab substring, bump piece start idx
+    String8 piece_substring = str8_substr(string, r1u64(piece_substring_start_idx, piece_substring_end_idx));
+    piece_substring_start_idx = idx;
+    piece_substring_end_idx = idx;
     
     //- rjf: determine if this piece is a tab - if so, use space info to draw
     B32 is_tab = (piece_substring.size == 1 && piece_substring.str[0] == '\t');

@@ -4147,6 +4147,63 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
   }
   ctrl_c2u_push_events(&evts);
   
+  //- rjf: when a new process is loaded, for the first module, pre-emptively try
+  // to open all adjacent debug infos. with debug events, we learn about loaded
+  // modules serially, and we need to completely load debug info before continuing.
+  // for massive projects, this is a problem, because completely loading debug info
+  // isn't a trivial cost, and there are often 100s of DLLs.
+  //
+  // an imperfect but usually reasonable heuristic is to look at adjacent debug info
+  // files, in the same directory as the initially loaded, and pre-emptively convert
+  // all of them (which for us is the heaviest part of debug info loading, if native
+  // RDI is not used).
+  if(event->kind == DMN_EventKind_LoadModule)
+  {
+    CTRL_Handle process_handle = ctrl_handle_make(CTRL_MachineID_Local, event->process);
+    CTRL_Handle loaded_module_handle = ctrl_handle_make(CTRL_MachineID_Local, event->module);
+    CTRL_Entity *process = ctrl_entity_from_handle(ctrl_state->ctrl_thread_entity_store, process_handle);
+    CTRL_Entity *loaded_module = ctrl_entity_from_handle(ctrl_state->ctrl_thread_entity_store, loaded_module_handle);
+    B32 is_first = 1;
+    for(CTRL_Entity *child = process->first; child != &ctrl_entity_nil; child = child->next)
+    {
+      if(child->kind == CTRL_EntityKind_Module && child != loaded_module)
+      {
+        is_first = 0;
+        break;
+      }
+    }
+    if(is_first)
+    {
+      DI_Key loaded_di_key = ctrl_dbgi_key_from_module(loaded_module);
+      String8 loaded_di_name = str8_skip_last_slash(loaded_di_key.path);
+      String8 containing_folder_path = str8_chop_last_slash(loaded_di_key.path);
+      if(containing_folder_path.size < loaded_di_key.path.size)
+      {
+        String8 debug_info_ext = str8_skip_last_dot(loaded_di_key.path);
+        OS_FileIter *it = os_file_iter_begin(scratch.arena, containing_folder_path, OS_FileIterFlag_SkipFolders);
+        DI_KeyList preemptively_loaded_keys = {0};
+        for(OS_FileInfo info = {0}; os_file_iter_next(scratch.arena, it, &info);)
+        {
+          if(str8_match(str8_skip_last_dot(info.name), debug_info_ext, StringMatchFlag_CaseInsensitive) &&
+             !str8_match(loaded_di_name, info.name, StringMatchFlag_CaseInsensitive))
+          {
+            DI_Key key = {push_str8f(scratch.arena, "%S/%S", containing_folder_path, info.name), info.props.modified};
+            di_open(&key);
+            di_key_list_push(scratch.arena, &preemptively_loaded_keys, &key);
+          }
+        }
+        for(DI_KeyNode *n = preemptively_loaded_keys.first; n != 0; n = n->next)
+        {
+          DI_Scope *di_scope = di_scope_open();
+          RDI_Parsed *rdi = di_rdi_from_key(di_scope, &n->v, max_U64);
+          di_scope_close(di_scope);
+          di_close(&n->v);
+        }
+        os_file_iter_end(it);
+      }
+    }
+  }
+  
   //- rjf: clear process memory cache, if we've just started a lone process
   if(event->kind == DMN_EventKind_CreateProcess && ctrl_state->process_counter == 1)
   {
@@ -5797,6 +5854,7 @@ ctrl_u2ms_dequeue_req(CTRL_Handle *out_process, Rng1U64 *out_vaddr_range, B32 *o
 internal void
 ctrl_mem_stream_thread__entry_point(void *p)
 {
+  ThreadNameF("[ctrl] mem stream thread #%I64u", (U64)p);
   CTRL_ProcessMemoryCache *cache = &ctrl_state->process_memory_cache;
   for(;;)
   {
@@ -5806,6 +5864,7 @@ ctrl_mem_stream_thread__entry_point(void *p)
     B32 zero_terminated = 0;
     ctrl_u2ms_dequeue_req(&process, &vaddr_range, &zero_terminated);
     U128 key = ctrl_calc_hash_store_key_from_process_vaddr_range(process, vaddr_range, zero_terminated);
+    ProfBegin("memory stream request");
     
     //- rjf: unpack process memory cache key
     U64 process_hash = ctrl_hash_from_string(str8_struct(&process));
@@ -5956,5 +6015,6 @@ ctrl_mem_stream_thread__entry_point(void *p)
     
     //- rjf: broadcast changes
     os_condition_variable_broadcast(process_stripe->cv);
+    ProfEnd();
   }
 }
