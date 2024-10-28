@@ -274,31 +274,41 @@ backslashed_from_str8(Arena *arena, String8 string)
 //~ rjf: String Matching
 
 internal B32
-str8_match(String8 a, String8 b, StringMatchFlags flags){
+str8_match(String8 a, String8 b, StringMatchFlags flags)
+{
   B32 result = 0;
-  if (a.size == b.size || (flags & StringMatchFlag_RightSideSloppy)){
-    B32 case_insensitive = (flags & StringMatchFlag_CaseInsensitive);
+  if(a.size == b.size && flags == 0)
+  {
+    result = MemoryMatch(a.str, b.str, b.size);
+  }
+  else if(a.size == b.size || (flags & StringMatchFlag_RightSideSloppy))
+  {
+    B32 case_insensitive  = (flags & StringMatchFlag_CaseInsensitive);
     B32 slash_insensitive = (flags & StringMatchFlag_SlashInsensitive);
-    U64 size = Min(a.size, b.size);
+    U64 size              = Min(a.size, b.size);
     result = 1;
-    for (U64 i = 0; i < size; i += 1){
+    for(U64 i = 0; i < size; i += 1)
+    {
       U8 at = a.str[i];
       U8 bt = b.str[i];
-      if (case_insensitive){
+      if(case_insensitive)
+      {
         at = char_to_upper(at);
         bt = char_to_upper(bt);
       }
-      if (slash_insensitive){
+      if(slash_insensitive)
+      {
         at = char_to_correct_slash(at);
         bt = char_to_correct_slash(bt);
       }
-      if (at != bt){
+      if(at != bt)
+      {
         result = 0;
         break;
       }
     }
   }
-  return(result);
+  return result;
 }
 
 internal U64
