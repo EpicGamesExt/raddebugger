@@ -1265,7 +1265,7 @@ pdb_type_server_build(TP_Context *tp, PDB_TypeServer *ts, PDB_StringTable *strta
       lf_arr[lf_arr_idx]        = lf;
       lf_arr_idx += 1;
     }
-    lf_buf_size += AlignPow2(lf->string.size, PDB_LEAF_ALIGN);
+    lf_buf_size += lf->string.size;
     lf_node_idx += 1;
   }
 
@@ -1274,7 +1274,6 @@ pdb_type_server_build(TP_Context *tp, PDB_TypeServer *ts, PDB_StringTable *strta
   ProfBegin("Write Type Data & Hints");
 
   PDB_WriteTypesTask write_types_task;
-  write_types_task.align         = PDB_LEAF_ALIGN;
   write_types_task.ti_lo         = ts->ti_lo;
   write_types_task.ti_hi         = ts->ti_lo + ts->leaf_list.node_count;
   write_types_task.hint_count    = hint_count;
@@ -1472,7 +1471,7 @@ THREAD_POOL_TASK_FUNC(pdb_push_udt_leaf_task)
       CV_UDTInfo udt_info = cv_get_udt_info(leaf.kind, leaf.data);
       if (~udt_info.props & CV_TypeProp_FwdRef) {
         // hash udt and compute bucket index
-        U32 hash       = pdb_hash_udt(udt_info, leaf.data);
+        U32 hash = pdb_hash_udt(udt_info, leaf.data);
         U32 bucket_idx = hash % type_ht_cap;
 
         // fill out & insert bucket

@@ -135,7 +135,6 @@ typedef struct
 
 typedef struct
 {
-  U64             align;
   CV_TypeIndex    ti_lo;
   CV_TypeIndex    ti_hi;
   U64             hint_count;
