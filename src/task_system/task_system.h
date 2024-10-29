@@ -38,6 +38,26 @@ struct TS_TicketList
 typedef TS_TASK_FUNCTION_DEF(TS_TaskFunctionType);
 
 ////////////////////////////////
+//~ rjf: Task Kickoff Parameters
+
+typedef struct TS_KickoffParams TS_KickoffParams;
+struct TS_KickoffParams
+{
+  Arena **optional_arena_ptr;
+  void *in;
+};
+
+////////////////////////////////
+//~ rjf: Task Join Result
+
+typedef struct TS_JoinResult TS_JoinResult;
+struct TS_JoinResult
+{
+  B32 good;
+  void *out;
+};
+
+////////////////////////////////
 //~ rjf: Task Artifact Cache Types
 
 typedef struct TS_TaskArtifact TS_TaskArtifact;
@@ -46,7 +66,7 @@ struct TS_TaskArtifact
   TS_TaskArtifact *next;
   U64 num;
   B64 task_is_done;
-  void *result;
+  void *out;
 };
 
 typedef struct TS_TaskArtifactSlot TS_TaskArtifactSlot;
@@ -112,6 +132,7 @@ global TS_Shared *ts_shared = 0;
 //~ rjf: Basic Type Functions
 
 internal TS_Ticket ts_ticket_zero(void);
+internal B32 ts_ticket_match(TS_Ticket a, TS_Ticket b);
 internal void ts_ticket_list_push(Arena *arena, TS_TicketList *list, TS_Ticket ticket);
 
 ////////////////////////////////
@@ -127,9 +148,10 @@ internal U64 ts_thread_count(void);
 ////////////////////////////////
 //~ rjf: High-Level Task Kickoff / Joining
 
-internal TS_Ticket ts_kickoff(TS_TaskFunctionType *entry_point, Arena **optional_arena_ptr, void *p);
-internal void *ts_join(TS_Ticket ticket, U64 endt_us);
-#define ts_join_struct(ticket, endt_us, type) (type *)ts_join((ticket), (endt_us))
+internal TS_Ticket ts_kickoff_(TS_TaskFunctionType *entry_point, TS_KickoffParams *params);
+#define ts_kickoff(entry_point, input_ptr, ...) ts_kickoff_((entry_point), &(TS_KickoffParams){.in = (input_ptr), __VA_ARGS__})
+internal TS_JoinResult ts_join(TS_Ticket ticket, U64 endt_us);
+#define ts_join_struct(ticket, endt_us, type) (type *)ts_join((ticket), (endt_us)).out
 
 ////////////////////////////////
 //~ rjf: Task Threads

@@ -225,11 +225,11 @@ entry_point(CmdLine *cmdline)
     
     //- rjf: kick off unit vmap baking
     P2B_BakeUnitVMapIn bake_unit_vmap_in = {&params->units};
-    TS_Ticket bake_unit_vmap_ticket = ts_kickoff(p2b_bake_unit_vmap_task__entry_point, 0, &bake_unit_vmap_in);
+    TS_Ticket bake_unit_vmap_ticket = ts_kickoff(p2b_bake_unit_vmap_task__entry_point, &bake_unit_vmap_in);
     
     //- rjf: kick off line-table baking
     P2B_BakeLineTablesIn bake_line_tables_in = {&params->line_tables};
-    TS_Ticket bake_line_tables_ticket = ts_kickoff(p2b_bake_line_table_task__entry_point, 0, &bake_line_tables_in);
+    TS_Ticket bake_line_tables_ticket = ts_kickoff(p2b_bake_line_table_task__entry_point, &bake_line_tables_in);
     
     //- rjf: build unit -> line table idx array
     U64 unit_count = params->units.total_count;
@@ -288,7 +288,7 @@ entry_point(CmdLine *cmdline)
         dump_proc_chunk_in[task_idx].unit_count           = unit_count;
         dump_proc_chunk_in[task_idx].line_tables_bake     = bake_line_tables_out;
         dump_proc_chunk_in[task_idx].chunk                = n;
-        dump_proc_chunk_tickets[task_idx] = ts_kickoff(p2b_dump_proc_chunk_task__entry_point, 0, &dump_proc_chunk_in[task_idx]);
+        dump_proc_chunk_tickets[task_idx] = ts_kickoff(p2b_dump_proc_chunk_task__entry_point, &dump_proc_chunk_in[task_idx]);
       }
     }
     

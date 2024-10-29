@@ -123,6 +123,7 @@
 //      ability to put "$err, hr" into the watch window, which will just show
 //      the value of GetLastError() as a string. This is super useful for
 //      debugging, so you don't have to litter your own code with it.
+//      (NOTE(rjf): NtQueryInformationThread)
 //
 //  [ ] Tooltip Coverage:
 //   [ ] lock icon
@@ -571,6 +572,7 @@
 //- rjf: [h]
 #include "base/base_inc.h"
 #include "os/os_inc.h"
+#include "async/async.h"
 #include "task_system/task_system.h"
 #include "rdi_format/rdi_format_local.h"
 #include "rdi_make/rdi_make_local.h"
@@ -613,6 +615,7 @@
 //- rjf: [c]
 #include "base/base_inc.c"
 #include "os/os_inc.c"
+#include "async/async.c"
 #include "task_system/task_system.c"
 #include "rdi_format/rdi_format_local.c"
 #include "rdi_make/rdi_make_local.c"

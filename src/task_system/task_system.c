@@ -11,6 +11,13 @@ ts_ticket_zero(void)
   return ticket;
 }
 
+internal B32
+ts_ticket_match(TS_Ticket a, TS_Ticket b)
+{
+  B32 result = MemoryMatchStruct(&a, &b);
+  return result;
+}
+
 internal void
 ts_ticket_list_push(Arena *arena, TS_TicketList *list, TS_Ticket ticket)
 {
@@ -65,7 +72,7 @@ ts_thread_count(void)
 //~ rjf: High-Level Task Kickoff / Joining
 
 internal TS_Ticket
-ts_kickoff(TS_TaskFunctionType *entry_point, Arena **optional_arena_ptr, void *p)
+ts_kickoff_(TS_TaskFunctionType *entry_point, TS_KickoffParams *params)
 {
   ProfBeginFunction();
   
@@ -93,7 +100,7 @@ ts_kickoff(TS_TaskFunctionType *entry_point, Arena **optional_arena_ptr, void *p
       }
       artifact->num          = artifact_num;
       artifact->task_is_done = 0;
-      artifact->result       = 0;
+      artifact->out          = 0;
     }
   }
   
@@ -107,20 +114,20 @@ ts_kickoff(TS_TaskFunctionType *entry_point, Arena **optional_arena_ptr, void *p
     {
       U64 unconsumed_size = ts_shared->u2t_ring_write_pos - ts_shared->u2t_ring_read_pos;
       U64 available_size = ts_shared->u2t_ring_size-unconsumed_size;
-      if(available_size >= sizeof(entry_point) + sizeof(p) + sizeof(ticket))
+      if(available_size >= sizeof(entry_point) + sizeof(Arena *) + sizeof(params->in) + sizeof(ticket))
       {
         Arena *task_arena = 0;
-        if(optional_arena_ptr != 0)
+        if(params->optional_arena_ptr != 0)
         {
-          task_arena = *optional_arena_ptr;
+          task_arena = *params->optional_arena_ptr;
         }
         ts_shared->u2t_ring_write_pos += ring_write_struct(ts_shared->u2t_ring_base, ts_shared->u2t_ring_size, ts_shared->u2t_ring_write_pos, &entry_point);
         ts_shared->u2t_ring_write_pos += ring_write_struct(ts_shared->u2t_ring_base, ts_shared->u2t_ring_size, ts_shared->u2t_ring_write_pos, &task_arena);
-        ts_shared->u2t_ring_write_pos += ring_write_struct(ts_shared->u2t_ring_base, ts_shared->u2t_ring_size, ts_shared->u2t_ring_write_pos, &p);
+        ts_shared->u2t_ring_write_pos += ring_write_struct(ts_shared->u2t_ring_base, ts_shared->u2t_ring_size, ts_shared->u2t_ring_write_pos, &params->in);
         ts_shared->u2t_ring_write_pos += ring_write_struct(ts_shared->u2t_ring_base, ts_shared->u2t_ring_size, ts_shared->u2t_ring_write_pos, &ticket);
-        if(optional_arena_ptr != 0)
+        if(params->optional_arena_ptr != 0)
         {
-          *optional_arena_ptr = 0;
+          *params->optional_arena_ptr = 0;
         }
         break;
       }
@@ -133,10 +140,10 @@ ts_kickoff(TS_TaskFunctionType *entry_point, Arena **optional_arena_ptr, void *p
   return ticket;
 }
 
-internal void *
+internal TS_JoinResult
 ts_join(TS_Ticket ticket, U64 endt_us)
 {
-  void *result = 0;
+  TS_JoinResult result = {0};
   U64 artifact_num = ticket.u64[0];
   U64 slot_idx = artifact_num%ts_shared->artifact_slots_count;
   U64 stripe_idx = slot_idx%ts_shared->artifact_stripes_count;
@@ -152,7 +159,8 @@ ts_join(TS_Ticket ticket, U64 endt_us)
       {
         OS_MutexScopeRWPromote(stripe->rw_mutex)
         {
-          result = artifact->result;
+          result.good = 1;
+          result.out = artifact->out;
           SLLStackPush(stripe->free_artifact, artifact);
         }
         break;
@@ -211,7 +219,7 @@ ts_task_thread__entry_point(void *p)
     }
     
     //- rjf: run task
-    void *task_result = task_function(task_arena, thread_idx, task_params);
+    void *task_out = task_function(task_arena, thread_idx, task_params);
     
     //- rjf: store into artifact
     U64 artifact_num = task_ticket.u64[0];
@@ -223,7 +231,7 @@ ts_task_thread__entry_point(void *p)
     OS_MutexScopeW(stripe->rw_mutex)
     {
       artifact->task_is_done = 1;
-      artifact->result = task_result;
+      artifact->out = task_out;
     }
     os_condition_variable_broadcast(stripe->cv);
   }

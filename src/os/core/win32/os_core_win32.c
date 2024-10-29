@@ -711,7 +711,12 @@ internal void
 os_file_iter_end(OS_FileIter *iter)
 {
   OS_W32_FileIter *w32_iter = (OS_W32_FileIter*)iter->memory;
-  FindClose(w32_iter->handle);
+  HANDLE zero_handle;
+  MemoryZeroStruct(&zero_handle);
+  if(!MemoryMatchStruct(&zero_handle, &w32_iter->handle))
+  {
+    FindClose(w32_iter->handle);
+  }
 }
 
 //- rjf: directory creation
