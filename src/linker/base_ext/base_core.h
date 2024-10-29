@@ -24,16 +24,6 @@
 #define BitExtract(x, count, shift) (((x) >> (shift)) & ((1 << (count)) - 1))
 
 ////////////////////////////////
-
-#if OS_WINDOWS
-# define ins_atomic_ptr_eval_cond_assign(x,k,c) InterlockedCompareExchangePointer((volatile PVOID *)(x),(k),(c))
-# define ins_atomic_u32_add_eval(x,c)           InterlockedAdd((volatile LONG *)(x), c)
-# define ins_atomic_u32_inc_eval(x)             InterlockedIncrement((volatile LONG *)x)
-#else
-# error "atomics are not defined for this system"
-#endif
-
-////////////////////////////////
 // Linked List Helpers
 
 #define DLLConcatInPlace(list, to_concat) do { \
