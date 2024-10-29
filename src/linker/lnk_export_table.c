@@ -218,20 +218,16 @@ lnk_build_edata(LNK_ExportTable *exptab, LNK_SectionTable *st, LNK_SymbolTable *
   lnk_chunk_set_debugf(edata->arena, string_buffer_chunk,   "EXPORT_STRING_BUFFER");
   lnk_chunk_set_debugf(edata->arena, image_name_chunk,      "EXPORT_IMAGE_NAME");
   
-  LNK_Symbol *image_name_symbol    = lnk_make_defined_symbol_chunk(symtab->arena, str8_lit("export_table.name_voff"),                 LNK_DefinedSymbolVisibility_Internal, 0, image_name_chunk,      0, 0, 0);
-  LNK_Symbol *address_table_symbol = lnk_make_defined_symbol_chunk(symtab->arena, str8_lit("export_table.export_address_table_voff"), LNK_DefinedSymbolVisibility_Internal, 0, voff_table_chunk,      0, 0, 0);
-  LNK_Symbol *name_table_symbol    = lnk_make_defined_symbol_chunk(symtab->arena, str8_lit("export_table.name_pointer_table_voff"),   LNK_DefinedSymbolVisibility_Internal, 0, name_voff_table_chunk, 0, 0, 0);
-  LNK_Symbol *ordinal_table_symbol = lnk_make_defined_symbol_chunk(symtab->arena, str8_lit("export_table.ordinal_table_voff"),        LNK_DefinedSymbolVisibility_Internal, 0, ordinal_table_chunk,   0, 0, 0);
-  lnk_symbol_table_push(symtab, image_name_symbol);
-  lnk_symbol_table_push(symtab, address_table_symbol);
-  lnk_symbol_table_push(symtab, name_table_symbol);
-  lnk_symbol_table_push(symtab, ordinal_table_symbol);
+  LNK_Symbol *image_name_symbol    = lnk_symbol_table_push_defined_chunk(symtab, str8_lit("export_table.name_voff"),                 LNK_DefinedSymbolVisibility_Internal, 0, image_name_chunk,      0, 0, 0);
+  LNK_Symbol *address_table_symbol = lnk_symbol_table_push_defined_chunk(symtab, str8_lit("export_table.export_address_table_voff"), LNK_DefinedSymbolVisibility_Internal, 0, voff_table_chunk,      0, 0, 0);
+  LNK_Symbol *name_table_symbol    = lnk_symbol_table_push_defined_chunk(symtab, str8_lit("export_table.name_pointer_table_voff"),   LNK_DefinedSymbolVisibility_Internal, 0, name_voff_table_chunk, 0, 0, 0);
+  LNK_Symbol *ordinal_table_symbol = lnk_symbol_table_push_defined_chunk(symtab, str8_lit("export_table.ordinal_table_voff"),        LNK_DefinedSymbolVisibility_Internal, 0, ordinal_table_chunk,   0, 0, 0);
   
   // patch header fields
-  lnk_section_push_reloc(edata, header_chunk, LNK_Reloc_VIRT_OFF_32, OffsetOf(PE_ExportTable, name_voff), image_name_symbol);
+  lnk_section_push_reloc(edata, header_chunk, LNK_Reloc_VIRT_OFF_32, OffsetOf(PE_ExportTable, name_voff),                 image_name_symbol);
   lnk_section_push_reloc(edata, header_chunk, LNK_Reloc_VIRT_OFF_32, OffsetOf(PE_ExportTable, export_address_table_voff), address_table_symbol);
-  lnk_section_push_reloc(edata, header_chunk, LNK_Reloc_VIRT_OFF_32, OffsetOf(PE_ExportTable, name_pointer_table_voff), name_table_symbol);
-  lnk_section_push_reloc(edata, header_chunk, LNK_Reloc_VIRT_OFF_32, OffsetOf(PE_ExportTable, ordinal_table_voff), ordinal_table_symbol);
+  lnk_section_push_reloc(edata, header_chunk, LNK_Reloc_VIRT_OFF_32, OffsetOf(PE_ExportTable, name_pointer_table_voff),   name_table_symbol);
+  lnk_section_push_reloc(edata, header_chunk, LNK_Reloc_VIRT_OFF_32, OffsetOf(PE_ExportTable, ordinal_table_voff),        ordinal_table_symbol);
   
   // reserve virtual offset chunks
   LNK_Chunk **ordinal_voff_map = push_array(scratch.arena, LNK_Chunk *, exptab->max_ordinal);
@@ -254,9 +250,8 @@ lnk_build_edata(LNK_ExportTable *exptab, LNK_SectionTable *st, LNK_SymbolTable *
       lnk_chunk_set_debugf(edata->arena, name_chunk, "export: %S", name_cstr);
       
       // push name symbol
-      String8 name_export_name = push_str8f(symtab->arena, "export.%S", name_cstr);
-      LNK_Symbol *name_symbol = lnk_make_defined_symbol_chunk(symtab->arena, name_export_name, LNK_DefinedSymbolVisibility_Internal, 0, name_chunk, 0, 0, 0);
-      lnk_symbol_table_push(symtab, name_symbol);
+      String8     name_export_name = push_str8f(symtab->arena->v[0], "export.%S", name_cstr);
+      LNK_Symbol *name_symbol      = lnk_symbol_table_push_defined_chunk(symtab, name_export_name, LNK_DefinedSymbolVisibility_Internal, 0, name_chunk, 0, 0, 0);
       
       // name voff
       LNK_Chunk *voff_chunk = lnk_section_push_chunk_bss(edata, name_voff_table_chunk, exptab->voff_size, /* export table must be sorted lexically: */ name_cstr);

@@ -417,7 +417,7 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
   lnk_chunk_set_debugf(arena, master_common_block, "%S: master common block", path);
 
   // convert from coff
-  LNK_SymbolArray symbol_arr     = lnk_symbol_array_from_coff(arena, input->data, cached_path, coff_info.string_table_off, coff_info.section_count_no_null, coff_sect_arr, coff_symbols, chunk_arr, master_common_block);
+  LNK_SymbolArray symbol_arr     = lnk_symbol_array_from_coff(arena, input->data, obj, cached_path, coff_info.string_table_off, coff_info.section_count_no_null, coff_sect_arr, coff_symbols, chunk_arr, master_common_block);
   LNK_SymbolList  symbol_list    = lnk_symbol_list_from_array(arena, symbol_arr);
   LNK_RelocList  *reloc_list_arr = lnk_reloc_list_array_from_coff(arena, coff_info.machine, input->data, coff_info.section_count_no_null, coff_sect_arr, chunk_arr, symbol_arr);
 
@@ -425,6 +425,7 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
   obj->data                = input->data;
   obj->path                = cached_path;
   obj->lib_path            = cached_lib_path;
+  obj->input_idx           = obj_idx;
   obj->machine             = coff_info.machine;
   obj->chunk_count         = chunk_count;
   obj->sect_count          = coff_info.section_count_no_null;
@@ -712,6 +713,7 @@ lnk_obj_list_push_parallel(TP_Context *tp, TP_Arena *arena, LNK_ObjList *obj_lis
 internal LNK_SymbolArray
 lnk_symbol_array_from_coff(Arena              *arena,
                            String8             coff_data,
+                           LNK_Obj            *obj,
                            String8             obj_path,
                            U64                 string_table_off,
                            U64                 sect_count,
@@ -729,7 +731,8 @@ lnk_symbol_array_from_coff(Arena              *arena,
   for (U64 symbol_idx = 0; symbol_idx < coff_symbols.count; symbol_idx += 1) {
     COFF_Symbol32 *coff_symbol = &coff_symbols.v[symbol_idx];
     LNK_Symbol    *symbol      = &symbol_array.v[symbol_idx];
-    lnk_symbol_set_debug(symbol, obj_path);
+
+    symbol->obj = obj;
     
     String8 name = coff_read_symbol_name(coff_data, string_table_off, &coff_symbol->name);
 

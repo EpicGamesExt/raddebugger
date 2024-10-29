@@ -97,6 +97,8 @@ lnk_lib_symbol_array_sort(LNK_LibSymbol *arr, U64 count)
 internal LNK_Lib
 lnk_lib_from_data(Arena *arena, String8 data, String8 path)
 {
+  ProfBeginFunction();
+
   U64     symbol_count;
   String8 string_table;
   U32    *member_off_arr;
@@ -167,9 +169,11 @@ lnk_lib_from_data(Arena *arena, String8 data, String8 path)
   lib.symbol_name_list = symbol_name_list;
   lib.long_names       = parse.long_names;
   
+  ProfEnd();
   return lib;
 }
 
+internal
 THREAD_POOL_TASK_FUNC(lnk_lib_initer)
 {
   LNK_LibIniter *task       = raw_task;
@@ -179,6 +183,7 @@ THREAD_POOL_TASK_FUNC(lnk_lib_initer)
   String8        path       = task->path_arr[task_id];
   
   *lib = lnk_lib_from_data(arena, data, path);
+  lib->input_idx = task->base_input_idx + task_id;
 }
 
 internal LNK_LibNodeArray
@@ -187,15 +192,16 @@ lnk_lib_list_push_parallel(TP_Context *tp, TP_Arena *arena, LNK_LibList *list, S
   Assert(data_arr.count == path_arr.count);
   U64 lib_count = data_arr.count;
   
-  LNK_LibIniter lib_initer = {0};
-  lib_initer.node_arr      = lnk_lib_list_reserve(arena->v[0], list, lib_count);
-  lib_initer.data_arr      = data_arr.v;
-  lib_initer.path_arr      = path_arr.v;
-  tp_for_parallel(tp, arena, lib_count, lnk_lib_initer, &lib_initer);
+  LNK_LibIniter task  = {0};
+  task.node_arr       = lnk_lib_list_reserve(arena->v[0], list, lib_count);
+  task.data_arr       = data_arr.v;
+  task.path_arr       = path_arr.v;
+  task.base_input_idx = list->count;
+  tp_for_parallel(tp, arena, lib_count, lnk_lib_initer, &task);
 
-  LNK_LibNodeArray arr;
-  arr.count = lib_count;
-  arr.v = lib_initer.node_arr;
+  LNK_LibNodeArray arr = {0};
+  arr.count            = lib_count;
+  arr.v                = task.node_arr;
   return arr;
 }
 

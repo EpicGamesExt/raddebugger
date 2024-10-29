@@ -43,6 +43,8 @@ typedef struct LNK_Chunk
 #if LNK_DEBUG_CHUNKS
   String8 debug;
 #endif
+
+  int debug;
 } LNK_Chunk, * LNK_ChunkPtr;
 
 typedef struct LNK_ChunkNode

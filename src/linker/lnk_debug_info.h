@@ -333,16 +333,15 @@ typedef struct
 
 typedef struct
 {
-  LNK_Section        **sect_id_map;
-  LNK_SymbolScopeIndex scope_idx;
-  LNK_SymbolList     **bucket_arr;
-  CV_SymbolList       *pub_list_arr;
+  LNK_Section                 **sect_id_map;
+  LNK_SymbolHashTrieChunkList  *chunk_lists;
+  CV_SymbolList                *pub_list_arr;
 
   Rng1U64           *symbol_ranges;
   PDB_GsiContext    *gsi;
   CV_SymbolPtrArray  symbols;
   U32               *hashes;
-} LNK_BuildPublicSymbolsTaskData;
+} LNK_BuildPublicSymbolsTask;
 
 typedef struct
 {
@@ -566,8 +565,7 @@ internal void lnk_build_pdb_public_symbols(TP_Context            *tp,
                                            TP_Arena              *arena,
                                            LNK_SymbolTable       *symtab,
                                            LNK_Section          **sect_id_map,
-                                           PDB_PsiContext        *psi,
-                                           LNK_SymbolScopeIndex   scope_idx);
+                                           PDB_PsiContext        *psi);
 
 internal String8List lnk_build_pdb(TP_Context               *tp,
                                    TP_Arena                 *tp_arena,

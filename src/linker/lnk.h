@@ -174,13 +174,6 @@ typedef struct
 
 typedef struct
 {
-  Rng1U64     *range_arr;
-  LNK_LibNode *lib_arr;
-  LNK_Symbol **symbol_arr_arr;
-} LNK_LazyIniter;
-
-typedef struct
-{
   LNK_InputObjList    input_obj_list;
   LNK_InputImportList input_import_list;
   LNK_SymbolList      unresolved_symbol_list;
@@ -194,6 +187,15 @@ typedef struct
   LNK_SymbolFinderResult *result_arr;
   Rng1U64                *range_arr;
 } LNK_SymbolFinder;
+
+typedef struct
+{
+  LNK_SymbolTable  *symtab;
+  union {
+    LNK_ObjNodeArray objs;
+    LNK_LibNodeArray libs;
+  } u;
+} LNK_SymbolPusher;
 
 typedef struct
 {
@@ -213,7 +215,6 @@ typedef struct
   U64                base_addr;
   LNK_Obj          **obj_arr;
 } LNK_ObjRelocPatcher;
-
 
 typedef struct
 {

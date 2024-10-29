@@ -2827,20 +2827,23 @@ THREAD_POOL_TASK_FUNC(lnk_push_dbi_sec_contrib_task)
 ////////////////////////////////
 
 internal
-THREAD_POOL_TASK_FUNC(lnk_build_pdb_public_symbols_task)
+THREAD_POOL_TASK_FUNC(lnk_build_pdb_public_symbols_defined_task)
 {
-  U64                             bucket_idx = task_id;
-  LNK_BuildPublicSymbolsTaskData *task       = raw_task;
+  ProfBeginFunction();
 
-  LNK_Section        **sect_id_map = task->sect_id_map;
-  LNK_SymbolScopeIndex scope_idx   = task->scope_idx;
-  LNK_SymbolList       bucket      = task->bucket_arr[scope_idx][bucket_idx];
-  CV_SymbolList       *pub_list    = &task->pub_list_arr[bucket_idx];
+  LNK_BuildPublicSymbolsTask   *task        = raw_task;
+  LNK_Section                 **sect_id_map = task->sect_id_map;
+  CV_SymbolList                *pub_list    = &task->pub_list_arr[task_id];
+  LNK_SymbolHashTrieChunkList   chunk_list  = task->chunk_lists[task_id];
 
-  for (LNK_SymbolNode *symbol_node = bucket.first; symbol_node != 0; symbol_node = symbol_node->next) {
-    LNK_Symbol *symbol = symbol_node->data;
+  for (LNK_SymbolHashTrieChunk *chunk = chunk_list.first; chunk != 0; chunk = chunk->next) {
+    CV_SymbolNode *nodes = push_array_no_zero(arena, CV_SymbolNode, chunk->count);
 
-    if (LNK_Symbol_IsDefined(symbol->type)) {
+    for (U64 i = 0, node_idx = 0; i < chunk->count; ++i) {
+      LNK_Symbol *symbol = chunk->v[i].symbol;
+
+      Assert(LNK_Symbol_IsDefined(symbol->type));
+
       LNK_DefinedSymbol *defined_symbol = &symbol->u.defined;
       if (defined_symbol->value_type == LNK_DefinedSymbolValue_Chunk) {
         CV_Pub32Flags flags = 0;
@@ -2854,11 +2857,15 @@ THREAD_POOL_TASK_FUNC(lnk_build_pdb_public_symbols_task)
         U32 symbol_off32   = safe_cast_u32(symbol_off);
         U16 symbol_isect16 = safe_cast_u16(symbol_isect);
 
-        CV_SymbolNode *pub_node = cv_symbol_list_push(arena, pub_list);
-        pub_node->data = cv_make_pub32(arena, flags, symbol_off32, symbol_isect16, symbol->name);
+        nodes[node_idx].data = cv_make_pub32(arena, flags, symbol_off32, symbol_isect16, symbol->name);
+        cv_symbol_list_push_node(pub_list, &nodes[node_idx]);
+
+        ++node_idx;
       }
     }
   }
+
+  ProfEnd();
 }
 
 internal
@@ -2866,8 +2873,8 @@ THREAD_POOL_TASK_FUNC(lnk_gsi_hash_cv_list_task)
 {
   ProfBeginFunction();
 
-  LNK_BuildPublicSymbolsTaskData *task  = raw_task;
-  Rng1U64                         range = task->symbol_ranges[task_id];
+  LNK_BuildPublicSymbolsTask *task  = raw_task;
+  Rng1U64                     range = task->symbol_ranges[task_id];
 
   for (U64 symbol_idx = range.min; symbol_idx < range.max; ++symbol_idx) {
     CV_Symbol *symbol = &task->symbols.v[symbol_idx]->data;
@@ -2883,22 +2890,20 @@ lnk_build_pdb_public_symbols(TP_Context            *tp,
                              TP_Arena              *arena,
                              LNK_SymbolTable       *symtab,
                              LNK_Section          **sect_id_map,
-                             PDB_PsiContext        *psi,
-                             LNK_SymbolScopeIndex   scope_idx)
+                             PDB_PsiContext        *psi)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(arena->v, arena->count);
 
-  ProfBegin("Make Public Symbols");
-  LNK_BuildPublicSymbolsTaskData task = {0};
-  task.sect_id_map  = sect_id_map;
-  task.scope_idx    = scope_idx;
-  task.bucket_arr   = symtab->buckets;
-  task.pub_list_arr = push_array(scratch.arena, CV_SymbolList, symtab->bucket_count[scope_idx]);
-  tp_for_parallel(tp, arena, symtab->bucket_count[scope_idx], lnk_build_pdb_public_symbols_task, &task);
+  ProfBegin("Defined");
+  LNK_BuildPublicSymbolsTask task = {0};
+  task.sect_id_map                = sect_id_map;
+  task.pub_list_arr               = push_array(scratch.arena, CV_SymbolList, tp->worker_count);
+  task.chunk_lists = symtab->chunk_lists[LNK_SymbolScopeIndex_Defined];
+  tp_for_parallel(tp, arena, tp->worker_count, lnk_build_pdb_public_symbols_defined_task, &task);
   ProfEnd();
 
-  CV_SymbolPtrArray symbols = cv_symbol_ptr_array_from_list(scratch.arena, tp, symtab->bucket_count[scope_idx], task.pub_list_arr);
+  CV_SymbolPtrArray symbols = cv_symbol_ptr_array_from_list(scratch.arena, tp, tp->worker_count, task.pub_list_arr);
 
   ProfBegin("GSI Push");
   gsi_push_many_arr(tp, psi->gsi, symbols.count, symbols.v);
@@ -3070,7 +3075,7 @@ lnk_build_pdb(TP_Context               *tp,
   ProfBegin("Build DBI Section Headers");
   {
     LNK_Symbol         *coff_sect_array_symbol = lnk_symbol_table_searchf(symtab, LNK_SymbolScopeFlag_Internal, LNK_COFF_SECT_HEADER_ARRAY_SYMBOL_NAME);
-    LNK_Chunk          *coff_sect_chunk        = lnk_defined_symbol_get_chunk(&coff_sect_array_symbol->u.defined);
+    LNK_Chunk          *coff_sect_chunk        = lnk_chunk_from_symbol(coff_sect_array_symbol);
     String8             coff_sect_chunk_data   = lnk_data_from_chunk_ref(sect_id_map, coff_sect_chunk->ref);
     U64                 coff_sect_count        = coff_sect_chunk_data.size / sizeof(COFF_SectionHeader);
     COFF_SectionHeader *coff_sect_ptr          = (COFF_SectionHeader*)coff_sect_chunk_data.str;
@@ -3125,7 +3130,7 @@ lnk_build_pdb(TP_Context               *tp,
   }
   ProfEnd();
   
-  lnk_build_pdb_public_symbols(tp, tp_arena, symtab, sect_id_map, pdb->psi, LNK_SymbolScopeIndex_Defined);
+  lnk_build_pdb_public_symbols(tp, tp_arena, symtab, sect_id_map, pdb->psi);
   
   pdb_build(tp, tp_arena, pdb, string_ht);
 

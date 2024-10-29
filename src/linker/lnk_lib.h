@@ -12,6 +12,7 @@ typedef struct LNK_Lib
   U32 *            member_off_arr;
   String8List      symbol_name_list;
   String8          long_names;
+  U64              input_idx;
 } LNK_Lib;
 
 typedef struct LNK_LibNode
@@ -92,9 +93,10 @@ typedef struct LNK_LibBuild
 
 typedef struct
 {
-  LNK_LibNode *node_arr;
-  String8     *data_arr;
-  String8     *path_arr;
+  LNK_LibNode     *node_arr;
+  String8         *data_arr;
+  String8         *path_arr;
+  U64              base_input_idx;
 } LNK_LibIniter;
 
 ////////////////////////////////

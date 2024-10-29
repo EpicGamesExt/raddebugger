@@ -70,6 +70,12 @@ lnk_parse_directives(Arena *arena, LNK_DirectiveInfo *directive_info, String8 bu
     for (U64 i = 0; i < ArrayCount(directive_table); ++i) {
       if (str8_match(directive_table[i].name, opt->string, StringMatchFlag_CaseInsensitive)) {
         kind = directive_table[i].kind;
+<<<<<<< HEAD
+=======
+        if (kind == LNK_Directive_Merge) {
+          String8  v = str8_list_join(scratch.arena, &opt->value_strings, &(StringJoin){ .sep = str8_lit_comp(" ")});
+        }
+>>>>>>> 9e2d09f (switch to thread safe hash trie map)
         break;
       }
     }
