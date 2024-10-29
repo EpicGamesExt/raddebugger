@@ -137,6 +137,9 @@ typedef enum
   LNK_CmdSwitch_Rad_OsVer,
   LNK_CmdSwitch_Rad_PageSize,
   LNK_CmdSwitch_Rad_PathStyle,
+  LNK_CmdSwitch_Rad_PdbHashTypeNames,
+  LNK_CmdSwitch_Rad_PdbHashTypeNameMap,
+  LNK_CmdSwitch_Rad_PdbHashTypeNameLength,
   LNK_CmdSwitch_Rad_SectVirtOff,
   LNK_CmdSwitch_Rad_SuppressError,
   LNK_CmdSwitch_Rad_SymbolTableCapDefined,
@@ -271,6 +274,9 @@ typedef struct LNK_Config
   String8                     pdb_name;
   String8                     pdb_alt_path;
   String8                     mt_path;
+  LNK_SwitchState             pdb_hash_type_names;
+  String8                     pdb_hash_type_name_map;
+  U64                         pdb_hash_type_name_length;
   String8List                 input_list[LNK_Input_Count];
   String8List                 input_default_lib_list;
   String8List                 disallow_lib_list;

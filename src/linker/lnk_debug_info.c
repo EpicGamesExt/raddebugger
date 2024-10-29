@@ -2476,6 +2476,134 @@ lnk_import_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input)
   return types;
 }
 
+internal U64
+lnk_format_u128(U8 *buf, U64 buf_max, U64 length, U128 v)
+{
+  U64 size = 0;
+  if (length > 0 && buf_max > 0) {
+    if (length <= 8) {
+      U64 mask = length == 8 ? max_U32 : (1ull << (length*8)) - 1;
+      size = raddbg_snprintf((char*)buf, buf_max - 1, "%llX", v.u64[0] & mask);
+    } else {
+      U64 mask1 = length == 16 ? max_U64 : (1ull << (length*8)) - 1;
+      size = raddbg_snprintf((char*)buf, buf_max, "%llX%llX", v.u64[1] & mask1, v.u64[0]);
+    }
+  }
+  return size;
+}
+
+internal
+THREAD_POOL_TASK_FUNC(lnk_replace_type_names_with_hashes_task)
+{
+  ProfBeginFunction();
+
+  LNK_TypeNameReplacer *task        = raw_task;
+  Rng1U64               range       = task->ranges[task_id];
+  CV_DebugT             debug_t     = task->debug_t;
+  U64                   hash_length = task->hash_length;
+
+  B32          make_map  = task->make_map;
+  Arena       *map_arena = 0;
+  String8List *map       = 0;
+  if (make_map) {
+    map_arena = task->map_arena->v[task_id];
+    map       = &task->maps[task_id];
+  }
+
+  U64 hash_max_chars = hash_length*2;
+  U8  temp[128];
+
+  for (U64 leaf_idx = range.min; leaf_idx < range.max; ++leaf_idx) {
+    CV_Leaf leaf = cv_debug_t_get_leaf(debug_t, leaf_idx);
+    if (leaf.kind == CV_LeafKind_STRUCTURE || leaf.kind == CV_LeafKind_CLASS) {
+      CV_UDTInfo udt_info = cv_get_udt_info(leaf.kind, leaf.data);
+
+      CV_NumericParsed dummy;
+      U64 numeric_size = cv_read_numeric(leaf.data, sizeof(CV_LeafStruct), &dummy);
+
+      U128 name_hash;
+      if (udt_info.props & CV_TypeProp_HasUniqueName) {
+        blake3_hasher hasher; blake3_hasher_init(&hasher);
+        blake3_hasher_update(&hasher, udt_info.unique_name.str, udt_info.unique_name.size);
+        blake3_hasher_finalize(&hasher, (U8*)&name_hash, sizeof(name_hash));
+
+        if (make_map) {
+          lnk_format_u128(temp, sizeof(temp), hash_length, name_hash);
+          str8_list_pushf(map_arena, map, "%s %.*s\n", temp, str8_varg(udt_info.unique_name));
+        }
+      } else {
+        blake3_hasher hasher; blake3_hasher_init(&hasher);
+        blake3_hasher_update(&hasher, udt_info.name.str, udt_info.name.size);
+        blake3_hasher_finalize(&hasher, (U8*)&name_hash, sizeof(name_hash));
+
+        if (make_map) {
+          lnk_format_u128(temp, sizeof(temp), hash_length, name_hash);
+          str8_list_pushf(map_arena, map, "%s %.*s\n", temp, str8_varg(udt_info.name));
+        }
+      }
+
+      if (udt_info.name.size < hash_max_chars) {
+
+        U64  buf_size = sizeof(CV_LeafHeader) + sizeof(CV_LeafStruct) + numeric_size + (hash_max_chars + 1) * 2;
+        U8  *buf      = push_array(arena, U8, buf_size);
+
+        MemoryCopy(buf + sizeof(CV_LeafHeader), leaf.data.str, sizeof(CV_LeafStruct) + numeric_size);
+
+        CV_LeafStruct *lf = (CV_LeafStruct *)(buf + sizeof(CV_LeafHeader));
+        lf->props &= ~CV_TypeProp_HasUniqueName;
+
+        udt_info.name.str  = buf + sizeof(CV_LeafHeader) + sizeof(CV_LeafStruct) + numeric_size;
+        udt_info.name.size = lnk_format_u128(udt_info.name.str, hash_max_chars + 1, hash_length, name_hash);
+
+        CV_LeafHeader *new_header  = (CV_LeafHeader *)buf;
+        new_header->size           = sizeof(CV_LeafKind) + sizeof(CV_LeafStruct) + numeric_size + udt_info.name.size + 1;
+        new_header->kind           = leaf.kind;
+
+        debug_t.v[leaf_idx] = buf;
+      } else {
+        udt_info.name.size = lnk_format_u128(udt_info.name.str, udt_info.name.size, hash_length, name_hash);
+
+        CV_LeafHeader *header = cv_debug_t_get_leaf_header(debug_t, leaf_idx);
+        header->size          = sizeof(CV_LeafKind) + sizeof(CV_LeafStruct) + numeric_size + udt_info.name.size + 1;
+
+        CV_LeafStruct *lf = (CV_LeafStruct *)(header + 1);
+        lf->props &= ~CV_TypeProp_HasUniqueName;
+      }
+    }
+  }
+
+  ProfEnd();
+}
+
+internal void
+lnk_replace_type_names_with_hashes(TP_Context *tp, TP_Arena *arena, CV_DebugT debug_t, U64 hash_length, String8 map_name)
+{
+  ProfBeginFunction();
+  Temp scratch = scratch_begin(arena->v, arena->count);
+
+  LNK_TypeNameReplacer task = {0};
+  task.debug_t              = debug_t;
+  task.ranges               = tp_divide_work(scratch.arena, debug_t.count, tp->worker_count);
+  task.hash_length          = Clamp(1, hash_length, 16);
+  if (map_name.size > 0) {
+    task.make_map  = 1;
+    task.map_arena = tp_arena_alloc(tp);
+    task.maps      = push_array(scratch.arena, String8List, tp->worker_count);
+  }
+
+  tp_for_parallel(tp, arena, tp->worker_count, lnk_replace_type_names_with_hashes_task, &task);
+
+  if (task.make_map) {
+    String8List map = {0};
+    str8_list_concat_in_place_array(&map, task.maps, tp->worker_count);
+    lnk_write_data_list_to_file_path(map_name, map);
+    tp_arena_release(&task.map_arena);
+  }
+
+  scratch_end(scratch);
+  ProfEnd();
+}
+
 ////////////////////////////////
 // PDB Builder
 

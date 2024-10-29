@@ -367,6 +367,16 @@ typedef struct
   CV_SymbolNode    **symbol_arr;
 } LNK_GsiUnbucket;
 
+typedef struct
+{
+  CV_DebugT    debug_t;
+  Rng1U64     *ranges;
+  U64          hash_length;
+  B32          make_map;
+  TP_Arena    *map_arena;
+  String8List *maps;
+} LNK_TypeNameReplacer;
+
 ////////////////////////////////
 // RAD Debug Info
 
@@ -523,6 +533,8 @@ internal void                lnk_patch_inlines(TP_Context *tp, LNK_CodeViewInput
 internal void                lnk_patch_leaves(TP_Context *tp, LNK_CodeViewInput *input, LNK_LeafHashes *hashes, LNK_LeafHashTable *leaf_ht_arr, LNK_LeafBucketArray bucket_arr);
 internal String8Node *       lnk_copy_raw_leaf_arr_to_type_server(TP_Context *tp, CV_DebugT types, PDB_TypeServer *type_server);
 internal CV_DebugT *         lnk_import_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input);
+
+internal void lnk_replace_type_names_with_hashes(TP_Context *tp, TP_Arena *arena, CV_DebugT debug_t, U64 hash_length, String8 map_name);
 
 ////////////////////////////////
 // RAD Debug info
