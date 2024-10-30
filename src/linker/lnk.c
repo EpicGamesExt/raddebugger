@@ -2885,7 +2885,7 @@ lnk_init_section_table(LNK_SymbolTable *symtab, U64 section_virt_off, U64 sect_a
     { ".edata",   LNK_EDATA_SYMBOL_NAME, LNK_EDATA_SECTION_FLAGS }, 
     { ".rsrc",    LNK_RSRC_SYMBOL_NAME,  LNK_RSRC_SECTION_FLAGS  },
     { ".debug",   LNK_DEBUG_SYMBOL_NAME, LNK_DEBUG_SECTION_FLAGS },
-    { ".tls",     LNK_TLS_SYMBOL_NAME,   LNK_TLS_SECTION_FLAGS   },
+    { ".tls",     LNK_TLS_SYMBOL_NAME,   LNK_DATA_SECTION_FLAGS  },
   };
   
   LNK_SectionTable *st = lnk_section_table_alloc(section_virt_off, sect_align, file_align);
@@ -4012,7 +4012,7 @@ l.count += 1;                                                \
 
           LNK_Section **sect_id_map = lnk_sect_id_map_from_section_table(scratch.arena, st);
 
-          LNK_Symbol *tls_used_symbol = lnk_symbol_table_searchf(symtab, LNK_SymbolScopeFlag_Main, "_tls_used");
+          LNK_Symbol *tls_used_symbol = lnk_symbol_table_searchf(symtab, LNK_SymbolScopeFlag_Main, LNK_TLS_SYMBOL_NAME);
           if (tls_used_symbol) {
             ProfBegin("Patch TLS Align");
 
