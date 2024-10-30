@@ -617,6 +617,9 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
   //
   if(text_info->lines_count != 0)
   {
+    TxtPt cursor = rd_regs()->cursor;
+    B32 cursor_in_range = (1 <= cursor.line && cursor.line <= text_info->lines_count);
+    
     // rjf: contain => snap
     if(cv->contain_cursor && text_info->lines_count != 0)
     {
@@ -629,31 +632,34 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
     if(cv->center_cursor && text_info->lines_count != 0)
     {
       cv->center_cursor = 0;
-      String8 cursor_line = str8_substr(text_data, text_info->lines_ranges[rd_regs()->cursor.line-1]);
-      F32 cursor_advance = fnt_dim_from_tag_size_string(code_font, code_font_size, 0, code_tab_size, str8_prefix(cursor_line, rd_regs()->cursor.column-1)).x;
-      
-      // rjf: scroll x
+      if(cursor_in_range)
       {
-        S64 new_idx = (S64)(cursor_advance - code_area_dim.x/2);
-        new_idx = Clamp(scroll_idx_rng[Axis2_X].min, new_idx, scroll_idx_rng[Axis2_X].max);
-        ui_scroll_pt_target_idx(&scroll_pos.x, new_idx);
-        snap[Axis2_X] = 0;
-      }
-      
-      // rjf: scroll y
-      {
-        S64 new_idx = (rd_regs()->cursor.line-1) - num_possible_visible_lines/2 + 2;
-        new_idx = Clamp(scroll_idx_rng[Axis2_Y].min, new_idx, scroll_idx_rng[Axis2_Y].max);
-        ui_scroll_pt_target_idx(&scroll_pos.y, new_idx);
-        snap[Axis2_Y] = 0;
+        String8 cursor_line = str8_substr(text_data, text_info->lines_ranges[cursor.line-1]);
+        F32 cursor_advance = fnt_dim_from_tag_size_string(code_font, code_font_size, 0, code_tab_size, str8_prefix(cursor_line, cursor.column-1)).x;
+        
+        // rjf: scroll x
+        {
+          S64 new_idx = (S64)(cursor_advance - code_area_dim.x/2);
+          new_idx = Clamp(scroll_idx_rng[Axis2_X].min, new_idx, scroll_idx_rng[Axis2_X].max);
+          ui_scroll_pt_target_idx(&scroll_pos.x, new_idx);
+          snap[Axis2_X] = 0;
+        }
+        
+        // rjf: scroll y
+        {
+          S64 new_idx = (cursor.line-1) - num_possible_visible_lines/2 + 2;
+          new_idx = Clamp(scroll_idx_rng[Axis2_Y].min, new_idx, scroll_idx_rng[Axis2_Y].max);
+          ui_scroll_pt_target_idx(&scroll_pos.y, new_idx);
+          snap[Axis2_Y] = 0;
+        }
       }
     }
     
     // rjf: snap in X
-    if(snap[Axis2_X])
+    if(snap[Axis2_X] && cursor_in_range)
     {
-      String8 cursor_line = str8_substr(text_data, text_info->lines_ranges[rd_regs()->cursor.line-1]);
-      S64 cursor_off = (S64)(fnt_dim_from_tag_size_string(code_font, code_font_size, 0, code_tab_size, str8_prefix(cursor_line, rd_regs()->cursor.column-1)).x + priority_margin_width_px + catchall_margin_width_px + line_num_width_px);
+      String8 cursor_line = str8_substr(text_data, text_info->lines_ranges[cursor.line-1]);
+      S64 cursor_off = (S64)(fnt_dim_from_tag_size_string(code_font, code_font_size, 0, code_tab_size, str8_prefix(cursor_line, cursor.column-1)).x + priority_margin_width_px + catchall_margin_width_px + line_num_width_px);
       Rng1S64 visible_pixel_range =
       {
         scroll_pos.x.idx,
@@ -674,7 +680,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
     // rjf: snap in Y
     if(snap[Axis2_Y])
     {
-      Rng1S64 cursor_visibility_range = r1s64(rd_regs()->cursor.line-4, rd_regs()->cursor.line+4);
+      Rng1S64 cursor_visibility_range = r1s64(cursor.line-4, cursor.line+4);
       cursor_visibility_range.min = ClampBot(0, cursor_visibility_range.min);
       cursor_visibility_range.max = ClampBot(0, cursor_visibility_range.max);
       S64 min_delta = Min(0, cursor_visibility_range.min-(target_visible_line_num_range.min));
