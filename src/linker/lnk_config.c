@@ -137,7 +137,7 @@ read_only struct
   { LNK_CmdSwitch_Rad_MtPath,                  "RAD_MT_PATH",                     ":EXEPATH",  "Path to manifest tool."                                                        },
   { LNK_CmdSwitch_Rad_OsVer,                   "RAD_OS_VER",                      ":##,##", ""                                                                                 },
   { LNK_CmdSwitch_Rad_PageSize,                "RAD_PAGE_SIZE",                   ":#",        "Must be power of two."                                                         },
-  { LNK_CmdSwitch_Rad_PdbHashTypeNames,        "RAD_PDB_HASH_TYPE_NAMES",         ":[NO]",     "Replace type names in LF_STRUCTURE and LF_CLASS with hashes."                  },
+  { LNK_CmdSwitch_Rad_PdbHashTypeNames,        "RAD_PDB_HASH_TYPE_NAMES",         ":{NONE|LENIENT|FULL}", "Replace type names in LF_STRUCTURE and LF_CLASS with hashes."       },
   { LNK_CmdSwitch_Rad_PdbHashTypeNameMap,      "RAD_PDB_HASH_TYPE_NAME_MAP",      ":FILENAME", "Produce map file with hash -> type name mappings."                             },
   { LNK_CmdSwitch_Rad_PdbHashTypeNameLength,   "RAD_PDB_HASH_TYPE_NAME_LENGTH",   ":#",        "Number of hash bytes to use to replace type name. Default 8 bytes (Max 16)."   },
   { LNK_CmdSwitch_Rad_PathStyle,               "RAD_PATH_STYLE",                  ":{WindowsAbsolute|UnixAbsolute}", ""                                                        },
@@ -225,6 +225,27 @@ lnk_debug_mode_from_string(String8 string)
     }
   }
   return LNK_DebugMode_Null;
+}
+
+read_only struct
+{
+   char                 *name;
+   LNK_TypeNameHashMode  mode;
+} g_type_name_hash_mode_map[] = {
+  { "none",    LNK_TypeNameHashMode_None    },
+  { "lenient", LNK_TypeNameHashMode_Lenient },
+  { "full",    LNK_TypeNameHashMode_Full    }
+};
+
+internal LNK_TypeNameHashMode
+lnk_type_name_hash_mode_from_string(String8 string)
+{
+  for (U64 i = 0; i < ArrayCount(g_type_name_hash_mode_map); ++i) {
+    if (str8_match(str8_cstring(g_type_name_hash_mode_map[i].name), string, StringMatchFlag_CaseInsensitive)) {
+      return g_type_name_hash_mode_map[i].mode;
+    }
+  }
+  return LNK_TypeNameHashMode_Null;
 }
 
 ////////////////////////////////
@@ -928,6 +949,7 @@ lnk_config_from_cmd_line(Arena *arena, String8List raw_cmd_line)
   config->heap_commit               = KB(1);
   config->stack_reserve             = MB(1);
   config->stack_commit              = KB(1);
+  config->pdb_hash_type_names       = LNK_TypeNameHashMode_None;
   config->pdb_hash_type_name_length = 8;
 
   // process command line switches
@@ -1590,7 +1612,19 @@ lnk_config_from_cmd_line(Arena *arena, String8List raw_cmd_line)
     } break;
 
     case LNK_CmdSwitch_Rad_PdbHashTypeNames: {
-      lnk_cmd_switch_parse_flag(cmd->value_strings, cmd_switch, &config->pdb_hash_type_names);
+      String8              mode_string = str8_list_first(&cmd->value_strings);
+
+      LNK_TypeNameHashMode mode;
+      if (mode_string.size == 0) {
+        config->pdb_hash_type_names = LNK_TypeNameHashMode_Lenient;
+      } else {
+        mode = lnk_type_name_hash_mode_from_string(mode_string);
+        if (mode == LNK_TypeNameHashMode_Null) {
+          lnk_error_cmd_switch(LNK_Error_Cmdl, cmd_switch, "unknown parameter: \"%S\"", mode_string);
+        } else {
+          config->pdb_hash_type_names = mode;
+        }
+      }
     } break;
 
     case LNK_CmdSwitch_Rad_PdbHashTypeNameMap: {

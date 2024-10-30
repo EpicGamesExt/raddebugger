@@ -4132,8 +4132,8 @@ l.count += 1;                                                \
           if (config->debug_mode == LNK_DebugMode_Full || config->debug_mode == LNK_DebugMode_GHash) {
             lnk_timer_begin(LNK_Timer_Pdb);
 
-            if (config->pdb_hash_type_names == LNK_SwitchState_Yes) {
-              lnk_replace_type_names_with_hashes(tp, tp_arena, types[CV_TypeIndexSource_TPI], config->pdb_hash_type_name_length, config->pdb_hash_type_name_map);
+            if (config->pdb_hash_type_names != LNK_TypeNameHashMode_Null && config->pdb_hash_type_names != LNK_TypeNameHashMode_None) {
+              lnk_replace_type_names_with_hashes(tp, tp_arena, types[CV_TypeIndexSource_TPI], config->pdb_hash_type_names, config->pdb_hash_type_name_length, config->pdb_hash_type_name_map);
             }
 
             String8List pdb_data = lnk_build_pdb(tp,

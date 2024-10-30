@@ -226,6 +226,14 @@ typedef enum
   Lnk_DebugInfoGuid_ImageBlake3,
 } LNK_DebugInfoGuidType;
 
+typedef enum
+{
+  LNK_TypeNameHashMode_Null,
+  LNK_TypeNameHashMode_None,
+  LNK_TypeNameHashMode_Lenient,
+  LNK_TypeNameHashMode_Full,
+} LNK_TypeNameHashMode;
+
 typedef struct LNK_Config
 {
   LNK_ConfigFlags             flags;
@@ -274,7 +282,7 @@ typedef struct LNK_Config
   String8                     pdb_name;
   String8                     pdb_alt_path;
   String8                     mt_path;
-  LNK_SwitchState             pdb_hash_type_names;
+  LNK_TypeNameHashMode        pdb_hash_type_names;
   String8                     pdb_hash_type_name_map;
   U64                         pdb_hash_type_name_length;
   String8List                 input_list[LNK_Input_Count];
@@ -436,10 +444,11 @@ typedef enum
 ////////////////////////////////
 // Enum <-> String
 
-internal String8           lnk_string_cmd_switch_type(LNK_CmdSwitchType type);
-internal LNK_CmdSwitchType lnk_cmd_switch_from_string(String8 string);
-internal LNK_InputType     lnk_input_type_from_string(String8 string);
-internal LNK_DebugMode     lnk_debug_mode_from_string(String8 string);
+internal String8              lnk_string_cmd_switch_type(LNK_CmdSwitchType type);
+internal LNK_CmdSwitchType    lnk_cmd_switch_from_string(String8 string);
+internal LNK_InputType        lnk_input_type_from_string(String8 string);
+internal LNK_DebugMode        lnk_debug_mode_from_string(String8 string);
+internal LNK_TypeNameHashMode lnk_type_name_hash_mode_from_string(String8 string);
 
 ////////////////////////////////
 // Command Line Helpers

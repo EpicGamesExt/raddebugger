@@ -2493,7 +2493,84 @@ lnk_format_u128(U8 *buf, U64 buf_max, U64 length, U128 v)
 }
 
 internal
-THREAD_POOL_TASK_FUNC(lnk_replace_type_names_with_hashes_task)
+THREAD_POOL_TASK_FUNC(lnk_replace_type_names_with_hashes_lenient_task)
+{
+  ProfBeginFunction();
+
+  LNK_TypeNameReplacer *task        = raw_task;
+  Rng1U64               range       = task->ranges[task_id];
+  CV_DebugT             debug_t     = task->debug_t;
+  U64                   hash_length = task->hash_length;
+
+  B32          make_map  = task->make_map;
+  Arena       *map_arena = 0;
+  String8List *map       = 0;
+  if (make_map) {
+    map_arena = task->map_arena->v[task_id];
+    map       = &task->maps[task_id];
+  }
+
+  U64 hash_max_chars = hash_length;
+  U8  temp[128];
+
+  for (U64 leaf_idx = range.min; leaf_idx < range.max; ++leaf_idx) {
+    CV_Leaf leaf = cv_debug_t_get_leaf(debug_t, leaf_idx);
+    if (leaf.kind == CV_LeafKind_STRUCTURE || leaf.kind == CV_LeafKind_CLASS) {
+      CV_UDTInfo udt_info = cv_get_udt_info(leaf.kind, leaf.data);
+
+      if (udt_info.props & CV_TypeProp_HasUniqueName && udt_info.unique_name.size > hash_max_chars) {
+        // hash unique name
+        U128 name_hash;
+        blake3_hasher hasher; blake3_hasher_init(&hasher);
+        blake3_hasher_update(&hasher, udt_info.unique_name.str, udt_info.unique_name.size);
+        blake3_hasher_finalize(&hasher, (U8*)&name_hash, sizeof(name_hash));
+
+        // emit hash -> unique name map
+        if (make_map) {
+          lnk_format_u128(temp, sizeof(temp), hash_length, name_hash);
+          str8_list_pushf(map_arena, map, "%s %.*s\n", temp, str8_varg(udt_info.unique_name));
+        }
+
+        // parse leaf size
+        CV_NumericParsed dummy;
+        U64 numeric_size = cv_read_numeric(leaf.data, sizeof(CV_LeafStruct), &dummy);
+
+        U64 colon_pos = str8_find_needle_reverse(udt_info.name, 0, str8_lit("<lambda_"), 0);
+        B32 is_lambda = colon_pos != 0;
+
+        if (is_lambda) {
+          // replace display type string with unique type name hash
+          udt_info.name.size = lnk_format_u128(udt_info.name.str, udt_info.name.size, hash_length, name_hash);
+
+          // update leaf header
+          CV_LeafHeader *header = cv_debug_t_get_leaf_header(debug_t, leaf_idx);
+          header->size          = sizeof(CV_LeafKind) + sizeof(CV_LeafStruct) + numeric_size + udt_info.name.size + 1;
+
+          // discard unique name
+          CV_LeafStruct *lf = (CV_LeafStruct *)(header + 1);
+          lf->props &= ~CV_TypeProp_HasUniqueName;
+        } else {
+          // replace uniuqe type name with hash
+          udt_info.unique_name.str  = udt_info.name.str + udt_info.name.size + 1;
+          udt_info.unique_name.size = lnk_format_u128(udt_info.unique_name.str, udt_info.unique_name.size, hash_length, name_hash);
+
+          // update leaf header
+          CV_LeafHeader *header = cv_debug_t_get_leaf_header(debug_t, leaf_idx);
+          header->size          = sizeof(CV_LeafKind) +
+                                  sizeof(CV_LeafStruct) +
+                                  numeric_size +
+                                  udt_info.name.size + 1 +
+                                  udt_info.unique_name.size + 1;
+        }
+      }
+    }
+  }
+
+  ProfEnd();
+}
+
+internal
+THREAD_POOL_TASK_FUNC(lnk_replace_type_names_with_hashes_full_task)
 {
   ProfBeginFunction();
 
@@ -2518,54 +2595,39 @@ THREAD_POOL_TASK_FUNC(lnk_replace_type_names_with_hashes_task)
     if (leaf.kind == CV_LeafKind_STRUCTURE || leaf.kind == CV_LeafKind_CLASS) {
       CV_UDTInfo udt_info = cv_get_udt_info(leaf.kind, leaf.data);
 
-      CV_NumericParsed dummy;
-      U64 numeric_size = cv_read_numeric(leaf.data, sizeof(CV_LeafStruct), &dummy);
-
-      U128 name_hash;
-      if (udt_info.props & CV_TypeProp_HasUniqueName) {
-        blake3_hasher hasher; blake3_hasher_init(&hasher);
-        blake3_hasher_update(&hasher, udt_info.unique_name.str, udt_info.unique_name.size);
-        blake3_hasher_finalize(&hasher, (U8*)&name_hash, sizeof(name_hash));
-
-        if (make_map) {
-          lnk_format_u128(temp, sizeof(temp), hash_length, name_hash);
-          str8_list_pushf(map_arena, map, "%s %.*s\n", temp, str8_varg(udt_info.unique_name));
+      if (udt_info.name.size > hash_max_chars) {
+        // pick name to hash
+        String8 name;
+        if (udt_info.props & CV_TypeProp_HasUniqueName) {
+          name = udt_info.unique_name;
+        } else {
+          name = udt_info.name;
         }
-      } else {
+
+        // hash name
+        U128 name_hash;
         blake3_hasher hasher; blake3_hasher_init(&hasher);
         blake3_hasher_update(&hasher, udt_info.name.str, udt_info.name.size);
         blake3_hasher_finalize(&hasher, (U8*)&name_hash, sizeof(name_hash));
 
+        // emit hash -> name map
         if (make_map) {
           lnk_format_u128(temp, sizeof(temp), hash_length, name_hash);
-          str8_list_pushf(map_arena, map, "%s %.*s\n", temp, str8_varg(udt_info.name));
+          str8_list_pushf(map_arena, map, "%s %.*s\n", temp, str8_varg(name));
         }
-      }
 
-      if (udt_info.name.size < hash_max_chars) {
-
-        U64  buf_size = sizeof(CV_LeafHeader) + sizeof(CV_LeafStruct) + numeric_size + (hash_max_chars + 1) * 2;
-        U8  *buf      = push_array(arena, U8, buf_size);
-
-        MemoryCopy(buf + sizeof(CV_LeafHeader), leaf.data.str, sizeof(CV_LeafStruct) + numeric_size);
-
-        CV_LeafStruct *lf = (CV_LeafStruct *)(buf + sizeof(CV_LeafHeader));
-        lf->props &= ~CV_TypeProp_HasUniqueName;
-
-        udt_info.name.str  = buf + sizeof(CV_LeafHeader) + sizeof(CV_LeafStruct) + numeric_size;
-        udt_info.name.size = lnk_format_u128(udt_info.name.str, hash_max_chars + 1, hash_length, name_hash);
-
-        CV_LeafHeader *new_header  = (CV_LeafHeader *)buf;
-        new_header->size           = sizeof(CV_LeafKind) + sizeof(CV_LeafStruct) + numeric_size + udt_info.name.size + 1;
-        new_header->kind           = leaf.kind;
-
-        debug_t.v[leaf_idx] = buf;
-      } else {
+        // replace name with hash
         udt_info.name.size = lnk_format_u128(udt_info.name.str, udt_info.name.size, hash_length, name_hash);
 
+        // parse struct size
+        CV_NumericParsed dummy;
+        U64 numeric_size = cv_read_numeric(leaf.data, sizeof(CV_LeafStruct), &dummy);
+
+        // update header
         CV_LeafHeader *header = cv_debug_t_get_leaf_header(debug_t, leaf_idx);
         header->size          = sizeof(CV_LeafKind) + sizeof(CV_LeafStruct) + numeric_size + udt_info.name.size + 1;
 
+        // discard unique name
         CV_LeafStruct *lf = (CV_LeafStruct *)(header + 1);
         lf->props &= ~CV_TypeProp_HasUniqueName;
       }
@@ -2576,23 +2638,38 @@ THREAD_POOL_TASK_FUNC(lnk_replace_type_names_with_hashes_task)
 }
 
 internal void
-lnk_replace_type_names_with_hashes(TP_Context *tp, TP_Arena *arena, CV_DebugT debug_t, U64 hash_length, String8 map_name)
+lnk_replace_type_names_with_hashes(TP_Context *tp, TP_Arena *arena, CV_DebugT debug_t, LNK_TypeNameHashMode mode, U64 hash_length, String8 map_name)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(arena->v, arena->count);
 
+  // init task context
   LNK_TypeNameReplacer task = {0};
   task.debug_t              = debug_t;
   task.ranges               = tp_divide_work(scratch.arena, debug_t.count, tp->worker_count);
   task.hash_length          = Clamp(1, hash_length, 16);
+
   if (map_name.size > 0) {
     task.make_map  = 1;
     task.map_arena = tp_arena_alloc(tp);
     task.maps      = push_array(scratch.arena, String8List, tp->worker_count);
   }
 
-  tp_for_parallel(tp, arena, tp->worker_count, lnk_replace_type_names_with_hashes_task, &task);
+  // pick task function
+  TP_TaskFunc *func = 0;
+  switch (mode) {
+  case LNK_TypeNameHashMode_Null: 
+  case LNK_TypeNameHashMode_None:
+    break;
 
+  case LNK_TypeNameHashMode_Lenient: func = lnk_replace_type_names_with_hashes_lenient_task; break;
+  case LNK_TypeNameHashMode_Full:    func = lnk_replace_type_names_with_hashes_full_task;    break;
+  }
+
+  // run task
+  tp_for_parallel(tp, arena, tp->worker_count, func, &task);
+
+  // optionally write out map file 
   if (task.make_map) {
     String8List map = {0};
     str8_list_concat_in_place_array(&map, task.maps, tp->worker_count);
