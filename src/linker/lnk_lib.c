@@ -513,15 +513,22 @@ internal LNK_LibBuild
 lnk_build_lib(Arena *arena, COFF_MachineType machine, COFF_TimeStamp time_stamp, String8 dll_name, LNK_ObjList obj_list, LNK_ExportTable *exptab)
 {
   ProfBeginFunction();
+  Temp scratch = scratch_begin(&arena, 1);
+
   LNK_LibWriter *writer = lnk_lib_writer_alloc();
   for (LNK_ObjNode *obj_node = obj_list.first; obj_node != 0; obj_node = obj_node->next) {
     lnk_lib_writer_push_obj(writer, &obj_node->data);
   }
-  for (LNK_Export *exp = exptab->name_export_list.first; exp != 0; exp = exp->next) {
+
+  KeyValuePair *raw_export_arr = key_value_pairs_from_hash_table(scratch.arena, exptab->name_export_ht);
+  for (U64 i = 0; i < exptab->name_export_ht->count; ++i) {
+    LNK_Export *exp = raw_export_arr[i].value_raw;
     lnk_lib_writer_push_export(writer, machine, time_stamp, dll_name, exp);
   }
   LNK_LibBuild lib = lnk_lib_build_from_writer(arena, writer);
   lnk_lib_writer_release(&writer);
+
+  scratch_end(scratch);
   ProfEnd();
   return lib;
 }

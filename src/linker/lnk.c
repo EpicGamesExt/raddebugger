@@ -1544,8 +1544,14 @@ lnk_build_guard_tables(TP_Context       *tp,
   lnk_symbol_list_push(scratch.arena, &guard_symbol_list_table[GUARD_FIDS], entry_point_symbol);
   
   // push exports
-  for (LNK_Export *exp = exptab->name_export_list.first; exp != NULL; exp = exp->next) {
-    lnk_symbol_list_push(scratch.arena, &guard_symbol_list_table[GUARD_FIDS], exp->symbol);
+  {
+    Temp temp = temp_begin(scratch.arena);
+    KeyValuePair *raw_exports = key_value_pairs_from_hash_table(temp.arena, exptab->name_export_ht);
+    for (U64 i = 0; i < exptab->name_export_ht->count; ++i) {
+      LNK_Export *exp = raw_exports[i].value_raw;
+      lnk_symbol_list_push(scratch.arena, &guard_symbol_list_table[GUARD_FIDS], exp->symbol);
+    }
+    scratch_end(temp);
   }
   
   // TODO: push noname exports

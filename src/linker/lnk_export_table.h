@@ -30,8 +30,8 @@ typedef struct LNK_ExportArray
 typedef struct LNK_ExportTable
 {
   Arena         *arena;
-  LNK_ExportList name_export_list;
-  LNK_ExportList noname_export_list;
+  HashTable     *name_export_ht;
+  HashTable     *noname_export_ht;
   U64            voff_size;
   U64            max_ordinal;
   B8            *is_ordinal_used;

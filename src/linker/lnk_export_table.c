@@ -23,11 +23,15 @@ lnk_export_table_alloc(void)
 {
   ProfBeginFunction();
   Arena *arena = arena_alloc();
-  LNK_ExportTable *exptab = push_array(arena, LNK_ExportTable, 1);
-  exptab->arena = arena;
-  exptab->voff_size = sizeof(U32);
-  exptab->max_ordinal = max_U16;
-  exptab->is_ordinal_used = push_array(arena, B8, exptab->max_ordinal);
+
+  LNK_ExportTable *exptab  = push_array(arena, LNK_ExportTable, 1);
+  exptab->arena            = arena;
+  exptab->voff_size        = sizeof(U32);
+  exptab->max_ordinal      = max_U16;
+  exptab->is_ordinal_used  = push_array(arena, B8, exptab->max_ordinal);
+  exptab->name_export_ht   = hash_table_init(arena, 0x10000);
+  exptab->noname_export_ht = hash_table_init(arena, 0x100);
+
   ProfEnd();
   return exptab;
 }
@@ -44,12 +48,11 @@ lnk_export_table_release(LNK_ExportTable **exptab_ptr)
 internal LNK_Export *
 lnk_export_table_search(LNK_ExportTable *exptab, String8 name)
 {
-  for (LNK_Export *exp = exptab->name_export_list.first; exp != NULL; exp = exp->next) {
-    if (str8_match(exp->name, name, 0)) {
-      return exp;
-    }
+  KeyValuePair *kv = hash_table_search_string(exptab->name_export_ht, name);
+  if (kv) {
+    return kv->value_raw;
   }
-  return NULL;
+  return 0;
 }
 
 internal LNK_Export *
@@ -69,6 +72,7 @@ lnk_export_table_push_export(LNK_ExportTable *exptab, LNK_SymbolTable *symtab, L
     goto exit;
   }
   LNK_DefinedSymbol *def = &symbol->u.defined;
+
   
   // NOTE: It is possible to export a global variable as CODE
   // with following snippet:
@@ -141,14 +145,12 @@ lnk_export_table_push_export(LNK_ExportTable *exptab, LNK_SymbolTable *symtab, L
   exp->next       = 0;
   exp->name       = push_str8_copy(exptab->arena, exp_parse->alias.size > 0 ? exp_parse->alias : exp_parse->name);
   exp->symbol     = symbol;
-  exp->id         = exptab->name_export_list.count;
+  exp->id         = exptab->name_export_ht->count;
   exp->ordinal    = ordinal;
   exp->type       = type;
   exp->is_private = 0; // exports through directives are public
-  
-  // push node
-  SLLQueuePush(exptab->name_export_list.first, exptab->name_export_list.last, exp);
-  exptab->name_export_list.count += 1;
+
+  hash_table_push_string_raw(exptab->arena, exptab->name_export_ht, exp->name, exp);
   
   exit:;
   return exp;
@@ -175,7 +177,7 @@ lnk_build_edata(LNK_ExportTable *exptab, LNK_SectionTable *st, LNK_SymbolTable *
   Temp scratch = scratch_begin(0, 0);
   
   // is export table empty?
-  if (exptab->name_export_list.count == 0 && exptab->noname_export_list.count == 0) {
+  if (exptab->name_export_ht->count == 0 && exptab->noname_export_ht->count == 0) {
     goto exit;
   }
   
@@ -198,8 +200,8 @@ lnk_build_edata(LNK_ExportTable *exptab, LNK_SectionTable *st, LNK_SymbolTable *
   // push header
   PE_ExportTable *header             = push_array(edata->arena, PE_ExportTable, 1);
   header->ordinal_base               = safe_cast_u16(ordinal_low + 1);
-  header->export_address_table_count = safe_cast_u32(exptab->name_export_list.count + exptab->noname_export_list.count);
-  header->name_pointer_table_count   = safe_cast_u32(exptab->name_export_list.count);
+  header->export_address_table_count = safe_cast_u32(exptab->name_export_ht->count + exptab->noname_export_ht->count);
+  header->name_pointer_table_count   = safe_cast_u32(exptab->name_export_ht->count);
   
   String8 header_data = str8((U8*)header, sizeof(*header));
   String8 image_name_cstr = push_cstr(edata->arena, str8_skip_last_slash(image_name));
@@ -238,12 +240,15 @@ lnk_build_edata(LNK_ExportTable *exptab, LNK_SectionTable *st, LNK_SymbolTable *
   }
   
   B8 *is_ordinal_bound = push_array(scratch.arena, B8, exptab->max_ordinal);
-  LNK_ExportList *exp_list_arr[] = { &exptab->name_export_list, &exptab->noname_export_list };
-  for (LNK_ExportList *list_ptr = exp_list_arr[0], *list_opl = list_ptr + ArrayCount(exp_list_arr);
-       list_ptr < list_opl;
-       list_ptr += 1) {
-    for (LNK_Export *exp = list_ptr->first; exp != 0; exp = exp->next) {
-      String8 name_cstr = push_cstr(edata->arena, exp->name);
+  HashTable *exp_ht_arr[] = { exptab->name_export_ht, exptab->noname_export_ht };
+  for (HashTable **ht_ptr = &exp_ht_arr[0], **ht_opl = ht_ptr + ArrayCount(exp_ht_arr);
+       ht_ptr < ht_opl;
+       ht_ptr += 1) {
+    KeyValuePair *kv_arr = key_value_pairs_from_hash_table(scratch.arena, *ht_ptr);
+
+    for (U64 i = 0; i < (*ht_ptr)->count; ++i) {
+      LNK_Export *exp       = kv_arr[i].value_raw;
+      String8     name_cstr = push_cstr(edata->arena, exp->name);
       
       // push name string
       LNK_Chunk *name_chunk = lnk_section_push_chunk_data(edata, string_buffer_chunk, name_cstr, str8(0,0));
