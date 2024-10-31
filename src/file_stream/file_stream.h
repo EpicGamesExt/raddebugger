@@ -12,7 +12,8 @@ struct FS_RangeNode
 {
   FS_RangeNode *next;
   Rng1U64 range;
-  B32 is_working;
+  U64 request_count;
+  U64 completion_count;
 };
 
 typedef struct FS_RangeSlot FS_RangeSlot;
@@ -114,12 +115,11 @@ internal U64 fs_timestamp_from_path(String8 path);
 internal U64 fs_size_from_path(String8 path);
 
 ////////////////////////////////
-//~ rjf: Streamer Threads
+//~ rjf: Streaming Work
 
 internal B32 fs_u2s_enqueue_req(Rng1U64 range, String8 path, U64 endt_us);
 internal void fs_u2s_dequeue_req(Arena *arena, Rng1U64 *range_out, String8 *path_out);
-
-internal void fs_streamer_thread__entry_point(void *p);
+ASYNC_WORK_DEF(fs_stream_work);
 
 ////////////////////////////////
 //~ rjf: Change Detector Thread

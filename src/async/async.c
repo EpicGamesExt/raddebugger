@@ -40,9 +40,10 @@ async_push_work_(ASYNC_WorkFunctionType *work_function, ASYNC_WorkParams *params
   B32 result = 0;
   ASYNC_Work work = {0};
   work.work_function = work_function;
-  work.input         = params->input;
-  work.output        = params->output;
-  work.semaphore     = params->semaphore;
+  work.input              = params->input;
+  work.output             = params->output;
+  work.semaphore          = params->semaphore;
+  work.completion_counter = params->completion_counter;
   OS_MutexScope(async_shared->u2w_ring_mutex) for(;;)
   {
     U64 unconsumed_size = async_shared->u2w_ring_write_pos - async_shared->u2w_ring_read_pos;
@@ -62,6 +63,10 @@ async_push_work_(ASYNC_WorkFunctionType *work_function, ASYNC_WorkParams *params
       break;
     }
     os_condition_variable_wait(async_shared->u2w_ring_cv, async_shared->u2w_ring_mutex, params->endt_us);
+  }
+  if(result)
+  {
+    os_condition_variable_broadcast(async_shared->u2w_ring_cv);
   }
   return result;
 }
@@ -127,6 +132,7 @@ async_work_thread__entry_point(void *p)
       }
       os_condition_variable_wait(async_shared->u2w_ring_cv, async_shared->u2w_ring_mutex, max_U64);
     }
+    os_condition_variable_broadcast(async_shared->u2w_ring_cv);
     
     //- rjf: run work
     void *work_out = work.work_function(thread_idx, work.input);
@@ -141,6 +147,12 @@ async_work_thread__entry_point(void *p)
     if(!os_handle_match(work.semaphore, os_handle_zero()))
     {
       os_semaphore_drop(work.semaphore);
+    }
+    
+    //- rjf: increment completion counter
+    if(work.completion_counter != 0)
+    {
+      ins_atomic_u64_inc_eval(work.completion_counter);
     }
   }
 }

@@ -20,6 +20,7 @@ struct ASYNC_WorkParams
   void *input;
   void **output;
   OS_Handle semaphore;
+  U64 *completion_counter;
   U64 endt_us;
 };
 
@@ -30,6 +31,7 @@ struct ASYNC_Work
   void *input;
   void **output;
   OS_Handle semaphore;
+  U64 *completion_counter;
 };
 
 ////////////////////////////////

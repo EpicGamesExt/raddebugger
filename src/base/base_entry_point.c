@@ -27,6 +27,9 @@ main_thread_base_entry_point(void (*entry_point)(CmdLine *cmdline), char **argum
   }
   
   //- rjf: initialize all included layers
+#if defined(ASYNC_H) && !defined(ASYNC_INIT_MANUAL)
+  async_init();
+#endif
 #if defined(TASK_SYSTEM_H) && !defined(TS_INIT_MANUAL)
   ts_init();
 #endif

@@ -214,7 +214,7 @@
 # define ins_atomic_ptr_eval_assign(x,c)        (void*)ins_atomic_u32_eval_assign((volatile U32 *)(x), (U32)(c))
 # define ins_atomic_ptr_eval(x)                 (void*)ins_atomic_u32_eval((volatile U32 *)x)
 #else
-# error Atomic intrinsics for pointers not defined for this achitecture.
+# error Atomic intrinsics for pointers not defined for this architecture.
 #endif
 
 ////////////////////////////////
