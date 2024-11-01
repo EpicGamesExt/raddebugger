@@ -2482,10 +2482,10 @@ lnk_format_u128(U8 *buf, U64 buf_max, U64 length, U128 v)
   U64 size = 0;
   if (length > 0 && buf_max > 0) {
     if (length <= 8) {
-      U64 mask = length == 8 ? max_U32 : (1ull << (length*8)) - 1;
+      U64 mask = length == 8 ? max_U64 : (1ull << (length*8)) - 1;
       size = raddbg_snprintf((char*)buf, buf_max - 1, "%llX", v.u64[0] & mask);
     } else {
-      U64 mask1 = length == 16 ? max_U64 : (1ull << (length*8)) - 1;
+      U64 mask1 = length == 16 ? max_U64 : (1ull << ((length-8)*8)) - 1;
       size = raddbg_snprintf((char*)buf, buf_max, "%llX%llX", v.u64[1] & mask1, v.u64[0]);
     }
   }
