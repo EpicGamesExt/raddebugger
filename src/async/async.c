@@ -2,16 +2,6 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
-//~ rjf: Basic Type Functions
-
-internal ASYNC_Task
-async_task_zero(void)
-{
-  ASYNC_Task task = {0};
-  return task;
-}
-
-////////////////////////////////
 //~ rjf: Top-Level Layer Initialization
 
 internal void
@@ -85,7 +75,7 @@ async_push_work_(ASYNC_WorkFunctionType *work_function, ASYNC_WorkParams *params
 //~ rjf: Task-Based Work Helper
 
 internal void
-async_task_list_push(Arena *arena, ASYNC_TaskList *list, ASYNC_Task t)
+async_task_list_push(Arena *arena, ASYNC_TaskList *list, ASYNC_Task *t)
 {
   ASYNC_TaskNode *n = push_array(arena, ASYNC_TaskNode, 1);
   SLLQueuePush(list->first, list->last, n);
@@ -93,33 +83,33 @@ async_task_list_push(Arena *arena, ASYNC_TaskList *list, ASYNC_Task t)
   list->count += 1;
 }
 
-internal ASYNC_Task
-async_task_launch_(ASYNC_WorkFunctionType *work_function, ASYNC_WorkParams *params)
+internal ASYNC_Task *
+async_task_launch_(Arena *arena, ASYNC_WorkFunctionType *work_function, ASYNC_WorkParams *params)
 {
-  ASYNC_Task task = {0};
-  task.semaphore = os_semaphore_alloc(1, 1, str8_zero());
+  ASYNC_Task *task = push_array(arena, ASYNC_Task, 1);
+  task->semaphore = os_semaphore_alloc(1, 1, str8_zero());
   ASYNC_WorkParams params_refined = {0};
   MemoryCopyStruct(&params_refined, params);
   params_refined.endt_us = max_U64;
-  params_refined.semaphore = task.semaphore;
+  params_refined.semaphore = task->semaphore;
   if(params_refined.output == 0)
   {
-    params_refined.output = &task.output;
+    params_refined.output = &task->output;
   }
   async_push_work_(work_function, &params_refined);
   return task;
 }
 
 internal void *
-async_task_join(ASYNC_Task task)
+async_task_join(ASYNC_Task *task)
 {
   void *result = 0;
-  if(!os_handle_match(task.semaphore, os_handle_zero()))
+  if(task != 0 && !os_handle_match(task->semaphore, os_handle_zero()))
   {
-    os_semaphore_take(task.semaphore, max_U64);
-    os_semaphore_release(task.semaphore);
-    MemoryZeroStruct(&task.semaphore);
-    result = (void *)ins_atomic_u64_eval(&task.output);
+    os_semaphore_take(task->semaphore, max_U64);
+    os_semaphore_release(task->semaphore);
+    MemoryZeroStruct(&task->semaphore);
+    result = (void *)ins_atomic_u64_eval(&task->output);
   }
   return result;
 }

@@ -48,7 +48,7 @@ typedef struct ASYNC_TaskNode ASYNC_TaskNode;
 struct ASYNC_TaskNode
 {
   ASYNC_TaskNode *next;
-  ASYNC_Task v;
+  ASYNC_Task *v;
 };
 
 typedef struct ASYNC_TaskList ASYNC_TaskList;
@@ -86,11 +86,6 @@ struct ASYNC_Shared
 global ASYNC_Shared *async_shared = 0;
 
 ////////////////////////////////
-//~ rjf: Basic Type Functions
-
-internal ASYNC_Task async_task_zero(void);
-
-////////////////////////////////
 //~ rjf: Top-Level Layer Initialization
 
 internal void async_init(void);
@@ -109,10 +104,10 @@ internal B32 async_push_work_(ASYNC_WorkFunctionType *work_function, ASYNC_WorkP
 ////////////////////////////////
 //~ rjf: Task-Based Work Helper
 
-internal void async_task_list_push(Arena *arena, ASYNC_TaskList *list, ASYNC_Task t);
-internal ASYNC_Task async_task_launch_(ASYNC_WorkFunctionType *work_function, ASYNC_WorkParams *params);
-#define async_task_launch(work_function, ...) async_task_launch_((work_function), &(ASYNC_WorkParams){.endt_us = max_U64, __VA_ARGS__})
-internal void *async_task_join(ASYNC_Task task);
+internal void async_task_list_push(Arena *arena, ASYNC_TaskList *list, ASYNC_Task *t);
+internal ASYNC_Task *async_task_launch_(Arena *arena, ASYNC_WorkFunctionType *work_function, ASYNC_WorkParams *params);
+#define async_task_launch(arena, work_function, ...) async_task_launch_((arena), (work_function), &(ASYNC_WorkParams){.endt_us = max_U64, __VA_ARGS__})
+internal void *async_task_join(ASYNC_Task *task);
 #define async_task_join_struct(task, T) (T *)async_task_join(task)
 
 ////////////////////////////////

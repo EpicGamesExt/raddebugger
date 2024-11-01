@@ -5755,73 +5755,73 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
   //- rjf: kickoff EXE hash
   //
   P2R_EXEHashIn exe_hash_in = {in->input_exe_data};
-  ASYNC_Task exe_hash_task = async_task_launch(p2r_exe_hash_work, .input = &exe_hash_in);
+  ASYNC_Task *exe_hash_task = async_task_launch(scratch.arena, p2r_exe_hash_work, .input = &exe_hash_in);
   
   //////////////////////////////////////////////////////////////
   //- rjf: kickoff TPI hash parse
   //
   P2R_TPIHashParseIn tpi_hash_in = {0};
-  ASYNC_Task tpi_hash_task = {0};
+  ASYNC_Task *tpi_hash_task = 0;
   if(tpi != 0)
   {
     tpi_hash_in.strtbl    = strtbl;
     tpi_hash_in.tpi       = tpi;
     tpi_hash_in.hash_data = msf_data_from_stream(msf, tpi->hash_sn);
     tpi_hash_in.aux_data  = msf_data_from_stream(msf, tpi->hash_sn_aux);
-    tpi_hash_task = async_task_launch(p2r_tpi_hash_parse_work, .input = &tpi_hash_in);
+    tpi_hash_task = async_task_launch(scratch.arena, p2r_tpi_hash_parse_work, .input = &tpi_hash_in);
   }
   
   //////////////////////////////////////////////////////////////
   //- rjf: kickoff TPI leaf parse
   //
   P2R_TPILeafParseIn tpi_leaf_in = {0};
-  ASYNC_Task tpi_leaf_task = {0};
+  ASYNC_Task *tpi_leaf_task = 0;
   if(tpi != 0)
   {
     tpi_leaf_in.leaf_data   = pdb_leaf_data_from_tpi(tpi);
     tpi_leaf_in.itype_first = tpi->itype_first;
-    tpi_leaf_task = async_task_launch(p2r_tpi_leaf_parse_work, .input = &tpi_leaf_in);
+    tpi_leaf_task = async_task_launch(scratch.arena, p2r_tpi_leaf_parse_work, .input = &tpi_leaf_in);
   }
   
   //////////////////////////////////////////////////////////////
   //- rjf: kickoff IPI hash parse
   //
   P2R_TPIHashParseIn ipi_hash_in = {0};
-  ASYNC_Task ipi_hash_task = {0};
+  ASYNC_Task *ipi_hash_task = 0;
   if(ipi != 0)
   {
     ipi_hash_in.strtbl    = strtbl;
     ipi_hash_in.tpi       = ipi;
     ipi_hash_in.hash_data = msf_data_from_stream(msf, ipi->hash_sn);
     ipi_hash_in.aux_data  = msf_data_from_stream(msf, ipi->hash_sn_aux);
-    ipi_hash_task = async_task_launch(p2r_tpi_hash_parse_work, .input = &ipi_hash_in);
+    ipi_hash_task = async_task_launch(scratch.arena, p2r_tpi_hash_parse_work, .input = &ipi_hash_in);
   }
   
   //////////////////////////////////////////////////////////////
   //- rjf: kickoff IPI leaf parse
   //
   P2R_TPILeafParseIn ipi_leaf_in = {0};
-  ASYNC_Task ipi_leaf_task = {0};
+  ASYNC_Task *ipi_leaf_task = 0;
   if(ipi != 0)
   {
     ipi_leaf_in.leaf_data   = pdb_leaf_data_from_tpi(ipi);
     ipi_leaf_in.itype_first = ipi->itype_first;
-    ipi_leaf_task = async_task_launch(p2r_tpi_leaf_parse_work, .input = &ipi_leaf_in);
+    ipi_leaf_task = async_task_launch(scratch.arena, p2r_tpi_leaf_parse_work, .input = &ipi_leaf_in);
   }
   
   //////////////////////////////////////////////////////////////
   //- rjf: kickoff top-level global symbol stream parse
   //
   P2R_SymbolStreamParseIn sym_parse_in = {dbi ? msf_data_from_stream(msf, dbi->sym_sn) : str8_zero()};
-  ASYNC_Task sym_parse_task = !dbi ? async_task_zero() : async_task_launch(p2r_symbol_stream_parse_work, .input = &sym_parse_in);
+  ASYNC_Task *sym_parse_task = !dbi ? 0 : async_task_launch(scratch.arena, p2r_symbol_stream_parse_work, .input = &sym_parse_in);
   
   //////////////////////////////////////////////////////////////
   //- rjf: kickoff compilation unit parses
   //
   P2R_CompUnitParseIn comp_unit_parse_in = {dbi ? pdb_data_from_dbi_range(dbi, PDB_DbiRange_ModuleInfo) : str8_zero()};
   P2R_CompUnitContributionsParseIn comp_unit_contributions_parse_in = {dbi ? pdb_data_from_dbi_range(dbi, PDB_DbiRange_SecCon) : str8_zero(), coff_sections};
-  ASYNC_Task comp_unit_parse_task               = !dbi ? async_task_zero() : async_task_launch(p2r_comp_unit_parse_work, .input = &comp_unit_parse_in);
-  ASYNC_Task comp_unit_contributions_parse_task = !dbi ? async_task_zero() : async_task_launch(p2r_comp_unit_contributions_parse_work, .input = &comp_unit_contributions_parse_in);
+  ASYNC_Task *comp_unit_parse_task               = !dbi ? 0 : async_task_launch(scratch.arena, p2r_comp_unit_parse_work, .input = &comp_unit_parse_in);
+  ASYNC_Task *comp_unit_contributions_parse_task = !dbi ? 0 : async_task_launch(scratch.arena, p2r_comp_unit_contributions_parse_work, .input = &comp_unit_contributions_parse_in);
   
   //////////////////////////////////////////////////////////////
   //- rjf: join compilation unit parses
@@ -5846,18 +5846,18 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
   {
     //- rjf: kick off tasks
     P2R_SymbolStreamParseIn *sym_tasks_inputs = push_array(scratch.arena, P2R_SymbolStreamParseIn, comp_unit_count);
-    ASYNC_Task *sym_tasks = push_array(scratch.arena, ASYNC_Task, comp_unit_count);
+    ASYNC_Task **sym_tasks = push_array(scratch.arena, ASYNC_Task *, comp_unit_count);
     P2R_C13StreamParseIn *c13_tasks_inputs = push_array(scratch.arena, P2R_C13StreamParseIn, comp_unit_count);
-    ASYNC_Task *c13_tasks = push_array(scratch.arena, ASYNC_Task, comp_unit_count);
+    ASYNC_Task **c13_tasks = push_array(scratch.arena, ASYNC_Task *, comp_unit_count);
     for(U64 idx = 0; idx < comp_unit_count; idx += 1)
     {
       PDB_CompUnit *unit = comp_units->units[idx];
       sym_tasks_inputs[idx].data = pdb_data_from_unit_range(msf, unit, PDB_DbiCompUnitRange_Symbols);
-      sym_tasks[idx]             = async_task_launch(p2r_symbol_stream_parse_work, .input = &sym_tasks_inputs[idx]);
+      sym_tasks[idx]             = async_task_launch(scratch.arena, p2r_symbol_stream_parse_work, .input = &sym_tasks_inputs[idx]);
       c13_tasks_inputs[idx].data          = pdb_data_from_unit_range(msf, unit, PDB_DbiCompUnitRange_C13);
       c13_tasks_inputs[idx].strtbl        = raw_strtbl;
       c13_tasks_inputs[idx].coff_sections = coff_sections;
-      c13_tasks[idx]                      = async_task_launch(p2r_c13_stream_parse_work, .input = &c13_tasks_inputs[idx]);
+      c13_tasks[idx]                      = async_task_launch(scratch.arena, p2r_c13_stream_parse_work, .input = &c13_tasks_inputs[idx]);
     }
     
     //- rjf: join tasks
@@ -5960,7 +5960,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
   //- rjf: kick off unit conversion & source file collection
   //
   P2R_UnitConvertIn unit_convert_in = {strtbl, coff_sections, comp_units, comp_unit_contributions, sym_for_unit, c13_for_unit};
-  ASYNC_Task unit_convert_task = async_task_launch(p2r_units_convert_work, .input = &unit_convert_in);
+  ASYNC_Task *unit_convert_task = async_task_launch(scratch.arena, p2r_units_convert_work, .input = &unit_convert_in);
   
   //////////////////////////////////////////////////////////////
   //- rjf: join global sym stream parse
@@ -5995,7 +5995,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
   //
   P2R_LinkNameMap link_name_map__in_progress = {0};
   P2R_LinkNameMapBuildIn link_name_map_build_in = {0};
-  ASYNC_Task link_name_map_task = {0};
+  ASYNC_Task *link_name_map_task = 0;
   if(sym != 0) ProfScope("kick off link name map build task")
   {
     link_name_map__in_progress.buckets_count = symbol_count_prediction;
@@ -6003,7 +6003,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
     link_name_map_build_in.sym = sym;
     link_name_map_build_in.coff_sections = coff_sections;
     link_name_map_build_in.link_name_map = &link_name_map__in_progress;
-    link_name_map_task = async_task_launch(p2r_link_name_map_build_work, .input = &link_name_map_build_in);
+    link_name_map_task = async_task_launch(scratch.arena, p2r_link_name_map_build_work, .input = &link_name_map_build_in);
   }
   
   //////////////////////////////////////////////////////////////
@@ -6043,7 +6043,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
     U64 task_size_itypes = 1024;
     U64 tasks_count = ((U64)itype_opl+(task_size_itypes-1))/task_size_itypes;
     P2R_ITypeFwdMapFillIn *tasks_inputs = push_array(scratch.arena, P2R_ITypeFwdMapFillIn, tasks_count);
-    ASYNC_Task *tasks = push_array(scratch.arena, ASYNC_Task, tasks_count);
+    ASYNC_Task **tasks = push_array(scratch.arena, ASYNC_Task *, tasks_count);
     for(U64 idx = 0; idx < tasks_count; idx += 1)
     {
       tasks_inputs[idx].tpi_hash      = tpi_hash;
@@ -6052,7 +6052,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
       tasks_inputs[idx].itype_opl     = tasks_inputs[idx].itype_first + task_size_itypes;
       tasks_inputs[idx].itype_opl     = ClampTop(tasks_inputs[idx].itype_opl, itype_opl);
       tasks_inputs[idx].itype_fwd_map = itype_fwd_map;
-      tasks[idx] = async_task_launch(p2r_itype_fwd_map_fill_work, .input = &tasks_inputs[idx]);
+      tasks[idx] = async_task_launch(scratch.arena, p2r_itype_fwd_map_fill_work, .input = &tasks_inputs[idx]);
     }
     
     //- rjf: join all tasks
@@ -6082,7 +6082,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
     U64 task_size_itypes = 1024;
     U64 tasks_count = ((U64)itype_opl+(task_size_itypes-1))/task_size_itypes;
     P2R_ITypeChainBuildIn *tasks_inputs = push_array(scratch.arena, P2R_ITypeChainBuildIn, tasks_count);
-    ASYNC_Task *tasks = push_array(scratch.arena, ASYNC_Task, tasks_count);
+    ASYNC_Task **tasks = push_array(scratch.arena, ASYNC_Task *, tasks_count);
     for(U64 idx = 0; idx < tasks_count; idx += 1)
     {
       tasks_inputs[idx].tpi_leaf      = tpi_leaf;
@@ -6091,7 +6091,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
       tasks_inputs[idx].itype_opl     = ClampTop(tasks_inputs[idx].itype_opl, itype_opl);
       tasks_inputs[idx].itype_chains  = itype_chains;
       tasks_inputs[idx].itype_fwd_map = itype_fwd_map;
-      tasks[idx] = async_task_launch(p2r_itype_chain_build_work, .input = &tasks_inputs[idx]);
+      tasks[idx] = async_task_launch(scratch.arena, p2r_itype_chain_build_work, .input = &tasks_inputs[idx]);
     }
     
     //- rjf: join all tasks
@@ -6550,7 +6550,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
   U64 udt_task_size_itypes = 4096;
   U64 udt_tasks_count = ((U64)itype_opl+(udt_task_size_itypes-1))/udt_task_size_itypes;
   P2R_UDTConvertIn *udt_tasks_inputs = push_array(scratch.arena, P2R_UDTConvertIn, udt_tasks_count);
-  ASYNC_Task *udt_tasks = push_array(scratch.arena, ASYNC_Task, udt_tasks_count);
+  ASYNC_Task **udt_tasks = push_array(scratch.arena, ASYNC_Task *, udt_tasks_count);
   if(in->flags & P2R_ConvertFlag_UDTs) ProfScope("types pass 4: kick off UDT build")
   {
     for(U64 idx = 0; idx < udt_tasks_count; idx += 1)
@@ -6561,7 +6561,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
       udt_tasks_inputs[idx].itype_opl       = ClampTop(udt_tasks_inputs[idx].itype_opl, itype_opl);
       udt_tasks_inputs[idx].itype_fwd_map   = itype_fwd_map;
       udt_tasks_inputs[idx].itype_type_ptrs = itype_type_ptrs;
-      udt_tasks[idx] = async_task_launch(p2r_udt_convert_work, .input = &udt_tasks_inputs[idx]);
+      udt_tasks[idx] = async_task_launch(scratch.arena, p2r_udt_convert_work, .input = &udt_tasks_inputs[idx]);
     }
   }
   
@@ -6608,7 +6608,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
     U64 global_stream_syms_per_task = sym ? sym->sym_ranges.count/global_stream_subdivision_tasks_count : 0;
     U64 tasks_count = comp_unit_count + global_stream_subdivision_tasks_count;
     P2R_SymbolStreamConvertIn *tasks_inputs = push_array(scratch.arena, P2R_SymbolStreamConvertIn, tasks_count);
-    ASYNC_Task *tasks = push_array(scratch.arena, ASYNC_Task, tasks_count);
+    ASYNC_Task **tasks = push_array(scratch.arena, ASYNC_Task *, tasks_count);
     ProfScope("kick off all symbol conversion tasks")
     {
       for(U64 idx = 0; idx < tasks_count; idx += 1)
@@ -6635,7 +6635,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
           tasks_inputs[idx].sym_ranges_opl  = sym_for_unit[idx-global_stream_subdivision_tasks_count]->sym_ranges.count;
           tasks_inputs[idx].first_inline_site_line_table = units_first_inline_site_line_tables[idx-global_stream_subdivision_tasks_count];
         }
-        tasks[idx] = async_task_launch(p2r_symbol_stream_convert_work, .input = &tasks_inputs[idx]);
+        tasks[idx] = async_task_launch(scratch.arena, p2r_symbol_stream_convert_work, .input = &tasks_inputs[idx]);
       }
     }
     
@@ -7311,11 +7311,11 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
   //////////////////////////////
   //- rjf: kick off line tables baking
   //
-  ASYNC_Task bake_line_tables_task = {0};
+  ASYNC_Task *bake_line_tables_task = 0;
   {
     P2R_BakeLineTablesIn *in = push_array(scratch.arena, P2R_BakeLineTablesIn, 1);
     in->line_tables = &in_params->line_tables;
-    bake_line_tables_task = async_task_launch(p2r_bake_line_tables_work, .input = in);
+    bake_line_tables_task = async_task_launch(scratch.arena, p2r_bake_line_tables_work, .input = in);
   }
   
   //////////////////////////////
@@ -7345,7 +7345,7 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
       in->top = &bake_string_map_topology;
       in->maps = bake_string_maps__in_progress;
       in->list = &in_params->src_files;
-      async_task_list_push(scratch.arena, &bake_string_map_build_tasks, async_task_launch(p2r_bake_src_files_strings_work, .input = in));
+      async_task_list_push(scratch.arena, &bake_string_map_build_tasks, async_task_launch(scratch.arena, p2r_bake_src_files_strings_work, .input = in));
     }
     
     // rjf: units
@@ -7355,7 +7355,7 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
       in->top = &bake_string_map_topology;
       in->maps = bake_string_maps__in_progress;
       in->list = &in_params->units;
-      async_task_list_push(scratch.arena, &bake_string_map_build_tasks, async_task_launch(p2r_bake_units_strings_work, .input = in));
+      async_task_list_push(scratch.arena, &bake_string_map_build_tasks, async_task_launch(scratch.arena, p2r_bake_units_strings_work, .input = in));
     }
     
     // rjf: types
@@ -7386,7 +7386,7 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
             chunk_off = 0;
           }
         }
-        async_task_list_push(scratch.arena, &bake_string_map_build_tasks, async_task_launch(p2r_bake_types_strings_work, .input = in));
+        async_task_list_push(scratch.arena, &bake_string_map_build_tasks, async_task_launch(scratch.arena, p2r_bake_types_strings_work, .input = in));
       }
     }
     
@@ -7418,7 +7418,7 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
             chunk_off = 0;
           }
         }
-        async_task_list_push(scratch.arena, &bake_string_map_build_tasks, async_task_launch(p2r_bake_udts_strings_work, .input = in));
+        async_task_list_push(scratch.arena, &bake_string_map_build_tasks, async_task_launch(scratch.arena, p2r_bake_udts_strings_work, .input = in));
       }
     }
     
@@ -7458,7 +7458,7 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
               chunk_off = 0;
             }
           }
-          async_task_list_push(scratch.arena, &bake_string_map_build_tasks, async_task_launch(p2r_bake_symbols_strings_work, .input = in));
+          async_task_list_push(scratch.arena, &bake_string_map_build_tasks, async_task_launch(scratch.arena, p2r_bake_symbols_strings_work, .input = in));
         }
       }
     }
@@ -7491,7 +7491,7 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
             chunk_off = 0;
           }
         }
-        async_task_list_push(scratch.arena, &bake_string_map_build_tasks, async_task_launch(p2r_bake_scopes_strings_work, .input = in));
+        async_task_list_push(scratch.arena, &bake_string_map_build_tasks, async_task_launch(scratch.arena, p2r_bake_scopes_strings_work, .input = in));
       }
     }
   }
@@ -7500,14 +7500,14 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
   //- rjf: kick off name map building tasks
   //
   P2R_BuildBakeNameMapIn build_bake_name_map_in[RDI_NameMapKind_COUNT] = {0};
-  ASYNC_Task build_bake_name_map_task[RDI_NameMapKind_COUNT] = {0};
+  ASYNC_Task *build_bake_name_map_task[RDI_NameMapKind_COUNT] = {0};
   for(RDI_NameMapKind k = (RDI_NameMapKind)(RDI_NameMapKind_NULL+1);
       k < RDI_NameMapKind_COUNT;
       k = (RDI_NameMapKind)(k+1))
   {
     build_bake_name_map_in[k].k = k;
     build_bake_name_map_in[k].params = in_params;
-    build_bake_name_map_task[k] = async_task_launch(p2r_build_bake_name_map_work, .input = &build_bake_name_map_in[k]);
+    build_bake_name_map_task[k] = async_task_launch(scratch.arena, p2r_build_bake_name_map_work, .input = &build_bake_name_map_in[k]);
   }
   
   //////////////////////////////
@@ -7529,7 +7529,7 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
   {
     U64 slots_per_task = 16384;
     U64 num_tasks = (bake_string_map_topology.slots_count+slots_per_task-1)/slots_per_task;
-    ASYNC_Task *tasks = push_array(scratch.arena, ASYNC_Task, num_tasks);
+    ASYNC_Task **tasks = push_array(scratch.arena, ASYNC_Task *, num_tasks);
     
     // rjf: kickoff tasks
     for(U64 task_idx = 0; task_idx < num_tasks; task_idx += 1)
@@ -7541,7 +7541,7 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
       in->dst_map = unsorted_bake_string_map;
       in->slot_idx_range = r1u64(task_idx*slots_per_task, task_idx*slots_per_task + slots_per_task);
       in->slot_idx_range.max = Min(in->slot_idx_range.max, in->top->slots_count);
-      tasks[task_idx] = async_task_launch(p2r_bake_string_map_join_work, .input = in);
+      tasks[task_idx] = async_task_launch(scratch.arena, p2r_bake_string_map_join_work, .input = in);
     }
     
     // rjf: join tasks
@@ -7578,7 +7578,7 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
           in->slot_count = bake_string_map_topology.slots_count - in->slot_idx;
         }
       }
-      async_task_list_push(scratch.arena, &sort_bake_string_map_tasks, async_task_launch(p2r_bake_string_map_sort_work, .input = in));
+      async_task_list_push(scratch.arena, &sort_bake_string_map_tasks, async_task_launch(scratch.arena, p2r_bake_string_map_sort_work, .input = in));
     }
   }
   
@@ -7608,31 +7608,31 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
   //- rjf: kick off pass 2 tasks
   //
   P2R_BakeUnitsIn bake_units_top_level_in = {&bake_strings, path_tree, &in_params->units};
-  ASYNC_Task bake_units_task = async_task_launch(p2r_bake_units_work, .input = &bake_units_top_level_in);
+  ASYNC_Task *bake_units_task = async_task_launch(scratch.arena, p2r_bake_units_work, .input = &bake_units_top_level_in);
   P2R_BakeUnitVMapIn bake_unit_vmap_in = {&in_params->units};
-  ASYNC_Task bake_unit_vmap_task = async_task_launch(p2r_bake_unit_vmap_work, .input = &bake_unit_vmap_in);
+  ASYNC_Task *bake_unit_vmap_task = async_task_launch(scratch.arena, p2r_bake_unit_vmap_work, .input = &bake_unit_vmap_in);
   P2R_BakeSrcFilesIn bake_src_files_in = {&bake_strings, path_tree, &in_params->src_files};
-  ASYNC_Task bake_src_files_task = async_task_launch(p2r_bake_src_files_work, .input = &bake_src_files_in);
+  ASYNC_Task *bake_src_files_task = async_task_launch(scratch.arena, p2r_bake_src_files_work, .input = &bake_src_files_in);
   P2R_BakeUDTsIn bake_udts_in = {&bake_strings, &in_params->udts};
-  ASYNC_Task bake_udts_task = async_task_launch(p2r_bake_udts_work, .input = &bake_udts_in);
+  ASYNC_Task *bake_udts_task = async_task_launch(scratch.arena, p2r_bake_udts_work, .input = &bake_udts_in);
   P2R_BakeGlobalVariablesIn bake_global_variables_in = {&bake_strings, &in_params->global_variables};
-  ASYNC_Task bake_global_variables_task = async_task_launch(p2r_bake_global_variables_work, .input = &bake_global_variables_in);
+  ASYNC_Task *bake_global_variables_task = async_task_launch(scratch.arena, p2r_bake_global_variables_work, .input = &bake_global_variables_in);
   P2R_BakeGlobalVMapIn bake_global_vmap_in = {&in_params->global_variables};
-  ASYNC_Task bake_global_vmap_task = async_task_launch(p2r_bake_global_vmap_work, .input = &bake_global_vmap_in);
+  ASYNC_Task *bake_global_vmap_task = async_task_launch(scratch.arena, p2r_bake_global_vmap_work, .input = &bake_global_vmap_in);
   P2R_BakeThreadVariablesIn bake_thread_variables_in = {&bake_strings, &in_params->thread_variables};
-  ASYNC_Task bake_thread_variables_task = async_task_launch(p2r_bake_thread_variables_work, .input = &bake_thread_variables_in);
+  ASYNC_Task *bake_thread_variables_task = async_task_launch(scratch.arena, p2r_bake_thread_variables_work, .input = &bake_thread_variables_in);
   P2R_BakeProceduresIn bake_procedures_in = {&bake_strings, &in_params->procedures};
-  ASYNC_Task bake_procedures_task = async_task_launch(p2r_bake_procedures_work, .input = &bake_procedures_in);
+  ASYNC_Task *bake_procedures_task = async_task_launch(scratch.arena, p2r_bake_procedures_work, .input = &bake_procedures_in);
   P2R_BakeScopesIn bake_scopes_in = {&bake_strings, &in_params->scopes};
-  ASYNC_Task bake_scopes_task = async_task_launch(p2r_bake_scopes_work, .input = &bake_scopes_in);
+  ASYNC_Task *bake_scopes_task = async_task_launch(scratch.arena, p2r_bake_scopes_work, .input = &bake_scopes_in);
   P2R_BakeScopeVMapIn bake_scope_vmap_in = {&in_params->scopes};
-  ASYNC_Task bake_scope_vmap_task = async_task_launch(p2r_bake_scope_vmap_work, .input = &bake_scope_vmap_in);
+  ASYNC_Task *bake_scope_vmap_task = async_task_launch(scratch.arena, p2r_bake_scope_vmap_work, .input = &bake_scope_vmap_in);
   P2R_BakeInlineSitesIn bake_inline_sites_in = {&bake_strings, &in_params->inline_sites};
-  ASYNC_Task bake_inline_sites_task = async_task_launch(p2r_bake_inline_sites_work, .input = &bake_inline_sites_in);
+  ASYNC_Task *bake_inline_sites_task = async_task_launch(scratch.arena, p2r_bake_inline_sites_work, .input = &bake_inline_sites_in);
   P2R_BakeFilePathsIn bake_file_paths_in = {&bake_strings, path_tree};
-  ASYNC_Task bake_file_paths_task = async_task_launch(p2r_bake_file_paths_work, .input = &bake_file_paths_in);
+  ASYNC_Task *bake_file_paths_task = async_task_launch(scratch.arena, p2r_bake_file_paths_work, .input = &bake_file_paths_in);
   P2R_BakeStringsIn bake_strings_in = {&bake_strings};
-  ASYNC_Task bake_strings_task = async_task_launch(p2r_bake_strings_work, .input = &bake_strings_in);
+  ASYNC_Task *bake_strings_task = async_task_launch(scratch.arena, p2r_bake_strings_work, .input = &bake_strings_in);
   
   //////////////////////////////
   //- rjf: join name map building tasks
@@ -7668,8 +7668,8 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
   //- rjf: kick off pass 3 tasks
   //
   P2R_BakeTypeNodesIn bake_type_nodes_in = {&bake_strings, idx_runs, &in_params->types};
-  ASYNC_Task bake_type_nodes_task = async_task_launch(p2r_bake_type_nodes_work, .input = &bake_type_nodes_in);
-  ASYNC_Task bake_name_maps_tasks[RDI_NameMapKind_COUNT] = {0};
+  ASYNC_Task *bake_type_nodes_task = async_task_launch(scratch.arena, p2r_bake_type_nodes_work, .input = &bake_type_nodes_in);
+  ASYNC_Task *bake_name_maps_tasks[RDI_NameMapKind_COUNT] = {0};
   {
     for EachNonZeroEnumVal(RDI_NameMapKind, k)
     {
@@ -7682,11 +7682,11 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
       in->idx_runs      = idx_runs;
       in->map           = name_maps[k];
       in->kind          = k;
-      bake_name_maps_tasks[k] = async_task_launch(p2r_bake_name_map_work, .input = in);
+      bake_name_maps_tasks[k] = async_task_launch(scratch.arena, p2r_bake_name_map_work, .input = in);
     }
   }
   P2R_BakeIdxRunsIn bake_idx_runs_in = {idx_runs};
-  ASYNC_Task bake_idx_runs_task = async_task_launch(p2r_bake_idx_runs_work, .input = &bake_idx_runs_in);
+  ASYNC_Task *bake_idx_runs_task = async_task_launch(scratch.arena, p2r_bake_idx_runs_work, .input = &bake_idx_runs_in);
   
   //////////////////////////////
   //- rjf: join remaining completed bakes
