@@ -237,9 +237,9 @@ lnk_can_replace_symbol(const LNK_Symbol *dst, const LNK_Symbol *src)
     LNK_Lib *dst_lib = dst->u.lazy.lib;
     LNK_Lib *src_lib = src->u.lazy.lib;
     
-    if (dst_lib->input_idx == src_lib->input_idx) {
+    //if (dst_lib->input_idx == src_lib->input_idx) {
       //Assert(!"TODO: report duplicate symbols in lib");
-    }
+    //}
 
     can_replace = dst_lib->input_idx > src_lib->input_idx;
   } else if (dst->type == LNK_Symbol_Lazy && (LNK_Symbol_IsDefined(src->type) || src->type == LNK_Symbol_Weak)) {
@@ -269,13 +269,6 @@ lnk_can_replace_symbol(const LNK_Symbol *dst, const LNK_Symbol *src)
       Assert(dst_defn->u.chunk->is_discarded == 0);
       Assert(dst_defn->u.chunk->type == LNK_Chunk_Leaf);
       Assert(src_defn->u.chunk->type == LNK_Chunk_Leaf);
-
-      // handle communal variable
-      //
-      // MSVC CRT relies on this behaviour (e.g. __src_ucrt_dll_is_in_use in ucrt_detection.c)
-      if (dst_defn->u.chunk->u.leaf.str == 0 && src_defn->u.chunk->u.leaf.size > 0) {
-        return 1;
-      }
 
       COFF_ComdatSelectType dst_select = dst_defn->u.selection;
       COFF_ComdatSelectType src_select = src_defn->u.selection;
@@ -328,7 +321,14 @@ lnk_can_replace_symbol(const LNK_Symbol *dst, const LNK_Symbol *src)
           U64 dst_chunk_size = lnk_chunk_get_size(dst_chunk);
           U64 src_chunk_size = lnk_chunk_get_size(src_chunk);
           if (dst_chunk_size == src_chunk_size) {
-            can_replace = src_chunk->input_idx < dst_chunk->input_idx;
+            if (dst_defn->u.chunk->u.leaf.str == 0 && src_defn->u.chunk->u.leaf.size > 0) {
+              // handle communal variable
+              //
+              // MSVC CRT relies on this behaviour (e.g. __scrt_ucrt_dll_is_in_use in ucrt_detection.c)
+              can_replace = 1;
+            } else {
+              can_replace = src_chunk->input_idx < dst_chunk->input_idx;
+            }
           } else {
             can_replace = dst_chunk_size < src_chunk_size;
           }
