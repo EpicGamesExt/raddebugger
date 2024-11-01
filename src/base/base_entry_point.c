@@ -33,9 +33,6 @@ main_thread_base_entry_point(void (*entry_point)(CmdLine *cmdline), char **argum
 #if defined(RDI_FROM_PDB_H) && !defined(P2R_INIT_MANUAL)
   p2r_init();
 #endif
-#if defined(TASK_SYSTEM_H) && !defined(TS_INIT_MANUAL)
-  ts_init();
-#endif
 #if defined(HASH_STORE_H) && !defined(HS_INIT_MANUAL)
   hs_init();
 #endif

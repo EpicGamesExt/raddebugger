@@ -241,6 +241,8 @@ not depend on any other layers in the codebase. The folders which contain these
 layers are prefixed with `lib_`, like `lib_rdi_format`.
 
 A list of the layers in the codebase and their associated namespaces is below:
+- `async` (`ASYNC_`): Implements a system for asynchronous work to be queued
+  and executed on a thread pool.
 - `base` (no namespace): Universal, codebase-wide constructs. Strings, math,
   memory allocators, helper macros, command-line parsing, and so on. Depends
   on no other codebase layers.
@@ -375,8 +377,6 @@ A list of the layers in the codebase and their associated namespaces is below:
   as-needed basis. Higher level drawing features are implemented in the `draw`
   layer.
 - `scratch` (no namespace): Scratch space for small and transient test programs.
-- `task_system` (`TS_`): Implements a system for kicking off asynchronous tasks
-  and obtaining artifacts from those tasks once they've completed.
 - `texture_cache` (`TEX_`): Implements an asynchronously-filled cache for GPU
   texture data, filled by data sourced in the `hash_store` layer's cache. Used
   for asynchronously preparing data for visualization.
