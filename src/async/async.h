@@ -86,6 +86,11 @@ struct ASYNC_Shared
 global ASYNC_Shared *async_shared = 0;
 
 ////////////////////////////////
+//~ rjf: Basic Type Functions
+
+internal ASYNC_Task async_task_zero(void);
+
+////////////////////////////////
 //~ rjf: Top-Level Layer Initialization
 
 internal void async_init(void);
@@ -106,7 +111,7 @@ internal B32 async_push_work_(ASYNC_WorkFunctionType *work_function, ASYNC_WorkP
 
 internal void async_task_list_push(Arena *arena, ASYNC_TaskList *list, ASYNC_Task t);
 internal ASYNC_Task async_task_launch_(ASYNC_WorkFunctionType *work_function, ASYNC_WorkParams *params);
-#define async_task_kickoff(work_function, ...) async_task_kickoff_((work_function), &(ASYNC_WorkParams){.endt_us = max_U64, __VA_ARGS__})
+#define async_task_launch(work_function, ...) async_task_launch_((work_function), &(ASYNC_WorkParams){.endt_us = max_U64, __VA_ARGS__})
 internal void *async_task_join(ASYNC_Task task);
 #define async_task_join_struct(task, T) (T *)async_task_join(task)
 

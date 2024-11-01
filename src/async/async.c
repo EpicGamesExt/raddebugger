@@ -2,6 +2,16 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
+//~ rjf: Basic Type Functions
+
+internal ASYNC_Task
+async_task_zero(void)
+{
+  ASYNC_Task task = {0};
+  return task;
+}
+
+////////////////////////////////
 //~ rjf: Top-Level Layer Initialization
 
 internal void
@@ -103,10 +113,14 @@ async_task_launch_(ASYNC_WorkFunctionType *work_function, ASYNC_WorkParams *para
 internal void *
 async_task_join(ASYNC_Task task)
 {
-  os_semaphore_take(task.semaphore, max_U64);
-  os_semaphore_release(task.semaphore);
-  MemoryZeroStruct(&task.semaphore);
-  void *result = (void *)ins_atomic_u64_eval(&task.output);
+  void *result = 0;
+  if(!os_handle_match(task.semaphore, os_handle_zero()))
+  {
+    os_semaphore_take(task.semaphore, max_U64);
+    os_semaphore_release(task.semaphore);
+    MemoryZeroStruct(&task.semaphore);
+    result = (void *)ins_atomic_u64_eval(&task.output);
+  }
   return result;
 }
 

@@ -525,6 +525,22 @@ struct P2R_BakeIdxRunsIn
 };
 
 ////////////////////////////////
+//~ rjf: Top-Level State
+
+typedef struct P2R_State P2R_State;
+struct P2R_State
+{
+  Arena *arena;
+  U64 work_thread_arenas_count;
+  Arena **work_thread_arenas;
+};
+
+////////////////////////////////
+//~ rjf: Globals
+
+global P2R_State *p2r_state = 0;
+
+////////////////////////////////
 //~ rjf: Basic Helpers
 
 internal U64 p2r_end_of_cplusplus_container_name(String8 str);
@@ -558,6 +574,14 @@ internal void p2r_location_over_lvar_addr_range(Arena *arena, RDIM_ScopeChunkLis
 
 ////////////////////////////////
 //~ rjf: Initial Parsing & Preparation Pass Tasks
+
+ASYNC_WORK_DEF(p2r_exe_hash_work);
+ASYNC_WORK_DEF(p2r_tpi_hash_parse_work);
+ASYNC_WORK_DEF(p2r_tpi_leaf_work);
+ASYNC_WORK_DEF(p2r_symbol_stream_parse_work);
+ASYNC_WORK_DEF(p2r_c13_stream_parse_work);
+ASYNC_WORK_DEF(p2r_comp_unit_parse_work);
+ASYNC_WORK_DEF(p2r_comp_unit_contributions_parse_work);
 
 internal TS_TASK_FUNCTION_DEF(p2r_exe_hash_task__entry_point);
 internal TS_TASK_FUNCTION_DEF(p2r_tpi_hash_parse_task__entry_point);
@@ -637,6 +661,11 @@ internal TS_TASK_FUNCTION_DEF(p2r_bake_strings_task__entry_point);
 internal TS_TASK_FUNCTION_DEF(p2r_bake_type_nodes_task__entry_point);
 internal TS_TASK_FUNCTION_DEF(p2r_bake_name_map_task__entry_point);
 internal TS_TASK_FUNCTION_DEF(p2r_bake_idx_runs_task__entry_point);
+
+////////////////////////////////
+//~ rjf: Top-Level Initialization
+
+internal void p2r_init(void);
 
 ////////////////////////////////
 //~ rjf: Top-Level Baking Entry Point

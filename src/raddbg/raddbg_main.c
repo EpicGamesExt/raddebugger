@@ -559,6 +559,7 @@
 #define FNT_INIT_MANUAL 1
 #define D_INIT_MANUAL 1
 #define RD_INIT_MANUAL 1
+#define P2R_INIT_MANUAL 1
 
 ////////////////////////////////
 //~ rjf: Includes
@@ -1071,6 +1072,9 @@ entry_point(CmdLine *cmd_line)
     case ExecMode_Converter:
     {
       Temp scratch = scratch_begin(0, 0);
+      
+      //- rjf: initializer pdb -> rdi conversion layer
+      p2r_init();
       
       //- rjf: parse arguments
       P2R_User2Convert *user2convert = p2r_user2convert_from_cmdln(scratch.arena, cmd_line);
