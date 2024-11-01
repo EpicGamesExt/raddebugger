@@ -819,7 +819,7 @@ ev_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, String8 str
       }
       
       // rjf: gather children expansions from inverse of expansion state
-      if(!child_count && (expand_info.rows_default_expanded || expand_node == 0 && !expand_info.rows_default_expanded))
+      if(!child_count && (expand_info.rows_default_expanded || (expand_node == 0 && !expand_info.rows_default_expanded)))
       {
         child_count = expand_info.row_count;
         child_keys  = push_array(scratch.arena, EV_Key, child_count);

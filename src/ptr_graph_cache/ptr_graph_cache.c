@@ -111,7 +111,8 @@ ptg_scope_touch_node__stripe_r_guarded(PTG_Scope *scope, PTG_GraphNode *node)
 internal PTG_Graph *
 ptg_graph_from_key(PTG_Scope *scope, PTG_Key *key)
 {
-  
+  PTG_Graph *g = 0;
+  return g;
 }
 
 ////////////////////////////////

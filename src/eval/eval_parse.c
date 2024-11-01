@@ -487,7 +487,7 @@ e_token_array_from_text(Arena *arena, String8 text)
       }break;
       case E_TokenKind_Numeric:
       {
-        if(exp && byte == '+' || byte == '-'){}
+        if(exp && (byte == '+' || byte == '-')){}
         else if(!char_is_alpha(byte) && !char_is_digit(byte, 10) && byte != '.' && byte != ':')
         {
           advance = 0;

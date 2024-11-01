@@ -1160,7 +1160,9 @@ str8_path_list_resolve_dots_in_place(String8List *path, PathStyle style){
 internal String8
 str8_path_list_join_by_style(Arena *arena, String8List *path, PathStyle style){
   StringJoin params = {0};
-  switch (style){
+  switch(style)
+  {
+    case PathStyle_Null:{}break;
     case PathStyle_Relative:
     case PathStyle_WindowsAbsolute:
     {
@@ -1173,9 +1175,8 @@ str8_path_list_join_by_style(Arena *arena, String8List *path, PathStyle style){
       params.sep = str8_lit("/");
     }break;
   }
-  
   String8 result = str8_list_join(arena, path, &params);
-  return(result);
+  return result;
 }
 
 internal String8TxtPtPair
