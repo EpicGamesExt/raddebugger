@@ -78,11 +78,14 @@ struct ASYNC_Shared
   // rjf: work threads
   OS_Handle *work_threads;
   U64 work_threads_count;
+  U64 work_threads_live_count;
 };
 
 ////////////////////////////////
 //~ rjf: Globals
 
+thread_static B32 async_work_thread_depth = 0;
+thread_static U64 async_work_thread_idx = 0;
 global ASYNC_Shared *async_shared = 0;
 
 ////////////////////////////////
@@ -109,6 +112,12 @@ internal ASYNC_Task *async_task_launch_(Arena *arena, ASYNC_WorkFunctionType *wo
 #define async_task_launch(arena, work_function, ...) async_task_launch_((arena), (work_function), &(ASYNC_WorkParams){.endt_us = max_U64, __VA_ARGS__})
 internal void *async_task_join(ASYNC_Task *task);
 #define async_task_join_struct(task, T) (T *)async_task_join(task)
+
+////////////////////////////////
+//~ rjf: Work Execution
+
+internal ASYNC_Work async_pop_work(void);
+internal void async_execute_work(ASYNC_Work work);
 
 ////////////////////////////////
 //~ rjf: Work Thread Entry Point
