@@ -91,8 +91,9 @@ struct DI_Node
   // rjf: metadata
   U64 ref_count;
   U64 touch_count;
+  U64 request_count;
+  U64 completion_count;
   U64 is_working;
-  U64 last_time_requested_us;
   
   // rjf: key
   DI_Key key;
@@ -181,10 +182,6 @@ struct DI_Shared
   U8 *p2u_ring_base;
   U64 p2u_ring_write_pos;
   U64 p2u_ring_read_pos;
-  
-  // rjf: threads
-  U64 parse_thread_count;
-  OS_Handle *parse_threads;
 };
 
 ////////////////////////////////
@@ -250,6 +247,7 @@ internal void di_u2p_dequeue_key(Arena *arena, DI_Key *out_key);
 internal void di_p2u_push_event(DI_Event *event);
 internal DI_EventList di_p2u_pop_events(Arena *arena, U64 endt_us);
 
+ASYNC_WORK_DEF(di_parse_work);
 internal void di_parse_thread__entry_point(void *p);
 
 #endif // DBGI_H

@@ -101,12 +101,6 @@ di_init(void)
   di_shared->p2u_ring_cv = os_condition_variable_alloc();
   di_shared->p2u_ring_size = KB(64);
   di_shared->p2u_ring_base = push_array_no_zero(arena, U8, di_shared->p2u_ring_size);
-  di_shared->parse_thread_count = Max(2, (os_get_system_info()->logical_processor_count*2)/3);
-  di_shared->parse_threads = push_array(arena, OS_Handle, di_shared->parse_thread_count);
-  for(U64 idx = 0; idx < di_shared->parse_thread_count; idx += 1)
-  {
-    di_shared->parse_threads[idx] = os_thread_launch(di_parse_thread__entry_point, (void *)idx, 0);
-  }
 }
 
 ////////////////////////////////
@@ -451,15 +445,14 @@ di_rdi_from_key(DI_Scope *scope, DI_Key *key, U64 endt_us)
         break;
       }
       
-      //- rjf: parse not done, not working, asked a while ago -> ask for parse
-      B32 sent = 0;
-      if(node != 0 && !node->parse_done && !node->is_working && ins_atomic_u64_eval(&node->last_time_requested_us)+1000000<os_now_microseconds())
+      //- rjf: parse not done, not working -> ask for parse
+      if(node != 0 &&
+         !node->parse_done &&
+         ins_atomic_u64_eval(&node->request_count) == ins_atomic_u64_eval(&node->completion_count) &&
+         async_push_work(di_parse_work, .endt_us = endt_us, .completion_counter = &node->completion_count))
       {
-        sent = di_u2p_enqueue_key(&key_normalized, endt_us);
-        if(sent)
-        {
-          ins_atomic_u64_eval_assign(&node->last_time_requested_us, os_now_microseconds());
-        }
+        di_u2p_enqueue_key(&key_normalized, max_U64);
+        ins_atomic_u64_inc_eval(&node->request_count);
       }
       
       //- rjf: time expired -> break
@@ -582,6 +575,308 @@ di_p2u_pop_events(Arena *arena, U64 endt_us)
   }
   os_condition_variable_broadcast(di_shared->p2u_ring_cv);
   return events;
+}
+
+ASYNC_WORK_DEF(di_parse_work)
+{
+  Temp scratch = scratch_begin(0, 0);
+  
+  ////////////////////////////
+  //- rjf: grab next key
+  //
+  DI_Key key = {0};
+  di_u2p_dequeue_key(scratch.arena, &key);
+  String8 og_path = key.path;
+  U64 min_timestamp = key.min_timestamp;
+  
+  ////////////////////////////
+  //- rjf: unpack key
+  //
+  U64 hash = di_hash_from_string(og_path, StringMatchFlag_CaseInsensitive);
+  U64 slot_idx = hash%di_shared->slots_count;
+  U64 stripe_idx = slot_idx%di_shared->stripes_count;
+  DI_Slot *slot = &di_shared->slots[slot_idx];
+  DI_Stripe *stripe = &di_shared->stripes[stripe_idx];
+  
+  ////////////////////////////
+  //- rjf: take task
+  //
+  B32 got_task = 0;
+  OS_MutexScopeR(stripe->rw_mutex)
+  {
+    DI_Node *node = di_node_from_key_slot__stripe_mutex_r_guarded(slot, &key);
+    if(node != 0)
+    {
+      got_task = !ins_atomic_u64_eval_cond_assign(&node->is_working, 1, 0);
+    }
+  }
+  
+  ////////////////////////////
+  //- rjf: got task -> open O.G. file (may or may not be RDI)
+  //
+  B32 og_format_is_known = 0;
+  B32 og_is_pe     = 0;
+  B32 og_is_pdb    = 0;
+  B32 og_is_elf    = 0;
+  B32 og_is_rdi    = 0;
+  FileProperties og_props = {0};
+  if(got_task) ProfScope("analyze %.*s", str8_varg(og_path))
+  {
+    OS_Handle file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead, og_path);
+    OS_Handle file_map = os_file_map_open(OS_AccessFlag_Read, file);
+    FileProperties props = og_props = os_properties_from_file(file);
+    void *base = os_file_map_view_open(file_map, OS_AccessFlag_Read, r1u64(0, props.size));
+    String8 data = str8((U8 *)base, props.size);
+    if(!og_format_is_known)
+    {
+      String8 msf20_magic = str8_lit("Microsoft C/C++ program database 2.00\r\n\x1aJG\0\0");
+      String8 msf70_magic = str8_lit("Microsoft C/C++ MSF 7.00\r\n\032DS\0\0");
+      String8 msfxx_magic = str8_lit("Microsoft C/C++");
+      if((data.size >= msf20_magic.size && str8_match(data, msf20_magic, StringMatchFlag_RightSideSloppy)) ||
+         (data.size >= msf70_magic.size && str8_match(data, msf70_magic, StringMatchFlag_RightSideSloppy)) ||
+         (data.size >= msfxx_magic.size && str8_match(data, msfxx_magic, StringMatchFlag_RightSideSloppy)))
+      {
+        og_format_is_known = 1;
+        og_is_pdb = 1;
+      }
+    }
+    if(!og_format_is_known)
+    {
+      if(data.size >= 8 && *(U64 *)data.str == RDI_MAGIC_CONSTANT)
+      {
+        og_format_is_known = 1;
+        og_is_rdi = 1;
+      }
+    }
+    if(!og_format_is_known)
+    {
+      if(data.size >= 4 &&
+         data.str[0] == 0x7f &&
+         data.str[1] == 'E' &&
+         data.str[2] == 'L' &&
+         data.str[3] == 'F')
+      {
+        og_format_is_known = 1;
+        og_is_elf = 1;
+      }
+    }
+    if(!og_format_is_known)
+    {
+      if(data.size >= 2 && *(U16 *)data.str == 0x5a4d)
+      {
+        og_format_is_known = 1;
+        og_is_pe = 1;
+      }
+    }
+    os_file_map_view_close(file_map, base, r1u64(0, props.size));
+    os_file_map_close(file_map);
+    os_file_close(file);
+  }
+  
+  ////////////////////////////
+  //- rjf: given O.G. path & analysis, determine RDI path
+  //
+  String8 rdi_path = {0};
+  if(got_task)
+  {
+    if(og_is_rdi)
+    {
+      rdi_path = og_path;
+    }
+    else if(og_format_is_known && og_is_pdb)
+    {
+      rdi_path = push_str8f(scratch.arena, "%S.rdi", str8_chop_last_dot(og_path));
+    }
+  }
+  
+  ////////////////////////////
+  //- rjf: check if rdi file is up-to-date
+  //
+  B32 rdi_file_is_up_to_date = 0;
+  if(got_task)
+  {
+    if(rdi_path.size != 0) ProfScope("check %.*s is up-to-date", str8_varg(rdi_path))
+    {
+      FileProperties props = os_properties_from_file_path(rdi_path);
+      rdi_file_is_up_to_date = (props.modified > og_props.modified);
+    }
+  }
+  
+  ////////////////////////////
+  //- rjf: if raddbg file is up to date based on timestamp, check the
+  // encoding generation number & size, to see if we need to regenerate it
+  // regardless
+  //
+  if(got_task && rdi_file_is_up_to_date) ProfScope("check %.*s version matches our's", str8_varg(rdi_path))
+  {
+    OS_Handle file = {0};
+    OS_Handle file_map = {0};
+    FileProperties file_props = {0};
+    void *file_base = 0;
+    file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead, rdi_path);
+    file_map = os_file_map_open(OS_AccessFlag_Read, file);
+    file_props = os_properties_from_file(file);
+    file_base = os_file_map_view_open(file_map, OS_AccessFlag_Read, r1u64(0, file_props.size));
+    if(sizeof(RDI_Header) <= file_props.size)
+    {
+      RDI_Header *header = (RDI_Header*)file_base;
+      if(header->encoding_version != RDI_ENCODING_VERSION)
+      {
+        rdi_file_is_up_to_date = 0;
+      }
+    }
+    else
+    {
+      rdi_file_is_up_to_date = 0;
+    }
+    os_file_map_view_close(file_map, file_base, r1u64(0, file_props.size));
+    os_file_map_close(file_map);
+    os_file_close(file);
+  }
+  
+  ////////////////////////////
+  //- rjf: heuristically choose compression settings
+  //
+  B32 should_compress = 0;
+#if 0
+  if(og_dbg_props.size > MB(64))
+  {
+    should_compress = 1;
+  }
+#endif
+  
+  ////////////////////////////
+  //- rjf: rdi file not up-to-date? we need to generate it
+  //
+  if(got_task && !rdi_file_is_up_to_date) ProfScope("generate %.*s", str8_varg(rdi_path))
+  {
+    if(og_is_pdb)
+    {
+      //- rjf: push conversion task begin event
+      {
+        DI_Event event = {DI_EventKind_ConversionStarted};
+        event.string = rdi_path;
+        di_p2u_push_event(&event);
+      }
+      
+      //- rjf: kick off process
+      OS_Handle process = {0};
+      {
+        OS_ProcessLaunchParams params = {0};
+        params.path = os_get_process_info()->binary_path;
+        params.inherit_env = 1;
+        params.consoleless = 1;
+        str8_list_pushf(scratch.arena, &params.cmd_line, "raddbg");
+        str8_list_pushf(scratch.arena, &params.cmd_line, "--convert");
+        str8_list_pushf(scratch.arena, &params.cmd_line, "--quiet");
+        if(should_compress)
+        {
+          str8_list_pushf(scratch.arena, &params.cmd_line, "--compress");
+        }
+        // str8_list_pushf(scratch.arena, &params.cmd_line, "--capture");
+        str8_list_pushf(scratch.arena, &params.cmd_line, "--pdb:%S", og_path);
+        str8_list_pushf(scratch.arena, &params.cmd_line, "--out:%S", rdi_path);
+        process = os_process_launch(&params);
+      }
+      
+      //- rjf: wait for process to complete
+      {
+        U64 start_wait_t = os_now_microseconds();
+        for(;;)
+        {
+          B32 wait_done = os_process_join(process, os_now_microseconds()+1000);
+          if(wait_done)
+          {
+            rdi_file_is_up_to_date = 1;
+            break;
+          }
+        }
+      }
+      
+      //- rjf: push conversion task end event
+      {
+        DI_Event event = {DI_EventKind_ConversionEnded};
+        event.string = rdi_path;
+        di_p2u_push_event(&event);
+      }
+    }
+    else
+    {
+      // NOTE(rjf): we cannot convert from this O.G. debug info format right now.
+      //- rjf: push conversion task failure event
+      {
+        DI_Event event = {DI_EventKind_ConversionFailureUnsupportedFormat};
+        event.string = rdi_path;
+        di_p2u_push_event(&event);
+      }
+    }
+  }
+  
+  ////////////////////////////
+  //- rjf: got task -> open file
+  //
+  OS_Handle file = {0};
+  OS_Handle file_map = {0};
+  FileProperties file_props = {0};
+  void *file_base = 0;
+  if(got_task)
+  {
+    file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead|OS_AccessFlag_ShareWrite, rdi_path);
+    file_map = os_file_map_open(OS_AccessFlag_Read, file);
+    file_props = os_properties_from_file(file);
+    file_base = os_file_map_view_open(file_map, OS_AccessFlag_Read, r1u64(0, file_props.size));
+  }
+  
+  ////////////////////////////
+  //- rjf: do initial parse of rdi
+  //
+  RDI_Parsed rdi_parsed_maybe_compressed = di_rdi_parsed_nil;
+  if(got_task)
+  {
+    RDI_ParseStatus parse_status = rdi_parse((U8 *)file_base, file_props.size, &rdi_parsed_maybe_compressed);
+    (void)parse_status;
+  }
+  
+  ////////////////////////////
+  //- rjf: decompress & re-parse, if necessary
+  //
+  Arena *rdi_parsed_arena = 0;
+  RDI_Parsed rdi_parsed = rdi_parsed_maybe_compressed;
+  if(got_task)
+  {
+    U64 decompressed_size = rdi_decompressed_size_from_parsed(&rdi_parsed_maybe_compressed);
+    if(decompressed_size > file_props.size)
+    {
+      rdi_parsed_arena = arena_alloc();
+      U8 *decompressed_data = push_array_no_zero(rdi_parsed_arena, U8, decompressed_size);
+      rdi_decompress_parsed(decompressed_data, decompressed_size, &rdi_parsed_maybe_compressed);
+      RDI_ParseStatus parse_status = rdi_parse(decompressed_data, decompressed_size, &rdi_parsed);
+      (void)parse_status;
+    }
+  }
+  
+  ////////////////////////////
+  //- rjf: commit parsed info to cache
+  //
+  if(got_task) OS_MutexScopeW(stripe->rw_mutex)
+  {
+    DI_Node *node = di_node_from_key_slot__stripe_mutex_r_guarded(slot, &key);
+    if(node != 0)
+    {
+      node->is_working = 0;
+      node->file = file;
+      node->file_map = file_map;
+      node->file_base = file_base;
+      node->file_props = file_props;
+      node->arena = rdi_parsed_arena;
+      node->rdi = rdi_parsed;
+      node->parse_done = 1;
+    }
+  }
+  os_condition_variable_broadcast(stripe->cv);
+  
+  scratch_end(scratch);
+  return 0;
 }
 
 internal void
