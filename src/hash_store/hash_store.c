@@ -296,6 +296,7 @@ hs_data_from_hash(HS_Scope *scope, U128 hash)
 internal void
 hs_evictor_thread__entry_point(void *p)
 {
+  ThreadNameF("[hs] evictor thread");
   for(;;)
   {
     for(U64 slot_idx = 0; slot_idx < hs_shared->slots_count; slot_idx += 1)

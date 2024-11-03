@@ -1299,12 +1299,6 @@ ctrl_init(void)
   ctrl_state->u2ms_ring_cv = os_condition_variable_alloc();
   ctrl_state->ctrl_thread_log = log_alloc();
   ctrl_state->ctrl_thread = os_thread_launch(ctrl_thread__entry_point, 0, 0);
-  ctrl_state->ms_thread_count = Clamp(1, os_get_system_info()->logical_processor_count-1, 4);
-  ctrl_state->ms_threads = push_array(arena, OS_Handle, ctrl_state->ms_thread_count);
-  for(U64 idx = 0; idx < ctrl_state->ms_thread_count; idx += 1)
-  {
-    ctrl_state->ms_threads[idx] = os_thread_launch(ctrl_mem_stream_thread__entry_point, (void *)idx, 0);
-  }
 }
 
 ////////////////////////////////
@@ -1468,6 +1462,7 @@ ctrl_stored_hash_from_process_vaddr_range(CTRL_Handle process, Rng1U64 range, B3
             }
           }
         }
+        async_push_work(ctrl_mem_stream_work);
       }
     }
     
@@ -5854,170 +5849,166 @@ ctrl_u2ms_dequeue_req(CTRL_Handle *out_process, Rng1U64 *out_vaddr_range, B32 *o
 
 //- rjf: entry point
 
-internal void
-ctrl_mem_stream_thread__entry_point(void *p)
+ASYNC_WORK_DEF(ctrl_mem_stream_work)
 {
-  ThreadNameF("[ctrl] mem stream thread #%I64u", (U64)p);
   CTRL_ProcessMemoryCache *cache = &ctrl_state->process_memory_cache;
-  for(;;)
+  //- rjf: unpack next request
+  CTRL_Handle process = {0};
+  Rng1U64 vaddr_range = {0};
+  B32 zero_terminated = 0;
+  ctrl_u2ms_dequeue_req(&process, &vaddr_range, &zero_terminated);
+  U128 key = ctrl_calc_hash_store_key_from_process_vaddr_range(process, vaddr_range, zero_terminated);
+  ProfBegin("memory stream request");
+  
+  //- rjf: unpack process memory cache key
+  U64 process_hash = ctrl_hash_from_string(str8_struct(&process));
+  U64 process_slot_idx = process_hash%cache->slots_count;
+  U64 process_stripe_idx = process_slot_idx%cache->stripes_count;
+  CTRL_ProcessMemoryCacheSlot *process_slot = &cache->slots[process_slot_idx];
+  CTRL_ProcessMemoryCacheStripe *process_stripe = &cache->stripes[process_stripe_idx];
+  
+  //- rjf: unpack address range hash cache key
+  U64 range_hash = ctrl_hash_from_string(str8_struct(&vaddr_range));
+  
+  //- rjf: take task
+  B32 got_task = 0;
+  U64 preexisting_mem_gen = 0;
+  U128 preexisting_hash = {0};
+  Rng1U64 vaddr_range_clamped = {0};
+  OS_MutexScopeW(process_stripe->rw_mutex)
   {
-    //- rjf: unpack next request
-    CTRL_Handle process = {0};
-    Rng1U64 vaddr_range = {0};
-    B32 zero_terminated = 0;
-    ctrl_u2ms_dequeue_req(&process, &vaddr_range, &zero_terminated);
-    U128 key = ctrl_calc_hash_store_key_from_process_vaddr_range(process, vaddr_range, zero_terminated);
-    ProfBegin("memory stream request");
-    
-    //- rjf: unpack process memory cache key
-    U64 process_hash = ctrl_hash_from_string(str8_struct(&process));
-    U64 process_slot_idx = process_hash%cache->slots_count;
-    U64 process_stripe_idx = process_slot_idx%cache->stripes_count;
-    CTRL_ProcessMemoryCacheSlot *process_slot = &cache->slots[process_slot_idx];
-    CTRL_ProcessMemoryCacheStripe *process_stripe = &cache->stripes[process_stripe_idx];
-    
-    //- rjf: unpack address range hash cache key
-    U64 range_hash = ctrl_hash_from_string(str8_struct(&vaddr_range));
-    
-    //- rjf: take task
-    B32 got_task = 0;
-    U64 preexisting_mem_gen = 0;
-    U128 preexisting_hash = {0};
-    Rng1U64 vaddr_range_clamped = {0};
-    OS_MutexScopeW(process_stripe->rw_mutex)
+    for(CTRL_ProcessMemoryCacheNode *n = process_slot->first; n != 0; n = n->next)
     {
-      for(CTRL_ProcessMemoryCacheNode *n = process_slot->first; n != 0; n = n->next)
+      if(ctrl_handle_match(n->handle, process))
       {
-        if(ctrl_handle_match(n->handle, process))
+        U64 range_slot_idx = range_hash%n->range_hash_slots_count;
+        CTRL_ProcessMemoryRangeHashSlot *range_slot = &n->range_hash_slots[range_slot_idx];
+        for(CTRL_ProcessMemoryRangeHashNode *range_n = range_slot->first; range_n != 0; range_n = range_n->next)
         {
-          U64 range_slot_idx = range_hash%n->range_hash_slots_count;
-          CTRL_ProcessMemoryRangeHashSlot *range_slot = &n->range_hash_slots[range_slot_idx];
-          for(CTRL_ProcessMemoryRangeHashNode *range_n = range_slot->first; range_n != 0; range_n = range_n->next)
+          if(MemoryMatchStruct(&range_n->vaddr_range, &vaddr_range) && range_n->zero_terminated == zero_terminated)
           {
-            if(MemoryMatchStruct(&range_n->vaddr_range, &vaddr_range) && range_n->zero_terminated == zero_terminated)
-            {
-              got_task = !ins_atomic_u32_eval_cond_assign(&range_n->is_taken, 1, 0);
-              preexisting_mem_gen = range_n->mem_gen;
-              preexisting_hash = range_n->hash;
-              vaddr_range_clamped = range_n->vaddr_range_clamped;
-              goto take_task__break_all;
-            }
+            got_task = !ins_atomic_u32_eval_cond_assign(&range_n->is_taken, 1, 0);
+            preexisting_mem_gen = range_n->mem_gen;
+            preexisting_hash = range_n->hash;
+            vaddr_range_clamped = range_n->vaddr_range_clamped;
+            goto take_task__break_all;
           }
         }
       }
-      take_task__break_all:;
     }
-    
-    //- rjf: task was taken -> read memory
-    U64 range_size = 0;
-    Arena *range_arena = 0;
-    void *range_base = 0;
-    U64 zero_terminated_size = 0;
-    U64 pre_read_mem_gen = dmn_mem_gen();
-    U64 post_read_mem_gen = 0;
-    if(got_task && pre_read_mem_gen != preexisting_mem_gen)
+    take_task__break_all:;
+  }
+  
+  //- rjf: task was taken -> read memory
+  U64 range_size = 0;
+  Arena *range_arena = 0;
+  void *range_base = 0;
+  U64 zero_terminated_size = 0;
+  U64 pre_read_mem_gen = dmn_mem_gen();
+  U64 post_read_mem_gen = 0;
+  if(got_task && pre_read_mem_gen != preexisting_mem_gen)
+  {
+    range_size = dim_1u64(vaddr_range_clamped);
+    U64 page_size = os_get_system_info()->page_size;
+    U64 arena_size = AlignPow2(range_size + ARENA_HEADER_SIZE, page_size);
+    range_arena = arena_alloc(.reserve_size = range_size+ARENA_HEADER_SIZE, .commit_size = range_size+ARENA_HEADER_SIZE);
+    if(range_arena == 0)
     {
-      range_size = dim_1u64(vaddr_range_clamped);
-      U64 page_size = os_get_system_info()->page_size;
-      U64 arena_size = AlignPow2(range_size + ARENA_HEADER_SIZE, page_size);
-      range_arena = arena_alloc(.reserve_size = range_size+ARENA_HEADER_SIZE, .commit_size = range_size+ARENA_HEADER_SIZE);
-      if(range_arena == 0)
+      range_size = 0;
+    }
+    else
+    {
+      range_base = push_array_no_zero(range_arena, U8, range_size);
+      U64 bytes_read = 0;
+      U64 retry_count = 0;
+      U64 retry_limit = range_size > page_size ? 64 : 0;
+      for(Rng1U64 vaddr_range_clamped_retry = vaddr_range_clamped;
+          retry_count <= retry_limit;
+          retry_count += 1)
       {
-        range_size = 0;
-      }
-      else
-      {
-        range_base = push_array_no_zero(range_arena, U8, range_size);
-        U64 bytes_read = 0;
-        U64 retry_count = 0;
-        U64 retry_limit = range_size > page_size ? 64 : 0;
-        for(Rng1U64 vaddr_range_clamped_retry = vaddr_range_clamped;
-            retry_count <= retry_limit;
-            retry_count += 1)
+        bytes_read = dmn_process_read(process.dmn_handle, vaddr_range_clamped_retry, range_base);
+        if(bytes_read == 0 && vaddr_range_clamped_retry.max > vaddr_range_clamped_retry.min)
         {
-          bytes_read = dmn_process_read(process.dmn_handle, vaddr_range_clamped_retry, range_base);
-          if(bytes_read == 0 && vaddr_range_clamped_retry.max > vaddr_range_clamped_retry.min)
-          {
-            U64 diff = (vaddr_range_clamped_retry.max-vaddr_range_clamped_retry.min)/2;
-            vaddr_range_clamped_retry.max -= diff;
-            vaddr_range_clamped_retry.max = AlignDownPow2(vaddr_range_clamped_retry.max, page_size);
-            if(diff == 0)
-            {
-              break;
-            }
-          }
-          else
+          U64 diff = (vaddr_range_clamped_retry.max-vaddr_range_clamped_retry.min)/2;
+          vaddr_range_clamped_retry.max -= diff;
+          vaddr_range_clamped_retry.max = AlignDownPow2(vaddr_range_clamped_retry.max, page_size);
+          if(diff == 0)
           {
             break;
           }
         }
-        if(bytes_read == 0)
+        else
         {
-          arena_release(range_arena);
-          range_base = 0;
-          range_size = 0;
-          range_arena = 0;
-        }
-        else if(bytes_read < range_size)
-        {
-          MemoryZero((U8 *)range_base + bytes_read, range_size-bytes_read);
-        }
-        zero_terminated_size = range_size;
-        if(zero_terminated)
-        {
-          for(U64 idx = 0; idx < bytes_read; idx += 1)
-          {
-            if(((U8 *)range_base)[idx] == 0)
-            {
-              zero_terminated_size = idx;
-              break;
-            }
-          }
+          break;
         }
       }
-      post_read_mem_gen = dmn_mem_gen();
-    }
-    
-    //- rjf: read successful -> submit to hash store
-    U128 hash = {0};
-    if(got_task && range_base != 0 && pre_read_mem_gen == post_read_mem_gen)
-    {
-      hash = hs_submit_data(key, &range_arena, str8((U8*)range_base, zero_terminated_size));
-    }
-    else if(range_arena != 0)
-    {
-      arena_release(range_arena);
-    }
-    
-    //- rjf: commit hash to cache
-    if(got_task) OS_MutexScopeW(process_stripe->rw_mutex)
-    {
-      for(CTRL_ProcessMemoryCacheNode *n = process_slot->first; n != 0; n = n->next)
+      if(bytes_read == 0)
       {
-        if(ctrl_handle_match(n->handle, process))
+        arena_release(range_arena);
+        range_base = 0;
+        range_size = 0;
+        range_arena = 0;
+      }
+      else if(bytes_read < range_size)
+      {
+        MemoryZero((U8 *)range_base + bytes_read, range_size-bytes_read);
+      }
+      zero_terminated_size = range_size;
+      if(zero_terminated)
+      {
+        for(U64 idx = 0; idx < bytes_read; idx += 1)
         {
-          U64 range_slot_idx = range_hash%n->range_hash_slots_count;
-          CTRL_ProcessMemoryRangeHashSlot *range_slot = &n->range_hash_slots[range_slot_idx];
-          for(CTRL_ProcessMemoryRangeHashNode *range_n = range_slot->first; range_n != 0; range_n = range_n->next)
+          if(((U8 *)range_base)[idx] == 0)
           {
-            if(MemoryMatchStruct(&range_n->vaddr_range, &vaddr_range) && range_n->zero_terminated == zero_terminated)
-            {
-              if(!u128_match(u128_zero(), hash))
-              {
-                range_n->hash = hash;
-                range_n->mem_gen = post_read_mem_gen;
-              }
-              ins_atomic_u32_eval_assign(&range_n->is_taken, 0);
-              goto commit__break_all;
-            }
+            zero_terminated_size = idx;
+            break;
           }
         }
       }
-      commit__break_all:;
     }
-    
-    //- rjf: broadcast changes
-    os_condition_variable_broadcast(process_stripe->cv);
-    ProfEnd();
+    post_read_mem_gen = dmn_mem_gen();
   }
+  
+  //- rjf: read successful -> submit to hash store
+  U128 hash = {0};
+  if(got_task && range_base != 0 && pre_read_mem_gen == post_read_mem_gen)
+  {
+    hash = hs_submit_data(key, &range_arena, str8((U8*)range_base, zero_terminated_size));
+  }
+  else if(range_arena != 0)
+  {
+    arena_release(range_arena);
+  }
+  
+  //- rjf: commit hash to cache
+  if(got_task) OS_MutexScopeW(process_stripe->rw_mutex)
+  {
+    for(CTRL_ProcessMemoryCacheNode *n = process_slot->first; n != 0; n = n->next)
+    {
+      if(ctrl_handle_match(n->handle, process))
+      {
+        U64 range_slot_idx = range_hash%n->range_hash_slots_count;
+        CTRL_ProcessMemoryRangeHashSlot *range_slot = &n->range_hash_slots[range_slot_idx];
+        for(CTRL_ProcessMemoryRangeHashNode *range_n = range_slot->first; range_n != 0; range_n = range_n->next)
+        {
+          if(MemoryMatchStruct(&range_n->vaddr_range, &vaddr_range) && range_n->zero_terminated == zero_terminated)
+          {
+            if(!u128_match(u128_zero(), hash))
+            {
+              range_n->hash = hash;
+              range_n->mem_gen = post_read_mem_gen;
+            }
+            ins_atomic_u32_eval_assign(&range_n->is_taken, 0);
+            goto commit__break_all;
+          }
+        }
+      }
+    }
+    commit__break_all:;
+  }
+  
+  //- rjf: broadcast changes
+  os_condition_variable_broadcast(process_stripe->cv);
+  ProfEnd();
+  return 0;
 }

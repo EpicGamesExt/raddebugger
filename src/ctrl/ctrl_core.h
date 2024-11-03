@@ -888,10 +888,6 @@ struct CTRL_State
   U64 u2ms_ring_read_pos;
   OS_Handle u2ms_ring_mutex;
   OS_Handle u2ms_ring_cv;
-  
-  // rjf: memory stream threads
-  U64 ms_thread_count;
-  OS_Handle *ms_threads;
 };
 
 ////////////////////////////////
@@ -1156,6 +1152,7 @@ internal B32 ctrl_u2ms_enqueue_req(CTRL_Handle process, Rng1U64 vaddr_range, B32
 internal void ctrl_u2ms_dequeue_req(CTRL_Handle *out_process, Rng1U64 *out_vaddr_range, B32 *out_zero_terminated);
 
 //- rjf: entry point
+ASYNC_WORK_DEF(ctrl_mem_stream_work);
 internal void ctrl_mem_stream_thread__entry_point(void *p);
 
 #endif // CTRL_CORE_H

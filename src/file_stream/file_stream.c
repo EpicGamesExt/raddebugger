@@ -423,7 +423,7 @@ ASYNC_WORK_DEF(fs_stream_work)
 internal void
 fs_detector_thread__entry_point(void *p)
 {
-  ThreadNameF("[fs] detector");
+  ThreadNameF("[fs] detector thread");
   for(;;)
   {
     U64 slots_per_stripe = fs_shared->slots_count/fs_shared->stripes_count;

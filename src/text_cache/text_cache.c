@@ -2347,6 +2347,7 @@ ASYNC_WORK_DEF(txt_parse_work)
 internal void
 txt_evictor_thread__entry_point(void *p)
 {
+  ThreadNameF("[txt] evictor thread");
   for(;;)
   {
     U64 check_time_us = os_now_microseconds();

@@ -248,6 +248,5 @@ internal void di_p2u_push_event(DI_Event *event);
 internal DI_EventList di_p2u_pop_events(Arena *arena, U64 endt_us);
 
 ASYNC_WORK_DEF(di_parse_work);
-internal void di_parse_thread__entry_point(void *p);
 
 #endif // DBGI_H
