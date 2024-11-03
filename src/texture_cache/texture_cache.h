@@ -102,10 +102,6 @@ struct TEX_Shared
   OS_Handle u2x_ring_cv;
   OS_Handle u2x_ring_mutex;
   
-  // rjf: transfer threads
-  U64 xfer_thread_count;
-  OS_Handle *xfer_threads;
-  
   // rjf: evictor thread
   OS_Handle evictor_thread;
 };
@@ -155,7 +151,7 @@ internal R_Handle tex_texture_from_key_topology(TEX_Scope *scope, U128 key, TEX_
 
 internal B32 tex_u2x_enqueue_req(U128 hash, TEX_Topology top, U64 endt_us);
 internal void tex_u2x_dequeue_req(U128 *hash_out, TEX_Topology *top_out);
-internal void tex_xfer_thread__entry_point(void *p);
+ASYNC_WORK_DEF(tex_xfer_work);
 
 ////////////////////////////////
 //~ rjf: Evictor Threads
