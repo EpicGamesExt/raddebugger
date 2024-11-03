@@ -332,6 +332,7 @@ di_open(DI_Key *key)
         if(node->ref_count == 1)
         {
           di_u2p_enqueue_key(&key_normalized, max_U64);
+          async_push_work(di_parse_work);
         }
       }
     }
@@ -449,10 +450,10 @@ di_rdi_from_key(DI_Scope *scope, DI_Key *key, U64 endt_us)
       if(node != 0 &&
          !node->parse_done &&
          ins_atomic_u64_eval(&node->request_count) == ins_atomic_u64_eval(&node->completion_count) &&
-         async_push_work(di_parse_work, .endt_us = endt_us, .completion_counter = &node->completion_count))
+         di_u2p_enqueue_key(&key_normalized, endt_us))
       {
-        di_u2p_enqueue_key(&key_normalized, max_U64);
         ins_atomic_u64_inc_eval(&node->request_count);
+        async_push_work(di_parse_work, .completion_counter = &node->completion_count);
       }
       
       //- rjf: time expired -> break
