@@ -1217,6 +1217,8 @@ dmn_ctrl_launch(DMN_CtrlCtx *ctx, OS_ProcessLaunchParams *params)
     {
       String8List args = {0};
       String8 exe_path = params->cmd_line.first->string;
+      String8List exe_path_parts = str8_split_path(scratch.arena, exe_path);
+      exe_path = str8_list_join(scratch.arena, &exe_path_parts, &(StringJoin){.sep = str8_lit("\\")});
       str8_list_pushf(scratch.arena, &args, "\"%S\"", exe_path);
       for(String8Node *n = params->cmd_line.first->next; n != 0; n = n->next)
       {
