@@ -218,10 +218,6 @@ struct TXT_Shared
   OS_Handle u2p_ring_cv;
   OS_Handle u2p_ring_mutex;
   
-  // rjf: parse threads
-  U64 parse_thread_count;
-  OS_Handle *parse_threads;
-  
   // rjf: evictor thread
   OS_Handle evictor_thread;
 };
@@ -303,7 +299,7 @@ internal TXT_LineTokensSlice txt_line_tokens_slice_from_info_data_line_range(Are
 
 internal B32 txt_u2p_enqueue_req(U128 hash, TXT_LangKind lang, U64 endt_us);
 internal void txt_u2p_dequeue_req(U128 *hash_out, TXT_LangKind *lang_out);
-internal void txt_parse_thread__entry_point(void *p);
+ASYNC_WORK_DEF(txt_parse_work);
 
 ////////////////////////////////
 //~ rjf: Evictor Threads
