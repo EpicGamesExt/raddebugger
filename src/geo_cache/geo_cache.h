@@ -90,10 +90,6 @@ struct GEO_Shared
   OS_Handle u2x_ring_cv;
   OS_Handle u2x_ring_mutex;
   
-  // rjf: transfer threads
-  U64 xfer_thread_count;
-  OS_Handle *xfer_threads;
-  
   // rjf: evictor thread
   OS_Handle evictor_thread;
 };
@@ -138,7 +134,7 @@ internal R_Handle geo_buffer_from_key(GEO_Scope *scope, U128 key);
 
 internal B32 geo_u2x_enqueue_req(U128 hash, U64 endt_us);
 internal void geo_u2x_dequeue_req(U128 *hash_out);
-internal void geo_xfer_thread__entry_point(void *p);
+ASYNC_WORK_DEF(geo_xfer_work);
 
 ////////////////////////////////
 //~ rjf: Evictor Threads
