@@ -113,7 +113,8 @@ dis_init(void)
   for(U64 idx = 0; idx < dis_shared->stripes_count; idx += 1)
   {
     dis_shared->stripes[idx].arena = arena_alloc();
-    dis_shared->stripes[idx].rw_mutex = os_rw_mutex_alloc();
+    dis_shared->stripes[idx].r_mutex = os_rw_mutex_alloc();
+    dis_shared->stripes[idx].w_mutex = os_rw_mutex_alloc();
     dis_shared->stripes[idx].cv = os_condition_variable_alloc();
   }
   dis_shared->thread_count = Min(os_get_system_info()->logical_processor_count, 2);
@@ -208,7 +209,7 @@ dis_items_from_key_params_query(DIS_Scope *scope, U128 key, DIS_Params *params, 
   DIS_Stripe *stripe = &dis_shared->stripes[stripe_idx];
   
   //- rjf: query and/or request
-  OS_MutexScopeR(stripe->rw_mutex) for(;;)
+  OS_MutexScopeR(stripe->r_mutex) for(;;)
   {
     // rjf: map key -> node
     DIS_Node *node = 0;
@@ -222,7 +223,7 @@ dis_items_from_key_params_query(DIS_Scope *scope, U128 key, DIS_Params *params, 
     }
     
     // rjf: no node? -> allocate
-    if(node == 0) OS_MutexScopeRWPromote(stripe->rw_mutex)
+    if(node == 0) OS_MutexScopeW(stripe->w_mutex)
     {
       node = push_array(stripe->arena, DIS_Node, 1);
       SLLQueuePush(slot->first, slot->last, node);
@@ -248,7 +249,7 @@ dis_items_from_key_params_query(DIS_Scope *scope, U128 key, DIS_Params *params, 
     }
     
     // rjf: if stale -> request again
-    if(stale) OS_MutexScopeRWPromote(stripe->rw_mutex)
+    if(stale) OS_MutexScopeW(stripe->w_mutex)
     {
       if(node->gen <= node->submit_gen && node->submit_gen < node->gen + ArrayCount(node->buckets)-1)
       {
@@ -272,7 +273,7 @@ dis_items_from_key_params_query(DIS_Scope *scope, U128 key, DIS_Params *params, 
     }
     
     // rjf: no results, but have time to wait -> wait
-    os_condition_variable_wait_rw_r(stripe->cv, stripe->rw_mutex, endt_us);
+    os_condition_variable_wait_rw_r(stripe->cv, stripe->r_mutex, endt_us);
   }
   
   scratch_end(scratch);
@@ -373,7 +374,7 @@ dis_search_thread__entry_point(void *p)
     String8 query = {0};
     DIS_Params params = {RDI_SectionKind_Procedures};
     U64 initial_submit_gen = 0;
-    OS_MutexScopeW(stripe->rw_mutex)
+    OS_MutexScopeR(stripe->r_mutex) OS_MutexScopeW(stripe->w_mutex)
     {
       for(DIS_Node *n = slot->first; n != 0; n = n->next)
       {
@@ -478,7 +479,7 @@ dis_search_thread__entry_point(void *p)
             chunk->count += 1;
             items_list.total_count += 1;
           }
-          if(idx%100 == 99) OS_MutexScopeR(stripe->rw_mutex)
+          if(idx%100 == 99) OS_MutexScopeR(stripe->r_mutex)
           {
             for(DIS_Node *n = slot->first; n != 0; n = n->next)
             {
@@ -520,7 +521,7 @@ dis_search_thread__entry_point(void *p)
       for(B32 done = 0; !done;)
       {
         B32 found = 0;
-        OS_MutexScopeW(stripe->rw_mutex) for(DIS_Node *n = slot->first; n != 0; n = n->next)
+        OS_MutexScopeR(stripe->r_mutex) OS_MutexScopeW(stripe->w_mutex) for(DIS_Node *n = slot->first; n != 0; n = n->next)
         {
           if(u128_match(n->key, key))
           {

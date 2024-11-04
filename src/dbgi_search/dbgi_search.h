@@ -86,7 +86,8 @@ typedef struct DIS_Stripe DIS_Stripe;
 struct DIS_Stripe
 {
   Arena *arena;
-  OS_Handle rw_mutex;
+  OS_Handle r_mutex;
+  OS_Handle w_mutex;
   OS_Handle cv;
 };
 

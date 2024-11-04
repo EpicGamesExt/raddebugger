@@ -50,7 +50,8 @@ struct FS_Stripe
 {
   Arena *arena;
   OS_Handle cv;
-  OS_Handle rw_mutex;
+  OS_Handle r_mutex;
+  OS_Handle w_mutex;
 };
 
 ////////////////////////////////

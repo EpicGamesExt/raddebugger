@@ -772,7 +772,8 @@ typedef struct CTRL_ThreadRegCacheStripe CTRL_ThreadRegCacheStripe;
 struct CTRL_ThreadRegCacheStripe
 {
   Arena *arena;
-  OS_Handle rw_mutex;
+  OS_Handle r_mutex;
+  OS_Handle w_mutex;
 };
 
 typedef struct CTRL_ThreadRegCache CTRL_ThreadRegCache;

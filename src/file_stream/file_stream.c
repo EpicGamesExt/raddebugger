@@ -47,7 +47,8 @@ fs_init(void)
   {
     fs_shared->stripes[idx].arena = arena_alloc();
     fs_shared->stripes[idx].cv = os_condition_variable_alloc();
-    fs_shared->stripes[idx].rw_mutex = os_rw_mutex_alloc();
+    fs_shared->stripes[idx].r_mutex = os_rw_mutex_alloc();
+    fs_shared->stripes[idx].w_mutex = os_rw_mutex_alloc();
   }
   fs_shared->u2s_ring_size = KB(64);
   fs_shared->u2s_ring_base = push_array_no_zero(arena, U8, fs_shared->u2s_ring_size);
@@ -106,7 +107,7 @@ fs_hash_from_path_range(String8 path, Rng1U64 range, U64 endt_us)
       FS_Stripe *path_stripe = &fs_shared->stripes[path_stripe_idx];
       
       // rjf: loop: request, check for results, return until we can't
-      OS_MutexScopeR(path_stripe->rw_mutex) for(;;)
+      OS_MutexScopeR(path_stripe->r_mutex) for(;;)
       {
         // rjf: path -> node
         FS_Node *node = 0;
@@ -119,25 +120,14 @@ fs_hash_from_path_range(String8 path, Rng1U64 range, U64 endt_us)
           }
         }
         
-        // rjf: node does not exist? -> create & store (we must re-search after promoting r -> w)
-        if(node == 0) OS_MutexScopeRWPromote(path_stripe->rw_mutex)
+        // rjf: node does not exist? -> create & store
+        if(node == 0) OS_MutexScopeW(path_stripe->w_mutex)
         {
-          for(FS_Node *n = path_slot->first; n != 0; n = n->next)
-          {
-            if(str8_match(path, n->path, 0))
-            {
-              node = n;
-              break;
-            }
-          }
-          if(node == 0)
-          {
-            node = push_array(path_stripe->arena, FS_Node, 1);
-            SLLQueuePush(path_slot->first, path_slot->last, node);
-            node->path = push_str8_copy(path_stripe->arena, path);
-            node->slots_count = 64;
-            node->slots = push_array(path_stripe->arena, FS_RangeSlot, node->slots_count);
-          }
+          node = push_array(path_stripe->arena, FS_Node, 1);
+          SLLQueuePush(path_slot->first, path_slot->last, node);
+          node->path = push_str8_copy(path_stripe->arena, path);
+          node->slots_count = 64;
+          node->slots = push_array(path_stripe->arena, FS_RangeSlot, node->slots_count);
         }
         
         // rjf: range -> node
@@ -154,17 +144,9 @@ fs_hash_from_path_range(String8 path, Rng1U64 range, U64 endt_us)
           }
         }
         
-        // rjf: range node does not exist? create & store (we must re-search after promoting r -> w)
-        if(range_node == 0) OS_MutexScopeRWPromote(path_stripe->rw_mutex)
+        // rjf: range node does not exist? create & store
+        if(range_node == 0) OS_MutexScopeW(path_stripe->w_mutex)
         {
-          for(FS_RangeNode *n = range_slot->first; n != 0; n = n->next)
-          {
-            if(MemoryMatchStruct(&n->range, &range))
-            {
-              range_node = n;
-              break;
-            }
-          }
           if(range_node == 0)
           {
             range_node = push_array(path_stripe->arena, FS_RangeNode, 1);
@@ -187,7 +169,7 @@ fs_hash_from_path_range(String8 path, Rng1U64 range, U64 endt_us)
         // rjf: have time to wait? -> wait on this stripe; otherwise exit
         if(u128_match(result, u128_zero()) && os_now_microseconds() <= endt_us)
         {
-          os_condition_variable_wait_rw_r(path_stripe->cv, path_stripe->rw_mutex, endt_us);
+          os_condition_variable_wait_rw_r(path_stripe->cv, path_stripe->r_mutex, endt_us);
         }
         else
         {
@@ -223,7 +205,7 @@ fs_timestamp_from_path(String8 path)
   U64 stripe_idx = slot_idx%fs_shared->stripes_count;
   FS_Slot *slot = &fs_shared->slots[slot_idx];
   FS_Stripe *stripe = &fs_shared->stripes[stripe_idx];
-  OS_MutexScopeR(stripe->rw_mutex)
+  OS_MutexScopeR(stripe->r_mutex)
   {
     for(FS_Node *n = slot->first; n != 0; n = n->next)
     {
@@ -249,7 +231,7 @@ fs_size_from_path(String8 path)
   U64 stripe_idx = slot_idx%fs_shared->stripes_count;
   FS_Slot *slot = &fs_shared->slots[slot_idx];
   FS_Stripe *stripe = &fs_shared->stripes[stripe_idx];
-  OS_MutexScopeR(stripe->rw_mutex)
+  OS_MutexScopeR(stripe->r_mutex)
   {
     for(FS_Node *n = slot->first; n != 0; n = n->next)
     {
@@ -374,7 +356,7 @@ ASYNC_WORK_DEF(fs_stream_work)
   }
   
   //- rjf: commit info to cache
-  ProfScope("commit to cache") OS_MutexScopeW(path_stripe->rw_mutex)
+  ProfScope("commit to cache") OS_MutexScopeR(path_stripe->r_mutex) OS_MutexScopeW(path_stripe->w_mutex)
   {
     FS_Node *node = 0;
     for(FS_Node *n = path_slot->first; n != 0; n = n->next)
@@ -430,7 +412,7 @@ fs_detector_thread__entry_point(void *p)
     for(U64 stripe_idx = 0; stripe_idx < fs_shared->stripes_count; stripe_idx += 1)
     {
       FS_Stripe *stripe = &fs_shared->stripes[stripe_idx];
-      OS_MutexScopeR(stripe->rw_mutex) for(U64 slot_in_stripe_idx = 0; slot_in_stripe_idx < slots_per_stripe; slot_in_stripe_idx += 1)
+      OS_MutexScopeR(stripe->r_mutex) for(U64 slot_in_stripe_idx = 0; slot_in_stripe_idx < slots_per_stripe; slot_in_stripe_idx += 1)
       {
         U64 slot_idx = stripe_idx*slots_per_stripe + slot_in_stripe_idx;
         FS_Slot *slot = &fs_shared->slots[slot_idx];
