@@ -43,21 +43,6 @@ geo_tctx_ensure_inited(void)
 }
 
 ////////////////////////////////
-//~ rjf: User Clock
-
-internal void
-geo_user_clock_tick(void)
-{
-  ins_atomic_u64_inc_eval(&geo_shared->user_clock_idx);
-}
-
-internal U64
-geo_user_clock_idx(void)
-{
-  return ins_atomic_u64_eval(&geo_shared->user_clock_idx);
-}
-
-////////////////////////////////
 //~ rjf: Scoped Access
 
 internal GEO_Scope *
@@ -110,7 +95,7 @@ geo_scope_touch_node__stripe_r_guarded(GEO_Scope *scope, GEO_Node *node)
   GEO_Touch *touch = geo_tctx->free_touch;
   ins_atomic_u64_inc_eval(&node->scope_ref_count);
   ins_atomic_u64_eval_assign(&node->last_time_touched_us, os_now_microseconds());
-  ins_atomic_u64_eval_assign(&node->last_user_clock_idx_touched, geo_user_clock_idx());
+  ins_atomic_u64_eval_assign(&node->last_user_clock_idx_touched, update_tick_idx());
   if(touch != 0)
   {
     SLLStackPop(geo_tctx->free_touch);
@@ -325,7 +310,7 @@ geo_evictor_thread__entry_point(void *p)
   for(;;)
   {
     U64 check_time_us = os_now_microseconds();
-    U64 check_time_user_clocks = geo_user_clock_idx();
+    U64 check_time_user_clocks = update_tick_idx();
     U64 evict_threshold_us = 10*1000000;
     U64 evict_threshold_user_clocks = 10;
     for(U64 slot_idx = 0; slot_idx < geo_shared->slots_count; slot_idx += 1)

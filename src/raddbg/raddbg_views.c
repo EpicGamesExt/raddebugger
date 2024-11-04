@@ -1264,7 +1264,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
 {
   ProfBeginFunction();
   DI_Scope *di_scope = di_scope_open();
-  FZY_Scope *fzy_scope = fzy_scope_open();
+  DIS_Scope *dis_scope = dis_scope_open();
   Temp scratch = scratch_begin(0, 0);
   UI_ScrollPt2 scroll_pos = rd_view_scroll_pos();
   F32 entity_hover_t_rate = rd_setting_val_from_code(RD_SettingCode_HoverAnimations).s32 ? (1 - pow_f32(2, (-20.f * rd_state->frame_dt))) : 1.f;
@@ -3407,7 +3407,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
   
   if(!is_top_level_hook) { rd_store_view_scroll_pos(scroll_pos); }
   scratch_end(scratch);
-  fzy_scope_close(fzy_scope);
+  dis_scope_close(dis_scope);
   di_scope_close(di_scope);
   ProfEnd();
 }
@@ -5214,11 +5214,11 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(symbol_lister)
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   DI_Scope *di_scope = di_scope_open();
-  FZY_Scope *fzy_scope = fzy_scope_open();
+  DIS_Scope *dis_scope = dis_scope_open();
   F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
   DI_KeyList dbgi_keys_list = d_push_active_dbgi_key_list(scratch.arena);
   DI_KeyArray dbgi_keys = di_key_array_from_list(scratch.arena, &dbgi_keys_list);
-  FZY_Params fuzzy_search_params = {RDI_SectionKind_Procedures, dbgi_keys};
+  DIS_Params fuzzy_search_params = {RDI_SectionKind_Procedures, dbgi_keys};
   U64 endt_us = os_now_microseconds()+200;
   
   //- rjf: grab rdis
@@ -5245,7 +5245,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(symbol_lister)
   //- rjf: query -> raddbg, filtered items
   U128 fuzzy_search_key = {rd_regs()->view.u64[0], rd_regs()->view.u64[1]};
   B32 items_stale = 0;
-  FZY_ItemArray items = fzy_items_from_key_params_query(fzy_scope, fuzzy_search_key, &fuzzy_search_params, string, endt_us, &items_stale);
+  DIS_ItemArray items = dis_items_from_key_params_query(dis_scope, fuzzy_search_key, &fuzzy_search_params, string, endt_us, &items_stale);
   if(items_stale)
   {
     rd_request_frame();
@@ -5254,7 +5254,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(symbol_lister)
   //- rjf: submit best match when hitting enter w/ no selection
   if(slv->cursor.y == 0 && items.count != 0 && ui_slot_press(UI_EventActionSlot_Accept))
   {
-    FZY_Item *item = &items.v[0];
+    DIS_Item *item = &items.v[0];
     U64 base_idx = 0;
     for(U64 rdi_idx = 0; rdi_idx < rdis_count; rdi_idx += 1)
     {
@@ -5306,7 +5306,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(symbol_lister)
         idx += 1)
       UI_Focus((slv->cursor.y == idx+1) ? UI_FocusKind_On : UI_FocusKind_Off)
     {
-      FZY_Item *item = &items.v[idx];
+      DIS_Item *item = &items.v[idx];
       
       //- rjf: determine dbgi/rdi to which this item belongs
       DI_Key dbgi_key = {0};
@@ -5385,7 +5385,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(symbol_lister)
   }
   
   rd_store_view_scroll_pos(scroll_pos);
-  fzy_scope_close(fzy_scope);
+  dis_scope_close(dis_scope);
   di_scope_close(di_scope);
   scratch_end(scratch);
   ProfEnd();

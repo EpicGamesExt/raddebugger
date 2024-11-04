@@ -246,9 +246,6 @@ struct DASM_Shared
 {
   Arena *arena;
   
-  // rjf: user clock
-  U64 user_clock_idx;
-  
   // rjf: cache
   U64 slots_count;
   U64 stripes_count;
@@ -300,12 +297,6 @@ internal U64 dasm_line_array_code_off_from_idx(DASM_LineArray *array, U64 idx);
 //~ rjf: Main Layer Initialization
 
 internal void dasm_init(void);
-
-////////////////////////////////
-//~ rjf: User Clock
-
-internal void dasm_user_clock_tick(void);
-internal U64 dasm_user_clock_idx(void);
 
 ////////////////////////////////
 //~ rjf: Scoped Access

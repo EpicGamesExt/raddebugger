@@ -264,12 +264,6 @@ internal void txt_init(void);
 internal void txt_tctx_ensure_inited(void);
 
 ////////////////////////////////
-//~ rjf: User Clock
-
-internal void txt_user_clock_tick(void);
-internal U64 txt_user_clock_idx(void);
-
-////////////////////////////////
 //~ rjf: Scoped Access
 
 internal TXT_Scope *txt_scope_open(void);

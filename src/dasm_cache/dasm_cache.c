@@ -278,22 +278,6 @@ dasm_init(void)
 }
 
 ////////////////////////////////
-//~ rjf: User Clock
-
-internal void
-dasm_user_clock_tick(void)
-{
-  ins_atomic_u64_inc_eval(&dasm_shared->user_clock_idx);
-}
-
-internal U64
-dasm_user_clock_idx(void)
-{
-  U64 idx = ins_atomic_u64_eval(&dasm_shared->user_clock_idx);
-  return idx;
-}
-
-////////////////////////////////
 //~ rjf: Scoped Access
 
 internal DASM_Scope *
@@ -342,7 +326,7 @@ dasm_scope_touch_node__stripe_r_guarded(DASM_Scope *scope, DASM_Node *node)
   DASM_Touch *touch = push_array(dasm_tctx->arena, DASM_Touch, 1);
   ins_atomic_u64_inc_eval(&node->scope_ref_count);
   ins_atomic_u64_eval_assign(&node->last_time_touched_us, os_now_microseconds());
-  ins_atomic_u64_eval_assign(&node->last_user_clock_idx_touched, dasm_user_clock_idx());
+  ins_atomic_u64_eval_assign(&node->last_user_clock_idx_touched, update_tick_idx());
   touch->hash = node->hash;
   MemoryCopyStruct(&touch->params, &node->params);
   touch->params.dbgi_key = di_key_copy(dasm_tctx->arena, &touch->params.dbgi_key);
@@ -804,7 +788,7 @@ dasm_evictor_detector_thread__entry_point(void *p)
   {
     U64 change_gen = fs_change_gen();
     U64 check_time_us = os_now_microseconds();
-    U64 check_time_user_clocks = dasm_user_clock_idx();
+    U64 check_time_user_clocks = update_tick_idx();
     U64 evict_threshold_us = 10*1000000;
     U64 retry_threshold_us =  1*1000000;
     U64 evict_threshold_user_clocks = 10;

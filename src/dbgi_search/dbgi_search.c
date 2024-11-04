@@ -5,7 +5,7 @@
 //~ rjf: Helpers
 
 internal U64
-fzy_hash_from_string(U64 seed, String8 string)
+dis_hash_from_string(U64 seed, String8 string)
 {
   U64 result = seed;
   for(U64 i = 0; i < string.size; i += 1)
@@ -16,20 +16,20 @@ fzy_hash_from_string(U64 seed, String8 string)
 }
 
 internal U64
-fzy_hash_from_params(FZY_Params *params)
+dis_hash_from_params(DIS_Params *params)
 {
   U64 hash = 5381;
-  hash = fzy_hash_from_string(hash, str8_struct(&params->target));
+  hash = dis_hash_from_string(hash, str8_struct(&params->target));
   for(U64 idx = 0; idx < params->dbgi_keys.count; idx += 1)
   {
-    hash = fzy_hash_from_string(hash, str8_struct(&params->dbgi_keys.v[idx].min_timestamp));
-    hash = fzy_hash_from_string(hash, params->dbgi_keys.v[idx].path);
+    hash = dis_hash_from_string(hash, str8_struct(&params->dbgi_keys.v[idx].min_timestamp));
+    hash = dis_hash_from_string(hash, params->dbgi_keys.v[idx].path);
   }
   return hash;
 }
 
 internal U64
-fzy_item_num_from_array_element_idx__linear_search(FZY_ItemArray *array, U64 element_idx)
+dis_item_num_from_array_element_idx__linear_search(DIS_ItemArray *array, U64 element_idx)
 {
   U64 fuzzy_item_num = 0;
   for(U64 idx = 0; idx < array->count; idx += 1)
@@ -44,7 +44,7 @@ fzy_item_num_from_array_element_idx__linear_search(FZY_ItemArray *array, U64 ele
 }
 
 internal String8
-fzy_item_string_from_rdi_target_element_idx(RDI_Parsed *rdi, RDI_SectionKind target, U64 element_idx)
+dis_item_string_from_rdi_target_element_idx(RDI_Parsed *rdi, RDI_SectionKind target, U64 element_idx)
 {
   String8 result = {0};
   switch(target)
@@ -83,10 +83,10 @@ fzy_item_string_from_rdi_target_element_idx(RDI_Parsed *rdi, RDI_SectionKind tar
   return result;
 }
 
-internal FZY_Params
-fzy_params_copy(Arena *arena, FZY_Params *src)
+internal DIS_Params
+dis_params_copy(Arena *arena, DIS_Params *src)
 {
-  FZY_Params dst = zero_struct;
+  DIS_Params dst = zero_struct;
   MemoryCopyStruct(&dst, src);
   dst.dbgi_keys.v = push_array(arena, DI_Key, dst.dbgi_keys.count);
   MemoryCopy(dst.dbgi_keys.v, src->dbgi_keys.v, sizeof(DI_Key)*src->dbgi_keys.count);
@@ -101,88 +101,88 @@ fzy_params_copy(Arena *arena, FZY_Params *src)
 //~ rjf: Main Layer Initialization
 
 internal void
-fzy_init(void)
+dis_init(void)
 {
   Arena *arena = arena_alloc();
-  fzy_shared = push_array(arena, FZY_Shared, 1);
-  fzy_shared->arena = arena;
-  fzy_shared->slots_count = 256;
-  fzy_shared->stripes_count = os_get_system_info()->logical_processor_count;
-  fzy_shared->slots = push_array(arena, FZY_Slot, fzy_shared->slots_count);
-  fzy_shared->stripes = push_array(arena, FZY_Stripe, fzy_shared->stripes_count);
-  for(U64 idx = 0; idx < fzy_shared->stripes_count; idx += 1)
+  dis_shared = push_array(arena, DIS_Shared, 1);
+  dis_shared->arena = arena;
+  dis_shared->slots_count = 256;
+  dis_shared->stripes_count = os_get_system_info()->logical_processor_count;
+  dis_shared->slots = push_array(arena, DIS_Slot, dis_shared->slots_count);
+  dis_shared->stripes = push_array(arena, DIS_Stripe, dis_shared->stripes_count);
+  for(U64 idx = 0; idx < dis_shared->stripes_count; idx += 1)
   {
-    fzy_shared->stripes[idx].arena = arena_alloc();
-    fzy_shared->stripes[idx].rw_mutex = os_rw_mutex_alloc();
-    fzy_shared->stripes[idx].cv = os_condition_variable_alloc();
+    dis_shared->stripes[idx].arena = arena_alloc();
+    dis_shared->stripes[idx].rw_mutex = os_rw_mutex_alloc();
+    dis_shared->stripes[idx].cv = os_condition_variable_alloc();
   }
-  fzy_shared->thread_count = Min(os_get_system_info()->logical_processor_count, 2);
-  fzy_shared->threads = push_array(arena, FZY_Thread, fzy_shared->thread_count);
-  for(U64 idx = 0; idx < fzy_shared->thread_count; idx += 1)
+  dis_shared->thread_count = Min(os_get_system_info()->logical_processor_count, 2);
+  dis_shared->threads = push_array(arena, DIS_Thread, dis_shared->thread_count);
+  for(U64 idx = 0; idx < dis_shared->thread_count; idx += 1)
   {
-    fzy_shared->threads[idx].u2f_ring_mutex = os_mutex_alloc();
-    fzy_shared->threads[idx].u2f_ring_cv = os_condition_variable_alloc();
-    fzy_shared->threads[idx].u2f_ring_size = KB(64);
-    fzy_shared->threads[idx].u2f_ring_base = push_array_no_zero(arena, U8, fzy_shared->threads[idx].u2f_ring_size);
-    fzy_shared->threads[idx].thread = os_thread_launch(fzy_search_thread__entry_point, (void *)idx, 0);
+    dis_shared->threads[idx].u2f_ring_mutex = os_mutex_alloc();
+    dis_shared->threads[idx].u2f_ring_cv = os_condition_variable_alloc();
+    dis_shared->threads[idx].u2f_ring_size = KB(64);
+    dis_shared->threads[idx].u2f_ring_base = push_array_no_zero(arena, U8, dis_shared->threads[idx].u2f_ring_size);
+    dis_shared->threads[idx].thread = os_thread_launch(dis_search_thread__entry_point, (void *)idx, 0);
   }
 }
 
 ////////////////////////////////
 //~ rjf: Scope Functions
 
-internal FZY_Scope *
-fzy_scope_open(void)
+internal DIS_Scope *
+dis_scope_open(void)
 {
-  if(fzy_tctx == 0)
+  if(dis_tctx == 0)
   {
     Arena *arena = arena_alloc();
-    fzy_tctx = push_array(arena, FZY_TCTX, 1);
-    fzy_tctx->arena = arena;
+    dis_tctx = push_array(arena, DIS_TCTX, 1);
+    dis_tctx->arena = arena;
   }
-  FZY_Scope *scope = fzy_tctx->free_scope;
+  DIS_Scope *scope = dis_tctx->free_scope;
   if(scope != 0)
   {
-    SLLStackPop(fzy_tctx->free_scope);
+    SLLStackPop(dis_tctx->free_scope);
   }
   else
   {
-    scope = push_array_no_zero(fzy_tctx->arena, FZY_Scope, 1);
+    scope = push_array_no_zero(dis_tctx->arena, DIS_Scope, 1);
   }
   MemoryZeroStruct(scope);
   return scope;
 }
 
 internal void
-fzy_scope_close(FZY_Scope *scope)
+dis_scope_close(DIS_Scope *scope)
 {
-  for(FZY_Touch *t = scope->first_touch, *next = 0; t != 0; t = next)
+  for(DIS_Touch *t = scope->first_touch, *next = 0; t != 0; t = next)
   {
     next = t->next;
-    SLLStackPush(fzy_tctx->free_touch, t);
+    SLLStackPush(dis_tctx->free_touch, t);
     if(t->node != 0)
     {
       ins_atomic_u64_dec_eval(&t->node->touch_count);
     }
   }
-  SLLStackPush(fzy_tctx->free_scope, scope);
+  SLLStackPush(dis_tctx->free_scope, scope);
 }
 
 internal void
-fzy_scope_touch_node__stripe_mutex_r_guarded(FZY_Scope *scope, FZY_Node *node)
+dis_scope_touch_node__stripe_mutex_r_guarded(DIS_Scope *scope, DIS_Node *node)
 {
   if(node != 0)
   {
     ins_atomic_u64_inc_eval(&node->touch_count);
   }
-  FZY_Touch *touch = fzy_tctx->free_touch;
+  DIS_Touch *touch = dis_tctx->free_touch;
   if(touch != 0)
   {
-    SLLStackPop(fzy_tctx->free_touch);
+    SLLStackPop(dis_tctx->free_touch);
   }
   else
   {
-    touch = push_array_no_zero(fzy_tctx->arena, FZY_Touch, 1);
+    touch = push_array_no_zero(dis_tctx->arena, DIS_Touch, 1);
   }
   MemoryZeroStruct(touch);
   SLLQueuePush(scope->first_touch, scope->last_touch, touch);
@@ -192,27 +192,27 @@ fzy_scope_touch_node__stripe_mutex_r_guarded(FZY_Scope *scope, FZY_Node *node)
 ////////////////////////////////
 //~ rjf: Cache Lookup Functions
 
-internal FZY_ItemArray
-fzy_items_from_key_params_query(FZY_Scope *scope, U128 key, FZY_Params *params, String8 query, U64 endt_us, B32 *stale_out)
+internal DIS_ItemArray
+dis_items_from_key_params_query(DIS_Scope *scope, U128 key, DIS_Params *params, String8 query, U64 endt_us, B32 *stale_out)
 {
   Temp scratch = scratch_begin(0, 0);
-  FZY_ItemArray items = {0};
+  DIS_ItemArray items = {0};
   
   //- rjf: hash parameters
-  U64 params_hash = fzy_hash_from_params(params);
+  U64 params_hash = dis_hash_from_params(params);
   
   //- rjf: unpack key
-  U64 slot_idx = key.u64[1]%fzy_shared->slots_count;
-  U64 stripe_idx = slot_idx%fzy_shared->stripes_count;
-  FZY_Slot *slot = &fzy_shared->slots[slot_idx];
-  FZY_Stripe *stripe = &fzy_shared->stripes[stripe_idx];
+  U64 slot_idx = key.u64[1]%dis_shared->slots_count;
+  U64 stripe_idx = slot_idx%dis_shared->stripes_count;
+  DIS_Slot *slot = &dis_shared->slots[slot_idx];
+  DIS_Stripe *stripe = &dis_shared->stripes[stripe_idx];
   
   //- rjf: query and/or request
   OS_MutexScopeR(stripe->rw_mutex) for(;;)
   {
     // rjf: map key -> node
-    FZY_Node *node = 0;
-    for(FZY_Node *n = slot->first; n != 0; n = n->next)
+    DIS_Node *node = 0;
+    for(DIS_Node *n = slot->first; n != 0; n = n->next)
     {
       if(u128_match(n->key, key))
       {
@@ -224,7 +224,7 @@ fzy_items_from_key_params_query(FZY_Scope *scope, U128 key, FZY_Params *params, 
     // rjf: no node? -> allocate
     if(node == 0) OS_MutexScopeRWPromote(stripe->rw_mutex)
     {
-      node = push_array(stripe->arena, FZY_Node, 1);
+      node = push_array(stripe->arena, DIS_Node, 1);
       SLLQueuePush(slot->first, slot->last, node);
       node->key = key;
       for(U64 idx = 0; idx < ArrayCount(node->buckets); idx += 1)
@@ -238,7 +238,7 @@ fzy_items_from_key_params_query(FZY_Scope *scope, U128 key, FZY_Params *params, 
     if(params_hash == node->buckets[node->gen%ArrayCount(node->buckets)].params_hash &&
        node->gen != 0)
     {
-      fzy_scope_touch_node__stripe_mutex_r_guarded(scope, node);
+      dis_scope_touch_node__stripe_mutex_r_guarded(scope, node);
       items = node->gen_items;
       stale = !str8_match(query, node->buckets[node->gen%ArrayCount(node->buckets)].query, 0);
       if(stale_out != 0)
@@ -255,11 +255,11 @@ fzy_items_from_key_params_query(FZY_Scope *scope, U128 key, FZY_Params *params, 
         node->submit_gen += 1;
         arena_clear(node->buckets[node->submit_gen%ArrayCount(node->buckets)].arena);
         node->buckets[node->submit_gen%ArrayCount(node->buckets)].query = push_str8_copy(node->buckets[node->submit_gen%ArrayCount(node->buckets)].arena, query);
-        node->buckets[node->submit_gen%ArrayCount(node->buckets)].params = fzy_params_copy(node->buckets[node->submit_gen%ArrayCount(node->buckets)].arena, params);
+        node->buckets[node->submit_gen%ArrayCount(node->buckets)].params = dis_params_copy(node->buckets[node->submit_gen%ArrayCount(node->buckets)].arena, params);
         node->buckets[node->submit_gen%ArrayCount(node->buckets)].params_hash = params_hash;
       }
       if((node->submit_gen > node->gen+1 || os_now_microseconds() >= node->last_time_submitted_us+100000) &&
-         fzy_u2s_enqueue_req(key, endt_us))
+         dis_u2s_enqueue_req(key, endt_us))
       {
         node->last_time_submitted_us = os_now_microseconds();
       }
@@ -283,10 +283,10 @@ fzy_items_from_key_params_query(FZY_Scope *scope, U128 key, FZY_Params *params, 
 //~ rjf: Searcher Threads
 
 internal B32
-fzy_u2s_enqueue_req(U128 key, U64 endt_us)
+dis_u2s_enqueue_req(U128 key, U64 endt_us)
 {
   B32 sent = 0;
-  FZY_Thread *thread = &fzy_shared->threads[key.u64[1]%fzy_shared->thread_count];
+  DIS_Thread *thread = &dis_shared->threads[key.u64[1]%dis_shared->thread_count];
   OS_MutexScope(thread->u2f_ring_mutex) for(;;)
   {
     U64 unconsumed_size = thread->u2f_ring_write_pos - thread->u2f_ring_read_pos;
@@ -307,7 +307,7 @@ fzy_u2s_enqueue_req(U128 key, U64 endt_us)
 }
 
 internal void
-fzy_u2s_dequeue_req(Arena *arena, FZY_Thread *thread, U128 *key_out)
+dis_u2s_dequeue_req(Arena *arena, DIS_Thread *thread, U128 *key_out)
 {
   OS_MutexScope(thread->u2f_ring_mutex) for(;;)
   {
@@ -323,7 +323,7 @@ fzy_u2s_dequeue_req(Arena *arena, FZY_Thread *thread, U128 *key_out)
 }
 
 internal int
-fzy_qsort_compare_items(FZY_Item *a, FZY_Item *b)
+dis_qsort_compare_items(DIS_Item *a, DIS_Item *b)
 {
   int result = 0;
   if(a->match_ranges.count > b->match_ranges.count)
@@ -346,10 +346,10 @@ fzy_qsort_compare_items(FZY_Item *a, FZY_Item *b)
 }
 
 internal void
-fzy_search_thread__entry_point(void *p)
+dis_search_thread__entry_point(void *p)
 {
   ThreadNameF("[fzy] searcher #%I64u", (U64)p);
-  FZY_Thread *thread = &fzy_shared->threads[(U64)p];
+  DIS_Thread *thread = &dis_shared->threads[(U64)p];
   for(;;)
   {
     Temp scratch = scratch_begin(0, 0);
@@ -359,11 +359,11 @@ fzy_search_thread__entry_point(void *p)
     //- rjf: dequeue next request
     //
     U128 key = {0};
-    fzy_u2s_dequeue_req(scratch.arena, thread, &key);
-    U64 slot_idx = key.u64[1]%fzy_shared->slots_count;
-    U64 stripe_idx = slot_idx%fzy_shared->stripes_count;
-    FZY_Slot *slot = &fzy_shared->slots[slot_idx];
-    FZY_Stripe *stripe = &fzy_shared->stripes[stripe_idx];
+    dis_u2s_dequeue_req(scratch.arena, thread, &key);
+    U64 slot_idx = key.u64[1]%dis_shared->slots_count;
+    U64 stripe_idx = slot_idx%dis_shared->stripes_count;
+    DIS_Slot *slot = &dis_shared->slots[slot_idx];
+    DIS_Stripe *stripe = &dis_shared->stripes[stripe_idx];
     
     ////////////////////////////
     //- rjf: grab next exe_path/query for this key
@@ -371,15 +371,15 @@ fzy_search_thread__entry_point(void *p)
     B32 task_is_good = 0;
     Arena *task_arena = 0;
     String8 query = {0};
-    FZY_Params params = {RDI_SectionKind_Procedures};
+    DIS_Params params = {RDI_SectionKind_Procedures};
     U64 initial_submit_gen = 0;
     OS_MutexScopeW(stripe->rw_mutex)
     {
-      for(FZY_Node *n = slot->first; n != 0; n = n->next)
+      for(DIS_Node *n = slot->first; n != 0; n = n->next)
       {
         if(u128_match(n->key, key))
         {
-          FZY_Bucket *bucket = &n->buckets[n->submit_gen%ArrayCount(n->buckets)];
+          DIS_Bucket *bucket = &n->buckets[n->submit_gen%ArrayCount(n->buckets)];
           task_is_good = 1;
           initial_submit_gen = n->submit_gen;
           task_arena         = bucket->arena;
@@ -434,7 +434,7 @@ fzy_search_thread__entry_point(void *p)
     ////////////////////////////
     //- rjf: rdis * query * params -> item list
     //
-    FZY_ItemChunkList items_list = {0};
+    DIS_ItemChunkList items_list = {0};
     if(task_is_good)
     {
       U64 base_idx = 0;
@@ -462,13 +462,13 @@ fzy_search_thread__entry_point(void *p)
           FuzzyMatchRangeList matches = fuzzy_match_find(task_arena, query, name);
           if(matches.count == matches.needle_part_count)
           {
-            FZY_ItemChunk *chunk = items_list.last;
+            DIS_ItemChunk *chunk = items_list.last;
             if(chunk == 0 || chunk->count >= chunk->cap)
             {
-              chunk = push_array(scratch.arena, FZY_ItemChunk, 1);
+              chunk = push_array(scratch.arena, DIS_ItemChunk, 1);
               chunk->cap = 1024;
               chunk->count = 0;
-              chunk->v = push_array_no_zero(scratch.arena, FZY_Item, chunk->cap);
+              chunk->v = push_array_no_zero(scratch.arena, DIS_Item, chunk->cap);
               SLLQueuePush(items_list.first, items_list.last, chunk);
               items_list.chunk_count += 1;
             }
@@ -480,7 +480,7 @@ fzy_search_thread__entry_point(void *p)
           }
           if(idx%100 == 99) OS_MutexScopeR(stripe->rw_mutex)
           {
-            for(FZY_Node *n = slot->first; n != 0; n = n->next)
+            for(DIS_Node *n = slot->first; n != 0; n = n->next)
             {
               if(u128_match(n->key, key) && n->submit_gen > initial_submit_gen)
               {
@@ -495,15 +495,15 @@ fzy_search_thread__entry_point(void *p)
     }
     
     //- rjf: item list -> item array
-    FZY_ItemArray items = {0};
+    DIS_ItemArray items = {0};
     if(task_is_good)
     {
       items.count = items_list.total_count;
-      items.v = push_array_no_zero(task_arena, FZY_Item, items.count);
+      items.v = push_array_no_zero(task_arena, DIS_Item, items.count);
       U64 idx = 0;
-      for(FZY_ItemChunk *chunk = items_list.first; chunk != 0; chunk = chunk->next)
+      for(DIS_ItemChunk *chunk = items_list.first; chunk != 0; chunk = chunk->next)
       {
-        MemoryCopy(items.v+idx, chunk->v, sizeof(FZY_Item)*chunk->count);
+        MemoryCopy(items.v+idx, chunk->v, sizeof(DIS_Item)*chunk->count);
         idx += chunk->count;
       }
     }
@@ -511,7 +511,7 @@ fzy_search_thread__entry_point(void *p)
     //- rjf: sort item array
     if(items.count != 0 && query.size != 0)
     {
-      quick_sort(items.v, items.count, sizeof(FZY_Item), fzy_qsort_compare_items);
+      quick_sort(items.v, items.count, sizeof(DIS_Item), dis_qsort_compare_items);
     }
     
     //- rjf: commit to cache - busyloop on scope touches
@@ -520,7 +520,7 @@ fzy_search_thread__entry_point(void *p)
       for(B32 done = 0; !done;)
       {
         B32 found = 0;
-        OS_MutexScopeW(stripe->rw_mutex) for(FZY_Node *n = slot->first; n != 0; n = n->next)
+        OS_MutexScopeW(stripe->rw_mutex) for(DIS_Node *n = slot->first; n != 0; n = n->next)
         {
           if(u128_match(n->key, key))
           {

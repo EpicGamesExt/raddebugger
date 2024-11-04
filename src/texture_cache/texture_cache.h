@@ -84,9 +84,6 @@ struct TEX_Shared
 {
   Arena *arena;
   
-  // rjf: user clock
-  U64 user_clock_idx;
-  
   // rjf: cache
   U64 slots_count;
   U64 stripes_count;
@@ -126,12 +123,6 @@ internal void tex_init(void);
 //~ rjf: Thread Context Initialization
 
 internal void tex_tctx_ensure_inited(void);
-
-////////////////////////////////
-//~ rjf: User Clock
-
-internal void tex_user_clock_tick(void);
-internal U64 tex_user_clock_idx(void);
 
 ////////////////////////////////
 //~ rjf: Scoped Access

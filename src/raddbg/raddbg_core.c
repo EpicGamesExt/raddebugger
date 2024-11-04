@@ -4880,7 +4880,7 @@ rd_window_frame(RD_Window *ws)
       {
         Temp scratch = scratch_begin(0, 0);
         DI_Scope *di_scope = di_scope_open();
-        FZY_Scope *fzy_scope = fzy_scope_open();
+        DIS_Scope *dis_scope = dis_scope_open();
         DI_KeyList dbgi_keys_list = d_push_active_dbgi_key_list(scratch.arena);
         DI_KeyArray dbgi_keys = di_key_array_from_list(scratch.arena, &dbgi_keys_list);
         
@@ -5012,14 +5012,14 @@ rd_window_frame(RD_Window *ws)
           //- rjf: gather globals
           if(ws->autocomp_lister_params.flags & RD_AutoCompListerFlag_Globals && query_word.size != 0)
           {
-            U128 fzy_key = {d_hash_from_string(str8_lit("autocomp_globals_fzy_key"))};
-            FZY_Params fzy_params =
+            U128 dis_key = {d_hash_from_string(str8_lit("autocomp_globals_dis_key"))};
+            DIS_Params dis_params =
             {
               RDI_SectionKind_GlobalVariables,
               dbgi_keys,
             };
             B32 is_stale = 0;
-            FZY_ItemArray items = fzy_items_from_key_params_query(fzy_scope, fzy_key, &fzy_params, query_word, 0, &is_stale);
+            DIS_ItemArray items = dis_items_from_key_params_query(dis_scope, dis_key, &dis_params, query_word, 0, &is_stale);
             for(U64 idx = 0; idx < 20 && idx < items.count; idx += 1)
             {
               // rjf: determine dbgi/rdi to which this item belongs
@@ -5030,7 +5030,7 @@ rd_window_frame(RD_Window *ws)
                 for(U64 rdi_idx = 0; rdi_idx < rdis_count; rdi_idx += 1)
                 {
                   U64 table_count = 0;
-                  rdi_section_raw_table_from_kind(rdis[rdi_idx], fzy_params.target, &table_count);
+                  rdi_section_raw_table_from_kind(rdis[rdi_idx], dis_params.target, &table_count);
                   if(base_idx <= items.v[idx].idx && items.v[idx].idx < base_idx + table_count)
                   {
                     dbgi_key = dbgi_keys.v[rdi_idx];
@@ -5042,7 +5042,7 @@ rd_window_frame(RD_Window *ws)
               }
               
               // rjf: unpack info
-              String8 name = fzy_item_string_from_rdi_target_element_idx(rdi, fzy_params.target, items.v[idx].idx-base_idx);
+              String8 name = dis_item_string_from_rdi_target_element_idx(rdi, dis_params.target, items.v[idx].idx-base_idx);
               
               // rjf: push item
               RD_AutoCompListerItem item = {0};
@@ -5059,14 +5059,14 @@ rd_window_frame(RD_Window *ws)
           //- rjf: gather thread locals
           if(ws->autocomp_lister_params.flags & RD_AutoCompListerFlag_ThreadLocals && query_word.size != 0)
           {
-            U128 fzy_key = {d_hash_from_string(str8_lit("autocomp_tvars_fzy_key"))};
-            FZY_Params fzy_params =
+            U128 dis_key = {d_hash_from_string(str8_lit("autocomp_tvars_dis_key"))};
+            DIS_Params dis_params =
             {
               RDI_SectionKind_ThreadVariables,
               dbgi_keys,
             };
             B32 is_stale = 0;
-            FZY_ItemArray items = fzy_items_from_key_params_query(fzy_scope, fzy_key, &fzy_params, query_word, 0, &is_stale);
+            DIS_ItemArray items = dis_items_from_key_params_query(dis_scope, dis_key, &dis_params, query_word, 0, &is_stale);
             for(U64 idx = 0; idx < 20 && idx < items.count; idx += 1)
             {
               // rjf: determine dbgi/rdi to which this item belongs
@@ -5077,7 +5077,7 @@ rd_window_frame(RD_Window *ws)
                 for(U64 rdi_idx = 0; rdi_idx < rdis_count; rdi_idx += 1)
                 {
                   U64 table_count = 0;
-                  rdi_section_raw_table_from_kind(rdis[rdi_idx], fzy_params.target, &table_count);
+                  rdi_section_raw_table_from_kind(rdis[rdi_idx], dis_params.target, &table_count);
                   if(base_idx <= items.v[idx].idx && items.v[idx].idx < base_idx + table_count)
                   {
                     dbgi_key = dbgi_keys.v[rdi_idx];
@@ -5089,7 +5089,7 @@ rd_window_frame(RD_Window *ws)
               }
               
               // rjf: unpack info
-              String8 name = fzy_item_string_from_rdi_target_element_idx(rdi, fzy_params.target, items.v[idx].idx-base_idx);
+              String8 name = dis_item_string_from_rdi_target_element_idx(rdi, dis_params.target, items.v[idx].idx-base_idx);
               
               // rjf: push item
               RD_AutoCompListerItem item = {0};
@@ -5106,14 +5106,14 @@ rd_window_frame(RD_Window *ws)
           //- rjf: gather procedures
           if(ws->autocomp_lister_params.flags & RD_AutoCompListerFlag_Procedures && query_word.size != 0)
           {
-            U128 fzy_key = {d_hash_from_string(str8_lit("autocomp_procedures_fzy_key"))};
-            FZY_Params fzy_params =
+            U128 dis_key = {d_hash_from_string(str8_lit("autocomp_procedures_dis_key"))};
+            DIS_Params dis_params =
             {
               RDI_SectionKind_Procedures,
               dbgi_keys,
             };
             B32 is_stale = 0;
-            FZY_ItemArray items = fzy_items_from_key_params_query(fzy_scope, fzy_key, &fzy_params, query_word, 0, &is_stale);
+            DIS_ItemArray items = dis_items_from_key_params_query(dis_scope, dis_key, &dis_params, query_word, 0, &is_stale);
             for(U64 idx = 0; idx < 20 && idx < items.count; idx += 1)
             {
               // rjf: determine dbgi/rdi to which this item belongs
@@ -5124,7 +5124,7 @@ rd_window_frame(RD_Window *ws)
                 for(U64 rdi_idx = 0; rdi_idx < rdis_count; rdi_idx += 1)
                 {
                   U64 table_count = 0;
-                  rdi_section_raw_table_from_kind(rdis[rdi_idx], fzy_params.target, &table_count);
+                  rdi_section_raw_table_from_kind(rdis[rdi_idx], dis_params.target, &table_count);
                   if(base_idx <= items.v[idx].idx && items.v[idx].idx < base_idx + table_count)
                   {
                     dbgi_key = dbgi_keys.v[rdi_idx];
@@ -5136,7 +5136,7 @@ rd_window_frame(RD_Window *ws)
               }
               
               // rjf: unpack info
-              String8 name = fzy_item_string_from_rdi_target_element_idx(rdi, fzy_params.target, items.v[idx].idx-base_idx);
+              String8 name = dis_item_string_from_rdi_target_element_idx(rdi, dis_params.target, items.v[idx].idx-base_idx);
               
               // rjf: push item
               RD_AutoCompListerItem item = {0};
@@ -5153,14 +5153,14 @@ rd_window_frame(RD_Window *ws)
           //- rjf: gather types
           if(ws->autocomp_lister_params.flags & RD_AutoCompListerFlag_Types && query_word.size != 0)
           {
-            U128 fzy_key = {d_hash_from_string(str8_lit("autocomp_types_fzy_key"))};
-            FZY_Params fzy_params =
+            U128 dis_key = {d_hash_from_string(str8_lit("autocomp_types_dis_key"))};
+            DIS_Params dis_params =
             {
               RDI_SectionKind_UDTs,
               dbgi_keys,
             };
             B32 is_stale = 0;
-            FZY_ItemArray items = fzy_items_from_key_params_query(fzy_scope, fzy_key, &fzy_params, query_word, 0, &is_stale);
+            DIS_ItemArray items = dis_items_from_key_params_query(dis_scope, dis_key, &dis_params, query_word, 0, &is_stale);
             for(U64 idx = 0; idx < 20 && idx < items.count; idx += 1)
             {
               // rjf: determine dbgi/rdi to which this item belongs
@@ -5171,7 +5171,7 @@ rd_window_frame(RD_Window *ws)
                 for(U64 rdi_idx = 0; rdi_idx < rdis_count; rdi_idx += 1)
                 {
                   U64 table_count = 0;
-                  rdi_section_raw_table_from_kind(rdis[rdi_idx], fzy_params.target, &table_count);
+                  rdi_section_raw_table_from_kind(rdis[rdi_idx], dis_params.target, &table_count);
                   if(base_idx <= items.v[idx].idx && items.v[idx].idx < base_idx + table_count)
                   {
                     dbgi_key = dbgi_keys.v[rdi_idx];
@@ -5183,7 +5183,7 @@ rd_window_frame(RD_Window *ws)
               }
               
               // rjf: unpack info
-              String8 name = fzy_item_string_from_rdi_target_element_idx(rdi, fzy_params.target, items.v[idx].idx-base_idx);
+              String8 name = dis_item_string_from_rdi_target_element_idx(rdi, dis_params.target, items.v[idx].idx-base_idx);
               
               // rjf: push item
               RD_AutoCompListerItem item = {0};
@@ -5467,7 +5467,7 @@ rd_window_frame(RD_Window *ws)
           }
         }
         
-        fzy_scope_close(fzy_scope);
+        dis_scope_close(dis_scope);
         di_scope_close(di_scope);
         scratch_end(scratch);
       }
@@ -9323,7 +9323,7 @@ rd_ev_view_rule_expr_num_from_id__meta_ctrl_entities(U64 id, void *user_data, CT
 typedef struct RD_DebugInfoTableExpandAccel RD_DebugInfoTableExpandAccel;
 struct RD_DebugInfoTableExpandAccel
 {
-  FZY_ItemArray items;
+  DIS_ItemArray items;
 };
 
 internal EV_ExpandInfo
@@ -9348,8 +9348,8 @@ rd_ev_view_rule_expr_expand_info__debug_info_tables(Arena *arena, EV_View *view,
     //- rjf: query all filtered items from dbgi searching system
     U128 fuzzy_search_key = {(U64)view, (U64)section};
     B32 items_stale = 0;
-    FZY_Params params = {section, dbgi_keys};
-    accel->items = fzy_items_from_key_params_query(rd_state->frame_fzy_scope, fuzzy_search_key, &params, filter, endt_us, &items_stale);
+    DIS_Params params = {section, dbgi_keys};
+    accel->items = dis_items_from_key_params_query(rd_state->frame_dis_scope, fuzzy_search_key, &params, filter, endt_us, &items_stale);
     if(items_stale)
     {
       rd_request_frame();
@@ -9376,7 +9376,7 @@ rd_ev_view_rule_expr_expand_range_info__debug_info_tables(Arena *arena, EV_View 
     for EachIndex(row_expr_idx, result.row_exprs_count)
     {
       // rjf: unpack row info
-      FZY_Item *item = &accel->items.v[idx_range.min + row_expr_idx];
+      DIS_Item *item = &accel->items.v[idx_range.min + row_expr_idx];
       
       // rjf: determine module to which this item belongs
       E_Module *module = e_parse_ctx->primary_module;
@@ -9488,7 +9488,7 @@ internal U64
 rd_ev_view_rule_expr_num_from_id__debug_info_tables(U64 id, void *user_data, RDI_SectionKind section)
 {
   RD_DebugInfoTableExpandAccel *accel = (RD_DebugInfoTableExpandAccel *)user_data;
-  U64 num = fzy_item_num_from_array_element_idx__linear_search(&accel->items, id-1);
+  U64 num = dis_item_num_from_array_element_idx__linear_search(&accel->items, id-1);
   return num;
 }
 
@@ -11704,7 +11704,7 @@ rd_frame(void)
   if(depth == 0)
   {
     rd_state->frame_di_scope = di_scope_open();
-    rd_state->frame_fzy_scope = fzy_scope_open();
+    rd_state->frame_dis_scope = dis_scope_open();
   }
   B32 allow_text_hotkeys = !rd_state->text_edit_mode;
   rd_state->text_edit_mode = 0;
@@ -16739,7 +16739,7 @@ rd_frame(void)
   if(depth == 0)
   {
     di_scope_close(rd_state->frame_di_scope);
-    fzy_scope_close(rd_state->frame_fzy_scope);
+    dis_scope_close(rd_state->frame_dis_scope);
   }
   
   //////////////////////////////

@@ -595,8 +595,8 @@
 #include "regs/regs.h"
 #include "regs/rdi/regs_rdi.h"
 #include "dbgi/dbgi.h"
+#include "dbgi_search/dbgi_search.h"
 #include "dasm_cache/dasm_cache.h"
-#include "fuzzy_search/fuzzy_search.h"
 #include "demon/demon_inc.h"
 #include "eval/eval_inc.h"
 #include "eval_visualization/eval_visualization_inc.h"
@@ -637,8 +637,8 @@
 #include "regs/regs.c"
 #include "regs/rdi/regs_rdi.c"
 #include "dbgi/dbgi.c"
+#include "dbgi_search/dbgi_search.c"
 #include "dasm_cache/dasm_cache.c"
-#include "fuzzy_search/fuzzy_search.c"
 #include "demon/demon_inc.c"
 #include "eval/eval_inc.c"
 #include "eval_visualization/eval_visualization_inc.c"
@@ -693,6 +693,7 @@ global OS_Handle ipc_s2m_ring_cv = {0};
 internal void
 ipc_signaler_thread__entry_point(void *p)
 {
+  ThreadNameF("[rd] ipc signaler thread");
   for(;;)
   {
     if(os_semaphore_take(ipc_signal_semaphore, max_U64))

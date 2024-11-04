@@ -72,9 +72,6 @@ struct GEO_Shared
 {
   Arena *arena;
   
-  // rjf: user clock
-  U64 user_clock_idx;
-  
   // rjf: cache
   U64 slots_count;
   U64 stripes_count;
@@ -109,12 +106,6 @@ internal void geo_init(void);
 //~ rjf: Thread Context Initialization
 
 internal void geo_tctx_ensure_inited(void);
-
-////////////////////////////////
-//~ rjf: User Clock
-
-internal void geo_user_clock_tick(void);
-internal U64 geo_user_clock_idx(void);
 
 ////////////////////////////////
 //~ rjf: Scoped Access

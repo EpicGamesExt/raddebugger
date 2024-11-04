@@ -1,6 +1,8 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
+global U64 global_update_tick_idx = 0;
+
 internal void
 main_thread_base_entry_point(void (*entry_point)(CmdLine *cmdline), char **arguments, U64 arguments_count)
 {
@@ -48,11 +50,11 @@ main_thread_base_entry_point(void (*entry_point)(CmdLine *cmdline), char **argum
 #if defined(DASM_CACHE_H) && !defined(DASM_INIT_MANUAL)
   dasm_init();
 #endif
-#if defined(DBGI_H) && !defined(DBGI_INIT_MANUAL)
+#if defined(DBGI_H) && !defined(DI_INIT_MANUAL)
   di_init();
 #endif
-#if defined(FUZZY_SEARCH_H) && !defined(FZY_INIT_MANUAL)
-  fzy_init();
+#if defined(DBGI_SEARCH_H) && !defined(DIS_INIT_MANUAL)
+  dis_init();
 #endif
 #if defined(DEMON_CORE_H) && !defined(DMN_INIT_MANUAL)
   dmn_init();
@@ -105,22 +107,18 @@ supplement_thread_base_entry_point(void (*entry_point)(void *params), void *para
   tctx_release();
 }
 
+internal U64
+update_tick_idx(void)
+{
+  U64 result = ins_atomic_u64_eval(&global_update_tick_idx);
+  return result;
+}
+
 internal B32
 update(void)
 {
   ProfTick(0);
-#if defined(TEXT_CACHE_H)
-  txt_user_clock_tick();
-#endif
-#if defined(DASM_CACHE_H)
-  dasm_user_clock_tick();
-#endif
-#if defined(GEO_CACHE_H)
-  geo_user_clock_tick();
-#endif
-#if defined(TEXTURE_CACHE_H)
-  tex_user_clock_tick();
-#endif
+  ins_atomic_u64_inc_eval(&global_update_tick_idx);
 #if OS_FEATURE_GRAPHICAL
   B32 result = frame();
 #else

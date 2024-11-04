@@ -56,21 +56,6 @@ tex_tctx_ensure_inited(void)
 }
 
 ////////////////////////////////
-//~ rjf: User Clock
-
-internal void
-tex_user_clock_tick(void)
-{
-  ins_atomic_u64_inc_eval(&tex_shared->user_clock_idx);
-}
-
-internal U64
-tex_user_clock_idx(void)
-{
-  return ins_atomic_u64_eval(&tex_shared->user_clock_idx);
-}
-
-////////////////////////////////
 //~ rjf: Scoped Access
 
 internal TEX_Scope *
@@ -123,7 +108,7 @@ tex_scope_touch_node__stripe_r_guarded(TEX_Scope *scope, TEX_Node *node)
   TEX_Touch *touch = tex_tctx->free_touch;
   ins_atomic_u64_inc_eval(&node->scope_ref_count);
   ins_atomic_u64_eval_assign(&node->last_time_touched_us, os_now_microseconds());
-  ins_atomic_u64_eval_assign(&node->last_user_clock_idx_touched, tex_user_clock_idx());
+  ins_atomic_u64_eval_assign(&node->last_user_clock_idx_touched, update_tick_idx());
   if(touch != 0)
   {
     SLLStackPop(tex_tctx->free_touch);
@@ -347,7 +332,7 @@ tex_evictor_thread__entry_point(void *p)
   for(;;)
   {
     U64 check_time_us = os_now_microseconds();
-    U64 check_time_user_clocks = tex_user_clock_idx();
+    U64 check_time_user_clocks = update_tick_idx();
     U64 evict_threshold_us = 10*1000000;
     U64 evict_threshold_user_clocks = 10;
     for(U64 slot_idx = 0; slot_idx < tex_shared->slots_count; slot_idx += 1)

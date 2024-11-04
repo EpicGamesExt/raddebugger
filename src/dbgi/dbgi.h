@@ -72,7 +72,7 @@ struct DI_EventList
 };
 
 ////////////////////////////////
-//~ rjf: Cache Types
+//~ rjf: Debug Info Cache Types
 
 typedef struct DI_StringChunkNode DI_StringChunkNode;
 struct DI_StringChunkNode
@@ -161,7 +161,7 @@ struct DI_Shared
 {
   Arena *arena;
   
-  // rjf: node cache
+  // rjf: debug info cache
   U64 slots_count;
   DI_Slot *slots;
   U64 stripes_count;
@@ -239,7 +239,7 @@ internal void di_close(DI_Key *key);
 internal RDI_Parsed *di_rdi_from_key(DI_Scope *scope, DI_Key *key, U64 endt_us);
 
 ////////////////////////////////
-//~ rjf: Parse Threads
+//~ rjf: Asynchronous Parse Work
 
 internal B32 di_u2p_enqueue_key(DI_Key *key, U64 endt_us);
 internal void di_u2p_dequeue_key(Arena *arena, DI_Key *out_key);
