@@ -522,9 +522,10 @@ typedef struct COFF_SymbolSecDef
   U16 number_of_relocations;
   U16 number_of_ln;
   U32 check_sum;
-  U16 number; // one-based section index
+  U16 number_lo; // one-based section index
   U8 selection;
-  U8 unused[3];
+  U8 unused;
+  U16 number_hi;
 } COFF_SymbolSecDef;
 
 // specifies how section data should be modified when placed in the image file.
@@ -682,6 +683,7 @@ typedef U32 COFF_DataType;
 typedef struct COFF_HeaderInfo
 {
   COFF_MachineType machine;
+  COFF_DataType type;
   U64 section_array_off;
   U64 section_count_no_null;
   U64 string_table_off;

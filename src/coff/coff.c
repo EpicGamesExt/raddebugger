@@ -97,15 +97,17 @@ coff_header_info_from_data(String8 data)
   COFF_HeaderInfo info = {0};
   if (coff_is_big_obj(data)) {
     COFF_HeaderBigObj *big_header = (COFF_HeaderBigObj*)data.str;
-    info.machine               = big_header->machine;
-    info.section_array_off     = sizeof(COFF_HeaderBigObj);
-    info.section_count_no_null = big_header->section_count;
-    info.string_table_off      = big_header->pointer_to_symbol_table + sizeof(COFF_Symbol32) * big_header->number_of_symbols;
-    info.symbol_size           = sizeof(COFF_Symbol32);
-    info.symbol_off            = big_header->pointer_to_symbol_table;
-    info.symbol_count          = big_header->number_of_symbols;
+    info.type                     = COFF_DataType_BIG_OBJ;
+    info.machine                  = big_header->machine;
+    info.section_array_off        = sizeof(COFF_HeaderBigObj);
+    info.section_count_no_null    = big_header->section_count;
+    info.string_table_off         = big_header->pointer_to_symbol_table + sizeof(COFF_Symbol32) * big_header->number_of_symbols;
+    info.symbol_size              = sizeof(COFF_Symbol32);
+    info.symbol_off               = big_header->pointer_to_symbol_table;
+    info.symbol_count             = big_header->number_of_symbols;
   } else if (coff_is_obj(data)) {
-    COFF_Header *header = (COFF_Header*)data.str;
+    COFF_Header *header        = (COFF_Header*)data.str;
+    info.type                  = COFF_DataType_OBJ;
     info.machine               = header->machine;
     info.section_array_off     = sizeof(COFF_Header);
     info.section_count_no_null = header->section_count;
