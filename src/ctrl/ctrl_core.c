@@ -1794,7 +1794,7 @@ ctrl_query_cached_reg_block_from_thread(Arena *arena, CTRL_EntityStore *store, C
     }
     
     // rjf: allocate existing node
-    if(!node) OS_MutexScopeW(stripe->w_mutex)
+    if(!node) OS_MutexScopeW(stripe->w_mutex) OS_MutexScopeRWPromote(stripe->r_mutex)
     {
       node = push_array(stripe->arena, CTRL_ThreadRegCacheNode, 1);
       DLLPushBack(slot->first, slot->last, node);
@@ -1810,7 +1810,7 @@ ctrl_query_cached_reg_block_from_thread(Arena *arena, CTRL_EntityStore *store, C
       B32 need_stale = 1;
       if(node->reg_gen != current_reg_gen && dmn_thread_read_reg_block(handle.dmn_handle, result))
       {
-        OS_MutexScopeW(stripe->w_mutex) if(node != 0)
+        OS_MutexScopeW(stripe->w_mutex) OS_MutexScopeRWPromote(stripe->r_mutex) if(node != 0)
         {
           need_stale = 0;
           node->reg_gen = current_reg_gen;
@@ -5819,6 +5819,7 @@ ctrl_u2ms_dequeue_req(CTRL_Handle *out_process, Rng1U64 *out_vaddr_range, B32 *o
 
 ASYNC_WORK_DEF(ctrl_mem_stream_work)
 {
+  ProfBeginFunction();
   CTRL_ProcessMemoryCache *cache = &ctrl_state->process_memory_cache;
   //- rjf: unpack next request
   CTRL_Handle process = {0};
@@ -5977,6 +5978,7 @@ ASYNC_WORK_DEF(ctrl_mem_stream_work)
   
   //- rjf: broadcast changes
   os_condition_variable_broadcast(process_stripe->cv);
+  ProfEnd();
   ProfEnd();
   return 0;
 }

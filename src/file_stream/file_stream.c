@@ -121,7 +121,7 @@ fs_hash_from_path_range(String8 path, Rng1U64 range, U64 endt_us)
         }
         
         // rjf: node does not exist? -> create & store
-        if(node == 0) OS_MutexScopeW(path_stripe->w_mutex)
+        if(node == 0) OS_MutexScopeW(path_stripe->w_mutex) OS_MutexScopeRWPromote(path_stripe->r_mutex)
         {
           node = push_array(path_stripe->arena, FS_Node, 1);
           SLLQueuePush(path_slot->first, path_slot->last, node);
@@ -145,7 +145,7 @@ fs_hash_from_path_range(String8 path, Rng1U64 range, U64 endt_us)
         }
         
         // rjf: range node does not exist? create & store
-        if(range_node == 0) OS_MutexScopeW(path_stripe->w_mutex)
+        if(range_node == 0) OS_MutexScopeW(path_stripe->w_mutex) OS_MutexScopeRWPromote(path_stripe->r_mutex)
         {
           if(range_node == 0)
           {
@@ -302,6 +302,7 @@ fs_u2s_dequeue_req(Arena *arena, Rng1U64 *range_out, String8 *path_out)
 
 ASYNC_WORK_DEF(fs_stream_work)
 {
+  ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   
   //- rjf: get next request
@@ -356,7 +357,7 @@ ASYNC_WORK_DEF(fs_stream_work)
   }
   
   //- rjf: commit info to cache
-  ProfScope("commit to cache") OS_MutexScopeR(path_stripe->r_mutex) OS_MutexScopeW(path_stripe->w_mutex)
+  ProfScope("commit to cache") OS_MutexScopeW(path_stripe->r_mutex) OS_MutexScopeW(path_stripe->w_mutex)
   {
     FS_Node *node = 0;
     for(FS_Node *n = path_slot->first; n != 0; n = n->next)
@@ -396,6 +397,7 @@ ASYNC_WORK_DEF(fs_stream_work)
   
   ProfEnd();
   scratch_end(scratch);
+  ProfEnd();
   return 0;
 }
 

@@ -518,64 +518,78 @@ p2r_location_over_lvar_addr_range(Arena *arena, RDIM_ScopeChunkList *scopes, RDI
 
 ASYNC_WORK_DEF(p2r_exe_hash_work)
 {
+  ProfBeginFunction();
   Arena *arena = p2r_state->work_thread_arenas[thread_idx];
   P2R_EXEHashIn *in = (P2R_EXEHashIn *)input;
   U64 *out = push_array(arena, U64, 1);
   ProfScope("hash exe") *out = rdi_hash(in->exe_data.str, in->exe_data.size);
+  ProfEnd();
   return out;
 }
 
 ASYNC_WORK_DEF(p2r_tpi_hash_parse_work)
 {
+  ProfBeginFunction();
   Arena *arena = p2r_state->work_thread_arenas[thread_idx];
   P2R_TPIHashParseIn *in = (P2R_TPIHashParseIn *)input;
   void *out = 0;
   ProfScope("parse tpi hash") out = pdb_tpi_hash_from_data(arena, in->strtbl, in->tpi, in->hash_data, in->aux_data);
+  ProfEnd();
   return out;
 }
 
 ASYNC_WORK_DEF(p2r_tpi_leaf_parse_work)
 {
+  ProfBeginFunction();
   Arena *arena = p2r_state->work_thread_arenas[thread_idx];
   P2R_TPILeafParseIn *in = (P2R_TPILeafParseIn *)input;
   void *out = 0;
   ProfScope("parse tpi leaf") out = cv_leaf_from_data(arena, in->leaf_data, in->itype_first);
+  ProfEnd();
   return out;
 }
 
 ASYNC_WORK_DEF(p2r_symbol_stream_parse_work)
 {
+  ProfBeginFunction();
   Arena *arena = p2r_state->work_thread_arenas[thread_idx];
   P2R_SymbolStreamParseIn *in = (P2R_SymbolStreamParseIn *)input;
   void *out = 0;
   ProfScope("parse symbol stream") out = cv_sym_from_data(arena, in->data, 4);
+  ProfEnd();
   return out;
 }
 
 ASYNC_WORK_DEF(p2r_c13_stream_parse_work)
 {
+  ProfBeginFunction();
   Arena *arena = p2r_state->work_thread_arenas[thread_idx];
   P2R_C13StreamParseIn *in = (P2R_C13StreamParseIn *)input;
   void *out = 0;
   ProfScope("parse c13 stream") out = cv_c13_parsed_from_data(arena, in->data, in->strtbl, in->coff_sections);
+  ProfEnd();
   return out;
 }
 
 ASYNC_WORK_DEF(p2r_comp_unit_parse_work)
 {
+  ProfBeginFunction();
   Arena *arena = p2r_state->work_thread_arenas[thread_idx];
   P2R_CompUnitParseIn *in = (P2R_CompUnitParseIn *)input;
   void *out = 0;
   ProfScope("parse comp units") out = pdb_comp_unit_array_from_data(arena, in->data);
+  ProfEnd();
   return out;
 }
 
 ASYNC_WORK_DEF(p2r_comp_unit_contributions_parse_work)
 {
+  ProfBeginFunction();
   Arena *arena = p2r_state->work_thread_arenas[thread_idx];
   P2R_CompUnitContributionsParseIn *in = (P2R_CompUnitContributionsParseIn *)input;
   void *out = 0;
   ProfScope("parse comp unit contributions") out = pdb_comp_unit_contribution_array_from_data(arena, in->data, in->coff_sections);
+  ProfEnd();
   return out;
 }
 
@@ -584,6 +598,7 @@ ASYNC_WORK_DEF(p2r_comp_unit_contributions_parse_work)
 
 ASYNC_WORK_DEF(p2r_units_convert_work)
 {
+  ProfBeginFunction();
   Arena *arena = p2r_state->work_thread_arenas[thread_idx];
   Temp scratch = scratch_begin(&arena, 1);
   P2R_UnitConvertIn *in = (P2R_UnitConvertIn *)input;
@@ -1044,6 +1059,7 @@ ASYNC_WORK_DEF(p2r_units_convert_work)
     }
   }
   scratch_end(scratch);
+  ProfEnd();
   return out;
 }
 
@@ -1052,6 +1068,7 @@ ASYNC_WORK_DEF(p2r_units_convert_work)
 
 ASYNC_WORK_DEF(p2r_link_name_map_build_work)
 {
+  ProfBeginFunction();
   Arena *arena = p2r_state->work_thread_arenas[thread_idx];
   P2R_LinkNameMapBuildIn *in = (P2R_LinkNameMapBuildIn *)input;
   CV_RecRange *rec_ranges_first = in->sym->sym_ranges.ranges;
@@ -1100,6 +1117,7 @@ ASYNC_WORK_DEF(p2r_link_name_map_build_work)
       }break;
     }
   }
+  ProfEnd();
   return 0;
 }
 
@@ -1108,6 +1126,7 @@ ASYNC_WORK_DEF(p2r_link_name_map_build_work)
 
 ASYNC_WORK_DEF(p2r_itype_fwd_map_fill_work)
 {
+  ProfBeginFunction();
   Arena *arena = p2r_state->work_thread_arenas[thread_idx];
   P2R_ITypeFwdMapFillIn *in = (P2R_ITypeFwdMapFillIn *)input;
   ProfScope("fill itype fwd map") for(CV_TypeId itype = in->itype_first; itype < in->itype_opl; itype += 1)
@@ -1231,11 +1250,13 @@ ASYNC_WORK_DEF(p2r_itype_fwd_map_fill_work)
       in->itype_fwd_map[itype] = itype_fwd;
     }
   }
+  ProfEnd();
   return 0;
 }
 
 ASYNC_WORK_DEF(p2r_itype_chain_build_work)
 {
+  ProfBeginFunction();
   Arena *arena = p2r_state->work_thread_arenas[thread_idx];
   Temp scratch = scratch_begin(&arena, 1);
   P2R_ITypeChainBuildIn *in = (P2R_ITypeChainBuildIn *)input;
@@ -1529,6 +1550,7 @@ ASYNC_WORK_DEF(p2r_itype_chain_build_work)
     }
   }
   scratch_end(scratch);
+  ProfEnd();
   return 0;
 }
 
@@ -1537,6 +1559,7 @@ ASYNC_WORK_DEF(p2r_itype_chain_build_work)
 
 ASYNC_WORK_DEF(p2r_udt_convert_work)
 {
+  ProfBeginFunction();
   Arena *arena = p2r_state->work_thread_arenas[thread_idx];
   P2R_UDTConvertIn *in = (P2R_UDTConvertIn *)input;
 #define p2r_type_ptr_from_itype(itype) ((in->itype_type_ptrs && (itype) < in->tpi_leaf->itype_opl) ? (in->itype_type_ptrs[(in->itype_fwd_map[(itype)] ? in->itype_fwd_map[(itype)] : (itype))]) : 0)
@@ -2164,6 +2187,7 @@ ASYNC_WORK_DEF(p2r_udt_convert_work)
     }
   }
 #undef p2r_type_ptr_from_itype
+  ProfEnd();
   return udts;
 }
 
@@ -2172,6 +2196,7 @@ ASYNC_WORK_DEF(p2r_udt_convert_work)
 
 ASYNC_WORK_DEF(p2r_symbol_stream_convert_work)
 {
+  ProfBeginFunction();
   Arena *arena = p2r_state->work_thread_arenas[thread_idx];
   Temp scratch = scratch_begin(&arena, 1);
   P2R_SymbolStreamConvertIn *in = (P2R_SymbolStreamConvertIn *)input;
@@ -3083,6 +3108,7 @@ ASYNC_WORK_DEF(p2r_symbol_stream_convert_work)
   
 #undef p2r_type_ptr_from_itype
   scratch_end(scratch);
+  ProfEnd();
   return out;
 }
 
@@ -4140,24 +4166,29 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
 
 ASYNC_WORK_DEF(p2r_bake_src_files_strings_work)
 {
+  ProfBeginFunction();
   Arena *arena = p2r_state->work_thread_arenas[thread_idx];
   P2R_BakeSrcFilesStringsIn *in = (P2R_BakeSrcFilesStringsIn *)input;
   p2r_make_string_map_if_needed();
   ProfScope("bake src file strings") rdim_bake_string_map_loose_push_src_files(arena, in->top, in->maps[thread_idx], in->list);
+  ProfEnd();
   return 0;
 }
 
 ASYNC_WORK_DEF(p2r_bake_units_strings_work)
 {
+  ProfBeginFunction();
   Arena *arena = p2r_state->work_thread_arenas[thread_idx];
   P2R_BakeUnitsStringsIn *in = (P2R_BakeUnitsStringsIn *)input;
   p2r_make_string_map_if_needed();
   ProfScope("bake unit strings") rdim_bake_string_map_loose_push_units(arena, in->top, in->maps[thread_idx], in->list);
+  ProfEnd();
   return 0;
 }
 
 ASYNC_WORK_DEF(p2r_bake_types_strings_work)
 {
+  ProfBeginFunction();
   Arena *arena = p2r_state->work_thread_arenas[thread_idx];
   P2R_BakeTypesStringsIn *in = (P2R_BakeTypesStringsIn *)input;
   p2r_make_string_map_if_needed();
@@ -4168,11 +4199,13 @@ ASYNC_WORK_DEF(p2r_bake_types_strings_work)
       rdim_bake_string_map_loose_push_type_slice(arena, in->top, in->maps[thread_idx], n->v, n->count);
     }
   }
+  ProfEnd();
   return 0;
 }
 
 ASYNC_WORK_DEF(p2r_bake_udts_strings_work)
 {
+  ProfBeginFunction();
   Arena *arena = p2r_state->work_thread_arenas[thread_idx];
   P2R_BakeUDTsStringsIn *in = (P2R_BakeUDTsStringsIn *)input;
   p2r_make_string_map_if_needed();
@@ -4183,11 +4216,13 @@ ASYNC_WORK_DEF(p2r_bake_udts_strings_work)
       rdim_bake_string_map_loose_push_udt_slice(arena, in->top, in->maps[thread_idx], n->v, n->count);
     }
   }
+  ProfEnd();
   return 0;
 }
 
 ASYNC_WORK_DEF(p2r_bake_symbols_strings_work)
 {
+  ProfBeginFunction();
   Arena *arena = p2r_state->work_thread_arenas[thread_idx];
   P2R_BakeSymbolsStringsIn *in = (P2R_BakeSymbolsStringsIn *)input;
   p2r_make_string_map_if_needed();
@@ -4198,11 +4233,13 @@ ASYNC_WORK_DEF(p2r_bake_symbols_strings_work)
       rdim_bake_string_map_loose_push_symbol_slice(arena, in->top, in->maps[thread_idx], n->v, n->count);
     }
   }
+  ProfEnd();
   return 0;
 }
 
 ASYNC_WORK_DEF(p2r_bake_scopes_strings_work)
 {
+  ProfBeginFunction();
   Arena *arena = p2r_state->work_thread_arenas[thread_idx];
   P2R_BakeScopesStringsIn *in = (P2R_BakeScopesStringsIn *)input;
   p2r_make_string_map_if_needed();
@@ -4213,15 +4250,18 @@ ASYNC_WORK_DEF(p2r_bake_scopes_strings_work)
       rdim_bake_string_map_loose_push_scope_slice(arena, in->top, in->maps[thread_idx], n->v, n->count);
     }
   }
+  ProfEnd();
   return 0;
 }
 
 ASYNC_WORK_DEF(p2r_bake_line_tables_work)
 {
+  ProfBeginFunction();
   Arena *arena = p2r_state->work_thread_arenas[thread_idx];
   P2R_BakeLineTablesIn *in = (P2R_BakeLineTablesIn *)input;
   RDIM_LineTableBakeResult *out = push_array(arena, RDIM_LineTableBakeResult, 1);
   ProfScope("bake line tables") *out = rdim_bake_line_tables(arena, in->line_tables);
+  ProfEnd();
   return out;
 }
 
@@ -4231,6 +4271,7 @@ ASYNC_WORK_DEF(p2r_bake_line_tables_work)
 
 ASYNC_WORK_DEF(p2r_bake_string_map_join_work)
 {
+  ProfBeginFunction();
   Arena *arena = p2r_state->work_thread_arenas[thread_idx];
   P2R_JoinBakeStringMapSlotsIn *in = (P2R_JoinBakeStringMapSlotsIn *)input;
   ProfScope("join bake string maps")
@@ -4252,6 +4293,7 @@ ASYNC_WORK_DEF(p2r_bake_string_map_join_work)
       }
     }
   }
+  ProfEnd();
   return 0;
 }
 
@@ -4259,6 +4301,7 @@ ASYNC_WORK_DEF(p2r_bake_string_map_join_work)
 
 ASYNC_WORK_DEF(p2r_bake_string_map_sort_work)
 {
+  ProfBeginFunction();
   Arena *arena = p2r_state->work_thread_arenas[thread_idx];
   P2R_SortBakeStringMapSlotsIn *in = (P2R_SortBakeStringMapSlotsIn *)input;
   ProfScope("sort bake string chunk list map range")
@@ -4281,6 +4324,7 @@ ASYNC_WORK_DEF(p2r_bake_string_map_sort_work)
       }
     }
   }
+  ProfEnd();
   return 0;
 }
 
@@ -4288,10 +4332,12 @@ ASYNC_WORK_DEF(p2r_bake_string_map_sort_work)
 
 ASYNC_WORK_DEF(p2r_build_bake_name_map_work)
 {
+  ProfBeginFunction();
   Arena *arena = p2r_state->work_thread_arenas[thread_idx];
   P2R_BuildBakeNameMapIn *in = (P2R_BuildBakeNameMapIn *)input;
   RDIM_BakeNameMap *name_map = 0;
   ProfScope("build name map %i", in->k) name_map = rdim_bake_name_map_from_kind_params(arena, in->k, in->params);
+  ProfEnd();
   return name_map;
 }
 
@@ -4299,118 +4345,144 @@ ASYNC_WORK_DEF(p2r_build_bake_name_map_work)
 
 ASYNC_WORK_DEF(p2r_bake_units_work)
 {
+  ProfBeginFunction();
   Arena *arena = p2r_state->work_thread_arenas[thread_idx];
   P2R_BakeUnitsIn *in = (P2R_BakeUnitsIn *)input;
   RDIM_UnitBakeResult *out = push_array(arena, RDIM_UnitBakeResult, 1);
   ProfScope("bake units") *out = rdim_bake_units(arena, in->strings, in->path_tree, in->units);
+  ProfEnd();
   return out;
 }
 
 ASYNC_WORK_DEF(p2r_bake_unit_vmap_work)
 {
+  ProfBeginFunction();
   Arena *arena = p2r_state->work_thread_arenas[thread_idx];
   P2R_BakeUnitVMapIn *in = (P2R_BakeUnitVMapIn *)input;
   RDIM_UnitVMapBakeResult *out = push_array(arena, RDIM_UnitVMapBakeResult, 1);
   ProfScope("bake unit vmap") *out = rdim_bake_unit_vmap(arena, in->units);
+  ProfEnd();
   return out;
 }
 
 ASYNC_WORK_DEF(p2r_bake_src_files_work)
 {
+  ProfBeginFunction();
   Arena *arena = p2r_state->work_thread_arenas[thread_idx];
   P2R_BakeSrcFilesIn *in = (P2R_BakeSrcFilesIn *)input;
   RDIM_SrcFileBakeResult *out = push_array(arena, RDIM_SrcFileBakeResult, 1);
   ProfScope("bake src files") *out = rdim_bake_src_files(arena, in->strings, in->path_tree, in->src_files);
+  ProfEnd();
   return out;
 }
 
 ASYNC_WORK_DEF(p2r_bake_udts_work)
 {
+  ProfBeginFunction();
   Arena *arena = p2r_state->work_thread_arenas[thread_idx];
   P2R_BakeUDTsIn *in = (P2R_BakeUDTsIn *)input;
   RDIM_UDTBakeResult *out = push_array(arena, RDIM_UDTBakeResult, 1);
   ProfScope("bake udts") *out = rdim_bake_udts(arena, in->strings, in->udts);
+  ProfEnd();
   return out;
 }
 
 ASYNC_WORK_DEF(p2r_bake_global_variables_work)
 {
+  ProfBeginFunction();
   Arena *arena = p2r_state->work_thread_arenas[thread_idx];
   P2R_BakeGlobalVariablesIn *in = (P2R_BakeGlobalVariablesIn *)input;
   RDIM_GlobalVariableBakeResult *out = push_array(arena, RDIM_GlobalVariableBakeResult, 1);
   ProfScope("bake global variables") *out = rdim_bake_global_variables(arena, in->strings, in->global_variables);
+  ProfEnd();
   return out;
 }
 
 ASYNC_WORK_DEF(p2r_bake_global_vmap_work)
 {
+  ProfBeginFunction();
   Arena *arena = p2r_state->work_thread_arenas[thread_idx];
   P2R_BakeGlobalVMapIn *in = (P2R_BakeGlobalVMapIn *)input;
   RDIM_GlobalVMapBakeResult *out = push_array(arena, RDIM_GlobalVMapBakeResult, 1);
   ProfScope("bake global vmap") *out = rdim_bake_global_vmap(arena, in->global_variables);
+  ProfEnd();
   return out;
 }
 
 ASYNC_WORK_DEF(p2r_bake_thread_variables_work)
 {
+  ProfBeginFunction();
   Arena *arena = p2r_state->work_thread_arenas[thread_idx];
   P2R_BakeThreadVariablesIn *in = (P2R_BakeThreadVariablesIn *)input;
   RDIM_ThreadVariableBakeResult *out = push_array(arena, RDIM_ThreadVariableBakeResult, 1);
   ProfScope("bake thread variables") *out = rdim_bake_thread_variables(arena, in->strings, in->thread_variables);
+  ProfEnd();
   return out;
 }
 
 ASYNC_WORK_DEF(p2r_bake_procedures_work)
 {
+  ProfBeginFunction();
   Arena *arena = p2r_state->work_thread_arenas[thread_idx];
   P2R_BakeProceduresIn *in = (P2R_BakeProceduresIn *)input;
   RDIM_ProcedureBakeResult *out = push_array(arena, RDIM_ProcedureBakeResult, 1);
   ProfScope("bake procedures") *out = rdim_bake_procedures(arena, in->strings, in->procedures);
+  ProfEnd();
   return out;
 }
 
 ASYNC_WORK_DEF(p2r_bake_scopes_work)
 {
+  ProfBeginFunction();
   Arena *arena = p2r_state->work_thread_arenas[thread_idx];
   P2R_BakeScopesIn *in = (P2R_BakeScopesIn *)input;
   RDIM_ScopeBakeResult *out = push_array(arena, RDIM_ScopeBakeResult, 1);
   ProfScope("bake scopes") *out = rdim_bake_scopes(arena, in->strings, in->scopes);
+  ProfEnd();
   return out;
 }
 
 ASYNC_WORK_DEF(p2r_bake_scope_vmap_work)
 {
+  ProfBeginFunction();
   Arena *arena = p2r_state->work_thread_arenas[thread_idx];
   P2R_BakeScopeVMapIn *in = (P2R_BakeScopeVMapIn *)input;
   RDIM_ScopeVMapBakeResult *out = push_array(arena, RDIM_ScopeVMapBakeResult, 1);
   ProfScope("bake scope vmap") *out = rdim_bake_scope_vmap(arena, in->scopes);
+  ProfEnd();
   return out;
 }
 
 ASYNC_WORK_DEF(p2r_bake_inline_sites_work)
 {
+  ProfBeginFunction();
   Arena *arena = p2r_state->work_thread_arenas[thread_idx];
   P2R_BakeInlineSitesIn *in = (P2R_BakeInlineSitesIn *)input;
   RDIM_InlineSiteBakeResult *out = push_array(arena, RDIM_InlineSiteBakeResult, 1);
   ProfScope("bake inline sites") *out = rdim_bake_inline_sites(arena, in->strings, in->inline_sites);
+  ProfEnd();
   return out;
 }
 
 ASYNC_WORK_DEF(p2r_bake_file_paths_work)
 {
+  ProfBeginFunction();
   Arena *arena = p2r_state->work_thread_arenas[thread_idx];
   P2R_BakeFilePathsIn *in = (P2R_BakeFilePathsIn *)input;
   RDIM_FilePathBakeResult *out = push_array(arena, RDIM_FilePathBakeResult, 1);
   ProfScope("bake file paths") *out = rdim_bake_file_paths(arena, in->strings, in->path_tree);
+  ProfEnd();
   return out;
 }
 
 ASYNC_WORK_DEF(p2r_bake_strings_work)
 {
+  ProfBeginFunction();
   Arena *arena = p2r_state->work_thread_arenas[thread_idx];
   P2R_BakeStringsIn *in = (P2R_BakeStringsIn *)input;
   RDIM_StringBakeResult *out = push_array(arena, RDIM_StringBakeResult, 1);
   ProfScope("bake strings") *out = rdim_bake_strings(arena, in->strings);
+  ProfEnd();
   return out;
 }
 
@@ -4418,28 +4490,34 @@ ASYNC_WORK_DEF(p2r_bake_strings_work)
 
 ASYNC_WORK_DEF(p2r_bake_type_nodes_work)
 {
+  ProfBeginFunction();
   Arena *arena = p2r_state->work_thread_arenas[thread_idx];
   P2R_BakeTypeNodesIn *in = (P2R_BakeTypeNodesIn *)input;
   RDIM_TypeNodeBakeResult *out = push_array(arena, RDIM_TypeNodeBakeResult, 1);
   ProfScope("bake type nodes") *out = rdim_bake_types(arena, in->strings, in->idx_runs, in->types);
+  ProfEnd();
   return out;
 }
 
 ASYNC_WORK_DEF(p2r_bake_name_map_work)
 {
+  ProfBeginFunction();
   Arena *arena = p2r_state->work_thread_arenas[thread_idx];
   P2R_BakeNameMapIn *in = (P2R_BakeNameMapIn *)input;
   RDIM_NameMapBakeResult *out = push_array(arena, RDIM_NameMapBakeResult, 1);
   ProfScope("bake name map %i", in->kind) *out = rdim_bake_name_map(arena, in->strings, in->idx_runs, in->map);
+  ProfEnd();
   return out;
 }
 
 ASYNC_WORK_DEF(p2r_bake_idx_runs_work)
 {
+  ProfBeginFunction();
   Arena *arena = p2r_state->work_thread_arenas[thread_idx];
   P2R_BakeIdxRunsIn *in = (P2R_BakeIdxRunsIn *)input;
   RDIM_IndexRunBakeResult *out = push_array(arena, RDIM_IndexRunBakeResult, 1);
   ProfScope("bake idx runs") *out = rdim_bake_index_runs(arena, in->idx_runs);
+  ProfEnd();
   return out;
 }
 

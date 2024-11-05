@@ -128,6 +128,90 @@ struct DI_Stripe
 };
 
 ////////////////////////////////
+//~ rjf: Search Cache Types
+
+typedef struct DI_SearchItem DI_SearchItem;
+struct DI_SearchItem
+{
+  U64 idx;
+  U64 dbgi_idx;
+  U64 missed_size;
+  FuzzyMatchRangeList match_ranges;
+};
+
+typedef struct DI_SearchItemChunk DI_SearchItemChunk;
+struct DI_SearchItemChunk
+{
+  DI_SearchItemChunk *next;
+  DI_SearchItem *v;
+  U64 count;
+  U64 cap;
+};
+
+typedef struct DI_SearchItemChunkList DI_SearchItemChunkList;
+struct DI_SearchItemChunkList
+{
+  DI_SearchItemChunk *first;
+  DI_SearchItemChunk *last;
+  U64 chunk_count;
+  U64 total_count;
+};
+
+typedef struct DI_SearchItemArray DI_SearchItemArray;
+struct DI_SearchItemArray
+{
+  DI_SearchItem *v;
+  U64 count;
+};
+
+typedef struct DI_SearchParams DI_SearchParams;
+struct DI_SearchParams
+{
+  RDI_SectionKind target;
+  DI_KeyArray dbgi_keys;
+};
+
+typedef struct DI_SearchBucket DI_SearchBucket;
+struct DI_SearchBucket
+{
+  Arena *arena;
+  String8 query;
+  U64 params_hash;
+  DI_SearchParams params;
+};
+
+typedef struct DI_SearchNode DI_SearchNode;
+struct DI_SearchNode
+{
+  DI_SearchNode *next;
+  DI_SearchNode *prev;
+  U128 key;
+  U64 scope_refcount;
+  U64 last_update_tick_idx;
+  U64 bucket_read_gen;
+  U64 bucket_write_gen;
+  DI_SearchBucket buckets[6];
+  DI_SearchItemArray items;
+};
+
+typedef struct DI_SearchSlot DI_SearchSlot;
+struct DI_SearchSlot
+{
+  DI_SearchNode *first;
+  DI_SearchNode *last;
+};
+
+typedef struct DI_SearchStripe DI_SearchStripe;
+struct DI_SearchStripe
+{
+  Arena *arena;
+  DI_SearchNode *free_node;
+  OS_Handle r_mutex;
+  OS_Handle w_mutex;
+  OS_Handle cv;
+};
+
+////////////////////////////////
 //~ rjf: Scoped Access Types
 
 typedef struct DI_Touch DI_Touch;
@@ -135,6 +219,7 @@ struct DI_Touch
 {
   DI_Touch *next;
   DI_Node *node;
+  DI_SearchNode *search_node;
 };
 
 typedef struct DI_Scope DI_Scope;
@@ -154,6 +239,21 @@ struct DI_TCTX
 };
 
 ////////////////////////////////
+//~ rjf: Search Thread State Types
+
+typedef struct DI_SearchThread DI_SearchThread;
+struct DI_SearchThread
+{
+  OS_Handle thread;
+  OS_Handle ring_mutex;
+  OS_Handle ring_cv;
+  U64 ring_size;
+  U8 *ring_base;
+  U64 ring_write_pos;
+  U64 ring_read_pos;
+};
+
+////////////////////////////////
 //~ rjf: Shared State Types
 
 typedef struct DI_Shared DI_Shared;
@@ -166,6 +266,12 @@ struct DI_Shared
   DI_Slot *slots;
   U64 stripes_count;
   DI_Stripe *stripes;
+  
+  // rjf: search cache
+  U64 search_slots_count;
+  DI_SearchSlot *search_slots;
+  U64 search_stripes_count;
+  DI_SearchStripe *search_stripes;
   
   // rjf: user -> parse ring
   OS_Handle u2p_ring_mutex;
@@ -182,6 +288,10 @@ struct DI_Shared
   U8 *p2u_ring_base;
   U64 p2u_ring_write_pos;
   U64 p2u_ring_read_pos;
+  
+  // rjf: search threads
+  U64 search_threads_count;
+  DI_SearchThread *search_threads;
 };
 
 ////////////////////////////////
@@ -194,6 +304,7 @@ global RDI_Parsed di_rdi_parsed_nil = {0};
 ////////////////////////////////
 //~ rjf: Basic Helpers
 
+internal U64 di_hash_from_seed_string(U64 seed, String8 string, StringMatchFlags match_flags);
 internal U64 di_hash_from_string(String8 string, StringMatchFlags match_flags);
 internal U64 di_hash_from_key(DI_Key *k);
 internal DI_Key di_key_zero(void);
@@ -202,6 +313,10 @@ internal DI_Key di_key_copy(Arena *arena, DI_Key *src);
 internal DI_Key di_normalized_key_from_key(Arena *arena, DI_Key *src);
 internal void di_key_list_push(Arena *arena, DI_KeyList *list, DI_Key *key);
 internal DI_KeyArray di_key_array_from_list(Arena *arena, DI_KeyList *list);
+internal DI_SearchParams di_search_params_copy(Arena *arena, DI_SearchParams *src);
+internal U64 di_hash_from_search_params(DI_SearchParams *params);
+internal void di_search_item_chunk_list_concat_in_place(DI_SearchItemChunkList *dst, DI_SearchItemChunkList *to_push);
+internal U64 di_search_item_num_from_array_element_idx__linear_search(DI_SearchItemArray *array, U64 element_idx);
 
 ////////////////////////////////
 //~ rjf: Main Layer Initialization
@@ -214,6 +329,7 @@ internal void di_init(void);
 internal DI_Scope *di_scope_open(void);
 internal void di_scope_close(DI_Scope *scope);
 internal void di_scope_touch_node__stripe_mutex_r_guarded(DI_Scope *scope, DI_Node *node);
+internal void di_scope_touch_search_node__stripe_mutex_r_guarded(DI_Scope *scope, DI_SearchNode *node);
 
 ////////////////////////////////
 //~ rjf: Per-Slot Functions
@@ -234,9 +350,14 @@ internal void di_open(DI_Key *key);
 internal void di_close(DI_Key *key);
 
 ////////////////////////////////
-//~ rjf: Cache Lookups
+//~ rjf: Debug Info Cache Lookups
 
 internal RDI_Parsed *di_rdi_from_key(DI_Scope *scope, DI_Key *key, U64 endt_us);
+
+////////////////////////////////
+//~ rjf: Search Cache Lookups
+
+internal DI_SearchItemArray di_search_items_from_key_params_query(DI_Scope *scope, U128 key, DI_SearchParams *params, String8 query, U64 endt_us, B32 *stale_out);
 
 ////////////////////////////////
 //~ rjf: Asynchronous Parse Work
@@ -248,5 +369,15 @@ internal void di_p2u_push_event(DI_Event *event);
 internal DI_EventList di_p2u_pop_events(Arena *arena, U64 endt_us);
 
 ASYNC_WORK_DEF(di_parse_work);
+
+////////////////////////////////
+//~ rjf: Search Threads
+
+internal B32 di_u2s_enqueue_req(U64 thread_idx, U128 key, U64 endt_us);
+internal U128 di_u2s_dequeue_req(U64 thread_idx);
+
+ASYNC_WORK_DEF(di_search_work);
+internal int di_qsort_compare_search_items(DI_SearchItem *a, DI_SearchItem *b);
+internal void di_search_thread__entry_point(void *p);
 
 #endif // DBGI_H

@@ -503,6 +503,7 @@ dasm_u2p_dequeue_req(Arena *arena, U128 *hash_out, DASM_Params *params_out)
 
 ASYNC_WORK_DEF(dasm_parse_work)
 {
+  ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   HS_Scope *hs_scope = hs_scope_open();
   DI_Scope *di_scope = di_scope_open();
@@ -774,6 +775,7 @@ ASYNC_WORK_DEF(dasm_parse_work)
   di_scope_close(di_scope);
   hs_scope_close(hs_scope);
   scratch_end(scratch);
+  ProfEnd();
   return 0;
 }
 

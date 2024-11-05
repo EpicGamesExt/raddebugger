@@ -262,6 +262,7 @@ tex_u2x_dequeue_req(U128 *hash_out, TEX_Topology *top_out)
 
 ASYNC_WORK_DEF(tex_xfer_work)
 {
+  ProfBeginFunction();
   HS_Scope *scope = hs_scope_open();
   
   //- rjf: decode
@@ -319,6 +320,7 @@ ASYNC_WORK_DEF(tex_xfer_work)
   }
   
   hs_scope_close(scope);
+  ProfEnd();
   return 0;
 }
 

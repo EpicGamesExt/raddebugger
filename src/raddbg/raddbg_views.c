@@ -5218,7 +5218,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(symbol_lister)
   F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
   DI_KeyList dbgi_keys_list = d_push_active_dbgi_key_list(scratch.arena);
   DI_KeyArray dbgi_keys = di_key_array_from_list(scratch.arena, &dbgi_keys_list);
-  DIS_Params fuzzy_search_params = {RDI_SectionKind_Procedures, dbgi_keys};
+  DI_SearchParams search_params = {RDI_SectionKind_Procedures, dbgi_keys};
   U64 endt_us = os_now_microseconds()+200;
   
   //- rjf: grab rdis
@@ -5243,9 +5243,9 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(symbol_lister)
   RD_SymbolListerViewState *slv = rd_view_state(RD_SymbolListerViewState);
   
   //- rjf: query -> raddbg, filtered items
-  U128 fuzzy_search_key = {rd_regs()->view.u64[0], rd_regs()->view.u64[1]};
+  U128 search_key = {rd_regs()->view.u64[0], rd_regs()->view.u64[1]};
   B32 items_stale = 0;
-  DIS_ItemArray items = dis_items_from_key_params_query(dis_scope, fuzzy_search_key, &fuzzy_search_params, string, endt_us, &items_stale);
+  DI_SearchItemArray items = di_search_items_from_key_params_query(di_scope, search_key, &search_params, string, endt_us, &items_stale);
   if(items_stale)
   {
     rd_request_frame();
@@ -5254,16 +5254,15 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(symbol_lister)
   //- rjf: submit best match when hitting enter w/ no selection
   if(slv->cursor.y == 0 && items.count != 0 && ui_slot_press(UI_EventActionSlot_Accept))
   {
-    DIS_Item *item = &items.v[0];
-    U64 base_idx = 0;
-    for(U64 rdi_idx = 0; rdi_idx < rdis_count; rdi_idx += 1)
+    DI_SearchItem *item = &items.v[0];
+    if(item->dbgi_idx < rdis_count)
     {
-      RDI_Parsed *rdi = rdis[rdi_idx];
+      RDI_Parsed *rdi = rdis[item->dbgi_idx];
       U64 rdi_procedures_count = 0;
       rdi_section_raw_table_from_kind(rdi, RDI_SectionKind_Procedures, &rdi_procedures_count);
-      if(base_idx <= item->idx && item->idx < base_idx + rdi_procedures_count)
+      if(item->idx < rdi_procedures_count)
       {
-        RDI_Procedure *procedure = rdi_element_from_name_idx(rdi, Procedures, item->idx-base_idx);
+        RDI_Procedure *procedure = rdi_element_from_name_idx(rdi, Procedures, item->idx);
         U64 name_size = 0;
         U8 *name_base = rdi_string_from_idx(rdi, procedure->name_string_idx, &name_size);
         String8 name = str8(name_base, name_size);
@@ -5271,9 +5270,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(symbol_lister)
         {
           rd_cmd(RD_CmdKind_CompleteQuery, .string = name);
         }
-        break;
       }
-      base_idx += rdi_procedures_count;
     }
   }
   
@@ -5306,29 +5303,13 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(symbol_lister)
         idx += 1)
       UI_Focus((slv->cursor.y == idx+1) ? UI_FocusKind_On : UI_FocusKind_Off)
     {
-      DIS_Item *item = &items.v[idx];
-      
-      //- rjf: determine dbgi/rdi to which this item belongs
-      DI_Key dbgi_key = {0};
-      RDI_Parsed *rdi = &di_rdi_parsed_nil;
-      U64 base_idx = 0;
-      {
-        for(U64 rdi_idx = 0; rdi_idx < rdis_count; rdi_idx += 1)
-        {
-          U64 procedures_count = 0;
-          rdi_section_raw_table_from_kind(rdis[rdi_idx], RDI_SectionKind_Procedures, &procedures_count);
-          if(base_idx <= item->idx && item->idx < base_idx + procedures_count)
-          {
-            dbgi_key = dbgi_keys.v[rdi_idx];
-            rdi = rdis[rdi_idx];
-            break;
-          }
-          base_idx += procedures_count;
-        }
-      }
+      DI_SearchItem *item = &items.v[idx];
+      if(item->dbgi_idx >= rdis_count) {continue;}
+      DI_Key dbgi_key = dbgi_keys.v[item->dbgi_idx];
+      RDI_Parsed *rdi = rdis[item->dbgi_idx];
       
       //- rjf: unpack this item's info
-      RDI_Procedure *procedure = rdi_element_from_name_idx(rdi, Procedures, item->idx-base_idx);
+      RDI_Procedure *procedure = rdi_element_from_name_idx(rdi, Procedures, item->idx);
       U64 name_size = 0;
       U8 *name_base = rdi_string_from_idx(rdi, procedure->name_string_idx, &name_size);
       String8 name = str8(name_base, name_size);
