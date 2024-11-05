@@ -4880,7 +4880,6 @@ rd_window_frame(RD_Window *ws)
       {
         Temp scratch = scratch_begin(0, 0);
         DI_Scope *di_scope = di_scope_open();
-        DIS_Scope *dis_scope = dis_scope_open();
         DI_KeyList dbgi_keys_list = d_push_active_dbgi_key_list(scratch.arena);
         DI_KeyArray dbgi_keys = di_key_array_from_list(scratch.arena, &dbgi_keys_list);
         
@@ -5024,7 +5023,7 @@ rd_window_frame(RD_Window *ws)
             {
               // rjf: unpack info
               RDI_Parsed *rdi = rdis[items.v[idx].dbgi_idx];
-              String8 name = dis_item_string_from_rdi_target_element_idx(rdi, search_params.target, items.v[idx].idx);
+              String8 name = di_search_item_string_from_rdi_target_element_idx(rdi, search_params.target, items.v[idx].idx);
               
               // rjf: push item
               RD_AutoCompListerItem item = {0};
@@ -5053,7 +5052,7 @@ rd_window_frame(RD_Window *ws)
             {
               // rjf: unpack info
               RDI_Parsed *rdi = rdis[items.v[idx].dbgi_idx];
-              String8 name = dis_item_string_from_rdi_target_element_idx(rdi, search_params.target, items.v[idx].idx);
+              String8 name = di_search_item_string_from_rdi_target_element_idx(rdi, search_params.target, items.v[idx].idx);
               
               // rjf: push item
               RD_AutoCompListerItem item = {0};
@@ -5082,7 +5081,7 @@ rd_window_frame(RD_Window *ws)
             {
               // rjf: unpack info
               RDI_Parsed *rdi = rdis[items.v[idx].dbgi_idx];
-              String8 name = dis_item_string_from_rdi_target_element_idx(rdi, search_params.target, items.v[idx].idx);
+              String8 name = di_search_item_string_from_rdi_target_element_idx(rdi, search_params.target, items.v[idx].idx);
               
               // rjf: push item
               RD_AutoCompListerItem item = {0};
@@ -5111,7 +5110,7 @@ rd_window_frame(RD_Window *ws)
             {
               // rjf: unpack info
               RDI_Parsed *rdi = rdis[items.v[idx].dbgi_idx];
-              String8 name = dis_item_string_from_rdi_target_element_idx(rdi, search_params.target, items.v[idx].idx);
+              String8 name = di_search_item_string_from_rdi_target_element_idx(rdi, search_params.target, items.v[idx].idx);
               
               // rjf: push item
               RD_AutoCompListerItem item = {0};
@@ -5395,7 +5394,6 @@ rd_window_frame(RD_Window *ws)
           }
         }
         
-        dis_scope_close(dis_scope);
         di_scope_close(di_scope);
         scratch_end(scratch);
       }
@@ -11621,7 +11619,6 @@ rd_frame(void)
   if(depth == 0)
   {
     rd_state->frame_di_scope = di_scope_open();
-    rd_state->frame_dis_scope = dis_scope_open();
   }
   B32 allow_text_hotkeys = !rd_state->text_edit_mode;
   rd_state->text_edit_mode = 0;
@@ -16656,7 +16653,6 @@ rd_frame(void)
   if(depth == 0)
   {
     di_scope_close(rd_state->frame_di_scope);
-    dis_scope_close(rd_state->frame_dis_scope);
   }
   
   //////////////////////////////

@@ -139,6 +139,46 @@ di_search_item_num_from_array_element_idx__linear_search(DI_SearchItemArray *arr
   return fuzzy_item_num;
 }
 
+internal String8
+di_search_item_string_from_rdi_target_element_idx(RDI_Parsed *rdi, RDI_SectionKind target, U64 element_idx)
+{
+  String8 result = {0};
+  switch(target)
+  {
+    default:{}break;
+    case RDI_SectionKind_Procedures:
+    {
+      RDI_Procedure *proc = rdi_element_from_name_idx(rdi, Procedures, element_idx);
+      U64 name_size = 0;
+      U8 *name_base = rdi_string_from_idx(rdi, proc->name_string_idx, &name_size);
+      result = str8(name_base, name_size);
+    }break;
+    case RDI_SectionKind_GlobalVariables:
+    {
+      RDI_GlobalVariable *gvar = rdi_element_from_name_idx(rdi, GlobalVariables, element_idx);
+      U64 name_size = 0;
+      U8 *name_base = rdi_string_from_idx(rdi, gvar->name_string_idx, &name_size);
+      result = str8(name_base, name_size);
+    }break;
+    case RDI_SectionKind_ThreadVariables:
+    {
+      RDI_ThreadVariable *tvar = rdi_element_from_name_idx(rdi, ThreadVariables, element_idx);
+      U64 name_size = 0;
+      U8 *name_base = rdi_string_from_idx(rdi, tvar->name_string_idx, &name_size);
+      result = str8(name_base, name_size);
+    }break;
+    case RDI_SectionKind_UDTs:
+    {
+      RDI_UDT *udt = rdi_element_from_name_idx(rdi, UDTs, element_idx);
+      RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, udt->self_type_idx);
+      U64 name_size = 0;
+      U8 *name_base = rdi_string_from_idx(rdi, type_node->user_defined.name_string_idx, &name_size);
+      result = str8(name_base, name_size);
+    }break;
+  }
+  return result;
+}
+
 ////////////////////////////////
 //~ rjf: Main Layer Initialization
 

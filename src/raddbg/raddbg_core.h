@@ -822,7 +822,6 @@ struct RD_State
   // rjf: frame parameters
   F32 frame_dt;
   DI_Scope *frame_di_scope;
-  DIS_Scope *frame_dis_scope;
   
   // rjf: ambiguous path table
   U64 ambiguous_path_slots_count;

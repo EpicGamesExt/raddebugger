@@ -317,6 +317,7 @@ internal DI_SearchParams di_search_params_copy(Arena *arena, DI_SearchParams *sr
 internal U64 di_hash_from_search_params(DI_SearchParams *params);
 internal void di_search_item_chunk_list_concat_in_place(DI_SearchItemChunkList *dst, DI_SearchItemChunkList *to_push);
 internal U64 di_search_item_num_from_array_element_idx__linear_search(DI_SearchItemArray *array, U64 element_idx);
+internal String8 di_search_item_string_from_rdi_target_element_idx(RDI_Parsed *rdi, RDI_SectionKind target, U64 element_idx);
 
 ////////////////////////////////
 //~ rjf: Main Layer Initialization

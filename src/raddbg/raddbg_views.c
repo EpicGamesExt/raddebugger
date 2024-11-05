@@ -1264,7 +1264,6 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
 {
   ProfBeginFunction();
   DI_Scope *di_scope = di_scope_open();
-  DIS_Scope *dis_scope = dis_scope_open();
   Temp scratch = scratch_begin(0, 0);
   UI_ScrollPt2 scroll_pos = rd_view_scroll_pos();
   F32 entity_hover_t_rate = rd_setting_val_from_code(RD_SettingCode_HoverAnimations).s32 ? (1 - pow_f32(2, (-20.f * rd_state->frame_dt))) : 1.f;
@@ -3407,7 +3406,6 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
   
   if(!is_top_level_hook) { rd_store_view_scroll_pos(scroll_pos); }
   scratch_end(scratch);
-  dis_scope_close(dis_scope);
   di_scope_close(di_scope);
   ProfEnd();
 }
@@ -5214,7 +5212,6 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(symbol_lister)
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   DI_Scope *di_scope = di_scope_open();
-  DIS_Scope *dis_scope = dis_scope_open();
   F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
   DI_KeyList dbgi_keys_list = d_push_active_dbgi_key_list(scratch.arena);
   DI_KeyArray dbgi_keys = di_key_array_from_list(scratch.arena, &dbgi_keys_list);
@@ -5366,7 +5363,6 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(symbol_lister)
   }
   
   rd_store_view_scroll_pos(scroll_pos);
-  dis_scope_close(dis_scope);
   di_scope_close(di_scope);
   scratch_end(scratch);
   ProfEnd();
