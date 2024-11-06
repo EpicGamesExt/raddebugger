@@ -481,7 +481,7 @@ lnk_op_list_from_chunk(Arena *arena, LNK_Chunk *root, U64 total_chunk_count, U8 
         frame->chunk_array  = *chunk->u.arr;
         frame->ichunk       = 0;
         SLLStackPush(stack, frame);
-      } goto yeild;
+      } goto _continue;
       
       case LNK_Chunk_List: { 
         // balance ops at :end_chunk_series
@@ -507,7 +507,7 @@ lnk_op_list_from_chunk(Arena *arena, LNK_Chunk *root, U64 total_chunk_count, U8 
         frame->chunk_array  = chunk_array;
         frame->ichunk       = 0;
         SLLStackPush(stack, frame);
-      } goto yeild;
+      } goto _continue;
       
       case LNK_Chunk_Null: { /* ignore */ } break;
       }
@@ -530,7 +530,7 @@ lnk_op_list_from_chunk(Arena *arena, LNK_Chunk *root, U64 total_chunk_count, U8 
     // move to next frame
     SLLStackPop(stack);
     
-    yeild:;
+    _continue:;
   }
   
   scratch_end(scratch);

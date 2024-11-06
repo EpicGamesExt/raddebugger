@@ -417,7 +417,8 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
   lnk_chunk_set_debugf(arena, master_common_block, "%S: master common block", path);
 
   // convert from coff
-  LNK_SymbolArray symbol_arr     = lnk_symbol_array_from_coff(arena, input->data, obj, cached_path, coff_info.string_table_off, coff_info.section_count_no_null, coff_sect_arr, coff_symbols, chunk_arr, master_common_block);
+  B32             is_big_obj     = coff_info.type == COFF_DataType_BIG_OBJ;
+  LNK_SymbolArray symbol_arr     = lnk_symbol_array_from_coff(arena, input->data, obj, cached_path, is_big_obj, coff_info.string_table_off, coff_info.section_count_no_null, coff_sect_arr, coff_symbols, chunk_arr, master_common_block);
   LNK_SymbolList  symbol_list    = lnk_symbol_list_from_array(arena, symbol_arr);
   LNK_RelocList  *reloc_list_arr = lnk_reloc_list_array_from_coff(arena, coff_info.machine, input->data, coff_info.section_count_no_null, coff_sect_arr, chunk_arr, symbol_arr);
 
@@ -715,6 +716,7 @@ lnk_symbol_array_from_coff(Arena              *arena,
                            String8             coff_data,
                            LNK_Obj            *obj,
                            String8             obj_path,
+                           B32                 is_big_obj,
                            U64                 string_table_off,
                            U64                 sect_count,
                            COFF_SectionHeader *coff_sect_arr,
@@ -774,7 +776,17 @@ lnk_symbol_array_from_coff(Arena              *arena,
           check_sum = secdef->check_sum;
           
           if (secdef->selection == COFF_ComdatSelectType_ASSOCIATIVE) {
-            LNK_Chunk *head_chunk = &chunk_arr[secdef->number - 1];
+            U32 secdef_number = secdef->number_lo;
+            if (is_big_obj) {
+              secdef_number |= (U32)secdef->number_hi << 16;
+            }
+
+            if (secdef_number == 0 || secdef_number > sect_count) {
+              lnk_error(LNK_Error_IllData, "%S: symbol %u has out of bounds section definition number %u", name, symbol_idx, secdef_number);
+              break;
+            }
+
+            LNK_Chunk *head_chunk      = &chunk_arr[secdef_number - 1];
             LNK_Chunk *associate_chunk = &chunk_arr[coff_symbol->section_number - 1];
             lnk_chunk_associate(arena, head_chunk, associate_chunk);
           }

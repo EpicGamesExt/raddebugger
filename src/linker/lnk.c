@@ -760,9 +760,10 @@ lnk_make_res_obj(TP_Context       *tp,
     coff_sect_symbol.aux_symbol_count = 1;
     coff_sect_symbol.storage_class    = COFF_SymStorageClass_STATIC;
     
+    Assert(sect->isect <= max_U16);
     COFF_SymbolSecDef secdef     = {0};
     secdef.length                = safe_cast_u32(sect_size);
-    secdef.number                = sect->isect;
+    secdef.number_lo             = sect->isect;
     secdef.number_of_relocations = safe_cast_u32(reloc_count);
     
     coff_symbol16_list_push(scratch.arena, &coff_symbol_list, coff_sect_symbol);
@@ -3279,7 +3280,7 @@ l.count += 1;                                                \
   B32                  build_win32_header               = 1;
   B32                  patch_relocs                     = 1;
   B32                  sort_exception_info              = 1;
-  B32                  build_imp_lib                    = 1; //config->build_imp_lib;
+  B32                  build_imp_lib                    = config->build_imp_lib;
   LNK_ObjList          obj_list                         = {0};
   LNK_LibList          lib_index[LNK_InputSource_Count] = {0};
   String8              image_data                       = str8_zero();
