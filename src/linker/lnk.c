@@ -84,7 +84,6 @@
 #include "path_ext/path.h"
 #include "hash_table.h"
 #include "thread_pool/thread_pool.h"
-#include "os_ext/os_inc.h"
 #include "codeview_ext/codeview.h"
 #include "pdb_ext/msf_builder.h"
 #include "pdb_ext/pdb.h"
@@ -95,7 +94,6 @@
 #include "path_ext/path.c"
 #include "hash_table.c"
 #include "thread_pool/thread_pool.c"
-#include "os_ext/os_inc.c"
 #include "codeview_ext/codeview.c"
 #include "pdb_ext/msf_builder.c"
 #include "pdb_ext/pdb.c"
@@ -3671,7 +3669,7 @@ l.count += 1;                                                \
               }
               
               // search disk for library
-              String8List match_list    = os_file_search(scratch.arena, config->lib_dir_list, path);
+              String8List match_list    = lnk_file_search(scratch.arena, config->lib_dir_list, path);
               String8     absolute_path = match_list.node_count ? match_list.first->string : str8_zero();
               
               // default to first match

@@ -579,14 +579,14 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, String8List lib_dir
       CV_TypeServerInfo ts      = cv_type_server_info_from_leaf(leaf);
 
       // search disk for type server
-      String8List match_list = os_file_search(scratch.arena, lib_dir_list, ts.name);
+      String8List match_list = lnk_file_search(scratch.arena, lib_dir_list, ts.name);
 
       // chop file name from path and search on it
       //
       // TODO: check if ts.name is a path and in that case do file search
       if (match_list.node_count == 0) {
         String8 file_name = str8_skip_last_slash(ts.name);
-        match_list = os_file_search(scratch.arena, lib_dir_list, file_name);
+        match_list = lnk_file_search(scratch.arena, lib_dir_list, file_name);
       }
 
       B32 do_debug_info_discard = 0;
