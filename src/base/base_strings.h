@@ -312,6 +312,11 @@ internal String8 str8_from_32(Arena *arena, String32 in);
 internal String32 str32_from_8(Arena *arena, String8 in);
 
 ////////////////////////////////
+//~ String -> Enum Conversions
+
+internal OperatingSystem operating_system_from_string(String8 string);
+
+////////////////////////////////
 //~ rjf: Basic Types & Space Enum -> String Conversions
 
 internal String8 string_from_dimension(Dimension dimension);

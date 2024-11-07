@@ -118,24 +118,4 @@ os_file_search(Arena *arena, String8List dir_list, String8 file_path)
   return match_list;
 }
 
-static struct
-{
-  String8         string;
-  OperatingSystem os;
-} g_os_map[] = {
-  { str8_lit_comp("windows"), OperatingSystem_Windows, },
-  { str8_lit_comp("linux"),   OperatingSystem_Linux,   },
-  { str8_lit_comp("mac"),     OperatingSystem_Mac,     },
-};
-
-internal OperatingSystem
-operating_system_from_string(String8 string)
-{
-  for (U64 i = 0; i < ArrayCount(g_os_map); ++i) {
-    if (str8_match(g_os_map[i].string, string, StringMatchFlag_CaseInsensitive)) {
-      return g_os_map[i].os;
-    }
-  }
-  return OperatingSystem_Null;
-}
 
