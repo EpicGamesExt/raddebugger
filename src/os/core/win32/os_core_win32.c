@@ -1678,7 +1678,7 @@ w32_entry_point_caller(int argc, WCHAR **wargv)
   os_w32_state.entity_arena = arena_alloc();
   
   //- rjf: call into "real" entry point
-  main_thread_base_entry_point(entry_point, argv, (U64)argc);
+  main_thread_base_entry_point(entry_point, argc, argv);
 }
 
 #if BUILD_CONSOLE_INTERFACE

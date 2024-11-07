@@ -4,21 +4,21 @@
 global U64 global_update_tick_idx = 0;
 
 internal void
-main_thread_base_entry_point(void (*entry_point)(CmdLine *cmdline), char **arguments, U64 arguments_count)
+main_thread_base_entry_point(EntryPoint entry_point, int argc, char **argv)
 {
   Temp scratch = scratch_begin(0, 0);
   ThreadNameF("[main thread]");
   
   //- rjf: set up telemetry
 #if PROFILE_TELEMETRY
-  local_persist U8 tm_data[MB(64)];
+  local_persist char tm_data[MB(64)];
   tmLoadLibrary(TM_RELEASE);
   tmSetMaxThreadCount(256);
-  tmInitialize(sizeof(tm_data), (char *)tm_data);
+  tmInitialize(sizeof(tm_data), tm_data);
 #endif
   
   //- rjf: parse command line
-  String8List command_line_argument_strings = os_string_list_from_argcv(scratch.arena, (int)arguments_count, arguments);
+  String8List command_line_argument_strings = os_string_list_from_argcv(scratch.arena, argc, argv);
   CmdLine cmdline = cmd_line_from_string_list(scratch.arena, command_line_argument_strings);
   
   //- rjf: begin captures
@@ -27,6 +27,10 @@ main_thread_base_entry_point(void (*entry_point)(CmdLine *cmdline), char **argum
   {
     ProfBeginCapture(arguments[0]);
   }
+
+#if PROFILE_TELEMETRY 
+  tmMessage(0, TMMF_ICON_NOTE, BUILD_TITLE);
+#endif
   
   //- rjf: initialize all included layers
 #if defined(ASYNC_H) && !defined(ASYNC_INIT_MANUAL)
@@ -83,16 +87,21 @@ main_thread_base_entry_point(void (*entry_point)(CmdLine *cmdline), char **argum
 #if defined(RADDBG_CORE_H) && !defined(RD_INIT_MANUAL)
   rd_init(&cmdline);
 #endif
-  
+
   //- rjf: call into entry point
+#if BASE_ENTRY_POINT_ARGCV
+  scratch_end(scratch); // release command line memory
+  entry_point(argc, argv);
+#else
   entry_point(&cmdline);
+  scratch_end(scratch);
+#endif
   
   //- rjf: end captures
   if(capture)
   {
     ProfEndCapture();
   }
-  scratch_end(scratch);
 }
 
 internal void
