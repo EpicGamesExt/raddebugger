@@ -3,12 +3,6 @@
 
 #pragma once
 
-#if OS_WINDOWS
-# include "os_core_win32.c"
-#else
-# error "undefined OS"
-#endif
-
 typedef struct
 {
   String8Array path_arr;
@@ -27,5 +21,4 @@ typedef struct
 
 internal String8Array os_data_from_file_path_parallel(TP_Context *tp, Arena *arena, String8Array path_arr);
 internal String8List  os_file_search(Arena *arena, String8List dir_list, String8 file_path);
-internal B32          os_folder_path_exists(String8 path);
 

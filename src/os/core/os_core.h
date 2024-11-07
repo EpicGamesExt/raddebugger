@@ -210,6 +210,7 @@ internal B32            os_delete_file_at_path(String8 path);
 internal B32            os_copy_file_path(String8 dst, String8 src);
 internal String8        os_full_path_from_path(Arena *arena, String8 path);
 internal B32            os_file_path_exists(String8 path);
+internal B32            os_folder_path_exists(String8 path);
 internal FileProperties os_properties_from_file_path(String8 path);
 
 //- rjf: file maps

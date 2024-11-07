@@ -521,6 +521,17 @@ os_file_path_exists(String8 path)
   return exists;
 }
 
+internal B32
+os_folder_path_exists(String8 path)
+{
+  Temp scratch = scratch_begin(0,0);
+  String16 path16     = str16_from_8(scratch.arena, path);
+  DWORD    attributes = GetFileAttributesW((WCHAR *)path16.str);
+  B32      exists     = (attributes != INVALID_FILE_ATTRIBUTES) && (attributes & FILE_ATTRIBUTE_DIRECTORY);
+  scratch_end(scratch);
+  return exists;
+}
+
 internal FileProperties
 os_properties_from_file_path(String8 path)
 {
