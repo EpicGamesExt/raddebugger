@@ -496,7 +496,6 @@ lnk_get_mt_path(Arena *arena)
 #undef OS_WINDOWS
 #pragma comment(lib, "shlwapi.lib")
 #include <shlwapi.h>
-
   local_persist wchar_t raw_mt_path[MAX_PATH*2] = L"mt.exe";
   PathFindOnPathW(&raw_mt_path[0], 0);
 
@@ -504,11 +503,10 @@ lnk_get_mt_path(Arena *arena)
   String8  mt_path    = str8_from_16(arena, mt_path_16);
   
   mt_path = path_convert_slashes(arena, mt_path, PathStyle_WindowsAbsolute);
-
 #undef OS_WINDOWS
 #define OS_WINDOWS 1
 #else
-#error "TODO: find llvm-mt"
+  mt_path = str8_lit("llvm-mt.exe");
 #endif
   return mt_path;
 }
