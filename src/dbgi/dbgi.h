@@ -206,8 +206,7 @@ struct DI_SearchStripe
 {
   Arena *arena;
   DI_SearchNode *free_node;
-  OS_Handle r_mutex;
-  OS_Handle w_mutex;
+  OS_Handle rw_mutex;
   OS_Handle cv;
 };
 
