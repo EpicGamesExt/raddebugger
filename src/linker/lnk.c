@@ -14,7 +14,8 @@
 
 ////////////////////////////////
 
-#define ARENA_FREE_LIST 1
+#define ARENA_FREE_LIST        1
+#define BASE_ENTRY_POINT_ARGCV 1
 
 ////////////////////////////////
 // Third Party
@@ -4338,7 +4339,7 @@ l.count += 1;                                                \
   
   exit:;
   
-  // linker is done punt memory release to OS
+  // linker is done, punt memory release to OS
   //lnk_section_table_release(&st);
   //lnk_export_table_release(&export_table);
   //lnk_import_table_release(&imptab_static);
@@ -4353,211 +4354,9 @@ l.count += 1;                                                \
 }
 
 internal void
-entry_point(CmdLine *cmdline)
+entry_point(int argc, char **argv)
 {
-  Temp scratch = scratch_begin(0,0);
-
-  int a      = 123;
-  int asdasd = 2;
-  
-#if PROFILE_TELEMETRY
-  tmMessage(0, TMMF_ICON_NOTE, BUILD_TITLE);
-#endif
-  
-  // TODO: temp hack to make custom command line work while syncing with latest code base changes
-  int    argc;
-  char **argv;
-  {
-    LPWSTR w32_cmd_line = GetCommandLineW();
-    argc = 0;
-    LPWSTR *argvw = CommandLineToArgvW(w32_cmd_line, &argc);
-    argv = push_array(scratch.arena, char *, argc);
-    for(int i = 0; i < argc; ++i)
-    {
-      String16 arg16 = str16_cstring((U16 *)argvw[i]);
-      String8  arg8  = str8_from_16(scratch.arena, arg16);
-      argv[i] = (char *)arg8.str;
-    }
-  }
-  
   lnk_init_error_handler();
   lnk_run(argc, argv);
-  
-  scratch_end(scratch);
 }
 
-#if 0
-internal void
-lnk_dump_symbol_table(FILE *f, LNK_SymbolTable *symtab)
-{
-  for (U64 bucket_idx = 0; bucket_idx < symtab->bucket_count; bucket_idx += 1) {
-    LNK_SymbolList *bucket = symtab->buckets[bucket_idx];
-    if (bucket) {
-      U64 node_idx = 0;
-      for (LNK_SymbolNode *symbol_node = bucket->first; symbol_node != 0; symbol_node = symbol_node->next, node_idx += 1) {
-        LNK_Symbol *symbol = symbol_node->data;
-        fprintf(f, "[%04llX,%04llX] %.*s\n", bucket_idx, node_idx, str8_varg(symbol->name));
-      }
-    }
-  }
-}
-
-int
-lnk_chunk_size_compar(void *ud, const void *a, const void *b)
-{
-  LNK_Section **sect_id_map = (LNK_Section**)ud;
-  LNK_ChunkPtr ac = *(LNK_ChunkPtr*)a;
-  LNK_ChunkPtr bc = *(LNK_ChunkPtr*)b;
-  U64 as = lnk_virt_size_from_chunk_ref(sect_id_map, ac->ref);
-  U64 bs = lnk_virt_size_from_chunk_ref(sect_id_map, bc->ref);
-  int cmp = as < bs ? -1 : as > bs ? +1 : 0;
-  return cmp;
-}
-
-internal LNK_ChunkArray
-lnk_query_chunks_near_voff_ex(Arena *arena, LNK_SectionTable *st, LNK_Section **sect_id_map, U64 voff)
-{
-  Temp scratch = scratch_begin(&arena, 1);
-  LNK_ChunkArray result; MemoryZeroStruct(&result);
-  for (U64 id = 0; id < st->id_max; ++id) {
-    LNK_Section *sect = sect_id_map[id];
-    U64 root_voff = lnk_virt_off_from_chunk_ref(sect_id_map, sect->root->ref);
-    U64 root_size = lnk_virt_size_from_chunk_ref(sect_id_map, sect->root->ref);
-    if (root_voff <= voff && voff < root_voff + root_size) {
-      U64List list; MemoryZeroStruct(&list);
-      for (U64 chunk_id = 0; chunk_id < sect->cman->total_chunk_count; ++chunk_id) {
-        LNK_ChunkRef chunk_ref = { sect->id, chunk_id };
-        U64 chunk_voff = lnk_virt_off_from_chunk_ref(sect_id_map, chunk_ref);
-        U64 chunk_size = lnk_virt_size_from_chunk_ref(sect_id_map, chunk_ref);
-        if (chunk_voff <= voff && voff < chunk_voff + chunk_size) {
-          u64_list_push(scratch.arena, &list, chunk_id);
-        }
-      }
-      
-      if (list.count) {
-        result.count = 0;
-        result.v = push_array_no_zero(arena, LNK_ChunkPtr, list.count);
-        LNK_ChunkPtr *chunk_id_map = lnk_make_chunk_id_map(scratch.arena, sect->cman);
-        for (U64Node *i = list.first; i != NULL; i = i->next) {
-          result.v[result.count++] = chunk_id_map[i->data];
-        }
-        qsort_s((void*)result.v, result.count, sizeof(result.v[0]), lnk_chunk_size_compar, sect_id_map);
-      }
-      
-      break;
-    }
-  }
-  scratch_end(scratch);
-  return result;
-}
-
-internal LNK_ChunkArray
-lnk_query_chunks_near_voff(Arena *arena, LNK_SectionTable *st, U64 voff)
-{
-  Temp scratch = scratch_begin(&arena, 1);
-  LNK_Section **sect_id_map = lnk_sect_id_map_from_section_table(scratch.arena, st);
-  LNK_ChunkArray result = lnk_query_chunks_near_voff_ex(arena, st, sect_id_map, voff);
-  scratch_end(scratch);
-  return result;
-}
-
-internal void
-lnk_dump_crt_inits(LNK_SectionTable *st, LNK_SymbolTable *symtab)
-{
-  static struct {
-    char *first;
-    char *last;
-  } table[] = {
-    { "__xi_a", "__xi_z" },
-    { "__xc_a", "__xc_z" },
-    { "__xp_a", "__xp_z" },
-    { "__xt_a", "__xt_z" }
-  };
-  
-  Temp scratch = scratch_begin(0, 0);
-  LNK_Section **sect_id_map = lnk_sect_id_map_from_section_table(scratch.arena, st);
-  for (U64 i = 0; i < ArrayCount(table); ++i) {
-    LNK_Symbol *first = lnk_symbol_table_searchf(symtab, LNK_SymbolScopeFlag_Main, table[i].first);
-    LNK_Symbol *last = lnk_symbol_table_searchf(symtab, LNK_SymbolScopeFlag_Main, table[i].last);
-    U64 first_voff = lnk_virt_off_from_chunk_ref(sect_id_map, first->u.defined.u.chunk->ref);
-    U64 last_voff = lnk_virt_off_from_chunk_ref(sect_id_map, last->u.defined.u.chunk->ref);
-    U64 ptr_size = sizeof(U64);
-    U64 count = (last_voff - first_voff) / ptr_size;
-    printf("(%s-%s)\n", table[i].first, table[i].last);
-    for (U64 ptr_idx = 0; ptr_idx < count; ++ptr_idx) {
-      LNK_ChunkArray chunk_ptr_arr = lnk_query_chunks_near_voff_ex(scratch.arena, st, sect_id_map, first_voff + ptr_idx * ptr_size);
-      LNK_Chunk *chunk = chunk_ptr_arr.v[0];
-      printf("\t%.*s\n", str8_varg(chunk->debug));
-    }
-  }
-  scratch_end(scratch);
-}
-
-internal void
-lnk_dump_resource_dir_(COFF_ResourceID dir_id, PE_ResourceDir *dir)
-{
-  Temp scratch = scratch_begin(0, 0);
-  
-  SYMS_String8 dir_id_syms = syms_str8_zero();
-  if (dir_id.type == COFF_ResourceIDType_NUMBER) {
-    dir_id_syms = syms_pe_resource_type_to_string(dir_id.u.number);
-  }
-  if (dir_id_syms.size == 0) {
-    dir_id_syms = syms_coff_resource_id_to_string(scratch.arena, dir_id);
-  }
-  
-  tool_fprintf(stdout, "ID: %.*s, Characteristics: %u, Time stamp: %u, Version: %u.%u\n",
-               syms_expand_string(dir_id_syms), dir->characteristics, dir->time_stamp, dir->major_version, dir->minor_version);
-  tool_fprintf(stdout, "{\n");
-  tool_indent(stdout);
-  
-  PE_ResourceList list_arr[2];
-  list_arr[0] = dir->named_list;
-  list_arr[1] = dir->id_list;
-  
-  for (U64 i = 0; i < ArrayCount(list_arr); ++i) {
-    PE_ResourceList *list = &list_arr[i];
-    for (PE_ResourceNode *n = list->first; n != NULL; n = n->next) {
-      PE_Resource *res = &n->data;
-      switch (res->type) {
-        default: InvalidPath;
-        case PE_ResData_NULL: break;
-        case PE_ResData_DIR: {
-          lnk_dump_resource_dir_(res->id, res->u.dir);
-        } break;
-        case PE_ResData_COFF_LEAF: {
-          SYMS_String8 id_syms = syms_coff_resource_id_to_string(scratch.arena, res->id);
-          tool_fprintf(stdout, "ID: %.*s Data voff: 0x%X, Data size: %u, Code page: %u, Reserved: %u\n", 
-                       syms_expand_string(id_syms), res->u.leaf.data_voff, res->u.leaf.data_size, res->u.leaf.code_page, res->u.leaf.reserved);
-        } break;
-        case PE_ResData_COFF_RESOURCE: {
-          SYMS_String8 id_syms = syms_coff_resource_id_to_string(scratch.arena, res->id);
-          SYMS_String8 type_syms = syms_str8_zero();
-          if (res->u.coff_res.type.type == COFF_ResourceIDType_NUMBER) {
-            type_syms = syms_pe_resource_type_to_string(res->u.coff_res.type.u.number);
-          }
-          if (type_syms.size == 0) {
-            type_syms = syms_coff_resource_id_to_string(scratch.arena, res->u.coff_res.type);
-          }
-          tool_fprintf(stdout, "ID: %.*s Data version: %u, Version: %u, Memory flags: %u, Data Byte Count: %u\n",
-                       syms_expand_string(id_syms), res->u.coff_res.data_version, res->u.coff_res.version, res->u.coff_res.memory_flags, res->u.coff_res.data.size);
-        } break;
-      }
-    }
-  }
-  
-  tool_unindent(stdout);
-  tool_fprintf(stdout, "}\n");
-  scratch_end(scratch);
-}
-
-internal void
-lnk_dump_resource_dir(PE_ResourceDir *dir)
-{
-  COFF_ResourceID dir_id;
-  dir_id.type = COFF_ResourceIDType_NUMBER;
-  dir_id.u.number = 0;
-  lnk_dump_resource_dir_(dir_id, dir);
-}
-
-#endif
