@@ -1515,8 +1515,8 @@ lnk_config_from_cmd_line(Arena *arena, String8List raw_cmd_line)
         } else if (str8_match(cmd->value_strings.first->string, str8_lit("random"), StringMatchFlag_CaseInsensitive)) {
           config->guid = os_make_guid();
         } else {
-          OS_Guid guid;
-          if (os_try_guid_from_string(cmd->value_strings.first->string, &guid)) {
+          Guid guid;
+          if (try_guid_from_string(cmd->value_strings.first->string, &guid)) {
             config->guid = guid;
           } else {
             lnk_error_cmd_switch(LNK_Error_Cmdl, cmd_switch, "unable to parse \"%S\"", cmd->value_strings.first->string);

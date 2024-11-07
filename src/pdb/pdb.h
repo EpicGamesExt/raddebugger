@@ -82,7 +82,7 @@ typedef struct PDB_InfoHeaderV70
   PDB_InfoVersion    version;
   COFF_TimeStamp     time_stamp;
   U32                age;
-  OS_Guid            guid;
+  Guid               guid;
   // PDB_HashTable   named_stream_hash_table
   // PDB_FeatureFlag features[*]
 } PDB_InfoHeaderV70;

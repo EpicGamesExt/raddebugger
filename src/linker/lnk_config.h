@@ -244,7 +244,7 @@ typedef struct LNK_Config
   U64                         opt_iter_count;
   LNK_GuardFlags              guard_flags;
   LNK_DebugInfoGuidType       guid_type;
-  OS_Guid                     guid;
+  Guid                        guid;
   COFF_TimeStamp              time_stamp;
   U32                         age;
   U64                         section_virt_off;

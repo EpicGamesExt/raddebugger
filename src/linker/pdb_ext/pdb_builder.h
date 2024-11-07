@@ -154,7 +154,7 @@ typedef struct PDB_InfoParse
   PDB_TpiVersion   version;
   COFF_TimeStamp   time_stamp;
   U32              age;
-  OS_Guid          guid;
+  Guid             guid;
   String8          extra_info;
 } PDB_InfoParse;
 
@@ -163,7 +163,7 @@ typedef struct PDB_InfoContext
   Arena            *arena;
   COFF_TimeStamp    time_stamp;
   U32               age;
-  OS_Guid           guid;
+  Guid              guid;
   PDB_FeatureFlags  flags;
   PDB_HashTable     named_stream_ht;
   PDB_HashTable     src_header_block_ht;
@@ -347,23 +347,23 @@ typedef struct
 ////////////////////////////////
 // PDB
 
-internal PDB_Context *    pdb_alloc(U64 page_size, COFF_MachineType machine, COFF_TimeStamp time_stamp, U32 age, OS_Guid guid);
+internal PDB_Context *    pdb_alloc(U64 page_size, COFF_MachineType machine, COFF_TimeStamp time_stamp, U32 age, Guid guid);
 internal PDB_Context *    pdb_open(String8 data);
 internal void             pdb_release(PDB_Context **pdb_ptr);
 internal void             pdb_build(TP_Context *tp, TP_Arena *pool_temp, PDB_Context *pdb, CV_StringHashTable string_ht);
 internal void             pdb_set_machine(PDB_Context *pdb, COFF_MachineType machine);
-internal void             pdb_set_guid(PDB_Context *pdb, OS_Guid guid);
+internal void             pdb_set_guid(PDB_Context *pdb, Guid guid);
 internal void             pdb_set_time_stamp(PDB_Context *pdb, COFF_TimeStamp time_stamp);
 internal void             pdb_set_age(PDB_Context *pdb, U32 age);
 internal COFF_MachineType pdb_get_machine(PDB_Context *pdb);
 internal COFF_TimeStamp   pdb_get_time_stamp(PDB_Context *pdb);
 internal U32              pdb_get_age(PDB_Context *pdb);
-internal OS_Guid          pdb_get_guid(PDB_Context *pdb);
+internal Guid             pdb_get_guid(PDB_Context *pdb);
 
 ////////////////////////////////
 // Info
 
-internal PDB_InfoContext * pdb_info_alloc(U32 age, COFF_TimeStamp time_stamp, OS_Guid guid);
+internal PDB_InfoContext * pdb_info_alloc(U32 age, COFF_TimeStamp time_stamp, Guid guid);
 internal void              pdb_info_parse_from_data(String8 data, PDB_InfoParse *parse_out);
 internal PDB_InfoContext * pdb_info_open(MSF_Context *msf, MSF_StreamNumber sn);
 internal void              pdb_info_build(PDB_InfoContext *info, MSF_Context *msf, MSF_StreamNumber sn);

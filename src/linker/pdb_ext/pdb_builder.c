@@ -1648,7 +1648,7 @@ pdb_load_types_from_leaf_list(PDB_TypeServer **type_server_arr, CV_LeafList leaf
 ////////////////////////////////
 
 internal PDB_InfoContext *
-pdb_info_alloc(U32 age, COFF_TimeStamp time_stamp, OS_Guid guid)
+pdb_info_alloc(U32 age, COFF_TimeStamp time_stamp, Guid guid)
 {
   ProfBeginFunction();
   Arena *arena = arena_alloc();
@@ -3528,7 +3528,7 @@ pdb_alloc_msf(U64 page_size)
 }
 
 internal PDB_Context *
-pdb_alloc(U64 page_size, COFF_MachineType machine, COFF_TimeStamp time_stamp, U32 age, OS_Guid guid)
+pdb_alloc(U64 page_size, COFF_MachineType machine, COFF_TimeStamp time_stamp, U32 age, Guid guid)
 {
   ProfBeginFunction();
   Arena *arena = arena_alloc();
@@ -3606,7 +3606,7 @@ pdb_set_machine(PDB_Context *pdb, COFF_MachineType machine)
 }
 
 internal void
-pdb_set_guid(PDB_Context *pdb, OS_Guid guid)
+pdb_set_guid(PDB_Context *pdb, Guid guid)
 {
   pdb->info->guid = guid;
 }
@@ -3642,7 +3642,7 @@ pdb_get_age(PDB_Context *pdb)
   return pdb->info->age;
 }
 
-internal OS_Guid
+internal Guid
 pdb_get_guid(PDB_Context *pdb)
 {
   return pdb->info->guid;

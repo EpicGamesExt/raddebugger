@@ -269,8 +269,8 @@ internal String8 lnk_make_linker_coff_obj(TP_Context *tp, Arena *arena, COFF_Tim
 ////////////////////////////////
 // Win32 Image Helpers
 
-internal void        lnk_build_debug_pdb(LNK_SectionTable *st, LNK_SymbolTable *symtab, LNK_Section *debug_sect, LNK_Chunk *debug_dir_array_chunk, COFF_TimeStamp time_stamp, OS_Guid guid, U32 age, String8 pdb_path);
-internal void        lnk_build_debug_rdi(LNK_SectionTable *st, LNK_SymbolTable *symtab, LNK_Section *debug_sect, LNK_Chunk *debug_dir_array_chunk, COFF_TimeStamp time_stamp, OS_Guid guid, String8 rdi_path);
+internal void        lnk_build_debug_pdb(LNK_SectionTable *st, LNK_SymbolTable *symtab, LNK_Section *debug_sect, LNK_Chunk *debug_dir_array_chunk, COFF_TimeStamp time_stamp, Guid guid, U32 age, String8 pdb_path);
+internal void        lnk_build_debug_rdi(LNK_SectionTable *st, LNK_SymbolTable *symtab, LNK_Section *debug_sect, LNK_Chunk *debug_dir_array_chunk, COFF_TimeStamp time_stamp, Guid guid, String8 rdi_path);
 internal void        lnk_build_guard_tables(TP_Context *tp, LNK_SectionTable *st, LNK_SymbolTable *symtab, LNK_ExportTable *exptab, LNK_ObjList obj_list, COFF_MachineType machine, String8 entry_point_name, LNK_GuardFlags guard_flags, B32 emit_suppress_flag);
 internal void        lnk_build_base_relocs(TP_Context *tp, TP_Arena *tp_arena, LNK_SectionTable *st, LNK_SymbolTable *symtab, COFF_MachineType  machine, U64 page_size, LNK_ObjList obj_list);
 internal LNK_Chunk * lnk_build_dos_header(LNK_SymbolTable *symtab, LNK_Section *header_sect, LNK_Chunk *parent_chunk);

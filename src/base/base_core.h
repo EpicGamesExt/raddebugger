@@ -487,6 +487,19 @@ struct TxtRng
 };
 
 ////////////////////////////////
+//~ Globally Unique Ids
+
+typedef struct Guid Guid;
+struct Guid
+{
+  U32 data1;
+  U16 data2;
+  U16 data3;
+  U8  data4[8];
+};
+StaticAssert(sizeof(Guid) == 16, g_guid_size_check);
+
+////////////////////////////////
 //~ NOTE(allen): Constants
 
 global U32 sign32     = 0x80000000;

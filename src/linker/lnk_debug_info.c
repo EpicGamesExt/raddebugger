@@ -708,8 +708,8 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, String8List lib_dir
           pdb_info_parse_from_data(msf_parse->streams[PDB_FixedStream_Info], &info_parse);
           if (!MemoryMatchStruct(&info_parse.guid, &ts_info_arr[ts_idx].sig)) {
             Temp scratch = scratch_begin(0,0);
-            String8 expected_sig_str = os_string_from_guid(scratch.arena, ts_info_arr[ts_idx].sig);
-            String8 on_disk_sig_str  = os_string_from_guid(scratch.arena, info_parse.guid);
+            String8 expected_sig_str = string_from_guid(scratch.arena, ts_info_arr[ts_idx].sig);
+            String8 on_disk_sig_str  = string_from_guid(scratch.arena, info_parse.guid);
             lnk_error(LNK_Warning_MismatchedTypeServerSignature, "%S: signature mismatch in type server read from disk, expected %S, got %S",
                 ts_info_arr[ts_idx].name, expected_sig_str, on_disk_sig_str);
             scratch_end(scratch);
@@ -3121,7 +3121,7 @@ lnk_build_pdb_public_symbols(TP_Context            *tp,
 internal String8List
 lnk_build_pdb(TP_Context               *tp,
               TP_Arena                 *tp_arena,
-              OS_Guid                   guid,
+              Guid                      guid,
               COFF_MachineType          machine,
               COFF_TimeStamp            time_stamp,
               U32                       age,

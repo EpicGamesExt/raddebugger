@@ -35,5 +35,3 @@ internal B32 os_set_large_pages(B32 toggle);
 
 internal U32 os_get_process_start_time_unix(void);
 
-internal B32     os_try_guid_from_string(String8 string, OS_Guid *guid_out);
-internal OS_Guid os_guid_from_string(String8 string);

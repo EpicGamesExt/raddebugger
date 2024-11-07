@@ -129,19 +129,6 @@ struct OS_ProcessLaunchParams
 };
 
 ////////////////////////////////
-//~ rjf: Globally Unique IDs
-
-typedef struct OS_Guid OS_Guid;
-struct OS_Guid
-{
-  U32 data1;
-  U16 data2;
-  U16 data3;
-  U8  data4[8];
-};
-StaticAssert(sizeof(OS_Guid) == 16, os_guid_check);
-
-////////////////////////////////
 //~ rjf: Thread Types
 
 typedef void OS_ThreadFunctionType(void *ptr);
@@ -175,11 +162,6 @@ internal String8        os_string_from_file_range(Arena *arena, OS_Handle file, 
 
 internal OS_Handle os_cmd_line_launch(String8 string);
 internal OS_Handle os_cmd_line_launchf(char *fmt, ...);
-
-////////////////////////////////
-//~ rjf: GUID Helpers (Helpers, Implemented Once)
-
-internal String8 os_string_from_guid(Arena *arena, OS_Guid guid);
 
 ////////////////////////////////
 //~ rjf: @os_hooks System/Process Info (Implemented Per-OS)
@@ -332,7 +314,7 @@ internal void os_safe_call(OS_ThreadFunctionType *func, OS_ThreadFunctionType *f
 ////////////////////////////////
 //~ rjf: @os_hooks GUIDs (Implemented Per-OS)
 
-internal OS_Guid os_make_guid(void);
+internal Guid os_make_guid(void);
 
 ////////////////////////////////
 //~ rjf: @os_hooks Entry Points (Implemented Per-OS)

@@ -1402,7 +1402,7 @@ lnk_build_debug_pdb(LNK_SectionTable *st,
                     LNK_Section      *sect,
                     LNK_Chunk        *dir_array_chunk,
                     COFF_TimeStamp    time_stamp,
-                    OS_Guid           guid,
+                    Guid              guid,
                     U32               age,
                     String8           pdb_path)
 {
@@ -1429,7 +1429,7 @@ lnk_build_debug_rdi(LNK_SectionTable *st,
                     LNK_Section      *debug_sect,
                     LNK_Chunk        *debug_dir_array_chunk,
                     COFF_TimeStamp    time_stamp,
-                    OS_Guid           guid,
+                    Guid              guid,
                     String8           rdi_path)
 {
   ProfBeginFunction();
@@ -4077,8 +4077,8 @@ l.count += 1;                                                \
                 U128 hash = lnk_blake3_hash_parallel(tp, 128, image_data);
                 MemoryCopy(&config->guid, hash.u64, sizeof(hash.u64));
                 
-                U64      guid_foff = lnk_file_off_from_symbol(sect_id_map, guid_symbol);
-                OS_Guid *guid_ptr  = (OS_Guid *)(image_data.str + guid_foff);
+                U64   guid_foff = lnk_file_off_from_symbol(sect_id_map, guid_symbol);
+                Guid *guid_ptr  = (Guid *)(image_data.str + guid_foff);
                 MemoryCopy(guid_ptr, hash.u64, sizeof(hash.u64));
                 
                 ProfEnd();

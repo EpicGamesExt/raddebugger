@@ -1294,10 +1294,10 @@ os_safe_call(OS_ThreadFunctionType *func, OS_ThreadFunctionType *fail_handler, v
 ////////////////////////////////
 //~ rjf: @os_hooks GUIDs (Implemented Per-OS)
 
-internal OS_Guid
+internal Guid
 os_make_guid(void)
 {
-  OS_Guid result; MemoryZeroStruct(&result);
+  Guid result; MemoryZeroStruct(&result);
   UUID uuid;
   RPC_STATUS rpc_status = UuidCreate(&uuid);
   if(rpc_status == RPC_S_OK)

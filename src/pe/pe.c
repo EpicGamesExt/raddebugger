@@ -195,7 +195,7 @@ pe_bin_info_from_data(Arena *arena, String8 data)
   // rjf: read info about debug file
   U32 dbg_time = 0;
   U32 dbg_age = 0;
-  OS_Guid dbg_guid = {0};
+  Guid dbg_guid = {0};
   U64 dbg_path_off = 0;
   U64 dbg_path_size = 0;
   if(valid && PE_DataDirectoryIndex_DEBUG < data_dir_count)
@@ -920,7 +920,7 @@ pe_make_manifest_resource(Arena *arena, U32 resource_id, String8 manifest_data)
 //~ Debug Directory
 
 internal String8
-pe_make_debug_header_pdb70(Arena *arena, OS_Guid guid, U32 age, String8 pdb_path)
+pe_make_debug_header_pdb70(Arena *arena, Guid guid, U32 age, String8 pdb_path)
 {
   Temp scratch = scratch_begin(&arena, 1);
   
@@ -941,7 +941,7 @@ pe_make_debug_header_pdb70(Arena *arena, OS_Guid guid, U32 age, String8 pdb_path
 }
 
 internal String8
-pe_make_debug_header_rdi(Arena *arena, OS_Guid guid, String8 rdi_path)
+pe_make_debug_header_rdi(Arena *arena, Guid guid, String8 rdi_path)
 {
   Temp scratch = scratch_begin(&arena,1);
 

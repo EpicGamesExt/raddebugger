@@ -208,7 +208,7 @@ typedef struct CV_UDTInfo
 typedef struct CV_TypeServerInfo
 {
   String8 name;
-  OS_Guid sig;
+  Guid    sig;
   U32     age;
 } CV_TypeServerInfo;
 

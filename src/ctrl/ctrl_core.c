@@ -3440,10 +3440,10 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
   Rng1U64 tls_vaddr_range = {0};
   U32 pdb_dbg_time = 0;
   U32 pdb_dbg_age = 0;
-  OS_Guid pdb_dbg_guid = {0};
+  Guid pdb_dbg_guid = {0};
   String8 pdb_dbg_path = str8_zero();
   U32 rdi_dbg_time = 0;
-  OS_Guid rdi_dbg_guid = {0};
+  Guid rdi_dbg_guid = {0};
   String8 rdi_dbg_path = str8_zero();
   ProfScope("unpack relevant PE info")
   {

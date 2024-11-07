@@ -329,6 +329,13 @@ internal String8 push_file_name_date_time_string(Arena *arena, DateTime *date_ti
 internal String8 string_from_elapsed_time(Arena *arena, DateTime dt);
 
 ////////////////////////////////
+//~ Globally Unique Ids
+
+internal String8 string_from_guid(Arena *arena, Guid guid);
+internal B32     try_guid_from_string(String8 string, Guid *guid_out);
+internal Guid    guid_from_string(String8 string);
+
+////////////////////////////////
 //~ rjf: Basic Text Indentation
 
 internal String8 indented_from_string(Arena *arena, String8 string);

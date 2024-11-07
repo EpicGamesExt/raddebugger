@@ -372,17 +372,17 @@ struct PE_CvHeaderPDB20
 typedef struct PE_CvHeaderPDB70 PE_CvHeaderPDB70;
 struct PE_CvHeaderPDB70
 {
-  U32 magic;
-  OS_Guid guid;
-  U32 age;
+  U32  magic;
+  Guid guid;
+  U32  age;
   // file name packed after struct
 };
 
 typedef struct PE_CvHeaderRDI PE_CvHeaderRDI;
 struct PE_CvHeaderRDI
 {
-  U32 magic;
-  OS_Guid guid;
+  U32  magic;
+  Guid guid;
   // file name packed after struct
 };
 
@@ -732,7 +732,7 @@ struct PE_BinInfo
   U64 string_table_off;
   U64 dbg_path_off;
   U64 dbg_path_size;
-  OS_Guid dbg_guid;
+  Guid dbg_guid;
   U32 dbg_age;
   U32 dbg_time;
   Arch arch;
@@ -784,8 +784,8 @@ internal String8 pe_make_manifest_resource(Arena *arena, U32 resource_id, String
 ////////////////////////////////
 //~ Debug Directory
 
-internal String8 pe_make_debug_header_pdb70(Arena *arena, OS_Guid guid, U32 age, String8 pdb_path);
-internal String8 pe_make_debug_header_rdi(Arena *arena, OS_Guid guid, String8 rdi_path);
+internal String8 pe_make_debug_header_pdb70(Arena *arena, Guid guid, U32 age, String8 pdb_path);
+internal String8 pe_make_debug_header_rdi(Arena *arena, Guid guid, String8 rdi_path);
 
 ////////////////////////////////
 //~ Image Checksum

@@ -581,7 +581,7 @@ internal void lnk_build_pdb_public_symbols(TP_Context            *tp,
 
 internal String8List lnk_build_pdb(TP_Context               *tp,
                                    TP_Arena                 *tp_arena,
-                                   OS_Guid                   guid,
+                                   Guid                      guid,
                                    COFF_MachineType          machine,
                                    COFF_TimeStamp            time_stamp,
                                    U32                       age,
