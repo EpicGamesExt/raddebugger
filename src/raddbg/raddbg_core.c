@@ -6059,7 +6059,7 @@ rd_window_frame(RD_Window *ws)
                 UI_Tooltip
                   RD_Font(RD_FontSlot_Main)
                   UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Main))
-                  ui_labelf("Step Over");
+                  ui_labelf("Step Into");
               }
               else
               {
