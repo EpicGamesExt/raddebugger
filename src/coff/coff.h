@@ -77,12 +77,12 @@ typedef struct COFF_Header COFF_Header;
 struct COFF_Header
 {
   COFF_MachineType machine;
-  U16 section_count;
-  COFF_TimeStamp time_stamp;
-  U32 symbol_table_foff;
-  U32 symbol_count;
-  U16 optional_header_size;
-  COFF_Flags flags;
+  U16              section_count;
+  COFF_TimeStamp   time_stamp;
+  U32              symbol_table_foff;
+  U32              symbol_count;
+  U16              optional_header_size;
+  COFF_Flags       flags;
 };
 
 typedef U32 COFF_SectionAlign;
@@ -108,35 +108,36 @@ enum
 typedef U32 COFF_SectionFlags;
 enum
 {
-  COFF_SectionFlag_TYPE_NO_PAD              = (1 << 3),
-  COFF_SectionFlag_CNT_CODE                 = (1 << 5),
-  COFF_SectionFlag_CNT_INITIALIZED_DATA     = (1 << 6),
-  COFF_SectionFlag_CNT_UNINITIALIZED_DATA   = (1 << 7),
-  COFF_SectionFlag_LNK_OTHER                = (1 << 8),
-  COFF_SectionFlag_LNK_INFO                 = (1 << 9),
-  COFF_SectionFlag_LNK_REMOVE               = (1 << 11),
-  COFF_SectionFlag_LNK_COMDAT               = (1 << 12),
-  COFF_SectionFlag_GPREL                    = (1 << 15),
-  COFF_SectionFlag_MEM_16BIT                = (1 << 17),
-  COFF_SectionFlag_MEM_LOCKED               = (1 << 18),
-  COFF_SectionFlag_MEM_PRELOAD              = (1 << 19),
-  COFF_SectionFlag_ALIGN_SHIFT = 20, COFF_SectionFlag_ALIGN_MASK = 0xf,
-  COFF_SectionFlag_LNK_NRELOC_OVFL          = (1 << 24),
-  COFF_SectionFlag_MEM_DISCARDABLE          = (1 << 25),
-  COFF_SectionFlag_MEM_NOT_CACHED           = (1 << 26),
-  COFF_SectionFlag_MEM_NOT_PAGED            = (1 << 27),
-  COFF_SectionFlag_MEM_SHARED               = (1 << 28),
-  COFF_SectionFlag_MEM_EXECUTE              = (1 << 29),
-  COFF_SectionFlag_MEM_READ                 = (1 << 30),
-  COFF_SectionFlag_MEM_WRITE                = (1 << 31),
+  COFF_SectionFlag_TYPE_NO_PAD            = (1 << 3),
+  COFF_SectionFlag_CNT_CODE               = (1 << 5),
+  COFF_SectionFlag_CNT_INITIALIZED_DATA   = (1 << 6),
+  COFF_SectionFlag_CNT_UNINITIALIZED_DATA = (1 << 7),
+  COFF_SectionFlag_LNK_OTHER              = (1 << 8),
+  COFF_SectionFlag_LNK_INFO               = (1 << 9),
+  COFF_SectionFlag_LNK_REMOVE             = (1 << 11),
+  COFF_SectionFlag_LNK_COMDAT             = (1 << 12),
+  COFF_SectionFlag_GPREL                  = (1 << 15),
+  COFF_SectionFlag_MEM_16BIT              = (1 << 17),
+  COFF_SectionFlag_MEM_LOCKED             = (1 << 18),
+  COFF_SectionFlag_MEM_PRELOAD            = (1 << 19),
+  COFF_SectionFlag_ALIGN_SHIFT            = 20,
+  COFF_SectionFlag_ALIGN_MASK             = 0xf,
+  COFF_SectionFlag_LNK_NRELOC_OVFL        = (1 << 24),
+  COFF_SectionFlag_MEM_DISCARDABLE        = (1 << 25),
+  COFF_SectionFlag_MEM_NOT_CACHED         = (1 << 26),
+  COFF_SectionFlag_MEM_NOT_PAGED          = (1 << 27),
+  COFF_SectionFlag_MEM_SHARED             = (1 << 28),
+  COFF_SectionFlag_MEM_EXECUTE            = (1 << 29),
+  COFF_SectionFlag_MEM_READ               = (1 << 30),
+  COFF_SectionFlag_MEM_WRITE              = (1 << 31),
 };
 #define COFF_SectionFlags_Extract_ALIGN(f) (COFF_SectionAlign)(((f) >> COFF_SectionFlag_ALIGN_SHIFT) & COFF_SectionFlag_ALIGN_MASK)
-#define COFF_SectionFlags_LNK_FLAGS    ((COFF_SectionFlag_ALIGN_MASK << COFF_SectionFlag_ALIGN_SHIFT) | COFF_SectionFlag_LNK_COMDAT | COFF_SectionFlag_LNK_INFO | COFF_SectionFlag_LNK_OTHER | COFF_SectionFlag_LNK_REMOVE | COFF_SectionFlag_LNK_NRELOC_OVFL)
+#define COFF_SectionFlags_LNK_FLAGS        ((COFF_SectionFlag_ALIGN_MASK << COFF_SectionFlag_ALIGN_SHIFT) | COFF_SectionFlag_LNK_COMDAT | COFF_SectionFlag_LNK_INFO | COFF_SectionFlag_LNK_OTHER | COFF_SectionFlag_LNK_REMOVE | COFF_SectionFlag_LNK_NRELOC_OVFL)
 
 typedef struct COFF_SectionHeader COFF_SectionHeader;
 struct COFF_SectionHeader
 {
-  U8 name[8];
+  U8  name[8];
   U32 vsize;
   U32 voff;
   U32 fsize;
@@ -151,112 +152,99 @@ struct COFF_SectionHeader
 typedef U16 COFF_RelocTypeX64;
 enum
 {
-  COFF_RelocTypeX64_ABS                = 0x0,
-  COFF_RelocTypeX64_ADDR64             = 0x1,
-  COFF_RelocTypeX64_ADDR32             = 0x2,
-  COFF_RelocTypeX64_ADDR32NB           = 0x3,
-  // NB => No Base
-  COFF_RelocTypeX64_REL32              = 0x4,
-  COFF_RelocTypeX64_REL32_1            = 0x5,
-  COFF_RelocTypeX64_REL32_2            = 0x6,
-  COFF_RelocTypeX64_REL32_3            = 0x7,
-  COFF_RelocTypeX64_REL32_4            = 0x8,
-  COFF_RelocTypeX64_REL32_5            = 0x9,
-  COFF_RelocTypeX64_SECTION            = 0xA,
-  COFF_RelocTypeX64_SECREL             = 0xB,
-  COFF_RelocTypeX64_SECREL7            = 0xC,
-  // TODO(nick): MSDN doesn't specify size for CLR token
-  COFF_RelocTypeX64_TOKEN              = 0xD,
-  COFF_RelocTypeX64_SREL32             = 0xE,
-  // TODO(nick): MSDN doesn't specify size for PAIR
-  COFF_RelocTypeX64_PAIR               = 0xF,
-  COFF_RelocTypeX64_SSPAN32            = 0x10,
-  COFF_RelocTypeX64_COUNT              = 17
+  COFF_RelocTypeX64_ABS      = 0x0,
+  COFF_RelocTypeX64_ADDR64   = 0x1,
+  COFF_RelocTypeX64_ADDR32   = 0x2,
+  COFF_RelocTypeX64_ADDR32NB = 0x3, // NB => No Base
+  COFF_RelocTypeX64_REL32    = 0x4,
+  COFF_RelocTypeX64_REL32_1  = 0x5,
+  COFF_RelocTypeX64_REL32_2  = 0x6,
+  COFF_RelocTypeX64_REL32_3  = 0x7,
+  COFF_RelocTypeX64_REL32_4  = 0x8,
+  COFF_RelocTypeX64_REL32_5  = 0x9,
+  COFF_RelocTypeX64_SECTION  = 0xA,
+  COFF_RelocTypeX64_SECREL   = 0xB,
+  COFF_RelocTypeX64_SECREL7  = 0xC, // TODO(nick): MSDN doesn't specify size for CLR token
+  COFF_RelocTypeX64_TOKEN    = 0xD,
+  COFF_RelocTypeX64_SREL32   = 0xE, // TODO(nick): MSDN doesn't specify size for PAIR
+  COFF_RelocTypeX64_PAIR     = 0xF,
+  COFF_RelocTypeX64_SSPAN32  = 0x10,
+  COFF_RelocTypeX64_COUNT    = 17
 };
 
 typedef U16 COFF_RelocTypeX86;
 enum
 {
-  COFF_RelocTypeX86_ABS                     = 0x0,
-  //  relocation is ignored
-  COFF_RelocTypeX86_DIR16                   = 0x1,
-  //  no support
-  COFF_RelocTypeX86_REL16                   = 0x2,
-  //  no support
-  COFF_RelocTypeX86_UNKNOWN0                = 0x3,
-  COFF_RelocTypeX86_UNKNOWN2                = 0x4,
-  COFF_RelocTypeX86_UNKNOWN3                = 0x5,
-  COFF_RelocTypeX86_DIR32                   = 0x6,
-  //  32-bit virtual address
-  COFF_RelocTypeX86_DIR32NB                 = 0x7,
-  //  32-bit virtual offset
-  COFF_RelocTypeX86_SEG12                   = 0x9,
-  //  no support
-  COFF_RelocTypeX86_SECTION                 = 0xA,
-  //  16-bit section index, used for debug info purposes
-  COFF_RelocTypeX86_SECREL                  = 0xB,
-  //  32-bit offset from start of a section
-  COFF_RelocTypeX86_TOKEN                   = 0xC,
-  //  CLR token? (for managed languages)
-  COFF_RelocTypeX86_SECREL7                 = 0xD,
-  //  7-bit offset from the base of the section that contains the target.
-  COFF_RelocTypeX86_UNKNOWN4                = 0xE,
-  COFF_RelocTypeX86_UNKNOWN5                = 0xF,
-  COFF_RelocTypeX86_UNKNOWN6                = 0x10,
-  COFF_RelocTypeX86_UNKNOWN7                = 0x11,
-  COFF_RelocTypeX86_UNKNOWN8                = 0x12,
-  COFF_RelocTypeX86_UNKNOWN9                = 0x13,
-  COFF_RelocTypeX86_REL32                   = 0x14,
-  COFF_RelocTypeX86_COUNT                   = 20
+  COFF_RelocTypeX86_ABS      = 0x0, //  relocation is ignored
+  COFF_RelocTypeX86_DIR16    = 0x1, //  no support
+  COFF_RelocTypeX86_REL16    = 0x2, //  no support
+  COFF_RelocTypeX86_UNKNOWN0 = 0x3,
+  COFF_RelocTypeX86_UNKNOWN2 = 0x4,
+  COFF_RelocTypeX86_UNKNOWN3 = 0x5,
+  COFF_RelocTypeX86_DIR32    = 0x6, //  32-bit virtual address
+  COFF_RelocTypeX86_DIR32NB  = 0x7, //  32-bit virtual offset
+  COFF_RelocTypeX86_SEG12    = 0x9, //  no support
+  COFF_RelocTypeX86_SECTION  = 0xA, //  16-bit section index, used for debug info purposes
+  COFF_RelocTypeX86_SECREL   = 0xB, //  32-bit offset from start of a section
+  COFF_RelocTypeX86_TOKEN    = 0xC, //  CLR token? (for managed languages)
+  COFF_RelocTypeX86_SECREL7  = 0xD, //  7-bit offset from the base of the section that contains the target.
+  COFF_RelocTypeX86_UNKNOWN4 = 0xE,
+  COFF_RelocTypeX86_UNKNOWN5 = 0xF,
+  COFF_RelocTypeX86_UNKNOWN6 = 0x10,
+  COFF_RelocTypeX86_UNKNOWN7 = 0x11,
+  COFF_RelocTypeX86_UNKNOWN8 = 0x12,
+  COFF_RelocTypeX86_UNKNOWN9 = 0x13,
+  COFF_RelocTypeX86_REL32    = 0x14,
+  COFF_RelocTypeX86_COUNT    = 20
 };
 
 typedef U16 COFF_RelocTypeARM;
 enum
 {
-  COFF_RelocTypeARM_ABS                     = 0x0,
-  COFF_RelocTypeARM_ADDR32                  = 0x1,
-  COFF_RelocTypeARM_ADDR32NB                = 0x2,
-  COFF_RelocTypeARM_BRANCH24                = 0x3,
-  COFF_RelocTypeARM_BRANCH11                = 0x4,
-  COFF_RelocTypeARM_UNKNOWN1                = 0x5,
-  COFF_RelocTypeARM_UNKNOWN2                = 0x6,
-  COFF_RelocTypeARM_UNKNOWN3                = 0x7,
-  COFF_RelocTypeARM_UNKNOWN4                = 0x8,
-  COFF_RelocTypeARM_UNKNOWN5                = 0x9,
-  COFF_RelocTypeARM_REL32                   = 0xA,
-  COFF_RelocTypeARM_SECTION                 = 0xE,
-  COFF_RelocTypeARM_SECREL                  = 0xF,
-  COFF_RelocTypeARM_MOV32                   = 0x10,
-  COFF_RelocTypeARM_THUMB_MOV32             = 0x11,
-  COFF_RelocTypeARM_THUMB_BRANCH20          = 0x12,
-  COFF_RelocTypeARM_UNUSED                  = 0x13,
-  COFF_RelocTypeARM_THUMB_BRANCH24          = 0x14,
-  COFF_RelocTypeARM_THUMB_BLX23             = 0x15,
-  COFF_RelocTypeARM_PAIR                    = 0x16,
-  COFF_RelocTypeARM_COUNT                   = 20
+  COFF_RelocTypeARM_ABS            = 0x0,
+  COFF_RelocTypeARM_ADDR32         = 0x1,
+  COFF_RelocTypeARM_ADDR32NB       = 0x2,
+  COFF_RelocTypeARM_BRANCH24       = 0x3,
+  COFF_RelocTypeARM_BRANCH11       = 0x4,
+  COFF_RelocTypeARM_UNKNOWN1       = 0x5,
+  COFF_RelocTypeARM_UNKNOWN2       = 0x6,
+  COFF_RelocTypeARM_UNKNOWN3       = 0x7,
+  COFF_RelocTypeARM_UNKNOWN4       = 0x8,
+  COFF_RelocTypeARM_UNKNOWN5       = 0x9,
+  COFF_RelocTypeARM_REL32          = 0xA,
+  COFF_RelocTypeARM_SECTION        = 0xE,
+  COFF_RelocTypeARM_SECREL         = 0xF,
+  COFF_RelocTypeARM_MOV32          = 0x10,
+  COFF_RelocTypeARM_THUMB_MOV32    = 0x11,
+  COFF_RelocTypeARM_THUMB_BRANCH20 = 0x12,
+  COFF_RelocTypeARM_UNUSED         = 0x13,
+  COFF_RelocTypeARM_THUMB_BRANCH24 = 0x14,
+  COFF_RelocTypeARM_THUMB_BLX23    = 0x15,
+  COFF_RelocTypeARM_PAIR           = 0x16,
+  COFF_RelocTypeARM_COUNT          = 20
 };
 
 typedef U16 COFF_RelocTypeARM64;
 enum
 {
-  COFF_RelocTypeARM64_ABS                   = 0x0,
-  COFF_RelocTypeARM64_ADDR32                = 0x1,
-  COFF_RelocTypeARM64_ADDR32NB              = 0x2,
-  COFF_RelocTypeARM64_BRANCH26              = 0x3,
-  COFF_RelocTypeARM64_PAGEBASE_REL21        = 0x4,
-  COFF_RelocTypeARM64_REL21                 = 0x5,
-  COFF_RelocTypeARM64_PAGEOFFSET_12A        = 0x6,
-  COFF_RelocTypeARM64_SECREL                = 0x8,
-  COFF_RelocTypeARM64_SECREL_LOW12A         = 0x9,
-  COFF_RelocTypeARM64_SECREL_HIGH12A        = 0xA,
-  COFF_RelocTypeARM64_SECREL_LOW12L         = 0xB,
-  COFF_RelocTypeARM64_TOKEN                 = 0xC,
-  COFF_RelocTypeARM64_SECTION               = 0xD,
-  COFF_RelocTypeARM64_ADDR64                = 0xE,
-  COFF_RelocTypeARM64_BRANCH19              = 0xF,
-  COFF_RelocTypeARM64_BRANCH14              = 0x10,
-  COFF_RelocTypeARM64_REL32                 = 0x11,
-  COFF_RelocTypeARM64_COUNT                 = 17
+  COFF_RelocTypeARM64_ABS            = 0x0,
+  COFF_RelocTypeARM64_ADDR32         = 0x1,
+  COFF_RelocTypeARM64_ADDR32NB       = 0x2,
+  COFF_RelocTypeARM64_BRANCH26       = 0x3,
+  COFF_RelocTypeARM64_PAGEBASE_REL21 = 0x4,
+  COFF_RelocTypeARM64_REL21          = 0x5,
+  COFF_RelocTypeARM64_PAGEOFFSET_12A = 0x6,
+  COFF_RelocTypeARM64_SECREL         = 0x8,
+  COFF_RelocTypeARM64_SECREL_LOW12A  = 0x9,
+  COFF_RelocTypeARM64_SECREL_HIGH12A = 0xA,
+  COFF_RelocTypeARM64_SECREL_LOW12L  = 0xB,
+  COFF_RelocTypeARM64_TOKEN          = 0xC,
+  COFF_RelocTypeARM64_SECTION        = 0xD,
+  COFF_RelocTypeARM64_ADDR64         = 0xE,
+  COFF_RelocTypeARM64_BRANCH19       = 0xF,
+  COFF_RelocTypeARM64_BRANCH14       = 0x10,
+  COFF_RelocTypeARM64_REL32          = 0x11,
+  COFF_RelocTypeARM64_COUNT          = 17
 };
 
 typedef U8 COFF_SymType;
@@ -273,8 +261,7 @@ enum
   COFF_SymType_STRUCT,
   COFF_SymType_UNION,
   COFF_SymType_ENUM,
-  COFF_SymType_MOE,
-  //  member of enumeration
+  COFF_SymType_MOE, //  member of enumeration
   COFF_SymType_BYTE,
   COFF_SymType_WORD,
   COFF_SymType_UINT,
@@ -285,100 +272,100 @@ enum
 typedef U8 COFF_SymStorageClass;
 enum
 {
-  COFF_SymStorageClass_END_OF_FUNCTION      = 0xff,
-  COFF_SymStorageClass_NULL                 = 0,
-  COFF_SymStorageClass_AUTOMATIC            = 1,
-  COFF_SymStorageClass_EXTERNAL             = 2,
-  COFF_SymStorageClass_STATIC               = 3,
-  COFF_SymStorageClass_REGISTER             = 4,
-  COFF_SymStorageClass_EXTERNAL_DEF         = 5,
-  COFF_SymStorageClass_LABEL                = 6,
-  COFF_SymStorageClass_UNDEFINED_LABEL      = 7,
-  COFF_SymStorageClass_MEMBER_OF_STRUCT     = 8,
-  COFF_SymStorageClass_ARGUMENT             = 9,
-  COFF_SymStorageClass_STRUCT_TAG           = 10,
-  COFF_SymStorageClass_MEMBER_OF_UNION      = 11,
-  COFF_SymStorageClass_UNION_TAG            = 12,
-  COFF_SymStorageClass_TYPE_DEFINITION      = 13,
-  COFF_SymStorageClass_UNDEFINED_STATIC     = 14,
-  COFF_SymStorageClass_ENUM_TAG             = 15,
-  COFF_SymStorageClass_MEMBER_OF_ENUM       = 16,
-  COFF_SymStorageClass_REGISTER_PARAM       = 17,
-  COFF_SymStorageClass_BIT_FIELD            = 18,
-  COFF_SymStorageClass_BLOCK                = 100,
-  COFF_SymStorageClass_FUNCTION             = 101,
-  COFF_SymStorageClass_END_OF_STRUCT        = 102,
-  COFF_SymStorageClass_FILE                 = 103,
-  COFF_SymStorageClass_SECTION              = 104,
-  COFF_SymStorageClass_WEAK_EXTERNAL        = 105,
-  COFF_SymStorageClass_CLR_TOKEN            = 107,
-  COFF_SymStorageClass_COUNT                = 27
+  COFF_SymStorageClass_END_OF_FUNCTION  = 0xff,
+  COFF_SymStorageClass_NULL             = 0,
+  COFF_SymStorageClass_AUTOMATIC        = 1,
+  COFF_SymStorageClass_EXTERNAL         = 2,
+  COFF_SymStorageClass_STATIC           = 3,
+  COFF_SymStorageClass_REGISTER         = 4,
+  COFF_SymStorageClass_EXTERNAL_DEF     = 5,
+  COFF_SymStorageClass_LABEL            = 6,
+  COFF_SymStorageClass_UNDEFINED_LABEL  = 7,
+  COFF_SymStorageClass_MEMBER_OF_STRUCT = 8,
+  COFF_SymStorageClass_ARGUMENT         = 9,
+  COFF_SymStorageClass_STRUCT_TAG       = 10,
+  COFF_SymStorageClass_MEMBER_OF_UNION  = 11,
+  COFF_SymStorageClass_UNION_TAG        = 12,
+  COFF_SymStorageClass_TYPE_DEFINITION  = 13,
+  COFF_SymStorageClass_UNDEFINED_STATIC = 14,
+  COFF_SymStorageClass_ENUM_TAG         = 15,
+  COFF_SymStorageClass_MEMBER_OF_ENUM   = 16,
+  COFF_SymStorageClass_REGISTER_PARAM   = 17,
+  COFF_SymStorageClass_BIT_FIELD        = 18,
+  COFF_SymStorageClass_BLOCK            = 100,
+  COFF_SymStorageClass_FUNCTION         = 101,
+  COFF_SymStorageClass_END_OF_STRUCT    = 102,
+  COFF_SymStorageClass_FILE             = 103,
+  COFF_SymStorageClass_SECTION          = 104,
+  COFF_SymStorageClass_WEAK_EXTERNAL    = 105,
+  COFF_SymStorageClass_CLR_TOKEN        = 107,
+  COFF_SymStorageClass_COUNT            = 27
 };
 
 typedef U16 COFF_SymSecNumber;
 enum
 {
-  COFF_SymSecNumber_NUMBER_UNDEFINED        = 0,
-  COFF_SymSecNumber_ABSOLUTE                = 0xffff,
-  COFF_SymSecNumber_DEBUG                   = 0xfffe,
-  COFF_SymSecNumber_COUNT                   = 3
+  COFF_SymSecNumber_NUMBER_UNDEFINED = 0,
+  COFF_SymSecNumber_ABSOLUTE         = 0xffff,
+  COFF_SymSecNumber_DEBUG            = 0xfffe,
+  COFF_SymSecNumber_COUNT            = 3
 };
 
 typedef U8 COFF_SymDType;
 enum
 {
-  COFF_SymDType_NULL                        = 0,
-  COFF_SymDType_PTR                         = 16,
-  COFF_SymDType_FUNC                        = 32,
-  COFF_SymDType_ARRAY                       = 48,
-  COFF_SymDType_COUNT                       = 4
+  COFF_SymDType_NULL  = 0,
+  COFF_SymDType_PTR   = 16,
+  COFF_SymDType_FUNC  = 32,
+  COFF_SymDType_ARRAY = 48,
+  COFF_SymDType_COUNT = 4
 };
 
 typedef U32 COFF_WeakExtType;
 enum
 {
-  COFF_WeakExtType_NOLIBRARY                = 1,
-  COFF_WeakExtType_SEARCH_LIBRARY           = 2,
-  COFF_WeakExtType_SEARCH_ALIAS             = 3,
-  COFF_WeakExtType_COUNT                    = 3
+  COFF_WeakExtType_NOLIBRARY      = 1,
+  COFF_WeakExtType_SEARCH_LIBRARY = 2,
+  COFF_WeakExtType_SEARCH_ALIAS   = 3,
+  COFF_WeakExtType_COUNT          = 3
 };
 
 typedef U32 COFF_ImportHeaderType;
 enum
 {
-  COFF_ImportHeaderType_CODE                = 0,
-  COFF_ImportHeaderType_DATA                = 1,
-  COFF_ImportHeaderType_CONST               = 2,
-  COFF_ImportHeaderType_COUNT               = 3
+  COFF_ImportHeaderType_CODE  = 0,
+  COFF_ImportHeaderType_DATA  = 1,
+  COFF_ImportHeaderType_CONST = 2,
+  COFF_ImportHeaderType_COUNT = 3
 };
 
 typedef U32 COFF_ImportHeaderNameType;
 enum
 {
-  COFF_ImportHeaderNameType_ORDINAL         = 0,
-  COFF_ImportHeaderNameType_NAME            = 1,
-  COFF_ImportHeaderNameType_NAME_NOPREFIX   = 2,
-  COFF_ImportHeaderNameType_UNDECORATE      = 3,
-  COFF_ImportHeaderNameType_COUNT           = 4
+  COFF_ImportHeaderNameType_ORDINAL       = 0,
+  COFF_ImportHeaderNameType_NAME          = 1,
+  COFF_ImportHeaderNameType_NAME_NOPREFIX = 2,
+  COFF_ImportHeaderNameType_UNDECORATE    = 3,
+  COFF_ImportHeaderNameType_COUNT         = 4
 };
 
-#define COFF_IMPORT_HEADER_TYPE_MASK  0x03
-#define COFF_IMPORT_HEADER_TYPE_SHIFT 0
+#define COFF_IMPORT_HEADER_TYPE_MASK       0x03
+#define COFF_IMPORT_HEADER_TYPE_SHIFT      0
 #define COFF_IMPORT_HEADER_NAME_TYPE_MASK  0x1c
 #define COFF_IMPORT_HEADER_NAME_TYPE_SHIFT 2
 #define COFF_IMPORT_HEADER_GET_TYPE(x)      (((x) & COFF_IMPORT_HEADER_TYPE_MASK) >> COFF_IMPORT_HEADER_TYPE_SHIFT)
 #define COFF_IMPORT_HEADER_GET_NAME_TYPE(x) (((x) & COFF_IMPORT_HEADER_NAME_TYPE_MASK) >> COFF_IMPORT_HEADER_NAME_TYPE_SHIFT)
 typedef struct COFF_ImportHeader
 {
-  U16 sig1;
-  U16 sig2;
-  U16 version;
-  U16 machine;
+  U16            sig1;
+  U16            sig2;
+  U16            version;
+  U16            machine;
   COFF_TimeStamp time_stamp;
-  U32 data_size;
-  U16 hint;
-  U16 type;
-  U16 name_type;
+  U32            data_size;
+  U16            hint;
+  U16            type;
+  U16            name_type;
   //  type : 2
   //  name type : 3
   //  reserved : 11
@@ -390,29 +377,17 @@ typedef struct COFF_ImportHeader
 typedef U8 COFF_ComdatSelectType;
 enum
 {
-  COFF_ComdatSelectType_NULL                = 0,
-  //  Only one symbol is allowed to be in global symbol table, otherwise multiply defintion error is thrown.
-  COFF_ComdatSelectType_NODUPLICATES        = 1,
-  //  Select any symbol, even if there are multiple definitions. (we default to first declaration)
-  COFF_ComdatSelectType_ANY                 = 2,
-  //  Sections that symbols reference must match in size, otherwise multiply definition error is thrown.
-  COFF_ComdatSelectType_SAME_SIZE           = 3,
-  //  Sections that symbols reference must have identical checksums, otherwise multiply defintion error is thrown.
-  COFF_ComdatSelectType_EXACT_MATCH         = 4,
-  //  Symbols with associative type form a chain of sections are related to each other. (next link is indicated in COFF_SecDef in 'number')
-  COFF_ComdatSelectType_ASSOCIATIVE         = 5,
-  //  Linker selects section with largest size.
-  COFF_ComdatSelectType_LARGEST             = 6,
-  COFF_ComdatSelectType_COUNT               = 7
+  COFF_ComdatSelectType_NULL         = 0, // Only one symbol is allowed to be in global symbol table, otherwise multiply defintion error is thrown.
+  COFF_ComdatSelectType_NODUPLICATES = 1, // Select any symbol, even if there are multiple definitions. (we default to first declaration)
+  COFF_ComdatSelectType_ANY          = 2, // Sections that symbols reference must match in size, otherwise multiply definition error is thrown.
+  COFF_ComdatSelectType_SAME_SIZE    = 3, // Sections that symbols reference must have identical checksums, otherwise multiply defintion error is thrown.
+  COFF_ComdatSelectType_EXACT_MATCH  = 4, // Symbols with associative type form a chain of sections are related to each other. (next link is indicated in COFF_SecDef in 'number')
+  COFF_ComdatSelectType_ASSOCIATIVE  = 5, // Linker selects section with largest size.
+  COFF_ComdatSelectType_LARGEST      = 6,
+  COFF_ComdatSelectType_COUNT        = 7
 };
 
 #define COFF_MIN_BIG_OBJ_VERSION 2
-
-global U8 coff_big_obj_magic[] =
-{
-  0xC7,0xA1,0xBA,0xD1,0xEE,0xBA,0xA9,0x4B,
-  0xAF,0x20,0xFA,0xF6,0x6A,0xA4,0xDC,0xB8,
-};
 
 typedef struct COFF_HeaderBigObj COFF_HeaderBigObj;
 struct COFF_HeaderBigObj
@@ -422,7 +397,7 @@ struct COFF_HeaderBigObj
   U16 version;
   U16 machine;
   U32 time_stamp;
-  U8 magic[16];
+  U8  magic[16];
   U32 unused[4];
   U32 section_count;
   U32 pointer_to_symbol_table;
@@ -454,8 +429,8 @@ typedef struct COFF_Symbol16 COFF_Symbol16;
 struct COFF_Symbol16
 {
   COFF_SymbolName name;
-  U32 value;
-  U16 section_number;
+  U32             value;
+  U16             section_number;
   union
   {
     struct
@@ -473,8 +448,8 @@ typedef struct COFF_Symbol32 COFF_Symbol32;
 struct COFF_Symbol32
 {
   COFF_SymbolName name;
-  U32 value;
-  U32 section_number;
+  U32             value;
+  U32             section_number;
   union
   {
     struct
@@ -494,11 +469,11 @@ struct COFF_Symbol32
 // storage class: FUNCTION
 typedef struct COFF_SymbolFunc
 {
-  U8 unused[4];
+  U8  unused[4];
   U16 ln;
-  U8 unused2[2];
+  U8  unused2[2];
   U32 ptr_to_next_func;
-  U8 unused3[2];
+  U8  unused3[2];
 } COFF_SymbolFunc;
 
 // storage class: WEAK_EXTERNAL
@@ -506,7 +481,7 @@ typedef struct COFF_SymbolWeakExt
 {
   U32 tag_index;
   U32 characteristics;
-  U8 unused[10];
+  U8  unused[10];
 } COFF_SymbolWeakExt;
 
 typedef struct COFF_SymbolFile
@@ -523,8 +498,8 @@ typedef struct COFF_SymbolSecDef
   U16 number_of_ln;
   U32 check_sum;
   U16 number_lo; // one-based section index
-  U8 selection;
-  U8 unused;
+  U8  selection;
+  U8  unused;
   U16 number_hi;
 } COFF_SymbolSecDef;
 
@@ -557,11 +532,6 @@ typedef U32 COFF_FeatFlags;
 
 #define COFF_RES_ALIGN 4u
 
-read_only U8 g_coff_res_magic[] = {
-  0x00, 0x00, 0x00, 0x00, 0x20, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0xFF, 0xFF, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
-};
-
 typedef struct COFF_ResourceHeaderPrefix
 {
   U32 data_size;
@@ -590,7 +560,7 @@ typedef struct COFF_ResourceID_16
   COFF_ResourceIDType type;
   union
   {
-    U16 number;
+    U16      number;
     String16 string;
   } u;
 } COFF_ResourceID_16;
@@ -600,21 +570,21 @@ typedef struct COFF_ResourceID
   COFF_ResourceIDType type;
   union
   {
-    U16 number;
+    U16     number;
     String8 string;
   } u;
 } COFF_ResourceID;
 
 typedef struct COFF_Resource
 {
-  COFF_ResourceID type;
-  COFF_ResourceID name;
-  U32 data_version;
+  COFF_ResourceID          type;
+  COFF_ResourceID          name;
+  U32                      data_version;
   COFF_ResourceMemoryFlags memory_flags;
-  U16 language_id;
-  U32 version;
-  U32 characteristics;
-  String8 data;
+  U16                      language_id;
+  U32                      version;
+  U32                      characteristics;
+  String8                  data;
 } COFF_Resource;
 
 typedef struct COFF_ResourceDataEntry
@@ -627,12 +597,12 @@ typedef struct COFF_ResourceDataEntry
 
 typedef struct COFF_ResourceDirTable
 {
-  U32 characteristics;
+  U32            characteristics;
   COFF_TimeStamp time_stamp;
-  U16 major_version;
-  U16 minor_version;
-  U16 name_entry_count;
-  U16 id_entry_count;
+  U16            major_version;
+  U16            minor_version;
+  U16            name_entry_count;
+  U16            id_entry_count;
 } COFF_ResourceDirTable;
 
 #define COFF_RESOURCE_SUB_DIR_FLAG (1u << 31u)
@@ -650,22 +620,19 @@ typedef struct COFF_ResourceDirEntry
 
 ////////////////////////////////
 
-read_only global U8 g_coff_archive_sig[8]      = "!<arch>\n";
-read_only global U8 g_coff_thin_archive_sig[8] = "!<thin>\n";
-
 #define COFF_ARCHIVE_ALIGN               2
 #define COFF_ARCHIVE_MAX_SHORT_NAME_SIZE 15
 #define COFF_ARCHIVE_MEMBER_HEADER_SIZE  60
 
 typedef struct COFF_ArchiveMemberHeader
 {
-  String8 name;       // padded to 16 bytes with spaces
-  U32 date;           // unix time
-  U32 user_id;        // unix artifact that does not have meaning on windows
-  U32 group_id;       // unix artifact that does not have meaning on windows
-  String8 mode;       // octal representation the members file mode
-  U32 size;           // size of the member data, not including header
-  B32 is_end_correct; // set to true if found correct signature after header
+  String8 name;           // padded to 16 bytes with spaces
+  U32     date;           // unix time
+  U32     user_id;        // unix artifact that does not have meaning on windows
+  U32     group_id;       // unix artifact that does not have meaning on windows
+  String8 mode;           // octal representation the members file mode
+  U32     size;           // size of the member data, not including header
+  B32     is_end_correct; // set to true if found correct signature after header
 } COFF_ArchiveMemberHeader;
 
 ////////////////////////////////
@@ -683,72 +650,61 @@ typedef U32 COFF_DataType;
 typedef struct COFF_HeaderInfo
 {
   COFF_MachineType machine;
-  COFF_DataType type;
-  U64 section_array_off;
-  U64 section_count_no_null;
-  U64 string_table_off;
-  U64 symbol_size;
-  U64 symbol_off;
-  U64 symbol_count;
+  COFF_DataType    type;
+  U64              section_array_off;
+  U64              section_count_no_null;
+  U64              string_table_off;
+  U64              symbol_size;
+  U64              symbol_off;
+  U64              symbol_count;
 } COFF_HeaderInfo;
 
 enum
 {
-  // symbol has section and offset.
-  COFF_SymbolValueInterp_REGULAR,
-  
-  // symbol is overridable
-  COFF_SymbolValueInterp_WEAK,
-  
-  // symbol doesn't have a reference section.
-  COFF_SymbolValueInterp_UNDEFINED,
-  
-  // symbol has no section but still has size.
-  COFF_SymbolValueInterp_COMMON,
-  
-  // symbol has an absolute (non-relocatable) value and is not an address.
-  COFF_SymbolValueInterp_ABS,
-  
-  // symbol is used to provide general type of debugging information.
-  COFF_SymbolValueInterp_DEBUG
+  COFF_SymbolValueInterp_REGULAR,   // symbol has section and offset.
+  COFF_SymbolValueInterp_WEAK,      // symbol is overridable
+  COFF_SymbolValueInterp_UNDEFINED, // symbol doesn't have a reference section.
+  COFF_SymbolValueInterp_COMMON,    // symbol has no section but still has size.
+  COFF_SymbolValueInterp_ABS,       // symbol has an absolute (non-relocatable) value and is not an address.
+  COFF_SymbolValueInterp_DEBUG      // symbol is used to provide general type of debugging information.
 };
 typedef U32 COFF_SymbolValueInterpType;
 
 typedef struct COFF_Symbol16Node
 {
   struct COFF_Symbol16Node *next;
-  COFF_Symbol16 data;
+  COFF_Symbol16             data;
 } COFF_Symbol16Node;
 
 typedef struct COFF_Symbol16List
 {
-  U64 count;
+  U64                count;
   COFF_Symbol16Node *first;
   COFF_Symbol16Node *last;
 } COFF_Symbol16List;
 
 typedef struct COFF_Symbol32Array
 {
-  U64 count;
+  U64            count;
   COFF_Symbol32 *v;
 } COFF_Symbol32Array;
 
 typedef struct COFF_RelocNode
 {
   struct COFF_RelocNode *next;
-  COFF_Reloc data;
+  COFF_Reloc             data;
 } COFF_RelocNode;
 
 typedef struct COFF_RelocList
 {
-  U64 count;
+  U64             count;
   COFF_RelocNode *first;
   COFF_RelocNode *last;
 } COFF_RelocList;
 
 typedef struct COFF_RelocArray
 {
-  U64 count;
+  U64         count;
   COFF_Reloc *v;
 } COFF_RelocArray;
 
@@ -761,12 +717,12 @@ typedef struct COFF_RelocInfo
 typedef struct COFF_ResourceNode
 {
   struct COFF_ResourceNode *next;
-  COFF_Resource data;
+  COFF_Resource             data;
 } COFF_ResourceNode;
 
 typedef struct COFF_ResourceList
 {
-  U64 count;
+  U64                count;
   COFF_ResourceNode *first;
   COFF_ResourceNode *last;
 } COFF_ResourceList;
@@ -776,21 +732,21 @@ typedef struct COFF_ResourceList
 typedef struct COFF_ArchiveMember
 {
   COFF_ArchiveMemberHeader header;
-  U64 offset;
-  String8 data;
+  U64                      offset;
+  String8                  data;
 } COFF_ArchiveMember;
 
 typedef struct COFF_ArchiveFirstMember
 {
-  U32 symbol_count;
+  U32     symbol_count;
   String8 member_offsets;
   String8 string_table;
 } COFF_ArchiveFirstMember;
 
 typedef struct COFF_ArchiveSecondMember
 {
-  U32 member_count;
-  U32 symbol_count;
+  U32     member_count;
+  U32     symbol_count;
   String8 member_offsets;
   String8 symbol_indices;
   String8 string_table;
@@ -799,12 +755,12 @@ typedef struct COFF_ArchiveSecondMember
 typedef struct COFF_ArchiveMemberNode
 {
   struct COFF_ArchiveMemberNode *next;
-  COFF_ArchiveMember data;
+  COFF_ArchiveMember             data;
 } COFF_ArchiveMemberNode;
 
 typedef struct COFF_ArchiveMemberList
 {
-  U64 count;
+  U64                     count;
   COFF_ArchiveMemberNode *first;
   COFF_ArchiveMemberNode *last;
 } COFF_ArchiveMemberList;
@@ -818,21 +774,36 @@ typedef enum
 
 typedef struct COFF_ArchiveParse
 {
-  COFF_ArchiveFirstMember first_member;
+  COFF_ArchiveFirstMember  first_member;
   COFF_ArchiveSecondMember second_member;
-  String8 long_names;
+  String8                  long_names;
 } COFF_ArchiveParse;
 
 ////////////////////////////////
 
 typedef struct COFF_SectionHeaderArray
 {
-  U64 count;
+  U64                 count;
   COFF_SectionHeader *v;
 } COFF_SectionHeaderArray;
 
 ////////////////////////////////
 //~ rjf: Globals
+
+read_only global U8 coff_big_obj_magic[] =
+{
+  0xC7,0xA1,0xBA,0xD1,0xEE,0xBA,0xA9,0x4B,
+  0xAF,0x20,0xFA,0xF6,0x6A,0xA4,0xDC,0xB8,
+};
+
+read_only global U8 g_coff_archive_sig[8]      = "!<arch>\n";
+read_only global U8 g_coff_thin_archive_sig[8] = "!<thin>\n";
+
+read_only global U8 g_coff_res_magic[] =
+{
+  0x00, 0x00, 0x00, 0x00, 0x20, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0xFF, 0xFF, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+};
 
 read_only global COFF_SectionHeader coff_section_header_nil = {0};
 
