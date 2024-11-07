@@ -1375,15 +1375,15 @@ di_search_thread__entry_point(void *p)
     {
       items.count = items_list.total_count;
       items.v = push_array(arena, DI_SearchItem, items.count);
-      U64 idx = 0;
+      U64 off = 0;
       for(DI_SearchItemChunk *chunk = items_list.first; chunk != 0; chunk = chunk->next)
       {
-        MemoryCopy(items.v + idx, chunk->v, sizeof(chunk->v[0])*chunk->count);
+        MemoryCopy(items.v + off, chunk->v, sizeof(chunk->v[0])*chunk->count);
         for EachIndex(idx, chunk->count)
         {
-          items.v[idx].match_ranges = fuzzy_match_range_list_copy(arena, &items.v[idx].match_ranges);
+          items.v[off+idx].match_ranges = fuzzy_match_range_list_copy(arena, &items.v[idx].match_ranges);
         }
-        idx += chunk->count;
+        off+= chunk->count;
       }
     }
     
