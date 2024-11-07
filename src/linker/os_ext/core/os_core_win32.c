@@ -73,27 +73,6 @@ os_w32_is_path_relative_current_directory(String8 path)
   return 1;
 }
 
-internal String8
-os_make_full_path(Arena *arena, String8 path)
-{
-  String8 full_path;
-  if (os_w32_is_path_relative_current_directory(path)) {
-    Temp scratch = scratch_begin(&arena, 1);
-    String8 current_dir = os_get_current_path(scratch.arena);
-    String8List list = {0};
-    str8_list_push(scratch.arena, &list, current_dir);
-    str8_list_push(scratch.arena, &list, path);
-    String8 temp_full_path = str8_list_join(scratch.arena, &list, &(StringJoin){ .sep = str8_lit_comp("\\") });
-    String8List split_full_path = str8_split_path(scratch.arena, temp_full_path);
-    str8_path_list_resolve_dots_in_place(&split_full_path, PathStyle_WindowsAbsolute);
-    full_path = str8_list_join(arena, &split_full_path, &(StringJoin){ .sep = str8_lit_comp("\\") });
-    scratch_end(scratch);
-  } else {
-    full_path = push_str8_copy(arena, path);
-  }
-  return full_path;
-}
-
 internal B32
 os_folder_path_exists(String8 path)
 {

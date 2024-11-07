@@ -494,11 +494,18 @@ internal String8
 os_full_path_from_path(Arena *arena, String8 path)
 {
   Temp scratch = scratch_begin(&arena, 1);
-  DWORD buffer_size = MAX_PATH + 1;
-  U16 *buffer = push_array_no_zero(scratch.arena, U16, buffer_size);
-  String16 path16 = str16_from_8(scratch.arena, path);
-  DWORD path16_size = GetFullPathNameW((WCHAR*)path16.str, buffer_size, (WCHAR*)buffer, NULL);
-  String8 full_path = str8_from_16(arena, str16(buffer, path16_size));
+  DWORD     buffer_size = Max(MAX_PATH, path.size * 2) + 1;
+  String16  path16      = str16_from_8(scratch.arena, path);
+  WCHAR    *buffer      = push_array_no_zero(scratch.arena, WCHAR, buffer_size);
+  DWORD     path16_size = GetFullPathNameW((WCHAR*)path16.str, buffer_size, buffer, NULL);
+  if(path16_size > buffer_size)
+  {
+    arena_pop(scratch.arena, buffer_size);
+    buffer_size = path16_size + 1;
+    buffer      = push_array_no_zero(scratch.arena, WCHAR, buffer_size);
+    path16_size = GetFullPathNameW((WCHAR*)path16.str, buffer_size, buffer, NULL);
+  }
+  String8 full_path = str8_from_16(arena, str16((U16*)buffer, path16_size));
   scratch_end(scratch);
   return full_path;
 }

@@ -1819,25 +1819,25 @@ lnk_config_from_cmd_line(Arena *arena, String8List raw_cmd_line)
     String8 ext  = (config->file_characteristics & PE_ImageFileCharacteristic_FILE_DLL) ? str8_lit("dll") : str8_lit("exe");
     config->image_name = make_file_path_with_ext(scratch.arena, name, ext);
   }
-  config->image_name = os_make_full_path(arena, config->image_name);
+  config->image_name = os_full_path_from_path(arena, config->image_name);
 
   // handle empty /PDB
   if (!lnk_cmd_line_has_switch(cmd_line, LNK_CmdSwitch_Pdb)) {
     config->pdb_name = make_file_path_with_ext(arena, config->image_name, str8_lit("pdb"));
   }
-  config->pdb_name = os_make_full_path(arena, config->pdb_name);
+  config->pdb_name = os_full_path_from_path(arena, config->pdb_name);
 
   // handle empty /RAD_DEBUG_NAME
   if (!lnk_cmd_line_has_switch(cmd_line, LNK_CmdSwitch_Rad_DebugName)) {
     config->rad_debug_name = make_file_name_with_ext(arena, config->image_name, str8_lit("rdi"));
   }
-  config->rad_debug_name = os_make_full_path(arena, config->rad_debug_name);
+  config->rad_debug_name = os_full_path_from_path(arena, config->rad_debug_name);
 
   // handle empty /IMPLIB
   if (!lnk_cmd_line_has_switch(cmd_line, LNK_CmdSwitch_ImpLib)) {
     config->imp_lib_name = make_file_name_with_ext(arena, config->image_name, str8_lit("lib"));
   }
-  config->imp_lib_name = os_make_full_path(arena, config->imp_lib_name);
+  config->imp_lib_name = os_full_path_from_path(arena, config->imp_lib_name);
 
   // handle empty /MANIFESTFILE
   if (!lnk_cmd_line_has_switch(cmd_line, LNK_CmdSwitch_ManifestFile)) {

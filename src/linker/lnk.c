@@ -1285,11 +1285,11 @@ lnk_push_input_from_lazy(Arena *arena, PathStyle path_style, LNK_LazySymbol *laz
       }
       
       LNK_InputObj *input = lnk_input_obj_list_push(arena, input_obj_list);
-      input->is_thin  = is_thin;
-      input->dedup_id = push_str8f(arena, "%S(%S)", lazy->lib->path, obj_path);
-      input->path     = obj_path;
-      input->data     = member_info.data;
-      input->lib_path = lazy->lib->path;
+      input->is_thin      = is_thin;
+      input->dedup_id     = push_str8f(arena, "%S/%S", lazy->lib->path, obj_path);
+      input->path         = obj_path;
+      input->data         = member_info.data;
+      input->lib_path     = lazy->lib->path;
     } break;
   }
 }
@@ -3557,7 +3557,7 @@ l.count += 1;                                                \
               continue;
             }
             
-            String8 full_path          = os_make_full_path(scratch.arena, input->dedup_id);
+            String8 full_path          = os_full_path_from_path(scratch.arena, input->dedup_id);
             B32     was_full_path_used = hash_table_search_path_u64(loaded_obj_ht, full_path, 0);
             if (was_full_path_used) {
               continue;
