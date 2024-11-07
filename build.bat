@@ -89,7 +89,6 @@ popd
 :: --- Get Current Git Commit Id ----------------------------------------------
 for /f %%i in ('call git describe --always --dirty')   do set compile=%compile% -DBUILD_GIT_HASH=\"%%i\"
 for /f %%i in ('call git rev-parse HEAD')              do set compile=%compile% -DBUILD_GIT_HASH_FULL=\"%%i\"
-for /f %%i in ('call git rev-parse --abbrev-ref HEAD') do set compile=%compile% -DBUILD_GIT_BRANCH=\"%%i\"
 
 :: --- Build & Run Metaprogram ------------------------------------------------
 if "%no_meta%"=="1" echo [skipping metagen]
