@@ -1383,6 +1383,7 @@ di_search_thread__entry_point(void *p)
         {
           items.v[idx].match_ranges = fuzzy_match_range_list_copy(arena, &items.v[idx].match_ranges);
         }
+        idx += chunk->count;
       }
     }
     
