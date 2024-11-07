@@ -489,13 +489,17 @@ struct TxtRng
 ////////////////////////////////
 //~ Globally Unique Ids
 
-typedef struct Guid Guid;
-struct Guid
+typedef union Guid Guid;
+union Guid
 {
-  U32 data1;
-  U16 data2;
-  U16 data3;
-  U8  data4[8];
+  struct
+  {
+    U32 data1;
+    U16 data2;
+    U16 data3;
+    U8  data4[8];
+  };
+  U8 v[16];
 };
 StaticAssert(sizeof(Guid) == 16, g_guid_size_check);
 

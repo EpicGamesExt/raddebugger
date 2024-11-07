@@ -1133,14 +1133,11 @@ os_safe_call(OS_ThreadFunctionType *func, OS_ThreadFunctionType *fail_handler, v
 ////////////////////////////////
 //~ rjf: @os_hooks GUIDs (Implemented Per-OS)
 
-internal OS_Guid
+internal Guid
 os_make_guid(void)
 {
-  U8 random_bytes[16] = {0};
-  StaticAssert(sizeof(random_bytes) == sizeof(OS_Guid), os_lnx_guid_size_check);
-  getrandom(random_bytes, sizeof(random_bytes), 0);
-  OS_Guid guid = {0};
-  MemoryCopy(&guid, random_bytes, sizeof(random_bytes));
+  Guid guid = {0};
+  getrandom(guid.v, sizeof(guid.v), 0);
   guid.data3 &= 0x0fff;
   guid.data3 |= (4 << 12);
   guid.data4[0] &= 0x3f;
