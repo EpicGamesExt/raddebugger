@@ -53,9 +53,6 @@ main_thread_base_entry_point(void (*entry_point)(CmdLine *cmdline), char **argum
 #if defined(DBGI_H) && !defined(DI_INIT_MANUAL)
   di_init();
 #endif
-#if defined(DBGI_SEARCH_H) && !defined(DIS_INIT_MANUAL)
-  dis_init();
-#endif
 #if defined(DEMON_CORE_H) && !defined(DMN_INIT_MANUAL)
   dmn_init();
 #endif
