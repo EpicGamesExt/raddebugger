@@ -29,5 +29,3 @@ internal String8Array os_data_from_file_path_parallel(TP_Context *tp, Arena *are
 internal String8List  os_file_search(Arena *arena, String8List dir_list, String8 file_path);
 internal B32          os_folder_path_exists(String8 path);
 
-internal U32 os_get_process_start_time_unix(void);
-

@@ -90,6 +90,18 @@ os_w32_sleep_ms_from_endt_us(U64 endt_us)
   return sleep_ms;
 }
 
+internal U32
+os_w32_unix_time_from_file_time(FILETIME file_time)
+{
+  U64 win32_time = ((U64)file_time.dwHighDateTime << 32) | file_time.dwLowDateTime;
+  U64 unix_time64 = ((win32_time - 0x19DB1DED53E8000ULL) / 10000000);
+  
+  Assert(unix_time64 <= max_U32);
+  U32 unix_time32 = (U32)unix_time64;
+
+  return unix_time32;
+}
+
 ////////////////////////////////
 //~ rjf: Entity Functions
 
@@ -165,6 +177,21 @@ os_get_current_path(Arena *arena)
   String8 name = str8_from_16(arena, str16(memory, length));
   scratch_end(scratch);
   return name;
+}
+
+internal U32
+os_get_process_start_time_unix(void)
+{
+  HANDLE handle = GetCurrentProcess();
+  FILETIME start_time = {0};
+  FILETIME exit_time;
+  FILETIME kernel_time;
+  FILETIME user_time;
+  if(GetProcessTimes(handle, &start_time, &exit_time, &kernel_time, &user_time))
+  {
+    return os_w32_unix_time_from_file_time(start_time);
+  }
+  return 0;
 }
 
 ////////////////////////////////
@@ -817,10 +844,8 @@ os_now_unix(void)
 {
   FILETIME file_time;
   GetSystemTimeAsFileTime(&file_time);
-  U64 win32_time = ((U64)file_time.dwHighDateTime << 32) | file_time.dwLowDateTime;
-  U64 unix_time64 = ((win32_time - 0x19DB1DED53E8000ULL) / 10000000);
-  U32 unix_time32 = (U32)unix_time64;
-  return unix_time32;
+  U32 unix_time = os_w32_unix_time_from_file_time(file_time);
+  return unix_time;
 }
 
 internal DateTime

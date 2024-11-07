@@ -1,18 +1,6 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-internal U32
-w32_unix_time_from_file_time(FILETIME file_time)
-{
-  U64 win32_time = ((U64)file_time.dwHighDateTime << 32) | file_time.dwLowDateTime;
-  U64 unix_time64 = ((win32_time - 0x19DB1DED53E8000ULL) / 10000000);
-  
-  Assert(unix_time64 <= max_U32);
-  U32 unix_time32 = (U32)unix_time64;
-
-  return unix_time32;
-}
-
 internal B32
 os_w32_has_path_volume_prefix(String8 path)
 {
@@ -126,43 +114,5 @@ os_folder_path_exists(String8 path)
   B32 exists = (attributes != INVALID_FILE_ATTRIBUTES) && (attributes & FILE_ATTRIBUTE_DIRECTORY);
   scratch_end(scratch);
   return exists;
-}
-
-internal B32
-os_set_large_pages(B32 toggle)
-{
-  B32 is_ok = 0;
-
-  HANDLE token;
-  if(OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &token))
-  {
-    LUID luid;
-    if(LookupPrivilegeValue(0, SE_LOCK_MEMORY_NAME, &luid))
-    {
-      TOKEN_PRIVILEGES priv;
-      priv.PrivilegeCount           = 1;
-      priv.Privileges[0].Luid       = luid;
-      priv.Privileges[0].Attributes = toggle ? SE_PRIVILEGE_ENABLED : SE_PRIVILEGE_REMOVED;
-      if (AdjustTokenPrivileges(token, 0, &priv, sizeof(priv), 0, 0) == ERROR_SUCCESS) {
-        is_ok = 1;
-      }
-    }
-    CloseHandle(token);
-  }
-  return is_ok;
-}
-
-internal U32
-os_get_process_start_time_unix(void)
-{
-  HANDLE handle = GetCurrentProcess();
-  FILETIME start_time = {0};
-  FILETIME exit_time;
-  FILETIME kernel_time;
-  FILETIME user_time;
-  if (GetProcessTimes(handle, &start_time, &exit_time, &kernel_time, &user_time)) {
-    return w32_unix_time_from_file_time(start_time);
-  }
-  return 0;
 }
 

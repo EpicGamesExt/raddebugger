@@ -166,9 +166,10 @@ internal OS_Handle os_cmd_line_launchf(char *fmt, ...);
 ////////////////////////////////
 //~ rjf: @os_hooks System/Process Info (Implemented Per-OS)
 
-internal OS_SystemInfo *os_get_system_info(void);
+internal OS_SystemInfo  *os_get_system_info(void);
 internal OS_ProcessInfo *os_get_process_info(void);
-internal String8 os_get_current_path(Arena *arena);
+internal String8         os_get_current_path(Arena *arena);
+internal U32             os_get_process_start_time_unix(void);
 
 ////////////////////////////////
 //~ rjf: @os_hooks Memory Allocation (Implemented Per-OS)
