@@ -769,7 +769,6 @@ internal U16 bswap_u16(U16 x);
 internal U32 bswap_u32(U32 x);
 internal U64 bswap_u64(U64 x);
 
-internal U64 count_bits_set16(U16 val);
 internal U64 count_bits_set32(U32 val);
 internal U64 count_bits_set64(U64 val);
 

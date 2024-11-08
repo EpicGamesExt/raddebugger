@@ -144,12 +144,6 @@ bswap_u64(U64 x)
 #if COMPILER_MSVC || (COMPILER_CLANG && OS_WINDOWS)
 
 internal U64
-count_bits_set16(U16 val)
-{
-  return __popcnt16(val);
-}
-
-internal U64
 count_bits_set32(U32 val)
 {
   return __popcnt(val);
@@ -196,45 +190,39 @@ clz64(U64 mask)
 #elif COMPILER_CLANG || COMPILER_GCC
 
 internal U64
-count_bits_set16(U16 val)
-{
-  NotImplemented;
-  return 0;
-}
-
-internal U64
 count_bits_set32(U32 val)
 {
-  NotImplemented;
-  return 0;
+  return __builtin_popcount(val);
 }
 
 internal U64
 count_bits_set64(U64 val)
 {
-  NotImplemented;
-  return 0;
+  return __builtin_popcountll(val);
 }
 
 internal U64
 ctz32(U32 val)
 {
-  NotImplemented;
-  return 0;
+  return __builtin_ctz(val);
 }
 
 internal U64
 clz32(U32 val)
 {
-  NotImplemented;
-  return 0;
+  return __builtin_clz(val);
+}
+
+internal U64
+ctz64(U64 val)
+{
+  return __builtin_ctzll(val);
 }
 
 internal U64
 clz64(U64 val)
 {
-  NotImplemented;
-  return 0;
+  return __builtin_clzll(val);
 }
 
 #else
