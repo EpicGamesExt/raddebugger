@@ -2479,7 +2479,7 @@ ui_box_equip_draw_bucket(UI_Box *box, DR_Bucket *bucket)
   box->flags |= UI_BoxFlag_DrawBucket;
   if(box->draw_bucket != 0)
   {
-    D_BucketScope(box->draw_bucket) dr_sub_bucket(bucket);
+    DR_BucketScope(box->draw_bucket) dr_sub_bucket(bucket);
   }
   else
   {

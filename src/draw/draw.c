@@ -609,6 +609,7 @@ dr_truncated_fancy_run_fuzzy_matches(Vec2F32 p, DR_FancyRunList *list, F32 max_x
 internal void
 dr_text_run(Vec2F32 p, Vec4F32 color, FNT_Run run)
 {
+  ProfBeginFunction();
   F32 advance = 0;
   FNT_Piece *piece_first = run.pieces.v;
   FNT_Piece *piece_opl = piece_first + run.pieces.count;
@@ -629,6 +630,7 @@ dr_text_run(Vec2F32 p, Vec4F32 color, FNT_Run run)
     }
     advance += piece->advance;
   }
+  ProfEnd();
 }
 
 internal void

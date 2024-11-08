@@ -4,6 +4,9 @@
 #ifndef RENDER_D3D11_H
 #define RENDER_D3D11_H
 
+#include <combaseapi.h>
+#include <dcommon.h>
+#include <initguid.h>
 #include <windows.h>
 #include <d3d11_1.h>
 #include <d3dcompiler.h>

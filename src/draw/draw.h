@@ -132,7 +132,7 @@ internal DR_Bucket *dr_bucket_make(void);
 internal void dr_push_bucket(DR_Bucket *bucket);
 internal void dr_pop_bucket(void);
 internal DR_Bucket *dr_top_bucket(void);
-#define D_BucketScope(b) DeferLoop(dr_push_bucket(b), dr_pop_bucket())
+#define DR_BucketScope(b) DeferLoop(dr_push_bucket(b), dr_pop_bucket())
 
 ////////////////////////////////
 //~ rjf: Bucket Stacks

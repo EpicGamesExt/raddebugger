@@ -2006,7 +2006,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   if(line_drag_drop && contains_2f32(clipped_top_container_rect, ui_mouse()))
   {
     DR_Bucket *bucket = dr_bucket_make();
-    D_BucketScope(bucket)
+    DR_BucketScope(bucket)
     {
       Vec4F32 color = line_drag_drop_color;
       Rng2F32 drop_line_rect = r2f32p(top_container_box->rect.x0,

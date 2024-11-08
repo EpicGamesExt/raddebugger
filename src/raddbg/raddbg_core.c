@@ -8214,7 +8214,7 @@ rd_window_frame(RD_Window *ws)
   //- rjf: draw UI
   //
   ws->draw_bucket = dr_bucket_make();
-  D_BucketScope(ws->draw_bucket)
+  DR_BucketScope(ws->draw_bucket)
     ProfScope("draw UI")
   {
     Temp scratch = scratch_begin(0, 0);

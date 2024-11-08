@@ -7074,7 +7074,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(memory)
           {
             Rng1U64 selection_in_row = intersect_1u64(row_range_bytes, selection);
             DR_Bucket *bucket = dr_bucket_make();
-            D_BucketScope(bucket)
+            DR_BucketScope(bucket)
             {
               Vec2F32 text_pos = ui_box_text_position(ascii_box);
               dr_rect(r2f32p(text_pos.x + fnt_dim_from_tag_size_string(font, font_size, 0, 0, str8_prefix(ascii_text, selection_in_row.min+0-row_range_bytes.min)).x - font_size/8.f,
@@ -7089,7 +7089,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(memory)
           if(mouse_hover_byte_num != 0 && contains_1u64(row_range_bytes, mouse_hover_byte_num-1))
           {
             DR_Bucket *bucket = dr_bucket_make();
-            D_BucketScope(bucket)
+            DR_BucketScope(bucket)
             {
               Vec2F32 text_pos = ui_box_text_position(ascii_box);
               Vec4F32 color = rd_rgba_from_theme_color(RD_ThemeColor_HighlightOverlay);

@@ -29,9 +29,9 @@ enum
 typedef union R_Handle R_Handle;
 union R_Handle
 {
-  U64 u64[2];
-  U32 u32[4];
-  U16 u16[8];
+  U64 u64[1];
+  U32 u32[2];
+  U16 u16[4];
 };
 
 ////////////////////////////////
