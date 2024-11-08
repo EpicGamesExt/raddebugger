@@ -4,28 +4,29 @@
 ////////////////////////////////
 //~ rjf: Basic Functions
 
-#if !defined(BLAKE2_H)
-#define HAVE_SSE2
-#include "third_party/blake2/blake2.h"
-#include "third_party/blake2/blake2b.c"
+#if !defined(XXH_IMPLEMENTATION)
+# define XXH_IMPLEMENTATION
+# define XXH_STATIC_LINKING_ONLY
+# include "linker/third_party_ext/xxHash/xxhash.h"
 #endif
 
 internal U128
 fnt_hash_from_string(String8 string)
 {
-  U128 result = {0};
-  blake2b((U8 *)&result.u64[0], sizeof(result), string.str, string.size, 0, 0);
-  return result;
+  union
+  {
+    XXH128_hash_t xxhash;
+    U128 u128;
+  }
+  hash;
+  hash.xxhash = XXH3_128bits(string.str, string.size);
+  return hash.u128;
 }
 
 internal U64
 fnt_little_hash_from_string(String8 string)
 {
-  U64 result = 5381;
-  for(U64 i = 0; i < string.size; i += 1)
-  {
-    result = ((result << 5) + result) + string.str[i];
-  }
+  U64 result = XXH3_64bits(string.str, string.size);
   return result;
 }
 
