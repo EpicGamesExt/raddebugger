@@ -154,6 +154,22 @@ os_get_current_path(Arena *arena)
   return string;
 }
 
+internal U32
+os_get_process_start_time_unix(void)
+{
+  Temp scratch = scratch_begin(0,0);
+  pid_t pid = getpid();
+  String8 path = push_str8f(scratch.arena, "/proc/%u", pid);
+  struct stat st;
+  int err = stat((char*)path.str, &st);
+  if(err == 0)
+  {
+    return (U32)st.st_mtime;
+  }
+  scratch_end(scratch);
+  return 0;
+}
+
 ////////////////////////////////
 //~ rjf: @os_hooks Memory Allocation (Implemented Per-OS)
 
@@ -451,6 +467,22 @@ os_file_path_exists(String8 path)
   }
   scratch_end(scratch);
   return result;
+}
+
+internal B32
+os_folder_path_exists(String8 path)
+{
+  Temp scratch = scratch_begin(0, 0);
+  B32      exists    = 0;
+  String8  path_copy = push_str8_copy(scratch.arena, path);
+  DIR     *handle    = opendir((char*)path_copy.str);
+  if(handle)
+  {
+    closedir(handle);
+    exists = 1;
+  }
+  scratch_end(scratch);
+  return exists;
 }
 
 internal FileProperties
@@ -1028,13 +1060,26 @@ os_condition_variable_broadcast(OS_Handle cv)
 internal OS_Handle
 os_semaphore_alloc(U32 initial_count, U32 max_count, String8 name)
 {
-  NotImplemented;
+  OS_Handle result = {0};
+  if (name.size > 0) {
+    // TODO: we need to allocate shared memory to store sem_t
+    NotImplemented;
+  } else {
+    sem_t *s = mmap(0, sizeof(*s), PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+    AssertAlways(s != MAP_FAILED);
+    int err = sem_init(s, 0, initial_count);
+    if (err == 0) {
+      result.u64[0] = (U64)s;
+    }
+  }
+  return result;
 }
 
 internal void
 os_semaphore_release(OS_Handle semaphore)
 {
-  NotImplemented;
+  int err = munmap((void*)semaphore.u64[0], sizeof(sem_t));
+  AssertAlways(err == 0);
 }
 
 internal OS_Handle
@@ -1052,13 +1097,37 @@ os_semaphore_close(OS_Handle semaphore)
 internal B32
 os_semaphore_take(OS_Handle semaphore, U64 endt_us)
 {
-  NotImplemented;
+  AssertAlways(endt_us == max_U64);
+  for (;;) {
+    int err = sem_wait((sem_t*)semaphore.u64[0]);
+    if (err == 0) {
+      break;
+    } else {
+      if (errno == EAGAIN) {
+        continue;
+      }
+    }
+    InvalidPath;
+    break;
+  }
+  return 1;
 }
 
 internal void
 os_semaphore_drop(OS_Handle semaphore)
 {
-  NotImplemented;
+  for (;;) {
+    int err = sem_post((sem_t*)semaphore.u64[0]);
+    if (err == 0) {
+      break;
+    } else {
+      if (errno == EAGAIN) {
+        continue;
+      }
+    }
+    InvalidPath;
+    break;
+  }
 }
 
 ////////////////////////////////
