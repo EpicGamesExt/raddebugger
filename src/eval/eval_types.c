@@ -403,6 +403,8 @@ e_type_key_cons_(E_ConsTypeParams *params)
       {
         node->params.members[idx].name = push_str8_copy(e_type_state->arena, node->params.members[idx].name);
         node->params.members[idx].inheritance_key_chain = e_type_key_list_copy(e_type_state->arena, &node->params.members[idx].inheritance_key_chain);
+        U64 opl_off = (node->params.members[idx].off + e_type_byte_size_from_key(node->params.members[idx].type_key));
+        node->byte_size = Max(node->byte_size, opl_off);
       }
     }
     else if(params->enum_vals != 0)
@@ -413,6 +415,23 @@ e_type_key_cons_(E_ConsTypeParams *params)
       {
         node->params.enum_vals[idx].name = push_str8_copy(e_type_state->arena, node->params.enum_vals[idx].name);
       }
+      node->byte_size = e_type_byte_size_from_key(node->params.direct_key);
+    }
+    else switch(params->kind)
+    {
+      default:
+      {
+        node->byte_size = e_type_byte_size_from_key(node->params.direct_key);
+      }break;
+      case E_TypeKind_Ptr:
+      {
+        node->byte_size = bit_size_from_arch(node->params.arch)/8;
+      }break;
+      case E_TypeKind_Array:
+      {
+        U64 ptee_size = e_type_byte_size_from_key(node->params.direct_key);
+        node->byte_size = ptee_size * node->params.count;
+      }break;
     }
     result = key;
   }
@@ -604,21 +623,9 @@ e_type_from_key(Arena *arena, E_TypeKey key)
             type->name             = push_str8_copy(arena, node->params.name);
             type->direct_type_key  = node->params.direct_key;
             type->count            = node->params.count;
+            type->byte_size        = node->byte_size;
             switch(type->kind)
             {
-              default:
-              {
-                type->byte_size = e_type_byte_size_from_key(type->direct_type_key);
-              }break;
-              case E_TypeKind_Ptr:
-              {
-                type->byte_size = bit_size_from_arch(node->params.arch)/8;
-              }break;
-              case E_TypeKind_Array:
-              {
-                U64 ptee_size = e_type_byte_size_from_key(node->params.direct_key);
-                type->byte_size = ptee_size * type->count;
-              }break;
               case E_TypeKind_Struct:
               case E_TypeKind_Union:
               case E_TypeKind_Class:
@@ -1123,6 +1130,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
 internal U64
 e_type_byte_size_from_key(E_TypeKey key)
 {
+  ProfBeginFunction();
   U64 result = 0;
   switch(key.kind)
   {
@@ -1133,14 +1141,31 @@ e_type_byte_size_from_key(E_TypeKey key)
       result = e_kind_basic_byte_size_table[kind];
     }break;
     case E_TypeKeyKind_Ext:
+    {
+      U64 type_node_idx = key.u32[1];
+      U32 rdi_idx = key.u32[2];
+      RDI_Parsed *rdi = e_type_state->ctx->modules[rdi_idx].rdi;
+      RDI_TypeNode *rdi_type = rdi_element_from_name_idx(rdi, TypeNodes, type_node_idx);
+      result = rdi_type->byte_size;
+    }break;
     case E_TypeKeyKind_Cons:
     {
-      Temp scratch = scratch_begin(0, 0);
-      E_Type *type = e_type_from_key(scratch.arena, key);
-      result = type->byte_size;
-      scratch_end(scratch);
+      U64 key_hash = e_hash_from_string(5381, str8_struct(&key));
+      U64 key_slot_idx = key_hash%e_type_state->cons_key_slots_count;
+      E_ConsTypeSlot *key_slot = &e_type_state->cons_key_slots[key_slot_idx];
+      for(E_ConsTypeNode *node = key_slot->first;
+          node != 0;
+          node = node->key_next)
+      {
+        if(e_type_key_match(node->key, key))
+        {
+          result = node->byte_size;
+          break;
+        }
+      }
     }break;
   }
+  ProfEnd();
   return result;
 }
 

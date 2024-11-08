@@ -162,6 +162,7 @@ struct E_ConsTypeNode
   E_ConsTypeNode *content_next;
   E_TypeKey key;
   E_ConsTypeParams params;
+  U64 byte_size;
 };
 
 typedef struct E_ConsTypeSlot E_ConsTypeSlot;
