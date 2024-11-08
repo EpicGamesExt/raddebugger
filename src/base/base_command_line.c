@@ -190,6 +190,18 @@ cmd_line_from_string_list(Arena *arena, String8List command_line)
     }
   }
   
+  // rjf: fill argc/argv
+  parsed.argc = command_line.node_count;
+  parsed.argv = push_array(arena, char *, parsed.argc);
+  {
+    U64 idx = 0;
+    for(String8Node *n = command_line.first; n != 0; n = n->next)
+    {
+      parsed.argv[idx] = (char *)push_str8_copy(arena, n->string).str;
+      idx += 1;
+    }
+  }
+  
   return parsed;
 }
 

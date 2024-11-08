@@ -326,11 +326,7 @@ internal Guid os_make_guid(void);
 // into the standard codebase program entry points, named "entry_point".
 
 #if BUILD_ENTRY_DEFINING_UNIT
-# if BASE_ENTRY_POINT_ARGCV
-internal void entry_point(int argc, char **argv);
-# else
 internal void entry_point(CmdLine *cmdline);
-#endif
 #endif
 
 #endif // OS_CORE_H

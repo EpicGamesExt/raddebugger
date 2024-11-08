@@ -98,7 +98,7 @@ os_w32_unix_time_from_file_time(FILETIME file_time)
   
   Assert(unix_time64 <= max_U32);
   U32 unix_time32 = (U32)unix_time64;
-
+  
   return unix_time32;
 }
 
@@ -1721,7 +1721,7 @@ w32_entry_point_caller(int argc, WCHAR **wargv)
   os_w32_state.entity_arena = arena_alloc();
   
   //- rjf: call into "real" entry point
-  main_thread_base_entry_point(entry_point, argc, argv);
+  main_thread_base_entry_point(argc, argv);
 }
 
 #if BUILD_CONSOLE_INTERFACE

@@ -4352,9 +4352,9 @@ l.count += 1;                                                \
 }
 
 internal void
-entry_point(int argc, char **argv)
+entry_point(CmdLine *cmdline)
 {
   lnk_init_error_handler();
-  lnk_run(argc, argv);
+  lnk_run(cmdline->argc, cmdline->argv);
 }
 
