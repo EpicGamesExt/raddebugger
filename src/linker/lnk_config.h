@@ -129,6 +129,7 @@ typedef enum
   LNK_CmdSwitch_Rad_EnvLib,
   LNK_CmdSwitch_Rad_Exe,
   LNK_CmdSwitch_Rad_Guid,
+  LNK_CmdSwitch_Rad_IdleWorkers,
   LNK_CmdSwitch_Rad_LargePages,
   LNK_CmdSwitch_Rad_LinkVer, 
   LNK_CmdSwitch_Rad_Log,
@@ -259,6 +260,7 @@ typedef struct LNK_Config
   U64                         page_size;
   U64                         pdb_page_size;
   U64                         worker_count;
+  U64                         idle_worker_count;
   U64                         function_pad_min;
   U64                        *manifest_resource_id;
   Version                     link_ver;
