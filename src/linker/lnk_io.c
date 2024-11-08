@@ -1,3 +1,58 @@
+////////////////////////////////
+// Shared File API
+
+shared_function int
+lnk_open_file_read(char *path, uint64_t path_size, void *handle_buffer, uint64_t handle_buffer_max)
+{
+  OS_Handle handle = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead, str8((U8*)path, path_size));
+  Assert(sizeof(handle) <= handle_buffer_max);
+  MemoryCopy(handle_buffer, &handle, sizeof(handle));
+  return !os_handle_match(handle, os_handle_zero());
+}
+
+shared_function int
+lnk_open_file_write(char *path, uint64_t path_size, void *handle_buffer, uint64_t handle_buffer_max)
+{
+  OS_Handle handle = os_file_open(OS_AccessFlag_Write, str8((U8*)path, path_size));
+  Assert(sizeof(handle) <= handle_buffer_max);
+  MemoryCopy(handle_buffer, &handle, sizeof(handle));
+  return !os_handle_match(handle, os_handle_zero());
+}
+
+shared_function void
+lnk_close_file(void *raw_handle)
+{
+  OS_Handle handle = *(OS_Handle *)raw_handle;
+  os_file_close(handle);
+}
+
+shared_function uint64_t
+lnk_size_from_file(void *raw_handle)
+{
+  OS_Handle handle = *(OS_Handle *)raw_handle;
+  FileProperties props  = os_properties_from_file(handle);
+  return props.size;
+}
+
+shared_function uint64_t
+lnk_read_file(void *raw_handle, void *buffer, uint64_t buffer_max)
+{
+  OS_Handle handle = *(OS_Handle *)raw_handle;
+  U64 read_size = os_file_read(handle, rng_1u64(0, buffer_max), buffer);
+  Assert(read_size == buffer_max);
+  return read_size;
+}
+
+shared_function uint64_t
+lnk_write_file(void *raw_handle, uint64_t offset, void *buffer, uint64_t buffer_size)
+{
+  OS_Handle handle = *(OS_Handle*)raw_handle;
+  U64 write_size = os_file_write(handle, r1u64(offset, offset + buffer_size), buffer);
+  return write_size;
+}
+
+////////////////////////////////
+
 internal void
 lnk_log_read(String8 path, U64 size)
 {
@@ -10,9 +65,27 @@ lnk_log_read(String8 path, U64 size)
 internal String8
 lnk_read_data_from_file_path(Arena *arena, String8 path)
 {
-  String8 data = os_data_from_file_path(arena, path);
-  if (lnk_get_log_status(LNK_Log_IO_Read)) {
-    lnk_log_read(path, data.size);
+  String8 data = str8_zero();
+  OS_Handle handle = {0};
+  int is_open = lnk_open_file_read((char*)path.str, path.size, &handle, sizeof(handle));
+  if (is_open) {
+    U64  buffer_size = lnk_size_from_file(&handle);
+    U8  *buffer      = push_array_no_zero(arena, U8, buffer_size);
+    U64  read_size   = lnk_read_file(&handle, buffer, buffer_size);
+
+    data = str8(buffer, read_size);
+	
+    lnk_close_file(&handle);
+
+    if (read_size != buffer_size) {
+      lnk_error(LNK_Warning_IllData, "incomplete file read occurred, read %u bytes, expected %u bytes, file %S", path);
+    }
+
+    if (lnk_get_log_status(LNK_Log_IO_Read)) {
+      lnk_log_read(path, data.size);
+    }
+  } else {
+    lnk_error(LNK_Error_FileNotFound, "unable to open file %S", path);
   }
   return data;
 }
@@ -21,13 +94,18 @@ internal
 THREAD_POOL_TASK_FUNC(lnk_data_size_from_file_path_task)
 {
   LNK_DiskReader *task = raw_task;
+  String8         path = task->path_arr.v[task_id];
 
-  String8        path   = task->path_arr.v[task_id];
-  OS_Handle      handle = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead, path);
-  FileProperties props  = os_properties_from_file(handle);
+  OS_Handle handle = {0};
+  U64       size   = 0;
+
+  int is_open = lnk_open_file_read((char*)path.str, path.size, &handle, sizeof(handle));
+  if (is_open) {
+    size = lnk_size_from_file(&handle);
+  }
 
   task->handle_arr[task_id] = handle;
-  task->size_arr[task_id]   = props.size;
+  task->size_arr[task_id]   = size;
 }
 
 internal
@@ -35,16 +113,14 @@ THREAD_POOL_TASK_FUNC(lnk_data_from_file_path_task)
 {
   LNK_DiskReader *task = raw_task;
 
-  OS_Handle handle = task->handle_arr[task_id];
-  U64       size   = task->size_arr[task_id];
-  U8       *buffer = task->buffer + task->off_arr[task_id];
+  OS_Handle handle      = task->handle_arr[task_id];
+  U64       buffer_size = task->size_arr[task_id];
+  U8       *buffer      = task->buffer + task->off_arr[task_id];
 
-  U64 read_size = os_file_read(handle, rng_1u64(0, size), buffer);
-  Assert(read_size == size);
+  U64 read_size = lnk_read_file(&handle, buffer, buffer_size);
+  Assert(read_size == buffer_size);
 
   task->data_arr.v[task_id] = str8(buffer, read_size);
-
-  os_file_close(handle);
 }
 
 internal String8Array
@@ -100,13 +176,32 @@ lnk_write_data_list_to_file_path(String8 path, String8List data)
     scratch_end(scratch);
   }
 #endif
-  B32 is_written = os_write_data_list_to_file_path(path, data);
-  if (is_written) {
-    if (lnk_get_log_status(LNK_Log_IO_Write)) {
-      Temp scratch = scratch_begin(0,0);
-      String8 size_str = str8_from_memory_size2(scratch.arena, data.total_size);
-      lnk_log(LNK_Log_IO_Write, "File \"%S\" %S written", path, size_str);
-      scratch_end(scratch);
+
+  B32 is_written = 0;
+
+  OS_Handle handle;
+  if (lnk_open_file_write((char*)path.str, path.size, &handle, sizeof(handle))) {
+    U64 offset = 0;
+    for (String8Node *data_n = data.first; data_n != 0; data_n = data_n->next) {
+      if (!lnk_write_file(&handle, offset, data_n->string.str, data_n->string.size)) {
+        break;
+      }
+      offset += data_n->string.size;
+    }
+
+    lnk_close_file(&handle);
+
+    is_written = (offset == data.total_size);
+    if (is_written) {
+      if (lnk_get_log_status(LNK_Log_IO_Write)) {
+        Temp scratch = scratch_begin(0,0);
+        String8 size_str = str8_from_memory_size2(scratch.arena, data.total_size);
+        lnk_log(LNK_Log_IO_Write, "File \"%S\" %S written", path, size_str);
+        scratch_end(scratch);
+      }
+    } else {
+      lnk_error(LNK_Error_IO, "incomplete write occurred, %u bytes written, expected %u bytes, file %S",
+                offset, data.total_size, path);
     }
   } else {
     lnk_error(LNK_Error_NoAccess, "don't have access to write to %S", path);

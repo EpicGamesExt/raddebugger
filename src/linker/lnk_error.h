@@ -29,6 +29,7 @@ typedef enum
   LNK_Error_Mt,
   LNK_Error_UnableToSerializeMsf,
   LNK_Error_LoadRes,
+  LNK_Error_IO,
   LNK_Error_StopLast,
   
   LNK_Error_First,
