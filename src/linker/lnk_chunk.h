@@ -43,8 +43,6 @@ typedef struct LNK_Chunk
 #if LNK_DEBUG_CHUNKS
   String8 debug;
 #endif
-
-  int debug;
 } LNK_Chunk, * LNK_ChunkPtr;
 
 typedef struct LNK_ChunkNode
@@ -115,8 +113,12 @@ typedef struct LNK_ChunkManager
   U64        total_chunk_count;
 } LNK_ChunkManager;
 
-extern LNK_Chunk  g_null_chunk;
-extern LNK_Chunk *g_null_chunk_ptr;
+////////////////////////////////
+
+read_only global LNK_Chunk  g_null_chunk      = { 0, 0, /* is_discarded: */ 1 };
+read_only global LNK_Chunk *g_null_chunk_ptr  = &g_null_chunk;
+
+////////////////////////////////
 
 internal LNK_ChunkRef lnk_chunk_ref(U64 sect_id, U64 chunk_id);
 internal B32          lnk_chunk_ref_is_equal(LNK_ChunkRef a, LNK_ChunkRef b);

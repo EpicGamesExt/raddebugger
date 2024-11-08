@@ -117,7 +117,7 @@ internal void lnk_suppress_error(LNK_ErrorCode code);
 internal LNK_ErrorCodeStatus lnk_get_error_code_status(LNK_ErrorCode code);
 
 internal void lnk_internal_error(LNK_InternalError code, char *file, int line, char *fmt, ...);
-#define lnk_invalid_path(fmt, ...)      lnk_internal_error(LNK_InternalError_InvalidPath, __FILE__, __LINE__, fmt, __VA_ARGS__)
-#define lnk_not_implemented(fmt, ...)   lnk_internal_error(LNK_InternalError_NotImplemented, __FILE__, __LINE__, fmt, __VA_ARGS__)
-#define lnk_incomplete_switch(fmt, ...) lnk_internal_error(LNK_InternalError_IncompleteSwitch, __FILE__, __LINE__, fmt, __VA_ARGS__)
+#define lnk_invalid_path(...)      lnk_internal_error(LNK_InternalError_InvalidPath, __FILE__, __LINE__, __VA_ARGS__)
+#define lnk_not_implemented(...)   lnk_internal_error(LNK_InternalError_NotImplemented, __FILE__, __LINE__, __VA_ARGS__)
+#define lnk_incomplete_switch(...) lnk_internal_error(LNK_InternalError_IncompleteSwitch, __FILE__, __LINE__, __VA_ARGS__)
 

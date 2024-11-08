@@ -1,9 +1,6 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-global read_only LNK_Chunk  g_null_chunk      = { 0, 0, /* is_discarded: */ 1 };
-global read_only LNK_Chunk *g_null_chunk_ptr  = &g_null_chunk;
-
 internal LNK_ChunkRef
 lnk_chunk_ref(U64 sect_id, U64 chunk_id)
 {

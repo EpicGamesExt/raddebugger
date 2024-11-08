@@ -1,9 +1,6 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-global read_only LNK_Symbol   g_null_symbol     = { str8_lit_comp("NULL"), LNK_Symbol_DefinedStatic };
-global read_only LNK_Symbol  *g_null_symbol_ptr = &g_null_symbol;
-
 internal void
 lnk_init_symbol(LNK_Symbol *symbol, String8 name, LNK_SymbolType type)
 {

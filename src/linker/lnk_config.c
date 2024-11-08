@@ -506,7 +506,7 @@ lnk_get_mt_path(Arena *arena)
 #undef OS_WINDOWS
 #define OS_WINDOWS 1
 #else
-  mt_path = str8_lit("llvm-mt.exe");
+  String8 mt_path = str8_lit("llvm-mt.exe");
 #endif
   return mt_path;
 }
@@ -1914,10 +1914,8 @@ lnk_build_config(Arena *arena, int argc, char **argv)
 
   String8List raw_cmd_line = os_string_list_from_argcv(arena, argc, argv);
 
-#if OS_WINDOWS
   // remove exe name first argument
   str8_list_pop_front(&raw_cmd_line); 
-#endif
 
   // init config
   LNK_Config *config = lnk_config_from_cmd_line(arena, raw_cmd_line);
