@@ -1026,6 +1026,9 @@ lnk_config_from_cmd_line(Arena *arena, String8List raw_cmd_line)
         if (debug_mode == LNK_DebugMode_GHash) {
           config->debug_mode = LNK_DebugMode_Full;
           lnk_error_cmd_switch(LNK_Warning_Cmdl, cmd_switch, "GHASH is not supported, switching to FULL");
+        } else if (debug_mode == LNK_DebugMode_FastLink) {
+          config->debug_mode = LNK_DebugMode_Full;
+          lnk_error_cmd_switch(LNK_Warning_Cmdl, cmd_switch, "FASTLINK is not supported, switching to FULL");
         } else if (debug_mode != LNK_DebugMode_Null) {
           config->debug_mode = debug_mode;
         } else {
