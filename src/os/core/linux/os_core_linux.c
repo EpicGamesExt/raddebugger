@@ -158,16 +158,17 @@ internal U32
 os_get_process_start_time_unix(void)
 {
   Temp scratch = scratch_begin(0,0);
+  U64 start_time = 0;
   pid_t pid = getpid();
   String8 path = push_str8f(scratch.arena, "/proc/%u", pid);
   struct stat st;
   int err = stat((char*)path.str, &st);
   if(err == 0)
   {
-    return (U32)st.st_mtime;
+    start_time = st.st_mtime;
   }
   scratch_end(scratch);
-  return 0;
+  return (U32)start_time;
 }
 
 ////////////////////////////////
