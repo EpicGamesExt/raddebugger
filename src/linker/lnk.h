@@ -284,7 +284,9 @@ internal LNK_Chunk * lnk_build_win32_image_header(LNK_SymbolTable *symtab, LNK_S
 ////////////////////////////////
 // Relocs
 
-internal void lnk_patch_relocs(TP_Context *tp, LNK_SymbolTable *symtab, LNK_SectionTable *st, U64 base_addr);
+internal void lnk_patch_relocs_linker(TP_Context *tp, LNK_SymbolTable *symtab, LNK_SectionTable *st, LNK_Section **sect_id_map, U64 base_addr);
+internal void lnk_patch_relocs_obj(TP_Context *tp, LNK_ObjList obj_list, LNK_SymbolTable *symtab, LNK_SectionTable *st, LNK_Section **sect_id_map, U64 base_addr);
+
 internal void lnk_apply_reloc(U64 base_addr, U64 virt_align, U64 file_align, LNK_Section **sect_id_map, LNK_SymbolTable *symtab, String8 chunk_data, LNK_Reloc *reloc);
 
 ////////////////////////////////

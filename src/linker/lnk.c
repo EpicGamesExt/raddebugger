@@ -947,7 +947,8 @@ lnk_make_res_obj(TP_Context       *tp,
   lnk_section_table_assign_indices(st);
   lnk_section_table_build_data(tp, st, machine);
   lnk_section_table_assign_file_offsets(st);
-  lnk_patch_relocs(tp, symtab, st, 0);
+  sect_id_map = lnk_sect_id_map_from_section_table(scratch.arena, st);
+  lnk_patch_relocs_linker(tp, symtab, st, sect_id_map, 0);
   
   String8 res_obj = lnk_section_table_serialize(arena, st);
   
@@ -1164,7 +1165,8 @@ lnk_make_linker_coff_obj(TP_Context       *tp,
   lnk_section_table_assign_indices(st);
   lnk_section_table_build_data(tp, st, machine);
   lnk_section_table_assign_file_offsets(st);
-  lnk_patch_relocs(tp, symtab, st, 0);
+  LNK_Section **sect_id_map = lnk_sect_id_map_from_section_table(scratch.arena, st);
+  lnk_patch_relocs_linker(tp, symtab, st, sect_id_map, 0);
   String8 coff_data = lnk_section_table_serialize(arena, st);
   
   lnk_section_table_release(&st);
@@ -2801,20 +2803,20 @@ THREAD_POOL_TASK_FUNC(lnk_section_reloc_patcher)
 }
 
 internal void
-lnk_patch_relocs(TP_Context *tp, LNK_SymbolTable *symtab, LNK_SectionTable *st, U64 base_addr)
+lnk_patch_relocs_linker(TP_Context *tp, LNK_SymbolTable *symtab, LNK_SectionTable *st, LNK_Section **sect_id_map, U64 base_addr)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0,0);
   
   LNK_SectionPtrArray sect_arr = lnk_section_ptr_array_from_list(scratch.arena, st->list);
   
-  LNK_SectionRelocPatcher task;
-  task.symtab      = symtab;
-  task.st          = st;
-  task.sect_id_map = lnk_sect_id_map_from_section_table(scratch.arena, st);
-  task.sect_arr    = sect_arr.v;
-  task.base_addr   = base_addr;
-  task.range_arr   = tp_divide_work(scratch.arena, sect_arr.count, tp->worker_count);
+  LNK_SectionRelocPatcher task = {0};
+  task.symtab                  = symtab;
+  task.st                      = st;
+  task.sect_id_map             = sect_id_map;
+  task.sect_arr                = sect_arr.v;
+  task.base_addr               = base_addr;
+  task.range_arr               = tp_divide_work(scratch.arena, sect_arr.count, tp->worker_count);
   tp_for_parallel(tp, 0, tp->worker_count, lnk_section_reloc_patcher, &task);
   
   scratch_end(scratch);
@@ -2852,7 +2854,7 @@ THREAD_POOL_TASK_FUNC(lnk_obj_reloc_patcher)
 }
 
 internal void
-lnk_patch_relocs_obj(TP_Context *tp, LNK_ObjList obj_list, LNK_SymbolTable *symtab, LNK_SectionTable *st, U64 base_addr)
+lnk_patch_relocs_obj(TP_Context *tp, LNK_ObjList obj_list, LNK_SymbolTable *symtab, LNK_SectionTable *st, LNK_Section **sect_id_map, U64 base_addr)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0,0);
@@ -2860,7 +2862,7 @@ lnk_patch_relocs_obj(TP_Context *tp, LNK_ObjList obj_list, LNK_SymbolTable *symt
   LNK_ObjRelocPatcher task;
   task.symtab      = symtab;
   task.st          = st;
-  task.sect_id_map = lnk_sect_id_map_from_section_table(scratch.arena, st);
+  task.sect_id_map = sect_id_map;
   task.base_addr   = base_addr;
   task.obj_arr     = lnk_obj_arr_from_list(scratch.arena, obj_list);
   tp_for_parallel(tp, 0, obj_list.count, lnk_obj_reloc_patcher, &task);
@@ -3185,12 +3187,9 @@ lnk_run(int argc, char **argv)
     State_MergeSections,
     State_BuildCFGuards,
     State_BuildBaseRelocs,
-    State_BuildWin32Header,
-    State_PatchRelocs,
-    State_SortExceptionInfo,
+    State_FinalizeImage,
     State_BuildImpLib,
     State_BuildDebugInfo,
-    State_WriteImage,
   };
   struct StateNode {
     struct StateNode *next;
@@ -3202,11 +3201,11 @@ lnk_run(int argc, char **argv)
     struct StateNode *last;
   };
   
-#define state_list_push(a, l, s) do {                            \
-struct StateNode *node = push_array(a, struct StateNode, 1); \
-node->state = s;                                             \
-SLLQueuePush(l.first, l.last, node);                         \
-l.count += 1;                                                \
+#define state_list_push(a, l, s) do {                          \
+  struct StateNode *node = push_array(a, struct StateNode, 1); \
+  node->state = s;                                             \
+  SLLQueuePush(l.first, l.last, node);                         \
+  l.count += 1;                                                \
 } while (0)
 #define state_list_pop(l) (l).first->state; SLLQueuePop((l).first, (l).last); (l).count -= 1
   
@@ -3276,9 +3275,6 @@ l.count += 1;                                                \
   B32                  build_base_relocs                = !(config->flags & LNK_ConfigFlag_Fixed);
   B32                  report_unresolved_symbols        = 1;
   B32                  check_unused_delay_loads         = !!(config->flags & LNK_ConfigFlag_CheckUnusedDelayLoadDll);
-  B32                  build_win32_header               = 1;
-  B32                  patch_relocs                     = 1;
-  B32                  sort_exception_info              = 1;
   B32                  build_imp_lib                    = config->build_imp_lib;
   LNK_ObjList          obj_list                         = {0};
   LNK_LibList          lib_index[LNK_InputSource_Count] = {0};
@@ -3933,7 +3929,7 @@ l.count += 1;                                                \
         lnk_build_base_relocs(tp, tp_arena, st, symtab, config->machine, config->page_size, obj_list);
         ProfEnd();
       } break;
-      case State_BuildWin32Header: {
+      case State_FinalizeImage: {
         ProfBegin("Build Win32 Header");
         
         // remove empty section headers from output image
@@ -3949,74 +3945,53 @@ l.count += 1;                                                \
         lnk_build_win32_image_header(symtab, header_sect, header_sect->root, config, out_sect_arr);
         
         ProfEnd();
-      } break;
-      case State_PatchRelocs: {
-        ProfBegin("Patch Relocs");
-        U64 base_addr = lnk_get_base_addr(config);
+
+        // finalize sections
         lnk_section_table_build_data(tp, st, config->machine);
         lnk_section_table_assign_indices(st);
         lnk_section_table_assign_virtual_offsets(st);
         lnk_section_table_assign_file_offsets(st);
-        lnk_patch_relocs_obj(tp, obj_list, symtab, st, base_addr);
-        lnk_patch_relocs(tp, symtab, st, base_addr);
+
+        // image layout is finalized, section id map is stable after this point
+        LNK_Section **sect_id_map = lnk_sect_id_map_from_section_table(scratch.arena, st);
+
+        ProfBegin("Patch Relocs");
+
+        U64 base_addr = lnk_get_base_addr(config);
+        lnk_patch_relocs_obj(tp, obj_list, symtab, st, sect_id_map, base_addr);
+        lnk_patch_relocs_linker(tp, symtab, st, sect_id_map, base_addr);
+
         ProfEnd();
-      } break;
-      case State_SortExceptionInfo: {
+
         ProfBegin("Sort Exception Info");
+
         LNK_Symbol *pdata_symbol = lnk_symbol_table_searchf(symtab, LNK_SymbolScopeFlag_Internal, LNK_PDATA_SYMBOL_NAME);
-        if (pdata_symbol) {
-          LNK_Section **sect_id_map = lnk_sect_id_map_from_section_table(scratch.arena, st);
-          String8 pdata = lnk_data_from_chunk_ref_no_pad(sect_id_map, pdata_symbol->u.defined.u.chunk->ref);
-          
-          switch (config->machine) {
-            case COFF_MachineType_X86:
-            case COFF_MachineType_X64: {
-              U64 count = pdata.size / sizeof(PE_IntelPdata);
-              radsort((PE_IntelPdata *)pdata.str, count, lnk_pdata_is_before_x8664);
-            } break;
-            case COFF_MachineType_ARM64:
-            case COFF_MachineType_ARM: {
-              Assert(!"TOOD: ARM");
-            } break;
-            case COFF_MachineType_MIPSFPU:
-            case COFF_MachineType_MIPS16:
-            case COFF_MachineType_MIPSFPU16: {
-              Assert(!"TODO: MIPS");
-            } break;
-          }
-        }
-        ProfEnd();
-      } break;
-      case State_WriteImage: {
-        ProfEnd(); // :EndBuild
-        
-        if (lnk_get_log_status(LNK_Log_InputObj)) {
-          U64 total_input_size = 0;
-          for (LNK_ObjNode *obj_n = obj_list.first; obj_n != 0; obj_n = obj_n->next) {
-            total_input_size += obj_n->data.data.size;
-          }
-          String8 size_string = str8_from_memory_size2(scratch.arena, total_input_size);
-          lnk_log(LNK_Log_InputObj, "[Total Obj Input Size %S]", size_string);
-        }
-        if (lnk_get_log_status(LNK_Log_InputLib)) {
-          U64 total_input_size = 0;
-          for (U64 i = 0; i < ArrayCount(lib_index); ++i) {
-            LNK_LibList list = lib_index[i];
-            for (LNK_LibNode *lib_n = list.first; lib_n != 0; lib_n = lib_n->next) {
-              total_input_size += lib_n->data.data.size;
-            }
-          }
-          String8 size_string = str8_from_memory_size2(scratch.arena, total_input_size);
-          lnk_log(LNK_Log_InputLib, "[Total Lib Input Size %S]", size_string);
+        String8     pdata        = lnk_data_from_chunk_ref_no_pad(sect_id_map, pdata_symbol->u.defined.u.chunk->ref);
+        switch (config->machine) {
+        case COFF_MachineType_X86:
+        case COFF_MachineType_X64: {
+          U64 count = pdata.size / sizeof(PE_IntelPdata);
+          radsort((PE_IntelPdata *)pdata.str, count, lnk_pdata_is_before_x8664);
+        } break;
+        case COFF_MachineType_ARM64:
+        case COFF_MachineType_ARM: {
+          AssertAlways(!"TOOD: ARM");
+        } break;
+        case COFF_MachineType_MIPSFPU:
+        case COFF_MachineType_MIPS16:
+        case COFF_MachineType_MIPSFPU16: {
+          AssertAlways(!"TODO: MIPS");
+        } break;
         }
 
-        //lnk_symbol_hash_trie_debug(symtab->scopes[LNK_SymbolScopeIndex_Lib]);
+        ProfEnd();
+
+        ProfEnd(); // :EndBuild
         
         ProfBegin("Image Serialize");
         image_data = lnk_section_table_serialize(scratch.arena, st);
+        Assert(image_data.size > 0);
         ProfEnd();
-
-        LNK_Section **sect_id_map = lnk_sect_id_map_from_section_table(scratch.arena, st);
 
         LNK_Symbol *tls_used_symbol = lnk_symbol_table_searchf(symtab, LNK_SymbolScopeFlag_Main, LNK_TLS_SYMBOL_NAME);
         if (tls_used_symbol) {
@@ -4065,22 +4040,23 @@ l.count += 1;                                                \
         
         LNK_Symbol *guid_symbol = lnk_symbol_table_searchf(symtab, LNK_SymbolScopeFlag_Internal, LNK_CV_HEADER_GUID_SYMBOL_NAME);
         if (guid_symbol) {
+          // we can't have a debug directory to patch without debug info
           Assert(build_debug_info);
           
           switch (config->guid_type) {
-            case LNK_DebugInfoGuid_Null: break;
-            case Lnk_DebugInfoGuid_ImageBlake3: {
-              ProfBegin("Hash Image With Blake3");
-              
-              U128 hash = lnk_blake3_hash_parallel(tp, 128, image_data);
-              MemoryCopy(&config->guid, hash.u64, sizeof(hash.u64));
-              
-              U64   guid_foff = lnk_file_off_from_symbol(sect_id_map, guid_symbol);
-              Guid *guid_ptr  = (Guid *)(image_data.str + guid_foff);
-              MemoryCopy(guid_ptr, hash.u64, sizeof(hash.u64));
-              
-              ProfEnd();
-            } break;
+          case LNK_DebugInfoGuid_Null: break;
+          case Lnk_DebugInfoGuid_ImageBlake3: {
+            ProfBegin("Hash Image With Blake3");
+            
+            U128 hash = lnk_blake3_hash_parallel(tp, 128, image_data);
+            MemoryCopy(&config->guid, hash.u64, sizeof(hash.u64));
+            
+            U64   guid_foff = lnk_file_off_from_symbol(sect_id_map, guid_symbol);
+            Guid *guid_ptr  = (Guid *)(image_data.str + guid_foff);
+            MemoryCopy(guid_ptr, hash.u64, sizeof(hash.u64));
+            
+            ProfEnd();
+          } break;
           }
         }
         
@@ -4088,6 +4064,26 @@ l.count += 1;                                                \
         ctx->path                   = config->image_name;
         ctx->data                   = image_data;
         image_write_thread = os_thread_launch(lnk_write_thread, ctx, 0);
+
+        if (lnk_get_log_status(LNK_Log_InputObj)) {
+          U64 total_input_size = 0;
+          for (LNK_ObjNode *obj_n = obj_list.first; obj_n != 0; obj_n = obj_n->next) {
+            total_input_size += obj_n->data.data.size;
+          }
+          String8 size_string = str8_from_memory_size(scratch.arena, total_input_size);
+          lnk_log(LNK_Log_InputObj, "[Total Obj Input Size %S]", size_string);
+        }
+        if (lnk_get_log_status(LNK_Log_InputLib)) {
+          U64 total_input_size = 0;
+          for (U64 i = 0; i < ArrayCount(lib_index); ++i) {
+            LNK_LibList list = lib_index[i];
+            for (LNK_LibNode *lib_n = list.first; lib_n != 0; lib_n = lib_n->next) {
+              total_input_size += lib_n->data.data.size;
+            }
+          }
+          String8 size_string = str8_from_memory_size(scratch.arena, total_input_size);
+          lnk_log(LNK_Log_InputLib, "[Total Lib Input Size %S]", size_string);
+        }
         
         lnk_timer_end(LNK_Timer_Image);
         ProfEnd(); // :EndImage
@@ -4285,23 +4281,8 @@ l.count += 1;                                                \
       state_list_push(scratch.arena, state_list, State_BuildBaseRelocs);
       continue;
     }
-    if (build_win32_header) {
-      build_win32_header = 0;
-      state_list_push(scratch.arena, state_list, State_BuildWin32Header);
-      continue;
-    }
-    if (patch_relocs) {
-      patch_relocs = 0;
-      state_list_push(scratch.arena, state_list, State_PatchRelocs);
-      continue;
-    }
-    if (sort_exception_info) {
-      sort_exception_info = 0;
-      state_list_push(scratch.arena, state_list, State_SortExceptionInfo);
-      continue;
-    }
     if (image_data.size == 0) {
-      state_list_push(scratch.arena, state_list, State_WriteImage);
+      state_list_push(scratch.arena, state_list, State_FinalizeImage);
       continue;
     }
     if (build_imp_lib) {
