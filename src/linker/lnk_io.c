@@ -57,7 +57,7 @@ internal void
 lnk_log_read(String8 path, U64 size)
 {
   Temp scratch = scratch_begin(0,0);
-  String8 size_str = str8_from_memory_size2(scratch.arena, size);
+  String8 size_str = str8_from_memory_size(scratch.arena, size);
   lnk_log(LNK_Log_IO_Read, "Read from \"%S\" %S", path, size_str);
   scratch_end(scratch);
 }
@@ -195,7 +195,7 @@ lnk_write_data_list_to_file_path(String8 path, String8List data)
     if (is_written) {
       if (lnk_get_log_status(LNK_Log_IO_Write)) {
         Temp scratch = scratch_begin(0,0);
-        String8 size_str = str8_from_memory_size2(scratch.arena, data.total_size);
+        String8 size_str = str8_from_memory_size(scratch.arena, data.total_size);
         lnk_log(LNK_Log_IO_Write, "File \"%S\" %S written", path, size_str);
         scratch_end(scratch);
       }

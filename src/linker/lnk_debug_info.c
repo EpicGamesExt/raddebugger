@@ -396,9 +396,9 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, String8List lib_dir
         total_debug_p_size += chunk->data->u.leaf.size;
       }
     }
-    String8 total_debug_s_size_string = str8_from_memory_size2(scratch.arena, total_debug_s_size);
-    String8 total_debug_t_size_string = str8_from_memory_size2(scratch.arena, total_debug_t_size);
-    String8 total_debug_p_size_string = str8_from_memory_size2(scratch.arena, total_debug_p_size);
+    String8 total_debug_s_size_string = str8_from_memory_size(scratch.arena, total_debug_s_size);
+    String8 total_debug_t_size_string = str8_from_memory_size(scratch.arena, total_debug_t_size);
+    String8 total_debug_p_size_string = str8_from_memory_size(scratch.arena, total_debug_p_size);
     if (lnk_get_log_status(LNK_Log_Debug)) {
       lnk_log(LNK_Log_Debug, "[Total .debug$S Input Size %S]", total_debug_s_size_string);
       lnk_log(LNK_Log_Debug, "[Total .debug$T Input Size %S]", total_debug_t_size_string);

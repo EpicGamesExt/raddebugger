@@ -565,21 +565,121 @@ try_s64_from_str8_c_rules(String8 string, S64 *x){
 //- rjf: integer -> string
 
 internal String8
-str8_from_memory_size(Arena *arena, U64 z){
-  String8 result = {0};
-  if (z < KB(1)){
-    result = push_str8f(arena, "%llu  b", z);
+str8_from_memory_size(Arena *arena, U64 size)
+{
+  String8 result;
+
+  if(size < KB(1))
+  {
+    result = push_str8f(arena, "%llu Bytes", size);
   }
-  else if (z < MB(1)){
-    result = push_str8f(arena, "%llu.%02llu Kb", z/KB(1), ((100*z)/KB(1))%100);
+  else if(size < MB(1))
+  {
+    result = push_str8f(arena, "%llu.%02llu KiB", size / KB(1), ((size * 100) / KB(1)) % 100);
   }
-  else if (z < GB(1)){
-    result = push_str8f(arena, "%llu.%02llu Mb", z/MB(1), ((100*z)/MB(1))%100);
+  else if(size < GB(1))
+  {
+    result = push_str8f(arena, "%llu.%02llu MiB", size / MB(1), ((size * 100) / MB(1)) % 100);
   }
-  else{
-    result = push_str8f(arena, "%llu.%02llu Gb", z/GB(1), ((100*z)/GB(1))%100);
+  else if(size < TB(1))
+  {
+    result = push_str8f(arena, "%llu.%02llu GiB", size / GB(1), ((size * 100) / GB(1)) % 100);
   }
-  return(result);
+  else
+  {
+    result = push_str8f(arena, "%llu.%02llu TiB", size / TB(1), ((size * 100) / TB(1)) % 100);
+  }
+
+  return result;
+}
+
+internal String8
+str8_from_count(Arena *arena, U64 count)
+{
+  String8 result;
+
+  if(count < 1 * 1000)
+  {
+    result = push_str8f(arena, "%llu", count);
+  }
+  else if(count < 1000000)
+  {
+    U64 frac = ((count * 100) / 1000) % 100;
+    if(frac > 0)
+    {
+      result = push_str8f(arena, "%llu.%02lluK", count / 1000, frac);
+    }
+    else
+    {
+      result = push_str8f(arena, "%lluK", count / 1000);
+    }
+  }
+  else if(count < 1000000000)
+  {
+    U64 frac = ((count * 100) / 1000000) % 100;
+    if(frac > 0)
+    {
+      result = push_str8f(arena, "%llu.%02lluM", count / 1000000, frac);
+    }
+    else
+    {
+      result = push_str8f(arena, "%lluM", count / 1000000);
+    }
+  }
+  else
+  {
+    U64 frac = ((count * 100) * 1000000000) % 100;
+    if(frac > 0)
+    {
+      result = push_str8f(arena, "%llu.%02lluB", count / 1000000000, frac);
+    }
+    else
+    {
+      result = push_str8f(arena, "%lluB", count / 1000000000, frac);
+    }
+  }
+
+  return result;
+}
+
+internal String8
+str8_from_bits_u32(Arena *arena, U32 x)
+{
+  U8 c0 = 'a' + ((x >> 28) & 0xf);
+  U8 c1 = 'a' + ((x >> 24) & 0xf);
+  U8 c2 = 'a' + ((x >> 20) & 0xf);
+  U8 c3 = 'a' + ((x >> 16) & 0xf);
+  U8 c4 = 'a' + ((x >> 12) & 0xf);
+  U8 c5 = 'a' + ((x >>  8) & 0xf);
+  U8 c6 = 'a' + ((x >>  4) & 0xf);
+  U8 c7 = 'a' + ((x >>  0) & 0xf);
+  String8 result = push_str8f(arena, "%c%c%c%c%c%c%c%c", c0, c1, c2, c3, c4, c5, c6, c7);
+  return result;
+}
+
+internal String8
+str8_from_bits_u64(Arena *arena, U64 x)
+{
+  U8 c0 = 'a' + ((x >> 60) & 0xf);
+  U8 c1 = 'a' + ((x >> 56) & 0xf);
+  U8 c2 = 'a' + ((x >> 52) & 0xf);
+  U8 c3 = 'a' + ((x >> 48) & 0xf);
+  U8 c4 = 'a' + ((x >> 44) & 0xf);
+  U8 c5 = 'a' + ((x >> 40) & 0xf);
+  U8 c6 = 'a' + ((x >> 36) & 0xf);
+  U8 c7 = 'a' + ((x >> 32) & 0xf);
+  U8 c8 = 'a' + ((x >> 28) & 0xf);
+  U8 c9 = 'a' + ((x >> 24) & 0xf);
+  U8 ca = 'a' + ((x >> 20) & 0xf);
+  U8 cb = 'a' + ((x >> 16) & 0xf);
+  U8 cc = 'a' + ((x >> 12) & 0xf);
+  U8 cd = 'a' + ((x >>  8) & 0xf);
+  U8 ce = 'a' + ((x >>  4) & 0xf);
+  U8 cf = 'a' + ((x >>  0) & 0xf);
+  String8 result = push_str8f(arena,
+                              "%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c",
+                              c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, ca, cb, cc, cd, ce, cf);
+  return result;
 }
 
 internal String8

@@ -3018,8 +3018,8 @@ lnk_log_size_breakdown(LNK_SectionTable *st, LNK_SymbolTable *symtab)
   U64 pe_opt_header_size       = lnk_file_size_from_chunk_ref(sect_id_map, pe_opt_header_chunk->ref);
   U64 pe_directories_size      = lnk_file_size_from_chunk_ref(sect_id_map, pe_directories_chunk->ref);
   
-  String8 code_size_str = str8_from_memory_size2(scratch.arena, code_size);
-  String8 data_size_str = str8_from_memory_size2(scratch.arena, data_size);
+  String8 code_size_str = str8_from_memory_size(scratch.arena, code_size);
+  String8 data_size_str = str8_from_memory_size(scratch.arena, data_size);
   
   String8List output_list; MemoryZeroStruct(&output_list);
   str8_list_pushf(scratch.arena, &output_list, "--- Image Size Breakdown -------------------------------------------------------");
@@ -3640,7 +3640,7 @@ lnk_run(int argc, char **argv)
           for (U64 i = 0; i < obj_node_arr.count; ++i) {
             input_size += obj_node_arr.v[i].data.data.size;
           }
-          String8 input_size_string = str8_from_memory_size2(scratch.arena, input_size);
+          String8 input_size_string = str8_from_memory_size(scratch.arena, input_size);
           lnk_log(LNK_Log_InputObj, "[ Obj Input Size %S ]", input_size_string);
         }
         
@@ -3717,7 +3717,7 @@ lnk_run(int argc, char **argv)
               for (U64 i = 0; i < lib_arr.count; ++i) {
                 input_size += lib_arr.v[i].data.data.size;
               }
-              String8 input_size_string = str8_from_memory_size2(scratch.arena, input_size);
+              String8 input_size_string = str8_from_memory_size(scratch.arena, input_size);
               lnk_log(LNK_Log_InputObj, "[ Lib Input Size %S ]", input_size_string);
             }
           }

@@ -20,14 +20,8 @@ internal U64           str8_list_push_pad_front(Arena *arena, String8List *list,
 internal String8List   str8_list_arr_concat(String8List *v, U64 count);
 internal String8Node * str8_list_push_many(Arena *arena, String8List *list, U64 count);
 
-internal String8 str8_from_bits_u32(Arena *arena, U32 x);
-internal String8 str8_from_bits_u64(Arena *arena, U64 x);
-
 // TODO: remove
 internal String8Node * str8_list_pop_front(String8List *list);
-
-internal String8 str8_from_memory_size2(Arena *arena, U64 size);
-internal String8 str8_from_count(Arena *arena, U64 count);
 
 internal U64 hash_from_str8(String8 string);
 
