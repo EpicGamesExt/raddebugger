@@ -1253,8 +1253,7 @@ ctrl_init(void)
   for(U64 idx = 0; idx < ctrl_state->thread_reg_cache.stripes_count; idx += 1)
   {
     ctrl_state->thread_reg_cache.stripes[idx].arena = arena_alloc();
-    ctrl_state->thread_reg_cache.stripes[idx].r_mutex = os_rw_mutex_alloc();
-    ctrl_state->thread_reg_cache.stripes[idx].w_mutex = os_rw_mutex_alloc();
+    ctrl_state->thread_reg_cache.stripes[idx].rw_mutex = os_rw_mutex_alloc();
   }
   ctrl_state->module_image_info_cache.slots_count = 1024;
   ctrl_state->module_image_info_cache.slots = push_array(arena, CTRL_ModuleImageInfoCacheSlot, ctrl_state->module_image_info_cache.slots_count);
@@ -1780,7 +1779,7 @@ ctrl_query_cached_reg_block_from_thread(Arena *arena, CTRL_EntityStore *store, C
   CTRL_ThreadRegCacheSlot *slot = &cache->slots[slot_idx];
   CTRL_ThreadRegCacheStripe *stripe = &cache->stripes[stripe_idx];
   void *result = push_array(arena, U8, reg_block_size);
-  OS_MutexScopeR(stripe->r_mutex)
+  OS_MutexScopeW(stripe->rw_mutex)
   {
     // rjf: find existing node
     CTRL_ThreadRegCacheNode *node = 0;
@@ -1794,7 +1793,7 @@ ctrl_query_cached_reg_block_from_thread(Arena *arena, CTRL_EntityStore *store, C
     }
     
     // rjf: allocate existing node
-    if(!node) OS_MutexScopeW(stripe->w_mutex) OS_MutexScopeRWPromote(stripe->r_mutex)
+    if(!node)
     {
       node = push_array(stripe->arena, CTRL_ThreadRegCacheNode, 1);
       DLLPushBack(slot->first, slot->last, node);
@@ -1810,7 +1809,7 @@ ctrl_query_cached_reg_block_from_thread(Arena *arena, CTRL_EntityStore *store, C
       B32 need_stale = 1;
       if(node->reg_gen != current_reg_gen && dmn_thread_read_reg_block(handle.dmn_handle, result))
       {
-        OS_MutexScopeW(stripe->w_mutex) OS_MutexScopeRWPromote(stripe->r_mutex) if(node != 0)
+        if(node != 0)
         {
           need_stale = 0;
           node->reg_gen = current_reg_gen;
