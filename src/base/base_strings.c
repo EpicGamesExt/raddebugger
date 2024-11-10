@@ -234,6 +234,25 @@ str16_cstring_capped(void *cstr, void *cap)
   return result;
 }
 
+internal String8
+str8_cstring_capped_reverse(void *raw_start, void *raw_cap)
+{
+  U8 *start = raw_start;
+  U8 *ptr   = raw_cap;
+  for(; ptr > start; )
+  {
+    ptr -= 1;
+
+    if (*ptr == '\0')
+    {
+      break;
+    }
+  }
+  U64 size = (U64)(ptr - start);
+  String8 result  = str8(start, size);
+  return result;
+}
+
 ////////////////////////////////
 //~ rjf: String Stylization
 
@@ -341,6 +360,22 @@ str8_find_needle(String8 string, U64 start_pos, String8 needle, StringMatchFlags
     result = (U64)(p - string.str);
   }
   return(result);
+}
+
+internal U64
+str8_find_needle_reverse(String8 string, U64 start_pos, String8 needle, StringMatchFlags flags)
+{
+  U64 result = 0;
+  for(S64 i = string.size - start_pos - needle.size; i >= 0; --i)
+  {
+    String8 haystack = str8_substr(string, rng_1u64(i, i + needle.size));
+    if(str8_match(haystack, needle, flags))
+    {
+      result = (U64)i + needle.size;
+      break;
+    }
+  }
+  return result;
 }
 
 internal B32

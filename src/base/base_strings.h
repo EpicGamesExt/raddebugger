@@ -194,6 +194,7 @@ internal String16 str16_cstring(U16 *c);
 internal String32 str32_cstring(U32 *c);
 internal String8  str8_cstring_capped(void *cstr, void *cap);
 internal String16 str16_cstring_capped(void *cstr, void *cap);
+internal String8  str8_cstring_capped_reverse(void *raw_start, void *raw_cap);
 
 ////////////////////////////////
 //~ rjf: String Stylization
@@ -207,6 +208,7 @@ internal String8 backslashed_from_str8(Arena *arena, String8 string);
 
 internal B32 str8_match(String8 a, String8 b, StringMatchFlags flags);
 internal U64 str8_find_needle(String8 string, U64 start_pos, String8 needle, StringMatchFlags flags);
+internal U64 str8_find_needle_reverse(String8 string, U64 start_pos, String8 needle, StringMatchFlags flags);
 internal B32 str8_ends_with(String8 string, String8 end, StringMatchFlags flags);
 
 ////////////////////////////////

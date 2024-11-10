@@ -1,33 +1,6 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-global read_only String8 g_null_string;
-
-internal String8
-str8_cstring_capped_reverse(void *start, void *cap)
-{
-  char *ptr = cap;
-  while (ptr > (char *)start) {
-    --ptr;
-    if (*ptr == '\0') break;
-  }
-  U64 null_offset = (U64)(ptr - (char *) start);
-  String8 result = str8((U8 *) start, null_offset);
-  return result;
-}
-
-internal U64
-str8_find_needle_reverse(String8 string, U64 start_pos, String8 needle, StringMatchFlags flags)
-{
-  for (S64 i = string.size - start_pos - needle.size; i >= 0; --i) {
-    String8 haystack = str8_substr(string, rng_1u64(i, i + needle.size));
-    if (str8_match(haystack, needle, flags)) {
-      return (U64)i + needle.size;
-    }
-  }
-  return 0;
-}
-
 internal int
 str8_compar(String8 a, String8 b, B32 ignore_case)
 {

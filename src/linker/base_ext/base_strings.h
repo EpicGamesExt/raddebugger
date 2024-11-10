@@ -5,10 +5,6 @@
 
 #define MemoryCopyStr8(dst, s) MemoryCopy(dst, (s).str, (s).size)
 
-internal String8 str8_cstring_capped_reverse(void *start, void *cap);
-
-internal U64 str8_find_needle_reverse(String8 string, U64 start_pos, String8 needle, StringMatchFlags flags);
-
 internal int str8_compar(String8 a, String8 b, B32 ignore_case);
 internal int str8_compar_ignore_case(const void *a, const void *b);
 internal int str8_compar_case_sensitive(const void *a, const void *b);
