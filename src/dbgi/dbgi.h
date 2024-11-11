@@ -190,6 +190,7 @@ struct DI_SearchNode
   U64 last_update_tick_idx;
   U64 bucket_read_gen;
   U64 bucket_write_gen;
+  U64 bucket_items_gen;
   DI_SearchBucket buckets[6];
   DI_SearchItemArray items;
 };
