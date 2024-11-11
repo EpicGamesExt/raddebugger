@@ -19,7 +19,7 @@ r_handle_zero(void)
 internal B32
 r_handle_match(R_Handle a, R_Handle b)
 {
-  return a.u64[0] == b.u64[0] && a.u64[1] == b.u64[1];
+  return MemoryMatchStruct(&a, &b);
 }
 
 ////////////////////////////////
