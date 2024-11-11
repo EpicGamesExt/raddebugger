@@ -1381,9 +1381,9 @@ di_search_thread__entry_point(void *p)
         MemoryCopy(items.v + off, chunk->v, sizeof(chunk->v[0])*chunk->count);
         for EachIndex(idx, chunk->count)
         {
-          items.v[off+idx].match_ranges = fuzzy_match_range_list_copy(arena, &items.v[idx].match_ranges);
+          items.v[off + idx].match_ranges = fuzzy_match_range_list_copy(arena, &items.v[off + idx].match_ranges);
         }
-        off+= chunk->count;
+        off += chunk->count;
       }
     }
     
