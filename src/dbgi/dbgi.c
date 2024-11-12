@@ -85,6 +85,7 @@ internal DI_KeyArray
 di_key_array_copy(Arena *arena, DI_KeyArray *src)
 {
   DI_KeyArray dst = {0};
+  dst.count = src->count;
   dst.v = push_array(arena, DI_Key, dst.count);
   for EachIndex(idx, dst.count)
   {
