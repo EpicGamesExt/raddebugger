@@ -52,7 +52,7 @@ arena_alloc_(ArenaParams *params)
   Arena *arena = (Arena *)base;
   arena->current = arena;
   arena->flags = params->flags;
-  arena->cmt_size = (U32)params->commit_size;
+  arena->cmt_size = safe_cast_u32(params->commit_size);
   arena->res_size = params->reserve_size;
   arena->base_pos = 0;
   arena->pos = ARENA_HEADER_SIZE;
