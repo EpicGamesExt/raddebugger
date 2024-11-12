@@ -631,6 +631,118 @@ cl = lg;                                 \
         dp = 0;
         cs = 0;
       }goto scopy;
+
+      case 'm':
+      case 'M':
+      {
+        static const U64 one_kib = 1ull * 1024;
+        static const U64 one_mib = 1ull * 1024 * 1024;
+        static const U64 one_gib = 1ull * 1024 * 1024 * 1024;
+        static const U64 one_tib = 1ull * 1024 * 1024 * 1024 * 1024;
+
+        U64 size;
+        if(f[0] == 'M')
+        {
+          size = va_arg(va, U64);
+        }
+        else
+        {
+          size = va_arg(va, U32);
+        }
+
+        U64 lo = 0;
+        U64 hi = 0;
+        char *units = "";
+
+        if(size < one_kib)
+        {
+          hi = size;
+          units = "Bytes";
+        }
+        else if(size < one_mib)
+        {
+          hi = size / one_kib;
+          lo = ((size * 100) / one_kib) % 100;
+          units = "KiB";
+        }
+        else if(size < one_gib)
+        {
+          hi = size / one_mib;
+          lo = ((size * 100) / one_mib) % 100;
+          units = "MiB";
+        }
+        else if(size < one_tib)
+        {
+          hi = size / one_gib;
+          lo = ((size * 100) / one_gib) % 100;
+          units = "GiB";
+        }
+        else 
+        {
+          Assert(size <= max_U64/100ull);
+          hi = size / one_tib;
+          lo = ((size * 100) / one_tib) % 100;
+          units = "TiB";
+        }
+
+        // format high part
+        if(hi > 0)
+        {
+          s = num;
+          for(U64 n = hi; n > 0; n /= 10ull)
+          {
+            *s = (char)(n % 10ull) + '0';
+            ++s;
+          }
+          for(S64 i = (S64)(s-num)-1; i >= 0; --i)
+          {
+            *bf = num[i];
+            ++bf;
+          }
+        }
+        else
+        {
+          *bf = '0';
+          ++bf;
+        }
+
+        // format low part
+        if(lo > 0)
+        {
+          *bf = '.';
+          ++bf;
+
+          s = num;
+          for(U64 n = lo; n > 0; n /= 10ull)
+          {
+            *s = (char)(n % 10ull) + '0';
+            ++s;
+          }
+
+          U64 lead_zero_count = 3 - (U64)(s-num);
+          for(U64 i = 1; i < lead_zero_count; ++i)
+          {
+            *bf = '0';
+            ++bf;
+          }
+
+          for(S64 i = (S64)(s-num)-1; i >= 0; --i)
+          {
+            *bf = num[i];
+            ++bf;
+          }
+        }
+
+        *bf = ' ';
+        ++bf;
+
+        // copy units
+        for(U64 i = 0; units[i] != 0; ++i)
+        {
+          *bf = units[i];
+          ++bf;
+        }
+      }break;
       //
       // NOTE(rjf): DEBUGGER PROJECT ADDITION ^^^
       //-
