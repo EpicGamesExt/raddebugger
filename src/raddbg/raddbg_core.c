@@ -3985,6 +3985,11 @@ rd_window_frame(RD_Window *ws)
         
         ui_divider(ui_em(1.f, 1.f));
         
+        //- rjf: draw match store stats
+        ui_labelf("name match nodes: %I64u", rd_state->match_store->active_match_name_nodes_count);
+        
+        ui_divider(ui_em(1.f, 1.f));
+        
         //- rjf: draw registers
         ui_labelf("hover_reg_slot: %i", rd_state->hover_regs_slot);
         struct
@@ -4072,6 +4077,7 @@ rd_window_frame(RD_Window *ws)
         ui_divider(ui_em(1.f, 1.f));
         
         //- rjf: draw entity tree
+#if 0
         RD_EntityRec rec = {0};
         S32 indent = 0;
         UI_PrefWidth(ui_text_dim(10, 1)) ui_labelf("Entity Tree:");
@@ -4096,6 +4102,7 @@ rd_window_frame(RD_Window *ws)
           indent += rec.push_count;
           indent -= rec.pop_count;
         }
+#endif
       }
     }
     
@@ -10375,6 +10382,28 @@ rd_theme_color_from_txt_token_kind_lookup_string(TXT_TokenKind kind, String8 str
       }
     }
     
+    // rjf: try to map using asynchronous matching system
+    if(!mapped && kind == TXT_TokenKind_Identifier)
+    {
+      RDI_SectionKind section_kind = di_match_store_section_kind_from_name(rd_state->match_store, string, 0);
+      mapped = 1;
+      switch(section_kind)
+      {
+        default:{mapped = 0;}break;
+        case RDI_SectionKind_Procedures:
+        case RDI_SectionKind_GlobalVariables:
+        case RDI_SectionKind_ThreadVariables:
+        {
+          color = RD_ThemeColor_CodeSymbol;
+        }break;
+        case RDI_SectionKind_TypeNodes:
+        {
+          color = RD_ThemeColor_CodeType;
+        }break;
+      }
+    }
+    
+#if 0
     // rjf: try to map as symbol
     if(!mapped && kind == TXT_TokenKind_Identifier)
     {
@@ -10396,6 +10425,7 @@ rd_theme_color_from_txt_token_kind_lookup_string(TXT_TokenKind kind, String8 str
         color = RD_ThemeColor_CodeType;
       }
     }
+#endif
   }
   return color;
 }
@@ -11485,6 +11515,7 @@ rd_init(CmdLine *cmdln)
   }
   rd_state->num_frames_requested = 2;
   rd_state->seconds_until_autosave = 0.5f;
+  rd_state->match_store = di_match_store_alloc();
   for(U64 idx = 0; idx < ArrayCount(rd_state->cmds_arenas); idx += 1)
   {
     rd_state->cmds_arenas[idx] = arena_alloc();
@@ -16676,6 +16707,15 @@ rd_frame(void)
       }
     }
     scratch_end(scratch);
+  }
+  
+  //////////////////////////////
+  //- rjf: set name matching parameters; begin matching
+  //
+  {
+    DI_KeyList keys_list = d_push_active_dbgi_key_list(scratch.arena);
+    DI_KeyArray keys = di_key_array_from_list(scratch.arena, &keys_list);
+    di_match_store_begin(rd_state->match_store, keys);
   }
   
   //////////////////////////////

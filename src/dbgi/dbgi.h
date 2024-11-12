@@ -279,7 +279,7 @@ struct DI_MatchNameNode
   U64 cmp_params_hash;
   String8 name;
   U64 hash;
-  B32 has_matches;
+  RDI_SectionKind section_kind;
   // DI_Match *first_match;
   // DI_Match *last_match;
 };
@@ -311,6 +311,7 @@ struct DI_MatchStore
   DI_Match *first_free_match;
   DI_MatchNameNode *first_lru_match_name;
   DI_MatchNameNode *last_lru_match_name;
+  U64 active_match_name_nodes_count;
   
   // rjf: user -> match work ring buffer
   OS_Handle u2m_ring_cv;
@@ -463,7 +464,7 @@ internal void di_search_thread__entry_point(void *p);
 
 internal DI_MatchStore *di_match_store_alloc(void);
 internal void di_match_store_begin(DI_MatchStore *store, DI_KeyArray keys);
-internal B32 di_match_store_name_has_matches(DI_MatchStore *store, String8 name, U64 endt_us);
+internal RDI_SectionKind di_match_store_section_kind_from_name(DI_MatchStore *store, String8 name, U64 endt_us);
 ASYNC_WORK_DEF(di_match_work);
 
 #endif // DBGI_H

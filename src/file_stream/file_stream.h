@@ -76,10 +76,6 @@ struct FS_Shared
   OS_Handle u2s_ring_cv;
   OS_Handle u2s_ring_mutex;
   
-  // rjf: streamer threads
-  U64 streamer_count;
-  OS_Handle *streamers;
-  
   // rjf: change detector threads
   OS_Handle detector_thread;
 };

@@ -823,6 +823,9 @@ struct RD_State
   F32 frame_dt;
   DI_Scope *frame_di_scope;
   
+  // rjf: dbgi match store
+  DI_MatchStore *match_store;
+  
   // rjf: ambiguous path table
   U64 ambiguous_path_slots_count;
   RD_AmbiguousPathNode **ambiguous_path_slots;
