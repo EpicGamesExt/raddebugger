@@ -2138,88 +2138,14 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
               }
               
               // rjf: token -> token color
-              Vec4F32 token_color = rd_rgba_from_theme_color(RD_ThemeColor_CodeDefault);
+              RD_ThemeColor token_theme_color = rd_theme_color_from_txt_token_kind(token->kind);
+              RD_ThemeColor lookup_theme_color = rd_theme_color_from_txt_token_kind_lookup_string(token->kind, token_string);
+              Vec4F32 token_color = rd_rgba_from_theme_color(token_theme_color);
+              if(lookup_theme_color != RD_ThemeColor_CodeDefault)
               {
-                RD_ThemeColor new_color_kind = rd_theme_color_from_txt_token_kind(token->kind);
-                F32 mix_t = 1.f;
-                if(token->kind == TXT_TokenKind_Identifier || token->kind == TXT_TokenKind_Keyword)
-                {
-                  B32 mapped_special = 0;
-                  for(DI_KeyNode *n = params->relevant_dbgi_keys.first; n != 0; n = n->next)
-                  {
-                    DI_Key dbgi_key = n->v;
-                    UI_Key dbgi_anim_key = ui_key_from_stringf(ui_key_zero(), "###dbgi_alive_t_%S", dbgi_key.path);
-                    if(!mapped_special && token->kind == TXT_TokenKind_Identifier)
-                    {
-                      U64 voff = d_voff_from_dbgi_key_symbol_name(&dbgi_key, token_string);
-                      if(voff != 0)
-                      {
-                        mapped_special = 1;
-                        new_color_kind = RD_ThemeColor_CodeSymbol;
-                        mix_t = ui_anim(dbgi_anim_key, 1.f);
-                      }
-                    }
-                    if(!mapped_special && token->kind == TXT_TokenKind_Identifier)
-                    {
-                      U64 type_num = d_type_num_from_dbgi_key_name(&dbgi_key, token_string);
-                      if(type_num != 0)
-                      {
-                        mapped_special = 1;
-                        new_color_kind = RD_ThemeColor_CodeType;
-                        mix_t = ui_anim(dbgi_anim_key, 1.f);
-                      }
-                    }
-                    break;
-                  }
-                  if(!mapped_special && token->kind == TXT_TokenKind_Identifier)
-                  {
-                    U64 local_num = e_num_from_string(e_parse_ctx->locals_map, token_string);
-                    if(local_num != 0)
-                    {
-                      mapped_special = 1;
-                      new_color_kind = RD_ThemeColor_CodeLocal;
-                      mix_t = selected_thread_module_alive_t;
-                    }
-                  }
-                  if(!mapped_special && token->kind == TXT_TokenKind_Identifier)
-                  {
-                    U64 member_num = e_num_from_string(e_parse_ctx->member_map, token_string);
-                    if(member_num != 0)
-                    {
-                      mapped_special = 1;
-                      new_color_kind = RD_ThemeColor_CodeLocal;
-                      mix_t = selected_thread_module_alive_t;
-                    }
-                  }
-                  if(!mapped_special)
-                  {
-                    U64 reg_num = e_num_from_string(e_parse_ctx->regs_map, token_string);
-                    if(reg_num != 0)
-                    {
-                      mapped_special = 1;
-                      new_color_kind = RD_ThemeColor_CodeRegister;
-                      mix_t = selected_thread_arch_alive_t;
-                    }
-                  }
-                  if(!mapped_special)
-                  {
-                    U64 alias_num = e_num_from_string(e_parse_ctx->reg_alias_map, token_string);
-                    if(alias_num != 0)
-                    {
-                      mapped_special = 1;
-                      new_color_kind = RD_ThemeColor_CodeRegister;
-                      mix_t = selected_thread_arch_alive_t;
-                    }
-                  }
-                }
-                if(new_color_kind != RD_ThemeColor_Null)
-                {
-                  Vec4F32 t_color = rd_rgba_from_theme_color(new_color_kind);
-                  token_color.x += (t_color.x - token_color.x) * mix_t;
-                  token_color.y += (t_color.y - token_color.y) * mix_t;
-                  token_color.z += (t_color.z - token_color.z) * mix_t;
-                  token_color.w += (t_color.w - token_color.w) * mix_t;
-                }
+                Vec4F32 lookup_color = rd_rgba_from_theme_color(lookup_theme_color);
+                F32 lookup_color_mix_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "%S_lookup", token_string), 1.f);
+                token_color = mix_4f32(token_color, lookup_color, lookup_color_mix_t);
               }
               
               // rjf: push fancy string
@@ -2727,28 +2653,20 @@ rd_fancy_string_list_from_code_string(Arena *arena, F32 alpha, B32 indirection_s
         dr_fancy_string_list_push(arena, &fancy_strings, &fancy_string);
       }break;
       case TXT_TokenKind_Identifier:
+      case TXT_TokenKind_Keyword:
       {
-        E_TypeKey type = e_leaf_type_from_name(token_string);
-        Vec4F32 color = base_color;
-        if(!e_type_key_match(e_type_key_zero(), type))
+        RD_ThemeColor lookup_theme_color = rd_theme_color_from_txt_token_kind_lookup_string(token->kind, token_string);
+        if(lookup_theme_color != RD_ThemeColor_CodeDefault)
         {
-          color = rd_rgba_from_theme_color(RD_ThemeColor_CodeType);
-        }
-        else
-        {
-          CTRL_Entity *module = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->module);
-          DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
-          U64 symbol_voff = d_voff_from_dbgi_key_symbol_name(&dbgi_key, token_string);
-          if(symbol_voff != 0)
-          {
-            color = rd_rgba_from_theme_color(RD_ThemeColor_CodeSymbol);
-          }
+          Vec4F32 lookup_color = rd_rgba_from_theme_color(lookup_theme_color);
+          F32 lookup_color_mix_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "%S_lookup", token_string), 1.f);
+          token_color_rgba = mix_4f32(token_color_rgba, lookup_color, lookup_color_mix_t);
         }
         DR_FancyString fancy_string =
         {
           ui_top_font(),
           token_string,
-          color,
+          token_color_rgba,
           ui_top_font_size() * (1.f - !!indirection_size_change*(indirection_counter/10.f)),
         };
         dr_fancy_string_list_push(arena, &fancy_strings, &fancy_string);

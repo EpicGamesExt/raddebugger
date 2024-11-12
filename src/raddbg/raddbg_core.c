@@ -10321,6 +10321,85 @@ rd_theme_color_from_txt_token_kind(TXT_TokenKind kind)
   return color;
 }
 
+internal RD_ThemeColor
+rd_theme_color_from_txt_token_kind_lookup_string(TXT_TokenKind kind, String8 string)
+{
+  RD_ThemeColor color = RD_ThemeColor_CodeDefault;
+  if(kind == TXT_TokenKind_Identifier || kind == TXT_TokenKind_Keyword)
+  {
+    CTRL_Entity *module = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->module);
+    DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
+    B32 mapped = 0;
+    
+    // rjf: try to map as local
+    if(!mapped && kind == TXT_TokenKind_Identifier)
+    {
+      U64 local_num = e_num_from_string(e_parse_ctx->locals_map, string);
+      if(local_num != 0)
+      {
+        mapped = 1;
+        color = RD_ThemeColor_CodeLocal;
+      }
+    }
+    
+    // rjf: try to map as member
+    if(!mapped && kind == TXT_TokenKind_Identifier)
+    {
+      U64 member_num = e_num_from_string(e_parse_ctx->member_map, string);
+      if(member_num != 0)
+      {
+        mapped = 1;
+        color = RD_ThemeColor_CodeLocal;
+      }
+    }
+    
+    // rjf: try to map as register
+    if(!mapped)
+    {
+      U64 reg_num = e_num_from_string(e_parse_ctx->regs_map, string);
+      if(reg_num != 0)
+      {
+        mapped = 1;
+        color = RD_ThemeColor_CodeRegister;
+      }
+    }
+    
+    // rjf: try to map as register alias
+    if(!mapped)
+    {
+      U64 alias_num = e_num_from_string(e_parse_ctx->reg_alias_map, string);
+      if(alias_num != 0)
+      {
+        mapped = 1;
+        color = RD_ThemeColor_CodeRegister;
+      }
+    }
+    
+    // rjf: try to map as symbol
+    if(!mapped && kind == TXT_TokenKind_Identifier)
+    {
+      U64 voff = d_voff_from_dbgi_key_symbol_name(&dbgi_key, string);
+      if(voff != 0)
+      {
+        mapped = 1;
+        color = RD_ThemeColor_CodeSymbol;
+      }
+    }
+    
+    // rjf: try to map as type
+    if(!mapped && kind == TXT_TokenKind_Identifier)
+    {
+      U64 type_num = d_type_num_from_dbgi_key_name(&dbgi_key, string);
+      if(type_num != 0)
+      {
+        mapped = 1;
+        color = RD_ThemeColor_CodeType;
+      }
+    }
+  }
+  return color;
+}
+
 //- rjf: code -> palette
 
 internal UI_Palette *

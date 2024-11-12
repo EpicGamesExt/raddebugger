@@ -254,6 +254,82 @@ struct DI_SearchThread
 };
 
 ////////////////////////////////
+//~ rjf: Match Cache State Types
+
+typedef struct DI_Match DI_Match;
+struct DI_Match
+{
+  DI_Match *next;
+  DI_Match *prev;
+  U64 dbgi_idx;
+  RDI_SectionKind section;
+  U32 idx;
+};
+
+typedef struct DI_MatchNameNode DI_MatchNameNode;
+struct DI_MatchNameNode
+{
+  DI_MatchNameNode *next;
+  DI_MatchNameNode *prev;
+  DI_MatchNameNode *lru_next;
+  DI_MatchNameNode *lru_prev;
+  U64 first_gen_touched;
+  U64 last_gen_touched;
+  U64 req_params_hash;
+  U64 cmp_params_hash;
+  String8 name;
+  U64 hash;
+  B32 has_matches;
+  // DI_Match *first_match;
+  // DI_Match *last_match;
+};
+
+typedef struct DI_MatchNameSlot DI_MatchNameSlot;
+struct DI_MatchNameSlot
+{
+  DI_MatchNameNode *first;
+  DI_MatchNameNode *last;
+};
+
+typedef struct DI_MatchStore DI_MatchStore;
+struct DI_MatchStore
+{
+  Arena *arena;
+  U64 gen;
+  Arena *gen_arenas[2];
+  
+  // rjf: parameters
+  Arena *params_arena;
+  OS_Handle params_rw_mutex;
+  U64 params_hash;
+  DI_KeyArray params_keys;
+  
+  // rjf: match cache
+  U64 match_name_slots_count;
+  DI_MatchNameSlot *match_name_slots;
+  DI_MatchNameNode *first_free_match_name;
+  DI_Match *first_free_match;
+  DI_MatchNameNode *first_lru_match_name;
+  DI_MatchNameNode *last_lru_match_name;
+  
+  // rjf: user -> match work ring buffer
+  OS_Handle u2m_ring_cv;
+  OS_Handle u2m_ring_mutex;
+  U64 u2m_ring_size;
+  U8 *u2m_ring_base;
+  U64 u2m_ring_write_pos;
+  U64 u2m_ring_read_pos;
+  
+  // rjf: match work -> user ring buffer
+  OS_Handle m2u_ring_cv;
+  OS_Handle m2u_ring_mutex;
+  U64 m2u_ring_size;
+  U8 *m2u_ring_base;
+  U64 m2u_ring_write_pos;
+  U64 m2u_ring_read_pos;
+};
+
+////////////////////////////////
 //~ rjf: Shared State Types
 
 typedef struct DI_Shared DI_Shared;
@@ -313,6 +389,7 @@ internal DI_Key di_key_copy(Arena *arena, DI_Key *src);
 internal DI_Key di_normalized_key_from_key(Arena *arena, DI_Key *src);
 internal void di_key_list_push(Arena *arena, DI_KeyList *list, DI_Key *key);
 internal DI_KeyArray di_key_array_from_list(Arena *arena, DI_KeyList *list);
+internal DI_KeyArray di_key_array_copy(Arena *arena, DI_KeyArray *src);
 internal DI_SearchParams di_search_params_copy(Arena *arena, DI_SearchParams *src);
 internal U64 di_hash_from_search_params(DI_SearchParams *params);
 internal void di_search_item_chunk_list_concat_in_place(DI_SearchItemChunkList *dst, DI_SearchItemChunkList *to_push);
@@ -374,11 +451,19 @@ ASYNC_WORK_DEF(di_parse_work);
 ////////////////////////////////
 //~ rjf: Search Threads
 
-internal B32 di_u2s_enqueue_req(U64 thread_idx, U128 key, U64 endt_us);
+internal B32 di_u2s_enqueue_req(U128 key, U64 endt_us);
 internal U128 di_u2s_dequeue_req(U64 thread_idx);
 
 ASYNC_WORK_DEF(di_search_work);
 internal int di_qsort_compare_search_items(DI_SearchItem *a, DI_SearchItem *b);
 internal void di_search_thread__entry_point(void *p);
+
+////////////////////////////////
+//~ rjf: Match Store
+
+internal DI_MatchStore *di_match_store_alloc(void);
+internal void di_match_store_begin(DI_MatchStore *store, DI_KeyArray keys);
+internal B32 di_match_store_name_has_matches(DI_MatchStore *store, String8 name, U64 endt_us);
+ASYNC_WORK_DEF(di_match_work);
 
 #endif // DBGI_H
