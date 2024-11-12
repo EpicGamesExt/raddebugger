@@ -1545,8 +1545,8 @@ di_match_store_begin(DI_MatchStore *store, DI_KeyArray keys)
   {
     for(DI_MatchNameNode *node = store->last_lru_match_name, *prev = 0; node != 0; node = prev)
     {
-      prev = node->prev;
-      if(node->last_gen_touched+64 < store->gen)
+      prev = node->lru_prev;
+      if(node->last_gen_touched+8 < store->gen)
       {
         node->alloc_gen += 1;
         U64 slot_idx = node->hash%store->match_name_slots_count;
