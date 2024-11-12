@@ -1523,6 +1523,7 @@ di_match_store_alloc(void)
 internal void
 di_match_store_begin(DI_MatchStore *store, DI_KeyArray keys)
 {
+  ProfBeginFunction();
   store->gen += 1;
   arena_clear(store->gen_arenas[store->gen%ArrayCount(store->gen_arenas)]);
   
@@ -1562,6 +1563,69 @@ di_match_store_begin(DI_MatchStore *store, DI_KeyArray keys)
       }
     }
   }
+  
+  // rjf: consume & store pending results
+  {
+    U64 endt_us = os_now_microseconds() + 1000000;
+    for(B32 done = 0; !done;)
+    {
+      Temp scratch = scratch_begin(0, 0);
+      
+      // rjf: get next result
+      String8 result_name = {0};
+      U64 result_params_hash = 0;
+      U64 result_dbgi_idx = 0;
+      RDI_SectionKind result_section_kind = RDI_SectionKind_NULL;
+      U32 result_idx = 0;
+      OS_MutexScope(store->m2u_ring_mutex)
+      {
+        U64 unconsumed_size = store->m2u_ring_write_pos - store->m2u_ring_read_pos;
+        if(unconsumed_size >= sizeof(U64)*4)
+        {
+          store->m2u_ring_read_pos += ring_read_struct(store->m2u_ring_base, store->m2u_ring_size, store->m2u_ring_read_pos, &result_name.size);
+          result_name.str = push_array(scratch.arena, U8, result_name.size);
+          store->m2u_ring_read_pos += ring_read(store->m2u_ring_base, store->m2u_ring_size, store->m2u_ring_read_pos, result_name.str, result_name.size);
+          store->m2u_ring_read_pos += 7;
+          store->m2u_ring_read_pos -= store->m2u_ring_read_pos%8;
+          store->m2u_ring_read_pos += ring_read_struct(store->m2u_ring_base, store->m2u_ring_size, store->m2u_ring_read_pos, &result_params_hash);
+          store->m2u_ring_read_pos += ring_read_struct(store->m2u_ring_base, store->m2u_ring_size, store->m2u_ring_read_pos, &result_dbgi_idx);
+          store->m2u_ring_read_pos += ring_read_struct(store->m2u_ring_base, store->m2u_ring_size, store->m2u_ring_read_pos, &result_section_kind);
+          store->m2u_ring_read_pos += ring_read_struct(store->m2u_ring_base, store->m2u_ring_size, store->m2u_ring_read_pos, &result_idx);
+        }
+      }
+      os_condition_variable_broadcast(store->m2u_ring_cv);
+      
+      // rjf: store result
+      if(result_name.size == 0)
+      {
+        done = 1;
+      }
+      else
+      {
+        U64 result_hash = di_hash_from_string(result_name, 0);
+        U64 result_slot_idx = result_hash%store->match_name_slots_count;
+        DI_MatchNameSlot *result_slot = &store->match_name_slots[result_slot_idx];
+        for(DI_MatchNameNode *n = result_slot->first; n != 0; n = n->next)
+        {
+          if(n->hash == result_hash && str8_match(result_name, n->name, 0))
+          {
+            n->cmp_params_hash = result_params_hash;
+            n->section_kind = result_section_kind;
+            break;
+          }
+        }
+      }
+      
+      // rjf: timeout
+      if(os_now_microseconds() >= endt_us)
+      {
+        done = 1;
+      }
+      
+      scratch_end(scratch);
+    }
+  }
+  ProfEnd();
 }
 
 internal RDI_SectionKind
@@ -1682,7 +1746,7 @@ di_match_store_section_kind_from_name(DI_MatchStore *store, String8 name, U64 en
         // rjf: store result
         U64 result_hash = di_hash_from_string(result_name, 0);
         U64 result_slot_idx = result_hash%store->match_name_slots_count;
-        DI_MatchNameSlot *result_slot = &store->match_name_slots[slot_idx];
+        DI_MatchNameSlot *result_slot = &store->match_name_slots[result_slot_idx];
         for(DI_MatchNameNode *n = result_slot->first; n != 0; n = n->next)
         {
           if(n->hash == result_hash && str8_match(result_name, n->name, 0))
@@ -1717,12 +1781,13 @@ di_match_store_section_kind_from_name(DI_MatchStore *store, String8 name, U64 en
 
 ASYNC_WORK_DEF(di_match_work)
 {
+  ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   DI_MatchStore *store = (DI_MatchStore *)input;
   {
     //- rjf: get next name
     String8 name = {0};
-    OS_MutexScope(store->u2m_ring_mutex) for(;;)
+    ProfScope("get next name") OS_MutexScope(store->u2m_ring_mutex) for(;;)
     {
       U64 unconsumed_size = store->u2m_ring_write_pos - store->u2m_ring_read_pos;
       if(unconsumed_size >= sizeof(U64))
@@ -1741,7 +1806,7 @@ ASYNC_WORK_DEF(di_match_work)
     //- rjf: read parameters
     U64 params_hash = 0;
     DI_KeyArray params_keys = {0};
-    OS_MutexScopeR(store->params_rw_mutex)
+    ProfScope("read parameters") OS_MutexScopeR(store->params_rw_mutex)
     {
       params_keys = di_key_array_copy(scratch.arena, &store->params_keys);
       params_hash = store->params_hash;
@@ -1762,54 +1827,58 @@ ASYNC_WORK_DEF(di_match_work)
       RDI_SectionKind_Procedures,
       RDI_SectionKind_TypeNodes,
     };
-    for EachIndex(dbgi_idx, params_keys.count)
+    ProfScope("do match") 
     {
-      DI_Scope *di_scope = di_scope_open();
-      DI_Key key = params_keys.v[dbgi_idx];
-      RDI_Parsed *rdi = di_rdi_from_key(di_scope, &key, max_U64);
-      for EachElement(name_map_kind_idx, name_map_kinds)
+      for EachIndex(dbgi_idx, params_keys.count)
       {
-        RDI_NameMap *name_map = rdi_element_from_name_idx(rdi, NameMaps, name_map_kinds[name_map_kind_idx]);
-        RDI_ParsedNameMap parsed_name_map = {0};
-        rdi_parsed_from_name_map(rdi, name_map, &parsed_name_map);
-        RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &parsed_name_map, name.str, name.size);
-        U32 num = 0;
-        U32 *run = rdi_matches_from_map_node(rdi, node, &num);
-        for(U32 run_idx = 0; run_idx < num; run_idx += 1)
+        DI_Scope *di_scope = di_scope_open();
+        DI_Key key = params_keys.v[dbgi_idx];
+        RDI_Parsed *rdi = di_rdi_from_key(di_scope, &key, max_U64);
+        for EachElement(name_map_kind_idx, name_map_kinds)
         {
-          OS_MutexScope(store->m2u_ring_mutex) for(;;)
+          RDI_NameMap *name_map = rdi_element_from_name_idx(rdi, NameMaps, name_map_kinds[name_map_kind_idx]);
+          RDI_ParsedNameMap parsed_name_map = {0};
+          rdi_parsed_from_name_map(rdi, name_map, &parsed_name_map);
+          RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &parsed_name_map, name.str, name.size);
+          U32 num = 0;
+          U32 *run = rdi_matches_from_map_node(rdi, node, &num);
+          for(U32 run_idx = 0; run_idx < num; run_idx += 1)
           {
-            U64 unconsumed_size = store->m2u_ring_write_pos - store->m2u_ring_read_pos;
-            U64 available_size  = store->m2u_ring_size - unconsumed_size;
-            U64 needed_size     = 0;
-            needed_size += sizeof(U64);
-            needed_size += name.size;
-            needed_size += 7;
-            needed_size -= needed_size%8;
-            needed_size += sizeof(U64);
-            needed_size += sizeof(U64);
-            needed_size += sizeof(RDI_SectionKind);
-            needed_size += sizeof(U32);
-            if(available_size >= needed_size)
+            ProfScope("write result") OS_MutexScope(store->m2u_ring_mutex) for(;;)
             {
-              store->m2u_ring_write_pos += ring_write_struct(store->m2u_ring_base, store->m2u_ring_size, store->m2u_ring_write_pos, &name.size);
-              store->m2u_ring_write_pos += ring_write(store->m2u_ring_base, store->m2u_ring_size, store->m2u_ring_write_pos, name.str, name.size);
-              store->m2u_ring_write_pos += 7;
-              store->m2u_ring_write_pos -= store->m2u_ring_write_pos%8;
-              store->m2u_ring_write_pos += ring_write_struct(store->m2u_ring_base, store->m2u_ring_size, store->m2u_ring_write_pos, &params_hash);
-              store->m2u_ring_write_pos += ring_write_struct(store->m2u_ring_base, store->m2u_ring_size, store->m2u_ring_write_pos, &dbgi_idx);
-              store->m2u_ring_write_pos += ring_write_struct(store->m2u_ring_base, store->m2u_ring_size, store->m2u_ring_write_pos, &name_map_section_kinds[name_map_kind_idx]);
-              store->m2u_ring_write_pos += ring_write_struct(store->m2u_ring_base, store->m2u_ring_size, store->m2u_ring_write_pos, &run[run_idx]);
-              break;
+              U64 unconsumed_size = store->m2u_ring_write_pos - store->m2u_ring_read_pos;
+              U64 available_size  = store->m2u_ring_size - unconsumed_size;
+              U64 needed_size     = 0;
+              needed_size += sizeof(U64);
+              needed_size += name.size;
+              needed_size += 7;
+              needed_size -= needed_size%8;
+              needed_size += sizeof(U64);
+              needed_size += sizeof(U64);
+              needed_size += sizeof(RDI_SectionKind);
+              needed_size += sizeof(U32);
+              if(available_size >= needed_size)
+              {
+                store->m2u_ring_write_pos += ring_write_struct(store->m2u_ring_base, store->m2u_ring_size, store->m2u_ring_write_pos, &name.size);
+                store->m2u_ring_write_pos += ring_write(store->m2u_ring_base, store->m2u_ring_size, store->m2u_ring_write_pos, name.str, name.size);
+                store->m2u_ring_write_pos += 7;
+                store->m2u_ring_write_pos -= store->m2u_ring_write_pos%8;
+                store->m2u_ring_write_pos += ring_write_struct(store->m2u_ring_base, store->m2u_ring_size, store->m2u_ring_write_pos, &params_hash);
+                store->m2u_ring_write_pos += ring_write_struct(store->m2u_ring_base, store->m2u_ring_size, store->m2u_ring_write_pos, &dbgi_idx);
+                store->m2u_ring_write_pos += ring_write_struct(store->m2u_ring_base, store->m2u_ring_size, store->m2u_ring_write_pos, &name_map_section_kinds[name_map_kind_idx]);
+                store->m2u_ring_write_pos += ring_write_struct(store->m2u_ring_base, store->m2u_ring_size, store->m2u_ring_write_pos, &run[run_idx]);
+                break;
+              }
+              os_condition_variable_wait(store->m2u_ring_cv, store->m2u_ring_mutex, max_U64);
             }
-            os_condition_variable_wait(store->m2u_ring_cv, store->m2u_ring_mutex, max_U64);
+            os_condition_variable_broadcast(store->m2u_ring_cv);
           }
-          os_condition_variable_broadcast(store->m2u_ring_cv);
         }
+        di_scope_close(di_scope);
       }
-      di_scope_close(di_scope);
     }
   }
   scratch_end(scratch);
+  ProfEnd();
   return 0;
 }
