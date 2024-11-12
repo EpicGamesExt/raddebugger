@@ -998,12 +998,7 @@ exit:;
 internal MSF_UInt
 msf_stream_reserve__(MSF_Context *msf, MSF_Stream *stream, MSF_UInt res)
 {
-  Temp scratch = scratch_begin(0,0);
-
-#if PROFILE_TELEMETRY
-  String8 size_string = str8_from_memory_size2(scratch.arena, res);
-  ProfBeginDynamic("MSF Reserve %.*s", str8_varg(size_string));
-#endif
+  ProfBeginV("MSF Reserve %m", res);
   
   B32 is_ok = 1;
 
@@ -1019,7 +1014,6 @@ msf_stream_reserve__(MSF_Context *msf, MSF_Stream *stream, MSF_UInt res)
     AssertAlways(is_ok);
   }
 
-  scratch_end(scratch);
   ProfEnd();
   return is_ok;
 } 
@@ -1152,20 +1146,13 @@ THREAD_POOL_TASK_FUNC(msf_write_task)
 internal B32
 msf_stream_write_parallel(TP_Context *tp, MSF_Context *msf, MSF_StreamNumber sn, void *buffer, MSF_UInt buffer_size)
 {
-  Temp scratch = scratch_begin(0,0);
-
-#if PROFILE_TELEMETRY
-  String8 buffer_size_string = str8_from_memory_size2(scratch.arena, buffer_size);
-  ProfBeginDynamic("MSF Write Parallel [%.*s]", str8_varg(buffer_size_string));
-#endif
+  ProfBeginV("MSF Write Parallel %m", buffer_size);
 
   MSF_Stream *stream = msf_find_stream(msf, sn);
 
   B32 is_write_ok = msf_stream_reserve__(msf, stream, buffer_size);
 
   if (is_write_ok) {
-    Temp scratch = scratch_begin(0,0);
-
     U64 expected_pos = stream->pos + buffer_size;
 
     U64 pre_size = Min(AlignPadPow2(stream->pos, msf->page_size), buffer_size);
@@ -1176,13 +1163,15 @@ msf_stream_write_parallel(TP_Context *tp, MSF_Context *msf, MSF_StreamNumber sn,
     U8 *mid_ptr = (U8*)buffer + pre_size;
     U8 *end_ptr = (U8*)buffer + pre_size + mid_size;
 
-    ProfBegin("Write Buffer Pre");
+    ProfBeginV("Write Buffer Pre %M", pre_size);
     B32 is_pre_written = msf_stream_write__(msf, stream, pre_ptr, pre_size);
     AssertAlways(is_pre_written);
     ProfEnd();
 
     // write buffer mid
     if (mid_size > 0) {
+	  Temp scratch = scratch_begin(0,0);
+	  
       Assert(stream->pos % msf->page_size == 0);
       Assert(mid_size % msf->page_size == 0);
 
@@ -1199,20 +1188,19 @@ msf_stream_write_parallel(TP_Context *tp, MSF_Context *msf, MSF_StreamNumber sn,
       U64 after_mid = stream->pos + mid_size;
       B32 is_seek_ok = msf_stream_seek__(msf, stream, after_mid);
       AssertAlways(is_seek_ok);
+	  
+      scratch_end(scratch);
     }
 
-    ProfBegin("Write Buffer End");
+    ProfBeginV("Write Buffer End %M", end_size);
     B32 is_end_ok = msf_stream_write__(msf, stream, end_ptr, end_size);
     AssertAlways(is_end_ok);
     ProfEnd();
 
     // did we write bytes correctly?
     AssertAlways(stream->pos == expected_pos);
-
-    scratch_end(scratch);
   }
 
-  scratch_end(scratch);
   ProfEnd();
   return is_write_ok;
 }

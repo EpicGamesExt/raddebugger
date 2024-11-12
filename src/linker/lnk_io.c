@@ -165,14 +165,7 @@ lnk_read_data_from_file_path_parallel(TP_Context *tp, Arena *arena, String8Array
 internal void
 lnk_write_data_list_to_file_path(String8 path, String8List data)
 {
-#if PROFILE_TELEMETRY
-  {
-    Temp scratch = scratch_begin(0, 0);
-    String8 size_str = str8_from_memory_size(scratch.arena, data.total_size);
-    ProfBeginDynamic("Write %.*s to %.*s", str8_varg(size_str), str8_varg(path));
-    scratch_end(scratch);
-  }
-#endif
+  ProfBeginV("Write %M to %S", data.total_size, path);
 
   B32 is_written = 0;
 
@@ -200,6 +193,7 @@ lnk_write_data_list_to_file_path(String8 path, String8List data)
   } else {
     lnk_error(LNK_Error_NoAccess, "don't have access to write to %S", path);
   }
+  
   ProfEnd();
 }
 
