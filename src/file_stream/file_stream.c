@@ -147,9 +147,9 @@ fs_hash_from_path_range(String8 path, Rng1U64 range, U64 endt_us)
         
         // rjf: try to send stream request
         if(ins_atomic_u64_eval(&range_node->request_count) == ins_atomic_u64_eval(&range_node->completion_count) &&
-           async_push_work(fs_stream_work, .endt_us = endt_us, .completion_counter = &range_node->completion_count))
+           fs_u2s_enqueue_req(range, path, endt_us))
         {
-          fs_u2s_enqueue_req(range, path, max_U64);
+          async_push_work(fs_stream_work, .completion_counter = &range_node->completion_count);
           ins_atomic_u64_inc_eval(&range_node->request_count);
         }
         
