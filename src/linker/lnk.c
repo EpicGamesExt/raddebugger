@@ -3018,19 +3018,16 @@ lnk_log_size_breakdown(LNK_SectionTable *st, LNK_SymbolTable *symtab)
   U64 pe_opt_header_size       = lnk_file_size_from_chunk_ref(sect_id_map, pe_opt_header_chunk->ref);
   U64 pe_directories_size      = lnk_file_size_from_chunk_ref(sect_id_map, pe_directories_chunk->ref);
   
-  String8 code_size_str = str8_from_memory_size(scratch.arena, code_size);
-  String8 data_size_str = str8_from_memory_size(scratch.arena, data_size);
-  
   String8List output_list; MemoryZeroStruct(&output_list);
   str8_list_pushf(scratch.arena, &output_list, "--- Image Size Breakdown -------------------------------------------------------");
-  str8_list_pushf(scratch.arena, &output_list, "  DOS Header:           %u", dos_header_size);
-  str8_list_pushf(scratch.arena, &output_list, "  DOS Program Stub:     %u", dos_program_size);
-  str8_list_pushf(scratch.arena, &output_list, "  COFF Header:          %u", coff_header_size);
-  str8_list_pushf(scratch.arena, &output_list, "  COFF Section Headers: %u", coff_section_header_size);
-  str8_list_pushf(scratch.arena, &output_list, "  PE Header:            %u", pe_opt_header_size);
-  str8_list_pushf(scratch.arena, &output_list, "  Directories:          %u", pe_directories_size);
-  str8_list_pushf(scratch.arena, &output_list, "  Code Size:            %S", code_size_str);
-  str8_list_pushf(scratch.arena, &output_list, "  Data Size:            %S", data_size_str);
+  str8_list_pushf(scratch.arena, &output_list, "  DOS Header:           %M", dos_header_size);
+  str8_list_pushf(scratch.arena, &output_list, "  DOS Program Stub:     %M", dos_program_size);
+  str8_list_pushf(scratch.arena, &output_list, "  COFF Header:          %M", coff_header_size);
+  str8_list_pushf(scratch.arena, &output_list, "  COFF Section Headers: %M", coff_section_header_size);
+  str8_list_pushf(scratch.arena, &output_list, "  PE Header:            %M", pe_opt_header_size);
+  str8_list_pushf(scratch.arena, &output_list, "  Directories:          %M", pe_directories_size);
+  str8_list_pushf(scratch.arena, &output_list, "  Code Size:            %M", code_size);
+  str8_list_pushf(scratch.arena, &output_list, "  Data Size:            %M", data_size);
   
   StringJoin new_line_join = { str8_lit_comp(""), str8_lit_comp("\n"), str8_lit_comp("") };
   String8 output = str8_list_join(scratch.arena, &output_list, &new_line_join);
@@ -3640,8 +3637,7 @@ lnk_run(int argc, char **argv)
           for (U64 i = 0; i < obj_node_arr.count; ++i) {
             input_size += obj_node_arr.v[i].data.data.size;
           }
-          String8 input_size_string = str8_from_memory_size(scratch.arena, input_size);
-          lnk_log(LNK_Log_InputObj, "[ Obj Input Size %S ]", input_size_string);
+          lnk_log(LNK_Log_InputObj, "[ Obj Input Size %M ]", input_size);
         }
         
         ProfEnd();
@@ -3717,8 +3713,7 @@ lnk_run(int argc, char **argv)
               for (U64 i = 0; i < lib_arr.count; ++i) {
                 input_size += lib_arr.v[i].data.data.size;
               }
-              String8 input_size_string = str8_from_memory_size(scratch.arena, input_size);
-              lnk_log(LNK_Log_InputObj, "[ Lib Input Size %S ]", input_size_string);
+              lnk_log(LNK_Log_InputObj, "[ Lib Input Size %M ]", input_size);
             }
           }
         }
@@ -4070,8 +4065,7 @@ lnk_run(int argc, char **argv)
           for (LNK_ObjNode *obj_n = obj_list.first; obj_n != 0; obj_n = obj_n->next) {
             total_input_size += obj_n->data.data.size;
           }
-          String8 size_string = str8_from_memory_size(scratch.arena, total_input_size);
-          lnk_log(LNK_Log_InputObj, "[Total Obj Input Size %S]", size_string);
+          lnk_log(LNK_Log_InputObj, "[Total Obj Input Size %M]", total_input_size);
         }
         if (lnk_get_log_status(LNK_Log_InputLib)) {
           U64 total_input_size = 0;
@@ -4081,8 +4075,7 @@ lnk_run(int argc, char **argv)
               total_input_size += lib_n->data.data.size;
             }
           }
-          String8 size_string = str8_from_memory_size(scratch.arena, total_input_size);
-          lnk_log(LNK_Log_InputLib, "[Total Lib Input Size %S]", size_string);
+          lnk_log(LNK_Log_InputLib, "[Total Lib Input Size %M]", total_input_size);
         }
         
         lnk_timer_end(LNK_Timer_Image);
