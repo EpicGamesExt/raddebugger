@@ -8894,7 +8894,7 @@ EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(scheduler_process)
         expr->space    = rd_eval_space_from_ctrl_entity(thread, RD_EvalSpaceKind_MetaCtrlEntity);
         expr->mode     = E_Mode_Offset;
         expr->type_key = e_type_key_cons_base(type(CTRL_ThreadMetaEval));;
-        info.row_strings[row_expr_idx] = thread->string;
+        info.row_strings[row_expr_idx] = push_str8f(arena, "thread:%S", thread->string);
         info.row_exprs[row_expr_idx]   = expr;
         info.row_members[row_expr_idx] = &e_member_nil;
       }

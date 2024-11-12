@@ -269,16 +269,20 @@ struct DI_Match
 typedef struct DI_MatchNameNode DI_MatchNameNode;
 struct DI_MatchNameNode
 {
+  // rjf: synchronously written by usage code
   DI_MatchNameNode *next;
   DI_MatchNameNode *prev;
   DI_MatchNameNode *lru_next;
   DI_MatchNameNode *lru_prev;
+  U64 alloc_gen;
   U64 first_gen_touched;
   U64 last_gen_touched;
   U64 req_params_hash;
-  U64 cmp_params_hash;
   String8 name;
   U64 hash;
+  
+  // rjf: atomically written by match work
+  U64 cmp_params_hash;
   RDI_SectionKind section_kind;
   // DI_Match *first_match;
   // DI_Match *last_match;
@@ -312,6 +316,8 @@ struct DI_MatchStore
   DI_MatchNameNode *first_lru_match_name;
   DI_MatchNameNode *last_lru_match_name;
   U64 active_match_name_nodes_count;
+  OS_Handle match_rw_mutex;
+  OS_Handle match_cv;
   
   // rjf: user -> match work ring buffer
   OS_Handle u2m_ring_cv;
@@ -320,14 +326,6 @@ struct DI_MatchStore
   U8 *u2m_ring_base;
   U64 u2m_ring_write_pos;
   U64 u2m_ring_read_pos;
-  
-  // rjf: match work -> user ring buffer
-  OS_Handle m2u_ring_cv;
-  OS_Handle m2u_ring_mutex;
-  U64 m2u_ring_size;
-  U8 *m2u_ring_base;
-  U64 m2u_ring_write_pos;
-  U64 m2u_ring_read_pos;
 };
 
 ////////////////////////////////

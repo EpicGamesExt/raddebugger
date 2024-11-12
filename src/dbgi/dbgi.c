@@ -1509,14 +1509,12 @@ di_match_store_alloc(void)
   store->params_rw_mutex        = os_rw_mutex_alloc();
   store->match_name_slots_count = 4096;
   store->match_name_slots       = push_array(arena, DI_MatchNameSlot, store->match_name_slots_count);
+  store->match_rw_mutex         = os_rw_mutex_alloc();
+  store->match_cv               = os_condition_variable_alloc();
   store->u2m_ring_cv            = os_condition_variable_alloc();
   store->u2m_ring_mutex         = os_mutex_alloc();
   store->u2m_ring_size          = KB(2);
   store->u2m_ring_base          = push_array_no_zero(arena, U8, store->u2m_ring_size);
-  store->m2u_ring_cv            = os_condition_variable_alloc();
-  store->m2u_ring_mutex         = os_mutex_alloc();
-  store->m2u_ring_size          = KB(2);
-  store->m2u_ring_base          = push_array_no_zero(arena, U8, store->m2u_ring_size);
   return store;
 }
 
@@ -1550,6 +1548,7 @@ di_match_store_begin(DI_MatchStore *store, DI_KeyArray keys)
       prev = node->prev;
       if(node->last_gen_touched+64 < store->gen)
       {
+        node->alloc_gen += 1;
         U64 slot_idx = node->hash%store->match_name_slots_count;
         DI_MatchNameSlot *slot = &store->match_name_slots[slot_idx];
         DLLRemove_NP(store->first_lru_match_name, store->last_lru_match_name, node, lru_next, lru_prev);
@@ -1564,67 +1563,6 @@ di_match_store_begin(DI_MatchStore *store, DI_KeyArray keys)
     }
   }
   
-  // rjf: consume & store pending results
-  {
-    U64 endt_us = os_now_microseconds() + 1000000;
-    for(B32 done = 0; !done;)
-    {
-      Temp scratch = scratch_begin(0, 0);
-      
-      // rjf: get next result
-      String8 result_name = {0};
-      U64 result_params_hash = 0;
-      U64 result_dbgi_idx = 0;
-      RDI_SectionKind result_section_kind = RDI_SectionKind_NULL;
-      U32 result_idx = 0;
-      OS_MutexScope(store->m2u_ring_mutex)
-      {
-        U64 unconsumed_size = store->m2u_ring_write_pos - store->m2u_ring_read_pos;
-        if(unconsumed_size >= sizeof(U64)*4)
-        {
-          store->m2u_ring_read_pos += ring_read_struct(store->m2u_ring_base, store->m2u_ring_size, store->m2u_ring_read_pos, &result_name.size);
-          result_name.str = push_array(scratch.arena, U8, result_name.size);
-          store->m2u_ring_read_pos += ring_read(store->m2u_ring_base, store->m2u_ring_size, store->m2u_ring_read_pos, result_name.str, result_name.size);
-          store->m2u_ring_read_pos += 7;
-          store->m2u_ring_read_pos -= store->m2u_ring_read_pos%8;
-          store->m2u_ring_read_pos += ring_read_struct(store->m2u_ring_base, store->m2u_ring_size, store->m2u_ring_read_pos, &result_params_hash);
-          store->m2u_ring_read_pos += ring_read_struct(store->m2u_ring_base, store->m2u_ring_size, store->m2u_ring_read_pos, &result_dbgi_idx);
-          store->m2u_ring_read_pos += ring_read_struct(store->m2u_ring_base, store->m2u_ring_size, store->m2u_ring_read_pos, &result_section_kind);
-          store->m2u_ring_read_pos += ring_read_struct(store->m2u_ring_base, store->m2u_ring_size, store->m2u_ring_read_pos, &result_idx);
-        }
-      }
-      os_condition_variable_broadcast(store->m2u_ring_cv);
-      
-      // rjf: store result
-      if(result_name.size == 0)
-      {
-        done = 1;
-      }
-      else
-      {
-        U64 result_hash = di_hash_from_string(result_name, 0);
-        U64 result_slot_idx = result_hash%store->match_name_slots_count;
-        DI_MatchNameSlot *result_slot = &store->match_name_slots[result_slot_idx];
-        for(DI_MatchNameNode *n = result_slot->first; n != 0; n = n->next)
-        {
-          if(n->hash == result_hash && str8_match(result_name, n->name, 0))
-          {
-            n->cmp_params_hash = result_params_hash;
-            n->section_kind = result_section_kind;
-            break;
-          }
-        }
-      }
-      
-      // rjf: timeout
-      if(os_now_microseconds() >= endt_us)
-      {
-        done = 1;
-      }
-      
-      scratch_end(scratch);
-    }
-  }
   ProfEnd();
 }
 
@@ -1653,9 +1591,11 @@ di_match_store_section_kind_from_name(DI_MatchStore *store, String8 name, U64 en
     if(node == 0)
     {
       node = store->first_free_match_name;
+      U64 alloc_gen = 0;
       if(node)
       {
         SLLStackPop(store->first_free_match_name);
+        alloc_gen = node->alloc_gen;
       }
       else
       {
@@ -1663,6 +1603,7 @@ di_match_store_section_kind_from_name(DI_MatchStore *store, String8 name, U64 en
       }
       MemoryZeroStruct(node);
       node->hash = hash;
+      node->alloc_gen = alloc_gen + 1;
       DLLPushBack(slot->first, slot->last, node);
       node->first_gen_touched = store->gen;
       DLLInsert_NP(store->first_lru_match_name, store->last_lru_match_name, (DI_MatchNameNode *)0, node, lru_next, lru_prev);
@@ -1675,7 +1616,7 @@ di_match_store_section_kind_from_name(DI_MatchStore *store, String8 name, U64 en
     DLLRemove_NP(store->first_lru_match_name, store->last_lru_match_name, node, lru_next, lru_prev);
     DLLInsert_NP(store->first_lru_match_name, store->last_lru_match_name, (DI_MatchNameNode *)0, node, lru_next, lru_prev);
     
-    // rjf: if this node is new, request it for the given parameters
+    // rjf: if this node is new w.r.t. the store's current parameters, request it
     if(node->req_params_hash != store->params_hash)
     {
       B32 sent = 0;
@@ -1685,6 +1626,8 @@ di_match_store_section_kind_from_name(DI_MatchStore *store, String8 name, U64 en
         U64 available_size = store->u2m_ring_size - unconsumed_size;
         if(available_size >= sizeof(U64) + name.size)
         {
+          store->u2m_ring_write_pos += ring_write_struct(store->u2m_ring_base, store->u2m_ring_size, store->u2m_ring_write_pos, &node);
+          store->u2m_ring_write_pos += ring_write_struct(store->u2m_ring_base, store->u2m_ring_size, store->u2m_ring_write_pos, &node->alloc_gen);
           store->u2m_ring_write_pos += ring_write_struct(store->u2m_ring_base, store->u2m_ring_size, store->u2m_ring_write_pos, &name.size);
           store->u2m_ring_write_pos +=        ring_write(store->u2m_ring_base, store->u2m_ring_size, store->u2m_ring_write_pos, name.str, name.size);
           store->u2m_ring_write_pos += 7;
@@ -1706,70 +1649,20 @@ di_match_store_section_kind_from_name(DI_MatchStore *store, String8 name, U64 en
       }
     }
     
-    // rjf: if this node's state is stale, consume results from match work & store them
-    if(node->req_params_hash != node->cmp_params_hash)
+    // rjf: if this node's state is stale, wait for it if we need to
+    if(os_now_microseconds() < endt_us && node->req_params_hash != ins_atomic_u64_eval(&node->cmp_params_hash))
     {
-      for(B32 done = 0; !done;)
+      OS_MutexScopeR(store->match_rw_mutex) for(;;)
       {
-        Temp scratch = scratch_begin(0, 0);
-        
-        // rjf: get next result
-        String8 result_name = {0};
-        U64 result_params_hash = 0;
-        U64 result_dbgi_idx = 0;
-        RDI_SectionKind result_section_kind = RDI_SectionKind_NULL;
-        U32 result_idx = 0;
-        OS_MutexScope(store->m2u_ring_mutex) for(;;)
+        if(node->req_params_hash == ins_atomic_u64_eval(&node->cmp_params_hash))
         {
-          U64 unconsumed_size = store->m2u_ring_write_pos - store->m2u_ring_read_pos;
-          if(unconsumed_size >= sizeof(U64)*4)
-          {
-            store->m2u_ring_read_pos += ring_read_struct(store->m2u_ring_base, store->m2u_ring_size, store->m2u_ring_read_pos, &result_name.size);
-            result_name.str = push_array(scratch.arena, U8, result_name.size);
-            store->m2u_ring_read_pos += ring_read(store->m2u_ring_base, store->m2u_ring_size, store->m2u_ring_read_pos, result_name.str, result_name.size);
-            store->m2u_ring_read_pos += 7;
-            store->m2u_ring_read_pos -= store->m2u_ring_read_pos%8;
-            store->m2u_ring_read_pos += ring_read_struct(store->m2u_ring_base, store->m2u_ring_size, store->m2u_ring_read_pos, &result_params_hash);
-            store->m2u_ring_read_pos += ring_read_struct(store->m2u_ring_base, store->m2u_ring_size, store->m2u_ring_read_pos, &result_dbgi_idx);
-            store->m2u_ring_read_pos += ring_read_struct(store->m2u_ring_base, store->m2u_ring_size, store->m2u_ring_read_pos, &result_section_kind);
-            store->m2u_ring_read_pos += ring_read_struct(store->m2u_ring_base, store->m2u_ring_size, store->m2u_ring_read_pos, &result_idx);
-            break;
-          }
-          if(os_now_microseconds() >= endt_us)
-          {
-            break;
-          }
-          os_condition_variable_wait(store->m2u_ring_cv, store->m2u_ring_mutex, endt_us);
+          break;
         }
-        os_condition_variable_broadcast(store->m2u_ring_cv);
-        
-        // rjf: store result
-        U64 result_hash = di_hash_from_string(result_name, 0);
-        U64 result_slot_idx = result_hash%store->match_name_slots_count;
-        DI_MatchNameSlot *result_slot = &store->match_name_slots[result_slot_idx];
-        for(DI_MatchNameNode *n = result_slot->first; n != 0; n = n->next)
-        {
-          if(n->hash == result_hash && str8_match(result_name, n->name, 0))
-          {
-            n->cmp_params_hash = result_params_hash;
-            n->section_kind = result_section_kind;
-            break;
-          }
-        }
-        
-        // rjf: we're done if we got the hash we were looking for
-        if(result_hash == hash && result_params_hash == store->params_hash)
-        {
-          done = 1;
-        }
-        
-        // rjf: we're done if we're out of time
         if(os_now_microseconds() >= endt_us)
         {
-          done = 1;
+          break;
         }
-        
-        scratch_end(scratch);
+        os_condition_variable_wait_rw_r(store->match_cv, store->match_rw_mutex, endt_us);
       }
     }
     
@@ -1785,13 +1678,17 @@ ASYNC_WORK_DEF(di_match_work)
   Temp scratch = scratch_begin(0, 0);
   DI_MatchStore *store = (DI_MatchStore *)input;
   {
-    //- rjf: get next name
+    //- rjf: get next request
+    DI_MatchNameNode *node = 0;
+    U64 alloc_gen = 0;
     String8 name = {0};
     ProfScope("get next name") OS_MutexScope(store->u2m_ring_mutex) for(;;)
     {
       U64 unconsumed_size = store->u2m_ring_write_pos - store->u2m_ring_read_pos;
       if(unconsumed_size >= sizeof(U64))
       {
+        store->u2m_ring_read_pos += ring_read_struct(store->u2m_ring_base, store->u2m_ring_size, store->u2m_ring_read_pos, &node);
+        store->u2m_ring_read_pos += ring_read_struct(store->u2m_ring_base, store->u2m_ring_size, store->u2m_ring_read_pos, &alloc_gen);
         store->u2m_ring_read_pos += ring_read_struct(store->u2m_ring_base, store->u2m_ring_size, store->u2m_ring_read_pos, &name.size);
         name.str = push_array(scratch.arena, U8, name.size);
         store->u2m_ring_read_pos += ring_read(store->u2m_ring_base, store->u2m_ring_size, store->u2m_ring_read_pos, name.str, name.size);
@@ -1839,39 +1736,12 @@ ASYNC_WORK_DEF(di_match_work)
           RDI_NameMap *name_map = rdi_element_from_name_idx(rdi, NameMaps, name_map_kinds[name_map_kind_idx]);
           RDI_ParsedNameMap parsed_name_map = {0};
           rdi_parsed_from_name_map(rdi, name_map, &parsed_name_map);
-          RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &parsed_name_map, name.str, name.size);
+          RDI_NameMapNode *map_node = rdi_name_map_lookup(rdi, &parsed_name_map, name.str, name.size);
           U32 num = 0;
-          U32 *run = rdi_matches_from_map_node(rdi, node, &num);
-          for(U32 run_idx = 0; run_idx < num; run_idx += 1)
+          U32 *run = rdi_matches_from_map_node(rdi, map_node, &num);
+          if(num != 0)
           {
-            ProfScope("write result") OS_MutexScope(store->m2u_ring_mutex) for(;;)
-            {
-              U64 unconsumed_size = store->m2u_ring_write_pos - store->m2u_ring_read_pos;
-              U64 available_size  = store->m2u_ring_size - unconsumed_size;
-              U64 needed_size     = 0;
-              needed_size += sizeof(U64);
-              needed_size += name.size;
-              needed_size += 7;
-              needed_size -= needed_size%8;
-              needed_size += sizeof(U64);
-              needed_size += sizeof(U64);
-              needed_size += sizeof(RDI_SectionKind);
-              needed_size += sizeof(U32);
-              if(available_size >= needed_size)
-              {
-                store->m2u_ring_write_pos += ring_write_struct(store->m2u_ring_base, store->m2u_ring_size, store->m2u_ring_write_pos, &name.size);
-                store->m2u_ring_write_pos += ring_write(store->m2u_ring_base, store->m2u_ring_size, store->m2u_ring_write_pos, name.str, name.size);
-                store->m2u_ring_write_pos += 7;
-                store->m2u_ring_write_pos -= store->m2u_ring_write_pos%8;
-                store->m2u_ring_write_pos += ring_write_struct(store->m2u_ring_base, store->m2u_ring_size, store->m2u_ring_write_pos, &params_hash);
-                store->m2u_ring_write_pos += ring_write_struct(store->m2u_ring_base, store->m2u_ring_size, store->m2u_ring_write_pos, &dbgi_idx);
-                store->m2u_ring_write_pos += ring_write_struct(store->m2u_ring_base, store->m2u_ring_size, store->m2u_ring_write_pos, &name_map_section_kinds[name_map_kind_idx]);
-                store->m2u_ring_write_pos += ring_write_struct(store->m2u_ring_base, store->m2u_ring_size, store->m2u_ring_write_pos, &run[run_idx]);
-                break;
-              }
-              os_condition_variable_wait(store->m2u_ring_cv, store->m2u_ring_mutex, max_U64);
-            }
-            os_condition_variable_broadcast(store->m2u_ring_cv);
+            ins_atomic_u32_eval_assign(&node->section_kind, name_map_section_kinds[name_map_kind_idx]);
           }
         }
         di_scope_close(di_scope);
