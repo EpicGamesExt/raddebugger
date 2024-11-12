@@ -1624,7 +1624,10 @@ di_match_store_section_kind_from_name(DI_MatchStore *store, String8 name, U64 en
       {
         U64 unconsumed_size = store->u2m_ring_write_pos - store->u2m_ring_read_pos;
         U64 available_size = store->u2m_ring_size - unconsumed_size;
-        if(available_size >= sizeof(U64) + name.size)
+        U64 needed_size = sizeof(&node) + sizeof(U64) + sizeof(U64) + name.size;
+        needed_size += 7;
+        needed_size -= needed_size%8;
+        if(available_size >= needed_size)
         {
           store->u2m_ring_write_pos += ring_write_struct(store->u2m_ring_base, store->u2m_ring_size, store->u2m_ring_write_pos, &node);
           store->u2m_ring_write_pos += ring_write_struct(store->u2m_ring_base, store->u2m_ring_size, store->u2m_ring_write_pos, &node->alloc_gen);
