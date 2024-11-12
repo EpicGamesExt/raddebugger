@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
+  <Type Name="LNK_Section">
+    <DisplayString>{{ name={name} flags={flags} id={id} sort_index={sort_index} }}</DisplayString>
+  </Type>
+
+  <Type Name="U32Array">
+    <AlternativeType Name="U64Array"/>
+    <Expand>
+      <Item Name="[count]">count</Item>
+      <ArrayItems>
+        <Size>count</Size>
+        <ValuePointer>v</ValuePointer>
+      </ArrayItems>
+    </Expand>
+  </Type>
+
+  <Type Name="LNK_SymbolList">
+    <AlternativeType Name="CV_SymbolList"/>
+    <AlternativeType Name="LNK_SectionList"/>
+    <DisplayString>{{count={count} first={first} last={last} }}</DisplayString>
+    <Expand>
+			<LinkedListItems>
+				<Size>count</Size>
+				<HeadPointer>first</HeadPointer>
+				<NextPointer>next</NextPointer>
+        <ValueNode>data</ValueNode>
+			</LinkedListItems>
+    </Expand>
+  </Type>
+
+  <Type Name="Rng1U64List">
+    <DisplayString>{{count={count} first={first} last={last} }}</DisplayString>
+    <Expand>
+			<LinkedListItems>
+				<Size>count</Size>
+				<HeadPointer>first</HeadPointer>
+				<NextPointer>next</NextPointer>
+        <ValueNode>v</ValueNode>
+			</LinkedListItems>
+    </Expand>
+  </Type>
+
+	<Type Name="RDIB_LineTable">
+    <DisplayString>{{count={count} first={first} last={last} }}</DisplayString>
+		<Expand>
+			<Item Name="[count]">count</Item>
+			<LinkedListItems>
+				<Size>count</Size>
+				<HeadPointer>first</HeadPointer>
+				<NextPointer>next_line_table</NextPointer>
+        <ValueNode>this</ValueNode>
+			</LinkedListItems>
+		</Expand>
+	</Type>
+
+	<Type Name="RDIB_VariableChunkList">
+    <AlternativeType Name="RDIB_UnitChunkList"/>
+    <AlternativeType Name="RDIB_LineTableChunkList"/>
+    <AlternativeType Name="RDIB_SourceFileChunkList"/>
+    <AlternativeType Name="RDIB_ProcedureChunkList"/>
+    <AlternativeType Name="RDIB_ScopeChunkList"/>
+    <AlternativeType Name="RDIB_InlineSiteChunkList"/>
+    <AlternativeType Name="RDIB_UDTMemberChunkList"/>
+    <AlternativeType Name="RDIB_TypeChunkList"/>
+		<Expand>
+      <Item Name="[chunk count]">count</Item>
+      <CustomListItems MaxItemsPerView="5000">
+        <Variable Name="node" InitialValue="first"/>
+        <Variable Name="idx" InitialValue="0"/>
+        <Loop>
+          <Break Condition="node == 0"/>
+          <Exec>idx = 0</Exec>
+          <Loop>
+            <Break Condition="idx >= node->count"/>
+            <Item>node->v[idx]</Item>
+            <Exec>idx += 1</Exec>
+          </Loop>
+          <Exec>node = node->next</Exec>
+        </Loop>
+      </CustomListItems>
+		</Expand>
+	</Type>
+
+  <Type Name="RDIB_VariableChunk">
+    <AlternativeType Name="RDIB_UnitChunk"/>
+    <AlternativeType Name="RDIB_LineTableChunk"/>
+    <AlternativeType Name="RDIB_SourceFileChunk"/>
+    <AlternativeType Name="RDIB_ProcedureChunk"/>
+    <AlternativeType Name="RDIB_ScopeChunk"/>
+    <AlternativeType Name="RDIB_InlineSiteChunk"/>
+    <AlternativeType Name="RDIB_UDTMemberChunk"/>
+    <AlternativeType Name="RDIB_TypeChunk"/>
+    <DisplayString>{count,cap,v}</DisplayString>
+    <Expand>
+      <Item Name="[base]">base</Item>
+      <Item Name="[count]">count</Item>
+      <Item Name="[cap]">cap</Item>
+      <ArrayItems>
+        <Size>count</Size>
+        <ValuePointer>v</ValuePointer>
+      </ArrayItems>
+    </Expand>
+  </Type>
+</AutoVisualizer>
+
