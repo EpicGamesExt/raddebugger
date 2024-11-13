@@ -12010,6 +12010,7 @@ rd_frame(void)
         if(module == m)
         {
           eval_modules_primary = &eval_modules[eval_module_idx];
+          primary_dbgi_key = dbgi_key;
         }
       }
     }

@@ -491,7 +491,8 @@ di_open(DI_Key *key)
         if(node->ref_count == 1)
         {
           di_u2p_enqueue_key(&key_normalized, max_U64);
-          async_push_work(di_parse_work);
+          ins_atomic_u64_inc_eval(&node->request_count);
+          async_push_work(di_parse_work, .completion_counter = &node->completion_count);
         }
       }
     }

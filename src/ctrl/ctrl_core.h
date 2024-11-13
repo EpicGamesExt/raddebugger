@@ -825,6 +825,22 @@ struct CTRL_ModuleImageInfoCache
 };
 
 ////////////////////////////////
+//~ rjf: Touched Debug Info Directory Cache
+
+typedef struct CTRL_DbgDirNode CTRL_DbgDirNode;
+struct CTRL_DbgDirNode
+{
+  CTRL_DbgDirNode *first;
+  CTRL_DbgDirNode *last;
+  CTRL_DbgDirNode *next;
+  CTRL_DbgDirNode *prev;
+  CTRL_DbgDirNode *parent;
+  String8 name;
+  U64 search_count;
+  U64 child_count;
+};
+
+////////////////////////////////
 //~ rjf: Wakeup Hook Function Types
 
 #define CTRL_WAKEUP_FUNCTION_DEF(name) void name(void)
@@ -880,6 +896,8 @@ struct CTRL_State
   CTRL_MetaEvalArray user_meta_evals;
   U64 exception_code_filters[(CTRL_ExceptionCodeKind_COUNT+63)/64];
   U64 process_counter;
+  Arena *dbg_dir_arena;
+  CTRL_DbgDirNode *dbg_dir_root;
   
   // rjf: user -> memstream ring buffer
   U64 u2ms_ring_size;

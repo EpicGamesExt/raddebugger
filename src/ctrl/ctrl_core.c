@@ -1286,6 +1286,7 @@ ctrl_init(void)
   ctrl_state->dmn_event_arena = arena_alloc();
   ctrl_state->user_entry_point_arena = arena_alloc();
   ctrl_state->user_meta_eval_arena = arena_alloc();
+  ctrl_state->dbg_dir_arena = arena_alloc();
   for(CTRL_ExceptionCodeKind k = (CTRL_ExceptionCodeKind)0; k < CTRL_ExceptionCodeKind_COUNT; k = (CTRL_ExceptionCodeKind)(k+1))
   {
     if(ctrl_exception_code_kind_default_enable_table[k])
@@ -4125,66 +4126,176 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
   //
   if(event->kind == DMN_EventKind_LoadModule)
   {
+    //- rjf: unpack event
     CTRL_Handle process_handle = ctrl_handle_make(CTRL_MachineID_Local, event->process);
     CTRL_Handle loaded_module_handle = ctrl_handle_make(CTRL_MachineID_Local, event->module);
     CTRL_Entity *process = ctrl_entity_from_handle(ctrl_state->ctrl_thread_entity_store, process_handle);
     CTRL_Entity *loaded_module = ctrl_entity_from_handle(ctrl_state->ctrl_thread_entity_store, loaded_module_handle);
-    B32 is_first = 1;
-    for(CTRL_Entity *child = process->first; child != &ctrl_entity_nil; child = child->next)
+    
+    //- rjf: determine if this is the first process launched in this session
+    B32 is_first_process = 1;
+    for(CTRL_Entity *child = process->parent->first; child != &ctrl_entity_nil; child = child->next)
     {
-      if(child->kind == CTRL_EntityKind_Module && child != loaded_module)
+      if(child->kind == CTRL_EntityKind_Process && child != process)
       {
-        is_first = 0;
+        is_first_process = 0;
         break;
       }
     }
-    if(is_first) ProfScope("pre-emptively load adjacent debug info")
+    
+    //- rjf: if this is the first process this session, clear the debug directory state
+    if(is_first_process)
     {
+      arena_clear(ctrl_state->dbg_dir_arena);
+      ctrl_state->dbg_dir_root = push_array(ctrl_state->dbg_dir_arena, CTRL_DbgDirNode, 1);
+    }
+    
+    //- rjf: for each module, use its full path as the start to a new limited recursive
+    // directory search. cache each directory once traversed in the dbg_dir tree. if any
+    // node is not cached, then scan it & pre-emptively convert debug info.
+    ProfScope("pre-emptively load adjacent debug info")
+    {
+      //- rjf: calculate seed path
       DI_Key loaded_di_key = ctrl_dbgi_key_from_module(loaded_module);
       String8 loaded_di_name = str8_skip_last_slash(loaded_di_key.path);
-      String8 containing_folder_path = str8_chop_last_slash(loaded_di_key.path);
-      if(containing_folder_path.size < loaded_di_key.path.size)
+      String8 debug_info_ext = str8_skip_last_dot(loaded_di_key.path);
+      String8 seed_folder_path = str8_chop_last_slash(loaded_di_key.path);
+      if(seed_folder_path.size == 0)
       {
-        String8 debug_info_ext = str8_skip_last_dot(loaded_di_key.path);
-        typedef struct Task Task;
-        struct Task
+        String8 module_path = loaded_module->string;
+        seed_folder_path = str8_chop_last_slash(module_path);
+      }
+      
+      //- rjf: split seed path
+      String8List seed_path_parts = str8_split_path(scratch.arena, seed_folder_path);
+      
+      //- rjf: find parent dir node for this module's debug info; build tree leading to this dir
+      CTRL_DbgDirNode *parent_dir_node = ctrl_state->dbg_dir_root;
+      for(String8Node *n = seed_path_parts.first; n != 0; n = n->next)
+      {
+        String8 name = n->string;
+        CTRL_DbgDirNode *next_child = 0;
+        for(CTRL_DbgDirNode *child = parent_dir_node->first; child != 0; child = child->next)
         {
-          Task *next;
-          String8 path;
-        };
-        Task start_task = {0, containing_folder_path};
-        Task *first_task = &start_task;
-        Task *last_task = first_task;
-        U64 task_count = 0;
-        for(Task *t = first_task; t != 0; t = t->next)
-        {
-          OS_FileIter *it = os_file_iter_begin(scratch.arena, t->path, 0);
-          DI_KeyList preemptively_loaded_keys = {0};
-          for(OS_FileInfo info = {0}; os_file_iter_next(scratch.arena, it, &info);)
+          if(str8_match(child->name, name, StringMatchFlag_CaseInsensitive))
           {
-            if(info.props.flags & FilePropertyFlag_IsFolder && task_count < 16384)
+            next_child = child;
+            break;
+          }
+        }
+        if(next_child == 0)
+        {
+          next_child = push_array(ctrl_state->dbg_dir_arena, CTRL_DbgDirNode, 1);
+          DLLPushBack(parent_dir_node->first, parent_dir_node->last, next_child);
+          next_child->parent = parent_dir_node;
+          next_child->name = push_str8_copy(ctrl_state->dbg_dir_arena, name);
+          parent_dir_node->child_count += 1;
+        }
+        parent_dir_node = next_child;
+      }
+      
+      //- rjf: iterate from dir node up its ancestor chain - do recursive searches if:
+      //
+      // (a) this is the direct ancestor of a loaded module, and it has not
+      //     been searched yet (search_count == 0)
+      // (b) this is an indirect ancestor of loaded modules, it has not been
+      //     searched yet, but it has >4 child branches, meaning it looks like
+      //     a project directory
+      //
+      for(CTRL_DbgDirNode *dir_node = parent_dir_node; dir_node != 0; dir_node = dir_node->parent)
+      {
+        if(dir_node->search_count == 0 && (dir_node == parent_dir_node || dir_node->child_count >= 4))
+        {
+          Temp temp = temp_begin(scratch.arena);
+          
+          //- rjf: form full path of this directory node
+          String8List dir_node_path_parts = {0};
+          for(CTRL_DbgDirNode *n = dir_node; n != 0; n = n->parent)
+          {
+            str8_list_push_front(temp.arena, &dir_node_path_parts, n->name);
+          }
+          String8 dir_node_path = str8_list_join(temp.arena, &dir_node_path_parts, &(StringJoin){.sep = str8_lit("/")});
+          
+          //- rjf: iterate downwards from this directory recursively, locate
+          // debug infos, and pre-emptively convert
+          typedef struct Task Task;
+          struct Task
+          {
+            Task *next;
+            CTRL_DbgDirNode *node;
+            String8 path;
+          };
+          Task start_task = {0, dir_node, dir_node_path};
+          Task *first_task = &start_task;
+          Task *last_task = first_task;
+          U64 task_count = 0;
+          for(Task *t = first_task; t != 0; t = t->next)
+          {
+            // rjf: increment search counter
+            t->node->search_count += 1;
+            
+            // rjf: iterate this directory. if debug infos are encountered,
+            // kick off pre-emptive conversion, and gather key. if folders
+            // are encountered, then add them to the tree, and kick off a
+            // sub-search if needed.
+            DI_KeyList preemptively_loaded_keys = {0};
+            OS_FileIter *it = os_file_iter_begin(temp.arena, t->path, 0);
+            for(OS_FileInfo info = {0}; os_file_iter_next(temp.arena, it, &info);)
             {
-              Task *task = push_array(scratch.arena, Task, 1);
-              task->path = push_str8f(scratch.arena, "%S/%S", t->path, info.name);
-              SLLQueuePush(first_task, last_task, task);
-              task_count += 1;
+              // rjf: folder -> do sub-search if not duplicative
+              if(info.props.flags & FilePropertyFlag_IsFolder && task_count < 16384)
+              {
+                CTRL_DbgDirNode *existing_dir_child = 0;
+                for(CTRL_DbgDirNode *child = t->node->first; child != 0; child = child->next)
+                {
+                  if(str8_match(child->name, info.name, StringMatchFlag_CaseInsensitive))
+                  {
+                    existing_dir_child = child;
+                    break;
+                  }
+                }
+                if(existing_dir_child == 0)
+                {
+                  existing_dir_child = push_array(ctrl_state->dbg_dir_arena, CTRL_DbgDirNode, 1);
+                  DLLPushBack(t->node->first, t->node->last, existing_dir_child);
+                  existing_dir_child->parent = t->node;
+                  existing_dir_child->name = push_str8_copy(ctrl_state->dbg_dir_arena, info.name);
+                  t->node->child_count += 1;
+                }
+                if(existing_dir_child->search_count == 0)
+                {
+                  Task *task = push_array(temp.arena, Task, 1);
+                  task->node = existing_dir_child;
+                  task->path = push_str8f(temp.arena, "%S/%S", t->path, info.name);
+                  SLLQueuePush(first_task, last_task, task);
+                  task_count += 1;
+                }
+              }
+              
+              // rjf: debug info file -> kick off open
+              else if(!(info.props.flags & FilePropertyFlag_IsFolder) &&
+                      str8_match(str8_skip_last_dot(info.name), debug_info_ext, StringMatchFlag_CaseInsensitive) &&
+                      !str8_match(loaded_di_name, info.name, StringMatchFlag_CaseInsensitive))
+              {
+                DI_Key key = {push_str8f(temp.arena, "%S/%S", t->path, info.name), info.props.modified};
+                di_open(&key);
+                di_key_list_push(temp.arena, &preemptively_loaded_keys, &key);
+              }
             }
-            else if(str8_match(str8_skip_last_dot(info.name), debug_info_ext, StringMatchFlag_CaseInsensitive) &&
-                    !str8_match(loaded_di_name, info.name, StringMatchFlag_CaseInsensitive))
+            os_file_iter_end(it);
+            
+            // rjf: for each pre-emptively loaded key, wait for the initial
+            // load task to be done
+            for(DI_KeyNode *n = preemptively_loaded_keys.first; n != 0; n = n->next)
             {
-              DI_Key key = {push_str8f(scratch.arena, "%S/%S", t->path, info.name), info.props.modified};
-              di_open(&key);
-              di_key_list_push(scratch.arena, &preemptively_loaded_keys, &key);
+              DI_Scope *di_scope = di_scope_open();
+              RDI_Parsed *rdi = di_rdi_from_key(di_scope, &n->v, max_U64);
+              di_scope_close(di_scope);
+              di_close(&n->v);
             }
           }
-          for(DI_KeyNode *n = preemptively_loaded_keys.first; n != 0; n = n->next)
-          {
-            DI_Scope *di_scope = di_scope_open();
-            RDI_Parsed *rdi = di_rdi_from_key(di_scope, &n->v, max_U64);
-            di_scope_close(di_scope);
-            di_close(&n->v);
-          }
-          os_file_iter_end(it);
+          
+          temp_end(temp);
         }
       }
     }
