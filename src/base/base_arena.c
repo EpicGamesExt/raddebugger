@@ -52,7 +52,7 @@ arena_alloc_(ArenaParams *params)
   Arena *arena = (Arena *)base;
   arena->current = arena;
   arena->flags = params->flags;
-  arena->cmt_size = safe_cast_u32(params->commit_size);
+  arena->cmt_size = params->commit_size;
   arena->res_size = params->reserve_size;
   arena->base_pos = 0;
   arena->pos = ARENA_HEADER_SIZE;
@@ -90,7 +90,7 @@ arena_push(Arena *arena, U64 size, U64 align)
   if(current->res < pos_pst && !(arena->flags & ArenaFlag_NoChain))
   {
     Arena *new_block = 0;
-
+    
 #if ARENA_FREE_LIST
     Arena *prev_block;
     for(new_block = arena->free_last, prev_block = 0; new_block != 0; prev_block = new_block, new_block = new_block->prev)
@@ -106,12 +106,12 @@ arena_push(Arena *arena, U64 size, U64 align)
           arena->free_last = new_block->prev;
         }
         arena->free_size -= new_block->res_size;
-		AsanUnpoisonMemoryRegion((U8*)new_block + ARENA_HEADER_SIZE, new_block->res_size - ARENA_HEADER_SIZE);
+        AsanUnpoisonMemoryRegion((U8*)new_block + ARENA_HEADER_SIZE, new_block->res_size - ARENA_HEADER_SIZE);
         break;
       }
     }
 #endif
-
+    
     if(new_block == 0)
     {
       U64 res_size = current->res_size;
@@ -125,10 +125,10 @@ arena_push(Arena *arena, U64 size, U64 align)
                               .commit_size  = cmt_size,
                               .flags        = current->flags);
     }
-
+    
     new_block->base_pos = current->base_pos + current->res;
     SLLStackPush_N(arena->current, new_block, prev);
-
+    
     current = new_block;
     pos_pre = AlignPow2(current->pos, align);
     pos_pst = pos_pre + size;
@@ -187,7 +187,7 @@ arena_pop_to(Arena *arena, U64 pos)
 {
   U64 big_pos = ClampBot(ARENA_HEADER_SIZE, pos);
   Arena *current = arena->current;
-
+  
 #if ARENA_FREE_LIST
   for(Arena *prev = 0; current->base_pos >= big_pos; current = prev)
   {

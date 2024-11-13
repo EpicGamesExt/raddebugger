@@ -7,16 +7,12 @@
 ////////////////////////////////
 //~ rjf: Constants
 
-#if ARENA_FREE_LIST
-# define ARENA_HEADER_SIZE 128
-#else
-# define ARENA_HEADER_SIZE 64
-#endif
+#define ARENA_HEADER_SIZE 128
 
 ////////////////////////////////
 //~ rjf: Types
 
-typedef U32 ArenaFlags;
+typedef U64 ArenaFlags;
 enum
 {
   ArenaFlag_NoChain    = (1<<0),
@@ -38,7 +34,7 @@ struct Arena
   Arena *prev;    // previous arena in chain
   Arena *current; // current arena in chain
   ArenaFlags flags;
-  U32 cmt_size;
+  U64 cmt_size;
   U64 res_size;
   U64 base_pos;
   U64 pos;

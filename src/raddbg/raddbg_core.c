@@ -8798,7 +8798,6 @@ EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(scheduler_machine)
         expr->space    = rd_eval_space_from_ctrl_entity(process, RD_EvalSpaceKind_MetaCtrlEntity);
         expr->mode     = E_Mode_Offset;
         expr->type_key = e_type_key_cons_base(type(CTRL_ProcessMetaEval));;
-        info.row_strings[row_expr_idx] = process->string;
         info.row_exprs[row_expr_idx]   = expr;
         info.row_members[row_expr_idx] = &e_member_nil;
       }
