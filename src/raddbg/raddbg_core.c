@@ -11704,6 +11704,7 @@ rd_init(CmdLine *cmdln)
 internal void
 rd_frame(void)
 {
+  ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   local_persist S32 depth = 0;
   log_scope_begin();
@@ -11843,6 +11844,7 @@ rd_frame(void)
   //////////////////////////////
   //- rjf: consume events
   //
+  ProfScope("consume events")
   {
     for(OS_Event *event = events.first, *next = 0;
         event != 0;
@@ -11973,11 +11975,12 @@ rd_frame(void)
   //
   CTRL_Handle find_thread_retry = {0};
   RD_Cmd *cmd = 0;
-  for(U64 cmd_process_loop_idx = 0; cmd_process_loop_idx < 3; cmd_process_loop_idx += 1)
+  ProfScope("loop - consume events in core, tick engine, and repeat") for(U64 cmd_process_loop_idx = 0; cmd_process_loop_idx < 3; cmd_process_loop_idx += 1)
   {
     ////////////////////////////
     //- rjf: unpack eval-dependent info
     //
+    ProfBegin("unpack eval-dependent info");
     CTRL_Entity *process = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->process);
     CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->thread);
     Arch arch = thread->arch;
@@ -11994,6 +11997,7 @@ rd_frame(void)
     eval_modules_primary->rdi = &di_rdi_parsed_nil;
     eval_modules_primary->vaddr_range = r1u64(0, max_U64);
     DI_Key primary_dbgi_key = {0};
+    ProfScope("produce all eval modules")
     {
       U64 eval_module_idx = 0;
       for(CTRL_EntityNode *n = all_modules.first; n != 0; n = n->next, eval_module_idx += 1)
@@ -12010,30 +12014,13 @@ rd_frame(void)
         }
       }
     }
-    U64 rdis_count = Max(1, all_modules.count);
-    RDI_Parsed **rdis = push_array(scratch.arena, RDI_Parsed *, rdis_count);
-    rdis[0] = &di_rdi_parsed_nil;
-    U64 rdis_primary_idx = 0;
-    Rng1U64 *rdis_vaddr_ranges = push_array(scratch.arena, Rng1U64, rdis_count);
-    {
-      U64 idx = 0;
-      for(CTRL_EntityNode *n = all_modules.first; n != 0; n = n->next, idx += 1)
-      {
-        DI_Key dbgi_key = ctrl_dbgi_key_from_module(n->v);
-        rdis[idx] = di_rdi_from_key(rd_state->frame_di_scope, &dbgi_key, 0);
-        rdis_vaddr_ranges[idx] = n->v->vaddr_range;
-        if(n->v == module)
-        {
-          primary_dbgi_key = dbgi_key;
-          rdis_primary_idx = idx;
-        }
-      }
-    }
+    ProfEnd();
     
     ////////////////////////////
     //- rjf: build eval type context
     //
     E_TypeCtx *type_ctx = push_array(scratch.arena, E_TypeCtx, 1);
+    ProfScope("build eval type context")
     {
       E_TypeCtx *ctx = type_ctx;
       ctx->ip_vaddr          = rip_vaddr;
@@ -16662,6 +16649,7 @@ rd_frame(void)
   //////////////////////////////
   //- rjf: compute all ambiguous paths from view titles
   //
+  ProfScope("compute all ambiguous paths from view titles")
   {
     Temp scratch = scratch_begin(0, 0);
     rd_state->ambiguous_path_slots_count = 512;
@@ -16776,6 +16764,7 @@ rd_frame(void)
   //////////////////////////////
   //- rjf: submit rendering to all windows
   //
+  ProfScope("submit rendering to all windows")
   {
     r_begin_frame();
     for(RD_Window *w = rd_state->first_window; w != 0; w = w->next)
@@ -16859,6 +16848,7 @@ rd_frame(void)
   //////////////////////////////
   //- rjf: collect logs
   //
+  ProfScope("collect logs")
   {
     LogScopeResult log = log_scope_end(scratch.arena);
     os_append_data_to_file_path(rd_state->log_path, log.strings[LogMsgKind_Info]);
@@ -16874,4 +16864,5 @@ rd_frame(void)
   }
   
   scratch_end(scratch);
+  ProfEnd();
 }

@@ -4111,16 +4111,18 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
   }
   ctrl_c2u_push_events(&evts);
   
-  //- rjf: when a new process is loaded, for the first module, pre-emptively try
-  // to open all adjacent debug infos. with debug events, we learn about loaded
-  // modules serially, and we need to completely load debug info before continuing.
-  // for massive projects, this is a problem, because completely loading debug info
-  // isn't a trivial cost, and there are often 100s of DLLs.
+  //- rjf: when a new process is loaded, for the first module, pre-emptively
+  // try to open all adjacent debug infos. with debug events, we learn about
+  // loaded modules serially, and we need to completely load debug info before
+  // continuing. for massive projects, this is a problem, because completely
+  // loading debug info isn't a trivial cost, and there are often 1000s of
+  // DLLs.
   //
-  // an imperfect but usually reasonable heuristic is to look at adjacent debug info
-  // files, in the same directory as the initially loaded, and pre-emptively convert
-  // all of them (which for us is the heaviest part of debug info loading, if native
-  // RDI is not used).
+  // an imperfect but usually reasonable heuristic is to look at adjacent
+  // debug info files, in the same or under the directory as the initially
+  // loaded, and pre-emptively convert all of them (which for us is the
+  // heaviest part of debug info loading, if native RDI is not used).
+  //
   if(event->kind == DMN_EventKind_LoadModule)
   {
     CTRL_Handle process_handle = ctrl_handle_make(CTRL_MachineID_Local, event->process);
@@ -4136,7 +4138,7 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
         break;
       }
     }
-    if(is_first)
+    if(is_first) ProfScope("pre-emptively load adjacent debug info")
     {
       DI_Key loaded_di_key = ctrl_dbgi_key_from_module(loaded_module);
       String8 loaded_di_name = str8_skip_last_slash(loaded_di_key.path);
@@ -4144,26 +4146,46 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
       if(containing_folder_path.size < loaded_di_key.path.size)
       {
         String8 debug_info_ext = str8_skip_last_dot(loaded_di_key.path);
-        OS_FileIter *it = os_file_iter_begin(scratch.arena, containing_folder_path, OS_FileIterFlag_SkipFolders);
-        DI_KeyList preemptively_loaded_keys = {0};
-        for(OS_FileInfo info = {0}; os_file_iter_next(scratch.arena, it, &info);)
+        typedef struct Task Task;
+        struct Task
         {
-          if(str8_match(str8_skip_last_dot(info.name), debug_info_ext, StringMatchFlag_CaseInsensitive) &&
-             !str8_match(loaded_di_name, info.name, StringMatchFlag_CaseInsensitive))
+          Task *next;
+          String8 path;
+        };
+        Task start_task = {0, containing_folder_path};
+        Task *first_task = &start_task;
+        Task *last_task = first_task;
+        U64 task_count = 0;
+        for(Task *t = first_task; t != 0; t = t->next)
+        {
+          OS_FileIter *it = os_file_iter_begin(scratch.arena, t->path, 0);
+          DI_KeyList preemptively_loaded_keys = {0};
+          for(OS_FileInfo info = {0}; os_file_iter_next(scratch.arena, it, &info);)
           {
-            DI_Key key = {push_str8f(scratch.arena, "%S/%S", containing_folder_path, info.name), info.props.modified};
-            di_open(&key);
-            di_key_list_push(scratch.arena, &preemptively_loaded_keys, &key);
+            if(info.props.flags & FilePropertyFlag_IsFolder && task_count < 16384)
+            {
+              Task *task = push_array(scratch.arena, Task, 1);
+              task->path = push_str8f(scratch.arena, "%S/%S", t->path, info.name);
+              SLLQueuePush(first_task, last_task, task);
+              task_count += 1;
+            }
+            else if(str8_match(str8_skip_last_dot(info.name), debug_info_ext, StringMatchFlag_CaseInsensitive) &&
+                    !str8_match(loaded_di_name, info.name, StringMatchFlag_CaseInsensitive))
+            {
+              DI_Key key = {push_str8f(scratch.arena, "%S/%S", t->path, info.name), info.props.modified};
+              di_open(&key);
+              di_key_list_push(scratch.arena, &preemptively_loaded_keys, &key);
+            }
           }
+          for(DI_KeyNode *n = preemptively_loaded_keys.first; n != 0; n = n->next)
+          {
+            DI_Scope *di_scope = di_scope_open();
+            RDI_Parsed *rdi = di_rdi_from_key(di_scope, &n->v, max_U64);
+            di_scope_close(di_scope);
+            di_close(&n->v);
+          }
+          os_file_iter_end(it);
         }
-        for(DI_KeyNode *n = preemptively_loaded_keys.first; n != 0; n = n->next)
-        {
-          DI_Scope *di_scope = di_scope_open();
-          RDI_Parsed *rdi = di_rdi_from_key(di_scope, &n->v, max_U64);
-          di_scope_close(di_scope);
-          di_close(&n->v);
-        }
-        os_file_iter_end(it);
       }
     }
   }

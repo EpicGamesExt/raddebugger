@@ -5343,10 +5343,10 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(symbol_lister)
       {
         RD_Font(RD_FontSlot_Code) rd_code_label(1.f, 0, rd_rgba_from_theme_color(RD_ThemeColor_CodeSymbol), name);
         RD_Font(RD_FontSlot_Main) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
-          ui_labelf("Procedure #%I64u", item->idx);
+          ui_labelf("Procedure #%I64u", idx);
         U64 binary_voff = d_voff_from_dbgi_key_symbol_name(&dbgi_key, name);
         D_LineList lines = d_lines_from_dbgi_key_voff(scratch.arena, &dbgi_key, binary_voff);
-        if(lines.first != 0)
+        if(lines.first != 0 && lines.first->v.file_path.size != 0 && lines.first->v.pt.line != 0)
         {
           String8 file_path = lines.first->v.file_path;
           S64 line_num = lines.first->v.pt.line;
