@@ -490,18 +490,20 @@ cv_c13_parsed_from_data(Arena *arena, String8 c13_data, String8 strtbl, COFF_Sec
         CV_C13SubSecLinesHeader *hdr = (CV_C13SubSecLinesHeader*)(first + read_off);
         read_off += sizeof(*hdr);
         
-        // extract top level info
+        // rjf: extract section index
         U32 sec_idx = hdr->sec;
-        B32 has_cols = !!(hdr->flags & CV_C13SubSecLinesFlag_HasColumns);
-        U64 secrel_off = hdr->sec_off;
-        U64 secrel_opl = secrel_off + hdr->len;
-        U64 sec_base_off = sections.v[sec_idx - 1].voff;
         
         // rjf: bad section index -> skip
         if(sec_idx < 1 || sections.count < sec_idx)
         {
           continue;
         }
+        
+        // extract top level info
+        B32 has_cols = !!(hdr->flags & CV_C13SubSecLinesFlag_HasColumns);
+        U64 secrel_off = hdr->sec_off;
+        U64 secrel_opl = secrel_off + hdr->len;
+        U64 sec_base_off = sections.v[sec_idx - 1].voff;
         
         // read files
         for(;read_off+sizeof(CV_C13File) <= read_off_opl;)
@@ -519,7 +521,7 @@ cv_c13_parsed_from_data(Arena *arena, String8 c13_data, String8 strtbl, COFF_Sec
             CV_C13Checksum *checksum = (CV_C13Checksum*)(c13_data.str + file_chksms->off + file_off);
             U32 name_off = checksum->name_off;
             file_name =  str8_cstring_capped((char*)(strtbl.str + name_off),
-                                            (char*)(strtbl.str + strtbl.size));
+                                             (char*)(strtbl.str + strtbl.size));
           }
           
           // array layouts
@@ -596,7 +598,7 @@ cv_c13_parsed_from_data(Arena *arena, String8 c13_data, String8 strtbl, COFF_Sec
             CV_C13Checksum *checksum = (CV_C13Checksum*)(c13_data.str + file_chksms->off + hdr->file_off);
             U32 name_off = checksum->name_off;
             file_name =  str8_cstring_capped((char*)(strtbl.str + name_off),
-                                            (char*)(strtbl.str + strtbl.size));
+                                             (char*)(strtbl.str + strtbl.size));
           }
           
           // rjf: parse extra files
@@ -617,7 +619,7 @@ cv_c13_parsed_from_data(Arena *arena, String8 c13_data, String8 strtbl, COFF_Sec
           SLLQueuePush(node->inlinee_lines_first, node->inlinee_lines_last, n);
           n->v.inlinee          = hdr->inlinee;
           n->v.file_name        = file_name;
-		  n->v.file_off         = hdr->file_off;
+          n->v.file_off         = hdr->file_off;
           n->v.first_source_ln  = hdr->first_source_ln;
           n->v.extra_file_count = extra_file_count;
           n->v.extra_files      = extra_files;

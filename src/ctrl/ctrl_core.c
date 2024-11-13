@@ -4133,15 +4133,7 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
     CTRL_Entity *loaded_module = ctrl_entity_from_handle(ctrl_state->ctrl_thread_entity_store, loaded_module_handle);
     
     //- rjf: determine if this is the first process launched in this session
-    B32 is_first_process = 1;
-    for(CTRL_Entity *child = process->parent->first; child != &ctrl_entity_nil; child = child->next)
-    {
-      if(child->kind == CTRL_EntityKind_Process && child != process)
-      {
-        is_first_process = 0;
-        break;
-      }
-    }
+    B32 is_first_process = (ctrl_state->process_counter == 1);
     
     //- rjf: if this is the first process this session, clear the debug directory state
     if(is_first_process)
@@ -4212,7 +4204,10 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
           String8List dir_node_path_parts = {0};
           for(CTRL_DbgDirNode *n = dir_node; n != 0; n = n->parent)
           {
-            str8_list_push_front(temp.arena, &dir_node_path_parts, n->name);
+            if(n->name.size != 0)
+            {
+              str8_list_push_front(temp.arena, &dir_node_path_parts, n->name);
+            }
           }
           String8 dir_node_path = str8_list_join(temp.arena, &dir_node_path_parts, &(StringJoin){.sep = str8_lit("/")});
           
@@ -4231,6 +4226,8 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
           U64 task_count = 0;
           for(Task *t = first_task; t != 0; t = t->next)
           {
+            ProfBegin("search task %.*s", str8_varg(t->path));
+            
             // rjf: increment search counter
             t->node->search_count += 1;
             
@@ -4240,10 +4237,11 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
             // sub-search if needed.
             DI_KeyList preemptively_loaded_keys = {0};
             OS_FileIter *it = os_file_iter_begin(temp.arena, t->path, 0);
-            for(OS_FileInfo info = {0}; os_file_iter_next(temp.arena, it, &info);)
+            U64 idx = 0;
+            for(OS_FileInfo info = {0}; idx < 64 && os_file_iter_next(temp.arena, it, &info); idx += 1)
             {
               // rjf: folder -> do sub-search if not duplicative
-              if(info.props.flags & FilePropertyFlag_IsFolder && task_count < 16384)
+              if(info.props.flags & FilePropertyFlag_IsFolder && task_count < 16384 && !str8_match(str8_prefix(info.name, 1), str8_lit("."), 0))
               {
                 CTRL_DbgDirNode *existing_dir_child = 0;
                 for(CTRL_DbgDirNode *child = t->node->first; child != 0; child = child->next)
@@ -4273,7 +4271,8 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
               }
               
               // rjf: debug info file -> kick off open
-              else if(!(info.props.flags & FilePropertyFlag_IsFolder) &&
+              else if(preemptively_loaded_keys.count < 4096 &&
+                      !(info.props.flags & FilePropertyFlag_IsFolder) &&
                       str8_match(str8_skip_last_dot(info.name), debug_info_ext, StringMatchFlag_CaseInsensitive) &&
                       !str8_match(loaded_di_name, info.name, StringMatchFlag_CaseInsensitive))
               {
@@ -4293,9 +4292,12 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
               di_scope_close(di_scope);
               di_close(&n->v);
             }
+            
+            ProfEnd();
           }
           
           temp_end(temp);
+          
         }
       }
     }
