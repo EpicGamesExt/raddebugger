@@ -4112,12 +4112,19 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
   }
   ctrl_c2u_push_events(&evts);
   
-  //- rjf: when a new process is loaded, for the first module, pre-emptively
-  // try to open all adjacent debug infos. with debug events, we learn about
-  // loaded modules serially, and we need to completely load debug info before
-  // continuing. for massive projects, this is a problem, because completely
-  // loading debug info isn't a trivial cost, and there are often 1000s of
-  // DLLs.
+  //- rjf: if this is the first process in a session, clear the debug directory
+  // cache state
+  if(ctrl_state->process_counter == 1 && event->kind == DMN_EventKind_CreateProcess)
+  {
+    arena_clear(ctrl_state->dbg_dir_arena);
+    ctrl_state->dbg_dir_root = push_array(ctrl_state->dbg_dir_arena, CTRL_DbgDirNode, 1);
+  }
+  
+  //- rjf: when a new module is loaded, pre-emptively try to open all adjacent
+  // debug infos. with debug events, we learn about loaded modules serially,
+  // and we need to completely load debug info before continuing. for massive
+  // projects, this is a problem, because completely loading debug info isn't a
+  // trivial cost, and there are often 1000s of DLLs.
   //
   // an imperfect but usually reasonable heuristic is to look at adjacent
   // debug info files, in the same or under the directory as the initially
@@ -4131,16 +4138,6 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
     CTRL_Handle loaded_module_handle = ctrl_handle_make(CTRL_MachineID_Local, event->module);
     CTRL_Entity *process = ctrl_entity_from_handle(ctrl_state->ctrl_thread_entity_store, process_handle);
     CTRL_Entity *loaded_module = ctrl_entity_from_handle(ctrl_state->ctrl_thread_entity_store, loaded_module_handle);
-    
-    //- rjf: determine if this is the first process launched in this session
-    B32 is_first_process = (ctrl_state->process_counter == 1);
-    
-    //- rjf: if this is the first process this session, clear the debug directory state
-    if(is_first_process)
-    {
-      arena_clear(ctrl_state->dbg_dir_arena);
-      ctrl_state->dbg_dir_root = push_array(ctrl_state->dbg_dir_arena, CTRL_DbgDirNode, 1);
-    }
     
     //- rjf: for each module, use its full path as the start to a new limited recursive
     // directory search. cache each directory once traversed in the dbg_dir tree. if any
