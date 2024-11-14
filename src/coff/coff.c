@@ -261,9 +261,6 @@ coff_parse_section_name(String8 full_name, String8 *name_out, String8 *postfix_o
   //    H: Clang extension produced with /debug:ghash, array of type hashes
   *name_out = full_name;
   *postfix_out = str8_lit("");
-  if (str8_match(full_name, str8_lit(".tls"), 0)) {
-      int x = 0;
-  }
   for (U64 i = 0; i < full_name.size; ++i) {
     if (full_name.str[i] == '$') {
       *name_out = str8(full_name.str, i);
