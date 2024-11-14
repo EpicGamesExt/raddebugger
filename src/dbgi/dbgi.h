@@ -94,6 +94,7 @@ struct DI_Node
   U64 request_count;
   U64 completion_count;
   U64 is_working;
+  U64 last_time_requested_us;
   
   // rjf: key
   DI_Key key;

@@ -14,6 +14,7 @@ struct FS_RangeNode
   Rng1U64 range;
   U64 request_count;
   U64 completion_count;
+  U64 last_time_requested_us;
 };
 
 typedef struct FS_RangeSlot FS_RangeSlot;

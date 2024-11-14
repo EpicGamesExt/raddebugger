@@ -838,6 +838,7 @@ struct CTRL_DbgDirNode
   String8 name;
   U64 search_count;
   U64 child_count;
+  U64 module_direct_count;
 };
 
 ////////////////////////////////

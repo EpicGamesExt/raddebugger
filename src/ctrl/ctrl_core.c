@@ -4125,7 +4125,13 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
   // loaded, and pre-emptively convert all of them (which for us is the
   // heaviest part of debug info loading, if native RDI is not used).
   //
-  if(event->kind == DMN_EventKind_LoadModule)
+  // only do this on the first ever loaded module, *or* once we get beyond 256
+  // modules (a very bad heuristic that may or may not inform us that we are
+  // dealing with insane-town projects)
+  //
+  if(event->kind == DMN_EventKind_LoadModule &&
+     (ctrl_state->ctrl_thread_entity_store->entity_kind_counts[CTRL_EntityKind_Module] > 256 ||
+      ctrl_state->ctrl_thread_entity_store->entity_kind_counts[CTRL_EntityKind_Module] == 1))
   {
     //- rjf: unpack event
     CTRL_Handle process_handle = ctrl_handle_make(CTRL_MachineID_Local, event->process);
@@ -4177,6 +4183,11 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
         parent_dir_node = next_child;
       }
       
+      //- rjf: count modules
+      {
+        parent_dir_node->module_direct_count += 1;
+      }
+      
       //- rjf: iterate from dir node up its ancestor chain - do recursive
       // searches if this is an ancestor of loaded modules, it has not been
       // searched yet, but it has >4 child branches, meaning it looks like
@@ -4185,7 +4196,7 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
       DI_KeyList preemptively_loaded_keys = {0};
       for(CTRL_DbgDirNode *dir_node = parent_dir_node; dir_node != 0; dir_node = dir_node->parent)
       {
-        if(dir_node->search_count == 0 && dir_node->child_count >= 4)
+        if(dir_node->search_count == 0 && dir_node->module_direct_count >= 1)
         {
           //- rjf: form full path of this directory node
           String8List dir_node_path_parts = {0};

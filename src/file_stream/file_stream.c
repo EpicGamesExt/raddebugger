@@ -146,11 +146,13 @@ fs_hash_from_path_range(String8 path, Rng1U64 range, U64 endt_us)
         }
         
         // rjf: try to send stream request
-        if(ins_atomic_u64_eval(&range_node->request_count) == ins_atomic_u64_eval(&range_node->completion_count) &&
+        if((ins_atomic_u64_eval(&range_node->request_count) == ins_atomic_u64_eval(&range_node->completion_count) ||
+            ins_atomic_u64_eval(&range_node->last_time_requested_us)+100000 < os_now_microseconds()) &&
            fs_u2s_enqueue_req(range, path, endt_us))
         {
-          async_push_work(fs_stream_work, .completion_counter = &range_node->completion_count);
+          ins_atomic_u64_eval_assign(&range_node->last_time_requested_us, os_now_microseconds());
           ins_atomic_u64_inc_eval(&range_node->request_count);
+          async_push_work(fs_stream_work, .completion_counter = &range_node->completion_count);
         }
         
         // rjf: try to reobtain results
@@ -419,8 +421,9 @@ fs_detector_thread__entry_point(void *p)
                 if(ins_atomic_u64_eval(&range_n->request_count) == ins_atomic_u64_eval(&range_n->completion_count) &&
                    fs_u2s_enqueue_req(range_n->range, n->path, os_now_microseconds()+100000))
                 {
-                  async_push_work(fs_stream_work, .completion_counter = &range_n->completion_count);
+                  ins_atomic_u64_eval_assign(&range_n->last_time_requested_us, os_now_microseconds());
                   ins_atomic_u64_inc_eval(&range_n->request_count);
+                  async_push_work(fs_stream_work, .completion_counter = &range_n->completion_count);
                 }
               }
             }
