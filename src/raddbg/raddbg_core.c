@@ -3822,9 +3822,13 @@ rd_window_frame(RD_Window *ws)
             {
               ui_labelf("Symbols successfully loaded from %S", dbgi_key.path);
             }
-            else
+            else if(dbgi_key.path.size != 0)
             {
               ui_labelf("Symbols not found at %S", dbgi_key.path);
+            }
+            else if(dbgi_key.path.size == 0)
+            {
+              ui_labelf("Symbol information not found in module file");
             }
             di_scope_close(di_scope);
           }

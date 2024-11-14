@@ -1615,12 +1615,12 @@ ctrl_query_cached_data_from_process_vaddr_range(Arena *arena, CTRL_Handle proces
         }
         
         // rjf: increment past this chunk
-        write_off += in_range_data.size;
-        if(data.size < page_size)
+        U64 bytes_to_skip = page_size;
+        if(page_idx == 0 && range.min > data_vaddr_range.min)
         {
-          U64 missed_byte_count = page_size-data.size;
-          write_off += missed_byte_count;
+          bytes_to_skip -= (range.min-data_vaddr_range.min);
         }
+        write_off += bytes_to_skip;
       }
     }
     
