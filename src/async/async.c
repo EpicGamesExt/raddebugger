@@ -174,6 +174,10 @@ async_pop_work(void)
           taken_priority = priority;
         }
       }
+      if(done)
+      {
+        break;
+      }
       if(priority == ASYNC_Priority_Low)
       {
         break;

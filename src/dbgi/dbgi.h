@@ -92,7 +92,6 @@ struct DI_Node
   U64 ref_count;
   U64 touch_count;
   U64 is_working;
-  U64 last_time_requested_us;
   
   // rjf: key
   DI_Key key;

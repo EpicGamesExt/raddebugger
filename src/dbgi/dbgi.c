@@ -491,7 +491,7 @@ di_open(DI_Key *key)
         if(node->ref_count == 1)
         {
           di_u2p_enqueue_key(&key_normalized, max_U64);
-          ins_atomic_u64_eval_assign(&node->last_time_requested_us, os_now_microseconds());
+          ins_atomic_u64_eval_assign(&node->is_working, 1);
           DeferLoop(os_rw_mutex_drop_w(stripe->rw_mutex), os_rw_mutex_take_w(stripe->rw_mutex))
           {
             async_push_work(di_parse_work);
@@ -613,10 +613,9 @@ di_rdi_from_key(DI_Scope *scope, DI_Key *key, U64 endt_us)
       if(node != 0 &&
          !node->parse_done &&
          !ins_atomic_u64_eval(&node->is_working) &&
-         ins_atomic_u64_eval(&node->last_time_requested_us)+100000 < os_now_microseconds() &&
          di_u2p_enqueue_key(&key_normalized, endt_us))
       {
-        ins_atomic_u64_eval_assign(&node->last_time_requested_us, os_now_microseconds());
+        ins_atomic_u64_eval_assign(&node->is_working, 1);
         DeferLoop(os_rw_mutex_drop_r(stripe->rw_mutex), os_rw_mutex_take_r(stripe->rw_mutex))
         {
           async_push_work(di_parse_work);
@@ -847,20 +846,7 @@ ASYNC_WORK_DEF(di_parse_work)
   DI_Stripe *stripe = &di_shared->stripes[stripe_idx];
   
   ////////////////////////////
-  //- rjf: take task
-  //
-  B32 got_task = 0;
-  OS_MutexScopeR(stripe->rw_mutex)
-  {
-    DI_Node *node = di_node_from_key_slot__stripe_mutex_r_guarded(slot, &key);
-    if(node != 0)
-    {
-      got_task = !ins_atomic_u64_eval_cond_assign(&node->is_working, 1, 0);
-    }
-  }
-  
-  ////////////////////////////
-  //- rjf: got task -> open O.G. file (may or may not be RDI)
+  //- rjf: open O.G. file (may or may not be RDI)
   //
   B32 og_format_is_known = 0;
   B32 og_is_pe     = 0;
@@ -868,7 +854,7 @@ ASYNC_WORK_DEF(di_parse_work)
   B32 og_is_elf    = 0;
   B32 og_is_rdi    = 0;
   FileProperties og_props = {0};
-  if(got_task) ProfScope("analyze %.*s", str8_varg(og_path))
+  ProfScope("analyze %.*s", str8_varg(og_path))
   {
     OS_Handle file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead, og_path);
     OS_Handle file_map = os_file_map_open(OS_AccessFlag_Read, file);
@@ -925,7 +911,6 @@ ASYNC_WORK_DEF(di_parse_work)
   //- rjf: given O.G. path & analysis, determine RDI path
   //
   String8 rdi_path = {0};
-  if(got_task)
   {
     if(og_is_rdi)
     {
@@ -941,7 +926,6 @@ ASYNC_WORK_DEF(di_parse_work)
   //- rjf: check if rdi file is up-to-date
   //
   B32 rdi_file_is_up_to_date = 0;
-  if(got_task)
   {
     if(rdi_path.size != 0) ProfScope("check %.*s is up-to-date", str8_varg(rdi_path))
     {
@@ -955,7 +939,7 @@ ASYNC_WORK_DEF(di_parse_work)
   // encoding generation number & size, to see if we need to regenerate it
   // regardless
   //
-  if(got_task && rdi_file_is_up_to_date) ProfScope("check %.*s version matches our's", str8_varg(rdi_path))
+  if(rdi_file_is_up_to_date) ProfScope("check %.*s version matches our's", str8_varg(rdi_path))
   {
     OS_Handle file = {0};
     OS_Handle file_map = {0};
@@ -996,7 +980,7 @@ ASYNC_WORK_DEF(di_parse_work)
   ////////////////////////////
   //- rjf: rdi file not up-to-date? we need to generate it
   //
-  if(got_task && !rdi_file_is_up_to_date) ProfScope("generate %.*s", str8_varg(rdi_path))
+  if(!rdi_file_is_up_to_date) ProfScope("generate %.*s", str8_varg(rdi_path))
   {
     if(og_is_pdb)
     {
@@ -1067,7 +1051,6 @@ ASYNC_WORK_DEF(di_parse_work)
   OS_Handle file_map = {0};
   FileProperties file_props = {0};
   void *file_base = 0;
-  if(got_task)
   {
     file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead|OS_AccessFlag_ShareWrite, rdi_path);
     file_map = os_file_map_open(OS_AccessFlag_Read, file);
@@ -1079,7 +1062,6 @@ ASYNC_WORK_DEF(di_parse_work)
   //- rjf: do initial parse of rdi
   //
   RDI_Parsed rdi_parsed_maybe_compressed = di_rdi_parsed_nil;
-  if(got_task)
   {
     RDI_ParseStatus parse_status = rdi_parse((U8 *)file_base, file_props.size, &rdi_parsed_maybe_compressed);
     (void)parse_status;
@@ -1090,7 +1072,6 @@ ASYNC_WORK_DEF(di_parse_work)
   //
   Arena *rdi_parsed_arena = 0;
   RDI_Parsed rdi_parsed = rdi_parsed_maybe_compressed;
-  if(got_task)
   {
     U64 decompressed_size = rdi_decompressed_size_from_parsed(&rdi_parsed_maybe_compressed);
     if(decompressed_size > file_props.size)
@@ -1106,7 +1087,7 @@ ASYNC_WORK_DEF(di_parse_work)
   ////////////////////////////
   //- rjf: commit parsed info to cache
   //
-  if(got_task) OS_MutexScopeW(stripe->rw_mutex)
+  OS_MutexScopeW(stripe->rw_mutex)
   {
     DI_Node *node = di_node_from_key_slot__stripe_mutex_r_guarded(slot, &key);
     if(node != 0)
