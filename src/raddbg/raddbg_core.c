@@ -16582,7 +16582,7 @@ rd_frame(void)
   //
   if(ProfIsCapturing())
   {
-    rd_request_frame();
+    // rd_request_frame();
   }
   
   //////////////////////////////

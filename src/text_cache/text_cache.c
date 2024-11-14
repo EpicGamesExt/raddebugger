@@ -2134,6 +2134,7 @@ txt_u2p_dequeue_req(U128 *hash_out, TXT_LangKind *lang_out)
 ASYNC_WORK_DEF(txt_parse_work)
 {
   ProfBeginFunction();
+  
   //- rjf: get next key
   U128 hash = {0};
   TXT_LangKind lang = TXT_LangKind_Null;

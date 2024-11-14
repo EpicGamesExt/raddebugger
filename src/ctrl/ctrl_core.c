@@ -3074,12 +3074,11 @@ ctrl_u2c_push_msgs(CTRL_MsgList *msgs, U64 endt_us)
   {
     U64 unconsumed_size = (ctrl_state->u2c_ring_write_pos-ctrl_state->u2c_ring_read_pos);
     U64 available_size = ctrl_state->u2c_ring_size-unconsumed_size;
-    if(available_size >= sizeof(U64) + msgs_srlzed_baked.size)
+    U64 needed_size = sizeof(msgs_srlzed_baked.size) + msgs_srlzed_baked.size;
+    if(available_size >= needed_size)
     {
       ctrl_state->u2c_ring_write_pos += ring_write_struct(ctrl_state->u2c_ring_base, ctrl_state->u2c_ring_size, ctrl_state->u2c_ring_write_pos, &msgs_srlzed_baked.size);
       ctrl_state->u2c_ring_write_pos += ring_write(ctrl_state->u2c_ring_base, ctrl_state->u2c_ring_size, ctrl_state->u2c_ring_write_pos, msgs_srlzed_baked.str, msgs_srlzed_baked.size);
-      ctrl_state->u2c_ring_write_pos += 7;
-      ctrl_state->u2c_ring_write_pos -= ctrl_state->u2c_ring_write_pos%8;
       good = 1;
       break;
     }
@@ -3112,8 +3111,6 @@ ctrl_u2c_pop_msgs(Arena *arena)
       msgs_srlzed_baked.size = size_to_decode;
       msgs_srlzed_baked.str = push_array_no_zero(scratch.arena, U8, msgs_srlzed_baked.size);
       ctrl_state->u2c_ring_read_pos += ring_read(ctrl_state->u2c_ring_base, ctrl_state->u2c_ring_size, ctrl_state->u2c_ring_read_pos, msgs_srlzed_baked.str, size_to_decode);
-      ctrl_state->u2c_ring_read_pos += 7;
-      ctrl_state->u2c_ring_read_pos -= ctrl_state->u2c_ring_read_pos%8;
       break;
     }
     os_condition_variable_wait(ctrl_state->u2c_ring_cv, ctrl_state->u2c_ring_mutex, max_U64);
@@ -3140,12 +3137,11 @@ ctrl_c2u_push_events(CTRL_EventList *events)
       {
         U64 unconsumed_size = (ctrl_state->c2u_ring_write_pos-ctrl_state->c2u_ring_read_pos);
         U64 available_size = ctrl_state->c2u_ring_size-unconsumed_size;
-        if(available_size >= sizeof(U64) + event_srlzed.size)
+        U64 needed_size = sizeof(event_srlzed.size) + event_srlzed.size;
+        if(available_size >= needed_size)
         {
           ctrl_state->c2u_ring_write_pos += ring_write_struct(ctrl_state->c2u_ring_base, ctrl_state->c2u_ring_size, ctrl_state->c2u_ring_write_pos, &event_srlzed.size);
           ctrl_state->c2u_ring_write_pos += ring_write(ctrl_state->c2u_ring_base, ctrl_state->c2u_ring_size, ctrl_state->c2u_ring_write_pos, event_srlzed.str, event_srlzed.size);
-          ctrl_state->c2u_ring_write_pos += 7;
-          ctrl_state->c2u_ring_write_pos -= ctrl_state->c2u_ring_write_pos%8;
           break;
         }
         os_condition_variable_wait(ctrl_state->c2u_ring_cv, ctrl_state->c2u_ring_mutex, os_now_microseconds()+100);
@@ -3177,8 +3173,6 @@ ctrl_c2u_pop_events(Arena *arena)
       event_srlzed.size = size_to_decode;
       event_srlzed.str = push_array_no_zero(scratch.arena, U8, event_srlzed.size);
       ctrl_state->c2u_ring_read_pos += ring_read(ctrl_state->c2u_ring_base, ctrl_state->c2u_ring_size, ctrl_state->c2u_ring_read_pos, event_srlzed.str, event_srlzed.size);
-      ctrl_state->c2u_ring_read_pos += 7;
-      ctrl_state->c2u_ring_read_pos -= ctrl_state->c2u_ring_read_pos%8;
       CTRL_Event *new_event = ctrl_event_list_push(arena, &events);
       *new_event = ctrl_event_from_serialized_string(arena, event_srlzed);
     }
@@ -4191,22 +4185,21 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
       //     searched yet, but it has >4 child branches, meaning it looks like
       //     a project directory
       //
+      DI_KeyList preemptively_loaded_keys = {0};
       for(CTRL_DbgDirNode *dir_node = parent_dir_node; dir_node != 0; dir_node = dir_node->parent)
       {
         if(dir_node->search_count == 0 && (dir_node == parent_dir_node || dir_node->child_count >= 4))
         {
-          Temp temp = temp_begin(scratch.arena);
-          
           //- rjf: form full path of this directory node
           String8List dir_node_path_parts = {0};
           for(CTRL_DbgDirNode *n = dir_node; n != 0; n = n->parent)
           {
             if(n->name.size != 0)
             {
-              str8_list_push_front(temp.arena, &dir_node_path_parts, n->name);
+              str8_list_push_front(scratch.arena, &dir_node_path_parts, n->name);
             }
           }
-          String8 dir_node_path = str8_list_join(temp.arena, &dir_node_path_parts, &(StringJoin){.sep = str8_lit("/")});
+          String8 dir_node_path = str8_list_join(scratch.arena, &dir_node_path_parts, &(StringJoin){.sep = str8_lit("/")});
           
           //- rjf: iterate downwards from this directory recursively, locate
           // debug infos, and pre-emptively convert
@@ -4232,10 +4225,9 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
             // kick off pre-emptive conversion, and gather key. if folders
             // are encountered, then add them to the tree, and kick off a
             // sub-search if needed.
-            DI_KeyList preemptively_loaded_keys = {0};
-            OS_FileIter *it = os_file_iter_begin(temp.arena, t->path, 0);
+            OS_FileIter *it = os_file_iter_begin(scratch.arena, t->path, 0);
             U64 idx = 0;
-            for(OS_FileInfo info = {0}; idx < 64 && os_file_iter_next(temp.arena, it, &info); idx += 1)
+            for(OS_FileInfo info = {0}; idx < 16384 && os_file_iter_next(scratch.arena, it, &info); idx += 1)
             {
               // rjf: folder -> do sub-search if not duplicative
               if(info.props.flags & FilePropertyFlag_IsFolder && task_count < 16384 && !str8_match(str8_prefix(info.name, 1), str8_lit("."), 0))
@@ -4259,9 +4251,9 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
                 }
                 if(existing_dir_child->search_count == 0)
                 {
-                  Task *task = push_array(temp.arena, Task, 1);
+                  Task *task = push_array(scratch.arena, Task, 1);
                   task->node = existing_dir_child;
-                  task->path = push_str8f(temp.arena, "%S/%S", t->path, info.name);
+                  task->path = push_str8f(scratch.arena, "%S/%S", t->path, info.name);
                   SLLQueuePush(first_task, last_task, task);
                   task_count += 1;
                 }
@@ -4273,29 +4265,25 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
                       str8_match(str8_skip_last_dot(info.name), debug_info_ext, StringMatchFlag_CaseInsensitive) &&
                       !str8_match(loaded_di_name, info.name, StringMatchFlag_CaseInsensitive))
               {
-                DI_Key key = {push_str8f(temp.arena, "%S/%S", t->path, info.name), info.props.modified};
+                DI_Key key = {push_str8f(scratch.arena, "%S/%S", t->path, info.name), info.props.modified};
                 di_open(&key);
-                di_key_list_push(temp.arena, &preemptively_loaded_keys, &key);
+                di_key_list_push(scratch.arena, &preemptively_loaded_keys, &key);
               }
             }
             os_file_iter_end(it);
-            
-            // rjf: for each pre-emptively loaded key, wait for the initial
-            // load task to be done
-            for(DI_KeyNode *n = preemptively_loaded_keys.first; n != 0; n = n->next)
-            {
-              DI_Scope *di_scope = di_scope_open();
-              RDI_Parsed *rdi = di_rdi_from_key(di_scope, &n->v, max_U64);
-              di_scope_close(di_scope);
-              di_close(&n->v);
-            }
-            
             ProfEnd();
           }
-          
-          temp_end(temp);
-          
         }
+      }
+      
+      //- rjf: for each pre-emptively loaded key, wait for the initial
+      // load task to be done
+      for(DI_KeyNode *n = preemptively_loaded_keys.first; n != 0; n = n->next)
+      {
+        DI_Scope *di_scope = di_scope_open();
+        RDI_Parsed *rdi = di_rdi_from_key(di_scope, &n->v, max_U64);
+        di_scope_close(di_scope);
+        di_close(&n->v);
       }
     }
   }

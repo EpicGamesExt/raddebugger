@@ -52,14 +52,13 @@ mtx_enqueue_op(MTX_MutThread *thread, U128 buffer_key, MTX_Op op)
   {
     U64 unconsumed_size = thread->ring_write_pos - thread->ring_read_pos;
     U64 available_size = thread->ring_size - unconsumed_size;
-    if(available_size >= sizeof(buffer_key) + sizeof(op.range) + sizeof(op.replace.size) + op.replace.size)
+    U64 needed_size = sizeof(buffer_key) + sizeof(op.range) + sizeof(op.replace.size) + op.replace.size;
+    if(available_size >= needed_size)
     {
       thread->ring_write_pos += ring_write_struct(thread->ring_base, thread->ring_size, thread->ring_write_pos, &buffer_key);
       thread->ring_write_pos += ring_write_struct(thread->ring_base, thread->ring_size, thread->ring_write_pos, &op.range);
       thread->ring_write_pos += ring_write_struct(thread->ring_base, thread->ring_size, thread->ring_write_pos, &op.replace.size);
       thread->ring_write_pos += ring_write(thread->ring_base, thread->ring_size, thread->ring_write_pos, op.replace.str, op.replace.size);
-      thread->ring_write_pos += 7;
-      thread->ring_write_pos -= thread->ring_write_pos%8;
       break;
     }
     os_condition_variable_wait(thread->cv, thread->mutex, max_U64);
@@ -80,8 +79,6 @@ mtx_dequeue_op(Arena *arena, MTX_MutThread *thread, U128 *buffer_key_out, MTX_Op
       thread->ring_read_pos += ring_read_struct(thread->ring_base, thread->ring_size, thread->ring_read_pos, &op_out->replace.size);
       op_out->replace.str = push_array_no_zero(arena, U8, op_out->replace.size);
       thread->ring_read_pos += ring_read(thread->ring_base, thread->ring_size, thread->ring_read_pos, op_out->replace.str, op_out->replace.size);
-      thread->ring_read_pos += 7;
-      thread->ring_read_pos -= thread->ring_read_pos%8;
       break;
     }
     os_condition_variable_wait(thread->cv, thread->mutex, max_U64);

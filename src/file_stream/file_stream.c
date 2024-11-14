@@ -248,15 +248,14 @@ fs_u2s_enqueue_req(Rng1U64 range, String8 path, U64 endt_us)
   {
     U64 unconsumed_size = fs_shared->u2s_ring_write_pos - fs_shared->u2s_ring_read_pos;
     U64 available_size = fs_shared->u2s_ring_size - unconsumed_size;
-    if(available_size >= sizeof(U64) + path.size)
+    U64 needed_size = sizeof(range.min) + sizeof(range.max) + sizeof(path.size) + path.size;
+    if(available_size >= needed_size)
     {
       result = 1;
       fs_shared->u2s_ring_write_pos += ring_write_struct(fs_shared->u2s_ring_base, fs_shared->u2s_ring_size, fs_shared->u2s_ring_write_pos, &range.min);
       fs_shared->u2s_ring_write_pos += ring_write_struct(fs_shared->u2s_ring_base, fs_shared->u2s_ring_size, fs_shared->u2s_ring_write_pos, &range.max);
       fs_shared->u2s_ring_write_pos += ring_write_struct(fs_shared->u2s_ring_base, fs_shared->u2s_ring_size, fs_shared->u2s_ring_write_pos, &path.size);
       fs_shared->u2s_ring_write_pos += ring_write(fs_shared->u2s_ring_base, fs_shared->u2s_ring_size, fs_shared->u2s_ring_write_pos, path.str, path.size);
-      fs_shared->u2s_ring_write_pos += 7;
-      fs_shared->u2s_ring_write_pos -= fs_shared->u2s_ring_write_pos%8;
       break;
     }
     os_condition_variable_wait(fs_shared->u2s_ring_cv, fs_shared->u2s_ring_mutex, endt_us);
@@ -281,8 +280,6 @@ fs_u2s_dequeue_req(Arena *arena, Rng1U64 *range_out, String8 *path_out)
       fs_shared->u2s_ring_read_pos += ring_read_struct(fs_shared->u2s_ring_base, fs_shared->u2s_ring_size, fs_shared->u2s_ring_read_pos, &path_out->size);
       path_out->str = push_array(arena, U8, path_out->size);
       fs_shared->u2s_ring_read_pos += ring_read(fs_shared->u2s_ring_base, fs_shared->u2s_ring_size, fs_shared->u2s_ring_read_pos, path_out->str, path_out->size);
-      fs_shared->u2s_ring_read_pos += 7;
-      fs_shared->u2s_ring_read_pos -= fs_shared->u2s_ring_read_pos%8;
       break;
     }
     os_condition_variable_wait(fs_shared->u2s_ring_cv, fs_shared->u2s_ring_mutex, max_U64);
@@ -420,9 +417,9 @@ fs_detector_thread__entry_point(void *p)
                   range_n = range_n->next)
               {
                 if(ins_atomic_u64_eval(&range_n->request_count) == ins_atomic_u64_eval(&range_n->completion_count) &&
-                   async_push_work(fs_stream_work, .endt_us = os_now_microseconds()+100000, .completion_counter = &range_n->completion_count))
+                   fs_u2s_enqueue_req(range_n->range, n->path, os_now_microseconds()+100000))
                 {
-                  fs_u2s_enqueue_req(range_n->range, n->path, max_U64);
+                  async_push_work(fs_stream_work, .completion_counter = &range_n->completion_count);
                   ins_atomic_u64_inc_eval(&range_n->request_count);
                 }
               }

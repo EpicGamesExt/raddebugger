@@ -457,8 +457,6 @@ dasm_u2p_enqueue_req(U128 hash, DASM_Params *params, U64 endt_us)
       dasm_shared->u2p_ring_write_pos += ring_write_struct(dasm_shared->u2p_ring_base, dasm_shared->u2p_ring_size, dasm_shared->u2p_ring_write_pos, &params->dbgi_key.path.size);
       dasm_shared->u2p_ring_write_pos += ring_write(dasm_shared->u2p_ring_base, dasm_shared->u2p_ring_size, dasm_shared->u2p_ring_write_pos, params->dbgi_key.path.str, params->dbgi_key.path.size);
       dasm_shared->u2p_ring_write_pos += ring_write_struct(dasm_shared->u2p_ring_base, dasm_shared->u2p_ring_size, dasm_shared->u2p_ring_write_pos, &params->dbgi_key.min_timestamp);
-      dasm_shared->u2p_ring_write_pos += 7;
-      dasm_shared->u2p_ring_write_pos -= dasm_shared->u2p_ring_write_pos%8;
       break;
     }
     if(os_now_microseconds() >= endt_us)
@@ -492,8 +490,6 @@ dasm_u2p_dequeue_req(Arena *arena, U128 *hash_out, DASM_Params *params_out)
       params_out->dbgi_key.path.str = push_array(arena, U8, params_out->dbgi_key.path.size);
       dasm_shared->u2p_ring_read_pos += ring_read(dasm_shared->u2p_ring_base, dasm_shared->u2p_ring_size, dasm_shared->u2p_ring_read_pos, params_out->dbgi_key.path.str, params_out->dbgi_key.path.size);
       dasm_shared->u2p_ring_read_pos += ring_read_struct(dasm_shared->u2p_ring_base, dasm_shared->u2p_ring_size, dasm_shared->u2p_ring_read_pos, &params_out->dbgi_key.min_timestamp);
-      dasm_shared->u2p_ring_read_pos += 7;
-      dasm_shared->u2p_ring_read_pos -= dasm_shared->u2p_ring_read_pos%8;
       break;
     }
     os_condition_variable_wait(dasm_shared->u2p_ring_cv, dasm_shared->u2p_ring_mutex, max_U64);

@@ -278,10 +278,12 @@ struct DI_MatchNameNode
   U64 first_gen_touched;
   U64 last_gen_touched;
   U64 req_params_hash;
+  U64 req_count;
   String8 name;
   U64 hash;
   
   // rjf: atomically written by match work
+  U64 cmp_count;
   U64 cmp_params_hash;
   RDI_SectionKind section_kind;
   // DI_Match *first_match;

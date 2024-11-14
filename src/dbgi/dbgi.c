@@ -728,13 +728,12 @@ di_u2p_enqueue_key(DI_Key *key, U64 endt_us)
   {
     U64 unconsumed_size = di_shared->u2p_ring_write_pos - di_shared->u2p_ring_read_pos;
     U64 available_size = di_shared->u2p_ring_size - unconsumed_size;
-    if(available_size >= sizeof(key->path.size) + key->path.size + sizeof(key->min_timestamp))
+    U64 needed_size = sizeof(key->min_timestamp) + sizeof(key->path.size) + key->path.size;
+    if(available_size >= needed_size)
     {
+      di_shared->u2p_ring_write_pos += ring_write_struct(di_shared->u2p_ring_base, di_shared->u2p_ring_size, di_shared->u2p_ring_write_pos, &key->min_timestamp);
       di_shared->u2p_ring_write_pos += ring_write_struct(di_shared->u2p_ring_base, di_shared->u2p_ring_size, di_shared->u2p_ring_write_pos, &key->path.size);
       di_shared->u2p_ring_write_pos += ring_write(di_shared->u2p_ring_base, di_shared->u2p_ring_size, di_shared->u2p_ring_write_pos, key->path.str, key->path.size);
-      di_shared->u2p_ring_write_pos += ring_write_struct(di_shared->u2p_ring_base, di_shared->u2p_ring_size, di_shared->u2p_ring_write_pos, &key->min_timestamp);
-      di_shared->u2p_ring_write_pos += 7;
-      di_shared->u2p_ring_write_pos -= di_shared->u2p_ring_write_pos%8;
       sent = 1;
       break;
     }
@@ -759,12 +758,10 @@ di_u2p_dequeue_key(Arena *arena, DI_Key *out_key)
     U64 unconsumed_size = di_shared->u2p_ring_write_pos - di_shared->u2p_ring_read_pos;
     if(unconsumed_size >= sizeof(out_key->path.size) + sizeof(out_key->min_timestamp))
     {
+      di_shared->u2p_ring_read_pos += ring_read_struct(di_shared->u2p_ring_base, di_shared->u2p_ring_size, di_shared->u2p_ring_read_pos, &out_key->min_timestamp);
       di_shared->u2p_ring_read_pos += ring_read_struct(di_shared->u2p_ring_base, di_shared->u2p_ring_size, di_shared->u2p_ring_read_pos, &out_key->path.size);
       out_key->path.str = push_array(arena, U8, out_key->path.size);
       di_shared->u2p_ring_read_pos += ring_read(di_shared->u2p_ring_base, di_shared->u2p_ring_size, di_shared->u2p_ring_read_pos, out_key->path.str, out_key->path.size);
-      di_shared->u2p_ring_read_pos += ring_read_struct(di_shared->u2p_ring_base, di_shared->u2p_ring_size, di_shared->u2p_ring_read_pos, &out_key->min_timestamp);
-      di_shared->u2p_ring_read_pos += 7;
-      di_shared->u2p_ring_read_pos -= di_shared->u2p_ring_read_pos%8;
       break;
     }
     os_condition_variable_wait(di_shared->u2p_ring_cv, di_shared->u2p_ring_mutex, max_U64);
@@ -779,14 +776,12 @@ di_p2u_push_event(DI_Event *event)
   {
     U64 unconsumed_size = (di_shared->p2u_ring_write_pos-di_shared->p2u_ring_read_pos);
     U64 available_size = di_shared->p2u_ring_size-unconsumed_size;
-    U64 needed_size = sizeof(DI_EventKind) + sizeof(U64) + event->string.size;
+    U64 needed_size = sizeof(event->kind) + sizeof(event->string.size) + event->string.size;
     if(available_size >= needed_size)
     {
       di_shared->p2u_ring_write_pos += ring_write_struct(di_shared->p2u_ring_base, di_shared->p2u_ring_size, di_shared->p2u_ring_write_pos, &event->kind);
       di_shared->p2u_ring_write_pos += ring_write_struct(di_shared->p2u_ring_base, di_shared->p2u_ring_size, di_shared->p2u_ring_write_pos, &event->string.size);
       di_shared->p2u_ring_write_pos += ring_write(di_shared->p2u_ring_base, di_shared->p2u_ring_size, di_shared->p2u_ring_write_pos, event->string.str, event->string.size);
-      di_shared->p2u_ring_write_pos += 7;
-      di_shared->p2u_ring_write_pos -= di_shared->p2u_ring_write_pos%8;
       break;
     }
     os_condition_variable_wait(di_shared->p2u_ring_cv, di_shared->p2u_ring_mutex, max_U64);
@@ -810,8 +805,6 @@ di_p2u_pop_events(Arena *arena, U64 endt_us)
       di_shared->p2u_ring_read_pos += ring_read_struct(di_shared->p2u_ring_base, di_shared->p2u_ring_size, di_shared->p2u_ring_read_pos, &n->v.string.size);
       n->v.string.str = push_array_no_zero(arena, U8, n->v.string.size);
       di_shared->p2u_ring_read_pos += ring_read(di_shared->p2u_ring_base, di_shared->p2u_ring_size, di_shared->p2u_ring_read_pos, n->v.string.str, n->v.string.size);
-      di_shared->p2u_ring_read_pos += 7;
-      di_shared->p2u_ring_read_pos -= di_shared->p2u_ring_read_pos%8;
     }
     else if(os_now_microseconds() >= endt_us)
     {
@@ -1618,24 +1611,21 @@ di_match_store_section_kind_from_name(DI_MatchStore *store, String8 name, U64 en
     DLLInsert_NP(store->first_lru_match_name, store->last_lru_match_name, (DI_MatchNameNode *)0, node, lru_next, lru_prev);
     
     // rjf: if this node is new w.r.t. the store's current parameters, request it
-    if(node->req_params_hash != store->params_hash)
+    U64 completed_params_hash = ins_atomic_u64_eval(&node->cmp_params_hash);
+    if(completed_params_hash != store->params_hash && node->req_count == ins_atomic_u64_eval(&node->cmp_count))
     {
       B32 sent = 0;
       OS_MutexScope(store->u2m_ring_mutex) for(;;)
       {
         U64 unconsumed_size = store->u2m_ring_write_pos - store->u2m_ring_read_pos;
         U64 available_size = store->u2m_ring_size - unconsumed_size;
-        U64 needed_size = sizeof(&node) + sizeof(U64) + sizeof(U64) + name.size;
-        needed_size += 7;
-        needed_size -= needed_size%8;
+        U64 needed_size = sizeof(&node) + sizeof(node->alloc_gen) + sizeof(name.size) + name.size;
         if(available_size >= needed_size)
         {
           store->u2m_ring_write_pos += ring_write_struct(store->u2m_ring_base, store->u2m_ring_size, store->u2m_ring_write_pos, &node);
           store->u2m_ring_write_pos += ring_write_struct(store->u2m_ring_base, store->u2m_ring_size, store->u2m_ring_write_pos, &node->alloc_gen);
           store->u2m_ring_write_pos += ring_write_struct(store->u2m_ring_base, store->u2m_ring_size, store->u2m_ring_write_pos, &name.size);
           store->u2m_ring_write_pos +=        ring_write(store->u2m_ring_base, store->u2m_ring_size, store->u2m_ring_write_pos, name.str, name.size);
-          store->u2m_ring_write_pos += 7;
-          store->u2m_ring_write_pos -= store->u2m_ring_write_pos%8;
           sent = 1;
           break;
         }
@@ -1648,13 +1638,14 @@ di_match_store_section_kind_from_name(DI_MatchStore *store, String8 name, U64 en
       if(sent)
       {
         os_condition_variable_broadcast(store->u2m_ring_cv);
-        async_push_work(di_match_work, .input = store);
+        async_push_work(di_match_work, .input = store, .priority = ASYNC_Priority_Low, .completion_counter = &node->cmp_count);
         node->req_params_hash = store->params_hash;
+        node->req_count += 1;
       }
     }
     
     // rjf: if this node's state is stale, wait for it if we need to
-    if(os_now_microseconds() < endt_us && node->req_params_hash != ins_atomic_u64_eval(&node->cmp_params_hash))
+    if(os_now_microseconds() < endt_us && node->req_params_hash != completed_params_hash)
     {
       OS_MutexScopeR(store->match_rw_mutex) for(;;)
       {
@@ -1696,8 +1687,6 @@ ASYNC_WORK_DEF(di_match_work)
         store->u2m_ring_read_pos += ring_read_struct(store->u2m_ring_base, store->u2m_ring_size, store->u2m_ring_read_pos, &name.size);
         name.str = push_array(scratch.arena, U8, name.size);
         store->u2m_ring_read_pos += ring_read(store->u2m_ring_base, store->u2m_ring_size, store->u2m_ring_read_pos, name.str, name.size);
-        store->u2m_ring_read_pos += 7;
-        store->u2m_ring_read_pos -= store->u2m_ring_read_pos%8;
         break;
       }
       os_condition_variable_wait(store->u2m_ring_cv, store->u2m_ring_mutex, max_U64);

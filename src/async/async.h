@@ -14,6 +14,14 @@ typedef ASYNC_WORK_SIG(ASYNC_WorkFunctionType);
 ////////////////////////////////
 //~ rjf: Work Types
 
+typedef enum ASYNC_Priority
+{
+  ASYNC_Priority_Low,
+  ASYNC_Priority_High,
+  ASYNC_Priority_COUNT
+}
+ASYNC_Priority;
+
 typedef struct ASYNC_WorkParams ASYNC_WorkParams;
 struct ASYNC_WorkParams
 {
@@ -22,6 +30,7 @@ struct ASYNC_WorkParams
   OS_Handle semaphore;
   U64 *completion_counter;
   U64 endt_us;
+  ASYNC_Priority priority;
 };
 
 typedef struct ASYNC_Work ASYNC_Work;
@@ -62,18 +71,26 @@ struct ASYNC_TaskList
 ////////////////////////////////
 //~ rjf: Shared State Bundle
 
+typedef struct ASYNC_Ring ASYNC_Ring;
+struct ASYNC_Ring
+{
+  U64 ring_size;
+  U8 *ring_base;
+  U64 ring_write_pos;
+  U64 ring_read_pos;
+  OS_Handle ring_mutex;
+  OS_Handle ring_cv;
+};
+
 typedef struct ASYNC_Shared ASYNC_Shared;
 struct ASYNC_Shared
 {
   Arena *arena;
   
-  // rjf: user -> work thread ring buffer
-  U64 u2w_ring_size;
-  U8 *u2w_ring_base;
-  U64 u2w_ring_write_pos;
-  U64 u2w_ring_read_pos;
-  OS_Handle u2w_ring_mutex;
-  OS_Handle u2w_ring_cv;
+  // rjf: user -> work thread ring buffers
+  ASYNC_Ring rings[ASYNC_Priority_COUNT];
+  OS_Handle ring_mutex;
+  OS_Handle ring_cv;
   
   // rjf: work threads
   OS_Handle *work_threads;
@@ -102,7 +119,7 @@ internal U64 async_thread_count(void);
 //~ rjf: Work Kickoffs
 
 internal B32 async_push_work_(ASYNC_WorkFunctionType *work_function, ASYNC_WorkParams *params);
-#define async_push_work(function, ...) async_push_work_((function), &(ASYNC_WorkParams){.endt_us = max_U64, __VA_ARGS__})
+#define async_push_work(function, ...) async_push_work_((function), &(ASYNC_WorkParams){.endt_us = max_U64, .priority = ASYNC_Priority_High, __VA_ARGS__})
 
 ////////////////////////////////
 //~ rjf: Task-Based Work Helper
