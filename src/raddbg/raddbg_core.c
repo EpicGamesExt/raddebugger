@@ -3428,6 +3428,10 @@ rd_window_open(Vec2F32 size, OS_Handle preferred_monitor, RD_CfgSrc cfg_src)
       window->setting_vals[code] = rd_setting_code_default_val_table[code];
     }
   }
+  window->setting_vals[RD_SettingCode_MainFontSize].s32 = window->setting_vals[RD_SettingCode_MainFontSize].s32 * (window->last_dpi / 96.f);
+  window->setting_vals[RD_SettingCode_CodeFontSize].s32 = window->setting_vals[RD_SettingCode_CodeFontSize].s32 * (window->last_dpi / 96.f);
+  window->setting_vals[RD_SettingCode_MainFontSize].s32 = ClampBot(window->setting_vals[RD_SettingCode_MainFontSize].s32, rd_setting_code_default_val_table[RD_SettingCode_MainFontSize].s32);
+  window->setting_vals[RD_SettingCode_CodeFontSize].s32 = ClampBot(window->setting_vals[RD_SettingCode_CodeFontSize].s32, rd_setting_code_default_val_table[RD_SettingCode_CodeFontSize].s32);
   OS_Handle zero_monitor = {0};
   if(!os_handle_match(zero_monitor, preferred_monitor))
   {
