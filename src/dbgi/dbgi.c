@@ -826,6 +826,7 @@ ASYNC_WORK_DEF(di_parse_work)
   //
   DI_Key key = {0};
   di_u2p_dequeue_key(scratch.arena, &key);
+  ProfBegin("di_parse_work: %.*s", str8_varg(key.path));
   String8 og_path = key.path;
   U64 min_timestamp = key.min_timestamp;
   
@@ -1116,6 +1117,7 @@ ASYNC_WORK_DEF(di_parse_work)
   os_condition_variable_broadcast(stripe->cv);
   
   scratch_end(scratch);
+  ProfEnd();
   ProfEnd();
   return 0;
 }
@@ -1723,7 +1725,7 @@ ASYNC_WORK_DEF(di_match_work)
       {
         DI_Scope *di_scope = di_scope_open();
         DI_Key key = params_keys.v[dbgi_idx];
-        RDI_Parsed *rdi = di_rdi_from_key(di_scope, &key, max_U64);
+        RDI_Parsed *rdi = di_rdi_from_key(di_scope, &key, os_now_microseconds()+1000);
         for EachElement(name_map_kind_idx, name_map_kinds)
         {
           RDI_NameMap *name_map = rdi_element_from_name_idx(rdi, NameMaps, name_map_kinds[name_map_kind_idx]);

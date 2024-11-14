@@ -4136,7 +4136,7 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
     //- rjf: for each module, use its full path as the start to a new limited recursive
     // directory search. cache each directory once traversed in the dbg_dir tree. if any
     // node is not cached, then scan it & pre-emptively convert debug info.
-    ProfScope("pre-emptively load adjacent debug info")
+    ProfScope("pre-emptively load adjacent debug info for %.*s", str8_varg(loaded_module->string))
     {
       //- rjf: calculate seed path
       DI_Key loaded_di_key = ctrl_dbgi_key_from_module(loaded_module);
@@ -4177,18 +4177,15 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
         parent_dir_node = next_child;
       }
       
-      //- rjf: iterate from dir node up its ancestor chain - do recursive searches if:
-      //
-      // (a) this is the direct ancestor of a loaded module, and it has not
-      //     been searched yet (search_count == 0)
-      // (b) this is an indirect ancestor of loaded modules, it has not been
-      //     searched yet, but it has >4 child branches, meaning it looks like
-      //     a project directory
+      //- rjf: iterate from dir node up its ancestor chain - do recursive
+      // searches if this is an ancestor of loaded modules, it has not been
+      // searched yet, but it has >4 child branches, meaning it looks like
+      // project directory
       //
       DI_KeyList preemptively_loaded_keys = {0};
       for(CTRL_DbgDirNode *dir_node = parent_dir_node; dir_node != 0; dir_node = dir_node->parent)
       {
-        if(dir_node->search_count == 0 && (dir_node == parent_dir_node || dir_node->child_count >= 4))
+        if(dir_node->search_count == 0 && dir_node->child_count >= 4)
         {
           //- rjf: form full path of this directory node
           String8List dir_node_path_parts = {0};
