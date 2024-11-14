@@ -195,6 +195,30 @@ read_only global Type B32__type  = {TypeKind_B32,  0, sizeof(B32), &type_nil, st
 read_only global Type B64__type  = {TypeKind_B64,  0, sizeof(B64), &type_nil, str8_lit_comp("B64")};
 read_only global Type F32__type  = {TypeKind_F32,  0, sizeof(F32), &type_nil, str8_lit_comp("F32")};
 read_only global Type F64__type  = {TypeKind_F64,  0, sizeof(F64), &type_nil, str8_lit_comp("F64")};
+read_only global Type *type_kind_type_table[] =
+{
+  &type_nil,
+  type(void),
+  type(U8),
+  type(U16),
+  type(U32),
+  type(U64),
+  type(S8),
+  type(S16),
+  type(S32),
+  type(S64),
+  type(B8),
+  type(B16),
+  type(B32),
+  type(B64),
+  type(F32),
+  type(F64),
+  &type_nil,
+  &type_nil,
+  &type_nil,
+  &type_nil,
+  &type_nil,
+};
 
 //- rjf: Rng1U64
 struct_members(Rng1U64)

@@ -415,6 +415,7 @@ struct RD_Entity
   TxtPt text_point;
   RD_Handle entity_handle;
   B32 disabled;
+  B32 debug_subprocesses;
   U64 u64;
   Vec4F32 color_hsva;
   RD_CfgSrc cfg_src;

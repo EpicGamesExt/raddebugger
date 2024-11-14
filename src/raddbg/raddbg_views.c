@@ -2961,6 +2961,16 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                         cell_ui_hook = ui_view_rule_info->ui;
                         cell_ui_params = ui_view_rule_params_root;
                       }
+                      for(EV_ViewRuleNode *n = row->view_rules->first; n != 0; n = n->next)
+                      {
+                        EV_ViewRule *vr = &n->v;
+                        RD_ViewRuleInfo *info = rd_view_rule_info_from_string(vr->root->string);
+                        if(info->flags & RD_ViewRuleInfoFlag_CanFillValueCell && info->ui != 0)
+                        {
+                          cell_ui_hook = info->ui;
+                          cell_ui_params = vr->root;
+                        }
+                      }
                       cell_can_edit = ev_type_key_is_editable(cell_eval.type_key);
                     }break;
                     case RD_WatchViewColumnKind_Type:
@@ -5382,7 +5392,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(targets)
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,      0.75f, .dequote_string = 1, .is_non_code = 0);
   }
   rd_watch_view_build(wv, RD_WatchViewFlag_NoHeader|RD_WatchViewFlag_PrettyNameMembers|RD_WatchViewFlag_PrettyEntityRows|RD_WatchViewFlag_DisableCacheLines,
-                      str8_lit("collection:targets"), str8_lit("only: label exe args working_directory entry_point stdout_path stderr_path stdin_path str"), 1, 10, rect);
+                      str8_lit("collection:targets"), str8_lit("only: label exe args working_directory entry_point stdout_path stderr_path stdin_path debug_subprocesses b32 str"), 1, 10, rect);
   ProfEnd();
 }
 

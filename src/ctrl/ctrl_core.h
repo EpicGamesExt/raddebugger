@@ -15,6 +15,20 @@ typedef U64 CTRL_MachineID;
 ////////////////////////////////
 //~ rjf: Meta Evaluation Types
 
+//- rjf: auto-checkbox b32s
+
+typedef struct CTRL_CheckB32 CTRL_CheckB32;
+struct CTRL_CheckB32
+{
+  B32 b32;
+};
+
+struct_members(CTRL_CheckB32)
+{
+  member_lit_comp(CTRL_CheckB32, type(B32), b32),
+};
+struct_type(CTRL_CheckB32);
+
 //- rjf: styled string types
 
 ptr_type(CTRL_PlainString8__str_ptr_type, type(U8), .flags = TypeFlag_IsPlainText,.count_delimiter_name = str8_lit_comp("size"));
@@ -74,12 +88,13 @@ typedef struct CTRL_MetaEval CTRL_MetaEval;
 struct CTRL_MetaEval
 {
 #define CTRL_MetaEval_MemberXList \
-X(B32, enabled,         "Enabled")\
-X(B32, frozen,          "Frozen")\
-X(U64, hit_count,       "Hit Count")\
-X(U64, id,              "ID")\
-X(Rng1U64, vaddr_range, "Address Range")\
-X(U32, color,           "Color")\
+X(B32, enabled,            "Enabled")\
+X(B32, frozen,             "Frozen")\
+X(U64, hit_count,          "Hit Count")\
+X(U64, id,                 "ID")\
+X(Rng1U64, vaddr_range,    "Address Range")\
+X(U32, color,              "Color")\
+X(CTRL_CheckB32, debug_subprocesses,"Debug Subprocesses")\
 Y(String8, type(CTRL_CodeString8),  label,             "Label")\
 Y(String8, type(CTRL_PathString8),  exe,               "Executable Path")\
 Y(String8, type(CTRL_PathString8),  dbg,               "Debug Info Path")\
@@ -138,6 +153,7 @@ struct_members(CTRL_TargetMetaEval)
   member_lit_comp(CTRL_MetaEval, type(CTRL_PathString8), stdout_path,        .pretty_name = str8_lit_comp("Standard Output Path")),
   member_lit_comp(CTRL_MetaEval, type(CTRL_PathString8), stderr_path,        .pretty_name = str8_lit_comp("Standard Error Path")),
   member_lit_comp(CTRL_MetaEval, type(CTRL_PathString8), stdin_path,         .pretty_name = str8_lit_comp("Standard Input Path")),
+  member_lit_comp(CTRL_MetaEval, type(CTRL_CheckB32),    debug_subprocesses, .pretty_name = str8_lit_comp("Debug Subprocesses")),
 };
 
 struct_members(CTRL_PinMetaEval)

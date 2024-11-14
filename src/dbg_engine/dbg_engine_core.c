@@ -2068,6 +2068,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
                 msg->stdout_path = stdout_path;
                 msg->stderr_path = stderr_path;
                 msg->stdin_path  = stdin_path;
+                msg->debug_subprocesses = target->debug_subprocesses;
                 msg->env_inherit = 1;
                 MemoryCopyArray(msg->exception_code_filters, exception_code_filters);
                 MemoryCopyStruct(&msg->meta_evals, meta_evals);

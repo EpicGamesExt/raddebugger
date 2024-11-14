@@ -1911,6 +1911,7 @@ rd_d_target_from_entity(RD_Entity *entity)
   target.stdout_path             = src_target_stdo->string;
   target.stderr_path             = src_target_stde->string;
   target.stdin_path              = src_target_stdi->string;
+  target.debug_subprocesses      = entity->debug_subprocesses;
   return target;
 }
 
@@ -2350,6 +2351,7 @@ rd_ctrl_meta_eval_from_entity(Arena *arena, RD_Entity *entity)
   meval->address_location = vaddr_loc_string;
   meval->function_location = function_loc_string;
   meval->condition = cnd_string;
+  meval->debug_subprocesses.b32 = entity->debug_subprocesses;
   switch(entity->kind)
   {
     default:{}break;
@@ -2611,6 +2613,7 @@ rd_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range)
 #define FlatMemberCase(name) else if(range.min == OffsetOf(CTRL_MetaEval, name) && dim_1u64(range) <= sizeof(meval_read->name))
 #define StringMemberCase(name) else if(range.min == (U64)meval_read->name.str)
       FlatMemberCase(enabled)             {result = 1; rd_entity_equip_disabled(entity, !!((U8 *)in)[0]);}
+      FlatMemberCase(debug_subprocesses)  {result = 1; entity->debug_subprocesses = !!((U8 *)in)[0]; }
       StringMemberCase(label)             {result = 1; rd_entity_equip_name(entity, str8_cstring_capped(in, (U8 *)in + 4096));}
       StringMemberCase(exe)               {result = 1; rd_entity_equip_name(rd_entity_child_from_kind_or_alloc(entity, RD_EntityKind_Executable), str8_cstring_capped(in, (U8 *)in + 4096));}
       StringMemberCase(args)              {result = 1; rd_entity_equip_name(rd_entity_child_from_kind_or_alloc(entity, RD_EntityKind_Arguments), str8_cstring_capped(in, (U8 *)in + 4096));}
@@ -10593,6 +10596,7 @@ rd_cfg_strings_from_gfx(Arena *arena, String8 root_path, RD_CfgSrc source)
             EntityInfoFlag_HasVAddr    = (1<<3),
             EntityInfoFlag_HasColor    = (1<<4),
             EntityInfoFlag_HasChildren = (1<<5),
+            EntityInfoFlag_HasDebugSubprocesses = (1<<6),
           };
           String8 entity_name_escaped = e->string;
           // TODO(rjf): @hack - hardcoding in the "EntityKind_Location" here - this is because
@@ -10617,6 +10621,7 @@ rd_cfg_strings_from_gfx(Arena *arena, String8 root_path, RD_CfgSrc source)
           if(e->flags & RD_EntityFlag_HasVAddr)     { info_flags |= EntityInfoFlag_HasVAddr; }
           if(e->flags & RD_EntityFlag_HasColor)     { info_flags |= EntityInfoFlag_HasColor; }
           if(!rd_entity_is_nil(e->first))           { info_flags |= EntityInfoFlag_HasChildren; }
+          if(e->debug_subprocesses)                 { info_flags |= EntityInfoFlag_HasDebugSubprocesses; }
           
           //- rjf: write entity info
           B32 opened_brace = 0;
@@ -10638,6 +10643,10 @@ rd_cfg_strings_from_gfx(Arena *arena, String8 root_path, RD_CfgSrc source)
               if(e->disabled)
               {
                 str8_list_pushf(arena, &strs, "disabled: 1\n");
+              }
+              if(e->debug_subprocesses)
+              {
+                str8_list_pushf(arena, &strs, "debug_subprocesses: 1\n");
               }
               if(e->flags & RD_EntityFlag_HasColor)
               {
@@ -12258,6 +12267,7 @@ rd_frame(void)
     //
     EV_AutoViewRuleTable *auto_view_rule_table = push_array(scratch.arena, EV_AutoViewRuleTable, 1);
     {
+      // ev_auto_view_rule_table_push_new(scratch.arena, auto_view_rule_table, e_type_key_cons_base(type(CTRL_CheckB32)), str8_lit("checkbox"), 1);
       ev_auto_view_rule_table_push_new(scratch.arena, auto_view_rule_table, e_type_key_cons_base(type(CTRL_MetaEvalFrameArray)), str8_lit("slice"), 1);
       ev_auto_view_rule_table_push_new(scratch.arena, auto_view_rule_table, e_type_key_cons_base(type(CTRL_MachineMetaEval)),    str8_lit("scheduler_machine"), 1);
       ev_auto_view_rule_table_push_new(scratch.arena, auto_view_rule_table, e_type_key_cons_base(type(CTRL_ProcessMetaEval)),    str8_lit("scheduler_process"), 1);
@@ -12837,6 +12847,10 @@ rd_frame(void)
                         if(str8_match(child->string, str8_lit("disabled"), StringMatchFlag_CaseInsensitive) && child->first != &md_nil_node)
                         {
                           rd_entity_equip_disabled(t->entity, str8_match(child->first->string, str8_lit("1"), 0));
+                        }
+                        if(str8_match(child->string, str8_lit("debug_subprocesses"), StringMatchFlag_CaseInsensitive) && child->first != &md_nil_node)
+                        {
+                          t->entity->debug_subprocesses = str8_match(child->first->string, str8_lit("1"), 0);
                         }
                         if(str8_match(child->string, str8_lit("hsva"), StringMatchFlag_CaseInsensitive) && child->first != &md_nil_node)
                         {

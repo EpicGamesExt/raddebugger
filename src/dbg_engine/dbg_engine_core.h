@@ -17,6 +17,7 @@ struct D_Target
   String8 stdout_path;
   String8 stderr_path;
   String8 stdin_path;
+  B32 debug_subprocesses;
   String8List env;
 };
 
