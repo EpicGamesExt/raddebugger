@@ -16,8 +16,9 @@
   </Type>
 
   <Type Name="LNK_SymbolList">
-    <AlternativeType Name="CV_SymbolList"/>
     <AlternativeType Name="LNK_SectionList"/>
+    <AlternativeType Name="LNK_ChunkList"/>
+    <AlternativeType Name="CV_SymbolList"/>
     <DisplayString>{{count={count} first={first} last={last} }}</DisplayString>
     <Expand>
 			<LinkedListItems>

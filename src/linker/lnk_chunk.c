@@ -343,185 +343,170 @@ lnk_chunk_list_get_node_count(LNK_Chunk *chunk)
 }
 
 internal void
-lnk_chunk_op_list_push_node(LNK_ChunkOpList *list, LNK_ChunkOp *op)
+lnk_chunk_align_array_list_push(Arena *arena, Arena *scratch, LNK_ChunkAlignArrayList *list, U64 cap, U64 align_off, U64 align_size)
 {
-  SLLQueuePush(list->first, list->last, op);
+  if (align_size > 0) {
+    if (list->last == 0 || list->last->data.count >= list->last->cap) {
+      LNK_ChunkAlignArrayNode *node = push_array(scratch, LNK_ChunkAlignArrayNode, 1);
+      node->cap                     = cap;
+      node->data.v                  = push_array_no_zero(arena, LNK_ChunkAlign, cap);
+
+      SLLQueuePush(list->first, list->last, node);
+      ++list->count;
+    }
+
+    LNK_ChunkAlignArray *last_array = &list->last->data;
+    LNK_ChunkAlign *align = &last_array->v[last_array->count++];
+    align->off            = align_off;
+    align->size           = align_size;
+  }
 }
 
-internal LNK_ChunkOp *
-lnk_push_chunk_op_begin(Arena *arena, U64 chunk_id)
-{
-  LNK_ChunkOp *begin_op = push_array_no_zero(arena, LNK_ChunkOp, 1);
-  begin_op->next        = 0;
-  begin_op->type        = LNK_ChunkOp_Begin;
-  begin_op->u.chunk_id  = chunk_id;
-  return begin_op;
-}
 
-internal LNK_ChunkOp *
-lnk_push_chunk_op_end_virt(Arena *arena)
+internal LNK_ChunkLayout
+lnk_layout_from_chunk(Arena *arena, LNK_Chunk *root, U64 total_chunk_count)
 {
-  LNK_ChunkOp *end_virt_op = push_array_no_zero(arena, LNK_ChunkOp, 1);
-  end_virt_op->next        = 0;
-  end_virt_op->type        = LNK_ChunkOp_EndVirt;
-  return end_virt_op;
-}
+  ProfBeginV("lnk_layout_from_chunk [total_chunk_count = %llu]", total_chunk_count);
+  Temp scratch = scratch_begin(&arena, 1);
+  
+  LNK_ChunkLayout layout       = {0};
+  layout.total_count           = total_chunk_count;
+  layout.chunk_ptr_array       = push_array_no_zero(arena, LNK_ChunkPtr, total_chunk_count);
+  layout.chunk_off_array       = push_array_no_zero(arena, U64,          total_chunk_count);
+  layout.chunk_file_size_array = push_array_no_zero(arena, U64,          total_chunk_count);
+  layout.chunk_virt_size_array = push_array_no_zero(arena, U64,          total_chunk_count);
 
-internal LNK_ChunkOp *
-lnk_push_chunk_op_end_file(Arena *arena)
-{
-  LNK_ChunkOp *end_op = push_array_no_zero(arena, LNK_ChunkOp, 1);
-  end_op->next        = 0;
-  end_op->type        = LNK_ChunkOp_End;
-  return end_op;
-}
+  ProfBegin("Init Arrays");
+  for (U64 i = 0; i < total_chunk_count; ++i) {
+    layout.chunk_ptr_array[i] = &g_null_chunk;
+  }
+#if BUILD_DEBUG
+  MemorySet(layout.chunk_off_array,       0xff, total_chunk_count * sizeof(layout.chunk_off_array));
+  MemorySet(layout.chunk_file_size_array, 0xff, total_chunk_count * sizeof(layout.chunk_file_size_array));
+  MemorySet(layout.chunk_virt_size_array, 0xff, total_chunk_count * sizeof(layout.chunk_virt_size_array));
+#endif
+  ProfEnd();
 
-internal LNK_ChunkOp *
-lnk_push_chunk_op_align(Arena *arena, U64 align, U64 val)
-{
-  LNK_ChunkOp *align_op = push_array_no_zero(arena, LNK_ChunkOp, 1);
-  align_op->next        = 0;
-  align_op->type        = LNK_ChunkOp_Align;
-  align_op->u.align.x   = align;
-  align_op->u.align.val = val;
-  return align_op;
-}
+  // handle null chunk
+  layout.chunk_off_array[0]       = 0;
+  layout.chunk_file_size_array[0] = 0;
+  layout.chunk_virt_size_array[0] = 0;
 
-internal LNK_ChunkOp *
-lnk_push_chunk_op_write(Arena *arena, String8 string)
-{
-  LNK_ChunkOp *write_op = push_array_no_zero(arena, LNK_ChunkOp, 1);
-  write_op->next        = 0;
-  write_op->type        = LNK_ChunkOp_WriteString;
-  write_op->u.string    = string;
-  return write_op;
-}
-
-internal LNK_ChunkOpList
-lnk_op_list_from_chunk(Arena *arena, LNK_Chunk *root, U64 total_chunk_count, U8 align_byte)
-{
+  // setup stack
   struct Stack {
     struct Stack  *next;
     LNK_ChunkArray chunk_array;
     U64            ichunk;
+    U64            cursor;
   };
-
-  ProfBeginFunction();
-  Temp scratch = scratch_begin(&arena, 1);
-  
-  // setup stack
   struct Stack *stack      = push_array(scratch.arena, struct Stack, 1);
   stack->chunk_array.count = 1;
   stack->chunk_array.v     = &root;
-  
-  // setup output list
-  LNK_ChunkOpList list   = {0};
-  list.total_chunk_count = total_chunk_count;
-  list.first             = list.last = 0;
-  
-  // write null
-  LNK_ChunkOp *null_begin_op    = lnk_push_chunk_op_begin(arena, 0);
-  LNK_ChunkOp *null_end_virt_op = lnk_push_chunk_op_end_virt(arena);
-  LNK_ChunkOp *null_end_file_op = lnk_push_chunk_op_end_file(arena);;
-  lnk_chunk_op_list_push_node(&list, null_begin_op);
-  lnk_chunk_op_list_push_node(&list, null_end_virt_op);
-  lnk_chunk_op_list_push_node(&list, null_end_file_op);
-  
-  // traverse chunks from root
+
+  U64                     align_cap  = 4096;
+  LNK_ChunkAlignArrayList align_list = {0};
+
+  U64 cursor = 0;
+
+  ProfBegin("Traverse chunks from root");
   while (stack) {
     while (stack->ichunk < stack->chunk_array.count) {
       LNK_Chunk *chunk = stack->chunk_array.v[stack->ichunk++];
       
-      // skip unused chunks
+      // skip discarded chunk
       if (lnk_chunk_is_discarded(chunk)) {
         continue;
       }
+
+      // push align
+      U64 align_size = AlignPadPow2(cursor, chunk->align);
+      lnk_chunk_align_array_list_push(arena, scratch.arena, &align_list, align_cap, cursor, align_size);
+      cursor += align_size;
+
+      // store id -> chunk
+      Assert(chunk->ref.chunk_id < total_chunk_count);
+      Assert(layout.chunk_ptr_array[chunk->ref.chunk_id] == &g_null_chunk);
+      layout.chunk_ptr_array[chunk->ref.chunk_id] = chunk;
+
+      // store id -> offset
+      Assert(layout.chunk_off_array[chunk->ref.chunk_id] == max_U64);
+      layout.chunk_off_array[chunk->ref.chunk_id] = cursor;
       
       switch (chunk->type) {
       case LNK_Chunk_Leaf: {
-        // align start in its own begin/end block so align bytes don't contribute to chunk size
-        LNK_ChunkOp *pad_begin_op    = lnk_push_chunk_op_begin(arena, list.total_chunk_count++);
-        LNK_ChunkOp *pad_align_op    = lnk_push_chunk_op_align(arena, chunk->align, align_byte);
-        LNK_ChunkOp *pad_end_file_op = lnk_push_chunk_op_end_file(arena);
-        lnk_chunk_op_list_push_node(&list, pad_begin_op);
-        lnk_chunk_op_list_push_node(&list, pad_align_op);
-        lnk_chunk_op_list_push_node(&list, pad_end_file_op);
-        
-        // write leaf
-        LNK_ChunkOp *leaf_begin_op    = lnk_push_chunk_op_begin(arena, chunk->ref.chunk_id);
-        LNK_ChunkOp *leaf_write_op    = lnk_push_chunk_op_write(arena, chunk->u.leaf);
-        LNK_ChunkOp *leaf_align_op    = lnk_push_chunk_op_align(arena, chunk->align, align_byte);
-        LNK_ChunkOp *leaf_end_virt_op = lnk_push_chunk_op_end_virt(arena);
-        LNK_ChunkOp *leaf_end_file_op = lnk_push_chunk_op_end_file(arena);
-        #if LNK_DUMP_CHUNK_LAYOUT
-        leaf_write_op->chunk = chunk;
-        #endif
-        lnk_chunk_op_list_push_node(&list, leaf_begin_op);
-        lnk_chunk_op_list_push_node(&list, leaf_write_op);
-        lnk_chunk_op_list_push_node(&list, leaf_align_op);
-        lnk_chunk_op_list_push_node(&list, leaf_end_virt_op);
-        lnk_chunk_op_list_push_node(&list, leaf_end_file_op);
+		// store id -> file size
+        Assert(layout.chunk_file_size_array[chunk->ref.chunk_id] == max_U64);
+        layout.chunk_file_size_array[chunk->ref.chunk_id] = chunk->u.leaf.size;
+		
+		// store id -> virt size
+		Assert(layout.chunk_virt_size_array[chunk->ref.chunk_id] == max_U64);
+        layout.chunk_virt_size_array[chunk->ref.chunk_id] = chunk->u.leaf.size;
+		
+		// advance
+        cursor += chunk->u.leaf.size;
       } break;
 
       case LNK_Chunk_LeafArray: {
-        LNK_ChunkOp *begin_op = lnk_push_chunk_op_begin(arena, chunk->ref.chunk_id);
-        LNK_ChunkOp *align_op = lnk_push_chunk_op_align(arena, chunk->align, align_byte);
-        lnk_chunk_op_list_push_node(&list, begin_op);
-        lnk_chunk_op_list_push_node(&list, align_op);
-
+		// apply sort
         if (chunk->sort_chunk) {
           lnk_chunk_array_sort(*chunk->u.arr);
         }
 
-        struct Stack *frame = push_array_no_zero(scratch.arena, struct Stack, 1);
-        frame->next         = 0;
+		// recurse into sub chunks
+        struct Stack *frame = push_array(scratch.arena, struct Stack, 1);
         frame->chunk_array  = *chunk->u.arr;
-        frame->ichunk       = 0;
+        frame->cursor       = cursor;
         SLLStackPush(stack, frame);
       } goto _continue;
       
-      case LNK_Chunk_List: { 
-        // balance ops at :end_chunk_series
-        LNK_ChunkOp *begin_op = lnk_push_chunk_op_begin(arena, chunk->ref.chunk_id);
-        LNK_ChunkOp *align_op = lnk_push_chunk_op_align(arena, chunk->align, align_byte);
-        lnk_chunk_op_list_push_node(&list, begin_op);
-        lnk_chunk_op_list_push_node(&list, align_op);
-
-        // chunk list -> chunk array
+      case LNK_Chunk_List: {
+        // list -> array
         LNK_ChunkArray chunk_array = {0};
         chunk_array.v              = push_array_no_zero(scratch.arena, LNK_ChunkPtr, chunk->u.list->count);
         for (LNK_ChunkNode *cptr = chunk->u.list->first; cptr != 0; cptr = cptr->next) {
           chunk_array.v[chunk_array.count++] = cptr->data;
         }
         
+		// apply sort
         if (chunk->sort_chunk) {
           lnk_chunk_array_sort(chunk_array);
         }
         
-        // recurse into list chunk
-        struct Stack *frame = push_array_no_zero(scratch.arena, struct Stack, 1);
-        frame->next         = 0;
+        // recurse into sub chunks
+        struct Stack *frame = push_array(scratch.arena, struct Stack, 1);
         frame->chunk_array  = chunk_array;
-        frame->ichunk       = 0;
+        frame->cursor       = cursor;
         SLLStackPush(stack, frame);
       } goto _continue;
       
-      case LNK_Chunk_Null: { /* ignore */ } break;
+      case LNK_Chunk_Null: break;
       }
     }
     
     // terminate series
     if (stack->next) {
+	  // pop node chunk from stack
       struct Stack *prev = stack->next;
       Assert(prev->ichunk > 0);
 
-      // :end_chunk_series
-      LNK_ChunkOp *end_virt_op = lnk_push_chunk_op_end_virt(arena);
-      LNK_ChunkOp *align_op    = lnk_push_chunk_op_align(arena, prev->chunk_array.v[prev->ichunk - 1]->align, align_byte);
-      LNK_ChunkOp *end_op      = lnk_push_chunk_op_end_file(arena);
-      lnk_chunk_op_list_push_node(&list, end_virt_op);
-      lnk_chunk_op_list_push_node(&list, align_op);
-      lnk_chunk_op_list_push_node(&list, end_op);
+      // align chunk end
+      LNK_Chunk *chunk      = prev->chunk_array.v[prev->ichunk-1];
+      U64        align_size = AlignPadPow2(cursor, chunk->align);
+      lnk_chunk_align_array_list_push(arena, scratch.arena, &align_list, align_cap, cursor, align_size);
+
+	  // check stack cursor for correctness
+      Assert(cursor >= prev->cursor);
+      
+	  // store id -> virt size
+	  U64 virt_chunk_size = cursor - prev->cursor;
+      layout.chunk_virt_size_array[chunk->ref.chunk_id] = virt_chunk_size;
+      
+	  // store id -> file size
+	  U64 file_chunk_size = (cursor + align_size) - prev->cursor;
+      layout.chunk_file_size_array[chunk->ref.chunk_id] = file_chunk_size;
+
+      // advance cursor
+      cursor += align_size;
     }
     
     // move to next frame
@@ -529,121 +514,111 @@ lnk_op_list_from_chunk(Arena *arena, LNK_Chunk *root, U64 total_chunk_count, U8 
     
     _continue:;
   }
-  
+  ProfEnd();
+
+  ProfBegin("Build Aligns Array");
+  layout.align_array_count = 0;
+  layout.align_array       = push_array(arena, LNK_ChunkAlignArray, align_list.count);
+  for (LNK_ChunkAlignArrayNode *node = align_list.first; node != 0; node = node->next) {
+    layout.align_array[layout.align_array_count++] = node->data;
+  }
+  ProfEnd();
+
   scratch_end(scratch);
   ProfEnd();
-  return list;
+  return layout;
 }
 
 internal LNK_ChunkLayout
-lnk_chunk_layout_from_op_list(Arena *arena, LNK_ChunkOpList op_list, B32 is_data_inited)
+lnk_build_chunk_layout(Arena *arena, LNK_ChunkManager *cman)
 {
   ProfBeginFunction();
-  Temp scratch = scratch_begin(&arena, 1);
-  
-  // setup stack
-  struct Stack {
-    struct Stack *next;
-    U64           chunk_id;
-    U64           cursor;
-  } *stack = 0;
-  
-  // setup state
-  U64 cursor = 0;
-  String8List data_list = {0};
-  
-  // setup output
-  U64 *chunk_off_array       = push_array_no_zero(arena, U64, op_list.total_chunk_count);
-  U64 *chunk_file_size_array = push_array_no_zero(arena, U64, op_list.total_chunk_count);
-  U64 *chunk_virt_size_array = push_array_no_zero(arena, U64, op_list.total_chunk_count);
-  
-  // debug stomp so discarded chunks map to invalid offset
-#if LNK_PARANOID
-  MemorySet(chunk_off_array, 0xFF, sizeof(*chunk_off_array) * op_list.total_chunk_count);
-  MemorySet(chunk_file_size_array, 0xFF, sizeof(*chunk_file_size_array) * op_list.total_chunk_count);
-  MemorySet(chunk_virt_size_array, 0xFF, sizeof(*chunk_virt_size_array) * op_list.total_chunk_count);
-#endif
-  
-  // execute opcodes
-  for (LNK_ChunkOp *op = op_list.first; op != NULL; op = op->next) {
-    switch (op->type) {
-    case LNK_ChunkOp_Null: break;
-    case LNK_ChunkOp_Begin: {
-      struct Stack *frame = push_array(scratch.arena, struct Stack, 1);
-      frame->chunk_id     = op->u.chunk_id;
-      frame->cursor       = cursor;
-      SLLStackPush(stack, frame);
-      chunk_off_array[stack->chunk_id] = stack->cursor;
-    } break;
-    case LNK_ChunkOp_End: {
-      chunk_file_size_array[stack->chunk_id] = cursor - stack->cursor;
-      SLLStackPop(stack);
-    } break;
-    case LNK_ChunkOp_EndVirt: {
-      chunk_virt_size_array[stack->chunk_id] = cursor - stack->cursor;
-    } break;
-    case LNK_ChunkOp_Align: {
-      Assert(IsPow2(op->u.align.x));
-      U64 size = AlignPow2(cursor, op->u.align.x) - cursor;
-      
-      String8 string;
-      string.size = size;
-      string.str  = push_array_no_zero(arena, U8, string.size);
-      MemorySet(string.str, op->u.align.val, string.size);
-      
-      op->type     = LNK_ChunkOp_WriteString;
-      op->u.string = string;
-    } // fall-through
-    case LNK_ChunkOp_WriteString: {
-      if (is_data_inited) {
-        // we allow chunks to have null for str for regions in the image that are zeroed out.
-        if (op->u.string.str == 0) {
-          op->u.string.str = push_array(arena, U8, op->u.string.size);
-        }
-        str8_list_push(scratch.arena, &data_list, op->u.string);
+  LNK_ChunkLayout layout = lnk_layout_from_chunk(arena, cman->root, cman->total_chunk_count);
+  ProfEnd();
+  return layout;
+}
+
+internal
+THREAD_POOL_TASK_FUNC(lnk_fill_chunks_task)
+{
+  ProfBeginFunction();
+
+  LNK_ChunkLayoutSerializer *task   = raw_task;
+  Rng1U64                    range  = task->ranges[task_id];
+  LNK_ChunkLayout            layout = task->layout;
+  String8                    buffer = task->buffer;
+
+  for (U64 chunk_idx = range.min; chunk_idx < range.max; ++chunk_idx) {
+    LNK_Chunk *chunk = layout.chunk_ptr_array[chunk_idx];
+
+    if (lnk_chunk_is_discarded(chunk)) {
+      continue;
+    }
+
+    if (chunk->type == LNK_Chunk_Leaf) {
+      U64 off = layout.chunk_off_array[chunk->ref.chunk_id];
+      Assert(off + chunk->u.leaf.size <= buffer.size);
+      U8 *buffer_ptr = buffer.str + off;
+
+      if (chunk->u.leaf.str == 0) {
+        // zero out chunk bytes
+        MemorySet(buffer_ptr, 0, chunk->u.leaf.size);
+      } else {
+        // copy chunk bytes
+        MemoryCopy(buffer_ptr, chunk->u.leaf.str, chunk->u.leaf.size);
       }
-#if LNK_DUMP_CHUNK_LAYOUT
-      if (op->chunk) {
-        fprintf(g_layout_file, "[%.*s] %llX %.*s\n", str8_varg(op->chunk->sort_idx), op->chunk->input_idx, str8_varg(op->chunk->debug));
-      }
-#endif
-      // advance
-      cursor += op->u.string.size;
-    } break;
     }
   }
   
-  // are begin/end series opcodes balanced?
-  Assert(stack == 0);
-  
-  // fill out result
-  LNK_ChunkLayout layout       = {0};
-  layout.data                  = str8_list_join(arena, &data_list, 0);
-  layout.chunk_off_array       = chunk_off_array;
-  layout.chunk_file_size_array = chunk_file_size_array;
-  layout.chunk_virt_size_array = chunk_virt_size_array;
-
-  scratch_end(scratch);
   ProfEnd();
-  return layout;
 }
 
-internal LNK_ChunkLayout
-lnk_build_chunk_layout(Arena *arena, LNK_ChunkManager *cman, COFF_SectionFlags flags, U8 align_byte)
+internal
+THREAD_POOL_TASK_FUNC(lnk_fill_aligns_task)
 {
   ProfBeginFunction();
-  Temp scratch = scratch_begin(&arena, 1);
-  
-  // should we write data for chunks?
-  B32 is_data_inited = !!(~flags & COFF_SectionFlag_CNT_UNINITIALIZED_DATA);
-  
-  // build layout
-  LNK_ChunkOpList op_list = lnk_op_list_from_chunk(scratch.arena, cman->root, cman->total_chunk_count, align_byte);
-  LNK_ChunkLayout layout = lnk_chunk_layout_from_op_list(arena, op_list, is_data_inited);
+
+  LNK_ChunkLayoutSerializer *task      = raw_task;
+  Rng1U64                    range     = task->ranges[task_id];
+  LNK_ChunkLayout            layout    = task->layout;
+  String8                    buffer    = task->buffer;
+  U8                         fill_byte = task->fill_byte;
+
+  for (U64 align_array_idx = range.min; align_array_idx < range.max; ++align_array_idx) {
+    LNK_ChunkAlignArray align_array = layout.align_array[align_array_idx];
+    for (U64 align_idx = 0; align_idx < align_array.count; ++align_idx) {
+      LNK_ChunkAlign align = align_array.v[align_idx];
+      Assert(align.off + align.size <= buffer.size);
+      MemorySet(buffer.str + align.off, fill_byte, align.size);
+    }
+  }
+
+  ProfEnd();
+}
+
+internal void
+lnk_serialize_chunk_layout(TP_Context *tp, LNK_ChunkLayout layout, String8 buffer, U8 fill_byte)
+{
+  ProfBeginFunction();
+  Temp scratch = scratch_begin(0,0);
+
+  LNK_ChunkLayoutSerializer task;
+  task.layout    = layout;
+  task.buffer    = buffer;
+  task.fill_byte = fill_byte;
+
+  ProfBeginV("Fill Chunks [Chunk Count %llu]", layout.total_count);
+  task.ranges = tp_divide_work(scratch.arena, layout.total_count, tp->worker_count);
+  tp_for_parallel(tp, 0, tp->worker_count, lnk_fill_chunks_task, &task);
+  ProfEnd();
+
+  ProfBeginV("Fill Aligns [Array Count %llu]", layout.align_array_count);
+  task.ranges = tp_divide_work(scratch.arena, layout.align_array_count, tp->worker_count);
+  tp_for_parallel(tp, 0, tp->worker_count, lnk_fill_aligns_task, &task);
+  ProfEnd();
 
   scratch_end(scratch);
   ProfEnd();
-  return layout;
 }
 
 internal B32
@@ -699,15 +674,10 @@ LNK_CHUNK_VISITOR_SIG(lnk_save_chunk_ptr)
 internal LNK_ChunkPtr *
 lnk_make_chunk_id_map(Arena *arena, LNK_ChunkManager *cman)
 {
-  LNK_ChunkPtr *chunk_id_map = push_array_no_zero(arena, LNK_ChunkPtr, cman->total_chunk_count + 1);
-  lnk_visit_chunks(0, cman->root, lnk_save_chunk_ptr, chunk_id_map);
-
-  LNK_Chunk *null_chunk    = push_array(arena, LNK_Chunk, 1);
-  null_chunk->is_discarded = 1;
-
-  chunk_id_map[0] = null_chunk;
-
-  return chunk_id_map;
+  LNK_ChunkPtr *map = push_array_no_zero(arena, LNK_ChunkPtr, cman->total_chunk_count);
+  lnk_visit_chunks(0, cman->root, lnk_save_chunk_ptr, map);
+  map[0] = &g_null_chunk;
+  return map;
 }
 
 internal LNK_ChunkNode *

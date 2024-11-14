@@ -2969,6 +2969,7 @@ THREAD_POOL_TASK_FUNC(lnk_push_dbi_sec_contrib_task)
   PDB_DbiModule                  *mod        = task->mod_arr[obj_idx];
   LNK_Obj                        *obj        = &task->obj_arr[obj_idx];
   PDB_DbiSectionContribList      *dst_list   = &task->sc_list[obj_idx];
+  String8                         image_data = task->image_data;
 
   // TODO: use chunked lists for SC
 
@@ -2990,7 +2991,7 @@ THREAD_POOL_TASK_FUNC(lnk_push_dbi_sec_contrib_task)
 
     // query chunk info
     ISectOff     chunk_sc   = lnk_sc_from_chunk_ref       (sect_id_map, chunk->ref);
-    String8      chunk_data = lnk_data_from_chunk_ref     (sect_id_map, chunk->ref);
+    String8      chunk_data = lnk_data_from_chunk_ref     (sect_id_map, image_data, chunk->ref);
     LNK_Section *chunk_sect = lnk_sect_from_chunk_ref     (sect_id_map, chunk->ref);
     U64          chunk_size = lnk_file_size_from_chunk_ref(sect_id_map, chunk->ref);
     
@@ -3116,6 +3117,7 @@ lnk_build_pdb_public_symbols(TP_Context            *tp,
 internal String8List
 lnk_build_pdb(TP_Context               *tp,
               TP_Arena                 *tp_arena,
+              String8                   image_data,
               Guid                      guid,
               COFF_MachineType          machine,
               COFF_TimeStamp            time_stamp,
@@ -3276,7 +3278,7 @@ lnk_build_pdb(TP_Context               *tp,
   {
     LNK_Symbol         *coff_sect_array_symbol = lnk_symbol_table_searchf(symtab, LNK_SymbolScopeFlag_Internal, LNK_COFF_SECT_HEADER_ARRAY_SYMBOL_NAME);
     LNK_Chunk          *coff_sect_chunk        = lnk_chunk_from_symbol(coff_sect_array_symbol);
-    String8             coff_sect_chunk_data   = lnk_data_from_chunk_ref(sect_id_map, coff_sect_chunk->ref);
+    String8             coff_sect_chunk_data   = lnk_data_from_chunk_ref(sect_id_map, image_data, coff_sect_chunk->ref);
     U64                 coff_sect_count        = coff_sect_chunk_data.size / sizeof(COFF_SectionHeader);
     COFF_SectionHeader *coff_sect_ptr          = (COFF_SectionHeader*)coff_sect_chunk_data.str;
     for (COFF_SectionHeader *hdr_ptr = &coff_sect_ptr[0], *opl = hdr_ptr + coff_sect_count;
@@ -3294,6 +3296,7 @@ lnk_build_pdb(TP_Context               *tp,
     task.sect_id_map                   = sect_id_map;
     task.mod_arr                       = mod_arr;
     task.sc_list                       = push_array(scratch.arena, PDB_DbiSectionContribList, obj_count);
+    task.image_data                    = image_data;
     tp_for_parallel(tp, tp_arena, obj_count, lnk_push_dbi_sec_contrib_task, &task);
 
     dbi_sec_list_concat_arr(&pdb->dbi->sec_contrib_list, obj_count, task.sc_list);

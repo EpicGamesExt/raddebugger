@@ -121,7 +121,7 @@ internal void                lnk_section_table_build_data(TP_Context *tp, LNK_Se
 internal void                lnk_section_table_assign_virtual_offsets(LNK_SectionTable *st);
 internal void                lnk_section_table_assign_file_offsets(LNK_SectionTable *st);
 internal void                lnk_section_table_assign_indices(LNK_SectionTable *st);
-internal String8             lnk_section_table_serialize(Arena *arena, LNK_SectionTable *st);
+internal String8             lnk_section_table_serialize(TP_Context *tp, Arena *arena, LNK_SectionTable *st, COFF_MachineType machine);
 
 internal LNK_ChunkPtr ** lnk_chunk_id_map_from_section_table(Arena *arena, LNK_SectionTable *st);
 internal LNK_Section **  lnk_sect_id_map_from_section_table(Arena *arena, LNK_SectionTable *st);
@@ -134,8 +134,8 @@ internal U64             lnk_virt_off_from_chunk_ref(LNK_Section **sect_id_map, 
 internal U64             lnk_file_off_from_chunk_ref(LNK_Section **sect_id_map, LNK_ChunkRef chunk_ref);
 internal U64             lnk_virt_size_from_chunk_ref(LNK_Section **sect_id_map, LNK_ChunkRef chunk_ref);
 internal U64             lnk_file_size_from_chunk_ref(LNK_Section **sect_id_map, LNK_ChunkRef chunk_ref);
-internal String8         lnk_data_from_chunk_ref(LNK_Section **sect_id_map, LNK_ChunkRef chunk_ref);
-internal String8         lnk_data_from_chunk_ref_no_pad(LNK_Section **sect_id_map, LNK_ChunkRef chunk_ref);
+internal String8         lnk_data_from_chunk_ref(LNK_Section **sect_id_map, String8 image_data, LNK_ChunkRef chunk_ref);
+internal String8         lnk_data_from_chunk_ref_no_pad(LNK_Section **sect_id_map, String8 image_data, LNK_ChunkRef chunk_ref);
 internal ISectOff        lnk_sc_from_chunk_ref(LNK_Section **sect_id_map, LNK_ChunkRef chunk_ref);
 internal U64             lnk_virt_off_from_reloc(LNK_Section **sect_id_map, LNK_Reloc *reloc);
 internal U64             lnk_isect_from_symbol(LNK_Section **sect_id_map, LNK_Symbol *symbol);

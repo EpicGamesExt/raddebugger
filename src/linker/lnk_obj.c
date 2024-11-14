@@ -399,7 +399,7 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
     chunk->flags        = coff_sect->flags;
     chunk->associate    = 0;
     chunk->u.leaf       = data;
-    lnk_chunk_set_debugf(arena, chunk, "%S: name: %S, isect: 0x%llX", path, sect_name_arr[sect_idx], sect_idx);
+    lnk_chunk_set_debugf(arena, chunk, "%S: name: %S, obj_idx: 0x%llX isect: 0x%llX", cached_path, sect_name_arr[sect_idx], obj_idx, sect_idx);
   }
 
   // :common_block
@@ -414,7 +414,7 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
   master_common_block->flags        = LNK_BSS_SECTION_FLAGS;
   master_common_block->associate    = 0;
   master_common_block->u.list       = push_array(arena, LNK_ChunkList, 1);
-  lnk_chunk_set_debugf(arena, master_common_block, "%S: master common block", path);
+  lnk_chunk_set_debugf(arena, master_common_block, "%S: master common block", cached_path);
 
   // convert from coff
   B32             is_big_obj     = coff_info.type == COFF_DataType_BIG_OBJ;

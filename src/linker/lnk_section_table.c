@@ -250,16 +250,18 @@ lnk_code_align_byte_from_machine(COFF_MachineType machine)
 internal void
 lnk_section_build_data(LNK_Section *sect, COFF_MachineType machine)
 {
-  if (sect->is_loose && sect->has_layout) {
-    // get value for align data fill
-    U8 align_byte = 0;
-    B32 is_code = !!(sect->flags & COFF_SectionFlag_CNT_CODE);
-    if (is_code) {
-      align_byte = lnk_code_align_byte_from_machine(machine);
+  if (sect->is_loose) {
+    if (sect->has_layout) {
+      sect->layout = lnk_build_chunk_layout(sect->arena, sect->cman);
+    } else {
+      sect->layout.total_count           = sect->cman->total_chunk_count;
+      sect->layout.chunk_ptr_array       = lnk_make_chunk_id_map(sect->arena, sect->cman);
+      sect->layout.chunk_off_array       = 0;
+      sect->layout.chunk_file_size_array = 0;
+      sect->layout.chunk_virt_size_array = 0;
+      sect->layout.align_array_count     = 0;
+      sect->layout.align_array           = 0;
     }
-
-    sect->layout = lnk_build_chunk_layout(sect->arena, sect->cman, sect->flags, align_byte);
-
     sect->is_loose = 0;
   }
 }
@@ -594,19 +596,48 @@ lnk_section_table_assign_indices(LNK_SectionTable *st)
 }
 
 internal String8
-lnk_section_table_serialize(Arena *arena, LNK_SectionTable *st)
+lnk_section_table_serialize(TP_Context *tp, Arena *arena, LNK_SectionTable *st, COFF_MachineType machine)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(&arena, 1);
-  String8List image_list = {0};
-  for (LNK_SectionNode *sect_node = st->list.first; sect_node != NULL; sect_node = sect_node->next) {
-    LNK_Section *sect = &sect_node->data;
-    str8_list_push(scratch.arena, &image_list, sect->layout.data);
+
+  U64 image_size = 0;
+  for (LNK_SectionNode *sect_n = st->list.first; sect_n != 0; sect_n = sect_n->next) {
+    LNK_Section *sect = &sect_n->data;
+    if (sect->has_layout) {
+      U64 root_size = sect->layout.chunk_file_size_array[sect->root->ref.chunk_id];
+      image_size += root_size;
+    }
   }
-  String8 result = str8_list_join(arena, &image_list, NULL);
+
+  U8      *image_buffer = push_array_no_zero(arena, U8, image_size);
+  String8  image        = str8(image_buffer, image_size);
+  U64      image_cursor = 0;
+
+  for (LNK_SectionNode *sect_n = st->list.first; sect_n != 0; sect_n = sect_n->next) {
+    LNK_Section *sect = &sect_n->data;
+    if (sect->has_layout) {
+      if (sect->flags & COFF_SectionFlag_CNT_UNINITIALIZED_DATA) {
+        continue;
+      }
+
+      U64     sect_size = sect->layout.chunk_file_size_array[sect->root->ref.chunk_id];
+      String8 sect_data = str8_substr(image, rng_1u64(image_cursor, image_cursor + sect_size));
+
+      U8 fill_byte = 0;
+      if (sect->flags & COFF_SectionFlag_CNT_CODE) {
+        fill_byte = lnk_code_align_byte_from_machine(machine);
+      }
+
+      lnk_serialize_chunk_layout(tp, sect->layout, sect_data, fill_byte);
+
+      image_cursor += sect_size;
+    }
+  }
+
   scratch_end(scratch);
   ProfEnd();
-  return result;
+  return image;
 }
 
 internal LNK_ChunkPtr **
@@ -736,24 +767,41 @@ lnk_file_size_from_chunk_ref(LNK_Section **sect_id_map, LNK_ChunkRef chunk_ref)
 }
 
 internal String8
-lnk_data_from_chunk_ref(LNK_Section **sect_id_map, LNK_ChunkRef chunk_ref)
+lnk_data_from_chunk_ref(LNK_Section **sect_id_map, String8 image_data, LNK_ChunkRef chunk_ref)
 {
-  LNK_ChunkRef final_chunk_ref = lnk_get_final_chunk_ref(sect_id_map, chunk_ref);
-  LNK_Section *sect = sect_id_map[final_chunk_ref.sect_id];
-  U64 chunk_off = lnk_off_from_chunk_ref(sect_id_map, chunk_ref);
-  U64 chunk_size = lnk_file_size_from_chunk_ref(sect_id_map, chunk_ref);
-  String8 chunk_data = str8_substr(sect->layout.data, r1u64(chunk_off, chunk_off + chunk_size));
+  LNK_ChunkRef  final_chunk_ref = lnk_get_final_chunk_ref(sect_id_map, chunk_ref);
+  LNK_Section  *sect            = sect_id_map[final_chunk_ref.sect_id];
+  String8 chunk_data;
+  if (sect->has_layout) {
+    U64 chunk_size = lnk_file_size_from_chunk_ref(sect_id_map, chunk_ref);
+    U64 chunk_foff = lnk_file_off_from_chunk_ref(sect_id_map, chunk_ref);
+    chunk_data = str8_substr(image_data, r1u64(chunk_foff, chunk_foff + chunk_size));
+  } else {
+    LNK_Chunk *chunk = sect->layout.chunk_ptr_array[final_chunk_ref.chunk_id];
+    Assert(chunk->type == LNK_Chunk_Leaf);
+    chunk_data = chunk->u.leaf;
+  }
+
   return chunk_data;
 }
 
 internal String8
-lnk_data_from_chunk_ref_no_pad(LNK_Section **sect_id_map, LNK_ChunkRef chunk_ref)
+lnk_data_from_chunk_ref_no_pad(LNK_Section **sect_id_map, String8 image_data, LNK_ChunkRef chunk_ref)
 {
   LNK_ChunkRef final_chunk_ref = lnk_get_final_chunk_ref(sect_id_map, chunk_ref);
   LNK_Section *sect = sect_id_map[final_chunk_ref.sect_id];
-  U64 chunk_off = lnk_off_from_chunk_ref(sect_id_map, chunk_ref);
-  U64 chunk_size = lnk_virt_size_from_chunk_ref(sect_id_map, chunk_ref);
-  String8 chunk_data = str8_substr(sect->layout.data, r1u64(chunk_off, chunk_off + chunk_size));
+
+  String8 chunk_data;
+  if (sect->has_layout) {
+    U64 chunk_size = lnk_virt_size_from_chunk_ref(sect_id_map, chunk_ref);
+    U64 chunk_foff = lnk_file_off_from_chunk_ref(sect_id_map, chunk_ref);
+    chunk_data = str8_substr(image_data, r1u64(chunk_foff, chunk_foff + chunk_size));
+  } else {
+    LNK_Chunk *chunk = sect->layout.chunk_ptr_array[final_chunk_ref.chunk_id];
+    Assert(chunk->type == LNK_Chunk_Leaf);
+    chunk_data = chunk->u.leaf;
+  }
+
   return chunk_data;
 }
 

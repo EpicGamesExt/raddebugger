@@ -943,11 +943,9 @@ lnk_make_res_obj(TP_Context       *tp,
   lnk_section_table_assign_indices(st);
   lnk_section_table_build_data(tp, st, machine);
   lnk_section_table_assign_file_offsets(st);
+  String8 res_obj = lnk_section_table_serialize(tp, arena, st, machine);
   sect_id_map = lnk_sect_id_map_from_section_table(scratch.arena, st);
-  lnk_patch_relocs_linker(tp, symtab, st, sect_id_map, 0);
-  
-  String8 res_obj = lnk_section_table_serialize(arena, st);
-  
+  lnk_patch_relocs_linker(tp, symtab, st, sect_id_map, res_obj, 0);
   lnk_section_table_release(&st);
   
   arena_release(temp_tp_arena->v[0]);
@@ -1161,9 +1159,9 @@ lnk_make_linker_coff_obj(TP_Context       *tp,
   lnk_section_table_assign_indices(st);
   lnk_section_table_build_data(tp, st, machine);
   lnk_section_table_assign_file_offsets(st);
+  String8       coff_data   = lnk_section_table_serialize(tp, arena, st, machine);
   LNK_Section **sect_id_map = lnk_sect_id_map_from_section_table(scratch.arena, st);
-  lnk_patch_relocs_linker(tp, symtab, st, sect_id_map, 0);
-  String8 coff_data = lnk_section_table_serialize(arena, st);
+  lnk_patch_relocs_linker(tp, symtab, st, sect_id_map, coff_data, 0);
   
   lnk_section_table_release(&st);
   
@@ -1210,10 +1208,8 @@ lnk_is_lib_disallowed(HashTable *disallow_lib_ht, String8 path)
 internal B32
 lnk_is_lib_loaded(HashTable *default_lib_ht, HashTable *loaded_lib_ht, LNK_InputSourceType input_source, String8 path)
 {
-  // when /defaultlib:path is comes from command line or obj directive
-  // check against lib name
-  if (input_source == LNK_InputSource_Default ||
-      input_source == LNK_InputSource_Obj) {
+  // when /defaultlib:path comes from command line or obj directive check against lib name
+  if (input_source == LNK_InputSource_Default || input_source == LNK_InputSource_Obj) {
     String8 lib_name = str8_skip_last_slash(path);
     if (hash_table_search_path(default_lib_ht, lib_name)) {
       return 1;
@@ -1378,9 +1374,9 @@ lnk_push_pe_debug_data_directory(LNK_Section           *sect,
   PE_DebugDirectory *dir = push_array(sect->arena, PE_DebugDirectory, 1);
   dir->time_stamp        = time_stamp;
   dir->type              = type;
-  //dir->voff            = 0; // relocated through 'symbol'
-  //dir->foff            = 0; // relocated through 'symbol'
-  //dir->size            = 0; // relocated through 'symbol'
+  //dir->voff            = 0; // relocated through 'data_symbol'
+  //dir->foff            = 0; // relocated through 'data_symbol'
+  //dir->size            = 0; // relocated through 'data_symbol'
   
   // push chunk
   LNK_Chunk *dir_entry_chunk = lnk_section_push_chunk_data(sect, dir_array_chunk, str8_struct(dir), str8_zero());
@@ -1434,7 +1430,8 @@ lnk_build_debug_rdi(LNK_SectionTable *st,
   
   // push chunks
   String8    debug_rdi       = pe_make_debug_header_rdi(rdi_sect->arena, guid, rdi_path);
-  LNK_Chunk *debug_rdi_chunk = lnk_section_push_chunk_data(rdi_sect, rdi_sect->root, debug_rdi, str8_zero()); lnk_chunk_set_debugf(rdi_sect->arena, debug_rdi, LNK_CV_HEADER_RDI_SYMBOL_NAME);
+  LNK_Chunk *debug_rdi_chunk = lnk_section_push_chunk_data(rdi_sect, rdi_sect->root, debug_rdi, str8_zero());
+  lnk_chunk_set_debugf(rdi_sect->arena, debug_rdi_chunk, LNK_CV_HEADER_RDI_SYMBOL_NAME);
   
   // push symbols
   LNK_Symbol *debug_rdi_symbol = lnk_symbol_table_push_defined_chunk(symtab, str8_lit(LNK_CV_HEADER_RDI_SYMBOL_NAME), LNK_DefinedSymbolVisibility_Internal, 0, debug_rdi_chunk, 0, 0, 0);
@@ -1759,13 +1756,6 @@ lnk_emit_base_reloc_info(Arena                 *arena,
     U64 reloc_voff = lnk_virt_off_from_reloc(sect_id_map, reloc);
     U64 page_voff  = AlignDownPow2(reloc_voff, page_size);
 
-    if (str8_match(reloc->symbol->name, str8_lit("_mi_heap_empty"), 0)) {
-        int x = 0;
-    }
-    if (page_voff == 0x21C7000) {
-      int x = 0;
-    }
-    
     LNK_BaseRelocPageNode *page;
     {
       KeyValuePair *is_page_present = hash_table_search_u64(page_ht, page_voff);
@@ -2613,7 +2603,7 @@ lnk_apply_reloc(U64               base_addr,
                 LNK_Reloc        *reloc)
 {
   LNK_Symbol *symbol = lnk_resolve_symbol(symtab, reloc->symbol);
-  
+
   // TODO: check if user forced to link with unresolved symbols and accordingly report the error
   if (!LNK_Symbol_IsDefined(symbol->type)) {
     lnk_error(LNK_Error_UndefinedSymbol, "%S", symbol->name);
@@ -2629,21 +2619,21 @@ lnk_apply_reloc(U64               base_addr,
   
   LNK_DefinedSymbol *defined_symbol = &symbol->u.defined;
   switch (defined_symbol->value_type) {
-    case LNK_DefinedSymbolValue_Null: break;
-    case LNK_DefinedSymbolValue_Chunk: {
-      symbol_isect = lnk_isect_from_symbol(sect_id_map, symbol);
-      symbol_vsize = lnk_virt_size_from_symbol(sect_id_map, symbol);
-      symbol_fsize = lnk_file_size_from_symbol(sect_id_map, symbol);
-      symbol_off   = lnk_sect_off_from_symbol(sect_id_map, symbol);
-      symbol_voff  = lnk_virt_off_from_symbol(sect_id_map, symbol);
-      symbol_foff  = lnk_file_off_from_symbol(sect_id_map, symbol);
-    } break;
-    case LNK_DefinedSymbolValue_VA: {
-      symbol_voff = defined_symbol->u.va - base_addr;
-    } break;
+  case LNK_DefinedSymbolValue_Null: break;
+  case LNK_DefinedSymbolValue_Chunk: {
+    symbol_isect = lnk_isect_from_symbol(sect_id_map, symbol);
+    symbol_vsize = lnk_virt_size_from_symbol(sect_id_map, symbol);
+    symbol_fsize = lnk_file_size_from_symbol(sect_id_map, symbol);
+    symbol_off   = lnk_sect_off_from_symbol(sect_id_map, symbol);
+    symbol_voff  = lnk_virt_off_from_symbol(sect_id_map, symbol);
+    symbol_foff  = lnk_file_off_from_symbol(sect_id_map, symbol);
+  } break;
+  case LNK_DefinedSymbolValue_VA: {
+    symbol_voff = defined_symbol->u.va - base_addr;
+  } break;
   }
   
-#if LNK_DEBUG
+#if BUILD_DEBUG
   if (str8_match(str8_lit("__ImageBase"), symbol->name, 0)) {
     Assert(symbol_isect == 0);
     Assert(symbol_voff == 0);
@@ -2658,92 +2648,92 @@ lnk_apply_reloc(U64               base_addr,
   S64 reloc_value = 0;
   
   switch (reloc->type) {
-    case LNK_Reloc_NULL: /* ignore */ break;
-    case LNK_Reloc_ADDR_16: {
-      reloc_value = safe_cast_u16(base_addr + symbol_voff);
-      reloc_size  = 2;
-    } break;
-    case LNK_Reloc_ADDR_32: {
-      reloc_value = safe_cast_u32(base_addr + symbol_voff);
-      reloc_size  = 4;
-    } break;
-    case LNK_Reloc_ADDR_64: {
-      reloc_value = base_addr + symbol_voff;
-      reloc_size  = 8;
-    } break;
-    case LNK_Reloc_CHUNK_SIZE_FILE_16: {
-      reloc_value = safe_cast_u16(symbol_fsize);
-      reloc_size  = 2;
-    } break;
-    case LNK_Reloc_CHUNK_SIZE_FILE_32: {
-      reloc_value = symbol_fsize;
-      reloc_size  = 4;
-    } break;
-    case LNK_Reloc_CHUNK_SIZE_VIRT_32: {
-      reloc_value = symbol_vsize;
-      reloc_size  = 4;
-    } break;
-    case LNK_Reloc_FILE_ALIGN_32: {
-      reloc_value = 0;
-      reloc_size  = 4;
-      reloc_align = file_align;
-    } break;
-    case LNK_Reloc_FILE_OFF_32: {
-      reloc_value = safe_cast_u32(symbol_foff);
-      reloc_size  = 4;
-    } break;
-    case LNK_Reloc_FILE_OFF_64: {
-      reloc_value = symbol_foff;
-      reloc_size  = 8;
-    } break;
-    case LNK_Reloc_REL32: {
-      U64 reloc_voff = lnk_virt_off_from_reloc(sect_id_map, reloc);
-      reloc_value    = safe_cast_s32((S64)(symbol_voff - reloc_voff) - (4 + 0));
-      reloc_size     = 4;
-    } break;
-    case LNK_Reloc_REL32_1: {
-      U64 reloc_voff = lnk_virt_off_from_reloc(sect_id_map, reloc);
-      reloc_value    = safe_cast_s32((S64)(symbol_voff - reloc_voff) - (4 + 1));
-      reloc_size     = 4;
-    } break;
-    case LNK_Reloc_REL32_2: {
-      U64 reloc_voff = lnk_virt_off_from_reloc(sect_id_map, reloc);
-      reloc_value    = safe_cast_s32((S64)(symbol_voff - reloc_voff) - (4 + 2));
-      reloc_size     = 4;
-    } break;
-    case LNK_Reloc_REL32_3: {
-      U64 reloc_voff = lnk_virt_off_from_reloc(sect_id_map, reloc);
-      reloc_value    = safe_cast_s32((S64)(symbol_voff - reloc_voff) - (4 + 3));
-      reloc_size     = 4;
-    } break;
-    case LNK_Reloc_REL32_4: {
-      U64 reloc_voff = lnk_virt_off_from_reloc(sect_id_map, reloc);
-      reloc_value    = safe_cast_s32((S64)(symbol_voff - reloc_voff) - (4 + 4));
-      reloc_size     = 4;
-    } break;
-    case LNK_Reloc_REL32_5: {
-      U64 reloc_voff = lnk_virt_off_from_reloc(sect_id_map, reloc);
-      reloc_value    = safe_cast_s32((S64)(symbol_voff - reloc_voff) - (4 + 5));
-      reloc_size     = 4;
-    } break;
-    case LNK_Reloc_SECT_REL: {
-      reloc_value = safe_cast_u32(symbol_off);
-      reloc_size  = 4;
-    } break;
-    case LNK_Reloc_SECT_IDX: {
-      reloc_value = safe_cast_u32(symbol_isect);
-      reloc_size  = 4;
-    } break;
-    case LNK_Reloc_VIRT_ALIGN_32: {
-      reloc_value = 0;
-      reloc_size  = 4;
-      reloc_align = virt_align;
-    } break;
-    case LNK_Reloc_VIRT_OFF_32: {
-      reloc_value = safe_cast_u32(symbol_voff);
-      reloc_size  = 4;
-    } break;
-    default: NotImplemented;
+  case LNK_Reloc_NULL: /* ignore */ break;
+  case LNK_Reloc_ADDR_16: {
+    reloc_value = safe_cast_u16(base_addr + symbol_voff);
+    reloc_size  = 2;
+  } break;
+  case LNK_Reloc_ADDR_32: {
+    reloc_value = safe_cast_u32(base_addr + symbol_voff);
+    reloc_size  = 4;
+  } break;
+  case LNK_Reloc_ADDR_64: {
+    reloc_value = base_addr + symbol_voff;
+    reloc_size  = 8;
+  } break;
+  case LNK_Reloc_CHUNK_SIZE_FILE_16: {
+    reloc_value = safe_cast_u16(symbol_fsize);
+    reloc_size  = 2;
+  } break;
+  case LNK_Reloc_CHUNK_SIZE_FILE_32: {
+    reloc_value = symbol_fsize;
+    reloc_size  = 4;
+  } break;
+  case LNK_Reloc_CHUNK_SIZE_VIRT_32: {
+    reloc_value = symbol_vsize;
+    reloc_size  = 4;
+  } break;
+  case LNK_Reloc_FILE_ALIGN_32: {
+    reloc_value = 0;
+    reloc_size  = 4;
+    reloc_align = file_align;
+  } break;
+  case LNK_Reloc_FILE_OFF_32: {
+    reloc_value = safe_cast_u32(symbol_foff);
+    reloc_size  = 4;
+  } break;
+  case LNK_Reloc_FILE_OFF_64: {
+    reloc_value = symbol_foff;
+    reloc_size  = 8;
+  } break;
+  case LNK_Reloc_REL32: {
+    U64 reloc_voff = lnk_virt_off_from_reloc(sect_id_map, reloc);
+    reloc_value    = safe_cast_s32((S64)(symbol_voff - reloc_voff) - (4 + 0));
+    reloc_size     = 4;
+  } break;
+  case LNK_Reloc_REL32_1: {
+    U64 reloc_voff = lnk_virt_off_from_reloc(sect_id_map, reloc);
+    reloc_value    = safe_cast_s32((S64)(symbol_voff - reloc_voff) - (4 + 1));
+    reloc_size     = 4;
+  } break;
+  case LNK_Reloc_REL32_2: {
+    U64 reloc_voff = lnk_virt_off_from_reloc(sect_id_map, reloc);
+    reloc_value    = safe_cast_s32((S64)(symbol_voff - reloc_voff) - (4 + 2));
+    reloc_size     = 4;
+  } break;
+  case LNK_Reloc_REL32_3: {
+    U64 reloc_voff = lnk_virt_off_from_reloc(sect_id_map, reloc);
+    reloc_value    = safe_cast_s32((S64)(symbol_voff - reloc_voff) - (4 + 3));
+    reloc_size     = 4;
+  } break;
+  case LNK_Reloc_REL32_4: {
+    U64 reloc_voff = lnk_virt_off_from_reloc(sect_id_map, reloc);
+    reloc_value    = safe_cast_s32((S64)(symbol_voff - reloc_voff) - (4 + 4));
+    reloc_size     = 4;
+  } break;
+  case LNK_Reloc_REL32_5: {
+    U64 reloc_voff = lnk_virt_off_from_reloc(sect_id_map, reloc);
+    reloc_value    = safe_cast_s32((S64)(symbol_voff - reloc_voff) - (4 + 5));
+    reloc_size     = 4;
+  } break;
+  case LNK_Reloc_SECT_REL: {
+    reloc_value = safe_cast_u32(symbol_off);
+    reloc_size  = 4;
+  } break;
+  case LNK_Reloc_SECT_IDX: {
+    reloc_value = safe_cast_u32(symbol_isect);
+    reloc_size  = 4;
+  } break;
+  case LNK_Reloc_VIRT_ALIGN_32: {
+    reloc_value = 0;
+    reloc_size  = 4;
+    reloc_align = virt_align;
+  } break;
+  case LNK_Reloc_VIRT_OFF_32: {
+    reloc_value = safe_cast_u32(symbol_voff);
+    reloc_size  = 4;
+  } break;
+  default: NotImplemented;
   }
   
   // read addend
@@ -2763,6 +2753,7 @@ THREAD_POOL_TASK_FUNC(lnk_section_reloc_patcher)
 {
   LNK_SectionRelocPatcher *task = raw_task;
   
+  String8           image_data  = task->image_data;
   LNK_SymbolTable  *symtab      = task->symtab;
   LNK_SectionTable *st          = task->st;
   LNK_Section     **sect_id_map = task->sect_id_map;
@@ -2772,34 +2763,20 @@ THREAD_POOL_TASK_FUNC(lnk_section_reloc_patcher)
   for (U64 sect_idx = range.min; sect_idx < range.max; sect_idx += 1) {
     LNK_Section *sect = task->sect_arr[sect_idx];
     
-    if (sect->has_layout) {
-      for (LNK_Reloc *reloc = sect->reloc_list.first; reloc != 0; reloc = reloc->next) {
-        LNK_Chunk *chunk = reloc->chunk;
-        if (lnk_chunk_is_discarded(chunk)) {
-          continue;
-        }
-        String8 chunk_data = lnk_data_from_chunk_ref(sect_id_map, chunk->ref);
-        lnk_apply_reloc(base_addr, st->sect_align, st->file_align, sect_id_map, symtab, chunk_data, reloc);
-        int bad_vs = 0; (void)bad_vs;
+    for (LNK_Reloc *reloc = sect->reloc_list.first; reloc != 0; reloc = reloc->next) {
+      LNK_Chunk *chunk = reloc->chunk;
+      if (lnk_chunk_is_discarded(chunk)) {
+        continue;
       }
-    } else {
-      for (LNK_Reloc *reloc = sect->reloc_list.first; reloc != 0; reloc = reloc->next) {
-        LNK_Chunk *chunk = reloc->chunk;
-        if (lnk_chunk_is_discarded(chunk)) {
-          continue;
-        }
-        if (chunk->type != LNK_Chunk_Leaf) {
-          continue;
-        }
-        lnk_apply_reloc(base_addr, st->sect_align, st->file_align, sect_id_map, symtab, chunk->u.leaf, reloc);
-        int bad_vs = 0; (void)bad_vs;
-      }
+      String8 chunk_data = lnk_data_from_chunk_ref(sect_id_map, image_data, chunk->ref);
+      lnk_apply_reloc(base_addr, st->sect_align, st->file_align, sect_id_map, symtab, chunk_data, reloc);
+      int bad_vs = 0; (void)bad_vs;
     }
   }
 }
 
 internal void
-lnk_patch_relocs_linker(TP_Context *tp, LNK_SymbolTable *symtab, LNK_SectionTable *st, LNK_Section **sect_id_map, U64 base_addr)
+lnk_patch_relocs_linker(TP_Context *tp, LNK_SymbolTable *symtab, LNK_SectionTable *st, LNK_Section **sect_id_map, String8 image_data, U64 base_addr)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0,0);
@@ -2807,6 +2784,7 @@ lnk_patch_relocs_linker(TP_Context *tp, LNK_SymbolTable *symtab, LNK_SectionTabl
   LNK_SectionPtrArray sect_arr = lnk_section_ptr_array_from_list(scratch.arena, st->list);
   
   LNK_SectionRelocPatcher task = {0};
+  task.image_data              = image_data;
   task.symtab                  = symtab;
   task.st                      = st;
   task.sect_id_map             = sect_id_map;
@@ -2822,8 +2800,10 @@ lnk_patch_relocs_linker(TP_Context *tp, LNK_SymbolTable *symtab, LNK_SectionTabl
 internal
 THREAD_POOL_TASK_FUNC(lnk_obj_reloc_patcher)
 {
-  LNK_ObjRelocPatcher *task = raw_task;
-  LNK_Obj             *obj  = task->obj_arr[task_id];
+  LNK_ObjRelocPatcher *task        = raw_task;
+  String8              image_data  = task->image_data;
+  LNK_Obj             *obj         = task->obj_arr[task_id];
+  LNK_Section        **sect_id_map = task->sect_id_map;
   
   for (U64 sect_idx = 0; sect_idx < obj->sect_count; sect_idx += 1) {
     LNK_RelocList reloc_list = obj->sect_reloc_list_arr[sect_idx];
@@ -2831,18 +2811,7 @@ THREAD_POOL_TASK_FUNC(lnk_obj_reloc_patcher)
       if (lnk_chunk_is_discarded(reloc->chunk)) {
         continue;
       }
-      Assert(reloc->chunk->type == LNK_Chunk_Leaf);
-      
-      String8 chunk_data;
-      {
-        LNK_Section *sect = lnk_sect_from_chunk_ref(task->sect_id_map, reloc->chunk->ref);
-        if (sect->has_layout) {
-          chunk_data = lnk_data_from_chunk_ref(task->sect_id_map, reloc->chunk->ref);
-        } else {
-          chunk_data = reloc->chunk->u.leaf;
-        }
-      }
-      
+      String8 chunk_data = lnk_data_from_chunk_ref(sect_id_map, image_data, reloc->chunk->ref);
       lnk_apply_reloc(task->base_addr, task->st->sect_align, task->st->file_align, task->sect_id_map, task->symtab, chunk_data, reloc);
       int bad_vs = 0; (void)bad_vs;
     }
@@ -2850,12 +2819,13 @@ THREAD_POOL_TASK_FUNC(lnk_obj_reloc_patcher)
 }
 
 internal void
-lnk_patch_relocs_obj(TP_Context *tp, LNK_ObjList obj_list, LNK_SymbolTable *symtab, LNK_SectionTable *st, LNK_Section **sect_id_map, U64 base_addr)
+lnk_patch_relocs_obj(TP_Context *tp, LNK_ObjList obj_list, LNK_SymbolTable *symtab, LNK_SectionTable *st, LNK_Section **sect_id_map, String8 image_data, U64 base_addr)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0,0);
   
   LNK_ObjRelocPatcher task;
+  task.image_data  = image_data;
   task.symtab      = symtab;
   task.st          = st;
   task.sect_id_map = sect_id_map;
@@ -3648,10 +3618,13 @@ lnk_run(int argc, char **argv)
           LNK_InputLibList unique_input_lib_list = {0};
           for (LNK_InputLib *input = input_lib_list.first; input != 0; input = input->next) {
             String8 path = input->string;
-            
+
             if (lnk_is_lib_disallowed(disallow_lib_ht, path)) {
               continue;
             }
+            
+
+
             if (lnk_is_lib_loaded(default_lib_ht, loaded_lib_ht, input_source, path)) {
               continue;
             }
@@ -3942,6 +3915,11 @@ lnk_run(int argc, char **argv)
         lnk_section_table_assign_indices(st);
         lnk_section_table_assign_virtual_offsets(st);
         lnk_section_table_assign_file_offsets(st);
+        
+        ProfBegin("Image Serialize");
+        image_data = lnk_section_table_serialize(tp, scratch.arena, st, config->machine);
+        Assert(image_data.size > 0);
+        ProfEnd();
 
         // image layout is finalized, section id map is stable after this point
         LNK_Section **sect_id_map = lnk_sect_id_map_from_section_table(scratch.arena, st);
@@ -3949,40 +3927,38 @@ lnk_run(int argc, char **argv)
         ProfBegin("Patch Relocs");
 
         U64 base_addr = lnk_get_base_addr(config);
-        lnk_patch_relocs_obj(tp, obj_list, symtab, st, sect_id_map, base_addr);
-        lnk_patch_relocs_linker(tp, symtab, st, sect_id_map, base_addr);
+        lnk_patch_relocs_obj(tp, obj_list, symtab, st, sect_id_map, image_data, base_addr);
+        lnk_patch_relocs_linker(tp, symtab, st, sect_id_map, image_data, base_addr);
 
         ProfEnd();
 
         ProfBegin("Sort Exception Info");
 
         LNK_Symbol *pdata_symbol = lnk_symbol_table_searchf(symtab, LNK_SymbolScopeFlag_Internal, LNK_PDATA_SYMBOL_NAME);
-        String8     pdata        = lnk_data_from_chunk_ref_no_pad(sect_id_map, pdata_symbol->u.defined.u.chunk->ref);
-        switch (config->machine) {
-        case COFF_MachineType_X86:
-        case COFF_MachineType_X64: {
-          U64 count = pdata.size / sizeof(PE_IntelPdata);
-          radsort((PE_IntelPdata *)pdata.str, count, lnk_pdata_is_before_x8664);
-        } break;
-        case COFF_MachineType_ARM64:
-        case COFF_MachineType_ARM: {
-          AssertAlways(!"TOOD: ARM");
-        } break;
-        case COFF_MachineType_MIPSFPU:
-        case COFF_MachineType_MIPS16:
-        case COFF_MachineType_MIPSFPU16: {
-          AssertAlways(!"TODO: MIPS");
-        } break;
+        if (pdata_symbol) {
+          Assert(pdata_symbol->type == LNK_Symbol_DefinedExtern);
+          String8 pdata = lnk_data_from_chunk_ref_no_pad(sect_id_map, image_data, pdata_symbol->u.defined.u.chunk->ref);
+          switch (config->machine) {
+          case COFF_MachineType_X86:
+          case COFF_MachineType_X64: {
+            U64 count = pdata.size / sizeof(PE_IntelPdata);
+            radsort((PE_IntelPdata *)pdata.str, count, lnk_pdata_is_before_x8664);
+          } break;
+          case COFF_MachineType_ARM64:
+          case COFF_MachineType_ARM: {
+            AssertAlways(!"TOOD: ARM");
+          } break;
+          case COFF_MachineType_MIPSFPU:
+          case COFF_MachineType_MIPS16:
+          case COFF_MachineType_MIPSFPU16: {
+            AssertAlways(!"TODO: MIPS");
+          } break;
+          }
         }
 
         ProfEnd();
 
         ProfEnd(); // :EndBuild
-        
-        ProfBegin("Image Serialize");
-        image_data = lnk_section_table_serialize(scratch.arena, st);
-        Assert(image_data.size > 0);
-        ProfEnd();
 
         LNK_Symbol *tls_used_symbol = lnk_symbol_table_searchf(symtab, LNK_SymbolScopeFlag_Main, LNK_TLS_SYMBOL_NAME);
         if (tls_used_symbol) {
@@ -4129,6 +4105,7 @@ lnk_run(int argc, char **argv)
 
           String8List pdb_data = lnk_build_pdb(tp,
                                                tp_arena,
+                                               image_data,
                                                config->guid,
                                                config->machine,
                                                config->time_stamp,

@@ -5,8 +5,7 @@
 
 ////////////////////////////////
 
-#define LNK_DEBUG_CHUNKS      0
-#define LNK_DUMP_CHUNK_LAYOUT 0
+#define LNK_DEBUG_CHUNKS 0
 
 ////////////////////////////////
 
@@ -79,17 +78,14 @@ typedef struct LNK_ChunkOp
   struct LNK_ChunkOp *next;
   LNK_ChunkOpType     type;
   union {
-    String8 string;
-    U64     chunk_id;
+    String8    string;
+    LNK_Chunk *chunk;
     struct {
       U64 val;
       U64 x;
     } align;
     LNK_Chunk *leaf;
   } u;
-#if LNK_DUMP_CHUNK_LAYOUT
-  LNK_Chunk *chunk;
-#endif
 } LNK_ChunkOp;
 
 typedef struct LNK_ChunkOpList
@@ -99,12 +95,39 @@ typedef struct LNK_ChunkOpList
   LNK_ChunkOp *last;
 } LNK_ChunkOpList;
 
+typedef struct LNK_ChunkAlign
+{
+  U64 off;
+  U64 size;
+} LNK_ChunkAlign;
+
+typedef struct LNK_ChunkAlignArray
+{
+  U64             count;
+  LNK_ChunkAlign *v;
+} LNK_ChunkAlignArray;
+typedef struct LNK_ChunkAlignArrayNode
+{
+  struct LNK_ChunkAlignArrayNode *next;
+  U64                 cap;
+  LNK_ChunkAlignArray data;
+} LNK_ChunkAlignArrayNode;
+typedef struct LNK_ChunkAlignArrayList
+{
+  U64                      count;
+  LNK_ChunkAlignArrayNode *first;
+  LNK_ChunkAlignArrayNode *last;
+} LNK_ChunkAlignArrayList;
+
 typedef struct LNK_ChunkLayout
 {
-  String8    data;
-  U64       *chunk_off_array;
-  U64       *chunk_file_size_array;
-  U64       *chunk_virt_size_array;
+  U64                     total_count;
+  LNK_Chunk             **chunk_ptr_array;       // discarded chunks point to g_null_chunk
+  U64                    *chunk_off_array;       // discarded chunks have offset set to max_U64
+  U64                    *chunk_file_size_array; // discarded chunks have offset set to max_U64
+  U64                    *chunk_virt_size_array; // discarded chunks have offset set to max_U64
+  U64                     align_array_count;
+  LNK_ChunkAlignArray    *align_array;
 } LNK_ChunkLayout;
 
 typedef struct LNK_ChunkManager
@@ -112,6 +135,14 @@ typedef struct LNK_ChunkManager
   LNK_Chunk *root;
   U64        total_chunk_count;
 } LNK_ChunkManager;
+
+typedef struct
+{
+  LNK_ChunkLayout  layout;
+  String8          buffer;
+  U8               fill_byte;
+  Rng1U64         *ranges;
+} LNK_ChunkLayoutSerializer;
 
 ////////////////////////////////
 
@@ -148,9 +179,8 @@ internal LNK_ChunkOp * lnk_push_chunk_op_end_file(Arena *arena);
 internal LNK_ChunkOp * lnk_push_chunk_op_align(Arena *arena, U64 align, U64 val);
 internal LNK_ChunkOp * lnk_push_chunk_op_write(Arena *arena, String8 string);
 
-internal LNK_ChunkOpList lnk_op_list_from_chunk(Arena *arena, LNK_Chunk *root, U64 total_chunk_count, U8 align_byte);
-internal LNK_ChunkLayout lnk_chunk_layout_from_op_list(Arena *arena, LNK_ChunkOpList op_list, B32 is_data_inited);
-internal LNK_ChunkLayout lnk_build_chunk_layout(Arena *arena, LNK_ChunkManager *cman, COFF_SectionFlags flags, U8 align_byte);
+internal LNK_ChunkLayout lnk_layout_from_chunk(Arena *arena, LNK_Chunk *root, U64 total_chunk_count);
+internal LNK_ChunkLayout lnk_build_chunk_layout(Arena *arena, LNK_ChunkManager *cman);
 
 #define LNK_CHUNK_VISITOR_SIG(name) B32 name(U64 sect_id, LNK_Chunk *chunk, void *ud)
 typedef LNK_CHUNK_VISITOR_SIG(LNK_ChunkVisitorSig);
