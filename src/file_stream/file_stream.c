@@ -152,7 +152,10 @@ fs_hash_from_path_range(String8 path, Rng1U64 range, U64 endt_us)
         {
           ins_atomic_u64_eval_assign(&range_node->last_time_requested_us, os_now_microseconds());
           ins_atomic_u64_inc_eval(&range_node->request_count);
-          async_push_work(fs_stream_work, .completion_counter = &range_node->completion_count);
+          DeferLoop(os_rw_mutex_drop_w(path_stripe->rw_mutex), os_rw_mutex_take_w(path_stripe->rw_mutex))
+          {
+            async_push_work(fs_stream_work, .completion_counter = &range_node->completion_count);
+          }
         }
         
         // rjf: try to reobtain results

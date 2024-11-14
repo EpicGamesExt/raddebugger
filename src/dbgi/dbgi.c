@@ -493,7 +493,10 @@ di_open(DI_Key *key)
           di_u2p_enqueue_key(&key_normalized, max_U64);
           ins_atomic_u64_eval_assign(&node->last_time_requested_us, os_now_microseconds());
           ins_atomic_u64_inc_eval(&node->request_count);
-          async_push_work(di_parse_work, .completion_counter = &node->completion_count);
+          DeferLoop(os_rw_mutex_drop_w(stripe->rw_mutex), os_rw_mutex_take_w(stripe->rw_mutex))
+          {
+            async_push_work(di_parse_work, .completion_counter = &node->completion_count);
+          }
         }
       }
     }
@@ -616,7 +619,10 @@ di_rdi_from_key(DI_Scope *scope, DI_Key *key, U64 endt_us)
       {
         ins_atomic_u64_eval_assign(&node->last_time_requested_us, os_now_microseconds());
         ins_atomic_u64_inc_eval(&node->request_count);
-        async_push_work(di_parse_work, .completion_counter = &node->completion_count);
+        DeferLoop(os_rw_mutex_drop_w(stripe->rw_mutex), os_rw_mutex_take_w(stripe->rw_mutex))
+        {
+          async_push_work(di_parse_work, .completion_counter = &node->completion_count);
+        }
       }
       
       //- rjf: time expired -> break

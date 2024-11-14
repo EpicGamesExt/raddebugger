@@ -1445,20 +1445,23 @@ ctrl_stored_hash_from_process_vaddr_range(CTRL_Handle process, Rng1U64 range, B3
     //- rjf: not good, or is stale -> submit hash request
     if((!is_good || is_stale) && os_now_microseconds() >= last_time_requested_us+100000)
     {
-      if(ctrl_u2ms_enqueue_req(process, range, zero_terminated, endt_us)) OS_MutexScopeW(process_stripe->rw_mutex)
+      if(ctrl_u2ms_enqueue_req(process, range, zero_terminated, endt_us))
       {
-        for(CTRL_ProcessMemoryCacheNode *n = process_slot->first; n != 0; n = n->next)
+        OS_MutexScopeW(process_stripe->rw_mutex)
         {
-          if(ctrl_handle_match(n->handle, process))
+          for(CTRL_ProcessMemoryCacheNode *n = process_slot->first; n != 0; n = n->next)
           {
-            U64 range_slot_idx = range_hash%n->range_hash_slots_count;
-            CTRL_ProcessMemoryRangeHashSlot *range_slot = &n->range_hash_slots[range_slot_idx];
-            for(CTRL_ProcessMemoryRangeHashNode *range_n = range_slot->first; range_n != 0; range_n = range_n->next)
+            if(ctrl_handle_match(n->handle, process))
             {
-              if(MemoryMatchStruct(&range_n->vaddr_range, &range) && range_n->zero_terminated == zero_terminated)
+              U64 range_slot_idx = range_hash%n->range_hash_slots_count;
+              CTRL_ProcessMemoryRangeHashSlot *range_slot = &n->range_hash_slots[range_slot_idx];
+              for(CTRL_ProcessMemoryRangeHashNode *range_n = range_slot->first; range_n != 0; range_n = range_n->next)
               {
-                range_n->last_time_requested_us = os_now_microseconds();
-                break;
+                if(MemoryMatchStruct(&range_n->vaddr_range, &range) && range_n->zero_terminated == zero_terminated)
+                {
+                  range_n->last_time_requested_us = os_now_microseconds();
+                  break;
+                }
               }
             }
           }
