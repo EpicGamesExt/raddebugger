@@ -91,6 +91,13 @@ struct TypeWithBitfield
   int z : 10;
 };
 
+typedef struct BitfieldType64 BitfieldType64;
+struct BitfieldType64
+{
+  uint64_t size    : 63;
+  uint64_t is_free : 1;
+};
+
 void
 c_type_with_bitfield_usage(void)
 {
@@ -103,4 +110,8 @@ c_type_with_bitfield_usage(void)
   int x = (b.v + b.x);
   int y = (b.y - b.z);
   int z = (b.w) + 5;
+  BitfieldType64 b64 = {0};
+  b64.size = 524288;
+  b64.is_free = 1;
+  int abc = 0;
 }

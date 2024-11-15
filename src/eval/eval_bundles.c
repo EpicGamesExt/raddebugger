@@ -170,7 +170,7 @@ e_value_eval_from_eval(E_Eval eval)
           U64 valid_bits_mask = 0;
           for(U64 idx = 0; idx < type->count; idx += 1)
           {
-            valid_bits_mask |= (1<<idx);
+            valid_bits_mask |= (1ull<<idx);
           }
           eval.value.u64 = eval.value.u64 >> type->off;
           eval.value.u64 = eval.value.u64 & valid_bits_mask;
