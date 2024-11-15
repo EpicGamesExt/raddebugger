@@ -263,6 +263,7 @@ typedef struct LNK_Config
   U64                         idle_worker_count;
   U64                         function_pad_min;
   U64                        *manifest_resource_id;
+  B32                         no_default_libs;
   Version                     link_ver;
   Version                     os_ver;
   Version                     image_ver;

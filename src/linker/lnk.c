@@ -10,8 +10,7 @@
 
 ////////////////////////////////
 
-#define ARENA_FREE_LIST        1
-#define BASE_ENTRY_POINT_ARGCV 1
+#define ARENA_FREE_LIST 1
 
 ////////////////////////////////
 // Third Party
@@ -1206,16 +1205,10 @@ lnk_is_lib_disallowed(HashTable *disallow_lib_ht, String8 path)
 }
 
 internal B32
-lnk_is_lib_loaded(HashTable *default_lib_ht, HashTable *loaded_lib_ht, LNK_InputSourceType input_source, String8 path)
+lnk_is_lib_loaded(HashTable *loaded_lib_ht, String8 path)
 {
-  // when /defaultlib:path comes from command line or obj directive check against lib name
-  if (input_source == LNK_InputSource_Default || input_source == LNK_InputSource_Obj) {
-    String8 lib_name = str8_skip_last_slash(path);
-    if (hash_table_search_path(default_lib_ht, lib_name)) {
-      return 1;
-    }
-  }
-  return hash_table_search_path(loaded_lib_ht, path) != 0;
+  KeyValuePair *is_loaded = hash_table_search_path(loaded_lib_ht, path);
+  return is_loaded != 0;
 }
 
 internal void
@@ -1226,18 +1219,11 @@ lnk_push_disallow_lib(Arena *arena, HashTable *disallow_lib_ht, String8 path)
 }
 
 internal void
-lnk_push_loaded_lib(Arena     *arena,
-                    HashTable *default_lib_ht,
-                    HashTable *loaded_lib_ht,
-                    String8    path)
+lnk_push_loaded_lib(Arena *arena, HashTable *loaded_lib_ht, String8 path)
 {
-  String8 lib_name = str8_skip_last_slash(path);
-  if (!hash_table_search_path(default_lib_ht, lib_name)) {
-    hash_table_push_path_u64(arena, default_lib_ht, lib_name, 0);
-  }
-  
   if (!hash_table_search_path(loaded_lib_ht, path)) {
-    hash_table_push_string_u64(arena, loaded_lib_ht, path, 0);
+    String8 path_copy = push_str8_copy(arena, path);
+    hash_table_push_string_u64(arena, loaded_lib_ht, path_copy, 0);
   }
 }
 
@@ -3216,9 +3202,9 @@ lnk_run(int argc, char **argv)
   LNK_ImportTable     *imptab_static                    = 0;
   LNK_ImportTable     *imptab_delayed                   = 0;
   LNK_ExportTable     *exptab                           = lnk_export_table_alloc();
+  Arena               *ht_arena                         = arena_alloc();
   HashTable           *disallow_lib_ht                  = hash_table_init(scratch.arena, 0x100);
   HashTable           *delay_load_dll_ht                = hash_table_init(scratch.arena, 0x100);
-  HashTable           *default_lib_ht                   = hash_table_init(scratch.arena, 0x100);
   HashTable           *loaded_lib_ht                    = hash_table_init(scratch.arena, 0x100);
   HashTable           *missing_lib_ht                   = hash_table_init(scratch.arena, 0x100);
   HashTable           *loaded_obj_ht                    = hash_table_init(scratch.arena, 0x4000);
@@ -3246,6 +3232,7 @@ lnk_run(int argc, char **argv)
   
   // init state machine
   struct StateList state_list = {0};
+  state_list_push(scratch.arena, state_list, State_InputDisallowLibs);
   state_list_push(scratch.arena, state_list, State_InputObjs);
   state_list_push(scratch.arena, state_list, State_InputLibs);
   state_list_push(scratch.arena, state_list, State_PushLinkerSymbols);
@@ -3610,41 +3597,54 @@ lnk_run(int argc, char **argv)
       } break;
       case State_InputLibs: {
         ProfBegin("Input Libs");
+
+        // input libs from command line only
+        U64 input_source_opl = ArrayCount(input_libs);
+        if (config->no_default_libs) {
+          input_source_opl = LNK_InputSource_Default;
+        }
         
         for (U64 input_source = 0; input_source < ArrayCount(input_libs); ++input_source) {
-          LNK_InputLibList input_lib_list = input_libs[input_source];
-          
-          ProfBegin("Remove Duplicte Input Paths");
+          ProfBeginV("Source %S", lnk_string_from_input_source(input_source));
+
+          Temp             temp                  = temp_begin(scratch.arena);
+          LNK_InputLibList input_lib_list        = input_libs[input_source];
           LNK_InputLibList unique_input_lib_list = {0};
+
+          ProfBegin("Collect unique input libs");
           for (LNK_InputLib *input = input_lib_list.first; input != 0; input = input->next) {
             String8 path = input->string;
 
-            if (lnk_is_lib_disallowed(disallow_lib_ht, path)) {
-              continue;
+            if (input_source == LNK_InputSource_Default || input_source == LNK_InputSource_Obj) {
+              if (!str8_ends_with(path, str8_lit(".lib"), StringMatchFlag_CaseInsensitive)) {
+                path = push_str8f(temp.arena, "%S.lib", path);
+              }
+              if (lnk_is_lib_disallowed(disallow_lib_ht, path)) {
+                continue;
+              }
             }
-            
 
-
-            if (lnk_is_lib_loaded(default_lib_ht, loaded_lib_ht, input_source, path)) {
+            if (lnk_is_lib_loaded(loaded_lib_ht, path)) {
               continue;
             }
             
             // search disk for library
-            String8List match_list    = lnk_file_search(scratch.arena, config->lib_dir_list, path);
-            String8     absolute_path = match_list.node_count ? match_list.first->string : str8_zero();
-            
-            // default to first match
-            if (lnk_is_lib_loaded(default_lib_ht, loaded_lib_ht, input_source, absolute_path)) {
-              continue;
-            }
-            
+            String8List match_list = lnk_file_search(temp.arena, config->lib_dir_list, path);
+
             // warn about missing lib
             if (match_list.node_count == 0) {
               KeyValuePair *was_reported = hash_table_search_path(missing_lib_ht, path);
-              if (!was_reported) {
-                hash_table_push_path_u64(scratch.arena, missing_lib_ht, path, 0);
+              if (was_reported == 0) {
+                hash_table_push_path_u64(ht_arena, missing_lib_ht, path, 0);
                 lnk_error(LNK_Warning_FileNotFound, "unable to find library `%S`", path);
               }
+              continue;
+            }
+
+            // pick first match
+            String8 full_path = str8_list_first(&match_list);
+            
+            if (lnk_is_lib_loaded(loaded_lib_ht, full_path)) {
               continue;
             }
             
@@ -3654,19 +3654,19 @@ lnk_run(int argc, char **argv)
               lnk_supplement_error_list(match_list);
             }
             
-            // save paths for future checks
-            lnk_push_loaded_lib(scratch.arena, default_lib_ht, loaded_lib_ht, path);
-            lnk_push_loaded_lib(scratch.arena, default_lib_ht, loaded_lib_ht, absolute_path);
-            
             // push library for loading
-            str8_list_push(scratch.arena, &unique_input_lib_list, absolute_path);
+            str8_list_push(temp.arena, &unique_input_lib_list, full_path);
+
+            // save paths for future checks
+            lnk_push_loaded_lib(ht_arena, loaded_lib_ht, path);
+            lnk_push_loaded_lib(ht_arena, loaded_lib_ht, full_path);
             
-            lnk_log(LNK_Log_InputLib, "Input Lib: %S", absolute_path);
+            lnk_log(LNK_Log_InputLib, "Input Lib: %S", full_path);
           }
           ProfEnd();
           
           ProfBegin("Disk Read Libs");
-          String8Array path_arr  = str8_array_from_list(scratch.arena, &unique_input_lib_list);
+          String8Array path_arr  = str8_array_from_list(temp.arena, &unique_input_lib_list);
           String8Array data_arr  = lnk_read_data_from_file_path_parallel(tp, tp_arena->v[0], path_arr);
           ProfEnd();
           
@@ -3685,6 +3685,8 @@ lnk_run(int argc, char **argv)
               lnk_log(LNK_Log_InputObj, "[ Lib Input Size %M ]", input_size);
             }
           }
+
+          temp_end(temp);
         }
         
         // reset input libs
@@ -3936,7 +3938,6 @@ lnk_run(int argc, char **argv)
 
         LNK_Symbol *pdata_symbol = lnk_symbol_table_searchf(symtab, LNK_SymbolScopeFlag_Internal, LNK_PDATA_SYMBOL_NAME);
         if (pdata_symbol) {
-          Assert(pdata_symbol->type == LNK_Symbol_DefinedExtern);
           String8 pdata = lnk_data_from_chunk_ref_no_pad(sect_id_map, image_data, pdata_symbol->u.defined.u.chunk->ref);
           switch (config->machine) {
           case COFF_MachineType_X86:
@@ -4283,6 +4284,7 @@ lnk_run(int argc, char **argv)
   exit:;
   
   // linker is done, punt memory release to OS
+  //arena_release(ht_arena);
   //lnk_section_table_release(&st);
   //lnk_export_table_release(&export_table);
   //lnk_import_table_release(&imptab_static);
@@ -4301,5 +4303,19 @@ entry_point(CmdLine *cmdline)
 {
   lnk_init_error_handler();
   lnk_run(cmdline->argc, cmdline->argv);
+}
+
+////////////////////////////////
+
+internal String8
+lnk_string_from_input_source(LNK_InputSourceType input_source)
+{
+  String8 result = str8_zero();
+  switch (input_source) {
+  case LNK_InputSource_CmdLine: result = str8_lit("CmdLine"); break;
+  case LNK_InputSource_Default: result = str8_lit("Default"); break;
+  case LNK_InputSource_Obj:     result = str8_lit("Obj");     break;
+  }
+  return result;
 }
 

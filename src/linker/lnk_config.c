@@ -84,6 +84,7 @@ read_only struct
   { LNK_CmdSwitch_Natvis,             "NATVIS",               ":FILENAME", ""                                                                                             },
   { LNK_CmdSwitch_NotImplemented,     "NOASSEMBLY",           "", ""                                                                                                      },
   { LNK_CmdSwitch_NoDefaultLib,       "NODEFAULTLIB",         ":LIBNAME", ""                                                                                              },
+  { LNK_CmdSwitch_NoDefaultLib,       "NOD",                  ":LIBNAME", ""                                                                                              },
   { LNK_CmdSwitch_NotImplemented,     "NOENTRY",              "", ""                                                                                                      },
   { LNK_CmdSwitch_NoExp,              "NOEXP",                "", ".exp is not supported."                                                                                },
   { LNK_CmdSwitch_NoImpLib,           "NOIMPLIB",             "", ""                                                                                                      },
@@ -1323,8 +1324,12 @@ lnk_config_from_cmd_line(Arena *arena, String8List raw_cmd_line)
     } break;
 
     case LNK_CmdSwitch_NoDefaultLib: {
-      String8List no_default_lib_list = str8_list_copy(arena, &cmd->value_strings);
-      str8_list_concat_in_place(&config->disallow_lib_list, &no_default_lib_list);
+      if (cmd->value_strings.node_count == 0) {
+        config->no_default_libs = 1;
+      } else {
+        String8List no_default_lib_list = str8_list_copy(arena, &cmd->value_strings);
+        str8_list_concat_in_place(&config->disallow_lib_list, &no_default_lib_list);
+      }
     } break;
 
     case LNK_CmdSwitch_NoExp: {

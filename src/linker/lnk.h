@@ -245,9 +245,9 @@ internal String8 lnk_make_full_path(Arena *arena, String8 work_dir, PathStyle sy
 
 internal String8 lnk_get_lib_name(String8 path);
 internal B32     lnk_is_lib_disallowed(HashTable *disallow_lib_ht, String8 path);
-internal B32     lnk_is_lib_loaded(HashTable *default_lib_ht, HashTable *loaded_lib_ht, LNK_InputSourceType input_source, String8 lib_path);
+internal B32     lnk_is_lib_loaded(HashTable *loaded_lib_ht, String8 lib_path);
 internal void    lnk_push_disallow_lib(Arena *arena, HashTable *disallow_lib_ht, String8 path);
-internal void    lnk_push_loaded_lib(Arena *arena, HashTable *default_lib_ht, HashTable *loaded_lib_ht, String8 path);
+internal void    lnk_push_loaded_lib(Arena *arena, HashTable *loaded_lib_ht, String8 path);
 
 ////////////////////////////////
 // Manifest
@@ -296,4 +296,9 @@ internal void lnk_apply_reloc(U64 base_addr, U64 virt_align, U64 file_align, LNK
 internal void lnk_log_size_breakdown(LNK_SectionTable *st, LNK_SymbolTable *symtab);
 internal void lnk_log_link_stats(LNK_ObjList obj_list, LNK_LibList *lib_index, LNK_SectionTable *st);
 internal void lnk_log_timers(void);
+
+////////////////////////////////
+// Enum <-> String
+
+internal String8 lnk_string_from_input_source(LNK_InputSourceType input_source);
 
