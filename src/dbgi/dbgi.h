@@ -185,6 +185,7 @@ struct DI_SearchNode
   DI_SearchNode *prev;
   U128 key;
   U64 scope_refcount;
+  U64 work_refcount;
   U64 last_update_tick_idx;
   U64 bucket_read_gen;
   U64 bucket_write_gen;
@@ -367,6 +368,7 @@ struct DI_Shared
   // rjf: search threads
   U64 search_threads_count;
   DI_SearchThread *search_threads;
+  OS_Handle search_evictor_thread;
 };
 
 ////////////////////////////////
@@ -456,6 +458,8 @@ internal U128 di_u2s_dequeue_req(U64 thread_idx);
 ASYNC_WORK_DEF(di_search_work);
 internal int di_qsort_compare_search_items(DI_SearchItem *a, DI_SearchItem *b);
 internal void di_search_thread__entry_point(void *p);
+
+internal void di_search_evictor_thread__entry_point(void *p);
 
 ////////////////////////////////
 //~ rjf: Match Store
