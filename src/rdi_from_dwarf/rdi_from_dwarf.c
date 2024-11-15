@@ -4,10 +4,6 @@
 ////////////////////////////////
 //~ rjf: Build Options
 
-#define BUILD_VERSION_MAJOR 0
-#define BUILD_VERSION_MINOR 9
-#define BUILD_VERSION_PATCH 13
-#define BUILD_RELEASE_PHASE_STRING_LITERAL "ALPHA"
 #define BUILD_TITLE "rdi_from_dwarf"
 #define BUILD_CONSOLE_INTERFACE 1
 
