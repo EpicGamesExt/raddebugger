@@ -297,7 +297,9 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
     if(!dasm_lines) ProfScope("find all src -> dasm info for source code")
     {
       String8 file_path = rd_regs()->file_path;
-      D_LineListArray lines_array = d_lines_array_from_file_path_line_range(scratch.arena, file_path, visible_line_num_range);
+      CTRL_Entity *module = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->module);
+      DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
+      D_LineListArray lines_array = d_lines_array_from_dbgi_key_file_path_line_range(scratch.arena, dbgi_key, file_path, visible_line_num_range);
       if(lines_array.count != 0)
       {
         MemoryCopy(code_slice_params.line_infos, lines_array.v, sizeof(D_LineList)*lines_array.count);

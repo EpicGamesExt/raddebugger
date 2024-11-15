@@ -943,6 +943,100 @@ d_lines_from_dbgi_key_voff(Arena *arena, DI_Key *dbgi_key, U64 voff)
 // TODO(rjf): this depends on file path maps, needs to move
 
 internal D_LineListArray
+d_lines_array_from_dbgi_key_file_path_line_range(Arena *arena, DI_Key dbgi_key, String8 file_path, Rng1S64 line_num_range)
+{
+  D_LineListArray array = {0};
+  {
+    array.count = dim_1s64(line_num_range)+1;
+    array.v = push_array(arena, D_LineList, array.count);
+    di_key_list_push(arena, &array.dbgi_keys, &dbgi_key);
+  }
+  Temp scratch = scratch_begin(&arena, 1);
+  U64 *lines_num_voffs = push_array(scratch.arena, U64, array.count);
+  DI_Scope *scope = di_scope_open();
+  String8List overrides = rd_possible_overrides_from_file_path(scratch.arena, file_path);
+  for(String8Node *override_n = overrides.first;
+      override_n != 0;
+      override_n = override_n->next)
+  {
+    String8 file_path = override_n->string;
+    String8 file_path_normalized = lower_from_str8(scratch.arena, file_path);
+    
+    // rjf: binary -> rdi
+    RDI_Parsed *rdi = di_rdi_from_key(scope, &dbgi_key, 0);
+    
+    // rjf: file_path_normalized * rdi -> src_id
+    B32 good_src_id = 0;
+    U32 src_id = 0;
+    if(rdi != &di_rdi_parsed_nil) ProfScope("file_path_normalized * rdi -> src_id")
+    {
+      RDI_NameMap *mapptr = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_NormalSourcePaths);
+      RDI_ParsedNameMap map = {0};
+      rdi_parsed_from_name_map(rdi, mapptr, &map);
+      RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &map, file_path_normalized.str, file_path_normalized.size);
+      if(node != 0)
+      {
+        U32 id_count = 0;
+        U32 *ids = rdi_matches_from_map_node(rdi, node, &id_count);
+        if(id_count > 0)
+        {
+          good_src_id = 1;
+          src_id = ids[0];
+        }
+      }
+    }
+    
+    // rjf: good src-id -> look up line info for visible range
+    if(good_src_id) ProfScope("good src-id -> look up line info for visible range")
+    {
+      RDI_SourceFile *src = rdi_element_from_name_idx(rdi, SourceFiles, src_id);
+      RDI_SourceLineMap *src_line_map = rdi_element_from_name_idx(rdi, SourceLineMaps, src->source_line_map_idx);
+      RDI_ParsedSourceLineMap line_map = {0};
+      rdi_parsed_from_source_line_map(rdi, src_line_map, &line_map);
+      U64 line_idx = 0;
+      for(S64 line_num = line_num_range.min;
+          line_num <= line_num_range.max;
+          line_num += 1, line_idx += 1)
+      {
+        D_LineList *list = &array.v[line_idx];
+        U32 voff_count = 0;
+        U64 *voffs = rdi_line_voffs_from_num(&line_map, u32_from_u64_saturate((U64)line_num), &voff_count);
+        if(lines_num_voffs[line_idx] < 8) ProfScope("iterate voffs (%i)", voff_count) for(U64 idx = 0; idx < voff_count; idx += 1)
+        {
+          U64 base_voff = voffs[idx];
+          U64 unit_idx = rdi_vmap_idx_from_section_kind_voff(rdi, RDI_SectionKind_UnitVMap, base_voff);
+          RDI_Unit *unit = rdi_element_from_name_idx(rdi, Units, unit_idx);
+          RDI_LineTable *line_table = rdi_element_from_name_idx(rdi, LineTables, unit->line_table_idx);
+          RDI_ParsedLineTable unit_line_info = {0};
+          rdi_parsed_from_line_table(rdi, line_table, &unit_line_info);
+          U64 line_info_idx = rdi_line_info_idx_from_voff(&unit_line_info, base_voff);
+          if(unit_line_info.voffs != 0)
+          {
+            Rng1U64 range = r1u64(base_voff, unit_line_info.voffs[line_info_idx+1]);
+            S64 actual_line = (S64)unit_line_info.lines[line_info_idx].line_num;
+            D_LineNode *n = push_array(arena, D_LineNode, 1);
+            n->v.voff_range = range;
+            n->v.pt.line = (S64)actual_line;
+            n->v.pt.column = 1;
+            n->v.dbgi_key = dbgi_key;
+            SLLQueuePush(list->first, list->last, n);
+            list->count += 1;
+            lines_num_voffs[line_idx] += 1;
+            if(lines_num_voffs[line_idx] >= 8)
+            {
+              break;
+            }
+          }
+        }
+      }
+    }
+  }
+  di_scope_close(scope);
+  scratch_end(scratch);
+  return array;
+}
+
+internal D_LineListArray
 d_lines_array_from_file_path_line_range(Arena *arena, String8 file_path, Rng1S64 line_num_range)
 {
   D_LineListArray array = {0};
