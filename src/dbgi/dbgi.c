@@ -1727,9 +1727,9 @@ ASYNC_WORK_DEF(di_match_work)
             ins_atomic_u32_eval_assign(&node->section_kind, name_map_section_kinds[name_map_kind_idx]);
           }
         }
-        ins_atomic_u64_eval_assign(&node->cmp_params_hash, params_hash);
         di_scope_close(di_scope);
       }
+      ins_atomic_u64_eval_assign(&node->cmp_params_hash, params_hash);
     }
   }
   scratch_end(scratch);
