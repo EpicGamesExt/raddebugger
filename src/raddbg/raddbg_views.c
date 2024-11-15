@@ -5925,7 +5925,9 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(text)
   //
   if(path.size != 0)
   {
-    rd_regs()->lines = d_lines_from_file_path_line_num(rd_frame_arena(), path, rd_regs()->cursor.line);
+    CTRL_Entity *module = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->module);
+    DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
+    rd_regs()->lines = d_lines_from_dbgi_key_file_path_line_num(rd_frame_arena(), dbgi_key, path, rd_regs()->cursor.line);
   }
   
   //////////////////////////////

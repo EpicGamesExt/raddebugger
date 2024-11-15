@@ -447,6 +447,7 @@ internal D_LineList d_lines_from_dbgi_key_voff(Arena *arena, DI_Key *dbgi_key, U
 // TODO(rjf): need to clean this up & dedup
 internal D_LineListArray d_lines_array_from_dbgi_key_file_path_line_range(Arena *arena, DI_Key dbgi_key, String8 file_path, Rng1S64 line_num_range);
 internal D_LineListArray d_lines_array_from_file_path_line_range(Arena *arena, String8 file_path, Rng1S64 line_num_range);
+internal D_LineList d_lines_from_dbgi_key_file_path_line_num(Arena *arena, DI_Key dbgi_key, String8 file_path, S64 line_num);
 internal D_LineList d_lines_from_file_path_line_num(Arena *arena, String8 file_path, S64 line_num);
 
 ////////////////////////////////

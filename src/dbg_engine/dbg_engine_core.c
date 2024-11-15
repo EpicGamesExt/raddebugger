@@ -1142,6 +1142,18 @@ d_lines_array_from_file_path_line_range(Arena *arena, String8 file_path, Rng1S64
 }
 
 internal D_LineList
+d_lines_from_dbgi_key_file_path_line_num(Arena *arena, DI_Key dbgi_key, String8 file_path, S64 line_num)
+{
+  D_LineListArray array = d_lines_array_from_dbgi_key_file_path_line_range(arena, dbgi_key, file_path, r1s64(line_num, line_num+1));
+  D_LineList list = {0};
+  if(array.count != 0)
+  {
+    list = array.v[0];
+  }
+  return list;
+}
+
+internal D_LineList
 d_lines_from_file_path_line_num(Arena *arena, String8 file_path, S64 line_num)
 {
   D_LineListArray array = d_lines_array_from_file_path_line_range(arena, file_path, r1s64(line_num, line_num+1));
