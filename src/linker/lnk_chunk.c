@@ -362,7 +362,6 @@ lnk_chunk_align_array_list_push(Arena *arena, Arena *scratch, LNK_ChunkAlignArra
   }
 }
 
-
 internal LNK_ChunkLayout
 lnk_layout_from_chunk(Arena *arena, LNK_Chunk *root, U64 total_chunk_count)
 {
@@ -397,7 +396,6 @@ lnk_layout_from_chunk(Arena *arena, LNK_Chunk *root, U64 total_chunk_count)
     struct Stack  *next;
     LNK_ChunkArray chunk_array;
     U64            ichunk;
-    U64            cursor;
   };
   struct Stack *stack      = push_array(scratch.arena, struct Stack, 1);
   stack->chunk_array.count = 1;
@@ -409,8 +407,8 @@ lnk_layout_from_chunk(Arena *arena, LNK_Chunk *root, U64 total_chunk_count)
   U64 cursor = 0;
 
   ProfBegin("Traverse chunks from root");
-  while (stack) {
-    while (stack->ichunk < stack->chunk_array.count) {
+  for (; stack != 0; ) {
+    for (; stack->ichunk < stack->chunk_array.count; ) {
       LNK_Chunk *chunk = stack->chunk_array.v[stack->ichunk++];
       
       // skip discarded chunk
@@ -434,28 +432,32 @@ lnk_layout_from_chunk(Arena *arena, LNK_Chunk *root, U64 total_chunk_count)
       
       switch (chunk->type) {
       case LNK_Chunk_Leaf: {
-		// store id -> file size
+        // store id -> file size
         Assert(layout.chunk_file_size_array[chunk->ref.chunk_id] == max_U64);
         layout.chunk_file_size_array[chunk->ref.chunk_id] = chunk->u.leaf.size;
 		
-		// store id -> virt size
-		Assert(layout.chunk_virt_size_array[chunk->ref.chunk_id] == max_U64);
+        // store id -> virt size
+        Assert(layout.chunk_virt_size_array[chunk->ref.chunk_id] == max_U64);
         layout.chunk_virt_size_array[chunk->ref.chunk_id] = chunk->u.leaf.size;
-		
-		// advance
+
+        // advance
         cursor += chunk->u.leaf.size;
       } break;
 
       case LNK_Chunk_LeafArray: {
-		// apply sort
+#if BUILD_DEBUG
+        for (U64 i = 0; i < chunk->u.arr->count; ++i) {
+          Assert(chunk->u.arr->v[i]->type == LNK_Chunk_Leaf);
+        }
+#endif
+        // apply sort
         if (chunk->sort_chunk) {
           lnk_chunk_array_sort(*chunk->u.arr);
         }
 
-		// recurse into sub chunks
+        // recurse into sub chunks
         struct Stack *frame = push_array(scratch.arena, struct Stack, 1);
         frame->chunk_array  = *chunk->u.arr;
-        frame->cursor       = cursor;
         SLLStackPush(stack, frame);
       } goto _continue;
       
@@ -467,7 +469,7 @@ lnk_layout_from_chunk(Arena *arena, LNK_Chunk *root, U64 total_chunk_count)
           chunk_array.v[chunk_array.count++] = cptr->data;
         }
         
-		// apply sort
+        // apply sort
         if (chunk->sort_chunk) {
           lnk_chunk_array_sort(chunk_array);
         }
@@ -475,7 +477,6 @@ lnk_layout_from_chunk(Arena *arena, LNK_Chunk *root, U64 total_chunk_count)
         // recurse into sub chunks
         struct Stack *frame = push_array(scratch.arena, struct Stack, 1);
         frame->chunk_array  = chunk_array;
-        frame->cursor       = cursor;
         SLLStackPush(stack, frame);
       } goto _continue;
       
@@ -485,7 +486,7 @@ lnk_layout_from_chunk(Arena *arena, LNK_Chunk *root, U64 total_chunk_count)
     
     // terminate series
     if (stack->next) {
-	  // pop node chunk from stack
+      // pop node chunk from stack
       struct Stack *prev = stack->next;
       Assert(prev->ichunk > 0);
 
@@ -494,19 +495,22 @@ lnk_layout_from_chunk(Arena *arena, LNK_Chunk *root, U64 total_chunk_count)
       U64        align_size = AlignPadPow2(cursor, chunk->align);
       lnk_chunk_align_array_list_push(arena, scratch.arena, &align_list, align_cap, cursor, align_size);
 
-	  // check stack cursor for correctness
-      Assert(cursor >= prev->cursor);
-      
-	  // store id -> virt size
-	  U64 virt_chunk_size = cursor - prev->cursor;
+      U64 chunk_start_off = layout.chunk_off_array[chunk->ref.chunk_id];
+      Assert(chunk_start_off != max_U64);
+      Assert(chunk_start_off <= cursor);
+
+      // store id -> virt size
+      Assert(layout.chunk_virt_size_array[chunk->ref.chunk_id] == max_U64);
+      U64 virt_chunk_size = cursor - chunk_start_off;
       layout.chunk_virt_size_array[chunk->ref.chunk_id] = virt_chunk_size;
-      
-	  // store id -> file size
-	  U64 file_chunk_size = (cursor + align_size) - prev->cursor;
-      layout.chunk_file_size_array[chunk->ref.chunk_id] = file_chunk_size;
 
       // advance cursor
       cursor += align_size;
+
+      // store id -> file size
+      Assert(layout.chunk_file_size_array[chunk->ref.chunk_id] == max_U64);
+      U64 file_chunk_size = cursor - chunk_start_off;
+      layout.chunk_file_size_array[chunk->ref.chunk_id] = file_chunk_size;
     }
     
     // move to next frame
