@@ -1504,70 +1504,98 @@ utf8_from_utf32_single(U8 *buffer, U32 character){
 //~ rjf: Unicode String Conversions
 
 internal String8
-str8_from_16(Arena *arena, String16 in){
-  U64 cap = in.size*3;
-  U8 *str = push_array_no_zero(arena, U8, cap + 1);
-  U16 *ptr = in.str;
-  U16 *opl = ptr + in.size;
-  U64 size = 0;
-  UnicodeDecode consume;
-  for (;ptr < opl; ptr += consume.inc){
-    consume = utf16_decode(ptr, opl - ptr);
-    size += utf8_encode(str + size, consume.codepoint);
+str8_from_16(Arena *arena, String16 in)
+{
+  String8 result = str8_zero();
+  if(in.size)
+  {
+    U64 cap = in.size*3;
+    U8 *str = push_array_no_zero(arena, U8, cap + 1);
+    U16 *ptr = in.str;
+    U16 *opl = ptr + in.size;
+    U64 size = 0;
+    UnicodeDecode consume;
+    for(;ptr < opl; ptr += consume.inc)
+    {
+      consume = utf16_decode(ptr, opl - ptr);
+      size += utf8_encode(str + size, consume.codepoint);
+    }
+    str[size] = 0;
+    arena_pop(arena, (cap - size));
+    result = str8(str, size);
   }
-  str[size] = 0;
-  arena_pop(arena, (cap - size));
-  return(str8(str, size));
+  return result;
 }
 
 internal String16
-str16_from_8(Arena *arena, String8 in){
-  U64 cap = in.size*2;
-  U16 *str = push_array_no_zero(arena, U16, cap + 1);
-  U8 *ptr = in.str;
-  U8 *opl = ptr + in.size;
-  U64 size = 0;
-  UnicodeDecode consume;
-  for (;ptr < opl; ptr += consume.inc){
-    consume = utf8_decode(ptr, opl - ptr);
-    size += utf16_encode(str + size, consume.codepoint);
+str16_from_8(Arena *arena, String8 in)
+{
+  String16 result = str16_zero();
+  if(in.size)
+  {
+    U64 cap = in.size*2;
+    U16 *str = push_array_no_zero(arena, U16, cap + 1);
+    U8 *ptr = in.str;
+    U8 *opl = ptr + in.size;
+    U64 size = 0;
+    UnicodeDecode consume;
+    for(;ptr < opl; ptr += consume.inc)
+    {
+      consume = utf8_decode(ptr, opl - ptr);
+      size += utf16_encode(str + size, consume.codepoint);
+    }
+    str[size] = 0;
+    arena_pop(arena, (cap - size)*2);
+    result = str16(str, size);
   }
-  str[size] = 0;
-  arena_pop(arena, (cap - size)*2);
-  return(str16(str, size));
+  return result;
 }
 
 internal String8
-str8_from_32(Arena *arena, String32 in){
-  U64 cap = in.size*4;
-  U8 *str = push_array_no_zero(arena, U8, cap + 1);
-  U32 *ptr = in.str;
-  U32 *opl = ptr + in.size;
-  U64 size = 0;
-  for (;ptr < opl; ptr += 1){
-    size += utf8_encode(str + size, *ptr);
+str8_from_32(Arena *arena, String32 in)
+{
+  String8 result = str8_zero();
+  if(in.size)
+  {
+    U64 cap = in.size*4;
+    U8 *str = push_array_no_zero(arena, U8, cap + 1);
+    U32 *ptr = in.str;
+    U32 *opl = ptr + in.size;
+    U64 size = 0;
+    for(;ptr < opl; ptr += 1)
+    {
+      size += utf8_encode(str + size, *ptr);
+    }
+    str[size] = 0;
+    arena_pop(arena, (cap - size));
+    result = str8(str, size);
   }
-  str[size] = 0;
-  arena_pop(arena, (cap - size));
-  return(str8(str, size));
+  return result;
 }
 
 internal String32
-str32_from_8(Arena *arena, String8 in){
-  U64 cap = in.size;
-  U32 *str = push_array_no_zero(arena, U32, cap + 1);
-  U8 *ptr = in.str;
-  U8 *opl = ptr + in.size;
-  U64 size = 0;
-  UnicodeDecode consume;
-  for (;ptr < opl; ptr += consume.inc){
-    consume = utf8_decode(ptr, opl - ptr);
-    str[size] = consume.codepoint;
-    size += 1;
+str32_from_8(Arena *arena, String8 in)
+{
+  String32 result = str32_zero(); 
+  if(in.size)
+  {
+    U64 cap = in.size;
+    U32 *str = push_array_no_zero(arena, U32, cap + 1);
+    U8 *ptr = in.str;
+    U8 *opl = ptr + in.size;
+    U64 size = 0;
+    UnicodeDecode consume;
+    for(;ptr < opl; ptr += consume.inc)
+    {
+      consume = utf8_decode(ptr, opl - ptr);
+      str[size] = consume.codepoint;
+      size += 1;
+    }
+    str[size] = 0;
+    arena_pop(arena, (cap - size)*4);
+    result = str32(str, size);
   }
-  str[size] = 0;
-  arena_pop(arena, (cap - size)*4);
-  return(str32(str, size));
+  return result;
 }
 
 ////////////////////////////////
