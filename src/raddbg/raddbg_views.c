@@ -5942,7 +5942,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(text)
       for(DI_KeyNode *n = dbgi_keys.first; n != 0; n = n->next)
       {
         DI_Key key = n->v;
-        if(key.min_timestamp < file_timestamp)
+        if(key.min_timestamp < file_timestamp && key.min_timestamp != 0 && key.path.size != 0)
         {
           file_is_out_of_date = 1;
           out_of_date_dbgi_name = str8_skip_last_slash(key.path);
