@@ -1354,7 +1354,7 @@ di_search_thread__entry_point(void *p)
     String8 query = {0};
     DI_SearchParams params = {0};
     U64 initial_bucket_write_gen = 0;
-    OS_MutexScopeR(stripe->rw_mutex)
+    OS_MutexScopeW(stripe->rw_mutex)
     {
       for(DI_SearchNode *n = slot->first; n != 0; n = n->next)
       {
