@@ -1149,7 +1149,8 @@ lnk_config_from_cmd_line(Arena *arena, String8List raw_cmd_line)
       String8List lib_dir_list = str8_list_copy(arena, &cmd->value_strings);
       for (String8Node *dir_n = lib_dir_list.first; dir_n != 0; dir_n = dir_n->next) {
         if (!os_folder_path_exists(dir_n->string)) {
-          lnk_error_cmd_switch(LNK_Warning_Cmdl, cmd_switch, "path doesn't exist %S", dir_n->string);
+          String8 full_path = os_full_path_from_path(scratch.arena, dir_n->string);
+          lnk_error_cmd_switch(LNK_Warning_Cmdl, cmd_switch, "path doesn't exist %S", full_path);
         }
       }
       str8_list_concat_in_place(&config->lib_dir_list, &lib_dir_list);
