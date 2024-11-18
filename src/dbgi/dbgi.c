@@ -54,7 +54,9 @@ di_key_copy(Arena *arena, DI_Key *src)
 internal DI_Key
 di_normalized_key_from_key(Arena *arena, DI_Key *src)
 {
+  ProfBeginFunction();
   DI_Key dst = {path_normalized_from_string(arena, src->path), src->min_timestamp};
+  ProfEnd();
   return dst;
 }
 
@@ -197,7 +199,7 @@ di_init(void)
   Arena *arena = arena_alloc();
   di_shared = push_array(arena, DI_Shared, 1);
   di_shared->arena = arena;
-  di_shared->slots_count = 1024;
+  di_shared->slots_count = 4096;
   di_shared->slots = push_array(arena, DI_Slot, di_shared->slots_count);
   di_shared->stripes_count = Min(di_shared->slots_count, os_get_system_info()->logical_processor_count);
   di_shared->stripes = push_array(arena, DI_Stripe, di_shared->stripes_count);
@@ -330,6 +332,7 @@ di_scope_touch_search_node__stripe_mutex_r_guarded(DI_Scope *scope, DI_SearchNod
 internal DI_Node *
 di_node_from_key_slot__stripe_mutex_r_guarded(DI_Slot *slot, DI_Key *key)
 {
+  ProfBeginFunction();
   DI_Node *node = 0;
   StringMatchFlags match_flags = path_match_flags_from_os(operating_system_from_context());
   U64 most_recent_timestamp = max_U64;
@@ -343,6 +346,7 @@ di_node_from_key_slot__stripe_mutex_r_guarded(DI_Slot *slot, DI_Key *key)
       most_recent_timestamp = (n->key.min_timestamp - key->min_timestamp);
     }
   }
+  ProfEnd();
   return node;
 }
 
@@ -586,7 +590,7 @@ di_rdi_from_key(DI_Scope *scope, DI_Key *key, U64 endt_us)
     U64 stripe_idx = slot_idx%di_shared->stripes_count;
     DI_Slot *slot = &di_shared->slots[slot_idx];
     DI_Stripe *stripe = &di_shared->stripes[stripe_idx];
-    OS_MutexScopeR(stripe->rw_mutex) for(;;)
+    ProfScope("grab node") OS_MutexScopeR(stripe->rw_mutex) for(;;)
     {
       //- rjf: find existing node
       DI_Node *node = di_node_from_key_slot__stripe_mutex_r_guarded(slot, &key_normalized);
@@ -617,10 +621,13 @@ di_rdi_from_key(DI_Scope *scope, DI_Key *key, U64 endt_us)
          !ins_atomic_u64_eval(&node->is_working) &&
          di_u2p_enqueue_key(&key_normalized, endt_us))
       {
-        ins_atomic_u64_eval_assign(&node->is_working, 1);
-        DeferLoop(os_rw_mutex_drop_r(stripe->rw_mutex), os_rw_mutex_take_r(stripe->rw_mutex))
+        ProfScope("ask for parse")
         {
-          async_push_work(di_parse_work);
+          ins_atomic_u64_eval_assign(&node->is_working, 1);
+          DeferLoop(os_rw_mutex_drop_r(stripe->rw_mutex), os_rw_mutex_take_r(stripe->rw_mutex))
+          {
+            async_push_work(di_parse_work);
+          }
         }
       }
       

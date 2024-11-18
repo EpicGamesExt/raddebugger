@@ -5039,6 +5039,12 @@ rd_window_frame(RD_Window *ws)
             DI_SearchItemArray items = di_search_items_from_key_params_query(di_scope, search_key, &search_params, query_word, 0, &is_stale);
             for(U64 idx = 0; idx < 20 && idx < items.count; idx += 1)
             {
+              // rjf: skip bad elements
+              if(items.v[idx].dbgi_idx >= rdis_count)
+              {
+                continue;
+              }
+              
               // rjf: unpack info
               RDI_Parsed *rdi = rdis[items.v[idx].dbgi_idx];
               String8 name = di_search_item_string_from_rdi_target_element_idx(rdi, search_params.target, items.v[idx].idx);
@@ -5068,6 +5074,12 @@ rd_window_frame(RD_Window *ws)
             DI_SearchItemArray items = di_search_items_from_key_params_query(di_scope, search_key, &search_params, query_word, 0, &is_stale);
             for(U64 idx = 0; idx < 20 && idx < items.count; idx += 1)
             {
+              // rjf: skip bad elements
+              if(items.v[idx].dbgi_idx >= rdis_count)
+              {
+                continue;
+              }
+              
               // rjf: unpack info
               RDI_Parsed *rdi = rdis[items.v[idx].dbgi_idx];
               String8 name = di_search_item_string_from_rdi_target_element_idx(rdi, search_params.target, items.v[idx].idx);
@@ -5097,6 +5109,12 @@ rd_window_frame(RD_Window *ws)
             DI_SearchItemArray items = di_search_items_from_key_params_query(di_scope, search_key, &search_params, query_word, 0, &is_stale);
             for(U64 idx = 0; idx < 20 && idx < items.count; idx += 1)
             {
+              // rjf: skip bad elements
+              if(items.v[idx].dbgi_idx >= rdis_count)
+              {
+                continue;
+              }
+              
               // rjf: unpack info
               RDI_Parsed *rdi = rdis[items.v[idx].dbgi_idx];
               String8 name = di_search_item_string_from_rdi_target_element_idx(rdi, search_params.target, items.v[idx].idx);
@@ -5126,6 +5144,12 @@ rd_window_frame(RD_Window *ws)
             DI_SearchItemArray items = di_search_items_from_key_params_query(di_scope, search_key, &search_params, query_word, 0, &is_stale);
             for(U64 idx = 0; idx < 20 && idx < items.count; idx += 1)
             {
+              // rjf: skip bad elements
+              if(items.v[idx].dbgi_idx >= rdis_count)
+              {
+                continue;
+              }
+              
               // rjf: unpack info
               RDI_Parsed *rdi = rdis[items.v[idx].dbgi_idx];
               String8 name = di_search_item_string_from_rdi_target_element_idx(rdi, search_params.target, items.v[idx].idx);
@@ -9321,8 +9345,16 @@ rd_ev_view_rule_expr_expand_range_info__debug_info_tables(Arena *arena, EV_View 
     result.row_members     = push_array(arena, E_Member *, result.row_exprs_count);
     for EachIndex(row_expr_idx, result.row_exprs_count)
     {
-      // rjf: unpack row info
+      // rjf: unpack row
       DI_SearchItem *item = &accel->items.v[idx_range.min + row_expr_idx];
+      
+      // rjf: skip bad elements
+      if(item->dbgi_idx >= accel->rdis_count)
+      {
+        continue;
+      }
+      
+      // rjf: unpack row info
       RDI_Parsed *rdi = accel->rdis[item->dbgi_idx];
       E_Module *module = &e_parse_ctx->modules[item->dbgi_idx];
       
