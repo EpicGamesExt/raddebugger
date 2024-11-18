@@ -136,7 +136,7 @@ read_only struct
   { LNK_CmdSwitch_Rad_LargePages,              "RAD_LARGE_PAGES",                 "[:NO]",     "Disabled by default on Windows."                                               },
   { LNK_CmdSwitch_Rad_LinkVer,                 "RAD_LINK_VER",                    ":##,##", ""                                                                                 },
   { LNK_CmdSwitch_Rad_Log,                     "RAD_LOG",                         ":{ALL,INPUT_OBJ,INPUT_LIB,IO,LINK_STATS,TIMERS}", ""                                        },
-  { LNK_CmdSwitch_Rad_MtPath,                  "RAD_MT_PATH",                     ":EXEPATH",  "Path to manifest tool."                                                        },
+  { LNK_CmdSwitch_Rad_MtPath,                  "RAD_MT_PATH",                     ":EXEPATH",  "Exe path to manifest tool, default: " LNK_MANIFEST_MERGE_TOOL_NAME             },
   { LNK_CmdSwitch_Rad_OsVer,                   "RAD_OS_VER",                      ":##,##", ""                                                                                 },
   { LNK_CmdSwitch_Rad_PageSize,                "RAD_PAGE_SIZE",                   ":#",        "Must be power of two."                                                         },
   { LNK_CmdSwitch_Rad_PathStyle,               "RAD_PATH_STYLE",                  ":{WindowsAbsolute|UnixAbsolute}", ""                                                        },
@@ -489,28 +489,6 @@ lnk_get_min_subsystem_version(PE_WindowsSubsystem subsystem, COFF_MachineType ma
   } break;
   }
   return ver;
-}
-
-internal String8
-lnk_get_mt_path(Arena *arena)
-{
-#if OS_WINDOWS
-#undef OS_WINDOWS
-#pragma comment(lib, "shlwapi.lib")
-#include <shlwapi.h>
-  local_persist wchar_t raw_mt_path[MAX_PATH*2] = L"mt.exe";
-  PathFindOnPathW(&raw_mt_path[0], 0);
-
-  String16 mt_path_16 = str16_cstring_capped(&raw_mt_path[0], raw_mt_path + sizeof(raw_mt_path));
-  String8  mt_path    = str8_from_16(arena, mt_path_16);
-  
-  mt_path = path_convert_slashes(arena, mt_path, PathStyle_WindowsAbsolute);
-#undef OS_WINDOWS
-#define OS_WINDOWS 1
-#else
-  String8 mt_path = str8_lit("llvm-mt.exe");
-#endif
-  return mt_path;
 }
 
 internal B32
@@ -936,8 +914,7 @@ lnk_config_from_cmd_line(Arena *arena, String8List raw_cmd_line)
 #endif
 
   if (!lnk_cmd_line_has_switch(cmd_line, LNK_CmdSwitch_Rad_MtPath)) {
-    String8 mt_path = lnk_get_mt_path(scratch.arena);
-    lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_MtPath, "%S", mt_path);
+    lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_MtPath, "%s", LNK_MANIFEST_MERGE_TOOL_NAME);
   }
 
   LNK_Config *config                = push_array(arena, LNK_Config, 1);

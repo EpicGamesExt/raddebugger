@@ -324,7 +324,6 @@ lnk_merge_manifest_files(String8 mt_path, String8 out_name, String8List manifest
   // launch mt.exe with our command line
   OS_ProcessLaunchParams launch_opts = {0};
   launch_opts.cmd_line               = cmd_line;
-  launch_opts.path                   = str8_chop_last_slash(mt_path);
   launch_opts.inherit_env            = 1;
   launch_opts.consoleless            = 1;
   OS_Handle mt_handle = os_process_launch(&launch_opts);

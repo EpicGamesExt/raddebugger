@@ -235,6 +235,14 @@ typedef enum
   LNK_TypeNameHashMode_Full,
 } LNK_TypeNameHashMode;
 
+#if OS_WINDOWS
+# define LNK_MANIFEST_MERGE_TOOL_NAME "mt.exe"
+#elif OS_LINUX || OS_MAC
+# define LNK_MANIFEST_MERGE_TOOL_NAME "llvm-mt"
+#else
+# error 
+#endif
+
 typedef struct LNK_Config
 {
   LNK_ConfigFlags             flags;
@@ -473,7 +481,6 @@ internal void lnk_error_cmd_switch_invalid_param(LNK_ErrorCode code, LNK_CmdSwit
 internal U64     lnk_get_base_addr(LNK_Config *config);
 internal Version lnk_get_default_subsystem_version(PE_WindowsSubsystem subsystem, COFF_MachineType machine);
 internal Version lnk_get_min_subsystem_version(PE_WindowsSubsystem subsystem, COFF_MachineType machine);
-internal String8 lnk_get_mt_path(Arena *arena);
 
 internal B32 lnk_do_debug_info(LNK_Config *config);
 
