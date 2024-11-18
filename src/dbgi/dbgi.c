@@ -575,6 +575,7 @@ di_close(DI_Key *key)
 internal RDI_Parsed *
 di_rdi_from_key(DI_Scope *scope, DI_Key *key, U64 endt_us)
 {
+  ProfBeginFunction();
   RDI_Parsed *result = &di_rdi_parsed_nil;
   if(key->path.size != 0)
   {
@@ -636,6 +637,7 @@ di_rdi_from_key(DI_Scope *scope, DI_Key *key, U64 endt_us)
     }
     scratch_end(scratch);
   }
+  ProfEnd();
   return result;
 }
 
@@ -1421,7 +1423,7 @@ di_search_thread__entry_point(void *p)
     
     //- rjf: list -> array
     DI_SearchItemArray items = {0};
-    if(!cancelled)
+    if(arena != 0 && !cancelled)
     {
       items.count = items_list.total_count;
       items.v = push_array(arena, DI_SearchItem, items.count);
