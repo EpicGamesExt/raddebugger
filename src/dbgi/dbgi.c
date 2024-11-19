@@ -687,7 +687,7 @@ di_search_items_from_key_params_query(DI_Scope *scope, U128 key, DI_SearchParams
         {
           node = push_array(stripe->arena, DI_SearchNode, 1);
         }
-        SLLQueuePush(slot->first, slot->last, node);
+        DLLPushBack(slot->first, slot->last, node);
         node->key = key;
         for(U64 idx = 0; idx < ArrayCount(node->buckets); idx += 1)
         {
