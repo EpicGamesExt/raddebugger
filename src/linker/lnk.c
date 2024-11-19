@@ -17,16 +17,16 @@
 
 #include "base_ext/base_blake3.h"
 #include "base_ext/base_blake3.c"
-#include "third_party_ext/md5/md5.c"
-#include "third_party_ext/md5/md5.h"
-#include "third_party_ext/xxHash/xxhash.c"
-#include "third_party_ext/xxHash/xxhash.h"
+#include "third_party/md5/md5.c"
+#include "third_party/md5/md5.h"
+#include "third_party/xxHash/xxhash.c"
+#include "third_party/xxHash/xxhash.h"
 
 #if defined(_MSC_VER)
 #pragma warning(push)
 #pragma warning(disable:4789)
 #endif
-#include "third_party_ext/radsort/radsort.h"
+#include "third_party/radsort/radsort.h"
 #if defined(_MSC_VER)
 #pragma warning(pop)
 #endif

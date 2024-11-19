@@ -28,7 +28,7 @@
 #  pragma clang diagnostic pop
 #endif
 
-#include "../third_party_ext/blake3/c/blake3.h"
+#include "third_party/blake3/c/blake3.h"
 
 static void
 blake3(void* out, size_t outlen, void* in, size_t inlen)

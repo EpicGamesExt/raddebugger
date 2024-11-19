@@ -8,14 +8,14 @@
 #pragma warning (push, 0)
 #endif
 
-#include "../third_party_ext/blake3/c/blake3_portable.c"
+#include "third_party/blake3/c/blake3_portable.c"
 
 #if defined(_M_AMD64) || defined(__x86_64__)
 
 #define round_fn           sse2_round_fn
 #define compress_pre       sse2_compress_pre
 
-#include "../third_party_ext/blake3/c/blake3_sse2.c"
+#include "third_party/blake3/c/blake3_sse2.c"
 
 #define loadu              sse41_loadu
 #define storeu             sse41_storeu
@@ -40,7 +40,7 @@
 #if defined(__clang__)
 #pragma clang attribute push(__attribute__((target("sse4.1"))), apply_to=function)
 #endif
-#include "../third_party_ext/blake3/c/blake3_sse41.c"
+#include "third_party/blake3/c/blake3_sse41.c"
 #if defined(__clang__)
 #pragma clang attribute pop
 #endif
@@ -62,7 +62,7 @@
 #if defined(__clang__)
 #pragma clang attribute push(__attribute__((target("avx2"))), apply_to=function)
 #endif
-#include "../third_party_ext/blake3/c/blake3_avx2.c"
+#include "third_party/blake3/c/blake3_avx2.c"
 #if defined(__clang__)
 #pragma clang attribute pop
 #endif
@@ -80,7 +80,7 @@
 #if defined(__clang__)
 #pragma clang attribute push(__attribute__((target("avx512f,avx512vl"))), apply_to=function)
 #endif
-#include "../third_party_ext/blake3/c/blake3_avx512.c"
+#include "third_party/blake3/c/blake3_avx512.c"
 #if defined(__clang__)
 #pragma clang attribute pop
 #endif
@@ -88,11 +88,11 @@
 #endif
 
 #if defined(__aarch64__) || defined(_M_ARM64)
-#include "../third_party_ext/blake3/c/blake3_neon.c"
+#include "third_party/blake3/c/blake3_neon.c"
 #endif
 
-#include "../third_party_ext/blake3/c/blake3_dispatch.c"
-#include "../third_party_ext/blake3/c/blake3.c"
+#include "third_party/blake3/c/blake3_dispatch.c"
+#include "third_party/blake3/c/blake3.c"
 
 #if defined(__clang__)
 #pragma clang diagnostic pop
