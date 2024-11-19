@@ -1030,7 +1030,6 @@ os_init(void)
       }
     }
   }
-  scratch_end(scratch);
 
   lnx_page_size = (U64)getpagesize();
 
@@ -1052,6 +1051,7 @@ os_init(void)
      umask is *also* not thread-safe. Fun! */
   umask(00);
 
+  scratch_end(scratch);
 }
 
 ////////////////////////////////
@@ -1130,13 +1130,15 @@ os_set_large_pages(B32 flag)
 internal B32
 os_large_pages_enabled(void)
 {
+  NotImplemented; // *facepalm* this is not done
   // This is aparently the reccomended way to check for hugepage support. Do not ask...
   // TODO(mallchad): This is an annoying way to do it, query for nr_hugepages instead
   U8 buffer[5000];
-  LNX_fd fd = open("/proc/meminfo", O_RDONLY);
+  LNX_fd fd = open("/proc/sys/vm/nr_hugepages", O_RDONLY);
   String8 meminfo = {0};
+  AssertAlways(fd >= 0);
   meminfo.str = buffer;
-  meminfo.size = read(fd, buffer, 5000);
+  // meminfo.size = read(fd, buffer, 5000);
 
   Rng1U64 match = str8_match_substr( meminfo, str8_cstring("Huge"), 0x0 );
 
@@ -1462,7 +1464,7 @@ internal void
 os_file_write(OS_Handle file, Rng1U64 rng, void *data)
 {
   // Zero Valid Argument
-  if (*file.u64 == 0 || data == NULL) { return; }
+  if ((*file.u64 == 0) || (data == NULL) || (rng.min - rng.max == 0)) { return; }
   S32 fd = lnx_fd_from_handle(file);
   LNX_fstat file_info;
   fstat(fd, &file_info);
