@@ -42,7 +42,7 @@ EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(identity)
 #if !defined(XXH_IMPLEMENTATION)
 # define XXH_IMPLEMENTATION
 # define XXH_STATIC_LINKING_ONLY
-# include "linker/third_party_ext/xxHash/xxhash.h"
+# include "third_party/xxHash/xxhash.h"
 #endif
 
 internal EV_Key

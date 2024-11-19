@@ -7,7 +7,7 @@
 #if !defined(XXH_IMPLEMENTATION)
 # define XXH_IMPLEMENTATION
 # define XXH_STATIC_LINKING_ONLY
-# include "linker/third_party_ext/xxHash/xxhash.h"
+# include "third_party/xxHash/xxhash.h"
 #endif
 
 internal U128
