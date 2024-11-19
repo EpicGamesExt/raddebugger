@@ -79,7 +79,7 @@ set auto_compile_flags=
 [[ -n "${telemetry}" ]] && auto_compile_flags="${auto_compile_flags} -DPROFILE_TELEMETRY=1" &&
     rad_log "[telemetry profiling enabled]"
 [[ -n "${asan}"      ]] && auto_compile_flags="${auto_compile_flags} -fsanitize=address" &&
-    "rad_log [asan enabled]"
+    rad_log "[asan enabled]"
 
 # --- Compile/Link Line Definitions ------------------------------------------
     cl_common="/I../src/ /I../local/ /nologo /FC /Z7"
@@ -158,13 +158,17 @@ function finish()
 # @param $@ - rest is any arguments provided
 function build_single()
 {
-    didbuild=1 &&
-        ${compile} "$1" ${@:3:100} ${compile_link} "${out}$2" || finish
+    local binary=$2
+    rad_log "Building '${binary}'"
+    didbuild=1
+    ${compile} "$1" ${@:3:100} ${compile_link} "${out}$2" || finish
     return $?
 }
 
 function build_dll()
 {
+    local binary=$2
+    rad_log "Building '${binary}'"
     didbuild=1
     ${compile} "$1" ${compile_link} ${@:3:100} ${link_dll} "${out}$2"
     return $?
