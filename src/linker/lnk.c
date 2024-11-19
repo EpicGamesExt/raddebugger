@@ -21,15 +21,7 @@
 #include "third_party/md5/md5.h"
 #include "third_party/xxHash/xxhash.c"
 #include "third_party/xxHash/xxhash.h"
-
-#if defined(_MSC_VER)
-#pragma warning(push)
-#pragma warning(disable:4789)
-#endif
 #include "third_party/radsort/radsort.h"
-#if defined(_MSC_VER)
-#pragma warning(pop)
-#endif
 
 ////////////////////////////////
 // Code Base
