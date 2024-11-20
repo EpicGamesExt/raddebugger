@@ -166,7 +166,7 @@ pdb_strtbl_from_data(Arena *arena, String8 data){
     header = (PDB_StringTableHeader *)data.str;
   }
   
-  PDB_Strtbl *result = 0;
+  PDB_Strtbl *result = push_array(arena, PDB_Strtbl, 1);
   if (header != 0 && header->magic == PDB_StringTableHeader_MAGIC && header->version == 1){
     U32 strblock_size_off = sizeof(*header);
     U32 strblock_size = 0;
@@ -185,7 +185,6 @@ pdb_strtbl_from_data(Arena *arena, String8 data){
     U32 bucket_array_size = bucket_count*sizeof(PDB_StringIndex);
     
     if (bucket_array_off + bucket_array_size <= data.size){
-      result = push_array(arena, PDB_Strtbl, 1);
       result->data = data;
       result->bucket_count = bucket_count;
       result->strblock_min = strblock_off;

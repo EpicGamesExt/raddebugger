@@ -108,7 +108,7 @@ global ASYNC_Shared *async_shared = 0;
 ////////////////////////////////
 //~ rjf: Top-Level Layer Initialization
 
-internal void async_init(void);
+internal void async_init(CmdLine *cmdline);
 
 ////////////////////////////////
 //~ rjf: Top-Level Accessors

@@ -5,7 +5,7 @@
 //~ rjf: Top-Level Layer Initialization
 
 internal void
-async_init(void)
+async_init(CmdLine *cmdline)
 {
   Arena *arena = arena_alloc();
   async_shared = push_array(arena, ASYNC_Shared, 1);
@@ -20,8 +20,12 @@ async_init(void)
   }
   async_shared->ring_mutex = os_mutex_alloc();
   async_shared->ring_cv = os_condition_variable_alloc();
-  async_shared->work_threads_count = Max(1, os_get_system_info()->logical_processor_count-1);
-  async_shared->work_threads   = push_array(arena, OS_Handle, async_shared->work_threads_count);
+  String8 work_thread_count_string = cmd_line_string(cmdline, str8_lit("work_threads_count"));
+  if(work_thread_count_string.size == 0 || !try_u64_from_str8_c_rules(work_thread_count_string, &async_shared->work_threads_count))
+  {
+    async_shared->work_threads_count = Max(1, os_get_system_info()->logical_processor_count-1);
+  }
+  async_shared->work_threads = push_array(arena, OS_Handle, async_shared->work_threads_count);
   for EachIndex(idx, async_shared->work_threads_count)
   {
     async_shared->work_threads[idx] = os_thread_launch(async_work_thread__entry_point, (void *)idx, 0);
