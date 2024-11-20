@@ -643,7 +643,33 @@ os_w32_wnd_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
       {
         if(os_w32_new_window_custom_border || (window && window->custom_border))
         {
-          if(wParam == 1)
+          DWORD window_style = GetWindowLong(hwnd, GWL_STYLE);
+          B32 window_is_fullscreen = !(window_style & WS_OVERLAPPEDWINDOW);
+          if(IsZoomed(hwnd) && !window_is_fullscreen)
+          {
+            F32 dpi = w32_GetDpiForWindow_func ? (F32)w32_GetDpiForWindow_func(hwnd) : 96.f;
+            S32 title_bar_size = w32_GetSystemMetricsForDpi_func ? w32_GetSystemMetricsForDpi_func(SM_CYCAPTION, dpi) : 0;
+            S32 border_lr_size = 0;//w32_GetSystemMetricsForDpi_func ? w32_GetSystemMetricsForDpi_func(SM_CXPADDEDBORDER, dpi) : 0;
+            S32 border_b_size = 0;//w32_GetSystemMetricsForDpi_func ? w32_GetSystemMetricsForDpi_func(SM_CXPADDEDBORDER, dpi) : 0;
+            if(wParam == 1)
+            {
+              NCCALCSIZE_PARAMS *pncsp = (NCCALCSIZE_PARAMS *)lParam;
+              pncsp->rgrc[0].top -= title_bar_size;
+              pncsp->rgrc[0].left += border_lr_size;
+              pncsp->rgrc[0].right -= border_lr_size;
+              pncsp->rgrc[0].bottom -= border_b_size;
+            }
+            else
+            {
+              RECT *rect = (RECT *)lParam;
+              rect->top -= title_bar_size;
+              rect->left += border_lr_size;
+              rect->right -= border_lr_size;
+              rect->bottom -= border_b_size;
+            }
+            result = DefWindowProc(hwnd, uMsg, wParam, lParam);
+          }
+          else if(wParam == 1)
           {
             NCCALCSIZE_PARAMS *pncsp = (NCCALCSIZE_PARAMS *)lParam;
             pncsp->rgrc[0].right += 1;
