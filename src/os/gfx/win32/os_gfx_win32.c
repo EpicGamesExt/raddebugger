@@ -8,8 +8,10 @@
 
 typedef BOOL w32_SetProcessDpiAwarenessContext_Type(void* value);
 typedef UINT w32_GetDpiForWindow_Type(HWND hwnd);
+typedef int w32_GetSystemMetricsForDpi_Type(int nIndex, UINT dpi);
 #define w32_DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 ((void*)-4)
 global w32_GetDpiForWindow_Type *w32_GetDpiForWindow_func = 0;
+global w32_GetSystemMetricsForDpi_Type *w32_GetSystemMetricsForDpi_func = 0;
 
 ////////////////////////////////
 //~ rjf: Basic Helpers
@@ -559,7 +561,7 @@ os_w32_wnd_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
       //- rjf: [custom border]
       case WM_NCPAINT:
       {
-        if(window != 0 && window->custom_border && !window->custom_border_composition_enabled)
+        if(os_w32_new_window_custom_border || (window != 0 && window->custom_border && !window->custom_border_composition_enabled))
         {
           result = 0;
         }
@@ -596,7 +598,7 @@ os_w32_wnd_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
       case WM_NCUAHDRAWFRAME:
       {
         // NOTE(rjf): undocumented messages for drawing themed window borders.
-        if(window != 0 && window->custom_border)
+        if(os_w32_new_window_custom_border || (window != 0 && window->custom_border))
         {
           result = 0;
         }
@@ -608,7 +610,7 @@ os_w32_wnd_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
       case WM_SETICON:
       case WM_SETTEXT:
       {
-        if(window && window->custom_border && !window->custom_border_composition_enabled)
+        if(os_w32_new_window_custom_border || (window && window->custom_border && !window->custom_border_composition_enabled))
         {
           // NOTE(rjf):
           // https://blogs.msdn.microsoft.com/wpfsdk/2008/09/08/custom-window-chrome-in-wpf/
@@ -626,7 +628,7 @@ os_w32_wnd_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
       //- rjf: [custom border] activation - without this `result`, stuff flickers.
       case WM_NCACTIVATE:
       {
-        if(window == 0 || window->custom_border == 0)
+        if(!os_w32_new_window_custom_border && (window == 0 || window->custom_border == 0))
         {
           result = DefWindowProcW(hwnd, uMsg, wParam, lParam);
         }
@@ -638,30 +640,18 @@ os_w32_wnd_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
       
       //- rjf: [custom border] client/window size calculation
       case WM_NCCALCSIZE:
-      if(window != 0)
       {
-        if(window->custom_border == 0)
+        if(os_w32_new_window_custom_border || (window && window->custom_border))
         {
-          result = DefWindowProcW(hwnd, uMsg, wParam, lParam);
+          if(wParam == 1)
+          {
+            NCCALCSIZE_PARAMS *pncsp = (NCCALCSIZE_PARAMS *)lParam;
+            pncsp->rgrc[0].right += 1;
+          }
         }
         else
         {
-          MARGINS m = {0, 0, 0, 0};
-          RECT *r = (RECT *)lParam;
-          DWORD window_style = window ? GetWindowLong(window->hwnd, GWL_STYLE) : 0;
-          B32 is_fullscreen = !(window_style & WS_OVERLAPPEDWINDOW);
-          if(IsZoomed(hwnd) && !is_fullscreen)
-          {
-            int x_push_in = GetSystemMetrics(SM_CXFRAME) + GetSystemMetrics(SM_CXPADDEDBORDER);
-            int y_push_in = GetSystemMetrics(SM_CYFRAME) + GetSystemMetrics(SM_CXPADDEDBORDER);
-            r->left   += x_push_in;
-            r->top    += y_push_in;
-            r->bottom -= x_push_in;
-            r->right  -= y_push_in;
-            m.cxLeftWidth = m.cxRightWidth = x_push_in;
-            m.cyTopHeight = m.cyBottomHeight = y_push_in;
-          }
-          DwmExtendFrameIntoClientArea(hwnd, &m);
+          result = DefWindowProc(hwnd, uMsg, wParam, lParam);
         }
       }break;
       
@@ -814,6 +804,7 @@ os_gfx_init(void)
     (w32_SetProcessDpiAwarenessContext_Type*)GetProcAddress(module, "SetProcessDpiAwarenessContext");
     w32_GetDpiForWindow_func =
     (w32_GetDpiForWindow_Type*)GetProcAddress(module, "GetDpiForWindow");
+    w32_GetSystemMetricsForDpi_func = (w32_GetSystemMetricsForDpi_Type *)GetProcAddress(module, "GetSystemMetricsForDpi");
     FreeLibrary(module);
   }
   if(SetProcessDpiAwarenessContext_func != 0)
@@ -1015,11 +1006,14 @@ os_get_clipboard_text(Arena *arena)
 internal OS_Handle
 os_window_open(Vec2F32 resolution, OS_WindowFlags flags, String8 title)
 {
+  B32 custom_border = !!(flags & OS_WindowFlag_CustomBorder);
+  
   //- rjf: make hwnd
   HWND hwnd = 0;
   {
     Temp scratch = scratch_begin(0, 0);
     String16 title16 = str16_from_8(scratch.arena, title);
+    os_w32_new_window_custom_border = custom_border;
     hwnd = CreateWindowExW(WS_EX_APPWINDOW,
                            L"graphical-window",
                            (WCHAR*)title16.str,
@@ -1031,6 +1025,7 @@ os_window_open(Vec2F32 resolution, OS_WindowFlags flags, String8 title)
                            os_w32_gfx_state->hInstance,
                            0);
     DragAcceptFiles(hwnd, 1);
+    os_w32_new_window_custom_border = 0;
     scratch_end(scratch);
   }
   
@@ -1038,10 +1033,12 @@ os_window_open(Vec2F32 resolution, OS_WindowFlags flags, String8 title)
   OS_W32_Window *window = os_w32_window_alloc();
   {
     window->hwnd = hwnd;
-    if (w32_GetDpiForWindow_func != 0){
+    if(w32_GetDpiForWindow_func != 0)
+    {
       window->dpi = (F32)w32_GetDpiForWindow_func(hwnd);
     }
-    else{
+    else
+    {
       window->dpi = 96.f;
     }
   }

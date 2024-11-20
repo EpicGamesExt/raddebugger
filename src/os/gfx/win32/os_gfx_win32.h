@@ -84,7 +84,8 @@ struct OS_W32_GfxState
 global OS_W32_GfxState *os_w32_gfx_state = 0;
 global OS_EventList os_w32_event_list = {0};
 global Arena *os_w32_event_arena = 0;
-B32 os_w32_resizing = 0;
+global B32 os_w32_resizing = 0;
+global B32 os_w32_new_window_custom_border = 0;
 
 ////////////////////////////////
 //~ rjf: Basic Helpers
