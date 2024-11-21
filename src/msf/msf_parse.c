@@ -66,18 +66,18 @@ msf_raw_stream_table_from_data(Arena *arena, String8 msf_data)
     // 
     // The "data" in the directory describes streams:
     // PDB20:
-    // struct Pdb20StreamSize{
+    // struct Pdb20StreamSize {
     //  U32 size;
     //  U32 unknown; // looks like kind codes or revision counters or something
     // }
-    // struct{
+    // struct {
     //  U32 stream_count;
     //  Pdb20StreamSize stream_sizes[stream_count];
     //  U16 stream_indices[stream_count][...];
     // }
     //
     // PDB70:
-    // struct{
+    // struct {
     //  U32 stream_count;
     //  U32 stream_sizes[stream_count];
     //  U32 stream_indices[stream_count][...];
@@ -88,8 +88,8 @@ msf_raw_stream_table_from_data(Arena *arena, String8 msf_data)
     B32 got_directory = 1;
     
     {
-      U32  directory_super_map_dummy     = 0;
-      U32 *directory_super_map           = 0;
+      U32  directory_super_map_dummy    = 0;
+      U32 *directory_super_map          = 0;
       U32  directory_map_page_skip_size = 0;
       if (index_size == 2) {
         directory_super_map           = &directory_super_map_dummy;
@@ -117,8 +117,8 @@ msf_raw_stream_table_from_data(Arena *arena, String8 msf_data)
         // clamp index count by end of directory
         U32 index_count;
         {
-          U32 directory_pos             = (U32)(out_ptr - directory_buf);
-          U32 remaining_size            = directory_size - directory_pos;
+          U32 directory_pos            = (U32)(out_ptr - directory_buf);
+          U32 remaining_size           = directory_size - directory_pos;
           U32 remaining_map_page_count = CeilIntegerDiv(remaining_size, page_size);
           index_count = ClampTop(max_index_count_in_map_page, remaining_map_page_count);
         }
@@ -289,8 +289,8 @@ msf_parsed_from_data(Arena *arena, String8 msf_data)
     result               = push_array_no_zero(arena, MSF_Parsed, 1);
     result->streams      = streams;
     result->stream_count = st->stream_count;
-    result->block_size   = st->page_size;
-    result->block_count  = st->total_page_count;
+    result->page_size   = st->page_size;
+    result->page_count  = st->total_page_count;
   }
   
   scratch_end(scratch);

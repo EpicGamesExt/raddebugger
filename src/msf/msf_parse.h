@@ -33,8 +33,8 @@ struct MSF_Parsed
 {
   String8 *streams;
   U64      stream_count;
-  U64      block_size;
-  U64      block_count;
+  U64      page_size;
+  U64      page_count;
 };
 
 ////////////////////////////////
