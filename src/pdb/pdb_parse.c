@@ -586,50 +586,9 @@ pdb_gsi_symbol_from_string(PDB_GsiParsed *gsi, String8 symbol_data, String8 stri
           sym_opl = symbol_data.str + opl_off;
         }
         
-        String8 sym_name = str8_zero();
-        switch(sym_header->kind)
-        {
-        case CV_SymKind_CONSTANT:
-        {
-          CV_SymConstant *sym = (CV_SymConstant*)(sym_header+1);
-          CV_NumericParsed dummy;
-          U64 numeric_size = cv_read_numeric(symbol_data, off + sizeof(CV_RecHeader), &dummy);
-          sym_name = str8_cstring_capped((U8*)(sym+1)+numeric_size, sym_opl);
-        }break;
-        case CV_SymKind_LDATA32:
-        case CV_SymKind_GDATA32:
-        {
-          CV_SymData32 *sym = (CV_SymData32 *)(sym_header+1);
-          sym_name = str8_cstring_capped(sym+1, sym_opl);
-        }break;
-        case CV_SymKind_LTHREAD32:
-        case CV_SymKind_GTHREAD32:
-        {
-          if(off + sizeof(CV_RecHeader) + sizeof(CV_SymThread32) <= symbol_data.size)
-          {
-            CV_SymThread32 *sym = (CV_SymThread32 *)(sym_header+1);
-            sym_name = str8_cstring_capped(sym+1, sym_opl);
-          }
-        }break;
-        case CV_SymKind_UDT:
-        {
-          if(off + sizeof(CV_RecHeader) + sizeof(CV_SymUDT) <= symbol_data.size)
-          {
-            CV_SymUDT *sym = (CV_SymUDT *)(sym_header+1);
-            sym_name = str8_cstring_capped(sym+1, sym_opl);
-          }
-        }break;
-        case CV_SymKind_LPROCREF:
-        case CV_SymKind_PROCREF:
-        {
-          if(off + sizeof(CV_RecHeader) + sizeof(CV_SymRef2) <= symbol_data.size)
-          {
-            CV_SymRef2 *sym = (CV_SymRef2 *)(sym_header+1);
-            sym_name = str8_cstring_capped(sym+1, sym_opl);
-          }
-        }break;
-        default: InvalidPath;
-        }
+        Rng1U64 raw_symbol_range = rng_1u64(off + sizeof(*sym_header), off + (sym_header->size - sizeof(sym_header->kind)));
+        String8 raw_symbol       = str8_substr(symbol_data, raw_symbol_range);
+        String8 sym_name         = cv_name_from_symbol(sym_header->kind, raw_symbol);
 
         if(str8_match(sym_name, string, 0))
         {

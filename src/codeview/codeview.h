@@ -9,6 +9,8 @@
 ////////////////////////////////
 //~ rjf: CodeView Format Shared Types
 
+#define CV_MinComplexTypeIndex 0x1000
+
 #define CV_TypeIndex_Max max_U32
 typedef U32 CV_TypeIndex;
 typedef CV_TypeIndex CV_TypeId;
@@ -2903,6 +2905,51 @@ struct CV_C13InlineeSourceLineHeader
 #pragma pack(pop)
 
 ////////////////////////////////
+//~ Type Index Helper
+
+typedef enum CV_TypeIndexSource CV_TypeIndexSource;
+enum CV_TypeIndexSource
+{
+  CV_TypeIndexSource_NULL,
+  CV_TypeIndexSource_TPI,
+  CV_TypeIndexSource_IPI,
+  CV_TypeIndexSource_COUNT
+};
+
+typedef struct CV_TypeIndexInfo CV_TypeIndexInfo;
+struct CV_TypeIndexInfo
+{
+  struct CV_TypeIndexInfo *next;
+  U64                      offset;
+  CV_TypeIndexSource       source;
+};
+
+typedef struct CV_TypeIndexInfoList CV_TypeIndexInfoList;
+struct CV_TypeIndexInfoList
+{
+  U64               count;
+  CV_TypeIndexInfo *first;
+  CV_TypeIndexInfo *last;
+};
+
+typedef struct CV_TypeIndexArray CV_TypeIndexArray;
+struct CV_TypeIndexArray
+{
+  U32 count;
+  CV_TypeIndex *v;
+};
+
+////////////////////////////////
+
+typedef struct CV_UDTInfo CV_UDTInfo;
+struct CV_UDTInfo
+{
+  String8      name;
+  String8      unique_name;
+  CV_TypeProps props;
+};
+
+////////////////////////////////
 //~ CodeView Common Parser Types
 
 // CV_Numeric layout
@@ -3078,6 +3125,16 @@ struct CV_TypeIdArray
 };
 
 ////////////////////////////////
+
+internal CV_Arch               cv_arch_from_coff_machine(COFF_MachineType machine);
+internal U64                   cv_size_from_reg_x86(CV_Reg reg);
+internal U64                   cv_size_from_reg_x64(CV_Reg reg);
+internal U64                   cv_size_from_reg(CV_Arch arch, CV_Reg reg);
+internal B32                   cv_is_reg_sp(CV_Arch arch, CV_Reg reg);
+internal CV_EncodedFramePtrReg cv_pick_fp_encoding(CV_SymFrameproc *frameproc, B32 is_local_param);
+internal CV_Reg                cv_decode_fp_reg(CV_Arch arch, CV_EncodedFramePtrReg encoded_reg);
+
+////////////////////////////////
 //~ CodeView Common Decoding Helper Functions
 
 internal U64 cv_hash_from_string(String8 string);
@@ -3099,6 +3156,25 @@ internal U64 cv_decode_inline_annot_s32(String8 data, U64 offset, S32 *out_value
 
 internal S32 cv_inline_annot_signed_from_unsigned_operand(U32 value);
 
+////////////////////////////////
+
+internal CV_TypeIndexInfoList cv_get_symbol_type_index_offsets(Arena *arena, CV_SymKind kind, String8 data);
+internal CV_TypeIndexInfoList cv_get_leaf_type_index_offsets(Arena *arena, CV_LeafKind leaf_kind, String8 data);
+internal CV_TypeIndexInfoList cv_get_inlinee_type_index_offsets(Arena *arena, String8 raw_data);
+internal String8Array         cv_get_data_around_type_indices(Arena *arena, CV_TypeIndexInfoList ti_list, String8 data);
+internal CV_TypeIndexSource   cv_type_index_source_from_leaf_kind(CV_LeafKind leaf_kind);
+
+internal U64                  cv_name_offset_from_symbol(CV_SymKind kind, String8 data);
+internal String8              cv_name_from_symbol(CV_SymKind kind, String8 data);
+
+internal B32 cv_is_udt_name_anon(String8 name);
+internal B32 cv_is_udt(CV_LeafKind kind);
+internal B32 cv_is_global_symbol(CV_SymKind kind);
+internal B32 cv_is_typedef(CV_SymKind kind);
+internal B32 cv_is_scope_symbol(CV_SymKind kind);
+internal B32 cv_is_end_symbol(CV_SymKind kind);
+internal B32 cv_is_leaf_type_server(CV_LeafKind kind);
+internal B32 cv_is_leaf_pch(CV_LeafKind kind);
 
 ////////////////////////////////
 //~ CodeView Parsing Functions
@@ -3117,5 +3193,10 @@ internal CV_LeafParsed *cv_leaf_from_data(Arena *arena, String8 leaf_data, CV_Ty
 //~ CodeView C13 Parser Functions
 
 internal CV_C13Parsed *cv_c13_parsed_from_data(Arena *arena, String8 c13_data, String8 strtbl, COFF_SectionHeaderArray sections);
+
+////////////////////////////////
+//~ Enum <-> String
+
+internal String8 cv_string_from_type_index_source(CV_TypeIndexSource ti_source);
 
 #endif // CODEVIEW_H

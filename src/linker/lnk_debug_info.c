@@ -408,7 +408,7 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, String8List lib_dir
 
   // TODO: temp hack, remove when we have null obj with .debug$T
   {
-    String8 raw_null_leaf = cv_serialize_leaf_ex(scratch.arena, CV_LeafKind_NOTYPE, str8(0,0), 1);
+    String8 raw_null_leaf = cv_serialize_raw_leaf(scratch.arena, CV_LeafKind_NOTYPE, str8(0,0), 1);
 
     String8List srl = {0};
     str8_serial_begin(scratch.arena, &srl);

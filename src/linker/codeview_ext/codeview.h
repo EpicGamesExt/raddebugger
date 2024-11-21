@@ -3,8 +3,6 @@
 
 #pragma once
 
-#define CV_MinComplexTypeIndex 0x1000
-
 ////////////////////////////////
 // Aligns
 
@@ -37,34 +35,6 @@ typedef struct CV_SymbolHeader
 
 ////////////////////////////////
 // Type Index Helpers
-
-typedef enum CV_TypeIndexSource
-{
-  CV_TypeIndexSource_NULL,
-  CV_TypeIndexSource_TPI,
-  CV_TypeIndexSource_IPI,
-  CV_TypeIndexSource_COUNT
-} CV_TypeIndexSource;
-
-typedef struct CV_TypeIndexInfo
-{
-  struct CV_TypeIndexInfo *next;
-  U64                      offset;
-  CV_TypeIndexSource       source;
-} CV_TypeIndexInfo;
-
-typedef struct CV_TypeIndexInfoList
-{
-  U64               count;
-  CV_TypeIndexInfo *first;
-  CV_TypeIndexInfo *last;
-} CV_TypeIndexInfoList;
-
-typedef struct CV_TypeIndexArray
-{
-  U32 count;
-  CV_TypeIndex *v;
-} CV_TypeIndexArray;
 
 //- $$Symbols
 
@@ -197,13 +167,6 @@ typedef struct CV_C13LinesHeaderList
 } CV_C13LinesHeaderList;
 
 ////////////////////////////////
-
-typedef struct CV_UDTInfo
-{
-  String8      name;
-  String8      unique_name;
-  CV_TypeProps props;
-} CV_UDTInfo;
 
 typedef struct CV_TypeServerInfo
 {
@@ -417,42 +380,17 @@ typedef struct
 } CV_Str8ListFromDebugT;
 
 ////////////////////////////////
-// Type Index Helpers
-
-internal CV_TypeIndexInfo *   cv_symbol_type_index_info_push(Arena *arena, CV_TypeIndexInfoList *list, CV_TypeIndexSource source, U64 offset);
-internal CV_TypeIndexInfoList cv_get_symbol_type_index_offsets(Arena *arena, CV_SymKind kind, String8 data);
-internal CV_TypeIndexInfoList cv_get_leaf_type_index_offsets(Arena *arena, CV_LeafKind leaf_kind, String8 data);
-internal CV_TypeIndexInfoList cv_get_inlinee_type_index_offsets(Arena *arena, String8 raw_data);
-internal String8Array         cv_get_data_around_type_indices(Arena *arena, CV_TypeIndexInfoList ti_list, String8 data);
-internal CV_TypeIndexSource   cv_type_index_source_from_leaf_kind(CV_LeafKind leaf_kind);
-
-////////////////////////////////
-
-internal U64     cv_name_offset_from_symbol(CV_SymKind kind, String8 data);
-internal String8 cv_name_from_symbol       (CV_SymKind kind, String8 data);
-internal String8 cv_name_from_udt_info     (CV_UDTInfo udt_info);
-
-internal B32 cv_is_udt_name_anon   (String8 name);
-internal B32 cv_is_udt             (CV_LeafKind kind);
-internal B32 cv_is_global_symbol   (CV_SymKind kind);
-internal B32 cv_is_typedef         (CV_SymKind kind);
-internal B32 cv_is_scope_symbol    (CV_SymKind kind);
-internal B32 cv_is_end_symbol      (CV_SymKind kind);
-internal B32 cv_is_leaf_type_server(CV_LeafKind kind);
-internal B32 cv_is_leaf_pch        (CV_LeafKind kind);
 
 internal CV_ObjInfo        cv_obj_info_from_symbol(CV_Symbol symbol);
 internal CV_TypeServerInfo cv_type_server_info_from_leaf(CV_Leaf leaf);
 internal CV_PrecompInfo    cv_precomp_info_from_leaf(CV_Leaf leaf);
-
-internal B32 cv_is_reg_sp(CV_Arch arch, CV_Reg reg);
 
 ////////////////////////////////
 //~ Leaf Helpers
 
 internal U64     cv_compute_leaf_record_size(String8 data, U64 align);
 internal U64     cv_serialize_leaf_to_buffer(U8 *buffer, U64 buffer_cursor, U64 buffer_size, CV_LeafKind kind, String8 data, U64 align);
-internal String8 cv_serialize_leaf_ex(Arena *arena, CV_LeafKind kind, String8 data, U64 align);
+internal String8 cv_serialize_raw_leaf(Arena *arena, CV_LeafKind kind, String8 data, U64 align);
 internal String8 cv_serialize_leaf(Arena *arena, CV_Leaf *leaf, U64 align);
 internal CV_Leaf cv_make_leaf(Arena *arena, CV_LeafKind kind, String8 data);
 internal U64     cv_deserial_leaf(String8 raw_data, U64 off, U64 align, CV_Leaf *leaf_out);
@@ -506,6 +444,9 @@ internal U64             cv_debug_t_array_count_leaves(U64 count, CV_DebugT *arr
 
 internal String8List cv_str8_list_from_debug_t_parallel(TP_Context *tp, Arena *arena, CV_DebugT types);
 
+////////////////////////////////
+//~ Sub Section helpers
+
 // $$Symbols
 internal void              cv_parse_symbol_sub_section(Arena *arena, CV_SymbolList *list, U64 offset_base, String8 data, U64 align);
 internal void              cv_symbol_list_push_node(CV_SymbolList *list, CV_SymbolNode *node);
@@ -518,15 +459,12 @@ internal void              cv_symbol_list_concat_in_place_arr(CV_SymbolList *lis
 internal U64               cv_symbol_list_arr_get_count(U64 count, CV_SymbolList *list_arr);
 internal String8List       cv_data_from_symbol_list(Arena *arena, CV_SymbolList symbol_list, U64 align);
 internal CV_SymbolList     cv_global_scope_symbols_from_list(Arena *arena, CV_SymbolList list);
-internal CV_ScopeList      cv_symbol_tree_from_symbol_list(Arena *arena, CV_SymbolList list);
-internal CV_SymbolList     cv_build_symbol_tree(Arena *arena, CV_ScopeList symbol_tree, U64 symbol_base, U64 align);
 internal CV_SymbolPtrArray cv_symbol_ptr_array_from_list(Arena *arena, TP_Context *tp, U64 count, CV_SymbolList *symbol_list_arr);
 
 // $$FileChksms
 #define CV_MAP_STRING_TO_OFFSET_FUNC(name) U64 name(void *ud, String8 string)
 typedef CV_MAP_STRING_TO_OFFSET_FUNC(CV_MapStringToOffsetFunc);
 
-//internal String8     cv_c13_file_chksms_from_sub_sections(String8 c13_data, CV_C13Parsed *ss);
 internal void        cv_c13_patch_string_offsets_in_checksum_list(CV_ChecksumList checksum_list, String8 string_data, U64 string_data_base_offset, CV_StringHashTable string_ht);
 internal String8List cv_c13_collect_source_file_names(Arena *arena, CV_ChecksumList checksum_list, String8 string_data);
 
@@ -566,19 +504,6 @@ internal String8                  cv_pack_string_hash_table(Arena *arena, TP_Con
 
 ////////////////////////////////
 
-internal CV_EncodedFramePtrReg cv_pick_fp_encoding(CV_SymFrameproc *frameproc, B32 is_local_param);
-internal CV_Reg                cv_decode_fp_reg(CV_Arch arch, CV_EncodedFramePtrReg encoded_reg);
-internal Rng1U64List           cv_make_defined_range_list_from_gaps(Arena *arena, Rng1U64 defrange, CV_LvarAddrGap *gaps, U64 gap_count);
-
-////////////////////////////////
-
-internal U64 cv_size_from_reg_x86(CV_Reg reg);
-internal U64 cv_size_from_reg_x64(CV_Reg reg);
-internal U64 cv_size_from_reg(CV_Arch arch, CV_Reg reg);
-
-////////////////////////////////
-
-internal CV_Arch cv_arch_from_coff_machine(COFF_MachineType machine);
-internal String8 cv_string_from_type_index_source(CV_TypeIndexSource ti_source);
+internal Rng1U64List cv_make_defined_range_list_from_gaps(Arena *arena, Rng1U64 defrange, CV_LvarAddrGap *gaps, U64 gap_count);
 
 

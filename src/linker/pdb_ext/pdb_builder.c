@@ -1330,7 +1330,7 @@ pdb_type_server_make_leaf(PDB_TypeServer *ts, CV_LeafKind kind, String8 data)
 {
   ProfBeginFunction();
 
-  String8      leaf = cv_serialize_leaf_ex(ts->arena, kind, data, PDB_LEAF_ALIGN);
+  String8      leaf = cv_serialize_raw_leaf(ts->arena, kind, data, PDB_LEAF_ALIGN);
   String8Node *node = str8_list_push(ts->arena, &ts->leaf_list, leaf);
   
   ProfEnd();

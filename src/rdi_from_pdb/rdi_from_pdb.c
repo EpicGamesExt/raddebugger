@@ -415,22 +415,6 @@ p2r_location_from_addr_reg_off(Arena *arena, RDI_Arch arch, RDI_RegCode reg_code
   return result;
 }
 
-internal CV_EncodedFramePtrReg
-p2r_cv_encoded_fp_reg_from_frameproc(CV_SymFrameproc *frameproc, B32 param_base)
-{
-  CV_EncodedFramePtrReg result = 0;
-  CV_FrameprocFlags flags = frameproc->flags;
-  if(param_base)
-  {
-    result = CV_FrameprocFlags_ExtractParamBasePointer(flags);
-  }
-  else
-  {
-    result = CV_FrameprocFlags_ExtractLocalBasePointer(flags);
-  }
-  return result;
-}
-
 internal RDI_RegCode
 p2r_reg_code_from_arch_encoded_fp_reg(RDI_Arch arch, CV_EncodedFramePtrReg encoded_reg)
 {
@@ -2762,7 +2746,7 @@ ASYNC_WORK_DEF(p2r_symbol_stream_convert_work)
           U64 gap_count = ((U8*)sym_data_opl - (U8*)gaps) / sizeof(*gaps);
           
           // rjf: select frame pointer register
-          CV_EncodedFramePtrReg encoded_fp_reg = p2r_cv_encoded_fp_reg_from_frameproc(frameproc, defrange_target_is_param);
+          CV_EncodedFramePtrReg encoded_fp_reg = cv_pick_fp_encoding(frameproc, defrange_target_is_param);
           RDI_RegCode fp_register_code = p2r_reg_code_from_arch_encoded_fp_reg(in->arch, encoded_fp_reg);
           
           // rjf: build location
@@ -2834,7 +2818,7 @@ ASYNC_WORK_DEF(p2r_symbol_stream_convert_work)
           
           // rjf: unpack sym
           CV_SymDefrangeFramepointerRelFullScope *defrange_fprel_full_scope = (CV_SymDefrangeFramepointerRelFullScope*)sym_header_struct_base;
-          CV_EncodedFramePtrReg encoded_fp_reg = p2r_cv_encoded_fp_reg_from_frameproc(frameproc, defrange_target_is_param);
+          CV_EncodedFramePtrReg encoded_fp_reg = cv_pick_fp_encoding(frameproc, defrange_target_is_param);
           RDI_RegCode fp_register_code = p2r_reg_code_from_arch_encoded_fp_reg(in->arch, encoded_fp_reg);
           
           // rjf: build location
