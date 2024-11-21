@@ -48,24 +48,18 @@ set cl_debug=      call cl /Od /Ob1 /DBUILD_DEBUG=1 %cl_common% %auto_compile_fl
 set cl_release=    call cl /O2 /DBUILD_DEBUG=0 %cl_common% %auto_compile_flags%
 set clang_debug=   call clang -g -O0 -DBUILD_DEBUG=1 %clang_common% %auto_compile_flags%
 set clang_release= call clang -g -O2 -DBUILD_DEBUG=0 %clang_common% %auto_compile_flags%
-set cl_link=       /link /MANIFEST:EMBED /INCREMENTAL:NO /pdbaltpath:%%%%_PDB%%%%
-set clang_link=    -fuse-ld=lld -Xlinker /MANIFEST:EMBED -Xlinker /pdbaltpath:%%%%_PDB%%%%
+set cl_link=       /link /MANIFEST:EMBED /INCREMENTAL:NO /pdbaltpath:%%%%_PDB%%%% /NATVIS:"%~dp0\src\natvis\base.natvis"
+set clang_link=    -fuse-ld=lld -Xlinker /MANIFEST:EMBED -Xlinker /pdbaltpath:%%%%_PDB%%%% -Xlinker /NATVIS:"%~dp0\src\natvis\base.natvis"
 set cl_out=        /out:
 set clang_out=     -o
-
-:: --- NATVIS -----------------------------------------------------------------
-set natvis= /NATVIS:"%~dp0\src\natvis\base.natvis"
-if "%radlink%"=="1" set natvis= %natvis% /NATVIS:"%~dp0\src\linker\linker.natvis"
-
-if "%clang%"=="1" (
-  set result=
-  for %%n in (%natvis%) do set result= !result! -Xlinker %%n
-  set natvis= !result!
-)
+set cl_natvis=     /NATVIS:
+set clang_natvis=  -Xlinker /NATVIS:
 
 :: --- Per-Build Settings -----------------------------------------------------
 set link_dll=-DLL
 set link_icon=logo.res
+if "%msvc%"=="1"    set link_natvis=%cl_natvis%
+if "%clang%"=="1"   set link_natvis=%clang_natvis%
 if "%msvc%"=="1"    set only_compile=/c
 if "%clang%"=="1"   set only_compile=-c
 if "%msvc%"=="1"    set EHsc=/EHsc
@@ -86,9 +80,6 @@ if "%clang%"=="1"     set compile_link=%clang_link%
 if "%clang%"=="1"     set out=%clang_out%
 if "%debug%"=="1"     set compile=%compile_debug%
 if "%release%"=="1"   set compile=%compile_release%
-
-:: --- Append NATVIS to link line ---------------------------------------------
-set compile_link= %compile_link% %natvis%
 
 :: --- Prep Directories -------------------------------------------------------
 if not exist build mkdir build
@@ -115,7 +106,7 @@ if not "%no_meta%"=="1" (
 :: --- Build Everything (@build_targets) --------------------------------------
 pushd build
 if "%raddbg%"=="1"                     set didbuild=1 && %compile% ..\src\raddbg\raddbg_main.c                               %compile_link% %link_icon% %out%raddbg.exe || exit /b 1
-if "%radlink%"=="1"                    set didbuild=1 && %compile%  ..\src\linker\lnk.c                                      %compile_link% %out%radlink.exe || exit /b 1
+if "%radlink%"=="1"                    set didbuild=1 && %compile%  ..\src\linker\lnk.c                                      %compile_link% %link_natvis%"%~dp0\src\linker\linker.natvis" %out%radlink.exe || exit /b 1
 if "%rdi_from_pdb%"=="1"               set didbuild=1 && %compile% ..\src\rdi_from_pdb\rdi_from_pdb_main.c                   %compile_link% %out%rdi_from_pdb.exe || exit /b 1
 if "%rdi_from_dwarf%"=="1"             set didbuild=1 && %compile% ..\src\rdi_from_dwarf\rdi_from_dwarf.c                    %compile_link% %out%rdi_from_dwarf.exe || exit /b 1
 if "%rdi_dump%"=="1"                   set didbuild=1 && %compile% ..\src\rdi_dump\rdi_dump_main.c                           %compile_link% %out%rdi_dump.exe || exit /b 1
