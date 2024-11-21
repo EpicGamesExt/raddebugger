@@ -198,6 +198,7 @@ internal PDB_TpiHashParsed*   pdb_tpi_hash_from_data(Arena *arena,
                                                      String8 tpi_hash_data,
                                                      String8 tpi_hash_aux_data);
 internal PDB_GsiParsed*       pdb_gsi_from_data(Arena *arena, String8 gsi_data);
+internal U64                  pdb_gsi_symbol_from_string(PDB_GsiParsed *gsi, String8 symbol_data, String8 string);
 
 internal COFF_SectionHeaderArray pdb_coff_section_array_from_data(Arena *arena, String8 section_data);
 
@@ -238,6 +239,7 @@ internal CV_TypeId            pdb_tpi_first_itype_from_name(PDB_TpiHashParsed *t
 internal String8              pdb_strtbl_string_from_off(PDB_Strtbl *strtbl, U32 off);
 internal String8              pdb_strtbl_string_from_index(PDB_Strtbl *strtbl,
                                                            PDB_StringIndex idx);
+internal U32                  pdb_strtbl_off_from_string(PDB_Strtbl *strtbl, String8 string);
 
 
 #endif // PDB_PARSE_H

@@ -561,6 +561,89 @@ pdb_gsi_from_data(Arena *arena, String8 data){
   return(result);
 }
 
+internal U64
+pdb_gsi_symbol_from_string(PDB_GsiParsed *gsi, String8 symbol_data, String8 string)
+{
+  U64 result = max_U64;
+
+  U32           hash       = pdb_hash_v1(string);
+  U32           bucket_idx = hash % ArrayCount(gsi->buckets);
+  PDB_GsiBucket bucket     = gsi->buckets[bucket_idx];
+
+  for(U64 i = 0; i < bucket.count; ++i)
+  {
+    U32 off = bucket.offs[i];
+    if(off + sizeof(CV_RecHeader) <= symbol_data.size)
+    {
+      CV_RecHeader *sym_header = (CV_RecHeader *)(symbol_data.str + off);
+
+      if(sym_header->size >= sizeof(sym_header->kind))
+      {
+        U64  opl_off = off + sizeof(sym_header->size) + sym_header->size;
+        U8  *sym_opl = (U8*)sym_header;
+        if(opl_off <= symbol_data.size)
+        {
+          sym_opl = symbol_data.str + opl_off;
+        }
+        
+        String8 sym_name = str8_zero();
+        switch(sym_header->kind)
+        {
+        case CV_SymKind_CONSTANT:
+        {
+          CV_SymConstant *sym = (CV_SymConstant*)(sym_header+1);
+          CV_NumericParsed dummy;
+          U64 numeric_size = cv_read_numeric(symbol_data, off + sizeof(CV_RecHeader), &dummy);
+          sym_name = str8_cstring_capped((U8*)(sym+1)+numeric_size, sym_opl);
+        }break;
+        case CV_SymKind_LDATA32:
+        case CV_SymKind_GDATA32:
+        {
+          CV_SymData32 *sym = (CV_SymData32 *)(sym_header+1);
+          sym_name = str8_cstring_capped(sym+1, sym_opl);
+        }break;
+        case CV_SymKind_LTHREAD32:
+        case CV_SymKind_GTHREAD32:
+        {
+          if(off + sizeof(CV_RecHeader) + sizeof(CV_SymThread32) <= symbol_data.size)
+          {
+            CV_SymThread32 *sym = (CV_SymThread32 *)(sym_header+1);
+            sym_name = str8_cstring_capped(sym+1, sym_opl);
+          }
+        }break;
+        case CV_SymKind_UDT:
+        {
+          if(off + sizeof(CV_RecHeader) + sizeof(CV_SymUDT) <= symbol_data.size)
+          {
+            CV_SymUDT *sym = (CV_SymUDT *)(sym_header+1);
+            sym_name = str8_cstring_capped(sym+1, sym_opl);
+          }
+        }break;
+        case CV_SymKind_LPROCREF:
+        case CV_SymKind_PROCREF:
+        {
+          if(off + sizeof(CV_RecHeader) + sizeof(CV_SymRef2) <= symbol_data.size)
+          {
+            CV_SymRef2 *sym = (CV_SymRef2 *)(sym_header+1);
+            sym_name = str8_cstring_capped(sym+1, sym_opl);
+          }
+        }break;
+        default: InvalidPath;
+        }
+
+        if(str8_match(sym_name, string, 0))
+        {
+          result = off;
+          goto exit;
+        }
+      }
+    }
+  }
+
+exit:;
+  return result;
+}
+
 internal COFF_SectionHeaderArray
 pdb_coff_section_array_from_data(Arena *arena, String8 data){
   COFF_SectionHeaderArray result = {0};
@@ -978,4 +1061,34 @@ pdb_strtbl_string_from_index(PDB_Strtbl *strtbl, PDB_StringIndex idx){
     result = pdb_strtbl_string_from_off(strtbl, off);
   }
   return(result);
+}
+
+internal U32
+pdb_strtbl_off_from_string(PDB_Strtbl *strtbl, String8 string)
+{
+  U32 result = max_U32;
+
+  U32 hash            = pdb_hash_v1(string);
+  U32 best_bucket_idx = hash % strtbl->bucket_count;
+  U32 bucket_idx      = best_bucket_idx;
+
+  do
+  {
+    String8 test_string = pdb_strtbl_string_from_index(strtbl, bucket_idx);
+
+    if(test_string.size == 0)
+    {
+      break;
+    }
+
+    if(str8_match(test_string, string, 0))
+    {
+      result = bucket_idx;
+      break;
+    }
+
+    bucket_idx = (bucket_idx+1) % strtbl->buckets_max;
+  } while (bucket_idx != best_bucket_idx);
+
+  return result;
 }
