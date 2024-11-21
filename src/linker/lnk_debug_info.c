@@ -2978,7 +2978,7 @@ THREAD_POOL_TASK_FUNC(lnk_push_dbi_sec_contrib_task)
   U64                        sc_count = 0;
   
   for (U64 chunk_idx = 0; chunk_idx < obj->sect_count; ++chunk_idx) {
-    LNK_Chunk *chunk = &obj->chunk_arr[chunk_idx];
+    LNK_Chunk *chunk = obj->chunk_arr[chunk_idx];
     
     if (!chunk || lnk_chunk_is_discarded(chunk)) {
       continue;
@@ -5325,7 +5325,7 @@ THREAD_POOL_TASK_FUNC(lnk_collect_obj_virtual_ranges_task)
   dst->virt_ranges      = push_array_no_zero(arena, Rng1U64, obj->sect_count);
 
   for (U64 chunk_idx = 0; chunk_idx < obj->sect_count; ++chunk_idx) {
-    LNK_Chunk *chunk = &obj->chunk_arr[chunk_idx];
+    LNK_Chunk *chunk = obj->chunk_arr[chunk_idx];
     if (!chunk || lnk_chunk_is_discarded(chunk)) {
       continue;
     }

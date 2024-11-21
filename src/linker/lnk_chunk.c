@@ -183,11 +183,15 @@ lnk_chunk_deep_copy(Arena *arena, LNK_Chunk *chunk)
       stack->src_node = stack->src_node->next;
       stack->dst_node = stack->dst_node->next;
 
-      dst->ref      = src->ref;
-      dst->align    = src->align;
-      dst->sort_idx = push_str8_copy(arena, src->sort_idx);
-      dst->type     = src->type;
-      dst->flags    = src->flags;
+      dst->ref          = src->ref;
+      dst->type         = src->type;
+      dst->align        = src->align;
+      dst->is_discarded = src->is_discarded;
+      dst->sort_chunk   = src->sort_chunk;
+      dst->sort_idx     = push_str8_copy(arena, src->sort_idx);
+      dst->input_idx    = src->input_idx;
+      dst->flags        = src->flags;
+      dst->associate    = src->associate;
       lnk_chunk_set_debugf(arena, dst, "%S", src->debug);
     
       switch (src->type) {
@@ -343,23 +347,35 @@ lnk_chunk_list_get_node_count(LNK_Chunk *chunk)
 }
 
 internal void
-lnk_chunk_align_array_list_push(Arena *arena, Arena *scratch, LNK_ChunkAlignArrayList *list, U64 cap, U64 align_off, U64 align_size)
+lnk_chunk_pad_array_list_push(Arena *arena, Arena *scratch, LNK_ChunkPadArrayList *list, U64 cap, U64 align_off, U64 align_size)
 {
   if (align_size > 0) {
     if (list->last == 0 || list->last->data.count >= list->last->cap) {
-      LNK_ChunkAlignArrayNode *node = push_array(scratch, LNK_ChunkAlignArrayNode, 1);
+      LNK_ChunkPadArrayNode *node = push_array(scratch, LNK_ChunkPadArrayNode, 1);
       node->cap                     = cap;
-      node->data.v                  = push_array_no_zero(arena, LNK_ChunkAlign, cap);
+      node->data.v                  = push_array_no_zero(arena, LNK_ChunkPad, cap);
 
       SLLQueuePush(list->first, list->last, node);
       ++list->count;
     }
 
-    LNK_ChunkAlignArray *last_array = &list->last->data;
-    LNK_ChunkAlign *align = &last_array->v[last_array->count++];
+    LNK_ChunkPadArray *last_array = &list->last->data;
+    LNK_ChunkPad *align = &last_array->v[last_array->count++];
     align->off            = align_off;
     align->size           = align_size;
   }
+}
+
+internal
+LNK_CHUNK_VISITOR_SIG(lnk_offset_chunks)
+{
+  LNK_OffsetChunks *offset_chunks = ud;
+  U64               offset        = offset_chunks->offset;
+  LNK_ChunkLayout  *layout        = offset_chunks->layout;
+
+  layout->chunk_off_array[chunk->ref.chunk_id] += offset;
+
+  return 0;
 }
 
 internal LNK_ChunkLayout
@@ -401,8 +417,8 @@ lnk_layout_from_chunk(Arena *arena, LNK_Chunk *root, U64 total_chunk_count)
   stack->chunk_array.count = 1;
   stack->chunk_array.v     = &root;
 
-  U64                     align_cap  = 4096;
-  LNK_ChunkAlignArrayList align_list = {0};
+  U64                   pad_cap  = 4096;
+  LNK_ChunkPadArrayList pad_list = {0};
 
   U64 cursor = 0;
 
@@ -416,22 +432,29 @@ lnk_layout_from_chunk(Arena *arena, LNK_Chunk *root, U64 total_chunk_count)
         continue;
       }
 
-      // push align
-      U64 align_size = AlignPadPow2(cursor, chunk->align);
-      lnk_chunk_align_array_list_push(arena, scratch.arena, &align_list, align_cap, cursor, align_size);
-      cursor += align_size;
-
-      // store id -> chunk
-      Assert(chunk->ref.chunk_id < total_chunk_count);
-      Assert(layout.chunk_ptr_array[chunk->ref.chunk_id] == &g_null_chunk);
-      layout.chunk_ptr_array[chunk->ref.chunk_id] = chunk;
-
-      // store id -> offset
-      Assert(layout.chunk_off_array[chunk->ref.chunk_id] == max_U64);
-      layout.chunk_off_array[chunk->ref.chunk_id] = cursor;
-      
       switch (chunk->type) {
       case LNK_Chunk_Leaf: {
+        // push pad
+        if (chunk->u.leaf.size < chunk->min_size) {
+          U64 pad_size = chunk->min_size - chunk->u.leaf.size;
+          lnk_chunk_pad_array_list_push(arena, scratch.arena, &pad_list, pad_cap, cursor, pad_size);
+          cursor += pad_size;
+        }
+
+        // push align
+        U64 align_size = AlignPadPow2(cursor, chunk->align);
+        lnk_chunk_pad_array_list_push(arena, scratch.arena, &pad_list, pad_cap, cursor, align_size);
+        cursor += align_size;
+		
+        // store id -> chunk
+        Assert(chunk->ref.chunk_id < total_chunk_count);
+        Assert(layout.chunk_ptr_array[chunk->ref.chunk_id] == &g_null_chunk);
+        layout.chunk_ptr_array[chunk->ref.chunk_id] = chunk;
+
+        // store id -> offset
+        Assert(layout.chunk_off_array[chunk->ref.chunk_id] == max_U64);
+        layout.chunk_off_array[chunk->ref.chunk_id] = cursor;
+
         // store id -> file size
         Assert(layout.chunk_file_size_array[chunk->ref.chunk_id] == max_U64);
         layout.chunk_file_size_array[chunk->ref.chunk_id] = chunk->u.leaf.size;
@@ -445,11 +468,20 @@ lnk_layout_from_chunk(Arena *arena, LNK_Chunk *root, U64 total_chunk_count)
       } break;
 
       case LNK_Chunk_LeafArray: {
-#if BUILD_DEBUG
-        for (U64 i = 0; i < chunk->u.arr->count; ++i) {
-          Assert(chunk->u.arr->v[i]->type == LNK_Chunk_Leaf);
-        }
-#endif
+        // push align
+        U64 align_size = AlignPadPow2(cursor, chunk->align);
+        lnk_chunk_pad_array_list_push(arena, scratch.arena, &pad_list, pad_cap, cursor, align_size);
+        cursor += align_size;
+
+        // store id -> chunk
+        Assert(chunk->ref.chunk_id < total_chunk_count);
+        Assert(layout.chunk_ptr_array[chunk->ref.chunk_id] == &g_null_chunk);
+        layout.chunk_ptr_array[chunk->ref.chunk_id] = chunk;
+
+        // store id -> offset
+        Assert(layout.chunk_off_array[chunk->ref.chunk_id] == max_U64);
+        layout.chunk_off_array[chunk->ref.chunk_id] = cursor;
+
         // apply sort
         if (chunk->sort_chunk) {
           lnk_chunk_array_sort(*chunk->u.arr);
@@ -462,6 +494,20 @@ lnk_layout_from_chunk(Arena *arena, LNK_Chunk *root, U64 total_chunk_count)
       } goto _continue;
       
       case LNK_Chunk_List: {
+        // push align
+        U64 align_size = AlignPadPow2(cursor, chunk->align);
+        lnk_chunk_pad_array_list_push(arena, scratch.arena, &pad_list, pad_cap, cursor, align_size);
+        cursor += align_size;
+
+        // store id -> chunk
+        Assert(chunk->ref.chunk_id < total_chunk_count);
+        Assert(layout.chunk_ptr_array[chunk->ref.chunk_id] == &g_null_chunk);
+        layout.chunk_ptr_array[chunk->ref.chunk_id] = chunk;
+
+        // store id -> offset
+        Assert(layout.chunk_off_array[chunk->ref.chunk_id] == max_U64);
+        layout.chunk_off_array[chunk->ref.chunk_id] = cursor;
+
         // list -> array
         LNK_ChunkArray chunk_array = {0};
         chunk_array.v              = push_array_no_zero(scratch.arena, LNK_ChunkPtr, chunk->u.list->count);
@@ -488,29 +534,41 @@ lnk_layout_from_chunk(Arena *arena, LNK_Chunk *root, U64 total_chunk_count)
     if (stack->next) {
       // pop node chunk from stack
       struct Stack *prev = stack->next;
+
       Assert(prev->ichunk > 0);
+      LNK_Chunk *chunk = prev->chunk_array.v[prev->ichunk-1];
+
+      U64 chunk_data_off = layout.chunk_off_array[chunk->ref.chunk_id];
+      Assert(chunk_data_off != max_U64);
+      Assert(chunk_data_off <= cursor);
+
+      U64 chunk_data_size = cursor - chunk_data_off;
+
+      // store id -> virt size (no pad and align)
+      Assert(layout.chunk_virt_size_array[chunk->ref.chunk_id] == max_U64);
+      layout.chunk_virt_size_array[chunk->ref.chunk_id] = chunk_data_size;
+
+      // push pad
+      if (chunk_data_size < chunk->min_size) {
+        U64 pad_size = chunk->min_size - chunk->u.leaf.size;
+        lnk_chunk_pad_array_list_push(arena, scratch.arena, &pad_list, pad_cap, chunk_data_off, pad_size);
+
+        LNK_OffsetChunks ud = {0};
+        ud.offset           = pad_size;
+        ud.layout           = &layout;
+        lnk_visit_chunks(0, chunk, lnk_offset_chunks, &ud);
+      }
 
       // align chunk end
-      LNK_Chunk *chunk      = prev->chunk_array.v[prev->ichunk-1];
-      U64        align_size = AlignPadPow2(cursor, chunk->align);
-      lnk_chunk_align_array_list_push(arena, scratch.arena, &align_list, align_cap, cursor, align_size);
-
-      U64 chunk_start_off = layout.chunk_off_array[chunk->ref.chunk_id];
-      Assert(chunk_start_off != max_U64);
-      Assert(chunk_start_off <= cursor);
-
-      // store id -> virt size
-      Assert(layout.chunk_virt_size_array[chunk->ref.chunk_id] == max_U64);
-      U64 virt_chunk_size = cursor - chunk_start_off;
-      layout.chunk_virt_size_array[chunk->ref.chunk_id] = virt_chunk_size;
-
-      // advance cursor
+      U64 align_size = AlignPadPow2(cursor, chunk->align);
+      lnk_chunk_pad_array_list_push(arena, scratch.arena, &pad_list, pad_cap, cursor, align_size);
       cursor += align_size;
 
-      // store id -> file size
+      chunk_data_size = cursor - chunk_data_off;
+
+      // store id -> file size (pad + align)
       Assert(layout.chunk_file_size_array[chunk->ref.chunk_id] == max_U64);
-      U64 file_chunk_size = cursor - chunk_start_off;
-      layout.chunk_file_size_array[chunk->ref.chunk_id] = file_chunk_size;
+      layout.chunk_file_size_array[chunk->ref.chunk_id] = chunk_data_size;
     }
     
     // move to next frame
@@ -520,11 +578,11 @@ lnk_layout_from_chunk(Arena *arena, LNK_Chunk *root, U64 total_chunk_count)
   }
   ProfEnd();
 
-  ProfBegin("Build Aligns Array");
-  layout.align_array_count = 0;
-  layout.align_array       = push_array(arena, LNK_ChunkAlignArray, align_list.count);
-  for (LNK_ChunkAlignArrayNode *node = align_list.first; node != 0; node = node->next) {
-    layout.align_array[layout.align_array_count++] = node->data;
+  ProfBegin("Build Pad Array");
+  layout.pad_array_count = 0;
+  layout.pad_array       = push_array(arena, LNK_ChunkPadArray, pad_list.count);
+  for (LNK_ChunkPadArrayNode *node = pad_list.first; node != 0; node = node->next) {
+    layout.pad_array[layout.pad_array_count++] = node->data;
   }
   ProfEnd();
 
@@ -578,7 +636,7 @@ THREAD_POOL_TASK_FUNC(lnk_fill_chunks_task)
 }
 
 internal
-THREAD_POOL_TASK_FUNC(lnk_fill_aligns_task)
+THREAD_POOL_TASK_FUNC(lnk_fill_pads_task)
 {
   ProfBeginFunction();
 
@@ -588,12 +646,12 @@ THREAD_POOL_TASK_FUNC(lnk_fill_aligns_task)
   String8                    buffer    = task->buffer;
   U8                         fill_byte = task->fill_byte;
 
-  for (U64 align_array_idx = range.min; align_array_idx < range.max; ++align_array_idx) {
-    LNK_ChunkAlignArray align_array = layout.align_array[align_array_idx];
-    for (U64 align_idx = 0; align_idx < align_array.count; ++align_idx) {
-      LNK_ChunkAlign align = align_array.v[align_idx];
-      Assert(align.off + align.size <= buffer.size);
-      MemorySet(buffer.str + align.off, fill_byte, align.size);
+  for (U64 pad_array_idx = range.min; pad_array_idx < range.max; ++pad_array_idx) {
+    LNK_ChunkPadArray pad_array = layout.pad_array[pad_array_idx];
+    for (U64 pad_idx = 0; pad_idx < pad_array.count; ++pad_idx) {
+      LNK_ChunkPad pad = pad_array.v[pad_idx];
+      Assert(pad.off + pad.size <= buffer.size);
+      MemorySet(buffer.str + pad.off, fill_byte, pad.size);
     }
   }
 
@@ -616,9 +674,9 @@ lnk_serialize_chunk_layout(TP_Context *tp, LNK_ChunkLayout layout, String8 buffe
   tp_for_parallel(tp, 0, tp->worker_count, lnk_fill_chunks_task, &task);
   ProfEnd();
 
-  ProfBeginV("Fill Aligns [Array Count %llu]", layout.align_array_count);
-  task.ranges = tp_divide_work(scratch.arena, layout.align_array_count, tp->worker_count);
-  tp_for_parallel(tp, 0, tp->worker_count, lnk_fill_aligns_task, &task);
+  ProfBeginV("Fill Pads [Array Count %llu]", layout.pad_array_count);
+  task.ranges = tp_divide_work(scratch.arena, layout.pad_array_count, tp->worker_count);
+  tp_for_parallel(tp, 0, tp->worker_count, lnk_fill_pads_task, &task);
   ProfEnd();
 
   scratch_end(scratch);

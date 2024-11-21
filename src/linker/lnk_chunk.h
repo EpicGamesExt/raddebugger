@@ -28,6 +28,7 @@ typedef struct LNK_Chunk
   LNK_ChunkRef      ref;
   LNK_ChunkType     type;
   U64               align;
+  U64               min_size;
   B32               is_discarded;
   B32               sort_chunk;
   String8           sort_idx;
@@ -95,29 +96,29 @@ typedef struct LNK_ChunkOpList
   LNK_ChunkOp *last;
 } LNK_ChunkOpList;
 
-typedef struct LNK_ChunkAlign
+typedef struct LNK_ChunkPad
 {
   U64 off;
   U64 size;
-} LNK_ChunkAlign;
+} LNK_ChunkPad;
 
-typedef struct LNK_ChunkAlignArray
+typedef struct LNK_ChunkPadArray
 {
-  U64             count;
-  LNK_ChunkAlign *v;
-} LNK_ChunkAlignArray;
-typedef struct LNK_ChunkAlignArrayNode
+  U64           count;
+  LNK_ChunkPad *v;
+} LNK_ChunkPadArray;
+typedef struct LNK_ChunkPadArrayNode
 {
-  struct LNK_ChunkAlignArrayNode *next;
+  struct LNK_ChunkPadArrayNode *next;
   U64                 cap;
-  LNK_ChunkAlignArray data;
-} LNK_ChunkAlignArrayNode;
-typedef struct LNK_ChunkAlignArrayList
+  LNK_ChunkPadArray data;
+} LNK_ChunkPadArrayNode;
+typedef struct LNK_ChunkPadArrayList
 {
   U64                      count;
-  LNK_ChunkAlignArrayNode *first;
-  LNK_ChunkAlignArrayNode *last;
-} LNK_ChunkAlignArrayList;
+  LNK_ChunkPadArrayNode *first;
+  LNK_ChunkPadArrayNode *last;
+} LNK_ChunkPadArrayList;
 
 typedef struct LNK_ChunkLayout
 {
@@ -126,8 +127,8 @@ typedef struct LNK_ChunkLayout
   U64                    *chunk_off_array;       // discarded chunks have offset set to max_U64
   U64                    *chunk_file_size_array; // discarded chunks have offset set to max_U64
   U64                    *chunk_virt_size_array; // discarded chunks have offset set to max_U64
-  U64                     align_array_count;
-  LNK_ChunkAlignArray    *align_array;
+  U64                     pad_array_count;
+  LNK_ChunkPadArray      *pad_array;
 } LNK_ChunkLayout;
 
 typedef struct LNK_ChunkManager
@@ -135,6 +136,14 @@ typedef struct LNK_ChunkManager
   LNK_Chunk *root;
   U64        total_chunk_count;
 } LNK_ChunkManager;
+
+////////////////////////////////
+
+typedef struct
+{
+  U64              offset;
+  LNK_ChunkLayout *layout;
+} LNK_OffsetChunks;
 
 typedef struct
 {

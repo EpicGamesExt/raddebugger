@@ -259,8 +259,8 @@ lnk_section_build_data(LNK_Section *sect, COFF_MachineType machine)
       sect->layout.chunk_off_array       = 0;
       sect->layout.chunk_file_size_array = 0;
       sect->layout.chunk_virt_size_array = 0;
-      sect->layout.align_array_count     = 0;
-      sect->layout.align_array           = 0;
+      sect->layout.pad_array_count     = 0;
+      sect->layout.pad_array           = 0;
     }
     sect->is_loose = 0;
   }

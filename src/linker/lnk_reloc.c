@@ -64,16 +64,36 @@ internal LNK_RelocList
 lnk_reloc_list_from_coff_reloc_array(Arena *arena, COFF_MachineType machine, LNK_Chunk *chunk, LNK_SymbolArray symbol_array, COFF_Reloc *reloc_v, U64 reloc_count)
 {
   LNK_RelocList reloc_list = {0};
-  LNK_Reloc *reloc_arr = lnk_reloc_list_reserve(arena, &reloc_list, reloc_count);
-  LNK_Reloc *reloc_ptr = reloc_arr;
-  LNK_Reloc *reloc_opl = reloc_arr + reloc_count;
+
+  LNK_Reloc  *reloc_arr      = lnk_reloc_list_reserve(arena, &reloc_list, reloc_count);
+  LNK_Reloc  *reloc_ptr      = reloc_arr;
+  LNK_Reloc  *reloc_opl      = reloc_arr + reloc_count;
   COFF_Reloc *coff_reloc_ptr = reloc_v;
-  for (; reloc_ptr < reloc_opl; reloc_ptr += 1, coff_reloc_ptr += 1) {
+
+  for (; reloc_ptr < reloc_opl; ++reloc_ptr, ++coff_reloc_ptr) {
+    LNK_RelocType  type        = lnk_ext_reloc_type_from_coff(machine, coff_reloc_ptr->type);
+    LNK_Chunk     *reloc_chunk = chunk;
+    U64            apply_off   = coff_reloc_ptr->apply_off;
+    LNK_Symbol    *symbol      = symbol_array.v + coff_reloc_ptr->isymbol;
+
+    if (chunk->type == LNK_Chunk_List) {
+      U64 cursor = 0;
+      for (LNK_ChunkNode *c = chunk->u.list->first; c != 0; c = c->next) {
+        Assert(c->data->type == LNK_Chunk_Leaf);
+        if (coff_reloc_ptr->apply_off < cursor + c->data->u.leaf.size) {
+          reloc_chunk = c->data;
+          apply_off   = coff_reloc_ptr->apply_off - cursor;
+          break;
+        }
+        cursor += c->data->u.leaf.size;
+      }
+    }
+
     Assert(coff_reloc_ptr->isymbol < symbol_array.count);
-    reloc_ptr->chunk     = chunk;
-    reloc_ptr->type      = lnk_ext_reloc_type_from_coff(machine, coff_reloc_ptr->type);
-    reloc_ptr->apply_off = coff_reloc_ptr->apply_off;
-    reloc_ptr->symbol    = symbol_array.v + coff_reloc_ptr->isymbol;
+    reloc_ptr->chunk     = reloc_chunk;
+    reloc_ptr->type      = type;
+    reloc_ptr->apply_off = apply_off;
+    reloc_ptr->symbol    = symbol;
   }
   return reloc_list;
 }

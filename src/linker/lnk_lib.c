@@ -938,7 +938,7 @@ lnk_build_import_lib(TP_Context *tp, TP_Arena *arena, COFF_MachineType machine, 
   LNK_InputObj     **inputs   = lnk_array_from_input_obj_list(scratch.arena, input_obj_list);
   LNK_SectionTable  *st       = lnk_section_table_alloc(0,0,0);
   LNK_ObjList        obj_list = {0};
-  lnk_obj_list_push_parallel(tp, arena, &obj_list, st, input_obj_list.count, inputs);
+  lnk_obj_list_push_parallel(tp, arena, &obj_list, st, 0, input_obj_list.count, inputs);
   
   LNK_LibBuild import_lib = lnk_build_lib(scratch.arena, machine, time_stamp, dll_name, obj_list, exptab);
   B32 emit_second_member = 0; // MSVC linker refuses to link with lib that has the second member.

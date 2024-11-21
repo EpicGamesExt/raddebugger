@@ -1475,7 +1475,7 @@ lnk_build_guard_tables(TP_Context       *tp,
     } else {
       // use relocation data in code sections to get function symbols
       for (U64 isect = 0; isect < obj->sect_count; ++isect) {
-        LNK_Chunk *chunk = &obj->chunk_arr[isect];
+        LNK_Chunk *chunk = obj->chunk_arr[isect];
         if (!chunk) {
           continue;
         }
@@ -1782,7 +1782,7 @@ THREAD_POOL_TASK_FUNC(lnk_emit_base_relocs_from_objs_task)
   for (U64 obj_idx = range.min; obj_idx < range.max; ++obj_idx) {
     LNK_Obj *obj = task->obj_arr[obj_idx];
     for (U64 sect_idx = 0; sect_idx < obj->sect_count; sect_idx += 1) {
-      B32 is_live = !lnk_chunk_is_discarded(&obj->chunk_arr[sect_idx]);
+      B32 is_live = !lnk_chunk_is_discarded(obj->chunk_arr[sect_idx]);
       if (is_live) {
         LNK_RelocList reloc_list = obj->sect_reloc_list_arr[sect_idx];
         for (LNK_Reloc *reloc = reloc_list.first; reloc != 0; reloc = reloc->next) {
@@ -2609,16 +2609,6 @@ lnk_apply_reloc(U64               base_addr,
     symbol_voff = defined_symbol->u.va - base_addr;
   } break;
   }
-  
-#if BUILD_DEBUG
-  if (str8_match(str8_lit("__ImageBase"), symbol->name, 0)) {
-    Assert(symbol_isect == 0);
-    Assert(symbol_voff == 0);
-    Assert(symbol_foff == 0);
-    Assert(symbol_vsize == 0);
-    Assert(symbol_fsize == 0);
-  }
-#endif
   
   U64 reloc_align = 1;
   U64 reloc_size  = 0;
@@ -3521,7 +3511,7 @@ lnk_run(int argc, char **argv)
         }
         ProfEnd();
         
-        LNK_ObjNodeArray obj_node_arr = lnk_obj_list_push_parallel(tp, tp_arena, &obj_list, st, unique_obj_input_list.count, input_obj_arr);
+        LNK_ObjNodeArray obj_node_arr = lnk_obj_list_push_parallel(tp, tp_arena, &obj_list, st, config->function_pad_min, unique_obj_input_list.count, input_obj_arr);
         
         ProfBegin("Machine Compat Check");
         for (U64 obj_idx = 0; obj_idx < obj_node_arr.count; ++obj_idx) {
