@@ -5013,3 +5013,98 @@ p2r_compress(Arena *arena, P2R_Serialize2File *in)
   }
   return out;
 }
+
+////////////////////////////////
+
+internal B32
+p2r_has_symbol_ref(String8 msf_data, String8List symbol_list, MSF_RawStreamTable *st)
+{
+  Temp scratch = scratch_begin(0,0);
+
+  B32 has_ref = 0;
+
+  String8        dbi_data = msf_data_from_stream_index(scratch.arena, msf_data, st, PDB_FixedStream_Dbi);
+  PDB_DbiParsed *dbi      = pdb_dbi_from_data(scratch.arena, dbi_data);
+  if(dbi)
+  {
+    String8        gsi_data   = msf_data_from_stream_index(scratch.arena, msf_data, st, dbi->gsi_sn);
+    PDB_GsiParsed *gsi_parsed = pdb_gsi_from_data(scratch.arena, gsi_data);
+    if(gsi_parsed)
+    {
+      String8 symbol_data = msf_data_from_stream_index(scratch.arena, msf_data, st, dbi->sym_sn);
+
+      for(String8Node *symbol_n = symbol_list.first; symbol_n != 0; symbol_n = symbol_n->next)
+      {
+        U64 symbol_off = pdb_gsi_symbol_from_string(gsi_parsed, symbol_data, symbol_n->string);
+        if(symbol_off < symbol_data.size)
+        {
+          has_ref = 1;
+          break;
+        }
+      }
+    }
+  }
+
+  scratch_end(scratch);
+  return has_ref;
+}
+
+internal B32
+p2r_has_file_ref(String8 msf_data, String8List file_list, MSF_RawStreamTable *st)
+{
+  Temp scratch = scratch_begin(0,0);
+
+  B32 has_ref = 0;
+
+  String8   info_data = msf_data_from_stream_index(scratch.arena, msf_data, st, PDB_FixedStream_Info);
+  PDB_Info *info      = pdb_info_from_data(scratch.arena, info_data);
+  if(info)
+  {
+    PDB_NamedStreamTable *named_streams = pdb_named_stream_table_from_info(scratch.arena, info);
+    if(named_streams)
+    {
+      MSF_StreamNumber  strtbl_sn   = named_streams->sn[PDB_NamedStream_StringTable];
+      String8           strtbl_data = msf_data_from_stream_index(scratch.arena, msf_data, st, strtbl_sn);
+      PDB_Strtbl       *strtbl      = pdb_strtbl_from_data(scratch.arena, strtbl_data);
+      if(strtbl)
+      {
+        for(String8Node *file_n = file_list.first; file_n != 0; file_n = file_n->next)
+        {
+          U32 off = pdb_strtbl_off_from_string(strtbl, file_n->string);
+          if(off != max_U32)
+          {
+            has_ref = 1;
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  scratch_end(scratch);
+  return has_ref;
+}
+
+internal B32
+p2r_has_symbol_or_file_ref(String8 msf_data, String8List symbol_list, String8List file_list)
+{
+  Temp scratch = scratch_begin(0,0);
+
+  B32 has_ref = 0;
+
+  MSF_RawStreamTable *st = msf_raw_stream_table_from_data(scratch.arena, msf_data);
+
+  if(!has_ref && symbol_list.node_count)
+  {
+    has_ref = p2r_has_symbol_ref(msf_data, symbol_list, st);
+  }
+  
+  if(!has_ref && file_list.node_count)
+  {
+    has_ref = p2r_has_file_ref(msf_data, file_list, st);
+  }
+
+  scratch_end(scratch);
+  return has_ref;
+}
+

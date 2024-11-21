@@ -669,4 +669,10 @@ internal P2R_Bake2Serialize *p2r_bake(Arena *arena, P2R_Convert2Bake *in);
 
 internal P2R_Serialize2File *p2r_compress(Arena *arena, P2R_Serialize2File *in);
 
+////////////////////////////////
+
+internal B32 p2r_has_symbol_ref(String8 msf_data, String8List symbol_list, MSF_RawStreamTable *st);
+internal B32 p2r_has_file_ref(String8 msf_data, String8List file_list, MSF_RawStreamTable *st);
+internal B32 p2r_has_symbol_or_file_ref(String8 msf_data, String8List symbol_list, String8List file_list);
+
 #endif // RDI_FROM_PDB_H
