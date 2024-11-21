@@ -191,7 +191,8 @@ lnk_chunk_deep_copy(Arena *arena, LNK_Chunk *chunk)
       dst->sort_idx     = push_str8_copy(arena, src->sort_idx);
       dst->input_idx    = src->input_idx;
       dst->flags        = src->flags;
-      dst->associate    = src->associate;
+      //dst->associate    = src->associate;
+      Assert(src->associate == 0);
       lnk_chunk_set_debugf(arena, dst, "%S", src->debug);
     
       switch (src->type) {
