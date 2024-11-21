@@ -37,13 +37,11 @@ struct MSF_Parsed
   U64      block_count;
 };
 
-#define MSF_MAX_MAGIC_SIZE Min(sizeof(msf_msf20_magic), sizeof(msf_msf70_magic))
-
 ////////////////////////////////
 //~ rjf: MSF Parser Functions
 
 internal MSF_RawStreamTable* msf_raw_stream_table_from_data(Arena *arena, String8 msf_data);
-internal String8             msf_data_from_stream_index(Arena *arena, String8 msf_data, MSF_RawStreamTable *st, U64 stream_idx);
+internal String8             msf_data_from_stream_number(Arena *arena, String8 msf_data, MSF_RawStreamTable *st, MSF_StreamNumber sn);
 internal MSF_Parsed*         msf_parsed_from_data(Arena *arena, String8 msf_data);
 internal String8             msf_data_from_stream(MSF_Parsed *msf, MSF_StreamNumber sn);
 

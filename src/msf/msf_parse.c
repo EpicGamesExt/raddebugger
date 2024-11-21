@@ -232,9 +232,9 @@ msf_raw_stream_table_from_data(Arena *arena, String8 msf_data)
 }
 
 internal String8
-msf_data_from_stream_index(Arena *arena, String8 msf_data, MSF_RawStreamTable *st, U64 stream_idx)
+msf_data_from_stream_number(Arena *arena, String8 msf_data, MSF_RawStreamTable *st, MSF_StreamNumber sn)
 {
-  MSF_RawStream stream = st->streams[stream_idx];
+  MSF_RawStream stream = st->streams[sn];
 
   U8 *stream_buf     = push_array_no_zero(arena, U8, stream.size);
   U8 *stream_out_ptr = stream_buf;
@@ -277,17 +277,21 @@ msf_parsed_from_data(Arena *arena, String8 msf_data)
 {
   Temp scratch = scratch_begin(&arena, 1);
 
-  MSF_RawStreamTable *st      = msf_raw_stream_table_from_data(scratch.arena, msf_data);
-  String8            *streams = push_array_no_zero(arena, String8, st->stream_count);
-  for (U64 stream_idx = 0; stream_idx < st->stream_count; ++stream_idx) {
-    streams[stream_idx] = msf_data_from_stream_index(arena, msf_data, st, stream_idx);
-  }
+  MSF_Parsed *result = 0;
 
-  MSF_Parsed *result   = push_array_no_zero(arena, MSF_Parsed, 1);
-  result->streams      = streams;
-  result->stream_count = st->stream_count;
-  result->block_size   = st->page_size;
-  result->block_count  = st->total_page_count;
+  MSF_RawStreamTable *st = msf_raw_stream_table_from_data(scratch.arena, msf_data);
+  if (st) {
+    String8 *streams = push_array_no_zero(arena, String8, st->stream_count);
+    for (MSF_StreamNumber sn = 0; sn < st->stream_count; ++sn) {
+      streams[sn] = msf_data_from_stream_number(arena, msf_data, st, sn);
+    }
+
+    result               = push_array_no_zero(arena, MSF_Parsed, 1);
+    result->streams      = streams;
+    result->stream_count = st->stream_count;
+    result->block_size   = st->page_size;
+    result->block_count  = st->total_page_count;
+  }
   
   scratch_end(scratch);
   return result;

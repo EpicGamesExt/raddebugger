@@ -5023,15 +5023,15 @@ p2r_has_symbol_ref(String8 msf_data, String8List symbol_list, MSF_RawStreamTable
 
   B32 has_ref = 0;
 
-  String8        dbi_data = msf_data_from_stream_index(scratch.arena, msf_data, st, PDB_FixedStream_Dbi);
+  String8        dbi_data = msf_data_from_stream_number(scratch.arena, msf_data, st, PDB_FixedStream_Dbi);
   PDB_DbiParsed *dbi      = pdb_dbi_from_data(scratch.arena, dbi_data);
   if(dbi)
   {
-    String8        gsi_data   = msf_data_from_stream_index(scratch.arena, msf_data, st, dbi->gsi_sn);
+    String8        gsi_data   = msf_data_from_stream_number(scratch.arena, msf_data, st, dbi->gsi_sn);
     PDB_GsiParsed *gsi_parsed = pdb_gsi_from_data(scratch.arena, gsi_data);
     if(gsi_parsed)
     {
-      String8 symbol_data = msf_data_from_stream_index(scratch.arena, msf_data, st, dbi->sym_sn);
+      String8 symbol_data = msf_data_from_stream_number(scratch.arena, msf_data, st, dbi->sym_sn);
 
       for(String8Node *symbol_n = symbol_list.first; symbol_n != 0; symbol_n = symbol_n->next)
       {
@@ -5056,7 +5056,7 @@ p2r_has_file_ref(String8 msf_data, String8List file_list, MSF_RawStreamTable *st
 
   B32 has_ref = 0;
 
-  String8   info_data = msf_data_from_stream_index(scratch.arena, msf_data, st, PDB_FixedStream_Info);
+  String8   info_data = msf_data_from_stream_number(scratch.arena, msf_data, st, PDB_FixedStream_Info);
   PDB_Info *info      = pdb_info_from_data(scratch.arena, info_data);
   if(info)
   {
@@ -5064,7 +5064,7 @@ p2r_has_file_ref(String8 msf_data, String8List file_list, MSF_RawStreamTable *st
     if(named_streams)
     {
       MSF_StreamNumber  strtbl_sn   = named_streams->sn[PDB_NamedStream_StringTable];
-      String8           strtbl_data = msf_data_from_stream_index(scratch.arena, msf_data, st, strtbl_sn);
+      String8           strtbl_data = msf_data_from_stream_number(scratch.arena, msf_data, st, strtbl_sn);
       PDB_Strtbl       *strtbl      = pdb_strtbl_from_data(scratch.arena, strtbl_data);
       if(strtbl)
       {
