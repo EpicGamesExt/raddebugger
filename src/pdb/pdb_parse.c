@@ -543,7 +543,7 @@ pdb_gsi_from_data(Arena *arena, String8 data){
             bucket_offs[j] = hash_record_ptr->symbol_off - 1;
             hash_record_ptr -= 1;
           }
-          PDB_GsiBucket *bucket = &result->buckets[i - 1];
+          PDB_GsiBucket *bucket = &result->buckets[i];
           bucket->count = num_steps;
           bucket->offs = bucket_offs;
           
