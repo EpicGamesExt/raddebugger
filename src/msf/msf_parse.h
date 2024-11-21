@@ -7,13 +7,34 @@
 ////////////////////////////////
 //~ rjf: MSF Parser Helper Types
 
+typedef struct MSF_RawStream MSF_RawStream;
+struct MSF_RawStream
+{
+  U64 size;
+  U64 page_count;
+  union {
+    U32 *page_indices_u32;
+    U16 *page_indices_u16;
+  } u;
+};
+
+typedef struct MSF_RawStreamTable MSF_RawStreamTable;
+struct MSF_RawStreamTable
+{
+  U64            total_page_count;
+  U64            index_size;
+  U64            page_size;
+  U64            stream_count;
+  MSF_RawStream *streams;
+};
+
 typedef struct MSF_Parsed MSF_Parsed;
 struct MSF_Parsed
 {
   String8 *streams;
-  U64 stream_count;
-  U64 block_size;
-  U64 block_count;
+  U64      stream_count;
+  U64      block_size;
+  U64      block_count;
 };
 
 #define MSF_MAX_MAGIC_SIZE Min(sizeof(msf_msf20_magic), sizeof(msf_msf70_magic))
@@ -21,7 +42,9 @@ struct MSF_Parsed
 ////////////////////////////////
 //~ rjf: MSF Parser Functions
 
-internal MSF_Parsed* msf_parsed_from_data(Arena *arena, String8 msf_data);
-internal String8     msf_data_from_stream(MSF_Parsed *msf, MSF_StreamNumber sn);
+internal MSF_RawStreamTable* msf_raw_stream_table_from_data(Arena *arena, String8 msf_data);
+internal String8             msf_data_from_stream_index(Arena *arena, String8 msf_data, MSF_RawStreamTable *st, U64 stream_idx);
+internal MSF_Parsed*         msf_parsed_from_data(Arena *arena, String8 msf_data);
+internal String8             msf_data_from_stream(MSF_Parsed *msf, MSF_StreamNumber sn);
 
 #endif // MSF_PARSE_H
