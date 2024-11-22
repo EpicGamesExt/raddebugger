@@ -170,24 +170,24 @@ coff_section_flag_from_align_size(U64 align)
 }
 
 internal COFF_SymbolValueInterpType
-coff_interp_symbol(COFF_Symbol32 *symbol)
+coff_interp_symbol(U32 section_number, U32 value, COFF_SymStorageClass storage_class)
 {
-  if (symbol->storage_class == COFF_SymStorageClass_SECTION && symbol->section_number == COFF_SYMBOL_UNDEFINED_SECTION) {
+  if (storage_class == COFF_SymStorageClass_SECTION && section_number == COFF_SYMBOL_UNDEFINED_SECTION) {
     return COFF_SymbolValueInterp_UNDEFINED;
   }
-  if (symbol->storage_class == COFF_SymStorageClass_EXTERNAL && symbol->value == 0 && symbol->section_number == COFF_SYMBOL_UNDEFINED_SECTION) {
+  if (storage_class == COFF_SymStorageClass_EXTERNAL && value == 0 && section_number == COFF_SYMBOL_UNDEFINED_SECTION) {
     return COFF_SymbolValueInterp_UNDEFINED;
   }
-  if (symbol->storage_class == COFF_SymStorageClass_EXTERNAL && symbol->value != 0 && symbol->section_number == COFF_SYMBOL_UNDEFINED_SECTION) {
+  if (storage_class == COFF_SymStorageClass_EXTERNAL && value != 0 && section_number == COFF_SYMBOL_UNDEFINED_SECTION) {
     return COFF_SymbolValueInterp_COMMON;
   }
-  if (symbol->section_number == COFF_SYMBOL_ABS_SECTION) {
+  if (section_number == COFF_SYMBOL_ABS_SECTION) {
     return COFF_SymbolValueInterp_ABS;
   }
-  if (symbol->section_number == COFF_SYMBOL_DEBUG_SECTION) {
+  if (section_number == COFF_SYMBOL_DEBUG_SECTION) {
     return COFF_SymbolValueInterp_DEBUG;
   }
-  if (symbol->storage_class == COFF_SymStorageClass_WEAK_EXTERNAL) {
+  if (storage_class == COFF_SymStorageClass_WEAK_EXTERNAL) {
     return COFF_SymbolValueInterp_WEAK;
   }
   return COFF_SymbolValueInterp_REGULAR;

@@ -425,42 +425,39 @@ union COFF_SymbolName
   }long_name;
 };
 
+#define COFF_SymbolType_IsFunc(x) ((x).u.lsb == COFF_SymType_NULL && (x).u.msb == COFF_SymDType_FUNC)
+
+typedef union COFF_SymbolType COFF_SymbolType;
+union COFF_SymbolType
+{
+  struct
+  {
+    COFF_SymDType msb;
+    COFF_SymType  lsb;
+  } u;
+  U16 v;
+};
+
 typedef struct COFF_Symbol16 COFF_Symbol16;
 struct COFF_Symbol16
 {
-  COFF_SymbolName name;
-  U32             value;
-  U16             section_number;
-  union
-  {
-    struct
-    {
-      COFF_SymDType msb;
-      COFF_SymType  lsb;
-    }u;
-    U16 v;
-  }type;
+  COFF_SymbolName      name;
+  U32                  value;
+  U16                  section_number;
+  COFF_SymbolType      type;
   COFF_SymStorageClass storage_class;
-  U8 aux_symbol_count;
+  U8                   aux_symbol_count;
 };
 
 typedef struct COFF_Symbol32 COFF_Symbol32;
 struct COFF_Symbol32
 {
-  COFF_SymbolName name;
-  U32             value;
-  U32             section_number;
-  union
-  {
-    struct
-    {
-      COFF_SymDType msb;
-      COFF_SymType  lsb;
-    }u;
-    U16 v;
-  }type;
+  COFF_SymbolName      name;
+  U32                  value;
+  U32                  section_number;
+  COFF_SymbolType      type;
   COFF_SymStorageClass storage_class;
-  U8 aux_symbol_count;
+  U8                   aux_symbol_count;
 };
 
 // Auxilary symbols are allocated with fixed size so that symbol table could be maintaned as array of regular size.
@@ -815,7 +812,7 @@ internal B32                        coff_is_obj(String8 data);
 internal COFF_HeaderInfo            coff_header_info_from_data(String8 data);
 internal U64                        coff_align_size_from_section_flags(COFF_SectionFlags flags);
 internal COFF_SectionFlags          coff_section_flag_from_align_size(U64 align);
-internal COFF_SymbolValueInterpType coff_interp_symbol(COFF_Symbol32 *symbol);
+internal COFF_SymbolValueInterpType coff_interp_symbol(U32 section_number, U32 value, COFF_SymStorageClass storage_class);
 
 internal U64                 coff_foff_from_voff(COFF_SectionHeader *sections, U64 section_count, U64 voff);
 internal COFF_SectionHeader *coff_section_header_from_num(String8 data, U64 section_headers_off, U64 n);

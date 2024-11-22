@@ -339,11 +339,10 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
   // parse coff obj
   COFF_HeaderInfo     coff_info      = coff_header_info_from_data(input->data);
   COFF_SectionHeader *coff_sect_arr  = (COFF_SectionHeader *)(input->data.str + coff_info.section_array_off);
-  COFF_Symbol32Array  coff_symbols   = coff_symbol_array_from_data(scratch.arena, input->data, coff_info.symbol_off, coff_info.symbol_count, coff_info.symbol_size);
+  void               *coff_symbols   = input->data.str + coff_info.symbol_off;
 
   // handle machines we dont support
-  if (coff_info.machine != COFF_MachineType_UNKNOWN &&
-      coff_info.machine != COFF_MachineType_X64) {
+  if (coff_info.machine != COFF_MachineType_UNKNOWN && coff_info.machine != COFF_MachineType_X64) {
     lnk_error(LNK_Error_UnsupportedMachine, "%S: %S machine is supported", input->path, coff_string_from_machine_type(coff_info.machine));
   }
 
@@ -422,7 +421,7 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
 
   // convert from coff
   B32             is_big_obj     = coff_info.type == COFF_DataType_BIG_OBJ;
-  LNK_SymbolArray symbol_arr     = lnk_symbol_array_from_coff(arena, input->data, obj, cached_path, is_big_obj, task->function_pad_min, coff_info.string_table_off, coff_info.section_count_no_null, coff_sect_arr, coff_symbols, chunk_ptr_arr, master_common_block);
+  LNK_SymbolArray symbol_arr     = lnk_symbol_array_from_coff(arena, input->data, obj, cached_path, is_big_obj, task->function_pad_min, coff_info.string_table_off, coff_info.section_count_no_null, coff_sect_arr, coff_info.symbol_count, coff_symbols, chunk_ptr_arr, master_common_block);
   LNK_SymbolList  symbol_list    = lnk_symbol_list_from_array(arena, symbol_arr);
   LNK_RelocList  *reloc_list_arr = lnk_reloc_list_array_from_coff(arena, coff_info.machine, input->data, coff_info.section_count_no_null, coff_sect_arr, chunk_ptr_arr, symbol_arr);
 
@@ -726,66 +725,92 @@ lnk_symbol_array_from_coff(Arena              *arena,
                            U64                 string_table_off,
                            U64                 sect_count,
                            COFF_SectionHeader *coff_sect_arr,
-                           COFF_Symbol32Array  coff_symbols,
+                           U64                 coff_symbol_count,
+                           void               *coff_symbols,
                            LNK_ChunkPtr       *chunk_ptr_arr,
                            LNK_Chunk          *master_common_block)
 {
   LNK_SymbolArray symbol_array;
-  symbol_array.count = coff_symbols.count;
+  symbol_array.count = coff_symbol_count;
   symbol_array.v     = push_array(arena, LNK_Symbol, symbol_array.count);
   
-  for (U64 symbol_idx = 0; symbol_idx < coff_symbols.count; ++symbol_idx) {
-    COFF_Symbol32 *coff_symbol = &coff_symbols.v[symbol_idx];
-    LNK_Symbol    *symbol      = &symbol_array.v[symbol_idx];
+  for (U64 symbol_idx = 0; symbol_idx < coff_symbol_count; ++symbol_idx) {
+    String8              name;
+    U32                  section_number;
+    U32                  value;
+    COFF_SymStorageClass storage_class;
+    COFF_SymbolType      type;
+    U64                  aux_symbol_count;
+    void                *aux_symbols;
+    if (is_big_obj) {
+      COFF_Symbol32 *coff_symbol32 = (COFF_Symbol32 *)coff_symbols + symbol_idx;
+      name             = coff_read_symbol_name(coff_data, string_table_off, &coff_symbol32->name);
+      section_number   = coff_symbol32->section_number;
+      value            = coff_symbol32->value;
+      storage_class    = coff_symbol32->storage_class;
+      type             = coff_symbol32->type;
+      aux_symbol_count = coff_symbol32->aux_symbol_count;
+      aux_symbols      = coff_symbol32 + 1;
+    } else {
+      COFF_Symbol16 *coff_symbol16 = (COFF_Symbol16 *)coff_symbols + symbol_idx;
+      name             = coff_read_symbol_name(coff_data, string_table_off, &coff_symbol16->name);
+      section_number   = coff_symbol16->section_number;
+      value            = coff_symbol16->value;
+      storage_class    = coff_symbol16->storage_class;
+      type             = coff_symbol16->type;
+      aux_symbol_count = coff_symbol16->aux_symbol_count;
+      aux_symbols      = coff_symbol16 + 1;
 
-    symbol->obj = obj;
-    
-    String8 name = coff_read_symbol_name(coff_data, string_table_off, &coff_symbol->name);
+      // promote special section numbers to 32 bit
+      if (section_number == COFF_SYMBOL_DEBUG_SECTION_16) {
+        section_number = COFF_SYMBOL_DEBUG_SECTION;
+      } else if (section_number == COFF_SYMBOL_ABS_SECTION_16) {
+        section_number = COFF_SYMBOL_ABS_SECTION;
+      }
+    }
 
-    // TODO: we convert 16-bit symbols and copy them to arena; symbols with short names
-    // are stored in the symbol itself and becuase converted symbols are pushed to scratch
-    // that memory is discarded after obj is processed
-    name = push_str8_copy(arena, name); 
-    
-    COFF_SymbolValueInterpType interp = coff_interp_symbol(coff_symbol);
+    if (symbol_idx + aux_symbol_count > coff_symbol_count) {
+      lnk_error(LNK_Error_IllData, "%S: symbol %S has out of bounds aux symbol count %u", obj_path, name, aux_symbol_count);
+    }
+
+    COFF_SymbolValueInterpType interp = coff_interp_symbol(section_number, value, storage_class);
     switch (interp) {
     case COFF_SymbolValueInterp_REGULAR: {
-      if (coff_symbol->section_number == 0 || coff_symbol->section_number > sect_count) {
-        lnk_error(LNK_Error_IllData, "%S: out ouf bounds section index in symbol \"%S (%u)\"", obj_path, name, coff_symbol->section_number);
+      if (section_number == 0 || section_number > sect_count) {
+        lnk_error(LNK_Error_IllData, "%S: out ouf bounds section index in symbol \"%S (%u)\"", obj_path, name, section_number);
         break;
       }
 
-      COFF_SectionHeader *coff_sect_header = &coff_sect_arr[coff_symbol->section_number - 1];
+      COFF_SectionHeader *coff_sect_header = &coff_sect_arr[section_number-1];
 
-      if (coff_symbol->value > coff_sect_header->fsize) {
-        lnk_error(LNK_Error_IllData, "%S: out of bounds section offset in symbol \"%S (%u)\"", obj_path, name, coff_symbol->value);
+      if (value > coff_sect_header->fsize) {
+        lnk_error(LNK_Error_IllData, "%S: out of bounds section offset in symbol \"%S (%u)\"", obj_path, name, value);
         break;
       }
 
       LNK_DefinedSymbolVisibility visibility = LNK_DefinedSymbolVisibility_Static;
-      if (coff_symbol->storage_class == COFF_SymStorageClass_EXTERNAL) {
+      if (storage_class == COFF_SymStorageClass_EXTERNAL) {
         visibility = LNK_DefinedSymbolVisibility_Extern;
       }
 
       LNK_DefinedSymbolFlags flags = 0;
-      if (coff_symbol->type.u.lsb == COFF_SymType_NULL &&
-          coff_symbol->type.u.msb == COFF_SymDType_FUNC &&
-          (coff_sect_header->flags & COFF_SectionFlag_CNT_CODE)) {
+      if (COFF_SymbolType_IsFunc(type)) {
         flags |= LNK_DefinedSymbolFlag_IsFunc;
       }
 
-      LNK_Chunk             *chunk     = chunk_ptr_arr[coff_symbol->section_number-1];
-      U64                    offset    = coff_symbol->value;
+      LNK_Chunk             *chunk     = chunk_ptr_arr[section_number-1];
+      U64                    offset    = value;
       COFF_ComdatSelectType  selection = COFF_ComdatSelectType_ANY;
       U64                    check_sum = 0;
 
       if (coff_sect_header->flags & COFF_SectionFlag_LNK_COMDAT) {
-        B32 has_static_def = coff_symbol->value == 0 &&
-                             coff_symbol->type.u.lsb == COFF_SymType_NULL &&
-                             coff_symbol->storage_class == COFF_SymStorageClass_STATIC &&
-                             coff_symbol->aux_symbol_count == 1;
+        B32 has_static_def = value == 0 &&
+                             type.u.lsb == COFF_SymType_NULL &&
+                             storage_class == COFF_SymStorageClass_STATIC &&
+                             aux_symbol_count == 1;
         if (has_static_def) {
-          COFF_SymbolSecDef *secdef = (COFF_SymbolSecDef *)(coff_symbol + 1);
+          COFF_SymbolSecDef *secdef = aux_symbols;
+
           selection = secdef->selection;
           check_sum = secdef->check_sum;
           
@@ -797,13 +822,10 @@ lnk_symbol_array_from_coff(Arena              *arena,
 
             if (secdef_number == 0 || secdef_number > sect_count) {
               lnk_error(LNK_Error_IllData, "%S: symbol %u has out of bounds section definition number %u", name, symbol_idx, secdef_number);
-              break;
             }
 
             LNK_Chunk *head_chunk      = chunk_ptr_arr[secdef_number-1];
-            LNK_Chunk *associate_chunk = chunk_ptr_arr[coff_symbol->section_number-1];
-            Assert(head_chunk->type == LNK_Chunk_Leaf);
-            Assert(associate_chunk->type == LNK_Chunk_Leaf);
+            LNK_Chunk *associate_chunk = chunk_ptr_arr[section_number-1];
             lnk_chunk_associate(arena, head_chunk, associate_chunk);
           }
         }
@@ -812,7 +834,7 @@ lnk_symbol_array_from_coff(Arena              *arena,
       if (function_pad_min) {
         if ((flags & LNK_DefinedSymbolFlag_IsFunc)) {
           if (offset > 0) {
-            // convert leaf to list chunk
+            // convert leaf to list
             //
             // there is no way to know up front how many splits we have,
             // so lazily convert chunks when see two or more functions
@@ -820,15 +842,15 @@ lnk_symbol_array_from_coff(Arena              *arena,
             if (chunk->type == LNK_Chunk_Leaf) {
               // make a list chunk
               LNK_Chunk *chunk_list    = push_array(arena, LNK_Chunk, 1);
+              chunk_list->type         = LNK_Chunk_List;
               chunk_list->align        = chunk->align;
               chunk_list->is_discarded = chunk->is_discarded;
-              chunk_list->type         = LNK_Chunk_List;
               chunk_list->sort_idx     = chunk->sort_idx;
-              chunk_list->sort_chunk   = 0;
               chunk_list->input_idx    = chunk->input_idx;
               chunk_list->flags        = chunk->flags;
               chunk_list->associate    = chunk->associate;
               chunk_list->u.list       = push_array(arena, LNK_ChunkList, 1);
+              lnk_chunk_set_debugf(arena, chunk_list, "%S: function chunk list for %S", obj_path, name);
 
               // reset chunk properties
               chunk->align      = 1;
@@ -845,7 +867,7 @@ lnk_symbol_array_from_coff(Arena              *arena,
               chunk = chunk_list;
 
               // set list chunk to be head of this section
-              chunk_ptr_arr[coff_symbol->section_number-1] = chunk_list;
+              chunk_ptr_arr[section_number-1] = chunk_list;
             }
 
             // find chunk that is near symbol
@@ -853,16 +875,16 @@ lnk_symbol_array_from_coff(Arena              *arena,
             LNK_ChunkNode *current = chunk->u.list->last;
             for (LNK_ChunkNode *c = chunk->u.list->first; c != 0; c = c->next) {
               Assert(c->data->type == LNK_Chunk_Leaf);
-              if (cursor + c->data->u.leaf.size > coff_symbol->value) {
+              if (cursor + c->data->u.leaf.size > value) {
                 current = c;
                 break;
               }
               cursor += c->data->u.leaf.size;
             }
 
-            if (cursor < coff_symbol->value) {
+            if (cursor < value) {
               // bifurcate chunk at symbol offset
-              U64     split_pos        = coff_symbol->value - cursor;
+              U64     split_pos        = value - cursor;
               Rng1U64 left_data_range  = rng_1u64(0, split_pos);
               Rng1U64 right_data_range = rng_1u64(left_data_range.max, current->data->u.leaf.size);
               String8 left_data        = str8_substr(current->data->u.leaf, left_data_range);
@@ -875,6 +897,7 @@ lnk_symbol_array_from_coff(Arena              *arena,
               split_chunk->type         = LNK_Chunk_Leaf;
               split_chunk->flags        = current->data->flags;
               split_chunk->u.leaf       = right_data;
+              lnk_chunk_set_debugf(arena, chunk, "%S: chunk split on function %S", obj_path, name);
 
               LNK_ChunkNode *split_node = push_array(arena, LNK_ChunkNode, 1);
               split_node->data = split_chunk;
@@ -893,7 +916,7 @@ lnk_symbol_array_from_coff(Arena              *arena,
             } else {
               // chunk was already split at the offset
               chunk  = current->data;
-              offset = coff_symbol->value - cursor;
+              offset = value - cursor;
             }
           }
 
@@ -905,7 +928,7 @@ lnk_symbol_array_from_coff(Arena              *arena,
         if (chunk->type == LNK_Chunk_List) {
           U64 cursor = 0;
           for (LNK_ChunkNode *c = chunk->u.list->first; c != 0; c = c->next) {
-            if (cursor + c->data->u.leaf.size > coff_symbol->value) {
+            if (cursor + c->data->u.leaf.size > value) {
               chunk  = c->data;
               offset = offset - cursor;
               break;
@@ -916,57 +939,53 @@ lnk_symbol_array_from_coff(Arena              *arena,
       }
 
       Assert(chunk->type == LNK_Chunk_Leaf);
+      LNK_Symbol *symbol = &symbol_array.v[symbol_idx];
       lnk_init_defined_symbol_chunk(symbol, name, visibility, flags, chunk, offset, selection, check_sum);
-    } break;
-    case COFF_SymbolValueInterp_UNDEFINED: {
-      lnk_init_undefined_symbol(symbol, name, LNK_SymbolScopeFlag_Main);
-    } break;
-    case COFF_SymbolValueInterp_COMMON: {
-      // :common_block
-      LNK_Chunk *chunk = push_array_no_zero(arena, LNK_Chunk, 1);
-      chunk->ref          = lnk_chunk_ref(0,0); // :chunk_ref_assign
-      chunk->align        = 1;
-      chunk->min_size     = 0;
-      chunk->is_discarded = 0;
-      chunk->sort_chunk   = 1;
-      chunk->type         = LNK_Chunk_Leaf;
-      chunk->sort_idx     = str8(0,0);
-      chunk->input_idx    = LNK_MakeChunkInputIdx(0, lnk_chunk_list_get_node_count(master_common_block));
-      chunk->flags        = LNK_BSS_SECTION_FLAGS;
-      chunk->associate    = 0;
-      chunk->u.leaf       = str8(0, coff_symbol->value);
-      lnk_chunk_set_debugf(arena, chunk, "common block %S", name);
-      lnk_chunk_list_push(arena, master_common_block->u.list, chunk);
-
-      LNK_DefinedSymbolVisibility visibility = LNK_DefinedSymbolVisibility_Extern;
-
-      LNK_DefinedSymbolFlags flags = 0;
-      if (coff_symbol->type.u.lsb == COFF_SymType_NULL && coff_symbol->type.u.msb == COFF_SymDType_FUNC) {
-        flags |= LNK_DefinedSymbolFlag_IsFunc;
-      }
-
-      lnk_init_defined_symbol_chunk(symbol, name, visibility, flags, chunk, 0, COFF_ComdatSelectType_LARGEST, 0);
+      symbol->obj = obj;
     } break;
     case COFF_SymbolValueInterp_WEAK: {
-      if (coff_symbol->aux_symbol_count == 0 || symbol_idx + 1 >= coff_symbols.count) {
+      if (aux_symbol_count == 0) {
         lnk_error(LNK_Error_IllData, "%S: Weak symbol \"%S (%u)\" must at least one aux symbol", obj_path, name, symbol_idx);
-        break;
       }
       
-      COFF_SymbolWeakExt *weak_ext = (COFF_SymbolWeakExt*)(coff_symbol + 1);
-      if (weak_ext->tag_index >= symbol_array.count) {
+      COFF_SymbolWeakExt *weak_ext = aux_symbols;
+      if (weak_ext->tag_index >= coff_symbol_count) {
         lnk_error(LNK_Error_IllData, "%S: Weak symbol \"%S (%u)\" points to out of bounds symbol", obj_path, name, symbol_idx);
         break;
       }
-#if 0
-      if (symbol_array.v[weak_ext->tag_index] == NULL) {
-        lnk_error(LNK_ERROR_ILL_DATA, "%S: Weak symbol \"%S (%u)\" tags auxiliary symbol %u", 
-                  obj_path, name, symbol_idx, weak_ext->tag_index);
-        break;
+
+      LNK_Symbol *symbol          = &symbol_array.v[symbol_idx];
+      LNK_Symbol *fallback_symbol = &symbol_array.v[weak_ext->tag_index];
+      lnk_init_weak_symbol(symbol, name, weak_ext->characteristics, fallback_symbol);
+
+      symbol->obj          = obj;
+      fallback_symbol->obj = obj;
+    } break;
+    case COFF_SymbolValueInterp_UNDEFINED: {
+      LNK_Symbol *symbol = &symbol_array.v[symbol_idx];
+      lnk_init_undefined_symbol(symbol, name, LNK_SymbolScopeFlag_Main);
+      symbol->obj = obj;
+    } break;
+    case COFF_SymbolValueInterp_COMMON: {
+      // :common_block
+      //
+      // TODO: sort chunks on size to reduce bss usage
+      LNK_Chunk *chunk = push_array(arena, LNK_Chunk, 1);
+      chunk->align     = Min(32, u64_up_to_pow2(value)); // link.exe caps align at 32 bytes
+      chunk->type      = LNK_Chunk_Leaf;
+      chunk->flags     = master_common_block->flags;
+      chunk->u.leaf    = str8(0, value);
+      lnk_chunk_set_debugf(arena, chunk, "%S: common block %S", obj_path, name);
+      lnk_chunk_list_push(arena, master_common_block->u.list, chunk);
+
+      LNK_DefinedSymbolFlags flags = 0;
+      if (COFF_SymbolType_IsFunc(type)) {
+        flags |= LNK_DefinedSymbolFlag_IsFunc;
       }
-#endif
-      
-      lnk_init_weak_symbol(symbol, name, weak_ext->characteristics, &symbol_array.v[weak_ext->tag_index]);
+
+      LNK_Symbol *symbol = &symbol_array.v[symbol_idx];
+      lnk_init_defined_symbol_chunk(symbol, name, LNK_DefinedSymbolVisibility_Extern, flags, chunk, 0, COFF_ComdatSelectType_LARGEST, 0);
+      symbol->obj = obj;
     } break;
     case COFF_SymbolValueInterp_ABS: {
       // Never code or data, synthetic symbol. COFF spec says bits in value are used
@@ -974,19 +993,19 @@ lnk_symbol_array_from_coff(Arena              *arena,
       // LLVM uses undocumented mask 0x4800 on @feat.00 to tell if object was compiled with /guard:cf.
 
       LNK_DefinedSymbolVisibility visibility = LNK_DefinedSymbolVisibility_Static;
-      if (coff_symbol->storage_class == COFF_SymStorageClass_EXTERNAL) {
+      if (storage_class == COFF_SymStorageClass_EXTERNAL) {
         visibility = LNK_DefinedSymbolVisibility_Extern;
       }
 
-      lnk_init_defined_symbol_va(symbol, name, visibility, 0, coff_symbol->value);
+      LNK_Symbol *symbol = &symbol_array.v[symbol_idx];
+      lnk_init_defined_symbol_va(symbol, name, visibility, 0, value);
+      symbol->obj = obj;
     } break;
-    case COFF_SymbolValueInterp_DEBUG: {
-      // ignore
-    } break;
+    case COFF_SymbolValueInterp_DEBUG: break;
     }
     
     // skip aux symbols
-    symbol_idx += coff_symbol->aux_symbol_count;
+    symbol_idx += aux_symbol_count;
   }
 
   return symbol_array;
