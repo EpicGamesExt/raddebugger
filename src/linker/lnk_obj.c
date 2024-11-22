@@ -769,7 +769,7 @@ lnk_symbol_array_from_coff(Arena              *arena,
       }
     }
 
-    if (symbol_idx + aux_symbol_count > coff_symbol_count) {
+    if (symbol_idx + aux_symbol_count + 1 > coff_symbol_count) {
       lnk_error(LNK_Error_IllData, "%S: symbol %S has out of bounds aux symbol count %u", obj_path, name, aux_symbol_count);
     }
 
