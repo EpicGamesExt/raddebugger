@@ -1410,7 +1410,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
                     {
                       U8 *bytecode_base = all_location_data + block->location_data_off + sizeof(RDI_LocationKind);
                       U64 bytecode_size = 0;
-                      for(U64 idx = 0; idx < all_location_data_size; idx += 1)
+                      for(U64 idx = 0; idx < all_location_data_size;)
                       {
                         U8 op = bytecode_base[idx];
                         if(op == 0)
@@ -1420,6 +1420,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
                         U16 ctrlbits = rdi_eval_op_ctrlbits_table[op];
                         U32 p_size = RDI_DECODEN_FROM_CTRLBITS(ctrlbits);
                         bytecode_size += 1+p_size;
+                        idx += 1+p_size;
                       }
                       loc_bytecode = str8(bytecode_base, bytecode_size);
                     }break;
