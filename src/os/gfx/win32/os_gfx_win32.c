@@ -643,36 +643,31 @@ os_w32_wnd_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
       {
         if(os_w32_new_window_custom_border || (window && window->custom_border))
         {
-          DWORD window_style = GetWindowLong(hwnd, GWL_STYLE);
-          B32 window_is_fullscreen = !(window_style & WS_OVERLAPPEDWINDOW);
-          if(IsZoomed(hwnd) && !window_is_fullscreen)
+          F32 dpi = w32_GetDpiForWindow_func ? (F32)w32_GetDpiForWindow_func(hwnd) : 96.f;
+          S32 frame_x = w32_GetSystemMetricsForDpi_func ? w32_GetSystemMetricsForDpi_func(SM_CXFRAME, dpi) : GetSystemMetrics(SM_CXFRAME);
+          S32 frame_y = w32_GetSystemMetricsForDpi_func ? w32_GetSystemMetricsForDpi_func(SM_CYFRAME, dpi) : GetSystemMetrics(SM_CYFRAME);
+          S32 padding = w32_GetSystemMetricsForDpi_func ? w32_GetSystemMetricsForDpi_func(SM_CXPADDEDBORDER, dpi) : GetSystemMetrics(SM_CXPADDEDBORDER);
+          if (wParam)
           {
-            F32 dpi = w32_GetDpiForWindow_func ? (F32)w32_GetDpiForWindow_func(hwnd) : 96.f;
-            S32 title_bar_size = w32_GetSystemMetricsForDpi_func ? w32_GetSystemMetricsForDpi_func(SM_CYCAPTION, dpi) : 0;
-            S32 border_lr_size = 0;//w32_GetSystemMetricsForDpi_func ? w32_GetSystemMetricsForDpi_func(SM_CXPADDEDBORDER, dpi) : 0;
-            S32 border_b_size = 0;//w32_GetSystemMetricsForDpi_func ? w32_GetSystemMetricsForDpi_func(SM_CXPADDEDBORDER, dpi) : 0;
-            if(wParam == 1)
+            NCCALCSIZE_PARAMS* params = (NCCALCSIZE_PARAMS*)lParam;
+            RECT* rect = params->rgrc;
+            rect->right  -= frame_x + padding;
+            rect->left   += frame_x + padding;
+            rect->bottom -= frame_y + padding;
+            if (IsMaximized(hwnd))
             {
-              NCCALCSIZE_PARAMS *pncsp = (NCCALCSIZE_PARAMS *)lParam;
-              pncsp->rgrc[0].top -= title_bar_size;
-              pncsp->rgrc[0].left += border_lr_size;
-              pncsp->rgrc[0].right -= border_lr_size;
-              pncsp->rgrc[0].bottom -= border_b_size;
+              rect->top += frame_y + padding;
+              // If we do not do this hidden taskbar can not be unhidden on mouse hover
+              // Unfortunately it can create an ugly bottom border when maximized...
+              rect->bottom -= 1; 
             }
-            else
-            {
-              RECT *rect = (RECT *)lParam;
-              rect->top -= title_bar_size;
-              rect->left += border_lr_size;
-              rect->right -= border_lr_size;
-              rect->bottom -= border_b_size;
-            }
-            result = DefWindowProc(hwnd, uMsg, wParam, lParam);
           }
-          else if(wParam == 1)
+          else
           {
-            NCCALCSIZE_PARAMS *pncsp = (NCCALCSIZE_PARAMS *)lParam;
-            pncsp->rgrc[0].right += 1;
+            RECT* rect = (RECT*)lParam;
+            rect->right  -= frame_x + padding;
+            rect->left   += frame_x + padding;
+            rect->bottom -= frame_y + padding;
           }
         }
         else
@@ -692,100 +687,91 @@ os_w32_wnd_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
         }
         else
         {
-          POINT pos_monitor;
-          pos_monitor.x = GET_X_LPARAM(lParam);
-          pos_monitor.y = GET_Y_LPARAM(lParam);
-          POINT pos_client = pos_monitor;
-          ScreenToClient(hwnd, &pos_client);
+          B32 is_default_handled = 0;
           
-          //- rjf: check against window boundaries
-          RECT frame_rect;
-          GetWindowRect(hwnd, &frame_rect);
-          B32 is_over_window = (frame_rect.left <= pos_monitor.x && pos_monitor.x < frame_rect.right &&
-                                frame_rect.top <= pos_monitor.y && pos_monitor.y < frame_rect.bottom);
-          
-          //- rjf: check against borders
-          B32 is_over_left   = 0;
-          B32 is_over_right  = 0;
-          B32 is_over_top    = 0;
-          B32 is_over_bottom = 0;
+          // Let the default procedure handle resizing areas
+          result = DefWindowProc(hwnd, uMsg, wParam, lParam);
+          switch (result)
           {
-            RECT rect;
-            GetClientRect(hwnd, &rect);
-            if(!IsZoomed(hwnd))
+            case HTNOWHERE:
+            case HTRIGHT:
+            case HTLEFT:
+            case HTTOPLEFT:
+            case HTTOPRIGHT:
+            case HTBOTTOMRIGHT:
+            case HTBOTTOM:
+            case HTBOTTOMLEFT:
             {
-              if(rect.left <= pos_client.x && pos_client.x < rect.left + window->custom_border_edge_thickness)
-              {
-                is_over_left = 1;
-              }
-              if(rect.right - window->custom_border_edge_thickness <= pos_client.x && pos_client.x < rect.right)
-              {
-                is_over_right = 1;
-              }
-              if(rect.bottom - window->custom_border_edge_thickness <= pos_client.y && pos_client.y < rect.bottom)
-              {
-                is_over_bottom = 1;
-              }
-              if(rect.top <= pos_client.y && pos_client.y < rect.top + window->custom_border_edge_thickness)
-              {
-                is_over_top = 1;
-              }
-            }
+              is_default_handled = 1;
+            } break;
           }
           
-          //- rjf: check against title bar
-          B32 is_over_title_bar = 0;
+          if (!is_default_handled)
           {
-            RECT rect;
-            GetClientRect(hwnd, &rect);
-            is_over_title_bar = (rect.left <= pos_client.x && pos_client.x < rect.right &&
-                                 rect.top <= pos_client.y && pos_client.y < rect.top + window->custom_border_title_thickness);
-          }
+            POINT pos_monitor;
+            pos_monitor.x = GET_X_LPARAM(lParam);
+            pos_monitor.y = GET_Y_LPARAM(lParam);
+            POINT pos_client = pos_monitor;
+            ScreenToClient(hwnd, &pos_client);
           
-          //- rjf: check against title bar client areas
-          B32 is_over_title_bar_client_area = 0;
-          for(OS_W32_TitleBarClientArea *area = window->first_title_bar_client_area;
-              area != 0;
-              area = area->next)
-          {
-            Rng2F32 rect = area->rect;
-            if(rect.x0 <= pos_client.x && pos_client.x < rect.x1 &&
-               rect.y0 <= pos_client.y && pos_client.y < rect.y1)
-            {
-              is_over_title_bar_client_area = 1;
-              break;
-            }
-          }
-          
-          //- rjf: resolve hovering to result
-          result = HTNOWHERE;
-          if(is_over_window)
-          {
-            // rjf: default to client area
-            result = HTCLIENT;
+            // Adjustments happening in NCCALCSIZE are messing with the detection
+            // of the top hit area so manually checking that.
+            F32 dpi = w32_GetDpiForWindow_func ? (F32)w32_GetDpiForWindow_func(hwnd) : 96.f;
+            S32 frame_y = w32_GetSystemMetricsForDpi_func ? w32_GetSystemMetricsForDpi_func(SM_CYFRAME, dpi) : GetSystemMetrics(SM_CYFRAME);
+            S32 padding = w32_GetSystemMetricsForDpi_func ? w32_GetSystemMetricsForDpi_func(SM_CXPADDEDBORDER, dpi) : GetSystemMetrics(SM_CXPADDEDBORDER);
             
-            // rjf: title bar
-            if(is_over_title_bar)
+            B32 is_over_top_resize = pos_client.y >= 0 && pos_client.y < frame_y + padding;
+            B32 is_over_title_bar  = pos_client.y >= 0 && pos_client.y < window->custom_border_title_thickness;
+            
+            //- rjf: check against title bar client areas
+            B32 is_over_title_bar_client_area = 0;
+            for(OS_W32_TitleBarClientArea *area = window->first_title_bar_client_area;
+                area != 0;
+                area = area->next)
             {
-              result = HTCAPTION;
+              Rng2F32 rect = area->rect;
+              if(rect.x0 <= pos_client.x && pos_client.x < rect.x1 &&
+                 rect.y0 <= pos_client.y && pos_client.y < rect.y1)
+              {
+                is_over_title_bar_client_area = 1;
+                break;
+              }
             }
             
-            // rjf: normal edges
-            if(is_over_left)   { result = HTLEFT; }
-            if(is_over_right)  { result = HTRIGHT; }
-            if(is_over_top)    { result = HTTOP; }
-            if(is_over_bottom) { result = HTBOTTOM; }
-            
-            // rjf: corners
-            if(is_over_left  && is_over_top)    { result = HTTOPLEFT; }
-            if(is_over_left  && is_over_bottom) { result = HTBOTTOMLEFT; }
-            if(is_over_right && is_over_top)    { result = HTTOPRIGHT; }
-            if(is_over_right && is_over_bottom) { result = HTBOTTOMRIGHT; }
-            
-            // rjf: title bar client area
-            if(is_over_title_bar_client_area)
+            if (IsMaximized(hwnd))
             {
-              result = HTCLIENT;
+              if (is_over_title_bar_client_area)
+              {
+                result = HTCLIENT;
+              }
+              else if (is_over_title_bar)
+              {
+                result = HTCAPTION;
+              }
+              else 
+              {
+                result = HTCLIENT;
+              }
+            }
+            else
+            {
+              //Swap the first two conditions to choose if hovering the top border
+              //should prioritize resize or title bar buttons.
+              if (is_over_title_bar_client_area)
+              {
+                result = HTCLIENT;
+              }
+              else if (is_over_top_resize)
+              {
+                result = HTTOP;
+              }
+              else if (is_over_title_bar)
+              {
+                result = HTCAPTION;
+              }
+              else {
+                result = HTCLIENT;
+              }
             }
           }
         }
