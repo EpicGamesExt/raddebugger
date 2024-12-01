@@ -647,27 +647,18 @@ os_w32_wnd_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
           S32 frame_x = w32_GetSystemMetricsForDpi_func ? w32_GetSystemMetricsForDpi_func(SM_CXFRAME, dpi) : GetSystemMetrics(SM_CXFRAME);
           S32 frame_y = w32_GetSystemMetricsForDpi_func ? w32_GetSystemMetricsForDpi_func(SM_CYFRAME, dpi) : GetSystemMetrics(SM_CYFRAME);
           S32 padding = w32_GetSystemMetricsForDpi_func ? w32_GetSystemMetricsForDpi_func(SM_CXPADDEDBORDER, dpi) : GetSystemMetrics(SM_CXPADDEDBORDER);
-          if (wParam)
+          
+          RECT* rect = wParam == 0 ? (RECT*)lParam : ((NCCALCSIZE_PARAMS*)lParam)->rgrc;
+          rect->right  -= frame_x + padding;
+          rect->left   += frame_x + padding;
+          rect->bottom -= frame_y + padding;
+          
+          if (IsMaximized(hwnd))
           {
-            NCCALCSIZE_PARAMS* params = (NCCALCSIZE_PARAMS*)lParam;
-            RECT* rect = params->rgrc;
-            rect->right  -= frame_x + padding;
-            rect->left   += frame_x + padding;
-            rect->bottom -= frame_y + padding;
-            if (IsMaximized(hwnd))
-            {
-              rect->top += frame_y + padding;
-              // If we do not do this hidden taskbar can not be unhidden on mouse hover
-              // Unfortunately it can create an ugly bottom border when maximized...
-              rect->bottom -= 1; 
-            }
-          }
-          else
-          {
-            RECT* rect = (RECT*)lParam;
-            rect->right  -= frame_x + padding;
-            rect->left   += frame_x + padding;
-            rect->bottom -= frame_y + padding;
+            rect->top += frame_y + padding;
+            // If we do not do this hidden taskbar can not be unhidden on mouse hover
+            // Unfortunately it can create an ugly bottom border when maximized...
+            rect->bottom -= 1; 
           }
         }
         else
