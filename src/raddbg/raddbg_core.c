@@ -8337,7 +8337,7 @@ rd_window_frame(RD_Window *ws)
       // rjf: blur background
       if(box->flags & UI_BoxFlag_DrawBackgroundBlur && rd_setting_val_from_code(RD_SettingCode_BackgroundBlur).s32)
       {
-        R_PassParams_Blur *params = dr_blur(box->rect, box->blur_size*(1-box->transparency), 0);
+        R_PassParams_Blur *params = dr_blur(pad_2f32(box->rect, 1.f), box->blur_size*(1-box->transparency), 0);
         MemoryCopyArray(params->corner_radii, box->corner_radii);
       }
       
