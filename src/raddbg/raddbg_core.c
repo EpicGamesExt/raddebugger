@@ -16528,8 +16528,8 @@ rd_frame(void)
             }
           }
           
-          // rjf: focus window if none focused
-          if(need_refocus)
+          // rjf: focus window if none focused, and if we have a thread to snap to
+          if(need_refocus && (selected_thread != &ctrl_entity_nil || thread != &ctrl_entity_nil))
           {
             B32 any_window_is_focused = 0;
             for(RD_Window *window = rd_state->first_window; window != 0; window = window->next)
