@@ -1716,12 +1716,23 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
           // rjf: push stop event to caller, if this is not a soft-halt
           if(should_snap)
           {
+            CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, event->entity);
             D_EventCause cause = D_EventCause_Null;
             switch(event->cause)
             {
               default:{}break;
-              case CTRL_EventCause_InterruptedByHalt:{cause = D_EventCause_Halt;}break;
-              case CTRL_EventCause_UserBreakpoint:{cause = D_EventCause_UserBreakpoint;}break;
+              case CTRL_EventCause_InterruptedByHalt:
+              {
+                if(should_snap)
+                {
+                  cause = D_EventCause_Halt;
+                }
+                else
+                {
+                  cause = D_EventCause_SoftHalt;
+                }
+              }break;
+              case CTRL_EventCause_UserBreakpoint:    {cause = D_EventCause_UserBreakpoint;}break;
             }
             D_EventNode *n = push_array(arena, D_EventNode, 1);
             SLLQueuePush(result.first, result.last, n);
@@ -1729,7 +1740,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
             D_Event *evt = &n->v;
             evt->kind = D_EventKind_Stop;
             evt->cause  = cause;
-            evt->thread = event->entity;
+            evt->thread = thread->kind == CTRL_EntityKind_Thread ? thread->handle : ctrl_handle_zero();
             evt->vaddr  = event->rip_vaddr;
           }
         }break;

@@ -16440,27 +16440,6 @@ rd_frame(void)
     D_EventList engine_events = d_tick(scratch.arena, &targets, &breakpoints, &path_maps, exception_code_filters, &meta_evals);
     
     ////////////////////////////
-    //- rjf: no selected thread? -> try to snap to any existing thread
-    //
-    if(!d_ctrl_targets_running() && ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_base_regs()->thread) == &ctrl_entity_nil)
-    {
-      CTRL_Entity *process = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_base_regs()->process);
-      if(process == &ctrl_entity_nil)
-      {
-        CTRL_EntityList all_processes = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Process);
-        if(all_processes.count != 0)
-        {
-          process = all_processes.first->v;
-        }
-      }
-      CTRL_Entity *new_thread = ctrl_entity_child_from_kind(process, CTRL_EntityKind_Thread);
-      if(new_thread != &ctrl_entity_nil)
-      {
-        rd_cmd(RD_CmdKind_SelectThread, .thread = new_thread->handle);
-      }
-    }
-    
-    ////////////////////////////
     //- rjf: process debug engine events
     //
     for(D_EventNode *n = engine_events.first; n != 0; n = n->next)
@@ -16484,6 +16463,7 @@ rd_frame(void)
         }break;
         case D_EventKind_Stop:
         {
+          B32 need_refocus = (evt->cause != D_EventCause_SoftHalt);
           CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, evt->thread);
           U64 vaddr = evt->vaddr;
           CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, CTRL_EntityKind_Process);
@@ -16493,20 +16473,20 @@ rd_frame(void)
           U64 test_cached_vaddr = ctrl_query_cached_rip_from_thread(d_state->ctrl_entity_store, thread->handle);
           
           // rjf: valid stop thread? -> select & snap
-          if(thread != &ctrl_entity_nil && evt->cause != D_EventCause_Halt)
+          if(need_refocus && thread != &ctrl_entity_nil && evt->cause != D_EventCause_Halt)
           {
             rd_cmd(RD_CmdKind_SelectThread, .thread = thread->handle);
           }
           
           // rjf: no stop-causing thread, but have selected thread? -> snap to selected
           CTRL_Entity *selected_thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_base_regs()->thread);
-          if((evt->cause == D_EventCause_Halt || thread == &ctrl_entity_nil) && selected_thread != &ctrl_entity_nil)
+          if(need_refocus && (evt->cause == D_EventCause_Halt || thread == &ctrl_entity_nil) && selected_thread != &ctrl_entity_nil)
           {
             rd_cmd(RD_CmdKind_SelectThread, .thread = selected_thread->handle);
           }
           
           // rjf: no stop-causing thread, but don't have selected thread? -> snap to first available thread
-          if(thread == &ctrl_entity_nil && selected_thread == &ctrl_entity_nil)
+          if(need_refocus && thread == &ctrl_entity_nil && selected_thread == &ctrl_entity_nil)
           {
             CTRL_EntityList threads = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Thread);
             CTRL_Entity *first_available_thread = ctrl_entity_list_first(&threads);
@@ -16549,27 +16529,30 @@ rd_frame(void)
           }
           
           // rjf: focus window if none focused
-          B32 any_window_is_focused = 0;
-          for(RD_Window *window = rd_state->first_window; window != 0; window = window->next)
+          if(need_refocus)
           {
-            if(os_window_is_focused(window->os))
+            B32 any_window_is_focused = 0;
+            for(RD_Window *window = rd_state->first_window; window != 0; window = window->next)
             {
-              any_window_is_focused = 1;
-              break;
+              if(os_window_is_focused(window->os))
+              {
+                any_window_is_focused = 1;
+                break;
+              }
             }
-          }
-          if(!any_window_is_focused)
-          {
-            RD_Window *window = rd_window_from_handle(rd_state->last_focused_window);
-            if(window == 0)
+            if(!any_window_is_focused)
             {
-              window = rd_state->first_window;
-            }
-            if(window != 0)
-            {
-              os_window_set_minimized(window->os, 0);
-              os_window_bring_to_front(window->os);
-              os_window_focus(window->os);
+              RD_Window *window = rd_window_from_handle(rd_state->last_focused_window);
+              if(window == 0)
+              {
+                window = rd_state->first_window;
+              }
+              if(window != 0)
+              {
+                os_window_set_minimized(window->os, 0);
+                os_window_bring_to_front(window->os);
+                os_window_focus(window->os);
+              }
             }
           }
         }break;
