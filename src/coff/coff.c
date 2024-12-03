@@ -101,10 +101,10 @@ coff_header_info_from_data(String8 data)
     info.machine                  = big_header->machine;
     info.section_array_off        = sizeof(COFF_HeaderBigObj);
     info.section_count_no_null    = big_header->section_count;
-    info.string_table_off         = big_header->pointer_to_symbol_table + sizeof(COFF_Symbol32) * big_header->number_of_symbols;
+    info.string_table_off         = big_header->symbol_table_foff + sizeof(COFF_Symbol32) * big_header->symbol_count;
     info.symbol_size              = sizeof(COFF_Symbol32);
-    info.symbol_off               = big_header->pointer_to_symbol_table;
-    info.symbol_count             = big_header->number_of_symbols;
+    info.symbol_off               = big_header->symbol_table_foff;
+    info.symbol_count             = big_header->symbol_count;
   } else if (coff_is_obj(data)) {
     COFF_Header *header        = (COFF_Header*)data.str;
     info.type                  = COFF_DataType_OBJ;
@@ -406,6 +406,75 @@ coff_reloc_info_from_section_header(String8 data, COFF_SectionHeader *header)
     result.count     = header->reloc_count;
   }
   return result;
+}
+
+internal U64
+coff_apply_size_from_reloc_x64(COFF_RelocTypeX64 x)
+{
+  switch (x) {
+    case COFF_RelocTypeX64_ABS:      return 4;
+    case COFF_RelocTypeX64_ADDR64:   return 8;
+    case COFF_RelocTypeX64_ADDR32:   return 4;
+    case COFF_RelocTypeX64_ADDR32NB: return 4;
+    case COFF_RelocTypeX64_REL32:    return 4;
+    case COFF_RelocTypeX64_REL32_1:  return 4;
+    case COFF_RelocTypeX64_REL32_2:  return 4;
+    case COFF_RelocTypeX64_REL32_3:  return 4;
+    case COFF_RelocTypeX64_REL32_4:  return 4;
+    case COFF_RelocTypeX64_REL32_5:  return 4;
+    case COFF_RelocTypeX64_SECTION:  return 2;
+    case COFF_RelocTypeX64_SECREL:   return 4;
+    case COFF_RelocTypeX64_SREL32:   return 4;
+
+    case COFF_RelocTypeX64_SECREL7:
+    case COFF_RelocTypeX64_TOKEN:
+    case COFF_RelocTypeX64_PAIR:
+    case COFF_RelocTypeX64_SSPAN32:
+      NotImplemented;
+    break;
+  }
+  return 0;
+}
+
+internal U64
+coff_apply_size_from_reloc_x86(COFF_RelocTypeX86 x)
+{
+  switch (x) {
+    case COFF_RelocTypeX86_ABS:      return 4;
+    case COFF_RelocTypeX86_DIR16:    return 2;
+    case COFF_RelocTypeX86_REL16:    return 2;
+    case COFF_RelocTypeX86_DIR32:    return 4;
+    case COFF_RelocTypeX86_DIR32NB:  return 4;
+    case COFF_RelocTypeX86_SEG12:    return 0;
+    case COFF_RelocTypeX86_SECTION:  return 2;
+    case COFF_RelocTypeX86_SECREL:   return 4;
+    case COFF_RelocTypeX86_TOKEN:    return 4;
+    case COFF_RelocTypeX86_SECREL7:  return 1;
+    case COFF_RelocTypeX86_REL32:    return 4;
+
+    case COFF_RelocTypeX86_UNKNOWN0:
+    case COFF_RelocTypeX86_UNKNOWN2:
+    case COFF_RelocTypeX86_UNKNOWN3:
+    case COFF_RelocTypeX86_UNKNOWN4:
+    case COFF_RelocTypeX86_UNKNOWN6:
+    case COFF_RelocTypeX86_UNKNOWN7:
+    case COFF_RelocTypeX86_UNKNOWN8:
+    case COFF_RelocTypeX86_UNKNOWN9:
+      NotImplemented;
+    break;
+  }
+  return 0;
+}
+
+internal U64
+coff_apply_size_from_reloc(COFF_MachineType machine, COFF_RelocType x)
+{
+  switch (machine) {
+    case COFF_MachineType_X64: return coff_apply_size_from_reloc_x64(x);
+    case COFF_MachineType_X86: return coff_apply_size_from_reloc_x86(x);
+    default: NotImplemented;
+  }
+  return 0;
 }
 
 internal U64
@@ -1369,6 +1438,221 @@ coff_string_from_import_header_type(COFF_ImportHeaderType type)
     }
   }
   return str8(0,0);
+}
+
+internal String8
+coff_string_from_sym_dtype(COFF_SymDType x)
+{
+  switch (x) {
+    case COFF_SymDType_NULL:  break;
+    case COFF_SymDType_PTR :  return str8_lit("PTR");
+    case COFF_SymDType_FUNC:  return str8_lit("FUNC");
+    case COFF_SymDType_ARRAY: return str8_lit("ARRAY");
+  }
+  return str8_zero();
+}
+
+internal String8
+coff_string_from_sym_type(COFF_SymType x)
+{
+  switch (x) {
+    case COFF_SymType_NULL:   break;
+    case COFF_SymType_VOID:   return str8_lit("VOID");
+    case COFF_SymType_CHAR:   return str8_lit("CHAR");
+    case COFF_SymType_SHORT:  return str8_lit("SHORT");
+    case COFF_SymType_INT:    return str8_lit("INT");
+    case COFF_SymType_LONG:   return str8_lit("LONG");
+    case COFF_SymType_FLOAT:  return str8_lit("FLOAT");
+    case COFF_SymType_DOUBLE: return str8_lit("DOUBLE");
+    case COFF_SymType_STRUCT: return str8_lit("STRUCT");
+    case COFF_SymType_UNION:  return str8_lit("UNION");
+    case COFF_SymType_ENUM:   return str8_lit("ENUM");
+    case COFF_SymType_MOE:    return str8_lit("MOE");
+    case COFF_SymType_BYTE:   return str8_lit("BYTE");
+    case COFF_SymType_WORD:   return str8_lit("WORD");
+    case COFF_SymType_UINT:   return str8_lit("UINT");
+    case COFF_SymType_DWORD:  return str8_lit("DWORD");
+  }
+  return str8_zero();
+}
+
+internal String8
+coff_string_from_sym_storage_class(COFF_SymStorageClass x)
+{
+  switch (x) {
+    case COFF_SymStorageClass_NULL:             break;
+    case COFF_SymStorageClass_END_OF_FUNCTION:  return str8_lit("EOF");
+    case COFF_SymStorageClass_AUTOMATIC:        return str8_lit("AUTOMATIC");
+    case COFF_SymStorageClass_EXTERNAL:         return str8_lit("EXTERNAL");
+    case COFF_SymStorageClass_STATIC:           return str8_lit("STATIC");
+    case COFF_SymStorageClass_REGISTER:         return str8_lit("REGISTER");
+    case COFF_SymStorageClass_EXTERNAL_DEF:     return str8_lit("DEF");
+    case COFF_SymStorageClass_LABEL:            return str8_lit("LABEL");
+    case COFF_SymStorageClass_UNDEFINED_LABEL:  return str8_lit("LABEL");
+    case COFF_SymStorageClass_MEMBER_OF_STRUCT: return str8_lit("STRUCT");
+    case COFF_SymStorageClass_ARGUMENT:         return str8_lit("ARGUMENT");
+    case COFF_SymStorageClass_STRUCT_TAG:       return str8_lit("TAG");
+    case COFF_SymStorageClass_MEMBER_OF_UNION:  return str8_lit("UNION");
+    case COFF_SymStorageClass_UNION_TAG:        return str8_lit("TAG");
+    case COFF_SymStorageClass_TYPE_DEFINITION:  return str8_lit("DEFINITION");
+    case COFF_SymStorageClass_UNDEFINED_STATIC: return str8_lit("STATIC");
+    case COFF_SymStorageClass_ENUM_TAG:         return str8_lit("TAG");
+    case COFF_SymStorageClass_MEMBER_OF_ENUM:   return str8_lit("ENUM");
+    case COFF_SymStorageClass_REGISTER_PARAM:   return str8_lit("PARAM");
+    case COFF_SymStorageClass_BIT_FIELD:        return str8_lit("FIELD");
+    case COFF_SymStorageClass_BLOCK:            return str8_lit("BLOCK");
+    case COFF_SymStorageClass_FUNCTION:         return str8_lit("FUNCTION");
+    case COFF_SymStorageClass_END_OF_STRUCT:    return str8_lit("STRUCT");
+    case COFF_SymStorageClass_FILE:             return str8_lit("FILE");
+    case COFF_SymStorageClass_SECTION:          return str8_lit("SECTION");
+    case COFF_SymStorageClass_WEAK_EXTERNAL:    return str8_lit("EXTERNAL");
+    case COFF_SymStorageClass_CLR_TOKEN:        return str8_lit("TOKEN");
+  }
+  return str8_zero();
+}
+
+internal String8
+coff_string_from_weak_ext_type(COFF_WeakExtType x)
+{
+  switch (x) {
+    case COFF_WeakExtType_NOLIBRARY:      return str8_lit("NOLIBRARY");
+    case COFF_WeakExtType_SEARCH_LIBRARY: return str8_lit("SEARCH_LIBRARY");
+    case COFF_WeakExtType_SEARCH_ALIAS:   return str8_lit("SEARCH_ALIAS");
+  }
+  return str8_zero();
+}
+
+internal String8
+coff_string_from_selection(COFF_ComdatSelectType x)
+{
+  switch (x) {
+    case COFF_ComdatSelectType_NULL:         break;
+    case COFF_ComdatSelectType_NODUPLICATES: return str8_lit("NODUPLICATES");
+    case COFF_ComdatSelectType_ANY:          return str8_lit("ANY");
+    case COFF_ComdatSelectType_SAME_SIZE:    return str8_lit("SIZE");
+    case COFF_ComdatSelectType_EXACT_MATCH:  return str8_lit("MATCH");
+    case COFF_ComdatSelectType_ASSOCIATIVE:  return str8_lit("ASSOCIATIVE");
+    case COFF_ComdatSelectType_LARGEST:      return str8_lit("LARGEST");
+  }
+  return str8_zero();
+}
+
+internal String8
+coff_string_from_reloc_x86(COFF_RelocTypeX86 x)
+{
+  switch (x) {
+    case COFF_RelocTypeX86_ABS:      return str8_lit("ABS");
+    case COFF_RelocTypeX86_DIR16:    return str8_lit("DIR16");
+    case COFF_RelocTypeX86_REL16:    return str8_lit("REL16");
+    case COFF_RelocTypeX86_UNKNOWN0: return str8_lit("UNKNOWN0");
+    case COFF_RelocTypeX86_UNKNOWN2: return str8_lit("UNKNOWN2");
+    case COFF_RelocTypeX86_UNKNOWN3: return str8_lit("UNKNOWN3");
+    case COFF_RelocTypeX86_DIR32:    return str8_lit("DIR32");
+    case COFF_RelocTypeX86_DIR32NB:  return str8_lit("DIR32NB");
+    case COFF_RelocTypeX86_SEG12:    return str8_lit("SEG12");
+    case COFF_RelocTypeX86_SECTION:  return str8_lit("SECTION");
+    case COFF_RelocTypeX86_SECREL:   return str8_lit("SECREL");
+    case COFF_RelocTypeX86_TOKEN:    return str8_lit("TOKEN");
+    case COFF_RelocTypeX86_SECREL7:  return str8_lit("SECREL7");
+    case COFF_RelocTypeX86_UNKNOWN4: return str8_lit("UNKNOWN4");
+    case COFF_RelocTypeX86_UNKNOWN5: return str8_lit("UNKNOWN5");
+    case COFF_RelocTypeX86_UNKNOWN6: return str8_lit("UNKNOWN6");
+    case COFF_RelocTypeX86_UNKNOWN7: return str8_lit("UNKNOWN7");
+    case COFF_RelocTypeX86_UNKNOWN8: return str8_lit("UNKNOWN8");
+    case COFF_RelocTypeX86_UNKNOWN9: return str8_lit("UNKNOWN9");
+    case COFF_RelocTypeX86_REL32:    return str8_lit("REL32");
+  }
+  return str8_zero();
+}
+
+internal String8
+coff_string_from_reloc_x64(COFF_RelocTypeX64 x)
+{
+  switch (x) {
+    case COFF_RelocTypeX64_ABS:      return str8_lit("ABS");
+    case COFF_RelocTypeX64_ADDR64:   return str8_lit("ADDR64");
+    case COFF_RelocTypeX64_ADDR32:   return str8_lit("ADDR32");
+    case COFF_RelocTypeX64_ADDR32NB: return str8_lit("ADDR32NB");
+    case COFF_RelocTypeX64_REL32:    return str8_lit("REL32");
+    case COFF_RelocTypeX64_REL32_1:  return str8_lit("REL32_1");
+    case COFF_RelocTypeX64_REL32_2:  return str8_lit("REL32_2");
+    case COFF_RelocTypeX64_REL32_3:  return str8_lit("REL32_3");
+    case COFF_RelocTypeX64_REL32_4:  return str8_lit("REL32_4");
+    case COFF_RelocTypeX64_REL32_5:  return str8_lit("REL32_5");
+    case COFF_RelocTypeX64_SECTION:  return str8_lit("SECTION");
+    case COFF_RelocTypeX64_SECREL:   return str8_lit("SECREL");
+    case COFF_RelocTypeX64_SECREL7:  return str8_lit("SECREL7");
+    case COFF_RelocTypeX64_TOKEN:    return str8_lit("TOKEN");
+    case COFF_RelocTypeX64_SREL32:   return str8_lit("SREL32");
+    case COFF_RelocTypeX64_PAIR:     return str8_lit("PAIR");
+    case COFF_RelocTypeX64_SSPAN32:  return str8_lit("SSPAN32");
+  }
+  return str8_zero();
+}
+
+internal String8
+coff_string_from_reloc_arm(COFF_RelocTypeARM x)
+{
+  switch (x) {
+    case COFF_RelocTypeARM_ABS:            return str8_lit("ABS");
+    case COFF_RelocTypeARM_ADDR32:         return str8_lit("ADDR32");
+    case COFF_RelocTypeARM_ADDR32NB:       return str8_lit("ADDR32NB");
+    case COFF_RelocTypeARM_BRANCH24:       return str8_lit("BRANCH24");
+    case COFF_RelocTypeARM_BRANCH11:       return str8_lit("BRANCH11");
+    case COFF_RelocTypeARM_UNKNOWN1:       return str8_lit("UNKNOWN1");
+    case COFF_RelocTypeARM_UNKNOWN2:       return str8_lit("UNKNOWN2");
+    case COFF_RelocTypeARM_UNKNOWN3:       return str8_lit("UNKNOWN3");
+    case COFF_RelocTypeARM_UNKNOWN4:       return str8_lit("UNKNOWN4");
+    case COFF_RelocTypeARM_UNKNOWN5:       return str8_lit("UNKNOWN5");
+    case COFF_RelocTypeARM_REL32:          return str8_lit("REL32");
+    case COFF_RelocTypeARM_SECTION:        return str8_lit("SECTION");
+    case COFF_RelocTypeARM_SECREL:         return str8_lit("SECREL");
+    case COFF_RelocTypeARM_MOV32:          return str8_lit("MOV32");
+    case COFF_RelocTypeARM_THUMB_MOV32:    return str8_lit("THUMB_MOV32");
+    case COFF_RelocTypeARM_THUMB_BRANCH20: return str8_lit("THUMB_BRANCH20");
+    case COFF_RelocTypeARM_UNUSED:         return str8_lit("UNUSED");
+    case COFF_RelocTypeARM_THUMB_BRANCH24: return str8_lit("THUMB_BRANCH24");
+    case COFF_RelocTypeARM_THUMB_BLX23:    return str8_lit("THUMB_BLX23");
+    case COFF_RelocTypeARM_PAIR:           return str8_lit("PAIR");
+  }
+  return str8_zero();
+}
+
+internal String8
+coff_string_from_reloc_arm64(COFF_RelocTypeARM64 x)
+{
+  switch (x) {
+    case COFF_RelocTypeARM64_ABS:            return str8_lit("ABS");
+    case COFF_RelocTypeARM64_ADDR32:         return str8_lit("ADDR32");
+    case COFF_RelocTypeARM64_ADDR32NB:       return str8_lit("ADDR32NB");
+    case COFF_RelocTypeARM64_BRANCH26:       return str8_lit("BRANCH26");
+    case COFF_RelocTypeARM64_PAGEBASE_REL21: return str8_lit("PAGEBASE_REL21");
+    case COFF_RelocTypeARM64_REL21:          return str8_lit("REL21");
+    case COFF_RelocTypeARM64_PAGEOFFSET_12A: return str8_lit("PAGEOFFSET_12A");
+    case COFF_RelocTypeARM64_SECREL:         return str8_lit("SECREL");
+    case COFF_RelocTypeARM64_SECREL_LOW12A:  return str8_lit("SECREL_LOW12A");
+    case COFF_RelocTypeARM64_SECREL_HIGH12A: return str8_lit("SECREL_HIGH12A");
+    case COFF_RelocTypeARM64_SECREL_LOW12L:  return str8_lit("SECREL_LOW12L");
+    case COFF_RelocTypeARM64_TOKEN:          return str8_lit("TOKEN");
+    case COFF_RelocTypeARM64_SECTION:        return str8_lit("SECTION");
+    case COFF_RelocTypeARM64_ADDR64:         return str8_lit("ADDR64");
+    case COFF_RelocTypeARM64_BRANCH19:       return str8_lit("BRANCH19");
+    case COFF_RelocTypeARM64_BRANCH14:       return str8_lit("BRANCH14");
+    case COFF_RelocTypeARM64_REL32:          return str8_lit("REL32");
+  }
+  return str8_zero();
+}
+
+internal String8
+coff_string_from_reloc(COFF_MachineType machine, COFF_RelocType x)
+{
+  switch (machine) {
+    case COFF_MachineType_X86:   return coff_string_from_reloc_x86(x);
+    case COFF_MachineType_X64:   return coff_string_from_reloc_x64(x);
+    case COFF_MachineType_ARM:   return coff_string_from_reloc_arm(x);
+    case COFF_MachineType_ARM64: return coff_string_from_reloc_arm64(x);
+  }
+  return str8_zero();
 }
 
 internal COFF_MachineType
