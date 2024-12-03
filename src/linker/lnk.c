@@ -5,8 +5,7 @@
 // Build Options
 
 #define BUILD_CONSOLE_INTERFACE 1
-#define BUILD_VERSION_STRING Stringify(BUILD_VERSION_MAJOR) "." Stringify(BUILD_VERSION_MINOR) "." Stringify(BUILD_VERSION_PATCH)
-#define BUILD_TITLE "Epic Games Tools (R) RAD COFF/PE Linker " BUILD_VERSION_STRING " (" BUILD_GIT_HASH_FULL ")"
+#define BUILD_TITLE "Epic Games Tools (R) RAD COFF/PE Linker"
 
 ////////////////////////////////
 
@@ -611,7 +610,7 @@ lnk_add_resource_debug_s(LNK_SectionTable *st,
   if (exe_name_ext.size > 0) {
     exe_name = str8_chop(exe_name, 1);
   }
-  String8 version_string = push_str8f(scratch.arena, BUILD_TITLE);
+  String8 version_string = push_str8f(scratch.arena, BUILD_TITLE_STRING_LITERAL);
   String8 comp_data = cv_make_comp3(scratch.arena, CV_Compile3Flag_EC, CV_Language_CVTRES, arch,
                                     0, 0, 0, 0,
                                     1, 0, 1, 0,

@@ -782,7 +782,7 @@ lnk_print_build_info()
   fprintf(stdout, "  Compiler: %s\n", COMPILER_STRING);
   fprintf(stdout, "  Mode    : %s\n", BUILD_MODE_STRING);
   fprintf(stdout, "  Date    : %s %s\n", __TIME__, __DATE__);
-  fprintf(stdout, "  Version : %s\n", BUILD_VERSION_STRING);
+  fprintf(stdout, "  Version : %s\n", BUILD_VERSION_STRING_LITERAL);
 }
 
 internal void
@@ -791,7 +791,7 @@ lnk_print_help(void)
   Temp scratch = scratch_begin(0,0);
 
   fprintf(stdout, "--- Help -------------------------------------------------------\n");
-  fprintf(stdout, "  %s\n", BUILD_TITLE);
+  fprintf(stdout, "  %s\n", BUILD_TITLE_STRING_LITERAL);
   fprintf(stdout, "\n");
   fprintf(stdout, "  Usage: rad-link.exe [Options] [Files] [@rsp]\n");
   fprintf(stdout, "\n");
@@ -1680,7 +1680,7 @@ lnk_config_from_cmd_line(Arena *arena, String8List raw_cmd_line)
     } break;
 
     case LNK_CmdSwitch_Rad_Version: {
-      fprintf(stdout, "%s\n", BUILD_TITLE);
+      fprintf(stdout, "%s\n", BUILD_TITLE_STRING_LITERAL);
       os_abort(0);
     } break;
 
