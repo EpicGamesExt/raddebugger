@@ -775,6 +775,16 @@ internal U16 bswap_u16(U16 x);
 internal U32 bswap_u32(U32 x);
 internal U64 bswap_u64(U64 x);
 
+#if ARCH_LITTLE_ENDIAN
+# define from_be_u16(x) bswap_u16(x)
+# define from_be_u32(x) bswap_u32(x)
+# define from_be_u64(x) bswap_u64(x)
+#else
+# define from_be_u16(x) (x)
+# define from_be_u32(x) (x)
+# define from_be_u64(x) (x)
+#endif
+
 internal U64 count_bits_set32(U32 val);
 internal U64 count_bits_set64(U64 val);
 
