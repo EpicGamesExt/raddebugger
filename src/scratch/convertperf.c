@@ -42,8 +42,7 @@ entry_point(CmdLine *cmdline)
   String8List lines = str8_split(arena, list_data, splits, ArrayCount(splits), 0);
   OS_HandleList processes = {0};
   String8Node *processes_first_path_n = 0;
-  
-  U64 limit = 32;
+  U64 limit = 64;
   U64 idx = 0;
   for(String8Node *n = lines.first; n != 0; n = n->next)
   {
@@ -54,7 +53,7 @@ entry_point(CmdLine *cmdline)
       String8 dll_name = str8_skip_last_slash(dll_path_no_ext);
       String8 pdb_path = push_str8f(arena, "%S.pdb", dll_path_no_ext);
       String8 rdi_path = push_str8f(arena, "dump/%S.rdi", dll_name);
-      OS_Handle handle = os_cmd_line_launchf("raddbg --convert --work_threads_count:1 --pdb:%S --out:%S", pdb_path, rdi_path);
+      OS_Handle handle = os_cmd_line_launchf("raddbg --convert --pdb:%S --out:%S", pdb_path, rdi_path);
       os_handle_list_push(arena, &processes, handle);
       if(processes_first_path_n == 0)
       {

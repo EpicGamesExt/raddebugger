@@ -3314,6 +3314,7 @@ ctrl_thread__entry_point(void *p)
 internal void
 ctrl_thread__append_resolved_module_user_bp_traps(Arena *arena, CTRL_Handle process, CTRL_Handle module, CTRL_UserBreakpointList *user_bps, DMN_TrapChunkList *traps_out)
 {
+  if(user_bps->first == 0) { return; }
   Temp scratch = scratch_begin(&arena, 1);
   DI_Scope *di_scope = di_scope_open();
   CTRL_Entity *module_entity = ctrl_entity_from_handle(ctrl_state->ctrl_thread_entity_store, module);
@@ -4136,6 +4137,8 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
      (ctrl_state->ctrl_thread_entity_store->entity_kind_counts[CTRL_EntityKind_Module] > 256 ||
       ctrl_state->ctrl_thread_entity_store->entity_kind_counts[CTRL_EntityKind_Module] == 1))
   {
+    U64 endt_us = os_now_microseconds() + 1000000;
+    
     //- rjf: unpack event
     CTRL_Handle process_handle = ctrl_handle_make(CTRL_MachineID_Local, event->process);
     CTRL_Handle loaded_module_handle = ctrl_handle_make(CTRL_MachineID_Local, event->module);
@@ -4292,7 +4295,7 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
       for(DI_KeyNode *n = preemptively_loaded_keys.first; n != 0; n = n->next)
       {
         DI_Scope *di_scope = di_scope_open();
-        RDI_Parsed *rdi = di_rdi_from_key(di_scope, &n->v, max_U64);
+        RDI_Parsed *rdi = di_rdi_from_key(di_scope, &n->v, endt_us);
         di_scope_close(di_scope);
         di_close(&n->v);
       }
