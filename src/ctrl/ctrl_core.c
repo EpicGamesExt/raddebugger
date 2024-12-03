@@ -3606,7 +3606,7 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
                 U64 read_size = dmn_process_read_struct(process.dmn_handle, vaddr_range.min+dbg_data.voff, &cv);
                 if(read_size == sizeof(cv))
                 {
-                  pdb_dbg_time = cv.time;
+                  pdb_dbg_time = cv.time_stamp;
                   pdb_dbg_age = cv.age;
                   pdb_dbg_path = dmn_process_read_cstring(arena, process.dmn_handle, vaddr_range.min + dbg_data.voff + sizeof(cv));
                 }
