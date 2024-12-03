@@ -549,6 +549,14 @@ u64_from_str8(String8 string, U32 radix){
   return(x);
 }
 
+internal U32
+u32_from_str8(String8 string, U32 radix)
+{
+  U64 x64 = u64_from_str8(string, radix);
+  U32 x32 = safe_cast_u32(x64);
+  return x32;
+}
+
 internal S64
 s64_from_str8(String8 string, U32 radix){
   S64 sign = sign_from_str8(string, &string);

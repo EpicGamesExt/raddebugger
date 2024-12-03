@@ -235,6 +235,8 @@ internal String8 push_str8f(Arena *arena, char *fmt, ...);
 //- rjf: string -> integer
 internal S64 sign_from_str8(String8 string, String8 *string_tail);
 internal B32 str8_is_integer(String8 string, U32 radix);
+
+internal U32 u32_from_str8(String8 string, U32 radix);
 internal U64 u64_from_str8(String8 string, U32 radix);
 internal S64 s64_from_str8(String8 string, U32 radix);
 internal B32 try_u64_from_str8_c_rules(String8 string, U64 *x);
