@@ -2422,8 +2422,8 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
           if(processes.count != 0)
           {
             d_cmd(D_CmdKind_KillAll);
-            d_cmd(D_CmdKind_LaunchAndRun);
           }
+          d_cmd(D_CmdKind_LaunchAndRun);
         }break;
         case D_CmdKind_StepInto:
         case D_CmdKind_StepOver:

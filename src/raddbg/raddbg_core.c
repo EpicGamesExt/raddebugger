@@ -12368,9 +12368,10 @@ rd_frame(void)
           case RD_CmdKind_LaunchAndInit:
           case RD_CmdKind_StepInto:
           case RD_CmdKind_StepOver:
+          case RD_CmdKind_Restart:
           {
             CTRL_EntityList processes = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Process);
-            if(processes.count == 0)
+            if(processes.count == 0 || kind == RD_CmdKind_Restart)
             {
               RD_EntityList bps = rd_query_cached_entity_list_with_kind(RD_EntityKind_Breakpoint);
               for(RD_EntityNode *n = bps.first; n != 0; n = n->next)
