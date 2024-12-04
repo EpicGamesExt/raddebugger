@@ -13640,6 +13640,7 @@ rd_frame(void)
           //- rjf: font sizes
           case RD_CmdKind_IncUIFontScale:
           {
+            fnt_reset();
             RD_Window *window = rd_window_from_handle(rd_regs()->window);
             if(window != 0)
             {
@@ -13650,6 +13651,7 @@ rd_frame(void)
           }break;
           case RD_CmdKind_DecUIFontScale:
           {
+            fnt_reset();
             RD_Window *window = rd_window_from_handle(rd_regs()->window);
             if(window != 0)
             {
@@ -13660,6 +13662,7 @@ rd_frame(void)
           }break;
           case RD_CmdKind_IncCodeFontScale:
           {
+            fnt_reset();
             RD_Window *window = rd_window_from_handle(rd_regs()->window);
             if(window != 0)
             {
@@ -13670,6 +13673,7 @@ rd_frame(void)
           }break;
           case RD_CmdKind_DecCodeFontScale:
           {
+            fnt_reset();
             RD_Window *window = rd_window_from_handle(rd_regs()->window);
             if(window != 0)
             {

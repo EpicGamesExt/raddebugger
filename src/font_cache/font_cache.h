@@ -187,7 +187,8 @@ struct FNT_Metrics
 typedef struct FNT_State FNT_State;
 struct FNT_State
 {
-  Arena *arena;
+  Arena *permanent_arena;
+  Arena *raster_arena;
   
   // rjf: font table
   U64 font_hash_table_size;
@@ -260,5 +261,6 @@ internal F32 fnt_line_height_from_metrics(FNT_Metrics *metrics);
 //~ rjf: Main Calls
 
 internal void fnt_init(void);
+internal void fnt_reset(void);
 
 #endif // FONT_CACHE_H

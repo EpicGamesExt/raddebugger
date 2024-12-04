@@ -479,7 +479,7 @@ fp_raster(Arena *arena, FP_Handle font_handle, F32 size, FP_RasterFlags flags, S
   Vec2F32 draw_p = {0, (F32)atlas_dim.y};
   if(font.face != 0)
   {
-    F32 descent = floor_f32((96.f/72.f)*size * font_metrics.descent / design_units_per_em);
+    F32 descent = round_f32((96.f/72.f)*size * font_metrics.descent / design_units_per_em);
     draw_p.y -= descent;
   }
   DWRITE_GLYPH_RUN glyph_run = {0};
