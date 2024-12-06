@@ -506,7 +506,7 @@ typedef struct COFF_SymbolSecDef
   U16                   number_of_relocations;
   U16                   number_of_ln;
   U32                   check_sum;
-  U16                   number_lo; // one-based section index
+  U16                   number_lo;              // low 16 bits of one-based section index
   COFF_ComdatSelectType selection;
   U8                    unused;
   U16                   number_hi;
@@ -635,13 +635,13 @@ typedef struct COFF_ResourceDirEntry
 
 typedef struct COFF_ArchiveMemberHeader
 {
-  String8 name;           // padded to 16 bytes with spaces
-  U32     date;           // unix time
-  U32     user_id;        // unix artifact that does not have meaning on windows
-  U32     group_id;       // unix artifact that does not have meaning on windows
-  String8 mode;           // octal representation the members file mode
-  U32     size;           // size of the member data, not including header
-  B32     is_end_correct; // set to true if found correct signature after header
+  String8        name;           // padded to 16 bytes with spaces
+  COFF_TimeStamp time_stamp;
+  U32            user_id;        // unix artifact that does not have meaning on windows
+  U32            group_id;       // unix artifact that does not have meaning on windows
+  String8        mode;           // octal representation the members file mode
+  B32            is_end_correct; // set to true if found correct signature after header
+  Rng1U64        data_range;
 } COFF_ArchiveMemberHeader;
 
 ////////////////////////////////
@@ -747,18 +747,21 @@ typedef struct COFF_ArchiveMember
 
 typedef struct COFF_ArchiveFirstMember
 {
-  U32     symbol_count;
-  String8 member_offsets;
-  String8 string_table;
+  U32      symbol_count;
+  U64      member_offset_count;
+  U32     *member_offsets;
+  String8  string_table;
 } COFF_ArchiveFirstMember;
 
 typedef struct COFF_ArchiveSecondMember
 {
-  U32     member_count;
-  U32     symbol_count;
-  String8 member_offsets;
-  String8 symbol_indices;
-  String8 string_table;
+  U32      member_count;
+  U32      symbol_count;
+  U64      member_offset_count;
+  U32     *member_offsets;
+  U64      symbol_index_count;
+  U16     *symbol_indices;
+  String8  string_table;
 } COFF_ArchiveSecondMember;
 
 typedef struct COFF_ArchiveMemberNode
@@ -783,9 +786,12 @@ typedef enum
 
 typedef struct COFF_ArchiveParse
 {
+  B32                      has_second_header;
+  B32                      has_long_names;
   COFF_ArchiveFirstMember  first_member;
   COFF_ArchiveSecondMember second_member;
   String8                  long_names;
+  String8                  error;
 } COFF_ArchiveParse;
 
 ////////////////////////////////
@@ -828,7 +834,7 @@ internal COFF_SymbolValueInterpType coff_interp_symbol(U32 section_number, U32 v
 
 internal U64                 coff_foff_from_voff(COFF_SectionHeader *sections, U64 section_count, U64 voff);
 internal COFF_SectionHeader *coff_section_header_from_num(String8 data, U64 section_headers_off, U64 n);
-internal String8             coff_section_header_get_name(COFF_SectionHeader *header, String8 coff_data, U64 string_table_base);
+internal String8             coff_name_from_section_header(COFF_SectionHeader *header, String8 coff_data, U64 string_table_base);
 internal void                coff_parse_section_name(String8 full_name, String8 *name_out, String8 *postfix_out);
 
 internal String8             coff_read_symbol_name(String8 data, U64 string_table_base_offset, COFF_SymbolName *name);
@@ -883,31 +889,42 @@ internal String8 coff_write_resource_id(Arena *arena, COFF_ResourceID id);
 internal String8 coff_write_resource(Arena *arena, COFF_ResourceID type, COFF_ResourceID name, U32 data_version, COFF_ResourceMemoryFlags memory_flags, U16 language_id, U32 version, U32 characteristics, String8 data);
 
 ////////////////////////////////
+//~ Archive
 
-internal COFF_DataType      coff_data_type_from_data(String8 data);
-internal B32                coff_is_import(String8 data);
-internal B32                coff_is_archive(String8 data);
-internal B32                coff_is_thin_archive(String8 data);
-internal U64                coff_read_archive_member_header(String8 data, U64 offset, COFF_ArchiveMemberHeader *header_out);
-internal COFF_ArchiveMember coff_read_archive_member(String8 data, U64 offset);
-internal U64                coff_read_archive_import(String8 data, U64 offset, COFF_ImportHeader *header_out);
-internal String8            coff_read_archive_long_name(String8 long_names, String8 name);
+internal COFF_DataType    coff_data_type_from_data(String8 data);
+internal B32              coff_is_import(String8 data);
+internal B32              coff_is_archive(String8 data);
+internal B32              coff_is_thin_archive(String8 data);
+internal COFF_ArchiveType coff_archive_type_from_data(String8 data);
+
+internal U64                      coff_parse_archive_member_header(String8 data, U64 offset, B32 is_regular_archive, COFF_ArchiveMemberHeader *header_out);
+internal B32                      coff_parse_archive_member_data(String8 data, U64 cursor, COFF_ArchiveMember *member_out);
+internal COFF_ArchiveFirstMember  coff_parse_first_archive_member(COFF_ArchiveMember *member);
+internal COFF_ArchiveSecondMember coff_parse_second_archive_member(COFF_ArchiveMember *member);
+internal String8                  coff_parse_long_name(String8 long_names, String8 name);
+internal U64                      coff_parse_archive_import(String8 data, U64 offset, COFF_ImportHeader *header_out);
+
+internal COFF_ArchiveMember coff_archive_member_from_offset(String8 data, U64 offset);
 internal COFF_ArchiveMember coff_archive_member_from_data(String8 data);
-internal U64                coff_archive_member_iter_init(String8 data);
-internal B32                coff_archive_member_iter_next(String8 data, U64 *offset, COFF_ArchiveMember *member_out);
-internal COFF_ArchiveParse  coff_archive_parse_from_member_list(COFF_ArchiveMemberList list);
-internal COFF_ArchiveParse  coff_archive_from_data(Arena *arena, String8 data);
-internal U64                coff_thin_archive_member_iter_init(String8 data);
-internal B32                coff_thin_archive_member_iter_next(String8 data, U64 *offset, COFF_ArchiveMember *member_out);
-internal COFF_ArchiveParse  coff_thin_archive_from_data(Arena *arena, String8 data);
-internal COFF_ArchiveType   coff_archive_type_from_data(String8 data);
-internal COFF_ArchiveParse  coff_archive_parse_from_data(Arena *arena, String8 data);
+internal COFF_ImportHeader  coff_archive_import_from_data(String8 data);
+
+internal U64 coff_archive_member_iter_init(String8 data);
+internal B32 coff_archive_member_iter_next(String8 data, U64 *offset, COFF_ArchiveMember *member_out);
+
+internal U64 coff_thin_archive_member_iter_init(String8 data);
+internal B32 coff_thin_archive_member_iter_next(String8 data, U64 *offset, COFF_ArchiveMember *member_out);
+
+internal COFF_ArchiveParse coff_archive_parse_from_member_list(COFF_ArchiveMemberList list);
+internal COFF_ArchiveParse coff_archive_from_data(String8 data);
+internal COFF_ArchiveParse coff_thin_archive_from_data(String8 data);
+internal COFF_ArchiveParse coff_archive_parse_from_data(String8 data);
 
 ////////////////////////////////
 // String <-> Enum
 
 internal String8 coff_string_from_comdat_select_type(COFF_ComdatSelectType select);
 internal String8 coff_string_from_machine_type(COFF_MachineType machine);
+internal String8 coff_string_from_flags(Arena *arena, COFF_Flags flags);
 internal String8 coff_string_from_section_flags(Arena *arena, COFF_SectionFlags flags);
 internal String8 coff_string_from_import_header_type(COFF_ImportHeaderType type);
 internal String8 coff_string_from_sym_dtype(COFF_SymDType x);

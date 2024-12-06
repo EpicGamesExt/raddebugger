@@ -359,7 +359,7 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
     COFF_SectionHeader *coff_sect = &coff_sect_arr[sect_idx];
 
     // read name
-    String8 sect_name = coff_section_header_get_name(coff_sect, input->data, coff_info.string_table_off);
+    String8 sect_name = coff_name_from_section_header(coff_sect, input->data, coff_info.string_table_off);
     
     // parse section name
     String8 name, postfix;

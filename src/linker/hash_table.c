@@ -243,6 +243,19 @@ key_value_pair_is_before_u64(void *raw_a, void *raw_b)
   return a->key_u64 < b->key_u64;
 }
 
+internal U32 *
+keys_from_hash_table_u32(Arena *arena, HashTable *ht)
+{
+  U32 *result = push_array_no_zero(arena, U32, ht->count);
+  for (U64 bucket_idx = 0, cursor = 0; bucket_idx < ht->cap; ++bucket_idx) {
+    for (BucketNode *n = ht->buckets[bucket_idx].first; n != 0; n = n->next) {
+      Assert(cursor < ht->count);
+      result[cursor++] = n->v.key_u32;
+    }
+  }
+  return result;
+}
+
 internal KeyValuePair *
 key_value_pairs_from_hash_table(Arena *arena, HashTable *ht)
 {

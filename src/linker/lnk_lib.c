@@ -109,25 +109,28 @@ lnk_lib_from_data(Arena *arena, String8 data, String8 path)
     lnk_not_implemented("TODO: data is not archive");
   }
 
-  COFF_ArchiveParse parse = coff_archive_parse_from_data(arena, data);
+  COFF_ArchiveParse parse = coff_archive_parse_from_data(data);
+
+  // report archive parser errors
+  if (parse.error.size) {
+    lnk_error(LNK_Error_IllData, "%S: %S", path, parse.error);
+  }
   
   // try to init library from optional second member
   if (parse.second_member.member_count) {
     COFF_ArchiveSecondMember second_member = parse.second_member;
-    Assert(second_member.symbol_count == second_member.symbol_indices.size / sizeof(U16));
-    Assert(second_member.member_count == second_member.member_offsets.size / sizeof(U32));
+    Assert(second_member.symbol_count == second_member.symbol_index_count);
+    Assert(second_member.member_count == second_member.member_offset_count);
     
     symbol_count   = second_member.symbol_count;
     string_table   = second_member.string_table;
     member_off_arr = push_array_no_zero(arena, U32, symbol_count);
     
     // decompress member offsets
-    U32 *comp_off_arr   = (U32*)second_member.member_offsets.str;
-    U16 *off_number_arr = (U16*)second_member.symbol_indices.str;
     for (U64 symbol_idx = 0; symbol_idx < symbol_count; symbol_idx += 1) {
-      U16 off_number = off_number_arr[symbol_idx];
+      U16 off_number = second_member.symbol_indices[symbol_idx];
       if (0 < off_number && off_number <= second_member.member_count) {
-        member_off_arr[symbol_idx] = comp_off_arr[off_number - 1];
+        member_off_arr[symbol_idx] = second_member.member_offsets[off_number - 1];
       } else {
         // TODO: log bad offset
         member_off_arr[symbol_idx] = max_U32;
@@ -138,19 +141,19 @@ lnk_lib_from_data(Arena *arena, String8 data, String8 path)
   // and lld-link with /DLL emits only first member
   else if (parse.first_member.symbol_count) {
     COFF_ArchiveFirstMember first_member = parse.first_member;
-    Assert(first_member.symbol_count == first_member.member_offsets.size / sizeof(U32));
+    Assert(first_member.symbol_count == first_member.member_offset_count);
     
     symbol_count   = first_member.symbol_count;
     string_table   = first_member.string_table;
-    member_off_arr = (U32*)first_member.member_offsets.str;
+    member_off_arr = first_member.member_offsets;
     
     // convert big endian offsets
     for (U32 offset_idx = 0; offset_idx < symbol_count; offset_idx += 1) {
-      member_off_arr[offset_idx] = BE_U32(member_off_arr[offset_idx]);
+      member_off_arr[offset_idx] = from_be_u32(member_off_arr[offset_idx]);
     }
   } else {
     symbol_count   = 0;
-    string_table   = str8(0,0);
+    string_table   = str8_zero();
     member_off_arr = 0;
   }
   
@@ -472,7 +475,7 @@ lnk_coff_archive_from_lib_build(Arena *arena, LNK_LibBuild *lib, B32 emit_second
   
   // first linker member (obsolete, but kept for compatability reasons)
   {
-    U32  symbol_count_be  = BE_U32(symbol_count);
+    U32  symbol_count_be  = from_be_u32(symbol_count);
     U32 *member_off32_arr = push_array_no_zero(scratch.arena, U32, symbol_count);
 
     for (U64 symbol_idx = 0; symbol_idx < symbol_count; symbol_idx += 1) {
@@ -480,7 +483,7 @@ lnk_coff_archive_from_lib_build(Arena *arena, LNK_LibBuild *lib, B32 emit_second
 
       // write big endian member offset
       U64 member_off = member_base_off + member_off_arr[symbol->member_idx];
-      U32 member_off32 = BE_U32(safe_cast_u32(member_off));
+      U32 member_off32 = from_be_u32(safe_cast_u32(member_off));
       member_off32_arr[symbol_idx] = member_off32;
     }
 

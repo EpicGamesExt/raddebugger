@@ -75,6 +75,7 @@ internal B32 hash_table_search_path_u64(HashTable *ht, String8 key, U64 *value_o
 
 //- key-value helpers
 
+internal U32 *          keys_from_hash_table_u32(Arena *arena, HashTable *ht);
 internal KeyValuePair * key_value_pairs_from_hash_table(Arena *arena, HashTable *ht);
 internal void           sort_key_value_pairs_as_u32(KeyValuePair *pairs, U64 count);
 internal void           sort_key_value_pairs_as_u64(KeyValuePair *pairs, U64 count);

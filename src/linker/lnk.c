@@ -1221,7 +1221,7 @@ internal void
 lnk_push_input_from_lazy(Arena *arena, PathStyle path_style, LNK_LazySymbol *lazy, LNK_InputImportList *input_import_list, LNK_InputObjList *input_obj_list)
 {
   // parse member
-  COFF_ArchiveMember member_info = coff_read_archive_member(lazy->lib->data, lazy->member_offset);
+  COFF_ArchiveMember member_info = coff_archive_member_from_offset(lazy->lib->data, lazy->member_offset);
   COFF_DataType      member_type = coff_data_type_from_data(member_info.data);
   
   switch (member_type) {
@@ -1231,7 +1231,7 @@ lnk_push_input_from_lazy(Arena *arena, PathStyle path_style, LNK_LazySymbol *laz
     } break;
     case COFF_DataType_BIG_OBJ:
     case COFF_DataType_OBJ: {
-      String8 obj_path = coff_read_archive_long_name(lazy->lib->long_names, member_info.header.name);
+      String8 obj_path = coff_parse_long_name(lazy->lib->long_names, member_info.header.name);
       
       // obj path in thin archive has slash appended which screws up 
       // file lookup on disk; it couble be there to enable paths to symbols

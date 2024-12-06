@@ -114,14 +114,6 @@
 
 ////////////////////////////////
 
-#if ARCH_LITTLE_ENDIAN
-# define BE_U32(x) bswap_u32(x)
-#else
-# define BE_U32(x) (x)
-#endif
-
-////////////////////////////////
-
 typedef struct
 {
   U64 major;
