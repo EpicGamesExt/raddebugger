@@ -19,8 +19,6 @@ typedef enum RD_EntityKind
 {
 RD_EntityKind_Nil,
 RD_EntityKind_Root,
-RD_EntityKind_Machine,
-RD_EntityKind_File,
 RD_EntityKind_AutoViewRule,
 RD_EntityKind_FilePathMap,
 RD_EntityKind_WatchPin,
@@ -761,11 +759,11 @@ extern String8 rd_cfg_src_string_table[4];
 extern RD_CmdKind rd_cfg_src_load_cmd_kind_table[4];
 extern RD_CmdKind rd_cfg_src_write_cmd_kind_table[4];
 extern RD_CmdKind rd_cfg_src_apply_cmd_kind_table[4];
-extern String8 d_entity_kind_display_string_table[29];
-extern String8 d_entity_kind_name_lower_table[29];
-extern String8 d_entity_kind_name_lower_plural_table[29];
-extern String8 d_entity_kind_name_label_table[29];
-extern RD_EntityKindFlags rd_entity_kind_flags_table[29];
+extern String8 d_entity_kind_display_string_table[27];
+extern String8 d_entity_kind_name_lower_table[27];
+extern String8 d_entity_kind_name_lower_plural_table[27];
+extern String8 d_entity_kind_name_label_table[27];
+extern RD_EntityKindFlags rd_entity_kind_flags_table[27];
 extern Rng1U64 rd_reg_slot_range_table[34];
 extern RD_StringBindingPair rd_default_binding_table[110];
 extern String8 rd_binding_version_remap_old_name_table[8];
@@ -779,7 +777,7 @@ extern EV_ViewRuleExprExpandRangeInfoHookFunctionType * rd_collection_expr_expan
 extern EV_ViewRuleExprExpandIDFromNumHookFunctionType * rd_collection_expr_expand_id_from_num_hook_function_table[18];
 extern EV_ViewRuleExprExpandIDFromNumHookFunctionType * rd_collection_expr_expand_num_from_id_hook_function_table[18];
 extern RD_ViewRuleInfo rd_view_rule_kind_info_table[35];
-extern RD_IconKind rd_entity_kind_icon_kind_table[29];
+extern RD_IconKind rd_entity_kind_icon_kind_table[27];
 extern String8 rd_theme_preset_display_string_table[9];
 extern String8 rd_theme_preset_code_string_table[9];
 extern String8 rd_theme_color_version_remap_old_name_table[22];

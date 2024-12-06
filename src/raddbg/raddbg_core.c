@@ -327,30 +327,6 @@ rd_entity_array_from_list(Arena *arena, RD_EntityList *list)
   return result;
 }
 
-//- rjf: full path building, from file/folder entities
-
-internal String8
-rd_full_path_from_entity(Arena *arena, RD_Entity *entity)
-{
-  String8 string = {0};
-  {
-    Temp scratch = scratch_begin(&arena, 1);
-    String8List strs = {0};
-    for(RD_Entity *e = entity; !rd_entity_is_nil(e); e = e->parent)
-    {
-      if(e->kind == RD_EntityKind_File)
-      {
-        str8_list_push_front(scratch.arena, &strs, e->string);
-      }
-    }
-    StringJoin join = {0};
-    join.sep = str8_lit("/");
-    string = str8_list_join(arena, &strs, &join);
-    scratch_end(scratch);
-  }
-  return string;
-}
-
 //- rjf: display string entities, for referencing entities in ui
 
 internal String8
@@ -11392,13 +11368,6 @@ rd_init(CmdLine *cmdln)
   rd_state->drag_drop_regs = push_array(rd_state->drag_drop_arena, RD_Regs, 1);
   rd_state->top_regs = &rd_state->base_regs;
   rd_clear_bindings();
-  
-  // rjf: set up initial entities
-  {
-    RD_Entity *local_machine = rd_entity_alloc(rd_state->entities_root, RD_EntityKind_Machine);
-    rd_entity_equip_ctrl_handle(local_machine, ctrl_handle_make(CTRL_MachineID_Local, dmn_handle_zero()));
-    rd_entity_equip_name(local_machine, str8_lit("This PC"));
-  }
   
   // rjf: set up user / project paths
   {

@@ -36,12 +36,10 @@ RD_CmdKind_Null,
 RD_CmdKind_Null,
 };
 
-String8 d_entity_kind_display_string_table[29] =
+String8 d_entity_kind_display_string_table[27] =
 {
 str8_lit_comp("Nil"),
 str8_lit_comp("Root"),
-str8_lit_comp("Machine"),
-str8_lit_comp("File"),
 str8_lit_comp("Auto View Rule"),
 str8_lit_comp("File Path Map"),
 str8_lit_comp("Watch Pin"),
@@ -69,12 +67,10 @@ str8_lit_comp("Conversion Task"),
 str8_lit_comp("Conversion Failure"),
 };
 
-String8 d_entity_kind_name_lower_table[29] =
+String8 d_entity_kind_name_lower_table[27] =
 {
 str8_lit_comp("nil"),
 str8_lit_comp("root"),
-str8_lit_comp("machine"),
-str8_lit_comp("file"),
 str8_lit_comp("auto_view_rule"),
 str8_lit_comp("file_path_map"),
 str8_lit_comp("watch_pin"),
@@ -102,12 +98,10 @@ str8_lit_comp("conversion_task"),
 str8_lit_comp("conversion_fail"),
 };
 
-String8 d_entity_kind_name_lower_plural_table[29] =
+String8 d_entity_kind_name_lower_plural_table[27] =
 {
 str8_lit_comp("nils"),
 str8_lit_comp("roots"),
-str8_lit_comp("machines"),
-str8_lit_comp("files"),
 str8_lit_comp("auto_view_rules"),
 str8_lit_comp("file_path_maps"),
 str8_lit_comp("watch_pins"),
@@ -135,10 +129,8 @@ str8_lit_comp("conversion_tasks"),
 str8_lit_comp("conversion_fails"),
 };
 
-String8 d_entity_kind_name_label_table[29] =
+String8 d_entity_kind_name_label_table[27] =
 {
-str8_lit_comp("Label"),
-str8_lit_comp("Label"),
 str8_lit_comp("Label"),
 str8_lit_comp("Label"),
 str8_lit_comp("Label"),
@@ -168,11 +160,9 @@ str8_lit_comp("Label"),
 str8_lit_comp("Label"),
 };
 
-RD_EntityKindFlags rd_entity_kind_flags_table[29] =
+RD_EntityKindFlags rd_entity_kind_flags_table[27] =
 {
 (0*RD_EntityKindFlag_CanDelete) | (0*RD_EntityKindFlag_CanFreeze) | (0*RD_EntityKindFlag_CanEdit) | (0*RD_EntityKindFlag_CanRename) | (0*RD_EntityKindFlag_CanEnable) | (0*RD_EntityKindFlag_CanCondition) | (0*RD_EntityKindFlag_CanDuplicate) | (0*RD_EntityKindFlag_NameIsCode) | (0*RD_EntityKindFlag_NameIsPath) | (0*RD_EntityKindFlag_UserDefinedLifetime) | (0*RD_EntityKindFlag_IsSerializedToConfig),
-(0*RD_EntityKindFlag_CanDelete) | (0*RD_EntityKindFlag_CanFreeze) | (0*RD_EntityKindFlag_CanEdit) | (0*RD_EntityKindFlag_CanRename) | (0*RD_EntityKindFlag_CanEnable) | (0*RD_EntityKindFlag_CanCondition) | (0*RD_EntityKindFlag_CanDuplicate) | (0*RD_EntityKindFlag_NameIsCode) | (0*RD_EntityKindFlag_NameIsPath) | (0*RD_EntityKindFlag_UserDefinedLifetime) | (0*RD_EntityKindFlag_IsSerializedToConfig),
-(0*RD_EntityKindFlag_CanDelete) | (1*RD_EntityKindFlag_CanFreeze) | (0*RD_EntityKindFlag_CanEdit) | (1*RD_EntityKindFlag_CanRename) | (0*RD_EntityKindFlag_CanEnable) | (0*RD_EntityKindFlag_CanCondition) | (0*RD_EntityKindFlag_CanDuplicate) | (0*RD_EntityKindFlag_NameIsCode) | (0*RD_EntityKindFlag_NameIsPath) | (0*RD_EntityKindFlag_UserDefinedLifetime) | (0*RD_EntityKindFlag_IsSerializedToConfig),
 (0*RD_EntityKindFlag_CanDelete) | (0*RD_EntityKindFlag_CanFreeze) | (0*RD_EntityKindFlag_CanEdit) | (0*RD_EntityKindFlag_CanRename) | (0*RD_EntityKindFlag_CanEnable) | (0*RD_EntityKindFlag_CanCondition) | (0*RD_EntityKindFlag_CanDuplicate) | (0*RD_EntityKindFlag_NameIsCode) | (0*RD_EntityKindFlag_NameIsPath) | (0*RD_EntityKindFlag_UserDefinedLifetime) | (0*RD_EntityKindFlag_IsSerializedToConfig),
 (1*RD_EntityKindFlag_CanDelete) | (0*RD_EntityKindFlag_CanFreeze) | (0*RD_EntityKindFlag_CanEdit) | (0*RD_EntityKindFlag_CanRename) | (0*RD_EntityKindFlag_CanEnable) | (0*RD_EntityKindFlag_CanCondition) | (0*RD_EntityKindFlag_CanDuplicate) | (0*RD_EntityKindFlag_NameIsCode) | (0*RD_EntityKindFlag_NameIsPath) | (1*RD_EntityKindFlag_UserDefinedLifetime) | (1*RD_EntityKindFlag_IsSerializedToConfig),
 (1*RD_EntityKindFlag_CanDelete) | (0*RD_EntityKindFlag_CanFreeze) | (0*RD_EntityKindFlag_CanEdit) | (0*RD_EntityKindFlag_CanRename) | (0*RD_EntityKindFlag_CanEnable) | (0*RD_EntityKindFlag_CanCondition) | (0*RD_EntityKindFlag_CanDuplicate) | (0*RD_EntityKindFlag_NameIsCode) | (0*RD_EntityKindFlag_NameIsPath) | (0*RD_EntityKindFlag_UserDefinedLifetime) | (1*RD_EntityKindFlag_IsSerializedToConfig),
@@ -860,12 +850,10 @@ RD_ViewRuleInfo rd_view_rule_kind_info_table[35] =
 {str8_lit_comp("geo3d"), str8_lit_comp("Visualizes memory as 3D geometry."), str8_lit_comp("Geometry (3D)"), str8_lit_comp("x:{'count':expr, 'vtx':expr, 'vtx_size':expr}"), RD_IconKind_Binoculars, (RD_ViewRuleInfoFlag_ShowInDocs*1|RD_ViewRuleInfoFlag_CanFilter*0|RD_ViewRuleInfoFlag_FilterIsCode*0|RD_ViewRuleInfoFlag_TypingAutomaticallyFilters*0|RD_ViewRuleInfoFlag_CanUseInWatchTable*1|RD_ViewRuleInfoFlag_CanFillValueCell*0|RD_ViewRuleInfoFlag_CanExpand*1), EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME(geo3d) , RD_VIEW_RULE_UI_FUNCTION_NAME(geo3d)},
 };
 
-RD_IconKind rd_entity_kind_icon_kind_table[29] =
+RD_IconKind rd_entity_kind_icon_kind_table[27] =
 {
 RD_IconKind_Null,
 RD_IconKind_Null,
-RD_IconKind_Machine,
-RD_IconKind_FileOutline,
 RD_IconKind_Binoculars,
 RD_IconKind_FileOutline,
 RD_IconKind_Pin,

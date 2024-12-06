@@ -1071,9 +1071,6 @@ internal void rd_entity_list_push(Arena *arena, RD_EntityList *list, RD_Entity *
 internal RD_EntityArray rd_entity_array_from_list(Arena *arena, RD_EntityList *list);
 #define rd_first_entity_from_list(list) ((list)->first != 0 ? (list)->first->entity : &d_nil_entity)
 
-//- rjf: full path building, from file/folder entities
-internal String8 rd_full_path_from_entity(Arena *arena, RD_Entity *entity);
-
 //- rjf: display string entities, for referencing entities in ui
 internal String8 rd_display_string_from_entity(Arena *arena, RD_Entity *entity);
 
