@@ -459,43 +459,6 @@ rd_display_string_from_entity(Arena *arena, RD_Entity *entity)
       }
     }break;
     
-    case RD_EntityKind_Process:
-    {
-      RD_Entity *main_mod_child = rd_entity_child_from_kind(entity, RD_EntityKind_Module);
-      String8 main_mod_name = str8_skip_last_slash(main_mod_child->string);
-      result = push_str8f(arena, "%S%s%sPID: %i%s",
-                          main_mod_name,
-                          main_mod_name.size != 0 ? " " : "",
-                          main_mod_name.size != 0 ? "(" : "",
-                          entity->ctrl_id,
-                          main_mod_name.size != 0 ? ")" : "");
-    }break;
-    
-    case RD_EntityKind_Thread:
-    {
-      String8 name = entity->string;
-      if(name.size == 0)
-      {
-        RD_Entity *process = rd_entity_ancestor_from_kind(entity, RD_EntityKind_Process);
-        RD_Entity *first_thread = rd_entity_child_from_kind(process, RD_EntityKind_Thread);
-        if(first_thread == entity)
-        {
-          name = str8_lit("Main Thread");
-        }
-      }
-      result = push_str8f(arena, "%S%s%sTID: %i%s",
-                          name,
-                          name.size != 0 ? " " : "",
-                          name.size != 0 ? "(" : "",
-                          entity->ctrl_id,
-                          name.size != 0 ? ")" : "");
-    }break;
-    
-    case RD_EntityKind_Module:
-    {
-      result = push_str8_copy(arena, str8_skip_last_slash(entity->string));
-    }break;
-    
     case RD_EntityKind_RecentProject:
     {
       result = push_str8_copy(arena, str8_skip_last_slash(entity->string));
@@ -5854,7 +5817,7 @@ rd_window_frame(RD_Window *ws)
         {
           Temp scratch = scratch_begin(0, 0);
           RD_EntityList targets = rd_push_active_target_list(scratch.arena);
-          RD_EntityList processes = rd_query_cached_entity_list_with_kind(RD_EntityKind_Process);
+          CTRL_EntityList processes = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Process);
           B32 have_targets = targets.count != 0;
           B32 can_send_signal = !d_ctrl_targets_running();
           B32 can_play  = (have_targets && (can_send_signal || d_ctrl_last_run_frame_idx()+4 > d_frame_index()));
@@ -6241,6 +6204,7 @@ rd_window_frame(RD_Window *ws)
         
         // rjf: status
         {
+          ui_spacer(ui_em(1.f, 1.f));
           if(is_running)
           {
             ui_label(str8_lit("Running"));
@@ -6248,23 +6212,9 @@ rd_window_frame(RD_Window *ws)
           else
           {
             Temp scratch = scratch_begin(0, 0);
-            RD_IconKind icon = RD_IconKind_Null;
-            String8 explanation = str8_lit("Not running");
-            {
-              String8 stop_explanation = rd_stop_explanation_string_icon_from_ctrl_event(scratch.arena, &stop_event, &icon);
-              if(stop_explanation.size != 0)
-              {
-                explanation = stop_explanation;
-              }
-            }
-            if(icon != RD_IconKind_Null)
-            {
-              UI_PrefWidth(ui_em(2.25f, 1.f))
-                RD_Font(RD_FontSlot_Icons)
-                UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Icons))
-                ui_label(rd_icon_kind_text_table[icon]);
-            }
-            UI_PrefWidth(ui_text_dim(10, 1)) ui_label(explanation);
+            DR_FancyStringList explanation_fstrs = rd_stop_explanation_fstrs_from_ctrl_event(scratch.arena, &stop_event);
+            UI_Box *box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
+            ui_box_equip_display_fancy_strings(box, &explanation_fstrs);
             scratch_end(scratch);
           }
         }
@@ -8596,7 +8546,7 @@ rd_window_frame(RD_Window *ws)
           {
             Vec4F32 color = rd_rgba_from_theme_color(RD_ThemeColor_Focus);
             color.w *= b->focus_active_t;
-            R_Rect2DInst *inst = dr_rect(pad_2f32(b->rect, 0.f), color, 0, 1.f, 1.f);
+            R_Rect2DInst *inst = dr_rect(b->rect, color, 0, 1.f, 1.f);
             MemoryCopyArray(inst->corner_radii, b->corner_radii);
           }
           
@@ -11114,115 +11064,140 @@ rd_string_from_exception_code(U32 code)
   return string;
 }
 
-internal String8
-rd_stop_explanation_string_icon_from_ctrl_event(Arena *arena, CTRL_Event *event, RD_IconKind *icon_out)
+internal DR_FancyStringList
+rd_stop_explanation_fstrs_from_ctrl_event(Arena *arena, CTRL_Event *event)
 {
-  RD_IconKind icon = RD_IconKind_Null;
-  String8 explanation = {0};
-  Temp scratch = scratch_begin(&arena, 1);
-  RD_Entity *thread = rd_entity_from_ctrl_handle(event->entity);
-  String8 thread_display_string = rd_display_string_from_entity(scratch.arena, thread);
-  String8 process_thread_string = thread_display_string;
-  RD_Entity *process = rd_entity_ancestor_from_kind(thread, RD_EntityKind_Process);
-  if(process->kind == RD_EntityKind_Process)
+  CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, event->entity);
+  DR_FancyStringList thread_fstrs = rd_title_fstrs_from_ctrl_entity(arena, thread, ui_top_palette()->text, ui_top_font_size(), 0);
+  DR_FancyStringList fstrs = {0};
+  switch(event->cause)
   {
-    String8 process_display_string = rd_display_string_from_entity(scratch.arena, process);
-    process_thread_string = push_str8f(scratch.arena, "%S: %S", process_display_string, thread_display_string);
-  }
-  switch(event->kind)
-  {
-    default:
+    default:{}break;
+    
+    //- rjf: finished operation; if active thread, completed thread, otherwise we're just stopped
+    case CTRL_EventCause_Finished:
     {
-      switch(event->cause)
+      if(thread != &ctrl_entity_nil)
       {
-        default:{}break;
-        case CTRL_EventCause_Finished:
-        {
-          if(!rd_entity_is_nil(thread))
-          {
-            explanation = push_str8f(arena, "%S completed step", process_thread_string);
-          }
-          else
-          {
-            explanation = str8_lit("Stopped");
-          }
-        }break;
-        case CTRL_EventCause_EntryPoint:
-        {
-          explanation = str8_lit("Stopped at entry point");
-        }break;
-        case CTRL_EventCause_UserBreakpoint:
-        {
-          if(!rd_entity_is_nil(thread))
-          {
-            icon = RD_IconKind_CircleFilled;
-            explanation = push_str8f(arena, "%S hit a breakpoint", process_thread_string);
-          }
-        }break;
-        case CTRL_EventCause_InterruptedByException:
-        {
-          if(!rd_entity_is_nil(thread))
-          {
-            icon = RD_IconKind_WarningBig;
-            switch(event->exception_kind)
-            {
-              default:
-              {
-                String8 exception_code_string = rd_string_from_exception_code(event->exception_code);
-                explanation = push_str8f(arena, "Exception thrown by %S - 0x%x%s%S", process_thread_string, event->exception_code, exception_code_string.size > 0 ? ": " : "", exception_code_string);
-              }break;
-              case CTRL_ExceptionKind_CppThrow:
-              {
-                explanation = push_str8f(arena, "Exception thrown by %S - 0x%x: C++ exception", process_thread_string, event->exception_code);
-              }break;
-              case CTRL_ExceptionKind_MemoryRead:
-              {
-                explanation = push_str8f(arena, "Exception thrown by %S - 0x%x: Access violation reading 0x%I64x",
-                                         process_thread_string,
-                                         event->exception_code,
-                                         event->vaddr_rng.min);
-              }break;
-              case CTRL_ExceptionKind_MemoryWrite:
-              {
-                explanation = push_str8f(arena, "Exception thrown by %S - 0x%x: Access violation writing 0x%I64x",
-                                         process_thread_string,
-                                         event->exception_code,
-                                         event->vaddr_rng.min);
-              }break;
-              case CTRL_ExceptionKind_MemoryExecute:
-              {
-                explanation = push_str8f(arena, "Exception thrown by %S - 0x%x: Access violation executing 0x%I64x",
-                                         process_thread_string,
-                                         event->exception_code,
-                                         event->vaddr_rng.min);
-              }break;
-            }
-          }
-          else
-          {
-            icon = RD_IconKind_Pause;
-            explanation = str8_lit("Interrupted");
-          }
-        }break;
-        case CTRL_EventCause_InterruptedByTrap:
-        {
-          icon = RD_IconKind_WarningBig;
-          explanation = push_str8f(arena, "%S interrupted by trap - 0x%x", process_thread_string, event->exception_code);
-        }break;
-        case CTRL_EventCause_InterruptedByHalt:
-        {
-          icon = RD_IconKind_Pause;
-          explanation = str8_lit("Halted");
-        }break;
+        dr_fancy_string_list_concat_in_place(&fstrs, &thread_fstrs);
+        dr_fancy_string_list_push_new(arena, &fstrs, ui_top_font(), ui_top_font_size(), ui_top_palette()->text, str8_lit(" completed step"));
+      }
+      else
+      {
+        dr_fancy_string_list_push_new(arena, &fstrs, ui_top_font(), ui_top_font_size(), ui_top_palette()->text, str8_lit("Stopped"));
       }
     }break;
+    
+    //- rjf: stopped at entry point
+    case CTRL_EventCause_EntryPoint:
+    {
+      if(thread != &ctrl_entity_nil)
+      {
+        dr_fancy_string_list_concat_in_place(&fstrs, &thread_fstrs);
+        dr_fancy_string_list_push_new(arena, &fstrs, ui_top_font(), ui_top_font_size(), ui_top_palette()->text, str8_lit(" stopped at entry point"));
+      }
+      else
+      {
+        dr_fancy_string_list_push_new(arena, &fstrs, ui_top_font(), ui_top_font_size(), ui_top_palette()->text, str8_lit("Stopped at entry point"));
+      }
+    }break;
+    
+    //- rjf: user breakpoint
+    case CTRL_EventCause_UserBreakpoint:
+    {
+      if(thread != &ctrl_entity_nil)
+      {
+        dr_fancy_string_list_push_new(arena, &fstrs, rd_font_from_slot(RD_FontSlot_Icons), ui_top_font_size(), ui_top_palette()->text, rd_icon_kind_text_table[RD_IconKind_CircleFilled]);
+        dr_fancy_string_list_concat_in_place(&fstrs, &thread_fstrs);
+        dr_fancy_string_list_push_new(arena, &fstrs, ui_top_font(), ui_top_font_size(), ui_top_palette()->text, str8_lit(" hit a breakpoint"));
+      }
+    }break;
+    
+    //- rjf: exception
+    case CTRL_EventCause_InterruptedByException:
+    {
+      if(thread != &ctrl_entity_nil)
+      {
+        dr_fancy_string_list_push_new(arena, &fstrs, rd_font_from_slot(RD_FontSlot_Icons), ui_top_font_size(), ui_top_palette()->text, rd_icon_kind_text_table[RD_IconKind_WarningBig]);
+        switch(event->exception_kind)
+        {
+          default:
+          {
+            dr_fancy_string_list_concat_in_place(&fstrs, &thread_fstrs);
+            dr_fancy_string_list_push_new(arena, &fstrs, ui_top_font(), ui_top_font_size(), ui_top_palette()->text, str8_lit(" hit an exception - "));
+            String8 exception_code_string = str8_from_u64(arena, event->exception_code, 16, 0, 0);
+            String8 exception_explanation_string = rd_string_from_exception_code(event->exception_code);
+            String8 exception_info_string = push_str8f(arena, "%S%s%S%s",
+                                                       exception_code_string,
+                                                       exception_explanation_string.size != 0 ? " (" : "",
+                                                       exception_explanation_string,
+                                                       exception_explanation_string.size != 0 ? ")" : "");
+            dr_fancy_string_list_push_new(arena, &fstrs, ui_top_font(), ui_top_font_size(), ui_top_palette()->text, exception_info_string);
+          }break;
+          case CTRL_ExceptionKind_CppThrow:
+          {
+            dr_fancy_string_list_concat_in_place(&fstrs, &thread_fstrs);
+            dr_fancy_string_list_push_new(arena, &fstrs, ui_top_font(), ui_top_font_size(), ui_top_palette()->text, str8_lit(" hit a C++ exception - "));
+            String8 exception_code_string = str8_from_u64(arena, event->exception_code, 16, 0, 0);
+            dr_fancy_string_list_push_new(arena, &fstrs, ui_top_font(), ui_top_font_size(), ui_top_palette()->text, exception_code_string);
+          }break;
+          case CTRL_ExceptionKind_MemoryRead:
+          {
+            dr_fancy_string_list_concat_in_place(&fstrs, &thread_fstrs);
+            dr_fancy_string_list_push_new(arena, &fstrs, ui_top_font(), ui_top_font_size(), ui_top_palette()->text, str8_lit(" hit an exception - "));
+            String8 exception_code_string = str8_from_u64(arena, event->exception_code, 16, 0, 0);
+            String8 exception_info_string = push_str8f(arena, "%S (Access violation reading 0x%I64x)", exception_code_string, event->vaddr_rng.min);
+            dr_fancy_string_list_push_new(arena, &fstrs, ui_top_font(), ui_top_font_size(), ui_top_palette()->text, exception_info_string);
+          }break;
+          case CTRL_ExceptionKind_MemoryWrite:
+          {
+            dr_fancy_string_list_concat_in_place(&fstrs, &thread_fstrs);
+            dr_fancy_string_list_push_new(arena, &fstrs, ui_top_font(), ui_top_font_size(), ui_top_palette()->text, str8_lit(" hit an exception - "));
+            String8 exception_code_string = str8_from_u64(arena, event->exception_code, 16, 0, 0);
+            String8 exception_info_string = push_str8f(arena, "%S (Access violation writing 0x%I64x)", exception_code_string, event->vaddr_rng.min);
+            dr_fancy_string_list_push_new(arena, &fstrs, ui_top_font(), ui_top_font_size(), ui_top_palette()->text, exception_info_string);
+          }break;
+          case CTRL_ExceptionKind_MemoryExecute:
+          {
+            dr_fancy_string_list_concat_in_place(&fstrs, &thread_fstrs);
+            dr_fancy_string_list_push_new(arena, &fstrs, ui_top_font(), ui_top_font_size(), ui_top_palette()->text, str8_lit(" hit an exception - "));
+            String8 exception_code_string = str8_from_u64(arena, event->exception_code, 16, 0, 0);
+            String8 exception_info_string = push_str8f(arena, "%S (Access violation executing 0x%I64x)", exception_code_string, event->vaddr_rng.min);
+            dr_fancy_string_list_push_new(arena, &fstrs, ui_top_font(), ui_top_font_size(), ui_top_palette()->text, exception_info_string);
+          }break;
+        }
+      }
+      else
+      {
+        dr_fancy_string_list_push_new(arena, &fstrs, rd_font_from_slot(RD_FontSlot_Icons), ui_top_font_size(), ui_top_palette()->text, rd_icon_kind_text_table[RD_IconKind_WarningBig]);
+        dr_fancy_string_list_push_new(arena, &fstrs, ui_top_font(), ui_top_font_size(), ui_top_palette()->text, str8_lit("Hit an exception - "));
+        String8 exception_code_string = str8_from_u64(arena, event->exception_code, 16, 0, 0);
+        String8 exception_explanation_string = rd_string_from_exception_code(event->exception_code);
+        String8 exception_info_string = push_str8f(arena, "%S%s%S%s",
+                                                   exception_code_string,
+                                                   exception_explanation_string.size != 0 ? " (" : "",
+                                                   exception_explanation_string,
+                                                   exception_explanation_string.size != 0 ? ")" : "");
+        dr_fancy_string_list_push_new(arena, &fstrs, ui_top_font(), ui_top_font_size(), ui_top_palette()->text, exception_info_string);
+      }
+    }break;
+    
+    //- rjf: trap
+    case CTRL_EventCause_InterruptedByTrap:
+    {
+      dr_fancy_string_list_push_new(arena, &fstrs, rd_font_from_slot(RD_FontSlot_Icons), ui_top_font_size(), ui_top_palette()->text, rd_icon_kind_text_table[RD_IconKind_WarningBig]);
+      dr_fancy_string_list_concat_in_place(&fstrs, &thread_fstrs);
+      dr_fancy_string_list_push_new(arena, &fstrs, ui_top_font(), ui_top_font_size(), ui_top_palette()->text, str8_lit(" hit a trap"));
+    }break;
+    
+    //- rjf: halt
+    case CTRL_EventCause_InterruptedByHalt:
+    {
+      dr_fancy_string_list_push_new(arena, &fstrs, rd_font_from_slot(RD_FontSlot_Icons), ui_top_font_size(), ui_top_palette()->text, rd_icon_kind_text_table[RD_IconKind_Pause]);
+      dr_fancy_string_list_push_new(arena, &fstrs, ui_top_font(), ui_top_font_size(), ui_top_palette()->text, str8_lit("Halted"));
+    }break;
   }
-  scratch_end(scratch);
-  if(icon_out)
-  {
-    *icon_out = icon;
-  }
-  return explanation;
+  return fstrs;
 }
 
 ////////////////////////////////

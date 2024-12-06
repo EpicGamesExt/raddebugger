@@ -91,9 +91,6 @@ internal UI_Signal rd_cmd_spec_button(String8 name);
 internal void rd_cmd_list_menu_buttons(U64 count, String8 *cmd_names, U32 *fastpath_codepoints);
 internal UI_Signal rd_icon_button(RD_IconKind kind, FuzzyMatchRangeList *matches, String8 string);
 internal UI_Signal rd_icon_buttonf(RD_IconKind kind, FuzzyMatchRangeList *matches, char *fmt, ...);
-internal void rd_entity_tooltips(RD_Entity *entity);
-internal UI_Signal rd_entity_desc_button(RD_Entity *entity, FuzzyMatchRangeList *name_matches, String8 fuzzy_query, B32 is_implicit);
-internal void rd_src_loc_button(String8 file_path, TxtPt point);
 
 ////////////////////////////////
 //~ rjf: UI Widgets: Text View

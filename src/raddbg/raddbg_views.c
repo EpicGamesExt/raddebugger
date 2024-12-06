@@ -3465,7 +3465,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(getting_started)
     UI_Padding(ui_pct(1, 0)) UI_Focus(UI_FocusKind_Null)
   {
     RD_EntityList targets = rd_push_active_target_list(scratch.arena);
-    RD_EntityList processes = rd_query_cached_entity_list_with_kind(RD_EntityKind_Process);
+    CTRL_EntityList processes = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Process);
     
     //- rjf: icon & info
     UI_Padding(ui_em(2.f, 1.f))
@@ -4506,14 +4506,14 @@ rd_process_info_list_from_query(Arena *arena, String8 query)
   U64 attached_process_count = 0;
   U32 *attached_process_pids = 0;
   {
-    RD_EntityList processes = rd_query_cached_entity_list_with_kind(RD_EntityKind_Process);
+    CTRL_EntityList processes = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Process);
     attached_process_count = processes.count;
     attached_process_pids = push_array(scratch.arena, U32, attached_process_count);
     U64 idx = 0;
-    for(RD_EntityNode *n = processes.first; n != 0; n = n->next, idx += 1)
+    for(CTRL_EntityNode *n = processes.first; n != 0; n = n->next, idx += 1)
     {
-      RD_Entity *process = n->entity;
-      attached_process_pids[idx] = process->ctrl_id;
+      CTRL_Entity *process = n->v;
+      attached_process_pids[idx] = process->id;
     }
   }
   

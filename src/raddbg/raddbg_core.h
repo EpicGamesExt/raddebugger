@@ -1424,7 +1424,7 @@ internal String8List rd_cfg_strings_from_gfx(Arena *arena, String8 root_path, RD
 //~ rjf: Process Control Info Stringification
 
 internal String8 rd_string_from_exception_code(U32 code);
-internal String8 rd_stop_explanation_string_icon_from_ctrl_event(Arena *arena, CTRL_Event *event, RD_IconKind *icon_out);
+internal DR_FancyStringList rd_stop_explanation_fstrs_from_ctrl_event(Arena *arena, CTRL_Event *event);
 
 ////////////////////////////////
 //~ rjf: Continuous Frame Requests
