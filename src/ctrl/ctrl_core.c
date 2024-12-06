@@ -2716,8 +2716,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_Handle process_handle, CT
             
             case PE_UnwindOpCode_EPILOG:
             {
-              keep_parsing = 0;
-              is_good = 0;
+              keep_parsing = 1;
             }break;
             
             case PE_UnwindOpCode_SPARE_CODE:
