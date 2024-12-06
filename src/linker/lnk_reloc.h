@@ -30,16 +30,16 @@ typedef enum
 
 typedef struct LNK_Reloc
 {
-  struct LNK_Reloc *next;
-  LNK_Chunk *chunk;
-  LNK_RelocType type;
-  U64 apply_off;
+  struct LNK_Reloc  *next;
+  LNK_Chunk         *chunk;
+  LNK_RelocType      type;
+  U64                apply_off;
   struct LNK_Symbol *symbol;
 } LNK_Reloc;
 
 typedef struct LNK_RelocList
 {
-  U64 count;
+  U64        count;
   LNK_Reloc *first;
   LNK_Reloc *last;
 } LNK_RelocList;

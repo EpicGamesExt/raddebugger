@@ -130,7 +130,8 @@ typedef struct LNK_InputImportList
 typedef struct LNK_BaseRelocPage
 {
   U64     voff;
-  U64List entries;
+  U64List entries_addr32;
+  U64List entries_addr64;
 } LNK_BaseRelocPage;
 
 typedef struct LNK_BaseRelocPageNode
@@ -160,6 +161,7 @@ typedef struct
   Rng1U64                *range_arr;
   LNK_BaseRelocPageList  *list_arr;
   HashTable             **page_ht_arr;
+  B32                     is_large_addr_aware;
 } LNK_BaseRelocTask;
 
 typedef struct
@@ -170,6 +172,7 @@ typedef struct
   LNK_BaseRelocPageList  *list_arr;
   LNK_Obj               **obj_arr;
   HashTable             **page_ht_arr;
+  B32                     is_large_addr_aware;
 } LNK_ObjBaseRelocTask;
 
 typedef struct
@@ -274,7 +277,7 @@ internal String8 lnk_make_linker_coff_obj(TP_Context *tp, Arena *arena, COFF_Tim
 internal void        lnk_build_debug_pdb(LNK_SectionTable *st, LNK_SymbolTable *symtab, LNK_Section *debug_sect, LNK_Chunk *debug_dir_array_chunk, COFF_TimeStamp time_stamp, Guid guid, U32 age, String8 pdb_path);
 internal void        lnk_build_debug_rdi(LNK_SectionTable *st, LNK_SymbolTable *symtab, LNK_Section *debug_sect, LNK_Chunk *debug_dir_array_chunk, COFF_TimeStamp time_stamp, Guid guid, String8 rdi_path);
 internal void        lnk_build_guard_tables(TP_Context *tp, LNK_SectionTable *st, LNK_SymbolTable *symtab, LNK_ExportTable *exptab, LNK_ObjList obj_list, COFF_MachineType machine, String8 entry_point_name, LNK_GuardFlags guard_flags, B32 emit_suppress_flag);
-internal void        lnk_build_base_relocs(TP_Context *tp, TP_Arena *tp_arena, LNK_SectionTable *st, LNK_SymbolTable *symtab, COFF_MachineType  machine, U64 page_size, LNK_ObjList obj_list);
+internal void        lnk_build_base_relocs(TP_Context *tp, TP_Arena *tp_arena, LNK_SectionTable *st, LNK_SymbolTable *symtab, COFF_MachineType  machine, U64 page_size, PE_ImageFileCharacteristics file_chars, LNK_ObjList obj_list);
 internal LNK_Chunk * lnk_build_dos_header(LNK_SymbolTable *symtab, LNK_Section *header_sect, LNK_Chunk *parent_chunk);
 internal LNK_Chunk * lnk_build_pe_magic(LNK_SymbolTable *symtab, LNK_Section *header_sect, LNK_Chunk *parent);
 internal LNK_Chunk * lnk_build_coff_file_header(LNK_SymbolTable *symtab, LNK_Section *header_sect, LNK_Chunk *parent, COFF_MachineType machine, COFF_TimeStamp time_stamp, PE_ImageFileCharacteristics file_characteristics);
