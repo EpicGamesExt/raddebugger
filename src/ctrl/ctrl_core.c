@@ -1146,6 +1146,16 @@ ctrl_entity_store_apply_events(CTRL_EntityStore *store, CTRL_EventList *list)
         {
           ctrl_entity_equip_string(store, thread, str8_lit("main_thread"));
         }
+        CTRL_EntityList pending_thread_names = ctrl_entity_list_from_kind(store, CTRL_EntityKind_PendingThreadName);
+        for(CTRL_EntityNode *n = pending_thread_names.first; n != 0; n = n->next)
+        {
+          if(n->v->id == event->entity_id)
+          {
+            ctrl_entity_equip_string(store, thread, n->v->string);
+            ctrl_entity_release(store, n->v);
+            break;
+          }
+        }
         thread->stack_base = event->stack_base;
         ctrl_query_cached_rip_from_thread(store, event->entity);
       }break;
@@ -1156,8 +1166,17 @@ ctrl_entity_store_apply_events(CTRL_EntityStore *store, CTRL_EventList *list)
       }break;
       case CTRL_EventKind_ThreadName:
       {
+        CTRL_Entity *process = ctrl_entity_from_handle(store, event->parent);
         CTRL_Entity *thread = ctrl_entity_from_handle(store, event->entity);
-        ctrl_entity_equip_string(store, thread, event->string);
+        if(thread != &ctrl_entity_nil)
+        {
+          ctrl_entity_equip_string(store, thread, event->string);
+        }
+        else
+        {
+          CTRL_Entity *pending_name = ctrl_entity_alloc(store, process, CTRL_EntityKind_PendingThreadName, Arch_Null, ctrl_handle_zero(), event->entity_id);
+          ctrl_entity_equip_string(store, pending_name, event->string);
+        }
       }break;
       case CTRL_EventKind_ThreadColor:
       {

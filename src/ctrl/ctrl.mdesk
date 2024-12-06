@@ -14,6 +14,7 @@ CTRL_EntityKindTable:
   {Module                    "Module"                    }
   {EntryPoint                "Entry Point"               }
   {DebugInfoPath             "Debug Info Path"           }
+  {PendingThreadName         "Pending Thread Name"       }
 }
 
 @enum CTRL_EntityKind:

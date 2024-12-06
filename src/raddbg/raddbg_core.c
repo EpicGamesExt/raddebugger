@@ -327,56 +327,6 @@ rd_entity_array_from_list(Arena *arena, RD_EntityList *list)
   return result;
 }
 
-//- rjf: entity fuzzy list building
-
-internal RD_EntityFuzzyItemArray
-rd_entity_fuzzy_item_array_from_entity_list_needle(Arena *arena, RD_EntityList *list, String8 needle)
-{
-  Temp scratch = scratch_begin(&arena, 1);
-  RD_EntityArray array = rd_entity_array_from_list(scratch.arena, list);
-  RD_EntityFuzzyItemArray result = rd_entity_fuzzy_item_array_from_entity_array_needle(arena, &array, needle);
-  return result;
-}
-
-internal RD_EntityFuzzyItemArray
-rd_entity_fuzzy_item_array_from_entity_array_needle(Arena *arena, RD_EntityArray *array, String8 needle)
-{
-  Temp scratch = scratch_begin(&arena, 1);
-  RD_EntityFuzzyItemArray result = {0};
-  result.count = array->count;
-  result.v = push_array(arena, RD_EntityFuzzyItem, result.count);
-  U64 result_idx = 0;
-  for(U64 src_idx = 0; src_idx < array->count; src_idx += 1)
-  {
-    RD_Entity *entity = array->v[src_idx];
-    String8 display_string = rd_display_string_from_entity(scratch.arena, entity);
-    FuzzyMatchRangeList matches = fuzzy_match_find(arena, needle, display_string);
-    if(matches.count >= matches.needle_part_count)
-    {
-      result.v[result_idx].entity = entity;
-      result.v[result_idx].matches = matches;
-      result_idx += 1;
-    }
-    else
-    {
-      String8 search_tags = rd_search_tags_from_entity(scratch.arena, entity);
-      if(search_tags.size != 0)
-      {
-        FuzzyMatchRangeList tag_matches = fuzzy_match_find(scratch.arena, needle, search_tags);
-        if(tag_matches.count >= tag_matches.needle_part_count)
-        {
-          result.v[result_idx].entity = entity;
-          result.v[result_idx].matches = matches;
-          result_idx += 1;
-        }
-      }
-    }
-  }
-  result.count = result_idx;
-  scratch_end(scratch);
-  return result;
-}
-
 //- rjf: full path building, from file/folder entities
 
 internal String8
@@ -463,40 +413,6 @@ rd_display_string_from_entity(Arena *arena, RD_Entity *entity)
     {
       result = push_str8_copy(arena, str8_skip_last_slash(entity->string));
     }break;
-  }
-  return result;
-}
-
-//- rjf: extra search tag strings for fuzzy filtering entities
-
-internal String8
-rd_search_tags_from_entity(Arena *arena, RD_Entity *entity)
-{
-  String8 result = {0};
-  if(entity->kind == RD_EntityKind_Thread)
-  {
-    Temp scratch = scratch_begin(&arena, 1);
-    CTRL_Entity *entity_ctrl = ctrl_entity_from_handle(d_state->ctrl_entity_store, entity->ctrl_handle);
-    CTRL_Entity *process = ctrl_entity_ancestor_from_kind(entity_ctrl, CTRL_EntityKind_Process);
-    CTRL_Unwind unwind = d_query_cached_unwind_from_thread(entity_ctrl);
-    String8List strings = {0};
-    for(U64 frame_num = unwind.frames.count; frame_num > 0; frame_num -= 1)
-    {
-      CTRL_UnwindFrame *f = &unwind.frames.v[frame_num-1];
-      U64 rip_vaddr = regs_rip_from_arch_block(entity->arch, f->regs);
-      CTRL_Entity *module = ctrl_module_from_process_vaddr(process, rip_vaddr);
-      U64 rip_voff = ctrl_voff_from_vaddr(module, rip_vaddr);
-      DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
-      String8 procedure_name = d_symbol_name_from_dbgi_key_voff(scratch.arena, &dbgi_key, rip_voff, 0);
-      if(procedure_name.size != 0)
-      {
-        str8_list_push(scratch.arena, &strings, procedure_name);
-      }
-    }
-    StringJoin join = {0};
-    join.sep = str8_lit(",");
-    result = str8_list_join(arena, &strings, &join);
-    scratch_end(scratch);
   }
   return result;
 }
