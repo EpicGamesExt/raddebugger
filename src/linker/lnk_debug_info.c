@@ -5388,7 +5388,7 @@ lnk_build_rad_debug_info(TP_Context               *tp,
     input.top_level_info.exe_name        = image_name;
     input.top_level_info.exe_hash        = rdi_hash(image_data.str, image_data.size);
     input.top_level_info.voff_max        = image_vsize;
-    input.top_level_info.producer_string = push_str8f(scratch.arena, "%s [Debug Info: CodeView]", BUILD_VERSION_STRING);
+    input.top_level_info.producer_string = push_str8f(scratch.arena, "%s [Debug Info: CodeView]", BUILD_VERSION_STRING_LITERAL);
   }
   ProfEnd();
 

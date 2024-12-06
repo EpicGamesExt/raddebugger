@@ -3,24 +3,6 @@
 
 #pragma once
 
-typedef struct U32Array
-{
-  U64  count;
-  U32 *v;
-} U32Array;
-
-typedef struct U64Array
-{
-  U64  count;
-  U64 *v;
-} U64Array;
-
-typedef struct
-{
-  U64   count;
-  U128 *v;
-} U128Array;
-
 typedef struct U64Node
 {
   struct U64Node *next;
