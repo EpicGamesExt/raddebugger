@@ -213,8 +213,6 @@ msf_raw_stream_table_from_data(Arena *arena, String8 msf_data)
         index_cursor += stream_page_count * index_size;
         stream_ptr   += 1;
       }
-      
-      parse_streams_done:;
     }
     
     if (got_streams) {

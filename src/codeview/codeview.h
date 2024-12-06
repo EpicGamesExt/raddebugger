@@ -2907,7 +2907,6 @@ struct CV_C13InlineeSourceLineHeader
 ////////////////////////////////
 //~ Type Index Helper
 
-typedef enum CV_TypeIndexSource CV_TypeIndexSource;
 enum CV_TypeIndexSource
 {
   CV_TypeIndexSource_NULL,
@@ -2915,6 +2914,7 @@ enum CV_TypeIndexSource
   CV_TypeIndexSource_IPI,
   CV_TypeIndexSource_COUNT
 };
+typedef enum CV_TypeIndexSource CV_TypeIndexSource;
 
 typedef struct CV_TypeIndexInfo CV_TypeIndexInfo;
 struct CV_TypeIndexInfo

@@ -373,7 +373,7 @@ mscrt_catch_blocks_from_data_x8664(Arena              *arena,
     U64            uwinfo_foff = coff_foff_from_voff(sections, section_count, pdata->voff_unwind_info);
     PE_UnwindInfo *uwinfo      = str8_deserial_get_raw_ptr(raw_data, uwinfo_foff, sizeof(*uwinfo));
 
-    U8  flags            = PE_UnwindInfo_FlagsFromHeader(uwinfo->header);
+    U8  flags            = PE_UNWIND_INFO_FLAGS_FROM_HDR(uwinfo->header);
     B32 is_chained       = !!(flags & PE_UnwindInfoFlag_CHAINED);
     B32 has_handler_data = !is_chained && ((flags & (PE_UnwindInfoFlag_EHANDLER | PE_UnwindInfoFlag_UHANDLER)) != 0);
 

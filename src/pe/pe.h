@@ -1022,7 +1022,7 @@ internal PE_WindowsSubsystem pe_subsystem_from_string(String8 string);
 
 internal String8 pe_string_from_subsystem(PE_WindowsSubsystem x);
 internal String8 pe_string_from_unwind_gpr_x64(PE_UnwindGprRegX64 x);
-internal String8 pe_string_from_data_directory_index(PE_DebugDirectoryType x);
+internal String8 pe_string_from_data_directory_index(PE_DataDirectoryIndex x);
 internal String8 pe_string_from_debug_directory_type(PE_DebugDirectoryType x);
 internal String8 pe_string_from_fpo_type(PE_FPOType x);
 internal String8 pe_string_from_misc_type(PE_DebugMiscType x);

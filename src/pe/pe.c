@@ -78,6 +78,7 @@ pe_string_from_unwind_gpr_x64(PE_UnwindGprRegX64 x)
     case PE_UnwindGprRegX64_R13: return str8_lit("R13");
     case PE_UnwindGprRegX64_R14: return str8_lit("R14");
     case PE_UnwindGprRegX64_R15: return str8_lit("R15");
+    default: InvalidPath;
   }
   return str8_zero();
 }
@@ -102,6 +103,7 @@ pe_string_from_data_directory_index(PE_DataDirectoryIndex x)
     case PE_DataDirectoryIndex_DELAY_IMPORT:   return str8_lit("DelayImport");
     case PE_DataDirectoryIndex_COM_DESCRIPTOR: return str8_lit("COM Descriptor");
     case PE_DataDirectoryIndex_RESERVED:       return str8_lit("Reserved");
+    default: InvalidPath;
   }
   return str8_zero();
 }

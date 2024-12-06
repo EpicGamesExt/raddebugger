@@ -4295,6 +4295,7 @@ lnk_string_from_input_source(LNK_InputSourceType input_source)
   case LNK_InputSource_CmdLine: result = str8_lit("CmdLine"); break;
   case LNK_InputSource_Default: result = str8_lit("Default"); break;
   case LNK_InputSource_Obj:     result = str8_lit("Obj");     break;
+  default:                      InvalidPath;
   }
   return result;
 }

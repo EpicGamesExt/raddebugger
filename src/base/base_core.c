@@ -553,6 +553,7 @@ date_time_from_unix_time(U64 unix_time)
         case Month_Oct: c = 31; break;
         case Month_Nov: c = 30; break;
         case Month_Dec: c = 31; break;
+        default: InvalidPath;
       }
       if(date.day <= c)
       {
