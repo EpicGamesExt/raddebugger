@@ -1756,133 +1756,10 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
             MTX_Op op = {r1u64(0, 0xffffffffffffffffull), str8_lit("[new session]\n")};
             mtx_push_op(d_state->output_log_key, op);
           }
-          
-          // rjf: create entity
-          RD_Entity *machine = rd_machine_entity_from_machine_id(event->entity.machine_id);
-          RD_Entity *entity = rd_entity_alloc(machine, RD_EntityKind_Process);
-          rd_entity_equip_u64(entity, event->msg_id);
-          rd_entity_equip_ctrl_handle(entity, event->entity);
-          rd_entity_equip_ctrl_id(entity, event->entity_id);
-          rd_entity_equip_arch(entity, event->arch);
-        }break;
-        
-        case CTRL_EventKind_NewThread:
-        {
-          // rjf: create entity
-          RD_Entity *parent = rd_entity_from_ctrl_handle(event->parent);
-          RD_Entity *entity = rd_entity_alloc(parent, RD_EntityKind_Thread);
-          rd_entity_equip_ctrl_handle(entity, event->entity);
-          rd_entity_equip_arch(entity, event->arch);
-          rd_entity_equip_ctrl_id(entity, event->entity_id);
-          rd_entity_equip_stack_base(entity, event->stack_base);
-          rd_entity_equip_vaddr(entity, event->rip_vaddr);
-          if(event->string.size != 0)
-          {
-            rd_entity_equip_name(entity, event->string);
-          }
-          
-          // rjf: find any pending thread names correllating with this TID -> equip name if found match
-          {
-            RD_EntityList pending_thread_names = rd_query_cached_entity_list_with_kind(RD_EntityKind_PendingThreadName);
-            for(RD_EntityNode *n = pending_thread_names.first; n != 0; n = n->next)
-            {
-              RD_Entity *pending_thread_name = n->entity;
-              if(event->entity.machine_id == pending_thread_name->ctrl_handle.machine_id && event->entity_id == pending_thread_name->ctrl_id)
-              {
-                rd_entity_mark_for_deletion(pending_thread_name);
-                rd_entity_equip_name(entity, pending_thread_name->string);
-                break;
-              }
-            }
-          }
-          
-          // rjf: determine index in process
-          U64 thread_idx_in_process = 0;
-          for(RD_Entity *child = parent->first; !rd_entity_is_nil(child); child = child->next)
-          {
-            if(child == entity)
-            {
-              break;
-            }
-            if(child->kind == RD_EntityKind_Thread)
-            {
-              thread_idx_in_process += 1;
-            }
-          }
-          
-          // rjf: build default thread color table
-          Vec4F32 thread_colors[] =
-          {
-            rd_rgba_from_theme_color(RD_ThemeColor_Thread0),
-            rd_rgba_from_theme_color(RD_ThemeColor_Thread1),
-            rd_rgba_from_theme_color(RD_ThemeColor_Thread2),
-            rd_rgba_from_theme_color(RD_ThemeColor_Thread3),
-            rd_rgba_from_theme_color(RD_ThemeColor_Thread4),
-            rd_rgba_from_theme_color(RD_ThemeColor_Thread5),
-            rd_rgba_from_theme_color(RD_ThemeColor_Thread6),
-            rd_rgba_from_theme_color(RD_ThemeColor_Thread7),
-          };
-          
-          // rjf: pick color
-          Vec4F32 thread_color = thread_colors[thread_idx_in_process % ArrayCount(thread_colors)];
-          
-          // rjf: equip color
-          rd_entity_equip_color_rgba(entity, thread_color);
-        }break;
-        
-        case CTRL_EventKind_NewModule:
-        {
-          // rjf: grab process
-          RD_Entity *parent = rd_entity_from_ctrl_handle(event->parent);
-          
-          // rjf: determine if this is the first module
-          B32 is_first = 0;
-          if(rd_entity_is_nil(rd_entity_child_from_kind(parent, RD_EntityKind_Module)))
-          {
-            is_first = 1;
-          }
-          
-          // rjf: create module entity
-          RD_Entity *module = rd_entity_alloc(parent, RD_EntityKind_Module);
-          rd_entity_equip_ctrl_handle(module, event->entity);
-          rd_entity_equip_arch(module, event->arch);
-          rd_entity_equip_name(module, event->string);
-          rd_entity_equip_vaddr_rng(module, event->vaddr_rng);
-          rd_entity_equip_vaddr(module, event->rip_vaddr);
-          rd_entity_equip_timestamp(module, event->timestamp);
-          
-          // rjf: is first -> find target, equip process & module & first thread with target color
-          if(is_first)
-          {
-            RD_EntityList targets = rd_query_cached_entity_list_with_kind(RD_EntityKind_Target);
-            for(RD_EntityNode *n = targets.first; n != 0; n = n->next)
-            {
-              RD_Entity *target = n->entity;
-              RD_Entity *exe = rd_entity_child_from_kind(target, RD_EntityKind_Executable);
-              String8 exe_name = exe->string;
-              String8 exe_name_normalized = path_normalized_from_string(scratch.arena, exe_name);
-              String8 module_name_normalized = path_normalized_from_string(scratch.arena, module->string);
-              if(str8_match(exe_name_normalized, module_name_normalized, StringMatchFlag_CaseInsensitive) &&
-                 target->flags & RD_EntityFlag_HasColor)
-              {
-                RD_Entity *first_thread = rd_entity_child_from_kind(parent, RD_EntityKind_Thread);
-                Vec4F32 rgba = rd_rgba_from_entity(target);
-                rd_entity_equip_color_rgba(parent, rgba);
-                rd_entity_equip_color_rgba(first_thread, rgba);
-                rd_entity_equip_color_rgba(module, rgba);
-                break;
-              }
-            }
-          }
         }break;
         
         case CTRL_EventKind_EndProc:
         {
-          U32 pid = event->entity_id;
-          RD_Entity *process = rd_entity_from_ctrl_handle(event->entity);
-          rd_entity_mark_for_deletion(process);
-          
-          // rjf: report
           D_EventNode *n = push_array(arena, D_EventNode, 1);
           SLLQueuePush(result.first, result.last, n);
           result.count += 1;
@@ -1891,63 +1768,12 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
           evt->code = event->u64_code;
         }break;
         
-        case CTRL_EventKind_EndThread:
-        {
-          RD_Entity *thread = rd_entity_from_ctrl_handle(event->entity);
-          rd_entity_mark_for_deletion(thread);
-        }break;
-        
-        case CTRL_EventKind_EndModule:
-        {
-          RD_Entity *module = rd_entity_from_ctrl_handle(event->entity);
-          rd_entity_mark_for_deletion(module);
-        }break;
-        
-        //- rjf: debug info changes
-        
-        case CTRL_EventKind_ModuleDebugInfoPathChange:
-        {
-          RD_Entity *module = rd_entity_from_ctrl_handle(event->entity);
-          RD_Entity *debug_info = rd_entity_child_from_kind(module, RD_EntityKind_DebugInfoPath);
-          if(rd_entity_is_nil(debug_info))
-          {
-            debug_info = rd_entity_alloc(module, RD_EntityKind_DebugInfoPath);
-          }
-          rd_entity_equip_name(debug_info, event->string);
-          rd_entity_equip_timestamp(debug_info, event->timestamp);
-        }break;
-        
         //- rjf: debug strings
         
         case CTRL_EventKind_DebugString:
         {
           MTX_Op op = {r1u64(max_U64, max_U64), event->string};
           mtx_push_op(d_state->output_log_key, op);
-        }break;
-        
-        case CTRL_EventKind_ThreadName:
-        {
-          String8 string = event->string;
-          RD_Entity *entity = rd_entity_from_ctrl_handle(event->entity);
-          if(event->entity_id != 0)
-          {
-            entity = rd_entity_from_ctrl_id(event->entity.machine_id, event->entity_id);
-          }
-          if(rd_entity_is_nil(entity))
-          {
-            RD_Entity *process = rd_entity_from_ctrl_handle(event->parent);
-            if(!rd_entity_is_nil(process))
-            {
-              entity = rd_entity_alloc(process, RD_EntityKind_PendingThreadName);
-              rd_entity_equip_name(entity, string);
-              rd_entity_equip_ctrl_handle(entity, ctrl_handle_make(event->entity.machine_id, dmn_handle_zero()));
-              rd_entity_equip_ctrl_id(entity, event->entity_id);
-            }
-          }
-          if(!rd_entity_is_nil(entity))
-          {
-            rd_entity_equip_name(entity, string);
-          }
         }break;
         
         //- rjf: memory

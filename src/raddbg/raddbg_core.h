@@ -1204,9 +1204,6 @@ internal String8List rd_possible_overrides_from_file_path(Arena *arena, String8 
 internal RD_Entity *rd_entity_root(void);
 internal RD_EntityList rd_push_entity_list_with_kind(Arena *arena, RD_EntityKind kind);
 internal RD_Entity *rd_entity_from_id(RD_EntityID id);
-internal RD_Entity *rd_machine_entity_from_machine_id(CTRL_MachineID machine_id);
-internal RD_Entity *rd_entity_from_ctrl_handle(CTRL_Handle handle);
-internal RD_Entity *rd_entity_from_ctrl_id(CTRL_MachineID machine_id, U32 id);
 internal RD_Entity *rd_entity_from_name_and_kind(String8 string, RD_EntityKind kind);
 
 ////////////////////////////////

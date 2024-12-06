@@ -36,7 +36,7 @@ RD_CmdKind_Null,
 RD_CmdKind_Null,
 };
 
-String8 d_entity_kind_display_string_table[34] =
+String8 d_entity_kind_display_string_table[29] =
 {
 str8_lit_comp("Nil"),
 str8_lit_comp("Root"),
@@ -65,16 +65,11 @@ str8_lit_comp("Recent Project"),
 str8_lit_comp("Recent File"),
 str8_lit_comp("Source"),
 str8_lit_comp("Destination"),
-str8_lit_comp("Process"),
-str8_lit_comp("Thread"),
-str8_lit_comp("Module"),
-str8_lit_comp("Pending Thread Name"),
-str8_lit_comp("Debug Info Path"),
 str8_lit_comp("Conversion Task"),
 str8_lit_comp("Conversion Failure"),
 };
 
-String8 d_entity_kind_name_lower_table[34] =
+String8 d_entity_kind_name_lower_table[29] =
 {
 str8_lit_comp("nil"),
 str8_lit_comp("root"),
@@ -103,16 +98,11 @@ str8_lit_comp("recent_project"),
 str8_lit_comp("recent_file"),
 str8_lit_comp("source"),
 str8_lit_comp("dest"),
-str8_lit_comp("process"),
-str8_lit_comp("thread"),
-str8_lit_comp("module"),
-str8_lit_comp("pending_thread_name"),
-str8_lit_comp("debug_info_path"),
 str8_lit_comp("conversion_task"),
 str8_lit_comp("conversion_fail"),
 };
 
-String8 d_entity_kind_name_lower_plural_table[34] =
+String8 d_entity_kind_name_lower_plural_table[29] =
 {
 str8_lit_comp("nils"),
 str8_lit_comp("roots"),
@@ -141,16 +131,11 @@ str8_lit_comp("recent_projects"),
 str8_lit_comp("recent_files"),
 str8_lit_comp("sources"),
 str8_lit_comp("dests"),
-str8_lit_comp("processes"),
-str8_lit_comp("threads"),
-str8_lit_comp("modules"),
-str8_lit_comp("pending_thread_names"),
-str8_lit_comp("debug_info_paths"),
 str8_lit_comp("conversion_tasks"),
 str8_lit_comp("conversion_fails"),
 };
 
-String8 d_entity_kind_name_label_table[34] =
+String8 d_entity_kind_name_label_table[29] =
 {
 str8_lit_comp("Label"),
 str8_lit_comp("Label"),
@@ -181,14 +166,9 @@ str8_lit_comp("Path"),
 str8_lit_comp("Path"),
 str8_lit_comp("Label"),
 str8_lit_comp("Label"),
-str8_lit_comp("Label"),
-str8_lit_comp("Label"),
-str8_lit_comp("Label"),
-str8_lit_comp("Label"),
-str8_lit_comp("Label"),
 };
 
-RD_EntityKindFlags rd_entity_kind_flags_table[34] =
+RD_EntityKindFlags rd_entity_kind_flags_table[29] =
 {
 (0*RD_EntityKindFlag_CanDelete) | (0*RD_EntityKindFlag_CanFreeze) | (0*RD_EntityKindFlag_CanEdit) | (0*RD_EntityKindFlag_CanRename) | (0*RD_EntityKindFlag_CanEnable) | (0*RD_EntityKindFlag_CanCondition) | (0*RD_EntityKindFlag_CanDuplicate) | (0*RD_EntityKindFlag_NameIsCode) | (0*RD_EntityKindFlag_NameIsPath) | (0*RD_EntityKindFlag_UserDefinedLifetime) | (0*RD_EntityKindFlag_IsSerializedToConfig),
 (0*RD_EntityKindFlag_CanDelete) | (0*RD_EntityKindFlag_CanFreeze) | (0*RD_EntityKindFlag_CanEdit) | (0*RD_EntityKindFlag_CanRename) | (0*RD_EntityKindFlag_CanEnable) | (0*RD_EntityKindFlag_CanCondition) | (0*RD_EntityKindFlag_CanDuplicate) | (0*RD_EntityKindFlag_NameIsCode) | (0*RD_EntityKindFlag_NameIsPath) | (0*RD_EntityKindFlag_UserDefinedLifetime) | (0*RD_EntityKindFlag_IsSerializedToConfig),
@@ -215,11 +195,6 @@ RD_EntityKindFlags rd_entity_kind_flags_table[34] =
 (1*RD_EntityKindFlag_CanDelete) | (0*RD_EntityKindFlag_CanFreeze) | (0*RD_EntityKindFlag_CanEdit) | (0*RD_EntityKindFlag_CanRename) | (0*RD_EntityKindFlag_CanEnable) | (0*RD_EntityKindFlag_CanCondition) | (1*RD_EntityKindFlag_CanDuplicate) | (0*RD_EntityKindFlag_NameIsCode) | (0*RD_EntityKindFlag_NameIsPath) | (1*RD_EntityKindFlag_UserDefinedLifetime) | (1*RD_EntityKindFlag_IsSerializedToConfig),
 (0*RD_EntityKindFlag_CanDelete) | (0*RD_EntityKindFlag_CanFreeze) | (0*RD_EntityKindFlag_CanEdit) | (0*RD_EntityKindFlag_CanRename) | (0*RD_EntityKindFlag_CanEnable) | (0*RD_EntityKindFlag_CanCondition) | (0*RD_EntityKindFlag_CanDuplicate) | (0*RD_EntityKindFlag_NameIsCode) | (1*RD_EntityKindFlag_NameIsPath) | (0*RD_EntityKindFlag_UserDefinedLifetime) | (1*RD_EntityKindFlag_IsSerializedToConfig),
 (0*RD_EntityKindFlag_CanDelete) | (0*RD_EntityKindFlag_CanFreeze) | (0*RD_EntityKindFlag_CanEdit) | (0*RD_EntityKindFlag_CanRename) | (0*RD_EntityKindFlag_CanEnable) | (0*RD_EntityKindFlag_CanCondition) | (0*RD_EntityKindFlag_CanDuplicate) | (0*RD_EntityKindFlag_NameIsCode) | (1*RD_EntityKindFlag_NameIsPath) | (0*RD_EntityKindFlag_UserDefinedLifetime) | (1*RD_EntityKindFlag_IsSerializedToConfig),
-(0*RD_EntityKindFlag_CanDelete) | (0*RD_EntityKindFlag_CanFreeze) | (0*RD_EntityKindFlag_CanEdit) | (0*RD_EntityKindFlag_CanRename) | (0*RD_EntityKindFlag_CanEnable) | (0*RD_EntityKindFlag_CanCondition) | (0*RD_EntityKindFlag_CanDuplicate) | (0*RD_EntityKindFlag_NameIsCode) | (0*RD_EntityKindFlag_NameIsPath) | (0*RD_EntityKindFlag_UserDefinedLifetime) | (0*RD_EntityKindFlag_IsSerializedToConfig),
-(0*RD_EntityKindFlag_CanDelete) | (0*RD_EntityKindFlag_CanFreeze) | (0*RD_EntityKindFlag_CanEdit) | (0*RD_EntityKindFlag_CanRename) | (0*RD_EntityKindFlag_CanEnable) | (0*RD_EntityKindFlag_CanCondition) | (0*RD_EntityKindFlag_CanDuplicate) | (0*RD_EntityKindFlag_NameIsCode) | (0*RD_EntityKindFlag_NameIsPath) | (0*RD_EntityKindFlag_UserDefinedLifetime) | (0*RD_EntityKindFlag_IsSerializedToConfig),
-(0*RD_EntityKindFlag_CanDelete) | (1*RD_EntityKindFlag_CanFreeze) | (0*RD_EntityKindFlag_CanEdit) | (1*RD_EntityKindFlag_CanRename) | (0*RD_EntityKindFlag_CanEnable) | (0*RD_EntityKindFlag_CanCondition) | (0*RD_EntityKindFlag_CanDuplicate) | (0*RD_EntityKindFlag_NameIsCode) | (0*RD_EntityKindFlag_NameIsPath) | (0*RD_EntityKindFlag_UserDefinedLifetime) | (0*RD_EntityKindFlag_IsSerializedToConfig),
-(0*RD_EntityKindFlag_CanDelete) | (1*RD_EntityKindFlag_CanFreeze) | (0*RD_EntityKindFlag_CanEdit) | (1*RD_EntityKindFlag_CanRename) | (0*RD_EntityKindFlag_CanEnable) | (0*RD_EntityKindFlag_CanCondition) | (0*RD_EntityKindFlag_CanDuplicate) | (0*RD_EntityKindFlag_NameIsCode) | (0*RD_EntityKindFlag_NameIsPath) | (0*RD_EntityKindFlag_UserDefinedLifetime) | (0*RD_EntityKindFlag_IsSerializedToConfig),
-(0*RD_EntityKindFlag_CanDelete) | (0*RD_EntityKindFlag_CanFreeze) | (0*RD_EntityKindFlag_CanEdit) | (0*RD_EntityKindFlag_CanRename) | (0*RD_EntityKindFlag_CanEnable) | (0*RD_EntityKindFlag_CanCondition) | (0*RD_EntityKindFlag_CanDuplicate) | (0*RD_EntityKindFlag_NameIsCode) | (0*RD_EntityKindFlag_NameIsPath) | (0*RD_EntityKindFlag_UserDefinedLifetime) | (0*RD_EntityKindFlag_IsSerializedToConfig),
 (0*RD_EntityKindFlag_CanDelete) | (0*RD_EntityKindFlag_CanFreeze) | (0*RD_EntityKindFlag_CanEdit) | (0*RD_EntityKindFlag_CanRename) | (0*RD_EntityKindFlag_CanEnable) | (0*RD_EntityKindFlag_CanCondition) | (0*RD_EntityKindFlag_CanDuplicate) | (0*RD_EntityKindFlag_NameIsCode) | (0*RD_EntityKindFlag_NameIsPath) | (0*RD_EntityKindFlag_UserDefinedLifetime) | (0*RD_EntityKindFlag_IsSerializedToConfig),
 (0*RD_EntityKindFlag_CanDelete) | (0*RD_EntityKindFlag_CanFreeze) | (0*RD_EntityKindFlag_CanEdit) | (0*RD_EntityKindFlag_CanRename) | (0*RD_EntityKindFlag_CanEnable) | (0*RD_EntityKindFlag_CanCondition) | (0*RD_EntityKindFlag_CanDuplicate) | (0*RD_EntityKindFlag_NameIsCode) | (0*RD_EntityKindFlag_NameIsPath) | (0*RD_EntityKindFlag_UserDefinedLifetime) | (0*RD_EntityKindFlag_IsSerializedToConfig),
 (0*RD_EntityKindFlag_CanDelete) | (0*RD_EntityKindFlag_CanFreeze) | (0*RD_EntityKindFlag_CanEdit) | (1*RD_EntityKindFlag_CanRename) | (0*RD_EntityKindFlag_CanEnable) | (0*RD_EntityKindFlag_CanCondition) | (0*RD_EntityKindFlag_CanDuplicate) | (0*RD_EntityKindFlag_NameIsCode) | (0*RD_EntityKindFlag_NameIsPath) | (0*RD_EntityKindFlag_UserDefinedLifetime) | (0*RD_EntityKindFlag_IsSerializedToConfig),
@@ -885,7 +860,7 @@ RD_ViewRuleInfo rd_view_rule_kind_info_table[35] =
 {str8_lit_comp("geo3d"), str8_lit_comp("Visualizes memory as 3D geometry."), str8_lit_comp("Geometry (3D)"), str8_lit_comp("x:{'count':expr, 'vtx':expr, 'vtx_size':expr}"), RD_IconKind_Binoculars, (RD_ViewRuleInfoFlag_ShowInDocs*1|RD_ViewRuleInfoFlag_CanFilter*0|RD_ViewRuleInfoFlag_FilterIsCode*0|RD_ViewRuleInfoFlag_TypingAutomaticallyFilters*0|RD_ViewRuleInfoFlag_CanUseInWatchTable*1|RD_ViewRuleInfoFlag_CanFillValueCell*0|RD_ViewRuleInfoFlag_CanExpand*1), EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME(geo3d) , RD_VIEW_RULE_UI_FUNCTION_NAME(geo3d)},
 };
 
-RD_IconKind rd_entity_kind_icon_kind_table[34] =
+RD_IconKind rd_entity_kind_icon_kind_table[29] =
 {
 RD_IconKind_Null,
 RD_IconKind_Null,
@@ -914,11 +889,6 @@ RD_IconKind_Briefcase,
 RD_IconKind_FileOutline,
 RD_IconKind_Null,
 RD_IconKind_Null,
-RD_IconKind_Threads,
-RD_IconKind_Thread,
-RD_IconKind_Module,
-RD_IconKind_Threads,
-RD_IconKind_Module,
 RD_IconKind_Null,
 RD_IconKind_Null,
 };

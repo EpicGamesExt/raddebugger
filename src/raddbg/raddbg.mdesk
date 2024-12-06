@@ -114,13 +114,6 @@ RD_EntityKindTable:
   {Source             source                sources                       0  0  0  0  0  0  0  0  0  0  0                      "Path"              Null                   "Source"                     }
   {Dest               dest                  dests                         0  0  0  0  0  0  0  0  0  0  0                      "Path"              Null                   "Destination"                }
   
-  //- rjf: control system entities
-  {Process            process               processes                     0  1  0  1  0  0  0  0  0  0  0                      "Label"             Threads                "Process"                    }
-  {Thread             thread                threads                       0  1  0  1  0  0  0  0  0  0  0                      "Label"             Thread                 "Thread"                     }
-  {Module             module                modules                       0  0  0  0  0  0  0  0  0  0  0                      "Label"             Module                 "Module"                     }
-  {PendingThreadName  pending_thread_name   pending_thread_names          0  0  0  0  0  0  0  0  0  0  0                      "Label"             Threads                "Pending Thread Name"        }
-  {DebugInfoPath      debug_info_path       debug_info_paths              0  0  0  0  0  0  0  0  0  0  0                      "Label"             Module                 "Debug Info Path"            }
-  
   //- rjf: parser task entities
   {ConversionTask     conversion_task       conversion_tasks              0  0  0  1  0  0  0  0  0  0  0                      "Label"             Null                   "Conversion Task"            }
   {ConversionFail     conversion_fail       conversion_fails              0  0  0  1  0  0  0  0  0  0  0                      "Label"             Null                   "Conversion Failure"         }
