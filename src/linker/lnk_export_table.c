@@ -198,7 +198,7 @@ lnk_build_edata(LNK_ExportTable *exptab, LNK_SectionTable *st, LNK_SymbolTable *
   LNK_Section *edata = lnk_section_table_search(st, str8_lit(".edata"));
   
   // push header
-  PE_ExportTable *header             = push_array(edata->arena, PE_ExportTable, 1);
+  PE_ExportTableHeader *header       = push_array(edata->arena, PE_ExportTableHeader, 1);
   header->ordinal_base               = safe_cast_u16(ordinal_low + 1);
   header->export_address_table_count = safe_cast_u32(exptab->name_export_ht->count + exptab->noname_export_ht->count);
   header->name_pointer_table_count   = safe_cast_u32(exptab->name_export_ht->count);
@@ -226,10 +226,10 @@ lnk_build_edata(LNK_ExportTable *exptab, LNK_SectionTable *st, LNK_SymbolTable *
   LNK_Symbol *ordinal_table_symbol = lnk_symbol_table_push_defined_chunk(symtab, str8_lit("export_table.ordinal_table_voff"),        LNK_DefinedSymbolVisibility_Internal, 0, ordinal_table_chunk,   0, 0, 0);
   
   // patch header fields
-  lnk_section_push_reloc(edata, header_chunk, LNK_Reloc_VIRT_OFF_32, OffsetOf(PE_ExportTable, name_voff),                 image_name_symbol);
-  lnk_section_push_reloc(edata, header_chunk, LNK_Reloc_VIRT_OFF_32, OffsetOf(PE_ExportTable, export_address_table_voff), address_table_symbol);
-  lnk_section_push_reloc(edata, header_chunk, LNK_Reloc_VIRT_OFF_32, OffsetOf(PE_ExportTable, name_pointer_table_voff),   name_table_symbol);
-  lnk_section_push_reloc(edata, header_chunk, LNK_Reloc_VIRT_OFF_32, OffsetOf(PE_ExportTable, ordinal_table_voff),        ordinal_table_symbol);
+  lnk_section_push_reloc(edata, header_chunk, LNK_Reloc_VIRT_OFF_32, OffsetOf(PE_ExportTableHeader, name_voff),                 image_name_symbol);
+  lnk_section_push_reloc(edata, header_chunk, LNK_Reloc_VIRT_OFF_32, OffsetOf(PE_ExportTableHeader, export_address_table_voff), address_table_symbol);
+  lnk_section_push_reloc(edata, header_chunk, LNK_Reloc_VIRT_OFF_32, OffsetOf(PE_ExportTableHeader, name_pointer_table_voff),   name_table_symbol);
+  lnk_section_push_reloc(edata, header_chunk, LNK_Reloc_VIRT_OFF_32, OffsetOf(PE_ExportTableHeader, ordinal_table_voff),        ordinal_table_symbol);
   
   // reserve virtual offset chunks
   LNK_Chunk **ordinal_voff_map = push_array(scratch.arena, LNK_Chunk *, exptab->max_ordinal);

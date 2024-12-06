@@ -58,6 +58,340 @@ pe_string_from_subsystem(PE_WindowsSubsystem subsystem)
   return str8(0,0);
 }
 
+internal String8
+pe_string_from_unwind_gpr_x64(PE_UnwindGprRegX64 x)
+{
+  switch (x) {
+    case PE_UnwindGprRegX64_RAX: return str8_lit("RCX");
+    case PE_UnwindGprRegX64_RCX: return str8_lit("RCX");
+    case PE_UnwindGprRegX64_RDX: return str8_lit("RDX");
+    case PE_UnwindGprRegX64_RBX: return str8_lit("RBX");
+    case PE_UnwindGprRegX64_RSP: return str8_lit("RSP");
+    case PE_UnwindGprRegX64_RBP: return str8_lit("RBP");
+    case PE_UnwindGprRegX64_RSI: return str8_lit("RSI");
+    case PE_UnwindGprRegX64_RDI: return str8_lit("RDI");
+    case PE_UnwindGprRegX64_R8:  return str8_lit("R8");
+    case PE_UnwindGprRegX64_R9:  return str8_lit("R9");
+    case PE_UnwindGprRegX64_R10: return str8_lit("R10");
+    case PE_UnwindGprRegX64_R11: return str8_lit("R11");
+    case PE_UnwindGprRegX64_R12: return str8_lit("R12");
+    case PE_UnwindGprRegX64_R13: return str8_lit("R13");
+    case PE_UnwindGprRegX64_R14: return str8_lit("R14");
+    case PE_UnwindGprRegX64_R15: return str8_lit("R15");
+  }
+  return str8_zero();
+}
+
+internal String8
+pe_string_from_data_directory_index(PE_DataDirectoryIndex x)
+{
+  switch (x) {
+    case PE_DataDirectoryIndex_EXPORT:         return str8_lit("Export");
+    case PE_DataDirectoryIndex_IMPORT:         return str8_lit("Import");
+    case PE_DataDirectoryIndex_RESOURCES:      return str8_lit("Resources");
+    case PE_DataDirectoryIndex_EXCEPTIONS:     return str8_lit("Exceptions");
+    case PE_DataDirectoryIndex_CERT:           return str8_lit("Cert");
+    case PE_DataDirectoryIndex_BASE_RELOC:     return str8_lit("BaseReloc");
+    case PE_DataDirectoryIndex_DEBUG:          return str8_lit("Debug");
+    case PE_DataDirectoryIndex_ARCH:           return str8_lit("Arch");
+    case PE_DataDirectoryIndex_GLOBAL_PTR:     return str8_lit("GlobalPtr");
+    case PE_DataDirectoryIndex_TLS:            return str8_lit("TLS");
+    case PE_DataDirectoryIndex_LOAD_CONFIG:    return str8_lit("LoadConfig");
+    case PE_DataDirectoryIndex_BOUND_IMPORT:   return str8_lit("BoundImport");
+    case PE_DataDirectoryIndex_IMPORT_ADDR:    return str8_lit("ImportAddr");
+    case PE_DataDirectoryIndex_DELAY_IMPORT:   return str8_lit("DelayImport");
+    case PE_DataDirectoryIndex_COM_DESCRIPTOR: return str8_lit("COM Descriptor");
+    case PE_DataDirectoryIndex_RESERVED:       return str8_lit("Reserved");
+  }
+  return str8_zero();
+}
+
+internal String8
+pe_string_from_debug_directory_type(PE_DebugDirectoryType x)
+{
+  switch (x) {
+    case PE_DebugDirectoryType_UNKNOWN:               return str8_lit("UNKNOWN");
+    case PE_DebugDirectoryType_COFF:                  return str8_lit("COFF");
+    case PE_DebugDirectoryType_CODEVIEW:              return str8_lit("CODEVIEW");
+    case PE_DebugDirectoryType_FPO:                   return str8_lit("FPO");
+    case PE_DebugDirectoryType_MISC:                  return str8_lit("MISC");
+    case PE_DebugDirectoryType_EXCEPTION:             return str8_lit("EXCEPTION");
+    case PE_DebugDirectoryType_FIXUP:                 return str8_lit("FIXUP");
+    case PE_DebugDirectoryType_OMAP_TO_SRC:           return str8_lit("OMAP_TO_SRC");
+    case PE_DebugDirectoryType_OMAP_FROM_SRC:         return str8_lit("OMAP_FROM_SRC");
+    case PE_DebugDirectoryType_BORLAND:               return str8_lit("BORLAND");
+    case PE_DebugDirectoryType_RESERVED10:            return str8_lit("RESERVED10");
+    case PE_DebugDirectoryType_CLSID:                 return str8_lit("CLSID");
+    case PE_DebugDirectoryType_VC_FEATURE:            return str8_lit("VC_FEATURE");
+    case PE_DebugDirectoryType_POGO:                  return str8_lit("POGO");
+    case PE_DebugDirectoryType_ILTCG:                 return str8_lit("ILTCG");
+    case PE_DebugDirectoryType_MPX:                   return str8_lit("MPX");
+    case PE_DebugDirectoryType_REPRO:                 return str8_lit("REPRO");
+    case PE_DebugDirectoryType_EX_DLLCHARACTERISTICS: return str8_lit("EX_DLLCHARACTERISTICS");
+    case PE_DebugDirectoryType_COUNT:                 return str8_lit("COUNT");
+  }
+  return str8_zero();
+}
+
+internal String8
+pe_string_from_fpo_type(PE_FPOType x)
+{
+  switch (x) {
+    case PE_FPOType_FPO:   return str8_lit("FPO");
+    case PE_FPOType_TRAP:  return str8_lit("TRAP");
+    case PE_FPOType_TSS:   return str8_lit("TSS");
+    case PE_FPOType_NOFPO: return str8_lit("NOFPO");
+  }
+  return str8_zero();
+}
+
+internal String8
+pe_string_from_misc_type(PE_DebugMiscType x)
+{
+  switch (x) {
+    case PE_DebugMiscType_NULL:     break;
+    case PE_DebugMiscType_EXE_NAME: return str8_lit("EXE_NAME");
+  }
+  return str8_zero();
+}
+
+internal String8
+pe_resource_kind_to_string(PE_ResourceKind x)
+{
+  String8 result = str8_zero();
+  switch (x) {
+    case PE_ResourceKind_ACCELERATOR:  result = str8_lit("Accelerator");     break;
+    case PE_ResourceKind_ANICURSOR:    result = str8_lit("Animated Cursor"); break;
+    case PE_ResourceKind_ANIICON:      result = str8_lit("Animated Icon");   break;
+    case PE_ResourceKind_BITMAP:       result = str8_lit("Bitmap");          break;
+    case PE_ResourceKind_CURSOR:       result = str8_lit("Cursor");          break;
+    case PE_ResourceKind_DIALOG:       result = str8_lit("Dialog");          break;
+    case PE_ResourceKind_FONT:         result = str8_lit("Font");            break;
+    case PE_ResourceKind_FONTDIR:      result = str8_lit("Font Directory");  break;
+    case PE_ResourceKind_GROUP_CURSOR: result = str8_lit("Cursor Group");    break;
+    case PE_ResourceKind_GROUP_ICON:   result = str8_lit("Icon Group");      break;
+    case PE_ResourceKind_HTML:         result = str8_lit("HTML");            break;
+    case PE_ResourceKind_ICON:         result = str8_lit("Icon");            break;
+    case PE_ResourceKind_MANIFEST:     result = str8_lit("Manifest");        break;
+    case PE_ResourceKind_MENU:         result = str8_lit("Menu");            break;
+    case PE_ResourceKind_MESSAGETABLE: result = str8_lit("Message Table");   break;
+    case PE_ResourceKind_PLUGPLAY:     result = str8_lit("Plug Play");       break;
+    case PE_ResourceKind_RCDATA:       result = str8_lit("RC Data");         break;
+    case PE_ResourceKind_STRING:       result = str8_lit("String");          break;
+    case PE_ResourceKind_VERSION:      result = str8_lit("Version Info");    break;
+    case PE_ResourceKind_VXD:          result = str8_lit("VXD");             break;
+  }
+  return result;
+}
+
+internal String8
+pe_string_from_fpo_flags(Arena *arena, PE_FPOFlags flags)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  String8List l = {0};
+  if (flags & PE_FPOFlags_HAS_SEH) {
+    str8_list_pushf(scratch.arena, &l, "HAS_SEH");
+  }
+  if (flags & PE_FPOFlags_USE_BP_REG) {
+    str8_list_pushf(scratch.arena, &l, "USE_BP_REG");
+  }
+  if (flags & PE_FPOFlags_RESERVED) {
+    str8_list_pushf(scratch.arena, &l, "RESERVED");
+  }
+  String8 result = str8_list_join(arena, &l, &(StringJoin){.sep=str8_lit(" ")});
+  scratch_end(scratch);
+  return result;
+}
+
+internal String8
+pe_string_from_global_flags(Arena *arena, PE_GlobalFlags flags)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+
+  String8List l = {0};
+  if (flags & PE_GlobalFlags_STOP_ON_EXCEPTION) {
+    str8_list_pushf(scratch.arena, &l, "STOP_ON_EXCEPTION");
+  }
+  if (flags & PE_GlobalFlags_SHOW_LDR_SNAPS) {
+    str8_list_pushf(scratch.arena, &l, "SHOW_LDR_SNAPS");
+  }
+  if (flags & PE_GlobalFlags_DEBUG_INITIAL_COMMAND) {
+    str8_list_pushf(scratch.arena, &l, "DEBUG_INITIAL_COMMAND");
+  }
+  if (flags & PE_GlobalFlags_STOP_ON_HUNG_GUI) {
+    str8_list_pushf(scratch.arena, &l, "STOP_ON_HUNG_GUI");
+  }
+  if (flags & PE_GlobalFlags_HEAP_ENABLE_TAIL_CHECK) {
+    str8_list_pushf(scratch.arena, &l, "HEAP_ENABLE_TAIL_CHECK");
+  }
+  if (flags & PE_GlobalFlags_HEAP_ENABLE_FREE_CHECK) {
+    str8_list_pushf(scratch.arena, &l, "HEAP_ENABLE_FREE_CHECK");
+  }
+  if (flags & PE_GlobalFlags_HEAP_VALIDATE_PARAMETERS) {
+    str8_list_pushf(scratch.arena, &l, "HEAP_VALIDATE_PARAMETERS");
+  }
+  if (flags & PE_GlobalFlags_HEAP_VALIDATE_ALL) {
+    str8_list_pushf(scratch.arena, &l, "HEAP_VALIDATE_ALL");
+  }
+  if (flags & PE_GlobalFlags_APPLICATION_VERIFIER) {
+    str8_list_pushf(scratch.arena, &l, "APPLICATION_VERIFIER");
+  }
+  if (flags & PE_GlobalFlags_POOL_ENABLE_TAGGING) {
+    str8_list_pushf(scratch.arena, &l, "POOL_ENABLE_TAGGING");
+  }
+  if (flags & PE_GlobalFlags_HEAP_ENABLE_TAGGING) {
+    str8_list_pushf(scratch.arena, &l, "HEAP_ENABLE_TAGGING");
+  }
+  if (flags & PE_GlobalFlags_STACK_TRACE_DB) {
+    str8_list_pushf(scratch.arena, &l, "STACK_TRACE_DB");
+  }
+  if (flags & PE_GlobalFlags_KERNEL_STACK_TRACE_DB) {
+    str8_list_pushf(scratch.arena, &l, "KERNEL_STACK_TRACE_DB");
+  }
+  if (flags & PE_GlobalFlags_MAINTAIN_OBJECT_TYPELIST) {
+    str8_list_pushf(scratch.arena, &l, "MAINTAIN_OBJECT_TYPELIST");
+  }
+  if (flags & PE_GlobalFlags_HEAP_ENABLE_TAG_BY_DLL) {
+    str8_list_pushf(scratch.arena, &l, "HEAP_ENABLE_TAG_BY_DLL");
+  }
+  if (flags & PE_GlobalFlags_DISABLE_STACK_EXTENSION) {
+    str8_list_pushf(scratch.arena, &l, "DISABLE_STACK_EXTENSION");
+  }
+  if (flags & PE_GlobalFlags_ENABLE_CSRDEBUG) {
+    str8_list_pushf(scratch.arena, &l, "ENABLE_CSRDEBUG");
+  }
+  if (flags & PE_GlobalFlags_ENABLE_KDEBUG_SYMBOL_LOAD) {
+    str8_list_pushf(scratch.arena, &l, "ENABLE_KDEBUG_SYMBOL_LOAD");
+  }
+  if (flags & PE_GlobalFlags_DISABLE_PAGE_KERNEL_STACKS) {
+    str8_list_pushf(scratch.arena, &l, "DISABLE_PAGE_KERNEL_STACKS");
+  }
+  if (flags & PE_GlobalFlags_ENABLE_SYSTEM_CRIT_BREAKS) {
+    str8_list_pushf(scratch.arena, &l, "ENABLE_SYSTEM_CRIT_BREAKS");
+  }
+  if (flags & PE_GlobalFlags_HEAP_DISABLE_COALESCING) {
+    str8_list_pushf(scratch.arena, &l, "HEAP_DISABLE_COALESCING");
+  }
+  if (flags & PE_GlobalFlags_ENABLE_CLOSE_EXCEPTIONS) {
+    str8_list_pushf(scratch.arena, &l, "ENABLE_CLOSE_EXCEPTIONS");
+  }
+  if (flags & PE_GlobalFlags_ENABLE_EXCEPTION_LOGGING) {
+    str8_list_pushf(scratch.arena, &l, "ENABLE_EXCEPTION_LOGGING");
+  }
+  if (flags & PE_GlobalFlags_ENABLE_HANDLE_TYPE_TAGGING) {
+    str8_list_pushf(scratch.arena, &l, "ENABLE_HANDLE_TYPE_TAGGING");
+  }
+  if (flags & PE_GlobalFlags_HEAP_PAGE_ALLOCS) {
+    str8_list_pushf(scratch.arena, &l, "HEAP_PAGE_ALLOCS");
+  }
+  if (flags & PE_GlobalFlags_DEBUG_INITIAL_COMMAND_EX) {
+    str8_list_pushf(scratch.arena, &l, "DEBUG_INITIAL_COMMAND_EX");
+  }
+  if (flags & PE_GlobalFlags_DISABLE_DBGPRINT) {
+    str8_list_pushf(scratch.arena, &l, "DISABLE_DBGPRINT");
+  }
+  if (flags & PE_GlobalFlags_CRITSEC_EVENT_CREATION) {
+    str8_list_pushf(scratch.arena, &l, "CRITSEC_EVENT_CREATION");
+  }
+  if (flags & PE_GlobalFlags_LDR_TOP_DOWN) {
+    str8_list_pushf(scratch.arena, &l, "LDR_TOP_DOWN");
+  }
+  if (flags & PE_GlobalFlags_ENABLE_HANDLE_EXCEPTIONS) {
+    str8_list_pushf(scratch.arena, &l, "ENABLE_HANDLE_EXCEPTIONS");
+  }
+  if (flags & PE_GlobalFlags_DISABLE_PROTDLLS) {
+    str8_list_pushf(scratch.arena, &l, "DISABLE_PROTDLLS");
+  }
+
+  String8 result = str8_list_join(arena, &l, &(StringJoin){.sep=str8_lit(" ")});
+  return result;
+}
+
+internal String8
+pe_string_from_load_config_guard_flags(Arena *arena, PE_LoadConfigGuardFlags flags)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  
+  String8List l = {0};
+  if (flags & PE_LoadConfigGuardFlags_CF_INSTRUMENTED) {
+    str8_list_pushf(scratch.arena, &l, "CF_INSTRUMENTED");
+  }
+  if (flags & PE_LoadConfigGuardFlags_CFW_INSTRUMENTED) {
+    str8_list_pushf(scratch.arena, &l, "CFW_INSTRUMENTED");
+  }
+  if (flags & PE_LoadConfigGuardFlags_CF_FUNCTION_TABLE_PRESENT) {
+    str8_list_pushf(scratch.arena, &l, "CF_FUNCTION_TABLE_PRESENT");
+  }
+  if (flags & PE_LoadConfigGuardFlags_SECURITY_COOKIE_UNUSED) {
+    str8_list_pushf(scratch.arena, &l, "SECURITY_COOKIE_UNUSED");
+  }
+  if (flags & PE_LoadConfigGuardFlags_PROTECT_DELAYLOAD_IAT) {
+    str8_list_pushf(scratch.arena, &l, "PROTECT_DELAYLOAD_IAT");
+  }
+  if (flags & PE_LoadConfigGuardFlags_DELAYLOAD_IAT_IN_ITS_OWN_SECTION) {
+    str8_list_pushf(scratch.arena, &l, "DELAYLOAD_IAT_IN_ITS_OWN_SECTION");
+  }
+  if (flags & PE_LoadConfigGuardFlags_CF_EXPORT_SUPPRESSION_INFO_PRESENT) {
+    str8_list_pushf(scratch.arena, &l, "CF_EXPORT_SUPPRESSION_INFO_PRESENT");
+  }
+  if (flags & PE_LoadConfigGuardFlags_CF_ENABLE_EXPORT_SUPPRESSION) {
+    str8_list_pushf(scratch.arena, &l, "CF_ENABLE_EXPORT_SUPPRESSION");
+  }
+  if (flags & PE_LoadConfigGuardFlags_CF_LONGJUMP_TABLE_PRESENT) {
+    str8_list_pushf(scratch.arena, &l, "CF_LONGJUMP_TABLE_PRESENT");
+  }
+  if (flags & PE_LoadConfigGuardFlags_EH_CONTINUATION_TABLE_PRESENT) {
+    str8_list_pushf(scratch.arena, &l, "EH_CONTINUATION_TABLE_PRESENT");
+  }
+
+  String8 result = str8_list_join(arena, &l, &(StringJoin){.sep = str8_lit(" ")});
+  scratch_end(scratch);
+  return result;
+}
+
+internal String8
+pe_string_from_dll_characteristics(Arena *arena, PE_DllCharacteristics dll_chars)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  String8List l = {0};
+  if (dll_chars & PE_DllCharacteristic_HIGH_ENTROPY_VA) {
+    str8_list_pushf(scratch.arena, &l, "High Entropy Virtual Address");
+  }
+  if (dll_chars & PE_DllCharacteristic_DYNAMIC_BASE) {
+    str8_list_pushf(scratch.arena, &l, "Dynamic Base");
+  }
+  if (dll_chars & PE_DllCharacteristic_FORCE_INTEGRITY) {
+    str8_list_pushf(scratch.arena, &l, "Force Integrity");
+  }
+  if (dll_chars & PE_DllCharacteristic_NX_COMPAT) {
+    str8_list_pushf(scratch.arena, &l, "NX Compatible");
+  }
+  if (dll_chars & PE_DllCharacteristic_NO_ISOLATION) {
+    str8_list_pushf(scratch.arena, &l, "No Isolation");
+  }
+  if (dll_chars & PE_DllCharacteristic_NO_SEH) {
+    str8_list_pushf(scratch.arena, &l, "No SEH");
+  }
+  if (dll_chars & PE_DllCharacteristic_NO_BIND) {
+    str8_list_pushf(scratch.arena, &l, "No Bind");
+  }
+  if (dll_chars & PE_DllCharacteristic_APPCONTAINER) {
+    str8_list_pushf(scratch.arena, &l, "App Container");
+  }
+  if (dll_chars & PE_DllCharacteristic_WDM_DRIVER) {
+    str8_list_pushf(scratch.arena, &l, "WDM Driver");
+  }
+  if (dll_chars & PE_DllCharacteristic_GUARD_CF) {
+    str8_list_pushf(scratch.arena, &l, "GuardCF");
+  }
+  if (dll_chars & PE_DllCharacteristic_TERMINAL_SERVER_AWARE) {
+    str8_list_pushf(scratch.arena, &l, "Terminal Server Aware");
+  }
+  String8 result = str8_list_join(arena, &l, &(StringJoin){.sep=str8_lit(", ")});
+  scratch_end(scratch);
+  return result;
+}
+
 internal PE_WindowsSubsystem
 pe_subsystem_from_string(String8 string)
 {
@@ -217,7 +551,7 @@ pe_bin_info_from_data(Arena *arena, String8 data)
         {
           PE_CvHeaderPDB20 cv = {0};
           str8_deserial_read_struct(data, cv_offset, &cv);
-          dbg_time = cv.time;
+          dbg_time = cv.time_stamp;
           dbg_age = cv.age;
           dbg_path_off = cv_offset + sizeof(cv);
         }break;
@@ -301,63 +635,58 @@ pe_bin_info_from_data(Arena *arena, String8 data)
 //~ rjf: Helpers
 
 internal U64
-pe_intel_pdata_off_from_voff__binary_search(String8 data, PE_BinInfo *bin, U64 voff)
+pe_pdata_off_from_voff__binary_search_x8664(String8 raw_pdata, U64 voff)
 {
   U64 result = 0;
-  if(bin->arch != Arch_Null && PE_DataDirectoryIndex_EXCEPTIONS < bin->data_dir_count)
+
+  if(raw_pdata.size >= sizeof(PE_IntelPdata))
   {
-    Rng1U64 range = bin->data_dir_franges[PE_DataDirectoryIndex_EXCEPTIONS];
-    U64 pdata_off = range.min;
-    U64 pdata_count = (range.max - range.min)/sizeof(PE_IntelPdata);
-    
-    // check if this bin includes a pdata array
-    if(pdata_count > 0 && 0 <= pdata_off && pdata_off < data.size)
+    U64            pdata_count = raw_pdata.size/sizeof(PE_IntelPdata);
+    PE_IntelPdata *pdata_array = (PE_IntelPdata*)raw_pdata.str;
+    if(voff >= pdata_array[0].voff_first)
     {
-      PE_IntelPdata *pdata_array = (PE_IntelPdata*)(data.str + pdata_off);
-      if(voff >= pdata_array[0].voff_first)
+      // binary search:
+      //  find max index s.t. pdata_array[index].voff_first <= voff
+      //  we assume (i < j) -> (pdata_array[i].voff_first < pdata_array[j].voff_first)
+      U64 index = pdata_count;
+      U64 min   = 0;
+      U64 opl   = pdata_count;
+      for(;;)
       {
-        // binary search:
-        //  find max index s.t. pdata_array[index].voff_first <= voff
-        //  we assume (i < j) -> (pdata_array[i].voff_first < pdata_array[j].voff_first)
-        U64 index = pdata_count;
-        U64 min = 0;
-        U64 opl = pdata_count;
-        for(;;)
+        U64            mid   = (min + opl)/2;
+        PE_IntelPdata *pdata = pdata_array + mid;
+        if(voff < pdata->voff_first)
         {
-          U64 mid = (min + opl)/2;
-          PE_IntelPdata *pdata = pdata_array + mid;
-          if(voff < pdata->voff_first)
-          {
-            opl = mid;
-          }
-          else if(pdata->voff_first < voff)
-          {
-            min = mid;
-          }
-          else
-          {
-            index = mid;
-            break;
-          }
-          if(min + 1 >= opl)
-          {
-            index = min;
-            break;
-          }
+          opl = mid;
         }
-        
-        // if we are in range fill result
+        else if(pdata->voff_first < voff)
         {
-          PE_IntelPdata *pdata = pdata_array + index;
-          if(pdata->voff_first <= voff && voff < pdata->voff_one_past_last)
-          {
-            result = pdata_off + index*sizeof(PE_IntelPdata);
-          }
+          min = mid;
+        }
+        else
+        {
+          index = mid;
+          break;
+        }
+        if(min + 1 >= opl)
+        {
+          index = min;
+          break;
+        }
+      }
+
+      // if we are in range fill result
+      {
+        PE_IntelPdata *pdata = pdata_array + index;
+        if(pdata->voff_first <= voff && voff < pdata->voff_one_past_last)
+        {
+          result = index*sizeof(PE_IntelPdata);
         }
       }
     }
   }
-  return(result);
+
+  return result;
 }
 
 internal void *
@@ -633,6 +962,447 @@ pe_get_entry_point_names(COFF_MachineType            machine,
   }
 
   return entry_point_names;
+}
+
+////////////////////////////////
+
+internal PE_ParsedImport *
+pe_parsed_imports_from_data(Arena              *arena,
+                            B32                 is_pe32,
+                            U64                 section_count,
+                            COFF_SectionHeader *sections,
+                            String8             raw_data,
+                            U64                 name_table_voff,
+                            U64                *import_count_out)
+{
+  PE_ParsedImport *imports      = 0;
+  U64              import_count = 0;
+
+  U64 name_table_off = coff_foff_from_voff(sections, section_count, name_table_voff);
+
+  if (is_pe32) {
+    for (;; ++import_count) {
+      U32 raw_entry = 0;
+      str8_deserial_read_struct(raw_data, name_table_off + import_count*sizeof(raw_entry), &raw_entry);
+      if (raw_entry == 0) {
+        break;
+      }
+    }
+
+    imports = push_array(arena, PE_ParsedImport, import_count);
+
+    for (U64 imp_idx = 0; imp_idx < import_count; ++imp_idx) {
+      U32 raw_entry = 0;
+      str8_deserial_read_struct(raw_data, name_table_off + imp_idx*sizeof(raw_entry), &raw_entry);
+
+      B32 is_ordinal = raw_entry & (1 << 31);
+
+      PE_ParsedImport *imp = imports+imp_idx;
+      ++imp_idx;
+
+      if (is_ordinal) {
+        // fill out ordinal import
+        imp->type      = PE_ParsedImport_Ordinal;
+        imp->u.ordinal = raw_entry & max_U16;
+      } else {
+        // map voff -> foff
+        U64 off = coff_foff_from_voff(sections, section_count, raw_entry);
+
+        // read hint & name
+        U16     hint = 0;
+        String8 name = str8_zero();
+        str8_deserial_read_struct(raw_data, off, &hint);
+        str8_deserial_read_cstr(raw_data, off+sizeof(hint), &name);
+
+        // fill out named import
+        imp->type          = PE_ParsedImport_Name;
+        imp->u.name.hint   = hint;
+        imp->u.name.string = name;
+      }
+    }
+  } else {
+    for (;; ++import_count) {
+      U64 raw_entry = 0;
+      str8_deserial_read_struct(raw_data, name_table_off + import_count*sizeof(raw_entry), &raw_entry);
+      if (raw_entry == 0) {
+        break;
+      }
+    }
+
+    imports = push_array(arena, PE_ParsedImport, import_count);
+
+    for (U64 imp_idx = 0; imp_idx < import_count; ++imp_idx) {
+      U64 raw_entry = 0;
+      str8_deserial_read_struct(raw_data, name_table_off + imp_idx*sizeof(raw_entry), &raw_entry);
+
+      B32 is_ordinal = raw_entry & (1ull << 63);
+
+      PE_ParsedImport *imp = imports+imp_idx;
+      ++imp_idx;
+
+      if (is_ordinal) {
+        // fill out ordinal import
+        imp->type      = PE_ParsedImport_Ordinal;
+        imp->u.ordinal = raw_entry & max_U16;
+      } else {
+        // map voff -> foff
+        U64 off = coff_foff_from_voff(sections, section_count, raw_entry);
+
+        // read hint & name
+        U16     hint = 0;
+        String8 name = str8_zero();
+        str8_deserial_read_struct(raw_data, off, &hint);
+        str8_deserial_read_cstr(raw_data, off + sizeof(hint), &name);
+
+        // fill out named import
+        imp->type          = PE_ParsedImport_Name;
+        imp->u.name.hint   = hint;
+        imp->u.name.string = name;
+      }
+    }
+  }
+
+  *import_count_out = import_count;
+  return imports;
+}
+
+internal U64 *
+pe_array_from_null_term_addr(Arena *arena, B32 is_pe32, String8 raw_data, Rng1U64 range, U64 *count_out)
+{
+  U64 *result = 0;
+  *count_out = 0;
+
+  if (is_pe32) {
+    U32 *src = (U32 *)(raw_data.str + range.min);
+    U32 *opl = (U32 *)(raw_data.str + AlignDownPow2(range.max, sizeof(*opl)));
+
+    // count items
+    U32 *ptr;
+    for (ptr = src; ptr < opl && *ptr != 0; ++ptr);
+    
+    // push output array
+    *count_out = (U64)(ptr - src);
+    result     = push_array(arena, U64, *count_out);
+
+    // convert & copy
+    for (U64 i = 0; i < *count_out; ++i) {
+      result[i] = (U64)src[i];
+    }
+  } else {
+    U64 *src = (U64 *)(raw_data.str + range.min);
+    U64 *opl = (U64 *)(raw_data.str + AlignDownPow2(range.max, sizeof(*opl)));
+
+    // count items
+    U64 *ptr;
+    for (ptr = src; ptr < opl && *ptr != 0; ++ptr);
+
+    // push output array
+    *count_out = (U64)(ptr - src);
+    result     = push_array(arena, U64, *count_out);
+
+    // copy
+    MemoryCopyTyped(result, src, *count_out);
+  }
+
+  return result;
+}
+
+internal PE_ParsedStaticImportTable
+pe_static_imports_from_data(Arena              *arena,
+                            B32                 is_pe32,
+                            U64                 section_count,
+                            COFF_SectionHeader *sections,
+                            String8             raw_data,
+                            Rng1U64             dir_file_range)
+{
+  // count imports
+  U64 max_dll_count = dim_1u64(dir_file_range) / sizeof (PE_ImportEntry);
+  U64 dll_count     = max_dll_count;
+  for (U64 i = 0; i < max_dll_count; ++i) {
+    PE_ImportEntry *imp = str8_deserial_get_raw_ptr(raw_data, dir_file_range.min+(i*sizeof(*imp)), sizeof(*imp));
+    if (memory_is_zero(imp, sizeof(*imp))) {
+      dll_count = i;
+      break;
+    }
+  }
+
+  PE_ParsedStaticDLLImport *dlls = push_array(arena, PE_ParsedStaticDLLImport, dll_count);
+
+  for (U64 dll_idx = 0; dll_idx < dll_count; ++dll_idx) {
+    PE_ImportEntry *raw_dll = str8_deserial_get_raw_ptr(raw_data, dir_file_range.min+(dll_idx*sizeof(*raw_dll)), sizeof(*raw_dll));
+
+    // get name
+    U64     name_off = coff_foff_from_voff(sections, section_count, raw_dll->name_voff);
+    String8 name     = str8_zero();
+    str8_deserial_read_cstr(raw_data, name_off, &name);
+
+    U64              import_count = 0;
+    PE_ParsedImport *imports      = pe_parsed_imports_from_data(arena,
+                                                                is_pe32,
+                                                                section_count,
+                                                                sections,
+                                                                raw_data,
+                                                                raw_dll->lookup_table_voff,
+                                                                &import_count);
+
+    PE_ParsedStaticDLLImport *dll  = dlls+dll_idx;
+    dll->name                      = name;
+    dll->import_address_table_voff = raw_dll->import_addr_table_voff;
+    dll->import_name_table_voff    = raw_dll->lookup_table_voff;
+    dll->time_stamp                = raw_dll->time_stamp;
+    dll->forwarder_chain           = raw_dll->forwarder_chain;
+    dll->import_count              = import_count;
+    dll->imports                   = imports;
+  }
+
+  PE_ParsedStaticImportTable imptab = {0};
+  imptab.count                      = dll_count;
+  imptab.v                          = dlls;
+
+  return imptab;
+}
+
+internal PE_ParsedDelayImportTable
+pe_delay_imports_from_data(Arena              *arena,
+                           B32                 is_pe32,
+                           U64                 section_count,
+                           COFF_SectionHeader *sections,
+                           String8             raw_data,
+                           Rng1U64             dir_file_range)
+{
+  // count imports
+  U64 max_dll_count = dim_1u64(dir_file_range) / sizeof(PE_DelayedImportEntry);
+  U64 dll_count     = 0;
+  for (; dll_count < max_dll_count; ++dll_count) {
+    PE_DelayedImportEntry *raw_dll = str8_deserial_get_raw_ptr(raw_data, dir_file_range.min+(dll_count*sizeof(*raw_dll)), sizeof(*raw_dll));
+    if (memory_is_zero(raw_dll, sizeof(*raw_dll))) {
+      break;
+    }
+  }
+
+  // parse dll imports
+  PE_ParsedDelayDLLImport *dlls = push_array(arena, PE_ParsedDelayDLLImport, dll_count);
+  for (U64 dll_idx = 0; dll_idx < dll_count; ++dll_idx) {
+    PE_DelayedImportEntry *raw_dll = str8_deserial_get_raw_ptr(raw_data, dir_file_range.min+(dll_idx*sizeof(*raw_dll)), sizeof(*raw_dll));
+
+    U64     name_off = coff_foff_from_voff(sections, section_count, raw_dll->name_voff);
+    String8 name     = str8_zero();
+    str8_deserial_read_cstr(raw_data, name_off, &name);
+
+    // parse import table
+    U64              import_count = 0;
+    PE_ParsedImport *imports      = pe_parsed_imports_from_data(arena,
+                                                                is_pe32,
+                                                                section_count,
+                                                                sections,
+                                                                raw_data,
+                                                                raw_dll->name_table_voff,
+                                                                &import_count);
+
+    // parse bound table
+    U64     bound_table_foff  = coff_foff_from_voff(sections, section_count, raw_dll->bound_table_voff);
+    Rng1U64 bound_table_range = rng_1u64(bound_table_foff, raw_data.size);
+    U64     bound_table_count;
+    U64 *   bound_table       = pe_array_from_null_term_addr(arena, is_pe32, raw_data, bound_table_range, &bound_table_count);
+
+    // parse unload table
+    U64     unload_table_foff  = coff_foff_from_voff(sections, section_count, raw_dll->unload_table_voff);
+    Rng1U64 unload_table_range = rng_1u64(unload_table_foff, raw_data.size);
+    U64     unload_table_count;
+    U64 *   unload_table       = pe_array_from_null_term_addr(arena, is_pe32, raw_data, unload_table_range, &unload_table_count);
+
+    // fill out DLL
+    PE_ParsedDelayDLLImport *dll = dlls+dll_idx;
+    dll->attributes              = raw_dll->attributes;
+    dll->name                    = name;
+    dll->module_handle_voff      = raw_dll->module_handle_voff;
+    dll->iat_voff                = raw_dll->iat_voff;
+    dll->name_table_voff         = raw_dll->name_table_voff;
+    dll->bound_table_voff        = raw_dll->bound_table_voff;
+    dll->unload_table_voff       = raw_dll->unload_table_voff;
+    dll->time_stamp              = raw_dll->time_stamp;
+    dll->bound_table_count       = bound_table_count;
+    dll->bound_table             = bound_table;
+    dll->unload_table_count      = unload_table_count;
+    dll->unload_table            = unload_table;
+    dll->import_count            = import_count;
+    dll->imports                 = imports;
+  }
+
+  // fill out result
+  PE_ParsedDelayImportTable imptab = {0};
+  imptab.count                     = dll_count;
+  imptab.v                         = dlls;
+
+  return imptab;
+}
+
+internal PE_ParsedExportTable
+pe_exports_from_data(Arena *arena, U64 section_count, COFF_SectionHeader *sections, String8 raw_data, Rng1U64 dir_file_range, Rng1U64 dir_virt_range)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+
+  String8 raw_dir = str8_substr(raw_data, dir_file_range);
+
+  PE_ExportTableHeader *header = str8_deserial_get_raw_ptr(raw_dir, 0, sizeof(*header));
+
+  U64 name_table_off    = coff_foff_from_voff(sections, section_count, header->name_pointer_table_voff);
+  U64 export_table_off  = coff_foff_from_voff(sections, section_count, header->export_address_table_voff);
+  U64 ordinal_table_off = coff_foff_from_voff(sections, section_count, header->ordinal_table_voff);
+
+  U32 *name_table    = str8_deserial_get_raw_ptr(raw_data, name_table_off, sizeof(*name_table)*header->name_pointer_table_count);
+  U32 *export_table  = str8_deserial_get_raw_ptr(raw_data, export_table_off, sizeof(*export_table)*header->export_address_table_count);
+  U16 *ordinal_table = str8_deserial_get_raw_ptr(raw_data, ordinal_table_off, sizeof(*ordinal_table)*header->name_pointer_table_count);
+
+  // Scan export address table to get accruate count of ordinals. 
+  // We can't rely on "name_pointer_table_count" becuase it is possible
+  // to define an export without a name through NONAME attribute in DEF file
+  U64 ordinal_count = 0;
+  for (U64 voff_idx = 0; voff_idx < header->export_address_table_count; ++voff_idx) {
+    if (export_table[voff_idx] != 0) {
+      ++ordinal_count;
+    }
+  }
+
+  U64  ordinal_max     = header->export_address_table_count;
+  B32 *is_ordinal_used = push_array(scratch.arena, B32, ordinal_max);
+
+  PE_ParsedExport *exports  = push_array(arena, PE_ParsedExport, ordinal_count);
+  PE_ParsedExport *curr_exp = exports;
+
+  // parse exports with name
+  for (U64 i = 0; i < header->name_pointer_table_count; ++i) {
+    // get name
+    U32     name_voff = name_table[i];
+    U64     name_foff = coff_foff_from_voff(sections, section_count, name_voff);
+    String8 name      = str8_cstring_capped(raw_data.str+name_foff, raw_data.str+raw_data.size);
+
+    // get ordinal
+    U16 ordinal_nb = ordinal_table[i];
+
+    // mark ordinal
+    Assert(ordinal_nb < ordinal_max);
+    is_ordinal_used[ordinal_nb] = 1;
+
+    // get voff
+    U32 export_voff = 0;
+    if (ordinal_nb < header->export_address_table_count) {
+      export_voff = export_table[ordinal_nb];
+    }
+
+    // make ordinal
+    U16 ordinal = header->ordinal_base + ordinal_nb;
+
+    String8 forwarder = str8_zero();
+    {
+      B32 is_forwarder = dir_virt_range.min <= export_voff && export_voff < dir_virt_range.max;
+      if (is_forwarder) {
+        U64 fwd_name_off = coff_foff_from_voff(sections, section_count, name_voff);
+        str8_deserial_read_cstr(raw_data, fwd_name_off, &forwarder);
+      }
+    }
+
+    curr_exp->forwarder = forwarder;
+    curr_exp->name      = name;
+    curr_exp->voff      = export_voff;
+    curr_exp->ordinal   = ordinal;
+    ++curr_exp;
+  }
+
+  // parse exports with ordinal
+  for (U64 ordinal_nb = 0; ordinal_nb < header->export_address_table_count; ++ordinal_nb) {
+    U32 voff            = export_table[ordinal_nb];
+    B32 is_voff_taken   = (voff != 0);
+    B32 is_ordinal_free = !is_ordinal_used[ordinal_nb];
+    if (is_voff_taken && is_ordinal_free) {
+      curr_exp->name      = str8_zero();
+      curr_exp->voff      = voff;
+      curr_exp->ordinal   = header->ordinal_base;
+      ++curr_exp;
+    }
+  }
+
+  // fill out result
+  PE_ParsedExportTable exptab = {0};
+  exptab.flags          = header->flags;
+  exptab.time_stamp     = header->time_stamp;
+  exptab.major_ver      = header->major_ver;
+  exptab.minor_ver      = header->minor_ver;
+  exptab.ordinal_base   = header->ordinal_base;
+  exptab.export_count   = ordinal_count;
+  exptab.exports        = exports;
+
+  scratch_end(scratch);
+  return exptab;
+}
+
+
+internal PE_ParsedTLS
+pe_tls_from_data(Arena              *arena,
+                 COFF_MachineType    machine,
+                 U64                 image_base,
+                 U64                 section_count,
+                 COFF_SectionHeader *sections,
+                 String8             raw_data,
+                 Rng1U64             tls_frange)
+{
+  String8 raw_tls = str8_substr(raw_data, tls_frange);
+
+  PE_TLSHeader64  header64       = {0};
+  U64             callback_count = 0;
+  U64            *callback_addrs = 0;
+
+  switch (machine) {
+    case COFF_MachineType_UNKNOWN: break;
+    case COFF_MachineType_X86: {
+      PE_TLSHeader32 header32 = {0};
+      str8_deserial_read_struct(raw_tls, 0, &header32);
+
+      header64.raw_data_start    = header32.raw_data_start;
+      header64.raw_data_end      = header32.raw_data_end;
+      header64.index_address     = header32.index_address;
+      header64.callbacks_address = header32.callbacks_address;
+      header64.zero_fill_size    = header32.zero_fill_size;
+      header64.characteristics   = header32.characteristics;
+
+      U64 callbacks_voff = header32.callbacks_address - image_base;
+      U64 callbacks_foff = coff_foff_from_voff(sections, section_count, callbacks_voff);
+
+      U32 *src = (U32 *)(raw_data.str + callbacks_foff);
+      U32 *opl = (U32 *)(raw_data.str + raw_data.size);
+      U32 *ptr = src;
+      for (; ptr < opl && *ptr != 0; ++ptr);
+
+      callback_count = (U64)(ptr-src);
+      callback_addrs = push_array(arena, U64, callback_count);
+      for (U64 i = 0; i < callback_count; ++i) {
+        callback_addrs[i] = (U64)src[i];
+      }
+    } break;
+    case COFF_MachineType_X64: {
+      str8_deserial_read_struct(raw_tls, 0, &header64);
+
+      U64 callbacks_voff = header64.callbacks_address - image_base;
+      U64 callbacks_foff = coff_foff_from_voff(sections, section_count, callbacks_voff);
+
+      U64 *src = (U64 *)(raw_data.str + callbacks_foff);
+      U64 *opl = (U64 *)(raw_data.str + raw_data.size);
+      U64 *ptr = src;
+      for (; ptr < opl && *ptr != 0; ++ptr);
+
+      callback_count = (U64)(ptr-src);
+      callback_addrs = push_array(arena, U64, callback_count);
+      MemoryCopyTyped(callback_addrs, src, callback_count);
+    } break;
+    default: NotImplemented;
+  }
+
+  PE_ParsedTLS result   = {0};
+  result.header         = header64;
+  result.callback_count = callback_count;
+  result.callback_addrs = callback_addrs;
+
+  return result;
 }
 
 ////////////////////////////////
