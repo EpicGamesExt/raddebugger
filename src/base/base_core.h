@@ -510,6 +510,34 @@ union Guid
 StaticAssert(sizeof(Guid) == 16, g_guid_size_check);
 
 ////////////////////////////////
+//~ Arrays
+
+typedef struct U16Array U16Array;
+struct U16Array
+{
+  U64  count;
+  U16 *v;
+};
+typedef struct U32Array U32Array;
+struct U32Array
+{
+  U64  count;
+  U32 *v;
+};
+typedef struct U64Array U64Array;
+struct U64Array
+{
+  U64  count;
+  U64 *v;
+};
+typedef struct U128Array U128Array;
+struct U128Array
+{
+  U64   count;
+  U128 *v;
+};
+
+////////////////////////////////
 //~ NOTE(allen): Constants
 
 global U32 sign32     = 0x80000000;
