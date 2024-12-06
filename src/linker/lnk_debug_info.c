@@ -4704,7 +4704,7 @@ THREAD_POOL_TASK_FUNC(lnk_convert_symbols_to_rdi_task)
       scope->container_proc = scope_stack->proc;
       scope->parent         = scope_stack->scope;
       SLLQueuePush_N(scope_stack->scope->first_child, scope_stack->scope->last_child, scope, next_sibling);
-      rng_1u64_list_push(arena, &scope->ranges, virt_range);
+      rng1u64_list_push(arena, &scope->ranges, virt_range);
 
 #if 0
       if (scope->parent) {
@@ -4753,7 +4753,7 @@ THREAD_POOL_TASK_FUNC(lnk_convert_symbols_to_rdi_task)
         }
 
         Rng1U64List ranges = {0};
-        rng_1u64_list_push(arena, &ranges, rng_1u64(data_voff, data_voff + data_size));
+        rng1u64_list_push(arena, &ranges, rng_1u64(data_voff, data_voff + data_size));
 
         RDIB_Location location = rdib_make_location_addr_byte_stream(ranges, bytecode);
         rdib_location_list_push(arena, &locations, location);
@@ -4787,7 +4787,7 @@ THREAD_POOL_TASK_FUNC(lnk_convert_symbols_to_rdi_task)
         rdib_bytecode_push_op(arena, &bytecode, RDI_EvalOp_TLSOff, thread32->tls_off);
           
         Rng1U64List ranges = {0};
-        rng_1u64_list_push(arena, &ranges, rng_1u64(0, max_U64));
+        rng1u64_list_push(arena, &ranges, rng_1u64(0, max_U64));
 
         RDIB_Location location = rdib_make_location_addr_byte_stream(ranges, bytecode);
         rdib_location_list_push(arena, &locations, location);
@@ -4868,7 +4868,7 @@ THREAD_POOL_TASK_FUNC(lnk_convert_symbols_to_rdi_task)
       if (scope_stack->scope != 0) {
         SLLQueuePush_N(scope_stack->scope->first_child, scope_stack->scope->last_child, root_scope, next_sibling);
       }
-      rng_1u64_list_push(arena, &root_scope->ranges, virt_range);
+      rng1u64_list_push(arena, &root_scope->ranges, virt_range);
 
       // fill out procedure
       proc->link_flags     = symbol.kind == CV_SymKind_GPROC32 ? RDI_LinkFlag_External : 0;
@@ -4951,7 +4951,7 @@ THREAD_POOL_TASK_FUNC(lnk_convert_symbols_to_rdi_task)
       if (scope_stack->scope != 0) {
         SLLQueuePush_N(scope_stack->scope->first_child, scope_stack->scope->last_child, root_scope, next_sibling);
       }
-      rng_1u64_list_push(arena, &root_scope->ranges, virt_range);
+      rng1u64_list_push(arena, &root_scope->ranges, virt_range);
 
       // fill out procedure
       thunk->name  = name;

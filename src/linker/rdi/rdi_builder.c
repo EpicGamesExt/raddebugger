@@ -4985,11 +4985,11 @@ rdib_init_input(Arena *arena)
     null_unit->line_table       = null_line_table;
 
     // Scope
-    rng_1u64_list_push(arena, &null_scope->ranges, rng_1u64(0,max_U32));
+    rng1u64_list_push(arena, &null_scope->ranges, rng_1u64(0,max_U32));
 
     // Location
     RDIB_Location null_loc = {0};
-    rng_1u64_list_push(arena, &null_loc.ranges, rng_1u64(0,0));
+    rng1u64_list_push(arena, &null_loc.ranges, rng_1u64(0,0));
     RDIB_LocationList null_loc_list = {0};
     rdib_location_list_push(arena, &null_loc_list, null_loc);
 

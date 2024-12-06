@@ -592,6 +592,30 @@ u32_from_rgba(Vec4F32 rgba)
 //~ rjf: List Type Functions
 
 internal void
+rng1u64_list_push(Arena *arena, Rng1U64List *list, Rng1U64 rng)
+{
+  Rng1U64Node *n = push_array(arena, Rng1U64Node, 1);
+  MemoryCopyStruct(&n->v, &rng);
+  SLLQueuePush(list->first, list->last, n);
+  list->count += 1;
+}
+
+internal Rng1U64Array
+rng1u64_array_from_list(Arena *arena, Rng1U64List *list)
+{
+  Rng1U64Array arr = {0};
+  arr.count        = list->count;
+  arr.v            = push_array_no_zero(arena, Rng1U64, arr.count);
+  U64 idx = 0;
+  for(Rng1U64Node *n = list->first; n != 0; n = n->next)
+  {
+    arr.v[idx] = n->v;
+    idx += 1;
+  }
+  return arr;
+}
+
+internal void
 rng1s64_list_push(Arena *arena, Rng1S64List *list, Rng1S64 rng)
 {
   Rng1S64Node *n = push_array(arena, Rng1S64Node, 1);

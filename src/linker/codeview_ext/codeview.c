@@ -2127,7 +2127,7 @@ cv_c13_parse_inline_binary_annots(Arena                    *arena,
         code_ranges.last->v.max = parent_voff + code_offset_hi;
       } else {
         // append range
-        rng_1u64_list_push(arena, &code_ranges, rng_1u64(parent_voff + code_offset_lo, parent_voff + code_offset_hi));
+        rng1u64_list_push(arena, &code_ranges, rng_1u64(parent_voff + code_offset_lo, parent_voff + code_offset_hi));
 
         // update last code range in file
         if (file_last) {
@@ -2226,13 +2226,13 @@ cv_make_defined_range_list_from_gaps(Arena *arena, Rng1U64 defrange, CV_LvarAddr
 
   if (gap_count == 0) {
     // no gaps, push whole range
-    rng_1u64_list_push(arena, &result, defrange);
+    rng1u64_list_push(arena, &result, defrange);
   } else {
     U64 cursor = defrange.min;
     for (U64 gap_idx = 0; gap_idx < gap_count; ++gap_idx) {
       // make range
       Rng1U64 range = rng_1u64(cursor, cursor + gaps[gap_idx].off);
-      rng_1u64_list_push(arena, &result, range);
+      rng1u64_list_push(arena, &result, range);
 
       // advance
       cursor = defrange.min + gaps[gap_idx].off + gaps[gap_idx].len;
@@ -2245,7 +2245,7 @@ cv_make_defined_range_list_from_gaps(Arena *arena, Rng1U64 defrange, CV_LvarAddr
       U64             last_range_byte_size = dim_1u64(defrange) - (last_gap.off + last_gap.len);
       if (last_range_byte_size) {
         Rng1U64 last_range = rng_1u64(defrange.min + last_gap.off + last_gap.len, defrange.max);
-        rng_1u64_list_push(arena, &result, last_range);
+        rng1u64_list_push(arena, &result, last_range);
       }
     }
   }
