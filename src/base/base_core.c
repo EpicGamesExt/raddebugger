@@ -526,7 +526,7 @@ date_time_from_unix_time(U64 unix_time)
 
   for(;;)
   {
-    for(date.month = 0; date.month <= 12; ++date.month)
+    for(date.month = 0; date.month < 12; ++date.month)
     {
       U64 c = 0;
       switch(date.month)
