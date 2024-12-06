@@ -4231,33 +4231,14 @@ rd_window_frame(RD_Window *ws)
               rd_cmd(RD_CmdKind_ToggleWatchExpression, .string = expr);
               ui_ctx_menu_close();
             }
-            if(regs->file_path.size == 0 && range.min.line == range.max.line && ui_clicked(rd_icon_buttonf(RD_IconKind_FileOutline, 0, "Go To Source")))
+            if(regs->file_path.size == 0 && range.min.line == range.max.line && ui_clicked(rd_cmd_spec_button(rd_cmd_kind_info_table[RD_CmdKind_GoToSource].string)))
             {
-              if(lines.first != 0)
-              {
-                rd_cmd(RD_CmdKind_FindCodeLocation,
-                       .file_path = lines.first->v.file_path,
-                       .cursor    = lines.first->v.pt,
-                       .vaddr     = 0,
-                       .process   = ctrl_handle_zero());
-              }
+              rd_cmd(RD_CmdKind_GoToSource, .lines = lines);
               ui_ctx_menu_close();
             }
-            if(regs->file_path.size != 0 && range.min.line == range.max.line && ui_clicked(rd_icon_buttonf(RD_IconKind_FileOutline, 0, "Go To Disassembly")))
+            if(regs->file_path.size != 0 && range.min.line == range.max.line && ui_clicked(rd_cmd_spec_button(rd_cmd_kind_info_table[RD_CmdKind_GoToDisassembly].string)))
             {
-              CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->thread);
-              U64 vaddr = 0;
-              for(D_LineNode *n = lines.first; n != 0; n = n->next)
-              {
-                CTRL_EntityList modules = ctrl_modules_from_dbgi_key(scratch.arena, d_state->ctrl_entity_store, &n->v.dbgi_key);
-                CTRL_Entity *module = ctrl_module_from_thread_candidates(d_state->ctrl_entity_store, thread, &modules);
-                if(module != &ctrl_entity_nil)
-                {
-                  vaddr = ctrl_vaddr_from_voff(module, n->v.voff_range.min);
-                  break;
-                }
-              }
-              rd_cmd(RD_CmdKind_FindCodeLocation, .vaddr = vaddr);
+              rd_cmd(RD_CmdKind_GoToDisassembly, .lines = lines);
               ui_ctx_menu_close();
             }
             hs_scope_close(hs_scope);
@@ -14344,7 +14325,7 @@ rd_frame(void)
                 break;
               }
             }
-            rd_cmd(RD_CmdKind_FindCodeLocation, .vaddr = vaddr);
+            rd_cmd(RD_CmdKind_FindCodeLocation, .process = ctrl_entity_ancestor_from_kind(thread, CTRL_EntityKind_Process)->handle, .vaddr = vaddr, .prefer_disasm = 1);
           }break;
           case RD_CmdKind_GoToSource:
           {
@@ -14354,7 +14335,8 @@ rd_frame(void)
                      .file_path = rd_regs()->lines.first->v.file_path,
                      .cursor    = rd_regs()->lines.first->v.pt,
                      .vaddr     = 0,
-                     .process   = ctrl_handle_zero());
+                     .process   = ctrl_handle_zero(),
+                     .prefer_disasm = 0);
             }
           }break;
           
@@ -15075,8 +15057,7 @@ rd_frame(void)
                   if(rd_view_is_project_filtered(view)) { continue; }
                   RD_ViewRuleKind view_kind = rd_view_rule_kind_from_string(view->spec->string);
                   B32 view_is_selected = (view == panel_selected_tab);
-                  if(view_kind == RD_ViewRuleKind_Disasm && view->query_string_size == 0 && panel_area > best_panel_area &&
-                     (view_is_selected || require_disasm_snap))
+                  if(view_kind == RD_ViewRuleKind_Disasm && view->query_string_size == 0 && panel_area > best_panel_area)
                   {
                     panel_w_disasm = panel;
                     view_w_disasm = view;
@@ -15143,19 +15124,50 @@ rd_frame(void)
               }
             }
             
-            // rjf: given the above, find source code location.
-            B32 disasm_view_prioritized = 0;
-            RD_Panel *panel_used_for_src_code = &rd_nil_panel;
-            if(file_path.size != 0)
+            // rjf: choose panel for source code
+            RD_Panel *src_code_dst_panel = &rd_nil_panel;
             {
-              // rjf: determine which panel we will use to find the code loc
-              RD_Panel *dst_panel = &rd_nil_panel;
+              if(rd_panel_is_nil(src_code_dst_panel)) { src_code_dst_panel = panel_w_this_src_code; }
+              if(rd_panel_is_nil(src_code_dst_panel)) { src_code_dst_panel = panel_w_any_src_code; }
+              if(rd_panel_is_nil(src_code_dst_panel)) { src_code_dst_panel = biggest_empty_panel; }
+              if(rd_panel_is_nil(src_code_dst_panel)) { src_code_dst_panel = biggest_panel; }
+            }
+            
+            // rjf: choose panel for disassembly
+            RD_Panel *disasm_dst_panel = &rd_nil_panel;
+            {
+              if(rd_panel_is_nil(disasm_dst_panel)) { disasm_dst_panel = panel_w_disasm; }
+              if(rd_panel_is_nil(disasm_dst_panel)) { disasm_dst_panel = biggest_empty_panel; }
+              if(rd_panel_is_nil(disasm_dst_panel)) { disasm_dst_panel = biggest_panel; }
+            }
+            
+            // rjf: if disasm and source code match:
+            //        if disasm preferred, cancel source
+            //        if source preferred, cancel disasm
+            if(disasm_dst_panel == src_code_dst_panel)
+            {
+              if(rd_regs()->prefer_disasm)
               {
-                if(rd_panel_is_nil(dst_panel)) { dst_panel = panel_w_this_src_code; }
-                if(rd_panel_is_nil(dst_panel)) { dst_panel = panel_w_any_src_code; }
-                if(rd_panel_is_nil(dst_panel)) { dst_panel = biggest_empty_panel; }
-                if(rd_panel_is_nil(dst_panel)) { dst_panel = biggest_panel; }
+                src_code_dst_panel = &rd_nil_panel;
               }
+              else
+              {
+                disasm_dst_panel = &rd_nil_panel;
+              }
+            }
+            
+            // rjf: if disasm is not preferred, and we have no disassembly view
+            // open at all, cancel disasm, so that it doesn't open if the user
+            // doesn't want it.
+            if(!rd_regs()->prefer_disasm && panel_w_disasm == &rd_nil_panel)
+            {
+              disasm_dst_panel = &rd_nil_panel;
+            }
+            
+            // rjf: given the above, find source code location.
+            if(file_path.size != 0 && src_code_dst_panel != &rd_nil_panel)
+            {
+              RD_Panel *dst_panel = src_code_dst_panel;
               
               // rjf: construct new view if needed
               RD_View *dst_view = view_w_this_src_code;
@@ -15178,7 +15190,6 @@ rd_frame(void)
               // rjf: move cursor & snap-to-cursor
               if(!rd_panel_is_nil(dst_panel))
               {
-                disasm_view_prioritized = (rd_selected_tab_from_panel(dst_panel) == view_w_disasm);
                 dst_panel->selected_tab_view = rd_handle_from_view(dst_view);
                 rd_cmd(RD_CmdKind_GoToLine,
                        .panel = rd_handle_from_panel(dst_panel),
@@ -15187,7 +15198,6 @@ rd_frame(void)
                 rd_cmd(cursor_snap_kind,
                        .panel = rd_handle_from_panel(dst_panel),
                        .view = rd_handle_from_view(dst_view));
-                panel_used_for_src_code = dst_panel;
               }
               
               // rjf: record
@@ -15195,21 +15205,9 @@ rd_frame(void)
             }
             
             // rjf: given the above, find disassembly location.
-            if(process != &ctrl_entity_nil && vaddr != 0)
+            if(process != &ctrl_entity_nil && vaddr != 0 && disasm_dst_panel != &rd_nil_panel)
             {
-              // rjf: determine which panel we will use to find the disasm loc -
-              // we *cannot* use the same panel we used for source code, if any.
-              RD_Panel *dst_panel = &rd_nil_panel;
-              {
-                if(rd_panel_is_nil(dst_panel)) { dst_panel = panel_w_disasm; }
-                if(rd_panel_is_nil(panel_used_for_src_code) && rd_panel_is_nil(dst_panel)) { dst_panel = biggest_empty_panel; }
-                if(rd_panel_is_nil(panel_used_for_src_code) && rd_panel_is_nil(dst_panel)) { dst_panel = biggest_panel; }
-                if(dst_panel == panel_used_for_src_code &&
-                   !disasm_view_prioritized)
-                {
-                  dst_panel = &rd_nil_panel;
-                }
-              }
+              RD_Panel *dst_panel = disasm_dst_panel;
               
               // rjf: construct new view if needed
               RD_View *dst_view = view_w_disasm;
