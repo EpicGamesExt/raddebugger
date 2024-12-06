@@ -821,8 +821,9 @@ internal Compiler compiler_from_context(void);
 //~ rjf: Time Functions
 
 internal DenseTime dense_time_from_date_time(DateTime date_time);
-internal DateTime date_time_from_dense_time(DenseTime time);
-internal DateTime date_time_from_micro_seconds(U64 time);
+internal DateTime  date_time_from_dense_time(DenseTime time);
+internal DateTime  date_time_from_micro_seconds(U64 time);
+internal DateTime  date_time_from_unix_time(U64 unix_time);
 
 ////////////////////////////////
 //~ rjf: Non-Fancy Ring Buffer Reads/Writes
