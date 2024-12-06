@@ -236,9 +236,10 @@ internal String8 push_str8f(Arena *arena, char *fmt, ...);
 internal S64 sign_from_str8(String8 string, String8 *string_tail);
 internal B32 str8_is_integer(String8 string, U32 radix);
 
-internal U32 u32_from_str8(String8 string, U32 radix);
 internal U64 u64_from_str8(String8 string, U32 radix);
 internal S64 s64_from_str8(String8 string, U32 radix);
+internal U32 u32_from_str8(String8 string, U32 radix);
+internal S32 s32_from_str8(String8 string, U32 radix);
 internal B32 try_u64_from_str8_c_rules(String8 string, U64 *x);
 internal B32 try_s64_from_str8_c_rules(String8 string, S64 *x);
 
@@ -399,10 +400,11 @@ internal void    str8_serial_push_string(Arena *arena, String8List *srl, String8
 
 internal U64    str8_deserial_read(String8 string, U64 off, void *read_dst, U64 read_size, U64 granularity);
 internal U64    str8_deserial_find_first_match(String8 string, U64 off, U16 scan_val);
-internal void * str8_deserial_get_raw_ptr(String8 string, U64 off, U64 size);internal U64 str8_deserial_read_cstr(String8 string, U64 off, String8 *cstr_out);
+internal void * str8_deserial_get_raw_ptr(String8 string, U64 off, U64 size);
+internal U64    str8_deserial_read_cstr(String8 string, U64 off, String8 *cstr_out);
 internal U64    str8_deserial_read_windows_utf16_string16(String8 string, U64 off, String16 *str_out);
 internal U64    str8_deserial_read_block(String8 string, U64 off, U64 size, String8 *block_out);
 #define str8_deserial_read_array(string, off, ptr, count) str8_deserial_read((string), (off), (ptr), sizeof(*(ptr))*(count), sizeof(*(ptr)))
-#define str8_deserial_read_struct(string, off, ptr) str8_deserial_read((string), (off), (ptr), sizeof(*(ptr)), sizeof(*(ptr)))
+#define str8_deserial_read_struct(string, off, ptr)       str8_deserial_read_array(string, off, ptr, 1)
 
 #endif // BASE_STRINGS_H
