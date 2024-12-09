@@ -809,6 +809,8 @@ pe_base_reloc_block_list_from_data(Arena *arena, String8 raw_base_relocs)
     block->entries           = push_array(arena, U16, block->entry_count);
     U64 entry_read_size = str8_deserial_read_array(raw_base_relocs, off, &block->entries[0], block->entry_count);
     Assert(entry_read_size == sizeof(block->entries[0]) * block->entry_count);
+
+    off += entry_read_size;
   }
   return list;
 }
