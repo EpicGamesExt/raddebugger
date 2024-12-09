@@ -393,9 +393,7 @@ coff_format_relocs(Arena              *arena,
     }
   }
 
-  if (print_header) {
-    coff_printf("# No relocations");
-  } else {
+  if (!print_header) {
     coff_unindent();
   }
   coff_newline();
@@ -2064,6 +2062,104 @@ pe_format_exceptions(Arena              *arena,
 }
 
 internal void
+pe_format_base_relocs(Arena              *arena,
+                      String8List        *out,
+                      String8             indent,
+                      COFF_MachineType    machine,
+                      U64                 image_base,
+                      U64                 section_count,
+                      COFF_SectionHeader *sections,
+                      String8             raw_data,
+                      Rng1U64             base_reloc_franges)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+
+  String8               raw_base_relocs = str8_substr(raw_data, base_reloc_franges);
+  PE_BaseRelocBlockList base_relocs     = pe_base_reloc_block_list_from_data(scratch.arena, raw_base_relocs);
+
+  if (base_relocs.count) {
+    coff_printf("# Base Relocs");
+    coff_indent();
+
+    U32 addr_size = 0;
+    switch (machine) {
+      case COFF_MachineType_UNKNOWN: break;
+      case COFF_MachineType_X86:     addr_size = 4; break;
+      case COFF_MachineType_X64:     addr_size = 8; break;
+      default: NotImplemented;
+    }
+   
+    // convert blocks to string list
+    U64 iblock = 0;
+    for (PE_BaseRelocBlockNode *node = base_relocs.first; node != 0; node = node->next) {
+      PE_BaseRelocBlock *block = &node->v;
+      coff_printf("Block No. %u, Virt Off %#x, Reloc Count %u", iblock++, block->page_virt_off, block->entry_count);
+      coff_indent();
+      for (U64 ientry = 0; ientry < block->entry_count; ++ientry) {
+        PE_BaseRelocKind type   = PE_BaseRelocKindFromEntry(block->entries[ientry]);
+        U16              offset = PE_BaseRelocOffsetFromEntry(block->entries[ientry]);
+        
+        U64 apply_to_voff = block->page_virt_off + offset;
+        U64 apply_to_foff = coff_foff_from_voff(sections, section_count, apply_to_voff);
+        U64 apply_to      = 0;
+        str8_deserial_read(raw_data, apply_to_foff, &apply_to, addr_size, 1);
+        U64 addr = image_base + apply_to;
+        
+        const char *type_str = "???";
+        switch (type) {
+          case PE_BaseRelocKind_ABSOLUTE: type_str = "ABS";     break;
+          case PE_BaseRelocKind_HIGH:     type_str = "HIGH";    break;
+          case PE_BaseRelocKind_LOW:      type_str = "LOW";     break;
+          case PE_BaseRelocKind_HIGHLOW:  type_str = "HIGHLOW"; break;
+          case PE_BaseRelocKind_HIGHADJ:  type_str = "HIGHADJ"; break;
+          case PE_BaseRelocKind_DIR64:    type_str = "DIR64";   break;
+          default: {
+            switch (machine) {
+              case COFF_MachineType_ARM:
+              case COFF_MachineType_ARM64:
+              case COFF_MachineType_ARMNT: {
+                switch (type) {
+                  case PE_BaseRelocKind_ARM_MOV32:   type_str = "ARM_MOV32";   break;
+                  case PE_BaseRelocKind_THUMB_MOV32: type_str = "THUMB_MOV32"; break;
+                  default: NotImplemented;
+                }
+              } break;
+              // TODO: mips, loong, risc-v
+            }
+          } break;
+        }
+        
+        if (type == PE_BaseRelocKind_ABSOLUTE) {
+          coff_printf("%-4x %-12s", offset, type_str);
+        } else {
+          coff_printf("%-4x %-12s %016llx", offset, type_str, apply_to);
+
+          // TODO
+          #if 0
+          U64 reloc_voff = apply_to - image_base;
+          SYMS_UnitID   uid = syms_group_uid_from_voff__accelerated(group, reloc_voff);
+          SYMS_SymbolID sid = syms_group_proc_sid_from_uid_voff__accelerated(group, uid, reloc_voff);
+          if (sid) {
+            SYMS_UnitAccel *unit = syms_group_unit_from_uid(group, uid);
+            SYMS_String8 name = syms_group_symbol_name_from_sid(arena, group, unit, sid);
+            syms_string_list_pushf__dev(arena, list, "  %-4X %-12s %016llX %.*s", offset, type_str, apply_to, syms_expand_string(name));
+          } else {
+            syms_string_list_pushf__dev(arena, list, "  %-4X %-12s %016llX", offset, type_str, apply_to);
+          }
+          #endif
+        }
+      }
+      coff_unindent();
+      coff_newline();
+    }
+
+    coff_unindent();
+  }
+
+  scratch_end(scratch);
+}
+
+internal void
 pe_format(Arena *arena, String8List *out, String8 indent, String8 raw_data, CoffdumpOption opts)
 {
   Temp scratch = scratch_begin(&arena, 1);
@@ -2208,7 +2304,7 @@ pe_format(Arena *arena, String8List *out, String8 indent, String8 raw_data, Coff
   }
 
   if (opts & CoffdumpOption_Relocs) {
-    NotImplemented;
+    pe_format_base_relocs(arena, out, indent, coff_header->machine, image_base, coff_header->section_count, sections, raw_data, dirs_file_ranges[PE_DataDirectoryIndex_BASE_RELOC]);
   }
 
   if (opts & CoffdumpOption_Debug) {
