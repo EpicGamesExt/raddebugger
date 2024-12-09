@@ -1051,7 +1051,7 @@ internal void *                pe_ptr_from_voff(String8 data, PE_BinInfo *bin, U
 internal U64                   pe_section_num_from_voff(String8 data, PE_BinInfo *bin, U64 voff);
 internal void *                pe_ptr_from_section_num(String8 data, PE_BinInfo *bin, U64 n);
 internal U64                   pe_foff_from_voff(String8 data, PE_BinInfo *bin, U64 voff);
-internal PE_BaseRelocBlockList pe_base_reloc_block_list_from_bin(Arena *arena, String8 data, PE_BinInfo *bin);
+internal PE_BaseRelocBlockList pe_base_reloc_block_list_from_data(Arena *arena, String8 raw_relocs);
 internal Rng1U64               pe_tls_rng_from_bin_base_vaddr(String8 data, PE_BinInfo *bin, U64 base_vaddr);
 internal String8Array          pe_get_entry_point_names(COFF_MachineType machine, PE_WindowsSubsystem subsystem, PE_ImageFileCharacteristics file_characteristics);
 

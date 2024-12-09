@@ -778,18 +778,16 @@ pe_foff_from_voff(String8 data, PE_BinInfo *bin, U64 voff)
 }
 
 internal PE_BaseRelocBlockList
-pe_base_reloc_block_list_from_bin(Arena *arena, String8 data, PE_BinInfo *bin)
+pe_base_reloc_block_list_from_data(Arena *arena, String8 raw_base_relocs)
 {
   PE_BaseRelocBlockList list = {0};
-  Rng1U64 base_reloc_range = bin->data_dir_franges[PE_DataDirectoryIndex_BASE_RELOC];
-  U64 range_dim = dim_1u64(base_reloc_range);
-  for(U64 off = base_reloc_range.min; off < range_dim;)
+  for(U64 off = 0; off < raw_base_relocs.size;)
   {
     // rjf: read next entry
     U32 page_virt_off = 0;
     U32 block_size = 0;
-    off += str8_deserial_read_struct(data, off, &page_virt_off);
-    off += str8_deserial_read_struct(data, off, &block_size);
+    off += str8_deserial_read_struct(raw_base_relocs, off, &page_virt_off);
+    off += str8_deserial_read_struct(raw_base_relocs, off, &block_size);
     
     // rjf: break on sentinel
     if(block_size == 0)
@@ -801,14 +799,16 @@ pe_base_reloc_block_list_from_bin(Arena *arena, String8 data, PE_BinInfo *bin)
     PE_BaseRelocBlockNode *node = push_array(arena, PE_BaseRelocBlockNode, 1);
     SLLQueuePush(list.first, list.last, node);
     list.count += 1;
+
+    U64 entries_size = block_size - (sizeof(block_size) + sizeof(page_virt_off));
     
     // rjf: fill block
     PE_BaseRelocBlock *block = &node->v;
-    U64 entries_size = block_size - (sizeof(block_size) + sizeof(page_virt_off));
-    block->page_virt_off = page_virt_off;
-    block->entry_count = entries_size / sizeof(U16);
-    block->entries = push_array(arena, U16, block->entry_count);
-    off += str8_deserial_read_array(data, off, &block->entries[0], entries_size);
+    block->page_virt_off     = page_virt_off;
+    block->entry_count       = entries_size / sizeof(U16);
+    block->entries           = push_array(arena, U16, block->entry_count);
+    U64 entry_read_size = str8_deserial_read_array(raw_base_relocs, off, &block->entries[0], block->entry_count);
+    Assert(entry_read_size == sizeof(block->entries[0]) * block->entry_count);
   }
   return list;
 }
@@ -822,7 +822,8 @@ pe_tls_rng_from_bin_base_vaddr(String8 data, PE_BinInfo *bin, U64 base_vaddr)
   {
     U64 addr_size = bit_size_from_arch(bin->arch)/8;
     Temp scratch = scratch_begin(0, 0);
-    PE_BaseRelocBlockList relocs = pe_base_reloc_block_list_from_bin(scratch.arena, data, bin);
+    String8 raw_relocs = str8_substr(data, bin->data_dir_franges[PE_DataDirectoryIndex_BASE_RELOC]);
+    PE_BaseRelocBlockList relocs = pe_base_reloc_block_list_from_data(scratch.arena, raw_relocs);
     for(PE_BaseRelocBlockNode *n = relocs.first; n != 0; n = n->next)
     {
       PE_BaseRelocBlock *block = &n->v;
