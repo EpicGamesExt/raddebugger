@@ -269,7 +269,7 @@ typedef struct LNK_Config
   U64                         pdb_page_size;
   U64                         worker_count;
   U64                         idle_worker_count;
-  U64                         function_pad_min;
+  U64                        *function_pad_min;
   U64                        *manifest_resource_id;
   B32                         no_default_libs;
   Version                     link_ver;
@@ -478,6 +478,7 @@ internal void lnk_error_cmd_switch_invalid_param(LNK_ErrorCode code, LNK_CmdSwit
 ////////////////////////////////
 // Getters
 
+internal U64     lnk_get_default_function_pad_min(COFF_MachineType machine);
 internal U64     lnk_get_base_addr(LNK_Config *config);
 internal Version lnk_get_default_subsystem_version(PE_WindowsSubsystem subsystem, COFF_MachineType machine);
 internal Version lnk_get_min_subsystem_version(PE_WindowsSubsystem subsystem, COFF_MachineType machine);

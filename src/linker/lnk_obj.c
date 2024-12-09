@@ -346,6 +346,14 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
     lnk_error(LNK_Error_UnsupportedMachine, "%S: %S machine is supported", input->path, coff_string_from_machine_type(coff_info.machine));
   }
 
+  // :function_pad_min
+  U64 function_pad_min;
+  if (task->function_pad_min) {
+    function_pad_min = *task->function_pad_min;
+  } else {
+    function_pad_min = lnk_get_default_function_pad_min(coff_info.machine);
+  }
+
   U64 chunk_count = 0;
   chunk_count += coff_info.section_count_no_null;
   chunk_count += 1; // :common_block
@@ -421,7 +429,7 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
 
   // convert from coff
   B32             is_big_obj     = coff_info.type == COFF_DataType_BIG_OBJ;
-  LNK_SymbolArray symbol_arr     = lnk_symbol_array_from_coff(arena, input->data, obj, cached_path, is_big_obj, task->function_pad_min, coff_info.string_table_off, coff_info.section_count_no_null, coff_sect_arr, coff_info.symbol_count, coff_symbols, chunk_ptr_arr, master_common_block);
+  LNK_SymbolArray symbol_arr     = lnk_symbol_array_from_coff(arena, input->data, obj, cached_path, is_big_obj, function_pad_min, coff_info.string_table_off, coff_info.section_count_no_null, coff_sect_arr, coff_info.symbol_count, coff_symbols, chunk_ptr_arr, master_common_block);
   LNK_SymbolList  symbol_list    = lnk_symbol_list_from_array(arena, symbol_arr);
   LNK_RelocList  *reloc_list_arr = lnk_reloc_list_array_from_coff(arena, coff_info.machine, input->data, coff_info.section_count_no_null, coff_sect_arr, chunk_ptr_arr, symbol_arr);
 
@@ -573,7 +581,13 @@ THREAD_POOL_TASK_FUNC(lnk_chunk_ref_assigner)
 }
 
 internal LNK_ObjNodeArray
-lnk_obj_list_push_parallel(TP_Context *tp, TP_Arena *arena, LNK_ObjList *obj_list, LNK_SectionTable *st, U64 function_pad_min, U64 input_count, LNK_InputObj **inputs)
+lnk_obj_list_push_parallel(TP_Context        *tp,
+                           TP_Arena          *arena,
+                           LNK_ObjList       *obj_list,
+                           LNK_SectionTable  *st,
+                           U64               *function_pad_min,
+                           U64                input_count,
+                           LNK_InputObj     **inputs)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(arena->v, arena->count);
