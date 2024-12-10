@@ -1067,10 +1067,10 @@ lnk_init_directives(Arena *arena, String8 obj_path, U64 chunk_count, String8 *se
   return directive_info;
 }
 
-internal COFF_FeatFlags
+internal MSCRT_FeatFlags
 lnk_obj_get_features(LNK_Obj *obj)
 {
-  COFF_FeatFlags result = 0;
+  MSCRT_FeatFlags result = 0;
   LNK_Symbol *sym = lnk_symbol_list_search(obj->symbol_list, str8_lit("@feat.00"), 0);
   if (sym) {
     Assert(LNK_Symbol_IsDefined(sym->type));

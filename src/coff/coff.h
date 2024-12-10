@@ -523,20 +523,6 @@ struct COFF_Reloc
 
 #pragma pack(pop)
 
-// feature flags in absolute symbol @feat.00
-enum
-{
-  COFF_FeatFlag_HAS_SAFE_SEH  = (1 << 0),  // /safeseh
-  COFF_FeatFlag_UNKNOWN_4     = (1 << 4),
-  COFF_FeatFlag_GUARD_STACK   = (1 << 8),  // /GS
-  COFF_FeatFlag_SDL           = (1 << 9),  // /sdl
-  COFF_FeatFlag_GUARD_CF      = (1 << 11), // /guard:cf
-  COFF_FeatFlag_GUARD_EH_CONT = (1 << 14), // /guard:ehcont
-  COFF_FeatFlag_NO_RTTI       = (1 << 17), // /GR-
-  COFF_FeatFlag_KERNEL        = (1 << 30), // /kernel
-};
-typedef U32 COFF_FeatFlags;
-
 ////////////////////////////////
 
 #define COFF_RES_ALIGN 4u

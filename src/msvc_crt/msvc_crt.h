@@ -6,14 +6,28 @@
 
 ////////////////////////////////
 
-typedef struct MSVCRT_VCFeatures
+// feature flags in absolute symbol @feat.00
+enum
+{
+  MSCRT_FeatFlag_HAS_SAFE_SEH  = (1 << 0),  // /safeseh
+  MSCRT_FeatFlag_UNKNOWN_4     = (1 << 4),
+  MSCRT_FeatFlag_GUARD_STACK   = (1 << 8),  // /GS
+  MSCRT_FeatFlag_SDL           = (1 << 9),  // /sdl
+  MSCRT_FeatFlag_GUARD_CF      = (1 << 11), // /guard:cf
+  MSCRT_FeatFlag_GUARD_EH_CONT = (1 << 14), // /guard:ehcont
+  MSCRT_FeatFlag_NO_RTTI       = (1 << 17), // /GR-
+  MSCRT_FeatFlag_KERNEL        = (1 << 30), // /kernel
+};
+typedef U32 MSCRT_FeatFlags;
+
+typedef struct MSCRT_VCFeatures
 {
   U32 pre_vcpp;
   U32 c_cpp;
   U32 gs;
   U32 sdl;
   U32 guard_n;
-} MSVCRT_VCFeatures;
+} MSCRT_VCFeatures;
 
 ////////////////////////////////
 // GS Handler

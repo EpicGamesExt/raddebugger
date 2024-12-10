@@ -1274,7 +1274,7 @@ pe_format_debug_directory(Arena *arena, String8List *out, String8 indent, String
         }
       } break;
       case PE_DebugDirectoryType_VC_FEATURE: {
-        MSVCRT_VCFeatures *feat = str8_deserial_get_raw_ptr(raw_entry, 0, sizeof(*feat));
+        MSCRT_VCFeatures *feat = str8_deserial_get_raw_ptr(raw_entry, 0, sizeof(*feat));
         if (feat) {
           coff_printf("Pre-VC++ 11.0: %u", feat->pre_vcpp);
           coff_printf("C/C++:         %u", feat->c_cpp);

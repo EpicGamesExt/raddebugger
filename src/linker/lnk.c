@@ -40,6 +40,7 @@
 #include "msf/msf.h"
 #include "msf/msf_parse.h"
 #include "pdb/pdb.h"
+#include "msvc_crt/msvc_crt.h"
 
 #include "base/base_inc.c"
 #include "os/os_inc.c"
@@ -49,6 +50,7 @@
 #include "codeview/codeview.c"
 #include "msf/msf_parse.c"
 #include "pdb/pdb.c"
+#include "msvc_crt/msvc_crt.c"
 
 #if defined(__clang__)
 # pragma clang diagnostic pop
@@ -717,7 +719,7 @@ lnk_make_res_obj(TP_Context       *tp,
   
   COFF_Symbol16 coff_feat00  = {0};
   MemoryCopyStr8(&coff_feat00.name, str8_lit("@feat.00"));
-  coff_feat00.value          = COFF_FeatFlag_HAS_SAFE_SEH|COFF_FeatFlag_UNKNOWN_4;
+  coff_feat00.value          = MSCRT_FeatFlag_HAS_SAFE_SEH|MSCRT_FeatFlag_UNKNOWN_4;
   coff_feat00.section_number = COFF_SYMBOL_ABS_SECTION_16;
   coff_feat00.storage_class  = COFF_SymStorageClass_STATIC;
   coff_symbol16_list_push(scratch.arena, &coff_symbol_list, coff_feat00);
@@ -1441,8 +1443,8 @@ lnk_build_guard_tables(TP_Context       *tp,
   // collect symbols from objs
   for (LNK_ObjNode *obj_node = obj_list.first; obj_node != NULL; obj_node = obj_node->next) {
     LNK_Obj *obj = &obj_node->data;
-    COFF_FeatFlags feat_flags = lnk_obj_get_features(obj);
-    B32 has_guard_flags = (feat_flags & COFF_FeatFlag_GUARD_CF) || (feat_flags & COFF_FeatFlag_GUARD_EH_CONT);
+    MSCRT_FeatFlags feat_flags = lnk_obj_get_features(obj);
+    B32 has_guard_flags = (feat_flags & MSCRT_FeatFlag_GUARD_CF) || (feat_flags & MSCRT_FeatFlag_GUARD_EH_CONT);
     if (has_guard_flags) {
       LNK_SymbolArray symbol_arr = lnk_symbol_array_from_list(scratch.arena, obj->symbol_list);
       if (guard_flags & LNK_Guard_Cf) {
