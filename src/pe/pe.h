@@ -204,7 +204,7 @@ enum
   PE_DebugDirectoryType_RESERVED10            = 10,
   PE_DebugDirectoryType_CLSID                 = 11,
   PE_DebugDirectoryType_VC_FEATURE            = 12,
-  PE_DebugDirectoryType_POGO                  = 13,
+  PE_DebugDirectoryType_COFF_GROUP            = 13,
   PE_DebugDirectoryType_ILTCG                 = 14,
   PE_DebugDirectoryType_MPX                   = 15,
   PE_DebugDirectoryType_REPRO                 = 16,

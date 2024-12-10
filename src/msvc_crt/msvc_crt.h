@@ -5,6 +5,17 @@
 #define MSVC_CRT
 
 ////////////////////////////////
+
+typedef struct MSVCRT_VCFeatures
+{
+  U32 pre_vcpp;
+  U32 c_cpp;
+  U32 gs;
+  U32 sdl;
+  U32 guard_n;
+} MSVCRT_VCFeatures;
+
+////////////////////////////////
 // GS Handler
 
 #define MSCRT_GSHandler_GetFlags(x)        (((x) & 0x00000007) >> 0)

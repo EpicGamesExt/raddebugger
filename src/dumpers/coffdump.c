@@ -53,50 +53,50 @@
 
 ////////////////////////////////
 
-typedef U64 CoffdumpOption;
-enum CoffdumpOptionEnum
+typedef U64 Coffdump_Option;
+enum Coffdump_OptionEnum
 {
-  CoffdumpOption_Help       = (1 << 0),
-  CoffdumpOption_Version    = (1 << 1),
-  CoffdumpOption_Headers    = (1 << 2),
-  CoffdumpOption_Sections   = (1 << 3),
-  CoffdumpOption_Debug      = (1 << 4),
-  CoffdumpOption_Imports    = (1 << 5),
-  CoffdumpOption_Exports    = (1 << 6),
-  CoffdumpOption_Disasm     = (1 << 7),
-  CoffdumpOption_Rawdata    = (1 << 8),
-  CoffdumpOption_Tls        = (1 << 9),
-  CoffdumpOption_Codeview   = (1 << 10),
-  CoffdumpOption_Symbols    = (1 << 11),
-  CoffdumpOption_Relocs     = (1 << 12),
-  CoffdumpOption_Exceptions = (1 << 13),
-  CoffdumpOption_LoadConfig = (1 << 14),
-  CoffdumpOption_Resources  = (1 << 15),
-  CoffdumpOption_LongNames  = (1 << 16),
+  Coffdump_Option_Help       = (1 << 0),
+  Coffdump_Option_Version    = (1 << 1),
+  Coffdump_Option_Headers    = (1 << 2),
+  Coffdump_Option_Sections   = (1 << 3),
+  Coffdump_Option_Debug      = (1 << 4),
+  Coffdump_Option_Imports    = (1 << 5),
+  Coffdump_Option_Exports    = (1 << 6),
+  Coffdump_Option_Disasm     = (1 << 7),
+  Coffdump_Option_Rawdata    = (1 << 8),
+  Coffdump_Option_Tls        = (1 << 9),
+  Coffdump_Option_Codeview   = (1 << 10),
+  Coffdump_Option_Symbols    = (1 << 11),
+  Coffdump_Option_Relocs     = (1 << 12),
+  Coffdump_Option_Exceptions = (1 << 13),
+  Coffdump_Option_LoadConfig = (1 << 14),
+  Coffdump_Option_Resources  = (1 << 15),
+  Coffdump_Option_LongNames  = (1 << 16),
 };
 
  global read_only struct {
-  CoffdumpOption  opt;
+  Coffdump_Option opt;
   char           *name;
   char           *help;
 } g_coffdump_option_map[] = {
-  { CoffdumpOption_Help,       "help",       "Print help and exit"                           },
-  { CoffdumpOption_Version,    "v",          "Print version and exit"                        },
-  { CoffdumpOption_Headers,    "headers",    "Dump dos header, file header, optional header" },
-  { CoffdumpOption_Sections,   "sections",   "Dump section headers as table"                 },
-  { CoffdumpOption_Debug,      "debug",      "Dump debug directory"                          },
-  { CoffdumpOption_Imports,    "imports",    "Dump import table"                             },
-  { CoffdumpOption_Exports,    "exports",    "Dump export table"                             },
-  { CoffdumpOption_Disasm,     "disasm",     "Disassemble code sections"                     },
-  { CoffdumpOption_Rawdata,    "rawdata",    "Dump raw section data"                         },
-  { CoffdumpOption_Tls,        "tls",        "Dump Thread Local Storage directory"           },
-  { CoffdumpOption_Codeview,   "cv",         "Dump relocations"                              },
-  { CoffdumpOption_Symbols,    "symbols",    "Dump COFF symbol table"                        },
-  { CoffdumpOption_Relocs,     "relocs",     "Dump relocations"                              },
-  { CoffdumpOption_Exceptions, "exceptions", "Dump exceptions"                               },
-  { CoffdumpOption_LoadConfig, "loadconfig", "Dump load config"                              },
-  { CoffdumpOption_Resources,  "resources",  "Dump resource directory"                       },
-  { CoffdumpOption_LongNames,  "longnames",  "COFF Archive: Dump Long Names Member"          },
+  { Coffdump_Option_Help,       "help",       "Print help and exit"                           },
+  { Coffdump_Option_Version,    "v",          "Print version and exit"                        },
+  { Coffdump_Option_Headers,    "headers",    "Dump DOS header, file header, optional header, and/or archive header" },
+  { Coffdump_Option_Sections,   "sections",   "Dump section headers as table"                 },
+  { Coffdump_Option_Rawdata,    "rawdata",    "Dump raw section data"                         },
+  { Coffdump_Option_Codeview,   "cv",         "Dump relocations"                              },
+  { Coffdump_Option_Disasm,     "disasm",     "Disassemble code sections"                     },
+  { Coffdump_Option_Symbols,    "symbols",    "Dump COFF symbol table"                        },
+  { Coffdump_Option_Relocs,     "relocs",     "Dump relocations"                              },
+  { Coffdump_Option_Exceptions, "exceptions", "Dump exceptions"                               },
+  { Coffdump_Option_Tls,        "tls",        "Dump Thread Local Storage directory"           },
+  { Coffdump_Option_Debug,      "debug",      "Dump debug directory"                          },
+  { Coffdump_Option_Imports,    "imports",    "Dump import table"                             },
+  { Coffdump_Option_Exports,    "exports",    "Dump export table"                             },
+  { Coffdump_Option_LoadConfig, "loadconfig", "Dump load config"                              },
+  { Coffdump_Option_Resources,  "resources",  "Dump resource directory"                       },
+  { Coffdump_Option_LongNames,  "longnames",  "Dump archive long names"                       },
 };
 
 ////////////////////////////////
@@ -106,7 +106,9 @@ internal String8
 coff_format_time_stamp(Arena *arena, COFF_TimeStamp time_stamp)
 {
   String8 result;
-  if (time_stamp >= max_U32) {
+  if (time_stamp == 0) {
+    result = str8_lit("0");
+  } else if (time_stamp >= max_U32) {
     result = str8_lit("-1");
   } else {
     DateTime dt = date_time_from_unix_time(time_stamp);
@@ -566,7 +568,7 @@ coff_format_import(Arena *arena, String8List *out, String8 indent, COFF_ImportHe
 }
 
 internal void
-coff_format_big_obj(Arena *arena, String8List *out, String8 indent, String8 raw_data, CoffdumpOption opts)
+coff_format_big_obj(Arena *arena, String8List *out, String8 indent, String8 raw_data, Coffdump_Option opts)
 {
   Temp scratch = scratch_begin(&arena, 1);
 
@@ -575,12 +577,12 @@ coff_format_big_obj(Arena *arena, String8List *out, String8 indent, String8 raw_
   U64                 string_table_off = big_obj->symbol_table_foff + sizeof(COFF_Symbol32)*big_obj->symbol_count;
   COFF_Symbol32Array  symbols          = coff_symbol_array_from_data_32(scratch.arena, raw_data, big_obj->symbol_table_foff, big_obj->symbol_count);
 
-  if (opts & CoffdumpOption_Headers) {
+  if (opts & Coffdump_Option_Headers) {
     coff_format_big_obj_header(arena, out, indent, big_obj);
     coff_newline();
   }
 
-  if (opts & CoffdumpOption_Sections) {
+  if (opts & Coffdump_Option_Sections) {
     Rng1U64 sect_headers_range = rng_1u64(sizeof(*big_obj), sizeof(*big_obj) + sizeof(COFF_SectionHeader)*big_obj->section_count);
     Rng1U64 symbols_range      = rng_1u64(big_obj->symbol_table_foff, big_obj->symbol_table_foff + sizeof(COFF_Symbol32)*big_obj->symbol_count);
 
@@ -604,12 +606,12 @@ coff_format_big_obj(Arena *arena, String8List *out, String8 indent, String8 raw_
     coff_newline();
   }
 
-  if (opts & CoffdumpOption_Relocs) {
+  if (opts & Coffdump_Option_Relocs) {
     coff_format_relocs(arena, out, indent, raw_data, string_table_off, big_obj->machine, big_obj->section_count, sections, symbols);
     coff_newline();
   }
 
-  if (opts & CoffdumpOption_Symbols) {
+  if (opts & Coffdump_Option_Symbols) {
     coff_format_symbol_table(arena, out, indent, raw_data, string_table_off, 1, symbols);
     coff_newline();
   }
@@ -619,7 +621,7 @@ exit:;
 }
 
 internal void
-coff_format_obj(Arena *arena, String8List *out, String8 indent, String8 raw_data, CoffdumpOption opts)
+coff_format_obj(Arena *arena, String8List *out, String8 indent, String8 raw_data, Coffdump_Option opts)
 {
   Temp scratch = scratch_begin(&arena, 1);
 
@@ -628,12 +630,12 @@ coff_format_obj(Arena *arena, String8List *out, String8 indent, String8 raw_data
   U64                 string_table_off = header->symbol_table_foff + sizeof(COFF_Symbol16)*header->symbol_count;
   COFF_Symbol32Array  symbols          = coff_symbol_array_from_data_16(scratch.arena, raw_data, header->symbol_table_foff, header->symbol_count);
 
-  if (opts & CoffdumpOption_Headers) {
+  if (opts & Coffdump_Option_Headers) {
     coff_format_header(arena, out, indent, header);
     coff_newline();
   }
 
-  if (opts & CoffdumpOption_Sections) {
+  if (opts & Coffdump_Option_Sections) {
     Rng1U64 sect_headers_range = rng_1u64(sizeof(*header), sizeof(*header) + sizeof(COFF_SectionHeader)*header->section_count);
     Rng1U64 symbols_range      = rng_1u64(header->symbol_table_foff, header->symbol_table_foff + sizeof(COFF_Symbol16)*header->symbol_count);
 
@@ -657,12 +659,12 @@ coff_format_obj(Arena *arena, String8List *out, String8 indent, String8 raw_data
     coff_newline();
   }
 
-  if (opts & CoffdumpOption_Relocs) {
+  if (opts & Coffdump_Option_Relocs) {
     coff_format_relocs(arena, out, indent, raw_data, string_table_off, header->machine, header->section_count, sections, symbols);
     coff_newline();
   }
 
-  if (opts & CoffdumpOption_Symbols) {
+  if (opts & Coffdump_Option_Symbols) {
     coff_format_symbol_table(arena, out, indent, raw_data, 0, string_table_off, symbols);
     coff_newline();
   }
@@ -672,7 +674,7 @@ exit:;
 }
 
 internal void
-coff_format_archive(Arena *arena, String8List *out, String8 indent, String8 raw_archive, CoffdumpOption opts)
+coff_format_archive(Arena *arena, String8List *out, String8 indent, String8 raw_archive, Coffdump_Option opts)
 {
   Temp scratch = scratch_begin(&arena, 1);
 
@@ -749,7 +751,7 @@ coff_format_archive(Arena *arena, String8List *out, String8 indent, String8 raw_
     coff_newline();
   }
 
-  if (archive_parse.has_long_names && opts & CoffdumpOption_LongNames) {
+  if (archive_parse.has_long_names && opts & Coffdump_Option_LongNames) {
     coff_printf("# Long Names");
     coff_indent();
 
@@ -795,7 +797,7 @@ coff_format_archive(Arena *arena, String8List *out, String8 indent, String8 raw_
     coff_printf("Member @ %#llx", member_offset);
     coff_indent();
 
-    if (opts & CoffdumpOption_Headers) {
+    if (opts & Coffdump_Option_Headers) {
       coff_format_archive_member_header(arena, out, indent, member.header, archive_parse.long_names);
       coff_newline();
     }
@@ -808,7 +810,7 @@ coff_format_archive(Arena *arena, String8List *out, String8 indent, String8 raw_
         coff_format_obj(arena, out, indent, member.data, opts);
       } break;
       case COFF_DataType_IMPORT: {
-        if (opts & CoffdumpOption_Headers) {
+        if (opts & Coffdump_Option_Headers) {
           COFF_ImportHeader header = {0};
           U64 parse_size = coff_parse_archive_import(member.data, 0, &header);
           if (parse_size) {
@@ -1232,7 +1234,6 @@ pe_format_debug_directory(Arena *arena, String8List *out, String8 indent, String
 
     coff_indent();
     switch (de->type) {
-      case PE_DebugDirectoryType_POGO:
       case PE_DebugDirectoryType_ILTCG:
       case PE_DebugDirectoryType_MPX:
       case PE_DebugDirectoryType_EXCEPTION:
@@ -1242,29 +1243,70 @@ pe_format_debug_directory(Arena *arena, String8List *out, String8 indent, String
       case PE_DebugDirectoryType_BORLAND:
       case PE_DebugDirectoryType_CLSID:
       case PE_DebugDirectoryType_REPRO:
-      case PE_DebugDirectoryType_VC_FEATURE:
       case PE_DebugDirectoryType_EX_DLLCHARACTERISTICS: {
         NotImplemented;
       } break;
+      case PE_DebugDirectoryType_COFF_GROUP: {
+        U64 off = 0;
+
+        // TODO: is this version?
+        U32 unknown  = 0;
+        off += str8_deserial_read_struct(raw_entry, off, &unknown);
+        if (unknown != 0) {
+          coff_printf("TODO: unknown: %u", unknown);
+        }
+
+        coff_printf("%-8s %-8s %-8s", "VOFF", "Size", "Name");
+        for (; off < raw_entry.size; ) {
+          U32     voff = 0;
+          U32     size = 0;
+          String8 name = str8_zero();
+
+          off += str8_deserial_read_struct(raw_entry, off, &voff);
+          off += str8_deserial_read_struct(raw_entry, off, &size);
+          if (voff == 0 && size == 0) {
+            break;
+          }
+          off += str8_deserial_read_cstr(raw_entry, off, &name);
+          off = AlignPow2(off, 4);
+		  
+          coff_printf("%08x %08x %S", voff, size, name);
+        }
+      } break;
+      case PE_DebugDirectoryType_VC_FEATURE: {
+        MSVCRT_VCFeatures *feat = str8_deserial_get_raw_ptr(raw_entry, 0, sizeof(*feat));
+        if (feat) {
+          coff_printf("Pre-VC++ 11.0: %u", feat->pre_vcpp);
+          coff_printf("C/C++:         %u", feat->c_cpp);
+          coff_printf("/GS:           %u", feat->gs);
+          coff_printf("/sdl:          %u", feat->sdl);
+          coff_printf("guardN:        %u", feat->guard_n);
+        } else {
+          coff_errorf("not enough bytes to read VC Features");
+        }
+      } break;
       case PE_DebugDirectoryType_FPO: {
-        PE_DebugFPO *fpo = str8_deserial_get_raw_ptr(raw_entry, 0, sizeof(PE_DebugFPO));
+        PE_DebugFPO *fpo = str8_deserial_get_raw_ptr(raw_entry, 0, sizeof(*fpo));
+        if (fpo) {
+          U8          prolog_size     = PE_FPOEncoded_Extract_PROLOG_SIZE(fpo->flags);
+          U8          saved_regs_size = PE_FPOEncoded_Extract_SAVED_REGS_SIZE(fpo->flags);
+          PE_FPOType  type            = PE_FPOEncoded_Extract_FRAME_TYPE(fpo->flags);
+          PE_FPOFlags flags           = PE_FPOEncoded_Extract_FLAGS(fpo->flags);
 
-        U8          prolog_size     = PE_FPOEncoded_Extract_PROLOG_SIZE(fpo->flags);
-        U8          saved_regs_size = PE_FPOEncoded_Extract_SAVED_REGS_SIZE(fpo->flags);
-        PE_FPOType  type            = PE_FPOEncoded_Extract_FRAME_TYPE(fpo->flags);
-        PE_FPOFlags flags           = PE_FPOEncoded_Extract_FLAGS(fpo->flags);
+          String8 type_string  = pe_string_from_fpo_type(type);
+          String8 flags_string = pe_string_from_fpo_flags(scratch.arena, flags);
 
-        String8 type_string  = pe_string_from_fpo_type(type);
-        String8 flags_string = pe_string_from_fpo_flags(scratch.arena, flags);
-
-        coff_printf("Function offset: %#x", fpo->func_code_off);
-        coff_printf("Function size:   %#x", fpo->func_size);
-        coff_printf("Locals size:     %u",   fpo->locals_size);
-        coff_printf("Params size:     %u",   fpo->params_size);
-        coff_printf("Prolog size:     %u",   prolog_size);
-        coff_printf("Saved regs size: %u",   saved_regs_size);
-        coff_printf("Type:            %S",   type_string);
-        coff_printf("Flags:           %S",   flags_string);
+          coff_printf("Function offset: %#x", fpo->func_code_off);
+          coff_printf("Function size:   %#x", fpo->func_size);
+          coff_printf("Locals size:     %u",   fpo->locals_size);
+          coff_printf("Params size:     %u",   fpo->params_size);
+          coff_printf("Prolog size:     %u",   prolog_size);
+          coff_printf("Saved regs size: %u",   saved_regs_size);
+          coff_printf("Type:            %S",   type_string);
+          coff_printf("Flags:           %S",   flags_string);
+        } else {
+          coff_errorf("not enough bytes to read FPO");
+        }
       } break;
 
       case PE_DebugDirectoryType_CODEVIEW: {
@@ -2162,7 +2204,7 @@ pe_format_base_relocs(Arena              *arena,
 }
 
 internal void
-pe_format(Arena *arena, String8List *out, String8 indent, String8 raw_data, CoffdumpOption opts)
+pe_format(Arena *arena, String8List *out, String8 indent, String8 raw_data, Coffdump_Option opts)
 {
   Temp scratch = scratch_begin(&arena, 1);
 
@@ -2219,7 +2261,7 @@ pe_format(Arena *arena, String8List *out, String8 indent, String8 raw_data, Coff
   U8 *raw_opt_header = push_array(scratch.arena, U8, coff_header->optional_header_size);
   str8_deserial_read_array(raw_data, opt_header_off, raw_opt_header, coff_header->optional_header_size);
 
-  if (opts & CoffdumpOption_Headers) {
+  if (opts & Coffdump_Option_Headers) {
     coff_format_header(arena, out, indent, coff_header);
     coff_newline();
   }
@@ -2238,7 +2280,7 @@ pe_format(Arena *arena, String8List *out, String8 indent, String8 raw_data, Coff
       goto exit;
     }
 
-    if (opts & CoffdumpOption_Headers) {
+    if (opts & Coffdump_Option_Headers) {
       pe_format_optional_header32(arena, out, indent, opt_header, dirs);
     }
   } else if (opt_header_magic == PE_PE32PLUS_MAGIC) {
@@ -2251,7 +2293,7 @@ pe_format(Arena *arena, String8List *out, String8 indent, String8 raw_data, Coff
       goto exit;
     }
 
-    if (opts & CoffdumpOption_Headers) {
+    if (opts & Coffdump_Option_Headers) {
       pe_format_optional_header32plus(arena, out, indent, opt_header, dirs);
     }
   }
@@ -2266,19 +2308,19 @@ pe_format(Arena *arena, String8List *out, String8 indent, String8 raw_data, Coff
     dirs_virt_ranges[i] = r1u64(dir.virt_off, dir.virt_off+dir.virt_size);
   }
 
-  if (opts & CoffdumpOption_Sections) {
+  if (opts & Coffdump_Option_Sections) {
     coff_format_section_table(arena, out, indent, raw_data, string_table_off, symbols, coff_header->section_count, sections);
   }
 
-  if (opts & CoffdumpOption_Relocs) {
+  if (opts & Coffdump_Option_Relocs) {
     coff_format_relocs(arena, out, indent, raw_data, string_table_off, coff_header->machine, coff_header->section_count, sections, symbols);
   }
 
-  if (opts & CoffdumpOption_Symbols) {
+  if (opts & Coffdump_Option_Symbols) {
     coff_format_symbol_table(arena, out, indent, raw_data, 0, string_table_off, symbols);
   }
 
-  if (opts & CoffdumpOption_Exports) {
+  if (opts & Coffdump_Option_Exports) {
     PE_ParsedExportTable exptab = pe_exports_from_data(arena,
                                                        coff_header->section_count,
                                                        sections,
@@ -2287,7 +2329,7 @@ pe_format(Arena *arena, String8List *out, String8 indent, String8 raw_data, Coff
                                                        dirs_virt_ranges[PE_DataDirectoryIndex_EXPORT]);
   }
 
-  if (opts & CoffdumpOption_Imports) {
+  if (opts & Coffdump_Option_Imports) {
     B32                        is_pe32       = opt_header_magic == PE_PE32_MAGIC;
     PE_ParsedStaticImportTable static_imptab = pe_static_imports_from_data(arena, is_pe32, coff_header->section_count, sections, raw_data, dirs_file_ranges[PE_DataDirectoryIndex_IMPORT]);
     PE_ParsedDelayImportTable  delay_imptab  = pe_delay_imports_from_data(arena, is_pe32, coff_header->section_count, sections, raw_data, dirs_file_ranges[PE_DataDirectoryIndex_DELAY_IMPORT]);
@@ -2295,35 +2337,35 @@ pe_format(Arena *arena, String8List *out, String8 indent, String8 raw_data, Coff
     pe_format_delay_import_table(arena, out, indent, image_base, delay_imptab);
   }
 
-  if (opts & CoffdumpOption_Resources) {
+  if (opts & Coffdump_Option_Resources) {
     String8         raw_dir  = str8_substr(raw_data, dirs_file_ranges[PE_DataDirectoryIndex_RESOURCES]);
     PE_ResourceDir *dir_root = pe_resource_table_from_directory_data(scratch.arena, raw_dir);
     pe_format_resources(arena, out, indent, dir_root);
   }
 
-  if (opts & CoffdumpOption_Exceptions) {
+  if (opts & Coffdump_Option_Exceptions) {
     pe_format_exceptions(arena, out, indent, coff_header->machine, coff_header->section_count, sections, raw_data, dirs_file_ranges[PE_DataDirectoryIndex_EXCEPTIONS]);
   }
 
-  if (opts & CoffdumpOption_Relocs) {
+  if (opts & Coffdump_Option_Relocs) {
     pe_format_base_relocs(arena, out, indent, coff_header->machine, image_base, coff_header->section_count, sections, raw_data, dirs_file_ranges[PE_DataDirectoryIndex_BASE_RELOC]);
   }
 
-  if (opts & CoffdumpOption_Debug) {
+  if (opts & Coffdump_Option_Debug) {
     if (PE_DataDirectoryIndex_DEBUG < dir_count) {
       String8 raw_dir = str8_substr(raw_data, dirs_file_ranges[PE_DataDirectoryIndex_DEBUG]);
       pe_format_debug_directory(arena, out, indent, raw_data, raw_dir);
     }
   }
 
-  if (opts & CoffdumpOption_Tls) {
+  if (opts & Coffdump_Option_Tls) {
     if (dim_1u64(dirs_file_ranges[PE_DataDirectoryIndex_TLS])) {
       PE_ParsedTLS tls = pe_tls_from_data(scratch.arena, coff_header->machine, image_base, coff_header->section_count, sections, raw_data, dirs_file_ranges[PE_DataDirectoryIndex_TLS]);
       pe_format_tls(arena, out, indent, tls);
     }
   }
 
-  if (opts & CoffdumpOption_LoadConfig) {
+  if (opts & Coffdump_Option_LoadConfig) {
     String8 raw_lc = str8_substr(raw_data, dirs_file_ranges[PE_DataDirectoryIndex_LOAD_CONFIG]);
     if (raw_lc.size) {
       switch (coff_header->machine) {
@@ -2395,17 +2437,17 @@ entry_point(CmdLine *cmdline)
   Temp scratch = scratch_begin(0,0);
 
   // parse options
-  CoffdumpOption opts = 0;
+  Coffdump_Option opts = 0;
   {
     for (CmdLineOpt *cmd = cmdline->options.first; cmd != 0; cmd = cmd->next) {
-      CoffdumpOption opt = 0;
+      Coffdump_Option opt = 0;
       for (U64 opt_idx = 0; opt_idx < ArrayCount(g_coffdump_option_map); ++opt_idx) {
         String8 opt_name = str8_cstring(g_coffdump_option_map[opt_idx].name);
         if (str8_match(cmd->string, opt_name, StringMatchFlag_CaseInsensitive)) {
           opt = g_coffdump_option_map[opt_idx].opt;
           break;
         } else if (str8_match(cmd->string, str8_lit("all"), StringMatchFlag_CaseInsensitive)) {
-          opt = ~0ull & ~(CoffdumpOption_Help|CoffdumpOption_Version);
+          opt = ~0ull & ~(Coffdump_Option_Help|Coffdump_Option_Version);
           break;
         }
       }
@@ -2420,7 +2462,7 @@ entry_point(CmdLine *cmdline)
   }
 
   // print help
-  if (opts & CoffdumpOption_Help) {
+  if (opts & Coffdump_Option_Help) {
     for (U64 opt_idx = 0; opt_idx < ArrayCount(g_coffdump_option_map); ++opt_idx) {
       fprintf(stdout, "-%s %s\n", g_coffdump_option_map[opt_idx].name, g_coffdump_option_map[opt_idx].help);
     }
@@ -2428,7 +2470,7 @@ entry_point(CmdLine *cmdline)
   }
 
   // print version
-  if (opts & CoffdumpOption_Version) {
+  if (opts & Coffdump_Option_Version) {
     fprintf(stdout, BUILD_TITLE_STRING_LITERAL "\n");
     fprintf(stdout, "\tcoffdump <options> <inputs>\n");
     os_abort(0);

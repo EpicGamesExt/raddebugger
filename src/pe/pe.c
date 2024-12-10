@@ -125,7 +125,7 @@ pe_string_from_debug_directory_type(PE_DebugDirectoryType x)
     case PE_DebugDirectoryType_RESERVED10:            return str8_lit("RESERVED10");
     case PE_DebugDirectoryType_CLSID:                 return str8_lit("CLSID");
     case PE_DebugDirectoryType_VC_FEATURE:            return str8_lit("VC_FEATURE");
-    case PE_DebugDirectoryType_POGO:                  return str8_lit("POGO");
+    case PE_DebugDirectoryType_COFF_GROUP:            return str8_lit("COFF_GROUP");
     case PE_DebugDirectoryType_ILTCG:                 return str8_lit("ILTCG");
     case PE_DebugDirectoryType_MPX:                   return str8_lit("MPX");
     case PE_DebugDirectoryType_REPRO:                 return str8_lit("REPRO");
