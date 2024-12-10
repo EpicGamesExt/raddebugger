@@ -42,11 +42,14 @@
 
 ////////////////////////////////
 
+#define COFF_INDENT_WIDTH 4
+#define COFF_INDENT_MAX   4096
+
 #define coff_printf(f, ...) str8_list_pushf(arena, out, "%S" f, indent, __VA_ARGS__)
 #define coff_newline()      str8_list_pushf(arena, out, "");
 #define coff_errorf(f, ...) coff_printf("ERROR: "f, __VA_ARGS__)
-#define coff_indent()    indent.size += 4
-#define coff_unindent()  indent.size -= 4
+#define coff_indent()       do { if (indent.size + COFF_INDENT_WIDTH <= COFF_INDENT_MAX) { indent.size += COFF_INDENT_WIDTH; } else { Assert(!"indent overflow");   } } while (0)
+#define coff_unindent()     do { if (indent.size >= COFF_INDENT_WIDTH)                   { indent.size -= COFF_INDENT_WIDTH; } else { Assert(!"unbalanced indent"); } } while (0)
 
 ////////////////////////////////
 
@@ -1474,12 +1477,12 @@ pe_format_resources(Arena *arena, String8List *out, String8 indent, PE_ResourceD
 
   if (stack) {
     coff_printf("# Resources");
-    coff_indent();
 
     // traverse resource tree
     while (stack) {
       if (stack->print_table) {
         stack->print_table = 0;
+        coff_indent();
         
         if (stack->is_named) {
           coff_printf("[%u] %S { Time Stamp: %u, Version %u.%u Name Count: %u, ID Count %u, Characteristics: %u }", 
@@ -1530,20 +1533,19 @@ pe_format_resources(Arena *arena, String8List *out, String8 indent, PE_ResourceD
           frame->curr_name_node = frame->table->named_list.first;
           frame->curr_id_node   = frame->table->id_list.first;
           SLLStackPush(stack, frame);
-          coff_indent();
           goto yield;
         } else if (res->kind == PE_ResDataKind_COFF_LEAF) {
           COFF_ResourceDataEntry *entry = &res->u.leaf;
-          coff_printf("[%u] %S Data VOFF: %#08X, Data Size: %#08X, Code Page: %u", 
+          coff_printf("[%u] %S Data VOFF: %#08x, Data Size: %#08x, Code Page: %u", 
                       name_idx, res->id.u.string, entry->data_voff, entry->data_size, entry->code_page);
         } else {
           InvalidPath;
         }
       }
-      
+
       while (stack->curr_id_node) {
         PE_ResourceNode *id_node = stack->curr_id_node;
-        PE_Resource *res = &id_node->data;
+        PE_Resource     *res     = &id_node->data;
         stack->curr_id_node = stack->curr_id_node->next;
         U64 id_idx = stack->id_idx++;
         
@@ -1556,26 +1558,26 @@ pe_format_resources(Arena *arena, String8List *out, String8 indent, PE_ResourceD
           frame->curr_name_node = frame->table->named_list.first;
           frame->curr_id_node   = frame->table->id_list.first;
           SLLStackPush(stack, frame);
-          coff_indent();
           goto yield;
         } else if (res->kind == PE_ResDataKind_COFF_LEAF) {
           COFF_ResourceDataEntry *entry = &res->u.leaf;
-          coff_printf("[%u] ID: %u Data VOFF: %#08X, Data Size: %#08X, Code Page: %u", id_idx, res->id.u.number, entry->data_voff, entry->data_size, entry->code_page);
+          coff_printf("[%u] ID: %u Data VOFF: %#08x, Data Size: %#08x, Code Page: %u", id_idx, res->id.u.number, entry->data_voff, entry->data_size, entry->code_page);
         } else {
           InvalidPath;
         }
       }
-      
+
+      if (stack->curr_id_node == 0 && stack->curr_name_node == 0) {
+        coff_unindent();
+      }
+
       SLLStackPop(stack);
-      coff_unindent();
       
       yield:;
     }
 
-    coff_unindent();
+    coff_newline();
   }
-
-  coff_newline();
 
   scratch_end(scratch);
 }
@@ -2354,6 +2356,40 @@ exit:;
 ////////////////////////////////
 
 internal void
+format_preamble(Arena *arena, String8List *out, String8 indent, String8 input_path, String8 raw_data)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+
+  char *input_type_string = "???";
+
+  if (coff_is_archive(raw_data)) {
+    input_type_string = "Archive";
+  } else if (coff_is_thin_archive(raw_data)) {
+    input_type_string = "Thin Archive";
+  } else if (coff_is_big_obj(raw_data)) {
+    input_type_string = "Big Obj";
+  } else if (coff_is_obj(raw_data)) {
+    input_type_string = "Obj";
+  } else if (is_pe(raw_data)) {
+    input_type_string = "COFF/PE";
+  }
+
+  DateTime universal_dt = os_now_universal_time();
+  DateTime local_dt     = os_local_time_from_universal(&universal_dt);
+  String8  time = push_date_time_string(scratch.arena, &local_dt);
+
+  coff_printf("# Input");
+  coff_indent();
+  coff_printf("Path: %S", input_path);
+  coff_printf("Type: %s", input_type_string);
+  coff_printf("Time: %S", time);
+  coff_unindent();
+  coff_newline();
+
+  scratch_end(scratch);
+}
+
+internal void
 entry_point(CmdLine *cmdline)
 {
   Temp scratch = scratch_begin(0,0);
@@ -2361,15 +2397,25 @@ entry_point(CmdLine *cmdline)
   // parse options
   CoffdumpOption opts = 0;
   {
-    for (U64 opt_idx = 0; opt_idx < ArrayCount(g_coffdump_option_map); ++opt_idx) {
-      String8 opt_name = str8_cstring(g_coffdump_option_map[opt_idx].name);
-      if (cmd_line_has_flag(cmdline, opt_name)) {
-        opts |= g_coffdump_option_map[opt_idx].opt;
+    for (CmdLineOpt *cmd = cmdline->options.first; cmd != 0; cmd = cmd->next) {
+      CoffdumpOption opt = 0;
+      for (U64 opt_idx = 0; opt_idx < ArrayCount(g_coffdump_option_map); ++opt_idx) {
+        String8 opt_name = str8_cstring(g_coffdump_option_map[opt_idx].name);
+        if (str8_match(cmd->string, opt_name, StringMatchFlag_CaseInsensitive)) {
+          opt = g_coffdump_option_map[opt_idx].opt;
+          break;
+        } else if (str8_match(cmd->string, str8_lit("all"), StringMatchFlag_CaseInsensitive)) {
+          opt = ~0ull & ~(CoffdumpOption_Help|CoffdumpOption_Version);
+          break;
+        }
       }
-    }
-    if (cmd_line_has_flag(cmdline, str8_lit("all"))) {
-      opts = ~0ull;
-      opts &= ~(CoffdumpOption_Help|CoffdumpOption_Version);
+
+      if (opt == 0) {
+        fprintf(stderr, "Unknown argument: \"%.*s\"\n", str8_varg(cmd->string));
+        os_abort(1);
+      }
+
+      opts |= opt;
     }
   }
 
@@ -2384,7 +2430,7 @@ entry_point(CmdLine *cmdline)
   // print version
   if (opts & CoffdumpOption_Version) {
     fprintf(stdout, BUILD_TITLE_STRING_LITERAL "\n");
-    fprintf(stdout, "\tCOFFDUMP <OPTIONS> <INPUTS>\n");
+    fprintf(stdout, "\tcoffdump <options> <inputs>\n");
     os_abort(0);
   }
 
@@ -2407,11 +2453,20 @@ entry_point(CmdLine *cmdline)
     os_abort(1);
   }
 
+  // make indent
+  String8 indent;
+  {
+    U64 indent_buffer_size = COFF_INDENT_WIDTH * COFF_INDENT_MAX;
+    U8 *indent_buffer      = push_array(scratch.arena, U8, indent_buffer_size);
+    MemorySet(indent_buffer, ' ', indent_buffer_size);
+    indent = str8(indent_buffer, 0);
+  }
+
   // format input
   String8List out = {0};
   {
-    String8 indent = str8_lit("                                                                   ");
-    indent.size    = 0;
+    format_preamble(scratch.arena, &out, indent, file_path, raw_data);
+
     if (coff_is_archive(raw_data) || coff_is_thin_archive(raw_data)) {
       coff_format_archive(scratch.arena, &out, indent, raw_data, opts);
     } else if (coff_is_big_obj(raw_data)) {
@@ -2426,7 +2481,7 @@ entry_point(CmdLine *cmdline)
   }
   
   // print formatted string
-  String8 out_string = str8_list_join(scratch.arena, &out, &(StringJoin){ .sep = str8_lit("\n"), .post = str8_lit("\n") });
+  String8 out_string = str8_list_join(scratch.arena, &out, &(StringJoin){ .sep = str8_lit("\n"),});
   fprintf(stdout, "%.*s", str8_varg(out_string));
 
   scratch_end(scratch);
