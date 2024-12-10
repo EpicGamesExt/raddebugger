@@ -1247,95 +1247,98 @@ pe_exports_from_data(Arena *arena, U64 section_count, COFF_SectionHeader *sectio
 {
   Temp scratch = scratch_begin(&arena, 1);
 
-  String8 raw_dir = str8_substr(raw_data, dir_file_range);
-
-  PE_ExportTableHeader *header = str8_deserial_get_raw_ptr(raw_dir, 0, sizeof(*header));
-
-  U64 name_table_off    = coff_foff_from_voff(sections, section_count, header->name_pointer_table_voff);
-  U64 export_table_off  = coff_foff_from_voff(sections, section_count, header->export_address_table_voff);
-  U64 ordinal_table_off = coff_foff_from_voff(sections, section_count, header->ordinal_table_voff);
-
-  U32 *name_table    = str8_deserial_get_raw_ptr(raw_data, name_table_off, sizeof(*name_table)*header->name_pointer_table_count);
-  U32 *export_table  = str8_deserial_get_raw_ptr(raw_data, export_table_off, sizeof(*export_table)*header->export_address_table_count);
-  U16 *ordinal_table = str8_deserial_get_raw_ptr(raw_data, ordinal_table_off, sizeof(*ordinal_table)*header->name_pointer_table_count);
-
-  // Scan export address table to get accruate count of ordinals. 
-  // We can't rely on "name_pointer_table_count" becuase it is possible
-  // to define an export without a name through NONAME attribute in DEF file
-  U64 ordinal_count = 0;
-  for (U64 voff_idx = 0; voff_idx < header->export_address_table_count; ++voff_idx) {
-    if (export_table[voff_idx] != 0) {
-      ++ordinal_count;
-    }
-  }
-
-  U64  ordinal_max     = header->export_address_table_count;
-  B32 *is_ordinal_used = push_array(scratch.arena, B32, ordinal_max);
-
-  PE_ParsedExport *exports  = push_array(arena, PE_ParsedExport, ordinal_count);
-  PE_ParsedExport *curr_exp = exports;
-
-  // parse exports with name
-  for (U64 i = 0; i < header->name_pointer_table_count; ++i) {
-    // get name
-    U32     name_voff = name_table[i];
-    U64     name_foff = coff_foff_from_voff(sections, section_count, name_voff);
-    String8 name      = str8_cstring_capped(raw_data.str+name_foff, raw_data.str+raw_data.size);
-
-    // get ordinal
-    U16 ordinal_nb = ordinal_table[i];
-
-    // mark ordinal
-    Assert(ordinal_nb < ordinal_max);
-    is_ordinal_used[ordinal_nb] = 1;
-
-    // get voff
-    U32 export_voff = 0;
-    if (ordinal_nb < header->export_address_table_count) {
-      export_voff = export_table[ordinal_nb];
-    }
-
-    // make ordinal
-    U16 ordinal = header->ordinal_base + ordinal_nb;
-
-    String8 forwarder = str8_zero();
-    {
-      B32 is_forwarder = dir_virt_range.min <= export_voff && export_voff < dir_virt_range.max;
-      if (is_forwarder) {
-        U64 fwd_name_off = coff_foff_from_voff(sections, section_count, name_voff);
-        str8_deserial_read_cstr(raw_data, fwd_name_off, &forwarder);
-      }
-    }
-
-    curr_exp->forwarder = forwarder;
-    curr_exp->name      = name;
-    curr_exp->voff      = export_voff;
-    curr_exp->ordinal   = ordinal;
-    ++curr_exp;
-  }
-
-  // parse exports with ordinal
-  for (U64 ordinal_nb = 0; ordinal_nb < header->export_address_table_count; ++ordinal_nb) {
-    U32 voff            = export_table[ordinal_nb];
-    B32 is_voff_taken   = (voff != 0);
-    B32 is_ordinal_free = !is_ordinal_used[ordinal_nb];
-    if (is_voff_taken && is_ordinal_free) {
-      curr_exp->name      = str8_zero();
-      curr_exp->voff      = voff;
-      curr_exp->ordinal   = header->ordinal_base;
-      ++curr_exp;
-    }
-  }
-
-  // fill out result
   PE_ParsedExportTable exptab = {0};
-  exptab.flags          = header->flags;
-  exptab.time_stamp     = header->time_stamp;
-  exptab.major_ver      = header->major_ver;
-  exptab.minor_ver      = header->minor_ver;
-  exptab.ordinal_base   = header->ordinal_base;
-  exptab.export_count   = ordinal_count;
-  exptab.exports        = exports;
+
+  String8               raw_dir = str8_substr(raw_data, dir_file_range);
+  PE_ExportTableHeader *header  = str8_deserial_get_raw_ptr(raw_dir, 0, sizeof(*header));
+  if (header) {
+    U64 name_table_off    = coff_foff_from_voff(sections, section_count, header->name_pointer_table_voff);
+    U64 export_table_off  = coff_foff_from_voff(sections, section_count, header->export_address_table_voff);
+    U64 ordinal_table_off = coff_foff_from_voff(sections, section_count, header->ordinal_table_voff);
+
+    U32 *name_table    = str8_deserial_get_raw_ptr(raw_data, name_table_off,    sizeof(*name_table   )*header->name_pointer_table_count);
+    U32 *export_table  = str8_deserial_get_raw_ptr(raw_data, export_table_off,  sizeof(*export_table )*header->export_address_table_count);
+    U16 *ordinal_table = str8_deserial_get_raw_ptr(raw_data, ordinal_table_off, sizeof(*ordinal_table)*header->name_pointer_table_count);
+
+    if (name_table && export_table && ordinal_table) {
+      // Scan export address table to get accruate count of ordinals. 
+      // We can't rely on "name_pointer_table_count" becuase it is possible
+      // to define an export without a name through NONAME attribute in DEF file
+      U64 ordinal_count = 0;
+      for (U64 voff_idx = 0; voff_idx < header->export_address_table_count; ++voff_idx) {
+        if (export_table[voff_idx] != 0) {
+          ++ordinal_count;
+        }
+      }
+
+      U64  ordinal_max     = header->export_address_table_count;
+      B32 *is_ordinal_used = push_array(scratch.arena, B32, ordinal_max);
+
+      PE_ParsedExport *exports  = push_array(arena, PE_ParsedExport, ordinal_count);
+      PE_ParsedExport *curr_exp = exports;
+
+      // parse exports with name
+      for (U64 i = 0; i < header->name_pointer_table_count; ++i) {
+        // get name
+        U32     name_voff = name_table[i];
+        U64     name_foff = coff_foff_from_voff(sections, section_count, name_voff);
+        String8 name      = str8_cstring_capped(raw_data.str+name_foff, raw_data.str+raw_data.size);
+
+        // get ordinal
+        U16 ordinal_nb = ordinal_table[i];
+
+        // mark ordinal
+        Assert(ordinal_nb < ordinal_max);
+        is_ordinal_used[ordinal_nb] = 1;
+
+        // get voff
+        U32 export_voff = 0;
+        if (ordinal_nb < header->export_address_table_count) {
+          export_voff = export_table[ordinal_nb];
+        }
+
+        // make ordinal
+        U16 ordinal = header->ordinal_base + ordinal_nb;
+
+        String8 forwarder = str8_zero();
+        {
+          B32 is_forwarder = dir_virt_range.min <= export_voff && export_voff < dir_virt_range.max;
+          if (is_forwarder) {
+            U64 fwd_name_off = coff_foff_from_voff(sections, section_count, name_voff);
+            str8_deserial_read_cstr(raw_data, fwd_name_off, &forwarder);
+          }
+        }
+
+        curr_exp->forwarder = forwarder;
+        curr_exp->name      = name;
+        curr_exp->voff      = export_voff;
+        curr_exp->ordinal   = ordinal;
+        ++curr_exp;
+      }
+
+      // parse exports with ordinal
+      for (U64 ordinal_nb = 0; ordinal_nb < header->export_address_table_count; ++ordinal_nb) {
+        U32 voff            = export_table[ordinal_nb];
+        B32 is_voff_taken   = (voff != 0);
+        B32 is_ordinal_free = !is_ordinal_used[ordinal_nb];
+        if (is_voff_taken && is_ordinal_free) {
+          curr_exp->name      = str8_zero();
+          curr_exp->voff      = voff;
+          curr_exp->ordinal   = header->ordinal_base;
+          ++curr_exp;
+        }
+      }
+
+      // fill out result
+      exptab.flags          = header->flags;
+      exptab.time_stamp     = header->time_stamp;
+      exptab.major_ver      = header->major_ver;
+      exptab.minor_ver      = header->minor_ver;
+      exptab.ordinal_base   = header->ordinal_base;
+      exptab.export_count   = ordinal_count;
+      exptab.exports        = exports;
+    }
+  }
 
   scratch_end(scratch);
   return exptab;
