@@ -9,6 +9,8 @@
 #include "third_party/xxHash/xxhash.c"
 #include "third_party/xxHash/xxhash.h"
 #include "third_party/radsort/radsort.h"
+#include "third_party/zydis/zydis.h"
+#include "third_party/zydis/zydis.c"
 
 ////////////////////////////////
 
@@ -98,6 +100,241 @@ enum Coffdump_OptionEnum
   { Coffdump_Option_Resources,  "resources",  "Dump resource directory"                       },
   { Coffdump_Option_LongNames,  "longnames",  "Dump archive long names"                       },
 };
+
+////////////////////////////////
+
+typedef struct
+{
+  U64     off;
+  String8 string;
+} Marker;
+
+typedef struct
+{
+  U64     count;
+  Marker *v;
+} MarkerArray;
+
+typedef struct MarkerNode
+{
+  struct MarkerNode *next;
+  Marker             v;
+} MarkerNode;
+
+typedef struct
+{
+  U64         count;
+  MarkerNode *first;
+  MarkerNode *last;
+} MarkerList;
+
+internal int
+marker_is_before(void *a, void *b)
+{
+  return u64_is_before(&((Marker*)a)->off, &((Marker*)b)->off);
+}
+
+internal MarkerArray *
+section_markers_from_coff_symbol_table(Arena *arena, String8 raw_data, U64 string_table_off, U64 section_count, COFF_Symbol32Array symbols)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+
+  // extract markers from symbol table
+  MarkerList *markers = push_array(scratch.arena, MarkerList, section_count);
+  for (U64 symbol_idx = 0; symbol_idx < symbols.count; ++symbol_idx) {
+    COFF_Symbol32 *symbol = &symbols.v[symbol_idx];
+
+    COFF_SymbolValueInterpType interp = coff_interp_symbol(symbol->section_number, symbol->value, symbol->storage_class);
+    B32 is_marker = interp == COFF_SymbolValueInterp_REGULAR &&
+                    symbol->aux_symbol_count == 0 &&
+                    (symbol->storage_class == COFF_SymStorageClass_EXTERNAL || symbol->storage_class == COFF_SymStorageClass_STATIC);
+
+    if (is_marker) {
+      String8 name = coff_read_symbol_name(raw_data, string_table_off, &symbol->name);
+
+      struct MarkerNode *n = push_array(scratch.arena, struct MarkerNode, 1);
+      n->v.off    = symbol->value;
+      n->v.string = name;
+
+      MarkerList *list = &markers[symbol->section_number-1];
+      SLLQueuePush(list->first, list->last, n);
+      ++list->count;
+    }
+
+    symbol_idx += symbol->aux_symbol_count;
+  }
+
+  // lists -> arrays
+  MarkerArray *result = push_array(arena, MarkerArray, section_count);
+  for (U64 i = 0; i < section_count; ++i) {
+    result[i].count = 0;
+    result[i].v     = push_array(arena, Marker, markers[i].count);
+    for (MarkerNode *n = markers[i].first; n != 0; n = n->next) {
+      result[i].v[result[i].count++] = n->v;
+    }
+  }
+
+  // sort arrays
+  for (U64 i = 0; i < section_count; ++i) {
+    radsort(result[i].v, result[i].count, marker_is_before);
+  }
+
+  scratch_end(scratch);
+  return result;
+}
+
+////////////////////////////////
+//~ Disasm
+
+typedef struct
+{
+  String8 text;
+  U64     size;
+} DisasmResult;
+
+internal DisasmResult
+disasm_next_instruction(Arena *arena, COFF_MachineType machine, U64 addr, String8 raw_code)
+{
+  DisasmResult result = {0};
+
+  switch (machine) {
+    case COFF_MachineType_UNKNOWN: break;
+
+    case COFF_MachineType_X64:
+    case COFF_MachineType_X86: {
+      ZydisMachineMode             machine_mode = machine == COFF_MachineType_X86 ? ZYDIS_MACHINE_MODE_LEGACY_32 : ZYDIS_MACHINE_MODE_LONG_64;
+      ZydisDisassembledInstruction inst         = {0};
+      ZyanStatus                   status       = ZydisDisassemble(machine_mode, addr, raw_code.str, raw_code.size, &inst, ZYDIS_FORMATTER_STYLE_INTEL);
+
+      String8 text = str8_cstring_capped(inst.text, inst.text+sizeof(inst.text));
+      result.text = push_str8_copy(arena, text);
+      result.size = inst.info.length;
+    } break;
+
+    default: NotImplemented;
+  }
+
+  return result;
+}
+
+internal void
+format_disasm(Arena            *arena,
+              String8List      *out,
+              String8           indent,
+              COFF_MachineType  machine,
+              U64               image_base,
+              U64               sect_off,
+              U64               marker_count,
+              Marker           *markers,
+              String8           raw_code)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+
+  U64 bytes_buffer_max = 256;
+  U8 *bytes_buffer     = push_array(scratch.arena, U8, bytes_buffer_max);
+
+  U64     decode_off    = 0;
+  U64     marker_cursor = 0;
+  String8 to_decode     = raw_code;
+
+  for (; to_decode.size > 0; ) {
+    Temp temp = temp_begin(scratch.arena);
+
+    // decode instruction
+    U64          addr          = image_base + sect_off + decode_off;
+    DisasmResult disasm_result = disasm_next_instruction(temp.arena, machine, addr, to_decode);
+
+    // format instruction bytes
+    String8 bytes;
+    {
+      U64 bytes_size = 0;
+      for (U64 i = 0; i < disasm_result.size; ++i) {
+        bytes_size += raddbg_snprintf(bytes_buffer + bytes_size, bytes_buffer_max-bytes_size, "%s%02x", i > 0 ? " " : "", to_decode.str[i]);
+      }
+      bytes = str8(bytes_buffer, bytes_size);
+    }
+
+    // print address marker
+    if (marker_cursor < marker_count) {
+      Marker *m = &markers[marker_cursor];
+      // NOTE: markers must be sorted on address
+      if (decode_off <= m->off && m->off < decode_off + disasm_result.size) {
+        if (m->off != decode_off) {
+          U64 off = m->off - decode_off;
+          coff_printf("; %S+%#llx", m->string, addr);
+        } else {
+          coff_printf("; %S", m->string);
+        }
+        marker_cursor += 1;
+      }
+    }
+
+    // print final line
+    coff_printf("%#08x: %-32S %S", addr, bytes, disasm_result.text);
+
+    // advance
+    to_decode = str8_skip(to_decode, disasm_result.size);
+    decode_off += disasm_result.size;
+
+    temp_end(temp);
+  }
+
+  scratch_end(scratch);
+}
+
+////////////////////////////////
+//~ Raw Data
+
+internal void
+format_raw_data(Arena       *arena,
+                String8List *out,
+                String8      indent,
+                U64          bytes_per_row,
+                U64          marker_count,
+                Marker      *markers,
+                String8      raw_data)
+{
+  AssertAlways(bytes_per_row > 0);
+
+  U8 temp_buffer[1024];
+
+  String8 to_format = raw_data;
+  for (; to_format.size > 0; ) {
+    String8 raw_row = str8_prefix(to_format, bytes_per_row);
+
+    U64 temp_cursor = 0;
+
+    // offset
+    U64 offset = (U64)(raw_row.str-raw_data.str);
+    temp_cursor += raddbg_snprintf(temp_buffer+temp_cursor, sizeof(temp_buffer)-temp_cursor, "%#08x: ", offset);
+
+    // hex
+    for (U64 i = 0; i < raw_row.size; ++i) {
+      U8 b = raw_row.str[i];
+      temp_cursor += raddbg_snprintf(temp_buffer+temp_cursor, sizeof(temp_buffer)-temp_cursor, "%s%02x", i>0 ? " " : "", b);
+    }
+    U64 hex_indent_size = (bytes_per_row - raw_row.size) * 3;
+    MemorySet(temp_buffer+temp_cursor, ' ', hex_indent_size);
+    temp_cursor += hex_indent_size;
+
+    temp_cursor += raddbg_snprintf(temp_buffer+temp_cursor, sizeof(temp_buffer) - temp_cursor, " ");
+
+    // ascii
+    for (U64 i = 0; i < raw_row.size; ++i) {
+      U8 b = raw_row.str[i];
+      U8 c = b;
+      if (c < ' ' || c > '~') {
+        c = '.';
+      }
+      temp_cursor += raddbg_snprintf(temp_buffer+temp_cursor, sizeof(temp_buffer)-temp_cursor, "%c", c);
+    }
+
+    coff_printf("%.*s", temp_cursor, temp_buffer);
+
+    // advance
+    to_format = str8_skip(to_format, bytes_per_row);
+  }
+}
 
 ////////////////////////////////
 //~ COFF
@@ -283,7 +520,7 @@ coff_format_section_table(Arena              *arena,
       }
 
       String8List l = {0};
-      str8_list_pushf(scratch.arena, &l, "%-4x",  i                  );
+      str8_list_pushf(scratch.arena, &l, "%-4x",  i+1                );
       str8_list_pushf(scratch.arena, &l, "%-8S",  name               );
       str8_list_pushf(scratch.arena, &l, "%08x",  header->vsize      );
       str8_list_pushf(scratch.arena, &l, "%08x",  header->voff       );
@@ -326,6 +563,64 @@ coff_format_section_table(Arena              *arena,
   }
 
   scratch_end(scratch);
+}
+
+internal void
+coff_disasm_sections(Arena              *arena,
+                     String8List        *out,
+                     String8             indent,
+                     String8             raw_data,
+                     COFF_MachineType    machine,
+                     U64                 image_base,
+                     B32                 is_obj,
+                     MarkerArray        *section_markers,
+                     U64                 section_count,
+                     COFF_SectionHeader *sections)
+{
+  if (section_count) {
+    for (U64 sect_idx = 0; sect_idx < section_count; ++sect_idx) {
+      COFF_SectionHeader *sect = sections+sect_idx;
+      if (sect->flags & COFF_SectionFlag_CNT_CODE) {
+        U64         sect_off  = is_obj ? sect->foff : sect->voff;
+        U64         sect_size = is_obj ? sect->fsize : sect->vsize;
+        String8     raw_code  = str8_substr(raw_data, rng_1u64(sect->foff, sect->foff+sect_size));
+        MarkerArray markers   = section_markers[sect_idx];
+
+        coff_printf("# Disassembly [Section No. %#llx]", (sect_idx+1));
+        coff_indent();
+        format_disasm(arena, out, indent, machine, image_base, sect_off, markers.count, markers.v, raw_code);
+        coff_unindent();
+      }
+    }
+  }
+}
+
+internal void
+coff_raw_data_sections(Arena              *arena,
+                       String8List        *out,
+                       String8             indent,
+                       String8             raw_data,
+                       B32                 is_obj,
+                       MarkerArray        *section_markers,
+                       U64                 section_count,
+                       COFF_SectionHeader *sections)
+{
+  if (section_count) {
+    for (U64 sect_idx = 0; sect_idx < section_count; ++sect_idx) {
+      COFF_SectionHeader *sect = sections+sect_idx;
+      if (sect->fsize > 0) {
+        U64         sect_size = is_obj ? sect->fsize : sect->vsize;
+        String8     raw_sect  = str8_substr(raw_data, rng_1u64(sect->foff, sect->foff+sect_size));
+        MarkerArray markers   = section_markers[sect_idx];
+
+        coff_printf("# Raw Data [Section No. %#llx]", (sect_idx+1));
+        coff_indent();
+        format_raw_data(arena, out, indent, 32, markers.count, markers.v, raw_sect);
+        coff_unindent();
+        coff_newline();
+      }
+    }
+  }
 }
 
 internal void
@@ -411,89 +706,91 @@ coff_format_symbol_table(Arena *arena, String8List *out, String8 indent, String8
 {
   Temp scratch = scratch_begin(&arena, 1);
 
-  coff_printf("# Symbol Table");
-  coff_indent();
-
-  coff_printf("%-4s %-8s %-10s %-4s %-4s %-4s %-16s %-20s", 
-              "No.", "Value", "SectNum", "Aux", "Msb", "Lsb", "Storage", "Name");
-
-  for (U64 i = 0; i < symbols.count; ++i) {
-    COFF_Symbol32 *symbol        = &symbols.v[i];
-    String8        name          = coff_read_symbol_name(raw_data, string_table_off, &symbol->name);
-    String8        msb           = coff_string_from_sym_dtype(symbol->type.u.msb);
-    String8        lsb           = coff_string_from_sym_type(symbol->type.u.lsb);
-    String8        storage_class = coff_string_from_sym_storage_class(symbol->storage_class);
-    String8        section_number;
-    switch (symbol->section_number) {
-      case COFF_SYMBOL_UNDEFINED_SECTION: section_number = str8_lit("UNDEF"); break;
-      case COFF_SYMBOL_ABS_SECTION:       section_number = str8_lit("ABS");   break;
-      case COFF_SYMBOL_DEBUG_SECTION:     section_number = str8_lit("DEBUG"); break;
-      default:                            section_number = push_str8f(scratch.arena, "%010x", symbol->section_number); break;
-    }
-
-    String8List line = {0};
-    str8_list_pushf(scratch.arena, &line, "%-4x",  i                       );
-    str8_list_pushf(scratch.arena, &line, "%08x",  symbol->value           );
-    str8_list_pushf(scratch.arena, &line, "%-10S", section_number          );
-    str8_list_pushf(scratch.arena, &line, "%-4u",  symbol->aux_symbol_count);
-    str8_list_pushf(scratch.arena, &line, "%-4S",  msb                     );
-    str8_list_pushf(scratch.arena, &line, "%-4S",  lsb                     );
-    str8_list_pushf(scratch.arena, &line, "%-16S", storage_class           );
-    str8_list_pushf(scratch.arena, &line, "%S",    name                    );
-
-    String8 l = str8_list_join(scratch.arena, &line, &(StringJoin){.sep = str8_lit(" ")});
-    coff_printf("%S", l);
-
+  if (symbols.count) {
+    coff_printf("# Symbol Table");
     coff_indent();
-    for (U64 k=i+1, c = i+symbol->aux_symbol_count; k <= c; ++k) {
-      void *raw_aux = &symbols.v[k];
-      switch (symbol->storage_class) {
-        case COFF_SymStorageClass_EXTERNAL: {
-          COFF_SymbolFuncDef *func_def = (COFF_SymbolFuncDef*)&symbols.v[k];
-          coff_printf("Tag Index %#x, Total Size %#x, Line Numbers %#x, Next Function %#x", 
-                     func_def->tag_index, func_def->total_size, func_def->ptr_to_ln, func_def->ptr_to_next_func);
-        } break;
-        case COFF_SymStorageClass_FUNCTION: {
-          COFF_SymbolFunc *func = raw_aux;
-          coff_printf("Ordinal Line Number %#x, Next Function %#x", func->ln, func->ptr_to_next_func);
-        } break;
-        case COFF_SymStorageClass_WEAK_EXTERNAL: {
-          COFF_SymbolWeakExt *weak = raw_aux;
-          String8             type = coff_string_from_weak_ext_type(weak->characteristics);
-          coff_printf("Tag Index %#x, Characteristics %S", weak->tag_index, type);
-        } break;
-        case COFF_SymStorageClass_FILE: {
-          COFF_SymbolFile *file = raw_aux;
-          String8          name = str8_cstring_capped(file->name, file->name+sizeof(file->name));
-          coff_printf("Name %S", name);
-        } break;
-        case COFF_SymStorageClass_STATIC: {
-          COFF_SymbolSecDef *sd        = raw_aux;
-          String8            selection = coff_string_from_selection(sd->selection);
-          U32 number = sd->number_lo;
-          if (is_big_obj) {
-            number |= (U32)sd->number_hi << 16;
-          }
-          if (number) {
-            coff_printf("Length %x, Reloc Count %u, Line Count %u, Checksum %x, Section %x, Selection %S",
-                       sd->length, sd->number_of_relocations, sd->number_of_ln, sd->check_sum, number, selection);
-          } else {
-            coff_printf("Length %x, Reloc Count %u, Line Count %u, Checksum %x",
-                       sd->length, sd->number_of_relocations, sd->number_of_ln, sd->check_sum);
-          }
-        } break;
-        default: {
-          coff_printf("???");
-        } break;
+
+    coff_printf("%-4s %-8s %-10s %-4s %-4s %-4s %-16s %-20s", 
+                "No.", "Value", "SectNum", "Aux", "Msb", "Lsb", "Storage", "Name");
+
+    for (U64 i = 0; i < symbols.count; ++i) {
+      COFF_Symbol32 *symbol        = &symbols.v[i];
+      String8        name          = coff_read_symbol_name(raw_data, string_table_off, &symbol->name);
+      String8        msb           = coff_string_from_sym_dtype(symbol->type.u.msb);
+      String8        lsb           = coff_string_from_sym_type(symbol->type.u.lsb);
+      String8        storage_class = coff_string_from_sym_storage_class(symbol->storage_class);
+      String8        section_number;
+      switch (symbol->section_number) {
+        case COFF_SYMBOL_UNDEFINED_SECTION: section_number = str8_lit("UNDEF"); break;
+        case COFF_SYMBOL_ABS_SECTION:       section_number = str8_lit("ABS");   break;
+        case COFF_SYMBOL_DEBUG_SECTION:     section_number = str8_lit("DEBUG"); break;
+        default:                            section_number = push_str8f(scratch.arena, "%010x", symbol->section_number); break;
       }
+
+      String8List line = {0};
+      str8_list_pushf(scratch.arena, &line, "%-4x",  i                       );
+      str8_list_pushf(scratch.arena, &line, "%08x",  symbol->value           );
+      str8_list_pushf(scratch.arena, &line, "%-10S", section_number          );
+      str8_list_pushf(scratch.arena, &line, "%-4u",  symbol->aux_symbol_count);
+      str8_list_pushf(scratch.arena, &line, "%-4S",  msb                     );
+      str8_list_pushf(scratch.arena, &line, "%-4S",  lsb                     );
+      str8_list_pushf(scratch.arena, &line, "%-16S", storage_class           );
+      str8_list_pushf(scratch.arena, &line, "%S",    name                    );
+
+      String8 l = str8_list_join(scratch.arena, &line, &(StringJoin){.sep = str8_lit(" ")});
+      coff_printf("%S", l);
+
+      coff_indent();
+      for (U64 k=i+1, c = i+symbol->aux_symbol_count; k <= c; ++k) {
+        void *raw_aux = &symbols.v[k];
+        switch (symbol->storage_class) {
+          case COFF_SymStorageClass_EXTERNAL: {
+            COFF_SymbolFuncDef *func_def = (COFF_SymbolFuncDef*)&symbols.v[k];
+            coff_printf("Tag Index %#x, Total Size %#x, Line Numbers %#x, Next Function %#x", 
+                        func_def->tag_index, func_def->total_size, func_def->ptr_to_ln, func_def->ptr_to_next_func);
+          } break;
+          case COFF_SymStorageClass_FUNCTION: {
+            COFF_SymbolFunc *func = raw_aux;
+            coff_printf("Ordinal Line Number %#x, Next Function %#x", func->ln, func->ptr_to_next_func);
+          } break;
+          case COFF_SymStorageClass_WEAK_EXTERNAL: {
+            COFF_SymbolWeakExt *weak = raw_aux;
+            String8             type = coff_string_from_weak_ext_type(weak->characteristics);
+            coff_printf("Tag Index %#x, Characteristics %S", weak->tag_index, type);
+          } break;
+          case COFF_SymStorageClass_FILE: {
+            COFF_SymbolFile *file = raw_aux;
+            String8          name = str8_cstring_capped(file->name, file->name+sizeof(file->name));
+            coff_printf("Name %S", name);
+          } break;
+          case COFF_SymStorageClass_STATIC: {
+            COFF_SymbolSecDef *sd        = raw_aux;
+            String8            selection = coff_string_from_selection(sd->selection);
+            U32 number = sd->number_lo;
+            if (is_big_obj) {
+              number |= (U32)sd->number_hi << 16;
+            }
+            if (number) {
+              coff_printf("Length %x, Reloc Count %u, Line Count %u, Checksum %x, Section %x, Selection %S",
+                          sd->length, sd->number_of_relocations, sd->number_of_ln, sd->check_sum, number, selection);
+            } else {
+              coff_printf("Length %x, Reloc Count %u, Line Count %u, Checksum %x",
+                          sd->length, sd->number_of_relocations, sd->number_of_ln, sd->check_sum);
+            }
+          } break;
+          default: {
+            coff_printf("???");
+          } break;
+        }
+      }
+
+      i += symbol->aux_symbol_count;
+      coff_unindent();
     }
 
-    i += symbol->aux_symbol_count;
     coff_unindent();
+    coff_newline();
   }
-
-  coff_unindent();
-  coff_newline();
 
   scratch_end(scratch);
 }
@@ -666,6 +963,20 @@ coff_format_obj(Arena *arena, String8List *out, String8 indent, String8 raw_data
 
   if (opts & Coffdump_Option_Symbols) {
     coff_format_symbol_table(arena, out, indent, raw_data, 0, string_table_off, symbols);
+    coff_newline();
+  }
+
+  MarkerArray *section_markers = 0;
+  if (opts & (Coffdump_Option_Disasm|Coffdump_Option_Rawdata)) {
+    section_markers = section_markers_from_coff_symbol_table(scratch.arena, raw_data, string_table_off, header->section_count, symbols);
+  }
+
+  if (opts & Coffdump_Option_Rawdata) {
+    coff_raw_data_sections(arena, out, indent, raw_data, 1, section_markers, header->section_count, sections);
+  }
+
+  if (opts & Coffdump_Option_Disasm) {
+    coff_disasm_sections(arena, out, indent, raw_data, header->machine, 0, 1, section_markers, header->section_count, sections);
     coff_newline();
   }
 
@@ -1209,6 +1520,9 @@ pe_format_debug_directory(Arena *arena, String8List *out, String8 indent, String
   PE_DebugDirectory *entries      = str8_deserial_get_raw_ptr(raw_dir, 0, sizeof(*entries)*entry_count);
   for (U64 i = 0; i < entry_count; ++i) {
     PE_DebugDirectory *de = entries+i;
+    if (i > 0) {
+      coff_newline();
+    }
     coff_printf("Entry[%u]", i);
     coff_indent();
 
@@ -1362,7 +1676,6 @@ pe_format_debug_directory(Arena *arena, String8List *out, String8 indent, String
     coff_unindent();
 
     coff_unindent();
-    coff_newline();
   }
 
   coff_unindent();
@@ -2090,19 +2403,22 @@ pe_format_exceptions(Arena              *arena,
                      String8             raw_data,
                      Rng1U64             except_frange)
 {
-  coff_printf("# Exceptions");
-  coff_indent();
-  coff_printf("%-8s %-8s %-8s %-8s", "Offset", "Begin", "End", "Unwind Info");
+  if (dim_1u64(except_frange)) {
+    coff_printf("# Exceptions");
+    coff_indent();
+    coff_printf("%-8s %-8s %-8s %-8s", "Offset", "Begin", "End", "Unwind Info");
 
-  switch (machine) {
-    case COFF_MachineType_UNKNOWN: break;
-    case COFF_MachineType_X64:
-    case COFF_MachineType_X86: {
-      pe_format_exceptions_x8664(arena, out, indent, section_count, sections, raw_data, except_frange);
-    } break;
-    default: NotImplemented; break;
+    switch (machine) {
+      case COFF_MachineType_UNKNOWN: break;
+      case COFF_MachineType_X64:
+      case COFF_MachineType_X86: {
+        pe_format_exceptions_x8664(arena, out, indent, section_count, sections, raw_data, except_frange);
+      } break;
+      default: NotImplemented; break;
+    }
+    coff_unindent();
+    coff_newline();
   }
-  coff_unindent();
 }
 
 internal void
@@ -2389,6 +2705,19 @@ pe_format(Arena *arena, String8List *out, String8 indent, String8 raw_data, Coff
         default: NotImplemented;
       }
     }
+  }
+
+  MarkerArray *section_markers = 0;
+  if (opts & (Coffdump_Option_Disasm|Coffdump_Option_Rawdata)) {
+    section_markers = section_markers_from_coff_symbol_table(scratch.arena, raw_data, string_table_off, coff_header->section_count, symbols);
+  }
+
+  if (opts & Coffdump_Option_Rawdata) {
+    coff_raw_data_sections(arena, out, indent, raw_data, 0, section_markers, coff_header->section_count, sections);
+  }
+
+  if (opts & Coffdump_Option_Disasm) {
+    coff_disasm_sections(arena, out, indent, raw_data, coff_header->machine, 0, 1, section_markers, coff_header->section_count, sections);
   }
 
 exit:;
