@@ -11,16 +11,6 @@ typedef U32 COFF_TimeStamp;
 
 #pragma pack(push,1)
 
-typedef struct COFF_Guid COFF_Guid;
-struct COFF_Guid
-{
-  U32 data1;
-  U16 data2;
-  U16 data3;
-  U32 data4;
-  U32 data5;
-};
-
 typedef U16 COFF_Flags;
 enum
 {

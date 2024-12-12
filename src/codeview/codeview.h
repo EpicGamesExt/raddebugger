@@ -1179,7 +1179,7 @@ struct CV_SymSLink32
 typedef struct CV_SymOEM CV_SymOEM;
 struct CV_SymOEM
 {
-  COFF_Guid id;
+  Guid id;
   CV_TypeId itype;
   //  padding align(4)
 };
@@ -1210,27 +1210,27 @@ CV_EncodedFramePtrRegEnum;
 typedef U32 CV_FrameprocFlags;
 enum
 {
-  CV_FrameprocFlag_UsesAlloca  = (1 << 0),
-  CV_FrameprocFlag_UsesSetJmp  = (1 << 1),
-  CV_FrameprocFlag_UsesLongJmp = (1 << 2),
-  CV_FrameprocFlag_UsesInlAsm  = (1 << 3),
-  CV_FrameprocFlag_UsesEH      = (1 << 4),
-  CV_FrameprocFlag_Inline      = (1 << 5),
-  CV_FrameprocFlag_HasSEH      = (1 << 6),
-  CV_FrameprocFlag_Naked       = (1 << 7),
+  CV_FrameprocFlag_UsesAlloca        = (1 << 0),
+  CV_FrameprocFlag_UsesSetJmp        = (1 << 1),
+  CV_FrameprocFlag_UsesLongJmp       = (1 << 2),
+  CV_FrameprocFlag_UsesInlAsm        = (1 << 3),
+  CV_FrameprocFlag_UsesEH            = (1 << 4),
+  CV_FrameprocFlag_Inline            = (1 << 5),
+  CV_FrameprocFlag_HasSEH            = (1 << 6),
+  CV_FrameprocFlag_Naked             = (1 << 7),
   CV_FrameprocFlag_HasSecurityChecks = (1 << 8),
-  CV_FrameprocFlag_AsyncEH     = (1 << 9),
+  CV_FrameprocFlag_AsyncEH           = (1 << 9),
   CV_FrameprocFlag_GSNoStackOrdering = (1 << 10),
-  CV_FrameprocFlag_WasInlined  = (1 << 11),
-  CV_FrameprocFlag_GSCheck     = (1 << 12),
-  CV_FrameprocFlag_SafeBuffers = (1 << 13),
+  CV_FrameprocFlag_WasInlined        = (1 << 11),
+  CV_FrameprocFlag_GSCheck           = (1 << 12),
+  CV_FrameprocFlag_SafeBuffers       = (1 << 13),
   // LocalBasePointer: 14,15
   // ParamBasePointer: 16,17
-  CV_FrameprocFlag_PogoOn      = (1 << 18),
-  CV_FrameprocFlag_PogoCountsValid = (1 << 19),
-  CV_FrameprocFlag_OptSpeed    = (1 << 20),
-  CV_FrameprocFlag_HasCFG      = (1 << 21),
-  CV_FrameprocFlag_HasCFW      = (1 << 22),
+  CV_FrameprocFlag_PogoOn            = (1 << 18),
+  CV_FrameprocFlag_PogoCountsValid   = (1 << 19),
+  CV_FrameprocFlag_OptSpeed          = (1 << 20),
+  CV_FrameprocFlag_HasCFG            = (1 << 21),
+  CV_FrameprocFlag_HasCFW            = (1 << 22),
 };
 #define CV_FrameprocFlags_ExtractLocalBasePointer(f) (((f) >> 14)&3)
 #define CV_FrameprocFlags_ExtractParamBasePointer(f) (((f) >> 16)&3)
@@ -1795,6 +1795,16 @@ enum
   CV_RangeAttrib_Maybe = (1 << 0),
 };
 
+//- (SymKind: DEFRANGE)
+
+typedef struct CV_SymDefrange CV_SymDefrange;
+struct CV_SymDefrange
+{
+  U32 program;
+  CV_LvarAddrRange range;
+  // variable-width: CV_LvarAddrGap gaps;
+};
+
 //- (SymKind: DEFRANGE_SUBFIELD)
 
 typedef struct CV_SymDefrangeSubfield CV_SymDefrangeSubfield;
@@ -2322,7 +2332,7 @@ struct CV_LeafTypeServer
 typedef struct CV_LeafTypeServer2 CV_LeafTypeServer2;
 struct CV_LeafTypeServer2
 {
-  COFF_Guid sig70;
+  Guid sig70;
   U32 age;
   // U8[] name (null terminated)
 };
@@ -2357,8 +2367,8 @@ struct CV_LeafLabel
 typedef U16 CV_ModifierFlags;
 enum
 {
-  CV_ModifierFlag_Const = (1 << 0),
-  CV_ModifierFlag_Volatile = (1 << 1),
+  CV_ModifierFlag_Const     = (1 << 0),
+  CV_ModifierFlag_Volatile  = (1 << 1),
   CV_ModifierFlag_Unaligned = (1 << 2),
 };
 
@@ -2376,15 +2386,15 @@ enum
 {
   // Kind: [0:4]
   // Mode: [5:7]
-  CV_PointerAttrib_IsFlat   = (1 << 8),
-  CV_PointerAttrib_Volatile = (1 << 9),
-  CV_PointerAttrib_Const    = (1 << 10),
-  CV_PointerAttrib_Unaligned = (1 << 11),
+  CV_PointerAttrib_IsFlat     = (1 << 8),
+  CV_PointerAttrib_Volatile   = (1 << 9),
+  CV_PointerAttrib_Const      = (1 << 10),
+  CV_PointerAttrib_Unaligned  = (1 << 11),
   CV_PointerAttrib_Restricted = (1 << 12),
   // Size: [13,18]
-  CV_PointerAttrib_MOCOM = (1 << 19),
-  CV_PointerAttrib_LRef  = (1 << 21),
-  CV_PointerAttrib_RRef  = (1 << 22)
+  CV_PointerAttrib_MOCOM      = (1 << 19),
+  CV_PointerAttrib_LRef       = (1 << 21),
+  CV_PointerAttrib_RRef       = (1 << 22)
 };
 
 #define CV_PointerAttribs_ExtractKind(a) ((a)&0x1F)
