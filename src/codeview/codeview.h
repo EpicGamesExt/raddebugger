@@ -12,7 +12,7 @@
 #define CV_MinComplexTypeIndex 0x1000
 
 #define CV_TypeIndex_Max max_U32
-typedef U32 CV_TypeIndex;
+typedef U32          CV_TypeIndex;
 typedef CV_TypeIndex CV_TypeId;
 typedef CV_TypeIndex CV_ItemId;
 
@@ -31,253 +31,261 @@ read_only global CV_TypeId cv_type_id_variadic = 0xFFFFFFFF;
 #include "generated/codeview.meta.h"
 
 ////////////////////////////////
+//~ Aligns
+
+#define CV_LeafAlign          4
+#define CV_SymbolAlign        1
+#define CV_C13SubSectionAlign 4
+#define CV_FileCheckSumsAlign 4
+
+////////////////////////////////
 //~ rjf: Registers
 
 // X(NAME, CODE, (RDI_RegCode_X86) NAME, BYTE_POS, BYTE_SIZE)
-#define CV_Reg_X86_XList(X) \
-X(NONE,     0, nil, 0, 0)\
-X(AL,       1, eax, 0, 1)\
-X(CL,       2, ecx, 0, 1)\
-X(DL,       3, edx, 0, 1)\
-X(BL,       4, ebx, 0, 1)\
-X(AH,       5, eax, 1, 1)\
-X(CH,       6, ecx, 1, 1)\
-X(DH,       7, edx, 1, 1)\
-X(BH,       8, ebx, 1, 1)\
-X(AX,       9, eax, 0, 2)\
-X(CX,      10, ecx, 0, 2)\
-X(DX,      11, edx, 0, 2)\
-X(BX,      12, ebx, 0, 2)\
-X(SP,      13, esp, 0, 2)\
-X(BP,      14, ebp, 0, 2)\
-X(SI,      15, esi, 0, 2)\
-X(DI,      16, edi, 0, 2)\
-X(EAX,     17, eax, 0, 4)\
-X(ECX,     18, ecx, 0, 4)\
-X(EDX,     19, edx, 0, 4)\
-X(EBX,     20, ebx, 0, 4)\
-X(ESP,     21, esp, 0, 4)\
-X(EBP,     22, ebp, 0, 4)\
-X(ESI,     23, esi, 0, 4)\
-X(EDI,     24, edi, 0, 4)\
-X(ES,      25, es,  0, 2)\
-X(CS,      26, cs,  0, 2)\
-X(SS,      27, ss,  0, 2)\
-X(DS,      28, ds,  0, 2)\
-X(FS,      29, fs,  0, 2)\
-X(GS,      30, gs,  0, 2)\
-X(IP,      31, eip,    0, 2)\
-X(FLAGS,   32, eflags, 0, 2)\
-X(EIP,     33, eip,    0, 4)\
-X(EFLAGS,  34, eflags, 0, 4)\
-X(MM0,    146, fpr0, 0, 8)\
-X(MM1,    147, fpr1, 0, 8)\
-X(MM2,    148, fpr2, 0, 8)\
-X(MM3,    149, fpr3, 0, 8)\
-X(MM4,    150, fpr4, 0, 8)\
-X(MM5,    151, fpr5, 0, 8)\
-X(MM6,    152, fpr6, 0, 8)\
-X(MM7,    153, fpr7, 0, 8)\
-X(XMM0,   154, ymm0,  0, 16)\
-X(XMM1,   155, ymm1,  0, 16)\
-X(XMM2,   156, ymm2,  0, 16)\
-X(XMM3,   157, ymm3,  0, 16)\
-X(XMM4,   158, ymm4,  0, 16)\
-X(XMM5,   159, ymm5,  0, 16)\
-X(XMM6,   160, ymm6,  0, 16)\
-X(XMM7,   161, ymm7,  0, 16)\
-X(XMM00,  162, ymm0,  0,  4)\
-X(XMM01,  163, ymm0,  4,  4)\
-X(XMM02,  164, ymm0,  8,  4)\
-X(XMM03,  165, ymm0, 12,  4)\
-X(XMM10,  166, ymm1,  0,  4)\
-X(XMM11,  167, ymm1,  4,  4)\
-X(XMM12,  168, ymm1,  8,  4)\
-X(XMM13,  169, ymm1, 12,  4)\
-X(XMM20,  170, ymm2,  0,  4)\
-X(XMM21,  171, ymm2,  4,  4)\
-X(XMM22,  172, ymm2,  8,  4)\
-X(XMM23,  173, ymm2, 12,  4)\
-X(XMM30,  174, ymm3,  0,  4)\
-X(XMM31,  175, ymm3,  4,  4)\
-X(XMM32,  176, ymm3,  8,  4)\
-X(XMM33,  177, ymm3, 12,  4)\
-X(XMM40,  178, ymm4,  0,  4)\
-X(XMM41,  179, ymm4,  4,  4)\
-X(XMM42,  180, ymm4,  8,  4)\
-X(XMM43,  181, ymm4, 12,  4)\
-X(XMM50,  182, ymm5,  0,  4)\
-X(XMM51,  183, ymm5,  4,  4)\
-X(XMM52,  184, ymm5,  8,  4)\
-X(XMM53,  185, ymm5, 12,  4)\
-X(XMM60,  186, ymm6,  0,  4)\
-X(XMM61,  187, ymm6,  4,  4)\
-X(XMM62,  188, ymm6,  8,  4)\
-X(XMM63,  189, ymm6, 12,  4)\
-X(XMM70,  190, ymm7,  0,  4)\
-X(XMM71,  191, ymm7,  4,  4)\
-X(XMM72,  192, ymm7,  8,  4)\
-X(XMM73,  193, ymm7, 12,  4)\
-X(XMM0L,  194, ymm0,  0,  8)\
-X(XMM1L,  195, ymm1,  0,  8)\
-X(XMM2L,  196, ymm2,  0,  8)\
-X(XMM3L,  197, ymm3,  0,  8)\
-X(XMM4L,  198, ymm4,  0,  8)\
-X(XMM5L,  199, ymm5,  0,  8)\
-X(XMM6L,  200, ymm6,  0,  8)\
-X(XMM7L,  201, ymm7,  0,  8)\
-X(XMM0H,  202, ymm0,  8,  8)\
-X(XMM1H,  203, ymm1,  8,  8)\
-X(XMM2H,  204, ymm2,  8,  8)\
-X(XMM3H,  205, ymm3,  8,  8)\
-X(XMM4H,  206, ymm4,  8,  8)\
-X(XMM5H,  207, ymm5,  8,  8)\
-X(XMM6H,  208, ymm6,  8,  8)\
-X(XMM7H,  209, ymm7,  8,  8)\
-X(YMM0,   252, ymm0,  0, 32)\
-X(YMM1,   253, ymm1,  0, 32)\
-X(YMM2,   254, ymm2,  0, 32)\
-X(YMM3,   255, ymm3,  0, 32)\
-X(YMM4,   256, ymm4,  0, 32)\
-X(YMM5,   257, ymm5,  0, 32)\
-X(YMM6,   258, ymm6,  0, 32)\
-X(YMM7,   259, ymm7,  0, 32)\
-X(YMM0H,  260, ymm0, 16, 16)\
-X(YMM1H,  261, ymm1, 16, 16)\
-X(YMM2H,  262, ymm2, 16, 16)\
-X(YMM3H,  263, ymm3, 16, 16)\
-X(YMM4H,  264, ymm4, 16, 16)\
-X(YMM5H,  265, ymm5, 16, 16)\
-X(YMM6H,  266, ymm6, 16, 16)\
-X(YMM7H,  267, ymm7, 16, 16)\
-X(YMM0I0, 268, ymm0,  0,  8)\
-X(YMM0I1, 269, ymm0,  8,  8)\
-X(YMM0I2, 270, ymm0, 16,  8)\
-X(YMM0I3, 271, ymm0, 24,  8)\
-X(YMM1I0, 272, ymm1,  0,  8)\
-X(YMM1I1, 273, ymm1,  8,  8)\
-X(YMM1I2, 274, ymm1, 16,  8)\
-X(YMM1I3, 275, ymm1, 24,  8)\
-X(YMM2I0, 276, ymm2,  0,  8)\
-X(YMM2I1, 277, ymm2,  8,  8)\
-X(YMM2I2, 278, ymm2, 16,  8)\
-X(YMM2I3, 279, ymm2, 24,  8)\
-X(YMM3I0, 280, ymm3,  0,  8)\
-X(YMM3I1, 281, ymm3,  8,  8)\
-X(YMM3I2, 282, ymm3, 16,  8)\
-X(YMM3I3, 283, ymm3, 24,  8)\
-X(YMM4I0, 284, ymm4,  0,  8)\
-X(YMM4I1, 285, ymm4,  8,  8)\
-X(YMM4I2, 286, ymm4, 16,  8)\
-X(YMM4I3, 287, ymm4, 24,  8)\
-X(YMM5I0, 288, ymm5,  0,  8)\
-X(YMM5I1, 289, ymm5,  8,  8)\
-X(YMM5I2, 290, ymm5, 16,  8)\
-X(YMM5I3, 291, ymm5, 24,  8)\
-X(YMM6I0, 292, ymm6,  0,  8)\
-X(YMM6I1, 293, ymm6,  8,  8)\
-X(YMM6I2, 294, ymm6, 16,  8)\
-X(YMM6I3, 295, ymm6, 24,  8)\
-X(YMM7I0, 296, ymm7,  0,  8)\
-X(YMM7I1, 297, ymm7,  8,  8)\
-X(YMM7I2, 298, ymm7, 16,  8)\
-X(YMM7I3, 299, ymm7, 24,  8)\
-X(YMM0F0, 300, ymm0,  0,  4)\
-X(YMM0F1, 301, ymm0,  4,  4)\
-X(YMM0F2, 302, ymm0,  8,  4)\
-X(YMM0F3, 303, ymm0, 12,  4)\
-X(YMM0F4, 304, ymm0, 16,  4)\
-X(YMM0F5, 305, ymm0, 20,  4)\
-X(YMM0F6, 306, ymm0, 24,  4)\
-X(YMM0F7, 307, ymm0, 28,  4)\
-X(YMM1F0, 308, ymm1,  0,  4)\
-X(YMM1F1, 309, ymm1,  4,  4)\
-X(YMM1F2, 310, ymm1,  8,  4)\
-X(YMM1F3, 311, ymm1, 12,  4)\
-X(YMM1F4, 312, ymm1, 16,  4)\
-X(YMM1F5, 313, ymm1, 20,  4)\
-X(YMM1F6, 314, ymm1, 24,  4)\
-X(YMM1F7, 315, ymm1, 28,  4)\
-X(YMM2F0, 316, ymm2,  0,  4)\
-X(YMM2F1, 317, ymm2,  4,  4)\
-X(YMM2F2, 318, ymm2,  8,  4)\
-X(YMM2F3, 319, ymm2, 12,  4)\
-X(YMM2F4, 320, ymm2, 16,  4)\
-X(YMM2F5, 321, ymm2, 20,  4)\
-X(YMM2F6, 322, ymm2, 24,  4)\
-X(YMM2F7, 323, ymm2, 28,  4)\
-X(YMM3F0, 324, ymm3,  0,  4)\
-X(YMM3F1, 325, ymm3,  4,  4)\
-X(YMM3F2, 326, ymm3,  8,  4)\
-X(YMM3F3, 327, ymm3, 12,  4)\
-X(YMM3F4, 328, ymm3, 16,  4)\
-X(YMM3F5, 329, ymm3, 20,  4)\
-X(YMM3F6, 330, ymm3, 24,  4)\
-X(YMM3F7, 331, ymm3, 28,  4)\
-X(YMM4F0, 332, ymm4,  0,  4)\
-X(YMM4F1, 333, ymm4,  4,  4)\
-X(YMM4F2, 334, ymm4,  8,  4)\
-X(YMM4F3, 335, ymm4, 12,  4)\
-X(YMM4F4, 336, ymm4, 16,  4)\
-X(YMM4F5, 337, ymm4, 20,  4)\
-X(YMM4F6, 338, ymm4, 24,  4)\
-X(YMM4F7, 339, ymm4, 28,  4)\
-X(YMM5F0, 340, ymm5,  0,  4)\
-X(YMM5F1, 341, ymm5,  4,  4)\
-X(YMM5F2, 342, ymm5,  8,  4)\
-X(YMM5F3, 343, ymm5, 12,  4)\
-X(YMM5F4, 344, ymm5, 16,  4)\
-X(YMM5F5, 345, ymm5, 20,  4)\
-X(YMM5F6, 346, ymm5, 24,  4)\
-X(YMM5F7, 347, ymm5, 28,  4)\
-X(YMM6F0, 348, ymm6,  0,  4)\
-X(YMM6F1, 349, ymm6,  4,  4)\
-X(YMM6F2, 350, ymm6,  8,  4)\
-X(YMM6F3, 351, ymm6, 12,  4)\
-X(YMM6F4, 352, ymm6, 16,  4)\
-X(YMM6F5, 353, ymm6, 20,  4)\
-X(YMM6F6, 354, ymm6, 24,  4)\
-X(YMM6F7, 355, ymm6, 28,  4)\
-X(YMM7F0, 356, ymm7,  0,  4)\
-X(YMM7F1, 357, ymm7,  4,  4)\
-X(YMM7F2, 358, ymm7,  8,  4)\
-X(YMM7F3, 359, ymm7, 12,  4)\
-X(YMM7F4, 360, ymm7, 16,  4)\
-X(YMM7F5, 361, ymm7, 20,  4)\
-X(YMM7F6, 362, ymm7, 24,  4)\
-X(YMM7F7, 363, ymm7, 28,  4)\
-X(YMM0D0, 364, ymm0,  0,  8)\
-X(YMM0D1, 365, ymm0,  8,  8)\
-X(YMM0D2, 366, ymm0, 16,  8)\
-X(YMM0D3, 367, ymm0, 24,  8)\
-X(YMM1D0, 368, ymm1,  0,  8)\
-X(YMM1D1, 369, ymm1,  8,  8)\
-X(YMM1D2, 370, ymm1, 16,  8)\
-X(YMM1D3, 371, ymm1, 24,  8)\
-X(YMM2D0, 372, ymm2,  0,  8)\
-X(YMM2D1, 373, ymm2,  8,  8)\
-X(YMM2D2, 374, ymm2, 16,  8)\
-X(YMM2D3, 375, ymm2, 24,  8)\
-X(YMM3D0, 376, ymm3,  0,  8)\
-X(YMM3D1, 377, ymm3,  8,  8)\
-X(YMM3D2, 378, ymm3, 16,  8)\
-X(YMM3D3, 379, ymm3, 24,  8)\
-X(YMM4D0, 380, ymm4,  0,  8)\
-X(YMM4D1, 381, ymm4,  8,  8)\
-X(YMM4D2, 382, ymm4, 16,  8)\
-X(YMM4D3, 383, ymm4, 24,  8)\
-X(YMM5D0, 384, ymm5,  0,  8)\
-X(YMM5D1, 385, ymm5,  8,  8)\
-X(YMM5D2, 386, ymm5, 16,  8)\
-X(YMM5D3, 387, ymm5, 24,  8)\
-X(YMM6D0, 388, ymm6,  0,  8)\
-X(YMM6D1, 389, ymm6,  8,  8)\
-X(YMM6D2, 390, ymm6, 16,  8)\
-X(YMM6D3, 391, ymm6, 24,  8)\
-X(YMM7D0, 392, ymm7,  0,  8)\
-X(YMM7D1, 393, ymm7,  8,  8)\
-X(YMM7D2, 394, ymm7, 16,  8)\
-X(YMM7D3, 395, ymm7, 24,  8)
+#define CV_Reg_X86_XList(X)      \
+  X(NONE,     0, nil,    0,  0)  \
+  X(AL,       1, eax,    0,  1)  \
+  X(CL,       2, ecx,    0,  1)  \
+  X(DL,       3, edx,    0,  1)  \
+  X(BL,       4, ebx,    0,  1)  \
+  X(AH,       5, eax,    1,  1)  \
+  X(CH,       6, ecx,    1,  1)  \
+  X(DH,       7, edx,    1,  1)  \
+  X(BH,       8, ebx,    1,  1)  \
+  X(AX,       9, eax,    0,  2)  \
+  X(CX,      10, ecx,    0,  2)  \
+  X(DX,      11, edx,    0,  2)  \
+  X(BX,      12, ebx,    0,  2)  \
+  X(SP,      13, esp,    0,  2)  \
+  X(BP,      14, ebp,    0,  2)  \
+  X(SI,      15, esi,    0,  2)  \
+  X(DI,      16, edi,    0,  2)  \
+  X(EAX,     17, eax,    0,  4)  \
+  X(ECX,     18, ecx,    0,  4)  \
+  X(EDX,     19, edx,    0,  4)  \
+  X(EBX,     20, ebx,    0,  4)  \
+  X(ESP,     21, esp,    0,  4)  \
+  X(EBP,     22, ebp,    0,  4)  \
+  X(ESI,     23, esi,    0,  4)  \
+  X(EDI,     24, edi,    0,  4)  \
+  X(ES,      25, es,     0,  2)  \
+  X(CS,      26, cs,     0,  2)  \
+  X(SS,      27, ss,     0,  2)  \
+  X(DS,      28, ds,     0,  2)  \
+  X(FS,      29, fs,     0,  2)  \
+  X(GS,      30, gs,     0,  2)  \
+  X(IP,      31, eip,    0,  2)  \
+  X(FLAGS,   32, eflags, 0,  2)  \
+  X(EIP,     33, eip,    0,  4)  \
+  X(EFLAGS,  34, eflags, 0,  4)  \
+  X(MM0,    146, fpr0,   0,  8)  \
+  X(MM1,    147, fpr1,   0,  8)  \
+  X(MM2,    148, fpr2,   0,  8)  \
+  X(MM3,    149, fpr3,   0,  8)  \
+  X(MM4,    150, fpr4,   0,  8)  \
+  X(MM5,    151, fpr5,   0,  8)  \
+  X(MM6,    152, fpr6,   0,  8)  \
+  X(MM7,    153, fpr7,   0,  8)  \
+  X(XMM0,   154, ymm0,   0,  16) \
+  X(XMM1,   155, ymm1,   0,  16) \
+  X(XMM2,   156, ymm2,   0,  16) \
+  X(XMM3,   157, ymm3,   0,  16) \
+  X(XMM4,   158, ymm4,   0,  16) \
+  X(XMM5,   159, ymm5,   0,  16) \
+  X(XMM6,   160, ymm6,   0,  16) \
+  X(XMM7,   161, ymm7,   0,  16) \
+  X(XMM00,  162, ymm0,   0,  4)  \
+  X(XMM01,  163, ymm0,   4,  4)  \
+  X(XMM02,  164, ymm0,   8,  4)  \
+  X(XMM03,  165, ymm0,   12, 4)  \
+  X(XMM10,  166, ymm1,   0,  4)  \
+  X(XMM11,  167, ymm1,   4,  4)  \
+  X(XMM12,  168, ymm1,   8,  4)  \
+  X(XMM13,  169, ymm1,   12, 4)  \
+  X(XMM20,  170, ymm2,   0,  4)  \
+  X(XMM21,  171, ymm2,   4,  4)  \
+  X(XMM22,  172, ymm2,   8,  4)  \
+  X(XMM23,  173, ymm2,   12, 4)  \
+  X(XMM30,  174, ymm3,   0,  4)  \
+  X(XMM31,  175, ymm3,   4,  4)  \
+  X(XMM32,  176, ymm3,   8,  4)  \
+  X(XMM33,  177, ymm3,   12, 4)  \
+  X(XMM40,  178, ymm4,   0,  4)  \
+  X(XMM41,  179, ymm4,   4,  4)  \
+  X(XMM42,  180, ymm4,   8,  4)  \
+  X(XMM43,  181, ymm4,   12, 4)  \
+  X(XMM50,  182, ymm5,   0,  4)  \
+  X(XMM51,  183, ymm5,   4,  4)  \
+  X(XMM52,  184, ymm5,   8,  4)  \
+  X(XMM53,  185, ymm5,   12, 4)  \
+  X(XMM60,  186, ymm6,   0,  4)  \
+  X(XMM61,  187, ymm6,   4,  4)  \
+  X(XMM62,  188, ymm6,   8,  4)  \
+  X(XMM63,  189, ymm6,   12, 4)  \
+  X(XMM70,  190, ymm7,   0,  4)  \
+  X(XMM71,  191, ymm7,   4,  4)  \
+  X(XMM72,  192, ymm7,   8,  4)  \
+  X(XMM73,  193, ymm7,   12, 4)  \
+  X(XMM0L,  194, ymm0,   0,  8)  \
+  X(XMM1L,  195, ymm1,   0,  8)  \
+  X(XMM2L,  196, ymm2,   0,  8)  \
+  X(XMM3L,  197, ymm3,   0,  8)  \
+  X(XMM4L,  198, ymm4,   0,  8)  \
+  X(XMM5L,  199, ymm5,   0,  8)  \
+  X(XMM6L,  200, ymm6,   0,  8)  \
+  X(XMM7L,  201, ymm7,   0,  8)  \
+  X(XMM0H,  202, ymm0,   8,  8)  \
+  X(XMM1H,  203, ymm1,   8,  8)  \
+  X(XMM2H,  204, ymm2,   8,  8)  \
+  X(XMM3H,  205, ymm3,   8,  8)  \
+  X(XMM4H,  206, ymm4,   8,  8)  \
+  X(XMM5H,  207, ymm5,   8,  8)  \
+  X(XMM6H,  208, ymm6,   8,  8)  \
+  X(XMM7H,  209, ymm7,   8,  8)  \
+  X(YMM0,   252, ymm0,   0,  32) \
+  X(YMM1,   253, ymm1,   0,  32) \
+  X(YMM2,   254, ymm2,   0,  32) \
+  X(YMM3,   255, ymm3,   0,  32) \
+  X(YMM4,   256, ymm4,   0,  32) \
+  X(YMM5,   257, ymm5,   0,  32) \
+  X(YMM6,   258, ymm6,   0,  32) \
+  X(YMM7,   259, ymm7,   0,  32) \
+  X(YMM0H,  260, ymm0,   16, 16) \
+  X(YMM1H,  261, ymm1,   16, 16) \
+  X(YMM2H,  262, ymm2,   16, 16) \
+  X(YMM3H,  263, ymm3,   16, 16) \
+  X(YMM4H,  264, ymm4,   16, 16) \
+  X(YMM5H,  265, ymm5,   16, 16) \
+  X(YMM6H,  266, ymm6,   16, 16) \
+  X(YMM7H,  267, ymm7,   16, 16) \
+  X(YMM0I0, 268, ymm0,   0,  8)  \
+  X(YMM0I1, 269, ymm0,   8,  8)  \
+  X(YMM0I2, 270, ymm0,   16, 8)  \
+  X(YMM0I3, 271, ymm0,   24, 8)  \
+  X(YMM1I0, 272, ymm1,   0,  8)  \
+  X(YMM1I1, 273, ymm1,   8,  8)  \
+  X(YMM1I2, 274, ymm1,   16, 8)  \
+  X(YMM1I3, 275, ymm1,   24, 8)  \
+  X(YMM2I0, 276, ymm2,   0,  8)  \
+  X(YMM2I1, 277, ymm2,   8,  8)  \
+  X(YMM2I2, 278, ymm2,   16, 8)  \
+  X(YMM2I3, 279, ymm2,   24, 8)  \
+  X(YMM3I0, 280, ymm3,   0,  8)  \
+  X(YMM3I1, 281, ymm3,   8,  8)  \
+  X(YMM3I2, 282, ymm3,   16, 8)  \
+  X(YMM3I3, 283, ymm3,   24, 8)  \
+  X(YMM4I0, 284, ymm4,   0,  8)  \
+  X(YMM4I1, 285, ymm4,   8,  8)  \
+  X(YMM4I2, 286, ymm4,   16, 8)  \
+  X(YMM4I3, 287, ymm4,   24, 8)  \
+  X(YMM5I0, 288, ymm5,   0,  8)  \
+  X(YMM5I1, 289, ymm5,   8,  8)  \
+  X(YMM5I2, 290, ymm5,   16, 8)  \
+  X(YMM5I3, 291, ymm5,   24, 8)  \
+  X(YMM6I0, 292, ymm6,   0,  8)  \
+  X(YMM6I1, 293, ymm6,   8,  8)  \
+  X(YMM6I2, 294, ymm6,   16, 8)  \
+  X(YMM6I3, 295, ymm6,   24, 8)  \
+  X(YMM7I0, 296, ymm7,   0,  8)  \
+  X(YMM7I1, 297, ymm7,   8,  8)  \
+  X(YMM7I2, 298, ymm7,   16, 8)  \
+  X(YMM7I3, 299, ymm7,   24, 8)  \
+  X(YMM0F0, 300, ymm0,   0,  4)  \
+  X(YMM0F1, 301, ymm0,   4,  4)  \
+  X(YMM0F2, 302, ymm0,   8,  4)  \
+  X(YMM0F3, 303, ymm0,   12, 4)  \
+  X(YMM0F4, 304, ymm0,   16, 4)  \
+  X(YMM0F5, 305, ymm0,   20, 4)  \
+  X(YMM0F6, 306, ymm0,   24, 4)  \
+  X(YMM0F7, 307, ymm0,   28, 4)  \
+  X(YMM1F0, 308, ymm1,   0,  4)  \
+  X(YMM1F1, 309, ymm1,   4,  4)  \
+  X(YMM1F2, 310, ymm1,   8,  4)  \
+  X(YMM1F3, 311, ymm1,   12, 4)  \
+  X(YMM1F4, 312, ymm1,   16, 4)  \
+  X(YMM1F5, 313, ymm1,   20, 4)  \
+  X(YMM1F6, 314, ymm1,   24, 4)  \
+  X(YMM1F7, 315, ymm1,   28, 4)  \
+  X(YMM2F0, 316, ymm2,   0,  4)  \
+  X(YMM2F1, 317, ymm2,   4,  4)  \
+  X(YMM2F2, 318, ymm2,   8,  4)  \
+  X(YMM2F3, 319, ymm2,   12, 4)  \
+  X(YMM2F4, 320, ymm2,   16, 4)  \
+  X(YMM2F5, 321, ymm2,   20, 4)  \
+  X(YMM2F6, 322, ymm2,   24, 4)  \
+  X(YMM2F7, 323, ymm2,   28, 4)  \
+  X(YMM3F0, 324, ymm3,   0,  4)  \
+  X(YMM3F1, 325, ymm3,   4,  4)  \
+  X(YMM3F2, 326, ymm3,   8,  4)  \
+  X(YMM3F3, 327, ymm3,   12, 4)  \
+  X(YMM3F4, 328, ymm3,   16, 4)  \
+  X(YMM3F5, 329, ymm3,   20, 4)  \
+  X(YMM3F6, 330, ymm3,   24, 4)  \
+  X(YMM3F7, 331, ymm3,   28, 4)  \
+  X(YMM4F0, 332, ymm4,   0,  4)  \
+  X(YMM4F1, 333, ymm4,   4,  4)  \
+  X(YMM4F2, 334, ymm4,   8,  4)  \
+  X(YMM4F3, 335, ymm4,   12, 4)  \
+  X(YMM4F4, 336, ymm4,   16, 4)  \
+  X(YMM4F5, 337, ymm4,   20, 4)  \
+  X(YMM4F6, 338, ymm4,   24, 4)  \
+  X(YMM4F7, 339, ymm4,   28, 4)  \
+  X(YMM5F0, 340, ymm5,   0,  4)  \
+  X(YMM5F1, 341, ymm5,   4,  4)  \
+  X(YMM5F2, 342, ymm5,   8,  4)  \
+  X(YMM5F3, 343, ymm5,   12, 4)  \
+  X(YMM5F4, 344, ymm5,   16, 4)  \
+  X(YMM5F5, 345, ymm5,   20, 4)  \
+  X(YMM5F6, 346, ymm5,   24, 4)  \
+  X(YMM5F7, 347, ymm5,   28, 4)  \
+  X(YMM6F0, 348, ymm6,   0,  4)  \
+  X(YMM6F1, 349, ymm6,   4,  4)  \
+  X(YMM6F2, 350, ymm6,   8,  4)  \
+  X(YMM6F3, 351, ymm6,   12, 4)  \
+  X(YMM6F4, 352, ymm6,   16, 4)  \
+  X(YMM6F5, 353, ymm6,   20, 4)  \
+  X(YMM6F6, 354, ymm6,   24, 4)  \
+  X(YMM6F7, 355, ymm6,   28, 4)  \
+  X(YMM7F0, 356, ymm7,   0,  4)  \
+  X(YMM7F1, 357, ymm7,   4,  4)  \
+  X(YMM7F2, 358, ymm7,   8,  4)  \
+  X(YMM7F3, 359, ymm7,   12, 4)  \
+  X(YMM7F4, 360, ymm7,   16, 4)  \
+  X(YMM7F5, 361, ymm7,   20, 4)  \
+  X(YMM7F6, 362, ymm7,   24, 4)  \
+  X(YMM7F7, 363, ymm7,   28, 4)  \
+  X(YMM0D0, 364, ymm0,   0,  8)  \
+  X(YMM0D1, 365, ymm0,   8,  8)  \
+  X(YMM0D2, 366, ymm0,   16, 8)  \
+  X(YMM0D3, 367, ymm0,   24, 8)  \
+  X(YMM1D0, 368, ymm1,   0,  8)  \
+  X(YMM1D1, 369, ymm1,   8,  8)  \
+  X(YMM1D2, 370, ymm1,   16, 8)  \
+  X(YMM1D3, 371, ymm1,   24, 8)  \
+  X(YMM2D0, 372, ymm2,   0,  8)  \
+  X(YMM2D1, 373, ymm2,   8,  8)  \
+  X(YMM2D2, 374, ymm2,   16, 8)  \
+  X(YMM2D3, 375, ymm2,   24, 8)  \
+  X(YMM3D0, 376, ymm3,   0,  8)  \
+  X(YMM3D1, 377, ymm3,   8,  8)  \
+  X(YMM3D2, 378, ymm3,   16, 8)  \
+  X(YMM3D3, 379, ymm3,   24, 8)  \
+  X(YMM4D0, 380, ymm4,   0,  8)  \
+  X(YMM4D1, 381, ymm4,   8,  8)  \
+  X(YMM4D2, 382, ymm4,   16, 8)  \
+  X(YMM4D3, 383, ymm4,   24, 8)  \
+  X(YMM5D0, 384, ymm5,   0,  8)  \
+  X(YMM5D1, 385, ymm5,   8,  8)  \
+  X(YMM5D2, 386, ymm5,   16, 8)  \
+  X(YMM5D3, 387, ymm5,   24, 8)  \
+  X(YMM6D0, 388, ymm6,   0,  8)  \
+  X(YMM6D1, 389, ymm6,   8,  8)  \
+  X(YMM6D2, 390, ymm6,   16, 8)  \
+  X(YMM6D3, 391, ymm6,   24, 8)  \
+  X(YMM7D0, 392, ymm7,   0,  8)  \
+  X(YMM7D1, 393, ymm7,   8,  8)  \
+  X(YMM7D2, 394, ymm7,   16, 8)  \
+  X(YMM7D3, 395, ymm7,   24, 8)
 
 typedef U16 CV_Regx86;
 typedef enum CV_Regx86Enum
@@ -289,712 +297,712 @@ typedef enum CV_Regx86Enum
 CV_Regx86Enum;
 
 // X(NAME, CODE, (RDI_RegisterCode_X64) NAME, BYTE_POS, BYTE_SIZE)
-#define CV_Reg_X64_XList(X) \
-X(NONE,      0, nil, 0, 0)\
-X(AL,        1, rax, 0, 1)\
-X(CL,        2, rcx, 0, 1)\
-X(DL,        3, rdx, 0, 1)\
-X(BL,        4, rbx, 0, 1)\
-X(AH,        5, rax, 1, 1)\
-X(CH,        6, rcx, 1, 1)\
-X(DH,        7, rdx, 1, 1)\
-X(BH,        8, rbx, 1, 1)\
-X(AX,        9, rax, 0, 2)\
-X(CX,       10, rcx, 0, 2)\
-X(DX,       11, rdx, 0, 2)\
-X(BX,       12, rbx, 0, 2)\
-X(SP,       13, rsp, 0, 2)\
-X(BP,       14, rbp, 0, 2)\
-X(SI,       15, rsi, 0, 2)\
-X(DI,       16, rdi, 0, 2)\
-X(EAX,      17, rax, 0, 4)\
-X(ECX,      18, rcx, 0, 4)\
-X(EDX,      19, rdx, 0, 4)\
-X(EBX,      20, rbx, 0, 4)\
-X(ESP,      21, rsp, 0, 4)\
-X(EBP,      22, rbp, 0, 4)\
-X(ESI,      23, rsi, 0, 4)\
-X(EDI,      24, rdi, 0, 4)\
-X(ES,       25, es,  0, 2)\
-X(CS,       26, cs,  0, 2)\
-X(SS,       27, ss,  0, 2)\
-X(DS,       28, ds,  0, 2)\
-X(FS,       29, fs,  0, 2)\
-X(GS,       30, gs,  0, 2)\
-X(FLAGS,    32, rflags, 0, 2)\
-X(RIP,      33, rip,    0, 8)\
-X(EFLAGS,   34, rflags, 0, 4)\
-/* TODO: possibly missing control registers in x64 definitions? */ \
-X(CR0,      80, nil, 0, 0)\
-X(CR1,      81, nil, 0, 0)\
-X(CR2,      82, nil, 0, 0)\
-X(CR3,      83, nil, 0, 0)\
-X(CR4,      84, nil, 0, 0)\
-X(CR8,      88, nil, 0, 0)\
-X(DR0,      90, dr0, 0, 4)\
-X(DR1,      91, dr1, 0, 4)\
-X(DR2,      92, dr2, 0, 4)\
-X(DR3,      93, dr3, 0, 4)\
-X(DR4,      94, dr4, 0, 4)\
-X(DR5,      95, dr5, 0, 4)\
-X(DR6,      96, dr6, 0, 4)\
-X(DR7,      97, dr7, 0, 4)\
-/* TODO: possibly missing debug registers 8-15 in x64 definitions? */ \
-X(DR8,      98, nil, 0, 0)\
-X(DR9,      99, nil, 0, 0)\
-X(DR10,    100, nil, 0, 0)\
-X(DR11,    101, nil, 0, 0)\
-X(DR12,    102, nil, 0, 0)\
-X(DR13,    103, nil, 0, 0)\
-X(DR14,    104, nil, 0, 0)\
-X(DR15,    105, nil, 0, 0)\
-/* TODO: possibly missing ~whatever these are~ in x64 definitions? */ \
-X(GDTR,    110, nil, 0, 0)\
-X(GDTL,    111, nil, 0, 0)\
-X(IDTR,    112, nil, 0, 0)\
-X(IDTL,    113, nil, 0, 0)\
-X(LDTR,    114, nil, 0, 0)\
-X(TR,      115, nil, 0, 0)\
-X(ST0,     128, st0, 0, 10)\
-X(ST1,     129, st1, 0, 10)\
-X(ST2,     130, st2, 0, 10)\
-X(ST3,     131, st3, 0, 10)\
-X(ST4,     132, st4, 0, 10)\
-X(ST5,     133, st5, 0, 10)\
-X(ST6,     134, st6, 0, 10)\
-X(ST7,     135, st7, 0, 10)\
-/* TODO: possibly missing these, or not sure how they map to our x64 definitions? */ \
-X(CTRL,    136, nil, 0, 0)\
-X(STAT,    137, nil, 0, 0)\
-X(TAG,     138, nil, 0, 0)\
-X(FPIP,    139, nil, 0, 0)\
-X(FPCS,    140, nil, 0, 0)\
-X(FPDO,    141, nil, 0, 0)\
-X(FPDS,    142, nil, 0, 0)\
-X(ISEM,    143, nil, 0, 0)\
-X(FPEIP,   144, nil, 0, 0)\
-X(FPEDO,   145, nil, 0, 0)\
-X(MM0,     146, fpr0, 0, 8)\
-X(MM1,     147, fpr1, 0, 8)\
-X(MM2,     148, fpr2, 0, 8)\
-X(MM3,     149, fpr3, 0, 8)\
-X(MM4,     150, fpr4, 0, 8)\
-X(MM5,     151, fpr5, 0, 8)\
-X(MM6,     152, fpr6, 0, 8)\
-X(MM7,     153, fpr7, 0, 8)\
-X(XMM0,    154, zmm0,  0, 16)\
-X(XMM1,    155, zmm1,  0, 16)\
-X(XMM2,    156, zmm2,  0, 16)\
-X(XMM3,    157, zmm3,  0, 16)\
-X(XMM4,    158, zmm4,  0, 16)\
-X(XMM5,    159, zmm5,  0, 16)\
-X(XMM6,    160, zmm6,  0, 16)\
-X(XMM7,    161, zmm7,  0, 16)\
-X(XMM0_0,  162, zmm0,  0,  4)\
-X(XMM0_1,  163, zmm0,  4,  4)\
-X(XMM0_2,  164, zmm0,  8,  4)\
-X(XMM0_3,  165, zmm0, 12,  4)\
-X(XMM1_0,  166, zmm1,  0,  4)\
-X(XMM1_1,  167, zmm1,  4,  4)\
-X(XMM1_2,  168, zmm1,  8,  4)\
-X(XMM1_3,  169, zmm1, 12,  4)\
-X(XMM2_0,  170, zmm2,  0,  4)\
-X(XMM2_1,  171, zmm2,  4,  4)\
-X(XMM2_2,  172, zmm2,  8,  4)\
-X(XMM2_3,  173, zmm2, 12,  4)\
-X(XMM3_0,  174, zmm3,  0,  4)\
-X(XMM3_1,  175, zmm3,  4,  4)\
-X(XMM3_2,  176, zmm3,  8,  4)\
-X(XMM3_3,  177, zmm3, 12,  4)\
-X(XMM4_0,  178, zmm4,  0,  4)\
-X(XMM4_1,  179, zmm4,  4,  4)\
-X(XMM4_2,  180, zmm4,  8,  4)\
-X(XMM4_3,  181, zmm4, 12,  4)\
-X(XMM5_0,  182, zmm5,  0,  4)\
-X(XMM5_1,  183, zmm5,  4,  4)\
-X(XMM5_2,  184, zmm5,  8,  4)\
-X(XMM5_3,  185, zmm5, 12,  4)\
-X(XMM6_0,  186, zmm6,  0,  4)\
-X(XMM6_1,  187, zmm6,  4,  4)\
-X(XMM6_2,  188, zmm6,  8,  4)\
-X(XMM6_3,  189, zmm6, 12,  4)\
-X(XMM7_0,  190, zmm7,  0,  4)\
-X(XMM7_1,  191, zmm7,  4,  4)\
-X(XMM7_2,  192, zmm7,  8,  4)\
-X(XMM7_3,  193, zmm7, 12,  4)\
-X(XMM0L,   194, zmm0,  0,  8)\
-X(XMM1L,   195, zmm1,  0,  8)\
-X(XMM2L,   196, zmm2,  0,  8)\
-X(XMM3L,   197, zmm3,  0,  8)\
-X(XMM4L,   198, zmm4,  0,  8)\
-X(XMM5L,   199, zmm5,  0,  8)\
-X(XMM6L,   200, zmm6,  0,  8)\
-X(XMM7L,   201, zmm7,  0,  8)\
-X(XMM0H,   202, zmm0,  8,  8)\
-X(XMM1H,   203, zmm1,  8,  8)\
-X(XMM2H,   204, zmm2,  8,  8)\
-X(XMM3H,   205, zmm3,  8,  8)\
-X(XMM4H,   206, zmm4,  8,  8)\
-X(XMM5H,   207, zmm5,  8,  8)\
-X(XMM6H,   208, zmm6,  8,  8)\
-X(XMM7H,   209, zmm7,  8,  8)\
-X(MXCSR,   211, mxcsr, 0,  4)\
-X(EMM0L,   220, zmm0,  0,  8)\
-X(EMM1L,   221, zmm1,  0,  8)\
-X(EMM2L,   222, zmm2,  0,  8)\
-X(EMM3L,   223, zmm3,  0,  8)\
-X(EMM4L,   224, zmm4,  0,  8)\
-X(EMM5L,   225, zmm5,  0,  8)\
-X(EMM6L,   226, zmm6,  0,  8)\
-X(EMM7L,   227, zmm7,  0,  8)\
-X(EMM0H,   228, zmm0,  8,  8)\
-X(EMM1H,   229, zmm1,  8,  8)\
-X(EMM2H,   230, zmm2,  8,  8)\
-X(EMM3H,   231, zmm3,  8,  8)\
-X(EMM4H,   232, zmm4,  8,  8)\
-X(EMM5H,   233, zmm5,  8,  8)\
-X(EMM6H,   234, zmm6,  8,  8)\
-X(EMM7H,   235, zmm7,  8,  8)\
-X(MM00,    236, fpr0,  0,  4)\
-X(MM01,    237, fpr0,  4,  4)\
-X(MM10,    238, fpr1,  0,  4)\
-X(MM11,    239, fpr1,  4,  4)\
-X(MM20,    240, fpr2,  0,  4)\
-X(MM21,    241, fpr2,  4,  4)\
-X(MM30,    242, fpr3,  0,  4)\
-X(MM31,    243, fpr3,  4,  4)\
-X(MM40,    244, fpr4,  0,  4)\
-X(MM41,    245, fpr4,  4,  4)\
-X(MM50,    246, fpr5,  0,  4)\
-X(MM51,    247, fpr5,  4,  4)\
-X(MM60,    248, fpr6,  0,  4)\
-X(MM61,    249, fpr6,  4,  4)\
-X(MM70,    250, fpr7,  0,  4)\
-X(MM71,    251, fpr7,  4,  4)\
-X(XMM8,    252, zmm8,   0, 16)\
-X(XMM9,    253, zmm9,   0, 16)\
-X(XMM10,   254, zmm10,  0, 16)\
-X(XMM11,   255, zmm11,  0, 16)\
-X(XMM12,   256, zmm12,  0, 16)\
-X(XMM13,   257, zmm13,  0, 16)\
-X(XMM14,   258, zmm14,  0, 16)\
-X(XMM15,   259, zmm15,  0, 16)\
-X(XMM8_0,  260, zmm8,   0, 16)\
-X(XMM8_1,  261, zmm8,   4, 16)\
-X(XMM8_2,  262, zmm8,   8, 16)\
-X(XMM8_3,  263, zmm8,  12, 16)\
-X(XMM9_0,  264, zmm9,   0,  4)\
-X(XMM9_1,  265, zmm9,   4,  4)\
-X(XMM9_2,  266, zmm9,   8,  4)\
-X(XMM9_3,  267, zmm9,  12,  4)\
-X(XMM10_0, 268, zmm10,  0,  4)\
-X(XMM10_1, 269, zmm10,  4,  4)\
-X(XMM10_2, 270, zmm10,  8,  4)\
-X(XMM10_3, 271, zmm10, 12,  4)\
-X(XMM11_0, 272, zmm11,  0,  4)\
-X(XMM11_1, 273, zmm11,  4,  4)\
-X(XMM11_2, 274, zmm11,  8,  4)\
-X(XMM11_3, 275, zmm11, 12,  4)\
-X(XMM12_0, 276, zmm12,  0,  4)\
-X(XMM12_1, 277, zmm12,  4,  4)\
-X(XMM12_2, 278, zmm12,  8,  4)\
-X(XMM12_3, 279, zmm12, 12,  4)\
-X(XMM13_0, 280, zmm13,  0,  4)\
-X(XMM13_1, 281, zmm13,  4,  4)\
-X(XMM13_2, 282, zmm13,  8,  4)\
-X(XMM13_3, 283, zmm13, 12,  4)\
-X(XMM14_0, 284, zmm14,  0,  4)\
-X(XMM14_1, 285, zmm14,  4,  4)\
-X(XMM14_2, 286, zmm14,  8,  4)\
-X(XMM14_3, 287, zmm14, 12,  4)\
-X(XMM15_0, 288, zmm15,  0,  4)\
-X(XMM15_1, 289, zmm15,  4,  4)\
-X(XMM15_2, 290, zmm15,  8,  4)\
-X(XMM15_3, 291, zmm15, 12,  4)\
-X(XMM8L,   292, zmm8,   0,  8)\
-X(XMM9L,   293, zmm9,   0,  8)\
-X(XMM10L,  294, zmm10,  0,  8)\
-X(XMM11L,  295, zmm11,  0,  8)\
-X(XMM12L,  296, zmm12,  0,  8)\
-X(XMM13L,  297, zmm13,  0,  8)\
-X(XMM14L,  298, zmm14,  0,  8)\
-X(XMM15L,  299, zmm15,  0,  8)\
-X(XMM8H,   300, zmm8,   8,  8)\
-X(XMM9H,   301, zmm9,   8,  8)\
-X(XMM10H,  302, zmm10,  8,  8)\
-X(XMM11H,  303, zmm11,  8,  8)\
-X(XMM12H,  304, zmm12,  8,  8)\
-X(XMM13H,  305, zmm13,  8,  8)\
-X(XMM14H,  306, zmm14,  8,  8)\
-X(XMM15H,  307, zmm15,  8,  8)\
-X(EMM8L,   308, zmm8,   0,  8)\
-X(EMM9L,   309, zmm9,   0,  8)\
-X(EMM10L,  310, zmm10,  0,  8)\
-X(EMM11L,  311, zmm11,  0,  8)\
-X(EMM12L,  312, zmm12,  0,  8)\
-X(EMM13L,  313, zmm13,  0,  8)\
-X(EMM14L,  314, zmm14,  0,  8)\
-X(EMM15L,  315, zmm15,  0,  8)\
-X(EMM8H,   316, zmm8,   8,  8)\
-X(EMM9H,   317, zmm9,   8,  8)\
-X(EMM10H,  318, zmm10,  8,  8)\
-X(EMM11H,  319, zmm11,  8,  8)\
-X(EMM12H,  320, zmm12,  8,  8)\
-X(EMM13H,  321, zmm13,  8,  8)\
-X(EMM14H,  322, zmm14,  8,  8)\
-X(EMM15H,  323, zmm15,  8,  8)\
-X(SIL,     324, rsi, 0, 1)\
-X(DIL,     325, rdi, 0, 1)\
-X(BPL,     326, rbp, 0, 1)\
-X(SPL,     327, rsp, 0, 1)\
-X(RAX,     328, rax, 0, 8)\
-X(RBX,     329, rbx, 0, 8)\
-X(RCX,     330, rcx, 0, 8)\
-X(RDX,     331, rdx, 0, 8)\
-X(RSI,     332, rsi, 0, 8)\
-X(RDI,     333, rdi, 0, 8)\
-X(RBP,     334, rbp, 0, 8)\
-X(RSP,     335, rsp, 0, 8)\
-X(R8,      336, r8,  0, 8)\
-X(R9,      337, r9,  0, 8)\
-X(R10,     338, r10, 0, 8)\
-X(R11,     339, r11, 0, 8)\
-X(R12,     340, r12, 0, 8)\
-X(R13,     341, r13, 0, 8)\
-X(R14,     342, r14, 0, 8)\
-X(R15,     343, r15, 0, 8)\
-X(R8B,     344, r8,  0, 1)\
-X(R9B,     345, r9,  0, 1)\
-X(R10B,    346, r10, 0, 1)\
-X(R11B,    347, r11, 0, 1)\
-X(R12B,    348, r12, 0, 1)\
-X(R13B,    349, r13, 0, 1)\
-X(R14B,    350, r14, 0, 1)\
-X(R15B,    351, r15, 0, 1)\
-X(R8W,     352, r8,  0, 2)\
-X(R9W,     353, r9,  0, 2)\
-X(R10W,    354, r10, 0, 2)\
-X(R11W,    355, r11, 0, 2)\
-X(R12W,    356, r12, 0, 2)\
-X(R13W,    357, r13, 0, 2)\
-X(R14W,    358, r14, 0, 2)\
-X(R15W,    359, r15, 0, 2)\
-X(R8D,     360, r8,  0, 4)\
-X(R9D,     361, r9,  0, 4)\
-X(R10D,    362, r10, 0, 4)\
-X(R11D,    363, r11, 0, 4)\
-X(R12D,    364, r12, 0, 4)\
-X(R13D,    365, r13, 0, 4)\
-X(R14D,    366, r14, 0, 4)\
-X(R15D,    367, r15, 0, 4)\
-X(YMM0,    368, zmm0,   0, 32)\
-X(YMM1,    369, zmm1,   0, 32)\
-X(YMM2,    370, zmm2,   0, 32)\
-X(YMM3,    371, zmm3,   0, 32)\
-X(YMM4,    372, zmm4,   0, 32)\
-X(YMM5,    373, zmm5,   0, 32)\
-X(YMM6,    374, zmm6,   0, 32)\
-X(YMM7,    375, zmm7,   0, 32)\
-X(YMM8,    376, zmm8,   0, 32)\
-X(YMM9,    377, zmm9,   0, 32)\
-X(YMM10,   378, zmm10,  0, 32)\
-X(YMM11,   379, zmm11,  0, 32)\
-X(YMM12,   380, zmm12,  0, 32)\
-X(YMM13,   381, zmm13,  0, 32)\
-X(YMM14,   382, zmm14,  0, 32)\
-X(YMM15,   383, zmm15,  0, 32)\
-X(YMM0H,   384, zmm0,  16, 32)\
-X(YMM1H,   385, zmm1,  16, 32)\
-X(YMM2H,   386, zmm2,  16, 32)\
-X(YMM3H,   387, zmm3,  16, 32)\
-X(YMM4H,   388, zmm4,  16, 32)\
-X(YMM5H,   389, zmm5,  16, 32)\
-X(YMM6H,   390, zmm6,  16, 32)\
-X(YMM7H,   391, zmm7,  16, 32)\
-X(YMM8H,   392, zmm8,  16, 32)\
-X(YMM9H,   393, zmm9,  16, 32)\
-X(YMM10H,  394, zmm10, 16, 32)\
-X(YMM11H,  395, zmm11, 16, 32)\
-X(YMM12H,  396, zmm12, 16, 32)\
-X(YMM13H,  397, zmm13, 16, 32)\
-X(YMM14H,  398, zmm14, 16, 32)\
-X(YMM15H,  399, zmm15, 16, 32)\
-X(XMM0IL,  400, zmm0,   0,  8)\
-X(XMM1IL,  401, zmm1,   0,  8)\
-X(XMM2IL,  402, zmm2,   0,  8)\
-X(XMM3IL,  403, zmm3,   0,  8)\
-X(XMM4IL,  404, zmm4,   0,  8)\
-X(XMM5IL,  405, zmm5,   0,  8)\
-X(XMM6IL,  406, zmm6,   0,  8)\
-X(XMM7IL,  407, zmm7,   0,  8)\
-X(XMM8IL,  408, zmm8,   0,  8)\
-X(XMM9IL,  409, zmm9,   0,  8)\
-X(XMM10IL, 410, zmm10,  0,  8)\
-X(XMM11IL, 411, zmm11,  0,  8)\
-X(XMM12IL, 412, zmm12,  0,  8)\
-X(XMM13IL, 413, zmm13,  0,  8)\
-X(XMM14IL, 414, zmm14,  0,  8)\
-X(XMM15IL, 415, zmm15,  0,  8)\
-X(XMM0IH,  416, zmm0,   8,  8)\
-X(XMM1IH,  417, zmm1,   8,  8)\
-X(XMM2IH,  418, zmm2,   8,  8)\
-X(XMM3IH,  419, zmm3,   8,  8)\
-X(XMM4IH,  420, zmm4,   8,  8)\
-X(XMM5IH,  421, zmm5,   8,  8)\
-X(XMM6IH,  422, zmm6,   8,  8)\
-X(XMM7IH,  423, zmm7,   8,  8)\
-X(XMM8IH,  424, zmm8,   8,  8)\
-X(XMM9IH,  425, zmm9,   8,  8)\
-X(XMM10IH, 426, zmm10,  8,  8)\
-X(XMM11IH, 427, zmm11,  8,  8)\
-X(XMM12IH, 428, zmm12,  8,  8)\
-X(XMM13IH, 429, zmm13,  8,  8)\
-X(XMM14IH, 430, zmm14,  8,  8)\
-X(XMM15IH, 431, zmm15,  8,  8)\
-X(YMM0I0,  432, zmm0,   0,  8)\
-X(YMM0I1,  433, zmm0,   8,  8)\
-X(YMM0I2,  434, zmm0,  16,  8)\
-X(YMM0I3,  435, zmm0,  24,  8)\
-X(YMM1I0,  436, zmm1,   0,  8)\
-X(YMM1I1,  437, zmm1,   8,  8)\
-X(YMM1I2,  438, zmm1,  16,  8)\
-X(YMM1I3,  439, zmm1,  24,  8)\
-X(YMM2I0,  440, zmm2,   0,  8)\
-X(YMM2I1,  441, zmm2,   8,  8)\
-X(YMM2I2,  442, zmm2,  16,  8)\
-X(YMM2I3,  443, zmm2,  24,  8)\
-X(YMM3I0,  444, zmm3,   0,  8)\
-X(YMM3I1,  445, zmm3,   8,  8)\
-X(YMM3I2,  446, zmm3,  16,  8)\
-X(YMM3I3,  447, zmm3,  24,  8)\
-X(YMM4I0,  448, zmm4,   0,  8)\
-X(YMM4I1,  449, zmm4,   8,  8)\
-X(YMM4I2,  450, zmm4,  16,  8)\
-X(YMM4I3,  451, zmm4,  24,  8)\
-X(YMM5I0,  452, zmm5,   0,  8)\
-X(YMM5I1,  453, zmm5,   8,  8)\
-X(YMM5I2,  454, zmm5,  16,  8)\
-X(YMM5I3,  455, zmm5,  24,  8)\
-X(YMM6I0,  456, zmm6,   0,  8)\
-X(YMM6I1,  457, zmm6,   8,  8)\
-X(YMM6I2,  458, zmm6,  16,  8)\
-X(YMM6I3,  459, zmm6,  24,  8)\
-X(YMM7I0,  460, zmm7,   0,  8)\
-X(YMM7I1,  461, zmm7,   8,  8)\
-X(YMM7I2,  462, zmm7,  16,  8)\
-X(YMM7I3,  463, zmm7,  24,  8)\
-X(YMM8I0,  464, zmm8,   0,  8)\
-X(YMM8I1,  465, zmm8,   8,  8)\
-X(YMM8I2,  466, zmm8,  16,  8)\
-X(YMM8I3,  467, zmm8,  24,  8)\
-X(YMM9I0,  468, zmm9,   0,  8)\
-X(YMM9I1,  469, zmm9,   8,  8)\
-X(YMM9I2,  470, zmm9,  16,  8)\
-X(YMM9I3,  471, zmm9,  24,  8)\
-X(YMM10I0, 472, zmm10,  0,  8)\
-X(YMM10I1, 473, zmm10,  8,  8)\
-X(YMM10I2, 474, zmm10, 16,  8)\
-X(YMM10I3, 475, zmm10, 24,  8)\
-X(YMM11I0, 476, zmm11,  0,  8)\
-X(YMM11I1, 477, zmm11,  8,  8)\
-X(YMM11I2, 478, zmm11, 16,  8)\
-X(YMM11I3, 479, zmm11, 24,  8)\
-X(YMM12I0, 480, zmm12,  0,  8)\
-X(YMM12I1, 481, zmm12,  8,  8)\
-X(YMM12I2, 482, zmm12, 16,  8)\
-X(YMM12I3, 483, zmm12, 24,  8)\
-X(YMM13I0, 484, zmm13,  0,  8)\
-X(YMM13I1, 485, zmm13,  8,  8)\
-X(YMM13I2, 486, zmm13, 16,  8)\
-X(YMM13I3, 487, zmm13, 24,  8)\
-X(YMM14I0, 488, zmm14,  0,  8)\
-X(YMM14I1, 489, zmm14,  8,  8)\
-X(YMM14I2, 490, zmm14, 16,  8)\
-X(YMM14I3, 491, zmm14, 24,  8)\
-X(YMM15I0, 492, zmm15,  0,  8)\
-X(YMM15I1, 493, zmm15,  8,  8)\
-X(YMM15I2, 494, zmm15, 16,  8)\
-X(YMM15I3, 495, zmm15, 24,  8)\
-X(YMM0F0,  496, zmm0,   0,  4)\
-X(YMM0F1,  497, zmm0,   4,  4)\
-X(YMM0F2,  498, zmm0,   8,  4)\
-X(YMM0F3,  499, zmm0,  12,  4)\
-X(YMM0F4,  500, zmm0,  16,  4)\
-X(YMM0F5,  501, zmm0,  20,  4)\
-X(YMM0F6,  502, zmm0,  24,  4)\
-X(YMM0F7,  503, zmm0,  28,  4)\
-X(YMM1F0,  504, zmm1,   0,  4)\
-X(YMM1F1,  505, zmm1,   4,  4)\
-X(YMM1F2,  506, zmm1,   8,  4)\
-X(YMM1F3,  507, zmm1,  12,  4)\
-X(YMM1F4,  508, zmm1,  16,  4)\
-X(YMM1F5,  509, zmm1,  20,  4)\
-X(YMM1F6,  510, zmm1,  24,  4)\
-X(YMM1F7,  511, zmm1,  28,  4)\
-X(YMM2F0,  512, zmm2,   0,  4)\
-X(YMM2F1,  513, zmm2,   4,  4)\
-X(YMM2F2,  514, zmm2,   8,  4)\
-X(YMM2F3,  515, zmm2,  12,  4)\
-X(YMM2F4,  516, zmm2,  16,  4)\
-X(YMM2F5,  517, zmm2,  20,  4)\
-X(YMM2F6,  518, zmm2,  24,  4)\
-X(YMM2F7,  519, zmm2,  28,  4)\
-X(YMM3F0,  520, zmm3,   0,  4)\
-X(YMM3F1,  521, zmm3,   4,  4)\
-X(YMM3F2,  522, zmm3,   8,  4)\
-X(YMM3F3,  523, zmm3,  12,  4)\
-X(YMM3F4,  524, zmm3,  16,  4)\
-X(YMM3F5,  525, zmm3,  20,  4)\
-X(YMM3F6,  526, zmm3,  24,  4)\
-X(YMM3F7,  527, zmm3,  28,  4)\
-X(YMM4F0,  528, zmm4,   0,  4)\
-X(YMM4F1,  529, zmm4,   4,  4)\
-X(YMM4F2,  530, zmm4,   8,  4)\
-X(YMM4F3,  531, zmm4,  12,  4)\
-X(YMM4F4,  532, zmm4,  16,  4)\
-X(YMM4F5,  533, zmm4,  20,  4)\
-X(YMM4F6,  534, zmm4,  24,  4)\
-X(YMM4F7,  535, zmm4,  28,  4)\
-X(YMM5F0,  536, zmm5,   0,  4)\
-X(YMM5F1,  537, zmm5,   4,  4)\
-X(YMM5F2,  538, zmm5,   8,  4)\
-X(YMM5F3,  539, zmm5,  12,  4)\
-X(YMM5F4,  540, zmm5,  16,  4)\
-X(YMM5F5,  541, zmm5,  20,  4)\
-X(YMM5F6,  542, zmm5,  24,  4)\
-X(YMM5F7,  543, zmm5,  28,  4)\
-X(YMM6F0,  544, zmm6,   0,  4)\
-X(YMM6F1,  545, zmm6,   4,  4)\
-X(YMM6F2,  546, zmm6,   8,  4)\
-X(YMM6F3,  547, zmm6,  12,  4)\
-X(YMM6F4,  548, zmm6,  16,  4)\
-X(YMM6F5,  549, zmm6,  20,  4)\
-X(YMM6F6,  550, zmm6,  24,  4)\
-X(YMM6F7,  551, zmm6,  28,  4)\
-X(YMM7F0,  552, zmm7,   0,  4)\
-X(YMM7F1,  553, zmm7,   4,  4)\
-X(YMM7F2,  554, zmm7,   8,  4)\
-X(YMM7F3,  555, zmm7,  12,  4)\
-X(YMM7F4,  556, zmm7,  16,  4)\
-X(YMM7F5,  557, zmm7,  20,  4)\
-X(YMM7F6,  558, zmm7,  24,  4)\
-X(YMM7F7,  559, zmm7,  28,  4)\
-X(YMM8F0,  560, zmm8,   0,  4)\
-X(YMM8F1,  561, zmm8,   4,  4)\
-X(YMM8F2,  562, zmm8,   8,  4)\
-X(YMM8F3,  563, zmm8,  12,  4)\
-X(YMM8F4,  564, zmm8,  16,  4)\
-X(YMM8F5,  565, zmm8,  20,  4)\
-X(YMM8F6,  566, zmm8,  24,  4)\
-X(YMM8F7,  567, zmm8,  28,  4)\
-X(YMM9F0,  568, zmm9,   0,  4)\
-X(YMM9F1,  569, zmm9,   4,  4)\
-X(YMM9F2,  570, zmm9,   8,  4)\
-X(YMM9F3,  571, zmm9,  12,  4)\
-X(YMM9F4,  572, zmm9,  16,  4)\
-X(YMM9F5,  573, zmm9,  20,  4)\
-X(YMM9F6,  574, zmm9,  24,  4)\
-X(YMM9F7,  575, zmm9,  28,  4)\
-X(YMM10F0, 576, zmm10,  0,  4)\
-X(YMM10F1, 577, zmm10,  4,  4)\
-X(YMM10F2, 578, zmm10,  8,  4)\
-X(YMM10F3, 579, zmm10, 12,  4)\
-X(YMM10F4, 580, zmm10, 16,  4)\
-X(YMM10F5, 581, zmm10, 20,  4)\
-X(YMM10F6, 582, zmm10, 24,  4)\
-X(YMM10F7, 583, zmm10, 28,  4)\
-X(YMM11F0, 584, zmm11,  0,  4)\
-X(YMM11F1, 585, zmm11,  4,  4)\
-X(YMM11F2, 586, zmm11,  8,  4)\
-X(YMM11F3, 587, zmm11, 12,  4)\
-X(YMM11F4, 588, zmm11, 16,  4)\
-X(YMM11F5, 589, zmm11, 20,  4)\
-X(YMM11F6, 590, zmm11, 24,  4)\
-X(YMM11F7, 591, zmm11, 28,  4)\
-X(YMM12F0, 592, zmm12,  0,  4)\
-X(YMM12F1, 593, zmm12,  4,  4)\
-X(YMM12F2, 594, zmm12,  8,  4)\
-X(YMM12F3, 595, zmm12, 12,  4)\
-X(YMM12F4, 596, zmm12, 16,  4)\
-X(YMM12F5, 597, zmm12, 20,  4)\
-X(YMM12F6, 598, zmm12, 24,  4)\
-X(YMM12F7, 599, zmm12, 28,  4)\
-X(YMM13F0, 600, zmm13,  0,  4)\
-X(YMM13F1, 601, zmm13,  4,  4)\
-X(YMM13F2, 602, zmm13,  8,  4)\
-X(YMM13F3, 603, zmm13, 12,  4)\
-X(YMM13F4, 604, zmm13, 16,  4)\
-X(YMM13F5, 605, zmm13, 20,  4)\
-X(YMM13F6, 606, zmm13, 24,  4)\
-X(YMM13F7, 607, zmm13, 28,  4)\
-X(YMM14F0, 608, zmm14,  0,  4)\
-X(YMM14F1, 609, zmm14,  4,  4)\
-X(YMM14F2, 610, zmm14,  8,  4)\
-X(YMM14F3, 611, zmm14, 12,  4)\
-X(YMM14F4, 612, zmm14, 16,  4)\
-X(YMM14F5, 613, zmm14, 20,  4)\
-X(YMM14F6, 614, zmm14, 24,  4)\
-X(YMM14F7, 615, zmm14, 28,  4)\
-X(YMM15F0, 616, zmm15,  0,  4)\
-X(YMM15F1, 617, zmm15,  4,  4)\
-X(YMM15F2, 618, zmm15,  8,  4)\
-X(YMM15F3, 619, zmm15, 12,  4)\
-X(YMM15F4, 620, zmm15, 16,  4)\
-X(YMM15F5, 621, zmm15, 20,  4)\
-X(YMM15F6, 622, zmm15, 24,  4)\
-X(YMM15F7, 623, zmm15, 28,  4)\
-X(YMM0D0,  624, zmm0,   0,  8)\
-X(YMM0D1,  625, zmm0,   8,  8)\
-X(YMM0D2,  626, zmm0,  16,  8)\
-X(YMM0D3,  627, zmm0,  24,  8)\
-X(YMM1D0,  628, zmm1,   0,  8)\
-X(YMM1D1,  629, zmm1,   8,  8)\
-X(YMM1D2,  630, zmm1,  16,  8)\
-X(YMM1D3,  631, zmm1,  24,  8)\
-X(YMM2D0,  632, zmm2,   0,  8)\
-X(YMM2D1,  633, zmm2,   8,  8)\
-X(YMM2D2,  634, zmm2,  16,  8)\
-X(YMM2D3,  635, zmm2,  24,  8)\
-X(YMM3D0,  636, zmm3,   0,  8)\
-X(YMM3D1,  637, zmm3,   8,  8)\
-X(YMM3D2,  638, zmm3,  16,  8)\
-X(YMM3D3,  639, zmm3,  24,  8)\
-X(YMM4D0,  640, zmm4,   0,  8)\
-X(YMM4D1,  641, zmm4,   8,  8)\
-X(YMM4D2,  642, zmm4,  16,  8)\
-X(YMM4D3,  643, zmm4,  24,  8)\
-X(YMM5D0,  644, zmm5,   0,  8)\
-X(YMM5D1,  645, zmm5,   8,  8)\
-X(YMM5D2,  646, zmm5,  16,  8)\
-X(YMM5D3,  647, zmm5,  24,  8)\
-X(YMM6D0,  648, zmm6,   0,  8)\
-X(YMM6D1,  649, zmm6,   8,  8)\
-X(YMM6D2,  650, zmm6,  16,  8)\
-X(YMM6D3,  651, zmm6,  24,  8)\
-X(YMM7D0,  652, zmm7,   0,  8)\
-X(YMM7D1,  653, zmm7,   8,  8)\
-X(YMM7D2,  654, zmm7,  16,  8)\
-X(YMM7D3,  655, zmm7,  24,  8)\
-X(YMM8D0,  656, zmm8,   0,  8)\
-X(YMM8D1,  657, zmm8,   8,  8)\
-X(YMM8D2,  658, zmm8,  16,  8)\
-X(YMM8D3,  659, zmm8,  24,  8)\
-X(YMM9D0,  660, zmm9,   0,  8)\
-X(YMM9D1,  661, zmm9,   8,  8)\
-X(YMM9D2,  662, zmm9,  16,  8)\
-X(YMM9D3,  663, zmm9,  24,  8)\
-X(YMM10D0, 664, zmm10,  0,  8)\
-X(YMM10D1, 665, zmm10,  8,  8)\
-X(YMM10D2, 666, zmm10, 16,  8)\
-X(YMM10D3, 667, zmm10, 24,  8)\
-X(YMM11D0, 668, zmm11,  0,  8)\
-X(YMM11D1, 669, zmm11,  8,  8)\
-X(YMM11D2, 670, zmm11, 16,  8)\
-X(YMM11D3, 671, zmm11, 24,  8)\
-X(YMM12D0, 672, zmm12,  0,  8)\
-X(YMM12D1, 673, zmm12,  8,  8)\
-X(YMM12D2, 674, zmm12, 16,  8)\
-X(YMM12D3, 675, zmm12, 24,  8)\
-X(YMM13D0, 676, zmm13,  0,  8)\
-X(YMM13D1, 677, zmm13,  8,  8)\
-X(YMM13D2, 678, zmm13, 16,  8)\
-X(YMM13D3, 679, zmm13, 24,  8)\
-X(YMM14D0, 680, zmm14,  0,  8)\
-X(YMM14D1, 681, zmm14,  8,  8)\
-X(YMM14D2, 682, zmm14, 16,  8)\
-X(YMM14D3, 683, zmm14, 24,  8)\
-X(YMM15D0, 684, zmm15,  0,  8)\
-X(YMM15D1, 685, zmm15,  8,  8)\
-X(YMM15D2, 686, zmm15, 16,  8)\
-X(YMM15D3, 687, zmm15, 24,  8)\
-X(XMM16,   694, zmm16,  0, 16)\
-X(XMM17,   695, zmm17,  0, 16)\
-X(XMM18,   696, zmm18,  0, 16)\
-X(XMM19,   697, zmm19,  0, 16)\
-X(XMM20,   698, zmm20,  0, 16)\
-X(XMM21,   699, zmm21,  0, 16)\
-X(XMM22,   700, zmm22,  0, 16)\
-X(XMM23,   701, zmm23,  0, 16)\
-X(XMM24,   702, zmm24,  0, 16)\
-X(XMM25,   703, zmm25,  0, 16)\
-X(XMM26,   704, zmm26,  0, 16)\
-X(XMM27,   705, zmm27,  0, 16)\
-X(XMM28,   706, zmm28,  0, 16)\
-X(XMM29,   707, zmm29,  0, 16)\
-X(XMM30,   708, zmm30,  0, 16)\
-X(XMM31,   709, zmm31,  0, 16)\
-X(YMM16,   710, zmm16,  0, 32)\
-X(YMM17,   711, zmm17,  0, 32)\
-X(YMM18,   712, zmm18,  0, 32)\
-X(YMM19,   713, zmm19,  0, 32)\
-X(YMM20,   714, zmm20,  0, 32)\
-X(YMM21,   715, zmm21,  0, 32)\
-X(YMM22,   716, zmm22,  0, 32)\
-X(YMM23,   717, zmm23,  0, 32)\
-X(YMM24,   718, zmm24,  0, 32)\
-X(YMM25,   719, zmm25,  0, 32)\
-X(YMM26,   720, zmm26,  0, 32)\
-X(YMM27,   721, zmm27,  0, 32)\
-X(YMM28,   722, zmm28,  0, 32)\
-X(YMM29,   723, zmm29,  0, 32)\
-X(YMM30,   724, zmm30,  0, 32)\
-X(YMM31,   725, zmm31,  0, 32)\
-X(ZMM0,    726, zmm0,   0, 64)\
-X(ZMM1,    727, zmm1,   0, 64)\
-X(ZMM2,    728, zmm2,   0, 64)\
-X(ZMM3,    729, zmm3,   0, 64)\
-X(ZMM4,    730, zmm4,   0, 64)\
-X(ZMM5,    731, zmm5,   0, 64)\
-X(ZMM6,    732, zmm6,   0, 64)\
-X(ZMM7,    733, zmm7,   0, 64)\
-X(ZMM8,    734, zmm8,   0, 64)\
-X(ZMM9,    735, zmm9,   0, 64)\
-X(ZMM10,   736, zmm10,  0, 64)\
-X(ZMM11,   737, zmm11,  0, 64)\
-X(ZMM12,   738, zmm12,  0, 64)\
-X(ZMM13,   739, zmm13,  0, 64)\
-X(ZMM14,   740, zmm14,  0, 64)\
-X(ZMM15,   741, zmm15,  0, 64)\
-X(ZMM16,   742, zmm16,  0, 64)\
-X(ZMM17,   743, zmm17,  0, 64)\
-X(ZMM18,   744, zmm18,  0, 64)\
-X(ZMM19,   745, zmm19,  0, 64)\
-X(ZMM20,   746, zmm20,  0, 64)\
-X(ZMM21,   747, zmm21,  0, 64)\
-X(ZMM22,   748, zmm22,  0, 64)\
-X(ZMM23,   749, zmm23,  0, 64)\
-X(ZMM24,   750, zmm24,  0, 64)\
-X(ZMM25,   751, zmm25,  0, 64)\
-X(ZMM26,   752, zmm26,  0, 64)\
-X(ZMM27,   753, zmm27,  0, 64)\
-X(ZMM28,   754, zmm28,  0, 64)\
-X(ZMM29,   755, zmm29,  0, 64)\
-X(ZMM30,   756, zmm30,  0, 64)\
-X(ZMM31,   757, zmm31,  0, 64)\
-X(K0,      758, k0,     0,  8)\
-X(K1,      759, k1,     0,  8)\
-X(K2,      760, k2,     0,  8)\
-X(K3,      761, k3,     0,  8)\
-X(K4,      762, k4,     0,  8)\
-X(K5,      763, k5,     0,  8)\
-X(K6,      764, k6,     0,  8)\
-X(K7,      765, k7,     0,  8)\
-X(ZMM0H,   766, zmm0,  32, 32)\
-X(ZMM1H,   767, zmm1,  32, 32)\
-X(ZMM2H,   768, zmm2,  32, 32)\
-X(ZMM3H,   769, zmm3,  32, 32)\
-X(ZMM4H,   770, zmm4,  32, 32)\
-X(ZMM5H,   771, zmm5,  32, 32)\
-X(ZMM6H,   772, zmm6,  32, 32)\
-X(ZMM7H,   773, zmm7,  32, 32)\
-X(ZMM8H,   774, zmm8,  32, 32)\
-X(ZMM9H,   775, zmm9,  32, 32)\
-X(ZMM10H,  776, zmm10, 32, 32)\
-X(ZMM11H,  777, zmm11, 32, 32)\
-X(ZMM12H,  778, zmm12, 32, 32)\
-X(ZMM13H,  779, zmm13, 32, 32)\
-X(ZMM14H,  780, zmm14, 32, 32)\
-X(ZMM15H,  781, zmm15, 32, 32)
+#define CV_Reg_X64_XList(X)       \
+  X(NONE,      0, nil,    0,  0)  \
+  X(AL,        1, rax,    0,  1)  \
+  X(CL,        2, rcx,    0,  1)  \
+  X(DL,        3, rdx,    0,  1)  \
+  X(BL,        4, rbx,    0,  1)  \
+  X(AH,        5, rax,    1,  1)  \
+  X(CH,        6, rcx,    1,  1)  \
+  X(DH,        7, rdx,    1,  1)  \
+  X(BH,        8, rbx,    1,  1)  \
+  X(AX,        9, rax,    0,  2)  \
+  X(CX,       10, rcx,    0,  2)  \
+  X(DX,       11, rdx,    0,  2)  \
+  X(BX,       12, rbx,    0,  2)  \
+  X(SP,       13, rsp,    0,  2)  \
+  X(BP,       14, rbp,    0,  2)  \
+  X(SI,       15, rsi,    0,  2)  \
+  X(DI,       16, rdi,    0,  2)  \
+  X(EAX,      17, rax,    0,  4)  \
+  X(ECX,      18, rcx,    0,  4)  \
+  X(EDX,      19, rdx,    0,  4)  \
+  X(EBX,      20, rbx,    0,  4)  \
+  X(ESP,      21, rsp,    0,  4)  \
+  X(EBP,      22, rbp,    0,  4)  \
+  X(ESI,      23, rsi,    0,  4)  \
+  X(EDI,      24, rdi,    0,  4)  \
+  X(ES,       25, es,     0,  2)  \
+  X(CS,       26, cs,     0,  2)  \
+  X(SS,       27, ss,     0,  2)  \
+  X(DS,       28, ds,     0,  2)  \
+  X(FS,       29, fs,     0,  2)  \
+  X(GS,       30, gs,     0,  2)  \
+  X(FLAGS,    32, rflags, 0,  2)  \
+  X(RIP,      33, rip,    0,  8)  \
+  X(EFLAGS,   34, rflags, 0,  4)  \
+  /* TODO: possibly missing control registers in x64 definitions? */ \
+  X(CR0,      80, nil,    0,  0)  \
+  X(CR1,      81, nil,    0,  0)  \
+  X(CR2,      82, nil,    0,  0)  \
+  X(CR3,      83, nil,    0,  0)  \
+  X(CR4,      84, nil,    0,  0)  \
+  X(CR8,      88, nil,    0,  0)  \
+  X(DR0,      90, dr0,    0,  4)  \
+  X(DR1,      91, dr1,    0,  4)  \
+  X(DR2,      92, dr2,    0,  4)  \
+  X(DR3,      93, dr3,    0,  4)  \
+  X(DR4,      94, dr4,    0,  4)  \
+  X(DR5,      95, dr5,    0,  4)  \
+  X(DR6,      96, dr6,    0,  4)  \
+  X(DR7,      97, dr7,    0,  4)  \
+  /* TODO: possibly missing debug registers 8-15 in x64 definitions? */ \
+  X(DR8,      98, nil,    0,  0)  \
+  X(DR9,      99, nil,    0,  0)  \
+  X(DR10,    100, nil,    0,  0)  \
+  X(DR11,    101, nil,    0,  0)  \
+  X(DR12,    102, nil,    0,  0)  \
+  X(DR13,    103, nil,    0,  0)  \
+  X(DR14,    104, nil,    0,  0)  \
+  X(DR15,    105, nil,    0,  0)  \
+  /* TODO: possibly missing ~whatever these are~ in x64 definitions? */ \
+  X(GDTR,    110, nil,    0,  0)  \
+  X(GDTL,    111, nil,    0,  0)  \
+  X(IDTR,    112, nil,    0,  0)  \
+  X(IDTL,    113, nil,    0,  0)  \
+  X(LDTR,    114, nil,    0,  0)  \
+  X(TR,      115, nil,    0,  0)  \
+  X(ST0,     128, st0,    0,  10) \
+  X(ST1,     129, st1,    0,  10) \
+  X(ST2,     130, st2,    0,  10) \
+  X(ST3,     131, st3,    0,  10) \
+  X(ST4,     132, st4,    0,  10) \
+  X(ST5,     133, st5,    0,  10) \
+  X(ST6,     134, st6,    0,  10) \
+  X(ST7,     135, st7,    0,  10) \
+  /* TODO: possibly missing these, or not sure how they map to our x64 definitions? */ \
+  X(CTRL,    136, nil,    0,  0)  \
+  X(STAT,    137, nil,    0,  0)  \
+  X(TAG,     138, nil,    0,  0)  \
+  X(FPIP,    139, nil,    0,  0)  \
+  X(FPCS,    140, nil,    0,  0)  \
+  X(FPDO,    141, nil,    0,  0)  \
+  X(FPDS,    142, nil,    0,  0)  \
+  X(ISEM,    143, nil,    0,  0)  \
+  X(FPEIP,   144, nil,    0,  0)  \
+  X(FPEDO,   145, nil,    0,  0)  \
+  X(MM0,     146, fpr0,   0,  8)  \
+  X(MM1,     147, fpr1,   0,  8)  \
+  X(MM2,     148, fpr2,   0,  8)  \
+  X(MM3,     149, fpr3,   0,  8)  \
+  X(MM4,     150, fpr4,   0,  8)  \
+  X(MM5,     151, fpr5,   0,  8)  \
+  X(MM6,     152, fpr6,   0,  8)  \
+  X(MM7,     153, fpr7,   0,  8)  \
+  X(XMM0,    154, zmm0,   0,  16) \
+  X(XMM1,    155, zmm1,   0,  16) \
+  X(XMM2,    156, zmm2,   0,  16) \
+  X(XMM3,    157, zmm3,   0,  16) \
+  X(XMM4,    158, zmm4,   0,  16) \
+  X(XMM5,    159, zmm5,   0,  16) \
+  X(XMM6,    160, zmm6,   0,  16) \
+  X(XMM7,    161, zmm7,   0,  16) \
+  X(XMM0_0,  162, zmm0,   0,  4)  \
+  X(XMM0_1,  163, zmm0,   4,  4)  \
+  X(XMM0_2,  164, zmm0,   8,  4)  \
+  X(XMM0_3,  165, zmm0,   12, 4)  \
+  X(XMM1_0,  166, zmm1,   0,  4)  \
+  X(XMM1_1,  167, zmm1,   4,  4)  \
+  X(XMM1_2,  168, zmm1,   8,  4)  \
+  X(XMM1_3,  169, zmm1,   12, 4)  \
+  X(XMM2_0,  170, zmm2,   0,  4)  \
+  X(XMM2_1,  171, zmm2,   4,  4)  \
+  X(XMM2_2,  172, zmm2,   8,  4)  \
+  X(XMM2_3,  173, zmm2,   12, 4)  \
+  X(XMM3_0,  174, zmm3,   0,  4)  \
+  X(XMM3_1,  175, zmm3,   4,  4)  \
+  X(XMM3_2,  176, zmm3,   8,  4)  \
+  X(XMM3_3,  177, zmm3,   12, 4)  \
+  X(XMM4_0,  178, zmm4,   0,  4)  \
+  X(XMM4_1,  179, zmm4,   4,  4)  \
+  X(XMM4_2,  180, zmm4,   8,  4)  \
+  X(XMM4_3,  181, zmm4,   12, 4)  \
+  X(XMM5_0,  182, zmm5,   0,  4)  \
+  X(XMM5_1,  183, zmm5,   4,  4)  \
+  X(XMM5_2,  184, zmm5,   8,  4)  \
+  X(XMM5_3,  185, zmm5,   12, 4)  \
+  X(XMM6_0,  186, zmm6,   0,  4)  \
+  X(XMM6_1,  187, zmm6,   4,  4)  \
+  X(XMM6_2,  188, zmm6,   8,  4)  \
+  X(XMM6_3,  189, zmm6,   12, 4)  \
+  X(XMM7_0,  190, zmm7,   0,  4)  \
+  X(XMM7_1,  191, zmm7,   4,  4)  \
+  X(XMM7_2,  192, zmm7,   8,  4)  \
+  X(XMM7_3,  193, zmm7,   12, 4)  \
+  X(XMM0L,   194, zmm0,   0,  8)  \
+  X(XMM1L,   195, zmm1,   0,  8)  \
+  X(XMM2L,   196, zmm2,   0,  8)  \
+  X(XMM3L,   197, zmm3,   0,  8)  \
+  X(XMM4L,   198, zmm4,   0,  8)  \
+  X(XMM5L,   199, zmm5,   0,  8)  \
+  X(XMM6L,   200, zmm6,   0,  8)  \
+  X(XMM7L,   201, zmm7,   0,  8)  \
+  X(XMM0H,   202, zmm0,   8,  8)  \
+  X(XMM1H,   203, zmm1,   8,  8)  \
+  X(XMM2H,   204, zmm2,   8,  8)  \
+  X(XMM3H,   205, zmm3,   8,  8)  \
+  X(XMM4H,   206, zmm4,   8,  8)  \
+  X(XMM5H,   207, zmm5,   8,  8)  \
+  X(XMM6H,   208, zmm6,   8,  8)  \
+  X(XMM7H,   209, zmm7,   8,  8)  \
+  X(MXCSR,   211, mxcsr,  0,  4)  \
+  X(EMM0L,   220, zmm0,   0,  8)  \
+  X(EMM1L,   221, zmm1,   0,  8)  \
+  X(EMM2L,   222, zmm2,   0,  8)  \
+  X(EMM3L,   223, zmm3,   0,  8)  \
+  X(EMM4L,   224, zmm4,   0,  8)  \
+  X(EMM5L,   225, zmm5,   0,  8)  \
+  X(EMM6L,   226, zmm6,   0,  8)  \
+  X(EMM7L,   227, zmm7,   0,  8)  \
+  X(EMM0H,   228, zmm0,   8,  8)  \
+  X(EMM1H,   229, zmm1,   8,  8)  \
+  X(EMM2H,   230, zmm2,   8,  8)  \
+  X(EMM3H,   231, zmm3,   8,  8)  \
+  X(EMM4H,   232, zmm4,   8,  8)  \
+  X(EMM5H,   233, zmm5,   8,  8)  \
+  X(EMM6H,   234, zmm6,   8,  8)  \
+  X(EMM7H,   235, zmm7,   8,  8)  \
+  X(MM00,    236, fpr0,   0,  4)  \
+  X(MM01,    237, fpr0,   4,  4)  \
+  X(MM10,    238, fpr1,   0,  4)  \
+  X(MM11,    239, fpr1,   4,  4)  \
+  X(MM20,    240, fpr2,   0,  4)  \
+  X(MM21,    241, fpr2,   4,  4)  \
+  X(MM30,    242, fpr3,   0,  4)  \
+  X(MM31,    243, fpr3,   4,  4)  \
+  X(MM40,    244, fpr4,   0,  4)  \
+  X(MM41,    245, fpr4,   4,  4)  \
+  X(MM50,    246, fpr5,   0,  4)  \
+  X(MM51,    247, fpr5,   4,  4)  \
+  X(MM60,    248, fpr6,   0,  4)  \
+  X(MM61,    249, fpr6,   4,  4)  \
+  X(MM70,    250, fpr7,   0,  4)  \
+  X(MM71,    251, fpr7,   4,  4)  \
+  X(XMM8,    252, zmm8,   0,  16) \
+  X(XMM9,    253, zmm9,   0,  16) \
+  X(XMM10,   254, zmm10,  0,  16) \
+  X(XMM11,   255, zmm11,  0,  16) \
+  X(XMM12,   256, zmm12,  0,  16) \
+  X(XMM13,   257, zmm13,  0,  16) \
+  X(XMM14,   258, zmm14,  0,  16) \
+  X(XMM15,   259, zmm15,  0,  16) \
+  X(XMM8_0,  260, zmm8,   0,  16) \
+  X(XMM8_1,  261, zmm8,   4,  16) \
+  X(XMM8_2,  262, zmm8,   8,  16) \
+  X(XMM8_3,  263, zmm8,   12, 16) \
+  X(XMM9_0,  264, zmm9,   0,  4)  \
+  X(XMM9_1,  265, zmm9,   4,  4)  \
+  X(XMM9_2,  266, zmm9,   8,  4)  \
+  X(XMM9_3,  267, zmm9,   12, 4)  \
+  X(XMM10_0, 268, zmm10,  0,  4)  \
+  X(XMM10_1, 269, zmm10,  4,  4)  \
+  X(XMM10_2, 270, zmm10,  8,  4)  \
+  X(XMM10_3, 271, zmm10,  12, 4)  \
+  X(XMM11_0, 272, zmm11,  0,  4)  \
+  X(XMM11_1, 273, zmm11,  4,  4)  \
+  X(XMM11_2, 274, zmm11,  8,  4)  \
+  X(XMM11_3, 275, zmm11,  12, 4)  \
+  X(XMM12_0, 276, zmm12,  0,  4)  \
+  X(XMM12_1, 277, zmm12,  4,  4)  \
+  X(XMM12_2, 278, zmm12,  8,  4)  \
+  X(XMM12_3, 279, zmm12,  12, 4)  \
+  X(XMM13_0, 280, zmm13,  0,  4)  \
+  X(XMM13_1, 281, zmm13,  4,  4)  \
+  X(XMM13_2, 282, zmm13,  8,  4)  \
+  X(XMM13_3, 283, zmm13,  12, 4)  \
+  X(XMM14_0, 284, zmm14,  0,  4)  \
+  X(XMM14_1, 285, zmm14,  4,  4)  \
+  X(XMM14_2, 286, zmm14,  8,  4)  \
+  X(XMM14_3, 287, zmm14,  12, 4)  \
+  X(XMM15_0, 288, zmm15,  0,  4)  \
+  X(XMM15_1, 289, zmm15,  4,  4)  \
+  X(XMM15_2, 290, zmm15,  8,  4)  \
+  X(XMM15_3, 291, zmm15,  12, 4)  \
+  X(XMM8L,   292, zmm8,   0,  8)  \
+  X(XMM9L,   293, zmm9,   0,  8)  \
+  X(XMM10L,  294, zmm10,  0,  8)  \
+  X(XMM11L,  295, zmm11,  0,  8)  \
+  X(XMM12L,  296, zmm12,  0,  8)  \
+  X(XMM13L,  297, zmm13,  0,  8)  \
+  X(XMM14L,  298, zmm14,  0,  8)  \
+  X(XMM15L,  299, zmm15,  0,  8)  \
+  X(XMM8H,   300, zmm8,   8,  8)  \
+  X(XMM9H,   301, zmm9,   8,  8)  \
+  X(XMM10H,  302, zmm10,  8,  8)  \
+  X(XMM11H,  303, zmm11,  8,  8)  \
+  X(XMM12H,  304, zmm12,  8,  8)  \
+  X(XMM13H,  305, zmm13,  8,  8)  \
+  X(XMM14H,  306, zmm14,  8,  8)  \
+  X(XMM15H,  307, zmm15,  8,  8)  \
+  X(EMM8L,   308, zmm8,   0,  8)  \
+  X(EMM9L,   309, zmm9,   0,  8)  \
+  X(EMM10L,  310, zmm10,  0,  8)  \
+  X(EMM11L,  311, zmm11,  0,  8)  \
+  X(EMM12L,  312, zmm12,  0,  8)  \
+  X(EMM13L,  313, zmm13,  0,  8)  \
+  X(EMM14L,  314, zmm14,  0,  8)  \
+  X(EMM15L,  315, zmm15,  0,  8)  \
+  X(EMM8H,   316, zmm8,   8,  8)  \
+  X(EMM9H,   317, zmm9,   8,  8)  \
+  X(EMM10H,  318, zmm10,  8,  8)  \
+  X(EMM11H,  319, zmm11,  8,  8)  \
+  X(EMM12H,  320, zmm12,  8,  8)  \
+  X(EMM13H,  321, zmm13,  8,  8)  \
+  X(EMM14H,  322, zmm14,  8,  8)  \
+  X(EMM15H,  323, zmm15,  8,  8)  \
+  X(SIL,     324, rsi,    0,  1)  \
+  X(DIL,     325, rdi,    0,  1)  \
+  X(BPL,     326, rbp,    0,  1)  \
+  X(SPL,     327, rsp,    0,  1)  \
+  X(RAX,     328, rax,    0,  8)  \
+  X(RBX,     329, rbx,    0,  8)  \
+  X(RCX,     330, rcx,    0,  8)  \
+  X(RDX,     331, rdx,    0,  8)  \
+  X(RSI,     332, rsi,    0,  8)  \
+  X(RDI,     333, rdi,    0,  8)  \
+  X(RBP,     334, rbp,    0,  8)  \
+  X(RSP,     335, rsp,    0,  8)  \
+  X(R8,      336, r8,     0,  8)  \
+  X(R9,      337, r9,     0,  8)  \
+  X(R10,     338, r10,    0,  8)  \
+  X(R11,     339, r11,    0,  8)  \
+  X(R12,     340, r12,    0,  8)  \
+  X(R13,     341, r13,    0,  8)  \
+  X(R14,     342, r14,    0,  8)  \
+  X(R15,     343, r15,    0,  8)  \
+  X(R8B,     344, r8,     0,  1)  \
+  X(R9B,     345, r9,     0,  1)  \
+  X(R10B,    346, r10,    0,  1)  \
+  X(R11B,    347, r11,    0,  1)  \
+  X(R12B,    348, r12,    0,  1)  \
+  X(R13B,    349, r13,    0,  1)  \
+  X(R14B,    350, r14,    0,  1)  \
+  X(R15B,    351, r15,    0,  1)  \
+  X(R8W,     352, r8,     0,  2)  \
+  X(R9W,     353, r9,     0,  2)  \
+  X(R10W,    354, r10,    0,  2)  \
+  X(R11W,    355, r11,    0,  2)  \
+  X(R12W,    356, r12,    0,  2)  \
+  X(R13W,    357, r13,    0,  2)  \
+  X(R14W,    358, r14,    0,  2)  \
+  X(R15W,    359, r15,    0,  2)  \
+  X(R8D,     360, r8,     0,  4)  \
+  X(R9D,     361, r9,     0,  4)  \
+  X(R10D,    362, r10,    0,  4)  \
+  X(R11D,    363, r11,    0,  4)  \
+  X(R12D,    364, r12,    0,  4)  \
+  X(R13D,    365, r13,    0,  4)  \
+  X(R14D,    366, r14,    0,  4)  \
+  X(R15D,    367, r15,    0,  4)  \
+  X(YMM0,    368, zmm0,   0,  32) \
+  X(YMM1,    369, zmm1,   0,  32) \
+  X(YMM2,    370, zmm2,   0,  32) \
+  X(YMM3,    371, zmm3,   0,  32) \
+  X(YMM4,    372, zmm4,   0,  32) \
+  X(YMM5,    373, zmm5,   0,  32) \
+  X(YMM6,    374, zmm6,   0,  32) \
+  X(YMM7,    375, zmm7,   0,  32) \
+  X(YMM8,    376, zmm8,   0,  32) \
+  X(YMM9,    377, zmm9,   0,  32) \
+  X(YMM10,   378, zmm10,  0,  32) \
+  X(YMM11,   379, zmm11,  0,  32) \
+  X(YMM12,   380, zmm12,  0,  32) \
+  X(YMM13,   381, zmm13,  0,  32) \
+  X(YMM14,   382, zmm14,  0,  32) \
+  X(YMM15,   383, zmm15,  0,  32) \
+  X(YMM0H,   384, zmm0,   16, 32) \
+  X(YMM1H,   385, zmm1,   16, 32) \
+  X(YMM2H,   386, zmm2,   16, 32) \
+  X(YMM3H,   387, zmm3,   16, 32) \
+  X(YMM4H,   388, zmm4,   16, 32) \
+  X(YMM5H,   389, zmm5,   16, 32) \
+  X(YMM6H,   390, zmm6,   16, 32) \
+  X(YMM7H,   391, zmm7,   16, 32) \
+  X(YMM8H,   392, zmm8,   16, 32) \
+  X(YMM9H,   393, zmm9,   16, 32) \
+  X(YMM10H,  394, zmm10,  16, 32) \
+  X(YMM11H,  395, zmm11,  16, 32) \
+  X(YMM12H,  396, zmm12,  16, 32) \
+  X(YMM13H,  397, zmm13,  16, 32) \
+  X(YMM14H,  398, zmm14,  16, 32) \
+  X(YMM15H,  399, zmm15,  16, 32) \
+  X(XMM0IL,  400, zmm0,   0,  8)  \
+  X(XMM1IL,  401, zmm1,   0,  8)  \
+  X(XMM2IL,  402, zmm2,   0,  8)  \
+  X(XMM3IL,  403, zmm3,   0,  8)  \
+  X(XMM4IL,  404, zmm4,   0,  8)  \
+  X(XMM5IL,  405, zmm5,   0,  8)  \
+  X(XMM6IL,  406, zmm6,   0,  8)  \
+  X(XMM7IL,  407, zmm7,   0,  8)  \
+  X(XMM8IL,  408, zmm8,   0,  8)  \
+  X(XMM9IL,  409, zmm9,   0,  8)  \
+  X(XMM10IL, 410, zmm10,  0,  8)  \
+  X(XMM11IL, 411, zmm11,  0,  8)  \
+  X(XMM12IL, 412, zmm12,  0,  8)  \
+  X(XMM13IL, 413, zmm13,  0,  8)  \
+  X(XMM14IL, 414, zmm14,  0,  8)  \
+  X(XMM15IL, 415, zmm15,  0,  8)  \
+  X(XMM0IH,  416, zmm0,   8,  8)  \
+  X(XMM1IH,  417, zmm1,   8,  8)  \
+  X(XMM2IH,  418, zmm2,   8,  8)  \
+  X(XMM3IH,  419, zmm3,   8,  8)  \
+  X(XMM4IH,  420, zmm4,   8,  8)  \
+  X(XMM5IH,  421, zmm5,   8,  8)  \
+  X(XMM6IH,  422, zmm6,   8,  8)  \
+  X(XMM7IH,  423, zmm7,   8,  8)  \
+  X(XMM8IH,  424, zmm8,   8,  8)  \
+  X(XMM9IH,  425, zmm9,   8,  8)  \
+  X(XMM10IH, 426, zmm10,  8,  8)  \
+  X(XMM11IH, 427, zmm11,  8,  8)  \
+  X(XMM12IH, 428, zmm12,  8,  8)  \
+  X(XMM13IH, 429, zmm13,  8,  8)  \
+  X(XMM14IH, 430, zmm14,  8,  8)  \
+  X(XMM15IH, 431, zmm15,  8,  8)  \
+  X(YMM0I0,  432, zmm0,   0,  8)  \
+  X(YMM0I1,  433, zmm0,   8,  8)  \
+  X(YMM0I2,  434, zmm0,   16, 8)  \
+  X(YMM0I3,  435, zmm0,   24, 8)  \
+  X(YMM1I0,  436, zmm1,   0,  8)  \
+  X(YMM1I1,  437, zmm1,   8,  8)  \
+  X(YMM1I2,  438, zmm1,   16, 8)  \
+  X(YMM1I3,  439, zmm1,   24, 8)  \
+  X(YMM2I0,  440, zmm2,   0,  8)  \
+  X(YMM2I1,  441, zmm2,   8,  8)  \
+  X(YMM2I2,  442, zmm2,   16, 8)  \
+  X(YMM2I3,  443, zmm2,   24, 8)  \
+  X(YMM3I0,  444, zmm3,   0,  8)  \
+  X(YMM3I1,  445, zmm3,   8,  8)  \
+  X(YMM3I2,  446, zmm3,   16, 8)  \
+  X(YMM3I3,  447, zmm3,   24, 8)  \
+  X(YMM4I0,  448, zmm4,   0,  8)  \
+  X(YMM4I1,  449, zmm4,   8,  8)  \
+  X(YMM4I2,  450, zmm4,   16, 8)  \
+  X(YMM4I3,  451, zmm4,   24, 8)  \
+  X(YMM5I0,  452, zmm5,   0,  8)  \
+  X(YMM5I1,  453, zmm5,   8,  8)  \
+  X(YMM5I2,  454, zmm5,   16, 8)  \
+  X(YMM5I3,  455, zmm5,   24, 8)  \
+  X(YMM6I0,  456, zmm6,   0,  8)  \
+  X(YMM6I1,  457, zmm6,   8,  8)  \
+  X(YMM6I2,  458, zmm6,   16, 8)  \
+  X(YMM6I3,  459, zmm6,   24, 8)  \
+  X(YMM7I0,  460, zmm7,   0,  8)  \
+  X(YMM7I1,  461, zmm7,   8,  8)  \
+  X(YMM7I2,  462, zmm7,   16, 8)  \
+  X(YMM7I3,  463, zmm7,   24, 8)  \
+  X(YMM8I0,  464, zmm8,   0,  8)  \
+  X(YMM8I1,  465, zmm8,   8,  8)  \
+  X(YMM8I2,  466, zmm8,   16, 8)  \
+  X(YMM8I3,  467, zmm8,   24, 8)  \
+  X(YMM9I0,  468, zmm9,   0,  8)  \
+  X(YMM9I1,  469, zmm9,   8,  8)  \
+  X(YMM9I2,  470, zmm9,   16, 8)  \
+  X(YMM9I3,  471, zmm9,   24, 8)  \
+  X(YMM10I0, 472, zmm10,  0,  8)  \
+  X(YMM10I1, 473, zmm10,  8,  8)  \
+  X(YMM10I2, 474, zmm10,  16, 8)  \
+  X(YMM10I3, 475, zmm10,  24, 8)  \
+  X(YMM11I0, 476, zmm11,  0,  8)  \
+  X(YMM11I1, 477, zmm11,  8,  8)  \
+  X(YMM11I2, 478, zmm11,  16, 8)  \
+  X(YMM11I3, 479, zmm11,  24, 8)  \
+  X(YMM12I0, 480, zmm12,  0,  8)  \
+  X(YMM12I1, 481, zmm12,  8,  8)  \
+  X(YMM12I2, 482, zmm12,  16, 8)  \
+  X(YMM12I3, 483, zmm12,  24, 8)  \
+  X(YMM13I0, 484, zmm13,  0,  8)  \
+  X(YMM13I1, 485, zmm13,  8,  8)  \
+  X(YMM13I2, 486, zmm13,  16, 8)  \
+  X(YMM13I3, 487, zmm13,  24, 8)  \
+  X(YMM14I0, 488, zmm14,  0,  8)  \
+  X(YMM14I1, 489, zmm14,  8,  8)  \
+  X(YMM14I2, 490, zmm14,  16, 8)  \
+  X(YMM14I3, 491, zmm14,  24, 8)  \
+  X(YMM15I0, 492, zmm15,  0,  8)  \
+  X(YMM15I1, 493, zmm15,  8,  8)  \
+  X(YMM15I2, 494, zmm15,  16, 8)  \
+  X(YMM15I3, 495, zmm15,  24, 8)  \
+  X(YMM0F0,  496, zmm0,   0,  4)  \
+  X(YMM0F1,  497, zmm0,   4,  4)  \
+  X(YMM0F2,  498, zmm0,   8,  4)  \
+  X(YMM0F3,  499, zmm0,   12, 4)  \
+  X(YMM0F4,  500, zmm0,   16, 4)  \
+  X(YMM0F5,  501, zmm0,   20, 4)  \
+  X(YMM0F6,  502, zmm0,   24, 4)  \
+  X(YMM0F7,  503, zmm0,   28, 4)  \
+  X(YMM1F0,  504, zmm1,   0,  4)  \
+  X(YMM1F1,  505, zmm1,   4,  4)  \
+  X(YMM1F2,  506, zmm1,   8,  4)  \
+  X(YMM1F3,  507, zmm1,   12, 4)  \
+  X(YMM1F4,  508, zmm1,   16, 4)  \
+  X(YMM1F5,  509, zmm1,   20, 4)  \
+  X(YMM1F6,  510, zmm1,   24, 4)  \
+  X(YMM1F7,  511, zmm1,   28, 4)  \
+  X(YMM2F0,  512, zmm2,   0,  4)  \
+  X(YMM2F1,  513, zmm2,   4,  4)  \
+  X(YMM2F2,  514, zmm2,   8,  4)  \
+  X(YMM2F3,  515, zmm2,   12, 4)  \
+  X(YMM2F4,  516, zmm2,   16, 4)  \
+  X(YMM2F5,  517, zmm2,   20, 4)  \
+  X(YMM2F6,  518, zmm2,   24, 4)  \
+  X(YMM2F7,  519, zmm2,   28, 4)  \
+  X(YMM3F0,  520, zmm3,   0,  4)  \
+  X(YMM3F1,  521, zmm3,   4,  4)  \
+  X(YMM3F2,  522, zmm3,   8,  4)  \
+  X(YMM3F3,  523, zmm3,   12, 4)  \
+  X(YMM3F4,  524, zmm3,   16, 4)  \
+  X(YMM3F5,  525, zmm3,   20, 4)  \
+  X(YMM3F6,  526, zmm3,   24, 4)  \
+  X(YMM3F7,  527, zmm3,   28, 4)  \
+  X(YMM4F0,  528, zmm4,   0,  4)  \
+  X(YMM4F1,  529, zmm4,   4,  4)  \
+  X(YMM4F2,  530, zmm4,   8,  4)  \
+  X(YMM4F3,  531, zmm4,   12, 4)  \
+  X(YMM4F4,  532, zmm4,   16, 4)  \
+  X(YMM4F5,  533, zmm4,   20, 4)  \
+  X(YMM4F6,  534, zmm4,   24, 4)  \
+  X(YMM4F7,  535, zmm4,   28, 4)  \
+  X(YMM5F0,  536, zmm5,   0,  4)  \
+  X(YMM5F1,  537, zmm5,   4,  4)  \
+  X(YMM5F2,  538, zmm5,   8,  4)  \
+  X(YMM5F3,  539, zmm5,   12, 4)  \
+  X(YMM5F4,  540, zmm5,   16, 4)  \
+  X(YMM5F5,  541, zmm5,   20, 4)  \
+  X(YMM5F6,  542, zmm5,   24, 4)  \
+  X(YMM5F7,  543, zmm5,   28, 4)  \
+  X(YMM6F0,  544, zmm6,   0,  4)  \
+  X(YMM6F1,  545, zmm6,   4,  4)  \
+  X(YMM6F2,  546, zmm6,   8,  4)  \
+  X(YMM6F3,  547, zmm6,   12, 4)  \
+  X(YMM6F4,  548, zmm6,   16, 4)  \
+  X(YMM6F5,  549, zmm6,   20, 4)  \
+  X(YMM6F6,  550, zmm6,   24, 4)  \
+  X(YMM6F7,  551, zmm6,   28, 4)  \
+  X(YMM7F0,  552, zmm7,   0,  4)  \
+  X(YMM7F1,  553, zmm7,   4,  4)  \
+  X(YMM7F2,  554, zmm7,   8,  4)  \
+  X(YMM7F3,  555, zmm7,   12, 4)  \
+  X(YMM7F4,  556, zmm7,   16, 4)  \
+  X(YMM7F5,  557, zmm7,   20, 4)  \
+  X(YMM7F6,  558, zmm7,   24, 4)  \
+  X(YMM7F7,  559, zmm7,   28, 4)  \
+  X(YMM8F0,  560, zmm8,   0,  4)  \
+  X(YMM8F1,  561, zmm8,   4,  4)  \
+  X(YMM8F2,  562, zmm8,   8,  4)  \
+  X(YMM8F3,  563, zmm8,   12, 4)  \
+  X(YMM8F4,  564, zmm8,   16, 4)  \
+  X(YMM8F5,  565, zmm8,   20, 4)  \
+  X(YMM8F6,  566, zmm8,   24, 4)  \
+  X(YMM8F7,  567, zmm8,   28, 4)  \
+  X(YMM9F0,  568, zmm9,   0,  4)  \
+  X(YMM9F1,  569, zmm9,   4,  4)  \
+  X(YMM9F2,  570, zmm9,   8,  4)  \
+  X(YMM9F3,  571, zmm9,   12, 4)  \
+  X(YMM9F4,  572, zmm9,   16, 4)  \
+  X(YMM9F5,  573, zmm9,   20, 4)  \
+  X(YMM9F6,  574, zmm9,   24, 4)  \
+  X(YMM9F7,  575, zmm9,   28, 4)  \
+  X(YMM10F0, 576, zmm10,  0,  4)  \
+  X(YMM10F1, 577, zmm10,  4,  4)  \
+  X(YMM10F2, 578, zmm10,  8,  4)  \
+  X(YMM10F3, 579, zmm10,  12, 4)  \
+  X(YMM10F4, 580, zmm10,  16, 4)  \
+  X(YMM10F5, 581, zmm10,  20, 4)  \
+  X(YMM10F6, 582, zmm10,  24, 4)  \
+  X(YMM10F7, 583, zmm10,  28, 4)  \
+  X(YMM11F0, 584, zmm11,  0,  4)  \
+  X(YMM11F1, 585, zmm11,  4,  4)  \
+  X(YMM11F2, 586, zmm11,  8,  4)  \
+  X(YMM11F3, 587, zmm11,  12, 4)  \
+  X(YMM11F4, 588, zmm11,  16, 4)  \
+  X(YMM11F5, 589, zmm11,  20, 4)  \
+  X(YMM11F6, 590, zmm11,  24, 4)  \
+  X(YMM11F7, 591, zmm11,  28, 4)  \
+  X(YMM12F0, 592, zmm12,  0,  4)  \
+  X(YMM12F1, 593, zmm12,  4,  4)  \
+  X(YMM12F2, 594, zmm12,  8,  4)  \
+  X(YMM12F3, 595, zmm12,  12, 4)  \
+  X(YMM12F4, 596, zmm12,  16, 4)  \
+  X(YMM12F5, 597, zmm12,  20, 4)  \
+  X(YMM12F6, 598, zmm12,  24, 4)  \
+  X(YMM12F7, 599, zmm12,  28, 4)  \
+  X(YMM13F0, 600, zmm13,  0,  4)  \
+  X(YMM13F1, 601, zmm13,  4,  4)  \
+  X(YMM13F2, 602, zmm13,  8,  4)  \
+  X(YMM13F3, 603, zmm13,  12, 4)  \
+  X(YMM13F4, 604, zmm13,  16, 4)  \
+  X(YMM13F5, 605, zmm13,  20, 4)  \
+  X(YMM13F6, 606, zmm13,  24, 4)  \
+  X(YMM13F7, 607, zmm13,  28, 4)  \
+  X(YMM14F0, 608, zmm14,  0,  4)  \
+  X(YMM14F1, 609, zmm14,  4,  4)  \
+  X(YMM14F2, 610, zmm14,  8,  4)  \
+  X(YMM14F3, 611, zmm14,  12, 4)  \
+  X(YMM14F4, 612, zmm14,  16, 4)  \
+  X(YMM14F5, 613, zmm14,  20, 4)  \
+  X(YMM14F6, 614, zmm14,  24, 4)  \
+  X(YMM14F7, 615, zmm14,  28, 4)  \
+  X(YMM15F0, 616, zmm15,  0,  4)  \
+  X(YMM15F1, 617, zmm15,  4,  4)  \
+  X(YMM15F2, 618, zmm15,  8,  4)  \
+  X(YMM15F3, 619, zmm15,  12, 4)  \
+  X(YMM15F4, 620, zmm15,  16, 4)  \
+  X(YMM15F5, 621, zmm15,  20, 4)  \
+  X(YMM15F6, 622, zmm15,  24, 4)  \
+  X(YMM15F7, 623, zmm15,  28, 4)  \
+  X(YMM0D0,  624, zmm0,   0,  8)  \
+  X(YMM0D1,  625, zmm0,   8,  8)  \
+  X(YMM0D2,  626, zmm0,   16, 8)  \
+  X(YMM0D3,  627, zmm0,   24, 8)  \
+  X(YMM1D0,  628, zmm1,   0,  8)  \
+  X(YMM1D1,  629, zmm1,   8,  8)  \
+  X(YMM1D2,  630, zmm1,   16, 8)  \
+  X(YMM1D3,  631, zmm1,   24, 8)  \
+  X(YMM2D0,  632, zmm2,   0,  8)  \
+  X(YMM2D1,  633, zmm2,   8,  8)  \
+  X(YMM2D2,  634, zmm2,   16, 8)  \
+  X(YMM2D3,  635, zmm2,   24, 8)  \
+  X(YMM3D0,  636, zmm3,   0,  8)  \
+  X(YMM3D1,  637, zmm3,   8,  8)  \
+  X(YMM3D2,  638, zmm3,   16, 8)  \
+  X(YMM3D3,  639, zmm3,   24, 8)  \
+  X(YMM4D0,  640, zmm4,   0,  8)  \
+  X(YMM4D1,  641, zmm4,   8,  8)  \
+  X(YMM4D2,  642, zmm4,   16, 8)  \
+  X(YMM4D3,  643, zmm4,   24, 8)  \
+  X(YMM5D0,  644, zmm5,   0,  8)  \
+  X(YMM5D1,  645, zmm5,   8,  8)  \
+  X(YMM5D2,  646, zmm5,   16, 8)  \
+  X(YMM5D3,  647, zmm5,   24, 8)  \
+  X(YMM6D0,  648, zmm6,   0,  8)  \
+  X(YMM6D1,  649, zmm6,   8,  8)  \
+  X(YMM6D2,  650, zmm6,   16, 8)  \
+  X(YMM6D3,  651, zmm6,   24, 8)  \
+  X(YMM7D0,  652, zmm7,   0,  8)  \
+  X(YMM7D1,  653, zmm7,   8,  8)  \
+  X(YMM7D2,  654, zmm7,   16, 8)  \
+  X(YMM7D3,  655, zmm7,   24, 8)  \
+  X(YMM8D0,  656, zmm8,   0,  8)  \
+  X(YMM8D1,  657, zmm8,   8,  8)  \
+  X(YMM8D2,  658, zmm8,   16, 8)  \
+  X(YMM8D3,  659, zmm8,   24, 8)  \
+  X(YMM9D0,  660, zmm9,   0,  8)  \
+  X(YMM9D1,  661, zmm9,   8,  8)  \
+  X(YMM9D2,  662, zmm9,   16, 8)  \
+  X(YMM9D3,  663, zmm9,   24, 8)  \
+  X(YMM10D0, 664, zmm10,  0,  8)  \
+  X(YMM10D1, 665, zmm10,  8,  8)  \
+  X(YMM10D2, 666, zmm10,  16, 8)  \
+  X(YMM10D3, 667, zmm10,  24, 8)  \
+  X(YMM11D0, 668, zmm11,  0,  8)  \
+  X(YMM11D1, 669, zmm11,  8,  8)  \
+  X(YMM11D2, 670, zmm11,  16, 8)  \
+  X(YMM11D3, 671, zmm11,  24, 8)  \
+  X(YMM12D0, 672, zmm12,  0,  8)  \
+  X(YMM12D1, 673, zmm12,  8,  8)  \
+  X(YMM12D2, 674, zmm12,  16, 8)  \
+  X(YMM12D3, 675, zmm12,  24, 8)  \
+  X(YMM13D0, 676, zmm13,  0,  8)  \
+  X(YMM13D1, 677, zmm13,  8,  8)  \
+  X(YMM13D2, 678, zmm13,  16, 8)  \
+  X(YMM13D3, 679, zmm13,  24, 8)  \
+  X(YMM14D0, 680, zmm14,  0,  8)  \
+  X(YMM14D1, 681, zmm14,  8,  8)  \
+  X(YMM14D2, 682, zmm14,  16, 8)  \
+  X(YMM14D3, 683, zmm14,  24, 8)  \
+  X(YMM15D0, 684, zmm15,  0,  8)  \
+  X(YMM15D1, 685, zmm15,  8,  8)  \
+  X(YMM15D2, 686, zmm15,  16, 8)  \
+  X(YMM15D3, 687, zmm15,  24, 8)  \
+  X(XMM16,   694, zmm16,  0,  16) \
+  X(XMM17,   695, zmm17,  0,  16) \
+  X(XMM18,   696, zmm18,  0,  16) \
+  X(XMM19,   697, zmm19,  0,  16) \
+  X(XMM20,   698, zmm20,  0,  16) \
+  X(XMM21,   699, zmm21,  0,  16) \
+  X(XMM22,   700, zmm22,  0,  16) \
+  X(XMM23,   701, zmm23,  0,  16) \
+  X(XMM24,   702, zmm24,  0,  16) \
+  X(XMM25,   703, zmm25,  0,  16) \
+  X(XMM26,   704, zmm26,  0,  16) \
+  X(XMM27,   705, zmm27,  0,  16) \
+  X(XMM28,   706, zmm28,  0,  16) \
+  X(XMM29,   707, zmm29,  0,  16) \
+  X(XMM30,   708, zmm30,  0,  16) \
+  X(XMM31,   709, zmm31,  0,  16) \
+  X(YMM16,   710, zmm16,  0,  32) \
+  X(YMM17,   711, zmm17,  0,  32) \
+  X(YMM18,   712, zmm18,  0,  32) \
+  X(YMM19,   713, zmm19,  0,  32) \
+  X(YMM20,   714, zmm20,  0,  32) \
+  X(YMM21,   715, zmm21,  0,  32) \
+  X(YMM22,   716, zmm22,  0,  32) \
+  X(YMM23,   717, zmm23,  0,  32) \
+  X(YMM24,   718, zmm24,  0,  32) \
+  X(YMM25,   719, zmm25,  0,  32) \
+  X(YMM26,   720, zmm26,  0,  32) \
+  X(YMM27,   721, zmm27,  0,  32) \
+  X(YMM28,   722, zmm28,  0,  32) \
+  X(YMM29,   723, zmm29,  0,  32) \
+  X(YMM30,   724, zmm30,  0,  32) \
+  X(YMM31,   725, zmm31,  0,  32) \
+  X(ZMM0,    726, zmm0,   0,  64) \
+  X(ZMM1,    727, zmm1,   0,  64) \
+  X(ZMM2,    728, zmm2,   0,  64) \
+  X(ZMM3,    729, zmm3,   0,  64) \
+  X(ZMM4,    730, zmm4,   0,  64) \
+  X(ZMM5,    731, zmm5,   0,  64) \
+  X(ZMM6,    732, zmm6,   0,  64) \
+  X(ZMM7,    733, zmm7,   0,  64) \
+  X(ZMM8,    734, zmm8,   0,  64) \
+  X(ZMM9,    735, zmm9,   0,  64) \
+  X(ZMM10,   736, zmm10,  0,  64) \
+  X(ZMM11,   737, zmm11,  0,  64) \
+  X(ZMM12,   738, zmm12,  0,  64) \
+  X(ZMM13,   739, zmm13,  0,  64) \
+  X(ZMM14,   740, zmm14,  0,  64) \
+  X(ZMM15,   741, zmm15,  0,  64) \
+  X(ZMM16,   742, zmm16,  0,  64) \
+  X(ZMM17,   743, zmm17,  0,  64) \
+  X(ZMM18,   744, zmm18,  0,  64) \
+  X(ZMM19,   745, zmm19,  0,  64) \
+  X(ZMM20,   746, zmm20,  0,  64) \
+  X(ZMM21,   747, zmm21,  0,  64) \
+  X(ZMM22,   748, zmm22,  0,  64) \
+  X(ZMM23,   749, zmm23,  0,  64) \
+  X(ZMM24,   750, zmm24,  0,  64) \
+  X(ZMM25,   751, zmm25,  0,  64) \
+  X(ZMM26,   752, zmm26,  0,  64) \
+  X(ZMM27,   753, zmm27,  0,  64) \
+  X(ZMM28,   754, zmm28,  0,  64) \
+  X(ZMM29,   755, zmm29,  0,  64) \
+  X(ZMM30,   756, zmm30,  0,  64) \
+  X(ZMM31,   757, zmm31,  0,  64) \
+  X(K0,      758, k0,     0,  8)  \
+  X(K1,      759, k1,     0,  8)  \
+  X(K2,      760, k2,     0,  8)  \
+  X(K3,      761, k3,     0,  8)  \
+  X(K4,      762, k4,     0,  8)  \
+  X(K5,      763, k5,     0,  8)  \
+  X(K6,      764, k6,     0,  8)  \
+  X(K7,      765, k7,     0,  8)  \
+  X(ZMM0H,   766, zmm0,   32, 32) \
+  X(ZMM1H,   767, zmm1,   32, 32) \
+  X(ZMM2H,   768, zmm2,   32, 32) \
+  X(ZMM3H,   769, zmm3,   32, 32) \
+  X(ZMM4H,   770, zmm4,   32, 32) \
+  X(ZMM5H,   771, zmm5,   32, 32) \
+  X(ZMM6H,   772, zmm6,   32, 32) \
+  X(ZMM7H,   773, zmm7,   32, 32) \
+  X(ZMM8H,   774, zmm8,   32, 32) \
+  X(ZMM9H,   775, zmm9,   32, 32) \
+  X(ZMM10H,  776, zmm10,  32, 32) \
+  X(ZMM11H,  777, zmm11,  32, 32) \
+  X(ZMM12H,  778, zmm12,  32, 32) \
+  X(ZMM13H,  779, zmm13,  32, 32) \
+  X(ZMM14H,  780, zmm14,  32, 32) \
+  X(ZMM15H,  781, zmm15,  32, 32)
 
 typedef U16 CV_Regx64;
 typedef enum CV_Regx64Enum
@@ -1007,11 +1015,11 @@ CV_Regx64Enum;
 
 
 #define CV_SignatureXList(X) \
-X(C6,  0)\
-X(C7,  1)\
-X(C11, 2)\
-X(C13, 4)\
-X(RESERVED, 5)
+  X(C6,       0)             \
+  X(C7,       1)             \
+  X(C11,      2)             \
+  X(C13,      4)             \
+  X(RESERVED, 5)
 
 typedef U32 CV_Signature;
 typedef enum CV_SignatureEnum
@@ -1024,23 +1032,23 @@ CV_SignatureEnum;
 
 
 #define CV_LanguageXList(X) \
-X(C,       0x00)\
-X(CXX,     0x01)\
-X(FORTRAN, 0x02)\
-X(MASM,    0x03)\
-X(PASCAL,  0x04)\
-X(BASIC,   0x05)\
-X(COBOL,   0x06)\
-X(LINK,    0x07)\
-X(CVTRES,  0x08)\
-X(CVTPGD,  0x09)\
-X(CSHARP,  0x0A)\
-X(VB,      0x0B)\
-X(ILASM,   0x0C)\
-X(JAVA,    0x0D)\
-X(JSCRIPT, 0x0E)\
-X(MSIL,    0x0F)\
-X(HLSL,    0x10)
+  X(C,       0x00)          \
+  X(CXX,     0x01)          \
+  X(FORTRAN, 0x02)          \
+  X(MASM,    0x03)          \
+  X(PASCAL,  0x04)          \
+  X(BASIC,   0x05)          \
+  X(COBOL,   0x06)          \
+  X(LINK,    0x07)          \
+  X(CVTRES,  0x08)          \
+  X(CVTPGD,  0x09)          \
+  X(CSHARP,  0x0A)          \
+  X(VB,      0x0B)          \
+  X(ILASM,   0x0C)          \
+  X(JAVA,    0x0D)          \
+  X(JSCRIPT, 0x0E)          \
+  X(MSIL,    0x0F)          \
+  X(HLSL,    0x10)
 
 typedef U16 CV_Language;
 typedef enum CV_LanguageEnum
@@ -1055,6 +1063,12 @@ CV_LanguageEnum;
 
 ////////////////////////////////
 //~ rjf: CodeView Format "Sym" and "Leaf" Header Type
+
+#define CV_LeafSize_Max max_U16
+typedef U16 CV_LeafSize;
+
+#define CV_SymSize_Max max_U16
+typedef U16 CV_SymSize;
 
 typedef struct CV_RecHeader CV_RecHeader;
 struct CV_RecHeader
@@ -1101,8 +1115,8 @@ enum
 typedef struct CV_LocalVarAttr CV_LocalVarAttr;
 struct CV_LocalVarAttr
 {
-  U32 off;
-  U16 seg;
+  U32           off;
+  U16           seg;
   CV_LocalFlags flags;
 };
 
@@ -1119,7 +1133,7 @@ typedef U32 CV_CompileFlags;
 typedef struct CV_SymCompile CV_SymCompile;
 struct CV_SymCompile
 {
-  U8 machine;
+  U8              machine;
   CV_CompileFlags flags;
   // U8[] ver_str (null terminated)
 };
@@ -1141,11 +1155,11 @@ typedef U8 CV_GenericStyle;
 typedef enum CV_GenericStyleEnum
 {
   CV_GenericStyle_VOID,
-  CV_GenericStyle_REG,  //  "return data is in register"
-  CV_GenericStyle_ICAN, //  "indirect caller allocated near"
-  CV_GenericStyle_ICAF, //  "indirect caller allocated far"
-  CV_GenericStyle_IRAN, //  "indirect returnee allocated near"
-  CV_GenericStyle_IRAF, //  "indirect returnee allocated far"
+  CV_GenericStyle_REG,    //  "return data is in register"
+  CV_GenericStyle_ICAN,   //  "indirect caller allocated near"
+  CV_GenericStyle_ICAF,   //  "indirect caller allocated far"
+  CV_GenericStyle_IRAN,   //  "indirect returnee allocated near"
+  CV_GenericStyle_IRAF,   //  "indirect returnee allocated far"
   CV_GenericStyle_UNUSED,
 }
 CV_GenericStyleEnum;
@@ -1179,7 +1193,7 @@ struct CV_SymSLink32
 typedef struct CV_SymOEM CV_SymOEM;
 struct CV_SymOEM
 {
-  Guid id;
+  Guid      id;
   CV_TypeId itype;
   //  padding align(4)
 };
@@ -1191,8 +1205,8 @@ struct CV_SymVPath32
 {
   CV_TypeId root;
   CV_TypeId path;
-  U32 off;
-  U16 seg;
+  U32       off;
+  U16       seg;
 };
 
 //- (SymKind: FRAMEPROC)
@@ -1238,12 +1252,12 @@ enum
 typedef struct CV_SymFrameproc CV_SymFrameproc;
 struct CV_SymFrameproc
 {
-  U32 frame_size;
-  U32 pad_size;
-  U32 pad_off;
-  U32 save_reg_size;
-  U32 eh_off;
-  CV_SectionIndex eh_sec;
+  U32               frame_size;
+  U32               pad_size;
+  U32               pad_off;
+  U32               save_reg_size;
+  U32               eh_off;
+  CV_SectionIndex   eh_sec;
   CV_FrameprocFlags flags;
 };
 
@@ -1285,12 +1299,12 @@ CV_ThunkOrdinalEnum;
 typedef struct CV_SymThunk32 CV_SymThunk32;
 struct CV_SymThunk32
 {
-  U32 parent;
-  U32 end;
-  U32 next;
-  U32 off;
-  U16 sec;
-  U16 len;
+  U32             parent;
+  U32             end;
+  U32             next;
+  U32             off;
+  U16             sec;
+  U16             len;
   CV_ThunkOrdinal ord;
   // U8[] name (null terminated)
   // U8[] variant (null terminated)
@@ -1314,8 +1328,8 @@ struct CV_SymBlock32
 typedef struct CV_SymLabel32 CV_SymLabel32;
 struct CV_SymLabel32
 {
-  U32 off;
-  U16 sec;
+  U32          off;
+  U16          sec;
   CV_ProcFlags flags;
   // U8[] name (null terminated)
 };
@@ -1326,7 +1340,7 @@ typedef struct CV_SymRegister CV_SymRegister;
 struct CV_SymRegister
 {
   CV_TypeId itype;
-  U16 reg;
+  U16       reg;
   // U8[] name (null terminated)
 };
 
@@ -1355,7 +1369,7 @@ typedef struct CV_SymManyreg CV_SymManyreg;
 struct CV_SymManyreg
 {
   CV_TypeId itype;
-  U8 count;
+  U8        count;
   // U8[count] regs;
 };
 
@@ -1364,7 +1378,7 @@ struct CV_SymManyreg
 typedef struct CV_SymBPRel32 CV_SymBPRel32;
 struct CV_SymBPRel32
 {
-  U32 off;
+  U32       off;
   CV_TypeId itype;
   // U8[] name (null terminated)
 };
@@ -1374,8 +1388,8 @@ struct CV_SymBPRel32
 typedef struct CV_SymData32 CV_SymData32;
 struct CV_SymData32
 {
-  CV_TypeId itype;
-  U32 off;
+  CV_TypeId       itype;
+  U32             off;
   CV_SectionIndex sec;
   // U8[] name (null terminated)
 };
@@ -1394,8 +1408,8 @@ enum
 typedef struct CV_SymPub32 CV_SymPub32;
 struct CV_SymPub32
 {
-  CV_Pub32Flags flags;
-  U32 off;
+  CV_Pub32Flags   flags;
+  U32             off;
   CV_SectionIndex sec;
   // U8[] name (null terminated)
 };
@@ -1405,15 +1419,15 @@ struct CV_SymPub32
 typedef struct CV_SymProc32 CV_SymProc32;
 struct CV_SymProc32
 {
-  U32 parent;
-  U32 end;
-  U32 next;
-  U32 len;
-  U32 dbg_start;
-  U32 dbg_end;
-  CV_TypeId itype;
-  U32 off;
-  U16 sec;
+  U32          parent;
+  U32          end;
+  U32          next;
+  U32          len;
+  U32          dbg_start;
+  U32          dbg_end;
+  CV_TypeId    itype;
+  U32          off;
+  U16          sec;
   CV_ProcFlags flags;
   // U8[] name (null terminated)
 };
@@ -1423,9 +1437,9 @@ struct CV_SymProc32
 typedef struct CV_SymRegrel32 CV_SymRegrel32;
 struct CV_SymRegrel32
 {
-  U32 reg_off;
+  U32       reg_off;
   CV_TypeId itype;
-  CV_Reg reg;
+  CV_Reg    reg;
   // U8[] name (null terminated)
 };
 
@@ -1435,8 +1449,8 @@ typedef struct CV_SymThread32 CV_SymThread32;
 struct CV_SymThread32
 {
   CV_TypeId itype;
-  U32 tls_off;
-  U16 tls_seg;
+  U32       tls_off;
+  U16       tls_seg;
   // U8[] name (null terminated)
 };
 
@@ -1458,13 +1472,13 @@ typedef struct CV_SymCompile2 CV_SymCompile2;
 struct CV_SymCompile2
 {
   CV_Compile2Flags flags;
-  CV_Arch machine;
-  U16 ver_fe_major;
-  U16 ver_fe_minor;
-  U16 ver_fe_build;
-  U16 ver_major;
-  U16 ver_minor;
-  U16 ver_build;
+  CV_Arch          machine;
+  U16              ver_fe_major;
+  U16              ver_fe_minor;
+  U16              ver_fe_build;
+  U16              ver_major;
+  U16              ver_minor;
+  U16              ver_build;
   // U8[] ver_str (null terminated)
 };
 
@@ -1474,7 +1488,7 @@ typedef struct CV_SymManyreg2 CV_SymManyreg2;
 struct CV_SymManyreg2
 {
   CV_TypeId itype;
-  U16 count;
+  U16       count;
   // U16[count] regs;
 };
 
@@ -1483,7 +1497,7 @@ struct CV_SymManyreg2
 typedef struct CV_SymSlot CV_SymSlot;
 struct CV_SymSlot
 {
-  U32 slot_index;
+  U32       slot_index;
   CV_TypeId itype;
   // U8[] name (null terminated)
 };
@@ -1493,8 +1507,8 @@ struct CV_SymSlot
 typedef struct CV_SymAttrFrameRel CV_SymAttrFrameRel;
 struct CV_SymAttrFrameRel
 {
-  U32 off;
-  CV_TypeId itype;
+  U32             off;
+  CV_TypeId       itype;
   CV_LocalVarAttr attr;
   // U8[] name (null terminated)
 };
@@ -1504,9 +1518,9 @@ struct CV_SymAttrFrameRel
 typedef struct CV_SymAttrReg CV_SymAttrReg;
 struct CV_SymAttrReg
 {
-  CV_TypeId itype;
+  CV_TypeId       itype;
   CV_LocalVarAttr attr;
-  U16 reg;
+  U16             reg;
   // U8[] name (null terminated)
 };
 
@@ -1516,9 +1530,9 @@ struct CV_SymAttrReg
 typedef struct CV_SymAttrManyReg CV_SymAttrManyReg;
 struct CV_SymAttrManyReg
 {
-  CV_TypeId itype;
+  CV_TypeId       itype;
   CV_LocalVarAttr attr;
-  U8 count;
+  U8              count;
   // U8[count] regs
   // U8[] name (null terminated)
 };
@@ -1528,9 +1542,9 @@ struct CV_SymAttrManyReg
 typedef struct CV_SymAttrRegRel CV_SymAttrRegRel;
 struct CV_SymAttrRegRel
 {
-  U32 off;
-  CV_TypeId itype;
-  U16 reg;
+  U32             off;
+  CV_TypeId       itype;
+  U16             reg;
   CV_LocalVarAttr attr;
   // U8[] name (null terminated)
 };
@@ -1554,8 +1568,8 @@ struct CV_SymUNamespace
 typedef struct CV_SymRef2 CV_SymRef2;
 struct CV_SymRef2
 {
-  U32 suc_name;
-  U32 sym_off;
+  U32         suc_name;
+  U32         sym_off;
   CV_ModIndex imod;
   // U8[] name (null terminated)
 };
@@ -1574,11 +1588,11 @@ typedef struct CV_SymTrampoline CV_SymTrampoline;
 struct CV_SymTrampoline
 {
   CV_TrampolineKind kind;
-  U16 thunk_size;
-  U32 thunk_sec_off;
-  U32 target_sec_off;
-  CV_SectionIndex thunk_sec;
-  CV_SectionIndex target_sec;
+  U16               thunk_size;
+  U32               thunk_sec_off;
+  U32               target_sec_off;
+  CV_SectionIndex   thunk_sec;
+  CV_SectionIndex   target_sec;
 };
 
 //- (SymKind: SEPCODE)
@@ -1593,14 +1607,14 @@ enum
 typedef struct CV_SymSepcode CV_SymSepcode;
 struct CV_SymSepcode
 {
-  U32 parent;
-  U32 end;
-  U32 len;
+  U32             parent;
+  U32             end;
+  U32             len;
   CV_SepcodeFlags flags;
-  U32 sec_off;
-  U32 sec_parent_off;
-  U16 sec;
-  U16 sec_parent;
+  U32             sec_off;
+  U32             sec_parent_off;
+  U16             sec;
+  U16             sec_parent;
 };
 
 //- (SymKind: SECTION)
@@ -1609,8 +1623,8 @@ typedef struct CV_SymSection CV_SymSection;
 struct CV_SymSection
 {
   U16 sec_index;
-  U8 align;
-  U8 pad;
+  U8  align;
+  U8  pad;
   U32 rva;
   U32 size;
   U32 characteristics;
@@ -1645,7 +1659,7 @@ enum
 typedef struct CV_SymExport CV_SymExport;
 struct CV_SymExport
 {
-  U16 ordinal;
+  U16            ordinal;
   CV_ExportFlags flags;
   // U8[] name (null terminated)
 };
@@ -1655,9 +1669,9 @@ struct CV_SymExport
 typedef struct CV_SymCallSiteInfo CV_SymCallSiteInfo;
 struct CV_SymCallSiteInfo
 {
-  U32 off;
-  U16 sec;
-  U16 pad;
+  U32       off;
+  U16       sec;
+  U16       pad;
   CV_TypeId itype;
 };
 
@@ -1676,10 +1690,10 @@ CV_FrameCookieKindEnum;
 typedef struct CV_SymFrameCookie CV_SymFrameCookie;
 struct CV_SymFrameCookie
 {
-  U32 off;
-  CV_Reg reg;
+  U32                off;
+  CV_Reg             reg;
   CV_FrameCookieKind kind;
-  U8 flags;
+  U8                 flags;
 };
 
 //- (SymKind: DISCARDED)
@@ -1697,8 +1711,8 @@ typedef struct CV_SymDiscarded CV_SymDiscarded;
 struct CV_SymDiscarded
 {
   CV_DiscardedKind kind;
-  U32 file_id;
-  U32 file_ln;
+  U32              file_id;
+  U32              file_ln;
   // U8[] data (rest of data)
 };
 
@@ -1741,15 +1755,15 @@ typedef struct CV_SymCompile3 CV_SymCompile3;
 struct CV_SymCompile3
 {
   CV_Compile3Flags flags;
-  CV_Arch machine;
-  U16 ver_fe_major;
-  U16 ver_fe_minor;
-  U16 ver_fe_build;
-  U16 ver_feqfe;
-  U16 ver_major;
-  U16 ver_minor;
-  U16 ver_build;
-  U16 ver_qfe;
+  CV_Arch          machine;
+  U16              ver_fe_major;
+  U16              ver_fe_minor;
+  U16              ver_fe_build;
+  U16              ver_feqfe;
+  U16              ver_major;
+  U16              ver_minor;
+  U16              ver_build;
+  U16              ver_qfe;
   // U8[] ver_str (null terminated)
 };
 
@@ -1767,7 +1781,7 @@ struct CV_SymEnvBlock
 typedef struct CV_SymLocal CV_SymLocal;
 struct CV_SymLocal
 {
-  CV_TypeId itype;
+  CV_TypeId     itype;
   CV_LocalFlags flags;
   // U8[] name (null terminated)
 };
@@ -1800,7 +1814,7 @@ enum
 typedef struct CV_SymDefrange CV_SymDefrange;
 struct CV_SymDefrange
 {
-  U32 program;
+  U32              program;
   CV_LvarAddrRange range;
   // variable-width: CV_LvarAddrGap gaps;
 };
@@ -1810,8 +1824,8 @@ struct CV_SymDefrange
 typedef struct CV_SymDefrangeSubfield CV_SymDefrangeSubfield;
 struct CV_SymDefrangeSubfield
 {
-  U32 program;
-  U32 off_in_parent;
+  U32              program;
+  U32              off_in_parent;
   CV_LvarAddrRange range;
   // CV_LvarAddrGap[] gaps (rest of data)
 };
@@ -1821,8 +1835,8 @@ struct CV_SymDefrangeSubfield
 typedef struct CV_SymDefrangeRegister CV_SymDefrangeRegister;
 struct CV_SymDefrangeRegister
 {
-  CV_Reg reg;
-  CV_RangeAttribs attribs;
+  CV_Reg           reg;
+  CV_RangeAttribs  attribs;
   CV_LvarAddrRange range;
   // CV_LvarAddrGap[] gaps (rest of data)
 };
@@ -1832,7 +1846,7 @@ struct CV_SymDefrangeRegister
 typedef struct CV_SymDefrangeFramepointerRel CV_SymDefrangeFramepointerRel;
 struct CV_SymDefrangeFramepointerRel
 {
-  S32 off;
+  S32              off;
   CV_LvarAddrRange range;
   // CV_LvarAddrGap[] gaps (rest of data)
 };
@@ -1844,9 +1858,9 @@ struct CV_SymDefrangeFramepointerRel
 typedef struct CV_SymDefrangeSubfieldRegister CV_SymDefrangeSubfieldRegister;
 struct CV_SymDefrangeSubfieldRegister
 {
-  CV_Reg reg;
-  CV_RangeAttribs attribs;
-  U32 field_offset;
+  CV_Reg           reg;
+  CV_RangeAttribs  attribs;
+  U32              field_offset;
   CV_LvarAddrRange range;
   // CV_LvarAddrGap[] gaps (rest of data)
 };
@@ -1871,10 +1885,10 @@ enum
 typedef struct CV_SymDefrangeRegisterRel CV_SymDefrangeRegisterRel;
 struct CV_SymDefrangeRegisterRel
 {
-  CV_Reg reg;
+  CV_Reg                      reg;
   CV_DefrangeRegisterRelFlags flags;
-  S32 reg_off;
-  CV_LvarAddrRange range;
+  S32                         reg_off;
+  CV_LvarAddrRange            range;
   // CV_LvarAddGap[] gaps (rest of data)
 };
 
@@ -1919,8 +1933,8 @@ CV_InlineRangeKindEnum;
 typedef struct CV_SymInlineSite CV_SymInlineSite;
 struct CV_SymInlineSite
 {
-  U32 parent;
-  U32 end;
+  U32       parent;
+  U32       end;
   CV_ItemId inlinee;
   // U8 annotations[] (rest of data)
 };
@@ -1930,10 +1944,10 @@ struct CV_SymInlineSite
 typedef struct CV_SymInlineSite2 CV_SymInlineSite2;
 struct CV_SymInlineSite2
 {
-  U32 parent_off;
-  U32 end_off;
+  U32       parent_off;
+  U32       end_off;
   CV_ItemId inlinee;
-  U32 invocations;
+  U32       invocations;
   // U8 annotations[] (rest of data)
 };
 
@@ -1944,8 +1958,8 @@ struct CV_SymInlineSite2
 typedef struct CV_SymFileStatic CV_SymFileStatic;
 struct CV_SymFileStatic
 {
-  CV_TypeId itype;
-  U32 mod_offset;
+  CV_TypeId     itype;
+  U32           mod_offset;
   CV_LocalFlags flags;
   // U8[] name (null terminated)
 };
@@ -1972,14 +1986,14 @@ CV_ArmSwitchKindEnum;
 typedef struct CV_SymArmSwitchTable CV_SymArmSwitchTable;
 struct CV_SymArmSwitchTable
 {
-  U32 off_base;
-  U16 sec_base;
+  U32              off_base;
+  U16              sec_base;
   CV_ArmSwitchKind kind;
-  U32 off_branch;
-  U32 off_table;
-  U16 sec_branch;
-  U16 sec_table;
-  U32 entry_count;
+  U32              off_branch;
+  U32              off_table;
+  U16              sec_branch;
+  U16              sec_table;
+  U32              entry_count;
 };
 
 //- (SymKind: CALLEES, CALLERS)
@@ -2008,9 +2022,9 @@ struct CV_SymPogoInfo
 typedef struct CV_SymHeapAllocSite CV_SymHeapAllocSite;
 struct CV_SymHeapAllocSite
 {
-  U32 off;
-  U16 sec;
-  U16 call_inst_len;
+  U32       off;
+  U16       sec;
+  U16       call_inst_len;
   CV_TypeId itype;
 };
 
@@ -2032,8 +2046,8 @@ struct CV_SymModTypeRef
 {
   CV_ModTypeRefFlags flags;
   // contain stream number or module index depending on flags     (undocumented)
-  U32 word0;
-  U32 word1;
+  U32                word0;
+  U32                word1;
 };
 
 //- (SymKind: REF_MINIPDB)
@@ -2051,8 +2065,8 @@ enum
 typedef struct CV_SymRefMiniPdb CV_SymRefMiniPdb;
 struct CV_SymRefMiniPdb
 {
-  U32 data;
-  CV_ModIndex imod;
+  U32                data;
+  CV_ModIndex        imod;
   CV_RefMiniPdbFlags flags;
   // U8[] name (null terminated)
 };
@@ -2074,7 +2088,7 @@ enum
 typedef struct CV_SymFastLink CV_SymFastLink;
 struct CV_SymFastLink
 {
-  CV_TypeId itype;
+  CV_TypeId        itype;
   CV_FastLinkFlags flags;
   // U8[] name (null terminated)
 };
@@ -2097,13 +2111,13 @@ struct CV_SymInlinees
 #define CV_TypeId_Variadic 0
 
 #define CV_BasicPointerKindXList(X) \
-X(VALUE,      0x0)\
-X(16BIT,      0x1)\
-X(FAR_16BIT,  0x2)\
-X(HUGE_16BIT, 0x3)\
-X(32BIT,      0x4)\
-X(16_32BIT,   0x5)\
-X(64BIT,      0x6)
+  X(VALUE,      0x0)                \
+  X(16BIT,      0x1)                \
+  X(FAR_16BIT,  0x2)                \
+  X(HUGE_16BIT, 0x3)                \
+  X(32BIT,      0x4)                \
+  X(16_32BIT,   0x5)                \
+  X(64BIT,      0x6)
 
 typedef U8 CV_BasicPointerKind;
 typedef enum
@@ -2113,7 +2127,7 @@ typedef enum
 #undef X
 } CV_BasicPointerKindEnum;
 
-#define CV_BasicTypeFromTypeId(x) ((x)&0xFF)
+#define CV_BasicTypeFromTypeId(x)        ((x)&0xFF)
 #define CV_BasicPointerKindFromTypeId(x) (((x)>>8)&0xFF)
 
 typedef U8 CV_HFAKind;
@@ -2123,8 +2137,7 @@ typedef enum CV_HFAKindEnum
   CV_HFAKind_Float,
   CV_HFAKind_Double,
   CV_HFAKind_Other
-}
-CV_HFAKindEnum;
+} CV_HFAKindEnum;
 
 typedef U8 CV_MoComUDTKind;
 typedef enum CV_MoComUDTKindEnum
@@ -2133,25 +2146,24 @@ typedef enum CV_MoComUDTKindEnum
   CV_MoComUDTKind_Ref,
   CV_MoComUDTKind_Value,
   CV_MoComUDTKind_Interface
-}
-CV_MoComUDTKindEnum;
+} CV_MoComUDTKindEnum;
 
 typedef U16 CV_TypeProps;
 enum
 {
-  CV_TypeProp_Packed                     = (1<<0),
-  CV_TypeProp_HasConstructorsDestructors = (1<<1),
-  CV_TypeProp_OverloadedOperators        = (1<<2),
-  CV_TypeProp_IsNested                   = (1<<3),
-  CV_TypeProp_ContainsNested             = (1<<4),
-  CV_TypeProp_OverloadedAssignment       = (1<<5),
-  CV_TypeProp_OverloadedCasting          = (1<<6),
-  CV_TypeProp_FwdRef                     = (1<<7),
-  CV_TypeProp_Scoped                     = (1<<8),
-  CV_TypeProp_HasUniqueName              = (1<<9),
-  CV_TypeProp_Sealed                     = (1<<10),
+  CV_TypeProp_Packed                     = (1 << 0),
+  CV_TypeProp_HasConstructorsDestructors = (1 << 1),
+  CV_TypeProp_OverloadedOperators        = (1 << 2),
+  CV_TypeProp_IsNested                   = (1 << 3),
+  CV_TypeProp_ContainsNested             = (1 << 4),
+  CV_TypeProp_OverloadedAssignment       = (1 << 5),
+  CV_TypeProp_OverloadedCasting          = (1 << 6),
+  CV_TypeProp_FwdRef                     = (1 << 7),
+  CV_TypeProp_Scoped                     = (1 << 8),
+  CV_TypeProp_HasUniqueName              = (1 << 9),
+  CV_TypeProp_Sealed                     = (1 << 10),
   // HFA: 11,12
-  CV_TypeProp_Intrinsic                  = (1<<13),
+  CV_TypeProp_Intrinsic                  = (1 << 13),
   // MOCOM: 14,15
 };
 #define CV_TypeProps_ExtractHFA(f)   (((f)>>11)&0x3)
@@ -2160,9 +2172,9 @@ enum
 typedef U8 CV_PointerKind;
 typedef enum CV_PointerKindEnum
 {
-  CV_PointerKind_Near,  // 16 bit
-  CV_PointerKind_Far,   // 16:16 bit
-  CV_PointerKind_Huge,  // 16:16 bit
+  CV_PointerKind_Near,      // 16 bit
+  CV_PointerKind_Far,       // 16:16 bit
+  CV_PointerKind_Huge,      // 16:16 bit
   CV_PointerKind_BaseSeg,
   CV_PointerKind_BaseVal,
   CV_PointerKind_BaseSegVal,
@@ -2170,11 +2182,10 @@ typedef enum CV_PointerKindEnum
   CV_PointerKind_BaseSegAddr,
   CV_PointerKind_BaseType,
   CV_PointerKind_BaseSelf,
-  CV_PointerKind_Near32, // 32 bit
-  CV_PointerKind_Far32,  // 16:32 bit
-  CV_PointerKind_64,     // 64 bit
-}
-CV_PointerKindEnum;
+  CV_PointerKind_Near32,    // 32 bit
+  CV_PointerKind_Far32,     // 16:32 bit
+  CV_PointerKind_64,        // 64 bit
+} CV_PointerKindEnum;
 
 typedef U8 CV_PointerMode;
 typedef enum CV_PointerModeEnum
@@ -2248,7 +2259,7 @@ enum
   CV_FieldAttrib_CompilerGenated = (1<<8),
   CV_FieldAttrib_Sealed          = (1<<9),
 };
-#define CV_FieldAttribs_ExtractAccess(f) ((f)&0x3)
+#define CV_FieldAttribs_ExtractAccess(f)     ((f)&0x3)
 #define CV_FieldAttribs_ExtractMethodProp(f) (((f)>>2)&0x7)
 
 typedef U16 CV_LabelKind;
@@ -2333,7 +2344,7 @@ typedef struct CV_LeafTypeServer2 CV_LeafTypeServer2;
 struct CV_LeafTypeServer2
 {
   Guid sig70;
-  U32 age;
+  U32  age;
   // U8[] name (null terminated)
 };
 
@@ -2375,7 +2386,7 @@ enum
 typedef struct CV_LeafModifier CV_LeafModifier;
 struct CV_LeafModifier
 {
-  CV_TypeId itype;
+  CV_TypeId        itype;
   CV_ModifierFlags flags;
 };
 
@@ -2404,7 +2415,7 @@ enum
 typedef struct CV_LeafPointer CV_LeafPointer;
 struct CV_LeafPointer
 {
-  CV_TypeId itype;
+  CV_TypeId         itype;
   CV_PointerAttribs attribs;
 };
 
@@ -2413,11 +2424,11 @@ struct CV_LeafPointer
 typedef struct CV_LeafProcedure CV_LeafProcedure;
 struct CV_LeafProcedure
 {
-  CV_TypeId ret_itype;
-  CV_CallKind call_kind;
+  CV_TypeId          ret_itype;
+  CV_CallKind        call_kind;
   CV_FunctionAttribs attribs;
-  U16 arg_count;
-  CV_TypeId arg_itype;
+  U16                arg_count;
+  CV_TypeId          arg_itype;
 };
 
 //- (LeafKind: MFUNCTION)
@@ -2425,14 +2436,14 @@ struct CV_LeafProcedure
 typedef struct CV_LeafMFunction CV_LeafMFunction;
 struct CV_LeafMFunction
 {
-  CV_TypeId ret_itype;
-  CV_TypeId class_itype;
-  CV_TypeId this_itype;
-  CV_CallKind call_kind;
+  CV_TypeId          ret_itype;
+  CV_TypeId          class_itype;
+  CV_TypeId          this_itype;
+  CV_CallKind        call_kind;
   CV_FunctionAttribs attribs;
-  U16 arg_count;
-  CV_TypeId arg_itype;
-  S32 this_adjust;
+  U16                arg_count;
+  CV_TypeId          arg_itype;
+  S32                this_adjust;
 };
 
 //- (LeafKind: ARGLIST)
@@ -2450,8 +2461,8 @@ typedef struct CV_LeafBitField CV_LeafBitField;
 struct CV_LeafBitField
 {
   CV_TypeId itype;
-  U8 len;
-  U8 pos;
+  U8        len;
+  U8        pos;
 };
 
 //- (LeafKind: METHODLIST)
@@ -2461,8 +2472,8 @@ typedef struct CV_LeafMethodListMember CV_LeafMethodListMember;
 struct CV_LeafMethodListMember
 {
   CV_FieldAttribs attribs;
-  U16 pad;
-  CV_TypeId itype;
+  U16             pad;
+  CV_TypeId       itype;
   // U32 vbaseoff (when Intro or PureIntro)
 };
 
@@ -2471,7 +2482,7 @@ struct CV_LeafMethodListMember
 typedef struct CV_LeafIndex CV_LeafIndex;
 struct CV_LeafIndex
 {
-  U16 pad;
+  U16       pad;
   CV_TypeId itype;
 };
 
@@ -2490,11 +2501,11 @@ struct CV_LeafArray
 typedef struct CV_LeafStruct CV_LeafStruct;
 struct CV_LeafStruct
 {
-  U16 count;
+  U16          count;
   CV_TypeProps props;
-  CV_TypeId field_itype;
-  CV_TypeId derived_itype;
-  CV_TypeId vshape_itype;
+  CV_TypeId    field_itype;
+  CV_TypeId    derived_itype;
+  CV_TypeId    vshape_itype;
   // CV_Numeric size
   // U8[] name (null terminated)
   // U8[] unique_name (null terminated)
@@ -2505,9 +2516,9 @@ struct CV_LeafStruct
 typedef struct CV_LeafUnion CV_LeafUnion;
 struct CV_LeafUnion
 {
-  U16 count;
+  U16          count;
   CV_TypeProps props;
-  CV_TypeId field_itype;
+  CV_TypeId    field_itype;
   // CV_Numeric size
   // U8[] name (null terminated)
   // U8[] unique_name (null terminated)
@@ -2518,10 +2529,10 @@ struct CV_LeafUnion
 typedef struct CV_LeafEnum CV_LeafEnum;
 struct CV_LeafEnum
 {
-  U16 count;
+  U16          count;
   CV_TypeProps props;
-  CV_TypeId base_itype;
-  CV_TypeId field_itype;
+  CV_TypeId    base_itype;
+  CV_TypeId    field_itype;
   // U8[] name (null terminated)
   // U8[] unique_name (null terminated)
 };
@@ -2541,7 +2552,7 @@ typedef struct CV_LeafMember CV_LeafMember;
 struct CV_LeafMember
 {
   CV_FieldAttribs attribs;
-  CV_TypeId itype;
+  CV_TypeId       itype;
   // CV_Numeric offset
   // U8[] name (null terminated)
 };
@@ -2552,7 +2563,7 @@ typedef struct CV_LeafStMember CV_LeafStMember;
 struct CV_LeafStMember
 {
   CV_FieldAttribs attribs;
-  CV_TypeId itype;
+  CV_TypeId       itype;
   // U8[] name (null terminated)
 };
 
@@ -2561,7 +2572,7 @@ struct CV_LeafStMember
 typedef struct CV_LeafMethod CV_LeafMethod;
 struct CV_LeafMethod
 {
-  U16 count;
+  U16       count;
   CV_TypeId list_itype;
   // U8[] name (null terminated)
 };
@@ -2572,7 +2583,7 @@ typedef struct CV_LeafOneMethod CV_LeafOneMethod;
 struct CV_LeafOneMethod
 {
   CV_FieldAttribs attribs;
-  CV_TypeId itype;
+  CV_TypeId       itype;
   // U32 vbaseoff (when Intro or PureIntro)
   // U8[] name (null terminated)
 };
@@ -2592,7 +2603,7 @@ struct CV_LeafEnumerate
 typedef struct CV_LeafNestType CV_LeafNestType;
 struct CV_LeafNestType
 {
-  U16 pad;
+  U16       pad;
   CV_TypeId itype;
   // U8[] name (null terminated)
 };
@@ -2603,7 +2614,7 @@ typedef struct CV_LeafNestTypeEx CV_LeafNestTypeEx;
 struct CV_LeafNestTypeEx
 {
   CV_FieldAttribs attribs;
-  CV_TypeId itype;
+  CV_TypeId       itype;
   // U8[] name (null terminated)
 };
 
@@ -2613,7 +2624,7 @@ typedef struct CV_LeafBClass CV_LeafBClass;
 struct CV_LeafBClass
 {
   CV_FieldAttribs attribs;
-  CV_TypeId itype;
+  CV_TypeId       itype;
   // CV_Numeric offset
 };
 
@@ -2623,8 +2634,8 @@ typedef struct CV_LeafVBClass CV_LeafVBClass;
 struct CV_LeafVBClass
 {
   CV_FieldAttribs attribs;
-  CV_TypeId itype;
-  CV_TypeId vbptr_itype;
+  CV_TypeId       itype;
+  CV_TypeId       vbptr_itype;
   // CV_Numeric vbptr_off
   // CV_Numeric vtable_off
 };
@@ -2634,7 +2645,7 @@ struct CV_LeafVBClass
 typedef struct CV_LeafVFuncTab CV_LeafVFuncTab;
 struct CV_LeafVFuncTab
 {
-  U16 pad;
+  U16       pad;
   CV_TypeId itype;
 };
 
@@ -2643,9 +2654,9 @@ struct CV_LeafVFuncTab
 typedef struct CV_LeafVFuncOff CV_LeafVFuncOff;
 struct CV_LeafVFuncOff
 {
-  U16 pad;
+  U16       pad;
   CV_TypeId itype;
-  U32 off;
+  U32       off;
 };
 
 //- (LeafKind: VFTABLE)
@@ -2655,8 +2666,8 @@ struct CV_LeafVFTable
 {
   CV_TypeId owner_itype;
   CV_TypeId base_table_itype;
-  U32 offset_in_object_layout;
-  U32 names_len;
+  U32       offset_in_object_layout;
+  U32       names_len;
   // U8[] names (multiple null terminated strings)
 };
 
@@ -2676,11 +2687,11 @@ struct CV_LeafStruct2
 {
   // NOTE: still reverse engineering this - if you find docs please help!
   CV_TypeProps props;
-  U16 unknown1;
-  CV_TypeId field_itype;
-  CV_TypeId derived_itype;
-  CV_TypeId vshape_itype;
-  U16 unknown2;
+  U16          unknown1;
+  CV_TypeId    field_itype;
+  CV_TypeId    derived_itype;
+  CV_TypeId    vshape_itype;
+  U16          unknown2;
   // CV_Numeric size
   // U8[] name (null terminated)
   // U8[] unique_name (null terminated)
@@ -2750,7 +2761,7 @@ struct CV_LeafUDTSrcLine
 {
   CV_TypeId udt_itype;
   CV_ItemId src_string_id;
-  U32 line;
+  U32       line;
 };
 
 //- (LeafIDKind: UDT_MOD_SRC_LINE)
@@ -2758,9 +2769,9 @@ struct CV_LeafUDTSrcLine
 typedef struct CV_LeafUDTModSrcLine CV_LeafUDTModSrcLine;
 struct CV_LeafUDTModSrcLine
 {
-  CV_TypeId udt_itype;
-  CV_ItemId src_string_id;
-  U32 line;
+  CV_TypeId   udt_itype;
+  CV_ItemId   src_string_id;
+  U32         line;
   CV_ModIndex imod;
 };
 
@@ -2769,22 +2780,22 @@ struct CV_LeafUDTModSrcLine
 
 #define CV_C13SubSectionKind_IgnoreFlag 0x80000000
 
-#define CV_C13SubSectionKindXList(X)\
-X(Symbols,             0xF1)\
-X(Lines,               0xF2)\
-X(StringTable,         0xF3)\
-X(FileChksms,          0xF4)\
-X(FrameData,           0xF5)\
-X(InlineeLines,        0xF6)\
-X(CrossScopeImports,   0xF7)\
-X(CrossScopeExports,   0xF8)\
-X(IlLines,             0xF9)\
-X(FuncMDTokenMap,      0xFA)\
-X(TypeMDTokenMap,      0xFB)\
-X(MergedAssemblyInput, 0xFC)\
-X(CoffSymbolRVA,       0xFD)\
-X(XfgHashType,         0xFF)\
-X(XfgHashVirtual,      0x100)
+#define CV_C13SubSectionKindXList(X) \
+  X(Symbols,             0xF1)       \
+  X(Lines,               0xF2)       \
+  X(StringTable,         0xF3)       \
+  X(FileChksms,          0xF4)       \
+  X(FrameData,           0xF5)       \
+  X(InlineeLines,        0xF6)       \
+  X(CrossScopeImports,   0xF7)       \
+  X(CrossScopeExports,   0xF8)       \
+  X(IlLines,             0xF9)       \
+  X(FuncMDTokenMap,      0xFA)       \
+  X(TypeMDTokenMap,      0xFB)       \
+  X(MergedAssemblyInput, 0xFC)       \
+  X(CoffSymbolRVA,       0xFD)       \
+  X(XfgHashType,         0xFF)       \
+  X(XfgHashVirtual,      0x100)
 
 typedef U32 CV_C13SubSectionKind;
 typedef enum CV_C13SubSectionKindEnum
@@ -2799,7 +2810,7 @@ typedef struct CV_C13SubSectionHeader CV_C13SubSectionHeader;
 struct CV_C13SubSectionHeader
 {
   CV_C13SubSectionKind kind;
-  U32 size;
+  U32                  size;
 };
 
 //- FileChksms sub-section
@@ -2817,8 +2828,8 @@ CV_C13ChecksumKindEnum;
 typedef struct CV_C13Checksum CV_C13Checksum;
 struct CV_C13Checksum
 {
-  U32 name_off;
-  U8 len;
+  U32                name_off;
+  U8                 len;
   CV_C13ChecksumKind kind;
 };
 
@@ -2833,10 +2844,10 @@ enum
 typedef struct CV_C13SubSecLinesHeader CV_C13SubSecLinesHeader;
 struct CV_C13SubSecLinesHeader
 {
-  U32 sec_off;
-  CV_SectionIndex sec;
+  U32                    sec_off;
+  CV_SectionIndex        sec;
   CV_C13SubSecLinesFlags flags;
-  U32 len;
+  U32                    len;
 };
 
 typedef struct CV_C13File CV_C13File;
@@ -2857,8 +2868,8 @@ typedef U32 CV_C13LineFlags;
 typedef struct CV_C13Line CV_C13Line;
 struct CV_C13Line
 {
-  U32 off;
-  CV_C13LineFlags flags; 
+  U32             off;
+  CV_C13LineFlags flags;
 };
 
 typedef struct CV_C13Column CV_C13Column;
@@ -2881,14 +2892,14 @@ enum
 typedef struct CV_C13FrameData CV_C13FrameData;
 struct CV_C13FrameData
 {
-  U32 start_voff;
-  U32 code_size;
-  U32 local_size;
-  U32 params_size;
-  U32 max_stack_size;
-  U32 frame_func;
-  U16 prolog_size;
-  U16 saved_reg_size;
+  U32                  start_voff;
+  U32                  code_size;
+  U32                  local_size;
+  U32                  params_size;
+  U32                  max_stack_size;
+  U32                  frame_func;
+  U16                  prolog_size;
+  U16                  saved_reg_size;
   CV_C13FrameDataFlags flags;
 };
 
@@ -2905,8 +2916,8 @@ typedef struct CV_C13InlineeSourceLineHeader CV_C13InlineeSourceLineHeader;
 struct CV_C13InlineeSourceLineHeader
 {
   CV_ItemId inlinee;          // LF_FUNC_ID or LF_MFUNC_ID
-  U32 file_off;               // offset into FileChksms sub-section
-  U32 first_source_ln;        // base source line number for binary annotations
+  U32       file_off;         // offset into FileChksms sub-section
+  U32       first_source_ln;  // base source line number for binary annotations
   // if sig set to CV_C13InlineeLinesSig_EXTRA_FILES
   //  U32 extra_file_count;
   //  U32 files[];
@@ -2945,193 +2956,8 @@ struct CV_TypeIndexInfoList
 typedef struct CV_TypeIndexArray CV_TypeIndexArray;
 struct CV_TypeIndexArray
 {
-  U32 count;
+  U32           count;
   CV_TypeIndex *v;
-};
-
-////////////////////////////////
-
-typedef struct CV_UDTInfo CV_UDTInfo;
-struct CV_UDTInfo
-{
-  String8      name;
-  String8      unique_name;
-  CV_TypeProps props;
-};
-
-////////////////////////////////
-//~ CodeView Common Parser Types
-
-// CV_Numeric layout
-// x: U16
-// buf: U8[]
-// case (x < 0x8000):  kind=U16 val=x
-// case (x >= 0x8000): kind=x   val=buf
-
-typedef struct CV_NumericParsed CV_NumericParsed;
-struct CV_NumericParsed
-{
-  CV_NumericKind kind;
-  U8 *val;
-  U64 encoded_size;
-};
-
-typedef struct CV_RecRange CV_RecRange;
-struct CV_RecRange
-{
-  U32 off;
-  CV_RecHeader hdr;
-};
-
-#define CV_REC_RANGE_CHUNK_SIZE 511
-
-typedef struct CV_RecRangeChunk CV_RecRangeChunk;
-struct CV_RecRangeChunk
-{
-  struct CV_RecRangeChunk *next;
-  CV_RecRange ranges[CV_REC_RANGE_CHUNK_SIZE];
-};
-
-typedef struct CV_RecRangeStream CV_RecRangeStream;
-struct CV_RecRangeStream
-{
-  CV_RecRangeChunk *first_chunk;
-  CV_RecRangeChunk *last_chunk;
-  U64 total_count;
-};
-
-typedef struct CV_RecRangeArray CV_RecRangeArray;
-struct CV_RecRangeArray
-{
-  CV_RecRange *ranges;
-  U64 count;
-};
-
-////////////////////////////////
-//~ CodeView Sym Parser Types
-
-typedef struct CV_SymTopLevelInfo CV_SymTopLevelInfo;
-struct CV_SymTopLevelInfo
-{
-  CV_Arch arch;
-  CV_Language language; 
-  String8 compiler_name;
-};
-
-typedef struct CV_SymParsed CV_SymParsed;
-struct CV_SymParsed
-{
-  // source information
-  String8 data;
-  U64 sym_align;
-  
-  // sym index derived from source
-  CV_RecRangeArray sym_ranges;
-  
-  // top-level info derived from the syms
-  CV_SymTopLevelInfo info;
-};
-
-////////////////////////////////
-//~ CodeView Leaf Parser Types
-
-typedef struct CV_LeafParsed CV_LeafParsed;
-struct CV_LeafParsed
-{
-  // source information
-  String8 data;
-  CV_TypeId itype_first;
-  CV_TypeId itype_opl;
-  
-  // leaf index derived from source
-  CV_RecRangeArray leaf_ranges;
-};
-
-////////////////////////////////
-//~ CodeView C13 Info Parser Types
-
-typedef struct CV_C13LinesParsed CV_C13LinesParsed;
-struct CV_C13LinesParsed
-{
-  // raw info
-  U32 sec_idx;
-  U32 file_off;
-  U64 secrel_base_off;
-  
-  // parsed info
-  String8 file_name;
-  U64 *voffs;     // [line_count + 1]
-  U32 *line_nums; // [line_count]
-  U16 *col_nums;  // [2*line_count]
-  U32 line_count;
-};
-
-typedef struct CV_C13LinesParsedNode CV_C13LinesParsedNode;
-struct CV_C13LinesParsedNode
-{
-  CV_C13LinesParsedNode *next;
-  CV_C13LinesParsed v;
-};
-
-typedef struct CV_C13InlineeLinesParsed CV_C13InlineeLinesParsed;
-struct CV_C13InlineeLinesParsed
-{
-  CV_ItemId inlinee;
-  U32 file_off;
-  String8 file_name;
-  U32 first_source_ln;
-  U32 extra_file_count;
-  U32 *extra_files;
-};
-
-typedef struct CV_C13InlineeLinesParsedNode CV_C13InlineeLinesParsedNode;
-struct CV_C13InlineeLinesParsedNode
-{
-  CV_C13InlineeLinesParsedNode *next;
-  CV_C13InlineeLinesParsedNode *hash_next;
-  CV_C13InlineeLinesParsed v;
-};
-
-typedef struct CV_C13SubSectionNode CV_C13SubSectionNode;
-struct CV_C13SubSectionNode
-{
-  struct CV_C13SubSectionNode *next;
-  CV_C13SubSectionKind kind;
-  U32 off;
-  U32 size;
-  CV_C13LinesParsedNode *lines_first;
-  CV_C13LinesParsedNode *lines_last;
-  CV_C13InlineeLinesParsedNode *inlinee_lines_first;
-  CV_C13InlineeLinesParsedNode *inlinee_lines_last;
-};
-
-typedef struct CV_C13Parsed CV_C13Parsed;
-struct CV_C13Parsed
-{
-  // rjf: source data
-  String8 data;
-  
-  // rjf: full sub-section list
-  CV_C13SubSectionNode *first_sub_section;
-  CV_C13SubSectionNode *last_sub_section;
-  U64 sub_section_count;
-  
-  // rjf: fastpath to file checksums section
-  CV_C13SubSectionNode *file_chksms_sub_section;
-  
-  // rjf: fastpath to map inlinee CV_ItemId -> CV_InlineeLinesParsed quickly
-  CV_C13InlineeLinesParsedNode **inlinee_lines_parsed_slots;
-  U64 inlinee_lines_parsed_slots_count;
-};
-
-////////////////////////////////
-//~ CodeView Compound Types
-
-typedef struct CV_TypeIdArray CV_TypeIdArray;
-struct CV_TypeIdArray
-{
-  CV_TypeId *itypes;
-  U64 count;
 };
 
 ////////////////////////////////
@@ -3143,66 +2969,6 @@ internal U64                   cv_size_from_reg(CV_Arch arch, CV_Reg reg);
 internal B32                   cv_is_reg_sp(CV_Arch arch, CV_Reg reg);
 internal CV_EncodedFramePtrReg cv_pick_fp_encoding(CV_SymFrameproc *frameproc, B32 is_local_param);
 internal CV_Reg                cv_decode_fp_reg(CV_Arch arch, CV_EncodedFramePtrReg encoded_reg);
-
-////////////////////////////////
-//~ CodeView Common Decoding Helper Functions
-
-internal U64 cv_hash_from_string(String8 string);
-internal U64 cv_hash_from_item_id(CV_ItemId item_id);
-
-internal CV_NumericParsed cv_numeric_from_data_range(U8 *first, U8 *opl);
-internal U64 cv_read_numeric(String8 data, U64 offset, CV_NumericParsed *out);
-
-internal B32 cv_numeric_fits_in_u64(CV_NumericParsed *num);
-internal B32 cv_numeric_fits_in_s64(CV_NumericParsed *num);
-internal B32 cv_numeric_fits_in_f64(CV_NumericParsed *num);
-
-internal U64 cv_u64_from_numeric(CV_NumericParsed *num);
-internal S64 cv_s64_from_numeric(CV_NumericParsed *num);
-internal F64 cv_f64_from_numeric(CV_NumericParsed *num);
-
-internal U64 cv_decode_inline_annot_u32(String8 data, U64 offset, U32 *out_value);
-internal U64 cv_decode_inline_annot_s32(String8 data, U64 offset, S32 *out_value);
-
-internal S32 cv_inline_annot_signed_from_unsigned_operand(U32 value);
-
-////////////////////////////////
-
-internal CV_TypeIndexInfoList cv_get_symbol_type_index_offsets(Arena *arena, CV_SymKind kind, String8 data);
-internal CV_TypeIndexInfoList cv_get_leaf_type_index_offsets(Arena *arena, CV_LeafKind leaf_kind, String8 data);
-internal CV_TypeIndexInfoList cv_get_inlinee_type_index_offsets(Arena *arena, String8 raw_data);
-internal String8Array         cv_get_data_around_type_indices(Arena *arena, CV_TypeIndexInfoList ti_list, String8 data);
-internal CV_TypeIndexSource   cv_type_index_source_from_leaf_kind(CV_LeafKind leaf_kind);
-
-internal U64                  cv_name_offset_from_symbol(CV_SymKind kind, String8 data);
-internal String8              cv_name_from_symbol(CV_SymKind kind, String8 data);
-
-internal B32 cv_is_udt_name_anon(String8 name);
-internal B32 cv_is_udt(CV_LeafKind kind);
-internal B32 cv_is_global_symbol(CV_SymKind kind);
-internal B32 cv_is_typedef(CV_SymKind kind);
-internal B32 cv_is_scope_symbol(CV_SymKind kind);
-internal B32 cv_is_end_symbol(CV_SymKind kind);
-internal B32 cv_is_leaf_type_server(CV_LeafKind kind);
-internal B32 cv_is_leaf_pch(CV_LeafKind kind);
-
-////////////////////////////////
-//~ CodeView Parsing Functions
-
-//- rjf: record range stream parsing
-internal CV_RecRangeStream *cv_rec_range_stream_from_data(Arena *arena, String8 data, U64 align);
-internal CV_RecRangeArray   cv_rec_range_array_from_stream(Arena *arena, CV_RecRangeStream *stream);
-
-//- rjf: sym stream parsing
-internal CV_SymParsed *cv_sym_from_data(Arena *arena, String8 sym_data, U64 sym_align);
-
-//- rjf: leaf stream parsing
-internal CV_LeafParsed *cv_leaf_from_data(Arena *arena, String8 leaf_data, CV_TypeId first);
-
-////////////////////////////////
-//~ CodeView C13 Parser Functions
-
-internal CV_C13Parsed *cv_c13_parsed_from_data(Arena *arena, String8 c13_data, String8 strtbl, COFF_SectionHeaderArray sections);
 
 ////////////////////////////////
 //~ Enum <-> String

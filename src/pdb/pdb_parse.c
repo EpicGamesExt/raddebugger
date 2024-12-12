@@ -17,7 +17,7 @@ pdb_info_from_data(Arena *arena, String8 data){
   PDB_Info *result = 0;
   if (header != 0){
     // read guid
-    COFF_Guid *auth_guid = 0;
+    Guid *auth_guid = 0;
     U32 after_auth_guid_off = sizeof(*header);
     switch (header->version){
       case PDB_InfoVersion_VC70_DEP:
@@ -26,7 +26,7 @@ pdb_info_from_data(Arena *arena, String8 data){
       case PDB_InfoVersion_VC110:
       case PDB_InfoVersion_VC140:
       {
-        auth_guid = (COFF_Guid*)(data.str + after_auth_guid_off);
+        auth_guid = (Guid*)(data.str + after_auth_guid_off);
         after_auth_guid_off = sizeof(*header) + sizeof(*auth_guid);
       }break;
       

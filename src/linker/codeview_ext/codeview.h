@@ -3,23 +3,7 @@
 
 #pragma once
 
-////////////////////////////////
-// Aligns
-
-#define CV_LeafAlign          4
-#define CV_SymbolAlign        1
-#define CV_C13SubSectionAlign 4
-#define CV_FileCheckSumsAlign 4
-
-////////////////////////////////
-
 //- Symbol and Leaf Headers
-
-#define CV_LeafSize_Max max_U16
-typedef U16 CV_LeafSize;
-
-#define CV_SymSize_Max max_U16
-typedef U16 CV_SymSize;
 
 typedef struct CV_LeafHeader
 {

@@ -3127,7 +3127,7 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
   //- rjf: parse PDB auth_guid & named streams table
   //
   PDB_NamedStreamTable *named_streams = 0;
-  COFF_Guid auth_guid = {0};
+  Guid auth_guid = {0};
   if(msf != 0) ProfScope("parse PDB auth_guid & named streams table")
   {
     Temp scratch = scratch_begin(&arena, 1);
