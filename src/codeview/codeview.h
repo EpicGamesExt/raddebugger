@@ -2969,10 +2969,7 @@ internal U64                   cv_size_from_reg(CV_Arch arch, CV_Reg reg);
 internal B32                   cv_is_reg_sp(CV_Arch arch, CV_Reg reg);
 internal CV_EncodedFramePtrReg cv_pick_fp_encoding(CV_SymFrameproc *frameproc, B32 is_local_param);
 internal CV_Reg                cv_decode_fp_reg(CV_Arch arch, CV_EncodedFramePtrReg encoded_reg);
-
-////////////////////////////////
-//~ Enum <-> String
-
-internal String8 cv_string_from_type_index_source(CV_TypeIndexSource ti_source);
+internal U32                   cv_map_encoded_base_pointer(CV_Arch arch, U32 encoded_frame_reg);
 
 #endif // CODEVIEW_H
+ 

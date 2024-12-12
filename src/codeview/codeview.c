@@ -139,18 +139,29 @@ cv_decode_fp_reg(CV_Arch arch, CV_EncodedFramePtrReg encoded_reg)
   return fp_reg;
 }
 
-////////////////////////////////
-//~ Enum <-> String
-
-internal String8
-cv_string_from_type_index_source(CV_TypeIndexSource ti_source)
+internal U32
+cv_map_encoded_base_pointer(CV_Arch arch, U32 encoded_frame_reg)
 {
-  switch (ti_source) {
-  case CV_TypeIndexSource_NULL:  return str8_lit("");    break;
-  case CV_TypeIndexSource_TPI:   return str8_lit("TPI"); break;
-  case CV_TypeIndexSource_IPI:   return str8_lit("IPI"); break;
-  case CV_TypeIndexSource_COUNT: break;
+  U32 r = 0;
+  switch (arch) {
+  case CV_Arch_8086: {
+    switch (encoded_frame_reg) {
+    case 0: r = 0;                    break;
+    case 1: r = CV_AllReg_VFRAME; break;
+    case 2: r = CV_Regx86_EBP;    break;
+    case 3: r = CV_Regx86_EBX;    break;
+    }
+  } break;
+  case CV_Arch_X64: {
+    switch (encoded_frame_reg) {
+    case 0: r = 0; break;
+    case 1: r = CV_Regx64_RSP; break;
+    case 2: r = CV_Regx64_RBP; break;
+    case 3: r = CV_Regx64_R13; break;
+    }
+  } break;
+    default: NotImplemented;
   }
-  return str8_zero();
+  return r;
 }
 
