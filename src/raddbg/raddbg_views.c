@@ -8598,12 +8598,19 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(settings)
       
       //- rjf: interact
       UI_Signal sig = ui_signal_from_box(item_box);
-      if(item->kind == RD_SettingsItemKind_ThemeColor && ui_clicked(sig))
+      if(item->kind == RD_SettingsItemKind_ThemeColor && ui_pressed(sig))
       {
         Vec3F32 rgb = v3f32(rgba.x, rgba.y, rgba.z);
         Vec3F32 hsv = hsv_from_rgb(rgb);
         Vec4F32 hsva = v4f32(hsv.x, hsv.y, hsv.z, rgba.w);
-        ui_ctx_menu_open(color_ctx_menu_keys[item->color], item_box->key, v2f32(0, dim_2f32(item_box->rect).y));
+        if(ui_ctx_menu_is_open(color_ctx_menu_keys[item->color]))
+        {
+          ui_ctx_menu_close();
+        }
+        else
+        {
+          ui_ctx_menu_open(color_ctx_menu_keys[item->color], item_box->key, v2f32(0, dim_2f32(item_box->rect).y));
+        }
         sv->color_ctx_menu_color = item->color;
         sv->color_ctx_menu_color_hsva = v4f32(hsv.x, hsv.y, hsv.z, rgba.w);
         rd_cmd(RD_CmdKind_FocusPanel);
