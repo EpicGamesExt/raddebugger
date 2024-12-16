@@ -13326,7 +13326,9 @@ rd_frame(void)
               Vec2F32 monitor_dim = os_dim_from_monitor(preferred_monitor);
               Vec2F32 window_dim = v2f32(monitor_dim.x*4/5, monitor_dim.y*4/5);
               RD_Window *ws = rd_window_open(window_dim, preferred_monitor, RD_CfgSrc_User);
-              if(monitor_dim.x < 1920)
+              F32 font_size = (F32)ws->setting_vals[RD_SettingCode_MainFontSize].s32;
+              F32 num_lines_in_monitor_height = monitor_dim.y / font_size;
+              if(num_lines_in_monitor_height < 100)
               {
                 rd_cmd(RD_CmdKind_ResetToCompactPanels, .window = rd_handle_from_window(ws));
               }
