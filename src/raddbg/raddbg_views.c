@@ -1765,20 +1765,31 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                 }break;
                 case RD_WatchViewColumnKind_Member:
                 case RD_WatchViewColumnKind_Value:
-                if(editing_complete && evt->slot != UI_EventActionSlot_Cancel)
                 {
                   EV_WindowedRowList rows = ev_windowed_row_list_from_block_range_list(scratch.arena, eval_view, filter, &block_ranges, r1u64(ui_scroll_list_row_from_item(&row_blocks, y),
                                                                                                                                               ui_scroll_list_row_from_item(&row_blocks, y)+1));
-                  B32 success = 0;
                   if(rows.first != 0)
                   {
+                    B32 should_commit_asap = editing_complete;
                     E_Expr *expr = rd_expr_from_watch_view_row_column(scratch.arena, eval_view, row, col);
                     E_Eval dst_eval = e_eval_from_expr(scratch.arena, expr);
-                    success = rd_commit_eval_value_string(dst_eval, new_string, !col->dequote_string);
-                  }
-                  if(!success)
-                  {
-                    log_user_error(str8_lit("Could not commit value successfully."));
+                    if(dst_eval.space.kind == RD_EvalSpaceKind_MetaEntity)
+                    {
+                      should_commit_asap = 1;
+                    }
+                    else if(evt->slot != UI_EventActionSlot_Cancel)
+                    {
+                      should_commit_asap = 0;
+                    }
+                    if(should_commit_asap)
+                    {
+                      B32 success = 0;
+                      success = rd_commit_eval_value_string(dst_eval, new_string, !col->dequote_string);
+                      if(!success)
+                      {
+                        log_user_error(str8_lit("Could not commit value successfully."));
+                      }
+                    }
                   }
                 }break;
                 case RD_WatchViewColumnKind_Type:{}break;

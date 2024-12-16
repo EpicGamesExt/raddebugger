@@ -4,10 +4,8 @@
 ////////////////////////////////
 //~ rjf: post-0.9.12 TODO notes
 //
-// [ ] fullscreen with new custom borders are busted...
 // [ ] breakpoints in optimized code? maybe early-terminating bp resolution loop? @bpmiss
-// [ ] committing strings in target editor needs to be a bit more aggressive
-//     if e.g. someone clicks away
+//      - actually this seems to be potentially because of incomplete src-line-map info...
 // [ ] CLI argument over-mangling?
 // [ ] OutputDebugString spam, keeping way too much around!
 // [ ] Mohit-reported breakpoint not hitting - may be similar thing to @bpmiss
