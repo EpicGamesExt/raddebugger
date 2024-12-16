@@ -11,11 +11,13 @@ e_eval_from_expr(Arena *arena, E_Expr *expr)
   E_OpList         oplist   = e_oplist_from_irtree(arena, irtree.root);
   String8          bytecode = e_bytecode_from_oplist(arena, &oplist);
   E_Interpretation interp   = e_interpret(bytecode);
+  E_Space zero_space = {0};
+  E_Space space = (MemoryMatchStruct(&zero_space, &irtree.space) ? e_interpret_ctx->primary_space : irtree.space);
   E_Eval eval =
   {
     .value    = interp.value,
     .mode     = irtree.mode,
-    .space    = irtree.space,
+    .space    = space,
     .expr     = expr,
     .type_key = irtree.type_key,
     .code     = interp.code,
