@@ -267,7 +267,7 @@ os_file_open(OS_AccessFlags flags, String8 path)
   Temp scratch = scratch_begin(0, 0);
   String8 path_copy = push_str8_copy(scratch.arena, path);
   int lnx_flags = 0;
-  if(flags & (OS_AccessFlag_Read|OS_AccessFlag_Write))
+  if(flags & OS_AccessFlag_Read && flags & OS_AccessFlag_Write)
   {
     lnx_flags = O_RDWR;
   }
