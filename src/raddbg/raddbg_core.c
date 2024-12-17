@@ -9473,7 +9473,7 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
       {
         U64 element_size = e_type_byte_size_from_key(direct_type_key);
         did_content = 1;
-        U64 string_buffer_size = 256;
+        U64 string_buffer_size = Clamp(1, array_count, 1024);
         U8 *string_buffer = push_array(arena, U8, string_buffer_size);
         switch(eval.mode)
         {
@@ -9481,26 +9481,18 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
           case E_Mode_Offset:
           {
             U64 string_memory_addr = eval.value.u64;
-            for(U64 try_size = string_buffer_size; try_size >= 16; try_size /= 2)
-            {
-              B32 read_good = e_space_read(eval.space, string_buffer, r1u64(string_memory_addr, string_memory_addr+try_size));
-              if(read_good)
-              {
-                break;
-              }
-            }
+            B32 read_good = e_space_read(eval.space, string_buffer, r1u64(string_memory_addr, string_memory_addr+string_buffer_size));
           }break;
           case E_Mode_Value:
           {
             MemoryCopy(string_buffer, &eval.value.u512[0], Min(string_buffer_size, sizeof(eval.value)));
           }break;
         }
-        string_buffer[string_buffer_size-1] = 0;
         String8 string = {0};
         switch(element_size)
         {
-          default:{string = str8_cstring((char *)string_buffer);}break;
-          case 2: {string = str8_from_16(arena, str16_cstring((U16 *)string_buffer));}break;
+          default:{string = str8_cstring_capped(string_buffer, string_buffer + string_buffer_size);}break;
+          case 2: {string = str8_from_16(arena, str16_cstring_capped(string_buffer, string_buffer + string_buffer_size));}break;
           case 4: {string = str8_from_32(arena, str32_cstring((U32 *)string_buffer));}break;
         }
         String8 string_escaped = ev_escaped_from_raw_string(arena, string);
