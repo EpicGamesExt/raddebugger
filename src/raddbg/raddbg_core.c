@@ -9255,6 +9255,7 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
   U32 radix = default_radix;
   U32 min_digits = 0;
   B32 no_addr = 0;
+  B32 no_string = 0;
   B32 has_array = 0;
   for(EV_ViewRuleNode *n = view_rules->first; n != 0; n = n->next)
   {
@@ -9264,6 +9265,7 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
     else if(str8_match(n->v.root->string, str8_lit("bin"), 0)) {radix = 2; }
     else if(str8_match(n->v.root->string, str8_lit("oct"), 0)) {radix = 8; }
     else if(str8_match(n->v.root->string, str8_lit("no_addr"), 0)) {no_addr = 1;}
+    else if(str8_match(n->v.root->string, str8_lit("no_string"), 0)) {no_string = 1;}
     else if(str8_match(n->v.root->string, str8_lit("array"), 0)) {has_array = 1;}
     else if(str8_match(n->v.root->string, str8_lit("digits"), 0))
     {
@@ -9345,7 +9347,7 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
       // rjf: special case: push strings for textual string content
       B32 did_content = 0;
       B32 did_string = 0;
-      if(!did_content && ptee_has_string && !has_array)
+      if(!did_content && ptee_has_string && !no_string)
       {
         did_content = 1;
         did_string = 1;
@@ -9469,7 +9471,7 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
       
       // rjf: special case: push strings for textual string content
       B32 did_content = 0;
-      if(!did_content && array_is_string && !has_array && (member == 0 || member->kind != E_MemberKind_Padding))
+      if(!did_content && array_is_string && !no_string && (member == 0 || member->kind != E_MemberKind_Padding))
       {
         U64 element_size = e_type_byte_size_from_key(direct_type_key);
         did_content = 1;
