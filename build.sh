@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+# TODO(mallchad): This code is really ugly especially with the stupid && branching tricks. Please fix.
+
 # --- Usage Notes (2024/1/10) ------------------------------------------------
 #
 # This is a central build script for the RAD Debugger project. It takes a list

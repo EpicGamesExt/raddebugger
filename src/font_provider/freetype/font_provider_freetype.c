@@ -143,12 +143,12 @@ fp_raster(Arena *arena,
 {
   /* NotImplemented; */
   /* NOTE(mallchad): I am assuming this function will only ever run for 1 glyph
-     at a time because that is the API usage. If anything else occurs the code
-     may not behave properly */
+     at a time because that is the API usage and how it works in the dwrite
+     section. If anything else occurs the code may not behave properly */
   Assert(string.size <= 1);
   FP_RasterResult result = {0};
   FreeType_FontFace face = freetype_face_from_handle(font);
-  if (face == 0) { return face; }
+  if (face == 0) { return result; }
 
   Temp scratch = scratch_begin(0, 0);
   U32* charmap_indices = push_array(scratch.arena, U32, 4+ string.size);
@@ -182,21 +182,20 @@ fp_raster(Arena *arena,
   U32 glyph_height = 60;
   U32 glyph_width = 100;
   U32 magic_dpi = 64;
-
+  U32 total_advance = 0;
+  U32 total_height = 0;
+  Vec2S16 atlas_dim = {0};
+  U32 glyph_count = string.size;
   /* NOTE(mallchad): 'size' is the actual internal glyph "scale" not char count
   Convert magic fixed point coordinate system to internal floating point representation */
   F32 glyph_advance_width = (face->max_advance_width * (96.f/72.f) * size) / face->units_per_EM;
   F32 glyph_advance_height = (face->max_advance_height * (96.f/72.f) * size) / face->units_per_EM;
-  result.atlas_dim.x = glyph_advance_width;
-  result.atlas_dim.y = glyph_advance_height;
-  result.advance = glyph_advance_width;
-  result.atlas = push_array(arena, U8, result.atlas_dim.x * result.atlas_dim.y);
+  U8* atlas = push_array_no_zero( scratch.arena, U8, 5* glyph_advance_width * glyph_advance_height );
 
   U8 x_char = 0;
   U32 x_charmap = 0;
   U32 i = 0;
-  string.size = 1;
-  for (; i < string.size; ++i)
+  for (; i < glyph_count; ++i)
   {
     x_char = string.str[i];
     x_charmap = FT_Get_Char_Index(face, (FT_ULong)x_char);
@@ -210,7 +209,19 @@ fp_raster(Arena *arena,
     err_render += FT_Render_Glyph(face->glyph, FT_RENDER_MODE_NORMAL);
 
     Assert(face->glyph->bitmap.pixel_mode == FT_PIXEL_MODE_GRAY);
+    // TODO(mallchad): Untested section
+    freetype_rectangle_copy( atlas,
+                             face->glyph->bitmap.buffer,
+                             vec_2s32(face->glyph->bitmap.pitch, face->glyph->bitmap.rows),
+                             vec_2s32(0, 0),
+                             vec_2s32(total_advance, total_height),
+                             face->glyph->bitmap.pitch,
+                             glyph_advance_width);
 
+    // Section compied from dwrite
+    total_advance += glyph_advance_width;
+    total_height += glyph_advance_height;
+    atlas_dim.x = Max(atlas_dim.x, (S16)(1+ total_advance));
     err_char += (errors_glyph > 0);
     err_glyph += (errors_glyph > 0);
     err_render += (errors_render > 0);
@@ -218,20 +229,32 @@ fp_raster(Arena *arena,
   Assert(!errors_glyph);
   Assert(!errors_glyph);
   Assert(!errors_render);
+  atlas_dim.x += 7;
+  atlas_dim.x -= atlas_dim.x%8;
+  atlas_dim.x += 4;
+  atlas_dim.y += 4;
+  // Fill raster basics
+  result.atlas_dim.x = total_advance;
+  result.atlas_dim.y = total_height;
+  result.advance = glyph_advance_width;
+  result.atlas = push_array(arena, U8, 4* result.atlas_dim.x*  result.atlas_dim.y);
 
   static U32 null_errors = 0;
-  // WTF. Even if no errors came back???
+  /* WTF. Even if no errors came back???
+     leaving here as a guard against 3rd party NULL shenanegans */
   if (face->glyph->bitmap.buffer != NULL)
   {
-
     // Debug Stuff
     String8 debug_name = str8_lit("debug/test.bmp");
     freetype_write_bmp_monochrome_file(debug_name,
                                        face->glyph->bitmap.buffer,
                                        face->glyph->bitmap.pitch,
                                        face->glyph->bitmap.rows);
-    scratch_end(scratch);
+
+
   } else { ++null_errors; }
+  scratch_end(scratch);
+
   return result;
 }
 
@@ -365,6 +388,28 @@ freetype_write_bmp_monochrome_file(String8 name, U8* data, U32 width, U32 height
   scratch_end(scratch);
 
   return (*file.u64 > 0);
+}
+
+U8*
+freetype_rectangle_copy(U8* dest,
+                        U8* source,
+                        Vec2S32 copy_size,
+                        Vec2S32 src_coord,
+                        Vec2S32 dest_coord,
+                        U32 src_stride,
+                        U32 dest_stride)
+{
+  // TODO(mallchad): Untested
+  U8* result = (dest+ dest_coord.x + dest_stride);
+  U8* copy_begin = 0x0;
+  U8* result_begin = 0x0;
+  for (int iy = src_coord.y; iy < copy_size.y; ++iy)
+  {
+    copy_begin = source+ src_coord.x + (iy* src_stride);
+    result_begin = dest+ dest_coord.x + (iy* dest_stride);
+    MemoryCopy(result_begin, copy_begin, copy_size.x);
+  }
+  return result;
 }
 
 U8*

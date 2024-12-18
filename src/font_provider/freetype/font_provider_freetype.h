@@ -49,5 +49,12 @@ B32 freetype_write_bmp_file(String8 name, U8* data, U32 width, U32 height);
 B32 freetype_write_bmp_monochrome_file(String8 name, U8* data, U32 width, U32 height);
 // Assumes the same size source and dest
 U8* freetype_rectangle_slice( Arena* arena, U8* source, U32 x, U32 y, U32 width, U32 height);
+U8* freetype_rectangle_copy(U8* dest,
+                            U8* source,
+                            Vec2S32 copy_size,
+                            Vec2S32 src_coord,
+                            Vec2S32 dest_coord,
+                            U32 src_stride,
+                            U32 dest_stride);
 
 #endif // FONT_PROVIDER_FREETYPE_H
