@@ -1490,6 +1490,7 @@ ev_string_from_simple_typed_eval(Arena *arena, EV_StringFlags flags, U32 radix, 
   {
     digit_group_separator = 0;
   }
+  F64 f64 = 0;
   switch(type_kind)
   {
     default:{}break;
@@ -1584,8 +1585,26 @@ ev_string_from_simple_typed_eval(Arena *arena, EV_StringFlags flags, U32 radix, 
       scratch_end(scratch);
     }break;
     
-    case E_TypeKind_F32: {result = push_str8f(arena, "%f", eval.value.f32);}break;
-    case E_TypeKind_F64: {result = push_str8f(arena, "%f", eval.value.f64);}break;
+    case E_TypeKind_F32:{f64 = (F64)eval.value.f32;}goto f64_path;
+    case E_TypeKind_F64:{f64 = eval.value.f64;}goto f64_path;
+    f64_path:;
+    {
+      result = push_str8f(arena, "%.*f", min_digits ? min_digits : 16, f64);
+      U64 num_to_chop = 0;
+      for(U64 num_trimmed = 0; num_trimmed < result.size; num_trimmed += 1)
+      {
+        if(result.str[result.size - 1 - num_trimmed] != '0')
+        {
+          if(result.str[result.size - 1 - num_trimmed] == '.' && num_to_chop > 0)
+          {
+            num_to_chop -= 1;
+          }
+          break;
+        }
+        num_to_chop += 1;
+      }
+      result = str8_chop(result, num_to_chop);
+    }break;
     case E_TypeKind_Bool:{result = push_str8f(arena, "%s", eval.value.u64 ? "true" : "false");}break;
     case E_TypeKind_Ptr: {result = push_str8f(arena, "0x%I64x", eval.value.u64);}break;
     case E_TypeKind_LRef:{result = push_str8f(arena, "0x%I64x", eval.value.u64);}break;
