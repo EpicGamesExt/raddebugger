@@ -120,12 +120,17 @@ rwlock_routine( void* restrict payload )
   os_rw_mutex_drop_r( g_share_data->rwlock );
 }
 
+// Stub
+internal void
+entry_point(CmdLine *cmd_line)
+{}
+
 /* NOTE(mallchad): These tests were built with testing the Linux layer in mind,
    it was supposed to be cross-platform, and it may still work, but the API is
    not friendly to error checking, so treat these files a scratchpad than rather
    than gospel.
 */
-int main()
+int test_main()
 {
   srand( time(NULL) );
   U64 seed = rand();
@@ -145,7 +150,7 @@ int main()
   AssertAlways( g_shared != NULL );
 
   B32 res = 0;
-  U64* g_buffer[4096];
+  U64 g_buffer[4096];
   Share* g_share_data = (Share*)g_shared; g_shared += sizeof(Share);
 
   SECTION( "OS Memory Management" );
@@ -335,7 +340,7 @@ int main()
                  time_universal.micro_sec );
   MANUAL_CHECKF( "os_universal_time_from_local_time: year: %d \n"
                  "month: %d \n"
-                 "week: %d \n"
+                 "day of week: %d \n"
                  "day: %d \n"
                  "time: %d:%d:%d:%d:%d",
                  time_to_universal.year,
@@ -349,7 +354,7 @@ int main()
                  time_to_universal.micro_sec );
   MANUAL_CHECKF( "os_local_time_from_universal_time: year: %d \n"
                  "month: %d \n"
-                 "week: %d \n"
+                 "day of week: %d \n"
                  "day: %d \n"
                  "time: %d:%d:%d:%d:%d",
                  time_to_local.year,
@@ -430,4 +435,5 @@ int main()
   printf( "\x1b[1mTotal Tests Run: %d \n", total );
 
   os_exit_process( 0 ); test( 0, "os_exit_process" );
+  return 1;
 }

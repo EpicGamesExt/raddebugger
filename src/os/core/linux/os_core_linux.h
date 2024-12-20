@@ -130,6 +130,8 @@ struct LNX_file_iter {
   S32 dir_fd;
 };
 
+int lnx_entry_point(int argc, char** argv);
+
 internal B32 lnx_write_list_to_file_descriptor(int fd, String8List list);
  /* Helper function to return a timespec using a adjtime stable high precision clock
   This should not be affected by setting the system clock or RTC*/

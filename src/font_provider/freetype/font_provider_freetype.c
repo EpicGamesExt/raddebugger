@@ -241,7 +241,7 @@ fp_raster(Arena *arena,
 
   static U32 null_errors = 0;
   /* WTF. Even if no errors came back???
-     leaving here as a guard against 3rd party NULL shenanegans */
+     leaving here as a guard against 3rd party NULL shenanigans */
   if (face->glyph->bitmap.buffer != NULL)
   {
     // Debug Stuff

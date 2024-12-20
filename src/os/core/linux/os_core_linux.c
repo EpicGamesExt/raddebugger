@@ -18,6 +18,8 @@ global B32 lnx_huge_page_use_1GB = 0;
 global U16 lnx_ring_buffers_created = 0;
 global U16 lnx_ring_buffers_limit = 65000;
 global String8List lnx_environment = {0};
+global U64 lnx_hugepage_count_2MB = 0;
+global U32 lnx_hugepage_count_min = 250;  // (500 MB/2MB)
 
 global String8 lnx_hostname = {0};
 global LNX_version lnx_kernel_version = {0};
@@ -1130,20 +1132,30 @@ os_set_large_pages(B32 flag)
 internal B32
 os_large_pages_enabled(void)
 {
-  NotImplemented; // *facepalm* this is not done
-  // This is aparently the reccomended way to check for hugepage support. Do not ask...
-  // TODO(mallchad): This is an annoying way to do it, query for nr_hugepages instead
-  U8 buffer[5000];
+  /* NOTE(mallchad): This is aparently the reccomended way to check for hugepage support.
+     Do not ask... */
+  U8 buffer[32];
+  MemoryZeroArray(buffer);
   LNX_fd fd = open("/proc/sys/vm/nr_hugepages", O_RDONLY);
-  String8 meminfo = {0};
-  AssertAlways(fd >= 0);
-  meminfo.str = buffer;
-  // meminfo.size = read(fd, buffer, 5000);
+  // NOTE: Fake files have fake behaviour. Keep making this mistake. Virtual files have no size.
 
-  Rng1U64 match = str8_match_substr( meminfo, str8_cstring("Huge"), 0x0 );
+  String8 data = {0};
+  Assert(fd >= 0);              // Something is seriously wrong if we can't access this file
+  if (fd < 0) { return 0; }
 
-  // return (match.max > 0);
-  return 0;
+  data.str = buffer;
+  data.size = read(fd, buffer, 32);
+  Assert(data.size > 0);        // Probably indicative of platform quirk
+  if ( data.size <= 0) { return 0; } // Guard against underflow
+  U8 last_char = (data.str[ data.size - 1]);
+  if (last_char == '\n') { --data.size; }
+  close(fd);
+
+  U64 hugepage_count = 0;
+  hugepage_count = u64_from_str8(data, 10);
+  B32 enable_largepages = (hugepage_count > lnx_hugepage_count_min);
+
+  return enable_largepages;
 }
 
 /* NOTE: The size seems to be consistent across Linux systems, it's configurable
@@ -2394,7 +2406,11 @@ os_make_guid(void)
 
   return result;
 }
-
+int
+lnx_entry_point(int argc, char** argv)
+{
+  return 1;
+}
 int
 main(int argc, char** argv)
 {
