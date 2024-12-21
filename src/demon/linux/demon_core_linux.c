@@ -21,8 +21,9 @@ dmn_init(void)
 internal DMN_CtrlCtx
 *dmn_ctrl_begin(void)
 {
-  // Boolean return, just says the context is valid
+  // NOTE: Boolean return, just says the context is valid
   DMN_CtrlCtx* ctx = (DMN_CtrlCtx* )1;
+  dmn_lnx_ctrl_thread = 1;
   return ctx;
 }
 
@@ -42,12 +43,31 @@ internal U32
 dmn_ctrl_launch(DMN_CtrlCtx *ctx, OS_LaunchOptions *options)
 {
   NotImplemented;
+  U32 result = 0;
+  Temp scratch = scratch_begin(0, 0);
+  AssertAlways(options->inherit_env); // NOTE(mallchad): Figure out no-inherit later
+  OS_Handle process = {0};
+  B32 success = 0;
+
+  DMN_AccessScope
+  {
+    success = os_launch_process(options, &process);
+  }
+  /* NOTE(mallchad): I don't believe there is a neccessary Linux equivilent to AllocConsole.
+     If you wanted to redirect stdin/stdout here would probably be the best place */
+  if (success) { result = *process.u64; }
+  scratch_end(scratch);
+
+  return result;
 }
 
+/* TODO: This behaviour is governed by kernel.yama.ptrace_scope kernel parameter
+   This information should probably be relayed to the user in future. */
 internal B32
 dmn_ctrl_attach(DMN_CtrlCtx *ctx, U32 pid)
 {
-  NotImplemented;
+  S32 error = ptrace(PTRACE_ATTACH, pid);
+  return (error == 0);
 }
 
 internal B32
@@ -100,15 +120,22 @@ dmn_reg_gen(void)
 }
 
 //-  non-blocking-control-thread access barriers
+
 internal B32
 dmn_access_open(void)
 {
-  NotImplemented;
+  // TODO(mallchad): I feel like this needs to be improved but I don't know how
+  if (dmn_lnx_ctrl_thread)
+  { }
+  else
+  { os_mutex_take(dmn_lnx->mutex_access); }
+  return 1;
 }
 internal void
 dmn_access_close(void)
 {
-  NotImplemented;
+  if (dmn_lnx_ctrl_thread == 0)
+  { os_mutex_drop(dmn_lnx->mutex_access); }
 }
 
 //-  processes

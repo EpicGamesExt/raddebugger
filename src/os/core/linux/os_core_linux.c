@@ -1965,6 +1965,7 @@ os_launch_process(OS_LaunchOptions *options, OS_Handle *handle_out)
   *success_shared = 1;
   *child_pid = 0;
   // TODO(allen): I want to redo this API before I bother implementing it here
+  // TODO(mallchad): Is this comment still relevant? gut says yes.
   String8List cmdline_list = options->cmd_line;
   char** cmdline = (char**)push_array(scratch.arena, char*, cmdline_list.node_count + 4);
   String8Node* x_node = cmdline_list.first;
@@ -1975,18 +1976,20 @@ os_launch_process(OS_LaunchOptions *options, OS_Handle *handle_out)
   }
 
   if (options->inherit_env) { NotImplemented; };
-  if (options->consoleless == 1) { NotImplemented; };
+  if (options->consoleless == 0) { NotImplemented; };
   S32 pid = 0;
   pid = fork();
   // Child
   if (pid)
   {
     *child_pid = pid;
+    if (child_pid > 0) { *(handle_out->u64) = (U64)child_pid; }
     execv(*cmdline, cmdline);
     *success_shared = 0;
     exit(0);
   } // Parent
   else { waitpid(*child_pid, NULL, 0x0); } // TODO: Heck? Can't figure out how to wait on 'exec'
+  os_sleep_milliseconds(20);              // Getto fix for no-wait issue
   B32 success = *success_shared;
   munmap(success_shared, 4096);
   scratch_end(scratch);
