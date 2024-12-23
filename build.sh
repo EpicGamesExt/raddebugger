@@ -40,7 +40,7 @@ function rad_log ()
 
 function rad_debug_log ()
 {
-    if [[ -n ${RAD_DEBUG} ]] ; then
+    if [[ -n "${RAD_DEBUG}" ]] ; then
         # -e enable escape sequences
         rad_log "${@}"
     fi
@@ -85,12 +85,13 @@ set auto_compile_flags=
 
 # --- Compile/Link Line Definitions ------------------------------------------
     cl_common="/I../src/ /I../local/ /nologo /FC /Z7"
- clang_common="-I../src/ -I../local -I/usr/include/freetype2/ -fdiagnostics-absolute-paths -Wall -Wno-unknown-warning-option -Wno-missing-braces -Wno-unused-function -Wno-writable-strings -Wno-unused-value -Wno-unused-variable -Wno-unused-local-typedef -Wno-deprecated-register -Wno-deprecated-declarations -Wno-unused-but-set-variable -Wno-single-bit-bitfield-constant-conversion -Wno-compare-distinct-pointer-types -Xclang -flto-visibility-public-std -D_USE_MATH_DEFINES -Dstrdup=_strdup -Dgnu_printf=printf -Wl,-z,notext -lpthread -ldl -lrt -latomic -lm -lfreetype"
+ clang_common="-I../src/ -I../local -I/usr/include/freetype2/ -fdiagnostics-absolute-paths -Wall -Wno-unknown-warning-option -Wno-missing-braces -Wno-unused-function -Wno-writable-strings -Wno-unused-value -Wno-unused-variable -Wno-unused-local-typedef -Wno-deprecated-register -Wno-deprecated-declarations -Wno-unused-but-set-variable -Wno-single-bit-bitfield-constant-conversion -Wno-compare-distinct-pointer-types -Xclang -flto-visibility-public-std -D_USE_MATH_DEFINES -Dstrdup=_strdup -Dgnu_printf=printf -Wl,-z,notext"
+ clang_dynamic="-lpthread -ldl -lrt -latomic -lm -lfreetype -lEGL -lX11 -lGL"
  clang_errors="-Werror=atomic-memory-ordering -Wno-parentheses"
      cl_debug="cl /Od /Ob1 /DBUILD_DEBUG=1 ${cl_common} ${auto_compile_flags}"
    cl_release="cl /O2 /DBUILD_DEBUG=0 ${cl_common} ${auto_compile_flags}"
-  clang_debug="clang -g -O0 -DBUILD_DEBUG=1 ${clang_common} ${clang_errors} ${auto_compile_flags}"
-clang_release="clang -g -O2 -DBUILD_DEBUG=0 ${clang_common} ${clang_errors} ${auto_compile_flags}"
+  clang_debug="clang -g -O0 -DBUILD_DEBUG=1 ${clang_common} ${clang_dynamic} ${clang_errors} ${auto_compile_flags}"
+clang_release="clang -g -O2 -DBUILD_DEBUG=0 ${clang_common} ${clang_dynamic} ${clang_errors} ${auto_compile_flags}"
       cl_link="/link /MANIFEST:EMBED /INCREMENTAL:NO \
 /natvis:'${self_directory}/src/natvis/base.natvis' logo.res"
    clang_link="-fuse-ld=lld"
@@ -136,6 +137,9 @@ cd "${self_directory}"
 # NOTE(mallchad): I don't really understand why this written has a loop. Is it okay without?
 compile="${compile} -DBUILD_GIT_HASH=\"$(git describe --always --dirty)\""
 
+rad_debug_log "Compile Command: "
+rad_debug_log "${compile}"
+
 # --- Build & Run Metaprogram ------------------------------------------------
 if [[ -n "${no_meta}" ]] ; then
     rad_log "[skipping metagen]"
@@ -175,9 +179,6 @@ function build_dll()
     ${compile} "$1" ${compile_link} ${@:3:100} ${link_dll} "${out}$2"
     return $?
 }
-
-rad_debug_log "Compile Command: "
-rad_debug_log ${compile}
 
 cd build
 [[ -n "${raddbg}"                ]] && build_single ../src/raddbg/raddbg_main.c                               raddbg.exe

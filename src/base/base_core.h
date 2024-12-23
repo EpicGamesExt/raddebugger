@@ -136,9 +136,15 @@
 //~ rjf: Asserts
 
 #if COMPILER_MSVC
-# define Trap() __debugbreak()
-#elif COMPILER_CLANG || COMPILER_GCC
-# define Trap() __builtin_trap()
+#  define Trap() __debugbreak()
+#elif COMPILER_CLANG || COMPILER_GC
+// Check support for debugger-continue break
+// Alternatively use raise(SIGTRAP) if you wish because its more portable
+#  if __has_builtin(__builtin_debugtrap)
+#    define Trap() __builtin_debugtrap()
+#  else
+#    define Trap() __builtin_trap()
+#  endif
 #else
 # error Unknown trap intrinsic for this compiler.
 #endif

@@ -36,6 +36,9 @@
 # endif
 #elif OS_LINUX
 # include "core/linux/os_core_linux.h"
+#  if OS_FEATURE_GRAPHICAL && !OS_GFX_STUB
+#    include "gfx/linux/os_gfx_linux.h"
+#  endif
 #else
 # error no OS layer setup
 #endif
