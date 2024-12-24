@@ -12,7 +12,8 @@ global String8 lnx_initial_path = {0};
 thread_static LNX_SafeCallChain *lnx_safe_call_chain = 0;
 
 global U64 lnx_page_size = 4096;
-// TODO: This can't be used until the huge page allocation count is checked
+// TODO(mallchad): This can't be used until the huge page allocation count is checked
+// TODO(mallchad): Pretty sure this can be used now????
 global B32 lnx_huge_page_enabled = 0;
 global B32 lnx_huge_page_use_1GB = 0;
 global U16 lnx_ring_buffers_created = 0;

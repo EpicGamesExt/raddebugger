@@ -1,11 +1,12 @@
 
+Arena* gfx_lnx_arena = NULL;
 
 global B32 gfx_lnx_wayland_preferred = 0;
 global B32 gfx_lnx_wayland_disabled = 1;
 global S32 gfx_egl_version_major = 0;
 global S32 gfx_egl_version_minor = 0;
 global U8* gfx_default_window_name = (U8*)"raddebugger";
-GFX_Context gfx_context = {0};
+global GFX_LinuxContext gfx_context = {0};
 
 global EGLContext gfx_egl_context = NULL;
 global EGLDisplay gfx_egl_display = NULL;
@@ -43,18 +44,39 @@ global S32 gfx_egl_context_config[] = {
  * it. So be it.
  */
 
+
+GFX_LinuxWindow*
+gfx_window_from_handle(OS_Handle context)
+{
+  return (GFX_LinuxWindow*)PtrFromInt(*context.u64);
+}
+
+OS_Handle
+gfx_handle_from_window(GFX_LinuxWindow* window)
+{
+  OS_Handle result = {0};
+  *result.u64 = IntFromPtr(window);
+  return result;
+}
+
 // Stub
 B32
-wayland_graphical_init(GFX_Context* out)
+wayland_window_open(GFX_LinuxContext* gfx_context, OS_Handle* result,
+                    Vec2F32 resolution, OS_WindowFlags flags, String8 title)
+{ NotImplemented; }
+
+B32
+wayland_graphical_init(GFX_LinuxContext* out)
 { NotImplemented; }
 
 internal void
 os_graphical_init(void)
 {
+  gfx_lnx_arena = arena_alloc();
   gfx_context.window_name = gfx_default_window_name;
-  gfx_context.default_window_size = vec_2s32(500, 500);
+  gfx_context.default_window_size = vec_2f32(500, 500);
   gfx_context.window_size = gfx_context.default_window_size;
-  gfx_context.default_window_pos = vec_2s32(500, 500);
+  gfx_context.default_window_pos = vec_2f32(500, 500);
   gfx_context.window_pos = gfx_context.default_window_pos;
 
   B32 init_result = 0;
@@ -76,10 +98,6 @@ os_graphical_init(void)
                                          &gfx_egl_version_major);
   B32 egl_config_result = eglChooseConfig(gfx_egl_display, gfx_egl_config, gfx_egl_config_available,
                                           10, &gfx_egl_config_available_size);
-  gfx_egl_draw_surface = eglCreateWindowSurface(gfx_egl_display, gfx_egl_config_available[0],
-                                                (EGLNativeWindowType)gfx_context.native_window, NULL);
-  gfx_egl_read_surface = eglCreateWindowSurface(gfx_egl_display, gfx_egl_config_available[0],
-                                                (EGLNativeWindowType)gfx_context.native_window, NULL);
   B32 egl_bind_result = eglBindAPI(EGL_OPENGL_API);
   Assert(gfx_egl_config_available_size > 0);
   Assert(egl_initial_result == 1 && egl_config_result == 1 && egl_bind_result == 1);
@@ -87,19 +105,6 @@ os_graphical_init(void)
   gfx_egl_context = eglCreateContext(gfx_egl_display, select_config,
                                      EGL_NO_CONTEXT, gfx_egl_context_config );
   Assert(gfx_egl_context != EGL_NO_CONTEXT);
-   eglMakeCurrent(gfx_egl_display, gfx_egl_draw_surface, gfx_egl_draw_surface, gfx_egl_context);
-
-  Vec4F32 dark_magenta = vec_4f32( 0.2f, 0.f, 0.2f, 1.0f );
-while (1){
-  glBindFramebuffer(GL_FRAMEBUFFER, 0);
-  glClear( GL_COLOR_BUFFER_BIT  | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT );
-  glClearColor(dark_magenta.x, dark_magenta.y, dark_magenta.z, dark_magenta.w);
-  S32 swap_result =eglSwapBuffers(gfx_egl_display, gfx_egl_draw_surface);
-  S32 err = eglGetError();
-  Trap();
-  static int i = 0;
-  ++i;
-}
 }
 
 
@@ -125,9 +130,21 @@ NotImplemented;}
 internal OS_Handle
 os_window_open(Vec2F32 resolution, OS_WindowFlags flags, String8 title)
 {
+  // TODO(mallchad): Figure out default window placement
   OS_Handle result = {0};
+  B32 success = 0;
+  if (gfx_lnx_wayland_disabled)
+  { x11_window_open(&gfx_context, &result, resolution, flags, title); }
+  else
+  { wayland_window_open(&gfx_context, &result, resolution, flags, title); }
+  GFX_LinuxWindow* window = gfx_window_from_handle(result);
+
+  window->first_surface = eglCreateWindowSurface(gfx_egl_display, gfx_egl_config_available[0],
+                                                 (EGLNativeWindowType)window->handle, NULL);
+  eglMakeCurrent(gfx_egl_display, gfx_egl_draw_surface, gfx_egl_draw_surface, gfx_egl_context);
+
   return result;
-NotImplemented;}
+}
 internal void
 os_window_close(OS_Handle window)
 {
@@ -142,8 +159,13 @@ NotImplemented;}
 internal void
 os_window_equip_repaint(OS_Handle window, OS_WindowRepaintFunctionType *repaint,  void *user_data)
 {
-
-NotImplemented;}
+  GFX_LinuxWindow* _window = gfx_window_from_handle(window);
+  Vec4F32 dark_magenta = vec_4f32( 0.2f, 0.f, 0.2f, 1.0f );
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  glClear( GL_COLOR_BUFFER_BIT  | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT );
+  glClearColor(dark_magenta.x, dark_magenta.y, dark_magenta.z, dark_magenta.w);
+  S32 swap_result = eglSwapBuffers(gfx_egl_display, _window->first_surface);
+}
 
 internal void
 os_window_focus(OS_Handle window)
