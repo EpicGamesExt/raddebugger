@@ -256,6 +256,19 @@ keys_from_hash_table_u32(Arena *arena, HashTable *ht)
   return result;
 }
 
+internal U64 *
+keys_from_hash_table_u64(Arena *arena, HashTable *ht)
+{
+  U64 *result = push_array_no_zero(arena, U64, ht->count);
+  for (U64 bucket_idx = 0, cursor = 0; bucket_idx < ht->cap; ++bucket_idx) {
+    for (BucketNode *n = ht->buckets[bucket_idx].first; n != 0; n = n->next) {
+      Assert(cursor < ht->count);
+      result[cursor++] = n->v.key_u64;
+    }
+  }
+  return result;
+}
+
 internal KeyValuePair *
 key_value_pairs_from_hash_table(Arena *arena, HashTable *ht)
 {
@@ -281,3 +294,24 @@ sort_key_value_pairs_as_u64(KeyValuePair *pairs, U64 count)
   radsort(pairs, count, key_value_pair_is_before_u64);
 }
 
+internal U64Array
+remove_duplicates_u64_array(Arena *arena, U64Array arr)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+
+  HashTable *ht = hash_table_init(scratch.arena, ((U64)(F64)arr.count * 0.5));
+
+  for (U64 i = 0; i < arr.count; ++i) {
+    KeyValuePair *is_present = hash_table_search_u64(ht, arr.v[i]);
+    if (!is_present) {
+      hash_table_push_u64_raw(scratch.arena, ht, arr.v[i], 0);
+    }
+  }
+
+  U64Array result = {0};
+  result.count    = ht->count;
+  result.v        = keys_from_hash_table_u64(arena, ht);
+
+  scratch_end(scratch);
+  return result;
+}
