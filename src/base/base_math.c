@@ -600,6 +600,25 @@ rng1u64_list_push(Arena *arena, Rng1U64List *list, Rng1U64 rng)
   list->count += 1;
 }
 
+internal void
+rng1u64_list_concat(Rng1U64List *list, Rng1U64List *to_concat)
+{
+  if(to_concat->first)
+  {
+    if(list->first)
+    {
+      list->last->next = to_concat->first;
+      list->last       = to_concat->last;
+    }
+    else
+    {
+      list->first = to_concat->first;
+      list->last  = to_concat->last;
+    }
+    MemoryZeroStruct(to_concat);
+  }
+}
+
 internal Rng1U64Array
 rng1u64_array_from_list(Arena *arena, Rng1U64List *list)
 {

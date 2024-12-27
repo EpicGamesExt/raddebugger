@@ -1,0 +1,42 @@
+--- DWARF NOTES ---------------------------------------------------------------
+
+DWARF V4 Spec: http://www.dwarfstd.org/doc/DWARF4.pdf
+DWARF V5 Spec: http://www.dwarfstd.org/doc/DWARF5.pdf
+
+-------------------------------------------------------------------------------
+
+$ (2021/04/30) On .debug_pubtypes, .debug_pubnames, and .debug_names:
+
+.debug_pubtypes and .debug_pubnames are tables that map from a string (the name
+of a type or function respectively) to an offset into .debug_info, which is the
+offset of the Debug Information Entry (DIE, in DWARF terminology) of the info
+associated with the string. THESE TWO SECTIONS ARE OPTIONAL. They don't show up
+in every DWARF-holding file, and so they cannot be relied upon as acceleration
+structures. But we're going to support parsing them, to make things a bit nicer
+in cases where they are present. DWARF doesn't have much in the way of acceler-
+ation structures built in, so our rationale is that we should take anything we
+can get to make the format a bit more in some subset of the possible cases.
+
+.debug_names is a DWARF V5 section that is intended to replace .debug_pubtypes
+and .debug_pubnames. However, even in cases when DWARF V5 is produced at the
+time of writing this, we have not found .debug_names sections being produced.
+We did not exhaustively test all compilers and configurations, but it seems
+that it is not well-supported at all by major compilers, and there's a very low
+probability that a user will have that section, so our current thinking is
+that there's no point in supporting it right now.
+
+-------------------------------------------------------------------------------
+
+$ (2021/04/30) On producing DWARF V5 with Clang:
+
+https://lists.llvm.org/pipermail/llvm-dev/2018-August/125068.html
+
+By default it looks like (at the time of writing this) that Clang, by default,
+will produce DWARF V4. To produce DWARF V5, however, you can use the -gdwarf-5
+option. Even when that option is used, it seems that some features of V5 are
+not used (for example, .debug_names).
+
+The above link also says that this will produce .debug_names, but it doesn't as
+of Clang 10.
+
+-------------------------------------------------------------------------------

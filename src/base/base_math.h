@@ -666,6 +666,7 @@ internal U32 u32_from_rgba(Vec4F32 rgba);
 //~ rjf: List Type Functions
 
 internal void rng1u64_list_push(Arena *arena, Rng1U64List *list, Rng1U64 rng);
+internal void rng1u64_list_concat(Rng1U64List *list, Rng1U64List *to_concat);
 internal Rng1U64Array rng1u64_array_from_list(Arena *arena, Rng1U64List *list);
 
 internal void rng1s64_list_push(Arena *arena, Rng1S64List *list, Rng1S64 rng);
