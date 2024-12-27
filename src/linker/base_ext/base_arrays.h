@@ -31,6 +31,7 @@ internal U64Array  u64_array_from_list(Arena *arena, U64List *list);
 internal U64Array u64_array_remove_duplicates(Arena *arena, U64Array in);
 
 internal void u32_array_sort(U64 count, U32 *v);
+internal void u64_array_sort(U64 count, U64 *v);
 internal B32  u32_array_compare(U32Array a, U32Array b);
 
 internal U64 sum_array_u64(U64 count, U64 *v);

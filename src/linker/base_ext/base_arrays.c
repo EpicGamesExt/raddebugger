@@ -64,6 +64,12 @@ u32_array_sort(U64 count, U32 *v)
 }
 
 internal void
+u64_array_sort(U64 count, U64 *v)
+{
+  radsort(v, count, u64_is_before);
+}
+
+internal void
 u32_pair_radix_sort(U64 count, PairU32 *arr)
 {
   Temp scratch = scratch_begin(0,0);
