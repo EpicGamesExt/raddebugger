@@ -37,6 +37,7 @@
 #elif OS_LINUX
 # include "core/linux/os_core_linux.h"
 #  if OS_FEATURE_GRAPHICAL && !OS_GFX_STUB
+#    include "gfx/linux/os_gfx_x11.h"
 #    include "gfx/linux/os_gfx_linux.h"
 #  endif
 #else

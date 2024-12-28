@@ -1,8 +1,13 @@
 
 Arena* gfx_lnx_arena = NULL;
 
+/// Determines if wayland pathway should be used by default. We have seperate
+/// pathway so recompilation isn't necesscary
 global B32 gfx_lnx_wayland_preferred = 0;
 global B32 gfx_lnx_wayland_disabled = 1;
+/// Caps the amount of events that can be process in one collection run
+global U32 gfx_lnx_event_limit = 5000;
+
 global S32 gfx_egl_version_major = 0;
 global S32 gfx_egl_version_minor = 0;
 global U8* gfx_default_window_name = (U8*)"raddebugger";
@@ -65,8 +70,14 @@ wayland_window_open(GFX_LinuxContext* gfx_context, OS_Handle* result,
                     Vec2F32 resolution, OS_WindowFlags flags, String8 title)
 { NotImplemented; }
 
+// Stub
 B32
 wayland_graphical_init(GFX_LinuxContext* out)
+{ NotImplemented; }
+
+// Stub
+B32
+wayland_get_events(Arena *arena, B32 wait, OS_EventList* out)
 { NotImplemented; }
 
 internal void
@@ -311,17 +322,25 @@ NotImplemented;}
 internal OS_EventList
 os_get_events(Arena *arena, B32 wait)
 {
-NotImplemented;}
+  OS_EventList result = {0};
+  if (gfx_lnx_wayland_disabled)
+  { x11_get_events(arena, wait, &result); }
+  else
+  { wayland_get_events(arena, wait, &result); }
+  return result;
+}
 
 internal OS_EventFlags
 os_get_event_flags(void)
 {
-NotImplemented;}
+  NotImplemented;
+}
 
 internal B32
 os_key_is_down(OS_Key key)
 {
-NotImplemented;}
+  NotImplemented;
+}
 
 internal Vec2F32
 os_mouse_from_window(OS_Handle window)

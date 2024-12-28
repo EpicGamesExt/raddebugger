@@ -31,7 +31,6 @@ struct GFX_LinuxWindow
   EGLSurface second_surface;
   B32 wayland_native;
 };
-
 extern Arena* gfx_lnx_arena;
 
 
