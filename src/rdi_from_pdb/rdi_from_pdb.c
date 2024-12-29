@@ -2560,6 +2560,16 @@ ASYNC_WORK_DEF(p2r_symbol_stream_convert_work)
             }
           }
           
+          // TODO(rjf): is this correct?
+          // rjf: redirect type, if 0, and if outside frame, to the return type of the
+          // containing procedure
+          if(local_kind == RDI_LocalKind_Parameter && regrel32->itype == 0 &&
+             top_scope_node->scope->symbol != 0 &&
+             top_scope_node->scope->symbol->type != 0)
+          {
+            type = top_scope_node->scope->symbol->type->direct_type;
+          }
+          
           // rjf: build local
           RDIM_Scope *scope = top_scope_node->scope;
           RDIM_Local *local = rdim_scope_push_local(arena, &sym_scopes, scope);
@@ -5004,9 +5014,9 @@ internal B32
 p2r_has_symbol_ref(String8 msf_data, String8List symbol_list, MSF_RawStreamTable *st)
 {
   Temp scratch = scratch_begin(0,0);
-
+  
   B32 has_ref = 0;
-
+  
   String8        dbi_data = msf_data_from_stream_number(scratch.arena, msf_data, st, PDB_FixedStream_Dbi);
   PDB_DbiParsed *dbi      = pdb_dbi_from_data(scratch.arena, dbi_data);
   if(dbi)
@@ -5016,7 +5026,7 @@ p2r_has_symbol_ref(String8 msf_data, String8List symbol_list, MSF_RawStreamTable
     if(gsi_parsed)
     {
       String8 symbol_data = msf_data_from_stream_number(scratch.arena, msf_data, st, dbi->sym_sn);
-
+      
       for(String8Node *symbol_n = symbol_list.first; symbol_n != 0; symbol_n = symbol_n->next)
       {
         U64 symbol_off = pdb_gsi_symbol_from_string(gsi_parsed, symbol_data, symbol_n->string);
@@ -5028,7 +5038,7 @@ p2r_has_symbol_ref(String8 msf_data, String8List symbol_list, MSF_RawStreamTable
       }
     }
   }
-
+  
   scratch_end(scratch);
   return has_ref;
 }
@@ -5037,9 +5047,9 @@ internal B32
 p2r_has_file_ref(String8 msf_data, String8List file_list, MSF_RawStreamTable *st)
 {
   Temp scratch = scratch_begin(0,0);
-
+  
   B32 has_ref = 0;
-
+  
   String8   info_data = msf_data_from_stream_number(scratch.arena, msf_data, st, PDB_FixedStream_Info);
   PDB_Info *info      = pdb_info_from_data(scratch.arena, info_data);
   if(info)
@@ -5064,7 +5074,7 @@ p2r_has_file_ref(String8 msf_data, String8List file_list, MSF_RawStreamTable *st
       }
     }
   }
-
+  
   scratch_end(scratch);
   return has_ref;
 }
@@ -5073,11 +5083,11 @@ internal B32
 p2r_has_symbol_or_file_ref(String8 msf_data, String8List symbol_list, String8List file_list)
 {
   Temp scratch = scratch_begin(0,0);
-
+  
   B32 has_ref = 0;
-
+  
   MSF_RawStreamTable *st = msf_raw_stream_table_from_data(scratch.arena, msf_data);
-
+  
   if(!has_ref && symbol_list.node_count)
   {
     has_ref = p2r_has_symbol_ref(msf_data, symbol_list, st);
@@ -5087,7 +5097,7 @@ p2r_has_symbol_or_file_ref(String8 msf_data, String8List symbol_list, String8Lis
   {
     has_ref = p2r_has_file_ref(msf_data, file_list, st);
   }
-
+  
   scratch_end(scratch);
   return has_ref;
 }
