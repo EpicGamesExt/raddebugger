@@ -1408,20 +1408,25 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
                     case RDI_LocationKind_AddrBytecodeStream: goto bytecode_stream;
                     bytecode_stream:;
                     {
-                      U8 *bytecode_base = all_location_data + block->location_data_off + sizeof(RDI_LocationKind);
                       U64 bytecode_size = 0;
-                      for(U64 idx = 0; idx < all_location_data_size; idx += 1)
+                      U64 off_first = block->location_data_off + sizeof(RDI_LocationKind);
+                      U64 off_opl = all_location_data_size;
+                      for(U64 off = off_first, next_off = off_opl;
+                          off < all_location_data_size;
+                          off = next_off)
                       {
-                        U8 op = bytecode_base[idx];
+                        next_off = off_opl;
+                        U8 op = all_location_data[off];
                         if(op == 0)
                         {
                           break;
                         }
                         U16 ctrlbits = rdi_eval_op_ctrlbits_table[op];
                         U32 p_size = RDI_DECODEN_FROM_CTRLBITS(ctrlbits);
-                        bytecode_size += 1+p_size;
+                        bytecode_size += (1 + p_size);
+                        next_off = (off + 1 + p_size);
                       }
-                      loc_bytecode = str8(bytecode_base, bytecode_size);
+                      loc_bytecode = str8(all_location_data + off_first, bytecode_size);
                     }break;
                     case RDI_LocationKind_AddrRegPlusU16:
                     case RDI_LocationKind_AddrAddrRegPlusU16:
