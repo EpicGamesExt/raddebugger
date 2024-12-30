@@ -6970,6 +6970,10 @@ rd_window_frame(RD_Window *ws)
     ////////////////////////////
     //- rjf: animate panels
     //
+    // TODO(rjf): @hack investigate why we were ever animating to a busted
+    // rectangle when minimized...
+    //
+    if(!os_window_is_minimized(ws->os))
     {
       F32 rate = rd_setting_val_from_code(RD_SettingCode_MenuAnimations).s32 ? 1 - pow_f32(2, (-50.f * rd_state->frame_dt)) : 1.f;
       Vec2F32 content_rect_dim = dim_2f32(content_rect);
