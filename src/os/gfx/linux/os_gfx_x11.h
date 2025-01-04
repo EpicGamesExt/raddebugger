@@ -1,8 +1,17 @@
 
 #ifndef GFX_X11_H
 #define GFX_X11_H
-
+// X11 - Xorg Base Headers
+#include <X11/Xlib.h>
+#include <X11/Xutil.h>
+#include <X11/Xatom.h>
 #include <X11/keysym.h>
+
+// X11 Extensions
+#include <X11/extensions/Xrandr.h>
+
+// OpenGL
+#include <GL/gl.h>
 
 
 global U32 x11_keysym[] = {

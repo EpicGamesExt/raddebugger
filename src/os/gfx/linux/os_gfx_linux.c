@@ -1,5 +1,6 @@
 
-Arena* gfx_lnx_arena = NULL;
+global Arena* gfx_lnx_arena = NULL;
+global U32 gfx_lnx_max_monitors = 6;
 
 /// Determines if wayland pathway should be used by default. We have seperate
 /// pathway so recompilation isn't necesscary
@@ -10,7 +11,7 @@ global U32 gfx_lnx_event_limit = 5000;
 
 global S32 gfx_egl_version_major = 0;
 global S32 gfx_egl_version_minor = 0;
-global U8* gfx_default_window_name = (U8*)"raddebugger";
+global String8 gfx_default_window_name = {0};
 global GFX_LinuxContext gfx_context = {0};
 
 global EGLContext gfx_egl_context = NULL;
@@ -84,11 +85,12 @@ internal void
 os_graphical_init(void)
 {
   gfx_lnx_arena = arena_alloc();
-  gfx_context.window_name = gfx_default_window_name;
+  gfx_context.default_window_name = gfx_default_window_name;
   gfx_context.default_window_size = vec_2f32(500, 500);
-  gfx_context.window_size = gfx_context.default_window_size;
+  gfx_context.default_window_size = gfx_context.default_window_size;
   gfx_context.default_window_pos = vec_2f32(500, 500);
-  gfx_context.window_pos = gfx_context.default_window_pos;
+  gfx_context.default_window_pos = gfx_context.default_window_pos;
+  gfx_default_window_name = str8_lit("raddebugger");
 
   B32 init_result = 0;
   if (gfx_lnx_wayland_disabled)
@@ -281,20 +283,30 @@ NotImplemented;}
 internal OS_HandleArray
 os_push_monitors_array(Arena *arena)
 {
+  OS_HandleArray result = {0};
+  if (gfx_lnx_wayland_disabled)
+  { x11_push_monitors_array(arena, &result); }
+  else
+  { wayland_push_monitors_array(arena, &result); }
+  return result;
 NotImplemented;}
 
 internal OS_Handle
 os_primary_monitor(void)
 {
   OS_Handle result = {0};
+  x11_primary_monitor(&result);
   return result;
   NotImplemented;}
 
 internal OS_Handle
 os_monitor_from_window(OS_Handle window)
 {
-  NotImplemented;
   OS_Handle result = {0};
+  if (gfx_lnx_wayland_disabled)
+  { x11_monitor_from_window(window, &result); }
+  else
+  { wayland_monitor_from_window(window, &result); }
   return result;
 }
 

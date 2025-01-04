@@ -37,6 +37,9 @@
 #elif OS_LINUX
 # include "core/linux/os_core_linux.h"
 #  if OS_FEATURE_GRAPHICAL && !OS_GFX_STUB
+#    ifndef WAYLAND_DISABLED
+#      include "gfx/linux/os_gfx_wayland.h"
+#    endif
 #    include "gfx/linux/os_gfx_x11.h"
 #    include "gfx/linux/os_gfx_linux.h"
 #  endif

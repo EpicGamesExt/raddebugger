@@ -25,6 +25,9 @@
 #elif OS_LINUX
 # include "core/linux/os_core_linux.c"
 #  if OS_FEATURE_GRAPHICAL && !OS_GFX_STUB
+#    ifndef WAYLAND_DISABLED
+#      include "gfx/linux/os_gfx_wayland.c"
+#    endif
 #    include "gfx/linux/os_gfx_x11.c"
 #    include "gfx/linux/os_gfx_linux.c"
 #  endif

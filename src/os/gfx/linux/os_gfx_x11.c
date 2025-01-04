@@ -1,9 +1,4 @@
 
-#include <X11/Xlib.h>
-#include <X11/Xutil.h>
-#include <X11/Xatom.h>
-
-#include <GL/gl.h>
 
 typedef Display X11_Display;
 typedef Window X11_Window;
@@ -11,11 +6,31 @@ typedef Window X11_Window;
 
 global X11_Display* x11_server = NULL;
 global X11_Window x11_window = 0;
+global X11_Window x11_root_window = 0;
 global Atom x11_atoms[100];
 global Atom x11_atom_tail = 0;
 global U32 x11_unhandled_events = 0;
-global U32 xdnd_supported_version = 5;
+global U32 x11_xdnd_supported_version = 5;
+global RROutput* x11_monitors = 0;
+global U32 x11_monitors_size = 0;
 
+
+/// Update window properties from X11
+B32
+x11_window_update_properties(GFX_LinuxWindow* out)
+{
+  XWindowAttributes props = {0};
+  XGetWindowAttributes(x11_server, out->handle, &props);
+  out->pos.x = props.x;
+  out->pos.y = props.y;
+  out->pos_mid.x = props.x + (props.width/2.f);
+  out->pos_mid.y = props.y + (props.height/2.f);
+  out->size.x = props.width;
+  out->size.y = props.height;
+  out->border_width = props.border_width;
+  out->root_relative_depth = props.depth;
+  return 1;
+}
 
 B32
 x11_graphical_init(GFX_LinuxContext* out)
@@ -39,6 +54,11 @@ x11_graphical_init(GFX_LinuxContext* out)
     else
     { Assert(0); } // Something is not going to work properly if an intern fails
   }
+
+  // Initialize furthur internal things
+  x11_monitors = (RROutput*)push_array_no_zero(gfx_lnx_arena, RROutput, gfx_lnx_max_monitors);
+  S32 default_screen = XDefaultScreen(x11_server);
+  x11_root_window = RootWindow(x11_server, default_screen);
   return 1;
 }
 
@@ -53,17 +73,16 @@ x11_window_open(GFX_LinuxContext* out, OS_Handle* out_handle,
   S32 default_depth = DefaultDepth(x11_server, default_screen);
   XVisualInfo visual_info = {0};
   XMatchVisualInfo(x11_server, default_screen, default_depth, TrueColor, &visual_info);
-  X11_Window root_window = RootWindow(x11_server, default_screen);
   XSetWindowAttributes window_attributes = {0};
   window_attributes.colormap = XCreateColormap( x11_server,
-                                                root_window,
+                                                x11_root_window,
                                                 visual_info.visual, AllocNone );
   window_attributes.background_pixmap = None ;
   window_attributes.border_pixel      = 0;
   window_attributes.event_mask        = StructureNotifyMask;
   window_attributes.override_redirect = 1;
   X11_Window new_window = XCreateWindow(x11_server,
-                                        root_window,
+                                        x11_root_window,
                                         out->default_window_pos.x, out->default_window_pos.y,
                                         resolution.x, resolution.y, 0,
                                         visual_info.depth,
@@ -75,7 +94,7 @@ x11_window_open(GFX_LinuxContext* out, OS_Handle* out_handle,
   if (title.size)
   { XStoreName(x11_server, new_window, (char*)title.str); }
   else
-  { XStoreName(x11_server, new_window, (char*)out->window_name); }
+  { XStoreName(x11_server, new_window, (char*)out->default_window_name.str); }
 
   // Subscribe to NET_WM_DELETE events and disable auto XDestroyWindow()
   Atom enabled_protocols[] = { x11_atoms[ X11_Atom_WM_DELETE_WINDOW ] };
@@ -91,12 +110,11 @@ x11_window_open(GFX_LinuxContext* out, OS_Handle* out_handle,
   XMapWindow(x11_server, new_window);
 
   result->handle = (U64)new_window;
-  result->window_name = push_str8_copy(gfx_lnx_arena, title);
-  result->start_pos = out->default_window_pos;
-  result->pos = result->start_pos;
-  result->size = resolution;
-  result->root_relative_depth = 0;
+  result->name = push_str8_copy(gfx_lnx_arena, title);
+  result->pos_target = out->default_window_pos;
+  result->size_target = resolution;
   result->wayland_native = 0;
+  x11_window_update_properties(result);
   *out_handle = gfx_handle_from_window(result);
   return 0;
 }
@@ -203,7 +221,7 @@ x11_get_events(Arena *arena, B32 wait, OS_EventList* out)
         if ((Atom)(message.data.l[0]) == x11_atoms[ X11_Atom_WM_DELETE_WINDOW ])
         { x_node->kind = OS_EventKind_WindowClose; }
         else if ((Atom)message.message_type == x11_atoms[ X11_Atom_XdndDrop ]
-                 && xdnd_version <= xdnd_supported_version)
+                 && xdnd_version <= x11_xdnd_supported_version)
         {
           x_node->kind = OS_EventKind_FileDrop;
           if (format_list)
@@ -270,5 +288,94 @@ x11_get_events(Arena *arena, B32 wait, OS_EventList* out)
 
     }
   }
+  return 1;
+}
+
+
+/* NOTE(mallchad): Xrandr is the X Resize, Rotate and Reflection extension, which allows
+   for seamlessly spreading an X11 display across multiple physical monitors. It
+   does this by creating an oversized X11 display and mapping user-defined
+   regions onto the physical monitors.
+
+   An Xrandr "provider" can be best though of as a logical monitor supplier,
+   like a graphics card that makes monitors available and drawable, or a virtual
+   graphics card that pipes through a network.
+
+   An Xrandr "monitor" is a logical monitor that usually represents a physical
+   monitor and all its relevant properties.
+*/
+B32
+x11_push_monitors_array(Arena* arena, OS_HandleArray* monitor)
+{
+  (void)monitor;                // NOTE(mallchad): Only really need one instance for now
+  RROutput x_monitor = {0};
+  S32 x_monitor_count = 0;
+  XRRMonitorInfo* monitor_list = NULL;
+  MemoryZeroTyped(x11_monitors, gfx_lnx_max_monitors);
+
+  // Get active monitors
+  monitor_list = XRRGetMonitors(x11_server, x11_root_window, 1, &x_monitor_count);
+  if (monitor_list == NULL) { return 0; }
+  x11_monitors_size = x_monitor_count;
+  if (x_monitor_count > gfx_lnx_max_monitors)
+  {
+    gfx_lnx_max_monitors = (2* x_monitor_count); // Greedy allocation to reduce leakage
+    x11_monitors = push_array_no_zero(gfx_lnx_arena, RROutput, gfx_lnx_max_monitors);
+  }
+  for (int i=0; i<x11_monitors_size; ++i)
+  {
+    /* NOTE(mallchad): This is called "outputs" but I'm not entirely convinced
+       it any more than one output. */
+    x11_monitors[i] = monitor_list[i].outputs[0];
+  }
+  // Free data
+  XRRFreeMonitors(monitor_list);
+  return 1;
+}
+
+B32
+x11_primary_monitor(OS_Handle* monitor)
+{
+  S32 default_screen = XDefaultScreen(x11_server);
+  (*monitor->u64) = XRRGetOutputPrimary(x11_server, x11_root_window);
+  return 1;
+}
+
+B32
+x11_monitor_from_window(OS_Handle window, OS_Handle* out_monitor)
+{
+  GFX_LinuxWindow* _window = gfx_window_from_handle(window);
+  x11_window_update_properties(_window);
+
+  B32 horizontal_inside;
+  B32 vertical_inside;
+
+  // Monitor Measurements
+  S32 right_extent;
+  S32 left_extent;
+  S32 up_extent;
+  S32 down_extent;
+
+  B32 found = 0;
+  XRRMonitorInfo* monitor_list = NULL;
+  S32 monitor_count = 0;
+  monitor_list = XRRGetMonitors(x11_server, x11_root_window, 1, &monitor_count);
+  XRRMonitorInfo x_monitor;
+  for (int i=0; i<x11_monitors_size; ++i)
+  {
+    x_monitor = monitor_list[i];
+    left_extent = x_monitor.x;
+    right_extent = (x_monitor.x + x_monitor.width);
+    up_extent = x_monitor.y;
+    down_extent = (x_monitor.y + x_monitor.height);
+    horizontal_inside = (_window->pos_mid.x > left_extent) && (_window->pos_mid.x > right_extent);
+    vertical_inside = (_window->pos_mid.y > up_extent) && (_window->pos_mid.y > down_extent);
+
+    if (horizontal_inside && vertical_inside) { found = 1; break; }
+  }
+  Assert(found);
+  if (found == 0) { return 0; }
+
+  *(out_monitor->u64) = x_monitor.outputs[0];
   return 1;
 }

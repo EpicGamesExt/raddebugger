@@ -86,7 +86,7 @@ set auto_compile_flags=
 # --- Compile/Link Line Definitions ------------------------------------------
     cl_common="/I../src/ /I../local/ /nologo /FC /Z7"
  clang_common="-I../src/ -I../local -I/usr/include/freetype2/ -fdiagnostics-absolute-paths -Wall -Wno-unknown-warning-option -Wno-missing-braces -Wno-unused-function -Wno-writable-strings -Wno-unused-value -Wno-unused-variable -Wno-unused-local-typedef -Wno-deprecated-register -Wno-deprecated-declarations -Wno-unused-but-set-variable -Wno-single-bit-bitfield-constant-conversion -Wno-compare-distinct-pointer-types -Xclang -flto-visibility-public-std -D_USE_MATH_DEFINES -Dstrdup=_strdup -Dgnu_printf=printf -Wl,-z,notext"
- clang_dynamic="-lpthread -ldl -lrt -latomic -lm -lfreetype -lEGL -lX11 -lGL"
+ clang_dynamic="-lpthread -ldl -lrt -latomic -lm -lfreetype -lEGL -lX11 -lGL -lXrandr"
  clang_errors="-Werror=atomic-memory-ordering -Wno-parentheses"
      cl_debug="cl /Od /Ob1 /DBUILD_DEBUG=1 ${cl_common} ${auto_compile_flags}"
    cl_release="cl /O2 /DBUILD_DEBUG=0 ${cl_common} ${auto_compile_flags}"
@@ -159,6 +159,11 @@ function finish()
     exit 1
 }
 
+function get_epoch()
+{
+    echo "$(date +%s)"
+}
+
 # @param $1 - name of file to compile
 # @param $2 - name of executable to output as
 # @param $@ - rest is any arguments provided
@@ -167,7 +172,20 @@ function build_single()
     local binary=$2
     rad_log "Building '${binary}'"
     didbuild=1
-    ${compile} "$1" ${@:3:100} ${compile_link} "${out}$2" || finish
+
+    build_start=$(get_epoch)
+    ${compile} "$1" ${@:3:100} ${compile_link} "${out}$2"
+    status=$?
+    build_end=$(get_epoch)
+    time_elapsed=$((build_end - build_start))
+
+    rad_log "Compilation Time: $ansi_cyanbold \
+$((time_elapsed / 60))min $((time_elapsed % 60))s $ansi_reset"
+    if [[ "${status}" != 0 ]] ; then
+        rad_log "A standalone build command didn't complete successfully. \
+${ansi_red}Line: ${BASH_LINENO[$i]} ${ansi_reset}";
+        exit $? ;
+    fi
     return $?
 }
 
