@@ -3667,13 +3667,13 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
     String8List dbg_path_candidates = {0};
     if(rdi_dbg_path.size != 0)
     {
-      str8_list_push(scratch.arena,  &dbg_path_candidates, rdi_dbg_path);
       str8_list_pushf(scratch.arena, &dbg_path_candidates, "%S/%S", exe_folder, rdi_dbg_path);
+      str8_list_push(scratch.arena,  &dbg_path_candidates, rdi_dbg_path);
     }
     if(pdb_dbg_path.size != 0)
     {
-      str8_list_push(scratch.arena,  &dbg_path_candidates, pdb_dbg_path);
       str8_list_pushf(scratch.arena, &dbg_path_candidates, "%S/%S", exe_folder, pdb_dbg_path);
+      str8_list_push(scratch.arena,  &dbg_path_candidates, pdb_dbg_path);
     }
     str8_list_pushf(scratch.arena, &dbg_path_candidates, "%S.pdb", str8_chop_last_dot(path));
     str8_list_pushf(scratch.arena, &dbg_path_candidates, "%S.pdb", path);
