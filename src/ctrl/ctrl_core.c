@@ -3665,6 +3665,16 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
     Temp scratch = scratch_begin(0, 0);
     String8 exe_folder = str8_chop_last_slash(path);
     String8List dbg_path_candidates = {0};
+    //
+    //~ TODO(rjf): @linux_port PLEASE READ RYAN vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
+    //
+    // TODO(rjf): trying "exe_folder/embedded_path" as the first option is only a valid
+    // heuristic on Windows, because we know that two absolute paths concatted together
+    // are necessarily invalid. however, on Linux, this is not the case - you could stitch
+    // two paths together and get a third path that is completely valid. so, in that case,
+    // we will need to infer if the path is relative, and then use either the embedded
+    // path as-is, or the exe-relative-path accordingly, depending on that.
+    //
     if(rdi_dbg_path.size != 0)
     {
       str8_list_pushf(scratch.arena, &dbg_path_candidates, "%S/%S", exe_folder, rdi_dbg_path);
