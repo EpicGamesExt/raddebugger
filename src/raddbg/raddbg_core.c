@@ -1161,6 +1161,7 @@ rd_name_alloc(String8 string)
       }
       U8 *chunk_memory = push_array(rd_state->arena, U8, chunk_size);
       RD_NameChunkNode *chunk = (RD_NameChunkNode *)chunk_memory;
+      chunk->size = chunk_size;
       SLLStackPush(rd_state->free_name_chunks[bucket_idx], chunk);
     }
   }
