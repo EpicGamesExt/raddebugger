@@ -676,7 +676,7 @@ ctrl_entity_string_alloc(CTRL_EntityStore *store, String8 string)
           n != 0;
           prev = n, n = n->next)
       {
-        if(n->size >= string.size+1)
+        if(n->size >= string.size)
         {
           if(prev == 0)
           {
@@ -711,6 +711,7 @@ ctrl_entity_string_alloc(CTRL_EntityStore *store, String8 string)
     }
     U8 *chunk_memory = push_array(store->arena, U8, chunk_size);
     node = (CTRL_EntityStringChunkNode *)chunk_memory;
+    node->size = chunk_size;
   }
   
   // rjf: fill string & return

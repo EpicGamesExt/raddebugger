@@ -1126,7 +1126,7 @@ rd_name_alloc(String8 string)
             n != 0;
             prev = n, n = n->next)
         {
-          if(n->size >= string.size+1)
+          if(n->size >= string.size)
           {
             if(prev == 0)
             {
