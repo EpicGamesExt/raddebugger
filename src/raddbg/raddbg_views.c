@@ -1738,86 +1738,90 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
               // rjf: commit edited cell string
               Vec2S64 tbl = v2s64(x, y);
               RD_WatchViewColumn *col = rd_watch_view_column_from_x(ewv, x);
-              switch(col->kind)
+              String8 initial_string = str8(edit_state->initial_buffer, edit_state->initial_size);;
+              if(!str8_match(new_string, initial_string, 0))
               {
-                default:{}break;
-                case RD_WatchViewColumnKind_Expr:
-                if(modifiable)
+                switch(col->kind)
                 {
-                  if(row_info.collection_entity_kind != RD_EntityKind_Nil)
+                  default:{}break;
+                  case RD_WatchViewColumnKind_Expr:
+                  if(modifiable)
                   {
-                    RD_Entity *entity = row_info.collection_entity;
-                    if(!rd_entity_is_nil(entity) || editing_complete)
+                    if(row_info.collection_entity_kind != RD_EntityKind_Nil)
                     {
-                      if(rd_entity_is_nil(entity) && new_string.size != 0)
+                      RD_Entity *entity = row_info.collection_entity;
+                      if(!rd_entity_is_nil(entity) || editing_complete)
                       {
-                        entity = rd_entity_alloc(rd_entity_root(), row_info.collection_entity_kind);
-                        rd_entity_equip_cfg_src(entity, RD_CfgSrc_Project);
+                        if(rd_entity_is_nil(entity) && new_string.size != 0)
+                        {
+                          entity = rd_entity_alloc(rd_entity_root(), row_info.collection_entity_kind);
+                          rd_entity_equip_cfg_src(entity, RD_CfgSrc_Project);
+                        }
+                        if(!rd_entity_is_nil(entity))
+                        {
+                          rd_entity_equip_name(entity, new_string);
+                        }
+                        state_dirty = 1;
+                        snap_to_cursor = 1;
                       }
-                      if(!rd_entity_is_nil(entity))
+                    }
+                  }break;
+                  case RD_WatchViewColumnKind_Member:
+                  case RD_WatchViewColumnKind_Value:
+                  {
+                    EV_WindowedRowList rows = ev_windowed_row_list_from_block_range_list(scratch.arena, eval_view, filter, &block_ranges, r1u64(ui_scroll_list_row_from_item(&row_blocks, y),
+                                                                                                                                                ui_scroll_list_row_from_item(&row_blocks, y)+1));
+                    if(rows.first != 0)
+                    {
+                      B32 should_commit_asap = editing_complete;
+                      E_Expr *expr = rd_expr_from_watch_view_row_column(scratch.arena, eval_view, row, col);
+                      E_Eval dst_eval = e_eval_from_expr(scratch.arena, expr);
+                      if(dst_eval.space.kind == RD_EvalSpaceKind_MetaEntity)
                       {
-                        rd_entity_equip_name(entity, new_string);
+                        should_commit_asap = 1;
+                      }
+                      else if(evt->slot != UI_EventActionSlot_Cancel)
+                      {
+                        should_commit_asap = editing_complete;
+                      }
+                      if(should_commit_asap)
+                      {
+                        B32 success = 0;
+                        success = rd_commit_eval_value_string(dst_eval, new_string, !col->dequote_string);
+                        if(!success)
+                        {
+                          log_user_error(str8_lit("Could not commit value successfully."));
+                        }
+                      }
+                    }
+                  }break;
+                  case RD_WatchViewColumnKind_Type:{}break;
+                  case RD_WatchViewColumnKind_ViewRule:
+                  if(editing_complete)
+                  {
+                    RD_WatchViewPoint pt = rd_watch_view_point_from_tbl(&block_ranges, tbl);
+                    ev_key_set_view_rule(eval_view, pt.key, new_string);
+                    if(row_info.collection_entity_kind != RD_EntityKind_Nil)
+                    {
+                      RD_Entity *entity = row_info.collection_entity;
+                      RD_Entity *view_rule = rd_entity_child_from_kind(entity, RD_EntityKind_ViewRule);
+                      if(rd_entity_is_nil(view_rule) && new_string.size != 0)
+                      {
+                        view_rule = rd_entity_alloc(entity, RD_EntityKind_ViewRule);
+                      }
+                      else if(!rd_entity_is_nil(view_rule) && new_string.size == 0)
+                      {
+                        rd_entity_mark_for_deletion(view_rule);
+                      }
+                      if(new_string.size != 0)
+                      {
+                        rd_entity_equip_name(view_rule, new_string);
                       }
                       state_dirty = 1;
                       snap_to_cursor = 1;
                     }
-                  }
-                }break;
-                case RD_WatchViewColumnKind_Member:
-                case RD_WatchViewColumnKind_Value:
-                {
-                  EV_WindowedRowList rows = ev_windowed_row_list_from_block_range_list(scratch.arena, eval_view, filter, &block_ranges, r1u64(ui_scroll_list_row_from_item(&row_blocks, y),
-                                                                                                                                              ui_scroll_list_row_from_item(&row_blocks, y)+1));
-                  if(rows.first != 0)
-                  {
-                    B32 should_commit_asap = editing_complete;
-                    E_Expr *expr = rd_expr_from_watch_view_row_column(scratch.arena, eval_view, row, col);
-                    E_Eval dst_eval = e_eval_from_expr(scratch.arena, expr);
-                    if(dst_eval.space.kind == RD_EvalSpaceKind_MetaEntity)
-                    {
-                      should_commit_asap = 1;
-                    }
-                    else if(evt->slot != UI_EventActionSlot_Cancel)
-                    {
-                      should_commit_asap = 0;
-                    }
-                    if(should_commit_asap)
-                    {
-                      B32 success = 0;
-                      success = rd_commit_eval_value_string(dst_eval, new_string, !col->dequote_string);
-                      if(!success)
-                      {
-                        log_user_error(str8_lit("Could not commit value successfully."));
-                      }
-                    }
-                  }
-                }break;
-                case RD_WatchViewColumnKind_Type:{}break;
-                case RD_WatchViewColumnKind_ViewRule:
-                if(editing_complete)
-                {
-                  RD_WatchViewPoint pt = rd_watch_view_point_from_tbl(&block_ranges, tbl);
-                  ev_key_set_view_rule(eval_view, pt.key, new_string);
-                  if(row_info.collection_entity_kind != RD_EntityKind_Nil)
-                  {
-                    RD_Entity *entity = row_info.collection_entity;
-                    RD_Entity *view_rule = rd_entity_child_from_kind(entity, RD_EntityKind_ViewRule);
-                    if(rd_entity_is_nil(view_rule) && new_string.size != 0)
-                    {
-                      view_rule = rd_entity_alloc(entity, RD_EntityKind_ViewRule);
-                    }
-                    else if(!rd_entity_is_nil(view_rule) && new_string.size == 0)
-                    {
-                      rd_entity_mark_for_deletion(view_rule);
-                    }
-                    if(new_string.size != 0)
-                    {
-                      rd_entity_equip_name(view_rule, new_string);
-                    }
-                    state_dirty = 1;
-                    snap_to_cursor = 1;
-                  }
-                }break;
+                  }break;
+                }
               }
             }
           }
