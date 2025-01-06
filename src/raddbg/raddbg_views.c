@@ -1738,8 +1738,6 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
               // rjf: commit edited cell string
               Vec2S64 tbl = v2s64(x, y);
               RD_WatchViewColumn *col = rd_watch_view_column_from_x(ewv, x);
-              String8 initial_string = str8(edit_state->initial_buffer, edit_state->initial_size);;
-              if(!str8_match(new_string, initial_string, 0))
               {
                 switch(col->kind)
                 {
