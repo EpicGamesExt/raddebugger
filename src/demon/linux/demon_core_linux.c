@@ -74,18 +74,22 @@ internal B32
 dmn_ctrl_kill(DMN_CtrlCtx *ctx, DMN_Handle process, U32 exit_code)
 {
   NotImplemented;
+  return 0;
 }
 
 internal B32
 dmn_ctrl_detach(DMN_CtrlCtx *ctx, DMN_Handle process)
 {
   NotImplemented;
+  return 0;
 }
 
 internal DMN_EventList
 dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
 {
+  DMN_EventList result = {0};
   NotImplemented;
+  return result;
 }
 
 ////////////////////////////////
@@ -143,6 +147,7 @@ internal U64
 dmn_process_memory_reserve(DMN_Handle process, U64 vaddr, U64 size)
 {
   NotImplemented;
+  return 0;
 }
 
 internal void
@@ -173,37 +178,45 @@ internal U64
 dmn_process_read(DMN_Handle process, Rng1U64 range, void *dst)
 {
   NotImplemented;
+  return 0;
 }
 
 internal B32
 dmn_process_write(DMN_Handle process, Rng1U64 range, void *src)
 {
   NotImplemented;
+  return 0;
 }
 
 //-  threads
 internal Architecture dmn_arch_from_thread(DMN_Handle handle)
 {
+  Architecture result = 0;
   NotImplemented;
+  return 0;
 }
 internal U64 dmn_stack_base_vaddr_from_thread(DMN_Handle handle)
 {
   NotImplemented;
+  return 0;
 }
 internal U64 dmn_tls_root_vaddr_from_thread(DMN_Handle handle)
 {
   NotImplemented;
+  return 0;
 }
 internal B32
 dmn_thread_read_reg_block(DMN_Handle handle, void *reg_block)
 {
   NotImplemented;
+  return 0;
 }
 
 internal B32
 dmn_thread_write_reg_block(DMN_Handle handle, void *reg_block)
 {
   NotImplemented;
+  return 0;
 }
 
 //-  system process listing
@@ -217,6 +230,7 @@ internal B32
 dmn_process_iter_next(Arena *arena, DMN_ProcessIter *iter, DMN_ProcessInfo *info_out)
 {
   NotImplemented;
+  return 0;
 }
 
 internal void

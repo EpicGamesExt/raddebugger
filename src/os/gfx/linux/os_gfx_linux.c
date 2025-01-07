@@ -50,6 +50,17 @@ global S32 gfx_egl_context_config[] = {
  * it. So be it.
  */
 
+GFX_LinuxMonitor*
+gfx_monitor_from_handle(OS_Handle monitor)
+{
+  return (GFX_LinuxMonitor*)PtrFromInt(*monitor.u64);
+}
+OS_Handle gfx_handle_from_monitor(GFX_LinuxMonitor* monitor)
+{
+  OS_Handle result = {0};
+  *(result.u64) = IntFromPtr(monitor);
+  return result;
+}
 
 GFX_LinuxWindow*
 gfx_window_from_handle(OS_Handle context)
@@ -64,22 +75,6 @@ gfx_handle_from_window(GFX_LinuxWindow* window)
   *result.u64 = IntFromPtr(window);
   return result;
 }
-
-// Stub
-B32
-wayland_window_open(GFX_LinuxContext* gfx_context, OS_Handle* result,
-                    Vec2F32 resolution, OS_WindowFlags flags, String8 title)
-{ NotImplemented; }
-
-// Stub
-B32
-wayland_graphical_init(GFX_LinuxContext* out)
-{ NotImplemented; }
-
-// Stub
-B32
-wayland_get_events(Arena *arena, B32 wait, OS_EventList* out)
-{ NotImplemented; }
 
 internal void
 os_graphical_init(void)
@@ -207,74 +202,80 @@ NotImplemented;}
 internal B32
 os_window_is_maximized(OS_Handle window)
 {
-
-NotImplemented;}
+  NotImplemented;
+  return 0;
+}
 
 internal void
 os_window_set_maximized(OS_Handle window, B32 maximized)
 {
-
-NotImplemented;}
+  NotImplemented;
+}
 
 internal void
 os_window_minimize(OS_Handle window)
 {
-
-NotImplemented;}
+NotImplemented;
+}
 
 internal void
 os_window_bring_to_front(OS_Handle window)
 {
-
-NotImplemented;}
+NotImplemented;
+}
 
 internal void
 os_window_set_monitor(OS_Handle window, OS_Handle monitor)
 {
-
-NotImplemented;}
+NotImplemented;
+}
 
 internal void
 os_window_clear_custom_border_data(OS_Handle handle)
 {
-
-NotImplemented;}
+  NotImplemented;
+}
 
 internal void
 os_window_push_custom_title_bar(OS_Handle handle, F32 thickness)
 {
-
-NotImplemented;}
+  NotImplemented;
+}
 
 internal void
 os_window_push_custom_edges(OS_Handle handle, F32 thickness)
 {
-
-NotImplemented;}
+  NotImplemented;
+}
 
 internal void
 os_window_push_custom_title_bar_client_area(OS_Handle handle, Rng2F32 rect)
 {
-
-NotImplemented;}
+  NotImplemented;
+}
 
 internal Rng2F32
 os_rect_from_window(OS_Handle window)
 {
-
-NotImplemented;}
+  Rng2F32 result = {0};
+  NotImplemented;
+  return result;
+}
 
 internal Rng2F32
 os_client_rect_from_window(OS_Handle window)
 {
-
-NotImplemented;}
+  Rng2F32 result = {0};
+  NotImplemented;
+  return result;
+}
 
 internal F32
 os_dpi_from_window(OS_Handle window)
 {
+  NotImplemented;
   return 0.f;
-NotImplemented;}
+}
 
 
 ////////////////////////////////
@@ -313,23 +314,36 @@ os_monitor_from_window(OS_Handle window)
 internal String8
 os_name_from_monitor(Arena *arena, OS_Handle monitor)
 {
-  NotImplemented;
+  String8 result = {0};
+  if (gfx_lnx_wayland_disabled)
+  { x11_name_from_monitor(arena, monitor, &result); }
+  else
+  { wayland_name_from_monitor(arena, monitor, &result); }
+  return result;
 }
 
 internal Vec2F32
 os_dim_from_monitor(OS_Handle monitor)
 {
-  NotImplemented;
+  Vec2F32 result = {0};
+  if (gfx_lnx_wayland_disabled)
+  { x11_dim_from_monitor(monitor, &result); }
+  else
+  { x11_dim_from_monitor(monitor, &result); }
+  return result;
 }
 
 
 ////////////////////////////////
 //~ rjf: @os_hooks Events (Implemented Per-OS)
 
+/* NOTE(mallchad): No idea what this is supposed to mean or be for it looks like
+   a dead pathway in this branch anyway so I'm just going to leave it. */
 internal void
 os_send_wakeup_event(void)
 {
-NotImplemented;}
+  return;
+}
 
 internal OS_EventList
 os_get_events(Arena *arena, B32 wait)
@@ -345,19 +359,25 @@ os_get_events(Arena *arena, B32 wait)
 internal OS_EventFlags
 os_get_event_flags(void)
 {
+  OS_EventFlags result = 0;
   NotImplemented;
+  return result;
 }
 
 internal B32
 os_key_is_down(OS_Key key)
 {
   NotImplemented;
+  return 0;
 }
 
 internal Vec2F32
 os_mouse_from_window(OS_Handle window)
 {
-NotImplemented;}
+  Vec2F32 result = {0};
+  NotImplemented;
+  return result;
+}
 
 
 ////////////////////////////////
@@ -366,7 +386,8 @@ NotImplemented;}
 internal void
 os_set_cursor(OS_Cursor cursor)
 {
-NotImplemented;}
+  NotImplemented;
+}
 
 
 ////////////////////////////////
@@ -383,13 +404,15 @@ internal F32
 os_caret_blink_time(void)
 {
   return 0.f;
-NotImplemented;}
+  NotImplemented;
+}
 
 internal F32
 os_default_refresh_rate(void)
 {
   return 0.f;
-NotImplemented;}
+  NotImplemented;
+}
 
 
 ////////////////////////////////
@@ -398,5 +421,5 @@ NotImplemented;}
 internal void
 os_graphical_message(B32 error, String8 title, String8 message)
 {
-
-NotImplemented;}
+  NotImplemented;
+}

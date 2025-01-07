@@ -14,6 +14,31 @@
 #include <GL/gl.h>
 
 
+/* NOTE(mallchad): Xrandr is the X Resize, Rotate and Reflection extension, which allows
+   for seamlessly spreading an X11 display across multiple physical monitors. It
+   does this by creating an oversized X11 display and mapping user-defined
+   regions onto the physical monitors.
+
+   An Xrandr "provider" can be best though of as a logical monitor supplier,
+   like a graphics card that makes monitors available and drawable, or a virtual
+   graphics card that pipes through a network.
+
+   An Xrandr "monitor" is a logical monitor that usually represents a physical
+   monitor and all its relevant properties.
+
+   An Xrandr "output" is a virtual object that sets allows for writing pixel
+   data to, for all intents and purposes it is more or less analogous to a
+   physical monitor but isn't bound by hardware changes, this is the most
+   relevant object to users.
+
+   An Xrandr "crtc" is an archaic representation of Cathode-Ray-Tube Controller
+   properties. For our purposes it carries extra display info. Mostly just
+   position, rotation and sizing data.
+
+   The Xrandr struct _XRRMonitorInfo has the field "outputs", I'm not actually
+   convinced it's ever more than 1
+*/
+
 global U32 x11_keysym[] = {
   XK_VoidSymbol,                // OS_Key_Null
   XK_Escape,                    // OS_Key_Esc

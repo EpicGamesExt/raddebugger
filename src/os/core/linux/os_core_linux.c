@@ -1277,7 +1277,9 @@ os_logical_core_count(void)
 internal String8List
 os_get_command_line_arguments(void)
 {
+  String8List result = {0};
   NotImplemented;               /* This doesn't appear to be used any longer */
+  return result;
 }
 
 internal S32
@@ -2001,6 +2003,7 @@ internal B32
 os_process_wait(OS_Handle handle, U64 endt_us)
 {
   NotImplemented;
+  return 0;
 }
 
 internal void
@@ -2043,6 +2046,7 @@ os_thread_wait(OS_Handle handle, U64 endt_us)
   // TODO: Supposed to be thread sleep?
   LNX_Entity* entity = lnx_entity_from_handle(handle, LNX_EntityKind_Thread);
   NotImplemented;
+  return 0;
 }
 
 // TODO: Marked as old / review

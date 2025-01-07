@@ -12,14 +12,63 @@ global Atom x11_atom_tail = 0;
 global U32 x11_unhandled_events = 0;
 global U32 x11_xdnd_supported_version = 5;
 global RROutput* x11_monitors = 0;
+global GFX_LinuxMonitor* x11_monitors2 = 0;
 global U32 x11_monitors_size = 0;
 
+B32
+x11_monitor_update_properties(GFX_LinuxMonitor* out_monitor)
+{
+  RROutput xrandr_output = out_monitor->handle;
+  XRRScreenResources* resources = XRRGetScreenResources(x11_server, x11_root_window);
+  XRROutputInfo* props = XRRGetOutputInfo(x11_server, resources, xrandr_output);
+  XRRCrtcInfo* x_info = NULL;
+  B32 found_crtc = 0;
+  for (int i=0; i< props->ncrtc; ++i)
+  {
+    x_info = XRRGetCrtcInfo(x11_server, resources, props->crtcs[i]);
+    /* NOTE(mallchad): If output is set its probably means the output is using
+       this config but I'm not always be sure its *this* output usin this crtc
+       mode so this should probably be investigated later*/
+    if (x_info->noutput > 0) { found_crtc = 1; break; }
+    XRRFreeCrtcInfo(x_info);
+  }
+  if (found_crtc)
+  {
+    out_monitor->offset.x = x_info->x;
+    out_monitor->offset.y = x_info->y;
+    out_monitor->offset_mid.x = x_info->x + (x_info->width / 2);
+    out_monitor->offset_mid.y = x_info->y + (x_info->height / 2);
+    out_monitor->size_px.x = x_info->width;
+    out_monitor->size_px.y = x_info->height;
+    out_monitor->size_mid_px.x = (x_info->width / 2);
+    out_monitor->size_mid_px.y = (x_info->height / 2);
+    XRRFreeCrtcInfo(x_info);
+  }
+  else
+  { return 0; }
+  out_monitor->size_physical_mm.x = props->mm_width;
+  out_monitor->size_physical_mm.y = props->mm_height;
+  out_monitor->size_physical_mid_mm.x = (props->mm_width / 2) ;
+  out_monitor->size_physical_mid_mm.y = (props->mm_height / 2) ;
+  /* out_monitor->refresh_rate = mode->dotClock; */
+  /* out_monitor->subpixel_order = */
+  /* out_monitor->orientation; */
+  out_monitor->landscape = (out_monitor->size_px.x > out_monitor->size_px.y);
+  out_monitor->landscape_physical = (props->mm_width > props->mm_height);
+  out_monitor->physical = 1;
+
+  XRRFreeOutputInfo(props);
+  XRRFreeScreenResources(resources);
+  return 1;
+}
 
 /// Update window properties from X11
 B32
 x11_window_update_properties(GFX_LinuxWindow* out)
 {
   XWindowAttributes props = {0};
+
+  // Update base properties
   XGetWindowAttributes(x11_server, out->handle, &props);
   out->pos.x = props.x;
   out->pos.y = props.y;
@@ -29,6 +78,44 @@ x11_window_update_properties(GFX_LinuxWindow* out)
   out->size.y = props.height;
   out->border_width = props.border_width;
   out->root_relative_depth = props.depth;
+
+  // Calculate window's current monitor
+  B32 horizontal_inside;
+  B32 vertical_inside;
+
+  // Monitor Measurements
+  S32 right_extent;
+  S32 left_extent;
+  S32 up_extent;
+  S32 down_extent;
+
+  B32 found = 0;
+  XRRMonitorInfo* monitor_list = NULL;
+  S32 monitor_count = 0;
+  monitor_list = XRRGetMonitors(x11_server, x11_root_window, 1, &monitor_count);
+  XRRMonitorInfo* one_monitor = XRRGetMonitors(x11_server, out->handle, 1, &monitor_count);
+  XRRMonitorInfo x_monitor;
+  for (int i=0; i<x11_monitors_size; ++i)
+  {
+    x_monitor = monitor_list[i];
+    left_extent = x_monitor.x;
+    right_extent = (x_monitor.x + x_monitor.width);
+    up_extent = x_monitor.y;
+    down_extent = (x_monitor.y + x_monitor.height);
+    horizontal_inside = (out->pos_mid.x > left_extent) && (out->pos_mid.x < right_extent);
+    vertical_inside = (out->pos_mid.y > up_extent) && (out->pos_mid.y < down_extent);
+
+    if (horizontal_inside && vertical_inside) { found = 1; break; }
+  }
+  if (found == 0)
+  { out->monitor = NULL; }
+  else
+  {
+    // small leak
+    out->monitor = push_array(gfx_lnx_arena, GFX_LinuxMonitor, 1);
+    out->monitor->handle = x_monitor.outputs[0];
+    x11_monitor_update_properties(out->monitor);
+  }
   return 1;
 }
 
@@ -159,7 +246,7 @@ x11_get_events(Arena *arena, B32 wait, OS_EventList* out)
     x_window.handle = event.xany.window;
     x_node->window = gfx_handle_from_window(&x_window);
 
-    // TODO: Still missing wakeup event
+    // NOTE(mallchad): Don't think wakeup is relevant here
     switch (event.type)
     {
       case KeyPress:
@@ -291,19 +378,6 @@ x11_get_events(Arena *arena, B32 wait, OS_EventList* out)
   return 1;
 }
 
-
-/* NOTE(mallchad): Xrandr is the X Resize, Rotate and Reflection extension, which allows
-   for seamlessly spreading an X11 display across multiple physical monitors. It
-   does this by creating an oversized X11 display and mapping user-defined
-   regions onto the physical monitors.
-
-   An Xrandr "provider" can be best though of as a logical monitor supplier,
-   like a graphics card that makes monitors available and drawable, or a virtual
-   graphics card that pipes through a network.
-
-   An Xrandr "monitor" is a logical monitor that usually represents a physical
-   monitor and all its relevant properties.
-*/
 B32
 x11_push_monitors_array(Arena* arena, OS_HandleArray* monitor)
 {
@@ -322,10 +396,10 @@ x11_push_monitors_array(Arena* arena, OS_HandleArray* monitor)
     gfx_lnx_max_monitors = (2* x_monitor_count); // Greedy allocation to reduce leakage
     x11_monitors = push_array_no_zero(gfx_lnx_arena, RROutput, gfx_lnx_max_monitors);
   }
+  GFX_LinuxMonitor* x_monitor2 = NULL;
   for (int i=0; i<x11_monitors_size; ++i)
   {
-    /* NOTE(mallchad): This is called "outputs" but I'm not entirely convinced
-       it any more than one output. */
+    x11_monitors2 = push_array(gfx_lnx_arena, GFX_LinuxMonitor, 1);
     x11_monitors[i] = monitor_list[i].outputs[0];
   }
   // Free data
@@ -336,8 +410,13 @@ x11_push_monitors_array(Arena* arena, OS_HandleArray* monitor)
 B32
 x11_primary_monitor(OS_Handle* monitor)
 {
+  // small leak
+  GFX_LinuxMonitor* _monitor = push_array_no_zero(gfx_lnx_arena, GFX_LinuxMonitor, 1);
   S32 default_screen = XDefaultScreen(x11_server);
-  (*monitor->u64) = XRRGetOutputPrimary(x11_server, x11_root_window);
+  RROutput primary_output = XRRGetOutputPrimary(x11_server, x11_root_window);
+  _monitor->handle = primary_output;
+  x11_monitor_update_properties(_monitor);
+  *monitor = gfx_handle_from_monitor(_monitor);
   return 1;
 }
 
@@ -345,37 +424,50 @@ B32
 x11_monitor_from_window(OS_Handle window, OS_Handle* out_monitor)
 {
   GFX_LinuxWindow* _window = gfx_window_from_handle(window);
+  if (_window->monitor != NULL)
+  { *out_monitor = gfx_handle_from_monitor(_window->monitor); }
+  else
+  { return 0; }
+  return 1;
+}
+
+B32
+x11_name_from_monitor(Arena* arena, OS_Handle monitor, String8* out_name)
+{
+  GFX_LinuxMonitor* _monitor = gfx_monitor_from_handle(monitor);
+  RROutput xrandr_output = _monitor->handle;
+  XRRScreenResources* resources = XRRGetScreenResources(x11_server, x11_root_window);
+  XRROutputInfo* props = XRRGetOutputInfo(x11_server, resources, xrandr_output);
+  String8 monitor_name = str8_cstring(props->name);
+  *out_name = push_str8_copy(arena, monitor_name);
+
+  XRRFreeOutputInfo(props);
+  XRRFreeScreenResources(resources);
+  return 1;
+}
+
+B32
+x11_dim_from_monitor(OS_Handle monitor, Vec2F32* out_v2)
+{
+  GFX_LinuxMonitor* _monitor = gfx_monitor_from_handle(monitor);
+  if ( x11_monitor_update_properties(_monitor) )
+  { *out_v2 = _monitor->size_px; return 0; }
+  else
+  { return 0; }
+}
+
+B32
+x11_window_set_monitor(OS_Handle window, OS_Handle monitor)
+{
+  GFX_LinuxWindow* _window = gfx_window_from_handle(window);
+  GFX_LinuxMonitor* _monitor = gfx_monitor_from_handle(monitor);
+  F32 monitor_relative_x = (_window->pos.x - _window->monitor->offset.x  + _monitor->offset.x);
+  F32 monitor_relative_y = (_window->pos.y - _window->monitor->offset.y  + _monitor->offset.y);
+  XMoveResizeWindow(x11_server, _window->handle,
+                    monitor_relative_x,
+                    monitor_relative_y,
+                    _window->size.y,
+                    _window->size.y);
   x11_window_update_properties(_window);
-
-  B32 horizontal_inside;
-  B32 vertical_inside;
-
-  // Monitor Measurements
-  S32 right_extent;
-  S32 left_extent;
-  S32 up_extent;
-  S32 down_extent;
-
-  B32 found = 0;
-  XRRMonitorInfo* monitor_list = NULL;
-  S32 monitor_count = 0;
-  monitor_list = XRRGetMonitors(x11_server, x11_root_window, 1, &monitor_count);
-  XRRMonitorInfo x_monitor;
-  for (int i=0; i<x11_monitors_size; ++i)
-  {
-    x_monitor = monitor_list[i];
-    left_extent = x_monitor.x;
-    right_extent = (x_monitor.x + x_monitor.width);
-    up_extent = x_monitor.y;
-    down_extent = (x_monitor.y + x_monitor.height);
-    horizontal_inside = (_window->pos_mid.x > left_extent) && (_window->pos_mid.x > right_extent);
-    vertical_inside = (_window->pos_mid.y > up_extent) && (_window->pos_mid.y > down_extent);
-
-    if (horizontal_inside && vertical_inside) { found = 1; break; }
-  }
-  Assert(found);
-  if (found == 0) { return 0; }
-
-  *(out_monitor->u64) = x_monitor.outputs[0];
   return 1;
 }
