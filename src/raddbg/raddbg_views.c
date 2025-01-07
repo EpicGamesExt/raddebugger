@@ -22,8 +22,6 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(&arena, 1);
-  HS_Scope *hs_scope = hs_scope_open();
-  TXT_Scope *txt_scope = txt_scope_open();
   
   //////////////////////////////
   //- rjf: unpack state
@@ -784,8 +782,6 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
   //
   rd_store_view_scroll_pos(scroll_pos);
   
-  txt_scope_close(txt_scope);
-  hs_scope_close(hs_scope);
   scratch_end(scratch);
   ProfEnd();
   return result;
