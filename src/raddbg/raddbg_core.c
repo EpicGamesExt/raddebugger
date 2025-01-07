@@ -444,35 +444,6 @@ rd_parent_ev_key_from_entity(RD_Entity *entity)
   return parent_key;
 }
 
-//- rjf: entity -> evaluation
-
-internal RD_EntityEval *
-rd_eval_from_entity(Arena *arena, RD_Entity *entity)
-{
-  RD_EntityEval *eval = push_array(arena, RD_EntityEval, 1);
-  {
-    RD_Entity *loc = rd_entity_child_from_kind(entity, RD_EntityKind_Location);
-    RD_Entity *cnd = rd_entity_child_from_kind(entity, RD_EntityKind_Condition);
-    String8 label_string = push_str8_copy(arena, entity->string);
-    String8 loc_string = {0};
-    if(loc->flags & RD_EntityFlag_HasTextPoint)
-    {
-      loc_string = push_str8f(arena, "%S:%I64u:%I64u", loc->string, loc->text_point.line, loc->text_point.column);
-    }
-    else if(loc->flags & RD_EntityFlag_HasVAddr)
-    {
-      loc_string = push_str8f(arena, "0x%I64x", loc->vaddr);
-    }
-    String8 cnd_string = push_str8_copy(arena, cnd->string);
-    eval->enabled      = !entity->disabled;
-    eval->hit_count    = entity->u64;
-    eval->label_off    = (U64)((U8 *)label_string.str - (U8 *)eval);
-    eval->location_off = (U64)((U8 *)loc_string.str - (U8 *)eval);
-    eval->condition_off= (U64)((U8 *)cnd_string.str - (U8 *)eval);
-  }
-  return eval;
-}
-
 ////////////////////////////////
 //~ rjf: View Type Functions
 
@@ -1363,14 +1334,6 @@ rd_entity_equip_txt_pt(RD_Entity *entity, TxtPt point)
 }
 
 internal void
-rd_entity_equip_entity_handle(RD_Entity *entity, RD_Handle handle)
-{
-  rd_require_entity_nonnil(entity, return);
-  entity->entity_handle = handle;
-  entity->flags |= RD_EntityFlag_HasEntityHandle;
-}
-
-internal void
 rd_entity_equip_disabled(RD_Entity *entity, B32 value)
 {
   rd_require_entity_nonnil(entity, return);
@@ -1418,46 +1381,6 @@ rd_entity_equip_timestamp(RD_Entity *entity, U64 timestamp)
 }
 
 //- rjf: control layer correllation equipment
-
-internal void
-rd_entity_equip_ctrl_handle(RD_Entity *entity, CTRL_Handle handle)
-{
-  rd_require_entity_nonnil(entity, return);
-  entity->ctrl_handle = handle;
-  entity->flags |= RD_EntityFlag_HasCtrlHandle;
-}
-
-internal void
-rd_entity_equip_arch(RD_Entity *entity, Arch arch)
-{
-  rd_require_entity_nonnil(entity, return);
-  entity->arch = arch;
-  entity->flags |= RD_EntityFlag_HasArch;
-}
-
-internal void
-rd_entity_equip_ctrl_id(RD_Entity *entity, U32 id)
-{
-  rd_require_entity_nonnil(entity, return);
-  entity->ctrl_id = id;
-  entity->flags |= RD_EntityFlag_HasCtrlID;
-}
-
-internal void
-rd_entity_equip_stack_base(RD_Entity *entity, U64 stack_base)
-{
-  rd_require_entity_nonnil(entity, return);
-  entity->stack_base = stack_base;
-  entity->flags |= RD_EntityFlag_HasStackBase;
-}
-
-internal void
-rd_entity_equip_vaddr_rng(RD_Entity *entity, Rng1U64 range)
-{
-  rd_require_entity_nonnil(entity, return);
-  entity->vaddr_rng = range;
-  entity->flags |= RD_EntityFlag_HasVAddrRng;
-}
 
 internal void
 rd_entity_equip_vaddr(RD_Entity *entity, U64 vaddr)
@@ -15232,10 +15155,9 @@ rd_frame(void)
                 if(src_n->flags & RD_EntityFlag_HasTextPoint)    {rd_entity_equip_txt_pt(dst_n, src_n->text_point);}
                 if(src_n->flags & RD_EntityFlag_HasU64)          {rd_entity_equip_u64(dst_n, src_n->u64);}
                 if(src_n->flags & RD_EntityFlag_HasColor)        {rd_entity_equip_color_hsva(dst_n, rd_hsva_from_entity(src_n));}
-                if(src_n->flags & RD_EntityFlag_HasVAddrRng)     {rd_entity_equip_vaddr_rng(dst_n, src_n->vaddr_rng);}
                 if(src_n->flags & RD_EntityFlag_HasVAddr)        {rd_entity_equip_vaddr(dst_n, src_n->vaddr);}
-                if(src_n->disabled)                             {rd_entity_equip_disabled(dst_n, 1);}
-                if(src_n->string.size != 0)                     {rd_entity_equip_name(dst_n, src_n->string);}
+                if(src_n->disabled)                              {rd_entity_equip_disabled(dst_n, 1);}
+                if(src_n->string.size != 0)                      {rd_entity_equip_name(dst_n, src_n->string);}
                 dst_n->cfg_src = src_n->cfg_src;
                 for(RD_Entity *src_child = task->src_n->first; !rd_entity_is_nil(src_child); src_child = src_child->next)
                 {

@@ -1689,23 +1689,6 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
             log_user_error(str8_zero());
           }
           
-          // rjf: kill all entities which are marked to die on stop
-          {
-            RD_Entity *request = rd_entity_from_id(event->msg_id);
-            if(rd_entity_is_nil(request))
-            {
-              for(RD_Entity *entity = rd_entity_root();
-                  !rd_entity_is_nil(entity);
-                  entity = rd_entity_rec_depth_first_pre(entity, rd_entity_root()).next)
-              {
-                if(entity->flags & RD_EntityFlag_DiesOnRunStop)
-                {
-                  rd_entity_mark_for_deletion(entity);
-                }
-              }
-            }
-          }
-          
           // rjf: gather stop info
           {
             arena_clear(d_state->ctrl_stop_arena);
