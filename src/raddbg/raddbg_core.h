@@ -1006,9 +1006,6 @@ internal RD_EntityRec rd_entity_rec_depth_first(RD_Entity *entity, RD_Entity *su
 
 //- rjf: ancestor/child introspection
 internal RD_Entity *rd_entity_child_from_kind(RD_Entity *entity, RD_EntityKind kind);
-internal RD_Entity *rd_entity_ancestor_from_kind(RD_Entity *entity, RD_EntityKind kind);
-internal RD_EntityList rd_push_entity_child_list_with_kind(Arena *arena, RD_Entity *entity, RD_EntityKind kind);
-internal RD_Entity *rd_entity_child_from_string_and_kind(RD_Entity *parent, String8 string, RD_EntityKind kind);
 
 //- rjf: entity list building
 internal void rd_entity_list_push(Arena *arena, RD_EntityList *list, RD_Entity *entity);

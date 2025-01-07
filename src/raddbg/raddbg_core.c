@@ -246,50 +246,6 @@ rd_entity_child_from_kind(RD_Entity *entity, RD_EntityKind kind)
   return result;
 }
 
-internal RD_Entity *
-rd_entity_ancestor_from_kind(RD_Entity *entity, RD_EntityKind kind)
-{
-  RD_Entity *result = &rd_nil_entity;
-  for(RD_Entity *p = entity->parent; !rd_entity_is_nil(p); p = p->parent)
-  {
-    if(p->kind == kind)
-    {
-      result = p;
-      break;
-    }
-  }
-  return result;
-}
-
-internal RD_EntityList
-rd_push_entity_child_list_with_kind(Arena *arena, RD_Entity *entity, RD_EntityKind kind)
-{
-  RD_EntityList result = {0};
-  for(RD_Entity *child = entity->first; !rd_entity_is_nil(child); child = child->next)
-  {
-    if(child->kind == kind)
-    {
-      rd_entity_list_push(arena, &result, child);
-    }
-  }
-  return result;
-}
-
-internal RD_Entity *
-rd_entity_child_from_string_and_kind(RD_Entity *parent, String8 string, RD_EntityKind kind)
-{
-  RD_Entity *result = &rd_nil_entity;
-  for(RD_Entity *child = parent->first; !rd_entity_is_nil(child); child = child->next)
-  {
-    if(str8_match(child->string, string, 0) && child->kind == kind)
-    {
-      result = child;
-      break;
-    }
-  }
-  return result;
-}
-
 //- rjf: entity list building
 
 internal void
