@@ -5331,7 +5331,7 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
         if(spoof_mode &&
            dmn_handle_match(target_process.dmn_handle, event->process) &&
            dmn_handle_match(target_thread.dmn_handle, event->thread) &&
-           spoof.new_ip_value == event->instruction_pointer)
+           spoof.new_ip_value == event->address)
         {
           hit_spoof = 1;
           log_infof("hit_spoof\n");

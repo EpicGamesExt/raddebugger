@@ -10933,6 +10933,7 @@ rd_stop_explanation_fstrs_from_ctrl_event(Arena *arena, CTRL_Event *event)
       if(thread != &ctrl_entity_nil)
       {
         dr_fancy_string_list_push_new(arena, &fstrs, rd_font_from_slot(RD_FontSlot_Icons), ui_top_font_size(), ui_top_palette()->text, rd_icon_kind_text_table[RD_IconKind_CircleFilled]);
+        dr_fancy_string_list_push_new(arena, &fstrs, ui_top_font(), ui_top_font_size(), ui_top_palette()->text, str8_lit("  "));
         dr_fancy_string_list_concat_in_place(&fstrs, &thread_fstrs);
         dr_fancy_string_list_push_new(arena, &fstrs, ui_top_font(), ui_top_font_size(), ui_top_palette()->text, str8_lit(" hit a breakpoint"));
       }
@@ -10948,6 +10949,7 @@ rd_stop_explanation_fstrs_from_ctrl_event(Arena *arena, CTRL_Event *event)
         {
           default:
           {
+            dr_fancy_string_list_push_new(arena, &fstrs, ui_top_font(), ui_top_font_size(), ui_top_palette()->text, str8_lit("  "));
             dr_fancy_string_list_concat_in_place(&fstrs, &thread_fstrs);
             dr_fancy_string_list_push_new(arena, &fstrs, ui_top_font(), ui_top_font_size(), ui_top_palette()->text, str8_lit(" hit an exception - "));
             String8 exception_code_string = str8_from_u64(arena, event->exception_code, 16, 0, 0);
@@ -10961,6 +10963,7 @@ rd_stop_explanation_fstrs_from_ctrl_event(Arena *arena, CTRL_Event *event)
           }break;
           case CTRL_ExceptionKind_CppThrow:
           {
+            dr_fancy_string_list_push_new(arena, &fstrs, ui_top_font(), ui_top_font_size(), ui_top_palette()->text, str8_lit("  "));
             dr_fancy_string_list_concat_in_place(&fstrs, &thread_fstrs);
             dr_fancy_string_list_push_new(arena, &fstrs, ui_top_font(), ui_top_font_size(), ui_top_palette()->text, str8_lit(" hit a C++ exception - "));
             String8 exception_code_string = str8_from_u64(arena, event->exception_code, 16, 0, 0);
@@ -10968,6 +10971,7 @@ rd_stop_explanation_fstrs_from_ctrl_event(Arena *arena, CTRL_Event *event)
           }break;
           case CTRL_ExceptionKind_MemoryRead:
           {
+            dr_fancy_string_list_push_new(arena, &fstrs, ui_top_font(), ui_top_font_size(), ui_top_palette()->text, str8_lit("  "));
             dr_fancy_string_list_concat_in_place(&fstrs, &thread_fstrs);
             dr_fancy_string_list_push_new(arena, &fstrs, ui_top_font(), ui_top_font_size(), ui_top_palette()->text, str8_lit(" hit an exception - "));
             String8 exception_code_string = str8_from_u64(arena, event->exception_code, 16, 0, 0);
@@ -10976,6 +10980,7 @@ rd_stop_explanation_fstrs_from_ctrl_event(Arena *arena, CTRL_Event *event)
           }break;
           case CTRL_ExceptionKind_MemoryWrite:
           {
+            dr_fancy_string_list_push_new(arena, &fstrs, ui_top_font(), ui_top_font_size(), ui_top_palette()->text, str8_lit("  "));
             dr_fancy_string_list_concat_in_place(&fstrs, &thread_fstrs);
             dr_fancy_string_list_push_new(arena, &fstrs, ui_top_font(), ui_top_font_size(), ui_top_palette()->text, str8_lit(" hit an exception - "));
             String8 exception_code_string = str8_from_u64(arena, event->exception_code, 16, 0, 0);
@@ -10984,6 +10989,7 @@ rd_stop_explanation_fstrs_from_ctrl_event(Arena *arena, CTRL_Event *event)
           }break;
           case CTRL_ExceptionKind_MemoryExecute:
           {
+            dr_fancy_string_list_push_new(arena, &fstrs, ui_top_font(), ui_top_font_size(), ui_top_palette()->text, str8_lit("  "));
             dr_fancy_string_list_concat_in_place(&fstrs, &thread_fstrs);
             dr_fancy_string_list_push_new(arena, &fstrs, ui_top_font(), ui_top_font_size(), ui_top_palette()->text, str8_lit(" hit an exception - "));
             String8 exception_code_string = str8_from_u64(arena, event->exception_code, 16, 0, 0);
@@ -11011,6 +11017,7 @@ rd_stop_explanation_fstrs_from_ctrl_event(Arena *arena, CTRL_Event *event)
     case CTRL_EventCause_InterruptedByTrap:
     {
       dr_fancy_string_list_push_new(arena, &fstrs, rd_font_from_slot(RD_FontSlot_Icons), ui_top_font_size(), ui_top_palette()->text, rd_icon_kind_text_table[RD_IconKind_WarningBig]);
+      dr_fancy_string_list_push_new(arena, &fstrs, ui_top_font(), ui_top_font_size(), ui_top_palette()->text, str8_lit("  "));
       dr_fancy_string_list_concat_in_place(&fstrs, &thread_fstrs);
       dr_fancy_string_list_push_new(arena, &fstrs, ui_top_font(), ui_top_font_size(), ui_top_palette()->text, str8_lit(" hit a trap"));
     }break;
