@@ -271,72 +271,6 @@ rd_entity_array_from_list(Arena *arena, RD_EntityList *list)
   return result;
 }
 
-//- rjf: display string entities, for referencing entities in ui
-
-internal String8
-rd_display_string_from_entity(Arena *arena, RD_Entity *entity)
-{
-  String8 result = {0};
-  switch(entity->kind)
-  {
-    default:
-    {
-      if(entity->string.size != 0)
-      {
-        result = push_str8_copy(arena, entity->string);
-      }
-      else
-      {
-        String8 kind_string = d_entity_kind_display_string_table[entity->kind];
-        result = push_str8f(arena, "%S $%I64u", kind_string, entity->id);
-      }
-    }break;
-    
-    case RD_EntityKind_Target:
-    {
-      if(entity->string.size != 0)
-      {
-        result = push_str8_copy(arena, entity->string);
-      }
-      else
-      {
-        RD_Entity *exe = rd_entity_child_from_kind(entity, RD_EntityKind_Executable);
-        result = push_str8_copy(arena, exe->string);
-      }
-    }break;
-    
-    case RD_EntityKind_Breakpoint:
-    {
-      if(entity->string.size != 0)
-      {
-        result = push_str8_copy(arena, entity->string);
-      }
-      else
-      {
-        RD_Entity *loc = rd_entity_child_from_kind(entity, RD_EntityKind_Location);
-        if(loc->flags & RD_EntityFlag_HasTextPoint)
-        {
-          result = push_str8f(arena, "%S:%I64d:%I64d", str8_skip_last_slash(loc->string), loc->text_point.line, loc->text_point.column);
-        }
-        else if(loc->flags & RD_EntityFlag_HasVAddr)
-        {
-          result = str8_from_u64(arena, loc->vaddr, 16, 16, 0);
-        }
-        else if(loc->string.size != 0)
-        {
-          result = push_str8_copy(arena, loc->string);
-        }
-      }
-    }break;
-    
-    case RD_EntityKind_RecentProject:
-    {
-      result = push_str8_copy(arena, str8_skip_last_slash(entity->string));
-    }break;
-  }
-  return result;
-}
-
 //- rjf: entity -> color operations
 
 internal Vec4F32
@@ -1209,10 +1143,8 @@ rd_entity_release(RD_Entity *entity)
     }
     LogInfoNamedBlockF("end_entity")
     {
-      String8 name = rd_display_string_from_entity(scratch.arena, task->e);
       log_infof("kind: \"%S\"\n", d_entity_kind_display_string_table[task->e->kind]);
       log_infof("id: $0x%I64x\n", task->e->id);
-      log_infof("display_string: \"%S\"\n", name);
     }
     SLLStackPush(rd_state->entities_free[free_list_idx], task->e);
     rd_state->entities_free_count += 1;
@@ -5544,8 +5476,9 @@ rd_window_frame(RD_Window *ws)
                   ui_labelf("Launch all active targets:");
                   for(RD_EntityNode *n = targets.first; n != 0; n = n->next)
                   {
-                    String8 target_display_name = rd_display_string_from_entity(scratch.arena, n->entity);
-                    ui_label(target_display_name);
+                    DR_FancyStringList title_fstrs = rd_title_fstrs_from_entity(ui_build_arena(), n->entity, ui_top_palette()->text_weak, ui_top_font_size());
+                    UI_Box *box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
+                    ui_box_equip_display_fancy_strings(box, &title_fstrs);
                   }
                 }
               }

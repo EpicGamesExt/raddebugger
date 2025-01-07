@@ -1012,9 +1012,6 @@ internal void rd_entity_list_push(Arena *arena, RD_EntityList *list, RD_Entity *
 internal RD_EntityArray rd_entity_array_from_list(Arena *arena, RD_EntityList *list);
 #define rd_first_entity_from_list(list) ((list)->first != 0 ? (list)->first->entity : &rd_nil_entity)
 
-//- rjf: display string entities, for referencing entities in ui
-internal String8 rd_display_string_from_entity(Arena *arena, RD_Entity *entity);
-
 //- rjf: entity -> color operations
 internal Vec4F32 rd_hsva_from_entity(RD_Entity *entity);
 internal Vec4F32 rd_rgba_from_entity(RD_Entity *entity);
