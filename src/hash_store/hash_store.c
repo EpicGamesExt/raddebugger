@@ -4,17 +4,18 @@
 ////////////////////////////////
 //~ rjf: Basic Helpers
 
-#if !defined(BLAKE2_H)
-#define HAVE_SSE2
-#include "third_party/blake2/blake2.h"
-#include "third_party/blake2/blake2b.c"
+#if !defined(XXH_IMPLEMENTATION)
+# define XXH_IMPLEMENTATION
+# define XXH_STATIC_LINKING_ONLY
+# include "third_party/xxHash/xxhash.h"
 #endif
 
 internal U128
 hs_hash_from_data(String8 data)
 {
   U128 u128 = {0};
-  blake2b((U8 *)&u128.u64[0], sizeof(u128), data.str, data.size, 0, 0);
+  XXH128_hash_t hash = XXH3_128bits(data.str, data.size);
+  MemoryCopy(&u128, &hash, sizeof(u128));
   return u128;
 }
 

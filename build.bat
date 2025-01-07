@@ -106,7 +106,7 @@ if not "%no_meta%"=="1" (
 :: --- Build Everything (@build_targets) --------------------------------------
 pushd build
 if "%raddbg%"=="1"                     set didbuild=1 && %compile% ..\src\raddbg\raddbg_main.c                               %compile_link% %link_icon% %out%raddbg.exe || exit /b 1
-if "%radlink%"=="1"                    set didbuild=1 && %compile%  ..\src\linker\lnk.c                                      %compile_link% %link_natvis%"%~dp0\src\linker\linker.natvis" %out%radlink.exe || exit /b 1
+if "%radlink%"=="1"                    set didbuild=1 && %compile% ..\src\linker\lnk.c                                       %compile_link% %link_natvis%"%~dp0\src\linker\linker.natvis" %out%radlink.exe || exit /b 1
 if "%rdi_from_pdb%"=="1"               set didbuild=1 && %compile% ..\src\rdi_from_pdb\rdi_from_pdb_main.c                   %compile_link% %out%rdi_from_pdb.exe || exit /b 1
 if "%rdi_from_dwarf%"=="1"             set didbuild=1 && %compile% ..\src\rdi_from_dwarf\rdi_from_dwarf.c                    %compile_link% %out%rdi_from_dwarf.exe || exit /b 1
 if "%rdi_dump%"=="1"                   set didbuild=1 && %compile% ..\src\rdi_dump\rdi_dump_main.c                           %compile_link% %out%rdi_dump.exe || exit /b 1
@@ -115,8 +115,9 @@ if "%tester%"=="1"                     set didbuild=1 && %compile% ..\src\tester
 if "%ryan_scratch%"=="1"               set didbuild=1 && %compile% ..\src\scratch\ryan_scratch.c                             %compile_link% %out%ryan_scratch.exe || exit /b 1
 if "%textperf%"=="1"                   set didbuild=1 && %compile% ..\src\scratch\textperf.c                                 %compile_link% %out%textperf.exe || exit /b 1
 if "%convertperf%"=="1"                set didbuild=1 && %compile% ..\src\scratch\convertperf.c                              %compile_link% %out%convertperf.exe || exit /b 1
+if "%debugstringperf%"=="1"            set didbuild=1 && %compile% ..\src\scratch\debugstringperf.c                          %compile_link% %out%debugstringperf.exe || exit /b 1
 if "%parse_inline_sites%"=="1"         set didbuild=1 && %compile% ..\src\scratch\parse_inline_sites.c                       %compile_link% %out%parse_inline_sites.exe || exit /b 1
-if "%coffdump%"=="1"                    set didbuild=1 && %compile% ..\src\dumpers\coffdump.c                                 %compile_link% %out%coffdump.exe || exit /b 1 
+if "%coffdump%"=="1"                   set didbuild=1 && %compile% ..\src\dumpers\coffdump.c                                 %compile_link% %out%coffdump.exe || exit /b 1 
 if "%mule_main%"=="1"                  set didbuild=1 && del vc*.pdb mule*.pdb && %compile_release% %only_compile% ..\src\mule\mule_inline.cpp && %compile_release% %only_compile% ..\src\mule\mule_o2.cpp && %compile_debug% %EHsc% ..\src\mule\mule_main.cpp ..\src\mule\mule_c.c mule_inline.obj mule_o2.obj %compile_link% %no_aslr% %out%mule_main.exe || exit /b 1
 if "%mule_module%"=="1"                set didbuild=1 && %compile% ..\src\mule\mule_module.cpp                               %compile_link% %link_dll% %out%mule_module.dll || exit /b 1
 if "%mule_hotload%"=="1"               set didbuild=1 && %compile% ..\src\mule\mule_hotload_main.c %compile_link% %out%mule_hotload.exe & %compile% ..\src\mule\mule_hotload_module_main.c %compile_link% %link_dll% %out%mule_hotload_module.dll || exit /b 1

@@ -1581,10 +1581,10 @@ d_next_cmd(D_Cmd **cmd)
 ////////////////////////////////
 //~ rjf: Main Layer Top-Level Calls
 
-#if !defined(BLAKE2_H)
-#define HAVE_SSE2
-#include "third_party/blake2/blake2.h"
-#include "third_party/blake2/blake2b.c"
+#if !defined(XXH_IMPLEMENTATION)
+# define XXH_IMPLEMENTATION
+# define XXH_STATIC_LINKING_ONLY
+# include "third_party/xxHash/xxhash.h"
 #endif
 
 internal void
@@ -1856,7 +1856,8 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
     
     // rjf: join & hash to produce result
     String8 string = str8_list_join(scratch.arena, &strings, 0);
-    blake2b((U8 *)&ctrl_param_state_hash.u64[0], sizeof(ctrl_param_state_hash), string.str, string.size, 0, 0);
+    XXH128_hash_t hash = XXH3_128bits(string.str, string.size);
+    MemoryCopy(&ctrl_param_state_hash, &hash, sizeof(ctrl_param_state_hash));
   }
   
   //////////////////////////////

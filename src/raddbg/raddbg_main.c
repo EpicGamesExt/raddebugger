@@ -6,9 +6,11 @@
 //
 // [ ] breakpoints in optimized code? maybe early-terminating bp resolution loop? @bpmiss
 //      - actually this seems to be potentially because of incomplete src-line-map info...
-// [ ] CLI argument over-mangling?
-// [ ] OutputDebugString spam, keeping way too much around!
 // [ ] Mohit-reported breakpoint not hitting - may be similar thing to @bpmiss
+//
+// [ ] CLI argument over-mangling?
+//
+// [ ] OutputDebugString spam, keeping way too much around!
 //
 // [ ] fix light themes
 // [ ] make `array` view rule work with actual array types, to change their
@@ -92,14 +94,12 @@
 //  [ ] max view rule
 //  [ ] min view rule
 //
-// [ ] filesystem drag/drop support
 // [ ] double-click vs. single-click for folder navigation, see if we can infer
-// [ ] use backslashes on windows by default, forward slashes elsewhere
+// [ ] use backslashes on windows by default, forward slashes elsewhere (?)
 //
 // [ ] investigate /DEBUG:FASTLINK - can we somehow alert that we do not
 //     support it?
 //
-// [ ] ** Converter performance & heuristics for asynchronously doing it early
 //
 // [ ] visualize conversion failures
 //
@@ -174,12 +174,6 @@
 //  [ ]  default font size is too small for me - not only source code, but
 //       menus/tab/watch names (which don't resize). Maybe you could query
 //       Windows for initial font size?
-//  [ ]  icon fonts glyphs sometimes disappear for specific font size, but they
-//       reappear if you go +1 higher or -1 lower. Mostly red triangle in watch
-//       values for "unknown identifier". But also yellow arrow in call stack
-//       disappears if font size gets too large.
-//  [ ]  undo close tab would be nice. If not for everything, then at least
-//       just for source files
 // [ ] Jump table thunks, on code w/o /INCREMENTAL:NO
 
 ////////////////////////////////
@@ -202,6 +196,8 @@
 //
 // [ ] undo/redo
 // [ ] proper "go back" + "go forward" history navigations
+//  [ ]  undo close tab would be nice. If not for everything, then at least
+//       just for source files
 //
 // [ ] globally disable/configure default view rule-like things (string
 //     viz for u8s in particular)
@@ -219,7 +215,6 @@
 //     table headers, etc.)
 // [ ] @cleanup straighten out index/number space & types & terminology for
 //     scroll lists
-// [ ] @cleanup central worker thread pool - eliminate per-layer thread pools
 // [ ] @cleanup eliminate explicit font parameters in the various ui paths (e.g.
 //     code slice params)
 
@@ -276,6 +271,13 @@
 ////////////////////////////////
 //~ rjf: Recently Completed Task Log
 //
+// [x] filesystem drag/drop support
+// [x] ** Converter performance & heuristics for asynchronously doing it early
+//  [x]  icon fonts glyphs sometimes disappear for specific font size, but they
+//       reappear if you go +1 higher or -1 lower. Mostly red triangle in watch
+//       values for "unknown identifier". But also yellow arrow in call stack
+//       disappears if font size gets too large.
+// [x] @cleanup central worker thread pool - eliminate per-layer thread pools
 
 ////////////////////////////////
 //~ rjf: Build Options
