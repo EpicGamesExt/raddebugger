@@ -206,18 +206,6 @@ rd_entity_from_handle(RD_Handle handle)
   return result;
 }
 
-internal RD_HandleList
-rd_handle_list_from_entity_list(Arena *arena, RD_EntityList entities)
-{
-  RD_HandleList result = {0};
-  for(RD_EntityNode *n = entities.first; n != 0; n = n->next)
-  {
-    RD_Handle handle = rd_handle_from_entity(n->entity);
-    rd_handle_list_push(arena, &result, handle);
-  }
-  return result;
-}
-
 //- rjf: entity recursion iterators
 
 internal RD_EntityRec
@@ -6889,34 +6877,33 @@ rd_window_frame(RD_Window *ws)
     ////////////////////////////
     //- rjf: animate panels
     //
-    // TODO(rjf): @hack investigate why we were ever animating to a busted
-    // rectangle when minimized...
-    //
-    if(!os_window_is_minimized(ws->os))
     {
       F32 rate = rd_setting_val_from_code(RD_SettingCode_MenuAnimations).s32 ? 1 - pow_f32(2, (-50.f * rd_state->frame_dt)) : 1.f;
       Vec2F32 content_rect_dim = dim_2f32(content_rect);
-      for(RD_Panel *panel = ws->root_panel; !rd_panel_is_nil(panel); panel = rd_panel_rec_depth_first_pre(panel).next)
+      if(content_rect_dim.x > 0 && content_rect_dim.y > 0)
       {
-        Rng2F32 target_rect_px = rd_target_rect_from_panel(content_rect, ws->root_panel, panel);
-        Rng2F32 target_rect_pct = r2f32p(target_rect_px.x0/content_rect_dim.x,
-                                         target_rect_px.y0/content_rect_dim.y,
-                                         target_rect_px.x1/content_rect_dim.x,
-                                         target_rect_px.y1/content_rect_dim.y);
-        if(abs_f32(target_rect_pct.x0 - panel->animated_rect_pct.x0) > 0.005f ||
-           abs_f32(target_rect_pct.y0 - panel->animated_rect_pct.y0) > 0.005f ||
-           abs_f32(target_rect_pct.x1 - panel->animated_rect_pct.x1) > 0.005f ||
-           abs_f32(target_rect_pct.y1 - panel->animated_rect_pct.y1) > 0.005f)
+        for(RD_Panel *panel = ws->root_panel; !rd_panel_is_nil(panel); panel = rd_panel_rec_depth_first_pre(panel).next)
         {
-          rd_request_frame();
-        }
-        panel->animated_rect_pct.x0 += rate * (target_rect_pct.x0 - panel->animated_rect_pct.x0);
-        panel->animated_rect_pct.y0 += rate * (target_rect_pct.y0 - panel->animated_rect_pct.y0);
-        panel->animated_rect_pct.x1 += rate * (target_rect_pct.x1 - panel->animated_rect_pct.x1);
-        panel->animated_rect_pct.y1 += rate * (target_rect_pct.y1 - panel->animated_rect_pct.y1);
-        if(ws->frames_alive < 5 || is_changing_panel_boundaries)
-        {
-          panel->animated_rect_pct = target_rect_pct;
+          Rng2F32 target_rect_px = rd_target_rect_from_panel(content_rect, ws->root_panel, panel);
+          Rng2F32 target_rect_pct = r2f32p(target_rect_px.x0/content_rect_dim.x,
+                                           target_rect_px.y0/content_rect_dim.y,
+                                           target_rect_px.x1/content_rect_dim.x,
+                                           target_rect_px.y1/content_rect_dim.y);
+          if(abs_f32(target_rect_pct.x0 - panel->animated_rect_pct.x0) > 0.005f ||
+             abs_f32(target_rect_pct.y0 - panel->animated_rect_pct.y0) > 0.005f ||
+             abs_f32(target_rect_pct.x1 - panel->animated_rect_pct.x1) > 0.005f ||
+             abs_f32(target_rect_pct.y1 - panel->animated_rect_pct.y1) > 0.005f)
+          {
+            rd_request_frame();
+          }
+          panel->animated_rect_pct.x0 += rate * (target_rect_pct.x0 - panel->animated_rect_pct.x0);
+          panel->animated_rect_pct.y0 += rate * (target_rect_pct.y0 - panel->animated_rect_pct.y0);
+          panel->animated_rect_pct.x1 += rate * (target_rect_pct.x1 - panel->animated_rect_pct.x1);
+          panel->animated_rect_pct.y1 += rate * (target_rect_pct.y1 - panel->animated_rect_pct.y1);
+          if(ws->frames_alive < 5 || is_changing_panel_boundaries)
+          {
+            panel->animated_rect_pct = target_rect_pct;
+          }
         }
       }
     }

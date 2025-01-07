@@ -998,7 +998,6 @@ internal B32 rd_entity_is_nil(RD_Entity *entity);
 internal U64 rd_index_from_entity(RD_Entity *entity);
 internal RD_Handle rd_handle_from_entity(RD_Entity *entity);
 internal RD_Entity *rd_entity_from_handle(RD_Handle handle);
-internal RD_HandleList rd_handle_list_from_entity_list(Arena *arena, RD_EntityList entities);
 
 //- rjf: entity recursion iterators
 internal RD_EntityRec rd_entity_rec_depth_first(RD_Entity *entity, RD_Entity *subtree_root, U64 sib_off, U64 child_off);
