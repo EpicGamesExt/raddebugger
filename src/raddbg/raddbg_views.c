@@ -872,7 +872,7 @@ rd_watch_view_row_info_from_row(EV_Row *row)
     }
     
     // rjf: extract frontend entity, if any
-    RD_Entity *entity = &d_nil_entity;
+    RD_Entity *entity = &rd_nil_entity;
     if(collection_entity_kind != RD_EntityKind_Nil)
     {
       entity = rd_entity_from_id(key.child_id);
@@ -2106,8 +2106,8 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
           }
           
           // rjf: map selection endpoints to entities
-          RD_Entity *first_entity = &d_nil_entity;
-          RD_Entity *last_entity = &d_nil_entity;
+          RD_Entity *first_entity = &rd_nil_entity;
+          RD_Entity *last_entity = &rd_nil_entity;
           if(collection_entity_kind != RD_EntityKind_Nil)
           {
             first_entity = rd_entity_from_id(selection_keys_in_block[0].child_id);
@@ -2117,8 +2117,8 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
           // rjf: reorder
           if(!rd_entity_is_nil(first_entity) && !rd_entity_is_nil(last_entity))
           {
-            RD_Entity *first_entity_prev = &d_nil_entity;
-            RD_Entity *last_entity_next  = &d_nil_entity;
+            RD_Entity *first_entity_prev = &rd_nil_entity;
+            RD_Entity *last_entity_next  = &rd_nil_entity;
             for(RD_Entity *prev = first_entity->prev; !rd_entity_is_nil(prev); prev = prev->prev)
             {
               if(prev->kind == collection_entity_kind)

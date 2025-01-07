@@ -1384,7 +1384,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   UI_Signal catchall_margin_container_sig = ui_signal_from_box(catchall_margin_container_box);
   UI_Signal text_container_sig = ui_signal_from_box(text_container_box);
   B32 line_drag_drop = 0;
-  RD_Entity *line_drag_entity = &d_nil_entity;
+  RD_Entity *line_drag_entity = &rd_nil_entity;
   CTRL_Entity *line_drag_ctrl_entity = &ctrl_entity_nil;
   Vec4F32 line_drag_drop_color = rd_rgba_from_theme_color(RD_ThemeColor_DropSiteOverlay);
   {

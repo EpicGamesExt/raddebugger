@@ -410,10 +410,6 @@ struct RD_Entity
   
   // rjf: string equipment
   String8 string;
-  
-  // rjf: parameter tree
-  Arena *params_arena;
-  MD_Node *params_root;
 };
 
 typedef struct RD_EntityNode RD_EntityNode;
@@ -918,13 +914,13 @@ struct RD_State
 read_only global RD_CfgTree d_nil_cfg_tree = {&d_nil_cfg_tree, RD_CfgSrc_User, &md_nil_node};
 read_only global RD_CfgVal d_nil_cfg_val = {&d_nil_cfg_val, &d_nil_cfg_val, &d_nil_cfg_tree, &d_nil_cfg_tree};
 
-read_only global RD_Entity d_nil_entity =
+read_only global RD_Entity rd_nil_entity =
 {
-  &d_nil_entity,
-  &d_nil_entity,
-  &d_nil_entity,
-  &d_nil_entity,
-  &d_nil_entity,
+  &rd_nil_entity,
+  &rd_nil_entity,
+  &rd_nil_entity,
+  &rd_nil_entity,
+  &rd_nil_entity,
 };
 
 read_only global RD_CmdKindInfo rd_nil_cmd_kind_info = {0};
@@ -1018,7 +1014,7 @@ internal RD_Entity *rd_entity_child_from_string_and_kind(RD_Entity *parent, Stri
 //- rjf: entity list building
 internal void rd_entity_list_push(Arena *arena, RD_EntityList *list, RD_Entity *entity);
 internal RD_EntityArray rd_entity_array_from_list(Arena *arena, RD_EntityList *list);
-#define rd_first_entity_from_list(list) ((list)->first != 0 ? (list)->first->entity : &d_nil_entity)
+#define rd_first_entity_from_list(list) ((list)->first != 0 ? (list)->first->entity : &rd_nil_entity)
 
 //- rjf: display string entities, for referencing entities in ui
 internal String8 rd_display_string_from_entity(Arena *arena, RD_Entity *entity);

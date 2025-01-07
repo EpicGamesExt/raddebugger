@@ -172,7 +172,7 @@ rd_cmd_list_push_new(Arena *arena, RD_CmdList *cmds, String8 name, RD_Regs *regs
 internal B32
 rd_entity_is_nil(RD_Entity *entity)
 {
-  return (entity == 0 || entity == &d_nil_entity);
+  return (entity == 0 || entity == &rd_nil_entity);
 }
 
 //- rjf: handle <-> entity conversions
@@ -201,7 +201,7 @@ rd_entity_from_handle(RD_Handle handle)
   RD_Entity *result = rd_state->entities_base + handle.u64[0];
   if(handle.u64[0] >= rd_state->entities_count || result->gen != handle.u64[1])
   {
-    result = &d_nil_entity;
+    result = &rd_nil_entity;
   }
   return result;
 }
@@ -246,7 +246,7 @@ rd_entity_rec_depth_first(RD_Entity *entity, RD_Entity *subtree_root, U64 sib_of
 internal RD_Entity *
 rd_entity_child_from_kind(RD_Entity *entity, RD_EntityKind kind)
 {
-  RD_Entity *result = &d_nil_entity;
+  RD_Entity *result = &rd_nil_entity;
   for(RD_Entity *child = entity->first; !rd_entity_is_nil(child); child = child->next)
   {
     if(!(child->flags & RD_EntityFlag_MarkedForDeletion) && child->kind == kind)
@@ -261,7 +261,7 @@ rd_entity_child_from_kind(RD_Entity *entity, RD_EntityKind kind)
 internal RD_Entity *
 rd_entity_ancestor_from_kind(RD_Entity *entity, RD_EntityKind kind)
 {
-  RD_Entity *result = &d_nil_entity;
+  RD_Entity *result = &rd_nil_entity;
   for(RD_Entity *p = entity->parent; !rd_entity_is_nil(p); p = p->parent)
   {
     if(p->kind == kind)
@@ -290,7 +290,7 @@ rd_push_entity_child_list_with_kind(Arena *arena, RD_Entity *entity, RD_EntityKi
 internal RD_Entity *
 rd_entity_child_from_string_and_kind(RD_Entity *parent, String8 string, RD_EntityKind kind)
 {
-  RD_Entity *result = &d_nil_entity;
+  RD_Entity *result = &rd_nil_entity;
   for(RD_Entity *child = parent->first; !rd_entity_is_nil(child); child = child->next)
   {
     if(str8_match(child->string, string, 0) && child->kind == kind)
@@ -1188,7 +1188,7 @@ rd_entity_alloc(RD_Entity *parent, RD_EntityKind kind)
   }
   
   // rjf: set up alloc'd entity links
-  entity->first = entity->last = entity->next = entity->prev = entity->parent = &d_nil_entity;
+  entity->first = entity->last = entity->next = entity->prev = entity->parent = &rd_nil_entity;
   entity->parent = parent;
   
   // rjf: stitch up parent links
@@ -1198,7 +1198,7 @@ rd_entity_alloc(RD_Entity *parent, RD_EntityKind kind)
   }
   else
   {
-    DLLPushBack_NPZ(&d_nil_entity, parent->first, parent->last, entity, next, prev);
+    DLLPushBack_NPZ(&rd_nil_entity, parent->first, parent->last, entity, next, prev);
   }
   
   // rjf: fill out metadata
@@ -1207,7 +1207,6 @@ rd_entity_alloc(RD_Entity *parent, RD_EntityKind kind)
   entity->id = rd_state->entities_id_gen;
   entity->gen += 1;
   entity->alloc_time_us = os_now_microseconds();
-  entity->params_root = &md_nil_node;
   
   // rjf: initialize to deleted, record history, then "undelete" if this allocation can be undone
   if(user_defined_lifetime)
@@ -1279,10 +1278,6 @@ rd_entity_release(RD_Entity *entity)
     {
       rd_name_release(task->e->string);
     }
-    if(task->e->params_arena != 0)
-    {
-      arena_release(task->e->params_arena);
-    }
     rd_state->kind_alloc_gens[task->e->kind] += 1;
   }
   
@@ -1299,11 +1294,11 @@ rd_entity_change_parent(RD_Entity *entity, RD_Entity *old_parent, RD_Entity *new
     // rjf: fix up links
     if(!rd_entity_is_nil(old_parent))
     {
-      DLLRemove_NPZ(&d_nil_entity, old_parent->first, old_parent->last, entity, next, prev);
+      DLLRemove_NPZ(&rd_nil_entity, old_parent->first, old_parent->last, entity, next, prev);
     }
     if(!rd_entity_is_nil(new_parent))
     {
-      DLLInsert_NPZ(&d_nil_entity, new_parent->first, new_parent->last, prev_child, entity, next, prev);
+      DLLInsert_NPZ(&rd_nil_entity, new_parent->first, new_parent->last, prev_child, entity, next, prev);
     }
     entity->parent = new_parent;
     
@@ -1559,7 +1554,7 @@ rd_push_entity_list_with_kind(Arena *arena, RD_EntityKind kind)
   RD_EntityList result = {0};
   for(RD_Entity *entity = rd_state->entities_root;
       !rd_entity_is_nil(entity);
-      entity = rd_entity_rec_depth_first_pre(entity, &d_nil_entity).next)
+      entity = rd_entity_rec_depth_first_pre(entity, &rd_nil_entity).next)
   {
     if(entity->kind == kind && !(entity->flags & RD_EntityFlag_MarkedForDeletion))
     {
@@ -1573,10 +1568,10 @@ rd_push_entity_list_with_kind(Arena *arena, RD_EntityKind kind)
 internal RD_Entity *
 rd_entity_from_id(RD_EntityID id)
 {
-  RD_Entity *result = &d_nil_entity;
+  RD_Entity *result = &rd_nil_entity;
   for(RD_Entity *e = rd_entity_root();
       !rd_entity_is_nil(e);
-      e = rd_entity_rec_depth_first_pre(e, &d_nil_entity).next)
+      e = rd_entity_rec_depth_first_pre(e, &rd_nil_entity).next)
   {
     if(e->id == id)
     {
@@ -1590,7 +1585,7 @@ rd_entity_from_id(RD_EntityID id)
 internal RD_Entity *
 rd_entity_from_name_and_kind(String8 string, RD_EntityKind kind)
 {
-  RD_Entity *result = &d_nil_entity;
+  RD_Entity *result = &rd_nil_entity;
   RD_EntityList all_of_this_kind = rd_query_cached_entity_list_with_kind(kind);
   for(RD_EntityNode *n = all_of_this_kind.first; n != 0; n = n->next)
   {
@@ -1969,7 +1964,7 @@ rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, Vec4F32 secon
 internal RD_Entity *
 rd_entity_from_eval_space(E_Space space)
 {
-  RD_Entity *entity = &d_nil_entity;
+  RD_Entity *entity = &rd_nil_entity;
   if(space.kind == RD_EvalSpaceKind_MetaEntity)
   {
     RD_Handle handle = {space.u64s[0], space.u64s[1]};
@@ -8815,7 +8810,7 @@ rd_ev_view_rule_expr_expand_range_info__meta_entities(Arena *arena, EV_View *vie
     for EachIndex(row_expr_idx, result.row_exprs_count)
     {
       U64 child_idx = idx_range.min + row_expr_idx;
-      RD_Entity *entity = &d_nil_entity;
+      RD_Entity *entity = &rd_nil_entity;
       if(entities_base_idx <= child_idx && child_idx < entities_base_idx+accel->entities.count)
       {
         entity = accel->entities.v[child_idx-entities_base_idx];
@@ -11027,7 +11022,7 @@ rd_push_active_target_list(Arena *arena)
 internal RD_Entity *
 rd_entity_from_ev_key_and_kind(EV_Key key, RD_EntityKind kind)
 {
-  RD_Entity *result = &d_nil_entity;
+  RD_Entity *result = &rd_nil_entity;
   RD_EntityList list = rd_query_cached_entity_list_with_kind(kind);
   for(RD_EntityNode *n = list.first; n != 0; n = n->next)
   {
@@ -11279,10 +11274,10 @@ rd_init(CmdLine *cmdln)
     rd_state->cmds_arenas[idx] = arena_alloc();
   }
   rd_state->entities_arena = arena_alloc(.reserve_size = GB(64), .commit_size = KB(64));
-  rd_state->entities_root = &d_nil_entity;
+  rd_state->entities_root = &rd_nil_entity;
   rd_state->entities_base = push_array(rd_state->entities_arena, RD_Entity, 0);
   rd_state->entities_count = 0;
-  rd_state->entities_root = rd_entity_alloc(&d_nil_entity, RD_EntityKind_Root);
+  rd_state->entities_root = rd_entity_alloc(&rd_nil_entity, RD_EntityKind_Root);
   rd_state->key_map_arena = arena_alloc();
   rd_state->popup_arena = arena_alloc();
   rd_state->ctx_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("top_level_ctx_menu"));
@@ -12450,7 +12445,7 @@ rd_frame(void)
             if(src == RD_CfgSrc_Project)
             {
               RD_EntityList recent_projects = rd_query_cached_entity_list_with_kind(RD_EntityKind_RecentProject);
-              RD_Entity *recent_project = &d_nil_entity;
+              RD_Entity *recent_project = &rd_nil_entity;
               for(RD_EntityNode *n = recent_projects.first; n != 0; n = n->next)
               {
                 if(path_match_normalized(cfg_path, n->entity->string))
@@ -14014,7 +14009,7 @@ rd_frame(void)
             {
               rd_entity_mark_for_deletion(recent_files.first->entity);
             }
-            RD_Entity *existing_recent_file = &d_nil_entity;
+            RD_Entity *existing_recent_file = &rd_nil_entity;
             for(RD_EntityNode *n = recent_files.first; n != 0; n = n->next)
             {
               if(str8_match(n->entity->string, path, StringMatchFlag_CaseInsensitive))
@@ -15303,7 +15298,7 @@ rd_frame(void)
             RD_Entity *existing_watch = rd_entity_from_name_and_kind(rd_regs()->string, RD_EntityKind_Watch);
             if(rd_entity_is_nil(existing_watch))
             {
-              RD_Entity *watch = &d_nil_entity;
+              RD_Entity *watch = &rd_nil_entity;
               watch = rd_entity_alloc(rd_entity_root(), RD_EntityKind_Watch);
               rd_entity_equip_cfg_src(watch, RD_CfgSrc_Project);
               rd_entity_equip_name(watch, rd_regs()->string);
@@ -15381,7 +15376,7 @@ rd_frame(void)
           case RD_CmdKind_AddTarget:
           {
             // rjf: build target
-            RD_Entity *entity = &d_nil_entity;
+            RD_Entity *entity = &rd_nil_entity;
             entity = rd_entity_alloc(rd_entity_root(), RD_EntityKind_Target);
             rd_entity_equip_disabled(entity, 1);
             rd_entity_equip_cfg_src(entity, RD_CfgSrc_Project);
@@ -16567,22 +16562,22 @@ rd_frame(void)
   {
     for(RD_Entity *entity = rd_entity_root(), *next = 0; !rd_entity_is_nil(entity); entity = next)
     {
-      next = rd_entity_rec_depth_first_pre(entity, &d_nil_entity).next;
+      next = rd_entity_rec_depth_first_pre(entity, &rd_nil_entity).next;
       if(entity->flags & RD_EntityFlag_MarkedForDeletion)
       {
         B32 undoable = (rd_entity_kind_flags_table[entity->kind] & RD_EntityKindFlag_UserDefinedLifetime);
         
         // rjf: fixup next entity to iterate to
-        next = rd_entity_rec_depth_first(entity, &d_nil_entity, OffsetOf(RD_Entity, next), OffsetOf(RD_Entity, next)).next;
+        next = rd_entity_rec_depth_first(entity, &rd_nil_entity, OffsetOf(RD_Entity, next), OffsetOf(RD_Entity, next)).next;
         
         // rjf: eliminate root entity if we're freeing it
         if(entity == rd_state->entities_root)
         {
-          rd_state->entities_root = &d_nil_entity;
+          rd_state->entities_root = &rd_nil_entity;
         }
         
         // rjf: unhook & release this entity tree
-        rd_entity_change_parent(entity, entity->parent, &d_nil_entity, &d_nil_entity);
+        rd_entity_change_parent(entity, entity->parent, &rd_nil_entity, &rd_nil_entity);
         rd_entity_release(entity);
       }
     }
