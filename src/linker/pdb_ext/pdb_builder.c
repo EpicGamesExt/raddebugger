@@ -2131,55 +2131,57 @@ gsi_release(PDB_GsiContext **gsi_ptr)
 }
 
 internal void
-gsi_write_build_result(TP_Context *tp, PDB_GsiBuildResult build, MSF_Context *msf, MSF_StreamNumber gsi_sn, MSF_StreamNumber symbols_sn)
+gsi_write_build_result(TP_Context         *tp,
+                       PDB_GsiBuildResult  build,
+                       MSF_Context        *msf,
+                       MSF_StreamNumber    gsi_sn,
+                       MSF_StreamNumber    symbols_sn)
 {
   ProfBeginFunction();
-  
-  // reserve stream memory
-  U64 hash_record_arr_size       = sizeof(build.hash_record_arr[0]) * build.hash_record_count;
-  U64 bitmap_size                = sizeof(build.bitmap[0]) * build.bitmap_count;
+
+  U64 hash_record_arr_size       = sizeof(build.hash_record_arr[0])       * build.hash_record_count;
+  U64 bitmap_size                = sizeof(build.bitmap[0])                * build.bitmap_count;
   U64 compressed_bucket_arr_size = sizeof(build.compressed_bucket_arr[0]) * build.compressed_bucket_count;
   U64 gsi_size                   = sizeof(build.header) + hash_record_arr_size + bitmap_size + compressed_bucket_arr_size;
-
-  ProfBegin("GSI Reserve");
+  
+  ProfBeginV("Reserve %M for GSI hash table", gsi_size);
   msf_stream_reserve(msf, gsi_sn, gsi_size);
   ProfEnd();
 
-  ProfBegin("Symbol Data Reserve");
+  ProfBeginV("Reserve %M for symbols", build.symbol_data.size);
   msf_stream_reserve(msf, symbols_sn, build.symbol_data.size);
   ProfEnd();
 
-  // write gsi stream
+  ProfBegin("Write GSI header");
   msf_stream_write_struct(msf, gsi_sn, &build.header);
+  ProfEnd();
 
-  ProfBegin("Hash Record Write");
+  ProfBegin("Write hash records [%M]", hash_record_arr_size);
   msf_stream_write_parallel(tp, msf, gsi_sn, &build.hash_record_arr[0], hash_record_arr_size);
   ProfEnd();
 
-  ProfBegin("Bitmap Write");
+  ProfBeginV("Write bucket bitmap [%M]", bitmap_size);
   msf_stream_write(msf, gsi_sn, &build.bitmap[0], bitmap_size);
   ProfEnd();
 
-  ProfBegin("Compressed Bucket Write");
+  ProfBegin("Write buckets [%M]", compressed_bucket_arr-size);
   msf_stream_write(msf, gsi_sn, &build.compressed_bucket_arr[0], compressed_bucket_arr_size);
   ProfEnd();
   
-  // write symbol stream
-  ProfBegin("Symbol Data Write");
+  ProfBegin("Write symbols [%M]", build.symbol_data.size);
   msf_stream_write_string_parallel(tp, msf, symbols_sn, build.symbol_data);
   ProfEnd();
 
   ProfEnd();
 }
 
-int
-gsi_hash_record_compar_is_before(void *a_, void *b_)
+internal int
+gsi_hash_record_compar_is_before(void *raw_a, void *raw_b)
 {
-  PDB_GsiSortRecord *a = (PDB_GsiSortRecord*)a_;
-  PDB_GsiSortRecord *b = (PDB_GsiSortRecord*)b_;
+  PDB_GsiSortRecord *a = raw_a;
+  PDB_GsiSortRecord *b = raw_b;
 
   int is_before;
-
   if (a->name.size != b->name.size) {
     is_before = a->name.size < b->name.size;
   } else {
@@ -2193,20 +2195,19 @@ gsi_hash_record_compar_is_before(void *a_, void *b_)
   return is_before;
 }
 
-int
-psi_addr_map_compar_is_before(void *a_, void *b_)
+internal int
+psi_addr_map_compar_is_before(void *raw_a, void *raw_b)
 {
-  PDB_GsiSortRecord *a = (PDB_GsiSortRecord*)a_;
-  PDB_GsiSortRecord *b = (PDB_GsiSortRecord*)b_;
+  PDB_GsiSortRecord *a = raw_a;
+  PDB_GsiSortRecord *b = raw_b;
 
   int is_before;
-
   if (a->isect_off.isect != b->isect_off.isect) {
     is_before = a->isect_off.isect < b->isect_off.isect;
   } else if (a->isect_off.off != b->isect_off.off) {
     is_before = a->isect_off.off < b->isect_off.off;
   } else {
-    is_before = a->name.size < b->name.size;
+    is_before = str8_compar_case_sensitive(&a->name, &b->name);
   }
 
   return is_before;
@@ -2231,9 +2232,9 @@ gsi_record_sort_by_sc(PDB_GsiSortRecord *arr, U64 count)
 internal
 THREAD_POOL_TASK_FUNC(gsi_size_buckets_task)
 {
-  U64                          bucket_idx = task_id;
-  PDB_GsiSerializeSymbolsTask *task       = raw_task;
-  CV_SymbolList *bucket_list = &task->bucket_arr[bucket_idx];
+  U64                          bucket_idx  = task_id;
+  PDB_GsiSerializeSymbolsTask *task        = raw_task;
+  CV_SymbolList               *bucket_list = &task->bucket_arr[bucket_idx];
   for (CV_SymbolNode *node = bucket_list->first; node != 0; node = node->next) {
     task->bucket_size_arr[bucket_idx] += cv_compute_symbol_record_size(&node->data, task->symbol_align);
   }
@@ -2258,16 +2259,16 @@ THREAD_POOL_TASK_FUNC(gsi_serialize_pub32)
     CV_Symbol *symbol = &node->data;
     Assert(symbol->kind == CV_SymKind_PUB32);
 
-    CV_SymPub32 *pub32 = (CV_SymPub32 *)symbol->data.str;
-    U8 *str_ptr  = (U8 *)(pub32 + 1);
-    U64 str_size = symbol->data.size - sizeof(*pub32);
-    String8 name = str8(str_ptr, str_size);
+    CV_SymPub32 *pub32    = (CV_SymPub32 *)symbol->data.str;
+    U8          *str_ptr  = (U8 *)(pub32 + 1);
+    U64          str_size = symbol->data.size - sizeof(*pub32);
+    String8      name     = str8(str_ptr, str_size);
 
     // init sort record
     PDB_GsiSortRecord *sr = &sort_record_arr[sort_idx];
-    sr->isect_off = isect_off(pub32->sec, pub32->off);
-    sr->name      = name;
-    sr->offset    = buffer_cursor;
+    sr->isect_off         = isect_off(pub32->sec, pub32->off);
+    sr->name              = name;
+    sr->offset            = buffer_cursor;
 
     // serialize symbol
     U64 serial_size = cv_serialize_symbol_to_buffer(buffer, buffer_cursor, buffer_size, symbol, task->symbol_align);
