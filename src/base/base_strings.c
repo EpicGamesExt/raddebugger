@@ -2377,16 +2377,22 @@ str8_deserial_read_uleb128(String8 string, U64 off, U64 *value_out)
   U64 value  = 0;
   U64 shift  = 0;
   U64 cursor = off;
-  for( ;; ++cursor, shift += 7u)
+  for(;;)
   {
     U8  byte       = 0;
     U64 bytes_read = str8_deserial_read_struct(string, cursor, &byte);
+
     if(bytes_read != sizeof(byte))
     {
       break;
     }
+
     U8 val = byte & 0x7fu;
     value |= ((U64)val) << shift;
+
+    cursor += bytes_read;
+    shift += 7u;
+
     if((byte & 0x80u) == 0)
     {
       break;
@@ -2406,7 +2412,7 @@ str8_deserial_read_sleb128(String8 string, U64 off, S64 *value_out)
   U64 value  = 0;
   U64 shift  = 0;
   U64 cursor = off;
-  for( ;; ++cursor)
+  for(;;)
   {
     U8 byte;
     U64 bytes_read = str8_deserial_read_struct(string, cursor, &byte);
@@ -2414,9 +2420,13 @@ str8_deserial_read_sleb128(String8 string, U64 off, S64 *value_out)
     {
       break;
     }
+
     U8 val = byte & 0x7fu;
     value |= ((U64)val) << shift;
+
+    cursor += bytes_read;
     shift += 7u;
+
     if((byte & 0x80u) == 0)
     {
       if(shift < sizeof(value) * 8 && (byte & 0x40u) != 0)
