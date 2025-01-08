@@ -2,6 +2,31 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
+//~ rjf: feature cleanup, code dedup, code elimination pass:
+//
+// [ ] frontend config entities, serialization/deserialization, remove hacks,
+//     etc. - the entity structure should be dramatically simplified & made
+//     to reflect a more flexible string-tree data structure which can be
+//     more trivially derived from config, and more flexibly rearranged.
+//     drag/drop watch rows -> tabs, tabs -> watch rows, etc.
+// [ ] frontend entities need to be the "upstream state" for windows, panels,
+//     tabs, etc. - entities can be mapped to caches of window/panel/view state
+//     in purely immediate-mode fashion, so the only *state* part of the
+//     equation only has to do with the string tree.
+// [ ] config hot-reloading using the wins from the previous points
+// [ ] undo/redo, using the wins from the previous points
+// [ ] watch table UI - hidden table boundaries, special-cased control hacks
+// [ ] hash store -> need to somehow hold on to hash blobs which are still
+//     depended upon by usage layers, e.g. extra dependency refcount, e.g.
+//     text cache can explicitly correllate nodes in its cache to hashes,
+//     bump their refcount - this would keep the hash correllated to its key
+//     and it would prevent it from being evicted (output debug string perf)
+// [ ] autocompletion lister, file lister, function lister, command lister,
+//     etc., all need to be merged, and optionally contextualized/filtered.
+//     right-clicking a tab should be equivalent to spawning a command lister,
+//     but only with commands that are directly
+
+////////////////////////////////
 //~ rjf: post-0.9.12 TODO notes
 //
 // [ ] breakpoints in optimized code? maybe early-terminating bp resolution loop? @bpmiss
