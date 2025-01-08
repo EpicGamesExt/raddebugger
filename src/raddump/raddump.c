@@ -5159,7 +5159,7 @@ coff_print_obj(Arena *arena, String8List *out, String8 indent, String8 raw_data,
 
   if (opts & RD_Option_Dwarf) {
     DW_SectionArray dwarf_sections = rd_dw_sections_from_coff_section_table(scratch.arena, raw_data, string_table_off, header->section_count, sections);
-    dw_format(arena, out, indent, opts, &dwarf_sections, arch, Image_COFF_PE);
+    dw_format(arena, out, indent, opts, &dwarf_sections, arch, Image_CoffPe);
   }
 
 exit:;
@@ -6857,7 +6857,7 @@ pe_print(Arena *arena, String8List *out, String8 indent, String8 raw_data, RD_Op
 
   if (opts & RD_Option_Dwarf) {
     DW_SectionArray dwarf_sections = rd_dw_sections_from_coff_section_table(scratch.arena, raw_data, string_table_off, coff_header->section_count, sections);
-    dw_format(arena, out, indent, opts, &dwarf_sections, arch, Image_COFF_PE);
+    dw_format(arena, out, indent, opts, &dwarf_sections, arch, Image_CoffPe);
   }
 
 exit:;

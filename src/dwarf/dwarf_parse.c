@@ -1473,15 +1473,15 @@ dw_ext_from_params(String8 producer, Arch arch, ImageType image_type)
   DW_Ext ext = DW_Ext_Null;
   switch (image_type) {
     case Image_Null: break;
-    case Image_COFF_PE: {
+    case Image_CoffPe: {
       if (str8_match(str8_lit("clang"), producer, StringMatchFlag_RightSideSloppy|StringMatchFlag_CaseInsensitive)) {
         ext = DW_Ext_GNU | DW_Ext_LLVM;
       } else if (str8_match(str8_lit("GNU"), producer, StringMatchFlag_RightSideSloppy|StringMatchFlag_CaseInsensitive)) {
         ext = DW_Ext_GNU;
       }
     } break;
-    case Image_ELF32:
-    case Image_ELF64: {
+    case Image_Elf32:
+    case Image_Elf64: {
       if (str8_match(str8_lit("clang"), producer, StringMatchFlag_RightSideSloppy|StringMatchFlag_CaseInsensitive)) {
         ext = DW_Ext_GNU | DW_Ext_LLVM;
       } else if (str8_match(str8_lit("GNU"), producer, StringMatchFlag_RightSideSloppy|StringMatchFlag_CaseInsensitive)) {

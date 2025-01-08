@@ -454,6 +454,15 @@ typedef enum OperatingSystem
 }
 OperatingSystem;
 
+typedef enum ImageType
+{
+  Image_Null,
+  Image_CoffPe,
+  Image_Elf32,
+  Image_Elf64,
+  Image_Macho
+} ImageType;
+
 typedef enum Arch
 {
   Arch_Null,
