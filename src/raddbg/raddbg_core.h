@@ -377,6 +377,44 @@ struct RD_CfgTable
 };
 
 ////////////////////////////////
+//~ rjf: New Config/Entity Data Structure
+
+typedef struct RD_Cfg RD_Cfg;
+struct RD_Cfg
+{
+  RD_Cfg *first;
+  RD_Cfg *last;
+  RD_Cfg *next;
+  RD_Cfg *prev;
+  RD_Cfg *parent;
+  U64 gen;
+  String8 string;
+};
+
+typedef struct RD_CfgNode RD_CfgNode;
+struct RD_CfgNode
+{
+  RD_CfgNode *next;
+  RD_Cfg *v;
+};
+
+typedef struct RD_CfgList RD_CfgList;
+struct RD_CfgList
+{
+  RD_CfgNode *first;
+  RD_CfgNode *last;
+  U64 count;
+};
+
+typedef struct RD_CfgRec RD_CfgRec;
+struct RD_CfgRec
+{
+  RD_Cfg *next;
+  S32 push_count;
+  S32 pop_count;
+};
+
+////////////////////////////////
 //~ rjf: Entity Types
 
 typedef U64 RD_EntityID;
@@ -836,12 +874,16 @@ struct RD_State
   RD_RegSlot drag_drop_regs_slot;
   RD_DragDropState drag_drop_state;
   
+  // rjf: cfg state
+  RD_NameChunkNode *free_name_chunks[8];
+  RD_Cfg *free_cfg;
+  RD_Cfg *root_cfg;
+  
   //-
   // TODO(rjf): TO BE ELIMINATED OR REPLACED VVVVVVVVVVVVVVVV
   //-
   
   // rjf: entity state
-  RD_NameChunkNode *free_name_chunks[8];
   Arena *entities_arena;
   RD_Entity *entities_base;
   U64 entities_count;
@@ -913,6 +955,15 @@ struct RD_State
 
 read_only global RD_CfgTree d_nil_cfg_tree = {&d_nil_cfg_tree, RD_CfgSrc_User, &md_nil_node};
 read_only global RD_CfgVal d_nil_cfg_val = {&d_nil_cfg_val, &d_nil_cfg_val, &d_nil_cfg_tree, &d_nil_cfg_tree};
+
+read_only global RD_Cfg rd_nil_cfg =
+{
+  &rd_nil_cfg,
+  &rd_nil_cfg,
+  &rd_nil_cfg,
+  &rd_nil_cfg,
+  &rd_nil_cfg,
+};
 
 read_only global RD_Entity rd_nil_entity =
 {
@@ -1096,6 +1147,24 @@ internal void rd_open_ctx_menu(UI_Key anchor_box_key, Vec2F32 anchor_box_off, RD
 internal U64 rd_name_bucket_idx_from_string_size(U64 size);
 internal String8 rd_name_alloc(String8 string);
 internal void rd_name_release(String8 string);
+
+////////////////////////////////
+//~ rjf: New Config/Entity Data Structure Functions
+
+internal RD_Cfg *rd_cfg_alloc(void);
+internal void rd_cfg_release(RD_Cfg *cfg);
+internal RD_Cfg *rd_cfg_new(RD_Cfg *parent, String8 string);
+internal RD_Cfg *rd_cfg_newf(RD_Cfg *parent, char *fmt, ...);
+internal void rd_cfg_equip_string(RD_Cfg *cfg, String8 string);
+internal void rd_cfg_insert_child(RD_Cfg *parent, RD_Cfg *prev_child, RD_Cfg *new_child);
+internal void rd_cfg_unhook(RD_Cfg *parent, RD_Cfg *child);
+internal RD_Cfg *rd_cfg_child_from_string(RD_Cfg *parent, String8 string);
+internal RD_CfgList rd_cfg_child_list_from_string(Arena *arena, RD_Cfg *parent, String8 string);
+internal RD_CfgList rd_cfg_top_level_list_from_string(Arena *arena, String8 string);
+internal RD_CfgList rd_cfg_tree_list_from_string(Arena *arena, String8 string);
+internal String8 rd_string_from_cfg_tree(Arena *arena, RD_Cfg *cfg);
+internal RD_CfgRec rd_cfg_rec__depth_first(RD_Cfg *root, RD_Cfg *cfg);
+internal void rd_cfg_list_push(Arena *arena, RD_CfgList *list, RD_Cfg *cfg);
 
 ////////////////////////////////
 //~ rjf: Entity Stateful Functions

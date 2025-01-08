@@ -1032,6 +1032,327 @@ rd_name_release(String8 string)
 }
 
 ////////////////////////////////
+//~ rjf: New Config/Entity Data Structure Functions
+
+internal RD_Cfg *
+rd_cfg_alloc(void)
+{
+  RD_Cfg *result = rd_state->free_cfg;
+  if(result)
+  {
+    SLLStackPop(rd_state->free_cfg);
+  }
+  else
+  {
+    result = push_array_no_zero(rd_state->arena, RD_Cfg, 1);
+  }
+  U64 old_gen = result->gen;
+  MemoryZeroStruct(result);
+  result->first = result->last = result->next = result->prev = result->parent = &rd_nil_cfg;
+  result->gen = old_gen + 1;
+  return result;
+}
+
+internal void
+rd_cfg_release(RD_Cfg *cfg)
+{
+  Temp scratch = scratch_begin(0, 0);
+  rd_cfg_unhook(cfg->parent, cfg);
+  RD_CfgList nodes = {0};
+  for(RD_Cfg *c = cfg; c != &rd_nil_cfg; c = rd_cfg_rec__depth_first(cfg, c).next)
+  {
+    rd_cfg_list_push(scratch.arena, &nodes, c);
+  }
+  for(RD_CfgNode *n = nodes.first; n != 0; n = n->next)
+  {
+    RD_Cfg *c = n->v;
+    c->gen += 1;
+    rd_name_release(c->string);
+    SLLStackPush(rd_state->free_cfg, c);
+  }
+  scratch_end(scratch);
+}
+
+internal RD_Cfg *
+rd_cfg_new(RD_Cfg *parent, String8 string)
+{
+  RD_Cfg *cfg = rd_cfg_alloc();
+  rd_cfg_insert_child(parent, parent->last, cfg);
+  rd_cfg_equip_string(cfg, string);
+  return cfg;
+}
+
+internal RD_Cfg *
+rd_cfg_newf(RD_Cfg *parent, char *fmt, ...)
+{
+  Temp scratch = scratch_begin(0, 0);
+  va_list args;
+  va_start(args, fmt);
+  String8 string = push_str8fv(scratch.arena, fmt, args);
+  RD_Cfg *result = rd_cfg_new(parent, string);
+  va_end(args);
+  scratch_end(scratch);
+  return result;
+}
+
+internal void
+rd_cfg_equip_string(RD_Cfg *cfg, String8 string)
+{
+  if(cfg->string.size != 0)
+  {
+    rd_name_release(cfg->string);
+  }
+  cfg->string = rd_name_alloc(string);
+}
+
+internal void
+rd_cfg_insert_child(RD_Cfg *parent, RD_Cfg *prev_child, RD_Cfg *new_child)
+{
+  DLLInsert_NPZ(&rd_nil_cfg, parent->first, parent->last, prev_child, new_child, next, prev);
+  new_child->parent = parent;
+}
+
+internal void
+rd_cfg_unhook(RD_Cfg *parent, RD_Cfg *child)
+{
+  if(parent == child->parent && parent != &rd_nil_cfg)
+  {
+    DLLRemove_NPZ(&rd_nil_cfg, parent->first, parent->last, child, next, prev);
+    child->parent = &rd_nil_cfg;
+  }
+}
+
+internal RD_Cfg *
+rd_cfg_child_from_string(RD_Cfg *parent, String8 string)
+{
+  RD_Cfg *child = &rd_nil_cfg;
+  for(RD_Cfg *c = parent->first; c != &rd_nil_cfg; c = c->next)
+  {
+    if(str8_match(c->string, string, 0))
+    {
+      child = c;
+      break;
+    }
+  }
+  return child;
+}
+
+internal RD_CfgList
+rd_cfg_child_list_from_string(Arena *arena, RD_Cfg *parent, String8 string)
+{
+  RD_CfgList result = {0};
+  for(RD_Cfg *child = parent->first; child != &rd_nil_cfg; child = child->next)
+  {
+    if(str8_match(child->string, string, 0))
+    {
+      rd_cfg_list_push(arena, &result, child);
+    }
+  }
+  return result;
+}
+
+internal RD_CfgList
+rd_cfg_top_level_list_from_string(Arena *arena, String8 string)
+{
+  RD_CfgList result = {0};
+  for(RD_Cfg *bucket = rd_state->root_cfg->first; bucket != &rd_nil_cfg; bucket = bucket->next)
+  {
+    for(RD_Cfg *tln = bucket->first; tln != &rd_nil_cfg; tln = tln->next)
+    {
+      if(str8_match(tln->string, string, 0))
+      {
+        rd_cfg_list_push(arena, &result, tln);
+      }
+    }
+  }
+  return result;
+}
+
+internal RD_CfgList
+rd_cfg_tree_list_from_string(Arena *arena, String8 string)
+{
+  RD_CfgList result = {0};
+  Temp scratch = scratch_begin(&arena, 1);
+  MD_Node *root = md_tree_from_string(scratch.arena, string);
+  for MD_EachNode(tln, root->first)
+  {
+    RD_Cfg *dst_root_n = &rd_nil_cfg;
+    RD_Cfg *dst_active_parent_n = &rd_nil_cfg;
+    MD_NodeRec rec = {0};
+    for(MD_Node *src_n = tln; !md_node_is_nil(src_n); src_n = rec.next)
+    {
+      RD_Cfg *dst_n = rd_cfg_alloc();
+      rd_cfg_equip_string(dst_n, src_n->string);
+      if(dst_active_parent_n != &rd_nil_cfg)
+      {
+        rd_cfg_insert_child(dst_active_parent_n, dst_active_parent_n->last, dst_n);
+      }
+      rec = md_node_rec_depth_first_pre(src_n, tln);
+      if(rec.push_count > 0)
+      {
+        if(dst_active_parent_n == &rd_nil_cfg)
+        {
+          dst_root_n = dst_n;
+        }
+        dst_active_parent_n = dst_n;
+      }
+      else for(S32 pop_idx = 0; pop_idx < rec.pop_count; pop_idx += 1)
+      {
+        dst_active_parent_n = dst_active_parent_n->parent;
+      }
+    }
+    rd_cfg_list_push(arena, &result, dst_root_n);
+  }
+  scratch_end(scratch);
+  return result;
+}
+
+internal String8
+rd_string_from_cfg_tree(Arena *arena, RD_Cfg *cfg)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  String8List strings = {0};
+  {
+    typedef struct NestTask NestTask;
+    struct NestTask
+    {
+      NestTask *next;
+      RD_Cfg *cfg;
+      B32 is_simple;
+    };
+    NestTask *top_nest_task = 0;
+    RD_CfgRec rec = {0};
+    for(RD_Cfg *c = cfg; c != &rd_nil_cfg; c = rec.next)
+    {
+      // rjf: push name of this node
+      if(c->string.size != 0 || c->first == &rd_nil_cfg)
+      {
+        String8List c_name_strings = {0};
+        B32 name_can_be_pushed_standalone = 0;
+        {
+          Temp temp = temp_begin(scratch.arena);
+          MD_TokenizeResult c_name_tokenize = md_tokenize_from_text(temp.arena, c->string);
+          name_can_be_pushed_standalone = (c_name_tokenize.tokens.count == 1 && c_name_tokenize.tokens.v[0].flags & (MD_TokenFlag_Identifier|
+                                                                                                                     MD_TokenFlag_Numeric|
+                                                                                                                     MD_TokenFlag_StringLiteral|
+                                                                                                                     MD_TokenFlag_Symbol));
+          temp_end(temp);
+        }
+        if(name_can_be_pushed_standalone)
+        {
+          str8_list_push(scratch.arena, &c_name_strings, c->string);
+        }
+        else
+        {
+          String8 c_name_escaped = escaped_from_raw_str8(scratch.arena, c->string);
+          str8_list_push(scratch.arena, &c_name_strings, str8_lit("\""));
+          str8_list_push(scratch.arena, &c_name_strings, c_name_escaped);
+          str8_list_push(scratch.arena, &c_name_strings, str8_lit("\""));
+        }
+        if(top_nest_task != 0 && top_nest_task->is_simple)
+        {
+          str8_list_push(scratch.arena, &strings, str8_lit(" "));
+        }
+        str8_list_concat_in_place(&strings, &c_name_strings);
+      }
+      
+      // rjf: grab next recursion
+      rec = rd_cfg_rec__depth_first(cfg, c);
+      
+      // rjf: determine if this node is simple, and can be encoded on a single line -
+      // if so, push a new nesting task onto the stack
+      if(c->first != &rd_nil_cfg)
+      {
+        B32 is_simple_children_list = 1;
+        for(RD_Cfg *child = c->first; child != &rd_nil_cfg; child = child->next)
+        {
+          if(child->first != &rd_nil_cfg && child != c->last)
+          {
+            is_simple_children_list = 0;
+            break;
+          }
+        }
+        NestTask *task = push_array(scratch.arena, NestTask, 1);
+        task->cfg = c;
+        task->is_simple = is_simple_children_list;
+        SLLStackPush(top_nest_task, task);
+      }
+      
+      // rjf: tree navigations -> encode hierarchy
+      if(rec.push_count > 0)
+      {
+        if(top_nest_task->is_simple && c->string.size != 0)
+        {
+          str8_list_push(scratch.arena, &strings, str8_lit(":"));
+        }
+        else
+        {
+          if(c->string.size != 0)
+          {
+            str8_list_push(scratch.arena, &strings, str8_lit(":\n"));
+          }
+          str8_list_push(scratch.arena, &strings, str8_lit("{"));
+        }
+      }
+      else
+      {
+        for(S32 pop_idx = 0; pop_idx < rec.pop_count; pop_idx += 1, SLLStackPop(top_nest_task))
+        {
+          if(top_nest_task->is_simple)
+          {
+            if(top_nest_task->cfg->string.size == 0)
+            {
+              str8_list_push(scratch.arena, &strings, str8_lit(" }"));
+            }
+          }
+          else
+          {
+            str8_list_push(scratch.arena, &strings, str8_lit("\n}"));
+          }
+        }
+      }
+      if(!top_nest_task || top_nest_task->is_simple == 0)
+      {
+        str8_list_push(scratch.arena, &strings, str8_lit("\n"));
+      }
+    }
+  }
+  String8 result_unindented = str8_list_join(scratch.arena, &strings, 0);
+  String8 result = indented_from_string(arena, result_unindented);
+  scratch_end(scratch);
+  return result;
+}
+
+internal RD_CfgRec
+rd_cfg_rec__depth_first(RD_Cfg *root, RD_Cfg *cfg)
+{
+  RD_CfgRec rec = {&rd_nil_cfg};
+  if(cfg->first != &rd_nil_cfg)
+  {
+    rec.next = cfg->first;
+    rec.push_count = 1;
+  }
+  else for(RD_Cfg *p = cfg; p != root; p = p->parent, rec.pop_count += 1)
+  {
+    if(p->next != &rd_nil_cfg)
+    {
+      rec.next = p->next;
+      break;
+    }
+  }
+  return rec;
+}
+
+internal void
+rd_cfg_list_push(Arena *arena, RD_CfgList *list, RD_Cfg *cfg)
+{
+  RD_CfgNode *n = push_array(arena, RD_CfgNode, 1);
+  n->v = cfg;
+  SLLQueuePush(list->first, list->last, n);
+  list->count += 1;
+}
+
+////////////////////////////////
 //~ rjf: Entity State Functions
 
 //- rjf: entity allocation + tree forming
@@ -11169,6 +11490,15 @@ rd_init(CmdLine *cmdln)
   rd_state->top_regs = &rd_state->base_regs;
   rd_clear_bindings();
   
+  // rjf: set up top-level config entity trees
+  {
+    rd_state->root_cfg = rd_cfg_alloc();
+    RD_Cfg *user_tree         = rd_cfg_new(rd_state->root_cfg, str8_lit("user"));
+    RD_Cfg *project_tree      = rd_cfg_new(rd_state->root_cfg, str8_lit("project"));
+    RD_Cfg *command_line_tree = rd_cfg_new(rd_state->root_cfg, str8_lit("command_line"));
+    RD_Cfg *transient         = rd_cfg_new(rd_state->root_cfg, str8_lit("transient"));
+  }
+  
   // rjf: set up user / project paths
   {
     Temp scratch = scratch_begin(0, 0);
@@ -11331,6 +11661,12 @@ rd_frame(void)
   Temp scratch = scratch_begin(0, 0);
   local_persist S32 depth = 0;
   log_scope_begin();
+  
+  //- TODO(rjf): @cfg debugging: stringify the current cfg tree
+  {
+    String8 string = rd_string_from_cfg_tree(scratch.arena, rd_state->root_cfg);
+    int x = 0;
+  }
   
   //////////////////////////////
   //- rjf: do per-frame resets
@@ -12147,6 +12483,32 @@ rd_frame(void)
           case RD_CmdKind_OpenUser:
           case RD_CmdKind_OpenProject:
           {
+            //- TODO(rjf): @cfg load & apply user/project data to the cfg data structure
+            {
+              String8 file_root_key = (kind == RD_CmdKind_OpenUser ? str8_lit("user") : str8_lit("project"));
+              RD_Cfg *file_root = rd_cfg_child_from_string(rd_state->root_cfg, file_root_key);
+              
+              //- rjf: eliminate all old state under this file tree
+              for(RD_Cfg *tln = file_root->first, *next = &rd_nil_cfg;
+                  tln != &rd_nil_cfg;
+                  tln = next)
+              {
+                next = tln->next;
+                rd_cfg_release(tln);
+              }
+              
+              //- rjf: load & parse the new file, generate cfg entities for it
+              String8 file_path = rd_regs()->file_path;
+              String8 file_data = os_data_from_file_path(scratch.arena, file_path);
+              RD_CfgList file_cfg_list = rd_cfg_tree_list_from_string(scratch.arena, file_data);
+              
+              //- rjf: insert the new cfg entities into this file tree
+              for(RD_CfgNode *n = file_cfg_list.first; n != 0; n = n->next)
+              {
+                rd_cfg_insert_child(file_root, file_root->last, n->v);
+              }
+            }
+            
             // TODO(rjf): dear lord this is so overcomplicated, this needs to be collapsed down & simplified ASAP
             
             B32 load_cfg[RD_CfgSrc_COUNT] = {0};
@@ -12320,6 +12682,32 @@ rd_frame(void)
             //- rjf: keep track of recent projects
             if(src == RD_CfgSrc_Project)
             {
+              //- TODO(rjf): @cfg keep track of recent projects
+              {
+                RD_Cfg *user = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("user"));
+                RD_CfgList recent_projects = rd_cfg_child_list_from_string(scratch.arena, user, str8_lit("recent_project"));
+                RD_Cfg *recent_project = &rd_nil_cfg;
+                for(RD_CfgNode *n = recent_projects.first; n != 0; n = n->next)
+                {
+                  if(path_match_normalized(n->v->string, cfg_path))
+                  {
+                    recent_project = n->v;
+                    break;
+                  }
+                }
+                if(recent_project == &rd_nil_cfg)
+                {
+                  recent_project = rd_cfg_new(user, str8_lit("recent_project"));
+                  rd_cfg_new(recent_project, path_normalized_from_string(scratch.arena, cfg_path));
+                }
+                rd_cfg_unhook(user, recent_project);
+                rd_cfg_insert_child(user, &rd_nil_cfg, recent_project);
+                recent_projects = rd_cfg_child_list_from_string(scratch.arena, user, str8_lit("recent_project"));
+                if(recent_projects.count > 32)
+                {
+                  rd_cfg_release(recent_projects.last->v);
+                }
+              }
               RD_EntityList recent_projects = rd_query_cached_entity_list_with_kind(RD_EntityKind_RecentProject);
               RD_Entity *recent_project = &rd_nil_entity;
               for(RD_EntityNode *n = recent_projects.first; n != 0; n = n->next)
@@ -13548,6 +13936,15 @@ rd_frame(void)
             String8 map_dst = str8_list_join(scratch.arena, &map_dst_parts, &map_join);
             
             //- rjf: store as file path map entity
+            //- TODO(rjf): @cfg store as file path map entity
+            {
+              RD_Cfg *user = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("user"));
+              RD_Cfg *map = rd_cfg_new(user, str8_lit("file_path_map"));
+              RD_Cfg *src = rd_cfg_new(map, str8_lit("source"));
+              RD_Cfg *dst = rd_cfg_new(map, str8_lit("dest"));
+              rd_cfg_new(src, map_src);
+              rd_cfg_new(dst, map_dst);
+            }
             RD_Entity *map = rd_entity_alloc(rd_entity_root(), RD_EntityKind_FilePathMap);
             RD_Entity *src = rd_entity_alloc(map, RD_EntityKind_Source);
             RD_Entity *dst = rd_entity_alloc(map, RD_EntityKind_Dest);
@@ -13880,6 +14277,34 @@ rd_frame(void)
           if(rd_regs()->file_path.size != 0)
           {
             String8 path = path_normalized_from_string(scratch.arena, rd_regs()->file_path);
+            
+            //- TODO(rjf): @cfg record file in project
+            {
+              RD_Cfg *project = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("project"));
+              RD_CfgList recent_files = rd_cfg_child_list_from_string(scratch.arena, project, str8_lit("recent_files"));
+              RD_Cfg *recent_file = &rd_nil_cfg;
+              for(RD_CfgNode *n = recent_files.first; n != 0; n = n->next)
+              {
+                if(path_match_normalized(n->v->string, path))
+                {
+                  recent_file = n->v;
+                  break;
+                }
+              }
+              if(recent_file == &rd_nil_cfg)
+              {
+                recent_file = rd_cfg_new(project, str8_lit("recent_file"));
+                rd_cfg_new(recent_file, path);
+              }
+              rd_cfg_unhook(project, recent_file);
+              rd_cfg_insert_child(project, &rd_nil_cfg, recent_file);
+              recent_files = rd_cfg_child_list_from_string(scratch.arena, project, str8_lit("recent_files"));
+              if(recent_files.count > 256)
+              {
+                rd_cfg_release(recent_files.last->v);
+              }
+            }
+            
             RD_EntityList recent_files = rd_query_cached_entity_list_with_kind(RD_EntityKind_RecentFile);
             if(recent_files.count >= 256)
             {
@@ -15075,6 +15500,49 @@ rd_frame(void)
             U64 vaddr = rd_regs()->vaddr;
             if(file_path.size != 0 || string.size != 0 || vaddr != 0)
             {
+              //- TODO(rjf): @cfg add/toggle breakpoint
+              {
+                B32 removed_already_existing = 0;
+                if(kind == RD_CmdKind_ToggleBreakpoint)
+                {
+                  RD_CfgList bps = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("breakpoint"));
+                  for(RD_CfgNode *n = bps.first; n != 0; n = n->next)
+                  {
+                    RD_Cfg *bp = n->v;
+                    RD_Cfg *loc = rd_cfg_child_from_string(bp, str8_lit("location"));
+                    S64 loc_line = 0;
+                    U64 loc_vaddr = 0;
+                    B32 loc_matches_file_pt = (file_path.size != 0 && path_match_normalized(loc->first->string, file_path) && try_s64_from_str8_c_rules(loc->first->first->string, &loc_line) && loc_line == pt.line);
+                    B32 loc_matches_string  = (string.size != 0 && str8_match(loc->first->string, string, 0));
+                    B32 loc_matches_vaddr   = (vaddr != 0 && try_u64_from_str8_c_rules(loc->first->string, &loc_vaddr) && loc_vaddr == vaddr);
+                    if(loc_matches_file_pt || loc_matches_string || loc_matches_vaddr)
+                    {
+                      rd_cfg_release(bp);
+                      removed_already_existing = 1;
+                      break;
+                    }
+                  }
+                }
+                if(!removed_already_existing)
+                {
+                  RD_Cfg *project = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("project"));
+                  RD_Cfg *bp = rd_cfg_new(project, str8_lit("breakpoint"));
+                  RD_Cfg *loc = rd_cfg_new(bp, str8_lit("location"));
+                  if(vaddr != 0)
+                  {
+                    rd_cfg_newf(loc, "0x%I64x", vaddr);
+                  }
+                  else if(string.size != 0)
+                  {
+                    rd_cfg_new(loc, string);
+                  }
+                  else if(file_path.size != 0)
+                  {
+                    RD_Cfg *file_path_cfg = rd_cfg_new(loc, file_path);
+                    rd_cfg_newf(file_path_cfg, "%I64d", pt.line);
+                  }
+                }
+              }
               B32 removed_already_existing = 0;
               if(kind == RD_CmdKind_ToggleBreakpoint)
               {
@@ -15131,6 +15599,48 @@ rd_frame(void)
             TxtPt pt = rd_regs()->cursor;
             String8 string = rd_regs()->string;
             U64 vaddr = rd_regs()->vaddr;
+            //- TODO(rjf): @cfg add/toggle watch pin
+            {
+              B32 removed_already_existing = 0;
+              if(kind == RD_CmdKind_ToggleWatchPin)
+              {
+                RD_CfgList wps = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("watch_pin"));
+                for(RD_CfgNode *n = wps.first; n != 0; n = n->next)
+                {
+                  RD_Cfg *wp = n->v;
+                  RD_Cfg *name = rd_cfg_child_from_string(wp, str8_lit("name"));
+                  RD_Cfg *loc = rd_cfg_child_from_string(wp, str8_lit("location"));
+                  S64 loc_line = 0;
+                  U64 loc_vaddr = 0;
+                  B32 loc_matches_file_pt = (file_path.size != 0 && path_match_normalized(loc->first->string, file_path) && try_s64_from_str8_c_rules(loc->first->first->string, &loc_line) && loc_line == pt.line);
+                  B32 loc_matches_vaddr   = (vaddr != 0 && try_u64_from_str8_c_rules(loc->first->string, &loc_vaddr) && loc_vaddr == vaddr);
+                  B32 loc_matches_expr    = (string.size != 0 && str8_match(name->first->string, string, 0));
+                  if(loc_matches_expr && (loc_matches_file_pt || loc_matches_vaddr))
+                  {
+                    rd_cfg_release(wp);
+                    removed_already_existing = 1;
+                    break;
+                  }
+                }
+              }
+              if(!removed_already_existing)
+              {
+                RD_Cfg *project = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("project"));
+                RD_Cfg *wp = rd_cfg_new(project, str8_lit("watch_pin"));
+                RD_Cfg *name = rd_cfg_new(wp, str8_lit("name"));
+                RD_Cfg *loc = rd_cfg_new(wp, str8_lit("location"));
+                rd_cfg_new(name, string);
+                if(vaddr != 0)
+                {
+                  rd_cfg_newf(loc, "0x%I64x", vaddr);
+                }
+                else if(file_path.size != 0)
+                {
+                  RD_Cfg *file_path_cfg = rd_cfg_new(loc, file_path);
+                  rd_cfg_newf(file_path_cfg, "%I64d", pt.line);
+                }
+              }
+            }
             B32 removed_already_existing = 0;
             if(kind == RD_CmdKind_ToggleWatchPin)
             {
@@ -15251,6 +15761,22 @@ rd_frame(void)
           //- rjf: targets
           case RD_CmdKind_AddTarget:
           {
+            //- TODO(rjf): @cfg add new target
+            {
+              String8 file_path = rd_regs()->file_path;
+              RD_Cfg *project = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("project"));
+              RD_Cfg *target = rd_cfg_new(project, str8_lit("target"));
+              RD_Cfg *exe = rd_cfg_new(target, str8_lit("executable"));
+              rd_cfg_new(exe, file_path);
+              String8 working_directory = str8_chop_last_slash(file_path);
+              if(working_directory.size != 0)
+              {
+                RD_Cfg *wdir = rd_cfg_new(target, str8_lit("working_directory"));
+                rd_cfg_newf(wdir, "%S/", working_directory);
+              }
+              // TODO(rjf): (select target here)
+            }
+            
             // rjf: build target
             RD_Entity *entity = &rd_nil_entity;
             entity = rd_entity_alloc(rd_entity_root(), RD_EntityKind_Target);
