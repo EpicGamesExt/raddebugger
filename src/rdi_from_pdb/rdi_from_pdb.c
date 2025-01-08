@@ -1792,7 +1792,7 @@ ASYNC_WORK_DEF(p2r_udt_convert_work)
                         method_read_ptr = next_method_read_ptr)
                     {
                       CV_LeafMethodListMember *method = (CV_LeafMethodListMember*)method_read_ptr;
-                      CV_MethodProp prop = CV_FieldAttribs_ExtractMethodProp(method->attribs);
+                      CV_MethodProp prop = CV_FieldAttribs_Extract_MethodProp(method->attribs);
                       RDIM_Type *method_type = p2r_type_ptr_from_itype(method->itype);
                       next_method_read_ptr = (U8 *)(method+1);
                       
@@ -1867,7 +1867,7 @@ ASYNC_WORK_DEF(p2r_udt_convert_work)
                     
                     // rjf: unpack leaf
                     CV_LeafOneMethod *lf = (CV_LeafOneMethod *)field_leaf_first;
-                    CV_MethodProp prop = CV_FieldAttribs_ExtractMethodProp(lf->attribs);
+                    CV_MethodProp prop = CV_FieldAttribs_Extract_MethodProp(lf->attribs);
                     U8 *vbaseoff_ptr = (U8 *)(lf+1);
                     U8 *vbaseoff_opl_ptr = vbaseoff_ptr;
                     U32 vbaseoff = 0;
@@ -3694,9 +3694,9 @@ p2r_convert(Arena *arena, P2R_User2Convert *in)
                 // rjf: unpack leaf
                 CV_LeafPointer *lf = (CV_LeafPointer *)itype_leaf_first;
                 RDIM_Type *direct_type = p2r_type_ptr_from_itype(lf->itype);
-                CV_PointerKind ptr_kind = CV_PointerAttribs_ExtractKind(lf->attribs);
-                CV_PointerMode ptr_mode = CV_PointerAttribs_ExtractMode(lf->attribs);
-                U32            ptr_size = CV_PointerAttribs_ExtractSize(lf->attribs);
+                CV_PointerKind ptr_kind = CV_PointerAttribs_Extract_Kind(lf->attribs);
+                CV_PointerMode ptr_mode = CV_PointerAttribs_Extract_Mode(lf->attribs);
+                U32            ptr_size = CV_PointerAttribs_Extract_Size(lf->attribs);
                 
                 // rjf: cv -> rdi modifier flags
                 RDI_TypeModifierFlags modifier_flags = 0;

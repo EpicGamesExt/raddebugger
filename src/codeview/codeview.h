@@ -1123,12 +1123,12 @@ struct CV_LocalVarAttr
 //- (SymKind: COMPILE)
 
 typedef U32 CV_CompileFlags;
-#define CV_CompileFlags_ExtractLanguage(f)    (((f)    )&0xFF)
-#define CV_CompileFlags_ExtractFloatPrec(f)   (((f)>> 8)&0x03)
-#define CV_CompileFlags_ExtractFloatPkg(f)    (((f)>>10)&0x03)
-#define CV_CompileFlags_ExtractAmbientData(f) (((f)>>12)&0x07)
-#define CV_CompileFlags_ExtractAmbientCode(f) (((f)>>15)&0x07)
-#define CV_CompileFlags_ExtractMode(f)        (((f)>>18)&0x01)
+#define CV_CompileFlags_Extract_Language(f)    (((f)    )&0xFF)
+#define CV_CompileFlags_Extract_FloatPrec(f)   (((f)>> 8)&0x03)
+#define CV_CompileFlags_Extract_FloatPkg(f)    (((f)>>10)&0x03)
+#define CV_CompileFlags_Extract_AmbientData(f) (((f)>>12)&0x07)
+#define CV_CompileFlags_Extract_AmbientCode(f) (((f)>>15)&0x07)
+#define CV_CompileFlags_Extract_Mode(f)        (((f)>>18)&0x01)
 
 typedef struct CV_SymCompile CV_SymCompile;
 struct CV_SymCompile
@@ -1246,8 +1246,8 @@ enum
   CV_FrameprocFlag_HasCFG            = (1 << 21),
   CV_FrameprocFlag_HasCFW            = (1 << 22),
 };
-#define CV_FrameprocFlags_ExtractLocalBasePointer(f) (((f) >> 14)&3)
-#define CV_FrameprocFlags_ExtractParamBasePointer(f) (((f) >> 16)&3)
+#define CV_FrameprocFlags_Extract_LocalBasePointer(f) (((f) >> 14)&3)
+#define CV_FrameprocFlags_Extract_ParamBasePointer(f) (((f) >> 16)&3)
 
 typedef struct CV_SymFrameproc CV_SymFrameproc;
 struct CV_SymFrameproc
@@ -1457,16 +1457,16 @@ struct CV_SymThread32
 //- (SymKind: COMPILE2)
 
 typedef U32 CV_Compile2Flags;
-#define CV_Compile2Flags_ExtractLanguage(f)        (((f)    )&0xFF)
-#define CV_Compile2Flags_ExtractEditAndContinue(f) (((f)>> 8)&0x01)
-#define CV_Compile2Flags_ExtractNoDbgInfo(f)       (((f)>> 9)&0x01)
-#define CV_Compile2Flags_ExtractLTCG(f)            (((f)>>10)&0x01)
-#define CV_Compile2Flags_ExtractNoDataAlign(f)     (((f)>>11)&0x01)
-#define CV_Compile2Flags_ExtractManagedPresent(f)  (((f)>>12)&0x01)
-#define CV_Compile2Flags_ExtractSecurityChecks(f)  (((f)>>13)&0x01)
-#define CV_Compile2Flags_ExtractHotPatch(f)        (((f)>>14)&0x01)
-#define CV_Compile2Flags_ExtractCVTCIL(f)          (((f)>>15)&0x01)
-#define CV_Compile2Flags_ExtractMSILModule(f)      (((f)>>16)&0x01)
+#define CV_Compile2Flags_Extract_Language(f)        (((f)    )&0xFF)
+#define CV_Compile2Flags_Extract_EditAndContinue(f) (((f)>> 8)&0x01)
+#define CV_Compile2Flags_Extract_NoDbgInfo(f)       (((f)>> 9)&0x01)
+#define CV_Compile2Flags_Extract_LTCG(f)            (((f)>>10)&0x01)
+#define CV_Compile2Flags_Extract_NoDataAlign(f)     (((f)>>11)&0x01)
+#define CV_Compile2Flags_Extract_ManagedPresent(f)  (((f)>>12)&0x01)
+#define CV_Compile2Flags_Extract_SecurityChecks(f)  (((f)>>13)&0x01)
+#define CV_Compile2Flags_Extract_HotPatch(f)        (((f)>>14)&0x01)
+#define CV_Compile2Flags_Extract_CVTCIL(f)          (((f)>>15)&0x01)
+#define CV_Compile2Flags_Extract_MSILModule(f)      (((f)>>16)&0x01)
 
 typedef struct CV_SymCompile2 CV_SymCompile2;
 struct CV_SymCompile2
@@ -1737,19 +1737,19 @@ enum
 };
 
 typedef U32 CV_Compile3Flags;
-#define CV_Compile3Flags_ExtractLanguage(f)        (((f)    )&0xFF)
-#define CV_Compile3Flags_ExtractEditAndContinue(f) (((f)>> 9)&0x01)
-#define CV_Compile3Flags_ExtractNoDbgInfo(f)       (((f)>>10)&0x01)
-#define CV_Compile3Flags_ExtractLTCG(f)            (((f)>>11)&0x01)
-#define CV_Compile3Flags_ExtractNoDataAlign(f)     (((f)>>12)&0x01)
-#define CV_Compile3Flags_ExtractManagedPresent(f)  (((f)>>13)&0x01)
-#define CV_Compile3Flags_ExtractSecurityChecks(f)  (((f)>>14)&0x01)
-#define CV_Compile3Flags_ExtractHotPatch(f)        (((f)>>15)&0x01)
-#define CV_Compile3Flags_ExtractCVTCIL(f)          (((f)>>16)&0x01)
-#define CV_Compile3Flags_ExtractMSILModule(f)      (((f)>>17)&0x01)
-#define CV_Compile3Flags_ExtractSDL(f)             (((f)>>18)&0x01)
-#define CV_Compile3Flags_ExtractPGO(f)             (((f)>>19)&0x01)
-#define CV_Compile3Flags_ExtractEXP(f)             (((f)>>20)&0x01)
+#define CV_Compile3Flags_Extract_Language(f)        (((f)    )&0xFF)
+#define CV_Compile3Flags_Extract_EditAndContinue(f) (((f)>> 9)&0x01)
+#define CV_Compile3Flags_Extract_NoDbgInfo(f)       (((f)>>10)&0x01)
+#define CV_Compile3Flags_Extract_LTCG(f)            (((f)>>11)&0x01)
+#define CV_Compile3Flags_Extract_NoDataAlign(f)     (((f)>>12)&0x01)
+#define CV_Compile3Flags_Extract_ManagedPresent(f)  (((f)>>13)&0x01)
+#define CV_Compile3Flags_Extract_SecurityChecks(f)  (((f)>>14)&0x01)
+#define CV_Compile3Flags_Extract_HotPatch(f)        (((f)>>15)&0x01)
+#define CV_Compile3Flags_Extract_CVTCIL(f)          (((f)>>16)&0x01)
+#define CV_Compile3Flags_Extract_MSILModule(f)      (((f)>>17)&0x01)
+#define CV_Compile3Flags_Extract_SDL(f)             (((f)>>18)&0x01)
+#define CV_Compile3Flags_Extract_PGO(f)             (((f)>>19)&0x01)
+#define CV_Compile3Flags_Extract_EXP(f)             (((f)>>20)&0x01)
 
 typedef struct CV_SymCompile3 CV_SymCompile3;
 struct CV_SymCompile3
@@ -1853,7 +1853,7 @@ struct CV_SymDefrangeFramepointerRel
 
 //- (SymKind: DEFRANGE_SUBFIELD_REGISTER)
 
-#define CV_DefrangeSubfieldRegister_ExtractParentOffset(x) ((x) & 0x1FFF)
+#define CV_DefrangeSubfieldRegister_Extract_ParentOffset(x) ((x) & 0x1FFF)
 
 typedef struct CV_SymDefrangeSubfieldRegister CV_SymDefrangeSubfieldRegister;
 struct CV_SymDefrangeSubfieldRegister
@@ -1880,7 +1880,7 @@ enum
 {
   CV_DefrangeRegisterRelFlag_SpilledOutUDTMember = (1 << 0),
 };
-#define CV_DefrangeRegisterRelFlag_ExtractOffsetParent(f) (((f)>>4)&0xFFF)
+#define CV_DefrangeRegisterRelFlag_Extract_OffsetParent(f) (((f)>>4)&0xFFF)
 
 typedef struct CV_SymDefrangeRegisterRel CV_SymDefrangeRegisterRel;
 struct CV_SymDefrangeRegisterRel
@@ -2166,8 +2166,8 @@ enum
   CV_TypeProp_Intrinsic                  = (1 << 13),
   // MOCOM: 14,15
 };
-#define CV_TypeProps_ExtractHFA(f)   (((f)>>11)&0x3)
-#define CV_TypeProps_ExtractMOCOM(f) (((f)>>14)&0x3)
+#define CV_TypeProps_Extract_HFA(f)   (((f)>>11)&0x3)
+#define CV_TypeProps_Extract_MOCOM(f) (((f)>>14)&0x3)
 
 typedef U8 CV_PointerKind;
 typedef enum CV_PointerKindEnum
@@ -2259,8 +2259,8 @@ enum
   CV_FieldAttrib_CompilerGenated = (1<<8),
   CV_FieldAttrib_Sealed          = (1<<9),
 };
-#define CV_FieldAttribs_ExtractAccess(f)     ((f)&0x3)
-#define CV_FieldAttribs_ExtractMethodProp(f) (((f)>>2)&0x7)
+#define CV_FieldAttribs_Extract_Access(f)     ((f)&0x3)
+#define CV_FieldAttribs_Extract_MethodProp(f) (((f)>>2)&0x7)
 
 typedef U16 CV_LabelKind;
 typedef enum CV_LabelKindEnum
@@ -2408,9 +2408,9 @@ enum
   CV_PointerAttrib_RRef       = (1 << 22)
 };
 
-#define CV_PointerAttribs_ExtractKind(a) ((a)&0x1F)
-#define CV_PointerAttribs_ExtractMode(a) (((a)>>5)&0x7)
-#define CV_PointerAttribs_ExtractSize(a) (((a)>>13)&0x3F)
+#define CV_PointerAttribs_Extract_Kind(a) ((a)&0x1F)
+#define CV_PointerAttribs_Extract_Mode(a) (((a)>>5)&0x7)
+#define CV_PointerAttribs_Extract_Size(a) (((a)>>13)&0x3F)
 
 typedef struct CV_LeafPointer CV_LeafPointer;
 struct CV_LeafPointer
@@ -2861,9 +2861,9 @@ struct CV_C13File
 };
 
 typedef U32 CV_C13LineFlags;
-#define CV_C13LineFlags_ExtractLineNumber(f) ((f)&0xFFFFFF)
-#define CV_C13LineFlags_ExtractDeltaToEnd(f) (((f)>>24)&0x7F)
-#define CV_C13LineFlags_ExtractStatement(f)  (((f)>>31)&0x1)
+#define CV_C13LineFlags_Extract_LineNumber(f) ((f)&0xFFFFFF)
+#define CV_C13LineFlags_Extract_DeltaToEnd(f) (((f)>>24)&0x7F)
+#define CV_C13LineFlags_Extract_Statement(f)  (((f)>>31)&0x1)
 
 typedef struct CV_C13Line CV_C13Line;
 struct CV_C13Line

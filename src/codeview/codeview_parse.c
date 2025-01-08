@@ -475,12 +475,12 @@ cv_get_leaf_type_index_offsets(Arena *arena, CV_LeafKind leaf_kind, String8 data
   case CV_LeafKind_POINTER: {
     cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, OffsetOf(CV_LeafPointer, itype));
     CV_LeafPointer *ptr = (CV_LeafPointer *)data.str;
-    CV_PointerKind ptr_kind = CV_PointerAttribs_ExtractKind(ptr->attribs);
+    CV_PointerKind ptr_kind = CV_PointerAttribs_Extract_Kind(ptr->attribs);
     if (ptr_kind == CV_PointerKind_BaseType) {
       // TODO: add CV_LeafPointerBaseType
       cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, sizeof(CV_LeafPointer) + 0);
     } else {
-      CV_PointerMode ptr_mode = CV_PointerAttribs_ExtractMode(ptr->attribs);
+      CV_PointerMode ptr_mode = CV_PointerAttribs_Extract_Mode(ptr->attribs);
       if (ptr_mode == CV_PointerMode_PtrMem || ptr_mode == CV_PointerMode_PtrMethod) {
         // TODO: add type for the CvLeafPointerMember to syms_cv.mc
         cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, sizeof(CV_LeafPointer) + 0);
@@ -631,7 +631,7 @@ cv_get_leaf_type_index_offsets(Arena *arena, CV_LeafKind leaf_kind, String8 data
         CV_LeafOneMethod onemethod;
         cursor += str8_deserial_read_struct(data, cursor, &onemethod);
 
-        CV_MethodProp prop = CV_FieldAttribs_ExtractMethodProp(onemethod.attribs);
+        CV_MethodProp prop = CV_FieldAttribs_Extract_MethodProp(onemethod.attribs);
         if(prop == CV_MethodProp_PureIntro || prop == CV_MethodProp_Intro)
         {
           cursor += sizeof(U32); // virtoff
@@ -711,7 +711,7 @@ cv_get_leaf_type_index_offsets(Arena *arena, CV_LeafKind leaf_kind, String8 data
       cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, cursor + OffsetOf(CV_LeafMethodListMember, itype));
 
       // take into account intro virtual offset
-      CV_MethodProp mprop = CV_FieldAttribs_ExtractMethodProp(method.attribs);
+      CV_MethodProp mprop = CV_FieldAttribs_Extract_MethodProp(method.attribs);
       if (mprop == CV_MethodProp_Intro || mprop == CV_MethodProp_PureIntro) {
         read_size += sizeof(U32);
       }
@@ -1100,7 +1100,7 @@ cv_sym_from_data(Arena *arena, String8 sym_data, U64 sym_align)
           CV_SymCompile *compile = (CV_SymCompile*)first;
           String8 ver_str = str8_cstring_capped((char*)(compile + 1), (char *)(first + cap));
           result->info.arch = compile->machine;
-          result->info.language = CV_CompileFlags_ExtractLanguage(compile->flags);;
+          result->info.language = CV_CompileFlags_Extract_Language(compile->flags);;
           result->info.compiler_name = ver_str;
         }break;
         case CV_SymKind_COMPILE2:
@@ -1114,7 +1114,7 @@ cv_sym_from_data(Arena *arena, String8 sym_data, U64 sym_align)
                                              compile2->ver_minor,
                                              compile2->ver_build);
           result->info.arch = compile2->machine;
-          result->info.language = CV_Compile2Flags_ExtractLanguage(compile2->flags);;
+          result->info.language = CV_Compile2Flags_Extract_Language(compile2->flags);;
           result->info.compiler_name = compiler_name;
         }break;
         case CV_SymKind_COMPILE3:
@@ -1128,7 +1128,7 @@ cv_sym_from_data(Arena *arena, String8 sym_data, U64 sym_align)
                                              compile3->ver_minor,
                                              compile3->ver_build);
           result->info.arch = compile3->machine;
-          result->info.language = CV_Compile3Flags_ExtractLanguage(compile3->flags);;
+          result->info.language = CV_Compile3Flags_Extract_Language(compile3->flags);;
           result->info.compiler_name = compiler_name;
         }break;
       }
@@ -1295,7 +1295,7 @@ cv_c13_parsed_from_data(Arena *arena, String8 c13_data, String8 strtbl, COFF_Sec
             U32 i = 0;
             for (; line_ptr < line_opl; line_ptr += 1, i += 1){
               voffs[i] = line_ptr->off + secrel_off + sec_base_off;
-              line_nums[i] = CV_C13LineFlags_ExtractLineNumber(line_ptr->flags);
+              line_nums[i] = CV_C13LineFlags_Extract_LineNumber(line_ptr->flags);
             }
             voffs[i] = secrel_opl + sec_base_off;
           }

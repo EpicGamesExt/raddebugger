@@ -7,7 +7,7 @@
 internal String8 cv_string_from_type_index_source(CV_TypeIndexSource ti_source);
 internal String8 cv_string_from_language(CV_Language x);
 internal String8 cv_string_from_numeric(Arena *arena, CV_NumericParsed num);
-internal String8 cv_string_from_reg_id(CV_Arch arch, U32 id);
+internal String8 cv_string_from_reg_id(Arena *arena, CV_Arch arch, U32 id);
 internal String8 cv_string_from_member_access(CV_MemberAccess x);
 internal String8 cv_string_from_method_prop(CV_MethodProp x);
 internal String8 cv_string_from_hfa(CV_HFAKind x);
@@ -30,7 +30,7 @@ internal String8 cv_string_from_function_attribs(Arena *arena, CV_FunctionAttrib
 internal String8 cv_string_from_export_flags(Arena *arena, CV_ExportFlags x);
 internal String8 cv_string_from_sepcode(Arena *arena, CV_SepcodeFlags x);
 internal String8 cv_string_from_pub32_flags(Arena *arena, CV_Pub32Flags x);
-internal String8 cv_string_generic_flags(Arena *arena, CV_GenericFlags x);
+internal String8 cv_string_from_generic_flags(Arena *arena, CV_GenericFlags x);
 internal String8 cv_string_from_frame_proc_flags(Arena *arena, CV_FrameprocFlags x);
 internal String8 cv_string_from_type_props(Arena *arena, CV_TypeProps x);
 internal String8 cv_string_from_local_flags(Arena *arena, CV_LocalFlags x);
@@ -38,7 +38,7 @@ internal String8 cv_string_from_proc_flags(Arena *arena, CV_ProcFlags x);
 internal String8 cv_string_from_range_attribs(Arena *arena, CV_RangeAttribs x);
 internal String8 cv_string_from_defrange_register_rel_flags(Arena *arena, CV_DefrangeRegisterRelFlags x);
 internal String8 cv_string_from_field_attribs(Arena *arena, CV_FieldAttribs attribs);
-internal String8 cv_string_from_itype(Arena *arena, CV_TypeIndex itype);
+internal String8 cv_string_from_itype(Arena *arena, CV_TypeIndex min_itype, CV_TypeIndex itype);
 internal String8 cv_string_from_itemid(Arena *arena, CV_ItemId itemid);
 internal String8 cv_string_from_reg_off(Arena *arena, CV_Arch arch, U32 reg, U32 off);
 internal String8 cv_string_from_symbol_type(Arena *arena, CV_SymKind symbol_type);

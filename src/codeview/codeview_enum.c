@@ -29,12 +29,12 @@ cv_string_from_numeric(Arena *arena, CV_NumericParsed num)
 {
   String8 result = str8_zero();
   switch (num.kind) {
-    case CV_NumericKind_FLOAT16:   break; // TODO: format float16
+    case CV_NumericKind_FLOAT16:   NotImplemented; break; // TODO: format float16
     case CV_NumericKind_FLOAT32:   result = push_str8f(arena, "%f", (F64)(*(F32*)num.val)); break;
-    case CV_NumericKind_FLOAT48:   break; // TODO: format float48
+    case CV_NumericKind_FLOAT48:   NotImplemented; break; // TODO: format float48
     case CV_NumericKind_FLOAT64:   result = push_str8f(arena, "%f", *(F64*)num.val); break;
-    case CV_NumericKind_FLOAT80:   break; // TODO: format float80
-    case CV_NumericKind_FLOAT128:  break; // TODO: format float128
+    case CV_NumericKind_FLOAT80:   NotImplemented; break; // TODO: format float80
+    case CV_NumericKind_FLOAT128:  NotImplemented; break; // TODO: format float128
     case CV_NumericKind_CHAR:      result = push_str8f(arena, "%d",   *(S8 *)num.val); break;
     case CV_NumericKind_SHORT:     result = push_str8f(arena, "%d",   *(S16*)num.val); break;
     case CV_NumericKind_LONG:      result = push_str8f(arena, "%d",   *(S32*)num.val); break;
@@ -47,25 +47,28 @@ cv_string_from_numeric(Arena *arena, CV_NumericParsed num)
 }
 
 internal String8 
-cv_string_from_reg_id(CV_Arch arch, U32 id)
+cv_string_from_reg_id(Arena *arena, CV_Arch arch, U32 id)
 {
   String8 result = str8_zero();
   switch (arch) {
   case CV_Arch_8086: {
       switch (id) {
-      #define X(_name, _id,...) case _id: str8_lit(Stringify(_name)); break;
+      #define X(_N, _ID, ...) case _ID: result = str8_lit(Stringify(_N)); break;
       CV_Reg_X86_XList(X)
       #undef X
       }
   } break;
   case CV_Arch_X64: {
       switch (id) {
-      #define X(_name, _id,...) case _id: str8_lit(Stringify(_name)); break;
+      #define X(_N, _ID, ...) case _ID: result = str8_lit(Stringify(_N)); break;
       CV_Reg_X64_XList(X)
       #undef X
       }
   } break;
-  default: NotImplemented;
+  default: NotImplemented; break;
+  }
+  if (result.size == 0) {
+    result = push_str8f(arena, "%x", id);
   }
   return result;
 }
@@ -274,7 +277,7 @@ cv_string_from_pointer_kind(CV_PointerKind x)
     case CV_PointerKind_BaseSelf:    return str8_lit("BaseSelf");
     case CV_PointerKind_Near32:      return str8_lit("Near32");
     case CV_PointerKind_Far32:       return str8_lit("Far32");
-    case CV_PointerKind_64:          return str8_lit("64");
+    case CV_PointerKind_64:          return str8_lit("64Bit");
   }
   return str8_zero();
 }
@@ -308,7 +311,7 @@ internal String8
 cv_string_from_c13_subsection_kind(CV_C13SubSectionKind x)
 {
   switch (x) {
-    #define X(_id, _name) case CV_C13SubSectionKind_##_id: return str8_lit(Stringify(_name));
+    #define X(_N, _ID) case CV_C13SubSectionKind_##_N: return str8_lit(Stringify(_N));
     CV_C13SubSectionKindXList(X)
     #undef X
   }
@@ -331,37 +334,70 @@ cv_string_from_modifier_flags(Arena *arena, CV_ModifierFlags x)
   }
   String8 result = str8_list_join(arena, &list, &(StringJoin){.sep=str8_lit(", ")});
   scratch_end(scratch);
+  return result;
 }
 
 internal String8
 cv_string_from_pointer_attribs(Arena *arena, CV_PointerAttribs x)
 {
   Temp scratch = scratch_begin(&arena, 1);
+
   String8List list = {0};
   if (x & CV_PointerAttrib_IsFlat) {
+    x &= ~CV_PointerAttrib_IsFlat;
     str8_list_pushf(scratch.arena, &list, "IsFlat");
   }
   if (x & CV_PointerAttrib_Volatile) {
+    x &= ~CV_PointerAttrib_Volatile;
     str8_list_pushf(scratch.arena, &list, "Volatile");
   }
   if (x & CV_PointerAttrib_Const) {
+    x &= ~CV_PointerAttrib_Const;
     str8_list_pushf(scratch.arena, &list, "Const");
   }
   if (x & CV_PointerAttrib_Unaligned) {
+    x &= ~CV_PointerAttrib_Unaligned;
     str8_list_pushf(scratch.arena, &list, "Unaligned");
   }
   if (x & CV_PointerAttrib_Restricted) {
+    x &= ~CV_PointerAttrib_Restricted;
     str8_list_pushf(scratch.arena, &list, "Restricted");
   }
   if (x & CV_PointerAttrib_MOCOM) {
+    x &= ~CV_PointerAttrib_MOCOM;
     str8_list_pushf(scratch.arena, &list, "MOCOM");
   }
   if (x & CV_PointerAttrib_LRef) {
+    x &= ~CV_PointerAttrib_LRef;
     str8_list_pushf(scratch.arena, &list, "LRef");
   }
   if (x & CV_PointerAttrib_RRef) {
+    x &= ~CV_PointerAttrib_RRef;
     str8_list_pushf(scratch.arena, &list, "RRef");
   }
+
+  CV_PointerKind kind = CV_PointerAttribs_Extract_Kind(x);
+  CV_PointerMode mode = CV_PointerAttribs_Extract_Mode(x);
+  U64            size = CV_PointerAttribs_Extract_Size(x);
+
+  x &= ~(0x1f|(0x7<<5)|(0x3f<<13));
+
+  if (kind) {
+    String8 kind_str = cv_string_from_pointer_kind(kind);
+    str8_list_pushf(scratch.arena, &list, "Kind=%S", kind_str);
+  }
+  if (mode) {
+    String8 mode_str = cv_string_from_pointer_mode(mode);
+    str8_list_pushf(scratch.arena, &list, "Mode=%S", mode_str);
+  }
+  if (size) {
+    str8_list_pushf(scratch.arena, &list, "Size=%llu", size);
+  }
+
+  if (x != 0) {
+    str8_list_pushf(scratch.arena, &list, "Unknown=%x", x);
+  }
+
   String8 result = str8_list_join(arena, &list, &(StringJoin){.sep=str8_lit(", ")});
   scratch_end(scratch);
   return result;
@@ -453,7 +489,7 @@ cv_string_from_pub32_flags(Arena *arena, CV_Pub32Flags x)
 }
 
 internal String8
-cv_string_generic_flags(Arena *arena, CV_GenericFlags x)
+cv_string_from_generic_flags(Arena *arena, CV_GenericFlags x)
 {
   Temp scratch = scratch_begin(&arena, 1);
   String8List list = {0};
@@ -539,51 +575,78 @@ internal String8
 cv_string_from_type_props(Arena *arena, CV_TypeProps x)
 {
   Temp scratch = scratch_begin(&arena, 1);
+
   U32 hfa  = CV_TypeProps_Extract_HFA(x);
   U32 mcom = CV_TypeProps_Extract_MOCOM(x);
+
+  String8 hfa_str  = cv_string_from_hfa(hfa);
+  String8 mcom_str = cv_string_from_mcom(mcom);
 
   String8 flags_str;
   {
     String8List list = {0};
     if (x & CV_TypeProp_Packed) {
+      x &= ~CV_TypeProp_Packed;
       str8_list_pushf(scratch.arena, &list, "Packed");
     }
     if (x & CV_TypeProp_HasConstructorsDestructors) {
+      x &= ~CV_TypeProp_HasConstructorsDestructors;
       str8_list_pushf(scratch.arena, &list, "HasConstructorsDestructors");
     }
     if (x & CV_TypeProp_OverloadedOperators) {
+      x &= ~CV_TypeProp_OverloadedOperators;
       str8_list_pushf(scratch.arena, &list, "OverloadedOperators");
     }
     if (x & CV_TypeProp_IsNested) {
+      x &= ~CV_TypeProp_IsNested;
       str8_list_pushf(scratch.arena, &list, "IsNested");
     }
     if (x & CV_TypeProp_ContainsNested) {
+      x &= ~CV_TypeProp_ContainsNested;
       str8_list_pushf(scratch.arena, &list, "ContainsNested");
     }
     if (x & CV_TypeProp_OverloadedAssignment) {
+      x &= ~CV_TypeProp_OverloadedAssignment;
       str8_list_pushf(scratch.arena, &list, "OverloadedAssignment");
     }
     if (x & CV_TypeProp_OverloadedCasting) {
+      x &= ~CV_TypeProp_OverloadedCasting;
       str8_list_pushf(scratch.arena, &list, "OverloadedCasting");
     }
     if (x & CV_TypeProp_FwdRef) {
+      x &= ~CV_TypeProp_FwdRef;
       str8_list_pushf(scratch.arena, &list, "FwdRef");
     }
     if (x & CV_TypeProp_Scoped) {
+      x &= ~CV_TypeProp_Scoped;
       str8_list_pushf(scratch.arena, &list, "Scoped");
     }
     if (x & CV_TypeProp_HasUniqueName) {
+      x &= ~CV_TypeProp_HasUniqueName;
       str8_list_pushf(scratch.arena, &list, "HasUniqueName");
     }
     if (x & CV_TypeProp_Sealed) {
+      x &= ~CV_TypeProp_Sealed;
       str8_list_pushf(scratch.arena, &list, "Sealed");
     }
+    if (x & CV_TypeProp_Intrinsic) {
+      x &= ~CV_TypeProp_Intrinsic;
+      str8_list_pushf(scratch.arena, &list, "Intrinsic");
+    }
+    if (x != 0) {
+      str8_list_pushf(scratch.arena, &list, "%x", x);
+    }
     flags_str = str8_list_join(scratch.arena, &list, &(StringJoin){.sep=str8_lit(", ") });
+
+    if (hfa) {
+      str8_list_pushf(scratch.arena, &list, "HFA = %S", hfa_str);
+    }
+    if (mcom) {
+      str8_list_pushf(scratch.arena, &list, "MCOM = %S", mcom_str);
+    }
   }
   
-  String8 hfa_str  = cv_string_from_hfa(hfa);
-  String8 mcom_str = cv_string_from_mcom(mcom);
-  String8 result   = push_str8f(arena, "flags = %S, HFA = %S, MCOM = %S", flags_str, hfa_str, mcom_str);
+  String8 result = push_str8f(arena, "%S", flags_str);
 
   scratch_end(scratch);
   return result;
@@ -638,30 +701,46 @@ cv_string_from_proc_flags(Arena *arena, CV_ProcFlags x)
   Temp scratch = scratch_begin(&arena, 1);
   String8List list = {0};
   if (x & CV_ProcFlag_NoFPO) {
+    x &= ~CV_ProcFlag_NoFPO;
     str8_list_pushf(scratch.arena, &list, "NoFPO");
   }
   if (x & CV_ProcFlag_IntReturn) {
+    x &= ~CV_ProcFlag_IntReturn;
     str8_list_pushf(scratch.arena, &list, "IntReturn");
   }
   if (x & CV_ProcFlag_FarReturn) {
+    x &= ~CV_ProcFlag_FarReturn;
     str8_list_pushf(scratch.arena, &list, "FarReturn");
   }
   if (x & CV_ProcFlag_NeverReturn) {
+    x &= ~CV_ProcFlag_NeverReturn;
     str8_list_pushf(scratch.arena, &list, "NeverReturn");
   }
   if (x & CV_ProcFlag_NotReached) {
+    x &= ~CV_ProcFlag_NotReached;
     str8_list_pushf(scratch.arena, &list, "NotReached");
   }
   if (x & CV_ProcFlag_CustomCall) {
+    x &= ~CV_ProcFlag_CustomCall;
     str8_list_pushf(scratch.arena, &list, "CustomCall");
   }
   if (x & CV_ProcFlag_NoInline) {
+    x &= ~CV_ProcFlag_NoInline;
     str8_list_pushf(scratch.arena, &list, "NoInline");
   }
   if (x & CV_ProcFlag_OptDbgInfo) {
+    x &= ~CV_ProcFlag_OptDbgInfo;
     str8_list_pushf(scratch.arena, &list, "OptDbgInfo");
   }
-  String8 result = str8_list_join(arena, &list, &(StringJoin){.sep=str8_lit(", ")});
+  if (x != 0) {
+    str8_list_pushf(scratch.arena, &list, "%#x", x);
+  }
+  String8 result;
+  if (list.node_count == 0) {
+    result = str8_lit("None");
+  } else {
+    result = str8_list_join(arena, &list, &(StringJoin){.sep=str8_lit(", ")});
+  }
   temp_end(scratch);
   return result;
 }
@@ -691,42 +770,140 @@ cv_string_from_field_attribs(Arena *arena, CV_FieldAttribs attribs)
 {
   Temp scratch = scratch_begin(&arena, 1);
 
-  U32 access = CV_FieldAttribs_Extract_ACCESS(attribs);
-  U32 mprop  = CV_FieldAttribs_Extract_MPROP(attribs);
-
-  String8 attribs_str;
-  {
-    String8List list = {0};
-    if (attribs & CV_FieldAttrib_Pseudo) {
-      str8_list_pushf(scratch.arena, &list, "Pseudo");
-    }
-    if (attribs & CV_FieldAttrib_NoInherit) {
-      str8_list_pushf(scratch.arena, &list, "NoInherit");
-    }
-    if (attribs & CV_FieldAttrib_NoConstruct) {
-      str8_list_pushf(scratch.arena, &list, "NoConstruct");
-    }
-    if (attribs & CV_FieldAttrib_CompilerGenated) {
-      str8_list_pushf(scratch.arena, &list, "CompilerGenerated");
-    }
-    if (attribs & CV_FieldAttrib_Sealed) {
-      str8_list_pushf(scratch.arena, &list, "Sealed");
-    }
-    attribs_str = str8_list_join(scratch.arena, &list, &(StringJoin){.sep=", " });
-  }
+  U32 access = CV_FieldAttribs_Extract_Access(attribs);
+  U32 mprop  = CV_FieldAttribs_Extract_MethodProp(attribs);
+  attribs &= ~(0x3 | 0x7);
 
   String8 access_str = cv_string_from_member_access(access);
   String8 mprop_str  = cv_string_from_method_prop(mprop);
-  String8 result     = push_str8f(arena, "flags = %S, access = %S, method prop = %S", attribs_str, access_str, mprop_str);
+
+  String8List list = {0};
+  {
+    if (attribs & CV_FieldAttrib_Pseudo) {
+      attribs &= ~CV_FieldAttrib_Pseudo;
+      str8_list_pushf(scratch.arena, &list, "Pseudo");
+    }
+    if (attribs & CV_FieldAttrib_NoInherit) {
+      attribs &= ~CV_FieldAttrib_NoInherit;
+      str8_list_pushf(scratch.arena, &list, "NoInherit");
+    }
+    if (attribs & CV_FieldAttrib_NoConstruct) {
+      attribs &= ~CV_FieldAttrib_NoConstruct;
+      str8_list_pushf(scratch.arena, &list, "NoConstruct");
+    }
+    if (attribs & CV_FieldAttrib_CompilerGenated) {
+      attribs &= ~CV_FieldAttrib_CompilerGenated;
+      str8_list_pushf(scratch.arena, &list, "CompilerGenerated");
+    }
+    if (attribs & CV_FieldAttrib_Sealed) {
+      attribs &= ~CV_FieldAttrib_Sealed;
+      str8_list_pushf(scratch.arena, &list, "Sealed");
+    }
+    if (attribs) {
+      str8_list_pushf(scratch.arena, &list, "Unknown: %x", attribs);
+    }
+  }
+
+  if (access) {
+    str8_list_pushf(scratch.arena, &list, "%S", access_str);
+  }
+  if (mprop) {
+    str8_list_pushf(scratch.arena, &list, "%S", mprop_str);
+  }
+
+  String8 result = str8_list_join(scratch.arena, &list, &(StringJoin){.sep=str8_lit(", ")});
 
   scratch_end(scratch);
   return result;
 }
 
 internal String8
-cv_string_from_itype(Arena *arena, CV_TypeIndex itype)
+cv_string_from_itype(Arena *arena, CV_TypeIndex min_itype, CV_TypeIndex itype)
 {
-  String8 result = push_str8f(arena, "%x", itype);
+  String8 result = str8_zero();
+  if (itype < min_itype) {
+    String8 n = cv_type_name_from_basic_type((CV_BasicType)itype);
+    if (n.size) {
+      Temp scratch = scratch_begin(&arena, 1);
+
+      U64 type = CV_BasicTypeFromTypeId(itype);
+      char *type_str = "???";
+      switch (type) {
+        case CV_BasicType_NOTYPE:     type_str = "NOTYPE";     break;
+        case CV_BasicType_ABS:        type_str = "ABS";        break;
+        case CV_BasicType_SEGMENT:    type_str = "SEGMENT";    break;
+        case CV_BasicType_VOID:       type_str = "VOID";       break;
+        case CV_BasicType_CURRENCY:   type_str = "CURRENCY";   break;
+        case CV_BasicType_NBASICSTR:  type_str = "NBASICSTR";  break;
+        case CV_BasicType_FBASICSTR:  type_str = "FBASICSTR";  break;
+        case CV_BasicType_NOTTRANS:   type_str = "NOTTRANS";   break;
+        case CV_BasicType_HRESULT:    type_str = "HRESULT";    break;
+        case CV_BasicType_CHAR:       type_str = "CHAR";       break;
+        case CV_BasicType_SHORT:      type_str = "SHORT";      break;
+        case CV_BasicType_LONG:       type_str = "LONG";       break;
+        case CV_BasicType_QUAD:       type_str = "QUAD";       break;
+        case CV_BasicType_OCT:        type_str = "OCT";        break;
+        case CV_BasicType_UCHAR:      type_str = "UCHAR";      break;
+        case CV_BasicType_USHORT:     type_str = "USHORT";     break;
+        case CV_BasicType_ULONG:      type_str = "ULONG";      break;
+        case CV_BasicType_UQUAD:      type_str = "UQUAD";      break;
+        case CV_BasicType_UOCT:       type_str = "UOCT";       break;
+        case CV_BasicType_BOOL8:      type_str = "BOOL8";      break;
+        case CV_BasicType_BOOL16:     type_str = "BOOL16";     break;
+        case CV_BasicType_BOOL32:     type_str = "BOOL32";     break;
+        case CV_BasicType_BOOL64:     type_str = "BOOL64";     break;
+        case CV_BasicType_FLOAT32:    type_str = "FLOAT32";    break;
+        case CV_BasicType_FLOAT64:    type_str = "FLOAT64";    break;
+        case CV_BasicType_FLOAT80:    type_str = "FLOAT80";    break;
+        case CV_BasicType_FLOAT128:   type_str = "FLOAT128";   break;
+        case CV_BasicType_FLOAT48:    type_str = "FLOAT48";    break;
+        case CV_BasicType_FLOAT32PP:  type_str = "FLOAT32PP";  break;
+        case CV_BasicType_FLOAT16:    type_str = "FLOAT16";    break;
+        case CV_BasicType_COMPLEX32:  type_str = "COMPLEX32";  break;
+        case CV_BasicType_COMPLEX64:  type_str = "COMPLEX64";  break;
+        case CV_BasicType_COMPLEX80:  type_str = "COMPLEX80";  break;
+        case CV_BasicType_COMPLEX128: type_str = "COMPLEX128"; break;
+        case CV_BasicType_BIT:        type_str = "BIT";        break;
+        case CV_BasicType_PASCHAR:    type_str = "PASCHAR";    break;
+        case CV_BasicType_BOOL32FF:   type_str = "BOOL32FF";   break;
+        case CV_BasicType_INT8:       type_str = "INT8";       break;
+        case CV_BasicType_UINT8:      type_str = "UINT8";      break;
+        case CV_BasicType_RCHAR:      type_str = "RCHAR";      break;
+        case CV_BasicType_WCHAR:      type_str = "WCHAR";      break;
+        case CV_BasicType_INT16:      type_str = "INT16";      break;
+        case CV_BasicType_UINT16:     type_str = "UINT16";     break;
+        case CV_BasicType_INT32:      type_str = "INT32";      break;
+        case CV_BasicType_UINT32:     type_str = "UINT32";     break;
+        case CV_BasicType_INT64:      type_str = "INT64";      break;
+        case CV_BasicType_UINT64:     type_str = "UINT64";     break;
+        case CV_BasicType_INT128:     type_str = "INT128";     break;
+        case CV_BasicType_UINT128:    type_str = "UINT128";    break;
+        case CV_BasicType_CHAR16:     type_str = "CHAR16";     break;
+        case CV_BasicType_CHAR32:     type_str = "CHAR32";     break;
+        case CV_BasicType_CHAR8:      type_str = "CHAR8";      break;
+        case CV_BasicType_PTR:        type_str = "PTR";        break;
+      }
+
+      U64 ptr = CV_BasicPointerKindFromTypeId(itype);
+      char *ptr_str = "";
+      switch (ptr) {
+        case 0x1: ptr_str = "P";    break;
+        case 0x2: ptr_str = "PF";   break;
+        case 0x3: ptr_str = "PH";   break;
+        case 0x4: ptr_str = "32P";  break;
+        case 0x5: ptr_str = "32PF"; break;
+        case 0x6: ptr_str = "64P";  break;
+      }
+
+      n = upper_from_str8(scratch.arena, n);
+      result = push_str8f(arena, "T_%s%s(%x)", ptr_str, type_str, itype);
+      scratch_end(scratch);
+    } else {
+      result = push_str8f(arena, "%x", itype);
+    }
+  } else {
+    result = push_str8f(arena, "%x", itype);
+  }
   return result;
 }
 
@@ -740,7 +917,10 @@ cv_string_from_itemid(Arena *arena, CV_ItemId itemid)
 internal String8
 cv_string_from_reg_off(Arena *arena, CV_Arch arch, U32 reg, U32 off)
 {
-  return push_str8f(arena, "%S+%x", cv_string_from_reg_id(arch, reg), off);
+  Temp scratch = scratch_begin(&arena, 1);
+  String8 result = push_str8f(arena, "%S+%x", cv_string_from_reg_id(scratch.arena, arch, reg), off);
+  scratch_end(scratch);
+  return result;
 }
 
 internal String8

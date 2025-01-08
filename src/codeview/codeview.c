@@ -96,11 +96,11 @@ cv_pick_fp_encoding(CV_SymFrameproc *frameproc, B32 is_local_param)
   CV_EncodedFramePtrReg fp_reg = 0;
   if(is_local_param)
   {
-    fp_reg = CV_FrameprocFlags_ExtractParamBasePointer(frameproc->flags);
+    fp_reg = CV_FrameprocFlags_Extract_ParamBasePointer(frameproc->flags);
   }
   else
   {
-    fp_reg = CV_FrameprocFlags_ExtractLocalBasePointer(frameproc->flags);
+    fp_reg = CV_FrameprocFlags_Extract_LocalBasePointer(frameproc->flags);
   }
   return fp_reg;
 }
