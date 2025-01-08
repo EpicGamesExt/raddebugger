@@ -1326,5 +1326,5 @@ main(int argc, char **argv)
   }
   
   //- rjf: call into "real" entry point
-  main_thread_base_entry_point(arguments_count, arguments);
+  main_thread_base_entry_point(argc, argv);
 }
