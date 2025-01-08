@@ -338,7 +338,7 @@ dw_unwind_parse_pointer_x64(void *frame_base, Rng1U64 frame_range, DW_EhPtrCtx *
     case DW_EhPtrEnc_UData8: size_param = 8; goto ufixed;
     ufixed:
     {
-      based_range_read(frame_base, frame_range, pointer_off, size_param, &raw_pointer);
+      dw_based_range_read(frame_base, frame_range, pointer_off, size_param, &raw_pointer);
       after_pointer_off = pointer_off + size_param;
     } break;
     
@@ -352,7 +352,7 @@ dw_unwind_parse_pointer_x64(void *frame_base, Rng1U64 frame_range, DW_EhPtrCtx *
     case DW_EhPtrEnc_SData8:size_param = 8; goto sfixed;
     sfixed:
     {
-      based_range_read(frame_base, frame_range, pointer_off, size_param, &raw_pointer);
+      dw_based_range_read(frame_base, frame_range, pointer_off, size_param, &raw_pointer);
       after_pointer_off = pointer_off + size_param;
       // sign extension
       U64 sign_bit = size_param*8 - 1;
@@ -363,13 +363,13 @@ dw_unwind_parse_pointer_x64(void *frame_base, Rng1U64 frame_range, DW_EhPtrCtx *
     
     case DW_EhPtrEnc_ULEB128:
     {
-      U64 size = based_range_read_uleb128(frame_base, frame_range, pointer_off, &raw_pointer);
+      U64 size = dw_based_range_read_uleb128(frame_base, frame_range, pointer_off, &raw_pointer);
       after_pointer_off = pointer_off + size;
     } break;
     
     case DW_EhPtrEnc_SLEB128:
     {
-      U64 size = based_range_read_sleb128(frame_base, frame_range, pointer_off,
+      U64 size = dw_based_range_read_sleb128(frame_base, frame_range, pointer_off,
                                                     (S64*)&raw_pointer);
       after_pointer_off = pointer_off + size;
     } break;
@@ -415,34 +415,34 @@ dw_unwind_parse_cie_x64(void *base, Rng1U64 range, DW_EhPtrCtx *ptr_ctx, U64 off
   // get version
   U64 version_off = off;
   U8  version     = 0;
-  based_range_read(base, range, version_off, 1, &version);
+  dw_based_range_read(base, range, version_off, 1, &version);
   
   // check version
   if (version == 1 || version == 3) {
     
     // read augmentation
     U64     augmentation_off = version_off + 1;
-    String8 augmentation     = based_range_read_string(base, range, augmentation_off);
+    String8 augmentation     = dw_based_range_read_string(base, range, augmentation_off);
     
     // read code align
     U64 code_align_factor_off  = augmentation_off + augmentation.size + 1;
     U64 code_align_factor      = 0;
-    U64 code_align_factor_size = based_range_read_uleb128(base, range, code_align_factor_off, &code_align_factor);
+    U64 code_align_factor_size = dw_based_range_read_uleb128(base, range, code_align_factor_off, &code_align_factor);
     
     // read data align
     U64 data_align_factor_off  = code_align_factor_off + code_align_factor_size;
     S64 data_align_factor      = 0;
-    U64 data_align_factor_size = based_range_read_sleb128(base, range, data_align_factor_off, &data_align_factor);
+    U64 data_align_factor_size = dw_based_range_read_sleb128(base, range, data_align_factor_off, &data_align_factor);
     
     // return address register
     U64 ret_addr_reg_off       = data_align_factor_off + data_align_factor_size;
     U64 after_ret_addr_reg_off = 0;
     U64 ret_addr_reg           = 0;
     if (version == 1) {
-      based_range_read(base, range, ret_addr_reg_off, 1, &ret_addr_reg);
+      dw_based_range_read(base, range, ret_addr_reg_off, 1, &ret_addr_reg);
       after_ret_addr_reg_off = ret_addr_reg_off + 1;
     } else {
-      U64 ret_addr_reg_size = based_range_read_uleb128(base, range, ret_addr_reg_off, &ret_addr_reg);
+      U64 ret_addr_reg_size = dw_based_range_read_uleb128(base, range, ret_addr_reg_off, &ret_addr_reg);
       after_ret_addr_reg_off = ret_addr_reg_off + ret_addr_reg_size;
     }
     
@@ -459,7 +459,7 @@ dw_unwind_parse_cie_x64(void *base, Rng1U64 range, DW_EhPtrCtx *ptr_ctx, U64 off
     U64 augmentation_size     = 0;
     if (augmentation.size > 0 && augmentation.str[0] == 'z') {
       has_augmentation_size = 1;
-      U64 aug_size_size = based_range_read_uleb128(base, range, aug_size_off, &augmentation_size);
+      U64 aug_size_size = dw_based_range_read_uleb128(base, range, aug_size_off, &augmentation_size);
       after_aug_size_off += aug_size_size;
     }
     
@@ -476,19 +476,19 @@ dw_unwind_parse_cie_x64(void *base, Rng1U64 range, DW_EhPtrCtx *ptr_ctx, U64 off
       for (U8 *ptr = augmentation.str + 1, *opl = augmentation.str + augmentation.size; ptr < opl; ++ptr) {
         switch (*ptr) {
           case 'L': {
-            based_range_read_struct(base, range, aug_data_cursor, &lsda_encoding);
+            dw_based_range_read_struct(base, range, aug_data_cursor, &lsda_encoding);
             aug_data_cursor += sizeof(lsda_encoding);
           } break;
           case 'P': {
             DW_EhPtrEnc handler_encoding = DW_EhPtrEnc_Omit;
-            based_range_read_struct(base, range, aug_data_cursor, &handler_encoding);
+            dw_based_range_read_struct(base, range, aug_data_cursor, &handler_encoding);
             
             U64 ptr_off  = aug_data_cursor + sizeof(handler_encoding);
             U64 ptr_size = dw_unwind_parse_pointer_x64(base, range, ptr_ctx, handler_encoding, ptr_off, &handler_ip);
             aug_data_cursor = ptr_off + ptr_size;
           } break;
           case 'R': {
-            based_range_read_struct(base, range, aug_data_cursor, &addr_encoding);
+            dw_based_range_read_struct(base, range, aug_data_cursor, &addr_encoding);
             aug_data_cursor += sizeof(addr_encoding);
           } break;
           default: {
@@ -547,7 +547,7 @@ dw_unwind_parse_fde_x64(void *base, Rng1U64 range, DW_EhPtrCtx *ptr_ctx, DW_CIEU
   if (cie->has_augmentation_size) {
     // augmentation size
     U64 augmentation_size  = 0;
-    U64 aug_size_size      = based_range_read_uleb128(base, range, aug_data_off, &augmentation_size);
+    U64 aug_size_size      = dw_based_range_read_uleb128(base, range, aug_data_off, &augmentation_size);
     U64 after_aug_size_off = aug_data_off + aug_size_size;
     
     // extract lsda (only thing that can actually be in FDE's augmentation data as far as we know)
@@ -863,7 +863,7 @@ dw_unwind_machine_run_to_ip_x64(void *base, Rng1U64 range, DW_CFIMachine *machin
     DW_CFAControlBits control_bits = 0;
     
     // decode opcode/operand0
-    if (!based_range_read(base, range, cfi_off, 1, &opcode)) {
+    if (!dw_based_range_read(base, range, cfi_off, 1, &opcode)) {
       result = 1;
       goto done;
     }
@@ -897,7 +897,7 @@ dw_unwind_machine_run_to_ip_x64(void *base, Rng1U64 range, DW_CFIMachine *machin
           } break;
           default: {
             if (d <= 8) {
-              based_range_read(base, range, decode_cursor, d, out);
+              dw_based_range_read(base, range, decode_cursor, d, out);
               o_size = d;
             }
           } break;
@@ -905,10 +905,10 @@ dw_unwind_machine_run_to_ip_x64(void *base, Rng1U64 range, DW_CFIMachine *machin
             o_size = dw_unwind_parse_pointer_x64(base, range, ptr_ctx, cie->addr_encoding, decode_cursor, out);
           } break;
           case DW_CFADecode_ULEB128: {
-            o_size = based_range_read_uleb128(base, range, decode_cursor, out);
+            o_size = dw_based_range_read_uleb128(base, range, decode_cursor, out);
           } break;
           case DW_CFADecode_SLEB128: {
-            o_size = based_range_read_sleb128(base, range, decode_cursor, (S64*)out);
+            o_size = dw_based_range_read_sleb128(base, range, decode_cursor, (S64*)out);
           } break;
         }
         decode_cursor += o_size;

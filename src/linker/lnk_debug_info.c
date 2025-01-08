@@ -3699,9 +3699,9 @@ THREAD_POOL_TASK_FUNC(lnk_convert_types_to_rdi_task)
     } break;
     case CV_LeafKind_POINTER: {
       CV_LeafPointer *ptr      = (CV_LeafPointer *) src.data.str;
-      CV_PointerKind  ptr_kind = CV_PointerAttribs_ExtractKind(ptr->attribs);
-      CV_PointerMode  ptr_mode = CV_PointerAttribs_ExtractMode(ptr->attribs);
-      U32             ptr_size = CV_PointerAttribs_ExtractSize(ptr->attribs);
+      CV_PointerKind  ptr_kind = CV_PointerAttribs_Extract_Kind(ptr->attribs);
+      CV_PointerMode  ptr_mode = CV_PointerAttribs_Extract_Mode(ptr->attribs);
+      U32             ptr_size = CV_PointerAttribs_Extract_Size(ptr->attribs);
       (void)ptr_kind;
 
       // parse ahead type chain and squash modifiers
@@ -4010,7 +4010,7 @@ THREAD_POOL_TASK_FUNC(lnk_convert_types_to_rdi_task)
               for (U64 cursor = 0; cursor + sizeof(CV_LeafMethodListMember) <= method_list_leaf.data.size; ) {
                 // parse CodeView method overload info
                 CV_LeafMethodListMember *list_member = (CV_LeafMethodListMember *) (method_list_leaf.data.str + cursor);
-                CV_MethodProp            prop        = CV_FieldAttribs_ExtractMethodProp(list_member->attribs);
+                CV_MethodProp            prop        = CV_FieldAttribs_Extract_MethodProp(list_member->attribs);
                 cursor += sizeof(CV_LeafMethodListMember);
                 U32 vftable_offset = 0;
                 if (prop == CV_MethodProp_Intro || prop == CV_MethodProp_PureIntro) {
@@ -4037,7 +4037,7 @@ THREAD_POOL_TASK_FUNC(lnk_convert_types_to_rdi_task)
         case CV_LeafKind_ONEMETHOD: {
           // parse CodeView method
           CV_LeafOneMethod *one_method = (CV_LeafOneMethod *) (src.data.str + cursor);
-          CV_MethodProp     prop       = CV_FieldAttribs_ExtractMethodProp(one_method->attribs);
+          CV_MethodProp     prop       = CV_FieldAttribs_Extract_MethodProp(one_method->attribs);
           cursor += sizeof(CV_LeafOneMethod);
           U32 vftable_offset = 0;
           if (prop == CV_MethodProp_Intro || prop == CV_MethodProp_PureIntro) {
@@ -4493,21 +4493,21 @@ THREAD_POOL_TASK_FUNC(lnk_find_obj_compiler_info_task)
         AssertAlways(sizeof(CV_SymCompile) <= symbol.data.size);
         CV_SymCompile *compile = (CV_SymCompile *)symbol.data.str;
         comp_info->arch          = compile->machine;
-        comp_info->language      = CV_CompileFlags_ExtractLanguage(compile->flags);
+        comp_info->language      = CV_CompileFlags_Extract_Language(compile->flags);
         comp_info->compiler_name = str8_cstring_capped(compile + 1, symbol.data.str + symbol.data.size);
         goto exit;
       } else if (symbol.kind == CV_SymKind_COMPILE2) {
         AssertAlways(sizeof(CV_SymCompile2) <= symbol.data.size);
         CV_SymCompile2 *compile2 = (CV_SymCompile2 *)symbol.data.str;
         comp_info->arch          = compile2->machine;
-        comp_info->language      = CV_Compile2Flags_ExtractLanguage(compile2->flags);
+        comp_info->language      = CV_Compile2Flags_Extract_Language(compile2->flags);
         comp_info->compiler_name = str8_cstring_capped(compile2 + 1, symbol.data.str + symbol.data.size);
         goto exit;
       } else if (symbol.kind == CV_SymKind_COMPILE3) {
         AssertAlways(sizeof(CV_SymCompile3) <= symbol.data.size);
         CV_SymCompile3 *compile3 = (CV_SymCompile3 *)symbol.data.str;
         comp_info->arch          = compile3->machine;
-        comp_info->language      = CV_Compile3Flags_ExtractLanguage(compile3->flags);
+        comp_info->language      = CV_Compile3Flags_Extract_Language(compile3->flags);
         comp_info->compiler_name = str8_cstring_capped(compile3 + 1, symbol.data.str + symbol.data.size);
         goto exit;
       }
@@ -5104,7 +5104,7 @@ THREAD_POOL_TASK_FUNC(lnk_convert_symbols_to_rdi_task)
       CV_LvarAddrGap                 *gaps                       = (CV_LvarAddrGap *) (defrange_subfield_register + 1);
       U64                             gap_count                  = (symbol.data.size - sizeof(*defrange_subfield_register)) / sizeof(gaps[0]);
       RDI_RegCode                     reg_rdi                    = rdi_reg_code_from_cv(comp_info.arch, defrange_subfield_register->reg);
-      U32                             value_pos                  = CV_DefrangeSubfieldRegister_ExtractParentOffset(defrange_subfield_register->field_offset);
+      U32                             value_pos                  = CV_DefrangeSubfieldRegister_Extract_ParentOffset(defrange_subfield_register->field_offset);
       U32                             value_size                 = cv_size_from_reg(comp_info.arch, defrange_subfield_register->reg) - value_pos;
       Rng1U64                         defrange                   = lnk_virt_range_from_sect_off_size(defrange_subfield_register->range.sec, defrange_subfield_register->range.off, defrange_subfield_register->range.len, task->image_sects, obj, symbol.kind, symbol.offset);
       Rng1U64List                     ranges                     = cv_make_defined_range_list_from_gaps(arena, defrange, gaps, gap_count);

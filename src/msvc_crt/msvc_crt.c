@@ -87,21 +87,65 @@ mscrt_parse_func_info(Arena              *arena,
 ////////////////////////////////
 
 internal U64
+mscrt_v4_parse_u32(String8 raw_data, U64 offset, U32 *uint_out)
+{
+  U64 cursor = offset;
+
+  U8 one = 0;
+  cursor += str8_deserial_read_struct(raw_data, cursor, &one);
+
+  if ((one & 0xF) == 15) {
+    U8 two = 0, three = 0, four = 0, five = 0;
+    cursor += str8_deserial_read_struct(raw_data, cursor, &two);
+    cursor += str8_deserial_read_struct(raw_data, cursor, &three);
+    cursor += str8_deserial_read_struct(raw_data, cursor, &four);
+    cursor += str8_deserial_read_struct(raw_data, cursor, &five);
+    *uint_out = (U32)two | ((U32)three << 8) | ((U32)four << 16) | ((U32)five << 24);
+  } else if ((one & 0xF) == 7) {
+    U8 two = 0, three = 0, four = 0;
+    cursor += str8_deserial_read_struct(raw_data, cursor, &two);
+    cursor += str8_deserial_read_struct(raw_data, cursor, &three);
+    cursor += str8_deserial_read_struct(raw_data, cursor, &four);
+    *uint_out = ((U32)one >> 4) | ((U32)two << 4) | ((U32)three << 12) | ((U32)four << 20);
+  } else if ((one & 0x7) == 3) {
+    U8 two = 0, three = 0;
+    cursor += str8_deserial_read_struct(raw_data, cursor, &two);
+    cursor += str8_deserial_read_struct(raw_data, cursor, &three);
+    *uint_out = ((U32)one >> 3) | ((U32)two << 5) | ((U32)three << 13);
+  } else if ((one & 0x3) == 1) {
+    U8 two = 0;
+    cursor += str8_deserial_read_struct(raw_data, cursor, &two);
+    *uint_out = ((U32)one >> 2) | ((U32)two << 6);
+  } else {
+    *uint_out = one >> 1;
+  }
+
+  U64 read_size = cursor - offset;
+  return read_size;
+}
+
+internal U64
+mscrt_v4_parse_s32(String8 raw_data, U64 offset, S32 *int_out)
+{
+  return str8_deserial_read_struct(raw_data, offset, int_out);
+}
+
+internal U64
 mscrt_parse_handler_type_v4(String8 raw_data, U64 offset, U64 func_voff, MSCRT_EhHandlerTypeV4 *handler)
 {
   U64 cursor = offset;
 
   cursor += str8_deserial_read_struct(raw_data, cursor, &handler->flags);
   if (handler->flags & MSCRT_EhHandlerV4Flag_Adjectives) {
-    cursor += str8_deserial_read_struct(raw_data, cursor, &handler->adjectives);
+    cursor += mscrt_v4_parse_u32(raw_data, cursor, &handler->adjectives);
   }
   if (handler->flags & MSCRT_EhHandlerV4Flag_DispType) {
-    cursor += str8_deserial_read_struct(raw_data, cursor, &handler->type_voff);
+    cursor += mscrt_v4_parse_s32(raw_data, cursor, &handler->type_voff);
   }
   if (handler->flags & MSCRT_EhHandlerV4Flag_DispCatchObj) {
-    cursor += str8_deserial_read_struct(raw_data, cursor, &handler->catch_obj_voff);
+    cursor += mscrt_v4_parse_u32(raw_data, cursor, &handler->catch_obj_voff);
   }
-  cursor += str8_deserial_read_struct(raw_data, cursor, &handler->catch_code_voff);
+  cursor += mscrt_v4_parse_s32(raw_data, cursor, &handler->catch_code_voff);
 
   U32 cont_type = (handler->flags & MSCRT_EhHandlerV4Flag_ContVOffMask) >> MSCRT_EhHandlerV4Flag_ContVOffShift;
   if (handler->flags & MSCRT_EhHandlerV4Flag_ContIsVOff) {
@@ -109,14 +153,14 @@ mscrt_parse_handler_type_v4(String8 raw_data, U64 offset, U64 func_voff, MSCRT_E
     case MSCRT_ContV4Type_NoMetadata: break;
     case MSCRT_ContV4Type_OneFuncRelAddr: {
       S32 v = 0;
-      cursor += str8_deserial_read_struct(raw_data, cursor, &v);
+      cursor += mscrt_v4_parse_s32(raw_data, cursor, &v);
       handler->catch_funclet_cont_addr[0]    = (U64)v;
       handler->catch_funclet_cont_addr_count = 1;
     } break;
     case MSCRT_ContV4Type_TwoFuncRelAddr: {
       S32 v1 = 0, v2 = 0;
-      cursor += str8_deserial_read_struct(raw_data, cursor, &v1);
-      cursor += str8_deserial_read_struct(raw_data, cursor, &v2);
+      cursor += mscrt_v4_parse_s32(raw_data, cursor, &v1);
+      cursor += mscrt_v4_parse_s32(raw_data, cursor, &v2);
       handler->catch_funclet_cont_addr[0]    = (U64)v1;
       handler->catch_funclet_cont_addr[1]    = (U64)v2;
       handler->catch_funclet_cont_addr_count = 2;
@@ -128,14 +172,14 @@ mscrt_parse_handler_type_v4(String8 raw_data, U64 offset, U64 func_voff, MSCRT_E
     } break;
     case MSCRT_ContV4Type_OneFuncRelAddr: {
       U32 v = 0;
-      cursor += str8_deserial_read_struct(raw_data, cursor, &v);
+      cursor += mscrt_v4_parse_u32(raw_data, cursor, &v);
       handler->catch_funclet_cont_addr[0]    = func_voff + (U64)v;
       handler->catch_funclet_cont_addr_count = 1;
     } break;
     case MSCRT_ContV4Type_TwoFuncRelAddr: {
       U32 v1 = 0, v2 = 0;
-      cursor += str8_deserial_read_struct(raw_data, cursor, &v1);
-      cursor += str8_deserial_read_struct(raw_data, cursor, &v2);
+      cursor += mscrt_v4_parse_u32(raw_data, cursor, &v1);
+      cursor += mscrt_v4_parse_u32(raw_data, cursor, &v2);
       handler->catch_funclet_cont_addr[0]    = func_voff + (U64)v1;
       handler->catch_funclet_cont_addr[1]    = func_voff + (U64)v2;
       handler->catch_funclet_cont_addr_count = 2;
@@ -156,7 +200,7 @@ mscrt_parse_handler_type_v4_array(Arena                      *arena,
 {
   U64 cursor = offset;
   U32 count  = 0;
-  cursor += str8_deserial_read_struct(raw_data, cursor, &count);
+  cursor += mscrt_v4_parse_u32(raw_data, cursor, &count);
 
   MSCRT_EhHandlerTypeV4 *handlers = 0;
   if (count) {
@@ -179,7 +223,7 @@ mscrt_parse_unwind_v4_entry(String8 raw_data, U64 offset, MSCRT_UnwindEntryV4 *e
   U64 cursor = offset;
 
   U32 type_and_next_off = 0;
-  cursor += str8_deserial_read_struct(raw_data, cursor, &type_and_next_off);
+  cursor += mscrt_v4_parse_u32(raw_data, cursor, &type_and_next_off);
 
   entry_out->type     = type_and_next_off & 0x3;
   entry_out->next_off = type_and_next_off >> 2;
@@ -187,11 +231,11 @@ mscrt_parse_unwind_v4_entry(String8 raw_data, U64 offset, MSCRT_UnwindEntryV4 *e
   switch (entry_out->type) {
   case MSCRT_UnwindMapV4Type_DtorWithObj:
   case MSCRT_UnwindMapV4Type_DtorWithPtrToObj: {
-    cursor += str8_deserial_read_struct(raw_data, cursor, &entry_out->action);
-    cursor += str8_deserial_read_struct(raw_data, cursor, &entry_out->object);
+    cursor += mscrt_v4_parse_s32(raw_data, cursor, &entry_out->action);
+    cursor += mscrt_v4_parse_u32(raw_data, cursor, &entry_out->object);
   } break;
   case MSCRT_UnwindMapV4Type_VOFF: {
-    cursor += str8_deserial_read_struct(raw_data, cursor, &entry_out->action);
+    cursor += mscrt_v4_parse_s32(raw_data, cursor, &entry_out->action);
   } break;
   case MSCRT_UnwindMapV4Type_NoUW: {
     // no action and/or object is associated with this type
@@ -209,7 +253,7 @@ internal U64
 mscrt_parse_unwind_map_v4(Arena *arena, String8 raw_data, U64 off, MSCRT_UnwindMapV4 *map_out)
 {
   U64 cursor = off;
-  cursor += str8_deserial_read_struct(raw_data, cursor, &map_out->count);
+  cursor += mscrt_v4_parse_u32(raw_data, cursor, &map_out->count);
   map_out->v = push_array(arena, MSCRT_UnwindEntryV4, map_out->count);
   for (U32 i = 0; i < map_out->count; ++i) {
     cursor += mscrt_parse_unwind_v4_entry(raw_data, cursor, &map_out->v[i]);
@@ -230,17 +274,17 @@ mscrt_parse_try_block_map_array_v4(Arena                   *arena,
   U64 cursor = off;
 
   U32 try_block_map_count = 0;
-  cursor += str8_deserial_read_struct(raw_data, cursor, &try_block_map_count);
+  cursor += mscrt_v4_parse_u32(raw_data, cursor, &try_block_map_count);
 
   MSCRT_TryBlockMapV4 *try_block_map = push_array(arena, MSCRT_TryBlockMapV4, try_block_map_count);
   for (U32 itry = 0; itry < try_block_map_count; ++itry) {
     MSCRT_TryBlockMapV4 *try_block = &try_block_map[itry];
-    cursor += str8_deserial_read_struct(raw_data, cursor, &try_block->try_low);
-    cursor += str8_deserial_read_struct(raw_data, cursor, &try_block->try_high);
-    cursor += str8_deserial_read_struct(raw_data, cursor, &try_block->catch_high);
+    cursor += mscrt_v4_parse_u32(raw_data, cursor, &try_block->try_low);
+    cursor += mscrt_v4_parse_u32(raw_data, cursor, &try_block->try_high);
+    cursor += mscrt_v4_parse_u32(raw_data, cursor, &try_block->catch_high);
 
     S32 handler_array_voff = 0;
-    cursor += str8_deserial_read_struct(raw_data, cursor, &handler_array_voff);
+    cursor += mscrt_v4_parse_s32(raw_data, cursor, &handler_array_voff);
 
     U64 handler_array_foff = coff_foff_from_voff(sections, section_count, (U32)handler_array_voff);
     mscrt_parse_handler_type_v4_array(arena, raw_data, handler_array_foff, func_voff, &try_block->handlers);
@@ -263,7 +307,7 @@ mscrt_parse_ip2state_map_v4(Arena              *arena,
   U64 cursor = off;
 
   U32 count = 0;
-  cursor += str8_deserial_read_struct(raw_data, cursor, &count);
+  cursor += mscrt_v4_parse_u32(raw_data, cursor, &count);
 
   U32 *voffs  = push_array(arena, U32, count);
   S32 *states = push_array(arena, S32, count);
@@ -271,13 +315,13 @@ mscrt_parse_ip2state_map_v4(Arena              *arena,
   U32 prev_voff = func_voff;
   for (U32 i = 0; i < count; ++i) {
     // virtual offsets are encoded as deltas
-    cursor += str8_deserial_read_struct(raw_data, cursor, &voffs[i]);
+    cursor += mscrt_v4_parse_u32(raw_data, cursor, &voffs[i]);
     voffs[i] += prev_voff;
     prev_voff = voffs[i];
 
     // states are encoded with +1 to avoid encoding negative integers
     U32 encoded_state = 0;
-    cursor += str8_deserial_read_struct(raw_data, cursor, &encoded_state);
+    cursor += mscrt_v4_parse_u32(raw_data, cursor, &encoded_state);
     states[i] = (S32)encoded_state - 1;
   }
 
@@ -303,22 +347,22 @@ mscrt_parse_func_info_v4(Arena                     *arena,
   MSCRT_FuncInfo32V4 func_info = {0};
   cursor += str8_deserial_read_struct(raw_data, cursor, &func_info.header);
   if (func_info.header & MSCRT_FuncInfoV4Flag_IsBBT) {
-    cursor += str8_deserial_read_struct(raw_data, cursor, &func_info.bbt_flags);
+    cursor += mscrt_v4_parse_u32(raw_data, cursor, &func_info.bbt_flags);
   }
   if (func_info.header & MSCRT_FuncInfoV4Flag_UnwindMap) {
-    cursor += str8_deserial_read_struct(raw_data, cursor, &func_info.unwind_map_voff);
+    cursor += mscrt_v4_parse_s32(raw_data, cursor, &func_info.unwind_map_voff);
   }
   if (func_info.header & MSCRT_FuncInfoV4Flag_TryBlockMap) {
-    cursor += str8_deserial_read_struct(raw_data, cursor, &func_info.try_block_map_voff);
+    cursor += mscrt_v4_parse_s32(raw_data, cursor, &func_info.try_block_map_voff);
   }
   if (func_info.header & MSCRT_FuncInfoV4Flag_IsSeparated) {
     // TODO: separted IP state map
     NotImplemented;
   } else {
-    cursor += str8_deserial_read_struct(raw_data, cursor, &func_info.ip_to_state_map_voff);
+    cursor += mscrt_v4_parse_s32(raw_data, cursor, &func_info.ip_to_state_map_voff);
   }
   if (func_info.header & MSCRT_FuncInfoV4Flag_IsCatch) {
-    cursor += str8_deserial_read_struct(raw_data, cursor, &func_info.wrt_frame_establisher_voff);
+    cursor += mscrt_v4_parse_s32(raw_data, cursor, &func_info.wrt_frame_establisher_voff);
   }
 
   MSCRT_UnwindMapV4 unwind_map = {0};
@@ -387,8 +431,8 @@ mscrt_catch_blocks_from_data_x8664(Arena              *arena,
       String8 handler_name = str8_zero();
       /* TODO:
       {
-        SYMS_UnitID     uid  = syms_group_uid_from_voff__accelerated(group, handler_voff);
-        SYMS_UnitAccel *unit = syms_group_unit_from_uid(group, uid);
+        UnitID     uid  = syms_group_uid_from_voff__accelerated(group, handler_voff);
+        UnitAccel *unit = syms_group_unit_from_uid(group, uid);
         SYMS_SymbolID   sid  = syms_group_proc_sid_from_uid_voff__accelerated(group, uid, handler_voff);
         handler_name = syms_group_symbol_name_from_sid(temp.arena, group, unit, sid);
       }

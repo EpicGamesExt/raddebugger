@@ -1677,7 +1677,7 @@ cv_c13_line_array_from_data(Arena *arena, String8 c13_data, U64 sec_base, CV_C13
   {
     CV_C13Line line = raw_lines[line_idx];
     result.voffs[line_idx]     = sec_base + parsed_lines.sec_off_lo + line.off;
-    result.line_nums[line_idx] = CV_C13LineFlags_ExtractLineNumber(line.flags);
+    result.line_nums[line_idx] = CV_C13LineFlags_Extract_LineNumber(line.flags);
   }
 
   // emit voff ender

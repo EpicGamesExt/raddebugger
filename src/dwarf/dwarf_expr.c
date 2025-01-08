@@ -9,7 +9,7 @@ dw_expr__analyze_fast(void *base, Rng1U64 range, U64 text_section_base)
   DW_SimpleLoc result = {DW_SimpleLocKind_Empty};
   
   U8 op = 0;
-  if (based_range_read(base, range, 0, 1, &op)) {
+  if (dw_based_range_read(base, range, 0, 1, &op)) {
     // step params
     U64 size_param = 0;
     B32 is_signed  = 0;
@@ -48,7 +48,7 @@ dw_expr__analyze_fast(void *base, Rng1U64 range, U64 text_section_base)
       const_n:
       {
         U64 x = 0;
-        step_cursor += based_range_read(base, range, step_cursor, size_param, &x);
+        step_cursor += dw_based_range_read(base, range, step_cursor, size_param, &x);
 
         if (is_signed) {
           x = extend_sign64(x, size_param);
@@ -61,7 +61,7 @@ dw_expr__analyze_fast(void *base, Rng1U64 range, U64 text_section_base)
       case DW_ExprOp_Addr:
       {
         U64 offset = 0;
-        step_cursor += based_range_read(base, range, step_cursor, 8, &offset);
+        step_cursor += dw_based_range_read(base, range, step_cursor, 8, &offset);
         U64 x = text_section_base + offset;
         result.kind = DW_SimpleLocKind_Address;
         result.addr = x;
@@ -70,7 +70,7 @@ dw_expr__analyze_fast(void *base, Rng1U64 range, U64 text_section_base)
       case DW_ExprOp_ConstU:
       {
         U64 x = 0;
-        step_cursor += based_range_read_uleb128(base, range, step_cursor, &x);
+        step_cursor += dw_based_range_read_uleb128(base, range, step_cursor, &x);
         result.kind = DW_SimpleLocKind_Address;
         result.addr = x;
       } break;
@@ -78,7 +78,7 @@ dw_expr__analyze_fast(void *base, Rng1U64 range, U64 text_section_base)
       case DW_ExprOp_ConstS:
       {
         U64 x = 0;
-        step_cursor += based_range_read_sleb128(base, range, step_cursor, (S64*)&x);
+        step_cursor += dw_based_range_read_sleb128(base, range, step_cursor, (S64*)&x);
         result.kind = DW_SimpleLocKind_Address;
         result.addr = x;
       } break;
@@ -106,7 +106,7 @@ dw_expr__analyze_fast(void *base, Rng1U64 range, U64 text_section_base)
       case DW_ExprOp_RegX:
       {
         U64 reg_idx = 0;
-        step_cursor += based_range_read_uleb128(base, range, step_cursor, &reg_idx);
+        step_cursor += dw_based_range_read_uleb128(base, range, step_cursor, &reg_idx);
         result.kind    = DW_SimpleLocKind_Register;
         result.reg_idx = reg_idx;
       } break;
@@ -117,7 +117,7 @@ dw_expr__analyze_fast(void *base, Rng1U64 range, U64 text_section_base)
       case DW_ExprOp_ImplicitValue:
       {
         U64 size = 0;
-        step_cursor += based_range_read_uleb128(base, range, step_cursor, &size);
+        step_cursor += dw_based_range_read_uleb128(base, range, step_cursor, &size);
         if (step_cursor + size <= range.max) {
           result.kind          = DW_SimpleLocKind_ValueLong;
           result.val_long.str  = (U8*)base + range.min + step_cursor;
@@ -141,15 +141,15 @@ dw_expr__analyze_fast(void *base, Rng1U64 range, U64 text_section_base)
       case DW_ExprOp_Piece:
       {
         U64 size = 0;
-        step_cursor += based_range_read_uleb128(base, range, step_cursor, &size);
+        step_cursor += dw_based_range_read_uleb128(base, range, step_cursor, &size);
         result.kind = DW_SimpleLocKind_Empty;
       } break;
       
       case DW_ExprOp_BitPiece:
       {
         U64 bit_size = 0, bit_off = 0;
-        step_cursor += based_range_read_uleb128(base, range, step_cursor, &bit_size);
-        step_cursor += based_range_read_uleb128(base, range, step_cursor, &bit_off);
+        step_cursor += dw_based_range_read_uleb128(base, range, step_cursor, &bit_size);
+        step_cursor += dw_based_range_read_uleb128(base, range, step_cursor, &bit_off);
         result.kind = DW_SimpleLocKind_Empty;
       } break;
       
@@ -222,7 +222,7 @@ dw_expr__analyze_details(void *in_base, Rng1U64 in_range, DW_ExprMachineCallConf
       // decode op
       U64 op_offset = cursor;
       U8  op        = 0;
-      if (based_range_read(task_base, task_range, op_offset, 1, &op)) {
+      if (dw_based_range_read(task_base, task_range, op_offset, 1, &op)) {
         U64 after_op_off = cursor + 1;
         
         // require piece op after 'implicit' location descriptions
@@ -267,26 +267,26 @@ dw_expr__analyze_details(void *in_base, Rng1U64 in_range, DW_ExprMachineCallConf
           const_n:
           {
             U64 x = 0;
-            step_cursor += based_range_read(task_base, task_range, step_cursor, size_param, &x);
+            step_cursor += dw_based_range_read(task_base, task_range, step_cursor, size_param, &x);
           } break;
           
           case DW_ExprOp_Addr:
           {
             U64 offset = 0;
-            step_cursor += based_range_read(task_base, task_range, step_cursor, 8, &offset);
+            step_cursor += dw_based_range_read(task_base, task_range, step_cursor, 8, &offset);
             result.flags |= DW_ExprFlag_UsesTextBase;
           } break;
           
           case DW_ExprOp_ConstU:
           {
             U64 x = 0;
-            step_cursor += based_range_read_uleb128(task_base, task_range, step_cursor, &x);
+            step_cursor += dw_based_range_read_uleb128(task_base, task_range, step_cursor, &x);
           } break;
           
           case DW_ExprOp_ConstS:
           {
             U64 x = 0;
-            step_cursor += based_range_read_sleb128(task_base, task_range, step_cursor, (S64*)&x);
+            step_cursor += dw_based_range_read_sleb128(task_base, task_range, step_cursor, (S64*)&x);
           } break;
           
           
@@ -295,7 +295,7 @@ dw_expr__analyze_details(void *in_base, Rng1U64 in_range, DW_ExprMachineCallConf
           case DW_ExprOp_FBReg:
           {
             S64 offset = 0;
-            step_cursor += based_range_read_sleb128(task_base, task_range, step_cursor, &offset);
+            step_cursor += dw_based_range_read_sleb128(task_base, task_range, step_cursor, &offset);
             result.flags |= DW_ExprFlag_UsesFrameBase;
           } break;
           
@@ -312,15 +312,15 @@ dw_expr__analyze_details(void *in_base, Rng1U64 in_range, DW_ExprMachineCallConf
           case DW_ExprOp_BReg30: case DW_ExprOp_BReg31:
           {
             S64 offset = 0;
-            step_cursor += based_range_read_sleb128(task_base, task_range, step_cursor, &offset);
+            step_cursor += dw_based_range_read_sleb128(task_base, task_range, step_cursor, &offset);
             result.flags |= DW_ExprFlag_UsesRegisters;
           } break;
           
           case DW_ExprOp_BRegX:
           {
             U64 reg_idx = 0; S64 offset = 0;
-            step_cursor += based_range_read_uleb128(task_base, task_range, step_cursor, &reg_idx);
-            step_cursor += based_range_read_sleb128(task_base, task_range, step_cursor, &offset);
+            step_cursor += dw_based_range_read_uleb128(task_base, task_range, step_cursor, &reg_idx);
+            step_cursor += dw_based_range_read_sleb128(task_base, task_range, step_cursor, &offset);
             result.flags |= DW_ExprFlag_UsesRegisters;
           } break;
           
@@ -334,7 +334,7 @@ dw_expr__analyze_details(void *in_base, Rng1U64 in_range, DW_ExprMachineCallConf
           case DW_ExprOp_Pick:
           {
             U64 idx = 0;
-            step_cursor += based_range_read(task_base, task_range, step_cursor, 1, &idx);
+            step_cursor += dw_based_range_read(task_base, task_range, step_cursor, 1, &idx);
           } break;
           
           case DW_ExprOp_Over:
@@ -350,7 +350,7 @@ dw_expr__analyze_details(void *in_base, Rng1U64 in_range, DW_ExprMachineCallConf
           case DW_ExprOp_DerefSize:
           {
             U64 size = 0;
-            step_cursor += based_range_read(task_base, task_range, step_cursor, 1, &size);
+            step_cursor += dw_based_range_read(task_base, task_range, step_cursor, 1, &size);
             result.flags |= DW_ExprFlag_UsesMemory;
           } break;
           
@@ -394,7 +394,7 @@ dw_expr__analyze_details(void *in_base, Rng1U64 in_range, DW_ExprMachineCallConf
           case DW_ExprOp_PlusUConst:
           {
             U64 y = 0;
-            step_cursor += based_range_read_uleb128(task_base, task_range, step_cursor, &y);
+            step_cursor += dw_based_range_read_uleb128(task_base, task_range, step_cursor, &y);
           } break;
           
           case DW_ExprOp_Shl:
@@ -418,7 +418,7 @@ dw_expr__analyze_details(void *in_base, Rng1U64 in_range, DW_ExprMachineCallConf
           case DW_ExprOp_Bra:
           {
             S16 d = 0;
-            step_cursor += based_range_read(task_base, task_range, step_cursor, 2, &d);
+            step_cursor += dw_based_range_read(task_base, task_range, step_cursor, 2, &d);
             result.flags |= DW_ExprFlag_NonLinearFlow;
           } break;
           
@@ -427,7 +427,7 @@ dw_expr__analyze_details(void *in_base, Rng1U64 in_range, DW_ExprMachineCallConf
           callN:
           {
             U64 p = 0;
-            step_cursor += based_range_read(task_base, task_range, step_cursor, size_param, &p);
+            step_cursor += dw_based_range_read(task_base, task_range, step_cursor, size_param, &p);
             result.flags |= DW_ExprFlag_UsesCallResolution|DW_ExprFlag_NonLinearFlow;
             
             // add to task list
@@ -476,7 +476,7 @@ dw_expr__analyze_details(void *in_base, Rng1U64 in_range, DW_ExprMachineCallConf
           case DW_ExprOp_RegX:
           {
             U64 reg_idx = 0;
-            step_cursor += based_range_read(task_base, task_range, step_cursor, size_param, &reg_idx);
+            step_cursor += dw_based_range_read(task_base, task_range, step_cursor, size_param, &reg_idx);
             last_was_implicit_loc = 1;
           } break;
           
@@ -486,7 +486,7 @@ dw_expr__analyze_details(void *in_base, Rng1U64 in_range, DW_ExprMachineCallConf
           case DW_ExprOp_ImplicitValue:
           {
             U64 size = 0;
-            step_cursor += based_range_read(task_base, task_range, step_cursor, size_param, &size);
+            step_cursor += dw_based_range_read(task_base, task_range, step_cursor, size_param, &size);
             if (step_cursor + size > task_range.max) {
               result.flags |= DW_ExprFlag_BadData;
               goto finish;
@@ -506,7 +506,7 @@ dw_expr__analyze_details(void *in_base, Rng1U64 in_range, DW_ExprMachineCallConf
           case DW_ExprOp_Piece:
           {
             U64 size = 0;
-            step_cursor += based_range_read_uleb128(task_base, task_range, step_cursor, &size);
+            step_cursor += dw_based_range_read_uleb128(task_base, task_range, step_cursor, &size);
             result.flags |= DW_ExprFlag_UsesComposite;
             
             last_was_implicit_loc = 0;
@@ -515,8 +515,8 @@ dw_expr__analyze_details(void *in_base, Rng1U64 in_range, DW_ExprMachineCallConf
           case DW_ExprOp_BitPiece:
           {
             U64 bit_size = 0; U64 bit_off = 0;
-            step_cursor += based_range_read_uleb128(task_base, task_range, step_cursor, &bit_size);
-            step_cursor += based_range_read_uleb128(task_base, task_range, step_cursor, &bit_off);
+            step_cursor += dw_based_range_read_uleb128(task_base, task_range, step_cursor, &bit_size);
+            step_cursor += dw_based_range_read_uleb128(task_base, task_range, step_cursor, &bit_off);
             result.flags |= DW_ExprFlag_UsesComposite;
             
             last_was_implicit_loc = 0;
@@ -590,7 +590,7 @@ dw_expr__eval(Arena *arena_optional, void *expr_base, Rng1U64 expr_range, DW_Exp
     // decode op
     U64 op_offset = cursor;
     U8  op        = 0;
-    if (based_range_read(base, range, op_offset, 1, &op)) {
+    if (dw_based_range_read(base, range, op_offset, 1, &op)) {
       U64 after_op_off = cursor + 1;
       
       // require piece op after 'implicit' location descriptions
@@ -639,7 +639,7 @@ dw_expr__eval(Arena *arena_optional, void *expr_base, Rng1U64 expr_range, DW_Exp
         const_n:
         {
           U64 x = 0;
-          step_cursor += based_range_read(base, range, step_cursor, size_param, &x);
+          step_cursor += dw_based_range_read(base, range, step_cursor, size_param, &x);
           if (is_signed) {
             x = extend_sign64(x, size_param);
           }
@@ -649,13 +649,13 @@ dw_expr__eval(Arena *arena_optional, void *expr_base, Rng1U64 expr_range, DW_Exp
         case DW_ExprOp_Addr:
         {
           U64 offset = 0;
-          step_cursor += based_range_read(base, range, step_cursor, 8, &offset);
+          step_cursor += dw_based_range_read(base, range, step_cursor, 8, &offset);
 
           // earlier versions of GCC emit TLS offset with DW_ExprOp_Addr.
           B32 is_text_relative;
           {
             U8 next_op = 0;
-            based_range_read_struct(base, range, step_cursor, &next_op);
+            dw_based_range_read_struct(base, range, step_cursor, &next_op);
             is_text_relative = (next_op != DW_ExprOp_GNU_PushTlsAddress);
           }
 
@@ -677,14 +677,14 @@ dw_expr__eval(Arena *arena_optional, void *expr_base, Rng1U64 expr_range, DW_Exp
         case DW_ExprOp_ConstU:
         {
           U64 x = 0;
-          step_cursor += based_range_read_uleb128(base, range, step_cursor, &x);
+          step_cursor += dw_based_range_read_uleb128(base, range, step_cursor, &x);
           dw_expr__stack_push(scratch.arena, &stack, x);
         } break;
         
         case DW_ExprOp_ConstS:
         {
           U64 x = 0;
-          step_cursor += based_range_read_sleb128(base, range, step_cursor, (S64*)&x);
+          step_cursor += dw_based_range_read_sleb128(base, range, step_cursor, (S64*)&x);
           dw_expr__stack_push(scratch.arena, &stack, x);
         } break;
         
@@ -694,7 +694,7 @@ dw_expr__eval(Arena *arena_optional, void *expr_base, Rng1U64 expr_range, DW_Exp
         case DW_ExprOp_FBReg:
         {
           S64 offset = 0;
-          step_cursor += based_range_read_sleb128(base, range, step_cursor, &offset);
+          step_cursor += dw_based_range_read_sleb128(base, range, step_cursor, &offset);
           if (config->frame_base != 0) {
             U64 x = *config->frame_base + offset;
             dw_expr__stack_push(scratch.arena, &stack, x);
@@ -718,7 +718,7 @@ dw_expr__eval(Arena *arena_optional, void *expr_base, Rng1U64 expr_range, DW_Exp
         case DW_ExprOp_BReg30: case DW_ExprOp_BReg31:
         {
           S64 offset = 0;
-          step_cursor += based_range_read_sleb128(base, range, step_cursor, &offset);
+          step_cursor += dw_based_range_read_sleb128(base, range, step_cursor, &offset);
           U64         reg_idx = op - DW_ExprOp_BReg0;
           DW_RegsX64 *regs    = config->regs;
           if (regs != 0) {
@@ -741,8 +741,8 @@ dw_expr__eval(Arena *arena_optional, void *expr_base, Rng1U64 expr_range, DW_Exp
         case DW_ExprOp_BRegX:
         {
           U64 reg_idx = 0; S64 offset = 0;
-          step_cursor += based_range_read_uleb128(base, range, step_cursor, &reg_idx);
-          step_cursor += based_range_read_sleb128(base, range, step_cursor, &offset);
+          step_cursor += dw_based_range_read_uleb128(base, range, step_cursor, &reg_idx);
+          step_cursor += dw_based_range_read_sleb128(base, range, step_cursor, &offset);
 
           DW_RegsX64 *regs = config->regs;
           if (regs != 0) {
@@ -779,7 +779,7 @@ dw_expr__eval(Arena *arena_optional, void *expr_base, Rng1U64 expr_range, DW_Exp
         case DW_ExprOp_Pick:
         {
           U64 idx = 0;
-          step_cursor += based_range_read(base, range, step_cursor, 1, &idx);
+          step_cursor += dw_based_range_read(base, range, step_cursor, 1, &idx);
           U64 x = dw_expr__stack_pick(&stack, idx);
           dw_expr__stack_push(scratch.arena, &stack, x);
         } break;
@@ -832,7 +832,7 @@ dw_expr__eval(Arena *arena_optional, void *expr_base, Rng1U64 expr_range, DW_Exp
         case DW_ExprOp_DerefSize:
         {
           U64 raw_size = 0;
-          step_cursor += based_range_read(base, range, step_cursor, 1, &raw_size);
+          step_cursor += dw_based_range_read(base, range, step_cursor, 1, &raw_size);
 
           U64 size = ClampTop(raw_size, 8);
           U64 addr = dw_expr__stack_pop(&stack);
@@ -983,7 +983,7 @@ dw_expr__eval(Arena *arena_optional, void *expr_base, Rng1U64 expr_range, DW_Exp
         case DW_ExprOp_PlusUConst:
         {
           U64 y = 0;
-          step_cursor += based_range_read_uleb128(base, range, step_cursor, &y);
+          step_cursor += dw_based_range_read_uleb128(base, range, step_cursor, &y);
           U64 z = dw_expr__stack_pop(&stack);
           U64 x = y + z;
           dw_expr__stack_push(scratch.arena, &stack, x);
@@ -1088,14 +1088,14 @@ dw_expr__eval(Arena *arena_optional, void *expr_base, Rng1U64 expr_range, DW_Exp
         case DW_ExprOp_Skip:
         {
           S16 d = 0;
-          step_cursor += based_range_read(base, range, step_cursor, 2, &d);
+          step_cursor += dw_based_range_read(base, range, step_cursor, 2, &d);
           step_cursor = step_cursor + d;
         } break;
         
         case DW_ExprOp_Bra:
         {
           S16 d = 0;
-          step_cursor += based_range_read(base, range, step_cursor, 2, &d);
+          step_cursor += dw_based_range_read(base, range, step_cursor, 2, &d);
           U64 b = dw_expr__stack_pop(&stack);
           if (b != 0) {
             step_cursor = step_cursor + d;
@@ -1105,7 +1105,7 @@ dw_expr__eval(Arena *arena_optional, void *expr_base, Rng1U64 expr_range, DW_Exp
         case DW_ExprOp_Call2:
         {
           U16 p = 0;
-          step_cursor += based_range_read(base, range, step_cursor, 2, &p);
+          step_cursor += dw_based_range_read(base, range, step_cursor, 2, &p);
           if (config->call.func != 0) {
             String8 sub_data = config->call.func(config->call.user_ptr, p);
             dw_expr__call_push(scratch.arena, &call_stack, sub_data.str, sub_data.size);
@@ -1119,7 +1119,7 @@ dw_expr__eval(Arena *arena_optional, void *expr_base, Rng1U64 expr_range, DW_Exp
         case DW_ExprOp_Call4:
         {
           U32 p = 0;
-          step_cursor += based_range_read(base, range, step_cursor, 4, &p);
+          step_cursor += dw_based_range_read(base, range, step_cursor, 4, &p);
           if (config->call.func != 0) {
             String8 sub_data = config->call.func(config->call.user_ptr, p);
             dw_expr__call_push(scratch.arena, &call_stack, sub_data.str, sub_data.size);
@@ -1165,7 +1165,7 @@ dw_expr__eval(Arena *arena_optional, void *expr_base, Rng1U64 expr_range, DW_Exp
         case DW_ExprOp_RegX:
         {
           U64 reg_idx = 0;
-          step_cursor += based_range_read(base, range, step_cursor, size_param, &reg_idx);
+          step_cursor += dw_based_range_read(base, range, step_cursor, size_param, &reg_idx);
           stashed_loc.kind = DW_SimpleLocKind_Register;
           stashed_loc.reg_idx = reg_idx;
         } break;
@@ -1176,7 +1176,7 @@ dw_expr__eval(Arena *arena_optional, void *expr_base, Rng1U64 expr_range, DW_Exp
         case DW_ExprOp_ImplicitValue:
         {
           U64 size = 0;
-          step_cursor += based_range_read(base, range, step_cursor, size_param, &size);
+          step_cursor += dw_based_range_read(base, range, step_cursor, size_param, &size);
           if (step_cursor + size <= range.max) {
             void *data = (U8*)base + range.min + step_cursor;
             stashed_loc.kind = DW_SimpleLocKind_ValueLong;
@@ -1216,13 +1216,13 @@ dw_expr__eval(Arena *arena_optional, void *expr_base, Rng1U64 expr_range, DW_Exp
               case DW_ExprOp_Piece:
               {
                 U64 size = 0;
-                step_cursor += based_range_read_uleb128(base, range, step_cursor, &size);
+                step_cursor += dw_based_range_read_uleb128(base, range, step_cursor, &size);
                 bit_size = size*8;
               } break;
               case DW_ExprOp_BitPiece:
               {
-                step_cursor += based_range_read_uleb128(base, range, step_cursor, &bit_size);
-                step_cursor += based_range_read_uleb128(base, range, step_cursor, &bit_off);
+                step_cursor += dw_based_range_read_uleb128(base, range, step_cursor, &bit_size);
+                step_cursor += dw_based_range_read_uleb128(base, range, step_cursor, &bit_off);
                 is_bit_loc = 1;
               } break;
             }
