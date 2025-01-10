@@ -283,6 +283,12 @@ os_dim_from_monitor(OS_Handle monitor)
   return v2f32(0, 0);
 }
 
+internal F32
+os_dpi_from_monitor(OS_Handle monitor)
+{
+  return 96.f;
+}
+
 ////////////////////////////////
 //~ rjf: @os_hooks Events (Implemented Per-OS)
 

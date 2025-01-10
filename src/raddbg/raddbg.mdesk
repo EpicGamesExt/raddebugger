@@ -158,11 +158,12 @@ RD_RegTable:
   {CTRL_Handle       ctrl_entity      CtrlEntity    }
   {RD_Handle         window           Window        }
   {RD_Handle         panel            Panel         }
-  {RD_Handle         view             View          }
-  {RD_Handle         prev_view        PrevView      }
+  {RD_Handle         tab              Tab           }
+  {RD_Handle         prev_tab         PrevTab       }
   {RD_Handle         dst_panel        DstPanel      }
   {RD_Handle         entity           Entity        }
   {RD_HandleList     entity_list      EntityList    }
+  {EV_Key            ev_key           EVKey         }
   
   // rjf: frame selection
   {U64              unwind_count     UnwindCount   }

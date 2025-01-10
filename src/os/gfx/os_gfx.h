@@ -168,6 +168,7 @@ internal OS_Handle      os_primary_monitor(void);
 internal OS_Handle      os_monitor_from_window(OS_Handle window);
 internal String8        os_name_from_monitor(Arena *arena, OS_Handle monitor);
 internal Vec2F32        os_dim_from_monitor(OS_Handle monitor);
+internal F32            os_dpi_from_monitor(OS_Handle monitor);
 
 ////////////////////////////////
 //~ rjf: @os_hooks Events (Implemented Per-OS)

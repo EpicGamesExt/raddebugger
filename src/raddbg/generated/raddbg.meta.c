@@ -191,7 +191,7 @@ RD_EntityKindFlags rd_entity_kind_flags_table[27] =
 (0*RD_EntityKindFlag_CanDelete) | (0*RD_EntityKindFlag_CanFreeze) | (0*RD_EntityKindFlag_CanEdit) | (1*RD_EntityKindFlag_CanRename) | (0*RD_EntityKindFlag_CanEnable) | (0*RD_EntityKindFlag_CanCondition) | (0*RD_EntityKindFlag_CanDuplicate) | (0*RD_EntityKindFlag_NameIsCode) | (0*RD_EntityKindFlag_NameIsPath) | (0*RD_EntityKindFlag_UserDefinedLifetime) | (0*RD_EntityKindFlag_IsSerializedToConfig),
 };
 
-Rng1U64 rd_reg_slot_range_table[34] =
+Rng1U64 rd_reg_slot_range_table[35] =
 {
 {0},
 {OffsetOf(RD_Regs, machine), OffsetOf(RD_Regs, machine) + sizeof(CTRL_Handle)},
@@ -201,11 +201,12 @@ Rng1U64 rd_reg_slot_range_table[34] =
 {OffsetOf(RD_Regs, ctrl_entity), OffsetOf(RD_Regs, ctrl_entity) + sizeof(CTRL_Handle)},
 {OffsetOf(RD_Regs, window), OffsetOf(RD_Regs, window) + sizeof(RD_Handle)},
 {OffsetOf(RD_Regs, panel), OffsetOf(RD_Regs, panel) + sizeof(RD_Handle)},
-{OffsetOf(RD_Regs, view), OffsetOf(RD_Regs, view) + sizeof(RD_Handle)},
-{OffsetOf(RD_Regs, prev_view), OffsetOf(RD_Regs, prev_view) + sizeof(RD_Handle)},
+{OffsetOf(RD_Regs, tab), OffsetOf(RD_Regs, tab) + sizeof(RD_Handle)},
+{OffsetOf(RD_Regs, prev_tab), OffsetOf(RD_Regs, prev_tab) + sizeof(RD_Handle)},
 {OffsetOf(RD_Regs, dst_panel), OffsetOf(RD_Regs, dst_panel) + sizeof(RD_Handle)},
 {OffsetOf(RD_Regs, entity), OffsetOf(RD_Regs, entity) + sizeof(RD_Handle)},
 {OffsetOf(RD_Regs, entity_list), OffsetOf(RD_Regs, entity_list) + sizeof(RD_HandleList)},
+{OffsetOf(RD_Regs, ev_key), OffsetOf(RD_Regs, ev_key) + sizeof(EV_Key)},
 {OffsetOf(RD_Regs, unwind_count), OffsetOf(RD_Regs, unwind_count) + sizeof(U64)},
 {OffsetOf(RD_Regs, inline_depth), OffsetOf(RD_Regs, inline_depth) + sizeof(U64)},
 {OffsetOf(RD_Regs, file_path), OffsetOf(RD_Regs, file_path) + sizeof(String8)},

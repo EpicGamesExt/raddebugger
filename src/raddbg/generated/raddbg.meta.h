@@ -57,11 +57,12 @@ RD_RegSlot_Thread,
 RD_RegSlot_CtrlEntity,
 RD_RegSlot_Window,
 RD_RegSlot_Panel,
-RD_RegSlot_View,
-RD_RegSlot_PrevView,
+RD_RegSlot_Tab,
+RD_RegSlot_PrevTab,
 RD_RegSlot_DstPanel,
 RD_RegSlot_Entity,
 RD_RegSlot_EntityList,
+RD_RegSlot_EVKey,
 RD_RegSlot_UnwindCount,
 RD_RegSlot_InlineDepth,
 RD_RegSlot_FilePath,
@@ -547,11 +548,12 @@ CTRL_Handle thread;
 CTRL_Handle ctrl_entity;
 RD_Handle window;
 RD_Handle panel;
-RD_Handle view;
-RD_Handle prev_view;
+RD_Handle tab;
+RD_Handle prev_tab;
 RD_Handle dst_panel;
 RD_Handle entity;
 RD_HandleList entity_list;
+EV_Key ev_key;
 U64 unwind_count;
 U64 inline_depth;
 String8 file_path;
@@ -618,11 +620,12 @@ RD_ViewRuleUIFunctionType *ui;
 .ctrl_entity = rd_regs()->ctrl_entity,\
 .window = rd_regs()->window,\
 .panel = rd_regs()->panel,\
-.view = rd_regs()->view,\
-.prev_view = rd_regs()->prev_view,\
+.tab = rd_regs()->tab,\
+.prev_tab = rd_regs()->prev_tab,\
 .dst_panel = rd_regs()->dst_panel,\
 .entity = rd_regs()->entity,\
 .entity_list = rd_regs()->entity_list,\
+.ev_key = rd_regs()->ev_key,\
 .unwind_count = rd_regs()->unwind_count,\
 .inline_depth = rd_regs()->inline_depth,\
 .file_path = rd_regs()->file_path,\
@@ -764,7 +767,7 @@ extern String8 d_entity_kind_name_lower_table[27];
 extern String8 d_entity_kind_name_lower_plural_table[27];
 extern String8 d_entity_kind_name_label_table[27];
 extern RD_EntityKindFlags rd_entity_kind_flags_table[27];
-extern Rng1U64 rd_reg_slot_range_table[34];
+extern Rng1U64 rd_reg_slot_range_table[35];
 extern RD_StringBindingPair rd_default_binding_table[110];
 extern String8 rd_binding_version_remap_old_name_table[8];
 extern String8 rd_binding_version_remap_new_name_table[8];

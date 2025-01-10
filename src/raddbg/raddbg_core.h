@@ -169,8 +169,6 @@ typedef RD_VIEW_RULE_UI_FUNCTION_SIG(RD_ViewRuleUIFunctionType);
 ////////////////////////////////
 //~ rjf: View Types
 
-typedef struct RD_View RD_View;
-
 typedef struct RD_ArenaExt RD_ArenaExt;
 struct RD_ArenaExt
 {
@@ -178,126 +176,49 @@ struct RD_ArenaExt
   Arena *arena;
 };
 
-typedef struct RD_TransientViewNode RD_TransientViewNode;
-struct RD_TransientViewNode
+typedef struct RD_ViewState RD_ViewState;
+struct RD_ViewState
 {
-  RD_TransientViewNode *next;
-  RD_TransientViewNode *prev;
-  EV_Key key;
-  RD_View *view;
-  Arena *initial_params_arena;
-  MD_Node *initial_params;
-  U64 first_frame_index_touched;
+  // rjf: hash links & key
+  RD_ViewState *hash_next;
+  RD_ViewState *hash_prev;
+  RD_Handle cfg_handle;
+  EV_Key ev_key;
+  
+  // rjf: touch info
   U64 last_frame_index_touched;
-};
-
-typedef struct RD_TransientViewSlot RD_TransientViewSlot;
-struct RD_TransientViewSlot
-{
-  RD_TransientViewNode *first;
-  RD_TransientViewNode *last;
-};
-
-typedef struct RD_View RD_View;
-struct RD_View
-{
-  // rjf: allocation links (for iterating all views)
-  RD_View *alloc_next;
-  RD_View *alloc_prev;
   
-  // rjf: ownership links ('owners' can have lists of views)
-  RD_View *order_next;
-  RD_View *order_prev;
-  
-  // rjf: transient view children
-  RD_View *first_transient;
-  RD_View *last_transient;
-  
-  // rjf: view specification info
-  struct RD_ViewRuleInfo *spec;
-  
-  // rjf: allocation info
-  U64 generation;
-  
-  // rjf: loading animation state
-  F32 loading_t;
+  // rjf: loading indicator info
   F32 loading_t_target;
   U64 loading_progress_v;
   U64 loading_progress_v_target;
   
-  // rjf: view project (for project-specific/filtered views)
-  Arena *project_path_arena;
-  String8 project_path;
-  
-  // rjf: view state
+  // rjf: scroll position
   UI_ScrollPt2 scroll_pos;
   
   // rjf: view-lifetime allocation & user data extensions
   Arena *arena;
   RD_ArenaExt *first_arena_ext;
   RD_ArenaExt *last_arena_ext;
-  U64 transient_view_slots_count;
-  RD_TransientViewSlot *transient_view_slots;
-  RD_TransientViewNode *free_transient_view_node;
   void *user_data;
   
-  // rjf: filter mode
+  // rjf: expression string
+  U8 expression_buffer[KB(1)];
+  U64 expression_string_size;
+  
+  // rjf: filter editing controls
   B32 is_filtering;
-  F32 is_filtering_t;
-  
-  // rjf: params tree state
-  Arena *params_arenas[2];
-  MD_Node *params_roots[2];
-  U64 params_write_gen;
-  U64 params_read_gen;
-  
-  // rjf: text query state
-  TxtPt query_cursor;
-  TxtPt query_mark;
-  U64 query_string_size;
-  U8 query_buffer[KB(4)];
+  TxtPt filter_cursor;
+  TxtPt filter_mark;
+  U8 filter_buffer[KB(1)];
+  U64 filter_string_size;
 };
 
-////////////////////////////////
-//~ rjf: Panel Types
-
-typedef struct RD_Panel RD_Panel;
-struct RD_Panel
+typedef struct RD_ViewStateSlot RD_ViewStateSlot;
+struct RD_ViewStateSlot
 {
-  // rjf: tree links/data
-  RD_Panel *first;
-  RD_Panel *last;
-  RD_Panel *next;
-  RD_Panel *prev;
-  RD_Panel *parent;
-  U64 child_count;
-  
-  // rjf: allocation data
-  U64 generation;
-  
-  // rjf: split data
-  Axis2 split_axis;
-  F32 pct_of_parent;
-  
-  // rjf: animated rectangle data
-  Rng2F32 animated_rect_pct;
-  
-  // rjf: tab params
-  Side tab_side;
-  
-  // rjf: stable views (tabs)
-  RD_View *first_tab_view;
-  RD_View *last_tab_view;
-  U64 tab_view_count;
-  RD_Handle selected_tab_view;
-};
-
-typedef struct RD_PanelRec RD_PanelRec;
-struct RD_PanelRec
-{
-  RD_Panel *next;
-  int push_count;
-  int pop_count;
+  RD_ViewState *first;
+  RD_ViewState *last;
 };
 
 ////////////////////////////////
@@ -410,6 +331,48 @@ typedef struct RD_CfgRec RD_CfgRec;
 struct RD_CfgRec
 {
   RD_Cfg *next;
+  S32 push_count;
+  S32 pop_count;
+};
+
+////////////////////////////////
+//~ rjf: New Panel Types (Queried From Config)
+
+typedef struct RD_PanelNode RD_PanelNode;
+struct RD_PanelNode
+{
+  // rjf: links data
+  RD_PanelNode *first;
+  RD_PanelNode *last;
+  RD_PanelNode *next;
+  RD_PanelNode *prev;
+  RD_PanelNode *parent;
+  U64 child_count;
+  RD_Cfg *cfg;
+  
+  // rjf: split data
+  Axis2 split_axis;
+  F32 pct_of_parent;
+  
+  // rjf: tab params
+  Side tab_side;
+  
+  // rjf: which tabs are attached
+  RD_CfgList tabs;
+  RD_Cfg *selected_tab;
+};
+
+typedef struct RD_PanelTree RD_PanelTree;
+struct RD_PanelTree
+{
+  RD_PanelNode *root;
+  RD_PanelNode *focused;
+};
+
+typedef struct RD_PanelNodeRec RD_PanelNodeRec;
+struct RD_PanelNodeRec
+{
+  RD_PanelNode *next;
   S32 push_count;
   S32 pop_count;
 };
@@ -618,15 +581,17 @@ struct RD_AutoCompListerParams
 ////////////////////////////////
 //~ rjf: Per-Window State
 
-typedef struct RD_Window RD_Window;
-struct RD_Window
+typedef struct RD_WindowState RD_WindowState;
+struct RD_WindowState
 {
   // rjf: links & metadata
-  RD_Window *next;
-  RD_Window *prev;
-  U64 gen;
+  RD_WindowState *order_next;
+  RD_WindowState *order_prev;
+  RD_WindowState *hash_next;
+  RD_WindowState *hash_prev;
+  RD_Handle cfg_handle;
   U64 frames_alive;
-  RD_CfgSrc cfg_src;
+  U64 last_frame_index_touched;
   
   // rjf: top-level info & handles
   Arena *arena;
@@ -681,7 +646,6 @@ struct RD_Window
   String8 query_cmd_name;
   RD_Regs *query_cmd_regs;
   U64 query_cmd_regs_mask[(RD_RegSlot_COUNT + 63) / 64];
-  RD_View *query_view_stack_top;
   B32 query_view_selected;
   F32 query_view_selected_t;
   F32 query_view_t;
@@ -708,16 +672,18 @@ struct RD_Window
   U64 error_string_size;
   F32 error_t;
   
-  // rjf: panel state
-  RD_Panel *root_panel;
-  RD_Panel *free_panel;
-  RD_Panel *focused_panel;
-  
   // rjf: per-frame ui events state
   UI_EventList ui_events;
   
   // rjf: per-frame drawing state
   DR_Bucket *draw_bucket;
+};
+
+typedef struct RD_WindowStateSlot RD_WindowStateSlot;
+struct RD_WindowStateSlot
+{
+  RD_WindowState *first;
+  RD_WindowState *last;
 };
 
 ////////////////////////////////
@@ -879,6 +845,19 @@ struct RD_State
   RD_Cfg *free_cfg;
   RD_Cfg *root_cfg;
   
+  // rjf: window state cache
+  U64 window_state_slots_count;
+  RD_WindowStateSlot *window_state_slots;
+  RD_WindowState *free_window_state;
+  RD_Handle last_focused_window;
+  RD_WindowState *first_window_state;
+  RD_WindowState *last_window_state;
+  
+  // rjf: view state cache
+  U64 view_state_slots_count;
+  RD_ViewStateSlot *view_state_slots;
+  RD_ViewState *free_view_state;
+  
   //-
   // TODO(rjf): TO BE ELIMINATED OR REPLACED VVVVVVVVVVVVVVVV
   //-
@@ -909,21 +888,6 @@ struct RD_State
   B32 bind_change_active;
   String8 bind_change_cmd_name;
   RD_Binding bind_change_binding;
-  
-  // rjf: windows
-  RD_Window *first_window;
-  RD_Window *last_window;
-  RD_Window *free_window;
-  U64 window_count;
-  B32 last_window_queued_save;
-  RD_Handle last_focused_window;
-  
-  // rjf: view state
-  RD_View *first_view;
-  RD_View *last_view;
-  RD_View *free_view;
-  U64 free_view_count;
-  U64 allocated_view_count;
   
   // rjf: config reading state
   Arena *cfg_path_arenas[RD_CfgSrc_COUNT];
@@ -965,6 +929,17 @@ read_only global RD_Cfg rd_nil_cfg =
   &rd_nil_cfg,
 };
 
+read_only global RD_PanelNode rd_nil_panel_node =
+{
+  &rd_nil_panel_node,
+  &rd_nil_panel_node,
+  &rd_nil_panel_node,
+  &rd_nil_panel_node,
+  &rd_nil_panel_node,
+  0,
+  &rd_nil_cfg,
+};
+
 read_only global RD_Entity rd_nil_entity =
 {
   &rd_nil_entity,
@@ -988,24 +963,18 @@ read_only global RD_ViewRuleInfo rd_nil_view_rule_info =
   RD_VIEW_RULE_UI_FUNCTION_NAME(null)
 };
 
-read_only global RD_View rd_nil_view =
+read_only global RD_ViewState rd_nil_view_state =
 {
-  &rd_nil_view,
-  &rd_nil_view,
-  &rd_nil_view,
-  &rd_nil_view,
-  &rd_nil_view,
-  &rd_nil_view,
-  &rd_nil_view_rule_info,
+  &rd_nil_view_state,
+  &rd_nil_view_state,
 };
 
-read_only global RD_Panel rd_nil_panel =
+read_only global RD_WindowState rd_nil_window_state =
 {
-  &rd_nil_panel,
-  &rd_nil_panel,
-  &rd_nil_panel,
-  &rd_nil_panel,
-  &rd_nil_panel,
+  &rd_nil_window_state,
+  &rd_nil_window_state,
+  &rd_nil_window_state,
+  &rd_nil_window_state,
 };
 
 global RD_State *rd_state = 0;
@@ -1072,14 +1041,6 @@ internal EV_Key rd_ev_key_from_entity(RD_Entity *entity);
 internal EV_Key rd_parent_ev_key_from_entity(RD_Entity *entity);
 
 ////////////////////////////////
-//~ rjf: View Type Functions
-
-internal B32 rd_view_is_nil(RD_View *view);
-internal B32 rd_view_is_project_filtered(RD_View *view);
-internal RD_Handle rd_handle_from_view(RD_View *view);
-internal RD_View *rd_view_from_handle(RD_Handle handle);
-
-////////////////////////////////
 //~ rjf: View Spec Type Functions
 
 internal RD_ViewRuleKind rd_view_rule_kind_from_string(String8 string);
@@ -1089,44 +1050,7 @@ internal RD_ViewRuleInfo *rd_view_rule_info_from_string(String8 string);
 ////////////////////////////////
 //~ rjf: Panel Type Functions
 
-//- rjf: basic type functions
-internal B32 rd_panel_is_nil(RD_Panel *panel);
-internal RD_Handle rd_handle_from_panel(RD_Panel *panel);
-internal RD_Panel *rd_panel_from_handle(RD_Handle handle);
-internal UI_Key rd_ui_key_from_panel(RD_Panel *panel);
 
-//- rjf: tree construction
-internal void rd_panel_insert(RD_Panel *parent, RD_Panel *prev_child, RD_Panel *new_child);
-internal void rd_panel_remove(RD_Panel *parent, RD_Panel *child);
-
-//- rjf: tree walk
-internal RD_PanelRec rd_panel_rec_depth_first(RD_Panel *panel, U64 sib_off, U64 child_off);
-#define rd_panel_rec_depth_first_pre(panel) rd_panel_rec_depth_first(panel, OffsetOf(RD_Panel, next), OffsetOf(RD_Panel, first))
-#define rd_panel_rec_depth_first_pre_rev(panel) rd_panel_rec_depth_first(panel, OffsetOf(RD_Panel, prev), OffsetOf(RD_Panel, last))
-
-//- rjf: panel -> rect calculations
-internal Rng2F32 rd_target_rect_from_panel_child(Rng2F32 parent_rect, RD_Panel *parent, RD_Panel *panel);
-internal Rng2F32 rd_target_rect_from_panel(Rng2F32 root_rect, RD_Panel *root, RD_Panel *panel);
-
-//- rjf: view ownership insertion/removal
-internal void rd_panel_insert_tab_view(RD_Panel *panel, RD_View *prev_view, RD_View *view);
-internal void rd_panel_remove_tab_view(RD_Panel *panel, RD_View *view);
-internal RD_View *rd_selected_tab_from_panel(RD_Panel *panel);
-
-//- rjf: icons & display strings
-internal RD_IconKind rd_icon_kind_from_view(RD_View *view);
-internal DR_FancyStringList rd_title_fstrs_from_view(Arena *arena, RD_View *view, Vec4F32 primary_color, Vec4F32 secondary_color, F32 size);
-
-////////////////////////////////
-//~ rjf: Window Type Functions
-
-internal RD_Handle rd_handle_from_window(RD_Window *window);
-internal RD_Window *rd_window_from_handle(RD_Handle handle);
-
-////////////////////////////////
-//~ rjf: Command Parameters From Context
-
-internal B32 rd_prefer_dasm_from_window(RD_Window *window);
 
 ////////////////////////////////
 //~ rjf: Global Cross-Window UI Interaction State Functions
@@ -1153,9 +1077,13 @@ internal void rd_name_release(String8 string);
 
 internal RD_Cfg *rd_cfg_alloc(void);
 internal void rd_cfg_release(RD_Cfg *cfg);
+internal RD_Handle rd_handle_from_cfg(RD_Cfg *cfg);
+internal RD_Cfg *rd_cfg_from_handle(RD_Handle handle);
 internal RD_Cfg *rd_cfg_new(RD_Cfg *parent, String8 string);
 internal RD_Cfg *rd_cfg_newf(RD_Cfg *parent, char *fmt, ...);
+internal RD_Cfg *rd_cfg_deep_copy(RD_Cfg *src_root);
 internal void rd_cfg_equip_string(RD_Cfg *cfg, String8 string);
+internal void rd_cfg_equip_stringf(RD_Cfg *cfg, char *fmt, ...);
 internal void rd_cfg_insert_child(RD_Cfg *parent, RD_Cfg *prev_child, RD_Cfg *new_child);
 internal void rd_cfg_unhook(RD_Cfg *parent, RD_Cfg *child);
 internal RD_Cfg *rd_cfg_child_from_string(RD_Cfg *parent, String8 string);
@@ -1165,6 +1093,16 @@ internal RD_CfgList rd_cfg_tree_list_from_string(Arena *arena, String8 string);
 internal String8 rd_string_from_cfg_tree(Arena *arena, RD_Cfg *cfg);
 internal RD_CfgRec rd_cfg_rec__depth_first(RD_Cfg *root, RD_Cfg *cfg);
 internal void rd_cfg_list_push(Arena *arena, RD_CfgList *list, RD_Cfg *cfg);
+
+internal RD_PanelTree rd_panel_tree_from_cfg(Arena *arena, RD_Cfg *cfg);
+internal RD_PanelNodeRec rd_panel_node_rec__depth_first(RD_PanelNode *root, RD_PanelNode *panel, U64 sib_off, U64 child_off);
+#define rd_panel_node_rec__depth_first_pre(root, p)     rd_panel_node_rec__depth_first((root), (p), OffsetOf(RD_PanelNode, next), OffsetOf(RD_PanelNode, first))
+#define rd_panel_node_rec__depth_first_pre_rev(root, p) rd_panel_node_rec__depth_first((root), (p), OffsetOf(RD_PanelNode, prev), OffsetOf(RD_PanelNode, last))
+internal RD_PanelNode *rd_panel_node_from_tree_cfg(RD_PanelNode *root, RD_Cfg *cfg);
+internal Rng2F32 rd_target_rect_from_panel_node_child(Rng2F32 parent_rect, RD_PanelNode *parent, RD_PanelNode *panel);
+internal Rng2F32 rd_target_rect_from_panel_node(Rng2F32 root_rect, RD_PanelNode *root, RD_PanelNode *panel);
+
+internal B32 rd_cfg_is_project_filtered(RD_Cfg *cfg);
 
 ////////////////////////////////
 //~ rjf: Entity Stateful Functions
@@ -1259,28 +1197,11 @@ internal String8 rd_file_path_from_eval_string(Arena *arena, String8 string);
 internal String8 rd_eval_string_from_file_path(Arena *arena, String8 string);
 
 ////////////////////////////////
-//~ rjf: View State Functions
+//~ rjf: View Functions
 
-//- rjf: allocation/releasing
-internal RD_View *rd_view_alloc(void);
-internal void rd_view_release(RD_View *view);
-
-//- rjf: equipment
-internal void rd_view_equip_spec(RD_View *view, RD_ViewRuleInfo *spec, String8 query, MD_Node *params);
-internal void rd_view_equip_query(RD_View *view, String8 query);
-internal void rd_view_equip_loading_info(RD_View *view, B32 is_loading, U64 progress_v, U64 progress_target);
-
-//- rjf: user state extensions
-internal void *rd_view_get_or_push_user_state(RD_View *view, U64 size);
-internal Arena *rd_view_push_arena_ext(RD_View *view);
-#define rd_view_user_state(view, type) (type *)rd_view_get_or_push_user_state((view), sizeof(type))
-
-//- rjf: param saving
-internal void rd_view_store_param(RD_View *view, String8 key, String8 value);
-internal void rd_view_store_paramf(RD_View *view, String8 key, char *fmt, ...);
-#define rd_view_store_param_f32(view, key, f32) rd_view_store_paramf((view), (key), "%ff", (f32))
-#define rd_view_store_param_s64(view, key, s64) rd_view_store_paramf((view), (key), "%I64d", (s64))
-#define rd_view_store_param_u64(view, key, u64) rd_view_store_paramf((view), (key), "0x%I64x", (u64))
+internal RD_ViewState *rd_view_state_from_cfg_ev_key(RD_Cfg *cfg, EV_Key ev_key);
+internal RD_ViewState *rd_view_state_from_cfg(RD_Cfg *cfg);
+internal DR_FancyStringList rd_title_fstrs_from_view(Arena *arena, String8 viewer_name_string, String8 query, Vec4F32 primary_color, Vec4F32 secondary_color, F32 size);
 
 ////////////////////////////////
 //~ rjf: View Building API
@@ -1308,25 +1229,12 @@ internal void rd_store_view_paramf(String8 key, char *fmt, ...);
 #define rd_store_view_param_u64(key, u64) rd_store_view_paramf((key), "0x%I64x", (u64))
 
 ////////////////////////////////
-//~ rjf: Expand-Keyed Transient View Functions
+//~ rjf: Window Functions
 
-internal RD_TransientViewNode *rd_transient_view_node_from_ev_key(RD_View *owner_view, EV_Key key);
-
-////////////////////////////////
-//~ rjf: Panel State Functions
-
-internal RD_Panel *rd_panel_alloc(RD_Window *ws);
-internal void rd_panel_release(RD_Window *ws, RD_Panel *panel);
-internal void rd_panel_release_all_views(RD_Panel *panel);
-
-////////////////////////////////
-//~ rjf: Window State Functions
-
-internal RD_Window *rd_window_open(Vec2F32 size, OS_Handle preferred_monitor, RD_CfgSrc cfg_src);
-
-internal RD_Window *rd_window_from_os_handle(OS_Handle os);
-
-internal void rd_window_frame(RD_Window *ws);
+internal RD_Cfg *rd_window_from_cfg(RD_Cfg *cfg);
+internal RD_WindowState *rd_window_state_from_cfg(RD_Cfg *cfg);
+internal RD_WindowState *rd_window_state_from_os_handle(OS_Handle os);
+internal void rd_window_frame(void);
 
 ////////////////////////////////
 //~ rjf: Eval Visualization

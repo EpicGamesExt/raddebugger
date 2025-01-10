@@ -325,61 +325,6 @@ rd_parent_ev_key_from_entity(RD_Entity *entity)
 ////////////////////////////////
 //~ rjf: View Type Functions
 
-internal B32
-rd_view_is_nil(RD_View *view)
-{
-  return (view == 0 || view == &rd_nil_view);
-}
-
-internal B32
-rd_view_is_project_filtered(RD_View *view)
-{
-  B32 result = 0;
-  String8 view_project = view->project_path;
-  if(view_project.size != 0)
-  {
-    RD_ViewRuleKind kind = rd_view_rule_kind_from_string(view->spec->string);
-    // TODO(rjf): @hack hack hack - this should be completely determined if the view
-    // is parameterized by an expression, but that is currently the same string as the
-    // query, and so we can't rely on that. when query expressions are separated from
-    // filter strings, we can rely on that here.
-    if((kind == RD_ViewRuleKind_Text ||
-        kind == RD_ViewRuleKind_Disasm ||
-        kind == RD_ViewRuleKind_Memory ||
-        kind == RD_ViewRuleKind_Bitmap ||
-        kind == RD_ViewRuleKind_Geo3D) &&
-       view->query_string_size != 0)
-    {
-      String8 current_project = rd_cfg_path_from_src(RD_CfgSrc_Project);
-      result = !path_match_normalized(view_project, current_project);
-    }
-  }
-  return result;
-}
-
-internal RD_Handle
-rd_handle_from_view(RD_View *view)
-{
-  RD_Handle handle = rd_handle_zero();
-  if(!rd_view_is_nil(view))
-  {
-    handle.u64[0] = (U64)view;
-    handle.u64[1] = view->generation;
-  }
-  return handle;
-}
-
-internal RD_View *
-rd_view_from_handle(RD_Handle handle)
-{
-  RD_View *result = (RD_View *)handle.u64[0];
-  if(rd_view_is_nil(result) || result->generation != handle.u64[1])
-  {
-    result = &rd_nil_view;
-  }
-  return result;
-}
-
 ////////////////////////////////
 //~ rjf: View Spec Type Functions
 
@@ -414,444 +359,6 @@ rd_view_rule_info_from_string(String8 string)
     {
       result = &rd_view_rule_kind_info_table[kind];
     }
-  }
-  return result;
-}
-
-////////////////////////////////
-//~ rjf: Panel Type Functions
-
-//- rjf: basic type functions
-
-internal B32
-rd_panel_is_nil(RD_Panel *panel)
-{
-  return panel == 0 || panel == &rd_nil_panel;
-}
-
-internal RD_Handle
-rd_handle_from_panel(RD_Panel *panel)
-{
-  RD_Handle h = {0};
-  h.u64[0] = (U64)panel;
-  h.u64[1] = panel->generation;
-  return h;
-}
-
-internal RD_Panel *
-rd_panel_from_handle(RD_Handle handle)
-{
-  RD_Panel *panel = (RD_Panel *)handle.u64[0];
-  if(panel == 0 || panel->generation != handle.u64[1])
-  {
-    panel = &rd_nil_panel;
-  }
-  return panel;
-}
-
-internal UI_Key
-rd_ui_key_from_panel(RD_Panel *panel)
-{
-  UI_Key panel_key = ui_key_from_stringf(ui_key_zero(), "panel_window_%p", panel);
-  return panel_key;
-}
-
-//- rjf: tree construction
-
-internal void
-rd_panel_insert(RD_Panel *parent, RD_Panel *prev_child, RD_Panel *new_child)
-{
-  DLLInsert_NPZ(&rd_nil_panel, parent->first, parent->last, prev_child, new_child, next, prev);
-  parent->child_count += 1;
-  new_child->parent = parent;
-}
-
-internal void
-rd_panel_remove(RD_Panel *parent, RD_Panel *child)
-{
-  DLLRemove_NPZ(&rd_nil_panel, parent->first, parent->last, child, next, prev);
-  child->next = child->prev = child->parent = &rd_nil_panel;
-  parent->child_count -= 1;
-}
-
-//- rjf: tree walk
-
-internal RD_PanelRec
-rd_panel_rec_depth_first(RD_Panel *panel, U64 sib_off, U64 child_off)
-{
-  RD_PanelRec rec = {0};
-  if(!rd_panel_is_nil(*MemberFromOffset(RD_Panel **, panel, child_off)))
-  {
-    rec.next = *MemberFromOffset(RD_Panel **, panel, child_off);
-    rec.push_count = 1;
-  }
-  else if(!rd_panel_is_nil(*MemberFromOffset(RD_Panel **, panel, sib_off)))
-  {
-    rec.next = *MemberFromOffset(RD_Panel **, panel, sib_off);
-  }
-  else
-  {
-    RD_Panel *uncle = &rd_nil_panel;
-    for(RD_Panel *p = panel->parent; !rd_panel_is_nil(p); p = p->parent)
-    {
-      rec.pop_count += 1;
-      if(!rd_panel_is_nil(*MemberFromOffset(RD_Panel **, p, sib_off)))
-      {
-        uncle = *MemberFromOffset(RD_Panel **, p, sib_off);
-        break;
-      }
-    }
-    rec.next = uncle;
-  }
-  return rec;
-}
-
-//- rjf: panel -> rect calculations
-
-internal Rng2F32
-rd_target_rect_from_panel_child(Rng2F32 parent_rect, RD_Panel *parent, RD_Panel *panel)
-{
-  Rng2F32 rect = parent_rect;
-  if(!rd_panel_is_nil(parent))
-  {
-    Vec2F32 parent_rect_size = dim_2f32(parent_rect);
-    Axis2 axis = parent->split_axis;
-    rect.p1.v[axis] = rect.p0.v[axis];
-    for(RD_Panel *child = parent->first; !rd_panel_is_nil(child); child = child->next)
-    {
-      rect.p1.v[axis] += parent_rect_size.v[axis] * child->pct_of_parent;
-      if(child == panel)
-      {
-        break;
-      }
-      rect.p0.v[axis] = rect.p1.v[axis];
-    }
-    //rect.p0.v[axis] += parent_rect_size.v[axis] * panel->off_pct_of_parent.v[axis];
-    //rect.p0.v[axis2_flip(axis)] += parent_rect_size.v[axis2_flip(axis)] * panel->off_pct_of_parent.v[axis2_flip(axis)];
-  }
-  rect.x0 = round_f32(rect.x0);
-  rect.x1 = round_f32(rect.x1);
-  rect.y0 = round_f32(rect.y0);
-  rect.y1 = round_f32(rect.y1);
-  return rect;
-}
-
-internal Rng2F32
-rd_target_rect_from_panel(Rng2F32 root_rect, RD_Panel *root, RD_Panel *panel)
-{
-  Temp scratch = scratch_begin(0, 0);
-  
-  // rjf: count ancestors
-  U64 ancestor_count = 0;
-  for(RD_Panel *p = panel->parent; !rd_panel_is_nil(p); p = p->parent)
-  {
-    ancestor_count += 1;
-  }
-  
-  // rjf: gather ancestors
-  RD_Panel **ancestors = push_array(scratch.arena, RD_Panel *, ancestor_count);
-  {
-    U64 ancestor_idx = 0;
-    for(RD_Panel *p = panel->parent; !rd_panel_is_nil(p); p = p->parent)
-    {
-      ancestors[ancestor_idx] = p;
-      ancestor_idx += 1;
-    }
-  }
-  
-  // rjf: go from highest ancestor => panel and calculate rect
-  Rng2F32 parent_rect = root_rect;
-  for(S64 ancestor_idx = (S64)ancestor_count-1;
-      0 <= ancestor_idx && ancestor_idx < ancestor_count;
-      ancestor_idx -= 1)
-  {
-    RD_Panel *ancestor = ancestors[ancestor_idx];
-    RD_Panel *parent = ancestor->parent;
-    if(!rd_panel_is_nil(parent))
-    {
-      parent_rect = rd_target_rect_from_panel_child(parent_rect, parent, ancestor);
-    }
-  }
-  
-  // rjf: calculate final rect
-  Rng2F32 rect = rd_target_rect_from_panel_child(parent_rect, panel->parent, panel);
-  
-  scratch_end(scratch);
-  return rect;
-}
-
-//- rjf: view ownership insertion/removal
-
-internal void
-rd_panel_insert_tab_view(RD_Panel *panel, RD_View *prev_view, RD_View *view)
-{
-  DLLInsert_NPZ(&rd_nil_view, panel->first_tab_view, panel->last_tab_view, prev_view, view, order_next, order_prev);
-  panel->tab_view_count += 1;
-  if(!rd_view_is_project_filtered(view))
-  {
-    panel->selected_tab_view = rd_handle_from_view(view);
-  }
-}
-
-internal void
-rd_panel_remove_tab_view(RD_Panel *panel, RD_View *view)
-{
-  if(rd_view_from_handle(panel->selected_tab_view) == view)
-  {
-    panel->selected_tab_view = rd_handle_zero();
-    if(rd_handle_match(rd_handle_zero(), panel->selected_tab_view))
-    {
-      for(RD_View *v = view->order_next; !rd_view_is_nil(v); v = v->order_next)
-      {
-        if(!rd_view_is_project_filtered(v))
-        {
-          panel->selected_tab_view = rd_handle_from_view(v);
-          break;
-        }
-      }
-    }
-    if(rd_handle_match(rd_handle_zero(), panel->selected_tab_view))
-    {
-      for(RD_View *v = view->order_prev; !rd_view_is_nil(v); v = v->order_prev)
-      {
-        if(!rd_view_is_project_filtered(v))
-        {
-          panel->selected_tab_view = rd_handle_from_view(v);
-          break;
-        }
-      }
-    }
-  }
-  DLLRemove_NPZ(&rd_nil_view, panel->first_tab_view, panel->last_tab_view, view, order_next, order_prev);
-  panel->tab_view_count -= 1;
-}
-
-internal RD_View *
-rd_selected_tab_from_panel(RD_Panel *panel)
-{
-  RD_View *view = rd_view_from_handle(panel->selected_tab_view);
-  if(rd_view_is_project_filtered(view))
-  {
-    view = &rd_nil_view;
-  }
-  return view;
-}
-
-//- rjf: icons & display strings
-
-internal RD_IconKind
-rd_icon_kind_from_view(RD_View *view)
-{
-  RD_IconKind result = view->spec->icon_kind;
-  return result;
-}
-
-internal DR_FancyStringList
-rd_title_fstrs_from_view(Arena *arena, RD_View *view, Vec4F32 primary_color, Vec4F32 secondary_color, F32 size)
-{
-  DR_FancyStringList result = {0};
-  Temp scratch = scratch_begin(&arena, 1);
-  String8 query = str8(view->query_buffer, view->query_string_size);
-  String8 file_path = rd_file_path_from_eval_string(scratch.arena, query);
-  
-  //- rjf: query is file path - do specific file name strings
-  if(file_path.size != 0)
-  {
-    // rjf: compute disambiguated file name
-    String8List qualifiers = {0};
-    String8 file_name = str8_skip_last_slash(file_path);
-    if(rd_state->ambiguous_path_slots_count != 0)
-    {
-      U64 hash = d_hash_from_string__case_insensitive(file_name);
-      U64 slot_idx = hash%rd_state->ambiguous_path_slots_count;
-      RD_AmbiguousPathNode *node = 0;
-      {
-        for(RD_AmbiguousPathNode *n = rd_state->ambiguous_path_slots[slot_idx];
-            n != 0;
-            n = n->next)
-        {
-          if(str8_match(n->name, file_name, StringMatchFlag_CaseInsensitive))
-          {
-            node = n;
-            break;
-          }
-        }
-      }
-      if(node != 0 && node->paths.node_count > 1)
-      {
-        // rjf: get all colliding paths
-        String8Array collisions = str8_array_from_list(scratch.arena, &node->paths);
-        
-        // rjf: get all reversed path parts for each collision
-        String8List *collision_parts_reversed = push_array(scratch.arena, String8List, collisions.count);
-        for EachIndex(idx, collisions.count)
-        {
-          String8List parts = str8_split_path(scratch.arena, collisions.v[idx]);
-          for(String8Node *n = parts.first; n != 0; n = n->next)
-          {
-            str8_list_push_front(scratch.arena, &collision_parts_reversed[idx], n->string);
-          }
-        }
-        
-        // rjf: get the search path & its reversed parts
-        String8List parts = str8_split_path(scratch.arena, file_path);
-        String8List parts_reversed = {0};
-        for(String8Node *n = parts.first; n != 0; n = n->next)
-        {
-          str8_list_push_front(scratch.arena, &parts_reversed, n->string);
-        }
-        
-        // rjf: iterate all collision part reversed lists, in lock-step with
-        // search path; disqualify until we only have one path remaining; gather
-        // qualifiers
-        {
-          U64 num_collisions_left = collisions.count;
-          String8Node **collision_nodes = push_array(scratch.arena, String8Node *, collisions.count);
-          for EachIndex(idx, collisions.count)
-          {
-            collision_nodes[idx] = collision_parts_reversed[idx].first;
-          }
-          for(String8Node *n = parts_reversed.first; num_collisions_left > 1 && n != 0; n = n->next)
-          {
-            B32 part_is_qualifier = 0;
-            for EachIndex(idx, collisions.count)
-            {
-              if(collision_nodes[idx] != 0 && !str8_match(collision_nodes[idx]->string, n->string, StringMatchFlag_CaseInsensitive))
-              {
-                collision_nodes[idx] = 0;
-                num_collisions_left -= 1;
-                part_is_qualifier = 1;
-              }
-              else if(collision_nodes[idx] != 0)
-              {
-                collision_nodes[idx] = collision_nodes[idx]->next;
-              }
-            }
-            if(part_is_qualifier)
-            {
-              str8_list_push_front(scratch.arena, &qualifiers, n->string);
-            }
-          }
-        }
-      }
-    }
-    
-    // rjf: push qualifiers
-    for(String8Node *n = qualifiers.first; n != 0; n = n->next)
-    {
-      String8 string = push_str8f(arena, "<%S> ", n->string);
-      dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Main), size*0.95f, secondary_color, string);
-    }
-    
-    // rjf: push file name
-    DR_FancyString fstr =
-    {
-      rd_font_from_slot(RD_FontSlot_Main),
-      push_str8_copy(arena, file_name),
-      primary_color,
-      size,
-    };
-    dr_fancy_string_list_push(arena, &result, &fstr);
-  }
-  
-  //- rjf: query is not file path - do general case, for view rule & expression
-  else
-  {
-    DR_FancyString fstr1 =
-    {
-      rd_font_from_slot(RD_FontSlot_Main),
-      view->spec->display_name,
-      primary_color,
-      size,
-    };
-    dr_fancy_string_list_push(arena, &result, &fstr1);
-    if(query.size != 0)
-    {
-      DR_FancyString fstr2 =
-      {
-        rd_font_from_slot(RD_FontSlot_Code),
-        str8_lit(" "),
-        primary_color,
-        size,
-      };
-      dr_fancy_string_list_push(arena, &result, &fstr2);
-      DR_FancyString fstr3 =
-      {
-        rd_font_from_slot(RD_FontSlot_Code),
-        push_str8_copy(arena, query),
-        secondary_color,
-        size*0.8f,
-      };
-      dr_fancy_string_list_push(arena, &result, &fstr3);
-    }
-  }
-  scratch_end(scratch);
-  return result;
-}
-
-////////////////////////////////
-//~ rjf: Window Type Functions
-
-internal RD_Handle
-rd_handle_from_window(RD_Window *window)
-{
-  RD_Handle handle = {0};
-  if(window != 0)
-  {
-    handle.u64[0] = (U64)window;
-    handle.u64[1] = window->gen;
-  }
-  return handle;
-}
-
-internal RD_Window *
-rd_window_from_handle(RD_Handle handle)
-{
-  RD_Window *window = (RD_Window *)handle.u64[0];
-  if(window != 0 && window->gen != handle.u64[1])
-  {
-    window = 0;
-  }
-  return window;
-}
-
-////////////////////////////////
-//~ rjf: Command Parameters From Context
-
-internal B32
-rd_prefer_dasm_from_window(RD_Window *window)
-{
-  RD_Panel *panel = window->focused_panel;
-  RD_View *view = rd_selected_tab_from_panel(panel);
-  RD_ViewRuleKind view_kind = rd_view_rule_kind_from_string(view->spec->string);
-  B32 result = 0;
-  if(view_kind == RD_ViewRuleKind_Disasm)
-  {
-    result = 1;
-  }
-  else if(view_kind == RD_ViewRuleKind_Text)
-  {
-    result = 0;
-  }
-  else
-  {
-    B32 has_src = 0;
-    B32 has_dasm = 0;
-    for(RD_Panel *p = window->root_panel; !rd_panel_is_nil(p); p = rd_panel_rec_depth_first_pre(p).next)
-    {
-      RD_View *p_view = rd_selected_tab_from_panel(p);
-      RD_ViewRuleKind p_view_kind = rd_view_rule_kind_from_string(p_view->spec->string);
-      if(p_view_kind == RD_ViewRuleKind_Text)
-      {
-        has_src = 1;
-      }
-      if(p_view_kind == RD_ViewRuleKind_Disasm)
-      {
-        has_dasm = 1;
-      }
-    }
-    if(has_src && !has_dasm) {result = 0;}
-    if(has_dasm && !has_src) {result = 1;}
   }
   return result;
 }
@@ -912,13 +419,14 @@ rd_get_hover_regs(void)
 internal void
 rd_open_ctx_menu(UI_Key anchor_box_key, Vec2F32 anchor_box_off, RD_RegSlot slot)
 {
-  RD_Window *window = rd_window_from_handle(rd_regs()->window);
-  if(window != 0)
+  RD_Cfg *window_cfg = rd_cfg_from_handle(rd_regs()->window);
+  RD_WindowState *ws = rd_window_state_from_cfg(window_cfg);
+  if(ws != 0)
   {
     ui_ctx_menu_open(rd_state->ctx_menu_key, anchor_box_key, anchor_box_off);
-    arena_clear(window->ctx_menu_arena);
-    window->ctx_menu_regs = rd_regs_copy(window->ctx_menu_arena, rd_regs());
-    window->ctx_menu_regs_slot = slot;
+    arena_clear(ws->ctx_menu_arena);
+    ws->ctx_menu_regs = rd_regs_copy(ws->ctx_menu_arena, rd_regs());
+    ws->ctx_menu_regs_slot = slot;
   }
 }
 
@@ -1073,6 +581,29 @@ rd_cfg_release(RD_Cfg *cfg)
   scratch_end(scratch);
 }
 
+internal RD_Handle
+rd_handle_from_cfg(RD_Cfg *cfg)
+{
+  RD_Handle handle = {0};
+  if(cfg != &rd_nil_cfg)
+  {
+    handle.u64[0] = (U64)cfg;
+    handle.u64[1] = cfg->gen;
+  }
+  return handle;
+}
+
+internal RD_Cfg *
+rd_cfg_from_handle(RD_Handle handle)
+{
+  RD_Cfg *cfg = (RD_Cfg *)handle.u64[0];
+  if(handle.u64[1] != cfg->gen)
+  {
+    cfg = &rd_nil_cfg;
+  }
+  return cfg;
+}
+
 internal RD_Cfg *
 rd_cfg_new(RD_Cfg *parent, String8 string)
 {
@@ -1095,6 +626,32 @@ rd_cfg_newf(RD_Cfg *parent, char *fmt, ...)
   return result;
 }
 
+internal RD_Cfg *
+rd_cfg_deep_copy(RD_Cfg *src_root)
+{
+  RD_CfgRec rec = {0};
+  RD_Cfg *dst_root = &rd_nil_cfg;
+  RD_Cfg *dst_parent = &rd_nil_cfg;
+  for(RD_Cfg *src = src_root; src != &rd_nil_cfg; src = rec.next)
+  {
+    RD_Cfg *dst = rd_cfg_new(dst_parent, src->string);
+    rec = rd_cfg_rec__depth_first(src_root, src);
+    if(rec.push_count > 0)
+    {
+      dst_parent = dst;
+      if(dst_root == &rd_nil_cfg)
+      {
+        dst_root = dst;
+      }
+    }
+    else for(S32 pop_idx = 0; pop_idx < rec.pop_count; pop_idx += 1)
+    {
+      dst_parent = dst_parent->parent;
+    }
+  }
+  return dst_root;
+}
+
 internal void
 rd_cfg_equip_string(RD_Cfg *cfg, String8 string)
 {
@@ -1103,6 +660,18 @@ rd_cfg_equip_string(RD_Cfg *cfg, String8 string)
     rd_name_release(cfg->string);
   }
   cfg->string = rd_name_alloc(string);
+}
+
+internal void
+rd_cfg_equip_stringf(RD_Cfg *cfg, char *fmt, ...)
+{
+  Temp scratch = scratch_begin(0, 0);
+  va_list args;
+  va_start(args, fmt);
+  String8 string = push_str8fv(scratch.arena, fmt, args);
+  rd_cfg_equip_string(cfg, string);
+  va_end(args);
+  scratch_end(scratch);
 }
 
 internal void
@@ -1350,6 +919,196 @@ rd_cfg_list_push(Arena *arena, RD_CfgList *list, RD_Cfg *cfg)
   n->v = cfg;
   SLLQueuePush(list->first, list->last, n);
   list->count += 1;
+}
+
+internal RD_PanelTree
+rd_panel_tree_from_cfg(Arena *arena, RD_Cfg *cfg)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  RD_Cfg *wcfg = rd_window_from_cfg(cfg);
+  RD_Cfg *src_root = rd_cfg_child_from_string(wcfg, str8_lit("panels"));
+  RD_PanelNode *dst_root = &rd_nil_panel_node;
+  RD_PanelNode *dst_focused = &rd_nil_panel_node;
+  {
+    Axis2 active_split_axis = rd_cfg_child_from_string(wcfg, str8_lit("split_x")) != &rd_nil_cfg ? Axis2_X : Axis2_Y;
+    RD_CfgRec rec = {0};
+    RD_PanelNode *dst_active_parent = &rd_nil_panel_node;
+    for(RD_Cfg *src = src_root; src != &rd_nil_cfg; src = rec.next)
+    {
+      // rjf: build a panel node
+      RD_PanelNode *dst = push_array(arena, RD_PanelNode, 1);
+      MemoryCopyStruct(dst, &rd_nil_panel_node);
+      dst->parent = dst_active_parent;
+      if(dst_active_parent != &rd_nil_panel_node)
+      {
+        DLLPushBack_NPZ(&rd_nil_panel_node, dst_active_parent->first, dst_active_parent->last, dst, next, prev);
+        dst_active_parent->child_count += 1;
+      }
+      
+      // rjf: extract cfg info
+      dst->cfg = src;
+      dst->pct_of_parent = (F32)f64_from_str8(src->string);
+      dst->tab_side = (rd_cfg_child_from_string(src, str8_lit("tabs_on_bottom")) != &rd_nil_cfg ? Side_Max : Side_Min);
+      dst->split_axis = active_split_axis;
+      for(RD_Cfg *src_child = src->first; src_child != &rd_nil_cfg; src_child = src_child->next)
+      {
+        MD_TokenizeResult tokenize = md_tokenize_from_text(scratch.arena, src->string);
+        if(tokenize.tokens.count == 1 && tokenize.tokens.v[0].flags & MD_TokenFlag_Numeric)
+        {
+          // NOTE(rjf): skip - this is a panel.
+        }
+        else if(str8_match(src_child->string, str8_lit("selected"), 0))
+        {
+          dst_focused = dst;
+        }
+        else if(tokenize.tokens.count == 1 && tokenize.tokens.v[0].flags & MD_TokenFlag_Identifier)
+        {
+          rd_cfg_list_push(arena, &dst->tabs, src_child);
+          if(rd_cfg_child_from_string(src_child, str8_lit("selected")))
+          {
+            dst->selected_tab = src_child;
+          }
+        }
+      }
+      
+      // rjf: recurse
+      rec = rd_cfg_rec__depth_first(src_root, src);
+      if(rec.push_count > 0)
+      {
+        dst_active_parent = dst;
+        if(dst_root == &rd_nil_panel_node)
+        {
+          dst_root = dst;
+        }
+        active_split_axis = axis2_flip(active_split_axis);
+      }
+      else for(S32 pop_idx = 0; pop_idx < rec.pop_count; pop_idx += 1)
+      {
+        dst_active_parent = dst_active_parent->parent;
+        active_split_axis = axis2_flip(active_split_axis);
+      }
+    }
+  }
+  scratch_end(scratch);
+  RD_PanelTree tree = {dst_root, dst_focused};
+  return tree;
+}
+
+internal RD_PanelNodeRec
+rd_panel_node_rec__depth_first(RD_PanelNode *root, RD_PanelNode *panel, U64 sib_off, U64 child_off)
+{
+  RD_PanelNodeRec rec = {&rd_nil_panel_node};
+  if(*MemberFromOffset(RD_PanelNode **, panel, child_off) != &rd_nil_panel_node)
+  {
+    rec.next = *MemberFromOffset(RD_PanelNode **, panel, child_off);
+    rec.push_count += 1;
+  }
+  else for(RD_PanelNode *p = panel; p != &rd_nil_panel_node && p != root; p = p->parent, rec.pop_count += 1)
+  {
+    if(*MemberFromOffset(RD_PanelNode **, panel, sib_off) != &rd_nil_panel_node)
+    {
+      rec.next = *MemberFromOffset(RD_PanelNode **, panel, sib_off);
+      break;
+    }
+  }
+  return rec;
+}
+
+internal RD_PanelNode *
+rd_panel_node_from_tree_cfg(RD_PanelNode *root, RD_Cfg *cfg)
+{
+  RD_PanelNode *result = &rd_nil_panel_node;
+  for(RD_PanelNode *p = root;
+      p != &rd_nil_panel_node;
+      p = rd_panel_node_rec__depth_first_pre(root, p).next)
+  {
+    if(p->cfg == cfg)
+    {
+      result = p;
+      break;
+    }
+  }
+  return result;
+}
+
+internal Rng2F32
+rd_target_rect_from_panel_node_child(Rng2F32 parent_rect, RD_PanelNode *parent, RD_PanelNode *panel)
+{
+  Rng2F32 rect = parent_rect;
+  if(parent != &rd_nil_panel_node)
+  {
+    Vec2F32 parent_rect_size = dim_2f32(parent_rect);
+    Axis2 axis = parent->split_axis;
+    rect.p1.v[axis] = rect.p0.v[axis];
+    for(RD_PanelNode *child = parent->first; child != &rd_nil_panel_node; child = child->next)
+    {
+      rect.p1.v[axis] += parent_rect_size.v[axis] * child->pct_of_parent;
+      if(child == panel)
+      {
+        break;
+      }
+      rect.p0.v[axis] = rect.p1.v[axis];
+    }
+    //rect.p0.v[axis] += parent_rect_size.v[axis] * panel->off_pct_of_parent.v[axis];
+    //rect.p0.v[axis2_flip(axis)] += parent_rect_size.v[axis2_flip(axis)] * panel->off_pct_of_parent.v[axis2_flip(axis)];
+  }
+  rect.x0 = round_f32(rect.x0);
+  rect.x1 = round_f32(rect.x1);
+  rect.y0 = round_f32(rect.y0);
+  rect.y1 = round_f32(rect.y1);
+  return rect;
+}
+
+internal Rng2F32
+rd_target_rect_from_panel_node(Rng2F32 root_rect, RD_PanelNode *root, RD_PanelNode *panel)
+{
+  Temp scratch = scratch_begin(0, 0);
+  
+  // rjf: count ancestors
+  U64 ancestor_count = 0;
+  for(RD_PanelNode *p = panel->parent; p != &rd_nil_panel_node; p = p->parent)
+  {
+    ancestor_count += 1;
+  }
+  
+  // rjf: gather ancestors
+  RD_PanelNode **ancestors = push_array(scratch.arena, RD_PanelNode *, ancestor_count);
+  {
+    U64 ancestor_idx = 0;
+    for(RD_PanelNode *p = panel->parent; p != &rd_nil_panel_node; p = p->parent)
+    {
+      ancestors[ancestor_idx] = p;
+      ancestor_idx += 1;
+    }
+  }
+  
+  // rjf: go from highest ancestor => panel and calculate rect
+  Rng2F32 parent_rect = root_rect;
+  for(S64 ancestor_idx = (S64)ancestor_count-1;
+      0 <= ancestor_idx && ancestor_idx < ancestor_count;
+      ancestor_idx -= 1)
+  {
+    RD_PanelNode *ancestor = ancestors[ancestor_idx];
+    RD_PanelNode *parent = ancestor->parent;
+    if(parent != &rd_nil_panel_node)
+    {
+      parent_rect = rd_target_rect_from_panel_node_child(parent_rect, parent, ancestor);
+    }
+  }
+  
+  // rjf: calculate final rect
+  Rng2F32 rect = rd_target_rect_from_panel_node_child(parent_rect, panel->parent, panel);
+  
+  scratch_end(scratch);
+  return rect;
+}
+
+internal B32
+rd_cfg_is_project_filtered(RD_Cfg *cfg)
+{
+  RD_Cfg *project = rd_cfg_child_from_string(cfg, str8_lit("project"));
+  B32 result = path_match_normalized(rd_state->cfg_paths[RD_CfgSrc_Project], project->first->string);
+  return result;
 }
 
 ////////////////////////////////
@@ -2886,212 +2645,195 @@ rd_eval_string_from_file_path(Arena *arena, String8 string)
 }
 
 ////////////////////////////////
-//~ rjf: View State Functions
+//~ rjf: View Functions
 
-//- rjf: allocation/releasing
-
-internal RD_View *
-rd_view_alloc(void)
+internal RD_ViewState *
+rd_view_state_from_cfg_ev_key(RD_Cfg *cfg, EV_Key ev_key)
 {
-  // rjf: allocate
-  RD_View *view = rd_state->free_view;
+  RD_Handle cfg_handle = rd_handle_from_cfg(cfg);
+  U64 hash = d_hash_from_string(str8_struct(&cfg_handle));
+  U64 slot_idx = hash%rd_state->view_state_slots_count;
+  RD_ViewStateSlot *slot = &rd_state->view_state_slots[slot_idx];
+  RD_ViewState *view_state = &rd_nil_view_state;
+  for(RD_ViewState *v = slot->first; v != &rd_nil_view_state; v = v->hash_next)
   {
-    if(!rd_view_is_nil(view))
+    if(rd_handle_match(v->cfg_handle, cfg_handle) && ev_key_match(v->ev_key, ev_key))
     {
-      rd_state->free_view_count -= 1;
-      SLLStackPop_N(rd_state->free_view, alloc_next);
-      U64 generation = view->generation;
-      MemoryZeroStruct(view);
-      view->generation = generation;
+      view_state = v;
+      break;
+    }
+  }
+  if(view_state == &rd_nil_view_state)
+  {
+    view_state = rd_state->free_view_state;
+    if(view_state != &rd_nil_view_state)
+    {
+      SLLStackPop_N(rd_state->free_view_state, hash_next);
     }
     else
     {
-      view = push_array(rd_state->arena, RD_View, 1);
+      view_state = push_array(rd_state->arena, RD_ViewState, 1);
     }
-    view->generation += 1;
+    MemoryCopyStruct(view_state, &rd_nil_view_state);
+    DLLPushBack_NPZ(&rd_nil_view_state, slot->first, slot->last, view_state, hash_next, hash_prev);
+    view_state->cfg_handle = cfg_handle;
+    view_state->ev_key = ev_key;
+    view_state->arena = arena_alloc();
   }
-  
-  // rjf: initialize
-  view->arena = arena_alloc();
-  view->spec = &rd_nil_view_rule_info;
-  view->project_path_arena = arena_alloc();
-  view->project_path = str8_zero();
-  for(U64 idx = 0; idx < ArrayCount(view->params_arenas); idx += 1)
+  if(view_state != &rd_nil_view_state)
   {
-    view->params_arenas[idx] = arena_alloc();
-    view->params_roots[idx] = &md_nil_node;
+    view_state->last_frame_index_touched = rd_state->frame_index;
   }
-  view->query_cursor = view->query_mark = txt_pt(1, 1);
-  view->query_string_size = 0;
-  rd_state->allocated_view_count += 1;
-  DLLPushBack_NPZ(&rd_nil_view, rd_state->first_view, rd_state->last_view, view, alloc_next, alloc_prev);
-  return view;
+  return view_state;
 }
 
-internal void
-rd_view_release(RD_View *view)
+internal RD_ViewState *
+rd_view_state_from_cfg(RD_Cfg *cfg)
 {
-  DLLRemove_NPZ(&rd_nil_view, rd_state->first_view, rd_state->last_view, view, alloc_next, alloc_prev);
-  SLLStackPush_N(rd_state->free_view, view, alloc_next);
-  for(RD_View *tchild = view->first_transient, *next = 0; !rd_view_is_nil(tchild); tchild = next)
-  {
-    next = tchild->order_next;
-    rd_view_release(tchild);
-  }
-  view->first_transient = view->last_transient = &rd_nil_view;
-  view->transient_view_slots_count = 0;
-  view->transient_view_slots = 0;
-  for(RD_ArenaExt *ext = view->first_arena_ext; ext != 0; ext = ext->next)
-  {
-    arena_release(ext->arena);
-  }
-  view->first_arena_ext = view->last_arena_ext = 0;
-  arena_release(view->project_path_arena);
-  for(U64 idx = 0; idx < ArrayCount(view->params_arenas); idx += 1)
-  {
-    arena_release(view->params_arenas[idx]);
-  }
-  arena_release(view->arena);
-  view->generation += 1;
-  rd_state->allocated_view_count -= 1;
-  rd_state->free_view_count += 1;
+  RD_ViewState *view_state = rd_view_state_from_cfg_ev_key(cfg, ev_key_zero());
+  return view_state;
 }
 
-//- rjf: equipment
-
-internal void
-rd_view_equip_spec(RD_View *view, RD_ViewRuleInfo *spec, String8 query, MD_Node *params)
+internal DR_FancyStringList
+rd_title_fstrs_from_view(Arena *arena, String8 viewer_name_string, String8 query, Vec4F32 primary_color, Vec4F32 secondary_color, F32 size)
 {
-  // rjf: fill params tree
-  for(U64 idx = 0; idx < ArrayCount(view->params_arenas); idx += 1)
-  {
-    arena_clear(view->params_arenas[idx]);
-  }
-  view->params_roots[0] = md_tree_copy(view->params_arenas[0], params);
-  view->params_write_gen = view->params_read_gen = 0;
+  DR_FancyStringList result = {0};
+  Temp scratch = scratch_begin(&arena, 1);
+  String8 file_path = rd_file_path_from_eval_string(scratch.arena, query);
   
-  // rjf: fill query buffer
-  rd_view_equip_query(view, query);
-  
-  // rjf: initialize state for new view spec
+  //- rjf: query is file path - do specific file name strings
+  if(file_path.size != 0)
   {
-    for(RD_ArenaExt *ext = view->first_arena_ext; ext != 0; ext = ext->next)
+    // rjf: compute disambiguated file name
+    String8List qualifiers = {0};
+    String8 file_name = str8_skip_last_slash(file_path);
+    if(rd_state->ambiguous_path_slots_count != 0)
     {
-      arena_release(ext->arena);
+      U64 hash = d_hash_from_string__case_insensitive(file_name);
+      U64 slot_idx = hash%rd_state->ambiguous_path_slots_count;
+      RD_AmbiguousPathNode *node = 0;
+      {
+        for(RD_AmbiguousPathNode *n = rd_state->ambiguous_path_slots[slot_idx];
+            n != 0;
+            n = n->next)
+        {
+          if(str8_match(n->name, file_name, StringMatchFlag_CaseInsensitive))
+          {
+            node = n;
+            break;
+          }
+        }
+      }
+      if(node != 0 && node->paths.node_count > 1)
+      {
+        // rjf: get all colliding paths
+        String8Array collisions = str8_array_from_list(scratch.arena, &node->paths);
+        
+        // rjf: get all reversed path parts for each collision
+        String8List *collision_parts_reversed = push_array(scratch.arena, String8List, collisions.count);
+        for EachIndex(idx, collisions.count)
+        {
+          String8List parts = str8_split_path(scratch.arena, collisions.v[idx]);
+          for(String8Node *n = parts.first; n != 0; n = n->next)
+          {
+            str8_list_push_front(scratch.arena, &collision_parts_reversed[idx], n->string);
+          }
+        }
+        
+        // rjf: get the search path & its reversed parts
+        String8List parts = str8_split_path(scratch.arena, file_path);
+        String8List parts_reversed = {0};
+        for(String8Node *n = parts.first; n != 0; n = n->next)
+        {
+          str8_list_push_front(scratch.arena, &parts_reversed, n->string);
+        }
+        
+        // rjf: iterate all collision part reversed lists, in lock-step with
+        // search path; disqualify until we only have one path remaining; gather
+        // qualifiers
+        {
+          U64 num_collisions_left = collisions.count;
+          String8Node **collision_nodes = push_array(scratch.arena, String8Node *, collisions.count);
+          for EachIndex(idx, collisions.count)
+          {
+            collision_nodes[idx] = collision_parts_reversed[idx].first;
+          }
+          for(String8Node *n = parts_reversed.first; num_collisions_left > 1 && n != 0; n = n->next)
+          {
+            B32 part_is_qualifier = 0;
+            for EachIndex(idx, collisions.count)
+            {
+              if(collision_nodes[idx] != 0 && !str8_match(collision_nodes[idx]->string, n->string, StringMatchFlag_CaseInsensitive))
+              {
+                collision_nodes[idx] = 0;
+                num_collisions_left -= 1;
+                part_is_qualifier = 1;
+              }
+              else if(collision_nodes[idx] != 0)
+              {
+                collision_nodes[idx] = collision_nodes[idx]->next;
+              }
+            }
+            if(part_is_qualifier)
+            {
+              str8_list_push_front(scratch.arena, &qualifiers, n->string);
+            }
+          }
+        }
+      }
     }
-    for(RD_View *tchild = view->first_transient, *next = 0; !rd_view_is_nil(tchild); tchild = next)
+    
+    // rjf: push qualifiers
+    for(String8Node *n = qualifiers.first; n != 0; n = n->next)
     {
-      next = tchild->order_next;
-      rd_view_release(tchild);
+      String8 string = push_str8f(arena, "<%S> ", n->string);
+      dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Main), size*0.95f, secondary_color, string);
     }
-    view->first_transient = view->last_transient = &rd_nil_view;
-    view->first_arena_ext = view->last_arena_ext = 0;
-    view->transient_view_slots_count = 0;
-    view->transient_view_slots = 0;
-    arena_clear(view->arena);
-    view->user_data = 0;
+    
+    // rjf: push file name
+    DR_FancyString fstr =
+    {
+      rd_font_from_slot(RD_FontSlot_Main),
+      push_str8_copy(arena, file_name),
+      primary_color,
+      size,
+    };
+    dr_fancy_string_list_push(arena, &result, &fstr);
   }
-  MemoryZeroStruct(&view->scroll_pos);
-  view->spec = spec;
-  arena_clear(view->project_path_arena);
-  view->project_path = push_str8_copy(view->project_path_arena, rd_cfg_path_from_src(RD_CfgSrc_Project));
-  view->is_filtering = 0;
-  view->is_filtering_t = 0;
-}
-
-internal void
-rd_view_equip_query(RD_View *view, String8 query)
-{
-  view->query_string_size = Min(sizeof(view->query_buffer), query.size);
-  MemoryCopy(view->query_buffer, query.str, view->query_string_size);
-  view->query_cursor = view->query_mark = txt_pt(1, query.size+1);
-}
-
-internal void
-rd_view_equip_loading_info(RD_View *view, B32 is_loading, U64 progress_v, U64 progress_target)
-{
-  view->loading_t_target = (F32)!!is_loading;
-  view->loading_progress_v = progress_v;
-  view->loading_progress_v_target = progress_target;
-  if(is_loading)
+  
+  //- rjf: query is not file path - do general case, for view rule & expression
+  else
   {
-    view->loading_t = view->loading_t_target;
+    DR_FancyString fstr1 =
+    {
+      rd_font_from_slot(RD_FontSlot_Main),
+      viewer_name_string,
+      primary_color,
+      size,
+    };
+    dr_fancy_string_list_push(arena, &result, &fstr1);
+    if(query.size != 0)
+    {
+      DR_FancyString fstr2 =
+      {
+        rd_font_from_slot(RD_FontSlot_Code),
+        str8_lit(" "),
+        primary_color,
+        size,
+      };
+      dr_fancy_string_list_push(arena, &result, &fstr2);
+      DR_FancyString fstr3 =
+      {
+        rd_font_from_slot(RD_FontSlot_Code),
+        push_str8_copy(arena, query),
+        secondary_color,
+        size*0.8f,
+      };
+      dr_fancy_string_list_push(arena, &result, &fstr3);
+    }
   }
-}
-
-//- rjf: user state extensions
-
-internal void *
-rd_view_get_or_push_user_state(RD_View *view, U64 size)
-{
-  void *result = view->user_data;
-  if(result == 0)
-  {
-    view->user_data = result = push_array(view->arena, U8, size);
-  }
-  return result;
-}
-
-internal Arena *
-rd_view_push_arena_ext(RD_View *view)
-{
-  RD_ArenaExt *ext = push_array(view->arena, RD_ArenaExt, 1);
-  ext->arena = arena_alloc();
-  SLLQueuePush(view->first_arena_ext, view->last_arena_ext, ext);
-  return ext->arena;
-}
-
-//- rjf: param saving
-
-internal void
-rd_view_store_param(RD_View *view, String8 key, String8 value)
-{
-  B32 new_copy = 0;
-  if(view->params_write_gen == view->params_read_gen)
-  {
-    view->params_write_gen += 1;
-    new_copy = 1;
-  }
-  Arena *new_params_arena = view->params_arenas[view->params_write_gen%ArrayCount(view->params_arenas)];
-  if(new_copy)
-  {
-    arena_clear(new_params_arena);
-    view->params_roots[view->params_write_gen%ArrayCount(view->params_arenas)] = md_tree_copy(new_params_arena, view->params_roots[view->params_read_gen%ArrayCount(view->params_arenas)]);
-  }
-  MD_Node *new_params_root = view->params_roots[view->params_write_gen%ArrayCount(view->params_arenas)];
-  if(md_node_is_nil(new_params_root))
-  {
-    new_params_root = view->params_roots[view->params_write_gen%ArrayCount(view->params_arenas)] = md_push_node(new_params_arena, MD_NodeKind_Main, 0, str8_zero(), str8_zero(), 0);
-  }
-  MD_Node *key_node = md_child_from_string(new_params_root, key, 0);
-  if(md_node_is_nil(key_node))
-  {
-    String8 key_copy = push_str8_copy(new_params_arena, key);
-    key_node = md_push_node(new_params_arena, MD_NodeKind_Main, MD_NodeFlag_Identifier, key_copy, key_copy, 0);
-    md_node_push_child(new_params_root, key_node);
-  }
-  key_node->first = key_node->last = &md_nil_node;
-  String8 value_copy = push_str8_copy(new_params_arena, value);
-  MD_TokenizeResult value_tokenize = md_tokenize_from_text(new_params_arena, value_copy);
-  MD_ParseResult value_parse = md_parse_from_text_tokens(new_params_arena, str8_zero(), value_copy, value_tokenize.tokens);
-  for MD_EachNode(child, value_parse.root->first)
-  {
-    child->parent = key_node;
-  }
-  key_node->first = value_parse.root->first;
-  key_node->last = value_parse.root->last;
-}
-
-internal void
-rd_view_store_paramf(RD_View *view, String8 key, char *fmt, ...)
-{
-  Temp scratch = scratch_begin(0, 0);
-  va_list args;
-  va_start(args, fmt);
-  String8 string = push_str8fv(scratch.arena, fmt, args);
-  rd_view_store_param(view, key, string);
-  va_end(args);
   scratch_end(scratch);
+  return result;
 }
 
 ////////////////////////////////
@@ -3102,33 +2844,35 @@ rd_view_store_paramf(RD_View *view, String8 key, char *fmt, ...)
 internal Arena *
 rd_view_arena(void)
 {
-  RD_View *view = rd_view_from_handle(rd_regs()->view);
-  return view->arena;
+  RD_Cfg *tab = rd_cfg_from_handle(rd_regs()->tab);
+  RD_ViewState *view_state = rd_view_state_from_cfg_ev_key(tab, rd_regs()->ev_key);
+  return view_state->arena;
 }
 
 internal UI_ScrollPt2
 rd_view_scroll_pos(void)
 {
-  RD_View *view = rd_view_from_handle(rd_regs()->view);
-  return view->scroll_pos;
+  RD_Cfg *tab = rd_cfg_from_handle(rd_regs()->tab);
+  RD_ViewState *view_state = rd_view_state_from_cfg_ev_key(tab, rd_regs()->ev_key);
+  return view_state->scroll_pos;
 }
 
 internal String8
 rd_view_expr_string(void)
 {
-  // TODO(rjf): @entity_simplification filter and expr string need to be different
-  RD_View *view = rd_view_from_handle(rd_regs()->view);
-  String8 expr_string = str8(view->query_buffer, view->query_string_size);
+  RD_Cfg *tab = rd_cfg_from_handle(rd_regs()->tab);
+  RD_ViewState *view_state = rd_view_state_from_cfg_ev_key(tab, rd_regs()->ev_key);
+  String8 expr_string = str8(view_state->expression_buffer, view_state->expression_string_size);
   return expr_string;
 }
 
 internal String8
 rd_view_filter(void)
 {
-  // TODO(rjf): @entity_simplification filter and expr string need to be different
-  RD_View *view = rd_view_from_handle(rd_regs()->view);
-  String8 filter = str8(view->query_buffer, view->query_string_size);
-  return filter;
+  RD_Cfg *tab = rd_cfg_from_handle(rd_regs()->tab);
+  RD_ViewState *view_state = rd_view_state_from_cfg_ev_key(tab, rd_regs()->ev_key);
+  String8 filter_string = str8(view_state->filter_buffer, view_state->filter_string_size);
+  return filter_string;
 }
 
 //- rjf: pushing/attaching view resources
@@ -3136,17 +2880,24 @@ rd_view_filter(void)
 internal void *
 rd_view_state_by_size(U64 size)
 {
-  RD_View *view = rd_view_from_handle(rd_regs()->view);
-  void *result = rd_view_get_or_push_user_state(view, size);
-  return result;
+  RD_Cfg *tab = rd_cfg_from_handle(rd_regs()->tab);
+  RD_ViewState *view_state = rd_view_state_from_cfg_ev_key(tab, rd_regs()->ev_key);
+  if(view_state->user_data == 0)
+  {
+    view_state->user_data = push_array(view_state->arena, U8, size);
+  }
+  return view_state->user_data;
 }
 
 internal Arena *
 rd_push_view_arena(void)
 {
-  RD_View *view = rd_view_from_handle(rd_regs()->view);
-  Arena *result = rd_view_push_arena_ext(view);
-  return result;
+  RD_Cfg *tab = rd_cfg_from_handle(rd_regs()->tab);
+  RD_ViewState *view_state = rd_view_state_from_cfg_ev_key(tab, rd_regs()->ev_key);
+  RD_ArenaExt *ext = push_array(view_state->arena, RD_ArenaExt, 1);
+  ext->arena = arena_alloc();
+  SLLQueuePush(view_state->first_arena_ext, view_state->last_arena_ext, ext);
+  return ext->arena;
 }
 
 //- rjf: storing view-attached state
@@ -3154,31 +2905,37 @@ rd_push_view_arena(void)
 internal void
 rd_store_view_expr_string(String8 string)
 {
-  // TODO(rjf): @entity_simplification filter and expr string need to be different
-  RD_View *view = rd_view_from_handle(rd_regs()->view);
-  rd_view_equip_query(view, string);
+  RD_Cfg *tab = rd_cfg_from_handle(rd_regs()->tab);
+  RD_ViewState *view_state = rd_view_state_from_cfg_ev_key(tab, rd_regs()->ev_key);
+  view_state->expression_string_size = Min(string.size, sizeof(view_state->expression_buffer));
+  MemoryCopy(view_state->expression_buffer, string.str, view_state->expression_string_size);
 }
 
 internal void
 rd_store_view_filter(String8 string)
 {
-  // TODO(rjf): @entity_simplification filter and expr string need to be different
-  RD_View *view = rd_view_from_handle(rd_regs()->view);
-  rd_view_equip_query(view, string);
+  RD_Cfg *tab = rd_cfg_from_handle(rd_regs()->tab);
+  RD_ViewState *view_state = rd_view_state_from_cfg_ev_key(tab, rd_regs()->ev_key);
+  view_state->filter_string_size = Min(string.size, sizeof(view_state->filter_buffer));
+  MemoryCopy(view_state->filter_buffer, string.str, view_state->filter_string_size);
 }
 
 internal void
 rd_store_view_loading_info(B32 is_loading, U64 progress_u64, U64 progress_u64_target)
 {
-  RD_View *view = rd_view_from_handle(rd_regs()->view);
-  rd_view_equip_loading_info(view, is_loading, progress_u64, progress_u64_target);
+  RD_Cfg *tab = rd_cfg_from_handle(rd_regs()->tab);
+  RD_ViewState *view_state = rd_view_state_from_cfg_ev_key(tab, rd_regs()->ev_key);
+  view_state->loading_t_target = (F32)!!is_loading;
+  view_state->loading_progress_v = progress_u64;
+  view_state->loading_progress_v_target = progress_u64_target;
 }
 
 internal void
 rd_store_view_scroll_pos(UI_ScrollPt2 pos)
 {
-  RD_View *view = rd_view_from_handle(rd_regs()->view);
-  view->scroll_pos = pos;
+  RD_Cfg *tab = rd_cfg_from_handle(rd_regs()->tab);
+  RD_ViewState *view_state = rd_view_state_from_cfg_ev_key(tab, rd_regs()->ev_key);
+  view_state->scroll_pos = pos;
 }
 
 internal void
@@ -3201,209 +2958,202 @@ rd_store_view_paramf(String8 key, char *fmt, ...)
 }
 
 ////////////////////////////////
-//~ rjf: Expand-Keyed Transient View Functions
+//~ rjf: Window Functions
 
-internal RD_TransientViewNode *
-rd_transient_view_node_from_ev_key(RD_View *owner_view, EV_Key key)
+internal RD_Cfg *
+rd_window_from_cfg(RD_Cfg *cfg)
 {
-  if(owner_view->transient_view_slots_count == 0)
+  RD_Cfg *result = &rd_nil_cfg;
+  for(RD_Cfg *c = cfg; c != &rd_nil_cfg; c = c->parent)
   {
-    owner_view->transient_view_slots_count = 256;
-    owner_view->transient_view_slots = push_array(owner_view->arena, RD_TransientViewSlot, owner_view->transient_view_slots_count);
-  }
-  U64 hash = ev_hash_from_key(key);
-  U64 slot_idx = hash%owner_view->transient_view_slots_count;
-  RD_TransientViewSlot *slot = &owner_view->transient_view_slots[slot_idx];
-  RD_TransientViewNode *node = 0;
-  for(RD_TransientViewNode *n = slot->first; n != 0; n = n->next)
-  {
-    if(ev_key_match(n->key, key))
+    if(c->parent->parent == rd_state->root_cfg && str8_match(c->string, str8_lit("window"), 0))
     {
-      node = n;
-      n->last_frame_index_touched = rd_state->frame_index;
-      break;
-    }
-  }
-  if(node == 0)
-  {
-    if(!owner_view->free_transient_view_node)
-    {
-      owner_view->free_transient_view_node = push_array(rd_state->arena, RD_TransientViewNode, 1);
-    }
-    node = owner_view->free_transient_view_node;
-    SLLStackPop(owner_view->free_transient_view_node);
-    DLLPushBack(slot->first, slot->last, node);
-    node->key = key;
-    node->view = rd_view_alloc();
-    node->initial_params_arena = arena_alloc();
-    node->first_frame_index_touched = node->last_frame_index_touched = rd_state->frame_index;
-    DLLPushBack_NPZ(&rd_nil_view, owner_view->first_transient, owner_view->last_transient, node->view, order_next, order_prev);
-  }
-  return node;
-}
-
-////////////////////////////////
-//~ rjf: Panel State Functions
-
-internal RD_Panel *
-rd_panel_alloc(RD_Window *ws)
-{
-  RD_Panel *panel = ws->free_panel;
-  if(!rd_panel_is_nil(panel))
-  {
-    SLLStackPop(ws->free_panel);
-    U64 generation = panel->generation;
-    MemoryZeroStruct(panel);
-    panel->generation = generation;
-  }
-  else
-  {
-    panel = push_array(ws->arena, RD_Panel, 1);
-  }
-  panel->first = panel->last = panel->next = panel->prev = panel->parent = &rd_nil_panel;
-  panel->first_tab_view = panel->last_tab_view = &rd_nil_view;
-  panel->generation += 1;
-  MemoryZeroStruct(&panel->animated_rect_pct);
-  return panel;
-}
-
-internal void
-rd_panel_release(RD_Window *ws, RD_Panel *panel)
-{
-  rd_panel_release_all_views(panel);
-  SLLStackPush(ws->free_panel, panel);
-  panel->generation += 1;
-}
-
-internal void
-rd_panel_release_all_views(RD_Panel *panel)
-{
-  for(RD_View *view = panel->first_tab_view, *next = 0; !rd_view_is_nil(view); view = next)
-  {
-    next = view->order_next;
-    rd_view_release(view);
-  }
-  panel->first_tab_view = panel->last_tab_view = &rd_nil_view;
-  panel->selected_tab_view = rd_handle_zero();
-  panel->tab_view_count = 0;
-}
-
-////////////////////////////////
-//~ rjf: Window State Functions
-
-internal RD_Window *
-rd_window_open(Vec2F32 size, OS_Handle preferred_monitor, RD_CfgSrc cfg_src)
-{
-  RD_Window *window = rd_state->free_window;
-  if(window != 0)
-  {
-    SLLStackPop(rd_state->free_window);
-    U64 gen = window->gen;
-    MemoryZeroStruct(window);
-    window->gen = gen;
-  }
-  else
-  {
-    window = push_array(rd_state->arena, RD_Window, 1);
-  }
-  window->gen += 1;
-  window->frames_alive = 0;
-  window->cfg_src = cfg_src;
-  window->arena = arena_alloc();
-  {
-    String8 title = str8_lit_comp(BUILD_TITLE_STRING_LITERAL);
-    window->os = os_window_open(size, OS_WindowFlag_CustomBorder, title);
-  }
-  window->r = r_window_equip(window->os);
-  window->ui = ui_state_alloc();
-  window->ctx_menu_arena = arena_alloc();
-  window->ctx_menu_regs = push_array(window->ctx_menu_arena, RD_Regs, 1);
-  window->ctx_menu_input_buffer_size = KB(4);
-  window->ctx_menu_input_buffer = push_array(window->arena, U8, window->ctx_menu_input_buffer_size);
-  window->drop_completion_arena = arena_alloc();
-  window->hover_eval_arena = arena_alloc();
-  window->autocomp_lister_params_arena = arena_alloc();
-  window->free_panel = &rd_nil_panel;
-  window->root_panel = rd_panel_alloc(window);
-  window->focused_panel = window->root_panel;
-  window->query_cmd_arena = arena_alloc();
-  window->query_view_stack_top = &rd_nil_view;
-  window->last_dpi = os_dpi_from_window(window->os);
-  for EachEnumVal(RD_SettingCode, code)
-  {
-    if(rd_setting_code_default_is_per_window_table[code])
-    {
-      window->setting_vals[code] = rd_setting_code_default_val_table[code];
-    }
-  }
-  window->setting_vals[RD_SettingCode_MainFontSize].s32 = window->setting_vals[RD_SettingCode_MainFontSize].s32 * (window->last_dpi / 96.f);
-  window->setting_vals[RD_SettingCode_CodeFontSize].s32 = window->setting_vals[RD_SettingCode_CodeFontSize].s32 * (window->last_dpi / 96.f);
-  window->setting_vals[RD_SettingCode_MainFontSize].s32 = ClampBot(window->setting_vals[RD_SettingCode_MainFontSize].s32, rd_setting_code_default_val_table[RD_SettingCode_MainFontSize].s32);
-  window->setting_vals[RD_SettingCode_CodeFontSize].s32 = ClampBot(window->setting_vals[RD_SettingCode_CodeFontSize].s32, rd_setting_code_default_val_table[RD_SettingCode_CodeFontSize].s32);
-  OS_Handle zero_monitor = {0};
-  if(!os_handle_match(zero_monitor, preferred_monitor))
-  {
-    os_window_set_monitor(window->os, preferred_monitor);
-  }
-  if(rd_state->first_window == 0) RD_RegsScope(.window = rd_handle_from_window(window))
-  {
-    RD_FontSlot english_font_slots[] = {RD_FontSlot_Main, RD_FontSlot_Code};
-    RD_FontSlot icon_font_slot = RD_FontSlot_Icons;
-    for(U64 idx = 0; idx < ArrayCount(english_font_slots); idx += 1)
-    {
-      Temp scratch = scratch_begin(0, 0);
-      RD_FontSlot slot = english_font_slots[idx];
-      String8 sample_text = str8_lit("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890~!@#$%^&*()-_+=[{]}\\|;:'\",<.>/?");
-      fnt_push_run_from_string(scratch.arena,
-                               rd_font_from_slot(slot),
-                               rd_font_size_from_slot(RD_FontSlot_Code),
-                               0, 0, 0,
-                               sample_text);
-      fnt_push_run_from_string(scratch.arena,
-                               rd_font_from_slot(slot),
-                               rd_font_size_from_slot(RD_FontSlot_Main),
-                               0, 0, 0,
-                               sample_text);
-      scratch_end(scratch);
-    }
-    for(RD_IconKind icon_kind = RD_IconKind_Null; icon_kind < RD_IconKind_COUNT; icon_kind = (RD_IconKind)(icon_kind+1))
-    {
-      Temp scratch = scratch_begin(0, 0);
-      fnt_push_run_from_string(scratch.arena,
-                               rd_font_from_slot(icon_font_slot),
-                               rd_font_size_from_slot(icon_font_slot),
-                               0, 0, FNT_RasterFlag_Smooth,
-                               rd_icon_kind_text_table[icon_kind]);
-      fnt_push_run_from_string(scratch.arena,
-                               rd_font_from_slot(icon_font_slot),
-                               rd_font_size_from_slot(RD_FontSlot_Main),
-                               0, 0, FNT_RasterFlag_Smooth,
-                               rd_icon_kind_text_table[icon_kind]);
-      fnt_push_run_from_string(scratch.arena,
-                               rd_font_from_slot(icon_font_slot),
-                               rd_font_size_from_slot(RD_FontSlot_Code),
-                               0, 0, FNT_RasterFlag_Smooth,
-                               rd_icon_kind_text_table[icon_kind]);
-      scratch_end(scratch);
-    }
-  }
-  DLLPushBack(rd_state->first_window, rd_state->last_window, window);
-  return window;
-}
-
-internal RD_Window *
-rd_window_from_os_handle(OS_Handle os)
-{
-  RD_Window *result = 0;
-  for(RD_Window *w = rd_state->first_window; w != 0; w = w->next)
-  {
-    if(os_handle_match(w->os, os))
-    {
-      result = w;
+      result = c;
       break;
     }
   }
   return result;
+}
+
+internal RD_WindowState *
+rd_window_state_from_cfg(RD_Cfg *cfg)
+{
+  //- rjf: unpack
+  RD_Cfg *window_cfg = rd_window_from_cfg(cfg);
+  RD_Handle handle = rd_handle_from_cfg(window_cfg);
+  U64 hash = d_hash_from_string(str8_struct(&handle));
+  U64 slot_idx = hash%rd_state->window_state_slots_count;
+  RD_WindowStateSlot *slot = &rd_state->window_state_slots[slot_idx];
+  
+  //- rjf: scan for existing window
+  RD_WindowState *ws = &rd_nil_window_state;
+  for(RD_WindowState *w = slot->first; w != 0; w = w->hash_next)
+  {
+    if(rd_handle_match(w->cfg_handle, handle))
+    {
+      ws = w;
+      break;
+    }
+  }
+  
+  //- rjf: allocate/open new window if one was not found
+  if(window_cfg != &rd_nil_cfg && ws == &rd_nil_window_state)
+  {
+    Temp scratch = scratch_begin(0, 0);
+    
+    // rjf: unpack configuration options
+    Vec2F32 size = {0};
+    OS_Handle preferred_monitor = {0};
+    {
+      RD_Cfg *size_cfg = rd_cfg_child_from_string(window_cfg, str8_lit("size"));
+      RD_Cfg *monitor_cfg = rd_cfg_child_from_string(window_cfg, str8_lit("monitor"));
+      size.x = (F32)f64_from_str8(size_cfg->first->string);
+      size.y = (F32)f64_from_str8(size_cfg->first->next->string);
+      OS_HandleArray monitors = os_push_monitors_array(scratch.arena);
+      for EachIndex(idx, monitors.count)
+      {
+        String8 monitor_name = os_name_from_monitor(scratch.arena, monitors.v[idx]);
+        if(str8_match(monitor_name, monitor_cfg->first->string, StringMatchFlag_CaseInsensitive))
+        {
+          preferred_monitor = monitors.v[idx];
+          break;
+        }
+      }
+    }
+    
+    // rjf: allocate window
+    ws = rd_state->free_window_state;
+    if(ws != 0)
+    {
+      SLLStackPop_N(rd_state->free_window_state, order_next);
+    }
+    else
+    {
+      ws = push_array_no_zero(rd_state->arena, RD_WindowState, 1);
+    }
+    MemoryZeroStruct(ws);
+    
+    // rjf: fill out window
+    ws->arena = arena_alloc();
+    {
+      String8 title = str8_lit_comp(BUILD_TITLE_STRING_LITERAL);
+      ws->os = os_window_open(size, OS_WindowFlag_CustomBorder, title);
+    }
+    ws->r = r_window_equip(ws->os);
+    ws->ui = ui_state_alloc();
+    ws->ctx_menu_arena = arena_alloc();
+    ws->ctx_menu_regs = push_array(ws->ctx_menu_arena, RD_Regs, 1);
+    ws->ctx_menu_input_buffer_size = KB(4);
+    ws->ctx_menu_input_buffer = push_array(ws->arena, U8, ws->ctx_menu_input_buffer_size);
+    ws->drop_completion_arena = arena_alloc();
+    ws->hover_eval_arena = arena_alloc();
+    ws->autocomp_lister_params_arena = arena_alloc();
+    ws->query_cmd_arena = arena_alloc();
+    ws->query_view_stack_top = &rd_nil_view;
+    ws->last_dpi = os_dpi_from_window(ws->os);
+    for EachEnumVal(RD_SettingCode, code)
+    {
+      if(rd_setting_code_default_is_per_window_table[code])
+      {
+        ws->setting_vals[code] = rd_setting_code_default_val_table[code];
+      }
+    }
+    ws->setting_vals[RD_SettingCode_MainFontSize].s32 = ws->setting_vals[RD_SettingCode_MainFontSize].s32 * (ws->last_dpi / 96.f);
+    ws->setting_vals[RD_SettingCode_CodeFontSize].s32 = ws->setting_vals[RD_SettingCode_CodeFontSize].s32 * (ws->last_dpi / 96.f);
+    ws->setting_vals[RD_SettingCode_MainFontSize].s32 = ClampBot(ws->setting_vals[RD_SettingCode_MainFontSize].s32, rd_setting_code_default_val_table[RD_SettingCode_MainFontSize].s32);
+    ws->setting_vals[RD_SettingCode_CodeFontSize].s32 = ClampBot(ws->setting_vals[RD_SettingCode_CodeFontSize].s32, rd_setting_code_default_val_table[RD_SettingCode_CodeFontSize].s32);
+    OS_Handle zero_monitor = {0};
+    if(!os_handle_match(zero_monitor, preferred_monitor))
+    {
+      os_window_set_monitor(ws->os, preferred_monitor);
+    }
+    if(rd_cfg_child_from_string(window_cfg, str8_lit("fullscreen")) != &rd_nil_cfg)
+    {
+      os_window_set_fullscreen(ws->os, 1);
+    }
+    if(rd_cfg_child_from_string(window_cfg, str8_lit("maximized")) != &rd_nil_cfg)
+    {
+      os_window_set_maximized(ws->os, 1);
+    }
+    
+    // rjf: pre-emptively rasterize common glyphs
+    if(rd_state->first_window_state == 0) RD_RegsScope(.window = handle)
+    {
+      RD_FontSlot english_font_slots[] = {RD_FontSlot_Main, RD_FontSlot_Code};
+      RD_FontSlot icon_font_slot = RD_FontSlot_Icons;
+      for(U64 idx = 0; idx < ArrayCount(english_font_slots); idx += 1)
+      {
+        Temp scratch = scratch_begin(0, 0);
+        RD_FontSlot slot = english_font_slots[idx];
+        String8 sample_text = str8_lit("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890~!@#$%^&*()-_+=[{]}\\|;:'\",<.>/?");
+        fnt_push_run_from_string(scratch.arena,
+                                 rd_font_from_slot(slot),
+                                 rd_font_size_from_slot(RD_FontSlot_Code),
+                                 0, 0, 0,
+                                 sample_text);
+        fnt_push_run_from_string(scratch.arena,
+                                 rd_font_from_slot(slot),
+                                 rd_font_size_from_slot(RD_FontSlot_Main),
+                                 0, 0, 0,
+                                 sample_text);
+        scratch_end(scratch);
+      }
+      for(RD_IconKind icon_kind = RD_IconKind_Null; icon_kind < RD_IconKind_COUNT; icon_kind = (RD_IconKind)(icon_kind+1))
+      {
+        Temp scratch = scratch_begin(0, 0);
+        fnt_push_run_from_string(scratch.arena,
+                                 rd_font_from_slot(icon_font_slot),
+                                 rd_font_size_from_slot(icon_font_slot),
+                                 0, 0, FNT_RasterFlag_Smooth,
+                                 rd_icon_kind_text_table[icon_kind]);
+        fnt_push_run_from_string(scratch.arena,
+                                 rd_font_from_slot(icon_font_slot),
+                                 rd_font_size_from_slot(RD_FontSlot_Main),
+                                 0, 0, FNT_RasterFlag_Smooth,
+                                 rd_icon_kind_text_table[icon_kind]);
+        fnt_push_run_from_string(scratch.arena,
+                                 rd_font_from_slot(icon_font_slot),
+                                 rd_font_size_from_slot(RD_FontSlot_Code),
+                                 0, 0, FNT_RasterFlag_Smooth,
+                                 rd_icon_kind_text_table[icon_kind]);
+        scratch_end(scratch);
+      }
+    }
+    
+    // rjf: hook up window links
+    DLLPushBack_NP(rd_state->first_window_state, rd_state->last_window_state, ws, order_next, order_prev);
+    DLLPushBack_NP(slot->first, slot->last, ws, hash_next, hash_prev);
+    
+    scratch_end(scratch);
+  }
+  
+  //- rjf: touch window for this frame
+  if(ws != &rd_nil_window_state)
+  {
+    ws->last_frame_index_touched = rd_state->frame_index;
+  }
+  
+  return ws;
+}
+
+internal RD_WindowState *
+rd_window_state_from_os_handle(OS_Handle os)
+{
+  RD_WindowState *ws = 0;
+  for EachIndex(slot_idx, rd_state->window_state_slots_count)
+  {
+    for(RD_WindowState *w = rd_state->window_state_slots[slot_idx].first;
+        w != 0;
+        w = w->order_next)
+    {
+      if(os_handle_match(w->os, os))
+      {
+        ws = w;
+        break;
+      }
+    }
+  }
+  return ws;
 }
 
 #if COMPILER_MSVC && !BUILD_DEBUG
@@ -3411,13 +3161,17 @@ rd_window_from_os_handle(OS_Handle os)
 #endif
 
 internal void
-rd_window_frame(RD_Window *ws)
+rd_window_frame(void)
 {
+  Temp scratch = scratch_begin(0, 0);
   ProfBeginFunction();
   
   //////////////////////////////
   //- rjf: unpack context
   //
+  RD_Cfg *window = rd_cfg_from_handle(rd_regs()->window);
+  RD_WindowState *ws = rd_window_state_from_cfg(rd_cfg_from_handle(rd_regs()->window));
+  RD_PanelTree panel_tree = rd_panel_tree_from_cfg(scratch.arena, window);
   B32 window_is_focused = os_window_is_focused(ws->os) || ws->window_temporarily_focused_ipc;
   B32 popup_open = rd_state->popup_active;
   B32 query_is_open = !rd_view_is_nil(ws->query_view_stack_top);
@@ -3433,52 +3187,10 @@ rd_window_frame(RD_Window *ws)
   ui_select_state(ws->ui);
   
   //////////////////////////////
-  //- rjf: panels with no selected tabs? -> select.
-  // panels with selected tabs? -> ensure they have active tabs.
-  //
-  for(RD_Panel *panel = ws->root_panel;
-      !rd_panel_is_nil(panel);
-      panel = rd_panel_rec_depth_first_pre(panel).next)
-  {
-    if(!rd_panel_is_nil(panel->first))
-    {
-      continue;
-    }
-    RD_View *view = rd_selected_tab_from_panel(panel);
-    if(rd_view_is_nil(view))
-    {
-      for(RD_View *tab = panel->first_tab_view; !rd_view_is_nil(tab); tab = tab->order_next)
-      {
-        if(!rd_view_is_project_filtered(tab))
-        {
-          panel->selected_tab_view = rd_handle_from_view(tab);
-          break;
-        }
-      }
-    }
-    if(!rd_view_is_nil(view))
-    {
-      B32 found = 0;
-      for(RD_View *tab = panel->first_tab_view; !rd_view_is_nil(tab); tab = tab->order_next)
-      {
-        if(rd_view_is_project_filtered(tab)) {continue;}
-        if(tab == view)
-        {
-          found = 1;
-        }
-      }
-      if(!found)
-      {
-        panel->selected_tab_view = rd_handle_zero();
-      }
-    }
-  }
-  
-  //////////////////////////////
   //- rjf: fill panel/view interaction registers
   //
-  rd_regs()->panel  = rd_handle_from_panel(ws->focused_panel);
-  rd_regs()->view   = ws->focused_panel->selected_tab_view;
+  rd_regs()->panel = rd_handle_from_cfg(panel_tree.focused->cfg);
+  rd_regs()->view  = rd_handle_from_cfg(panel_tree.focused->selected_tab);
   
   //////////////////////////////
   //- rjf: compute ui palettes from theme
@@ -3819,9 +3531,9 @@ rd_window_frame(RD_Window *ws)
                    .view = rd_state->drag_drop_regs->view)
     {
       Temp scratch = scratch_begin(0, 0);
-      RD_Panel *panel = rd_panel_from_handle(rd_state->drag_drop_regs->panel);
       RD_Entity *entity = rd_entity_from_handle(rd_state->drag_drop_regs->entity);
-      RD_View *view = rd_view_from_handle(rd_state->drag_drop_regs->view);
+      RD_Cfg *view = rd_cfg_from_handle(rd_state->drag_drop_regs->view);
+      RD_ViewRuleInfo *view_rule_info = rd_view_rule_info_from_string(view->string);
       {
         //- rjf: tab dragging
         if(rd_state->drag_drop_regs_slot == RD_RegSlot_View && !rd_view_is_nil(view))
@@ -3843,7 +3555,7 @@ rd_window_frame(RD_Window *ws)
             {
               UI_Row
               {
-                RD_IconKind icon_kind = rd_icon_kind_from_view(view);
+                RD_IconKind icon_kind = view_rule_info->icon_kind;
                 DR_FancyStringList fstrs = rd_title_fstrs_from_view(scratch.arena, view, ui_top_palette()->text, ui_top_palette()->text_weak, ui_top_font_size());
                 RD_Font(RD_FontSlot_Icons)
                   UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Icons))
@@ -3862,7 +3574,7 @@ rd_window_frame(RD_Window *ws)
               UI_Box *view_preview_container = ui_build_box_from_stringf(UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground|UI_BoxFlag_Clip, "###view_preview_container");
               UI_Parent(view_preview_container) UI_Focus(UI_FocusKind_Off) UI_WidthFill
               {
-                RD_ViewRuleUIFunctionType *view_ui = view->spec->ui;
+                RD_ViewRuleUIFunctionType *view_ui = view_rule_info->ui;
                 view_ui(str8(view->query_buffer, view->query_string_size), view->params_roots[view->params_read_gen%ArrayCount(view->params_roots)], view_preview_container->rect);
               }
             }
@@ -3948,17 +3660,17 @@ rd_window_frame(RD_Window *ws)
         ui_divider(ui_em(1.f, 1.f));
         
         //- rjf: draw per-window stats
-        for(RD_Window *window = rd_state->first_window; window != 0; window = window->next)
+        for(RD_WindowState *w = rd_state->first_window_state; w != 0; w = w->order_next)
         {
           // rjf: calc ui hash chain length
           F64 avg_ui_hash_chain_length = 0;
           {
             F64 chain_count = 0;
             F64 chain_length_sum = 0;
-            for(U64 idx = 0; idx < ws->ui->box_table_size; idx += 1)
+            for(U64 idx = 0; idx < w->ui->box_table_size; idx += 1)
             {
               F64 chain_length = 0;
-              for(UI_Box *b = ws->ui->box_table[idx].hash_first; !ui_box_is_nil(b); b = b->hash_next)
+              for(UI_Box *b = w->ui->box_table[idx].hash_first; !ui_box_is_nil(b); b = b->hash_next)
               {
                 chain_length += 1;
               }
@@ -3973,13 +3685,13 @@ rd_window_frame(RD_Window *ws)
           ui_labelf("Target Hz: %.2f", 1.f/rd_state->frame_dt);
           ui_labelf("Ctrl Run Index: %I64u", ctrl_run_gen());
           ui_labelf("Ctrl Mem Gen Index: %I64u", ctrl_mem_gen());
-          ui_labelf("Window %p", window);
+          ui_labelf("Window %p", w);
           ui_set_next_pref_width(ui_children_sum(1));
           ui_set_next_pref_height(ui_children_sum(1));
           UI_Row
           {
             ui_spacer(ui_em(2.f, 1.f));
-            ui_labelf("Box Count: %I64u", window->ui->last_build_box_count);
+            ui_labelf("Box Count: %I64u", w->ui->last_build_box_count);
           }
           ui_set_next_pref_width(ui_children_sum(1));
           ui_set_next_pref_height(ui_children_sum(1));
@@ -6051,6 +5763,20 @@ rd_window_frame(RD_Window *ws)
             ui_spacer(ui_em(0.75f, 0));
           }
           
+          // rjf: close dropdown
+          UI_Key close_ctx_menu_key = ui_key_from_stringf(ui_key_zero(), "###close_ctx_menu");
+          UI_CtxMenu(close_ctx_menu_key)
+          {
+            if(ui_clicked(rd_icon_buttonf(RD_IconKind_Window, 0, "Close Window")))
+            {
+              rd_cmd(RD_CmdKind_CloseWindow);
+            }
+            if(ui_clicked(rd_icon_buttonf(RD_IconKind_X, 0, "Exit")))
+            {
+              rd_cmd(RD_CmdKind_Exit);
+            }
+          }
+          
           // rjf: min/max/close buttons
           {
             UI_Signal min_sig = {0};
@@ -6078,7 +5804,7 @@ rd_window_frame(RD_Window *ws)
             }
             if(ui_clicked(cls_sig))
             {
-              rd_cmd(RD_CmdKind_CloseWindow, .window = rd_handle_from_window(ws));
+              ui_ctx_menu_open(close_ctx_menu_key, cls_sig.box->key, v2f32(0, dim_2f32(cls_sig.box->rect).y));
             }
             os_window_push_custom_title_bar_client_area(ws->os, min_sig.box->rect);
             os_window_push_custom_title_bar_client_area(ws->os, max_sig.box->rect);
@@ -6471,6 +6197,7 @@ rd_window_frame(RD_Window *ws)
       // rjf: disable hover eval if hovered view is actively scrolling
       if(hover_eval_is_open)
       {
+#if 0 // TODO(rjf): @cfg
         for(RD_Panel *panel = ws->root_panel;
             !rd_panel_is_nil(panel);
             panel = rd_panel_rec_depth_first_pre(panel).next)
@@ -6487,6 +6214,7 @@ rd_window_frame(RD_Window *ws)
             ws->hover_eval_first_frame_idx = rd_state->frame_index;
           }
         }
+#endif
       }
       
       // rjf: reset open animation
@@ -6811,14 +6539,14 @@ rd_window_frame(RD_Window *ws)
     //
     B32 is_changing_panel_boundaries = 0;
     ProfScope("non-leaf panel UI")
-      for(RD_Panel *panel = ws->root_panel;
-          !rd_panel_is_nil(panel);
-          panel = rd_panel_rec_depth_first_pre(panel).next)
+      for(RD_PanelNode *panel = panel_tree.root;
+          panel != &rd_nil_panel_node;
+          panel = rd_panel_node_rec__depth_first_pre(panel_tree.root, panel).next)
     {
       //////////////////////////
       //- rjf: continue on leaf panels
       //
-      if(rd_panel_is_nil(panel->first))
+      if(panel->first == &rd_nil_panel_node)
       {
         continue;
       }
@@ -6827,7 +6555,7 @@ rd_window_frame(RD_Window *ws)
       //- rjf: grab info
       //
       Axis2 split_axis = panel->split_axis;
-      Rng2F32 panel_rect = rd_target_rect_from_panel(content_rect, ws->root_panel, panel);
+      Rng2F32 panel_rect = rd_target_rect_from_panel_node(content_rect, panel_tree.root, panel);
       
       //////////////////////////
       //- rjf: boundary tab-drag/drop sites
@@ -6846,10 +6574,10 @@ rd_window_frame(RD_Window *ws)
           //
           // (this does not naturally follow from the below algorithm, since the
           // root level panel only splits on X)
-          if(panel == ws->root_panel) UI_CornerRadius(corner_radius)
+          if(panel == panel_tree.root) UI_CornerRadius(corner_radius)
           {
             Vec2F32 panel_rect_center = center_2f32(panel_rect);
-            Axis2 axis = axis2_flip(ws->root_panel->split_axis);
+            Axis2 axis = axis2_flip(panel_tree.root->split_axis);
             for EachEnumVal(Side, side)
             {
               UI_Key key = ui_key_from_stringf(ui_key_zero(), "root_extra_split_%i", side);
@@ -6917,9 +6645,9 @@ rd_window_frame(RD_Window *ws)
                             Dir2_Invalid);
                 if(dir != Dir2_Invalid)
                 {
-                  RD_Panel *split_panel = panel;
+                  RD_PanelNode *split_panel = panel;
                   rd_cmd(RD_CmdKind_SplitPanel,
-                         .dst_panel  = rd_handle_from_panel(split_panel),
+                         .dst_panel  = rd_handle_from_cfg(split_panel->cfg),
                          .panel      = rd_state->drag_drop_regs->panel,
                          .view       = rd_state->drag_drop_regs->view,
                          .dir2       = dir);
@@ -6930,10 +6658,10 @@ rd_window_frame(RD_Window *ws)
           
           //- rjf: iterate all children, build boundary drop sites
           Axis2 split_axis = panel->split_axis;
-          UI_CornerRadius(corner_radius) for(RD_Panel *child = panel->first;; child = child->next)
+          UI_CornerRadius(corner_radius) for(RD_PanelNode *child = panel->first;; child = child->next)
           {
             // rjf: form rect
-            Rng2F32 child_rect = rd_target_rect_from_panel_child(panel_rect, panel, child);
+            Rng2F32 child_rect = rd_target_rect_from_panel_node_child(panel_rect, panel, child);
             Vec2F32 child_rect_center = center_2f32(child_rect);
             UI_Key key = ui_key_from_stringf(ui_key_zero(), "drop_boundary_%p_%p", panel, child);
             Rng2F32 site_rect = r2f32(child_rect_center, child_rect_center);
@@ -6996,21 +6724,21 @@ rd_window_frame(RD_Window *ws)
             if(ui_key_match(site_box->key, ui_drop_hot_key()) && rd_drag_drop())
             {
               Dir2 dir = (panel->split_axis == Axis2_X ? Dir2_Left : Dir2_Up);
-              RD_Panel *split_panel = child;
-              if(rd_panel_is_nil(split_panel))
+              RD_PanelNode *split_panel = child;
+              if(split_panel == &rd_nil_panel_node)
               {
                 split_panel = panel->last;
                 dir = (panel->split_axis == Axis2_X ? Dir2_Right : Dir2_Down);
               }
               rd_cmd(RD_CmdKind_SplitPanel,
-                     .dst_panel  = rd_handle_from_panel(split_panel),
+                     .dst_panel  = rd_handle_from_cfg(split_panel->cfg),
                      .panel      = rd_state->drag_drop_regs->panel,
                      .view       = rd_state->drag_drop_regs->view,
                      .dir2       = dir);
             }
             
             // rjf: exit on opl child
-            if(rd_panel_is_nil(child))
+            if(child == &rd_nil_panel_node)
             {
               break;
             }
@@ -7021,12 +6749,14 @@ rd_window_frame(RD_Window *ws)
       //////////////////////////
       //- rjf: do UI for drag boundaries between all children
       //
-      for(RD_Panel *child = panel->first; !rd_panel_is_nil(child) && !rd_panel_is_nil(child->next); child = child->next)
+      for(RD_PanelNode *child = panel->first;
+          child != &rd_nil_panel_node && child->next != &rd_nil_panel_node;
+          child = child->next)
       {
-        RD_Panel *min_child = child;
-        RD_Panel *max_child = min_child->next;
-        Rng2F32 min_child_rect = rd_target_rect_from_panel_child(panel_rect, panel, min_child);
-        Rng2F32 max_child_rect = rd_target_rect_from_panel_child(panel_rect, panel, max_child);
+        RD_PanelNode *min_child = child;
+        RD_PanelNode *max_child = min_child->next;
+        Rng2F32 min_child_rect = rd_target_rect_from_panel_node_child(panel_rect, panel, min_child);
+        Rng2F32 max_child_rect = rd_target_rect_from_panel_node_child(panel_rect, panel, max_child);
         Rng2F32 boundary_rect = {0};
         {
           boundary_rect.p0.v[split_axis] = min_child_rect.p1.v[split_axis] - ui_top_font_size()/3;
@@ -7087,14 +6817,17 @@ rd_window_frame(RD_Window *ws)
     ////////////////////////////
     //- rjf: animate panels
     //
+#if 0
     {
       F32 rate = rd_setting_val_from_code(RD_SettingCode_MenuAnimations).s32 ? 1 - pow_f32(2, (-50.f * rd_state->frame_dt)) : 1.f;
       Vec2F32 content_rect_dim = dim_2f32(content_rect);
       if(content_rect_dim.x > 0 && content_rect_dim.y > 0)
       {
-        for(RD_Panel *panel = ws->root_panel; !rd_panel_is_nil(panel); panel = rd_panel_rec_depth_first_pre(panel).next)
+        for(RD_PanelNode *panel = panel_tree.root;
+            panel != &rd_nil_panel_node;
+            panel = rd_panel_node_rec__depth_first_pre(panel).next)
         {
-          Rng2F32 target_rect_px = rd_target_rect_from_panel(content_rect, ws->root_panel, panel);
+          Rng2F32 target_rect_px = rd_target_rect_from_panel_node(content_rect, panel_tree.root, panel);
           Rng2F32 target_rect_pct = r2f32p(target_rect_px.x0/content_rect_dim.x,
                                            target_rect_px.y0/content_rect_dim.y,
                                            target_rect_px.x1/content_rect_dim.x,
@@ -7117,29 +6850,36 @@ rd_window_frame(RD_Window *ws)
         }
       }
     }
+#endif
     
     ////////////////////////////
     //- rjf: panel leaf UI
     //
     ProfScope("leaf panel UI")
-      for(RD_Panel *panel = ws->root_panel;
-          !rd_panel_is_nil(panel);
-          panel = rd_panel_rec_depth_first_pre(panel).next)
+      for(RD_PanelNode *panel = panel_tree.root;
+          panel != &rd_nil_panel_node;
+          panel = rd_panel_node_rec__depth_first_pre(panel_tree.root, panel).next)
     {
-      if(!rd_panel_is_nil(panel->first)) {continue;}
+      if(panel->first != &rd_nil_panel_node) {continue;}
       B32 panel_is_focused = (window_is_focused &&
                               !ws->menu_bar_focused &&
                               (!query_is_open || !ws->query_view_selected) &&
                               !ui_any_ctx_menu_is_open() &&
                               !ws->hover_eval_focused &&
-                              ws->focused_panel == panel);
+                              panel_tree.focused == panel);
       UI_Focus(panel_is_focused ? UI_FocusKind_Null : UI_FocusKind_Off)
       {
         //////////////////////////
         //- rjf: calculate UI rectangles
         //
         Vec2F32 content_rect_dim = dim_2f32(content_rect);
-        Rng2F32 panel_rect_pct = panel->animated_rect_pct;
+        Rng2F32 target_rect_px = rd_target_rect_from_panel_node(content_rect, panel_tree.root, panel);
+        Rng2F32 target_rect_pct = r2f32p(target_rect_px.x0 / content_rect_dim.x,
+                                         target_rect_px.y0 / content_rect_dim.y,
+                                         target_rect_px.x1 / content_rect_dim.x,
+                                         target_rect_px.y1 / content_rect_dim.y);
+        // TODO(rjf): @cfg animate `target_rect_pct`
+        Rng2F32 panel_rect_pct = target_rect_pct;
         Rng2F32 panel_rect = r2f32p(panel_rect_pct.x0*content_rect_dim.x,
                                     panel_rect_pct.y0*content_rect_dim.y,
                                     panel_rect_pct.x1*content_rect_dim.x,
@@ -7299,7 +7039,7 @@ rd_window_frame(RD_Window *ws)
                 if(dir != Dir2_Invalid)
                 {
                   rd_cmd(RD_CmdKind_SplitPanel,
-                         .dst_panel = rd_handle_from_panel(panel),
+                         .dst_panel = rd_handle_from_cfg(panel->cfg),
                          .panel = rd_state->drag_drop_regs->panel,
                          .view = rd_state->drag_drop_regs->view,
                          .dir2 = dir);
@@ -7307,7 +7047,7 @@ rd_window_frame(RD_Window *ws)
                 else
                 {
                   rd_cmd(RD_CmdKind_MoveTab,
-                         .dst_panel = rd_handle_from_panel(panel),
+                         .dst_panel = rd_handle_from_cfg(panel->cfg),
                          .panel = rd_state->drag_drop_regs->panel,
                          .view = rd_state->drag_drop_regs->view,
                          .prev_view = rd_handle_from_view(panel->last_tab_view));
@@ -8595,6 +8335,7 @@ rd_window_frame(RD_Window *ws)
   ws->frames_alive += 1;
   
   ProfEnd();
+  scratch_end(scratch);
 }
 
 #if COMPILER_MSVC && !BUILD_DEBUG
@@ -9761,25 +9502,26 @@ rd_value_string_from_eval(Arena *arena, EV_StringFlags flags, U32 default_radix,
 internal void
 rd_set_hover_eval(Vec2F32 pos, String8 file_path, TxtPt pt, U64 vaddr, String8 string)
 {
-  RD_Window *window = rd_window_from_handle(rd_regs()->window);
-  if(window->hover_eval_last_frame_idx+1 < rd_state->frame_index &&
+  RD_Cfg *window_cfg = rd_cfg_from_handle(rd_regs()->window);
+  RD_WindowState *ws = rd_window_state_from_cfg(window_cfg);
+  if(ws->hover_eval_last_frame_idx+1 < rd_state->frame_index &&
      ui_key_match(ui_active_key(UI_MouseButtonKind_Left), ui_key_zero()) &&
      ui_key_match(ui_active_key(UI_MouseButtonKind_Middle), ui_key_zero()) &&
      ui_key_match(ui_active_key(UI_MouseButtonKind_Right), ui_key_zero()))
   {
-    B32 is_new_string = !str8_match(window->hover_eval_string, string, 0);
+    B32 is_new_string = !str8_match(ws->hover_eval_string, string, 0);
     if(is_new_string)
     {
-      window->hover_eval_first_frame_idx = window->hover_eval_last_frame_idx = rd_state->frame_index;
-      arena_clear(window->hover_eval_arena);
-      window->hover_eval_string = push_str8_copy(window->hover_eval_arena, string);
-      window->hover_eval_file_path = push_str8_copy(window->hover_eval_arena, file_path);
-      window->hover_eval_file_pt = pt;
-      window->hover_eval_vaddr = vaddr;
-      window->hover_eval_focused = 0;
+      ws->hover_eval_first_frame_idx = ws->hover_eval_last_frame_idx = rd_state->frame_index;
+      arena_clear(ws->hover_eval_arena);
+      ws->hover_eval_string = push_str8_copy(ws->hover_eval_arena, string);
+      ws->hover_eval_file_path = push_str8_copy(ws->hover_eval_arena, file_path);
+      ws->hover_eval_file_pt = pt;
+      ws->hover_eval_vaddr = vaddr;
+      ws->hover_eval_focused = 0;
     }
-    window->hover_eval_spawn_pos = pos;
-    window->hover_eval_last_frame_idx = rd_state->frame_index;
+    ws->hover_eval_spawn_pos = pos;
+    ws->hover_eval_last_frame_idx = rd_state->frame_index;
   }
 }
 
@@ -10053,29 +9795,30 @@ rd_view_rule_autocomp_lister_params_from_input_cursor(Arena *arena, String8 stri
 internal void
 rd_set_autocomp_lister_query(UI_Key root_key, RD_AutoCompListerParams *params, String8 input, U64 cursor_off)
 {
-  RD_Window *window = rd_window_from_handle(rd_regs()->window);
-  if(cursor_off != window->autocomp_cursor_off)
+  RD_Cfg *window_cfg = rd_cfg_from_handle(rd_regs()->window);
+  RD_WindowState *ws = rd_window_state_from_cfg(window_cfg);
+  if(cursor_off != ws->autocomp_cursor_off)
   {
-    window->autocomp_input_dirty = 1;
-    window->autocomp_cursor_off = cursor_off;
+    ws->autocomp_input_dirty = 1;
+    ws->autocomp_cursor_off = cursor_off;
   }
-  if(!ui_key_match(window->autocomp_root_key, root_key))
+  if(!ui_key_match(ws->autocomp_root_key, root_key))
   {
-    window->autocomp_num_visible_rows_t = 0;
-    window->autocomp_open_t = 0;
+    ws->autocomp_num_visible_rows_t = 0;
+    ws->autocomp_open_t = 0;
   }
-  if(window->autocomp_last_frame_idx+1 < rd_state->frame_index)
+  if(ws->autocomp_last_frame_idx+1 < rd_state->frame_index)
   {
-    window->autocomp_num_visible_rows_t = 0;
-    window->autocomp_open_t = 0;
+    ws->autocomp_num_visible_rows_t = 0;
+    ws->autocomp_open_t = 0;
   }
-  window->autocomp_root_key = root_key;
-  arena_clear(window->autocomp_lister_params_arena);
-  MemoryCopyStruct(&window->autocomp_lister_params, params);
-  window->autocomp_lister_params.strings = str8_list_copy(window->autocomp_lister_params_arena, &window->autocomp_lister_params.strings);
-  window->autocomp_lister_input_size = Min(input.size, sizeof(window->autocomp_lister_input_buffer));
-  MemoryCopy(window->autocomp_lister_input_buffer, input.str, window->autocomp_lister_input_size);
-  window->autocomp_last_frame_idx = rd_state->frame_index;
+  ws->autocomp_root_key = root_key;
+  arena_clear(ws->autocomp_lister_params_arena);
+  MemoryCopyStruct(&ws->autocomp_lister_params, params);
+  ws->autocomp_lister_params.strings = str8_list_copy(ws->autocomp_lister_params_arena, &ws->autocomp_lister_params.strings);
+  ws->autocomp_lister_input_size = Min(input.size, sizeof(ws->autocomp_lister_input_buffer));
+  MemoryCopy(ws->autocomp_lister_input_buffer, input.str, ws->autocomp_lister_input_size);
+  ws->autocomp_last_frame_idx = rd_state->frame_index;
 }
 
 ////////////////////////////////
@@ -10347,8 +10090,9 @@ rd_theme_color_from_txt_token_kind_lookup_string(TXT_TokenKind kind, String8 str
 internal UI_Palette *
 rd_palette_from_code(RD_PaletteCode code)
 {
-  RD_Window *window = rd_window_from_handle(rd_regs()->window);
-  UI_Palette *result = &window->cfg_palettes[code];
+  RD_Cfg *wcfg = rd_cfg_from_handle(rd_regs()->window);
+  RD_WindowState *ws = rd_window_state_from_cfg(wcfg);
+  UI_Palette *result = &ws->cfg_palettes[code];
   return result;
 }
 
@@ -10365,7 +10109,8 @@ internal F32
 rd_font_size_from_slot(RD_FontSlot slot)
 {
   F32 result = 0;
-  RD_Window *ws = rd_window_from_handle(rd_regs()->window);
+  RD_Cfg *wcfg = rd_cfg_from_handle(rd_regs()->window);
+  RD_WindowState *ws = rd_window_state_from_cfg(wcfg);
   F32 dpi = os_dpi_from_window(ws->os);
   if(dpi != ws->last_dpi)
   {
@@ -10419,11 +10164,12 @@ rd_raster_flags_from_slot(RD_FontSlot slot)
 internal RD_SettingVal
 rd_setting_val_from_code(RD_SettingCode code)
 {
-  RD_Window *window = rd_window_from_handle(rd_regs()->window);
+  RD_Cfg *wcfg = rd_cfg_from_handle(rd_regs()->window);
+  RD_WindowState *ws = rd_window_state_from_cfg(wcfg);
   RD_SettingVal result = {0};
-  if(window != 0)
+  if(ws != 0)
   {
-    result = window->setting_vals[code];
+    result = ws->setting_vals[code];
   }
   if(result.set == 0)
   {
@@ -10626,14 +10372,11 @@ rd_cfg_strings_from_gfx(Arena *arena, String8 root_path, RD_CfgSrc source)
   }
   
   //- rjf: serialize windows
+  if(source == RD_CfgSrc_User)
   {
     B32 first = 1;
-    for(RD_Window *window = rd_state->first_window; window != 0; window = window->next)
+    for(RD_WindowState *window = rd_state->first_window_state; window != 0; window = window->order_next)
     {
-      if(window->cfg_src != source)
-      {
-        continue;
-      }
       if(first)
       {
         first = 0;
@@ -11695,6 +11438,57 @@ rd_frame(void)
   rd_state->ctrl_entity_meval_cache_slots = push_array(rd_frame_arena(), RD_CtrlEntityMetaEvalCacheSlot, rd_state->ctrl_entity_meval_cache_slots_count);
   
   //////////////////////////////
+  //- rjf: garbage collect untouched window states
+  //
+  if(depth == 0) DeferLoop(depth += 1, depth -= 1)
+  {
+    for EachIndex(slot_idx, rd_state->window_state_slots_count)
+    {
+      for(RD_WindowState *ws = rd_state->window_state_slots[slot_idx].first, *next; ws != 0; ws = next)
+      {
+        next = ws->hash_next;
+        if(ws->last_frame_index_touched+1 < rd_state->frame_index)
+        {
+          ui_state_release(ws->ui);
+          r_window_unequip(ws->os, ws->r);
+          os_window_close(ws->os);
+          arena_release(ws->query_cmd_arena);
+          arena_release(ws->ctx_menu_arena);
+          arena_release(ws->drop_completion_arena);
+          arena_release(ws->hover_eval_arena);
+          arena_release(ws->autocomp_lister_params_arena);
+          arena_release(ws->arena);
+          DLLRemove_NP(rd_state->first_window_state, rd_state->last_window_state, ws, order_next, order_prev);
+          DLLRemove_NP(rd_state->window_state_slots[slot_idx].first, rd_state->window_state_slots[slot_idx].last, ws, hash_next, hash_prev);
+          SLLStackPush_N(rd_state->free_window_state, ws, order_next);
+        }
+      }
+    }
+  }
+  
+  //////////////////////////////
+  //- rjf: garbage collect untouched view states
+  //
+  if(depth == 0)
+  {
+    for EachIndex(slot_idx, rd_state->view_state_slots_count)
+    {
+      for(RD_ViewState *vs = rd_state->view_state_slots[slot_idx].first, *next; vs != 0; vs = next)
+      {
+        next = vs->hash_next;
+        if(vs->last_frame_index_touched+1 < rd_state->frame_index)
+        {
+          for(RD_ArenaExt *ext = vs->first_arena_ext; ext != 0; ext = ext->next)
+          {
+            arena_release(ext->arena);
+          }
+          arena_release(vs->arena);
+        }
+      }
+    }
+  }
+  
+  //////////////////////////////
   //- rjf: get events from the OS
   //
   OS_EventList events = {0};
@@ -11811,12 +11605,12 @@ rd_frame(void)
       RD_RegsScope()
     {
       next = event->next;
-      RD_Window *window = rd_window_from_os_handle(event->window);
-      if(window != 0 && window != rd_window_from_handle(rd_regs()->window))
+      RD_WindowState *ws = rd_window_state_from_os_handle(event->window);
+      if(ws != 0 && ws != rd_window_state_from_cfg(rd_cfg_from_handle(rd_regs()->window)))
       {
-        rd_regs()->window = rd_handle_from_window(window);
-        rd_regs()->panel  = rd_handle_from_panel(window->focused_panel);
-        rd_regs()->view   = window->focused_panel->selected_tab_view;
+        rd_regs()->window = ws->cfg_handle;
+        rd_regs()->panel  = rd_handle_from_panel(ws->focused_panel);
+        rd_regs()->view   = ws->focused_panel->selected_tab_view;
       }
       B32 take = 0;
       
@@ -11827,10 +11621,10 @@ rd_frame(void)
       }
       
       //- rjf: try window close
-      if(!take && event->kind == OS_EventKind_WindowClose && window != 0)
+      if(!take && event->kind == OS_EventKind_WindowClose && ws != 0)
       {
         take = 1;
-        rd_cmd(RD_CmdKind_CloseWindow, .window = rd_handle_from_window(window));
+        rd_cmd(RD_CmdKind_CloseWindow, .window = ws->cfg_handle);
       }
       
       //- rjf: try menu bar operations
@@ -11839,34 +11633,34 @@ rd_frame(void)
         {
           take = 1;
           rd_request_frame();
-          window->menu_bar_focused_on_press = window->menu_bar_focused;
-          window->menu_bar_key_held = 1;
-          window->menu_bar_focus_press_started = 1;
+          ws->menu_bar_focused_on_press = ws->menu_bar_focused;
+          ws->menu_bar_key_held = 1;
+          ws->menu_bar_focus_press_started = 1;
         }
         if(!take && event->kind == OS_EventKind_Release && event->key == OS_Key_Alt && event->modifiers == 0 && event->is_repeat == 0)
         {
           take = 1;
           rd_request_frame();
-          window->menu_bar_key_held = 0;
+          ws->menu_bar_key_held = 0;
         }
-        if(window->menu_bar_focused && event->kind == OS_EventKind_Press && event->key == OS_Key_Alt && event->modifiers == 0 && event->is_repeat == 0)
+        if(ws->menu_bar_focused && event->kind == OS_EventKind_Press && event->key == OS_Key_Alt && event->modifiers == 0 && event->is_repeat == 0)
         {
           take = 1;
           rd_request_frame();
-          window->menu_bar_focused = 0;
+          ws->menu_bar_focused = 0;
         }
-        else if(window->menu_bar_focus_press_started && !window->menu_bar_focused && event->kind == OS_EventKind_Release && event->modifiers == 0 && event->key == OS_Key_Alt && event->is_repeat == 0)
+        else if(ws->menu_bar_focus_press_started && !ws->menu_bar_focused && event->kind == OS_EventKind_Release && event->modifiers == 0 && event->key == OS_Key_Alt && event->is_repeat == 0)
         {
           take = 1;
           rd_request_frame();
-          window->menu_bar_focused = !window->menu_bar_focused_on_press;
-          window->menu_bar_focus_press_started = 0;
+          ws->menu_bar_focused = !ws->menu_bar_focused_on_press;
+          ws->menu_bar_focus_press_started = 0;
         }
-        else if(event->kind == OS_EventKind_Press && event->key == OS_Key_Esc && window->menu_bar_focused && !ui_any_ctx_menu_is_open())
+        else if(event->kind == OS_EventKind_Press && event->key == OS_Key_Esc && ws->menu_bar_focused && !ui_any_ctx_menu_is_open())
         {
           take = 1;
           rd_request_frame();
-          window->menu_bar_focused = 0;
+          ws->menu_bar_focused = 0;
         }
       }
       
@@ -11889,13 +11683,13 @@ rd_frame(void)
             take = 1;
             if(event->modifiers & OS_Modifier_Alt)
             {
-              window->menu_bar_focus_press_started = 0;
+              ws->menu_bar_focus_press_started = 0;
             }
           }
         }
         else if(OS_Key_F1 <= event->key && event->key <= OS_Key_F19)
         {
-          window->menu_bar_focus_press_started = 0;
+          ws->menu_bar_focus_press_started = 0;
         }
         rd_request_frame();
       }
@@ -11910,7 +11704,7 @@ rd_frame(void)
         take = 1;
         if(event->modifiers & OS_Modifier_Alt)
         {
-          window->menu_bar_focus_press_started = 0;
+          ws->menu_bar_focus_press_started = 0;
         }
       }
       
@@ -12251,6 +12045,19 @@ rd_frame(void)
     }
     
     ////////////////////////////
+    //- rjf: sanitize the window/panel/tab tree structure
+    //
+    {
+      // TODO(rjf): @cfg in the past, we had a spot in the rd_window_frame,
+      // which ensured to select tabs, if a panel had tabs but had none
+      // selected, and if a panel had a selected tab but it was project-filtered.
+      // this is effectively just fixing up unexpected malformations of the
+      // panel tree - because we are adopting some number of new possibilities
+      // of this via the cfg change, we can just actually do a single fixup
+      // point here.
+    }
+    
+    ////////////////////////////
     //- rjf: process top-level graphical commands
     //
     B32 panel_reset_done = 0;
@@ -12267,7 +12074,7 @@ rd_frame(void)
         
         // rjf: process command
         Dir2 split_dir = Dir2_Invalid;
-        RD_Panel *split_panel = &rd_nil_panel;
+        RD_Cfg *split_panel = &rd_nil_cfg;
         U64 panel_sib_off = 0;
         U64 panel_child_off = 0;
         Vec2S32 panel_change_dir = {0};
@@ -12339,14 +12146,15 @@ rd_frame(void)
             // rjf: command has required query -> prep query
             else
             {
-              RD_Window *window = rd_window_from_handle(rd_regs()->window);
-              if(window != 0)
+              RD_Cfg *wcfg = rd_cfg_from_handle(rd_regs()->window);
+              RD_WindowState *ws = rd_window_state_from_cfg(wcfg);
+              if(ws != 0)
               {
-                arena_clear(window->query_cmd_arena);
-                window->query_cmd_name = push_str8_copy(window->query_cmd_arena, cmd->regs->cmd_name);
-                window->query_cmd_regs = rd_regs_copy(window->query_cmd_arena, rd_regs());
-                MemoryZeroArray(window->query_cmd_regs_mask);
-                window->query_view_selected = 1;
+                arena_clear(ws->query_cmd_arena);
+                ws->query_cmd_name = push_str8_copy(ws->query_cmd_arena, cmd->regs->cmd_name);
+                ws->query_cmd_regs = rd_regs_copy(ws->query_cmd_arena, rd_regs());
+                MemoryZeroArray(ws->query_cmd_regs_mask);
+                ws->query_view_selected = 1;
               }
             }
           }break;
@@ -12385,73 +12193,51 @@ rd_frame(void)
           //- rjf: windows
           case RD_CmdKind_OpenWindow:
           {
-            RD_Window *originating_window = rd_window_from_handle(rd_regs()->window);
-            if(originating_window == 0)
+            RD_Cfg *old_window = rd_cfg_from_handle(rd_regs()->window);
+            RD_Cfg *bucket = old_window->parent;
+            if(bucket == &rd_nil_cfg)
             {
-              originating_window = rd_state->first_window;
+              bucket = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("user"));
             }
-            OS_Handle preferred_monitor = {0};
-            RD_Window *new_ws = rd_window_open(v2f32(1280, 720), preferred_monitor, RD_CfgSrc_User);
-            if(originating_window)
+            RD_Cfg *new_window = rd_cfg_new(bucket, str8_lit("window"));
+            RD_Cfg *size = rd_cfg_new(new_window, str8_lit("size"));
+            rd_cfg_newf(size, "1280");
+            rd_cfg_newf(size, "720");
+            for(RD_Cfg *old_child = old_window->first; old_child != &rd_nil_cfg; old_child = old_child->next)
             {
-              MemoryCopy(new_ws->setting_vals, originating_window->setting_vals, sizeof(RD_SettingVal)*RD_SettingCode_COUNT);
+              if(!str8_match(old_child->string, str8_lit("panels"), 0))
+              {
+                RD_Cfg *new_child = rd_cfg_deep_copy(old_child);
+                rd_cfg_insert_child(new_window, new_window->last, new_child);
+              }
             }
           }break;
           case RD_CmdKind_CloseWindow:
           {
-            RD_Window *ws = rd_window_from_handle(rd_regs()->window);
-            if(ws != 0)
-            {
-              // rjf: is this the last window? -> exit
-              if(rd_state->first_window == rd_state->last_window && rd_state->first_window == ws)
-              {
-                rd_cmd(RD_CmdKind_Exit);
-              }
-              
-              // rjf: not the last window? -> just release this window
-              else
-              {
-                // NOTE(rjf): we need to explicitly release all panel views, because views
-                // are a global concept and otherwise would leak.
-                for(RD_Panel *panel = ws->root_panel; !rd_panel_is_nil(panel); panel = rd_panel_rec_depth_first_pre(panel).next)
-                {
-                  rd_panel_release_all_views(panel);
-                }
-                
-                ui_state_release(ws->ui);
-                DLLRemove(rd_state->first_window, rd_state->last_window, ws);
-                r_window_unequip(ws->os, ws->r);
-                os_window_close(ws->os);
-                arena_release(ws->query_cmd_arena);
-                arena_release(ws->ctx_menu_arena);
-                arena_release(ws->drop_completion_arena);
-                arena_release(ws->hover_eval_arena);
-                arena_release(ws->autocomp_lister_params_arena);
-                arena_release(ws->arena);
-                SLLStackPush(rd_state->free_window, ws);
-                ws->gen += 1;
-              }
-            }
+            RD_Cfg *wcfg = rd_cfg_from_handle(rd_regs()->window);
+            rd_cfg_release(wcfg);
           }break;
           case RD_CmdKind_ToggleFullscreen:
           {
-            RD_Window *window = rd_window_from_handle(rd_regs()->window);
-            if(window != 0)
+            RD_Cfg *wcfg = rd_cfg_from_handle(rd_regs()->window);
+            RD_WindowState *ws = rd_window_state_from_cfg(wcfg);
+            if(ws != &rd_nil_window_state)
             {
-              os_window_set_fullscreen(window->os, !os_window_is_fullscreen(window->os));
+              os_window_set_fullscreen(ws->os, !os_window_is_fullscreen(ws->os));
             }
           }break;
           case RD_CmdKind_BringToFront:
           {
-            RD_Window *last_focused_window = rd_window_from_handle(rd_state->last_focused_window);
-            for(RD_Window *w = rd_state->first_window; w != 0; w = w->next)
+            RD_Cfg *last_focused_wcfg = rd_cfg_from_handle(rd_state->last_focused_window);
+            RD_WindowState *last_focused_ws = rd_window_state_from_cfg(last_focused_wcfg);
+            if(last_focused_ws == &rd_nil_window_state)
             {
-              os_window_set_minimized(w->os, 0);
-              os_window_focus(last_focused_window->os);
+              last_focused_ws = rd_state->first_window_state;
             }
-            if(last_focused_window != 0)
+            if(last_focused_ws != &rd_nil_window_state)
             {
-              os_window_focus(last_focused_window->os);
+              os_window_set_minimized(last_focused_ws->os, 0);
+              os_window_focus(last_focused_ws->os);
             }
           }break;
           
@@ -12506,6 +12292,36 @@ rd_frame(void)
               for(RD_CfgNode *n = file_cfg_list.first; n != 0; n = n->next)
               {
                 rd_cfg_insert_child(file_root, file_root->last, n->v);
+              }
+              
+              //- rjf: if config did not open any windows for the user, then we need to open a sensible default
+              {
+                if(str8_match(file_root_key, str8_lit("user"), 0))
+                {
+                  RD_CfgList all_user_windows = rd_cfg_child_list_from_string(scratch.arena, file_root, str8_lit("window"));
+                  if(all_user_windows.count == 0)
+                  {
+                    OS_Handle monitor    = os_primary_monitor();
+                    String8 monitor_name = os_name_from_monitor(scratch.arena, monitor);
+                    Vec2F32 monitor_dim  = os_dim_from_monitor(monitor);
+                    F32 monitor_dpi      = os_dpi_from_monitor(monitor);
+                    Vec2F32 window_dim   = v2f32(monitor_dim.x*4/5, monitor_dim.y*4/5);
+                    RD_Cfg *new_window = rd_cfg_new(file_root, str8_lit("window"));
+                    RD_Cfg *size = rd_cfg_new(new_window, str8_lit("size"));
+                    rd_cfg_newf(size, "%f", window_dim.x);
+                    rd_cfg_newf(size, "%f", window_dim.y);
+                    F32 line_height_guess = 11.f * (monitor_dpi / 96.f);
+                    F32 num_lines_in_monitor_height = monitor_dim.y / line_height_guess;
+                    if(num_lines_in_monitor_height < 100)
+                    {
+                      rd_cmd(RD_CmdKind_ResetToCompactPanels, .window = rd_handle_from_cfg(new_window));
+                    }
+                    else
+                    {
+                      rd_cmd(RD_CmdKind_ResetToDefaultPanels, .window = rd_handle_from_cfg(new_window));
+                    }
+                  }
+                }
               }
             }
             
@@ -12941,16 +12757,6 @@ rd_frame(void)
               }
             }
             
-            //- rjf: eliminate all windows
-            for(RD_Window *window = rd_state->first_window; window != 0; window = window->next)
-            {
-              if(window->cfg_src != src)
-              {
-                continue;
-              }
-              rd_cmd(RD_CmdKind_CloseWindow, .window = rd_handle_from_window(window));
-            }
-            
             //- rjf: apply fonts
             {
               FNT_Tag defaults[RD_FontSlot_COUNT] =
@@ -13089,198 +12895,6 @@ rd_frame(void)
                     setting_vals[code].s32 = clamp_1s32(rd_setting_code_s32_range_table[code], setting_vals[code].s32);
                   }
                 }
-              }
-              
-              // rjf: open window
-              RD_Window *ws = rd_window_open(size, preferred_monitor, window_tree->source);
-              if(dpi != 0.f) { ws->last_dpi = dpi; }
-              for EachEnumVal(RD_SettingCode, code)
-              {
-                if(setting_vals[code].set == 0 && rd_setting_code_default_is_per_window_table[code])
-                {
-                  setting_vals[code] = rd_setting_code_default_val_table[code];
-                }
-              }
-              MemoryCopy(ws->setting_vals, setting_vals, sizeof(setting_vals[0])*ArrayCount(setting_vals));
-              
-              // rjf: build panel tree
-              MD_Node *panel_tree = md_child_from_string(window_tree->root, str8_lit("panels"), 0);
-              RD_Panel *panel_parent = ws->root_panel;
-              panel_parent->split_axis = top_level_split_axis;
-              MD_NodeRec rec = {0};
-              for(MD_Node *n = panel_tree, *next = &md_nil_node;
-                  !md_node_is_nil(n);
-                  n = next)
-              {
-                // rjf: assume we're just moving to the next one initially...
-                next = n->next;
-                
-                // rjf: grab root panel
-                RD_Panel *panel = &rd_nil_panel;
-                if(n == panel_tree)
-                {
-                  panel = ws->root_panel;
-                  panel->pct_of_parent = 1.f;
-                }
-                
-                // rjf: allocate & insert non-root panels - these will have a numeric string, determining
-                // pct of parent
-                if(n->flags & MD_NodeFlag_Numeric)
-                {
-                  panel = rd_panel_alloc(ws);
-                  rd_panel_insert(panel_parent, panel_parent->last, panel);
-                  panel->split_axis = axis2_flip(panel_parent->split_axis);
-                  panel->pct_of_parent = (F32)f64_from_str8(n->string);
-                }
-                
-                // rjf: do general per-panel work
-                if(!rd_panel_is_nil(panel))
-                {
-                  // rjf: determine if this panel has panel children
-                  B32 has_panel_children = 0;
-                  for MD_EachNode(child, n->first)
-                  {
-                    if(child->flags & MD_NodeFlag_Numeric)
-                    {
-                      has_panel_children = 1;
-                      break;
-                    }
-                  }
-                  
-                  // rjf: apply panel options
-                  for MD_EachNode(op, n->first)
-                  {
-                    if(md_node_is_nil(op->first) && str8_match(op->string, str8_lit("tabs_on_bottom"), 0))
-                    {
-                      panel->tab_side = Side_Max;
-                    }
-                  }
-                  
-                  // rjf: apply panel views/tabs/commands
-                  RD_View *selected_view = &rd_nil_view;
-                  for MD_EachNode(op, n->first)
-                  {
-                    RD_ViewRuleInfo *view_rule_info = rd_view_rule_info_from_string(op->string);
-                    if(view_rule_info == &rd_nil_view_rule_info || has_panel_children != 0)
-                    {
-                      continue;
-                    }
-                    
-                    // rjf: allocate view & apply view-specific parameterizations
-                    RD_View *view = &rd_nil_view;
-                    B32 view_is_selected = 0;
-                    RD_ViewRuleInfoFlags view_rule_info_flags = view_rule_info->flags;
-                    {
-                      // rjf: allocate view
-                      view = rd_view_alloc();
-                      
-                      // rjf: check if this view is selected
-                      view_is_selected = !md_node_is_nil(md_child_from_string(op, str8_lit("selected"), 0));
-                      
-                      // rjf: read project path
-                      String8 project_path = str8_lit("");
-                      {
-                        MD_Node *project_node = md_child_from_string(op, str8_lit("project"), 0);
-                        if(!md_node_is_nil(project_node))
-                        {
-                          project_path = path_absolute_dst_from_relative_dst_src(scratch.arena, project_node->first->string, cfg_folder);
-                        }
-                      }
-                      
-                      // rjf: read view query string
-                      String8 view_query = str8_lit("");
-                      {
-                        String8 escaped_query = md_child_from_string(op, str8_lit("query"), 0)->first->string;
-                        view_query = raw_from_escaped_str8(scratch.arena, escaped_query);
-                      }
-                      
-                      // rjf: convert file queries from relative to absolute
-                      {
-                        String8 query_file_path = rd_file_path_from_eval_string(scratch.arena, view_query);
-                        if(query_file_path.size != 0)
-                        {
-                          query_file_path = path_absolute_dst_from_relative_dst_src(scratch.arena, query_file_path, cfg_folder);
-                          view_query = push_str8f(scratch.arena, "file:\"%S\"", query_file_path);
-                        }
-                      }
-                      
-                      // rjf: set up view
-                      rd_view_equip_spec(view, view_rule_info, view_query, op);
-                      if(project_path.size != 0)
-                      {
-                        arena_clear(view->project_path_arena);
-                        view->project_path = push_str8_copy(view->project_path_arena, project_path);
-                      }
-                    }
-                    
-                    // rjf: insert
-                    if(!rd_view_is_nil(view))
-                    {
-                      rd_panel_insert_tab_view(panel, panel->last_tab_view, view);
-                      if(view_is_selected)
-                      {
-                        selected_view = view;
-                      }
-                    }
-                  }
-                  
-                  // rjf: select selected view
-                  if(!rd_view_is_nil(selected_view))
-                  {
-                    panel->selected_tab_view = rd_handle_from_view(selected_view);
-                  }
-                  
-                  // rjf: recurse from this panel
-                  if(has_panel_children)
-                  {
-                    next = n->first;
-                    panel_parent = panel;
-                  }
-                  else for(MD_Node *p = n;
-                           p != &md_nil_node && p != panel_tree;
-                           p = p->parent, panel_parent = panel_parent->parent)
-                  {
-                    if(p->next != &md_nil_node)
-                    {
-                      next = p->next;
-                      break;
-                    }
-                  }
-                }
-              }
-              
-              // rjf: initiate fullscreen
-              if(is_fullscreen)
-              {
-                os_window_set_fullscreen(ws->os, 1);
-              }
-              
-              // rjf: initiate maximize
-              if(is_maximized)
-              {
-                os_window_set_maximized(ws->os, 1);
-              }
-              
-              // rjf: focus the biggest panel
-              {
-                RD_Panel *best_leaf_panel = &rd_nil_panel;
-                F32 best_leaf_panel_area = 0;
-                Rng2F32 root_rect = r2f32p(0, 0, 1000, 1000); // NOTE(rjf): we can assume any size - just need proportions.
-                for(RD_Panel *panel = ws->root_panel; !rd_panel_is_nil(panel); panel = rd_panel_rec_depth_first_pre(panel).next)
-                {
-                  if(rd_panel_is_nil(panel->first))
-                  {
-                    Rng2F32 rect = rd_target_rect_from_panel(root_rect, ws->root_panel, panel);
-                    Vec2F32 dim = dim_2f32(rect);
-                    F32 area = dim.x*dim.y;
-                    if(best_leaf_panel_area == 0 || area > best_leaf_panel_area)
-                    {
-                      best_leaf_panel_area = area;
-                      best_leaf_panel = panel;
-                    }
-                  }
-                }
-                ws->focused_panel = best_leaf_panel;
               }
             }
             
@@ -13508,6 +13122,7 @@ rd_frame(void)
             }
             
             //- rjf: if config opened 0 windows, we need to do some sensible default
+#if 0 // TODO(rjf): @cfg
             if(src == RD_CfgSrc_User && windows->first == &d_nil_cfg_tree)
             {
               OS_Handle preferred_monitor = os_primary_monitor();
@@ -13525,6 +13140,7 @@ rd_frame(void)
                 rd_cmd(RD_CmdKind_ResetToDefaultPanels, .window = rd_handle_from_window(ws));
               }
             }
+#endif
             
             //- rjf: if config bound 0 keys, we need to do some sensible default
             if(src == RD_CfgSrc_User && rd_state->key_map_total_count == 0)
@@ -13607,46 +13223,66 @@ rd_frame(void)
           case RD_CmdKind_IncUIFontScale:
           {
             fnt_reset();
-            RD_Window *window = rd_window_from_handle(rd_regs()->window);
-            if(window != 0)
+            RD_Cfg *window_cfg = rd_cfg_from_handle(rd_regs()->window);
+            RD_Cfg *main_font_size_cfg = rd_cfg_child_from_string(window_cfg, str8_lit("main_font_size"));
+            RD_WindowState *ws = rd_window_state_from_cfg(window_cfg);
+            if(main_font_size_cfg == &rd_nil_cfg)
             {
-              window->setting_vals[RD_SettingCode_MainFontSize].set = 1;
-              window->setting_vals[RD_SettingCode_MainFontSize].s32 += 1;
-              window->setting_vals[RD_SettingCode_MainFontSize].s32 = clamp_1s32(rd_setting_code_s32_range_table[RD_SettingCode_MainFontSize], window->setting_vals[RD_SettingCode_MainFontSize].s32);
+              main_font_size_cfg = rd_cfg_new(window_cfg, str8_lit("main_font_size"));
+              rd_cfg_newf(main_font_size_cfg, "%f", (F32)ws->setting_vals[RD_SettingCode_MainFontSize].s32);
             }
+            F32 size = (F32)f64_from_str8(main_font_size_cfg->first->string);
+            size += 1;
+            size = Clamp(6, size, 72);
+            rd_cfg_equip_stringf(main_font_size_cfg->first, "%f", size);
           }break;
           case RD_CmdKind_DecUIFontScale:
           {
             fnt_reset();
-            RD_Window *window = rd_window_from_handle(rd_regs()->window);
-            if(window != 0)
+            RD_Cfg *window_cfg = rd_cfg_from_handle(rd_regs()->window);
+            RD_Cfg *main_font_size_cfg = rd_cfg_child_from_string(window_cfg, str8_lit("main_font_size"));
+            RD_WindowState *ws = rd_window_state_from_cfg(window_cfg);
+            if(main_font_size_cfg == &rd_nil_cfg)
             {
-              window->setting_vals[RD_SettingCode_MainFontSize].set = 1;
-              window->setting_vals[RD_SettingCode_MainFontSize].s32 -= 1;
-              window->setting_vals[RD_SettingCode_MainFontSize].s32 = clamp_1s32(rd_setting_code_s32_range_table[RD_SettingCode_MainFontSize], window->setting_vals[RD_SettingCode_MainFontSize].s32);
+              main_font_size_cfg = rd_cfg_new(window_cfg, str8_lit("main_font_size"));
+              rd_cfg_newf(main_font_size_cfg, "%f", (F32)ws->setting_vals[RD_SettingCode_MainFontSize].s32);
             }
+            F32 size = (F32)f64_from_str8(main_font_size_cfg->first->string);
+            size -= 1;
+            size = Clamp(6, size, 72);
+            rd_cfg_equip_stringf(main_font_size_cfg->first, "%f", size);
           }break;
           case RD_CmdKind_IncCodeFontScale:
           {
             fnt_reset();
-            RD_Window *window = rd_window_from_handle(rd_regs()->window);
-            if(window != 0)
+            RD_Cfg *window_cfg = rd_cfg_from_handle(rd_regs()->window);
+            RD_Cfg *code_font_size_cfg = rd_cfg_child_from_string(window_cfg, str8_lit("code_font_size"));
+            RD_WindowState *ws = rd_window_state_from_cfg(window_cfg);
+            if(code_font_size_cfg == &rd_nil_cfg)
             {
-              window->setting_vals[RD_SettingCode_CodeFontSize].set = 1;
-              window->setting_vals[RD_SettingCode_CodeFontSize].s32 += 1;
-              window->setting_vals[RD_SettingCode_CodeFontSize].s32 = clamp_1s32(rd_setting_code_s32_range_table[RD_SettingCode_CodeFontSize], window->setting_vals[RD_SettingCode_CodeFontSize].s32);
+              code_font_size_cfg = rd_cfg_new(window_cfg, str8_lit("code_font_size"));
+              rd_cfg_newf(code_font_size_cfg, "%f", (F32)ws->setting_vals[RD_SettingCode_MainFontSize].s32);
             }
+            F32 size = (F32)f64_from_str8(code_font_size_cfg->first->string);
+            size += 1;
+            size = Clamp(6, size, 72);
+            rd_cfg_equip_stringf(code_font_size_cfg->first, "%f", size);
           }break;
           case RD_CmdKind_DecCodeFontScale:
           {
             fnt_reset();
-            RD_Window *window = rd_window_from_handle(rd_regs()->window);
-            if(window != 0)
+            RD_Cfg *window_cfg = rd_cfg_from_handle(rd_regs()->window);
+            RD_Cfg *code_font_size_cfg = rd_cfg_child_from_string(window_cfg, str8_lit("code_font_size"));
+            RD_WindowState *ws = rd_window_state_from_cfg(window_cfg);
+            if(code_font_size_cfg == &rd_nil_cfg)
             {
-              window->setting_vals[RD_SettingCode_CodeFontSize].set = 1;
-              window->setting_vals[RD_SettingCode_CodeFontSize].s32 -= 1;
-              window->setting_vals[RD_SettingCode_CodeFontSize].s32 = clamp_1s32(rd_setting_code_s32_range_table[RD_SettingCode_CodeFontSize], window->setting_vals[RD_SettingCode_CodeFontSize].s32);
+              code_font_size_cfg = rd_cfg_new(window_cfg, str8_lit("code_font_size"));
+              rd_cfg_newf(code_font_size_cfg, "%f", (F32)ws->setting_vals[RD_SettingCode_MainFontSize].s32);
             }
+            F32 size = (F32)f64_from_str8(code_font_size_cfg->first->string);
+            size -= 1;
+            size = Clamp(6, size, 72);
+            rd_cfg_equip_stringf(code_font_size_cfg->first, "%f", size);
           }break;
           
           //- rjf: panel creation
@@ -13657,65 +13293,70 @@ rd_frame(void)
           case RD_CmdKind_SplitPanel:
           {
             split_dir = rd_regs()->dir2;
-            split_panel = rd_panel_from_handle(rd_regs()->dst_panel);
+            split_panel = rd_cfg_from_handle(rd_regs()->dst_panel);
           }goto split;
           split:;
           if(split_dir != Dir2_Invalid)
           {
-            RD_Window *ws = rd_window_from_handle(rd_regs()->window);
-            if(rd_panel_is_nil(split_panel))
-            {
-              split_panel = ws->focused_panel;
-            }
-            RD_Panel *new_panel = &rd_nil_panel;
+            // rjf: unpack
             Axis2 split_axis = axis2_from_dir2(split_dir);
             Side split_side = side_from_dir2(split_dir);
-            RD_Panel *panel = split_panel;
-            RD_Panel *parent = panel->parent;
-            if(!rd_panel_is_nil(parent) && parent->split_axis == split_axis)
+            RD_Cfg *new_panel_cfg = &rd_nil_cfg;
+            RD_PanelNode *panel_root = rd_panel_tree_from_cfg(scratch.arena, split_panel);
+            RD_PanelNode *panel = rd_panel_node_from_tree_cfg(panel_root, split_panel);
+            RD_PanelNode *parent = panel->parent;
+            
+            // rjf: splitting on same axis as parent -> insert new sibling on same axis, adjust sizes
+            if(parent != &rd_nil_panel_node && parent->split_axis == split_axis)
             {
-              RD_Panel *next = rd_panel_alloc(ws);
-              rd_panel_insert(parent, split_side == Side_Max ? panel : panel->prev, next);
-              next->pct_of_parent = 1.f/parent->child_count;
-              for(RD_Panel *child = parent->first; !rd_panel_is_nil(child); child = child->next)
+              RD_Cfg *parent_cfg = parent->cfg;
+              RD_Cfg *panel_cfg = panel->cfg;
+              RD_Cfg *new_cfg = rd_cfg_alloc();
+              rd_cfg_insert_child(parent_cfg, split_side == Side_Max ? panel_cfg : panel_cfg->prev, new_cfg);
+              rd_cfg_equip_stringf(new_cfg, "%f", 1.f/parent->child_count);
+              for(RD_PanelNode *child = parent->first; child != &rd_nil_panel_node; child = child->next)
               {
-                if(child != next)
-                {
-                  child->pct_of_parent *= (F32)(parent->child_count-1) / (parent->child_count);
-                }
+                F32 old_pct = child->pct_of_parent;
+                F32 new_pct = old_pct * ((F32)(parent->child_count) / (parent->child_count+1));
+                rd_cfg_equip_stringf(child->cfg, "%f", new_pct);
               }
-              ws->focused_panel = next;
-              new_panel = next;
+              new_panel_cfg = new_cfg;
             }
+            
+            // rjf: splitting on opposite axis as parent - need to create new replacement node, + new sibling
             else
             {
-              RD_Panel *pre_prev = panel->prev;
-              RD_Panel *pre_parent = parent;
-              RD_Panel *new_parent = rd_panel_alloc(ws);
-              new_parent->pct_of_parent = panel->pct_of_parent;
-              if(!rd_panel_is_nil(pre_parent))
+              RD_Cfg *split_panel_prev = panel->prev->cfg;
+              RD_Cfg *new_parent = rd_cfg_alloc();
+              RD_Cfg *new_sibling = rd_cfg_alloc();
+              rd_cfg_equip_string(new_parent, split_panel->string);
+              rd_cfg_equip_string(split_panel, str8_lit("0.5"));
+              rd_cfg_equip_string(new_sibling, str8_lit("0.5"));
+              if(parent->cfg != &rd_nil_cfg)
               {
-                rd_panel_remove(pre_parent, panel);
-                rd_panel_insert(pre_parent, pre_prev, new_parent);
+                rd_cfg_unhook(parent->cfg, split_panel);
+                rd_cfg_insert_child(parent->cfg, split_panel_prev, new_parent);
               }
               else
               {
-                ws->root_panel = new_parent;
+                rd_cfg_equip_string(new_parent, str8_lit("panels"));
+                RD_Cfg *window_cfg = rd_window_from_cfg(split_panel);
+                rd_cfg_insert_child(window_cfg, window_cfg->last, new_parent);
               }
-              RD_Panel *left = panel;
-              RD_Panel *right = rd_panel_alloc(ws);
-              new_panel = right;
+              RD_Cfg *min = split_panel;
+              RD_Cfg *max = new_sibling;
               if(split_side == Side_Min)
               {
-                Swap(RD_Panel *, left, right);
+                Swap(RD_Cfg *, min, max);
               }
-              rd_panel_insert(new_parent, &rd_nil_panel, left);
-              rd_panel_insert(new_parent, left, right);
-              new_parent->split_axis = split_axis;
-              left->pct_of_parent = 0.5f;
-              right->pct_of_parent = 0.5f;
-              ws->focused_panel = new_panel;
+              rd_cfg_insert_child(new_parent, new_parent->last, min);
+              rd_cfg_insert_child(new_parent, new_parent->last, max);
+              new_panel_cfg = new_sibling;
             }
+            
+            // rjf: pre-emptively set up the animation rectangle, depending on where
+            // the new panel was inserted (?)
+#if 0 // TODO(rjf): @cfg
             if(!rd_panel_is_nil(new_panel->prev))
             {
               Rng2F32 prev_rect_pct = new_panel->prev->animated_rect_pct;
@@ -13728,38 +13369,40 @@ rd_frame(void)
               new_panel->animated_rect_pct = next_rect_pct;
               new_panel->animated_rect_pct.p1.v[split_axis] = new_panel->animated_rect_pct.p0.v[split_axis];
             }
-            RD_Panel *move_tab_panel = rd_panel_from_handle(rd_regs()->panel);
-            RD_View *move_tab = rd_view_from_handle(rd_regs()->view);
-            if(!rd_panel_is_nil(new_panel) && !rd_view_is_nil(move_tab) && !rd_panel_is_nil(move_tab_panel) &&
-               kind == RD_CmdKind_SplitPanel)
+#endif
+            
+            // rjf: if this split was caused by drag/dropping a tab, and the originating panel
+            // has no further tabs, then close the originating panel
+            RD_Cfg *dragdrop_origin_panel_cfg = rd_cfg_from_handle(rd_regs()->panel);
+            RD_Cfg *dragdrop_tab = rd_cfg_from_handle(rd_regs()->view);
+            if(kind == RD_CmdKind_SplitPanel &&
+               new_panel_cfg != &rd_nil_cfg && dragdrop_tab != &rd_nil_cfg && dragdrop_origin_panel_cfg != &rd_nil_cfg)
             {
-              rd_panel_remove_tab_view(move_tab_panel, move_tab);
-              rd_panel_insert_tab_view(new_panel, new_panel->last_tab_view, move_tab);
-              new_panel->selected_tab_view = rd_handle_from_view(move_tab);
-              B32 move_tab_panel_is_empty = 1;
-              for(RD_View *v = move_tab_panel->first_tab_view; !rd_view_is_nil(v); v = v->order_next)
+              rd_cfg_unhook(dragdrop_origin_panel_cfg, dragdrop_tab);
+              rd_cfg_insert_child(new_panel_cfg, new_panel_cfg->last, dragdrop_tab);
+              RD_PanelNode *origin_panel_tree = rd_panel_tree_from_cfg(scratch.arena, dragdrop_origin_panel_cfg);
+              RD_PanelNode *origin_panel = rd_panel_node_from_tree_cfg(origin_panel_tree, dragdrop_origin_panel_cfg);
+              if(origin_panel->tabs.count == 0)
               {
-                if(!rd_view_is_project_filtered(v))
-                {
-                  move_tab_panel_is_empty = 0;
-                  break;
-                }
+                rd_cmd(RD_CmdKind_ClosePanel);
               }
-              if(move_tab_panel_is_empty && move_tab_panel != ws->root_panel &&
-                 move_tab_panel != new_panel->prev && move_tab_panel != new_panel->next)
-              {
-                rd_cmd(RD_CmdKind_ClosePanel, .panel = rd_handle_from_panel(move_tab_panel));
-              }
+            }
+            
+            // rjf: focus new panel
+            if(new_panel_cfg != &rd_nil_cfg)
+            {
+              rd_cmd(RD_CmdKind_FocusPanel, .panel = rd_handle_from_cfg(new_panel_cfg));
             }
           }break;
           
           //- rjf: panel rotation
           case RD_CmdKind_RotatePanelColumns:
           {
-            RD_Window *ws = rd_window_from_handle(rd_regs()->window);
-            RD_Panel *panel = ws->focused_panel;
-            RD_Panel *parent = &rd_nil_panel;
-            for(RD_Panel *p = panel->parent; !rd_panel_is_nil(p); p = p->parent)
+            RD_Cfg *panel_cfg = rd_cfg_from_handle(rd_regs()->panel);
+            RD_PanelNode *panel_root = rd_panel_tree_from_cfg(scratch.arena, panel_cfg);
+            RD_PanelNode *panel = rd_panel_node_from_tree_cfg(panel_root, panel_cfg);
+            RD_PanelNode *parent = &rd_nil_panel_node;
+            for(RD_PanelNode *p = panel->parent; p != &rd_nil_panel_node; p = p->parent)
             {
               if(p->split_axis == Axis2_X)
               {
@@ -13767,47 +13410,65 @@ rd_frame(void)
                 break;
               }
             }
-            if(!rd_panel_is_nil(parent) && parent->child_count > 1)
+            if(parent != &rd_nil_panel_node && parent->child_count > 1)
             {
-              RD_Panel *old_first = parent->first;
-              RD_Panel *new_first = parent->first->next;
-              old_first->next = &rd_nil_panel;
-              old_first->prev = parent->last;
-              parent->last->next = old_first;
-              new_first->prev = &rd_nil_panel;
-              parent->first = new_first;
-              parent->last = old_first;
+              RD_Cfg *rotated = parent->first->cfg;
+              rd_cfg_unhook(parent->cfg, parent->first->cfg);
+              rd_cfg_insert_child(parent->cfg, parent->last->cfg, rotated);
             }
           }break;
           
           //- rjf: panel focusing
-          case RD_CmdKind_NextPanel: panel_sib_off = OffsetOf(RD_Panel, next); panel_child_off = OffsetOf(RD_Panel, first); goto cycle;
-          case RD_CmdKind_PrevPanel: panel_sib_off = OffsetOf(RD_Panel, prev); panel_child_off = OffsetOf(RD_Panel, last); goto cycle;
+          case RD_CmdKind_NextPanel: panel_sib_off = OffsetOf(RD_PanelNode, next); panel_child_off = OffsetOf(RD_PanelNode, first); goto cycle;
+          case RD_CmdKind_PrevPanel: panel_sib_off = OffsetOf(RD_PanelNode, prev); panel_child_off = OffsetOf(RD_PanelNode, last); goto cycle;
           cycle:;
           {
-            RD_Window *ws = rd_window_from_handle(rd_regs()->window);
-            for(RD_Panel *panel = ws->focused_panel; !rd_panel_is_nil(panel);)
+            RD_PanelTree panel_tree = rd_panel_tree_from_cfg(scratch.arena, rd_cfg_from_handle(rd_regs()->window));
+            RD_PanelNode *next_focused = &rd_nil_panel_node;
+            for(RD_PanelNode *p = panel_tree.focused;
+                p != &rd_nil_panel_node;
+                p = rd_panel_node_rec__depth_first(panel_tree.root, p, panel_sib_off, panel_child_off).next)
             {
-              RD_PanelRec rec = rd_panel_rec_depth_first(panel, panel_sib_off, panel_child_off);
-              panel = rec.next;
-              if(rd_panel_is_nil(panel))
+              if(p->first == &rd_nil_panel_node)
               {
-                panel = ws->root_panel;
-              }
-              if(rd_panel_is_nil(panel->first))
-              {
-                rd_cmd(RD_CmdKind_FocusPanel, .panel = rd_handle_from_panel(panel));
+                next_focused = p;
                 break;
               }
             }
+            if(next_focused == &rd_nil_panel_node)
+            {
+              for(RD_PanelNode *p = panel_tree.root;
+                  p != &rd_nil_panel_node;
+                  p = rd_panel_node_rec__depth_first(panel_tree.root, p, panel_sib_off, panel_child_off).next)
+              {
+                if(p->first == &rd_nil_panel_node)
+                {
+                  next_focused = p;
+                }
+              }
+            }
+            rd_cmd(RD_CmdKind_FocusPanel, .panel = rd_handle_from_cfg(next_focused->cfg));
           }break;
           case RD_CmdKind_FocusPanel:
           {
-            RD_Window *ws = rd_window_from_handle(rd_regs()->window);
-            RD_Panel *panel = rd_panel_from_handle(rd_regs()->panel);
-            if(!rd_panel_is_nil(panel))
+            RD_Cfg *panel = rd_cfg_from_handle(rd_regs()->panel);
+            RD_PanelTree panel_tree = rd_panel_tree_from_cfg(scratch.arena, panel);
+            for(RD_PanelNode *p = panel_tree.root;
+                p != &rd_nil_panel_node;
+                p = rd_panel_node_rec__depth_first_pre(panel_tree.root, p).next)
             {
-              ws->focused_panel = panel;
+              RD_Cfg *p_cfg = p->cfg;
+              RD_Cfg *p_selection = rd_cfg_child_from_string(p_cfg, str8_lit("selected"));
+              if(p_selection != &rd_nil_cfg)
+              {
+                rd_cfg_release(p_selection);
+              }
+            }
+            if(panel != &rd_nil_cfg)
+            {
+              rd_cfg_new(panel, str8_lit("selected"));
+              RD_Cfg *window = rd_window_from_cfg(panel);
+              RD_WindowState *ws = rd_window_state_from_cfg(window);
               ws->menu_bar_focused = 0;
               ws->query_view_selected = 0;
             }
@@ -14168,7 +13829,6 @@ rd_frame(void)
           //- rjf: files
           case RD_CmdKind_Open:
           {
-            RD_Window *ws = rd_window_from_handle(rd_regs()->window);
             String8 path = rd_regs()->file_path;
             FileProperties props = os_properties_from_file_path(path);
             if(props.created != 0)
@@ -16871,21 +16531,26 @@ rd_frame(void)
   //
   {
     dr_begin_frame();
-    for(RD_Window *w = rd_state->first_window; w != 0; w = w->next)
+    for EachIndex(slot_idx, rd_state->window_state_slots_count)
     {
-      B32 window_is_focused = os_window_is_focused(w->os);
-      if(window_is_focused)
+      for(RD_WindowState *w = rd_state->window_state_slots[slot_idx];
+          w != 0;
+          w = w->next)
       {
-        rd_state->last_focused_window = rd_handle_from_window(w);
-      }
-      rd_push_regs();
-      rd_regs()->window = rd_handle_from_window(w);
-      rd_window_frame(w);
-      MemoryZeroStruct(&w->ui_events);
-      RD_Regs *window_regs = rd_pop_regs();
-      if(rd_window_from_handle(rd_state->last_focused_window) == w)
-      {
-        MemoryCopyStruct(rd_regs(), window_regs);
+        B32 window_is_focused = os_window_is_focused(w->os);
+        if(window_is_focused)
+        {
+          rd_state->last_focused_window = rd_handle_from_window(w);
+        }
+        rd_push_regs();
+        rd_regs()->window = w->cfg_handle;
+        rd_window_frame(w);
+        MemoryZeroStruct(&w->ui_events);
+        RD_Regs *window_regs = rd_pop_regs();
+        if(rd_window_from_handle(rd_state->last_focused_window) == w)
+        {
+          MemoryCopyStruct(rd_regs(), window_regs);
+        }
       }
     }
   }
