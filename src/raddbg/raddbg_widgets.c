@@ -343,8 +343,9 @@ rd_cmd_list_menu_buttons(U64 count, String8 *cmd_names, U32 *fastpath_codepoints
     {
       rd_cmd(RD_CmdKind_RunCommand, .cmd_name = cmd_names[idx]);
       ui_ctx_menu_close();
-      RD_Window *window = rd_window_from_handle(rd_regs()->window);
-      window->menu_bar_focused = 0;
+      RD_Cfg *window = rd_cfg_from_handle(rd_regs()->window);
+      RD_WindowState *ws = rd_window_state_from_cfg(window);
+      ws->menu_bar_focused = 0;
     }
   }
   scratch_end(scratch);

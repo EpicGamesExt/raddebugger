@@ -191,7 +191,7 @@ RD_EntityKindFlags rd_entity_kind_flags_table[27] =
 (0*RD_EntityKindFlag_CanDelete) | (0*RD_EntityKindFlag_CanFreeze) | (0*RD_EntityKindFlag_CanEdit) | (1*RD_EntityKindFlag_CanRename) | (0*RD_EntityKindFlag_CanEnable) | (0*RD_EntityKindFlag_CanCondition) | (0*RD_EntityKindFlag_CanDuplicate) | (0*RD_EntityKindFlag_NameIsCode) | (0*RD_EntityKindFlag_NameIsPath) | (0*RD_EntityKindFlag_UserDefinedLifetime) | (0*RD_EntityKindFlag_IsSerializedToConfig),
 };
 
-Rng1U64 rd_reg_slot_range_table[35] =
+Rng1U64 rd_reg_slot_range_table[34] =
 {
 {0},
 {OffsetOf(RD_Regs, machine), OffsetOf(RD_Regs, machine) + sizeof(CTRL_Handle)},
@@ -201,12 +201,11 @@ Rng1U64 rd_reg_slot_range_table[35] =
 {OffsetOf(RD_Regs, ctrl_entity), OffsetOf(RD_Regs, ctrl_entity) + sizeof(CTRL_Handle)},
 {OffsetOf(RD_Regs, window), OffsetOf(RD_Regs, window) + sizeof(RD_Handle)},
 {OffsetOf(RD_Regs, panel), OffsetOf(RD_Regs, panel) + sizeof(RD_Handle)},
-{OffsetOf(RD_Regs, tab), OffsetOf(RD_Regs, tab) + sizeof(RD_Handle)},
-{OffsetOf(RD_Regs, prev_tab), OffsetOf(RD_Regs, prev_tab) + sizeof(RD_Handle)},
+{OffsetOf(RD_Regs, view), OffsetOf(RD_Regs, view) + sizeof(RD_Handle)},
+{OffsetOf(RD_Regs, prev_view), OffsetOf(RD_Regs, prev_view) + sizeof(RD_Handle)},
 {OffsetOf(RD_Regs, dst_panel), OffsetOf(RD_Regs, dst_panel) + sizeof(RD_Handle)},
 {OffsetOf(RD_Regs, entity), OffsetOf(RD_Regs, entity) + sizeof(RD_Handle)},
 {OffsetOf(RD_Regs, entity_list), OffsetOf(RD_Regs, entity_list) + sizeof(RD_HandleList)},
-{OffsetOf(RD_Regs, ev_key), OffsetOf(RD_Regs, ev_key) + sizeof(EV_Key)},
 {OffsetOf(RD_Regs, unwind_count), OffsetOf(RD_Regs, unwind_count) + sizeof(U64)},
 {OffsetOf(RD_Regs, inline_depth), OffsetOf(RD_Regs, inline_depth) + sizeof(U64)},
 {OffsetOf(RD_Regs, file_path), OffsetOf(RD_Regs, file_path) + sizeof(String8)},
@@ -230,7 +229,7 @@ Rng1U64 rd_reg_slot_range_table[35] =
 {OffsetOf(RD_Regs, os_event), OffsetOf(RD_Regs, os_event) + sizeof(OS_Event *)},
 };
 
-RD_CmdKindInfo rd_cmd_kind_info_table[213] =
+RD_CmdKindInfo rd_cmd_kind_info_table[214] =
 {
 {0},
 { str8_lit_comp("launch_and_run"), str8_lit_comp("Starts debugging a new instance of a target, then runs."), str8_lit_comp("launch,start,run,target"), str8_lit_comp("Launch and Run"), RD_IconKind_Play, (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Required*1), RD_RegSlot_Entity, str8_lit_comp(""), RD_EntityKind_Target, CTRL_EntityKind_Null}},
@@ -303,6 +302,7 @@ RD_CmdKindInfo rd_cmd_kind_info_table[213] =
 { str8_lit_comp("go_back"), str8_lit_comp("Returns to the previously selected panel and tab in recorded history."), str8_lit_comp(""), str8_lit_comp("Go Back"), RD_IconKind_LeftArrow, (RD_CmdKindFlag_ListInUI*0)|(RD_CmdKindFlag_ListInIPCDocs*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), RD_EntityKind_Nil, CTRL_EntityKind_Null}},
 { str8_lit_comp("go_forward"), str8_lit_comp("Returns to the next selected panel and tab in recorded history."), str8_lit_comp(""), str8_lit_comp("Go Forward"), RD_IconKind_RightArrow, (RD_CmdKindFlag_ListInUI*0)|(RD_CmdKindFlag_ListInIPCDocs*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), RD_EntityKind_Nil, CTRL_EntityKind_Null}},
 { str8_lit_comp("close_panel"), str8_lit_comp("Closes the currently active panel."), str8_lit_comp(""), str8_lit_comp("Close Panel"), RD_IconKind_ClosePanel, (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), RD_EntityKind_Nil, CTRL_EntityKind_Null}},
+{ str8_lit_comp("focus_tab"), str8_lit_comp("Focuses the passed tab within its containing panel."), str8_lit_comp(""), str8_lit_comp("Focus Tab"), RD_IconKind_Null, (RD_CmdKindFlag_ListInUI*0)|(RD_CmdKindFlag_ListInIPCDocs*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), RD_EntityKind_Nil, CTRL_EntityKind_Null}},
 { str8_lit_comp("next_tab"), str8_lit_comp("Focuses the next tab on the active panel."), str8_lit_comp(""), str8_lit_comp("Focus Next Tab"), RD_IconKind_RightArrow, (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), RD_EntityKind_Nil, CTRL_EntityKind_Null}},
 { str8_lit_comp("prev_tab"), str8_lit_comp("Focuses the previous tab on the active panel."), str8_lit_comp(""), str8_lit_comp("Focus Previous Tab"), RD_IconKind_LeftArrow, (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), RD_EntityKind_Nil, CTRL_EntityKind_Null}},
 { str8_lit_comp("move_tab_right"), str8_lit_comp("Moves the selected tab right one slot."), str8_lit_comp(""), str8_lit_comp("Move Tab Right"), RD_IconKind_RightArrow, (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), RD_EntityKind_Nil, CTRL_EntityKind_Null}},

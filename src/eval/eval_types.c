@@ -626,6 +626,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
             type->byte_size        = node->byte_size;
             switch(type->kind)
             {
+              default:{}break;
               case E_TypeKind_Struct:
               case E_TypeKind_Union:
               case E_TypeKind_Class:

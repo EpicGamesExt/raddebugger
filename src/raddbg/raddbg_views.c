@@ -148,6 +148,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
   Side search_query_side = Side_Invalid;
   B32 search_query_is_active = 0;
   {
+#if 0 // TODO(rjf): @cfg
     RD_Window *window = rd_window_from_handle(rd_regs()->window);
     RD_CmdKind query_cmd_kind = rd_cmd_kind_from_string(window->query_cmd_name);
     if(query_cmd_kind == RD_CmdKind_FindTextForward ||
@@ -157,6 +158,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
       search_query_is_active = 1;
       search_query_side = (query_cmd_kind == RD_CmdKind_FindTextForward) ? Side_Max : Side_Min;
     }
+#endif
   }
   
   //////////////////////////////
@@ -1304,6 +1306,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
   //- rjf: root-level view rule which has a ui hook? call into that to build the UI
   //
   B32 is_top_level_hook = 0;
+#if 0 // TODO(rjf): @cfg
   {
     RD_ViewRuleInfo *hook_rule_info = 0;
     MD_Node *hook_rule_root = &md_nil_node;
@@ -1323,6 +1326,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
       is_top_level_hook = 1;
     }
   }
+#endif
   
   //////////////////////////////
   //- rjf: determine autocompletion string
@@ -2445,6 +2449,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
             case RD_WatchViewRowKind_Canvas:
             ProfScope("canvas row") UI_FocusHot(row_selected ? UI_FocusKind_On : UI_FocusKind_Off)
             {
+#if 0 // TODO(rjf): @cfg
               //- rjf: unpack
               RD_WatchViewPoint pt = {0, row->block->key, row->key};
               RD_View *view = rd_view_from_handle(rd_regs()->view);
@@ -2537,6 +2542,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                 //- rjf: pop interaction registers
                 rd_pop_regs();
               }
+#endif
             }break;
             
             ////////////////////
@@ -3116,7 +3122,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                       UI_Parent(box)
                       {
                         String8 row_expr = e_string_from_expr(scratch.arena, row->expr);
-                        cell_ui_hook(row_expr, cell_ui_params, r2f32p(x_px, 0, x_px + col->pct*dim_2f32(rect).x, row_height_px));
+                        cell_ui_hook(row_expr, r2f32p(x_px, 0, x_px + col->pct*dim_2f32(rect).x, row_height_px));
                       }
                       sig = ui_signal_from_box(box);
                     }
@@ -4066,10 +4072,12 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(file_system)
   RD_PathQuery path_query = rd_path_query_from_string(query_normalized_with_opt_slash);
   F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
   F32 scroll_bar_dim = floor_f32(ui_top_font_size()*1.5f);
+#if 0 // TODO(rjf): @cfg
   RD_Window *window = rd_window_from_handle(rd_regs()->window);
   RD_CmdKindInfo *cmd_kind_info = rd_cmd_kind_info_from_string(window->query_cmd_name);
-  B32 file_selection = !!(cmd_kind_info->query.flags & RD_QueryFlag_AllowFiles);
-  B32 dir_selection = !!(cmd_kind_info->query.flags & RD_QueryFlag_AllowFolders);
+#endif
+  B32 file_selection = 1;// !!(cmd_kind_info->query.flags & RD_QueryFlag_AllowFiles);
+  B32 dir_selection = 1;// !!(cmd_kind_info->query.flags & RD_QueryFlag_AllowFolders);
   
   //- rjf: get extra state for this view
   UI_ScrollPt2 scroll_pos = rd_view_scroll_pos();
@@ -4892,9 +4900,11 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(entity_lister)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
+#if 0 // TODO(rjf): @cfg
   RD_Window *window = rd_window_from_handle(rd_regs()->window);
   RD_CmdKindInfo *cmd_kind_info = rd_cmd_kind_info_from_string(window->query_cmd_name);
-  RD_EntityKind entity_kind = cmd_kind_info->query.entity_kind;
+#endif
+  RD_EntityKind entity_kind = RD_EntityKind_Nil; // cmd_kind_info->query.entity_kind;
   F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
   F32 scroll_bar_dim = floor_f32(ui_top_font_size()*1.5f);
   

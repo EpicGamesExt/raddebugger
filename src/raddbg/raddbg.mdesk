@@ -158,12 +158,11 @@ RD_RegTable:
   {CTRL_Handle       ctrl_entity      CtrlEntity    }
   {RD_Handle         window           Window        }
   {RD_Handle         panel            Panel         }
-  {RD_Handle         tab              Tab           }
-  {RD_Handle         prev_tab         PrevTab       }
+  {RD_Handle         view             View          }
+  {RD_Handle         prev_view        PrevView      }
   {RD_Handle         dst_panel        DstPanel      }
   {RD_Handle         entity           Entity        }
   {RD_HandleList     entity_list      EntityList    }
-  {EV_Key            ev_key           EVKey         }
   
   // rjf: frame selection
   {U64              unwind_count     UnwindCount   }
@@ -290,6 +289,7 @@ RD_CmdTable:    //               |        |              |                  |   
   {ClosePanel                     1        1              Null               null              Nil                     Null       0  0  0  0  0  0                                                           ClosePanel            "close_panel"                 "Close Panel"                                 "Closes the currently active panel."                                                                               ""                               }
   
   //- rjf: panel tab
+  {FocusTab                       0        0              Null               null              Nil                     Null       0  0  0  0  0  0                                                           Null                  "focus_tab"                   "Focus Tab"                                   "Focuses the passed tab within its containing panel."                                                              ""                               }
   {NextTab                        1        1              Null               null              Nil                     Null       0  0  0  0  0  0                                                           RightArrow            "next_tab"                    "Focus Next Tab"                              "Focuses the next tab on the active panel."                                                                        ""                               }
   {PrevTab                        1        1              Null               null              Nil                     Null       0  0  0  0  0  0                                                           LeftArrow             "prev_tab"                    "Focus Previous Tab"                          "Focuses the previous tab on the active panel."                                                                    ""                               }
   {MoveTabRight                   1        1              Null               null              Nil                     Null       0  0  0  0  0  0                                                           RightArrow            "move_tab_right"              "Move Tab Right"                              "Moves the selected tab right one slot."                                                                           ""                               }

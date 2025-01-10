@@ -161,7 +161,7 @@ enum
   RD_ViewRuleInfoFlag_ProjectFiltered            = (1<<7),
 };
 
-#define RD_VIEW_RULE_UI_FUNCTION_SIG(name) void name(String8 string, MD_Node *params, Rng2F32 rect)
+#define RD_VIEW_RULE_UI_FUNCTION_SIG(name) void name(String8 string, Rng2F32 rect)
 #define RD_VIEW_RULE_UI_FUNCTION_NAME(name) rd_view_rule_ui_##name
 #define RD_VIEW_RULE_UI_FUNCTION_DEF(name) internal RD_VIEW_RULE_UI_FUNCTION_SIG(RD_VIEW_RULE_UI_FUNCTION_NAME(name))
 typedef RD_VIEW_RULE_UI_FUNCTION_SIG(RD_ViewRuleUIFunctionType);
@@ -183,7 +183,6 @@ struct RD_ViewState
   RD_ViewState *hash_next;
   RD_ViewState *hash_prev;
   RD_Handle cfg_handle;
-  EV_Key ev_key;
   
   // rjf: touch info
   U64 last_frame_index_touched;
@@ -201,10 +200,6 @@ struct RD_ViewState
   RD_ArenaExt *first_arena_ext;
   RD_ArenaExt *last_arena_ext;
   void *user_data;
-  
-  // rjf: expression string
-  U8 expression_buffer[KB(1)];
-  U64 expression_string_size;
   
   // rjf: filter editing controls
   B32 is_filtering;
@@ -646,9 +641,8 @@ struct RD_WindowState
   String8 query_cmd_name;
   RD_Regs *query_cmd_regs;
   U64 query_cmd_regs_mask[(RD_RegSlot_COUNT + 63) / 64];
+  RD_Cfg *query_view_stack_top;
   B32 query_view_selected;
-  F32 query_view_selected_t;
-  F32 query_view_t;
   
   // rjf: hover eval state
   B32 hover_eval_focused;
@@ -850,6 +844,7 @@ struct RD_State
   RD_WindowStateSlot *window_state_slots;
   RD_WindowState *free_window_state;
   RD_Handle last_focused_window;
+  // TODO(rjf): @cfg must be nil-initialized
   RD_WindowState *first_window_state;
   RD_WindowState *last_window_state;
   
@@ -1087,12 +1082,15 @@ internal void rd_cfg_equip_stringf(RD_Cfg *cfg, char *fmt, ...);
 internal void rd_cfg_insert_child(RD_Cfg *parent, RD_Cfg *prev_child, RD_Cfg *new_child);
 internal void rd_cfg_unhook(RD_Cfg *parent, RD_Cfg *child);
 internal RD_Cfg *rd_cfg_child_from_string(RD_Cfg *parent, String8 string);
+internal RD_Cfg *rd_cfg_child_from_string_or_alloc(RD_Cfg *parent, String8 string);
 internal RD_CfgList rd_cfg_child_list_from_string(Arena *arena, RD_Cfg *parent, String8 string);
 internal RD_CfgList rd_cfg_top_level_list_from_string(Arena *arena, String8 string);
 internal RD_CfgList rd_cfg_tree_list_from_string(Arena *arena, String8 string);
 internal String8 rd_string_from_cfg_tree(Arena *arena, RD_Cfg *cfg);
 internal RD_CfgRec rd_cfg_rec__depth_first(RD_Cfg *root, RD_Cfg *cfg);
 internal void rd_cfg_list_push(Arena *arena, RD_CfgList *list, RD_Cfg *cfg);
+#define rd_cfg_list_first(list) ((list)->count ? (list)->first->v : &rd_nil_cfg)
+#define rd_cfg_list_last(list)  ((list)->count ? (list)->last->v  : &rd_nil_cfg)
 
 internal RD_PanelTree rd_panel_tree_from_cfg(Arena *arena, RD_Cfg *cfg);
 internal RD_PanelNodeRec rd_panel_node_rec__depth_first(RD_PanelNode *root, RD_PanelNode *panel, U64 sib_off, U64 child_off);
@@ -1199,7 +1197,6 @@ internal String8 rd_eval_string_from_file_path(Arena *arena, String8 string);
 ////////////////////////////////
 //~ rjf: View Functions
 
-internal RD_ViewState *rd_view_state_from_cfg_ev_key(RD_Cfg *cfg, EV_Key ev_key);
 internal RD_ViewState *rd_view_state_from_cfg(RD_Cfg *cfg);
 internal DR_FancyStringList rd_title_fstrs_from_view(Arena *arena, String8 viewer_name_string, String8 query, Vec4F32 primary_color, Vec4F32 secondary_color, F32 size);
 
