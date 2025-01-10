@@ -933,6 +933,7 @@ read_only global RD_PanelNode rd_nil_panel_node =
   &rd_nil_panel_node,
   0,
   &rd_nil_cfg,
+  .selected_tab = &rd_nil_cfg,
 };
 
 read_only global RD_Entity rd_nil_entity =

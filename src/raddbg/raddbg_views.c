@@ -5106,9 +5106,11 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(ctrl_entity_lister)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
+#if 0 // TODO(rjf): @cfg
   RD_Window *window = rd_window_from_handle(rd_regs()->window);
   RD_CmdKindInfo *cmd_kind_info = rd_cmd_kind_info_from_string(window->query_cmd_name);
-  CTRL_EntityKind entity_kind = cmd_kind_info->query.ctrl_entity_kind;
+#endif
+  CTRL_EntityKind entity_kind = CTRL_EntityKind_Null; // cmd_kind_info->query.ctrl_entity_kind;
   F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
   F32 scroll_bar_dim = floor_f32(ui_top_font_size()*1.5f);
   
@@ -5779,6 +5781,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(pending_file)
   }
   
   //- rjf: if file is ready, move params tree to scratch for new command
+#if 0 // TODO(rjf): @cfg
   MD_Node *params_copy = &md_nil_node;
   if(file_is_ready)
   {
@@ -5793,6 +5796,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(pending_file)
     RD_View *view = rd_view_from_handle(rd_regs()->view);
     rd_view_equip_spec(view, view_rule_info, query, params_copy);
   }
+#endif
   
   //- rjf: if entity is ready, but we have no viewer for it, then just close this tab
   if(file_is_ready && viewer_kind == RD_ViewRuleKind_Null)
@@ -5870,18 +5874,20 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(text)
   rd_regs()->file_path     = path;
   rd_regs()->vaddr         = 0;
   rd_regs()->prefer_disasm = 0;
+#if 0 // TODO(rjf): @cfg
   rd_regs()->cursor.line   = rd_value_from_params_key(params, str8_lit("cursor_line")).s64;
   rd_regs()->cursor.column = rd_value_from_params_key(params, str8_lit("cursor_column")).s64;
   rd_regs()->mark.line     = rd_value_from_params_key(params, str8_lit("mark_line")).s64;
   rd_regs()->mark.column   = rd_value_from_params_key(params, str8_lit("mark_column")).s64;
+#endif
   if(rd_regs()->cursor.line == 0)   { rd_regs()->cursor.line = 1; }
   if(rd_regs()->cursor.column == 0) { rd_regs()->cursor.column = 1; }
   if(rd_regs()->mark.line == 0)   { rd_regs()->mark.line = 1; }
   if(rd_regs()->mark.column == 0) { rd_regs()->mark.column = 1; }
   E_Eval eval = e_eval_from_string(scratch.arena, string);
-  Rng1U64 range = rd_range_from_eval_params(eval, params);
+  Rng1U64 range = {0}; // TODO(rjf): @cfg rd_range_from_eval_params(eval, params);
   rd_regs()->text_key = rd_key_from_eval_space_range(eval.space, range, 1);
-  rd_regs()->lang_kind = rd_lang_kind_from_eval_params(eval, params);
+  rd_regs()->lang_kind = TXT_LangKind_Null; // TODO(rjf): @cfg rd_lang_kind_from_eval_params(eval, params);
   U128 hash = {0};
   TXT_TextInfo info = txt_text_info_from_key_lang(txt_scope, rd_regs()->text_key, rd_regs()->lang_kind, &hash);
   String8 data = hs_data_from_hash(hs_scope, hash);
@@ -6151,8 +6157,8 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(disasm)
   {
     space = auto_space;
   }
-  Rng1U64 range = rd_range_from_eval_params(eval, params);
-  Arch arch = rd_arch_from_eval_params(eval, params);
+  Rng1U64 range = {0}; // TODO(rjf): @cfg rd_range_from_eval_params(eval, params);
+  Arch arch = Arch_Null; // TODO(rjf): @cfg rd_arch_from_eval_params(eval, params);
   CTRL_Entity *space_entity = rd_ctrl_entity_from_eval_space(space);
   CTRL_Entity *dasm_module = &ctrl_entity_nil;
   DI_Key dbgi_key = {0};
@@ -6301,10 +6307,12 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(output)
   //
   rd_regs()->file_path     = str8_zero();
   rd_regs()->vaddr         = 0;
+#if 0 // TODO(rjf): @cfg
   rd_regs()->cursor.line   = rd_value_from_params_key(params, str8_lit("cursor_line")).s64;
   rd_regs()->cursor.column = rd_value_from_params_key(params, str8_lit("cursor_column")).s64;
   rd_regs()->mark.line     = rd_value_from_params_key(params, str8_lit("mark_line")).s64;
   rd_regs()->mark.column   = rd_value_from_params_key(params, str8_lit("mark_column")).s64;
+#endif
   
   //////////////////////////////
   //- rjf: unpack text info
@@ -6400,7 +6408,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(memory)
   //- rjf: unpack parameterization info
   //
   E_Eval eval = e_eval_from_string(scratch.arena, string);
-  Rng1U64 space_range = rd_range_from_eval_params(eval, params);
+  Rng1U64 space_range = {0}; // TODO(rjf): @cfg rd_range_from_eval_params(eval, params);
   if(eval.space.kind == 0)
   {
     eval.space = rd_eval_space_from_ctrl_entity(ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->process), RD_EvalSpaceKind_CtrlEntity);
@@ -6410,10 +6418,10 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(memory)
       space_range = r1u64(0, 0x7FFFFFFFFFFFull);
     }
   }
-  U64 cursor          = rd_value_from_params_key(params, str8_lit("cursor_vaddr")).u64;
-  U64 mark            = rd_value_from_params_key(params, str8_lit("mark_vaddr")).u64;
-  U64 bytes_per_cell  = rd_value_from_params_key(params, str8_lit("bytes_per_cell")).u64;
-  U64 num_columns     = rd_value_from_params_key(params, str8_lit("num_columns")).u64;
+  U64 cursor          = 0; // TODO(rjf): @cfg rd_value_from_params_key(params, str8_lit("cursor_vaddr")).u64;
+  U64 mark            = 0; // TODO(rjf): @cfg rd_value_from_params_key(params, str8_lit("mark_vaddr")).u64;
+  U64 bytes_per_cell  = 0; // TODO(rjf): @cfg rd_value_from_params_key(params, str8_lit("bytes_per_cell")).u64;
+  U64 num_columns     = 0; // TODO(rjf): @cfg rd_value_from_params_key(params, str8_lit("num_columns")).u64;
   if(num_columns == 0)
   {
     num_columns = 16;
@@ -7326,8 +7334,8 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(bitmap)
   //- rjf: evaluate expression
   //
   E_Eval eval = e_eval_from_string(scratch.arena, string);
-  Vec2S32 dim = rd_dim2s32_from_eval_params(eval, params);
-  R_Tex2DFormat fmt = rd_tex2dformat_from_eval_params(eval, params);
+  Vec2S32 dim = {0}; // TODO(rjf): @cfg rd_dim2s32_from_eval_params(eval, params);
+  R_Tex2DFormat fmt = R_Tex2DFormat_RGBA8; // TODO(rjf): @cfg rd_tex2dformat_from_eval_params(eval, params);
   U64 base_offset = rd_base_offset_from_eval(eval);
   U64 expected_size = dim.x*dim.y*r_tex2d_format_bytes_per_pixel_table[fmt];
   Rng1U64 offset_range = r1u64(base_offset, base_offset + expected_size);
@@ -7335,11 +7343,11 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(bitmap)
   //////////////////////////////
   //- rjf: unpack params
   //
-  F32 zoom = rd_value_from_params_key(params, str8_lit("zoom")).f32;
+  F32 zoom = 1.f; // TODO(rjf): @cfg rd_value_from_params_key(params, str8_lit("zoom")).f32;
   Vec2F32 view_center_pos =
   {
-    rd_value_from_params_key(params, str8_lit("x")).f32,
-    rd_value_from_params_key(params, str8_lit("y")).f32,
+    0.f, // TODO(rjf): @cfg rd_value_from_params_key(params, str8_lit("x")).f32,
+    0.f, // TODO(rjf): @cfg rd_value_from_params_key(params, str8_lit("y")).f32,
   };
   if(zoom == 0)
   {
@@ -7570,7 +7578,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(color_rgba)
   Vec2F32 dim = dim_2f32(rect);
   F32 padding = ui_top_font_size()*3.f;
   E_Eval eval = e_eval_from_string(scratch.arena, string);
-  Vec4F32 rgba = rd_rgba_from_eval_params(eval, params);
+  Vec4F32 rgba = {0}; // TODO(rjf): @cfg rd_rgba_from_eval_params(eval, params);
   Vec4F32 hsva = hsva_from_rgba(rgba);
   
   //- rjf: too small -> just show components
@@ -7734,12 +7742,12 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(geo3d)
   //////////////////////////////
   //- rjf: unpack parameters
   //
-  U64 count        = rd_value_from_params_key(params, str8_lit("count")).u64;
-  U64 vtx_base_off = rd_value_from_params_key(params, str8_lit("vtx")).u64;
-  U64 vtx_size     = rd_value_from_params_key(params, str8_lit("vtx_size")).u64;
-  F32 yaw_target   = rd_value_from_params_key(params, str8_lit("yaw")).f32;
-  F32 pitch_target = rd_value_from_params_key(params, str8_lit("pitch")).f32;
-  F32 zoom_target  = rd_value_from_params_key(params, str8_lit("zoom")).f32;
+  U64 count        = 0; // TODO(rjf): @cfg rd_value_from_params_key(params, str8_lit("count")).u64;
+  U64 vtx_base_off = 0; // TODO(rjf): @cfg rd_value_from_params_key(params, str8_lit("vtx")).u64;
+  U64 vtx_size     = 0; // TODO(rjf): @cfg rd_value_from_params_key(params, str8_lit("vtx_size")).u64;
+  F32 yaw_target   = 0; // TODO(rjf): @cfg rd_value_from_params_key(params, str8_lit("yaw")).f32;
+  F32 pitch_target = 0; // TODO(rjf): @cfg rd_value_from_params_key(params, str8_lit("pitch")).f32;
+  F32 zoom_target  = 0; // TODO(rjf): @cfg rd_value_from_params_key(params, str8_lit("zoom")).f32;
   
   //////////////////////////////
   //- rjf: evaluate & unpack expression
@@ -8056,7 +8064,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(settings)
   Temp scratch = scratch_begin(0, 0);
   F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
   String8 query = string;
-  RD_Window *window = rd_window_from_handle(rd_regs()->window);
+  RD_Cfg *window = rd_cfg_from_handle(rd_regs()->window);
   UI_ScrollPt2 scroll_pos = rd_view_scroll_pos();
   
   //////////////////////////////
@@ -8520,7 +8528,10 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(settings)
         {
           rgba = rd_rgba_from_theme_color(item->color);
         }break;
-        case RD_SettingsItemKind_WindowSetting: {val_table = &window->setting_vals[0];}goto setting;
+        case RD_SettingsItemKind_WindowSetting:
+        {
+          // TODO(rjf): @cfg val_table = &window->setting_vals[0];
+        }goto setting;
         case RD_SettingsItemKind_GlobalSetting:{}goto setting;
         setting:;
         {

@@ -750,29 +750,32 @@ entry_point(CmdLine *cmd_line)
             if(msg.size != 0)
             {
               log_infof("ipc_msg: \"%S\"", msg);
-              RD_Window *dst_window = rd_state->first_window;
-              for(RD_Window *window = dst_window; window != 0; window = window->next)
+              RD_WindowState *dst_ws = rd_state->first_window_state;
+              for(RD_WindowState *ws = dst_ws; ws != &rd_nil_window_state; ws = ws->order_next)
               {
-                if(os_window_is_focused(window->os))
+                if(os_window_is_focused(ws->os))
                 {
-                  dst_window = window;
+                  dst_ws = ws;
                   break;
                 }
               }
-              if(dst_window != 0)
+              if(dst_ws != &rd_nil_window_state)
               {
-                dst_window->window_temporarily_focused_ipc = 1;
+                dst_ws->window_temporarily_focused_ipc = 1;
                 U64 first_space_pos = str8_find_needle(msg, 0, str8_lit(" "), 0);
                 String8 cmd_kind_name_string = str8_prefix(msg, first_space_pos);
                 String8 cmd_args_string = str8_skip_chop_whitespace(str8_skip(msg, first_space_pos));
                 RD_CmdKindInfo *cmd_kind_info = rd_cmd_kind_info_from_string(cmd_kind_name_string);
                 if(cmd_kind_info != &rd_nil_cmd_kind_info) RD_RegsScope()
                 {
-                  if(dst_window != rd_window_from_handle(rd_regs()->window))
+                  if(!rd_handle_match(dst_ws->cfg_handle, rd_regs()->window))
                   {
-                    rd_regs()->window = rd_handle_from_window(dst_window);
-                    rd_regs()->panel  = rd_handle_from_panel(dst_window->focused_panel);
-                    rd_regs()->view   = dst_window->focused_panel->selected_tab_view;
+                    Temp scratch = scratch_begin(0, 0);
+                    RD_PanelTree panel_tree = rd_panel_tree_from_cfg(scratch.arena, rd_cfg_from_handle(dst_ws->cfg_handle));
+                    rd_regs()->window = dst_ws->cfg_handle;
+                    rd_regs()->panel  = rd_handle_from_cfg(panel_tree.focused->cfg);
+                    rd_regs()->view   = rd_handle_from_cfg(panel_tree.focused->selected_tab);
+                    scratch_end(scratch);
                   }
                   rd_regs_fill_slot_from_string(cmd_kind_info->query.slot, cmd_args_string);
                   rd_push_cmd(cmd_kind_name_string, rd_regs());
