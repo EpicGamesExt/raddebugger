@@ -165,3 +165,14 @@ cv_map_encoded_base_pointer(CV_Arch arch, U32 encoded_frame_reg)
   return r;
 }
 
+
+internal String8
+cv_string_from_inline_range_kind(CV_InlineRangeKind kind)
+{
+  switch (kind) {
+    case CV_InlineRangeKind_Expr: return str8_lit("Expr");
+    case CV_InlineRangeKind_Stmt: return str8_lit("Stmt");
+  }
+  return str8_zero();
+}
+

@@ -4,17 +4,18 @@
 #include "os/os_inc.h"
 #include "coff/coff.h"
 #include "codeview/codeview.h"
-#include "codeview/codeview_stringize.h"
+#include "codeview/codeview_parse.h"
 #include "msf/msf.h"
 #include "msf/msf_parse.h"
 #include "pdb/pdb.h"
 #include "pdb/pdb_parse.h"
+#include "pdb/pdb_stringize.h"
 
 #include "base/base_inc.c"
 #include "os/os_inc.c"
 #include "coff/coff.c"
 #include "codeview/codeview.c"
-#include "codeview/codeview_stringize.c"
+#include "codeview/codeview_parse.c"
 #include "msf/msf.c"
 #include "msf/msf_parse.c"
 #include "pdb/pdb.c"
@@ -25,23 +26,21 @@
 
 #include "linker/base_ext/base_blake3.h"
 #include "linker/base_ext/base_blake3.c"
-#include "linker/third_party_ext/md5/md5.c"
-#include "linker/third_party_ext/md5/md5.h"
-#include "linker/third_party_ext/xxHash/xxhash.c"
-#include "linker/third_party_ext/xxHash/xxhash.h"
+#include "third_party/md5/md5.c"
+#include "third_party/md5/md5.h"
+#include "third_party/xxHash/xxhash.c"
+#include "third_party/xxHash/xxhash.h"
 
 #include "linker/base_ext/base_inc.h"
 #include "linker/path_ext/path.h"
 #include "linker/hash_table.h"
 #include "linker/thread_pool/thread_pool.h"
-#include "linker/os_ext/os_inc.h"
 #include "linker/codeview_ext/codeview.h"
 
 #include "linker/base_ext/base_inc.c"
 #include "linker/path_ext/path.c"
 #include "linker/hash_table.c"
 #include "linker/thread_pool/thread_pool.c"
-#include "linker/os_ext/os_inc.c"
 #include "linker/codeview_ext/codeview.c"
 
 internal void
@@ -116,7 +115,7 @@ print_inline_binary_annotations(String8 binary_annots)
     case CV_InlineBinaryAnnotation_ChangeCodeOffsetAndLineOffset: {
       U32 code_offset_and_line_offset = 0;
       cursor += cv_decode_inline_annot_u32(binary_annots, cursor, &code_offset_and_line_offset);
-      S32 line_delta = cv_inline_annot_convert_to_signed_operand(code_offset_and_line_offset >> 4);
+      S32 line_delta = cv_inline_annot_signed_from_unsigned_operand(code_offset_and_line_offset >> 4);
       U32 code_delta = code_offset_and_line_offset & 0xF; 
       line_offset += line_delta;
       code_offset += code_delta;
