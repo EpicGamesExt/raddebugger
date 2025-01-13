@@ -794,11 +794,9 @@ ASYNC_WORK_DEF(p2r_units_convert_work)
               CV_InlineRangeKind range_kind             = 0;
               U32                code_length            = 0;
               U32                code_offset            = 0;
-              U32                last_code_offset       = code_offset;
               String8            file_name              = inlinee_lines_parsed->file_name;
-              String8            last_file_name         = file_name;
+              String8            last_file_name         = {0};
               S32                line                   = (S32)inlinee_lines_parsed->first_source_ln;
-              S32                last_line              = line;
               S32                column                 = 1;
               S32                last_column            = column;
               
@@ -821,6 +819,9 @@ ASYNC_WORK_DEF(p2r_units_convert_work)
               CV_C13SubSectionNode *file_chksms = unit_c13->file_chksms_sub_section;
               
               // rjf: decode loop
+              B32 line_num_emitted = 0;
+              B32 code_off_emitted = 0;
+              B32 code_len_emitted = 0;
               U64 read_off = 0;
               U64 read_off_opl = binary_annots.size;
               for(B32 good = 1; read_off < read_off_opl && good;)
@@ -840,6 +841,7 @@ ASYNC_WORK_DEF(p2r_units_convert_work)
                   case CV_InlineBinaryAnnotation_CodeOffset:
                   {
                     read_off += cv_decode_inline_annot_u32(binary_annots, read_off, &code_offset);
+                    code_off_emitted = 1;
                   }break;
                   case CV_InlineBinaryAnnotation_ChangeCodeOffsetBase:
                   {
@@ -857,11 +859,13 @@ ASYNC_WORK_DEF(p2r_units_convert_work)
                     U32 delta = 0;
                     read_off += cv_decode_inline_annot_u32(binary_annots, read_off, &delta);
                     code_offset += delta;
+                    code_off_emitted = 1;
                   }break;
                   case CV_InlineBinaryAnnotation_ChangeCodeLength:
                   {
                     code_length = 0;
                     read_off += cv_decode_inline_annot_u32(binary_annots, read_off, &code_length);
+                    code_len_emitted = 1;
                   }break;
                   case CV_InlineBinaryAnnotation_ChangeFile:
                   {
@@ -881,6 +885,7 @@ ASYNC_WORK_DEF(p2r_units_convert_work)
                     S32 delta = 0;
                     read_off += cv_decode_inline_annot_s32(binary_annots, read_off, &delta);
                     line += delta;
+                    line_num_emitted = 1;
                   }break;
                   case CV_InlineBinaryAnnotation_ChangeLineEndDelta:
                   {
@@ -923,6 +928,8 @@ ASYNC_WORK_DEF(p2r_units_convert_work)
                     S32 line_delta = cv_inline_annot_signed_from_unsigned_operand(code_offset_and_line_offset >> 4);
                     code_offset += code_delta;
                     line        += line_delta;
+                    code_off_emitted = 1;
+                    line_num_emitted = 1;
                   }break;
                   case CV_InlineBinaryAnnotation_ChangeCodeLengthAndCodeOffset:
                   {
@@ -930,6 +937,8 @@ ASYNC_WORK_DEF(p2r_units_convert_work)
                     read_off += cv_decode_inline_annot_u32(binary_annots, read_off, &code_length);
                     read_off += cv_decode_inline_annot_u32(binary_annots, read_off, &offset_delta); 
                     code_offset += offset_delta;
+                    code_len_emitted = 1;
+                    code_off_emitted = 1;
                   }break;
                   case CV_InlineBinaryAnnotation_ChangeColumnEnd:
                   {
@@ -941,7 +950,7 @@ ASYNC_WORK_DEF(p2r_units_convert_work)
                 }
                 
                 // rjf: gather new lines
-                if(!good || line != last_line || code_offset != last_code_offset)
+                if(!good || (line_num_emitted && code_off_emitted && code_len_emitted))
                 {
                   LineChunk *chunk = last_line_chunk;
                   if(chunk == 0 || chunk->count+1 >= chunk->cap)
@@ -957,6 +966,15 @@ ASYNC_WORK_DEF(p2r_units_convert_work)
                   chunk->line_nums[chunk->count] = (U32)line;
                   chunk->count += 1;
                   total_line_chunk_line_count += 1;
+                  line_num_emitted = 0;
+                  code_off_emitted = 0;
+                  code_len_emitted = 0;
+                }
+                
+                // rjf: advance code offset by the code length
+                {
+                  code_offset += code_length;
+                  code_length = 0;
                 }
                 
                 // rjf: push line sequence to line table & source file
@@ -1029,12 +1047,6 @@ ASYNC_WORK_DEF(p2r_units_convert_work)
                   first_line_chunk = last_line_chunk = 0;
                   total_line_chunk_line_count = 0;
                 }
-                
-                // rjf: update prev/current states
-                last_file_name   = file_name;
-                last_line        = line;
-                last_column      = column;
-                last_code_offset = code_offset;
               }
             }
           }break;
