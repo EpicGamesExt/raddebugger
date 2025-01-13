@@ -2575,7 +2575,7 @@ rd_line_edit(RD_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
       // rjf: any valid op & autocomplete hint? -> perform autocomplete first, then re-compute op
       if(autocomplete_hint_string.size != 0)
       {
-        String8 word_query = rd_autocomp_query_word_from_input_string_off(edit_string, cursor->column-1);
+        String8 word_query = rd_lister_query_word_from_input_string_off(edit_string, cursor->column-1);
         U64 word_off = (U64)(word_query.str - edit_string.str);
         String8 new_string = ui_push_string_replace_range(scratch.arena, edit_string, r1s64(word_off+1, word_off+1+word_query.size), autocomplete_hint_string);
         new_string.size = Min(edit_buffer_size, new_string.size);
@@ -2678,7 +2678,7 @@ rd_line_edit(RD_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
       DR_FancyStringList code_fancy_strings = rd_fancy_string_list_from_code_string(scratch.arena, 1.f, 0, ui_top_palette()->text, edit_string);
       if(autocomplete_hint_string.size != 0)
       {
-        String8 query_word = rd_autocomp_query_word_from_input_string_off(edit_string, cursor->column-1);
+        String8 query_word = rd_lister_query_word_from_input_string_off(edit_string, cursor->column-1);
         String8 autocomplete_append_string = str8_skip(autocomplete_hint_string, query_word.size);
         U64 off = 0;
         U64 cursor_off = cursor->column-1;

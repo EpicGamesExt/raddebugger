@@ -1704,7 +1704,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
               if(autocomplete_hint_string.size != 0)
               {
                 take_autocomplete = 1;
-                String8 word_query = rd_autocomp_query_word_from_input_string_off(string, edit_state->cursor.column-1);
+                String8 word_query = rd_lister_query_word_from_input_string_off(string, edit_state->cursor.column-1);
                 U64 word_off = (U64)(word_query.str - string.str);
                 String8 new_string = ui_push_string_replace_range(scratch.arena, string, r1s64(word_off+1, word_off+1+word_query.size), autocomplete_hint_string);
                 new_string.size = Min(sizeof(edit_state->input_buffer), new_string.size);
@@ -2892,7 +2892,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                   String8 cell_inheritance_string = {0};
                   String8 cell_error_string = {0};
                   String8 cell_error_tooltip_string = {0};
-                  RD_AutoCompListerFlags cell_autocomp_flags = 0;
+                  RD_ListerFlags cell_autocomp_flags = 0;
                   RD_ViewRuleUIFunctionType *cell_ui_hook = 0;
                   MD_Node *cell_ui_params = &md_nil_node;
                   Vec4F32 cell_base_color = ui_top_palette()->text;
@@ -2908,11 +2908,11 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                       {
                         cell_matches = fuzzy_match_find(scratch.arena, filter, ev_expr_string_from_row(scratch.arena, row, string_flags));
                       }
-                      cell_autocomp_flags = (RD_AutoCompListerFlag_Locals|
-                                             RD_AutoCompListerFlag_Procedures|
-                                             RD_AutoCompListerFlag_Globals|
-                                             RD_AutoCompListerFlag_ThreadLocals|
-                                             RD_AutoCompListerFlag_Types);
+                      cell_autocomp_flags = (RD_ListerFlag_Locals|
+                                             RD_ListerFlag_Procedures|
+                                             RD_ListerFlag_Globals|
+                                             RD_ListerFlag_ThreadLocals|
+                                             RD_ListerFlag_Types);
                       if(row->member != 0 && row->member->inheritance_key_chain.first != 0)
                       {
                         String8List inheritance_chain_type_names = {0};
@@ -2964,14 +2964,14 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                       {
                         cell_error_tooltip_string = str8_lit("Could not read memory successfully.");
                       }
-                      cell_autocomp_flags = (RD_AutoCompListerFlag_Locals|
-                                             RD_AutoCompListerFlag_Procedures|
-                                             RD_AutoCompListerFlag_Globals|
-                                             RD_AutoCompListerFlag_ThreadLocals|
-                                             RD_AutoCompListerFlag_Types);
+                      cell_autocomp_flags = (RD_ListerFlag_Locals|
+                                             RD_ListerFlag_Procedures|
+                                             RD_ListerFlag_Globals|
+                                             RD_ListerFlag_ThreadLocals|
+                                             RD_ListerFlag_Types);
                       if(cell_type->flags & E_TypeFlag_IsPathText)
                       {
-                        cell_autocomp_flags = RD_AutoCompListerFlag_Files;
+                        cell_autocomp_flags = RD_ListerFlag_Files;
                       }
                       if(ui_view_rule_info->flags & RD_ViewRuleInfoFlag_CanFillValueCell)
                       {
@@ -2997,7 +2997,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                     case RD_WatchViewColumnKind_ViewRule:
                     {
                       cell_can_edit = 1;
-                      cell_autocomp_flags = RD_AutoCompListerFlag_ViewRules;
+                      cell_autocomp_flags = RD_ListerFlag_ViewRules;
                       if(cell_pre_edit_string.size == 0)
                       {
                         EV_ViewRuleList *auto_view_rules = ev_auto_view_rules_from_type_key(scratch.arena, row_eval.type_key, 0, 1);
@@ -3158,16 +3158,20 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                          txt_pt_match(cell_edit_state->cursor, cell_edit_state->mark))
                       {
                         String8 input = str8(cell_edit_state->input_buffer, cell_edit_state->input_size);
-                        RD_AutoCompListerParams params = {cell_autocomp_flags};
+                        RD_ListerParams params = {cell_autocomp_flags};
                         if(col->kind == RD_WatchViewColumnKind_ViewRule)
                         {
-                          params = rd_view_rule_autocomp_lister_params_from_input_cursor(scratch.arena, input, cell_edit_state->cursor.column-1);
+                          params = rd_view_rule_lister_params_from_input_cursor(scratch.arena, input, cell_edit_state->cursor.column-1);
                           if(params.flags == 0)
                           {
                             params.flags = cell_autocomp_flags;
                           }
                         }
-                        rd_set_autocomp_lister_query(sig.box->key, &params, input, cell_edit_state->cursor.column-1);
+                        params.anchor_key = sig.box->key;
+                        params.anchor_off = v2f32(0, dim_2f32(sig.box->rect).y);
+                        params.input      = input;
+                        params.cursor_off = cell_edit_state->cursor.column-1;
+                        rd_set_lister_query_(&params);
                       }
                     }
                   }

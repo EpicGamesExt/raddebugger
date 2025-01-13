@@ -511,28 +511,28 @@ typedef enum RD_PaletteCode
 RD_PaletteCode;
 
 ////////////////////////////////
-//~ rjf: Auto-Complete Lister Types
+//~ rjf: Lister Types
 
-typedef U32 RD_AutoCompListerFlags;
+typedef U32 RD_ListerFlags;
 enum
 {
-  RD_AutoCompListerFlag_Locals        = (1<<0),
-  RD_AutoCompListerFlag_Registers     = (1<<1),
-  RD_AutoCompListerFlag_ViewRules     = (1<<2),
-  RD_AutoCompListerFlag_ViewRuleParams= (1<<3),
-  RD_AutoCompListerFlag_Members       = (1<<4),
-  RD_AutoCompListerFlag_Globals       = (1<<5),
-  RD_AutoCompListerFlag_ThreadLocals  = (1<<6),
-  RD_AutoCompListerFlag_Procedures    = (1<<7),
-  RD_AutoCompListerFlag_Types         = (1<<8),
-  RD_AutoCompListerFlag_Languages     = (1<<9),
-  RD_AutoCompListerFlag_Architectures = (1<<10),
-  RD_AutoCompListerFlag_Tex2DFormats  = (1<<11),
-  RD_AutoCompListerFlag_Files         = (1<<12),
+  RD_ListerFlag_Locals        = (1<<0),
+  RD_ListerFlag_Registers     = (1<<1),
+  RD_ListerFlag_ViewRules     = (1<<2),
+  RD_ListerFlag_ViewRuleParams= (1<<3),
+  RD_ListerFlag_Members       = (1<<4),
+  RD_ListerFlag_Globals       = (1<<5),
+  RD_ListerFlag_ThreadLocals  = (1<<6),
+  RD_ListerFlag_Procedures    = (1<<7),
+  RD_ListerFlag_Types         = (1<<8),
+  RD_ListerFlag_Languages     = (1<<9),
+  RD_ListerFlag_Architectures = (1<<10),
+  RD_ListerFlag_Tex2DFormats  = (1<<11),
+  RD_ListerFlag_Files         = (1<<12),
 };
 
-typedef struct RD_AutoCompListerItem RD_AutoCompListerItem;
-struct RD_AutoCompListerItem
+typedef struct RD_ListerItem RD_ListerItem;
+struct RD_ListerItem
 {
   String8 string;
   String8 kind_string;
@@ -541,36 +541,42 @@ struct RD_AutoCompListerItem
   B32 is_non_code;
 };
 
-typedef struct RD_AutoCompListerItemChunkNode RD_AutoCompListerItemChunkNode;
-struct RD_AutoCompListerItemChunkNode
+typedef struct RD_ListerItemChunkNode RD_ListerItemChunkNode;
+struct RD_ListerItemChunkNode
 {
-  RD_AutoCompListerItemChunkNode *next;
-  RD_AutoCompListerItem *v;
+  RD_ListerItemChunkNode *next;
+  RD_ListerItem *v;
   U64 count;
   U64 cap;
 };
 
-typedef struct RD_AutoCompListerItemChunkList RD_AutoCompListerItemChunkList;
-struct RD_AutoCompListerItemChunkList
+typedef struct RD_ListerItemChunkList RD_ListerItemChunkList;
+struct RD_ListerItemChunkList
 {
-  RD_AutoCompListerItemChunkNode *first;
-  RD_AutoCompListerItemChunkNode *last;
+  RD_ListerItemChunkNode *first;
+  RD_ListerItemChunkNode *last;
   U64 chunk_count;
   U64 total_count;
 };
 
-typedef struct RD_AutoCompListerItemArray RD_AutoCompListerItemArray;
-struct RD_AutoCompListerItemArray
+typedef struct RD_ListerItemArray RD_ListerItemArray;
+struct RD_ListerItemArray
 {
-  RD_AutoCompListerItem *v;
+  RD_ListerItem *v;
   U64 count;
 };
 
-typedef struct RD_AutoCompListerParams RD_AutoCompListerParams;
-struct RD_AutoCompListerParams
+typedef struct RD_ListerParams RD_ListerParams;
+struct RD_ListerParams
 {
-  RD_AutoCompListerFlags flags;
+  UI_Key anchor_key;
+  Vec2F32 anchor_off;
+  RD_ListerFlags flags;
   String8List strings;
+  String8 input;
+  U64 cursor_off;
+  F32 squish;
+  F32 transparency;
 };
 
 ////////////////////////////////
@@ -623,18 +629,15 @@ struct RD_WindowState
   Arena *drop_completion_arena;
   String8List drop_completion_paths;
   
-  // rjf: autocomplete lister state
-  U64 autocomp_last_frame_idx;
-  B32 autocomp_input_dirty;
-  UI_Key autocomp_root_key;
-  Arena *autocomp_lister_params_arena;
-  RD_AutoCompListerParams autocomp_lister_params;
-  U64 autocomp_cursor_off;
-  U8 autocomp_lister_input_buffer[1024];
-  U64 autocomp_lister_input_size;
-  F32 autocomp_open_t;
-  F32 autocomp_num_visible_rows_t;
-  S64 autocomp_cursor_num;
+  // rjf: lister state
+  U64 lister_last_frame_idx;
+  B32 lister_input_dirty;
+  Arena *lister_params_arena;
+  RD_ListerParams lister_params;
+  U8 lister_input_buffer[1024];
+  U64 lister_input_size;
+  F32 lister_open_t;
+  F32 lister_num_visible_rows_t;
   
   // rjf: query view stack
   U64 query_cmd_gen;
@@ -849,7 +852,6 @@ struct RD_State
   RD_WindowStateSlot *window_state_slots;
   RD_WindowState *free_window_state;
   RD_Handle last_focused_window;
-  // TODO(rjf): @cfg must be nil-initialized
   RD_WindowState *first_window_state;
   RD_WindowState *last_window_state;
   
@@ -1267,17 +1269,18 @@ internal String8 rd_value_string_from_eval(Arena *arena, EV_StringFlags flags, U
 internal void rd_set_hover_eval(Vec2F32 pos, String8 file_path, TxtPt pt, U64 vaddr, String8 string);
 
 ////////////////////////////////
-//~ rjf: Auto-Complete Lister
+//~ rjf: Lister
 
-internal void rd_autocomp_lister_item_chunk_list_push(Arena *arena, RD_AutoCompListerItemChunkList *list, U64 cap, RD_AutoCompListerItem *item);
-internal RD_AutoCompListerItemArray rd_autocomp_lister_item_array_from_chunk_list(Arena *arena, RD_AutoCompListerItemChunkList *list);
-internal int rd_autocomp_lister_item_qsort_compare(RD_AutoCompListerItem *a, RD_AutoCompListerItem *b);
-internal void rd_autocomp_lister_item_array_sort__in_place(RD_AutoCompListerItemArray *array);
+internal void rd_lister_item_chunk_list_push(Arena *arena, RD_ListerItemChunkList *list, U64 cap, RD_ListerItem *item);
+internal RD_ListerItemArray rd_lister_item_array_from_chunk_list(Arena *arena, RD_ListerItemChunkList *list);
+internal int rd_lister_item_qsort_compare(RD_ListerItem *a, RD_ListerItem *b);
+internal void rd_lister_item_array_sort__in_place(RD_ListerItemArray *array);
 
-internal String8 rd_autocomp_query_word_from_input_string_off(String8 input, U64 cursor_off);
-internal String8 rd_autocomp_query_path_from_input_string_off(String8 input, U64 cursor_off);
-internal RD_AutoCompListerParams rd_view_rule_autocomp_lister_params_from_input_cursor(Arena *arena, String8 string, U64 cursor_off);
-internal void rd_set_autocomp_lister_query(UI_Key root_key, RD_AutoCompListerParams *params, String8 input, U64 cursor_off);
+internal String8 rd_lister_query_word_from_input_string_off(String8 input, U64 cursor_off);
+internal String8 rd_lister_query_path_from_input_string_off(String8 input, U64 cursor_off);
+internal RD_ListerParams rd_view_rule_lister_params_from_input_cursor(Arena *arena, String8 string, U64 cursor_off);
+internal void rd_set_lister_query_(RD_ListerParams *params);
+#define rd_set_lister_query(...) rd_set_lister_query_(&(RD_ListerParams){.flags = 0, __VA_ARGS__})
 
 ////////////////////////////////
 //~ rjf: Search Strings

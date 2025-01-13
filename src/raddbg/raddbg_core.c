@@ -3085,7 +3085,7 @@ rd_window_state_from_cfg(RD_Cfg *cfg)
     ws->ctx_menu_input_buffer = push_array(ws->arena, U8, ws->ctx_menu_input_buffer_size);
     ws->drop_completion_arena = arena_alloc();
     ws->hover_eval_arena = arena_alloc();
-    ws->autocomp_lister_params_arena = arena_alloc();
+    ws->lister_params_arena = arena_alloc();
     ws->query_cmd_arena = arena_alloc();
     ws->last_dpi = os_dpi_from_window(ws->os);
     for EachEnumVal(RD_SettingCode, code)
@@ -3306,7 +3306,7 @@ rd_window_frame(void)
   //////////////////////////////
   //- rjf: build UI
   //
-  UI_Box *autocomp_box = &ui_nil_box;
+  UI_Box *lister_box = &ui_nil_box;
   UI_Box *hover_eval_box = &ui_nil_box;
   ProfScope("build UI")
   {
@@ -3772,6 +3772,806 @@ rd_window_frame(void)
         }
 #endif
       }
+    }
+    
+    ////////////////////////////
+    //- rjf: prepare query state for the in-progress query command
+    //
+    if(ws->query_cmd_name.size != 0)
+    {
+      RD_CmdKindInfo *cmd_kind_info = rd_cmd_kind_info_from_string(ws->query_cmd_name);
+      RD_RegSlot missing_slot = cmd_kind_info->query.slot;
+      
+      //- rjf: if our input is stale, w.r.t. the current query command, initialize input state
+      if(ws->query_input_gen < ws->query_cmd_gen)
+      {
+        ws->query_input_gen = ws->query_cmd_gen;
+        String8 default_query_input = {0};
+        ws->query_input_string_size = Min(sizeof(ws->query_input_buffer), default_query_input.size);
+        MemoryCopy(ws->query_input_buffer, default_query_input.str, ws->query_input_string_size);
+        ws->query_input_cursor = ws->query_input_mark = txt_pt(1, ws->query_input_string_size+1);
+      }
+      
+#if 0 // TODO(rjf): @cfg (query state prep)
+      String8 query_view_name = cmd_kind_info->query.view_name;
+      if(query_view_name.size == 0)
+      {
+        switch(missing_slot)
+        {
+          default:{}break;
+          case RD_RegSlot_Thread:
+          case RD_RegSlot_Module:
+          case RD_RegSlot_Process:
+          case RD_RegSlot_Machine:
+          case RD_RegSlot_CtrlEntity:{query_view_name = rd_view_rule_kind_info_table[RD_ViewRuleKind_CtrlEntityLister].string;}break;
+          case RD_RegSlot_Entity:    {query_view_name = rd_view_rule_kind_info_table[RD_ViewRuleKind_EntityLister].string;}break;
+          case RD_RegSlot_EntityList:{query_view_name = rd_view_rule_kind_info_table[RD_ViewRuleKind_EntityLister].string;}break;
+          case RD_RegSlot_FilePath:  {query_view_name = rd_view_rule_kind_info_table[RD_ViewRuleKind_FileSystem].string;}break;
+          case RD_RegSlot_PID:       {query_view_name = rd_view_rule_kind_info_table[RD_ViewRuleKind_SystemProcesses].string;}break;
+        }
+      }
+      RD_ViewRuleInfo *view_spec = rd_view_rule_info_from_string(query_view_name);
+      if(!str8_match(ws->query_view_stack_top->string, view_spec->string, 0) ||
+         ws->query_view_stack_top == &rd_nil_cfg)
+      {
+        Temp scratch = scratch_begin(0, 0);
+        
+        // rjf: clear existing query stack
+        rd_cfg_release(ws->query_view_stack_top);
+        
+        // rjf: determine default query
+        String8 default_query = {0};
+        switch(missing_slot)
+        {
+          default:
+          if(cmd_kind_info->query.flags & RD_QueryFlag_KeepOldInput)
+          {
+            default_query = rd_push_search_string(scratch.arena);
+          }break;
+          case RD_RegSlot_FilePath:
+          {
+            default_query = path_normalized_from_string(scratch.arena, rd_state->current_path);
+            default_query = push_str8f(scratch.arena, "%S/", default_query);
+          }break;
+        }
+        
+        // rjf: construct & push new view
+        RD_Cfg *bucket = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("transient"));
+        RD_Cfg *view = rd_cfg_new(bucket, view_spec->string);
+        RD_Cfg *filter = rd_cfg_new(view, str8_lit("filter"));
+        rd_cfg_new(filter, default_query);
+        RD_ViewState *view_state = rd_view_state_from_cfg(view);
+        view_state->filter_cursor = txt_pt(1, default_query.size+1);
+        if(cmd_kind_info->query.flags & RD_QueryFlag_SelectOldInput)
+        {
+          view_state->filter_mark = txt_pt(1, 1);
+        }
+        ws->query_view_stack_top = view;
+        ws->query_view_selected = 1;
+        
+        scratch_end(scratch);
+      }
+#endif
+    }
+    
+    ////////////////////////////
+    //- rjf: build query
+    //
+    if(query_is_open)
+      UI_Focus((window_is_focused && !ui_any_ctx_menu_is_open() && !ws->menu_bar_focused && ws->query_input_selected) ? UI_FocusKind_On : UI_FocusKind_Off)
+      RD_Palette(RD_PaletteCode_Floating)
+    {
+      String8 query_cmd_name = ws->query_cmd_name;
+      RD_CmdKindInfo *query_cmd_info = rd_cmd_kind_info_from_string(query_cmd_name);
+      RD_Query *query = &query_cmd_info->query;
+      F32 query_view_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "###%p_query_view_t", ws), 1.f);
+      F32 query_squish = 0.25f - query_view_t*0.25f;
+      F32 query_transparency = 1.f - query_view_t;
+      
+      //- rjf: calculate rectangles
+      Vec2F32 window_center = center_2f32(window_rect);
+      Vec2F32 query_input_dim = v2f32(dim_2f32(window_rect).x*0.5f, ui_top_font_size()*3.f);
+      F32 query_input_margin = ui_top_font_size()*8.f;
+      Rng2F32 query_input_rect = r2f32p(window_center.x - query_input_dim.x/2,
+                                        window_rect.y0 + query_input_margin,
+                                        window_center.x + query_input_dim.x/2,
+                                        window_rect.y0 + query_input_margin + query_input_dim.y);
+      
+      //- rjf: build floating query container
+      UI_Box *query_container_box = &ui_nil_box;
+      UI_Rect(query_input_rect)
+        UI_CornerRadius00(ui_top_font_size()*0.2f)
+        UI_CornerRadius10(ui_top_font_size()*0.2f)
+        UI_ChildLayoutAxis(Axis2_Y)
+        UI_Squish(query_squish)
+        UI_Transparency(query_transparency)
+      {
+        query_container_box = ui_build_box_from_stringf(UI_BoxFlag_Floating|
+                                                        UI_BoxFlag_AllowOverflow|
+                                                        UI_BoxFlag_Clickable|
+                                                        UI_BoxFlag_Clip|
+                                                        UI_BoxFlag_DisableFocusOverlay|
+                                                        UI_BoxFlag_DrawBorder|
+                                                        UI_BoxFlag_DrawBackground|
+                                                        UI_BoxFlag_DrawBackgroundBlur|
+                                                        UI_BoxFlag_DrawDropShadow,
+                                                        "query_container");
+      }
+      
+      //- rjf: set up autocompletion lister info
+      if(ui_is_focus_active())
+      {
+        rd_set_lister_query(.anchor_key  = query_container_box->key,
+                            .anchor_off  = v2f32(0, dim_2f32(query_container_box->rect).y - dim_2f32(query_container_box->rect).y*(1-query_view_t)*0.25f - 2.f),
+                            .flags       = 0xffffffff,
+                            .input       = str8(ws->query_input_buffer, ws->query_input_string_size),
+                            .cursor_off  = ws->query_input_cursor.column-1,
+                            .squish      = query_squish,
+                            .transparency= query_transparency);
+      }
+      
+      //- rjf: build query text input
+      B32 query_completed = 0;
+      B32 query_cancelled = 0;
+      UI_Parent(query_container_box)
+        UI_WidthFill UI_HeightFill
+        UI_Focus(UI_FocusKind_On)
+      {
+        ui_set_next_flags(UI_BoxFlag_DrawDropShadow|UI_BoxFlag_DrawBorder);
+        UI_Row
+        {
+          UI_PrefWidth(ui_text_dim(0.f, 1.f)) UI_Padding(ui_em(1.f, 1.f))
+          {
+            RD_IconKind icon_kind = query_cmd_info->icon_kind;
+            if(icon_kind != RD_IconKind_Null)
+            {
+              RD_Font(RD_FontSlot_Icons) ui_label(rd_icon_kind_text_table[icon_kind]);
+            }
+            ui_labelf("%S", query_cmd_info->display_name);
+          }
+          RD_Font((query->flags & RD_QueryFlag_CodeInput) ? RD_FontSlot_Code : RD_FontSlot_Main)
+            UI_TextPadding(ui_top_font_size()*0.5f)
+          {
+            UI_Signal sig = rd_line_edit(RD_LineEditFlag_Border|
+                                         (RD_LineEditFlag_CodeContents * !!(query->flags & RD_QueryFlag_CodeInput)),
+                                         0,
+                                         0,
+                                         &ws->query_input_cursor,
+                                         &ws->query_input_mark,
+                                         ws->query_input_buffer,
+                                         sizeof(ws->query_input_buffer),
+                                         &ws->query_input_string_size,
+                                         0,
+                                         str8(ws->query_input_buffer, ws->query_input_string_size),
+                                         str8_lit("###query_text_input"));
+            if(ui_pressed(sig))
+            {
+              ws->query_input_selected = 1;
+            }
+          }
+          UI_PrefWidth(ui_em(5.f, 1.f)) UI_Focus(UI_FocusKind_Off) RD_Palette(RD_PaletteCode_PositivePopButton)
+          {
+            if(ui_clicked(rd_icon_buttonf(RD_IconKind_RightArrow, 0, "##complete_query")))
+            {
+              query_completed = 1;
+            }
+          }
+          UI_PrefWidth(ui_em(3.f, 1.f)) UI_Focus(UI_FocusKind_Off) RD_Palette(RD_PaletteCode_PlainButton)
+          {
+            if(ui_clicked(rd_icon_buttonf(RD_IconKind_X, 0, "##cancel_query")))
+            {
+              query_cancelled = 1;
+            }
+          }
+        }
+      }
+      
+      //- rjf: query submission
+      if(((ui_is_focus_active() || (window_is_focused && !ui_any_ctx_menu_is_open() && !ws->menu_bar_focused && !ws->query_input_selected)) &&
+          ui_slot_press(UI_EventActionSlot_Cancel)) || query_cancelled)
+      {
+        rd_cmd(RD_CmdKind_CancelQuery);
+      }
+      if((ui_is_focus_active() && ui_slot_press(UI_EventActionSlot_Accept)) || query_completed)
+      {
+        Temp scratch = scratch_begin(0, 0);
+        RD_RegsScope()
+        {
+          rd_regs_fill_slot_from_string(query->slot, str8(ws->query_input_buffer, ws->query_input_string_size));
+          rd_cmd(RD_CmdKind_CompleteQuery);
+        }
+        scratch_end(scratch);
+      }
+      
+      //- rjf: take fallthrough interaction in query view
+      {
+        UI_Signal sig = ui_signal_from_box(query_container_box);
+        if(ui_pressed(sig))
+        {
+          ws->query_input_selected = 1;
+        }
+      }
+    }
+    else
+    {
+      ws->query_input_selected = 0;
+    }
+    
+    ////////////////////////////
+    //- rjf: build lister
+    //
+    ProfScope("build lister")
+      if(!ui_key_match(ws->lister_params.anchor_key, ui_key_zero()) && ws->lister_last_frame_idx+1 >= rd_state->frame_index)
+    {
+      String8 input = str8(ws->lister_input_buffer, ws->lister_input_size);
+      String8 query_word = rd_lister_query_word_from_input_string_off(input, ws->lister_params.cursor_off);
+      String8 query_path = rd_lister_query_path_from_input_string_off(input, ws->lister_params.cursor_off);
+      UI_Box *lister_root_box = ui_box_from_key(ws->lister_params.anchor_key);
+      if(!ui_box_is_nil(lister_root_box))
+      {
+        Temp scratch = scratch_begin(0, 0);
+        DI_Scope *di_scope = di_scope_open();
+        DI_KeyList dbgi_keys_list = d_push_active_dbgi_key_list(scratch.arena);
+        DI_KeyArray dbgi_keys = di_key_array_from_list(scratch.arena, &dbgi_keys_list);
+        
+        //- rjf: grab rdis
+        U64 rdis_count = dbgi_keys.count;
+        RDI_Parsed **rdis = push_array(scratch.arena, RDI_Parsed *, rdis_count);
+        {
+          for(U64 idx = 0; idx < rdis_count; idx += 1)
+          {
+            RDI_Parsed *rdi = di_rdi_from_key(di_scope, &dbgi_keys.v[idx], 0);
+            RDI_TopLevelInfo *tli = rdi_element_from_name_idx(rdi, TopLevelInfo, 0);
+            rdis[idx] = rdi;
+          }
+        }
+        
+        //- rjf: unpack lister params
+        CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_base_regs()->thread);
+        U64 thread_rip_vaddr = d_query_cached_rip_from_thread_unwind(thread, rd_base_regs()->unwind_count);
+        CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, CTRL_EntityKind_Process);
+        CTRL_Entity *module = ctrl_module_from_process_vaddr(process, thread_rip_vaddr);
+        U64 thread_rip_voff = ctrl_voff_from_vaddr(module, thread_rip_vaddr);
+        DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
+        
+        //- rjf: gather lister items
+        RD_ListerItemChunkList item_list = {0};
+        {
+          //- rjf: gather locals
+          if(ws->lister_params.flags & RD_ListerFlag_Locals)
+          {
+            E_String2NumMap *locals_map = d_query_cached_locals_map_from_dbgi_key_voff(&dbgi_key, thread_rip_voff);
+            E_String2NumMap *member_map = d_query_cached_member_map_from_dbgi_key_voff(&dbgi_key, thread_rip_voff);
+            for(E_String2NumMapNode *n = locals_map->first; n != 0; n = n->order_next)
+            {
+              RD_ListerItem item = {0};
+              {
+                item.string      = n->string;
+                item.kind_string = str8_lit("Local");
+                item.matches     = fuzzy_match_find(scratch.arena, query_word, n->string);
+              }
+              if(query_word.size == 0 || item.matches.count != 0)
+              {
+                rd_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
+              }
+            }
+            for(E_String2NumMapNode *n = member_map->first; n != 0; n = n->order_next)
+            {
+              RD_ListerItem item = {0};
+              {
+                item.string      = n->string;
+                item.kind_string = str8_lit("Local (Member)");
+                item.matches     = fuzzy_match_find(scratch.arena, query_word, n->string);
+              }
+              if(query_word.size == 0 || item.matches.count != 0)
+              {
+                rd_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
+              }
+            }
+          }
+          
+          //- rjf: gather registers
+          if(ws->lister_params.flags & RD_ListerFlag_Registers)
+          {
+            Arch arch = thread->arch;
+            U64 reg_names_count = regs_reg_code_count_from_arch(arch);
+            U64 alias_names_count = regs_alias_code_count_from_arch(arch);
+            String8 *reg_names = regs_reg_code_string_table_from_arch(arch);
+            String8 *alias_names = regs_alias_code_string_table_from_arch(arch);
+            for(U64 idx = 0; idx < reg_names_count; idx += 1)
+            {
+              if(reg_names[idx].size != 0)
+              {
+                RD_ListerItem item = {0};
+                {
+                  item.string      = reg_names[idx];
+                  item.kind_string = str8_lit("Register");
+                  item.matches     = fuzzy_match_find(scratch.arena, query_word, reg_names[idx]);
+                }
+                if(query_word.size == 0 || item.matches.count != 0)
+                {
+                  rd_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
+                }
+              }
+            }
+            for(U64 idx = 0; idx < alias_names_count; idx += 1)
+            {
+              if(alias_names[idx].size != 0)
+              {
+                RD_ListerItem item = {0};
+                {
+                  item.string      = alias_names[idx];
+                  item.kind_string = str8_lit("Reg. Alias");
+                  item.matches     = fuzzy_match_find(scratch.arena, query_word, alias_names[idx]);
+                }
+                if(query_word.size == 0 || item.matches.count != 0)
+                {
+                  rd_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
+                }
+              }
+            }
+          }
+          
+          //- rjf: gather view rules
+          if(ws->lister_params.flags & RD_ListerFlag_ViewRules)
+          {
+            for(U64 slot_idx = 0; slot_idx < d_state->view_rule_spec_table_size; slot_idx += 1)
+            {
+              for(D_ViewRuleSpec *spec = d_state->view_rule_spec_table[slot_idx]; spec != 0 && spec != &d_nil_core_view_rule_spec; spec = spec->hash_next)
+              {
+                RD_ListerItem item = {0};
+                {
+                  item.string      = spec->info.string;
+                  item.kind_string = str8_lit("View Rule");
+                  item.matches     = fuzzy_match_find(scratch.arena, query_word, spec->info.string);
+                }
+                if(query_word.size == 0 || item.matches.count != 0)
+                {
+                  rd_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
+                }
+              }
+            }
+          }
+          
+          //- rjf: gather members
+          if(ws->lister_params.flags & RD_ListerFlag_Members)
+          {
+            // TODO(rjf)
+          }
+          
+          //- rjf: gather globals
+          if(ws->lister_params.flags & RD_ListerFlag_Globals && query_word.size != 0)
+          {
+            U128 search_key = {d_hash_from_string(str8_lit("autocomp_globals_search_key")), d_hash_from_string(str8_lit("autocomp_globals_search_key"))};
+            DI_SearchParams search_params =
+            {
+              RDI_SectionKind_GlobalVariables,
+              dbgi_keys,
+            };
+            B32 is_stale = 0;
+            DI_SearchItemArray items = di_search_items_from_key_params_query(di_scope, search_key, &search_params, query_word, 0, &is_stale);
+            for(U64 idx = 0; idx < 20 && idx < items.count; idx += 1)
+            {
+              // rjf: skip bad elements
+              if(items.v[idx].dbgi_idx >= rdis_count)
+              {
+                continue;
+              }
+              
+              // rjf: unpack info
+              RDI_Parsed *rdi = rdis[items.v[idx].dbgi_idx];
+              String8 name = di_search_item_string_from_rdi_target_element_idx(rdi, search_params.target, items.v[idx].idx);
+              
+              // rjf: push item
+              RD_ListerItem item = {0};
+              {
+                item.string      = name;
+                item.kind_string = str8_lit("Global");
+                item.matches     = items.v[idx].match_ranges;
+                item.group       = 1;
+              }
+              rd_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
+            }
+          }
+          
+          //- rjf: gather thread locals
+          if(ws->lister_params.flags & RD_ListerFlag_ThreadLocals && query_word.size != 0)
+          {
+            U128 search_key = {d_hash_from_string(str8_lit("autocomp_tvars_dis_key")), d_hash_from_string(str8_lit("autocomp_tvars_dis_key"))};
+            DI_SearchParams search_params =
+            {
+              RDI_SectionKind_ThreadVariables,
+              dbgi_keys,
+            };
+            B32 is_stale = 0;
+            DI_SearchItemArray items = di_search_items_from_key_params_query(di_scope, search_key, &search_params, query_word, 0, &is_stale);
+            for(U64 idx = 0; idx < 20 && idx < items.count; idx += 1)
+            {
+              // rjf: skip bad elements
+              if(items.v[idx].dbgi_idx >= rdis_count)
+              {
+                continue;
+              }
+              
+              // rjf: unpack info
+              RDI_Parsed *rdi = rdis[items.v[idx].dbgi_idx];
+              String8 name = di_search_item_string_from_rdi_target_element_idx(rdi, search_params.target, items.v[idx].idx);
+              
+              // rjf: push item
+              RD_ListerItem item = {0};
+              {
+                item.string      = name;
+                item.kind_string = str8_lit("Thread Local");
+                item.matches     = items.v[idx].match_ranges;
+                item.group       = 1;
+              }
+              rd_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
+            }
+          }
+          
+          //- rjf: gather procedures
+          if(ws->lister_params.flags & RD_ListerFlag_Procedures && query_word.size != 0)
+          {
+            U128 search_key = {d_hash_from_string(str8_lit("autocomp_procedures_search_key")), d_hash_from_string(str8_lit("autocomp_procedures_search_key"))};
+            DI_SearchParams search_params =
+            {
+              RDI_SectionKind_Procedures,
+              dbgi_keys,
+            };
+            B32 is_stale = 0;
+            DI_SearchItemArray items = di_search_items_from_key_params_query(di_scope, search_key, &search_params, query_word, 0, &is_stale);
+            for(U64 idx = 0; idx < 20 && idx < items.count; idx += 1)
+            {
+              // rjf: skip bad elements
+              if(items.v[idx].dbgi_idx >= rdis_count)
+              {
+                continue;
+              }
+              
+              // rjf: unpack info
+              RDI_Parsed *rdi = rdis[items.v[idx].dbgi_idx];
+              String8 name = di_search_item_string_from_rdi_target_element_idx(rdi, search_params.target, items.v[idx].idx);
+              
+              // rjf: push item
+              RD_ListerItem item = {0};
+              {
+                item.string      = name;
+                item.kind_string = str8_lit("Procedure");
+                item.matches     = items.v[idx].match_ranges;
+                item.group       = 1;
+              }
+              rd_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
+            }
+          }
+          
+          //- rjf: gather types
+          if(ws->lister_params.flags & RD_ListerFlag_Types && query_word.size != 0)
+          {
+            U128 search_key = {d_hash_from_string(str8_lit("autocomp_types_search_key")), d_hash_from_string(str8_lit("autocomp_types_search_key"))};
+            DI_SearchParams search_params =
+            {
+              RDI_SectionKind_UDTs,
+              dbgi_keys,
+            };
+            B32 is_stale = 0;
+            DI_SearchItemArray items = di_search_items_from_key_params_query(di_scope, search_key, &search_params, query_word, 0, &is_stale);
+            for(U64 idx = 0; idx < 20 && idx < items.count; idx += 1)
+            {
+              // rjf: skip bad elements
+              if(items.v[idx].dbgi_idx >= rdis_count)
+              {
+                continue;
+              }
+              
+              // rjf: unpack info
+              RDI_Parsed *rdi = rdis[items.v[idx].dbgi_idx];
+              String8 name = di_search_item_string_from_rdi_target_element_idx(rdi, search_params.target, items.v[idx].idx);
+              
+              // rjf: push item
+              RD_ListerItem item = {0};
+              {
+                item.string      = name;
+                item.kind_string = str8_lit("Type");
+                item.matches     = items.v[idx].match_ranges;
+                item.group       = 1;
+              }
+              rd_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
+            }
+          }
+          
+          //- rjf: gather languages
+          if(ws->lister_params.flags & RD_ListerFlag_Languages)
+          {
+            for EachNonZeroEnumVal(TXT_LangKind, lang)
+            {
+              RD_ListerItem item = {0};
+              {
+                item.string      = txt_extension_from_lang_kind(lang);
+                item.kind_string = str8_lit("Language");
+                item.matches     = fuzzy_match_find(scratch.arena, query_word, item.string);
+              }
+              if(item.string.size != 0 && (query_word.size == 0 || item.matches.count != 0))
+              {
+                rd_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
+              }
+            }
+          }
+          
+          //- rjf: gather architectures
+          if(ws->lister_params.flags & RD_ListerFlag_Architectures)
+          {
+            for EachNonZeroEnumVal(Arch, arch)
+            {
+              RD_ListerItem item = {0};
+              {
+                item.string      = string_from_arch(arch);
+                item.kind_string = str8_lit("Arch");
+                item.matches     = fuzzy_match_find(scratch.arena, query_word, item.string);
+              }
+              if(query_word.size == 0 || item.matches.count != 0)
+              {
+                rd_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
+              }
+            }
+          }
+          
+          //- rjf: gather tex2dformats
+          if(ws->lister_params.flags & RD_ListerFlag_Tex2DFormats)
+          {
+            for EachEnumVal(R_Tex2DFormat, fmt)
+            {
+              RD_ListerItem item = {0};
+              {
+                item.string      = lower_from_str8(scratch.arena, r_tex2d_format_display_string_table[fmt]);
+                item.kind_string = str8_lit("Format");
+                item.matches     = fuzzy_match_find(scratch.arena, query_word, item.string);
+              }
+              if(query_word.size == 0 || item.matches.count != 0)
+              {
+                rd_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
+              }
+            }
+          }
+          
+          //- rjf: gather view rule params
+          if(ws->lister_params.flags & RD_ListerFlag_ViewRuleParams)
+          {
+            for(String8Node *n = ws->lister_params.strings.first; n != 0; n = n->next)
+            {
+              String8 string = n->string;
+              RD_ListerItem item = {0};
+              {
+                item.string      = string;
+                item.kind_string = str8_lit("Parameter");
+                item.matches     = fuzzy_match_find(scratch.arena, query_word, item.string);
+              }
+              if(query_word.size == 0 || item.matches.count != 0)
+              {
+                rd_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
+              }
+            }
+          }
+          
+          //- rjf: gather files
+          if(ws->lister_params.flags & RD_ListerFlag_Files)
+          {
+            // rjf: find containing directory in query_path
+            String8 dir_str_in_input = {0};
+            for(U64 i = 0; i < query_path.size; i += 1)
+            {
+              String8 substr1 = str8_substr(query_path, r1u64(i, i+1));
+              String8 substr2 = str8_substr(query_path, r1u64(i, i+2));
+              String8 substr3 = str8_substr(query_path, r1u64(i, i+3));
+              if(str8_match(substr1, str8_lit("/"), StringMatchFlag_SlashInsensitive))
+              {
+                dir_str_in_input = str8_substr(query_path, r1u64(i, query_path.size));
+              }
+              else if(i != 0 && str8_match(substr2, str8_lit(":/"), StringMatchFlag_SlashInsensitive))
+              {
+                dir_str_in_input = str8_substr(query_path, r1u64(i-1, query_path.size));
+              }
+              else if(str8_match(substr2, str8_lit("./"), StringMatchFlag_SlashInsensitive))
+              {
+                dir_str_in_input = str8_substr(query_path, r1u64(i, query_path.size));
+              }
+              else if(str8_match(substr3, str8_lit("../"), StringMatchFlag_SlashInsensitive))
+              {
+                dir_str_in_input = str8_substr(query_path, r1u64(i, query_path.size));
+              }
+              if(dir_str_in_input.size != 0)
+              {
+                break;
+              }
+            }
+            
+            // rjf: use query_path string to form various parts of search space
+            String8 prefix = {0};
+            String8 path = {0};
+            String8 search = {0};
+            if(dir_str_in_input.size != 0)
+            {
+              String8 dir = dir_str_in_input;
+              U64 one_past_last_slash = dir.size;
+              for(U64 i = 0; i < dir_str_in_input.size; i += 1)
+              {
+                if(dir_str_in_input.str[i] == '/' || dir_str_in_input.str[i] == '\\')
+                {
+                  one_past_last_slash = i+1;
+                }
+              }
+              dir.size = one_past_last_slash;
+              path = dir;
+              search = str8_substr(dir_str_in_input, r1u64(one_past_last_slash, dir_str_in_input.size));
+              prefix = str8_substr(query_path, r1u64(0, path.str - query_path.str));
+            }
+            
+            // rjf: get current files, filtered
+            B32 allow_dirs = 1;
+            OS_FileIter *it = os_file_iter_begin(scratch.arena, path, 0);
+            for(OS_FileInfo info = {0}; os_file_iter_next(scratch.arena, it, &info);)
+            {
+              FuzzyMatchRangeList match_ranges = fuzzy_match_find(scratch.arena, search, info.name);
+              B32 fits_search = (search.size == 0 || match_ranges.count == match_ranges.needle_part_count);
+              B32 fits_dir_only = (allow_dirs || !(info.props.flags & FilePropertyFlag_IsFolder));
+              if(fits_search && fits_dir_only)
+              {
+                RD_ListerItem item = {0};
+                {
+                  item.string      = info.props.flags & FilePropertyFlag_IsFolder ? push_str8f(scratch.arena, "%S/", info.name) : info.name;
+                  item.kind_string = info.props.flags & FilePropertyFlag_IsFolder ? str8_lit("Folder") : str8_lit("File");
+                  item.matches     = match_ranges;
+                  item.is_non_code = 1;
+                }
+                rd_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
+              }
+            }
+            os_file_iter_end(it);
+          }
+        }
+        
+        //- rjf: lister item list -> sorted array
+        RD_ListerItemArray item_array = rd_lister_item_array_from_chunk_list(scratch.arena, &item_list);
+        rd_lister_item_array_sort__in_place(&item_array);
+        
+        //- rjf: animate
+        {
+          // rjf: animate target # of rows
+          {
+            F32 rate = rd_setting_val_from_code(RD_SettingCode_MenuAnimations).s32 ? (1 - pow_f32(2, (-60.f * rd_state->frame_dt))) : 1.f;
+            F32 target = Min((F32)item_array.count, 16.f);
+            if(abs_f32(target - ws->lister_num_visible_rows_t) > 0.01f)
+            {
+              rd_request_frame();
+            }
+            ws->lister_num_visible_rows_t += (target - ws->lister_num_visible_rows_t) * rate;
+            if(abs_f32(target - ws->lister_num_visible_rows_t) <= 0.02f)
+            {
+              ws->lister_num_visible_rows_t = target;
+            }
+          }
+          
+          // rjf: animate open
+          {
+            F32 rate = rd_setting_val_from_code(RD_SettingCode_MenuAnimations).s32 ? 1 - pow_f32(2, (-60.f * rd_state->frame_dt)) : 1.f;
+            F32 diff = 1.f-ws->lister_open_t;
+            ws->lister_open_t += diff*rate;
+            if(abs_f32(diff) < 0.05f)
+            {
+              ws->lister_open_t = 1.f;
+            }
+            else
+            {
+              rd_request_frame();
+            }
+          }
+        }
+        
+        //- rjf: build
+        if(item_array.count != 0)
+        {
+          F32 squish = ws->lister_params.squish;
+          F32 transparency = ws->lister_params.transparency;
+          if(squish == 0.f)
+          {
+            squish = 0.25f - 0.25f*ws->lister_open_t;
+          }
+          if(transparency == 0.f)
+          {
+            transparency = 1.f-ws->lister_open_t;
+          }
+          F32 width_px = ui_box_is_nil(lister_root_box) ? (ui_top_font_size()*30.f) : dim_2f32(lister_root_box->rect).x;
+          F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
+          ui_set_next_fixed_x(lister_root_box->rect.x0 + ws->lister_params.anchor_off.x);
+          ui_set_next_fixed_y(lister_root_box->rect.y0 + ws->lister_params.anchor_off.y);
+          ui_set_next_pref_width(ui_px(width_px, 1.f));
+          ui_set_next_pref_height(ui_px(row_height_px*ws->lister_num_visible_rows_t + ui_top_font_size()*2.f, 1.f));
+          ui_set_next_child_layout_axis(Axis2_Y);
+          ui_set_next_corner_radius_01(ui_top_font_size()*0.25f);
+          ui_set_next_corner_radius_11(ui_top_font_size()*0.25f);
+          UI_Focus(UI_FocusKind_On)
+            UI_Squish(squish)
+            UI_Transparency(transparency)
+            RD_Palette(RD_PaletteCode_Floating)
+          {
+            lister_box = ui_build_box_from_stringf(UI_BoxFlag_DefaultFocusNavY|
+                                                   UI_BoxFlag_Clickable|
+                                                   UI_BoxFlag_Clip|
+                                                   UI_BoxFlag_RoundChildrenByParent|
+                                                   UI_BoxFlag_DisableFocusOverlay|
+                                                   UI_BoxFlag_DrawBorder|
+                                                   UI_BoxFlag_DrawBackgroundBlur|
+                                                   UI_BoxFlag_DrawDropShadow|
+                                                   UI_BoxFlag_DrawBackground,
+                                                   "lister_box");
+            if(ws->lister_input_dirty)
+            {
+              ws->lister_input_dirty = 0;
+              lister_box->default_nav_focus_hot_key = lister_box->default_nav_focus_active_key = lister_box->default_nav_focus_next_hot_key = lister_box->default_nav_focus_next_active_key = ui_key_zero();
+            }
+          }
+          UI_Parent(lister_box)
+            UI_WidthFill
+            UI_PrefHeight(ui_px(row_height_px, 1.f))
+            RD_Font(RD_FontSlot_Code)
+            UI_HoverCursor(OS_Cursor_HandPoint)
+            UI_Focus(UI_FocusKind_Null)
+            RD_Palette(RD_PaletteCode_ImplicitButton)
+            UI_Padding(ui_em(1.f, 1.f))
+          {
+            for(U64 idx = 0; idx < item_array.count; idx += 1)
+            {
+              RD_ListerItem *item = &item_array.v[idx];
+              UI_Box *item_box = ui_build_box_from_stringf(UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawHotEffects|UI_BoxFlag_DrawActiveEffects|UI_BoxFlag_MouseClickable, "autocomp_%I64x", idx);
+              UI_Parent(item_box) UI_Padding(ui_em(1.f, 1.f))
+              {
+                UI_WidthFill RD_Font(item->is_non_code ? RD_FontSlot_Main : RD_FontSlot_Code)
+                {
+                  UI_Box *box = item->is_non_code ? ui_label(item->string).box : rd_code_label(1.f, 0, ui_top_palette()->text, item->string);
+                  ui_box_equip_fuzzy_match_ranges(box, &item->matches);
+                }
+                RD_Font(RD_FontSlot_Main)
+                  UI_PrefWidth(ui_text_dim(10, 1))
+                  UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
+                  ui_label(item->kind_string);
+              }
+              UI_Signal item_sig = ui_signal_from_box(item_box);
+              if(ui_clicked(item_sig))
+              {
+                UI_Event move_back_evt = zero_struct;
+                move_back_evt.kind = UI_EventKind_Navigate;
+                move_back_evt.flags = UI_EventFlag_KeepMark;
+                move_back_evt.delta_2s32.x = -(S32)query_word.size;
+                ui_event_list_push(ui_build_arena(), &ws->ui_events, &move_back_evt);
+                UI_Event paste_evt = zero_struct;
+                paste_evt.kind = UI_EventKind_Text;
+                paste_evt.string = item->string;
+                ui_event_list_push(ui_build_arena(), &ws->ui_events, &paste_evt);
+                lister_box->default_nav_focus_hot_key = lister_box->default_nav_focus_active_key = lister_box->default_nav_focus_next_hot_key = lister_box->default_nav_focus_next_active_key = ui_key_zero();
+              }
+              else if(item_box->flags & UI_BoxFlag_FocusHot && !(item_box->flags & UI_BoxFlag_FocusHotDisabled))
+              {
+                UI_Event evt = zero_struct;
+                evt.kind   = UI_EventKind_AutocompleteHint;
+                evt.string = item->string;
+                ui_event_list_push(ui_build_arena(), &ws->ui_events, &evt);
+              }
+            }
+          }
+        }
+        
+        di_scope_close(di_scope);
+        scratch_end(scratch);
+      }
+    }
+    
+    ////////////////////////////
+    //- rjf: darken lower layer ui when query is selected
+    //
+    F32 query_input_selected_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "%p_query_input_selected", ws), (F32)!!ws->query_input_selected);
+    UI_Palette(ui_build_palette(0, .background = mix_4f32(rd_rgba_from_theme_color(RD_ThemeColor_InactivePanelOverlay), v4f32(0, 0, 0, 0), 1-query_input_selected_t)))
+      UI_Rect(window_rect)
+    {
+      ui_build_box_from_key(UI_BoxFlag_DrawBackground, ui_key_zero());
     }
     
     ////////////////////////////
@@ -4525,563 +5325,6 @@ rd_window_frame(void)
           }
         }
         ui_signal_from_box(bg_box);
-      }
-    }
-    
-    ////////////////////////////
-    //- rjf: build auto-complete lister
-    //
-    ProfScope("build autocomplete lister")
-      if(!ui_key_match(ws->autocomp_root_key, ui_key_zero()) && ws->autocomp_last_frame_idx+1 >= rd_state->frame_index)
-    {
-      String8 input = str8(ws->autocomp_lister_input_buffer, ws->autocomp_lister_input_size);
-      String8 query_word = rd_autocomp_query_word_from_input_string_off(input, ws->autocomp_cursor_off);
-      String8 query_path = rd_autocomp_query_path_from_input_string_off(input, ws->autocomp_cursor_off);
-      UI_Box *autocomp_root_box = ui_box_from_key(ws->autocomp_root_key);
-      if(!ui_box_is_nil(autocomp_root_box))
-      {
-        Temp scratch = scratch_begin(0, 0);
-        DI_Scope *di_scope = di_scope_open();
-        DI_KeyList dbgi_keys_list = d_push_active_dbgi_key_list(scratch.arena);
-        DI_KeyArray dbgi_keys = di_key_array_from_list(scratch.arena, &dbgi_keys_list);
-        
-        //- rjf: grab rdis
-        U64 rdis_count = dbgi_keys.count;
-        RDI_Parsed **rdis = push_array(scratch.arena, RDI_Parsed *, rdis_count);
-        {
-          for(U64 idx = 0; idx < rdis_count; idx += 1)
-          {
-            RDI_Parsed *rdi = di_rdi_from_key(di_scope, &dbgi_keys.v[idx], 0);
-            RDI_TopLevelInfo *tli = rdi_element_from_name_idx(rdi, TopLevelInfo, 0);
-            rdis[idx] = rdi;
-          }
-        }
-        
-        //- rjf: unpack lister params
-        CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_base_regs()->thread);
-        U64 thread_rip_vaddr = d_query_cached_rip_from_thread_unwind(thread, rd_base_regs()->unwind_count);
-        CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, CTRL_EntityKind_Process);
-        CTRL_Entity *module = ctrl_module_from_process_vaddr(process, thread_rip_vaddr);
-        U64 thread_rip_voff = ctrl_voff_from_vaddr(module, thread_rip_vaddr);
-        DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
-        
-        //- rjf: gather lister items
-        RD_AutoCompListerItemChunkList item_list = {0};
-        {
-          //- rjf: gather locals
-          if(ws->autocomp_lister_params.flags & RD_AutoCompListerFlag_Locals)
-          {
-            E_String2NumMap *locals_map = d_query_cached_locals_map_from_dbgi_key_voff(&dbgi_key, thread_rip_voff);
-            E_String2NumMap *member_map = d_query_cached_member_map_from_dbgi_key_voff(&dbgi_key, thread_rip_voff);
-            for(E_String2NumMapNode *n = locals_map->first; n != 0; n = n->order_next)
-            {
-              RD_AutoCompListerItem item = {0};
-              {
-                item.string      = n->string;
-                item.kind_string = str8_lit("Local");
-                item.matches     = fuzzy_match_find(scratch.arena, query_word, n->string);
-              }
-              if(query_word.size == 0 || item.matches.count != 0)
-              {
-                rd_autocomp_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
-              }
-            }
-            for(E_String2NumMapNode *n = member_map->first; n != 0; n = n->order_next)
-            {
-              RD_AutoCompListerItem item = {0};
-              {
-                item.string      = n->string;
-                item.kind_string = str8_lit("Local (Member)");
-                item.matches     = fuzzy_match_find(scratch.arena, query_word, n->string);
-              }
-              if(query_word.size == 0 || item.matches.count != 0)
-              {
-                rd_autocomp_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
-              }
-            }
-          }
-          
-          //- rjf: gather registers
-          if(ws->autocomp_lister_params.flags & RD_AutoCompListerFlag_Registers)
-          {
-            Arch arch = thread->arch;
-            U64 reg_names_count = regs_reg_code_count_from_arch(arch);
-            U64 alias_names_count = regs_alias_code_count_from_arch(arch);
-            String8 *reg_names = regs_reg_code_string_table_from_arch(arch);
-            String8 *alias_names = regs_alias_code_string_table_from_arch(arch);
-            for(U64 idx = 0; idx < reg_names_count; idx += 1)
-            {
-              if(reg_names[idx].size != 0)
-              {
-                RD_AutoCompListerItem item = {0};
-                {
-                  item.string      = reg_names[idx];
-                  item.kind_string = str8_lit("Register");
-                  item.matches     = fuzzy_match_find(scratch.arena, query_word, reg_names[idx]);
-                }
-                if(query_word.size == 0 || item.matches.count != 0)
-                {
-                  rd_autocomp_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
-                }
-              }
-            }
-            for(U64 idx = 0; idx < alias_names_count; idx += 1)
-            {
-              if(alias_names[idx].size != 0)
-              {
-                RD_AutoCompListerItem item = {0};
-                {
-                  item.string      = alias_names[idx];
-                  item.kind_string = str8_lit("Reg. Alias");
-                  item.matches     = fuzzy_match_find(scratch.arena, query_word, alias_names[idx]);
-                }
-                if(query_word.size == 0 || item.matches.count != 0)
-                {
-                  rd_autocomp_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
-                }
-              }
-            }
-          }
-          
-          //- rjf: gather view rules
-          if(ws->autocomp_lister_params.flags & RD_AutoCompListerFlag_ViewRules)
-          {
-            for(U64 slot_idx = 0; slot_idx < d_state->view_rule_spec_table_size; slot_idx += 1)
-            {
-              for(D_ViewRuleSpec *spec = d_state->view_rule_spec_table[slot_idx]; spec != 0 && spec != &d_nil_core_view_rule_spec; spec = spec->hash_next)
-              {
-                RD_AutoCompListerItem item = {0};
-                {
-                  item.string      = spec->info.string;
-                  item.kind_string = str8_lit("View Rule");
-                  item.matches     = fuzzy_match_find(scratch.arena, query_word, spec->info.string);
-                }
-                if(query_word.size == 0 || item.matches.count != 0)
-                {
-                  rd_autocomp_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
-                }
-              }
-            }
-          }
-          
-          //- rjf: gather members
-          if(ws->autocomp_lister_params.flags & RD_AutoCompListerFlag_Members)
-          {
-            // TODO(rjf)
-          }
-          
-          //- rjf: gather globals
-          if(ws->autocomp_lister_params.flags & RD_AutoCompListerFlag_Globals && query_word.size != 0)
-          {
-            U128 search_key = {d_hash_from_string(str8_lit("autocomp_globals_search_key")), d_hash_from_string(str8_lit("autocomp_globals_search_key"))};
-            DI_SearchParams search_params =
-            {
-              RDI_SectionKind_GlobalVariables,
-              dbgi_keys,
-            };
-            B32 is_stale = 0;
-            DI_SearchItemArray items = di_search_items_from_key_params_query(di_scope, search_key, &search_params, query_word, 0, &is_stale);
-            for(U64 idx = 0; idx < 20 && idx < items.count; idx += 1)
-            {
-              // rjf: skip bad elements
-              if(items.v[idx].dbgi_idx >= rdis_count)
-              {
-                continue;
-              }
-              
-              // rjf: unpack info
-              RDI_Parsed *rdi = rdis[items.v[idx].dbgi_idx];
-              String8 name = di_search_item_string_from_rdi_target_element_idx(rdi, search_params.target, items.v[idx].idx);
-              
-              // rjf: push item
-              RD_AutoCompListerItem item = {0};
-              {
-                item.string      = name;
-                item.kind_string = str8_lit("Global");
-                item.matches     = items.v[idx].match_ranges;
-                item.group       = 1;
-              }
-              rd_autocomp_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
-            }
-          }
-          
-          //- rjf: gather thread locals
-          if(ws->autocomp_lister_params.flags & RD_AutoCompListerFlag_ThreadLocals && query_word.size != 0)
-          {
-            U128 search_key = {d_hash_from_string(str8_lit("autocomp_tvars_dis_key")), d_hash_from_string(str8_lit("autocomp_tvars_dis_key"))};
-            DI_SearchParams search_params =
-            {
-              RDI_SectionKind_ThreadVariables,
-              dbgi_keys,
-            };
-            B32 is_stale = 0;
-            DI_SearchItemArray items = di_search_items_from_key_params_query(di_scope, search_key, &search_params, query_word, 0, &is_stale);
-            for(U64 idx = 0; idx < 20 && idx < items.count; idx += 1)
-            {
-              // rjf: skip bad elements
-              if(items.v[idx].dbgi_idx >= rdis_count)
-              {
-                continue;
-              }
-              
-              // rjf: unpack info
-              RDI_Parsed *rdi = rdis[items.v[idx].dbgi_idx];
-              String8 name = di_search_item_string_from_rdi_target_element_idx(rdi, search_params.target, items.v[idx].idx);
-              
-              // rjf: push item
-              RD_AutoCompListerItem item = {0};
-              {
-                item.string      = name;
-                item.kind_string = str8_lit("Thread Local");
-                item.matches     = items.v[idx].match_ranges;
-                item.group       = 1;
-              }
-              rd_autocomp_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
-            }
-          }
-          
-          //- rjf: gather procedures
-          if(ws->autocomp_lister_params.flags & RD_AutoCompListerFlag_Procedures && query_word.size != 0)
-          {
-            U128 search_key = {d_hash_from_string(str8_lit("autocomp_procedures_search_key")), d_hash_from_string(str8_lit("autocomp_procedures_search_key"))};
-            DI_SearchParams search_params =
-            {
-              RDI_SectionKind_Procedures,
-              dbgi_keys,
-            };
-            B32 is_stale = 0;
-            DI_SearchItemArray items = di_search_items_from_key_params_query(di_scope, search_key, &search_params, query_word, 0, &is_stale);
-            for(U64 idx = 0; idx < 20 && idx < items.count; idx += 1)
-            {
-              // rjf: skip bad elements
-              if(items.v[idx].dbgi_idx >= rdis_count)
-              {
-                continue;
-              }
-              
-              // rjf: unpack info
-              RDI_Parsed *rdi = rdis[items.v[idx].dbgi_idx];
-              String8 name = di_search_item_string_from_rdi_target_element_idx(rdi, search_params.target, items.v[idx].idx);
-              
-              // rjf: push item
-              RD_AutoCompListerItem item = {0};
-              {
-                item.string      = name;
-                item.kind_string = str8_lit("Procedure");
-                item.matches     = items.v[idx].match_ranges;
-                item.group       = 1;
-              }
-              rd_autocomp_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
-            }
-          }
-          
-          //- rjf: gather types
-          if(ws->autocomp_lister_params.flags & RD_AutoCompListerFlag_Types && query_word.size != 0)
-          {
-            U128 search_key = {d_hash_from_string(str8_lit("autocomp_types_search_key")), d_hash_from_string(str8_lit("autocomp_types_search_key"))};
-            DI_SearchParams search_params =
-            {
-              RDI_SectionKind_UDTs,
-              dbgi_keys,
-            };
-            B32 is_stale = 0;
-            DI_SearchItemArray items = di_search_items_from_key_params_query(di_scope, search_key, &search_params, query_word, 0, &is_stale);
-            for(U64 idx = 0; idx < 20 && idx < items.count; idx += 1)
-            {
-              // rjf: skip bad elements
-              if(items.v[idx].dbgi_idx >= rdis_count)
-              {
-                continue;
-              }
-              
-              // rjf: unpack info
-              RDI_Parsed *rdi = rdis[items.v[idx].dbgi_idx];
-              String8 name = di_search_item_string_from_rdi_target_element_idx(rdi, search_params.target, items.v[idx].idx);
-              
-              // rjf: push item
-              RD_AutoCompListerItem item = {0};
-              {
-                item.string      = name;
-                item.kind_string = str8_lit("Type");
-                item.matches     = items.v[idx].match_ranges;
-                item.group       = 1;
-              }
-              rd_autocomp_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
-            }
-          }
-          
-          //- rjf: gather languages
-          if(ws->autocomp_lister_params.flags & RD_AutoCompListerFlag_Languages)
-          {
-            for EachNonZeroEnumVal(TXT_LangKind, lang)
-            {
-              RD_AutoCompListerItem item = {0};
-              {
-                item.string      = txt_extension_from_lang_kind(lang);
-                item.kind_string = str8_lit("Language");
-                item.matches     = fuzzy_match_find(scratch.arena, query_word, item.string);
-              }
-              if(item.string.size != 0 && (query_word.size == 0 || item.matches.count != 0))
-              {
-                rd_autocomp_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
-              }
-            }
-          }
-          
-          //- rjf: gather architectures
-          if(ws->autocomp_lister_params.flags & RD_AutoCompListerFlag_Architectures)
-          {
-            for EachNonZeroEnumVal(Arch, arch)
-            {
-              RD_AutoCompListerItem item = {0};
-              {
-                item.string      = string_from_arch(arch);
-                item.kind_string = str8_lit("Arch");
-                item.matches     = fuzzy_match_find(scratch.arena, query_word, item.string);
-              }
-              if(query_word.size == 0 || item.matches.count != 0)
-              {
-                rd_autocomp_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
-              }
-            }
-          }
-          
-          //- rjf: gather tex2dformats
-          if(ws->autocomp_lister_params.flags & RD_AutoCompListerFlag_Tex2DFormats)
-          {
-            for EachEnumVal(R_Tex2DFormat, fmt)
-            {
-              RD_AutoCompListerItem item = {0};
-              {
-                item.string      = lower_from_str8(scratch.arena, r_tex2d_format_display_string_table[fmt]);
-                item.kind_string = str8_lit("Format");
-                item.matches     = fuzzy_match_find(scratch.arena, query_word, item.string);
-              }
-              if(query_word.size == 0 || item.matches.count != 0)
-              {
-                rd_autocomp_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
-              }
-            }
-          }
-          
-          //- rjf: gather view rule params
-          if(ws->autocomp_lister_params.flags & RD_AutoCompListerFlag_ViewRuleParams)
-          {
-            for(String8Node *n = ws->autocomp_lister_params.strings.first; n != 0; n = n->next)
-            {
-              String8 string = n->string;
-              RD_AutoCompListerItem item = {0};
-              {
-                item.string      = string;
-                item.kind_string = str8_lit("Parameter");
-                item.matches     = fuzzy_match_find(scratch.arena, query_word, item.string);
-              }
-              if(query_word.size == 0 || item.matches.count != 0)
-              {
-                rd_autocomp_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
-              }
-            }
-          }
-          
-          //- rjf: gather files
-          if(ws->autocomp_lister_params.flags & RD_AutoCompListerFlag_Files)
-          {
-            // rjf: find containing directory in query_path
-            String8 dir_str_in_input = {0};
-            for(U64 i = 0; i < query_path.size; i += 1)
-            {
-              String8 substr1 = str8_substr(query_path, r1u64(i, i+1));
-              String8 substr2 = str8_substr(query_path, r1u64(i, i+2));
-              String8 substr3 = str8_substr(query_path, r1u64(i, i+3));
-              if(str8_match(substr1, str8_lit("/"), StringMatchFlag_SlashInsensitive))
-              {
-                dir_str_in_input = str8_substr(query_path, r1u64(i, query_path.size));
-              }
-              else if(i != 0 && str8_match(substr2, str8_lit(":/"), StringMatchFlag_SlashInsensitive))
-              {
-                dir_str_in_input = str8_substr(query_path, r1u64(i-1, query_path.size));
-              }
-              else if(str8_match(substr2, str8_lit("./"), StringMatchFlag_SlashInsensitive))
-              {
-                dir_str_in_input = str8_substr(query_path, r1u64(i, query_path.size));
-              }
-              else if(str8_match(substr3, str8_lit("../"), StringMatchFlag_SlashInsensitive))
-              {
-                dir_str_in_input = str8_substr(query_path, r1u64(i, query_path.size));
-              }
-              if(dir_str_in_input.size != 0)
-              {
-                break;
-              }
-            }
-            
-            // rjf: use query_path string to form various parts of search space
-            String8 prefix = {0};
-            String8 path = {0};
-            String8 search = {0};
-            if(dir_str_in_input.size != 0)
-            {
-              String8 dir = dir_str_in_input;
-              U64 one_past_last_slash = dir.size;
-              for(U64 i = 0; i < dir_str_in_input.size; i += 1)
-              {
-                if(dir_str_in_input.str[i] == '/' || dir_str_in_input.str[i] == '\\')
-                {
-                  one_past_last_slash = i+1;
-                }
-              }
-              dir.size = one_past_last_slash;
-              path = dir;
-              search = str8_substr(dir_str_in_input, r1u64(one_past_last_slash, dir_str_in_input.size));
-              prefix = str8_substr(query_path, r1u64(0, path.str - query_path.str));
-            }
-            
-            // rjf: get current files, filtered
-            B32 allow_dirs = 1;
-            OS_FileIter *it = os_file_iter_begin(scratch.arena, path, 0);
-            for(OS_FileInfo info = {0}; os_file_iter_next(scratch.arena, it, &info);)
-            {
-              FuzzyMatchRangeList match_ranges = fuzzy_match_find(scratch.arena, search, info.name);
-              B32 fits_search = (search.size == 0 || match_ranges.count == match_ranges.needle_part_count);
-              B32 fits_dir_only = (allow_dirs || !(info.props.flags & FilePropertyFlag_IsFolder));
-              if(fits_search && fits_dir_only)
-              {
-                RD_AutoCompListerItem item = {0};
-                {
-                  item.string      = info.props.flags & FilePropertyFlag_IsFolder ? push_str8f(scratch.arena, "%S/", info.name) : info.name;
-                  item.kind_string = info.props.flags & FilePropertyFlag_IsFolder ? str8_lit("Folder") : str8_lit("File");
-                  item.matches     = match_ranges;
-                  item.is_non_code = 1;
-                }
-                rd_autocomp_lister_item_chunk_list_push(scratch.arena, &item_list, 256, &item);
-              }
-            }
-            os_file_iter_end(it);
-          }
-        }
-        
-        //- rjf: lister item list -> sorted array
-        RD_AutoCompListerItemArray item_array = rd_autocomp_lister_item_array_from_chunk_list(scratch.arena, &item_list);
-        rd_autocomp_lister_item_array_sort__in_place(&item_array);
-        
-        //- rjf: animate
-        {
-          // rjf: animate target # of rows
-          {
-            F32 rate = rd_setting_val_from_code(RD_SettingCode_MenuAnimations).s32 ? (1 - pow_f32(2, (-60.f * rd_state->frame_dt))) : 1.f;
-            F32 target = Min((F32)item_array.count, 16.f);
-            if(abs_f32(target - ws->autocomp_num_visible_rows_t) > 0.01f)
-            {
-              rd_request_frame();
-            }
-            ws->autocomp_num_visible_rows_t += (target - ws->autocomp_num_visible_rows_t) * rate;
-            if(abs_f32(target - ws->autocomp_num_visible_rows_t) <= 0.02f)
-            {
-              ws->autocomp_num_visible_rows_t = target;
-            }
-          }
-          
-          // rjf: animate open
-          {
-            F32 rate = rd_setting_val_from_code(RD_SettingCode_MenuAnimations).s32 ? 1 - pow_f32(2, (-60.f * rd_state->frame_dt)) : 1.f;
-            F32 diff = 1.f-ws->autocomp_open_t;
-            ws->autocomp_open_t += diff*rate;
-            if(abs_f32(diff) < 0.05f)
-            {
-              ws->autocomp_open_t = 1.f;
-            }
-            else
-            {
-              rd_request_frame();
-            }
-          }
-        }
-        
-        //- rjf: build
-        if(item_array.count != 0)
-        {
-          F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
-          ui_set_next_fixed_x(autocomp_root_box->rect.x0);
-          ui_set_next_fixed_y(autocomp_root_box->rect.y1);
-          ui_set_next_pref_width(ui_em(30.f, 1.f));
-          ui_set_next_pref_height(ui_px(row_height_px*ws->autocomp_num_visible_rows_t + ui_top_font_size()*2.f, 1.f));
-          ui_set_next_child_layout_axis(Axis2_Y);
-          ui_set_next_corner_radius_01(ui_top_font_size()*0.25f);
-          ui_set_next_corner_radius_11(ui_top_font_size()*0.25f);
-          ui_set_next_corner_radius_10(ui_top_font_size()*0.25f);
-          UI_Focus(UI_FocusKind_On)
-            UI_Squish(0.25f-0.25f*ws->autocomp_open_t)
-            UI_Transparency(1.f-ws->autocomp_open_t)
-            RD_Palette(RD_PaletteCode_Floating)
-          {
-            autocomp_box = ui_build_box_from_stringf(UI_BoxFlag_DefaultFocusNavY|
-                                                     UI_BoxFlag_Clickable|
-                                                     UI_BoxFlag_Clip|
-                                                     UI_BoxFlag_RoundChildrenByParent|
-                                                     UI_BoxFlag_DisableFocusOverlay|
-                                                     UI_BoxFlag_DrawBorder|
-                                                     UI_BoxFlag_DrawBackgroundBlur|
-                                                     UI_BoxFlag_DrawDropShadow|
-                                                     UI_BoxFlag_DrawBackground,
-                                                     "autocomp_box");
-            if(ws->autocomp_input_dirty)
-            {
-              ws->autocomp_input_dirty = 0;
-              autocomp_box->default_nav_focus_hot_key = autocomp_box->default_nav_focus_active_key = autocomp_box->default_nav_focus_next_hot_key = autocomp_box->default_nav_focus_next_active_key = ui_key_zero();
-            }
-          }
-          UI_Parent(autocomp_box)
-            UI_WidthFill
-            UI_PrefHeight(ui_px(row_height_px, 1.f))
-            RD_Font(RD_FontSlot_Code)
-            UI_HoverCursor(OS_Cursor_HandPoint)
-            UI_Focus(UI_FocusKind_Null)
-            RD_Palette(RD_PaletteCode_ImplicitButton)
-            UI_Padding(ui_em(1.f, 1.f))
-          {
-            for(U64 idx = 0; idx < item_array.count; idx += 1)
-            {
-              RD_AutoCompListerItem *item = &item_array.v[idx];
-              UI_Box *item_box = ui_build_box_from_stringf(UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawHotEffects|UI_BoxFlag_DrawActiveEffects|UI_BoxFlag_MouseClickable, "autocomp_%I64x", idx);
-              UI_Parent(item_box) UI_Padding(ui_em(1.f, 1.f))
-              {
-                UI_WidthFill RD_Font(item->is_non_code ? RD_FontSlot_Main : RD_FontSlot_Code)
-                {
-                  UI_Box *box = item->is_non_code ? ui_label(item->string).box : rd_code_label(1.f, 0, ui_top_palette()->text, item->string);
-                  ui_box_equip_fuzzy_match_ranges(box, &item->matches);
-                }
-                RD_Font(RD_FontSlot_Main)
-                  UI_PrefWidth(ui_text_dim(10, 1))
-                  UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
-                  ui_label(item->kind_string);
-              }
-              UI_Signal item_sig = ui_signal_from_box(item_box);
-              if(ui_clicked(item_sig))
-              {
-                UI_Event move_back_evt = zero_struct;
-                move_back_evt.kind = UI_EventKind_Navigate;
-                move_back_evt.flags = UI_EventFlag_KeepMark;
-                move_back_evt.delta_2s32.x = -(S32)query_word.size;
-                ui_event_list_push(ui_build_arena(), &ws->ui_events, &move_back_evt);
-                UI_Event paste_evt = zero_struct;
-                paste_evt.kind = UI_EventKind_Text;
-                paste_evt.string = item->string;
-                ui_event_list_push(ui_build_arena(), &ws->ui_events, &paste_evt);
-                autocomp_box->default_nav_focus_hot_key = autocomp_box->default_nav_focus_active_key = autocomp_box->default_nav_focus_next_hot_key = autocomp_box->default_nav_focus_next_active_key = ui_key_zero();
-              }
-              else if(item_box->flags & UI_BoxFlag_FocusHot && !(item_box->flags & UI_BoxFlag_FocusHotDisabled))
-              {
-                UI_Event evt = zero_struct;
-                evt.kind   = UI_EventKind_AutocompleteHint;
-                evt.string = item->string;
-                ui_event_list_push(ui_build_arena(), &ws->ui_events, &evt);
-              }
-            }
-          }
-        }
-        
-        di_scope_close(di_scope);
-        scratch_end(scratch);
       }
     }
     
@@ -5850,7 +6093,15 @@ rd_window_frame(void)
             }
             if(ui_clicked(cls_sig))
             {
-              ui_ctx_menu_open(close_ctx_menu_key, cls_sig.box->key, v2f32(0, dim_2f32(cls_sig.box->rect).y));
+              if(ws->order_next != &rd_nil_window_state ||
+                 ws->order_prev != &rd_nil_window_state)
+              {
+                ui_ctx_menu_open(close_ctx_menu_key, cls_sig.box->key, v2f32(0, dim_2f32(cls_sig.box->rect).y));
+              }
+              else
+              {
+                rd_cmd(RD_CmdKind_Exit);
+              }
             }
             os_window_push_custom_title_bar_client_area(ws->os, min_sig.box->rect);
             os_window_push_custom_title_bar_client_area(ws->os, max_sig.box->rect);
@@ -5970,229 +6221,6 @@ rd_window_frame(void)
           }
         }
       }
-    }
-    
-    ////////////////////////////
-    //- rjf: prepare query state for the in-progress query command
-    //
-    if(ws->query_cmd_name.size != 0)
-    {
-      RD_CmdKindInfo *cmd_kind_info = rd_cmd_kind_info_from_string(ws->query_cmd_name);
-      RD_RegSlot missing_slot = cmd_kind_info->query.slot;
-      
-      //- rjf: if our input is stale, w.r.t. the current query command, initialize input state
-      if(ws->query_input_gen < ws->query_cmd_gen)
-      {
-        ws->query_input_gen = ws->query_cmd_gen;
-        String8 default_query_input = {0};
-        ws->query_input_string_size = Min(sizeof(ws->query_input_buffer), default_query_input.size);
-        MemoryCopy(ws->query_input_buffer, default_query_input.str, ws->query_input_string_size);
-        ws->query_input_cursor = ws->query_input_mark = txt_pt(1, ws->query_input_string_size+1);
-      }
-      
-#if 0 // TODO(rjf): @cfg (query state prep)
-      String8 query_view_name = cmd_kind_info->query.view_name;
-      if(query_view_name.size == 0)
-      {
-        switch(missing_slot)
-        {
-          default:{}break;
-          case RD_RegSlot_Thread:
-          case RD_RegSlot_Module:
-          case RD_RegSlot_Process:
-          case RD_RegSlot_Machine:
-          case RD_RegSlot_CtrlEntity:{query_view_name = rd_view_rule_kind_info_table[RD_ViewRuleKind_CtrlEntityLister].string;}break;
-          case RD_RegSlot_Entity:    {query_view_name = rd_view_rule_kind_info_table[RD_ViewRuleKind_EntityLister].string;}break;
-          case RD_RegSlot_EntityList:{query_view_name = rd_view_rule_kind_info_table[RD_ViewRuleKind_EntityLister].string;}break;
-          case RD_RegSlot_FilePath:  {query_view_name = rd_view_rule_kind_info_table[RD_ViewRuleKind_FileSystem].string;}break;
-          case RD_RegSlot_PID:       {query_view_name = rd_view_rule_kind_info_table[RD_ViewRuleKind_SystemProcesses].string;}break;
-        }
-      }
-      RD_ViewRuleInfo *view_spec = rd_view_rule_info_from_string(query_view_name);
-      if(!str8_match(ws->query_view_stack_top->string, view_spec->string, 0) ||
-         ws->query_view_stack_top == &rd_nil_cfg)
-      {
-        Temp scratch = scratch_begin(0, 0);
-        
-        // rjf: clear existing query stack
-        rd_cfg_release(ws->query_view_stack_top);
-        
-        // rjf: determine default query
-        String8 default_query = {0};
-        switch(missing_slot)
-        {
-          default:
-          if(cmd_kind_info->query.flags & RD_QueryFlag_KeepOldInput)
-          {
-            default_query = rd_push_search_string(scratch.arena);
-          }break;
-          case RD_RegSlot_FilePath:
-          {
-            default_query = path_normalized_from_string(scratch.arena, rd_state->current_path);
-            default_query = push_str8f(scratch.arena, "%S/", default_query);
-          }break;
-        }
-        
-        // rjf: construct & push new view
-        RD_Cfg *bucket = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("transient"));
-        RD_Cfg *view = rd_cfg_new(bucket, view_spec->string);
-        RD_Cfg *filter = rd_cfg_new(view, str8_lit("filter"));
-        rd_cfg_new(filter, default_query);
-        RD_ViewState *view_state = rd_view_state_from_cfg(view);
-        view_state->filter_cursor = txt_pt(1, default_query.size+1);
-        if(cmd_kind_info->query.flags & RD_QueryFlag_SelectOldInput)
-        {
-          view_state->filter_mark = txt_pt(1, 1);
-        }
-        ws->query_view_stack_top = view;
-        ws->query_view_selected = 1;
-        
-        scratch_end(scratch);
-      }
-#endif
-    }
-    
-    ////////////////////////////
-    //- rjf: build query
-    //
-    if(query_is_open)
-      UI_Focus((window_is_focused && !ui_any_ctx_menu_is_open() && !ws->menu_bar_focused && ws->query_input_selected) ? UI_FocusKind_On : UI_FocusKind_Off)
-      RD_Palette(RD_PaletteCode_Floating)
-    {
-      String8 query_cmd_name = ws->query_cmd_name;
-      RD_CmdKindInfo *query_cmd_info = rd_cmd_kind_info_from_string(query_cmd_name);
-      RD_Query *query = &query_cmd_info->query;
-      F32 query_view_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "###%p_query_view_t", ws), 1.f);
-      
-      //- rjf: calculate rectangles
-      Vec2F32 window_center = center_2f32(window_rect);
-      Vec2F32 query_input_dim = v2f32(dim_2f32(window_rect).x*0.5f, ui_top_font_size()*3.f);
-      F32 query_input_margin = ui_top_font_size()*8.f;
-      Rng2F32 query_input_rect = r2f32p(window_center.x - query_input_dim.x/2 + (1-query_view_t)*query_input_dim.x/4,
-                                        window_rect.y0 + query_input_margin,
-                                        window_center.x + query_input_dim.x/2 - (1-query_view_t)*query_input_dim.x/4,
-                                        window_rect.y0 + query_input_margin + query_input_dim.y);
-      
-      //- rjf: build floating query container
-      UI_Box *query_container_box = &ui_nil_box;
-      UI_Rect(query_input_rect)
-        UI_CornerRadius(ui_top_font_size()*0.2f)
-        UI_ChildLayoutAxis(Axis2_Y)
-        UI_Squish(0.25f - query_view_t*0.25f)
-        UI_Transparency(1-query_view_t)
-      {
-        query_container_box = ui_build_box_from_stringf(UI_BoxFlag_Floating|
-                                                        UI_BoxFlag_AllowOverflow|
-                                                        UI_BoxFlag_Clickable|
-                                                        UI_BoxFlag_Clip|
-                                                        UI_BoxFlag_DisableFocusOverlay|
-                                                        UI_BoxFlag_DrawBorder|
-                                                        UI_BoxFlag_DrawBackground|
-                                                        UI_BoxFlag_DrawBackgroundBlur|
-                                                        UI_BoxFlag_DrawDropShadow,
-                                                        "query_container");
-      }
-      
-      //- rjf: set up autocompletion lister info
-      RD_AutoCompListerParams params = {0};
-      {
-        params.flags = 0xffffffff;
-      }
-      rd_set_autocomp_lister_query(query_container_box->key, &params, str8(ws->query_input_buffer, ws->query_input_string_size), ws->query_input_cursor.column-1);
-      
-      //- rjf: build query text input
-      B32 query_completed = 0;
-      B32 query_cancelled = 0;
-      UI_Parent(query_container_box)
-        UI_WidthFill UI_HeightFill
-        UI_Focus(UI_FocusKind_On)
-      {
-        ui_set_next_flags(UI_BoxFlag_DrawDropShadow|UI_BoxFlag_DrawBorder);
-        UI_Row
-        {
-          UI_PrefWidth(ui_text_dim(0.f, 1.f)) UI_Padding(ui_em(1.f, 1.f))
-          {
-            RD_IconKind icon_kind = query_cmd_info->icon_kind;
-            if(icon_kind != RD_IconKind_Null)
-            {
-              RD_Font(RD_FontSlot_Icons) ui_label(rd_icon_kind_text_table[icon_kind]);
-            }
-            ui_labelf("%S", query_cmd_info->display_name);
-          }
-          RD_Font((query->flags & RD_QueryFlag_CodeInput) ? RD_FontSlot_Code : RD_FontSlot_Main)
-            UI_TextPadding(ui_top_font_size()*0.5f)
-          {
-            UI_Signal sig = rd_line_edit(RD_LineEditFlag_Border|
-                                         (RD_LineEditFlag_CodeContents * !!(query->flags & RD_QueryFlag_CodeInput)),
-                                         0,
-                                         0,
-                                         &ws->query_input_cursor,
-                                         &ws->query_input_mark,
-                                         ws->query_input_buffer,
-                                         sizeof(ws->query_input_buffer),
-                                         &ws->query_input_string_size,
-                                         0,
-                                         str8(ws->query_input_buffer, ws->query_input_string_size),
-                                         str8_lit("###query_text_input"));
-            if(ui_pressed(sig))
-            {
-              ws->query_input_selected = 1;
-            }
-          }
-          UI_PrefWidth(ui_em(5.f, 1.f)) UI_Focus(UI_FocusKind_Off) RD_Palette(RD_PaletteCode_PositivePopButton)
-          {
-            if(ui_clicked(rd_icon_buttonf(RD_IconKind_RightArrow, 0, "##complete_query")))
-            {
-              query_completed = 1;
-            }
-          }
-          UI_PrefWidth(ui_em(3.f, 1.f)) UI_Focus(UI_FocusKind_Off) RD_Palette(RD_PaletteCode_PlainButton)
-          {
-            if(ui_clicked(rd_icon_buttonf(RD_IconKind_X, 0, "##cancel_query")))
-            {
-              query_cancelled = 1;
-            }
-          }
-        }
-      }
-      
-      //- rjf: query submission
-      if(((ui_is_focus_active() || (window_is_focused && !ui_any_ctx_menu_is_open() && !ws->menu_bar_focused && !ws->query_input_selected)) &&
-          ui_slot_press(UI_EventActionSlot_Cancel)) || query_cancelled)
-      {
-        rd_cmd(RD_CmdKind_CancelQuery);
-      }
-      if((ui_is_focus_active() && ui_slot_press(UI_EventActionSlot_Accept)) || query_completed)
-      {
-        Temp scratch = scratch_begin(0, 0);
-        RD_RegsScope()
-        {
-          rd_regs_fill_slot_from_string(query->slot, str8(ws->query_input_buffer, ws->query_input_string_size));
-          rd_cmd(RD_CmdKind_CompleteQuery);
-        }
-        scratch_end(scratch);
-      }
-      
-      //- rjf: take fallthrough interaction in query view
-      {
-        UI_Signal sig = ui_signal_from_box(query_container_box);
-        if(ui_pressed(sig))
-        {
-          ws->query_input_selected = 1;
-        }
-      }
-      
-      //- rjf: build darkening overlay for rest of screen
-      F32 query_input_selected_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "%p_query_input_selected", ws), (F32)!!ws->query_input_selected);
-      UI_Palette(ui_build_palette(0, .background = mix_4f32(rd_rgba_from_theme_color(RD_ThemeColor_InactivePanelOverlay), v4f32(0, 0, 0, 0), 1-query_input_selected_t)))
-        UI_Rect(window_rect)
-      {
-        ui_build_box_from_key(UI_BoxFlag_DrawBackground, ui_key_zero());
-      }
-    }
-    else
-    {
-      ws->query_input_selected = 0;
     }
     
     ////////////////////////////
@@ -7844,35 +7872,36 @@ rd_window_frame(void)
   }
   
   //////////////////////////////
-  //- rjf: attach autocomp box to root, or hide if it has not been renewed
+  //- rjf: attach lister box to root, or hide if it has not been renewed
   //
-  if(!ui_box_is_nil(autocomp_box) && ws->autocomp_last_frame_idx+1 >= rd_state->frame_index+1)
+  if(!ui_box_is_nil(lister_box) && ws->lister_last_frame_idx+1 >= rd_state->frame_index+1)
   {
-    UI_Box *autocomp_root_box = ui_box_from_key(ws->autocomp_root_key);
-    if(!ui_box_is_nil(autocomp_root_box))
+    UI_Box *lister_root_box = ui_box_from_key(ws->lister_params.anchor_key);
+    if(!ui_box_is_nil(lister_root_box))
     {
-      Vec2F32 size = autocomp_box->fixed_size;
-      autocomp_box->fixed_position = v2f32(autocomp_root_box->rect.x0, autocomp_root_box->rect.y1);
-      autocomp_box->rect = r2f32(autocomp_box->fixed_position, add_2f32(autocomp_box->fixed_position, size));
+      Vec2F32 size = lister_box->fixed_size;
+      lister_box->fixed_position = v2f32(lister_root_box->rect.x0 + ws->lister_params.anchor_off.x,
+                                         lister_root_box->rect.y0 + ws->lister_params.anchor_off.y);
+      lister_box->rect = r2f32(lister_box->fixed_position, add_2f32(lister_box->fixed_position, size));
       for(Axis2 axis = (Axis2)0; axis < Axis2_COUNT; axis = (Axis2)(axis + 1))
       {
-        ui_calc_sizes_standalone__in_place_rec(autocomp_box, axis);
-        ui_calc_sizes_upwards_dependent__in_place_rec(autocomp_box, axis);
-        ui_calc_sizes_downwards_dependent__in_place_rec(autocomp_box, axis);
-        ui_layout_enforce_constraints__in_place_rec(autocomp_box, axis);
-        ui_layout_position__in_place_rec(autocomp_box, axis);
+        ui_calc_sizes_standalone__in_place_rec(lister_box, axis);
+        ui_calc_sizes_upwards_dependent__in_place_rec(lister_box, axis);
+        ui_calc_sizes_downwards_dependent__in_place_rec(lister_box, axis);
+        ui_layout_enforce_constraints__in_place_rec(lister_box, axis);
+        ui_layout_position__in_place_rec(lister_box, axis);
       }
     }
   }
-  else if(!ui_box_is_nil(autocomp_box) && ws->autocomp_last_frame_idx+1 < rd_state->frame_index+1)
+  else if(!ui_box_is_nil(lister_box) && ws->lister_last_frame_idx+1 < rd_state->frame_index+1)
   {
-    UI_Box *autocomp_root_box = ui_box_from_key(ws->autocomp_root_key);
-    if(!ui_box_is_nil(autocomp_root_box))
+    UI_Box *lister_root_box = ui_box_from_key(ws->lister_params.anchor_key);
+    if(!ui_box_is_nil(lister_root_box))
     {
-      Vec2F32 size = autocomp_box->fixed_size;
+      Vec2F32 size = lister_box->fixed_size;
       Rng2F32 window_rect = os_client_rect_from_window(ws->os);
-      autocomp_box->fixed_position = v2f32(window_rect.x1, window_rect.y1);
-      autocomp_box->rect = r2f32(autocomp_box->fixed_position, add_2f32(autocomp_box->fixed_position, size));
+      lister_box->fixed_position = v2f32(window_rect.x1, window_rect.y1);
+      lister_box->rect = r2f32(lister_box->fixed_position, add_2f32(lister_box->fixed_position, size));
     }
   }
   
@@ -7960,9 +7989,9 @@ rd_window_frame(void)
       if(box->squish != 0)
       {
         Vec2F32 box_dim = dim_2f32(box->rect);
-        Mat3x3F32 box2origin_xform = make_translate_3x3f32(v2f32(-box->rect.x0 - box_dim.x/8, -box->rect.y0));
+        Mat3x3F32 box2origin_xform = make_translate_3x3f32(v2f32(-box->rect.x0 - box_dim.x/2, -box->rect.y0));
         Mat3x3F32 scale_xform = make_scale_3x3f32(v2f32(1-box->squish, 1-box->squish));
-        Mat3x3F32 origin2box_xform = make_translate_3x3f32(v2f32(box->rect.x0 + box_dim.x/8, box->rect.y0));
+        Mat3x3F32 origin2box_xform = make_translate_3x3f32(v2f32(box->rect.x0 + box_dim.x/2, box->rect.y0));
         Mat3x3F32 xform = mul_3x3f32(origin2box_xform, mul_3x3f32(scale_xform, box2origin_xform));
         dr_push_xform2d(xform);
         dr_push_tex2d_sample_kind(R_Tex2DSampleKind_Linear);
@@ -8200,7 +8229,8 @@ rd_window_frame(void)
           // rjf: draw border
           if(b->flags & UI_BoxFlag_DrawBorder)
           {
-            R_Rect2DInst *inst = dr_rect(pad_2f32(b->rect, 1.f), b->palette->colors[UI_ColorCode_Border], 0, 1.f, 1.f);
+            Rng2F32 b_border_rect = pad_2f32(b->rect, 1.f);
+            R_Rect2DInst *inst = dr_rect(b_border_rect, b->palette->colors[UI_ColorCode_Border], 0, 1.f, 1.f);
             MemoryCopyArray(inst->corner_radii, b->corner_radii);
             
             // rjf: hover effect
@@ -8208,7 +8238,7 @@ rd_window_frame(void)
             {
               Vec4F32 color = rd_rgba_from_theme_color(RD_ThemeColor_Hover);
               color.w *= b->hot_t;
-              R_Rect2DInst *inst = dr_rect(pad_2f32(b->rect, 1), color, 0, 1.f, 1.f);
+              R_Rect2DInst *inst = dr_rect(b_border_rect, color, 0, 1.f, 1.f);
               MemoryCopyArray(inst->corner_radii, b->corner_radii);
             }
           }
@@ -8216,7 +8246,7 @@ rd_window_frame(void)
           // rjf: debug border rendering
           if(0)
           {
-            R_Rect2DInst *inst = dr_rect(pad_2f32(b->rect, 1), v4f32(1, 0, 1, 0.25f), 0, 1.f, 1.f);
+            R_Rect2DInst *inst = dr_rect(b->rect, v4f32(1, 0, 1, 0.25f), 0, 1.f, 1.f);
             MemoryCopyArray(inst->corner_radii, b->corner_radii);
           }
           
@@ -9554,15 +9584,15 @@ rd_set_hover_eval(Vec2F32 pos, String8 file_path, TxtPt pt, U64 vaddr, String8 s
 //~ rjf: Auto-Complete Lister
 
 internal void
-rd_autocomp_lister_item_chunk_list_push(Arena *arena, RD_AutoCompListerItemChunkList *list, U64 cap, RD_AutoCompListerItem *item)
+rd_lister_item_chunk_list_push(Arena *arena, RD_ListerItemChunkList *list, U64 cap, RD_ListerItem *item)
 {
-  RD_AutoCompListerItemChunkNode *n = list->last;
+  RD_ListerItemChunkNode *n = list->last;
   if(n == 0 || n->count >= n->cap)
   {
-    n = push_array(arena, RD_AutoCompListerItemChunkNode, 1);
+    n = push_array(arena, RD_ListerItemChunkNode, 1);
     SLLQueuePush(list->first, list->last, n);
     n->cap = cap;
-    n->v = push_array_no_zero(arena, RD_AutoCompListerItem, n->cap);
+    n->v = push_array_no_zero(arena, RD_ListerItem, n->cap);
     list->chunk_count += 1;
   }
   MemoryCopyStruct(&n->v[n->count], item);
@@ -9570,23 +9600,23 @@ rd_autocomp_lister_item_chunk_list_push(Arena *arena, RD_AutoCompListerItemChunk
   list->total_count += 1;
 }
 
-internal RD_AutoCompListerItemArray
-rd_autocomp_lister_item_array_from_chunk_list(Arena *arena, RD_AutoCompListerItemChunkList *list)
+internal RD_ListerItemArray
+rd_lister_item_array_from_chunk_list(Arena *arena, RD_ListerItemChunkList *list)
 {
-  RD_AutoCompListerItemArray array = {0};
+  RD_ListerItemArray array = {0};
   array.count = list->total_count;
-  array.v = push_array_no_zero(arena, RD_AutoCompListerItem, array.count);
+  array.v = push_array_no_zero(arena, RD_ListerItem, array.count);
   U64 idx = 0;
-  for(RD_AutoCompListerItemChunkNode *n = list->first; n != 0; n = n->next)
+  for(RD_ListerItemChunkNode *n = list->first; n != 0; n = n->next)
   {
-    MemoryCopy(array.v+idx, n->v, sizeof(RD_AutoCompListerItem)*n->count);
+    MemoryCopy(array.v+idx, n->v, sizeof(RD_ListerItem)*n->count);
     idx += n->count;
   }
   return array;
 }
 
 internal int
-rd_autocomp_lister_item_qsort_compare(RD_AutoCompListerItem *a, RD_AutoCompListerItem *b)
+rd_lister_item_qsort_compare(RD_ListerItem *a, RD_ListerItem *b)
 {
   int result = 0;
   if(a->group < b->group)
@@ -9621,13 +9651,13 @@ rd_autocomp_lister_item_qsort_compare(RD_AutoCompListerItem *a, RD_AutoCompListe
 }
 
 internal void
-rd_autocomp_lister_item_array_sort__in_place(RD_AutoCompListerItemArray *array)
+rd_lister_item_array_sort__in_place(RD_ListerItemArray *array)
 {
-  quick_sort(array->v, array->count, sizeof(array->v[0]), rd_autocomp_lister_item_qsort_compare);
+  quick_sort(array->v, array->count, sizeof(array->v[0]), rd_lister_item_qsort_compare);
 }
 
 internal String8
-rd_autocomp_query_word_from_input_string_off(String8 input, U64 cursor_off)
+rd_lister_query_word_from_input_string_off(String8 input, U64 cursor_off)
 {
   U64 word_start_off = 0;
   for(U64 off = 0; off < input.size && off < cursor_off; off += 1)
@@ -9642,7 +9672,7 @@ rd_autocomp_query_word_from_input_string_off(String8 input, U64 cursor_off)
 }
 
 internal String8
-rd_autocomp_query_path_from_input_string_off(String8 input, U64 cursor_off)
+rd_lister_query_path_from_input_string_off(String8 input, U64 cursor_off)
 {
   // rjf: find start of path
   U64 path_start_off = 0;
@@ -9675,10 +9705,10 @@ rd_autocomp_query_path_from_input_string_off(String8 input, U64 cursor_off)
   return path;
 }
 
-internal RD_AutoCompListerParams
-rd_view_rule_autocomp_lister_params_from_input_cursor(Arena *arena, String8 string, U64 cursor_off)
+internal RD_ListerParams
+rd_view_rule_lister_params_from_input_cursor(Arena *arena, String8 string, U64 cursor_off)
 {
-  RD_AutoCompListerParams params = {0};
+  RD_ListerParams params = {0};
   {
     Temp scratch = scratch_begin(&arena, 1);
     
@@ -9786,15 +9816,15 @@ rd_view_rule_autocomp_lister_params_from_input_cursor(Arena *arena, String8 stri
           for MD_EachNode(child, schema_node->first)
           {
             if(0){}
-            else if(str8_match(child->string, str8_lit("expr"),           StringMatchFlag_CaseInsensitive)) {params.flags |= RD_AutoCompListerFlag_Locals;}
-            else if(str8_match(child->string, str8_lit("member"),         StringMatchFlag_CaseInsensitive)) {params.flags |= RD_AutoCompListerFlag_Members;}
-            else if(str8_match(child->string, str8_lit("lang"),           StringMatchFlag_CaseInsensitive)) {params.flags |= RD_AutoCompListerFlag_Languages;}
-            else if(str8_match(child->string, str8_lit("arch"),           StringMatchFlag_CaseInsensitive)) {params.flags |= RD_AutoCompListerFlag_Architectures;}
-            else if(str8_match(child->string, str8_lit("tex2dformat"),    StringMatchFlag_CaseInsensitive)) {params.flags |= RD_AutoCompListerFlag_Tex2DFormats;}
+            else if(str8_match(child->string, str8_lit("expr"),           StringMatchFlag_CaseInsensitive)) {params.flags |= RD_ListerFlag_Locals;}
+            else if(str8_match(child->string, str8_lit("member"),         StringMatchFlag_CaseInsensitive)) {params.flags |= RD_ListerFlag_Members;}
+            else if(str8_match(child->string, str8_lit("lang"),           StringMatchFlag_CaseInsensitive)) {params.flags |= RD_ListerFlag_Languages;}
+            else if(str8_match(child->string, str8_lit("arch"),           StringMatchFlag_CaseInsensitive)) {params.flags |= RD_ListerFlag_Architectures;}
+            else if(str8_match(child->string, str8_lit("tex2dformat"),    StringMatchFlag_CaseInsensitive)) {params.flags |= RD_ListerFlag_Tex2DFormats;}
             else if(child->flags & (MD_NodeFlag_StringSingleQuote|MD_NodeFlag_StringDoubleQuote|MD_NodeFlag_StringTick))
             {
               str8_list_push(arena, &params.strings, child->string);
-              params.flags |= RD_AutoCompListerFlag_ViewRuleParams;
+              params.flags |= RD_ListerFlag_ViewRuleParams;
             }
           }
           break;
@@ -9818,32 +9848,30 @@ rd_view_rule_autocomp_lister_params_from_input_cursor(Arena *arena, String8 stri
 }
 
 internal void
-rd_set_autocomp_lister_query(UI_Key root_key, RD_AutoCompListerParams *params, String8 input, U64 cursor_off)
+rd_set_lister_query_(RD_ListerParams *params)
 {
   RD_Cfg *window_cfg = rd_cfg_from_handle(rd_regs()->window);
   RD_WindowState *ws = rd_window_state_from_cfg(window_cfg);
-  if(cursor_off != ws->autocomp_cursor_off)
+  if(params->cursor_off != ws->lister_params.cursor_off)
   {
-    ws->autocomp_input_dirty = 1;
-    ws->autocomp_cursor_off = cursor_off;
+    ws->lister_input_dirty = 1;
   }
-  if(!ui_key_match(ws->autocomp_root_key, root_key))
+  if(!ui_key_match(ws->lister_params.anchor_key, params->anchor_key))
   {
-    ws->autocomp_num_visible_rows_t = 0;
-    ws->autocomp_open_t = 0;
+    ws->lister_num_visible_rows_t = 0;
+    ws->lister_open_t = 0;
   }
-  if(ws->autocomp_last_frame_idx+1 < rd_state->frame_index)
+  if(ws->lister_last_frame_idx+1 < rd_state->frame_index)
   {
-    ws->autocomp_num_visible_rows_t = 0;
-    ws->autocomp_open_t = 0;
+    ws->lister_num_visible_rows_t = 0;
+    ws->lister_open_t = 0;
   }
-  ws->autocomp_root_key = root_key;
-  arena_clear(ws->autocomp_lister_params_arena);
-  MemoryCopyStruct(&ws->autocomp_lister_params, params);
-  ws->autocomp_lister_params.strings = str8_list_copy(ws->autocomp_lister_params_arena, &ws->autocomp_lister_params.strings);
-  ws->autocomp_lister_input_size = Min(input.size, sizeof(ws->autocomp_lister_input_buffer));
-  MemoryCopy(ws->autocomp_lister_input_buffer, input.str, ws->autocomp_lister_input_size);
-  ws->autocomp_last_frame_idx = rd_state->frame_index;
+  arena_clear(ws->lister_params_arena);
+  MemoryCopyStruct(&ws->lister_params, params);
+  ws->lister_params.strings = str8_list_copy(ws->lister_params_arena, &ws->lister_params.strings);
+  ws->lister_input_size = Min(params->input.size, sizeof(ws->lister_input_buffer));
+  MemoryCopy(ws->lister_input_buffer, params->input.str, ws->lister_input_size);
+  ws->lister_last_frame_idx = rd_state->frame_index;
 }
 
 ////////////////////////////////
@@ -11539,7 +11567,7 @@ rd_frame(void)
           arena_release(ws->ctx_menu_arena);
           arena_release(ws->drop_completion_arena);
           arena_release(ws->hover_eval_arena);
-          arena_release(ws->autocomp_lister_params_arena);
+          arena_release(ws->lister_params_arena);
           arena_release(ws->arena);
           DLLRemove_NPZ(&rd_nil_window_state, rd_state->first_window_state, rd_state->last_window_state, ws, order_next, order_prev);
           DLLRemove_NP(rd_state->window_state_slots[slot_idx].first, rd_state->window_state_slots[slot_idx].last, ws, hash_next, hash_prev);
@@ -13808,7 +13836,15 @@ rd_frame(void)
           //- rjf: panel tab controls
           case RD_CmdKind_FocusTab:
           {
-            // TODO(rjf): @cfg
+            RD_Cfg *tab = rd_cfg_from_handle(rd_regs()->view);
+            RD_Cfg *panel = tab->parent;
+            RD_PanelTree panel_tree = rd_panel_tree_from_cfg(scratch.arena, panel);
+            RD_PanelNode *panel_node = rd_panel_node_from_tree_cfg(panel_tree.root, panel);
+            for(RD_CfgNode *n = panel_node->tabs.first; n != 0; n = n->next)
+            {
+              rd_cfg_release(rd_cfg_child_from_string(n->v, str8_lit("selected")));
+            }
+            rd_cfg_new(tab, str8_lit("selected"));
           }break;
           case RD_CmdKind_NextTab:
           {
