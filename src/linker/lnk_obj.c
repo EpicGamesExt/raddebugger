@@ -6,19 +6,9 @@
 internal void
 lnk_error_obj(LNK_ErrorCode code, LNK_Obj *obj, char *fmt, ...)
 {
-  Temp scratch = scratch_begin(0, 0);
-  va_list args;
-  va_start(args, fmt);
-  String8 text = push_str8fv(scratch.arena, fmt, args);
-  
-  if (obj->lib_path.size) {
-    lnk_error(code, "%S(%S): %S", obj->lib_path, obj->path, text);
-  } else {
-    lnk_error(code, "%S: %S", obj->path, text);
-  }
-
+  va_list args; va_start(args, fmt);
+  lnk_error_with_loc_fv(code, obj->path, obj->lib_path, fmt, args);
   va_end(args);
-  scratch_end(scratch);
 }
 
 ////////////////////////////////
@@ -230,7 +220,7 @@ THREAD_POOL_TASK_FUNC(lnk_default_lib_collector)
   String8List             *result = &task->out_arr[task_id];
   for (U64 obj_idx = range.min; obj_idx < range.max; obj_idx += 1) {
     LNK_Obj     *obj = &task->in_arr.v[obj_idx].data;
-    String8List list = lnk_parse_default_lib_directive(arena, &obj->directive_info.v[LNK_Directive_DefaultLib]);
+    String8List list = lnk_parse_default_lib_directive(arena, &obj->directive_info.v[LNK_CmdSwitch_DefaultLib]);
     str8_list_concat_in_place(result, &list);
   }
 }
@@ -264,7 +254,7 @@ THREAD_POOL_TASK_FUNC(lnk_manifest_dependency_collector)
 
   for (; obj_ptr < obj_opl; obj_ptr += 1) {
     LNK_Obj           *obj  = &obj_ptr->data;
-    LNK_DirectiveList *dirs = &obj->directive_info.v[LNK_Directive_ManifestDependency];
+    LNK_DirectiveList *dirs = &obj->directive_info.v[LNK_CmdSwitch_ManifestDependency];
     for (LNK_Directive *dir = dirs->first; dir != 0; dir = dir->next) {
       String8List dep = str8_list_copy(arena, &dir->value_list);
       str8_list_concat_in_place(list, &dep);
@@ -450,7 +440,7 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
 
   // parse exports
   LNK_ExportParseList export_parse = {0};
-  for (LNK_Directive *dir = obj->directive_info.v[LNK_Directive_Export].first; dir != 0; dir = dir->next) {
+  for (LNK_Directive *dir = obj->directive_info.v[LNK_CmdSwitch_Export].first; dir != 0; dir = dir->next) {
     lnk_parse_export_direcive(arena, &obj->export_parse, dir->value_list, obj);
   }
 
@@ -461,12 +451,12 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
   }
 
   // push /include symbols 
-  for (LNK_Directive *dir = obj->directive_info.v[LNK_Directive_Include].first; dir != 0; dir = dir->next) {
+  for (LNK_Directive *dir = obj->directive_info.v[LNK_CmdSwitch_Include].first; dir != 0; dir = dir->next) {
     str8_list_concat_in_place(&obj->include_symbol_list, &dir->value_list);
   }
 
   // parse /alternatename
-  for (LNK_Directive *dir = obj->directive_info.v[LNK_Directive_AlternateName].first; dir != 0; dir = dir->next) {
+  for (LNK_Directive *dir = obj->directive_info.v[LNK_CmdSwitch_AlternateName].first; dir != 0; dir = dir->next) {
     String8 *invalid_string = lnk_parse_alt_name_directive_list(arena, dir->value_list, &obj->alt_name_list);
     if (invalid_string != 0) {
       lnk_error_obj(LNK_Error_Cmdl, obj, "invalid syntax \"%S\", expected format \"FROM=TO\"", *invalid_string);

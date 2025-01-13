@@ -23,69 +23,76 @@ lnk_merge_directive_list_push(Arena *arena, LNK_MergeDirectiveList *list, LNK_Me
 
 ////////////////////////////////
 
+internal B32
+lnk_is_directive_legal(LNK_CmdSwitchType type)
+{
+  static B32 init_table = 1;
+  static B8  is_legal[LNK_CmdSwitch_Count];
+  if (init_table) {
+    init_table = 0;
+    is_legal[LNK_CmdSwitch_AlternateName]      = 1;
+    is_legal[LNK_CmdSwitch_DefaultLib]         = 1;
+    is_legal[LNK_CmdSwitch_DisallowLib]        = 1;
+    is_legal[LNK_CmdSwitch_EditAndContinue]    = 1;
+    is_legal[LNK_CmdSwitch_Entry]              = 1;
+    is_legal[LNK_CmdSwitch_Export]             = 1;
+    is_legal[LNK_CmdSwitch_FailIfMismatch]     = 1;
+    is_legal[LNK_CmdSwitch_GuardSym]           = 1;
+    is_legal[LNK_CmdSwitch_Include]            = 1;
+    is_legal[LNK_CmdSwitch_InferAsanLibs]      = 1;
+    is_legal[LNK_CmdSwitch_InferAsanLibsNo]    = 1;
+    is_legal[LNK_CmdSwitch_ManifestDependency] = 1;
+    is_legal[LNK_CmdSwitch_Merge]              = 1;
+    is_legal[LNK_CmdSwitch_NoDefaultLib]       = 1;
+    is_legal[LNK_CmdSwitch_Release]            = 1;
+    is_legal[LNK_CmdSwitch_Section]            = 1;
+    is_legal[LNK_CmdSwitch_Stack]              = 1;
+    is_legal[LNK_CmdSwitch_SubSystem]          = 1;
+    is_legal[LNK_CmdSwitch_ThrowingNew]        = 1;
+  }
+  return is_legal[type];
+}
+
 internal void
 lnk_parse_directives(Arena *arena, LNK_DirectiveInfo *directive_info, String8 buffer, String8 obj_path)
 {
   Temp scratch = scratch_begin(&arena, 1);
   
-  String8 unparsed_directives = buffer;
+  String8 to_parse;
   {
-    static const U8 BOM_SIG[] = { 0xEF, 0xBB, 0xBF };
-    B32 is_bom = MemoryMatch(buffer.str, &BOM_SIG[0], sizeof(BOM_SIG));
-    if (is_bom) {
-      unparsed_directives = str8_zero();
+    local_persist const U8 bom_sig[]   = { 0xEF, 0xBB, 0xBF };
+    local_persist const U8 ascii_sig[] = { 0x20, 0x20, 0x20 };
+    if (MemoryMatch(buffer.str, &bom_sig[0], sizeof(bom_sig))) {
+      to_parse = str8_zero();
       lnk_not_implemented("TODO: support for BOM encoding");
-    }
-    static const U8 ASCII_SIG[] = { 0x20, 0x20, 0x20 };
-    B32 is_ascii = MemoryMatch(buffer.str, &ASCII_SIG[0], sizeof(ASCII_SIG));
-    if (is_ascii) {
-      unparsed_directives = str8_skip(buffer, sizeof(ASCII_SIG));
+    } else if (MemoryMatch(buffer.str, &ascii_sig[0], sizeof(ascii_sig))) {
+      to_parse = str8_skip(buffer, sizeof(ascii_sig));
+    } else {
+      to_parse = buffer;
     }
   }
   
-  String8List arg_list = lnk_arg_list_parse_windows_rules(scratch.arena, unparsed_directives);
+  String8List arg_list = lnk_arg_list_parse_windows_rules(scratch.arena, to_parse);
   LNK_CmdLine cmd_line = lnk_cmd_line_parse_windows_rules(scratch.arena, arg_list);
 
   for (LNK_CmdOption *opt = cmd_line.first_option; opt != 0; opt = opt->next) {
-    static struct {
-      LNK_DirectiveKind kind;
-      String8           name;
-    } directive_table[LNK_Directive_Count] = {
-      { LNK_Directive_Null,                str8_lit_comp("")                   },
-      { LNK_Directive_DefaultLib,          str8_lit_comp("defaultlib")         },
-      { LNK_Directive_Export,              str8_lit_comp("export" )            },
-      { LNK_Directive_Include,             str8_lit_comp("include")            },
-      { LNK_Directive_ManifestDependency,  str8_lit_comp("manifestdependency") },
-      { LNK_Directive_Merge,               str8_lit_comp("merge")              },
-      { LNK_Directive_Section,             str8_lit_comp("section")            },
-      { LNK_Directive_AlternateName,       str8_lit_comp("alternatename")      },
-      { LNK_Directive_GuardSym,            str8_lit_comp("guardsym")           },
-      { LNK_Directive_DisallowLib,         str8_lit_comp("disallowlib")        },
-      { LNK_Directive_FailIfMismatch,      str8_lit_comp("failifmismatch")     },
-      { LNK_Directive_EditAndContinue,     str8_lit_comp("editandcontinue")    },
-      { LNK_Directive_ThrowingNew,         str8_lit_comp("throwingnew")        },
-    };
+    LNK_CmdSwitchType type = lnk_cmd_switch_type_from_string(opt->string);
 
-    LNK_DirectiveKind kind = LNK_Directive_Null;
-    for (U64 i = 0; i < ArrayCount(directive_table); ++i) {
-      if (str8_match(directive_table[i].name, opt->string, StringMatchFlag_CaseInsensitive)) {
-        kind = directive_table[i].kind;
-        if (kind == LNK_Directive_Merge) {
-          String8  v = str8_list_join(scratch.arena, &opt->value_strings, &(StringJoin){ .sep = str8_lit_comp(" ")});
-        }
-        break;
-      }
-    }
-    if (kind == LNK_Directive_Null) {
+    if (type == LNK_CmdSwitch_Null) {
       lnk_error(LNK_Warning_UnknownDirective, "%S: unknown directive \"%S\"", obj_path, opt->string);
+      continue;
     }
-    
+    if (!lnk_is_directive_legal(type)) {
+      lnk_error(LNK_Warning_IllegalDirective, "%S: illegal directive \"%S\"", obj_path, opt->string);
+      continue;
+    }
+
     LNK_Directive *directive = push_array_no_zero(arena, LNK_Directive, 1);
     directive->next          = 0;
     directive->id            = push_str8_copy(arena, opt->string);
     directive->value_list    = str8_list_copy(arena, &opt->value_strings);
-    
-    LNK_DirectiveList *directive_list = &directive_info->v[kind];
+
+    LNK_DirectiveList *directive_list = &directive_info->v[type];
     SLLQueuePush(directive_list->first, directive_list->last, directive);
     ++directive_list->count;
   }
@@ -110,7 +117,6 @@ lnk_parse_default_lib_directive(Arena *arena, LNK_DirectiveList *dir_list)
       } else {
         lib_path = push_str8_copy(arena, lib_path);
       }
-
       
       str8_list_push(arena, &default_libs, lib_path);
     }

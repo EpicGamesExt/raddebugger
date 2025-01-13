@@ -2895,7 +2895,7 @@ lnk_init_merge_directive_list(Arena *arena, LNK_ObjList obj_list)
   // collect merge directives from objs
   for (LNK_ObjNode *obj_node = obj_list.first; obj_node != 0; obj_node = obj_node->next) {
     LNK_Obj *obj = &obj_node->data;
-    for (LNK_Directive *dir = obj->directive_info.v[LNK_Directive_Merge].first; dir != 0; dir = dir->next) {
+    for (LNK_Directive *dir = obj->directive_info.v[LNK_CmdSwitch_Merge].first; dir != 0; dir = dir->next) {
       for (String8Node *value_node = dir->value_list.first; value_node != 0; value_node = value_node->next) {
         LNK_MergeDirective merge_dir;
         if (lnk_parse_merge_directive(value_node->string, &merge_dir)) { lnk_merge_directive_list_push(arena, &result, merge_dir);
@@ -3569,10 +3569,25 @@ lnk_run(int argc, char **argv)
         ProfBegin("Collect Directives");
         for (U64 i = 0; i < obj_node_arr.count; ++i) {
           LNK_Obj *obj = &obj_node_arr.v[i].data;
+
           str8_list_concat_in_place(&include_symbol_list, &obj->include_symbol_list);
+
           lnk_alt_name_list_concat_in_place(&alt_name_list, &obj->alt_name_list);
-          for (LNK_Directive *dir = obj->directive_info.v[LNK_Directive_DisallowLib].first; dir != 0; dir = dir->next) {
+
+          for (LNK_Directive *dir = obj->directive_info.v[LNK_CmdSwitch_DisallowLib].first; dir != 0; dir = dir->next) {
             str8_list_concat_in_place(&input_disallow_lib_list, &dir->value_list);
+          }
+
+          for (LNK_Directive *dir = obj->directive_info.v[LNK_CmdSwitch_Entry].first; dir != 0; dir = dir->next) {
+            lnk_apply_cmd_option_to_config(scratch.arena, config, dir->id, dir->value_list, obj->path, obj->lib_path);
+          }
+
+          for (LNK_Directive *dir = obj->directive_info.v[LNK_CmdSwitch_SubSystem].first; dir != 0; dir = dir->next) {
+            lnk_apply_cmd_option_to_config(scratch.arena, config, dir->id, dir->value_list, obj->path, obj->lib_path);
+          }
+
+          for (LNK_Directive *dir = obj->directive_info.v[LNK_CmdSwitch_Stack].first; dir != 0; dir = dir->next) {
+            lnk_apply_cmd_option_to_config(scratch.arena, config, dir->id, dir->value_list, obj->path, obj->lib_path);
           }
         }
         ProfEnd();

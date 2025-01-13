@@ -51,27 +51,9 @@ typedef struct LNK_MergeDirectiveList
   LNK_MergeDirectiveNode *last;
 } LNK_MergeDirectiveList;
 
-typedef enum
-{
-  LNK_Directive_Null,
-  LNK_Directive_DefaultLib,
-  LNK_Directive_Export,
-  LNK_Directive_Include,
-  LNK_Directive_ManifestDependency,
-  LNK_Directive_Merge,
-  LNK_Directive_Section,
-  LNK_Directive_AlternateName,
-  LNK_Directive_GuardSym,
-  LNK_Directive_DisallowLib,
-  LNK_Directive_FailIfMismatch,
-  LNK_Directive_EditAndContinue,
-  LNK_Directive_ThrowingNew,
-  LNK_Directive_Count
-} LNK_DirectiveKind;
-
 typedef struct LNK_DirectiveInfo
 {
-  LNK_DirectiveList v[LNK_Directive_Count];
+  LNK_DirectiveList v[LNK_CmdSwitch_Count];
 } LNK_DirectiveInfo;
 
 ////////////////////////////////

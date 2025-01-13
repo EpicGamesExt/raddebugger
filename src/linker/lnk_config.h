@@ -40,6 +40,7 @@ typedef enum
   LNK_CmdSwitch_ManifestFile,
   LNK_CmdSwitch_ManifestInput,
   LNK_CmdSwitch_ManifestUac,
+  LNK_CmdSwitch_Merge,
   LNK_CmdSwitch_Natvis,
   LNK_CmdSwitch_NoDefaultLib,
   LNK_CmdSwitch_NoExp,
@@ -73,18 +74,23 @@ typedef enum
   LNK_CmdSwitch_DependentLoadFlag,
   LNK_CmdSwitch_Driver,
   LNK_CmdSwitch_DisallowLib,
+  LNK_CmdSwitch_EditAndContinue,
   LNK_CmdSwitch_EmitVolatileMetadata,
   LNK_CmdSwitch_ErrorReport,
   LNK_CmdSwitch_Export,
   LNK_CmdSwitch_ExportAdmin,
   LNK_CmdSwitch_FastGenProfile,
+  LNK_CmdSwitch_FailIfMismatch,
   LNK_CmdSwitch_Force,
   LNK_CmdSwitch_Guard,
+  LNK_CmdSwitch_GuardSym,
   LNK_CmdSwitch_GenProfile,
   LNK_CmdSwitch_IdlOut,
   LNK_CmdSwitch_IgnoreIdl,
   LNK_CmdSwitch_Ilk,
   LNK_CmdSwitch_IntegrityCheck,
+  LNK_CmdSwitch_InferAsanLibs,
+  LNK_CmdSwitch_InferAsanLibsNo,
   LNK_CmdSwitch_Kernel,
   LNK_CmdSwitch_KeyContainer,
   LNK_CmdSwitch_KeyFile,
@@ -94,7 +100,6 @@ typedef enum
   LNK_CmdSwitch_LtcgOut,
   LNK_CmdSwitch_Map,
   LNK_CmdSwitch_MapInfo,
-  LNK_CmdSwitch_Merge,
   LNK_CmdSwitch_Midl,
   LNK_CmdSwitch_NoAssembly,
   LNK_CmdSwitch_NoEntry,
@@ -108,6 +113,7 @@ typedef enum
   LNK_CmdSwitch_Stub,
   LNK_CmdSwitch_SwapRun,
   LNK_CmdSwitch_TlbId,
+  LNK_CmdSwitch_ThrowingNew,
   LNK_CmdSwitch_UserProfile,
   LNK_CmdSwitch_Verbose,
   LNK_CmdSwitch_Version,
@@ -281,7 +287,6 @@ typedef struct LNK_Config
   Version                     subsystem_ver;
   PE_ImageFileCharacteristics file_characteristics;
   PE_DllCharacteristics       dll_characteristics;
-  String8                     user_entry_point_name;
   String8                     entry_point_name;
   String8List                 lib_dir_list;
   PathStyle                   path_style;
@@ -471,9 +476,9 @@ internal B32             lnk_cmd_line_has_switch(LNK_CmdLine cmd_line, LNK_CmdSw
 ////////////////////////////////
 // Errors
 
-internal void lnk_error_cmd_switch(LNK_ErrorCode code, LNK_CmdSwitchType cmd_switch, char *fmt, ...);
-internal void lnk_error_cmd_switch_invalid_param_count(LNK_ErrorCode code, LNK_CmdSwitchType cmd_switch);
-internal void lnk_error_cmd_switch_invalid_param(LNK_ErrorCode code, LNK_CmdSwitchType cmd_switch, String8 param);
+internal void lnk_error_cmd_switch(LNK_ErrorCode code, String8 obj_path, String8 lib_path, LNK_CmdSwitchType cmd_switch, char *fmt, ...);
+internal void lnk_error_cmd_switch_invalid_param_count(LNK_ErrorCode code, String8 obj_path, String8 lib_path, LNK_CmdSwitchType cmd_switch);
+internal void lnk_error_cmd_switch_invalid_param(LNK_ErrorCode code, String8 obj_path, String8 lib_path, LNK_CmdSwitchType cmd_switch, String8 param);
 
 ////////////////////////////////
 // Getters
@@ -488,23 +493,25 @@ internal B32 lnk_do_debug_info(LNK_Config *config);
 ////////////////////////////////
 // Specialized Parsers
 
-internal B32  lnk_cmd_switch_parse_version(String8List value_strings, LNK_CmdSwitchType cmd_switch, Version *ver_out);
-internal B32  lnk_cmd_switch_parse_tuple(String8List value_strings, LNK_CmdSwitchType cmd_switch, Rng1U64 *tuple_out);
-internal B32  lnk_cmd_switch_parse_u64(String8List value_strings, LNK_CmdSwitchType cmd_switch, U64 *value_out, LNK_ParseU64Flags flags);
-internal B32  lnk_cmd_switch_parse_u32(String8List value_strings, LNK_CmdSwitchType cmd_switch, U32 *value_out, LNK_ParseU64Flags flags);
-internal B32  lnk_cmd_switch_parse_flag(String8List value_strings, LNK_CmdSwitchType cmd_switch, LNK_SwitchState *value_out);
-internal void lnk_cmd_switch_set_flag_inv_16(String8List value_strings, LNK_CmdSwitchType cmd_switch, U16 *flags, U16 bits);
-internal void lnk_cmd_switch_set_flag_inv_64(String8List value_strings, LNK_CmdSwitchType cmd_switch, U64 *flags, U64 bits);
-internal void lnk_cmd_switch_set_flag_16(String8List value_strings, LNK_CmdSwitchType cmd_switch, U16 *flags, U16 bits);
-internal void lnk_cmd_switch_set_flag_32(String8List value_strings, LNK_CmdSwitchType cmd_switch, U32 *flags, U32 bits);
-internal void lnk_cmd_switch_set_flag_64(String8List value_strings, LNK_CmdSwitchType cmd_switch, U64 *flags, U64 bits);
-internal B32  lnk_cmd_switch_parse_string(String8List value_strings, LNK_CmdSwitchType cmd_switch, String8 *string_out);
-internal void lnk_cmd_switch_parse_string_copy(Arena *arena, String8List value_strings, LNK_CmdSwitchType cmd_switch, String8 *string_out);
+internal B32  lnk_cmd_switch_parse_version(String8 obj_path, String8 lib_path, LNK_CmdSwitchType cmd_switch, String8List value_strings, Version *ver_out);
+internal B32  lnk_cmd_switch_parse_tuple(String8 obj_path, String8 lib_path, LNK_CmdSwitchType cmd_switch, String8List value_strings, Rng1U64 *tuple_out);
+internal B32  lnk_cmd_switch_parse_u64(String8 obj_path, String8 lib_path, LNK_CmdSwitchType cmd_switch, String8List value_strings, U64 *value_out, LNK_ParseU64Flags flags);
+internal B32  lnk_cmd_switch_parse_u32(String8 obj_path, String8 lib_path, LNK_CmdSwitchType cmd_switch, String8List value_strings, U32 *value_out, LNK_ParseU64Flags flags);
+internal B32  lnk_cmd_switch_parse_flag(String8 obj_path, String8 lib_path, LNK_CmdSwitchType cmd_switch, String8List value_strings, LNK_SwitchState *value_out);
+internal void lnk_cmd_switch_set_flag_inv_16(String8 obj_path, String8 lib_path, LNK_CmdSwitchType cmd_switch, String8List value_strings, U16 *flags, U16 bits);
+internal void lnk_cmd_switch_set_flag_inv_64(String8 obj_path, String8 lib_path, LNK_CmdSwitchType cmd_switch, String8List value_strings, U64 *flags, U64 bits);
+internal void lnk_cmd_switch_set_flag_16(String8 obj_path, String8 lib_path, LNK_CmdSwitchType cmd_switch, String8List value_strings, U16 *flags, U16 bits);
+internal void lnk_cmd_switch_set_flag_32(String8 obj_path, String8 lib_path, LNK_CmdSwitchType cmd_switch, String8List value_strings, U32 *flags, U32 bits);
+internal void lnk_cmd_switch_set_flag_64(String8 obj_path, String8 lib_path, LNK_CmdSwitchType cmd_switch, String8List value_strings, U64 *flags, U64 bits);
+internal B32  lnk_cmd_switch_parse_string(String8 obj_path, String8 lib_path, LNK_CmdSwitchType cmd_switch, String8List value_strings, String8 *string_out);
+internal void lnk_cmd_switch_parse_string_copy(Arena *arena, String8 obj_path, String8 lib_path, LNK_CmdSwitchType cmd_switch, String8List value_strings, String8 *string_out);
 
 internal B32       lnk_parse_alt_name_directive(Arena *arena, String8 input, LNK_AltNameList *list_out);
 internal String8 * lnk_parse_alt_name_directive_list(Arena *arena, String8List list, LNK_AltNameList *list_out);
 
 ////////////////////////////////
+
+internal void lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 name, String8List value_list, String8 obj_path, String8 lib_path);
 
 internal LNK_Config * lnk_config_from_raw_cmd_line(Arena *arena, String8List raw_cmd_line);
 internal LNK_Config * lnk_build_config(Arena *arena, int argc, char **argv);
