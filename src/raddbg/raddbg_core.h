@@ -637,12 +637,17 @@ struct RD_WindowState
   S64 autocomp_cursor_num;
   
   // rjf: query view stack
+  U64 query_cmd_gen;
   Arena *query_cmd_arena;
   String8 query_cmd_name;
   RD_Regs *query_cmd_regs;
   U64 query_cmd_regs_mask[(RD_RegSlot_COUNT + 63) / 64];
-  RD_Cfg *query_view_stack_top;
-  B32 query_view_selected;
+  U64 query_input_gen;
+  B32 query_input_selected;
+  U8 query_input_buffer[1024];
+  U64 query_input_string_size;
+  TxtPt query_input_cursor;
+  TxtPt query_input_mark;
   
   // rjf: hover eval state
   B32 hover_eval_focused;
