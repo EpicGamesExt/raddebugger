@@ -635,14 +635,14 @@ rd_cfg_deep_copy(RD_Cfg *src_root)
   for(RD_Cfg *src = src_root; src != &rd_nil_cfg; src = rec.next)
   {
     RD_Cfg *dst = rd_cfg_new(dst_parent, src->string);
+    if(dst_root == &rd_nil_cfg)
+    {
+      dst_root = dst;
+    }
     rec = rd_cfg_rec__depth_first(src_root, src);
     if(rec.push_count > 0)
     {
       dst_parent = dst;
-      if(dst_root == &rd_nil_cfg)
-      {
-        dst_root = dst;
-      }
     }
     else for(S32 pop_idx = 0; pop_idx < rec.pop_count; pop_idx += 1)
     {
@@ -677,8 +677,11 @@ rd_cfg_equip_stringf(RD_Cfg *cfg, char *fmt, ...)
 internal void
 rd_cfg_insert_child(RD_Cfg *parent, RD_Cfg *prev_child, RD_Cfg *new_child)
 {
-  DLLInsert_NPZ(&rd_nil_cfg, parent->first, parent->last, prev_child, new_child, next, prev);
-  new_child->parent = parent;
+  if(parent != &rd_nil_cfg)
+  {
+    DLLInsert_NPZ(&rd_nil_cfg, parent->first, parent->last, prev_child, new_child, next, prev);
+    new_child->parent = parent;
+  }
 }
 
 internal void
