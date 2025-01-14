@@ -257,6 +257,201 @@ cv_inline_annot_signed_from_unsigned_operand(U32 value)
   return result;
 }
 
+internal CV_C13InlineSiteDecoder
+cv_c13_inline_site_decoder_init(U32 file_off, U32 first_source_ln, U32 parent_voff)
+{
+  CV_C13InlineSiteDecoder decoder = {0};
+  decoder.parent_voff             = parent_voff;
+  decoder.file_off                = file_off;
+  decoder.ln                      = (S32)first_source_ln;
+  decoder.cn                      = 1;
+  decoder.ln_changed              = 1;
+  return decoder;
+}
+
+internal CV_C13InlineSiteDecoderStep
+cv_c13_inline_site_decoder_step(CV_C13InlineSiteDecoder *decoder, String8 binary_annots)
+{
+  CV_C13InlineSiteDecoderStep result = {0};
+
+  for (; decoder->cursor < binary_annots.size && result.flags == 0; ) {
+    U32 op = CV_InlineBinaryAnnotation_Null;
+    decoder->cursor += cv_decode_inline_annot_u32(binary_annots, decoder->cursor, &op);
+
+    switch (op) {
+    case CV_InlineBinaryAnnotation_Null: {
+      decoder->cursor              = binary_annots.size;
+      // this is last run, append range with left over code bytes
+      decoder->code_length         = decoder->code_offset - decoder->code_offset_lo;
+      decoder->code_length_changed = 1;
+    } break;
+    case CV_InlineBinaryAnnotation_CodeOffset: {
+      decoder->cursor += cv_decode_inline_annot_u32(binary_annots, decoder->cursor, &decoder->code_offset);
+      decoder->code_offset_changed = 1;
+    } break;
+    case CV_InlineBinaryAnnotation_ChangeCodeOffsetBase: {
+      AssertAlways(!"TODO: test case");
+      // U32 delta = 0;
+      // decoder->cursor += cv_decode_inline_annot_u32(binary_annots, decoder->cursor, &delta);
+      // decoder->code_offset_base = decoder->code_offset;
+      // decoder->code_offset_end  = decoder->code_offset + delta;
+      // decoder->code_offset     += delta;
+    } break;
+    case CV_InlineBinaryAnnotation_ChangeCodeOffset: {
+      U32 delta = 0;
+      decoder->cursor += cv_decode_inline_annot_u32(binary_annots, decoder->cursor, &delta);
+
+      decoder->code_offset += delta;
+
+      if (!decoder->code_offset_lo_changed) {
+        decoder->code_offset_lo         = decoder->code_offset;
+        decoder->code_offset_lo_changed = 1;
+      }
+      decoder->code_offset_changed = 1;
+    } break;
+    case CV_InlineBinaryAnnotation_ChangeCodeLength: {
+      decoder->code_length = 0;
+      decoder->cursor += cv_decode_inline_annot_u32(binary_annots, decoder->cursor, &decoder->code_length);
+      decoder->code_length_changed = 1;
+    } break;
+    case CV_InlineBinaryAnnotation_ChangeFile: {
+      U32 old_file_off = decoder->file_off;
+      decoder->cursor += cv_decode_inline_annot_u32(binary_annots, decoder->cursor, &decoder->file_off);
+      decoder->file_off_changed = old_file_off != decoder->file_off;
+      // Compiler isn't obligated to terminate code sequence before chaning files,
+      // so we have to always force emit code range on file change.
+      decoder->code_length_changed = decoder->file_off_changed;
+    } break;
+    case CV_InlineBinaryAnnotation_ChangeLineOffset: {
+      S32 delta = 0;
+      decoder->cursor += cv_decode_inline_annot_s32(binary_annots, decoder->cursor, &delta);
+
+      decoder->ln         += delta;
+      decoder->ln_changed  = 1;
+    } break;
+    case CV_InlineBinaryAnnotation_ChangeLineEndDelta: {
+      AssertAlways(!"TODO: test case");
+      // S32 end_delta = 1;
+      // decoder->cursor += cv_decode_inline_annot_s32(binary_annots, decoder->cursor, &end_delta);
+      // decoder->ln += end_delta;
+    } break;
+    case CV_InlineBinaryAnnotation_ChangeRangeKind: {
+      AssertAlways(!"TODO: test case");
+      // decoder->cursor += cv_decode_inline_annot_u32(binary_annots, decoder->cursor, &range_kind);
+    } break;
+    case CV_InlineBinaryAnnotation_ChangeColumnStart: {
+      AssertAlways(!"TODO: test case");
+      // S32 delta;
+      // decoder->cursor += cv_decode_inline_annot_s32(binary_annots, decoder->cursor, &delta);
+      // decoder->cn += delta;
+    } break;
+    case CV_InlineBinaryAnnotation_ChangeColumnEndDelta: {
+      AssertAlways(!"TODO: test case");
+      // S32 end_delta;
+      // decoder->cursor += cv_decode_inline_annot_s32(binary_annots, decoder->cursor, &end_delta);
+      // decoder->cn += end_delta;
+    } break;
+    case CV_InlineBinaryAnnotation_ChangeCodeOffsetAndLineOffset: {
+      U32 code_offset_and_line_offset = 0;
+      decoder->cursor += cv_decode_inline_annot_u32(binary_annots, decoder->cursor, &code_offset_and_line_offset);
+
+      S32 line_delta = cv_inline_annot_signed_from_unsigned_operand(code_offset_and_line_offset >> 4);
+      U32 code_delta = (code_offset_and_line_offset & 0xf);
+
+      decoder->code_offset += code_delta;
+      decoder->ln          += line_delta;
+
+      if (!decoder->code_offset_lo_changed) {
+        decoder->code_offset_lo         = decoder->code_offset;
+        decoder->code_offset_lo_changed = 1;
+      }
+
+      decoder->code_offset_changed = 1;
+      decoder->ln_changed          = 1;
+    } break;
+    case CV_InlineBinaryAnnotation_ChangeCodeLengthAndCodeOffset: {
+      U32 offset_delta = 0;
+      decoder->cursor += cv_decode_inline_annot_u32(binary_annots, decoder->cursor, &decoder->code_length);
+      decoder->cursor += cv_decode_inline_annot_u32(binary_annots, decoder->cursor, &offset_delta); 
+
+      decoder->code_offset += offset_delta;
+
+      if (!decoder->code_offset_lo_changed) {
+        decoder->code_offset_lo         = decoder->code_offset;
+        decoder->code_offset_lo_changed = 1;
+      }
+
+      decoder->code_offset_changed = 1;
+      decoder->code_length_changed = 1;
+    } break;
+    case CV_InlineBinaryAnnotation_ChangeColumnEnd: {
+      AssertAlways(!"TODO: test case");
+      // U32 column_end = 0;
+      // decoder->cursor += cv_decode_inline_annot_u32(binary_annots, decoder->cursor, &column_end);
+    } break;
+    }
+
+    U64 line_code_offset = decoder->code_offset;
+
+    if (decoder->code_length_changed) {
+      // compute upper bound of the range
+      U64 code_offset_hi = decoder->code_offset + decoder->code_length;
+
+      // can last code range be extended to cover current sequence too?
+      if (decoder->last_range.max == decoder->parent_voff + decoder->code_offset_lo) {
+        decoder->last_range.max = decoder->parent_voff + code_offset_hi;
+
+        result.flags |= CV_C13InlineSiteDecoderStepFlag_ExtendLastRange;
+        result.range  = decoder->last_range;
+      } else {
+        decoder->last_range      = rng_1u64(decoder->parent_voff + decoder->code_offset_lo, decoder->parent_voff + code_offset_hi);
+        decoder->file_last_range = decoder->last_range;
+
+        result.flags |= CV_C13InlineSiteDecoderStepFlag_EmitRange;
+        result.range  = decoder->last_range;
+      }
+
+      // update state
+      decoder->code_offset_lo         = code_offset_hi;
+      decoder->code_offset           += decoder->code_length;
+      decoder->code_offset_lo_changed = 0;
+      decoder->code_length_changed    = 0;
+      decoder->code_length            = 0;
+    }
+
+    if (decoder->file_off_changed || (decoder->file_count == 0)) {
+      result.flags    |= CV_C13InlineSiteDecoderStepFlag_EmitFile;
+      result.file_off  = decoder->file_off;
+
+      // update state
+      decoder->file_last_range   = decoder->last_range;
+      decoder->file_off_changed  = 0;
+      decoder->file_count       += 1;
+      decoder->file_line_count   = 0;
+    }
+
+    if (decoder->code_offset_changed && decoder->ln_changed) {
+      if (decoder->file_line_count == 0 || decoder->file_last_ln != decoder->ln) {
+        result.flags         |= CV_C13InlineSiteDecoderStepFlag_EmitLine;
+        result.ln             = decoder->ln;
+        result.cn             = decoder->cn;
+        result.line_voff      = decoder->parent_voff + line_code_offset;
+        result.line_voff_end  = decoder->last_range.max;
+
+        // update state
+        decoder->file_line_count += 1;
+        decoder->file_last_ln     = decoder->ln;
+      }
+
+      // update state
+      decoder->code_offset_changed = 0;
+      decoder->ln_changed          = 0;
+    }
+  }
+
+  return result;
+}
+
 //- Symbol/Leaf Helpers
 
 internal B32

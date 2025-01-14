@@ -95,6 +95,51 @@ struct CV_LeafParsed
 ////////////////////////////////
 //~ CodeView C13 Info Parser Types
 
+typedef struct CV_C13InlineSiteDecoder CV_C13InlineSiteDecoder;
+struct CV_C13InlineSiteDecoder
+{
+  U64                cursor;
+  U64                parent_voff;
+  CV_InlineRangeKind range_kind;
+  U32                code_length;
+  U32                code_offset;
+  U32                file_off;
+  S32                ln;
+  S32                cn;
+  U64                code_offset_lo;
+  B32                code_offset_changed;
+  B32                code_offset_lo_changed;
+  B32                code_length_changed;
+  B32                ln_changed;
+  B32                file_off_changed;
+  Rng1U64            last_range;
+  U32                file_count;
+  Rng1U64            file_last_range;
+  U64                file_line_count;
+  U64                file_last_ln;
+};
+
+typedef U32 CV_C13InlineSiteDecoderStepFlags;
+enum
+{
+  CV_C13InlineSiteDecoderStepFlag_EmitRange       = (1 << 0),
+  CV_C13InlineSiteDecoderStepFlag_ExtendLastRange = (1 << 1),
+  CV_C13InlineSiteDecoderStepFlag_EmitFile        = (1 << 2),
+  CV_C13InlineSiteDecoderStepFlag_EmitLine        = (1 << 3),
+};
+
+typedef struct CV_C13InlineSiteDecoderStep CV_C13InlineSiteDecoderStep;
+struct CV_C13InlineSiteDecoderStep
+{
+  CV_C13InlineSiteDecoderStepFlags flags;
+  Rng1U64                     range;
+  U64                         line_voff;
+  U64                         line_voff_end;
+  U64                         ln;
+  U64                         cn;
+  U32                         file_off;
+};
+
 typedef struct CV_C13LinesParsed CV_C13LinesParsed;
 struct CV_C13LinesParsed
 {
@@ -212,6 +257,9 @@ internal F64 cv_f64_from_numeric(CV_NumericParsed *num);
 internal U64 cv_decode_inline_annot_u32(String8 data, U64 offset, U32 *out_value);
 internal U64 cv_decode_inline_annot_s32(String8 data, U64 offset, S32 *out_value);
 internal S32 cv_inline_annot_signed_from_unsigned_operand(U32 value);
+
+internal CV_C13InlineSiteDecoder      cv_c13_inline_site_decoder_init(U32 file_off, U32 first_source_ln, U32 parent_voff);
+internal CV_C13InlineSiteDecoderStep cv_c13_inline_site_decoder_step(CV_C13InlineSiteDecoder *decoder, String8 binary_annots);
 
 //- Symbol/Leaf Helpers
 
