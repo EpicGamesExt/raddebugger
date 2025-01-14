@@ -516,27 +516,38 @@ RD_PaletteCode;
 typedef U32 RD_ListerFlags;
 enum
 {
-  RD_ListerFlag_Locals        = (1<<0),
-  RD_ListerFlag_Registers     = (1<<1),
-  RD_ListerFlag_ViewRules     = (1<<2),
-  RD_ListerFlag_ViewRuleParams= (1<<3),
-  RD_ListerFlag_Members       = (1<<4),
-  RD_ListerFlag_Globals       = (1<<5),
-  RD_ListerFlag_ThreadLocals  = (1<<6),
-  RD_ListerFlag_Procedures    = (1<<7),
-  RD_ListerFlag_Types         = (1<<8),
-  RD_ListerFlag_Languages     = (1<<9),
-  RD_ListerFlag_Architectures = (1<<10),
-  RD_ListerFlag_Tex2DFormats  = (1<<11),
-  RD_ListerFlag_Files         = (1<<12),
+  //- rjf: lister visual settings
+  RD_ListerFlag_Descriptions  = (1<<0),
+  
+  //- rjf: lister item sources
+  RD_ListerFlag_Locals        = (1<<1),
+  RD_ListerFlag_Registers     = (1<<2),
+  RD_ListerFlag_ViewRules     = (1<<3),
+  RD_ListerFlag_ViewRuleParams= (1<<4),
+  RD_ListerFlag_Members       = (1<<5),
+  RD_ListerFlag_Globals       = (1<<6),
+  RD_ListerFlag_ThreadLocals  = (1<<7),
+  RD_ListerFlag_Procedures    = (1<<8),
+  RD_ListerFlag_Types         = (1<<9),
+  RD_ListerFlag_Languages     = (1<<10),
+  RD_ListerFlag_Architectures = (1<<11),
+  RD_ListerFlag_Tex2DFormats  = (1<<12),
+  RD_ListerFlag_Files         = (1<<13),
+  RD_ListerFlag_Commands      = (1<<14),
 };
 
 typedef struct RD_ListerItem RD_ListerItem;
 struct RD_ListerItem
 {
   String8 string;
-  String8 kind_string;
-  FuzzyMatchRangeList matches;
+  String8 kind_name;
+  String8 display_name;
+  String8 description;
+  String8 search_tags;
+  RD_IconKind icon_kind;
+  FuzzyMatchRangeList kind_name__matches;
+  FuzzyMatchRangeList display_name__matches;
+  FuzzyMatchRangeList description__matches;
   U64 group;
   B32 is_non_code;
 };
@@ -1272,6 +1283,7 @@ internal void rd_set_hover_eval(Vec2F32 pos, String8 file_path, TxtPt pt, U64 va
 //~ rjf: Lister
 
 internal void rd_lister_item_chunk_list_push(Arena *arena, RD_ListerItemChunkList *list, U64 cap, RD_ListerItem *item);
+#define rd_lister_item_chunk_list_push_new(arena, list, cap, ...) rd_lister_item_chunk_list_push((arena), (list), (cap), &(RD_ListerItem){.string = {0}, __VA_ARGS__})
 internal RD_ListerItemArray rd_lister_item_array_from_chunk_list(Arena *arena, RD_ListerItemChunkList *list);
 internal int rd_lister_item_qsort_compare(RD_ListerItem *a, RD_ListerItem *b);
 internal void rd_lister_item_array_sort__in_place(RD_ListerItemArray *array);
