@@ -1969,6 +1969,15 @@ rdim_bake_string_map_loose_push_symbol_slice(RDIM_Arena *arena, RDIM_BakeStringM
 }
 
 RDI_PROC void
+rdim_bake_string_map_loose_push_inline_site_slice(RDIM_Arena *arena, RDIM_BakeStringMapTopology *top, RDIM_BakeStringMapLoose *map, RDIM_InlineSite *v, RDI_U64 count)
+{
+  for(RDI_U64 idx = 0; idx < count; idx += 1)
+  {
+    rdim_bake_string_map_loose_insert(arena, top, map, 4, v[idx].name);
+  }
+}
+
+RDI_PROC void
 rdim_bake_string_map_loose_push_scope_slice(RDIM_Arena *arena, RDIM_BakeStringMapTopology *top, RDIM_BakeStringMapLoose *map, RDIM_Scope *v, RDI_U64 count)
 {
   for(RDI_U64 idx = 0; idx < count; idx += 1)

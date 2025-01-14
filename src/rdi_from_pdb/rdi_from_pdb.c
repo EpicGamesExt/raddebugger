@@ -4052,6 +4052,23 @@ ASYNC_WORK_DEF(p2r_bake_symbols_strings_work)
   return 0;
 }
 
+ASYNC_WORK_DEF(p2r_bake_inline_site_strings_work)
+{
+  ProfBeginFunction();
+  Arena *arena = p2r_state->work_thread_arenas[thread_idx];
+  P2R_BakeInlineSiteStringsIn *in = input;
+  p2r_make_string_map_if_needed();
+  ProfScope("bake inline site strings");
+  {
+    for(P2R_BakeInlineSiteStringsInNode *n = in->first; n != 0; n = n->next)
+    {
+      rdim_bake_string_map_loose_push_inline_site_slice(arena, in->top, in->maps[thread_idx], n->v, n->count);
+    }
+  }
+  ProfEnd();
+  return 0;
+}
+
 ASYNC_WORK_DEF(p2r_bake_scopes_strings_work)
 {
   ProfBeginFunction();
@@ -4516,6 +4533,37 @@ p2r_bake(Arena *arena, P2R_Convert2Bake *in)
           }
           async_task_list_push(scratch.arena, &bake_string_map_build_tasks, async_task_launch(scratch.arena, p2r_bake_symbols_strings_work, .input = in));
         }
+      }
+    }
+
+    ProfScope("kick off inline site string map build task")
+    {
+      U64 items_per_task = 4096;
+      U64 num_tasks = CeilIntegerDiv(in_params->inline_sites.total_count, items_per_task);
+      RDIM_InlineSiteChunkNode *chunk = in_params->inline_sites.first;
+      U64 chunk_off = 0;
+      for(U64 task_idx = 0; task_idx < num_tasks; task_idx += 1)
+      {
+        P2R_BakeInlineSiteStringsIn *in = push_array(scratch.arena, P2R_BakeInlineSiteStringsIn, 1);
+        in->top = &bake_string_map_topology;
+        in->maps = bake_string_maps__in_progress;
+        U64 items_left = items_per_task;
+        for(;chunk != 0 && items_left > 0;)
+        {
+          U64 items_in_this_chunk = Min(items_per_task, chunk->count-chunk_off);
+          P2R_BakeInlineSiteStringsInNode *n = push_array(scratch.arena, P2R_BakeInlineSiteStringsInNode, 1);
+          SLLQueuePush(in->first, in->last, n);
+          n->v = chunk->v + chunk_off;
+          n->count = items_in_this_chunk;
+          chunk_off += items_in_this_chunk;
+          items_left -= items_in_this_chunk;
+          if(chunk_off >= chunk->count)
+          {
+            chunk = chunk->next;
+            chunk_off = 0;
+          }
+        }
+        async_task_list_push(scratch.arena, &bake_string_map_build_tasks, async_task_launch(scratch.arena, p2r_bake_inline_site_strings_work, .input = in));
       }
     }
     
