@@ -95,26 +95,28 @@ internal void
 rd_cmd_binding_buttons(String8 name)
 {
   Temp scratch = scratch_begin(0, 0);
-  RD_BindingList bindings = rd_bindings_from_name(scratch.arena, name);
+  RD_KeyMapNodePtrList key_map_nodes = rd_key_map_node_ptr_list_from_name(scratch.arena, name);
   
   //- rjf: build buttons for each binding
-  for(RD_BindingNode *n = bindings.first; n != 0; n = n->next)
+  for(RD_KeyMapNodePtr *n = key_map_nodes.first; n != 0; n = n->next)
   {
-    RD_Binding binding = n->binding;
+    RD_Binding binding = n->v->binding;
     B32 rebinding_active_for_this_binding = (rd_state->bind_change_active &&
                                              str8_match(rd_state->bind_change_cmd_name, name, 0) &&
                                              rd_state->bind_change_binding.key == binding.key &&
                                              rd_state->bind_change_binding.modifiers == binding.modifiers);
     
     //- rjf: grab all conflicts
-    String8List specs_with_binding = rd_cmd_name_list_from_binding(scratch.arena, binding);
     B32 has_conflicts = 0;
-    for(String8Node *n = specs_with_binding.first; n != 0; n = n->next)
+    RD_KeyMapNodePtrList nodes_with_this_binding = rd_key_map_node_ptr_list_from_binding(scratch.arena, binding);
     {
-      if(!str8_match(n->string, name, 0))
+      for(RD_KeyMapNodePtr *n2 = nodes_with_this_binding.first; n2 != 0; n2 = n2->next)
       {
-        has_conflicts = 1;
-        break;
+        if(!str8_match(n->v->name, n2->v->name, 0))
+        {
+          has_conflicts = 1;
+          break;
+        }
       }
     }
     
@@ -196,11 +198,11 @@ rd_cmd_binding_buttons(String8 name)
       if(ui_hovering(sig) && has_conflicts) UI_Tooltip
       {
         UI_PrefWidth(ui_children_sum(1)) rd_error_label(str8_lit("This binding conflicts with those for:"));
-        for(String8Node *n = specs_with_binding.first; n != 0; n = n->next)
+        for(RD_KeyMapNodePtr *n2 = nodes_with_this_binding.first; n2 != 0; n2 = n2->next)
         {
-          if(!str8_match(n->string, name, 0))
+          if(!str8_match(n2->v->name, n->v->name, 0))
           {
-            RD_CmdKindInfo *info = rd_cmd_kind_info_from_string(n->string);
+            RD_CmdKindInfo *info = rd_cmd_kind_info_from_string(n2->v->name);
             ui_labelf("%S", info->display_name);
           }
         }
@@ -219,7 +221,7 @@ rd_cmd_binding_buttons(String8 name)
       UI_Signal sig = rd_icon_button(RD_IconKind_X, 0, str8_lit("###delete_binding"));
       if(ui_clicked(sig))
       {
-        rd_unbind_name(name, binding);
+        // TODO(rjf): @cfg rd_unbind_name(name, binding);
         rd_state->bind_change_active = 0;
       }
     }

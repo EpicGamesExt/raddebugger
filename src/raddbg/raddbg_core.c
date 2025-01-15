@@ -1143,6 +1143,48 @@ rd_cfg_is_project_filtered(RD_Cfg *cfg)
   return result;
 }
 
+internal RD_KeyMapNodePtrList
+rd_key_map_node_ptr_list_from_name(Arena *arena, String8 string)
+{
+  RD_KeyMapNodePtrList list = {0};
+  {
+    U64 hash = d_hash_from_string(string);
+    U64 slot_idx = hash%rd_state->key_map->name_slots_count;
+    for(RD_KeyMapNode *n = rd_state->key_map->name_slots[slot_idx].first; n != 0; n = n->name_hash_next)
+    {
+      if(str8_match(n->name, string, 0))
+      {
+        RD_KeyMapNodePtr *ptr = push_array(arena, RD_KeyMapNodePtr, 1);
+        ptr->v = n;
+        SLLQueuePush(list.first, list.last, ptr);
+        list.count += 1;
+      }
+    }
+  }
+  return list;
+}
+
+internal RD_KeyMapNodePtrList
+rd_key_map_node_ptr_list_from_binding(Arena *arena, RD_Binding binding)
+{
+  RD_KeyMapNodePtrList list = {0};
+  {
+    U64 hash = d_hash_from_string(str8_struct(&binding));
+    U64 slot_idx = hash%rd_state->key_map->binding_slots_count;
+    for(RD_KeyMapNode *n = rd_state->key_map->binding_slots[slot_idx].first; n != 0; n = n->binding_hash_next)
+    {
+      if(MemoryMatchStruct(&binding, &n->binding))
+      {
+        RD_KeyMapNodePtr *ptr = push_array(arena, RD_KeyMapNodePtr, 1);
+        ptr->v = n;
+        SLLQueuePush(list.first, list.last, ptr);
+        list.count += 1;
+      }
+    }
+  }
+  return list;
+}
+
 ////////////////////////////////
 //~ rjf: Entity State Functions
 
@@ -4231,7 +4273,8 @@ rd_window_frame(void)
                                                    .display_name__matches = name_matches,
                                                    .description           = cmd_desc,
                                                    .description__matches  = desc_matches,
-                                                   .is_non_code           = 1);
+                                                   .is_non_code           = 1,
+                                                   .can_have_bindings     = 1);
               }
             }
           }
@@ -4391,9 +4434,17 @@ rd_window_frame(void)
                 }
                 
                 // rjf: bindings
-                if(0) UI_Column
+                if(item->can_have_bindings)
                 {
-                  
+                  ui_set_next_flags(UI_BoxFlag_Clickable);
+                  UI_PrefWidth(ui_children_sum(1.f)) UI_HeightFill UI_NamedColumn(str8_lit("binding_column")) UI_Padding(ui_em(1.5f, 1.f))
+                  {
+                    ui_set_next_flags(UI_BoxFlag_Clickable);
+                    UI_NamedRow(str8_lit("binding_row")) UI_Padding(ui_em(1.f, 1.f))
+                    {
+                      rd_cmd_binding_buttons(item->string);
+                    }
+                  }
                 }
               }
               
@@ -9997,123 +10048,6 @@ rd_push_search_string(Arena *arena)
 ////////////////////////////////
 //~ rjf: Colors, Fonts, Config
 
-//- rjf: keybindings
-
-internal OS_Key
-rd_os_key_from_cfg_string(String8 string)
-{
-  OS_Key result = OS_Key_Null;
-  {
-    for(OS_Key key = OS_Key_Null; key < OS_Key_COUNT; key = (OS_Key)(key+1))
-    {
-      if(str8_match(string, os_g_key_cfg_string_table[key], StringMatchFlag_CaseInsensitive))
-      {
-        result = key;
-        break;
-      }
-    }
-  }
-  return result;
-}
-
-internal void
-rd_clear_bindings(void)
-{
-  arena_clear(rd_state->key_map_arena);
-  rd_state->key_map_table_size = 1024;
-  rd_state->key_map_table = push_array(rd_state->key_map_arena, RD_KeyMapSlot, rd_state->key_map_table_size);
-  rd_state->key_map_total_count = 0;
-}
-
-internal RD_BindingList
-rd_bindings_from_name(Arena *arena, String8 name)
-{
-  RD_BindingList result = {0};
-  U64 hash = d_hash_from_string(name);
-  U64 slot = hash%rd_state->key_map_table_size;
-  for(RD_KeyMapNode *n = rd_state->key_map_table[slot].first; n != 0; n = n->hash_next)
-  {
-    if(str8_match(n->name, name, 0))
-    {
-      RD_BindingNode *node = push_array(arena, RD_BindingNode, 1);
-      node->binding = n->binding;
-      SLLQueuePush(result.first, result.last, node);
-      result.count += 1;
-    }
-  }
-  return result;
-}
-
-internal void
-rd_bind_name(String8 name, RD_Binding binding)
-{
-  if(binding.key != OS_Key_Null)
-  {
-    U64 hash = d_hash_from_string(name);
-    U64 slot = hash%rd_state->key_map_table_size;
-    RD_KeyMapNode *existing_node = 0;
-    for(RD_KeyMapNode *n = rd_state->key_map_table[slot].first; n != 0; n = n->hash_next)
-    {
-      if(str8_match(n->name, name, 0) && n->binding.key == binding.key && n->binding.modifiers == binding.modifiers)
-      {
-        existing_node = n;
-        break;
-      }
-    }
-    if(existing_node == 0)
-    {
-      RD_KeyMapNode *n = rd_state->free_key_map_node;
-      if(n == 0)
-      {
-        n = push_array(rd_state->arena, RD_KeyMapNode, 1);
-      }
-      else
-      {
-        rd_state->free_key_map_node = rd_state->free_key_map_node->hash_next;
-      }
-      n->name = push_str8_copy(rd_state->arena, name);
-      n->binding = binding;
-      DLLPushBack_NP(rd_state->key_map_table[slot].first, rd_state->key_map_table[slot].last, n, hash_next, hash_prev);
-      rd_state->key_map_total_count += 1;
-    }
-  }
-}
-
-internal void
-rd_unbind_name(String8 name, RD_Binding binding)
-{
-  U64 hash = d_hash_from_string(name);
-  U64 slot = hash%rd_state->key_map_table_size;
-  for(RD_KeyMapNode *n = rd_state->key_map_table[slot].first, *next = 0; n != 0; n = next)
-  {
-    next = n->hash_next;
-    if(str8_match(n->name, name, 0) && n->binding.key == binding.key && n->binding.modifiers == binding.modifiers)
-    {
-      DLLRemove_NP(rd_state->key_map_table[slot].first, rd_state->key_map_table[slot].last, n, hash_next, hash_prev);
-      n->hash_next = rd_state->free_key_map_node;
-      rd_state->free_key_map_node = n;
-      rd_state->key_map_total_count -= 1;
-    }
-  }
-}
-
-internal String8List
-rd_cmd_name_list_from_binding(Arena *arena, RD_Binding binding)
-{
-  String8List result = {0};
-  for(U64 idx = 0; idx < rd_state->key_map_table_size; idx += 1)
-  {
-    for(RD_KeyMapNode *n = rd_state->key_map_table[idx].first; n != 0; n = n->hash_next)
-    {
-      if(n->binding.key == binding.key && n->binding.modifiers == binding.modifiers)
-      {
-        str8_list_push(arena, &result, n->name);
-      }
-    }
-  }
-  return result;
-}
-
 //- rjf: colors
 
 internal Vec4F32
@@ -11335,7 +11269,7 @@ rd_cmd_kind_info_from_string(String8 string)
 {
   RD_CmdKindInfo *info = &rd_nil_cmd_kind_info;
   {
-    // TODO(rjf): extend this by looking up into dynamically-registered commands by views
+    // TODO(rjf): @dynamic_cmds extend this by looking up into dynamically-registered commands by views
     RD_CmdKind kind = rd_cmd_kind_from_string(string);
     if(kind != RD_CmdKind_Null)
     {
@@ -11419,7 +11353,6 @@ rd_init(CmdLine *cmdln)
   rd_state->entities_base = push_array(rd_state->entities_arena, RD_Entity, 0);
   rd_state->entities_count = 0;
   rd_state->entities_root = rd_entity_alloc(&rd_nil_entity, RD_EntityKind_Root);
-  rd_state->key_map_arena = arena_alloc();
   rd_state->popup_arena = arena_alloc();
   rd_state->ctx_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("top_level_ctx_menu"));
   rd_state->drop_completion_key = ui_key_from_string(ui_key_zero(), str8_lit("drop_completion_ctx_menu"));
@@ -11432,7 +11365,6 @@ rd_init(CmdLine *cmdln)
   rd_state->drag_drop_arena = arena_alloc();
   rd_state->drag_drop_regs = push_array(rd_state->drag_drop_arena, RD_Regs, 1);
   rd_state->top_regs = &rd_state->base_regs;
-  rd_clear_bindings();
   
   // rjf: set up top-level config entity trees
   {
@@ -11705,6 +11637,109 @@ rd_frame(void)
   }
   
   //////////////////////////////
+  //- rjf: build key map from config
+  //
+  {
+    //- rjf: set up table
+    rd_state->key_map = push_array(rd_frame_arena(), RD_KeyMap, 1);
+    RD_KeyMap *key_map = rd_state->key_map;
+    key_map->name_slots_count = 4096;
+    key_map->name_slots = push_array(rd_frame_arena(), RD_KeyMapSlot, key_map->name_slots_count);
+    key_map->binding_slots_count = 4096;
+    key_map->binding_slots = push_array(rd_frame_arena(), RD_KeyMapSlot, key_map->binding_slots_count);
+    
+    //- rjf: gather & parse all explicitly stored keybinding sets
+    RD_CfgList keybindings_cfg_list = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("keybindings"));
+    for(RD_CfgNode *n = keybindings_cfg_list.first; n != 0; n = n->next)
+    {
+      RD_Cfg *keybindings_root = n->v;
+      for(RD_Cfg *keybinding = keybindings_root->first; keybinding != &rd_nil_cfg; keybinding = keybinding->next)
+      {
+        String8 name = {0};
+        RD_Binding binding = {0};
+        for(RD_Cfg *child = keybinding->first; child != &rd_nil_cfg; child = child->next)
+        {
+          if(0){}
+          else if(str8_match(child->string, str8_lit("ctrl"), 0))   { binding.modifiers |= OS_Modifier_Ctrl; }
+          else if(str8_match(child->string, str8_lit("alt"), 0))    { binding.modifiers |= OS_Modifier_Alt; }
+          else if(str8_match(child->string, str8_lit("shift"), 0))  { binding.modifiers |= OS_Modifier_Shift; }
+          else
+          {
+            OS_Key key = OS_Key_Null;
+            for EachEnumVal(OS_Key, k)
+            {
+              if(str8_match(child->string, os_g_key_cfg_string_table[k], StringMatchFlag_CaseInsensitive))
+              {
+                key = k;
+                break;
+              }
+            }
+            if(key != OS_Key_Null)
+            {
+              binding.key = key;
+            }
+            else
+            {
+              name = child->string;
+              for(U64 idx = 0; idx < ArrayCount(rd_binding_version_remap_old_name_table); idx += 1)
+              {
+                if(str8_match(rd_binding_version_remap_old_name_table[idx], name, StringMatchFlag_CaseInsensitive))
+                {
+                  name = rd_binding_version_remap_new_name_table[idx];
+                }
+              }
+            }
+          }
+        }
+        if(name.size != 0)
+        {
+          U64 name_hash = d_hash_from_string(name);
+          U64 binding_hash = d_hash_from_string(str8_struct(&binding));
+          U64 name_slot_idx = name_hash%key_map->name_slots_count;
+          U64 binding_slot_idx = binding_hash%key_map->binding_slots_count;
+          RD_KeyMapNode *n = push_array(rd_frame_arena(), RD_KeyMapNode, 1);
+          n->cfg = keybinding;
+          n->name = push_str8_copy(rd_frame_arena(), name);
+          n->binding = binding;
+          SLLQueuePush_N(key_map->name_slots[name_slot_idx].first, key_map->name_slots[name_slot_idx].last, n, name_hash_next);
+          SLLQueuePush_N(key_map->binding_slots[binding_slot_idx].first, key_map->binding_slots[binding_slot_idx].last, n, binding_hash_next);
+        }
+      }
+    }
+    
+    //- rjf: iterate all commands - if they are not found in the map, then use
+    // the default binding.
+    // TODO(rjf): @dynamic_cmds
+    for EachElement(idx, rd_default_binding_table)
+    {
+      String8 name = rd_default_binding_table[idx].string;
+      B32 name_was_mapped = 0;
+      U64 name_hash = d_hash_from_string(name);
+      U64 name_slot_idx = name_hash%key_map->name_slots_count;
+      for(RD_KeyMapNode *n = key_map->name_slots[name_slot_idx].first; n != 0; n = n->name_hash_next)
+      {
+        if(str8_match(n->name, name, 0))
+        {
+          name_was_mapped = 1;
+          break;
+        }
+      }
+      if(!name_was_mapped)
+      {
+        RD_Binding binding = rd_default_binding_table[idx].binding;
+        U64 binding_hash = d_hash_from_string(str8_struct(&binding));
+        U64 binding_slot_idx = binding_hash%key_map->binding_slots_count;
+        RD_KeyMapNode *n = push_array(rd_frame_arena(), RD_KeyMapNode, 1);
+        n->cfg = &rd_nil_cfg;
+        n->name = push_str8_copy(rd_frame_arena(), name);
+        n->binding = binding;
+        SLLQueuePush_N(key_map->name_slots[name_slot_idx].first, key_map->name_slots[name_slot_idx].last, n, name_hash_next);
+        SLLQueuePush_N(key_map->binding_slots[binding_slot_idx].first, key_map->binding_slots[binding_slot_idx].last, n, binding_hash_next);
+      }
+    }
+  }
+  
+  //////////////////////////////
   //- rjf: get events from the OS
   //
   OS_EventList events = {0};
@@ -11774,7 +11809,7 @@ rd_frame(void)
     if(os_key_press(&events, os_handle_zero(), 0, OS_Key_Delete))
     {
       rd_request_frame();
-      rd_unbind_name(rd_state->bind_change_cmd_name, rd_state->bind_change_binding);
+      // TODO(rjf): @cfg rd_unbind_name(rd_state->bind_change_cmd_name, rd_state->bind_change_binding);
       rd_state->bind_change_active = 0;
       rd_cmd(rd_cfg_src_write_cmd_kind_table[RD_CfgSrc_User]);
     }
@@ -11798,8 +11833,8 @@ rd_frame(void)
           binding.key = event->key;
           binding.modifiers = event->modifiers;
         }
-        rd_unbind_name(rd_state->bind_change_cmd_name, rd_state->bind_change_binding);
-        rd_bind_name(rd_state->bind_change_cmd_name, binding);
+        // TODO(rjf): @cfg rd_unbind_name(rd_state->bind_change_cmd_name, rd_state->bind_change_binding);
+        // TODO(rjf): @cfg rd_bind_name(rd_state->bind_change_cmd_name, binding);
         U32 codepoint = os_codepoint_from_modifiers_and_key(event->modifiers, event->key);
         os_text(&events, event->window, codepoint);
         os_eat_event(&events, event);
@@ -11887,13 +11922,13 @@ rd_frame(void)
       if(!take && event->kind == OS_EventKind_Press)
       {
         RD_Binding binding = {event->key, event->modifiers};
-        String8List spec_candidates = rd_cmd_name_list_from_binding(scratch.arena, binding);
-        if(spec_candidates.first != 0)
+        RD_KeyMapNodePtrList key_map_nodes = rd_key_map_node_ptr_list_from_binding(scratch.arena, binding);
+        if(key_map_nodes.first != 0)
         {
           U32 hit_char = os_codepoint_from_modifiers_and_key(event->modifiers, event->key);
           if(hit_char == 0 || allow_text_hotkeys)
           {
-            rd_cmd(RD_CmdKind_RunCommand, .cmd_name = spec_candidates.first->string);
+            rd_cmd(RD_CmdKind_RunCommand, .cmd_name = key_map_nodes.first->v->name);
             if(allow_text_hotkeys)
             {
               os_text(&events, event->window, hit_char);
@@ -13118,6 +13153,7 @@ rd_frame(void)
             }
             
             //- rjf: apply keybindings
+#if 0 // TODO(rjf): @cfg
             if(src == RD_CfgSrc_User)
             {
               rd_clear_bindings();
@@ -13150,7 +13186,15 @@ rd_frame(void)
                   }
                   else
                   {
-                    OS_Key k = rd_os_key_from_cfg_string(child->string);
+                    OS_Key k = OS_Key_Null;
+                    for EachEnumVal(OS_Key, key)
+                    {
+                      if(str8_match(child->string, os_g_key_cfg_string_table[key], StringMatchFlag_CaseInsensitive))
+                      {
+                        k = key;
+                        break;
+                      }
+                    }
                     if(k != OS_Key_Null)
                     {
                       key = k;
@@ -13180,6 +13224,7 @@ rd_frame(void)
                 }
               }
             }
+#endif
             
             //- rjf: reset theme to default
             MemoryCopy(rd_state->cfg_theme_target.colors, rd_theme_preset_colors__default_dark, sizeof(rd_theme_preset_colors__default_dark));
@@ -13362,6 +13407,7 @@ rd_frame(void)
 #endif
             
             //- rjf: if config bound 0 keys, we need to do some sensible default
+#if 0 // TODO(rjf): @cfg
             if(src == RD_CfgSrc_User && rd_state->key_map_total_count == 0)
             {
               for(U64 idx = 0; idx < ArrayCount(rd_default_binding_table); idx += 1)
@@ -13370,8 +13416,10 @@ rd_frame(void)
                 rd_bind_name(pair->string, pair->binding);
               }
             }
+#endif
             
             //- rjf: always ensure that the meta controls have bindings
+#if 0 // TODO(rjf): @cfg
             if(src == RD_CfgSrc_User)
             {
               struct
@@ -13395,6 +13443,7 @@ rd_frame(void)
                 }
               }
             }
+#endif
           }break;
           
           //- rjf: writing config changes

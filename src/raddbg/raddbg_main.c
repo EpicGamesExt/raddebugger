@@ -25,6 +25,8 @@
 //     etc., all need to be merged, and optionally contextualized/filtered.
 //     right-clicking a tab should be equivalent to spawning a command lister,
 //     but only with commands that are directly
+//
+// [ ] r8 bitmap view rule seems incorrect?
 
 ////////////////////////////////
 //~ rjf: post-0.9.12 TODO notes

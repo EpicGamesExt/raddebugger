@@ -30,6 +30,38 @@ struct RD_HandleList
 };
 
 ////////////////////////////////
+//~ rjf: Binding Types
+
+typedef struct RD_Binding RD_Binding;
+struct RD_Binding
+{
+  OS_Key key;
+  OS_Modifiers modifiers;
+};
+
+typedef struct RD_BindingNode RD_BindingNode;
+struct RD_BindingNode
+{
+  RD_BindingNode *next;
+  RD_Binding binding;
+};
+
+typedef struct RD_BindingList RD_BindingList;
+struct RD_BindingList
+{
+  RD_BindingNode *first;
+  RD_BindingNode *last;
+  U64 count;
+};
+
+typedef struct RD_StringBindingPair RD_StringBindingPair;
+struct RD_StringBindingPair
+{
+  String8 string;
+  RD_Binding binding;
+};
+
+////////////////////////////////
 //~ rjf: Evaluation Spaces
 
 typedef U64 RD_EvalSpaceKind;
@@ -82,57 +114,6 @@ enum
   
   //- rjf: deletion
   RD_EntityFlag_MarkedForDeletion = (1<<31),
-};
-
-////////////////////////////////
-//~ rjf: Binding Types
-
-typedef struct RD_Binding RD_Binding;
-struct RD_Binding
-{
-  OS_Key key;
-  OS_Modifiers modifiers;
-};
-
-typedef struct RD_BindingNode RD_BindingNode;
-struct RD_BindingNode
-{
-  RD_BindingNode *next;
-  RD_Binding binding;
-};
-
-typedef struct RD_BindingList RD_BindingList;
-struct RD_BindingList
-{
-  RD_BindingNode *first;
-  RD_BindingNode *last;
-  U64 count;
-};
-
-typedef struct RD_StringBindingPair RD_StringBindingPair;
-struct RD_StringBindingPair
-{
-  String8 string;
-  RD_Binding binding;
-};
-
-////////////////////////////////
-//~ rjf: Key Map Types
-
-typedef struct RD_KeyMapNode RD_KeyMapNode;
-struct RD_KeyMapNode
-{
-  RD_KeyMapNode *hash_next;
-  RD_KeyMapNode *hash_prev;
-  String8 name;
-  RD_Binding binding;
-};
-
-typedef struct RD_KeyMapSlot RD_KeyMapSlot;
-struct RD_KeyMapSlot
-{
-  RD_KeyMapNode *first;
-  RD_KeyMapNode *last;
 };
 
 ////////////////////////////////
@@ -328,6 +309,50 @@ struct RD_CfgRec
   RD_Cfg *next;
   S32 push_count;
   S32 pop_count;
+};
+
+////////////////////////////////
+//~ rjf: Key Map Types
+
+typedef struct RD_KeyMapNode RD_KeyMapNode;
+struct RD_KeyMapNode
+{
+  RD_KeyMapNode *name_hash_next;
+  RD_KeyMapNode *binding_hash_next;
+  RD_Cfg *cfg;
+  String8 name;
+  RD_Binding binding;
+};
+
+typedef struct RD_KeyMapNodePtr RD_KeyMapNodePtr;
+struct RD_KeyMapNodePtr
+{
+  RD_KeyMapNodePtr *next;
+  RD_KeyMapNode *v;
+};
+
+typedef struct RD_KeyMapNodePtrList RD_KeyMapNodePtrList;
+struct RD_KeyMapNodePtrList
+{
+  RD_KeyMapNodePtr *first;
+  RD_KeyMapNodePtr *last;
+  U64 count;
+};
+
+typedef struct RD_KeyMapSlot RD_KeyMapSlot;
+struct RD_KeyMapSlot
+{
+  RD_KeyMapNode *first;
+  RD_KeyMapNode *last;
+};
+
+typedef struct RD_KeyMap RD_KeyMap;
+struct RD_KeyMap
+{
+  U64 name_slots_count;
+  RD_KeyMapSlot *name_slots;
+  U64 binding_slots_count;
+  RD_KeyMapSlot *binding_slots;
 };
 
 ////////////////////////////////
@@ -550,6 +575,7 @@ struct RD_ListerItem
   FuzzyMatchRangeList description__matches;
   U64 group;
   B32 is_non_code;
+  B32 can_have_bindings;
 };
 
 typedef struct RD_ListerItemChunkNode RD_ListerItemChunkNode;
@@ -789,9 +815,12 @@ struct RD_State
   // rjf: dbgi match store
   DI_MatchStore *match_store;
   
-  // rjf: ambiguous path table
+  // rjf: ambiguous path table (constructed from-scratch each frame)
   U64 ambiguous_path_slots_count;
   RD_AmbiguousPathNode **ambiguous_path_slots;
+  
+  // rjf: key map (constructed from-scratch each frame)
+  RD_KeyMap *key_map;
   
   // rjf: registers stack
   RD_RegsNode base_regs;
@@ -890,11 +919,13 @@ struct RD_State
   RD_EntityListCache kind_caches[RD_EntityKind_COUNT];
   
   // rjf: key map table
+#if 0 // TODO(rjf): @cfg
   Arena *key_map_arena;
   U64 key_map_table_size;
   RD_KeyMapSlot *key_map_table;
   RD_KeyMapNode *free_key_map_node;
   U64 key_map_total_count;
+#endif
   
   // rjf: bind change
   Arena *bind_change_arena;
@@ -1121,6 +1152,9 @@ internal Rng2F32 rd_target_rect_from_panel_node(Rng2F32 root_rect, RD_PanelNode 
 
 internal B32 rd_cfg_is_project_filtered(RD_Cfg *cfg);
 
+internal RD_KeyMapNodePtrList rd_key_map_node_ptr_list_from_name(Arena *arena, String8 string);
+internal RD_KeyMapNodePtrList rd_key_map_node_ptr_list_from_binding(Arena *arena, RD_Binding binding);
+
 ////////////////////////////////
 //~ rjf: Entity Stateful Functions
 
@@ -1302,14 +1336,6 @@ internal String8 rd_push_search_string(Arena *arena);
 
 ////////////////////////////////
 //~ rjf: Colors, Fonts, Config
-
-//- rjf: keybindings
-internal OS_Key rd_os_key_from_cfg_string(String8 string);
-internal void rd_clear_bindings(void);
-internal RD_BindingList rd_bindings_from_name(Arena *arena, String8 name);
-internal void rd_bind_name(String8 name, RD_Binding binding);
-internal void rd_unbind_name(String8 name, RD_Binding binding);
-internal String8List rd_cmd_name_list_from_binding(Arena *arena, RD_Binding binding);
 
 //- rjf: colors
 internal Vec4F32 rd_rgba_from_theme_color(RD_ThemeColor color);
