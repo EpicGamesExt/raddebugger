@@ -438,18 +438,18 @@ pe_bin_info_from_data(Arena *arena, String8 data)
   }
   
   // rjf: read coff header
-  U32 coff_header_off = dos_header.coff_file_offset + sizeof(pe_magic);
-  COFF_Header coff_header = {0};
+  U32         coff_header_off = dos_header.coff_file_offset + sizeof(pe_magic);
+  COFF_Header coff_header     = {0};
   if(valid)
   {
     str8_deserial_read_struct(data, coff_header_off, &coff_header);
   }
   
   // rjf: range of optional extension header ("optional" for short)
-  U32 optional_size = coff_header.optional_header_size;
-  U64 after_coff_header_off = coff_header_off + sizeof(coff_header);
-  U64 after_optional_header_off = after_coff_header_off + optional_size;
-  Rng1U64 optional_range = {0};
+  U32     optional_size             = coff_header.optional_header_size;
+  U64     after_coff_header_off     = coff_header_off + sizeof(coff_header);
+  U64     after_optional_header_off = after_coff_header_off + optional_size;
+  Rng1U64 optional_range            = {0};
   if(valid)
   {
     optional_range.min = ClampTop(after_coff_header_off, data.size);
@@ -457,11 +457,11 @@ pe_bin_info_from_data(Arena *arena, String8 data)
   }
   
   // rjf: get sections
-  U64 sec_array_off = optional_range.max;
-  U64 sec_array_raw_opl = sec_array_off + coff_header.section_count*sizeof(COFF_SectionHeader);
-  U64 sec_array_opl = ClampTop(sec_array_raw_opl, data.size);
-  U64 clamped_sec_count = (sec_array_opl - sec_array_off)/sizeof(COFF_SectionHeader);
-  COFF_SectionHeader *sections = (COFF_SectionHeader*)(data.str + sec_array_off);
+  U64                 sec_array_off     = optional_range.max;
+  U64                 sec_array_raw_opl = sec_array_off + coff_header.section_count*sizeof(COFF_SectionHeader);
+  U64                 sec_array_opl     = ClampTop(sec_array_raw_opl, data.size);
+  U64                 clamped_sec_count = (sec_array_opl - sec_array_off)/sizeof(COFF_SectionHeader);
+  COFF_SectionHeader *sections          = (COFF_SectionHeader*)(data.str + sec_array_off);
   
   // rjf: get symbols
   U64 symbol_array_off = coff_header.symbol_table_foff;
@@ -471,13 +471,13 @@ pe_bin_info_from_data(Arena *arena, String8 data)
   U64 string_table_off = symbol_array_off + sizeof(COFF_Symbol16) * symbol_count;
   
   // rjf: read optional header
-  U16 optional_magic = 0;
-  U64 image_base = 0;
-  U64 entry_point = 0;
-  U32 data_dir_count = 0;
-  U64 virt_section_align = 0;
-  U64 file_section_align = 0;
-  Rng1U64 *data_dir_franges = 0;
+  U16      optional_magic     = 0;
+  U64      image_base         = 0;
+  U64      entry_point        = 0;
+  U32      data_dir_count     = 0;
+  U64      virt_section_align = 0;
+  U64      file_section_align = 0;
+  Rng1U64 *data_dir_franges   = 0;
   if(valid && optional_size > 0)
   {
     // rjf: read magic number
@@ -491,24 +491,36 @@ pe_bin_info_from_data(Arena *arena, String8 data)
       case PE_PE32_MAGIC:
       {
         PE_OptionalHeader32 pe_optional = {0};
-        str8_deserial_read_struct(data, optional_range.min, &pe_optional);
-        image_base = pe_optional.image_base;
-        entry_point = pe_optional.entry_point_va;
-        virt_section_align = pe_optional.section_alignment;
-        file_section_align = pe_optional.file_alignment;
-        reported_data_dir_offset = sizeof(pe_optional);
-        reported_data_dir_count = pe_optional.data_dir_count;
+        if(str8_deserial_read_struct(data, optional_range.min, &pe_optional) == sizeof(pe_optional))
+        {
+          image_base               = pe_optional.image_base;
+          entry_point              = pe_optional.entry_point_va;
+          virt_section_align       = pe_optional.section_alignment;
+          file_section_align       = pe_optional.file_alignment;
+          reported_data_dir_offset = sizeof(pe_optional);
+          reported_data_dir_count  = pe_optional.data_dir_count;
+        }
+        else
+        {
+          Assert(!"unable to read PE Optional Header");
+        }
       }break;
       case PE_PE32PLUS_MAGIC:
       {
         PE_OptionalHeader32Plus pe_optional = {0};
-        str8_deserial_read_struct(data, optional_range.min, &pe_optional);
-        image_base = pe_optional.image_base;
-        entry_point = pe_optional.entry_point_va;
-        virt_section_align = pe_optional.section_alignment;
-        file_section_align = pe_optional.file_alignment;
-        reported_data_dir_offset = sizeof(pe_optional);
-        reported_data_dir_count = pe_optional.data_dir_count;
+        if(str8_deserial_read_struct(data, optional_range.min, &pe_optional) == sizeof(pe_optional))
+        {
+          image_base               = pe_optional.image_base;
+          entry_point              = pe_optional.entry_point_va;
+          virt_section_align       = pe_optional.section_alignment;
+          file_section_align       = pe_optional.file_alignment;
+          reported_data_dir_offset = sizeof(pe_optional);
+          reported_data_dir_count  = pe_optional.data_dir_count;
+        }
+        else
+        {
+          Assert(!"unable to read PE Optional Plus Header");
+        }
       }break;
     }
     
@@ -520,56 +532,16 @@ pe_bin_info_from_data(Arena *arena, String8 data)
     data_dir_franges = push_array(arena, Rng1U64, data_dir_count);
     for(U32 dir_idx = 0; dir_idx < data_dir_count; dir_idx += 1)
     {
-      U64 dir_offset = optional_range.min + reported_data_dir_offset + sizeof(PE_DataDirectory)*dir_idx;
-      PE_DataDirectory dir = {0};
-      str8_deserial_read_struct(data, dir_offset, &dir);
-      U64 file_off = coff_foff_from_voff(sections, clamped_sec_count, dir.virt_off);
-      data_dir_franges[dir_idx] = r1u64(file_off, file_off+dir.virt_size);
-    }
-  }
-  
-  // rjf: read info about debug file
-  U32 dbg_time = 0;
-  U32 dbg_age = 0;
-  Guid dbg_guid = {0};
-  U64 dbg_path_off = 0;
-  U64 dbg_path_size = 0;
-  if(valid && PE_DataDirectoryIndex_DEBUG < data_dir_count)
-  {
-    // rjf: read debug directory
-    PE_DebugDirectory dbg_data = {0};
-    str8_deserial_read_struct(data, data_dir_franges[PE_DataDirectoryIndex_DEBUG].min, &dbg_data);
-    
-    // rjf: extract external file info from codeview header
-    if(dbg_data.type == PE_DebugDirectoryType_CODEVIEW)
-    {
-      U64 cv_offset = dbg_data.foff;
-      U32 cv_magic = 0;
-      str8_deserial_read_struct(data, cv_offset, &cv_magic);
-      switch(cv_magic)
+      U64              dir_offset = optional_range.min + reported_data_dir_offset + sizeof(PE_DataDirectory)*dir_idx;
+      PE_DataDirectory dir        = {0};
+      if(str8_deserial_read_struct(data, dir_offset, &dir) == sizeof(dir))
       {
-        default:break;
-        case PE_CODEVIEW_PDB20_MAGIC:
-        {
-          PE_CvHeaderPDB20 cv = {0};
-          str8_deserial_read_struct(data, cv_offset, &cv);
-          dbg_time = cv.time_stamp;
-          dbg_age = cv.age;
-          dbg_path_off = cv_offset + sizeof(cv);
-        }break;
-        case PE_CODEVIEW_PDB70_MAGIC:
-        {
-          PE_CvHeaderPDB70 cv = {0};
-          str8_deserial_read_struct(data, cv_offset, &cv);
-          dbg_guid = cv.guid;
-          dbg_age = cv.age;
-          dbg_path_off = cv_offset + sizeof(cv);
-        }break;
+        U64 file_off = coff_foff_from_voff(sections, clamped_sec_count, dir.virt_off);
+        data_dir_franges[dir_idx] = r1u64(file_off, file_off+dir.virt_size);
       }
-      if(dbg_path_off > 0)
+      else
       {
-        U8 *dbg_path_cstring_base = data.str+dbg_path_off;
-        dbg_path_size = cstring8_length(dbg_path_cstring_base);
+        Assert(!"unable to read data directory");
       }
     }
   }
@@ -581,21 +553,32 @@ pe_bin_info_from_data(Arena *arena, String8 data)
     Rng1U64 tls_header_frng = data_dir_franges[PE_DataDirectoryIndex_TLS];
     switch(coff_header.machine)
     {
-      default:{}break;
+      default:{ NotImplemented; }break;
+      case COFF_MachineType_UNKNOWN: break;
       case COFF_MachineType_X86:
       {
         PE_TLSHeader32 tls_header32 = {0};
-        str8_deserial_read_struct(data, tls_header_frng.min, &tls_header32);
-        tls_header.raw_data_start    = (U64)tls_header32.raw_data_start;
-        tls_header.raw_data_end      = (U64)tls_header32.raw_data_end;
-        tls_header.index_address     = (U64)tls_header32.index_address;
-        tls_header.callbacks_address = (U64)tls_header32.callbacks_address;
-        tls_header.zero_fill_size    = (U64)tls_header32.zero_fill_size;
-        tls_header.characteristics   = (U64)tls_header32.characteristics;
+        if(str8_deserial_read_struct(data, tls_header_frng.min, &tls_header32) == sizeof(tls_header32))
+        {
+          tls_header.raw_data_start    = (U64)tls_header32.raw_data_start;
+          tls_header.raw_data_end      = (U64)tls_header32.raw_data_end;
+          tls_header.index_address     = (U64)tls_header32.index_address;
+          tls_header.callbacks_address = (U64)tls_header32.callbacks_address;
+          tls_header.zero_fill_size    = (U64)tls_header32.zero_fill_size;
+          tls_header.characteristics   = (U64)tls_header32.characteristics;
+        }
+        else
+        {
+          Assert(!"unable to read TLS Header 32");
+        }
       }break;
       case COFF_MachineType_X64:
       {
-        str8_deserial_read_struct(data, tls_header_frng.min, &tls_header);
+        if(str8_deserial_read_struct(data, tls_header_frng.min, &tls_header) != sizeof(tls_header))
+        {
+          MemoryZeroStruct(&tls_header);
+          Assert(!"unable to read TLS Header 64");
+        }
       }break;
     }
   }
@@ -603,34 +586,108 @@ pe_bin_info_from_data(Arena *arena, String8 data)
   // rjf: fill info
   if(valid)
   {
-    info.image_base                    = image_base;
-    info.entry_point                   = entry_point;
-    info.is_pe32                       = (optional_magic == PE_PE32_MAGIC);
-    info.virt_section_align            = virt_section_align;
-    info.file_section_align            = file_section_align;
-    info.section_array_off             = sec_array_off;
-    info.section_count                 = clamped_sec_count;
-    info.symbol_array_off              = symbol_array_off;
-    info.symbol_count                  = symbol_count;
-    info.string_table_off              = string_table_off;
-    info.dbg_path_off                  = dbg_path_off;
-    info.dbg_path_size                 = dbg_path_size;
-    info.dbg_guid                      = dbg_guid;
-    info.dbg_age                       = dbg_age;
-    info.dbg_time                      = dbg_time;
-    info.data_dir_franges              = data_dir_franges;
-    info.data_dir_count                = data_dir_count;
-    switch(coff_header.machine)
-    {
-      default:{}break;
-      case COFF_MachineType_X86:   {info.arch = Arch_x86;}break;
-      case COFF_MachineType_X64:   {info.arch = Arch_x64;}break;
-      case COFF_MachineType_ARM:   {info.arch = Arch_arm32;}break;
-      case COFF_MachineType_ARM64: {info.arch = Arch_arm64;}break;
-    }
-    MemoryCopyStruct(&info.tls_header, &tls_header);
+    info.image_base         = image_base;
+    info.entry_point        = entry_point;
+    info.is_pe32            = (optional_magic == PE_PE32_MAGIC);
+    info.virt_section_align = virt_section_align;
+    info.file_section_align = file_section_align;
+    info.section_array_off  = sec_array_off;
+    info.section_count      = clamped_sec_count;
+    info.symbol_array_off   = symbol_array_off;
+    info.symbol_count       = symbol_count;
+    info.string_table_off   = string_table_off;
+    info.data_dir_franges   = data_dir_franges;
+    info.data_dir_count     = data_dir_count;
+    info.arch               = arch_from_coff_machine(coff_header.machine);
+    info.tls_header         = tls_header;
   }
+
   return info;
+}
+
+internal PE_DebugInfoList
+pe_parse_debug_directory(Arena *arena, String8 raw_image, String8 raw_debug_dir)
+{
+  PE_DebugInfoList result = {0};
+
+  PE_DebugDirectory *debug_entry     = str8_deserial_get_raw_ptr(raw_debug_dir, 0, sizeof(*debug_entry));
+  PE_DebugDirectory *debug_entry_opl = debug_entry + raw_debug_dir.size/sizeof(*debug_entry_opl);
+  for (PE_DebugDirectory *entry = debug_entry; entry < debug_entry_opl; ++entry) {
+    switch (entry->type) {
+      default: {
+        PE_DebugInfoNode *n = push_array(arena, PE_DebugInfoNode, 1);
+        n->v.header         = *entry;
+        n->v.u.raw_data     = str8_substr(raw_image, rng_1u64(entry->foff, entry->foff + entry->size));
+
+        SLLQueuePush(result.first, result.last, n);
+        ++result.count;
+      } break;
+      case PE_DebugDirectoryType_CODEVIEW: {
+        U32 cv_magic = 0;
+        str8_deserial_read_struct(raw_image, entry->foff, &cv_magic);
+
+        switch (cv_magic) {
+          case PE_CODEVIEW_PDB20_MAGIC: {
+            PE_CvHeaderPDB20 cv = {0};
+            U64 cv_read_size = str8_deserial_read_struct(raw_image, entry->foff, &cv);
+            if (cv_read_size == sizeof(cv)) {
+              String8 path = {0};
+              str8_deserial_read_cstr(raw_image, entry->foff+sizeof(cv), &path);
+
+              PE_DebugInfoNode *n          = push_array(arena, PE_DebugInfoNode, 1);
+              n->v.header                  = *entry;
+              n->v.u.codeview.pdb20.header = cv;
+              n->v.u.codeview.pdb20.path   = path;
+
+              SLLQueuePush(result.first, result.last, n);
+              ++result.count;
+            } else {
+              Assert(!"unable to read PE_CvHeaderPDB20");
+            }
+          } break;
+          case PE_CODEVIEW_PDB70_MAGIC: {
+            PE_CvHeaderPDB70 cv = {0};
+            U64 cv_read_size = str8_deserial_read_struct(raw_image, entry->foff, &cv);
+            if (cv_read_size == sizeof(cv)) {
+              String8 path = {0};
+              str8_deserial_read_cstr(raw_image, entry->foff+sizeof(cv), &path);
+
+              PE_DebugInfoNode *n          = push_array(arena, PE_DebugInfoNode, 1);
+              n->v.header                  = *entry;
+              n->v.u.codeview.pdb70.header = cv;
+              n->v.u.codeview.pdb70.path   = path;
+
+              SLLQueuePush(result.first, result.last, n);
+              ++result.count;
+            } else {
+              Assert(!"unable to read PE_CvHeaderPDB70");
+            }
+          } break;
+          case PE_CODEVIEW_RDI_MAGIC: {
+            PE_CvHeaderRDI cv = {0};
+            U64 cv_read_size = str8_deserial_read_struct(raw_image, entry->foff, &cv);
+            if (cv_read_size == sizeof(cv)) {
+              String8 path = {0};
+              str8_deserial_read_cstr(raw_image, entry->foff+sizeof(cv), &path);
+
+              PE_DebugInfoNode *n        = push_array(arena, PE_DebugInfoNode, 1);
+              n->v.header                = *entry;
+              n->v.u.codeview.rdi.header = cv;
+              n->v.u.codeview.rdi.path   = path;
+
+              SLLQueuePush(result.first, result.last, n);
+              ++result.count;
+            } else {
+              Assert(!"unable to read PE_CvHeaderRDI");
+            }
+          } break;
+          default: break;
+        }
+      } break;
+    }
+  }
+
+  return result;
 }
 
 ////////////////////////////////

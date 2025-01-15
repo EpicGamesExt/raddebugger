@@ -42,8 +42,8 @@ rd_stderr(char *fmt, ...)
   scratch_end(scratch);
 }
 
-internal B32
-rd_invoke_rdi_converter(String8 exe_name, String8 exe_data, String8 pdb_path, String8 out_path)
+internal String8
+rd_invoke_rdi_converter(Arena *arena, String8 exe_name, String8 exe_data, String8 pdb_path)
 {
   Temp scratch = scratch_begin(0,0);
 
@@ -52,17 +52,17 @@ rd_invoke_rdi_converter(String8 exe_name, String8 exe_data, String8 pdb_path, St
   user2convert.input_pdb_data   = os_data_from_file_path(scratch.arena, pdb_path);
   user2convert.input_exe_name   = exe_name;
   user2convert.input_exe_data   = exe_data;
-  user2convert.output_name      = out_path;
+  user2convert.output_name      = str8_zero();
   user2convert.flags            = P2R_ConvertFlag_All;
 
-  P2R_Convert2Bake             *convert2bake    = p2r_convert(scratch.arena, &user2convert);
-  P2R_Bake2Serialize           *bake2srlz       = p2r_bake(scratch.arena, convert2bake);
-  RDIM_SerializedSectionBundle  bundle          = rdim_serialized_section_bundle_from_bake_results(&bake2srlz->bake_results);
-  String8List                   rdi_blobs       = rdim_file_blobs_from_section_bundle(scratch.arena, &bundle);
-  B32                           is_rdi_write_ok = os_write_data_list_to_file_path(user2convert.output_name, rdi_blobs);
+  P2R_Convert2Bake             *convert2bake = p2r_convert(scratch.arena, &user2convert);
+  P2R_Bake2Serialize           *bake2srlz    = p2r_bake(scratch.arena, convert2bake);
+  RDIM_SerializedSectionBundle  bundle       = rdim_serialized_section_bundle_from_bake_results(&bake2srlz->bake_results);
+  String8List                   rdi_blobs    = rdim_file_blobs_from_section_bundle(scratch.arena, &bundle);
+  String8                       raw_rdi      = str8_list_join(arena, &rdi_blobs, 0);
 
   scratch_end(scratch);
-  return is_rdi_write_ok;
+  return raw_rdi;
 }
 
 internal RDI_Parsed *
@@ -71,110 +71,72 @@ rd_rdi_from_pe(Arena *arena, String8 data_path, String8 raw_data)
   Temp scratch = scratch_begin(&arena, 1);
 
   RDI_Parsed *rdi = 0;
-  PE_BinInfo  pe  = pe_bin_info_from_data(scratch.arena, raw_data);
 
-  // PDB 2.0
-  COFF_TimeStamp pdb20_time_stamp = 0;
-  U32            pdb20_age        = 0;
-  String8        pdb20_path       = str8_zero();
-  // PDB 7.0
-  U32            pdb70_age        = 0;
-  Guid           pdb70_guid       = {0};
-  String8        pdb70_path       = str8_zero();
-  // RDI
-  String8        rdi_path         = str8_zero();
-  Guid           rdi_guid         = {0};
-  if (PE_DataDirectoryIndex_DEBUG < pe.data_dir_count) {
-    String8            raw_debug_dir   = str8_substr(raw_data, pe.data_dir_franges[PE_DataDirectoryIndex_DEBUG]);
-    PE_DebugDirectory *debug_entry     = str8_deserial_get_raw_ptr(raw_debug_dir, 0, sizeof(*debug_entry));
-    PE_DebugDirectory *debug_entry_opl = debug_entry + raw_debug_dir.size/sizeof(*debug_entry_opl);
-    for (PE_DebugDirectory *debug_entry_ptr = debug_entry; debug_entry_ptr < debug_entry_opl; ++debug_entry_ptr) {
-      if (debug_entry_ptr->type == PE_DebugDirectoryType_CODEVIEW) {
-        U32 cv_magic = 0;
-        str8_deserial_read_struct(raw_data, debug_entry_ptr->foff, &cv_magic);
+  PE_BinInfo       pe            = pe_bin_info_from_data(scratch.arena, raw_data);
+  String8          raw_debug_dir = str8_substr(raw_data, pe.data_dir_franges[PE_DataDirectoryIndex_DEBUG]);
+  PE_DebugInfoList dbg_list      = pe_parse_debug_directory(scratch.arena, raw_data, raw_debug_dir);
 
-        switch (cv_magic) {
-          case PE_CODEVIEW_PDB20_MAGIC: {
-            PE_CvHeaderPDB20 cv = {0};
-            U64 cv_read_size = str8_deserial_read_struct(raw_data, debug_entry_ptr->foff, &cv);
-            if (cv_read_size == sizeof(cv)) {
-              pdb20_time_stamp = cv.time_stamp;
-              pdb20_age        = cv.age;
-              str8_deserial_read_cstr(raw_data, debug_entry_ptr->foff+sizeof(cv), &pdb20_path);
-            } else {
-              rd_errorf("unable to read PE_CvHeaderPDB20");
-            }
-          } break;
-          case PE_CODEVIEW_PDB70_MAGIC: {
-            PE_CvHeaderPDB70 cv = {0};
-            U64 cv_read_size = str8_deserial_read_struct(raw_data, debug_entry_ptr->foff, &cv);
-            if (cv_read_size == sizeof(cv)) {
-              pdb70_age  = cv.age;
-              pdb70_guid = cv.guid;
-              str8_deserial_read_cstr(raw_data, debug_entry_ptr->foff+sizeof(cv), &pdb70_path);
-            } else {
-              rd_errorf("unable to read PE_CvHeaderPDB70");
-            }
-          } break;
-          case PE_CODEVIEW_RDI_MAGIC: {
-            PE_CvHeaderRDI cv = {0};
-            U64 cv_read_size = str8_deserial_read_struct(raw_data, debug_entry_ptr->foff, &cv);
-            if (cv_read_size == sizeof(cv)) {
-              rdi_guid = cv.guid;
-              str8_deserial_read_cstr(raw_data, debug_entry_ptr->foff+sizeof(cv), &rdi_path);
-            } else {
-              rd_errorf("unable to read PE_CvHeaderRDI");
-            }
-          } break;
-          default: break;
+  String8 raw_rdi  = {0};
+  Guid    rdi_guid = {0};
+  for (PE_DebugInfoNode *n = dbg_list.first; n != 0; n = n->next) {
+    PE_DebugInfo *v = &n->v;
+    if (v->header.type == PE_DebugDirectoryType_CODEVIEW) {
+      if (v->u.codeview.magic == PE_CODEVIEW_RDI_MAGIC) {
+        if (raw_rdi.size) {
+          rd_warningf("multiple RDI paths defined in %S");
+        } else {
+          raw_rdi  = os_data_from_file_path(arena, v->u.codeview.rdi.path);
+          rdi_guid = v->u.codeview.rdi.header.guid;
+          if (raw_rdi.size == 0) {
+            rd_errorf("unable to open RDI: %S", v->u.codeview.rdi.path);
+          }
         }
       }
     }
   }
 
-  // convert debug info to RDI
-  if (!rdi_path.size && (pdb20_path.size || pdb70_path.size)) {
-    if (pdb20_path.size && pdb70_path.size) {
-      rd_warningf("multiple PDB paths defined %S, %S (picking first)", pdb70_path, pdb20_path);
+  if (!raw_rdi.size) {
+    String8 pdb_path    = str8_zero();
+    Guid    pdb_guid    = {0};
+    B32     convert_pdb = 0;
+    for (PE_DebugInfoNode *n = dbg_list.first; n != 0; n = n->next) {
+      PE_DebugInfo *v = &n->v;
+      if (v->header.type == PE_DebugDirectoryType_CODEVIEW) {
+        pdb_path    = v->u.codeview.pdb70.path;
+        pdb_guid    = v->u.codeview.pdb70.header.guid;
+        convert_pdb = 1;
+        break;
+      }
     }
-    String8 pdb_path  = pdb70_path.size ? pdb70_path : pdb20_path;
-    String8 out_path  = push_str8f(scratch.arena, "%S.rdi", str8_chop_last_dot(pdb_path));
-    B32     is_rdi_ok = rd_invoke_rdi_converter(data_path, raw_data, pdb_path, out_path);
-    if (is_rdi_ok) {
-      rdi_path = out_path;
-    } else {
-      rd_errorf("unable write RDI to %S", out_path);
+
+    if (convert_pdb) {
+      raw_rdi = rd_invoke_rdi_converter(scratch.arena, data_path, raw_data, pdb_path);
     }
   }
 
-  if (rdi_path.size) {
-    String8 raw_rdi = os_data_from_file_path(arena, rdi_path);
-    if (raw_rdi.size > 0) {
-      rdi = push_array(arena, RDI_Parsed, 1);
+  if (raw_rdi.size) {
+    rdi = push_array(arena, RDI_Parsed, 1);
 
-      // TODO: check guid
-      RDI_ParseStatus parse_status = rdi_parse(raw_rdi.str, raw_rdi.size, rdi);
+    // TODO: check guid
+    RDI_ParseStatus parse_status = rdi_parse(raw_rdi.str, raw_rdi.size, rdi);
 
-      String8 parse_status_string = str8_zero();
-      if (parse_status == RDI_ParseStatus_Good) {
-      } else if (parse_status == RDI_ParseStatus_HeaderDoesNotMatch) {
-        parse_status_string = str8_lit("Header does not match");
-      } else if (parse_status == RDI_ParseStatus_UnsupportedVersionNumber) {
-        parse_status_string = str8_lit("Unsupported version number");
-      } else if (parse_status == RDI_ParseStatus_InvalidDataSecionLayout) {
-        parse_status_string = str8_lit("Invalid data section layout");
-      } else if (parse_status == RDI_ParseStatus_MissingRequiredSection) {
-        parse_status_string = str8_lit("Missing required section");
-      } else {
-        parse_status_string = push_str8f(scratch.arena, "unknown parse status code: %u", parse_status);
-      }
-
-      if (parse_status_string.size) {
-        rdi = 0;
-        rd_errorf("RDI parse status(%u): %S", parse_status, parse_status_string);
-      }
+    String8 parse_status_string = str8_zero();
+    if (parse_status == RDI_ParseStatus_Good) {
+    } else if (parse_status == RDI_ParseStatus_HeaderDoesNotMatch) {
+      parse_status_string = str8_lit("Header does not match");
+    } else if (parse_status == RDI_ParseStatus_UnsupportedVersionNumber) {
+      parse_status_string = str8_lit("Unsupported version number");
+    } else if (parse_status == RDI_ParseStatus_InvalidDataSecionLayout) {
+      parse_status_string = str8_lit("Invalid data section layout");
+    } else if (parse_status == RDI_ParseStatus_MissingRequiredSection) {
+      parse_status_string = str8_lit("Missing required section");
     } else {
-      rd_errorf("unable to open RDI: %S", rdi_path);
+      parse_status_string = push_str8f(scratch.arena, "unknown parse status code: %u", parse_status);
+    }
+
+    if (parse_status_string.size) {
+      rdi = 0;
+      rd_errorf("RDI parse status(%u): %S", parse_status, parse_status_string);
     }
   }
 
@@ -5657,41 +5619,34 @@ pe_print_debug_diretory(Arena *arena, String8List *out, String8 indent, String8 
 {
   Temp scratch = scratch_begin(&arena, 1);
 
-  rd_printf("# Debug");
+  rd_printf("# Debug Directory");
   rd_indent();
 
-  U64                entry_count = raw_dir.size / sizeof(PE_DebugDirectory);
-  PE_DebugDirectory *entries      = str8_deserial_get_raw_ptr(raw_dir, 0, sizeof(*entries)*entry_count);
-  for (U64 i = 0; i < entry_count; ++i) {
-    PE_DebugDirectory *de = entries+i;
-    if (i > 0) {
-      rd_newline();
-    }
-    rd_printf("Entry[%u]", i);
-    rd_indent();
+  PE_DebugInfoList debug_info_list = pe_parse_debug_directory(scratch.arena, raw_data, raw_dir);
+  U64 i = 0;
+  for (PE_DebugInfoNode *entry = debug_info_list.first; entry != 0; entry = entry->next, ++i) {
+    PE_DebugInfo *de = &entry->v;
 
-    {
-      String8 time_stamp = coff_string_from_time_stamp(scratch.arena, de->time_stamp);
-      String8 type       = pe_string_from_debug_directory_type(de->type);
-
-      rd_printf("Characteristics: %#x",   de->characteristics);
-      rd_printf("Time Stamp:      %S",    time_stamp);
-      rd_printf("Version:         %u.%u", de->major_ver, de->minor_ver);
-      rd_printf("Type:            %S",    type);
-      rd_printf("Size:            %u",    de->size);
-      rd_printf("Data virt off:   %#x",   de->voff);
-      rd_printf("Data file off:   %#x",   de->foff);
+    if (entry != debug_info_list.first) {
       rd_newline();
     }
 
-    String8 raw_entry = str8_substr(raw_data, rng_1u64(de->foff, de->foff+de->size));
-    if (raw_entry.size != de->size) {
-      rd_errorf("unable to read debug entry @ %#x", de->foff);
-      break;
-    }
-
+    rd_printf("Entry[%llu]", i);
     rd_indent();
-    switch (de->type) {
+
+    // print header
+    rd_printf("Characteristics: %#x",   de->header.characteristics);
+    rd_printf("Time Stamp:      %S",    coff_string_from_time_stamp(scratch.arena, de->header.time_stamp));
+    rd_printf("Version:         %u.%u", de->header.major_ver, de->header.minor_ver);
+    rd_printf("Type:            %S",    pe_string_from_debug_directory_type(de->header.type));
+    rd_printf("Size:            %u",    de->header.size);
+    rd_printf("Data virt off:   %#x",   de->header.voff);
+    rd_printf("Data file off:   %#x",   de->header.foff);
+    rd_newline();
+
+    // print directory contents
+    rd_indent();
+    switch (de->header.type) {
       case PE_DebugDirectoryType_ILTCG:
       case PE_DebugDirectoryType_MPX:
       case PE_DebugDirectoryType_EXCEPTION:
@@ -5709,30 +5664,30 @@ pe_print_debug_diretory(Arena *arena, String8List *out, String8 indent, String8 
 
         // TODO: is this version?
         U32 unknown  = 0;
-        off += str8_deserial_read_struct(raw_entry, off, &unknown);
+        off += str8_deserial_read_struct(de->u.raw_data, off, &unknown);
         if (unknown != 0) {
           rd_printf("TODO: unknown: %u", unknown);
         }
 
         rd_printf("%-8s %-8s %-8s", "VOFF", "Size", "Name");
-        for (; off < raw_entry.size; ) {
+        for (; off < de->u.raw_data.size; ) {
           U32     voff = 0;
           U32     size = 0;
           String8 name = str8_zero();
 
-          off += str8_deserial_read_struct(raw_entry, off, &voff);
-          off += str8_deserial_read_struct(raw_entry, off, &size);
+          off += str8_deserial_read_struct(de->u.raw_data, off, &voff);
+          off += str8_deserial_read_struct(de->u.raw_data, off, &size);
           if (voff == 0 && size == 0) {
             break;
           }
-          off += str8_deserial_read_cstr(raw_entry, off, &name);
+          off += str8_deserial_read_cstr(de->u.raw_data, off, &name);
           off = AlignPow2(off, 4);
 		  
           rd_printf("%08x %08x %S", voff, size, name);
         }
       } break;
       case PE_DebugDirectoryType_VC_FEATURE: {
-        MSCRT_VCFeatures *feat = str8_deserial_get_raw_ptr(raw_entry, 0, sizeof(*feat));
+        MSCRT_VCFeatures *feat = str8_deserial_get_raw_ptr(de->u.raw_data, 0, sizeof(*feat));
         if (feat) {
           rd_printf("Pre-VC++ 11.0: %u", feat->pre_vcpp);
           rd_printf("C/C++:         %u", feat->c_cpp);
@@ -5744,7 +5699,7 @@ pe_print_debug_diretory(Arena *arena, String8List *out, String8 indent, String8 
         }
       } break;
       case PE_DebugDirectoryType_FPO: {
-        PE_DebugFPO *fpo = str8_deserial_get_raw_ptr(raw_entry, 0, sizeof(*fpo));
+        PE_DebugFPO *fpo = str8_deserial_get_raw_ptr(de->u.raw_data, 0, sizeof(*fpo));
         if (fpo) {
           U8          prolog_size     = PE_FPOEncoded_Extract_PROLOG_SIZE(fpo->flags);
           U8          saved_regs_size = PE_FPOEncoded_Extract_SAVED_REGS_SIZE(fpo->flags);
@@ -5766,38 +5721,35 @@ pe_print_debug_diretory(Arena *arena, String8List *out, String8 indent, String8 
           rd_errorf("not enough bytes to read FPO");
         }
       } break;
-
       case PE_DebugDirectoryType_CODEVIEW: {
-        U32 magic = 0;
-        str8_deserial_read_struct(raw_entry, 0, &magic);
-        switch (magic) {
+        switch (de->u.codeview.magic) {
           case PE_CODEVIEW_PDB20_MAGIC: {
-            PE_CvHeaderPDB20 *cv20 = str8_deserial_get_raw_ptr(raw_entry, 0, sizeof(*cv20));
-            String8 name; str8_deserial_read_cstr(raw_entry, sizeof(*cv20), &name);
+            PE_CvHeaderPDB20 *header = &de->u.codeview.pdb20.header;
 
-            String8 time_stamp = coff_string_from_time_stamp(scratch.arena, cv20->time_stamp);
-
-            rd_printf("Time stamp: %S", time_stamp);
-            rd_printf("Age:        %u", cv20->age);
-            rd_printf("Name:       %S", name);
+            rd_printf("Time stamp: %S", coff_string_from_time_stamp(scratch.arena, header->time_stamp));
+            rd_printf("Age:        %u", header->age);
+            rd_printf("Name:       %S", de->u.codeview.pdb20.path);
           } break;
           case PE_CODEVIEW_PDB70_MAGIC: {
-            PE_CvHeaderPDB70 *cv70 = str8_deserial_get_raw_ptr(raw_entry, 0, sizeof(*cv70));
-            String8 name; str8_deserial_read_cstr(raw_entry, sizeof(*cv70), &name);
-            
-            String8 guid = string_from_guid(scratch.arena, cv70->guid);
+            PE_CvHeaderPDB70 *header = &de->u.codeview.pdb70.header;
 
-            rd_printf("GUID: %S", guid);
-            rd_printf("Age:  %u", cv70->age);
-            rd_printf("Name: %S", name);
+            rd_printf("GUID: %S", string_from_guid(scratch.arena, header->guid));
+            rd_printf("Age:  %u", header->age);
+            rd_printf("Name: %S", de->u.codeview.pdb70.path);
+          } break;
+          case PE_CODEVIEW_RDI_MAGIC: {
+            PE_CvHeaderRDI *header = &de->u.codeview.rdi.header;
+
+            rd_printf("GUID: %S", string_from_guid(scratch.arena, header->guid));
+            rd_printf("Name: %S", de->u.codeview.rdi.path);
           } break;
           default: {
-            rd_errorf("unknown CodeView magic %#x", magic);
+            rd_errorf("unknown CodeView magic %#x", de->u.codeview.magic);
           } break;
         }
       } break;
       case PE_DebugDirectoryType_MISC: {
-        PE_DebugMisc *misc = str8_deserial_get_raw_ptr(raw_entry, 0, sizeof(*misc));
+        PE_DebugMisc *misc = str8_deserial_get_raw_ptr(de->u.raw_data, 0, sizeof(*misc));
         
         String8 type_string = pe_string_from_misc_type(misc->data_type);
 
@@ -5808,7 +5760,7 @@ pe_print_debug_diretory(Arena *arena, String8List *out, String8 indent, String8 
         switch (misc->data_type) {
           case PE_DebugMiscType_EXE_NAME: {
             String8 name;
-            str8_deserial_read_cstr(raw_entry, sizeof(*misc), &name);
+            str8_deserial_read_cstr(de->u.raw_data, sizeof(*misc), &name);
             rd_printf("Name: %S", name);
           } break;
           default: {
@@ -5818,12 +5770,12 @@ pe_print_debug_diretory(Arena *arena, String8List *out, String8 indent, String8 
       } break;
     }
     rd_unindent();
-
     rd_unindent();
   }
 
   rd_unindent();
   rd_newline();
+
   scratch_end(scratch);
 }
 
