@@ -532,7 +532,7 @@ rd_print_disasm(Arena            *arena,
 internal String8
 rd_format_hex_array(Arena *arena, U8 *ptr, U64 size)
 {
-  U64   buf_max  = size * 8;
+  U64   buf_max  = 32 + size * 8;
   char *buf      = push_array(arena, char, buf_max);
   U64   buf_size = 0;
 
