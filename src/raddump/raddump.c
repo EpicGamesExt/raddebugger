@@ -255,13 +255,107 @@ rd_marker_is_before(void *a, void *b)
   return u64_is_before(&((RD_Marker*)a)->off, &((RD_Marker*)b)->off);
 }
 
+internal int
+rd_range_min_is_before(void *raw_a, void *raw_b)
+{
+  Rng1U64 *a = raw_a;
+  Rng1U64 *b = raw_b;
+  return a->min < b->min;
+}
+
+internal U64
+rd_range_bsearch(Rng1U64 *ranges, U64 count, U64 x)
+{
+  if (count > 0 && ranges[0].min <= x && x < ranges[count - 1].min) {
+    U64 first = 0;
+    U64 opl   = count;
+    for (;;) {
+      U64 mid = (first + opl)/2;
+      if (ranges[mid].min < x) {
+        first = mid;
+      } else if (ranges[mid].min > x) {
+        opl = mid;
+      } else {
+        first = mid;
+        break;
+      }
+      if (opl - first <= 1) {
+        break;
+      }
+    }
+    return first;
+  }
+  return max_U64;
+}
+
+internal RD_MarkerArray *
+rd_section_markers_from_rdi(Arena *arena, RDI_Parsed *rdi)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+
+  U64                sect_count = 0;
+  RDI_BinarySection *sect_lo    = rdi_table_from_name(rdi, BinarySections, &sect_count);
+
+  Rng1U64 *sect_vranges = push_array(scratch.arena, Rng1U64, sect_count);
+  for (U64 i = 0; i < sect_count; ++i) {
+    sect_vranges[i].min = sect_lo[i].voff_first;
+    sect_vranges[i].max = i;
+  }
+  radsort(sect_vranges, sect_count, rd_range_min_is_before);
+
+  U64            proc_count = 0;
+  RDI_Procedure *proc_lo    = rdi_table_from_name(rdi, Procedures, &proc_count);
+
+  RD_MarkerList *markers = push_array(scratch.arena, RD_MarkerList, sect_count);
+  for (U64 i = 0; i < proc_count; ++i) {
+    RDI_Procedure *proc         = proc_lo + i;
+    U64            proc_voff_lo = rdi_first_voff_from_procedure(rdi, proc);
+    U64            proc_voff_hi = rdi_opl_voff_from_procedure(rdi, proc);
+
+    U64 sect_range_idx = rd_range_bsearch(sect_vranges, sect_count, proc_voff_lo);
+    if (sect_range_idx < sect_count) {
+      Rng1U64 sect_range = sect_vranges[sect_range_idx];
+      U64     sect_idx   = sect_range.max;
+
+      String8 name = str8_zero();
+      name.str = rdi_name_from_procedure(rdi, proc, &name.size);
+
+      RD_MarkerNode *n = push_array(scratch.arena, RD_MarkerNode, 1);
+      n->v.off         = proc_voff_lo - sect_range.min;
+      n->v.string      = name;
+
+      RD_MarkerList *list = &markers[sect_idx];
+      SLLQueuePush(list->first, list->last, n);
+      ++list->count;
+    }
+  }
+
+  // lists -> arrays
+  RD_MarkerArray *result = push_array(arena, RD_MarkerArray, sect_count);
+  for (U64 i = 0; i < sect_count; ++i) {
+    result[i].count = 0;
+    result[i].v     = push_array(arena, RD_Marker, markers[i].count);
+    for (RD_MarkerNode *n = markers[i].first; n != 0; n = n->next) {
+      result[i].v[result[i].count++] = n->v;
+    }
+  }
+
+  // sort arrays
+  for (U64 i = 0; i < sect_count; ++i) {
+    radsort(result[i].v, result[i].count, rd_marker_is_before);
+  }
+
+  scratch_end(scratch);
+  return result;
+}
+
 internal RD_MarkerArray *
 rd_section_markers_from_coff_symbol_table(Arena *arena, String8 raw_data, U64 string_table_off, U64 section_count, COFF_Symbol32Array symbols)
 {
   Temp scratch = scratch_begin(&arena, 1);
 
   // extract markers from symbol table
-  RD_MarkerList *markers = push_array(scratch.arena, RD_MarkerList, section_count);
+  RD_MarkerList *markers = push_array(scratch.arena, RD_MarkerList, section_count+1);
   for (U64 symbol_idx = 0; symbol_idx < symbols.count; ++symbol_idx) {
     COFF_Symbol32 *symbol = &symbols.v[symbol_idx];
 
@@ -277,7 +371,7 @@ rd_section_markers_from_coff_symbol_table(Arena *arena, String8 raw_data, U64 st
       n->v.off         = symbol->value;
       n->v.string      = name;
 
-      RD_MarkerList *list = &markers[symbol->section_number-1];
+      RD_MarkerList *list = &markers[symbol->section_number];
       SLLQueuePush(list->first, list->last, n);
       ++list->count;
     }
@@ -4709,14 +4803,15 @@ coff_disasm_sections(Arena              *arena,
     for (U64 sect_idx = 0; sect_idx < section_count; ++sect_idx) {
       COFF_SectionHeader *sect = sections+sect_idx;
       if (sect->flags & COFF_SectionFlag_CNT_CODE) {
-        U64         sect_off  = is_obj ? sect->foff : sect->voff;
-        U64         sect_size = is_obj ? sect->fsize : sect->vsize;
-        String8     raw_code  = str8_substr(raw_data, rng_1u64(sect->foff, sect->foff+sect_size));
-        RD_MarkerArray markers   = section_markers[sect_idx];
+        U64            sect_off    = is_obj ? sect->foff : sect->voff;
+        U64            sect_size   = is_obj ? sect->fsize : sect->vsize;
+        String8        raw_code    = str8_substr(raw_data, rng_1u64(sect->foff, sect->foff+sect_size));
+        U64            sect_number = sect_idx+1;
+        RD_MarkerArray markers     = section_markers[sect_number];
 
-        rd_printf("# Disassembly [Section No. %#llx]", (sect_idx+1));
+        rd_printf("# Disassembly [Section No. %#llx]", sect_number);
         rd_indent();
-        rd_print_disasm(arena, out, indent, machine, image_base, sect_off, markers.count, markers.v, raw_code);
+        rd_print_disasm(arena, out, indent, arch_from_coff_machine(machine), image_base, sect_off, markers.count, markers.v, raw_code);
         rd_unindent();
       }
     }
@@ -6796,7 +6891,11 @@ pe_print(Arena *arena, String8List *out, String8 indent, String8 raw_data, RD_Op
 
   RD_MarkerArray *section_markers = 0;
   if (opts & (RD_Option_Disasm|RD_Option_Rawdata)) {
-    section_markers = rd_section_markers_from_coff_symbol_table(scratch.arena, raw_data, string_table_off, coff_header->section_count, symbols);
+    if (rdi) {
+      section_markers = rd_section_markers_from_rdi(scratch.arena, rdi);
+    } else {
+      section_markers = rd_section_markers_from_coff_symbol_table(scratch.arena, raw_data, string_table_off, coff_header->section_count, symbols);
+    }
   }
 
   if (opts & RD_Option_Rawdata) {
