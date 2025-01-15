@@ -634,8 +634,9 @@ typedef U32 COFF_DataType;
 
 typedef struct COFF_HeaderInfo
 {
-  COFF_MachineType machine;
   COFF_DataType    type;
+  COFF_MachineType machine;
+  U64              header_size;
   U64              section_array_off;
   U64              section_count_no_null;
   U64              string_table_off;

@@ -99,6 +99,7 @@ coff_header_info_from_data(String8 data)
     COFF_HeaderBigObj *big_header = (COFF_HeaderBigObj*)data.str;
     info.type                     = COFF_DataType_BIG_OBJ;
     info.machine                  = big_header->machine;
+    info.header_size              = sizeof(COFF_HeaderBigObj);
     info.section_array_off        = sizeof(COFF_HeaderBigObj);
     info.section_count_no_null    = big_header->section_count;
     info.string_table_off         = big_header->symbol_table_foff + sizeof(COFF_Symbol32) * big_header->symbol_count;
@@ -109,6 +110,7 @@ coff_header_info_from_data(String8 data)
     COFF_Header *header        = (COFF_Header*)data.str;
     info.type                  = COFF_DataType_OBJ;
     info.machine               = header->machine;
+    info.header_size           = sizeof(COFF_Header);
     info.section_array_off     = sizeof(COFF_Header);
     info.section_count_no_null = header->section_count;
     info.string_table_off      = header->symbol_table_foff + sizeof(COFF_Symbol16) * header->symbol_count;

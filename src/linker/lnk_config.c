@@ -43,7 +43,7 @@ read_only struct
   { LNK_CmdSwitch_NotImplemented,     "EMITVOLATILEMETADATA", "", ""                                                                                                      },
   { LNK_CmdSwitch_Entry,              "ENTRY",                ":FUNCTION", ""                                                                                             },
   { LNK_CmdSwitch_Null,               "ERRORREPORT",          "", "Deprecated starting Windows Vista."                                                                    },
-  { LNK_CmdSwitch_NotImplemented,     "EXPORT",               ":SYMBOL", ""                                                                                               },
+  { LNK_CmdSwitch_Export,             "EXPORT",               ":SYMBOL", ""                                                                                               },
   { LNK_CmdSwitch_NotImplemented,     "EXPORTADMIN",          "", ""                                                                                                      },
   { LNK_CmdSwitch_FastFail,           "FASTFAIL",             "", "Not used."                                                                                             },
   { LNK_CmdSwitch_NotImplemented,     "FASTGENPROFILE",       "", ""                                                                                                      },
@@ -773,6 +773,13 @@ lnk_cmd_switch_parse_string_copy(Arena *arena, String8 obj_path, String8 lib_pat
 
 ////////////////////////////////
 
+internal void
+lnk_alt_name_list_concat_in_place(LNK_AltNameList *list, LNK_AltNameList *to_concat)
+{
+  str8_list_concat_in_place(&list->from_list, &to_concat->from_list);
+  str8_list_concat_in_place(&list->to_list, &to_concat->to_list);
+}
+
 internal B32
 lnk_parse_alt_name_directive(Arena *arena, String8 input, LNK_AltNameList *list_out)
 {
@@ -798,6 +805,86 @@ lnk_parse_alt_name_directive_list(Arena *arena, String8List list, LNK_AltNameLis
     }
   }
   return 0;
+}
+
+internal LNK_ExportParse *
+lnk_parse_export_directive(Arena *arena, LNK_ExportParseList *list, String8List value_list, String8 obj_path, String8 lib_path)
+{
+  ProfBeginFunction();
+  Temp scratch = scratch_begin(&arena, 1);
+  LNK_ExportParse *parse = 0;
+
+  // parse directive
+  String8 name  = str8_zero();
+  String8 alias = str8_zero();
+  String8 type  = coff_string_from_import_header_type(COFF_ImportHeaderType_CODE);
+  if (value_list.node_count > 0) {
+    String8List dir_split = str8_split_by_string_chars(scratch.arena, value_list.first->string, str8_lit("="), 0);
+    B32 is_export_valid = value_list.node_count <= 2 && value_list.node_count > 0;
+    if (is_export_valid) {
+      if (dir_split.node_count > 0) {
+        name = dir_split.last->string;
+      }
+      if (dir_split.node_count == 2) {
+        alias = dir_split.first->string;
+      }
+      if (value_list.node_count == 2) {
+        type = value_list.last->string;
+      }
+    }
+  }
+  
+  // prase error check
+  if (name.size == 0) {
+    String8 dir = str8_list_join(scratch.arena, &value_list, 0);
+    lnk_error_with_loc(LNK_Error_IllData, obj_path, lib_path, "invalid export directive \"%S\"", dir);
+    goto exit;
+  }
+  
+  parse        = push_array_no_zero(arena, LNK_ExportParse, 1);
+  parse->next  = 0;
+  parse->name  = name;
+  parse->alias = alias;
+  parse->type  = type;
+  
+  SLLQueuePush(list->first, list->last, parse);
+  ++list->count;
+  
+exit:;
+
+  scratch_end(scratch);
+  ProfEnd();
+  return parse;
+}
+
+internal LNK_MergeDirectiveNode *
+lnk_merge_directive_list_push(Arena *arena, LNK_MergeDirectiveList *list, LNK_MergeDirective data)
+{
+  LNK_MergeDirectiveNode *node = push_array_no_zero(arena, LNK_MergeDirectiveNode, 1);
+  node->data                   = data;
+  node->next                   = 0;
+  
+  SLLQueuePush(list->first, list->last, node);
+  ++list->count;
+  
+  return node;
+}
+
+internal B32
+lnk_parse_merge_directive(String8 string, LNK_MergeDirective *out)
+{
+  Temp scratch = scratch_begin(0, 0);
+  B32 is_parse_ok = 0;
+  
+  String8List list = str8_split_by_string_chars(scratch.arena, string, str8_lit("="), 0);
+  if (list.node_count == 2) {
+    out->src = list.first->string;
+    out->dst = list.last->string;
+    is_parse_ok = 1;
+  }
+  
+  scratch_end(scratch);
+  return is_parse_ok;
 }
 
 ////////////////////////////////
@@ -1026,6 +1113,11 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
     }
 
     config->entry_point_name = new_entry_point_name;
+  } break;
+
+  case LNK_CmdSwitch_Export: {
+    String8List value_strings_copy = str8_list_copy(arena, &value_strings);
+    lnk_parse_export_directive(arena, &config->export_symbol_list, value_strings_copy, obj_path, lib_path);
   } break;
 
   case LNK_CmdSwitch_FastFail: {

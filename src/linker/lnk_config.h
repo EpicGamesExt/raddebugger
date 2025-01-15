@@ -7,7 +7,6 @@ typedef enum
 {
   LNK_CmdSwitch_Null,
   LNK_CmdSwitch_NotImplemented,
-  LNK_CmdSwitch_Deprecated,
 
   LNK_CmdSwitch_Align,
   LNK_CmdSwitch_AllowBind,
@@ -22,6 +21,7 @@ typedef enum
   LNK_CmdSwitch_Dll,
   LNK_CmdSwitch_DynamicBase,
   LNK_CmdSwitch_Entry,
+  LNK_CmdSwitch_Export,
   LNK_CmdSwitch_FastFail,
   LNK_CmdSwitch_FileAlign,
   LNK_CmdSwitch_Fixed,
@@ -77,7 +77,6 @@ typedef enum
   LNK_CmdSwitch_EditAndContinue,
   LNK_CmdSwitch_EmitVolatileMetadata,
   LNK_CmdSwitch_ErrorReport,
-  LNK_CmdSwitch_Export,
   LNK_CmdSwitch_ExportAdmin,
   LNK_CmdSwitch_FastGenProfile,
   LNK_CmdSwitch_FailIfMismatch,
@@ -227,6 +226,42 @@ typedef struct LNK_AltNameList
   String8List to_list;
 } LNK_AltNameList;
 
+typedef struct LNK_ExportParse
+{
+  struct LNK_ExportParse *next;
+  String8                 name;
+  String8                 alias;
+  String8                 type;
+} LNK_ExportParse;
+
+typedef struct LNK_ExportParseList
+{
+  U64              count;
+  LNK_ExportParse *first;
+  LNK_ExportParse *last;
+} LNK_ExportParseList;
+
+typedef struct LNK_MergeDirective
+{
+  String8 src;
+  String8 dst;
+} LNK_MergeDirective;
+
+typedef struct LNK_MergeDirectiveNode
+{
+  struct LNK_MergeDirectiveNode *next;
+  LNK_MergeDirective             data;
+} LNK_MergeDirectiveNode;
+
+typedef struct LNK_MergeDirectiveList
+{
+  U64                     count;
+  LNK_MergeDirectiveNode *first;
+  LNK_MergeDirectiveNode *last;
+} LNK_MergeDirectiveList;
+
+
+
 typedef enum
 {
   LNK_DebugInfoGuid_Null,
@@ -301,6 +336,7 @@ typedef struct LNK_Config
   LNK_TypeNameHashMode        pdb_hash_type_names;
   String8                     pdb_hash_type_name_map;
   U64                         pdb_hash_type_name_length;
+  LNK_ExportParseList         export_symbol_list;
   String8List                 input_list[LNK_Input_Count];
   String8List                 input_default_lib_list;
   String8List                 disallow_lib_list;
@@ -506,8 +542,16 @@ internal void lnk_cmd_switch_set_flag_64(String8 obj_path, String8 lib_path, LNK
 internal B32  lnk_cmd_switch_parse_string(String8 obj_path, String8 lib_path, LNK_CmdSwitchType cmd_switch, String8List value_strings, String8 *string_out);
 internal void lnk_cmd_switch_parse_string_copy(Arena *arena, String8 obj_path, String8 lib_path, LNK_CmdSwitchType cmd_switch, String8List value_strings, String8 *string_out);
 
+////////////////////////////////
+
+internal void      lnk_alt_name_list_concat_in_place(LNK_AltNameList *list, LNK_AltNameList *to_concat);
 internal B32       lnk_parse_alt_name_directive(Arena *arena, String8 input, LNK_AltNameList *list_out);
 internal String8 * lnk_parse_alt_name_directive_list(Arena *arena, String8List list, LNK_AltNameList *list_out);
+
+internal LNK_ExportParse * lnk_parse_export_directive(Arena *arena, LNK_ExportParseList *list, String8List value_list, String8 obj_path, String8 lib_path);
+
+internal LNK_MergeDirectiveNode * lnk_merge_directive_list_push(Arena *arena, LNK_MergeDirectiveList *list, LNK_MergeDirective data);
+internal B32                      lnk_parse_merge_directive(String8 string, LNK_MergeDirective *out);
 
 ////////////////////////////////
 

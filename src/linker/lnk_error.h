@@ -80,6 +80,7 @@ typedef enum
   LNK_Warning_LongSectionName,
   LNK_Warning_UnknownSwitch,
   LNK_Warning_TLSAlign,
+  LNK_Warning_DirectiveSectionWithRelocs,
   LNK_Warning_Last,
   
   LNK_Error_Count

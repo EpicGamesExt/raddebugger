@@ -115,7 +115,6 @@
 #include "lnk_config.h"
 #include "lnk_chunk.h"
 #include "lnk_reloc.h"
-#include "lnk_directive.h"
 #include "lnk_symbol_table.h"
 #include "lnk_section_table.h"
 #include "lnk_obj.h"
@@ -133,7 +132,6 @@
 #include "lnk_config.c"
 #include "lnk_chunk.c"
 #include "lnk_reloc.c"
-#include "lnk_directive.c"
 #include "lnk_symbol_table.c"
 #include "lnk_section_table.c"
 #include "lnk_obj.c"
@@ -3553,6 +3551,8 @@ lnk_run(int argc, char **argv)
           // derive machine from obj
           if (config->machine == COFF_MachineType_UNKNOWN) {
             config->machine = obj->machine;
+          } else if (config->machine != COFF_MachineType_X64) {
+            lnk_error_with_loc(LNK_Error_UnsupportedMachine, obj->path, obj->lib_path, "%S machine is supported", coff_string_from_machine_type(obj->machine));
           } else {
             // is obj machine compatible? 
             if (config->machine != obj->machine &&
@@ -3901,8 +3901,16 @@ lnk_run(int argc, char **argv)
       } break;
       case State_BuildExportTable: {
         ProfBegin("Build Export Table");
-        
+
+        // push exports from command line
+        for (LNK_ExportParse *exp_parse = config->export_symbol_list.first; exp_parse != 0; exp_parse = exp_parse->next) {
+          lnk_export_table_push_export(exptab, symtab, exp_parse);
+        }
+
+        // push exports from obj directives
         lnk_collect_exports_from_obj_directives(exptab, obj_list, symtab);
+
+        // build export table section
         lnk_build_edata(exptab, st, symtab, config->image_name, config->machine);
         
         ProfEnd();
