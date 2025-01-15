@@ -542,23 +542,24 @@ typedef U32 RD_ListerFlags;
 enum
 {
   //- rjf: lister visual settings
-  RD_ListerFlag_Descriptions  = (1<<0),
+  RD_ListerFlag_LineEdit      = (1<<0),  // determines whether or not the lister has its own line edit, or if the filtering string is sourced by a user
+  RD_ListerFlag_Descriptions  = (1<<1),  // determines whether or not the lister items have descriptions (taller & bigger buttons)
   
   //- rjf: lister item sources
-  RD_ListerFlag_Locals        = (1<<1),
-  RD_ListerFlag_Registers     = (1<<2),
-  RD_ListerFlag_ViewRules     = (1<<3),
-  RD_ListerFlag_ViewRuleParams= (1<<4),
-  RD_ListerFlag_Members       = (1<<5),
-  RD_ListerFlag_Globals       = (1<<6),
-  RD_ListerFlag_ThreadLocals  = (1<<7),
-  RD_ListerFlag_Procedures    = (1<<8),
-  RD_ListerFlag_Types         = (1<<9),
-  RD_ListerFlag_Languages     = (1<<10),
-  RD_ListerFlag_Architectures = (1<<11),
-  RD_ListerFlag_Tex2DFormats  = (1<<12),
-  RD_ListerFlag_Files         = (1<<13),
-  RD_ListerFlag_Commands      = (1<<14),
+  RD_ListerFlag_Locals        = (1<<2),
+  RD_ListerFlag_Registers     = (1<<3),
+  RD_ListerFlag_ViewRules     = (1<<4),
+  RD_ListerFlag_ViewRuleParams= (1<<5),
+  RD_ListerFlag_Members       = (1<<6),
+  RD_ListerFlag_Globals       = (1<<7),
+  RD_ListerFlag_ThreadLocals  = (1<<8),
+  RD_ListerFlag_Procedures    = (1<<9),
+  RD_ListerFlag_Types         = (1<<10),
+  RD_ListerFlag_Languages     = (1<<11),
+  RD_ListerFlag_Architectures = (1<<12),
+  RD_ListerFlag_Tex2DFormats  = (1<<13),
+  RD_ListerFlag_Files         = (1<<14),
+  RD_ListerFlag_Commands      = (1<<15),
 };
 
 typedef struct RD_ListerItem RD_ListerItem;
@@ -619,6 +620,15 @@ struct RD_ListerParams
 ////////////////////////////////
 //~ rjf: Per-Window State
 
+typedef struct RD_QueryMenu RD_QueryMenu;
+struct RD_QueryMenu
+{
+  RD_QueryMenu *next;
+  Arena *arena;
+  RD_Regs *regs;
+  RD_RegSlot slot;
+};
+
 typedef struct RD_WindowState RD_WindowState;
 struct RD_WindowState
 {
@@ -668,26 +678,23 @@ struct RD_WindowState
   
   // rjf: lister state
   U64 lister_last_frame_idx;
-  B32 lister_input_dirty;
-  Arena *lister_params_arena;
+  Arena *lister_arena;
+  RD_Regs *lister_regs;
   RD_ListerParams lister_params;
+  UI_ScrollPt lister_scroll_pt;
   U8 lister_input_buffer[1024];
   U64 lister_input_size;
-  F32 lister_open_t;
-  F32 lister_num_visible_rows_t;
+  TxtPt lister_input_cursor;
+  TxtPt lister_input_mark;
+  
+  // rjf: query menu stack
+  RD_QueryMenu *top_query_menu;
   
   // rjf: query view stack
-  U64 query_cmd_gen;
   Arena *query_cmd_arena;
   String8 query_cmd_name;
   RD_Regs *query_cmd_regs;
   U64 query_cmd_regs_mask[(RD_RegSlot_COUNT + 63) / 64];
-  U64 query_input_gen;
-  B32 query_input_selected;
-  U8 query_input_buffer[1024];
-  U64 query_input_string_size;
-  TxtPt query_input_cursor;
-  TxtPt query_input_mark;
   
   // rjf: hover eval state
   B32 hover_eval_focused;
@@ -1091,11 +1098,6 @@ internal EV_Key rd_parent_ev_key_from_entity(RD_Entity *entity);
 internal RD_ViewRuleKind rd_view_rule_kind_from_string(String8 string);
 internal RD_ViewRuleInfo *rd_view_rule_info_from_kind(RD_ViewRuleKind kind);
 internal RD_ViewRuleInfo *rd_view_rule_info_from_string(String8 string);
-
-////////////////////////////////
-//~ rjf: Panel Type Functions
-
-
 
 ////////////////////////////////
 //~ rjf: Global Cross-Window UI Interaction State Functions
