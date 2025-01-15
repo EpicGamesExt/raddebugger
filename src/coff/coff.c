@@ -953,9 +953,9 @@ coff_parse_archive_member_header(String8 data, U64 offset, B32 is_regular_archiv
     size     = str8_skip_chop_whitespace(size);
 
     header_out->name           = name;
-    header_out->time_stamp     = s32_from_str8(date, 10);
-    header_out->user_id        = s32_from_str8(user_id, 10);
-    header_out->group_id       = s32_from_str8(group_id, 10);
+    header_out->time_stamp     = u32_from_str8(date, 10);
+    header_out->user_id        = u32_from_str8(user_id, 10);
+    header_out->group_id       = u32_from_str8(group_id, 10);
     header_out->mode           = mode;
     header_out->is_end_correct = str8_match(end, end_magic, 0);
     header_out->data_range     = rng_1u64(cursor, cursor + u32_from_str8(size, 10));
@@ -1028,41 +1028,42 @@ coff_parse_first_archive_member(COFF_ArchiveMember *member)
 internal COFF_ArchiveSecondMember
 coff_parse_second_archive_member(COFF_ArchiveMember *member)
 {
-  Assert(str8_match(member->header.name, str8_lit("/"), 0));
-
-  U64 cursor = 0;
-  
-  U32 member_count = 0;
-  cursor += str8_deserial_read_struct(member->data, cursor, &member_count);
-  
-  Rng1U64 member_offsets_range = rng_1u64(cursor, cursor + member_count * sizeof(U32));
-  cursor += dim_1u64(member_offsets_range);
-  
-  U32 symbol_count = 0;
-  cursor += str8_deserial_read_struct(member->data, cursor, &symbol_count);
-  
-  Rng1U64 symbol_indices_range = rng_1u64(cursor, cursor + symbol_count * sizeof(U16));
-  cursor += dim_1u64(symbol_indices_range);
-  
-  Rng1U64 string_table_range = rng_1u64(cursor, member->data.size);
-
-  String8 raw_member_offsets = str8_substr(member->data, member_offsets_range);
-  String8 raw_indices        = str8_substr(member->data, symbol_indices_range);
-
-  U32 *member_offsets      = (U32 *)raw_member_offsets.str;
-  U64  member_offset_count = raw_member_offsets.size / sizeof(member_offsets[0]);
-
-  U16 *symbol_indices     = (U16 *)raw_indices.str;
-  U64  symbol_index_count = raw_indices.size / sizeof(symbol_indices[0]);
-  
   COFF_ArchiveSecondMember result = {0};
-  result.member_count             = member_count;
-  result.symbol_count             = symbol_count;
-  result.member_offsets           = member_offsets;
-  result.member_offset_count      = member_offset_count;
-  result.symbol_indices           = symbol_indices;
-  result.symbol_index_count       = symbol_index_count;
-  result.string_table             = str8_substr(member->data, string_table_range);
+
+  if (str8_match(member->header.name, str8_lit("/"), 0)) {
+    U64 cursor = 0;
+    
+    U32 member_count = 0;
+    cursor += str8_deserial_read_struct(member->data, cursor, &member_count);
+    
+    Rng1U64 member_offsets_range = rng_1u64(cursor, cursor + member_count * sizeof(U32));
+    cursor += dim_1u64(member_offsets_range);
+    
+    U32 symbol_count = 0;
+    cursor += str8_deserial_read_struct(member->data, cursor, &symbol_count);
+    
+    Rng1U64 symbol_indices_range = rng_1u64(cursor, cursor + symbol_count * sizeof(U16));
+    cursor += dim_1u64(symbol_indices_range);
+    
+    Rng1U64 string_table_range = rng_1u64(cursor, member->data.size);
+
+    String8 raw_member_offsets = str8_substr(member->data, member_offsets_range);
+    String8 raw_indices        = str8_substr(member->data, symbol_indices_range);
+
+    U32 *member_offsets      = (U32 *)raw_member_offsets.str;
+    U64  member_offset_count = raw_member_offsets.size / sizeof(member_offsets[0]);
+
+    U16 *symbol_indices     = (U16 *)raw_indices.str;
+    U64  symbol_index_count = raw_indices.size / sizeof(symbol_indices[0]);
+    
+    result.member_count             = member_count;
+    result.symbol_count             = symbol_count;
+    result.member_offsets           = member_offsets;
+    result.member_offset_count      = member_offset_count;
+    result.symbol_indices           = symbol_indices;
+    result.symbol_index_count       = symbol_index_count;
+    result.string_table             = str8_substr(member->data, string_table_range);
+  }
 
   return result;
 }
