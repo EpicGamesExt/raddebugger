@@ -310,6 +310,38 @@ coff_read_symbol_name(String8 data, U64 string_table_base_offset, COFF_SymbolNam
   return name_str;
 }
 
+internal COFF_ParsedSymbol
+coff_parse_symbol32(String8 raw_coff, U64 string_table_off, COFF_Symbol32 *sym32)
+{
+  COFF_ParsedSymbol result = {0};
+  result.name              = coff_read_symbol_name(raw_coff, string_table_off, &sym32->name);
+  result.value             = sym32->value;
+  result.section_number    = sym32->section_number;
+  result.type              = sym32->type;
+  result.storage_class     = sym32->storage_class;
+  result.aux_symbol_count  = sym32->aux_symbol_count;
+  return result;
+}
+
+internal COFF_ParsedSymbol
+coff_parse_symbol16(String8 raw_coff, U64 string_table_off, COFF_Symbol16 *sym16)
+{
+  COFF_ParsedSymbol result = {0};
+  result.name              = coff_read_symbol_name(raw_coff, string_table_off, &sym16->name);
+  result.value             = sym16->value;
+  if (sym16->section_number == COFF_SYMBOL_DEBUG_SECTION_16) {
+    result.section_number = COFF_SYMBOL_DEBUG_SECTION;
+  } else if (sym16->section_number == COFF_SYMBOL_ABS_SECTION_16) {
+    result.section_number = COFF_SYMBOL_ABS_SECTION;
+  } else {
+    result.section_number = (U32)sym16->section_number;
+  }
+  result.type             = sym16->type;
+  result.storage_class    = sym16->storage_class;
+  result.aux_symbol_count = sym16->aux_symbol_count;
+  return result;
+}
+
 internal void
 coff_symbol32_from_coff_symbol16(COFF_Symbol32 *sym32, COFF_Symbol16 *sym16)
 {
@@ -328,30 +360,30 @@ coff_symbol32_from_coff_symbol16(COFF_Symbol32 *sym32, COFF_Symbol16 *sym16)
 }
 
 internal COFF_Symbol32Array
-coff_symbol_array_from_data_16(Arena *arena, String8 data, U64 symbol_array_off, U64 symbol_count)
+coff_symbol_array_from_data_16(Arena *arena, String8 raw_coff, U64 symbol_array_off, U64 symbol_count)
 {
-  COFF_Symbol32Array result;
-  result.count = symbol_count;
-  result.v = push_array_no_zero_aligned(arena, COFF_Symbol32, result.count, 8);
+  COFF_Symbol32Array result = {0};
+  result.count              = symbol_count;
+  result.v                  = push_array_no_zero_aligned(arena, COFF_Symbol32, result.count, 8);
   
-  COFF_Symbol16 *sym16_arr = (COFF_Symbol16 *)(data.str + symbol_array_off);
-  for (U64 isymbol = 0; isymbol < symbol_count; isymbol += 1) {
-    // read header symbol
+  Rng1U64        sym16_arr_range = rng_1u64(symbol_array_off, symbol_array_off + sizeof(COFF_Symbol16) * symbol_count);
+  String8        raw_sym16_arr   = str8_substr(raw_coff, sym16_arr_range);
+  COFF_Symbol16 *sym16_arr       = (COFF_Symbol16 *)raw_sym16_arr.str;
+
+  for (U64 isymbol = 0, count = raw_sym16_arr.size / sizeof(COFF_Symbol16); isymbol < count; isymbol += 1) {
     COFF_Symbol16 *sym16 = &sym16_arr[isymbol];
-    
-    // convert to 32bit
     COFF_Symbol32 *sym32 = &result.v[isymbol];
+
     coff_symbol32_from_coff_symbol16(sym32, sym16);
     
-    if (isymbol + 1 + sym16->aux_symbol_count > symbol_count) {
-      Assert(!"aux symbols out of bounds");
-    }
-    
     // copy aux symbols
-    for (U64 iaux = 0; iaux < sym16->aux_symbol_count; iaux += 1) {
-      COFF_Symbol16 *aux16 = sym16 + iaux + 1;
-      COFF_Symbol32 *aux32 = sym32 + iaux + 1; // 32bit COFF uses 16bit aux symbols
+    for (U64 iaux = isymbol+1, iaux_hi = Min(count, iaux+sym16->aux_symbol_count); iaux < iaux_hi; iaux += 1) {
+      COFF_Symbol16 *aux16 = sym16_arr + iaux;
+      COFF_Symbol32 *aux32 = result.v  + iaux;
+
+      // 32bit COFF uses 16bit aux symbols
       MemoryCopy(aux32, aux16, sizeof(COFF_Symbol16));
+      MemoryZero((U8 *)aux32 + sizeof(COFF_Symbol16), sizeof(COFF_Symbol32)-sizeof(COFF_Symbol16));
     }
     
     // take into account aux symbols

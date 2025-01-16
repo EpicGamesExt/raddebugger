@@ -780,6 +780,18 @@ typedef struct COFF_SectionHeaderArray
 } COFF_SectionHeaderArray;
 
 ////////////////////////////////
+
+typedef struct COFF_ParsedSymbol
+{
+  String8               name;
+  U32                   value;
+  U32                   section_number;
+  COFF_SymbolType       type;
+  COFF_SymStorageClass  storage_class;
+  U8                    aux_symbol_count;
+} COFF_ParsedSymbol;
+
+////////////////////////////////
 //~ rjf: Globals
 
 read_only global U8 coff_big_obj_magic[] =
@@ -815,6 +827,8 @@ internal String8             coff_name_from_section_header(COFF_SectionHeader *h
 internal void                coff_parse_section_name(String8 full_name, String8 *name_out, String8 *postfix_out);
 
 internal String8             coff_read_symbol_name(String8 data, U64 string_table_base_offset, COFF_SymbolName *name);
+internal COFF_ParsedSymbol   coff_parse_symbol32(String8 raw_coff, U64 string_table_off, COFF_Symbol32 *sym32);
+internal COFF_ParsedSymbol   coff_parse_symbol16(String8 raw_coff, U64 string_table_off, COFF_Symbol16 *sym16);
 internal void                coff_symbol32_from_coff_symbol16(COFF_Symbol32 *sym32, COFF_Symbol16 *sym16);
 internal COFF_Symbol32Array  coff_symbol_array_from_data_16(Arena *arena, String8 data, U64 symbol_array_off, U64 symbol_count);
 internal COFF_Symbol32Array  coff_symbol_array_from_data_32(Arena *arena, String8 data, U64 symbol_array_off, U64 symbol_count);
