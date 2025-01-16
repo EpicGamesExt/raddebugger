@@ -175,7 +175,7 @@ internal LNK_Chunk *        lnk_chunk_push_leaf(Arena *arena, LNK_ChunkManager *
 internal LNK_Chunk *        lnk_chunk_push_list(Arena *arena, LNK_ChunkManager *cman, LNK_Chunk *parent, String8 sort_index);
 internal LNK_ChunkNode *    lnk_chunk_deep_copy(Arena *arena, LNK_Chunk *chunk);
 internal LNK_ChunkNode *    lnk_merge_chunks(Arena *arena, LNK_ChunkManager *dst_cman, LNK_Chunk *dst, LNK_Chunk *src, U64 *id_map_out, U64 id_map_max);
-internal void               lnk_chunk_associate(Arena *arena, LNK_Chunk *head, LNK_Chunk *associate);
+internal void               lnk_chunk_associate(LNK_Chunk *head, LNK_Chunk *associate);
 internal B32                lnk_chunk_is_discarded(LNK_Chunk *chunk);
 internal U64                lnk_chunk_get_size(LNK_Chunk *chunk);
 internal U64                lnk_chunk_list_get_node_count(LNK_Chunk *chunk);

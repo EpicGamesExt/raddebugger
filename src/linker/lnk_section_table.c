@@ -145,7 +145,7 @@ lnk_make_section_sort_index(Arena *arena, String8 name, COFF_SectionFlags flags,
 internal void
 lnk_section_associate_chunks(LNK_Section *sect, LNK_Chunk *head, LNK_Chunk *associate)
 {
-  lnk_chunk_associate(sect->arena, head, associate);
+  lnk_chunk_associate(head, associate);
 }
 
 internal LNK_Chunk *

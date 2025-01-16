@@ -302,13 +302,20 @@ lnk_merge_chunks(Arena *arena, LNK_ChunkManager *dst_cman, LNK_Chunk *dst, LNK_C
   return src_node;
 }
 
+internal
+LNK_CHUNK_VISITOR_SIG(lnk_set_associate_on_chunks)
+{
+  chunk->associate = (LNK_Chunk *)ud;
+  return 0;
+}
+
 internal void
-lnk_chunk_associate(Arena *arena, LNK_Chunk *head, LNK_Chunk *chunk)
+lnk_chunk_associate(LNK_Chunk *head, LNK_Chunk *chunk)
 {
   // for simplicity we don't support multiple associations,
   // but it's possible to craft symbol table with multiple associations
-  Assert(!chunk->associate);
-  chunk->associate = head;
+  AssertAlways(!chunk->associate);
+  lnk_visit_chunks(0, chunk, lnk_set_associate_on_chunks, head);
 }
 
 internal B32

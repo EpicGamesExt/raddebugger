@@ -77,18 +77,20 @@ lnk_reloc_list_from_coff_reloc_array(Arena *arena, COFF_MachineType machine, LNK
     LNK_Symbol    *symbol      = symbol_array.v + coff_reloc_ptr->isymbol;
 
     if (chunk->type == LNK_Chunk_List) {
+      reloc_chunk = chunk->u.list->last->data;
       U64 cursor = 0;
       for (LNK_ChunkNode *c = chunk->u.list->first; c != 0; c = c->next) {
         Assert(c->data->type == LNK_Chunk_Leaf);
         if (coff_reloc_ptr->apply_off < cursor + c->data->u.leaf.size) {
           reloc_chunk = c->data;
-          apply_off   = coff_reloc_ptr->apply_off - cursor;
           break;
         }
         cursor += c->data->u.leaf.size;
       }
+      apply_off = coff_reloc_ptr->apply_off - cursor;
     }
 
+    Assert(reloc_chunk->type == LNK_Chunk_Leaf);
     Assert(coff_reloc_ptr->isymbol < symbol_array.count);
     reloc_ptr->chunk     = reloc_chunk;
     reloc_ptr->type      = type;

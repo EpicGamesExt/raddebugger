@@ -2164,7 +2164,7 @@ gsi_write_build_result(TP_Context         *tp,
   msf_stream_write(msf, gsi_sn, &build.bitmap[0], bitmap_size);
   ProfEnd();
 
-  ProfBegin("Write buckets [%M]", compressed_bucket_arr-size);
+  ProfBegin("Write buckets [%M]", compressed_bucket_arr_size);
   msf_stream_write(msf, gsi_sn, &build.compressed_bucket_arr[0], compressed_bucket_arr_size);
   ProfEnd();
   

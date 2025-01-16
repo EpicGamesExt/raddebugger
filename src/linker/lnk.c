@@ -39,6 +39,7 @@
 #include "pe/pe.h"
 #include "codeview/codeview.h"
 #include "codeview/codeview_parse.h"
+#include "codeview/codeview_enum.h"
 #include "msf/msf.h"
 #include "msf/msf_parse.h"
 #include "pdb/pdb.h"
@@ -51,6 +52,7 @@
 #include "coff/coff_enum.c"
 #include "pe/pe.c"
 #include "codeview/codeview.c"
+#include "codeview/codeview_enum.c"
 #include "codeview/codeview_parse.c"
 #include "msf/msf.c"
 #include "msf/msf_parse.c"
@@ -1824,11 +1826,20 @@ lnk_base_reloc_page_is_before(void *raw_a, void *raw_b)
   return a->voff < b->voff;
 }
 
+int
+lnk_base_reloc_page_compar(const void *raw_a, const void *raw_b)
+{
+  const LNK_BaseRelocPage *a = raw_a;
+  const LNK_BaseRelocPage *b = raw_b;
+  return u64_compar(&a->voff, &b->voff);
+}
+
 internal void
 lnk_base_reloc_page_array_sort(LNK_BaseRelocPageArray arr)
 {
   ProfBeginFunction();
-  radsort(arr.v, arr.count, lnk_base_reloc_page_is_before);
+  //radsort(arr.v, arr.count, lnk_base_reloc_page_is_before);
+  qsort(arr.v, arr.count, sizeof(arr.v[0]), lnk_base_reloc_page_compar);
   ProfEnd();
 }
 
@@ -1927,7 +1938,7 @@ lnk_build_base_relocs(TP_Context                  *tp,
     ProfBegin("Page List -> Array");
     LNK_BaseRelocPageArray page_arr = lnk_base_reloc_page_array_from_list(base_reloc_sect->arena, *main_page_list);
     ProfEnd();
-    
+
     ProfBegin("Sort Pages on VOFF");
     lnk_base_reloc_page_array_sort(page_arr);
     ProfEnd();
@@ -3634,7 +3645,7 @@ lnk_run(int argc, char **argv)
         }
         
         for (U64 input_source = 0; input_source < ArrayCount(input_libs); ++input_source) {
-          ProfBeginV("Source %S", lnk_string_from_input_source(input_source));
+          ProfBeginV("Input Source %S", lnk_string_from_input_source(input_source));
 
           Temp             temp                  = temp_begin(scratch.arena);
           LNK_InputLibList input_lib_list        = input_libs[input_source];
@@ -3716,6 +3727,7 @@ lnk_run(int argc, char **argv)
           }
 
           temp_end(temp);
+          ProfEnd();
         }
         
         // reset input libs
