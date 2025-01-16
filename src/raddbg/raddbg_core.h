@@ -542,24 +542,26 @@ typedef U32 RD_ListerFlags;
 enum
 {
   //- rjf: lister visual settings
-  RD_ListerFlag_LineEdit      = (1<<0),  // determines whether or not the lister has its own line edit, or if the filtering string is sourced by a user
-  RD_ListerFlag_Descriptions  = (1<<1),  // determines whether or not the lister items have descriptions (taller & bigger buttons)
+  RD_ListerFlag_LineEdit       = (1<<0),  // determines whether or not the lister has its own line edit, or if the filtering string is sourced by a user
+  RD_ListerFlag_Descriptions   = (1<<1),  // determines whether or not the lister items have descriptions (taller & bigger buttons)
   
   //- rjf: lister item sources
-  RD_ListerFlag_Locals        = (1<<2),
-  RD_ListerFlag_Registers     = (1<<3),
-  RD_ListerFlag_ViewRules     = (1<<4),
-  RD_ListerFlag_ViewRuleParams= (1<<5),
-  RD_ListerFlag_Members       = (1<<6),
-  RD_ListerFlag_Globals       = (1<<7),
-  RD_ListerFlag_ThreadLocals  = (1<<8),
-  RD_ListerFlag_Procedures    = (1<<9),
-  RD_ListerFlag_Types         = (1<<10),
-  RD_ListerFlag_Languages     = (1<<11),
-  RD_ListerFlag_Architectures = (1<<12),
-  RD_ListerFlag_Tex2DFormats  = (1<<13),
-  RD_ListerFlag_Files         = (1<<14),
-  RD_ListerFlag_Commands      = (1<<15),
+  RD_ListerFlag_Locals         = (1<<2),
+  RD_ListerFlag_Registers      = (1<<3),
+  RD_ListerFlag_ViewRules      = (1<<4),
+  RD_ListerFlag_ViewRuleParams = (1<<5),
+  RD_ListerFlag_Members        = (1<<6),
+  RD_ListerFlag_Globals        = (1<<7),
+  RD_ListerFlag_ThreadLocals   = (1<<8),
+  RD_ListerFlag_Procedures     = (1<<9),
+  RD_ListerFlag_Types          = (1<<10),
+  RD_ListerFlag_Languages      = (1<<11),
+  RD_ListerFlag_Architectures  = (1<<12),
+  RD_ListerFlag_Tex2DFormats   = (1<<13),
+  RD_ListerFlag_Files          = (1<<14),
+  RD_ListerFlag_Commands       = (1<<15),
+  RD_ListerFlag_Settings       = (1<<16),
+  RD_ListerFlag_SystemProcesses= (1<<17),
 };
 
 typedef struct RD_ListerItem RD_ListerItem;
@@ -617,17 +619,22 @@ struct RD_ListerParams
   F32 transparency;
 };
 
-////////////////////////////////
-//~ rjf: Per-Window State
-
-typedef struct RD_QueryMenu RD_QueryMenu;
-struct RD_QueryMenu
+typedef struct RD_Lister RD_Lister;
+struct RD_Lister
 {
-  RD_QueryMenu *next;
+  RD_Lister *next;
   Arena *arena;
   RD_Regs *regs;
-  RD_RegSlot slot;
+  RD_ListerParams params;
+  UI_ScrollPt scroll_pt;
+  U8 input_buffer[1024];
+  U64 input_string_size;
+  TxtPt input_cursor;
+  TxtPt input_mark;
 };
+
+////////////////////////////////
+//~ rjf: Per-Window State
 
 typedef struct RD_WindowState RD_WindowState;
 struct RD_WindowState
@@ -662,6 +669,10 @@ struct RD_WindowState
   B32 menu_bar_key_held;
   B32 menu_bar_focus_press_started;
   
+  // rjf: lister stack state
+  RD_Lister top_lister; // points to chain of stateful listers
+  U64 autocomp_lister_last_frame_idx;
+  
   // rjf: context menu state
   Arena *ctx_menu_arena;
   RD_Regs *ctx_menu_regs;
@@ -686,9 +697,6 @@ struct RD_WindowState
   U64 lister_input_size;
   TxtPt lister_input_cursor;
   TxtPt lister_input_mark;
-  
-  // rjf: query menu stack
-  RD_QueryMenu *top_query_menu;
   
   // rjf: query view stack
   Arena *query_cmd_arena;
@@ -1327,8 +1335,8 @@ internal void rd_lister_item_array_sort__in_place(RD_ListerItemArray *array);
 internal String8 rd_lister_query_word_from_input_string_off(String8 input, U64 cursor_off);
 internal String8 rd_lister_query_path_from_input_string_off(String8 input, U64 cursor_off);
 internal RD_ListerParams rd_view_rule_lister_params_from_input_cursor(Arena *arena, String8 string, U64 cursor_off);
-internal void rd_set_lister_query_(RD_ListerParams *params);
-#define rd_set_lister_query(...) rd_set_lister_query_(&(RD_ListerParams){.flags = 0, __VA_ARGS__})
+internal void rd_set_autocomp_lister_query_(RD_ListerParams *params);
+#define rd_set_autocomp_lister_query(...) rd_set_autocomp_lister_query_(&(RD_ListerParams){.flags = 0, __VA_ARGS__})
 
 ////////////////////////////////
 //~ rjf: Search Strings

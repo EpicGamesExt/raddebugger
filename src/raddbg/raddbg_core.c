@@ -3824,7 +3824,7 @@ rd_window_frame(void)
     {
       if(ui_slot_press(UI_EventActionSlot_Cancel))
       {
-        rd_cmd(RD_CmdKind_CancelQuery);
+        rd_cmd(RD_CmdKind_CancelLister);
       }
       if(ui_slot_press(UI_EventActionSlot_Accept))
       {
@@ -3832,11 +3832,11 @@ rd_window_frame(void)
         RD_RegsScope()
         {
           //rd_regs_fill_slot_from_string(query->slot, str8(ws->query_input_buffer, ws->query_input_string_size));
-          rd_cmd(RD_CmdKind_CompleteQuery);
+          rd_cmd(RD_CmdKind_CompleteLister);
         }
         scratch_end(scratch);
       }
-      rd_set_lister_query(.flags = 0xffffffff);
+      rd_set_autocomp_lister_query(.flags = 0xffffffff);
     }
     
     ////////////////////////////
@@ -4701,13 +4701,13 @@ rd_window_frame(void)
       //- rjf: set up autocompletion lister info
       if(ui_is_focus_active())
       {
-        rd_set_lister_query(.anchor_key  = query_container_box->key,
-                            .anchor_off  = v2f32(0, dim_2f32(query_container_box->rect).y - dim_2f32(query_container_box->rect).y*(1-query_view_t)*0.25f - 2.f),
-                            .flags       = 0xffffffff,
-                            .input       = str8(ws->query_input_buffer, ws->query_input_string_size),
-                            .cursor_off  = ws->query_input_cursor.column-1,
-                            .squish      = query_squish,
-                            .transparency= query_transparency);
+        rd_set_autocomp_lister_query(.anchor_key  = query_container_box->key,
+                                     .anchor_off  = v2f32(0, dim_2f32(query_container_box->rect).y - dim_2f32(query_container_box->rect).y*(1-query_view_t)*0.25f - 2.f),
+                                     .flags       = 0xffffffff,
+                                     .input       = str8(ws->query_input_buffer, ws->query_input_string_size),
+                                     .cursor_off  = ws->query_input_cursor.column-1,
+                                     .squish      = query_squish,
+                                     .transparency= query_transparency);
       }
       
       //- rjf: build query text input
@@ -4778,7 +4778,7 @@ rd_window_frame(void)
         RD_RegsScope()
         {
           rd_regs_fill_slot_from_string(query->slot, str8(ws->query_input_buffer, ws->query_input_string_size));
-          rd_cmd(RD_CmdKind_CompleteQuery);
+          rd_cmd(RD_CmdKind_CompleteLister);
         }
         scratch_end(scratch);
       }
@@ -10098,7 +10098,7 @@ rd_view_rule_lister_params_from_input_cursor(Arena *arena, String8 string, U64 c
 }
 
 internal void
-rd_set_lister_query_(RD_ListerParams *params)
+rd_set_autocomp_lister_query_(RD_ListerParams *params)
 {
   RD_Cfg *window_cfg = rd_cfg_from_handle(rd_regs()->window);
   RD_WindowState *ws = rd_window_state_from_cfg(window_cfg);
@@ -15589,8 +15589,21 @@ X(getting_started)
 #endif
           }break;
           
-          //- rjf: query completion
-          case RD_CmdKind_CompleteQuery:
+          //- rjf: lister stack
+          case RD_CmdKind_PushLister:
+          {
+            RD_Cfg *wcfg = rd_cfg_from_handle(rd_regs()->window);
+            RD_WindowState *ws = rd_window_state_from_cfg(cfg);
+            if(ws != &rd_nil_window_state)
+            {
+              Arena *arena = arena_alloc();
+              RD_Lister *lister = push_array(arena, RD_Lister, 1);
+              SLLStackPush(ws->top_lister.next, lister);
+              lister->arena = arena;
+              lister->regs = rd_regs_copy(lister->arena, rd_regs());
+            }
+          }break;
+          case RD_CmdKind_CompleteLister:
           {
 #if 0 // TODO(rjf): @cfg
             RD_Window *ws = rd_window_from_handle(rd_regs()->window);
@@ -15636,7 +15649,7 @@ X(getting_started)
             }
 #endif
           }break;
-          case RD_CmdKind_CancelQuery:
+          case RD_CmdKind_CancelLister:
           {
             RD_Cfg *window = rd_cfg_from_handle(rd_regs()->window);
             RD_WindowState *ws = rd_window_state_from_cfg(window);

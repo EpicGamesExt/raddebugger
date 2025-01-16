@@ -3171,7 +3171,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                         params.anchor_off = v2f32(0, dim_2f32(sig.box->rect).y);
                         params.input      = input;
                         params.cursor_off = cell_edit_state->cursor.column-1;
-                        rd_set_lister_query_(&params);
+                        rd_set_autocomp_lister_query_(&params);
                       }
                     }
                   }
@@ -3762,7 +3762,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(commands)
   //- rjf: submit best match when hitting enter w/ no selection
   if(cv->selected_cmd_hash == 0 && ui_slot_press(UI_EventActionSlot_Accept))
   {
-    rd_cmd(RD_CmdKind_CompleteQuery, .cmd_name = (cmd_array.count > 0 ? cmd_array.v[0].cmd_name : str8_zero()));
+    rd_cmd(RD_CmdKind_CompleteLister, .cmd_name = (cmd_array.count > 0 ? cmd_array.v[0].cmd_name : str8_zero()));
   }
   
   //- rjf: selected kind -> cursor
@@ -3875,7 +3875,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(commands)
       UI_Signal sig = ui_signal_from_box(box);
       if(ui_clicked(sig))
       {
-        rd_cmd(RD_CmdKind_CompleteQuery, .cmd_name = item->cmd_name);
+        rd_cmd(RD_CmdKind_CompleteLister, .cmd_name = item->cmd_name);
       }
     }
   }
@@ -4227,7 +4227,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(file_system)
     // rjf: command search part is empty, but directory matches some file:
     if(path_query_path_props.created != 0 && path_query.search.size == 0)
     {
-      rd_cmd(RD_CmdKind_CompleteQuery, .file_path = query_normalized_with_opt_slash);
+      rd_cmd(RD_CmdKind_CompleteLister, .file_path = query_normalized_with_opt_slash);
     }
     
     // rjf: command argument exactly matches some file:
@@ -4243,14 +4243,14 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(file_system)
       // rjf: is a file -> complete view
       else
       {
-        rd_cmd(RD_CmdKind_CompleteQuery, .file_path = query_normalized_with_opt_slash);
+        rd_cmd(RD_CmdKind_CompleteLister, .file_path = query_normalized_with_opt_slash);
       }
     }
     
     // rjf: command argument is empty, picking folders -> use current folder
     else if(path_query.search.size == 0 && dir_selection)
     {
-      rd_cmd(RD_CmdKind_CompleteQuery, .file_path = path_query.path);
+      rd_cmd(RD_CmdKind_CompleteLister, .file_path = path_query.path);
     }
     
     // rjf: command argument does not exactly match any file, but lister results are in:
@@ -4266,14 +4266,14 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(file_system)
       else
       {
         String8 file_path = push_str8f(scratch.arena, "%S%S", path_query.path, filename);
-        rd_cmd(RD_CmdKind_CompleteQuery, .file_path = file_path);
+        rd_cmd(RD_CmdKind_CompleteLister, .file_path = file_path);
       }
     }
     
     // rjf: command argument does not match any file, and lister is empty (new file)
     else
     {
-      rd_cmd(RD_CmdKind_CompleteQuery, .file_path = query);
+      rd_cmd(RD_CmdKind_CompleteLister, .file_path = query);
     }
   }
   
@@ -4472,7 +4472,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(file_system)
         }
         else
         {
-          rd_cmd(RD_CmdKind_CompleteQuery, .file_path = new_path);
+          rd_cmd(RD_CmdKind_CompleteLister, .file_path = new_path);
         }
       }
     }
@@ -4693,7 +4693,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(system_processes)
   if(sp->selected_pid == 0 && process_info_array.count > 0 && ui_slot_press(UI_EventActionSlot_Accept))
   {
     RD_ProcessInfo *info = &process_info_array.v[0];
-    rd_cmd(RD_CmdKind_CompleteQuery, .pid = info->info.pid);
+    rd_cmd(RD_CmdKind_CompleteLister, .pid = info->info.pid);
   }
   
   //- rjf: selected PID -> cursor
@@ -4781,7 +4781,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(system_processes)
       // rjf: click => activate this specific process
       if(ui_clicked(sig))
       {
-        rd_cmd(RD_CmdKind_CompleteQuery, .pid = info->info.pid);
+        rd_cmd(RD_CmdKind_CompleteLister, .pid = info->info.pid);
       }
     }
   }
@@ -4932,7 +4932,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(entity_lister)
   if(rd_entity_is_nil(rd_entity_from_handle(fev->selected_entity_handle)) && ent_arr.count != 0 && ui_slot_press(UI_EventActionSlot_Accept))
   {
     RD_Entity *ent = ent_arr.v[0].entity;
-    rd_cmd(RD_CmdKind_CompleteQuery, .entity = rd_handle_from_entity(ent));
+    rd_cmd(RD_CmdKind_CompleteLister, .entity = rd_handle_from_entity(ent));
   }
   
   //- rjf: selected entity -> cursor
@@ -4997,7 +4997,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(entity_lister)
       }
       if(ui_clicked(ui_signal_from_box(box)))
       {
-        rd_cmd(RD_CmdKind_CompleteQuery, .entity = rd_handle_from_entity(ent));
+        rd_cmd(RD_CmdKind_CompleteLister, .entity = rd_handle_from_entity(ent));
       }
     }
   }
@@ -5148,7 +5148,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(ctrl_entity_lister)
         case CTRL_EntityKind_Thread: {rd_regs()->thread = ent->handle;}break;
         case CTRL_EntityKind_Module: {rd_regs()->module = ent->handle;}break;
       }
-      rd_cmd(RD_CmdKind_CompleteQuery, .ctrl_entity = ent->handle);
+      rd_cmd(RD_CmdKind_CompleteLister, .ctrl_entity = ent->handle);
     }
   }
   
@@ -5224,7 +5224,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(ctrl_entity_lister)
             case CTRL_EntityKind_Thread: {rd_regs()->thread = ent->handle;}break;
             case CTRL_EntityKind_Module: {rd_regs()->module = ent->handle;}break;
           }
-          rd_cmd(RD_CmdKind_CompleteQuery, .ctrl_entity = ent->handle);
+          rd_cmd(RD_CmdKind_CompleteLister, .ctrl_entity = ent->handle);
         }
       }
     }
@@ -5301,7 +5301,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(symbol_lister)
         String8 name = str8(name_base, name_size);
         if(name.size != 0)
         {
-          rd_cmd(RD_CmdKind_CompleteQuery, .string = name);
+          rd_cmd(RD_CmdKind_CompleteLister, .string = name);
         }
       }
     }
@@ -5373,7 +5373,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(symbol_lister)
       UI_Signal sig = ui_signal_from_box(box);
       if(ui_clicked(sig))
       {
-        rd_cmd(RD_CmdKind_CompleteQuery, .string = name);
+        rd_cmd(RD_CmdKind_CompleteLister, .string = name);
       }
       if(ui_hovering(sig)) UI_Tooltip
       {
