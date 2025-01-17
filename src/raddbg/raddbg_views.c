@@ -178,9 +178,9 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
     code_slice_params.line_text                 = push_array(scratch.arena, String8, visible_line_count);
     code_slice_params.line_ranges               = push_array(scratch.arena, Rng1U64, visible_line_count);
     code_slice_params.line_tokens               = push_array(scratch.arena, TXT_TokenArray, visible_line_count);
-    code_slice_params.line_bps                  = push_array(scratch.arena, RD_EntityList, visible_line_count);
+    code_slice_params.line_bps                  = push_array(scratch.arena, RD_CfgList, visible_line_count);
     code_slice_params.line_ips                  = push_array(scratch.arena, CTRL_EntityList, visible_line_count);
-    code_slice_params.line_pins                 = push_array(scratch.arena, RD_EntityList, visible_line_count);
+    code_slice_params.line_pins                 = push_array(scratch.arena, RD_CfgList, visible_line_count);
     code_slice_params.line_vaddrs               = push_array(scratch.arena, U64, visible_line_count);
     code_slice_params.line_infos                = push_array(scratch.arena, D_LineList, visible_line_count);
     code_slice_params.font                      = code_font;
@@ -211,21 +211,21 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
     // rjf: find visible breakpoints for source code
     if(!dasm_lines) ProfScope("find visible breakpoints for source code")
     {
-      RD_EntityList bps = rd_query_cached_entity_list_with_kind(RD_EntityKind_Breakpoint);
-      for(RD_EntityNode *n = bps.first; n != 0; n = n->next)
+      RD_CfgList bps = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("breakpoint"));
+      for(RD_CfgNode *n = bps.first; n != 0; n = n->next)
       {
-        RD_Entity *bp = n->entity;
-        RD_Entity *loc = rd_entity_child_from_kind(bp, RD_EntityKind_Location);
-        if(visible_line_num_range.min <= loc->text_point.line && loc->text_point.line <= visible_line_num_range.max)
+        RD_Cfg *bp = n->v;
+        RD_Location loc = rd_location_from_cfg(bp);
+        if(visible_line_num_range.min <= loc.pt.line && loc.pt.line <= visible_line_num_range.max)
         {
           for(String8Node *override_n = file_path_possible_overrides.first;
               override_n != 0;
               override_n = override_n->next)
           {
-            if(path_match_normalized(loc->string, override_n->string))
+            if(path_match_normalized(loc.file_path, override_n->string))
             {
-              U64 slice_line_idx = (loc->text_point.line-visible_line_num_range.min);
-              rd_entity_list_push(scratch.arena, &code_slice_params.line_bps[slice_line_idx], bp);
+              U64 slice_line_idx = (U64)(loc.pt.line-visible_line_num_range.min);
+              rd_cfg_list_push(scratch.arena, &code_slice_params.line_bps[slice_line_idx], bp);
               break;
             }
           }
@@ -273,21 +273,21 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
     // rjf: find visible watch pins for source code
     if(!dasm_lines) ProfScope("find visible watch pins for source code")
     {
-      RD_EntityList wps = rd_query_cached_entity_list_with_kind(RD_EntityKind_WatchPin);
-      for(RD_EntityNode *n = wps.first; n != 0; n = n->next)
+      RD_CfgList wps = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("watch_pin"));
+      for(RD_CfgNode *n = wps.first; n != 0; n = n->next)
       {
-        RD_Entity *wp = n->entity;
-        RD_Entity *loc = rd_entity_child_from_kind(wp, RD_EntityKind_Location);
-        if(visible_line_num_range.min <= loc->text_point.line && loc->text_point.line <= visible_line_num_range.max)
+        RD_Cfg *wp = n->v;
+        RD_Location loc = rd_location_from_cfg(wp);
+        if(visible_line_num_range.min <= loc.pt.line && loc.pt.line <= visible_line_num_range.max)
         {
           for(String8Node *override_n = file_path_possible_overrides.first;
               override_n != 0;
               override_n = override_n->next)
           {
-            if(path_match_normalized(loc->string, override_n->string))
+            if(path_match_normalized(loc.file_path, override_n->string))
             {
-              U64 slice_line_idx = (loc->text_point.line-visible_line_num_range.min);
-              rd_entity_list_push(scratch.arena, &code_slice_params.line_pins[slice_line_idx], wp);
+              U64 slice_line_idx = (loc.pt.line-visible_line_num_range.min);
+              rd_cfg_list_push(scratch.arena, &code_slice_params.line_pins[slice_line_idx], wp);
               break;
             }
           }
@@ -335,20 +335,20 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
     // rjf: find breakpoints mapping to this disasm
     if(dasm_lines) ProfScope("find breakpoints mapping to this disassembly")
     {
-      RD_EntityList bps = rd_query_cached_entity_list_with_kind(RD_EntityKind_Breakpoint);
-      for(RD_EntityNode *n = bps.first; n != 0; n = n->next)
+      RD_CfgList bps = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("breakpoint"));
+      for(RD_CfgNode *n = bps.first; n != 0; n = n->next)
       {
-        RD_Entity *bp = n->entity;
-        RD_Entity *loc = rd_entity_child_from_kind(bp, RD_EntityKind_Location);
-        if(loc->flags & RD_EntityFlag_HasVAddr && contains_1u64(dasm_vaddr_range, loc->vaddr))
+        RD_Cfg *bp = n->v;
+        RD_Location loc = rd_location_from_cfg(bp);
+        if(contains_1u64(dasm_vaddr_range, loc.vaddr))
         {
-          U64 off = loc->vaddr-dasm_vaddr_range.min;
+          U64 off = loc.vaddr - dasm_vaddr_range.min;
           U64 idx = dasm_line_array_idx_from_code_off__linear_scan(dasm_lines, off);
-          S64 line_num = (S64)(idx+1);
+          S64 line_num = (S64)idx+1;
           if(contains_1s64(visible_line_num_range, line_num))
           {
             U64 slice_line_idx = (line_num-visible_line_num_range.min);
-            rd_entity_list_push(scratch.arena, &code_slice_params.line_bps[slice_line_idx], bp);
+            rd_cfg_list_push(scratch.arena, &code_slice_params.line_bps[slice_line_idx], bp);
           }
         }
       }
@@ -357,20 +357,20 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
     // rjf: find watch pins mapping to this disasm
     if(dasm_lines) ProfScope("find watch pins mapping to this disassembly")
     {
-      RD_EntityList pins = rd_query_cached_entity_list_with_kind(RD_EntityKind_WatchPin);
-      for(RD_EntityNode *n = pins.first; n != 0; n = n->next)
+      RD_CfgList wps = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("watch_pin"));
+      for(RD_CfgNode *n = wps.first; n != 0; n = n->next)
       {
-        RD_Entity *pin = n->entity;
-        RD_Entity *loc = rd_entity_child_from_kind(pin, RD_EntityKind_Location);
-        if(loc->flags & RD_EntityFlag_HasVAddr && contains_1u64(dasm_vaddr_range, loc->vaddr))
+        RD_Cfg *wp = n->v;
+        RD_Location loc = rd_location_from_cfg(wp);
+        if(contains_1u64(dasm_vaddr_range, loc.vaddr))
         {
-          U64 off = loc->vaddr-dasm_vaddr_range.min;
+          U64 off = loc.vaddr - dasm_vaddr_range.min;
           U64 idx = dasm_line_array_idx_from_code_off__linear_scan(dasm_lines, off);
-          S64 line_num = (S64)(idx+1);
+          S64 line_num = (S64)idx+1;
           if(contains_1s64(visible_line_num_range, line_num))
           {
             U64 slice_line_idx = (line_num-visible_line_num_range.min);
-            rd_entity_list_push(scratch.arena, &code_slice_params.line_pins[slice_line_idx], pin);
+            rd_cfg_list_push(scratch.arena, &code_slice_params.line_pins[slice_line_idx], wp);
           }
         }
       }

@@ -131,6 +131,7 @@ rd_regs_copy_contents(Arena *arena, RD_Regs *dst, RD_Regs *src)
 {
   MemoryCopyStruct(dst, src);
   dst->entity_list = rd_handle_list_copy(arena, src->entity_list);
+  dst->cfg_list    = rd_handle_list_copy(arena, src->cfg_list);
   dst->file_path   = push_str8_copy(arena, src->file_path);
   dst->lines       = d_line_list_copy(arena, &src->lines);
   dst->dbgi_key    = di_key_copy(arena, &src->dbgi_key);
@@ -1183,6 +1184,78 @@ rd_key_map_node_ptr_list_from_binding(Arena *arena, RD_Binding binding)
     }
   }
   return list;
+}
+
+internal Vec4F32
+rd_hsva_from_cfg(RD_Cfg *cfg)
+{
+  Vec4F32 hsva = {0};
+  RD_Cfg *hsva_root = rd_cfg_child_from_string(cfg, str8_lit("hsva"));
+  RD_Cfg *h = hsva_root->first;
+  RD_Cfg *s = h->next;
+  RD_Cfg *v = s->next;
+  RD_Cfg *a = v->next;
+  hsva.x = (F32)f64_from_str8(h->string);
+  hsva.y = (F32)f64_from_str8(s->string);
+  hsva.z = (F32)f64_from_str8(v->string);
+  hsva.w = (F32)f64_from_str8(a->string);
+  return hsva;
+}
+
+internal Vec4F32
+rd_rgba_from_cfg(RD_Cfg *cfg)
+{
+  Vec4F32 hsva = rd_hsva_from_cfg(cfg);
+  Vec4F32 rgba = rgba_from_hsva(hsva);
+  return rgba;
+}
+
+internal B32
+rd_disabled_from_cfg(RD_Cfg *cfg)
+{
+  B32 is_disabled = (rd_cfg_child_from_string(cfg, str8_lit("disabled")) != &rd_nil_cfg);
+  return is_disabled;
+}
+
+internal RD_Location
+rd_location_from_cfg(RD_Cfg *cfg)
+{
+  RD_Location dst_loc = {0};
+  {
+    RD_Cfg *src_loc = rd_cfg_child_from_string(cfg, str8_lit("location"));
+    if(src_loc->first != &rd_nil_cfg && src_loc->first->first != &rd_nil_cfg)
+    {
+      dst_loc.file_path = src_loc->first->string;
+      try_s64_from_str8_c_rules(src_loc->first->first->string, &dst_loc.pt.line);
+      if(!try_s64_from_str8_c_rules(src_loc->first->first->first->string, &dst_loc.pt.column))
+      {
+        dst_loc.pt.column = 1;
+      }
+    }
+    else
+    {
+      Temp scratch = scratch_begin(0, 0);
+      MD_TokenizeResult tokenize = md_tokenize_from_text(scratch.arena, src_loc->first->string);
+      if(tokenize.tokens.count == 1 && tokenize.tokens.v[0].flags & (MD_TokenFlag_Identifier|MD_TokenFlag_StringLiteral))
+      {
+        dst_loc.name = src_loc->first->string;
+      }
+      else if(tokenize.tokens.count == 1 && tokenize.tokens.v[0].flags & MD_TokenFlag_Numeric)
+      {
+        try_u64_from_str8_c_rules(src_loc->first->string, &dst_loc.vaddr);
+      }
+      scratch_end(scratch);
+    }
+  }
+  return dst_loc;
+}
+
+internal String8
+rd_expr_from_cfg(RD_Cfg *cfg)
+{
+  RD_Cfg *expr_root = rd_cfg_child_from_string(cfg, str8_lit("expression"));
+  String8 result = expr_root->first->string;
+  return result;
 }
 
 ////////////////////////////////
@@ -3689,7 +3762,7 @@ rd_window_frame(void)
                 RD_ViewRuleUIFunctionType *view_ui = view_rule_info->ui;
                 String8 expr = rd_view_expr_string();
                 String8 params_string = rd_string_from_cfg_tree(scratch.arena, view);
-                MD_Node *params = md_tree_from_string(scratch.arena, params_string);
+                MD_Node *params = md_tree_from_string(scratch.arena, params_string)->first;
                 view_ui(expr, params, view_preview_container->rect);
               }
             }
@@ -4091,7 +4164,7 @@ rd_window_frame(void)
           UI_Signal item_sig = ui_signal_from_box(item_box);
           if(ui_clicked(item_sig))
           {
-#if 0 // TODO(rjf): @cfg
+#if 0 // TODO(rjf): @cfg_lister
             UI_Event move_back_evt = zero_struct;
             move_back_evt.kind = UI_EventKind_Navigate;
             move_back_evt.flags = UI_EventFlag_KeepMark;
@@ -4117,7 +4190,7 @@ rd_window_frame(void)
       di_scope_close(di_scope);
     }
     
-#if 0 // TODO(rjf): @cfg
+#if 0 // TODO(rjf): @cfg_lister
     ////////////////////////////
     //- rjf: prepare query state for the in-progress query command
     //
@@ -4136,7 +4209,7 @@ rd_window_frame(void)
         ws->query_input_cursor = ws->query_input_mark = txt_pt(1, ws->query_input_string_size+1);
       }
       
-#if 0 // TODO(rjf): @cfg (query state prep)
+#if 0 // TODO(rjf): @cfg_lister (query state prep)
       String8 query_view_name = cmd_kind_info->query.view_name;
       if(query_view_name.size == 0)
       {
@@ -6011,7 +6084,7 @@ rd_window_frame(void)
       // rjf: disable hover eval if hovered view is actively scrolling
       if(hover_eval_is_open)
       {
-#if 0 // TODO(rjf): @cfg
+#if 0 // TODO(rjf): @cfg_panels
         for(RD_Panel *panel = ws->root_panel;
             !rd_panel_is_nil(panel);
             panel = rd_panel_rec_depth_first_pre(panel).next)
@@ -6635,7 +6708,7 @@ rd_window_frame(void)
     ////////////////////////////
     //- rjf: animate panels
     //
-#if 0 // TODO(rjf): @cfg
+#if 0 // TODO(rjf): @cfg_panels
     {
       F32 rate = rd_setting_val_from_code(RD_SettingCode_MenuAnimations).s32 ? 1 - pow_f32(2, (-50.f * rd_state->frame_dt)) : 1.f;
       Vec2F32 content_rect_dim = dim_2f32(content_rect);
@@ -6690,8 +6763,6 @@ rd_window_frame(void)
       F32 selected_tab_is_filtering_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "###is_filtering_t_%p", selected_tab), (F32)!!selected_tab_view_state->is_filtering);
       ProfScope("leaf panel UI work - %.*s", str8_varg(selected_tab->string))
         UI_Focus(panel_is_focused ? UI_FocusKind_Null : UI_FocusKind_Off)
-        RD_RegsScope(.panel = rd_handle_from_cfg(panel->cfg),
-                     .view = rd_handle_from_cfg(selected_tab))
       {
         //////////////////////////
         //- rjf: calculate UI rectangles
@@ -6702,7 +6773,7 @@ rd_window_frame(void)
                                          target_rect_px.y0 / content_rect_dim.y,
                                          target_rect_px.x1 / content_rect_dim.x,
                                          target_rect_px.y1 / content_rect_dim.y);
-        // TODO(rjf): @cfg animate `target_rect_pct`
+        // TODO(rjf): @cfg_panels animate `target_rect_pct`
         Rng2F32 panel_rect_pct = target_rect_pct;
         Rng2F32 panel_rect = r2f32p(panel_rect_pct.x0*content_rect_dim.x,
                                     panel_rect_pct.y0*content_rect_dim.y,
@@ -7020,6 +7091,8 @@ rd_window_frame(void)
             String8 view_file_path = rd_file_path_from_eval_string(rd_frame_arena(), view_expr);
             if(view_file_path.size != 0)
             {
+              rd_regs()->panel = rd_handle_from_cfg(panel->cfg);
+              rd_regs()->view  = rd_handle_from_cfg(selected_tab);
               rd_regs()->file_path = view_file_path;
             }
           }
@@ -7044,7 +7117,7 @@ rd_window_frame(void)
           {
             String8 view_expr = rd_view_expr_string();
             String8 params_string = rd_string_from_cfg_tree(scratch.arena, selected_tab);
-            MD_Node *params = md_tree_from_string(scratch.arena, params_string);
+            MD_Node *params = md_tree_from_string(scratch.arena, params_string)->first;
             RD_ViewRuleInfo *view_rule_info = rd_view_rule_info_from_string(selected_tab->string);
             RD_ViewRuleUIFunctionType *view_ui = view_rule_info->ui;
             view_ui(view_expr, params, content_rect);
@@ -7172,7 +7245,7 @@ rd_window_frame(void)
               // draw empty space
               if(rd_drag_is_active() && rd_state->drag_drop_regs_slot == RD_RegSlot_View && catchall_drop_site_hovered)
               {
-#if 0 // TODO(rjf): @cfg
+#if 0 // TODO(rjf): @cfg_dragdrop
                 RD_Panel *dst_panel = rd_panel_from_handle(rd_last_drag_drop_panel);
                 RD_View *drag_view = rd_view_from_handle(rd_state->drag_drop_regs->view);
                 RD_View *dst_prev_view = rd_view_from_handle(rd_last_drag_drop_prev_tab);
@@ -7436,7 +7509,7 @@ rd_window_frame(void)
         //
         if(catchall_drop_site_hovered)
         {
-#if 0 // TODO(rjf): @cfg
+#if 0 // TODO(rjf): @cfg_dragdrop
           rd_last_drag_drop_panel = rd_handle_from_panel(panel);
           
           RD_View *dragged_view = rd_view_from_handle(rd_state->drag_drop_regs->view);
@@ -7514,89 +7587,6 @@ rd_window_frame(void)
           }
         }
       }
-    }
-    
-    ////////////////////////////
-    //- rjf: animate views
-    //
-    {
-#if 0 // TODO(rjf): @cfg
-      Temp scratch = scratch_begin(0, 0);
-      typedef struct Task Task;
-      struct Task
-      {
-        Task *next;
-        RD_Panel *panel;
-        RD_View *list_first;
-        RD_View *transient_owner;
-      };
-      Task start_task = {0, &rd_nil_panel, ws->query_view_stack_top};
-      Task *first_task = &start_task;
-      Task *last_task = first_task;
-      F32 rate = 1 - pow_f32(2, (-10.f * rd_state->frame_dt));
-      F32 fast_rate = 1 - pow_f32(2, (-40.f * rd_state->frame_dt));
-      for(RD_Panel *panel = ws->root_panel;
-          !rd_panel_is_nil(panel);
-          panel = rd_panel_rec_depth_first_pre(panel).next)
-      {
-        Task *t = push_array(scratch.arena, Task, 1);
-        SLLQueuePush(first_task, last_task, t);
-        t->panel = panel;
-        t->list_first = panel->first_tab_view;
-      }
-      for(Task *t = first_task; t != 0; t = t->next)
-      {
-        RD_View *list_first = t->list_first;
-        for(RD_View *view = list_first; !rd_view_is_nil(view); view = view->order_next)
-        {
-          if(!rd_view_is_nil(view->first_transient))
-          {
-            Task *task = push_array(scratch.arena, Task, 1);
-            SLLQueuePush(first_task, last_task, task);
-            task->panel = t->panel;
-            task->list_first = view->first_transient;
-            task->transient_owner = view;
-          }
-          if(window_is_focused)
-          {
-            if(abs_f32(view->loading_t_target - view->loading_t) > 0.01f ||
-               abs_f32(view->scroll_pos.x.off) > 0.01f ||
-               abs_f32(view->scroll_pos.y.off) > 0.01f ||
-               abs_f32(view->is_filtering_t - (F32)!!view->is_filtering))
-            {
-              rd_request_frame();
-            }
-            if(view->loading_t_target != 0 && (view == rd_selected_tab_from_panel(t->panel) ||
-                                               t->transient_owner == rd_selected_tab_from_panel(t->panel)))
-            {
-              rd_request_frame();
-            }
-          }
-          view->loading_t += (view->loading_t_target - view->loading_t) * rate;
-          view->is_filtering_t += ((F32)!!view->is_filtering - view->is_filtering_t) * fast_rate;
-          view->scroll_pos.x.off -= view->scroll_pos.x.off * (rd_setting_val_from_code(RD_SettingCode_ScrollingAnimations).s32 ? fast_rate : 1.f);
-          view->scroll_pos.y.off -= view->scroll_pos.y.off * (rd_setting_val_from_code(RD_SettingCode_ScrollingAnimations).s32 ? fast_rate : 1.f);
-          if(abs_f32(view->scroll_pos.x.off) < 0.01f)
-          {
-            view->scroll_pos.x.off = 0;
-          }
-          if(abs_f32(view->scroll_pos.y.off) < 0.01f)
-          {
-            view->scroll_pos.y.off = 0;
-          }
-          if(abs_f32(view->is_filtering_t - (F32)!!view->is_filtering) < 0.01f)
-          {
-            view->is_filtering_t = (F32)!!view->is_filtering;
-          }
-          if(view == rd_selected_tab_from_panel(t->panel) ||
-             t->transient_owner == rd_selected_tab_from_panel(t->panel))
-          {
-            view->loading_t_target = 0;
-          }
-        }
-      }
-      scratch_end(scratch);
-#endif
     }
     
     ////////////////////////////
@@ -9984,7 +9974,7 @@ rd_lister_query_path_from_input_string_off(String8 input, U64 cursor_off)
   return path;
 }
 
-#if 0 // TODO(rjf): @cfg
+#if 0 // TODO(rjf): @cfg_lister
 
 internal RD_ListerParams
 rd_view_rule_lister_params_from_input_cursor(Arena *arena, String8 string, U64 cursor_off)
@@ -10380,44 +10370,6 @@ rd_font_size_from_slot(RD_FontSlot slot)
     result *= (dpi / 96.f);
   }
   return result;
-  
-#if 0 // TODO(rjf): @cfg
-  F32 result = 0;
-  RD_Cfg *wcfg = rd_cfg_from_handle(rd_regs()->window);
-  RD_WindowState *ws = rd_window_state_from_cfg(wcfg);
-  F32 dpi = os_dpi_from_window(ws->os);
-  if(dpi != ws->last_dpi)
-  {
-    F32 old_dpi = ws->last_dpi;
-    F32 new_dpi = dpi;
-    ws->last_dpi = dpi;
-    S32 *pt_sizes[] =
-    {
-      &ws->setting_vals[RD_SettingCode_MainFontSize].s32,
-      &ws->setting_vals[RD_SettingCode_CodeFontSize].s32,
-    };
-    for(U64 idx = 0; idx < ArrayCount(pt_sizes); idx += 1)
-    {
-      F32 ratio = pt_sizes[idx][0] / old_dpi;
-      F32 new_pt_size = ratio*new_dpi;
-      pt_sizes[idx][0] = (S32)new_pt_size;
-    }
-  }
-  switch(slot)
-  {
-    case RD_FontSlot_Code:
-    {
-      result = (F32)ws->setting_vals[RD_SettingCode_CodeFontSize].s32;
-    }break;
-    default:
-    case RD_FontSlot_Main:
-    case RD_FontSlot_Icons:
-    {
-      result = (F32)ws->setting_vals[RD_SettingCode_MainFontSize].s32;
-    }break;
-  }
-  return result;
-#endif
 }
 
 internal FNT_RasterFlags
@@ -11827,6 +11779,112 @@ rd_frame(void)
   }
   
   //////////////////////////////
+  //- rjf: get events from the OS
+  //
+  OS_EventList events = {0};
+  if(depth == 0) DeferLoop(depth += 1, depth -= 1)
+  {
+    events = os_get_events(scratch.arena, rd_state->num_frames_requested == 0);
+  }
+  
+  //////////////////////////////
+  //- rjf: pick target hz
+  //
+  // TODO(rjf): maximize target, given all windows and their monitors
+  F32 target_hz = os_get_gfx_info()->default_refresh_rate;
+  if(rd_state->frame_index > 32)
+  {
+    // rjf: calculate average frame time out of the last N
+    U64 num_frames_in_history = Min(ArrayCount(rd_state->frame_time_us_history), rd_state->frame_index);
+    U64 frame_time_history_sum_us = 0;
+    for(U64 idx = 0; idx < num_frames_in_history; idx += 1)
+    {
+      frame_time_history_sum_us += rd_state->frame_time_us_history[idx];
+    }
+    U64 frame_time_history_avg_us = frame_time_history_sum_us/num_frames_in_history;
+    
+    // rjf: pick among a number of sensible targets to snap to, given how well
+    // we've been performing
+    F32 possible_alternate_hz_targets[] = {target_hz, 60.f, 120.f, 144.f, 240.f};
+    F32 best_target_hz = target_hz;
+    S64 best_target_hz_frame_time_us_diff = max_S64;
+    for(U64 idx = 0; idx < ArrayCount(possible_alternate_hz_targets); idx += 1)
+    {
+      F32 candidate = possible_alternate_hz_targets[idx];
+      if(candidate <= target_hz)
+      {
+        U64 candidate_frame_time_us = 1000000/(U64)candidate;
+        S64 frame_time_us_diff = (S64)frame_time_history_avg_us - (S64)candidate_frame_time_us;
+        if(abs_s64(frame_time_us_diff) < best_target_hz_frame_time_us_diff)
+        {
+          best_target_hz = candidate;
+          best_target_hz_frame_time_us_diff = frame_time_us_diff;
+        }
+      }
+    }
+    target_hz = best_target_hz;
+  }
+  
+  //////////////////////////////
+  //- rjf: target Hz -> delta time
+  //
+  rd_state->frame_dt = 1.f/target_hz;
+  
+  //////////////////////////////
+  //- rjf: begin measuring actual per-frame work
+  //
+  U64 begin_time_us = os_now_microseconds();
+  
+  //////////////////////////////
+  //- rjf: bind change
+  //
+  if(!rd_state->popup_active && rd_state->bind_change_active)
+  {
+    if(os_key_press(&events, os_handle_zero(), 0, OS_Key_Esc))
+    {
+      rd_request_frame();
+      rd_state->bind_change_active = 0;
+    }
+    if(os_key_press(&events, os_handle_zero(), 0, OS_Key_Delete))
+    {
+      rd_request_frame();
+      // TODO(rjf): @cfg_bindchange rd_unbind_name(rd_state->bind_change_cmd_name, rd_state->bind_change_binding);
+      rd_state->bind_change_active = 0;
+      rd_cmd(rd_cfg_src_write_cmd_kind_table[RD_CfgSrc_User]);
+    }
+    for(OS_Event *event = events.first, *next = 0; event != 0; event = next)
+    {
+      if(event->kind == OS_EventKind_Press &&
+         event->key != OS_Key_Esc &&
+         event->key != OS_Key_Return &&
+         event->key != OS_Key_Backspace &&
+         event->key != OS_Key_Delete &&
+         event->key != OS_Key_LeftMouseButton &&
+         event->key != OS_Key_RightMouseButton &&
+         event->key != OS_Key_MiddleMouseButton &&
+         event->key != OS_Key_Ctrl &&
+         event->key != OS_Key_Alt &&
+         event->key != OS_Key_Shift)
+      {
+        rd_state->bind_change_active = 0;
+        RD_Binding binding = zero_struct;
+        {
+          binding.key = event->key;
+          binding.modifiers = event->modifiers;
+        }
+        // TODO(rjf): @cfg_bindchange rd_unbind_name(rd_state->bind_change_cmd_name, rd_state->bind_change_binding);
+        // TODO(rjf): @cfg_bindchange rd_bind_name(rd_state->bind_change_cmd_name, binding);
+        U32 codepoint = os_codepoint_from_modifiers_and_key(event->modifiers, event->key);
+        os_text(&events, event->window, codepoint);
+        os_eat_event(&events, event);
+        rd_cmd(rd_cfg_src_write_cmd_kind_table[RD_CfgSrc_User]);
+        rd_request_frame();
+        break;
+      }
+    }
+  }
+  
+  //////////////////////////////
   //- rjf: build key map from config
   //
   {
@@ -11925,112 +11983,6 @@ rd_frame(void)
         n->binding = binding;
         SLLQueuePush_N(key_map->name_slots[name_slot_idx].first, key_map->name_slots[name_slot_idx].last, n, name_hash_next);
         SLLQueuePush_N(key_map->binding_slots[binding_slot_idx].first, key_map->binding_slots[binding_slot_idx].last, n, binding_hash_next);
-      }
-    }
-  }
-  
-  //////////////////////////////
-  //- rjf: get events from the OS
-  //
-  OS_EventList events = {0};
-  if(depth == 0) DeferLoop(depth += 1, depth -= 1)
-  {
-    events = os_get_events(scratch.arena, rd_state->num_frames_requested == 0);
-  }
-  
-  //////////////////////////////
-  //- rjf: pick target hz
-  //
-  // TODO(rjf): maximize target, given all windows and their monitors
-  F32 target_hz = os_get_gfx_info()->default_refresh_rate;
-  if(rd_state->frame_index > 32)
-  {
-    // rjf: calculate average frame time out of the last N
-    U64 num_frames_in_history = Min(ArrayCount(rd_state->frame_time_us_history), rd_state->frame_index);
-    U64 frame_time_history_sum_us = 0;
-    for(U64 idx = 0; idx < num_frames_in_history; idx += 1)
-    {
-      frame_time_history_sum_us += rd_state->frame_time_us_history[idx];
-    }
-    U64 frame_time_history_avg_us = frame_time_history_sum_us/num_frames_in_history;
-    
-    // rjf: pick among a number of sensible targets to snap to, given how well
-    // we've been performing
-    F32 possible_alternate_hz_targets[] = {target_hz, 60.f, 120.f, 144.f, 240.f};
-    F32 best_target_hz = target_hz;
-    S64 best_target_hz_frame_time_us_diff = max_S64;
-    for(U64 idx = 0; idx < ArrayCount(possible_alternate_hz_targets); idx += 1)
-    {
-      F32 candidate = possible_alternate_hz_targets[idx];
-      if(candidate <= target_hz)
-      {
-        U64 candidate_frame_time_us = 1000000/(U64)candidate;
-        S64 frame_time_us_diff = (S64)frame_time_history_avg_us - (S64)candidate_frame_time_us;
-        if(abs_s64(frame_time_us_diff) < best_target_hz_frame_time_us_diff)
-        {
-          best_target_hz = candidate;
-          best_target_hz_frame_time_us_diff = frame_time_us_diff;
-        }
-      }
-    }
-    target_hz = best_target_hz;
-  }
-  
-  //////////////////////////////
-  //- rjf: target Hz -> delta time
-  //
-  rd_state->frame_dt = 1.f/target_hz;
-  
-  //////////////////////////////
-  //- rjf: begin measuring actual per-frame work
-  //
-  U64 begin_time_us = os_now_microseconds();
-  
-  //////////////////////////////
-  //- rjf: bind change
-  //
-  if(!rd_state->popup_active && rd_state->bind_change_active)
-  {
-    if(os_key_press(&events, os_handle_zero(), 0, OS_Key_Esc))
-    {
-      rd_request_frame();
-      rd_state->bind_change_active = 0;
-    }
-    if(os_key_press(&events, os_handle_zero(), 0, OS_Key_Delete))
-    {
-      rd_request_frame();
-      // TODO(rjf): @cfg rd_unbind_name(rd_state->bind_change_cmd_name, rd_state->bind_change_binding);
-      rd_state->bind_change_active = 0;
-      rd_cmd(rd_cfg_src_write_cmd_kind_table[RD_CfgSrc_User]);
-    }
-    for(OS_Event *event = events.first, *next = 0; event != 0; event = next)
-    {
-      if(event->kind == OS_EventKind_Press &&
-         event->key != OS_Key_Esc &&
-         event->key != OS_Key_Return &&
-         event->key != OS_Key_Backspace &&
-         event->key != OS_Key_Delete &&
-         event->key != OS_Key_LeftMouseButton &&
-         event->key != OS_Key_RightMouseButton &&
-         event->key != OS_Key_MiddleMouseButton &&
-         event->key != OS_Key_Ctrl &&
-         event->key != OS_Key_Alt &&
-         event->key != OS_Key_Shift)
-      {
-        rd_state->bind_change_active = 0;
-        RD_Binding binding = zero_struct;
-        {
-          binding.key = event->key;
-          binding.modifiers = event->modifiers;
-        }
-        // TODO(rjf): @cfg rd_unbind_name(rd_state->bind_change_cmd_name, rd_state->bind_change_binding);
-        // TODO(rjf): @cfg rd_bind_name(rd_state->bind_change_cmd_name, binding);
-        U32 codepoint = os_codepoint_from_modifiers_and_key(event->modifiers, event->key);
-        os_text(&events, event->window, codepoint);
-        os_eat_event(&events, event);
-        rd_cmd(rd_cfg_src_write_cmd_kind_table[RD_CfgSrc_User]);
-        rd_request_frame();
-        break;
       }
     }
   }
@@ -12492,7 +12444,7 @@ rd_frame(void)
     //- rjf: sanitize the window/panel/tab tree structure
     //
     {
-      // TODO(rjf): @cfg in the past, we had a spot in the rd_window_frame,
+      // TODO(rjf): @cfg_panels in the past, we had a spot in the rd_window_frame,
       // which ensured to select tabs, if a panel had tabs but had none
       // selected, and if a panel had a selected tab but it was project-filtered.
       // this is effectively just fixing up unexpected malformations of the
@@ -15999,13 +15951,13 @@ X(getting_started)
                 for(RD_CfgNode *n = wps.first; n != 0; n = n->next)
                 {
                   RD_Cfg *wp = n->v;
-                  RD_Cfg *name = rd_cfg_child_from_string(wp, str8_lit("name"));
+                  RD_Cfg *expr = rd_cfg_child_from_string(wp, str8_lit("expression"));
                   RD_Cfg *loc = rd_cfg_child_from_string(wp, str8_lit("location"));
                   S64 loc_line = 0;
                   U64 loc_vaddr = 0;
                   B32 loc_matches_file_pt = (file_path.size != 0 && path_match_normalized(loc->first->string, file_path) && try_s64_from_str8_c_rules(loc->first->first->string, &loc_line) && loc_line == pt.line);
                   B32 loc_matches_vaddr   = (vaddr != 0 && try_u64_from_str8_c_rules(loc->first->string, &loc_vaddr) && loc_vaddr == vaddr);
-                  B32 loc_matches_expr    = (string.size != 0 && str8_match(name->first->string, string, 0));
+                  B32 loc_matches_expr    = (string.size != 0 && str8_match(expr->first->string, string, 0));
                   if(loc_matches_expr && (loc_matches_file_pt || loc_matches_vaddr))
                   {
                     rd_cfg_release(wp);
@@ -16018,9 +15970,9 @@ X(getting_started)
               {
                 RD_Cfg *project = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("project"));
                 RD_Cfg *wp = rd_cfg_new(project, str8_lit("watch_pin"));
-                RD_Cfg *name = rd_cfg_new(wp, str8_lit("name"));
+                RD_Cfg *expr = rd_cfg_new(wp, str8_lit("expression"));
                 RD_Cfg *loc = rd_cfg_new(wp, str8_lit("location"));
-                rd_cfg_new(name, string);
+                rd_cfg_new(expr, string);
                 if(vaddr != 0)
                 {
                   rd_cfg_newf(loc, "0x%I64x", vaddr);

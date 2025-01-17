@@ -829,8 +829,8 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
           line_num += 1, line_idx += 1)
       {
         CTRL_EntityList line_ips  = params->line_ips[line_idx];
-        RD_EntityList line_bps  = params->line_bps[line_idx];
-        RD_EntityList line_pins = params->line_pins[line_idx];
+        RD_CfgList line_bps       = params->line_bps[line_idx];
+        RD_CfgList line_pins      = params->line_pins[line_idx];
         ui_set_next_hover_cursor(OS_Cursor_HandPoint);
         UI_Box *line_margin_box = ui_build_box_from_stringf(UI_BoxFlag_Clickable*!!(params->flags & RD_CodeSliceFlag_Clickable)|UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawActiveEffects, "line_margin_%I64x", line_num);
         UI_Parent(line_margin_box)
@@ -952,25 +952,26 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
           }
           
           //- rjf: build margin breakpoint ui
-          for(RD_EntityNode *n = line_bps.first; n != 0; n = n->next)
+          for(RD_CfgNode *n = line_bps.first; n != 0; n = n->next)
           {
-            RD_Entity *bp = n->entity;
-            Vec4F32 bp_color = rd_rgba_from_theme_color(RD_ThemeColor_Breakpoint);
-            if(bp->flags & RD_EntityFlag_HasColor)
+            RD_Cfg *bp = n->v;
+            Vec4F32 bp_rgba = rd_rgba_from_cfg(bp);
+            B32 bp_is_disabled = rd_disabled_from_cfg(bp);
+            if(bp_rgba.w == 0)
             {
-              bp_color = rd_rgba_from_entity(bp);
+              bp_rgba = rd_rgba_from_theme_color(RD_ThemeColor_Breakpoint);
             }
-            if(bp->disabled)
+            if(bp_is_disabled)
             {
-              bp_color = v4f32(bp_color.x * 0.6f, bp_color.y * 0.6f, bp_color.z * 0.6f, bp_color.w * 0.6f);
+              bp_rgba = v4f32(bp_rgba.x * 0.6f, bp_rgba.y * 0.6f, bp_rgba.z * 0.6f, bp_rgba.w * 0.6f);
             }
             
             // rjf: prep custom rendering data
             RD_BreakpointBoxDrawExtData *bp_draw = push_array(ui_build_arena(), RD_BreakpointBoxDrawExtData, 1);
             {
               RD_Regs *hover_regs = rd_get_hover_regs();
-              B32 is_hovering = (rd_entity_from_handle(hover_regs->entity) == bp && rd_state->hover_regs_slot == RD_RegSlot_Entity);
-              bp_draw->color    = bp_color;
+              B32 is_hovering = (rd_cfg_from_handle(hover_regs->cfg) == bp && rd_state->hover_regs_slot == RD_RegSlot_Cfg);
+              bp_draw->color    = bp_rgba;
               bp_draw->alive_t  = ui_anim(ui_key_from_stringf(ui_key_zero(), "bp_alive_t_%p", bp), 1.f, .rate = entity_alive_t_rate);
               bp_draw->hover_t  = ui_anim(ui_key_from_stringf(ui_key_zero(), "bp_hover_t_%p", bp), (F32)!!is_hovering, .rate = entity_hover_t_rate);
               bp_draw->do_lines = rd_setting_val_from_code(RD_SettingCode_BreakpointLines).s32;
@@ -995,7 +996,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             ui_set_next_font_size(params->font_size * 1.f);
             ui_set_next_text_raster_flags(FNT_RasterFlag_Smooth);
             ui_set_next_hover_cursor(OS_Cursor_HandPoint);
-            ui_set_next_palette(ui_build_palette(ui_top_palette(), .text = bp_color));
+            ui_set_next_palette(ui_build_palette(ui_top_palette(), .text = bp_rgba));
             ui_set_next_text_alignment(UI_TextAlign_Center);
             UI_Box *bp_box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|
                                                        UI_BoxFlag_Clickable*!!(params->flags & RD_CodeSliceFlag_Clickable)|
@@ -1009,42 +1010,46 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             // rjf: bp hovering
             if(ui_hovering(bp_sig) && !rd_drag_is_active())
             {
-              RD_RegsScope(.entity = rd_handle_from_entity(bp)) rd_set_hover_regs(RD_RegSlot_Entity);
+              RD_RegsScope(.entity = rd_handle_from_cfg(bp)) rd_set_hover_regs(RD_RegSlot_Entity);
             }
             
             // rjf: shift+click => enable breakpoint
             if(ui_clicked(bp_sig) && bp_sig.event_flags & OS_Modifier_Shift)
             {
-              rd_cmd(bp->disabled ? RD_CmdKind_EnableEntity : RD_CmdKind_DisableEntity, .entity = rd_handle_from_entity(bp));
+              rd_cmd(bp_is_disabled ? RD_CmdKind_EnableEntity : RD_CmdKind_DisableEntity, .cfg = rd_handle_from_cfg(bp));
             }
             
             // rjf: click => remove breakpoint
             if(ui_clicked(bp_sig) && bp_sig.event_flags == 0)
             {
-              rd_cmd(RD_CmdKind_RemoveEntity, .entity = rd_handle_from_entity(bp));
+              rd_cmd(RD_CmdKind_RemoveEntity, .cfg = rd_handle_from_cfg(bp));
             }
             
             // rjf: drag start
             if(ui_dragging(bp_sig) && !contains_2f32(bp_box->rect, ui_mouse()))
             {
-              RD_RegsScope(.entity = rd_handle_from_entity(bp)) rd_drag_begin(RD_RegSlot_Entity);
+              RD_RegsScope(.cfg = rd_handle_from_cfg(bp)) rd_drag_begin(RD_RegSlot_Cfg);
             }
             
             // rjf: bp right-click menu
             if(ui_right_clicked(bp_sig))
             {
-              RD_RegsScope(.entity = rd_handle_from_entity(bp)) rd_open_ctx_menu(bp_box->key, v2f32(0, bp_box->rect.y1-bp_box->rect.y0), RD_RegSlot_Entity);
+              rd_cmd(RD_CmdKind_PushQuery,
+                     .cfg     = rd_handle_from_cfg(bp),
+                     .reg_slot= RD_RegSlot_Cfg,
+                     .ui_key  = bp_box->key,
+                     .off_px  = v2f32(0, bp_box->rect.y1-bp_box->rect.y0));
             }
           }
           
           //- rjf: build margin watch pin ui
-          for(RD_EntityNode *n = line_pins.first; n != 0; n = n->next)
+          for(RD_CfgNode *n = line_pins.first; n != 0; n = n->next)
           {
-            RD_Entity *pin = n->entity;
-            Vec4F32 color = rd_rgba_from_theme_color(RD_ThemeColor_Text);
-            if(pin->flags & RD_EntityFlag_HasColor)
+            RD_Cfg *pin = n->v;
+            Vec4F32 color = rd_rgba_from_cfg(pin);
+            if(color.w == 0)
             {
-              color = rd_rgba_from_entity(pin);
+              color = rd_rgba_from_theme_color(RD_ThemeColor_Text);
             }
             
             // rjf: build box for watch
@@ -1065,25 +1070,29 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             // rjf: watch hovering
             if(ui_hovering(pin_sig) && !rd_drag_is_active())
             {
-              RD_RegsScope(.entity = rd_handle_from_entity(pin)) rd_set_hover_regs(RD_RegSlot_Entity);
+              RD_RegsScope(.cfg = rd_handle_from_cfg(pin)) rd_set_hover_regs(RD_RegSlot_Entity);
             }
             
             // rjf: click => remove pin
             if(ui_clicked(pin_sig))
             {
-              rd_cmd(RD_CmdKind_RemoveEntity, .entity = rd_handle_from_entity(pin));
+              rd_cmd(RD_CmdKind_RemoveEntity, .cfg = rd_handle_from_cfg(pin));
             }
             
             // rjf: drag start
             if(ui_dragging(pin_sig) && !contains_2f32(pin_box->rect, ui_mouse()))
             {
-              RD_RegsScope(.entity = rd_handle_from_entity(pin)) rd_drag_begin(RD_RegSlot_Entity);
+              RD_RegsScope(.cfg = rd_handle_from_cfg(pin)) rd_drag_begin(RD_RegSlot_Cfg);
             }
             
             // rjf: watch right-click menu
             if(ui_right_clicked(pin_sig))
             {
-              RD_RegsScope(.entity = rd_handle_from_entity(pin)) rd_open_ctx_menu(pin_box->key, v2f32(0, pin_box->rect.y1-pin_box->rect.y0), RD_RegSlot_Entity);
+              rd_cmd(RD_CmdKind_PushQuery,
+                     .cfg     = rd_handle_from_cfg(pin),
+                     .reg_slot= RD_RegSlot_Cfg,
+                     .ui_key  = pin_box->key,
+                     .off_px  = v2f32(0, pin_box->rect.y1-pin_box->rect.y0));
             }
           }
         }
@@ -1257,16 +1266,16 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
         line_num < params->line_num_range.max;
         line_num += 1, line_idx += 1)
     {
-      RD_EntityList pins = params->line_pins[line_idx];
+      RD_CfgList pins = params->line_pins[line_idx];
       if(pins.count != 0) UI_Parent(line_extras_boxes[line_idx])
         RD_Font(RD_FontSlot_Code)
         UI_FontSize(params->font_size)
         UI_PrefHeight(ui_px(params->line_height_px, 1.f))
       {
-        for(RD_EntityNode *n = pins.first; n != 0; n = n->next)
+        for(RD_CfgNode *n = pins.first; n != 0; n = n->next)
         {
-          RD_Entity *pin = n->entity;
-          String8 pin_expr = pin->string;
+          RD_Cfg *pin = n->v;
+          String8 pin_expr = rd_expr_from_cfg(pin);
           E_Eval eval = e_eval_from_string(scratch.arena, pin_expr);
           String8 eval_string = {0};
           if(!e_type_key_match(e_type_key_zero(), eval.type_key))
@@ -1283,10 +1292,10 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
                                                   UI_BoxFlag_DrawBorder, pin_box_key);
           UI_Parent(pin_box) UI_PrefWidth(ui_text_dim(10, 1))
           {
-            Vec4F32 pin_color = rd_rgba_from_theme_color(RD_ThemeColor_CodeDefault);
-            if(pin->flags & RD_EntityFlag_HasColor)
+            Vec4F32 pin_color = rd_rgba_from_cfg(pin);
+            if(pin_color.w == 0)
             {
-              pin_color = rd_rgba_from_entity(pin);
+              pin_color = rd_rgba_from_theme_color(RD_ThemeColor_CodeDefault);
             }
             UI_PrefWidth(ui_em(1.5f, 1.f))
               RD_Font(RD_FontSlot_Icons)
@@ -1297,11 +1306,15 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
               UI_Signal sig = ui_buttonf("%S###pin_nub", rd_icon_kind_text_table[RD_IconKind_Pin]);
               if(ui_dragging(sig) && !contains_2f32(sig.box->rect, ui_mouse()))
               {
-                RD_RegsScope(.entity = rd_handle_from_entity(pin)) rd_drag_begin(RD_RegSlot_Entity);
+                RD_RegsScope(.cfg = rd_handle_from_cfg(pin)) rd_drag_begin(RD_RegSlot_Cfg);
               }
               if(ui_right_clicked(sig))
               {
-                RD_RegsScope(.entity = rd_handle_from_entity(pin)) rd_open_ctx_menu(sig.box->key, v2f32(0, sig.box->rect.y1-sig.box->rect.y0), RD_RegSlot_Entity);
+                rd_cmd(RD_CmdKind_PushQuery,
+                       .cfg     = rd_handle_from_cfg(pin),
+                       .reg_slot= RD_RegSlot_Cfg,
+                       .ui_key  = sig.box->key,
+                       .off_px  = v2f32(0, sig.box->rect.y1-sig.box->rect.y0));
               }
             }
             rd_code_label(0.8f, 1, rd_rgba_from_theme_color(RD_ThemeColor_CodeDefault), pin_expr);

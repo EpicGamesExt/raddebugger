@@ -191,7 +191,7 @@ RD_EntityKindFlags rd_entity_kind_flags_table[27] =
 (0*RD_EntityKindFlag_CanDelete) | (0*RD_EntityKindFlag_CanFreeze) | (0*RD_EntityKindFlag_CanEdit) | (1*RD_EntityKindFlag_CanRename) | (0*RD_EntityKindFlag_CanEnable) | (0*RD_EntityKindFlag_CanCondition) | (0*RD_EntityKindFlag_CanDuplicate) | (0*RD_EntityKindFlag_NameIsCode) | (0*RD_EntityKindFlag_NameIsPath) | (0*RD_EntityKindFlag_UserDefinedLifetime) | (0*RD_EntityKindFlag_IsSerializedToConfig),
 };
 
-Rng1U64 rd_reg_slot_range_table[38] =
+Rng1U64 rd_reg_slot_range_table[40] =
 {
 {0},
 {OffsetOf(RD_Regs, machine), OffsetOf(RD_Regs, machine) + sizeof(CTRL_Handle)},
@@ -204,6 +204,8 @@ Rng1U64 rd_reg_slot_range_table[38] =
 {OffsetOf(RD_Regs, view), OffsetOf(RD_Regs, view) + sizeof(RD_Handle)},
 {OffsetOf(RD_Regs, prev_view), OffsetOf(RD_Regs, prev_view) + sizeof(RD_Handle)},
 {OffsetOf(RD_Regs, dst_panel), OffsetOf(RD_Regs, dst_panel) + sizeof(RD_Handle)},
+{OffsetOf(RD_Regs, cfg), OffsetOf(RD_Regs, cfg) + sizeof(RD_Handle)},
+{OffsetOf(RD_Regs, cfg_list), OffsetOf(RD_Regs, cfg_list) + sizeof(RD_HandleList)},
 {OffsetOf(RD_Regs, entity), OffsetOf(RD_Regs, entity) + sizeof(RD_Handle)},
 {OffsetOf(RD_Regs, entity_list), OffsetOf(RD_Regs, entity_list) + sizeof(RD_HandleList)},
 {OffsetOf(RD_Regs, unwind_count), OffsetOf(RD_Regs, unwind_count) + sizeof(U64)},

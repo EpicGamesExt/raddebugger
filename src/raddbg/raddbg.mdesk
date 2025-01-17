@@ -161,6 +161,8 @@ RD_RegTable:
   {RD_Handle         view             View          }
   {RD_Handle         prev_view        PrevView      }
   {RD_Handle         dst_panel        DstPanel      }
+  {RD_Handle         cfg              Cfg           }
+  {RD_HandleList     cfg_list         CfgList       }
   {RD_Handle         entity           Entity        }
   {RD_HandleList     entity_list      EntityList    }
   

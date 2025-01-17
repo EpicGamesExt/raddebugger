@@ -1337,6 +1337,51 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
       e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, expr->location, "Type expression not expected.");
     }break;
     
+    //- rjf: textual line slicing
+    case E_ExprKind_Line:
+    {
+      E_Expr *lhs = expr->first;
+      E_Expr *rhs = expr->last;
+      E_IRTreeAndType lhs_irtree = e_irtree_and_type_from_expr(arena, lhs);
+      E_Space space = lhs_irtree.space;
+      U64 line_num = rhs->value.u64;
+      B32 space_is_good = 1;
+      if(lhs_irtree.root->op != E_IRExtKind_SetSpace)
+      {
+        space_is_good = 0;
+        e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, lhs->location, "Cannot take a line from a non-file.");
+      }
+      B32 line_num_is_good = 1;
+      if(rhs->kind != E_ExprKind_LeafU64)
+      {
+        line_num_is_good = 0;
+        e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, rhs->location, "Line number must be specified as a constant number.");
+      }
+      if(space_is_good && line_num_is_good)
+      {
+        TXT_Scope *txt_scope = txt_scope_open();
+        U128 key = space.u128;
+        U128 hash = {0};
+        TXT_TextInfo text_info = txt_text_info_from_key_lang(txt_scope, key, TXT_LangKind_Null, &hash);
+        if(1 <= line_num && line_num <= text_info.lines_count)
+        {
+          Rng1U64 line_range = text_info.lines_ranges[line_num-1];
+          U64 line_size = dim_1u64(line_range);
+          E_IRNode *line_offset = e_irtree_const_u(arena, line_range.min);
+          E_IRNode *set_space = e_irtree_set_space(arena, space, line_offset);
+          result.root     = set_space;
+          result.type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), line_size);
+          result.mode     = E_Mode_Offset;
+          result.space    = space;
+        }
+        else
+        {
+          e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, rhs->location, "Line %I64u is out of bounds.", line_num);
+        }
+        txt_scope_close(txt_scope);
+      }
+    }break;
+    
     //- rjf: definitions
     case E_ExprKind_Define:
     {

@@ -342,6 +342,18 @@ struct RD_CfgRec
 };
 
 ////////////////////////////////
+//~ rjf: Structured Locations, Parsed From Config
+
+typedef struct RD_Location RD_Location;
+struct RD_Location
+{
+  String8 file_path;
+  TxtPt pt;
+  U64 vaddr;
+  String8 name;
+};
+
+////////////////////////////////
 //~ rjf: Key Map Types
 
 typedef struct RD_KeyMapNode RD_KeyMapNode;
@@ -1146,6 +1158,13 @@ internal B32 rd_cfg_is_project_filtered(RD_Cfg *cfg);
 
 internal RD_KeyMapNodePtrList rd_key_map_node_ptr_list_from_name(Arena *arena, String8 string);
 internal RD_KeyMapNodePtrList rd_key_map_node_ptr_list_from_binding(Arena *arena, RD_Binding binding);
+
+internal Vec4F32 rd_hsva_from_cfg(RD_Cfg *cfg);
+internal Vec4F32 rd_rgba_from_cfg(RD_Cfg *cfg);
+
+internal B32 rd_disabled_from_cfg(RD_Cfg *cfg);
+internal RD_Location rd_location_from_cfg(RD_Cfg *cfg);
+internal String8 rd_expr_from_cfg(RD_Cfg *cfg);
 
 ////////////////////////////////
 //~ rjf: Entity Stateful Functions

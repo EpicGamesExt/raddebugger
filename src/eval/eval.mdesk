@@ -132,6 +132,8 @@ E_ExprKindTable:
   { Array                Null                0        "array"             ""        ""        "" }
   { Func                 Null                0        "function"          ""        ""        "" }
   
+  { Line                 Binary              1        ":"                 ""        ":"       "" }
+  
   { Define               Binary              13       "="                 ""        "="       "" }
 }
 

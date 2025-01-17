@@ -43,9 +43,9 @@ struct RD_CodeSliceParams
   String8 *line_text;
   Rng1U64 *line_ranges;
   TXT_TokenArray *line_tokens;
-  RD_EntityList *line_bps;
+  RD_CfgList *line_bps;
   CTRL_EntityList *line_ips;
-  RD_EntityList *line_pins;
+  RD_CfgList *line_pins;
   U64 *line_vaddrs;
   D_LineList *line_infos;
   DI_KeyList relevant_dbgi_keys;

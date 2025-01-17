@@ -60,6 +60,8 @@ RD_RegSlot_Panel,
 RD_RegSlot_View,
 RD_RegSlot_PrevView,
 RD_RegSlot_DstPanel,
+RD_RegSlot_Cfg,
+RD_RegSlot_CfgList,
 RD_RegSlot_Entity,
 RD_RegSlot_EntityList,
 RD_RegSlot_UnwindCount,
@@ -557,6 +559,8 @@ RD_Handle panel;
 RD_Handle view;
 RD_Handle prev_view;
 RD_Handle dst_panel;
+RD_Handle cfg;
+RD_HandleList cfg_list;
 RD_Handle entity;
 RD_HandleList entity_list;
 U64 unwind_count;
@@ -632,6 +636,8 @@ RD_ViewRuleUIFunctionType *ui;
 .view = rd_regs()->view,\
 .prev_view = rd_regs()->prev_view,\
 .dst_panel = rd_regs()->dst_panel,\
+.cfg = rd_regs()->cfg,\
+.cfg_list = rd_regs()->cfg_list,\
 .entity = rd_regs()->entity,\
 .entity_list = rd_regs()->entity_list,\
 .unwind_count = rd_regs()->unwind_count,\
@@ -779,7 +785,7 @@ extern String8 d_entity_kind_name_lower_table[27];
 extern String8 d_entity_kind_name_lower_plural_table[27];
 extern String8 d_entity_kind_name_label_table[27];
 extern RD_EntityKindFlags rd_entity_kind_flags_table[27];
-extern Rng1U64 rd_reg_slot_range_table[38];
+extern Rng1U64 rd_reg_slot_range_table[40];
 extern RD_StringBindingPair rd_default_binding_table[110];
 extern String8 rd_binding_version_remap_old_name_table[8];
 extern String8 rd_binding_version_remap_new_name_table[8];
