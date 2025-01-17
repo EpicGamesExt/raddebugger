@@ -3016,10 +3016,13 @@ internal void
 rd_store_view_param(String8 key, String8 value)
 {
   RD_Cfg *view = rd_cfg_from_handle(rd_regs()->view);
-  RD_Cfg *child = rd_cfg_child_from_string(view, key);
-  if(child == &rd_nil_cfg)
+  RD_Cfg *child = rd_cfg_child_from_string_or_alloc(view, key);
+  for(RD_Cfg *val_child = child->first, *next = &rd_nil_cfg;
+      val_child != &rd_nil_cfg;
+      val_child = next)
   {
-    child = rd_cfg_new(view, key);
+    next = val_child->next;
+    rd_cfg_release(val_child);
   }
   rd_cfg_new(child, value);
 }
