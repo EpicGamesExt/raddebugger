@@ -75,6 +75,10 @@ RD_RegSlot_Vaddr,
 RD_RegSlot_Voff,
 RD_RegSlot_VaddrRange,
 RD_RegSlot_VoffRange,
+RD_RegSlot_UIKey,
+RD_RegSlot_OffPx,
+RD_RegSlot_ListerFlags,
+RD_RegSlot_RegSlot,
 RD_RegSlot_PID,
 RD_RegSlot_ForceConfirm,
 RD_RegSlot_PreferDisasm,
@@ -123,6 +127,7 @@ RD_CmdKind_SetEntityColor,
 RD_CmdKind_SetEntityName,
 RD_CmdKind_Attach,
 RD_CmdKind_Exit,
+RD_CmdKind_OpenLister,
 RD_CmdKind_RunCommand,
 RD_CmdKind_OSEvent,
 RD_CmdKind_SelectThread,
@@ -298,9 +303,9 @@ RD_CmdKind_Settings,
 RD_CmdKind_PickFile,
 RD_CmdKind_PickFolder,
 RD_CmdKind_PickFileOrFolder,
-RD_CmdKind_PushLister,
-RD_CmdKind_CompleteLister,
-RD_CmdKind_CancelLister,
+RD_CmdKind_PushQuery,
+RD_CmdKind_CompleteQuery,
+RD_CmdKind_CancelQuery,
 RD_CmdKind_ToggleDevMenu,
 RD_CmdKind_LogMarker,
 RD_CmdKind_COUNT,
@@ -567,6 +572,10 @@ U64 vaddr;
 U64 voff;
 Rng1U64 vaddr_range;
 Rng1U64 voff_range;
+UI_Key ui_key;
+Vec2F32 off_px;
+RD_ListerFlags lister_flags;
+RD_RegSlot reg_slot;
 U32 pid;
 B32 force_confirm;
 B32 prefer_disasm;
@@ -638,6 +647,10 @@ RD_ViewRuleUIFunctionType *ui;
 .voff = rd_regs()->voff,\
 .vaddr_range = rd_regs()->vaddr_range,\
 .voff_range = rd_regs()->voff_range,\
+.ui_key = rd_regs()->ui_key,\
+.off_px = rd_regs()->off_px,\
+.lister_flags = rd_regs()->lister_flags,\
+.reg_slot = rd_regs()->reg_slot,\
 .pid = rd_regs()->pid,\
 .force_confirm = rd_regs()->force_confirm,\
 .prefer_disasm = rd_regs()->prefer_disasm,\
@@ -766,7 +779,7 @@ extern String8 d_entity_kind_name_lower_table[27];
 extern String8 d_entity_kind_name_lower_plural_table[27];
 extern String8 d_entity_kind_name_label_table[27];
 extern RD_EntityKindFlags rd_entity_kind_flags_table[27];
-extern Rng1U64 rd_reg_slot_range_table[34];
+extern Rng1U64 rd_reg_slot_range_table[38];
 extern RD_StringBindingPair rd_default_binding_table[110];
 extern String8 rd_binding_version_remap_old_name_table[8];
 extern String8 rd_binding_version_remap_new_name_table[8];

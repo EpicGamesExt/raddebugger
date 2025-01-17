@@ -181,6 +181,12 @@ RD_RegTable:
   {Rng1U64          vaddr_range      VaddrRange    }
   {Rng1U64          voff_range       VoffRange     }
   
+  // rjf: ui context
+  {UI_Key           ui_key           UIKey         }
+  {Vec2F32          off_px           OffPx         }
+  {RD_ListerFlags   lister_flags     ListerFlags   }
+  {RD_RegSlot       reg_slot         RegSlot       }
+  
   // rjf: general parameters
   {U32              pid              PID           }
   {B32              force_confirm    ForceConfirm  }
@@ -227,6 +233,9 @@ RD_CmdTable:    //               |        |              |                  |   
 {
   //- rjf: exiting
   {Exit                           1        1              Null               null              Nil                     Null       0  0  0  0  0  0                                                           X                     "exit"                        "Exit"                                        "Exits the debugger."                                                                                              "quit,close,abort"               }
+  
+  //- rjf: top-level lister
+  {OpenLister                     1        1              Null               null              Nil                     Null       0  0  0  0  0  0                                                           Null                  "open_lister"                 "Open Lister"                                 "Opens the lister."                                                                                                "help,cmd"                       }
   
   //- rjf: command runner
   {RunCommand                     1        1              CmdName            commands          Nil                     Null       0  0  0  0  0  1                                                           Null                  "run_command"                 "Run Command"                                 "Runs a command from the command palette."                                                                         "help,cmd"                       }
@@ -295,7 +304,7 @@ RD_CmdTable:    //               |        |              |                  |   
   {MoveTabRight                   1        1              Null               null              Nil                     Null       0  0  0  0  0  0                                                           RightArrow            "move_tab_right"              "Move Tab Right"                              "Moves the selected tab right one slot."                                                                           ""                               }
   {MoveTabLeft                    1        1              Null               null              Nil                     Null       0  0  0  0  0  0                                                           LeftArrow             "move_tab_left"               "Move Tab Left"                               "Moves the selected tab left one slot."                                                                            ""                               }
   {OpenTab                        0        0              Null               null              Nil                     Null       0  0  0  0  0  0                                                           Null                  "open_tab"                    "Open Tab"                                    "Opens a new tab with the parameterized view specification."                                                       ""                               }
-  {CloseTab                       1        1              Null               null              Nil                     Null       0  0  0  0  0  0                                                           X                     "close_tab"                   "Close Tab"                                   "Closes the currently opened tab."                                                                                 ""                               }
+  {CloseTab                       1        1              View               null              Nil                     Null       0  0  0  0  0  0                                                           X                     "close_tab"                   "Close Tab"                                   "Closes the currently opened tab."                                                                                 ""                               }
   {MoveTab                        0        0              Null               null              Nil                     Null       0  0  0  0  0  0                                                           Null                  "move_tab"                    "Move Tab"                                    "Moves a tab to a new panel."                                                                                      ""                               }
   {TabBarTop                      1        1              Null               null              Nil                     Null       0  0  0  0  0  0                                                           UpArrow               "tab_bar_top"                 "Anchor Tab Bar To Top"                       "Anchors a panel's tab bar to the top of the panel."                                                               ""                               }
   {TabBarBottom                   1        1              Null               null              Nil                     Null       0  0  0  0  0  0                                                           DownArrow             "tab_bar_bottom"              "Anchor Tab Bar To Bottom"                    "Anchors a panel's tab bar to the bottom of the panel."                                                            ""                               }
@@ -477,10 +486,10 @@ RD_CmdTable:    //               |        |              |                  |   
   {PickFolder                     0        0              FilePath           null              Nil                     Null       0  1  0  0  0  1                                                           FolderOpenFilled      "pick_folder"                 "Pick Folder"                                 "Opens the file browser to pick a folder."                                                                         ""                               }
   {PickFileOrFolder               0        0              FilePath           null              Nil                     Null       1  1  0  0  0  1                                                           FileOutline           "pick_file_or_folder"         "Pick File/Folder"                            "Opens the file browser to pick a file or folder."                                                                 ""                               }
   
-  //- rjf: lister stack
-  {PushLister                     0        0              Null               null              Nil                     Null       0  0  0  0  0  0                                                           Null                  "push_lister"                 "Push Lister"                                 "Pushes a new lister onto the lister stack."                                                                       ""                               }
-  {CompleteLister                 0        0              Null               null              Nil                     Null       0  0  0  0  0  0                                                           Null                  "complete_lister"             "Complete Lister"                             "Completes a lister, and pops it off the lister stack."                                                            ""                               }
-  {CancelLister                   0        0              Null               null              Nil                     Null       0  0  0  0  0  0                                                           Null                  "cancel_lister"               "Cancel Lister"                               "Cancels a lister, and pops it off the lister stack."                                                              ""                               }
+  //- rjf: query stack
+  {PushQuery                      0        0              Null               null              Nil                     Null       0  0  0  0  0  0                                                           Null                  "push_lister"                 "Push Lister"                                 "Pushes a new lister onto the lister stack."                                                                       ""                               }
+  {CompleteQuery                  0        0              Null               null              Nil                     Null       0  0  0  0  0  0                                                           Null                  "complete_lister"             "Complete Lister"                             "Completes a lister, and pops it off the lister stack."                                                            ""                               }
+  {CancelQuery                    0        0              Null               null              Nil                     Null       0  0  0  0  0  0                                                           Null                  "cancel_lister"               "Cancel Lister"                               "Cancels a lister, and pops it off the lister stack."                                                              ""                               }
   
   //- rjf: developer commands
   {ToggleDevMenu                  1        1              Null               null              Nil                     Null       0  0  0  0  0  0                                                           Null                  "toggle_dev_menu"             "Toggle Developer Menu"                       "Opens and closes the developer menu."                                                                             ""                               }
@@ -685,7 +694,8 @@ RD_DefaultBindingTable:
   { "filter"                      Slash     ctrl     0         0          }
   
   //- rjf: command lister
-  { "run_command"                 F1        0        0         0          }
+  // { "run_command"                 F1        0        0         0          }
+  { "open_lister"                 F1        0        0         0          }
   
   //- rjf: developer commands
   { "log_marker"                  M         ctrl     shift     alt        }

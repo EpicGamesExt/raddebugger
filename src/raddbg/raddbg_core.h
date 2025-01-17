@@ -142,7 +142,7 @@ enum
   RD_ViewRuleInfoFlag_ProjectFiltered            = (1<<7),
 };
 
-#define RD_VIEW_RULE_UI_FUNCTION_SIG(name) void name(String8 string, Rng2F32 rect)
+#define RD_VIEW_RULE_UI_FUNCTION_SIG(name) void name(String8 string, MD_Node *params, Rng2F32 rect)
 #define RD_VIEW_RULE_UI_FUNCTION_NAME(name) rd_view_rule_ui_##name
 #define RD_VIEW_RULE_UI_FUNCTION_DEF(name) internal RD_VIEW_RULE_UI_FUNCTION_SIG(RD_VIEW_RULE_UI_FUNCTION_NAME(name))
 typedef RD_VIEW_RULE_UI_FUNCTION_SIG(RD_ViewRuleUIFunctionType);
@@ -169,6 +169,7 @@ struct RD_ViewState
   U64 last_frame_index_touched;
   
   // rjf: loading indicator info
+  F32 loading_t;
   F32 loading_t_target;
   U64 loading_progress_v;
   U64 loading_progress_v_target;
@@ -228,6 +229,35 @@ enum
 {
   RD_CmdKindFlag_ListInUI      = (1<<0),
   RD_CmdKindFlag_ListInIPCDocs = (1<<1),
+};
+
+////////////////////////////////
+//~ rjf: Lister Flags
+
+typedef U32 RD_ListerFlags;
+enum
+{
+  //- rjf: lister visual settings
+  RD_ListerFlag_LineEdit       = (1<<0),  // determines whether or not the lister has its own line edit, or if the filtering string is sourced by a user
+  RD_ListerFlag_Descriptions   = (1<<1),  // determines whether or not the lister items have descriptions (taller & bigger buttons)
+  
+  //- rjf: lister item sources
+  RD_ListerFlag_Locals         = (1<<2),
+  RD_ListerFlag_Registers      = (1<<3),
+  RD_ListerFlag_ViewRules      = (1<<4),
+  RD_ListerFlag_ViewRuleParams = (1<<5),
+  RD_ListerFlag_Members        = (1<<6),
+  RD_ListerFlag_Globals        = (1<<7),
+  RD_ListerFlag_ThreadLocals   = (1<<8),
+  RD_ListerFlag_Procedures     = (1<<9),
+  RD_ListerFlag_Types          = (1<<10),
+  RD_ListerFlag_Languages      = (1<<11),
+  RD_ListerFlag_Architectures  = (1<<12),
+  RD_ListerFlag_Tex2DFormats   = (1<<13),
+  RD_ListerFlag_Files          = (1<<14),
+  RD_ListerFlag_Commands       = (1<<15),
+  RD_ListerFlag_Settings       = (1<<16),
+  RD_ListerFlag_SystemProcesses= (1<<17),
 };
 
 ////////////////////////////////
@@ -538,32 +568,6 @@ RD_PaletteCode;
 ////////////////////////////////
 //~ rjf: Lister Types
 
-typedef U32 RD_ListerFlags;
-enum
-{
-  //- rjf: lister visual settings
-  RD_ListerFlag_LineEdit       = (1<<0),  // determines whether or not the lister has its own line edit, or if the filtering string is sourced by a user
-  RD_ListerFlag_Descriptions   = (1<<1),  // determines whether or not the lister items have descriptions (taller & bigger buttons)
-  
-  //- rjf: lister item sources
-  RD_ListerFlag_Locals         = (1<<2),
-  RD_ListerFlag_Registers      = (1<<3),
-  RD_ListerFlag_ViewRules      = (1<<4),
-  RD_ListerFlag_ViewRuleParams = (1<<5),
-  RD_ListerFlag_Members        = (1<<6),
-  RD_ListerFlag_Globals        = (1<<7),
-  RD_ListerFlag_ThreadLocals   = (1<<8),
-  RD_ListerFlag_Procedures     = (1<<9),
-  RD_ListerFlag_Types          = (1<<10),
-  RD_ListerFlag_Languages      = (1<<11),
-  RD_ListerFlag_Architectures  = (1<<12),
-  RD_ListerFlag_Tex2DFormats   = (1<<13),
-  RD_ListerFlag_Files          = (1<<14),
-  RD_ListerFlag_Commands       = (1<<15),
-  RD_ListerFlag_Settings       = (1<<16),
-  RD_ListerFlag_SystemProcesses= (1<<17),
-};
-
 typedef struct RD_ListerItem RD_ListerItem;
 struct RD_ListerItem
 {
@@ -606,26 +610,12 @@ struct RD_ListerItemArray
   U64 count;
 };
 
-typedef struct RD_ListerParams RD_ListerParams;
-struct RD_ListerParams
-{
-  UI_Key anchor_key;
-  Vec2F32 anchor_off;
-  RD_ListerFlags flags;
-  String8List strings;
-  String8 input;
-  U64 cursor_off;
-  F32 squish;
-  F32 transparency;
-};
-
 typedef struct RD_Lister RD_Lister;
 struct RD_Lister
 {
   RD_Lister *next;
   Arena *arena;
   RD_Regs *regs;
-  RD_ListerParams params;
   UI_ScrollPt scroll_pt;
   U8 input_buffer[1024];
   U64 input_string_size;
@@ -669,8 +659,9 @@ struct RD_WindowState
   B32 menu_bar_key_held;
   B32 menu_bar_focus_press_started;
   
-  // rjf: lister stack state
-  RD_Lister top_lister; // points to chain of stateful listers
+  // rjf: lister state
+  RD_Lister *top_query_lister;
+  RD_Lister *autocomp_lister;
   U64 autocomp_lister_last_frame_idx;
   
   // rjf: context menu state
@@ -687,22 +678,13 @@ struct RD_WindowState
   Arena *drop_completion_arena;
   String8List drop_completion_paths;
   
-  // rjf: lister state
-  U64 lister_last_frame_idx;
-  Arena *lister_arena;
-  RD_Regs *lister_regs;
-  RD_ListerParams lister_params;
-  UI_ScrollPt lister_scroll_pt;
-  U8 lister_input_buffer[1024];
-  U64 lister_input_size;
-  TxtPt lister_input_cursor;
-  TxtPt lister_input_mark;
-  
   // rjf: query view stack
+#if 0
   Arena *query_cmd_arena;
   String8 query_cmd_name;
   RD_Regs *query_cmd_regs;
   U64 query_cmd_regs_mask[(RD_RegSlot_COUNT + 63) / 64];
+#endif
   
   // rjf: hover eval state
   B32 hover_eval_focused;
@@ -1324,19 +1306,24 @@ internal String8 rd_value_string_from_eval(Arena *arena, EV_StringFlags flags, U
 internal void rd_set_hover_eval(Vec2F32 pos, String8 file_path, TxtPt pt, U64 vaddr, String8 string);
 
 ////////////////////////////////
-//~ rjf: Lister
+//~ rjf: Lister Functions
 
 internal void rd_lister_item_chunk_list_push(Arena *arena, RD_ListerItemChunkList *list, U64 cap, RD_ListerItem *item);
 #define rd_lister_item_chunk_list_push_new(arena, list, cap, ...) rd_lister_item_chunk_list_push((arena), (list), (cap), &(RD_ListerItem){.string = {0}, __VA_ARGS__})
 internal RD_ListerItemArray rd_lister_item_array_from_chunk_list(Arena *arena, RD_ListerItemChunkList *list);
 internal int rd_lister_item_qsort_compare(RD_ListerItem *a, RD_ListerItem *b);
 internal void rd_lister_item_array_sort__in_place(RD_ListerItemArray *array);
+internal RD_ListerItemArray rd_lister_item_array_from_regs(Arena *arena, RD_Regs *regs);
 
 internal String8 rd_lister_query_word_from_input_string_off(String8 input, U64 cursor_off);
 internal String8 rd_lister_query_path_from_input_string_off(String8 input, U64 cursor_off);
+#if 0 // TODO(rjf): @cfg
 internal RD_ListerParams rd_view_rule_lister_params_from_input_cursor(Arena *arena, String8 string, U64 cursor_off);
 internal void rd_set_autocomp_lister_query_(RD_ListerParams *params);
 #define rd_set_autocomp_lister_query(...) rd_set_autocomp_lister_query_(&(RD_ListerParams){.flags = 0, __VA_ARGS__})
+#endif
+internal void rd_set_autocomp_lister_query_(RD_Regs *regs);
+#define rd_set_autocomp_lister_query(...) rd_set_autocomp_lister_query_(&(RD_Regs){rd_regs_lit_init_top __VA_ARGS__})
 
 ////////////////////////////////
 //~ rjf: Search Strings

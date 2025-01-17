@@ -7,6 +7,7 @@
 internal void
 rd_code_view_init(RD_CodeViewState *cv)
 {
+  ProfBeginFunction();
   if(cv->initialized == 0)
   {
     cv->initialized = 1;
@@ -15,6 +16,7 @@ rd_code_view_init(RD_CodeViewState *cv)
     cv->center_cursor = 1;
     rd_store_view_loading_info(1, 0, 0);
   }
+  ProfEnd();
 }
 
 internal RD_CodeViewBuildResult
@@ -3122,7 +3124,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                       UI_Parent(box)
                       {
                         String8 row_expr = e_string_from_expr(scratch.arena, row->expr);
-                        cell_ui_hook(row_expr, r2f32p(x_px, 0, x_px + col->pct*dim_2f32(rect).x, row_height_px));
+                        cell_ui_hook(row_expr, cell_ui_params, r2f32p(x_px, 0, x_px + col->pct*dim_2f32(rect).x, row_height_px));
                       }
                       sig = ui_signal_from_box(box);
                     }
@@ -3158,20 +3160,11 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                          txt_pt_match(cell_edit_state->cursor, cell_edit_state->mark))
                       {
                         String8 input = str8(cell_edit_state->input_buffer, cell_edit_state->input_size);
-                        RD_ListerParams params = {cell_autocomp_flags};
-                        if(col->kind == RD_WatchViewColumnKind_ViewRule)
-                        {
-                          params = rd_view_rule_lister_params_from_input_cursor(scratch.arena, input, cell_edit_state->cursor.column-1);
-                          if(params.flags == 0)
-                          {
-                            params.flags = cell_autocomp_flags;
-                          }
-                        }
-                        params.anchor_key = sig.box->key;
-                        params.anchor_off = v2f32(0, dim_2f32(sig.box->rect).y);
-                        params.input      = input;
-                        params.cursor_off = cell_edit_state->cursor.column-1;
-                        rd_set_autocomp_lister_query_(&params);
+                        rd_set_autocomp_lister_query(.ui_key       = sig.box->key,
+                                                     .off_px       = v2f32(0, dim_2f32(sig.box->rect).y),
+                                                     .string       = input,
+                                                     .cursor       = cell_edit_state->cursor,
+                                                     .lister_flags = cell_autocomp_flags);
                       }
                     }
                   }
@@ -3762,7 +3755,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(commands)
   //- rjf: submit best match when hitting enter w/ no selection
   if(cv->selected_cmd_hash == 0 && ui_slot_press(UI_EventActionSlot_Accept))
   {
-    rd_cmd(RD_CmdKind_CompleteLister, .cmd_name = (cmd_array.count > 0 ? cmd_array.v[0].cmd_name : str8_zero()));
+    rd_cmd(RD_CmdKind_CompleteQuery, .cmd_name = (cmd_array.count > 0 ? cmd_array.v[0].cmd_name : str8_zero()));
   }
   
   //- rjf: selected kind -> cursor
@@ -3875,7 +3868,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(commands)
       UI_Signal sig = ui_signal_from_box(box);
       if(ui_clicked(sig))
       {
-        rd_cmd(RD_CmdKind_CompleteLister, .cmd_name = item->cmd_name);
+        rd_cmd(RD_CmdKind_CompleteQuery, .cmd_name = item->cmd_name);
       }
     }
   }
@@ -4227,7 +4220,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(file_system)
     // rjf: command search part is empty, but directory matches some file:
     if(path_query_path_props.created != 0 && path_query.search.size == 0)
     {
-      rd_cmd(RD_CmdKind_CompleteLister, .file_path = query_normalized_with_opt_slash);
+      rd_cmd(RD_CmdKind_CompleteQuery, .file_path = query_normalized_with_opt_slash);
     }
     
     // rjf: command argument exactly matches some file:
@@ -4243,14 +4236,14 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(file_system)
       // rjf: is a file -> complete view
       else
       {
-        rd_cmd(RD_CmdKind_CompleteLister, .file_path = query_normalized_with_opt_slash);
+        rd_cmd(RD_CmdKind_CompleteQuery, .file_path = query_normalized_with_opt_slash);
       }
     }
     
     // rjf: command argument is empty, picking folders -> use current folder
     else if(path_query.search.size == 0 && dir_selection)
     {
-      rd_cmd(RD_CmdKind_CompleteLister, .file_path = path_query.path);
+      rd_cmd(RD_CmdKind_CompleteQuery, .file_path = path_query.path);
     }
     
     // rjf: command argument does not exactly match any file, but lister results are in:
@@ -4266,14 +4259,14 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(file_system)
       else
       {
         String8 file_path = push_str8f(scratch.arena, "%S%S", path_query.path, filename);
-        rd_cmd(RD_CmdKind_CompleteLister, .file_path = file_path);
+        rd_cmd(RD_CmdKind_CompleteQuery, .file_path = file_path);
       }
     }
     
     // rjf: command argument does not match any file, and lister is empty (new file)
     else
     {
-      rd_cmd(RD_CmdKind_CompleteLister, .file_path = query);
+      rd_cmd(RD_CmdKind_CompleteQuery, .file_path = query);
     }
   }
   
@@ -4472,7 +4465,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(file_system)
         }
         else
         {
-          rd_cmd(RD_CmdKind_CompleteLister, .file_path = new_path);
+          rd_cmd(RD_CmdKind_CompleteQuery, .file_path = new_path);
         }
       }
     }
@@ -4693,7 +4686,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(system_processes)
   if(sp->selected_pid == 0 && process_info_array.count > 0 && ui_slot_press(UI_EventActionSlot_Accept))
   {
     RD_ProcessInfo *info = &process_info_array.v[0];
-    rd_cmd(RD_CmdKind_CompleteLister, .pid = info->info.pid);
+    rd_cmd(RD_CmdKind_CompleteQuery, .pid = info->info.pid);
   }
   
   //- rjf: selected PID -> cursor
@@ -4781,7 +4774,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(system_processes)
       // rjf: click => activate this specific process
       if(ui_clicked(sig))
       {
-        rd_cmd(RD_CmdKind_CompleteLister, .pid = info->info.pid);
+        rd_cmd(RD_CmdKind_CompleteQuery, .pid = info->info.pid);
       }
     }
   }
@@ -4932,7 +4925,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(entity_lister)
   if(rd_entity_is_nil(rd_entity_from_handle(fev->selected_entity_handle)) && ent_arr.count != 0 && ui_slot_press(UI_EventActionSlot_Accept))
   {
     RD_Entity *ent = ent_arr.v[0].entity;
-    rd_cmd(RD_CmdKind_CompleteLister, .entity = rd_handle_from_entity(ent));
+    rd_cmd(RD_CmdKind_CompleteQuery, .entity = rd_handle_from_entity(ent));
   }
   
   //- rjf: selected entity -> cursor
@@ -4997,7 +4990,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(entity_lister)
       }
       if(ui_clicked(ui_signal_from_box(box)))
       {
-        rd_cmd(RD_CmdKind_CompleteLister, .entity = rd_handle_from_entity(ent));
+        rd_cmd(RD_CmdKind_CompleteQuery, .entity = rd_handle_from_entity(ent));
       }
     }
   }
@@ -5148,7 +5141,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(ctrl_entity_lister)
         case CTRL_EntityKind_Thread: {rd_regs()->thread = ent->handle;}break;
         case CTRL_EntityKind_Module: {rd_regs()->module = ent->handle;}break;
       }
-      rd_cmd(RD_CmdKind_CompleteLister, .ctrl_entity = ent->handle);
+      rd_cmd(RD_CmdKind_CompleteQuery, .ctrl_entity = ent->handle);
     }
   }
   
@@ -5224,7 +5217,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(ctrl_entity_lister)
             case CTRL_EntityKind_Thread: {rd_regs()->thread = ent->handle;}break;
             case CTRL_EntityKind_Module: {rd_regs()->module = ent->handle;}break;
           }
-          rd_cmd(RD_CmdKind_CompleteLister, .ctrl_entity = ent->handle);
+          rd_cmd(RD_CmdKind_CompleteQuery, .ctrl_entity = ent->handle);
         }
       }
     }
@@ -5301,7 +5294,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(symbol_lister)
         String8 name = str8(name_base, name_size);
         if(name.size != 0)
         {
-          rd_cmd(RD_CmdKind_CompleteLister, .string = name);
+          rd_cmd(RD_CmdKind_CompleteQuery, .string = name);
         }
       }
     }
@@ -5373,7 +5366,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(symbol_lister)
       UI_Signal sig = ui_signal_from_box(box);
       if(ui_clicked(sig))
       {
-        rd_cmd(RD_CmdKind_CompleteLister, .string = name);
+        rd_cmd(RD_CmdKind_CompleteQuery, .string = name);
       }
       if(ui_hovering(sig)) UI_Tooltip
       {
@@ -5840,7 +5833,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(text)
   //////////////////////////////
   //- rjf: process code-file commands
   //
-  for(RD_Cmd *cmd = 0; rd_next_cmd(&cmd);)
+  ProfScope("process code-file commands") for(RD_Cmd *cmd = 0; rd_next_cmd(&cmd);)
   {
     // rjf: mismatched window/panel => skip
     if(!rd_handle_match(rd_regs()->view, cmd->regs->view))
@@ -5874,29 +5867,33 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(text)
   //////////////////////////////
   //- rjf: unpack parameterization info
   //
+  ProfBegin("unpack parameterization info");
   String8 path = rd_file_path_from_eval_string(rd_frame_arena(), string);
   rd_regs()->file_path     = path;
   rd_regs()->vaddr         = 0;
   rd_regs()->prefer_disasm = 0;
-#if 0 // TODO(rjf): @cfg
   rd_regs()->cursor.line   = rd_value_from_params_key(params, str8_lit("cursor_line")).s64;
   rd_regs()->cursor.column = rd_value_from_params_key(params, str8_lit("cursor_column")).s64;
   rd_regs()->mark.line     = rd_value_from_params_key(params, str8_lit("mark_line")).s64;
   rd_regs()->mark.column   = rd_value_from_params_key(params, str8_lit("mark_column")).s64;
-#endif
   if(rd_regs()->cursor.line == 0)   { rd_regs()->cursor.line = 1; }
   if(rd_regs()->cursor.column == 0) { rd_regs()->cursor.column = 1; }
   if(rd_regs()->mark.line == 0)   { rd_regs()->mark.line = 1; }
   if(rd_regs()->mark.column == 0) { rd_regs()->mark.column = 1; }
   E_Eval eval = e_eval_from_string(scratch.arena, string);
-  Rng1U64 range = {0}; // TODO(rjf): @cfg rd_range_from_eval_params(eval, params);
+  Rng1U64 range = rd_range_from_eval_params(eval, params);
   rd_regs()->text_key = rd_key_from_eval_space_range(eval.space, range, 1);
-  rd_regs()->lang_kind = TXT_LangKind_Null; // TODO(rjf): @cfg rd_lang_kind_from_eval_params(eval, params);
+  rd_regs()->lang_kind = rd_lang_kind_from_eval_params(eval, params);
+  if(rd_regs()->lang_kind == TXT_LangKind_Null && path.size != 0)
+  {
+    rd_regs()->lang_kind = txt_lang_kind_from_extension(str8_skip_last_dot(path));
+  }
   U128 hash = {0};
   TXT_TextInfo info = txt_text_info_from_key_lang(txt_scope, rd_regs()->text_key, rd_regs()->lang_kind, &hash);
   String8 data = hs_data_from_hash(hs_scope, hash);
   B32 file_is_missing = (path.size != 0 && os_properties_from_file_path(path).modified == 0);
   B32 key_has_data = !u128_match(hash, u128_zero()) && info.lines_count;
+  ProfEnd();
   
   //////////////////////////////
   //- rjf: build missing file interface
