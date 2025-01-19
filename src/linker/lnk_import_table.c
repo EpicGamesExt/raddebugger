@@ -736,7 +736,7 @@ lnk_emit_load_thunk_symbol(LNK_SymbolTable *symtab, LNK_Chunk *chunk, String8 fu
   ProfBeginFunction();
   // emit load thunk symbol
   String8     load_thunk_name   = push_str8f(symtab->arena->v[0], "__imp_load_%S", func_name);
-  LNK_Symbol *load_thunk_symbol = lnk_symbol_table_push_defined_chunk(symtab, load_thunk_name, LNK_DefinedSymbolVisibility_Extern, LNK_DefinedSymbolFlag_IsFunc|LNK_DefinedSymbolFlag_IsThunk, chunk, 0, 0, 0);
+  LNK_Symbol *load_thunk_symbol = lnk_symbol_table_push_defined_chunk(symtab, load_thunk_name, LNK_DefinedSymbolVisibility_Extern, LNK_DefinedSymbolFlag_IsFunc|LNK_DefinedSymbolFlag_IsThunk, chunk, 0, COFF_ComdatSelectType_NODUPLICATES, 0);
   ProfEnd();
   return load_thunk_symbol;
 }
@@ -746,7 +746,7 @@ lnk_emit_jmp_thunk_symbol(LNK_SymbolTable *symtab, LNK_Chunk *chunk, String8 fun
 {
   ProfBeginFunction();
   String8     jmp_thunk_name   = push_str8f(symtab->arena->v[0], "%S", func_name);
-  LNK_Symbol *jmp_thunk_symbol = lnk_symbol_table_push_defined_chunk(symtab, jmp_thunk_name, LNK_DefinedSymbolVisibility_Extern, LNK_DefinedSymbolFlag_IsFunc|LNK_DefinedSymbolFlag_IsThunk, chunk, 0, 0, 0);
+  LNK_Symbol *jmp_thunk_symbol = lnk_symbol_table_push_defined_chunk(symtab, jmp_thunk_name, LNK_DefinedSymbolVisibility_Extern, LNK_DefinedSymbolFlag_IsFunc|LNK_DefinedSymbolFlag_IsThunk, chunk, 0, COFF_ComdatSelectType_ANY, 0);
   ProfEnd();
   return jmp_thunk_symbol;
 }
@@ -756,7 +756,7 @@ lnk_emit_tail_merge_symbol(LNK_SymbolTable *symtab, LNK_Chunk *chunk, String8 fu
 {
   ProfBeginFunction();
   String8     tail_merge_name   = push_str8f(symtab->arena->v[0], "__tailMerge_%S", func_name);
-  LNK_Symbol *tail_merge_symbol = lnk_symbol_table_push_defined_chunk(symtab, tail_merge_name, LNK_DefinedSymbolVisibility_Extern, LNK_DefinedSymbolFlag_IsFunc|LNK_DefinedSymbolFlag_IsThunk, chunk, 0, 0, 0);
+  LNK_Symbol *tail_merge_symbol = lnk_symbol_table_push_defined_chunk(symtab, tail_merge_name, LNK_DefinedSymbolVisibility_Extern, LNK_DefinedSymbolFlag_IsFunc|LNK_DefinedSymbolFlag_IsThunk, chunk, 0, COFF_ComdatSelectType_NODUPLICATES, 0);
   ProfEnd();
   return tail_merge_symbol;
 }
