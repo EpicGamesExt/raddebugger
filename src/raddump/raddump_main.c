@@ -163,7 +163,7 @@ entry_point(CmdLine *cmdline)
         if (str8_match(cmd->string, opt_name, StringMatchFlag_CaseInsensitive)) {
           opt = g_rd_dump_option_map[opt_idx].opt;
           break;
-        } else if (str8_match(cmd->string, str8_lit("all"), StringMatchFlag_CaseInsensitive)) {
+        } else if (str8_match_lit("all", cmd->string, StringMatchFlag_CaseInsensitive)) {
           opt = ~0ull & ~(RD_Option_Help|RD_Option_Version);
           break;
         }

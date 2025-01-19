@@ -542,7 +542,7 @@ lnk_build_import_entry_obj(Arena *arena, String8 dll_name, COFF_MachineType mach
   ProfBeginFunction();
   
   Assert(machine == COFF_MachineType_X64);
-  Assert(str8_match(str8_lit("dll"), str8_skip_last_dot(dll_name), StringMatchFlag_CaseInsensitive|StringMatchFlag_RightSideSloppy));
+  Assert(str8_match_lit("dll", str8_skip_last_dot(dll_name), StringMatchFlag_CaseInsensitive|StringMatchFlag_RightSideSloppy));
   
   String8List list = {0};
   
@@ -802,7 +802,7 @@ lnk_build_null_thunk_data_obj(Arena *arena, String8 dll_name, COFF_MachineType m
 {
   ProfBeginFunction();
   
-  Assert(str8_match(str8_lit("dll"), str8_skip_last_dot(dll_name), StringMatchFlag_CaseInsensitive|StringMatchFlag_RightSideSloppy));
+  Assert(str8_match_lit("dll", str8_skip_last_dot(dll_name), StringMatchFlag_CaseInsensitive|StringMatchFlag_RightSideSloppy));
   
   String8List list = {0};
   

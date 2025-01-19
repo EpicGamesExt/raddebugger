@@ -1119,7 +1119,7 @@ lnk_directive_info_from_sections(Arena         *arena,
   for (U64 chunk_idx = 0; chunk_idx < chunk_count; ++chunk_idx) {
     String8    sect_name  = sect_name_arr[chunk_idx];
     LNK_Chunk *sect_chunk = chunk_arr + chunk_idx;
-    if (str8_match(sect_name, str8_lit(".drectve"), 0)) {
+    if (str8_match_lit(".drectve", sect_name, 0)) {
       if (sect_chunk->type == LNK_Chunk_Leaf) {
         if (sect_chunk->u.leaf.size >= 3) {
           if (~sect_chunk->flags & COFF_SectionFlag_LNK_INFO) {

@@ -770,7 +770,7 @@ lnk_make_res_obj(TP_Context       *tp,
       LNK_RelocList reloc_list          = {0};
       LNK_RelocList res_data_reloc_list = {0};
       for (LNK_Reloc *reloc = sect->reloc_list.first; reloc != 0; reloc = reloc->next) {
-        B32 is_reloc_symbol = str8_match(str8_lit("$R"), reloc->symbol->name, StringMatchFlag_RightSideSloppy);
+        B32 is_reloc_symbol = str8_match_lit("$R", reloc->symbol->name, StringMatchFlag_RightSideSloppy);
         LNK_Reloc *dst;
         if (is_reloc_symbol) {
           dst = lnk_reloc_list_push(sect->arena, &res_data_reloc_list);
@@ -2464,7 +2464,7 @@ THREAD_POOL_TASK_FUNC(lnk_weak_symbol_finder)
       case COFF_WeakExtType_SEARCH_ALIAS: {
         lazy = lnk_symbol_table_search(task->symtab, LNK_SymbolScopeFlag_Lib, symbol->name);
         if (!lazy) {
-          if (str8_match(str8_lit(".weak."), symbol->name, StringMatchFlag_RightSideSloppy)) {
+          if (str8_match_lit(".weak.", symbol->name, StringMatchFlag_RightSideSloppy)) {
             // TODO: Clang and MingGW encode extra info in alias
             // 
             // __attribute__((weak,alias("foo"))) void bar(void);
@@ -3349,13 +3349,13 @@ lnk_run(int argc, char **argv)
           // redirect user entry to appropriate CRT entry
           if (entry_point_symbol) {
             config->entry_point_name = entry_point_symbol->name;
-            if (str8_match(config->entry_point_name, str8_lit("wmain"), 0)) {
+            if (str8_match_lit("wmain", config->entry_point_name, 0)) {
               config->entry_point_name = str8_lit("wmainCRTStartup");
-            } else if (str8_match(config->entry_point_name, str8_lit("main"), 0)) {
+            } else if (str8_match_lit("main", config->entry_point_name, 0)) {
               config->entry_point_name = str8_lit("mainCRTStartup");
-            } else if (str8_match(config->entry_point_name, str8_lit("WinMain"), 0)) {
+            } else if (str8_match_lit("WinMain", config->entry_point_name, 0)) {
               config->entry_point_name = str8_lit("WinMainCRTStartup");
-            } else if (str8_match(config->entry_point_name, str8_lit("wWinMain"), 0)) {
+            } else if (str8_match_lit("wWinMain", config->entry_point_name, 0)) {
               config->entry_point_name = str8_lit("wWinMainCRTStartup");
             }
           }

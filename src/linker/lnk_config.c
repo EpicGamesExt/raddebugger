@@ -4,7 +4,7 @@
 ////////////////////////////////
 // Enum <-> String
 
-read_only struct
+global read_only struct
 {
   LNK_CmdSwitchType type;
   char             *name;
@@ -164,12 +164,45 @@ read_only struct
   { LNK_CmdSwitch_Help,                        "?",                               "", ""                                                                                },
 };
 
+global read_only struct
+{
+  char         *name;
+  LNK_InputType type;
+} g_input_type_map[] = {
+  { "o",    LNK_Input_Obj },
+  { "obj",  LNK_Input_Obj },
+  { "lib",  LNK_Input_Lib },
+  { "rlib", LNK_Input_Lib }, // rust libs
+  { "res",  LNK_Input_Res },
+};
+
+global read_only struct
+{
+  char         *name;
+  LNK_DebugMode mode;
+} g_debug_mode_map[] = {
+  { "null",     LNK_DebugMode_Null     },
+  { "none",     LNK_DebugMode_None     },
+  { "fastlink", LNK_DebugMode_FastLink },
+  { "ghash",    LNK_DebugMode_GHash    },
+  { "full",     LNK_DebugMode_Full     },
+}; 
+
+global read_only struct
+{
+   char                 *name;
+   LNK_TypeNameHashMode  mode;
+} g_type_name_hash_mode_map[] = {
+  { "none",    LNK_TypeNameHashMode_None    },
+  { "lenient", LNK_TypeNameHashMode_Lenient },
+  { "full",    LNK_TypeNameHashMode_Full    }
+};
+
 internal LNK_CmdSwitchType
 lnk_cmd_switch_type_from_string(String8 name)
 {
-  for (U64 i = 0; i < ArrayCount(g_cmd_switch_map); ++i) {
-    String8 curr_name = str8_cstring(g_cmd_switch_map[i].name);
-    if (str8_match(curr_name, name, StringMatchFlag_CaseInsensitive)) {
+  for (U64 i = 0; i < ArrayCount(g_cmd_switch_map); i += 1) {
+    if (str8_match_cstr(g_cmd_switch_map[i].name, name, StringMatchFlag_CaseInsensitive)) {
       return g_cmd_switch_map[i].type;
     }
   }
@@ -184,69 +217,36 @@ lnk_string_from_cmd_switch_type(LNK_CmdSwitchType type)
       return str8_cstring(g_cmd_switch_map[cmd_idx].name);
     }
   }
-  return str8(0,0);
+  return str8_zero();
 }
 
-read_only struct {
-  char         *name;
-  LNK_InputType type;
-} g_input_type_map[] = {
-  { "o",    LNK_Input_Obj },
-  { "obj",  LNK_Input_Obj },
-  { "lib",  LNK_Input_Lib },
-  { "rlib", LNK_Input_Lib }, // rust libs
-  { "res",  LNK_Input_Res },
-};
-
 internal LNK_InputType
-lnk_input_type_from_string(String8 string)
+lnk_input_type_from_string(String8 name)
 {
   for (U64 i = 0; i < ArrayCount(g_input_type_map); i += 1) {
-    if (str8_match(str8_cstring(g_input_type_map[i].name), string, StringMatchFlag_CaseInsensitive)) {
+    if (str8_match_cstr(g_input_type_map[i].name, name, StringMatchFlag_CaseInsensitive)) {
       return g_input_type_map[i].type;
     }
   }
   return LNK_Input_Null;
 }
 
-read_only struct
-{
-  char         *name;
-  LNK_DebugMode mode;
-} g_debug_mode_map[] = {
-  { "null",     LNK_DebugMode_Null     },
-  { "none",     LNK_DebugMode_None     },
-  { "fastlink", LNK_DebugMode_FastLink },
-  { "ghash",    LNK_DebugMode_GHash    },
-  { "full",     LNK_DebugMode_Full     },
-}; 
-
 internal LNK_DebugMode
-lnk_debug_mode_from_string(String8 string)
+lnk_debug_mode_from_string(String8 name)
 {
   for (U64 i = 0; i < ArrayCount(g_debug_mode_map); i += 1) {
-    if (str8_match(str8_cstring(g_debug_mode_map[i].name), string, StringMatchFlag_CaseInsensitive)) {
+    if (str8_match_cstr(g_debug_mode_map[i].name, name, StringMatchFlag_CaseInsensitive)) {
       return g_debug_mode_map[i].mode;
     }
   }
   return LNK_DebugMode_Null;
 }
 
-read_only struct
-{
-   char                 *name;
-   LNK_TypeNameHashMode  mode;
-} g_type_name_hash_mode_map[] = {
-  { "none",    LNK_TypeNameHashMode_None    },
-  { "lenient", LNK_TypeNameHashMode_Lenient },
-  { "full",    LNK_TypeNameHashMode_Full    }
-};
-
 internal LNK_TypeNameHashMode
-lnk_type_name_hash_mode_from_string(String8 string)
+lnk_type_name_hash_mode_from_string(String8 name)
 {
-  for (U64 i = 0; i < ArrayCount(g_type_name_hash_mode_map); ++i) {
-    if (str8_match(str8_cstring(g_type_name_hash_mode_map[i].name), string, StringMatchFlag_CaseInsensitive)) {
+  for (U64 i = 0; i < ArrayCount(g_type_name_hash_mode_map); i += 1) {
+    if (str8_match_cstr(g_type_name_hash_mode_map[i].name, name, StringMatchFlag_CaseInsensitive)) {
       return g_type_name_hash_mode_map[i].mode;
     }
   }
@@ -296,16 +296,12 @@ internal void
 lnk_error_cmd_switch(LNK_ErrorCode code, String8 obj_path, String8 lib_path, LNK_CmdSwitchType cmd_switch, char *fmt, ...)
 {
   Temp scratch = scratch_begin(0,0);
-
   va_list args; va_start(args, fmt);
-
   String8 switch_name = lnk_string_from_cmd_switch_type(cmd_switch);
   String8 message     = push_str8fv(scratch.arena, fmt, args);
   String8 output      = push_str8f(scratch.arena, "/%S: %S", switch_name, message);
   lnk_error_with_loc(code, obj_path, lib_path, "%S", output);
-
   va_end(args);
-
   scratch_end(scratch);
 }
 
@@ -325,9 +321,9 @@ internal String8
 lnk_error_check_and_strip_quotes(LNK_ErrorCode error_code, String8 obj_path, String8 lib_path, LNK_CmdSwitchType cmd_switch, String8 string)
 {
   String8 result = string;
-  B32 starts_with_quote = str8_match(str8_lit("\""), string, StringMatchFlag_RightSideSloppy);
+  B32 starts_with_quote = str8_match_lit("\"", string, StringMatchFlag_RightSideSloppy);
   if (starts_with_quote) {
-    if (str8_ends_with(string, str8_lit("\""), 0)) {
+    if (str8_ends_with_lit(string, "\"", 0)) {
       result = str8_skip(result, 1);
       result = str8_chop(result, 1);
     } else {
@@ -396,55 +392,45 @@ lnk_get_default_subsystem_version(PE_WindowsSubsystem subsystem, COFF_MachineTyp
 {
   Version ver = make_version(0,0);
   switch (subsystem) {
-  case PE_WindowsSubsystem_WINDOWS_BOOT_APPLICATION: {
-    ver = make_version(1,0);
-  } break;
+  case PE_WindowsSubsystem_WINDOWS_BOOT_APPLICATION: ver = make_version(1,0); break;
 
   case PE_WindowsSubsystem_WINDOWS_CUI: {
     switch (machine) {
     case COFF_MachineType_X64: 
-    case COFF_MachineType_X86: {
-      ver = make_version(6,0);
-    } break;
+    case COFF_MachineType_X86: ver = make_version(6,0); break;
+
     case COFF_MachineType_ARMNT:
     case COFF_MachineType_ARM64:
-    case COFF_MachineType_ARM: {
-      ver = make_version(6,2);
-    } break;
-    default: { InvalidPath; } break;
+    case COFF_MachineType_ARM: ver = make_version(6,2); break;
+
+    default: lnk_not_implemented("define subsystem(%S) version for %S", pe_string_from_subsystem(subsystem), coff_string_from_machine_type(machine)); break;
     }
   } break;
 
   case PE_WindowsSubsystem_WINDOWS_GUI: {
     switch (machine) {
     case COFF_MachineType_X64:
-    case COFF_MachineType_X86: {
-      ver = make_version(6,0);
-    } break;
+    case COFF_MachineType_X86: ver = make_version(6,0); break;
+
     case COFF_MachineType_ARMNT:
     case COFF_MachineType_ARM64:
-    case COFF_MachineType_ARM: {
-      ver = make_version(6,2);
-    } break;
-    default: { InvalidPath; } break;
+    case COFF_MachineType_ARM: ver = make_version(6,2); break;
+
+    default: lnk_not_implemented("define subsystem(%S) version for %S", pe_string_from_subsystem(subsystem), coff_string_from_machine_type(machine)); break;
     }
   } break;
 
-  case PE_WindowsSubsystem_POSIX_CUI: {
-    ver = make_version(19,90);
-  } break;
+  case PE_WindowsSubsystem_POSIX_CUI: ver = make_version(19,90); break;
 
   case PE_WindowsSubsystem_EFI_APPLICATION: 
   case PE_WindowsSubsystem_EFI_BOOT_SERVICE_DRIVER:
   case PE_WindowsSubsystem_EFI_ROM: 
-  case PE_WindowsSubsystem_EFI_RUNTIME_DRIVER: {
-    ver = make_version(1,0);
-  } break;
+  case PE_WindowsSubsystem_EFI_RUNTIME_DRIVER: ver = make_version(1,0); break;
 
   case PE_WindowsSubsystem_NATIVE_WINDOWS:
-  case PE_WindowsSubsystem_NATIVE: {
-    Assert(!"TODO: detect -drive=WDM switch");
-  } break;
+  case PE_WindowsSubsystem_NATIVE: lnk_not_implemented("detect -drive=WDM switch"); break;
+
+  default: lnk_not_implemented("unknown subsystem kind %u", subsystem); break;
   }
   return ver;
 }
@@ -454,65 +440,47 @@ lnk_get_min_subsystem_version(PE_WindowsSubsystem subsystem, COFF_MachineType ma
 {
   Version ver = make_version(0,0);
   switch (subsystem) {
-  case PE_WindowsSubsystem_WINDOWS_BOOT_APPLICATION: {
-    ver = make_version(1,0);
-  } break;
+  case PE_WindowsSubsystem_WINDOWS_BOOT_APPLICATION: ver = make_version(1,0); break;
 
   case PE_WindowsSubsystem_WINDOWS_CUI: {
     switch (machine) {
-    case COFF_MachineType_X86: {
-      ver = make_version(5,1);
-    } break;
+    case COFF_MachineType_X86: ver = make_version(5,1); break;
 
-    case COFF_MachineType_X64: { 
-      ver = make_version(5,2);
-    } break;
+    case COFF_MachineType_X64: ver = make_version(5,2); break;
 
     case COFF_MachineType_ARMNT:
     case COFF_MachineType_ARM64:
-    case COFF_MachineType_ARM: {
-      ver = make_version(6,2);
-    } break;
+    case COFF_MachineType_ARM: ver = make_version(6,2); break;
 
-    default: InvalidPath; break;
+    default: lnk_not_implemented("define min subsystem(%S) version for %S", pe_string_from_subsystem(subsystem), coff_string_from_machine_type(machine)); break;
     }
   } break;
 
   case PE_WindowsSubsystem_WINDOWS_GUI: {
     switch (machine) {
-    case COFF_MachineType_X86: {
-      ver = make_version(5,1);
-    } break;
+    case COFF_MachineType_X86: ver = make_version(5,1); break;
 
-    case COFF_MachineType_X64: {
-      ver = make_version(5,2);
-    } break;
+    case COFF_MachineType_X64: ver = make_version(5,2); break;
 
     case COFF_MachineType_ARMNT:
     case COFF_MachineType_ARM64:
-    case COFF_MachineType_ARM: {
-      ver = make_version(6,2);
-    } break;
+    case COFF_MachineType_ARM: ver = make_version(6,2); break;
 
-    default: InvalidPath; break;
+    default: lnk_not_implemented("define min subsystem(%S) version for %S", pe_string_from_subsystem(subsystem), coff_string_from_machine_type(machine)); break;
     }
   } break;
 
-  case PE_WindowsSubsystem_POSIX_CUI: {
-    ver = make_version(1,0);
-  } break;
+  case PE_WindowsSubsystem_POSIX_CUI: ver = make_version(1,0); break;
 
   case PE_WindowsSubsystem_EFI_APPLICATION: 
   case PE_WindowsSubsystem_EFI_BOOT_SERVICE_DRIVER:
   case PE_WindowsSubsystem_EFI_ROM: 
-  case PE_WindowsSubsystem_EFI_RUNTIME_DRIVER: {
-    ver = make_version(1,0);
-  } break;
+  case PE_WindowsSubsystem_EFI_RUNTIME_DRIVER: ver = make_version(1,0); break;
 
   case PE_WindowsSubsystem_NATIVE_WINDOWS:
-  case PE_WindowsSubsystem_NATIVE: {
-    Assert(!"TODO: detect -drive=WDM switch");
-  } break;
+  case PE_WindowsSubsystem_NATIVE: lnk_not_implemented("detect -drive=WDM switch"); break;
+  
+  default: lnk_not_implemented("unknown subsystem kind %u", subsystem);
   }
   return ver;
 }
@@ -607,7 +575,6 @@ lnk_try_parse_u64(String8 string, LNK_ParseU64Flags flags, U64 *value_out)
         return 0;
       }
     }
-
     if (flags & LNK_ParseU64Flag_CheckPow2) {
       if (!IsPow2(*value_out)) {
         return 0;
@@ -663,10 +630,10 @@ lnk_cmd_switch_parse_flag(String8 obj_path, String8 lib_path, LNK_CmdSwitchType 
   if (value_strings.node_count > 1) {
     lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "too many parameters");
   } else if (value_strings.node_count == 1) {
-    if (str8_match(value_strings.first->string, str8_lit("no"), StringMatchFlag_CaseInsensitive)) {
+    if (str8_match_lit("no", value_strings.first->string, StringMatchFlag_CaseInsensitive)) {
       *value_out = LNK_SwitchState_No;
       is_parsed = 1;
-    } else if (str8_match(value_strings.first->string, str8_lit("yes"), StringMatchFlag_CaseInsensitive)) {
+    } else if (str8_match_lit("yes", value_strings.first->string, StringMatchFlag_CaseInsensitive)) {
       *value_out = LNK_SwitchState_Yes;
       is_parsed = 1;
     } else if (value_strings.first->string.size == 0) {
@@ -1021,7 +988,7 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
     if (value_strings.node_count == 2) {
       String8Node *first_node = value_strings.first;
       //String8Node *second_node = first_node->next;
-      B32 is_response_file = str8_match(str8_lit("@"), first_node->string, StringMatchFlag_RightSideSloppy);
+      B32 is_response_file = str8_match_lit("@", first_node->string, StringMatchFlag_RightSideSloppy);
       if (is_response_file) {
         //String8 file_path = first_node->string;
         //String8 tag = second_node->string;
@@ -1076,9 +1043,9 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
       lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "invalid number of parameters");
     } else {
       String8 value = value_strings.first->string;
-      if (str8_match(value, str8_lit("unload"), StringMatchFlag_CaseInsensitive)) {
+      if (str8_match_lit("unload", value, StringMatchFlag_CaseInsensitive)) {
         config->flags |= LNK_ConfigFlag_DelayUnload;
-      } else if (str8_match(value, str8_lit("nobind"), StringMatchFlag_CaseInsensitive)) {
+      } else if (str8_match_lit("nobind", value, StringMatchFlag_CaseInsensitive)) {
         config->flags &= ~LNK_ConfigFlag_DelayBind;
       } else {
         lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "unknown parameter \"%S\"", value);
@@ -1241,14 +1208,13 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
       String8List  param_list = str8_split_by_string_chars(scratch.arena, value_strings.first->string, str8_lit(","), 0);
       String8Array param_arr  = str8_array_from_list(scratch.arena, &param_list);
       if (param_arr.count > 0) {
-        if (str8_match(param_arr.v[0], str8_lit("embed"), StringMatchFlag_CaseInsensitive)) {
+        if (str8_match_lit("embed", param_arr.v[0], StringMatchFlag_CaseInsensitive)) {
           config->manifest_opt = LNK_ManifestOpt_Embed;
-
           if (param_arr.count == 1) {
             config->manifest_resource_id = 0;
           } else if (param_arr.count > 1) {
             // parse resource id
-            if (str8_match(param_arr.v[1], str8_lit("id="), StringMatchFlag_RightSideSloppy|StringMatchFlag_CaseInsensitive)) {
+            if (str8_match_lit("id=", param_arr.v[1], StringMatchFlag_RightSideSloppy|StringMatchFlag_CaseInsensitive)) {
               String8List  res_id_list = str8_split_by_string_chars(scratch.arena, param_arr.v[1], str8_lit("="), 0);
               String8Array res_id_arr  = str8_array_from_list(scratch.arena, &res_id_list);
               if (res_id_arr.count == 2) {
@@ -1267,7 +1233,7 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
           } else {
             lnk_error_cmd_switch_invalid_param_count(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch);
           }
-        } else if (str8_match(param_arr.v[0], str8_lit("no"), StringMatchFlag_CaseInsensitive)) {
+        } else if (str8_match_lit("no", param_arr.v[0], StringMatchFlag_CaseInsensitive)) {
           config->manifest_opt = LNK_ManifestOpt_No;
         } else {
           lnk_error_cmd_switch_invalid_param(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, param_arr.v[0]);
@@ -1305,15 +1271,15 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
       String8List  param_list = str8_split_by_string_chars(scratch.arena, uac, str8_lit(" "), 0);
       String8Array param_arr  = str8_array_from_list(scratch.arena, &param_list);
       if (param_arr.count > 0) {
-        if (str8_match(str8_lit("level="), param_arr.v[0], StringMatchFlag_RightSideSloppy|StringMatchFlag_CaseInsensitive)) {
+        if (str8_match_lit("level=", param_arr.v[0], StringMatchFlag_RightSideSloppy|StringMatchFlag_CaseInsensitive)) {
           String8 level_param = param_arr.v[0];
           String8List level_list = str8_split_by_string_chars(scratch.arena, level_param, str8_lit("="), 0);
           if (level_list.node_count == 2) {
-            if (str8_match(level_list.first->string, str8_lit("level"), StringMatchFlag_CaseInsensitive)) {
+            if (str8_match_lit("level", level_list.first->string, StringMatchFlag_CaseInsensitive)) {
               String8 level = level_list.last->string;
-              if (str8_match(level, str8_lit("'asInvoker'"), 0) ||
-                  str8_match(level, str8_lit("'highestAvailable'"), 0) ||
-                  str8_match(level, str8_lit("'requireAdministrator'"), 0)) {
+              if (str8_match_lit("'asInvoker'", level, 0) ||
+                  str8_match_lit("'highestAvailable'", level, 0) ||
+                  str8_match_lit("'requireAdministrator'", level, 0)) {
                 // manifest level was parsed!
                 config->manifest_uac = 1;
                 config->manifest_level = push_str8_copy(arena, level);
@@ -1322,8 +1288,8 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
                   String8List ui_access_list = str8_split_by_string_chars(scratch.arena, ui_access_param, str8_lit("="), 0);
                   if (ui_access_list.node_count == 2) {
                     String8 ui_access = ui_access_list.last->string;
-                    if (str8_match(ui_access, str8_lit("'true'"), 0) ||
-                        str8_match(ui_access, str8_lit("'false'"), 0)) {
+                    if (str8_match_lit("'true'", ui_access, 0) ||
+                        str8_match_lit("'false'", ui_access, 0)) {
                       // ui access was parsed!
                       config->manifest_ui_access = push_str8_copy(arena, ui_access);
                     } else {
@@ -1342,7 +1308,7 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
           } else {
             lnk_error_invalid_uac_level_param(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, level_param);
           }
-        } else if (str8_match(str8_lit("no"), param_arr.v[0], StringMatchFlag_CaseInsensitive)) {
+        } else if (str8_match_lit("no", param_arr.v[0], StringMatchFlag_CaseInsensitive)) {
           config->manifest_uac = 0;
         } else {
           lnk_error_cmd_switch_invalid_param(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, param_arr.v[0]);
@@ -1359,7 +1325,7 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
     // warn about invalid natvis extension
     for (String8Node *node = value_strings.first; node != 0; node = node->next) {
       String8 ext = str8_skip_last_dot(node->string);
-      if (!str8_match(ext, str8_lit("natvis"), StringMatchFlag_CaseInsensitive)) {
+      if (!str8_match_lit("natvis", ext, StringMatchFlag_CaseInsensitive)) {
         lnk_error_cmd_switch(LNK_Warning_InvalidNatvisFileExt, obj_path, lib_path, cmd_switch, "Visual Studio expects .natvis extension: \"%S\"", node->string);
       }
     }
@@ -1396,12 +1362,12 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
   case LNK_CmdSwitch_Opt: {
     for (String8Node *n = value_strings.first; n != 0; n = n->next) {
       String8 param = n->string;
-      if (str8_match(param, str8_lit("ref"), StringMatchFlag_CaseInsensitive)) {
+      if (str8_match_lit("ref", param, StringMatchFlag_CaseInsensitive)) {
         config->opt_ref = LNK_SwitchState_Yes; 
-      } else if (str8_match(param, str8_lit("noref"), StringMatchFlag_CaseInsensitive)) {
+      } else if (str8_match_lit("noref", param, StringMatchFlag_CaseInsensitive)) {
         config->opt_ref = LNK_SwitchState_No;
-      } else if (str8_match(param, str8_lit("icf"), StringMatchFlag_CaseInsensitive) ||
-                 str8_match(param, str8_lit("icf="), StringMatchFlag_CaseInsensitive | StringMatchFlag_RightSideSloppy)) {
+      } else if (str8_match_lit("icf", param, StringMatchFlag_CaseInsensitive) ||
+                 str8_match_lit("icf=", param, StringMatchFlag_CaseInsensitive | StringMatchFlag_RightSideSloppy)) {
         String8List vals = str8_split_by_string_chars(scratch.arena, param, str8_lit("="), 0);
         if (vals.node_count > 2) {
           lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "too many parameters for iteration");
@@ -1415,11 +1381,11 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
           }
         }
         config->opt_icf = LNK_SwitchState_Yes;
-      } else if (str8_match(param, str8_lit("noicf"), StringMatchFlag_CaseInsensitive)) {
+      } else if (str8_match_lit("noicf", param, StringMatchFlag_CaseInsensitive)) {
         config->opt_icf = LNK_SwitchState_No;
-      } else if (str8_match(param, str8_lit("lbr"), StringMatchFlag_CaseInsensitive)) {
+      } else if (str8_match_lit("lbr", param, StringMatchFlag_CaseInsensitive)) {
         config->opt_lbr = LNK_SwitchState_Yes;
-      } else if (str8_match(param, str8_lit("nolibr"), StringMatchFlag_CaseInsensitive)) {
+      } else if (str8_match_lit("nolibr", param, StringMatchFlag_CaseInsensitive)) {
         config->opt_lbr = LNK_SwitchState_No;
       } else {
         lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "unknown option \"%S\"", param);
@@ -1566,9 +1532,9 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
 
   case LNK_CmdSwitch_Rad_Guid: {
     if (value_strings.node_count == 1) {
-      if (str8_match(value_strings.first->string, str8_lit("imageblake3"), StringMatchFlag_CaseInsensitive)) {
+      if (str8_match_lit("imageblake3", value_strings.first->string, StringMatchFlag_CaseInsensitive)) {
         config->guid_type = Lnk_DebugInfoGuid_ImageBlake3;
-      } else if (str8_match(value_strings.first->string, str8_lit("random"), StringMatchFlag_CaseInsensitive)) {
+      } else if (str8_match_lit("random", value_strings.first->string, StringMatchFlag_CaseInsensitive)) {
         config->guid = os_make_guid();
       } else {
         Guid guid;
@@ -1605,12 +1571,12 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
 #endif
       }
     } else if (value_strings.node_count == 1) {
-      if (str8_match(value_strings.first->string, str8_lit("quiet"), StringMatchFlag_CaseInsensitive)) {
+      if (str8_match_lit("quiet", value_strings.first->string, StringMatchFlag_CaseInsensitive)) {
         OS_ProcessInfo *process_info = os_get_process_info();
         if (process_info->large_pages_allowed) {
           arena_default_flags |= ArenaFlag_LargePages;
         }
-      } else if (str8_match(value_strings.first->string, str8_lit("no"), StringMatchFlag_CaseInsensitive)) {
+      } else if (str8_match_lit("no", value_strings.first->string, StringMatchFlag_CaseInsensitive)) {
         arena_default_flags &= ~ArenaFlag_LargePages;
       } else {
         lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "invalid parameter: \"%S\", expected NO or QUIET", value_strings.first->string);
@@ -1626,11 +1592,11 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
 
   case LNK_CmdSwitch_Rad_Log: {
     if (value_strings.node_count == 1) {
-      if (str8_match(value_strings.first->string, str8_lit("all"), StringMatchFlag_CaseInsensitive)) {
+      if (str8_match_lit("all", value_strings.first->string, StringMatchFlag_CaseInsensitive)) {
         for (U64 ilog = 0; ilog < LNK_Log_Count; ilog += 1) {
           lnk_set_log_status((LNK_LogType)ilog, 1);
         }
-      } else if (str8_match(value_strings.first->string, str8_lit("io"), StringMatchFlag_CaseInsensitive)) {
+      } else if (str8_match_lit("io", value_strings.first->string, StringMatchFlag_CaseInsensitive)) {
         lnk_set_log_status(LNK_Log_IO_Read, 1);
         lnk_set_log_status(LNK_Log_IO_Write, 1);
       } else {

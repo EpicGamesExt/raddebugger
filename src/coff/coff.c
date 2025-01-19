@@ -270,7 +270,7 @@ coff_parse_section_name(String8 full_name, String8 *name_out, String8 *postfix_o
       
       // TLS sections don't have a postfix but we still have to sort them based
       // on dollar sign so they are sloted between CRT's _tls_start and _tls_end sections.
-      if (str8_match(*name_out, str8_lit(".tls"), 0) && postfix_out->size == 0) {
+      if (str8_match_lit(".tls", *name_out, 0) && postfix_out->size == 0) {
         *postfix_out = str8_lit("$");
       }
       
@@ -1031,7 +1031,7 @@ coff_parse_archive_member_data(String8 data, U64 cursor, COFF_ArchiveMember *mem
 internal COFF_ArchiveFirstMember
 coff_parse_first_archive_member(COFF_ArchiveMember *member)
 {
-  Assert(str8_match(member->header.name, str8_lit("/"), 0));
+  Assert(str8_match_lit("/", member->header.name, 0));
 
   U64 cursor = 0;
   
@@ -1064,7 +1064,7 @@ coff_parse_second_archive_member(COFF_ArchiveMember *member)
 {
   COFF_ArchiveSecondMember result = {0};
 
-  if (str8_match(member->header.name, str8_lit("/"), 0)) {
+  if (str8_match_lit("/", member->header.name, 0)) {
     U64 cursor = 0;
     
     U32 member_count = 0;
@@ -1232,7 +1232,7 @@ coff_thin_archive_member_iter_next(String8 data, U64 *offset, COFF_ArchiveMember
 
   if (member_out->header.is_end_correct) {
     member_out->offset = *offset;
-    if (str8_match(member_out->header.name, str8_lit("/"), 0) || str8_match(member_out->header.name, str8_lit("//"), 0)) {
+    if (str8_match_lit("/", member_out->header.name, 0) || str8_match_lit("//", member_out->header.name, 0)) {
       member_out->data = str8_substr(data, member_out->header.data_range);
     } else {
       // size field in non-header members means size of stand-alone obj
@@ -1265,7 +1265,7 @@ coff_archive_parse_from_member_list(COFF_ArchiveMemberList member_list)
   COFF_ArchiveMemberNode *ptr = member_list.first;
 
   if (ptr) {
-    if (str8_match(ptr->data.header.name, str8_lit("/"), 0)) {
+    if (str8_match_lit("/", ptr->data.header.name, 0)) {
       if (ptr->data.header.is_end_correct) {
         first_header = ptr->data;
         ptr = ptr->next;
@@ -1278,7 +1278,7 @@ coff_archive_parse_from_member_list(COFF_ArchiveMemberList member_list)
   }
 
   if (!error.size && ptr) {
-    if (str8_match(ptr->data.header.name, str8_lit("/"), 0)) {
+    if (str8_match_lit("/", ptr->data.header.name, 0)) {
       if (ptr->data.header.is_end_correct) {
         second_header = ptr->data;
         ptr = ptr->next;
@@ -1290,7 +1290,7 @@ coff_archive_parse_from_member_list(COFF_ArchiveMemberList member_list)
   }
 
   if (!error.size && ptr) {
-    if (str8_match(ptr->data.header.name, str8_lit("//"), 0)) {
+    if (str8_match_lit("//", ptr->data.header.name, 0)) {
       if (ptr->data.header.is_end_correct) {
         long_names_member = ptr->data;
         ptr = ptr->next;

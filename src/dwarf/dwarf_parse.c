@@ -1474,24 +1474,24 @@ dw_ext_from_params(String8 producer, Arch arch, ImageType image_type)
   switch (image_type) {
     case Image_Null: break;
     case Image_CoffPe: {
-      if (str8_match(str8_lit("clang"), producer, StringMatchFlag_RightSideSloppy|StringMatchFlag_CaseInsensitive)) {
+      if (str8_match_lit("clang", producer, StringMatchFlag_RightSideSloppy|StringMatchFlag_CaseInsensitive)) {
         ext = DW_Ext_GNU | DW_Ext_LLVM;
-      } else if (str8_match(str8_lit("GNU"), producer, StringMatchFlag_RightSideSloppy|StringMatchFlag_CaseInsensitive)) {
+      } else if (str8_match_lit("GNU", producer, StringMatchFlag_RightSideSloppy|StringMatchFlag_CaseInsensitive)) {
         ext = DW_Ext_GNU;
       }
     } break;
     case Image_Elf32:
     case Image_Elf64: {
-      if (str8_match(str8_lit("clang"), producer, StringMatchFlag_RightSideSloppy|StringMatchFlag_CaseInsensitive)) {
+      if (str8_match_lit("clang", producer, StringMatchFlag_RightSideSloppy|StringMatchFlag_CaseInsensitive)) {
         ext = DW_Ext_GNU | DW_Ext_LLVM;
-      } else if (str8_match(str8_lit("GNU"), producer, StringMatchFlag_RightSideSloppy|StringMatchFlag_CaseInsensitive)) {
+      } else if (str8_match_lit("GNU", producer, StringMatchFlag_RightSideSloppy|StringMatchFlag_CaseInsensitive)) {
         ext = DW_Ext_GNU;
       }
     } break;
     case Image_Macho: {
-      if (str8_match(str8_lit("clang"), producer, StringMatchFlag_RightSideSloppy|StringMatchFlag_CaseInsensitive)) {
+      if (str8_match_lit("clang", producer, StringMatchFlag_RightSideSloppy|StringMatchFlag_CaseInsensitive)) {
         ext = DW_Ext_LLVM | DW_Ext_APPLE;
-      } else if (str8_match(str8_lit("GNU"), producer, StringMatchFlag_RightSideSloppy|StringMatchFlag_CaseInsensitive)) {
+      } else if (str8_match_lit("GNU", producer, StringMatchFlag_RightSideSloppy|StringMatchFlag_CaseInsensitive)) {
         ext = DW_Ext_GNU | DW_Ext_APPLE;
       }
     } break;
@@ -2046,7 +2046,7 @@ dw_path_from_file_idx(Arena *arena, DW_LineVMHeader *vm, U64 file_idx)
 
   String8List path_list = {0};
 
-  if (str8_match(str8_lit(".."), dir, StringMatchFlag_RightSideSloppy)) {
+  if (str8_match_lit("..", dir, StringMatchFlag_RightSideSloppy)) {
     String8List comp_dir_list = str8_split_path(scratch.arena, vm->dir_table.v[0]);
     str8_list_concat_in_place(&path_list, &comp_dir_list);
   }

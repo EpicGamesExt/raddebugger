@@ -91,10 +91,10 @@ lnk_make_section_sort_index(Arena *arena, String8 name, COFF_SectionFlags flags,
     str8_list_pushf(scratch.arena, &sort_index_list, "a");
   }
   
-  if (str8_match(name, str8_lit(".null"), 0)) {
+  if (str8_match_lit(".null", name, 0)) {
     // null section always first
     str8_list_pushf(scratch.arena, &sort_index_list, "a");
-  } else if (str8_match(name, str8_lit(".rsrc"), 0)) {
+  } else if (str8_match_lit(".rsrc", name, 0)) {
     // section with resource data must be last because during runtime windows might append pages
     str8_list_pushf(scratch.arena, &sort_index_list, "c");
   } else {
@@ -104,18 +104,18 @@ lnk_make_section_sort_index(Arena *arena, String8 name, COFF_SectionFlags flags,
   // sort sections based on the contents
   if (flags & COFF_SectionFlag_CNT_CODE) {
     str8_list_pushf(scratch.arena, &sort_index_list, "a");
-    if (str8_match(name, str8_lit(".text"), 0)) {
+    if (str8_match_lit(".text", name, 0)) {
       str8_list_pushf(scratch.arena, &sort_index_list, "a");
     } else {
       str8_list_pushf(scratch.arena, &sort_index_list, "b");
     }
   } else if (flags & COFF_SectionFlag_CNT_INITIALIZED_DATA) {
     str8_list_pushf(scratch.arena, &sort_index_list, "b");
-    if (str8_match(name, str8_lit(".data"), 0)) {
+    if (str8_match_lit(".data", name, 0)) {
       str8_list_pushf(scratch.arena, &sort_index_list, "a");
-    } else if (str8_match(name, str8_lit(".rdata"), 0)) {
+    } else if (str8_match_lit(".rdata", name, 0)) {
       str8_list_pushf(scratch.arena, &sort_index_list, "b");
-    } else if (str8_match(name, str8_lit(".tls"), 0)) {
+    } else if (str8_match_lit(".tls", name, 0)) {
       str8_list_pushf(scratch.arena, &sort_index_list, "c");
     } else {
       str8_list_pushf(scratch.arena, &sort_index_list, "d");
@@ -888,7 +888,7 @@ lnk_dump_chunks(LNK_SectionTable *st)
     LNK_Section *sect = sect_id_map[sect_id];
     if (!sect) continue;
     if (sect->is_merged) continue;
-    if (str8_match(sect->name, str8_lit(".text"), 0)) {
+    if (str8_match_lit(".text", sect->name, 0)) {
       for (U64 chunk_id = 0; chunk_id < sect->cman->total_chunk_count; ++chunk_id) {
         LNK_ChunkRef chunk_ref = { sect_id, chunk_id };
         LNK_Chunk *chunk = lnk_chunk_from_chunk_ref(sect_id_map, chunk_id_map, chunk_ref);

@@ -416,9 +416,9 @@ rd_dw_sections_from_coff_section_table(Arena              *arena,
     DW_SectionKind  s      = DW_Section_Null;
     B32             is_dwo = 0;
     #define X(_K,_L,_M,_W)                                            \
-      if (str8_match(name, str8_lit(_L), 0)) { s = DW_Section_##_K; } \
-      if (str8_match(name, str8_lit(_M), 0)) { s = DW_Section_##_K; } \
-      if (str8_match(name, str8_lit(_W), 0)) { s = DW_Section_##_K; is_dwo = 1; }
+      if (str8_match_lit(_L, name, 0)) { s = DW_Section_##_K; } \
+      if (str8_match_lit(_M, name, 0)) { s = DW_Section_##_K; } \
+      if (str8_match_lit(_W, name, 0)) { s = DW_Section_##_K; is_dwo = 1; }
       DW_SectionKind_XList(X)
     #undef X
 
@@ -4499,7 +4499,7 @@ cv_format_debug_sections(Arena *arena, String8List *out, String8 indent, String8
       String8             sect_name   = coff_name_from_section_header(header, raw_image, string_table_off);
       Rng1U64             sect_frange = rng_1u64(header->foff, header->foff+header->fsize);
       String8             raw_sect    = str8_substr(raw_image, sect_frange);
-      if (str8_match(sect_name, str8_lit(".debug$S"), 0)) {
+      if (str8_match_lit(".debug$S", sect_name, 0)) {
         Temp scratch = scratch_begin(&arena, 1);
         CV_DebugS debug_s = cv_parse_debug_s(scratch.arena, raw_sect);
         for (String8Node *string_n = debug_s.data_list[CV_C13SubSectionIdxKind_Symbols].first;
@@ -4547,12 +4547,12 @@ cv_format_debug_sections(Arena *arena, String8List *out, String8 indent, String8
     String8             sect_name   = coff_name_from_section_header(header, raw_image, string_table_off);
     Rng1U64             sect_frange = rng_1u64(header->foff, header->foff+header->fsize);
     String8             raw_sect    = str8_substr(raw_image, sect_frange);
-    if (str8_match(sect_name, str8_lit(".debug$S"), 0)) {
+    if (str8_match_lit(".debug$S", sect_name, 0)) {
       rd_printf("# .debug$S No. %llx", i+1);
       rd_indent();
       cv_print_symbols_section(arena, out, indent, arch, raw_sect);
       rd_unindent();
-    } else if (str8_match(sect_name, str8_lit(".debug$T"), 0)) {
+    } else if (str8_match_lit(".debug$T", sect_name, 0)) {
       Temp scratch = scratch_begin(&arena, 1);
       CV_Signature sig = 0;
       str8_deserial_read_struct(raw_sect, 0, &sig);
@@ -6319,19 +6319,19 @@ pe_print_exceptions_x8664(Arena              *arena,
       rd_printf("Handler: %#llx%s%S", handler, handler_name.size ? " " : "", handler_name);
 
       U32 handler_data_flags = 0;
-      if (str8_match(handler_name, str8_lit("__GSHandlerCheck_EH4"), 0)) {
+      if (str8_match_lit("__GSHandlerCheck_EH4", handler_name, 0)) {
         handler_data_flags = ExceptionHandlerDataFlag_FuncInfo4;
-      } else if (str8_match(handler_name, str8_lit("__CxxFrameHandler4"), 0)) {
+      } else if (str8_match_lit("__CxxFrameHandler4", handler_name, 0)) {
         handler_data_flags = ExceptionHandlerDataFlag_FuncInfo4;
-      } else if (str8_match(handler_name, str8_lit("__CxxFrameHandler3"), 0)) {
+      } else if (str8_match_lit("__CxxFrameHandler3", handler_name, 0)) {
         handler_data_flags = ExceptionHandlerDataFlag_FuncInfo;
-      } else if (str8_match(handler_name, str8_lit("__C_specific_handler"), 0)) {
+      } else if (str8_match_lit("__C_specific_handler", handler_name, 0)) {
         handler_data_flags = ExceptionHandlerDataFlag_ScopeTable;
-      } else if (str8_match(handler_name, str8_lit("__GSHandlerCheck"), 0)) {
+      } else if (str8_match_lit("__GSHandlerCheck", handler_name, 0)) {
         handler_data_flags = ExceptionHandlerDataFlag_GS;
-      } else if (str8_match(handler_name, str8_lit("__GSHandlerCheck_SEH"), 0)) {
+      } else if (str8_match_lit("__GSHandlerCheck_SEH", handler_name, 0)) {
         handler_data_flags = ExceptionHandlerDataFlag_ScopeTable|ExceptionHandlerDataFlag_GS;
-      } else if (str8_match(handler_name, str8_lit("__GSHandlerCheck_EH"), 0)) {
+      } else if (str8_match_lit("__GSHandlerCheck_EH", handler_name, 0)) {
         handler_data_flags = ExceptionHandlerDataFlag_FuncInfo|ExceptionHandlerDataFlag_GS;
       }
 
