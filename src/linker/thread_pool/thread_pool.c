@@ -81,12 +81,25 @@ tp_alloc(Arena *arena, U32 worker_count)
   return pool;
 }
 
+internal TP_Context *
+tp_alloc_shared(Arena *arena, U32 worker_count, String8 name)
+{
+  TP_Context *tp          = tp_alloc(arena, worker_count);
+  tp->shared_mutex_name   = name;
+  tp->shared_mutex_handle = os_shared_mutex_alloc(name);
+  AssertAlways(!os_handle_match(tp->shared_mutex_handle, os_handle_zero()));
+  return tp;
+}
+
 internal void
 tp_release(TP_Context *pool)
 {
   pool->is_live = 0;
   os_semaphore_release(pool->task_semaphore);
   os_semaphore_release(pool->main_semaphore);
+  if (!os_handle_match(pool->shared_mutex_handle, os_handle_zero())) {
+    os_mutex_release(pool->shared_mutex_handle);
+  }
   for (U64 i = 1; i < pool->worker_count; i += 1) {
     os_thread_detach(pool->worker_arr[i].handle);
   }
@@ -160,13 +173,20 @@ tp_for_parallel(TP_Context *pool, TP_Arena *arena, U64 task_count, TP_TaskFunc *
 {
   Assert(!arena || arena->count == pool->worker_count);
 
+  // in shared mode take mutex 
+  if (!os_handle_match(pool->shared_mutex_handle, os_handle_zero())) {
+    if (!os_shared_mutex_take(pool->shared_mutex_handle, max_U64)) {
+      AssertAlways(!"failed to take shared mutex");
+    }
+  }
+
   // setup pool state
   pool->worker_arena = arena;
-  pool->task_count = task_count;
-  pool->task_func = task_func;
-  pool->task_data = task_data;
+  pool->task_count   = task_count;
+  pool->task_func    = task_func;
+  pool->task_data    = task_data;
   pool->next_task_id = 0;
-  pool->take_count = 0;
+  pool->take_count   = 0;
   
   // do we have enough work for other workers?
   pool->take_count = Min(pool->task_count, pool->worker_count);
@@ -182,6 +202,11 @@ tp_for_parallel(TP_Context *pool, TP_Arena *arena, U64 task_count, TP_TaskFunc *
   if (drop_count > 1) {
     // wait for workers to finish assigned tasks
     os_semaphore_take(pool->main_semaphore, max_U64);
+  }
+
+  // signal other thread pools that we have done our round of tasks
+  if (!os_handle_match(pool->shared_mutex_handle, os_handle_zero())) {
+    os_shared_mutex_drop(pool->shared_mutex_handle);
   }
 }
 

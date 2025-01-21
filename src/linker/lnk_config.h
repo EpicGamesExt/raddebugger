@@ -147,6 +147,8 @@ typedef enum
   LNK_CmdSwitch_Rad_PdbHashTypeNameMap,
   LNK_CmdSwitch_Rad_PdbHashTypeNameLength,
   LNK_CmdSwitch_Rad_SectVirtOff,
+  LNK_CmdSwitch_Rad_SharedThreadPool,
+  LNK_CmdSwitch_Rad_SharedThreadPoolMutexName,
   LNK_CmdSwitch_Rad_SuppressError,
   LNK_CmdSwitch_Rad_SymbolTableCapDefined,
   LNK_CmdSwitch_Rad_SymbolTableCapInternal,
@@ -310,6 +312,8 @@ typedef struct LNK_Config
   U64                         pdb_page_size;
   U64                         worker_count;
   U64                         idle_worker_count;
+  LNK_SwitchState             shared_thread_pool;
+  String8                     shared_thread_pool_mutex_name;
   U64                        *function_pad_min;
   U64                        *manifest_resource_id;
   B32                         no_default_libs;

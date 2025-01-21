@@ -127,41 +127,43 @@ global read_only struct
   { LNK_CmdSwitch_NotImplemented,     "WX",                   "", ""                                                                                                      },
 
   //- internal switches
-  { LNK_CmdSwitch_Rad_Age,                     "RAD_AGE",                         ":#",        "Age embeded in EXE and PDB, used to validate incremental build. Default is 1." },
-  { LNK_CmdSwitch_Rad_BuildInfo,               "RAD_BUILD_INFO",                  "",          "Print build info and exit."                                                    },
-  { LNK_CmdSwitch_Rad_CheckUnusedDelayLoadDll, "RAD_CHECK_UNUSED_DELAY_LOAD_DLL", "[:NO]",     ""                                                                              },
-  { LNK_CmdSwitch_Rad_Debug,                   "RAD_DEBUG",                       "[:NO]",     "Emit RAD debug info file."                                                     },
-  { LNK_CmdSwitch_Rad_DebugAltPath,            "RAD_DEBUGALTPATH",                "", ""                                                                                       },
-  { LNK_CmdSwitch_Rad_DebugName,               "RAD_DEBUG_NAME",                  ":FILENAME", "Sets file name for RAD debug info file."                                       },
-  { LNK_CmdSwitch_Rad_DelayBind,               "RAD_DELAY_BIND",                  "[:NO]", ""                                                                                  },
-  { LNK_CmdSwitch_Rad_DoMerge,                 "RAD_DO_MERGE",                    "[:NO]", ""                                                                                  },
-  { LNK_CmdSwitch_Rad_EnvLib,                  "RAD_ENV_LIB",                     "[:NO]", ""                                                                                  },
-  { LNK_CmdSwitch_Rad_Exe,                     "RAD_EXE",                         "[:NO]", ""                                                                                  },
-  { LNK_CmdSwitch_Rad_Guid,                    "RAD_GUID",                        ":{IMAGEBLAKE3|XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXXXXXX}", ""                                },
-  { LNK_CmdSwitch_Rad_IdleWorkers,             "RAD_IDLE_WORKERS",                ":#",        "Number of workers to leave idle."                                              },
-  { LNK_CmdSwitch_Rad_LargePages,              "RAD_LARGE_PAGES",                 "[:NO]",     "Disabled by default on Windows."                                               },
-  { LNK_CmdSwitch_Rad_LinkVer,                 "RAD_LINK_VER",                    ":##,##", ""                                                                                 },
-  { LNK_CmdSwitch_Rad_Log,                     "RAD_LOG",                         ":{ALL,INPUT_OBJ,INPUT_LIB,IO,LINK_STATS,TIMERS}", ""                                        },
-  { LNK_CmdSwitch_Rad_MtPath,                  "RAD_MT_PATH",                     ":EXEPATH",  "Exe path to manifest tool, default: " LNK_MANIFEST_MERGE_TOOL_NAME             },
-  { LNK_CmdSwitch_Rad_OsVer,                   "RAD_OS_VER",                      ":##,##", ""                                                                                 },
-  { LNK_CmdSwitch_Rad_PageSize,                "RAD_PAGE_SIZE",                   ":#",        "Must be power of two."                                                         },
-  { LNK_CmdSwitch_Rad_PathStyle,               "RAD_PATH_STYLE",                  ":{WindowsAbsolute|UnixAbsolute}", ""                                                        },
-  { LNK_CmdSwitch_Rad_PdbHashTypeNameLength,   "RAD_PDB_HASH_TYPE_NAME_LENGTH",   ":#",        "Number of hash bytes to use to replace type name. Default 8 bytes (Max 16)."   },
-  { LNK_CmdSwitch_Rad_PdbHashTypeNameMap,      "RAD_PDB_HASH_TYPE_NAME_MAP",      ":FILENAME", "Produce map file with hash -> type name mappings."                             },
-  { LNK_CmdSwitch_Rad_PdbHashTypeNames,        "RAD_PDB_HASH_TYPE_NAMES",         ":{NONE|LENIENT|FULL}", "Replace type names in LF_STRUCTURE and LF_CLASS with hashes."       },
-  { LNK_CmdSwitch_Rad_SectVirtOff,             "RAD_SECT_VIRT_OFF",               ":#",        "Set RVA where section data is placed in memory. For internal use only."        },
-  { LNK_CmdSwitch_Rad_SuppressError,           "RAD_SUPPRESS_ERROR",              ":#",        ""                                                                              },
-  { LNK_CmdSwitch_Rad_SymbolTableCapDefined,   "RAD_SYMBOL_TABLE_CAP_DEFINED",    ":#",        "Number of buckets allocated in the symbol table for defined symbols."          },
-  { LNK_CmdSwitch_Rad_SymbolTableCapInternal,  "RAD_SYMBOL_TABLE_CAP_INTERNAL",   ":#",        "Number of buckets allocated in the symbol table for internal symbols."         },
-  { LNK_CmdSwitch_Rad_SymbolTableCapLib,       "RAD_SYMBOL_TABLE_CAP_LIB",        ":#",        "Number of buckets allocated in the symbol table for library symbols."          },
-  { LNK_CmdSwitch_Rad_SymbolTableCapWeak,      "RAD_SYMBOL_TABLE_CAP_WEAK",       ":#",        "Number of buckets allocated in the symbol table for weak symbols."             },
-  { LNK_CmdSwitch_Rad_TargetOs,                "RAD_TARGET_OS",                   ":{WINDOWS,LINUX,MAC}"                                                                       },
-  { LNK_CmdSwitch_Rad_TimeStamp,               "RAD_TIME_STAMP",                  ":#",        "Time stamp embeded in EXE and PDB."                                            },
-  { LNK_CmdSwitch_Rad_Version,                 "RAD_VERSION",                     "",          "Print version and exit."                                                       },
-  { LNK_CmdSwitch_Rad_Workers,                 "RAD_WORKERS",                     ":#",        "Sets number of workers created in the pool. Number is capped at 1024."         },
+  { LNK_CmdSwitch_Rad_Age,                       "RAD_AGE",                         ":#",        "Age embeded in EXE and PDB, used to validate incremental build. Default is 1." },
+  { LNK_CmdSwitch_Rad_BuildInfo,                 "RAD_BUILD_INFO",                  "",          "Print build info and exit."                                                    },
+  { LNK_CmdSwitch_Rad_CheckUnusedDelayLoadDll,   "RAD_CHECK_UNUSED_DELAY_LOAD_DLL", "[:NO]",     ""                                                                              },
+  { LNK_CmdSwitch_Rad_Debug,                     "RAD_DEBUG",                       "[:NO]",     "Emit RAD debug info file."                                                     },
+  { LNK_CmdSwitch_Rad_DebugAltPath,              "RAD_DEBUGALTPATH",                "", ""                                                                                       },
+  { LNK_CmdSwitch_Rad_DebugName,                 "RAD_DEBUG_NAME",                  ":FILENAME", "Sets file name for RAD debug info file."                                       },
+  { LNK_CmdSwitch_Rad_DelayBind,                 "RAD_DELAY_BIND",                  "[:NO]", ""                                                                                  },
+  { LNK_CmdSwitch_Rad_DoMerge,                   "RAD_DO_MERGE",                    "[:NO]", ""                                                                                  },
+  { LNK_CmdSwitch_Rad_EnvLib,                    "RAD_ENV_LIB",                     "[:NO]", ""                                                                                  },
+  { LNK_CmdSwitch_Rad_Exe,                       "RAD_EXE",                         "[:NO]", ""                                                                                  },
+  { LNK_CmdSwitch_Rad_Guid,                      "RAD_GUID",                        ":{IMAGEBLAKE3|XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXXXXXX}", ""                                },
+  { LNK_CmdSwitch_Rad_IdleWorkers,               "RAD_IDLE_WORKERS",                ":#",        "Number of workers to leave idle."                                              },
+  { LNK_CmdSwitch_Rad_LargePages,                "RAD_LARGE_PAGES",                 "[:NO]",     "Disabled by default on Windows."                                               },
+  { LNK_CmdSwitch_Rad_LinkVer,                   "RAD_LINK_VER",                    ":##,##", ""                                                                                 },
+  { LNK_CmdSwitch_Rad_Log,                       "RAD_LOG",                         ":{ALL,INPUT_OBJ,INPUT_LIB,IO,LINK_STATS,TIMERS}", ""                                        },
+  { LNK_CmdSwitch_Rad_MtPath,                    "RAD_MT_PATH",                     ":EXEPATH",  "Exe path to manifest tool, default: " LNK_MANIFEST_MERGE_TOOL_NAME             },
+  { LNK_CmdSwitch_Rad_OsVer,                     "RAD_OS_VER",                      ":##,##", ""                                                                                 },
+  { LNK_CmdSwitch_Rad_PageSize,                  "RAD_PAGE_SIZE",                   ":#",        "Must be power of two."                                                         },
+  { LNK_CmdSwitch_Rad_PathStyle,                 "RAD_PATH_STYLE",                  ":{WindowsAbsolute|UnixAbsolute}", ""                                                        },
+  { LNK_CmdSwitch_Rad_PdbHashTypeNameLength,     "RAD_PDB_HASH_TYPE_NAME_LENGTH",   ":#",        "Number of hash bytes to use to replace type name. Default 8 bytes (Max 16)."   },
+  { LNK_CmdSwitch_Rad_PdbHashTypeNameMap,        "RAD_PDB_HASH_TYPE_NAME_MAP",      ":FILENAME", "Produce map file with hash -> type name mappings."                             },
+  { LNK_CmdSwitch_Rad_PdbHashTypeNames,          "RAD_PDB_HASH_TYPE_NAMES",         ":{NONE|LENIENT|FULL}", "Replace type names in LF_STRUCTURE and LF_CLASS with hashes."       },
+  { LNK_CmdSwitch_Rad_SectVirtOff,               "RAD_SECT_VIRT_OFF",               ":#",        "Set RVA where section data is placed in memory. For internal use only."        },
+  { LNK_CmdSwitch_Rad_SharedThreadPool,          "RAD_SHARED_THREAD_POOL",          "[:NO]",     ""                                                                              },
+  { LNK_CmdSwitch_Rad_SharedThreadPoolMutexName, "RAD_SHARED_THREAD_POOL_MUTEX_NAME", ":STRING", ""                                                                            },
+  { LNK_CmdSwitch_Rad_SuppressError,             "RAD_SUPPRESS_ERROR",              ":#",        ""                                                                              },
+  { LNK_CmdSwitch_Rad_SymbolTableCapDefined,     "RAD_SYMBOL_TABLE_CAP_DEFINED",    ":#",        "Number of buckets allocated in the symbol table for defined symbols."          },
+  { LNK_CmdSwitch_Rad_SymbolTableCapInternal,    "RAD_SYMBOL_TABLE_CAP_INTERNAL",   ":#",        "Number of buckets allocated in the symbol table for internal symbols."         },
+  { LNK_CmdSwitch_Rad_SymbolTableCapLib,         "RAD_SYMBOL_TABLE_CAP_LIB",        ":#",        "Number of buckets allocated in the symbol table for library symbols."          },
+  { LNK_CmdSwitch_Rad_SymbolTableCapWeak,        "RAD_SYMBOL_TABLE_CAP_WEAK",       ":#",        "Number of buckets allocated in the symbol table for weak symbols."             },
+  { LNK_CmdSwitch_Rad_TargetOs,                  "RAD_TARGET_OS",                   ":{WINDOWS,LINUX,MAC}"                                                                       },
+  { LNK_CmdSwitch_Rad_TimeStamp,                 "RAD_TIME_STAMP",                  ":#",        "Time stamp embeded in EXE and PDB."                                            },
+  { LNK_CmdSwitch_Rad_Version,                   "RAD_VERSION",                     "",          "Print version and exit."                                                       },
+  { LNK_CmdSwitch_Rad_Workers,                   "RAD_WORKERS",                     ":#",        "Sets number of workers created in the pool. Number is capped at 1024."         },
 
-  { LNK_CmdSwitch_Help,                        "HELP",                            "", ""                                                                                },
-  { LNK_CmdSwitch_Help,                        "?",                               "", ""                                                                                },
+  { LNK_CmdSwitch_Help, "HELP", "", "" },
+  { LNK_CmdSwitch_Help, "?",    "", "" },
 };
 
 global read_only struct
@@ -944,6 +946,8 @@ lnk_expand_env_vars_windows(Arena *arena, HashTable *env_vars, String8 string)
 internal void
 lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_name, String8List value_strings, String8 obj_path, String8 lib_path)
 {
+  Assert(cmd_name.size); // switch must have a defined name in the table
+
   Temp scratch = scratch_begin(&arena,1);
 
   LNK_CmdSwitchType cmd_switch = lnk_cmd_switch_type_from_string(cmd_name);
@@ -1672,6 +1676,14 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
     }
   } break;
 
+  case LNK_CmdSwitch_Rad_SharedThreadPool: {
+    lnk_cmd_switch_parse_flag(obj_path, lib_path, cmd_switch, value_strings, &config->shared_thread_pool);
+  } break;
+
+  case LNK_CmdSwitch_Rad_SharedThreadPoolMutexName: {
+    lnk_cmd_switch_parse_string(obj_path, lib_path, cmd_switch, value_strings, &config->shared_thread_pool_mutex_name);
+  } break;
+
   case LNK_CmdSwitch_Rad_SuppressError: {
     U64List error_code_list = {0};
     if (lnk_cmd_switch_parse_u64_list(scratch.arena, obj_path, lib_path, cmd_switch, value_strings, &error_code_list, 0)) {
@@ -1754,34 +1766,35 @@ lnk_config_from_cmd_line(Arena *arena, String8List raw_cmd_line)
   if (lnk_cmd_line_has_switch(cmd_line, LNK_CmdSwitch_Dll)) {
     lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_SubSystem, "%S", pe_string_from_subsystem(PE_WindowsSubsystem_WINDOWS_GUI));
   }
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_HighEntropyVa,               "");
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_ManifestUac,                 "\"level='asInvoker' uiAccess='false'\"");
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_NxCompat,                    "");
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_FunctionPadMin,              "0");
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_LargeAddressAware,           "");
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_PdbAltPath,                  "%%_RAD_PDB_PATH%%");
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_PdbPageSize,                 "%u", KB(4));
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_TimeStamp,               "%u", os_get_process_start_time_unix());
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_Age,                     "%u", 1);
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_CheckUnusedDelayLoadDll, "");
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_DelayBind,               "");
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_DoMerge,                 "");
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_EnvLib,                  "");
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_Exe,                     "");
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_Guid,                    "imageblake3");
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_LargePages,              "no");
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_LinkVer,                 "14.0");
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_OsVer,                   "6.0");
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_PageSize,                "%u", KB(4));
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_PathStyle,               "system");
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_SectVirtOff,             "0x1000");
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_Workers,                 "%u", os_get_system_info()->logical_processor_count);
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_TargetOs,                "windows");
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_SymbolTableCapDefined,   "0x3ffff");
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_SymbolTableCapInternal,  "0x1000");
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_SymbolTableCapWeak,      "0x3ffff");
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_SymbolTableCapLib,       "0x3ffff");
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_DebugAltPath,            "%%_RAD_RDI_PATH%%");
+  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_HighEntropyVa,                 "");
+  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_ManifestUac,                   "\"level='asInvoker' uiAccess='false'\"");
+  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_NxCompat,                      "");
+  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_FunctionPadMin,                "0");
+  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_LargeAddressAware,             "");
+  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_PdbAltPath,                    "%%_RAD_PDB_PATH%%");
+  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_PdbPageSize,                   "%u", KB(4));
+  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_TimeStamp,                 "%u", os_get_process_start_time_unix());
+  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_Age,                       "%u", 1);
+  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_CheckUnusedDelayLoadDll,   "");
+  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_DelayBind,                 "");
+  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_DoMerge,                   "");
+  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_EnvLib,                    "");
+  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_Exe,                       "");
+  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_Guid,                      "imageblake3");
+  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_LargePages,                "no");
+  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_LinkVer,                   "14.0");
+  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_OsVer,                     "6.0");
+  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_PageSize,                  "%u", KB(4));
+  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_PathStyle,                 "system");
+  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_SectVirtOff,               "0x1000");
+  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_Workers,                   "%u", os_get_system_info()->logical_processor_count);
+  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_TargetOs,                  "windows");
+  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_SymbolTableCapDefined,     "0x3ffff");
+  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_SymbolTableCapInternal,    "0x1000");
+  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_SymbolTableCapWeak,        "0x3ffff");
+  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_SymbolTableCapLib,         "0x3ffff");
+  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_DebugAltPath,              "%%_RAD_RDI_PATH%%");
+  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_SharedThreadPoolMutexName, "RADLINK_THREAD_POOL_MUTEX");
 #if BUILD_DEBUG
   lnk_cmd_line_push_optionf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_Log, "debug");
   lnk_cmd_line_push_optionf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_Log, "io_write");
