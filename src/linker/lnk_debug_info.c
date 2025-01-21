@@ -3025,7 +3025,7 @@ THREAD_POOL_TASK_FUNC(lnk_push_dbi_sec_contrib_task)
   // Mod1::fUpdateSecContrib
   if (sc_count > 0) {
     for (U64 sc_idx = 0; sc_idx < sc_count; ++sc_idx) {
-      if (sc_arr[sc_idx].data.base.flags & COFF_SectionFlag_CNT_CODE) {
+      if (sc_arr[sc_idx].data.base.flags & COFF_SectionFlag_CntCode) {
         mod->first_sc = sc_arr[sc_idx].data;
         break;
       }

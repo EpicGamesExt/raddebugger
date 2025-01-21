@@ -438,34 +438,34 @@ pe_bin_info_from_data(Arena *arena, String8 data)
   }
   
   // rjf: read coff header
-  U32         coff_header_off = dos_header.coff_file_offset + sizeof(pe_magic);
-  COFF_Header coff_header     = {0};
+  U32             file_header_off = dos_header.coff_file_offset + sizeof(pe_magic);
+  COFF_FileHeader file_header     = {0};
   if(valid)
   {
-    str8_deserial_read_struct(data, coff_header_off, &coff_header);
+    str8_deserial_read_struct(data, file_header_off, &file_header);
   }
   
   // rjf: range of optional extension header ("optional" for short)
-  U32     optional_size             = coff_header.optional_header_size;
-  U64     after_coff_header_off     = coff_header_off + sizeof(coff_header);
-  U64     after_optional_header_off = after_coff_header_off + optional_size;
+  U32     optional_size             = file_header.optional_header_size;
+  U64     after_file_header_off     = file_header_off + sizeof(COFF_FileHeader);
+  U64     after_optional_header_off = after_file_header_off + optional_size;
   Rng1U64 optional_range            = {0};
   if(valid)
   {
-    optional_range.min = ClampTop(after_coff_header_off, data.size);
+    optional_range.min = ClampTop(after_file_header_off,     data.size);
     optional_range.max = ClampTop(after_optional_header_off, data.size);
   }
   
   // rjf: get sections
   U64                 sec_array_off     = optional_range.max;
-  U64                 sec_array_raw_opl = sec_array_off + coff_header.section_count*sizeof(COFF_SectionHeader);
+  U64                 sec_array_raw_opl = sec_array_off + file_header.section_count*sizeof(COFF_SectionHeader);
   U64                 sec_array_opl     = ClampTop(sec_array_raw_opl, data.size);
   U64                 clamped_sec_count = (sec_array_opl - sec_array_off)/sizeof(COFF_SectionHeader);
   COFF_SectionHeader *sections          = (COFF_SectionHeader*)(data.str + sec_array_off);
   
   // rjf: get symbols
-  U64 symbol_array_off = coff_header.symbol_table_foff;
-  U64 symbol_count = coff_header.symbol_count;
+  U64 symbol_array_off = file_header.symbol_table_foff;
+  U64 symbol_count = file_header.symbol_count;
   
   // rjf: get string table
   U64 string_table_off = symbol_array_off + sizeof(COFF_Symbol16) * symbol_count;
@@ -551,11 +551,11 @@ pe_bin_info_from_data(Arena *arena, String8 data)
   if(valid && PE_DataDirectoryIndex_TLS < data_dir_count)
   {
     Rng1U64 tls_header_frng = data_dir_franges[PE_DataDirectoryIndex_TLS];
-    switch(coff_header.machine)
+    switch(file_header.machine)
     {
       default:{ NotImplemented; }break;
-      case COFF_MachineType_UNKNOWN: break;
-      case COFF_MachineType_X86:
+      case COFF_Machine_Unknown: break;
+      case COFF_Machine_X86:
       {
         PE_TLSHeader32 tls_header32 = {0};
         if(str8_deserial_read_struct(data, tls_header_frng.min, &tls_header32) == sizeof(tls_header32))
@@ -572,7 +572,7 @@ pe_bin_info_from_data(Arena *arena, String8 data)
           Assert(!"unable to read TLS Header 32");
         }
       }break;
-      case COFF_MachineType_X64:
+      case COFF_Machine_X64:
       {
         if(str8_deserial_read_struct(data, tls_header_frng.min, &tls_header) != sizeof(tls_header))
         {
@@ -598,7 +598,7 @@ pe_bin_info_from_data(Arena *arena, String8 data)
     info.string_table_off   = string_table_off;
     info.data_dir_franges   = data_dir_franges;
     info.data_dir_count     = data_dir_count;
-    info.arch               = arch_from_coff_machine(coff_header.machine);
+    info.arch               = arch_from_coff_machine(file_header.machine);
     info.tls_header         = tls_header;
   }
 
@@ -824,7 +824,7 @@ pe_foff_from_voff(String8 data, PE_BinInfo *bin, U64 voff)
     COFF_SectionHeader *sect = &sections[sect_idx];
     if(sect->voff <= voff && voff < sect->voff + sect->vsize)
     {
-      if(!(sect->flags & COFF_SectionFlag_CNT_UNINITIALIZED_DATA))
+      if(!(sect->flags & COFF_SectionFlag_CntUninitializedData))
       {
         foff = sect->foff + (voff - sect->voff);
       }
@@ -967,7 +967,7 @@ pe_get_entry_point_names(COFF_MachineType            machine,
   String8Array entry_point_names = {0};
   
   if (file_characteristics & PE_ImageFileCharacteristic_FILE_DLL) {
-    if (machine == COFF_MachineType_X86) {
+    if (machine == COFF_Machine_X86) {
       read_only static String8 dll_entry_point_arr[] = {
         str8_lit_comp("__DllMainCRTStartup@12"),
       };
@@ -1418,8 +1418,8 @@ pe_tls_from_data(Arena              *arena,
   U64            *callback_addrs = 0;
 
   switch (machine) {
-    case COFF_MachineType_UNKNOWN: break;
-    case COFF_MachineType_X86: {
+    case COFF_Machine_Unknown: break;
+    case COFF_Machine_X86: {
       PE_TLSHeader32 header32 = {0};
       str8_deserial_read_struct(raw_tls, 0, &header32);
 
@@ -1444,7 +1444,7 @@ pe_tls_from_data(Arena              *arena,
         callback_addrs[i] = (U64)src[i];
       }
     } break;
-    case COFF_MachineType_X64: {
+    case COFF_Machine_X64: {
       str8_deserial_read_struct(raw_tls, 0, &header64);
 
       U64 callbacks_voff = header64.callbacks_address - image_base;
@@ -1487,9 +1487,9 @@ pe_resource_dir_push_dir_node(Arena *arena, PE_ResourceDir *dir, COFF_ResourceID
   PE_ResourceList *list = 0;
   switch (id.type) {
     default:
-    case COFF_ResourceIDType_NULL: break;
-    case COFF_ResourceIDType_STRING: list = &dir->named_list; break;
-    case COFF_ResourceIDType_NUMBER: list = &dir->id_list;    break;
+    case COFF_ResourceIDType_Null: break;
+    case COFF_ResourceIDType_String: list = &dir->named_list; break;
+    case COFF_ResourceIDType_Number: list = &dir->id_list;    break;
   }
   
   PE_ResourceNode *res_node = push_array(arena, PE_ResourceNode, 1);
@@ -1516,9 +1516,9 @@ pe_resource_dir_push_entry_node(Arena *arena, PE_ResourceDir *dir, COFF_Resource
   PE_ResourceList *list = NULL;
   switch (id.type) {
     default:
-    case COFF_ResourceIDType_NULL: break;
-    case COFF_ResourceIDType_STRING: list = &dir->named_list; break;
-    case COFF_ResourceIDType_NUMBER: list = &dir->id_list;    break;
+    case COFF_ResourceIDType_Null: break;
+    case COFF_ResourceIDType_String: list = &dir->named_list; break;
+    case COFF_ResourceIDType_Number: list = &dir->id_list;    break;
   }
   
   PE_ResourceNode *res_node = push_array(arena, PE_ResourceNode, 1);
@@ -1555,7 +1555,7 @@ internal PE_ResourceNode *
 pe_resource_dir_search_node(PE_ResourceDir *dir, COFF_ResourceID id)
 {
   for (PE_ResourceNode *i = dir->id_list.first; i != NULL; i = i->next) {
-    if (coff_resource_id_is_equal(i->data.id, id)) {
+    if (coff_resource_id_compar(&i->data.id, &id)) {
       return i;
     }
   }
@@ -1586,11 +1586,11 @@ pe_resource_dir_push_res_file(Arena *arena, PE_ResourceDir *root_dir, String8 re
 {
   // parse file into resource list
   String8 res_data = str8_substr(res_file, rng_1u64(sizeof(PE_RES_MAGIC), res_file.size));
-  COFF_ResourceList list = coff_resource_list_from_data(arena, res_data);
+  COFF_ParsedResourceList list = coff_resource_list_from_data(arena, res_data);
   
   // move resources to directories based on type
-  for (COFF_ResourceNode *res_node = list.first; res_node != NULL; res_node = res_node->next) {
-    COFF_Resource *res = &res_node->data;
+  for (COFF_ParsedResourceNode *res_node = list.first; res_node != NULL; res_node = res_node->next) {
+    COFF_ParsedResource *res = &res_node->data;
     
     // search existing directories
     PE_Resource *dir_res = pe_resource_dir_search(root_dir, res->type);
@@ -1612,7 +1612,7 @@ pe_resource_dir_push_res_file(Arena *arena, PE_ResourceDir *root_dir, String8 re
     // push entry
     PE_Resource *sub_dir_res = pe_resource_dir_push_dir(arena, dir, res->name, 0, 0, 0, 0);
     COFF_ResourceID id;
-    id.type = COFF_ResourceIDType_NUMBER;
+    id.type = COFF_ResourceIDType_Number;
     id.u.number = res->language_id;
     pe_resource_dir_push_entry(arena, sub_dir_res->u.dir, id, res->type, res->data_version, res->version, res->memory_flags, res->data);
   }
@@ -1673,7 +1673,7 @@ pe_resource_table_from_directory_data(Arena *arena, String8 data)
       str8_deserial_read_struct(data, entry_offset, &coff_entry);
       
       // NOTE: this is not documented on MSDN but high bit here is set for some reason
-      U32 name_offset = coff_entry.name.offset & ~COFF_RESOURCE_SUB_DIR_FLAG;
+      U32 name_offset = coff_entry.name.offset & ~COFF_Resource_SubDirFlag;
       U16 name_size = 0;
       str8_deserial_read_struct(data, name_offset, &name_size);
       
@@ -1681,15 +1681,15 @@ pe_resource_table_from_directory_data(Arena *arena, String8 data)
       str8_deserial_read_block(data,  name_offset + sizeof(name_size), name_size*sizeof(U16), &name_block);
       String16 name16 = str16((U16*)name_block.str, name_size);
       
-      B32 is_dir = !!(coff_entry.id.data_entry_offset & COFF_RESOURCE_SUB_DIR_FLAG);
+      B32 is_dir = !!(coff_entry.id.data_entry_offset & COFF_Resource_SubDirFlag);
       
-      entry->id.type = COFF_ResourceIDType_STRING;
+      entry->id.type = COFF_ResourceIDType_String;
       entry->id.u.string = str8_from_16(arena, name16);
       entry->kind = is_dir ? PE_ResDataKind_DIR : PE_ResDataKind_COFF_LEAF;
       
       if (is_dir) {
         struct stack_s *frame = push_array(scratch.arena, struct stack_s, 1);
-        frame->table_offset = coff_entry.id.sub_dir_offset & ~COFF_RESOURCE_SUB_DIR_FLAG;
+        frame->table_offset = coff_entry.id.sub_dir_offset & ~COFF_Resource_SubDirFlag;
         frame->directory_ptr = &entry->u.dir;
         SLLStackPush(stack, frame);
         goto yeild;
@@ -1710,15 +1710,15 @@ pe_resource_table_from_directory_data(Arena *arena, String8 data)
       COFF_ResourceDirEntry coff_entry = {0};
       str8_deserial_read_struct(data, entry_offset, &coff_entry);
       
-      B32 is_dir = !!(coff_entry.id.sub_dir_offset & COFF_RESOURCE_SUB_DIR_FLAG);
+      B32 is_dir = !!(coff_entry.id.sub_dir_offset & COFF_Resource_SubDirFlag);
       
-      entry->id.type = COFF_ResourceIDType_NUMBER;
+      entry->id.type = COFF_ResourceIDType_Number;
       entry->id.u.number = coff_entry.name.id;
       entry->kind = is_dir ? PE_ResDataKind_DIR : PE_ResDataKind_COFF_LEAF;
       
       if (is_dir) {
         struct stack_s *frame = push_array(scratch.arena, struct stack_s, 1);
-        frame->table_offset = coff_entry.id.sub_dir_offset & ~COFF_RESOURCE_SUB_DIR_FLAG;
+        frame->table_offset = coff_entry.id.sub_dir_offset & ~COFF_Resource_SubDirFlag;
         frame->directory_ptr = &entry->u.dir;
         SLLStackPush(stack, frame);
         goto yeild;
@@ -1740,11 +1740,11 @@ internal String8
 pe_make_manifest_resource(Arena *arena, U32 resource_id, String8 manifest_data)
 {
   COFF_ResourceID type = {0};
-  type.type            = COFF_ResourceIDType_NUMBER;
+  type.type            = COFF_ResourceIDType_Number;
   type.u.number        = PE_ResourceKind_MANIFEST;
 
   COFF_ResourceID id = {0};
-  id.type            = COFF_ResourceIDType_NUMBER;
+  id.type            = COFF_ResourceIDType_Number;
   id.u.number        = resource_id;
 
   String8 res = coff_write_resource(arena, type, id, 1, 0, 1033, 0, 0, manifest_data);

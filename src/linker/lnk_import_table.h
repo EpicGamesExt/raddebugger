@@ -64,8 +64,8 @@ internal LNK_ImportTable * lnk_import_table_alloc_delayed(LNK_SectionTable *st, 
 internal void              lnk_import_table_release(LNK_ImportTable **imptab);
 internal LNK_ImportDLL *   lnk_import_table_push_dll_static(LNK_ImportTable *imptab, LNK_SymbolTable *symtab, String8 dll_name, COFF_MachineType machine);
 internal LNK_ImportDLL *   lnk_import_table_push_dll_delayed(LNK_ImportTable *imptab, LNK_SymbolTable *symtab, String8 dll_name, COFF_MachineType machine);
-internal LNK_ImportFunc *  lnk_import_table_push_func_static(LNK_ImportTable *imptab, LNK_SymbolTable *symtab, LNK_ImportDLL *dll, COFF_ImportHeader *header);
-internal LNK_ImportFunc *  lnk_import_table_push_func_delayed(LNK_ImportTable *imptab, LNK_SymbolTable *symtab, LNK_ImportDLL *dll, COFF_ImportHeader *header);
+internal LNK_ImportFunc *  lnk_import_table_push_func_static(LNK_ImportTable *imptab, LNK_SymbolTable *symtab, LNK_ImportDLL *dll, COFF_ParsedArchiveImportHeader *header);
+internal LNK_ImportFunc *  lnk_import_table_push_func_delayed(LNK_ImportTable *imptab, LNK_SymbolTable *symtab, LNK_ImportDLL *dll, COFF_ParsedArchiveImportHeader *header);
 internal LNK_ImportDLL *   lnk_import_table_search_dll(LNK_ImportTable *imptab, String8 name);
 internal LNK_ImportFunc *  lnk_import_table_search_func(LNK_ImportDLL *dll, String8 name);
 

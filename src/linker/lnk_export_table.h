@@ -5,13 +5,13 @@
 
 typedef struct LNK_Export
 {
-  struct LNK_Export    *next;
-  String8               name;
-  LNK_Symbol           *symbol;
-  U32                   id;
-  U16                   ordinal;
-  COFF_ImportHeaderType type;
-  B32                   is_private;
+  struct LNK_Export  *next;
+  String8             name;
+  LNK_Symbol         *symbol;
+  U32                 id;
+  U16                 ordinal;
+  COFF_ImportType     type;
+  B32                 is_private;
 } LNK_Export;
 
 typedef struct LNK_ExportList

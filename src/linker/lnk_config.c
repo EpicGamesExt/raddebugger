@@ -352,11 +352,11 @@ lnk_get_default_function_pad_min(COFF_MachineType machine)
 {
   U64 function_pad_min = 0;
   switch (machine) {
-    case COFF_MachineType_UNKNOWN: break;
-    case COFF_MachineType_X86: {
+    case COFF_Machine_Unknown: break;
+    case COFF_Machine_X86: {
       function_pad_min = 5;
     } break;
-    case COFF_MachineType_X64: {
+    case COFF_Machine_X64: {
       function_pad_min = 6;
     } break;
     default: {
@@ -396,12 +396,12 @@ lnk_get_default_subsystem_version(PE_WindowsSubsystem subsystem, COFF_MachineTyp
 
   case PE_WindowsSubsystem_WINDOWS_CUI: {
     switch (machine) {
-    case COFF_MachineType_X64: 
-    case COFF_MachineType_X86: ver = make_version(6,0); break;
+    case COFF_Machine_X64: 
+    case COFF_Machine_X86: ver = make_version(6,0); break;
 
-    case COFF_MachineType_ARMNT:
-    case COFF_MachineType_ARM64:
-    case COFF_MachineType_ARM: ver = make_version(6,2); break;
+    case COFF_Machine_ArmNt:
+    case COFF_Machine_Arm64:
+    case COFF_Machine_Arm: ver = make_version(6,2); break;
 
     default: lnk_not_implemented("define subsystem(%S) version for %S", pe_string_from_subsystem(subsystem), coff_string_from_machine_type(machine)); break;
     }
@@ -409,12 +409,12 @@ lnk_get_default_subsystem_version(PE_WindowsSubsystem subsystem, COFF_MachineTyp
 
   case PE_WindowsSubsystem_WINDOWS_GUI: {
     switch (machine) {
-    case COFF_MachineType_X64:
-    case COFF_MachineType_X86: ver = make_version(6,0); break;
+    case COFF_Machine_X64:
+    case COFF_Machine_X86: ver = make_version(6,0); break;
 
-    case COFF_MachineType_ARMNT:
-    case COFF_MachineType_ARM64:
-    case COFF_MachineType_ARM: ver = make_version(6,2); break;
+    case COFF_Machine_ArmNt:
+    case COFF_Machine_Arm64:
+    case COFF_Machine_Arm: ver = make_version(6,2); break;
 
     default: lnk_not_implemented("define subsystem(%S) version for %S", pe_string_from_subsystem(subsystem), coff_string_from_machine_type(machine)); break;
     }
@@ -444,13 +444,13 @@ lnk_get_min_subsystem_version(PE_WindowsSubsystem subsystem, COFF_MachineType ma
 
   case PE_WindowsSubsystem_WINDOWS_CUI: {
     switch (machine) {
-    case COFF_MachineType_X86: ver = make_version(5,1); break;
+    case COFF_Machine_X86: ver = make_version(5,1); break;
 
-    case COFF_MachineType_X64: ver = make_version(5,2); break;
+    case COFF_Machine_X64: ver = make_version(5,2); break;
 
-    case COFF_MachineType_ARMNT:
-    case COFF_MachineType_ARM64:
-    case COFF_MachineType_ARM: ver = make_version(6,2); break;
+    case COFF_Machine_ArmNt:
+    case COFF_Machine_Arm64:
+    case COFF_Machine_Arm: ver = make_version(6,2); break;
 
     default: lnk_not_implemented("define min subsystem(%S) version for %S", pe_string_from_subsystem(subsystem), coff_string_from_machine_type(machine)); break;
     }
@@ -458,13 +458,13 @@ lnk_get_min_subsystem_version(PE_WindowsSubsystem subsystem, COFF_MachineType ma
 
   case PE_WindowsSubsystem_WINDOWS_GUI: {
     switch (machine) {
-    case COFF_MachineType_X86: ver = make_version(5,1); break;
+    case COFF_Machine_X86: ver = make_version(5,1); break;
 
-    case COFF_MachineType_X64: ver = make_version(5,2); break;
+    case COFF_Machine_X64: ver = make_version(5,2); break;
 
-    case COFF_MachineType_ARMNT:
-    case COFF_MachineType_ARM64:
-    case COFF_MachineType_ARM: ver = make_version(6,2); break;
+    case COFF_Machine_ArmNt:
+    case COFF_Machine_Arm64:
+    case COFF_Machine_Arm: ver = make_version(6,2); break;
 
     default: lnk_not_implemented("define min subsystem(%S) version for %S", pe_string_from_subsystem(subsystem), coff_string_from_machine_type(machine)); break;
     }
@@ -784,7 +784,7 @@ lnk_parse_export_directive(Arena *arena, LNK_ExportParseList *list, String8List 
   // parse directive
   String8 name  = str8_zero();
   String8 alias = str8_zero();
-  String8 type  = coff_string_from_import_header_type(COFF_ImportHeaderType_CODE);
+  String8 type  = coff_string_from_import_header_type(COFF_ImportHeader_Code);
   if (value_list.node_count > 0) {
     String8List dir_split = str8_split_by_string_chars(scratch.arena, value_list.first->string, str8_lit("="), 0);
     B32 is_export_valid = value_list.node_count <= 2 && value_list.node_count > 0;
@@ -1193,7 +1193,7 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
   case LNK_CmdSwitch_Machine: {
     if (value_strings.node_count == 1) {
       COFF_MachineType machine = coff_machine_from_string(value_strings.first->string);
-      if (machine != COFF_MachineType_UNKNOWN) {
+      if (machine != COFF_Machine_Unknown) {
         config->machine = machine;
       } else {
         lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "unknown parameter \"%S\"", value_strings.first->string);

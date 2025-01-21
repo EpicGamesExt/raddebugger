@@ -49,7 +49,7 @@
 #define LNK_DOS_HEADER_SYMBOL_NAME                  "DOS_HEADER"
 #define LNK_DOS_PROGRAM_SYMBOL_NAME                 "DOS_PROGRAM"
 #define LNK_PE_MAGIC_SYMBOL_NAME                    "PE_MAGIC"
-#define LNK_COFF_HEADER_SYMBOL_NAME                 "COFF_HEADER"
+#define LNK_COFF_FILE_HEADER_SYMBOL_NAME            "COFF_FILE_HEADER"
 #define LNK_PE_DIRECTORY_ARRAY_SYMBOL_NAME          "PE_DIRECTORY_ARRAY"
 #define LNK_PE_DIRECTORY_COUNT_SYMBOL_NAME          "PE_DIRECTORY_COUNT"
 #define LNK_PE_OPT_HEADER_SYMBOL_NAME               "PE_OPTIONAL_HEADER"
@@ -82,10 +82,10 @@
 #define LNK_DELAY_LOAD_HELPER2_SYMBOL_NAME     "__delayLoadHelper2"
 #define LNK_DELAY_LOAD_HELPER2_X86_SYMBOL_NAME "___delayLoadHelper2@8"
 
-#define LNK_TEXT_SECTION_FLAGS      (COFF_SectionFlag_CNT_CODE|COFF_SectionFlag_MEM_EXECUTE|COFF_SectionFlag_MEM_READ)
-#define LNK_DATA_SECTION_FLAGS      (COFF_SectionFlag_CNT_INITIALIZED_DATA|COFF_SectionFlag_MEM_READ|COFF_SectionFlag_MEM_WRITE)
-#define LNK_RDATA_SECTION_FLAGS     (COFF_SectionFlag_CNT_INITIALIZED_DATA|COFF_SectionFlag_MEM_READ)
-#define LNK_BSS_SECTION_FLAGS       (COFF_SectionFlag_CNT_UNINITIALIZED_DATA|COFF_SectionFlag_MEM_READ|COFF_SectionFlag_MEM_WRITE)
+#define LNK_TEXT_SECTION_FLAGS      (COFF_SectionFlag_CntCode|COFF_SectionFlag_MemExecute|COFF_SectionFlag_MemRead)
+#define LNK_DATA_SECTION_FLAGS      (COFF_SectionFlag_CntInitializedData|COFF_SectionFlag_MemRead|COFF_SectionFlag_MemWrite)
+#define LNK_RDATA_SECTION_FLAGS     (COFF_SectionFlag_CntInitializedData|COFF_SectionFlag_MemRead)
+#define LNK_BSS_SECTION_FLAGS       (COFF_SectionFlag_CntUninitializedData|COFF_SectionFlag_MemRead|COFF_SectionFlag_MemWrite)
 #define LNK_IDATA_SECTION_FLAGS     LNK_DATA_SECTION_FLAGS
 #define LNK_DEBUG_DIR_SECTION_FLAGS LNK_DATA_SECTION_FLAGS
 #define LNK_RSRC_SECTION_FLAGS      LNK_DATA_SECTION_FLAGS
@@ -96,8 +96,8 @@
 #define LNK_GIATS_SECTION_FLAGS     LNK_RDATA_SECTION_FLAGS
 #define LNK_GLJMP_SECTION_FLAGS     LNK_RDATA_SECTION_FLAGS
 #define LNK_GEHCONT_SECTION_FLAGS   LNK_RDATA_SECTION_FLAGS
-#define LNK_RELOC_SECTION_FLAGS     (LNK_RDATA_SECTION_FLAGS | COFF_SectionFlag_MEM_DISCARDABLE)
-#define LNK_DEBUG_SECTION_FLAGS     (LNK_RDATA_SECTION_FLAGS | COFF_SectionFlag_MEM_DISCARDABLE)
+#define LNK_RELOC_SECTION_FLAGS     (LNK_RDATA_SECTION_FLAGS | COFF_SectionFlag_MemDiscardable)
+#define LNK_DEBUG_SECTION_FLAGS     (LNK_RDATA_SECTION_FLAGS | COFF_SectionFlag_MemDiscardable)
 
 ////////////////////////////////
 
@@ -114,7 +114,7 @@ typedef String8List LNK_InputLibList;
 
 typedef struct LNK_InputImport
 {
-  COFF_ImportHeader       import_header;
+  COFF_ParsedArchiveImportHeader       import_header;
   struct LNK_InputImport *next;
 } LNK_InputImport;
 

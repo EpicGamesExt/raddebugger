@@ -120,7 +120,8 @@ typedef struct RD_Line
 
 // raddump
 
-internal B32  rd_is_pe(String8 raw_data);
+internal B32 rd_is_pe(String8 raw_data);
+
 internal void rd_format_preamble(Arena *arena, String8List *out, String8 indent, String8 input_path, String8 raw_data);
 
 // Markers
@@ -134,12 +135,12 @@ internal RD_SectionArray rd_sections_from_coff_section_table(Arena *arnea, Strin
 // Disasm
 
 internal RD_DisasmResult rd_disasm_next_instruction(Arena *arena, Arch arch, U64 addr, String8 raw_code);
-internal void            rd_print_disasm          (Arena *arena, String8List *out, String8 indent, Arch arch, U64 image_base, U64 sect_off, U64 marker_count, RD_Marker *markers, String8 raw_code);
+internal void            rd_print_disasm           (Arena *arena, String8List *out, String8 indent, Arch arch, U64 image_base, U64 sect_off, U64 marker_count, RD_Marker *markers, String8 raw_code);
 
 // Raw Data
 
 internal String8 rd_format_hex_array(Arena *arena, U8 *ptr, U64 size);
-internal void    rd_print_raw_data (Arena *arena, String8List *out, String8 indent, U64 bytes_per_row, U64 marker_count, RD_Marker *markers, String8 raw_data);
+internal void    rd_print_raw_data  (Arena *arena, String8List *out, String8 indent, U64 bytes_per_row, U64 marker_count, RD_Marker *markers, String8 raw_data);
 
 // DWARF
 
@@ -182,15 +183,15 @@ internal void cv_print_symbols_section(Arena *arena, String8List *out, String8 i
 
 // COFF
 
-internal void coff_print_archive_member_header(Arena *arena, String8List *out, String8 indent, COFF_ArchiveMemberHeader header, String8 long_names);
+internal void coff_print_archive_member_header(Arena *arena, String8List *out, String8 indent, COFF_ParsedArchiveMemberHeader header, String8 long_names);
 internal void coff_print_seciton_table        (Arena *arena, String8List *out, String8 indent, String8 raw_data, U64 string_table_off, COFF_Symbol32Array symbols, U64 sect_count, COFF_SectionHeader *sect_headers);
-internal void coff_disasm_sections             (Arena *arena, String8List *out, String8 indent, String8 raw_data, COFF_MachineType machine, U64 image_base, B32 is_obj, RD_MarkerArray *section_markers, U64 section_count, COFF_SectionHeader *sections);
-internal void coff_raw_data_sections           (Arena *arena, String8List *out, String8 indent, String8 raw_data, B32 is_obj, RD_MarkerArray *section_markers, U64 section_count, COFF_SectionHeader *sections);
+internal void coff_disasm_sections            (Arena *arena, String8List *out, String8 indent, String8 raw_data, COFF_MachineType machine, U64 image_base, B32 is_obj, RD_MarkerArray *section_markers, U64 section_count, COFF_SectionHeader *sections);
+internal void coff_raw_data_sections          (Arena *arena, String8List *out, String8 indent, String8 raw_data, B32 is_obj, RD_MarkerArray *section_markers, U64 section_count, COFF_SectionHeader *sections);
 internal void coff_print_relocs               (Arena *arena, String8List *out, String8 indent, String8 raw_data, U64 string_table_off, COFF_MachineType machine, U64 sect_count, COFF_SectionHeader *sect_headers, COFF_Symbol32Array symbols);
 internal void coff_print_symbol_table         (Arena *arena, String8List *out, String8 indent, String8 raw_data, B32 is_big_obj, U64 string_table_off, COFF_Symbol32Array symbols);
-internal void coff_print_big_obj_header       (Arena *arena, String8List *out, String8 indent, COFF_HeaderBigObj *header);
-internal void coff_print_header               (Arena *arena, String8List *out, String8 indent, COFF_Header *header);
-internal void coff_print_import               (Arena *arena, String8List *out, String8 indent, COFF_ImportHeader *header);
+internal void coff_print_big_obj_header       (Arena *arena, String8List *out, String8 indent, COFF_BigObjHeader *header);
+internal void coff_print_file_header          (Arena *arena, String8List *out, String8 indent, COFF_FileHeader *header);
+internal void coff_print_import               (Arena *arena, String8List *out, String8 indent, COFF_ParsedArchiveImportHeader *header);
 internal void coff_print_big_obj              (Arena *arena, String8List *out, String8 indent, String8 raw_data, RD_Option opts);
 internal void coff_print_obj                  (Arena *arena, String8List *out, String8 indent, String8 raw_data, RD_Option opts);
 internal void coff_print_archive              (Arena *arena, String8List *out, String8 indent, String8 raw_archive, RD_Option opts);
@@ -207,7 +208,7 @@ internal void pe_print_optional_header32plus(Arena *arena, String8List *out, Str
 internal void pe_print_load_config32        (Arena *arena, String8List *out, String8 indent, PE_LoadConfig32 *lc);
 internal void pe_print_load_config64        (Arena *arena, String8List *out, String8 indent, PE_LoadConfig64 *lc);
 internal void pe_print_tls                  (Arena *arena, String8List *out, String8 indent, PE_ParsedTLS tls);
-internal void pe_print_debug_diretory      (Arena *arena, String8List *out, String8 indent, String8 raw_data, String8 raw_dir);
+internal void pe_print_debug_diretory       (Arena *arena, String8List *out, String8 indent, String8 raw_data, String8 raw_dir);
 internal void pe_print_export_table         (Arena *arena, String8List *out, String8 indent, PE_ParsedExportTable exptab);
 internal void pe_print_static_import_table  (Arena *arena, String8List *out, String8 indent, U64 image_base, PE_ParsedStaticImportTable imptab);
 internal void pe_print_delay_import_table   (Arena *arena, String8List *out, String8 indent, U64 image_base, PE_ParsedDelayImportTable imptab);

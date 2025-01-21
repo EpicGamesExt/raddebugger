@@ -3270,21 +3270,21 @@ dbi_build_sec_map(Arena *arena, PDB_DbiContext *dbi)
   U64 isect = 0;
   for (PDB_DbiSectionNode *sect = dbi->section_list.first; sect; sect = sect->next, ++isect) {
     PDB_DbiSecMapEntry *s = &entry_array[isect];
-    COFF_SectionHeader *coff_header = &sect->data;
-    if (coff_header->flags & COFF_SectionFlag_MEM_READ) {
+    COFF_SectionHeader *section_header = &sect->data;
+    if (section_header->flags & COFF_SectionFlag_MemRead) {
       s->flags |= PDB_DbiOMF_READ;
     }
-    if (coff_header->flags & COFF_SectionFlag_MEM_WRITE) {
+    if (section_header->flags & COFF_SectionFlag_MemWrite) {
       s->flags |= PDB_DbiOMF_WRITE;
     }
-    if (coff_header->flags & COFF_SectionFlag_MEM_EXECUTE) {
+    if (section_header->flags & COFF_SectionFlag_MemExecute) {
       s->flags |= PDB_DbiOMF_EXEC;
     }
-    if (~coff_header->flags & COFF_SectionFlag_MEM_16BIT) {
+    if (~section_header->flags & COFF_SectionFlag_Mem16Bit) {
       s->flags |= PDB_DbiOMF_IS_32BIT_ADDR;
     }
     s->flags |= PDB_DbiOMF_IS_SELECTOR; // always set
-    s->sec_size = coff_header->vsize;
+    s->sec_size = section_header->vsize;
     s->frame = isect + 1;
     s->sec_name = max_U16;
     s->class_name = max_U16;
@@ -3444,7 +3444,7 @@ dbi_module_push_section_contrib(PDB_DbiContext *dbi,
   
   // Mod1::fUpdateSecContrib
   if (mod->first_sc.base.mod == 0) {
-    if (flags & COFF_SectionFlag_CNT_CODE) {
+    if (flags & COFF_SectionFlag_CntCode) {
       mod->first_sc = sc;
     }
   }

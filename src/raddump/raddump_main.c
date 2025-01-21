@@ -28,6 +28,7 @@
 #include "path/path.h"
 #include "coff/coff.h"
 #include "coff/coff_enum.h"
+#include "coff/coff_parse.h"
 #include "pe/pe.h"
 #include "msvc_crt/msvc_crt.h"
 #include "msvc_crt/msvc_crt_enum.h"
@@ -53,6 +54,7 @@
 #include "path/path.c"
 #include "coff/coff.c"
 #include "coff/coff_enum.c"
+#include "coff/coff_parse.c"
 #include "pe/pe.c"
 #include "msvc_crt/msvc_crt.c"
 #include "msvc_crt/msvc_crt_enum.c"
@@ -226,7 +228,7 @@ entry_point(CmdLine *cmdline)
 
   // format input
   rd_format_preamble(arena, out, indent, file_path, raw_data);
-  if (coff_is_archive(raw_data) || coff_is_thin_archive(raw_data)) {
+  if (coff_is_regular_archive(raw_data) || coff_is_thin_archive(raw_data)) {
     coff_print_archive(arena, out, indent, raw_data, opts);
   } else if (coff_is_big_obj(raw_data)) {
     coff_print_big_obj(arena, out, indent, raw_data, opts);

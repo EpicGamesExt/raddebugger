@@ -117,26 +117,26 @@ lnk_ext_reloc_type_from_coff(COFF_MachineType machine, U32 type)
 {
   LNK_RelocType result = LNK_Reloc_NULL;
   switch (machine) {
-  case COFF_MachineType_UNKNOWN: break;
-  case COFF_MachineType_X64: {
+  case COFF_Machine_Unknown: break;
+  case COFF_Machine_X64: {
     switch (type) {
-    case COFF_RelocTypeX64_ABS:       result = LNK_Reloc_NULL;        break;
-    case COFF_RelocTypeX64_ADDR64:    result = LNK_Reloc_ADDR_64;     break;
-    case COFF_RelocTypeX64_ADDR32:    result = LNK_Reloc_ADDR_32;     break;
-    case COFF_RelocTypeX64_ADDR32NB:  result = LNK_Reloc_VIRT_OFF_32; break;
-    case COFF_RelocTypeX64_REL32:     result = LNK_Reloc_REL32;       break;
-    case COFF_RelocTypeX64_REL32_1:   result = LNK_Reloc_REL32_1;     break;
-    case COFF_RelocTypeX64_REL32_2:   result = LNK_Reloc_REL32_2;     break;
-    case COFF_RelocTypeX64_REL32_3:   result = LNK_Reloc_REL32_3;     break;
-    case COFF_RelocTypeX64_REL32_4:   result = LNK_Reloc_REL32_4;     break;
-    case COFF_RelocTypeX64_REL32_5:   result = LNK_Reloc_REL32_5;     break;
-    case COFF_RelocTypeX64_SECTION:   result = LNK_Reloc_SECT_IDX;    break;
-    case COFF_RelocTypeX64_SECREL:    result = LNK_Reloc_SECT_REL;    break;
-    case COFF_RelocTypeX64_SECREL7:   lnk_not_implemented("TODO: COFF_RelocTypeX64_SECREL7"); break;
-    case COFF_RelocTypeX64_TOKEN:     lnk_not_implemented("TODO: COFF_RelocTypeX64_TOKEN");   break;
-    case COFF_RelocTypeX64_SREL32:    lnk_not_implemented("TODO: COFF_RelocTypeX64_SREL32");  break;
-    case COFF_RelocTypeX64_PAIR:      lnk_not_implemented("TODO: COFF_RelocTypeX64_PAIR");    break;
-    case COFF_RelocTypeX64_SSPAN32:   lnk_not_implemented("TODO: COFF_RelocTypeX64_SSPAN32"); break;
+    case COFF_Reloc_X64_Abs:       result = LNK_Reloc_NULL;        break;
+    case COFF_Reloc_X64_Addr64:    result = LNK_Reloc_ADDR_64;     break;
+    case COFF_Reloc_X64_Addr32:    result = LNK_Reloc_ADDR_32;     break;
+    case COFF_Reloc_X64_Addr32Nb:  result = LNK_Reloc_VIRT_OFF_32; break;
+    case COFF_Reloc_X64_Rel32:     result = LNK_Reloc_REL32;       break;
+    case COFF_Reloc_X64_Rel32_1:   result = LNK_Reloc_REL32_1;     break;
+    case COFF_Reloc_X64_Rel32_2:   result = LNK_Reloc_REL32_2;     break;
+    case COFF_Reloc_X64_Rel32_3:   result = LNK_Reloc_REL32_3;     break;
+    case COFF_Reloc_X64_Rel32_4:   result = LNK_Reloc_REL32_4;     break;
+    case COFF_Reloc_X64_Rel32_5:   result = LNK_Reloc_REL32_5;     break;
+    case COFF_Reloc_X64_Section:   result = LNK_Reloc_SECT_IDX;    break;
+    case COFF_Reloc_X64_SecRel:    result = LNK_Reloc_SECT_REL;    break;
+    case COFF_Reloc_X64_SecRel7:   lnk_not_implemented("TODO: COFF_Reloc_X64_SecRel7"); break;
+    case COFF_Reloc_X64_Token:     lnk_not_implemented("TODO: COFF_Reloc_X64_Token");   break;
+    case COFF_Reloc_X64_SRel32:    lnk_not_implemented("TODO: COFF_Reloc_X64_SRel32");  break;
+    case COFF_Reloc_X64_Pair:      lnk_not_implemented("TODO: COFF_Reloc_X64_Pair");    break;
+    case COFF_Reloc_X64_SSpan32:   lnk_not_implemented("TODO: COFF_Reloc_X64_SSpan32"); break;
     default: lnk_invalid_path("unknown relocation type 0x%X", type);
     }
   } break;
@@ -150,20 +150,20 @@ lnk_ext_reloc_type_to_coff(COFF_MachineType machine, LNK_RelocType type)
 {
   U32 result = 0;
   switch (machine) {
-  case COFF_MachineType_X64: {
+  case COFF_Machine_X64: {
     switch (type) {
-    case LNK_Reloc_NULL:        result = COFF_RelocTypeX64_ABS;      break;
-    case LNK_Reloc_ADDR_64:     result = COFF_RelocTypeX64_ADDR64;   break;
-    case LNK_Reloc_ADDR_32:     result = COFF_RelocTypeX64_ADDR32;   break;
-    case LNK_Reloc_VIRT_OFF_32: result = COFF_RelocTypeX64_ADDR32NB; break;
-    case LNK_Reloc_REL32:       result = COFF_RelocTypeX64_REL32;    break;
-    case LNK_Reloc_REL32_1:     result = COFF_RelocTypeX64_REL32_1;  break;
-    case LNK_Reloc_REL32_2:     result = COFF_RelocTypeX64_REL32_2;  break;
-    case LNK_Reloc_REL32_3:     result = COFF_RelocTypeX64_REL32_3;  break;
-    case LNK_Reloc_REL32_4:     result = COFF_RelocTypeX64_REL32_4;  break;
-    case LNK_Reloc_REL32_5:     result = COFF_RelocTypeX64_REL32_5;  break;
-    case LNK_Reloc_SECT_IDX:    result = COFF_RelocTypeX64_SECTION;  break;
-    case LNK_Reloc_SECT_REL:    result = COFF_RelocTypeX64_SECREL;   break;
+    case LNK_Reloc_NULL:        result = COFF_Reloc_X64_Abs;      break;
+    case LNK_Reloc_ADDR_64:     result = COFF_Reloc_X64_Addr64;   break;
+    case LNK_Reloc_ADDR_32:     result = COFF_Reloc_X64_Addr32;   break;
+    case LNK_Reloc_VIRT_OFF_32: result = COFF_Reloc_X64_Addr32Nb; break;
+    case LNK_Reloc_REL32:       result = COFF_Reloc_X64_Rel32;    break;
+    case LNK_Reloc_REL32_1:     result = COFF_Reloc_X64_Rel32_1;  break;
+    case LNK_Reloc_REL32_2:     result = COFF_Reloc_X64_Rel32_2;  break;
+    case LNK_Reloc_REL32_3:     result = COFF_Reloc_X64_Rel32_3;  break;
+    case LNK_Reloc_REL32_4:     result = COFF_Reloc_X64_Rel32_4;  break;
+    case LNK_Reloc_REL32_5:     result = COFF_Reloc_X64_Rel32_5;  break;
+    case LNK_Reloc_SECT_IDX:    result = COFF_Reloc_X64_Section;  break;
+    case LNK_Reloc_SECT_REL:    result = COFF_Reloc_X64_SecRel;   break;
     default: InvalidPath;
     }
   } break;

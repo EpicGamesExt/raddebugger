@@ -327,7 +327,7 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
   String8 cached_lib_path = push_str8_copy(arena, input->lib_path);
 
   // parse coff obj
-  COFF_HeaderInfo     coff_info              = coff_header_info_from_data(input->data);
+  COFF_FileHeaderInfo coff_info              = coff_file_header_info_from_data(input->data);
   Rng1U64             coff_file_header_range = rng_1u64(0, coff_info.header_size);
   Rng1U64             coff_sect_arr_range    = rng_1u64(coff_info.section_array_off, coff_info.section_array_off + coff_info.section_count_no_null * sizeof(COFF_SectionHeader));
   Rng1U64             coff_symbols_range     = rng_1u64(coff_info.symbol_off, coff_info.symbol_off + coff_info.symbol_count * coff_info.symbol_size);
@@ -368,13 +368,13 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
     COFF_SectionHeader *coff_sect = &coff_sect_arr[sect_idx];
 
     // read name
-    String8 sect_name = coff_name_from_section_header(coff_sect, input->data, coff_info.string_table_off);
+    String8 sect_name = coff_name_from_section_header(input->data, coff_sect, coff_info.string_table_off);
     
     // parse section name
     coff_parse_section_name(sect_name, &sect_name_arr[sect_idx], &sect_sort_arr[sect_idx]);
 
     String8 data;
-    if (coff_sect->flags & COFF_SectionFlag_CNT_UNINITIALIZED_DATA) {
+    if (coff_sect->flags & COFF_SectionFlag_CntUninitializedData) {
       data = str8(0, coff_sect->fsize);
     } else {
       if (coff_sect->fsize > 0) {
@@ -403,7 +403,7 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
 
     LNK_Chunk *chunk    = &chunk_arr[sect_idx];
     chunk->align        = coff_align_size_from_section_flags(coff_sect->flags);
-    chunk->is_discarded = !!(coff_sect->flags & COFF_SectionFlag_LNK_REMOVE);
+    chunk->is_discarded = !!(coff_sect->flags & COFF_SectionFlag_LnkRemove);
     chunk->sort_chunk   = 1;
     chunk->type         = LNK_Chunk_Leaf;
     chunk->sort_idx     = sect_sort_arr[sect_idx];
@@ -433,8 +433,7 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
   }
 
   // convert from coff
-  B32                is_big_obj     = coff_info.type == COFF_DataType_BIG_OBJ;
-  LNK_SymbolArray    symbol_arr     = lnk_symbol_array_from_coff(arena, input->data, obj, cached_path, cached_lib_path, is_big_obj, function_pad_min, coff_info.string_table_off, coff_info.section_count_no_null, coff_sect_arr, coff_info.symbol_count, coff_symbols, chunk_ptr_arr, master_common_block);
+  LNK_SymbolArray    symbol_arr     = lnk_symbol_array_from_coff(arena, input->data, obj, cached_path, cached_lib_path, coff_info.is_big_obj, function_pad_min, coff_info.string_table_off, coff_info.section_count_no_null, coff_sect_arr, coff_info.symbol_count, coff_symbols, chunk_ptr_arr, master_common_block);
   LNK_SymbolList     symbol_list    = lnk_symbol_list_from_array(arena, symbol_arr);
   LNK_RelocList     *reloc_list_arr = lnk_reloc_list_array_from_coff(arena, coff_info.machine, input->data, coff_info.section_count_no_null, coff_sect_arr, chunk_ptr_arr, symbol_arr);
   LNK_DirectiveInfo  directive_info = lnk_directive_info_from_sections(arena, cached_path, cached_lib_path, coff_info.section_count_no_null, reloc_list_arr, sect_name_arr, chunk_arr);
@@ -495,7 +494,7 @@ THREAD_POOL_TASK_FUNC(lnk_obj_new_sect_scanner)
 
     for (U64 chunk_idx = 0; chunk_idx < obj->chunk_count; chunk_idx += 1) {
       String8           sect_name  = obj->sect_name_arr[chunk_idx];
-      COFF_SectionFlags sect_flags = obj->chunk_arr[chunk_idx]->flags & ~COFF_SectionFlags_LNK_FLAGS;
+      COFF_SectionFlags sect_flags = obj->chunk_arr[chunk_idx]->flags & ~COFF_SectionFlags_LnkFlags;
 
       KeyValuePair *is_present = hash_table_search_string(ht, sect_name);
       if (is_present) {
@@ -675,7 +674,7 @@ lnk_obj_list_push_parallel(TP_Context        *tp,
 
       // push new sections for :find_chunk_section
       for (LNK_SectDefn *curr = new_list.first; curr != 0; curr = curr->next) {
-        lnk_section_table_push(st, curr->name, curr->flags & ~COFF_SectionFlags_LNK_FLAGS);
+        lnk_section_table_push(st, curr->name, curr->flags & ~COFF_SectionFlags_LnkFlags);
       }
 
       tp_temp_end(temp);
@@ -763,7 +762,7 @@ lnk_symbol_array_from_coff(Arena              *arena,
 
       // is this a function symbol?
       COFF_SymbolValueInterpType interp = coff_interp_symbol(symbol.section_number, symbol.value, symbol.storage_class);
-      if (interp == COFF_SymbolValueInterp_REGULAR && COFF_SymbolType_IsFunc(symbol.type)) {
+      if (interp == COFF_SymbolValueInterp_Regular && COFF_SymbolType_IsFunc(symbol.type)) {
         if (symbol.section_number == 0 || symbol.section_number > sect_count) {
           lnk_error_with_loc(LNK_Error_IllData, obj_path, lib_path, "out ouf bounds section index in symbol \"%S (%u)\"", symbol.name, symbol.section_number);
         }
@@ -879,7 +878,7 @@ lnk_symbol_array_from_coff(Arena              *arena,
 
     COFF_SymbolValueInterpType interp = coff_interp_symbol(parsed_symbol.section_number, parsed_symbol.value, parsed_symbol.storage_class);
     switch (interp) {
-      case COFF_SymbolValueInterp_REGULAR: {
+      case COFF_SymbolValueInterp_Regular: {
         if (parsed_symbol.section_number == 0 || parsed_symbol.section_number > sect_count) {
           lnk_error_with_loc(LNK_Error_IllData, obj_path, lib_path, "symbol %S (No. %llx) has out ouf bounds section index %x", parsed_symbol.name, symbol_idx, parsed_symbol.section_number);
         }
@@ -889,7 +888,7 @@ lnk_symbol_array_from_coff(Arena              *arena,
 
 
         LNK_DefinedSymbolVisibility visibility = LNK_DefinedSymbolVisibility_Static;
-        if (parsed_symbol.storage_class == COFF_SymStorageClass_EXTERNAL) {
+        if (parsed_symbol.storage_class == COFF_SymStorageClass_External) {
           visibility = LNK_DefinedSymbolVisibility_Extern;
         }
         LNK_DefinedSymbolFlags flags = 0;
@@ -900,15 +899,15 @@ lnk_symbol_array_from_coff(Arena              *arena,
 
         LNK_Chunk             *chunk     = chunk_ptr_arr[parsed_symbol.section_number-1];
         U64                    offset    = parsed_symbol.value;
-        COFF_ComdatSelectType  selection = COFF_ComdatSelectType_ANY;
+        COFF_ComdatSelectType  selection = COFF_ComdatSelect_Any;
         U64                    check_sum = 0;
 
 
-        B32 is_comdat = (coff_sect_arr[parsed_symbol.section_number-1].flags & COFF_SectionFlag_LNK_COMDAT) &&
+        B32 is_comdat = (coff_sect_arr[parsed_symbol.section_number-1].flags & COFF_SectionFlag_LnkCOMDAT) &&
                         parsed_symbol.value == 0 &&
                         parsed_symbol.aux_symbol_count > 0 &&
-                        parsed_symbol.type.u.lsb == COFF_SymType_NULL &&
-                        parsed_symbol.storage_class == COFF_SymStorageClass_STATIC;
+                        parsed_symbol.type.u.lsb == COFF_SymType_Null &&
+                        parsed_symbol.storage_class == COFF_SymStorageClass_Static;
         if (is_comdat) {
           COFF_SymbolSecDef *secdef = aux_symbols;
 
@@ -916,7 +915,7 @@ lnk_symbol_array_from_coff(Arena              *arena,
           check_sum = secdef->check_sum;
 
           // create association link between chunks
-          if (secdef->selection == COFF_ComdatSelectType_ASSOCIATIVE) {
+          if (secdef->selection == COFF_ComdatSelect_Associative) {
             U32 secdef_number = secdef->number_lo;
 
             // promote secdef number to 32 bits
@@ -955,7 +954,7 @@ lnk_symbol_array_from_coff(Arena              *arena,
         lnk_init_defined_symbol_chunk(&symbol_array.v[symbol_idx], parsed_symbol.name, visibility, flags, chunk, offset, selection, check_sum);
         symbol_array.v[symbol_idx].obj = obj;
       } break;
-      case COFF_SymbolValueInterp_WEAK: {
+      case COFF_SymbolValueInterp_Weak: {
         if (parsed_symbol.aux_symbol_count == 0) {
           lnk_error_with_loc(LNK_Error_IllData, obj_path, lib_path, "weak symbol \"%S (%u)\" must at least one aux symbol", parsed_symbol.name, symbol_idx);
         }
@@ -972,12 +971,12 @@ lnk_symbol_array_from_coff(Arena              *arena,
         symbol->obj          = obj;
         fallback_symbol->obj = obj;
       } break;
-      case COFF_SymbolValueInterp_UNDEFINED: {
+      case COFF_SymbolValueInterp_Undefined: {
         LNK_Symbol *symbol = &symbol_array.v[symbol_idx];
         lnk_init_undefined_symbol(symbol, parsed_symbol.name, LNK_SymbolScopeFlag_Main);
         symbol->obj = obj;
       } break;
-      case COFF_SymbolValueInterp_COMMON: {
+      case COFF_SymbolValueInterp_Common: {
         // :common_block
         //
         // TODO: sort chunks on size to reduce bss usage
@@ -995,16 +994,16 @@ lnk_symbol_array_from_coff(Arena              *arena,
         }
 
         LNK_Symbol *symbol = &symbol_array.v[symbol_idx];
-        lnk_init_defined_symbol_chunk(symbol, parsed_symbol.name, LNK_DefinedSymbolVisibility_Extern, flags, chunk, 0, COFF_ComdatSelectType_LARGEST, 0);
+        lnk_init_defined_symbol_chunk(symbol, parsed_symbol.name, LNK_DefinedSymbolVisibility_Extern, flags, chunk, 0, COFF_ComdatSelect_Largest, 0);
         symbol->obj = obj;
       } break;
-      case COFF_SymbolValueInterp_ABS: {
+      case COFF_SymbolValueInterp_Abs: {
         // Never code or data, synthetic symbol. COFF spec says bits in value are used
         // as flags in symbol @feat.00, other symbols like @comp.id and @vol.md are undocumented.
         // LLVM uses undocumented mask 0x4800 on @feat.00 to tell if object was compiled with /guard:cf.
 
         LNK_DefinedSymbolVisibility visibility = LNK_DefinedSymbolVisibility_Static;
-        if (parsed_symbol.storage_class == COFF_SymStorageClass_EXTERNAL) {
+        if (parsed_symbol.storage_class == COFF_SymStorageClass_External) {
           visibility = LNK_DefinedSymbolVisibility_Extern;
         }
 
@@ -1012,7 +1011,7 @@ lnk_symbol_array_from_coff(Arena              *arena,
         lnk_init_defined_symbol_va(symbol, parsed_symbol.name, visibility, 0, parsed_symbol.value);
         symbol->obj = obj;
       } break;
-      case COFF_SymbolValueInterp_DEBUG: {
+      case COFF_SymbolValueInterp_Debug: {
       } break;
     }
   }
@@ -1025,8 +1024,8 @@ lnk_reloc_list_array_from_coff(Arena *arena, COFF_MachineType machine, String8 c
 {
   LNK_RelocList *reloc_list_arr = push_array_no_zero(arena, LNK_RelocList, sect_count);
   for (U64 sect_idx = 0; sect_idx < sect_count; ++sect_idx) {
-    COFF_SectionHeader *coff_header     = &coff_sect_arr[sect_idx];
-    COFF_RelocInfo      coff_reloc_info = coff_reloc_info_from_section_header(coff_data, coff_header);
+    COFF_SectionHeader *COFF_FileHeader     = &coff_sect_arr[sect_idx];
+    COFF_RelocInfo      coff_reloc_info = coff_reloc_info_from_section_header(coff_data, COFF_FileHeader);
     COFF_Reloc         *coff_reloc_v    = (COFF_Reloc *)(coff_data.str + coff_reloc_info.array_off);
     LNK_Chunk          *sect_chunk      = chunk_ptr_arr[sect_idx];
     reloc_list_arr[sect_idx] = lnk_reloc_list_from_coff_reloc_array(arena, machine, sect_chunk, symbol_array, coff_reloc_v, coff_reloc_info.count);
@@ -1122,8 +1121,8 @@ lnk_directive_info_from_sections(Arena         *arena,
     if (str8_match_lit(".drectve", sect_name, 0)) {
       if (sect_chunk->type == LNK_Chunk_Leaf) {
         if (sect_chunk->u.leaf.size >= 3) {
-          if (~sect_chunk->flags & COFF_SectionFlag_LNK_INFO) {
-            lnk_error_with_loc(LNK_Warning_IllData, obj_path, lib_path, "%S missing COFF_SectionFlag_LNK_INFO", sect_name);
+          if (~sect_chunk->flags & COFF_SectionFlag_LnkInfo) {
+            lnk_error_with_loc(LNK_Warning_IllData, obj_path, lib_path, "%S missing COFF_SectionFlag_LnkInfo", sect_name);
           }
           if (reloc_list_arr[chunk_idx].count > 0) {
             lnk_error_with_loc(LNK_Warning_DirectiveSectionWithRelocs, obj_path, lib_path, "directive section %S(%#x) has relocations", sect_name, (chunk_idx+1));

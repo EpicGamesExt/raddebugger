@@ -161,15 +161,15 @@ internal RDI_BinarySectionFlags
 p2r_rdi_binary_section_flags_from_coff_section_flags(COFF_SectionFlags flags)
 {
   RDI_BinarySectionFlags result = 0;
-  if(flags & COFF_SectionFlag_MEM_READ)
+  if(flags & COFF_SectionFlag_MemRead)
   {
     result |= RDI_BinarySectionFlag_Read;
   }
-  if(flags & COFF_SectionFlag_MEM_WRITE)
+  if(flags & COFF_SectionFlag_MemWrite)
   {
     result |= RDI_BinarySectionFlag_Write;
   }
-  if(flags & COFF_SectionFlag_MEM_EXECUTE)
+  if(flags & COFF_SectionFlag_MemExecute)
   {
     result |= RDI_BinarySectionFlag_Execute;
   }
