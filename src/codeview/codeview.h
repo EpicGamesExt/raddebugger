@@ -2149,6 +2149,7 @@ typedef enum CV_MoComUDTKindEnum
 } CV_MoComUDTKindEnum;
 
 typedef U16 CV_TypeProps;
+typedef U32 CV_TypeProps32;
 enum
 {
   CV_TypeProp_Packed                     = (1 << 0),
@@ -2686,12 +2687,11 @@ typedef struct CV_LeafStruct2 CV_LeafStruct2;
 struct CV_LeafStruct2
 {
   // NOTE: still reverse engineering this - if you find docs please help!
-  CV_TypeProps props;
-  U16          unknown1;
-  CV_TypeId    field_itype;
-  CV_TypeId    derived_itype;
-  CV_TypeId    vshape_itype;
-  U16          unknown2;
+  CV_TypeProps32 props;
+  CV_TypeId      field_itype;
+  CV_TypeId      derived_itype;
+  CV_TypeId      vshape_itype;
+  U16            unknown; // count for something? (possibly CV_Numeric)
   // CV_Numeric size
   // U8[] name (null terminated)
   // U8[] unique_name (null terminated)
