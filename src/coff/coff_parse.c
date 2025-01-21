@@ -481,13 +481,13 @@ coff_resource_id_compar(void *raw_a, void *raw_b)
   COFF_ResourceID *b = raw_b;
   if (a->type == b->type) {
     switch (a->type) {
-      case COFF_ResourceIDType_Null: break;
-      case COFF_ResourceIDType_Number: cmp = u16_compar(&a->u.number, &b->u.number);                 break;
-      case COFF_ResourceIDType_String: cmp = str8_compar_case_sensitive(&a->u.string, &b->u.string); break;
+      case COFF_ResourceIDType_Null:   cmp = 0; break;
+      case COFF_ResourceIDType_Number: cmp = a->u.number < b->u.number ? -1 : a->u.number > b->u.number ? +1 : 0; break;
+      case COFF_ResourceIDType_String: cmp = strncmp((char *)a->u.string.str, (char *)b->u.string.str, Min(a->u.string.size, b->u.string.size)); break;
       default: InvalidPath; break;
     }
   } else {
-    cmp = u32_compar(&a->type, &b->type);
+    cmp = a->type < b->type ? -1 : a->type > b->type ? +1 : 0;
   }
   return cmp;
 }

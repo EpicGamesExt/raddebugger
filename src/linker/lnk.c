@@ -1234,6 +1234,7 @@ lnk_push_input_from_lazy(Arena *arena, PathStyle path_style, LNK_LazySymbol *laz
   COFF_DataType      member_type = coff_data_type_from_data(member_info.data);
   
   switch (member_type) {
+    case COFF_DataType_Null: break;
     case COFF_DataType_Import: {
       LNK_InputImport *input = lnk_input_import_list_push(arena, input_import_list);
       input->import_header = coff_archive_import_from_data(member_info.data);
