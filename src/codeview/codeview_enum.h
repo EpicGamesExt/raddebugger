@@ -32,7 +32,7 @@ internal String8 cv_string_from_sepcode(Arena *arena, CV_SepcodeFlags x);
 internal String8 cv_string_from_pub32_flags(Arena *arena, CV_Pub32Flags x);
 internal String8 cv_string_from_generic_flags(Arena *arena, CV_GenericFlags x);
 internal String8 cv_string_from_frame_proc_flags(Arena *arena, CV_FrameprocFlags x);
-internal String8 cv_string_from_type_props(Arena *arena, CV_TypeProps x);
+internal String8 cv_string_from_type_props(Arena *arena, CV_TypeProps32 x);
 internal String8 cv_string_from_local_flags(Arena *arena, CV_LocalFlags x);
 internal String8 cv_string_from_proc_flags(Arena *arena, CV_ProcFlags x);
 internal String8 cv_string_from_range_attribs(Arena *arena, CV_RangeAttribs x);

@@ -3689,13 +3689,12 @@ cv_print_leaf(Arena *arena, String8List *out, String8 indent, CV_TypeIndex min_i
       cursor += cv_read_numeric(raw_leaf, cursor, &size);
       cursor += str8_deserial_read_cstr(raw_leaf, cursor, &name);
 
-      rd_printf("Name:          %S", name);
-      rd_printf("Fields:        %S", cv_string_from_itype(scratch.arena, min_itype, lf.field_itype));
-      rd_printf("Properties:    %S", cv_string_from_type_props(scratch.arena, lf.props));
-      rd_printf("Derived:       %S", cv_string_from_itype(scratch.arena, min_itype, lf.derived_itype));
-      rd_printf("VShape:        %S", cv_string_from_itype(scratch.arena, min_itype, lf.vshape_itype));
-      rd_printf("Unknown1:      %x", lf.unknown1);
-      rd_printf("Unknown2:      %x", lf.unknown2);
+      rd_printf("Name:       %S", name);
+      rd_printf("Fields:     %S", cv_string_from_itype(scratch.arena, min_itype, lf.field_itype));
+      rd_printf("Properties: %S", cv_string_from_type_props(scratch.arena, lf.props));
+      rd_printf("Derived:    %S", cv_string_from_itype(scratch.arena, min_itype, lf.derived_itype));
+      rd_printf("VShape:     %S", cv_string_from_itype(scratch.arena, min_itype, lf.vshape_itype));
+      rd_printf("Unknown:    %x", lf.unknown);
       if (lf.props & CV_TypeProp_HasUniqueName) {
         String8 unique_name = str8_zero();
         cursor += str8_deserial_read_cstr(raw_leaf, cursor, &unique_name);

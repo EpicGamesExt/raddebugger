@@ -572,7 +572,7 @@ cv_string_from_frame_proc_flags(Arena *arena, CV_FrameprocFlags x)
 }
 
 internal String8
-cv_string_from_type_props(Arena *arena, CV_TypeProps x)
+cv_string_from_type_props(Arena *arena, CV_TypeProps32 x)
 {
   Temp scratch = scratch_begin(&arena, 1);
 
