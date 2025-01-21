@@ -1106,6 +1106,40 @@ os_mutex_drop(OS_Handle mutex)
   LeaveCriticalSection(&entity->mutex);
 }
 
+internal OS_Handle
+os_shared_mutex_alloc(String8 name)
+{
+  Assert(name.size);
+  Temp scratch = scratch_begin(0,0);
+  String16 name16 = str16_from_8(scratch.arena, name);
+  HANDLE handle = CreateMutexW(0, 0, (WCHAR*)name16.str);
+  Assert(handle != 0);
+  OS_Handle mutex = {(U64)handle};
+  scratch_end(scratch);
+  return mutex;
+}
+
+internal void
+os_shared_mutex_release(OS_Handle mutex)
+{
+  CloseHandle((HANDLE)mutex.u64[0]);
+}
+
+internal B32
+os_shared_mutex_take(OS_Handle mutex, U64 endt_us)
+{
+  U32 sleep_ms = os_w32_sleep_ms_from_endt_us(endt_us);
+  DWORD wait_result = WaitForSingleObject((HANDLE)mutex.u64[0], sleep_ms);
+  B32 result = (wait_result == WAIT_OBJECT_0);
+  return result;
+}
+
+internal void
+os_shared_mutex_drop(OS_Handle mutex)
+{
+  ReleaseMutex((HANDLE)mutex.u64[0]);
+}
+
 //- rjf: reader/writer mutexes
 
 internal OS_Handle
