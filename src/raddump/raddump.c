@@ -4949,9 +4949,9 @@ coff_print_symbol_table(Arena              *arena,
       String8        storage_class = coff_string_from_sym_storage_class(symbol->storage_class);
       String8        section_number;
       switch (symbol->section_number) {
-        case COFF_Symbol_UndefinedSection: section_number = str8_lit("UNDEF"); break;
-        case COFF_Symbol_AbsSection32:       section_number = str8_lit("ABS");   break;
-        case COFF_Symbol_DebugSection32:     section_number = str8_lit("DEBUG"); break;
+        case COFF_Symbol_UndefinedSection: section_number = str8_lit("Undef"); break;
+        case COFF_Symbol_AbsSection32:     section_number = str8_lit("Abs");   break;
+        case COFF_Symbol_DebugSection32:   section_number = str8_lit("Debug"); break;
         default:                           section_number = push_str8f(scratch.arena, "%010x", symbol->section_number); break;
       }
 
@@ -5135,7 +5135,7 @@ coff_print_big_obj(Arena *arena, String8List *out, String8 indent, String8 raw_d
   }
 
   if (opts & RD_Option_Symbols) {
-    coff_print_symbol_table(arena, out, indent, raw_data, string_table_off, 1, symbols);
+    coff_print_symbol_table(arena, out, indent, raw_data, 1, string_table_off, symbols);
     rd_newline();
   }
 
