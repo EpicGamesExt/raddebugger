@@ -29,8 +29,6 @@ typedef struct TP_Context
 {
   OS_Handle    task_semaphore;
   OS_Handle    main_semaphore;
-  OS_Handle    shared_mutex_handle;
-  String8      shared_mutex_name;
   B32          is_live;
   U32          worker_count;
   TP_Worker   *worker_arr;
@@ -38,12 +36,11 @@ typedef struct TP_Context
   U64          task_count;
   TP_TaskFunc *task_func;
   void        *task_data;
-  volatile U64 next_task_id;
-  volatile U64 take_count;
+  volatile S64 task_left_count;
+  volatile U64 task_done_count;
 } TP_Context;
 
-internal TP_Context * tp_alloc(Arena *arena, U32 worker_count);
-internal TP_Context * tp_alloc_shared(Arena *arena, U32 worker_count, String8 name);
+internal TP_Context * tp_alloc(Arena *arena, U32 worker_count, String8 name);
 internal void         tp_release(TP_Context *pool);
 internal TP_Arena *   tp_arena_alloc(TP_Context *pool);
 internal void         tp_arena_release(TP_Arena **arena_ptr);

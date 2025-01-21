@@ -3190,13 +3190,8 @@ lnk_run(int argc, char **argv)
   
   LNK_Config *config = lnk_build_config(scratch.arena, argc, argv);
   
-  TP_Context *tp;
-  if (config->shared_thread_pool == LNK_SwitchState_Yes) {
-    tp = tp_alloc_shared(scratch.arena, config->worker_count, config->shared_thread_pool_mutex_name);
-  } else {
-    tp = tp_alloc(scratch.arena, config->worker_count);
-  }
-  TP_Arena *tp_arena = tp_arena_alloc(tp);
+  TP_Context *tp       = tp_alloc(scratch.arena, config->worker_count, config->shared_thread_pool_name);
+  TP_Arena   *tp_arena = tp_arena_alloc(tp);
   
 #if PROFILE_TELEMETRY
   {

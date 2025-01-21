@@ -150,8 +150,7 @@ global read_only struct
   { LNK_CmdSwitch_Rad_PdbHashTypeNameMap,        "RAD_PDB_HASH_TYPE_NAME_MAP",      ":FILENAME", "Produce map file with hash -> type name mappings."                             },
   { LNK_CmdSwitch_Rad_PdbHashTypeNames,          "RAD_PDB_HASH_TYPE_NAMES",         ":{NONE|LENIENT|FULL}", "Replace type names in LF_STRUCTURE and LF_CLASS with hashes."       },
   { LNK_CmdSwitch_Rad_SectVirtOff,               "RAD_SECT_VIRT_OFF",               ":#",        "Set RVA where section data is placed in memory. For internal use only."        },
-  { LNK_CmdSwitch_Rad_SharedThreadPool,          "RAD_SHARED_THREAD_POOL",          "[:NO]",     ""                                                                              },
-  { LNK_CmdSwitch_Rad_SharedThreadPoolMutexName, "RAD_SHARED_THREAD_POOL_MUTEX_NAME", ":STRING", ""                                                                            },
+  { LNK_CmdSwitch_Rad_SharedThreadPool,          "RAD_SHARED_THREAD_POOL",          "[:STRING]", "Default value \"" LNK_DEFAULT_THREAD_POOL_NAME "\""                            },
   { LNK_CmdSwitch_Rad_SuppressError,             "RAD_SUPPRESS_ERROR",              ":#",        ""                                                                              },
   { LNK_CmdSwitch_Rad_SymbolTableCapDefined,     "RAD_SYMBOL_TABLE_CAP_DEFINED",    ":#",        "Number of buckets allocated in the symbol table for defined symbols."          },
   { LNK_CmdSwitch_Rad_SymbolTableCapInternal,    "RAD_SYMBOL_TABLE_CAP_INTERNAL",   ":#",        "Number of buckets allocated in the symbol table for internal symbols."         },
@@ -1677,11 +1676,14 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
   } break;
 
   case LNK_CmdSwitch_Rad_SharedThreadPool: {
-    lnk_cmd_switch_parse_flag(obj_path, lib_path, cmd_switch, value_strings, &config->shared_thread_pool);
-  } break;
-
-  case LNK_CmdSwitch_Rad_SharedThreadPoolMutexName: {
-    lnk_cmd_switch_parse_string(obj_path, lib_path, cmd_switch, value_strings, &config->shared_thread_pool_mutex_name);
+    if (value_strings.node_count == 0) {
+      config->shared_thread_pool_name = str8_lit(LNK_DEFAULT_THREAD_POOL_NAME);
+    } else {
+      lnk_cmd_switch_parse_string(obj_path, lib_path, cmd_switch, value_strings, &config->shared_thread_pool_name);
+      if (config->shared_thread_pool_name.size == 0) {
+        lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "invalid empty string for thread pool name");
+      }
+    }
   } break;
 
   case LNK_CmdSwitch_Rad_SuppressError: {
@@ -1794,7 +1796,6 @@ lnk_config_from_cmd_line(Arena *arena, String8List raw_cmd_line)
   lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_SymbolTableCapWeak,        "0x3ffff");
   lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_SymbolTableCapLib,         "0x3ffff");
   lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_DebugAltPath,              "%%_RAD_RDI_PATH%%");
-  lnk_cmd_line_push_option_if_not_presentf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_SharedThreadPoolMutexName, "RADLINK_THREAD_POOL_MUTEX");
 #if BUILD_DEBUG
   lnk_cmd_line_push_optionf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_Log, "debug");
   lnk_cmd_line_push_optionf(scratch.arena, &cmd_line, LNK_CmdSwitch_Rad_Log, "io_write");
