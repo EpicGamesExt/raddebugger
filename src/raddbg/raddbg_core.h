@@ -1419,7 +1419,6 @@ internal String8 rd_cfg_path_from_src(RD_CfgSrc src);
 
 //- rjf: entity cache queries
 internal RD_EntityList rd_query_cached_entity_list_with_kind(RD_EntityKind kind);
-internal RD_EntityList rd_push_active_target_list(Arena *arena);
 
 //- rjf: config state
 internal RD_CfgTable *rd_cfg_table(void);

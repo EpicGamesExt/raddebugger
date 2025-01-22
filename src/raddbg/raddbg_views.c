@@ -3485,7 +3485,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(getting_started)
     UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
     UI_Padding(ui_pct(1, 0)) UI_Focus(UI_FocusKind_Null)
   {
-    RD_EntityList targets = rd_push_active_target_list(scratch.arena);
+    RD_CfgList targets = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("target"));
     CTRL_EntityList processes = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Process);
     
     //- rjf: icon & info
@@ -3543,8 +3543,9 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(getting_started)
         //- rjf: user has 1 target. build helper for launching it
         case 1:
         {
-          RD_Entity *target = rd_first_entity_from_list(&targets);
-          String8 target_full_path = target->string;
+          RD_Cfg *target_cfg = rd_cfg_list_first(&targets);
+          D_Target target = rd_target_from_cfg(scratch.arena, target_cfg);
+          String8 target_full_path = target.exe;
           String8 target_name = str8_skip_last_slash(target_full_path);
           UI_PrefHeight(ui_em(3.75f, 1.f))
             UI_Row
@@ -3556,12 +3557,12 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(getting_started)
           {
             if(ui_clicked(rd_icon_buttonf(RD_IconKind_Play, 0, "Launch %S", target_name)))
             {
-              rd_cmd(RD_CmdKind_LaunchAndRun, .entity = rd_handle_from_entity(target));
+              rd_cmd(RD_CmdKind_LaunchAndRun, .cfg = rd_handle_from_cfg(target_cfg));
             }
             ui_spacer(ui_em(1.5f, 1));
             if(ui_clicked(rd_icon_buttonf(RD_IconKind_Play, 0, "Step Into %S", target_name)))
             {
-              rd_cmd(RD_CmdKind_LaunchAndInit, .entity = rd_handle_from_entity(target));
+              rd_cmd(RD_CmdKind_LaunchAndInit, .cfg = rd_handle_from_cfg(target_cfg));
             }
           }
         }break;
@@ -3593,8 +3594,8 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(getting_started)
       RD_Palette(RD_PaletteCode_Floating)
     {
       ui_labelf("use");
-      UI_TextAlignment(UI_TextAlign_Center) rd_cmd_binding_buttons(rd_cmd_kind_info_table[RD_CmdKind_RunCommand].string);
-      ui_labelf("to open command menu");
+      UI_TextAlignment(UI_TextAlign_Center) rd_cmd_binding_buttons(rd_cmd_kind_info_table[RD_CmdKind_OpenLister].string);
+      ui_labelf("to open the lister for commands and options");
     }
   }
   scratch_end(scratch);

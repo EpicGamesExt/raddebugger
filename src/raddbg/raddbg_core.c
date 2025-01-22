@@ -11467,21 +11467,6 @@ rd_query_cached_entity_list_with_kind(RD_EntityKind kind)
   return result;
 }
 
-internal RD_EntityList
-rd_push_active_target_list(Arena *arena)
-{
-  RD_EntityList active_targets = {0};
-  RD_EntityList all_targets = rd_query_cached_entity_list_with_kind(RD_EntityKind_Target);
-  for(RD_EntityNode *n = all_targets.first; n != 0; n = n->next)
-  {
-    if(!n->entity->disabled)
-    {
-      rd_entity_list_push(arena, &active_targets, n->entity);
-    }
-  }
-  return active_targets;
-}
-
 //- rjf: config state
 
 internal RD_CfgTable *
