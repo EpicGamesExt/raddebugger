@@ -6126,7 +6126,7 @@ rd_qsort_compare_settings_item(RD_SettingsItem *a, RD_SettingsItem *b)
 
 RD_VIEW_RULE_UI_FUNCTION_DEF(settings)
 {
-#if 0
+#if 0 // TODO(rjf): @cfg
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);

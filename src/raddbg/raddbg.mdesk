@@ -111,6 +111,35 @@ RD_VocabularyMap:
 ////////////////////////////////
 //~ rjf: Configuration Tree Schemas
 
+/*
+  {
+    top_level,
+    ```x:
+    {
+      'hover_animations':     bool,
+      'press_animations':     bool,
+      'focus_animations':     bool,
+      'tooltip_animations':   bool,
+      'menu_animations':      bool,
+      'scrolling_animations': bool,
+      'background_blur':      bool,
+      'thread_lines':         bool,
+      'breakpoint_lines':     bool,
+      'thread_glow':          bool,
+      'breakpoint_glow':      bool,
+      'opaque_backgrounds':   bool,
+      'smooth_main_text':     bool,
+      'smooth_code_text':     bool,
+      'hint_main_text':       bool,
+      'hint_code_text':       bool,
+      'tab_width':      @range[1, 32] u64,
+      'main_font_size': @range[6, 72] u64,
+      'code_font_size': @range[1, 32] u64,
+    }
+    ```
+  }
+*/
+
 @table(name schema) RD_CfgSchemaTable:
 {
   {target          "x:{'label':code_string, 'exe':path, 'args':string, 'working_directory':path, 'entry_point':code_string, 'stdout_path':path, 'stderr_path':path, 'stdin_path':path, 'debug_subprocesses':bool}"}
