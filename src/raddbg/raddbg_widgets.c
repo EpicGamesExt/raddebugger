@@ -1016,13 +1016,13 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             // rjf: shift+click => enable breakpoint
             if(ui_clicked(bp_sig) && bp_sig.event_flags & OS_Modifier_Shift)
             {
-              rd_cmd(bp_is_disabled ? RD_CmdKind_EnableEntity : RD_CmdKind_DisableEntity, .cfg = rd_handle_from_cfg(bp));
+              rd_cmd(bp_is_disabled ? RD_CmdKind_EnableCfg : RD_CmdKind_DisableCfg, .cfg = rd_handle_from_cfg(bp));
             }
             
             // rjf: click => remove breakpoint
             if(ui_clicked(bp_sig) && bp_sig.event_flags == 0)
             {
-              rd_cmd(RD_CmdKind_RemoveEntity, .cfg = rd_handle_from_cfg(bp));
+              rd_cmd(RD_CmdKind_RemoveCfg, .cfg = rd_handle_from_cfg(bp));
             }
             
             // rjf: drag start
@@ -1077,7 +1077,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             // rjf: click => remove pin
             if(ui_clicked(pin_sig))
             {
-              rd_cmd(RD_CmdKind_RemoveEntity, .cfg = rd_handle_from_cfg(pin));
+              rd_cmd(RD_CmdKind_RemoveCfg, .cfg = rd_handle_from_cfg(pin));
             }
             
             // rjf: drag start
@@ -1403,7 +1403,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   UI_Signal catchall_margin_container_sig = ui_signal_from_box(catchall_margin_container_box);
   UI_Signal text_container_sig = ui_signal_from_box(text_container_box);
   B32 line_drag_drop = 0;
-  RD_Entity *line_drag_entity = &rd_nil_entity;
+  RD_Cfg *line_drag_cfg = &rd_nil_cfg;
   CTRL_Entity *line_drag_ctrl_entity = &ctrl_entity_nil;
   Vec4F32 line_drag_drop_color = rd_rgba_from_theme_color(RD_ThemeColor_DropSiteOverlay);
   {
@@ -1479,17 +1479,18 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
     if(rd_drag_is_active() && contains_2f32(clipped_top_container_rect, ui_mouse()))
     {
       CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_state->drag_drop_regs->thread);
-      RD_Entity *entity = rd_entity_from_handle(rd_state->drag_drop_regs->entity);
-      if(rd_state->drag_drop_regs_slot == RD_RegSlot_Entity &&
-         (entity->kind == RD_EntityKind_WatchPin ||
-          entity->kind == RD_EntityKind_Breakpoint))
+      RD_Cfg *cfg = rd_cfg_from_handle(rd_state->drag_drop_regs->cfg);
+      if(rd_state->drag_drop_regs_slot == RD_RegSlot_Cfg &&
+         (str8_match(cfg->string, str8_lit("breakpoint"), 0) ||
+          str8_match(cfg->string, str8_lit("watch_pin"), 0)))
       {
         line_drag_drop = 1;
-        line_drag_entity = entity;
-        if(entity->flags & RD_EntityFlag_HasColor)
+        line_drag_cfg = cfg;
+        line_drag_drop_color = rd_rgba_from_cfg(cfg);
+        line_drag_drop_color.w *= 0.5f;
+        if(line_drag_drop_color.w == 0)
         {
-          line_drag_drop_color = rd_rgba_from_entity(entity);
-          line_drag_drop_color.w *= 0.5f;
+          line_drag_drop_color = rd_rgba_from_theme_color(RD_ThemeColor_DropSiteOverlay);
         }
       }
       if(rd_state->drag_drop_regs_slot == RD_RegSlot_Thread)
@@ -1503,14 +1504,14 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
     
     //- rjf: drop target is dropped -> process
     {
-      if(!rd_entity_is_nil(line_drag_entity) && rd_drag_drop() && contains_1s64(params->line_num_range, mouse_pt.line))
+      if(line_drag_cfg != &rd_nil_cfg && rd_drag_drop() && contains_1s64(params->line_num_range, mouse_pt.line))
       {
-        RD_Entity *dropped_entity = line_drag_entity;
+        RD_Cfg *dropped_cfg = line_drag_cfg;
         S64 line_num = mouse_pt.line;
         U64 line_idx = line_num - params->line_num_range.min;
         U64 line_vaddr = params->line_vaddrs[line_idx];
-        rd_cmd(RD_CmdKind_RelocateEntity,
-               .entity     = rd_handle_from_entity(dropped_entity),
+        rd_cmd(RD_CmdKind_RelocateCfg,
+               .cfg        = rd_handle_from_cfg(dropped_cfg),
                .file_path  = line_vaddr == 0 ? rd_regs()->file_path : str8_zero(),
                .cursor     = line_vaddr == 0 ? txt_pt(line_num, 1) : txt_pt(0, 0),
                .vaddr      = line_vaddr);

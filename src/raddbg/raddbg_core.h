@@ -1138,6 +1138,7 @@ internal void rd_name_release(String8 string);
 
 internal RD_Cfg *rd_cfg_alloc(void);
 internal void rd_cfg_release(RD_Cfg *cfg);
+internal void rd_cfg_release_all_children(RD_Cfg *cfg);
 internal RD_Handle rd_handle_from_cfg(RD_Cfg *cfg);
 internal RD_Cfg *rd_cfg_from_handle(RD_Handle handle);
 internal RD_Cfg *rd_cfg_new(RD_Cfg *parent, String8 string);
@@ -1218,7 +1219,6 @@ internal RD_Entity *rd_entity_from_name_and_kind(String8 string, RD_EntityKind k
 ////////////////////////////////
 //~ rjf: Frontend Entity Info Extraction
 
-internal D_Target rd_d_target_from_entity(RD_Entity *entity);
 internal DR_FancyStringList rd_title_fstrs_from_entity(Arena *arena, RD_Entity *entity, Vec4F32 secondary_color, F32 size);
 
 ////////////////////////////////

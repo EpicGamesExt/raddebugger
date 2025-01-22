@@ -252,14 +252,14 @@ RD_CmdKind_ToggleWatchExpressionAtMouse,
 RD_CmdKind_SetColumns,
 RD_CmdKind_ToggleAddressVisibility,
 RD_CmdKind_ToggleCodeBytesVisibility,
-RD_CmdKind_EnableEntity,
-RD_CmdKind_DisableEntity,
-RD_CmdKind_SelectEntity,
-RD_CmdKind_RemoveEntity,
-RD_CmdKind_NameEntity,
-RD_CmdKind_ConditionEntity,
-RD_CmdKind_DuplicateEntity,
-RD_CmdKind_RelocateEntity,
+RD_CmdKind_EnableCfg,
+RD_CmdKind_DisableCfg,
+RD_CmdKind_SelectCfg,
+RD_CmdKind_RemoveCfg,
+RD_CmdKind_NameCfg,
+RD_CmdKind_ConditionCfg,
+RD_CmdKind_DuplicateCfg,
+RD_CmdKind_RelocateCfg,
 RD_CmdKind_AddBreakpoint,
 RD_CmdKind_AddAddressBreakpoint,
 RD_CmdKind_AddFunctionBreakpoint,
@@ -395,12 +395,6 @@ RD_ViewRuleKind_GettingStarted,
 RD_ViewRuleKind_ExceptionFilters,
 RD_ViewRuleKind_Settings,
 RD_ViewRuleKind_PendingFile,
-RD_ViewRuleKind_Commands,
-RD_ViewRuleKind_FileSystem,
-RD_ViewRuleKind_SystemProcesses,
-RD_ViewRuleKind_EntityLister,
-RD_ViewRuleKind_CtrlEntityLister,
-RD_ViewRuleKind_SymbolLister,
 RD_ViewRuleKind_Watch,
 RD_ViewRuleKind_Locals,
 RD_ViewRuleKind_Registers,
@@ -757,12 +751,6 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(getting_started);
 RD_VIEW_RULE_UI_FUNCTION_DEF(exception_filters);
 RD_VIEW_RULE_UI_FUNCTION_DEF(settings);
 RD_VIEW_RULE_UI_FUNCTION_DEF(pending_file);
-RD_VIEW_RULE_UI_FUNCTION_DEF(commands);
-RD_VIEW_RULE_UI_FUNCTION_DEF(file_system);
-RD_VIEW_RULE_UI_FUNCTION_DEF(system_processes);
-RD_VIEW_RULE_UI_FUNCTION_DEF(entity_lister);
-RD_VIEW_RULE_UI_FUNCTION_DEF(ctrl_entity_lister);
-RD_VIEW_RULE_UI_FUNCTION_DEF(symbol_lister);
 RD_VIEW_RULE_UI_FUNCTION_DEF(watch);
 RD_VIEW_RULE_UI_FUNCTION_DEF(locals);
 RD_VIEW_RULE_UI_FUNCTION_DEF(registers);
@@ -809,7 +797,7 @@ extern EV_ViewRuleExprExpandInfoHookFunctionType * rd_collection_expr_expand_inf
 extern EV_ViewRuleExprExpandRangeInfoHookFunctionType * rd_collection_expr_expand_range_info_hook_function_table[18];
 extern EV_ViewRuleExprExpandIDFromNumHookFunctionType * rd_collection_expr_expand_id_from_num_hook_function_table[18];
 extern EV_ViewRuleExprExpandIDFromNumHookFunctionType * rd_collection_expr_expand_num_from_id_hook_function_table[18];
-extern RD_ViewRuleInfo rd_view_rule_kind_info_table[35];
+extern RD_ViewRuleInfo rd_view_rule_kind_info_table[29];
 extern RD_IconKind rd_entity_kind_icon_kind_table[27];
 extern String8 rd_theme_preset_display_string_table[9];
 extern String8 rd_theme_preset_code_string_table[9];

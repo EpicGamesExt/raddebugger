@@ -579,6 +579,16 @@ rd_cfg_release(RD_Cfg *cfg)
   scratch_end(scratch);
 }
 
+internal void
+rd_cfg_release_all_children(RD_Cfg *cfg)
+{
+  for(RD_Cfg *child = cfg->first, *next = &rd_nil_cfg; child != &rd_nil_cfg; child = next)
+  {
+    next = child->next;
+    rd_cfg_release(child);
+  }
+}
+
 internal RD_Handle
 rd_handle_from_cfg(RD_Cfg *cfg)
 {
@@ -1294,38 +1304,7 @@ rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg, Vec4F32 secondary_color, F32 
     {
       rgba = ui_top_palette()->text;
     }
-    
-    //- rjf: name -> icon table
-    local_persist struct
-    {
-      String8 name;
-      RD_IconKind icon_kind;
-    }
-    name2icon_map[] =
-    {
-      {str8_lit_comp("target"),         RD_IconKind_Target},
-      {str8_lit_comp("breakpoint"),     RD_IconKind_CircleFilled},
-      {str8_lit_comp("auto_view_rule"), RD_IconKind_Binoculars},
-      {str8_lit_comp("file_path_map"),  RD_IconKind_FileOutline},
-      {str8_lit_comp("watch_pin"),      RD_IconKind_Pin},
-      {str8_lit_comp("watch"),          RD_IconKind_Binoculars},
-      {str8_lit_comp("window"),         RD_IconKind_Window},
-      {str8_lit_comp("recent_project"), RD_IconKind_Briefcase},
-      {str8_lit_comp("recent_file"),    RD_IconKind_FileOutline},
-    };
-    
-    //- rjf: map cfg -> icon
-    RD_IconKind icon_kind = RD_IconKind_Null;
-    for EachElement(idx, name2icon_map)
-    {
-      if(str8_match(cfg->string, name2icon_map[idx].name, 0))
-      {
-        icon_kind = name2icon_map[idx].icon_kind;
-        break;
-      }
-    }
-    
-    //- rjf: map icon -> is-from-command-line
+    RD_IconKind icon_kind = rd_icon_kind_from_code_name(cfg->string);
     B32 is_from_command_line = 0;
     {
       RD_Cfg *cmd_line_root = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("command_line"));
@@ -1946,28 +1925,6 @@ rd_entity_from_name_and_kind(String8 string, RD_EntityKind kind)
 
 ////////////////////////////////
 //~ rjf: Frontend Entity Info Extraction
-
-internal D_Target
-rd_d_target_from_entity(RD_Entity *entity)
-{
-  RD_Entity *src_target_exe   = rd_entity_child_from_kind(entity, RD_EntityKind_Executable);
-  RD_Entity *src_target_args  = rd_entity_child_from_kind(entity, RD_EntityKind_Arguments);
-  RD_Entity *src_target_wdir  = rd_entity_child_from_kind(entity, RD_EntityKind_WorkingDirectory);
-  RD_Entity *src_target_stdo  = rd_entity_child_from_kind(entity, RD_EntityKind_StdoutPath);
-  RD_Entity *src_target_stde  = rd_entity_child_from_kind(entity, RD_EntityKind_StderrPath);
-  RD_Entity *src_target_stdi  = rd_entity_child_from_kind(entity, RD_EntityKind_StdinPath);
-  RD_Entity *src_target_entry = rd_entity_child_from_kind(entity, RD_EntityKind_EntryPoint);
-  D_Target target = {0};
-  target.exe                     = src_target_exe->string;
-  target.args                    = src_target_args->string;
-  target.working_directory       = src_target_wdir->string;
-  target.custom_entry_point_name = src_target_entry->string;
-  target.stdout_path             = src_target_stdo->string;
-  target.stderr_path             = src_target_stde->string;
-  target.stdin_path              = src_target_stdi->string;
-  target.debug_subprocesses      = entity->debug_subprocesses;
-  return target;
-}
 
 internal DR_FancyStringList
 rd_title_fstrs_from_entity(Arena *arena, RD_Entity *entity, Vec4F32 secondary_color, F32 size)
@@ -3290,11 +3247,7 @@ rd_store_view_expr_string(String8 string)
 {
   RD_Cfg *view = rd_cfg_from_handle(rd_regs()->view);
   RD_Cfg *expr = rd_cfg_child_from_string_or_alloc(view, str8_lit("expression"));
-  for(RD_Cfg *child = expr->first, *next = &rd_nil_cfg; child != &rd_nil_cfg; child = next)
-  {
-    next = child->next;
-    rd_cfg_release(child);
-  }
+  rd_cfg_release_all_children(expr);
   rd_cfg_new(expr, string);
 }
 
@@ -3303,11 +3256,7 @@ rd_store_view_filter(String8 string)
 {
   RD_Cfg *view = rd_cfg_from_handle(rd_regs()->view);
   RD_Cfg *filter = rd_cfg_child_from_string_or_alloc(view, str8_lit("filter"));
-  for(RD_Cfg *child = filter->first, *next = &rd_nil_cfg; child != &rd_nil_cfg; child = next)
-  {
-    next = child->next;
-    rd_cfg_release(child);
-  }
+  rd_cfg_release_all_children(filter);
   rd_cfg_new(filter, string);
 }
 
@@ -3334,13 +3283,7 @@ rd_store_view_param(String8 key, String8 value)
 {
   RD_Cfg *view = rd_cfg_from_handle(rd_regs()->view);
   RD_Cfg *child = rd_cfg_child_from_string_or_alloc(view, key);
-  for(RD_Cfg *val_child = child->first, *next = &rd_nil_cfg;
-      val_child != &rd_nil_cfg;
-      val_child = next)
-  {
-    next = val_child->next;
-    rd_cfg_release(val_child);
-  }
+  rd_cfg_release_all_children(child);
   rd_cfg_new(child, value);
 }
 
@@ -5236,71 +5179,6 @@ rd_window_frame(void)
             }
 #endif
           }break;
-          
-          //////////////////////
-          //- rjf: frontend entities
-          //
-          case RD_RegSlot_Entity:
-          {
-            RD_Entity *entity = rd_entity_from_handle(regs->entity);
-            RD_EntityKindFlags kind_flags = rd_entity_kind_flags_table[entity->kind];
-            
-            //- rjf: title
-            UI_Row
-              UI_PrefWidth(ui_text_dim(5, 1))
-              UI_TextAlignment(UI_TextAlign_Center)
-              UI_TextPadding(ui_top_font_size()*1.5f)
-            {
-              DR_FancyStringList fstrs = rd_title_fstrs_from_entity(scratch.arena, entity, ui_top_palette()->text_weak, ui_top_font_size());
-              UI_Box *title_box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
-              ui_box_equip_display_fancy_strings(title_box, &fstrs);
-              if(ctrl_entity->kind == CTRL_EntityKind_Thread)
-              {
-                ui_spacer(ui_em(0.5f, 1.f));
-                UI_FontSize(ui_top_font_size() - 1.f)
-                  UI_CornerRadius(ui_top_font_size()*0.5f)
-                  RD_Palette(RD_PaletteCode_NeutralPopButton)
-                  UI_TextPadding(ui_top_font_size()*0.5f)
-                {
-                  UI_FlagsAdd(UI_BoxFlag_DrawTextWeak|UI_BoxFlag_DrawBorder) ui_label(string_from_arch(ctrl_entity->arch));
-                  ui_spacer(ui_em(0.5f, 1.f));
-                  UI_FlagsAdd(UI_BoxFlag_DrawTextWeak|UI_BoxFlag_DrawBorder) ui_labelf("TID: %i", (U32)ctrl_entity->id);
-                }
-              }
-            }
-            
-            RD_Palette(RD_PaletteCode_Floating) ui_divider(ui_em(1.f, 1.f));
-            
-            //- rjf: name editor
-            if(kind_flags & RD_EntityKindFlag_CanRename) RD_Font(RD_FontSlot_Code) UI_TextPadding(ui_top_font_size()*1.5f)
-            {
-              UI_Signal sig = rd_line_editf(RD_LineEditFlag_Border|RD_LineEditFlag_CodeContents, 0, 0, &ws->ctx_menu_input_cursor, &ws->ctx_menu_input_mark, ws->ctx_menu_input_buffer, ws->ctx_menu_input_buffer_size, &ws->ctx_menu_input_string_size, 0, entity->string, "Name###entity_string_edit_%p", ctrl_entity);
-              if(ui_committed(sig))
-              {
-                rd_cmd(RD_CmdKind_NameEntity, .entity = regs->entity, .string = str8(ws->ctx_menu_input_buffer, ws->ctx_menu_input_string_size));
-              }
-            }
-            
-            //- rjf: condition editor
-            if(kind_flags & RD_EntityKindFlag_CanCondition) RD_Font(RD_FontSlot_Code) UI_TextPadding(ui_top_font_size()*1.5f)
-            {
-              UI_Signal sig = rd_line_editf(RD_LineEditFlag_Border|RD_LineEditFlag_CodeContents, 0, 0, &ws->ctx_menu_input_cursor, &ws->ctx_menu_input_mark, ws->ctx_menu_input_buffer, ws->ctx_menu_input_buffer_size, &ws->ctx_menu_input_string_size, 0, rd_entity_child_from_kind(entity, RD_EntityKind_Condition)->string, "Condition###entity_condition_edit_%p", entity);
-              if(ui_committed(sig))
-              {
-                rd_cmd(RD_CmdKind_ConditionEntity, .entity = regs->entity, .string = str8(ws->ctx_menu_input_buffer, ws->ctx_menu_input_string_size));
-              }
-            }
-            
-            //- rjf: name editor
-            if(entity->cfg_src == RD_CfgSrc_CommandLine)
-            {
-              if(ui_clicked(rd_icon_buttonf(RD_IconKind_Save, 0, "Save To Project")))
-              {
-                rd_entity_equip_cfg_src(entity, RD_CfgSrc_Project);
-              }
-            }
-          }break;
-          
         }
       }
       
@@ -5839,13 +5717,14 @@ rd_window_frame(void)
             RD_Palette(RD_PaletteCode_NeutralPopButton)
           {
             Temp scratch = scratch_begin(0, 0);
-            RD_EntityList tasks = rd_query_cached_entity_list_with_kind(RD_EntityKind_ConversionTask);
-            for(RD_EntityNode *n = tasks.first; n != 0; n = n->next)
+            RD_CfgList tasks = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("conversion_task"));
+            for(RD_CfgNode *n = tasks.first; n != 0; n = n->next)
             {
-              RD_Entity *task = n->entity;
-              if(task->alloc_time_us + 500000 < os_now_microseconds())
+              RD_Cfg *task = n->v;
+              F32 task_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "task_anim_%p_%I64u", task, task->gen), 1.f);
+              if(task_t > 0.5f)
               {
-                String8 rdi_path = task->string;
+                String8 rdi_path = task->first->string;
                 String8 rdi_name = str8_skip_last_slash(rdi_path);
                 String8 task_text = push_str8f(scratch.arena, "Creating %S...", rdi_name);
                 UI_Key key = ui_key_from_stringf(ui_key_zero(), "task_%p", task);
@@ -6397,6 +6276,7 @@ rd_window_frame(void)
         String8 expr = ws->hover_eval_string;
         E_Eval eval = e_eval_from_string(scratch.arena, expr);
         EV_ViewRuleList top_level_view_rules = {0};
+        EV_ColList top_level_cols = {0};
         
         //- rjf: build if good
         if(!e_type_key_match(eval.type_key, e_type_key_zero()) && !ui_any_ctx_menu_is_open())
@@ -6410,7 +6290,7 @@ rd_window_frame(void)
           EV_View *ev_view = rd_ev_view_from_key(d_hash_from_string(ev_view_key_string));
           EV_Key parent_key = ev_key_make(5381, 1);
           EV_Key key = ev_key_make(ev_hash_from_key(parent_key), 1);
-          EV_BlockTree block_tree = ev_block_tree_from_string(scratch.arena, ev_view, str8_zero(), expr, &top_level_view_rules);
+          EV_BlockTree block_tree = ev_block_tree_from_string(scratch.arena, ev_view, str8_zero(), expr, &top_level_view_rules, &top_level_cols);
           EV_BlockRangeList block_ranges = ev_block_range_list_from_tree(scratch.arena, &block_tree);
           // EV_BlockList viz_blocks = ev_block_list_from_view_expr_keys(scratch.arena, ev_view, str8_zero(), &top_level_view_rules, expr, parent_key, key, 0);
           CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(eval.space);
@@ -12839,14 +12719,12 @@ rd_frame(void)
       {
         ev_auto_view_rule_table_push_new(scratch.arena, auto_view_rule_table, collection_type_keys[idx], rd_collection_name_table[idx], 1);
       }
-      RD_EntityList auto_view_rules = rd_query_cached_entity_list_with_kind(RD_EntityKind_AutoViewRule);
-      for(RD_EntityNode *n = auto_view_rules.first; n != 0; n = n->next)
+      RD_CfgList auto_view_rules = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("auto_view_rule"));
+      for(RD_CfgNode *n = auto_view_rules.first; n != 0; n = n->next)
       {
-        RD_Entity *rule = n->entity;
-        RD_Entity *src = rd_entity_child_from_kind(rule, RD_EntityKind_Source);
-        RD_Entity *dst = rd_entity_child_from_kind(rule, RD_EntityKind_Dest);
-        String8 type_string = src->string;
-        String8 view_rule_string = dst->string;
+        RD_Cfg *rule = n->v;
+        String8 type_string      = rd_cfg_child_from_string(rule, str8_lit("source"))->first->string;
+        String8 view_rule_string = rd_cfg_child_from_string(rule, str8_lit("dest"))->first->string;
         E_TokenArray tokens = e_token_array_from_text(scratch.arena, type_string);
         E_Parse type_parse = e_parse_type_from_text_tokens(scratch.arena, type_string, &tokens);
         E_TypeKey type_key = e_type_from_expr(type_parse.expr);
@@ -12917,10 +12795,12 @@ rd_frame(void)
             CTRL_EntityList processes = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Process);
             if(processes.count == 0 || kind == RD_CmdKind_Restart)
             {
-              RD_EntityList bps = rd_query_cached_entity_list_with_kind(RD_EntityKind_Breakpoint);
-              for(RD_EntityNode *n = bps.first; n != 0; n = n->next)
+              RD_CfgList bps = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("breakpoint"));
+              for(RD_CfgNode *n = bps.first; n != 0; n = n->next)
               {
-                n->entity->u64 = 0;
+                RD_Cfg *hit_count = rd_cfg_child_from_string_or_alloc(n->v, str8_lit("hit_count"));
+                rd_cfg_release_all_children(hit_count);
+                rd_cfg_new(hit_count, str8_lit("0"));
               }
             }
           } // fallthrough
@@ -13325,66 +13205,28 @@ rd_frame(void)
             //- rjf: keep track of recent projects
             if(src == RD_CfgSrc_Project)
             {
-              //- TODO(rjf): @cfg keep track of recent projects
+              RD_Cfg *user = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("user"));
+              RD_CfgList recent_projects = rd_cfg_child_list_from_string(scratch.arena, user, str8_lit("recent_project"));
+              RD_Cfg *recent_project = &rd_nil_cfg;
+              for(RD_CfgNode *n = recent_projects.first; n != 0; n = n->next)
               {
-                RD_Cfg *user = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("user"));
-                RD_CfgList recent_projects = rd_cfg_child_list_from_string(scratch.arena, user, str8_lit("recent_project"));
-                RD_Cfg *recent_project = &rd_nil_cfg;
-                for(RD_CfgNode *n = recent_projects.first; n != 0; n = n->next)
+                if(path_match_normalized(n->v->string, cfg_path))
                 {
-                  if(path_match_normalized(n->v->string, cfg_path))
-                  {
-                    recent_project = n->v;
-                    break;
-                  }
-                }
-                if(recent_project == &rd_nil_cfg)
-                {
-                  recent_project = rd_cfg_new(user, str8_lit("recent_project"));
-                  rd_cfg_new(recent_project, path_normalized_from_string(scratch.arena, cfg_path));
-                }
-                rd_cfg_unhook(user, recent_project);
-                rd_cfg_insert_child(user, &rd_nil_cfg, recent_project);
-                recent_projects = rd_cfg_child_list_from_string(scratch.arena, user, str8_lit("recent_project"));
-                if(recent_projects.count > 32)
-                {
-                  rd_cfg_release(recent_projects.last->v);
-                }
-              }
-              RD_EntityList recent_projects = rd_query_cached_entity_list_with_kind(RD_EntityKind_RecentProject);
-              RD_Entity *recent_project = &rd_nil_entity;
-              for(RD_EntityNode *n = recent_projects.first; n != 0; n = n->next)
-              {
-                if(path_match_normalized(cfg_path, n->entity->string))
-                {
-                  recent_project = n->entity;
+                  recent_project = n->v;
                   break;
                 }
               }
-              if(rd_entity_is_nil(recent_project))
+              if(recent_project == &rd_nil_cfg)
               {
-                recent_project = rd_entity_alloc(rd_entity_root(), RD_EntityKind_RecentProject);
-                rd_entity_equip_name(recent_project, path_normalized_from_string(scratch.arena, cfg_path));
-                rd_entity_equip_cfg_src(recent_project, RD_CfgSrc_User);
+                recent_project = rd_cfg_new(user, str8_lit("recent_project"));
+                rd_cfg_new(recent_project, path_normalized_from_string(scratch.arena, cfg_path));
               }
-            }
-            
-            //- rjf: eliminate all existing entities which are derived from config
-            {
-              for EachEnumVal(RD_EntityKind, k)
+              rd_cfg_unhook(user, recent_project);
+              rd_cfg_insert_child(user, &rd_nil_cfg, recent_project);
+              recent_projects = rd_cfg_child_list_from_string(scratch.arena, user, str8_lit("recent_project"));
+              if(recent_projects.count > 32)
               {
-                RD_EntityKindFlags k_flags = rd_entity_kind_flags_table[k];
-                if(k_flags & RD_EntityKindFlag_IsSerializedToConfig)
-                {
-                  RD_EntityList entities = rd_query_cached_entity_list_with_kind(k);
-                  for(RD_EntityNode *n = entities.first; n != 0; n = n->next)
-                  {
-                    if(n->entity->cfg_src == src)
-                    {
-                      rd_entity_mark_for_deletion(n->entity);
-                    }
-                  }
-                }
+                rd_cfg_release(recent_projects.last->v);
               }
             }
             
@@ -14070,11 +13912,7 @@ rd_frame(void)
             F32 new_font_size = clamp_1f32(r1f32(6, 72), current_font_size+1);
             RD_Cfg *window = rd_cfg_from_handle(rd_regs()->window);
             RD_Cfg *main_font_size = rd_cfg_child_from_string_or_alloc(window, str8_lit("main_font_size"));
-            for(RD_Cfg *child = main_font_size->first, *next = &rd_nil_cfg; child != &rd_nil_cfg; child = next)
-            {
-              next = child->next;
-              rd_cfg_release(child);
-            }
+            rd_cfg_release_all_children(main_font_size);
             rd_cfg_newf(main_font_size, "%f", new_font_size);
           }break;
           case RD_CmdKind_DecUIFontScale:
@@ -14084,11 +13922,7 @@ rd_frame(void)
             F32 new_font_size = clamp_1f32(r1f32(6, 72), current_font_size-1);
             RD_Cfg *window = rd_cfg_from_handle(rd_regs()->window);
             RD_Cfg *main_font_size = rd_cfg_child_from_string_or_alloc(window, str8_lit("main_font_size"));
-            for(RD_Cfg *child = main_font_size->first, *next = &rd_nil_cfg; child != &rd_nil_cfg; child = next)
-            {
-              next = child->next;
-              rd_cfg_release(child);
-            }
+            rd_cfg_release_all_children(main_font_size);
             rd_cfg_newf(main_font_size, "%f", new_font_size);
           }break;
           case RD_CmdKind_IncCodeFontScale:
@@ -14098,11 +13932,7 @@ rd_frame(void)
             F32 new_font_size = clamp_1f32(r1f32(6, 72), current_font_size+1);
             RD_Cfg *window = rd_cfg_from_handle(rd_regs()->window);
             RD_Cfg *code_font_size = rd_cfg_child_from_string_or_alloc(window, str8_lit("code_font_size"));
-            for(RD_Cfg *child = code_font_size->first, *next = &rd_nil_cfg; child != &rd_nil_cfg; child = next)
-            {
-              next = child->next;
-              rd_cfg_release(child);
-            }
+            rd_cfg_release_all_children(code_font_size);
             rd_cfg_newf(code_font_size, "%f", new_font_size);
           }break;
           case RD_CmdKind_DecCodeFontScale:
@@ -14112,11 +13942,7 @@ rd_frame(void)
             F32 new_font_size = clamp_1f32(r1f32(6, 72), current_font_size-1);
             RD_Cfg *window = rd_cfg_from_handle(rd_regs()->window);
             RD_Cfg *code_font_size = rd_cfg_child_from_string_or_alloc(window, str8_lit("code_font_size"));
-            for(RD_Cfg *child = code_font_size->first, *next = &rd_nil_cfg; child != &rd_nil_cfg; child = next)
-            {
-              next = child->next;
-              rd_cfg_release(child);
-            }
+            rd_cfg_release_all_children(code_font_size);
             rd_cfg_newf(code_font_size, "%f", new_font_size);
           }break;
           
@@ -14433,21 +14259,13 @@ rd_frame(void)
             String8 map_src = str8_list_join(scratch.arena, &map_src_parts, &map_join);
             String8 map_dst = str8_list_join(scratch.arena, &map_dst_parts, &map_join);
             
-            //- rjf: store as file path map entity
-            //- TODO(rjf): @cfg store as file path map entity
-            {
-              RD_Cfg *user = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("user"));
-              RD_Cfg *map = rd_cfg_new(user, str8_lit("file_path_map"));
-              RD_Cfg *src = rd_cfg_new(map, str8_lit("source"));
-              RD_Cfg *dst = rd_cfg_new(map, str8_lit("dest"));
-              rd_cfg_new(src, map_src);
-              rd_cfg_new(dst, map_dst);
-            }
-            RD_Entity *map = rd_entity_alloc(rd_entity_root(), RD_EntityKind_FilePathMap);
-            RD_Entity *src = rd_entity_alloc(map, RD_EntityKind_Source);
-            RD_Entity *dst = rd_entity_alloc(map, RD_EntityKind_Dest);
-            rd_entity_equip_name(src, map_src);
-            rd_entity_equip_name(dst, map_dst);
+            //- rjf: store as file path map cfg
+            RD_Cfg *user = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("user"));
+            RD_Cfg *map = rd_cfg_new(user, str8_lit("file_path_map"));
+            RD_Cfg *src = rd_cfg_new(map, str8_lit("source"));
+            RD_Cfg *dst = rd_cfg_new(map, str8_lit("dest"));
+            rd_cfg_new(src, map_src);
+            rd_cfg_new(dst, map_dst);
           }break;
           
           //- rjf: panel removal
@@ -14680,17 +14498,13 @@ rd_frame(void)
           }break;
           case RD_CmdKind_TabBarTop:
           {
-#if 0 // TODO(rjf): @cfg
-            RD_Panel *panel = rd_panel_from_handle(rd_regs()->panel);
-            panel->tab_side = Side_Min;
-#endif
+            RD_Cfg *panel = rd_cfg_from_handle(rd_regs()->panel);
+            rd_cfg_release(rd_cfg_child_from_string(panel, str8_lit("tabs_on_bottom")));
           }break;
           case RD_CmdKind_TabBarBottom:
           {
-#if 0 // TODO(rjf): @cfg
-            RD_Panel *panel = rd_panel_from_handle(rd_regs()->panel);
-            panel->tab_side = Side_Max;
-#endif
+            RD_Cfg *panel = rd_cfg_from_handle(rd_regs()->panel);
+            rd_cfg_child_from_string_or_alloc(panel, str8_lit("tabs_on_bottom"));
           }break;
           
           //- rjf: files
@@ -14808,57 +14622,28 @@ rd_frame(void)
           if(rd_regs()->file_path.size != 0)
           {
             String8 path = path_normalized_from_string(scratch.arena, rd_regs()->file_path);
-            
-            //- TODO(rjf): @cfg record file in project
+            RD_Cfg *project = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("project"));
+            RD_CfgList recent_files = rd_cfg_child_list_from_string(scratch.arena, project, str8_lit("recent_files"));
+            RD_Cfg *recent_file = &rd_nil_cfg;
+            for(RD_CfgNode *n = recent_files.first; n != 0; n = n->next)
             {
-              RD_Cfg *project = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("project"));
-              RD_CfgList recent_files = rd_cfg_child_list_from_string(scratch.arena, project, str8_lit("recent_files"));
-              RD_Cfg *recent_file = &rd_nil_cfg;
-              for(RD_CfgNode *n = recent_files.first; n != 0; n = n->next)
+              if(path_match_normalized(n->v->string, path))
               {
-                if(path_match_normalized(n->v->string, path))
-                {
-                  recent_file = n->v;
-                  break;
-                }
-              }
-              if(recent_file == &rd_nil_cfg)
-              {
-                recent_file = rd_cfg_new(project, str8_lit("recent_file"));
-                rd_cfg_new(recent_file, path);
-              }
-              rd_cfg_unhook(project, recent_file);
-              rd_cfg_insert_child(project, &rd_nil_cfg, recent_file);
-              recent_files = rd_cfg_child_list_from_string(scratch.arena, project, str8_lit("recent_files"));
-              if(recent_files.count > 256)
-              {
-                rd_cfg_release(recent_files.last->v);
-              }
-            }
-            
-            RD_EntityList recent_files = rd_query_cached_entity_list_with_kind(RD_EntityKind_RecentFile);
-            if(recent_files.count >= 256)
-            {
-              rd_entity_mark_for_deletion(recent_files.first->entity);
-            }
-            RD_Entity *existing_recent_file = &rd_nil_entity;
-            for(RD_EntityNode *n = recent_files.first; n != 0; n = n->next)
-            {
-              if(str8_match(n->entity->string, path, StringMatchFlag_CaseInsensitive))
-              {
-                existing_recent_file = n->entity;
+                recent_file = n->v;
                 break;
               }
             }
-            if(rd_entity_is_nil(existing_recent_file))
+            if(recent_file == &rd_nil_cfg)
             {
-              RD_Entity *recent_file = rd_entity_alloc(rd_entity_root(), RD_EntityKind_RecentFile);
-              rd_entity_equip_name(recent_file, path);
-              rd_entity_equip_cfg_src(recent_file, RD_CfgSrc_Project);
+              recent_file = rd_cfg_new(project, str8_lit("recent_file"));
+              rd_cfg_new(recent_file, path);
             }
-            else
+            rd_cfg_unhook(project, recent_file);
+            rd_cfg_insert_child(project, &rd_nil_cfg, recent_file);
+            recent_files = rd_cfg_child_list_from_string(scratch.arena, project, str8_lit("recent_files"));
+            if(recent_files.count > 256)
             {
-              rd_entity_change_parent(existing_recent_file, rd_entity_root(), rd_entity_root(), rd_entity_root()->last);
+              rd_cfg_release(recent_files.last->v);
             }
           }break;
           case RD_CmdKind_ShowFileInExplorer:
@@ -16145,124 +15930,95 @@ X(getting_started)
           }break;
           
           //- rjf: general entity operations
-          case RD_CmdKind_SelectEntity:
+          case RD_CmdKind_SelectCfg:
           case RD_CmdKind_SelectTarget:
           {
-            RD_Entity *entity = rd_entity_from_handle(rd_regs()->entity);
-            RD_EntityList all_of_the_same_kind = rd_query_cached_entity_list_with_kind(entity->kind);
-            B32 is_selected = !entity->disabled;
-            for(RD_EntityNode *n = all_of_the_same_kind.first; n != 0; n = n->next)
+            RD_Cfg *cfg = rd_cfg_from_handle(rd_regs()->cfg);
+            RD_CfgList all_of_the_same_kind = rd_cfg_top_level_list_from_string(scratch.arena, cfg->string);
+            B32 is_selected = rd_disabled_from_cfg(cfg);
+            for(RD_CfgNode *n = all_of_the_same_kind.first; n != 0; n = n->next)
             {
-              RD_Entity *e = n->entity;
-              rd_entity_equip_disabled(e, 1);
+              RD_Cfg *c = n->v;
+              rd_cfg_child_from_string_or_alloc(c, str8_lit("disabled"));
             }
             if(!is_selected)
             {
-              rd_entity_equip_disabled(entity, 0);
+              rd_cfg_release(rd_cfg_child_from_string(cfg, str8_lit("disabled")));
             }
           }break;
-          case RD_CmdKind_EnableEntity:
+          case RD_CmdKind_EnableCfg:
           case RD_CmdKind_EnableBreakpoint:
           case RD_CmdKind_EnableTarget:
           {
-            RD_Entity *entity = rd_entity_from_handle(rd_regs()->entity);
-            rd_entity_equip_disabled(entity, 0);
+            RD_Cfg *cfg = rd_cfg_from_handle(rd_regs()->cfg);
+            rd_cfg_release(rd_cfg_child_from_string(cfg, str8_lit("disabled")));
           }break;
-          case RD_CmdKind_DisableEntity:
+          case RD_CmdKind_DisableCfg:
           case RD_CmdKind_DisableBreakpoint:
           case RD_CmdKind_DisableTarget:
           {
-            RD_Entity *entity = rd_entity_from_handle(rd_regs()->entity);
-            rd_entity_equip_disabled(entity, 1);
+            RD_Cfg *cfg = rd_cfg_from_handle(rd_regs()->cfg);
+            rd_cfg_child_from_string_or_alloc(cfg, str8_lit("disabled"));
           }break;
-          case RD_CmdKind_RemoveEntity:
+          case RD_CmdKind_RemoveCfg:
           {
-            RD_Entity *entity = rd_entity_from_handle(rd_regs()->entity);
-            RD_EntityKindFlags kind_flags = rd_entity_kind_flags_table[entity->kind];
-            if(kind_flags & RD_EntityKindFlag_CanDelete)
+            RD_Cfg *cfg = rd_cfg_from_handle(rd_regs()->cfg);
+            rd_cfg_release(cfg);
+          }break;
+          case RD_CmdKind_NameCfg:
+          {
+            RD_Cfg *cfg = rd_cfg_from_handle(rd_regs()->cfg);
+            if(rd_regs()->string.size != 0)
             {
-              rd_entity_mark_for_deletion(entity);
-            }
-          }break;
-          case RD_CmdKind_NameEntity:
-          {
-            RD_Entity *entity = rd_entity_from_handle(rd_regs()->entity);
-            String8 string = rd_regs()->string;
-            rd_entity_equip_name(entity, string);
-          }break;
-          case RD_CmdKind_ConditionEntity:
-          {
-            RD_Entity *entity = rd_entity_from_handle(rd_regs()->entity);
-            String8 string = rd_regs()->string;
-            if(string.size != 0)
-            {
-              RD_Entity *child = rd_entity_child_from_kind_or_alloc(entity, RD_EntityKind_Condition);
-              rd_entity_equip_name(child, string);
+              RD_Cfg *label = rd_cfg_child_from_string_or_alloc(cfg, str8_lit("label"));
+              rd_cfg_new(label, rd_regs()->string);
             }
             else
             {
-              RD_Entity *child = rd_entity_child_from_kind(entity, RD_EntityKind_Condition);
-              rd_entity_mark_for_deletion(child);
+              rd_cfg_release(rd_cfg_child_from_string(cfg, str8_lit("label")));
             }
           }break;
-          case RD_CmdKind_DuplicateEntity:
+          case RD_CmdKind_ConditionCfg:
           {
-            RD_Entity *src = rd_entity_from_handle(rd_regs()->entity);
-            if(!rd_entity_is_nil(src))
+            RD_Cfg *cfg = rd_cfg_from_handle(rd_regs()->cfg);
+            if(rd_regs()->string.size != 0)
             {
-              typedef struct Task Task;
-              struct Task
-              {
-                Task *next;
-                RD_Entity *src_n;
-                RD_Entity *dst_parent;
-              };
-              Task starter_task = {0, src, src->parent};
-              Task *first_task = &starter_task;
-              Task *last_task = &starter_task;
-              for(Task *task = first_task; task != 0; task = task->next)
-              {
-                RD_Entity *src_n = task->src_n;
-                RD_Entity *dst_n = rd_entity_alloc(task->dst_parent, task->src_n->kind);
-                if(src_n->flags & RD_EntityFlag_HasTextPoint)    {rd_entity_equip_txt_pt(dst_n, src_n->text_point);}
-                if(src_n->flags & RD_EntityFlag_HasU64)          {rd_entity_equip_u64(dst_n, src_n->u64);}
-                if(src_n->flags & RD_EntityFlag_HasColor)        {rd_entity_equip_color_hsva(dst_n, rd_hsva_from_entity(src_n));}
-                if(src_n->flags & RD_EntityFlag_HasVAddr)        {rd_entity_equip_vaddr(dst_n, src_n->vaddr);}
-                if(src_n->disabled)                              {rd_entity_equip_disabled(dst_n, 1);}
-                if(src_n->string.size != 0)                      {rd_entity_equip_name(dst_n, src_n->string);}
-                dst_n->cfg_src = src_n->cfg_src;
-                for(RD_Entity *src_child = task->src_n->first; !rd_entity_is_nil(src_child); src_child = src_child->next)
-                {
-                  Task *child_task = push_array(scratch.arena, Task, 1);
-                  child_task->src_n = src_child;
-                  child_task->dst_parent = dst_n;
-                  SLLQueuePush(first_task, last_task, child_task);
-                }
-              }
+              RD_Cfg *cnd = rd_cfg_child_from_string_or_alloc(cfg, str8_lit("condition"));
+              rd_cfg_new(cnd, rd_regs()->string);
+            }
+            else
+            {
+              rd_cfg_release(rd_cfg_child_from_string(cfg, str8_lit("condition")));
             }
           }break;
-          case RD_CmdKind_RelocateEntity:
+          case RD_CmdKind_DuplicateCfg:
           {
-            RD_Entity *entity = rd_entity_from_handle(rd_regs()->entity);
-            RD_Entity *location = rd_entity_child_from_kind(entity, RD_EntityKind_Location);
-            if(rd_entity_is_nil(location))
+            RD_Cfg *src = rd_cfg_from_handle(rd_regs()->cfg);
+            RD_Cfg *dst = rd_cfg_deep_copy(src);
+            rd_cfg_insert_child(src->parent, src, dst);
+          }break;
+          case RD_CmdKind_RelocateCfg:
+          {
+            RD_Cfg *cfg = rd_cfg_from_handle(rd_regs()->cfg);
+            RD_Cfg *loc = rd_cfg_child_from_string_or_alloc(cfg, str8_lit("location"));
+            for(RD_Cfg *child = loc->first, *next = &rd_nil_cfg; child != &rd_nil_cfg; child = next)
             {
-              location = rd_entity_alloc(entity, RD_EntityKind_Location);
+              next = child->next;
+              rd_cfg_release(child);
             }
-            location->flags &= ~RD_EntityFlag_HasTextPoint;
-            location->flags &= ~RD_EntityFlag_HasVAddr;
             if(rd_regs()->cursor.line != 0)
             {
-              rd_entity_equip_txt_pt(location, rd_regs()->cursor);
+              RD_Cfg *file = rd_cfg_new(loc, rd_regs()->file_path);
+              RD_Cfg *line = rd_cfg_newf(file, "%I64d", rd_regs()->cursor.line);
+              rd_cfg_newf(line, "%I64d", rd_regs()->cursor.column);
             }
-            if(rd_regs()->vaddr != 0)
+            else if(rd_regs()->vaddr != 0)
             {
-              rd_entity_equip_vaddr(location, rd_regs()->vaddr);
-              rd_entity_equip_name(location, str8_zero());
+              rd_cfg_newf(loc, "0x%I64x", rd_regs()->vaddr);
             }
-            if(rd_regs()->file_path.size != 0)
+            else if(rd_regs()->string.size != 0)
             {
-              rd_entity_equip_name(location, rd_regs()->file_path);
+              rd_cfg_new(loc, rd_regs()->string);
             }
           }break;
           
@@ -16276,62 +16032,22 @@ X(getting_started)
             U64 vaddr = rd_regs()->vaddr;
             if(file_path.size != 0 || string.size != 0 || vaddr != 0)
             {
-              //- TODO(rjf): @cfg add/toggle breakpoint
-              {
-                B32 removed_already_existing = 0;
-                if(kind == RD_CmdKind_ToggleBreakpoint)
-                {
-                  RD_CfgList bps = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("breakpoint"));
-                  for(RD_CfgNode *n = bps.first; n != 0; n = n->next)
-                  {
-                    RD_Cfg *bp = n->v;
-                    RD_Cfg *loc = rd_cfg_child_from_string(bp, str8_lit("location"));
-                    S64 loc_line = 0;
-                    U64 loc_vaddr = 0;
-                    B32 loc_matches_file_pt = (file_path.size != 0 && path_match_normalized(loc->first->string, file_path) && try_s64_from_str8_c_rules(loc->first->first->string, &loc_line) && loc_line == pt.line);
-                    B32 loc_matches_string  = (string.size != 0 && str8_match(loc->first->string, string, 0));
-                    B32 loc_matches_vaddr   = (vaddr != 0 && try_u64_from_str8_c_rules(loc->first->string, &loc_vaddr) && loc_vaddr == vaddr);
-                    if(loc_matches_file_pt || loc_matches_string || loc_matches_vaddr)
-                    {
-                      rd_cfg_release(bp);
-                      removed_already_existing = 1;
-                      break;
-                    }
-                  }
-                }
-                if(!removed_already_existing)
-                {
-                  RD_Cfg *project = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("project"));
-                  RD_Cfg *bp = rd_cfg_new(project, str8_lit("breakpoint"));
-                  RD_Cfg *loc = rd_cfg_new(bp, str8_lit("location"));
-                  if(vaddr != 0)
-                  {
-                    rd_cfg_newf(loc, "0x%I64x", vaddr);
-                  }
-                  else if(string.size != 0)
-                  {
-                    rd_cfg_new(loc, string);
-                  }
-                  else if(file_path.size != 0)
-                  {
-                    RD_Cfg *file_path_cfg = rd_cfg_new(loc, file_path);
-                    rd_cfg_newf(file_path_cfg, "%I64d", pt.line);
-                  }
-                }
-              }
               B32 removed_already_existing = 0;
               if(kind == RD_CmdKind_ToggleBreakpoint)
               {
-                RD_EntityList bps = rd_query_cached_entity_list_with_kind(RD_EntityKind_Breakpoint);
-                for(RD_EntityNode *n = bps.first; n != 0; n = n->next)
+                RD_CfgList bps = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("breakpoint"));
+                for(RD_CfgNode *n = bps.first; n != 0; n = n->next)
                 {
-                  RD_Entity *bp = n->entity;
-                  RD_Entity *loc = rd_entity_child_from_kind(bp, RD_EntityKind_Location);
-                  if((loc->flags & RD_EntityFlag_HasTextPoint && path_match_normalized(loc->string, file_path) && loc->text_point.line == pt.line) ||
-                     (loc->flags & RD_EntityFlag_HasVAddr && loc->vaddr == vaddr) ||
-                     (!(loc->flags & RD_EntityFlag_HasTextPoint) && str8_match(loc->string, string, 0)))
+                  RD_Cfg *bp = n->v;
+                  RD_Cfg *loc = rd_cfg_child_from_string(bp, str8_lit("location"));
+                  S64 loc_line = 0;
+                  U64 loc_vaddr = 0;
+                  B32 loc_matches_file_pt = (file_path.size != 0 && path_match_normalized(loc->first->string, file_path) && try_s64_from_str8_c_rules(loc->first->first->string, &loc_line) && loc_line == pt.line);
+                  B32 loc_matches_string  = (string.size != 0 && str8_match(loc->first->string, string, 0));
+                  B32 loc_matches_vaddr   = (vaddr != 0 && try_u64_from_str8_c_rules(loc->first->string, &loc_vaddr) && loc_vaddr == vaddr);
+                  if(loc_matches_file_pt || loc_matches_string || loc_matches_vaddr)
                   {
-                    rd_entity_mark_for_deletion(bp);
+                    rd_cfg_release(bp);
                     removed_already_existing = 1;
                     break;
                   }
@@ -16339,21 +16055,21 @@ X(getting_started)
               }
               if(!removed_already_existing)
               {
-                RD_Entity *bp = rd_entity_alloc(rd_entity_root(), RD_EntityKind_Breakpoint);
-                rd_entity_equip_cfg_src(bp, RD_CfgSrc_Project);
-                RD_Entity *loc = rd_entity_alloc(bp, RD_EntityKind_Location);
+                RD_Cfg *project = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("project"));
+                RD_Cfg *bp = rd_cfg_new(project, str8_lit("breakpoint"));
+                RD_Cfg *loc = rd_cfg_new(bp, str8_lit("location"));
                 if(vaddr != 0)
                 {
-                  rd_entity_equip_vaddr(loc, vaddr);
+                  rd_cfg_newf(loc, "0x%I64x", vaddr);
                 }
                 else if(string.size != 0)
                 {
-                  rd_entity_equip_name(loc, string);
+                  rd_cfg_new(loc, string);
                 }
-                else if(file_path.size != 0 && pt.line != 0)
+                else if(file_path.size != 0)
                 {
-                  rd_entity_equip_name(loc, file_path);
-                  rd_entity_equip_txt_pt(loc, pt);
+                  RD_Cfg *file_path_cfg = rd_cfg_new(loc, file_path);
+                  rd_cfg_newf(file_path_cfg, "%I64d", pt.line);
                 }
               }
             }
@@ -16375,61 +16091,23 @@ X(getting_started)
             TxtPt pt = rd_regs()->cursor;
             String8 string = rd_regs()->string;
             U64 vaddr = rd_regs()->vaddr;
-            //- TODO(rjf): @cfg add/toggle watch pin
-            {
-              B32 removed_already_existing = 0;
-              if(kind == RD_CmdKind_ToggleWatchPin)
-              {
-                RD_CfgList wps = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("watch_pin"));
-                for(RD_CfgNode *n = wps.first; n != 0; n = n->next)
-                {
-                  RD_Cfg *wp = n->v;
-                  RD_Cfg *expr = rd_cfg_child_from_string(wp, str8_lit("expression"));
-                  RD_Cfg *loc = rd_cfg_child_from_string(wp, str8_lit("location"));
-                  S64 loc_line = 0;
-                  U64 loc_vaddr = 0;
-                  B32 loc_matches_file_pt = (file_path.size != 0 && path_match_normalized(loc->first->string, file_path) && try_s64_from_str8_c_rules(loc->first->first->string, &loc_line) && loc_line == pt.line);
-                  B32 loc_matches_vaddr   = (vaddr != 0 && try_u64_from_str8_c_rules(loc->first->string, &loc_vaddr) && loc_vaddr == vaddr);
-                  B32 loc_matches_expr    = (string.size != 0 && str8_match(expr->first->string, string, 0));
-                  if(loc_matches_expr && (loc_matches_file_pt || loc_matches_vaddr))
-                  {
-                    rd_cfg_release(wp);
-                    removed_already_existing = 1;
-                    break;
-                  }
-                }
-              }
-              if(!removed_already_existing)
-              {
-                RD_Cfg *project = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("project"));
-                RD_Cfg *wp = rd_cfg_new(project, str8_lit("watch_pin"));
-                RD_Cfg *expr = rd_cfg_new(wp, str8_lit("expression"));
-                RD_Cfg *loc = rd_cfg_new(wp, str8_lit("location"));
-                rd_cfg_new(expr, string);
-                if(vaddr != 0)
-                {
-                  rd_cfg_newf(loc, "0x%I64x", vaddr);
-                }
-                else if(file_path.size != 0)
-                {
-                  RD_Cfg *file_path_cfg = rd_cfg_new(loc, file_path);
-                  rd_cfg_newf(file_path_cfg, "%I64d", pt.line);
-                }
-              }
-            }
             B32 removed_already_existing = 0;
             if(kind == RD_CmdKind_ToggleWatchPin)
             {
-              RD_EntityList wps = rd_query_cached_entity_list_with_kind(RD_EntityKind_WatchPin);
-              for(RD_EntityNode *n = wps.first; n != 0; n = n->next)
+              RD_CfgList wps = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("watch_pin"));
+              for(RD_CfgNode *n = wps.first; n != 0; n = n->next)
               {
-                RD_Entity *wp = n->entity;
-                RD_Entity *loc = rd_entity_child_from_kind(wp, RD_EntityKind_Location);
-                if(str8_match(wp->string, string, 0) &&
-                   ((loc->flags & RD_EntityFlag_HasTextPoint && path_match_normalized(loc->string, file_path) && loc->text_point.line == pt.line) ||
-                    (loc->flags & RD_EntityFlag_HasVAddr && loc->vaddr == vaddr)))
+                RD_Cfg *wp = n->v;
+                RD_Cfg *expr = rd_cfg_child_from_string(wp, str8_lit("expression"));
+                RD_Cfg *loc = rd_cfg_child_from_string(wp, str8_lit("location"));
+                S64 loc_line = 0;
+                U64 loc_vaddr = 0;
+                B32 loc_matches_file_pt = (file_path.size != 0 && path_match_normalized(loc->first->string, file_path) && try_s64_from_str8_c_rules(loc->first->first->string, &loc_line) && loc_line == pt.line);
+                B32 loc_matches_vaddr   = (vaddr != 0 && try_u64_from_str8_c_rules(loc->first->string, &loc_vaddr) && loc_vaddr == vaddr);
+                B32 loc_matches_expr    = (string.size != 0 && str8_match(expr->first->string, string, 0));
+                if(loc_matches_expr && (loc_matches_file_pt || loc_matches_vaddr))
                 {
-                  rd_entity_mark_for_deletion(wp);
+                  rd_cfg_release(wp);
                   removed_already_existing = 1;
                   break;
                 }
@@ -16437,18 +16115,19 @@ X(getting_started)
             }
             if(!removed_already_existing)
             {
-              RD_Entity *wp = rd_entity_alloc(rd_entity_root(), RD_EntityKind_WatchPin);
-              rd_entity_equip_name(wp, string);
-              rd_entity_equip_cfg_src(wp, RD_CfgSrc_Project);
-              RD_Entity *loc = rd_entity_alloc(wp, RD_EntityKind_Location);
-              if(file_path.size != 0 && pt.line != 0)
+              RD_Cfg *project = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("project"));
+              RD_Cfg *wp = rd_cfg_new(project, str8_lit("watch_pin"));
+              RD_Cfg *expr = rd_cfg_new(wp, str8_lit("expression"));
+              RD_Cfg *loc = rd_cfg_new(wp, str8_lit("location"));
+              rd_cfg_new(expr, string);
+              if(vaddr != 0)
               {
-                rd_entity_equip_name(loc, file_path);
-                rd_entity_equip_txt_pt(loc, pt);
+                rd_cfg_newf(loc, "0x%I64x", vaddr);
               }
-              else if(vaddr != 0)
+              else if(file_path.size != 0)
               {
-                rd_entity_equip_vaddr(loc, vaddr);
+                RD_Cfg *file_path_cfg = rd_cfg_new(loc, file_path);
+                rd_cfg_newf(file_path_cfg, "%I64d", pt.line);
               }
             }
           }break;
@@ -16526,37 +16205,18 @@ X(getting_started)
           //- rjf: targets
           case RD_CmdKind_AddTarget:
           {
-            //- TODO(rjf): @cfg add new target
+            String8 file_path = rd_regs()->file_path;
+            RD_Cfg *project = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("project"));
+            RD_Cfg *target = rd_cfg_new(project, str8_lit("target"));
+            RD_Cfg *exe = rd_cfg_new(target, str8_lit("executable"));
+            rd_cfg_new(exe, file_path);
+            String8 working_directory = str8_chop_last_slash(file_path);
+            if(working_directory.size != 0)
             {
-              String8 file_path = rd_regs()->file_path;
-              RD_Cfg *project = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("project"));
-              RD_Cfg *target = rd_cfg_new(project, str8_lit("target"));
-              RD_Cfg *exe = rd_cfg_new(target, str8_lit("executable"));
-              rd_cfg_new(exe, file_path);
-              String8 working_directory = str8_chop_last_slash(file_path);
-              if(working_directory.size != 0)
-              {
-                RD_Cfg *wdir = rd_cfg_new(target, str8_lit("working_directory"));
-                rd_cfg_newf(wdir, "%S/", working_directory);
-              }
-              // TODO(rjf): (select target here)
+              RD_Cfg *wdir = rd_cfg_new(target, str8_lit("working_directory"));
+              rd_cfg_newf(wdir, "%S/", working_directory);
             }
-            
-            // rjf: build target
-            RD_Entity *entity = &rd_nil_entity;
-            entity = rd_entity_alloc(rd_entity_root(), RD_EntityKind_Target);
-            rd_entity_equip_disabled(entity, 1);
-            rd_entity_equip_cfg_src(entity, RD_CfgSrc_Project);
-            RD_Entity *exe = rd_entity_alloc(entity, RD_EntityKind_Executable);
-            rd_entity_equip_name(exe, rd_regs()->file_path);
-            String8 working_dir = str8_chop_last_slash(rd_regs()->file_path);
-            if(working_dir.size != 0)
-            {
-              String8 working_dir_path = push_str8f(scratch.arena, "%S/", working_dir);
-              RD_Entity *execution_path = rd_entity_alloc(entity, RD_EntityKind_WorkingDirectory);
-              rd_entity_equip_name(execution_path, working_dir_path);
-            }
-            rd_cmd(RD_CmdKind_SelectTarget, .entity = rd_handle_from_entity(entity));
+            rd_cmd(RD_CmdKind_SelectCfg, .cfg = rd_handle_from_cfg(target));
           }break;
           
           //- rjf: jit-debugger registration
@@ -17222,20 +16882,21 @@ X(getting_started)
       U64 meval_count = 0;
       MetaEvalNode *first_meval = 0;
       MetaEvalNode *last_meval = 0;
-      RD_EntityList bp_entities = rd_query_cached_entity_list_with_kind(RD_EntityKind_Breakpoint);
-      breakpoints.count = bp_entities.count;
+      RD_CfgList bp_cfgs = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("breakpoint"));
+      breakpoints.count = bp_cfgs.count;
       breakpoints.v = push_array(scratch.arena, D_Breakpoint, breakpoints.count);
       U64 idx = 0;
-      for(RD_EntityNode *n = bp_entities.first; n != 0; n = n->next)
+      for(RD_CfgNode *n = bp_cfgs.first; n != 0; n = n->next)
       {
-        RD_Entity *src_bp = n->entity;
-        if(src_bp->disabled)
+        RD_Cfg *src_bp = n->v;
+        B32 src_bp_is_disabled = rd_disabled_from_cfg(src_bp);
+        if(src_bp_is_disabled)
         {
           breakpoints.count -= 1;
           continue;
         }
-        RD_Entity *src_bp_loc = rd_entity_child_from_kind(src_bp, RD_EntityKind_Location);
-        RD_Entity *src_bp_cnd = rd_entity_child_from_kind(src_bp, RD_EntityKind_Condition);
+        RD_Location src_bp_loc = rd_location_from_cfg(src_bp);
+        String8 src_bp_cnd = rd_cfg_child_from_string(src_bp, str8_lit("condition"))->first->string;
         
         //- rjf: walk conditional breakpoint expression tree - for each leaf identifier,
         // determine if it resolves to a meta-evaluation. if it does, compute the meta
@@ -17248,7 +16909,7 @@ X(getting_started)
         // or not it is 'static', w.r.t. the control thread.
         //
         B32 is_static_for_ctrl_thread = 0;
-        if(src_bp_cnd->string.size != 0)
+        if(src_bp_cnd.size != 0)
         {
           typedef struct ExprWalkTask ExprWalkTask;
           struct ExprWalkTask
@@ -17256,7 +16917,7 @@ X(getting_started)
             ExprWalkTask *next;
             E_Expr *expr;
           };
-          E_Expr *expr = e_parse_expr_from_text(scratch.arena, src_bp_cnd->string);
+          E_Expr *expr = e_parse_expr_from_text(scratch.arena, src_bp_cnd);
           ExprWalkTask start_task = {0, expr};
           ExprWalkTask *first_task = &start_task;
           for(ExprWalkTask *t = first_task; t != 0; t = t->next)
@@ -17302,7 +16963,7 @@ X(getting_started)
         B32 is_statically_disqualified = 0;
         if(is_static_for_ctrl_thread)
         {
-          E_Eval eval = e_eval_from_string(scratch.arena, src_bp_cnd->string);
+          E_Eval eval = e_eval_from_string(scratch.arena, src_bp_cnd);
           E_Eval value_eval = e_value_eval_from_eval(eval);
           if(value_eval.value.u64 == 0)
           {
@@ -17319,11 +16980,11 @@ X(getting_started)
         
         //- rjf: fill breakpoint
         D_Breakpoint *dst_bp = &breakpoints.v[idx];
-        dst_bp->file_path   = src_bp_loc->string;
-        dst_bp->pt          = src_bp_loc->text_point;
-        dst_bp->symbol_name = src_bp_loc->string;
-        dst_bp->vaddr       = src_bp_loc->vaddr;
-        dst_bp->condition   = src_bp_cnd->string;
+        dst_bp->file_path   = src_bp_loc.file_path;
+        dst_bp->pt          = src_bp_loc.pt;
+        dst_bp->symbol_name = src_bp_loc.name;
+        dst_bp->vaddr       = src_bp_loc.vaddr;
+        dst_bp->condition   = src_bp_cnd;
         idx += 1;
       }
       
@@ -17345,15 +17006,15 @@ X(getting_started)
     //
     D_PathMapArray path_maps = {0};
     {
-      RD_EntityList maps = rd_query_cached_entity_list_with_kind(RD_EntityKind_FilePathMap);
+      RD_CfgList maps = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("file_path_map"));
       path_maps.count = maps.count;
       path_maps.v = push_array(scratch.arena, D_PathMap, path_maps.count);
       U64 idx = 0;
-      for(RD_EntityNode *n = maps.first; n != 0; n = n->next, idx += 1)
+      for(RD_CfgNode *n = maps.first; n != 0; n = n->next, idx += 1)
       {
-        RD_Entity *map = n->entity;
-        path_maps.v[idx].src = rd_entity_child_from_kind(map, RD_EntityKind_Source)->string;
-        path_maps.v[idx].dst = rd_entity_child_from_kind(map, RD_EntityKind_Dest)->string;
+        RD_Cfg *map = n->v;
+        path_maps.v[idx].src = rd_cfg_child_from_string(map, str8_lit("source"))->first->string;
+        path_maps.v[idx].dst = rd_cfg_child_from_string(map, str8_lit("dest"))->first->string;
       }
     }
     
@@ -17428,35 +17089,40 @@ X(getting_started)
           // rjf: increment breakpoint hit counts
           if(evt->cause == D_EventCause_UserBreakpoint)
           {
-            RD_EntityList user_bps = rd_query_cached_entity_list_with_kind(RD_EntityKind_Breakpoint);
-            for(RD_EntityNode *n = user_bps.first; n != 0; n = n->next)
+            RD_CfgList bps = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("breakpoint"));
+            for(RD_CfgNode *n = bps.first; n != 0; n = n->next)
             {
-              RD_Entity *bp = n->entity;
-              RD_Entity *loc = rd_entity_child_from_kind(bp, RD_EntityKind_Location);
-              D_LineList loc_lines = d_lines_from_file_path_line_num(scratch.arena, loc->string, loc->text_point.line);
+              RD_Cfg *bp = n->v;
+              RD_Cfg *hit_count_root = rd_cfg_child_from_string_or_alloc(bp, str8_lit("hit_count"));
+              U64 hit_count = 0;
+              try_u64_from_str8_c_rules(hit_count_root->first->string, &hit_count);
+              RD_Location loc = rd_location_from_cfg(bp);
+              D_LineList loc_lines = d_lines_from_file_path_line_num(scratch.arena, loc.file_path, loc.pt.line);
               if(loc_lines.first != 0)
               {
                 for(D_LineNode *n = loc_lines.first; n != 0; n = n->next)
                 {
                   if(contains_1u64(n->v.voff_range, voff))
                   {
-                    bp->u64 += 1;
+                    hit_count += 1;
                     break;
                   }
                 }
               }
-              else if(loc->flags & RD_EntityFlag_HasVAddr && vaddr == loc->vaddr)
+              else if(loc.vaddr != 0 && vaddr == loc.vaddr)
               {
-                bp->u64 += 1;
+                hit_count += 1;
               }
-              else if(loc->string.size != 0)
+              else if(loc.name.size != 0)
               {
-                U64 symb_voff = d_voff_from_dbgi_key_symbol_name(&dbgi_key, loc->string);
+                U64 symb_voff = d_voff_from_dbgi_key_symbol_name(&dbgi_key, loc.name);
                 if(symb_voff == voff)
                 {
-                  bp->u64 += 1;
+                  hit_count += 1;
                 }
               }
+              rd_cfg_release_all_children(hit_count_root);
+              rd_cfg_newf(hit_count_root, "%I64u", hit_count);
             }
           }
           
