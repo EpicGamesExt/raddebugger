@@ -36,7 +36,7 @@ RD_CmdKind_Null,
 RD_CmdKind_Null,
 };
 
-RD_VocabularyInfo rd_vocabulary_info_table[39] =
+RD_VocabularyInfo rd_vocabulary_info_table[41] =
 {
 {str8_lit_comp("auto_view_rule"), str8_lit_comp("auto_view_rules"), str8_lit_comp("Auto View Rule"), str8_lit_comp("Auto View Rules"), RD_IconKind_Binoculars},
 {str8_lit_comp("file_path_map"), str8_lit_comp("file_path_maps"), str8_lit_comp("File Path Map"), str8_lit_comp("File Path Maps"), RD_IconKind_FileOutline},
@@ -67,6 +67,7 @@ RD_VocabularyInfo rd_vocabulary_info_table[39] =
 {str8_lit_comp("lang"), str8_lit_comp("langs"), str8_lit_comp("Language"), str8_lit_comp("Languages"), RD_IconKind_Null},
 {str8_lit_comp("arch"), str8_lit_comp("archs"), str8_lit_comp("Architecture"), str8_lit_comp("Architectures"), RD_IconKind_Null},
 {str8_lit_comp("expr"), str8_lit_comp("exprs"), str8_lit_comp("Expression"), str8_lit_comp("Expressions"), RD_IconKind_Null},
+{str8_lit_comp("expression"), str8_lit_comp("expressions"), str8_lit_comp("Expression"), str8_lit_comp("Expressions"), RD_IconKind_Null},
 {str8_lit_comp("size"), str8_lit_comp("sizes"), str8_lit_comp("Size"), str8_lit_comp("Sizes"), RD_IconKind_Null},
 {str8_lit_comp("count"), str8_lit_comp("counts"), str8_lit_comp("Count"), str8_lit_comp("Counts"), RD_IconKind_Null},
 {str8_lit_comp("bool"), str8_lit_comp("bools"), str8_lit_comp("Boolean"), str8_lit_comp("Booleans"), RD_IconKind_Null},
@@ -77,6 +78,16 @@ RD_VocabularyInfo rd_vocabulary_info_table[39] =
 {str8_lit_comp("code_bytes"), str8_lit_comp("code_bytes"), str8_lit_comp("Code Bytes"), str8_lit_comp("Code Bytes"), RD_IconKind_Null},
 {str8_lit_comp("vtx"), str8_lit_comp("vtxs"), str8_lit_comp("Vertex Buffer"), str8_lit_comp("Vertex Buffers"), RD_IconKind_Null},
 {str8_lit_comp("vtx_size"), str8_lit_comp("vtx_sizes"), str8_lit_comp("Vertex Buffer Size"), str8_lit_comp("Vertex Buffer Sizes"), RD_IconKind_Null},
+{str8_lit_comp("label"), str8_lit_comp("labels"), str8_lit_comp("Label"), str8_lit_comp("Labels"), RD_IconKind_Null},
+};
+
+RD_CfgNameSchemaPair rd_cfg_name_schema_pair_table[5] =
+{
+{str8_lit_comp("target"), str8_lit_comp("x:{'label':code_string, 'exe':path, 'args':string, 'working_directory':path, 'entry_point':code_string, 'stdout_path':path, 'stderr_path':path, 'stdin_path':path, 'debug_subprocesses':bool}")},
+{str8_lit_comp("breakpoint"), str8_lit_comp("x:{'label':code_string, 'condition':code_string, 'location':location, 'hit_count':u64, 'enabled':bool}")},
+{str8_lit_comp("watch_pin"), str8_lit_comp("x:{'expression':code_string, 'view_rule':code_string, 'location':location}")},
+{str8_lit_comp("file_path_map"), str8_lit_comp("x:{'source':path, 'dest':path}")},
+{str8_lit_comp("auto_view_rule"), str8_lit_comp("x:{'source':code_string, 'dest':code_string}")},
 };
 
 String8 d_entity_kind_display_string_table[27] =

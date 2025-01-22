@@ -85,6 +85,7 @@ RD_VocabularyMap:
   {lang                 _                           "Language"                  _                     Null                                           }
   {arch                 _                           "Architecture"              _                     Null                                           }
   {expr                 _                           "Expression"                _                     Null                                           }
+  {expression           _                           "Expression"                _                     Null                                           }
   {size                 _                           "Size"                      _                     Null                                           }
   {count                _                           "Count"                     _                     Null                                           }
   {bool                 _                           "Boolean"                   _                     Null                                           }
@@ -95,6 +96,7 @@ RD_VocabularyMap:
   {code_bytes           code_bytes                  "Code Bytes"                "Code Bytes"          Null                                           }
   {vtx                  _                           "Vertex Buffer"             _                     Null                                           }
   {vtx_size             _                           "Vertex Buffer Size"        _                     Null                                           }
+  {label                _                           "Label"                     _                     Null                                           }
 }
 
 @struct RD_VocabularyInfo:
@@ -109,6 +111,29 @@ RD_VocabularyMap:
 @data(RD_VocabularyInfo) rd_vocabulary_info_table:
 {
   @expand(RD_VocabularyMap a) `{str8_lit_comp("$(a.code_name)"), str8_lit_comp("$(a.code_name_plural == _ -> a.code_name .. 's')$(a.code_name_plural != _ -> a.code_name_plural)"), str8_lit_comp("$(a.display_name)"), str8_lit_comp("$(a.display_name_plural == _ -> a.display_name .. 's')$(a.display_name_plural != _ -> a.display_name_plural)"), RD_IconKind_$(a.icon_kind)}`;
+}
+
+////////////////////////////////
+//~ rjf: Configuration Tree Schemas
+
+@table(name schema) RD_CfgSchemaTable:
+{
+  {target          "x:{'label':code_string, 'exe':path, 'args':string, 'working_directory':path, 'entry_point':code_string, 'stdout_path':path, 'stderr_path':path, 'stdin_path':path, 'debug_subprocesses':bool}"}
+  {breakpoint      "x:{'label':code_string, 'condition':code_string, 'location':location, 'hit_count':u64, 'enabled':bool}"}
+  {watch_pin       "x:{'expression':code_string, 'view_rule':code_string, 'location':location}"}
+  {file_path_map   "x:{'source':path, 'dest':path}"}
+  {auto_view_rule  "x:{'source':code_string, 'dest':code_string}"}
+}
+
+@struct RD_CfgNameSchemaPair:
+{
+  `String8 name`;
+  `String8 schema`;
+}
+
+@data(RD_CfgNameSchemaPair) rd_cfg_name_schema_pair_table:
+{
+  @expand(RD_CfgSchemaTable a) `{str8_lit_comp("$(a.name)"), str8_lit_comp("$(a.schema)")}`
 }
 
 ////////////////////////////////

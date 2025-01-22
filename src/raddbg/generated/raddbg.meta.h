@@ -550,6 +550,13 @@ String8 display_name_plural;
 RD_IconKind icon_kind;
 };
 
+typedef struct RD_CfgNameSchemaPair RD_CfgNameSchemaPair;
+struct RD_CfgNameSchemaPair
+{
+String8 name;
+String8 schema;
+};
+
 typedef struct RD_Regs RD_Regs;
 struct RD_Regs
 {
@@ -779,7 +786,8 @@ extern String8 rd_cfg_src_string_table[4];
 extern RD_CmdKind rd_cfg_src_load_cmd_kind_table[4];
 extern RD_CmdKind rd_cfg_src_write_cmd_kind_table[4];
 extern RD_CmdKind rd_cfg_src_apply_cmd_kind_table[4];
-extern RD_VocabularyInfo rd_vocabulary_info_table[39];
+extern RD_VocabularyInfo rd_vocabulary_info_table[41];
+extern RD_CfgNameSchemaPair rd_cfg_name_schema_pair_table[5];
 extern String8 d_entity_kind_display_string_table[27];
 extern String8 d_entity_kind_name_lower_table[27];
 extern String8 d_entity_kind_name_lower_plural_table[27];
