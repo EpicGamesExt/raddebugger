@@ -188,8 +188,6 @@ RD_CmdKind_SetFileReplacementPath,
 RD_CmdKind_OpenUser,
 RD_CmdKind_OpenProject,
 RD_CmdKind_OpenRecentProject,
-RD_CmdKind_ApplyUserData,
-RD_CmdKind_ApplyProjectData,
 RD_CmdKind_WriteUserData,
 RD_CmdKind_WriteProjectData,
 RD_CmdKind_Edit,
@@ -300,7 +298,6 @@ RD_CmdKind_PendingFile,
 RD_CmdKind_Disassembly,
 RD_CmdKind_Output,
 RD_CmdKind_Memory,
-RD_CmdKind_ExceptionFilters,
 RD_CmdKind_Settings,
 RD_CmdKind_PickFile,
 RD_CmdKind_PickFolder,
@@ -392,7 +389,6 @@ typedef enum RD_ViewRuleKind
 RD_ViewRuleKind_Null,
 RD_ViewRuleKind_Empty,
 RD_ViewRuleKind_GettingStarted,
-RD_ViewRuleKind_ExceptionFilters,
 RD_ViewRuleKind_Settings,
 RD_ViewRuleKind_PendingFile,
 RD_ViewRuleKind_Watch,
@@ -755,7 +751,6 @@ EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(color_rgba);
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(geo3d);
 RD_VIEW_RULE_UI_FUNCTION_DEF(empty);
 RD_VIEW_RULE_UI_FUNCTION_DEF(getting_started);
-RD_VIEW_RULE_UI_FUNCTION_DEF(exception_filters);
 RD_VIEW_RULE_UI_FUNCTION_DEF(settings);
 RD_VIEW_RULE_UI_FUNCTION_DEF(pending_file);
 RD_VIEW_RULE_UI_FUNCTION_DEF(watch);
@@ -785,7 +780,6 @@ C_LINKAGE_BEGIN
 extern String8 rd_cfg_src_string_table[4];
 extern RD_CmdKind rd_cfg_src_load_cmd_kind_table[4];
 extern RD_CmdKind rd_cfg_src_write_cmd_kind_table[4];
-extern RD_CmdKind rd_cfg_src_apply_cmd_kind_table[4];
 extern RD_VocabularyInfo rd_vocabulary_info_table[41];
 extern RD_CfgNameSchemaPair rd_cfg_name_schema_pair_table[5];
 extern String8 d_entity_kind_display_string_table[27];
@@ -805,7 +799,7 @@ extern EV_ViewRuleExprExpandInfoHookFunctionType * rd_collection_expr_expand_inf
 extern EV_ViewRuleExprExpandRangeInfoHookFunctionType * rd_collection_expr_expand_range_info_hook_function_table[18];
 extern EV_ViewRuleExprExpandIDFromNumHookFunctionType * rd_collection_expr_expand_id_from_num_hook_function_table[18];
 extern EV_ViewRuleExprExpandIDFromNumHookFunctionType * rd_collection_expr_expand_num_from_id_hook_function_table[18];
-extern RD_ViewRuleInfo rd_view_rule_kind_info_table[29];
+extern RD_ViewRuleInfo rd_view_rule_kind_info_table[28];
 extern RD_IconKind rd_entity_kind_icon_kind_table[27];
 extern String8 rd_theme_preset_display_string_table[9];
 extern String8 rd_theme_preset_code_string_table[9];

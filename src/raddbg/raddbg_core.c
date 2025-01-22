@@ -1150,7 +1150,7 @@ internal B32
 rd_cfg_is_project_filtered(RD_Cfg *cfg)
 {
   RD_Cfg *project = rd_cfg_child_from_string(cfg, str8_lit("project"));
-  B32 result = path_match_normalized(rd_state->cfg_paths[RD_CfgSrc_Project], project->first->string);
+  B32 result = path_match_normalized(rd_state->project_path, project->first->string);
   return result;
 }
 
@@ -2261,6 +2261,30 @@ rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_Entity *entity, Vec4F32 secon
 
 ////////////////////////////////
 //~ rjf: Evaluation Spaces
+
+//- rjf: cfg <-> eval space
+
+internal RD_Cfg *
+rd_cfg_from_eval_space(E_Space space)
+{
+  RD_Cfg *cfg = &rd_nil_cfg;
+  if(space.kind == RD_EvalSpaceKind_MetaCfg)
+  {
+    RD_Handle handle = {space.u64s[0], space.u64s[1]};
+    cfg = rd_cfg_from_handle(handle);
+  }
+  return cfg;
+}
+
+internal E_Space
+rd_eval_space_from_cfg(RD_Cfg *cfg)
+{
+  E_Space space = e_space_make(RD_EvalSpaceKind_MetaCfg);
+  RD_Handle handle = rd_handle_from_cfg(cfg);
+  space.u64s[0] = handle.u64[0];
+  space.u64s[1] = handle.u64[1];
+  return space;
+}
 
 //- rjf: entity <-> eval space
 
@@ -3537,7 +3561,7 @@ rd_window_frame(void)
   //- rjf: compute ui palettes from theme
   //
   {
-    RD_Theme *current = &rd_state->cfg_theme;
+    RD_Theme *current = rd_state->theme;
     for EachEnumVal(RD_PaletteCode, code)
     {
       ws->cfg_palettes[code].null       = v4f32(1, 0, 1, 1);
@@ -5482,7 +5506,6 @@ rd_window_frame(void)
                 rd_cmd_kind_info_table[RD_CmdKind_FilePathMap].string,
                 rd_cmd_kind_info_table[RD_CmdKind_AutoViewRules].string,
                 rd_cmd_kind_info_table[RD_CmdKind_Settings].string,
-                rd_cmd_kind_info_table[RD_CmdKind_ExceptionFilters].string,
                 rd_cmd_kind_info_table[RD_CmdKind_GettingStarted].string,
               };
               U32 codepoints[] =
@@ -5505,7 +5528,6 @@ rd_window_frame(void)
                 'h',
                 'p',
                 'v',
-                'e',
                 'g',
                 0,
               };
@@ -5991,7 +6013,7 @@ rd_window_frame(void)
             os_window_push_custom_title_bar_client_area(ws->os, user_box->rect);
             UI_Parent(user_box) UI_PrefWidth(ui_text_dim(10, 0)) UI_TextAlignment(UI_TextAlign_Center)
             {
-              String8 user_path = rd_cfg_path_from_src(RD_CfgSrc_User);
+              String8 user_path = rd_state->user_path;
               user_path = str8_chop_last_dot(user_path);
               RD_Font(RD_FontSlot_Icons)
                 UI_TextRasterFlags(rd_raster_flags_from_slot(RD_FontSlot_Icons))
@@ -6025,7 +6047,7 @@ rd_window_frame(void)
             os_window_push_custom_title_bar_client_area(ws->os, prof_box->rect);
             UI_Parent(prof_box) UI_PrefWidth(ui_text_dim(10, 0)) UI_TextAlignment(UI_TextAlign_Center)
             {
-              String8 prof_path = rd_cfg_path_from_src(RD_CfgSrc_Project);
+              String8 prof_path = rd_state->project_path;
               prof_path = str8_chop_last_dot(prof_path);
               RD_Font(RD_FontSlot_Icons)
                 ui_label(rd_icon_kind_text_table[RD_IconKind_Briefcase]);
@@ -10461,7 +10483,7 @@ rd_push_search_string(Arena *arena)
 internal Vec4F32
 rd_rgba_from_theme_color(RD_ThemeColor color)
 {
-  return rd_state->cfg_theme.colors[color];
+  return rd_state->theme->colors[color];
 }
 
 internal RD_ThemeColor
@@ -10599,7 +10621,51 @@ rd_palette_from_code(RD_PaletteCode code)
 internal FNT_Tag
 rd_font_from_slot(RD_FontSlot slot)
 {
-  FNT_Tag result = rd_state->cfg_font_tags[slot];
+  // rjf: determine key name for this font slot
+  String8 key = {0};
+  switch(slot)
+  {
+    default:{}break;
+    case RD_FontSlot_Main:{key = str8_lit("main_font");}break;
+    case RD_FontSlot_Code:{key = str8_lit("code_font");}break;
+  }
+  
+  // rjf: determine font name
+  String8 font_name = {0};
+  if(key.size != 0)
+  {
+    RD_Cfg *seed_cfg = &rd_nil_cfg;
+    if(seed_cfg == &rd_nil_cfg) { seed_cfg = rd_cfg_from_handle(rd_regs()->view); }
+    if(seed_cfg == &rd_nil_cfg) { seed_cfg = rd_cfg_from_handle(rd_regs()->panel); }
+    if(seed_cfg == &rd_nil_cfg) { seed_cfg = rd_cfg_from_handle(rd_regs()->window); }
+    for(RD_Cfg *cfg = seed_cfg; cfg != &rd_nil_cfg; cfg = cfg->parent)
+    {
+      RD_Cfg *font_root = rd_cfg_child_from_string(cfg, key);
+      if(font_root != &rd_nil_cfg)
+      {
+        font_name = font_root->first->string;
+        break;
+      }
+    }
+  }
+  
+  // rjf: map name -> tag
+  FNT_Tag result = {0};
+  if(font_name.size == 0)
+  {
+    switch(slot)
+    {
+      default:
+      case RD_FontSlot_Main: {result = fnt_tag_from_static_data_string(&rd_default_main_font_bytes);}break;
+      case RD_FontSlot_Code: {result = fnt_tag_from_static_data_string(&rd_default_code_font_bytes);}break;
+      case RD_FontSlot_Icons:{result = fnt_tag_from_static_data_string(&rd_icon_font_bytes);}break;
+    }
+  }
+  else
+  {
+    // TODO(rjf): need to handle "system font names" here.
+    result = fnt_tag_from_path(font_name);
+  }
   return result;
 }
 
@@ -11433,14 +11499,6 @@ rd_frame_arena(void)
   return rd_state->frame_arenas[rd_state->frame_index%ArrayCount(rd_state->frame_arenas)];
 }
 
-//- rjf: config paths
-
-internal String8
-rd_cfg_path_from_src(RD_CfgSrc src)
-{
-  return rd_state->cfg_paths[src];
-}
-
 //- rjf: entity cache queries
 
 internal RD_EntityList
@@ -11465,14 +11523,6 @@ rd_query_cached_entity_list_with_kind(RD_EntityKind kind)
   RD_EntityList result = cache->list;
   ProfEnd();
   return result;
-}
-
-//- rjf: config state
-
-internal RD_CfgTable *
-rd_cfg_table(void)
-{
-  return &rd_state->cfg_table;
 }
 
 ////////////////////////////////
@@ -11682,6 +11732,8 @@ rd_init(CmdLine *cmdln)
   rd_state->arena = arena;
   rd_state->quit_after_success = (cmd_line_has_flag(cmdln, str8_lit("quit_after_success")) ||
                                   cmd_line_has_flag(cmdln, str8_lit("q")));
+  rd_state->user_path_arena = arena_alloc();
+  rd_state->project_path_arena = arena_alloc();
   for(U64 idx = 0; idx < ArrayCount(rd_state->frame_arenas); idx += 1)
   {
     rd_state->frame_arenas[idx] = arena_alloc();
@@ -11715,8 +11767,6 @@ rd_init(CmdLine *cmdln)
   rd_state->string_search_arena = arena_alloc();
   rd_state->eval_viz_view_cache_slots_count = 1024;
   rd_state->eval_viz_view_cache_slots = push_array(arena, RD_EvalVizViewCacheSlot, rd_state->eval_viz_view_cache_slots_count);
-  rd_state->cfg_main_font_path_arena = arena_alloc();
-  rd_state->cfg_code_font_path_arena = arena_alloc();
   rd_state->bind_change_arena = arena_alloc();
   rd_state->drag_drop_arena = arena_alloc();
   rd_state->drag_drop_regs = push_array(rd_state->drag_drop_arena, RD_Regs, 1);
@@ -11749,46 +11799,27 @@ rd_init(CmdLine *cmdln)
     Temp scratch = scratch_begin(0, 0);
     
     // rjf: unpack command line arguments
-    String8 user_cfg_path = cmd_line_string(cmdln, str8_lit("user"));
-    String8 project_cfg_path = cmd_line_string(cmdln, str8_lit("project"));
-    if(project_cfg_path.size == 0)
-    {
-      project_cfg_path = cmd_line_string(cmdln, str8_lit("profile"));
-    }
+    String8 user_path = cmd_line_string(cmdln, str8_lit("user"));
+    String8 project_path = cmd_line_string(cmdln, str8_lit("project"));
     {
       String8 user_program_data_path = os_get_process_info()->user_program_data_path;
       String8 user_data_folder = push_str8f(scratch.arena, "%S/%S", user_program_data_path, str8_lit("raddbg"));
       os_make_directory(user_data_folder);
-      if(user_cfg_path.size == 0)
+      if(user_path.size == 0)
       {
-        user_cfg_path = push_str8f(scratch.arena, "%S/default.raddbg_user", user_data_folder);
+        user_path = push_str8f(scratch.arena, "%S/default.raddbg_user", user_data_folder);
       }
-      if(project_cfg_path.size == 0)
+      if(project_path.size == 0)
       {
-        project_cfg_path = push_str8f(scratch.arena, "%S/default.raddbg_project", user_data_folder);
+        project_path = push_str8f(scratch.arena, "%S/default.raddbg_project", user_data_folder);
       }
     }
     
-    // rjf: set up config path state
-    String8 cfg_src_paths[RD_CfgSrc_COUNT] = {user_cfg_path, project_cfg_path};
-    for(RD_CfgSrc src = (RD_CfgSrc)0; src < RD_CfgSrc_COUNT; src = (RD_CfgSrc)(src+1))
-    {
-      rd_state->cfg_path_arenas[src] = arena_alloc();
-      rd_cmd(rd_cfg_src_load_cmd_kind_table[src], .file_path = path_normalized_from_string(scratch.arena, cfg_src_paths[src]));
-    }
+    // rjf: do initial load
+    rd_cmd(RD_CmdKind_OpenUser,    .file_path = user_path);
+    rd_cmd(RD_CmdKind_OpenProject, .file_path = project_path);
     
-    // rjf: set up config table arena
-    rd_state->cfg_arena = arena_alloc();
     scratch_end(scratch);
-  }
-  
-  // rjf: set up initial exception filtering rules
-  for(CTRL_ExceptionCodeKind k = (CTRL_ExceptionCodeKind)0; k < CTRL_ExceptionCodeKind_COUNT; k = (CTRL_ExceptionCodeKind)(k+1))
-  {
-    if(ctrl_exception_code_kind_default_enable_table[k])
-    {
-      rd_state->ctrl_exception_code_filters[k/64] |= 1ull<<(k%64);
-    }
   }
   
   // rjf: unpack icon image data
@@ -12146,7 +12177,6 @@ rd_frame(void)
       rd_request_frame();
       // TODO(rjf): @cfg_bindchange rd_unbind_name(rd_state->bind_change_cmd_name, rd_state->bind_change_binding);
       rd_state->bind_change_active = 0;
-      rd_cmd(rd_cfg_src_write_cmd_kind_table[RD_CfgSrc_User]);
     }
     for(OS_Event *event = events.first, *next = 0; event != 0; event = next)
     {
@@ -12173,7 +12203,6 @@ rd_frame(void)
         U32 codepoint = os_codepoint_from_modifiers_and_key(event->modifiers, event->key);
         os_text(&events, event->window, codepoint);
         os_eat_event(&events, event);
-        rd_cmd(rd_cfg_src_write_cmd_kind_table[RD_CfgSrc_User]);
         rd_request_frame();
         break;
       }
@@ -12183,6 +12212,7 @@ rd_frame(void)
   //////////////////////////////
   //- rjf: build key map from config
   //
+  ProfScope("build key map from config")
   {
     //- rjf: set up table
     rd_state->key_map = push_array(rd_frame_arena(), RD_KeyMap, 1);
@@ -12251,9 +12281,11 @@ rd_frame(void)
       }
     }
     
-    //- rjf: iterate all commands - if they are not found in the map, then use
-    // the default binding.
+    //- rjf: iterate default bindings - if their commands are not found in the
+    // map, then use the default binding.
+    //
     // TODO(rjf): @dynamic_cmds
+    //
     for EachElement(idx, rd_default_binding_table)
     {
       String8 name = rd_default_binding_table[idx].string;
@@ -12279,6 +12311,110 @@ rd_frame(void)
         n->binding = binding;
         SLLQueuePush_N(key_map->name_slots[name_slot_idx].first, key_map->name_slots[name_slot_idx].last, n, name_hash_next);
         SLLQueuePush_N(key_map->binding_slots[binding_slot_idx].first, key_map->binding_slots[binding_slot_idx].last, n, binding_hash_next);
+      }
+    }
+  }
+  
+  //////////////////////////////
+  //- rjf: build theme from config
+  //
+  ProfScope("build theme from config")
+  {
+    rd_state->theme_target = push_array(rd_frame_arena(), RD_Theme, 1);
+    RD_Theme *theme = rd_state->theme_target;
+    
+    //- rjf: gather globally-applying config options
+    RD_CfgList preset_roots = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("color_preset"));
+    RD_CfgList colors_roots = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("colors"));
+    
+    //- rjf: assume default-dark
+    MemoryCopy(theme->colors, rd_theme_preset_colors_table[RD_ThemePreset_DefaultDark], sizeof(rd_theme_preset_colors__default_dark));
+    
+    //- rjf: apply explicitly-specified presets
+    for(RD_CfgNode *n = preset_roots.first; n != 0; n = n->next)
+    {
+      RD_Cfg *preset = n->v;
+      String8 preset_name = preset->first->string;
+      RD_ThemePreset preset_kind = (RD_ThemePreset)0;
+      B32 found_preset_kind = 0;
+      for(RD_ThemePreset p = (RD_ThemePreset)0; p < RD_ThemePreset_COUNT; p = (RD_ThemePreset)(p+1))
+      {
+        if(str8_match(preset_name, rd_theme_preset_code_string_table[p], StringMatchFlag_CaseInsensitive))
+        {
+          found_preset_kind = 1;
+          preset_kind = p;
+          break;
+        }
+      }
+      if(found_preset_kind)
+      {
+        MemoryCopy(theme->colors, rd_theme_preset_colors_table[preset_kind], sizeof(rd_theme_preset_colors__default_dark));
+      }
+    }
+    
+    //- rjf: apply explicitly-specified color codes
+    for(RD_CfgNode *n = colors_roots.first; n != 0; n = n->next)
+    {
+      RD_Cfg *colors = n->v;
+      for(RD_Cfg *color = colors->first; color != &rd_nil_cfg; color = color->next)
+      {
+        String8 name = color->string;
+        RD_ThemeColor color_code = RD_ThemeColor_Null;
+        for(RD_ThemeColor c = RD_ThemeColor_Null; c < RD_ThemeColor_COUNT; c = (RD_ThemeColor)(c+1))
+        {
+          if(str8_match(rd_theme_color_cfg_string_table[c], name, StringMatchFlag_CaseInsensitive))
+          {
+            color_code = c;
+            break;
+          }
+        }
+        if(color_code != RD_ThemeColor_Null)
+        {
+          U64 color_val = 0;
+          if(try_u64_from_str8_c_rules(color->first->string, &color_val))
+          {
+            Vec4F32 color_rgba = rgba_from_u32((U32)color_val);
+            theme->colors[color_code] = color_rgba;
+          }
+        }
+      }
+    }
+  }
+  
+  //////////////////////////////
+  //- rjf: animate theme
+  //
+  {
+    RD_Theme *last = rd_state->theme;
+    rd_state->theme = push_array(rd_frame_arena(), RD_Theme, 1);
+    RD_Theme *current = rd_state->theme;
+    RD_Theme *target = rd_state->theme_target;
+    if(last)
+    {
+      MemoryCopyStruct(current, last);
+    }
+    if(rd_state->frame_index <= 2)
+    {
+      MemoryCopyStruct(current, target);
+    }
+    else
+    {
+      F32 rate = 1 - pow_f32(2, (-50.f * rd_state->frame_dt));
+      for(RD_ThemeColor color = RD_ThemeColor_Null;
+          color < RD_ThemeColor_COUNT;
+          color = (RD_ThemeColor)(color+1))
+      {
+        if(abs_f32(target->colors[color].x - current->colors[color].x) > 0.01f ||
+           abs_f32(target->colors[color].y - current->colors[color].y) > 0.01f ||
+           abs_f32(target->colors[color].z - current->colors[color].z) > 0.01f ||
+           abs_f32(target->colors[color].w - current->colors[color].w) > 0.01f)
+        {
+          rd_request_frame();
+        }
+        current->colors[color].x += (target->colors[color].x - current->colors[color].x) * rate;
+        current->colors[color].y += (target->colors[color].y - current->colors[color].y) * rate;
+        current->colors[color].z += (target->colors[color].z - current->colors[color].z) * rate;
+        current->colors[color].w += (target->colors[color].w - current->colors[color].w) * rate;
       }
     }
   }
@@ -12528,7 +12664,39 @@ rd_frame(void)
         }
       }
       
+      //- rjf: add macros for evallable config trees
+      {
+        String8 evallable_names[] =
+        {
+          str8_lit("breakpoint"),
+          str8_lit("watch_pin"),
+          str8_lit("target"),
+          str8_lit("file_path_map"),
+          str8_lit("auto_view_rule"),
+        };
+        for EachElement(idx, evallable_names)
+        {
+          // rjf: determine schema string for this name
+          String8 schema_string = {0};
+          for EachElement(schema_idx, rd_cfg_name_schema_pair_table)
+          {
+            if(str8_match(evallable_names[idx], rd_cfg_name_schema_pair_table[idx].name, 0))
+            {
+              schema_string = rd_cfg_name_schema_pair_table[idx].schema;
+              break;
+            }
+          }
+          
+          // rjf: parse schema
+          MD_Node *schema = md_tree_from_string(scratch.arena, schema_string)->first;
+          
+          // rjf: form evaluation type from schema
+          
+        }
+      }
+      
       //- rjf: add macros for all evallable debugger frontend entities
+#if 0 // TODO(rjf): @cfg
       {
         RD_EntityKind evallable_kinds[] =
         {
@@ -12565,6 +12733,7 @@ rd_frame(void)
           }
         }
       }
+#endif
       
       //- rjf: add macros for all evallable control entities
       {
@@ -12961,241 +13130,105 @@ rd_frame(void)
           case RD_CmdKind_OpenUser:
           case RD_CmdKind_OpenProject:
           {
-            //- TODO(rjf): @cfg load & apply user/project data to the cfg data structure
+            String8 file_root_key = (kind == RD_CmdKind_OpenUser ? str8_lit("user") : str8_lit("project"));
+            RD_Cfg *file_root = rd_cfg_child_from_string(rd_state->root_cfg, file_root_key);
+            
+            //- rjf: load the new file's data
+            String8 file_path = rd_regs()->file_path;
+            String8 file_data = os_data_from_file_path(scratch.arena, file_path);
+            
+            //- rjf: determine if the file is good
+            B32 file_is_okay = 0;
             {
-              String8 file_root_key = (kind == RD_CmdKind_OpenUser ? str8_lit("user") : str8_lit("project"));
-              RD_Cfg *file_root = rd_cfg_child_from_string(rd_state->root_cfg, file_root_key);
-              
-              //- rjf: eliminate all old state under this file tree
-              for(RD_Cfg *tln = file_root->first, *next = &rd_nil_cfg;
-                  tln != &rd_nil_cfg;
-                  tln = next)
-              {
-                next = tln->next;
-                rd_cfg_release(tln);
-              }
-              
-              //- rjf: load & parse the new file, generate cfg entities for it
-              String8 file_path = rd_regs()->file_path;
-              String8 file_data = os_data_from_file_path(scratch.arena, file_path);
-              RD_CfgList file_cfg_list = rd_cfg_tree_list_from_string(scratch.arena, file_data);
-              
-              //- rjf: insert the new cfg entities into this file tree
-              for(RD_CfgNode *n = file_cfg_list.first; n != 0; n = n->next)
-              {
-                rd_cfg_insert_child(file_root, file_root->last, n->v);
-              }
-              
-              //- rjf: if config did not open any windows for the user, then we need to open a sensible default
-              {
-                if(str8_match(file_root_key, str8_lit("user"), 0))
-                {
-                  RD_CfgList all_user_windows = rd_cfg_child_list_from_string(scratch.arena, file_root, str8_lit("window"));
-                  if(all_user_windows.count == 0)
-                  {
-                    OS_Handle monitor    = os_primary_monitor();
-                    String8 monitor_name = os_name_from_monitor(scratch.arena, monitor);
-                    Vec2F32 monitor_dim  = os_dim_from_monitor(monitor);
-                    F32 monitor_dpi      = os_dpi_from_monitor(monitor);
-                    Vec2F32 window_dim   = v2f32(monitor_dim.x*4/5, monitor_dim.y*4/5);
-                    RD_Cfg *new_window = rd_cfg_new(file_root, str8_lit("window"));
-                    RD_Cfg *size = rd_cfg_new(new_window, str8_lit("size"));
-                    rd_cfg_newf(size, "%f", window_dim.x);
-                    rd_cfg_newf(size, "%f", window_dim.y);
-                    F32 line_height_guess = 11.f * (monitor_dpi / 96.f);
-                    F32 num_lines_in_monitor_height = monitor_dim.y / line_height_guess;
-                    if(num_lines_in_monitor_height < 100)
-                    {
-                      rd_cmd(RD_CmdKind_ResetToCompactPanels, .window = rd_handle_from_cfg(new_window));
-                    }
-                    else
-                    {
-                      rd_cmd(RD_CmdKind_ResetToDefaultPanels, .window = rd_handle_from_cfg(new_window));
-                    }
-                  }
-                }
-              }
-            }
-            
-            // TODO(rjf): dear lord this is so overcomplicated, this needs to be collapsed down & simplified ASAP
-            
-            B32 load_cfg[RD_CfgSrc_COUNT] = {0};
-            RD_CfgSrc cfg_src = (RD_CfgSrc)0;
-            for(RD_CfgSrc src = (RD_CfgSrc)0; src < RD_CfgSrc_COUNT; src = (RD_CfgSrc)(src+1))
-            {
-              load_cfg[src] = (kind == rd_cfg_src_load_cmd_kind_table[src]);
-              if(load_cfg[src])
-              {
-                cfg_src = src;
-              }
-            }
-            
-            //- rjf: normalize path
-            String8 new_path = path_normalized_from_string(scratch.arena, rd_regs()->file_path);
-            
-            //- rjf: path -> data
-            FileProperties props = {0};
-            String8 data = {0};
-            {
-              OS_Handle file = os_file_open(OS_AccessFlag_ShareRead|OS_AccessFlag_Read, new_path);
-              props = os_properties_from_file(file);
-              data = os_string_from_file_range(scratch.arena, file, r1u64(0, props.size));
-              os_file_close(file);
-            }
-            
-            //- rjf: investigate file path/data
-            B32 file_is_okay = 1;
-            if(props.modified != 0 && data.size != 0 && !str8_match(str8_prefix(data, 9), str8_lit("// raddbg"), 0) && rd_state->cfg_cached_timestamp[cfg_src] != 0)
-            {
-              file_is_okay = 0;
-            }
-            
-            //- rjf: set new config paths
-            if(file_is_okay)
-            {
-              for(RD_CfgSrc src = (RD_CfgSrc)0; src < RD_CfgSrc_COUNT; src = (RD_CfgSrc)(src+1))
-              {
-                if(load_cfg[src])
-                {
-                  arena_clear(rd_state->cfg_path_arenas[src]);
-                  rd_state->cfg_paths[src] = push_str8_copy(rd_state->cfg_path_arenas[src], new_path);
-                }
-              }
-            }
-            
-            //- rjf: get config file properties
-            FileProperties cfg_props[RD_CfgSrc_COUNT] = {0};
-            if(file_is_okay)
-            {
-              for(RD_CfgSrc src = (RD_CfgSrc)0; src < RD_CfgSrc_COUNT; src = (RD_CfgSrc)(src+1))
-              {
-                String8 path = rd_cfg_path_from_src(src);
-                cfg_props[src] = os_properties_from_file_path(path);
-              }
-            }
-            
-            //- rjf: load files
-            String8 cfg_data[RD_CfgSrc_COUNT] = {0};
-            U64 cfg_timestamps[RD_CfgSrc_COUNT] = {0};
-            if(file_is_okay)
-            {
-              for(RD_CfgSrc src = (RD_CfgSrc)0; src < RD_CfgSrc_COUNT; src = (RD_CfgSrc)(src+1))
-              {
-                String8 path = rd_cfg_path_from_src(src);
-                OS_Handle file = os_file_open(OS_AccessFlag_ShareRead|OS_AccessFlag_Read, path);
-                FileProperties props = os_properties_from_file(file);
-                String8 data = os_string_from_file_range(scratch.arena, file, r1u64(0, props.size));
-                if(props.modified != 0)
-                {
-                  cfg_data[src] = data;
-                  cfg_timestamps[src] = props.modified;
-                }
-                os_file_close(file);
-              }
-            }
-            
-            //- rjf: determine if we need to save config
-            B32 cfg_save[RD_CfgSrc_COUNT] = {0};
-            if(file_is_okay)
-            {
-              for(RD_CfgSrc src = (RD_CfgSrc)0; src < RD_CfgSrc_COUNT; src = (RD_CfgSrc)(src+1))
-              {
-                cfg_save[src] = (load_cfg[src] && cfg_props[src].created == 0);
-              }
-            }
-            
-            //- rjf: determine if we need to reload config
-            B32 cfg_load[RD_CfgSrc_COUNT] = {0};
-            B32 cfg_load_any = 0;
-            if(file_is_okay)
-            {
-              for(RD_CfgSrc src = (RD_CfgSrc)0; src < RD_CfgSrc_COUNT; src = (RD_CfgSrc)(src+1))
-              {
-                cfg_load[src] = (load_cfg[src] && ((cfg_save[src] == 0 && rd_state->cfg_cached_timestamp[src] != cfg_timestamps[src]) || cfg_props[src].created == 0));
-                cfg_load_any = cfg_load_any || cfg_load[src];
-              }
-            }
-            
-            //- rjf: load => build new config table
-            if(cfg_load_any)
-            {
-              arena_clear(rd_state->cfg_arena);
-              MemoryZeroStruct(&rd_state->cfg_table);
-              for(RD_CfgSrc src = (RD_CfgSrc)0; src < RD_CfgSrc_COUNT; src = (RD_CfgSrc)(src+1))
-              {
-                rd_cfg_table_push_unparsed_string(rd_state->cfg_arena, &rd_state->cfg_table, cfg_data[src], src);
-              }
-            }
-            
-            //- rjf: load => dispatch apply
-            //
-            // NOTE(rjf): must happen before `save`. we need to create a default before saving, which
-            // occurs in the 'apply' path.
-            //
-            if(file_is_okay)
-            {
-              for(RD_CfgSrc src = (RD_CfgSrc)0; src < RD_CfgSrc_COUNT; src = (RD_CfgSrc)(src+1))
-              {
-                if(cfg_load[src])
-                {
-                  RD_CmdKind cmd_kind = rd_cfg_src_apply_cmd_kind_table[src];
-                  rd_cmd(cmd_kind);
-                  rd_state->cfg_cached_timestamp[src] = cfg_timestamps[src];
-                }
-              }
-            }
-            
-            //- rjf: save => dispatch write
-            if(file_is_okay)
-            {
-              for(RD_CfgSrc src = (RD_CfgSrc)0; src < RD_CfgSrc_COUNT; src = (RD_CfgSrc)(src+1))
-              {
-                if(cfg_save[src])
-                {
-                  RD_CmdKind cmd_kind = rd_cfg_src_write_cmd_kind_table[src];
-                  rd_cmd(cmd_kind);
-                }
-              }
+              FileProperties file_props = os_properties_from_file_path(file_path);
+              file_is_okay = ((file_props.size == 0 && file_props.created == 0) ||
+                              str8_match(str8_prefix(file_data, 9), str8_lit("// raddbg"), 0));
             }
             
             //- rjf: bad file -> alert user
             if(!file_is_okay)
             {
-              log_user_errorf("\"%S\" appears to refer to an existing file which is not a RADDBG config file. This would overwrite the file.", new_path);
+              log_user_errorf("\"%S\" appears to refer to an existing file which is not a RADDBG config file. This would overwrite the file.", file_path);
             }
-          }break;
-          
-          //- rjf: loading/applying stateful config changes
-          case RD_CmdKind_ApplyUserData:
-          case RD_CmdKind_ApplyProjectData:
-          {
-            RD_CfgTable *table = rd_cfg_table();
-            OS_HandleArray monitors = os_push_monitors_array(scratch.arena);
             
-            //- rjf: get config source
-            RD_CfgSrc src = RD_CfgSrc_User;
-            for(RD_CfgSrc s = (RD_CfgSrc)0; s < RD_CfgSrc_COUNT; s = (RD_CfgSrc)(s+1))
+            //- rjf: eliminate all old state under this file tree
+            if(file_is_okay)
             {
-              if(kind == rd_cfg_src_apply_cmd_kind_table[s])
+              rd_cfg_release_all_children(file_root);
+            }
+            
+            //- rjf: parse the new file, generate cfg entities for it
+            RD_CfgList file_cfg_list = {0};
+            if(file_is_okay)
+            {
+              file_cfg_list = rd_cfg_tree_list_from_string(scratch.arena, file_data);
+            }
+            
+            //- rjf: store path
+            if(file_is_okay)
+            {
+              switch(kind)
               {
-                src = s;
-                break;
+                default:{}break;
+                case RD_CmdKind_OpenUser:
+                {
+                  arena_clear(rd_state->user_path_arena);
+                  rd_state->user_path = push_str8_copy(rd_state->user_path_arena, file_path);
+                }break;
+                case RD_CmdKind_OpenProject:
+                {
+                  arena_clear(rd_state->project_path_arena);
+                  rd_state->project_path = push_str8_copy(rd_state->project_path_arena, file_path);
+                }break;
               }
             }
             
-            //- rjf: get paths
-            String8 cfg_path   = rd_cfg_path_from_src(src);
-            String8 cfg_folder = str8_chop_last_slash(cfg_path);
+            //- rjf: insert the new cfg entities into this file tree
+            if(file_is_okay)
+            {
+              for(RD_CfgNode *n = file_cfg_list.first; n != 0; n = n->next)
+              {
+                rd_cfg_insert_child(file_root, file_root->last, n->v);
+              }
+            }
             
-            //- rjf: keep track of recent projects
-            if(src == RD_CfgSrc_Project)
+            //- rjf: if config did not open any windows for the user, then we need to open a sensible default
+            if(file_is_okay && kind == RD_CmdKind_OpenUser)
+            {
+              RD_CfgList all_user_windows = rd_cfg_child_list_from_string(scratch.arena, file_root, str8_lit("window"));
+              if(all_user_windows.count == 0)
+              {
+                OS_Handle monitor    = os_primary_monitor();
+                String8 monitor_name = os_name_from_monitor(scratch.arena, monitor);
+                Vec2F32 monitor_dim  = os_dim_from_monitor(monitor);
+                F32 monitor_dpi      = os_dpi_from_monitor(monitor);
+                Vec2F32 window_dim   = v2f32(monitor_dim.x*4/5, monitor_dim.y*4/5);
+                RD_Cfg *new_window = rd_cfg_new(file_root, str8_lit("window"));
+                RD_Cfg *size = rd_cfg_new(new_window, str8_lit("size"));
+                rd_cfg_newf(size, "%f", window_dim.x);
+                rd_cfg_newf(size, "%f", window_dim.y);
+                F32 line_height_guess = 11.f * (monitor_dpi / 96.f);
+                F32 num_lines_in_monitor_height = monitor_dim.y / line_height_guess;
+                if(num_lines_in_monitor_height < 100)
+                {
+                  rd_cmd(RD_CmdKind_ResetToCompactPanels, .window = rd_handle_from_cfg(new_window));
+                }
+                else
+                {
+                  rd_cmd(RD_CmdKind_ResetToDefaultPanels, .window = rd_handle_from_cfg(new_window));
+                }
+              }
+            }
+            
+            //- rjf: record recently-opened projects in the user
+            if(file_is_okay && kind == RD_CmdKind_OpenProject)
             {
               RD_Cfg *user = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("user"));
               RD_CfgList recent_projects = rd_cfg_child_list_from_string(scratch.arena, user, str8_lit("recent_project"));
               RD_Cfg *recent_project = &rd_nil_cfg;
               for(RD_CfgNode *n = recent_projects.first; n != 0; n = n->next)
               {
-                if(path_match_normalized(n->v->string, cfg_path))
+                if(path_match_normalized(n->v->string, file_path))
                 {
                   recent_project = n->v;
                   break;
@@ -13204,7 +13237,7 @@ rd_frame(void)
               if(recent_project == &rd_nil_cfg)
               {
                 recent_project = rd_cfg_new(user, str8_lit("recent_project"));
-                rd_cfg_new(recent_project, path_normalized_from_string(scratch.arena, cfg_path));
+                rd_cfg_new(recent_project, path_normalized_from_string(scratch.arena, file_path));
               }
               rd_cfg_unhook(user, recent_project);
               rd_cfg_insert_child(user, &rd_nil_cfg, recent_project);
@@ -13214,636 +13247,6 @@ rd_frame(void)
                 rd_cfg_release(recent_projects.last->v);
               }
             }
-            
-            //- rjf: apply all entities
-            {
-              for EachEnumVal(RD_EntityKind, k)
-              {
-                RD_EntityKindFlags k_flags = rd_entity_kind_flags_table[k];
-                if(k_flags & RD_EntityKindFlag_IsSerializedToConfig)
-                {
-                  RD_CfgVal *k_val = rd_cfg_val_from_string(table, d_entity_kind_name_lower_table[k]);
-                  for(RD_CfgTree *k_tree = k_val->first;
-                      k_tree != &d_nil_cfg_tree;
-                      k_tree = k_tree->next)
-                  {
-                    if(k_tree->source != src)
-                    {
-                      continue;
-                    }
-                    RD_Entity *entity = rd_entity_alloc(rd_entity_root(), k);
-                    rd_entity_equip_cfg_src(entity, k_tree->source);
-                    
-                    // rjf: iterate config tree
-                    typedef struct Task Task;
-                    struct Task
-                    {
-                      Task *next;
-                      RD_Entity *entity;
-                      MD_Node *n;
-                    };
-                    Task start_task = {0, entity, k_tree->root};
-                    Task *first_task = &start_task;
-                    Task *last_task = first_task;
-                    for(Task *t = first_task; t != 0; t = t->next)
-                    {
-                      MD_Node *node = t->n;
-                      for MD_EachNode(child, node->first)
-                      {
-                        // rjf: standalone string literals under an entity -> name
-                        if(child->flags & MD_NodeFlag_StringLiteral && child->first == &md_nil_node)
-                        {
-                          String8 string = raw_from_escaped_str8(scratch.arena, child->string);
-                          // TODO(rjf): @hack - hardcoding in the "EntityKind_Location" here - this is because
-                          // i am assuming an entity *kind* can 'know' about the 'pathness' of a string. this is
-                          // not the case. post-0.9.12 i need to fix this.
-                          if(rd_entity_kind_flags_table[t->entity->kind] & RD_EntityKindFlag_NameIsPath &&
-                             t->entity->kind != RD_EntityKind_Location)
-                          {
-                            string = path_absolute_dst_from_relative_dst_src(scratch.arena, string, cfg_folder);
-                          }
-                          rd_entity_equip_name(t->entity, string);
-                        }
-                        
-                        // rjf: standalone string literals under an entity, with a numeric child -> name & text location
-                        if(child->flags & MD_NodeFlag_StringLiteral && child->first->flags & MD_NodeFlag_Numeric && child->first->first == &md_nil_node)
-                        {
-                          String8 string = raw_from_escaped_str8(scratch.arena, child->string);
-                          if(rd_entity_kind_flags_table[t->entity->kind] & RD_EntityKindFlag_NameIsPath)
-                          {
-                            string = path_absolute_dst_from_relative_dst_src(scratch.arena, string, cfg_folder);
-                          }
-                          rd_entity_equip_name(t->entity, string);
-                          S64 line = 0;
-                          try_s64_from_str8_c_rules(child->first->string, &line);
-                          TxtPt pt = txt_pt(line, 1);
-                          rd_entity_equip_txt_pt(t->entity, pt);
-                        }
-                        
-                        // rjf: standalone hex literals under an entity -> vaddr
-                        if(child->flags & MD_NodeFlag_Numeric && child->first == &md_nil_node && str8_match(str8_substr(child->string, r1u64(0, 2)), str8_lit("0x"), 0))
-                        {
-                          U64 vaddr = 0;
-                          try_u64_from_str8_c_rules(child->string, &vaddr);
-                          rd_entity_equip_vaddr(t->entity, vaddr);
-                        }
-                        
-                        // rjf: specifically named entity equipment
-                        if((str8_match(child->string, str8_lit("name"), StringMatchFlag_CaseInsensitive) ||
-                            str8_match(child->string, str8_lit("label"), StringMatchFlag_CaseInsensitive)) &&
-                           child->first != &md_nil_node)
-                        {
-                          String8 string = raw_from_escaped_str8(scratch.arena, child->first->string);
-                          // TODO(rjf): @hack - hardcoding in the "EntityKind_Location" here - this is because
-                          // i am assuming an entity *kind* can 'know' about the 'pathness' of a string. this is
-                          // not the case. post-0.9.12 i need to fix this.
-                          if(rd_entity_kind_flags_table[t->entity->kind] & RD_EntityKindFlag_NameIsPath &&
-                             (t->entity->kind != RD_EntityKind_Location || !md_node_is_nil(md_child_from_string(node, str8_lit("line"), 0))))
-                          {
-                            string = path_absolute_dst_from_relative_dst_src(scratch.arena, string, cfg_folder);
-                          }
-                          rd_entity_equip_name(t->entity, string);
-                        }
-                        if((str8_match(child->string, str8_lit("active"), StringMatchFlag_CaseInsensitive) ||
-                            str8_match(child->string, str8_lit("enabled"), StringMatchFlag_CaseInsensitive)) &&
-                           child->first != &md_nil_node)
-                        {
-                          rd_entity_equip_disabled(t->entity, !str8_match(child->first->string, str8_lit("1"), 0));
-                        }
-                        if(str8_match(child->string, str8_lit("disabled"), StringMatchFlag_CaseInsensitive) && child->first != &md_nil_node)
-                        {
-                          rd_entity_equip_disabled(t->entity, str8_match(child->first->string, str8_lit("1"), 0));
-                        }
-                        if(str8_match(child->string, str8_lit("debug_subprocesses"), StringMatchFlag_CaseInsensitive) && child->first != &md_nil_node)
-                        {
-                          t->entity->debug_subprocesses = str8_match(child->first->string, str8_lit("1"), 0);
-                        }
-                        if(str8_match(child->string, str8_lit("hsva"), StringMatchFlag_CaseInsensitive) && child->first != &md_nil_node)
-                        {
-                          Vec4F32 hsva = {0};
-                          hsva.x = (F32)f64_from_str8(child->first->string);
-                          hsva.y = (F32)f64_from_str8(child->first->next->string);
-                          hsva.z = (F32)f64_from_str8(child->first->next->next->string);
-                          hsva.w = (F32)f64_from_str8(child->first->next->next->next->string);
-                          rd_entity_equip_color_hsva(t->entity, hsva);
-                        }
-                        if(str8_match(child->string, str8_lit("color"), StringMatchFlag_CaseInsensitive) && child->first != &md_nil_node)
-                        {
-                          Vec4F32 rgba = rgba_from_hex_string_4f32(child->first->string);
-                          Vec4F32 hsva = hsva_from_rgba(rgba);
-                          rd_entity_equip_color_hsva(t->entity, hsva);
-                        }
-                        if(str8_match(child->string, str8_lit("line"), StringMatchFlag_CaseInsensitive) && child->first != &md_nil_node)
-                        {
-                          S64 line = 0;
-                          try_s64_from_str8_c_rules(child->first->string, &line);
-                          TxtPt pt = txt_pt(line, 1);
-                          rd_entity_equip_txt_pt(t->entity, pt);
-                        }
-                        if((str8_match(child->string, str8_lit("vaddr"), StringMatchFlag_CaseInsensitive) ||
-                            str8_match(child->string, str8_lit("addr"), StringMatchFlag_CaseInsensitive)) &&
-                           child->first != &md_nil_node)
-                        {
-                          U64 vaddr = 0;
-                          try_u64_from_str8_c_rules(child->first->string, &vaddr);
-                          rd_entity_equip_vaddr(t->entity, vaddr);
-                        }
-                        
-                        // rjf: sub-entity -> create new task
-                        RD_EntityKind sub_entity_kind = RD_EntityKind_Nil;
-                        for EachEnumVal(RD_EntityKind, k2)
-                        {
-                          if(child->flags & MD_NodeFlag_Identifier && child->first != &md_nil_node &&
-                             (str8_match(child->string, d_entity_kind_name_lower_table[k2], StringMatchFlag_CaseInsensitive) ||
-                              (k2 == RD_EntityKind_Executable && str8_match(child->string, str8_lit("exe"), StringMatchFlag_CaseInsensitive))))
-                          {
-                            Task *task = push_array(scratch.arena, Task, 1);
-                            task->next = t->next;
-                            task->entity = rd_entity_alloc(t->entity, k2);
-                            task->n = child;
-                            t->next = task;
-                            break;
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-            
-            //- rjf: apply exception code filters
-            RD_CfgVal *filter_tables = rd_cfg_val_from_string(table, str8_lit("exception_code_filters"));
-            for(RD_CfgTree *table = filter_tables->first;
-                table != &d_nil_cfg_tree;
-                table = table->next)
-            {
-              for MD_EachNode(rule, table->root->first)
-              {
-                String8 name = rule->string;
-                String8 val_string = rule->first->string;
-                U64 val = 0;
-                if(try_u64_from_str8_c_rules(val_string, &val))
-                {
-                  CTRL_ExceptionCodeKind kind = CTRL_ExceptionCodeKind_Null;
-                  for(CTRL_ExceptionCodeKind k = (CTRL_ExceptionCodeKind)(CTRL_ExceptionCodeKind_Null+1);
-                      k < CTRL_ExceptionCodeKind_COUNT;
-                      k = (CTRL_ExceptionCodeKind)(k+1))
-                  {
-                    if(str8_match(name, ctrl_exception_code_kind_lowercase_code_string_table[k], 0))
-                    {
-                      kind = k;
-                      break;
-                    }
-                  }
-                  if(kind != CTRL_ExceptionCodeKind_Null)
-                  {
-                    if(val)
-                    {
-                      rd_state->ctrl_exception_code_filters[kind/64] |= (1ull<<(kind%64));
-                    }
-                    else
-                    {
-                      rd_state->ctrl_exception_code_filters[kind/64] &= ~(1ull<<(kind%64));
-                    }
-                  }
-                }
-              }
-            }
-            
-            //- rjf: apply fonts
-            {
-              FNT_Tag defaults[RD_FontSlot_COUNT] =
-              {
-                fnt_tag_from_static_data_string(&rd_default_main_font_bytes),
-                fnt_tag_from_static_data_string(&rd_default_code_font_bytes),
-                fnt_tag_from_static_data_string(&rd_icon_font_bytes),
-              };
-              MemoryZeroArray(rd_state->cfg_font_tags);
-              {
-                RD_CfgVal *code_font_val = rd_cfg_val_from_string(table, str8_lit("code_font"));
-                RD_CfgVal *main_font_val = rd_cfg_val_from_string(table, str8_lit("main_font"));
-                MD_Node *code_font_node = code_font_val->last->root;
-                MD_Node *main_font_node = main_font_val->last->root;
-                String8 code_font_relative_path = code_font_node->first->string;
-                String8 main_font_relative_path = main_font_node->first->string;
-                if(!md_node_is_nil(code_font_node))
-                {
-                  arena_clear(rd_state->cfg_code_font_path_arena);
-                  rd_state->cfg_code_font_path = raw_from_escaped_str8(rd_state->cfg_code_font_path_arena, code_font_relative_path);
-                }
-                if(!md_node_is_nil(main_font_node))
-                {
-                  arena_clear(rd_state->cfg_main_font_path_arena);
-                  rd_state->cfg_main_font_path = raw_from_escaped_str8(rd_state->cfg_main_font_path_arena, main_font_relative_path);
-                }
-                String8 code_font_path = path_absolute_dst_from_relative_dst_src(scratch.arena, code_font_relative_path, cfg_folder);
-                String8 main_font_path = path_absolute_dst_from_relative_dst_src(scratch.arena, main_font_relative_path, cfg_folder);
-                if(os_file_path_exists(code_font_path) && !md_node_is_nil(code_font_node) && code_font_relative_path.size != 0)
-                {
-                  rd_state->cfg_font_tags[RD_FontSlot_Code] = fnt_tag_from_path(code_font_path);
-                }
-                if(os_file_path_exists(main_font_path) && !md_node_is_nil(main_font_node) && main_font_relative_path.size != 0)
-                {
-                  rd_state->cfg_font_tags[RD_FontSlot_Main] = fnt_tag_from_path(main_font_path);
-                }
-              }
-              for(RD_FontSlot slot = (RD_FontSlot)0; slot < RD_FontSlot_COUNT; slot = (RD_FontSlot)(slot+1))
-              {
-                if(fnt_tag_match(fnt_tag_zero(), rd_state->cfg_font_tags[slot]))
-                {
-                  rd_state->cfg_font_tags[slot] = defaults[slot];
-                }
-              }
-            }
-            
-            //- rjf: build windows & panel layouts
-            RD_CfgVal *windows = rd_cfg_val_from_string(table, str8_lit("window"));
-            for(RD_CfgTree *window_tree = windows->first;
-                window_tree != &d_nil_cfg_tree;
-                window_tree = window_tree->next)
-            {
-              // rjf: skip wrong source
-              if(window_tree->source != src)
-              {
-                continue;
-              }
-              
-              // rjf: grab metadata
-              B32 is_fullscreen = 0;
-              B32 is_maximized = 0;
-              Axis2 top_level_split_axis = Axis2_X;
-              OS_Handle preferred_monitor = os_primary_monitor();
-              Vec2F32 size = {0};
-              F32 dpi = 0.f;
-              RD_SettingVal setting_vals[RD_SettingCode_COUNT] = {0};
-              {
-                for MD_EachNode(n, window_tree->root->first)
-                {
-                  if(n->flags & MD_NodeFlag_Identifier &&
-                     md_node_is_nil(n->first) &&
-                     str8_match(n->string, str8_lit("split_x"), StringMatchFlag_CaseInsensitive))
-                  {
-                    top_level_split_axis = Axis2_X;
-                  }
-                  if(n->flags & MD_NodeFlag_Identifier &&
-                     md_node_is_nil(n->first) &&
-                     str8_match(n->string, str8_lit("split_y"), StringMatchFlag_CaseInsensitive))
-                  {
-                    top_level_split_axis = Axis2_Y;
-                  }
-                  if(n->flags & MD_NodeFlag_Identifier &&
-                     md_node_is_nil(n->first) &&
-                     str8_match(n->string, str8_lit("fullscreen"), StringMatchFlag_CaseInsensitive))
-                  {
-                    is_fullscreen = 1;
-                  }
-                  if(n->flags & MD_NodeFlag_Identifier &&
-                     md_node_is_nil(n->first) &&
-                     str8_match(n->string, str8_lit("maximized"), StringMatchFlag_CaseInsensitive))
-                  {
-                    is_maximized = 1;
-                  }
-                }
-                MD_Node *monitor_node = md_child_from_string(window_tree->root, str8_lit("monitor"), 0);
-                String8 preferred_monitor_name = monitor_node->first->string;
-                for(U64 idx = 0; idx < monitors.count; idx += 1)
-                {
-                  String8 monitor_name = os_name_from_monitor(scratch.arena, monitors.v[idx]);
-                  if(str8_match(monitor_name, preferred_monitor_name, StringMatchFlag_CaseInsensitive))
-                  {
-                    preferred_monitor = monitors.v[idx];
-                    break;
-                  }
-                }
-                Vec2F32 preferred_monitor_size = os_dim_from_monitor(preferred_monitor);
-                MD_Node *size_node = md_child_from_string(window_tree->root, str8_lit("size"), 0);
-                {
-                  String8 x_string = size_node->first->string;
-                  String8 y_string = size_node->first->next->string;
-                  U64 x_u64 = 0;
-                  U64 y_u64 = 0;
-                  if(!try_u64_from_str8_c_rules(x_string, &x_u64))
-                  {
-                    x_u64 = (U64)(preferred_monitor_size.x*2/3);
-                  }
-                  if(!try_u64_from_str8_c_rules(y_string, &y_u64))
-                  {
-                    y_u64 = (U64)(preferred_monitor_size.y*2/3);
-                  }
-                  size.x = (F32)x_u64;
-                  size.y = (F32)y_u64;
-                }
-                MD_Node *dpi_node = md_child_from_string(window_tree->root, str8_lit("dpi"), 0);
-                String8 dpi_string = md_string_from_children(scratch.arena, dpi_node);
-                dpi = f64_from_str8(dpi_string);
-                for EachEnumVal(RD_SettingCode, code)
-                {
-                  MD_Node *code_node = md_child_from_string(window_tree->root, rd_setting_code_lower_string_table[code], 0);
-                  if(!md_node_is_nil(code_node))
-                  {
-                    S64 val_s64 = 0;
-                    try_s64_from_str8_c_rules(code_node->first->string, &val_s64);
-                    setting_vals[code].set = 1;
-                    setting_vals[code].s32 = (S32)val_s64;
-                    setting_vals[code].s32 = clamp_1s32(rd_setting_code_s32_range_table[code], setting_vals[code].s32);
-                  }
-                }
-              }
-            }
-            
-            //- rjf: apply keybindings
-#if 0 // TODO(rjf): @cfg
-            if(src == RD_CfgSrc_User)
-            {
-              rd_clear_bindings();
-            }
-            RD_CfgVal *keybindings = rd_cfg_val_from_string(table, str8_lit("keybindings"));
-            for(RD_CfgTree *keybinding_set = keybindings->first;
-                keybinding_set != &d_nil_cfg_tree;
-                keybinding_set = keybinding_set->next)
-            {
-              for MD_EachNode(keybind, keybinding_set->root->first)
-              {
-                String8 cmd_name = {0};
-                OS_Key key = OS_Key_Null;
-                MD_Node *ctrl_node = &md_nil_node;
-                MD_Node *shift_node = &md_nil_node;
-                MD_Node *alt_node = &md_nil_node;
-                for MD_EachNode(child, keybind->first)
-                {
-                  if(str8_match(child->string, str8_lit("ctrl"), 0))
-                  {
-                    ctrl_node = child;
-                  }
-                  else if(str8_match(child->string, str8_lit("shift"), 0))
-                  {
-                    shift_node = child;
-                  }
-                  else if(str8_match(child->string, str8_lit("alt"), 0))
-                  {
-                    alt_node = child;
-                  }
-                  else
-                  {
-                    OS_Key k = OS_Key_Null;
-                    for EachEnumVal(OS_Key, key)
-                    {
-                      if(str8_match(child->string, os_g_key_cfg_string_table[key], StringMatchFlag_CaseInsensitive))
-                      {
-                        k = key;
-                        break;
-                      }
-                    }
-                    if(k != OS_Key_Null)
-                    {
-                      key = k;
-                    }
-                    else
-                    {
-                      cmd_name = child->string;
-                      for(U64 idx = 0; idx < ArrayCount(rd_binding_version_remap_old_name_table); idx += 1)
-                      {
-                        if(str8_match(rd_binding_version_remap_old_name_table[idx], child->string, StringMatchFlag_CaseInsensitive))
-                        {
-                          String8 new_name = rd_binding_version_remap_new_name_table[idx];
-                          cmd_name = new_name;
-                        }
-                      }
-                    }
-                  }
-                }
-                if(cmd_name.size != 0 && key != OS_Key_Null)
-                {
-                  OS_Modifiers flags = 0;
-                  if(!md_node_is_nil(ctrl_node))  { flags |= OS_Modifier_Ctrl; }
-                  if(!md_node_is_nil(shift_node)) { flags |= OS_Modifier_Shift; }
-                  if(!md_node_is_nil(alt_node))   { flags |= OS_Modifier_Alt; }
-                  RD_Binding binding = {key, flags};
-                  rd_bind_name(cmd_name, binding);
-                }
-              }
-            }
-#endif
-            
-            //- rjf: reset theme to default
-            MemoryCopy(rd_state->cfg_theme_target.colors, rd_theme_preset_colors__default_dark, sizeof(rd_theme_preset_colors__default_dark));
-            MemoryCopy(rd_state->cfg_theme.colors, rd_theme_preset_colors__default_dark, sizeof(rd_theme_preset_colors__default_dark));
-            
-            //- rjf: apply theme presets
-            RD_CfgVal *color_preset = rd_cfg_val_from_string(table, str8_lit("color_preset"));
-            B32 preset_applied = 0;
-            if(color_preset != &d_nil_cfg_val)
-            {
-              String8 color_preset_name = color_preset->last->root->first->string;
-              RD_ThemePreset preset = (RD_ThemePreset)0;
-              B32 found_preset = 0;
-              for(RD_ThemePreset p = (RD_ThemePreset)0; p < RD_ThemePreset_COUNT; p = (RD_ThemePreset)(p+1))
-              {
-                if(str8_match(color_preset_name, rd_theme_preset_code_string_table[p], StringMatchFlag_CaseInsensitive))
-                {
-                  found_preset = 1;
-                  preset = p;
-                  break;
-                }
-              }
-              if(found_preset)
-              {
-                preset_applied = 1;
-                MemoryCopy(rd_state->cfg_theme_target.colors, rd_theme_preset_colors_table[preset], sizeof(rd_theme_preset_colors__default_dark));
-                MemoryCopy(rd_state->cfg_theme.colors, rd_theme_preset_colors_table[preset], sizeof(rd_theme_preset_colors__default_dark));
-              }
-            }
-            
-            //- rjf: apply individual theme colors
-            B8 theme_color_hit[RD_ThemeColor_COUNT] = {0};
-            RD_CfgVal *colors = rd_cfg_val_from_string(table, str8_lit("colors"));
-            for(RD_CfgTree *colors_set = colors->first;
-                colors_set != &d_nil_cfg_tree;
-                colors_set = colors_set->next)
-            {
-              for MD_EachNode(color, colors_set->root->first)
-              {
-                String8 saved_color_name = color->string;
-                String8List candidate_color_names = {0};
-                str8_list_push(scratch.arena, &candidate_color_names, saved_color_name);
-                for(U64 idx = 0; idx < ArrayCount(rd_theme_color_version_remap_old_name_table); idx += 1)
-                {
-                  if(str8_match(rd_theme_color_version_remap_old_name_table[idx], saved_color_name, StringMatchFlag_CaseInsensitive))
-                  {
-                    str8_list_push(scratch.arena, &candidate_color_names, rd_theme_color_version_remap_new_name_table[idx]);
-                  }
-                }
-                for(String8Node *name_n = candidate_color_names.first; name_n != 0; name_n = name_n->next)
-                {
-                  String8 name = name_n->string;
-                  RD_ThemeColor color_code = RD_ThemeColor_Null;
-                  for(RD_ThemeColor c = RD_ThemeColor_Null; c < RD_ThemeColor_COUNT; c = (RD_ThemeColor)(c+1))
-                  {
-                    if(str8_match(rd_theme_color_cfg_string_table[c], name, StringMatchFlag_CaseInsensitive))
-                    {
-                      color_code = c;
-                      break;
-                    }
-                  }
-                  if(color_code != RD_ThemeColor_Null)
-                  {
-                    theme_color_hit[color_code] = 1;
-                    MD_Node *hex_cfg = color->first;
-                    String8 hex_string = hex_cfg->string;
-                    U64 hex_val = 0;
-                    try_u64_from_str8_c_rules(hex_string, &hex_val);
-                    Vec4F32 color_rgba = rgba_from_u32((U32)hex_val);
-                    rd_state->cfg_theme_target.colors[color_code] = color_rgba;
-                    if(rd_state->frame_index <= 2)
-                    {
-                      rd_state->cfg_theme.colors[color_code] = color_rgba;
-                    }
-                  }
-                }
-              }
-            }
-            
-            //- rjf: no preset -> autofill all missing colors from the preset with the most similar background
-            if(!preset_applied)
-            {
-              RD_ThemePreset closest_preset = RD_ThemePreset_DefaultDark;
-              F32 closest_preset_bg_distance = 100000000;
-              for(RD_ThemePreset p = (RD_ThemePreset)0; p < RD_ThemePreset_COUNT; p = (RD_ThemePreset)(p+1))
-              {
-                Vec4F32 cfg_bg = rd_state->cfg_theme_target.colors[RD_ThemeColor_BaseBackground];
-                Vec4F32 pre_bg = rd_theme_preset_colors_table[p][RD_ThemeColor_BaseBackground];
-                Vec4F32 diff = sub_4f32(cfg_bg, pre_bg);
-                Vec3F32 diff3 = diff.xyz;
-                F32 distance = length_3f32(diff3);
-                if(distance < closest_preset_bg_distance)
-                {
-                  closest_preset = p;
-                  closest_preset_bg_distance = distance;
-                }
-              }
-              for(RD_ThemeColor c = (RD_ThemeColor)(RD_ThemeColor_Null+1);
-                  c < RD_ThemeColor_COUNT;
-                  c = (RD_ThemeColor)(c+1))
-              {
-                if(!theme_color_hit[c])
-                {
-                  rd_state->cfg_theme_target.colors[c] = rd_state->cfg_theme.colors[c] = rd_theme_preset_colors_table[closest_preset][c];
-                }
-              }
-            }
-            
-            //- rjf: if theme colors are all zeroes, then set to default - config appears busted
-            {
-              B32 all_colors_are_zero = 1;
-              Vec4F32 zero_color = {0};
-              for(RD_ThemeColor c = (RD_ThemeColor)(RD_ThemeColor_Null+1); c < RD_ThemeColor_COUNT; c = (RD_ThemeColor)(c+1))
-              {
-                if(!MemoryMatchStruct(&rd_state->cfg_theme_target.colors[c], &zero_color))
-                {
-                  all_colors_are_zero = 0;
-                  break;
-                }
-              }
-              if(all_colors_are_zero)
-              {
-                MemoryCopy(rd_state->cfg_theme_target.colors, rd_theme_preset_colors__default_dark, sizeof(rd_theme_preset_colors__default_dark));
-                MemoryCopy(rd_state->cfg_theme.colors, rd_theme_preset_colors__default_dark, sizeof(rd_theme_preset_colors__default_dark));
-              }
-            }
-            
-            //- rjf: apply settings
-            B8 setting_codes_hit[RD_SettingCode_COUNT] = {0};
-            MemoryZero(&rd_state->cfg_setting_vals[src][0], sizeof(RD_SettingVal)*RD_SettingCode_COUNT);
-            for EachEnumVal(RD_SettingCode, code)
-            {
-              String8 name = rd_setting_code_lower_string_table[code];
-              RD_CfgVal *code_cfg_val = rd_cfg_val_from_string(table, name);
-              RD_CfgTree *code_tree = code_cfg_val->last;
-              if(code_tree->source == src)
-              {
-                MD_Node *val_node = code_tree->root->first;
-                S64 val = 0;
-                if(try_s64_from_str8_c_rules(val_node->string, &val))
-                {
-                  rd_state->cfg_setting_vals[src][code].set = 1;
-                  rd_state->cfg_setting_vals[src][code].s32 = (S32)val;
-                }
-                setting_codes_hit[code] = !md_node_is_nil(val_node);
-              }
-            }
-            
-            //- rjf: if config applied 0 settings, we need to do some sensible default
-            if(src == RD_CfgSrc_User)
-            {
-              for EachEnumVal(RD_SettingCode, code)
-              {
-                if(!setting_codes_hit[code])
-                {
-                  rd_state->cfg_setting_vals[src][code] = rd_setting_code_default_val_table[code];
-                }
-              }
-            }
-            
-            //- rjf: if config opened 0 windows, we need to do some sensible default
-#if 0 // TODO(rjf): @cfg
-            if(src == RD_CfgSrc_User && windows->first == &d_nil_cfg_tree)
-            {
-              OS_Handle preferred_monitor = os_primary_monitor();
-              Vec2F32 monitor_dim = os_dim_from_monitor(preferred_monitor);
-              Vec2F32 window_dim = v2f32(monitor_dim.x*4/5, monitor_dim.y*4/5);
-              RD_Window *ws = rd_window_open(window_dim, preferred_monitor, RD_CfgSrc_User);
-              F32 font_size = (F32)ws->setting_vals[RD_SettingCode_MainFontSize].s32;
-              F32 num_lines_in_monitor_height = monitor_dim.y / font_size;
-              if(num_lines_in_monitor_height < 100)
-              {
-                rd_cmd(RD_CmdKind_ResetToCompactPanels, .window = rd_handle_from_window(ws));
-              }
-              else
-              {
-                rd_cmd(RD_CmdKind_ResetToDefaultPanels, .window = rd_handle_from_window(ws));
-              }
-            }
-#endif
-            
-            //- rjf: if config bound 0 keys, we need to do some sensible default
-#if 0 // TODO(rjf): @cfg
-            if(src == RD_CfgSrc_User && rd_state->key_map_total_count == 0)
-            {
-              for(U64 idx = 0; idx < ArrayCount(rd_default_binding_table); idx += 1)
-              {
-                RD_StringBindingPair *pair = &rd_default_binding_table[idx];
-                rd_bind_name(pair->string, pair->binding);
-              }
-            }
-#endif
-            
-            //- rjf: always ensure that the meta controls have bindings
-#if 0 // TODO(rjf): @cfg
-            if(src == RD_CfgSrc_User)
-            {
-              struct
-              {
-                String8 name;
-                OS_Key fallback_key;
-              }
-              meta_ctrls[] =
-              {
-                { rd_cmd_kind_info_table[RD_CmdKind_Edit].string, OS_Key_F2 },
-                { rd_cmd_kind_info_table[RD_CmdKind_Accept].string, OS_Key_Return },
-                { rd_cmd_kind_info_table[RD_CmdKind_Cancel].string, OS_Key_Esc },
-              };
-              for(U64 idx = 0; idx < ArrayCount(meta_ctrls); idx += 1)
-              {
-                RD_BindingList bindings = rd_bindings_from_name(scratch.arena, meta_ctrls[idx].name);
-                if(bindings.count == 0)
-                {
-                  RD_Binding binding = {meta_ctrls[idx].fallback_key, 0};
-                  rd_bind_name(meta_ctrls[idx].name, binding);
-                }
-              }
-            }
-#endif
           }break;
           
           //- rjf: writing config changes
@@ -17008,7 +16411,50 @@ X(getting_started)
     //
     U64 exception_code_filters[(CTRL_ExceptionCodeKind_COUNT+63)/64] = {0};
     {
-      MemoryCopyArray(exception_code_filters, rd_state->ctrl_exception_code_filters);
+      Temp scratch = scratch_begin(0, 0);
+      for(CTRL_ExceptionCodeKind k = (CTRL_ExceptionCodeKind)0; k < CTRL_ExceptionCodeKind_COUNT; k = (CTRL_ExceptionCodeKind)(k+1))
+      {
+        if(ctrl_exception_code_kind_default_enable_table[k])
+        {
+          exception_code_filters[k/64] |= 1ull<<(k%64);
+        }
+      }
+      RD_CfgList exception_code_filters_roots = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("exception_code_filters"));
+      for(RD_CfgNode *n = exception_code_filters_roots.first; n != 0; n = n->next)
+      {
+        for(RD_Cfg *rule = n->v->first; rule != &rd_nil_cfg; rule = rule->next)
+        {
+          String8 name = rule->string;
+          String8 val_string = rule->first->string;
+          U64 val = 0;
+          if(try_u64_from_str8_c_rules(val_string, &val))
+          {
+            CTRL_ExceptionCodeKind kind = CTRL_ExceptionCodeKind_Null;
+            for(CTRL_ExceptionCodeKind k = (CTRL_ExceptionCodeKind)(CTRL_ExceptionCodeKind_Null+1);
+                k < CTRL_ExceptionCodeKind_COUNT;
+                k = (CTRL_ExceptionCodeKind)(k+1))
+            {
+              if(str8_match(name, ctrl_exception_code_kind_lowercase_code_string_table[k], 0))
+              {
+                kind = k;
+                break;
+              }
+            }
+            if(kind != CTRL_ExceptionCodeKind_Null)
+            {
+              if(val)
+              {
+                exception_code_filters[kind/64] |= (1ull<<(kind%64));
+              }
+              else
+              {
+                exception_code_filters[kind/64] &= ~(1ull<<(kind%64));
+              }
+            }
+          }
+        }
+      }
+      scratch_end(scratch);
     }
     
     ////////////////////////////
@@ -17170,31 +16616,6 @@ X(getting_started)
     if(abs_f32(rd_state->popup_t - (F32)!!popup_open) > 0.005f)
     {
       rd_request_frame();
-    }
-  }
-  
-  //////////////////////////////
-  //- rjf: animate theme
-  //
-  {
-    RD_Theme *current = &rd_state->cfg_theme;
-    RD_Theme *target = &rd_state->cfg_theme_target;
-    F32 rate = 1 - pow_f32(2, (-50.f * rd_state->frame_dt));
-    for(RD_ThemeColor color = RD_ThemeColor_Null;
-        color < RD_ThemeColor_COUNT;
-        color = (RD_ThemeColor)(color+1))
-    {
-      if(abs_f32(target->colors[color].x - current->colors[color].x) > 0.01f ||
-         abs_f32(target->colors[color].y - current->colors[color].y) > 0.01f ||
-         abs_f32(target->colors[color].z - current->colors[color].z) > 0.01f ||
-         abs_f32(target->colors[color].w - current->colors[color].w) > 0.01f)
-      {
-        rd_request_frame();
-      }
-      current->colors[color].x += (target->colors[color].x - current->colors[color].x) * rate;
-      current->colors[color].y += (target->colors[color].y - current->colors[color].y) * rate;
-      current->colors[color].z += (target->colors[color].z - current->colors[color].z) * rate;
-      current->colors[color].w += (target->colors[color].w - current->colors[color].w) * rate;
     }
   }
   

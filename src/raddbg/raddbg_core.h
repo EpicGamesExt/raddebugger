@@ -39,26 +39,52 @@ struct RD_Binding
   OS_Modifiers modifiers;
 };
 
-typedef struct RD_BindingNode RD_BindingNode;
-struct RD_BindingNode
-{
-  RD_BindingNode *next;
-  RD_Binding binding;
-};
-
-typedef struct RD_BindingList RD_BindingList;
-struct RD_BindingList
-{
-  RD_BindingNode *first;
-  RD_BindingNode *last;
-  U64 count;
-};
-
 typedef struct RD_StringBindingPair RD_StringBindingPair;
 struct RD_StringBindingPair
 {
   String8 string;
   RD_Binding binding;
+};
+
+typedef struct RD_KeyMapNode RD_KeyMapNode;
+struct RD_KeyMapNode
+{
+  RD_KeyMapNode *name_hash_next;
+  RD_KeyMapNode *binding_hash_next;
+  struct RD_Cfg *cfg;
+  String8 name;
+  RD_Binding binding;
+};
+
+typedef struct RD_KeyMapNodePtr RD_KeyMapNodePtr;
+struct RD_KeyMapNodePtr
+{
+  RD_KeyMapNodePtr *next;
+  RD_KeyMapNode *v;
+};
+
+typedef struct RD_KeyMapNodePtrList RD_KeyMapNodePtrList;
+struct RD_KeyMapNodePtrList
+{
+  RD_KeyMapNodePtr *first;
+  RD_KeyMapNodePtr *last;
+  U64 count;
+};
+
+typedef struct RD_KeyMapSlot RD_KeyMapSlot;
+struct RD_KeyMapSlot
+{
+  RD_KeyMapNode *first;
+  RD_KeyMapNode *last;
+};
+
+typedef struct RD_KeyMap RD_KeyMap;
+struct RD_KeyMap
+{
+  U64 name_slots_count;
+  RD_KeyMapSlot *name_slots;
+  U64 binding_slots_count;
+  RD_KeyMapSlot *binding_slots;
 };
 
 ////////////////////////////////
@@ -68,6 +94,7 @@ typedef U64 RD_EvalSpaceKind;
 enum
 {
   RD_EvalSpaceKind_CtrlEntity = E_SpaceKind_FirstUserDefined,
+  RD_EvalSpaceKind_MetaCfg,
   RD_EvalSpaceKind_MetaEntity,
   RD_EvalSpaceKind_MetaCtrlEntity,
   RD_EvalSpaceKind_MetaCollection,
@@ -148,7 +175,7 @@ enum
 typedef RD_VIEW_RULE_UI_FUNCTION_SIG(RD_ViewRuleUIFunctionType);
 
 ////////////////////////////////
-//~ rjf: View Types
+//~ rjf: View State Types
 
 typedef struct RD_ArenaExt RD_ArenaExt;
 struct RD_ArenaExt
@@ -353,50 +380,6 @@ struct RD_Location
   TxtPt pt;
   U64 vaddr;
   String8 name;
-};
-
-////////////////////////////////
-//~ rjf: Key Map Types
-
-typedef struct RD_KeyMapNode RD_KeyMapNode;
-struct RD_KeyMapNode
-{
-  RD_KeyMapNode *name_hash_next;
-  RD_KeyMapNode *binding_hash_next;
-  RD_Cfg *cfg;
-  String8 name;
-  RD_Binding binding;
-};
-
-typedef struct RD_KeyMapNodePtr RD_KeyMapNodePtr;
-struct RD_KeyMapNodePtr
-{
-  RD_KeyMapNodePtr *next;
-  RD_KeyMapNode *v;
-};
-
-typedef struct RD_KeyMapNodePtrList RD_KeyMapNodePtrList;
-struct RD_KeyMapNodePtrList
-{
-  RD_KeyMapNodePtr *first;
-  RD_KeyMapNodePtr *last;
-  U64 count;
-};
-
-typedef struct RD_KeyMapSlot RD_KeyMapSlot;
-struct RD_KeyMapSlot
-{
-  RD_KeyMapNode *first;
-  RD_KeyMapNode *last;
-};
-
-typedef struct RD_KeyMap RD_KeyMap;
-struct RD_KeyMap
-{
-  U64 name_slots_count;
-  RD_KeyMapSlot *name_slots;
-  U64 binding_slots_count;
-  RD_KeyMapSlot *binding_slots;
 };
 
 ////////////////////////////////
@@ -816,6 +799,12 @@ struct RD_State
   B32 quit;
   B32 quit_after_success;
   
+  // rjf: config bucket paths
+  Arena *user_path_arena;
+  String8 user_path;
+  Arena *project_path_arena;
+  String8 project_path;
+  
   // rjf: log
   Log *log;
   String8 log_path;
@@ -840,6 +829,10 @@ struct RD_State
   
   // rjf: key map (constructed from-scratch each frame)
   RD_KeyMap *key_map;
+  
+  // rjf: theme target (constructed from-scratch each frame)
+  RD_Theme *theme;
+  RD_Theme *theme_target;
   
   // rjf: registers stack
   RD_RegsNode base_regs;
@@ -937,37 +930,11 @@ struct RD_State
   U64 kind_alloc_gens[RD_EntityKind_COUNT];
   RD_EntityListCache kind_caches[RD_EntityKind_COUNT];
   
-  // rjf: key map table
-#if 0 // TODO(rjf): @cfg
-  Arena *key_map_arena;
-  U64 key_map_table_size;
-  RD_KeyMapSlot *key_map_table;
-  RD_KeyMapNode *free_key_map_node;
-  U64 key_map_total_count;
-#endif
-  
   // rjf: bind change
   Arena *bind_change_arena;
   B32 bind_change_active;
   String8 bind_change_cmd_name;
   RD_Binding bind_change_binding;
-  
-  // rjf: config reading state
-  Arena *cfg_path_arenas[RD_CfgSrc_COUNT];
-  String8 cfg_paths[RD_CfgSrc_COUNT];
-  U64 cfg_cached_timestamp[RD_CfgSrc_COUNT];
-  Arena *cfg_arena;
-  RD_CfgTable cfg_table;
-  U64 ctrl_exception_code_filters[(CTRL_ExceptionCodeKind_COUNT+63)/64];
-  
-  // rjf: running theme state
-  RD_Theme cfg_theme_target;
-  RD_Theme cfg_theme;
-  Arena *cfg_main_font_path_arena;
-  Arena *cfg_code_font_path_arena;
-  String8 cfg_main_font_path;
-  String8 cfg_code_font_path;
-  FNT_Tag cfg_font_tags[RD_FontSlot_COUNT]; // derivative from font paths
   
   // rjf: global settings
   RD_SettingVal cfg_setting_vals[RD_CfgSrc_COUNT][RD_SettingCode_COUNT];
@@ -1231,6 +1198,10 @@ internal DR_FancyStringList rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_E
 ////////////////////////////////
 //~ rjf: Evaluation Spaces
 
+//- rjf: cfg <-> eval space
+internal RD_Cfg *rd_cfg_from_eval_space(E_Space space);
+internal E_Space rd_eval_space_from_cfg(RD_Cfg *cfg);
+
 //- rjf: entity <-> eval space
 internal RD_Entity *rd_entity_from_eval_space(E_Space space);
 internal E_Space rd_eval_space_from_entity(RD_Entity *entity);
@@ -1414,14 +1385,8 @@ internal void rd_request_frame(void);
 //- rjf: per-frame arena
 internal Arena *rd_frame_arena(void);
 
-//- rjf: config paths
-internal String8 rd_cfg_path_from_src(RD_CfgSrc src);
-
 //- rjf: entity cache queries
 internal RD_EntityList rd_query_cached_entity_list_with_kind(RD_EntityKind kind);
-
-//- rjf: config state
-internal RD_CfgTable *rd_cfg_table(void);
 
 ////////////////////////////////
 //~ rjf: Registers

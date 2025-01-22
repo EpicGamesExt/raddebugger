@@ -6051,144 +6051,6 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(geo3d)
 }
 
 ////////////////////////////////
-//~ rjf: exception_filters @view_hook_impl
-
-RD_VIEW_RULE_UI_FUNCTION_DEF(exception_filters)
-{
-  ProfBeginFunction();
-  Temp scratch = scratch_begin(0, 0);
-  F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
-  UI_ScrollPt2 scroll_pos = rd_view_scroll_pos();
-  String8 query = string;
-  
-  //- rjf: get state
-  typedef struct RD_ExceptionFiltersViewState RD_ExceptionFiltersViewState;
-  struct RD_ExceptionFiltersViewState
-  {
-    Vec2S64 cursor;
-  };
-  RD_ExceptionFiltersViewState *sv = rd_view_state(RD_ExceptionFiltersViewState);
-  
-  //- rjf: get list of options
-  typedef struct RD_ExceptionFiltersOption RD_ExceptionFiltersOption;
-  struct RD_ExceptionFiltersOption
-  {
-    String8 name;
-    FuzzyMatchRangeList matches;
-    B32 is_enabled;
-    CTRL_ExceptionCodeKind exception_code_kind;
-  };
-  typedef struct RD_ExceptionFiltersOptionChunkNode RD_ExceptionFiltersOptionChunkNode;
-  struct RD_ExceptionFiltersOptionChunkNode
-  {
-    RD_ExceptionFiltersOptionChunkNode *next;
-    RD_ExceptionFiltersOption *v;
-    U64 cap;
-    U64 count;
-  };
-  typedef struct RD_ExceptionFiltersOptionChunkList RD_ExceptionFiltersOptionChunkList;
-  struct RD_ExceptionFiltersOptionChunkList
-  {
-    RD_ExceptionFiltersOptionChunkNode *first;
-    RD_ExceptionFiltersOptionChunkNode *last;
-    U64 option_count;
-    U64 node_count;
-  };
-  typedef struct RD_ExceptionFiltersOptionArray RD_ExceptionFiltersOptionArray;
-  struct RD_ExceptionFiltersOptionArray
-  {
-    RD_ExceptionFiltersOption *v;
-    U64 count;
-  };
-  RD_ExceptionFiltersOptionChunkList opts_list = {0};
-  for(CTRL_ExceptionCodeKind k = (CTRL_ExceptionCodeKind)(CTRL_ExceptionCodeKind_Null+1);
-      k < CTRL_ExceptionCodeKind_COUNT;
-      k = (CTRL_ExceptionCodeKind)(k+1))
-  {
-    RD_ExceptionFiltersOptionChunkNode *node = opts_list.last;
-    String8 name = push_str8f(scratch.arena, "0x%x %S", ctrl_exception_code_kind_code_table[k], ctrl_exception_code_kind_display_string_table[k]);
-    FuzzyMatchRangeList matches = fuzzy_match_find(scratch.arena, query, name);
-    if(matches.count >= matches.needle_part_count)
-    {
-      if(node == 0 || node->count >= node->cap)
-      {
-        node = push_array(scratch.arena, RD_ExceptionFiltersOptionChunkNode, 1);
-        node->cap = 256;
-        node->v = push_array_no_zero(scratch.arena, RD_ExceptionFiltersOption, node->cap);
-        SLLQueuePush(opts_list.first, opts_list.last, node);
-        opts_list.node_count += 1;
-      }
-      node->v[node->count].name = name;
-      node->v[node->count].matches = matches;
-      node->v[node->count].is_enabled = !!(rd_state->ctrl_exception_code_filters[k/64] & (1ull<<(k%64)));
-      node->v[node->count].exception_code_kind = k;
-      node->count += 1;
-      opts_list.option_count += 1;
-    }
-  }
-  RD_ExceptionFiltersOptionArray opts = {0};
-  {
-    opts.count = opts_list.option_count;
-    opts.v = push_array_no_zero(scratch.arena, RD_ExceptionFiltersOption, opts.count);
-    U64 idx = 0;
-    for(RD_ExceptionFiltersOptionChunkNode *n = opts_list.first; n != 0; n = n->next)
-    {
-      MemoryCopy(opts.v+idx, n->v, n->count*sizeof(RD_ExceptionFiltersOption));
-      idx += n->count;
-    }
-  }
-  
-  //- rjf: build option table
-  Rng1S64 visible_row_range = {0};
-  UI_ScrollListParams scroll_list_params = {0};
-  {
-    Vec2F32 rect_dim = dim_2f32(rect);
-    scroll_list_params.flags         = UI_ScrollListFlag_All;
-    scroll_list_params.row_height_px = row_height_px;
-    scroll_list_params.dim_px        = rect_dim;
-    scroll_list_params.cursor_range  = r2s64(v2s64(0, 0), v2s64(0, opts.count));
-    scroll_list_params.item_range    = r1s64(0, opts.count);
-    scroll_list_params.cursor_min_is_empty_selection[Axis2_Y] = 1;
-  }
-  UI_ScrollListSignal scroll_list_sig = {0};
-  UI_Focus(UI_FocusKind_On)
-    UI_ScrollList(&scroll_list_params,
-                  &scroll_pos.y,
-                  &sv->cursor,
-                  0,
-                  &visible_row_range,
-                  &scroll_list_sig)
-    UI_Focus(UI_FocusKind_Null)
-  {
-    for(S64 row = visible_row_range.min; row <= visible_row_range.max && row < opts.count; row += 1)
-      UI_FocusHot(sv->cursor.y == row+1 ? UI_FocusKind_On : UI_FocusKind_Off)
-    {
-      RD_ExceptionFiltersOption *opt = &opts.v[row];
-      UI_Signal sig = rd_icon_buttonf(opt->is_enabled ? RD_IconKind_CheckFilled : RD_IconKind_CheckHollow, &opt->matches, "%S", opt->name);
-      if(ui_clicked(sig))
-      {
-        if(opt->exception_code_kind != CTRL_ExceptionCodeKind_Null)
-        {
-          CTRL_ExceptionCodeKind k = opt->exception_code_kind;
-          if(opt->is_enabled)
-          {
-            rd_state->ctrl_exception_code_filters[k/64] &= ~(1ull<<(k%64));
-          }
-          else
-          {
-            rd_state->ctrl_exception_code_filters[k/64] |= (1ull<<(k%64));
-          }
-        }
-      }
-    }
-  }
-  
-  rd_store_view_scroll_pos(scroll_pos);
-  scratch_end(scratch);
-  ProfEnd();
-}
-
-////////////////////////////////
 //~ rjf: settings @view_hook_impl
 
 typedef enum RD_SettingsItemKind
@@ -6264,6 +6126,7 @@ rd_qsort_compare_settings_item(RD_SettingsItem *a, RD_SettingsItem *b)
 
 RD_VIEW_RULE_UI_FUNCTION_DEF(settings)
 {
+#if 0
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
@@ -6888,4 +6751,5 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(settings)
   rd_store_view_scroll_pos(scroll_pos);
   scratch_end(scratch);
   ProfEnd();
+#endif
 }
