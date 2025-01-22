@@ -240,24 +240,26 @@ enum
   //- rjf: lister visual settings
   RD_ListerFlag_LineEdit       = (1<<0),  // determines whether or not the lister has its own line edit, or if the filtering string is sourced by a user
   RD_ListerFlag_Descriptions   = (1<<1),  // determines whether or not the lister items have descriptions (taller & bigger buttons)
+  RD_ListerFlag_KindLabel      = (1<<2),  // determines whether or not the lister items have labels for each item's kind
+  RD_ListerFlag_SizeByAnchor   = (1<<3),  // determines whether or not the lister is sized by the anchor box
   
   //- rjf: lister item sources
-  RD_ListerFlag_Locals         = (1<<2),
-  RD_ListerFlag_Registers      = (1<<3),
-  RD_ListerFlag_ViewRules      = (1<<4),
-  RD_ListerFlag_ViewRuleParams = (1<<5),
-  RD_ListerFlag_Members        = (1<<6),
-  RD_ListerFlag_Globals        = (1<<7),
-  RD_ListerFlag_ThreadLocals   = (1<<8),
-  RD_ListerFlag_Procedures     = (1<<9),
-  RD_ListerFlag_Types          = (1<<10),
-  RD_ListerFlag_Languages      = (1<<11),
-  RD_ListerFlag_Architectures  = (1<<12),
-  RD_ListerFlag_Tex2DFormats   = (1<<13),
-  RD_ListerFlag_Files          = (1<<14),
-  RD_ListerFlag_Commands       = (1<<15),
-  RD_ListerFlag_Settings       = (1<<16),
-  RD_ListerFlag_SystemProcesses= (1<<17),
+  RD_ListerFlag_Locals         = (1<<4),
+  RD_ListerFlag_Registers      = (1<<5),
+  RD_ListerFlag_ViewRules      = (1<<6),
+  RD_ListerFlag_ViewRuleParams = (1<<7),
+  RD_ListerFlag_Members        = (1<<8),
+  RD_ListerFlag_Globals        = (1<<9),
+  RD_ListerFlag_ThreadLocals   = (1<<10),
+  RD_ListerFlag_Procedures     = (1<<11),
+  RD_ListerFlag_Types          = (1<<12),
+  RD_ListerFlag_Languages      = (1<<13),
+  RD_ListerFlag_Architectures  = (1<<14),
+  RD_ListerFlag_Tex2DFormats   = (1<<15),
+  RD_ListerFlag_Files          = (1<<16),
+  RD_ListerFlag_Commands       = (1<<17),
+  RD_ListerFlag_Settings       = (1<<18),
+  RD_ListerFlag_SystemProcesses= (1<<19),
 };
 
 ////////////////////////////////
@@ -580,21 +582,28 @@ RD_PaletteCode;
 ////////////////////////////////
 //~ rjf: Lister Types
 
+typedef U32 RD_ListerItemFlags;
+enum
+{
+  RD_ListerItemFlag_IsNonCode      = (1<<0),
+  RD_ListerItemFlag_Bindings       = (1<<1),
+  RD_ListerItemFlag_Autocompletion = (1<<2),
+};
+
 typedef struct RD_ListerItem RD_ListerItem;
 struct RD_ListerItem
 {
+  RD_ListerItemFlags flags;
+  RD_IconKind icon_kind;
   String8 string;
   String8 kind_name;
   String8 display_name;
   String8 description;
   String8 search_tags;
-  RD_IconKind icon_kind;
   FuzzyMatchRangeList kind_name__matches;
   FuzzyMatchRangeList display_name__matches;
   FuzzyMatchRangeList description__matches;
   U64 group;
-  B32 is_non_code;
-  B32 can_have_bindings;
 };
 
 typedef struct RD_ListerItemChunkNode RD_ListerItemChunkNode;
@@ -629,6 +638,7 @@ struct RD_Lister
   Arena *arena;
   RD_Regs *regs;
   UI_ScrollPt scroll_pt;
+  U64 selected_item_hash;
   U8 input_buffer[1024];
   U64 input_string_size;
   TxtPt input_cursor;
@@ -969,6 +979,8 @@ struct RD_State
 
 ////////////////////////////////
 //~ rjf: Globals
+
+read_only global RD_VocabularyInfo rd_nil_vocabulary_info = {0};
 
 read_only global RD_CfgTree d_nil_cfg_tree = {&d_nil_cfg_tree, RD_CfgSrc_User, &md_nil_node};
 read_only global RD_CfgVal d_nil_cfg_val = {&d_nil_cfg_val, &d_nil_cfg_val, &d_nil_cfg_tree, &d_nil_cfg_tree};
@@ -1334,7 +1346,8 @@ internal void rd_lister_item_chunk_list_push(Arena *arena, RD_ListerItemChunkLis
 internal RD_ListerItemArray rd_lister_item_array_from_chunk_list(Arena *arena, RD_ListerItemChunkList *list);
 internal int rd_lister_item_qsort_compare(RD_ListerItem *a, RD_ListerItem *b);
 internal void rd_lister_item_array_sort__in_place(RD_ListerItemArray *array);
-internal RD_ListerItemArray rd_lister_item_array_from_regs(Arena *arena, RD_Regs *regs);
+internal RD_ListerItemArray rd_lister_item_array_from_regs_needle_cursor_off(Arena *arena, RD_Regs *regs, String8 needle, U64 cursor_off);
+internal U64 rd_hash_from_lister_item(RD_ListerItem *item);
 
 internal String8 rd_lister_query_word_from_input_string_off(String8 input, U64 cursor_off);
 internal String8 rd_lister_query_path_from_input_string_off(String8 input, U64 cursor_off);
@@ -1382,6 +1395,15 @@ internal String8 rd_string_from_exception_code(U32 code);
 internal DR_FancyStringList rd_stop_explanation_fstrs_from_ctrl_event(Arena *arena, CTRL_Event *event);
 
 ////////////////////////////////
+//~ rjf: Vocabulary Info Lookups
+
+internal RD_VocabularyInfo *rd_vocabulary_info_from_code_name(String8 code_name);
+#define rd_plural_from_code_name(code_name) (rd_vocabulary_info_from_code_name(code_name)->code_name_plural)
+#define rd_display_from_code_name(code_name) (rd_vocabulary_info_from_code_name(code_name)->display_name)
+#define rd_display_plural_from_code_name(code_name) (rd_vocabulary_info_from_code_name(code_name)->display_name_plural)
+#define rd_icon_kind_from_code_name(code_name) (rd_vocabulary_info_from_code_name(code_name)->icon_kind)
+
+////////////////////////////////
 //~ rjf: Continuous Frame Requests
 
 internal void rd_request_frame(void);
@@ -1398,7 +1420,6 @@ internal String8 rd_cfg_path_from_src(RD_CfgSrc src);
 //- rjf: entity cache queries
 internal RD_EntityList rd_query_cached_entity_list_with_kind(RD_EntityKind kind);
 internal RD_EntityList rd_push_active_target_list(Arena *arena);
-internal RD_Entity *rd_entity_from_ev_key_and_kind(EV_Key key, RD_EntityKind kind);
 
 //- rjf: config state
 internal RD_CfgTable *rd_cfg_table(void);

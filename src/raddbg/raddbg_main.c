@@ -601,106 +601,58 @@ entry_point(CmdLine *cmd_line)
         String8List args = cmd_line->inputs;
         if(args.node_count > 0 && args.first->string.size != 0)
         {
-          //- TODO(rjf): @cfg setup initial target from command line arguments
-          {
-            Temp scratch = scratch_begin(0, 0);
-            
-            //- rjf: unpack command line inputs
-            String8 executable_name_string = {0};
-            String8 arguments_string = {0};
-            String8 working_directory_string = {0};
-            {
-              // rjf: unpack full executable path
-              if(args.first->string.size != 0)
-              {
-                String8 current_path = os_get_current_path(scratch.arena);
-                String8 exe_name = args.first->string;
-                PathStyle style = path_style_from_str8(exe_name);
-                if(style == PathStyle_Relative)
-                {
-                  exe_name = push_str8f(scratch.arena, "%S/%S", current_path, exe_name);
-                  exe_name = path_normalized_from_string(scratch.arena, exe_name);
-                }
-                executable_name_string = exe_name;
-              }
-              
-              // rjf: unpack working directory
-              if(args.first->string.size != 0)
-              {
-                String8 path_part_of_arg = str8_chop_last_slash(args.first->string);
-                if(path_part_of_arg.size != 0)
-                {
-                  String8 path = push_str8f(scratch.arena, "%S/", path_part_of_arg);
-                  working_directory_string = path;
-                }
-              }
-              
-              // rjf: unpack arguments
-              String8List passthrough_args_list = {0};
-              for(String8Node *n = args.first->next; n != 0; n = n->next)
-              {
-                str8_list_push(scratch.arena, &passthrough_args_list, n->string);
-              }
-              StringJoin join = {str8_lit(""), str8_lit(" "), str8_lit("")};
-              arguments_string = str8_list_join(scratch.arena, &passthrough_args_list, &join);
-            }
-            
-            //- rjf: build config tree
-            RD_Cfg *command_line_root = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("command_line"));
-            RD_Cfg *target = rd_cfg_new(command_line_root, str8_lit("target"));
-            RD_Cfg *exe    = rd_cfg_new(target, str8_lit("executable"));
-            RD_Cfg *args   = rd_cfg_new(target, str8_lit("arguments"));
-            RD_Cfg *wdir   = rd_cfg_new(target, str8_lit("working_directory"));
-            rd_cfg_new(exe, executable_name_string);
-            rd_cfg_new(args, arguments_string);
-            rd_cfg_new(wdir, working_directory_string);
-            
-            scratch_end(scratch);
-          }
-          
           Temp scratch = scratch_begin(0, 0);
-          RD_Entity *target = rd_entity_alloc(rd_entity_root(), RD_EntityKind_Target);
-          rd_entity_equip_cfg_src(target, RD_CfgSrc_CommandLine);
-          String8List passthrough_args_list = {0};
-          for(String8Node *n = args.first->next; n != 0; n = n->next)
-          {
-            str8_list_push(scratch.arena, &passthrough_args_list, n->string);
-          }
           
-          // rjf: get current path
-          String8 current_path = os_get_current_path(scratch.arena);
-          
-          // rjf: equip exe
-          if(args.first->string.size != 0)
+          //- rjf: unpack command line inputs
+          String8 executable_name_string = {0};
+          String8 arguments_string = {0};
+          String8 working_directory_string = {0};
           {
-            String8 exe_name = args.first->string;
-            RD_Entity *exe = rd_entity_alloc(target, RD_EntityKind_Executable);
-            PathStyle style = path_style_from_str8(exe_name);
-            if(style == PathStyle_Relative)
+            // rjf: unpack full executable path
+            if(args.first->string.size != 0)
             {
-              exe_name = push_str8f(scratch.arena, "%S/%S", current_path, exe_name);
-              exe_name = path_normalized_from_string(scratch.arena, exe_name);
+              String8 current_path = os_get_current_path(scratch.arena);
+              String8 exe_name = args.first->string;
+              PathStyle style = path_style_from_str8(exe_name);
+              if(style == PathStyle_Relative)
+              {
+                exe_name = push_str8f(scratch.arena, "%S/%S", current_path, exe_name);
+                exe_name = path_normalized_from_string(scratch.arena, exe_name);
+              }
+              executable_name_string = exe_name;
             }
-            rd_entity_equip_name(exe, exe_name);
+            
+            // rjf: unpack working directory
+            if(args.first->string.size != 0)
+            {
+              String8 path_part_of_arg = str8_chop_last_slash(args.first->string);
+              if(path_part_of_arg.size != 0)
+              {
+                String8 path = push_str8f(scratch.arena, "%S/", path_part_of_arg);
+                working_directory_string = path;
+              }
+            }
+            
+            // rjf: unpack arguments
+            String8List passthrough_args_list = {0};
+            for(String8Node *n = args.first->next; n != 0; n = n->next)
+            {
+              str8_list_push(scratch.arena, &passthrough_args_list, n->string);
+            }
+            StringJoin join = {str8_lit(""), str8_lit(" "), str8_lit("")};
+            arguments_string = str8_list_join(scratch.arena, &passthrough_args_list, &join);
           }
           
-          // rjf: equip working directory
-          String8 path_part_of_arg = str8_chop_last_slash(args.first->string);
-          if(path_part_of_arg.size != 0)
-          {
-            String8 path = push_str8f(scratch.arena, "%S/", path_part_of_arg);
-            RD_Entity *wdir = rd_entity_alloc(target, RD_EntityKind_WorkingDirectory);
-            rd_entity_equip_name(wdir, path);
-          }
+          //- rjf: build config tree
+          RD_Cfg *command_line_root = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("command_line"));
+          RD_Cfg *target = rd_cfg_new(command_line_root, str8_lit("target"));
+          RD_Cfg *exe    = rd_cfg_new(target, str8_lit("executable"));
+          RD_Cfg *args   = rd_cfg_new(target, str8_lit("arguments"));
+          RD_Cfg *wdir   = rd_cfg_new(target, str8_lit("working_directory"));
+          rd_cfg_new(exe, executable_name_string);
+          rd_cfg_new(args, arguments_string);
+          rd_cfg_new(wdir, working_directory_string);
           
-          // rjf: equip args
-          StringJoin join = {str8_lit(""), str8_lit(" "), str8_lit("")};
-          String8 args_str = str8_list_join(scratch.arena, &passthrough_args_list, &join);
-          if(args_str.size != 0)
-          {
-            RD_Entity *args_entity = rd_entity_alloc(target, RD_EntityKind_Arguments);
-            rd_entity_equip_name(args_entity, args_str);
-          }
           scratch_end(scratch);
         }
       }

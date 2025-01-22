@@ -1873,35 +1873,6 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
   }
   
   //////////////////////////////
-  //- rjf: sync with di parsers
-  //
-  ProfScope("sync with di parsers")
-  {
-    DI_EventList events = di_p2u_pop_events(scratch.arena, 0);
-    for(DI_EventNode *n = events.first; n != 0; n = n->next)
-    {
-      DI_Event *event = &n->v;
-      switch(event->kind)
-      {
-        default:{}break;
-        case DI_EventKind_ConversionStarted:
-        {
-          RD_Entity *task = rd_entity_alloc(rd_entity_root(), RD_EntityKind_ConversionTask);
-          rd_entity_equip_name(task, event->string);
-        }break;
-        case DI_EventKind_ConversionEnded:
-        {
-          RD_Entity *task = rd_entity_from_name_and_kind(event->string, RD_EntityKind_ConversionTask);
-          if(!rd_entity_is_nil(task))
-          {
-            rd_entity_mark_for_deletion(task);
-          }
-        }break;
-      }
-    }
-  }
-  
-  //////////////////////////////
   //- rjf: process top-level commands
   //
   CTRL_MsgList ctrl_msgs = {0};

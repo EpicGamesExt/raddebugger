@@ -1010,7 +1010,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             // rjf: bp hovering
             if(ui_hovering(bp_sig) && !rd_drag_is_active())
             {
-              RD_RegsScope(.entity = rd_handle_from_cfg(bp)) rd_set_hover_regs(RD_RegSlot_Entity);
+              RD_RegsScope(.cfg = rd_handle_from_cfg(bp)) rd_set_hover_regs(RD_RegSlot_Cfg);
             }
             
             // rjf: shift+click => enable breakpoint
@@ -1035,10 +1035,11 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             if(ui_right_clicked(bp_sig))
             {
               rd_cmd(RD_CmdKind_PushQuery,
-                     .cfg     = rd_handle_from_cfg(bp),
-                     .reg_slot= RD_RegSlot_Cfg,
-                     .ui_key  = bp_box->key,
-                     .off_px  = v2f32(0, bp_box->rect.y1-bp_box->rect.y0));
+                     .cfg         = rd_handle_from_cfg(bp),
+                     .reg_slot    = RD_RegSlot_Cfg,
+                     .ui_key      = bp_box->key,
+                     .off_px      = v2f32(0, bp_box->rect.y1-bp_box->rect.y0),
+                     .lister_flags= RD_ListerFlag_LineEdit|RD_ListerFlag_Settings|RD_ListerFlag_Commands);
             }
           }
           
@@ -1070,7 +1071,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             // rjf: watch hovering
             if(ui_hovering(pin_sig) && !rd_drag_is_active())
             {
-              RD_RegsScope(.cfg = rd_handle_from_cfg(pin)) rd_set_hover_regs(RD_RegSlot_Entity);
+              RD_RegsScope(.cfg = rd_handle_from_cfg(pin)) rd_set_hover_regs(RD_RegSlot_Cfg);
             }
             
             // rjf: click => remove pin
@@ -1089,10 +1090,11 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             if(ui_right_clicked(pin_sig))
             {
               rd_cmd(RD_CmdKind_PushQuery,
-                     .cfg     = rd_handle_from_cfg(pin),
-                     .reg_slot= RD_RegSlot_Cfg,
-                     .ui_key  = pin_box->key,
-                     .off_px  = v2f32(0, pin_box->rect.y1-pin_box->rect.y0));
+                     .cfg         = rd_handle_from_cfg(pin),
+                     .reg_slot    = RD_RegSlot_Cfg,
+                     .ui_key      = pin_box->key,
+                     .off_px      = v2f32(0, pin_box->rect.y1-pin_box->rect.y0),
+                     .lister_flags= RD_ListerFlag_LineEdit|RD_ListerFlag_Settings|RD_ListerFlag_Commands);
             }
           }
         }
@@ -1311,10 +1313,11 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
               if(ui_right_clicked(sig))
               {
                 rd_cmd(RD_CmdKind_PushQuery,
-                       .cfg     = rd_handle_from_cfg(pin),
-                       .reg_slot= RD_RegSlot_Cfg,
-                       .ui_key  = sig.box->key,
-                       .off_px  = v2f32(0, sig.box->rect.y1-sig.box->rect.y0));
+                       .cfg         = rd_handle_from_cfg(pin),
+                       .reg_slot    = RD_RegSlot_Cfg,
+                       .ui_key      = sig.box->key,
+                       .off_px      = v2f32(0, sig.box->rect.y1-sig.box->rect.y0),
+                       .lister_flags= RD_ListerFlag_LineEdit|RD_ListerFlag_Settings|RD_ListerFlag_Commands);
               }
             }
             rd_code_label(0.8f, 1, rd_rgba_from_theme_color(RD_ThemeColor_CodeDefault), pin_expr);
@@ -1460,13 +1463,15 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
         vaddr = params->line_vaddrs[cursor->line - params->line_num_range.min];
         lines = params->line_infos[cursor->line - params->line_num_range.min];
       }
-      RD_RegsScope(.cursor = *cursor,
-                   .mark   = *mark,
-                   .vaddr  = vaddr,
-                   .lines  = lines)
-      {
-        rd_open_ctx_menu(ui_key_zero(), sub_2f32(ui_mouse(), v2f32(2, 2)), RD_RegSlot_Cursor);
-      }
+      rd_cmd(RD_CmdKind_PushQuery,
+             .reg_slot    = RD_RegSlot_Cursor,
+             .ui_key      = ui_get_selected_state()->root->key,
+             .off_px      = sub_2f32(ui_mouse(), v2f32(2, 2)),
+             .cursor      = *cursor,
+             .mark        = *mark,
+             .vaddr       = vaddr,
+             .lines       = lines,
+             .lister_flags= RD_ListerFlag_LineEdit|RD_ListerFlag_Settings|RD_ListerFlag_Commands);
     }
     
     //- rjf: dragging threads, breakpoints, or watch pins over this slice ->

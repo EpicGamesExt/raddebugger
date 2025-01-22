@@ -181,6 +181,7 @@ RD_CmdKind_Open,
 RD_CmdKind_Switch,
 RD_CmdKind_SwitchToPartnerFile,
 RD_CmdKind_RecordFileInProject,
+RD_CmdKind_ShowFileInExplorer,
 RD_CmdKind_GoToDisassembly,
 RD_CmdKind_GoToSource,
 RD_CmdKind_SetFileReplacementPath,
@@ -267,7 +268,6 @@ RD_CmdKind_EnableBreakpoint,
 RD_CmdKind_DisableBreakpoint,
 RD_CmdKind_AddWatchPin,
 RD_CmdKind_ToggleWatchPin,
-RD_CmdKind_RunToCursor,
 RD_CmdKind_SetNextStatement,
 RD_CmdKind_AddTarget,
 RD_CmdKind_SelectTarget,
@@ -546,6 +546,16 @@ RD_SettingCode_HintCodeText,
 RD_SettingCode_COUNT,
 } RD_SettingCode;
 
+typedef struct RD_VocabularyInfo RD_VocabularyInfo;
+struct RD_VocabularyInfo
+{
+String8 code_name;
+String8 code_name_plural;
+String8 display_name;
+String8 display_name_plural;
+RD_IconKind icon_kind;
+};
+
 typedef struct RD_Regs RD_Regs;
 struct RD_Regs
 {
@@ -606,6 +616,7 @@ struct RD_CmdKindInfo
 String8 string;
 String8 description;
 String8 search_tags;
+String8 ctx_filter;
 String8 display_name;
 RD_IconKind icon_kind;
 RD_CmdKindFlags flags;
@@ -780,6 +791,7 @@ extern String8 rd_cfg_src_string_table[4];
 extern RD_CmdKind rd_cfg_src_load_cmd_kind_table[4];
 extern RD_CmdKind rd_cfg_src_write_cmd_kind_table[4];
 extern RD_CmdKind rd_cfg_src_apply_cmd_kind_table[4];
+extern RD_VocabularyInfo rd_vocabulary_info_table[39];
 extern String8 d_entity_kind_display_string_table[27];
 extern String8 d_entity_kind_name_lower_table[27];
 extern String8 d_entity_kind_name_lower_plural_table[27];

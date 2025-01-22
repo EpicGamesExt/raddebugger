@@ -6308,12 +6308,10 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(output)
   //
   rd_regs()->file_path     = str8_zero();
   rd_regs()->vaddr         = 0;
-#if 0 // TODO(rjf): @cfg
   rd_regs()->cursor.line   = rd_value_from_params_key(params, str8_lit("cursor_line")).s64;
   rd_regs()->cursor.column = rd_value_from_params_key(params, str8_lit("cursor_column")).s64;
   rd_regs()->mark.line     = rd_value_from_params_key(params, str8_lit("mark_line")).s64;
   rd_regs()->mark.column   = rd_value_from_params_key(params, str8_lit("mark_column")).s64;
-#endif
   
   //////////////////////////////
   //- rjf: unpack text info
