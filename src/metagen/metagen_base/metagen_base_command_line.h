@@ -34,6 +34,8 @@ struct CmdLine
   String8List inputs;
   U64 option_table_size;
   CmdLineOpt **option_table;
+  U64 argc;
+  char **argv;
 };
 
 ////////////////////////////////

@@ -614,7 +614,11 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   margin_contents_palette->background = v4f32(0, 0, 0, 0);
   F32 line_num_padding_px = ui_top_font_size()*1.f;
   F32 entity_alive_t_rate = (1 - pow_f32(2, (-30.f * rd_state->frame_dt)));
-  F32 entity_hover_t_rate = rd_setting_val_from_code(RD_SettingCode_HoverAnimations).s32 ? (1 - pow_f32(2, (-20.f * rd_state->frame_dt))) : 1.f;
+  F32 entity_hover_t_rate = rd_setting_b32_from_key(str8_lit("hover_animations")) ? (1 - pow_f32(2, (-20.f * rd_state->frame_dt))) : 1.f;
+  B32 do_thread_lines = rd_setting_b32_from_key(str8_lit("thread_lines"));
+  B32 do_thread_glow = rd_setting_b32_from_key(str8_lit("thread_glow"));
+  B32 do_bp_lines = rd_setting_b32_from_key(str8_lit("breakpoint_lines"));
+  B32 do_bp_glow = rd_setting_b32_from_key(str8_lit("breakpoint_glow"));
   
   //////////////////////////////
   //- rjf: build top-level container
@@ -755,8 +759,8 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
               u->hover_t      = ui_anim(ui_key_from_stringf(top_container_box->key, "###thread_hover_t_%p", thread), (F32)!!is_hovering, .rate = entity_hover_t_rate);
               u->is_selected  = (thread == selected_thread);
               u->is_frozen    = !!thread->is_frozen;
-              u->do_lines     = rd_setting_val_from_code(RD_SettingCode_ThreadLines).s32;
-              u->do_glow      = rd_setting_val_from_code(RD_SettingCode_ThreadGlow).s32;
+              u->do_lines     = do_thread_lines;
+              u->do_glow      = do_thread_glow;
               ui_box_equip_custom_draw(thread_box, rd_thread_box_draw_extensions, u);
               
               // rjf: fill out progress t (progress into range of current line's
@@ -974,8 +978,8 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
               bp_draw->color    = bp_rgba;
               bp_draw->alive_t  = ui_anim(ui_key_from_stringf(ui_key_zero(), "bp_alive_t_%p", bp), 1.f, .rate = entity_alive_t_rate);
               bp_draw->hover_t  = ui_anim(ui_key_from_stringf(ui_key_zero(), "bp_hover_t_%p", bp), (F32)!!is_hovering, .rate = entity_hover_t_rate);
-              bp_draw->do_lines = rd_setting_val_from_code(RD_SettingCode_BreakpointLines).s32;
-              bp_draw->do_glow  = rd_setting_val_from_code(RD_SettingCode_BreakpointGlow).s32;
+              bp_draw->do_lines = do_bp_lines;
+              bp_draw->do_glow  = do_bp_glow;
               if(params->line_vaddrs[line_idx] == 0)
               {
                 D_LineList *lines = &params->line_infos[line_idx];

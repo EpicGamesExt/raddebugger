@@ -4,8 +4,8 @@
 ////////////////////////////////
 //~ rjf: Base Includes
 
-#undef RADDBG_LAYER_COLOR
-#define RADDBG_LAYER_COLOR 0.20f, 0.60f, 0.80f
+#undef MARKUP_LAYER_COLOR
+#define MARKUP_LAYER_COLOR 0.20f, 0.60f, 0.80f
 
 #include "metagen_base_core.c"
 #include "metagen_base_profile.c"
@@ -15,5 +15,6 @@
 #include "metagen_base_thread_context.c"
 #include "metagen_base_command_line.c"
 #include "metagen_base_markup.c"
+#include "metagen_base_meta.c"
 #include "metagen_base_log.c"
 #include "metagen_base_entry_point.c"

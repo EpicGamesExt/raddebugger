@@ -73,11 +73,12 @@ RD_VocabularyInfo rd_vocabulary_info_table[41] =
 {str8_lit_comp("label"), str8_lit_comp("labels"), str8_lit_comp("Label"), str8_lit_comp("Labels"), RD_IconKind_Null},
 };
 
-RD_CfgNameSchemaPair rd_cfg_name_schema_pair_table[5] =
+RD_CfgNameSchemaPair rd_cfg_name_schema_pair_table[6] =
 {
-{str8_lit_comp("target"), str8_lit_comp("x:{'label':code_string, 'exe':path, 'args':string, 'working_directory':path, 'entry_point':code_string, 'stdout_path':path, 'stderr_path':path, 'stdin_path':path, 'debug_subprocesses':bool}")},
-{str8_lit_comp("breakpoint"), str8_lit_comp("x:{'label':code_string, 'condition':code_string, 'location':location, 'hit_count':u64, 'enabled':bool}")},
-{str8_lit_comp("watch_pin"), str8_lit_comp("x:{'expression':code_string, 'view_rule':code_string, 'location':location}")},
+{str8_lit_comp("settings"), str8_lit_comp("x:\n{\n  @default(1) 'hover_animations':     bool,\n  @default(1) 'press_animations':     bool,\n  @default(0) 'focus_animations':     bool,\n  @default(1) 'tooltip_animations':   bool,\n  @default(1) 'menu_animations':      bool,\n  @default(1) 'scrolling_animations': bool,\n  @default(1) 'background_blur':      bool,\n  @default(1) 'thread_lines':         bool,\n  @default(1) 'breakpoint_lines':     bool,\n  @default(1) 'thread_glow':          bool,\n  @default(1) 'breakpoint_glow':      bool,\n  @default(0) 'opaque_backgrounds':   bool,\n  @default(1) 'smooth_main_text':     bool,\n  @default(0) 'smooth_code_text':     bool,\n  @default(1) 'hint_main_text':       bool,\n  @default(1) 'hint_code_text':       bool,\n  @default(2) 'tab_width':      @range[1, 32] u64,\n  @can_be_per_window 'main_font_size': @range[6, 72] u64,\n  @can_be_per_window 'code_font_size': @range[1, 32] u64,\n}\n")},
+{str8_lit_comp("target"), str8_lit_comp("x:\n{\n  'label':              code_string,\n  'exe':                path,\n  'args':               string,\n  'working_directory':  path,\n  'entry_point':        code_string,\n  'stdout_path':        path,\n  'stderr_path':        path,\n  'stdin_path':         path,\n  'debug_subprocesses': bool,\n}\n")},
+{str8_lit_comp("breakpoint"), str8_lit_comp("x:\n{\n  'label':         code_string,\n  'condition':     code_string,\n  'location':      location,\n  'hit_count':     u64,\n  'disabled':      bool,\n}\n")},
+{str8_lit_comp("watch_pin"), str8_lit_comp("x:\n{\n  'expression':code_string,\n  'view_rule':code_string,\n  'location':location,\n}\n")},
 {str8_lit_comp("file_path_map"), str8_lit_comp("x:{'source':path, 'dest':path}")},
 {str8_lit_comp("auto_view_rule"), str8_lit_comp("x:{'source':code_string, 'dest':code_string}")},
 };
@@ -1895,121 +1896,6 @@ str8_lit_comp("thread_unwound"),
 str8_lit_comp("thread_error"),
 str8_lit_comp("breakpoint"),
 str8_lit_comp("cache_line_boundary"),
-};
-
-String8 rd_setting_code_display_string_table[19] =
-{
-str8_lit_comp("Hover Animations"),
-str8_lit_comp("Press Animations"),
-str8_lit_comp("Focus Animations"),
-str8_lit_comp("Tooltip Animations"),
-str8_lit_comp("Menu Animations"),
-str8_lit_comp("Scrolling Animations"),
-str8_lit_comp("Background Blur"),
-str8_lit_comp("Thread Lines"),
-str8_lit_comp("Breakpoint Lines"),
-str8_lit_comp("Thread Glow"),
-str8_lit_comp("Breakpoint Glow"),
-str8_lit_comp("Opaque Backgrounds"),
-str8_lit_comp("Tab Width"),
-str8_lit_comp("Main Font Size"),
-str8_lit_comp("Code Font Size"),
-str8_lit_comp("Smooth UI Text"),
-str8_lit_comp("Smooth Code Text"),
-str8_lit_comp("Hint UI Text"),
-str8_lit_comp("Hint Code Text"),
-};
-
-String8 rd_setting_code_lower_string_table[19] =
-{
-str8_lit_comp("hover_animations"),
-str8_lit_comp("press_animations"),
-str8_lit_comp("focus_animations"),
-str8_lit_comp("tooltip_animations"),
-str8_lit_comp("menu_animations"),
-str8_lit_comp("scrolling_animations"),
-str8_lit_comp("background_blur"),
-str8_lit_comp("thread_lines"),
-str8_lit_comp("breakpoint_lines"),
-str8_lit_comp("thread_glow"),
-str8_lit_comp("breakpoint_glow"),
-str8_lit_comp("opaque_backgrounds"),
-str8_lit_comp("tab_width"),
-str8_lit_comp("main_font_size"),
-str8_lit_comp("code_font_size"),
-str8_lit_comp("smooth_ui_text"),
-str8_lit_comp("smooth_code_text"),
-str8_lit_comp("hint_ui_text"),
-str8_lit_comp("hint_code_text"),
-};
-
-B8 rd_setting_code_default_is_per_window_table[19] =
-{
-0,
-0,
-0,
-0,
-0,
-0,
-0,
-0,
-0,
-0,
-0,
-0,
-0,
-1,
-1,
-1,
-1,
-1,
-1,
-};
-
-RD_SettingVal rd_setting_code_default_val_table[19] =
-{
-{1, 1},
-{1, 1},
-{1, 0},
-{1, 1},
-{1, 1},
-{1, 1},
-{1, 1},
-{1, 1},
-{1, 1},
-{1, 1},
-{1, 1},
-{1, 0},
-{1, 4},
-{1, 11},
-{1, 11},
-{1, 1},
-{1, 0},
-{1, 1},
-{1, 1},
-};
-
-Rng1S32 rd_setting_code_s32_range_table[19] =
-{
-{0, 1},
-{0, 1},
-{0, 1},
-{0, 1},
-{0, 1},
-{0, 1},
-{0, 1},
-{0, 1},
-{0, 1},
-{0, 1},
-{0, 1},
-{0, 1},
-{1, 32},
-{6, 72},
-{6, 72},
-{0, 1},
-{0, 1},
-{0, 1},
-{0, 1},
 };
 
 C_LINKAGE_END

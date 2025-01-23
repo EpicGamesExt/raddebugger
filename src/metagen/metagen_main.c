@@ -246,8 +246,7 @@ entry_point(CmdLine *cmdline)
         }
         for(String8Node *n = gen_strings.first; n != 0; n = n->next)
         {
-          String8 escaped = mg_escaped_from_str8(mg_arena, n->string);
-          str8_list_pushf(mg_arena, &layer->enums, "%S_%S,\n", enum_member_prefix, escaped);
+          str8_list_pushf(mg_arena, &layer->enums, "%S_%S,\n", enum_member_prefix, n->string);
         }
         if(enum_base_type_name.size == 0)
         {
@@ -278,8 +277,7 @@ entry_point(CmdLine *cmdline)
         str8_list_pushf(mg_arena, &layer->enums, "#define %S \\\n", node->string);
         for(String8Node *n = gen_strings.first; n != 0; n = n->next)
         {
-          String8 escaped = mg_escaped_from_str8(mg_arena, n->string);
-          str8_list_pushf(mg_arena, &layer->enums, "X(%S)\\\n", escaped);
+          str8_list_pushf(mg_arena, &layer->enums, "X(%S)\\\n", n->string);
         }
         str8_list_push(mg_arena, &layer->enums, str8_lit("\n"));
       }
@@ -303,8 +301,7 @@ entry_point(CmdLine *cmdline)
         str8_list_pushf(mg_arena, &layer->structs, "struct %S\n{\n", node->string);
         for(String8Node *n = gen_strings.first; n != 0; n = n->next)
         {
-          String8 escaped = mg_escaped_from_str8(mg_arena, n->string);
-          str8_list_pushf(mg_arena, &layer->structs, "%S;\n", escaped);
+          str8_list_pushf(mg_arena, &layer->structs, "%S;\n", n->string);
         }
         str8_list_pushf(mg_arena, &layer->structs, "};\n\n");
       }
@@ -333,8 +330,7 @@ entry_point(CmdLine *cmdline)
         str8_list_pushf(mg_arena, &layer->c_tables, "%S %S[%I64u] =\n{\n", element_type, node->string, gen_strings.node_count);
         for(String8Node *n = gen_strings.first; n != 0; n = n->next)
         {
-          String8 escaped = mg_escaped_from_str8(mg_arena, n->string);
-          str8_list_pushf(mg_arena, &layer->c_tables, "%S,\n", escaped);
+          str8_list_pushf(mg_arena, &layer->c_tables, "%S,\n", n->string);
         }
         str8_list_push(mg_arena, &layer->c_tables, str8_lit("};\n\n"));
       }
@@ -364,8 +360,7 @@ entry_point(CmdLine *cmdline)
         str8_list_pushf(mg_arena, &layer->c_functions, "default:{}break;\n");
         for(String8Node *n = gen_strings.first; n != 0; n = n->next)
         {
-          String8 escaped = mg_escaped_from_str8(mg_arena, n->string);
-          str8_list_pushf(mg_arena, &layer->c_functions, "%S;\n", escaped);
+          str8_list_pushf(mg_arena, &layer->c_functions, "%S;\n", n->string);
         }
         str8_list_pushf(mg_arena, &layer->c_functions, "}\n");
         str8_list_pushf(mg_arena, &layer->c_functions, "return result;\n");
@@ -398,8 +393,7 @@ entry_point(CmdLine *cmdline)
         for(String8Node *n = gen_strings.first; n != 0; n = n->next)
         {
           String8 trimmed = str8_skip_chop_whitespace(n->string);
-          String8 escaped = mg_escaped_from_str8(mg_arena, trimmed);
-          str8_list_push(mg_arena, out, escaped);
+          str8_list_push(mg_arena, out, trimmed);
           str8_list_push(mg_arena, out, str8_lit("\n"));
         }
       }

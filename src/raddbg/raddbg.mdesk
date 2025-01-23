@@ -111,42 +111,91 @@ RD_VocabularyMap:
 ////////////////////////////////
 //~ rjf: Configuration Tree Schemas
 
-/*
+@table(name schema) RD_CfgSchemaTable:
+{
+  //- rjf: settings
   {
-    top_level,
+    settings,
     ```x:
     {
-      'hover_animations':     bool,
-      'press_animations':     bool,
-      'focus_animations':     bool,
-      'tooltip_animations':   bool,
-      'menu_animations':      bool,
-      'scrolling_animations': bool,
-      'background_blur':      bool,
-      'thread_lines':         bool,
-      'breakpoint_lines':     bool,
-      'thread_glow':          bool,
-      'breakpoint_glow':      bool,
-      'opaque_backgrounds':   bool,
-      'smooth_main_text':     bool,
-      'smooth_code_text':     bool,
-      'hint_main_text':       bool,
-      'hint_code_text':       bool,
-      'tab_width':      @range[1, 32] u64,
-      'main_font_size': @range[6, 72] u64,
-      'code_font_size': @range[1, 32] u64,
+      @default(1) 'hover_animations':     bool,
+      @default(1) 'press_animations':     bool,
+      @default(0) 'focus_animations':     bool,
+      @default(1) 'tooltip_animations':   bool,
+      @default(1) 'menu_animations':      bool,
+      @default(1) 'scrolling_animations': bool,
+      @default(1) 'background_blur':      bool,
+      @default(1) 'thread_lines':         bool,
+      @default(1) 'breakpoint_lines':     bool,
+      @default(1) 'thread_glow':          bool,
+      @default(1) 'breakpoint_glow':      bool,
+      @default(0) 'opaque_backgrounds':   bool,
+      @default(1) 'smooth_main_text':     bool,
+      @default(0) 'smooth_code_text':     bool,
+      @default(1) 'hint_main_text':       bool,
+      @default(1) 'hint_code_text':       bool,
+      @default(2) 'tab_width':      @range[1, 32] u64,
+      @can_be_per_window 'main_font_size': @range[6, 72] u64,
+      @can_be_per_window 'code_font_size': @range[1, 32] u64,
     }
     ```
   }
-*/
-
-@table(name schema) RD_CfgSchemaTable:
-{
-  {target          "x:{'label':code_string, 'exe':path, 'args':string, 'working_directory':path, 'entry_point':code_string, 'stdout_path':path, 'stderr_path':path, 'stdin_path':path, 'debug_subprocesses':bool}"}
-  {breakpoint      "x:{'label':code_string, 'condition':code_string, 'location':location, 'hit_count':u64, 'enabled':bool}"}
-  {watch_pin       "x:{'expression':code_string, 'view_rule':code_string, 'location':location}"}
-  {file_path_map   "x:{'source':path, 'dest':path}"}
-  {auto_view_rule  "x:{'source':code_string, 'dest':code_string}"}
+  
+  //- rjf: targets
+  {
+    target,
+    ```x:
+    {
+      'label':              code_string,
+      'exe':                path,
+      'args':               string,
+      'working_directory':  path,
+      'entry_point':        code_string,
+      'stdout_path':        path,
+      'stderr_path':        path,
+      'stdin_path':         path,
+      'debug_subprocesses': bool,
+    }
+    ```
+  }
+  
+  //- rjf: breakpoints
+  {
+    breakpoint,
+    ```x:
+    {
+      'label':         code_string,
+      'condition':     code_string,
+      'location':      location,
+      'hit_count':     u64,
+      'disabled':      bool,
+    }
+    ```
+  }
+  
+  //- rjf: watch pins
+  {
+    watch_pin,
+    ```x:
+    {
+      'expression':code_string,
+      'view_rule':code_string,
+      'location':location,
+    }
+    ```
+  }
+  
+  //- rjf: file path maps
+  {
+    file_path_map,
+    ```x:{'source':path, 'dest':path}```
+  }
+  
+  //- rjf: auto view rules
+  {
+    auto_view_rule,
+    ```x:{'source':code_string, 'dest':code_string}```
+  }
 }
 
 @struct RD_CfgNameSchemaPair:
@@ -1288,64 +1337,6 @@ RD_ThemeColorVersionRemapTable:
 @data(String8) rd_theme_color_cfg_string_table:
 {
   @expand(RD_ThemeColorTable a) `str8_lit_comp("$(a.name_lower)")`
-}
-
-////////////////////////////////
-//~ rjf: Settings
-
-@table(name  name_lower  display_string  default_per_window  default_s32  s32_min  s32_max)
-RD_SettingTable:
-{
-  {HoverAnimations       hover_animations        "Hover Animations"        0            1    0  1  }
-  {PressAnimations       press_animations        "Press Animations"        0            1    0  1  }
-  {FocusAnimations       focus_animations        "Focus Animations"        0            0    0  1  }
-  {TooltipAnimations     tooltip_animations      "Tooltip Animations"      0            1    0  1  }
-  {MenuAnimations        menu_animations         "Menu Animations"         0            1    0  1  }
-  {ScrollingAnimations   scrolling_animations    "Scrolling Animations"    0            1    0  1  }
-  {BackgroundBlur        background_blur         "Background Blur"         0            1    0  1  }
-  {ThreadLines           thread_lines            "Thread Lines"            0            1    0  1  }
-  {BreakpointLines       breakpoint_lines        "Breakpoint Lines"        0            1    0  1  }
-  {ThreadGlow            thread_glow             "Thread Glow"             0            1    0  1  }
-  {BreakpointGlow        breakpoint_glow         "Breakpoint Glow"         0            1    0  1  }
-  {OpaqueBackgrounds     opaque_backgrounds      "Opaque Backgrounds"      0            0    0  1  }
-  {TabWidth              tab_width               "Tab Width"               0            4    1  32 }
-  {MainFontSize          main_font_size          "Main Font Size"          1            11   6  72 }
-  {CodeFontSize          code_font_size          "Code Font Size"          1            11   6  72 }
-  {SmoothUIText          smooth_ui_text          "Smooth UI Text"          1            1    0  1  }
-  {SmoothCodeText        smooth_code_text        "Smooth Code Text"        1            0    0  1  }
-  {HintUIText            hint_ui_text            "Hint UI Text"            1            1    0  1  }
-  {HintCodeText          hint_code_text          "Hint Code Text"          1            1    0  1  }
-}
-
-@enum RD_SettingCode:
-{
-  @expand(RD_SettingTable a) `$(a.name)`,
-  COUNT
-}
-
-@data(String8) rd_setting_code_display_string_table:
-{
-  @expand(RD_SettingTable a) `str8_lit_comp("$(a.display_string)")`
-}
-
-@data(String8) rd_setting_code_lower_string_table:
-{
-  @expand(RD_SettingTable a) `str8_lit_comp("$(a.name_lower)")`
-}
-
-@data(B8) rd_setting_code_default_is_per_window_table:
-{
-  @expand(RD_SettingTable a) `$(a.default_per_window)`
-}
-
-@data(RD_SettingVal) rd_setting_code_default_val_table:
-{
-  @expand(RD_SettingTable a) `{1, $(a.default_s32)}`
-}
-
-@data(Rng1S32) rd_setting_code_s32_range_table:
-{
-  @expand(RD_SettingTable a) `{$(a.s32_min), $(a.s32_max)}`
 }
 
 ////////////////////////////////

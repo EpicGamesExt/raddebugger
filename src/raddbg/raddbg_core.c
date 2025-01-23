@@ -1479,6 +1479,49 @@ rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg, Vec4F32 secondary_color, F32 
   return result;
 }
 
+internal String8
+rd_setting_from_key(String8 key)
+{
+  String8 result = {0};
+  {
+    // rjf: find most-granular config scope to begin looking for the setting
+    RD_Cfg *start_cfg = rd_cfg_from_handle(rd_regs()->view);
+    if(start_cfg == &rd_nil_cfg) { start_cfg = rd_cfg_from_handle(rd_regs()->panel); }
+    if(start_cfg == &rd_nil_cfg) { start_cfg = rd_cfg_from_handle(rd_regs()->window); }
+    
+    // rjf: scan upwards the config tree until we find the setting
+    RD_Cfg *setting = &rd_nil_cfg;
+    for(RD_Cfg *cfg = start_cfg; cfg != &rd_nil_cfg && setting == &rd_nil_cfg; cfg = cfg->parent)
+    {
+      setting = rd_cfg_child_from_string(cfg, key);
+    }
+    
+    // rjf: return resultant child string stored under this key
+    result = setting->first->string;
+    
+    // rjf: no result -> look for default in settings schema
+    if(result.size == 0) ProfScope("default setting schema lookup")
+    {
+      Temp scratch = scratch_begin(0, 0);
+      String8 schema_string = {0};
+      for EachElement(idx, rd_cfg_name_schema_pair_table)
+      {
+        if(str8_match(rd_cfg_name_schema_pair_table[idx].name, str8_lit("settings"), 0))
+        {
+          schema_string = rd_cfg_name_schema_pair_table[idx].schema;
+          break;
+        }
+      }
+      MD_Node *schema = md_tree_from_string(scratch.arena, schema_string)->first;
+      MD_Node *setting = md_child_from_string(schema, key, 0);
+      MD_Node *default_tag = md_tag_from_string(setting, str8_lit("default"), 0);
+      result = default_tag->first->string;
+      scratch_end(scratch);
+    }
+  }
+  return result;
+}
+
 ////////////////////////////////
 //~ rjf: Entity State Functions
 
@@ -3415,17 +3458,6 @@ rd_window_state_from_cfg(RD_Cfg *cfg)
     ws->drop_completion_arena = arena_alloc();
     ws->hover_eval_arena = arena_alloc();
     ws->last_dpi = os_dpi_from_window(ws->os);
-    for EachEnumVal(RD_SettingCode, code)
-    {
-      if(rd_setting_code_default_is_per_window_table[code])
-      {
-        ws->setting_vals[code] = rd_setting_code_default_val_table[code];
-      }
-    }
-    ws->setting_vals[RD_SettingCode_MainFontSize].s32 = ws->setting_vals[RD_SettingCode_MainFontSize].s32 * (ws->last_dpi / 96.f);
-    ws->setting_vals[RD_SettingCode_CodeFontSize].s32 = ws->setting_vals[RD_SettingCode_CodeFontSize].s32 * (ws->last_dpi / 96.f);
-    ws->setting_vals[RD_SettingCode_MainFontSize].s32 = ClampBot(ws->setting_vals[RD_SettingCode_MainFontSize].s32, rd_setting_code_default_val_table[RD_SettingCode_MainFontSize].s32);
-    ws->setting_vals[RD_SettingCode_CodeFontSize].s32 = ClampBot(ws->setting_vals[RD_SettingCode_CodeFontSize].s32, rd_setting_code_default_val_table[RD_SettingCode_CodeFontSize].s32);
     OS_Handle zero_monitor = {0};
     if(!os_handle_match(zero_monitor, preferred_monitor))
     {
@@ -3616,7 +3648,7 @@ rd_window_frame(void)
     ws->cfg_palettes[RD_PaletteCode_DropSiteOverlay].text       = current->colors[RD_ThemeColor_DropSiteOverlay];
     ws->cfg_palettes[RD_PaletteCode_DropSiteOverlay].text_weak  = current->colors[RD_ThemeColor_DropSiteOverlay];
     ws->cfg_palettes[RD_PaletteCode_DropSiteOverlay].border     = current->colors[RD_ThemeColor_DropSiteOverlay];
-    if(rd_setting_val_from_code(RD_SettingCode_OpaqueBackgrounds).s32)
+    if(rd_setting_b32_from_key(str8_lit("opaque_backgrounds")))
     {
       for EachEnumVal(RD_PaletteCode, code)
       {
@@ -3703,12 +3735,12 @@ rd_window_frame(void)
       // rjf: build animation info
       UI_AnimationInfo animation_info = {0};
       {
-        if(rd_setting_val_from_code(RD_SettingCode_HoverAnimations).s32)       {animation_info.flags |= UI_AnimationInfoFlag_HotAnimations;}
-        if(rd_setting_val_from_code(RD_SettingCode_PressAnimations).s32)       {animation_info.flags |= UI_AnimationInfoFlag_ActiveAnimations;}
-        if(rd_setting_val_from_code(RD_SettingCode_FocusAnimations).s32)       {animation_info.flags |= UI_AnimationInfoFlag_FocusAnimations;}
-        if(rd_setting_val_from_code(RD_SettingCode_TooltipAnimations).s32)     {animation_info.flags |= UI_AnimationInfoFlag_TooltipAnimations;}
-        if(rd_setting_val_from_code(RD_SettingCode_MenuAnimations).s32)        {animation_info.flags |= UI_AnimationInfoFlag_ContextMenuAnimations;}
-        if(rd_setting_val_from_code(RD_SettingCode_ScrollingAnimations).s32)   {animation_info.flags |= UI_AnimationInfoFlag_ScrollingAnimations;}
+        if(rd_setting_b32_from_key(str8_lit("hover_animations")))       {animation_info.flags |= UI_AnimationInfoFlag_HotAnimations;}
+        if(rd_setting_b32_from_key(str8_lit("press_animations")))       {animation_info.flags |= UI_AnimationInfoFlag_ActiveAnimations;}
+        if(rd_setting_b32_from_key(str8_lit("focus_animations")))       {animation_info.flags |= UI_AnimationInfoFlag_FocusAnimations;}
+        if(rd_setting_b32_from_key(str8_lit("tooltip_animations")))     {animation_info.flags |= UI_AnimationInfoFlag_TooltipAnimations;}
+        if(rd_setting_b32_from_key(str8_lit("menu_animations")))        {animation_info.flags |= UI_AnimationInfoFlag_ContextMenuAnimations;}
+        if(rd_setting_b32_from_key(str8_lit("scrolling_animations")))   {animation_info.flags |= UI_AnimationInfoFlag_ScrollingAnimations;}
       }
       
       // rjf: begin & push initial stack values
@@ -3721,8 +3753,8 @@ rd_window_frame(void)
       ui_push_palette(rd_palette_from_code(RD_PaletteCode_Base));
       ui_push_blur_size(10.f);
       FNT_RasterFlags text_raster_flags = 0;
-      if(rd_setting_val_from_code(RD_SettingCode_SmoothUIText).s32) {text_raster_flags |= FNT_RasterFlag_Smooth;}
-      if(rd_setting_val_from_code(RD_SettingCode_HintUIText).s32) {text_raster_flags |= FNT_RasterFlag_Hinted;}
+      if(rd_setting_b32_from_key(str8_lit("smooth_main_text"))) {text_raster_flags |= FNT_RasterFlag_Smooth;}
+      if(rd_setting_b32_from_key(str8_lit("hint_main_text"))) {text_raster_flags |= FNT_RasterFlag_Hinted;}
       ui_push_text_raster_flags(text_raster_flags);
     }
     
@@ -6322,11 +6354,13 @@ rd_window_frame(void)
           
           //- rjf: animate
           {
+            B32 do_menu_animations = rd_setting_b32_from_key(str8_lit("menu_animations"));
+            F32 rate = do_menu_animations ? 1 - pow_f32(2, (-60.f * rd_state->frame_dt)) : 1.f;
+            
             // rjf: animate height
             {
-              F32 fish_rate = rd_setting_val_from_code(RD_SettingCode_MenuAnimations).s32 ? 1 - pow_f32(2, (-60.f * rd_state->frame_dt)) : 1.f;
               F32 hover_eval_container_height_target = row_height * Min(30, block_tree.total_row_count);
-              ws->hover_eval_num_visible_rows_t += (hover_eval_container_height_target - ws->hover_eval_num_visible_rows_t) * fish_rate;
+              ws->hover_eval_num_visible_rows_t += (hover_eval_container_height_target - ws->hover_eval_num_visible_rows_t) * rate;
               if(abs_f32(hover_eval_container_height_target - ws->hover_eval_num_visible_rows_t) > 0.5f)
               {
                 rd_request_frame();
@@ -6339,9 +6373,8 @@ rd_window_frame(void)
             
             // rjf: animate open
             {
-              F32 fish_rate = rd_setting_val_from_code(RD_SettingCode_MenuAnimations).s32 ? 1 - pow_f32(2, (-60.f * rd_state->frame_dt)) : 1.f;
               F32 diff = 1.f - ws->hover_eval_open_t;
-              ws->hover_eval_open_t += diff*fish_rate;
+              ws->hover_eval_open_t += diff*rate;
               if(abs_f32(diff) < 0.01f)
               {
                 ws->hover_eval_open_t = 1.f;
@@ -7885,6 +7918,9 @@ rd_window_frame(void)
   {
     Temp scratch = scratch_begin(0, 0);
     
+    //- rjf: unpack settings
+    B32 do_background_blur = rd_setting_b32_from_key(str8_lit("background_blur"));
+    
     //- rjf: set up heatmap buckets
     F32 heatmap_bucket_size = 32.f;
     U64 *heatmap_buckets = 0;
@@ -7959,7 +7995,7 @@ rd_window_frame(void)
       }
       
       // rjf: blur background
-      if(box->flags & UI_BoxFlag_DrawBackgroundBlur && rd_setting_val_from_code(RD_SettingCode_BackgroundBlur).s32)
+      if(box->flags & UI_BoxFlag_DrawBackgroundBlur && do_background_blur)
       {
         R_PassParams_Blur *params = dr_blur(pad_2f32(box->rect, 1.f), box->blur_size*(1-box->transparency), 0);
         MemoryCopyArray(params->corner_radii, box->corner_radii);
@@ -10672,7 +10708,6 @@ rd_font_from_slot(RD_FontSlot slot)
 internal F32
 rd_font_size_from_slot(RD_FontSlot slot)
 {
-  B32 explicit_config_found = 0;
   F32 result = 9.f;
   
   // rjf: determine config key based on slot
@@ -10685,32 +10720,23 @@ rd_font_size_from_slot(RD_FontSlot slot)
     case RD_FontSlot_Code:{key = str8_lit("code_font_size");}break;
   }
   
-  // rjf: find most-granular config scope to begin looking for the setting
-  RD_Cfg *start_cfg = rd_cfg_from_handle(rd_regs()->view);
-  if(start_cfg == &rd_nil_cfg) { start_cfg = rd_cfg_from_handle(rd_regs()->panel); }
-  if(start_cfg == &rd_nil_cfg) { start_cfg = rd_cfg_from_handle(rd_regs()->window); }
+  // rjf: given key, find setting string
+  String8 setting_string = rd_setting_from_key(key);
   
-  // rjf: scan upwards the config tree until we find the setting
-  for(RD_Cfg *parent = start_cfg; parent != &rd_nil_cfg; parent = parent->parent)
-  {
-    RD_Cfg *child = rd_cfg_child_from_string(parent, key);
-    if(child != &rd_nil_cfg)
-    {
-      result = (F32)f64_from_str8(child->first->string);
-      explicit_config_found = 1;
-      break;
-    }
-  }
-  
-  // rjf: if we haven't found any explicit config, then use the window's monitor's DPI
+  // rjf: if found, map setting string -> f64; otherwise use the window's monitor's DPI
   // based on some default size.
-  if(explicit_config_found == 0)
+  if(setting_string.size)
+  {
+    result = (F32)f64_from_str8(setting_string);
+  }
+  else
   {
     RD_Cfg *window_cfg = rd_cfg_from_handle(rd_regs()->window);
     RD_WindowState *ws = rd_window_state_from_cfg(window_cfg);
     F32 dpi = os_dpi_from_window(ws->os);
-    result *= (dpi / 96.f);
+    result = 9.f * (dpi / 96.f);
   }
+  
   return result;
 }
 
@@ -10722,36 +10748,10 @@ rd_raster_flags_from_slot(RD_FontSlot slot)
   {
     default:{}break;
     case RD_FontSlot_Icons:{flags = FNT_RasterFlag_Smooth;}break;
-    case RD_FontSlot_Main: {flags = (!!rd_setting_val_from_code(RD_SettingCode_SmoothUIText).s32*FNT_RasterFlag_Smooth)|(!!rd_setting_val_from_code(RD_SettingCode_HintUIText).s32*FNT_RasterFlag_Hinted);}break;
-    case RD_FontSlot_Code: {flags = (!!rd_setting_val_from_code(RD_SettingCode_SmoothCodeText).s32*FNT_RasterFlag_Smooth)|(!!rd_setting_val_from_code(RD_SettingCode_HintCodeText).s32*FNT_RasterFlag_Hinted);}break;
+    case RD_FontSlot_Main: {flags = (rd_setting_b32_from_key(str8_lit("smooth_main_text"))*FNT_RasterFlag_Smooth)|(rd_setting_b32_from_key(str8_lit("hint_main_text"))*FNT_RasterFlag_Hinted);}break;
+    case RD_FontSlot_Code: {flags = (rd_setting_b32_from_key(str8_lit("smooth_code_text"))*FNT_RasterFlag_Smooth)|(rd_setting_b32_from_key(str8_lit("hint_code_text"))*FNT_RasterFlag_Hinted);}break;
   }
   return flags;
-}
-
-//- rjf: settings
-
-internal RD_SettingVal
-rd_setting_val_from_code(RD_SettingCode code)
-{
-  RD_Cfg *wcfg = rd_cfg_from_handle(rd_regs()->window);
-  RD_WindowState *ws = rd_window_state_from_cfg(wcfg);
-  RD_SettingVal result = {0};
-  if(ws != 0)
-  {
-    result = ws->setting_vals[code];
-  }
-  if(result.set == 0)
-  {
-    for EachEnumVal(RD_CfgSrc, src)
-    {
-      if(rd_state->cfg_setting_vals[src][code].set)
-      {
-        result = rd_state->cfg_setting_vals[src][code];
-        break;
-      }
-    }
-  }
-  return result;
 }
 
 //- rjf: config serialization
@@ -13316,7 +13316,7 @@ rd_frame(void)
           case RD_CmdKind_IncCodeFontScale:
           {
             fnt_reset();
-            F32 current_font_size = rd_font_size_from_slot(RD_FontSlot_Main);
+            F32 current_font_size = rd_font_size_from_slot(RD_FontSlot_Code);
             F32 new_font_size = clamp_1f32(r1f32(6, 72), current_font_size+1);
             RD_Cfg *window = rd_cfg_from_handle(rd_regs()->window);
             RD_Cfg *code_font_size = rd_cfg_child_from_string_or_alloc(window, str8_lit("code_font_size"));
@@ -13326,7 +13326,7 @@ rd_frame(void)
           case RD_CmdKind_DecCodeFontScale:
           {
             fnt_reset();
-            F32 current_font_size = rd_font_size_from_slot(RD_FontSlot_Main);
+            F32 current_font_size = rd_font_size_from_slot(RD_FontSlot_Code);
             F32 new_font_size = clamp_1f32(r1f32(6, 72), current_font_size-1);
             RD_Cfg *window = rd_cfg_from_handle(rd_regs()->window);
             RD_Cfg *code_font_size = rd_cfg_child_from_string_or_alloc(window, str8_lit("code_font_size"));
@@ -16610,7 +16610,7 @@ X(getting_started)
   //- rjf: animate confirmation
   //
   {
-    F32 rate = rd_setting_val_from_code(RD_SettingCode_MenuAnimations).s32 ? 1 - pow_f32(2, (-10.f * rd_state->frame_dt)) : 1.f;
+    F32 rate = rd_setting_b32_from_key(str8_lit("menu_animations")) ? 1 - pow_f32(2, (-10.f * rd_state->frame_dt)) : 1.f;
     B32 popup_open = rd_state->popup_active;
     rd_state->popup_t += rate * ((F32)!!popup_open-rd_state->popup_t);
     if(abs_f32(rd_state->popup_t - (F32)!!popup_open) > 0.005f)

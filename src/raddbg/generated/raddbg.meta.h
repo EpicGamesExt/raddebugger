@@ -512,30 +512,6 @@ RD_ThemePreset_FarManager,
 RD_ThemePreset_COUNT,
 } RD_ThemePreset;
 
-typedef enum RD_SettingCode
-{
-RD_SettingCode_HoverAnimations,
-RD_SettingCode_PressAnimations,
-RD_SettingCode_FocusAnimations,
-RD_SettingCode_TooltipAnimations,
-RD_SettingCode_MenuAnimations,
-RD_SettingCode_ScrollingAnimations,
-RD_SettingCode_BackgroundBlur,
-RD_SettingCode_ThreadLines,
-RD_SettingCode_BreakpointLines,
-RD_SettingCode_ThreadGlow,
-RD_SettingCode_BreakpointGlow,
-RD_SettingCode_OpaqueBackgrounds,
-RD_SettingCode_TabWidth,
-RD_SettingCode_MainFontSize,
-RD_SettingCode_CodeFontSize,
-RD_SettingCode_SmoothUIText,
-RD_SettingCode_SmoothCodeText,
-RD_SettingCode_HintUIText,
-RD_SettingCode_HintCodeText,
-RD_SettingCode_COUNT,
-} RD_SettingCode;
-
 typedef struct RD_VocabularyInfo RD_VocabularyInfo;
 struct RD_VocabularyInfo
 {
@@ -781,7 +757,7 @@ extern String8 rd_cfg_src_string_table[4];
 extern RD_CmdKind rd_cfg_src_load_cmd_kind_table[4];
 extern RD_CmdKind rd_cfg_src_write_cmd_kind_table[4];
 extern RD_VocabularyInfo rd_vocabulary_info_table[41];
-extern RD_CfgNameSchemaPair rd_cfg_name_schema_pair_table[5];
+extern RD_CfgNameSchemaPair rd_cfg_name_schema_pair_table[6];
 extern String8 d_entity_kind_display_string_table[27];
 extern String8 d_entity_kind_name_lower_table[27];
 extern String8 d_entity_kind_name_lower_plural_table[27];
@@ -817,11 +793,6 @@ extern Vec4F32 rd_theme_preset_colors__far_manager[76];
 extern Vec4F32* rd_theme_preset_colors_table[9];
 extern String8 rd_theme_color_display_string_table[76];
 extern String8 rd_theme_color_cfg_string_table[76];
-extern String8 rd_setting_code_display_string_table[19];
-extern String8 rd_setting_code_lower_string_table[19];
-extern B8 rd_setting_code_default_is_per_window_table[19];
-extern RD_SettingVal rd_setting_code_default_val_table[19];
-extern Rng1S32 rd_setting_code_s32_range_table[19];
 read_only global U8 rd_icon_font_bytes__data[] =
 {
 0x00,0x01,0x00,0x00,0x00,0x0f,0x00,0x80,0x00,0x03,0x00,0x70,0x47,0x53,0x55,0x42,0x20,0x8b,0x25,0x7a,0x00,0x00,0x00,0xfc,0x00,0x00,0x00,0x54,0x4f,0x53,0x2f,0x32,0x56,0x44,0x49,0xa0,0x00,0x00,0x01,0x50,0x00,0x00,0x00,0x60,0x63,0x6d,0x61,0x70,0x2a,0x09,0xe2,0xc2,0x00,0x00,0x01,0xb0,0x00,0x00,0x05,0xec,0x63,0x76,0x74,0x20,

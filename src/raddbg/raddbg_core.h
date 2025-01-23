@@ -652,7 +652,6 @@ struct RD_WindowState
   B32 window_temporarily_focused_ipc;
   
   // rjf: config/settings
-  RD_SettingVal setting_vals[RD_SettingCode_COUNT];
   UI_Palette cfg_palettes[RD_PaletteCode_COUNT]; // derivative from theme
   
   // rjf: dev interface state
@@ -936,9 +935,6 @@ struct RD_State
   String8 bind_change_cmd_name;
   RD_Binding bind_change_binding;
   
-  // rjf: global settings
-  RD_SettingVal cfg_setting_vals[RD_CfgSrc_COUNT][RD_SettingCode_COUNT];
-  
   //-
   // TODO(rjf): TO BE ELIMINATED OR REPLACED ^^^^^^^^^^^^^^^^^^
   //-
@@ -1148,6 +1144,10 @@ internal String8 rd_expr_from_cfg(RD_Cfg *cfg);
 internal D_Target rd_target_from_cfg(Arena *arena, RD_Cfg *cfg);
 internal DR_FancyStringList rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg, Vec4F32 secondary_color, F32 size);
 
+internal String8 rd_setting_from_key(String8 key);
+#define rd_setting_b32_from_key(key) (str8_match(rd_setting_from_key(key), str8_lit("1"), 0))
+#define rd_setting_u64_from_key(key) (u64_from_str8(rd_setting_from_key(key), 10))
+
 ////////////////////////////////
 //~ rjf: Entity Stateful Functions
 
@@ -1351,9 +1351,6 @@ internal UI_Palette *rd_palette_from_code(RD_PaletteCode code);
 internal FNT_Tag rd_font_from_slot(RD_FontSlot slot);
 internal F32 rd_font_size_from_slot(RD_FontSlot slot);
 internal FNT_RasterFlags rd_raster_flags_from_slot(RD_FontSlot slot);
-
-//- rjf: settings
-internal RD_SettingVal rd_setting_val_from_code(RD_SettingCode code);
 
 //- rjf: config serialization
 internal int rd_qsort_compare__cfg_string_bindings(RD_StringBindingPair *a, RD_StringBindingPair *b);

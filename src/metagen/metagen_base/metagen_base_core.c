@@ -144,12 +144,6 @@ bswap_u64(U64 x)
 #if COMPILER_MSVC || (COMPILER_CLANG && OS_WINDOWS)
 
 internal U64
-count_bits_set16(U16 val)
-{
-  return __popcnt16(val);
-}
-
-internal U64
 count_bits_set32(U32 val)
 {
   return __popcnt(val);
@@ -196,45 +190,39 @@ clz64(U64 mask)
 #elif COMPILER_CLANG || COMPILER_GCC
 
 internal U64
-count_bits_set16(U16 val)
-{
-  NotImplemented;
-  return 0;
-}
-
-internal U64
 count_bits_set32(U32 val)
 {
-  NotImplemented;
-  return 0;
+  return __builtin_popcount(val);
 }
 
 internal U64
 count_bits_set64(U64 val)
 {
-  NotImplemented;
-  return 0;
+  return __builtin_popcountll(val);
 }
 
 internal U64
 ctz32(U32 val)
 {
-  NotImplemented;
-  return 0;
+  return __builtin_ctz(val);
 }
 
 internal U64
 clz32(U32 val)
 {
-  NotImplemented;
-  return 0;
+  return __builtin_clz(val);
+}
+
+internal U64
+ctz64(U64 val)
+{
+  return __builtin_ctzll(val);
 }
 
 internal U64
 clz64(U64 val)
 {
-  NotImplemented;
-  return 0;
+  return __builtin_clzll(val);
 }
 
 #else
@@ -399,23 +387,23 @@ txt_rng_contains(TxtRng r, TxtPt pt)
 //~ rjf: Toolchain/Environment Enum Functions
 
 internal U64
-bit_size_from_arch(Architecture arch)
+bit_size_from_arch(Arch arch)
 {
   // TODO(rjf): metacode
   U64 arch_bitsize = 0;
   switch(arch)
   {
-    case Architecture_x64:   arch_bitsize = 64; break;
-    case Architecture_x86:   arch_bitsize = 32; break;
-    case Architecture_arm64: arch_bitsize = 64; break;
-    case Architecture_arm32: arch_bitsize = 32; break;
+    case Arch_x64:   arch_bitsize = 64; break;
+    case Arch_x86:   arch_bitsize = 32; break;
+    case Arch_arm64: arch_bitsize = 64; break;
+    case Arch_arm32: arch_bitsize = 32; break;
     default: break;
   }
   return arch_bitsize;
 }
 
 internal U64
-max_instruction_size_from_arch(Architecture arch)
+max_instruction_size_from_arch(Arch arch)
 {
   // TODO(rjf): make this real
   return 64;
@@ -434,17 +422,17 @@ operating_system_from_context(void){
   return os;
 }
 
-internal Architecture
-architecture_from_context(void){
-  Architecture arch = Architecture_Null;
+internal Arch
+arch_from_context(void){
+  Arch arch = Arch_Null;
 #if ARCH_X64
-  arch = Architecture_x64;
+  arch = Arch_x64;
 #elif ARCH_X86
-  arch = Architecture_x86;
+  arch = Arch_x86;
 #elif ARCH_ARM64
-  arch = Architecture_arm64;
+  arch = Arch_arm64;
 #elif ARCH_ARM32
-  arch = Architecture_arm32;
+  arch = Arch_arm32;
 #endif
   return arch;
 }
@@ -524,6 +512,60 @@ date_time_from_micro_seconds(U64 time){
   Assert(time <= max_U32);
   result.year = (U32)time;
   return(result);
+}
+
+internal DateTime
+date_time_from_unix_time(U64 unix_time)
+{
+  DateTime date = {0};
+  date.year     = 1970;
+  date.day      = 1 + (unix_time / 86400);
+  date.sec      = (U32)unix_time % 60;
+  date.min      = (U32)(unix_time / 60) % 60;
+  date.hour     = (U32)(unix_time / 3600) % 24;
+
+  for(;;)
+  {
+    for(date.month = 0; date.month < 12; ++date.month)
+    {
+      U64 c = 0;
+      switch(date.month)
+      {
+        case Month_Jan: c = 31; break;
+        case Month_Feb:
+        {
+          if((date.year % 4 == 0) && ((date.year % 100) != 0 || (date.year % 400) == 0))
+          {
+            c = 29;
+          }
+          else
+          {
+            c = 28;
+          }
+        } break;
+        case Month_Mar: c = 31; break;
+        case Month_Apr: c = 30; break;
+        case Month_May: c = 31; break;
+        case Month_Jun: c = 30; break;
+        case Month_Jul: c = 31; break;
+        case Month_Aug: c = 31; break;
+        case Month_Sep: c = 30; break;
+        case Month_Oct: c = 31; break;
+        case Month_Nov: c = 30; break;
+        case Month_Dec: c = 31; break;
+        default: InvalidPath;
+      }
+      if(date.day <= c)
+      {
+        goto exit;
+      }
+      date.day -= c;
+    }
+    ++date.year;
+  }
+  exit:;
+
+  return date;
 }
 
 ////////////////////////////////
