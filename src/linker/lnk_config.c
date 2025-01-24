@@ -2027,10 +2027,10 @@ lnk_config_from_cmd_line(Arena *arena, String8List raw_cmd_line)
 
   if (lnk_get_log_status(LNK_Log_Debug)) {
     String8 full_cmd_line = str8_list_join(scratch.arena, &raw_cmd_line, &(StringJoin){ .sep = str8_lit_comp(" ") });
-    lnk_log(LNK_Log_Debug, "--------------------------------------------------------------------------------");
-    lnk_log(LNK_Log_Debug, "Command Line: %S", full_cmd_line);
-    lnk_log(LNK_Log_Debug, "Work Dir    : %S", config->work_dir);
-    lnk_log(LNK_Log_Debug, "--------------------------------------------------------------------------------");
+    fprintf(stderr, "--------------------------------------------------------------------------------\n");
+    fprintf(stderr, "Command Line: %.*s\n", str8_varg(full_cmd_line));
+    fprintf(stderr, "Work Dir    : %.*s\n", str8_varg(config->work_dir));
+    fprintf(stderr, "--------------------------------------------------------------------------------\n");
   }
 
   scratch_end(scratch);
