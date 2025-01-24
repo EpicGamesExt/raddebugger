@@ -57,7 +57,7 @@ tp_worker_main_shared(void *raw_worker)
 }
 
 internal TP_Context * 
-tp_alloc(Arena *arena, U32 worker_count, String8 name)
+tp_alloc(Arena *arena, U32 worker_count, U32 max_worker_count, String8 name)
 {
   ProfBeginDynamic("Alloc Thread Pool [Worker Count: %u]", worker_count);
   AssertAlways(worker_count > 0);
@@ -71,7 +71,8 @@ tp_alloc(Arena *arena, U32 worker_count, String8 name)
   if (worker_count > 1) {
     main_semaphore = os_semaphore_alloc(0, 1, str8_zero());
     if (is_shared) {
-      task_semaphore = os_semaphore_alloc(0, worker_count, name);
+      AssertAlways(worker_count <= max_worker_count);
+      task_semaphore = os_semaphore_alloc(0, max_worker_count, name);
       exec_semaphore = os_semaphore_alloc(0, worker_count, str8_zero());
     } else {
       task_semaphore = os_semaphore_alloc(0, worker_count, str8_zero());

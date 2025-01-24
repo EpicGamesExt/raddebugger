@@ -43,7 +43,7 @@ typedef struct TP_Context
   S64          task_left;
 } TP_Context;
 
-internal TP_Context * tp_alloc(Arena *arena, U32 worker_count, String8 name);
+internal TP_Context * tp_alloc(Arena *arena, U32 worker_count, U32 max_worker_count, String8 name);
 internal void         tp_release(TP_Context *pool);
 internal TP_Arena *   tp_arena_alloc(TP_Context *pool);
 internal void         tp_arena_release(TP_Arena **arena_ptr);

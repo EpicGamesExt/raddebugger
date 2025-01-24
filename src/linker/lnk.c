@@ -3190,7 +3190,7 @@ lnk_run(int argc, char **argv)
   
   LNK_Config *config = lnk_build_config(scratch.arena, argc, argv);
   
-  TP_Context *tp       = tp_alloc(scratch.arena, config->worker_count, config->shared_thread_pool_name);
+  TP_Context *tp       = tp_alloc(scratch.arena, config->worker_count, config->max_worker_count, config->shared_thread_pool_name);
   TP_Arena   *tp_arena = tp_arena_alloc(tp);
   
 #if PROFILE_TELEMETRY
