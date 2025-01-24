@@ -305,8 +305,8 @@ THREAD_POOL_TASK_FUNC(lnk_get_external_leaves_task)
   LNK_GetExternalLeavesTask *task      = raw_task;
   MSF_Parsed                *msf_parse = task->msf_parse_arr[ts_idx];
 
-  task->external_ti_ranges[ts_idx] = push_array_no_zero(arena, Rng1U64, CV_TypeIndexSource_COUNT);
-  task->external_leaves[ts_idx]    = push_array_no_zero(arena, CV_DebugT, CV_TypeIndexSource_COUNT);
+  task->external_ti_ranges[ts_idx] = push_array(arena, Rng1U64,   CV_TypeIndexSource_COUNT);
+  task->external_leaves[ts_idx]    = push_array(arena, CV_DebugT, CV_TypeIndexSource_COUNT);
   task->is_corrupted[ts_idx]       = 1;
 
   if (msf_parse) {
