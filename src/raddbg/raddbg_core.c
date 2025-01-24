@@ -2785,6 +2785,99 @@ rd_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range)
       }
     }break;
     
+    //- rjf: meta-config writes
+    case RD_EvalSpaceKind_MetaCfg:
+    {
+      Temp scratch = scratch_begin(0, 0);
+      
+      // rjf: unpack
+      RD_Cfg *cfg = rd_cfg_from_eval_space(space);
+      String8 eval_blob = rd_eval_blob_from_cfg(cfg);
+      MD_Node *schema = rd_schema_from_name(scratch.arena, cfg->string);
+      
+      // rjf: cfg name -> type key
+      String8 name = cfg->string;
+      E_TypeKey type_key = zero_struct;
+      {
+        U64 name_hash = d_hash_from_string(name);
+        U64 name_slot_idx = name_hash%rd_state->cfg_string2typekey_map->slots_count;
+        for(RD_String2TypeKeyNode *n = rd_state->cfg_string2typekey_map->slots[name_slot_idx].first;
+            n != 0;
+            n = n->next)
+        {
+          if(str8_match(n->string, name, 0))
+          {
+            type_key = n->key;
+            break;
+          }
+        }
+      }
+      
+      // rjf: key -> type
+      E_Type *type = e_type_from_key(scratch.arena, type_key);
+      
+      // rjf: find member to which this write applies, reflect back in the cfg tree
+      if(type->members != 0) for EachIndex(member_idx, type->count)
+      {
+        E_Member *member = &type->members[member_idx];
+        Rng1U64 member_range = r1u64(member->off, member->off + e_type_byte_size_from_key(member->type_key));
+        String8 child_name = member->name;
+        MD_Node *member_schema = md_child_from_string(schema, child_name, 0);
+        String8 member_type_name = member_schema->first->string;
+        RD_Cfg *child = rd_cfg_child_from_string(cfg, child_name);
+        if((str8_match(member_type_name, str8_lit("code_string"), 0) ||
+            str8_match(member_type_name, str8_lit("path"), 0) ||
+            str8_match(member_type_name, str8_lit("string"), 0)) &&
+           member->off+sizeof(U64) <= eval_blob.size)
+        {
+          U64 string_off = *(U64 *)(eval_blob.str + member->off);
+          U64 string_opl = string_off + child->first->string.size + 1;
+          Rng1U64 string_range = r1u64(string_off, string_opl);
+          if(contains_1u64(string_range, range.min))
+          {
+            String8 pre_edit_string = push_str8_copy(scratch.arena, str8(eval_blob.str + member->off, child->first->string.size));
+            String8 post_edit_string = ui_push_string_replace_range(scratch.arena, pre_edit_string, r1s64(range.min-string_range.min+1, range.max-string_range.min+1), str8((U8 *)in, dim_1u64(range)));
+            if(child == &rd_nil_cfg)
+            {
+              child = rd_cfg_new(cfg, child_name);
+            }
+            rd_cfg_release_all_children(child);
+            rd_cfg_new(child, post_edit_string);
+            result = 1;
+            break;
+          }
+        }
+        else if(str8_match(member_type_name, str8_lit("u64"), 0) && dim_1u64(range) >= 1 && contains_1u64(member_range, range.min))
+        {
+          U64 value = 0;
+          MemoryCopy(&value, in, dim_1u64(range));
+          if(child == &rd_nil_cfg)
+          {
+            child = rd_cfg_new(cfg, child_name);
+          }
+          rd_cfg_release_all_children(child);
+          rd_cfg_newf(child, "%I64u", value);
+          result = 1;
+          break;
+        }
+        else if(str8_match(member_type_name, str8_lit("bool"), 0) && dim_1u64(range) >= 1 && contains_1u64(member_range, range.min))
+        {
+          U64 value = 0;
+          MemoryCopy(&value, in, dim_1u64(range));
+          if(child == &rd_nil_cfg)
+          {
+            child = rd_cfg_new(cfg, child_name);
+          }
+          rd_cfg_release_all_children(child);
+          rd_cfg_newf(child, "%I64u", value);
+          result = 1;
+          break;
+        }
+      }
+      
+      scratch_end(scratch);
+    }break;
+    
     //- rjf: meta-entity writes
     case RD_EvalSpaceKind_MetaEntity:
     {
