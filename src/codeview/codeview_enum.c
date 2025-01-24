@@ -2,6 +2,12 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 internal String8
+cv_string_from_unknown_value(Arena *arena, U32 x)
+{
+  return push_str8f(arena, "%#x", x);
+}
+
+internal String8
 cv_string_from_type_index_source(CV_TypeIndexSource ti_source)
 {
   switch (ti_source) {
@@ -305,6 +311,16 @@ cv_string_from_c13_checksum_kind(CV_C13ChecksumKind x)
     case CV_C13ChecksumKind_SHA256: return str8_lit("SHA256");
   }
   return str8_zero();
+}
+
+internal String8
+cv_string_from_label_kind(Arena *arena, CV_LabelKind x)
+{
+  switch (x) {
+    case CV_LabelKind_Near: return str8_lit("Near");
+    case CV_LabelKind_Far:  return str8_lit("Far");
+  }
+  return cv_string_from_unknown_value(arena, x);
 }
 
 internal String8

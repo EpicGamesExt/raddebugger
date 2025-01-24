@@ -4084,7 +4084,7 @@ cv_print_leaf(Arena *arena, String8List *out, String8 indent, CV_TypeIndex min_i
     } break;
     case CV_LeafKind_MEMBER_ST:
     case CV_LeafKind_MEMBER: {
-      CV_LeafMember    lf  = {0};
+      CV_LeafMember    lf   = {0};
       CV_NumericParsed num  = {0};
       String8          name = {0};
       cursor += str8_deserial_read_struct(raw_leaf, cursor, &lf);
@@ -4095,6 +4095,17 @@ cv_print_leaf(Arena *arena, String8List *out, String8 indent, CV_TypeIndex min_i
       rd_printf("Attribs: %S", cv_string_from_field_attribs(scratch.arena, lf.attribs));
       rd_printf("Type:    %S", cv_string_from_itype(scratch.arena, min_itype, lf.itype));
       rd_printf("Offset:  %S", cv_string_from_numeric(scratch.arena, num));
+    } break;
+    case CV_LeafKind_LABEL: {
+      CV_LeafLabel lf = {0};
+      cursor += str8_deserial_read_struct(raw_leaf, cursor, &lf);
+
+      rd_printf("Kind: %S", cv_string_from_label_kind(scratch.arena, lf.kind));
+    } break;
+    case CV_LeafKind_ENDPRECOMP: {
+      CV_LeafEndPreComp lf = {0};
+      cursor += str8_deserial_read_struct(raw_leaf, cursor, &lf);
+      rd_printf("Sig: %#x", lf.sig);
     } break;
     // 16bit
     case CV_LeafKind_OEM_16t: 
@@ -4145,8 +4156,6 @@ cv_print_leaf(Arena *arena, String8List *out, String8 indent, CV_TypeIndex min_i
     // Manged
     case CV_LeafKind_MANAGED_ST: 
     // undefined
-    case CV_LeafKind_LABEL: 
-    case CV_LeafKind_ENDPRECOMP: 
     case CV_LeafKind_LIST: 
     case CV_LeafKind_REFSYM: 
     case CV_LeafKind_BARRAY: 

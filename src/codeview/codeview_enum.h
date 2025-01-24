@@ -23,6 +23,7 @@ internal String8 cv_string_from_member_pointer_kind(CV_MemberPointerKind x);
 internal String8 cv_string_from_pointer_kind(CV_PointerKind x);
 internal String8 cv_string_from_pointer_mode(CV_PointerMode x);
 internal String8 cv_string_from_c13_checksum_kind(CV_C13ChecksumKind x);
+internal String8 cv_string_from_label_kind(Arena *arena, CV_LabelKind x);
 internal String8 cv_string_from_c13_subsection_kind(CV_C13SubSectionKind x);
 internal String8 cv_string_from_modifier_flags(Arena *arena, CV_ModifierFlags x);
 internal String8 cv_string_from_pointer_attribs(Arena *arena, CV_PointerAttribs x);
