@@ -147,8 +147,8 @@ RD_VocabularyMap:
     ```x:
     {
       'label':              code_string,
-      'exe':                path,
-      'args':               string,
+      'executable':         path,
+      'arguments':          string,
       'working_directory':  path,
       'entry_point':        code_string,
       'stdout_path':        path,
@@ -178,9 +178,9 @@ RD_VocabularyMap:
     watch_pin,
     ```x:
     {
-      'expression':code_string,
-      'view_rule':code_string,
-      'location':location,
+      'expression': code_string,
+      'view_rule':  code_string,
+      'location':   location,
     }
     ```
   }

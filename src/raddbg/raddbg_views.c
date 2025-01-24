@@ -35,7 +35,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
   //
   FNT_Tag code_font = rd_font_from_slot(RD_FontSlot_Code);
   F32 code_font_size = rd_font_size_from_slot(RD_FontSlot_Code);
-  F32 code_tab_size = fnt_column_size_from_tag_size(code_font, code_font_size)*rd_setting_u64_from_key(str8_lit("tab_width"));
+  F32 code_tab_size = fnt_column_size_from_tag_size(code_font, code_font_size)*rd_setting_u64_from_name(str8_lit("tab_width"));
   FNT_Metrics code_font_metrics = fnt_metrics_from_tag_size(code_font, code_font_size);
   F32 code_line_height = ceil_f32(fnt_line_height_from_metrics(&code_font_metrics) * 1.5f);
   F32 big_glyph_advance = fnt_dim_from_tag_size_string(code_font, code_font_size, 0, 0, str8_lit("H")).x;
@@ -1268,7 +1268,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
   DI_Scope *di_scope = di_scope_open();
   Temp scratch = scratch_begin(0, 0);
   UI_ScrollPt2 scroll_pos = rd_view_scroll_pos();
-  F32 entity_hover_t_rate = rd_setting_b32_from_key(str8_lit("hover_animations")) ? (1 - pow_f32(2, (-20.f * rd_state->frame_dt))) : 1.f;
+  F32 entity_hover_t_rate = rd_setting_b32_from_name(str8_lit("hover_animations")) ? (1 - pow_f32(2, (-20.f * rd_state->frame_dt))) : 1.f;
   
   //////////////////////////////
   //- rjf: unpack arguments

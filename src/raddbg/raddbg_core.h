@@ -765,6 +765,56 @@ struct RD_CtrlEntityMetaEvalCacheSlot
 };
 
 ////////////////////////////////
+//~ rjf: String -> Type Key Map Helper Data Structure
+
+typedef struct RD_String2TypeKeyNode RD_String2TypeKeyNode;
+struct RD_String2TypeKeyNode
+{
+  RD_String2TypeKeyNode *next;
+  String8 string;
+  E_TypeKey key;
+};
+
+typedef struct RD_String2TypeKeySlot RD_String2TypeKeySlot;
+struct RD_String2TypeKeySlot
+{
+  RD_String2TypeKeyNode *first;
+  RD_String2TypeKeyNode *last;
+};
+
+typedef struct RD_String2TypeKeyMap RD_String2TypeKeyMap;
+struct RD_String2TypeKeyMap
+{
+  U64 slots_count;
+  RD_String2TypeKeySlot *slots;
+};
+
+////////////////////////////////
+//~ rjf: Config -> Eval Blob Cache Types
+
+typedef struct RD_Cfg2EvalBlobNode RD_Cfg2EvalBlobNode;
+struct RD_Cfg2EvalBlobNode
+{
+  RD_Cfg2EvalBlobNode *next;
+  RD_Handle handle;
+  String8 blob;
+};
+
+typedef struct RD_Cfg2EvalBlobSlot RD_Cfg2EvalBlobSlot;
+struct RD_Cfg2EvalBlobSlot
+{
+  RD_Cfg2EvalBlobNode *first;
+  RD_Cfg2EvalBlobNode *last;
+};
+
+typedef struct RD_Cfg2EvalBlobMap RD_Cfg2EvalBlobMap;
+struct RD_Cfg2EvalBlobMap
+{
+  U64 slots_count;
+  RD_Cfg2EvalBlobSlot *slots;
+};
+
+////////////////////////////////
 //~ rjf: Main Per-Process Graphical State
 
 typedef struct RD_NameChunkNode RD_NameChunkNode;
@@ -832,6 +882,12 @@ struct RD_State
   // rjf: theme target (constructed from-scratch each frame)
   RD_Theme *theme;
   RD_Theme *theme_target;
+  
+  // rjf: config name -> eval type key map (constructed from-scratch each frame)
+  RD_String2TypeKeyMap *cfg_string2typekey_map;
+  
+  // rjf: config -> eval blob map (lazily constructed from-scratch each frame)
+  RD_Cfg2EvalBlobMap *cfg2evalblob_map;
   
   // rjf: registers stack
   RD_RegsNode base_regs;
@@ -1144,9 +1200,11 @@ internal String8 rd_expr_from_cfg(RD_Cfg *cfg);
 internal D_Target rd_target_from_cfg(Arena *arena, RD_Cfg *cfg);
 internal DR_FancyStringList rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg, Vec4F32 secondary_color, F32 size);
 
-internal String8 rd_setting_from_key(String8 key);
-#define rd_setting_b32_from_key(key) (str8_match(rd_setting_from_key(key), str8_lit("1"), 0))
-#define rd_setting_u64_from_key(key) (u64_from_str8(rd_setting_from_key(key), 10))
+internal MD_Node *rd_schema_from_name(Arena *arena, String8 name);
+
+internal String8 rd_setting_from_name(String8 name);
+#define rd_setting_b32_from_name(name) (str8_match(rd_setting_from_name(name), str8_lit("1"), 0))
+#define rd_setting_u64_from_name(name) (u64_from_str8(rd_setting_from_name(name), 10))
 
 ////////////////////////////////
 //~ rjf: Entity Stateful Functions
@@ -1201,6 +1259,7 @@ internal DR_FancyStringList rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_E
 //- rjf: cfg <-> eval space
 internal RD_Cfg *rd_cfg_from_eval_space(E_Space space);
 internal E_Space rd_eval_space_from_cfg(RD_Cfg *cfg);
+internal String8 rd_eval_blob_from_cfg(RD_Cfg *cfg);
 
 //- rjf: entity <-> eval space
 internal RD_Entity *rd_entity_from_eval_space(E_Space space);
