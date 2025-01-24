@@ -28,6 +28,9 @@ this can be turned into a `.desktop` file.
 * -Wno=parenthesis | Checks surprising gotchas with operator precedence, seems
   mostly like basic noob trap mistakes, think we can ignore it here.
 * -Werror=atomic-memory-ordering | This is probably an actual major bug if it appears.
+* -std=c11 | pin version to some oldish C standard to try to increase version support
+* -D_DEFAULT_SOURCE=1 provides missing definitions like 'futimes' that vanish when '-std=c11' is used
+  It's not entirely clear why this works this way but _GNU_SOURCE=1 was providing it previously
 
 ## Linker Flags
 * `-Wl,-z,notext` this linker flag was given to allow metagen to relocate data in the read only segment, it gave the option between that and "-fPIC". This is the exact compiler output.

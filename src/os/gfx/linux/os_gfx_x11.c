@@ -7,21 +7,40 @@ typedef Window X11_Window;
 global X11_Display* x11_server = NULL;
 global X11_Window x11_window = 0;
 global X11_Window x11_root_window = 0;
+global S32 x11_default_screen = 0;
 global Atom x11_atoms[100];
 global Atom x11_atom_tail = 0;
 global U32 x11_unhandled_events = 0;
 global U32 x11_xdnd_supported_version = 5;
 global RROutput* x11_monitors = 0;
-global GFX_LinuxMonitor* x11_monitors2 = 0;
 global U32 x11_monitors_size = 0;
 
 B32
+x11_monitor_init(GFX_LinuxMonitor* out_monitor, RROutput handle)
+{
+  U64 time_us = os_now_microseconds();
+  out_monitor->handle = handle;
+  out_monitor->id = handle;
+
+  B32 duplicate = 1;
+  for (int i=0; i < gfx_lnx_monitors.head_size; ++i)
+  {
+    duplicate = (handle == gfx_lnx_monitors.data[i].handle);
+    if (duplicate) { return 0; }
+  }
+  B32 success_update = x11_monitor_update_properties(out_monitor);
+  return success_update;
+}
+
+internal B32
 x11_monitor_update_properties(GFX_LinuxMonitor* out_monitor)
 {
   RROutput xrandr_output = out_monitor->handle;
   XRRScreenResources* resources = XRRGetScreenResources(x11_server, x11_root_window);
   XRROutputInfo* props = XRRGetOutputInfo(x11_server, resources, xrandr_output);
+
   XRRCrtcInfo* x_info = NULL;
+  XRRModeInfo* x_mode = NULL;
   B32 found_crtc = 0;
   for (int i=0; i< props->ncrtc; ++i)
   {
@@ -34,6 +53,22 @@ x11_monitor_update_properties(GFX_LinuxMonitor* out_monitor)
   }
   if (found_crtc)
   {
+    // Search for active mode
+    B32 found_mode = 0;
+    for (int i=0; i<resources->nmode; ++i)
+    {
+      x_mode = resources->modes + i;
+      if (x_info->mode == x_mode->id) { found_mode = 1; break; }
+    }
+    if (found_mode)
+    {
+      out_monitor->refresh_rate = (x_mode->dotClock / (x_mode->vTotal * x_mode->hTotal));
+    }
+    else
+    {
+      out_monitor->refresh_rate = 60;
+    }
+
     out_monitor->offset.x = x_info->x;
     out_monitor->offset.y = x_info->y;
     out_monitor->offset_mid.x = x_info->x + (x_info->width / 2);
@@ -46,11 +81,17 @@ x11_monitor_update_properties(GFX_LinuxMonitor* out_monitor)
   }
   else
   { return 0; }
+  RROutput primary_output = XRRGetOutputPrimary(x11_server, x11_root_window);
+  out_monitor->primary = (out_monitor->handle == primary_output);
+
   out_monitor->size_physical_mm.x = props->mm_width;
   out_monitor->size_physical_mm.y = props->mm_height;
-  out_monitor->size_physical_mid_mm.x = (props->mm_width / 2) ;
-  out_monitor->size_physical_mid_mm.y = (props->mm_height / 2) ;
-  /* out_monitor->refresh_rate = mode->dotClock; */
+  out_monitor->size_physical_mid_mm.x = (props->mm_width / 2);
+  out_monitor->size_physical_mid_mm.y = (props->mm_height / 2);
+
+  F32 cms_per_inch = 25.4;
+  out_monitor->dots_per_mm = (out_monitor->size_px.x / out_monitor->size_physical_mid_mm.x);
+  out_monitor->dpi = (out_monitor->dots_per_mm / cms_per_inch);
   /* out_monitor->subpixel_order = */
   /* out_monitor->orientation; */
   out_monitor->landscape = (out_monitor->size_px.x > out_monitor->size_px.y);
@@ -90,18 +131,14 @@ x11_window_update_properties(GFX_LinuxWindow* out)
   S32 down_extent;
 
   B32 found = 0;
-  XRRMonitorInfo* monitor_list = NULL;
-  S32 monitor_count = 0;
-  monitor_list = XRRGetMonitors(x11_server, x11_root_window, 1, &monitor_count);
-  XRRMonitorInfo* one_monitor = XRRGetMonitors(x11_server, out->handle, 1, &monitor_count);
-  XRRMonitorInfo x_monitor;
-  for (int i=0; i<x11_monitors_size; ++i)
+  GFX_LinuxMonitor* x_monitor;
+  for (int i=0; i < gfx_lnx_monitors.head_size; ++i)
   {
-    x_monitor = monitor_list[i];
-    left_extent = x_monitor.x;
-    right_extent = (x_monitor.x + x_monitor.width);
-    up_extent = x_monitor.y;
-    down_extent = (x_monitor.y + x_monitor.height);
+    x_monitor = (i+ gfx_lnx_monitors.data);
+    left_extent = x_monitor->offset.x;
+    right_extent = (x_monitor->offset.x + x_monitor->size_px.x);
+    up_extent = x_monitor->offset.y;
+    down_extent = (x_monitor->offset.y + x_monitor->size_px.y);
     horizontal_inside = (out->pos_mid.x > left_extent) && (out->pos_mid.x < right_extent);
     vertical_inside = (out->pos_mid.y > up_extent) && (out->pos_mid.y < down_extent);
 
@@ -110,12 +147,47 @@ x11_window_update_properties(GFX_LinuxWindow* out)
   if (found == 0)
   { out->monitor = NULL; }
   else
+  { out->monitor = x_monitor; }
+
+  return 1;
+}
+
+OS_EventFlags
+x11_event_flags_from_modmap(U32 modmap)
+{
+  /* NOTE(mallchad): Modifiers aren't as well standardized on Linux and
+     delegates to things like the X11 mod map, which is setup to support
+     several arbitrary modifier keys. ctrl and shift is pretty standard
+     but users may remap them, Meta (often windows) is often different
+     between desktop environments, alt is usually Mod1 (tested on KDE
+     Plasma) but could easily shift around. Be warned. */
+  gfx_lnx_modifier_state = (modmap & ShiftMask) ? OS_EventFlag_Shift : 0x0;
+  gfx_lnx_modifier_state = (modmap & ControlMask) ? OS_EventFlag_Ctrl : 0x0;
+  gfx_lnx_modifier_state = (modmap & Mod1Mask) ? OS_EventFlag_Alt : 0x0;
+  return gfx_lnx_modifier_state;
+}
+
+B32
+x11_repopulate_monitors()
+{
+  ArrayZero(&gfx_lnx_monitors);
+  GFX_LinuxMonitor x_monitor = {0};
+  S32 monitor_count = 0;
+  XRRMonitorInfo* monitor_list = NULL;
+
+  // Get active monitors only
+  monitor_list = XRRGetMonitors(x11_server, x11_root_window, 0, &monitor_count);
+  if (monitor_list == NULL) { Assert(0); return 0; } // Bug, its very odd if you can't get any windows
+  Assert(monitor_count < gfx_lnx_max_monitors); // App probably hasn't been configured to support more
+
+  for (int i=0; i<monitor_count; ++i)
   {
-    // small leak
-    out->monitor = push_array(gfx_lnx_arena, GFX_LinuxMonitor, 1);
-    out->monitor->handle = x_monitor.outputs[0];
-    x11_monitor_update_properties(out->monitor);
+    MemoryZeroStruct(&x_monitor);
+    x11_monitor_init(&x_monitor, monitor_list[i].outputs[0]);
+    ArrayPushTail(&gfx_lnx_monitors, &x_monitor);
   }
+  // Free data
+  XRRFreeMonitors(monitor_list);
   return 1;
 }
 
@@ -135,7 +207,7 @@ x11_graphical_init(GFX_LinuxContext* out)
   for (int i=0; i<ArrayCount(x11_test_atoms); ++i)
   {
     char* x_atom = x11_test_atoms[i];
-    test_atom = XInternAtom( x11_server, x_atom, 1 );
+    test_atom = XInternAtom( x11_server, x_atom, 0 );
     if (test_atom != 0)
     { x11_atoms[ x11_atom_tail++ ] = test_atom; }
     else
@@ -144,8 +216,13 @@ x11_graphical_init(GFX_LinuxContext* out)
 
   // Initialize furthur internal things
   x11_monitors = (RROutput*)push_array_no_zero(gfx_lnx_arena, RROutput, gfx_lnx_max_monitors);
-  S32 default_screen = XDefaultScreen(x11_server);
-  x11_root_window = RootWindow(x11_server, default_screen);
+  x11_default_screen = XDefaultScreen(x11_server);
+  x11_root_window = XRootWindow(x11_server, x11_default_screen);
+
+  // Try to populate monitors interally for searchability
+  B32 success_repopulate = x11_repopulate_monitors();
+  Assert(success_repopulate);   // Application will behave strangely if can't get monitor properties
+
   return 1;
 }
 
@@ -154,7 +231,6 @@ x11_window_open(GFX_LinuxContext* out, OS_Handle* out_handle,
                 Vec2F32 resolution, OS_WindowFlags flags, String8 title)
 {
   GFX_LinuxWindow* result = push_array_no_zero(gfx_lnx_arena, GFX_LinuxWindow, 1);
-  Assert(flags & OS_WindowFlag_CustomBorder == 0); // This isn't supported yet
 
   S32 default_screen = XDefaultScreen(x11_server);
   S32 default_depth = DefaultDepth(x11_server, default_screen);
@@ -226,26 +302,34 @@ x11_get_events(Arena *arena, B32 wait, OS_EventList* out)
   // Force to wait for at least 1 event if 'wait'
   if (wait) { pending_events &= 1; }
   OS_Event* x_node;
+  XEvent event;
+  GFX_LinuxWindow* window = NULL;
+  B32 keep_event;
   for (U32 i_events=0; i_events < pending_events; ++i_events)
   {
-    x_node = push_array_no_zero(arena, OS_Event, 1);
-    // Set links
-    if (out->first == NULL) { out->first = x_node; };
-    if (out->last != NULL)
-    {
-      out->last->next = x_node;
-      x_node->prev = out->last;
-    }
-    out->last = x_node;
-    ++(out->count);
+    x_node = push_array(arena, OS_Event, 1);
+    window = NULL;
+    keep_event = 1;
 
     // Fill out Event
-    XEvent event;
     XNextEvent(x11_server, &event);
-    GFX_LinuxWindow x_window = {0};
-    x_window.handle = event.xany.window;
-    x_node->window = gfx_handle_from_window(&x_window);
 
+    /* search for existing window to match DF API which draws from pre-existing windows (handles)
+       (hidden dependency) */
+    GFX_LinuxWindow* x_window = gfx_lnx_windows.first;
+    for (; x_window != NULL;)
+    {
+      if (x_window->handle == event.xany.window)
+      {
+        window = x_window;
+        x_node->window = gfx_handle_from_window(x_window);
+        break;
+      }
+      x_window = x_window->next;
+    }
+    Assert(window != NULL);     // Something has gone horribly wrong if no match is found
+
+    // Fulfil event type specific tasks
     // NOTE(mallchad): Don't think wakeup is relevant here
     switch (event.type)
     {
@@ -253,8 +337,7 @@ x11_get_events(Arena *arena, B32 wait, OS_EventList* out)
         x_node->timestamp_us = (event.xkey.time / 1000); // ms to us
         x_node->kind = OS_EventKind_Press;
         x_node->key = x11_oskey_from_keycode(event.xkey.keycode);
-        // TODO(mallchad): Figure out modifiers, this is gonna be weird
-        // x_node->flags = ;
+        x_node->flags = x11_event_flags_from_modmap(event.xkey.state);
         // TODO:(mallchad): Dunno what to do about this section right now
         x_node->is_repeat = 0;
         x_node->right_sided = 0;
@@ -265,8 +348,7 @@ x11_get_events(Arena *arena, B32 wait, OS_EventList* out)
         x_node->timestamp_us = (event.xkey.time / 1000); // ms to us
         x_node->kind = OS_EventKind_Release;
         x_node->key = x11_oskey_from_keycode(event.xkey.keycode);
-        // TODO(mallchad): Figure out modifiers, this is gonna be weird
-        // x_node->flags = ;
+        x_node->flags = x11_event_flags_from_modmap(event.xkey.state);
         // TODO:(mallchad): Dunno what to do about this section right now
         x_node->is_repeat = 0;
         x_node->right_sided = 0;
@@ -281,13 +363,18 @@ x11_get_events(Arena *arena, B32 wait, OS_EventList* out)
         x_node->timestamp_us = (event.xmotion.time / 1000); // ms to us
         x_node->kind = OS_EventKind_MouseMove;
         x_node->pos = vec_2f32(event.xmotion.x_root, event.xmotion.y_root); // root window relative
+        x_node->flags = x11_event_flags_from_modmap(event.xmotion.state);
+        window->mouse_pos = (x_node->pos);
+        window->mouse_timestamp = (x_node->timestamp_us);
         break;
 
       case ButtonPress:
-        x_node->timestamp_us = (event.xmotion.time / 1000); // ms to us
+        x_node->timestamp_us = (event.xbutton.time / 1000); // ms to us
         x_node->kind = OS_EventKind_Press;
         U32 button_code = event.xbutton.button;
         x_node->key = x11_mouse[button_code];
+        x_node->flags = x11_event_flags_from_modmap(event.xbutton.state);
+
         B32 scroll_action = (button_code == X11_Mouse_ScrollUp || button_code == X11_Mouse_ScrollDown);
         if (scroll_action) {}
         /* NOTE(mallchad): Actually I don't know if this is sensible yet. X11
@@ -368,56 +455,88 @@ x11_get_events(Arena *arena, B32 wait, OS_EventList* out)
         x_node->kind = OS_EventKind_WindowLoseFocus;
         break;
 
+      case RRScreenChangeNotify:
+        break;
+      case RRNotify:
+      {
+        XRRNotifyEvent* xrr_event = (XRRNotifyEvent*)&event;
+        Trap();
+
+        switch (xrr_event->subtype)
+        {
+          case RRNotify_CrtcChange: break;
+            NotImplemented;
+          case RRNotify_OutputChange:
+          {
+            XRROutputChangeNotifyEvent* xrr_event2 = (XRROutputChangeNotifyEvent*)&event;
+            NotImplemented;
+            break;
+          }
+          case RRNotify_OutputProperty:
+          {
+            XRROutputPropertyNotifyEvent* xrr_event2 = (XRROutputPropertyNotifyEvent*)&event;
+            NotImplemented;
+            break;
+          }
+            /* NOTE(mallchad): Should never really change because that would
+               imply hardware graphics change, except in the extremely rare case
+               of Virtual graphics device creaction, this would break everything
+               at the OS level reguardless.
+            */
+          case RRNotify_ProviderChange: break;
+          case RRNotify_ProviderProperty: break;
+
+          case RRNotify_ResourceChange: break;
+        }
+      }
+      break;
       default:
         ++x11_unhandled_events;
+        keep_event = 0;
         x_node->kind = OS_EventKind_Null;
         break;
+
+    }
+    if (keep_event)
+    {
+      // Set links
+      if (out->first == NULL)
+      { out->first = x_node; out->last = x_node; }
+      else
+      {
+        out->last->next = x_node;
+        x_node->prev = out->last;
+        out->last = x_node;
+      }
+      ++(out->count);
 
     }
   }
   return 1;
 }
 
+// Unused
 B32
 x11_push_monitors_array(Arena* arena, OS_HandleArray* monitor)
 {
-  (void)monitor;                // NOTE(mallchad): Only really need one instance for now
-  RROutput x_monitor = {0};
-  S32 x_monitor_count = 0;
-  XRRMonitorInfo* monitor_list = NULL;
-  MemoryZeroTyped(x11_monitors, gfx_lnx_max_monitors);
-
-  // Get active monitors
-  monitor_list = XRRGetMonitors(x11_server, x11_root_window, 1, &x_monitor_count);
-  if (monitor_list == NULL) { return 0; }
-  x11_monitors_size = x_monitor_count;
-  if (x_monitor_count > gfx_lnx_max_monitors)
-  {
-    gfx_lnx_max_monitors = (2* x_monitor_count); // Greedy allocation to reduce leakage
-    x11_monitors = push_array_no_zero(gfx_lnx_arena, RROutput, gfx_lnx_max_monitors);
-  }
-  GFX_LinuxMonitor* x_monitor2 = NULL;
-  for (int i=0; i<x11_monitors_size; ++i)
-  {
-    x11_monitors2 = push_array(gfx_lnx_arena, GFX_LinuxMonitor, 1);
-    x11_monitors[i] = monitor_list[i].outputs[0];
-  }
-  // Free data
-  XRRFreeMonitors(monitor_list);
+  NoOp;
   return 1;
 }
 
 B32
 x11_primary_monitor(OS_Handle* monitor)
 {
-  // small leak
-  GFX_LinuxMonitor* _monitor = push_array_no_zero(gfx_lnx_arena, GFX_LinuxMonitor, 1);
-  S32 default_screen = XDefaultScreen(x11_server);
   RROutput primary_output = XRRGetOutputPrimary(x11_server, x11_root_window);
-  _monitor->handle = primary_output;
-  x11_monitor_update_properties(_monitor);
-  *monitor = gfx_handle_from_monitor(_monitor);
-  return 1;
+
+  GFX_LinuxMonitor* x_monitor = NULL;
+  B32 found_primary = 0;
+  for (int i=0; i < gfx_lnx_monitors.head_size; ++i)
+  {
+    x_monitor = (gfx_lnx_monitors.data + i);
+    found_primary = (x_monitor->handle == primary_output);
+    if (found_primary) { *monitor = gfx_handle_from_monitor(x_monitor); break; }
+  }
+  return found_primary;
 }
 
 B32
@@ -469,5 +588,77 @@ x11_window_set_monitor(OS_Handle window, OS_Handle monitor)
                     _window->size.y,
                     _window->size.y);
   x11_window_update_properties(_window);
+  return 1;
+}
+
+B32
+x11_window_push_custom_edges(OS_Handle window, F32 thickness)
+{
+  /* NOTE(mallchad): X11 doesn't support fractional border width, you are free
+     to set your own border pixmap though */
+  GFX_LinuxWindow* _window = gfx_window_from_handle(window);
+  XSetWindowBorderWidth(x11_server, _window->handle, thickness);
+  return 1;
+}
+
+B32
+x11_window_is_maximized(OS_Handle window)
+{
+  GFX_LinuxWindow* _window = gfx_window_from_handle(window);
+  Atom* props = NULL;           // Return typed data
+  U64 offset = 0;
+  U64 user_type = 0;            // Abitrary User-Type set by XChangeProperty
+  U64 bit_width = 0;            // Bits per item
+  U64 item_count = 0;
+  U64 bytes_read = 0;
+  U64 bytes_unread = 0;
+
+  XGetWindowProperty(x11_server,
+                     _window->handle,
+                     x11_atoms[ X11_Atom_WM_STATE ],
+                     offset,
+                     LONG_MAX,
+                     False,
+                     AnyPropertyType,
+                     &user_type,
+                     (S32*)&bit_width,
+                     &item_count,
+                     &bytes_unread,
+                     (U8**)&props);
+  bytes_read = ((item_count * bit_width) / 8);
+
+  B32 horizontal_maximized = 0;
+  B32 vertical_maximized = 0;
+  B32 is_maximized = 0;
+  for (int i=0; i<item_count; ++i)
+  {
+    if (x11_atoms[ X11_Atom_WM_STATE_MAXIMIZED_HORZ ] == props[i])
+    { horizontal_maximized = 1; }
+    if (x11_atoms[ X11_Atom_WM_STATE_MAXIMIZED_VERT ] == props[i])
+    { vertical_maximized = 1; }
+  }
+  is_maximized = (horizontal_maximized && vertical_maximized);
+  XFree(props);
+  return is_maximized;
+}
+
+B32
+x11_window_set_maximized(OS_Handle window, B32 maximized)
+{
+  GFX_LinuxWindow* _window = gfx_window_from_handle(window);
+  Atom bit_width = 32;          // bits per item
+  U32 user_type = 0;            // Abitrary User-Specified Layout ID
+  Atom wm_state_new[] =
+  {
+    x11_atoms[ X11_Atom_WM_STATE_MAXIMIZED_VERT ]
+  };
+  XChangeProperty(x11_server,
+                  _window->handle,
+                  x11_atoms[ X11_Atom_WM_STATE ],
+                  1,
+                  bit_width,
+                  PropModeAppend,
+                  (U8*)wm_state_new,
+                  1);
   return 1;
 }

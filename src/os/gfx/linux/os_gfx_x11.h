@@ -210,7 +210,20 @@ global U32 x11_mouse[] =
 /// Access locations for atom values in 'x11_atom' from derived names
 enum x11_atoms
 {
+  X11_Atom_WM_STATE,
   X11_Atom_WM_DELETE_WINDOW,
+  X11_Atom_WM_STATE_MODAL,
+  X11_Atom_WM_STATE_STICKY,
+  X11_Atom_WM_STATE_MAXIMIZED_VERT,
+  X11_Atom_WM_STATE_MAXIMIZED_HORZ,
+  X11_Atom_WM_STATE_SHADED,
+  X11_Atom_WM_STATE_SKIP_TASKBAR,
+  X11_Atom_WM_STATE_SKIP_PAGER,
+  X11_Atom_WM_STATE_HIDDEN,
+  X11_Atom_WM_STATE_FULLSCREEN,
+  X11_Atom_WM_STATE_ABOVE,
+  X11_Atom_WM_STATE_BELOW,
+  X11_Atom_WM_STATE_DEMANDS_ATTENTION,
   X11_Atom_XdndTypeList,
   X11_Atom_XdndSelection,
   X11_Atom_XdndEnter,
@@ -226,7 +239,23 @@ enum x11_atoms
 
 global char* x11_test_atoms[] =
 {
-  "WM_DELETE_WINDOW",
+  "_NET_WM_STATE",
+  "WM_DELETE_WINDOW",           // NOTE(mallchad): This one is named different idk why
+  /* NOTE(mallchad): Freedesktop WM Extensions for state like fullscreen
+     https://specifications.freedesktop.org/wm-spec/1.3/ar01s05.html#id2522991
+  */
+  "_NET_WM_STATE_MODAL",
+  "_NET_WM_STATE_STICKY",
+  "_NET_WM_STATE_MAXIMIZED_VERT",
+  "_NET_WM_STATE_MAXIMIZED_HORZ",
+  "_NET_WM_STATE_SHADED",
+  "_NET_WM_STATE_SKIP_TASKBAR",
+  "_NET_WM_STATE_SKIP_PAGER",
+  "_NET_WM_STATE_HIDDEN",
+  "_NET_WM_STATE_FULLSCREEN",
+  "_NET_WM_STATE_ABOVE",
+  "_NET_WM_STATE_BELOW",
+  "_NET_WM_STATE_DEMANDS_ATTENTION",
   "XdndTypeList",
   "XdndSelection",
   "XdndEnter",
@@ -241,3 +270,6 @@ global char* x11_test_atoms[] =
 };
 
 #endif // GFX_X11_H
+
+struct GFX_LinuxMonitor;
+internal B32 x11_monitor_update_properties(struct GFX_LinuxMonitor* out_monitor);

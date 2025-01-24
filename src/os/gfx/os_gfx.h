@@ -142,6 +142,7 @@ internal F32            os_dpi_from_window(OS_Handle window);
 ////////////////////////////////
 //~ rjf: @os_hooks Monitors (Implemented Per-OS)
 
+/// NOTE(mallchad): 'os_push_monitors_array' serves close to no use at present and is almost unused.
 internal OS_HandleArray os_push_monitors_array(Arena *arena);
 internal OS_Handle      os_primary_monitor(void);
 internal OS_Handle      os_monitor_from_window(OS_Handle window);

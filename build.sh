@@ -85,8 +85,8 @@ set auto_compile_flags=
 
 # --- Compile/Link Line Definitions ------------------------------------------
     cl_common="/I../src/ /I../local/ /nologo /FC /Z7"
- clang_common="-I../src/ -I../local -I/usr/include/freetype2/ -fdiagnostics-absolute-paths -Wall -Wno-unknown-warning-option -Wno-missing-braces -Wno-unused-function -Wno-writable-strings -Wno-unused-value -Wno-unused-variable -Wno-unused-local-typedef -Wno-deprecated-register -Wno-deprecated-declarations -Wno-unused-but-set-variable -Wno-single-bit-bitfield-constant-conversion -Wno-compare-distinct-pointer-types -Xclang -flto-visibility-public-std -D_USE_MATH_DEFINES -Dstrdup=_strdup -Dgnu_printf=printf -Wl,-z,notext"
- clang_dynamic="-lpthread -ldl -lrt -latomic -lm -lfreetype -lEGL -lX11 -lGL -lXrandr"
+ clang_common="-I../src/ -I../local -I/usr/include/freetype2/ -fdiagnostics-absolute-paths -Wall -Wno-unknown-warning-option -Wno-missing-braces -Wno-unused-function -Wno-writable-strings -Wno-unused-value -Wno-unused-variable -Wno-unused-local-typedef -Wno-deprecated-register -Wno-deprecated-declarations -Wno-unused-but-set-variable -Wno-single-bit-bitfield-constant-conversion -Wno-compare-distinct-pointer-types -Xclang -flto-visibility-public-std -D_USE_MATH_DEFINES -Dstrdup=_strdup -Dgnu_printf=printf -Wl,-z,notext -std=c11 -D_DEFAULT_SOURCE=1"
+ clang_dynamic="-lpthread -ldl -lrt -latomic -lm -lfreetype -lEGL -lX11 -lGL -lXrandr -luuid"
  clang_errors="-Werror=atomic-memory-ordering -Wno-parentheses"
      cl_debug="cl /Od /Ob1 /DBUILD_DEBUG=1 ${cl_common} ${auto_compile_flags}"
    cl_release="cl /O2 /DBUILD_DEBUG=0 ${cl_common} ${auto_compile_flags}"
@@ -183,10 +183,10 @@ function build_single()
 $((time_elapsed / 60))min $((time_elapsed % 60))s $ansi_reset"
     if [[ "${status}" != 0 ]] ; then
         rad_log "A standalone build command didn't complete successfully. \
-${ansi_red}Line: ${BASH_LINENO[$i]} ${ansi_reset}";
-        exit $? ;
+${ansi_red}Line: ${BASH_LINENO[$i]} ${ansi_reset}" ;
+        exit ${status} ;
     fi
-    return $?
+    return ${status}
 }
 
 function build_dll()

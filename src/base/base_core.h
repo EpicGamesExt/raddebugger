@@ -710,6 +710,7 @@ struct DateTime
   U32 year; // 1 = 1 CE, 0 = 1 BC
 };
 
+/// Time in microseconds
 typedef U64 DenseTime;
 
 ////////////////////////////////
@@ -816,5 +817,63 @@ internal U64 ring_write(U8 *ring_base, U64 ring_size, U64 ring_pos, void *src_da
 internal U64 ring_read(U8 *ring_base, U64 ring_size, U64 ring_pos, void *dst_data, U64 read_size);
 #define ring_write_struct(ring_base, ring_size, ring_pos, ptr) ring_write((ring_base), (ring_size), (ring_pos), (ptr), sizeof(*(ptr)))
 #define ring_read_struct(ring_base, ring_size, ring_pos, ptr) ring_read((ring_base), (ring_size), (ring_pos), (ptr), sizeof(*(ptr)))
+
+////////////////////////////////
+// Array Functionality
+
+// Foward Declare
+struct Arena;
+
+typedef struct GenericArray GenericArray;
+struct GenericArray
+{
+  U8* data;
+  struct Arena* arena;
+  U64 size;
+  U64 head;
+  U64 head_size;
+  U32 item_size;
+  B32 fast_bounded;
+};
+
+/// Declare a typed dynamic array class
+#define DeclareArray(NAME, ELEMENT_TYPE)        \
+  typedef struct NAME NAME;                     \
+  struct NAME                                   \
+  {                                             \
+    ELEMENT_TYPE* data;                         \
+    Arena* arena;                               \
+    U64 size;                                   \
+    U64 head;                                   \
+    U64 head_size;                              \
+    U32 item_size;                              \
+    B32 fast_bounded;                           \
+  };
+
+B32 ArrayAllocate(GenericArray* target, struct Arena* arena, U64 size, U32 item_size);
+#define ArrayAllocate(target, arena, size) \
+  _ArrayAllocate((GenericArray*)(target), (arena), (size), sizeof((target)->data[0]))
+
+B32 _ArrayZero(GenericArray* target, U64 item_size);
+#define ArrayZero(target) \
+  _ArrayZero( (GenericArray*)(target), sizeof((target)->data[0]) )
+
+U64 _ArrayGetTailIndex(GenericArray* target);
+#define ArrayGetTailIndex(target) \
+  _ArrayGetTailIndex((GenericArray*)(target));
+
+B32 _ArrayGetTail(GenericArray* target, void* out, U32 item_size);
+#define ArrayGetTail(target, out) \
+  _ArrayGetTail((GenericArray*)(target), (out), sizeof((target)->data[0]));
+
+/// Push a new item after the tail index and increments head_size
+B32 _ArrayPushTail(GenericArray* target, void* item, U32 item_size);
+#define ArrayPushTail(target, item) \
+  _ArrayPushTail((GenericArray*)(target), (item), sizeof((target)->data[0]))
+
+/// Pops an item at the tail index tail and decrements head_size
+B32 _ArrayPopTail(GenericArray* target, void* out, U32 item_size);
+#define ArrayPopTail(target, out) \
+  _ArrayPopTail((GenericArray*)(target), (out), sizeof((target)->data[0]))
 
 #endif // BASE_CORE_H

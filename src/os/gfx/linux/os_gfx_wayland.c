@@ -43,3 +43,30 @@ wayland_name_from_monitor(Arena* arena, OS_Handle monitor, String8* result)
   NotImplemented;
   return 0;
 }
+
+B32
+wayland_window_set_monitor(OS_Handle window, OS_Handle monitor)
+{
+  return 0;
+}
+
+B32
+wayland_window_push_custom_edges(OS_Handle window, F32 thickness)
+{
+  NotImplemented;
+  return 0;
+}
+
+B32
+wayland_window_is_maximized(OS_Handle window)
+{
+  NotImplemented;
+  return 0;
+}
+
+B32
+wayland_window_set_maximized(OS_Handle window, B32 maximized)
+{
+  NotImplemented;
+  return 0;
+}

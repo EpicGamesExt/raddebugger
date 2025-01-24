@@ -1,6 +1,11 @@
 
 global Arena* gfx_lnx_arena = NULL;
 global U32 gfx_lnx_max_monitors = 6;
+global OS_EventFlags gfx_lnx_modifier_state = 0;
+global GFX_LinuxWindowList gfx_lnx_windows = {0};
+global GFX_LinuxMonitorArray gfx_lnx_monitors = {0};
+global GFX_LinuxMonitor* gfx_lnx_primary_monitor = {0};
+global GFX_LinuxMonitor gfx_lnx_monitor_stub = {0};
 
 /// Determines if wayland pathway should be used by default. We have seperate
 /// pathway so recompilation isn't necesscary
@@ -51,14 +56,26 @@ global S32 gfx_egl_context_config[] = {
  */
 
 GFX_LinuxMonitor*
+gfx_monitor_from_id(U64 id)
+{
+  GFX_LinuxMonitor* x_monitor = NULL;
+  for (int i=0; i < gfx_lnx_monitors.head_size; ++i)
+  {
+    x_monitor = (gfx_lnx_monitors.data + i);
+    if (x_monitor->id == id) { return x_monitor; }
+  }
+  return &gfx_lnx_monitor_stub;
+}
+
+GFX_LinuxMonitor*
 gfx_monitor_from_handle(OS_Handle monitor)
 {
-  return (GFX_LinuxMonitor*)PtrFromInt(*monitor.u64);
+  return gfx_monitor_from_id(*monitor.u64);
 }
 OS_Handle gfx_handle_from_monitor(GFX_LinuxMonitor* monitor)
 {
   OS_Handle result = {0};
-  *(result.u64) = IntFromPtr(monitor);
+  *(result.u64) = monitor->id;
   return result;
 }
 
@@ -79,13 +96,18 @@ gfx_handle_from_window(GFX_LinuxWindow* window)
 internal void
 os_graphical_init(void)
 {
+  // Allocate and setup basic internal stuff
   gfx_lnx_arena = arena_alloc();
+
   gfx_context.default_window_name = gfx_default_window_name;
   gfx_context.default_window_size = vec_2f32(500, 500);
   gfx_context.default_window_size = gfx_context.default_window_size;
   gfx_context.default_window_pos = vec_2f32(500, 500);
   gfx_context.default_window_pos = gfx_context.default_window_pos;
   gfx_default_window_name = str8_lit("raddebugger");
+
+  ArrayAllocate(&gfx_lnx_monitors, gfx_lnx_arena, gfx_lnx_max_monitors);
+  ArrayAllocate(&gfx_lnx_monitors_active, gfx_lnx_arena, gfx_lnx_max_monitors);
 
   B32 init_result = 0;
   if (gfx_lnx_wayland_disabled)
@@ -146,11 +168,10 @@ os_window_open(Vec2F32 resolution, OS_WindowFlags flags, String8 title)
   else
   { wayland_window_open(&gfx_context, &result, resolution, flags, title); }
   GFX_LinuxWindow* window = gfx_window_from_handle(result);
+  DLLPushBack(gfx_lnx_windows.first, gfx_lnx_windows.last, window);
 
   window->first_surface = eglCreateWindowSurface(gfx_egl_display, gfx_egl_config_available[0],
                                                  (EGLNativeWindowType)window->handle, NULL);
-  eglMakeCurrent(gfx_egl_display, gfx_egl_draw_surface, gfx_egl_draw_surface, gfx_egl_context);
-
   return result;
 }
 internal void
@@ -162,16 +183,20 @@ NotImplemented;}
 internal void
 os_window_first_paint(OS_Handle window)
 {
+  // Nothing to do on first paint yet
+  NoOp;
+}
 
-NotImplemented;}
 internal void
 os_window_equip_repaint(OS_Handle window, OS_WindowRepaintFunctionType *repaint,  void *user_data)
 {
   GFX_LinuxWindow* _window = gfx_window_from_handle(window);
   Vec4F32 dark_magenta = vec_4f32( 0.2f, 0.f, 0.2f, 1.0f );
-  glBindFramebuffer(GL_FRAMEBUFFER, 0);
-  glClear( GL_COLOR_BUFFER_BIT  | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT );
+
+  eglMakeCurrent(gfx_egl_display, _window->first_surface, _window->first_surface, gfx_egl_context);
+  /* glBindFramebuffer(GL_FRAMEBUFFER, 0); */
   glClearColor(dark_magenta.x, dark_magenta.y, dark_magenta.z, dark_magenta.w);
+  glClear( GL_COLOR_BUFFER_BIT  | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT );
   S32 swap_result = eglSwapBuffers(gfx_egl_display, _window->first_surface);
 }
 
@@ -202,14 +227,21 @@ NotImplemented;}
 internal B32
 os_window_is_maximized(OS_Handle window)
 {
-  NotImplemented;
-  return 0;
+  B32 result = 0;
+  if (gfx_lnx_wayland_disabled)
+  { result = x11_window_is_maximized(window); }
+  else
+  { result = wayland_window_is_maximized(window); }
+  return result;
 }
 
 internal void
 os_window_set_maximized(OS_Handle window, B32 maximized)
 {
-  NotImplemented;
+  if (gfx_lnx_wayland_disabled)
+  { x11_window_set_maximized(window, maximized); }
+  else
+  { wayland_window_set_maximized(window, maximized); }
 }
 
 internal void
@@ -227,38 +259,53 @@ NotImplemented;
 internal void
 os_window_set_monitor(OS_Handle window, OS_Handle monitor)
 {
-NotImplemented;
+  if (gfx_lnx_wayland_disabled)
+  { x11_window_set_monitor(window, monitor); }
+  else
+  { wayland_window_set_monitor(window, monitor); }
 }
 
 internal void
 os_window_clear_custom_border_data(OS_Handle handle)
 {
-  NotImplemented;
+  // NOTE(mallchad): No practical use yet4
+  NoOp;
 }
 
 internal void
 os_window_push_custom_title_bar(OS_Handle handle, F32 thickness)
 {
-  NotImplemented;
+  /* NOTE(mallchad): No standard on linux, check back here later
+     https://gitlab.freedesktop.org/wayland/wayland-protocols/-/tree/main/unstable/xdg-decoration?ref_type=heads */
+  NoOp;
 }
 
 internal void
-os_window_push_custom_edges(OS_Handle handle, F32 thickness)
+os_window_push_custom_edges(OS_Handle window, F32 thickness)
 {
-  NotImplemented;
+  if (gfx_lnx_wayland_disabled)
+  { x11_window_push_custom_edges(window, thickness); }
+  else
+  { wayland_window_push_custom_edges(window, thickness); }
 }
 
 internal void
 os_window_push_custom_title_bar_client_area(OS_Handle handle, Rng2F32 rect)
 {
-  NotImplemented;
+  /* NOTE(mallchad): I have no idea what this is supposed to be. I'm assuming
+     it's a Windows specific API because there's no generic reasoning for this
+     besides being an actual full implimentation for window setup, just not an
+     OS abstraction. So I'm not adding it. */
+  NoOp;
 }
 
 internal Rng2F32
 os_rect_from_window(OS_Handle window)
 {
   Rng2F32 result = {0};
-  NotImplemented;
+  GFX_LinuxWindow* _window = gfx_window_from_handle(window);
+  result.min = _window->pos;
+  result.max = add_2f32(_window->pos, _window->size);
   return result;
 }
 
@@ -266,15 +313,17 @@ internal Rng2F32
 os_client_rect_from_window(OS_Handle window)
 {
   Rng2F32 result = {0};
-  NotImplemented;
+  GFX_LinuxWindow* _window = gfx_window_from_handle(window);
+  result.max = _window->size;
   return result;
 }
 
 internal F32
 os_dpi_from_window(OS_Handle window)
 {
-  NotImplemented;
-  return 0.f;
+  GFX_LinuxWindow* _window = gfx_window_from_handle(window);
+  Assert(_window->monitor->dpi > 0.001 && _window->monitor->dpi < 1000);
+  return (_window->monitor->dpi);
 }
 
 
@@ -290,7 +339,7 @@ os_push_monitors_array(Arena *arena)
   else
   { wayland_push_monitors_array(arena, &result); }
   return result;
-NotImplemented;}
+}
 
 internal OS_Handle
 os_primary_monitor(void)
@@ -359,9 +408,7 @@ os_get_events(Arena *arena, B32 wait)
 internal OS_EventFlags
 os_get_event_flags(void)
 {
-  OS_EventFlags result = 0;
-  NotImplemented;
-  return result;
+  return gfx_lnx_modifier_state;
 }
 
 internal B32
@@ -374,9 +421,8 @@ os_key_is_down(OS_Key key)
 internal Vec2F32
 os_mouse_from_window(OS_Handle window)
 {
-  Vec2F32 result = {0};
-  NotImplemented;
-  return result;
+  GFX_LinuxWindow* _window = gfx_window_from_handle(window);
+  return _window->mouse_pos;
 }
 
 
@@ -410,8 +456,9 @@ os_caret_blink_time(void)
 internal F32
 os_default_refresh_rate(void)
 {
-  return 0.f;
-  NotImplemented;
+  OS_Handle primary_monitor = os_primary_monitor();
+  GFX_LinuxMonitor* monitor = gfx_monitor_from_handle(primary_monitor);
+  return monitor->refresh_rate;
 }
 
 

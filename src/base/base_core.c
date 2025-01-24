@@ -560,3 +560,63 @@ ring_read(U8 *ring_base, U64 ring_size, U64 ring_pos, void *dst_data, U64 read_s
   }
   return read_size;
 }
+////////////////////////////////
+// Generic Array Functions
+
+B32
+_ArrayAllocate(GenericArray* target, Arena* arena, U32 size, U32 item_size)
+{
+  Assert(arena != NULL);        // The arena parameter is incorrect
+  target->arena = arena;
+  target->size = size;
+  target->item_size = item_size;
+  target->data = arena_push(arena, (size * item_size));
+
+  return 1;
+}
+
+B32 _ArrayZero(GenericArray* target, U64 item_size)
+{
+  MemoryZero(target->data, (target->size * item_size));
+  return 1;
+}
+
+// Candidate for inline
+U64
+_ArrayGetTailIndex(GenericArray* target)
+{
+  return (target->head + target->head_size - 1);
+}
+
+B32 _ArrayGetTail(GenericArray* target, void* out, U32 item_size)
+{
+  if (target->head_size <= 0) { return 0; }
+  U8* tail = target->data;
+  tail += (target->head + ((target->head_size - 1) * item_size));
+  MemoryCopy(out, tail, item_size);
+  return 1;
+}
+
+B32
+_ArrayPushTail(GenericArray* target, void* item, U32 item_size)
+{
+  if (target->fast_bounded && (target->head + target->head_size >= target->size))
+  { return 0; }
+  U8* new_tail = target->data;
+  new_tail += (target->head + (target->head_size * item_size));
+  MemoryCopy(new_tail, item, item_size);
+  ++(target->head_size);
+  return 1;
+}
+
+B32
+_ArrayPopTail(GenericArray* target, void* out, U32 item_size)
+{
+  if (target->fast_bounded && (target->head_size <= 0))
+  { return 0; }
+  U8* tail = target->data;
+  tail += (target->head + ((target->head_size -1) * item_size));
+  MemoryCopy(out, tail, item_size);
+  --(target->head_size);
+  return 1;
+}

@@ -169,6 +169,7 @@ update_and_render(OS_Handle repaint_window_handle, void *user_data)
       DF_CmdParams params = window ? df_cmd_params_from_window(window) : df_cmd_params_from_gfx();
       B32 take = 0;
       B32 skip = 0;
+      if (window == NULL) { continue; }
       
       //- rjf: try drag-drop
       if(df_drag_is_active() && event->kind == OS_EventKind_Release && event->key == OS_Key_LeftMouseButton)
