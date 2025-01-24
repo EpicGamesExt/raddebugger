@@ -1259,7 +1259,6 @@ internal DR_FancyStringList rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_E
 //- rjf: cfg <-> eval space
 internal RD_Cfg *rd_cfg_from_eval_space(E_Space space);
 internal E_Space rd_eval_space_from_cfg(RD_Cfg *cfg);
-internal String8 rd_eval_blob_from_cfg(RD_Cfg *cfg);
 
 //- rjf: entity <-> eval space
 internal RD_Entity *rd_entity_from_eval_space(E_Space space);
@@ -1268,6 +1267,10 @@ internal E_Space rd_eval_space_from_entity(RD_Entity *entity);
 //- rjf: ctrl entity <-> eval space
 internal CTRL_Entity *rd_ctrl_entity_from_eval_space(E_Space space);
 internal E_Space rd_eval_space_from_ctrl_entity(CTRL_Entity *entity, E_SpaceKind kind);
+
+//- rjf: cfg -> eval blob
+internal String8 rd_eval_blob_from_cfg(Arena *arena, RD_Cfg *cfg);
+internal String8 rd_eval_blob_from_cfg__cached(RD_Cfg *cfg);
 
 //- rjf: entity -> meta eval
 internal CTRL_MetaEval *rd_ctrl_meta_eval_from_entity(Arena *arena, RD_Entity *entity);

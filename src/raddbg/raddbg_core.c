@@ -2336,107 +2336,6 @@ rd_eval_space_from_cfg(RD_Cfg *cfg)
   return space;
 }
 
-internal String8
-rd_eval_blob_from_cfg(RD_Cfg *cfg)
-{
-  String8 result = {0};
-  {
-    // rjf: unpack
-    RD_Cfg2EvalBlobMap *map = rd_state->cfg2evalblob_map;
-    RD_Handle handle = rd_handle_from_cfg(cfg);
-    U64 hash = d_hash_from_string(str8_struct(&handle));
-    U64 slot_idx = hash%map->slots_count;
-    
-    // rjf: cfg -> cached node
-    RD_Cfg2EvalBlobNode *node = 0;
-    for(RD_Cfg2EvalBlobNode *n = map->slots[slot_idx].first; n != 0; n = n->next)
-    {
-      if(rd_handle_match(handle, n->handle))
-      {
-        node = n;
-        break;
-      }
-    }
-    
-    // rjf: no node? -> try to build one
-    if(node == 0)
-    {
-      // rjf: cfg name -> type
-      String8 name = cfg->string;
-      E_TypeKey type_key = zero_struct;
-      {
-        U64 name_hash = d_hash_from_string(name);
-        U64 name_slot_idx = name_hash%rd_state->cfg_string2typekey_map->slots_count;
-        for(RD_String2TypeKeyNode *n = rd_state->cfg_string2typekey_map->slots[name_slot_idx].first;
-            n != 0;
-            n = n->next)
-        {
-          if(str8_match(n->string, name, 0))
-          {
-            type_key = n->key;
-            break;
-          }
-        }
-      }
-      
-      // rjf: if this config has an eval type, build eval blob & cache
-      if(!e_type_key_match(e_type_key_zero(), type_key))
-      {
-        Temp scratch = scratch_begin(0, 0);
-        MD_Node *schema = rd_schema_from_name(scratch.arena, name);
-        String8List fixed_width_parts = {0};
-        String8List variable_width_parts = {0};
-        {
-          E_Type *type = e_type_from_key(scratch.arena, type_key);
-          if(type->members != 0) for EachIndex(member_idx, type->count)
-          {
-            E_Member *member = &type->members[member_idx];
-            String8 child_name = member->name;
-            MD_Node *member_schema = md_child_from_string(schema, child_name, 0);
-            String8 member_type_name = member_schema->first->string;
-            RD_Cfg *child = rd_cfg_child_from_string(cfg, child_name);
-            if(str8_match(member_type_name, str8_lit("code_string"), 0) ||
-               str8_match(member_type_name, str8_lit("path"), 0) ||
-               str8_match(member_type_name, str8_lit("string"), 0))
-            {
-              U64 off = type->byte_size + variable_width_parts.total_size;
-              str8_list_push(scratch.arena, &fixed_width_parts, push_str8_copy(scratch.arena, str8_struct(&off)));
-              str8_list_push(scratch.arena, &variable_width_parts, child->first->string);
-              str8_list_push(scratch.arena, &variable_width_parts, str8_lit("\0"));
-            }
-            else if(str8_match(member_type_name, str8_lit("u64"), 0))
-            {
-              U64 val = 0;
-              try_u64_from_str8_c_rules(child->first->string, &val);
-              str8_list_push(scratch.arena, &fixed_width_parts, push_str8_copy(scratch.arena, str8_struct(&val)));
-            }
-            else if(str8_match(member_type_name, str8_lit("bool"), 0))
-            {
-              B32 val = str8_match(child->first->string, str8_lit("1"), 0);
-              str8_list_push(scratch.arena, &fixed_width_parts, push_str8_copy(scratch.arena, str8((U8 *)&val, e_type_byte_size_from_key(member->type_key))));
-            }
-          }
-        }
-        String8List all_parts = {0};
-        str8_list_concat_in_place(&all_parts, &fixed_width_parts);
-        str8_list_concat_in_place(&all_parts, &variable_width_parts);
-        node = push_array(rd_frame_arena(), RD_Cfg2EvalBlobNode, 1);
-        SLLQueuePush(map->slots[slot_idx].first, map->slots[slot_idx].last, node);
-        node->handle = handle;
-        node->blob = str8_list_join(rd_frame_arena(), &all_parts, 0);
-        scratch_end(scratch);
-      }
-    }
-    
-    // rjf: grab string from cached node
-    if(node != 0)
-    {
-      result = node->blob;
-    }
-  }
-  return result;
-}
-
 //- rjf: entity <-> eval space
 
 internal RD_Entity *
@@ -2485,6 +2384,140 @@ rd_eval_space_from_ctrl_entity(CTRL_Entity *entity, E_SpaceKind kind)
   space.u64s[0] = entity->handle.machine_id;
   space.u64s[1] = entity->handle.dmn_handle.u64[0];
   return space;
+}
+
+//- rjf: cfg -> eval blob
+
+internal String8
+rd_eval_blob_from_cfg(Arena *arena, RD_Cfg *cfg)
+{
+  String8 result = {0};
+  
+  // rjf: cfg name -> type
+  String8 name = cfg->string;
+  E_TypeKey type_key = zero_struct;
+  {
+    U64 name_hash = d_hash_from_string(name);
+    U64 name_slot_idx = name_hash%rd_state->cfg_string2typekey_map->slots_count;
+    for(RD_String2TypeKeyNode *n = rd_state->cfg_string2typekey_map->slots[name_slot_idx].first;
+        n != 0;
+        n = n->next)
+    {
+      if(str8_match(n->string, name, 0))
+      {
+        type_key = n->key;
+        break;
+      }
+    }
+  }
+  
+  // rjf: if this config has an eval type, build eval blob & cache
+  if(!e_type_key_match(e_type_key_zero(), type_key))
+  {
+    Temp scratch = scratch_begin(&arena, 1);
+    MD_Node *schema = rd_schema_from_name(scratch.arena, name);
+    String8List fixed_width_parts = {0};
+    String8List variable_width_parts = {0};
+    {
+      E_Type *type = e_type_from_key(scratch.arena, type_key);
+      if(type->members != 0) for EachIndex(member_idx, type->count)
+      {
+        E_Member *member = &type->members[member_idx];
+        String8 child_name = member->name;
+        MD_Node *member_schema = md_child_from_string(schema, child_name, 0);
+        String8 member_type_name = member_schema->first->string;
+        RD_Cfg *child = rd_cfg_child_from_string(cfg, child_name);
+        if(str8_match(member_type_name, str8_lit("code_string"), 0) ||
+           str8_match(member_type_name, str8_lit("path"), 0) ||
+           str8_match(member_type_name, str8_lit("string"), 0))
+        {
+          U64 off = type->byte_size + variable_width_parts.total_size;
+          str8_list_push(scratch.arena, &fixed_width_parts, push_str8_copy(scratch.arena, str8_struct(&off)));
+          str8_list_push(scratch.arena, &variable_width_parts, child->first->string);
+          str8_list_push(scratch.arena, &variable_width_parts, str8_lit("\0"));
+        }
+        else if(str8_match(member_type_name, str8_lit("u64"), 0))
+        {
+          U64 val = 0;
+          try_u64_from_str8_c_rules(child->first->string, &val);
+          str8_list_push(scratch.arena, &fixed_width_parts, push_str8_copy(scratch.arena, str8_struct(&val)));
+        }
+        else if(str8_match(member_type_name, str8_lit("bool"), 0))
+        {
+          B32 val = str8_match(child->first->string, str8_lit("1"), 0);
+          str8_list_push(scratch.arena, &fixed_width_parts, push_str8_copy(scratch.arena, str8((U8 *)&val, e_type_byte_size_from_key(member->type_key))));
+        }
+      }
+    }
+    String8List all_parts = {0};
+    str8_list_concat_in_place(&all_parts, &fixed_width_parts);
+    str8_list_concat_in_place(&all_parts, &variable_width_parts);
+    result = str8_list_join(arena, &all_parts, 0);
+  }
+  
+  return result;
+}
+
+internal String8
+rd_eval_blob_from_cfg__cached(RD_Cfg *cfg)
+{
+  String8 result = {0};
+  {
+    // rjf: unpack
+    RD_Cfg2EvalBlobMap *map = rd_state->cfg2evalblob_map;
+    RD_Handle handle = rd_handle_from_cfg(cfg);
+    U64 hash = d_hash_from_string(str8_struct(&handle));
+    U64 slot_idx = hash%map->slots_count;
+    
+    // rjf: cfg -> cached node
+    RD_Cfg2EvalBlobNode *node = 0;
+    for(RD_Cfg2EvalBlobNode *n = map->slots[slot_idx].first; n != 0; n = n->next)
+    {
+      if(rd_handle_match(handle, n->handle))
+      {
+        node = n;
+        break;
+      }
+    }
+    
+    // rjf: no node? -> try to build one
+    if(node == 0)
+    {
+      // rjf: cfg name -> type
+      String8 name = cfg->string;
+      E_TypeKey type_key = zero_struct;
+      {
+        U64 name_hash = d_hash_from_string(name);
+        U64 name_slot_idx = name_hash%rd_state->cfg_string2typekey_map->slots_count;
+        for(RD_String2TypeKeyNode *n = rd_state->cfg_string2typekey_map->slots[name_slot_idx].first;
+            n != 0;
+            n = n->next)
+        {
+          if(str8_match(n->string, name, 0))
+          {
+            type_key = n->key;
+            break;
+          }
+        }
+      }
+      
+      // rjf: if this config has an eval type, build eval blob & cache
+      if(!e_type_key_match(e_type_key_zero(), type_key))
+      {
+        node = push_array(rd_frame_arena(), RD_Cfg2EvalBlobNode, 1);
+        SLLQueuePush(map->slots[slot_idx].first, map->slots[slot_idx].last, node);
+        node->handle = handle;
+        node->blob = rd_eval_blob_from_cfg(rd_frame_arena(), cfg);
+      }
+    }
+    
+    // rjf: grab string from cached node
+    if(node != 0)
+    {
+      result = node->blob;
+    }
+  }
+  return result;
 }
 
 //- rjf: entity -> meta eval
@@ -2669,7 +2702,7 @@ rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
     case RD_EvalSpaceKind_MetaCfg:
     {
       RD_Cfg *cfg = rd_cfg_from_eval_space(space);
-      String8 cfg_eval_blob = rd_eval_blob_from_cfg(cfg);
+      String8 cfg_eval_blob = rd_eval_blob_from_cfg__cached(cfg);
       Rng1U64 legal_range = r1u64(0, cfg_eval_blob.size);
       Rng1U64 read_range = intersect_1u64(range, legal_range);
       if(read_range.min < read_range.max)
@@ -2792,7 +2825,7 @@ rd_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range)
       
       // rjf: unpack
       RD_Cfg *cfg = rd_cfg_from_eval_space(space);
-      String8 eval_blob = rd_eval_blob_from_cfg(cfg);
+      String8 eval_blob = rd_eval_blob_from_cfg__cached(cfg);
       MD_Node *schema = rd_schema_from_name(scratch.arena, cfg->string);
       
       // rjf: cfg name -> type key
@@ -2872,6 +2905,31 @@ rd_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range)
           rd_cfg_newf(child, "%I64u", value);
           result = 1;
           break;
+        }
+      }
+      
+      // rjf: commit to the eval blob cache
+      {
+        RD_Cfg2EvalBlobMap *map = rd_state->cfg2evalblob_map;
+        RD_Handle handle = rd_handle_from_cfg(cfg);
+        U64 hash = d_hash_from_string(str8_struct(&handle));
+        U64 slot_idx = hash%map->slots_count;
+        
+        // rjf: cfg -> cached node
+        RD_Cfg2EvalBlobNode *node = 0;
+        for(RD_Cfg2EvalBlobNode *n = map->slots[slot_idx].first; n != 0; n = n->next)
+        {
+          if(rd_handle_match(handle, n->handle))
+          {
+            node = n;
+            break;
+          }
+        }
+        
+        // rjf: if node -> commit
+        if(node)
+        {
+          node->blob = rd_eval_blob_from_cfg(rd_frame_arena(), cfg);
         }
       }
       
