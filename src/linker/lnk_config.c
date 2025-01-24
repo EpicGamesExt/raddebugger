@@ -977,7 +977,8 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
   } break;
 
   case LNK_CmdSwitch_AlternateName: {
-    String8 *error_string = lnk_parse_alt_name_directive_list(arena, value_strings, &config->alt_name_list);
+    String8List value_strings_copy = str8_list_copy(arena, &value_strings);
+    String8 *error_string = lnk_parse_alt_name_directive_list(arena, value_strings_copy, &config->alt_name_list);
     if (error_string != 0) {
       lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "invalid syntax \"%S\", expected format \"FROM=TO\"", *error_string);
     }
