@@ -29,6 +29,7 @@ global read_only struct
   { LNK_CmdSwitch_NotImplemented,     "CLRTHREADATTRIBUTE",   "", ""                                                                                                      }, // .NET
   { LNK_CmdSwitch_NotImplemented,     "CLRUNMANAGEDCODECHECK","", ""                                                                                                      }, // .NET
   { LNK_CmdSwitch_Debug,              "DEBUG",                "[:{FULL|NONE}]", ""                                                                                        },
+  { LNK_CmdSwitch_Dump,               "DUMP",                 "", ""                                                                                                      },
   { LNK_CmdSwitch_NotImplemented,     "DEF",                  ":FILENAME", ""                                                                                             },
   { LNK_CmdSwitch_DefaultLib,         "DEFAULTLIB",           ":LIBNAME", ""                                                                                              },
   { LNK_CmdSwitch_Delay,              "DELAY",                ":{NOBIND|UNLOAD}", ""                                                                                      },
@@ -71,6 +72,7 @@ global read_only struct
   { LNK_CmdSwitch_NotImplemented,     "KEYCONTAINER",         "", ""                                                                                                      },
   { LNK_CmdSwitch_NotImplemented,     "KEYFILE",              "", ""                                                                                                      },
   { LNK_CmdSwitch_LargeAddressAware,  "LARGEADDRESSAWARE",    "[:NO]", ""                                                                                                 },
+  { LNK_CmdSwitch_Lib,                "LIB",                  ""                                                                                                          },
   { LNK_CmdSwitch_LibPath,            "LIBPATH",              ":DIR", ""                                                                                                  },
   { LNK_CmdSwitch_NotImplemented,     "LINKERREPO",           "", ""                                                                                                      },
   { LNK_CmdSwitch_NotImplemented,     "LINKERREPOTARGET",     "", ""                                                                                                      },
@@ -1080,6 +1082,10 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
     lnk_cmd_switch_set_flag_16(obj_path, lib_path, cmd_switch, value_strings, &config->dll_characteristics, PE_DllCharacteristic_DYNAMIC_BASE);
   } break;
 
+  case LNK_CmdSwitch_Dump: { 
+    lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "unsupported switch; binary dump is done by passing /DUMP to link.exe");
+  } break;
+
   case LNK_CmdSwitch_Entry: {
     String8 new_entry_point_name = {0};
     lnk_cmd_switch_parse_string_copy(arena, obj_path, lib_path, cmd_switch, value_strings, &new_entry_point_name);
@@ -1187,6 +1193,10 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
 
   case LNK_CmdSwitch_LargeAddressAware: {
     lnk_cmd_switch_set_flag_16(obj_path, lib_path, cmd_switch, value_strings, &config->file_characteristics, PE_ImageFileCharacteristic_LARGE_ADDRESS_AWARE);
+  } break;
+
+  case LNK_CmdSwitch_Lib: {
+    lnk_error_cmd_switch(LNK_Error_Cmdl, obj_path, lib_path, cmd_switch, "unsupported switch; static library is created by passing /LIB to link.exe");
   } break;
 
   case LNK_CmdSwitch_LibPath: {
