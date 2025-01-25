@@ -861,32 +861,6 @@ os_mutex_drop(OS_Handle mutex)
   pthread_mutex_unlock(&entity->mutex_handle);
 }
 
-internal OS_Handle
-os_shared_mutex_alloc(String8 name)
-{
-  NotImplemented;
-  OS_Handle handle = {0};
-  return handle;
-}
-
-internal void
-os_shared_mutex_release(OS_Handle mutex)
-{
-  NotImplemented;
-}
-
-internal B32
-os_shared_mutex_take(OS_Handle mutex, U64 endt_us)
-{
-  NotImplemented;
-}
-
-internal void
-os_shared_mutex_drop(OS_Handle mutex)
-{
-  NotImplemented;
-}
-
 //- rjf: reader/writer mutexes
 
 internal OS_Handle

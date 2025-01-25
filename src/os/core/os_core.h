@@ -277,12 +277,6 @@ internal void      os_rw_mutex_drop_r(OS_Handle mutex);
 internal void      os_rw_mutex_take_w(OS_Handle mutex);
 internal void      os_rw_mutex_drop_w(OS_Handle mutex);
 
-//- shared mutex
-internal OS_Handle os_shared_mutex_alloc(String8 name);
-internal void      os_shared_mutex_release(OS_Handle mutex);
-internal B32       os_shared_mutex_take(OS_Handle mutex, U64 endt_us);
-internal void      os_shared_mutex_drop(OS_Handle mutex);
-
 //- rjf: condition variables
 internal OS_Handle os_condition_variable_alloc(void);
 internal void      os_condition_variable_release(OS_Handle cv);
