@@ -988,11 +988,11 @@ RD_CollectionTable:
 {
   //- rjf: frontend entity groups
   {watches                        Watch            Null              x}
-  {targets                        Target           Null              x}
-  {breakpoints                    Breakpoint       Null              x}
-  {watch_pins                     WatchPin         Null              x}
-  {file_path_maps                 FilePathMap      Null              x}
-  {auto_view_rules                AutoViewRule     Null              x}
+  //{targets                        Target           Null              x}
+  //{breakpoints                    Breakpoint       Null              x}
+  //{watch_pins                     WatchPin         Null              x}
+  //{file_path_maps                 FilePathMap      Null              x}
+  //{auto_view_rules                AutoViewRule     Null              x}
   
   //- rjf: control entity groups
   {machines                       Nil              Machine           x}

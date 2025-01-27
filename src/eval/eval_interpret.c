@@ -74,7 +74,8 @@ e_interpret(String8 bytecode)
     }
     else switch(op)
     {
-      case E_IRExtKind_SetSpace:{ctrlbits = RDI_EVAL_CTRLBITS(32, 0, 0);}break;
+      case E_IRExtKind_SetSpace:     {ctrlbits = RDI_EVAL_CTRLBITS(32, 0, 0);}break;
+      case E_IRExtKind_DerefSpacePtr:{ctrlbits = RDI_EVAL_CTRLBITS(0, 1, 1);}break;
       default:
       {
         result.code = E_InterpretationCode_BadOp;
@@ -122,6 +123,27 @@ e_interpret(String8 bytecode)
       case E_IRExtKind_SetSpace:
       {
         MemoryCopy(&selected_space, &imm, sizeof(selected_space));
+      }break;
+      
+      case E_IRExtKind_DerefSpacePtr:
+      {
+        U64 addr = svals[0].u64;
+        U64 size = sizeof(E_Space) + sizeof(U64);
+        typedef struct SpacePtrRead SpacePtrRead;
+        struct SpacePtrRead
+        {
+          E_Space space;
+          U64 off;
+        };
+        SpacePtrRead space_ptr_read = {0};
+        B32 good_read = e_space_read(selected_space, &space_ptr_read, r1u64(addr, addr+size));
+        if(!good_read)
+        {
+          result.code = E_InterpretationCode_BadMemRead;
+          goto done;
+        }
+        MemoryCopyStruct(&selected_space, &space_ptr_read.space);
+        nval.u64 = space_ptr_read.off;
       }break;
       
       case RDI_EvalOp_Stop:
@@ -812,6 +834,7 @@ e_interpret(String8 bytecode)
   {
     result.value = stack[0];
   }
+  result.space = selected_space;
   scratch_end(scratch);
   return result;
 }

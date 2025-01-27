@@ -11,6 +11,7 @@ typedef struct E_Interpretation E_Interpretation;
 struct E_Interpretation
 {
   E_Value value;
+  E_Space space;
   E_InterpretationCode code;
 };
 

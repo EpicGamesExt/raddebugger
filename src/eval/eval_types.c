@@ -427,6 +427,10 @@ e_type_key_cons_(E_ConsTypeParams *params)
       {
         node->byte_size = bit_size_from_arch(node->params.arch)/8;
       }break;
+      case E_TypeKind_SpacePtr:
+      {
+        node->byte_size = sizeof(U64) + sizeof(E_Space);
+      }break;
       case E_TypeKind_Array:
       {
         U64 ptee_size = e_type_byte_size_from_key(node->params.direct_key);
@@ -455,6 +459,13 @@ internal E_TypeKey
 e_type_key_cons_ptr(Arch arch, E_TypeKey element_type_key, E_TypeFlags flags)
 {
   E_TypeKey key = e_type_key_cons(.arch = arch, .kind = E_TypeKind_Ptr, .flags = flags, .direct_key = element_type_key);
+  return key;
+}
+
+internal E_TypeKey
+e_type_key_cons_space_ptr(E_TypeKey direct_type_key)
+{
+  E_TypeKey key = e_type_key_cons(.kind = E_TypeKind_SpacePtr, .direct_key = direct_type_key);
   return key;
 }
 
@@ -1697,6 +1708,12 @@ e_type_lhs_string_from_key(Arena *arena, E_TypeKey key, String8List *out, U32 pr
       E_TypeKey direct = e_type_direct_from_key(key);
       e_type_lhs_string_from_key(arena, direct, out, 1, skip_return);
       str8_list_push(arena, out, str8_lit("*"));
+    }break;
+    
+    case E_TypeKind_SpacePtr:
+    {
+      E_TypeKey direct = e_type_direct_from_key(key);
+      e_type_lhs_string_from_key(arena, direct, out, 1, skip_return);
     }break;
     
     case E_TypeKind_LRef:

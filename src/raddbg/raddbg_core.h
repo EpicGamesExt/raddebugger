@@ -144,16 +144,6 @@ enum
 };
 
 ////////////////////////////////
-//~ rjf: Setting Types
-
-typedef struct RD_SettingVal RD_SettingVal;
-struct RD_SettingVal
-{
-  B32 set;
-  S32 s32;
-};
-
-////////////////////////////////
 //~ rjf: View Rule Info Types
 
 typedef U32 RD_ViewRuleInfoFlags;
@@ -351,6 +341,7 @@ typedef struct RD_CfgNode RD_CfgNode;
 struct RD_CfgNode
 {
   RD_CfgNode *next;
+  RD_CfgNode *prev;
   RD_Cfg *v;
 };
 
@@ -359,6 +350,13 @@ struct RD_CfgList
 {
   RD_CfgNode *first;
   RD_CfgNode *last;
+  U64 count;
+};
+
+typedef struct RD_CfgArray RD_CfgArray;
+struct RD_CfgArray
+{
+  RD_Cfg **v;
   U64 count;
 };
 
@@ -889,6 +887,10 @@ struct RD_State
   // rjf: config -> eval blob map (lazily constructed from-scratch each frame)
   RD_Cfg2EvalBlobMap *cfg2evalblob_map;
   
+  // rjf: eval collections (constructed from scratch every frame)
+  String8Array *eval_collection_cfg_names;
+  RD_CfgArray *eval_collection_cfgs;
+  
   // rjf: registers stack
   RD_RegsNode base_regs;
   RD_RegsNode *top_regs;
@@ -1171,6 +1173,7 @@ internal RD_Cfg *rd_cfg_child_from_string(RD_Cfg *parent, String8 string);
 internal RD_Cfg *rd_cfg_child_from_string_or_alloc(RD_Cfg *parent, String8 string);
 internal RD_CfgList rd_cfg_child_list_from_string(Arena *arena, RD_Cfg *parent, String8 string);
 internal RD_CfgList rd_cfg_top_level_list_from_string(Arena *arena, String8 string);
+internal RD_CfgArray rd_cfg_array_from_list(Arena *arena, RD_CfgList *list);
 internal RD_CfgList rd_cfg_tree_list_from_string(Arena *arena, String8 string);
 internal String8 rd_string_from_cfg_tree(Arena *arena, RD_Cfg *cfg);
 internal RD_CfgRec rd_cfg_rec__depth_first(RD_Cfg *root, RD_Cfg *cfg);

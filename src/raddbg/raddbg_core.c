@@ -759,6 +759,20 @@ rd_cfg_top_level_list_from_string(Arena *arena, String8 string)
   return result;
 }
 
+internal RD_CfgArray
+rd_cfg_array_from_list(Arena *arena, RD_CfgList *list)
+{
+  RD_CfgArray array = {0};
+  array.count = list->count;
+  array.v = push_array_no_zero(arena, RD_Cfg *, array.count);
+  U64 idx = 0;
+  for(RD_CfgNode *n = list->first; n != 0; n = n->next, idx += 1)
+  {
+    array.v[idx] = n->v;
+  }
+  return array;
+}
+
 internal RD_CfgList
 rd_cfg_tree_list_from_string(Arena *arena, String8 string)
 {
@@ -941,7 +955,7 @@ rd_cfg_list_push(Arena *arena, RD_CfgList *list, RD_Cfg *cfg)
 {
   RD_CfgNode *n = push_array(arena, RD_CfgNode, 1);
   n->v = cfg;
-  SLLQueuePush(list->first, list->last, n);
+  DLLPushBack(list->first, list->last, n);
   list->count += 1;
 }
 
@@ -2427,9 +2441,23 @@ rd_eval_blob_from_cfg(Arena *arena, RD_Cfg *cfg)
         MD_Node *member_schema = md_child_from_string(schema, child_name, 0);
         String8 member_type_name = member_schema->first->string;
         RD_Cfg *child = rd_cfg_child_from_string(cfg, child_name);
-        if(str8_match(member_type_name, str8_lit("code_string"), 0) ||
-           str8_match(member_type_name, str8_lit("path"), 0) ||
-           str8_match(member_type_name, str8_lit("string"), 0))
+        if(str8_match(member_type_name, str8_lit("location"), 0))
+        {
+          U64 off = type->byte_size + variable_width_parts.total_size;
+          str8_list_push(scratch.arena, &fixed_width_parts, push_str8_copy(scratch.arena, str8_struct(&off)));
+          for(RD_Cfg *loc_child = child->first; loc_child != &rd_nil_cfg; loc_child = loc_child->first)
+          {
+            if(loc_child != child->first)
+            {
+              str8_list_push(scratch.arena, &variable_width_parts, str8_lit(":"));
+            }
+            str8_list_push(scratch.arena, &variable_width_parts, loc_child->string);
+          }
+          str8_list_push(scratch.arena, &variable_width_parts, str8_lit("\0"));
+        }
+        else if(str8_match(member_type_name, str8_lit("code_string"), 0) ||
+                str8_match(member_type_name, str8_lit("path"), 0) ||
+                str8_match(member_type_name, str8_lit("string"), 0))
         {
           U64 off = type->byte_size + variable_width_parts.total_size;
           str8_list_push(scratch.arena, &fixed_width_parts, push_str8_copy(scratch.arena, str8_struct(&off)));
@@ -2778,6 +2806,38 @@ rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
         }
       }
     }break;
+    
+    //- rjf: meta collections
+    case RD_EvalSpaceKind_MetaCollection:
+    {
+      typedef struct SpacePtr SpacePtr;
+      struct SpacePtr
+      {
+        E_Space space;
+        U64 off;
+      };
+      RD_CfgArray cfgs_array = {0};
+      if(space.u64s[0] < rd_state->eval_collection_cfg_names->count)
+      {
+        cfgs_array = rd_state->eval_collection_cfgs[space.u64s[0]];
+      }
+      U64 space_ptr_size = sizeof(SpacePtr);
+      Rng1U64 idx_range = r1u64(range.min/space_ptr_size, range.max/space_ptr_size);
+      U64 out_off = 0;
+      U64 out_opl = dim_1u64(range);
+      for(U64 src_idx = idx_range.min; src_idx < idx_range.max && out_off+space_ptr_size <= out_opl; src_idx += 1)
+      {
+        RD_Cfg *cfg = &rd_nil_cfg;
+        if(src_idx < cfgs_array.count)
+        {
+          cfg = cfgs_array.v[src_idx];
+        }
+        SpacePtr space_ptr = {rd_eval_space_from_cfg(cfg), 0};
+        MemoryCopy((U8 *)out + out_off, &space_ptr, space_ptr_size);
+        out_off += sizeof(space_ptr);
+      }
+      result = 1;
+    }break;
   }
   scratch_end(scratch);
   return result;
@@ -2869,12 +2929,19 @@ rd_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range)
           if(contains_1u64(string_range, range.min))
           {
             String8 new_string = str8_cstring_capped(in, (U8 *)in + dim_1u64(range));
-            if(child == &rd_nil_cfg)
+            if(new_string.size == 0)
             {
-              child = rd_cfg_new(cfg, child_name);
+              rd_cfg_release(child);
             }
-            rd_cfg_release_all_children(child);
-            rd_cfg_new(child, new_string);
+            else
+            {
+              if(child == &rd_nil_cfg)
+              {
+                child = rd_cfg_new(cfg, child_name);
+              }
+              rd_cfg_release_all_children(child);
+              rd_cfg_new(child, new_string);
+            }
             result = 1;
             break;
           }
@@ -2883,12 +2950,19 @@ rd_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range)
         {
           U64 value = 0;
           MemoryCopy(&value, in, dim_1u64(range));
-          if(child == &rd_nil_cfg)
+          if(value == 0)
           {
-            child = rd_cfg_new(cfg, child_name);
+            rd_cfg_release(child);
           }
-          rd_cfg_release_all_children(child);
-          rd_cfg_newf(child, "%I64u", value);
+          else
+          {
+            if(child == &rd_nil_cfg)
+            {
+              child = rd_cfg_new(cfg, child_name);
+            }
+            rd_cfg_release_all_children(child);
+            rd_cfg_newf(child, "%I64u", value);
+          }
           result = 1;
           break;
         }
@@ -2896,12 +2970,19 @@ rd_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range)
         {
           U64 value = 0;
           MemoryCopy(&value, in, dim_1u64(range));
-          if(child == &rd_nil_cfg)
+          if(value == 0)
           {
-            child = rd_cfg_new(cfg, child_name);
+            rd_cfg_release(child);
           }
-          rd_cfg_release_all_children(child);
-          rd_cfg_newf(child, "%I64u", value);
+          else
+          {
+            if(child == &rd_nil_cfg)
+            {
+              child = rd_cfg_new(cfg, child_name);
+            }
+            rd_cfg_release_all_children(child);
+            rd_cfg_newf(child, "%I64u", value);
+          }
           result = 1;
           break;
         }
@@ -12940,127 +13021,135 @@ rd_frame(void)
         }
       }
       
-      //- rjf: add macros for evallable config trees
+      //- rjf: choose set of evallable config names
+      String8 evallable_cfg_names[] =
       {
-        //- rjf: choose set of evallable config names
-        String8 evallable_cfg_names[] =
-        {
-          str8_lit("breakpoint"),
-          str8_lit("watch_pin"),
-          str8_lit("target"),
-          str8_lit("file_path_map"),
-          str8_lit("auto_view_rule"),
-        };
-        
-        //- rjf: build special member types for evallable config types
-        E_TypeKey bool_type_key = {0};
-        E_TypeKey u64_type_key = {0};
-        E_TypeKey code_string_type_key = {0};
-        E_TypeKey path_type_key = {0};
-        E_TypeKey string_type_key = {0};
-        E_TypeKey location_type_key = {0};
-        {
-          bool_type_key        = e_type_key_basic(E_TypeKind_Bool);
-          u64_type_key         = e_type_key_basic(E_TypeKind_U64);
-          code_string_type_key = e_type_key_cons_ptr(arch_from_context(), e_type_key_basic(E_TypeKind_U8), E_TypeFlag_IsCodeText);
-          path_type_key        = e_type_key_cons_ptr(arch_from_context(), e_type_key_basic(E_TypeKind_U8), E_TypeFlag_IsPathText);
-          string_type_key      = e_type_key_cons_ptr(arch_from_context(), e_type_key_basic(E_TypeKind_U8), E_TypeFlag_IsPlainText);
-          location_type_key    = e_type_key_cons_ptr(arch_from_context(), e_type_key_basic(E_TypeKind_U8), E_TypeFlag_IsPlainText|E_TypeFlag_IsCodeText|E_TypeFlag_IsPathText);
-        }
-        
-        //- rjf: build types for each evallable config tree
-        struct
-        {
-          String8 schema_type_name;
-          E_TypeKey type_key;
-        }
-        schema_type_name_key_map[] =
-        {
-          { str8_lit("bool"), bool_type_key },
-          { str8_lit("u64"), u64_type_key },
-          { str8_lit("code_string"), code_string_type_key },
-          { str8_lit("path"), path_type_key },
-          { str8_lit("string"), string_type_key },
-          { str8_lit("location"), location_type_key },
-        };
-        E_TypeKey evallable_cfg_types[ArrayCount(evallable_cfg_names)] = {0};
-        for EachElement(idx, evallable_cfg_names)
-        {
-          String8 name = evallable_cfg_names[idx];
-          MD_Node *schema = rd_schema_from_name(scratch.arena, name);
-          E_MemberList members_list = {0};
-          U64 off = 0;
-          for MD_EachNode(child, schema->first)
-          {
-            String8 member_name        = child->string;
-            String8 member_pretty_name = rd_display_from_code_name(member_name);
-            E_TypeKey member_type_key  = zero_struct;
-            for EachElement(schema_type_name_idx, schema_type_name_key_map)
-            {
-              if(str8_match(child->first->string, schema_type_name_key_map[schema_type_name_idx].schema_type_name, 0))
-              {
-                member_type_key = schema_type_name_key_map[schema_type_name_idx].type_key;
-                break;
-              }
-            }
-            e_member_list_push_new(scratch.arena, &members_list,
-                                   .type_key    = member_type_key,
-                                   .name        = member_name,
-                                   .pretty_name = member_pretty_name,
-                                   .off         = off);
-            off += e_type_byte_size_from_key(member_type_key);
-          }
-          E_MemberArray members = e_member_array_from_list(scratch.arena, &members_list);
-          evallable_cfg_types[idx] = e_type_key_cons(.name    = name,
-                                                     .kind    = E_TypeKind_Struct,
-                                                     .members = members.v,
-                                                     .count   = members.count);
-        }
-        
-        //- rjf: cache cfg name -> type key correllation
-        rd_state->cfg_string2typekey_map = push_array(rd_frame_arena(), RD_String2TypeKeyMap, 1);
-        rd_state->cfg_string2typekey_map->slots_count = 256;
-        rd_state->cfg_string2typekey_map->slots = push_array(rd_frame_arena(), RD_String2TypeKeySlot, rd_state->cfg_string2typekey_map->slots_count);
-        for EachElement(idx, evallable_cfg_names)
-        {
-          String8 name = evallable_cfg_names[idx];
-          E_TypeKey type_key = evallable_cfg_types[idx];
-          U64 hash = d_hash_from_string(name);
-          U64 slot_idx = hash%rd_state->cfg_string2typekey_map->slots_count;
-          RD_String2TypeKeyNode *node = push_array(rd_frame_arena(), RD_String2TypeKeyNode, 1);
-          node->string = push_str8_copy(rd_frame_arena(), name);
-          node->key = type_key;
-          SLLQueuePush(rd_state->cfg_string2typekey_map->slots[slot_idx].first, rd_state->cfg_string2typekey_map->slots[slot_idx].last, node);
-        }
-        
-        //- rjf: add macros for each evallable config tree
-        for EachElement(idx, evallable_cfg_names)
-        {
-          String8 name = evallable_cfg_names[idx];
-          RD_CfgList cfgs = rd_cfg_top_level_list_from_string(scratch.arena, name);
-          for(RD_CfgNode *n = cfgs.first; n != 0; n = n->next)
-          {
-            RD_Cfg *cfg = n->v;
-            String8 label = rd_cfg_child_from_string(cfg, str8_lit("label"))->first->string;
-            String8 exe   = rd_cfg_child_from_string(cfg, str8_lit("executable"))->first->string;
-            E_Space space = rd_eval_space_from_cfg(cfg);
-            E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
-            expr->space    = space;
-            expr->mode     = E_Mode_Offset;
-            expr->type_key = evallable_cfg_types[idx];
-            if(exe.size != 0)
-            {
-              e_string2expr_map_insert(scratch.arena, ctx->macro_map, str8_skip_last_slash(exe), expr);
-            }
-            if(label.size != 0)
-            {
-              e_string2expr_map_insert(scratch.arena, ctx->macro_map, label, expr);
-            }
-            e_string2expr_map_insert(scratch.arena, ctx->macro_map, push_str8f(scratch.arena, "$%I64x%I64x", (U64)cfg, cfg->gen), expr);
-          }
-        }
+        str8_lit("breakpoint"),
+        str8_lit("watch_pin"),
+        str8_lit("target"),
+        str8_lit("file_path_map"),
+        str8_lit("auto_view_rule"),
+      };
+      
+      //- rjf: store off eval collections for this frame
+      rd_state->eval_collection_cfg_names = push_array(rd_frame_arena(), String8Array, 1);
+      rd_state->eval_collection_cfg_names->count = ArrayCount(evallable_cfg_names);
+      rd_state->eval_collection_cfg_names->v = push_array(rd_frame_arena(), String8, rd_state->eval_collection_cfg_names->count);
+      MemoryCopy(rd_state->eval_collection_cfg_names->v, evallable_cfg_names, sizeof(evallable_cfg_names));
+      rd_state->eval_collection_cfgs = push_array(rd_frame_arena(), RD_CfgArray, rd_state->eval_collection_cfg_names->count);
+      for EachElement(idx, evallable_cfg_names)
+      {
+        RD_CfgList list = rd_cfg_top_level_list_from_string(scratch.arena, evallable_cfg_names[idx]);
+        rd_state->eval_collection_cfgs[idx] = rd_cfg_array_from_list(rd_frame_arena(), &list);
       }
       
+      //- rjf: build special member types for evallable config types
+      E_TypeKey bool_type_key = {0};
+      E_TypeKey u64_type_key = {0};
+      E_TypeKey code_string_type_key = {0};
+      E_TypeKey path_type_key = {0};
+      E_TypeKey string_type_key = {0};
+      E_TypeKey location_type_key = {0};
+      {
+        bool_type_key        = e_type_key_basic(E_TypeKind_Bool);
+        u64_type_key         = e_type_key_basic(E_TypeKind_U64);
+        code_string_type_key = e_type_key_cons_ptr(arch_from_context(), e_type_key_basic(E_TypeKind_U8), E_TypeFlag_IsCodeText);
+        path_type_key        = e_type_key_cons_ptr(arch_from_context(), e_type_key_basic(E_TypeKind_U8), E_TypeFlag_IsPathText);
+        string_type_key      = e_type_key_cons_ptr(arch_from_context(), e_type_key_basic(E_TypeKind_U8), E_TypeFlag_IsPlainText);
+        location_type_key    = e_type_key_cons_ptr(arch_from_context(), e_type_key_basic(E_TypeKind_U8), E_TypeFlag_IsPlainText|E_TypeFlag_IsCodeText|E_TypeFlag_IsPathText);
+      }
+      
+      //- rjf: build types for each evallable config tree
+      struct
+      {
+        String8 schema_type_name;
+        E_TypeKey type_key;
+      }
+      schema_type_name_key_map[] =
+      {
+        { str8_lit("bool"), bool_type_key },
+        { str8_lit("u64"), u64_type_key },
+        { str8_lit("code_string"), code_string_type_key },
+        { str8_lit("path"), path_type_key },
+        { str8_lit("string"), string_type_key },
+        { str8_lit("location"), location_type_key },
+      };
+      E_TypeKey evallable_cfg_types[ArrayCount(evallable_cfg_names)] = {0};
+      for EachElement(idx, evallable_cfg_names)
+      {
+        String8 name = evallable_cfg_names[idx];
+        MD_Node *schema = rd_schema_from_name(scratch.arena, name);
+        E_MemberList members_list = {0};
+        U64 off = 0;
+        for MD_EachNode(child, schema->first)
+        {
+          String8 member_name        = child->string;
+          String8 member_pretty_name = rd_display_from_code_name(member_name);
+          E_TypeKey member_type_key  = zero_struct;
+          for EachElement(schema_type_name_idx, schema_type_name_key_map)
+          {
+            if(str8_match(child->first->string, schema_type_name_key_map[schema_type_name_idx].schema_type_name, 0))
+            {
+              member_type_key = schema_type_name_key_map[schema_type_name_idx].type_key;
+              break;
+            }
+          }
+          e_member_list_push_new(scratch.arena, &members_list,
+                                 .type_key    = member_type_key,
+                                 .name        = member_name,
+                                 .pretty_name = member_pretty_name,
+                                 .off         = off);
+          off += e_type_byte_size_from_key(member_type_key);
+        }
+        E_MemberArray members = e_member_array_from_list(scratch.arena, &members_list);
+        evallable_cfg_types[idx] = e_type_key_cons(.name    = name,
+                                                   .kind    = E_TypeKind_Struct,
+                                                   .members = members.v,
+                                                   .count   = members.count);
+      }
+      
+      //- rjf: cache cfg name -> type key correllation
+      rd_state->cfg_string2typekey_map = push_array(rd_frame_arena(), RD_String2TypeKeyMap, 1);
+      rd_state->cfg_string2typekey_map->slots_count = 256;
+      rd_state->cfg_string2typekey_map->slots = push_array(rd_frame_arena(), RD_String2TypeKeySlot, rd_state->cfg_string2typekey_map->slots_count);
+      for EachElement(idx, evallable_cfg_names)
+      {
+        String8 name = evallable_cfg_names[idx];
+        E_TypeKey type_key = evallable_cfg_types[idx];
+        U64 hash = d_hash_from_string(name);
+        U64 slot_idx = hash%rd_state->cfg_string2typekey_map->slots_count;
+        RD_String2TypeKeyNode *node = push_array(rd_frame_arena(), RD_String2TypeKeyNode, 1);
+        node->string = push_str8_copy(rd_frame_arena(), name);
+        node->key = type_key;
+        SLLQueuePush(rd_state->cfg_string2typekey_map->slots[slot_idx].first, rd_state->cfg_string2typekey_map->slots[slot_idx].last, node);
+      }
+      
+      //- rjf: add macros for each evallable config tree
+      for EachElement(idx, evallable_cfg_names)
+      {
+        String8 name = evallable_cfg_names[idx];
+        RD_CfgList cfgs = rd_cfg_top_level_list_from_string(scratch.arena, name);
+        for(RD_CfgNode *n = cfgs.first; n != 0; n = n->next)
+        {
+          RD_Cfg *cfg = n->v;
+          String8 label = rd_cfg_child_from_string(cfg, str8_lit("label"))->first->string;
+          String8 exe   = rd_cfg_child_from_string(cfg, str8_lit("executable"))->first->string;
+          E_Space space = rd_eval_space_from_cfg(cfg);
+          E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
+          expr->space    = space;
+          expr->mode     = E_Mode_Offset;
+          expr->type_key = evallable_cfg_types[idx];
+          if(exe.size != 0)
+          {
+            e_string2expr_map_insert(scratch.arena, ctx->macro_map, str8_skip_last_slash(exe), expr);
+          }
+          if(label.size != 0)
+          {
+            e_string2expr_map_insert(scratch.arena, ctx->macro_map, label, expr);
+          }
+          e_string2expr_map_insert(scratch.arena, ctx->macro_map, push_str8f(scratch.arena, "$%I64x%I64x", (U64)cfg, cfg->gen), expr);
+        }
+      }
       //- rjf: add macros for all evallable control entities
       {
         CTRL_EntityKind evallable_kinds[] =
@@ -13108,6 +13197,26 @@ rd_frame(void)
             }
           }
         }
+      }
+      
+      //- rjf: add macros for collections (new @cfg)
+      for EachElement(cfg_name_idx, evallable_cfg_names)
+      {
+        String8 cfg_name = evallable_cfg_names[cfg_name_idx];
+        String8 collection_name = rd_plural_from_code_name(cfg_name);
+        E_TypeKey collection_type_key = {0};
+        {
+          E_TypeKey element_type_key = evallable_cfg_types[cfg_name_idx];
+          RD_CfgList cfgs = rd_cfg_top_level_list_from_string(scratch.arena, cfg_name);
+          collection_type_key = e_type_key_cons_array(e_type_key_cons_space_ptr(element_type_key), cfgs.count);
+        }
+        E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
+        E_Space space = e_space_make(RD_EvalSpaceKind_MetaCollection);
+        space.u64s[0] = cfg_name_idx;
+        expr->space    = space;
+        expr->mode     = E_Mode_Offset;
+        expr->type_key = collection_type_key;
+        e_string2expr_map_insert(scratch.arena, ctx->macro_map, collection_name, expr);
       }
       
       //- rjf: add macros for all watches which define identifiers
@@ -14095,47 +14204,65 @@ rd_frame(void)
           }break;
           case RD_CmdKind_NextTab:
           {
-#if 0 // TODO(rjf): @cfg
-            RD_Panel *panel = rd_panel_from_handle(rd_regs()->panel);
-            RD_View *start_view = rd_selected_tab_from_panel(panel);
-            RD_View *next_view = start_view;
-            U64 idx = 0;
-            for(RD_View *v = start_view; !rd_view_is_nil(v); v = (rd_view_is_nil(v->order_next) ? panel->first_tab_view : v->order_next), idx += 1)
+            RD_Cfg *window = rd_cfg_from_handle(rd_regs()->window);
+            RD_PanelTree panel_tree = rd_panel_tree_from_cfg(scratch.arena, window);
+            RD_PanelNode *focused = panel_tree.focused;
+            RD_CfgNode *selected_tab_n = 0;
+            for(RD_CfgNode *n = focused->tabs.first; n != 0; n = n->next)
             {
-              if(v == start_view && idx != 0)
+              if(n->v == focused->selected_tab)
               {
-                break;
-              }
-              if(!rd_view_is_project_filtered(v) && v != start_view)
-              {
-                next_view = v;
+                selected_tab_n = n;
                 break;
               }
             }
-            panel->selected_tab_view = rd_handle_from_view(next_view);
-#endif
+            RD_Cfg *next_selected_tab = &rd_nil_cfg;
+            U64 idx = 0;
+            for(RD_CfgNode *tab_n = selected_tab_n;
+                tab_n != 0 && (tab_n != selected_tab_n || idx == 0);
+                ((tab_n->next == 0) ? (tab_n = focused->tabs.first) : (tab_n = tab_n->next)), idx += 1)
+            {
+              if(!rd_cfg_is_project_filtered(tab_n->v) && tab_n != selected_tab_n)
+              {
+                next_selected_tab = tab_n->v;
+                break;
+              }
+            }
+            if(next_selected_tab != &rd_nil_cfg)
+            {
+              rd_cmd(RD_CmdKind_FocusTab, .view = rd_handle_from_cfg(next_selected_tab));
+            }
           }break;
           case RD_CmdKind_PrevTab:
           {
-#if 0 // TODO(rjf): @cfg
-            RD_Panel *panel = rd_panel_from_handle(rd_regs()->panel);
-            RD_View *start_view = rd_selected_tab_from_panel(panel);
-            RD_View *next_view = start_view;
-            U64 idx = 0;
-            for(RD_View *v = start_view; !rd_view_is_nil(v); v = (rd_view_is_nil(v->order_prev) ? panel->last_tab_view : v->order_prev), idx += 1)
+            RD_Cfg *window = rd_cfg_from_handle(rd_regs()->window);
+            RD_PanelTree panel_tree = rd_panel_tree_from_cfg(scratch.arena, window);
+            RD_PanelNode *focused = panel_tree.focused;
+            RD_CfgNode *selected_tab_n = 0;
+            for(RD_CfgNode *n = focused->tabs.last; n != 0; n = n->prev)
             {
-              if(v == start_view && idx != 0)
+              if(n->v == focused->selected_tab)
               {
-                break;
-              }
-              if(!rd_view_is_project_filtered(v) && v != start_view)
-              {
-                next_view = v;
+                selected_tab_n = n;
                 break;
               }
             }
-            panel->selected_tab_view = rd_handle_from_view(next_view);
-#endif
+            RD_Cfg *next_selected_tab = &rd_nil_cfg;
+            U64 idx = 0;
+            for(RD_CfgNode *tab_n = selected_tab_n;
+                tab_n != 0 && (tab_n != selected_tab_n || idx == 0);
+                ((tab_n->prev == 0) ? (tab_n = focused->tabs.last) : (tab_n = tab_n->prev)), idx += 1)
+            {
+              if(!rd_cfg_is_project_filtered(tab_n->v) && tab_n != selected_tab_n)
+              {
+                next_selected_tab = tab_n->v;
+                break;
+              }
+            }
+            if(next_selected_tab != &rd_nil_cfg)
+            {
+              rd_cmd(RD_CmdKind_FocusTab, .view = rd_handle_from_cfg(next_selected_tab));
+            }
           }break;
           case RD_CmdKind_MoveTabRight:
           case RD_CmdKind_MoveTabLeft:
@@ -14168,15 +14295,28 @@ rd_frame(void)
           }break;
           case RD_CmdKind_CloseTab:
           {
-#if 0 // TODO(rjf): @cfg
-            RD_Panel *panel = rd_panel_from_handle(rd_regs()->panel);
-            RD_View *view = rd_view_from_handle(rd_regs()->view);
-            if(!rd_view_is_nil(view))
+            RD_Cfg *tab = rd_cfg_from_handle(rd_regs()->view);
+            RD_PanelTree panel_tree = rd_panel_tree_from_cfg(scratch.arena, tab);
+            RD_PanelNode *panel = rd_panel_node_from_tree_cfg(panel_tree.root, tab->parent);
+            B32 found_selected = 0;
+            RD_Cfg *next_selected_tab = &rd_nil_cfg;
+            for(RD_CfgNode *n = panel->tabs.first; n != 0; n = n->next)
             {
-              rd_panel_remove_tab_view(panel, view);
-              rd_view_release(view);
+              if(n->v == panel->selected_tab)
+              {
+                found_selected = 1;
+              }
+              else if(!rd_cfg_is_project_filtered(n->v))
+              {
+                next_selected_tab = n->v;
+                if(found_selected)
+                {
+                  break;
+                }
+              }
             }
-#endif
+            rd_cmd(RD_CmdKind_FocusTab, .view = rd_handle_from_cfg(next_selected_tab));
+            rd_cfg_release(tab);
           }break;
           case RD_CmdKind_MoveTab:
           {
@@ -14603,368 +14743,6 @@ X(getting_started)
 #define X(name) if(name->parent == &rd_nil_cfg) {rd_cfg_release(name);}
             FixedTab_XList
 #undef X
-            
-#if 0 // TODO(rjf): @cfg
-            RD_Window *ws = rd_window_from_handle(rd_regs()->window);
-            
-            typedef enum Layout
-            {
-              Layout_Default,
-              Layout_Compact,
-            }
-            Layout;
-            Layout layout = Layout_Default;
-            switch(kind)
-            {
-              default:{}break;
-              case RD_CmdKind_ResetToDefaultPanels:{layout = Layout_Default;}break;
-              case RD_CmdKind_ResetToCompactPanels:{layout = Layout_Compact;}break;
-            }
-            
-            //- rjf: gather all panels in the panel tree - remove & gather views
-            // we'd like to keep in the next layout
-            RD_HandleList panels_to_close = {0};
-            RD_HandleList views_to_close = {0};
-            RD_View *watch = &rd_nil_view;
-            RD_View *locals = &rd_nil_view;
-            RD_View *regs = &rd_nil_view;
-            RD_View *globals = &rd_nil_view;
-            RD_View *tlocals = &rd_nil_view;
-            RD_View *types = &rd_nil_view;
-            RD_View *procs = &rd_nil_view;
-            RD_View *callstack = &rd_nil_view;
-            RD_View *breakpoints = &rd_nil_view;
-            RD_View *watch_pins = &rd_nil_view;
-            RD_View *output = &rd_nil_view;
-            RD_View *targets = &rd_nil_view;
-            RD_View *scheduler = &rd_nil_view;
-            RD_View *modules = &rd_nil_view;
-            RD_View *disasm = &rd_nil_view;
-            RD_View *memory = &rd_nil_view;
-            RD_View *getting_started = &rd_nil_view;
-            RD_HandleList code_views = {0};
-            for(RD_Panel *panel = ws->root_panel; !rd_panel_is_nil(panel); panel = rd_panel_rec_depth_first_pre(panel).next)
-            {
-              RD_Handle handle = rd_handle_from_panel(panel);
-              rd_handle_list_push(scratch.arena, &panels_to_close, handle);
-              for(RD_View *view = panel->first_tab_view, *next = 0; !rd_view_is_nil(view); view = next)
-              {
-                next = view->order_next;
-                RD_ViewRuleKind view_rule_kind = rd_view_rule_kind_from_string(view->spec->string);
-                B32 needs_delete = 1;
-                switch(view_rule_kind)
-                {
-                  default:{}break;
-                  case RD_ViewRuleKind_Watch:         {if(rd_view_is_nil(watch))               { needs_delete = 0; watch = view;} }break;
-                  case RD_ViewRuleKind_Locals:        {if(rd_view_is_nil(locals))              { needs_delete = 0; locals = view;} }break;
-                  case RD_ViewRuleKind_Registers:     {if(rd_view_is_nil(regs))                { needs_delete = 0; regs = view;} }break;
-                  case RD_ViewRuleKind_Globals:       {if(rd_view_is_nil(globals))             { needs_delete = 0; globals = view;} }break;
-                  case RD_ViewRuleKind_ThreadLocals:  {if(rd_view_is_nil(tlocals))             { needs_delete = 0; tlocals = view;} }break;
-                  case RD_ViewRuleKind_Types:         {if(rd_view_is_nil(types))               { needs_delete = 0; types = view;} }break;
-                  case RD_ViewRuleKind_Procedures:    {if(rd_view_is_nil(procs))               { needs_delete = 0; procs = view;} }break;
-                  case RD_ViewRuleKind_CallStack:     {if(rd_view_is_nil(callstack))           { needs_delete = 0; callstack = view;} }break;
-                  case RD_ViewRuleKind_Breakpoints:   {if(rd_view_is_nil(breakpoints))         { needs_delete = 0; breakpoints = view;} }break;
-                  case RD_ViewRuleKind_WatchPins:     {if(rd_view_is_nil(watch_pins))          { needs_delete = 0; watch_pins = view;} }break;
-                  case RD_ViewRuleKind_Output:        {if(rd_view_is_nil(output))              { needs_delete = 0; output = view;} }break;
-                  case RD_ViewRuleKind_Targets:       {if(rd_view_is_nil(targets))             { needs_delete = 0; targets = view;} }break;
-                  case RD_ViewRuleKind_Scheduler:     {if(rd_view_is_nil(scheduler))           { needs_delete = 0; scheduler = view;} }break;
-                  case RD_ViewRuleKind_Modules:       {if(rd_view_is_nil(modules))             { needs_delete = 0; modules = view;} }break;
-                  case RD_ViewRuleKind_Disasm:        {if(rd_view_is_nil(disasm))              { needs_delete = 0; disasm = view;} }break;
-                  case RD_ViewRuleKind_Memory:        {if(rd_view_is_nil(memory))              { needs_delete = 0; memory = view;} }break;
-                  case RD_ViewRuleKind_GettingStarted:{if(rd_view_is_nil(getting_started))     { needs_delete = 0; getting_started = view;} }break;
-                  case RD_ViewRuleKind_Text:
-                  {
-                    needs_delete = 0;
-                    rd_handle_list_push(scratch.arena, &code_views, rd_handle_from_view(view));
-                  }break;
-                }
-                if(!needs_delete)
-                {
-                  rd_panel_remove_tab_view(panel, view);
-                }
-              }
-            }
-            
-            //- rjf: close all panels/views
-            for(RD_HandleNode *n = panels_to_close.first; n != 0; n = n->next)
-            {
-              RD_Panel *panel = rd_panel_from_handle(n->handle);
-              if(panel != ws->root_panel)
-              {
-                rd_panel_release(ws, panel);
-              }
-              else
-              {
-                rd_panel_release_all_views(panel);
-                panel->first = panel->last = &rd_nil_panel;
-              }
-            }
-            
-            //- rjf: allocate any missing views
-            if(rd_view_is_nil(watch))
-            {
-              watch = rd_view_alloc();
-              rd_view_equip_spec(watch, rd_view_rule_info_from_kind(RD_ViewRuleKind_Watch), str8_zero(), &md_nil_node);
-            }
-            if(layout == Layout_Default && rd_view_is_nil(locals))
-            {
-              locals = rd_view_alloc();
-              rd_view_equip_spec(locals, rd_view_rule_info_from_kind(RD_ViewRuleKind_Locals), str8_zero(), &md_nil_node);
-            }
-            if(layout == Layout_Default && rd_view_is_nil(regs))
-            {
-              regs = rd_view_alloc();
-              rd_view_equip_spec(regs, rd_view_rule_info_from_kind(RD_ViewRuleKind_Registers), str8_zero(), &md_nil_node);
-            }
-            if(layout == Layout_Default && rd_view_is_nil(globals))
-            {
-              globals = rd_view_alloc();
-              rd_view_equip_spec(globals, rd_view_rule_info_from_kind(RD_ViewRuleKind_Globals), str8_zero(), &md_nil_node);
-            }
-            if(layout == Layout_Default && rd_view_is_nil(tlocals))
-            {
-              tlocals = rd_view_alloc();
-              rd_view_equip_spec(tlocals, rd_view_rule_info_from_kind(RD_ViewRuleKind_ThreadLocals), str8_zero(), &md_nil_node);
-            }
-            if(rd_view_is_nil(types))
-            {
-              types = rd_view_alloc();
-              rd_view_equip_spec(types, rd_view_rule_info_from_kind(RD_ViewRuleKind_Types), str8_zero(), &md_nil_node);
-            }
-            if(layout == Layout_Default && rd_view_is_nil(procs))
-            {
-              procs = rd_view_alloc();
-              rd_view_equip_spec(procs, rd_view_rule_info_from_kind(RD_ViewRuleKind_Procedures), str8_zero(), &md_nil_node);
-            }
-            if(rd_view_is_nil(callstack))
-            {
-              callstack = rd_view_alloc();
-              rd_view_equip_spec(callstack, rd_view_rule_info_from_kind(RD_ViewRuleKind_CallStack), str8_zero(), &md_nil_node);
-            }
-            if(rd_view_is_nil(breakpoints))
-            {
-              breakpoints = rd_view_alloc();
-              rd_view_equip_spec(breakpoints, rd_view_rule_info_from_kind(RD_ViewRuleKind_Breakpoints), str8_zero(), &md_nil_node);
-            }
-            if(layout == Layout_Default && rd_view_is_nil(watch_pins))
-            {
-              watch_pins = rd_view_alloc();
-              rd_view_equip_spec(watch_pins, rd_view_rule_info_from_kind(RD_ViewRuleKind_WatchPins), str8_zero(), &md_nil_node);
-            }
-            if(rd_view_is_nil(output))
-            {
-              output = rd_view_alloc();
-              rd_view_equip_spec(output, rd_view_rule_info_from_kind(RD_ViewRuleKind_Output), str8_zero(), &md_nil_node);
-            }
-            if(rd_view_is_nil(targets))
-            {
-              targets = rd_view_alloc();
-              rd_view_equip_spec(targets, rd_view_rule_info_from_kind(RD_ViewRuleKind_Targets), str8_zero(), &md_nil_node);
-            }
-            if(rd_view_is_nil(scheduler))
-            {
-              scheduler = rd_view_alloc();
-              rd_view_equip_spec(scheduler, rd_view_rule_info_from_kind(RD_ViewRuleKind_Scheduler), str8_zero(), &md_nil_node);
-            }
-            if(rd_view_is_nil(modules))
-            {
-              modules = rd_view_alloc();
-              rd_view_equip_spec(modules, rd_view_rule_info_from_kind(RD_ViewRuleKind_Modules), str8_zero(), &md_nil_node);
-            }
-            if(rd_view_is_nil(disasm))
-            {
-              disasm = rd_view_alloc();
-              rd_view_equip_spec(disasm, rd_view_rule_info_from_kind(RD_ViewRuleKind_Disasm), str8_zero(), &md_nil_node);
-            }
-            if(layout == Layout_Default && rd_view_is_nil(memory))
-            {
-              memory = rd_view_alloc();
-              rd_view_equip_spec(memory, rd_view_rule_info_from_kind(RD_ViewRuleKind_Memory), str8_zero(), &md_nil_node);
-            }
-            if(code_views.count == 0 && rd_view_is_nil(getting_started))
-            {
-              getting_started = rd_view_alloc();
-              rd_view_equip_spec(getting_started, rd_view_rule_info_from_kind(RD_ViewRuleKind_GettingStarted), str8_zero(), &md_nil_node);
-            }
-            
-            //- rjf: apply layout
-            switch(layout)
-            {
-              //- rjf: default layout
-              case Layout_Default:
-              {
-                // rjf: root split
-                ws->root_panel->split_axis = Axis2_X;
-                RD_Panel *root_0 = rd_panel_alloc(ws);
-                RD_Panel *root_1 = rd_panel_alloc(ws);
-                rd_panel_insert(ws->root_panel, ws->root_panel->last, root_0);
-                rd_panel_insert(ws->root_panel, ws->root_panel->last, root_1);
-                root_0->pct_of_parent = 0.85f;
-                root_1->pct_of_parent = 0.15f;
-                
-                // rjf: root_0 split
-                root_0->split_axis = Axis2_Y;
-                RD_Panel *root_0_0 = rd_panel_alloc(ws);
-                RD_Panel *root_0_1 = rd_panel_alloc(ws);
-                rd_panel_insert(root_0, root_0->last, root_0_0);
-                rd_panel_insert(root_0, root_0->last, root_0_1);
-                root_0_0->pct_of_parent = 0.80f;
-                root_0_1->pct_of_parent = 0.20f;
-                
-                // rjf: root_1 split
-                root_1->split_axis = Axis2_Y;
-                RD_Panel *root_1_0 = rd_panel_alloc(ws);
-                RD_Panel *root_1_1 = rd_panel_alloc(ws);
-                rd_panel_insert(root_1, root_1->last, root_1_0);
-                rd_panel_insert(root_1, root_1->last, root_1_1);
-                root_1_0->pct_of_parent = 0.50f;
-                root_1_1->pct_of_parent = 0.50f;
-                rd_panel_insert_tab_view(root_1_0, root_1_0->last_tab_view, targets);
-                rd_panel_insert_tab_view(root_1_1, root_1_1->last_tab_view, scheduler);
-                root_1_0->selected_tab_view = rd_handle_from_view(targets);
-                root_1_1->selected_tab_view = rd_handle_from_view(scheduler);
-                root_1_1->tab_side = Side_Max;
-                
-                // rjf: root_0_0 split
-                root_0_0->split_axis = Axis2_X;
-                RD_Panel *root_0_0_0 = rd_panel_alloc(ws);
-                RD_Panel *root_0_0_1 = rd_panel_alloc(ws);
-                rd_panel_insert(root_0_0, root_0_0->last, root_0_0_0);
-                rd_panel_insert(root_0_0, root_0_0->last, root_0_0_1);
-                root_0_0_0->pct_of_parent = 0.25f;
-                root_0_0_1->pct_of_parent = 0.75f;
-                
-                // rjf: root_0_0_0 split
-                root_0_0_0->split_axis = Axis2_Y;
-                RD_Panel *root_0_0_0_0 = rd_panel_alloc(ws);
-                RD_Panel *root_0_0_0_1 = rd_panel_alloc(ws);
-                rd_panel_insert(root_0_0_0, root_0_0_0->last, root_0_0_0_0);
-                rd_panel_insert(root_0_0_0, root_0_0_0->last, root_0_0_0_1);
-                root_0_0_0_0->pct_of_parent = 0.5f;
-                root_0_0_0_1->pct_of_parent = 0.5f;
-                rd_panel_insert_tab_view(root_0_0_0_0, root_0_0_0_0->last_tab_view, disasm);
-                root_0_0_0_0->selected_tab_view = rd_handle_from_view(disasm);
-                rd_panel_insert_tab_view(root_0_0_0_1, root_0_0_0_1->last_tab_view, breakpoints);
-                rd_panel_insert_tab_view(root_0_0_0_1, root_0_0_0_1->last_tab_view, watch_pins);
-                rd_panel_insert_tab_view(root_0_0_0_1, root_0_0_0_1->last_tab_view, output);
-                rd_panel_insert_tab_view(root_0_0_0_1, root_0_0_0_1->last_tab_view, memory);
-                root_0_0_0_1->selected_tab_view = rd_handle_from_view(output);
-                
-                // rjf: root_0_1 split
-                root_0_1->split_axis = Axis2_X;
-                RD_Panel *root_0_1_0 = rd_panel_alloc(ws);
-                RD_Panel *root_0_1_1 = rd_panel_alloc(ws);
-                rd_panel_insert(root_0_1, root_0_1->last, root_0_1_0);
-                rd_panel_insert(root_0_1, root_0_1->last, root_0_1_1);
-                root_0_1_0->pct_of_parent = 0.60f;
-                root_0_1_1->pct_of_parent = 0.40f;
-                rd_panel_insert_tab_view(root_0_1_0, root_0_1_0->last_tab_view, watch);
-                rd_panel_insert_tab_view(root_0_1_0, root_0_1_0->last_tab_view, locals);
-                rd_panel_insert_tab_view(root_0_1_0, root_0_1_0->last_tab_view, regs);
-                rd_panel_insert_tab_view(root_0_1_0, root_0_1_0->last_tab_view, globals);
-                rd_panel_insert_tab_view(root_0_1_0, root_0_1_0->last_tab_view, tlocals);
-                rd_panel_insert_tab_view(root_0_1_0, root_0_1_0->last_tab_view, types);
-                rd_panel_insert_tab_view(root_0_1_0, root_0_1_0->last_tab_view, procs);
-                root_0_1_0->selected_tab_view = rd_handle_from_view(watch);
-                root_0_1_0->tab_side = Side_Max;
-                rd_panel_insert_tab_view(root_0_1_1, root_0_1_1->last_tab_view, callstack);
-                rd_panel_insert_tab_view(root_0_1_1, root_0_1_1->last_tab_view, modules);
-                root_0_1_1->selected_tab_view = rd_handle_from_view(callstack);
-                root_0_1_1->tab_side = Side_Max;
-                
-                // rjf: fill main panel with getting started, OR all collected code views
-                if(!rd_view_is_nil(getting_started))
-                {
-                  rd_panel_insert_tab_view(root_0_0_1, root_0_0_1->last_tab_view, getting_started);
-                }
-                for(RD_HandleNode *n = code_views.first; n != 0; n = n->next)
-                {
-                  RD_View *view = rd_view_from_handle(n->handle);
-                  if(!rd_view_is_nil(view))
-                  {
-                    rd_panel_insert_tab_view(root_0_0_1, root_0_0_1->last_tab_view, view);
-                  }
-                }
-                
-                // rjf: choose initial focused panel
-                ws->focused_panel = root_0_0_1;
-              }break;
-              
-              //- rjf: compact layout:
-              case Layout_Compact:
-              {
-                // rjf: root split
-                ws->root_panel->split_axis = Axis2_X;
-                RD_Panel *root_0 = rd_panel_alloc(ws);
-                RD_Panel *root_1 = rd_panel_alloc(ws);
-                rd_panel_insert(ws->root_panel, ws->root_panel->last, root_0);
-                rd_panel_insert(ws->root_panel, ws->root_panel->last, root_1);
-                root_0->pct_of_parent = 0.25f;
-                root_1->pct_of_parent = 0.75f;
-                
-                // rjf: root_0 split
-                root_0->split_axis = Axis2_Y;
-                RD_Panel *root_0_0 = rd_panel_alloc(ws);
-                {
-                  if(!rd_view_is_nil(watch)) { rd_panel_insert_tab_view(root_0_0, root_0_0->last_tab_view, watch); }
-                  if(!rd_view_is_nil(types)) { rd_panel_insert_tab_view(root_0_0, root_0_0->last_tab_view, types); }
-                  root_0_0->selected_tab_view = rd_handle_from_view(watch);
-                }
-                RD_Panel *root_0_1 = rd_panel_alloc(ws);
-                {
-                  if(!rd_view_is_nil(scheduler))     { rd_panel_insert_tab_view(root_0_1, root_0_1->last_tab_view, scheduler); }
-                  if(!rd_view_is_nil(targets))       { rd_panel_insert_tab_view(root_0_1, root_0_1->last_tab_view, targets); }
-                  if(!rd_view_is_nil(breakpoints))   { rd_panel_insert_tab_view(root_0_1, root_0_1->last_tab_view, breakpoints); }
-                  if(!rd_view_is_nil(watch_pins))    { rd_panel_insert_tab_view(root_0_1, root_0_1->last_tab_view, watch_pins); }
-                  root_0_1->selected_tab_view = rd_handle_from_view(scheduler);
-                }
-                RD_Panel *root_0_2 = rd_panel_alloc(ws);
-                {
-                  if(!rd_view_is_nil(disasm))    { rd_panel_insert_tab_view(root_0_2, root_0_2->last_tab_view, disasm); }
-                  if(!rd_view_is_nil(output))    { rd_panel_insert_tab_view(root_0_2, root_0_2->last_tab_view, output); }
-                  root_0_2->selected_tab_view = rd_handle_from_view(disasm);
-                }
-                RD_Panel *root_0_3 = rd_panel_alloc(ws);
-                {
-                  if(!rd_view_is_nil(callstack))    { rd_panel_insert_tab_view(root_0_3, root_0_3->last_tab_view, callstack); }
-                  if(!rd_view_is_nil(modules))      { rd_panel_insert_tab_view(root_0_3, root_0_3->last_tab_view, modules); }
-                  root_0_3->selected_tab_view = rd_handle_from_view(callstack);
-                }
-                rd_panel_insert(root_0, root_0->last, root_0_0);
-                rd_panel_insert(root_0, root_0->last, root_0_1);
-                rd_panel_insert(root_0, root_0->last, root_0_2);
-                rd_panel_insert(root_0, root_0->last, root_0_3);
-                root_0_0->pct_of_parent = 0.25f;
-                root_0_1->pct_of_parent = 0.25f;
-                root_0_2->pct_of_parent = 0.25f;
-                root_0_3->pct_of_parent = 0.25f;
-                
-                // rjf: fill main panel with getting started, OR all collected code views
-                if(!rd_view_is_nil(getting_started))
-                {
-                  rd_panel_insert_tab_view(root_1, root_1->last_tab_view, getting_started);
-                }
-                for(RD_HandleNode *n = code_views.first; n != 0; n = n->next)
-                {
-                  RD_View *view = rd_view_from_handle(n->handle);
-                  if(!rd_view_is_nil(view))
-                  {
-                    rd_panel_insert_tab_view(root_1, root_1->last_tab_view, view);
-                  }
-                }
-                
-                // rjf: choose initial focused panel
-                ws->focused_panel = root_1;
-              }break;
-            }
-            
-            // rjf: dispatch cfg saves
-            for(RD_CfgSrc src = (RD_CfgSrc)0; src < RD_CfgSrc_COUNT; src = (RD_CfgSrc)(src+1))
-            {
-              RD_CmdKind write_cmd = rd_cfg_src_write_cmd_kind_table[src];
-              rd_cmd(write_cmd, .file_path = rd_cfg_path_from_src(src));
-            }
-#endif
           }break;
           
           //- rjf: thread finding
@@ -15671,7 +15449,8 @@ X(getting_started)
           case RD_CmdKind_DisableTarget:
           {
             RD_Cfg *cfg = rd_cfg_from_handle(rd_regs()->cfg);
-            rd_cfg_child_from_string_or_alloc(cfg, str8_lit("disabled"));
+            RD_Cfg *disabled = rd_cfg_child_from_string_or_alloc(cfg, str8_lit("disabled"));
+            rd_cfg_new(disabled, str8_lit("1"));
           }break;
           case RD_CmdKind_RemoveCfg:
           {
