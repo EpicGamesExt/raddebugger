@@ -135,7 +135,7 @@ E_OpInfo e_expr_kind_op_info_table[49] =
 { E_OpKind_Binary, 13, str8_lit_comp(""), str8_lit_comp("="), str8_lit_comp("") },
 };
 
-U8 e_kind_basic_byte_size_table[56] =
+U8 e_kind_basic_byte_size_table[55] =
 {
 0,
 0,
@@ -192,10 +192,9 @@ U8 e_kind_basic_byte_size_table[56] =
 0,
 0,
 0,
-0,
 };
 
-String8 e_kind_basic_string_table[56] =
+String8 e_kind_basic_string_table[55] =
 {
 str8_lit_comp(""),
 str8_lit_comp("void"),
@@ -252,7 +251,6 @@ str8_lit_comp("class"),
 str8_lit_comp("enum"),
 str8_lit_comp("bitfield"),
 str8_lit_comp("variadic"),
-str8_lit_comp("collection"),
 };
 
 C_LINKAGE_END

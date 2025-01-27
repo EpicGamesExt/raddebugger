@@ -2868,14 +2868,13 @@ rd_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range)
           Rng1U64 string_range = r1u64(string_off, string_opl);
           if(contains_1u64(string_range, range.min))
           {
-            String8 pre_edit_string = push_str8_copy(scratch.arena, str8(eval_blob.str + member->off, child->first->string.size));
-            String8 post_edit_string = ui_push_string_replace_range(scratch.arena, pre_edit_string, r1s64(range.min-string_range.min+1, range.max-string_range.min+1), str8_cstring_capped(in, (U8 *)in + dim_1u64(range)));
+            String8 new_string = str8_cstring_capped(in, (U8 *)in + dim_1u64(range));
             if(child == &rd_nil_cfg)
             {
               child = rd_cfg_new(cfg, child_name);
             }
             rd_cfg_release_all_children(child);
-            rd_cfg_new(child, post_edit_string);
+            rd_cfg_new(child, new_string);
             result = 1;
             break;
           }
@@ -9796,14 +9795,6 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
         space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, brace).x;
       }
     }break;
-    
-    //- rjf: collections
-    case E_TypeKind_Collection:
-    {
-      String8 placeholder = str8_lit("{...}");
-      str8_list_push(arena, out, placeholder);
-      space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, placeholder).x;
-    }break;
   }
   
   scratch_end(scratch);
@@ -12924,7 +12915,7 @@ rd_frame(void)
     E_TypeKey collection_type_keys[ArrayCount(rd_collection_name_table)] = {0};
     for EachElement(idx, rd_collection_name_table)
     {
-      collection_type_keys[idx] = e_type_key_cons(.kind = E_TypeKind_Collection, .name = rd_collection_name_table[idx]);
+      collection_type_keys[idx] = e_type_key_cons(.kind = E_TypeKind_Array, .name = rd_collection_name_table[idx]);
     }
     
     ////////////////////////////
