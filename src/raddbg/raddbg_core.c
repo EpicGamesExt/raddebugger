@@ -2869,7 +2869,7 @@ rd_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range)
           if(contains_1u64(string_range, range.min))
           {
             String8 pre_edit_string = push_str8_copy(scratch.arena, str8(eval_blob.str + member->off, child->first->string.size));
-            String8 post_edit_string = ui_push_string_replace_range(scratch.arena, pre_edit_string, r1s64(range.min-string_range.min+1, range.max-string_range.min+1), str8((U8 *)in, dim_1u64(range)));
+            String8 post_edit_string = ui_push_string_replace_range(scratch.arena, pre_edit_string, r1s64(range.min-string_range.min+1, range.max-string_range.min+1), str8_cstring_capped(in, (U8 *)in + dim_1u64(range)));
             if(child == &rd_nil_cfg)
             {
               child = rd_cfg_new(cfg, child_name);
@@ -9450,7 +9450,8 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
     }
   }
   if(eval.space.kind == RD_EvalSpaceKind_MetaEntity ||
-     eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity)
+     eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity ||
+     eval.space.kind == RD_EvalSpaceKind_MetaCfg)
   {
     E_TypeKind kind = e_type_kind_from_key(eval.type_key);
     if(kind != E_TypeKind_Ptr)
@@ -9548,9 +9549,15 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
         String8 string_escaped = ev_escaped_from_raw_string(arena, string);
         space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, string_escaped).x;
         space_taken += 2*fnt_dim_from_tag_size_string(font, font_size, 0, 0, str8_lit("\"")).x;
-        str8_list_push(arena, out, str8_lit("\""));
+        if(!no_addr || depth > 0)
+        {
+          str8_list_push(arena, out, str8_lit("\""));
+        }
         str8_list_push(arena, out, string_escaped);
-        str8_list_push(arena, out, str8_lit("\""));
+        if(!no_addr || depth > 0)
+        {
+          str8_list_push(arena, out, str8_lit("\""));
+        }
       }
       
       // rjf: special case: push strings for symbols
@@ -9674,9 +9681,15 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
         String8 string_escaped = ev_escaped_from_raw_string(arena, string);
         space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, string_escaped).x;
         space_taken += 2*fnt_dim_from_tag_size_string(font, font_size, 0, 0, str8_lit("\"")).x;
-        str8_list_push(arena, out, str8_lit("\""));
+        if(!no_addr || depth > 0)
+        {
+          str8_list_push(arena, out, str8_lit("\""));
+        }
         str8_list_push(arena, out, string_escaped);
-        str8_list_push(arena, out, str8_lit("\""));
+        if(!no_addr || depth > 0)
+        {
+          str8_list_push(arena, out, str8_lit("\""));
+        }
       }
       
       // rjf: descend in all other cases
