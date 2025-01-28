@@ -1581,6 +1581,12 @@ e_bytecode_from_oplist(Arena *arena, E_OpList *oplist)
         // rjf: advance
         ptr = next_ptr;
       }break;
+      
+      case E_IRExtKind_DerefSpacePtr:
+      {
+        ptr[0] = opcode;
+        ptr += 1;
+      }break;
     }
   }
   
