@@ -50,6 +50,37 @@ enum
   RD_WatchViewFlag_DisableCacheLines          = (1<<3),
 };
 
+typedef enum RD_WatchCellKind
+{
+  RD_WatchCellKind_Expr,
+  RD_WatchCellKind_Value,
+  RD_WatchCellKind_Type,
+  RD_WatchCellKind_ViewRule,
+  RD_WatchCellKind_Member,
+  RD_WatchCellKind_CallStackFrame,
+  RD_WatchCellKind_CallStackFrameSelection,
+  RD_WatchCellKind_Module,
+}
+RD_WatchCellKind;
+
+typedef struct RD_WatchCell RD_WatchCell;
+struct RD_WatchCell
+{
+  RD_WatchCell *next;
+  RD_WatchCellKind kind;
+  F32 pct;
+  String8 member;
+  String8 view_rule;
+};
+
+typedef struct RD_WatchCellList RD_WatchCellList;
+struct RD_WatchCellList
+{
+  RD_WatchCell *first;
+  RD_WatchCell *last;
+  U64 count;
+};
+
 typedef enum RD_WatchViewColumnKind
 {
   RD_WatchViewColumnKind_Expr,
@@ -113,9 +144,9 @@ RD_WatchViewRowKind;
 typedef struct RD_WatchViewPoint RD_WatchViewPoint;
 struct RD_WatchViewPoint
 {
-  S64 x;
   EV_Key parent_key;
   EV_Key key;
+  U64 cell_id;
 };
 
 typedef struct RD_WatchViewRowInfo RD_WatchViewRowInfo;
@@ -178,6 +209,11 @@ internal RD_CodeViewBuildResult rd_code_view_build(Arena *arena, RD_CodeViewStat
 ////////////////////////////////
 //~ rjf: Watch View Functions
 
+//- rjf: cell list building
+internal RD_WatchCell *rd_watch_cell_list_push(Arena *arena, RD_WatchCellList *list);
+internal RD_WatchCell *rd_watch_cell_list_push_new_(Arena *arena, RD_WatchCellList *list, RD_WatchCell *params);
+#define rd_watch_cell_list_push_new(arena, list, kind_, ...) rd_watch_cell_list_push_new_((arena), (list), &(RD_WatchCell){.kind = (kind_), __VA_ARGS__})
+
 //- rjf: index -> column
 internal RD_WatchViewColumn *rd_watch_view_column_from_x(RD_WatchViewState *wv, S64 index);
 
@@ -192,9 +228,12 @@ internal RD_WatchViewRowInfo rd_watch_view_row_info_from_row(EV_Row *row);
 //- rjf: watch view flags & row & row info -> row kind
 internal RD_WatchViewRowKind rd_watch_view_row_kind_from_flags_row_info(RD_WatchViewFlags flags, EV_Row *row, RD_WatchViewRowInfo *info);
 
+//- rjf: row info -> cell list
+internal RD_WatchCellList rd_watch_cell_list_from_row_info(Arena *arena, EV_Row *row, RD_WatchViewRowInfo *info);
+
 //- rjf: row/column -> exprs / strings
-internal E_Expr *rd_expr_from_watch_view_row_column(Arena *arena, EV_View *ev_view, EV_Row *row, RD_WatchViewColumn *col);
-internal String8 rd_string_from_eval_viz_row_column(Arena *arena, EV_View *ev, EV_Row *row, RD_WatchViewColumn *col, EV_StringFlags string_flags, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size_px);
+internal E_Expr *rd_expr_from_watch_view_row_column(Arena *arena, EV_Row *row, RD_WatchViewColumn *col);
+internal String8 rd_string_from_eval_viz_row_column(Arena *arena, EV_Row *row, RD_WatchViewColumn *col, EV_StringFlags string_flags, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size_px);
 
 //- rjf: table coordinates -> text edit state
 internal RD_WatchViewTextEditState *rd_watch_view_text_edit_state_from_pt(RD_WatchViewState *wv, RD_WatchViewPoint pt);

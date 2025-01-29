@@ -111,7 +111,7 @@ RD_VocabularyMap:
 ////////////////////////////////
 //~ rjf: Configuration Tree Schemas
 
-@table(name schema) RD_CfgSchemaTable:
+@table(name schema cmd_names) RD_CfgSchemaTable:
 {
   //- rjf: settings
   {
@@ -156,7 +156,8 @@ RD_VocabularyMap:
       'stdin_path':         path,
       'debug_subprocesses': bool,
     }
-    ```
+    ```,
+    `launch_and_run,launch_and_init,select_cfg,remove_cfg`,
   }
   
   //- rjf: breakpoints
@@ -170,7 +171,8 @@ RD_VocabularyMap:
       'hit_count':     u64,
       'disabled':      bool,
     }
-    ```
+    ```,
+    `enable_cfg,remove_cfg`,
   }
   
   //- rjf: watch pins
@@ -182,19 +184,22 @@ RD_VocabularyMap:
       'view_rule':  code_string,
       'location':   location,
     }
-    ```
+    ```,
+    `remove_cfg`,
   }
   
   //- rjf: file path maps
   {
     file_path_map,
-    ```x:{'source':path, 'dest':path}```
+    ```x:{'source':path, 'dest':path}```,
+    `remove_cfg`,
   }
   
   //- rjf: auto view rules
   {
     auto_view_rule,
-    ```x:{'source':code_string, 'dest':code_string}```
+    ```x:{'source':code_string, 'dest':code_string}```,
+    `remove_cfg`,
   }
 }
 
@@ -202,11 +207,12 @@ RD_VocabularyMap:
 {
   `String8 name`;
   `String8 schema`;
+  `String8 cmd_names`;
 }
 
 @data(RD_CfgNameSchemaPair) rd_cfg_name_schema_pair_table:
 {
-  @expand(RD_CfgSchemaTable a) `{str8_lit_comp("$(a.name)"), str8_lit_comp("$(a.schema)")}`
+  @expand(RD_CfgSchemaTable a) `{str8_lit_comp("$(a.name)"), str8_lit_comp("$(a.schema)"), str8_lit_comp("$(a.cmd_names)")}`
 }
 
 ////////////////////////////////
@@ -573,14 +579,14 @@ RD_CmdTable:    //               |        |              |                  |   
   {ToggleCodeBytesVisibility      1        1              Null               null              Nil                     Null       0  0  0  0  0  0                                                           Thumbnails            "toggle_code_bytes_visibility""Toggle Code Bytes Visibility"                "Toggles the visibility of machine code bytes in a disassembly view."                                              ""                               "$disasm,"                                                       }
   
   //- rjf: general config operations
-  {EnableCfg                      0        0              Null               null              Nil                     Null       0  0  0  0  0  0                                                           Null                  "enable_entity"               "Enable Entity"                               "Enables an entity."                                                                                               ""                               ""                                                               }
-  {DisableCfg                     0        0              Null               null              Nil                     Null       0  0  0  0  0  0                                                           Null                  "disable_entity"              "Disable Entity"                              "Disables an entity."                                                                                              ""                               ""                                                               }
-  {SelectCfg                      0        0              Null               null              Nil                     Null       0  0  0  0  0  0                                                           CheckHollow           "select_entity"               "Select Entity"                               "Selects an entity, disabling all others of the same kind."                                                        ""                               ""                                                               }
-  {RemoveCfg                      0        0              Null               null              Nil                     Null       0  0  0  0  0  0                                                           Trash                 "remove_entity"               "Remove Entity"                               "Removes an entity."                                                                                               ""                               ""                                                               }
-  {NameCfg                        0        0              Null               null              Nil                     Null       0  0  0  0  0  0                                                           Null                  "name_entity"                 "Name Entity"                                 "Equips an entity with a name."                                                                                    ""                               ""                                                               }
-  {ConditionCfg                   0        0              Null               null              Nil                     Null       0  0  0  0  0  0                                                           Null                  "condition_entity"            "Condition Entity"                            "Equips an entity with a condition string."                                                                        ""                               ""                                                               }
-  {DuplicateCfg                   0        0              Null               null              Nil                     Null       0  0  0  0  0  0                                                           Null                  "duplicate_entity"            "Duplicate Entity"                            "Duplicates an entity."                                                                                            ""                               ""                                                               }
-  {RelocateCfg                    0        0              Null               null              Nil                     Null       0  0  0  0  0  0                                                           Null                  "relocate_entity"             "Relocate Entity"                             "Relocates an entity."                                                                                             ""                               ""                                                               }
+  {EnableCfg                      0        0              Null               null              Nil                     Null       0  0  0  0  0  0                                                           Null                  "enable_cfg"                  "Enable Config Tree"                          "Enables an entity."                                                                                               ""                               ""                                                               }
+  {DisableCfg                     0        0              Null               null              Nil                     Null       0  0  0  0  0  0                                                           Null                  "disable_cfg"                 "Disable Config Tree"                         "Disables an entity."                                                                                              ""                               ""                                                               }
+  {SelectCfg                      0        0              Null               null              Nil                     Null       0  0  0  0  0  0                                                           CheckHollow           "select_cfg"                  "Select Config Tree"                          "Selects an entity, disabling all others of the same kind."                                                        ""                               ""                                                               }
+  {RemoveCfg                      0        0              Null               null              Nil                     Null       0  0  0  0  0  0                                                           Trash                 "remove_cfg"                  "Remove Config Tree"                          "Removes an entity."                                                                                               ""                               ""                                                               }
+  {NameCfg                        0        0              Null               null              Nil                     Null       0  0  0  0  0  0                                                           Null                  "name_cfg"                    "Name Config Tree"                            "Equips an entity with a name."                                                                                    ""                               ""                                                               }
+  {ConditionCfg                   0        0              Null               null              Nil                     Null       0  0  0  0  0  0                                                           Null                  "condition_cfg"               "Condition Config Tree"                       "Equips an entity with a condition string."                                                                        ""                               ""                                                               }
+  {DuplicateCfg                   0        0              Null               null              Nil                     Null       0  0  0  0  0  0                                                           Null                  "duplicate_cfg"               "Duplicate Config Tree"                       "Duplicates an entity."                                                                                            ""                               ""                                                               }
+  {RelocateCfg                    0        0              Null               null              Nil                     Null       0  0  0  0  0  0                                                           Null                  "relocate_cfg"                "Relocate Config Tree"                        "Relocates an entity."                                                                                             ""                               ""                                                               }
   
   //- rjf: breakpoints
   {AddBreakpoint                  1        1              Null               null              Nil                     Null       0  0  0  0  0  0                                                           CircleFilled          "add_breakpoint"              "Add Breakpoint"                              "Places a breakpoint at a given location (file path and line number, address, or symbol name)."                    ""                               ""                                                               }

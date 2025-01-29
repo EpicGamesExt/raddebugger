@@ -794,6 +794,26 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
 ////////////////////////////////
 //~ rjf: Watch Views
 
+//- rjf: cell list building
+
+internal RD_WatchCell *
+rd_watch_cell_list_push(Arena *arena, RD_WatchCellList *list)
+{
+  RD_WatchCell *cell = push_array(arena, RD_WatchCell, 1);
+  SLLQueuePush(list->first, list->last, cell);
+  list->count += 1;
+  return cell;
+}
+
+internal RD_WatchCell *
+rd_watch_cell_list_push_new_(Arena *arena, RD_WatchCellList *list, RD_WatchCell *params)
+{
+  RD_WatchCell *cell = rd_watch_cell_list_push(arena, list);
+  MemoryCopyStruct(cell, params);
+  cell->next = 0;
+  return cell;
+}
+
 //- rjf: index -> column
 
 internal RD_WatchViewColumn *
@@ -817,16 +837,16 @@ rd_watch_view_column_from_x(RD_WatchViewState *wv, S64 index)
 internal B32
 rd_watch_view_point_match(RD_WatchViewPoint a, RD_WatchViewPoint b)
 {
-  return (a.x == b.x &&
-          ev_key_match(a.parent_key, b.parent_key) &&
-          ev_key_match(a.key, b.key));
+  return (ev_key_match(a.parent_key, b.parent_key) &&
+          ev_key_match(a.key, b.key) &&
+          a.cell_id == b.cell_id);
 }
 
 internal RD_WatchViewPoint
 rd_watch_view_point_from_tbl(EV_BlockRangeList *block_ranges, Vec2S64 tbl)
 {
   RD_WatchViewPoint pt = zero_struct;
-  pt.x           = tbl.x;
+  pt.cell_id     = (U64)tbl.x;
   pt.key         = ev_key_from_num(block_ranges, (U64)tbl.y);
   pt.parent_key  = ev_block_range_from_num(block_ranges, (U64)tbl.y).block->key;
   return pt;
@@ -836,7 +856,7 @@ internal Vec2S64
 rd_tbl_from_watch_view_point(EV_BlockRangeList *block_ranges, RD_WatchViewPoint pt)
 {
   Vec2S64 tbl = {0};
-  tbl.x = pt.x;
+  tbl.x = (S64)pt.cell_id;
   tbl.y = (S64)ev_num_from_key(block_ranges, pt.key);
   return tbl;
 }
@@ -996,10 +1016,23 @@ rd_watch_view_row_kind_from_flags_row_info(RD_WatchViewFlags flags, EV_Row *row,
   return row_kind;
 }
 
+//- rjf: row info -> cell list
+
+internal RD_WatchCellList
+rd_watch_cell_list_from_row_info(Arena *arena, EV_Row *row, RD_WatchViewRowInfo *info)
+{
+  RD_WatchCellList cell_list = {0};
+  rd_watch_cell_list_push_new(arena, &cell_list, RD_WatchCellKind_Expr,     .pct = 0.25f);
+  rd_watch_cell_list_push_new(arena, &cell_list, RD_WatchCellKind_Value,    .pct = 0.30f);
+  rd_watch_cell_list_push_new(arena, &cell_list, RD_WatchCellKind_Type,     .pct = 0.15f);
+  rd_watch_cell_list_push_new(arena, &cell_list, RD_WatchCellKind_ViewRule, .pct = 0.30f);
+  return cell_list;
+}
+
 //- rjf: row/column -> strings
 
 internal E_Expr *
-rd_expr_from_watch_view_row_column(Arena *arena, EV_View *ev_view, EV_Row *row, RD_WatchViewColumn *col)
+rd_expr_from_watch_view_row_column(Arena *arena, EV_Row *row, RD_WatchViewColumn *col)
 {
   E_Expr *expr = row->expr;
   switch(col->kind)
@@ -1026,11 +1059,11 @@ rd_expr_from_watch_view_row_column(Arena *arena, EV_View *ev_view, EV_Row *row, 
 }
 
 internal String8
-rd_string_from_eval_viz_row_column(Arena *arena, EV_View *ev, EV_Row *row, RD_WatchViewColumn *col, EV_StringFlags string_flags, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size_px)
+rd_string_from_eval_viz_row_column(Arena *arena, EV_Row *row, RD_WatchViewColumn *col, EV_StringFlags string_flags, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size_px)
 {
   ProfBeginFunction();
   String8 result = {0};
-  E_Expr *row_col_expr = rd_expr_from_watch_view_row_column(arena, ev, row, col);
+  E_Expr *row_col_expr = rd_expr_from_watch_view_row_column(arena, row, col);
   switch(col->kind)
   {
     default:{}break;
@@ -1063,6 +1096,9 @@ rd_string_from_eval_viz_row_column(Arena *arena, EV_View *ev, EV_Row *row, RD_Wa
     case RD_WatchViewColumnKind_ViewRule:
     ProfScope("view rule cell string")
     {
+      RD_Cfg *view = rd_cfg_from_handle(rd_regs()->view);
+      RD_ViewState *vs = rd_view_state_from_cfg(view);
+      EV_View *ev = vs->ev_view;
       result = ev_view_rule_from_key(ev, row->key);
     }break;
     case RD_WatchViewColumnKind_Module:
@@ -1265,7 +1301,6 @@ internal void
 rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 root_expr, String8 root_view_rule, B32 modifiable, U32 default_radix, Rng2F32 rect)
 {
   ProfBeginFunction();
-  DI_Scope *di_scope = di_scope_open();
   Temp scratch = scratch_begin(0, 0);
   UI_ScrollPt2 scroll_pos = rd_view_scroll_pos();
   F32 entity_hover_t_rate = rd_setting_b32_from_name(str8_lit("hover_animations")) ? (1 - pow_f32(2, (-20.f * rd_state->frame_dt))) : 1.f;
@@ -1274,9 +1309,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
   //- rjf: unpack arguments
   //
   EV_ViewRuleList *top_level_view_rules = ev_view_rule_list_from_string(scratch.arena, root_view_rule);
-  EV_ColList top_level_cols = {0};
-  String8 eval_view_key_string = push_str8f(scratch.arena, "eval_view_watch_%p", ewv);
-  EV_View *eval_view = rd_ev_view_from_key(d_hash_from_string(eval_view_key_string));
+  EV_View *eval_view = rd_view_eval_view();
   String8 filter = rd_view_filter();
   F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
   S64 num_possible_visible_rows = (S64)(dim_2f32(rect).y/row_height_px);
@@ -1308,36 +1341,9 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
 #endif
   
   //////////////////////////////
-  //- rjf: root-level view rule which has a ui hook? call into that to build the UI
-  //
-  B32 is_top_level_hook = 0;
-#if 0 // TODO(rjf): @cfg
-  {
-    RD_ViewRuleInfo *hook_rule_info = 0;
-    MD_Node *hook_rule_root = &md_nil_node;
-    for(EV_ViewRuleNode *n = top_level_view_rules->first; n != 0; n = n->next)
-    {
-      RD_ViewRuleInfo *rule_info = rd_view_rule_info_from_string(n->v.root->string);
-      if(rule_info != &rd_nil_view_rule_info && rule_info->ui != 0)
-      {
-        hook_rule_info = rule_info;
-        hook_rule_root = n->v.root;
-        break;
-      }
-    }
-    if(hook_rule_info)
-    {
-      hook_rule_info->ui(root_expr, hook_rule_root, rect);
-      is_top_level_hook = 1;
-    }
-  }
-#endif
-  
-  //////////////////////////////
   //- rjf: determine autocompletion string
   //
   String8 autocomplete_hint_string = {0};
-  if(!is_top_level_hook)
   {
     for(UI_Event *evt = 0; ui_next_event(&evt);)
     {
@@ -1358,7 +1364,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
   Vec2S64 cursor_tbl = {0};
   Vec2S64 mark_tbl = {0};
   Rng2S64 selection_tbl = {0};
-  if(!is_top_level_hook) ProfScope("consume events & perform navigations/edits - calculate state") UI_Focus(UI_FocusKind_On)
+  ProfScope("consume events & perform navigations/edits - calculate state") UI_Focus(UI_FocusKind_On)
   {
     B32 state_dirty = 1;
     B32 snap_to_cursor = 0;
@@ -1374,7 +1380,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
         MemoryZeroStruct(&block_tree);
         MemoryZeroStruct(&block_ranges);
         ev_key_set_expansion(eval_view, ev_key_root(), ev_key_make(ev_hash_from_key(ev_key_root()), 1), 1);
-        block_tree   = ev_block_tree_from_string(scratch.arena, eval_view, filter, root_expr, top_level_view_rules, &top_level_cols);
+        block_tree   = ev_block_tree_from_string(scratch.arena, eval_view, filter, root_expr, top_level_view_rules);
         block_ranges = ev_block_range_list_from_tree(scratch.arena, &block_tree);
       }
       
@@ -1591,9 +1597,9 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
             for(S64 x = selection_tbl.min.x; x <= selection_tbl.max.x; x += 1)
             {
               RD_WatchViewColumn *col = rd_watch_view_column_from_x(ewv, x);
-              String8 string = rd_string_from_eval_viz_row_column(scratch.arena, eval_view, row, col, string_flags, default_radix, ui_top_font(), ui_top_font_size(), row_string_max_size_px);
+              String8 string = rd_string_from_eval_viz_row_column(scratch.arena, row, col, string_flags, default_radix, ui_top_font(), ui_top_font_size(), row_string_max_size_px);
               string.size = Min(string.size, sizeof(ewv->dummy_text_edit_state.input_buffer));
-              RD_WatchViewPoint pt = {x, row->block->key, row->key};
+              RD_WatchViewPoint pt = {row->block->key, row->key, x};
               U64 hash = ev_hash_from_key(pt.key);
               U64 slot_idx = hash%ewv->text_edit_state_slots_count;
               RD_WatchViewTextEditState *edit_state = push_array(ewv->text_edit_arena, RD_WatchViewTextEditState, 1);
@@ -1779,7 +1785,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                     if(rows.first != 0)
                     {
                       B32 should_commit_asap = editing_complete;
-                      E_Expr *expr = rd_expr_from_watch_view_row_column(scratch.arena, eval_view, row, col);
+                      E_Expr *expr = rd_expr_from_watch_view_row_column(scratch.arena, row, col);
                       E_Eval dst_eval = e_eval_from_expr(scratch.arena, expr);
                       if(dst_eval.space.kind == RD_EvalSpaceKind_MetaEntity)
                       {
@@ -1852,7 +1858,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
           for(S64 x = selection_tbl.min.x; x <= selection_tbl.max.x; x += 1)
           {
             RD_WatchViewColumn *col = rd_watch_view_column_from_x(ewv, x);
-            String8 cell_string = rd_string_from_eval_viz_row_column(scratch.arena, eval_view, row, col, string_flags|EV_StringFlag_ReadOnlyDisplayRules, default_radix, ui_top_font(), ui_top_font_size(), row_string_max_size_px);
+            String8 cell_string = rd_string_from_eval_viz_row_column(scratch.arena, row, col, string_flags|EV_StringFlag_ReadOnlyDisplayRules, default_radix, ui_top_font(), ui_top_font_size(), row_string_max_size_px);
             cell_string = str8_skip_chop_whitespace(cell_string);
             U64 comma_pos = str8_find_needle(cell_string, 0, str8_lit(","), 0);
             if(selection_tbl.min.x != selection_tbl.max.x || selection_tbl.min.y != selection_tbl.max.y)
@@ -1920,7 +1926,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                     key = row->block->key;
                     parent_key = row->block->parent->key;
                   }
-                  RD_WatchViewPoint new_pt = {0, parent_key, key};
+                  RD_WatchViewPoint new_pt = {parent_key, key, 0};
                   next_cursor_pt = new_pt;
                   next_cursor_set = 1;
                 }
@@ -1938,7 +1944,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
             }
             else if(tbl.y != 0 && (col->kind == RD_WatchViewColumnKind_Value || col->kind == RD_WatchViewColumnKind_Member) && row_kind == RD_WatchViewRowKind_Normal)
             {
-              E_Expr *expr = rd_expr_from_watch_view_row_column(scratch.arena, eval_view, row, col);
+              E_Expr *expr = rd_expr_from_watch_view_row_column(scratch.arena, row, col);
               E_Eval dst_eval = e_eval_from_expr(scratch.arena, expr);
               rd_commit_eval_value_string(dst_eval, str8_zero(), 0);
             }
@@ -2187,7 +2193,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
   //- rjf: build ui
   //
   B32 pressed = 0;
-  if(!is_top_level_hook) ProfScope("build ui")
+  ProfScope("build ui")
   {
     F32 **col_pcts = push_array(scratch.arena, F32*, ewv->column_count);
     {
@@ -2293,7 +2299,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
             ui_view_rule_params_root = &md_nil_node;
           }
           RD_WatchViewRowInfo row_info = rd_watch_view_row_info_from_row(row);
-          RD_WatchViewRowKind row_kind = rd_watch_view_row_kind_from_flags_row_info(flags, row, &row_info);
+          RD_WatchCellList row_cells = rd_watch_cell_list_from_row_info(scratch.arena, row, &row_info);
           ProfEnd();
           
           ////////////////////////
@@ -2346,6 +2352,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
               palette = ui_build_palette(ui_top_palette(), .background = rd_rgba_from_theme_color(RD_ThemeColor_BaseBackgroundAlt));
               row_flags |= UI_BoxFlag_DrawBackground;
             }
+#if 0 // TODO(rjf): @cfg
             switch(row_kind)
             {
               default:{}break;
@@ -2354,6 +2361,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
               case RD_WatchViewRowKind_Canvas:{row_flags |= UI_BoxFlag_Clip|UI_BoxFlag_DrawBorder;}break;
               case RD_WatchViewRowKind_PrettyEntityControls:{row_flags |= UI_BoxFlag_DisableFocusOverlay;}break;
             }
+#endif
           }
           ProfEnd();
           
@@ -2372,6 +2380,587 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
           //////////////////////
           //- rjf: build row contents
           //
+          RD_RegsScope(.module = row_module->handle) UI_Parent(row_box)
+          {
+            ////////////////////
+            //- rjf: draw start of cache lines in expansions
+            //
+            if(!(flags & RD_WatchViewFlag_DisableCacheLines))
+            {
+              U64 row_offset = row_eval.value.u64;
+              if((row_eval.mode == E_Mode_Offset || row_eval.mode == E_Mode_Null) &&
+                 row_offset%64 == 0 && row_depth > 0)
+              {
+                ui_set_next_fixed_x(0);
+                ui_set_next_fixed_y(0);
+                ui_set_next_fixed_height(ui_top_font_size()*0.2f);
+                ui_set_next_palette(ui_build_palette(ui_top_palette(), .background = rd_rgba_from_theme_color(RD_ThemeColor_CacheLineBoundary)));
+                ui_build_box_from_key(UI_BoxFlag_Floating|UI_BoxFlag_DrawBackground, ui_key_zero());
+              }
+            }
+            
+            ////////////////////
+            //- rjf: draw mid-row cache line boundaries in expansions
+            //
+            if(!(flags & RD_WatchViewFlag_DisableCacheLines))
+            {
+              if((row_eval.mode == E_Mode_Offset || row_eval.mode == E_Mode_Null) &&
+                 row_eval.value.u64%64 != 0 &&
+                 row_depth > 0 &&
+                 !row_expanded)
+              {
+                U64 next_off = (row_eval.value.u64 + e_type_byte_size_from_key(row_eval.type_key));
+                if(next_off%64 != 0 && row_eval.value.u64/64 < next_off/64)
+                {
+                  ui_set_next_fixed_x(0);
+                  ui_set_next_fixed_y(scroll_list_params.row_height_px - ui_top_font_size()*0.5f);
+                  ui_set_next_fixed_height(ui_top_font_size()*1.f);
+                  Vec4F32 boundary_color = rd_rgba_from_theme_color(RD_ThemeColor_CacheLineBoundary);
+                  boundary_color.w *= 0.5f;
+                  ui_set_next_palette(ui_build_palette(ui_top_palette(), .background = boundary_color));
+                  ui_build_box_from_key(UI_BoxFlag_Floating|UI_BoxFlag_DrawBackground, ui_key_zero());
+                }
+              }
+            }
+            
+            ////////////////////
+            //- rjf: build all cells
+            //
+            for(RD_WatchCell *cell = row_cells.first; cell != 0; cell = cell->next)
+            {
+#if 0 // TODO(rjf): @cfg
+              //- rjf: unpack cell info
+              RD_WatchViewPoint cell_pt = {x, row->block->key, row->key};
+              RD_WatchViewTextEditState *cell_edit_state = rd_watch_view_text_edit_state_from_pt(ewv, cell_pt);
+              B32 cell_selected = (row_selected && selection_tbl.min.x <= cell_pt.x && cell_pt.x <= selection_tbl.max.x);
+              String8 cell_pre_edit_string = rd_string_from_eval_viz_row_column(scratch.arena, eval_view, row, col, string_flags|EV_StringFlag_ReadOnlyDisplayRules, default_radix, ui_top_font(), ui_top_font_size(), row_string_max_size_px);
+              
+              //- rjf: unpack column-kind-specific info
+              ProfBegin("unpack column-kind-specific info");
+              E_Eval cell_eval = row_eval;
+              E_Type *cell_type = row_type;
+              B32 cell_can_edit = 0;
+              FuzzyMatchRangeList cell_matches = {0};
+              String8 cell_inheritance_string = {0};
+              String8 cell_error_string = {0};
+              String8 cell_error_tooltip_string = {0};
+              RD_ListerFlags cell_autocomp_flags = 0;
+              RD_ViewRuleUIFunctionType *cell_ui_hook = 0;
+              MD_Node *cell_ui_params = &md_nil_node;
+              Vec4F32 cell_base_color = ui_top_palette()->text;
+              RD_IconKind cell_icon = RD_IconKind_Null;
+              String8 cell_ghost_text = {0};
+              switch(col->kind)
+              {
+                default:{}break;
+                case RD_WatchViewColumnKind_Expr:
+                {
+                  cell_can_edit = (row_depth == 0 && modifiable && filter.size == 0);
+                  if(filter.size != 0)
+                  {
+                    cell_matches = fuzzy_match_find(scratch.arena, filter, ev_expr_string_from_row(scratch.arena, row, string_flags));
+                  }
+                  cell_autocomp_flags = (RD_ListerFlag_Locals|
+                                         RD_ListerFlag_Procedures|
+                                         RD_ListerFlag_Globals|
+                                         RD_ListerFlag_ThreadLocals|
+                                         RD_ListerFlag_Types);
+                  if(row->member != 0 && row->member->inheritance_key_chain.first != 0)
+                  {
+                    String8List inheritance_chain_type_names = {0};
+                    for(E_TypeKeyNode *n = row->member->inheritance_key_chain.first; n != 0; n = n->next)
+                    {
+                      String8 inherited_type_name = e_type_string_from_key(scratch.arena, n->v);
+                      inherited_type_name = str8_skip_chop_whitespace(inherited_type_name);
+                      str8_list_push(scratch.arena, &inheritance_chain_type_names, inherited_type_name);
+                    }
+                    if(inheritance_chain_type_names.node_count != 0)
+                    {
+                      StringJoin join = {0};
+                      join.sep = str8_lit("::");
+                      String8 inheritance_type = str8_list_join(scratch.arena, &inheritance_chain_type_names, &join);
+                      cell_inheritance_string = inheritance_type;
+                    }
+                  }
+                }break;
+                case RD_WatchViewColumnKind_Value:
+                {
+                }goto value_cell;
+                case RD_WatchViewColumnKind_Member:
+                {
+                  E_Expr *expr = rd_expr_from_watch_view_row_column(scratch.arena, eval_view, row, col);
+                  cell_eval = e_eval_from_expr(scratch.arena, expr);
+                  cell_type = e_type_from_key(scratch.arena, cell_eval.type_key);
+                }goto value_cell;
+                value_cell:;
+                {
+                  E_MsgList msgs = cell_eval.msgs;
+                  if(row_depth == 0 && row->string.size != 0)
+                  {
+                    E_TokenArray tokens = e_token_array_from_text(scratch.arena, row->string);
+                    E_Parse parse = e_parse_expr_from_text_tokens(scratch.arena, row->string, &tokens);
+                    e_msg_list_concat_in_place(&parse.msgs, &msgs);
+                    msgs = parse.msgs;
+                  }
+                  if(msgs.max_kind > E_MsgKind_Null)
+                  {
+                    String8List strings = {0};
+                    for(E_Msg *msg = msgs.first; msg != 0; msg = msg->next)
+                    {
+                      str8_list_push(scratch.arena, &strings, msg->text);
+                    }
+                    StringJoin join = {str8_lit(""), str8_lit(" "), str8_lit("")};
+                    cell_error_string = str8_list_join(scratch.arena, &strings, &join);
+                  }
+                  if(row_is_bad)
+                  {
+                    cell_error_tooltip_string = str8_lit("Could not read memory successfully.");
+                  }
+                  cell_autocomp_flags = (RD_ListerFlag_Locals|
+                                         RD_ListerFlag_Procedures|
+                                         RD_ListerFlag_Globals|
+                                         RD_ListerFlag_ThreadLocals|
+                                         RD_ListerFlag_Types);
+                  if(cell_type->flags & E_TypeFlag_IsPathText)
+                  {
+                    cell_autocomp_flags = RD_ListerFlag_Files;
+                  }
+                  if(ui_view_rule_info->flags & RD_ViewRuleInfoFlag_CanFillValueCell)
+                  {
+                    cell_ui_hook = ui_view_rule_info->ui;
+                    cell_ui_params = ui_view_rule_params_root;
+                  }
+                  for(EV_ViewRuleNode *n = row->view_rules->first; n != 0; n = n->next)
+                  {
+                    EV_ViewRule *vr = &n->v;
+                    RD_ViewRuleInfo *info = rd_view_rule_info_from_string(vr->root->string);
+                    if(info->flags & RD_ViewRuleInfoFlag_CanFillValueCell && info->ui != 0)
+                    {
+                      cell_ui_hook = info->ui;
+                      cell_ui_params = vr->root;
+                    }
+                  }
+                  cell_can_edit = ev_type_key_is_editable(cell_eval.type_key);
+                }break;
+                case RD_WatchViewColumnKind_Type:
+                {
+                  cell_can_edit = 0;
+                }break;
+                case RD_WatchViewColumnKind_ViewRule:
+                {
+                  cell_can_edit = 1;
+                  cell_autocomp_flags = RD_ListerFlag_ViewRules;
+                  if(cell_pre_edit_string.size == 0)
+                  {
+                    EV_ViewRuleList *auto_view_rules = ev_auto_view_rules_from_type_key(scratch.arena, row_eval.type_key, 0, 1);
+                    String8List strings = {0};
+                    for(EV_ViewRuleNode *n = auto_view_rules->first; n != 0; n = n->next)
+                    {
+                      str8_list_push(scratch.arena, &strings, n->v.root->string);
+                    }
+                    cell_ghost_text = str8_list_join(scratch.arena, &strings, &(StringJoin){.sep = str8_lit(", ")});
+                  }
+                }break;
+                case RD_WatchViewColumnKind_CallStackFrameSelection:
+                {
+                  if(ctrl_handle_match(row_info.callstack_thread->handle, rd_regs()->thread) &&
+                     row_info.callstack_unwind_index == rd_regs()->unwind_count &&
+                     row_info.callstack_inline_depth == rd_regs()->inline_depth)
+                  {
+                    cell_icon = RD_IconKind_RightArrow;
+                    cell_base_color = rd_rgba_from_ctrl_entity(row_info.callstack_thread);
+                  }
+                }break;
+              }
+              ProfEnd();
+              
+              //- rjf: apply column-specified view rules
+              ProfBegin("apply column-specified view rules");
+              if(col->view_rule_size != 0)
+              {
+                String8 col_view_rule = str8(col->view_rule_buffer, col->view_rule_size);
+                EV_ViewRuleList *view_rules = ev_view_rule_list_from_string(scratch.arena, col_view_rule);
+                for(EV_ViewRuleNode *n = view_rules->first; n != 0; n = n->next)
+                {
+                  EV_ViewRule *vr = &n->v;
+                  RD_ViewRuleInfo *info = rd_view_rule_info_from_string(vr->root->string);
+                  if(info->flags & RD_ViewRuleInfoFlag_CanFillValueCell && info->ui != 0)
+                  {
+                    cell_ui_hook = info->ui;
+                    cell_ui_params = vr->root;
+                  }
+                }
+              }
+              ProfEnd();
+              
+              //- rjf: determine cell's palette
+              ProfBegin("determine cell's palette");
+              UI_BoxFlags cell_flags = 0;
+              UI_Palette *palette = ui_top_palette();
+              {
+                if(cell_error_tooltip_string.size != 0 ||
+                   cell_error_string.size != 0)
+                {
+                  palette = ui_build_palette(ui_top_palette(), .text = rd_rgba_from_theme_color(RD_ThemeColor_TextNegative), .text_weak = rd_rgba_from_theme_color(RD_ThemeColor_TextNegative), .background = rd_rgba_from_theme_color(RD_ThemeColor_HighlightOverlayError));
+                  cell_flags |= UI_BoxFlag_DrawBackground;
+                }
+                else if(cell_inheritance_string.size != 0)
+                {
+                  palette = ui_build_palette(ui_top_palette(), .background = rd_rgba_from_theme_color(RD_ThemeColor_HighlightOverlay));
+                  cell_flags |= UI_BoxFlag_DrawBackground;
+                }
+                else
+                {
+                  palette = ui_build_palette(ui_top_palette(), .text = cell_base_color);
+                }
+              }
+              ProfEnd();
+              
+              //- rjf: determine if cell needs code styling
+              B32 cell_is_code = !col->is_non_code;
+              switch(col->kind)
+              {
+                default:{}break;
+                case RD_WatchViewColumnKind_Expr:
+                {
+                  cell_is_code = 1;
+                  if(row->member != 0 && row->member->pretty_name.size != 0 && flags & RD_WatchViewFlag_PrettyNameMembers)
+                  {
+                    cell_is_code = 0;
+                  }
+                }break;
+                case RD_WatchViewColumnKind_Value:
+                case RD_WatchViewColumnKind_Member:
+                {
+                  if(cell_type->flags & E_TypeFlag_IsCodeText)
+                  {
+                    cell_is_code = 1;
+                  }
+                  else if(cell_type->flags & E_TypeFlag_IsPathText ||
+                          cell_type->flags & E_TypeFlag_IsPlainText)
+                  {
+                    cell_is_code = 0;
+                  }
+                }break;
+              }
+              
+              //- rjf: build cell
+              UI_Signal sig = {0};
+              ProfScope("build cell")
+                UI_Palette(palette)
+                UI_TableCell
+                UI_FocusHot(cell_selected ? UI_FocusKind_On : UI_FocusKind_Off)
+                UI_FocusActive((cell_selected && ewv->text_editing) ? UI_FocusKind_On : UI_FocusKind_Off)
+                RD_Font(cell_is_code ? RD_FontSlot_Code : RD_FontSlot_Main)
+                UI_FlagsAdd(row_depth > 0 ? UI_BoxFlag_DrawTextWeak : 0)
+              {
+                ui_set_next_flags(ui_top_flags() | cell_flags);
+                
+                // rjf: cell has errors? -> build error box
+                if(cell_error_string.size != 0) RD_Font(RD_FontSlot_Main)
+                {
+                  UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clip|UI_BoxFlag_Clickable, "###%I64x_row_%I64x", x, row_hash);
+                  sig = ui_signal_from_box(box);
+                  UI_Parent(box) UI_Flags(0)
+                  {
+                    rd_error_label(cell_error_string);
+                  }
+                }
+                
+                // rjf: cell has hook? -> build ui by calling hook
+                else if(cell_ui_hook != 0)
+                {
+                  UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clip|UI_BoxFlag_Clickable, "###val_%I64x", row_hash);
+                  UI_Parent(box)
+                  {
+                    String8 row_expr = e_string_from_expr(scratch.arena, row->expr);
+                    cell_ui_hook(row_expr, cell_ui_params, r2f32p(x_px, 0, x_px + col->pct*dim_2f32(rect).x, row_height_px));
+                  }
+                  sig = ui_signal_from_box(box);
+                }
+                
+                // rjf: cell has icon? build icon
+                else if(cell_icon != RD_IconKind_Null)
+                {
+                  UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clickable, "###cell_%I64x", row_hash);
+                  UI_Parent(box) RD_Font(RD_FontSlot_Icons) UI_WidthFill UI_TextAlignment(UI_TextAlign_Center)
+                  {
+                    ui_label(rd_icon_kind_text_table[cell_icon]);
+                  }
+                  sig = ui_signal_from_box(box);
+                }
+                
+                // rjf: build cell line edit
+                else
+                {
+                  sig = rd_line_editf((RD_LineEditFlag_CodeContents*(!!cell_is_code)|
+                                       RD_LineEditFlag_NoBackground|
+                                       RD_LineEditFlag_KeyboardClickable|
+                                       RD_LineEditFlag_DisableEdit*(!cell_can_edit)|
+                                       RD_LineEditFlag_Expander*!!(x == 0 && row_is_expandable && cell == row_cells.first)|
+                                       RD_LineEditFlag_ExpanderPlaceholder*(x == 0 && row_depth==0 && cell == row_cells.first)|
+                                       RD_LineEditFlag_ExpanderSpace*(x == 0 && row_depth!=0 && cell == row_cells.first)),
+                                      x == 0 ? row_depth : 0,
+                                      &cell_matches,
+                                      &cell_edit_state->cursor, &cell_edit_state->mark, cell_edit_state->input_buffer, sizeof(cell_edit_state->input_buffer), &cell_edit_state->input_size, &next_row_expanded,
+                                      cell_pre_edit_string,
+                                      "%S###%I64x_row_%I64x", cell_ghost_text, x, row_hash);
+                  if(ui_is_focus_active() &&
+                     selection_tbl.min.x == selection_tbl.max.x && selection_tbl.min.y == selection_tbl.max.y &&
+                     txt_pt_match(cell_edit_state->cursor, cell_edit_state->mark))
+                  {
+                    String8 input = str8(cell_edit_state->input_buffer, cell_edit_state->input_size);
+                    rd_set_autocomp_lister_query(.ui_key       = sig.box->key,
+                                                 .off_px       = v2f32(0, dim_2f32(sig.box->rect).y),
+                                                 .string       = input,
+                                                 .cursor       = cell_edit_state->cursor,
+                                                 .lister_flags = cell_autocomp_flags);
+                  }
+                }
+              }
+              
+              //- rjf: handle interactions
+              {
+                // rjf: single-click -> move selection here
+                if(ui_pressed(sig))
+                {
+                  ewv->next_cursor = ewv->next_mark = cell_pt;
+                  pressed = 1;
+                }
+                
+                // rjf: double-click actions
+                if(ui_double_clicked(sig) || sig.f & UI_SignalFlag_KeyboardPressed)
+                {
+                  ui_kill_action();
+                  
+                  // rjf: has callstack info? -> select unwind
+                  if(row_info.callstack_thread != &ctrl_entity_nil)
+                  {
+                    rd_cmd(RD_CmdKind_SelectThread, .thread = row_info.callstack_thread->handle);
+                    rd_cmd(RD_CmdKind_SelectUnwind,
+                           .unwind_count = row_info.callstack_unwind_index,
+                           .inline_depth = row_info.callstack_inline_depth);
+                  }
+                  
+                  // rjf: can edit? -> begin editing
+                  else if(cell_can_edit)
+                  {
+                    rd_cmd(RD_CmdKind_Edit);
+                  }
+                  
+                  // rjf: cannot edit, has addr info? -> go to address
+                  else if(row_kind == RD_WatchViewRowKind_Normal &&
+                          (col->kind == RD_WatchViewColumnKind_Value ||
+                           col->kind == RD_WatchViewColumnKind_Member) &&
+                          cell_eval.space.kind == RD_EvalSpaceKind_CtrlEntity)
+                  {
+                    CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(cell_eval.space);
+                    CTRL_Entity *process = ctrl_process_from_entity(entity);
+                    if(process != &ctrl_entity_nil)
+                    {
+                      U64 vaddr = cell_eval.value.u64;
+                      CTRL_Entity *module = ctrl_module_from_process_vaddr(process, vaddr);
+                      DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
+                      U64 voff = ctrl_voff_from_vaddr(module, vaddr);
+                      D_LineList lines = d_lines_from_dbgi_key_voff(scratch.arena, &dbgi_key, voff);
+                      String8 file_path = {0};
+                      TxtPt pt = {0};
+                      if(lines.first != 0)
+                      {
+                        file_path = lines.first->v.file_path;
+                        pt        = lines.first->v.pt;
+                      }
+                      rd_cmd(RD_CmdKind_FindCodeLocation,
+                             .process    = process->handle,
+                             .vaddr      = vaddr,
+                             .file_path  = file_path,
+                             .cursor     = pt);
+                    }
+                  }
+                }
+                
+                // rjf: hovering with inheritance string -> show tooltip
+                if(ui_hovering(sig) && cell_inheritance_string.size != 0) UI_Tooltip
+                {
+                  UI_PrefWidth(ui_children_sum(1)) UI_Row UI_PrefWidth(ui_text_dim(1, 1)) UI_TextPadding(0)
+                  {
+                    ui_labelf("Inherited from ");
+                    RD_Font(RD_FontSlot_Code) rd_code_label(1.f, 0, rd_rgba_from_theme_color(RD_ThemeColor_CodeDefault), cell_inheritance_string);
+                  }
+                }
+                
+                // rjf: hovering with error tooltip -> show tooltip
+                if(ui_hovering(sig) && cell_error_tooltip_string.size != 0) UI_Tooltip
+                {
+                  UI_PrefWidth(ui_children_sum(1)) rd_error_label(cell_error_tooltip_string);
+                }
+              }
+              
+              //- rjf: bump x pixel coordinate
+              x_px += col->pct*dim_2f32(rect).x;
+              
+              //- rjf: [DEV] hovering -> watch key tooltips
+              if(DEV_eval_watch_key_tooltips && ui_hovering(sig)) UI_Tooltip RD_Font(RD_FontSlot_Code)
+              {
+                ui_labelf("Block Key:  {0x%I64x, %I64u}", row->block->key.parent_hash, row->block->key.child_id);
+                ui_labelf("Row Key:    {0x%I64x, %I64u}", row->key.parent_hash, row->key.child_id);
+                ui_labelf("Cursor Key: {0x%I64x, %I64u}", ewv->cursor.key.parent_hash, ewv->cursor.key.child_id);
+                ui_spacer(ui_em(1.f, 1.f));
+                ui_labelf("Cursor Table Coordinates: {%I64u, %I64u}", selection_tbl.min.x, selection_tbl.min.y);
+              }
+              
+              //- rjf: [DEV] hovering -> eval system tooltips
+              if(DEV_eval_compiler_tooltips && ui_hovering(sig)) UI_Tooltip RD_Font(RD_FontSlot_Code)
+              {
+                local_persist char *spaces = "                                                                        ";
+                String8         string      = ev_expr_string_from_row(scratch.arena, row, 0);
+                E_TokenArray    tokens      = e_token_array_from_text(scratch.arena, string);
+                E_Parse         parse       = e_parse_expr_from_text_tokens(scratch.arena, string, &tokens);
+                E_IRTreeAndType irtree      = e_irtree_and_type_from_expr(scratch.arena, parse.expr);
+                E_OpList        oplist      = e_oplist_from_irtree(scratch.arena, irtree.root);
+                String8         bytecode    = e_bytecode_from_oplist(scratch.arena, &oplist);
+                UI_Flags(UI_BoxFlag_DrawTextWeak) ui_labelf("Text:");
+                ui_label(string);
+                ui_spacer(ui_em(2.f, 1.f));
+                UI_Flags(UI_BoxFlag_DrawTextWeak) ui_labelf("Tokens:");
+                for(U64 idx = 0; idx < tokens.count; idx += 1)
+                {
+                  ui_labelf("%S: '%S'", e_token_kind_strings[tokens.v[idx].kind], str8_substr(string, tokens.v[idx].range));
+                }
+                ui_spacer(ui_em(2.f, 1.f));
+                UI_Flags(UI_BoxFlag_DrawTextWeak) ui_labelf("Expression:");
+                {
+                  typedef struct Task Task;
+                  struct Task
+                  {
+                    Task *next;
+                    Task *prev;
+                    E_Expr *expr;
+                    S64 depth;
+                  };
+                  Task start_task = {0, 0, parse.expr};
+                  Task *first_task = &start_task;
+                  Task *last_task = first_task;
+                  for(Task *t = first_task; t != 0; t = t->next)
+                  {
+                    String8 ext = {0};
+                    switch(t->expr->kind)
+                    {
+                      default:
+                      {
+                        if(t->expr->string.size != 0)
+                        {
+                          ext = push_str8f(scratch.arena, "'%S'", t->expr->string);
+                        }
+                        else if(t->expr->value.u32 != 0)
+                        {
+                          ext = push_str8f(scratch.arena, "0x%x", t->expr->value.u32);
+                        }
+                        else if(t->expr->value.f32 != 0)
+                        {
+                          ext = push_str8f(scratch.arena, "%f", t->expr->value.f32);
+                        }
+                        else if(t->expr->value.f64 != 0)
+                        {
+                          ext = push_str8f(scratch.arena, "%f", t->expr->value.f64);
+                        }
+                        else if(t->expr->value.u64 != 0)
+                        {
+                          ext = push_str8f(scratch.arena, "0x%I64x", t->expr->value.u64);
+                        }
+                      }break;
+                    }
+                    ui_labelf("%.*s%S%s%S", (int)t->depth*2, spaces, e_expr_kind_strings[t->expr->kind], ext.size ? " " : "", ext);
+                    for(E_Expr *child = t->expr->first; child != &e_expr_nil; child = child->next)
+                    {
+                      Task *task = push_array(scratch.arena, Task, 1);
+                      task->expr = child;
+                      task->depth = t->depth+1;
+                      DLLInsert(first_task, last_task, t, task);
+                    }
+                  }
+                }
+                ui_spacer(ui_em(2.f, 1.f));
+                UI_Flags(UI_BoxFlag_DrawTextWeak) ui_labelf("IR Tree:");
+                {
+                  typedef struct Task Task;
+                  struct Task
+                  {
+                    Task *next;
+                    Task *prev;
+                    E_IRNode *node;
+                    S64 depth;
+                  };
+                  Task start_task = {0, 0, irtree.root};
+                  Task *first_task = &start_task;
+                  Task *last_task = first_task;
+                  for(Task *t = first_task; t != 0; t = t->next)
+                  {
+                    String8 op_string = {0};
+                    switch(t->node->op)
+                    {
+                      default:{}break;
+                      case E_IRExtKind_Bytecode:{op_string = str8_lit("Bytecode");}break;
+                      case E_IRExtKind_SetSpace:{op_string = str8_lit("SetSpace");}break;
+#define X(name) case RDI_EvalOp_##name:{op_string = str8_lit(#name);}break;
+                      RDI_EvalOp_XList
+#undef X
+                    }
+                    String8 ext = {0};
+                    ui_labelf("%.*s%S", (int)t->depth*2, spaces, op_string);
+                    for(E_IRNode *child = t->node->first; child != &e_irnode_nil; child = child->next)
+                    {
+                      Task *task = push_array(scratch.arena, Task, 1);
+                      task->node = child;
+                      task->depth = t->depth+1;
+                      DLLInsert(first_task, last_task, t, task);
+                    }
+                  }
+                }
+                ui_spacer(ui_em(2.f, 1.f));
+                UI_Flags(UI_BoxFlag_DrawTextWeak) ui_labelf("Op List:");
+                {
+                  for(E_Op *op = oplist.first; op != 0; op = op->next)
+                  {
+                    String8 op_string = {0};
+                    switch(op->opcode)
+                    {
+                      default:{}break;
+                      case E_IRExtKind_Bytecode:{op_string = str8_lit("Bytecode");}break;
+                      case E_IRExtKind_SetSpace:{op_string = str8_lit("SetSpace");}break;
+#define X(name) case RDI_EvalOp_##name:{op_string = str8_lit(#name);}break;
+                      RDI_EvalOp_XList
+#undef X
+                    }
+                    String8 ext = {0};
+                    switch(op->opcode)
+                    {
+                      case E_IRExtKind_Bytecode:{ext = str8_lit("[bytecode]");}break;
+                      default:
+                      {
+                        ext = str8_from_u64(scratch.arena, op->value.u64, 16, 0, 0);
+                      }break;
+                    }
+                    ui_labelf("  %S%s%S", op_string, ext.size ? " " : "", ext);
+                  }
+                }
+                ui_spacer(ui_em(2.f, 1.f));
+                UI_Flags(UI_BoxFlag_DrawTextWeak) ui_labelf("Bytecode:");
+                {
+                  for(U64 idx = 0; idx < bytecode.size; idx += 1)
+                  {
+                    ui_labelf("  0x%x ('%c')", (U32)bytecode.str[idx], (char)bytecode.str[idx]);
+                  }
+                }
+              }
+#endif
+            }
+          }
+          
+          //////////////////////
+          //- rjf: build row contents
+          //
+#if 0 // TODO(rjf): @cfg
           RD_RegsScope(.module = row_module->handle) UI_Parent(row_box) switch(row_kind)
           {
             ////////////////////
@@ -3416,6 +4005,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
               }
             }break;
           }
+#endif
           
           //////////////////////
           //- rjf: commit expansion state changes
@@ -3432,14 +4022,13 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
   //////////////////////////////
   //- rjf: general table-wide press logic
   //
-  if(!is_top_level_hook) if(pressed)
+  if(pressed)
   {
     rd_cmd(RD_CmdKind_FocusPanel);
   }
   
-  if(!is_top_level_hook) { rd_store_view_scroll_pos(scroll_pos); }
+  rd_store_view_scroll_pos(scroll_pos);
   scratch_end(scratch);
-  di_scope_close(di_scope);
   ProfEnd();
 }
 

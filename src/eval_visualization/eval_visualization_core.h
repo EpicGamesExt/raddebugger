@@ -188,24 +188,6 @@ struct EV_ViewRuleInfoTable
 };
 
 ////////////////////////////////
-//~ rjf: Columns
-
-typedef struct EV_Col EV_Col;
-struct EV_Col
-{
-  EV_Col *next;
-  String8 key;
-};
-
-typedef struct EV_ColList EV_ColList;
-struct EV_ColList
-{
-  EV_Col *first;
-  EV_Col *last;
-  U64 count;
-};
-
-////////////////////////////////
 //~ rjf: Blocks
 
 typedef struct EV_Block EV_Block;
@@ -223,9 +205,6 @@ struct EV_Block
   
   // rjf: split index, relative to parent's space
   U64 split_relative_idx;
-  
-  // rjf: columns
-  EV_ColList cols;
   
   // rjf: expression / visualization info
   String8 string;
@@ -372,7 +351,7 @@ global read_only EV_ViewRuleInfo ev_nil_view_rule_info =
 thread_static EV_ViewRuleInfoTable *ev_view_rule_info_table = 0;
 global read_only EV_ViewRuleList ev_nil_view_rule_list = {0};
 thread_static EV_AutoViewRuleTable *ev_auto_view_rule_table = 0;
-global read_only EV_Block ev_nil_block = {&ev_nil_block, &ev_nil_block, &ev_nil_block, &ev_nil_block, &ev_nil_block, {0}, 0, {0}, {0}, &e_expr_nil, &ev_nil_view_rule_list, &ev_nil_view_rule_info};
+global read_only EV_Block ev_nil_block = {&ev_nil_block, &ev_nil_block, &ev_nil_block, &ev_nil_block, &ev_nil_block, {0}, 0, {0}, &e_expr_nil, &ev_nil_view_rule_list, &ev_nil_view_rule_info};
 
 ////////////////////////////////
 //~ rjf: Key Functions
@@ -437,16 +416,10 @@ internal void ev_view_rule_list_concat_in_place(EV_ViewRuleList *dst, EV_ViewRul
 internal E_Expr *ev_resolved_from_expr(Arena *arena, E_Expr *expr, EV_ViewRuleList *view_rules);
 
 ////////////////////////////////
-//~ rjf: Column List Building
-
-internal EV_Col *ev_col_list_push(Arena *arena, EV_ColList *list);
-internal EV_Col *ev_col_list_push_new(Arena *arena, EV_ColList *list, String8 key);
-
-////////////////////////////////
 //~ rjf: Block Building
 
-internal EV_BlockTree ev_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, String8 string, E_Expr *expr, EV_ViewRuleList *view_rules, EV_ColList *cols);
-internal EV_BlockTree ev_block_tree_from_string(Arena *arena, EV_View *view, String8 filter, String8 string, EV_ViewRuleList *view_rules, EV_ColList *cols);
+internal EV_BlockTree ev_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, String8 string, E_Expr *expr, EV_ViewRuleList *view_rules);
+internal EV_BlockTree ev_block_tree_from_string(Arena *arena, EV_View *view, String8 filter, String8 string, EV_ViewRuleList *view_rules);
 internal U64 ev_depth_from_block(EV_Block *block);
 
 ////////////////////////////////

@@ -668,30 +668,10 @@ ev_resolved_from_expr(Arena *arena, E_Expr *expr, EV_ViewRuleList *view_rules)
 }
 
 ////////////////////////////////
-//~ rjf: Column List Building
-
-internal EV_Col *
-ev_col_list_push(Arena *arena, EV_ColList *list)
-{
-  EV_Col *col = push_array(arena, EV_Col, 1);
-  SLLQueuePush(list->first, list->last, col);
-  list->count += 1;
-  return col;
-}
-
-internal EV_Col *
-ev_col_list_push_new(Arena *arena, EV_ColList *list, String8 key)
-{
-  EV_Col *col = ev_col_list_push(arena, list);
-  col->key = push_str8_copy(arena, key);
-  return col;
-}
-
-////////////////////////////////
 //~ rjf: Block Building
 
 internal EV_BlockTree
-ev_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, String8 string, E_Expr *expr, EV_ViewRuleList *view_rules, EV_ColList *cols)
+ev_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, String8 string, E_Expr *expr, EV_ViewRuleList *view_rules)
 {
   ProfBeginFunction();
   EV_BlockTree tree = {&ev_nil_block};
@@ -711,7 +691,6 @@ ev_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, String8 str
     tree.root = push_array(arena, EV_Block, 1);
     MemoryCopyStruct(tree.root, &ev_nil_block);
     tree.root->key        = ev_key_root();
-    tree.root->cols       = *cols;
     tree.root->string     = string;
     tree.root->expr       = ev_resolved_from_expr(arena, expr, top_level_view_rules);
     tree.root->view_rules = top_level_view_rules;
@@ -779,7 +758,6 @@ ev_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, String8 str
         expansion_block->parent                   = t->parent_block;
         expansion_block->key                      = key;
         expansion_block->split_relative_idx       = t->split_relative_idx;
-        expansion_block->cols                     = *cols;
         expansion_block->expr                     = t->expr;
         expansion_block->view_rules               = t->view_rules;
         expansion_block->expand_view_rule_info    = expand_view_rule_info;
@@ -907,7 +885,7 @@ ev_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, String8 str
 }
 
 internal EV_BlockTree
-ev_block_tree_from_string(Arena *arena, EV_View *view, String8 filter, String8 string, EV_ViewRuleList *view_rules, EV_ColList *cols)
+ev_block_tree_from_string(Arena *arena, EV_View *view, String8 filter, String8 string, EV_ViewRuleList *view_rules)
 {
   ProfBeginFunction();
   EV_BlockTree tree = {0};
@@ -918,7 +896,7 @@ ev_block_tree_from_string(Arena *arena, EV_View *view, String8 filter, String8 s
     EV_ViewRuleList *fastpath_view_rules = ev_view_rule_list_from_expr_fastpaths(arena, string);
     EV_ViewRuleList *all_view_rules = ev_view_rule_list_copy(arena, view_rules);
     ev_view_rule_list_concat_in_place(all_view_rules, &fastpath_view_rules);
-    tree = ev_block_tree_from_expr(arena, view, filter, string, parse.expr, all_view_rules, cols);
+    tree = ev_block_tree_from_expr(arena, view, filter, string, parse.expr, all_view_rules);
   }
   scratch_end(scratch);
   ProfEnd();

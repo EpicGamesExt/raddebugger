@@ -194,6 +194,9 @@ struct RD_ViewState
   // rjf: scroll position
   UI_ScrollPt2 scroll_pos;
   
+  // rjf: eval visualization view state
+  EV_View *ev_view;
+  
   // rjf: view-lifetime allocation & user data extensions
   Arena *arena;
   RD_ArenaExt *first_arena_ext;
@@ -725,25 +728,6 @@ struct RD_WindowStateSlot
 };
 
 ////////////////////////////////
-//~ rjf: Eval Visualization View Cache Types
-
-typedef struct RD_EvalVizViewCacheNode RD_EvalVizViewCacheNode;
-struct RD_EvalVizViewCacheNode
-{
-  RD_EvalVizViewCacheNode *next;
-  RD_EvalVizViewCacheNode *prev;
-  U64 key;
-  EV_View *v;
-};
-
-typedef struct RD_EvalVizViewCacheSlot RD_EvalVizViewCacheSlot;
-struct RD_EvalVizViewCacheSlot
-{
-  RD_EvalVizViewCacheNode *first;
-  RD_EvalVizViewCacheNode *last;
-};
-
-////////////////////////////////
 //~ rjf: Meta Evaluation Cache Types
 
 typedef struct RD_CtrlEntityMetaEvalCacheNode RD_CtrlEntityMetaEvalCacheNode;
@@ -918,11 +902,6 @@ struct RD_State
   // rjf: string search state
   Arena *string_search_arena;
   String8 string_search_string;
-  
-  // rjf: eval visualization view cache
-  U64 eval_viz_view_cache_slots_count;
-  RD_EvalVizViewCacheSlot *eval_viz_view_cache_slots;
-  RD_EvalVizViewCacheNode *eval_viz_view_cache_node_free;
   
   // rjf: ctrl entity meta eval cache
   U64 ctrl_entity_meval_cache_slots_count;
@@ -1209,6 +1188,9 @@ internal String8 rd_setting_from_name(String8 name);
 #define rd_setting_b32_from_name(name) (str8_match(rd_setting_from_name(name), str8_lit("1"), 0))
 #define rd_setting_u64_from_name(name) (u64_from_str8(rd_setting_from_name(name), 10))
 
+internal RD_Cfg *rd_immediate_cfg_from_key(String8 string);
+internal RD_Cfg *rd_immediate_cfg_from_keyf(char *fmt, ...);
+
 ////////////////////////////////
 //~ rjf: Entity Stateful Functions
 
@@ -1320,6 +1302,7 @@ internal DR_FancyStringList rd_title_fstrs_from_view(Arena *arena, String8 viewe
 //- rjf: view info extraction
 internal Arena *rd_view_arena(void);
 internal UI_ScrollPt2 rd_view_scroll_pos(void);
+internal EV_View *rd_view_eval_view(void);
 internal String8 rd_view_expr_string(void);
 internal String8 rd_view_filter(void);
 
@@ -1365,7 +1348,6 @@ internal EV_ExpandRangeInfo rd_ev_view_rule_expr_expand_range_info__debug_info_t
 internal U64                rd_ev_view_rule_expr_id_from_num__debug_info_tables(U64 num, void *user_data, RDI_SectionKind section);
 internal U64                rd_ev_view_rule_expr_num_from_id__debug_info_tables(U64 id, void *user_data, RDI_SectionKind section);
 
-internal EV_View *rd_ev_view_from_key(U64 key);
 internal F32 rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size, S32 depth, E_Eval eval, E_Member *member, EV_ViewRuleList *view_rules, String8List *out);
 internal String8 rd_value_string_from_eval(Arena *arena, EV_StringFlags flags, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size, E_Eval eval, E_Member *member, EV_ViewRuleList *view_rules);
 

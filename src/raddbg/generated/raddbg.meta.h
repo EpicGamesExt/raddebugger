@@ -527,6 +527,7 @@ struct RD_CfgNameSchemaPair
 {
 String8 name;
 String8 schema;
+String8 cmd_names;
 };
 
 typedef struct RD_Regs RD_Regs;

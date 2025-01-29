@@ -1543,6 +1543,46 @@ rd_setting_from_name(String8 name)
   return result;
 }
 
+internal RD_Cfg *
+rd_immediate_cfg_from_key(String8 string)
+{
+  RD_Cfg *transient = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("transient"));
+  RD_Cfg *immediate = &rd_nil_cfg;
+  RD_Cfg *cfg = &rd_nil_cfg;
+  for(RD_Cfg *child = transient->first; child != &rd_nil_cfg; child = child->next)
+  {
+    if(str8_match(child->string, str8_lit("immediate"), 0))
+    {
+      cfg = rd_cfg_child_from_string(child, string);
+      if(cfg != &rd_nil_cfg)
+      {
+        immediate = child;
+        break;
+      }
+    }
+  }
+  if(cfg == &rd_nil_cfg)
+  {
+    immediate = rd_cfg_new(transient, str8_lit("immediate"));
+    cfg = rd_cfg_new(immediate, string);
+  }
+  rd_cfg_new(immediate, str8_lit("hot"));
+  return cfg;
+}
+
+internal RD_Cfg *
+rd_immediate_cfg_from_keyf(char *fmt, ...)
+{
+  Temp scratch = scratch_begin(0, 0);
+  va_list args;
+  va_start(args, fmt);
+  String8 key = push_str8fv(scratch.arena, fmt, args);
+  RD_Cfg *result = rd_immediate_cfg_from_key(key);
+  va_end(args);
+  scratch_end(scratch);
+  return result;
+}
+
 ////////////////////////////////
 //~ rjf: Entity State Functions
 
@@ -3441,6 +3481,7 @@ rd_view_state_from_cfg(RD_Cfg *cfg)
     DLLPushBack_NP(slot->first, slot->last, view_state, hash_next, hash_prev);
     view_state->cfg_handle = cfg_handle;
     view_state->arena = arena_alloc();
+    view_state->ev_view = ev_view_alloc();
     view_state->loading_t = 1.f;
   }
   if(view_state != &rd_nil_view_state)
@@ -3611,6 +3652,14 @@ rd_view_scroll_pos(void)
   RD_Cfg *view = rd_cfg_from_handle(rd_regs()->view);
   RD_ViewState *view_state = rd_view_state_from_cfg(view);
   return view_state->scroll_pos;
+}
+
+internal EV_View *
+rd_view_eval_view(void)
+{
+  RD_Cfg *view = rd_cfg_from_handle(rd_regs()->view);
+  RD_ViewState *view_state = rd_view_state_from_cfg(view);
+  return view_state->ev_view;
 }
 
 internal String8
@@ -6674,12 +6723,47 @@ rd_window_frame(void)
         UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Main))
         RD_Palette(RD_PaletteCode_Floating)
       {
+        RD_Cfg *root = rd_immediate_cfg_from_keyf("hover_eval_%p", ws);
+        RD_Cfg *view = rd_cfg_child_from_string_or_alloc(root, str8_lit("watch"));
+        RD_Cfg *expr = rd_cfg_child_from_string_or_alloc(view, str8_lit("expression"));
+        RD_RegsScope(.panel = rd_handle_zero(), .view = rd_handle_from_cfg(view))
+        {
+          RD_ViewRuleInfo *view_rule_info = rd_view_rule_info_from_string(view->string);
+          rd_cfg_release_all_children(expr);
+          rd_cfg_new(expr, ws->hover_eval_string);
+          {
+            ui_set_next_fixed_x(ws->hover_eval_spawn_pos.x);
+            ui_set_next_fixed_y(ws->hover_eval_spawn_pos.y);
+            ui_set_next_pref_width(ui_em(60.f, 1.f));
+            ui_set_next_pref_height(ui_em(40.f, 1.f));
+            ui_set_next_child_layout_axis(Axis2_Y);
+            UI_Box *container = ui_build_box_from_key(UI_BoxFlag_Floating, ui_key_zero());
+            UI_Parent(container)
+            {
+              UI_Row
+              {
+              }
+              ui_set_next_pref_width(ui_pct(1, 0));
+              ui_set_next_pref_height(ui_pct(1, 0));
+              ui_set_next_child_layout_axis(Axis2_Y);
+              UI_Box *view_contents_container = ui_build_box_from_stringf(UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground|UI_BoxFlag_Clip, "###view_contents_container");
+              UI_Parent(view_contents_container) UI_Focus(UI_FocusKind_Off) UI_WidthFill
+              {
+                RD_ViewRuleUIFunctionType *view_ui = view_rule_info->ui;
+                String8 params_string = rd_string_from_cfg_tree(scratch.arena, view);
+                MD_Node *params = md_tree_from_string(scratch.arena, params_string)->first;
+                view_ui(expr->first->string, params, view_contents_container->rect);
+              }
+            }
+          }
+        }
+        
+#if 0 // TODO(rjf): @cfg
         Temp scratch = scratch_begin(0, 0);
         DI_Scope *scope = di_scope_open();
         String8 expr = ws->hover_eval_string;
         E_Eval eval = e_eval_from_string(scratch.arena, expr);
         EV_ViewRuleList top_level_view_rules = {0};
-        EV_ColList top_level_cols = {0};
         
         //- rjf: build if good
         if(!e_type_key_match(eval.type_key, e_type_key_zero()) && !ui_any_ctx_menu_is_open())
@@ -6693,7 +6777,7 @@ rd_window_frame(void)
           EV_View *ev_view = rd_ev_view_from_key(d_hash_from_string(ev_view_key_string));
           EV_Key parent_key = ev_key_make(5381, 1);
           EV_Key key = ev_key_make(ev_hash_from_key(parent_key), 1);
-          EV_BlockTree block_tree = ev_block_tree_from_string(scratch.arena, ev_view, str8_zero(), expr, &top_level_view_rules, &top_level_cols);
+          EV_BlockTree block_tree = ev_block_tree_from_string(scratch.arena, ev_view, str8_zero(), expr, &top_level_view_rules);
           EV_BlockRangeList block_ranges = ev_block_range_list_from_tree(scratch.arena, &block_tree);
           // EV_BlockList viz_blocks = ev_block_list_from_view_expr_keys(scratch.arena, ev_view, str8_zero(), &top_level_view_rules, expr, parent_key, key, 0);
           CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(eval.space);
@@ -6963,6 +7047,7 @@ rd_window_frame(void)
         
         di_scope_close(scope);
         scratch_end(scratch);
+#endif
       }
     }
     
@@ -9464,38 +9549,6 @@ rd_ev_view_rule_expr_num_from_id__debug_info_tables(U64 id, void *user_data, RDI
   RD_DebugInfoTableExpandAccel *accel = (RD_DebugInfoTableExpandAccel *)user_data;
   U64 num = di_search_item_num_from_array_element_idx__linear_search(&accel->items, id-1);
   return num;
-}
-
-internal EV_View *
-rd_ev_view_from_key(U64 key)
-{
-  U64 slot_idx = key % rd_state->eval_viz_view_cache_slots_count;
-  RD_EvalVizViewCacheNode *node = 0;
-  RD_EvalVizViewCacheSlot *slot = &rd_state->eval_viz_view_cache_slots[slot_idx];
-  for(RD_EvalVizViewCacheNode *n = slot->first; n != 0; n = n->next)
-  {
-    if(n->key == key)
-    {
-      node = n;
-      break;
-    }
-  }
-  if(node == 0)
-  {
-    node = rd_state->eval_viz_view_cache_node_free;
-    if(node)
-    {
-      SLLStackPop(rd_state->eval_viz_view_cache_node_free);
-    }
-    else
-    {
-      node = push_array(rd_state->arena, RD_EvalVizViewCacheNode, 1);
-    }
-    DLLPushBack(slot->first, slot->last, node);
-    node->key = key;
-    node->v = ev_view_alloc();
-  }
-  return node->v;
 }
 
 internal F32
@@ -12119,8 +12172,6 @@ rd_init(CmdLine *cmdln)
   rd_state->ctx_menu_key = ui_key_from_string(ui_key_zero(), str8_lit("top_level_ctx_menu"));
   rd_state->drop_completion_key = ui_key_from_string(ui_key_zero(), str8_lit("drop_completion_ctx_menu"));
   rd_state->string_search_arena = arena_alloc();
-  rd_state->eval_viz_view_cache_slots_count = 1024;
-  rd_state->eval_viz_view_cache_slots = push_array(arena, RD_EvalVizViewCacheSlot, rd_state->eval_viz_view_cache_slots_count);
   rd_state->bind_change_arena = arena_alloc();
   rd_state->drag_drop_arena = arena_alloc();
   rd_state->drag_drop_regs = push_array(rd_state->drag_drop_arena, RD_Regs, 1);
@@ -12328,6 +12379,32 @@ rd_frame(void)
   rd_state->cfg2evalblob_map->slots = push_array(rd_frame_arena(), RD_Cfg2EvalBlobSlot, rd_state->cfg2evalblob_map->slots_count);
   
   //////////////////////////////
+  //- rjf: garbage collect untouched immediate cfg trees
+  //
+  if(depth == 0)
+  {
+    RD_Cfg *transient = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("transient"));
+    for(RD_Cfg *tln = transient->first, *next = &rd_nil_cfg; tln != &rd_nil_cfg; tln = next)
+    {
+      next = tln->next;
+      if(str8_match(tln->string, str8_lit("immediate"), 0))
+      {
+        if(rd_cfg_child_from_string(tln, str8_lit("hot")) == &rd_nil_cfg)
+        {
+          rd_cfg_release(tln);
+        }
+      }
+    }
+    for(RD_Cfg *tln = transient->first; tln != &rd_nil_cfg; tln = tln->next)
+    {
+      if(str8_match(tln->string, str8_lit("immediate"), 0))
+      {
+        rd_cfg_release(rd_cfg_child_from_string(tln, str8_lit("hot")));
+      }
+    }
+  }
+  
+  //////////////////////////////
   //- rjf: garbage collect untouched window states
   //
   if(depth == 0) DeferLoop(depth += 1, depth -= 1)
@@ -12374,6 +12451,7 @@ rd_frame(void)
         next = vs->hash_next;
         if(vs->last_frame_index_touched+2 < rd_state->frame_index)
         {
+          ev_view_release(vs->ev_view);
           for(RD_ArenaExt *ext = vs->first_arena_ext; ext != 0; ext = ext->next)
           {
             arena_release(ext->arena);
