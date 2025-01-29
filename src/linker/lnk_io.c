@@ -173,7 +173,8 @@ lnk_write_data_list_to_file_path(String8 path, String8List data)
   if (lnk_open_file_write((char*)path.str, path.size, &handle, sizeof(handle))) {
     U64 offset = 0;
     for (String8Node *data_n = data.first; data_n != 0; data_n = data_n->next) {
-      if (!lnk_write_file(&handle, offset, data_n->string.str, data_n->string.size)) {
+      U64 write_size = lnk_write_file(&handle, offset, data_n->string.str, data_n->string.size);
+      if (write_size != data_n->string.size) {
         break;
       }
       offset += data_n->string.size;
