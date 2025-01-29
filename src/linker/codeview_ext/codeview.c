@@ -1992,7 +1992,7 @@ cv_c13_parse_inline_binary_annots(Arena                    *arena,
       break;
     }
     if (step.flags & CV_C13InlineSiteDecoderStepFlag_EmitRange) {
-      rng1u64_list_push(scratch.arena, &code_ranges, step.range);
+      rng1u64_list_push(arena, &code_ranges, step.range);
     }
     if (step.flags & CV_C13InlineSiteDecoderStepFlag_ExtendLastRange) {
       if (code_ranges.last) {
