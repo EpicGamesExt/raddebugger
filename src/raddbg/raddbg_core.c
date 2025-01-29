@@ -2713,7 +2713,7 @@ rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
   switch(space.kind)
   {
     //- rjf: filesystem reads
-    case E_SpaceKind_FileSystem:
+    case E_SpaceKind_HashStoreKey:
     {
       U128 key = space.u128;
       U128 hash = hs_hash_from_key(key, 0);
@@ -3164,7 +3164,7 @@ rd_key_from_eval_space_range(E_Space space, Rng1U64 range, B32 zero_terminated)
   U128 result = {0};
   switch(space.kind)
   {
-    case E_SpaceKind_FileSystem:
+    case E_SpaceKind_HashStoreKey:
     {
       result = space.u128;
     }break;
@@ -3188,7 +3188,7 @@ rd_whole_range_from_eval_space(E_Space space)
   Rng1U64 result = {0};
   switch(space.kind)
   {
-    case E_SpaceKind_FileSystem:
+    case E_SpaceKind_HashStoreKey:
     {
       HS_Scope *scope = hs_scope_open();
       U128 hash = {0};
@@ -13295,6 +13295,22 @@ rd_frame(void)
         expr->mode     = E_Mode_Offset;
         expr->type_key = collection_type_key;
         e_string2expr_map_insert(scratch.arena, ctx->macro_map, collection_name, expr);
+      }
+      
+      //- rjf: add macro for output log
+      {
+        HS_Scope *hs_scope = hs_scope_open();
+        U128 key = d_state->output_log_key;
+        U128 hash = hs_hash_from_key(key, 0);
+        String8 data = hs_data_from_hash(hs_scope, hash);
+        E_Space space = e_space_make(E_SpaceKind_HashStoreKey);
+        E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
+        space.u128 = key;
+        expr->space    = space;
+        expr->mode     = E_Mode_Offset;
+        expr->type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), data.size);
+        e_string2expr_map_insert(scratch.arena, ctx->macro_map, str8_lit("output_log"), expr);
+        hs_scope_close(hs_scope);
       }
       
       //- rjf: add macros for all watches which define identifiers

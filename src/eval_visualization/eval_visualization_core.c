@@ -1049,6 +1049,52 @@ ev_num_from_key(EV_BlockRangeList *block_ranges, EV_Key key)
   return result;
 }
 
+internal U64
+ev_vidx_from_num(EV_BlockRangeList *block_ranges, U64 num)
+{
+  U64 vidx = 0;
+  {
+    U64 base_vidx = 0;
+    U64 base_num = 1;
+    for(EV_BlockRangeNode *n = block_ranges->first; n != 0; n = n->next)
+    {
+      U64 next_base_num = base_num + (n->v.block->single_item ? 1 : dim_1u64(n->v.range));
+      if(base_num <= num && num < next_base_num)
+      {
+        U64 relative_vidx = (n->v.block->single_item ? 0 : (num - base_num));
+        vidx = base_vidx + relative_vidx;
+        break;
+      }
+      base_num = next_base_num;
+      base_vidx += dim_1u64(n->v.range);
+    }
+  }
+  return vidx;
+}
+
+internal U64
+ev_num_from_vidx(EV_BlockRangeList *block_ranges, U64 vidx)
+{
+  U64 num = 0;
+  {
+    U64 base_vidx = 0;
+    U64 base_num = 1;
+    for(EV_BlockRangeNode *n = block_ranges->first; n != 0; n = n->next)
+    {
+      U64 next_base_vidx = base_vidx + dim_1u64(n->v.range);
+      if(base_vidx <= vidx && vidx < next_base_vidx)
+      {
+        U64 relative_num = (n->v.block->single_item ? 0 : (vidx - base_vidx));
+        num = base_num + relative_num;
+        break;
+      }
+      base_vidx = next_base_vidx;
+      base_num += (n->v.block->single_item ? 1 : dim_1u64(n->v.range));
+    }
+  }
+  return num;
+}
+
 ////////////////////////////////
 //~ rjf: Row Building
 
@@ -1126,18 +1172,19 @@ ev_windowed_row_list_from_block_range_list(Arena *arena, EV_View *view, String8 
             }
             scratch_end(scratch);
           }
-          EV_Row *row = push_array(arena, EV_Row, 1);
-          SLLQueuePush(rows.first, rows.last, row);
+          EV_WindowedRowNode *row_node = push_array(arena, EV_WindowedRowNode, 1);
+          SLLQueuePush(rows.first, rows.last, row_node);
           rows.count += 1;
-          row->block                = n->v.block;
-          row->key                  = ev_key_make(ev_hash_from_key(row->block->key), 1);
-          row->visual_size          = n->v.block->single_item ? (n->v.block->row_count - (num_skipped + num_chopped)) : 1;
-          row->visual_size_skipped  = num_skipped;
-          row->visual_size_chopped  = num_chopped;
-          row->string               = n->v.block->string;
-          row->expr                 = n->v.block->expr;
-          row->member               = member;
-          row->view_rules           = n->v.block->view_rules;
+          row_node->visual_size_skipped = num_skipped;
+          row_node->visual_size_chopped = num_chopped;
+          EV_Row *row = &row_node->row;
+          row->block         = n->v.block;
+          row->key           = ev_key_make(ev_hash_from_key(row->block->key), 1);
+          row->visual_size   = n->v.block->single_item ? (n->v.block->row_count - (num_skipped + num_chopped)) : 1;
+          row->string        = n->v.block->string;
+          row->expr          = n->v.block->expr;
+          row->member        = member;
+          row->view_rules    = n->v.block->view_rules;
         }
         
         // rjf: expansion operator applied -> call, and add rows for all expressions in the viewable range
@@ -1165,14 +1212,13 @@ ev_windowed_row_list_from_block_range_list(Arena *arena, EV_View *view, String8 
               scratch_end(scratch);
             }
             E_Expr *row_expr__resolved = ev_resolved_from_expr(arena, row_expr, row_view_rules);
-            EV_Row *row = push_array(arena, EV_Row, 1);
-            SLLQueuePush(rows.first, rows.last, row);
+            EV_WindowedRowNode *row_node = push_array(arena, EV_WindowedRowNode, 1);
+            SLLQueuePush(rows.first, rows.last, row_node);
             rows.count += 1;
+            EV_Row *row = &row_node->row;
             row->block                = n->v.block;
             row->key                  = row_key;
             row->visual_size          = 1;
-            row->visual_size_skipped  = 0;
-            row->visual_size_chopped  = 0;
             row->string               = expand_range_info.row_strings[idx];
             row->expr                 = row_expr__resolved;
             row->member               = expand_range_info.row_members[idx];
@@ -1202,6 +1248,31 @@ ev_windowed_row_list_from_block_range_list(Arena *arena, EV_View *view, String8 
       }
     }
   }
+  return rows;
+}
+
+internal EV_Row *
+ev_row_from_num(Arena *arena, EV_View *view, String8 filter, EV_BlockRangeList *block_ranges, U64 num)
+{
+  U64 vidx = ev_vidx_from_num(block_ranges, num);
+  EV_WindowedRowList rows = ev_windowed_row_list_from_block_range_list(arena, view, filter, block_ranges, r1u64(vidx, vidx+1));
+  EV_Row *result = 0;
+  if(rows.first != 0)
+  {
+    result = &rows.first->row;
+  }
+  else
+  {
+    result = push_array(arena, EV_Row, 1);
+  }
+  return result;
+}
+
+internal EV_WindowedRowList
+ev_rows_from_num_range(Arena *arena, EV_View *view, String8 filter, EV_BlockRangeList *block_ranges, Rng1U64 num_range)
+{
+  Rng1U64 vidx_range = r1u64(ev_vidx_from_num(block_ranges, num_range.min), ev_vidx_from_num(block_ranges, num_range.max)+1);
+  EV_WindowedRowList rows = ev_windowed_row_list_from_block_range_list(arena, view, filter, block_ranges, vidx_range);
   return rows;
 }
 

@@ -1464,15 +1464,14 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
         mark_tbl = rd_tbl_from_watch_view_point(&block_ranges, ewv->mark);
         
         // rjf: compute row at initial selection point (or just cursor point)
-        mark_rows = ev_windowed_row_list_from_block_range_list(scratch.arena, eval_view, filter, &block_ranges, r1u64(ui_scroll_list_row_from_item(&row_blocks, mark_tbl.y),
-                                                                                                                      ui_scroll_list_row_from_item(&row_blocks, mark_tbl.y)+1));
+        mark_rows = ev_rows_from_num_range(scratch.arena, eval_view, filter, &block_ranges, r1u64(mark_tbl.y, mark_tbl.y+1));
         
         // rjf: compute legal coordinate range, given selection-defining row
         Rng1S64 cursor_x_range = r1s64(0, ewv->column_count-1);
         if(mark_rows.first != 0)
         {
-          RD_WatchViewRowInfo row_info = rd_watch_view_row_info_from_row(mark_rows.first);
-          RD_WatchViewRowKind row_kind = rd_watch_view_row_kind_from_flags_row_info(flags, mark_rows.first, &row_info);
+          RD_WatchViewRowInfo row_info = rd_watch_view_row_info_from_row(&mark_rows.first->row);
+          RD_WatchViewRowKind row_kind = rd_watch_view_row_kind_from_flags_row_info(flags, &mark_rows.first->row, &row_info);
           if(row_kind == RD_WatchViewRowKind_PrettyEntityControls)
           {
             U64 row_ctrl_count = 0;
@@ -1584,11 +1583,11 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
         ewv->text_edit_state_slots_count = u64_up_to_pow2(selection_dim.y+1);
         ewv->text_edit_state_slots_count = Max(ewv->text_edit_state_slots_count, 64);
         ewv->text_edit_state_slots = push_array(ewv->text_edit_arena, RD_WatchViewTextEditState*, ewv->text_edit_state_slots_count);
-        EV_WindowedRowList rows = ev_windowed_row_list_from_block_range_list(scratch.arena, eval_view, filter, &block_ranges, r1u64(ui_scroll_list_row_from_item(&row_blocks, selection_tbl.min.y),
-                                                                                                                                    ui_scroll_list_row_from_item(&row_blocks, selection_tbl.max.y)+1));
-        EV_Row *row = rows.first;
-        for(S64 y = selection_tbl.min.y; y <= selection_tbl.max.y; y += 1, row = row->next)
+        EV_WindowedRowList rows = ev_rows_from_num_range(scratch.arena, eval_view, filter, &block_ranges, r1u64(selection_tbl.min.y, selection_tbl.max.y+1));
+        EV_WindowedRowNode *row_node = rows.first;
+        for(S64 y = selection_tbl.min.y; y <= selection_tbl.max.y; y += 1, row_node = row_node->next)
         {
+          EV_Row *row = &row_node->row;
           RD_WatchViewRowInfo row_info = rd_watch_view_row_info_from_row(row);
           RD_WatchViewRowKind row_kind = rd_watch_view_row_kind_from_flags_row_info(flags, row, &row_info);
           if(row_kind == RD_WatchViewRowKind_Normal)
@@ -1623,12 +1622,12 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
       if(!ewv->text_editing && evt->slot == UI_EventActionSlot_Accept)
       {
         taken = 1;
-        EV_WindowedRowList rows = ev_windowed_row_list_from_block_range_list(scratch.arena, eval_view, filter, &block_ranges, r1u64(ui_scroll_list_row_from_item(&row_blocks, selection_tbl.min.y),
-                                                                                                                                    ui_scroll_list_row_from_item(&row_blocks, selection_tbl.max.y)+1));
-        EV_Row *row = rows.first;
-        for(S64 y = selection_tbl.min.y; y <= selection_tbl.max.y && row != 0; y += 1, row = row->next)
+        EV_WindowedRowList rows = ev_rows_from_num_range(scratch.arena, eval_view, filter, &block_ranges, r1u64(selection_tbl.min.y, selection_tbl.max.y+1));
+        EV_WindowedRowNode *row_node = rows.first;
+        for(S64 y = selection_tbl.min.y; y <= selection_tbl.max.y && row_node != 0; y += 1, row_node = row_node->next)
         {
           // rjf: unpack row info
+          EV_Row *row = &row_node->row;
           RD_WatchViewRowInfo row_info = rd_watch_view_row_info_from_row(row);
           RD_WatchViewRowKind row_kind = rd_watch_view_row_kind_from_flags_row_info(flags, row, &row_info);
           
@@ -1693,11 +1692,11 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
             evt->delta_2s32.y == 0))
         {
           taken = 1;
-          EV_WindowedRowList rows = ev_windowed_row_list_from_block_range_list(scratch.arena, eval_view, filter, &block_ranges, r1u64(ui_scroll_list_row_from_item(&row_blocks, selection_tbl.min.y),
-                                                                                                                                      ui_scroll_list_row_from_item(&row_blocks, selection_tbl.max.y)+1));
-          EV_Row *row = rows.first;
-          for(S64 y = selection_tbl.min.y; y <= selection_tbl.max.y; y += 1, row = row->next)
+          EV_WindowedRowList rows = ev_rows_from_num_range(scratch.arena, eval_view, filter, &block_ranges, r1u64(selection_tbl.min.y, selection_tbl.max.y+1));
+          EV_WindowedRowNode *row_node = rows.first;
+          for(S64 y = selection_tbl.min.y; y <= selection_tbl.max.y; y += 1, row_node = row_node->next)
           {
+            EV_Row *row = &row_node->row;
             RD_WatchViewRowInfo row_info = rd_watch_view_row_info_from_row(row);
             RD_WatchViewRowKind row_kind = rd_watch_view_row_kind_from_flags_row_info(flags, row, &row_info);
             for(S64 x = selection_tbl.min.x; x <= selection_tbl.max.x; x += 1)
@@ -1780,8 +1779,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                   case RD_WatchViewColumnKind_Member:
                   case RD_WatchViewColumnKind_Value:
                   {
-                    EV_WindowedRowList rows = ev_windowed_row_list_from_block_range_list(scratch.arena, eval_view, filter, &block_ranges, r1u64(ui_scroll_list_row_from_item(&row_blocks, y),
-                                                                                                                                                ui_scroll_list_row_from_item(&row_blocks, y)+1));
+                    EV_WindowedRowList rows = ev_rows_from_num_range(scratch.arena, eval_view, filter, &block_ranges, r1u64(y, y+1));
                     if(rows.first != 0)
                     {
                       B32 should_commit_asap = editing_complete;
@@ -1850,11 +1848,11 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
       {
         taken = 1;
         String8List strs = {0};
-        EV_WindowedRowList rows = ev_windowed_row_list_from_block_range_list(scratch.arena, eval_view, filter, &block_ranges, r1u64(ui_scroll_list_row_from_item(&row_blocks, selection_tbl.min.y),
-                                                                                                                                    ui_scroll_list_row_from_item(&row_blocks, selection_tbl.max.y)+1));
-        EV_Row *row = rows.first;
-        for(S64 y = selection_tbl.min.y; y <= selection_tbl.max.y && row != 0; y += 1, row = row->next)
+        EV_WindowedRowList rows = ev_rows_from_num_range(scratch.arena, eval_view, filter, &block_ranges, r1u64(selection_tbl.min.y, selection_tbl.max.y+1));
+        EV_WindowedRowNode *row_node = rows.first;
+        for(S64 y = selection_tbl.min.y; y <= selection_tbl.max.y && row_node != 0; y += 1, row_node = row_node->next)
         {
+          EV_Row *row = &row_node->row;
           for(S64 x = selection_tbl.min.x; x <= selection_tbl.max.x; x += 1)
           {
             RD_WatchViewColumn *col = rd_watch_view_column_from_x(ewv, x);
@@ -1894,11 +1892,11 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
         RD_EntityList entities_to_remove = {0};
         RD_WatchViewPoint next_cursor_pt = {0};
         B32 next_cursor_set = 0;
-        EV_WindowedRowList rows = ev_windowed_row_list_from_block_range_list(scratch.arena, eval_view, filter, &block_ranges, r1u64(ui_scroll_list_row_from_item(&row_blocks, selection_tbl.min.y),
-                                                                                                                                    ui_scroll_list_row_from_item(&row_blocks, selection_tbl.max.y)+1));
-        EV_Row *row = rows.first;
-        for(S64 y = selection_tbl.min.y; y <= selection_tbl.max.y; y += 1, row = row->next)
+        EV_WindowedRowList rows = ev_rows_from_num_range(scratch.arena, eval_view, filter, &block_ranges, r1u64(selection_tbl.min.y, selection_tbl.max.y+1));
+        EV_WindowedRowNode *row_node = rows.first;
+        for(S64 y = selection_tbl.min.y; y <= selection_tbl.max.y; y += 1, row_node = row_node->next)
         {
+          EV_Row *row = &row_node->row;
           RD_WatchViewRowInfo row_info = rd_watch_view_row_info_from_row(row);
           RD_WatchViewRowKind row_kind = rd_watch_view_row_kind_from_flags_row_info(flags, row, &row_info);
           for(S64 x = selection_tbl.min.x; x <= selection_tbl.max.x; x += 1)
@@ -2245,7 +2243,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
       ProfScope("build table")
       {
         U64 global_row_idx = rows.count_before_semantic;
-        for(EV_Row *row = rows.first; row != 0; row = row->next, global_row_idx += 1)
+        for(EV_WindowedRowNode *row_node = rows.first; row_node != 0; row_node = row_node->next, global_row_idx += 1)
         {
           ////////////////////////
           //- rjf: skip header
@@ -2259,6 +2257,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
           //- rjf: unpack row info
           //
           ProfBegin("unpack row info");
+          EV_Row *row = &row_node->row;
           U64 row_hash = ev_hash_from_key(row->key);
           U64 row_depth = ev_depth_from_block(row->block);
           if(row_depth > 0)
@@ -2373,7 +2372,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
           ui_set_next_pref_width(ui_pct(1, 0));
           ui_set_next_pref_height(ui_px(scroll_list_params.row_height_px*row->visual_size, 1.f));
           ui_set_next_focus_hot(row_selected ? UI_FocusKind_On : UI_FocusKind_Off);
-          UI_Box *row_box = ui_build_box_from_stringf(row_flags|(!row->next)*UI_BoxFlag_DrawSideBottom|UI_BoxFlag_Clickable, "row_%I64x", row_hash);
+          UI_Box *row_box = ui_build_box_from_stringf(row_flags|(!row_node->next)*UI_BoxFlag_DrawSideBottom|UI_BoxFlag_Clickable, "row_%I64x", row_hash);
           ui_ts_vector_idx += 1;
           ui_ts_cell_idx = 0;
           

@@ -1282,7 +1282,7 @@ e_irtree_and_type_from_expr__space(Arena *arena, E_Space *current_space, E_Expr 
     case E_ExprKind_LeafFilePath:
     {
       U128 key = fs_key_from_path_range(expr->string, r1u64(0, max_U64));
-      E_Space space = {E_SpaceKind_FileSystem, .u128 = key};
+      E_Space space = {E_SpaceKind_HashStoreKey, .u128 = key};
       U64 size = fs_size_from_path(expr->string);
       E_IRNode *base_offset = e_irtree_const_u(arena, 0);
       E_IRNode *set_space = e_irtree_set_space(arena, space, base_offset);

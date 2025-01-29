@@ -256,29 +256,29 @@ struct EV_BlockRangeList
 typedef struct EV_Row EV_Row;
 struct EV_Row
 {
-  EV_Row *next;
-  
-  // rjf: block hierarchy info
   EV_Block *block;
   EV_Key key;
-  
-  // rjf: row size/scroll info
   U64 visual_size;
-  U64 visual_size_skipped;
-  U64 visual_size_chopped;
-  
-  // rjf: expression / visualization info
   String8 string;
   E_Expr *expr;
   E_Member *member;
   EV_ViewRuleList *view_rules;
 };
 
+typedef struct EV_WindowedRowNode EV_WindowedRowNode;
+struct EV_WindowedRowNode
+{
+  EV_WindowedRowNode *next;
+  U64 visual_size_skipped;
+  U64 visual_size_chopped;
+  EV_Row row;
+};
+
 typedef struct EV_WindowedRowList EV_WindowedRowList;
 struct EV_WindowedRowList
 {
-  EV_Row *first;
-  EV_Row *last;
+  EV_WindowedRowNode *first;
+  EV_WindowedRowNode *last;
   U64 count;
   U64 count_before_visual;
   U64 count_before_semantic;
@@ -429,11 +429,15 @@ internal EV_BlockRangeList ev_block_range_list_from_tree(Arena *arena, EV_BlockT
 internal EV_BlockRange ev_block_range_from_num(EV_BlockRangeList *block_ranges, U64 num);
 internal EV_Key ev_key_from_num(EV_BlockRangeList *block_ranges, U64 num);
 internal U64    ev_num_from_key(EV_BlockRangeList *block_ranges, EV_Key key);
+internal U64    ev_vidx_from_num(EV_BlockRangeList *block_ranges, U64 num);
+internal U64    ev_num_from_vidx(EV_BlockRangeList *block_ranges, U64 vidx);
 
 ////////////////////////////////
 //~ rjf: Row Building
 
 internal EV_WindowedRowList ev_windowed_row_list_from_block_range_list(Arena *arena, EV_View *view, String8 filter, EV_BlockRangeList *block_ranges, Rng1U64 visible_range);
+internal EV_Row *ev_row_from_num(Arena *arena, EV_View *view, String8 filter, EV_BlockRangeList *block_ranges, U64 num);
+internal EV_WindowedRowList ev_rows_from_num_range(Arena *arena, EV_View *view, String8 filter, EV_BlockRangeList *block_ranges, Rng1U64 num_range);
 internal String8 ev_expr_string_from_row(Arena *arena, EV_Row *row, EV_StringFlags flags);
 internal B32 ev_row_is_expandable(EV_Row *row);
 internal B32 ev_row_is_editable(EV_Row *row);
