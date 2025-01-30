@@ -82,6 +82,8 @@
 #include "linker/codeview_ext/codeview.c"
 #include "linker/hash_table.h"
 #include "linker/hash_table.c"
+#include "linker/rdi/rdi.h"
+#include "linker/rdi/rdi.c"
 
 #include "raddump/raddump.h"
 #include "raddump/raddump.c"
@@ -250,7 +252,18 @@ entry_point(CmdLine *cmdline)
 
   // format input
   rd_format_preamble(arena, out, indent, file_path, raw_data);
-  if (coff_is_regular_archive(raw_data) || coff_is_thin_archive(raw_data)) {
+  if (rd_is_rdi(raw_data)) {
+    RDI_Parsed rdi = {0};
+    RDI_ParseStatus parse_status = rdi_parse(raw_data.str, raw_data.size, &rdi);
+    switch (parse_status) {
+    case RDI_ParseStatus_Good:                     rdi_print(arena, out, indent, &rdi, opts);                     break;
+    case RDI_ParseStatus_HeaderDoesNotMatch:       rd_errorf("RDI Parse: header does not match");                 break;
+    case RDI_ParseStatus_UnsupportedVersionNumber: rd_errorf("RDI Parse: unsupported version");                   break;
+    case RDI_ParseStatus_InvalidDataSecionLayout:  rd_errorf("RDI Parse: invalid data section layout");           break;
+    case RDI_ParseStatus_MissingRequiredSection:   rd_errorf("RDI Parse: missing required section");              break;
+    default:                                       rd_errorf("RDI Parse: unknown parse status %u", parse_status); break;
+    }
+  } else if (coff_is_regular_archive(raw_data) || coff_is_thin_archive(raw_data)) {
     coff_print_archive(arena, out, indent, raw_data, opts);
   } else if (coff_is_big_obj(raw_data)) {
     coff_print_big_obj(arena, out, indent, raw_data, opts);

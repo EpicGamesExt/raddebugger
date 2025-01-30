@@ -222,6 +222,17 @@ rd_is_pe(String8 raw_data)
   return header.magic == PE_DOS_MAGIC;
 }
 
+internal B32
+rd_is_rdi(String8 raw_data)
+{
+  B32 is_rdi = 0;
+  if (raw_data.size > 8) {
+    U64 *magic = (U64 *)raw_data.str;
+    is_rdi = *magic == RDI_MAGIC_CONSTANT;
+  }
+  return is_rdi;
+}
+
 internal String8
 rd_string_from_flags(Arena *arena, String8List list, U64 remaining_flags)
 {
@@ -233,9 +244,22 @@ rd_string_from_flags(Arena *arena, String8List list, U64 remaining_flags)
     if (remaining_flags != 0) {
       str8_list_pushf(scratch.arena, &list, "Unknown flags: %#llx", remaining_flags);
     }
-    result = str8_list_join(arena, &list, &(StringJoin){.sep = str8_lit(" ") });
+    result = str8_list_join(arena, &list, &(StringJoin){.sep = str8_lit(", ") });
     scratch_end(scratch);
   }
+  return result;
+}
+
+internal String8
+rd_string_from_array_u32(Arena *arena, U32 *v, U64 count)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  String8List list = {0};
+  for (U64 i = 0; i < count; ++i) {
+    str8_list_pushf(scratch.arena, &list, "%u", v[i]);
+  }
+  String8 result = str8_list_join(arena, &list, &(StringJoin){.sep=str8_lit(", ")});
+  scratch_end(scratch);
   return result;
 }
 
@@ -268,7 +292,14 @@ rd_string_from_array_hex_u64(Arena *arena, U64 *v, U64 count)
 internal String8
 rd_string_from_range_array_u64_hex(Arena *arena, U64 *v, U64 count)
 {
-  NotImplemented;
+  Temp scratch = scratch_begin(&arena, 1);
+  String8List list = {0};
+  for (U64 i = 0; i+2 <= count; i += 2) {
+    str8_list_pushf(scratch.arena, &list, "[%#llx, %#llx)", v[i+0], v[i+1]);
+  }
+  String8 result = str8_list_join(arena, &list, &(StringJoin){.sep=str8_lit(", ")});
+  scratch_end(scratch);
+  return result;
 }
 
 internal void
@@ -287,6 +318,8 @@ rd_format_preamble(Arena *arena, String8List *out, String8 indent, String8 input
     input_type_string = "Obj";
   } else if (rd_is_pe(raw_data)) {
     input_type_string = "COFF/PE";
+  } else if (rd_is_rdi(raw_data)) {
+    input_type_string = "RDI";
   }
 
   DateTime universal_dt = os_now_universal_time();
@@ -696,6 +729,33 @@ rdi_string_from_language(Arena *arena, RDI_Language v)
 }
 
 internal String8
+rdi_string_from_local_kind(Arena *arena, RDI_LocalKind v)
+{
+  String8 result;
+  switch(v)
+  {
+    default: { result = push_str8f(arena, "<invalid RDI_LocalKind %u>", v); } break;
+#define X(name) case RDI_LocalKind_##name:{ result = str8_lit(#name); } break;
+    RDI_LocalKind_XList
+#undef X
+  }
+  return result;
+}
+
+internal String8
+rdi_string_from_type_kind(Arena *arena, RDI_TypeKind v)
+{
+  String8 result;
+  switch (v) {
+    default: { result = push_str8f(arena, "%u", v); } break;
+#define X(name) case RDI_TypeKind_##name: { result = str8_lit(#name); } break;
+    RDI_TypeKind_XList
+#undef X
+  }
+  return result;
+}
+
+internal String8
 rdi_string_from_member_kind(Arena *arena, RDI_MemberKind v)
 {
   String8 result;
@@ -778,6 +838,7 @@ rdi_string_from_udt_flags(Arena *arena, RDI_UDTFlags flags)
 #undef X
   String8 result = rd_string_from_flags(arena, list, flags);
   scratch_end(scratch);
+  return result;
 }
 
 internal String8
@@ -821,7 +882,7 @@ internal void
 rdi_print_binary_section(Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi, RDI_BinarySection *bin_section)
 {
   Temp scratch = scratch_begin(&arena, 1);
-  rd_printf("name      ='%S'",  str8_from_idx(rdi, bin_section->name_string_idx));
+  rd_printf("name      ='%S'",  str8_from_rdi_string_idx(rdi, bin_section->name_string_idx));
   rd_printf("flags     =%S",    rdi_string_from_binary_section_flags(scratch.arena, bin_section->flags));
   rd_printf("voff_first=%#08x", bin_section->voff_first);
   rd_printf("voff_opl  =%#08x", bin_section->voff_opl);
@@ -857,7 +918,7 @@ rdi_print_file_path(Arena *arena, String8List *out, String8 indent, RDI_Parsed *
     
     // stringize child
     rd_indent();
-    rdi_stringize_file_path(arena, out, indent, rdi, child_node);
+    rdi_print_file_path(arena, out, indent, rdi, child_node);
     rd_unindent();
     
     // increment iterator
@@ -868,9 +929,10 @@ rdi_print_file_path(Arena *arena, String8List *out, String8 indent, RDI_Parsed *
 internal void
 rdi_print_source_file(Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi, RDI_SourceFile *source_file)
 {
-  rd_printf("file_path_node_idx= %u",  source_file->file_path_node_idx);
-  rd_printf("path=               'S'", str8_from_rdi_string_idx(rdi, source_file->normal_full_path_string_idx));
-  rd_printf("source_line_map=    %u",  source_file->source_line_map_idx);
+  rd_printf("{ file_path_node_idx= ");
+  rd_printf("file_path_node_idx= %u",   source_file->file_path_node_idx);
+  rd_printf("path=               '%S'", str8_from_rdi_string_idx(rdi, source_file->normal_full_path_string_idx));
+  rd_printf("source_line_map=    %u",   source_file->source_line_map_idx);
 }
 
 internal void
@@ -961,18 +1023,18 @@ rdi_print_type_node(Arena *arena, String8List *out, String8 indent, RDI_Parsed *
   } else if (type->kind == RDI_TypeKind_Function) {
     U32  param_idx_count = 0;
     U32 *param_idx_array = rdi_idx_run_from_first_count(rdi, type->constructed.param_idx_run_first, type->constructed.count, &param_idx_count);
-    String8 param_idx_str = rd_string_from_array_hex_u32(scratch.arena, param_idx_array, param_idx_count);
+    String8 param_idx_str = rd_string_from_array_u32(scratch.arena, param_idx_array, param_idx_count);
     rd_printf("constructed.params      =%S", param_idx_str);
   } else if (type->kind == RDI_TypeKind_Method) {
     U32  param_idx_count = 0;
     U32 *param_idx_array = rdi_idx_run_from_first_count(rdi, type->constructed.param_idx_run_first, type->constructed.count, &param_idx_count);
-    String8 this_type_str = str8_lit("???");
+    String8 this_type_str = str8_lit("\?\?\?");
     if (param_idx_count > 0) {
       this_type_str = push_str8f(scratch.arena, "%u", param_idx_array[0]);
       param_idx_count -= 1;
       param_idx_array += 1;
     }
-    String8 param_idx_str = rd_string_from_array_hex_u32(scratch.arena, param_idx_array, param_idx_count);
+    String8 param_idx_str = rd_string_from_array_u32(scratch.arena, param_idx_array, param_idx_count);
     rd_printf("constructed.this_type   =%S", this_type_str);
     rd_printf("constructed.params      =%S", param_idx_str);
   } else if (RDI_TypeKind_FirstConstructed <= type->kind && type->kind <= RDI_TypeKind_LastConstructed) {
@@ -1017,7 +1079,7 @@ rdi_print_udt(Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi, R
       rd_indent();
       RDI_EnumMember *enum_member = enum_member_array + member_lo;
       for (U32 i = member_lo; i < member_hi; ++i, ++enum_member) {
-        rd_printf("'%S' %llu", str8_from_rdi_string_idx(rdi, enum_member->name_string_idx), enum_member->val);
+        rd_printf("{ %llu, '%S' }", enum_member->val, str8_from_rdi_string_idx(rdi, enum_member->name_string_idx));
       }
       rd_unindent();
       rd_printf("}");
@@ -1034,7 +1096,7 @@ rdi_print_udt(Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi, R
       for (U32 i = member_lo; i < member_hi; ++i, ++member) {
         String8 kind_str = rdi_string_from_member_kind(scratch.arena, member->kind);
         String8 name_str = str8_from_rdi_string_idx(rdi, member->name_string_idx);
-        rd_printf("{ kind=%S, name='%S', type=%u, off=%u }", kind_str, name_str, member->type_idx, member->off);
+        rd_printf("{ kind=%S, type=%u, off=%u, name='%S' }", kind_str, member->type_idx, member->off, name_str);
       }
       rd_unindent();
       rd_printf("}");
@@ -1071,8 +1133,8 @@ internal void
 rdi_print_procedure(Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi, RDI_Procedure *proc)
 {
   Temp scratch = scratch_begin(&arena, 1);
-  rd_printf("name          ='%S'", str8_from_rdi_string(scratch.arena, rdi, proc->name_string_idx));
-  rd_printf("link_name     ='%S'", str8_from_rdi_string(scratch.arena, rdi, proc->link_name_string_idx));
+  rd_printf("name          ='%S'", str8_from_rdi_string_idx(rdi, proc->name_string_idx));
+  rd_printf("link_name     ='%S'", str8_from_rdi_string_idx(rdi, proc->link_name_string_idx));
   rd_printf("link_flags    =%S",   rdi_string_from_link_flags(scratch.arena, proc->link_flags));
   rd_printf("type_idx      =%u",   proc->type_idx);
   rd_printf("root_scope_idx=%u",   proc->root_scope_idx);
@@ -1090,11 +1152,13 @@ rdi_print_scope(Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi,
   U64                local_count          = 0;
   U64                location_block_count = 0;
   U64                location_data_size   = 0;
+  U64                proc_count           = 0;
   RDI_Scope         *scope_array          = rdi_table_from_name(rdi, Scopes,         &scope_count);
   U64               *scope_voff_array     = rdi_table_from_name(rdi, ScopeVOffData,  &scope_voff_count);
   RDI_Local         *local_array          = rdi_table_from_name(rdi, Locals,         &local_count);
   RDI_LocationBlock *location_block_array = rdi_table_from_name(rdi, LocationBlocks, &location_block_count);
   RDI_U8            *location_data        = rdi_table_from_name(rdi, LocationData,   &location_data_size);
+  RDI_Procedure     *proc_array           = rdi_table_from_name(rdi, Procedures, &proc_count);
 
   U32      voff_range_lo    = ClampTop(scope->voff_range_first, scope_voff_count);
   U32      voff_range_hi    = ClampTop(scope->voff_range_opl,   scope_voff_count);
@@ -1106,9 +1170,15 @@ rdi_print_scope(Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi,
   rd_printf("[%llu]", this_idx);
   rd_indent();
 
-  rd_printf("proc_idx       =%u", scope->proc_idx); 
-  rd_printf("inline_site_idx=%u", scope->inline_site_idx);
-  rd_printf("voff_ranges    =%S", voff_str);
+  String8 proc_name = str8_lit("???");
+  if (scope->proc_idx < proc_count) {
+    RDI_Procedure *proc = &proc_array[scope->proc_idx];
+    proc_name           = str8_from_rdi_string_idx(rdi, proc->name_string_idx);
+  }
+
+  rd_printf("proc_idx       =%u '%S'", scope->proc_idx, proc_name);
+  rd_printf("inline_site_idx=%u",      scope->inline_site_idx);
+  rd_printf("voff_ranges    =%S",      voff_str);
   
   // local_array
   {
@@ -1120,7 +1190,7 @@ rdi_print_scope(Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi,
 
         rd_printf("local[%u]", local_idx);
         rd_indent();
-        rd_printf("kind    =%S",   rdi_string_from_local_kind(local_ptr->kind));
+        rd_printf("kind    =%S",   rdi_string_from_local_kind(scratch.arena, local_ptr->kind));
         rd_printf("name    ='%S'", str8_from_rdi_string_idx(rdi, local_ptr->name_string_idx));
         rd_printf("type_idx=%u",   local_ptr->type_idx);
         
@@ -1146,7 +1216,7 @@ rdi_print_scope(Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi,
               RDI_LocationKind  kind         = *(RDI_LocationKind*)loc_base_ptr;
               switch (kind) {
               default: {
-                rd_printf("???: %u", kind);
+                rd_printf("\?\?\?: %u", kind);
               } break;
 
               case RDI_LocationKind_AddrBytecodeStream: {
@@ -1165,7 +1235,7 @@ rdi_print_scope(Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi,
 
               case RDI_LocationKind_AddrRegPlusU16: {
                 if (loc_base_ptr + sizeof(RDI_LocationRegPlusU16) > loc_data_opl) {
-                  rd_errorf("AddrRegPlusU16(???)");
+                  rd_printf("AddrRegPlusU16(\?\?\?)");
                 } else {
                   RDI_LocationRegPlusU16 *loc = (RDI_LocationRegPlusU16*)loc_base_ptr;
                   rd_printf("AddrRegPlusU16(reg: %S, off: %u)", rdi_string_from_reg_code(scratch.arena, arch, loc->reg_code), loc->offset);
@@ -1174,7 +1244,7 @@ rdi_print_scope(Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi,
 
               case RDI_LocationKind_AddrAddrRegPlusU16: {
                 if (loc_base_ptr + sizeof(RDI_LocationRegPlusU16) > loc_data_opl){
-                  rd_errorf("AddrAddrRegPlusU16(???");
+                  rd_printf("AddrAddrRegPlusU16(\?\?\?)");
                 } else {
                   RDI_LocationRegPlusU16 *loc = (RDI_LocationRegPlusU16 *)loc_base_ptr;
                   rd_printf("AddrAddrRegisterPlusU16(reg: %S, off: %u)", rdi_string_from_reg_code(scratch.arena, arch, loc->reg_code), loc->offset);
@@ -1183,10 +1253,10 @@ rdi_print_scope(Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi,
 
               case RDI_LocationKind_ValReg: {
                 if (loc_base_ptr + sizeof(RDI_LocationReg) > loc_data_opl) {
-                  rd_errorf("ValReg(???)");
+                  rd_printf("ValReg(\?\?\?)");
                 } else {
                   RDI_LocationReg *loc = (RDI_LocationReg*)loc_base_ptr;
-                  str8_list_pushf(arena, out, "ValReg(reg: %S)", rdi_string_from_reg_code(scratch.arena, arch, loc->reg_code));
+                  rd_printf("ValReg(reg: %S)", rdi_string_from_reg_code(scratch.arena, arch, loc->reg_code));
                 }
               } break;
               }
@@ -1214,8 +1284,8 @@ rdi_print_scope(Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi,
     child_scope_idx = child_scope->next_sibling_scope_idx;
   }
   
-  rd_printf("[/%llu]", this_idx);
   rd_unindent();
+  rd_printf("[/%llu]", this_idx);
 
   scratch_end(scratch);
 }
@@ -1230,61 +1300,297 @@ rdi_print_inline_site(Arena *arena, String8List *out, String8 indent, RDI_Parsed
 }
 
 internal void
+rdi_print_vmap_entry(Arena *arena, String8List *out, String8 indent, RDI_VMapEntry *v)
+{
+  rd_printf("%#llx: %llu", v->voff, v->idx);
+}
+
+internal void
 rdi_print(Arena *arena, String8List *out, String8 indent, RDI_Parsed *rdi, RD_Option opts)
 {
+  RDI_TopLevelInfo *tli = rdi_element_from_name_idx(rdi, TopLevelInfo, 0);
+
   if (opts & RD_Option_RdiDataSections) {
-    NotImplemented;
+    rd_printf("# DATA SECTIONS");
+    rd_indent();
+    rdi_print_data_sections(arena, out, indent, rdi);
+    rd_unindent();
+    rd_newline();
   }
   if (opts & RD_Option_RdiTopLevelInfo) {
-    NotImplemented;
+    rd_printf("# TOP LEVEL INFO");
+    rd_indent();
+    rdi_print_top_level_info(arena, out, indent, rdi, tli);
+    rd_unindent();
+    rd_newline();
   }
   if (opts & RD_Option_RdiBinarySections) {
-    NotImplemented;
+    U64 count;
+    RDI_BinarySection *v = rdi_table_from_name(rdi, BinarySections, &count);
+    rd_printf("# BINARY SECTIONS");
+    rd_indent();
+    for (U64 idx = 0; idx < count; ++idx) {
+      rd_printf("section[%llu]:", idx);
+      rd_indent();
+      rdi_print_binary_section(arena, out, indent, rdi, &v[idx]);
+      rd_unindent();
+    }
+    rd_unindent();
+    rd_newline();
   }
   if (opts & RD_Option_RdiFilePaths) {
-    NotImplemented;
+    U64                file_path_count = 0;
+    RDI_FilePathNode *file_path_array = rdi_table_from_name(rdi, FilePathNodes, &file_path_count);
+    rd_printf("# FILE PATHS");
+    rd_indent();
+    for (U64 i = 0; i < file_path_count; ++i) {
+      if (file_path_array[i].parent_path_node == 0) {
+        rdi_print_file_path(arena, out, indent, rdi, &file_path_array[i]);
+      }
+    }
+    rd_unindent();
+    rd_newline();
   }
   if (opts & RD_Option_RdiSourceFiles) {
-    NotImplemented;
-  }
-  if (opts & RD_Option_RdiLineTables) {
-    NotImplemented;
-  }
-  if (opts & RD_Option_RdiSourceLineMaps) {
-    NotImplemented;
+    U64             source_file_count = 0;
+    RDI_SourceFile *source_file_array = rdi_table_from_name(rdi, SourceFiles, &source_file_count);
+    rd_printf("# SOURCE FILES");
+    rd_indent();
+    for (U64 i = 0; i < source_file_count; ++i) {
+      RDI_SourceFile *source_file = &source_file_array[i];
+      rd_printf("source_file[%4llu] = { file_path_node_idx = %4u, source_line_map = %4u, path = '%S' }",
+                i,
+                source_file->file_path_node_idx,
+                source_file->source_line_map_idx,
+                str8_from_rdi_string_idx(rdi, source_file->normal_full_path_string_idx));
+    }
+    rd_unindent();
+    rd_newline();
   }
   if (opts & RD_Option_RdiUnits) {
-    NotImplemented;
+    U64       unit_count = 0;
+    RDI_Unit *unit_array = rdi_table_from_name(rdi, Units, &unit_count);
+    rd_printf("# UNITS");
+    rd_indent();
+    for (U64 i = 0; i < unit_count; ++i) {
+      rd_printf("unit[%llu]:", i);
+      rd_indent();
+      rdi_print_unit(arena, out, indent, rdi, &unit_array[i]);
+      rd_unindent();
+    }
+    rd_unindent();
+    rd_newline();
   }
   if (opts & RD_Option_RdiUnitVMap) {
-    NotImplemented;
+    U64            vmap_count = 0;
+    RDI_VMapEntry *vmap_array = rdi_table_from_name(rdi, UnitVMap, &vmap_count);
+    rd_printf("# UNIT VMAP");
+    rd_indent();
+    for (U64 i = 0; i < vmap_count; ++i) {
+      rdi_print_vmap_entry(arena, out, indent, &vmap_array[i]);
+    }
+    rd_unindent();
+    rd_newline();
+  }
+  if (opts & RD_Option_RdiLineTables) {
+    U64            line_table_count = 0;
+    RDI_LineTable *line_table_array = rdi_table_from_name(rdi, LineTables, &line_table_count);
+    rd_printf("# LINE TABLES");
+    rd_indent();
+    for (U64 i = 0; i < line_table_count; ++i) {
+      rd_printf("line_table[%llu]", i);
+      rd_indent();
+      rdi_print_line_table(arena, out, indent, rdi, &line_table_array[i]);
+      rd_unindent();
+    }
+    rd_unindent();
+    rd_newline();
+  }
+  if (opts & RD_Option_RdiSourceLineMaps) {
+    U64                source_line_map_count = 0;
+    RDI_SourceLineMap *source_line_map_array = rdi_table_from_name(rdi, SourceLineMaps, &source_line_map_count);
+    rd_printf("# SOURCE LINE MAPS");
+    rd_indent();
+    for (U64 i = 0; i < source_line_map_count; ++i) {
+      rd_printf("source_line_map[%llu]:", i);
+      rd_indent();
+      rdi_print_source_line_map(arena, out, indent, rdi, &source_line_map_array[i]);
+      rd_unindent();
+    }
+    rd_unindent();
+    rd_newline();
   }
   if (opts & RD_Option_RdiTypeNodes) {
-    NotImplemented;
+    U64           type_node_count = 0;
+    RDI_TypeNode *type_node_array = rdi_table_from_name(rdi, TypeNodes, &type_node_count);
+    rd_printf("# TYPE NODES");
+    rd_indent();
+    for (U64 i = 0; i < type_node_count; ++i) {
+      rd_printf("type[%llu]", i);
+      rd_indent();
+      rdi_print_type_node(arena, out, indent, rdi, &type_node_array[i]);
+      rd_unindent();
+    }
+    rd_unindent();
+    rd_newline();
   }
   if (opts & RD_Option_RdiUserDefinedTypes) {
-    NotImplemented;
+    U64      udt_count = 0;
+    RDI_UDT *udt_array = rdi_table_from_name(rdi, UDTs, &udt_count);
+    rd_printf("# UDTS");
+    rd_indent();
+    for (U64 i = 0; i < udt_count; ++i) {
+      rd_printf("udt[%u]:", i);
+      rd_indent();
+      rdi_print_udt(arena, out, indent, rdi, &udt_array[i]);
+      rd_unindent();
+    }
+    rd_unindent();
+    rd_newline();
   }
   if (opts & RD_Option_RdiGlobalVars) {
-    NotImplemented;
+    U64                 gvar_count = 0;
+    RDI_GlobalVariable *gvar_array = rdi_table_from_name(rdi, GlobalVariables, &gvar_count);
+    rd_printf("# GLOBAL VARIABLES");
+    rd_indent();
+    for (U64 i = 0; i < gvar_count; ++i) {
+      rd_printf("global_variable[%llu]:", i);
+      rd_indent();
+      rdi_print_global_variable(arena, out, indent, rdi, &gvar_array[i]);
+      rd_unindent();
+    }
+    rd_unindent();
+    rd_newline();
+  }
+  if (opts & RD_Option_RdiGlobalVarsVMap) {
+    U64            vmap_count = 0;
+    RDI_VMapEntry *vmap_array = rdi_table_from_name(rdi, GlobalVMap, &vmap_count);
+    rd_printf("# GLOBAL VMAP");
+    rd_indent();
+    for (U64 i = 0; i < vmap_count; ++i) {
+      rdi_print_vmap_entry(arena, out, indent, &vmap_array[i]);
+    }
+    rd_unindent();
+    rd_newline();
   }
   if (opts & RD_Option_RdiThreadVars) {
-    NotImplemented;
+    U64                 tvar_count = 0;
+    RDI_ThreadVariable *tvar_array = rdi_table_from_name(rdi, ThreadVariables, &tvar_count);
+    rd_printf("# THREAD VARIABLES");
+    rd_indent();
+    for (U64 i = 0; i < tvar_count; ++i) {
+      rd_printf("thread_variable[%llu]:", i);
+      rdi_print_thread_variable(arena, out, indent, rdi, &tvar_array[i]);
+    }
+    rd_unindent();
+    rd_newline();
+  }
+  if (opts & RD_Option_RdiProcedures) {
+    U64            proc_count = 0;
+    RDI_Procedure *proc_array = rdi_table_from_name(rdi, Procedures, &proc_count);
+    rd_printf("# PROCEDURES");
+    rd_indent();
+    for (U64 i = 0; i < proc_count; ++i) {
+      rd_printf("procedure[%llu]:", i);
+      rd_indent();
+      rdi_print_procedure(arena, out, indent, rdi, &proc_array[i]);
+      rd_unindent();
+    }
+    rd_unindent();
+    rd_newline();
   }
   if (opts & RD_Option_RdiScopes) {
-    NotImplemented;
+    U64        scope_count = 0;
+    RDI_Scope *scope_array = rdi_table_from_name(rdi, Scopes, &scope_count);
+    rd_printf("# SCOPES");
+    rd_indent();
+    for (U64 i = 0; i < scope_count; ++i) {
+      if (scope_array[i].parent_scope_idx == 0) {
+        rdi_print_scope(arena, out, indent, rdi, &scope_array[i], tli->arch);
+      }
+    }
+    rd_unindent();
+    rd_newline();
   }
   if (opts & RD_Option_RdiScopeVMap) {
-    NotImplemented;
+    U64            vmap_count = 0;
+    RDI_VMapEntry *vmap_array = rdi_table_from_name(rdi, ScopeVMap, &vmap_count);
+    rd_printf("# SCOPE VMAP");
+    rd_indent();
+    for (U64 i = 0; i < vmap_count; ++i) {
+      rdi_print_vmap_entry(arena, out, indent, &vmap_array[i]);
+    }
+    rd_unindent();
+    rd_newline();
   }
   if (opts & RD_Option_RdiInlineSites) {
-    NotImplemented;
+    U64             inline_site_count = 0;
+    RDI_InlineSite *inline_site_array = rdi_table_from_name(rdi, InlineSites, &inline_site_count);
+    rd_printf("# INLINE SITES");
+    rd_indent();
+    for (U64 i = 0; i < inline_site_count; ++i) {
+      rd_printf("inline_site[%llu]:", i);
+      rd_indent();
+      rdi_print_inline_site(arena, out, indent, rdi, &inline_site_array[i]);
+      rd_unindent();
+    }
+    rd_unindent();
+    rd_newline();
   }
   if (opts & RD_Option_RdiNameMaps) {
-    NotImplemented;
+    Temp scratch = scratch_begin(&arena, 1);
+    U64          name_map_count = 0;
+    RDI_NameMap *name_map_array = rdi_table_from_name(rdi, NameMaps, &name_map_count);
+    rd_printf("# NAME MAPS");
+    rd_indent();
+    for (U64 i = 0; i < name_map_count; ++i) {
+      if (i > 0) {
+        rd_newline();
+      }
+      RDI_ParsedNameMap name_map = {0};
+      rdi_parsed_from_name_map(rdi, &name_map_array[i], &name_map);
+      rd_printf("name_map[%S]",rdi_string_from_name_map_kind(i));
+      rd_indent();
+      for (U64 bucket_idx = 0; bucket_idx < name_map.bucket_count; ++bucket_idx) {
+        if (name_map.buckets[bucket_idx].node_count == 0) {
+          continue;
+        }
+        rd_printf("bucket[%llu]:", bucket_idx);
+        rd_indent();
+        RDI_NameMapNode *node_ptr = name_map.nodes + name_map.buckets[bucket_idx].first_node;
+        RDI_NameMapNode *node_opl = node_ptr + name_map.buckets[bucket_idx].node_count;
+        for (; node_ptr < node_opl; ++node_ptr) {
+          Temp temp = temp_begin(scratch.arena);
+          String8 str     = str8_from_rdi_string_idx(rdi, node_ptr->string_idx);
+          String8 indices;
+          if (node_ptr->match_count == 1) {
+            indices = push_str8f(temp.arena, "%u", node_ptr->match_idx_or_idx_run_first);
+          } else {
+            U32  idx_count = 0;
+            U32 *idx_array = rdi_idx_run_from_first_count(rdi, node_ptr->match_idx_or_idx_run_first, node_ptr->match_count, &idx_count);
+            indices = rd_string_from_array_u32(temp.arena, idx_array, idx_count);
+          }
+          rd_printf("match \"%S\": %S", str, indices);
+          temp_end(temp);
+        }
+        rd_unindent();
+      }
+      rd_unindent();
+    }
+    rd_unindent();
+    rd_newline();
+    scratch_end(scratch);
   }
   if (opts & RD_Option_RdiStrings) {
-    NotImplemented;
+    U64  stridx_count = 0;
+    U32 *stridx_array = rdi_table_from_name(rdi, StringTable, &stridx_count);
+    rd_printf("# STRINGS");
+    rd_indent();
+    for (U64 i = 0; i < stridx_count; ++i) {
+      rd_printf("string[%llu]: \"%S\"", i, str8_from_rdi_string_idx(rdi, i));
+    }
+    rd_unindent();
+    rd_newline();
   }
 }
 
