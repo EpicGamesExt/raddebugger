@@ -83,6 +83,9 @@ typedef E_LOOKUP_INFO_FUNCTION_SIG(E_LookupInfoFunctionType);
 #define E_LOOKUP_FUNCTION_DEF(name) internal E_LOOKUP_FUNCTION_SIG(E_LOOKUP_FUNCTION_NAME(name))
 typedef E_LOOKUP_FUNCTION_SIG(E_LookupFunctionType);
 
+E_LOOKUP_INFO_FUNCTION_DEF(default);
+E_LOOKUP_FUNCTION_DEF(default);
+
 typedef struct E_LookupRule E_LookupRule;
 struct E_LookupRule
 {
@@ -125,6 +128,12 @@ struct E_IRCtx
 ////////////////////////////////
 //~ rjf: Globals
 
+local_persist read_only E_LookupRule e_lookup_rule__default =
+{
+  str8_lit_comp("default"),
+  E_LOOKUP_INFO_FUNCTION_NAME(default),
+  E_LOOKUP_FUNCTION_NAME(default),
+};
 global read_only E_IRNode e_irnode_nil = {&e_irnode_nil, &e_irnode_nil, &e_irnode_nil};
 thread_static E_IRCtx *e_ir_ctx = 0;
 

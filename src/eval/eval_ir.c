@@ -76,13 +76,8 @@ e_select_ir_ctx(E_IRCtx *ctx)
 internal E_LookupRule *
 e_lookup_rule_from_string(String8 string)
 {
-  local_persist read_only E_LookupRule e_lookup_rule__default =
-  {
-    str8_lit_comp("default"),
-    E_LOOKUP_INFO_FUNCTION_NAME(default),
-    E_LOOKUP_FUNCTION_NAME(default),
-  };
   E_LookupRule *result = &e_lookup_rule__default;
+  if(e_ir_ctx->lookup_rule_map != 0 && e_ir_ctx->lookup_rule_map->slots_count != 0)
   {
     U64 hash = e_hash_from_string(5381, string);
     U64 slot_idx = hash%e_ir_ctx->lookup_rule_map->slots_count;
@@ -142,7 +137,7 @@ E_LOOKUP_INFO_FUNCTION_DEF(default)
 
 E_LOOKUP_FUNCTION_DEF(default)
 {
-  E_Lookup lookup = {0};
+  E_Lookup lookup = {{&e_irnode_nil}};
   switch(kind)
   {
     default:{}break;
