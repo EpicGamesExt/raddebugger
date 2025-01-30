@@ -596,6 +596,14 @@ entry_point(CmdLine *cmd_line)
         rd_init(cmd_line);
       }
       
+      //- TODO(rjf): @cfg set up debugging config state
+      {
+        RD_Cfg *user = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("user"));
+        RD_Cfg *watch = rd_cfg_new(user, str8_lit("watch"));
+        RD_Cfg *expr = rd_cfg_new(watch, str8_lit("expression"));
+        rd_cfg_new(expr, str8_lit("basics"));
+      }
+      
       //- rjf: setup initial target from command line args
       {
         String8List args = cmd_line->inputs;

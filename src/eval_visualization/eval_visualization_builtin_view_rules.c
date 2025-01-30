@@ -104,6 +104,7 @@ struct EV_DefaultExpandAccel
 {
   E_MemberArray members;
   E_EnumValArray enum_vals;
+  void *lookup_accel;
   U64 array_count;
   B32 array_need_extra_deref;
   B32 is_ptr2ptr;
@@ -172,6 +173,15 @@ EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(default)
   {
     total_row_count = 1;
     accel->is_ptr2ptr = 1;
+  }
+  
+  ////////////////////////////
+  //- rjf: sets -> expansions generate rows for all possible lookups
+  //
+  else if(type_kind == E_TypeKind_Set)
+  {
+    E_Type *type = e_type_from_key(scratch.arena, type_key);
+    //E_LookupRule *rule = e_lookup_rule_from_string(type->name);
   }
   
   ////////////////////////////

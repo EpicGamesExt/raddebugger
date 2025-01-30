@@ -9161,6 +9161,65 @@ EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(procedures)      {return rd_ev_
 EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(procedures)     {return rd_ev_view_rule_expr_id_from_num__debug_info_tables(num, user_data, RDI_SectionKind_Procedures); }
 EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(procedures)     {return rd_ev_view_rule_expr_num_from_id__debug_info_tables(id,  user_data, RDI_SectionKind_Procedures); }
 
+E_LOOKUP_INFO_FUNCTION_DEF(top_level_cfg)
+{
+  E_LookupInfo result = {0};
+  Temp scratch = scratch_begin(&arena, 1);
+  {
+    E_IRTreeAndType lhs_irtree = e_irtree_and_type_from_expr(scratch.arena, lhs);
+    E_TypeKey lhs_type_key = lhs_irtree.type_key;
+    E_Type *lhs_type = e_type_from_key(scratch.arena, lhs_type_key);
+    RD_CfgList cfgs_list = rd_cfg_top_level_list_from_string(scratch.arena, lhs_type->name);
+    RD_CfgArray *cfgs = push_array(arena, RD_CfgArray, 1);
+    cfgs[0] = rd_cfg_array_from_list(arena, &cfgs_list);
+    result.user_data = cfgs;
+    result.idxed_expr_count = cfgs_list.count;
+  }
+  scratch_end(scratch);
+  return result;
+}
+
+E_LOOKUP_FUNCTION_DEF(top_level_cfg)
+{
+  E_Lookup result = {{&e_irnode_nil}};
+  if(kind == E_ExprKind_ArrayIndex)
+  {
+    Temp scratch = scratch_begin(&arena, 1);
+    RD_CfgArray *cfgs = (RD_CfgArray *)user_data;
+    E_IRTreeAndType rhs_irtree = e_irtree_and_type_from_expr(scratch.arena, rhs);
+    E_OpList rhs_oplist = e_oplist_from_irtree(scratch.arena, rhs_irtree.root);
+    String8 rhs_bytecode = e_bytecode_from_oplist(scratch.arena, &rhs_oplist);
+    E_Interpretation rhs_interp = e_interpret(rhs_bytecode);
+    E_Value rhs_value = rhs_interp.value;
+    if(0 <= rhs_value.u64 && rhs_value.u64 < cfgs->count)
+    {
+      RD_Cfg *cfg = cfgs->v[rhs_value.u64];
+      E_Space cfg_space = rd_eval_space_from_cfg(cfg);
+      String8 cfg_name = cfg->string;
+      E_TypeKey cfg_type_key = {0};
+      {
+        U64 hash = d_hash_from_string(cfg_name);
+        U64 slot_idx = hash%rd_state->cfg_string2typekey_map->slots_count;
+        for(RD_String2TypeKeyNode *n = rd_state->cfg_string2typekey_map->slots[slot_idx].first;
+            n != 0;
+            n = n->next)
+        {
+          if(str8_match(n->string, cfg_name, 0))
+          {
+            cfg_type_key = n->key;
+            break;
+          }
+        }
+      }
+      result.irtree_and_type.root      = e_irtree_set_space(arena, cfg_space, e_irtree_const_u(arena, 0));
+      result.irtree_and_type.type_key  = cfg_type_key;
+      result.irtree_and_type.mode      = E_Mode_Offset;
+    }
+    scratch_end(scratch);
+  }
+  return result;
+}
+
 internal EV_ExpandInfo
 rd_ev_view_rule_expr_expand_info__meta_entities(Arena *arena, EV_View *view, String8 filter, E_Expr *expr, MD_Node *params, RD_EntityKind kind)
 {
@@ -13104,6 +13163,7 @@ rd_frame(void)
       //- rjf: choose set of evallable config names
       String8 evallable_cfg_names[] =
       {
+        str8_lit("watch"),
         str8_lit("breakpoint"),
         str8_lit("watch_pin"),
         str8_lit("target"),
@@ -13208,10 +13268,10 @@ rd_frame(void)
       for EachElement(idx, evallable_cfg_names)
       {
         String8 name = evallable_cfg_names[idx];
-        RD_CfgList cfgs = rd_cfg_top_level_list_from_string(scratch.arena, name);
-        for(RD_CfgNode *n = cfgs.first; n != 0; n = n->next)
+        RD_CfgArray cfgs = rd_state->eval_collection_cfgs[idx];
+        for EachIndex(cfg_idx, cfgs.count)
         {
-          RD_Cfg *cfg = n->v;
+          RD_Cfg *cfg = cfgs.v[cfg_idx];
           String8 label = rd_cfg_child_from_string(cfg, str8_lit("label"))->first->string;
           String8 exe   = rd_cfg_child_from_string(cfg, str8_lit("executable"))->first->string;
           E_Space space = rd_eval_space_from_cfg(cfg);
@@ -13293,7 +13353,7 @@ rd_frame(void)
         expr->mode     = E_Mode_Offset;
         expr->type_key = collection_type_key;
         e_string2expr_map_insert(scratch.arena, ctx->macro_map, collection_name, expr);
-        // TODO(rjf): e_lookup_rule_map_insert_new(scratch.arena, ctx->lookup_rule_map, collection_name, );
+        e_lookup_rule_map_insert_new(scratch.arena, ctx->lookup_rule_map, collection_name, E_LOOKUP_INFO_FUNCTION_NAME(top_level_cfg), E_LOOKUP_FUNCTION_NAME(top_level_cfg));
       }
       
       //- rjf: add macro for output log

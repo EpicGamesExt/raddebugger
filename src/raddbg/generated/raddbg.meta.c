@@ -73,7 +73,7 @@ RD_VocabularyInfo rd_vocabulary_info_table[41] =
 {str8_lit_comp("label"), str8_lit_comp("labels"), str8_lit_comp("Label"), str8_lit_comp("Labels"), RD_IconKind_Null},
 };
 
-RD_CfgNameSchemaPair rd_cfg_name_schema_pair_table[6] =
+RD_CfgNameSchemaPair rd_cfg_name_schema_pair_table[7] =
 {
 {str8_lit_comp("settings"), str8_lit_comp("x:\n{\n  @default(1) 'hover_animations':     bool,\n  @default(1) 'press_animations':     bool,\n  @default(0) 'focus_animations':     bool,\n  @default(1) 'tooltip_animations':   bool,\n  @default(1) 'menu_animations':      bool,\n  @default(1) 'scrolling_animations': bool,\n  @default(1) 'background_blur':      bool,\n  @default(1) 'thread_lines':         bool,\n  @default(1) 'breakpoint_lines':     bool,\n  @default(1) 'thread_glow':          bool,\n  @default(1) 'breakpoint_glow':      bool,\n  @default(0) 'opaque_backgrounds':   bool,\n  @default(1) 'smooth_main_text':     bool,\n  @default(0) 'smooth_code_text':     bool,\n  @default(1) 'hint_main_text':       bool,\n  @default(1) 'hint_code_text':       bool,\n  @default(2) 'tab_width':      @range[1, 32] u64,\n  @can_be_per_window 'main_font_size': @range[6, 72] u64,\n  @can_be_per_window 'code_font_size': @range[1, 32] u64,\n}\n"), str8_lit_comp("")},
 {str8_lit_comp("target"), str8_lit_comp("x:\n{\n  'label':              code_string,\n  'executable':         path,\n  'arguments':          string,\n  'working_directory':  path,\n  'entry_point':        code_string,\n  'stdout_path':        path,\n  'stderr_path':        path,\n  'stdin_path':         path,\n  'debug_subprocesses': bool,\n}\n"), str8_lit_comp("launch_and_run,launch_and_init,select_cfg,remove_cfg")},
@@ -81,6 +81,7 @@ RD_CfgNameSchemaPair rd_cfg_name_schema_pair_table[6] =
 {str8_lit_comp("watch_pin"), str8_lit_comp("x:\n{\n  'expression': code_string,\n  'view_rule':  code_string,\n  'location':   location,\n}\n"), str8_lit_comp("remove_cfg")},
 {str8_lit_comp("file_path_map"), str8_lit_comp("x:{'source':path, 'dest':path}"), str8_lit_comp("remove_cfg")},
 {str8_lit_comp("auto_view_rule"), str8_lit_comp("x:{'source':code_string, 'dest':code_string}"), str8_lit_comp("remove_cfg")},
+{str8_lit_comp("watch"), str8_lit_comp("x:\n{\n  'expression': code_string,\n  'view_rule':  code_string,\n}\n"), str8_lit_comp("remove_cfg")},
 };
 
 String8 d_entity_kind_display_string_table[27] =
@@ -710,9 +711,8 @@ str8_lit_comp("5"),
 str8_lit_comp("c"),
 };
 
-String8 rd_collection_name_table[13] =
+String8 rd_collection_name_table[12] =
 {
-str8_lit_comp("watches"),
 str8_lit_comp("machines"),
 str8_lit_comp("processes"),
 str8_lit_comp("threads"),
@@ -727,9 +727,8 @@ str8_lit_comp("types"),
 str8_lit_comp("procedures"),
 };
 
-RD_EntityKind rd_collection_entity_kind_table[13] =
+RD_EntityKind rd_collection_entity_kind_table[12] =
 {
-RD_EntityKind_Watch,
 RD_EntityKind_Nil,
 RD_EntityKind_Nil,
 RD_EntityKind_Nil,
@@ -744,9 +743,8 @@ RD_EntityKind_Nil,
 RD_EntityKind_Nil,
 };
 
-CTRL_EntityKind rd_collection_ctrl_entity_kind_table[13] =
+CTRL_EntityKind rd_collection_ctrl_entity_kind_table[12] =
 {
-CTRL_EntityKind_Null,
 CTRL_EntityKind_Machine,
 CTRL_EntityKind_Process,
 CTRL_EntityKind_Thread,
@@ -761,9 +759,8 @@ CTRL_EntityKind_Null,
 CTRL_EntityKind_Null,
 };
 
-EV_ViewRuleExprExpandInfoHookFunctionType * rd_collection_expr_expand_info_hook_function_table[13] =
+EV_ViewRuleExprExpandInfoHookFunctionType * rd_collection_expr_expand_info_hook_function_table[12] =
 {
-EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME(watches),
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME(machines),
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME(processes),
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME(threads),
@@ -778,9 +775,8 @@ EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME(types),
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME(procedures),
 };
 
-EV_ViewRuleExprExpandRangeInfoHookFunctionType * rd_collection_expr_expand_range_info_hook_function_table[13] =
+EV_ViewRuleExprExpandRangeInfoHookFunctionType * rd_collection_expr_expand_range_info_hook_function_table[12] =
 {
-EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_NAME(watches),
 EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_NAME(machines),
 EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_NAME(processes),
 EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_NAME(threads),
@@ -795,9 +791,8 @@ EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_NAME(types),
 EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_NAME(procedures),
 };
 
-EV_ViewRuleExprExpandIDFromNumHookFunctionType * rd_collection_expr_expand_id_from_num_hook_function_table[13] =
+EV_ViewRuleExprExpandIDFromNumHookFunctionType * rd_collection_expr_expand_id_from_num_hook_function_table[12] =
 {
-EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_NAME(watches),
 EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_NAME(machines),
 EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_NAME(processes),
 EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_NAME(threads),
@@ -812,9 +807,8 @@ EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_NAME(types),
 EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_NAME(procedures),
 };
 
-EV_ViewRuleExprExpandIDFromNumHookFunctionType * rd_collection_expr_expand_num_from_id_hook_function_table[13] =
+EV_ViewRuleExprExpandIDFromNumHookFunctionType * rd_collection_expr_expand_num_from_id_hook_function_table[12] =
 {
-EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_NAME(watches),
 EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_NAME(machines),
 EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_NAME(processes),
 EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_NAME(threads),
