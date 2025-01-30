@@ -139,7 +139,6 @@ typedef enum DW_StdOpcode
 #define X(_N,_ID) DW_StdOpcode_##_N = _ID,
   DW_StdOpcode_XList(X)
 #undef X
-  DW_StdOpcode_Count,
 } DW_StdOpcode;
 
 #define DW_ExtOpcode_XList(X) \
@@ -156,7 +155,6 @@ typedef enum DW_ExtOpcode
 #define X(_N,_ID) DW_ExtOpcode_##_N = _ID,
   DW_ExtOpcode_XList(X)
 #undef X
-  DW_ExtOpcode_Count
 } DW_ExtOpcode;
 
 #define DW_NameCase_XList(X) \
