@@ -152,6 +152,10 @@ internal void e_select_ir_ctx(E_IRCtx *ctx);
 ////////////////////////////////
 //~ rjf: Lookups
 
+internal E_LookupRuleMap e_lookup_rule_map_make(Arena *arena, U64 slots_count);
+internal void e_lookup_rule_map_insert(Arena *arena, E_LookupRuleMap *map, E_LookupRule *rule);
+#define e_lookup_rule_map_insert_new(arena, map, name_, lookup_info_, lookup_) e_lookup_rule_map_insert((arena), (map), &(E_LookupRule){.name = (name_), .lookup_info = (lookup_info_), .lookup = (lookup_)})
+
 internal E_LookupRule *e_lookup_rule_from_string(String8 string);
 E_LOOKUP_INFO_FUNCTION_DEF(default);
 E_LOOKUP_FUNCTION_DEF(default);

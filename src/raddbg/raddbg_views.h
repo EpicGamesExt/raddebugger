@@ -223,6 +223,7 @@ internal RD_CodeViewBuildResult rd_code_view_build(Arena *arena, RD_CodeViewStat
 //~ rjf: Watch View Functions
 
 //- rjf: cell list building
+internal U64 rd_id_from_watch_cell(RD_WatchCell *cell);
 internal RD_WatchCell *rd_watch_cell_list_push(Arena *arena, RD_WatchCellList *list);
 internal RD_WatchCell *rd_watch_cell_list_push_new_(Arena *arena, RD_WatchCellList *list, RD_WatchCell *params);
 #define rd_watch_cell_list_push_new(arena, list, kind_, ...) rd_watch_cell_list_push_new_((arena), (list), &(RD_WatchCell){.kind = (kind_), __VA_ARGS__})

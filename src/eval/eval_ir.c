@@ -73,6 +73,26 @@ e_select_ir_ctx(E_IRCtx *ctx)
 ////////////////////////////////
 //~ rjf: Lookups
 
+internal E_LookupRuleMap
+e_lookup_rule_map_make(Arena *arena, U64 slots_count)
+{
+  E_LookupRuleMap map = {0};
+  map.slots_count = slots_count;
+  map.slots = push_array(arena, E_LookupRuleSlot, map.slots_count);
+  return map;
+}
+
+internal void
+e_lookup_rule_map_insert(Arena *arena, E_LookupRuleMap *map, E_LookupRule *rule)
+{
+  U64 hash = e_hash_from_string(5381, rule->name);
+  U64 slot_idx = hash%map->slots_count;
+  E_LookupRuleNode *n = push_array(arena, E_LookupRuleNode, 1);
+  SLLQueuePush(map->slots[slot_idx].first, map->slots[slot_idx].last, n);
+  MemoryCopyStruct(&n->v, rule);
+  n->v.name = push_str8_copy(arena, n->v.name);
+}
+
 internal E_LookupRule *
 e_lookup_rule_from_string(String8 string)
 {
@@ -703,12 +723,21 @@ e_irtree_and_type_from_expr__space(Arena *arena, E_Space *current_space, E_Expr 
     case E_ExprKind_MemberAccess:
     case E_ExprKind_ArrayIndex:
     {
+      Temp scratch = scratch_begin(&arena, 1);
       E_Expr *lhs = expr->first;
+      E_IRTreeAndType lhs_irtree = e_irtree_and_type_from_expr(scratch.arena, lhs);
+      E_Type *lhs_type = e_type_from_key(scratch.arena, lhs_irtree.type_key);
+      String8 lookup_rule_name = expr->string;
+      if(lhs_type->kind == E_TypeKind_Set)
+      {
+        lookup_rule_name = lhs_type->name;
+      }
       E_Expr *rhs = lhs->next;
-      E_LookupRule *lookup_rule = e_lookup_rule_from_string(expr->string);
+      E_LookupRule *lookup_rule = e_lookup_rule_from_string(lookup_rule_name);
       E_LookupInfo lookup_info = lookup_rule->lookup_info(arena, lhs);
       E_Lookup lookup = lookup_rule->lookup(arena, expr->kind, lhs, rhs, lookup_info.user_data);
       result = lookup.irtree_and_type;
+      scratch_end(scratch);
     }break;
     
     //- rjf: dereference

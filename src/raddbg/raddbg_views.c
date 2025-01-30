@@ -796,6 +796,15 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
 
 //- rjf: cell list building
 
+internal U64
+rd_id_from_watch_cell(RD_WatchCell *cell)
+{
+  U64 result = 5381;
+  result = e_hash_from_string(result, str8_struct(&cell->kind));
+  result = e_hash_from_string(result, cell->member);
+  return result;
+}
+
 internal RD_WatchCell *
 rd_watch_cell_list_push(Arena *arena, RD_WatchCellList *list)
 {
@@ -846,9 +855,25 @@ internal RD_WatchPt
 rd_watch_pt_from_tbl(EV_BlockRangeList *block_ranges, Vec2S64 tbl)
 {
   RD_WatchPt pt = zero_struct;
-  pt.cell_id     = (U64)tbl.x;
-  pt.key         = ev_key_from_num(block_ranges, (U64)tbl.y);
-  pt.parent_key  = ev_block_range_from_num(block_ranges, (U64)tbl.y).block->key;
+  {
+    Temp scratch = scratch_begin(0, 0);
+    EV_Row *row = ev_row_from_num(scratch.arena, rd_view_eval_view(), rd_view_filter(), block_ranges, (U64)tbl.y);
+    RD_WatchRowInfo row_info = rd_watch_row_info_from_row(scratch.arena, row);
+    {
+      S64 x = 0;
+      for(RD_WatchCell *cell = row_info.cells.first; cell != 0; cell = cell->next, x += 1)
+      {
+        if(x == tbl.x)
+        {
+          pt.cell_id = rd_id_from_watch_cell(cell);
+          break;
+        }
+      }
+    }
+    pt.key         = row->key;
+    pt.parent_key  = row->block->key;
+    scratch_end(scratch);
+  }
   return pt;
 }
 
@@ -856,8 +881,27 @@ internal Vec2S64
 rd_tbl_from_watch_pt(EV_BlockRangeList *block_ranges, RD_WatchPt pt)
 {
   Vec2S64 tbl = {0};
-  tbl.x = (S64)pt.cell_id;
-  tbl.y = (S64)ev_num_from_key(block_ranges, pt.key);
+  {
+    Temp scratch = scratch_begin(0, 0);
+    U64 num = ev_num_from_key(block_ranges, pt.key);
+    EV_Row *row = ev_row_from_num(scratch.arena, rd_view_eval_view(), rd_view_filter(), block_ranges, num);
+    RD_WatchRowInfo row_info = rd_watch_row_info_from_row(scratch.arena, row);
+    tbl.x = 0;
+    {
+      S64 x = 0;
+      for(RD_WatchCell *cell = row_info.cells.first; cell != 0; cell = cell->next, x += 1)
+      {
+        U64 cell_id = rd_id_from_watch_cell(cell);
+        if(cell_id == pt.cell_id)
+        {
+          tbl.x = x;
+          break;
+        }
+      }
+    }
+    tbl.y = (S64)num;
+    scratch_end(scratch);
+  }
   return tbl;
 }
 

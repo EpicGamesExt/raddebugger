@@ -13086,6 +13086,8 @@ rd_frame(void)
       E_IRCtx *ctx = ir_ctx;
       ctx->macro_map    = push_array(scratch.arena, E_String2ExprMap, 1);
       ctx->macro_map[0] = e_string2expr_map_make(scratch.arena, 512);
+      ctx->lookup_rule_map    = push_array(scratch.arena, E_LookupRuleMap, 1);
+      ctx->lookup_rule_map[0] = e_lookup_rule_map_make(scratch.arena, 512);
       
       //- rjf: add macros for collections
       {
@@ -13228,6 +13230,7 @@ rd_frame(void)
           e_string2expr_map_insert(scratch.arena, ctx->macro_map, push_str8f(scratch.arena, "$%I64x%I64x", (U64)cfg, cfg->gen), expr);
         }
       }
+      
       //- rjf: add macros for all evallable control entities
       {
         CTRL_EntityKind evallable_kinds[] =
@@ -13282,12 +13285,7 @@ rd_frame(void)
       {
         String8 cfg_name = evallable_cfg_names[cfg_name_idx];
         String8 collection_name = rd_plural_from_code_name(cfg_name);
-        E_TypeKey collection_type_key = {0};
-        {
-          E_TypeKey element_type_key = evallable_cfg_types[cfg_name_idx];
-          RD_CfgList cfgs = rd_cfg_top_level_list_from_string(scratch.arena, cfg_name);
-          collection_type_key = e_type_key_cons_array(e_type_key_cons_space_ptr(element_type_key), cfgs.count);
-        }
+        E_TypeKey collection_type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = collection_name);
         E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
         E_Space space = e_space_make(RD_EvalSpaceKind_MetaCollection);
         space.u64s[0] = cfg_name_idx;
@@ -13295,6 +13293,7 @@ rd_frame(void)
         expr->mode     = E_Mode_Offset;
         expr->type_key = collection_type_key;
         e_string2expr_map_insert(scratch.arena, ctx->macro_map, collection_name, expr);
+        // TODO(rjf): e_lookup_rule_map_insert_new(scratch.arena, ctx->lookup_rule_map, collection_name, );
       }
       
       //- rjf: add macro for output log
