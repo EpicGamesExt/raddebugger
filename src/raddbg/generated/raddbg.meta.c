@@ -73,7 +73,7 @@ RD_VocabularyInfo rd_vocabulary_info_table[41] =
 {str8_lit_comp("label"), str8_lit_comp("labels"), str8_lit_comp("Label"), str8_lit_comp("Labels"), RD_IconKind_Null},
 };
 
-RD_CfgNameSchemaPair rd_cfg_name_schema_pair_table[7] =
+RD_CfgNameSchemaPair rd_cfg_name_schema_pair_table[6] =
 {
 {str8_lit_comp("settings"), str8_lit_comp("x:\n{\n  @default(1) 'hover_animations':     bool,\n  @default(1) 'press_animations':     bool,\n  @default(0) 'focus_animations':     bool,\n  @default(1) 'tooltip_animations':   bool,\n  @default(1) 'menu_animations':      bool,\n  @default(1) 'scrolling_animations': bool,\n  @default(1) 'background_blur':      bool,\n  @default(1) 'thread_lines':         bool,\n  @default(1) 'breakpoint_lines':     bool,\n  @default(1) 'thread_glow':          bool,\n  @default(1) 'breakpoint_glow':      bool,\n  @default(0) 'opaque_backgrounds':   bool,\n  @default(1) 'smooth_main_text':     bool,\n  @default(0) 'smooth_code_text':     bool,\n  @default(1) 'hint_main_text':       bool,\n  @default(1) 'hint_code_text':       bool,\n  @default(2) 'tab_width':      @range[1, 32] u64,\n  @can_be_per_window 'main_font_size': @range[6, 72] u64,\n  @can_be_per_window 'code_font_size': @range[1, 32] u64,\n}\n"), str8_lit_comp("")},
 {str8_lit_comp("target"), str8_lit_comp("x:\n{\n  'label':              code_string,\n  'executable':         path,\n  'arguments':          string,\n  'working_directory':  path,\n  'entry_point':        code_string,\n  'stdout_path':        path,\n  'stderr_path':        path,\n  'stdin_path':         path,\n  'debug_subprocesses': bool,\n}\n"), str8_lit_comp("launch_and_run,launch_and_init,select_cfg,remove_cfg")},
@@ -81,7 +81,6 @@ RD_CfgNameSchemaPair rd_cfg_name_schema_pair_table[7] =
 {str8_lit_comp("watch_pin"), str8_lit_comp("x:\n{\n  'expression': code_string,\n  'view_rule':  code_string,\n  'location':   location,\n}\n"), str8_lit_comp("remove_cfg")},
 {str8_lit_comp("file_path_map"), str8_lit_comp("x:{'source':path, 'dest':path}"), str8_lit_comp("remove_cfg")},
 {str8_lit_comp("auto_view_rule"), str8_lit_comp("x:{'source':code_string, 'dest':code_string}"), str8_lit_comp("remove_cfg")},
-{str8_lit_comp("watch"), str8_lit_comp("x:\n{\n  'expression': code_string,\n  'view_rule':  code_string,\n}\n"), str8_lit_comp("remove_cfg")},
 };
 
 String8 d_entity_kind_display_string_table[27] =
@@ -500,7 +499,7 @@ RD_CmdKindInfo rd_cmd_kind_info_table[213] =
 { str8_lit_comp("log_marker"), str8_lit_comp("Logs a marker in the application log, to denote specific points in time within the log."), str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp("Log Marker"), RD_IconKind_Null, (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp(""), RD_EntityKind_Nil, CTRL_EntityKind_Null}},
 };
 
-RD_StringBindingPair rd_default_binding_table[110] =
+RD_StringBindingPair rd_default_binding_table[111] =
 {
 {str8_lit_comp("kill_all"), {OS_Key_F5, 0  |OS_Modifier_Shift }},
 {str8_lit_comp("step_into_inst"), {OS_Key_F11, 0   |OS_Modifier_Alt}},
@@ -612,6 +611,7 @@ RD_StringBindingPair rd_default_binding_table[110] =
 {str8_lit_comp("filter"), {OS_Key_Slash, 0 |OS_Modifier_Ctrl  }},
 {str8_lit_comp("open_lister"), {OS_Key_F1, 0   }},
 {str8_lit_comp("log_marker"), {OS_Key_M, 0 |OS_Modifier_Ctrl |OS_Modifier_Shift |OS_Modifier_Alt}},
+{str8_lit_comp("toggle_dev_menu"), {OS_Key_D, 0 |OS_Modifier_Ctrl |OS_Modifier_Shift |OS_Modifier_Alt}},
 };
 
 String8 rd_binding_version_remap_old_name_table[8] =

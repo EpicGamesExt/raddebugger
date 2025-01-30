@@ -1416,10 +1416,12 @@ internal DR_FancyStringList rd_stop_explanation_fstrs_from_ctrl_event(Arena *are
 //~ rjf: Vocabulary Info Lookups
 
 internal RD_VocabularyInfo *rd_vocabulary_info_from_code_name(String8 code_name);
+internal RD_VocabularyInfo *rd_vocabulary_info_from_code_name_plural(String8 code_name_plural);
 #define rd_plural_from_code_name(code_name) (rd_vocabulary_info_from_code_name(code_name)->code_name_plural)
 #define rd_display_from_code_name(code_name) (rd_vocabulary_info_from_code_name(code_name)->display_name)
 #define rd_display_plural_from_code_name(code_name) (rd_vocabulary_info_from_code_name(code_name)->display_name_plural)
 #define rd_icon_kind_from_code_name(code_name) (rd_vocabulary_info_from_code_name(code_name)->icon_kind)
+#define rd_singular_from_code_name_plural(code_name_plural) (rd_vocabulary_info_from_code_name_plural(code_name_plural)->code_name)
 
 ////////////////////////////////
 //~ rjf: Continuous Frame Requests

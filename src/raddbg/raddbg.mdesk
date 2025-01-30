@@ -201,19 +201,6 @@ RD_VocabularyMap:
     ```x:{'source':code_string, 'dest':code_string}```,
     `remove_cfg`,
   }
-  
-  //- rjf: watches
-  {
-    watch,
-    ```x:
-    {
-      'expression': code_string,
-      'view_rule':  code_string,
-    }
-    ```,
-    `remove_cfg`,
-  }
-  
 }
 
 @struct RD_CfgNameSchemaPair:
@@ -877,6 +864,7 @@ RD_DefaultBindingTable:
   
   //- rjf: developer commands
   { "log_marker"                  M         ctrl     shift     alt        }
+  { "toggle_dev_menu"             D         ctrl     shift     alt        }
 }
 
 @data(RD_StringBindingPair) rd_default_binding_table:

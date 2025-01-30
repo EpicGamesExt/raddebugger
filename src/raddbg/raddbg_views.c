@@ -957,9 +957,10 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     
     // rjf: fill row's cells
     rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .string = str8_lit("expression"),       .pct = 0.25f);
-    rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval,                                         .pct = 0.30f);
+    rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval,                                         .pct = 0.20f);
     rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .string = str8_lit("typeof($expr)"),    .pct = 0.15f);
-    rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .string = str8_lit("view_rule"),        .pct = 0.30f);
+    rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .string = str8_lit("sizeof($expr)"),    .pct = 0.15f);
+    rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .string = str8_lit("view_rule"),        .pct = 0.25f);
     
     di_scope_close(di_scope);
     scratch_end(scratch);
@@ -1092,7 +1093,105 @@ internal RD_WatchRowCellInfo
 rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, RD_WatchRowInfo *row_info, RD_WatchCell *cell, FNT_Tag font, F32 font_size, F32 max_size_px)
 {
   RD_WatchRowCellInfo result = {0};
-  result.string = row->string;
+  switch(cell->kind)
+  {
+    //- rjf: expression cells -> if no string attached to row itself, form one from the
+    // expression tree.
+    case RD_WatchCellKind_Expr:
+    {
+      result.string = row->string;
+      if(result.string.size == 0)
+      {
+        E_Expr *notable_expr = row->expr;
+        for(B32 good = 0; !good;)
+        {
+          switch(notable_expr->kind)
+          {
+            default:{good = 1;}break;
+            case E_ExprKind_Address:
+            case E_ExprKind_Deref:
+            case E_ExprKind_Cast:
+            {
+              notable_expr = notable_expr->last;
+            }break;
+            case E_ExprKind_Ref:
+            {
+              notable_expr = notable_expr->ref;
+            }break;
+          }
+        }
+        switch(notable_expr->kind)
+        {
+          default:
+          {
+            result.string = e_string_from_expr(arena, notable_expr);
+          }break;
+          case E_ExprKind_ArrayIndex:
+          {
+            result.string = push_str8f(arena, "[%S]", e_string_from_expr(arena, notable_expr->last));
+          }break;
+          case E_ExprKind_MemberAccess:
+          {
+            result.string = push_str8f(arena, ".%S", e_string_from_expr(arena, notable_expr->last));
+          }break;
+        }
+      }
+    }break;
+    
+    //- rjf: evaluation cells -> wrap expression if needed, evaluate, & stringize
+    case RD_WatchCellKind_Eval:
+    {
+      Temp scratch = scratch_begin(&arena, 1);
+      
+      //- rjf: use cell's wrap string to wrap row's expression
+      String8 wrap_string = cell->string;
+      E_Expr *root_expr = row->expr;
+      if(wrap_string.size != 0)
+      {
+        E_Expr *wrap_expr = e_parse_expr_from_text(scratch.arena, wrap_string);
+        root_expr = wrap_expr;
+        typedef struct Task Task;
+        struct Task
+        {
+          Task *next;
+          E_Expr *parent;
+          E_Expr *expr;
+        };
+        Task start_task = {0, &e_expr_nil, wrap_expr};
+        Task *first_task = &start_task;
+        Task *last_task = first_task;
+        for(Task *t = first_task; t != 0; t = t->next)
+        {
+          if(t->expr->kind == E_ExprKind_LeafIdent && str8_match(t->expr->string, str8_lit("$expr"), 0))
+          {
+            E_Expr *original_expr_ref = e_expr_ref(scratch.arena, row->expr);
+            if(t->parent != &e_expr_nil)
+            {
+              e_expr_insert_child(t->parent, t->expr, original_expr_ref);
+              e_expr_remove_child(t->parent, t->expr);
+            }
+            else
+            {
+              root_expr = original_expr_ref;
+            }
+          }
+          else for(E_Expr *child = t->expr->first; child != &e_expr_nil; child = child->next)
+          {
+            Task *task = push_array(scratch.arena, Task, 1);
+            SLLQueuePush(first_task, last_task, task);
+            task->parent = t->expr;
+            task->expr = child;
+          }
+        }
+      }
+      
+      //- rjf: evaluate wrapped expression
+      result.eval   = e_eval_from_expr(scratch.arena, root_expr);
+      result.string = rd_value_string_from_eval(arena, 0, 10, font, font_size, max_size_px, result.eval, &e_member_nil, row->view_rules);
+      
+      scratch_end(scratch);
+    }break;
+  }
   return result;
 }
 
@@ -4026,7 +4125,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(targets)
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Expr,       0.25f);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,      0.75f, .dequote_string = 1, .is_non_code = 0);
   }
-  rd_watch_view_build(wv, str8_lit("collection:targets"), str8_lit("only: label exe args working_directory entry_point stdout_path stderr_path stdin_path debug_subprocesses b32 str"), 1, 10, rect);
+  rd_watch_view_build(wv, str8_lit("collection:targets"), str8_zero(), 1, 10, rect);
   ProfEnd();
 }
 
