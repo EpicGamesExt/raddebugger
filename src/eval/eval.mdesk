@@ -72,6 +72,7 @@ E_TypeKindTable:
   {Bitfield                  "bitfield"            0    }
   {Variadic                  "variadic"            0    }
   {SpacePtr                  "space_ptr"           0    }
+  {Set                       "set"                 0    }
 }
 
 @table(name  op_kind  precedence  string  op_pre  op_sep  op_pos)

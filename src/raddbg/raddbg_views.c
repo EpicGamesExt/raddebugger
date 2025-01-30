@@ -835,17 +835,17 @@ rd_watch_view_column_from_x(RD_WatchViewState *wv, S64 index)
 //- rjf: watch view points <-> table coordinates
 
 internal B32
-rd_watch_view_point_match(RD_WatchViewPoint a, RD_WatchViewPoint b)
+rd_watch_pt_match(RD_WatchPt a, RD_WatchPt b)
 {
   return (ev_key_match(a.parent_key, b.parent_key) &&
           ev_key_match(a.key, b.key) &&
           a.cell_id == b.cell_id);
 }
 
-internal RD_WatchViewPoint
-rd_watch_view_point_from_tbl(EV_BlockRangeList *block_ranges, Vec2S64 tbl)
+internal RD_WatchPt
+rd_watch_pt_from_tbl(EV_BlockRangeList *block_ranges, Vec2S64 tbl)
 {
-  RD_WatchViewPoint pt = zero_struct;
+  RD_WatchPt pt = zero_struct;
   pt.cell_id     = (U64)tbl.x;
   pt.key         = ev_key_from_num(block_ranges, (U64)tbl.y);
   pt.parent_key  = ev_block_range_from_num(block_ranges, (U64)tbl.y).block->key;
@@ -853,12 +853,46 @@ rd_watch_view_point_from_tbl(EV_BlockRangeList *block_ranges, Vec2S64 tbl)
 }
 
 internal Vec2S64
-rd_tbl_from_watch_view_point(EV_BlockRangeList *block_ranges, RD_WatchViewPoint pt)
+rd_tbl_from_watch_pt(EV_BlockRangeList *block_ranges, RD_WatchPt pt)
 {
   Vec2S64 tbl = {0};
   tbl.x = (S64)pt.cell_id;
   tbl.y = (S64)ev_num_from_key(block_ranges, pt.key);
   return tbl;
+}
+
+//- rjf: row -> info
+
+internal RD_WatchRowInfo
+rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
+{
+  RD_WatchRowInfo info = {0};
+  {
+    Temp scratch = scratch_begin(&arena, 1);
+    DI_Scope *di_scope = di_scope_open();
+    
+    // rjf: unpack key & block
+    EV_Block *block = row->block;
+    EV_Key key = row->key;
+    E_IRTreeAndType parent_irtree = e_irtree_and_type_from_expr(scratch.arena, block->expr);
+    E_Type *parent_type = e_type_from_key(arena, parent_irtree.type_key);
+    
+    // rjf: fill row's eval
+    info.eval = e_eval_from_expr(arena, row->expr);
+    
+    // rjf: determine cfg group
+    
+    
+    // rjf: fill row's cells
+    rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr,     .pct = 0.25f);
+    rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Value,    .pct = 0.30f);
+    rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Type,     .pct = 0.15f);
+    rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_ViewRule, .pct = 0.30f);
+    
+    di_scope_close(di_scope);
+    scratch_end(scratch);
+  }
+  return info;
 }
 
 //- rjf: row -> context info
@@ -1229,7 +1263,7 @@ rd_string_from_eval_viz_row_column(Arena *arena, EV_Row *row, RD_WatchViewColumn
 //- rjf: table coordinates -> text edit state
 
 internal RD_WatchViewTextEditState *
-rd_watch_view_text_edit_state_from_pt(RD_WatchViewState *wv, RD_WatchViewPoint pt)
+rd_watch_view_text_edit_state_from_pt(RD_WatchViewState *wv, RD_WatchPt pt)
 {
   RD_WatchViewTextEditState *result = &wv->dummy_text_edit_state;
   if(wv->text_edit_state_slots_count != 0 && wv->text_editing != 0)
@@ -1238,7 +1272,7 @@ rd_watch_view_text_edit_state_from_pt(RD_WatchViewState *wv, RD_WatchViewPoint p
     U64 slot_idx = hash%wv->text_edit_state_slots_count;
     for(RD_WatchViewTextEditState *s = wv->text_edit_state_slots[slot_idx]; s != 0; s = s->pt_hash_next)
     {
-      if(rd_watch_view_point_match(pt, s->pt))
+      if(rd_watch_pt_match(pt, s->pt))
       {
         result = s;
         break;
@@ -1416,7 +1450,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
         cursor_dirty__tbl = 0;
         struct
         {
-          RD_WatchViewPoint *pt_state;
+          RD_WatchPt *pt_state;
           Vec2S64 pt_tbl;
         }
         points[] =
@@ -1428,7 +1462,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
         {
           EV_Key last_key = points[point_idx].pt_state->key;
           EV_Key last_parent_key = points[point_idx].pt_state->parent_key;
-          points[point_idx].pt_state[0] = rd_watch_view_point_from_tbl(&block_ranges, points[point_idx].pt_tbl);
+          points[point_idx].pt_state[0] = rd_watch_pt_from_tbl(&block_ranges, points[point_idx].pt_tbl);
           if(ev_key_match(ev_key_zero(), points[point_idx].pt_state->key))
           {
             points[point_idx].pt_state->key = last_parent_key;
@@ -1460,8 +1494,8 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
       Rng2S64 cursor_tbl_range = {0};
       {
         // rjf: compute 2d table coordinates
-        cursor_tbl = rd_tbl_from_watch_view_point(&block_ranges, ewv->cursor);
-        mark_tbl = rd_tbl_from_watch_view_point(&block_ranges, ewv->mark);
+        cursor_tbl = rd_tbl_from_watch_pt(&block_ranges, ewv->cursor);
+        mark_tbl = rd_tbl_from_watch_pt(&block_ranges, ewv->mark);
         
         // rjf: compute row at initial selection point (or just cursor point)
         mark_rows = ev_rows_from_num_range(scratch.arena, eval_view, filter, &block_ranges, r1u64(mark_tbl.y, mark_tbl.y+1));
@@ -1544,7 +1578,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
       //- rjf: apply cursor/mark rugpull change
       //
       B32 cursor_rugpull = 0;
-      if(!rd_watch_view_point_match(ewv->cursor, ewv->next_cursor))
+      if(!rd_watch_pt_match(ewv->cursor, ewv->next_cursor))
       {
         cursor_rugpull = 1;
         ewv->cursor = ewv->next_cursor;
@@ -1598,7 +1632,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
               RD_WatchViewColumn *col = rd_watch_view_column_from_x(ewv, x);
               String8 string = rd_string_from_eval_viz_row_column(scratch.arena, row, col, string_flags, default_radix, ui_top_font(), ui_top_font_size(), row_string_max_size_px);
               string.size = Min(string.size, sizeof(ewv->dummy_text_edit_state.input_buffer));
-              RD_WatchViewPoint pt = {row->block->key, row->key, x};
+              RD_WatchPt pt = {row->block->key, row->key, x};
               U64 hash = ev_hash_from_key(pt.key);
               U64 slot_idx = hash%ewv->text_edit_state_slots_count;
               RD_WatchViewTextEditState *edit_state = push_array(ewv->text_edit_arena, RD_WatchViewTextEditState, 1);
@@ -1701,7 +1735,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
             RD_WatchViewRowKind row_kind = rd_watch_view_row_kind_from_flags_row_info(flags, row, &row_info);
             for(S64 x = selection_tbl.min.x; x <= selection_tbl.max.x; x += 1)
             {
-              RD_WatchViewPoint pt = rd_watch_view_point_from_tbl(&block_ranges, v2s64(x, y));
+              RD_WatchPt pt = rd_watch_pt_from_tbl(&block_ranges, v2s64(x, y));
               RD_WatchViewTextEditState *edit_state = rd_watch_view_text_edit_state_from_pt(ewv, pt);
               String8 string = str8(edit_state->input_buffer, edit_state->input_size);
               UI_TxtOp op = ui_single_line_txt_op_from_event(scratch.arena, evt, string, edit_state->cursor, edit_state->mark);
@@ -1808,7 +1842,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                   case RD_WatchViewColumnKind_ViewRule:
                   if(editing_complete)
                   {
-                    RD_WatchViewPoint pt = rd_watch_view_point_from_tbl(&block_ranges, tbl);
+                    RD_WatchPt pt = rd_watch_pt_from_tbl(&block_ranges, tbl);
                     ev_key_set_view_rule(eval_view, pt.key, new_string);
                     if(row_info.collection_entity_kind != RD_EntityKind_Nil)
                     {
@@ -1890,7 +1924,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
         state_dirty = 1;
         snap_to_cursor = 1;
         RD_EntityList entities_to_remove = {0};
-        RD_WatchViewPoint next_cursor_pt = {0};
+        RD_WatchPt next_cursor_pt = {0};
         B32 next_cursor_set = 0;
         EV_WindowedRowList rows = ev_rows_from_num_range(scratch.arena, eval_view, filter, &block_ranges, r1u64(selection_tbl.min.y, selection_tbl.max.y+1));
         EV_WindowedRowNode *row_node = rows.first;
@@ -1902,7 +1936,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
           for(S64 x = selection_tbl.min.x; x <= selection_tbl.max.x; x += 1)
           {
             Vec2S64 tbl = v2s64(x, y);
-            RD_WatchViewPoint pt = rd_watch_view_point_from_tbl(&block_ranges, tbl);
+            RD_WatchPt pt = rd_watch_pt_from_tbl(&block_ranges, tbl);
             RD_WatchViewColumn *col = rd_watch_view_column_from_x(ewv, x);
             if(tbl.y != 0 && (col->kind == RD_WatchViewColumnKind_Expr || row_kind == RD_WatchViewRowKind_PrettyEntityControls) &&
                row_info.collection_entity_kind != RD_EntityKind_Nil)
@@ -1924,7 +1958,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                     key = row->block->key;
                     parent_key = row->block->parent->key;
                   }
-                  RD_WatchViewPoint new_pt = {parent_key, key, 0};
+                  RD_WatchPt new_pt = {parent_key, key, 0};
                   next_cursor_pt = new_pt;
                   next_cursor_set = 1;
                 }
@@ -2298,7 +2332,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
             ui_view_rule_params_root = &md_nil_node;
           }
           RD_WatchViewRowInfo row_info = rd_watch_view_row_info_from_row(row);
-          RD_WatchCellList row_cells = rd_watch_cell_list_from_row_info(scratch.arena, row, &row_info);
+          RD_WatchRowInfo row_info_NEW = rd_watch_row_info_from_row(scratch.arena, row); 
           ProfEnd();
           
           ////////////////////////
@@ -2425,11 +2459,11 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
             ////////////////////
             //- rjf: build all cells
             //
-            for(RD_WatchCell *cell = row_cells.first; cell != 0; cell = cell->next)
+            for(RD_WatchCell *cell = row_info_NEW.cells.first; cell != 0; cell = cell->next)
             {
 #if 0 // TODO(rjf): @cfg
               //- rjf: unpack cell info
-              RD_WatchViewPoint cell_pt = {x, row->block->key, row->key};
+              RD_WatchPt cell_pt = {x, row->block->key, row->key};
               RD_WatchViewTextEditState *cell_edit_state = rd_watch_view_text_edit_state_from_pt(ewv, cell_pt);
               B32 cell_selected = (row_selected && selection_tbl.min.x <= cell_pt.x && cell_pt.x <= selection_tbl.max.x);
               String8 cell_pre_edit_string = rd_string_from_eval_viz_row_column(scratch.arena, eval_view, row, col, string_flags|EV_StringFlag_ReadOnlyDisplayRules, default_radix, ui_top_font(), ui_top_font_size(), row_string_max_size_px);
@@ -3046,7 +3080,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
             {
 #if 0 // TODO(rjf): @cfg
               //- rjf: unpack
-              RD_WatchViewPoint pt = {0, row->block->key, row->key};
+              RD_WatchPt pt = {0, row->block->key, row->key};
               RD_View *view = rd_view_from_handle(rd_regs()->view);
               RD_TransientViewNode *canvas_view_node = rd_transient_view_node_from_ev_key(view, row->key);
               RD_View *canvas_view = canvas_view_node->view;
@@ -3312,7 +3346,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                     }
                     if(ui_pressed(sig))
                     {
-                      RD_WatchViewPoint cell_pt = {1, row->block->key, row->key};
+                      RD_WatchPt cell_pt = {1, row->block->key, row->key};
                       ewv->next_cursor = ewv->next_mark = cell_pt;
                       pressed = 1;
                     }
@@ -3477,7 +3511,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, RD_WatchViewFlags flags, String8 roo
                 for(RD_WatchViewColumn *col = ewv->first_column; col != 0; col = col->next, x += 1)
                 {
                   //- rjf: unpack cell info
-                  RD_WatchViewPoint cell_pt = {x, row->block->key, row->key};
+                  RD_WatchPt cell_pt = {x, row->block->key, row->key};
                   RD_WatchViewTextEditState *cell_edit_state = rd_watch_view_text_edit_state_from_pt(ewv, cell_pt);
                   B32 cell_selected = (row_selected && selection_tbl.min.x <= cell_pt.x && cell_pt.x <= selection_tbl.max.x);
                   String8 cell_pre_edit_string = rd_string_from_eval_viz_row_column(scratch.arena, eval_view, row, col, string_flags|EV_StringFlag_ReadOnlyDisplayRules, default_radix, ui_top_font(), ui_top_font_size(), row_string_max_size_px);

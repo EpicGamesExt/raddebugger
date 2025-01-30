@@ -13084,8 +13084,8 @@ rd_frame(void)
     E_IRCtx *ir_ctx = push_array(scratch.arena, E_IRCtx, 1);
     {
       E_IRCtx *ctx = ir_ctx;
-      ctx->macro_map     = push_array(scratch.arena, E_String2ExprMap, 1);
-      ctx->macro_map[0]  = e_string2expr_map_make(scratch.arena, 512);
+      ctx->macro_map    = push_array(scratch.arena, E_String2ExprMap, 1);
+      ctx->macro_map[0] = e_string2expr_map_make(scratch.arena, 512);
       
       //- rjf: add macros for collections
       {

@@ -57,12 +57,69 @@ struct E_IRTreeAndType
 };
 
 ////////////////////////////////
+//~ rjf: Member/Index Lookup Hooks
+
+typedef struct E_LookupInfo E_LookupInfo;
+struct E_LookupInfo
+{
+  void *user_data;
+  U64 named_expr_count;
+  U64 idxed_expr_count;
+};
+
+typedef struct E_Lookup E_Lookup;
+struct E_Lookup
+{
+  E_IRTreeAndType irtree_and_type;
+};
+
+#define E_LOOKUP_INFO_FUNCTION_SIG(name) E_LookupInfo name(Arena *arena, E_Expr *lhs)
+#define E_LOOKUP_INFO_FUNCTION_NAME(name) e_lookup_info_##name
+#define E_LOOKUP_INFO_FUNCTION_DEF(name) internal E_LOOKUP_INFO_FUNCTION_SIG(E_LOOKUP_INFO_FUNCTION_NAME(name))
+typedef E_LOOKUP_INFO_FUNCTION_SIG(E_LookupInfoFunctionType);
+
+#define E_LOOKUP_FUNCTION_SIG(name) E_Lookup name(Arena *arena, E_ExprKind kind, E_Expr *lhs, E_Expr *rhs, void *user_data)
+#define E_LOOKUP_FUNCTION_NAME(name) e_lookup_##name
+#define E_LOOKUP_FUNCTION_DEF(name) internal E_LOOKUP_FUNCTION_SIG(E_LOOKUP_FUNCTION_NAME(name))
+typedef E_LOOKUP_FUNCTION_SIG(E_LookupFunctionType);
+
+typedef struct E_LookupRule E_LookupRule;
+struct E_LookupRule
+{
+  String8 name;
+  E_LookupInfoFunctionType *lookup_info;
+  E_LookupFunctionType *lookup;
+};
+
+typedef struct E_LookupRuleNode E_LookupRuleNode;
+struct E_LookupRuleNode
+{
+  E_LookupRuleNode *next;
+  E_LookupRule v;
+};
+
+typedef struct E_LookupRuleSlot E_LookupRuleSlot;
+struct E_LookupRuleSlot
+{
+  E_LookupRuleNode *first;
+  E_LookupRuleNode *last;
+};
+
+typedef struct E_LookupRuleMap E_LookupRuleMap;
+struct E_LookupRuleMap
+{
+  E_LookupRuleSlot *slots;
+  U64 slots_count;
+};
+
+////////////////////////////////
 //~ rjf: Parse Context
 
 typedef struct E_IRCtx E_IRCtx;
 struct E_IRCtx
 {
   E_String2ExprMap *macro_map;
+  E_LookupRuleMap *lookup_rule_map;
 };
 
 ////////////////////////////////
@@ -82,6 +139,13 @@ internal B32        e_expr_kind_is_comparison(E_ExprKind kind);
 
 internal E_IRCtx *e_selected_ir_ctx(void);
 internal void e_select_ir_ctx(E_IRCtx *ctx);
+
+////////////////////////////////
+//~ rjf: Lookups
+
+internal E_LookupRule *e_lookup_rule_from_string(String8 string);
+E_LOOKUP_INFO_FUNCTION_DEF(default);
+E_LOOKUP_FUNCTION_DEF(default);
 
 ////////////////////////////////
 //~ rjf: IR-ization Functions
