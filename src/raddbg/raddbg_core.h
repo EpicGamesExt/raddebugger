@@ -97,7 +97,6 @@ enum
   RD_EvalSpaceKind_MetaCfg,
   RD_EvalSpaceKind_MetaEntity,
   RD_EvalSpaceKind_MetaCtrlEntity,
-  RD_EvalSpaceKind_MetaCollection,
 };
 
 ////////////////////////////////

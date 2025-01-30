@@ -2846,38 +2846,6 @@ rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
         }
       }
     }break;
-    
-    //- rjf: meta collections
-    case RD_EvalSpaceKind_MetaCollection:
-    {
-      typedef struct SpacePtr SpacePtr;
-      struct SpacePtr
-      {
-        E_Space space;
-        U64 off;
-      };
-      RD_CfgArray cfgs_array = {0};
-      if(space.u64s[0] < rd_state->eval_collection_cfg_names->count)
-      {
-        cfgs_array = rd_state->eval_collection_cfgs[space.u64s[0]];
-      }
-      U64 space_ptr_size = sizeof(SpacePtr);
-      Rng1U64 idx_range = r1u64(range.min/space_ptr_size, range.max/space_ptr_size);
-      U64 out_off = 0;
-      U64 out_opl = dim_1u64(range);
-      for(U64 src_idx = idx_range.min; src_idx < idx_range.max && out_off+space_ptr_size <= out_opl; src_idx += 1)
-      {
-        RD_Cfg *cfg = &rd_nil_cfg;
-        if(src_idx < cfgs_array.count)
-        {
-          cfg = cfgs_array.v[src_idx];
-        }
-        SpacePtr space_ptr = {rd_eval_space_from_cfg(cfg), 0};
-        MemoryCopy((U8 *)out + out_off, &space_ptr, space_ptr_size);
-        out_off += sizeof(space_ptr);
-      }
-      result = 1;
-    }break;
   }
   scratch_end(scratch);
   return result;
@@ -13197,7 +13165,6 @@ rd_frame(void)
         for EachElement(idx, rd_collection_name_table)
         {
           E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
-          expr->space    = e_space_make(RD_EvalSpaceKind_MetaCollection);
           expr->mode     = E_Mode_Null;
           expr->type_key = collection_type_keys[idx];
           e_string2expr_map_insert(scratch.arena, ctx->macro_map, rd_collection_name_table[idx], expr);
@@ -13393,17 +13360,13 @@ rd_frame(void)
         e_lookup_rule_map_insert_new(scratch.arena, ctx->lookup_rule_map, collection_name, E_LOOKUP_INFO_FUNCTION_NAME(watch_group), E_LOOKUP_FUNCTION_NAME(watch_group));
       }
       
-      //- rjf: add macros for collections (new @cfg)
+      //- rjf: add macros for all cfg collections (new @cfg)
       for EachElement(cfg_name_idx, evallable_cfg_names)
       {
         String8 cfg_name = evallable_cfg_names[cfg_name_idx];
         String8 collection_name = rd_plural_from_code_name(cfg_name);
         E_TypeKey collection_type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = collection_name);
         E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
-        E_Space space = e_space_make(RD_EvalSpaceKind_MetaCollection);
-        space.u64s[0] = cfg_name_idx;
-        expr->space    = space;
-        expr->mode     = E_Mode_Offset;
         expr->type_key = collection_type_key;
         e_string2expr_map_insert(scratch.arena, ctx->macro_map, collection_name, expr);
         e_lookup_rule_map_insert_new(scratch.arena, ctx->lookup_rule_map, collection_name, E_LOOKUP_INFO_FUNCTION_NAME(top_level_cfg), E_LOOKUP_FUNCTION_NAME(top_level_cfg));

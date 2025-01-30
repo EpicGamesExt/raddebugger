@@ -465,16 +465,6 @@ e_oplist_push_set_space(Arena *arena, E_OpList *list, E_Space space)
 }
 
 internal void
-e_oplist_push_deref_space_ptr(Arena *arena, E_OpList *list)
-{
-  E_Op *node = push_array_no_zero(arena, E_Op, 1);
-  node->opcode = E_IRExtKind_DerefSpacePtr;
-  SLLQueuePush(list->first, list->last, node);
-  list->op_count += 1;
-  list->encoded_size += 1;
-}
-
-internal void
 e_oplist_push_string_literal(Arena *arena, E_OpList *list, String8 string)
 {
   RDI_EvalOp opcode = RDI_EvalOp_ConstString;
@@ -598,14 +588,6 @@ e_irtree_set_space(Arena *arena, E_Space space, E_IRNode *c)
   E_IRNode *root = e_push_irnode(arena, E_IRExtKind_SetSpace);
   StaticAssert(sizeof(E_Space) <= sizeof(E_Value), space_size_check);
   MemoryCopy(&root->value, &space, sizeof(space));
-  e_irnode_push_child(root, c);
-  return root;
-}
-
-internal E_IRNode *
-e_irtree_deref_space_ptr(Arena *arena, E_IRNode *c)
-{
-  E_IRNode *root = e_push_irnode(arena, E_IRExtKind_DerefSpacePtr);
   e_irnode_push_child(root, c);
   return root;
 }
@@ -1484,14 +1466,6 @@ e_irtree_and_type_from_expr__space(Arena *arena, E_Space *current_space, E_Expr 
     }break;
   }
   
-  //- rjf: evaluating a space pointer -> generate a dynamic set-space & resolve to the offset
-  if(e_type_kind_from_key(result.type_key) == E_TypeKind_SpacePtr)
-  {
-    result.root     = e_irtree_deref_space_ptr(arena, result.root);
-    result.type_key = e_type_direct_from_key(result.type_key);
-    result.mode     = E_Mode_Offset;
-  }
-  
   //- rjf: if the expression's space does not match the current, then push a set-space node
   // before returning
   E_Space zero_space = zero_struct;
@@ -1543,17 +1517,6 @@ e_append_oplist_from_irtree(Arena *arena, E_IRNode *root, E_OpList *out)
       {
         e_append_oplist_from_irtree(arena, child, out);
       }
-    }break;
-    
-    case E_IRExtKind_DerefSpacePtr:
-    {
-      for(E_IRNode *child = root->first;
-          child != &e_irnode_nil;
-          child = child->next)
-      {
-        e_append_oplist_from_irtree(arena, child, out);
-      }
-      e_oplist_push_deref_space_ptr(arena, out);
     }break;
     
     case RDI_EvalOp_Cond:
@@ -1696,12 +1659,6 @@ e_bytecode_from_oplist(Arena *arena, E_OpList *oplist)
         
         // rjf: advance
         ptr = next_ptr;
-      }break;
-      
-      case E_IRExtKind_DerefSpacePtr:
-      {
-        ptr[0] = opcode;
-        ptr += 1;
       }break;
     }
   }

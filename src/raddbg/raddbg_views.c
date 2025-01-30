@@ -4142,7 +4142,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(file_path_map)
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Expr,       0.25f);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,      0.75f, .dequote_string = 1, .is_non_code = 0);
   }
-  rd_watch_view_build(wv, str8_lit("collection:file_path_maps"), str8_lit("only: source_path destination_path str"), 1, 10, rect);
+  rd_watch_view_build(wv, str8_lit("collection:file_path_maps"), str8_zero(), 1, 10, rect);
   ProfEnd();
 }
 
@@ -4159,7 +4159,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(auto_view_rules)
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Expr,       0.25f);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,      0.75f, .dequote_string = 1, .is_non_code = 0);
   }
-  rd_watch_view_build(wv, str8_lit("collection:auto_view_rules"), str8_lit("only: type view_rule str"), 1, 10, rect);
+  rd_watch_view_build(wv, str8_lit("collection:auto_view_rules"), str8_zero(), 1, 10, rect);
   ProfEnd();
 }
 
@@ -4176,7 +4176,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(breakpoints)
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Expr,       0.25f);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,      0.75f, .dequote_string = 1);
   }
-  rd_watch_view_build(wv, str8_lit("collection:breakpoints"), str8_lit("only: label condition str hit_count source_location address_location function_location"), 0, 10, rect);
+  rd_watch_view_build(wv, str8_lit("collection:breakpoints"), str8_zero(), 0, 10, rect);
   ProfEnd();
 }
 
@@ -4193,7 +4193,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(watch_pins)
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Expr,       0.25f);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,      0.75f, .dequote_string = 1);
   }
-  rd_watch_view_build(wv, str8_lit("collection:watch_pins"), str8_lit("only: label source_location address_location str"), 0, 10, rect);
+  rd_watch_view_build(wv, str8_lit("collection:watch_pins"), str8_zero(), 0, 10, rect);
   ProfEnd();
 }
 
