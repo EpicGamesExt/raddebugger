@@ -4058,7 +4058,7 @@ ASYNC_WORK_DEF(p2r_bake_inline_site_strings_work)
   Arena *arena = p2r_state->work_thread_arenas[thread_idx];
   P2R_BakeInlineSiteStringsIn *in = input;
   p2r_make_string_map_if_needed();
-  ProfScope("bake inline site strings");
+  ProfScope("bake inline site strings")
   {
     for(P2R_BakeInlineSiteStringsInNode *n = in->first; n != 0; n = n->next)
     {
