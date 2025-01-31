@@ -71,7 +71,7 @@ struct RD_WatchRowInfo
 {
   E_Eval eval;
   CTRL_Entity *module;
-  String8 group_key;
+  String8 group_cfg_name;
   RD_Cfg *group_cfg;
   CTRL_Entity *group_entity;
   CTRL_Entity *callstack_thread;

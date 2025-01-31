@@ -870,10 +870,6 @@ struct RD_State
   // rjf: config -> eval blob map (lazily constructed from-scratch each frame)
   RD_Cfg2EvalBlobMap *cfg2evalblob_map;
   
-  // rjf: eval collections (constructed from scratch every frame)
-  String8Array *eval_collection_cfg_names;
-  RD_CfgArray *eval_collection_cfgs;
-  
   // rjf: registers stack
   RD_RegsNode base_regs;
   RD_RegsNode *top_regs;

@@ -13181,18 +13181,6 @@ rd_frame(void)
         str8_lit("auto_view_rule"),
       };
       
-      //- rjf: store off eval collections for this frame
-      rd_state->eval_collection_cfg_names = push_array(rd_frame_arena(), String8Array, 1);
-      rd_state->eval_collection_cfg_names->count = ArrayCount(evallable_cfg_names);
-      rd_state->eval_collection_cfg_names->v = push_array(rd_frame_arena(), String8, rd_state->eval_collection_cfg_names->count);
-      MemoryCopy(rd_state->eval_collection_cfg_names->v, evallable_cfg_names, sizeof(evallable_cfg_names));
-      rd_state->eval_collection_cfgs = push_array(rd_frame_arena(), RD_CfgArray, rd_state->eval_collection_cfg_names->count);
-      for EachElement(idx, evallable_cfg_names)
-      {
-        RD_CfgList list = rd_cfg_top_level_list_from_string(scratch.arena, evallable_cfg_names[idx]);
-        rd_state->eval_collection_cfgs[idx] = rd_cfg_array_from_list(rd_frame_arena(), &list);
-      }
-      
       //- rjf: build special member types for evallable config types
       E_TypeKey bool_type_key = {0};
       E_TypeKey u64_type_key = {0};
@@ -13278,10 +13266,10 @@ rd_frame(void)
       for EachElement(idx, evallable_cfg_names)
       {
         String8 name = evallable_cfg_names[idx];
-        RD_CfgArray cfgs = rd_state->eval_collection_cfgs[idx];
-        for EachIndex(cfg_idx, cfgs.count)
+        RD_CfgList cfgs = rd_cfg_top_level_list_from_string(scratch.arena, name);
+        for(RD_CfgNode *n = cfgs.first; n != 0; n = n->next)
         {
-          RD_Cfg *cfg = cfgs.v[cfg_idx];
+          RD_Cfg *cfg = n->v;
           String8 label = rd_cfg_child_from_string(cfg, str8_lit("label"))->first->string;
           String8 exe   = rd_cfg_child_from_string(cfg, str8_lit("executable"))->first->string;
           E_Space space = rd_eval_space_from_cfg(cfg);
@@ -13858,7 +13846,7 @@ rd_frame(void)
               RD_Cfg *user = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("user"));
               RD_Cfg *watch = rd_cfg_new(user, str8_lit("watch"));
               RD_Cfg *expr = rd_cfg_new(watch, str8_lit("expression"));
-              rd_cfg_new(expr, str8_lit("basics"));
+              rd_cfg_new(expr, str8_lit("targets[0]"));
             }
           }break;
           

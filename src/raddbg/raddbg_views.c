@@ -952,8 +952,25 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       }
     }
     
-    // rjf: determine cfg group
+    // rjf: determine cfg group name
+    {
+      E_IRTreeAndType block_irtree = e_irtree_and_type_from_expr(scratch.arena, row->block->expr);
+      E_TypeKey block_type_key = block_irtree.type_key;
+      E_TypeKind block_type_kind = e_type_kind_from_key(block_type_key);
+      if(block_type_kind == E_TypeKind_Set)
+      {
+        E_Type *block_type = e_type_from_key(scratch.arena, block_type_key);
+        info.group_cfg_name = rd_singular_from_code_name_plural(block_type->name);
+      }
+    }
     
+    // rjf: determine row's cfg
+    if(info.group_cfg_name.size != 0)
+    {
+      RD_CfgList cfgs = rd_cfg_top_level_list_from_string(scratch.arena, info.group_cfg_name);
+      // TODO(rjf): this is not correct - assumes row's evaluation is in the block's space...
+      // info.group_cfg = rd_cfg_from_eval_space(info.eval.space);
+    }
     
     // rjf: fill row's cells
     rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .string = str8_lit("expression"),       .pct = 0.25f);
