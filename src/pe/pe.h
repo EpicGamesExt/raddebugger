@@ -1072,6 +1072,7 @@ internal String8 pe_string_from_dll_characteristics(Arena *arena, PE_DllCharacte
 ////////////////////////////////
 //~ rjf: Parser Functions
 
+internal B32        pe_check_magic(String8 data);
 internal PE_BinInfo pe_bin_info_from_data(Arena *arena, String8 data);
 
 internal PE_DebugInfoList           pe_parse_debug_directory(Arena *arena, String8 raw_image, String8 raw_debug_dir);

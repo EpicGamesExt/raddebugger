@@ -269,7 +269,7 @@ entry_point(CmdLine *cmdline)
     coff_print_big_obj(arena, out, indent, raw_data, opts);
   } else if (coff_is_obj(raw_data)) {
     coff_print_obj(arena, out, indent, raw_data, opts);
-  } else if (rd_is_pe(raw_data)) {
+  } else if (pe_check_magic(raw_data)) {
     RDI_Parsed *rdi = 0;
     if (!(opts & RD_Option_NoRdi)) {
       rdi = rd_rdi_from_pe(arena, file_path, raw_data);

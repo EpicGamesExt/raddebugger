@@ -215,14 +215,6 @@ rd_format_line_from_voff(Arena *arena, RDI_Parsed *rdi, U64 voff, PathStyle path
 }
 
 internal B32
-rd_is_pe(String8 raw_data)
-{
-  PE_DosHeader header = {0};
-  str8_deserial_read_struct(raw_data, 0, &header);
-  return header.magic == PE_DOS_MAGIC;
-}
-
-internal B32
 rd_is_rdi(String8 raw_data)
 {
   B32 is_rdi = 0;
@@ -316,7 +308,7 @@ rd_format_preamble(Arena *arena, String8List *out, String8 indent, String8 input
     input_type_string = "Big Obj";
   } else if (coff_is_obj(raw_data)) {
     input_type_string = "Obj";
-  } else if (rd_is_pe(raw_data)) {
+  } else if (pe_check_magic(raw_data)) {
     input_type_string = "COFF/PE";
   } else if (rd_is_rdi(raw_data)) {
     input_type_string = "RDI";

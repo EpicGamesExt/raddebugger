@@ -408,6 +408,20 @@ pe_subsystem_from_string(String8 string)
 ////////////////////////////////
 //~ rjf: Parser Functions
 
+internal B32
+pe_check_magic(String8 data)
+{
+  B32 is_pe = 0;
+  PE_DosHeader dos_header = {0};
+  str8_deserial_read_struct(data, 0, &dos_header);
+  if (dos_header.magic == PE_DOS_MAGIC) {
+    U32 pe_magic = 0;
+    str8_deserial_read_struct(data, dos_header.coff_file_offset, &pe_magic);
+    is_pe= pe_magic == PE_MAGIC;
+  }
+  return is_pe;
+}
+
 internal PE_BinInfo
 pe_bin_info_from_data(Arena *arena, String8 data)
 {

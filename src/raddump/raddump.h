@@ -140,7 +140,6 @@ typedef struct RD_Line
 
 // raddump
 
-internal B32 rd_is_pe (String8 raw_data);
 internal B32 rd_is_rdi(String8 raw_data);
 
 internal String8 rd_string_from_flags(Arena *arena, String8List list, U64 remaining_flags);
