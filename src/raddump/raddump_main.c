@@ -44,6 +44,7 @@
 #include "dwarf/dwarf_parse.h"
 #include "dwarf/dwarf_expr.h"
 #include "dwarf/dwarf_unwind.h"
+#include "dwarf/dwarf_coff.h"
 #include "dwarf/dwarf_enum.h"
 
 #include "base/base_inc.c"
@@ -70,6 +71,7 @@
 #include "dwarf/dwarf_parse.c"
 #include "dwarf/dwarf_expr.c"
 #include "dwarf/dwarf_unwind.c"
+#include "dwarf/dwarf_coff.c"
 #include "dwarf/dwarf_enum.c"
  
 #include "linker/base_ext/base_inc.h"
