@@ -2160,6 +2160,18 @@ dw_print_debug_info(Arena *arena, String8List *out, String8 indent, DW_SectionAr
     rd_printf("Tags Range:    %#llx-%#llx (Size %#llx)", comp_root.tags_info_range.min, comp_root.tags_info_range.max, dim_1u64(comp_root.tags_info_range));
     rd_newline();
 
+    DW_LineVMHeader vm_header = {0};
+    dw_read_line_vm_header(comp_temp.arena,
+                           dw_base_from_sec(sections, DW_Section_Line),
+                           dw_range_from_sec(sections, DW_Section_Line),
+                           comp_root.line_off,
+                           dw_mode_from_sec(sections, DW_Section_Line),
+                           sections,
+                           resolve_params,
+                           comp_root.compile_dir,
+                           comp_root.name,
+                           &vm_header);
+
     // prase tags
     U32 tag_depth = 0;
     for (U64 info_off = comp_root.tags_info_range.min; info_off < comp_root.tags_info_range.max; /* empty */) {
@@ -2218,11 +2230,27 @@ dw_print_debug_info(Arena *arena, String8List *out, String8 indent, DW_SectionAr
           str8_list_pushf(attrib_temp.arena, &attrib_list, "%#llx %#llx", attrib_value.v[0], attrib_value.v[1]);
         } break;
         case DW_AttribClass_Const: {
-          str8_list_pushf(attrib_temp.arena, &attrib_list, "%#llx", attrib_value.v[0]);
           switch (attrib->attrib_kind) {
           case DW_Attrib_Language: {
+            str8_list_pushf(attrib_temp.arena, &attrib_list, "%#llx", attrib_value.v[0]);
+
             String8 lang_str = dw_string_from_language(attrib_temp.arena, attrib_value.v[0]);
             str8_list_pushf(attrib_temp.arena, &attrib_list, " (%S)", lang_str);
+          } break;
+          case DW_Attrib_DeclFile: {
+            str8_list_pushf(attrib_temp.arena, &attrib_list, "%llu", attrib_value.v[0]);
+
+            String8 path = str8_lit("\?\?\?");
+            if (attrib_value.v[0] < vm_header.file_table.count) {
+              path = dw_path_from_file_idx(attrib_temp.arena, &vm_header, attrib_value.v[0]);
+            }
+            str8_list_pushf(attrib_temp.arena, &attrib_list, " (%S)", path);
+          } break;
+          case DW_Attrib_DeclLine: {
+            str8_list_pushf(attrib_temp.arena, &attrib_list, "%llu", attrib_value.v[0]);
+          } break;
+          default: {
+            str8_list_pushf(attrib_temp.arena, &attrib_list, "%#llx", attrib_value.v[0]);
           } break;
           }
         } break;
