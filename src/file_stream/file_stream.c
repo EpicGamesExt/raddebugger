@@ -316,6 +316,7 @@ ASYNC_WORK_DEF(fs_stream_work)
   U64 range_size = dim_1u64(range);
   U64 read_size = Min(pre_props.size, range_size);
   OS_Handle file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead|OS_AccessFlag_ShareWrite, path);
+  B32 file_handle_was_invalid = os_handle_match(file, os_handle_zero());
   U64 data_arena_size = read_size+ARENA_HEADER_SIZE;
   data_arena_size += KB(4)-1;
   data_arena_size -= data_arena_size%KB(4);
@@ -328,8 +329,10 @@ ASYNC_WORK_DEF(fs_stream_work)
   os_file_close(file);
   FileProperties post_props = os_properties_from_file_path(path);
   
-  //- rjf: abort if modification timestamps differ - we did not successfully read the file
-  if(pre_props.modified != post_props.modified)
+  //- rjf: abort if modification timestamps or sizes differ - we did not successfully read the file
+  B32 pre_post_props_were_different = (pre_props.modified != post_props.modified) ||
+                                      (pre_props.size != post_props.size);
+  if(file_handle_was_invalid || pre_post_props_were_different)
   {
     ProfScope("abort")
     {
@@ -338,54 +341,53 @@ ASYNC_WORK_DEF(fs_stream_work)
       data_arena = 0;
     }
   }
-  
-  //- rjf: submit
   else
   {
+    //- rjf: submit
     ProfScope("submit")
     {
       hs_submit_data(key, &data_arena, data);
     }
-  }
   
-  //- rjf: commit info to cache
-  ProfScope("commit to cache") OS_MutexScopeW(path_stripe->rw_mutex)
-  {
-    FS_Node *node = 0;
-    for(FS_Node *n = path_slot->first; n != 0; n = n->next)
+    //- rjf: commit info to cache
+    ProfScope("commit to cache") OS_MutexScopeW(path_stripe->rw_mutex)
     {
-      if(str8_match(n->path, path, 0))
+      FS_Node *node = 0;
+      for(FS_Node *n = path_slot->first; n != 0; n = n->next)
       {
-        node = n;
-        break;
-      }
-    }
-    if(node != 0)
-    {
-      if(node->timestamp != 0)
-      {
-        ins_atomic_u64_inc_eval(&fs_shared->change_gen);
-      }
-      if(post_props.modified == pre_props.modified)
-      {
-        node->timestamp = post_props.modified;
-        node->size = post_props.size;
-      }
-      U64 range_hash = fs_little_hash_from_string(str8_struct(&range));
-      U64 range_slot_idx = range_hash%node->slots_count;
-      FS_RangeSlot *range_slot = &node->slots[range_slot_idx];
-      FS_RangeNode *range_node = 0;
-      for(FS_RangeNode *n = range_slot->first; n != 0; n = n->next)
-      {
-        if(MemoryMatchStruct(&n->range, &range))
+        if(str8_match(n->path, path, 0))
         {
-          range_node = n;
+          node = n;
           break;
         }
       }
+      if(node != 0)
+      {
+        if(node->timestamp != 0)
+        {
+          ins_atomic_u64_inc_eval(&fs_shared->change_gen);
+        }
+        if(!pre_post_props_were_different)
+        {
+          node->timestamp = post_props.modified;
+          node->size = post_props.size;
+        }
+        U64 range_hash = fs_little_hash_from_string(str8_struct(&range));
+        U64 range_slot_idx = range_hash%node->slots_count;
+        FS_RangeSlot *range_slot = &node->slots[range_slot_idx];
+        FS_RangeNode *range_node = 0;
+        for(FS_RangeNode *n = range_slot->first; n != 0; n = n->next)
+        {
+          if(MemoryMatchStruct(&n->range, &range))
+          {
+            range_node = n;
+            break;
+          }
+        }
+      }
     }
+    os_condition_variable_broadcast(path_stripe->cv);
   }
-  os_condition_variable_broadcast(path_stripe->cv);
   
   ProfEnd();
   scratch_end(scratch);
