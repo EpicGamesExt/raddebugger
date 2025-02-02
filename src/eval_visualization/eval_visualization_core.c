@@ -9,11 +9,6 @@
 ////////////////////////////////
 //~ rjf: Nil/Identity View Rule Hooks
 
-EV_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_DEF(identity)
-{
-  return expr;
-}
-
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(nil)
 {
   EV_ExpandInfo info = {0};
@@ -655,14 +650,6 @@ ev_resolved_from_expr(Arena *arena, E_Expr *expr, EV_ViewRuleList *view_rules)
       }
     }
     scratch_end(scratch);
-  }
-  for(EV_ViewRuleNode *n = view_rules->first; n != 0; n = n->next)
-  {
-    EV_ViewRuleInfo *info = ev_view_rule_info_from_string(n->v.root->string);
-    if(info->expr_resolution != 0)
-    {
-      expr = info->expr_resolution(arena, expr, n->v.root);
-    }
   }
   ProfEnd();
   return expr;

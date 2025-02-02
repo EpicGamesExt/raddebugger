@@ -13387,7 +13387,6 @@ rd_frame(void)
         EV_ViewRuleInfo info = {0};
         info.string                  = rd_collection_name_table[idx];
         info.flags                   = EV_ViewRuleInfoFlag_Expandable;
-        info.expr_resolution         = EV_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_NAME(identity);
         info.expr_expand_info        = rd_collection_expr_expand_info_hook_function_table[idx];
         info.expr_expand_range_info  = rd_collection_expr_expand_range_info_hook_function_table[idx];
         info.expr_expand_id_from_num = rd_collection_expr_expand_id_from_num_hook_function_table[idx];
@@ -13404,7 +13403,6 @@ rd_frame(void)
           EV_ViewRuleInfo dst_info = {0};
           dst_info.string                  = src_info->string;
           dst_info.flags                   = src_info->flags & RD_ViewRuleInfoFlag_CanExpand ? EV_ViewRuleInfoFlag_Expandable : 0;
-          dst_info.expr_resolution         = EV_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_NAME(identity);
           dst_info.expr_expand_info        = src_info->expr_expand_info;
           dst_info.expr_expand_range_info  = EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_NAME(nil);
           dst_info.expr_expand_id_from_num = EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_NAME(identity);

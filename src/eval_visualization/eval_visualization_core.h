@@ -121,10 +121,6 @@ struct EV_ExpandRangeInfo
   E_Member **row_members;
 };
 
-#define EV_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_SIG(name) E_Expr *name(Arena *arena, E_Expr *expr, MD_Node *params)
-#define EV_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_NAME(name) ev_view_rule_expr_resolution__##name
-#define EV_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_DEF(name) internal EV_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_SIG(EV_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_NAME(name))
-
 #define EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_SIG(name) EV_ExpandInfo name(Arena *arena, EV_View *view, String8 filter, E_Expr *expr, MD_Node *params)
 #define EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME(name) ev_view_rule_expr_expand_info__##name
 #define EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(name) internal EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_SIG(EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME(name))
@@ -141,7 +137,6 @@ struct EV_ExpandRangeInfo
 #define EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_NAME(name) ev_view_rule_expr_expand_num_from_id_##name
 #define EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(name) internal EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_SIG(EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_NAME(name))
 
-typedef EV_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_SIG(EV_ViewRuleExprResolutionHookFunctionType);
 typedef EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_SIG(EV_ViewRuleExprExpandInfoHookFunctionType);
 typedef EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_SIG(EV_ViewRuleExprExpandRangeInfoHookFunctionType);
 typedef EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_SIG(EV_ViewRuleExprExpandIDFromNumHookFunctionType);
@@ -159,7 +154,6 @@ struct EV_ViewRuleInfo
 {
   String8 string;
   EV_ViewRuleInfoFlags flags;
-  EV_ViewRuleExprResolutionHookFunctionType *expr_resolution;
   EV_ViewRuleExprExpandInfoHookFunctionType *expr_expand_info;
   EV_ViewRuleExprExpandRangeInfoHookFunctionType *expr_expand_range_info;
   EV_ViewRuleExprExpandIDFromNumHookFunctionType *expr_expand_id_from_num;
@@ -329,7 +323,6 @@ enum
 ////////////////////////////////
 //~ rjf: Nil/Identity View Rule Hooks
 
-EV_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_DEF(identity);
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(nil);
 EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(nil);
 EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(identity);
@@ -342,7 +335,6 @@ global read_only EV_ViewRuleInfo ev_nil_view_rule_info =
 {
   {0},
   0,
-  EV_VIEW_RULE_EXPR_RESOLUTION_FUNCTION_NAME(identity),
   EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME(nil),
   EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_NAME(nil),
   EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_NAME(identity),
