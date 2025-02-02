@@ -52,6 +52,8 @@ struct E_Expr
 {
   E_Expr *first;
   E_Expr *last;
+  E_Expr *first_tag;
+  E_Expr *last_tag;
   E_Expr *next;
   E_Expr *prev;
   E_Expr *ref;
@@ -218,6 +220,7 @@ internal E_Expr *e_push_expr(Arena *arena, E_ExprKind kind, void *location);
 internal void e_expr_insert_child(E_Expr *parent, E_Expr *prev, E_Expr *child);
 internal void e_expr_push_child(E_Expr *parent, E_Expr *child);
 internal void e_expr_remove_child(E_Expr *parent, E_Expr *child);
+internal void e_expr_push_tag(E_Expr *parent, E_Expr *child);
 internal E_Expr *e_expr_ref(Arena *arena, E_Expr *ref);
 internal E_Expr *e_expr_ref_addr(Arena *arena, E_Expr *rhs);
 internal E_Expr *e_expr_ref_member_access(Arena *arena, E_Expr *lhs, String8 member_name);
@@ -225,6 +228,7 @@ internal E_Expr *e_expr_ref_array_index(Arena *arena, E_Expr *lhs, U64 index);
 internal E_Expr *e_expr_ref_deref(Arena *arena, E_Expr *rhs);
 internal E_Expr *e_expr_ref_cast(Arena *arena, E_TypeKey type_key, E_Expr *rhs);
 internal E_Expr *e_expr_ref_bswap(Arena *arena, E_Expr *rhs);
+internal E_Expr *e_expr_copy(Arena *arena, E_Expr *src);
 
 ////////////////////////////////
 //~ rjf: Expression Tree -> String Conversions

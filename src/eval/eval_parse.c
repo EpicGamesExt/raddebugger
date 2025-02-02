@@ -15,6 +15,7 @@ global read_only String8 e_multichar_symbol_strings[] =
   str8_lit_comp("!="),
   str8_lit_comp("&&"),
   str8_lit_comp("||"),
+  str8_lit_comp("=>"),
 };
 
 global read_only S64 e_max_precedence = 15;
@@ -649,7 +650,7 @@ internal E_Expr *
 e_push_expr(Arena *arena, E_ExprKind kind, void *location)
 {
   E_Expr *e = push_array(arena, E_Expr, 1);
-  e->first = e->last = e->next = e->ref = &e_expr_nil;
+  e->first = e->last = e->next = e->ref = e->first_tag = e->last_tag = &e_expr_nil;
   e->location = location;
   e->kind = kind;
   return e;
@@ -671,6 +672,12 @@ internal void
 e_expr_remove_child(E_Expr *parent, E_Expr *child)
 {
   DLLRemove_NPZ(&e_expr_nil, parent->first, parent->last, child, next, prev);
+}
+
+internal void
+e_expr_push_tag(E_Expr *parent, E_Expr *child)
+{
+  DLLPushBack_NPZ(&e_expr_nil, parent->first_tag, parent->last_tag, child, next, prev);
 }
 
 internal E_Expr *
@@ -742,6 +749,78 @@ e_expr_ref_bswap(Arena *arena, E_Expr *rhs)
   E_Expr *rhs_ref = e_expr_ref(arena, rhs);
   e_expr_push_child(root, rhs_ref);
   return root;
+}
+
+internal E_Expr *
+e_expr_copy(Arena *arena, E_Expr *src)
+{
+  E_Expr *result = &e_expr_nil;
+  Temp scratch = scratch_begin(&arena, 1);
+  {
+    typedef struct Task Task;
+    struct Task
+    {
+      Task *next;
+      E_Expr *dst_parent;
+      E_Expr *src;
+      B32 is_ref;
+      B32 is_tag;
+    };
+    Task start_task = {0, &e_expr_nil, src};
+    Task *first_task = &start_task;
+    Task *last_task = first_task;
+    for(Task *t = first_task; t != 0; t = t->next)
+    {
+      E_Expr *dst = e_push_expr(arena, t->src->kind, t->src->location);
+      dst->mode      = t->src->mode;
+      dst->space     = t->src->space;
+      dst->type_key  = t->src->type_key;
+      dst->value     = t->src->value;
+      dst->string    = push_str8_copy(arena, t->src->string);
+      dst->bytecode  = push_str8_copy(arena, t->src->bytecode);
+      if(t->dst_parent == &e_expr_nil)
+      {
+        result = dst;
+      }
+      else if(t->is_ref)
+      {
+        t->dst_parent->ref = dst;
+      }
+      else if(t->is_tag)
+      {
+        e_expr_push_tag(t->dst_parent, dst);
+      }
+      else
+      {
+        e_expr_push_child(t->dst_parent, dst);
+      }
+      if(t->src->ref != &e_expr_nil)
+      {
+        Task *task = push_array(scratch.arena, Task, 1);
+        task->dst_parent = dst;
+        task->src = t->src->ref;
+        task->is_ref = 1;
+        SLLQueuePush(first_task, last_task, task);
+      }
+      for(E_Expr *src_child = t->src->first; src_child != &e_expr_nil; src_child = src_child->next)
+      {
+        Task *task = push_array(scratch.arena, Task, 1);
+        task->dst_parent = dst;
+        task->src = src_child;
+        SLLQueuePush(first_task, last_task, task);
+      }
+      for(E_Expr *src_child = t->src->first_tag; src_child != &e_expr_nil; src_child = src_child->next)
+      {
+        Task *task = push_array(scratch.arena, Task, 1);
+        task->dst_parent = dst;
+        task->src = src_child;
+        task->is_tag = 1;
+        SLLQueuePush(first_task, last_task, task);
+      }
+    }
+  }
+  scratch_end(scratch);
+  return result;
 }
 
 ////////////////////////////////
@@ -1943,6 +2022,44 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
       }
     }
     
+    // rjf: calls
+    if(token.kind == E_TokenKind_Symbol &&
+       str8_match(token_string, str8_lit("("), 0))
+    {
+      it += 1;
+      E_Expr *callee_expr = atom;
+      E_Expr *call_expr = e_push_expr(arena, E_ExprKind_Call, token_string.str);
+      e_expr_push_child(call_expr, callee_expr);
+      for(B32 done = 0; !done && it < it_opl;)
+      {
+        E_Token token = e_token_at_it(it, tokens);
+        String8 token_string = str8_substr(text, token.range);
+        if(token.kind == E_TokenKind_Symbol && str8_match(token_string, str8_lit(")"), 0))
+        {
+          done = 1;
+          it += 1;
+        }
+        else
+        {
+          E_TokenArray idx_expr_parse_tokens = e_token_array_make_first_opl(it, it_opl);
+          E_Parse arg_parse = e_parse_expr_from_text_tokens__prec(arena, text, tokens, e_max_precedence);
+          e_msg_list_concat_in_place(&result.msgs, &arg_parse.msgs);
+          if(arg_parse.expr != &e_expr_nil)
+          {
+            e_expr_push_child(call_expr, arg_parse.expr);
+          }
+          it = arg_parse.last_token;
+          E_Token maybe_comma = e_token_at_it(it, tokens);
+          String8 maybe_comma_string = str8_substr(text, token.range);
+          if(maybe_comma.kind == E_TokenKind_Symbol && str8_match(maybe_comma_string, str8_lit(","), 0))
+          {
+            it += 1;
+          }
+        }
+      }
+      atom = call_expr;
+    }
+    
     // rjf: quit if this doesn't look like any patterns of postfix unary we know
     if(!is_postfix_unary)
     {
@@ -2096,6 +2213,46 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
           e_expr_push_child(atom, lhs);
           e_expr_push_child(atom, mhs);
           e_expr_push_child(atom, rhs);
+        }
+      }
+    }
+    
+    //- rjf: parse tags
+    {
+      if(token.kind == E_TokenKind_Symbol && str8_match(token_string, str8_lit("=>"), 0))
+      {
+        for(B32 done = 0; !done && it < it_opl;)
+        {
+          E_Token maybe_identifier = e_token_at_it(it, tokens);
+          E_Token maybe_open_paren = e_token_at_it(it+1, tokens);
+          String8 maybe_open_paren_string = str8_substr(text, maybe_open_paren.range);
+          if(maybe_identifier.kind == E_TokenKind_Identifier &&
+             maybe_open_paren.kind == E_TokenKind_Symbol &&
+             str8_match(maybe_open_paren_string, str8_lit("("), 0))
+          {
+            E_TokenArray tag_tokens = e_token_array_make_first_opl(it, it_opl);
+            E_Parse tag_parse = e_parse_expr_from_text_tokens(arena, text, &tag_tokens);
+            e_msg_list_concat_in_place(&result.msgs, &tag_parse.msgs);
+            it = tag_parse.last_token;
+            if(tag_parse.expr != &e_expr_nil)
+            {
+              e_expr_push_tag(atom, tag_parse.expr);
+            }
+            else
+            {
+              done = 1;
+            }
+            E_Token maybe_comma = e_token_at_it(it, tokens);
+            String8 maybe_comma_string = str8_substr(text, token.range);
+            if(maybe_comma.kind == E_TokenKind_Symbol && str8_match(maybe_comma_string, str8_lit(","), 0))
+            {
+              it += 1;
+            }
+          }
+          else
+          {
+            done = 1;
+          }
         }
       }
     }

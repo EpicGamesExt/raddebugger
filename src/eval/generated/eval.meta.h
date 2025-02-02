@@ -125,6 +125,7 @@ E_ExprKind_BitOr,
 E_ExprKind_LogAnd,
 E_ExprKind_LogOr,
 E_ExprKind_Ternary,
+E_ExprKind_Call,
 E_ExprKind_LeafBytecode,
 E_ExprKind_LeafMember,
 E_ExprKind_LeafStringLiteral,
@@ -141,6 +142,7 @@ E_ExprKind_Array,
 E_ExprKind_Func,
 E_ExprKind_Line,
 E_ExprKind_Define,
+E_ExprKind_Tag,
 E_ExprKind_COUNT,
 } E_ExprKindEnum;
 
@@ -162,9 +164,9 @@ E_InterpretationCode_COUNT,
 
 C_LINKAGE_BEGIN
 extern String8 e_token_kind_strings[6];
-extern String8 e_expr_kind_strings[49];
+extern String8 e_expr_kind_strings[51];
 extern String8 e_interpretation_code_display_strings[11];
-extern E_OpInfo e_expr_kind_op_info_table[49];
+extern E_OpInfo e_expr_kind_op_info_table[51];
 extern U8 e_kind_basic_byte_size_table[57];
 extern String8 e_kind_basic_string_table[57];
 

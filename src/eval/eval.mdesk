@@ -117,6 +117,8 @@ E_ExprKindTable:
   
   { Ternary              Null                0        "? "                ""        "?"       ":"}
   
+  { Call                 Null                0        "()"                "("       ","       ")"}
+  
   { LeafBytecode         Null                0        "bytecode"          ""        ""        "" }
   { LeafMember           Null                0        "member"            ""        ""        "" }
   { LeafStringLiteral    Null                0        "string_literal"    ""        ""        "" }
@@ -136,6 +138,8 @@ E_ExprKindTable:
   { Line                 Binary              1        ":"                 ""        ":"       "" }
   
   { Define               Binary              13       "="                 ""        "="       "" }
+  
+  { Tag                  Null                0        "=>"                "=>"      ","       "" }
 }
 
 @table(name display_string)
