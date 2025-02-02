@@ -8,7 +8,7 @@
 
 typedef enum EV_ViewRuleKind
 {
-EV_ViewRuleKind_Default,
+EV_ViewRuleKind_EV_ViewRuleKind_Null,
 EV_ViewRuleKind_Array,
 EV_ViewRuleKind_List,
 EV_ViewRuleKind_Slice,
@@ -25,8 +25,5 @@ EV_ViewRuleKind_NoAddress,
 EV_ViewRuleKind_COUNT,
 } EV_ViewRuleKind;
 
-EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(default);
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(list);
-EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(default);
-EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(list);
 #endif // EVAL_VISUALIZATION_META_H

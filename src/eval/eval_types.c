@@ -456,16 +456,9 @@ e_type_key_cons_array(E_TypeKey element_type_key, U64 count)
 }
 
 internal E_TypeKey
-e_type_key_cons_ptr(Arch arch, E_TypeKey element_type_key, E_TypeFlags flags)
+e_type_key_cons_ptr(Arch arch, E_TypeKey element_type_key, U64 count, E_TypeFlags flags)
 {
   E_TypeKey key = e_type_key_cons(.arch = arch, .kind = E_TypeKind_Ptr, .flags = flags, .direct_key = element_type_key);
-  return key;
-}
-
-internal E_TypeKey
-e_type_key_cons_space_ptr(E_TypeKey direct_type_key)
-{
-  E_TypeKey key = e_type_key_cons(.kind = E_TypeKind_SpacePtr, .direct_key = direct_type_key);
   return key;
 }
 
@@ -489,7 +482,7 @@ e_type_key_cons_base(Type *type)
       if(type->flags & TypeFlag_IsPlainText){ flags |= E_TypeFlag_IsPlainText; }
       if(type->flags & TypeFlag_IsCodeText) { flags |= E_TypeFlag_IsCodeText; }
       if(type->flags & TypeFlag_IsPathText) { flags |= E_TypeFlag_IsPathText; }
-      result = e_type_key_cons_ptr(arch_from_context(), direct_type, flags);
+      result = e_type_key_cons_ptr(arch_from_context(), direct_type, 1, flags);
     }break;
     case TypeKind_Array:
     {
@@ -804,6 +797,7 @@ e_type_from_key(Arena *arena, E_TypeKey key)
                 type->kind            = kind;
                 type->direct_type_key = direct_type_key;
                 type->byte_size       = bit_size_from_arch(e_type_state->ctx->modules[rdi_idx].arch)/8;
+                type->count           = 1;
               }break;
               
               case RDI_TypeKind_Array:

@@ -130,14 +130,10 @@ E_LOOKUP_INFO_FUNCTION_DEF(default)
     E_TypeKind lhs_type_kind = e_type_kind_from_key(lhs_type_key);
     if(e_type_kind_is_pointer_or_ref(lhs_type_kind))
     {
-      lookup_info.idxed_expr_count = 1;
+      E_Type *type = e_type_from_key(scratch.arena, lhs_type_key);
+      lookup_info.idxed_expr_count = type->count;
       E_TypeKey direct_type_key = e_type_unwrap(e_type_direct_from_key(lhs_irtree.type_key));
       E_TypeKind direct_type_kind = e_type_kind_from_key(direct_type_key);
-      if(direct_type_kind == E_TypeKind_Array)
-      {
-        E_Type *direct_type = e_type_from_key(scratch.arena, direct_type_key);
-        lookup_info.idxed_expr_count = direct_type->count;
-      }
       if(direct_type_kind == E_TypeKind_Struct ||
          direct_type_kind == E_TypeKind_Class ||
          direct_type_kind == E_TypeKind_Union ||
@@ -154,6 +150,11 @@ E_LOOKUP_INFO_FUNCTION_DEF(default)
     {
       E_Type *lhs_type = e_type_from_key(scratch.arena, lhs_type_key);
       lookup_info.named_expr_count = lhs_type->count;
+    }
+    else if(lhs_type_kind == E_TypeKind_Array)
+    {
+      E_Type *lhs_type = e_type_from_key(scratch.arena, lhs_type_key);
+      lookup_info.idxed_expr_count = lhs_type->count;
     }
   }
   scratch_end(scratch);
@@ -405,44 +406,83 @@ E_LOOKUP_ACCESS_FUNCTION_DEF(default)
 
 E_LOOKUP_RANGE_FUNCTION_DEF(default)
 {
-  E_LookupRange result = {0};
   Temp scratch = scratch_begin(&arena, 1);
   {
+    //- rjf: unpack type of expression
     E_IRTreeAndType lhs_irtree = e_irtree_and_type_from_expr(scratch.arena, lhs);
     E_TypeKey lhs_type_key = lhs_irtree.type_key;
     E_TypeKind lhs_type_kind = e_type_kind_from_key(lhs_type_key);
-    if(lhs_type_kind == E_TypeKind_Struct ||
-       lhs_type_kind == E_TypeKind_Union ||
-       lhs_type_kind == E_TypeKind_Class ||
-       lhs_type_kind == E_TypeKind_Enum)
+    E_TypeKey direct_type_key = e_type_unwrap(e_type_direct_from_key(lhs_type_key));
+    E_TypeKind direct_type_kind = e_type_kind_from_key(direct_type_key);
+    
+    //- rjf: pull out specific kinds of types
+    B32 do_struct_range = 0;
+    B32 do_index_range = 0;
+    E_TypeKey struct_type_key = zero_struct;
+    E_TypeKind struct_type_kind = E_TypeKind_Null;
+    if(e_type_kind_is_pointer_or_ref(lhs_type_kind))
+    {
+      E_Type *lhs_type = e_type_from_key(scratch.arena, lhs_type_key);
+      if(lhs_type->count == 1 &&
+         (direct_type_kind == E_TypeKind_Struct ||
+          direct_type_kind == E_TypeKind_Union ||
+          direct_type_kind == E_TypeKind_Class ||
+          direct_type_kind == E_TypeKind_Enum))
+      {
+        struct_type_key = direct_type_key;
+        struct_type_kind = direct_type_kind;
+        do_struct_range = 1;
+      }
+      else
+      {
+        do_index_range = 1;
+      }
+    }
+    else if(lhs_type_kind == E_TypeKind_Struct ||
+            lhs_type_kind == E_TypeKind_Union ||
+            lhs_type_kind == E_TypeKind_Class ||
+            lhs_type_kind == E_TypeKind_Enum)
+    {
+      struct_type_key = lhs_type_key;
+      struct_type_kind = lhs_type_kind;
+      do_struct_range = 1;
+    }
+    else if(lhs_type_kind == E_TypeKind_Set)
+    {
+      do_index_range = 1;
+    }
+    else if(lhs_type_kind == E_TypeKind_Array)
+    {
+      do_index_range = 1;
+    }
+    
+    //- rjf: struct case -> the lookup-range will return a range of members
+    if(do_struct_range)
     {
       E_Type *lhs_type = e_type_from_key(scratch.arena, lhs_type_key);
       Rng1U64 legal_idx_range = r1u64(0, lhs_type->count);
       Rng1U64 read_range = intersect_1u64(legal_idx_range, idx_range);
       U64 read_range_count = dim_1u64(read_range);
-      result.exprs_count = read_range_count;
-      result.exprs = push_array(arena, E_Expr *, result.exprs_count);
-      for(U64 idx = 0; idx < result.exprs_count; idx += 1)
+      for(U64 idx = 0; idx < read_range_count; idx += 1)
       {
         U64 member_idx = idx + read_range.min;
         String8 member_name = (lhs_type->members   ? lhs_type->members[member_idx].name :
                                lhs_type->enum_vals ? lhs_type->enum_vals[member_idx].name : str8_lit(""));
-        result.exprs[idx] = e_expr_ref_member_access(arena, lhs, member_name);
+        exprs[idx] = e_expr_ref_member_access(arena, lhs, member_name);
       }
     }
-    else if(lhs_type_kind == E_TypeKind_Set)
+    
+    //- rjf: ptr case -> the lookup-range will return a range of dereferences
+    else if(do_index_range)
     {
-      result.exprs_count = dim_1u64(idx_range);
-      result.exprs = push_array(arena, E_Expr *, result.exprs_count);
-      result.exprs_strings = push_array(arena, String8, result.exprs_count);
-      for(U64 idx = 0; idx < result.exprs_count; idx += 1)
+      U64 read_range_count = dim_1u64(idx_range);
+      for(U64 idx = 0; idx < read_range_count; idx += 1)
       {
-        result.exprs[idx] = e_expr_ref_array_index(arena, lhs, idx_range.min + idx);
+        exprs[idx] = e_expr_ref_array_index(arena, lhs, idx_range.min + idx);
       }
     }
   }
   scratch_end(scratch);
-  return result;
 }
 
 E_LOOKUP_ID_FROM_NUM_FUNCTION_DEF(default)
@@ -486,8 +526,7 @@ E_IRGEN_FUNCTION_DEF(array)
     Temp scratch = scratch_begin(&arena, 1);
     E_Eval count_eval = e_eval_from_expr(scratch.arena, tag->first->next);
     E_TypeKey element_type_key = e_type_ptee_from_key(type_key);
-    E_TypeKey array_type_key = e_type_key_cons_array(element_type_key, count_eval.value.u64);
-    E_TypeKey ptr_type_key = e_type_key_cons_ptr(e_type_state->ctx->primary_module->arch, array_type_key, 0);
+    E_TypeKey ptr_type_key = e_type_key_cons_ptr(e_type_state->ctx->primary_module->arch, element_type_key, count_eval.value.u64, 0);
     irtree.type_key = ptr_type_key;
     scratch_end(scratch);
   }
@@ -542,8 +581,7 @@ E_IRGEN_FUNCTION_DEF(slice)
     {
       String8 struct_name = e_type_string_from_key(scratch.arena, irtree.type_key);
       E_TypeKey element_type_key = e_type_ptee_from_key(base_ptr_member->type_key);
-      E_TypeKey array_type_key = e_type_key_cons_array(element_type_key, count);
-      E_TypeKey sized_base_ptr_type_key = e_type_key_cons_ptr(e_type_state->ctx->primary_module->arch, array_type_key, 0);
+      E_TypeKey sized_base_ptr_type_key = e_type_key_cons_ptr(e_type_state->ctx->primary_module->arch, element_type_key, count, 0);
       E_MemberList slice_type_members = {0};
       e_member_list_push(scratch.arena, &slice_type_members, count_member);
       e_member_list_push(scratch.arena, &slice_type_members, &(E_Member){.kind = E_MemberKind_DataField, .type_key = sized_base_ptr_type_key, .name = base_ptr_member->name, .pretty_name = base_ptr_member->pretty_name, .off = base_ptr_member->off});
@@ -1055,7 +1093,7 @@ E_IRGEN_FUNCTION_DEF(default)
       
       // rjf: generate
       result.root     = r_tree.root;
-      result.type_key = e_type_key_cons_ptr(e_type_state->ctx->primary_module->arch, r_type_unwrapped, 0);
+      result.type_key = e_type_key_cons_ptr(e_type_state->ctx->primary_module->arch, r_type_unwrapped, 1, 0);
       result.mode     = E_Mode_Value;
     }break;
     
@@ -1414,7 +1452,7 @@ E_IRGEN_FUNCTION_DEF(default)
             E_TypeKey ptr_type = ptr_tree->type_key;
             if(ptr_is_decay)
             {
-              ptr_type = e_type_key_cons_ptr(e_type_state->ctx->primary_module->arch, direct_type, 0);
+              ptr_type = e_type_key_cons_ptr(e_type_state->ctx->primary_module->arch, direct_type, 1, 0);
             }
             E_IRNode *new_root = e_irtree_binary_op_u(arena, op, ptr_root, int_root);
             result.root     = new_root;

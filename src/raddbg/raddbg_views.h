@@ -239,14 +239,18 @@ internal Vec2S64 rd_tbl_from_watch_pt(EV_BlockRangeList *block_ranges, RD_WatchP
 internal RD_WatchRowInfo rd_watch_row_info_from_row(Arena *arena, EV_Row *row);
 
 //- rjf: row -> context info
+#if 0 // TODO(rjf): @cfg
 internal RD_WatchViewRowInfo rd_watch_view_row_info_from_row(EV_Row *row);
+#endif
 
 //- rjf: row * cell -> info
 internal RD_WatchRowCellInfo rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, RD_WatchRowInfo *row_info, RD_WatchCell *cell, FNT_Tag font, F32 font_size, F32 max_size_px);
 
 //- rjf: row/column -> exprs / strings
+#if 0 // TODO(rjf): @cfg
 internal E_Expr *rd_expr_from_watch_view_row_column(Arena *arena, EV_Row *row, RD_WatchViewColumn *col);
 internal String8 rd_string_from_eval_viz_row_column(Arena *arena, EV_Row *row, RD_WatchViewColumn *col, EV_StringFlags string_flags, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size_px);
+#endif
 
 //- rjf: table coordinates -> text edit state
 internal RD_WatchViewTextEditState *rd_watch_view_text_edit_state_from_pt(RD_WatchViewState *wv, RD_WatchPt pt);

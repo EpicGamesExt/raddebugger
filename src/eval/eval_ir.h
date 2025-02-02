@@ -73,14 +73,6 @@ struct E_LookupAccess
   E_IRTreeAndType irtree_and_type;
 };
 
-typedef struct E_LookupRange E_LookupRange;
-struct E_LookupRange
-{
-  U64 exprs_count;
-  E_Expr **exprs;
-  String8 *exprs_strings;
-};
-
 #define E_LOOKUP_INFO_FUNCTION_SIG(name) E_LookupInfo name(Arena *arena, E_Expr *lhs, String8 filter)
 #define E_LOOKUP_INFO_FUNCTION_NAME(name) e_lookup_info_##name
 #define E_LOOKUP_INFO_FUNCTION_DEF(name) internal E_LOOKUP_INFO_FUNCTION_SIG(E_LOOKUP_INFO_FUNCTION_NAME(name))
@@ -93,7 +85,7 @@ E_LOOKUP_INFO_FUNCTION_DEF(default);
 typedef E_LOOKUP_ACCESS_FUNCTION_SIG(E_LookupAccessFunctionType);
 E_LOOKUP_ACCESS_FUNCTION_DEF(default);
 
-#define E_LOOKUP_RANGE_FUNCTION_SIG(name) E_LookupRange name(Arena *arena, E_Expr *lhs, Rng1U64 idx_range, void *user_data)
+#define E_LOOKUP_RANGE_FUNCTION_SIG(name) void name(Arena *arena, E_Expr *lhs, Rng1U64 idx_range, E_Expr **exprs, String8 *exprs_strings, void *user_data)
 #define E_LOOKUP_RANGE_FUNCTION_NAME(name) e_lookup_range_##name
 #define E_LOOKUP_RANGE_FUNCTION_DEF(name) internal E_LOOKUP_RANGE_FUNCTION_SIG(E_LOOKUP_RANGE_FUNCTION_NAME(name))
 typedef E_LOOKUP_RANGE_FUNCTION_SIG(E_LookupRangeFunctionType);

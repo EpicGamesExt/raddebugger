@@ -75,30 +75,6 @@ struct EV_View
 };
 
 ////////////////////////////////
-//~ rjf: View Rule Instance Types
-
-typedef struct EV_ViewRule EV_ViewRule;
-struct EV_ViewRule
-{
-  MD_Node *root;
-};
-
-typedef struct EV_ViewRuleNode EV_ViewRuleNode;
-struct EV_ViewRuleNode
-{
-  EV_ViewRuleNode *next;
-  EV_ViewRule v;
-};
-
-typedef struct EV_ViewRuleList EV_ViewRuleList;
-struct EV_ViewRuleList
-{
-  EV_ViewRuleNode *first;
-  EV_ViewRuleNode *last;
-  U64 count;
-};
-
-////////////////////////////////
 //~ rjf: View Rule Info Types
 
 typedef struct EV_ExpandInfo EV_ExpandInfo;
@@ -111,36 +87,10 @@ struct EV_ExpandInfo
   B32 rows_default_expanded;
 };
 
-typedef struct EV_ExpandRangeInfo EV_ExpandRangeInfo;
-struct EV_ExpandRangeInfo
-{
-  U64 row_exprs_count;
-  String8 *row_strings;
-  String8 *row_view_rules;
-  E_Expr **row_exprs;
-  E_Member **row_members;
-};
-
-#define EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_SIG(name) EV_ExpandInfo name(Arena *arena, EV_View *view, String8 filter, E_Expr *expr, MD_Node *params)
+#define EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_SIG(name) EV_ExpandInfo name(Arena *arena, EV_View *view, String8 filter, E_Expr *expr, E_Expr *tag)
 #define EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME(name) ev_view_rule_expr_expand_info__##name
 #define EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(name) internal EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_SIG(EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME(name))
-
-#define EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_SIG(name) EV_ExpandRangeInfo name(Arena *arena, EV_View *view, String8 filter, E_Expr *expr, MD_Node *params, Rng1U64 idx_range, void *user_data)
-#define EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_NAME(name) ev_view_rule_expr_expand_range_info__##name
-#define EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(name) internal EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_SIG(EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_NAME(name))
-
-#define EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_SIG(name) U64 name(U64 num, void *user_data)
-#define EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_NAME(name) ev_view_rule_expr_expand_id_from_num_##name
-#define EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(name) internal EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_SIG(EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_NAME(name))
-
-#define EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_SIG(name) U64 name(U64 id, void *user_data)
-#define EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_NAME(name) ev_view_rule_expr_expand_num_from_id_##name
-#define EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(name) internal EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_SIG(EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_NAME(name))
-
 typedef EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_SIG(EV_ViewRuleExprExpandInfoHookFunctionType);
-typedef EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_SIG(EV_ViewRuleExprExpandRangeInfoHookFunctionType);
-typedef EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_SIG(EV_ViewRuleExprExpandIDFromNumHookFunctionType);
-typedef EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_SIG(EV_ViewRuleExprExpandNumFromIDHookFunctionType);
 
 typedef U32 EV_ViewRuleInfoFlags; // NOTE(rjf): see @view_rule_info
 enum
@@ -155,9 +105,6 @@ struct EV_ViewRuleInfo
   String8 string;
   EV_ViewRuleInfoFlags flags;
   EV_ViewRuleExprExpandInfoHookFunctionType *expr_expand_info;
-  EV_ViewRuleExprExpandRangeInfoHookFunctionType *expr_expand_range_info;
-  EV_ViewRuleExprExpandIDFromNumHookFunctionType *expr_expand_id_from_num;
-  EV_ViewRuleExprExpandIDFromNumHookFunctionType *expr_expand_num_from_id;
 };
 
 typedef struct EV_ViewRuleInfoNode EV_ViewRuleInfoNode;
@@ -203,10 +150,12 @@ struct EV_Block
   // rjf: expression / visualization info
   String8 string;
   E_Expr *expr;
-  EV_ViewRuleList *view_rules;
-  EV_ViewRuleInfo *expand_view_rule_info;
-  MD_Node *expand_view_rule_params;
-  void *expand_view_rule_info_user_data;
+  E_Expr *lookup_tag;
+  E_Expr *expand_tag;
+  E_LookupRule *lookup_rule;
+  EV_ViewRuleInfo *expand_rule;
+  void *lookup_rule_user_data;
+  void *expand_rule_user_data;
   
   // rjf: expansion info
   U64 row_count;
@@ -255,8 +204,6 @@ struct EV_Row
   U64 visual_size;
   String8 string;
   E_Expr *expr;
-  E_Member *member;
-  EV_ViewRuleList *view_rules;
 };
 
 typedef struct EV_WindowedRowNode EV_WindowedRowNode;
@@ -324,9 +271,6 @@ enum
 //~ rjf: Nil/Identity View Rule Hooks
 
 EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(nil);
-EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(nil);
-EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_DEF(identity);
-EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(identity);
 
 ////////////////////////////////
 //~ rjf: Globals
@@ -336,14 +280,10 @@ global read_only EV_ViewRuleInfo ev_nil_view_rule_info =
   {0},
   0,
   EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME(nil),
-  EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_NAME(nil),
-  EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_NAME(identity),
-  EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_NAME(identity),
 };
 thread_static EV_ViewRuleInfoTable *ev_view_rule_info_table = 0;
-global read_only EV_ViewRuleList ev_nil_view_rule_list = {0};
 thread_static EV_AutoViewRuleTable *ev_auto_view_rule_table = 0;
-global read_only EV_Block ev_nil_block = {&ev_nil_block, &ev_nil_block, &ev_nil_block, &ev_nil_block, &ev_nil_block, {0}, 0, {0}, &e_expr_nil, &ev_nil_view_rule_list, &ev_nil_view_rule_info};
+global read_only EV_Block ev_nil_block = {&ev_nil_block, &ev_nil_block, &ev_nil_block, &ev_nil_block, &ev_nil_block, {0}, 0, {0}, &e_expr_nil, &e_expr_nil, &e_expr_nil, &e_lookup_rule__default, &ev_nil_view_rule_info};
 
 ////////////////////////////////
 //~ rjf: Key Functions
@@ -385,33 +325,15 @@ internal void ev_select_view_rule_info_table(EV_ViewRuleInfoTable *table);
 internal EV_ViewRuleInfo *ev_view_rule_info_from_string(String8 string);
 
 ////////////////////////////////
-//~ rjf: Automatic Type -> View Rule Table Building / Selection / Lookups
-
-internal void ev_auto_view_rule_table_push_new(Arena *arena, EV_AutoViewRuleTable *table, E_TypeKey type_key, String8 view_rule, B32 is_required);
-internal void ev_select_auto_view_rule_table(EV_AutoViewRuleTable *table);
-internal EV_ViewRuleList *ev_auto_view_rules_from_type_key(Arena *arena, E_TypeKey type_key, B32 gather_required, B32 gather_optional);
-
-////////////////////////////////
-//~ rjf: View Rule Instance List Building
-
-internal void ev_view_rule_list_push_tree(Arena *arena, EV_ViewRuleList *list, MD_Node *root);
-internal void ev_view_rule_list_push_string(Arena *arena, EV_ViewRuleList *list, String8 string);
-internal EV_ViewRuleList *ev_view_rule_list_from_string(Arena *arena, String8 string);
-internal EV_ViewRuleList *ev_view_rule_list_from_expr_fastpaths(Arena *arena, String8 string);
-internal EV_ViewRuleList *ev_view_rule_list_from_inheritance(Arena *arena, EV_ViewRuleList *src);
-internal EV_ViewRuleList *ev_view_rule_list_copy(Arena *arena, EV_ViewRuleList *src);
-internal void ev_view_rule_list_concat_in_place(EV_ViewRuleList *dst, EV_ViewRuleList **src);
-
-////////////////////////////////
 //~ rjf: Expression Resolution (Dynamic Overrides, View Rule Application)
 
-internal E_Expr *ev_resolved_from_expr(Arena *arena, E_Expr *expr, EV_ViewRuleList *view_rules);
+internal E_Expr *ev_resolved_from_expr(Arena *arena, E_Expr *expr);
 
 ////////////////////////////////
 //~ rjf: Block Building
 
-internal EV_BlockTree ev_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, String8 string, E_Expr *expr, EV_ViewRuleList *view_rules);
-internal EV_BlockTree ev_block_tree_from_string(Arena *arena, EV_View *view, String8 filter, String8 string, EV_ViewRuleList *view_rules);
+internal EV_BlockTree ev_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, String8 string, E_Expr *expr);
+internal EV_BlockTree ev_block_tree_from_string(Arena *arena, EV_View *view, String8 filter, String8 string);
 internal U64 ev_depth_from_block(EV_Block *block);
 
 ////////////////////////////////

@@ -987,6 +987,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
 
 //- rjf: row -> context info
 
+#if 0 // TODO(rjf): @cfg
 internal RD_WatchViewRowInfo
 rd_watch_view_row_info_from_row(EV_Row *row)
 {
@@ -1103,6 +1104,7 @@ rd_watch_view_row_info_from_row(EV_Row *row)
   }
   return info;
 }
+#endif
 
 //- rjf: row * cell -> string
 
@@ -1204,7 +1206,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, RD_WatchRowInfo *row_info
       
       //- rjf: evaluate wrapped expression
       result.eval   = e_eval_from_expr(scratch.arena, root_expr);
-      result.string = rd_value_string_from_eval(arena, 0, 10, font, font_size, max_size_px, result.eval, &e_member_nil, row->view_rules);
+      result.string = rd_value_string_from_eval(arena, 0, 10, font, font_size, max_size_px, result.eval);
       
       scratch_end(scratch);
     }break;
@@ -1213,6 +1215,8 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, RD_WatchRowInfo *row_info
 }
 
 //- rjf: row/column -> strings
+
+#if 0 // TODO(rjf): @cfg
 
 internal E_Expr *
 rd_expr_from_watch_view_row_column(Arena *arena, EV_Row *row, RD_WatchViewColumn *col)
@@ -1409,6 +1413,8 @@ rd_string_from_eval_viz_row_column(Arena *arena, EV_Row *row, RD_WatchViewColumn
   return result;
 }
 
+#endif
+
 //- rjf: table coordinates -> text edit state
 
 internal RD_WatchViewTextEditState *
@@ -1491,7 +1497,6 @@ rd_watch_view_build(RD_WatchViewState *ewv, String8 root_expr, String8 root_view
   //////////////////////////////
   //- rjf: unpack arguments
   //
-  EV_ViewRuleList *top_level_view_rules = ev_view_rule_list_from_string(scratch.arena, root_view_rule);
   EV_View *eval_view = rd_view_eval_view();
   String8 filter = rd_view_filter();
   F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
@@ -1559,7 +1564,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, String8 root_expr, String8 root_view
         MemoryZeroStruct(&block_tree);
         MemoryZeroStruct(&block_ranges);
         ev_key_set_expansion(eval_view, ev_key_root(), ev_key_make(ev_hash_from_key(ev_key_root()), 1), 1);
-        block_tree   = ev_block_tree_from_string(scratch.arena, eval_view, filter, root_expr, top_level_view_rules);
+        block_tree   = ev_block_tree_from_string(scratch.arena, eval_view, filter, root_expr);
         block_ranges = ev_block_range_list_from_tree(scratch.arena, &block_tree);
       }
       
@@ -2026,10 +2031,16 @@ rd_watch_view_build(RD_WatchViewState *ewv, String8 root_expr, String8 root_view
         for(S64 y = selection_tbl.min.y; y <= selection_tbl.max.y && row_node != 0; y += 1, row_node = row_node->next)
         {
           EV_Row *row = &row_node->row;
-          for(S64 x = selection_tbl.min.x; x <= selection_tbl.max.x; x += 1)
+          RD_WatchRowInfo row_info = rd_watch_row_info_from_row(scratch.arena, row);
+          S64 cell_x = 0;
+          for(RD_WatchCell *cell = row_info.cells.first; cell != 0; cell = cell->next, cell_x += 1)
           {
-            RD_WatchViewColumn *col = rd_watch_view_column_from_x(ewv, x);
-            String8 cell_string = rd_string_from_eval_viz_row_column(scratch.arena, row, col, string_flags|EV_StringFlag_ReadOnlyDisplayRules, default_radix, ui_top_font(), ui_top_font_size(), row_string_max_size_px);
+            if(cell_x < selection_tbl.min.x || selection_tbl.max.x < cell_x)
+            {
+              continue;
+            }
+            RD_WatchRowCellInfo cell_info = rd_info_from_watch_row_cell(scratch.arena, row, &row_info, cell, ui_top_font(), ui_top_font_size(), row_string_max_size_px);
+            String8 cell_string = cell_info.string;
             cell_string = str8_skip_chop_whitespace(cell_string);
             U64 comma_pos = str8_find_needle(cell_string, 0, str8_lit(","), 0);
             if(selection_tbl.min.x != selection_tbl.max.x || selection_tbl.min.y != selection_tbl.max.y)
@@ -2038,7 +2049,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, String8 root_expr, String8 root_view
                               comma_pos < cell_string.size ? "\"" : "",
                               cell_string,
                               comma_pos < cell_string.size ? "\"" : "",
-                              x+1 <= selection_tbl.max.x ? "," : "");
+                              cell_x+1 <= selection_tbl.max.x ? "," : "");
             }
             else
             {
@@ -2288,6 +2299,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, String8 root_expr, String8 root_view
           RD_EntityKind collection_entity_kind = RD_EntityKind_Nil;
           E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, selection_block->expr);
           E_Type *type = e_type_from_key(scratch.arena, irtree.type_key);
+#if 0 // TODO(rjf): @cfg
           for EachElement(idx, rd_collection_name_table)
           {
             if(str8_match(type->name, rd_collection_name_table[idx], 0))
@@ -2296,6 +2308,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, String8 root_expr, String8 root_view
               break;
             }
           }
+#endif
           
           // rjf: map selection endpoints to entities
           RD_Entity *first_entity = &rd_nil_entity;

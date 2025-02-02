@@ -719,48 +719,6 @@ str8_lit_comp("5"),
 str8_lit_comp("c"),
 };
 
-String8 rd_collection_name_table[2] =
-{
-str8_lit_comp("scheduler_machine"),
-str8_lit_comp("scheduler_process"),
-};
-
-RD_EntityKind rd_collection_entity_kind_table[2] =
-{
-RD_EntityKind_Nil,
-RD_EntityKind_Nil,
-};
-
-CTRL_EntityKind rd_collection_ctrl_entity_kind_table[2] =
-{
-CTRL_EntityKind_Null,
-CTRL_EntityKind_Null,
-};
-
-EV_ViewRuleExprExpandInfoHookFunctionType * rd_collection_expr_expand_info_hook_function_table[2] =
-{
-EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME(scheduler_machine),
-EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME(scheduler_process),
-};
-
-EV_ViewRuleExprExpandRangeInfoHookFunctionType * rd_collection_expr_expand_range_info_hook_function_table[2] =
-{
-EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_NAME(scheduler_machine),
-EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_NAME(scheduler_process),
-};
-
-EV_ViewRuleExprExpandIDFromNumHookFunctionType * rd_collection_expr_expand_id_from_num_hook_function_table[2] =
-{
-EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_NAME(scheduler_machine),
-EV_VIEW_RULE_EXPR_EXPAND_ID_FROM_NUM_FUNCTION_NAME(scheduler_process),
-};
-
-EV_ViewRuleExprExpandIDFromNumHookFunctionType * rd_collection_expr_expand_num_from_id_hook_function_table[2] =
-{
-EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_NAME(scheduler_machine),
-EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_NAME(scheduler_process),
-};
-
 RD_ViewRuleInfo rd_view_rule_kind_info_table[28] =
 {
 {{0}, {0}, {0}, {0}, RD_IconKind_Null, 0, EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME(nil), RD_VIEW_RULE_UI_FUNCTION_NAME(null)},

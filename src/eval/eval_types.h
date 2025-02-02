@@ -318,8 +318,7 @@ internal E_TypeKey e_type_key_cons_(E_ConsTypeParams *params);
 
 //- rjf: constructed type construction helpers
 internal E_TypeKey e_type_key_cons_array(E_TypeKey element_type_key, U64 count);
-internal E_TypeKey e_type_key_cons_ptr(Arch arch, E_TypeKey element_type_key, E_TypeFlags flags);
-internal E_TypeKey e_type_key_cons_space_ptr(E_TypeKey direct_type_key);
+internal E_TypeKey e_type_key_cons_ptr(Arch arch, E_TypeKey element_type_key, U64 count, E_TypeFlags flags);
 internal E_TypeKey e_type_key_cons_base(Type *type);
 
 //- rjf: basic type key functions
