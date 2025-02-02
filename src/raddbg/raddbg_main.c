@@ -27,6 +27,7 @@
 //     but only with commands that are directly
 //
 // [ ] r8 bitmap view rule seems incorrect?
+// [ ] crash bug, release mode - filter globals view (try with debugging raddbg, typing `dev` in globals view)
 
 ////////////////////////////////
 //~ rjf: post-0.9.12 TODO notes

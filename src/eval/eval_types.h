@@ -138,6 +138,31 @@ struct E_Type
 };
 
 ////////////////////////////////
+//~ rjf: String -> Type Key Map Data Structure
+
+typedef struct E_String2TypeKeyNode E_String2TypeKeyNode;
+struct E_String2TypeKeyNode
+{
+  E_String2TypeKeyNode *next;
+  String8 string;
+  E_TypeKey key;
+};
+
+typedef struct E_String2TypeKeySlot E_String2TypeKeySlot;
+struct E_String2TypeKeySlot
+{
+  E_String2TypeKeyNode *first;
+  E_String2TypeKeyNode *last;
+};
+
+typedef struct E_String2TypeKeyMap E_String2TypeKeyMap;
+struct E_String2TypeKeyMap
+{
+  U64 slots_count;
+  E_String2TypeKeySlot *slots;
+};
+
+////////////////////////////////
 //~ rjf: Evaluation Context
 
 //- rjf: constructed type cache types
@@ -323,6 +348,9 @@ internal String8 e_type_string_from_key(Arena *arena, E_TypeKey key);
 //- rjf: type key data structures
 internal void e_type_key_list_push(Arena *arena, E_TypeKeyList *list, E_TypeKey key);
 internal E_TypeKeyList e_type_key_list_copy(Arena *arena, E_TypeKeyList *src);
+internal E_String2TypeKeyMap e_string2typekey_map_make(Arena *arena, U64 slots_count);
+internal void e_string2typekey_map_insert(Arena *arena, E_String2TypeKeyMap *map, String8 string, E_TypeKey key);
+internal E_TypeKey e_string2typekey_map_lookup(E_String2TypeKeyMap *map, String8 string);
 
 ////////////////////////////////
 //~ rjf: Cache Lookups

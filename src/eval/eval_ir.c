@@ -90,6 +90,11 @@ e_lookup_rule_map_insert(Arena *arena, E_LookupRuleMap *map, E_LookupRule *rule)
   E_LookupRuleNode *n = push_array(arena, E_LookupRuleNode, 1);
   SLLQueuePush(map->slots[slot_idx].first, map->slots[slot_idx].last, n);
   MemoryCopyStruct(&n->v, rule);
+  if(n->v.info == 0)       { n->v.info = E_LOOKUP_INFO_FUNCTION_NAME(default); }
+  if(n->v.access == 0)     { n->v.access = E_LOOKUP_ACCESS_FUNCTION_NAME(default); }
+  if(n->v.range == 0)      { n->v.range = E_LOOKUP_RANGE_FUNCTION_NAME(default); }
+  if(n->v.id_from_num == 0){ n->v.id_from_num = E_LOOKUP_ID_FROM_NUM_FUNCTION_NAME(default); }
+  if(n->v.num_from_id == 0){ n->v.num_from_id = E_LOOKUP_NUM_FROM_ID_FUNCTION_NAME(default); }
   n->v.name = push_str8_copy(arena, n->v.name);
 }
 
@@ -155,9 +160,18 @@ E_LOOKUP_INFO_FUNCTION_DEF(default)
   return lookup_info;
 }
 
-E_LOOKUP_FUNCTION_DEF(default)
+E_LOOKUP_ACCESS_FUNCTION_DEF(default)
 {
-  E_Lookup lookup = {{&e_irnode_nil}};
+  //
+  // TODO(rjf): need to define what it means to access a set expression
+  // whose type *does not* define its IR generation rules, BUT it does
+  // define specific child expressions. so e.g. `watches`, does not
+  // define `watches[0]`, because it has defined that `watches[0]`
+  // maps to another expression, which is whatever the first watch
+  // expression is (e.g. `basics`). so, in that case, we can just use
+  // the lookup-range rule, grab the Nth expression, and IR-ify *that*.
+  //
+  E_LookupAccess result = {{&e_irnode_nil}};
   switch(kind)
   {
     default:{}break;
@@ -180,7 +194,7 @@ E_LOOKUP_FUNCTION_DEF(default)
         check_type_key = e_type_unwrap(e_type_direct_from_key(e_type_unwrap(l_restype)));
         check_type_kind = e_type_kind_from_key(check_type_key);
       }
-      e_msg_list_concat_in_place(&lookup.irtree_and_type.msgs, &l.msgs);
+      e_msg_list_concat_in_place(&result.irtree_and_type.msgs, &l.msgs);
       
       // rjf: look up member
       B32 r_found = 0;
@@ -234,12 +248,12 @@ E_LOOKUP_FUNCTION_DEF(default)
       }
       else if(exprr->kind != E_ExprKind_LeafMember)
       {
-        e_msgf(arena, &lookup.irtree_and_type.msgs, E_MsgKind_MalformedInput, exprl->location, "Expected member name.");
+        e_msgf(arena, &result.irtree_and_type.msgs, E_MsgKind_MalformedInput, exprl->location, "Expected member name.");
         break;
       }
       else if(!r_found)
       {
-        e_msgf(arena, &lookup.irtree_and_type.msgs, E_MsgKind_MalformedInput, exprr->location, "Could not find a member named `%S`.", exprr->string);
+        e_msgf(arena, &result.irtree_and_type.msgs, E_MsgKind_MalformedInput, exprr->location, "Could not find a member named `%S`.", exprr->string);
         break;
       }
       else if(check_type_kind != E_TypeKind_Struct &&
@@ -247,7 +261,7 @@ E_LOOKUP_FUNCTION_DEF(default)
               check_type_kind != E_TypeKind_Union &&
               check_type_kind != E_TypeKind_Enum)
       {
-        e_msgf(arena, &lookup.irtree_and_type.msgs, E_MsgKind_MalformedInput, exprl->location, "Cannot perform member access on this type.");
+        e_msgf(arena, &result.irtree_and_type.msgs, E_MsgKind_MalformedInput, exprl->location, "Cannot perform member access on this type.");
         break;
       }
       
@@ -275,9 +289,9 @@ E_LOOKUP_FUNCTION_DEF(default)
         }
         
         // rjf: fill
-        lookup.irtree_and_type.root     = new_tree;
-        lookup.irtree_and_type.type_key = r_type;
-        lookup.irtree_and_type.mode     = mode;
+        result.irtree_and_type.root     = new_tree;
+        result.irtree_and_type.type_key = r_type;
+        result.irtree_and_type.mode     = mode;
       }
     }break;
     
@@ -302,8 +316,8 @@ E_LOOKUP_FUNCTION_DEF(default)
       direct_type = e_type_direct_from_key(direct_type);
       direct_type = e_type_unwrap(direct_type);
       U64 direct_type_size = e_type_byte_size_from_key(direct_type);
-      e_msg_list_concat_in_place(&lookup.irtree_and_type.msgs, &l.msgs);
-      e_msg_list_concat_in_place(&lookup.irtree_and_type.msgs, &r.msgs);
+      e_msg_list_concat_in_place(&result.irtree_and_type.msgs, &l.msgs);
+      e_msg_list_concat_in_place(&result.irtree_and_type.msgs, &r.msgs);
       
       // rjf: bad conditions? -> error if applicable, exit
       if(r.root->op == 0)
@@ -312,22 +326,22 @@ E_LOOKUP_FUNCTION_DEF(default)
       }
       else if(l_restype_kind != E_TypeKind_Ptr && l_restype_kind != E_TypeKind_Array)
       {
-        e_msgf(arena, &lookup.irtree_and_type.msgs, E_MsgKind_MalformedInput, exprl->location, "Cannot index into this type.");
+        e_msgf(arena, &result.irtree_and_type.msgs, E_MsgKind_MalformedInput, exprl->location, "Cannot index into this type.");
         break;
       }
       else if(!e_type_kind_is_integer(r_restype_kind))
       {
-        e_msgf(arena, &lookup.irtree_and_type.msgs, E_MsgKind_MalformedInput, exprr->location, "Cannot index with this type.");
+        e_msgf(arena, &result.irtree_and_type.msgs, E_MsgKind_MalformedInput, exprr->location, "Cannot index with this type.");
         break;
       }
       else if(l_restype_kind == E_TypeKind_Ptr && direct_type_size == 0)
       {
-        e_msgf(arena, &lookup.irtree_and_type.msgs, E_MsgKind_MalformedInput, exprr->location, "Cannot index into pointers of zero-sized types.");
+        e_msgf(arena, &result.irtree_and_type.msgs, E_MsgKind_MalformedInput, exprr->location, "Cannot index into pointers of zero-sized types.");
         break;
       }
       else if(l_restype_kind == E_TypeKind_Array && direct_type_size == 0)
       {
-        e_msgf(arena, &lookup.irtree_and_type.msgs, E_MsgKind_MalformedInput, exprr->location, "Cannot index into arrays of zero-sized types.");
+        e_msgf(arena, &result.irtree_and_type.msgs, E_MsgKind_MalformedInput, exprr->location, "Cannot index into arrays of zero-sized types.");
         break;
       }
       
@@ -381,12 +395,64 @@ E_LOOKUP_FUNCTION_DEF(default)
       }
       
       // rjf: fill
-      lookup.irtree_and_type.root     = new_tree;
-      lookup.irtree_and_type.type_key = direct_type;
-      lookup.irtree_and_type.mode     = l.mode;
+      result.irtree_and_type.root     = new_tree;
+      result.irtree_and_type.type_key = direct_type;
+      result.irtree_and_type.mode     = l.mode;
     }break;
   }
-  return lookup;
+  return result;
+}
+
+E_LOOKUP_RANGE_FUNCTION_DEF(default)
+{
+  E_LookupRange result = {0};
+  Temp scratch = scratch_begin(&arena, 1);
+  {
+    E_IRTreeAndType lhs_irtree = e_irtree_and_type_from_expr(scratch.arena, lhs);
+    E_TypeKey lhs_type_key = lhs_irtree.type_key;
+    E_TypeKind lhs_type_kind = e_type_kind_from_key(lhs_type_key);
+    if(lhs_type_kind == E_TypeKind_Struct ||
+       lhs_type_kind == E_TypeKind_Union ||
+       lhs_type_kind == E_TypeKind_Class ||
+       lhs_type_kind == E_TypeKind_Enum)
+    {
+      E_Type *lhs_type = e_type_from_key(scratch.arena, lhs_type_key);
+      Rng1U64 legal_idx_range = r1u64(0, lhs_type->count);
+      Rng1U64 read_range = intersect_1u64(legal_idx_range, idx_range);
+      U64 read_range_count = dim_1u64(read_range);
+      result.exprs_count = read_range_count;
+      result.exprs = push_array(arena, E_Expr *, result.exprs_count);
+      for(U64 idx = 0; idx < result.exprs_count; idx += 1)
+      {
+        U64 member_idx = idx + read_range.min;
+        String8 member_name = (lhs_type->members   ? lhs_type->members[member_idx].name :
+                               lhs_type->enum_vals ? lhs_type->enum_vals[member_idx].name : str8_lit(""));
+        result.exprs[idx] = e_expr_ref_member_access(arena, lhs, member_name);
+      }
+    }
+    else if(lhs_type_kind == E_TypeKind_Set)
+    {
+      result.exprs_count = dim_1u64(idx_range);
+      result.exprs = push_array(arena, E_Expr *, result.exprs_count);
+      result.exprs_strings = push_array(arena, String8, result.exprs_count);
+      for(U64 idx = 0; idx < result.exprs_count; idx += 1)
+      {
+        result.exprs[idx] = e_expr_ref_array_index(arena, lhs, idx_range.min + idx);
+      }
+    }
+  }
+  scratch_end(scratch);
+  return result;
+}
+
+E_LOOKUP_ID_FROM_NUM_FUNCTION_DEF(default)
+{
+  return num;
+}
+
+E_LOOKUP_NUM_FROM_ID_FUNCTION_DEF(default)
+{
+  return id;
 }
 
 ////////////////////////////////
@@ -716,9 +782,9 @@ e_irtree_and_type_from_expr__space(Arena *arena, E_Space *current_space, E_Expr 
       }
       E_Expr *rhs = lhs->next;
       E_LookupRule *lookup_rule = e_lookup_rule_from_string(lookup_rule_name);
-      E_LookupInfo lookup_info = lookup_rule->lookup_info(arena, lhs);
-      E_Lookup lookup = lookup_rule->lookup(arena, expr->kind, lhs, rhs, lookup_info.user_data);
-      result = lookup.irtree_and_type;
+      E_LookupInfo lookup_info = lookup_rule->info(arena, lhs, str8_zero());
+      E_LookupAccess lookup_access = lookup_rule->access(arena, expr->kind, lhs, rhs, lookup_info.user_data);
+      result = lookup_access.irtree_and_type;
       scratch_end(scratch);
     }break;
     

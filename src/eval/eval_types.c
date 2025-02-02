@@ -1864,6 +1864,43 @@ e_type_key_list_copy(Arena *arena, E_TypeKeyList *src)
   return dst;
 }
 
+internal E_String2TypeKeyMap
+e_string2typekey_map_make(Arena *arena, U64 slots_count)
+{
+  E_String2TypeKeyMap map = {0};
+  map.slots_count = slots_count;
+  map.slots = push_array(arena, E_String2TypeKeySlot, map.slots_count);
+  return map;
+}
+
+internal void
+e_string2typekey_map_insert(Arena *arena, E_String2TypeKeyMap *map, String8 string, E_TypeKey key)
+{
+  E_String2TypeKeyNode *n = push_array(arena, E_String2TypeKeyNode, 1);
+  U64 hash = e_hash_from_string(5381, string);
+  U64 slot_idx = hash%map->slots_count;
+  SLLQueuePush(map->slots[slot_idx].first, map->slots[slot_idx].last, n);
+  n->string = push_str8_copy(arena, string);
+  n->key = key;
+}
+
+internal E_TypeKey
+e_string2typekey_map_lookup(E_String2TypeKeyMap *map, String8 string)
+{
+  E_TypeKey key = zero_struct;
+  U64 hash = e_hash_from_string(5381, string);
+  U64 slot_idx = hash%map->slots_count;
+  for(E_String2TypeKeyNode *n = map->slots[slot_idx].first; n != 0; n = n->next)
+  {
+    if(str8_match(n->string, string, 0))
+    {
+      key = n->key;
+      break;
+    }
+  }
+  return key;
+}
+
 ////////////////////////////////
 //~ rjf: Cache Lookups
 

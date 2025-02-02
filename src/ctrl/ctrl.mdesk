@@ -4,17 +4,17 @@
 ////////////////////////////////
 //~ rjf: Entity Kinds
 
-@table(name display_string)
+@table(name  code_name  display_string)
 CTRL_EntityKindTable:
 {
-  {Root                      "Root"                      }
-  {Machine                   "Machine"                   }
-  {Process                   "Process"                   }
-  {Thread                    "Thread"                    }
-  {Module                    "Module"                    }
-  {EntryPoint                "Entry Point"               }
-  {DebugInfoPath             "Debug Info Path"           }
-  {PendingThreadName         "Pending Thread Name"       }
+  {Root                      root                 "Root"                      }
+  {Machine                   machine              "Machine"                   }
+  {Process                   process              "Process"                   }
+  {Thread                    thread               "Thread"                    }
+  {Module                    module               "Module"                    }
+  {EntryPoint                entry_point          "Entry Point"               }
+  {DebugInfoPath             debug_info_path      "Debug Info Path"           }
+  {PendingThreadName         pending_thread_name  "Pending Thread Name"       }
 }
 
 @enum CTRL_EntityKind:
@@ -22,6 +22,12 @@ CTRL_EntityKindTable:
   Null,
   @expand(CTRL_EntityKindTable a) `$(a.name)`,
   COUNT,
+}
+
+@data(String8) ctrl_entity_kind_code_name_table:
+{
+  `{0}`,
+  @expand(CTRL_EntityKindTable a) `str8_lit_comp("$(a.code_name)")`
 }
 
 @data(String8) ctrl_entity_kind_display_string_table:

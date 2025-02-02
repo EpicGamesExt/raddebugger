@@ -92,6 +92,10 @@ RD_VocabularyMap:
   {vtx                  _                           "Vertex Buffer"             _                     Null                                           }
   {vtx_size             _                           "Vertex Buffer Size"        _                     Null                                           }
   {label                _                           "Label"                     _                     Null                                           }
+  {thread               _                           "Thread"                    _                     Thread                                         }
+  {process              processes                   "Process"                   "Processes"           Threads                                        }
+  {machine              _                           "Machine"                   _                     Machine                                        }
+  {module               _                           "Module"                    _                     Module                                         }
 }
 
 @struct RD_VocabularyInfo:
@@ -109,9 +113,9 @@ RD_VocabularyMap:
 }
 
 ////////////////////////////////
-//~ rjf: Configuration Tree Schemas
+//~ rjf: Schemas
 
-@table(name schema cmd_names) RD_CfgSchemaTable:
+@table(name schema cmd_names) RD_SchemaTable:
 {
   //- rjf: settings
   {
@@ -201,18 +205,42 @@ RD_VocabularyMap:
     ```x:{'source':code_string, 'dest':code_string}```,
     `remove_cfg`,
   }
+  
+  //- rjf: machines
+  {
+    machine,
+    ```x:{'frozen':bool, 'label':code_string}```,
+  }
+  
+  //- rjf: processes
+  {
+    process,
+    ```x:{'frozen':bool, 'label':code_string, 'id':u64}```,
+  }
+  
+  //- rjf: modules
+  {
+    module,
+    ```x:{'label':code_string, 'exe':path, 'dbg':path, 'vaddr_range':vaddr_range}```,
+  }
+  
+  //- rjf: threads
+  {
+    thread,
+    ```x:{'frozen':bool, 'label':code_string, 'id':u64}```,
+  }
 }
 
-@struct RD_CfgNameSchemaPair:
+@struct RD_NameSchemaInfo:
 {
   `String8 name`;
   `String8 schema`;
   `String8 cmd_names`;
 }
 
-@data(RD_CfgNameSchemaPair) rd_cfg_name_schema_pair_table:
+@data(RD_NameSchemaInfo) rd_name_schema_info_table:
 {
-  @expand(RD_CfgSchemaTable a) `{str8_lit_comp("$(a.name)"), str8_lit_comp("$(a.schema)"), str8_lit_comp("$(a.cmd_names)")}`
+  @expand(RD_SchemaTable a) `{str8_lit_comp("$(a.name)"), str8_lit_comp("$(a.schema)"), str8_lit_comp("$(a.cmd_names)")}`
 }
 
 ////////////////////////////////
@@ -1002,22 +1030,22 @@ RD_CollectionTable:
   //{auto_view_rules                AutoViewRule     Null              x}
   
   //- rjf: control entity groups
-  {machines                       Nil              Machine           x}
-  {processes                      Nil              Process           x}
-  {threads                        Nil              Thread            x}
-  {modules                        Nil              Module            x}
+  //{machines                       Nil              Machine           x}
+  //{processes                      Nil              Process           x}
+  //{threads                        Nil              Thread            x}
+  //{modules                        Nil              Module            x}
   
   //- rjf: scheduling control entity hierarchies
   {scheduler_machine              Nil              Null              x}
   {scheduler_process              Nil              Null              x}
   
   //- rjf: debug info / architecture watch tables
-  {locals                         Nil              Null              -}
-  {registers                      Nil              Null              -}
-  {globals                        Nil              Null              x}
-  {thread_locals                  Nil              Null              x}
-  {types                          Nil              Null              x}
-  {procedures                     Nil              Null              x}
+  // {locals                         Nil              Null              -}
+  // {registers                      Nil              Null              -}
+  // {globals                        Nil              Null              x}
+  // {thread_locals                  Nil              Null              x}
+  // {types                          Nil              Null              x}
+  // {procedures                     Nil              Null              x}
 }
 
 @gen

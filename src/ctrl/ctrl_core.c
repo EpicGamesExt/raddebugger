@@ -91,6 +91,21 @@ ctrl_string_from_msg_kind(CTRL_MsgKind kind)
   return result;
 }
 
+internal CTRL_EntityKind
+ctrl_entity_kind_from_string(String8 string)
+{
+  CTRL_EntityKind result = CTRL_EntityKind_Null;
+  for EachNonZeroEnumVal(CTRL_EntityKind, k)
+  {
+    if(str8_match(ctrl_entity_kind_code_name_table[k], string, 0))
+    {
+      result = k;
+      break;
+    }
+  }
+  return result;
+}
+
 ////////////////////////////////
 //~ rjf: Machine/Handle Pair Type Functions
 

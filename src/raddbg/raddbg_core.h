@@ -746,31 +746,6 @@ struct RD_CtrlEntityMetaEvalCacheSlot
 };
 
 ////////////////////////////////
-//~ rjf: String -> Type Key Map Helper Data Structure
-
-typedef struct RD_String2TypeKeyNode RD_String2TypeKeyNode;
-struct RD_String2TypeKeyNode
-{
-  RD_String2TypeKeyNode *next;
-  String8 string;
-  E_TypeKey key;
-};
-
-typedef struct RD_String2TypeKeySlot RD_String2TypeKeySlot;
-struct RD_String2TypeKeySlot
-{
-  RD_String2TypeKeyNode *first;
-  RD_String2TypeKeyNode *last;
-};
-
-typedef struct RD_String2TypeKeyMap RD_String2TypeKeyMap;
-struct RD_String2TypeKeyMap
-{
-  U64 slots_count;
-  RD_String2TypeKeySlot *slots;
-};
-
-////////////////////////////////
 //~ rjf: Config -> Eval Blob Cache Types
 
 typedef struct RD_Cfg2EvalBlobNode RD_Cfg2EvalBlobNode;
@@ -864,8 +839,8 @@ struct RD_State
   RD_Theme *theme;
   RD_Theme *theme_target;
   
-  // rjf: config name -> eval type key map (constructed from-scratch each frame)
-  RD_String2TypeKeyMap *cfg_string2typekey_map;
+  // rjf: meta name -> eval type key map (constructed from-scratch each frame)
+  E_String2TypeKeyMap *meta_name2type_map;
   
   // rjf: config -> eval blob map (lazily constructed from-scratch each frame)
   RD_Cfg2EvalBlobMap *cfg2evalblob_map;
@@ -1328,9 +1303,6 @@ internal void rd_window_frame(void);
 ////////////////////////////////
 //~ rjf: Eval Visualization
 
-E_LOOKUP_INFO_FUNCTION_DEF(top_level_cfg);
-E_LOOKUP_FUNCTION_DEF(top_level_cfg);
-
 internal EV_ExpandInfo      rd_ev_view_rule_expr_expand_info__meta_entities(Arena *arena, EV_View *view, String8 filter, E_Expr *expr, MD_Node *params, RD_EntityKind kind);
 internal EV_ExpandRangeInfo rd_ev_view_rule_expr_expand_range_info__meta_entities(Arena *arena, EV_View *view, String8 filter, E_Expr *expr, MD_Node *params, Rng1U64 idx_range, void *user_data, RD_EntityKind kind, B32 add_new_at_top);
 internal U64                rd_ev_view_rule_expr_id_from_num__meta_entities(U64 num, void *user_data, RD_EntityKind kind, B32 add_new_at_top);
@@ -1340,11 +1312,6 @@ internal EV_ExpandInfo      rd_ev_view_rule_expr_expand_info__meta_ctrl_entities
 internal EV_ExpandRangeInfo rd_ev_view_rule_expr_expand_range_info__meta_ctrl_entities(Arena *arena, EV_View *view, String8 filter, E_Expr *expr, MD_Node *params, Rng1U64 idx_range, void *user_data, CTRL_EntityKind kind);
 internal U64                rd_ev_view_rule_expr_id_from_num__meta_ctrl_entities(U64 num, void *user_data, CTRL_EntityKind kind);
 internal U64                rd_ev_view_rule_expr_num_from_id__meta_ctrl_entities(U64 id, void *user_data, CTRL_EntityKind kind);
-
-internal EV_ExpandInfo      rd_ev_view_rule_expr_expand_info__debug_info_tables(Arena *arena, EV_View *view, String8 filter, E_Expr *expr, MD_Node *params, RDI_SectionKind section);
-internal EV_ExpandRangeInfo rd_ev_view_rule_expr_expand_range_info__debug_info_tables(Arena *arena, EV_View *view, String8 filter, E_Expr *expr, MD_Node *params, Rng1U64 idx_range, void *user_data, RDI_SectionKind section);
-internal U64                rd_ev_view_rule_expr_id_from_num__debug_info_tables(U64 num, void *user_data, RDI_SectionKind section);
-internal U64                rd_ev_view_rule_expr_num_from_id__debug_info_tables(U64 id, void *user_data, RDI_SectionKind section);
 
 internal F32 rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size, S32 depth, E_Eval eval, E_Member *member, EV_ViewRuleList *view_rules, String8List *out);
 internal String8 rd_value_string_from_eval(Arena *arena, EV_StringFlags flags, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size, E_Eval eval, E_Member *member, EV_ViewRuleList *view_rules);

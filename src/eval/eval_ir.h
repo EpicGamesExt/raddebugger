@@ -66,31 +66,60 @@ struct E_LookupInfo
   U64 idxed_expr_count;
 };
 
-typedef struct E_Lookup E_Lookup;
-struct E_Lookup
+typedef struct E_LookupAccess E_LookupAccess;
+struct E_LookupAccess
 {
   E_IRTreeAndType irtree_and_type;
 };
 
-#define E_LOOKUP_INFO_FUNCTION_SIG(name) E_LookupInfo name(Arena *arena, E_Expr *lhs)
+typedef struct E_LookupRange E_LookupRange;
+struct E_LookupRange
+{
+  U64 exprs_count;
+  E_Expr **exprs;
+  String8 *exprs_strings;
+};
+
+#define E_LOOKUP_INFO_FUNCTION_SIG(name) E_LookupInfo name(Arena *arena, E_Expr *lhs, String8 filter)
 #define E_LOOKUP_INFO_FUNCTION_NAME(name) e_lookup_info_##name
 #define E_LOOKUP_INFO_FUNCTION_DEF(name) internal E_LOOKUP_INFO_FUNCTION_SIG(E_LOOKUP_INFO_FUNCTION_NAME(name))
 typedef E_LOOKUP_INFO_FUNCTION_SIG(E_LookupInfoFunctionType);
 
-#define E_LOOKUP_FUNCTION_SIG(name) E_Lookup name(Arena *arena, E_ExprKind kind, E_Expr *lhs, E_Expr *rhs, void *user_data)
-#define E_LOOKUP_FUNCTION_NAME(name) e_lookup_##name
-#define E_LOOKUP_FUNCTION_DEF(name) internal E_LOOKUP_FUNCTION_SIG(E_LOOKUP_FUNCTION_NAME(name))
-typedef E_LOOKUP_FUNCTION_SIG(E_LookupFunctionType);
+#define E_LOOKUP_ACCESS_FUNCTION_SIG(name) E_LookupAccess name(Arena *arena, E_ExprKind kind, E_Expr *lhs, E_Expr *rhs, void *user_data)
+#define E_LOOKUP_ACCESS_FUNCTION_NAME(name) e_lookup_access_##name
+#define E_LOOKUP_ACCESS_FUNCTION_DEF(name) internal E_LOOKUP_ACCESS_FUNCTION_SIG(E_LOOKUP_ACCESS_FUNCTION_NAME(name))
+typedef E_LOOKUP_ACCESS_FUNCTION_SIG(E_LookupAccessFunctionType);
+
+#define E_LOOKUP_RANGE_FUNCTION_SIG(name) E_LookupRange name(Arena *arena, E_Expr *lhs, Rng1U64 idx_range, void *user_data)
+#define E_LOOKUP_RANGE_FUNCTION_NAME(name) e_lookup_range_##name
+#define E_LOOKUP_RANGE_FUNCTION_DEF(name) internal E_LOOKUP_RANGE_FUNCTION_SIG(E_LOOKUP_RANGE_FUNCTION_NAME(name))
+typedef E_LOOKUP_RANGE_FUNCTION_SIG(E_LookupRangeFunctionType);
+
+#define E_LOOKUP_ID_FROM_NUM_FUNCTION_SIG(name) U64 name(U64 num, void *user_data)
+#define E_LOOKUP_ID_FROM_NUM_FUNCTION_NAME(name) e_lookup_id_from_num_##name
+#define E_LOOKUP_ID_FROM_NUM_FUNCTION_DEF(name) internal E_LOOKUP_ID_FROM_NUM_FUNCTION_SIG(E_LOOKUP_ID_FROM_NUM_FUNCTION_NAME(name))
+typedef E_LOOKUP_ID_FROM_NUM_FUNCTION_SIG(E_LookupIDFromNumFunctionType);
+
+#define E_LOOKUP_NUM_FROM_ID_FUNCTION_SIG(name) U64 name(U64 id, void *user_data)
+#define E_LOOKUP_NUM_FROM_ID_FUNCTION_NAME(name) e_lookup_num_from_id_##name
+#define E_LOOKUP_NUM_FROM_ID_FUNCTION_DEF(name) internal E_LOOKUP_NUM_FROM_ID_FUNCTION_SIG(E_LOOKUP_NUM_FROM_ID_FUNCTION_NAME(name))
+typedef E_LOOKUP_NUM_FROM_ID_FUNCTION_SIG(E_LookupNumFromIDFunctionType);
 
 E_LOOKUP_INFO_FUNCTION_DEF(default);
-E_LOOKUP_FUNCTION_DEF(default);
+E_LOOKUP_ACCESS_FUNCTION_DEF(default);
+E_LOOKUP_RANGE_FUNCTION_DEF(default);
+E_LOOKUP_ID_FROM_NUM_FUNCTION_DEF(default);
+E_LOOKUP_NUM_FROM_ID_FUNCTION_DEF(default);
 
 typedef struct E_LookupRule E_LookupRule;
 struct E_LookupRule
 {
   String8 name;
-  E_LookupInfoFunctionType *lookup_info;
-  E_LookupFunctionType *lookup;
+  E_LookupInfoFunctionType *info;
+  E_LookupAccessFunctionType *access;
+  E_LookupRangeFunctionType *range;
+  E_LookupIDFromNumFunctionType *id_from_num;
+  E_LookupNumFromIDFunctionType *num_from_id;
 };
 
 typedef struct E_LookupRuleNode E_LookupRuleNode;
@@ -131,7 +160,10 @@ local_persist read_only E_LookupRule e_lookup_rule__default =
 {
   str8_lit_comp("default"),
   E_LOOKUP_INFO_FUNCTION_NAME(default),
-  E_LOOKUP_FUNCTION_NAME(default),
+  E_LOOKUP_ACCESS_FUNCTION_NAME(default),
+  E_LOOKUP_RANGE_FUNCTION_NAME(default),
+  E_LOOKUP_ID_FROM_NUM_FUNCTION_NAME(default),
+  E_LOOKUP_NUM_FROM_ID_FUNCTION_NAME(default),
 };
 global read_only E_IRNode e_irnode_nil = {&e_irnode_nil, &e_irnode_nil, &e_irnode_nil};
 thread_static E_IRCtx *e_ir_ctx = 0;
@@ -153,11 +185,9 @@ internal void e_select_ir_ctx(E_IRCtx *ctx);
 
 internal E_LookupRuleMap e_lookup_rule_map_make(Arena *arena, U64 slots_count);
 internal void e_lookup_rule_map_insert(Arena *arena, E_LookupRuleMap *map, E_LookupRule *rule);
-#define e_lookup_rule_map_insert_new(arena, map, name_, lookup_info_, lookup_) e_lookup_rule_map_insert((arena), (map), &(E_LookupRule){.name = (name_), .lookup_info = (lookup_info_), .lookup = (lookup_)})
+#define e_lookup_rule_map_insert_new(arena, map, name_, ...) e_lookup_rule_map_insert((arena), (map), &(E_LookupRule){.name = (name_), __VA_ARGS__})
 
 internal E_LookupRule *e_lookup_rule_from_string(String8 string);
-E_LOOKUP_INFO_FUNCTION_DEF(default);
-E_LOOKUP_FUNCTION_DEF(default);
 
 ////////////////////////////////
 //~ rjf: IR-ization Functions

@@ -183,7 +183,7 @@ EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(default)
   {
     E_Type *type = e_type_from_key(scratch.arena, type_key);
     E_LookupRule *rule = e_lookup_rule_from_string(type->name);
-    E_LookupInfo lookup_info = rule->lookup_info(arena, expr);
+    E_LookupInfo lookup_info = rule->info(arena, expr, filter);
     total_row_count = Max(lookup_info.named_expr_count, lookup_info.idxed_expr_count);
     accel->lookup_rule = rule;
     accel->lookup_user_data = lookup_info.user_data;
@@ -283,14 +283,14 @@ EV_VIEW_RULE_EXPR_EXPAND_RANGE_INFO_FUNCTION_DEF(default)
   //
   else if(accel->lookup_rule != 0)
   {
-    result.row_exprs_count = needed_row_count;
-    result.row_exprs = push_array(arena, E_Expr *, result.row_exprs_count);
-    result.row_strings = push_array(arena, String8, result.row_exprs_count);
+    E_LookupRange lookup_range = accel->lookup_rule->range(arena, expr, idx_range, accel->lookup_user_data);
+    result.row_exprs_count = lookup_range.exprs_count;
+    result.row_exprs = lookup_range.exprs;
+    result.row_strings = lookup_range.exprs_strings;
     result.row_view_rules  = push_array(arena, String8, result.row_exprs_count);
     result.row_members = push_array(arena, E_Member *, result.row_exprs_count);
     for EachIndex(row_expr_idx, result.row_exprs_count)
     {
-      result.row_exprs[row_expr_idx] = e_expr_ref_array_index(arena, expr, idx_range.min + row_expr_idx);
       result.row_members[row_expr_idx] = &e_member_nil;
     }
   }
