@@ -276,7 +276,7 @@ entry_point(CmdLine *cmdline)
     }
     pe_print(arena, out, indent, raw_data, opts, rdi);
   } else if (pe_is_res(raw_data)) {
-    //tool_out_coff_res(stdout, file_data);
+    coff_print_res(arena, out, indent, raw_data);
   }
   
 exit:;

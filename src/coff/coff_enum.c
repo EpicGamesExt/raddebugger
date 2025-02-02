@@ -215,6 +215,35 @@ coff_string_from_section_flags(Arena *arena, COFF_SectionFlags flags)
 }
 
 internal String8
+coff_string_from_resource_memory_flags(Arena *arena, COFF_ResourceMemoryFlags flags)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+
+  String8List list = {0};
+
+  if (flags & COFF_ResourceMemoryFlag_Moveable) {
+    flags &= COFF_ResourceMemoryFlag_Moveable;
+    str8_list_pushf(scratch.arena, &list, "Moveable");
+  }
+  if (flags & COFF_ResourceMemoryFlag_Pure) {
+    flags &= COFF_ResourceMemoryFlag_Pure;
+    str8_list_pushf(scratch.arena, &list, "Pure");
+  }
+  if (flags & COFF_ResourceMemoryFlag_Discardable) {
+    flags &= COFF_ResourceMemoryFlag_Discardable;
+    str8_list_pushf(scratch.arena, &list, "Discardable");
+  }
+  if (flags != 0) {
+    str8_list_pushf(scratch.arena, &list, "%#x", flags);
+  }
+
+  String8 result = str8_list_join(arena, &list, &(StringJoin){.sep=str8_lit(", ")});
+
+  scratch_end(scratch);
+  return result;
+}
+
+internal String8
 coff_string_from_import_header_type(COFF_ImportType type)
 {
   for (U64 i = 0; i < ArrayCount(g_coff_import_header_type_map); ++i) {

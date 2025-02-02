@@ -320,6 +320,8 @@ rd_format_preamble(Arena *arena, String8List *out, String8 indent, String8 input
     input_type_string = "COFF/PE";
   } else if (rd_is_rdi(raw_data)) {
     input_type_string = "RDI";
+  } else if (pe_is_res(raw_data)) {
+    input_type_string = "RES";
   }
 
   DateTime universal_dt = os_now_universal_time();
@@ -6382,6 +6384,56 @@ coff_print_archive(Arena *arena, String8List *out, String8 indent, String8 raw_a
 
   rd_unindent();
 
+  scratch_end(scratch);
+}
+
+internal String8
+coff_string_from_resource_id(Arena *arena, COFF_ResourceID id)
+{
+  String8 result = str8_zero();
+  switch (id.type) {
+  case COFF_ResourceIDType_Null:   result = str8_lit("\?\?\?");                   break;
+  case COFF_ResourceIDType_Number: result = push_str8f(arena, "%u", id.u.number); break;
+  case COFF_ResourceIDType_String: result = id.u.string;                          break;
+  }
+  return result;
+}
+
+internal void
+coff_print_parsed_res(Arena *arena, String8List *out, String8 indent, COFF_ParsedResource *res)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+
+  String8 type;
+  if (res->type.type == COFF_ResourceIDType_Number) {
+    type = pe_resource_kind_to_string(res->type.u.number);
+  } else {
+    type = coff_string_from_resource_id(scratch.arena, res->type);
+  }
+
+  String8 name  = coff_string_from_resource_id(scratch.arena, res->name);
+  String8 flags = coff_string_from_resource_memory_flags(scratch.arena, res->memory_flags);
+
+  rd_printf("Type:         %S",         type);
+  rd_printf("Name:         %S",         name);
+  rd_printf("Language ID:  %u",         res->language_id);
+  rd_printf("Data Version: %u",         res->data_version);
+  rd_printf("Version:      %u",         res->version);
+  rd_printf("Memory Flags: %S",         flags);
+  rd_printf("Data size:    %u (bytes)", res->data.size);
+
+  scratch_end(scratch);
+}
+
+internal void
+coff_print_res(Arena *arena, String8List *out, String8 indent, String8 raw_res)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  COFF_ParsedResourceList res_list = coff_resource_list_from_data(scratch.arena, raw_res);
+  for (COFF_ParsedResourceNode *n = res_list.first; n != 0; n = n->next) {
+    coff_print_parsed_res(arena, out, indent, &n->data);
+    rd_newline();
+  }
   scratch_end(scratch);
 }
 
