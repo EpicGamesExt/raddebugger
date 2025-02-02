@@ -1555,7 +1555,7 @@ internal PE_ResourceNode *
 pe_resource_dir_search_node(PE_ResourceDir *dir, COFF_ResourceID id)
 {
   for (PE_ResourceNode *i = dir->id_list.first; i != NULL; i = i->next) {
-    if (coff_resource_id_compar(&i->data.id, &id)) {
+    if (coff_resource_id_compar(&i->data.id, &id) == 0) {
       return i;
     }
   }

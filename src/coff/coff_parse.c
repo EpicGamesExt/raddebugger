@@ -477,12 +477,12 @@ internal int
 coff_resource_id_compar(void *raw_a, void *raw_b)
 {
   int cmp;
-  COFF_ResourceID *a = raw_b;
+  COFF_ResourceID *a = raw_a;
   COFF_ResourceID *b = raw_b;
   if (a->type == b->type) {
     switch (a->type) {
       case COFF_ResourceIDType_Null:   cmp = 0; break;
-      case COFF_ResourceIDType_Number: cmp = a->u.number < b->u.number ? -1 : a->u.number > b->u.number ? +1 : 0; break;
+      case COFF_ResourceIDType_Number: cmp = MemoryCompare(&a->u.number, &b->u.number, sizeof(a->u.number)); break;
       case COFF_ResourceIDType_String: cmp = strncmp((char *)a->u.string.str, (char *)b->u.string.str, Min(a->u.string.size, b->u.string.size)); break;
       default: InvalidPath; break;
     }
