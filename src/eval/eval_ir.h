@@ -173,6 +173,35 @@ struct E_IRGenRuleMap
 };
 
 ////////////////////////////////
+//~ rjf: Type Pattern -> Hook Key Data Structure (Auto View Rules)
+
+typedef struct E_AutoHookNode E_AutoHookNode;
+struct E_AutoHookNode
+{
+  E_AutoHookNode *hash_next;
+  E_AutoHookNode *pattern_order_next;
+  E_TypeKey type_key;
+  String8List type_pattern_parts;
+  E_Expr *tag_expr;
+};
+
+typedef struct E_AutoHookSlot E_AutoHookSlot;
+struct E_AutoHookSlot
+{
+  E_AutoHookNode *first;
+  E_AutoHookNode *last;
+};
+
+typedef struct E_AutoHookMap E_AutoHookMap;
+struct E_AutoHookMap
+{
+  U64 slots_count;
+  E_AutoHookSlot *slots;
+  E_AutoHookNode *first_pattern;
+  E_AutoHookNode *last_pattern;
+};
+
+////////////////////////////////
 //~ rjf: Used Tag Map Data Structure
 
 typedef struct E_UsedTagNode E_UsedTagNode;
@@ -206,6 +235,7 @@ struct E_IRCtx
   E_String2ExprMap *macro_map;
   E_LookupRuleMap *lookup_rule_map;
   E_IRGenRuleMap *irgen_rule_map;
+  E_AutoHookMap *auto_hook_map;
   E_UsedTagMap *used_tag_map;
 };
 
@@ -258,6 +288,13 @@ internal void e_irgen_rule_map_insert(Arena *arena, E_IRGenRuleMap *map, E_IRGen
 #define e_irgen_rule_map_insert_new(arena, map, name_, ...) e_irgen_rule_map_insert((arena), (map), &(E_IRGenRule){.name = (name_), __VA_ARGS__})
 
 internal E_IRGenRule *e_irgen_rule_from_string(String8 string);
+
+////////////////////////////////
+//~ rjf: Auto Hooks
+
+internal E_AutoHookMap e_auto_hook_map_make(Arena *arena, U64 slots_count);
+internal void e_auto_hook_map_insert_new(Arena *arena, E_AutoHookMap *map, String8 pattern, String8 tag_expr_string);
+internal E_ExprList e_auto_hook_tag_exprs_from_type_key(Arena *arena, E_TypeKey type_key);
 
 ////////////////////////////////
 //~ rjf: IR-ization Functions

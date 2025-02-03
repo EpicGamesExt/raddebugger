@@ -67,6 +67,21 @@ struct E_Expr
   String8 bytecode;
 };
 
+typedef struct E_ExprNode E_ExprNode;
+struct E_ExprNode
+{
+  E_ExprNode *next;
+  E_Expr *v;
+};
+
+typedef struct E_ExprList E_ExprList;
+struct E_ExprList
+{
+  E_ExprNode *first;
+  E_ExprNode *last;
+  U64 count;
+};
+
 ////////////////////////////////
 //~ rjf: Map Types
 
@@ -229,6 +244,7 @@ internal E_Expr *e_expr_ref_deref(Arena *arena, E_Expr *rhs);
 internal E_Expr *e_expr_ref_cast(Arena *arena, E_TypeKey type_key, E_Expr *rhs);
 internal E_Expr *e_expr_ref_bswap(Arena *arena, E_Expr *rhs);
 internal E_Expr *e_expr_copy(Arena *arena, E_Expr *src);
+internal void e_expr_list_push(Arena *arena, E_ExprList *list, E_Expr *expr);
 
 ////////////////////////////////
 //~ rjf: Expression Tree -> String Conversions

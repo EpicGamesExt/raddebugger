@@ -95,7 +95,6 @@ enum
 {
   RD_EvalSpaceKind_CtrlEntity = E_SpaceKind_FirstUserDefined,
   RD_EvalSpaceKind_MetaCfg,
-  RD_EvalSpaceKind_MetaEntity,
   RD_EvalSpaceKind_MetaCtrlEntity,
 };
 
@@ -771,6 +770,31 @@ struct RD_Cfg2EvalBlobMap
 };
 
 ////////////////////////////////
+//~ rjf: Control Entity -> Eval Blob Cache Types
+
+typedef struct RD_Entity2EvalBlobNode RD_Entity2EvalBlobNode;
+struct RD_Entity2EvalBlobNode
+{
+  RD_Entity2EvalBlobNode *next;
+  CTRL_Handle handle;
+  String8 blob;
+};
+
+typedef struct RD_Entity2EvalBlobSlot RD_Entity2EvalBlobSlot;
+struct RD_Entity2EvalBlobSlot
+{
+  RD_Entity2EvalBlobNode *first;
+  RD_Entity2EvalBlobNode *last;
+};
+
+typedef struct RD_Entity2EvalBlobMap RD_Entity2EvalBlobMap;
+struct RD_Entity2EvalBlobMap
+{
+  U64 slots_count;
+  RD_Entity2EvalBlobSlot *slots;
+};
+
+////////////////////////////////
 //~ rjf: Main Per-Process Graphical State
 
 typedef struct RD_NameChunkNode RD_NameChunkNode;
@@ -842,8 +866,9 @@ struct RD_State
   // rjf: meta name -> eval type key map (constructed from-scratch each frame)
   E_String2TypeKeyMap *meta_name2type_map;
   
-  // rjf: config -> eval blob map (lazily constructed from-scratch each frame)
+  // rjf: eval blob caches (lazily constructed from-scratch each frame)
   RD_Cfg2EvalBlobMap *cfg2evalblob_map;
+  RD_Entity2EvalBlobMap *entity2evalblob_map;
   
   // rjf: registers stack
   RD_RegsNode base_regs;
@@ -1215,10 +1240,6 @@ internal DR_FancyStringList rd_title_fstrs_from_ctrl_entity(Arena *arena, CTRL_E
 internal RD_Cfg *rd_cfg_from_eval_space(E_Space space);
 internal E_Space rd_eval_space_from_cfg(RD_Cfg *cfg);
 
-//- rjf: entity <-> eval space
-internal RD_Entity *rd_entity_from_eval_space(E_Space space);
-internal E_Space rd_eval_space_from_entity(RD_Entity *entity);
-
 //- rjf: ctrl entity <-> eval space
 internal CTRL_Entity *rd_ctrl_entity_from_eval_space(E_Space space);
 internal E_Space rd_eval_space_from_ctrl_entity(CTRL_Entity *entity, E_SpaceKind kind);
@@ -1226,6 +1247,10 @@ internal E_Space rd_eval_space_from_ctrl_entity(CTRL_Entity *entity, E_SpaceKind
 //- rjf: cfg -> eval blob
 internal String8 rd_eval_blob_from_cfg(Arena *arena, RD_Cfg *cfg);
 internal String8 rd_eval_blob_from_cfg__cached(RD_Cfg *cfg);
+
+//- rjf: ctrl entity -> eval blob
+internal String8 rd_eval_blob_from_entity(Arena *arena, CTRL_Entity *entity);
+internal String8 rd_eval_blob_from_entity__cached(CTRL_Entity *entity);
 
 //- rjf: entity -> meta eval
 internal CTRL_MetaEval *rd_ctrl_meta_eval_from_entity(Arena *arena, RD_Entity *entity);

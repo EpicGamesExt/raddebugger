@@ -2390,30 +2390,6 @@ rd_eval_space_from_cfg(RD_Cfg *cfg)
   return space;
 }
 
-//- rjf: entity <-> eval space
-
-internal RD_Entity *
-rd_entity_from_eval_space(E_Space space)
-{
-  RD_Entity *entity = &rd_nil_entity;
-  if(space.kind == RD_EvalSpaceKind_MetaEntity)
-  {
-    RD_Handle handle = {space.u64s[0], space.u64s[1]};
-    entity = rd_entity_from_handle(handle);
-  }
-  return entity;
-}
-
-internal E_Space
-rd_eval_space_from_entity(RD_Entity *entity)
-{
-  E_Space space = e_space_make(RD_EvalSpaceKind_MetaEntity);
-  RD_Handle handle = rd_handle_from_entity(entity);
-  space.u64s[0] = handle.u64[0];
-  space.u64s[1] = handle.u64[1];
-  return space;
-}
-
 //- rjf: ctrl entity <-> eval space
 
 internal CTRL_Entity *
@@ -2512,13 +2488,10 @@ rd_eval_blob_from_cfg__cached(RD_Cfg *cfg)
 {
   String8 result = {0};
   {
-    // rjf: unpack
     RD_Cfg2EvalBlobMap *map = rd_state->cfg2evalblob_map;
     RD_Handle handle = rd_handle_from_cfg(cfg);
     U64 hash = d_hash_from_string(str8_struct(&handle));
     U64 slot_idx = hash%map->slots_count;
-    
-    // rjf: cfg -> cached node
     RD_Cfg2EvalBlobNode *node = 0;
     for(RD_Cfg2EvalBlobNode *n = map->slots[slot_idx].first; n != 0; n = n->next)
     {
@@ -2528,25 +2501,115 @@ rd_eval_blob_from_cfg__cached(RD_Cfg *cfg)
         break;
       }
     }
-    
-    // rjf: no node? -> try to build one
     if(node == 0)
     {
-      E_TypeKey type_key = e_string2typekey_map_lookup(rd_state->meta_name2type_map, cfg->string);
-      if(!e_type_key_match(e_type_key_zero(), type_key))
+      node = push_array(rd_frame_arena(), RD_Cfg2EvalBlobNode, 1);
+      SLLQueuePush(map->slots[slot_idx].first, map->slots[slot_idx].last, node);
+      node->handle = handle;
+      node->blob = rd_eval_blob_from_cfg(rd_frame_arena(), cfg);
+    }
+    result = node->blob;
+  }
+  return result;
+}
+
+//- rjf: ctrl entity -> eval blob
+
+internal String8
+rd_eval_blob_from_entity(Arena *arena, CTRL_Entity *entity)
+{
+  String8 result = {0};
+  String8 name = ctrl_entity_kind_code_name_table[entity->kind];
+  E_TypeKey type_key = e_string2typekey_map_lookup(rd_state->meta_name2type_map, name);
+  if(!e_type_key_match(e_type_key_zero(), type_key))
+  {
+    Temp scratch = scratch_begin(&arena, 1);
+    MD_Node *schema = rd_schema_from_name(scratch.arena, name);
+    String8List fixed_width_parts = {0};
+    String8List variable_width_parts = {0};
+    {
+      E_Type *type = e_type_from_key(scratch.arena, type_key);
+      if(type->members != 0) for EachIndex(member_idx, type->count)
       {
-        node = push_array(rd_frame_arena(), RD_Cfg2EvalBlobNode, 1);
-        SLLQueuePush(map->slots[slot_idx].first, map->slots[slot_idx].last, node);
-        node->handle = handle;
-        node->blob = rd_eval_blob_from_cfg(rd_frame_arena(), cfg);
+        E_Member *member = &type->members[member_idx];
+        String8 member_name = member->name;
+        if(0){}
+        else if(str8_match(member_name, str8_lit("frozen"), 0))
+        {
+          str8_list_push(scratch.arena, &fixed_width_parts, str8((U8 *)&entity->is_frozen, 1));
+        }
+        else if(str8_match(member_name, str8_lit("vaddr_range"), 0))
+        {
+          str8_list_push(scratch.arena, &fixed_width_parts, str8_struct(&entity->vaddr_range));
+        }
+        else if(str8_match(member_name, str8_lit("id"), 0))
+        {
+          str8_list_push(scratch.arena, &fixed_width_parts, str8_struct(&entity->id));
+        }
+        else if(str8_match(member_name, str8_lit("label"), 0))
+        {
+          String8 label = entity->string;
+          if(entity->kind == CTRL_EntityKind_Module)
+          {
+            label = str8_skip_last_slash(label);
+          }
+          U64 off = type->byte_size + variable_width_parts.total_size;
+          str8_list_push(scratch.arena, &fixed_width_parts, push_str8_copy(scratch.arena, str8_struct(&off)));
+          str8_list_push(scratch.arena, &variable_width_parts, label);
+          str8_list_push(scratch.arena, &variable_width_parts, str8_lit("\0"));
+        }
+        else if(str8_match(member_name, str8_lit("exe"), 0))
+        {
+          String8 string = entity->string;
+          U64 off = type->byte_size + variable_width_parts.total_size;
+          str8_list_push(scratch.arena, &fixed_width_parts, push_str8_copy(scratch.arena, str8_struct(&off)));
+          str8_list_push(scratch.arena, &variable_width_parts, string);
+          str8_list_push(scratch.arena, &variable_width_parts, str8_lit("\0"));
+        }
+        else if(str8_match(member_name, str8_lit("dbg"), 0))
+        {
+          String8 string = ctrl_entity_child_from_kind(entity, CTRL_EntityKind_DebugInfoPath)->string;
+          U64 off = type->byte_size + variable_width_parts.total_size;
+          str8_list_push(scratch.arena, &fixed_width_parts, push_str8_copy(scratch.arena, str8_struct(&off)));
+          str8_list_push(scratch.arena, &variable_width_parts, string);
+          str8_list_push(scratch.arena, &variable_width_parts, str8_lit("\0"));
+        }
       }
     }
-    
-    // rjf: grab string from cached node
-    if(node != 0)
+    String8List all_parts = {0};
+    str8_list_concat_in_place(&all_parts, &fixed_width_parts);
+    str8_list_concat_in_place(&all_parts, &variable_width_parts);
+    result = str8_list_join(arena, &all_parts, 0);
+  }
+  return result;
+}
+
+internal String8
+rd_eval_blob_from_entity__cached(CTRL_Entity *entity)
+{
+  String8 result = {0};
+  {
+    RD_Entity2EvalBlobMap *map = rd_state->entity2evalblob_map;
+    CTRL_Handle handle = entity->handle;
+    U64 hash = ctrl_hash_from_handle(handle);
+    U64 slot_idx = hash%map->slots_count;
+    RD_Entity2EvalBlobNode *node = 0;
+    for(RD_Entity2EvalBlobNode *n = map->slots[slot_idx].first; n != 0; n = n->next)
     {
-      result = node->blob;
+      if(ctrl_handle_match(n->handle, handle))
+      {
+        node = n;
+        break;
+      }
     }
+    if(node == 0)
+    {
+      node = push_array(rd_frame_arena(), RD_Entity2EvalBlobNode, 1);
+      SLLQueuePush(map->slots[slot_idx].first, map->slots[slot_idx].last, node);
+      node->handle = handle;
+      node->blob = rd_eval_blob_from_entity(rd_frame_arena(), entity);
+    }
+    result = node->blob;
   }
   return result;
 }
@@ -2743,70 +2806,17 @@ rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
       }
     }break;
     
-    //- rjf: meta-control-enttiy reads (computed data about control entities)
+    //- rjf: meta-entity reads
     case RD_EvalSpaceKind_MetaCtrlEntity:
     {
       CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(space);
-      U64 hash = ctrl_hash_from_handle(entity->handle);
-      U64 slot_idx = hash%rd_state->ctrl_entity_meval_cache_slots_count;
-      RD_CtrlEntityMetaEvalCacheSlot *slot = &rd_state->ctrl_entity_meval_cache_slots[slot_idx];
-      RD_CtrlEntityMetaEvalCacheNode *node = 0;
-      for(RD_CtrlEntityMetaEvalCacheNode *n = slot->first; n != 0; n = n->next)
-      {
-        if(ctrl_handle_match(n->handle, entity->handle))
-        {
-          node = n;
-          break;
-        }
-      }
-      if(!node)
-      {
-        CTRL_MetaEval *meval = rd_ctrl_meta_eval_from_ctrl_entity(scratch.arena, entity);
-        String8 meval_srlzed = serialized_from_struct(scratch.arena, CTRL_MetaEval, meval);
-        U64 pos_min = arena_pos(rd_frame_arena());
-        arena_push(rd_frame_arena(), 0, 64);
-        CTRL_MetaEval *meval_read = struct_from_serialized(rd_frame_arena(), CTRL_MetaEval, meval_srlzed);
-        struct_rebase_ptrs(CTRL_MetaEval, meval_read, meval_read);
-        U64 pos_opl = arena_pos(scratch.arena);
-        node = push_array(rd_frame_arena(), RD_CtrlEntityMetaEvalCacheNode, 1);
-        SLLQueuePush(slot->first, slot->last, node);
-        node->handle = entity->handle;
-        node->meval  = meval_read;
-        node->range  = r1u64(0, pos_opl-pos_min);
-      }
-      meval_read = node->meval;
-      meval_legal_range = node->range;
-    }goto meta_eval;
-    case RD_EvalSpaceKind_MetaEntity:
-    {
-      // rjf: calculate meta evaluation
-      CTRL_MetaEval *meval = rd_ctrl_meta_eval_from_entity(scratch.arena, rd_entity_from_eval_space(space));
-      
-      // rjf: copy meta evaluation to scratch arena, to form range of legal reads
-      arena_push(scratch.arena, 0, 64);
-      String8 meval_srlzed = serialized_from_struct(scratch.arena, CTRL_MetaEval, meval);
-      U64 pos_min = arena_pos(scratch.arena);
-      meval_read = struct_from_serialized(scratch.arena, CTRL_MetaEval, meval_srlzed);
-      U64 pos_opl = arena_pos(scratch.arena);
-      
-      // rjf: rebase all pointer values in meta evaluation to be relative to base pointer
-      struct_rebase_ptrs(CTRL_MetaEval, meval_read, meval_read);
-      
-      // rjf: form legal range
-      meval_legal_range = r1u64(0, pos_opl-pos_min);
-    }goto meta_eval;
-    meta_eval:;
-    {
-      if(contains_1u64(meval_legal_range, range.min))
+      String8 entity_eval_blob = rd_eval_blob_from_entity__cached(entity);
+      Rng1U64 legal_range = r1u64(0, entity_eval_blob.size);
+      Rng1U64 read_range = intersect_1u64(range, legal_range);
+      if(read_range.min < read_range.max)
       {
         result = 1;
-        U64 range_dim = dim_1u64(range);
-        U64 bytes_to_read = Min(range_dim, (meval_legal_range.max - range.min));
-        MemoryCopy(out, ((U8 *)meval_read) + range.min, bytes_to_read);
-        if(bytes_to_read < range_dim)
-        {
-          MemoryZero((U8 *)out + bytes_to_read, range_dim - bytes_to_read);
-        }
+        MemoryCopy(out, entity_eval_blob.str + read_range.min, dim_1u64(read_range));
       }
     }break;
   }
@@ -2969,77 +2979,9 @@ rd_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range)
       scratch_end(scratch);
     }break;
     
-    //- rjf: meta-entity writes
-    case RD_EvalSpaceKind_MetaEntity:
-    {
-      Temp scratch = scratch_begin(0, 0);
-      
-      // rjf: get entity, produce meta-eval
-      RD_Entity *entity = rd_entity_from_eval_space(space);
-      CTRL_MetaEval *meval = rd_ctrl_meta_eval_from_entity(scratch.arena, entity);
-      
-      // rjf: copy meta evaluation to scratch arena, to form range of legal reads
-      arena_push(scratch.arena, 0, 64);
-      String8 meval_srlzed = serialized_from_struct(scratch.arena, CTRL_MetaEval, meval);
-      U64 pos_min = arena_pos(scratch.arena);
-      CTRL_MetaEval *meval_read = struct_from_serialized(scratch.arena, CTRL_MetaEval, meval_srlzed);
-      U64 pos_opl = arena_pos(scratch.arena);
-      
-      // rjf: rebase all pointer values in meta evaluation to be relative to base pointer
-      struct_rebase_ptrs(CTRL_MetaEval, meval_read, meval_read);
-      
-      // rjf: perform write to entity
-      if(0){}
-#define FlatMemberCase(name) else if(range.min == OffsetOf(CTRL_MetaEval, name) && dim_1u64(range) <= sizeof(meval_read->name))
-#define StringMemberCase(name) else if(range.min == (U64)meval_read->name.str)
-      FlatMemberCase(enabled)             {result = 1; rd_entity_equip_disabled(entity, !!((U8 *)in)[0]);}
-      FlatMemberCase(debug_subprocesses)  {result = 1; entity->debug_subprocesses = !!((U8 *)in)[0]; }
-      StringMemberCase(label)             {result = 1; rd_entity_equip_name(entity, str8_cstring_capped(in, (U8 *)in + 4096));}
-      StringMemberCase(exe)               {result = 1; rd_entity_equip_name(rd_entity_child_from_kind_or_alloc(entity, RD_EntityKind_Executable), str8_cstring_capped(in, (U8 *)in + 4096));}
-      StringMemberCase(args)              {result = 1; rd_entity_equip_name(rd_entity_child_from_kind_or_alloc(entity, RD_EntityKind_Arguments), str8_cstring_capped(in, (U8 *)in + 4096));}
-      StringMemberCase(working_directory) {result = 1; rd_entity_equip_name(rd_entity_child_from_kind_or_alloc(entity, RD_EntityKind_WorkingDirectory), str8_cstring_capped(in, (U8 *)in + 4096));}
-      StringMemberCase(entry_point)       {result = 1; rd_entity_equip_name(rd_entity_child_from_kind_or_alloc(entity, RD_EntityKind_EntryPoint), str8_cstring_capped(in, (U8 *)in + 4096));}
-      StringMemberCase(stdout_path)       {result = 1; rd_entity_equip_name(rd_entity_child_from_kind_or_alloc(entity, RD_EntityKind_StdoutPath), str8_cstring_capped(in, (U8 *)in + 4096));}
-      StringMemberCase(stderr_path)       {result = 1; rd_entity_equip_name(rd_entity_child_from_kind_or_alloc(entity, RD_EntityKind_StderrPath), str8_cstring_capped(in, (U8 *)in + 4096));}
-      StringMemberCase(stdin_path)        {result = 1; rd_entity_equip_name(rd_entity_child_from_kind_or_alloc(entity, RD_EntityKind_StdinPath), str8_cstring_capped(in, (U8 *)in + 4096));}
-      StringMemberCase(source_path)       {result = 1; rd_entity_equip_name(rd_entity_child_from_kind_or_alloc(entity, RD_EntityKind_Source), str8_cstring_capped(in, (U8 *)in + 4096));}
-      StringMemberCase(destination_path)  {result = 1; rd_entity_equip_name(rd_entity_child_from_kind_or_alloc(entity, RD_EntityKind_Dest), str8_cstring_capped(in, (U8 *)in + 4096));}
-      StringMemberCase(type)              {result = 1; rd_entity_equip_name(rd_entity_child_from_kind_or_alloc(entity, RD_EntityKind_Source), str8_cstring_capped(in, (U8 *)in + 4096));}
-      StringMemberCase(view_rule)         {result = 1; rd_entity_equip_name(rd_entity_child_from_kind_or_alloc(entity, RD_EntityKind_Dest), str8_cstring_capped(in, (U8 *)in + 4096));}
-      StringMemberCase(condition)         {result = 1; rd_entity_equip_name(rd_entity_child_from_kind_or_alloc(entity, RD_EntityKind_Condition), str8_cstring_capped(in, (U8 *)in + 4096));}
-      StringMemberCase(source_location)
-      {
-        result = 1;
-        String8TxtPtPair src_loc = str8_txt_pt_pair_from_string(str8_cstring_capped(in, (U8 *)in + 4096));
-        RD_Entity *loc = rd_entity_child_from_kind_or_alloc(entity, RD_EntityKind_Location);
-        rd_entity_equip_name(loc, src_loc.string);
-        rd_entity_equip_txt_pt(loc, src_loc.pt);
-      }
-      StringMemberCase(address_location)
-      {
-        U64 vaddr = 0;
-        if(try_u64_from_str8_c_rules(str8_cstring_capped(in, (U8 *)in + 4096), &vaddr))
-        {
-          RD_Entity *loc = rd_entity_child_from_kind_or_alloc(entity, RD_EntityKind_Location);
-          rd_entity_equip_vaddr(loc, vaddr);
-          rd_entity_equip_name(loc, str8_zero());
-          loc->flags &= ~RD_EntityFlag_HasTextPoint;
-          result = 1;
-        }
-      }
-      StringMemberCase(function_location)
-      {
-        result = 1;
-        RD_Entity *loc = rd_entity_child_from_kind_or_alloc(entity, RD_EntityKind_Location);
-        loc->flags &= ~RD_EntityFlag_HasTextPoint;
-        rd_entity_equip_name(loc, str8_cstring_capped(in, (U8 *)in + 4096));
-      }
-#undef FlatMemberCase
-#undef StringMemberCase
-      scratch_end(scratch);
-    }break;
     case RD_EvalSpaceKind_MetaCtrlEntity:
     {
+#if 0  // TODO(rjf): @cfg
       Temp scratch = scratch_begin(0, 0);
       
       // rjf: get entity, produce meta-eval
@@ -3064,6 +3006,7 @@ rd_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range)
 #undef FlatMemberCase
 #undef StringMemberCase
       scratch_end(scratch);
+#endif
     }break;
   }
   return result;
@@ -9362,8 +9305,7 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
       min_digits = (U32)num_value_eval.value.u64;
     }
   }
-  if(eval.space.kind == RD_EvalSpaceKind_MetaEntity ||
-     eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity ||
+  if(eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity ||
      eval.space.kind == RD_EvalSpaceKind_MetaCfg)
   {
     E_TypeKind kind = e_type_kind_from_key(eval.type_key);
@@ -12161,6 +12103,9 @@ rd_frame(void)
   rd_state->cfg2evalblob_map = push_array(rd_frame_arena(), RD_Cfg2EvalBlobMap, 1);
   rd_state->cfg2evalblob_map->slots_count = 256;
   rd_state->cfg2evalblob_map->slots = push_array(rd_frame_arena(), RD_Cfg2EvalBlobSlot, rd_state->cfg2evalblob_map->slots_count);
+  rd_state->entity2evalblob_map = push_array(rd_frame_arena(), RD_Entity2EvalBlobMap, 1);
+  rd_state->entity2evalblob_map->slots_count = 256;
+  rd_state->entity2evalblob_map->slots = push_array(rd_frame_arena(), RD_Entity2EvalBlobSlot, rd_state->entity2evalblob_map->slots_count);
   
   //////////////////////////////
   //- rjf: garbage collect untouched immediate cfg trees
@@ -12863,6 +12808,8 @@ rd_frame(void)
       ctx->macro_map[0] = e_string2expr_map_make(scratch.arena, 512);
       ctx->lookup_rule_map    = push_array(scratch.arena, E_LookupRuleMap, 1);
       ctx->lookup_rule_map[0] = e_lookup_rule_map_make(scratch.arena, 512);
+      ctx->auto_hook_map      = push_array(scratch.arena, E_AutoHookMap, 1);
+      ctx->auto_hook_map[0]   = e_auto_hook_map_make(scratch.arena, 512);
       
       //- rjf: choose set of evallable meta names
       String8 evallable_meta_names[] =
@@ -16302,17 +16249,9 @@ X(getting_started)
                 {
                   default:{is_static_for_ctrl_thread = 0;}break;
                   case E_SpaceKind_Null:
-                  case RD_EvalSpaceKind_MetaEntity:
+                  case RD_EvalSpaceKind_MetaCfg:
                   {
                     is_static_for_ctrl_thread = 1;
-                    RD_Entity *entity = rd_entity_from_eval_space(eval.space);
-                    if(!rd_entity_is_nil(entity))
-                    {
-                      MetaEvalNode *meval_node = push_array(scratch.arena, MetaEvalNode, 1);
-                      meval_node->meval = rd_ctrl_meta_eval_from_entity(scratch.arena, entity);
-                      SLLQueuePush(first_meval, last_meval, meval_node);
-                      meval_count += 1;
-                    }
                   }break;
                 }
               }

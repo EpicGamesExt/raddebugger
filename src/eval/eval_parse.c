@@ -823,6 +823,15 @@ e_expr_copy(Arena *arena, E_Expr *src)
   return result;
 }
 
+internal void
+e_expr_list_push(Arena *arena, E_ExprList *list, E_Expr *expr)
+{
+  E_ExprNode *n = push_array(arena, E_ExprNode, 1);
+  n->v = expr;
+  SLLQueuePush(list->first, list->last, n);
+  list->count +=1;
+}
+
 ////////////////////////////////
 //~ rjf: Expression Tree -> String Conversions
 

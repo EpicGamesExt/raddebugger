@@ -684,6 +684,99 @@ e_irgen_rule_from_string(String8 string)
 }
 
 ////////////////////////////////
+//~ rjf: Auto Hooks
+
+internal E_AutoHookMap
+e_auto_hook_map_make(Arena *arena, U64 slots_count)
+{
+  E_AutoHookMap map = {0};
+  map.slots_count = slots_count;
+  map.slots = push_array(arena, E_AutoHookSlot, map.slots_count);
+  return map;
+}
+
+internal void
+e_auto_hook_map_insert_new(Arena *arena, E_AutoHookMap *map, String8 pattern, String8 tag_expr_string)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  E_TokenArray tokens = e_token_array_from_text(scratch.arena, pattern);
+  E_Parse parse = e_parse_type_from_text_tokens(scratch.arena, pattern, &tokens);
+  E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, parse.expr);
+  E_TypeKey type_key = irtree.type_key;
+  E_AutoHookNode *node = push_array(arena, E_AutoHookNode, 1);
+  node->type_key = type_key;
+  U8 pattern_split = '?';
+  node->type_pattern_parts = str8_split(arena, pattern, &pattern_split, 1, 0);
+  node->tag_expr = e_parse_expr_from_text(arena, push_str8_copy(arena, tag_expr_string));
+  if(!e_type_key_match(e_type_key_zero(), type_key))
+  {
+    U64 hash = e_hash_from_type_key(type_key);
+    U64 slot_idx = map->slots_count;
+    SLLQueuePush_N(map->slots[slot_idx].first, map->slots[slot_idx].last, node, hash_next);
+  }
+  else
+  {
+    SLLQueuePush_N(map->first_pattern, map->last_pattern, node, pattern_order_next);
+  }
+  scratch_end(scratch);
+}
+
+internal E_ExprList
+e_auto_hook_tag_exprs_from_type_key(Arena *arena, E_TypeKey type_key)
+{
+  E_ExprList exprs = {0};
+  {
+    Temp scratch = scratch_begin(&arena, 1);
+    E_AutoHookMap *map = e_ir_ctx->auto_hook_map;
+    
+    //- rjf: gather exact-type-key-matches from the map
+    {
+      U64 hash = e_hash_from_type_key(type_key);
+      U64 slot_idx = hash%map->slots_count;
+      for(E_AutoHookNode *n = map->slots[slot_idx].first; n != 0; n = n->hash_next)
+      {
+        if(e_type_key_match(n->type_key, type_key))
+        {
+          e_expr_list_push(arena, &exprs, n->tag_expr);
+        }
+      }
+    }
+    
+    //- rjf: gather fuzzy matches from all patterns in the map
+    if(map->first_pattern != 0)
+    {
+      String8 type_string = str8_skip_chop_whitespace(e_type_string_from_key(scratch.arena, type_key));
+      for(E_AutoHookNode *auto_hook_node = map->first_pattern; auto_hook_node != 0; auto_hook_node = auto_hook_node->pattern_order_next)
+      {
+        B32 fits_this_type_string = 1;
+        U64 scan_pos = 0;
+        for(String8Node *n = auto_hook_node->type_pattern_parts.first; n != 0; n = n->next)
+        {
+          U64 pattern_part_pos = str8_find_needle(type_string, scan_pos, n->string, 0);
+          if(pattern_part_pos >= type_string.size)
+          {
+            fits_this_type_string = 0;
+            break;
+          }
+          scan_pos = pattern_part_pos + n->string.size;
+        }
+        if(scan_pos < type_string.size)
+        {
+          fits_this_type_string = 0;
+        }
+        if(fits_this_type_string)
+        {
+          e_expr_list_push(arena, &exprs, auto_hook_node->tag_expr);
+        }
+      }
+    }
+    
+    scratch_end(scratch);
+  }
+  return exprs;
+}
+
+////////////////////////////////
 //~ rjf: IR-ization Functions
 
 //- rjf: op list functions
@@ -1767,9 +1860,12 @@ E_IRGEN_FUNCTION_DEF(default)
 internal E_IRTreeAndType
 e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
 {
+  Temp scratch = scratch_begin(&arena, 1);
   E_IRTreeAndType result = {&e_irnode_nil};
-  E_IRGenRule *irgen_rule = &e_irgen_rule__default;
-  E_Expr *irgen_rule_tag = &e_expr_nil;
+  
+  //- rjf: pick the ir-generation rule from explicitly-stored expressions
+  E_IRGenRule *explicit_irgen_rule = &e_irgen_rule__default;
+  E_Expr *explicit_irgen_rule_tag = &e_expr_nil;
   for(E_Expr *tag = expr->first_tag; tag != &e_expr_nil; tag = tag->next)
   {
     String8 name = tag->first->string;
@@ -1789,29 +1885,80 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
       }
       if(!tag_is_poisoned)
       {
-        E_UsedTagNode *n = push_array(arena, E_UsedTagNode, 1);
-        n->tag = tag;
-        DLLPushBack(e_ir_ctx->used_tag_map->slots[slot_idx].first, e_ir_ctx->used_tag_map->slots[slot_idx].last, n);
-        irgen_rule_tag = tag;
-        irgen_rule = irgen_rule_candidate;
+        explicit_irgen_rule = irgen_rule_candidate;
+        explicit_irgen_rule_tag = tag;
         break;
       }
     }
   }
-  result = irgen_rule->irgen(arena, expr, irgen_rule_tag);
-  if(irgen_rule_tag != &e_expr_nil)
+  
+  //- rjf: apply all ir-generation steps
+  typedef struct Task Task;
+  struct Task
   {
-    U64 hash = e_hash_from_string(5381, str8_struct(&irgen_rule_tag));
-    U64 slot_idx = hash%e_ir_ctx->used_tag_map->slots_count;
-    for(E_UsedTagNode *n = e_ir_ctx->used_tag_map->slots[slot_idx].first; n != 0; n = n->next)
+    Task *next;
+    E_IRGenRule *rule;
+    E_Expr *tag;
+  };
+  Task start_task = {0, explicit_irgen_rule, explicit_irgen_rule_tag};
+  Task *first_task = &start_task;
+  Task *last_task = first_task;
+  for(Task *t = first_task; t != 0; t = t->next)
+  {
+    // rjf: poison the tag we are about to use, so we don't recursively use it
+    if(t->tag != &e_expr_nil)
     {
-      if(n->tag == irgen_rule_tag)
+      U64 hash = e_hash_from_string(5381, str8_struct(&t->tag));
+      U64 slot_idx = hash%e_ir_ctx->used_tag_map->slots_count;
+      E_UsedTagNode *n = push_array(arena, E_UsedTagNode, 1);
+      n->tag = t->tag;
+      DLLPushBack(e_ir_ctx->used_tag_map->slots[slot_idx].first, e_ir_ctx->used_tag_map->slots[slot_idx].last, n);
+    }
+    
+    // rjf: do this rule's generation
+    result = t->rule->irgen(arena, expr, t->tag);
+    
+    // rjf: find any auto hooks according to this generation's type
+    {
+      E_ExprList exprs = e_auto_hook_tag_exprs_from_type_key(scratch.arena, result.type_key);
+      for(E_ExprNode *n = exprs.first; n != 0; n = n->next)
       {
-        DLLRemove(e_ir_ctx->used_tag_map->slots[slot_idx].first, e_ir_ctx->used_tag_map->slots[slot_idx].last, n);
-        break;
+        for(E_Expr *tag = n->v; tag != &e_expr_nil; tag = tag->next)
+        {
+          E_IRGenRule *rule = e_irgen_rule_from_string(tag->first->string);
+          if(rule == &e_irgen_rule__default) { rule = e_irgen_rule_from_string(tag->string); }
+          if(rule != &e_irgen_rule__default)
+          {
+            Task *task = push_array(scratch.arena, Task, 1);
+            SLLQueuePush(first_task, last_task, task);
+            task->rule = rule;
+            task->tag = tag;
+            break;
+          }
+        }
       }
     }
   }
+  
+  //- rjf: unpoison the tags we used
+  for(Task *t = first_task; t != 0; t = t->next)
+  {
+    if(t->tag != &e_expr_nil)
+    {
+      U64 hash = e_hash_from_string(5381, str8_struct(&t->tag));
+      U64 slot_idx = hash%e_ir_ctx->used_tag_map->slots_count;
+      for(E_UsedTagNode *n = e_ir_ctx->used_tag_map->slots[slot_idx].first; n != 0; n = n->next)
+      {
+        if(n->tag == t->tag)
+        {
+          DLLRemove(e_ir_ctx->used_tag_map->slots[slot_idx].first, e_ir_ctx->used_tag_map->slots[slot_idx].last, n);
+          break;
+        }
+      }
+    }
+  }
+  
+  scratch_end(scratch);
   return result;
 }
 
