@@ -283,7 +283,7 @@ global read_only EV_ViewRuleInfo ev_nil_view_rule_info =
 };
 thread_static EV_ViewRuleInfoTable *ev_view_rule_info_table = 0;
 thread_static EV_AutoViewRuleTable *ev_auto_view_rule_table = 0;
-global read_only EV_Block ev_nil_block = {&ev_nil_block, &ev_nil_block, &ev_nil_block, &ev_nil_block, &ev_nil_block, {0}, 0, {0}, &e_expr_nil, &e_expr_nil, &e_expr_nil, &e_lookup_rule__default, &ev_nil_view_rule_info};
+global read_only EV_Block ev_nil_block = {&ev_nil_block, &ev_nil_block, &ev_nil_block, &ev_nil_block, &ev_nil_block, {0}, 0, {0}, &e_expr_nil, &e_expr_nil, &e_expr_nil, &e_lookup_rule__nil, &ev_nil_view_rule_info};
 
 ////////////////////////////////
 //~ rjf: Key Functions

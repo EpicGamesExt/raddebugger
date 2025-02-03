@@ -242,6 +242,15 @@ struct E_IRCtx
 ////////////////////////////////
 //~ rjf: Globals
 
+local_persist read_only E_LookupRule e_lookup_rule__nil =
+{
+  str8_lit_comp("nil"),
+  E_LOOKUP_INFO_FUNCTION_NAME(default),
+  E_LOOKUP_ACCESS_FUNCTION_NAME(default),
+  E_LOOKUP_RANGE_FUNCTION_NAME(default),
+  E_LOOKUP_ID_FROM_NUM_FUNCTION_NAME(default),
+  E_LOOKUP_NUM_FROM_ID_FUNCTION_NAME(default),
+};
 local_persist read_only E_LookupRule e_lookup_rule__default =
 {
   str8_lit_comp("default"),

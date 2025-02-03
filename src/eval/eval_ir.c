@@ -101,7 +101,7 @@ e_lookup_rule_map_insert(Arena *arena, E_LookupRuleMap *map, E_LookupRule *rule)
 internal E_LookupRule *
 e_lookup_rule_from_string(String8 string)
 {
-  E_LookupRule *result = &e_lookup_rule__default;
+  E_LookupRule *result = &e_lookup_rule__nil;
   if(e_ir_ctx->lookup_rule_map != 0 && e_ir_ctx->lookup_rule_map->slots_count != 0)
   {
     U64 hash = e_hash_from_string(5381, string);

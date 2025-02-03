@@ -508,7 +508,7 @@ ev_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, String8 str
       {
         E_LookupRule *lookup_rule_candidate = e_lookup_rule_from_string(tag->first->string);
         EV_ViewRuleInfo *expand_rule_candidate = ev_view_rule_info_from_string(tag->first->string);
-        if(lookup_rule_candidate != &e_lookup_rule__default)
+        if(lookup_rule_candidate != &e_lookup_rule__nil)
         {
           lookup_rule = lookup_rule_candidate;
           lookup_rule_tag = tag;
@@ -946,6 +946,7 @@ ev_windowed_row_list_from_block_range_list(Arena *arena, EV_View *view, String8 
       if(block_relative_range__windowed.max > block_relative_range__windowed.min)
       {
         // rjf: get info about expansion range
+        B32 is_root = 0;
         U64 range_exprs_count = dim_1u64(block_relative_range__windowed);
         E_Expr **range_exprs = push_array(arena, E_Expr *, range_exprs_count);
         String8 *range_exprs_strings = push_array(arena, String8 ,range_exprs_count);
@@ -953,10 +954,17 @@ ev_windowed_row_list_from_block_range_list(Arena *arena, EV_View *view, String8 
         {
           range_exprs[idx] = &e_expr_nil;
         }
-        n->v.block->lookup_rule->range(arena, n->v.block->expr, block_relative_range__windowed, range_exprs, range_exprs_strings, n->v.block->lookup_rule_user_data);
+        if(n->v.block->lookup_rule == &e_lookup_rule__nil)
+        {
+          is_root = 1;
+        }
+        else
+        {
+          n->v.block->lookup_rule->range(arena, n->v.block->expr, block_relative_range__windowed, range_exprs, range_exprs_strings, n->v.block->lookup_rule_user_data);
+        }
         
         // rjf: no expansion operator applied -> push row for block expression; pass through block info
-        if(range_exprs_count == 0)
+        if(is_root)
         {
           EV_WindowedRowNode *row_node = push_array(arena, EV_WindowedRowNode, 1);
           SLLQueuePush(rows.first, rows.last, row_node);
