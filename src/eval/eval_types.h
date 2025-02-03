@@ -197,6 +197,23 @@ struct E_ConsTypeSlot
   E_ConsTypeNode *last;
 };
 
+//- rjf: unpacked type cache
+
+typedef struct E_TypeCacheNode E_TypeCacheNode;
+struct E_TypeCacheNode
+{
+  E_TypeCacheNode *next;
+  E_TypeKey key;
+  E_Type *type;
+};
+
+typedef struct E_TypeCacheSlot E_TypeCacheSlot;
+struct E_TypeCacheSlot
+{
+  E_TypeCacheNode *first;
+  E_TypeCacheNode *last;
+};
+
 //- rjf: member lookup cache types
 
 typedef struct E_MemberHashNode E_MemberHashNode;
@@ -266,6 +283,10 @@ struct E_TypeState
   // rjf: member cache table
   U64 member_cache_slots_count;
   E_MemberCacheSlot *member_cache_slots;
+  
+  // rjf: unpacked type cache
+  U64 type_cache_slots_count;
+  E_TypeCacheSlot *type_cache_slots;
 };
 
 ////////////////////////////////
@@ -325,10 +346,11 @@ internal E_TypeKey e_type_key_cons_base(Type *type);
 internal B32 e_type_key_match(E_TypeKey l, E_TypeKey r);
 
 //- rjf: key -> info extraction
-internal U64 e_hash_from_type_key(E_TypeKey key);
+internal U64 e_hash_from_type(E_Type *type);
 internal E_TypeKind e_type_kind_from_key(E_TypeKey key);
 internal U64 e_type_byte_size_from_key(E_TypeKey key);
 internal E_Type *e_type_from_key(Arena *arena, E_TypeKey key);
+internal E_Type *e_type_from_key__cached(E_TypeKey key);
 internal E_TypeKey e_type_direct_from_key(E_TypeKey key);
 internal E_TypeKey e_type_owner_from_key(E_TypeKey key);
 internal E_TypeKey e_type_ptee_from_key(E_TypeKey key);

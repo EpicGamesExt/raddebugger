@@ -2431,7 +2431,7 @@ rd_eval_blob_from_cfg(Arena *arena, RD_Cfg *cfg)
     String8List fixed_width_parts = {0};
     String8List variable_width_parts = {0};
     {
-      E_Type *type = e_type_from_key(scratch.arena, type_key);
+      E_Type *type = e_type_from_key__cached(type_key);
       if(type->members != 0) for EachIndex(member_idx, type->count)
       {
         E_Member *member = &type->members[member_idx];
@@ -2528,7 +2528,7 @@ rd_eval_blob_from_entity(Arena *arena, CTRL_Entity *entity)
     String8List fixed_width_parts = {0};
     String8List variable_width_parts = {0};
     {
-      E_Type *type = e_type_from_key(scratch.arena, type_key);
+      E_Type *type = e_type_from_key__cached(type_key);
       if(type->members != 0) for EachIndex(member_idx, type->count)
       {
         E_Member *member = &type->members[member_idx];
@@ -2870,7 +2870,7 @@ rd_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range)
       MD_Node *schema = rd_schema_from_name(scratch.arena, cfg->string);
       String8 name = cfg->string;
       E_TypeKey type_key = e_string2typekey_map_lookup(rd_state->meta_name2type_map, name);
-      E_Type *type = e_type_from_key(scratch.arena, type_key);
+      E_Type *type = e_type_from_key__cached(type_key);
       
       // rjf: find member to which this write applies, reflect back in the cfg tree
       if(type->members != 0) for EachIndex(member_idx, type->count)
@@ -8993,9 +8993,8 @@ E_LOOKUP_INFO_FUNCTION_DEF(top_level_cfg)
   E_LookupInfo result = {0};
   Temp scratch = scratch_begin(&arena, 1);
   {
-    E_IRTreeAndType lhs_irtree = e_irtree_and_type_from_expr(scratch.arena, lhs);
-    E_TypeKey lhs_type_key = lhs_irtree.type_key;
-    E_Type *lhs_type = e_type_from_key(scratch.arena, lhs_type_key);
+    E_TypeKey lhs_type_key = lhs->type_key;
+    E_Type *lhs_type = e_type_from_key__cached(lhs_type_key);
     String8 cfg_name = rd_singular_from_code_name_plural(lhs_type->name);
     RD_CfgList cfgs_list = rd_cfg_top_level_list_from_string(scratch.arena, cfg_name);
     RD_CfgArray *cfgs = push_array(arena, RD_CfgArray, 1);
@@ -9039,9 +9038,8 @@ E_LOOKUP_INFO_FUNCTION_DEF(ctrl_entities)
   E_LookupInfo result = {0};
   Temp scratch = scratch_begin(&arena, 1);
   {
-    E_IRTreeAndType lhs_irtree = e_irtree_and_type_from_expr(scratch.arena, lhs);
-    E_TypeKey lhs_type_key = lhs_irtree.type_key;
-    E_Type *lhs_type = e_type_from_key(scratch.arena, lhs_type_key);
+    E_TypeKey lhs_type_key = lhs->type_key;
+    E_Type *lhs_type = e_type_from_key__cached(lhs_type_key);
     String8 name = rd_singular_from_code_name_plural(lhs_type->name);
     CTRL_EntityKind entity_kind = CTRL_EntityKind_Null;
     for EachNonZeroEnumVal(CTRL_EntityKind, k)
@@ -9119,9 +9117,8 @@ E_LOOKUP_INFO_FUNCTION_DEF(debug_info_table)
   // rjf: determine which debug info section we're dealing with
   RDI_SectionKind section = RDI_SectionKind_NULL;
   {
-    E_IRTreeAndType lhs_irtree = e_irtree_and_type_from_expr(scratch.arena, lhs);
-    E_TypeKey lhs_type_key = lhs_irtree.type_key;
-    E_Type *lhs_type = e_type_from_key(scratch.arena, lhs_type_key);
+    E_TypeKey lhs_type_key = lhs->type_key;
+    E_Type *lhs_type = e_type_from_key__cached(lhs_type_key);
     if(0){}
     else if(str8_match(lhs_type->name, str8_lit("procedures"), 0))       {section = RDI_SectionKind_Procedures;}
     else if(str8_match(lhs_type->name, str8_lit("globals"), 0))          {section = RDI_SectionKind_GlobalVariables;}
@@ -9296,8 +9293,8 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
     else if(str8_match(tag->string, str8_lit("oct"), 0)) {radix = 8; }
     else if(str8_match(tag->string, str8_lit("no_addr"), 0)) {no_addr = 1;}
     else if(str8_match(tag->string, str8_lit("no_string"), 0)) {no_string = 1;}
-    else if(str8_match(tag->first->string, str8_lit("array"), 0)) {has_array = 1;}
-    else if(str8_match(tag->first->string, str8_lit("digits"), 0))
+    else if(str8_match(tag->string, str8_lit("array"), 0)) {has_array = 1;}
+    else if(str8_match(tag->string, str8_lit("digits"), 0))
     {
       E_Expr *num_expr = tag->first->next;
       E_Eval num_eval = e_eval_from_expr(scratch.arena, num_expr);
@@ -9315,7 +9312,7 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
     }
     else
     {
-      E_Type *type = e_type_from_key(scratch.arena, eval.type_key);
+      E_Type *type = e_type_from_key__cached(eval.type_key);
       if(!(type->flags & E_TypeFlag_External))
       {
         no_addr = 1;
@@ -9484,7 +9481,7 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
     case E_TypeKind_Array:
     {
       // rjf: unpack type info
-      E_Type *eval_type = e_type_from_key(scratch.arena, e_type_unwrap(eval.type_key));
+      E_Type *eval_type = e_type_from_key__cached(e_type_unwrap(eval.type_key));
       E_TypeKey direct_type_key = e_type_unwrap(eval_type->direct_type_key);
       E_TypeKind direct_type_kind = e_type_kind_from_key(direct_type_key);
       U64 array_count = eval_type->count;
@@ -9594,6 +9591,8 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
     case E_TypeKind_IncompleteUnion:
     case E_TypeKind_IncompleteClass:
     {
+      ProfBegin("struct");
+      
       // rjf: open brace
       {
         String8 brace = str8_lit("{");
@@ -9608,21 +9607,23 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
         for(U64 member_idx = 0; member_idx < data_members.count && max_size > space_taken; member_idx += 1)
         {
           E_Member *mem = &data_members.v[member_idx];
-          E_Expr *dot_expr = e_expr_ref_member_access(scratch.arena, eval.expr, mem->name);
-          E_Expr *dot_expr_resolved = ev_resolved_from_expr(scratch.arena, dot_expr);
-          E_Eval dot_eval = e_eval_from_expr(scratch.arena, dot_expr_resolved);
-          space_taken += rd_append_value_strings_from_eval(arena, flags, radix, font, font_size, max_size-space_taken, depth+1, dot_eval, out);
-          if(member_idx+1 < data_members.count)
+          ProfScope("member %.*s", str8_varg(mem->name))
           {
-            String8 comma = str8_lit(", ");
-            space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, comma).x;
-            str8_list_push(arena, out, comma);
-          }
-          if(space_taken > max_size && member_idx+1 < data_members.count)
-          {
-            String8 ellipses = str8_lit("...");
-            space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, ellipses).x;
-            str8_list_push(arena, out, ellipses);
+            E_Expr *dot_expr = e_expr_ref_member_access(scratch.arena, eval.expr, mem->name);
+            E_Eval dot_eval = e_eval_from_expr(scratch.arena, dot_expr);
+            space_taken += rd_append_value_strings_from_eval(arena, flags, radix, font, font_size, max_size-space_taken, depth+1, dot_eval, out);
+            if(member_idx+1 < data_members.count)
+            {
+              String8 comma = str8_lit(", ");
+              space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, comma).x;
+              str8_list_push(arena, out, comma);
+            }
+            if(space_taken > max_size && member_idx+1 < data_members.count)
+            {
+              String8 ellipses = str8_lit("...");
+              space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, ellipses).x;
+              str8_list_push(arena, out, ellipses);
+            }
           }
         }
       }
@@ -9639,6 +9640,8 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
         str8_list_push(arena, out, brace);
         space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, brace).x;
       }
+      
+      ProfEnd();
     }break;
   }
   
@@ -12802,6 +12805,7 @@ rd_frame(void)
     //
     E_TypeKey meta_eval_type_key = e_type_key_cons_base(type(CTRL_MetaEval));
     E_IRCtx *ir_ctx = push_array(scratch.arena, E_IRCtx, 1);
+    e_ir_ctx = 0;
     {
       E_IRCtx *ctx = ir_ctx;
       ctx->macro_map    = push_array(scratch.arena, E_String2ExprMap, 1);
@@ -12810,6 +12814,12 @@ rd_frame(void)
       ctx->lookup_rule_map[0] = e_lookup_rule_map_make(scratch.arena, 512);
       ctx->auto_hook_map      = push_array(scratch.arena, E_AutoHookMap, 1);
       ctx->auto_hook_map[0]   = e_auto_hook_map_make(scratch.arena, 512);
+      ctx->used_tag_map       = push_array(scratch.arena, E_UsedTagMap, 1);
+      ctx->used_tag_map->slots_count = 64;
+      ctx->used_tag_map->slots = push_array(scratch.arena, E_UsedTagSlot, ctx->used_tag_map->slots_count);
+      ctx->type_auto_hook_cache_map = push_array(scratch.arena, E_TypeAutoHookCacheMap, 1);
+      ctx->type_auto_hook_cache_map->slots_count = 256;
+      ctx->type_auto_hook_cache_map->slots = push_array(scratch.arena, E_TypeAutoHookCacheSlot, ctx->type_auto_hook_cache_map->slots_count);
       
       //- rjf: choose set of evallable meta names
       String8 evallable_meta_names[] =
@@ -12980,6 +12990,7 @@ rd_frame(void)
             e_string2expr_map_insert(scratch.arena, ctx->macro_map, str8_lit("current_module"), expr);
           }
         }
+        e_auto_hook_map_insert_new(scratch.arena, ctx->auto_hook_map, name, name);
       }
       
       //- rjf: add macro for collections with specific lookup rules

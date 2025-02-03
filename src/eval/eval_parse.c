@@ -2038,6 +2038,10 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
       it += 1;
       E_Expr *callee_expr = atom;
       E_Expr *call_expr = e_push_expr(arena, E_ExprKind_Call, token_string.str);
+      if(callee_expr->kind == E_ExprKind_LeafIdent)
+      {
+        call_expr->string = callee_expr->string;
+      }
       e_expr_push_child(call_expr, callee_expr);
       for(B32 done = 0; !done && it < it_opl;)
       {

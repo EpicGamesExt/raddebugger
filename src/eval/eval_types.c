@@ -250,6 +250,8 @@ e_select_type_ctx(E_TypeCtx *ctx)
   e_type_state->cons_key_slots = push_array(e_type_state->arena, E_ConsTypeSlot, e_type_state->cons_key_slots_count);
   e_type_state->member_cache_slots_count = 256;
   e_type_state->member_cache_slots = push_array(e_type_state->arena, E_MemberCacheSlot, e_type_state->member_cache_slots_count);
+  e_type_state->type_cache_slots_count = 1024;
+  e_type_state->type_cache_slots = push_array(e_type_state->arena, E_TypeCacheSlot, e_type_state->type_cache_slots_count);
 }
 
 ////////////////////////////////
@@ -522,13 +524,12 @@ e_type_key_match(E_TypeKey l, E_TypeKey r)
 //- rjf: key -> info extraction
 
 internal U64
-e_hash_from_type_key(E_TypeKey key)
+e_hash_from_type(E_Type *type)
 {
   U64 hash = 0;
-  if(!e_type_key_match(e_type_key_zero(), key))
+  if(type != &e_type_nil)
   {
     Temp scratch = scratch_begin(0, 0);
-    E_Type *type = e_type_from_key(scratch.arena, key);
     String8List strings = {0};
     str8_serial_begin(scratch.arena, &strings);
     str8_serial_push_struct(scratch.arena, &strings, &type->kind);
@@ -1133,6 +1134,34 @@ e_type_from_key(Arena *arena, E_TypeKey key)
   return type;
 }
 
+internal E_Type *
+e_type_from_key__cached(E_TypeKey key)
+{
+  E_Type *type = &e_type_nil;
+  {
+    U64 hash = e_hash_from_string(5381, str8_struct(&key));
+    U64 slot_idx = hash%e_type_state->type_cache_slots_count;
+    E_TypeCacheNode *node = 0;
+    for(E_TypeCacheNode *n = e_type_state->type_cache_slots[slot_idx].first; n != 0; n = n->next)
+    {
+      if(e_type_key_match(key, n->key))
+      {
+        node = n;
+        break;
+      }
+    }
+    if(node == 0)
+    {
+      node = push_array(e_type_state->arena, E_TypeCacheNode, 1);
+      node->key = key;
+      node->type = e_type_from_key(e_type_state->arena, key);
+      SLLQueuePush(e_type_state->type_cache_slots[slot_idx].first, e_type_state->type_cache_slots[slot_idx].last, node);
+    }
+    type = node->type;
+  }
+  return type;
+}
+
 internal U64
 e_type_byte_size_from_key(E_TypeKey key)
 {
@@ -1185,10 +1214,8 @@ e_type_direct_from_key(E_TypeKey key)
     case E_TypeKeyKind_Ext:
     case E_TypeKeyKind_Cons:
     {
-      Temp scratch = scratch_begin(0, 0);
-      E_Type *type = e_type_from_key(scratch.arena, key);
+      E_Type *type = e_type_from_key__cached(key);
       result = type->direct_type_key;
-      scratch_end(scratch);
     }break;
   }
   return result;
@@ -1204,10 +1231,8 @@ e_type_owner_from_key(E_TypeKey key)
     case E_TypeKeyKind_Ext:
     case E_TypeKeyKind_Cons:
     {
-      Temp scratch = scratch_begin(0, 0);
-      E_Type *type = e_type_from_key(scratch.arena, key);
+      E_Type *type = e_type_from_key__cached(key);
       result = type->owner_type_key;
-      scratch_end(scratch);
     }break;
   }
   return result;
@@ -1346,21 +1371,18 @@ e_type_match(E_TypeKey l, E_TypeKey r)
         
         case E_TypeKind_Array:
         {
-          Temp scratch = scratch_begin(0, 0);
-          E_Type *lt = e_type_from_key(scratch.arena, l);
-          E_Type *rt = e_type_from_key(scratch.arena, r);
+          E_Type *lt = e_type_from_key__cached(l);
+          E_Type *rt = e_type_from_key__cached(r);
           if(lt->count == rt->count && e_type_match(lt->direct_type_key, rt->direct_type_key))
           {
             result = 1;
           }
-          scratch_end(scratch);
         }break;
         
         case E_TypeKind_Function:
         {
-          Temp scratch = scratch_begin(0, 0);
-          E_Type *lt = e_type_from_key(scratch.arena, l);
-          E_Type *rt = e_type_from_key(scratch.arena, r);
+          E_Type *lt = e_type_from_key__cached(l);
+          E_Type *rt = e_type_from_key__cached(r);
           if(lt->count == rt->count && e_type_match(lt->direct_type_key, rt->direct_type_key))
           {
             B32 params_match = 1;
@@ -1377,14 +1399,12 @@ e_type_match(E_TypeKey l, E_TypeKey r)
             }
             result = params_match;
           }
-          scratch_end(scratch);
         }break;
         
         case E_TypeKind_Method:
         {
-          Temp scratch = scratch_begin(0, 0);
-          E_Type *lt = e_type_from_key(scratch.arena, l);
-          E_Type *rt = e_type_from_key(scratch.arena, r);
+          E_Type *lt = e_type_from_key__cached(l);
+          E_Type *rt = e_type_from_key__cached(r);
           if(lt->count == rt->count &&
              e_type_match(lt->direct_type_key, rt->direct_type_key) &&
              e_type_match(lt->owner_type_key, rt->owner_type_key))
@@ -1403,7 +1423,6 @@ e_type_match(E_TypeKey l, E_TypeKey r)
             }
             result = params_match;
           }
-          scratch_end(scratch);
         }break;
       }
     }
@@ -1448,7 +1467,7 @@ e_type_data_members_from_key(Arena *arena, E_TypeKey key)
   E_MemberList members_list = {0};
   B32 members_need_offset_sort = 0;
   {
-    E_Type *root_type = e_type_from_key(scratch.arena, key);
+    E_Type *root_type = e_type_from_key__cached(key);
     typedef struct Task Task;
     struct Task
     {
@@ -1487,7 +1506,7 @@ e_type_data_members_from_key(Arena *arena, E_TypeKey key)
             t->inheritance_chain = e_type_key_list_copy(scratch.arena, &task->inheritance_chain);
             e_type_key_list_push(scratch.arena, &t->inheritance_chain, type->members[member_idx].type_key);
             t->type_key = type->members[member_idx].type_key;
-            t->type = e_type_from_key(scratch.arena, type->members[member_idx].type_key);
+            t->type = e_type_from_key__cached(type->members[member_idx].type_key);
             SLLQueuePush(first_task, last_task, t);
             members_need_offset_sort = 1;
           }
@@ -1608,26 +1627,21 @@ e_type_lhs_string_from_key(Arena *arena, E_TypeKey key, String8List *out, U32 pr
   {
     default:
     {
-      Temp scratch = scratch_begin(&arena, 1);
-      E_Type *type = e_type_from_key(scratch.arena, key);
+      E_Type *type = e_type_from_key__cached(key);
       str8_list_push(arena, out, push_str8_copy(arena, type->name));
       str8_list_push(arena, out, str8_lit(" "));
-      scratch_end(scratch);
     }break;
     
     case E_TypeKind_Bitfield:
     {
-      Temp scratch = scratch_begin(&arena, 1);
-      E_Type *type = e_type_from_key(scratch.arena, key);
+      E_Type *type = e_type_from_key__cached(key);
       e_type_lhs_string_from_key(arena, type->direct_type_key, out, prec, skip_return);
       str8_list_pushf(arena, out, ": %I64u", type->count);
-      scratch_end(scratch);
     }break;
     
     case E_TypeKind_Modifier:
     {
-      Temp scratch = scratch_begin(&arena, 1);
-      E_Type *type = e_type_from_key(scratch.arena, key);
+      E_Type *type = e_type_from_key__cached(key);
       E_TypeKey direct = type->direct_type_key;
       e_type_lhs_string_from_key(arena, direct, out, 1, skip_return);
       if(type->flags & E_TypeFlag_Const)
@@ -1638,7 +1652,6 @@ e_type_lhs_string_from_key(Arena *arena, E_TypeKey key, String8List *out, U32 pr
       {
         str8_list_push(arena, out, str8_lit("volatile "));
       }
-      scratch_end(scratch);
     }break;
     
     case E_TypeKind_Variadic:
@@ -1652,11 +1665,9 @@ e_type_lhs_string_from_key(Arena *arena, E_TypeKey key, String8List *out, U32 pr
     case E_TypeKind_Class:
     case E_TypeKind_Alias:
     {
-      Temp scratch = scratch_begin(&arena, 1);
-      E_Type *type = e_type_from_key(scratch.arena, key);
+      E_Type *type = e_type_from_key__cached(key);
       str8_list_push(arena, out, push_str8_copy(arena, type->name));
       str8_list_push(arena, out, str8_lit(" "));
-      scratch_end(scratch);
     }break;
     
     case E_TypeKind_IncompleteStruct: keyword = str8_lit("struct"); goto fwd_udt;
@@ -1665,13 +1676,11 @@ e_type_lhs_string_from_key(Arena *arena, E_TypeKey key, String8List *out, U32 pr
     case E_TypeKind_IncompleteClass:  keyword = str8_lit("class"); goto fwd_udt;
     fwd_udt:;
     {
-      Temp scratch = scratch_begin(&arena, 1);
-      E_Type *type = e_type_from_key(scratch.arena, key);
+      E_Type *type = e_type_from_key__cached(key);
       str8_list_push(arena, out, keyword);
       str8_list_push(arena, out, str8_lit(" "));
       str8_list_push(arena, out, push_str8_copy(arena, type->name));
       str8_list_push(arena, out, str8_lit(" "));
-      scratch_end(scratch);
     }break;
     
     case E_TypeKind_Array:
@@ -1726,11 +1735,10 @@ e_type_lhs_string_from_key(Arena *arena, E_TypeKey key, String8List *out, U32 pr
     
     case E_TypeKind_MemberPtr:
     {
-      Temp scratch = scratch_begin(&arena, 1);
-      E_Type *type = e_type_from_key(scratch.arena, key);
+      E_Type *type = e_type_from_key__cached(key);
       E_TypeKey direct = type->direct_type_key;
       e_type_lhs_string_from_key(arena, direct, out, 1, skip_return);
-      E_Type *container = e_type_from_key(scratch.arena, type->owner_type_key);
+      E_Type *container = e_type_from_key__cached(type->owner_type_key);
       if(container->kind != E_TypeKind_Null)
       {
         str8_list_push(arena, out, push_str8_copy(arena, container->name));
@@ -1740,7 +1748,6 @@ e_type_lhs_string_from_key(Arena *arena, E_TypeKey key, String8List *out, U32 pr
         str8_list_push(arena, out, str8_lit("<unknown-class>"));
       }
       str8_list_push(arena, out, str8_lit("::*"));
-      scratch_end(scratch);
     }break;
   }
 }
@@ -1771,8 +1778,7 @@ e_type_rhs_string_from_key(Arena *arena, E_TypeKey key, String8List *out, U32 pr
     
     case E_TypeKind_Array:
     {
-      Temp scratch = scratch_begin(&arena, 1);
-      E_Type *type = e_type_from_key(scratch.arena, key);
+      E_Type *type = e_type_from_key__cached(key);
       if(prec == 1)
       {
         str8_list_push(arena, out, str8_lit(")"));
@@ -1783,13 +1789,11 @@ e_type_rhs_string_from_key(Arena *arena, E_TypeKey key, String8List *out, U32 pr
       str8_list_push(arena, out, str8_lit("]"));
       E_TypeKey direct = e_type_direct_from_key(key);
       e_type_rhs_string_from_key(arena, direct, out, 2);
-      scratch_end(scratch);
     }break;
     
     case E_TypeKind_Function:
     {
-      Temp scratch = scratch_begin(&arena, 1);
-      E_Type *type = e_type_from_key(scratch.arena, key);
+      E_Type *type = e_type_from_key__cached(key);
       if(prec == 1)
       {
         str8_list_push(arena, out, str8_lit(")"));
@@ -1818,7 +1822,6 @@ e_type_rhs_string_from_key(Arena *arena, E_TypeKey key, String8List *out, U32 pr
       }
       E_TypeKey direct = e_type_direct_from_key(key);
       e_type_rhs_string_from_key(arena, direct, out, 2);
-      scratch_end(scratch);
     }break;
   }
 }

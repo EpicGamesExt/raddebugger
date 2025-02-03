@@ -7,6 +7,7 @@
 internal E_Eval
 e_eval_from_expr(Arena *arena, E_Expr *expr)
 {
+  ProfBeginFunction();
   E_IRTreeAndType  irtree   = e_irtree_and_type_from_expr(arena, expr);
   E_OpList         oplist   = e_oplist_from_irtree(arena, irtree.root);
   String8          bytecode = e_bytecode_from_oplist(arena, &oplist);
@@ -25,6 +26,7 @@ e_eval_from_expr(Arena *arena, E_Expr *expr)
   {
     e_msg(arena, &eval.msgs, E_MsgKind_InterpretationError, 0, e_interpretation_code_display_strings[eval.code]);
   }
+  ProfEnd();
   return eval;
 }
 
@@ -83,7 +85,7 @@ e_dynamically_typed_eval_from_eval(E_Eval eval)
     E_TypeKind ptee_type_kind = e_type_kind_from_key(ptee_type_key);
     if(ptee_type_kind == E_TypeKind_Struct || ptee_type_kind == E_TypeKind_Class)
     {
-      E_Type *ptee_type = e_type_from_key(scratch.arena, ptee_type_key);
+      E_Type *ptee_type = e_type_from_key__cached(ptee_type_key);
       B32 has_vtable = 0;
       for(U64 idx = 0; idx < ptee_type->count; idx += 1)
       {
@@ -166,7 +168,7 @@ e_value_eval_from_eval(E_Eval eval)
         if(type_kind == E_TypeKind_Bitfield && type_byte_size <= sizeof(U64))
         {
           Temp scratch = scratch_begin(0, 0);
-          E_Type *type = e_type_from_key(scratch.arena, type_key);
+          E_Type *type = e_type_from_key__cached(type_key);
           U64 valid_bits_mask = 0;
           for(U64 idx = 0; idx < type->count; idx += 1)
           {

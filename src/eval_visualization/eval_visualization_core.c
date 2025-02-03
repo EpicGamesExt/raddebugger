@@ -374,6 +374,7 @@ ev_view_rule_info_from_string(String8 string)
 ////////////////////////////////
 //~ rjf: Expression Resolution (Dynamic Overrides, View Rule Application)
 
+#if 0 // TODO(rjf): @cfg
 internal E_Expr *
 ev_resolved_from_expr(Arena *arena, E_Expr *expr)
 {
@@ -387,7 +388,7 @@ ev_resolved_from_expr(Arena *arena, E_Expr *expr)
     E_TypeKind ptee_type_kind = e_type_kind_from_key(ptee_type_key);
     if(ptee_type_kind == E_TypeKind_Struct || ptee_type_kind == E_TypeKind_Class)
     {
-      E_Type *ptee_type = e_type_from_key(scratch.arena, ptee_type_key);
+      E_Type *ptee_type = e_type_from_key__cached(ptee_type_key);
       B32 has_vtable = 0;
       for(U64 idx = 0; idx < ptee_type->count; idx += 1)
       {
@@ -443,6 +444,7 @@ ev_resolved_from_expr(Arena *arena, E_Expr *expr)
   ProfEnd();
   return expr;
 }
+#endif
 
 ////////////////////////////////
 //~ rjf: Block Building
@@ -461,7 +463,7 @@ ev_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, String8 str
     MemoryCopyStruct(tree.root, &ev_nil_block);
     tree.root->key        = ev_key_root();
     tree.root->string     = string;
-    tree.root->expr       = ev_resolved_from_expr(arena, expr);
+    tree.root->expr       = expr;
     tree.root->row_count  = 1;
     tree.total_row_count += 1;
     tree.total_item_count += 1;
@@ -499,6 +501,9 @@ ev_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, String8 str
         continue;
       }
       
+      // rjf: unpack expr
+      E_IRTreeAndType expr_irtree = e_irtree_and_type_from_expr(scratch.arena, t->expr);
+      
       // rjf: get expansion view rule info
       E_LookupRule *lookup_rule = &e_lookup_rule__default;
       EV_ViewRuleInfo *expand_rule = default_expand_view_rule_info;
@@ -506,8 +511,8 @@ ev_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, String8 str
       E_Expr *expand_rule_tag = &e_expr_nil;
       for(E_Expr *tag = t->expr->first_tag; tag != &e_expr_nil; tag = tag->next)
       {
-        E_LookupRule *lookup_rule_candidate = e_lookup_rule_from_string(tag->first->string);
-        EV_ViewRuleInfo *expand_rule_candidate = ev_view_rule_info_from_string(tag->first->string);
+        E_LookupRule *lookup_rule_candidate = e_lookup_rule_from_string(tag->string);
+        EV_ViewRuleInfo *expand_rule_candidate = ev_view_rule_info_from_string(tag->string);
         if(lookup_rule_candidate != &e_lookup_rule__nil)
         {
           lookup_rule = lookup_rule_candidate;
@@ -525,12 +530,11 @@ ev_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, String8 str
       if(lookup_rule == &e_lookup_rule__default ||
          expand_rule == default_expand_view_rule_info)
       {
-        E_IRTreeAndType expr_irtree = e_irtree_and_type_from_expr(scratch.arena, t->expr);
         E_TypeKey expr_type_key = expr_irtree.type_key;
         E_TypeKind expr_type_kind = e_type_kind_from_key(expr_type_key);
         if(expr_type_kind == E_TypeKind_Set)
         {
-          E_Type *expr_type = e_type_from_key(scratch.arena, expr_type_key);
+          E_Type *expr_type = e_type_from_key__cached(expr_type_key);
           if(lookup_rule == &e_lookup_rule__default)
           {
             lookup_rule = e_lookup_rule_from_string(expr_type->name);
@@ -547,7 +551,7 @@ ev_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, String8 str
       }
       
       // rjf: get top-level lookup/expansion info
-      E_LookupInfo lookup_info = lookup_rule->info(arena, t->expr, filter);
+      E_LookupInfo lookup_info = lookup_rule->info(arena, &expr_irtree, filter);
       EV_ExpandInfo expand_info = expand_rule->expr_expand_info(arena, view, filter, t->expr, expand_rule_tag);
       
       // rjf: determine expansion info
@@ -1077,7 +1081,7 @@ ev_row_is_expandable(EV_Row *row)
     {
       for(E_Expr *tag = row->expr->first_tag; tag != &e_expr_nil; tag = tag->next)
       {
-        EV_ViewRuleInfo *info = ev_view_rule_info_from_string(tag->first->string);
+        EV_ViewRuleInfo *info = ev_view_rule_info_from_string(tag->string);
         if(info->flags & EV_ViewRuleInfoFlag_Expandable)
         {
           result = 1;
@@ -1429,7 +1433,7 @@ ev_string_from_simple_typed_eval(Arena *arena, EV_StringFlags flags, U32 radix, 
     case E_TypeKind_Enum:
     {
       Temp scratch = scratch_begin(&arena, 1);
-      E_Type *type = e_type_from_key(scratch.arena, type_key);
+      E_Type *type = e_type_from_key__cached(type_key);
       String8 constant_name = {0};
       for(U64 val_idx = 0; val_idx < type->count; val_idx += 1)
       {

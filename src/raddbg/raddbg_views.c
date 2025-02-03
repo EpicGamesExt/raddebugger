@@ -925,7 +925,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     EV_Block *block = row->block;
     EV_Key key = row->key;
     E_IRTreeAndType parent_irtree = e_irtree_and_type_from_expr(scratch.arena, block->expr);
-    E_Type *parent_type = e_type_from_key(arena, parent_irtree.type_key);
+    E_Type *parent_type = e_type_from_key__cached(parent_irtree.type_key);
     
     // rjf: fill row's eval
     info.eval = e_eval_from_expr(arena, row->expr);
@@ -959,7 +959,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       E_TypeKind block_type_kind = e_type_kind_from_key(block_type_key);
       if(block_type_kind == E_TypeKind_Set)
       {
-        E_Type *block_type = e_type_from_key(scratch.arena, block_type_key);
+        E_Type *block_type = e_type_from_key__cached(block_type_key);
         info.group_cfg_name = rd_singular_from_code_name_plural(block_type->name);
       }
     }
@@ -2298,7 +2298,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, String8 root_expr, String8 root_view
           // rjf: determine collection info for the block
           RD_EntityKind collection_entity_kind = RD_EntityKind_Nil;
           E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, selection_block->expr);
-          E_Type *type = e_type_from_key(scratch.arena, irtree.type_key);
+          E_Type *type = e_type_from_key__cached(irtree.type_key);
 #if 0 // TODO(rjf): @cfg
           for EachElement(idx, rd_collection_name_table)
           {

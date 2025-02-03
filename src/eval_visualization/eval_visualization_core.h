@@ -327,7 +327,9 @@ internal EV_ViewRuleInfo *ev_view_rule_info_from_string(String8 string);
 ////////////////////////////////
 //~ rjf: Expression Resolution (Dynamic Overrides, View Rule Application)
 
+#if 0 // TODO(rjf): @cfg
 internal E_Expr *ev_resolved_from_expr(Arena *arena, E_Expr *expr);
+#endif
 
 ////////////////////////////////
 //~ rjf: Block Building

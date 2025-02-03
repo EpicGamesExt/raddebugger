@@ -73,7 +73,7 @@ struct E_LookupAccess
   E_IRTreeAndType irtree_and_type;
 };
 
-#define E_LOOKUP_INFO_FUNCTION_SIG(name) E_LookupInfo name(Arena *arena, E_Expr *lhs, String8 filter)
+#define E_LOOKUP_INFO_FUNCTION_SIG(name) E_LookupInfo name(Arena *arena, E_IRTreeAndType *lhs, String8 filter)
 #define E_LOOKUP_INFO_FUNCTION_NAME(name) e_lookup_info_##name
 #define E_LOOKUP_INFO_FUNCTION_DEF(name) internal E_LOOKUP_INFO_FUNCTION_SIG(E_LOOKUP_INFO_FUNCTION_NAME(name))
 typedef E_LOOKUP_INFO_FUNCTION_SIG(E_LookupInfoFunctionType);
@@ -227,6 +227,31 @@ struct E_UsedTagMap
 };
 
 ////////////////////////////////
+//~ rjf: Type Key -> Auto Hook Expr List Cache
+
+typedef struct E_TypeAutoHookCacheNode E_TypeAutoHookCacheNode;
+struct E_TypeAutoHookCacheNode
+{
+  E_TypeAutoHookCacheNode *next;
+  E_TypeKey key;
+  E_ExprList exprs;
+};
+
+typedef struct E_TypeAutoHookCacheSlot E_TypeAutoHookCacheSlot;
+struct E_TypeAutoHookCacheSlot
+{
+  E_TypeAutoHookCacheNode *first;
+  E_TypeAutoHookCacheNode *last;
+};
+
+typedef struct E_TypeAutoHookCacheMap E_TypeAutoHookCacheMap;
+struct E_TypeAutoHookCacheMap
+{
+  U64 slots_count;
+  E_TypeAutoHookCacheSlot *slots;
+};
+
+////////////////////////////////
 //~ rjf: Parse Context
 
 typedef struct E_IRCtx E_IRCtx;
@@ -237,6 +262,7 @@ struct E_IRCtx
   E_IRGenRuleMap *irgen_rule_map;
   E_AutoHookMap *auto_hook_map;
   E_UsedTagMap *used_tag_map;
+  E_TypeAutoHookCacheMap *type_auto_hook_cache_map;
 };
 
 ////////////////////////////////
@@ -304,6 +330,7 @@ internal E_IRGenRule *e_irgen_rule_from_string(String8 string);
 internal E_AutoHookMap e_auto_hook_map_make(Arena *arena, U64 slots_count);
 internal void e_auto_hook_map_insert_new(Arena *arena, E_AutoHookMap *map, String8 pattern, String8 tag_expr_string);
 internal E_ExprList e_auto_hook_tag_exprs_from_type_key(Arena *arena, E_TypeKey type_key);
+internal E_ExprList e_auto_hook_tag_exprs_from_type_key__cached(E_TypeKey type_key);
 
 ////////////////////////////////
 //~ rjf: IR-ization Functions

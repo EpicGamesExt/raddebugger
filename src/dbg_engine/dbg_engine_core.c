@@ -12,14 +12,16 @@
 ////////////////////////////////
 //~ rjf: Basic Helpers
 
+#if !defined(XXH_IMPLEMENTATION)
+# define XXH_IMPLEMENTATION
+# define XXH_STATIC_LINKING_ONLY
+# include "third_party/xxHash/xxhash.h"
+#endif
+
 internal U64
 d_hash_from_seed_string(U64 seed, String8 string)
 {
-  U64 result = seed;
-  for(U64 i = 0; i < string.size; i += 1)
-  {
-    result = ((result << 5) + result) + string.str[i];
-  }
+  U64 result = XXH3_64bits_withSeed(string.str, string.size, seed);
   return result;
 }
 
