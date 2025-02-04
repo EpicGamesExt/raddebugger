@@ -180,7 +180,7 @@ struct E_ParseCtx
 };
 
 ////////////////////////////////
-//~ rjf: Parse State (Stateful thread-local caching mechanisms, not provided by user)
+//~ rjf: Parse State (stateful thread-local caching mechanisms, not provided by user)
 
 typedef struct E_ParseCacheNode E_ParseCacheNode;
 struct E_ParseCacheNode

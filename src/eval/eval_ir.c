@@ -74,6 +74,7 @@ e_select_ir_ctx(E_IRCtx *ctx)
     e_ir_state->arena = arena;
     e_ir_state->arena_eval_start_pos = arena_pos(arena);
   }
+  arena_pop_to(e_ir_state->arena, e_ir_state->arena_eval_start_pos);
   e_ir_state->ctx = ctx;
   e_ir_state->used_tag_map       = push_array(e_ir_state->arena, E_UsedTagMap, 1);
   e_ir_state->used_tag_map->slots_count = 64;

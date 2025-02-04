@@ -834,6 +834,9 @@ struct RD_State
   Arena *project_path_arena;
   String8 project_path;
   
+  // rjf: schema table
+  MD_Node **schemas;
+  
   // rjf: log
   Log *log;
   String8 log_path;

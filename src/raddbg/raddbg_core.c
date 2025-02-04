@@ -1496,16 +1496,15 @@ rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg, Vec4F32 secondary_color, F32 
 internal MD_Node *
 rd_schema_from_name(Arena *arena, String8 name)
 {
-  String8 schema_string = {0};
+  MD_Node *schema = &md_nil_node;
   for EachElement(idx, rd_name_schema_info_table)
   {
     if(str8_match(name, rd_name_schema_info_table[idx].name, 0))
     {
-      schema_string = rd_name_schema_info_table[idx].schema;
+      schema = rd_state->schemas[idx];
       break;
     }
   }
-  MD_Node *schema = md_tree_from_string(arena, schema_string)->first;
   return schema;
 }
 
@@ -11905,6 +11904,16 @@ rd_init(CmdLine *cmdln)
   rd_state->drag_drop_arena = arena_alloc();
   rd_state->drag_drop_regs = push_array(rd_state->drag_drop_arena, RD_Regs, 1);
   rd_state->top_regs = &rd_state->base_regs;
+  
+  // rjf: set up schemas
+  {
+    U64 schemas_count = ArrayCount(rd_name_schema_info_table);
+    rd_state->schemas = push_array(rd_state->arena, MD_Node *, schemas_count);
+    for EachIndex(idx, schemas_count)
+    {
+      rd_state->schemas[idx] = md_tree_from_string(rd_state->arena, rd_name_schema_info_table[idx].schema)->first;
+    }
+  }
   
   // rjf: set up top-level config entity trees
   {

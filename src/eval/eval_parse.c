@@ -632,6 +632,7 @@ e_select_parse_ctx(E_ParseCtx *ctx)
     e_parse_state->arena = arena;
     e_parse_state->arena_eval_start_pos = arena_pos(arena);
   }
+  arena_pop_to(e_parse_state->arena, e_parse_state->arena_eval_start_pos);
   e_parse_state->ctx = ctx;
   e_parse_state->parse_cache_slots_count = 1024;
   e_parse_state->parse_cache_slots = push_array(e_parse_state->arena, E_ParseCacheSlot, e_parse_state->parse_cache_slots_count);
