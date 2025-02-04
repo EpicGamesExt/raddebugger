@@ -43,9 +43,9 @@ e_eval_from_string(Arena *arena, String8 string)
 internal E_Eval
 e_autoresolved_eval_from_eval(E_Eval eval)
 {
-  if(e_parse_ctx &&
+  if(e_parse_state &&
      e_interpret_ctx &&
-     e_parse_ctx->modules_count > 0 &&
+     e_parse_state->ctx->modules_count > 0 &&
      e_interpret_ctx->module_base != 0 &&
      (e_type_key_match(eval.type_key, e_type_key_basic(E_TypeKind_S64)) ||
       e_type_key_match(eval.type_key, e_type_key_basic(E_TypeKind_U64)) ||
@@ -54,7 +54,7 @@ e_autoresolved_eval_from_eval(E_Eval eval)
   {
     U64 vaddr = eval.value.u64;
     U64 voff = vaddr - e_interpret_ctx->module_base[0];
-    RDI_Parsed *rdi = e_parse_ctx->primary_module->rdi;
+    RDI_Parsed *rdi = e_parse_state->ctx->primary_module->rdi;
     RDI_Scope *scope = rdi_scope_from_voff(rdi, voff);
     RDI_Procedure *procedure = rdi_procedure_from_voff(rdi, voff);
     RDI_GlobalVariable *gvar = rdi_global_variable_from_voff(rdi, voff);

@@ -8905,7 +8905,7 @@ E_LOOKUP_INFO_FUNCTION_DEF(locals)
   E_LookupInfo result = {0};
   Temp scratch = scratch_begin(&arena, 1);
   {
-    E_String2NumMapNodeArray nodes = e_string2num_map_node_array_from_map(scratch.arena, e_parse_ctx->locals_map);
+    E_String2NumMapNodeArray nodes = e_string2num_map_node_array_from_map(scratch.arena, e_parse_state->ctx->locals_map);
     e_string2num_map_node_array_sort__in_place(&nodes);
     String8List exprs_filtered = {0};
     for EachIndex(idx, nodes.count)
@@ -9177,7 +9177,7 @@ E_LOOKUP_RANGE_FUNCTION_DEF(debug_info_table)
     
     // rjf: unpack row info
     RDI_Parsed *rdi = accel->rdis[item->dbgi_idx];
-    E_Module *module = &e_parse_ctx->modules[item->dbgi_idx];
+    E_Module *module = &e_parse_state->ctx->modules[item->dbgi_idx];
     
     // rjf: build expr
     E_Expr *item_expr = &e_expr_nil;
@@ -9196,7 +9196,7 @@ E_LOOKUP_RANGE_FUNCTION_DEF(debug_info_table)
           String8 bytecode = e_bytecode_from_oplist(arena, &oplist);
           U32 type_idx = procedure->type_idx;
           RDI_TypeNode *type_node = rdi_element_from_name_idx(module->rdi, TypeNodes, type_idx);
-          E_TypeKey type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), type_idx, (U32)(module - e_parse_ctx->modules));
+          E_TypeKey type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), type_idx, (U32)(module - e_parse_state->ctx->modules));
           item_expr = e_push_expr(arena, E_ExprKind_LeafBytecode, 0);
           item_expr->mode     = E_Mode_Value;
           item_expr->space    = module->space;
@@ -9213,7 +9213,7 @@ E_LOOKUP_RANGE_FUNCTION_DEF(debug_info_table)
           String8 bytecode = e_bytecode_from_oplist(arena, &oplist);
           U32 type_idx = gvar->type_idx;
           RDI_TypeNode *type_node = rdi_element_from_name_idx(module->rdi, TypeNodes, type_idx);
-          E_TypeKey type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), type_idx, (U32)(module - e_parse_ctx->modules));
+          E_TypeKey type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), type_idx, (U32)(module - e_parse_state->ctx->modules));
           item_expr = e_push_expr(arena, E_ExprKind_LeafBytecode, 0);
           item_expr->mode     = E_Mode_Offset;
           item_expr->space    = module->space;
@@ -9229,7 +9229,7 @@ E_LOOKUP_RANGE_FUNCTION_DEF(debug_info_table)
           String8 bytecode = e_bytecode_from_oplist(arena, &oplist);
           U32 type_idx = tvar->type_idx;
           RDI_TypeNode *type_node = rdi_element_from_name_idx(module->rdi, TypeNodes, type_idx);
-          E_TypeKey type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), type_idx, (U32)(module - e_parse_ctx->modules));
+          E_TypeKey type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), type_idx, (U32)(module - e_parse_state->ctx->modules));
           item_expr = e_push_expr(arena, E_ExprKind_LeafBytecode, 0);
           item_expr->mode     = E_Mode_Offset;
           item_expr->space    = module->space;
@@ -9241,7 +9241,7 @@ E_LOOKUP_RANGE_FUNCTION_DEF(debug_info_table)
         {
           RDI_UDT *udt = rdi_element_from_name_idx(module->rdi, UDTs, element_idx);
           RDI_TypeNode *type_node = rdi_element_from_name_idx(module->rdi, TypeNodes, udt->self_type_idx);
-          E_TypeKey type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), udt->self_type_idx, (U32)(module - e_parse_ctx->modules));
+          E_TypeKey type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), udt->self_type_idx, (U32)(module - e_parse_state->ctx->modules));
           item_expr = e_push_expr(arena, E_ExprKind_TypeIdent, 0);
           item_expr->type_key = type_key;
         }break;
@@ -10673,7 +10673,7 @@ rd_theme_color_from_txt_token_kind_lookup_string(TXT_TokenKind kind, String8 str
     // rjf: try to map as local
     if(!mapped && kind == TXT_TokenKind_Identifier)
     {
-      U64 local_num = e_num_from_string(e_parse_ctx->locals_map, string);
+      U64 local_num = e_num_from_string(e_parse_state->ctx->locals_map, string);
       if(local_num != 0)
       {
         mapped = 1;
@@ -10684,7 +10684,7 @@ rd_theme_color_from_txt_token_kind_lookup_string(TXT_TokenKind kind, String8 str
     // rjf: try to map as member
     if(!mapped && kind == TXT_TokenKind_Identifier)
     {
-      U64 member_num = e_num_from_string(e_parse_ctx->member_map, string);
+      U64 member_num = e_num_from_string(e_parse_state->ctx->member_map, string);
       if(member_num != 0)
       {
         mapped = 1;
@@ -10695,7 +10695,7 @@ rd_theme_color_from_txt_token_kind_lookup_string(TXT_TokenKind kind, String8 str
     // rjf: try to map as register
     if(!mapped)
     {
-      U64 reg_num = e_num_from_string(e_parse_ctx->regs_map, string);
+      U64 reg_num = e_num_from_string(e_parse_state->ctx->regs_map, string);
       if(reg_num != 0)
       {
         mapped = 1;
@@ -10706,7 +10706,7 @@ rd_theme_color_from_txt_token_kind_lookup_string(TXT_TokenKind kind, String8 str
     // rjf: try to map as register alias
     if(!mapped)
     {
-      U64 alias_num = e_num_from_string(e_parse_ctx->reg_alias_map, string);
+      U64 alias_num = e_num_from_string(e_parse_state->ctx->reg_alias_map, string);
       if(alias_num != 0)
       {
         mapped = 1;
@@ -13084,8 +13084,7 @@ rd_frame(void)
       {
         RD_Cfg *watch = n->v;
         String8 expr = rd_expr_from_cfg(watch);
-        E_TokenArray tokens   = e_token_array_from_text(scratch.arena, expr);
-        E_Parse      parse    = e_parse_expr_from_text_tokens(scratch.arena, expr, &tokens);
+        E_Parse parse = e_parse_expr_from_text__cached(expr);
         if(parse.msgs.max_kind == E_MsgKind_Null)
         {
           e_push_leaf_ident_exprs_from_expr__in_place(scratch.arena, ctx->macro_map, parse.expr);

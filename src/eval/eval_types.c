@@ -1134,34 +1134,6 @@ e_type_from_key(Arena *arena, E_TypeKey key)
   return type;
 }
 
-internal E_Type *
-e_type_from_key__cached(E_TypeKey key)
-{
-  E_Type *type = &e_type_nil;
-  {
-    U64 hash = e_hash_from_string(5381, str8_struct(&key));
-    U64 slot_idx = hash%e_type_state->type_cache_slots_count;
-    E_TypeCacheNode *node = 0;
-    for(E_TypeCacheNode *n = e_type_state->type_cache_slots[slot_idx].first; n != 0; n = n->next)
-    {
-      if(e_type_key_match(key, n->key))
-      {
-        node = n;
-        break;
-      }
-    }
-    if(node == 0)
-    {
-      node = push_array(e_type_state->arena, E_TypeCacheNode, 1);
-      node->key = key;
-      node->type = e_type_from_key(e_type_state->arena, key);
-      SLLQueuePush(e_type_state->type_cache_slots[slot_idx].first, e_type_state->type_cache_slots[slot_idx].last, node);
-    }
-    type = node->type;
-  }
-  return type;
-}
-
 internal U64
 e_type_byte_size_from_key(E_TypeKey key)
 {
@@ -1900,6 +1872,34 @@ e_string2typekey_map_lookup(E_String2TypeKeyMap *map, String8 string)
 
 ////////////////////////////////
 //~ rjf: Cache Lookups
+
+internal E_Type *
+e_type_from_key__cached(E_TypeKey key)
+{
+  E_Type *type = &e_type_nil;
+  {
+    U64 hash = e_hash_from_string(5381, str8_struct(&key));
+    U64 slot_idx = hash%e_type_state->type_cache_slots_count;
+    E_TypeCacheNode *node = 0;
+    for(E_TypeCacheNode *n = e_type_state->type_cache_slots[slot_idx].first; n != 0; n = n->next)
+    {
+      if(e_type_key_match(key, n->key))
+      {
+        node = n;
+        break;
+      }
+    }
+    if(node == 0)
+    {
+      node = push_array(e_type_state->arena, E_TypeCacheNode, 1);
+      node->key = key;
+      node->type = e_type_from_key(e_type_state->arena, key);
+      SLLQueuePush(e_type_state->type_cache_slots[slot_idx].first, e_type_state->type_cache_slots[slot_idx].last, node);
+    }
+    type = node->type;
+  }
+  return type;
+}
 
 internal E_MemberCacheNode *
 e_member_cache_node_from_type_key(E_TypeKey key)

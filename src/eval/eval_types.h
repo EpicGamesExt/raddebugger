@@ -350,7 +350,6 @@ internal U64 e_hash_from_type(E_Type *type);
 internal E_TypeKind e_type_kind_from_key(E_TypeKey key);
 internal U64 e_type_byte_size_from_key(E_TypeKey key);
 internal E_Type *e_type_from_key(Arena *arena, E_TypeKey key);
-internal E_Type *e_type_from_key__cached(E_TypeKey key);
 internal E_TypeKey e_type_direct_from_key(E_TypeKey key);
 internal E_TypeKey e_type_owner_from_key(E_TypeKey key);
 internal E_TypeKey e_type_ptee_from_key(E_TypeKey key);
@@ -376,6 +375,7 @@ internal E_TypeKey e_string2typekey_map_lookup(E_String2TypeKeyMap *map, String8
 ////////////////////////////////
 //~ rjf: Cache Lookups
 
+internal E_Type *e_type_from_key__cached(E_TypeKey key);
 internal E_MemberCacheNode *e_member_cache_node_from_type_key(E_TypeKey key);
 internal E_MemberArray e_type_data_members_from_key__cached(E_TypeKey key);
 internal E_Member e_type_member_from_key_name__cached(E_TypeKey key, String8 name);

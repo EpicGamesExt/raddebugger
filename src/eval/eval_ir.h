@@ -266,6 +266,21 @@ struct E_IRCtx
 ////////////////////////////////
 //~ rjf: IR State
 
+typedef struct E_IRTreeAndTypeCacheNode E_IRTreeAndTypeCacheNode;
+struct E_IRTreeAndTypeCacheNode
+{
+  E_IRTreeAndTypeCacheNode *next;
+  E_Expr *expr;
+  E_IRTreeAndType irtree_and_type;
+};
+
+typedef struct E_IRTreeAndTypeCacheSlot E_IRTreeAndTypeCacheSlot;
+struct E_IRTreeAndTypeCacheSlot
+{
+  E_IRTreeAndTypeCacheNode *first;
+  E_IRTreeAndTypeCacheNode *last;
+};
+
 typedef struct E_IRState E_IRState;
 struct E_IRState
 {
@@ -278,6 +293,8 @@ struct E_IRState
   // rjf: caches
   E_UsedTagMap *used_tag_map;
   E_TypeAutoHookCacheMap *type_auto_hook_cache_map;
+  U64 irtree_and_type_cache_slots_count;
+  E_IRTreeAndTypeCacheSlot *irtree_and_type_cache_slots;
 };
 
 ////////////////////////////////
@@ -385,5 +402,10 @@ internal E_IRTreeAndType e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
 internal void e_append_oplist_from_irtree(Arena *arena, E_IRNode *root, E_Space *current_space, E_OpList *out);
 internal E_OpList e_oplist_from_irtree(Arena *arena, E_IRNode *root);
 internal String8 e_bytecode_from_oplist(Arena *arena, E_OpList *oplist);
+
+////////////////////////////////
+//~ rjf: IRified Expression Cache
+
+internal E_IRTreeAndType e_irtree_and_type_from_expr__cached(E_Expr *expr);
 
 #endif // EVAL_IR_H

@@ -619,22 +619,31 @@ e_token_array_make_first_opl(E_Token *first, E_Token *opl)
 internal E_ParseCtx *
 e_selected_parse_ctx(void)
 {
-  return e_parse_ctx;
+  return e_parse_state->ctx;
 }
 
 internal void
 e_select_parse_ctx(E_ParseCtx *ctx)
 {
-  e_parse_ctx = ctx;
+  if(e_parse_state == 0)
+  {
+    Arena *arena = arena_alloc();
+    e_parse_state = push_array(arena, E_ParseState, 1);
+    e_parse_state->arena = arena;
+    e_parse_state->arena_eval_start_pos = arena_pos(arena);
+  }
+  e_parse_state->ctx = ctx;
+  e_parse_state->parse_cache_slots_count = 1024;
+  e_parse_state->parse_cache_slots = push_array(e_parse_state->arena, E_ParseCacheSlot, e_parse_state->parse_cache_slots_count);
 }
 
 internal U32
 e_parse_ctx_module_idx_from_rdi(RDI_Parsed *rdi)
 {
   U32 result = 0;
-  for(U64 idx = 0; idx < e_parse_ctx->modules_count; idx += 1)
+  for(U64 idx = 0; idx < e_parse_state->ctx->modules_count; idx += 1)
   {
-    if(e_parse_ctx->modules[idx].rdi == rdi)
+    if(e_parse_state->ctx->modules[idx].rdi == rdi)
     {
       result = (U32)idx;
       break;
@@ -933,9 +942,9 @@ e_leaf_type_from_name(String8 name)
 {
   E_TypeKey key = zero_struct;
   B32 found = 0;
-  for(U64 module_idx = 0; module_idx < e_parse_ctx->modules_count; module_idx += 1)
+  for(U64 module_idx = 0; module_idx < e_parse_state->ctx->modules_count; module_idx += 1)
   {
-    RDI_Parsed *rdi = e_parse_ctx->modules[module_idx].rdi;
+    RDI_Parsed *rdi = e_parse_state->ctx->modules[module_idx].rdi;
     RDI_NameMap *name_map = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_Types);
     RDI_ParsedNameMap parsed_name_map = {0};
     rdi_parsed_from_name_map(rdi, name_map, &parsed_name_map);
@@ -1050,7 +1059,7 @@ e_type_from_expr(E_Expr *expr)
     case E_ExprKind_Ptr:
     {
       E_TypeKey direct_type_key = e_type_from_expr(expr->first);
-      result = e_type_key_cons_ptr(e_parse_ctx->primary_module->arch, direct_type_key, 1, 0);
+      result = e_type_key_cons_ptr(e_parse_state->ctx->primary_module->arch, direct_type_key, 1, 0);
     }break;
     case E_ExprKind_Array:
     {
@@ -1365,7 +1374,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
       else
       {
         E_Expr *type = e_push_expr(arena, E_ExprKind_TypeIdent, token_string.str);
-        type->type_key = e_type_key_cons_ptr(e_parse_ctx->primary_module->arch, e_type_key_basic(E_TypeKind_U64), 1, 0);
+        type->type_key = e_type_key_cons_ptr(e_parse_state->ctx->primary_module->arch, e_type_key_basic(E_TypeKind_U64), 1, 0);
         E_Expr *casted = atom;
         E_Expr *cast = e_push_expr(arena, E_ExprKind_Cast, token_string.str);
         e_expr_push_child(cast, type);
@@ -1425,9 +1434,9 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
           //- rjf: form namespaceified fallback versions of this lookup string
           String8List namespaceified_token_strings = {0};
           {
-            E_Module *module = e_parse_ctx->primary_module;
+            E_Module *module = e_parse_state->ctx->primary_module;
             RDI_Parsed *rdi = module->rdi;
-            U64 scope_idx = rdi_vmap_idx_from_section_kind_voff(rdi, RDI_SectionKind_ScopeVMap, e_parse_ctx->ip_voff);
+            U64 scope_idx = rdi_vmap_idx_from_section_kind_voff(rdi, RDI_SectionKind_ScopeVMap, e_parse_state->ctx->ip_voff);
             RDI_Scope *scope = rdi_element_from_name_idx(rdi, Scopes, scope_idx);
             U64 proc_idx = scope->proc_idx;
             RDI_Procedure *procedure = rdi_element_from_name_idx(rdi, Procedures, proc_idx);
@@ -1454,7 +1463,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
           //- rjf: try members
           if(mapped_identifier == 0 && (resolution_qualifier.size == 0 || str8_match(resolution_qualifier, str8_lit("member"), 0))) ProfScope("try to map name as member")
           {
-            U64 data_member_num = e_num_from_string(e_parse_ctx->member_map, token_string);
+            U64 data_member_num = e_num_from_string(e_parse_state->ctx->member_map, token_string);
             if(data_member_num != 0)
             {
               atom_implicit_member_name = token_string;
@@ -1465,15 +1474,15 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
           //- rjf: try locals
           if(mapped_identifier == 0 && (resolution_qualifier.size == 0 || str8_match(resolution_qualifier, str8_lit("local"), 0))) ProfScope("try to map name as local")
           {
-            E_Module *module = e_parse_ctx->primary_module;
+            E_Module *module = e_parse_state->ctx->primary_module;
             RDI_Parsed *rdi = module->rdi;
-            U64 local_num = e_num_from_string(e_parse_ctx->locals_map, local_lookup_string);
+            U64 local_num = e_num_from_string(e_parse_state->ctx->locals_map, local_lookup_string);
             if(local_num != 0)
             {
               identifier_type_is_possibly_dynamically_overridden = 1;
               RDI_Local *local_var = rdi_element_from_name_idx(rdi, Locals, local_num-1);
               RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, local_var->type_idx);
-              type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), local_var->type_idx, (U32)(module - e_parse_ctx->modules));
+              type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), local_var->type_idx, (U32)(module - e_parse_state->ctx->modules));
               
               // rjf: grab location info
               for(U32 loc_block_idx = local_var->location_first;
@@ -1481,7 +1490,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
                   loc_block_idx += 1)
               {
                 RDI_LocationBlock *block = rdi_element_from_name_idx(rdi, LocationBlocks, loc_block_idx);
-                if(block->scope_off_first <= e_parse_ctx->ip_voff && e_parse_ctx->ip_voff < block->scope_off_opl)
+                if(block->scope_off_first <= e_parse_state->ctx->ip_voff && e_parse_state->ctx->ip_voff < block->scope_off_opl)
                 {
                   mapped_identifier = 1;
                   space = module->space;
@@ -1534,37 +1543,37 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
           //- rjf: try registers
           if(mapped_identifier == 0 && (resolution_qualifier.size == 0 || str8_match(resolution_qualifier, str8_lit("reg"), 0))) ProfScope("try to map name as register")
           {
-            U64 reg_num = e_num_from_string(e_parse_ctx->regs_map, token_string);
+            U64 reg_num = e_num_from_string(e_parse_state->ctx->regs_map, token_string);
             if(reg_num != 0)
             {
               reg_code = reg_num;
-              type_key = e_type_key_reg(e_parse_ctx->primary_module->arch, reg_code);
+              type_key = e_type_key_reg(e_parse_state->ctx->primary_module->arch, reg_code);
               mapped_identifier = 1;
-              space = e_parse_ctx->ip_thread_space;
-              arch = e_parse_ctx->primary_module->arch;
+              space = e_parse_state->ctx->ip_thread_space;
+              arch = e_parse_state->ctx->primary_module->arch;
             }
           }
           
           //- rjf: try register aliases
           if(mapped_identifier == 0 && (resolution_qualifier.size == 0 || str8_match(resolution_qualifier, str8_lit("reg"), 0))) ProfScope("try to map name as register alias")
           {
-            U64 alias_num = e_num_from_string(e_parse_ctx->reg_alias_map, token_string);
+            U64 alias_num = e_num_from_string(e_parse_state->ctx->reg_alias_map, token_string);
             if(alias_num != 0)
             {
               alias_code = (REGS_AliasCode)alias_num;
-              type_key = e_type_key_reg_alias(e_parse_ctx->primary_module->arch, alias_code);
+              type_key = e_type_key_reg_alias(e_parse_state->ctx->primary_module->arch, alias_code);
               mapped_identifier = 1;
-              space = e_parse_ctx->ip_thread_space;
-              arch = e_parse_ctx->primary_module->arch;
+              space = e_parse_state->ctx->ip_thread_space;
+              arch = e_parse_state->ctx->primary_module->arch;
             }
           }
           
           //- rjf: try global variables
           if(mapped_identifier == 0 && (resolution_qualifier.size == 0 || str8_match(resolution_qualifier, str8_lit("global"), 0))) ProfScope("try to map name as global variable")
           {
-            for(U64 module_idx = 0; module_idx < e_parse_ctx->modules_count; module_idx += 1)
+            for(U64 module_idx = 0; module_idx < e_parse_state->ctx->modules_count; module_idx += 1)
             {
-              E_Module *module = &e_parse_ctx->modules[module_idx];
+              E_Module *module = &e_parse_state->ctx->modules[module_idx];
               RDI_Parsed *rdi = module->rdi;
               RDI_NameMap *name_map = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_GlobalVariables);
               RDI_ParsedNameMap parsed_name_map = {0};
@@ -1606,9 +1615,9 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
           //- rjf: try thread variables
           if(mapped_identifier == 0 && (resolution_qualifier.size == 0 || str8_match(resolution_qualifier, str8_lit("thread_variable"), 0))) ProfScope("try to map name as thread variable")
           {
-            for(U64 module_idx = 0; module_idx < e_parse_ctx->modules_count; module_idx += 1)
+            for(U64 module_idx = 0; module_idx < e_parse_state->ctx->modules_count; module_idx += 1)
             {
-              E_Module *module = &e_parse_ctx->modules[module_idx];
+              E_Module *module = &e_parse_state->ctx->modules[module_idx];
               RDI_Parsed *rdi = module->rdi;
               RDI_NameMap *name_map = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_ThreadVariables);
               RDI_ParsedNameMap parsed_name_map = {0};
@@ -1646,9 +1655,9 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
           //- rjf: try procedures
           if(mapped_identifier == 0 && (resolution_qualifier.size == 0 || str8_match(resolution_qualifier, str8_lit("procedure"), 0))) ProfScope("try to map name as procedure")
           {
-            for(U64 module_idx = 0; module_idx < e_parse_ctx->modules_count; module_idx += 1)
+            for(U64 module_idx = 0; module_idx < e_parse_state->ctx->modules_count; module_idx += 1)
             {
-              E_Module *module = &e_parse_ctx->modules[module_idx];
+              E_Module *module = &e_parse_state->ctx->modules[module_idx];
               RDI_Parsed *rdi = module->rdi;
               RDI_NameMap *name_map = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_Procedures);
               RDI_ParsedNameMap parsed_name_map = {0};
@@ -1694,7 +1703,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
               mapped_identifier = 1;
               identifier_looks_like_type_expr = 1;
               MemoryZeroStruct(&space);
-              arch = e_parse_ctx->primary_module->arch;
+              arch = e_parse_state->ctx->primary_module->arch;
             }
           }
           
@@ -1741,7 +1750,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
                 }
                 else if(reg_code != 0)
                 {
-                  REGS_Rng reg_rng = regs_reg_code_rng_table_from_arch(e_parse_ctx->primary_module->arch)[reg_code];
+                  REGS_Rng reg_rng = regs_reg_code_rng_table_from_arch(e_parse_state->ctx->primary_module->arch)[reg_code];
                   E_OpList oplist = {0};
                   e_oplist_push_uconst(arena, &oplist, reg_rng.byte_off);
                   atom = e_push_expr(arena, E_ExprKind_LeafBytecode, token_string.str);
@@ -1753,8 +1762,8 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
                 }
                 else if(alias_code != 0)
                 {
-                  REGS_Slice alias_slice = regs_alias_code_slice_table_from_arch(e_parse_ctx->primary_module->arch)[alias_code];
-                  REGS_Rng alias_reg_rng = regs_reg_code_rng_table_from_arch(e_parse_ctx->primary_module->arch)[alias_slice.code];
+                  REGS_Slice alias_slice = regs_alias_code_slice_table_from_arch(e_parse_state->ctx->primary_module->arch)[alias_code];
+                  REGS_Rng alias_reg_rng = regs_reg_code_rng_table_from_arch(e_parse_state->ctx->primary_module->arch)[alias_slice.code];
                   E_OpList oplist = {0};
                   e_oplist_push_uconst(arena, &oplist, alias_reg_rng.byte_off + alias_slice.byte_off);
                   atom = e_push_expr(arena, E_ExprKind_LeafBytecode, token_string.str);
@@ -2302,4 +2311,36 @@ e_parse_expr_from_text(Arena *arena, String8 text)
   E_Parse parse = e_parse_expr_from_text_tokens(arena, text, &tokens);
   scratch_end(scratch);
   return parse.expr;
+}
+
+internal E_Parse
+e_parse_expr_from_text__cached(String8 text)
+{
+  E_Parse parse = {0, &e_expr_nil};
+  U64 hash = e_hash_from_string(5381, str8_struct(&text));
+  U64 slot_idx = hash%e_parse_state->parse_cache_slots_count;
+  E_ParseCacheNode *node = 0;
+  for(E_ParseCacheNode *n = e_parse_state->parse_cache_slots[slot_idx].first; n != 0; n = n->next)
+  {
+    if(str8_match(n->string, text, 0))
+    {
+      node = n;
+      break;
+    }
+  }
+  if(node == 0)
+  {
+    Temp scratch = scratch_begin(0, 0);
+    node = push_array(e_parse_state->arena, E_ParseCacheNode, 1);
+    SLLQueuePush(e_parse_state->parse_cache_slots[slot_idx].first, e_parse_state->parse_cache_slots[slot_idx].last, node);
+    node->string = push_str8_copy(e_parse_state->arena, text);
+    E_TokenArray tokens = e_token_array_from_text(scratch.arena, text);
+    node->parse = e_parse_expr_from_text_tokens(e_parse_state->arena, node->string, &tokens);
+    scratch_end(scratch);
+  }
+  if(node != 0)
+  {
+    parse = node->parse;
+  }
+  return parse;
 }

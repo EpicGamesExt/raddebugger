@@ -691,8 +691,7 @@ ev_block_tree_from_string(Arena *arena, EV_View *view, String8 filter, String8 s
   EV_BlockTree tree = {0};
   Temp scratch = scratch_begin(&arena, 1);
   {
-    E_TokenArray tokens = e_token_array_from_text(scratch.arena, string);
-    E_Parse parse = e_parse_expr_from_text_tokens(arena, string, &tokens);
+    E_Parse parse = e_parse_expr_from_text__cached(string);
     tree = ev_block_tree_from_expr(arena, view, filter, string, parse.expr);
   }
   scratch_end(scratch);

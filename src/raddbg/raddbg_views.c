@@ -5488,7 +5488,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(memory)
         rd_rgba_from_theme_color(RD_ThemeColor_Thread7),
       };
       U64 thread_rip_vaddr = d_query_cached_rip_from_thread_unwind(thread, rd_regs()->unwind_count);
-      for(E_String2NumMapNode *n = e_parse_ctx->locals_map->first; n != 0; n = n->order_next)
+      for(E_String2NumMapNode *n = e_parse_state->ctx->locals_map->first; n != 0; n = n->order_next)
       {
         String8 local_name = n->string;
         E_Eval local_eval = e_eval_from_string(scratch.arena, local_name);

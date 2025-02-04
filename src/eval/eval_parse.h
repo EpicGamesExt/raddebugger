@@ -146,6 +146,17 @@ struct E_String2ExprMap
 };
 
 ////////////////////////////////
+//~ rjf: Parse Results
+
+typedef struct E_Parse E_Parse;
+struct E_Parse
+{
+  E_Token *last_token;
+  E_Expr *expr;
+  E_MsgList msgs;
+};
+
+////////////////////////////////
 //~ rjf: Parse Context
 
 typedef struct E_ParseCtx E_ParseCtx;
@@ -169,14 +180,33 @@ struct E_ParseCtx
 };
 
 ////////////////////////////////
-//~ rjf: Parse Results
+//~ rjf: Parse State (Stateful thread-local caching mechanisms, not provided by user)
 
-typedef struct E_Parse E_Parse;
-struct E_Parse
+typedef struct E_ParseCacheNode E_ParseCacheNode;
+struct E_ParseCacheNode
 {
-  E_Token *last_token;
-  E_Expr *expr;
-  E_MsgList msgs;
+  E_ParseCacheNode *next;
+  String8 string;
+  E_Parse parse;
+};
+
+typedef struct E_ParseCacheSlot E_ParseCacheSlot;
+struct E_ParseCacheSlot
+{
+  E_ParseCacheNode *first;
+  E_ParseCacheNode *last;
+};
+
+typedef struct E_ParseState E_ParseState;
+struct E_ParseState
+{
+  Arena *arena;
+  U64 arena_eval_start_pos;
+  E_ParseCtx *ctx;
+  
+  // rjf: string -> parse cache
+  E_ParseCacheSlot *parse_cache_slots;
+  U64 parse_cache_slots_count;
 };
 
 ////////////////////////////////
@@ -185,7 +215,7 @@ struct E_Parse
 global read_only E_String2NumMap e_string2num_map_nil = {0};
 global read_only E_String2ExprMap e_string2expr_map_nil = {0};
 global read_only E_Expr e_expr_nil = {&e_expr_nil, &e_expr_nil, &e_expr_nil};
-thread_static E_ParseCtx *e_parse_ctx = 0;
+thread_static E_ParseState *e_parse_state = 0;
 
 ////////////////////////////////
 //~ rjf: Basic Map Functions
@@ -262,5 +292,6 @@ internal E_Parse e_parse_type_from_text_tokens(Arena *arena, String8 text, E_Tok
 internal E_Parse e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *tokens, S64 max_precedence);
 internal E_Parse e_parse_expr_from_text_tokens(Arena *arena, String8 text, E_TokenArray *tokens);
 internal E_Expr *e_parse_expr_from_text(Arena *arena, String8 text);
+internal E_Parse e_parse_expr_from_text__cached(String8 text);
 
 #endif // EVAL_PARSE_H
