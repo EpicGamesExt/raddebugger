@@ -9327,242 +9327,283 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
   }
   
   //- rjf: value/offset evaluations
-  else if(max_size > 0) switch(e_type_kind_from_key(e_type_unwrap(eval.type_key)))
+  else if(max_size > 0)
   {
-    //- rjf: default - leaf cases
-    default:
+    E_TypeKey type_key = e_type_unwrap(eval.type_key);
+    E_TypeKind kind = e_type_kind_from_key(type_key);
+    switch(kind)
     {
-      E_Eval value_eval = e_value_eval_from_eval(eval);
-      String8 string = ev_string_from_simple_typed_eval(arena, flags, radix, min_digits, value_eval);
-      space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, string).x;
-      str8_list_push(arena, out, string);
-    }break;
-    
-    //- rjf: pointers
-    case E_TypeKind_Function:
-    case E_TypeKind_Ptr:
-    case E_TypeKind_LRef:
-    case E_TypeKind_RRef:
-    {
-      // rjf: unpack type info
-      E_TypeKind type_kind = e_type_kind_from_key(e_type_unwrap(eval.type_key));
-      E_TypeKey direct_type_key = e_type_unwrap(e_type_ptee_from_key(e_type_unwrap(eval.type_key)));
-      E_TypeKind direct_type_kind = e_type_kind_from_key(direct_type_key);
-      
-      // rjf: unpack info about pointer destination
-      E_Eval value_eval = e_value_eval_from_eval(eval);
-      B32 ptee_has_content = (direct_type_kind != E_TypeKind_Null && direct_type_kind != E_TypeKind_Void);
-      B32 ptee_has_string  = ((E_TypeKind_Char8 <= direct_type_kind && direct_type_kind <= E_TypeKind_UChar32) ||
-                              direct_type_kind == E_TypeKind_S8 ||
-                              direct_type_kind == E_TypeKind_U8);
-      CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->thread);
-      CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, CTRL_EntityKind_Process);
-      String8 symbol_name = d_symbol_name_from_process_vaddr(arena, process, value_eval.value.u64, 1);
-      
-      // rjf: special case: push strings for textual string content
-      B32 did_content = 0;
-      B32 did_string = 0;
-      if(!did_content && ptee_has_string && !no_string)
+      //- rjf: default - leaf cases
+      default:
       {
-        did_content = 1;
-        did_string = 1;
-        U64 string_memory_addr = value_eval.value.u64;
-        U64 element_size = e_type_byte_size_from_key(direct_type_key);
-        U64 string_buffer_size = 256;
-        U8 *string_buffer = push_array(arena, U8, string_buffer_size);
-        for(U64 try_size = string_buffer_size; try_size >= 16; try_size /= 2)
-        {
-          B32 read_good = e_space_read(eval.space, string_buffer, r1u64(string_memory_addr, string_memory_addr+try_size));
-          if(read_good)
-          {
-            break;
-          }
-        }
-        string_buffer[string_buffer_size-1] = 0;
-        String8 string = {0};
-        switch(element_size)
-        {
-          default:{string = str8_cstring((char *)string_buffer);}break;
-          case 2: {string = str8_from_16(arena, str16_cstring((U16 *)string_buffer));}break;
-          case 4: {string = str8_from_32(arena, str32_cstring((U32 *)string_buffer));}break;
-        }
-        String8 string_escaped = ev_escaped_from_raw_string(arena, string);
-        space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, string_escaped).x;
-        space_taken += 2*fnt_dim_from_tag_size_string(font, font_size, 0, 0, str8_lit("\"")).x;
-        if(!no_addr || depth > 0)
-        {
-          str8_list_push(arena, out, str8_lit("\""));
-        }
-        str8_list_push(arena, out, string_escaped);
-        if(!no_addr || depth > 0)
-        {
-          str8_list_push(arena, out, str8_lit("\""));
-        }
-      }
-      
-      // rjf: special case: push strings for symbols
-      if(value_eval.value.u64 != 0 &&
-         !did_content && symbol_name.size != 0 &&
-         flags & EV_StringFlag_ReadOnlyDisplayRules &&
-         ((type_kind == E_TypeKind_Ptr && direct_type_kind == E_TypeKind_Void) ||
-          (type_kind == E_TypeKind_Ptr && direct_type_kind == E_TypeKind_Function) ||
-          (type_kind == E_TypeKind_Function)))
-      {
-        did_content = 1;
-        str8_list_push(arena, out, symbol_name);
-        space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, symbol_name).x;
-      }
-      
-      // rjf: special case: need symbol name, don't have one
-      if(value_eval.value.u64 != 0 &&
-         !did_content && symbol_name.size == 0 &&
-         flags & EV_StringFlag_ReadOnlyDisplayRules &&
-         ((type_kind == E_TypeKind_Ptr && direct_type_kind == E_TypeKind_Function) ||
-          (type_kind == E_TypeKind_Function)) &&
-         (flags & EV_StringFlag_ReadOnlyDisplayRules))
-      {
-        did_content = 1;
-        String8 string = str8_lit("???");
-        str8_list_push(arena, out, string);
-        space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, string).x;
-      }
-      
-      // rjf: push pointer value
-      B32 did_ptr_value = 0;
-      if(!no_addr || value_eval.value.u64 == 0)
-      {
-        did_ptr_value = 1;
-        if(did_content)
-        {
-          String8 left_paren = str8_lit(" (");
-          space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, left_paren).x;
-          str8_list_push(arena, out, left_paren);
-        }
+        E_Eval value_eval = e_value_eval_from_eval(eval);
         String8 string = ev_string_from_simple_typed_eval(arena, flags, radix, min_digits, value_eval);
         space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, string).x;
         str8_list_push(arena, out, string);
-        if(did_content)
-        {
-          String8 right_paren = str8_lit(")");
-          space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, right_paren).x;
-          str8_list_push(arena, out, right_paren);
-        }
-      }
+      }break;
       
-      // rjf: descend for all other cases
-      B32 did_arrow = 0;
-      if(value_eval.value.u64 != 0 && !did_content && ptee_has_content && (flags & EV_StringFlag_ReadOnlyDisplayRules))
+      //- rjf: pointers
+      case E_TypeKind_Function:
+      case E_TypeKind_Ptr:
+      case E_TypeKind_LRef:
+      case E_TypeKind_RRef:
       {
-        if(did_ptr_value && !did_arrow)
-        {
-          did_arrow = 1;
-          String8 arrow = str8_lit(" -> ");
-          space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, arrow).x;
-          str8_list_push(arena, out, arrow);
-        }
-        did_content = 1;
-        if(depth < 4)
-        {
-          E_Expr *deref_expr = e_expr_ref_deref(scratch.arena, eval.expr);
-          E_Eval deref_eval = e_eval_from_expr(scratch.arena, deref_expr);
-          space_taken += rd_append_value_strings_from_eval(arena, flags, radix, font, font_size, max_size-space_taken, depth+1, deref_eval, out);
-        }
-        else
-        {
-          String8 ellipses = str8_lit("...");
-          str8_list_push(arena, out, ellipses);
-          space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, ellipses).x;
-        }
-      }
-    }break;
-    
-    //- rjf: arrays
-    case E_TypeKind_Array:
-    {
-      // rjf: unpack type info
-      E_Type *eval_type = e_type_from_key__cached(e_type_unwrap(eval.type_key));
-      E_TypeKey direct_type_key = e_type_unwrap(eval_type->direct_type_key);
-      E_TypeKind direct_type_kind = e_type_kind_from_key(direct_type_key);
-      U64 array_count = eval_type->count;
-      
-      // rjf: get pointed-at type
-      B32 array_is_string = ((E_TypeKind_Char8 <= direct_type_kind && direct_type_kind <= E_TypeKind_UChar32) ||
-                             direct_type_kind == E_TypeKind_S8 ||
-                             direct_type_kind == E_TypeKind_U8);
-      
-      // rjf: special case: push strings for textual string content
-      B32 did_content = 0;
-      if(!did_content && array_is_string && !no_string)
-      {
-        U64 element_size = e_type_byte_size_from_key(direct_type_key);
-        did_content = 1;
-        U64 string_buffer_size = Clamp(1, array_count, 1024);
-        U8 *string_buffer = push_array(arena, U8, string_buffer_size);
-        switch(eval.mode)
-        {
-          default:{}break;
-          case E_Mode_Offset:
-          {
-            U64 string_memory_addr = eval.value.u64;
-            B32 read_good = e_space_read(eval.space, string_buffer, r1u64(string_memory_addr, string_memory_addr+string_buffer_size));
-          }break;
-          case E_Mode_Value:
-          {
-            MemoryCopy(string_buffer, &eval.value.u512[0], Min(string_buffer_size, sizeof(eval.value)));
-          }break;
-        }
-        String8 string = {0};
-        switch(element_size)
-        {
-          default:{string = str8_cstring_capped(string_buffer, string_buffer + string_buffer_size);}break;
-          case 2: {string = str8_from_16(arena, str16_cstring_capped(string_buffer, string_buffer + string_buffer_size));}break;
-          case 4: {string = str8_from_32(arena, str32_cstring((U32 *)string_buffer));}break;
-        }
-        String8 string_escaped = ev_escaped_from_raw_string(arena, string);
-        space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, string_escaped).x;
-        space_taken += 2*fnt_dim_from_tag_size_string(font, font_size, 0, 0, str8_lit("\"")).x;
-        if(!no_addr || depth > 0)
-        {
-          str8_list_push(arena, out, str8_lit("\""));
-        }
-        str8_list_push(arena, out, string_escaped);
-        if(!no_addr || depth > 0)
-        {
-          str8_list_push(arena, out, str8_lit("\""));
-        }
-      }
-      
-      // rjf: descend in all other cases
-      if(!did_content && (flags & EV_StringFlag_ReadOnlyDisplayRules))
-      {
-        did_content = 1;
+        // rjf: unpack type info
+        E_TypeKind type_kind = e_type_kind_from_key(e_type_unwrap(eval.type_key));
+        E_TypeKey direct_type_key = e_type_unwrap(e_type_ptee_from_key(e_type_unwrap(eval.type_key)));
+        E_TypeKind direct_type_kind = e_type_kind_from_key(direct_type_key);
         
-        // rjf: [
+        // rjf: unpack info about pointer destination
+        E_Eval value_eval = e_value_eval_from_eval(eval);
+        B32 ptee_has_content = (direct_type_kind != E_TypeKind_Null && direct_type_kind != E_TypeKind_Void);
+        B32 ptee_has_string  = ((E_TypeKind_Char8 <= direct_type_kind && direct_type_kind <= E_TypeKind_UChar32) ||
+                                direct_type_kind == E_TypeKind_S8 ||
+                                direct_type_kind == E_TypeKind_U8);
+        E_Space space = value_eval.space;
+        CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(space);
+        CTRL_Entity *process = ctrl_process_from_entity(entity);
+        if(process == &ctrl_entity_nil)
         {
-          String8 bracket = str8_lit("[");
-          str8_list_push(arena, out, bracket);
-          space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, bracket).x;
+          process = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->process);
+        }
+        String8 symbol_name = d_symbol_name_from_process_vaddr(arena, process, value_eval.value.u64, 1);
+        
+        // rjf: special case: push strings for textual string content
+        B32 did_content = 0;
+        B32 did_string = 0;
+        if(!did_content && ptee_has_string && !no_string)
+        {
+          did_content = 1;
+          did_string = 1;
+          U64 string_memory_addr = value_eval.value.u64;
+          U64 element_size = e_type_byte_size_from_key(direct_type_key);
+          U64 string_buffer_size = 1024;
+          U8 *string_buffer = push_array(arena, U8, string_buffer_size);
+          for(U64 try_size = string_buffer_size; try_size >= 16; try_size /= 2)
+          {
+            B32 read_good = e_space_read(eval.space, string_buffer, r1u64(string_memory_addr, string_memory_addr+try_size));
+            if(read_good)
+            {
+              break;
+            }
+          }
+          string_buffer[string_buffer_size-1] = 0;
+          String8 string = {0};
+          switch(element_size)
+          {
+            default:{string = str8_cstring((char *)string_buffer);}break;
+            case 2: {string = str8_from_16(arena, str16_cstring((U16 *)string_buffer));}break;
+            case 4: {string = str8_from_32(arena, str32_cstring((U32 *)string_buffer));}break;
+          }
+          String8 string_escaped = ev_escaped_from_raw_string(arena, string);
+          space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, string_escaped).x;
+          space_taken += 2*fnt_dim_from_tag_size_string(font, font_size, 0, 0, str8_lit("\"")).x;
+          if(!no_addr || depth > 0)
+          {
+            str8_list_push(arena, out, str8_lit("\""));
+          }
+          str8_list_push(arena, out, string_escaped);
+          if(!no_addr || depth > 0)
+          {
+            str8_list_push(arena, out, str8_lit("\""));
+          }
+        }
+        
+        // rjf: special case: push strings for symbols
+        if(value_eval.value.u64 != 0 &&
+           !did_content && symbol_name.size != 0 &&
+           flags & EV_StringFlag_ReadOnlyDisplayRules &&
+           ((type_kind == E_TypeKind_Ptr && direct_type_kind == E_TypeKind_Void) ||
+            (type_kind == E_TypeKind_Ptr && direct_type_kind == E_TypeKind_Function) ||
+            (type_kind == E_TypeKind_Function)))
+        {
+          did_content = 1;
+          str8_list_push(arena, out, symbol_name);
+          space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, symbol_name).x;
+        }
+        
+        // rjf: special case: need symbol name, don't have one
+        if(value_eval.value.u64 != 0 &&
+           !did_content && symbol_name.size == 0 &&
+           flags & EV_StringFlag_ReadOnlyDisplayRules &&
+           ((type_kind == E_TypeKind_Ptr && direct_type_kind == E_TypeKind_Function) ||
+            (type_kind == E_TypeKind_Function)) &&
+           (flags & EV_StringFlag_ReadOnlyDisplayRules))
+        {
+          did_content = 1;
+          String8 string = str8_lit("???");
+          str8_list_push(arena, out, string);
+          space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, string).x;
+        }
+        
+        // rjf: push pointer value
+        B32 did_ptr_value = 0;
+        if(!no_addr || value_eval.value.u64 == 0)
+        {
+          did_ptr_value = 1;
+          if(did_content)
+          {
+            String8 left_paren = str8_lit(" (");
+            space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, left_paren).x;
+            str8_list_push(arena, out, left_paren);
+          }
+          String8 string = ev_string_from_simple_typed_eval(arena, flags, radix, min_digits, value_eval);
+          space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, string).x;
+          str8_list_push(arena, out, string);
+          if(did_content)
+          {
+            String8 right_paren = str8_lit(")");
+            space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, right_paren).x;
+            str8_list_push(arena, out, right_paren);
+          }
+        }
+        
+        // rjf: descend for all other cases
+        B32 did_arrow = 0;
+        if(value_eval.value.u64 != 0 && !did_content && ptee_has_content && (flags & EV_StringFlag_ReadOnlyDisplayRules))
+        {
+          if(did_ptr_value && !did_arrow)
+          {
+            did_arrow = 1;
+            String8 arrow = str8_lit(" -> ");
+            space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, arrow).x;
+            str8_list_push(arena, out, arrow);
+          }
+          did_content = 1;
+          if(depth < 4)
+          {
+            E_Expr *deref_expr = e_expr_ref_deref(scratch.arena, eval.expr);
+            E_Eval deref_eval = e_eval_from_expr(scratch.arena, deref_expr);
+            space_taken += rd_append_value_strings_from_eval(arena, flags, radix, font, font_size, max_size-space_taken, depth+1, deref_eval, out);
+          }
+          else
+          {
+            String8 ellipses = str8_lit("...");
+            str8_list_push(arena, out, ellipses);
+            space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, ellipses).x;
+          }
+        }
+      }break;
+      
+      //- rjf: arrays
+      case E_TypeKind_Array:
+      {
+        // rjf: unpack type info
+        E_Type *eval_type = e_type_from_key__cached(e_type_unwrap(eval.type_key));
+        E_TypeKey direct_type_key = e_type_unwrap(eval_type->direct_type_key);
+        E_TypeKind direct_type_kind = e_type_kind_from_key(direct_type_key);
+        U64 array_count = eval_type->count;
+        
+        // rjf: get pointed-at type
+        B32 array_is_string = ((E_TypeKind_Char8 <= direct_type_kind && direct_type_kind <= E_TypeKind_UChar32) ||
+                               direct_type_kind == E_TypeKind_S8 ||
+                               direct_type_kind == E_TypeKind_U8);
+        
+        // rjf: special case: push strings for textual string content
+        B32 did_content = 0;
+        if(!did_content && array_is_string && !no_string)
+        {
+          U64 element_size = e_type_byte_size_from_key(direct_type_key);
+          did_content = 1;
+          U64 string_buffer_size = Clamp(1, array_count, 1024);
+          U8 *string_buffer = push_array(arena, U8, string_buffer_size);
+          switch(eval.mode)
+          {
+            default:{}break;
+            case E_Mode_Offset:
+            {
+              U64 string_memory_addr = eval.value.u64;
+              B32 read_good = e_space_read(eval.space, string_buffer, r1u64(string_memory_addr, string_memory_addr+string_buffer_size));
+            }break;
+            case E_Mode_Value:
+            {
+              MemoryCopy(string_buffer, &eval.value.u512[0], Min(string_buffer_size, sizeof(eval.value)));
+            }break;
+          }
+          String8 string = {0};
+          switch(element_size)
+          {
+            default:{string = str8_cstring_capped(string_buffer, string_buffer + string_buffer_size);}break;
+            case 2: {string = str8_from_16(arena, str16_cstring_capped(string_buffer, string_buffer + string_buffer_size));}break;
+            case 4: {string = str8_from_32(arena, str32_cstring((U32 *)string_buffer));}break;
+          }
+          String8 string_escaped = ev_escaped_from_raw_string(arena, string);
+          space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, string_escaped).x;
+          space_taken += 2*fnt_dim_from_tag_size_string(font, font_size, 0, 0, str8_lit("\"")).x;
+          if(!no_addr || depth > 0)
+          {
+            str8_list_push(arena, out, str8_lit("\""));
+          }
+          str8_list_push(arena, out, string_escaped);
+          if(!no_addr || depth > 0)
+          {
+            str8_list_push(arena, out, str8_lit("\""));
+          }
+        }
+        
+        // rjf: if we did not do any special content, then go to the regular arrays/structs/sets case
+        if(!did_content)
+        {
+          goto arrays_and_sets_and_structs;
+        }
+      }break;
+      
+      //- rjf: non-string-arrays/structs/sets
+      case E_TypeKind_Struct:
+      case E_TypeKind_Union:
+      case E_TypeKind_Class:
+      case E_TypeKind_IncompleteStruct:
+      case E_TypeKind_IncompleteUnion:
+      case E_TypeKind_IncompleteClass:
+      case E_TypeKind_Set:
+      arrays_and_sets_and_structs:
+      {
+        String8 opener_string = str8_lit("{");
+        String8 closer_string = str8_lit("}");
+        if(kind == E_TypeKind_Array)
+        {
+          opener_string = str8_lit("[");
+          closer_string = str8_lit("]");
+        }
+        
+        // rjf: opener ({, [)
+        {
+          str8_list_push(arena, out, opener_string);
+          space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, opener_string).x;
         }
         
         // rjf: build contents
         if(depth < 4)
         {
-          for(U64 idx = 0; idx < array_count && max_size > space_taken; idx += 1)
+          E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, eval.expr);
+          E_LookupRuleTagPair lookup_rule_and_tag = e_lookup_rule_tag_pair_from_expr_irtree(eval.expr, &irtree);
+          E_LookupRule *lookup_rule = lookup_rule_and_tag.rule;
+          E_Expr *lookup_rule_tag = lookup_rule_and_tag.tag;
+          E_LookupInfo lookup_info = lookup_rule->info(arena, &irtree, str8_zero());
+          U64 total_possible_child_count = Max(lookup_info.idxed_expr_count, lookup_info.named_expr_count);
+          B32 is_first = 1;
+          for(U64 idx = 0; idx < total_possible_child_count && max_size > space_taken; idx += 1)
           {
-            E_Expr *element_expr = e_expr_ref_array_index(scratch.arena, eval.expr, idx);
-            E_Eval element_eval = e_eval_from_expr(scratch.arena, element_expr);
-            space_taken += rd_append_value_strings_from_eval(arena, flags, radix, font, font_size, max_size-space_taken, depth+1, element_eval, out);
-            if(idx+1 < array_count)
+            E_Expr *expr = &e_expr_nil;
+            String8 expr_string = {0};
+            lookup_rule->range(scratch.arena, eval.expr, r1u64(idx, idx+1), &expr, &expr_string, lookup_info.user_data);
+            if(expr != &e_expr_nil)
             {
-              String8 comma = str8_lit(", ");
-              space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, comma).x;
-              str8_list_push(arena, out, comma);
-            }
-            if(space_taken > max_size && idx+1 < array_count)
-            {
-              String8 ellipses = str8_lit("...");
-              space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, ellipses).x;
-              str8_list_push(arena, out, ellipses);
+              if(!is_first)
+              {
+                String8 comma = str8_lit(", ");
+                space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, comma).x;
+                str8_list_push(arena, out, comma);
+              }
+              is_first = 0;
+              E_Eval child_eval = e_eval_from_expr(scratch.arena, expr);
+              space_taken += rd_append_value_strings_from_eval(arena, flags, radix, font, font_size, max_size-space_taken, depth+1, child_eval, out);
+              if(space_taken > max_size && idx+1 < total_possible_child_count)
+              {
+                String8 ellipses = str8_lit(", ...");
+                space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, ellipses).x;
+                str8_list_push(arena, out, ellipses);
+              }
             }
           }
         }
@@ -9573,75 +9614,13 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
           space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, ellipses).x;
         }
         
-        // rjf: ]
+        // rjf: closer (}, ])
         {
-          String8 bracket = str8_lit("]");
-          str8_list_push(arena, out, bracket);
-          space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, bracket).x;
+          str8_list_push(arena, out, closer_string);
+          space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, closer_string).x;
         }
-      }
-    }break;
-    
-    //- rjf: structs
-    case E_TypeKind_Struct:
-    case E_TypeKind_Union:
-    case E_TypeKind_Class:
-    case E_TypeKind_IncompleteStruct:
-    case E_TypeKind_IncompleteUnion:
-    case E_TypeKind_IncompleteClass:
-    {
-      ProfBegin("struct");
-      
-      // rjf: open brace
-      {
-        String8 brace = str8_lit("{");
-        str8_list_push(arena, out, brace);
-        space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, brace).x;
-      }
-      
-      // rjf: content
-      if(depth < 4)
-      {
-        E_MemberArray data_members = e_type_data_members_from_key__cached(e_type_unwrap(eval.type_key));
-        for(U64 member_idx = 0; member_idx < data_members.count && max_size > space_taken; member_idx += 1)
-        {
-          E_Member *mem = &data_members.v[member_idx];
-          ProfScope("member %.*s", str8_varg(mem->name))
-          {
-            E_Expr *dot_expr = e_expr_ref_member_access(scratch.arena, eval.expr, mem->name);
-            E_Eval dot_eval = e_eval_from_expr(scratch.arena, dot_expr);
-            space_taken += rd_append_value_strings_from_eval(arena, flags, radix, font, font_size, max_size-space_taken, depth+1, dot_eval, out);
-            if(member_idx+1 < data_members.count)
-            {
-              String8 comma = str8_lit(", ");
-              space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, comma).x;
-              str8_list_push(arena, out, comma);
-            }
-            if(space_taken > max_size && member_idx+1 < data_members.count)
-            {
-              String8 ellipses = str8_lit("...");
-              space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, ellipses).x;
-              str8_list_push(arena, out, ellipses);
-            }
-          }
-        }
-      }
-      else
-      {
-        String8 ellipses = str8_lit("...");
-        str8_list_push(arena, out, ellipses);
-        space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, ellipses).x;
-      }
-      
-      // rjf: close brace
-      {
-        String8 brace = str8_lit("}");
-        str8_list_push(arena, out, brace);
-        space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, brace).x;
-      }
-      
-      ProfEnd();
-    }break;
+      }break;
+    }
   }
   
   scratch_end(scratch);
@@ -12993,7 +12972,7 @@ rd_frame(void)
             e_string2expr_map_insert(scratch.arena, ctx->macro_map, str8_lit("current_module"), expr);
           }
         }
-        e_auto_hook_map_insert_new(scratch.arena, ctx->auto_hook_map, name, name);
+        e_auto_hook_map_insert_new(scratch.arena, ctx->auto_hook_map, .type_key = type_key, .tag_expr_string = name);
       }
       
       //- rjf: add macro for collections with specific lookup rules

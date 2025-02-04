@@ -504,51 +504,15 @@ ev_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, String8 str
       // rjf: unpack expr
       E_IRTreeAndType expr_irtree = e_irtree_and_type_from_expr(scratch.arena, t->expr);
       
-      // rjf: get expansion view rule info
-      E_LookupRule *lookup_rule = &e_lookup_rule__default;
-      EV_ViewRuleInfo *expand_rule = default_expand_view_rule_info;
-      E_Expr *lookup_rule_tag = &e_expr_nil;
-      E_Expr *expand_rule_tag = &e_expr_nil;
-      for(E_Expr *tag = t->expr->first_tag; tag != &e_expr_nil; tag = tag->next)
-      {
-        E_LookupRule *lookup_rule_candidate = e_lookup_rule_from_string(tag->string);
-        EV_ViewRuleInfo *expand_rule_candidate = ev_view_rule_info_from_string(tag->string);
-        if(lookup_rule_candidate != &e_lookup_rule__nil)
-        {
-          lookup_rule = lookup_rule_candidate;
-          lookup_rule_tag = tag;
-        }
-        if(expand_rule_candidate != &ev_nil_view_rule_info)
-        {
-          expand_rule = expand_rule_candidate;
-          expand_rule_tag = tag;
-        }
-      }
+      // rjf: get expr's lookup rule
+      E_LookupRuleTagPair lookup_rule_and_tag = e_lookup_rule_tag_pair_from_expr_irtree(t->expr, &expr_irtree);
+      E_LookupRule *lookup_rule = lookup_rule_and_tag.rule;
+      E_Expr *lookup_rule_tag = lookup_rule_and_tag.tag;
       
-      // rjf: for set types, try to use the set's name to lookup rules, if we don't
-      // have any
-      if(lookup_rule == &e_lookup_rule__default ||
-         expand_rule == default_expand_view_rule_info)
-      {
-        E_TypeKey expr_type_key = expr_irtree.type_key;
-        E_TypeKind expr_type_kind = e_type_kind_from_key(expr_type_key);
-        if(expr_type_kind == E_TypeKind_Set)
-        {
-          E_Type *expr_type = e_type_from_key__cached(expr_type_key);
-          if(lookup_rule == &e_lookup_rule__default)
-          {
-            lookup_rule = e_lookup_rule_from_string(expr_type->name);
-          }
-          if(expand_rule == default_expand_view_rule_info)
-          {
-            expand_rule = ev_view_rule_info_from_string(expr_type->name);
-            if(expand_rule == &ev_nil_view_rule_info)
-            {
-              expand_rule = default_expand_view_rule_info;
-            }
-          }
-        }
-      }
+      // rjf: get expr's expansion rule
+      EV_ExpandRuleTagPair expand_rule_and_tag = ev_expand_rule_tag_pair_from_expr_irtree(t->expr, &expr_irtree);
+      EV_ViewRuleInfo *expand_rule = expand_rule_and_tag.rule;
+      E_Expr *expand_rule_tag = expand_rule_and_tag.tag;
       
       // rjf: get top-level lookup/expansion info
       E_LookupInfo lookup_info = lookup_rule->info(arena, &expr_irtree, filter);
@@ -1508,5 +1472,64 @@ ev_escaped_from_raw_string(Arena *arena, String8 raw)
   StringJoin join = {0};
   String8 result = str8_list_join(arena, &parts, &join);
   scratch_end(scratch);
+  return result;
+}
+
+////////////////////////////////
+//~ rjf: Expression & IR-Tree => Expand Rule
+
+internal EV_ExpandRuleTagPair
+ev_expand_rule_tag_pair_from_expr_irtree(E_Expr *expr, E_IRTreeAndType *irtree)
+{
+  EV_ViewRuleInfo *default_expand_view_rule = ev_view_rule_info_from_string(str8_lit("default"));
+  EV_ExpandRuleTagPair result = {default_expand_view_rule, &e_expr_nil};
+  {
+    // rjf: first try explicitly-stored tags
+    if(result.rule == default_expand_view_rule)
+    {
+      for(E_Expr *tag = expr->first_tag; tag != &e_expr_nil; tag = tag->next)
+      {
+        EV_ViewRuleInfo *candidate = ev_view_rule_info_from_string(tag->string);
+        if(candidate != &ev_nil_view_rule_info)
+        {
+          result.rule = candidate;
+          result.tag = tag;
+          break;
+        }
+      }
+    }
+    
+    // rjf: next try implicit set name -> rule mapping
+    if(result.rule == default_expand_view_rule)
+    {
+      E_TypeKind type_kind = e_type_kind_from_key(irtree->type_key);
+      if(type_kind == E_TypeKind_Set)
+      {
+        E_Type *type = e_type_from_key__cached(irtree->type_key);
+        String8 name = type->name;
+        EV_ViewRuleInfo *candidate = ev_view_rule_info_from_string(name);
+        if(candidate != &ev_nil_view_rule_info)
+        {
+          result.rule = candidate;
+        }
+      }
+    }
+    
+    // rjf: next try auto hook map
+    if(result.rule == default_expand_view_rule)
+    {
+      E_ExprList tags = e_auto_hook_tag_exprs_from_type_key__cached(irtree->type_key);
+      for(E_ExprNode *n = tags.first; n != 0; n = n->next)
+      {
+        EV_ViewRuleInfo *candidate = ev_view_rule_info_from_string(n->v->string);
+        if(candidate != &ev_nil_view_rule_info)
+        {
+          result.rule = candidate;
+          result.tag = n->v;
+          break;
+        }
+      }
+    }
+  }
   return result;
 }

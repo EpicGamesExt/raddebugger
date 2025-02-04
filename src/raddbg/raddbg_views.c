@@ -973,11 +973,11 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     }
     
     // rjf: fill row's cells
-    rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .string = str8_lit("expression"),       .pct = 0.25f);
-    rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval,                                         .pct = 0.20f);
-    rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .string = str8_lit("typeof($expr)"),    .pct = 0.15f);
-    rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .string = str8_lit("sizeof($expr)"),    .pct = 0.15f);
-    rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .string = str8_lit("view_rule"),        .pct = 0.25f);
+    rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr,                                        .pct = 0.25f);
+    rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval,                                        .pct = 0.35f);
+    rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .string = str8_lit("typeof($expr)"),   .pct = 0.15f);
+    rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Tag,                                         .pct = 0.25f);
+    // rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .string = str8_lit("sizeof($expr)"),    .pct = 0.15f);
     
     di_scope_close(di_scope);
     scratch_end(scratch);
@@ -1209,6 +1209,13 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, RD_WatchRowInfo *row_info
       result.string = rd_value_string_from_eval(arena, 0, 10, font, font_size, max_size_px, result.eval);
       
       scratch_end(scratch);
+    }break;
+    
+    //- rjf: tag cells -> look up attached tag
+    case RD_WatchCellKind_Tag:
+    {
+      EV_View *ev_view = rd_view_eval_view();
+      result.string = ev_view_rule_from_key(ev_view, row->key);
     }break;
   }
   return result;

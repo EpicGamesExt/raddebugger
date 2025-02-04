@@ -129,6 +129,16 @@ struct EV_ViewRuleInfoTable
 };
 
 ////////////////////////////////
+//~ rjf: Expansion Rule Types
+
+typedef struct EV_ExpandRuleTagPair EV_ExpandRuleTagPair;
+struct EV_ExpandRuleTagPair
+{
+  EV_ViewRuleInfo *rule;
+  E_Expr *tag;
+};
+
+////////////////////////////////
 //~ rjf: Blocks
 
 typedef struct EV_Block EV_Block;
@@ -367,5 +377,10 @@ internal String8 ev_string_from_hresult_facility_code(U32 code);
 internal String8 ev_string_from_hresult_code(U32 code);
 internal String8 ev_string_from_simple_typed_eval(Arena *arena, EV_StringFlags flags, U32 radix, U32 min_digits, E_Eval eval);
 internal String8 ev_escaped_from_raw_string(Arena *arena, String8 raw);
+
+////////////////////////////////
+//~ rjf: Expression & IR-Tree => Expand Rule
+
+internal EV_ExpandRuleTagPair ev_expand_rule_tag_pair_from_expr_irtree(E_Expr *expr, E_IRTreeAndType *irtree);
 
 #endif // EVAL_VISUALIZATION_CORE_H

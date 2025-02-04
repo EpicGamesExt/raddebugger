@@ -710,22 +710,26 @@ e_auto_hook_map_make(Arena *arena, U64 slots_count)
 }
 
 internal void
-e_auto_hook_map_insert_new(Arena *arena, E_AutoHookMap *map, String8 pattern, String8 tag_expr_string)
+e_auto_hook_map_insert_new_(Arena *arena, E_AutoHookMap *map, E_AutoHookParams *params)
 {
   Temp scratch = scratch_begin(&arena, 1);
-  E_TokenArray tokens = e_token_array_from_text(scratch.arena, pattern);
-  E_Parse parse = e_parse_type_from_text_tokens(scratch.arena, pattern, &tokens);
-  E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, parse.expr);
-  E_TypeKey type_key = irtree.type_key;
+  E_TypeKey type_key = params->type_key;
+  if(params->type_pattern.size != 0)
+  {
+    E_TokenArray tokens = e_token_array_from_text(scratch.arena, params->type_pattern);
+    E_Parse parse = e_parse_type_from_text_tokens(scratch.arena, params->type_pattern, &tokens);
+    E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, parse.expr);
+    type_key = irtree.type_key;
+  }
   E_AutoHookNode *node = push_array(arena, E_AutoHookNode, 1);
   node->type_key = type_key;
   U8 pattern_split = '?';
-  node->type_pattern_parts = str8_split(arena, pattern, &pattern_split, 1, 0);
-  node->tag_expr = e_parse_expr_from_text(arena, push_str8_copy(arena, tag_expr_string));
+  node->type_pattern_parts = str8_split(arena, params->type_pattern, &pattern_split, 1, 0);
+  node->tag_expr = e_parse_expr_from_text(arena, push_str8_copy(arena, params->tag_expr_string));
   if(!e_type_key_match(e_type_key_zero(), type_key))
   {
     U64 hash = e_hash_from_string(5381, str8_struct(&type_key));
-    U64 slot_idx = map->slots_count;
+    U64 slot_idx = hash%map->slots_count;
     SLLQueuePush_N(map->slots[slot_idx].first, map->slots[slot_idx].last, node, hash_next);
   }
   else
@@ -2287,6 +2291,64 @@ e_irtree_and_type_from_expr__cached(E_Expr *expr)
     if(node != 0)
     {
       result = node->irtree_and_type;
+    }
+  }
+  return result;
+}
+
+////////////////////////////////
+//~ rjf: Expression & IR-Tree => Lookup Rule
+
+internal E_LookupRuleTagPair
+e_lookup_rule_tag_pair_from_expr_irtree(E_Expr *expr, E_IRTreeAndType *irtree)
+{
+  E_LookupRuleTagPair result = {&e_lookup_rule__default, &e_expr_nil};
+  {
+    // rjf: first try explicitly-stored tags
+    if(result.rule == &e_lookup_rule__default)
+    {
+      for(E_Expr *tag = expr->first_tag; tag != &e_expr_nil; tag = tag->next)
+      {
+        E_LookupRule *candidate = e_lookup_rule_from_string(tag->string);
+        if(candidate != &e_lookup_rule__nil)
+        {
+          result.rule = candidate;
+          result.tag = tag;
+          break;
+        }
+      }
+    }
+    
+    // rjf: next try implicit set name -> rule mapping
+    if(result.rule == &e_lookup_rule__default)
+    {
+      E_TypeKind type_kind = e_type_kind_from_key(irtree->type_key);
+      if(type_kind == E_TypeKind_Set)
+      {
+        E_Type *type = e_type_from_key__cached(irtree->type_key);
+        String8 name = type->name;
+        E_LookupRule *candidate = e_lookup_rule_from_string(name);
+        if(candidate != &e_lookup_rule__nil)
+        {
+          result.rule = candidate;
+        }
+      }
+    }
+    
+    // rjf: next try auto hook map
+    if(result.rule == &e_lookup_rule__default)
+    {
+      E_ExprList tags = e_auto_hook_tag_exprs_from_type_key__cached(irtree->type_key);
+      for(E_ExprNode *n = tags.first; n != 0; n = n->next)
+      {
+        E_LookupRule *candidate = e_lookup_rule_from_string(n->v->string);
+        if(candidate != &e_lookup_rule__nil)
+        {
+          result.rule = candidate;
+          result.tag = n->v;
+          break;
+        }
+      }
     }
   }
   return result;

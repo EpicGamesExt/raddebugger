@@ -43,9 +43,9 @@ struct RD_CodeViewBuildResult
 
 typedef enum RD_WatchCellKind
 {
-  RD_WatchCellKind_String, // plain text
-  RD_WatchCellKind_Expr,   // strings for forming expression, under some key; `expression` for expression, `view_rule` for view rule
-  RD_WatchCellKind_Eval,   // an evaluation of the expression, with some optional modification - e.g. `$expr.some_member`, or `typeof($expr)~
+  RD_WatchCellKind_Expr, // strings to represent expression itself
+  RD_WatchCellKind_Tag,  // strings to represent attached tags at row-granularity
+  RD_WatchCellKind_Eval, // an evaluation of the expression, with some optional modification - e.g. `$expr.some_member`, or `typeof($expr)`
 }
 RD_WatchCellKind;
 

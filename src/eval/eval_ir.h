@@ -135,6 +135,13 @@ struct E_LookupRuleMap
   U64 slots_count;
 };
 
+typedef struct E_LookupRuleTagPair E_LookupRuleTagPair;
+struct E_LookupRuleTagPair
+{
+  E_LookupRule *rule;
+  E_Expr *tag;
+};
+
 ////////////////////////////////
 //~ rjf: IR Generation Hooks
 
@@ -199,6 +206,14 @@ struct E_AutoHookMap
   E_AutoHookSlot *slots;
   E_AutoHookNode *first_pattern;
   E_AutoHookNode *last_pattern;
+};
+
+typedef struct E_AutoHookParams E_AutoHookParams;
+struct E_AutoHookParams
+{
+  E_TypeKey type_key;
+  String8 type_pattern;
+  String8 tag_expr_string;
 };
 
 ////////////////////////////////
@@ -360,7 +375,8 @@ internal E_IRGenRule *e_irgen_rule_from_string(String8 string);
 //~ rjf: Auto Hooks
 
 internal E_AutoHookMap e_auto_hook_map_make(Arena *arena, U64 slots_count);
-internal void e_auto_hook_map_insert_new(Arena *arena, E_AutoHookMap *map, String8 pattern, String8 tag_expr_string);
+internal void e_auto_hook_map_insert_new_(Arena *arena, E_AutoHookMap *map, E_AutoHookParams *params);
+#define e_auto_hook_map_insert_new(arena, map, ...) e_auto_hook_map_insert_new_((arena), (map), &(E_AutoHookParams){.type_key = zero_struct, __VA_ARGS__})
 internal E_ExprList e_auto_hook_tag_exprs_from_type_key(Arena *arena, E_TypeKey type_key);
 internal E_ExprList e_auto_hook_tag_exprs_from_type_key__cached(E_TypeKey type_key);
 
@@ -407,5 +423,10 @@ internal String8 e_bytecode_from_oplist(Arena *arena, E_OpList *oplist);
 //~ rjf: IRified Expression Cache
 
 internal E_IRTreeAndType e_irtree_and_type_from_expr__cached(E_Expr *expr);
+
+////////////////////////////////
+//~ rjf: Expression & IR-Tree => Lookup Rule
+
+internal E_LookupRuleTagPair e_lookup_rule_tag_pair_from_expr_irtree(E_Expr *expr, E_IRTreeAndType *irtree);
 
 #endif // EVAL_IR_H
