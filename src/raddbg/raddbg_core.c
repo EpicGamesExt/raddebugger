@@ -12805,7 +12805,7 @@ rd_frame(void)
     //
     E_TypeKey meta_eval_type_key = e_type_key_cons_base(type(CTRL_MetaEval));
     E_IRCtx *ir_ctx = push_array(scratch.arena, E_IRCtx, 1);
-    e_ir_ctx = 0;
+    if(e_ir_state != 0) { e_ir_state->ctx = 0; }
     {
       E_IRCtx *ctx = ir_ctx;
       ctx->macro_map    = push_array(scratch.arena, E_String2ExprMap, 1);
@@ -12814,12 +12814,6 @@ rd_frame(void)
       ctx->lookup_rule_map[0] = e_lookup_rule_map_make(scratch.arena, 512);
       ctx->auto_hook_map      = push_array(scratch.arena, E_AutoHookMap, 1);
       ctx->auto_hook_map[0]   = e_auto_hook_map_make(scratch.arena, 512);
-      ctx->used_tag_map       = push_array(scratch.arena, E_UsedTagMap, 1);
-      ctx->used_tag_map->slots_count = 64;
-      ctx->used_tag_map->slots = push_array(scratch.arena, E_UsedTagSlot, ctx->used_tag_map->slots_count);
-      ctx->type_auto_hook_cache_map = push_array(scratch.arena, E_TypeAutoHookCacheMap, 1);
-      ctx->type_auto_hook_cache_map->slots_count = 256;
-      ctx->type_auto_hook_cache_map->slots = push_array(scratch.arena, E_TypeAutoHookCacheSlot, ctx->type_auto_hook_cache_map->slots_count);
       
       //- rjf: choose set of evallable meta names
       String8 evallable_meta_names[] =
@@ -16252,7 +16246,7 @@ X(getting_started)
           {
             if(t->expr->kind == E_ExprKind_LeafIdent)
             {
-              E_Expr *macro_expr = e_string2expr_lookup(e_ir_ctx->macro_map, t->expr->string);
+              E_Expr *macro_expr = e_string2expr_lookup(e_ir_state->ctx->macro_map, t->expr->string);
               if(macro_expr != &e_expr_nil)
               {
                 E_Eval eval = e_eval_from_expr(scratch.arena, macro_expr);

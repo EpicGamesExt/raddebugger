@@ -252,7 +252,7 @@ struct E_TypeAutoHookCacheMap
 };
 
 ////////////////////////////////
-//~ rjf: Parse Context
+//~ rjf: IR Context
 
 typedef struct E_IRCtx E_IRCtx;
 struct E_IRCtx
@@ -261,6 +261,21 @@ struct E_IRCtx
   E_LookupRuleMap *lookup_rule_map;
   E_IRGenRuleMap *irgen_rule_map;
   E_AutoHookMap *auto_hook_map;
+};
+
+////////////////////////////////
+//~ rjf: IR State
+
+typedef struct E_IRState E_IRState;
+struct E_IRState
+{
+  Arena *arena;
+  U64 arena_eval_start_pos;
+  
+  // rjf: ir context
+  E_IRCtx *ctx;
+  
+  // rjf: caches
   E_UsedTagMap *used_tag_map;
   E_TypeAutoHookCacheMap *type_auto_hook_cache_map;
 };
@@ -292,7 +307,7 @@ local_persist read_only E_IRGenRule e_irgen_rule__default =
   E_IRGEN_FUNCTION_NAME(default),
 };
 global read_only E_IRNode e_irnode_nil = {&e_irnode_nil, &e_irnode_nil, &e_irnode_nil};
-thread_static E_IRCtx *e_ir_ctx = 0;
+thread_static E_IRState *e_ir_state = 0;
 
 ////////////////////////////////
 //~ rjf: Expr Kind Enum Functions

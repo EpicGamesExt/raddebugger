@@ -61,13 +61,26 @@ e_expr_kind_is_comparison(E_ExprKind kind)
 internal E_IRCtx *
 e_selected_ir_ctx(void)
 {
-  return e_ir_ctx;
+  return e_ir_state->ctx;
 }
 
 internal void
 e_select_ir_ctx(E_IRCtx *ctx)
 {
-  e_ir_ctx = ctx;
+  if(e_ir_state == 0)
+  {
+    Arena *arena = arena_alloc();
+    e_ir_state = push_array(arena, E_IRState, 1);
+    e_ir_state->arena = arena;
+    e_ir_state->arena_eval_start_pos = arena_pos(arena);
+  }
+  e_ir_state->ctx = ctx;
+  e_ir_state->used_tag_map       = push_array(e_ir_state->arena, E_UsedTagMap, 1);
+  e_ir_state->used_tag_map->slots_count = 64;
+  e_ir_state->used_tag_map->slots = push_array(e_ir_state->arena, E_UsedTagSlot, e_ir_state->used_tag_map->slots_count);
+  e_ir_state->type_auto_hook_cache_map = push_array(e_ir_state->arena, E_TypeAutoHookCacheMap, 1);
+  e_ir_state->type_auto_hook_cache_map->slots_count = 256;
+  e_ir_state->type_auto_hook_cache_map->slots = push_array(e_ir_state->arena, E_TypeAutoHookCacheSlot, e_ir_state->type_auto_hook_cache_map->slots_count);
 }
 
 ////////////////////////////////
@@ -102,11 +115,11 @@ internal E_LookupRule *
 e_lookup_rule_from_string(String8 string)
 {
   E_LookupRule *result = &e_lookup_rule__nil;
-  if(e_ir_ctx->lookup_rule_map != 0 && e_ir_ctx->lookup_rule_map->slots_count != 0)
+  if(e_ir_state->ctx->lookup_rule_map != 0 && e_ir_state->ctx->lookup_rule_map->slots_count != 0)
   {
     U64 hash = e_hash_from_string(5381, string);
-    U64 slot_idx = hash%e_ir_ctx->lookup_rule_map->slots_count;
-    for(E_LookupRuleNode *n = e_ir_ctx->lookup_rule_map->slots[slot_idx].first;
+    U64 slot_idx = hash%e_ir_state->ctx->lookup_rule_map->slots_count;
+    for(E_LookupRuleNode *n = e_ir_state->ctx->lookup_rule_map->slots[slot_idx].first;
         n != 0;
         n = n->next)
     {
@@ -664,9 +677,9 @@ internal E_IRGenRule *
 e_irgen_rule_from_string(String8 string)
 {
   E_IRGenRule *rule = &e_irgen_rule__default;
-  if(e_ir_ctx != 0 && e_ir_ctx->irgen_rule_map != 0 && e_ir_ctx->irgen_rule_map->slots_count != 0)
+  if(e_ir_state != 0 && e_ir_state->ctx != 0 && e_ir_state->ctx->irgen_rule_map != 0 && e_ir_state->ctx->irgen_rule_map->slots_count != 0)
   {
-    E_IRGenRuleMap *map = e_ir_ctx->irgen_rule_map;
+    E_IRGenRuleMap *map = e_ir_state->ctx->irgen_rule_map;
     U64 hash = e_hash_from_string(5381, string);
     U64 slot_idx = hash%map->slots_count;
     for(E_IRGenRuleNode *n = map->slots[slot_idx].first; n != 0; n = n->next)
@@ -724,10 +737,10 @@ e_auto_hook_tag_exprs_from_type_key(Arena *arena, E_TypeKey type_key)
 {
   ProfBeginFunction();
   E_ExprList exprs = {0};
-  if(e_ir_ctx != 0)
+  if(e_ir_state != 0 && e_ir_state->ctx != 0)
   {
     Temp scratch = scratch_begin(&arena, 1);
-    E_AutoHookMap *map = e_ir_ctx->auto_hook_map;
+    E_AutoHookMap *map = e_ir_state->ctx->auto_hook_map;
     
     //- rjf: gather exact-type-key-matches from the map
     if(map != 0 && map->slots_count != 0)
@@ -782,12 +795,12 @@ internal E_ExprList
 e_auto_hook_tag_exprs_from_type_key__cached(E_TypeKey type_key)
 {
   E_ExprList exprs = {0};
-  if(e_ir_ctx != 0 && e_ir_ctx->type_auto_hook_cache_map != 0 && e_ir_ctx->type_auto_hook_cache_map->slots_count != 0)
+  if(e_ir_state != 0 && e_ir_state->ctx != 0 && e_ir_state->type_auto_hook_cache_map != 0 && e_ir_state->type_auto_hook_cache_map->slots_count != 0)
   {
     U64 hash = e_hash_from_string(5381, str8_struct(&type_key));
-    U64 slot_idx = hash%e_ir_ctx->type_auto_hook_cache_map->slots_count;
+    U64 slot_idx = hash%e_ir_state->type_auto_hook_cache_map->slots_count;
     E_TypeAutoHookCacheNode *node = 0;
-    for(E_TypeAutoHookCacheNode *n = e_ir_ctx->type_auto_hook_cache_map->slots[slot_idx].first;
+    for(E_TypeAutoHookCacheNode *n = e_ir_state->type_auto_hook_cache_map->slots[slot_idx].first;
         n != 0;
         n = n->next)
     {
@@ -798,9 +811,8 @@ e_auto_hook_tag_exprs_from_type_key__cached(E_TypeKey type_key)
     }
     if(node == 0)
     {
-      // TODO(rjf): @cfg hack!!! should not be using this arena...
-      node = push_array(e_type_state->arena, E_TypeAutoHookCacheNode, 1);
-      SLLQueuePush(e_ir_ctx->type_auto_hook_cache_map->slots[slot_idx].first, e_ir_ctx->type_auto_hook_cache_map->slots[slot_idx].last, node);
+      node = push_array(e_ir_state->arena, E_TypeAutoHookCacheNode, 1);
+      SLLQueuePush(e_ir_state->type_auto_hook_cache_map->slots[slot_idx].first, e_ir_state->type_auto_hook_cache_map->slots[slot_idx].last, node);
       node->key = type_key;
       node->exprs = e_auto_hook_tag_exprs_from_type_key(e_type_state->arena, type_key);
     }
@@ -1807,16 +1819,16 @@ E_IRGEN_FUNCTION_DEF(default)
     //- rjf: leaf identifiers
     case E_ExprKind_LeafIdent:
     {
-      E_Expr *macro_expr = e_string2expr_lookup(e_ir_ctx->macro_map, expr->string);
+      E_Expr *macro_expr = e_string2expr_lookup(e_ir_state->ctx->macro_map, expr->string);
       if(macro_expr == &e_expr_nil)
       {
         e_msgf(arena, &result.msgs, E_MsgKind_ResolutionFailure, expr->location, "`%S` could not be found.", expr->string);
       }
       else
       {
-        e_string2expr_map_inc_poison(e_ir_ctx->macro_map, expr->string);
+        e_string2expr_map_inc_poison(e_ir_state->ctx->macro_map, expr->string);
         result = e_irtree_and_type_from_expr(arena, macro_expr);
-        e_string2expr_map_dec_poison(e_ir_ctx->macro_map, expr->string);
+        e_string2expr_map_dec_poison(e_ir_state->ctx->macro_map, expr->string);
       }
     }break;
     
@@ -1946,8 +1958,8 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
     {
       B32 tag_is_poisoned = 0;
       U64 hash = e_hash_from_string(5381, str8_struct(&tag));
-      U64 slot_idx = hash%e_ir_ctx->used_tag_map->slots_count;
-      for(E_UsedTagNode *n = e_ir_ctx->used_tag_map->slots[slot_idx].first; n != 0; n = n->next)
+      U64 slot_idx = hash%e_ir_state->used_tag_map->slots_count;
+      for(E_UsedTagNode *n = e_ir_state->used_tag_map->slots[slot_idx].first; n != 0; n = n->next)
       {
         if(n->tag == tag)
         {
@@ -1981,10 +1993,10 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
     if(t->tag != &e_expr_nil)
     {
       U64 hash = e_hash_from_string(5381, str8_struct(&t->tag));
-      U64 slot_idx = hash%e_ir_ctx->used_tag_map->slots_count;
+      U64 slot_idx = hash%e_ir_state->used_tag_map->slots_count;
       E_UsedTagNode *n = push_array(arena, E_UsedTagNode, 1);
       n->tag = t->tag;
-      DLLPushBack(e_ir_ctx->used_tag_map->slots[slot_idx].first, e_ir_ctx->used_tag_map->slots[slot_idx].last, n);
+      DLLPushBack(e_ir_state->used_tag_map->slots[slot_idx].first, e_ir_state->used_tag_map->slots[slot_idx].last, n);
     }
     
     // rjf: do this rule's generation
@@ -2002,8 +2014,8 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
         {
           B32 tag_is_poisoned = 0;
           U64 hash = e_hash_from_string(5381, str8_struct(&tag));
-          U64 slot_idx = hash%e_ir_ctx->used_tag_map->slots_count;
-          for(E_UsedTagNode *n = e_ir_ctx->used_tag_map->slots[slot_idx].first; n != 0; n = n->next)
+          U64 slot_idx = hash%e_ir_state->used_tag_map->slots_count;
+          for(E_UsedTagNode *n = e_ir_state->used_tag_map->slots[slot_idx].first; n != 0; n = n->next)
           {
             if(n->tag == tag)
             {
@@ -2034,12 +2046,12 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
     if(t->tag != &e_expr_nil)
     {
       U64 hash = e_hash_from_string(5381, str8_struct(&t->tag));
-      U64 slot_idx = hash%e_ir_ctx->used_tag_map->slots_count;
-      for(E_UsedTagNode *n = e_ir_ctx->used_tag_map->slots[slot_idx].first; n != 0; n = n->next)
+      U64 slot_idx = hash%e_ir_state->used_tag_map->slots_count;
+      for(E_UsedTagNode *n = e_ir_state->used_tag_map->slots[slot_idx].first; n != 0; n = n->next)
       {
         if(n->tag == t->tag)
         {
-          DLLRemove(e_ir_ctx->used_tag_map->slots[slot_idx].first, e_ir_ctx->used_tag_map->slots[slot_idx].last, n);
+          DLLRemove(e_ir_state->used_tag_map->slots[slot_idx].first, e_ir_state->used_tag_map->slots[slot_idx].last, n);
           break;
         }
       }
