@@ -12099,6 +12099,33 @@ rd_frame(void)
   rd_state->entity2evalblob_map->slots = push_array(rd_frame_arena(), RD_Entity2EvalBlobSlot, rd_state->entity2evalblob_map->slots_count);
   
   //////////////////////////////
+  //- rjf: iterate all tabs, touch their view-states
+  //
+  if(depth == 0)
+  {
+    Temp scratch = scratch_begin(0, 0);
+    RD_CfgList windows = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("window"));
+    for(RD_CfgNode *n = windows.first; n != 0; n = n->next)
+    {
+      RD_Cfg *window = n->v;
+      RD_PanelTree panel_tree = rd_panel_tree_from_cfg(scratch.arena, window);
+      for(RD_PanelNode *p = panel_tree.root; p != &rd_nil_panel_node; p = rd_panel_node_rec__depth_first_pre(panel_tree.root, p).next)
+      {
+        for(RD_CfgNode *n = p->tabs.first; n != 0; n = n->next)
+        {
+          RD_Cfg *tab = n->v;
+          if(rd_cfg_is_project_filtered(tab))
+          {
+            continue;
+          }
+          rd_view_state_from_cfg(tab);
+        }
+      }
+    }
+    scratch_end(scratch);
+  }
+  
+  //////////////////////////////
   //- rjf: garbage collect untouched immediate cfg trees
   //
   if(depth == 0)
