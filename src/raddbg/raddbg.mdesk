@@ -221,7 +221,7 @@ RD_VocabularyMap:
   //- rjf: modules
   {
     module,
-    ```x:{'label':code_string, 'exe':path, 'dbg':path, 'vaddr_range':vaddr_range}```,
+    ```x:{'exe':path, 'dbg':path, 'vaddr_range':vaddr_range}```,
   }
   
   //- rjf: threads

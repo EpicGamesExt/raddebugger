@@ -2497,7 +2497,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, String8 root_expr, String8 root_view
           //- rjf: determine row's flags & color palette
           //
           ProfBegin("determine row's flags & color palette");
-          UI_BoxFlags row_flags = 0;
+          UI_BoxFlags row_flags = UI_BoxFlag_DisableFocusOverlay;
           UI_Palette *palette = ui_top_palette();
           {
             if(row_is_fresh)

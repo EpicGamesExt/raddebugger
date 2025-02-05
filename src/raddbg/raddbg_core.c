@@ -8878,7 +8878,7 @@ E_LOOKUP_INFO_FUNCTION_DEF(watches)
     RD_CfgArray *cfgs = push_array(arena, RD_CfgArray, 1);
     cfgs[0] = rd_cfg_array_from_list(arena, &cfgs_list__filtered);
     result.user_data = cfgs;
-    result.idxed_expr_count = cfgs->count;
+    result.idxed_expr_count = cfgs->count + 1;
   }
   scratch_end(scratch);
   return result;
@@ -8893,9 +8893,12 @@ E_LOOKUP_RANGE_FUNCTION_DEF(watches)
   for(U64 idx = 0; idx < read_range_count; idx += 1)
   {
     U64 cfg_idx = read_range.min + idx;
-    String8 expr_string = rd_cfg_child_from_string(cfgs->v[idx], str8_lit("expression"))->first->string;
-    exprs[idx] = e_parse_expr_from_text(arena, expr_string);
-    exprs_strings[idx] = push_str8_copy(arena, expr_string);
+    if(cfg_idx < cfgs->count)
+    {
+      String8 expr_string = rd_cfg_child_from_string(cfgs->v[idx], str8_lit("expression"))->first->string;
+      exprs[idx] = e_parse_expr_from_text(arena, expr_string);
+      exprs_strings[idx] = push_str8_copy(arena, expr_string);
+    }
   }
 }
 
@@ -8987,6 +8990,13 @@ E_LOOKUP_RANGE_FUNCTION_DEF(registers)
   }
 }
 
+typedef struct RD_TopLevelCfgLookupAccel RD_TopLevelCfgLookupAccel;
+struct RD_TopLevelCfgLookupAccel
+{
+  String8Array cmds;
+  RD_CfgArray cfgs;
+};
+
 E_LOOKUP_INFO_FUNCTION_DEF(top_level_cfg)
 {
   E_LookupInfo result = {0};
@@ -8995,11 +9005,28 @@ E_LOOKUP_INFO_FUNCTION_DEF(top_level_cfg)
     E_TypeKey lhs_type_key = lhs->type_key;
     E_Type *lhs_type = e_type_from_key__cached(lhs_type_key);
     String8 cfg_name = rd_singular_from_code_name_plural(lhs_type->name);
-    RD_CfgList cfgs_list = rd_cfg_top_level_list_from_string(scratch.arena, cfg_name);
-    RD_CfgArray *cfgs = push_array(arena, RD_CfgArray, 1);
-    cfgs[0] = rd_cfg_array_from_list(arena, &cfgs_list);
-    result.user_data = cfgs;
-    result.idxed_expr_count = cfgs_list.count;
+    RD_CfgList cfgs_list = rd_cfg_top_level_list_from_string(scratch.arena, cfg_name);\
+    String8List cmds_list = {0};
+    // TODO(rjf): @cfg hack - probably want to table-drive this
+    if(str8_match(cfg_name, str8_lit("target"), 0))
+    {
+      str8_list_push(arena, &cmds_list, rd_cmd_kind_info_table[RD_CmdKind_AddTarget].string);
+    }
+    else if(str8_match(cfg_name, str8_lit("breakpoint"), 0))
+    {
+      str8_list_push(arena, &cmds_list, rd_cmd_kind_info_table[RD_CmdKind_AddBreakpoint].string);
+      str8_list_push(arena, &cmds_list, rd_cmd_kind_info_table[RD_CmdKind_AddAddressBreakpoint].string);
+      str8_list_push(arena, &cmds_list, rd_cmd_kind_info_table[RD_CmdKind_AddFunctionBreakpoint].string);
+    }
+    else if(str8_match(cfg_name, str8_lit("watch_pin"), 0))
+    {
+      str8_list_push(arena, &cmds_list, rd_cmd_kind_info_table[RD_CmdKind_AddWatchPin].string);
+    }
+    RD_TopLevelCfgLookupAccel *accel = push_array(arena, RD_TopLevelCfgLookupAccel, 1);
+    accel->cfgs = rd_cfg_array_from_list(arena, &cfgs_list);
+    accel->cmds = str8_array_from_list(arena, &cmds_list);
+    result.user_data = accel;
+    result.idxed_expr_count = accel->cfgs.count + accel->cmds.count;
   }
   scratch_end(scratch);
   return result;
@@ -9011,15 +9038,27 @@ E_LOOKUP_ACCESS_FUNCTION_DEF(top_level_cfg)
   if(kind == E_ExprKind_ArrayIndex)
   {
     Temp scratch = scratch_begin(&arena, 1);
-    RD_CfgArray *cfgs = (RD_CfgArray *)user_data;
+    RD_TopLevelCfgLookupAccel *accel = (RD_TopLevelCfgLookupAccel *)user_data;
+    Rng1U64 cmds_idx_range = r1u64(0, accel->cmds.count);
+    Rng1U64 cfgs_idx_range = r1u64(accel->cmds.count, accel->cmds.count + accel->cfgs.count);
     E_IRTreeAndType rhs_irtree = e_irtree_and_type_from_expr(scratch.arena, rhs);
     E_OpList rhs_oplist = e_oplist_from_irtree(scratch.arena, rhs_irtree.root);
     String8 rhs_bytecode = e_bytecode_from_oplist(scratch.arena, &rhs_oplist);
     E_Interpretation rhs_interp = e_interpret(rhs_bytecode);
     E_Value rhs_value = rhs_interp.value;
-    if(0 <= rhs_value.u64 && rhs_value.u64 < cfgs->count)
+    if(contains_1u64(cmds_idx_range, rhs_value.u64))
     {
-      RD_Cfg *cfg = cfgs->v[rhs_value.u64];
+      String8 cmd_name = accel->cmds.v[rhs_value.u64 - cmds_idx_range.min];
+      RD_CmdKind cmd_kind = rd_cmd_kind_from_string(cmd_name);
+      E_TypeKey type_key = e_type_key_basic(E_TypeKind_U64);
+      E_Space cmd_space = e_space_make(RD_EvalSpaceKind_MetaCmd);
+      result.irtree_and_type.root      = e_irtree_set_space(arena, cmd_space, e_irtree_const_u(arena, cmd_kind));
+      result.irtree_and_type.type_key  = type_key;
+      result.irtree_and_type.mode      = E_Mode_Value;
+    }
+    else if(contains_1u64(cfgs_idx_range, rhs_value.u64))
+    {
+      RD_Cfg *cfg = accel->cfgs.v[rhs_value.u64 - cfgs_idx_range.min];
       E_Space cfg_space = rd_eval_space_from_cfg(cfg);
       String8 cfg_name = cfg->string;
       E_TypeKey cfg_type_key = e_string2typekey_map_lookup(rd_state->meta_name2type_map, cfg_name);
@@ -12854,12 +12893,12 @@ rd_frame(void)
       E_TypeKey location_type_key = {0};
       {
         E_MemberList vaddr_range_members_list = {0};
-        e_member_list_push_new(scratch.arena, &vaddr_range_members_list, .type_key = e_type_key_basic(E_TypeKind_U64), .name = str8_lit("min"));
-        e_member_list_push_new(scratch.arena, &vaddr_range_members_list, .type_key = e_type_key_basic(E_TypeKind_U64), .name = str8_lit("max"));
+        e_member_list_push_new(scratch.arena, &vaddr_range_members_list, .type_key = e_type_key_basic(E_TypeKind_U64), .name = str8_lit("min"), .off = 0);
+        e_member_list_push_new(scratch.arena, &vaddr_range_members_list, .type_key = e_type_key_basic(E_TypeKind_U64), .name = str8_lit("max"), .off = 8);
         E_MemberArray vaddr_range_members = e_member_array_from_list(scratch.arena, &vaddr_range_members_list);
         bool_type_key        = e_type_key_basic(E_TypeKind_Bool);
         u64_type_key         = e_type_key_basic(E_TypeKind_U64);
-        vaddr_range_type_key = e_type_key_cons(E_TypeKind_Struct, .name = str8_lit("vaddr_range"), .count = vaddr_range_members.count, .members = vaddr_range_members.v);
+        vaddr_range_type_key = e_type_key_cons(.kind = E_TypeKind_Struct, .name = str8_lit("vaddr_range"), .count = vaddr_range_members.count, .members = vaddr_range_members.v);
         code_string_type_key = e_type_key_cons_ptr(arch_from_context(), e_type_key_basic(E_TypeKind_U8), 1, E_TypeFlag_IsCodeText);
         path_type_key        = e_type_key_cons_ptr(arch_from_context(), e_type_key_basic(E_TypeKind_U8), 1, E_TypeFlag_IsPathText);
         string_type_key      = e_type_key_cons_ptr(arch_from_context(), e_type_key_basic(E_TypeKind_U8), 1, E_TypeFlag_IsPlainText);

@@ -87,7 +87,7 @@ RD_NameSchemaInfo rd_name_schema_info_table[10] =
 {str8_lit_comp("auto_view_rule"), str8_lit_comp("x:{'source':code_string, 'dest':code_string}"), str8_lit_comp("remove_cfg")},
 {str8_lit_comp("machine"), str8_lit_comp("x:{'frozen':bool, 'label':code_string}"), str8_lit_comp("")},
 {str8_lit_comp("process"), str8_lit_comp("x:{'frozen':bool, 'label':code_string, 'id':u64}"), str8_lit_comp("")},
-{str8_lit_comp("module"), str8_lit_comp("x:{'label':code_string, 'exe':path, 'dbg':path, 'vaddr_range':vaddr_range}"), str8_lit_comp("")},
+{str8_lit_comp("module"), str8_lit_comp("x:{'exe':path, 'dbg':path, 'vaddr_range':vaddr_range}"), str8_lit_comp("")},
 {str8_lit_comp("thread"), str8_lit_comp("x:{'frozen':bool, 'label':code_string, 'id':u64}"), str8_lit_comp("")},
 };
 

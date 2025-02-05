@@ -136,23 +136,6 @@ struct RD_WatchViewColumn
   B32 rangify_braces;
 };
 
-typedef struct RD_WatchViewRowCtrl RD_WatchViewRowCtrl;
-struct RD_WatchViewRowCtrl
-{
-  RD_EntityKind entity_kind;
-  CTRL_EntityKind ctrl_entity_kind;
-  RD_CmdKind kind;
-};
-
-typedef enum RD_WatchViewRowKind
-{
-  RD_WatchViewRowKind_Normal,
-  RD_WatchViewRowKind_Header,
-  RD_WatchViewRowKind_Canvas,
-  RD_WatchViewRowKind_PrettyEntityControls,
-}
-RD_WatchViewRowKind;
-
 typedef struct RD_WatchPt RD_WatchPt;
 struct RD_WatchPt
 {
