@@ -6587,12 +6587,18 @@ rd_window_frame(void)
           RD_ViewRuleInfo *view_rule_info = rd_view_rule_info_from_string(view->string);
           rd_cfg_release_all_children(expr);
           rd_cfg_new(expr, ws->hover_eval_string);
+          EV_BlockTree predicted_block_tree = ev_block_tree_from_string(scratch.arena, rd_view_eval_view(), str8_zero(), ws->hover_eval_string);
+          F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
+          U64 max_row_count = (U64)floor_f32(ui_top_font_size()*40.f / row_height_px);
+          U64 needed_row_count = Min(max_row_count, predicted_block_tree.total_row_count);
+          F32 num_rows_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "hover_eval_num_rows_t"), (F32)needed_row_count);
           UI_Focus(ws->hover_eval_focused ? UI_FocusKind_On : UI_FocusKind_Off)
+            UI_PrefHeight(ui_px(row_height_px, 1.f))
           {
             ui_set_next_fixed_x(ws->hover_eval_spawn_pos.x);
             ui_set_next_fixed_y(ws->hover_eval_spawn_pos.y);
             ui_set_next_pref_width(ui_em(60.f, 1.f));
-            ui_set_next_pref_height(ui_em(40.f, 1.f));
+            ui_set_next_pref_height(ui_px(num_rows_t*row_height_px, 1.f));
             ui_set_next_child_layout_axis(Axis2_Y);
             ui_set_next_squish(0.25f-0.25f*hover_eval_t);
             ui_set_next_transparency(1.f-hover_eval_t);
@@ -8240,6 +8246,7 @@ rd_window_frame(void)
   {
     Temp scratch = scratch_begin(0, 0);
     F32 box_squish_epsilon = 0.01f;
+    Rng2F32 window_rect = os_client_rect_from_window(ws->os);
     
     //- rjf: unpack settings
     B32 do_background_blur = rd_setting_b32_from_name(str8_lit("background_blur"));
@@ -8597,9 +8604,15 @@ rd_window_frame(void)
           // rjf: draw focus border
           if(b->flags & UI_BoxFlag_Clickable && !(b->flags & UI_BoxFlag_DisableFocusBorder) && b->focus_active_t > 0.01f)
           {
+            Rng2F32 rect = b->rect;
+            if(b->flags & UI_BoxFlag_Floating)
+            {
+              rect = pad_2f32(rect, 2.f);
+              rect = intersect_2f32(window_rect, rect);
+            }
             Vec4F32 color = rd_rgba_from_theme_color(RD_ThemeColor_Focus);
             color.w *= b->focus_active_t;
-            R_Rect2DInst *inst = dr_rect(b->rect, color, 0, 1.f, 1.f);
+            R_Rect2DInst *inst = dr_rect(rect, color, 0, 1.f, 1.f);
             MemoryCopyArray(inst->corner_radii, b->corner_radii);
           }
           
