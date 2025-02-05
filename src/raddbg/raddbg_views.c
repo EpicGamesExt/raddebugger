@@ -1510,26 +1510,6 @@ rd_watch_view_build(RD_WatchViewState *ewv, String8 root_expr, String8 root_view
   S64 num_possible_visible_rows = (S64)(dim_2f32(rect).y/row_height_px);
   F32 row_string_max_size_px = dim_2f32(rect).x;
   EV_StringFlags string_flags = 0;
-#if 0 // TODO(rjf): @cfg
-  RD_WatchViewRowCtrl row_ctrls_[] =
-  {
-    {RD_EntityKind_Target,      CTRL_EntityKind_Null,   RD_CmdKind_LaunchAndRun  },
-    {RD_EntityKind_Target,      CTRL_EntityKind_Null,   RD_CmdKind_LaunchAndInit },
-    {RD_EntityKind_Target,      CTRL_EntityKind_Null,   RD_CmdKind_SelectEntity  },
-    {RD_EntityKind_Target,      CTRL_EntityKind_Null,   RD_CmdKind_RemoveEntity  },
-    {RD_EntityKind_Breakpoint,  CTRL_EntityKind_Null,   RD_CmdKind_EnableEntity  },
-    {RD_EntityKind_Breakpoint,  CTRL_EntityKind_Null,   RD_CmdKind_RemoveEntity  },
-    {RD_EntityKind_FilePathMap, CTRL_EntityKind_Null,   RD_CmdKind_RemoveEntity  },
-    {RD_EntityKind_AutoViewRule,CTRL_EntityKind_Null,   RD_CmdKind_RemoveEntity  },
-    {RD_EntityKind_Nil, CTRL_EntityKind_Machine, RD_CmdKind_FreezeEntity  },
-    {RD_EntityKind_Nil, CTRL_EntityKind_Process, RD_CmdKind_Kill  },
-    {RD_EntityKind_Nil, CTRL_EntityKind_Process, RD_CmdKind_FreezeEntity  },
-    {RD_EntityKind_Nil, CTRL_EntityKind_Thread,  RD_CmdKind_SelectThread  },
-    {RD_EntityKind_Nil, CTRL_EntityKind_Thread,  RD_CmdKind_FreezeEntity  },
-  };
-  RD_WatchViewRowCtrl *row_ctrls = row_ctrls_;
-  U64 row_ctrls_count = ArrayCount(row_ctrls_);
-#endif
   
   //////////////////////////////
   //- rjf: determine autocompletion string
@@ -1620,7 +1600,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, String8 root_expr, String8 root_view
           EV_Key last_key = points[point_idx].pt_state->key;
           EV_Key last_parent_key = points[point_idx].pt_state->parent_key;
           points[point_idx].pt_state[0] = rd_watch_pt_from_tbl(&block_ranges, points[point_idx].pt_tbl);
-          if(ev_key_match(ev_key_zero(), points[point_idx].pt_state->key))
+          if(ev_key_match(ev_key_zero(), points[point_idx].pt_state->key) && points[point_idx].pt_tbl.y != 0)
           {
             points[point_idx].pt_state->key = last_parent_key;
             EV_ExpandNode *node = ev_expand_node_from_key(eval_view, last_parent_key);
@@ -1659,9 +1639,9 @@ rd_watch_view_build(RD_WatchViewState *ewv, String8 root_expr, String8 root_view
         {
           EV_Row *row = ev_row_from_num(scratch.arena, eval_view, filter, &block_ranges, mark_tbl.y);
           RD_WatchRowInfo row_info = rd_watch_row_info_from_row(scratch.arena, row);
-          cursor_x_range = r1s64(0, (S64)row_info.cells.count);
+          cursor_x_range = r1s64(0, (S64)row_info.cells.count-1);
         }
-        cursor_tbl_range = r2s64(v2s64(cursor_x_range.min, 0), v2s64(cursor_x_range.max, block_tree.total_item_count-1));
+        cursor_tbl_range = r2s64(v2s64(cursor_x_range.min, 0), v2s64(cursor_x_range.max, block_tree.total_item_count));
         
         // rjf: clamp x positions of cursor/mark tbl
         for EachEnumVal(Axis2, axis)
@@ -1680,36 +1660,30 @@ rd_watch_view_build(RD_WatchViewState *ewv, String8 root_expr, String8 root_view
       //
       if(snap_to_cursor)
       {
-        Rng1S64 item_range = r1s64(0, block_tree.total_item_count);
-        Rng1S64 row_range  = r1s64(0, block_tree.total_row_count);
-        Rng1S64 scroll_row_idx_range = r1s64(row_range.min, ClampBot(row_range.min, row_range.max-1));
-        S64 cursor_item_idx = cursor_tbl.y;
-        if(item_range.min <= cursor_item_idx && cursor_item_idx <= item_range.max)
+        Rng1S64 global_vnum_range  = r1s64(1, block_tree.total_row_count+1);
+        if(contains_1s64(global_vnum_range, cursor_tbl.y))
         {
           UI_ScrollPt *scroll_pt = &scroll_pos.y;
           
           //- rjf: compute visible row range
-          Rng1S64 visible_row_range = r1s64(scroll_pt->idx + 0 - !!(scroll_pt->off < 0),
-                                            scroll_pt->idx + 0 + num_possible_visible_rows);
+          Rng1S64 visible_row_num_range = r1s64(scroll_pt->idx + 1 - !!(scroll_pt->off < 0),
+                                                scroll_pt->idx + 1 + num_possible_visible_rows);
           
           //- rjf: compute cursor row range from cursor item
-          Rng1S64 cursor_visibility_row_range = {0};
-          if(row_blocks.count == 0)
-          {
-            cursor_visibility_row_range = r1s64(cursor_item_idx-2, cursor_item_idx+3);
-          }
-          else
-          {
-            cursor_visibility_row_range.min = (S64)ui_scroll_list_row_from_item(&row_blocks, (U64)cursor_item_idx) - 1;
-            cursor_visibility_row_range.max = cursor_visibility_row_range.min + 3;
-          }
+          Rng1S64 cursor_visibility_row_num_range = {0};
+          cursor_visibility_row_num_range.min = ev_vnum_from_num(&block_ranges, cursor_tbl.y) - 1;
+          cursor_visibility_row_num_range.max = cursor_visibility_row_num_range.min + 3;
           
           //- rjf: compute deltas & apply
-          S64 min_delta = Min(0, cursor_visibility_row_range.min-visible_row_range.min);
-          S64 max_delta = Max(0, cursor_visibility_row_range.max-visible_row_range.max);
-          S64 new_idx = scroll_pt->idx+min_delta+max_delta;
-          new_idx = clamp_1s64(scroll_row_idx_range, new_idx);
-          ui_scroll_pt_target_idx(scroll_pt, new_idx);
+          S64 min_delta = Min(0, cursor_visibility_row_num_range.min-visible_row_num_range.min);
+          S64 max_delta = Max(0, cursor_visibility_row_num_range.max-visible_row_num_range.max);
+          S64 new_num = (S64)scroll_pt->idx + 1 + min_delta + max_delta;
+          new_num = clamp_1s64(global_vnum_range, new_num);
+          if(new_num > 0)
+          {
+            U64 new_idx = (U64)(new_num - 1);
+            ui_scroll_pt_target_idx(scroll_pt, new_idx);
+          }
         }
       }
       
@@ -2406,7 +2380,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, String8 root_expr, String8 root_view
       scroll_list_params.dim_px        = dim_2f32(rect);
       scroll_list_params.cursor_range  = r2s64(v2s64(0, 0), v2s64(ewv->column_count-1, block_tree.total_item_count));
       scroll_list_params.item_range    = r1s64(0, block_tree.total_row_count);
-      scroll_list_params.cursor_min_is_empty_selection[Axis2_Y] = 0;
+      scroll_list_params.cursor_min_is_empty_selection[Axis2_Y] = 1;
       scroll_list_params.row_blocks    = row_blocks;
     }
     UI_BoxFlags disabled_flags = ui_top_flags();
@@ -2431,7 +2405,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, String8 root_expr, String8 root_view
       //
       EV_WindowedRowList rows = {0};
       {
-        rows = ev_windowed_row_list_from_block_range_list(scratch.arena, eval_view, filter, &block_ranges, r1u64(visible_row_rng.min, visible_row_rng.max + 1));
+        rows = ev_windowed_row_list_from_block_range_list(scratch.arena, eval_view, filter, &block_ranges, r1u64(visible_row_rng.min+1, visible_row_rng.max+2));
       }
       
       ////////////////////////////
@@ -2449,7 +2423,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, String8 root_expr, String8 root_view
           EV_Row *row = &row_node->row;
           U64 row_hash = ev_hash_from_key(row->key);
           U64 row_depth = ev_depth_from_block(row->block);
-          B32 row_selected = (selection_tbl.min.y <= global_row_idx && global_row_idx <= selection_tbl.max.y);
+          B32 row_selected = (selection_tbl.min.y <= global_row_idx+1 && global_row_idx+1 <= selection_tbl.max.y);
           B32 row_expanded = ev_expansion_from_key(eval_view, row->key);
           B32 next_row_expanded = row_expanded;
           RD_WatchRowInfo row_info = rd_watch_row_info_from_row(scratch.arena, row); 

@@ -768,7 +768,7 @@ ev_key_from_num(EV_BlockRangeList *block_ranges, U64 num)
   {
     key = ev_key_make(ev_hash_from_key(ev_key_root()), 1);
   }
-  U64 base_num = 0;
+  U64 base_num = 1;
   for(EV_BlockRangeNode *n = block_ranges->first; n != 0; n = n->next)
   {
     U64 range_size = n->v.block->single_item ? 1 : dim_1u64(n->v.range);
@@ -790,7 +790,7 @@ internal U64
 ev_num_from_key(EV_BlockRangeList *block_ranges, EV_Key key)
 {
   U64 result = 0;
-  U64 base_num = 0;
+  U64 base_num = 1;
   for(EV_BlockRangeNode *n = block_ranges->first; n != 0; n = n->next)
   {
     U64 hash = ev_hash_from_key(n->v.block->key);
@@ -810,45 +810,45 @@ ev_num_from_key(EV_BlockRangeList *block_ranges, EV_Key key)
 }
 
 internal U64
-ev_vidx_from_num(EV_BlockRangeList *block_ranges, U64 num)
+ev_vnum_from_num(EV_BlockRangeList *block_ranges, U64 num)
 {
-  U64 vidx = 0;
+  U64 vnum = 0;
   {
-    U64 base_vidx = 0;
+    U64 base_vnum = 1;
     U64 base_num = 1;
     for(EV_BlockRangeNode *n = block_ranges->first; n != 0; n = n->next)
     {
       U64 next_base_num = base_num + (n->v.block->single_item ? 1 : dim_1u64(n->v.range));
       if(base_num <= num && num < next_base_num)
       {
-        U64 relative_vidx = (n->v.block->single_item ? 0 : (num - base_num));
-        vidx = base_vidx + relative_vidx;
+        U64 relative_vnum = (n->v.block->single_item ? 0 : (num - base_num));
+        vnum = base_vnum + relative_vnum;
         break;
       }
       base_num = next_base_num;
-      base_vidx += dim_1u64(n->v.range);
+      base_vnum += dim_1u64(n->v.range);
     }
   }
-  return vidx;
+  return vnum;
 }
 
 internal U64
-ev_num_from_vidx(EV_BlockRangeList *block_ranges, U64 vidx)
+ev_num_from_vnum(EV_BlockRangeList *block_ranges, U64 vnum)
 {
   U64 num = 0;
   {
-    U64 base_vidx = 0;
+    U64 base_vnum = 1;
     U64 base_num = 1;
     for(EV_BlockRangeNode *n = block_ranges->first; n != 0; n = n->next)
     {
-      U64 next_base_vidx = base_vidx + dim_1u64(n->v.range);
-      if(base_vidx <= vidx && vidx < next_base_vidx)
+      U64 next_base_vnum = base_vnum + dim_1u64(n->v.range);
+      if(base_vnum <= vnum && vnum < next_base_vnum)
       {
-        U64 relative_num = (n->v.block->single_item ? 0 : (vidx - base_vidx));
+        U64 relative_num = (n->v.block->single_item ? 0 : (vnum - base_vnum));
         num = base_num + relative_num;
         break;
       }
-      base_vidx = next_base_vidx;
+      base_vnum = next_base_vnum;
       base_num += (n->v.block->single_item ? 1 : dim_1u64(n->v.range));
     }
   }
@@ -859,30 +859,30 @@ ev_num_from_vidx(EV_BlockRangeList *block_ranges, U64 vidx)
 //~ rjf: Row Building
 
 internal EV_WindowedRowList
-ev_windowed_row_list_from_block_range_list(Arena *arena, EV_View *view, String8 filter, EV_BlockRangeList *block_ranges, Rng1U64 visible_range)
+ev_windowed_row_list_from_block_range_list(Arena *arena, EV_View *view, String8 filter, EV_BlockRangeList *block_ranges, Rng1U64 vnum_range)
 {
   EV_WindowedRowList rows = {0};
   {
-    U64 visual_idx_off = 0;
+    U64 base_vnum = 1;
     for(EV_BlockRangeNode *n = block_ranges->first; n != 0; n = n->next)
     {
       // rjf: unpack this block/range pair
       Rng1U64 block_relative_range = n->v.range;
       U64 block_num_visual_rows = dim_1u64(block_relative_range);
-      Rng1U64 block_global_range = r1u64(visual_idx_off, visual_idx_off + block_num_visual_rows);
+      Rng1U64 block_global_range = r1u64(base_vnum, base_vnum + block_num_visual_rows);
       
       // rjf: get skip/chop of global range
       U64 num_skipped = 0;
       U64 num_chopped = 0;
       {
-        if(visible_range.min > block_global_range.min)
+        if(vnum_range.min > block_global_range.min)
         {
-          num_skipped = (visible_range.min - block_global_range.min);
+          num_skipped = (vnum_range.min - block_global_range.min);
           num_skipped = Min(num_skipped, block_num_visual_rows);
         }
-        if(visible_range.max < block_global_range.max)
+        if(vnum_range.max < block_global_range.max)
         {
-          num_chopped = (block_global_range.max - visible_range.max);
+          num_chopped = (block_global_range.max - vnum_range.max);
           num_chopped = Min(num_chopped, block_num_visual_rows);
         }
       }
@@ -892,7 +892,7 @@ ev_windowed_row_list_from_block_range_list(Arena *arena, EV_View *view, String8 
                                                      block_relative_range.max - num_chopped);
       
       // rjf: sum & advance
-      visual_idx_off += block_num_visual_rows;
+      base_vnum += block_num_visual_rows;
       rows.count_before_visual += num_skipped;
       if(block_num_visual_rows != 0 && num_skipped != 0)
       {
@@ -972,7 +972,7 @@ ev_windowed_row_list_from_block_range_list(Arena *arena, EV_View *view, String8 
 internal EV_Row *
 ev_row_from_num(Arena *arena, EV_View *view, String8 filter, EV_BlockRangeList *block_ranges, U64 num)
 {
-  U64 vidx = ev_vidx_from_num(block_ranges, num);
+  U64 vidx = ev_vnum_from_num(block_ranges, num);
   EV_WindowedRowList rows = ev_windowed_row_list_from_block_range_list(arena, view, filter, block_ranges, r1u64(vidx, vidx+1));
   EV_Row *result = 0;
   if(rows.first != 0)
@@ -982,6 +982,8 @@ ev_row_from_num(Arena *arena, EV_View *view, String8 filter, EV_BlockRangeList *
   else
   {
     result = push_array(arena, EV_Row, 1);
+    result->block = &ev_nil_block;
+    result->expr = &e_expr_nil;
   }
   return result;
 }
@@ -989,7 +991,7 @@ ev_row_from_num(Arena *arena, EV_View *view, String8 filter, EV_BlockRangeList *
 internal EV_WindowedRowList
 ev_rows_from_num_range(Arena *arena, EV_View *view, String8 filter, EV_BlockRangeList *block_ranges, Rng1U64 num_range)
 {
-  Rng1U64 vidx_range = r1u64(ev_vidx_from_num(block_ranges, num_range.min), ev_vidx_from_num(block_ranges, num_range.max)+1);
+  Rng1U64 vidx_range = r1u64(ev_vnum_from_num(block_ranges, num_range.min), ev_vnum_from_num(block_ranges, num_range.max)+1);
   EV_WindowedRowList rows = ev_windowed_row_list_from_block_range_list(arena, view, filter, block_ranges, vidx_range);
   return rows;
 }

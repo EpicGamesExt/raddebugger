@@ -355,13 +355,13 @@ internal EV_BlockRangeList ev_block_range_list_from_tree(Arena *arena, EV_BlockT
 internal EV_BlockRange ev_block_range_from_num(EV_BlockRangeList *block_ranges, U64 num);
 internal EV_Key ev_key_from_num(EV_BlockRangeList *block_ranges, U64 num);
 internal U64    ev_num_from_key(EV_BlockRangeList *block_ranges, EV_Key key);
-internal U64    ev_vidx_from_num(EV_BlockRangeList *block_ranges, U64 num);
-internal U64    ev_num_from_vidx(EV_BlockRangeList *block_ranges, U64 vidx);
+internal U64    ev_vnum_from_num(EV_BlockRangeList *block_ranges, U64 num);
+internal U64    ev_num_from_vnum(EV_BlockRangeList *block_ranges, U64 vidx);
 
 ////////////////////////////////
 //~ rjf: Row Building
 
-internal EV_WindowedRowList ev_windowed_row_list_from_block_range_list(Arena *arena, EV_View *view, String8 filter, EV_BlockRangeList *block_ranges, Rng1U64 visible_range);
+internal EV_WindowedRowList ev_windowed_row_list_from_block_range_list(Arena *arena, EV_View *view, String8 filter, EV_BlockRangeList *block_ranges, Rng1U64 vnum_range);
 internal EV_Row *ev_row_from_num(Arena *arena, EV_View *view, String8 filter, EV_BlockRangeList *block_ranges, U64 num);
 internal EV_WindowedRowList ev_rows_from_num_range(Arena *arena, EV_View *view, String8 filter, EV_BlockRangeList *block_ranges, Rng1U64 num_range);
 internal String8 ev_expr_string_from_row(Arena *arena, EV_Row *row, EV_StringFlags flags);
