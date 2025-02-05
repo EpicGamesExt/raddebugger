@@ -8160,7 +8160,7 @@ E_LOOKUP_RANGE_FUNCTION_DEF(watches)
     U64 cfg_idx = read_range.min + idx;
     if(cfg_idx < cfgs->count)
     {
-      String8 expr_string = rd_cfg_child_from_string(cfgs->v[idx], str8_lit("expression"))->first->string;
+      String8 expr_string = rd_cfg_child_from_string(cfgs->v[cfg_idx], str8_lit("expression"))->first->string;
       exprs[idx] = e_parse_expr_from_text(arena, expr_string);
       exprs_strings[idx] = push_str8_copy(arena, expr_string);
     }
@@ -8260,6 +8260,8 @@ struct RD_TopLevelCfgLookupAccel
 {
   String8Array cmds;
   RD_CfgArray cfgs;
+  Rng1U64 cmds_idx_range;
+  Rng1U64 cfgs_idx_range;
 };
 
 E_LOOKUP_INFO_FUNCTION_DEF(top_level_cfg)
@@ -8290,6 +8292,8 @@ E_LOOKUP_INFO_FUNCTION_DEF(top_level_cfg)
     RD_TopLevelCfgLookupAccel *accel = push_array(arena, RD_TopLevelCfgLookupAccel, 1);
     accel->cfgs = rd_cfg_array_from_list(arena, &cfgs_list);
     accel->cmds = str8_array_from_list(arena, &cmds_list);
+    accel->cmds_idx_range = r1u64(0, accel->cmds.count);
+    accel->cfgs_idx_range = r1u64(accel->cmds.count, accel->cmds.count + accel->cfgs.count);
     result.user_data = accel;
     result.idxed_expr_count = accel->cfgs.count + accel->cmds.count;
   }
@@ -8304,16 +8308,14 @@ E_LOOKUP_ACCESS_FUNCTION_DEF(top_level_cfg)
   {
     Temp scratch = scratch_begin(&arena, 1);
     RD_TopLevelCfgLookupAccel *accel = (RD_TopLevelCfgLookupAccel *)user_data;
-    Rng1U64 cmds_idx_range = r1u64(0, accel->cmds.count);
-    Rng1U64 cfgs_idx_range = r1u64(accel->cmds.count, accel->cmds.count + accel->cfgs.count);
     E_IRTreeAndType rhs_irtree = e_irtree_and_type_from_expr(scratch.arena, rhs);
     E_OpList rhs_oplist = e_oplist_from_irtree(scratch.arena, rhs_irtree.root);
     String8 rhs_bytecode = e_bytecode_from_oplist(scratch.arena, &rhs_oplist);
     E_Interpretation rhs_interp = e_interpret(rhs_bytecode);
     E_Value rhs_value = rhs_interp.value;
-    if(contains_1u64(cmds_idx_range, rhs_value.u64))
+    if(contains_1u64(accel->cmds_idx_range, rhs_value.u64))
     {
-      String8 cmd_name = accel->cmds.v[rhs_value.u64 - cmds_idx_range.min];
+      String8 cmd_name = accel->cmds.v[rhs_value.u64 - accel->cmds_idx_range.min];
       RD_CmdKind cmd_kind = rd_cmd_kind_from_string(cmd_name);
       E_TypeKey type_key = e_type_key_basic(E_TypeKind_U64);
       E_Space cmd_space = e_space_make(RD_EvalSpaceKind_MetaCmd);
@@ -8321,9 +8323,9 @@ E_LOOKUP_ACCESS_FUNCTION_DEF(top_level_cfg)
       result.irtree_and_type.type_key  = type_key;
       result.irtree_and_type.mode      = E_Mode_Value;
     }
-    else if(contains_1u64(cfgs_idx_range, rhs_value.u64))
+    else if(contains_1u64(accel->cfgs_idx_range, rhs_value.u64))
     {
-      RD_Cfg *cfg = accel->cfgs.v[rhs_value.u64 - cfgs_idx_range.min];
+      RD_Cfg *cfg = accel->cfgs.v[rhs_value.u64 - accel->cfgs_idx_range.min];
       E_Space cfg_space = rd_eval_space_from_cfg(cfg);
       String8 cfg_name = cfg->string;
       E_TypeKey cfg_type_key = e_string2typekey_map_lookup(rd_state->meta_name2type_map, cfg_name);
@@ -8334,6 +8336,63 @@ E_LOOKUP_ACCESS_FUNCTION_DEF(top_level_cfg)
     scratch_end(scratch);
   }
   return result;
+}
+
+E_LOOKUP_ID_FROM_NUM_FUNCTION_DEF(top_level_cfg)
+{
+  U64 id = 0;
+  RD_TopLevelCfgLookupAccel *accel = (RD_TopLevelCfgLookupAccel *)user_data;
+  if(num != 0)
+  {
+    U64 idx = (num-1);
+    if(contains_1u64(accel->cfgs_idx_range, idx))
+    {
+      id = accel->cfgs.v[idx - accel->cfgs_idx_range.min]->id;
+    }
+    else if(contains_1u64(accel->cmds_idx_range, idx))
+    {
+      String8 cmd_name = accel->cmds.v[idx - accel->cmds_idx_range.min];
+      RD_CmdKind cmd_kind = rd_cmd_kind_from_string(cmd_name);
+      id = (U64)cmd_kind;
+      id |= (1ull<<63);
+    }
+  }
+  return id;
+}
+
+E_LOOKUP_NUM_FROM_ID_FUNCTION_DEF(top_level_cfg)
+{
+  U64 num = 0;
+  RD_TopLevelCfgLookupAccel *accel = (RD_TopLevelCfgLookupAccel *)user_data;
+  if(id != 0)
+  {
+    if(id & (1ull<<63))
+    {
+      for EachIndex(idx, accel->cmds.count)
+      {
+        String8 cmd_name = accel->cmds.v[idx - accel->cmds_idx_range.min];
+        RD_CmdKind cmd_kind = rd_cmd_kind_from_string(cmd_name);
+        U64 cmd_id = (U64)cmd_kind;
+        cmd_id |= (1ull<<63);
+        if(cmd_id == id)
+        {
+          num = idx+1+accel->cmds_idx_range.min;
+        }
+      }
+    }
+    else
+    {
+      for EachIndex(idx, accel->cfgs.count)
+      {
+        if(accel->cfgs.v[idx]->id == id)
+        {
+          num = idx+1+accel->cfgs_idx_range.min;
+          break;
+        }
+      }
+    }
+  }
+  return num;
 }
 
 E_LOOKUP_INFO_FUNCTION_DEF(ctrl_entities)
@@ -12334,8 +12393,10 @@ rd_frame(void)
         expr->type_key = collection_type_key;
         e_string2expr_map_insert(scratch.arena, ctx->macro_map, collection_name, expr);
         e_lookup_rule_map_insert_new(scratch.arena, ctx->lookup_rule_map, collection_name,
-                                     .info   = E_LOOKUP_INFO_FUNCTION_NAME(top_level_cfg),
-                                     .access = E_LOOKUP_ACCESS_FUNCTION_NAME(top_level_cfg));
+                                     .info        = E_LOOKUP_INFO_FUNCTION_NAME(top_level_cfg),
+                                     .access      = E_LOOKUP_ACCESS_FUNCTION_NAME(top_level_cfg),
+                                     .id_from_num = E_LOOKUP_ID_FROM_NUM_FUNCTION_NAME(top_level_cfg),
+                                     .num_from_id = E_LOOKUP_NUM_FROM_ID_FUNCTION_NAME(top_level_cfg));
       }
       
       //- rjf: add macros for all ctrl entity collections
@@ -12797,9 +12858,21 @@ rd_frame(void)
             if(kind == RD_CmdKind_OpenUser)
             {
               RD_Cfg *user = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("user"));
-              RD_Cfg *watch = rd_cfg_new(user, str8_lit("watch"));
-              RD_Cfg *expr = rd_cfg_new(watch, str8_lit("expression"));
-              rd_cfg_new(expr, str8_lit("current_thread"));
+              {
+                RD_Cfg *watch = rd_cfg_new(user, str8_lit("watch"));
+                RD_Cfg *expr = rd_cfg_new(watch, str8_lit("expression"));
+                rd_cfg_new(expr, str8_lit("current_thread"));
+              }
+              {
+                RD_Cfg *watch = rd_cfg_new(user, str8_lit("watch"));
+                RD_Cfg *expr = rd_cfg_new(watch, str8_lit("expression"));
+                rd_cfg_new(expr, str8_lit("targets[1]"));
+              }
+              {
+                RD_Cfg *watch = rd_cfg_new(user, str8_lit("watch"));
+                RD_Cfg *expr = rd_cfg_new(watch, str8_lit("expression"));
+                rd_cfg_new(expr, str8_lit("basics"));
+              }
             }
           }break;
           

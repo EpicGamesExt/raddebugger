@@ -967,10 +967,8 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     // rjf: determine row's cfg
     if(info.group_cfg_name.size != 0)
     {
-      RD_CfgList cfgs = rd_cfg_top_level_list_from_string(scratch.arena, info.group_cfg_name);
-      
-      // TODO(rjf): this is not correct - assumes row's evaluation is in the block's space...
-      // info.group_cfg = rd_cfg_from_eval_space(info.eval.space);
+      RD_CfgID id = row->key.child_id;
+      info.group_cfg = rd_cfg_from_id(id);
     }
     
     // rjf: fill row's cells
