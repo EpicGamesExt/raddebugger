@@ -58,7 +58,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
   for(RD_Cmd *cmd = 0; rd_next_cmd(&cmd);)
   {
     // rjf: mismatched window/panel => skip
-    if(!rd_handle_match(rd_regs()->view, cmd->regs->view))
+    if(rd_regs()->view != cmd->regs->view)
     {
       continue;
     }
@@ -1291,7 +1291,7 @@ rd_string_from_eval_viz_row_column(Arena *arena, EV_Row *row, RD_WatchViewColumn
     case RD_WatchViewColumnKind_ViewRule:
     ProfScope("view rule cell string")
     {
-      RD_Cfg *view = rd_cfg_from_handle(rd_regs()->view);
+      RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
       RD_ViewState *vs = rd_view_state_from_cfg(view);
       EV_View *ev = vs->ev_view;
       result = ev_view_rule_from_key(ev, row->key);
@@ -4110,12 +4110,12 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(getting_started)
           {
             if(ui_clicked(rd_icon_buttonf(RD_IconKind_Play, 0, "Launch %S", target_name)))
             {
-              rd_cmd(RD_CmdKind_LaunchAndRun, .cfg = rd_handle_from_cfg(target_cfg));
+              rd_cmd(RD_CmdKind_LaunchAndRun, .cfg = target_cfg->id);
             }
             ui_spacer(ui_em(1.5f, 1));
             if(ui_clicked(rd_icon_buttonf(RD_IconKind_Play, 0, "Step Into %S", target_name)))
             {
-              rd_cmd(RD_CmdKind_LaunchAndInit, .cfg = rd_handle_from_cfg(target_cfg));
+              rd_cmd(RD_CmdKind_LaunchAndInit, .cfg = target_cfg->id);
             }
           }
         }break;
@@ -4200,7 +4200,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(pending_file)
   for(RD_Cmd *cmd = 0; rd_next_cmd(&cmd);)
   {
     // rjf: mismatched window/panel => skip
-    if(!rd_handle_match(rd_regs()->view, cmd->regs->view))
+    if(rd_regs()->view != cmd->regs->view)
     {
       continue;
     }
@@ -4336,7 +4336,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(text)
   ProfScope("process code-file commands") for(RD_Cmd *cmd = 0; rd_next_cmd(&cmd);)
   {
     // rjf: mismatched window/panel => skip
-    if(!rd_handle_match(rd_regs()->view, cmd->regs->view))
+    if(rd_regs()->view != cmd->regs->view)
     {
       continue;
     }
@@ -4627,7 +4627,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(disasm)
   for(RD_Cmd *cmd = 0; rd_next_cmd(&cmd);)
   {
     // rjf: mismatched window/panel => skip
-    if(!rd_handle_match(rd_regs()->view, cmd->regs->view))
+    if(rd_regs()->view != cmd->regs->view)
     {
       continue;
     }
@@ -4834,7 +4834,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(memory)
   for(RD_Cmd *cmd = 0; rd_next_cmd(&cmd);)
   {
     // rjf: mismatched window/panel => skip
-    if(!rd_handle_match(rd_regs()->view, cmd->regs->view))
+    if(rd_regs()->view != cmd->regs->view)
     {
       continue;
     }
@@ -6327,7 +6327,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(settings)
   Temp scratch = scratch_begin(0, 0);
   F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
   String8 query = string;
-  RD_Cfg *window = rd_cfg_from_handle(rd_regs()->window);
+  RD_Cfg *window = rd_cfg_from_id(rd_regs()->window);
   UI_ScrollPt2 scroll_pos = rd_view_scroll_pos();
   
   //////////////////////////////

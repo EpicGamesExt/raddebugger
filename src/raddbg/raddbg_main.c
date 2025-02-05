@@ -723,13 +723,13 @@ entry_point(CmdLine *cmd_line)
                 RD_CmdKindInfo *cmd_kind_info = rd_cmd_kind_info_from_string(cmd_kind_name_string);
                 if(cmd_kind_info != &rd_nil_cmd_kind_info) RD_RegsScope()
                 {
-                  if(!rd_handle_match(dst_ws->cfg_handle, rd_regs()->window))
+                  if(dst_ws->cfg_id != rd_regs()->window)
                   {
                     Temp scratch = scratch_begin(0, 0);
-                    RD_PanelTree panel_tree = rd_panel_tree_from_cfg(scratch.arena, rd_cfg_from_handle(dst_ws->cfg_handle));
-                    rd_regs()->window = dst_ws->cfg_handle;
-                    rd_regs()->panel  = rd_handle_from_cfg(panel_tree.focused->cfg);
-                    rd_regs()->view   = rd_handle_from_cfg(panel_tree.focused->selected_tab);
+                    RD_PanelTree panel_tree = rd_panel_tree_from_cfg(scratch.arena, rd_cfg_from_id(dst_ws->cfg_id));
+                    rd_regs()->window = dst_ws->cfg_id;
+                    rd_regs()->panel  = panel_tree.focused->cfg->id;
+                    rd_regs()->view   = panel_tree.focused->selected_tab->id;
                     scratch_end(scratch);
                   }
                   rd_regs_fill_slot_from_string(cmd_kind_info->query.slot, cmd_args_string);

@@ -5,27 +5,22 @@
 #define RADDBG_CORE_H
 
 ////////////////////////////////
-//~ rjf: Handles
+//~ rjf: Config IDs
 
-typedef struct RD_Handle RD_Handle;
-struct RD_Handle
+typedef U64 RD_CfgID;
+
+typedef struct RD_CfgIDNode RD_CfgIDNode;
+struct RD_CfgIDNode
 {
-  U64 u64[2];
+  RD_CfgIDNode *next;
+  RD_CfgID v;
 };
 
-typedef struct RD_HandleNode RD_HandleNode;
-struct RD_HandleNode
+typedef struct RD_CfgIDList RD_CfgIDList;
+struct RD_CfgIDList
 {
-  RD_HandleNode *next;
-  RD_HandleNode *prev;
-  RD_Handle handle;
-};
-
-typedef struct RD_HandleList RD_HandleList;
-struct RD_HandleList
-{
-  RD_HandleNode *first;
-  RD_HandleNode *last;
+  RD_CfgIDNode *first;
+  RD_CfgIDNode *last;
   U64 count;
 };
 
@@ -179,7 +174,7 @@ struct RD_ViewState
   // rjf: hash links & key
   RD_ViewState *hash_next;
   RD_ViewState *hash_prev;
-  RD_Handle cfg_handle;
+  RD_CfgID cfg_id;
   
   // rjf: touch info
   U64 last_frame_index_touched;
@@ -297,7 +292,7 @@ struct RD_Cfg
   RD_Cfg *next;
   RD_Cfg *prev;
   RD_Cfg *parent;
-  U64 gen;
+  RD_CfgID id;
   String8 string;
 };
 
@@ -307,6 +302,13 @@ struct RD_CfgNode
   RD_CfgNode *next;
   RD_CfgNode *prev;
   RD_Cfg *v;
+};
+
+typedef struct RD_CfgSlot RD_CfgSlot;
+struct RD_CfgSlot
+{
+  RD_CfgNode *first;
+  RD_CfgNode *last;
 };
 
 typedef struct RD_CfgList RD_CfgList;
@@ -333,7 +335,7 @@ struct RD_CfgRec
 };
 
 ////////////////////////////////
-//~ rjf: Structured Locations, Parsed From Config
+//~ rjf: Structured Locations, Parsed From Config Trees
 
 typedef struct RD_Location RD_Location;
 struct RD_Location
@@ -345,7 +347,7 @@ struct RD_Location
 };
 
 ////////////////////////////////
-//~ rjf: New Panel Types (Queried From Config)
+//~ rjf: Structured Panel Trees, Parsed From Config Trees
 
 typedef struct RD_PanelNode RD_PanelNode;
 struct RD_PanelNode
@@ -423,7 +425,7 @@ struct RD_RegsNode
 };
 
 ////////////////////////////////
-//~ rjf: Theme Types
+//~ rjf: Structured Theme Types, Parsed From Config
 
 typedef struct RD_Theme RD_Theme;
 struct RD_Theme
@@ -535,7 +537,7 @@ struct RD_WindowState
   RD_WindowState *order_prev;
   RD_WindowState *hash_next;
   RD_WindowState *hash_prev;
-  RD_Handle cfg_handle;
+  RD_CfgID cfg_id;
   U64 frames_alive;
   U64 last_frame_index_touched;
   
@@ -648,7 +650,7 @@ typedef struct RD_Cfg2EvalBlobNode RD_Cfg2EvalBlobNode;
 struct RD_Cfg2EvalBlobNode
 {
   RD_Cfg2EvalBlobNode *next;
-  RD_Handle handle;
+  RD_CfgID id;
   String8 blob;
 };
 
@@ -821,12 +823,16 @@ struct RD_State
   RD_NameChunkNode *free_name_chunks[8];
   RD_Cfg *free_cfg;
   RD_Cfg *root_cfg;
+  U64 cfg_id_slots_count;
+  RD_CfgSlot *cfg_id_slots;
+  RD_CfgNode *free_cfg_id_node;
+  U64 cfg_id_gen;
   
   // rjf: window state cache
   U64 window_state_slots_count;
   RD_WindowStateSlot *window_state_slots;
   RD_WindowState *free_window_state;
-  RD_Handle last_focused_window;
+  RD_CfgID last_focused_window;
   RD_WindowState *first_window_state;
   RD_WindowState *last_window_state;
   
@@ -905,17 +911,14 @@ read_only global RD_WindowState rd_nil_window_state =
 };
 
 global RD_State *rd_state = 0;
-global RD_Handle rd_last_drag_drop_panel = {0};
-global RD_Handle rd_last_drag_drop_prev_tab = {0};
+global RD_CfgID rd_last_drag_drop_panel = 0;
+global RD_CfgID rd_last_drag_drop_prev_tab = 0;
 
 ////////////////////////////////
-//~ rjf: Handle Type Pure Functions
+//~ rjf: Config ID Type Functions
 
-internal RD_Handle rd_handle_zero(void);
-internal B32 rd_handle_match(RD_Handle a, RD_Handle b);
-internal void rd_handle_list_push_node(RD_HandleList *list, RD_HandleNode *node);
-internal void rd_handle_list_push(Arena *arena, RD_HandleList *list, RD_Handle handle);
-internal RD_HandleList rd_handle_list_copy(Arena *arena, RD_HandleList list);
+internal void rd_cfg_id_list_push(Arena *arena, RD_CfgIDList *list, RD_CfgID id);
+internal RD_CfgIDList rd_cfg_id_list_copy(Arena *arena, RD_CfgIDList *src);
 
 ////////////////////////////////
 //~ rjf: Registers Type Functions
@@ -956,13 +959,12 @@ internal String8 rd_name_alloc(String8 string);
 internal void rd_name_release(String8 string);
 
 ////////////////////////////////
-//~ rjf: New Config/Entity Data Structure Functions
+//~ rjf: Config Tree Functions
 
 internal RD_Cfg *rd_cfg_alloc(void);
 internal void rd_cfg_release(RD_Cfg *cfg);
 internal void rd_cfg_release_all_children(RD_Cfg *cfg);
-internal RD_Handle rd_handle_from_cfg(RD_Cfg *cfg);
-internal RD_Cfg *rd_cfg_from_handle(RD_Handle handle);
+internal RD_Cfg *rd_cfg_from_id(RD_CfgID id);
 internal RD_Cfg *rd_cfg_new(RD_Cfg *parent, String8 string);
 internal RD_Cfg *rd_cfg_newf(RD_Cfg *parent, char *fmt, ...);
 internal RD_Cfg *rd_cfg_deep_copy(RD_Cfg *src_root);

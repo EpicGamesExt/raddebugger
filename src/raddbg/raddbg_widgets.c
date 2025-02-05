@@ -345,7 +345,7 @@ rd_cmd_list_menu_buttons(U64 count, String8 *cmd_names, U32 *fastpath_codepoints
     {
       rd_cmd(RD_CmdKind_RunCommand, .cmd_name = cmd_names[idx]);
       ui_ctx_menu_close();
-      RD_Cfg *window = rd_cfg_from_handle(rd_regs()->window);
+      RD_Cfg *window = rd_cfg_from_id(rd_regs()->window);
       RD_WindowState *ws = rd_window_state_from_cfg(window);
       ws->menu_bar_focused = 0;
     }
@@ -974,7 +974,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             RD_BreakpointBoxDrawExtData *bp_draw = push_array(ui_build_arena(), RD_BreakpointBoxDrawExtData, 1);
             {
               RD_Regs *hover_regs = rd_get_hover_regs();
-              B32 is_hovering = (rd_cfg_from_handle(hover_regs->cfg) == bp && rd_state->hover_regs_slot == RD_RegSlot_Cfg);
+              B32 is_hovering = (rd_cfg_from_id(hover_regs->cfg) == bp && rd_state->hover_regs_slot == RD_RegSlot_Cfg);
               bp_draw->color    = bp_rgba;
               bp_draw->alive_t  = ui_anim(ui_key_from_stringf(ui_key_zero(), "bp_alive_t_%p", bp), 1.f, .rate = entity_alive_t_rate);
               bp_draw->hover_t  = ui_anim(ui_key_from_stringf(ui_key_zero(), "bp_hover_t_%p", bp), (F32)!!is_hovering, .rate = entity_hover_t_rate);
@@ -1014,32 +1014,32 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             // rjf: bp hovering
             if(ui_hovering(bp_sig) && !rd_drag_is_active())
             {
-              RD_RegsScope(.cfg = rd_handle_from_cfg(bp)) rd_set_hover_regs(RD_RegSlot_Cfg);
+              RD_RegsScope(.cfg = bp->id) rd_set_hover_regs(RD_RegSlot_Cfg);
             }
             
             // rjf: shift+click => enable breakpoint
             if(ui_clicked(bp_sig) && bp_sig.event_flags & OS_Modifier_Shift)
             {
-              rd_cmd(bp_is_disabled ? RD_CmdKind_EnableCfg : RD_CmdKind_DisableCfg, .cfg = rd_handle_from_cfg(bp));
+              rd_cmd(bp_is_disabled ? RD_CmdKind_EnableCfg : RD_CmdKind_DisableCfg, .cfg = bp->id);
             }
             
             // rjf: click => remove breakpoint
             if(ui_clicked(bp_sig) && bp_sig.event_flags == 0)
             {
-              rd_cmd(RD_CmdKind_RemoveCfg, .cfg = rd_handle_from_cfg(bp));
+              rd_cmd(RD_CmdKind_RemoveCfg, .cfg = bp->id);
             }
             
             // rjf: drag start
             if(ui_dragging(bp_sig) && !contains_2f32(bp_box->rect, ui_mouse()))
             {
-              RD_RegsScope(.cfg = rd_handle_from_cfg(bp)) rd_drag_begin(RD_RegSlot_Cfg);
+              RD_RegsScope(.cfg = bp->id) rd_drag_begin(RD_RegSlot_Cfg);
             }
             
             // rjf: bp right-click menu
             if(ui_right_clicked(bp_sig))
             {
               rd_cmd(RD_CmdKind_PushQuery,
-                     .cfg         = rd_handle_from_cfg(bp),
+                     .cfg         = bp->id,
                      .reg_slot    = RD_RegSlot_Cfg,
                      .ui_key      = bp_box->key,
                      .off_px      = v2f32(0, bp_box->rect.y1-bp_box->rect.y0),
@@ -1075,26 +1075,26 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             // rjf: watch hovering
             if(ui_hovering(pin_sig) && !rd_drag_is_active())
             {
-              RD_RegsScope(.cfg = rd_handle_from_cfg(pin)) rd_set_hover_regs(RD_RegSlot_Cfg);
+              RD_RegsScope(.cfg = pin->id) rd_set_hover_regs(RD_RegSlot_Cfg);
             }
             
             // rjf: click => remove pin
             if(ui_clicked(pin_sig))
             {
-              rd_cmd(RD_CmdKind_RemoveCfg, .cfg = rd_handle_from_cfg(pin));
+              rd_cmd(RD_CmdKind_RemoveCfg, .cfg = pin->id);
             }
             
             // rjf: drag start
             if(ui_dragging(pin_sig) && !contains_2f32(pin_box->rect, ui_mouse()))
             {
-              RD_RegsScope(.cfg = rd_handle_from_cfg(pin)) rd_drag_begin(RD_RegSlot_Cfg);
+              RD_RegsScope(.cfg = pin->id) rd_drag_begin(RD_RegSlot_Cfg);
             }
             
             // rjf: watch right-click menu
             if(ui_right_clicked(pin_sig))
             {
               rd_cmd(RD_CmdKind_PushQuery,
-                     .cfg         = rd_handle_from_cfg(pin),
+                     .cfg         = pin->id,
                      .reg_slot    = RD_RegSlot_Cfg,
                      .ui_key      = pin_box->key,
                      .off_px      = v2f32(0, pin_box->rect.y1-pin_box->rect.y0),
@@ -1311,12 +1311,12 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
               UI_Signal sig = ui_buttonf("%S###pin_nub", rd_icon_kind_text_table[RD_IconKind_Pin]);
               if(ui_dragging(sig) && !contains_2f32(sig.box->rect, ui_mouse()))
               {
-                RD_RegsScope(.cfg = rd_handle_from_cfg(pin)) rd_drag_begin(RD_RegSlot_Cfg);
+                RD_RegsScope(.cfg = pin->id) rd_drag_begin(RD_RegSlot_Cfg);
               }
               if(ui_right_clicked(sig))
               {
                 rd_cmd(RD_CmdKind_PushQuery,
-                       .cfg         = rd_handle_from_cfg(pin),
+                       .cfg         = pin->id,
                        .reg_slot    = RD_RegSlot_Cfg,
                        .ui_key      = sig.box->key,
                        .off_px      = v2f32(0, sig.box->rect.y1-sig.box->rect.y0),
@@ -1482,7 +1482,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
     if(rd_drag_is_active() && contains_2f32(clipped_top_container_rect, ui_mouse()))
     {
       CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_state->drag_drop_regs->thread);
-      RD_Cfg *cfg = rd_cfg_from_handle(rd_state->drag_drop_regs->cfg);
+      RD_Cfg *cfg = rd_cfg_from_id(rd_state->drag_drop_regs->cfg);
       if(rd_state->drag_drop_regs_slot == RD_RegSlot_Cfg &&
          (str8_match(cfg->string, str8_lit("breakpoint"), 0) ||
           str8_match(cfg->string, str8_lit("watch_pin"), 0)))
@@ -1514,7 +1514,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
         U64 line_idx = line_num - params->line_num_range.min;
         U64 line_vaddr = params->line_vaddrs[line_idx];
         rd_cmd(RD_CmdKind_RelocateCfg,
-               .cfg        = rd_handle_from_cfg(dropped_cfg),
+               .cfg        = dropped_cfg->id,
                .file_path  = line_vaddr == 0 ? rd_regs()->file_path : str8_zero(),
                .cursor     = line_vaddr == 0 ? txt_pt(line_num, 1) : txt_pt(0, 0),
                .vaddr      = line_vaddr);
