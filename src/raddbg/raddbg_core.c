@@ -6578,6 +6578,7 @@ rd_window_frame(void)
         UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Main))
         RD_Palette(RD_PaletteCode_Floating)
       {
+        F32 hover_eval_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "hover_eval_open_t"), 1.f);
         RD_Cfg *root = rd_immediate_cfg_from_keyf("hover_eval_%p", ws);
         RD_Cfg *view = rd_cfg_child_from_string_or_alloc(root, str8_lit("watch"));
         RD_Cfg *expr = rd_cfg_child_from_string_or_alloc(view, str8_lit("expression"));
@@ -6586,29 +6587,61 @@ rd_window_frame(void)
           RD_ViewRuleInfo *view_rule_info = rd_view_rule_info_from_string(view->string);
           rd_cfg_release_all_children(expr);
           rd_cfg_new(expr, ws->hover_eval_string);
+          UI_Focus(ws->hover_eval_focused ? UI_FocusKind_On : UI_FocusKind_Off)
           {
             ui_set_next_fixed_x(ws->hover_eval_spawn_pos.x);
             ui_set_next_fixed_y(ws->hover_eval_spawn_pos.y);
             ui_set_next_pref_width(ui_em(60.f, 1.f));
             ui_set_next_pref_height(ui_em(40.f, 1.f));
             ui_set_next_child_layout_axis(Axis2_Y);
-            UI_Box *container = ui_build_box_from_key(UI_BoxFlag_Floating, ui_key_zero());
-            UI_Parent(container)
+            ui_set_next_squish(0.25f-0.25f*hover_eval_t);
+            ui_set_next_transparency(1.f-hover_eval_t);
+            UI_Box *container = ui_build_box_from_string(UI_BoxFlag_Clickable|
+                                                         UI_BoxFlag_DrawBorder|
+                                                         UI_BoxFlag_DrawBackground|
+                                                         UI_BoxFlag_DrawBackgroundBlur|
+                                                         UI_BoxFlag_DisableFocusOverlay|
+                                                         UI_BoxFlag_DrawDropShadow,
+                                                         str8_lit("hover_eval_container"));
+            if(!ws->hover_eval_focused)
             {
-              UI_Row
+              for(UI_Event *evt = 0; ui_next_event(&evt);)
               {
+                if(evt->kind == UI_EventKind_Press &&
+                   evt->key == OS_Key_LeftMouseButton &&
+                   contains_2f32(container->rect, evt->pos))
+                {
+                  ws->hover_eval_focused = 1;
+                  break;
+                }
               }
+            }
+            UI_Parent(container) UI_Focus(ws->hover_eval_focused ? UI_FocusKind_Null : UI_FocusKind_Off)
+            {
               ui_set_next_pref_width(ui_pct(1, 0));
               ui_set_next_pref_height(ui_pct(1, 0));
               ui_set_next_child_layout_axis(Axis2_Y);
               UI_Box *view_contents_container = ui_build_box_from_stringf(UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawBackground|UI_BoxFlag_Clip, "###view_contents_container");
-              UI_Parent(view_contents_container) UI_Focus(UI_FocusKind_Off) UI_WidthFill
+              UI_Parent(view_contents_container) UI_WidthFill
               {
                 RD_ViewRuleUIFunctionType *view_ui = view_rule_info->ui;
                 String8 params_string = rd_string_from_cfg_tree(scratch.arena, view);
                 MD_Node *params = md_tree_from_string(scratch.arena, params_string)->first;
                 view_ui(expr->first->string, params, view_contents_container->rect);
               }
+            }
+            UI_Signal sig = ui_signal_from_box(container);
+            if(ui_pressed(sig))
+            {
+              ws->hover_eval_focused = 1;
+            }
+            if(ui_mouse_over(sig))
+            {
+              ws->hover_eval_last_frame_idx = rd_state->frame_index;
+            }
+            else if(ws->hover_eval_last_frame_idx+2 < rd_state->frame_index)
+            {
+              rd_request_frame();
             }
           }
         }
@@ -8206,6 +8239,7 @@ rd_window_frame(void)
     ProfScope("draw UI")
   {
     Temp scratch = scratch_begin(0, 0);
+    F32 box_squish_epsilon = 0.01f;
     
     //- rjf: unpack settings
     B32 do_background_blur = rd_setting_b32_from_name(str8_lit("background_blur"));
@@ -8264,7 +8298,7 @@ rd_window_frame(void)
       }
       
       // rjf: push squish
-      if(box->squish != 0)
+      if(box->squish > box_squish_epsilon)
       {
         Vec2F32 box_dim = dim_2f32(box->rect);
         Mat3x3F32 box2origin_xform = make_translate_3x3f32(v2f32(-box->rect.x0 - box_dim.x/2, -box->rect.y0));
@@ -8579,7 +8613,7 @@ rd_window_frame(void)
           }
           
           // rjf: pop squish
-          if(b->squish != 0)
+          if(b->squish > box_squish_epsilon)
           {
             dr_pop_xform2d();
             dr_pop_tex2d_sample_kind();

@@ -4276,7 +4276,12 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(watch)
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Type,      0.15f);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_ViewRule,  0.30f);
   }
-  rd_watch_view_build(wv, str8_lit("collection:watches"), str8_lit(""), 1, 10, rect);
+  String8 expr = rd_view_expr_string();
+  if(expr.size == 0)
+  {
+    expr = str8_lit("collection:watches");
+  }
+  rd_watch_view_build(wv, expr, str8_lit(""), 1, 10, rect);
   ProfEnd();
 }
 
