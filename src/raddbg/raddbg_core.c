@@ -8607,7 +8607,7 @@ rd_window_frame(void)
             Rng2F32 rect = b->rect;
             if(b->flags & UI_BoxFlag_Floating)
             {
-              rect = pad_2f32(rect, 2.f);
+              rect = pad_2f32(rect, 1.f);
               rect = intersect_2f32(window_rect, rect);
             }
             Vec4F32 color = rd_rgba_from_theme_color(RD_ThemeColor_Focus);
@@ -14476,7 +14476,7 @@ rd_frame(void)
             
             //- rjf: define all of the "fixed" tabs we care about
 #define FixedTab_XList \
-X(watch)\
+X(watches)\
 X(locals)\
 X(registers)\
 X(globals)\
@@ -14486,16 +14486,20 @@ X(procedures)\
 X(call_stack)\
 X(breakpoints)\
 X(watch_pins)\
-X(output)\
 X(targets)\
 X(scheduler)\
 X(modules)\
-X(disasm)\
-X(memory)\
-X(getting_started)
+Y(output, text, "query:output_log")\
+Y(disasm, disasm, "")\
+Y(memory, memory, "")\
+Z(getting_started)
 #define X(name) RD_Cfg *name = &rd_nil_cfg;
+#define Y(name, rule, expr) RD_Cfg *name = &rd_nil_cfg;
+#define Z(name) RD_Cfg *name = &rd_nil_cfg;
             FixedTab_XList
 #undef X
+#undef Y
+#undef Z
             
             //- rjf: find all the fixed tabs, and all text viewers
             RD_CfgList texts = {0};
@@ -14508,9 +14512,13 @@ X(getting_started)
                 RD_Cfg *tab = n->v;
                 B32 need_unhook = 1;
                 if(0){}
-#define X(name) else if(str8_match(tab->string, str8_lit(#name), 0)) {name = tab;}
+#define X(name) else if(str8_match(tab->string, str8_lit("watch"), 0) && str8_match(rd_expr_from_cfg(tab), str8_lit("query:" #name), 0)) {name = tab;}
+#define Y(name, rule, expr) else if(str8_match(tab->string, str8_lit(#rule), 0) && str8_match(rd_expr_from_cfg(tab), str8_lit(expr), 0)) {name = tab;}
+#define Z(name) else if(str8_match(tab->string, str8_lit(#name), 0)) {name = tab;}
                 FixedTab_XList
 #undef X
+#undef Y
+#undef Z
                 else if(str8_match(tab->string, str8_lit("text"), 0)) {rd_cfg_list_push(scratch.arena, &texts, tab);}
                 else
                 {
@@ -14527,14 +14535,22 @@ X(getting_started)
             rd_cfg_release(panels);
             
             //- rjf: allocate any missing tabs
-#define X(name) if(name == &rd_nil_cfg) {name = rd_cfg_alloc(); rd_cfg_equip_string(name, str8_lit(#name));}
+#define X(name) if(name == &rd_nil_cfg) {name = rd_cfg_alloc(); rd_cfg_equip_string(name, str8_lit("watch")); RD_Cfg *expr_cfg = rd_cfg_new(name, str8_lit("expression")); rd_cfg_new(expr_cfg, str8_lit("query:" #name));}
+#define Y(name, rule, expr) if(name == &rd_nil_cfg) {name = rd_cfg_alloc(); rd_cfg_equip_string(name, str8_lit(#rule)); RD_Cfg *expr_cfg = rd_cfg_new(name, str8_lit("expression")); rd_cfg_new(expr_cfg, str8_lit(expr));}
+#define Z(name) if(name == &rd_nil_cfg) {name = rd_cfg_alloc(); rd_cfg_equip_string(name, str8_lit(#name));}
             FixedTab_XList
 #undef X
+#undef Y
+#undef Z
             
             //- rjf: eliminate all tab selections
 #define X(name) if(name != &rd_nil_cfg) {rd_cfg_release(rd_cfg_child_from_string(name, str8_lit("selected")));}
+#define Y(name, rule, expr) if(name != &rd_nil_cfg) {rd_cfg_release(rd_cfg_child_from_string(name, str8_lit("selected")));}
+#define Z(name) if(name != &rd_nil_cfg) {rd_cfg_release(rd_cfg_child_from_string(name, str8_lit("selected")));}
             FixedTab_XList
 #undef X
+#undef Y
+#undef Z
             for(RD_CfgNode *n = texts.first; n != 0; n = n->next)
             {
               rd_cfg_release(rd_cfg_child_from_string(n->v, str8_lit("selected")));
@@ -14586,14 +14602,14 @@ X(getting_started)
                 // rjf: root_0_1 split
                 RD_Cfg *root_0_1_0 = rd_cfg_new(root_0_1, str8_lit("0.60"));
                 RD_Cfg *root_0_1_1 = rd_cfg_new(root_0_1, str8_lit("0.40"));
-                rd_cfg_insert_child(root_0_1_0, root_0_1_0->last, watch);
+                rd_cfg_insert_child(root_0_1_0, root_0_1_0->last, watches);
                 rd_cfg_insert_child(root_0_1_0, root_0_1_0->last, locals);
                 rd_cfg_insert_child(root_0_1_0, root_0_1_0->last, registers);
                 rd_cfg_insert_child(root_0_1_0, root_0_1_0->last, globals);
                 rd_cfg_insert_child(root_0_1_0, root_0_1_0->last, thread_locals);
                 rd_cfg_insert_child(root_0_1_0, root_0_1_0->last, types);
                 rd_cfg_insert_child(root_0_1_0, root_0_1_0->last, procedures);
-                rd_cfg_new(watch, str8_lit("selected"));
+                rd_cfg_new(watches, str8_lit("selected"));
                 rd_cfg_new(root_0_1_0, str8_lit("tabs_on_bottom"));
                 rd_cfg_insert_child(root_0_1_1, root_0_1_1->last, call_stack);
                 rd_cfg_insert_child(root_0_1_1, root_0_1_1->last, modules);
@@ -14633,9 +14649,9 @@ X(getting_started)
                 RD_Cfg *root_0_1 = rd_cfg_new(root_0, str8_lit("0.25"));
                 RD_Cfg *root_0_2 = rd_cfg_new(root_0, str8_lit("0.25"));
                 RD_Cfg *root_0_3 = rd_cfg_new(root_0, str8_lit("0.25"));
-                rd_cfg_insert_child(root_0_0, root_0_0->last, watch);
+                rd_cfg_insert_child(root_0_0, root_0_0->last, watches);
                 rd_cfg_insert_child(root_0_0, root_0_0->last, types);
-                rd_cfg_new(watch, str8_lit("selected"));
+                rd_cfg_new(watches, str8_lit("selected"));
                 rd_cfg_insert_child(root_0_1, root_0_1->last, scheduler);
                 rd_cfg_insert_child(root_0_1, root_0_1->last, targets);
                 rd_cfg_insert_child(root_0_1, root_0_1->last, breakpoints);
@@ -14671,8 +14687,12 @@ X(getting_started)
             
             //- rjf: release any unused views from the previous layout
 #define X(name) if(name->parent == &rd_nil_cfg) {rd_cfg_release(name);}
+#define Y(name, rule, expr) if(name->parent == &rd_nil_cfg) {rd_cfg_release(name);}
+#define Z(name) if(name->parent == &rd_nil_cfg) {rd_cfg_release(name);}
             FixedTab_XList
 #undef X
+#undef Y
+#undef Z
           }break;
           
           //- rjf: thread finding
@@ -15007,7 +15027,9 @@ X(getting_started)
                   RD_Cfg *tab = tab_n->v;
                   if(rd_cfg_is_project_filtered(tab)) { continue; }
                   RD_ViewRuleKind view_kind = rd_view_rule_kind_from_string(tab->string);
-                  if(view_kind == RD_ViewRuleKind_Text && panel_area > best_panel_area)
+                  String8 view_expr = rd_expr_from_cfg(tab);
+                  String8 file_path = rd_file_path_from_eval_string(scratch.arena, view_expr);
+                  if(view_kind == RD_ViewRuleKind_Text && file_path.size != 0 && panel_area > best_panel_area)
                   {
                     panel_w_any_src_code = panel;
                     best_panel_area = panel_area;

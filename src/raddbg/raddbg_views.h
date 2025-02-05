@@ -245,6 +245,6 @@ internal void rd_watch_view_column_release(RD_WatchViewState *wv, RD_WatchViewCo
 
 //- rjf: watch view main hooks
 internal void rd_watch_view_init(RD_WatchViewState *ewv);
-internal void rd_watch_view_build(RD_WatchViewState *ewv, String8 root_expr, String8 root_view_rule, B32 modifiable, U32 default_radix, Rng2F32 rect);
+internal void rd_watch_view_build(RD_WatchViewState *ewv, Rng2F32 rect);
 
 #endif // RADDBG_VIEWS_H

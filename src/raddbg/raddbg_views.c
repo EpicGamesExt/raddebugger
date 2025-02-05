@@ -1494,7 +1494,7 @@ rd_watch_view_init(RD_WatchViewState *ewv)
 }
 
 internal void
-rd_watch_view_build(RD_WatchViewState *ewv, String8 root_expr, String8 root_view_rule, B32 modifiable, U32 default_radix, Rng2F32 rect)
+rd_watch_view_build(RD_WatchViewState *ewv, Rng2F32 rect)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
@@ -1505,11 +1505,34 @@ rd_watch_view_build(RD_WatchViewState *ewv, String8 root_expr, String8 root_view
   //- rjf: unpack arguments
   //
   EV_View *eval_view = rd_view_eval_view();
-  String8 filter = rd_view_filter();
   F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
   S64 num_possible_visible_rows = (S64)(dim_2f32(rect).y/row_height_px);
   F32 row_string_max_size_px = dim_2f32(rect).x;
   EV_StringFlags string_flags = 0;
+  String8 filter = rd_view_filter();
+  String8 expr = rd_view_expr_string();
+  if(expr.size == 0)
+  {
+    expr = str8_lit("query:watches");
+  }
+  
+  //////////////////////////////
+  //- rjf: decide if root should be implicit
+  //
+  // "implicit" means -> root is automatically expanded, row depth is 1 less than the
+  // block tree structure would suggest. this would be used if the root is, for instance,
+  // the "collection of all watches", to build a watch window. but this behavior is not
+  // as desirable if we are just using some other expression as the root.
+  //
+  B32 implicit_root = 0;
+  {
+    E_Eval eval = e_eval_from_string(scratch.arena, expr);
+    E_TypeKind kind = e_type_kind_from_key(eval.type_key);
+    if(kind == E_TypeKind_Set)
+    {
+      implicit_root = 1;
+    }
+  }
   
   //////////////////////////////
   //- rjf: determine autocompletion string
@@ -1550,8 +1573,11 @@ rd_watch_view_build(RD_WatchViewState *ewv, String8 root_expr, String8 root_view
       {
         MemoryZeroStruct(&block_tree);
         MemoryZeroStruct(&block_ranges);
-        ev_key_set_expansion(eval_view, ev_key_root(), ev_key_make(ev_hash_from_key(ev_key_root()), 1), 1);
-        block_tree   = ev_block_tree_from_string(scratch.arena, eval_view, filter, root_expr);
+        if(implicit_root)
+        {
+          ev_key_set_expansion(eval_view, ev_key_root(), ev_key_make(ev_hash_from_key(ev_key_root()), 1), 1);
+        }
+        block_tree   = ev_block_tree_from_string(scratch.arena, eval_view, filter, expr);
         block_ranges = ev_block_range_list_from_tree(scratch.arena, &block_tree);
       }
       
@@ -2428,7 +2454,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, String8 root_expr, String8 root_view
           B32 next_row_expanded = row_expanded;
           RD_WatchRowInfo row_info = rd_watch_row_info_from_row(scratch.arena, row); 
           B32 row_is_expandable = ev_row_is_expandable(row);
-          if(row_depth > 0)
+          if(implicit_root && row_depth > 0)
           {
             row_depth -= 1;
           }
@@ -3944,7 +3970,10 @@ rd_watch_view_build(RD_WatchViewState *ewv, String8 root_expr, String8 root_view
           //
           if(next_row_expanded != row_expanded)
           {
-            ev_key_set_expansion(eval_view, row->block->key, row->key, next_row_expanded);
+            if(!ev_key_match(ev_key_root(), row->key) || !implicit_root)
+            {
+              ev_key_set_expansion(eval_view, row->block->key, row->key, next_row_expanded);
+            }
           }
         }
       }
@@ -4124,144 +4153,6 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(getting_started)
 }
 
 ////////////////////////////////
-//~ rjf: targets @view_hook_impl
-
-RD_VIEW_RULE_UI_FUNCTION_DEF(targets)
-{
-  ProfBeginFunction();
-  RD_WatchViewState *wv = rd_view_state(RD_WatchViewState);
-  if(!wv->initialized)
-  {
-    rd_watch_view_init(wv);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Expr,       0.25f);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,      0.75f, .dequote_string = 1, .is_non_code = 0);
-  }
-  rd_watch_view_build(wv, str8_lit("collection:targets"), str8_zero(), 1, 10, rect);
-  ProfEnd();
-}
-
-////////////////////////////////
-//~ rjf: file_path_map @view_hook_impl
-
-RD_VIEW_RULE_UI_FUNCTION_DEF(file_path_map)
-{
-  ProfBeginFunction();
-  RD_WatchViewState *wv = rd_view_state(RD_WatchViewState);
-  if(!wv->initialized)
-  {
-    rd_watch_view_init(wv);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Expr,       0.25f);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,      0.75f, .dequote_string = 1, .is_non_code = 0);
-  }
-  rd_watch_view_build(wv, str8_lit("collection:file_path_maps"), str8_zero(), 1, 10, rect);
-  ProfEnd();
-}
-
-////////////////////////////////
-//~ rjf: auto_view_rules @view_hook_impl
-
-RD_VIEW_RULE_UI_FUNCTION_DEF(auto_view_rules)
-{
-  ProfBeginFunction();
-  RD_WatchViewState *wv = rd_view_state(RD_WatchViewState);
-  if(!wv->initialized)
-  {
-    rd_watch_view_init(wv);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Expr,       0.25f);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,      0.75f, .dequote_string = 1, .is_non_code = 0);
-  }
-  rd_watch_view_build(wv, str8_lit("collection:auto_view_rules"), str8_zero(), 1, 10, rect);
-  ProfEnd();
-}
-
-////////////////////////////////
-//~ rjf: breakpoints @view_hook_impl
-
-RD_VIEW_RULE_UI_FUNCTION_DEF(breakpoints)
-{
-  ProfBeginFunction();
-  RD_WatchViewState *wv = rd_view_state(RD_WatchViewState);
-  if(!wv->initialized)
-  {
-    rd_watch_view_init(wv);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Expr,       0.25f);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,      0.75f, .dequote_string = 1);
-  }
-  rd_watch_view_build(wv, str8_lit("collection:breakpoints"), str8_zero(), 0, 10, rect);
-  ProfEnd();
-}
-
-////////////////////////////////
-//~ rjf: watch_pins @view_hook_impl
-
-RD_VIEW_RULE_UI_FUNCTION_DEF(watch_pins)
-{
-  ProfBeginFunction();
-  RD_WatchViewState *wv = rd_view_state(RD_WatchViewState);
-  if(!wv->initialized)
-  {
-    rd_watch_view_init(wv);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Expr,       0.25f);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,      0.75f, .dequote_string = 1);
-  }
-  rd_watch_view_build(wv, str8_lit("collection:watch_pins"), str8_zero(), 0, 10, rect);
-  ProfEnd();
-}
-
-////////////////////////////////
-//~ rjf: scheduler @view_hook_impl
-
-RD_VIEW_RULE_UI_FUNCTION_DEF(scheduler)
-{
-  ProfBeginFunction();
-  RD_WatchViewState *wv = rd_view_state(RD_WatchViewState);
-  if(!wv->initialized)
-  {
-    rd_watch_view_init(wv);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Expr,       0.25f);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,      0.75f, .dequote_string = 1);
-  }
-  rd_watch_view_build(wv, str8_lit("collection:machines"), str8_lit("only: label str id callstack v count vaddr inline_depth"), 0, 10, rect);
-  ProfEnd();
-}
-
-////////////////////////////////
-//~ rjf: call_stack @view_hook_impl
-
-RD_VIEW_RULE_UI_FUNCTION_DEF(call_stack)
-{
-  ProfBeginFunction();
-  RD_WatchViewState *wv = rd_view_state(RD_WatchViewState);
-  if(!wv->initialized)
-  {
-    rd_watch_view_init(wv);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_CallStackFrameSelection, 0.05f);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_CallStackFrame,          0.50f, .display_string = str8_lit("Symbol"), .dequote_string = 1);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Member,                  0.20f, .string = str8_lit("vaddr"), .display_string = str8_lit("Address"), .view_rule = str8_lit("cast:U64"));
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Module,                  0.25f, .string = str8_lit("module.str"), .display_string = str8_lit("Module"), .dequote_string = 1, .is_non_code = 1);
-  }
-  rd_watch_view_build(wv, str8_lit("thread:current_thread.callstack.v"), str8_lit("array:'thread:current_thread.callstack.count', hex"), 0, 10, rect);
-  ProfEnd();
-}
-
-////////////////////////////////
-//~ rjf: modules @view_hook_impl
-
-RD_VIEW_RULE_UI_FUNCTION_DEF(modules)
-{
-  ProfBeginFunction();
-  RD_WatchViewState *wv = rd_view_state(RD_WatchViewState);
-  if(!wv->initialized)
-  {
-    rd_watch_view_init(wv);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Expr,       0.25f);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,      0.75f, .dequote_string = 1);
-  }
-  rd_watch_view_build(wv, str8_lit("collection:modules"), str8_lit("only: exe dbg str vaddr_range min max"), 0, 16, rect);
-  ProfEnd();
-}
-
-////////////////////////////////
 //~ rjf: watch @view_hook_impl
 
 RD_VIEW_RULE_UI_FUNCTION_DEF(watch)
@@ -4276,125 +4167,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(watch)
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Type,      0.15f);
     rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_ViewRule,  0.30f);
   }
-  String8 expr = rd_view_expr_string();
-  if(expr.size == 0)
-  {
-    expr = str8_lit("collection:watches");
-  }
-  rd_watch_view_build(wv, expr, str8_lit(""), 1, 10, rect);
-  ProfEnd();
-}
-
-////////////////////////////////
-//~ rjf: locals @view_hook_impl
-
-RD_VIEW_RULE_UI_FUNCTION_DEF(locals)
-{
-  ProfBeginFunction();
-  RD_WatchViewState *wv = rd_view_state(RD_WatchViewState);
-  if(!wv->initialized)
-  {
-    rd_watch_view_init(wv);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Expr,      0.25f);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,     0.3f);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Type,      0.15f);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_ViewRule,  0.30f);
-  }
-  rd_watch_view_build(wv, str8_lit("collection:locals"), str8_lit(""), 0, 10, rect);
-  ProfEnd();
-}
-
-////////////////////////////////
-//~ rjf: registers @view_hook_impl
-
-RD_VIEW_RULE_UI_FUNCTION_DEF(registers)
-{
-  ProfBeginFunction();
-  RD_WatchViewState *wv = rd_view_state(RD_WatchViewState);
-  if(!wv->initialized)
-  {
-    rd_watch_view_init(wv);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Expr,      0.25f);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,     0.3f);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Type,      0.15f);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_ViewRule,  0.30f);
-  }
-  rd_watch_view_build(wv, str8_lit("collection:registers"), str8_lit("hex"), 0, 16, rect);
-  ProfEnd();
-}
-
-////////////////////////////////
-//~ rjf: globals @view_hook_impl
-
-RD_VIEW_RULE_UI_FUNCTION_DEF(globals)
-{
-  ProfBeginFunction();
-  RD_WatchViewState *wv = rd_view_state(RD_WatchViewState);
-  if(!wv->initialized)
-  {
-    rd_watch_view_init(wv);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Expr,      0.25f);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,     0.3f);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Type,      0.15f);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_ViewRule,  0.30f);
-  }
-  rd_watch_view_build(wv, str8_lit("collection:globals"), str8_lit(""), 0, 10, rect);
-  ProfEnd();
-}
-
-////////////////////////////////
-//~ rjf: thread_locals @view_hook_impl
-
-RD_VIEW_RULE_UI_FUNCTION_DEF(thread_locals)
-{
-  ProfBeginFunction();
-  RD_WatchViewState *wv = rd_view_state(RD_WatchViewState);
-  if(!wv->initialized)
-  {
-    rd_watch_view_init(wv);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Expr,      0.25f);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,     0.3f);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Type,      0.15f);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_ViewRule,  0.30f);
-  }
-  rd_watch_view_build(wv, str8_lit("collection:thread_locals"), str8_lit(""), 0, 10, rect);
-  ProfEnd();
-}
-
-////////////////////////////////
-//~ rjf: types @view_hook_impl
-
-RD_VIEW_RULE_UI_FUNCTION_DEF(types)
-{
-  ProfBeginFunction();
-  RD_WatchViewState *wv = rd_view_state(RD_WatchViewState);
-  if(!wv->initialized)
-  {
-    rd_watch_view_init(wv);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Expr,      0.25f);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,     0.3f);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Type,      0.15f);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_ViewRule,  0.30f);
-  }
-  rd_watch_view_build(wv, str8_lit("collection:types"), str8_lit(""), 0, 10, rect);
-  ProfEnd();
-}
-
-////////////////////////////////
-//~ rjf: procedures @view_hook_impl
-
-RD_VIEW_RULE_UI_FUNCTION_DEF(procedures)
-{
-  ProfBeginFunction();
-  RD_WatchViewState *wv = rd_view_state(RD_WatchViewState);
-  if(!wv->initialized)
-  {
-    rd_watch_view_init(wv);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Expr,      0.2f);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_Value,     0.6f);
-    rd_watch_view_column_alloc(wv, RD_WatchViewColumnKind_ViewRule,  0.2f);
-  }
-  rd_watch_view_build(wv, str8_lit("collection:procedures"), str8_lit(""), 0, 10, rect);
+  rd_watch_view_build(wv, rect);
   ProfEnd();
 }
 
@@ -4997,107 +4770,6 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(disasm)
   
   txt_scope_close(txt_scope);
   dasm_scope_close(dasm_scope);
-  hs_scope_close(hs_scope);
-  scratch_end(scratch);
-}
-
-////////////////////////////////
-//~ rjf: output @view_hook_impl
-
-typedef struct RD_OutputViewState RD_OutputViewState;
-struct RD_OutputViewState
-{
-  U128 last_hash;
-  RD_CodeViewState cv;
-};
-
-RD_VIEW_RULE_UI_FUNCTION_DEF(output)
-{
-  RD_OutputViewState *ov = rd_view_state(RD_OutputViewState);
-  RD_CodeViewState *cv = &ov->cv;
-  rd_code_view_init(cv);
-  Temp scratch = scratch_begin(0, 0);
-  HS_Scope *hs_scope = hs_scope_open();
-  TXT_Scope *txt_scope = txt_scope_open();
-  
-  //////////////////////////////
-  //- rjf: set up invariants
-  //
-  F32 bottom_bar_height = ui_top_font_size()*2.f;
-  Rng2F32 code_area_rect = r2f32p(rect.x0, rect.y0, rect.x1, rect.y1 - bottom_bar_height);
-  Rng2F32 bottom_bar_rect = r2f32p(rect.x0, rect.y1 - bottom_bar_height, rect.x1, rect.y1);
-  
-  //////////////////////////////
-  //- rjf: unpack parameterization info
-  //
-  rd_regs()->file_path     = str8_zero();
-  rd_regs()->vaddr         = 0;
-  rd_regs()->cursor.line   = rd_value_from_params_key(params, str8_lit("cursor_line")).s64;
-  rd_regs()->cursor.column = rd_value_from_params_key(params, str8_lit("cursor_column")).s64;
-  rd_regs()->mark.line     = rd_value_from_params_key(params, str8_lit("mark_line")).s64;
-  rd_regs()->mark.column   = rd_value_from_params_key(params, str8_lit("mark_column")).s64;
-  
-  //////////////////////////////
-  //- rjf: unpack text info
-  //
-  U128 key = d_state->output_log_key;
-  TXT_LangKind lang_kind = TXT_LangKind_Null;
-  U128 hash = {0};
-  TXT_TextInfo info = txt_text_info_from_key_lang(txt_scope, key, lang_kind, &hash);
-  String8 data = hs_data_from_hash(hs_scope, hash);
-  Rng1U64 empty_range = {0};
-  if(info.lines_count == 0)
-  {
-    info.lines_count = 1;
-    info.lines_ranges = &empty_range;
-  }
-  
-  //////////////////////////////
-  //- rjf: scroll-to-bottom
-  //
-  if(!u128_match(hash, ov->last_hash))
-  {
-    ov->last_hash     = hash;
-    cv->goto_line_num = info.lines_count;
-    cv->contain_cursor= 1;
-  }
-  
-  //////////////////////////////
-  //- rjf: build code contents
-  //
-  {
-    rd_code_view_build(scratch.arena, cv, 0, code_area_rect, data, &info, 0, r1u64(0, 0), di_key_zero());
-  }
-  
-  //////////////////////////////
-  //- rjf: build bottom bar
-  //
-  {
-    ui_set_next_rect(shift_2f32(bottom_bar_rect, scale_2f32(rect.p0, -1.f)));
-    ui_set_next_flags(UI_BoxFlag_DrawBackground);
-    UI_Row
-      UI_TextAlignment(UI_TextAlign_Center)
-      UI_PrefWidth(ui_text_dim(10, 1))
-      UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
-      RD_Font(RD_FontSlot_Code)
-    {
-      ui_labelf("(Debug String Output)");
-      ui_spacer(ui_em(1.5f, 1));
-      ui_labelf("Line: %I64d, Column: %I64d", rd_regs()->cursor.line, rd_regs()->cursor.column);
-      ui_spacer(ui_pct(1, 0));
-      ui_labelf("(read only)");
-    }
-  }
-  
-  //////////////////////////////
-  //- rjf: store params
-  //
-  rd_store_view_param_s64(str8_lit("cursor_line"), rd_regs()->cursor.line);
-  rd_store_view_param_s64(str8_lit("cursor_column"), rd_regs()->cursor.column);
-  rd_store_view_param_s64(str8_lit("mark_line"), rd_regs()->mark.line);
-  rd_store_view_param_s64(str8_lit("mark_column"), rd_regs()->mark.column);
-  
-  txt_scope_close(txt_scope);
   hs_scope_close(hs_scope);
   scratch_end(scratch);
 }

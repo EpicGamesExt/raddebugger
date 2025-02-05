@@ -392,23 +392,8 @@ RD_ViewRuleKind_GettingStarted,
 RD_ViewRuleKind_Settings,
 RD_ViewRuleKind_PendingFile,
 RD_ViewRuleKind_Watch,
-RD_ViewRuleKind_Locals,
-RD_ViewRuleKind_Registers,
-RD_ViewRuleKind_Globals,
-RD_ViewRuleKind_ThreadLocals,
-RD_ViewRuleKind_Types,
-RD_ViewRuleKind_Procedures,
-RD_ViewRuleKind_Targets,
-RD_ViewRuleKind_FilePathMap,
-RD_ViewRuleKind_AutoViewRules,
-RD_ViewRuleKind_Breakpoints,
-RD_ViewRuleKind_WatchPins,
-RD_ViewRuleKind_Scheduler,
-RD_ViewRuleKind_CallStack,
-RD_ViewRuleKind_Modules,
 RD_ViewRuleKind_Text,
 RD_ViewRuleKind_Disasm,
-RD_ViewRuleKind_Output,
 RD_ViewRuleKind_Memory,
 RD_ViewRuleKind_Bitmap,
 RD_ViewRuleKind_Checkbox,
@@ -663,23 +648,8 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(getting_started);
 RD_VIEW_RULE_UI_FUNCTION_DEF(settings);
 RD_VIEW_RULE_UI_FUNCTION_DEF(pending_file);
 RD_VIEW_RULE_UI_FUNCTION_DEF(watch);
-RD_VIEW_RULE_UI_FUNCTION_DEF(locals);
-RD_VIEW_RULE_UI_FUNCTION_DEF(registers);
-RD_VIEW_RULE_UI_FUNCTION_DEF(globals);
-RD_VIEW_RULE_UI_FUNCTION_DEF(thread_locals);
-RD_VIEW_RULE_UI_FUNCTION_DEF(types);
-RD_VIEW_RULE_UI_FUNCTION_DEF(procedures);
-RD_VIEW_RULE_UI_FUNCTION_DEF(targets);
-RD_VIEW_RULE_UI_FUNCTION_DEF(file_path_map);
-RD_VIEW_RULE_UI_FUNCTION_DEF(auto_view_rules);
-RD_VIEW_RULE_UI_FUNCTION_DEF(breakpoints);
-RD_VIEW_RULE_UI_FUNCTION_DEF(watch_pins);
-RD_VIEW_RULE_UI_FUNCTION_DEF(scheduler);
-RD_VIEW_RULE_UI_FUNCTION_DEF(call_stack);
-RD_VIEW_RULE_UI_FUNCTION_DEF(modules);
 RD_VIEW_RULE_UI_FUNCTION_DEF(text);
 RD_VIEW_RULE_UI_FUNCTION_DEF(disasm);
-RD_VIEW_RULE_UI_FUNCTION_DEF(output);
 RD_VIEW_RULE_UI_FUNCTION_DEF(memory);
 RD_VIEW_RULE_UI_FUNCTION_DEF(bitmap);
 RD_VIEW_RULE_UI_FUNCTION_DEF(checkbox);
@@ -701,7 +671,7 @@ extern RD_StringBindingPair rd_default_binding_table[111];
 extern String8 rd_binding_version_remap_old_name_table[8];
 extern String8 rd_binding_version_remap_new_name_table[8];
 extern String8 rd_icon_kind_text_table[69];
-extern RD_ViewRuleInfo rd_view_rule_kind_info_table[28];
+extern RD_ViewRuleInfo rd_view_rule_kind_info_table[13];
 extern RD_IconKind rd_entity_kind_icon_kind_table[27];
 extern String8 rd_theme_preset_display_string_table[9];
 extern String8 rd_theme_preset_code_string_table[9];
