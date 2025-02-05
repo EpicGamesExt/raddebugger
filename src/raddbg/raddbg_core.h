@@ -387,72 +387,6 @@ struct RD_PanelNodeRec
 };
 
 ////////////////////////////////
-//~ rjf: Entity Types
-
-typedef U64 RD_EntityID;
-
-typedef struct RD_Entity RD_Entity;
-struct RD_Entity
-{
-  // rjf: tree links
-  RD_Entity *first;
-  RD_Entity *last;
-  RD_Entity *next;
-  RD_Entity *prev;
-  RD_Entity *parent;
-  
-  // rjf: metadata
-  RD_EntityKind kind;
-  RD_EntityFlags flags;
-  RD_EntityID id;
-  U64 gen;
-  U64 alloc_time_us;
-  
-  // rjf: basic equipment
-  TxtPt text_point;
-  B32 disabled;
-  B32 debug_subprocesses;
-  U64 u64;
-  U64 vaddr;
-  Vec4F32 color_hsva;
-  RD_CfgSrc cfg_src;
-  U64 timestamp;
-  
-  // rjf: string equipment
-  String8 string;
-};
-
-typedef struct RD_EntityNode RD_EntityNode;
-struct RD_EntityNode
-{
-  RD_EntityNode *next;
-  RD_Entity *entity;
-};
-
-typedef struct RD_EntityList RD_EntityList;
-struct RD_EntityList
-{
-  RD_EntityNode *first;
-  RD_EntityNode *last;
-  U64 count;
-};
-
-typedef struct RD_EntityArray RD_EntityArray;
-struct RD_EntityArray
-{
-  RD_Entity **v;
-  U64 count;
-};
-
-typedef struct RD_EntityRec RD_EntityRec;
-struct RD_EntityRec
-{
-  RD_Entity *next;
-  S32 push_count;
-  S32 pop_count;
-};
-
-////////////////////////////////
 //~ rjf: Command Types
 
 typedef struct RD_Cmd RD_Cmd;
@@ -767,14 +701,6 @@ struct RD_NameChunkNode
   U64 size;
 };
 
-typedef struct RD_EntityListCache RD_EntityListCache;
-struct RD_EntityListCache
-{
-  Arena *arena;
-  U64 alloc_gen;
-  RD_EntityList list;
-};
-
 typedef struct RD_AmbiguousPathNode RD_AmbiguousPathNode;
 struct RD_AmbiguousPathNode
 {
@@ -913,20 +839,6 @@ struct RD_State
   // TODO(rjf): TO BE ELIMINATED OR REPLACED VVVVVVVVVVVVVVVV
   //-
   
-  // rjf: entity state
-  Arena *entities_arena;
-  RD_Entity *entities_base;
-  U64 entities_count;
-  U64 entities_id_gen;
-  RD_Entity *entities_root;
-  RD_Entity *entities_free[2]; // [0] -> normal lifetime, not user defined; [1] -> user defined lifetime (& thus undoable)
-  U64 entities_free_count;
-  U64 entities_active_count;
-  
-  // rjf: entity query caches
-  U64 kind_alloc_gens[RD_EntityKind_COUNT];
-  RD_EntityListCache kind_caches[RD_EntityKind_COUNT];
-  
   // rjf: bind change
   Arena *bind_change_arena;
   B32 bind_change_active;
@@ -962,15 +874,6 @@ read_only global RD_PanelNode rd_nil_panel_node =
   0,
   &rd_nil_cfg,
   .selected_tab = &rd_nil_cfg,
-};
-
-read_only global RD_Entity rd_nil_entity =
-{
-  &rd_nil_entity,
-  &rd_nil_entity,
-  &rd_nil_entity,
-  &rd_nil_entity,
-  &rd_nil_entity,
 };
 
 read_only global RD_CmdKindInfo rd_nil_cmd_kind_info = {0};
@@ -1024,39 +927,6 @@ internal RD_Regs *rd_regs_copy(Arena *arena, RD_Regs *src);
 //~ rjf: Commands Type Functions
 
 internal void rd_cmd_list_push_new(Arena *arena, RD_CmdList *cmds, String8 name, RD_Regs *regs);
-
-////////////////////////////////
-//~ rjf: Entity Type Pure Functions
-
-//- rjf: nil
-internal B32 rd_entity_is_nil(RD_Entity *entity);
-#define rd_require_entity_nonnil(entity, if_nil_stmts) do{if(rd_entity_is_nil(entity)){if_nil_stmts;}}while(0)
-
-//- rjf: handle <-> entity conversions
-internal U64 rd_index_from_entity(RD_Entity *entity);
-internal RD_Handle rd_handle_from_entity(RD_Entity *entity);
-internal RD_Entity *rd_entity_from_handle(RD_Handle handle);
-
-//- rjf: entity recursion iterators
-internal RD_EntityRec rd_entity_rec_depth_first(RD_Entity *entity, RD_Entity *subtree_root, U64 sib_off, U64 child_off);
-#define rd_entity_rec_depth_first_pre(entity, subtree_root)  rd_entity_rec_depth_first((entity), (subtree_root), OffsetOf(RD_Entity, next), OffsetOf(RD_Entity, first))
-#define rd_entity_rec_depth_first_post(entity, subtree_root) rd_entity_rec_depth_first((entity), (subtree_root), OffsetOf(RD_Entity, prev), OffsetOf(RD_Entity, last))
-
-//- rjf: ancestor/child introspection
-internal RD_Entity *rd_entity_child_from_kind(RD_Entity *entity, RD_EntityKind kind);
-
-//- rjf: entity list building
-internal void rd_entity_list_push(Arena *arena, RD_EntityList *list, RD_Entity *entity);
-internal RD_EntityArray rd_entity_array_from_list(Arena *arena, RD_EntityList *list);
-#define rd_first_entity_from_list(list) ((list)->first != 0 ? (list)->first->entity : &rd_nil_entity)
-
-//- rjf: entity -> color operations
-internal Vec4F32 rd_hsva_from_entity(RD_Entity *entity);
-internal Vec4F32 rd_rgba_from_entity(RD_Entity *entity);
-
-//- rjf: entity -> expansion tree keys
-internal EV_Key rd_ev_key_from_entity(RD_Entity *entity);
-internal EV_Key rd_parent_ev_key_from_entity(RD_Entity *entity);
 
 ////////////////////////////////
 //~ rjf: View Spec Type Functions
@@ -1143,45 +1013,8 @@ internal String8 rd_setting_from_name(String8 name);
 internal RD_Cfg *rd_immediate_cfg_from_key(String8 string);
 internal RD_Cfg *rd_immediate_cfg_from_keyf(char *fmt, ...);
 
-////////////////////////////////
-//~ rjf: Entity Stateful Functions
-
-//- rjf: entity allocation + tree forming
-internal RD_Entity *rd_entity_alloc(RD_Entity *parent, RD_EntityKind kind);
-internal void rd_entity_mark_for_deletion(RD_Entity *entity);
-internal void rd_entity_release(RD_Entity *entity);
-internal void rd_entity_change_parent(RD_Entity *entity, RD_Entity *old_parent, RD_Entity *new_parent, RD_Entity *prev_child);
-internal RD_Entity *rd_entity_child_from_kind_or_alloc(RD_Entity *entity, RD_EntityKind kind);
-
-//- rjf: entity simple equipment
-internal void rd_entity_equip_txt_pt(RD_Entity *entity, TxtPt point);
-internal void rd_entity_equip_disabled(RD_Entity *entity, B32 b32);
-internal void rd_entity_equip_u64(RD_Entity *entity, U64 u64);
-internal void rd_entity_equip_color_rgba(RD_Entity *entity, Vec4F32 rgba);
-internal void rd_entity_equip_color_hsva(RD_Entity *entity, Vec4F32 hsva);
-internal void rd_entity_equip_cfg_src(RD_Entity *entity, RD_CfgSrc cfg_src);
-internal void rd_entity_equip_timestamp(RD_Entity *entity, U64 timestamp);
-
-//- rjf: control layer correllation equipment
-internal void rd_entity_equip_vaddr(RD_Entity *entity, U64 vaddr);
-
-//- rjf: name equipment
-internal void rd_entity_equip_name(RD_Entity *entity, String8 name);
-
-//- rjf: file path map override lookups
 internal String8 rd_mapped_from_file_path(Arena *arena, String8 file_path);
 internal String8List rd_possible_overrides_from_file_path(Arena *arena, String8 file_path);
-
-//- rjf: top-level state queries
-internal RD_Entity *rd_entity_root(void);
-internal RD_EntityList rd_push_entity_list_with_kind(Arena *arena, RD_EntityKind kind);
-internal RD_Entity *rd_entity_from_id(RD_EntityID id);
-internal RD_Entity *rd_entity_from_name_and_kind(String8 string, RD_EntityKind kind);
-
-////////////////////////////////
-//~ rjf: Frontend Entity Info Extraction
-
-internal DR_FancyStringList rd_title_fstrs_from_entity(Arena *arena, RD_Entity *entity, Vec4F32 secondary_color, F32 size);
 
 ////////////////////////////////
 //~ rjf: Control Entity Info Extraction
@@ -1210,7 +1043,6 @@ internal String8 rd_eval_blob_from_entity(Arena *arena, CTRL_Entity *entity);
 internal String8 rd_eval_blob_from_entity__cached(CTRL_Entity *entity);
 
 //- rjf: entity -> meta eval
-internal CTRL_MetaEval *rd_ctrl_meta_eval_from_entity(Arena *arena, RD_Entity *entity);
 internal CTRL_MetaEval *rd_ctrl_meta_eval_from_ctrl_entity(Arena *arena, CTRL_Entity *entity);
 
 //- rjf: eval space reads/writes
@@ -1367,9 +1199,6 @@ internal void rd_request_frame(void);
 
 //- rjf: per-frame arena
 internal Arena *rd_frame_arena(void);
-
-//- rjf: entity cache queries
-internal RD_EntityList rd_query_cached_entity_list_with_kind(RD_EntityKind kind);
 
 ////////////////////////////////
 //~ rjf: Registers

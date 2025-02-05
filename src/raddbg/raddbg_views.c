@@ -968,6 +968,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     if(info.group_cfg_name.size != 0)
     {
       RD_CfgList cfgs = rd_cfg_top_level_list_from_string(scratch.arena, info.group_cfg_name);
+      
       // TODO(rjf): this is not correct - assumes row's evaluation is in the block's space...
       // info.group_cfg = rd_cfg_from_eval_space(info.eval.space);
     }
@@ -2080,7 +2081,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, Rng2F32 rect)
         taken = 1;
         state_dirty = 1;
         snap_to_cursor = 1;
-        RD_EntityList entities_to_remove = {0};
+        RD_CfgList cfgs_to_remove = {0};
         RD_WatchPt next_cursor_pt = {0};
         B32 next_cursor_set = 0;
         EV_WindowedRowList rows = ev_rows_from_num_range(scratch.arena, eval_view, filter, &block_ranges, r1u64(selection_tbl.min.y, selection_tbl.max.y+1));
@@ -2143,9 +2144,9 @@ rd_watch_view_build(RD_WatchViewState *ewv, Rng2F32 rect)
 #endif
           }
         }
-        for(RD_EntityNode *n = entities_to_remove.first; n != 0; n = n->next)
+        for(RD_CfgNode *n = cfgs_to_remove.first; n != 0; n = n->next)
         {
-          rd_entity_mark_for_deletion(n->entity);
+          rd_cfg_release(n->v);
         }
         if(next_cursor_set)
         {
@@ -2318,6 +2319,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, Rng2F32 rect)
 #endif
           
           // rjf: map selection endpoints to entities
+#if 0 // TODO(rjf): @cfg
           RD_Entity *first_entity = &rd_nil_entity;
           RD_Entity *last_entity = &rd_nil_entity;
           if(collection_entity_kind != RD_EntityKind_Nil)
@@ -2360,6 +2362,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, Rng2F32 rect)
               rd_entity_change_parent(last_entity_next, last_entity_next->parent, last_entity_next->parent, first_entity_prev);
             }
           }
+#endif
         }
       }
       
