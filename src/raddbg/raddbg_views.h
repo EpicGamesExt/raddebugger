@@ -144,18 +144,6 @@ struct RD_WatchPt
   U64 cell_id;
 };
 
-typedef struct RD_WatchViewRowInfo RD_WatchViewRowInfo;
-struct RD_WatchViewRowInfo
-{
-  RD_EntityKind collection_entity_kind;
-  RD_Entity *collection_entity;
-  CTRL_EntityKind collection_ctrl_entity_kind;
-  CTRL_Entity *collection_ctrl_entity;
-  CTRL_Entity *callstack_thread;
-  U64 callstack_unwind_index;
-  U64 callstack_inline_depth;
-};
-
 typedef struct RD_WatchViewTextEditState RD_WatchViewTextEditState;
 struct RD_WatchViewTextEditState
 {

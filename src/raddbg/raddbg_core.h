@@ -30,7 +30,7 @@ struct RD_HandleList
 };
 
 ////////////////////////////////
-//~ rjf: Binding Types
+//~ rjf: Key Binding Types
 
 typedef struct RD_Binding RD_Binding;
 struct RD_Binding
@@ -287,45 +287,7 @@ enum
 #include "generated/raddbg.meta.h"
 
 ////////////////////////////////
-//~ rjf: Config Types
-
-typedef struct RD_CfgTree RD_CfgTree;
-struct RD_CfgTree
-{
-  RD_CfgTree *next;
-  RD_CfgSrc source;
-  MD_Node *root;
-};
-
-typedef struct RD_CfgVal RD_CfgVal;
-struct RD_CfgVal
-{
-  RD_CfgVal *hash_next;
-  RD_CfgVal *linear_next;
-  RD_CfgTree *first;
-  RD_CfgTree *last;
-  U64 insertion_stamp;
-  String8 string;
-};
-
-typedef struct RD_CfgSlot RD_CfgSlot;
-struct RD_CfgSlot
-{
-  RD_CfgVal *first;
-};
-
-typedef struct RD_CfgTable RD_CfgTable;
-struct RD_CfgTable
-{
-  U64 slot_count;
-  RD_CfgSlot *slots;
-  U64 insertion_stamp_counter;
-  RD_CfgVal *first_val;
-  RD_CfgVal *last_val;
-};
-
-////////////////////////////////
-//~ rjf: New Config/Entity Data Structure
+//~ rjf: Config Tree
 
 typedef struct RD_Cfg RD_Cfg;
 struct RD_Cfg
@@ -981,9 +943,6 @@ struct RD_State
 
 read_only global RD_VocabularyInfo rd_nil_vocabulary_info = {0};
 
-read_only global RD_CfgTree d_nil_cfg_tree = {&d_nil_cfg_tree, RD_CfgSrc_User, &md_nil_node};
-read_only global RD_CfgVal d_nil_cfg_val = {&d_nil_cfg_val, &d_nil_cfg_val, &d_nil_cfg_tree, &d_nil_cfg_tree};
-
 read_only global RD_Cfg rd_nil_cfg =
 {
   &rd_nil_cfg,
@@ -1054,12 +1013,6 @@ internal B32 rd_handle_match(RD_Handle a, RD_Handle b);
 internal void rd_handle_list_push_node(RD_HandleList *list, RD_HandleNode *node);
 internal void rd_handle_list_push(Arena *arena, RD_HandleList *list, RD_Handle handle);
 internal RD_HandleList rd_handle_list_copy(Arena *arena, RD_HandleList list);
-
-////////////////////////////////
-//~ rjf: Config Type Pure Functions
-
-internal void rd_cfg_table_push_unparsed_string(Arena *arena, RD_CfgTable *table, String8 string, RD_CfgSrc source);
-internal RD_CfgVal *rd_cfg_val_from_string(RD_CfgTable *table, String8 string);
 
 ////////////////////////////////
 //~ rjf: Registers Type Functions
