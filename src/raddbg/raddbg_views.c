@@ -1117,7 +1117,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
     // expression tree.
     case RD_WatchCellKind_Expr:
     {
-      if(row->string.size != 0 || row->expr == &e_expr_nil)
+      if(!ev_key_match(ev_key_root(), row->block->key) && (row->string.size != 0 || row->expr == &e_expr_nil))
       {
         result.can_edit = 1;
       }
@@ -1778,7 +1778,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, Rng2F32 rect)
               continue;
             }
             RD_WatchRowCellInfo cell_info = rd_info_from_watch_row_cell(scratch.arena, row, string_flags, &row_info, cell, ui_top_font(), ui_top_font_size(), row_string_max_size_px);
-            if(!ev_key_match(ev_key_root(), row->block->key) && cell_info.can_edit)
+            if(cell_info.can_edit)
             {
               any_edits_started = 1;
               String8 string = cell_info.string;
@@ -2003,92 +2003,6 @@ rd_watch_view_build(RD_WatchViewState *ewv, Rng2F32 rect)
                   }
                 }break;
               }
-#if 0 // TODO(rjf): @cfg
-              Vec2S64 tbl = v2s64(x, y);
-              RD_WatchViewColumn *col = rd_watch_view_column_from_x(ewv, x);
-              {
-                switch(col->kind)
-                {
-                  default:{}break;
-                  case RD_WatchViewColumnKind_Expr:
-                  if(modifiable)
-                  {
-                    if(row_info.collection_entity_kind != RD_EntityKind_Nil)
-                    {
-                      RD_Entity *entity = row_info.collection_entity;
-                      if(!rd_entity_is_nil(entity) || editing_complete)
-                      {
-                        if(rd_entity_is_nil(entity) && new_string.size != 0)
-                        {
-                          entity = rd_entity_alloc(rd_entity_root(), row_info.collection_entity_kind);
-                          rd_entity_equip_cfg_src(entity, RD_CfgSrc_Project);
-                        }
-                        if(!rd_entity_is_nil(entity))
-                        {
-                          rd_entity_equip_name(entity, new_string);
-                        }
-                        state_dirty = 1;
-                        snap_to_cursor = 1;
-                      }
-                    }
-                  }break;
-                  case RD_WatchViewColumnKind_Member:
-                  case RD_WatchViewColumnKind_Value:
-                  {
-                    EV_WindowedRowList rows = ev_rows_from_num_range(scratch.arena, eval_view, filter, &block_ranges, r1u64(y, y+1));
-                    if(rows.first != 0)
-                    {
-                      B32 should_commit_asap = editing_complete;
-                      E_Expr *expr = rd_expr_from_watch_view_row_column(scratch.arena, row, col);
-                      E_Eval dst_eval = e_eval_from_expr(scratch.arena, expr);
-                      if(dst_eval.space.kind == RD_EvalSpaceKind_MetaEntity)
-                      {
-                        should_commit_asap = 1;
-                      }
-                      else if(evt->slot != UI_EventActionSlot_Cancel)
-                      {
-                        should_commit_asap = editing_complete;
-                      }
-                      if(should_commit_asap)
-                      {
-                        B32 success = 0;
-                        success = rd_commit_eval_value_string(dst_eval, new_string, !col->dequote_string);
-                        if(!success)
-                        {
-                          log_user_error(str8_lit("Could not commit value successfully."));
-                        }
-                      }
-                    }
-                  }break;
-                  case RD_WatchViewColumnKind_Type:{}break;
-                  case RD_WatchViewColumnKind_ViewRule:
-                  if(editing_complete)
-                  {
-                    RD_WatchPt pt = rd_watch_pt_from_tbl(&block_ranges, tbl);
-                    ev_key_set_view_rule(eval_view, pt.key, new_string);
-                    if(row_info.collection_entity_kind != RD_EntityKind_Nil)
-                    {
-                      RD_Entity *entity = row_info.collection_entity;
-                      RD_Entity *view_rule = rd_entity_child_from_kind(entity, RD_EntityKind_ViewRule);
-                      if(rd_entity_is_nil(view_rule) && new_string.size != 0)
-                      {
-                        view_rule = rd_entity_alloc(entity, RD_EntityKind_ViewRule);
-                      }
-                      else if(!rd_entity_is_nil(view_rule) && new_string.size == 0)
-                      {
-                        rd_entity_mark_for_deletion(view_rule);
-                      }
-                      if(new_string.size != 0)
-                      {
-                        rd_entity_equip_name(view_rule, new_string);
-                      }
-                      state_dirty = 1;
-                      snap_to_cursor = 1;
-                    }
-                  }break;
-                }
-              }
-#endif
             }
           }
         }
@@ -2776,6 +2690,13 @@ rd_watch_view_build(RD_WatchViewState *ewv, Rng2F32 rect)
                            .unwind_count = row_info.callstack_unwind_index,
                            .inline_depth = row_info.callstack_inline_depth);
                   }
+                  
+                  // rjf: can edit? -> begin editing
+                  else if(cell_info.can_edit)
+                  {
+                    rd_cmd(RD_CmdKind_Edit);
+                  }
+                  
                   
 #if 0 // TODO(rjf): @cfg
                   // rjf: can edit? -> begin editing
