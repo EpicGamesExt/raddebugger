@@ -8008,7 +8008,7 @@ struct RD_EntityExpandAccel
 
 //- rjf: control entity hierarchies
 
-EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(scheduler_machine)
+EV_EXPAND_RULE_INFO_FUNCTION_DEF(scheduler_machine)
 {
   EV_ExpandInfo info = {0};
   Temp scratch = scratch_begin(&arena, 1);
@@ -8072,7 +8072,7 @@ EV_VIEW_RULE_EXPR_EXPAND_NUM_FROM_ID_FUNCTION_DEF(scheduler_machine)
   return id;
 }
 
-EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(scheduler_process)
+EV_EXPAND_RULE_INFO_FUNCTION_DEF(scheduler_process)
 {
   EV_ExpandInfo info = {0};
   Temp scratch = scratch_begin(&arena, 1);
@@ -12572,13 +12572,10 @@ rd_frame(void)
     e_select_interpret_ctx(interpret_ctx);
     
     ////////////////////////////
-    //- rjf: build eval visualization view rule table
+    //- rjf: build eval visualization expand rule table
     //
-    EV_ViewRuleInfoTable *view_rule_info_table = push_array(scratch.arena, EV_ViewRuleInfoTable, 1);
-    {
-      ev_view_rule_info_table_push_builtins(scratch.arena, view_rule_info_table);
-    }
-    ev_select_view_rule_info_table(view_rule_info_table);
+    EV_ExpandRuleTable *expand_rule_table = push_array(scratch.arena, EV_ExpandRuleTable, 1);
+    ev_select_expand_rule_table(expand_rule_table);
     
     ////////////////////////////
     //- rjf: build eval visualization auto-view-rule table

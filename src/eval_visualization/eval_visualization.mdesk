@@ -105,22 +105,3 @@ EV_ViewRuleTable:
   {x  Hex        hex         "hex"                        x   -   -   -                    "Display In Hexadecimal"      x       ""                                                             "Specifies that all numeric values should be shown in base 16 (hexadecimal)."                                                                                                }
   {x  NoAddress  no_addr     "no_addr"                    x   -   -   -                    "Omit Addresses"              x       ""                                                             "Specifies that addresses should be omitted from visualizations, if possible."                                                                                               }
 }
-
-@enum EV_ViewRuleKind:
-{
-  EV_ViewRuleKind_Null,
-  @expand(EV_ViewRuleTable a) `$(a.name)`,
-  COUNT,
-}
-
-@gen
-{
-  @expand(EV_ViewRuleTable a) `$(a.xe == "x" -> "EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(" .. a.name_lower .. ");")`;
-}
-
-@data(EV_ViewRuleInfo) @c_file ev_builtin_view_rule_info_table:
-{
-  `{0}`,
-  @expand(EV_ViewRuleTable a)
-    ```{str8_lit_comp("$(a.string)"), (EV_ViewRuleInfoFlag_Inherited*$(a.ih == "x"))|(EV_ViewRuleInfoFlag_Expandable*$(a.ex == "x")), $(a.xe == "x" -> "EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME("..a.name_lower..")") }```;
-}

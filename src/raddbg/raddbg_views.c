@@ -4303,7 +4303,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(pending_file)
 ////////////////////////////////
 //~ rjf: text @view_hook_impl
 
-EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(text)
+EV_EXPAND_RULE_INFO_FUNCTION_DEF(text)
 {
   EV_ExpandInfo info = {0};
   info.row_count = 8;
@@ -4558,7 +4558,7 @@ struct RD_DisasmViewState
   RD_CodeViewState cv;
 };
 
-EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(disasm)
+EV_EXPAND_RULE_INFO_FUNCTION_DEF(disasm)
 {
   EV_ExpandInfo info = {0};
   info.row_count = 8;
@@ -4783,7 +4783,7 @@ struct RD_MemoryViewState
   B32 contain_cursor;
 };
 
-EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(memory)
+EV_EXPAND_RULE_INFO_FUNCTION_DEF(memory)
 {
   EV_ExpandInfo info = {0};
   info.row_count = 16;
@@ -5618,7 +5618,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(memory)
 ////////////////////////////////
 //~ rjf: "graph"
 
-EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(graph)
+EV_EXPAND_RULE_INFO_FUNCTION_DEF(graph)
 {
   EV_ExpandInfo info = {0};
   info.row_count = 8;
@@ -5710,7 +5710,7 @@ internal UI_BOX_CUSTOM_DRAW(rd_bitmap_view_canvas_box_draw)
   }
 }
 
-EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(bitmap)
+EV_EXPAND_RULE_INFO_FUNCTION_DEF(bitmap)
 {
   EV_ExpandInfo info = {0};
   info.row_count = 8;
@@ -5958,7 +5958,7 @@ rd_rgba_from_eval_params(E_Eval eval, MD_Node *params)
   return rgba;
 }
 
-EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(color_rgba)
+EV_EXPAND_RULE_INFO_FUNCTION_DEF(color_rgba)
 {
   EV_ExpandInfo info = {0};
   info.row_count = 8;
@@ -6119,7 +6119,7 @@ internal UI_BOX_CUSTOM_DRAW(rd_geo3d_box_draw)
   dr_mesh(draw_data->vertex_buffer, draw_data->index_buffer, R_GeoTopologyKind_Triangles, R_GeoVertexFlag_TexCoord|R_GeoVertexFlag_Normals|R_GeoVertexFlag_RGB, r_handle_zero(), mat_4x4f32(1.f));
 }
 
-EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(geo3d)
+EV_EXPAND_RULE_INFO_FUNCTION_DEF(geo3d)
 {
   EV_ExpandInfo info = {0};
   info.row_count = 16;

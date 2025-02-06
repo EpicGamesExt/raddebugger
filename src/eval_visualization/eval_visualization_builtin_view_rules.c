@@ -99,7 +99,7 @@ ev_arch_from_eval_params(E_Eval eval, MD_Node *params)
 ////////////////////////////////
 //~ rjf: "list"
 
-EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(list)
+EV_EXPAND_RULE_INFO_FUNCTION_DEF(list)
 {
   EV_ExpandInfo info = {0};
   return info;

@@ -892,7 +892,7 @@ read_only global RD_ViewRuleInfo rd_nil_view_rule_info =
   {0},
   RD_IconKind_Null,
   0,
-  EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME(nil),
+  EV_EXPAND_RULE_INFO_FUNCTION_NAME(nil),
   RD_VIEW_RULE_UI_FUNCTION_NAME(null)
 };
 

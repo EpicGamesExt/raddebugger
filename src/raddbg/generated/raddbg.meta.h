@@ -587,7 +587,7 @@ String8 display_name;
 String8 params_schema;
 RD_IconKind icon_kind;
 RD_ViewRuleInfoFlags flags;
-EV_ViewRuleExprExpandInfoHookFunctionType *expr_expand_info;
+EV_ExpandRuleInfoHookFunctionType *expr_expand_info;
 RD_ViewRuleUIFunctionType *ui;
 };
 
@@ -631,12 +631,12 @@ RD_ViewRuleUIFunctionType *ui;
 .os_event = rd_regs()->os_event,\
 
 RD_VIEW_RULE_UI_FUNCTION_DEF(null);
-EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(text);
-EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(disasm);
-EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(memory);
-EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(bitmap);
-EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(color_rgba);
-EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_DEF(geo3d);
+EV_EXPAND_RULE_INFO_FUNCTION_DEF(text);
+EV_EXPAND_RULE_INFO_FUNCTION_DEF(disasm);
+EV_EXPAND_RULE_INFO_FUNCTION_DEF(memory);
+EV_EXPAND_RULE_INFO_FUNCTION_DEF(bitmap);
+EV_EXPAND_RULE_INFO_FUNCTION_DEF(color_rgba);
+EV_EXPAND_RULE_INFO_FUNCTION_DEF(geo3d);
 RD_VIEW_RULE_UI_FUNCTION_DEF(empty);
 RD_VIEW_RULE_UI_FUNCTION_DEF(getting_started);
 RD_VIEW_RULE_UI_FUNCTION_DEF(settings);

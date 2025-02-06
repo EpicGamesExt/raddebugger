@@ -3,24 +3,3 @@
 
 //- GENERATED CODE
 
-C_LINKAGE_BEGIN
-EV_ViewRuleInfo ev_builtin_view_rule_info_table[14] =
-{
-{0},
-{str8_lit_comp("array"), (EV_ViewRuleInfoFlag_Inherited*0)|(EV_ViewRuleInfoFlag_Expandable*0),  },
-{str8_lit_comp("list"), (EV_ViewRuleInfoFlag_Inherited*0)|(EV_ViewRuleInfoFlag_Expandable*0), EV_VIEW_RULE_EXPR_EXPAND_INFO_FUNCTION_NAME(list) },
-{str8_lit_comp("slice"), (EV_ViewRuleInfoFlag_Inherited*0)|(EV_ViewRuleInfoFlag_Expandable*0),  },
-{str8_lit_comp("bswap"), (EV_ViewRuleInfoFlag_Inherited*1)|(EV_ViewRuleInfoFlag_Expandable*0),  },
-{str8_lit_comp("cast"), (EV_ViewRuleInfoFlag_Inherited*0)|(EV_ViewRuleInfoFlag_Expandable*0),  },
-{str8_lit_comp("wrap"), (EV_ViewRuleInfoFlag_Inherited*0)|(EV_ViewRuleInfoFlag_Expandable*0),  },
-{str8_lit_comp("only"), (EV_ViewRuleInfoFlag_Inherited*1)|(EV_ViewRuleInfoFlag_Expandable*0),  },
-{str8_lit_comp("omit"), (EV_ViewRuleInfoFlag_Inherited*1)|(EV_ViewRuleInfoFlag_Expandable*0),  },
-{str8_lit_comp("bin"), (EV_ViewRuleInfoFlag_Inherited*1)|(EV_ViewRuleInfoFlag_Expandable*0),  },
-{str8_lit_comp("oct"), (EV_ViewRuleInfoFlag_Inherited*1)|(EV_ViewRuleInfoFlag_Expandable*0),  },
-{str8_lit_comp("dec"), (EV_ViewRuleInfoFlag_Inherited*1)|(EV_ViewRuleInfoFlag_Expandable*0),  },
-{str8_lit_comp("hex"), (EV_ViewRuleInfoFlag_Inherited*1)|(EV_ViewRuleInfoFlag_Expandable*0),  },
-{str8_lit_comp("no_addr"), (EV_ViewRuleInfoFlag_Inherited*1)|(EV_ViewRuleInfoFlag_Expandable*0),  },
-};
-
-C_LINKAGE_END
-
