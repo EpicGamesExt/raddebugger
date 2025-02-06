@@ -1934,6 +1934,58 @@ rd_watch_view_build(RD_WatchViewState *ewv, Rng2F32 rect)
               edit_state->mark = op.mark;
               
               // rjf: commit edited cell string
+              switch(cell->kind)
+              {
+                case RD_WatchCellKind_Expr:
+                {
+                  RD_Cfg *cfg = row_info.group_cfg;
+                  if(cfg == &rd_nil_cfg && editing_complete)
+                  {
+                    RD_CfgList all_cfgs = rd_cfg_top_level_list_from_string(scratch.arena, row_info.group_cfg_name);
+                    RD_Cfg *new_cfg_parent = rd_cfg_list_last(&all_cfgs)->parent;
+                    cfg = rd_cfg_new(new_cfg_parent, row_info.group_cfg_name);
+                  }
+                  if(cfg != &rd_nil_cfg)
+                  {
+                    RD_Cfg *expr = rd_cfg_child_from_string_or_alloc(cfg, str8_lit("expression"));
+                    rd_cfg_release_all_children(expr);
+                    if(new_string.size != 0)
+                    {
+                      rd_cfg_new(expr, new_string);
+                    }
+                  }
+                }break;
+                case RD_WatchCellKind_Tag:
+                if(editing_complete)
+                {
+                  ev_key_set_view_rule(eval_view, pt.key, new_string);
+                }break;
+                case RD_WatchCellKind_Eval:
+                {
+                  RD_WatchRowCellInfo cell_info = rd_info_from_watch_row_cell(scratch.arena, row, string_flags, &row_info, cell, ui_top_font(), ui_top_font_size(), row_string_max_size_px);
+                  if(cell_info.eval.mode == E_Mode_Offset)
+                  {
+                    B32 should_commit_asap = editing_complete;
+                    if(cell_info.eval.space.kind == RD_EvalSpaceKind_MetaCfg)
+                    {
+                      should_commit_asap = 1;
+                    }
+                    else if(evt->slot != UI_EventActionSlot_Cancel)
+                    {
+                      should_commit_asap = editing_complete;
+                    }
+                    if(should_commit_asap)
+                    {
+                      B32 success = 0;
+                      success = rd_commit_eval_value_string(cell_info.eval, new_string, 0);
+                      if(!success)
+                      {
+                        log_user_error(str8_lit("Could not commit value successfully."));
+                      }
+                    }
+                  }
+                }break;
+              }
 #if 0 // TODO(rjf): @cfg
               Vec2S64 tbl = v2s64(x, y);
               RD_WatchViewColumn *col = rd_watch_view_column_from_x(ewv, x);
