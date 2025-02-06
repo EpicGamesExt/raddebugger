@@ -828,6 +828,10 @@ ev_vnum_from_num(EV_BlockRangeList *block_ranges, U64 num)
       base_num = next_base_num;
       base_vnum += dim_1u64(n->v.range);
     }
+    if(vnum == 0)
+    {
+      vnum = base_vnum;
+    }
   }
   return vnum;
 }
@@ -991,8 +995,8 @@ ev_row_from_num(Arena *arena, EV_View *view, String8 filter, EV_BlockRangeList *
 internal EV_WindowedRowList
 ev_rows_from_num_range(Arena *arena, EV_View *view, String8 filter, EV_BlockRangeList *block_ranges, Rng1U64 num_range)
 {
-  Rng1U64 vidx_range = r1u64(ev_vnum_from_num(block_ranges, num_range.min), ev_vnum_from_num(block_ranges, num_range.max)+1);
-  EV_WindowedRowList rows = ev_windowed_row_list_from_block_range_list(arena, view, filter, block_ranges, vidx_range);
+  Rng1U64 vnum_range = r1u64(ev_vnum_from_num(block_ranges, num_range.min), ev_vnum_from_num(block_ranges, num_range.max)+1);
+  EV_WindowedRowList rows = ev_windowed_row_list_from_block_range_list(arena, view, filter, block_ranges, vnum_range);
   return rows;
 }
 

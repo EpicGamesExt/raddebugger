@@ -215,7 +215,7 @@ internal RD_WatchViewRowInfo rd_watch_view_row_info_from_row(EV_Row *row);
 #endif
 
 //- rjf: row * cell -> info
-internal RD_WatchRowCellInfo rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, RD_WatchRowInfo *row_info, RD_WatchCell *cell, FNT_Tag font, F32 font_size, F32 max_size_px);
+internal RD_WatchRowCellInfo rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_flags, RD_WatchRowInfo *row_info, RD_WatchCell *cell, FNT_Tag font, F32 font_size, F32 max_size_px);
 
 //- rjf: row/column -> exprs / strings
 #if 0 // TODO(rjf): @cfg

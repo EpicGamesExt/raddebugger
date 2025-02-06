@@ -5628,118 +5628,6 @@ rd_window_frame(void)
     }
     
     ////////////////////////////
-    //- rjf: bottom bar
-    //
-    ProfScope("build bottom bar")
-    {
-      B32 is_running = d_ctrl_targets_running() && d_ctrl_last_run_frame_idx() < d_frame_index();
-      CTRL_Event stop_event = d_ctrl_last_stop_event();
-      UI_Palette *positive_scheme = rd_palette_from_code(RD_PaletteCode_PositivePopButton);
-      UI_Palette *running_scheme  = rd_palette_from_code(RD_PaletteCode_NeutralPopButton);
-      UI_Palette *negative_scheme = rd_palette_from_code(RD_PaletteCode_NegativePopButton);
-      UI_Palette *palette = running_scheme;
-      if(!is_running)
-      {
-        switch(stop_event.cause)
-        {
-          default:
-          case CTRL_EventCause_Finished:
-          {
-            palette = positive_scheme;
-          }break;
-          case CTRL_EventCause_UserBreakpoint:
-          case CTRL_EventCause_InterruptedByException:
-          case CTRL_EventCause_InterruptedByTrap:
-          case CTRL_EventCause_InterruptedByHalt:
-          {
-            palette = negative_scheme;
-          }break;
-        }
-      }
-      if(ws->error_t > 0.01f)
-      {
-        UI_Palette *blended_scheme = push_array(ui_build_arena(), UI_Palette, 1);
-        MemoryCopyStruct(blended_scheme, palette);
-        for EachEnumVal(UI_ColorCode, code)
-        {
-          for(U64 idx = 0; idx < 4; idx += 1)
-          {
-            blended_scheme->colors[code].v[idx] += (negative_scheme->colors[code].v[idx] - blended_scheme->colors[code].v[idx]) * ws->error_t;
-          }
-        }
-        palette = blended_scheme;
-      }
-      UI_Flags(UI_BoxFlag_DrawBackground) UI_CornerRadius(0)
-        UI_Palette(palette)
-        UI_Pane(bottom_bar_rect, str8_lit("###bottom_bar")) UI_WidthFill UI_Row
-        UI_Flags(0)
-      {
-        // rjf: developer frame-time indicator
-        if(DEV_updating_indicator)
-        {
-          F32 animation_t = pow_f32(sin_f32(rd_state->time_in_seconds/2.f), 2.f);
-          ui_spacer(ui_em(0.3f, 1.f));
-          ui_spacer(ui_em(1.5f*animation_t, 1.f));
-          UI_PrefWidth(ui_text_dim(10, 1)) ui_labelf("*");
-          ui_spacer(ui_em(1.5f*(1-animation_t), 1.f));
-        }
-        
-        // rjf: status
-        {
-          ui_spacer(ui_em(1.f, 1.f));
-          if(is_running)
-          {
-            ui_label(str8_lit("Running"));
-          }
-          else
-          {
-            Temp scratch = scratch_begin(0, 0);
-            DR_FancyStringList explanation_fstrs = rd_stop_explanation_fstrs_from_ctrl_event(scratch.arena, &stop_event);
-            UI_Box *box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
-            ui_box_equip_display_fancy_strings(box, &explanation_fstrs);
-            scratch_end(scratch);
-          }
-        }
-        
-        ui_spacer(ui_pct(1, 0));
-        
-        // rjf: bind change visualization
-        if(rd_state->bind_change_active)
-        {
-          RD_CmdKindInfo *info = rd_cmd_kind_info_from_string(rd_state->bind_change_cmd_name);
-          UI_PrefWidth(ui_text_dim(10, 1))
-            UI_Flags(UI_BoxFlag_DrawBackground)
-            UI_TextAlignment(UI_TextAlign_Center)
-            UI_CornerRadius(4)
-            RD_Palette(RD_PaletteCode_NeutralPopButton)
-            ui_labelf("Currently rebinding \"%S\" hotkey", info->display_name);
-        }
-        
-        // rjf: error visualization
-        else if(ws->error_t >= 0.01f)
-        {
-          ws->error_t -= rd_state->frame_dt/8.f;
-          rd_request_frame();
-          String8 error_string = str8(ws->error_buffer, ws->error_string_size);
-          if(error_string.size != 0)
-          {
-            ui_set_next_pref_width(ui_children_sum(1));
-            UI_CornerRadius(4)
-              UI_Row
-              UI_PrefWidth(ui_text_dim(10, 1))
-              UI_TextAlignment(UI_TextAlign_Center)
-            {
-              RD_Font(RD_FontSlot_Icons)
-                UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Icons))
-                ui_label(rd_icon_kind_text_table[RD_IconKind_WarningBig]);
-              rd_label(error_string);
-            }
-          }
-        }
-      }
-    }
-    
-    ////////////////////////////
     //- rjf: build hover eval
     //
     ProfScope("build hover eval")
@@ -5807,7 +5695,11 @@ rd_window_frame(void)
           rd_cfg_new(expr, ws->hover_eval_string);
           EV_BlockTree predicted_block_tree = ev_block_tree_from_string(scratch.arena, rd_view_eval_view(), str8_zero(), ws->hover_eval_string);
           F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
-          U64 max_row_count = (U64)floor_f32(ui_top_font_size()*40.f / row_height_px);
+          U64 max_row_count = (U64)floor_f32(ui_top_font_size()*10.f / row_height_px);
+          if(ws->hover_eval_focused)
+          {
+            max_row_count *= 3;
+          }
           U64 needed_row_count = Min(max_row_count, predicted_block_tree.total_row_count);
           F32 num_rows_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "hover_eval_num_rows_t"), (F32)needed_row_count);
           UI_Focus(ws->hover_eval_focused ? UI_FocusKind_On : UI_FocusKind_Off)
@@ -5859,13 +5751,29 @@ rd_window_frame(void)
             {
               ws->hover_eval_focused = 1;
             }
-            if(ui_mouse_over(sig))
+            if(ui_mouse_over(sig) || ws->hover_eval_focused)
             {
               ws->hover_eval_last_frame_idx = rd_state->frame_index;
             }
             else if(ws->hover_eval_last_frame_idx+2 < rd_state->frame_index)
             {
               rd_request_frame();
+            }
+            if(ws->hover_eval_focused)
+            {
+              for(UI_Event *evt = 0; ui_next_event(&evt);)
+              {
+                if(evt->kind == UI_EventKind_Press &&
+                   evt->key == OS_Key_LeftMouseButton &&
+                   !contains_2f32(container->rect, evt->pos))
+                {
+                  ws->hover_eval_focused = 0;
+                  MemoryZeroStruct(&ws->hover_eval_string);
+                  arena_clear(ws->hover_eval_arena);
+                  rd_request_frame();
+                  break;
+                }
+              }
             }
           }
         }
@@ -6160,6 +6068,118 @@ rd_window_frame(void)
         di_scope_close(scope);
         scratch_end(scratch);
 #endif
+      }
+    }
+    
+    ////////////////////////////
+    //- rjf: bottom bar
+    //
+    ProfScope("build bottom bar")
+    {
+      B32 is_running = d_ctrl_targets_running() && d_ctrl_last_run_frame_idx() < d_frame_index();
+      CTRL_Event stop_event = d_ctrl_last_stop_event();
+      UI_Palette *positive_scheme = rd_palette_from_code(RD_PaletteCode_PositivePopButton);
+      UI_Palette *running_scheme  = rd_palette_from_code(RD_PaletteCode_NeutralPopButton);
+      UI_Palette *negative_scheme = rd_palette_from_code(RD_PaletteCode_NegativePopButton);
+      UI_Palette *palette = running_scheme;
+      if(!is_running)
+      {
+        switch(stop_event.cause)
+        {
+          default:
+          case CTRL_EventCause_Finished:
+          {
+            palette = positive_scheme;
+          }break;
+          case CTRL_EventCause_UserBreakpoint:
+          case CTRL_EventCause_InterruptedByException:
+          case CTRL_EventCause_InterruptedByTrap:
+          case CTRL_EventCause_InterruptedByHalt:
+          {
+            palette = negative_scheme;
+          }break;
+        }
+      }
+      if(ws->error_t > 0.01f)
+      {
+        UI_Palette *blended_scheme = push_array(ui_build_arena(), UI_Palette, 1);
+        MemoryCopyStruct(blended_scheme, palette);
+        for EachEnumVal(UI_ColorCode, code)
+        {
+          for(U64 idx = 0; idx < 4; idx += 1)
+          {
+            blended_scheme->colors[code].v[idx] += (negative_scheme->colors[code].v[idx] - blended_scheme->colors[code].v[idx]) * ws->error_t;
+          }
+        }
+        palette = blended_scheme;
+      }
+      UI_Flags(UI_BoxFlag_DrawBackground) UI_CornerRadius(0)
+        UI_Palette(palette)
+        UI_Pane(bottom_bar_rect, str8_lit("###bottom_bar")) UI_WidthFill UI_Row
+        UI_Flags(0)
+      {
+        // rjf: developer frame-time indicator
+        if(DEV_updating_indicator)
+        {
+          F32 animation_t = pow_f32(sin_f32(rd_state->time_in_seconds/2.f), 2.f);
+          ui_spacer(ui_em(0.3f, 1.f));
+          ui_spacer(ui_em(1.5f*animation_t, 1.f));
+          UI_PrefWidth(ui_text_dim(10, 1)) ui_labelf("*");
+          ui_spacer(ui_em(1.5f*(1-animation_t), 1.f));
+        }
+        
+        // rjf: status
+        {
+          ui_spacer(ui_em(1.f, 1.f));
+          if(is_running)
+          {
+            ui_label(str8_lit("Running"));
+          }
+          else
+          {
+            Temp scratch = scratch_begin(0, 0);
+            DR_FancyStringList explanation_fstrs = rd_stop_explanation_fstrs_from_ctrl_event(scratch.arena, &stop_event);
+            UI_Box *box = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
+            ui_box_equip_display_fancy_strings(box, &explanation_fstrs);
+            scratch_end(scratch);
+          }
+        }
+        
+        ui_spacer(ui_pct(1, 0));
+        
+        // rjf: bind change visualization
+        if(rd_state->bind_change_active)
+        {
+          RD_CmdKindInfo *info = rd_cmd_kind_info_from_string(rd_state->bind_change_cmd_name);
+          UI_PrefWidth(ui_text_dim(10, 1))
+            UI_Flags(UI_BoxFlag_DrawBackground)
+            UI_TextAlignment(UI_TextAlign_Center)
+            UI_CornerRadius(4)
+            RD_Palette(RD_PaletteCode_NeutralPopButton)
+            ui_labelf("Currently rebinding \"%S\" hotkey", info->display_name);
+        }
+        
+        // rjf: error visualization
+        else if(ws->error_t >= 0.01f)
+        {
+          ws->error_t -= rd_state->frame_dt/8.f;
+          rd_request_frame();
+          String8 error_string = str8(ws->error_buffer, ws->error_string_size);
+          if(error_string.size != 0)
+          {
+            ui_set_next_pref_width(ui_children_sum(1));
+            UI_CornerRadius(4)
+              UI_Row
+              UI_PrefWidth(ui_text_dim(10, 1))
+              UI_TextAlignment(UI_TextAlign_Center)
+            {
+              RD_Font(RD_FontSlot_Icons)
+                UI_FontSize(rd_font_size_from_slot(RD_FontSlot_Icons))
+                ui_label(rd_icon_kind_text_table[RD_IconKind_WarningBig]);
+              rd_label(error_string);
+            }
+          }
+        }
       }
     }
     
@@ -8167,6 +8187,44 @@ E_LOOKUP_RANGE_FUNCTION_DEF(watches)
   }
 }
 
+E_LOOKUP_ID_FROM_NUM_FUNCTION_DEF(watches)
+{
+  U64 id = 0;
+  RD_CfgArray *cfgs = (RD_CfgArray *)user_data;
+  if(1 <= num && num <= cfgs->count)
+  {
+    U64 idx = (num-1);
+    id = cfgs->v[idx]->id;
+  }
+  else if(num == cfgs->count+1)
+  {
+    id = max_U64;
+  }
+  return id;
+}
+
+E_LOOKUP_NUM_FROM_ID_FUNCTION_DEF(watches)
+{
+  U64 num = 0;
+  RD_CfgArray *cfgs = (RD_CfgArray *)user_data;
+  if(id != 0 && id != max_U64)
+  {
+    for EachIndex(idx, cfgs->count)
+    {
+      if(cfgs->v[idx]->id == id)
+      {
+        num = idx+1;
+        break;
+      }
+    }
+  }
+  else if(id == max_U64)
+  {
+    num = cfgs->count + 1;
+  }
+  return num;
+}
+
 E_LOOKUP_INFO_FUNCTION_DEF(locals)
 {
   E_LookupInfo result = {0};
@@ -8727,7 +8785,8 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
         CTRL_Entity *process = ctrl_process_from_entity(entity);
         if(process == &ctrl_entity_nil)
         {
-          process = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->process);
+          CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->thread);
+          process = ctrl_process_from_entity(thread);
         }
         String8 symbol_name = d_symbol_name_from_process_vaddr(arena, process, value_eval.value.u64, 1);
         
@@ -12336,30 +12395,44 @@ rd_frame(void)
         e_auto_hook_map_insert_new(scratch.arena, ctx->auto_hook_map, .type_key = type_key, .tag_expr_string = name);
       }
       
-      //- rjf: add macro for collections with specific lookup rules
-      struct
+      //- rjf: add macro for watches group
       {
-        String8 name;
-        E_LookupInfoFunctionType *lookup_info;
-        E_LookupRangeFunctionType *lookup_range;
-      }
-      collection_infos[] =
-      {
-#define Collection(name) {str8_lit_comp(#name), E_LOOKUP_INFO_FUNCTION_NAME(name), E_LOOKUP_RANGE_FUNCTION_NAME(name)}
-        Collection(watches),
-        Collection(locals),
-        Collection(registers),
-#undef Collection
-      };
-      for EachElement(idx, collection_infos)
-      {
-        String8 collection_name = collection_infos[idx].name;
+        String8 collection_name = str8_lit("watches");
         E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
         expr->type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = collection_name);
         e_string2expr_map_insert(scratch.arena, ctx->macro_map, collection_name, expr);
         e_lookup_rule_map_insert_new(scratch.arena, ctx->lookup_rule_map, collection_name,
-                                     .info   = collection_infos[idx].lookup_info,
-                                     .range  = collection_infos[idx].lookup_range);
+                                     .info        = E_LOOKUP_INFO_FUNCTION_NAME(watches),
+                                     .range       = E_LOOKUP_RANGE_FUNCTION_NAME(watches),
+                                     .id_from_num = E_LOOKUP_ID_FROM_NUM_FUNCTION_NAME(watches),
+                                     .num_from_id = E_LOOKUP_NUM_FROM_ID_FUNCTION_NAME(watches));
+      }
+      
+      //- rjf: add macro for collections with specific lookup rules (but no unique id rules)
+      {
+        struct
+        {
+          String8 name;
+          E_LookupInfoFunctionType *lookup_info;
+          E_LookupRangeFunctionType *lookup_range;
+        }
+        collection_infos[] =
+        {
+#define Collection(name) {str8_lit_comp(#name), E_LOOKUP_INFO_FUNCTION_NAME(name), E_LOOKUP_RANGE_FUNCTION_NAME(name)}
+          Collection(locals),
+          Collection(registers),
+#undef Collection
+        };
+        for EachElement(idx, collection_infos)
+        {
+          String8 collection_name = collection_infos[idx].name;
+          E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
+          expr->type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = collection_name);
+          e_string2expr_map_insert(scratch.arena, ctx->macro_map, collection_name, expr);
+          e_lookup_rule_map_insert_new(scratch.arena, ctx->lookup_rule_map, collection_name,
+                                       .info   = collection_infos[idx].lookup_info,
+                                       .range  = collection_infos[idx].lookup_range);
+        }
       }
       
       //- rjf: add macros for debug info table collections

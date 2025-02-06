@@ -1108,7 +1108,7 @@ rd_watch_view_row_info_from_row(EV_Row *row)
 //- rjf: row * cell -> string
 
 internal RD_WatchRowCellInfo
-rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, RD_WatchRowInfo *row_info, RD_WatchCell *cell, FNT_Tag font, F32 font_size, F32 max_size_px)
+rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_flags, RD_WatchRowInfo *row_info, RD_WatchCell *cell, FNT_Tag font, F32 font_size, F32 max_size_px)
 {
   RD_WatchRowCellInfo result = {0};
   switch(cell->kind)
@@ -1117,6 +1117,10 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, RD_WatchRowInfo *row_info
     // expression tree.
     case RD_WatchCellKind_Expr:
     {
+      if(row->string.size != 0 || row->expr == &e_expr_nil)
+      {
+        result.can_edit = 1;
+      }
       result.string = row->string;
       if(result.string.size == 0)
       {
@@ -1204,8 +1208,9 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, RD_WatchRowInfo *row_info
       }
       
       //- rjf: evaluate wrapped expression
-      result.eval   = e_eval_from_expr(scratch.arena, root_expr);
-      result.string = rd_value_string_from_eval(arena, 0, 10, font, font_size, max_size_px, result.eval);
+      result.eval     = e_eval_from_expr(scratch.arena, root_expr);
+      result.string   = rd_value_string_from_eval(arena, string_flags, 10, font, font_size, max_size_px, result.eval);
+      result.can_edit = (ev_type_key_is_editable(result.eval.type_key) && result.eval.mode == E_Mode_Offset);
       
       scratch_end(scratch);
     }break;
@@ -1215,6 +1220,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, RD_WatchRowInfo *row_info
     {
       EV_View *ev_view = rd_view_eval_view();
       result.string = ev_view_rule_from_key(ev_view, row->key);
+      result.can_edit = 1;
     }break;
   }
   return result;
@@ -1507,7 +1513,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, Rng2F32 rect)
   F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
   S64 num_possible_visible_rows = (S64)(dim_2f32(rect).y/row_height_px);
   F32 row_string_max_size_px = dim_2f32(rect).x;
-  EV_StringFlags string_flags = 0;
+  EV_StringFlags string_flags = EV_StringFlag_ReadOnlyDisplayRules;
   String8 filter = rd_view_filter();
   String8 expr = rd_view_expr_string();
   if(expr.size == 0)
@@ -1572,10 +1578,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, Rng2F32 rect)
       {
         MemoryZeroStruct(&block_tree);
         MemoryZeroStruct(&block_ranges);
-        if(implicit_root)
-        {
-          ev_key_set_expansion(eval_view, ev_key_root(), ev_key_make(ev_hash_from_key(ev_key_root()), 1), 1);
-        }
+        ev_key_set_expansion(eval_view, ev_key_root(), ev_key_make(ev_hash_from_key(ev_key_root()), 1), 1);
         block_tree   = ev_block_tree_from_string(scratch.arena, eval_view, filter, expr);
         block_ranges = ev_block_range_list_from_tree(scratch.arena, &block_tree);
       }
@@ -1769,7 +1772,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, Rng2F32 rect)
             {
               continue;
             }
-            RD_WatchRowCellInfo cell_info = rd_info_from_watch_row_cell(scratch.arena, row, &row_info, cell, ui_top_font(), ui_top_font_size(), row_string_max_size_px);
+            RD_WatchRowCellInfo cell_info = rd_info_from_watch_row_cell(scratch.arena, row, string_flags, &row_info, cell, ui_top_font(), ui_top_font_size(), row_string_max_size_px);
             if(cell_info.can_edit)
             {
               any_edits_started = 1;
@@ -1779,6 +1782,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, Rng2F32 rect)
               U64 hash = ev_hash_from_key(pt.key);
               U64 slot_idx = hash%ewv->text_edit_state_slots_count;
               RD_WatchViewTextEditState *edit_state = push_array(ewv->text_edit_arena, RD_WatchViewTextEditState, 1);
+              SLLStackPush_N(ewv->text_edit_state_slots[slot_idx], edit_state, pt_hash_next);
               edit_state->pt           = pt;
               edit_state->cursor       = txt_pt(1, string.size+1);
               edit_state->mark         = txt_pt(1, 1);
@@ -2045,7 +2049,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, Rng2F32 rect)
             {
               continue;
             }
-            RD_WatchRowCellInfo cell_info = rd_info_from_watch_row_cell(scratch.arena, row, &row_info, cell, ui_top_font(), ui_top_font_size(), row_string_max_size_px);
+            RD_WatchRowCellInfo cell_info = rd_info_from_watch_row_cell(scratch.arena, row, string_flags, &row_info, cell, ui_top_font(), ui_top_font_size(), row_string_max_size_px);
             String8 cell_string = cell_info.string;
             cell_string = str8_skip_chop_whitespace(cell_string);
             U64 comma_pos = str8_find_needle(cell_string, 0, str8_lit(","), 0);
@@ -2302,65 +2306,65 @@ rd_watch_view_build(RD_WatchViewState *ewv, Rng2F32 rect)
           }
           
           // rjf: determine collection info for the block
-          RD_EntityKind collection_entity_kind = RD_EntityKind_Nil;
-          E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, selection_block->expr);
-          E_Type *type = e_type_from_key__cached(irtree.type_key);
-#if 0 // TODO(rjf): @cfg
-          for EachElement(idx, rd_collection_name_table)
+          String8 group_cfg_name = {0};
           {
-            if(str8_match(type->name, rd_collection_name_table[idx], 0))
+            E_IRTreeAndType block_irtree = e_irtree_and_type_from_expr(scratch.arena, selection_block->expr);
+            E_TypeKey block_type_key = block_irtree.type_key;
+            E_TypeKind block_type_kind = e_type_kind_from_key(block_type_key);
+            if(block_type_kind == E_TypeKind_Set)
             {
-              collection_entity_kind = rd_collection_entity_kind_table[idx];
-              break;
+              E_Type *block_type = e_type_from_key__cached(block_type_key);
+              group_cfg_name = rd_singular_from_code_name_plural(block_type->name);
             }
           }
-#endif
           
-          // rjf: map selection endpoints to entities
-#if 0 // TODO(rjf): @cfg
-          RD_Entity *first_entity = &rd_nil_entity;
-          RD_Entity *last_entity = &rd_nil_entity;
-          if(collection_entity_kind != RD_EntityKind_Nil)
+          // rjf: map selection endpoints to cfgs
+          RD_Cfg *first_cfg = &rd_nil_cfg;
+          RD_Cfg *last_cfg = &rd_nil_cfg;
+          if(group_cfg_name.size != 0)
           {
-            first_entity = rd_entity_from_id(selection_keys_in_block[0].child_id);
-            last_entity  = rd_entity_from_id(selection_keys_in_block[1].child_id);
+            first_cfg = rd_cfg_from_id(selection_keys_in_block[0].child_id);
+            last_cfg  = rd_cfg_from_id(selection_keys_in_block[1].child_id);
           }
           
           // rjf: reorder
-          if(!rd_entity_is_nil(first_entity) && !rd_entity_is_nil(last_entity))
+          if(first_cfg != &rd_nil_cfg && last_cfg != &rd_nil_cfg)
           {
-            RD_Entity *first_entity_prev = &rd_nil_entity;
-            RD_Entity *last_entity_next  = &rd_nil_entity;
-            for(RD_Entity *prev = first_entity->prev; !rd_entity_is_nil(prev); prev = prev->prev)
+            RD_Cfg *first_cfg_prev = &rd_nil_cfg;
+            RD_Cfg *last_cfg_next  = &rd_nil_cfg;
+            for(RD_Cfg *prev = first_cfg->prev; prev != &rd_nil_cfg; prev = prev->prev)
             {
-              if(prev->kind == collection_entity_kind)
+              if(str8_match(prev->string, first_cfg->string, 0))
               {
-                first_entity_prev = prev;
+                first_cfg_prev = prev;
                 break;
               }
             }
-            for(RD_Entity *next = last_entity->next; !rd_entity_is_nil(next); next = next->next)
+            for(RD_Cfg *next = last_cfg->next; next != &rd_nil_cfg; next = next->next)
             {
-              if(next->kind == collection_entity_kind)
+              if(str8_match(next->string, last_cfg->string, 0))
               {
-                last_entity_next = next;
+                last_cfg_next = next;
                 break;
               }
             }
-            if(evt->delta_2s32.y < 0 && !rd_entity_is_nil(first_entity) && !rd_entity_is_nil(first_entity_prev))
+            if(evt->delta_2s32.y < 0 && first_cfg != &rd_nil_cfg && first_cfg_prev != &rd_nil_cfg)
             {
               state_dirty = 1;
               snap_to_cursor = 1;
-              rd_entity_change_parent(first_entity_prev, first_entity_prev->parent, first_entity_prev->parent, last_entity);
+              RD_Cfg *parent = first_cfg_prev->parent;
+              rd_cfg_unhook(parent, first_cfg_prev);
+              rd_cfg_insert_child(parent, last_cfg, first_cfg_prev);
             }
-            if(evt->delta_2s32.y > 0 && !rd_entity_is_nil(last_entity) && !rd_entity_is_nil(last_entity_next))
+            if(evt->delta_2s32.y > 0 && last_cfg != &rd_nil_cfg && last_cfg_next != &rd_nil_cfg)
             {
               state_dirty = 1;
               snap_to_cursor = 1;
-              rd_entity_change_parent(last_entity_next, last_entity_next->parent, last_entity_next->parent, first_entity_prev);
+              RD_Cfg *parent = last_cfg_next->parent;
+              rd_cfg_unhook(parent, last_cfg_next);
+              rd_cfg_insert_child(parent, first_cfg_prev, last_cfg_next);
             }
           }
-#endif
         }
       }
       
@@ -2592,7 +2596,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, Rng2F32 rect)
               RD_WatchPt cell_pt = {row->block->key, row->key, cell_id};
               RD_WatchViewTextEditState *cell_edit_state = rd_watch_view_text_edit_state_from_pt(ewv, cell_pt);
               B32 cell_selected = (row_selected && selection_tbl.min.x <= cell_x && cell_x <= selection_tbl.max.x);
-              RD_WatchRowCellInfo cell_info = rd_info_from_watch_row_cell(scratch.arena, row, &row_info, cell, ui_top_font(), ui_top_font_size(), row_string_max_size_px);
+              RD_WatchRowCellInfo cell_info = rd_info_from_watch_row_cell(scratch.arena, row, string_flags, &row_info, cell, ui_top_font(), ui_top_font_size(), row_string_max_size_px);
               
               //- rjf: determine cell's palette
               ProfBegin("determine cell's palette");
@@ -3971,7 +3975,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, Rng2F32 rect)
           //
           if(next_row_expanded != row_expanded)
           {
-            if(!ev_key_match(ev_key_root(), row->key) || !implicit_root)
+            if(!ev_key_match(ev_key_root(), row->key))
             {
               ev_key_set_expansion(eval_view, row->block->key, row->key, next_row_expanded);
             }
