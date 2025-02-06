@@ -244,113 +244,19 @@ RD_VocabularyMap:
 }
 
 ////////////////////////////////
-//~ rjf: Entity Kind Tables
-
-@table(name          name_lower            name_lower_plural             op_delete  op_freeze  op_edit  op_rename  op_enable  op_cond  op_dup  name_is_code  name_is_path  user_lifetime  is_serialized  name_label   icon_kind  display_string)
-//                                                                       |                                                                                                                                                                     |
-//                                                                       |                                _____________________________________________________________________________________________________________________________________/
-//                                                                       |                               /
-//                                                                        operations________  names lt sz
-//                                                                       /..................\ /...\ |  |
-//                                                                       dl fz ed rn en cn dp nc np ul iz
-RD_EntityKindTable:
-{
-  {Nil                nil                   nils                          0  0  0  0  0  0  0  0  0  0  0                      "Label"             Null                   "Nil"                        }
-  {Root               root                  roots                         0  0  0  0  0  0  0  0  0  0  0                      "Label"             Null                   "Root"                       }
-  
-  //- rjf: auto view rules
-  {AutoViewRule       auto_view_rule        auto_view_rules               1  0  0  0  0  0  0  0  0  1  1                      "Label"             Binoculars             "Auto View Rule"             }
-  
-  //- rjf: file path maps
-  {FilePathMap        file_path_map         file_path_maps                1  0  0  0  0  0  0  0  0  0  1                      "Label"             FileOutline            "File Path Map"              }
-  
-  //- rjf: watch pins
-  {WatchPin           watch_pin             watch_pins                    1  0  0  1  0  0  1  1  0  1  1                      "Expression"        Pin                    "Watch Pin"                  }
-  
-  //- rjf: watches
-  {Watch              watch                 watches                       1  0  0  1  1  0  1  1  0  1  1                      "Expression"        Binoculars             "Watch"                      }
-  {ViewRule           view_rule             view_rules                    1  0  0  1  1  0  1  1  0  1  0                      "Expression"        Binoculars             "View Rule"                  }
-  
-  //- rjf: breakpoints
-  {Breakpoint         breakpoint            breakpoints                   1  0  0  1  1  1  1  1  0  1  1                      "Label"             CircleFilled           "Breakpoint"                 }
-  {Condition          condition             conditions                    0  0  0  0  0  0  0  1  0  1  0                      "Expression"        CircleFilled           "Condition"                  }
-  
-  //- rjf: user-controlled locations (source, addresses, symbol names)
-  {Location           location              locations                     0  0  0  0  0  0  0  1  1  1  0                      "Location"          Null                   "Location"                   }
-  
-  //- rjf: targets
-  {Target             target                targets                       1  0  1  1  1  0  1  0  0  1  1                      "Label"             Target                 "Target"                     }
-  {Executable         executable            executables                   0  0  0  0  0  0  0  0  1  1  0                      "Executable"        Null                   "Executable"                 }
-  {Arguments          arguments             argumentses                   0  0  0  0  0  0  0  0  0  1  0                      "Arguments"         Null                   "Arguments"                  }
-  {WorkingDirectory   working_directory     working_directories           0  0  0  0  0  0  0  0  1  1  0                      "Path"              Null                   "Working Directory"          }
-  {EntryPoint         entry_point           entry_points                  0  0  0  0  0  0  0  0  0  1  0                      "Symbol Name"       Null                   "Entry Point"                }
-  {StdoutPath         stdout_path           stdout_paths                  0  0  0  0  0  0  0  0  1  1  0                      "Path"              Null                   "Standard Output Path"       }
-  {StderrPath         stderr_path           stderr_paths                  0  0  0  0  0  0  0  0  1  1  0                      "Path"              Null                   "Standard Error Path"        }
-  {StdinPath          stdin_path            stdin_paths                   0  0  0  0  0  0  0  0  1  1  0                      "Path"              Null                   "Standard Input Path"        }
-  
-  //- rjf: frontend containers (windows, panels, views)
-  {Window             window                windows                       1  0  0  0  0  0  1  0  0  1  1                      "Label"             Window                 "Window"                     }
-  {Panel              panel                 panels                        1  0  0  0  0  0  1  0  0  1  1                      "Label"             XSplit                 "Panel"                      }
-  {View               view                  views                         1  0  0  0  0  0  1  0  0  1  1                      "Label"             Null                   "View"                       }
-  
-  //- rjf: recent projects
-  {RecentProject      recent_project        recent_projects               0  0  0  0  0  0  0  0  1  0  1                      "Path"              Briefcase              "Recent Project"             }
-  
-  //- rjf: recent files
-  {RecentFile         recent_file           recent_files                  0  0  0  0  0  0  0  0  1  0  1                      "Path"              FileOutline            "Recent File"                }
-  
-  //- rjf: src -> dst mapping
-  {Source             source                sources                       0  0  0  0  0  0  0  0  0  0  0                      "Path"              Null                   "Source"                     }
-  {Dest               dest                  dests                         0  0  0  0  0  0  0  0  0  0  0                      "Path"              Null                   "Destination"                }
-  
-  //- rjf: parser task entities
-  {ConversionTask     conversion_task       conversion_tasks              0  0  0  1  0  0  0  0  0  0  0                      "Label"             Null                   "Conversion Task"            }
-  {ConversionFail     conversion_fail       conversion_fails              0  0  0  1  0  0  0  0  0  0  0                      "Label"             Null                   "Conversion Failure"         }
-}
-
-@enum RD_EntityKind:
-{
-  @expand(RD_EntityKindTable a) `$(a.name)`,
-  COUNT,
-}
-
-@data(String8) d_entity_kind_display_string_table:
-{
-  @expand(RD_EntityKindTable a) `str8_lit_comp("$(a.display_string)")`,
-}
-
-@data(String8) d_entity_kind_name_lower_table:
-{
-  @expand(RD_EntityKindTable a) `str8_lit_comp("$(a.name_lower)")`,
-}
-
-@data(String8) d_entity_kind_name_lower_plural_table:
-{
-  @expand(RD_EntityKindTable a) `str8_lit_comp("$(a.name_lower_plural)")`,
-}
-
-@data(String8) d_entity_kind_name_label_table:
-{
-  @expand(RD_EntityKindTable a) `str8_lit_comp("$(a.name_label)")`,
-}
-
-@data(RD_EntityKindFlags) rd_entity_kind_flags_table:
-{
-  @expand(RD_EntityKindTable a) `($(a.op_delete)*RD_EntityKindFlag_CanDelete) | ($(a.op_freeze)*RD_EntityKindFlag_CanFreeze) | ($(a.op_edit)*RD_EntityKindFlag_CanEdit) | ($(a.op_rename)*RD_EntityKindFlag_CanRename) | ($(a.op_enable)*RD_EntityKindFlag_CanEnable) | ($(a.op_cond)*RD_EntityKindFlag_CanCondition) | ($(a.op_dup)*RD_EntityKindFlag_CanDuplicate) | ($(a.name_is_code)*RD_EntityKindFlag_NameIsCode) | ($(a.name_is_path)*RD_EntityKindFlag_NameIsPath) | ($(a.user_lifetime)*RD_EntityKindFlag_UserDefinedLifetime) | ($(a.is_serialized)*RD_EntityKindFlag_IsSerializedToConfig)`,
-}
-
-////////////////////////////////
 //~ rjf: Registers Type Table
 
 @table(c_type  name_lower  name)
 RD_RegTable:
 {
-  // rjf: entity slots
+  // rjf: ctrl entities
   {CTRL_Handle       machine          Machine       }
   {CTRL_Handle       module           Module        }
   {CTRL_Handle       process          Process       }
   {CTRL_Handle       thread           Thread        }
   {CTRL_Handle       ctrl_entity      CtrlEntity    }
+  
+  // rjf: cfgs
   {RD_CfgID          window           Window        }
   {RD_CfgID          panel            Panel         }
   {RD_CfgID          view             View          }
@@ -605,14 +511,14 @@ RD_CmdTable:    //               |        |              |                  |   
   {ToggleCodeBytesVisibility      1        1              Null               null              Nil                     Null       0  0  0  0  0  0                                                           Thumbnails            "toggle_code_bytes_visibility""Toggle Code Bytes Visibility"                "Toggles the visibility of machine code bytes in a disassembly view."                                              ""                               "$disasm,"                                                       }
   
   //- rjf: general config operations
-  {EnableCfg                      0        0              Null               null              Nil                     Null       0  0  0  0  0  0                                                           Null                  "enable_cfg"                  "Enable Config Tree"                          "Enables an entity."                                                                                               ""                               ""                                                               }
-  {DisableCfg                     0        0              Null               null              Nil                     Null       0  0  0  0  0  0                                                           Null                  "disable_cfg"                 "Disable Config Tree"                         "Disables an entity."                                                                                              ""                               ""                                                               }
-  {SelectCfg                      0        0              Null               null              Nil                     Null       0  0  0  0  0  0                                                           CheckHollow           "select_cfg"                  "Select Config Tree"                          "Selects an entity, disabling all others of the same kind."                                                        ""                               ""                                                               }
-  {RemoveCfg                      0        0              Null               null              Nil                     Null       0  0  0  0  0  0                                                           Trash                 "remove_cfg"                  "Remove Config Tree"                          "Removes an entity."                                                                                               ""                               ""                                                               }
-  {NameCfg                        0        0              Null               null              Nil                     Null       0  0  0  0  0  0                                                           Null                  "name_cfg"                    "Name Config Tree"                            "Equips an entity with a name."                                                                                    ""                               ""                                                               }
-  {ConditionCfg                   0        0              Null               null              Nil                     Null       0  0  0  0  0  0                                                           Null                  "condition_cfg"               "Condition Config Tree"                       "Equips an entity with a condition string."                                                                        ""                               ""                                                               }
-  {DuplicateCfg                   0        0              Null               null              Nil                     Null       0  0  0  0  0  0                                                           Null                  "duplicate_cfg"               "Duplicate Config Tree"                       "Duplicates an entity."                                                                                            ""                               ""                                                               }
-  {RelocateCfg                    0        0              Null               null              Nil                     Null       0  0  0  0  0  0                                                           Null                  "relocate_cfg"                "Relocate Config Tree"                        "Relocates an entity."                                                                                             ""                               ""                                                               }
+  {EnableCfg                      0        0              Null               null              Nil                     Null       0  0  0  0  0  0                                                           Null                  "enable_cfg"                  "Enable Config Tree"                          "Enables a config tree."                                                                                           ""                               ""                                                               }
+  {DisableCfg                     0        0              Null               null              Nil                     Null       0  0  0  0  0  0                                                           Null                  "disable_cfg"                 "Disable Config Tree"                         "Disables a config tree."                                                                                          ""                               ""                                                               }
+  {SelectCfg                      0        0              Null               null              Nil                     Null       0  0  0  0  0  0                                                           CheckHollow           "select_cfg"                  "Select Config Tree"                          "Selects a config tree, disabling all others of the same kind."                                                    ""                               ""                                                               }
+  {RemoveCfg                      0        0              Null               null              Nil                     Null       0  0  0  0  0  0                                                           Trash                 "remove_cfg"                  "Remove Config Tree"                          "Removes a config tree."                                                                                           ""                               ""                                                               }
+  {NameCfg                        0        0              Null               null              Nil                     Null       0  0  0  0  0  0                                                           Null                  "name_cfg"                    "Name Config Tree"                            "Equips a config tree with a label."                                                                               ""                               ""                                                               }
+  {ConditionCfg                   0        0              Null               null              Nil                     Null       0  0  0  0  0  0                                                           Null                  "condition_cfg"               "Condition Config Tree"                       "Equips a config tree with a condition string."                                                                    ""                               ""                                                               }
+  {DuplicateCfg                   0        0              Null               null              Nil                     Null       0  0  0  0  0  0                                                           Null                  "duplicate_cfg"               "Duplicate Config Tree"                       "Duplicates a config tree."                                                                                        ""                               ""                                                               }
+  {RelocateCfg                    0        0              Null               null              Nil                     Null       0  0  0  0  0  0                                                           Null                  "relocate_cfg"                "Relocate Config Tree"                        "Relocates a config tree."                                                                                         ""                               ""                                                               }
   
   //- rjf: breakpoints
   {AddBreakpoint                  1        1              Null               null              Nil                     Null       0  0  0  0  0  0                                                           CircleFilled          "add_breakpoint"              "Add Breakpoint"                              "Places a breakpoint at a given location (file path and line number, address, or symbol name)."                    ""                               ""                                                               }
@@ -699,7 +605,6 @@ RD_CmdTable:    //               |        |              |                  |   
   `RD_QueryFlags flags`;
   `RD_RegSlot slot`;
   `String8 view_name`;
-  `RD_EntityKind entity_kind`;
   `CTRL_EntityKind ctrl_entity_kind`;
 }
 
@@ -719,9 +624,9 @@ RD_CmdTable:    //               |        |              |                  |   
 {
   `{0}`,
   @expand(D_CmdTable, a)
-    ```{ str8_lit_comp("$(a.string)"), str8_lit_comp("$(a.desc)"), str8_lit_comp("$(a.search_tags)"), str8_lit_comp("$(a.ctx_filter)"), str8_lit_comp("$(a.display_name)"), RD_IconKind_$(a.canonical_icon), (RD_CmdKindFlag_ListInUI*$(a.ui_vis))|(RD_CmdKindFlag_ListInIPCDocs*$(a.ipc_docs_vis)), {(RD_QueryFlag_AllowFiles*$(a.q_allow_files))|(RD_QueryFlag_AllowFolders*$(a.q_allow_folders))|(RD_QueryFlag_CodeInput*$(a.q_is_code))|(RD_QueryFlag_KeepOldInput*$(a.q_keep_oi))|(RD_QueryFlag_SelectOldInput*$(a.q_select_oi))|(RD_QueryFlag_Required*$(a.q_required)), RD_RegSlot_$(a.q_slot), str8_lit_comp("$(a.q_view != 'null' -> a.q_view)"), RD_EntityKind_$(a.q_ent_kind), CTRL_EntityKind_$(a.q_ctrl_ent_kind)}}```;
+    ```{ str8_lit_comp("$(a.string)"), str8_lit_comp("$(a.desc)"), str8_lit_comp("$(a.search_tags)"), str8_lit_comp("$(a.ctx_filter)"), str8_lit_comp("$(a.display_name)"), RD_IconKind_$(a.canonical_icon), (RD_CmdKindFlag_ListInUI*$(a.ui_vis))|(RD_CmdKindFlag_ListInIPCDocs*$(a.ipc_docs_vis)), {(RD_QueryFlag_AllowFiles*$(a.q_allow_files))|(RD_QueryFlag_AllowFolders*$(a.q_allow_folders))|(RD_QueryFlag_CodeInput*$(a.q_is_code))|(RD_QueryFlag_KeepOldInput*$(a.q_keep_oi))|(RD_QueryFlag_SelectOldInput*$(a.q_select_oi))|(RD_QueryFlag_Required*$(a.q_required)), RD_RegSlot_$(a.q_slot), str8_lit_comp("$(a.q_view != 'null' -> a.q_view)"), CTRL_EntityKind_$(a.q_ctrl_ent_kind)}}```;
   @expand(RD_CmdTable, a)
-    ```{ str8_lit_comp("$(a.string)"), str8_lit_comp("$(a.desc)"), str8_lit_comp("$(a.search_tags)"), str8_lit_comp("$(a.ctx_filter)"), str8_lit_comp("$(a.display_name)"), RD_IconKind_$(a.canonical_icon), (RD_CmdKindFlag_ListInUI*$(a.ui_vis))|(RD_CmdKindFlag_ListInIPCDocs*$(a.ipc_docs_vis)), {(RD_QueryFlag_AllowFiles*$(a.q_allow_files))|(RD_QueryFlag_AllowFolders*$(a.q_allow_folders))|(RD_QueryFlag_CodeInput*$(a.q_is_code))|(RD_QueryFlag_KeepOldInput*$(a.q_keep_oi))|(RD_QueryFlag_SelectOldInput*$(a.q_select_oi))|(RD_QueryFlag_Required*$(a.q_required)), RD_RegSlot_$(a.q_slot), str8_lit_comp("$(a.q_view != 'null' -> a.q_view)"), RD_EntityKind_$(a.q_ent_kind), CTRL_EntityKind_$(a.q_ctrl_ent_kind)}}```;
+    ```{ str8_lit_comp("$(a.string)"), str8_lit_comp("$(a.desc)"), str8_lit_comp("$(a.search_tags)"), str8_lit_comp("$(a.ctx_filter)"), str8_lit_comp("$(a.display_name)"), RD_IconKind_$(a.canonical_icon), (RD_CmdKindFlag_ListInUI*$(a.ui_vis))|(RD_CmdKindFlag_ListInIPCDocs*$(a.ipc_docs_vis)), {(RD_QueryFlag_AllowFiles*$(a.q_allow_files))|(RD_QueryFlag_AllowFolders*$(a.q_allow_folders))|(RD_QueryFlag_CodeInput*$(a.q_is_code))|(RD_QueryFlag_KeepOldInput*$(a.q_keep_oi))|(RD_QueryFlag_SelectOldInput*$(a.q_select_oi))|(RD_QueryFlag_Required*$(a.q_required)), RD_RegSlot_$(a.q_slot), str8_lit_comp("$(a.q_view != 'null' -> a.q_view)"), CTRL_EntityKind_$(a.q_ctrl_ent_kind)}}```;
 }
 
 ////////////////////////////////
@@ -1029,10 +934,8 @@ RD_ViewRuleTable:
   //- rjf: temporary view for loading files - must analyze file before picking viewer
   { PendingFile            pending_file           "Pending File"               ""                                                                                                         FileOutline     0 0 0 0 0 0     0 ""                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         }
   
-  //- rjf: watch view
+  //- rjf: visualizers
   { Watch                  watch                  "Watch"                      ""                                                                                                         Binoculars      1 1 1 0 0 0     1 "The familiar 'watch window' debugger interface. Allows the inputting of a number of expressions. Each expression in the table is evaluated within the context of the selected thread's selected call stack frame. If applicable (depending on visualization rules and the expression's type), these expressions may be hierarchically expanded, which displays children as more rows in the table. The values of these expressions may also be edited, and if possible, can be used to write to registers or memory in attached processes. Also contains a new *view rule* column, not found in other major debuggers, which allows per-row specification of various visualization rules. These view rules may be used to visualize and inspect the evaluation of expressions in a variety of ways. To learn more, read the 'View Rules' section."                                                        }
-  
-  //- rjf: data visualizers
   { Text                   text                   "Text"                       "x:{'lang':lang, 'size':expr}"                                                                             FileOutline     0 0 0 1 0 1     0 ""                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         }
   { Disasm                 disasm                 "Disassembly"                "x:{'arch':arch, 'size':expr, 'addresses':bool, 'code_bytes':bool}"                                        Glasses         0 0 0 1 0 1     1 "Displays disassembled instructions in a textual form from the selected thread's containing process virtual address space."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                }
   { Memory                 memory                 "Memory"                     "x:{'size':expr}"                                                                                          Grid            0 0 0 1 0 1     1 "A hex-editor-like grid interface for viewing memory."                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     }
@@ -1072,14 +975,6 @@ RD_ViewRuleTable:
 {
   `{{0}, {0}, {0}, {0}, RD_IconKind_Null, 0, EV_EXPAND_RULE_INFO_FUNCTION_NAME(nil), RD_VIEW_RULE_UI_FUNCTION_NAME(null)}`,
   @expand(RD_ViewRuleTable a) `{str8_lit_comp("$(a.name_lower)"), str8_lit_comp("$(a.description)"), str8_lit_comp("$(a.display_name)"), str8_lit_comp("$(a.params_schema)"), RD_IconKind_$(a.icon), (RD_ViewRuleInfoFlag_ShowInDocs*$(a.show_in_docs)|RD_ViewRuleInfoFlag_CanFilter*$(a.can_filter)|RD_ViewRuleInfoFlag_FilterIsCode*$(a.filter_is_code)|RD_ViewRuleInfoFlag_TypingAutomaticallyFilters*$(a.typing_automatically_filters)|RD_ViewRuleInfoFlag_CanUseInWatchTable*$(a.can_use_in_watch_table)|RD_ViewRuleInfoFlag_CanFillValueCell*$(a.can_fill_value_cell)|RD_ViewRuleInfoFlag_CanExpand*$(a.can_expand)), $(a.can_expand != 0 -> "EV_EXPAND_RULE_INFO_FUNCTION_NAME(" .. a.name_lower .. ")") $(a.can_expand == 0 -> "EV_EXPAND_RULE_INFO_FUNCTION_NAME(nil)"), RD_VIEW_RULE_UI_FUNCTION_NAME($(a.name_lower))}`,
-}
-
-////////////////////////////////
-//~ rjf: Built-In Debug Engine Kind -> Icon Kind Table
-
-@data(RD_IconKind) rd_entity_kind_icon_kind_table:
-{
-  @expand(RD_EntityKindTable a) `RD_IconKind_$(a.icon_kind)`,
 }
 
 ////////////////////////////////

@@ -95,49 +95,6 @@ enum
 };
 
 ////////////////////////////////
-//~ rjf: Entity Kind Flags
-
-typedef U32 RD_EntityKindFlags;
-enum
-{
-  //- rjf: allowed operations
-  RD_EntityKindFlag_CanDelete                = (1<<0),
-  RD_EntityKindFlag_CanFreeze                = (1<<1),
-  RD_EntityKindFlag_CanEdit                  = (1<<2),
-  RD_EntityKindFlag_CanRename                = (1<<3),
-  RD_EntityKindFlag_CanEnable                = (1<<4),
-  RD_EntityKindFlag_CanCondition             = (1<<5),
-  RD_EntityKindFlag_CanDuplicate             = (1<<6),
-  
-  //- rjf: name categorization
-  RD_EntityKindFlag_NameIsCode               = (1<<7),
-  RD_EntityKindFlag_NameIsPath               = (1<<8),
-  
-  //- rjf: lifetime categorization
-  RD_EntityKindFlag_UserDefinedLifetime      = (1<<9),
-  
-  //- rjf: serialization
-  RD_EntityKindFlag_IsSerializedToConfig     = (1<<10),
-};
-
-////////////////////////////////
-//~ rjf: Entity Flags
-
-typedef U32 RD_EntityFlags;
-enum
-{
-  //- rjf: allocationless, simple equipment
-  RD_EntityFlag_HasTextPoint      = (1<<0),
-  RD_EntityFlag_HasEntityHandle   = (1<<2),
-  RD_EntityFlag_HasU64            = (1<<4),
-  RD_EntityFlag_HasColor          = (1<<6),
-  RD_EntityFlag_HasVAddr          = (1<<15),
-  
-  //- rjf: deletion
-  RD_EntityFlag_MarkedForDeletion = (1<<31),
-};
-
-////////////////////////////////
 //~ rjf: View Rule Info Types
 
 typedef U32 RD_ViewRuleInfoFlags;

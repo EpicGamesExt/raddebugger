@@ -447,27 +447,28 @@ internal void
 ev_keyed_expr_push_tags(Arena *arena, EV_View *view, EV_Block *block, EV_Key key, E_Expr *expr)
 {
   Temp scratch = scratch_begin(&arena, 1);
-  
-  // rjf: push inherited tags first (we want these to be found first, since tags are applied
-  // in order, and explicit ones should always be strongest)
-  for(EV_Block *b = block; b != &ev_nil_block; b = b->parent)
+  if(expr != &e_expr_nil)
   {
-    for(E_Expr *src_tag = b->expr->first_tag; src_tag != &e_expr_nil; src_tag = src_tag->next)
+    // rjf: push inherited tags first (we want these to be found first, since tags are applied
+    // in order, and explicit ones should always be strongest)
+    for(EV_Block *b = block; b != &ev_nil_block; b = b->parent)
     {
-      e_expr_push_tag(expr, e_expr_copy(arena, src_tag));
+      for(E_Expr *src_tag = b->expr->first_tag; src_tag != &e_expr_nil; src_tag = src_tag->next)
+      {
+        e_expr_push_tag(expr, e_expr_copy(arena, src_tag));
+      }
+    }
+    
+    // rjf: push explicitly-attached tags (via key) next
+    String8 tag_expr = push_str8_copy(arena, ev_view_rule_from_key(view, key));
+    E_TokenArray tag_expr_tokens = e_token_array_from_text(scratch.arena, tag_expr);
+    E_Parse tag_expr_parse = e_parse_expr_from_text_tokens(arena, tag_expr, &tag_expr_tokens);
+    for(E_Expr *tag = tag_expr_parse.expr, *next = &e_expr_nil; tag != &e_expr_nil; tag = next)
+    {
+      next = tag->next;
+      e_expr_push_tag(expr, tag);
     }
   }
-  
-  // rjf: push explicitly-attached tags (via key) next
-  String8 tag_expr = push_str8_copy(arena, ev_view_rule_from_key(view, key));
-  E_TokenArray tag_expr_tokens = e_token_array_from_text(scratch.arena, tag_expr);
-  E_Parse tag_expr_parse = e_parse_expr_from_text_tokens(arena, tag_expr, &tag_expr_tokens);
-  for(E_Expr *tag = tag_expr_parse.expr, *next = &e_expr_nil; tag != &e_expr_nil; tag = next)
-  {
-    next = tag->next;
-    e_expr_push_tag(expr, tag);
-  }
-  
   scratch_end(scratch);
 }
 

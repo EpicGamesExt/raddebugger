@@ -15,38 +15,6 @@ RD_CfgSrc_Transient,
 RD_CfgSrc_COUNT,
 } RD_CfgSrc;
 
-typedef enum RD_EntityKind
-{
-RD_EntityKind_Nil,
-RD_EntityKind_Root,
-RD_EntityKind_AutoViewRule,
-RD_EntityKind_FilePathMap,
-RD_EntityKind_WatchPin,
-RD_EntityKind_Watch,
-RD_EntityKind_ViewRule,
-RD_EntityKind_Breakpoint,
-RD_EntityKind_Condition,
-RD_EntityKind_Location,
-RD_EntityKind_Target,
-RD_EntityKind_Executable,
-RD_EntityKind_Arguments,
-RD_EntityKind_WorkingDirectory,
-RD_EntityKind_EntryPoint,
-RD_EntityKind_StdoutPath,
-RD_EntityKind_StderrPath,
-RD_EntityKind_StdinPath,
-RD_EntityKind_Window,
-RD_EntityKind_Panel,
-RD_EntityKind_View,
-RD_EntityKind_RecentProject,
-RD_EntityKind_RecentFile,
-RD_EntityKind_Source,
-RD_EntityKind_Dest,
-RD_EntityKind_ConversionTask,
-RD_EntityKind_ConversionFail,
-RD_EntityKind_COUNT,
-} RD_EntityKind;
-
 typedef enum RD_RegSlot
 {
 RD_RegSlot_Null,
@@ -561,7 +529,6 @@ struct RD_Query
 RD_QueryFlags flags;
 RD_RegSlot slot;
 String8 view_name;
-RD_EntityKind entity_kind;
 CTRL_EntityKind ctrl_entity_kind;
 };
 
@@ -655,18 +622,12 @@ extern RD_CmdKind rd_cfg_src_load_cmd_kind_table[4];
 extern RD_CmdKind rd_cfg_src_write_cmd_kind_table[4];
 extern RD_VocabularyInfo rd_vocabulary_info_table[45];
 extern RD_NameSchemaInfo rd_name_schema_info_table[10];
-extern String8 d_entity_kind_display_string_table[27];
-extern String8 d_entity_kind_name_lower_table[27];
-extern String8 d_entity_kind_name_lower_plural_table[27];
-extern String8 d_entity_kind_name_label_table[27];
-extern RD_EntityKindFlags rd_entity_kind_flags_table[27];
 extern Rng1U64 rd_reg_slot_range_table[38];
 extern RD_StringBindingPair rd_default_binding_table[111];
 extern String8 rd_binding_version_remap_old_name_table[8];
 extern String8 rd_binding_version_remap_new_name_table[8];
 extern String8 rd_icon_kind_text_table[69];
 extern RD_ViewRuleInfo rd_view_rule_kind_info_table[13];
-extern RD_IconKind rd_entity_kind_icon_kind_table[27];
 extern String8 rd_theme_preset_display_string_table[9];
 extern String8 rd_theme_preset_code_string_table[9];
 extern String8 rd_theme_color_version_remap_old_name_table[22];
