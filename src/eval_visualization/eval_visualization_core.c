@@ -504,6 +504,12 @@ ev_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, String8 str
       // rjf: unpack expr
       E_IRTreeAndType expr_irtree = e_irtree_and_type_from_expr(scratch.arena, t->expr);
       
+      // rjf: skip if type info disallows expansion
+      if(!ev_type_key_and_mode_is_expandable(expr_irtree.type_key, expr_irtree.mode))
+      {
+        continue;
+      }
+      
       // rjf: get expr's lookup rule
       E_LookupRuleTagPair lookup_rule_and_tag = e_lookup_rule_tag_pair_from_expr_irtree(t->expr, &expr_irtree);
       E_LookupRule *lookup_rule = lookup_rule_and_tag.rule;
@@ -631,6 +637,14 @@ ev_block_tree_from_expr(Arena *arena, EV_View *view, String8 filter, String8 str
           if(child_expr != &e_expr_nil)
           {
             EV_Key child_key = child_keys[idx];
+            String8 tag_expr = push_str8_copy(arena, ev_view_rule_from_key(view, child_key));
+            E_TokenArray tag_expr_tokens = e_token_array_from_text(scratch.arena, tag_expr);
+            E_Parse tag_expr_parse = e_parse_expr_from_text_tokens(arena, tag_expr, &tag_expr_tokens);
+            for(E_Expr *expr = tag_expr_parse.expr, *next = &e_expr_nil; expr != &e_expr_nil; expr = next)
+            {
+              next = expr->next;
+              e_expr_push_tag(child_expr, expr);
+            }
             Task *task = push_array(scratch.arena, Task, 1);
             SLLQueuePush(first_task, last_task, task);
             task->parent_block       = expansion_block;

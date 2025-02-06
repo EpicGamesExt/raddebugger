@@ -2065,7 +2065,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
         else
         {
           E_TokenArray idx_expr_parse_tokens = e_token_array_make_first_opl(it, it_opl);
-          E_Parse arg_parse = e_parse_expr_from_text_tokens__prec(arena, text, tokens, e_max_precedence);
+          E_Parse arg_parse = e_parse_expr_from_text_tokens__prec(arena, text, &idx_expr_parse_tokens, e_max_precedence);
           e_msg_list_concat_in_place(&result.msgs, &arg_parse.msgs);
           if(arg_parse.expr != &e_expr_nil)
           {

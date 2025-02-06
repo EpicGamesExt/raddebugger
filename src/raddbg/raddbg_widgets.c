@@ -1014,7 +1014,8 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
             // rjf: bp hovering
             if(ui_hovering(bp_sig) && !rd_drag_is_active())
             {
-              RD_RegsScope(.cfg = bp->id) rd_set_hover_regs(RD_RegSlot_Cfg);
+              rd_set_hover_eval(v2f32(bp_box->rect.x0, bp_box->rect.y1-2.f), str8_zero(), txt_pt(0, 0), 0, push_str8f(scratch.arena, "$%I64u", bp->id));
+              // RD_RegsScope(.cfg = bp->id) rd_set_hover_regs(RD_RegSlot_Cfg);
             }
             
             // rjf: shift+click => enable breakpoint

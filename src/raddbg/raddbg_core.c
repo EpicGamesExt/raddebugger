@@ -12342,6 +12342,7 @@ rd_frame(void)
           expr->space    = space;
           expr->mode     = E_Mode_Offset;
           expr->type_key = e_string2typekey_map_lookup(rd_state->meta_name2type_map, name);
+          e_string2expr_map_insert(scratch.arena, ctx->macro_map, push_str8f(scratch.arena, "$%I64u", cfg->id), expr);
           if(exe.size != 0)
           {
             e_string2expr_map_insert(scratch.arena, ctx->macro_map, str8_skip_last_slash(exe), expr);
