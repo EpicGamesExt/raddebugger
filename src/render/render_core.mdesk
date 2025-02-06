@@ -35,7 +35,7 @@ R_ResourceKindTable:
   // stream resource will be often updated fully overwriting previous data
   // GPU can only read it
   // CPU can update via Map (with WRITE_DISCARD flag) + Unmap
-  {Stream   "Stream "} 
+  {Stream   "Stream "}
 }
 
 @table(name, display_string)
@@ -54,6 +54,13 @@ R_GeoTopologyKindTable:
   {TriangleStrip  "Triangle Strip" }
 }
 
+@table(name, display_string)
+R_BufferKindTable:
+{
+  {Static   "Static" }
+  {Dynamic  "Dynamic"}
+}
+
 @table(name, batch, display_string)
 R_PassKindTable:
 {
@@ -68,6 +75,12 @@ R_PassKindTable:
 @enum R_Tex2DFormat:
 {
   @expand(R_Tex2DFormatTable a) `$(a.name)`,
+  COUNT,
+}
+
+@enum R_Tex2DKind:
+{
+  @expand(R_ResourceKindTable a) `$(a.name)`,
   COUNT,
 }
 
@@ -88,6 +101,13 @@ R_PassKindTable:
   @expand(R_GeoTopologyKindTable a) `$(a.name)`,
   COUNT,
 }
+
+@enum R_BufferKind:
+{
+  @expand(R_BufferKindTable a) `$(a.name)`,
+  COUNT,
+}
+
 
 @enum R_PassKind:
 {

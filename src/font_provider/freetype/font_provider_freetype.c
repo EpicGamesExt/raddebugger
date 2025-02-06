@@ -1,11 +1,9 @@
 // Copyright (c) 2024 Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "third_party/stb/stb_image_write.h"
-
-internal FT_Library freetype_instance = NULL;
-internal Arena* freetype_arena = NULL;
+global FT_Library freetype_instance = NULL;
+global Arena* freetype_arena = NULL;
+global U32 freetype_glyph_size = 32;
 
 FreeType_FontFace
 freetype_face_from_handle(FP_Handle face)
@@ -19,6 +17,19 @@ freetype_handle_from_face(FreeType_FontFace face)
   FP_Handle result = {0};
   *result.u64 = IntFromPtr(face);
   return result;
+}
+
+String8 freetype_error_string(U32 error)
+{
+  U32 x_code = freetype_errors[0].err_code;
+  char* x_str = (char*)(freetype_errors[0].err_msg);
+  for (int i=0; x_str != NULL; ++i)
+  {
+    if (x_code == error) { return str8_cstring(x_str); }
+    x_code = freetype_errors[i].err_code;
+    x_str = (char*)(freetype_errors[i].err_msg);
+  }
+  return str8_lit("no error code found");
 }
 
 fp_hook void
@@ -69,10 +80,12 @@ fp_font_open_from_static_data_string(String8 *data_ptr)
   FT_Open_Args args = {0};
   S64 face_index = 0x0;
   FT_Size_RequestRec sizing_request = {0};
+  if (data_ptr->size == 0) { return result; }
 
-// Pt Fractional Scaling
-  sizing_request.width = 300*64;
-  sizing_request.height = 300*64;
+  // Pt Fractional Scaling
+  sizing_request.width = 300* freetype_glyph_size;
+  sizing_request.height = 300 * freetype_glyph_size;
+
   // DPI
   sizing_request.horiResolution = 30;
   sizing_request.vertResolution = 30;
@@ -151,8 +164,10 @@ fp_raster(Arena *arena,
   if (face == 0) { return result; }
 
   Temp scratch = scratch_begin(0, 0);
-  U32* charmap_indices = push_array(scratch.arena, U32, 4+ string.size);
-  F32 win32_magic_dimensions = (96.f/72.f);
+
+  U32 glyph_count = string.size;
+  U32* charmap_indices = push_array(scratch.arena, U32, glyph_count + 4);
+
   // Error counting
   U32 errors_char = 0;
   U32 errors_glyph = 0;
@@ -179,18 +194,20 @@ fp_raster(Arena *arena,
   // start at (300,200) relative to the upper left corner
   pen.x = 0;
   pen.y = face->ascender;
-  U32 glyph_height = 60;
-  U32 glyph_width = 100;
-  U32 magic_dpi = 64;
+  // Max glyph width and height
+  /* NOTE(mallchad): 'bbox' is the minimum bounding box that must fit all rendered glyphs,
+   the glyph metrics are stored is 26.6 fractional format. Meaning 1 unit is 1/64th of a pixel
+   https://freetype.org/freetype2/docs/tutorial/step2.html
+  So divide by 64 to get pixels */
+  U32 glyph_width = FT_MulFix((face->bbox.xMax - face->bbox.xMin), face->size->metrics.x_scale ) / 64;
+  U32 glyph_height = FT_MulFix((face->bbox.yMax - face->bbox.yMin), face->size->metrics.y_scale ) / 64;
+
   U32 total_advance = 0;
-  U32 total_height = 0;
   Vec2S16 atlas_dim = {0};
-  U32 glyph_count = string.size;
-  /* NOTE(mallchad): 'size' is the actual internal glyph "scale" not char count
-  Convert magic fixed point coordinate system to internal floating point representation */
-  F32 glyph_advance_width = (face->max_advance_width * (96.f/72.f) * size) / face->units_per_EM;
-  F32 glyph_advance_height = (face->max_advance_height * (96.f/72.f) * size) / face->units_per_EM;
-  U8* atlas = push_array_no_zero( scratch.arena, U8, 5* glyph_advance_width * glyph_advance_height );
+
+  U32 atlas_padding = (glyph_width % 4) * glyph_height * glyph_count;
+  U8* atlas = push_array_no_zero( scratch.arena, U8,
+                                  (glyph_width * glyph_height) + atlas_padding );
 
   U8 x_char = 0;
   U32 x_charmap = 0;
@@ -204,8 +221,8 @@ fp_raster(Arena *arena,
     // Undefined character code or NULL face
     /* err_char += FT_Load_Char(face, (FT_ULong)x_char, 0x0); */ // Load char and index in oneshot
     err_glyph += FT_Load_Glyph(face, x_charmap, FT_LOAD_DEFAULT);
-    /* FT_Set_Transform( face, &matrix, &pen ); // Set transforms */
-    FT_Set_Transform( face, NULL, NULL ); // Reset transforms
+    FT_Set_Transform( face, &matrix, &pen ); // Set transforms
+    /* FT_Set_Transform( face, NULL, NULL ); // Reset transforms */
     err_render += FT_Render_Glyph(face->glyph, FT_RENDER_MODE_NORMAL);
 
     Assert(face->glyph->bitmap.pixel_mode == FT_PIXEL_MODE_GRAY);
@@ -214,13 +231,12 @@ fp_raster(Arena *arena,
                              face->glyph->bitmap.buffer,
                              vec_2s32(face->glyph->bitmap.pitch, face->glyph->bitmap.rows),
                              vec_2s32(0, 0),
-                             vec_2s32(total_advance, total_height),
+                             vec_2s32(total_advance, glyph_height),
                              face->glyph->bitmap.pitch,
-                             glyph_advance_width);
+                             glyph_width);
 
     // Section compied from dwrite
-    total_advance += glyph_advance_width;
-    total_height += glyph_advance_height;
+    total_advance += glyph_width;
     atlas_dim.x = Max(atlas_dim.x, (S16)(1+ total_advance));
     err_char += (errors_glyph > 0);
     err_glyph += (errors_glyph > 0);
@@ -229,14 +245,14 @@ fp_raster(Arena *arena,
   Assert(!errors_glyph);
   Assert(!errors_glyph);
   Assert(!errors_render);
-  atlas_dim.x += 7;
-  atlas_dim.x -= atlas_dim.x%8;
-  atlas_dim.x += 4;
-  atlas_dim.y += 4;
+  /* atlas_dim.x += 7;
+     atlas_dim.x -= atlas_dim.x%8;
+     atlas_dim.x += 4;
+     atlas_dim.y += 4; */
   // Fill raster basics
   result.atlas_dim.x = total_advance;
-  result.atlas_dim.y = total_height;
-  result.advance = glyph_advance_width;
+  result.atlas_dim.y = glyph_height;
+  result.advance = glyph_width;
   result.atlas = push_array(arena, U8, 4* result.atlas_dim.x*  result.atlas_dim.y);
 
   static U32 null_errors = 0;
@@ -245,7 +261,7 @@ fp_raster(Arena *arena,
   if (face->glyph->bitmap.buffer != NULL)
   {
     // Debug Stuff
-    String8 debug_name = str8_lit("debug/test.bmp");
+    String8 debug_name = str8_lit("glyph_test.bmp");
     freetype_write_bmp_monochrome_file(debug_name,
                                        face->glyph->bitmap.buffer,
                                        face->glyph->bitmap.pitch,
@@ -268,10 +284,10 @@ freetype_write_bmp_file(String8 name, U8* data, U32 width, U32 height)
   { return 0; }
 
   Temp scratch = scratch_begin(0, 0);
-  U32 greedy_filesize = 4* width*height;
+  U32 greedy_filesize = sizeof(FreeType_BitmapHeader) + (4* width*height) + 200;
   U8* buffer = push_array(scratch.arena, U8, greedy_filesize);
   FreeType_BitmapHeader* header = (FreeType_BitmapHeader*)buffer;
-  U32 pixbuf_offset = (sizeof(FreeType_BitmapHeader)*2);
+  U32 pixbuf_offset = (40+ sizeof(FreeType_BitmapHeader));
   U8* pixbuf = buffer+ pixbuf_offset;
 
   MemoryCopy(&header->signature, "BM\0\0\0\0", 2);
@@ -331,10 +347,10 @@ freetype_write_bmp_monochrome_file(String8 name, U8* data, U32 width, U32 height
   { return 0; }
 
   Temp scratch = scratch_begin(0, 0);
-  U32 greedy_filesize = 4* width*height;
+  U32 greedy_filesize = sizeof(FreeType_BitmapHeader) + (4* width*height) + 200;
   U8* filebuf = push_array(scratch.arena, U8, greedy_filesize);
   FreeType_BitmapHeader* header = (FreeType_BitmapHeader*)filebuf;
-  U32 pixbuf_offset = (sizeof(FreeType_BitmapHeader)*2);
+  U32 pixbuf_offset = (40+ sizeof(FreeType_BitmapHeader)*2);
   U8* pixbuf = filebuf+ pixbuf_offset;
 
   MemoryZero(filebuf, greedy_filesize);
@@ -352,7 +368,7 @@ freetype_write_bmp_monochrome_file(String8 name, U8* data, U32 width, U32 height
   header->y_pixels_per_meter = 2835;
   header->compressed_image_size = 4* width*height;
 
-  U8* buffer = push_array(scratch.arena, U8, 4* width*height);
+  U8* buffer = push_array(scratch.arena, U8, 4* width*height * 128);
   // Error printing
   /* MemorySet(buffer, 0xAF, width * height * 4); */
   /* MemorySet(pixbuf, 0xAF, width * height * 4); */

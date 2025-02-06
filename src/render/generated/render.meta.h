@@ -20,6 +20,14 @@ R_Tex2DFormat_RGBA32,
 R_Tex2DFormat_COUNT,
 } R_Tex2DFormat;
 
+typedef enum R_Tex2DKind
+{
+R_Tex2DKind_Static,
+R_Tex2DKind_Dynamic,
+R_Tex2DKind_Stream,
+R_Tex2DKind_COUNT,
+} R_Tex2DKind;
+
 typedef enum R_ResourceKind
 {
 R_ResourceKind_Static,
@@ -43,6 +51,13 @@ R_GeoTopologyKind_Triangles,
 R_GeoTopologyKind_TriangleStrip,
 R_GeoTopologyKind_COUNT,
 } R_GeoTopologyKind;
+
+typedef enum R_BufferKind
+{
+R_BufferKind_Static,
+R_BufferKind_Dynamic,
+R_BufferKind_COUNT,
+} R_BufferKind;
 
 typedef enum R_PassKind
 {

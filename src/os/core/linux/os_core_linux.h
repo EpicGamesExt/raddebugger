@@ -96,9 +96,12 @@ struct LNX_Entity{
       U64 size;
       String8 shm_name;
     } map;
+    struct{
+      LNX_cond cond;
+      LNX_mutex mutex;
+    } condition_variable;
     LNX_mutex mutex;
     LNX_rwlock rwlock;
-    LNX_cond cond;
   };
 };
 

@@ -6,7 +6,7 @@
 
 global pthread_mutex_t lnx_mutex = {0};
 global Arena *lnx_perm_arena = 0;
-global LNX_Entity lnx_entity_buffer[1024];
+global LNX_Entity lnx_entity_buffer[16384];
 global LNX_Entity *lnx_entity_free = 0;
 global String8 lnx_initial_path = {0};
 thread_static LNX_SafeCallChain *lnx_safe_call_chain = 0;
@@ -1478,8 +1478,8 @@ os_file_read(OS_Handle file, Rng1U64 rng, void *out_data)
 internal void
 os_file_write(OS_Handle file, Rng1U64 rng, void *data)
 {
-  // Zero Valid Argument
-  if ((*file.u64 == 0) || (data == NULL) || (rng.min - rng.max == 0)) { return; }
+  // Zero Valid Argument, often but not always STDIN
+  if ((*file.u64 < 0) || (data == NULL) || (rng.min - rng.max == 0)) { return; }
   S32 fd = lnx_fd_from_handle(file);
   LNX_fstat file_info;
   fstat(fd, &file_info);
@@ -1790,9 +1790,11 @@ internal B32
 os_make_directory(String8 path)
 {
   B32 result = 0;
-  if (mkdir((char*)path.str, 0777) != -1){
-    result = 1;
-  }
+  mkdir((char*)path.str, 0770);
+  DIR* dirfd = opendir((char*)path.str);
+  result = (ENOENT != errno);
+  closedir(dirfd);
+
   return(result);
 }
 
@@ -1943,8 +1945,11 @@ os_now_microseconds(void){
 }
 
 internal void
-os_sleep_milliseconds(U32 msec){
-  usleep(msec*Thousand(1));
+os_sleep_milliseconds(U32 msec)
+{
+  LNX_timespec duration = {0};
+  duration.tv_nsec = (msec* Million(1));
+  nanosleep(&duration, NULL);
 }
 
 ////////////////////////////////
@@ -2124,12 +2129,10 @@ os_rw_mutex_alloc(void)
   // This can be cleaned up now.
   pthread_rwlockattr_destroy(&attr);
 
-  if (pthread_result == 0)
-  {
-      LNX_Entity *entity = lnx_alloc_entity(LNX_EntityKind_Rwlock);
-      entity->rwlock = rwlock;
-      *result.u64 = IntFromPtr(entity);
-  }
+  Assert(pthread_result == 0);
+  LNX_Entity *entity = lnx_alloc_entity(LNX_EntityKind_Rwlock);
+  entity->rwlock = rwlock;
+  *result.u64 = IntFromPtr(entity);
   return result;
 }
 
@@ -2160,7 +2163,7 @@ os_rw_mutex_drop_r_(OS_Handle mutex)
 internal void
 os_rw_mutex_take_w_(OS_Handle mutex)
 {
-    LNX_Entity* entity = lnx_entity_from_handle(mutex, LNX_EntityKind_Rwlock);
+  LNX_Entity* entity = lnx_entity_from_handle(mutex, LNX_EntityKind_Rwlock);
   pthread_rwlock_wrlock(&(entity->rwlock));
 }
 
@@ -2179,17 +2182,21 @@ os_condition_variable_alloc(void){
   LNX_Entity *entity = lnx_alloc_entity(LNX_EntityKind_ConditionVariable);
 
   // pthread
-  pthread_condattr_t attr;
-  pthread_condattr_init(&attr);
+  pthread_condattr_t attr_cond;
+  pthread_mutexattr_t attr_mutex;
+
   // Make sure condition uses CPU clock time
-  pthread_condattr_setclock(&attr, CLOCK_MONOTONIC_RAW);
-  pthread_condattr_setpshared(&attr, PTHREAD_PROCESS_PRIVATE);
-  pthread_condattr_destroy(&attr);
-  int pthread_result = pthread_cond_init(&entity->cond, &attr);
-  if (pthread_result == -1){
-    lnx_free_entity(entity);
-    entity = 0;
-  }
+  pthread_condattr_setclock(&attr_cond, CLOCK_MONOTONIC_RAW);
+  pthread_condattr_setpshared(&attr_cond, PTHREAD_PROCESS_PRIVATE);
+  pthread_mutexattr_init(&attr_mutex);
+  pthread_mutexattr_settype(&attr_mutex, PTHREAD_MUTEX_RECURSIVE);
+  int cond_result = pthread_cond_init(&entity->condition_variable.cond, &attr_cond);
+  int mutex_result = pthread_mutex_init(&entity->condition_variable.mutex, &attr_mutex);
+
+  pthread_condattr_destroy(&attr_cond);
+  pthread_mutexattr_destroy(&attr_mutex);
+
+  Assert(cond_result == 0);
 
   // cast to opaque handle
   OS_Handle result = {IntFromPtr(entity)};
@@ -2199,7 +2206,8 @@ os_condition_variable_alloc(void){
 internal void
 os_condition_variable_release(OS_Handle cv){
   LNX_Entity *entity = (LNX_Entity*)PtrFromInt(cv.u64[0]);
-  pthread_cond_destroy(&entity->cond);
+  pthread_cond_destroy(&entity->condition_variable.cond);
+  pthread_mutex_destroy(&entity->condition_variable.mutex);
   lnx_free_entity(entity);
 }
 
@@ -2208,54 +2216,105 @@ os_condition_variable_wait_(OS_Handle cv, OS_Handle mutex, U64 endt_us){
   B32 result = 0;
   LNX_Entity *entity_cond = lnx_entity_from_handle(cv, LNX_EntityKind_ConditionVariable);
   LNX_Entity *entity_mutex = lnx_entity_from_handle(mutex, LNX_EntityKind_Mutex);
-  LNX_timespec timeout_stamp = lnx_now_precision_timespec();
-  timeout_stamp.tv_nsec += endt_us * 1000;
+  LNX_timespec timeout_stamp = {0};
+  timeout_stamp.tv_sec = (endt_us / Million(1));
+  timeout_stamp.tv_nsec = ((endt_us % Million(1)) * Thousand(1));
+  // TODO(mallchad): is endt supposed to be "end time?"
 
   // The timeout is received as a system clock timespec of when to stop waiting
-  pthread_cond_timedwait(&entity_cond->cond, &entity_mutex->mutex, &timeout_stamp);
+  B32 wait_result = pthread_cond_timedwait(&entity_cond->condition_variable.cond,
+                                           &entity_mutex->mutex,
+                                           &timeout_stamp);
+  result = (wait_result == 0);
   return(result);
 }
 
 internal B32
 os_condition_variable_wait_rw_r_(OS_Handle cv, OS_Handle mutex_rw, U64 endt_us)
 {
+  // TODO(rjf): because pthread does not supply cv/rw natively, I had to hack
+  // this together, but this would probably just be a lot better if we just
+  // implemented the primitives ourselves with e.g. futexes
+  //
+  if(os_handle_match(cv, os_handle_zero())) { return 0; }
+  if(os_handle_match(mutex_rw, os_handle_zero())) { return 0; }
+  LNX_Entity *cv_entity = (LNX_Entity *)cv.u64[0];
+  LNX_Entity *rw_mutex_entity = (LNX_Entity *)mutex_rw.u64[0];
+  struct timespec endt_timespec;
+  endt_timespec.tv_sec = endt_us/Million(1);
+  endt_timespec.tv_nsec = Thousand(1) * (endt_us - (endt_us/Million(1))*Million(1));
   B32 result = 0;
-  LNX_Entity *entity_cond = lnx_entity_from_handle(cv, LNX_EntityKind_ConditionVariable);
-  LNX_Entity *entity_mutex = lnx_entity_from_handle(mutex_rw, LNX_EntityKind_Mutex);
-  LNX_timespec timeout_stamp = lnx_now_precision_timespec();
-  timeout_stamp.tv_nsec += endt_us * 1000;
-
-  // The timeout is received as a MONOTONIC_RAW clock timespec of when to stop waiting
-  pthread_cond_timedwait(&entity_cond->cond, &entity_mutex->mutex, &timeout_stamp);
-  return (result == 0);
+  for(;;)
+  {
+    pthread_mutex_lock(&cv_entity->condition_variable.mutex);
+    int wait_result = pthread_cond_timedwait(&cv_entity->condition_variable.cond,
+                                             &cv_entity->condition_variable.mutex,
+                                             &endt_timespec);
+    if(wait_result != ETIMEDOUT)
+    {
+      pthread_rwlock_rdlock(&rw_mutex_entity->rwlock);
+      pthread_mutex_unlock(&cv_entity->condition_variable.mutex);
+      result = 1;
+      break;
+    }
+    pthread_mutex_unlock(&cv_entity->condition_variable.mutex);
+    if(wait_result == ETIMEDOUT)
+    {
+      break;
+    }
+  }
+  return result;
 }
 
 internal B32
 os_condition_variable_wait_rw_w_(OS_Handle cv, OS_Handle mutex_rw, U64 endt_us)
 {
-   B32 result = 0;
-  LNX_Entity *entity_cond = lnx_entity_from_handle(cv, LNX_EntityKind_ConditionVariable);
-  LNX_Entity *entity_mutex = lnx_entity_from_handle(mutex_rw, LNX_EntityKind_Mutex);
-  LNX_timespec timeout_stamp = lnx_now_precision_timespec();
-  timeout_stamp.tv_nsec += endt_us * 1000;
-
-  // The timeout is received as a MONOTONIC_RAW clock timespec of when to stop waiting
-  result = pthread_cond_timedwait(&entity_cond->cond, &entity_mutex->mutex, &timeout_stamp);
-  return (result == 0);
+  // TODO(rjf): because pthread does not supply cv/rw natively, I had to hack
+  // this together, but this would probably just be a lot better if we just
+  // implemented the primitives ourselves with e.g. futexes
+  //
+  if(os_handle_match(cv, os_handle_zero())) { return 0; }
+  if(os_handle_match(mutex_rw, os_handle_zero())) { return 0; }
+  LNX_Entity *cv_entity = (LNX_Entity *)cv.u64[0];
+  LNX_Entity *rw_mutex_entity = (LNX_Entity *)mutex_rw.u64[0];
+  struct timespec endt_timespec;
+  endt_timespec.tv_sec = endt_us/Million(1);
+  endt_timespec.tv_nsec = Thousand(1) * (endt_us - (endt_us/Million(1))*Million(1));
+  B32 result = 0;
+  for(;;)
+  {
+    pthread_mutex_lock(&cv_entity->condition_variable.mutex);
+    int wait_result = pthread_cond_timedwait(&cv_entity->condition_variable.cond,
+                                             &cv_entity->condition_variable.mutex,
+                                             &endt_timespec);
+    if(wait_result != ETIMEDOUT)
+    {
+      pthread_rwlock_wrlock(&rw_mutex_entity->rwlock);
+      pthread_mutex_unlock(&cv_entity->condition_variable.mutex);
+      result = 1;
+      break;
+    }
+    pthread_mutex_unlock(&cv_entity->condition_variable.mutex);
+    if(wait_result == ETIMEDOUT)
+    {
+      break;
+    }
+  }
+  return result;
 }
 
 internal void
 os_condition_variable_signal_(OS_Handle cv)
 {
   LNX_Entity *entity = lnx_entity_from_handle(cv, LNX_EntityKind_ConditionVariable);
-  pthread_cond_signal(&entity->cond);
+  pthread_cond_signal(&entity->condition_variable.cond);
 }
 
 internal void
 os_condition_variable_broadcast_(OS_Handle cv)
 {
   LNX_Entity *entity = lnx_entity_from_handle(cv, LNX_EntityKind_ConditionVariable);
-  pthread_cond_broadcast(&entity->cond);
+  pthread_cond_broadcast(&entity->condition_variable.cond);
 }
 
 //- rjf: cross-process semaphores

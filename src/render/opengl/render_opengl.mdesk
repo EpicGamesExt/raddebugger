@@ -1,0 +1,701 @@
+////////////////////////////////
+//~ dmylo: OpenGL bindings generator
+@table(ret, name, params) GLFunctionsTable:
+{
+  {void       DrawArrays              "GLenum mode, GLint first, GLsizei count"}
+  {void       DrawElements            "GLenum mode, GLsizei count, GLenum type, const void *indices"}
+  {void       GenBuffers              "GLsizei n, GLuint *buffers"}
+  {void       BindBuffer              "GLenum target, GLuint buffer"}
+  {void       BufferData              "GLenum target, GLsizeiptr size, const void *data, GLenum usage"}
+  {void       DeleteShader            "GLuint shader"}
+  {GLuint     CreateShader            "GLenum type"}
+  {void       ShaderSource            "GLuint shader, GLsizei count, const GLchar *const*string, const GLint *length"}
+  {void       CompileShader           "GLuint shader"}
+  {void       GetShaderiv             "GLuint shader, GLenum pname, GLint *params"}
+  {void       GetShaderInfoLog        "GLuint shader, GLsizei bufSize, GLsizei *length, GLchar *infoLog"}
+  {GLuint     CreateProgram           "void"}
+  {void       GetProgramInfoLog       "GLuint program, GLsizei bufSize, GLsizei *length, GLchar *infoLog"}
+  {void       AttachShader            "GLuint program, GLuint shader"}
+  {void       LinkProgram             "GLuint program"}
+  {void       GetProgramiv            "GLuint program, GLenum pname, GLint *params"}
+  {void       GenVertexArrays         "GLsizei n, GLuint *arrays"}
+  {GLuint     GetUniformBlockIndex    "GLuint program, const GLchar* unifromBlockName"}
+  {void       UniformBlockBinding     "GLuint program, GLuint uniformBlockIndex, GLuint uniformBlockBinding"}
+  {void       GenTextures             "GLsizei n, GLuint *textures"}
+  {void       BindTexture             "GLenum target, GLuint texture"}
+  {void       TexImage2D              "GLenum target, GLint level, GLint internalformat, GLsizei width, GLsizei height, GLint border, GLenum format, GLenum type, const void *pixels"}
+  {void       TexSubImage2D           "GLenum target, GLint level, GLint xofffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLenum type, const void *pixels"}
+  {void       Disable                 "GLenum cap"}
+  {void       Enable                  "GLenum cap"}
+  {void       Clear                   "GLbitfield mask"}
+  {void       ClearColor              "GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha"}
+  {void       ClearDepth              "GLdouble depth"}
+  {void       CullFace                "GLenum mode"}
+  {void       FrontFace               "GLenum mode"}
+  {void       BlendFunc               "GLenum sfactor, GLenum dfactor"}
+  {void       Viewport                "GLint x, GLint y, GLsizei width, GLsizei height"}
+  {void       UseProgram              "GLuint program"}
+  {void       BindVertexArray         "GLuint array"}
+  {void       ActiveTexture           "GLenum texture"}
+  {void       DeleteBuffers           "GLsizei n, const GLuint *buffers"}
+  {void       DeleteTextures          "GLsizei n, const GLuint *textures"}
+  {"void*"    MapBuffer               "GLenum target, GLenum access"}
+  {GLboolean  UnmapBuffer             "GLenum target"}
+  {void       EnableVertexAttribArray "GLuint index"}
+  {void       VertexAttribDivisor     "GLuint index, GLuint divisor"}
+  {void       VertexAttribPointer     "GLuint index, GLint size, GLenum type, GLboolean normalized, GLsizei stride, const void *pointer"}
+  {void       BindBufferBase          "GLenum target, GLuint index, GLuint buffer"}
+  {void       TexParameteri           "GLenum target, GLenum pname, GLint param"}
+  {void       Scissor                 "GLint x, GLint y, GLsizei width, GLsizei height"}
+  {void       DrawArraysInstanced     "GLenum mode, GLint first, GLsizei count, GLsizei instancecount"}
+  {void       DeleteFramebuffers      "GLsizei n, const GLuint *framebuffers"}
+  {void       GenFramebuffers         "GLsizei n, GLuint *ids"}
+  {void       BindFramebuffer         "GLenum target, GLuint framebuffer"}
+  {void       FramebufferTexture2D    "GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level"}
+  {void       Uniform2f               "GLint location, GLfloat v0, GLfloat v1"}
+  {void       UniformMatrix4fv        "GLint location, GLsizei count, GLboolean transpose, const GLfloat *value"}
+  {GLint      GetUniformLocation      "GLuint program, const GLchar *name"}
+  {void       DepthFunc               "GLenum func"}
+}
+
+@table(name, value) OGL_DefinesTable:
+{
+  {GL_ARRAY_BUFFER                       0x8892}
+  {GL_ELEMENT_ARRAY_BUFFER               0x8893}
+  {GL_UNIFORM_BUFFER                     0x8A11}
+  {GL_STREAM_DRAW                        0x88E0}
+  {GL_STATIC_DRAW                        0x88E4}
+  {GL_DYNAMIC_DRAW                       0x88E8}
+  {GL_WRITE_ONLY                         0x88B9}
+  {GL_FRAGMENT_SHADER                    0x8B30}
+  {GL_VERTEX_SHADER                      0x8B31}
+  {GL_COMPILE_STATUS                     0x8B81}
+  {GL_LINK_STATUS                        0x8B82}
+  {GL_INFO_LOG_LENGTH                    0x8B84}
+  {GL_COLOR_BUFFER_BIT               0x00004000}
+  {GL_FALSE                                   0}
+  {GL_TRUE                                    1}
+  {GL_TRIANGLES                          0x0004}
+  {GL_TRIANGLE_STRIP                     0x0005}
+  {GL_ONE                                     1}
+  {GL_SRC_ALPHA                          0x0302}
+  {GL_ONE_MINUS_SRC_ALPHA                0x0303}
+  {GL_FRONT                              0x0404}
+  {GL_BACK                               0x0405}
+  {GL_FRONT_AND_BACK                     0x0408}
+  {GL_CULL_FACE                          0x0B44}
+  {GL_DEPTH_TEST                         0x0B71}
+  {GL_STENCIL_TEST                       0x0B90}
+  {GL_VIEWPORT                           0x0BA2}
+  {GL_BLEND                              0x0BE2}
+  {GL_SCISSOR_TEST                       0x0C11}
+  {GL_TEXTURE_2D                         0x0DE1}
+  {GL_UNSIGNED_BYTE                      0x1401}
+  {GL_UNSIGNED_SHORT                     0x1403}
+  {GL_UNSIGNED_INT                       0x1405}
+  {GL_FLOAT                              0x1406}
+  {GL_RGBA                               0x1908}
+  {GL_BGRA                               0x80E1}
+  {GL_RED                                0x1903}
+  {GL_RG                                 0x8227}
+  {GL_R8                                 0x8229}
+  {GL_RG8                                0x822B}
+  {GL_RGBA8                              0x8058}
+  {GL_R16                                0x822A}
+  {GL_RGBA16                             0x805B}
+  {GL_R32F                               0x822E}
+  {GL_RG32F                              0x8230}
+  {GL_RGBA32F                            0x8814}
+  {GL_UNSIGNED_INT_24_8                  0x84fa}
+  {GL_NEAREST                            0x2600}
+  {GL_LINEAR                             0x2601}
+  {GL_TEXTURE_MAG_FILTER                 0x2800}
+  {GL_TEXTURE_MIN_FILTER                 0x2801}
+  {GL_CW                                 0x0900}
+  {GL_TEXTURE0                           0x84C0}
+  {GL_FRAMEBUFFER                        0x8d40}
+  {GL_COLOR_ATTACHMENT0                  0x8ce0}
+  {GL_DEPTH_STENCIL_ATTACHMENT           0x821a}
+  {GL_DEPTH_STENCIL                      0x84f9}
+  {GL_DEPTH24_STENCIL8                   0x88f0}
+  {GL_DEPTH_BUFFER_BIT                   0x0100}
+  {GL_LESS                               0x0201}
+  {GL_GREATER                            0x0204}
+  {GL_TEXTURE_WRAP_S                     0x2802}
+  {GL_TEXTURE_WRAP_T                     0x2803}
+  {GL_CLAMP_TO_EDGE                      0x812F}
+}
+
+//- dmylo: base types
+@gen
+{
+  `// Adapted from Dear ImGui generated OpenGL bindings.
+  `// Adapted from KHR/khrplatform.h to avoid including entire file.`
+  `#ifndef __khrplatform_h_`
+  `typedef          float         khronos_float_t;`
+  `typedef signed   char          khronos_int8_t;`
+  `typedef unsigned char          khronos_uint8_t;`
+  `typedef signed   short int     khronos_int16_t;`
+  `typedef unsigned short int     khronos_uint16_t;`
+  `#ifdef _WIN64`
+  `typedef signed   long long int khronos_intptr_t;`
+  `typedef signed   long long int khronos_ssize_t;`
+  `#else`
+  `typedef signed   long  int     khronos_intptr_t;`
+  `typedef signed   long  int     khronos_ssize_t;`
+  `#endif`
+  ``
+  `#if defined(_MSC_VER) && !defined(__clang__)`
+  `typedef signed   __int64       khronos_int64_t;`
+  `typedef unsigned __int64       khronos_uint64_t;`
+  `#elif (defined(__clang__) || defined(__GNUC__)) && (__cplusplus < 201100)`
+  `#include <stdint.h>`
+  `typedef          int64_t       khronos_int64_t;`
+  `typedef          uint64_t      khronos_uint64_t;`
+  `#else`
+  `typedef signed   long long     khronos_int64_t;`
+  `typedef unsigned long long     khronos_uint64_t;`
+  `#endif`
+  `#endif  // __khrplatform_h_`
+  ``
+  `typedef void GLvoid;`
+  `typedef unsigned int GLenum;`
+  `typedef khronos_float_t GLfloat;`
+  `typedef int GLint;`
+  `typedef int GLsizei;`
+  `typedef unsigned int GLbitfield;`
+  `typedef double GLdouble;`
+  `typedef unsigned int GLuint;`
+  `typedef unsigned char GLboolean;`
+  `typedef khronos_uint8_t GLubyte;`
+  `typedef khronos_float_t GLclampf;`
+  `typedef double GLclampd;`
+  `typedef khronos_ssize_t GLsizeiptr;`
+  `typedef khronos_intptr_t GLintptr;`
+  `typedef char GLchar;`
+  `typedef khronos_int16_t GLshort;`
+  `typedef khronos_int8_t GLbyte;`
+  `typedef khronos_uint16_t GLushort;`
+  `typedef khronos_uint16_t GLhalf;`
+  `typedef struct __GLsync *GLsync;`
+  `typedef khronos_uint64_t GLuint64;`
+  `typedef khronos_int64_t GLint64;`
+  `typedef khronos_uint64_t GLuint64EXT;`
+  `typedef khronos_int64_t GLint64EXT;`
+}
+
+@gen{ `` }
+
+//- dmylo: Functions typedefs
+@gen
+{
+  @expand(GLFunctionsTable a) `typedef $(a.ret) (*PFNGL_$(a.name)) ($(a.params));`
+}
+
+@gen{ `` }
+
+//- dmylo: Function names
+@gen
+{
+  `const char* rgl_function_names[] = `
+  `{`
+}
+
+@gen
+{
+  @expand(GLFunctionsTable a) `  "gl$(a.name)",`,
+}
+
+@gen
+{
+  `};`
+}
+
+@gen{ `` }
+
+//- dmylo: Functions struct
+@gen
+{
+  `typedef struct R_GLProcFunctions R_GLProcFunctions;`
+  `struct R_GLProcFunctions`
+  `{`
+  `  union`
+  `  {`
+  `    void* _pointers[ArrayCount(rgl_function_names)];`
+  `    struct`
+  `    {`
+}
+
+@gen
+{
+  @expand(GLFunctionsTable a) `      PFNGL_$(a.name) $(a.name);`,
+}
+
+@gen
+{
+  `    };`
+  `  };`
+  `};`
+}
+
+@gen{ `` }
+
+@gen
+{
+  @expand(OGL_DefinesTable a) `#define $(a.name) $(a.value)`
+}
+
+@gen{ `` }
+@gen{ `` }
+
+////////////////////////////////
+//~ dmylo: UI Rectangle Shaders
+@embed_string r_ogl_g_rect_common_src:
+"""
+#version 330 core
+#define float2   vec2
+#define float3   vec3
+#define float4   vec4
+#define float3x3 mat3
+#define float4x4 mat4
+
+layout (std140) uniform Globals
+{
+  float2 viewport_size_px;
+  float opacity;
+  float _padding;
+
+  float4x4 texture_sample_channel_map;
+
+  float2 texture_t2d_size_px;
+  float  _padding1;
+  float  _padding2;
+
+  mat4x4 xform;
+
+  float2 xform_scale;
+  float  _padding3;
+  float  _padding4;
+};
+"""
+
+@embed_string r_ogl_g_rect_vs_src:
+"""
+layout (location=0) in float4 a_dst_rect_px;
+layout (location=1) in float4 a_src_rect_px;
+layout (location=2) in float4 a_color00;
+layout (location=3) in float4 a_color01;
+layout (location=4) in float4 a_color10;
+layout (location=5) in float4 a_color11;
+layout (location=6) in float4 a_corner_radii_px;
+layout (location=7) in float4 a_style_params;
+
+out Vertex2Pixel
+{
+  flat float2 rect_half_size_px;
+  float2 texcoord_pct;
+  float2 sdf_sample_pos;
+  float4 tint;
+  float corner_radius_px;
+  flat float border_thickness_px;
+  flat float softness_px;
+  flat float omit_texture;
+} vertex2pixel;
+
+void main()
+{
+  //- rjf: unpack & xform rectangle src/dst vertices
+  float2 dst_p0_px  = a_dst_rect_px.xy;
+  float2 dst_p1_px  = a_dst_rect_px.zw;
+  float2 src_p0_px  = a_src_rect_px.xy;
+  float2 src_p1_px  = a_src_rect_px.zw;
+  float2 dst_size_px = abs(dst_p1_px - dst_p0_px);
+
+  //- rjf: unpack style params
+  float border_thickness_px = a_style_params.x;
+  float softness_px         = a_style_params.y;
+  float omit_texture        = a_style_params.z;
+
+  //- rjf: prep per-vertex arrays to sample from (p: position, t: texcoord, c: colorcoord, r: cornerradius)
+  float2 dst_p_verts_px[4];
+  dst_p_verts_px[0] = float2(dst_p0_px.x, dst_p1_px.y);
+  dst_p_verts_px[1] = float2(dst_p0_px.x, dst_p0_px.y);
+  dst_p_verts_px[2] = float2(dst_p1_px.x, dst_p1_px.y);
+  dst_p_verts_px[3] = float2(dst_p1_px.x, dst_p0_px.y);
+
+  float2 src_p_verts_px[4];
+  src_p_verts_px[0] = float2(src_p0_px.x, src_p1_px.y);
+  src_p_verts_px[1] = float2(src_p0_px.x, src_p0_px.y);
+  src_p_verts_px[2] = float2(src_p1_px.x, src_p1_px.y);
+  src_p_verts_px[3] = float2(src_p1_px.x, src_p0_px.y);
+
+  float dst_r_verts_px[4] = float[](
+    a_corner_radii_px.y,
+    a_corner_radii_px.x,
+    a_corner_radii_px.w,
+    a_corner_radii_px.z
+  );
+
+  float4 src_color[4];
+  src_color[0] = a_color01;
+  src_color[1] = a_color00;
+  src_color[2] = a_color11;
+  src_color[3] = a_color10;
+
+  int vertex_id = gl_VertexID;
+  float2 dst_verts_pct = float2((vertex_id >> 1) != 0 ? 1.f : 0.f,
+                                (vertex_id & 1) != 0 ? 0.f : 1.f);
+
+  // rjf: fill vertex -> pixel data
+  {
+    float2 xformed_pos = (transpose(xform) * float4(dst_p_verts_px[vertex_id], 1.f, 0.0f)).xy;
+    xformed_pos.y = viewport_size_px.y - xformed_pos.y;
+    gl_Position.xy                    = 2.f * xformed_pos/viewport_size_px - 1.f;
+    gl_Position.z                     = 0.f;
+    gl_Position.w                     = 1.f;
+    vertex2pixel.rect_half_size_px    = dst_size_px / 2.f * xform_scale;
+    vertex2pixel.texcoord_pct         = src_p_verts_px[vertex_id] / texture_t2d_size_px;
+    vertex2pixel.sdf_sample_pos       = (2.f * dst_verts_pct - 1.f) * vertex2pixel.rect_half_size_px;
+    vertex2pixel.tint                 = src_color[vertex_id];
+    vertex2pixel.corner_radius_px     = dst_r_verts_px[vertex_id];
+    vertex2pixel.border_thickness_px  = border_thickness_px;
+    vertex2pixel.softness_px          = softness_px;
+    vertex2pixel.omit_texture         = omit_texture;
+  }
+}
+"""
+
+@embed_string r_ogl_g_rect_fs_src:
+"""
+in Vertex2Pixel
+{
+  flat float2 rect_half_size_px;
+  float2 texcoord_pct;
+  float2 sdf_sample_pos;
+  float4 tint;
+  float corner_radius_px;
+  flat float border_thickness_px;
+  flat float softness_px;
+  flat float omit_texture;
+} vertex2pixel;
+
+out float4 o_final_color;
+
+uniform sampler2D main_t2d;
+
+float rect_sdf(float2 sample_pos, float2 rect_half_size, float r)
+{
+  return length(max(abs(sample_pos) - rect_half_size + r, 0.0)) - r;
+}
+
+void main()
+{
+  // rjf: blend corner colors to produce final tint
+  float4 tint = vertex2pixel.tint;
+
+  // rjf: sample texture
+  float4 albedo_sample = float4(1, 1, 1, 1);
+  if(vertex2pixel.omit_texture < 1)
+  {
+    albedo_sample = texture(main_t2d, vertex2pixel.texcoord_pct) * transpose(texture_sample_channel_map);
+  }
+
+  // rjf: determine SDF sample position
+  float2 sdf_sample_pos = vertex2pixel.sdf_sample_pos;
+
+  // rjf: sample for borders
+  float border_sdf_t = 1;
+  if(vertex2pixel.border_thickness_px > 0)
+  {
+    float border_sdf_s = rect_sdf(sdf_sample_pos,
+                                  vertex2pixel.rect_half_size_px - float2(vertex2pixel.softness_px*2.f, vertex2pixel.softness_px*2.f) - vertex2pixel.border_thickness_px,
+                                  max(vertex2pixel.corner_radius_px-vertex2pixel.border_thickness_px, 0));
+    border_sdf_t = smoothstep(0, 2*vertex2pixel.softness_px, border_sdf_s);
+  }
+  if(border_sdf_t < 0.001f)
+  {
+    discard;
+  }
+
+  // rjf: sample for corners
+  float corner_sdf_t = 1;
+  if(vertex2pixel.corner_radius_px > 0 || vertex2pixel.softness_px > 0.75f)
+  {
+    float corner_sdf_s = rect_sdf(sdf_sample_pos,
+                                  vertex2pixel.rect_half_size_px - float2(vertex2pixel.softness_px*2.f, vertex2pixel.softness_px*2.f),
+                                  vertex2pixel.corner_radius_px);
+    corner_sdf_t = 1-smoothstep(0, 2*vertex2pixel.softness_px, corner_sdf_s);
+  }
+
+  // rjf: form+return final color
+  o_final_color = albedo_sample;
+  o_final_color *= tint;
+  o_final_color.a *= opacity;
+  o_final_color.a *= corner_sdf_t;
+  o_final_color.a *= border_sdf_t;
+}
+"""
+
+////////////////////////////////
+//~ dmylo: UI Finalize Shaders
+@embed_string r_ogl_g_finalize_common_src:
+"""
+#version 330 core
+#define float2   vec2
+#define float3   vec3
+#define float4   vec4
+#define float3x3 mat3
+#define float4x4 mat4
+"""
+
+@embed_string r_ogl_g_finalize_vs_src:
+"""
+out Vertex2Pixel
+{
+  float2 uv;
+} v2p;
+
+void main()
+{
+  int vertex_id = gl_VertexID;
+  float2 uv = vec2(vertex_id & 1, vertex_id >> 1);
+
+  v2p.uv = uv;
+  gl_Position = vec4(uv * 2.0 - 1.0, 0.0, 1.0);
+}
+"""
+
+@embed_string r_ogl_g_finalize_fs_src:
+"""
+in Vertex2Pixel
+{
+  float2 uv;
+} v2p;
+
+uniform sampler2D stage_t2d;
+
+out float4 o_final_color;
+
+void main()
+{
+  o_final_color = float4(texture(stage_t2d, v2p.uv).rgb, 1.0);
+}
+"""
+
+////////////////////////////////
+//~ dmylo: Blur Shaders
+@embed_string r_ogl_g_blur_common_src:
+"""
+#version 330 core
+#define float2   vec2
+#define float3   vec3
+#define float4   vec4
+#define float3x3 mat3
+#define float4x4 mat4
+
+layout (std140) uniform Globals
+{
+  float4 rect;
+  float4 corner_radii_px;
+
+  float2 viewport_size;
+  uint blur_count;
+  uint _padding;
+
+  float4 kernel[32];
+};
+"""
+
+@embed_string r_ogl_g_blur_vs_src:
+"""
+out Vertex2Pixel
+{
+  float2 texcoord;
+  float2 sdf_sample_pos;
+  flat float2 rect_half_size;
+  float corner_radius;
+} v2p;
+
+void main()
+{
+  float2 vertex_positions_scrn[4];
+  vertex_positions_scrn[0] = rect.xw;
+  vertex_positions_scrn[1] = rect.xy;
+  vertex_positions_scrn[2] = rect.zw;
+  vertex_positions_scrn[3] = rect.zy;
+
+  float corner_radii_px[] = float[]
+  (
+    corner_radii_px.y,
+    corner_radii_px.x,
+    corner_radii_px.w,
+    corner_radii_px.z
+  );
+
+  int vertex_id = gl_VertexID;
+  float2 cornercoords_pct = float2(
+                                    (vertex_id >> 1) != 0 ? 1.f : 0.f,
+                                    (vertex_id & 1)  != 0 ? 0.f : 1.f);
+
+  float2 vertex_position_pct = vertex_positions_scrn[vertex_id] / viewport_size;
+  float2 vertex_position_scr = 2.f * vertex_position_pct - 1.f;
+
+  float2 rect_half_size = float2((rect.z-rect.x)/2, (rect.w-rect.y)/2);
+
+  {
+    gl_Position = float4(vertex_position_scr.x, -vertex_position_scr.y, 0.f, 1.f);
+    v2p.texcoord = vertex_position_pct;
+    v2p.texcoord.y = 1.0 - v2p.texcoord.y;
+    v2p.sdf_sample_pos = (2.f * cornercoords_pct - 1.f) * rect_half_size;
+    v2p.rect_half_size = rect_half_size - 2.f;
+    v2p.corner_radius = corner_radii_px[vertex_id];
+  }
+}
+"""
+
+@embed_string r_ogl_g_blur_fs_src:
+"""
+in Vertex2Pixel
+{
+  float2 texcoord;
+  float2 sdf_sample_pos;
+  flat float2 rect_half_size;
+  float corner_radius;
+} v2p;
+
+
+uniform vec2 u_direction;
+uniform sampler2D stage_t2d;
+
+out float4 o_final_color;
+
+float rect_sdf(float2 sample_pos, float2 rect_half_size, float r)
+{
+  return length(max(abs(sample_pos) - rect_half_size + r, 0.0)) - r;
+}
+
+void main()
+{
+  // rjf: blend weighted texture samples into color
+  float3 color = kernel[0].x * texture(stage_t2d, v2p.texcoord).rgb;
+
+  for(uint i = 1u; i < blur_count; i += 1u)
+  {
+    float weight = kernel[i].x;
+    float offset = kernel[i].y;
+    color += weight * texture(stage_t2d, v2p.texcoord - offset * u_direction).rgb;
+    color += weight * texture(stage_t2d, v2p.texcoord + offset * u_direction).rgb;
+  }
+
+  // rjf: sample for corners
+  float corner_sdf_s = rect_sdf(v2p.sdf_sample_pos, v2p.rect_half_size, v2p.corner_radius);
+  float corner_sdf_t = 1-smoothstep(0, 2, corner_sdf_s);
+
+  // rjf: weight output color by sdf
+  // this is doing alpha testing, leave blurring only where mostly opaque pixels are
+  if (corner_sdf_t < 0.9f)
+  {
+    discard;
+  }
+
+  o_final_color = float4(color, 1.f);
+}
+"""
+
+////////////////////////////////
+//~ dmylo: Mesh Shaders
+
+@embed_string r_ogl_g_mesh_common_src:
+"""
+#version 330 core
+#define float2   vec2
+#define float3   vec3
+#define float4   vec4
+#define float3x3 mat3
+#define float4x4 mat4
+"""
+
+@embed_string r_ogl_g_mesh_vs_src:
+"""
+uniform mat4 xform;
+
+layout(location=0) in float3 a_position;
+layout(location=1) in float3 a_normal;
+layout(location=2) in float2 a_texcoord;
+layout(location=3) in float3 a_color;
+
+out Vertex2Pixel
+{
+  float2 texcoord;
+  float4 color;
+} v2p;
+
+void main()
+{
+  gl_Position = xform * float4(a_position, 1.f);
+  v2p.texcoord = a_texcoord;
+  v2p.color    = float4(a_color, 1.f);
+}
+"""
+
+@embed_string r_ogl_g_mesh_fs_src:
+"""
+in Vertex2Pixel
+{
+  float2 texcoord;
+  float4 color;
+} v2p;
+
+out float4 o_final_color;
+
+void main()
+{
+  o_final_color = v2p.color;
+}
+""";
+
+////////////////////////////////
+//~ dmylo: Geo3D Composition Shaders
+@embed_string r_ogl_g_geo3dcomposite_common_src:
+"""
+#version 330 core
+#define float2   vec2
+#define float3   vec3
+#define float4   vec4
+#define float3x3 mat3
+#define float4x4 mat4
+"""
+
+@embed_string r_ogl_g_geo3dcomposite_vs_src:
+"""
+out Vertex2Pixel
+{
+  float2 uv;
+} v2p;
+
+void main()
+{
+  int vertex_id = gl_VertexID;
+  float2 uv = vec2(vertex_id & 1, vertex_id >> 1);
+
+  v2p.uv = uv;
+  gl_Position = vec4(uv * 2.0 - 1.0, 0.0, 1.0);
+}
+"""
+
+@embed_string r_ogl_g_geo3dcomposite_fs_src:
+"""
+in Vertex2Pixel
+{
+  float2 uv;
+} v2p;
+
+uniform sampler2D stage_t2d;
+
+out float4 o_final_color;
+
+void main()
+{
+  o_final_color = float4(texture(stage_t2d, v2p.uv).rgb, 1.0);
+}
+"""

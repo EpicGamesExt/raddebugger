@@ -13151,13 +13151,6 @@ df_gfx_request_frame(void)
 ////////////////////////////////
 //~ rjf: Main Layer Top-Level Calls
 
-#if !defined(STBI_INCLUDE_STB_IMAGE_H)
-# define STB_IMAGE_IMPLEMENTATION
-# define STBI_ONLY_PNG
-# define STBI_ONLY_BMP
-# include "third_party/stb/stb_image.h"
-#endif
-
 internal void
 df_gfx_init(OS_WindowRepaintFunctionType *window_repaint_entry_point, DF_StateDeltaHistory *hist)
 {

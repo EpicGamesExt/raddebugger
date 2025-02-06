@@ -269,9 +269,51 @@ x11_window_open(GFX_LinuxContext* out, OS_Handle* out_handle,
                     EnterWindowMask | LeaveWindowMask);
   XSelectInput(x11_server, new_window, event_mask);
 
+  // Set window icon
+  if (gfx_lnx_icon != NULL)
+  {
+    Atom bit_width = 32;          // bits per item
+    U32 user_type = XA_CARDINAL;  // Abitrary User-Specified Layout ID
+    Temp scratch = scratch_begin(0, 0);
+    U32 pixel_count = (gfx_lnx_icon_stride * gfx_lnx_icon_size.y);
+    U32 item_count = 2+ pixel_count;
+
+    /* NOTE(mallchad): 64-bit Cardinal becomes 64-bit long with upper 32-bits padded
+       ie Cardinal is based on sizeof long
+       Source format is 32-bit RGBA no padding
+       Destination format is 32-bit ARGB */
+    U64 buffer_size = (2* sizeof(long)) + (item_count * sizeof(long));
+    U8* buffer = push_array(gfx_lnx_arena, U8, buffer_size);
+    ((long*)buffer)[0] = 256; // Width
+    ((long*)buffer)[1] = 256; // Height
+    U32* source_pixel = NULL;
+    long* dest_pixel = NULL;
+    for (int i=0; i < pixel_count; ++i)
+    {
+      source_pixel = ((U32*)gfx_lnx_icon) + (i);
+      dest_pixel = ((long*)buffer) + 2 + (i);
+      // Convert ABGR to ARGB | AAbbGGrr -> AArrGGbb
+      *dest_pixel = (((*source_pixel & 0xFF000000)) |  // A
+                     ((*source_pixel & 0x00FF0000) >> 16 ) | // B
+                     ((*source_pixel & 0x0000FF00) ) |  // G
+                     ((*source_pixel & 0x000000FF) << 16 )); // R
+    }
+
+    XChangeProperty(x11_server,
+                    new_window,
+                    x11_atoms[ X11_Atom_WM_ICON ],
+                    user_type,
+                    bit_width,
+                    PropModeReplace,
+                    (U8*)buffer,
+                    item_count);
+    scratch_end(scratch);
+  }
+
   // Make window viewable
   XMapWindow(x11_server, new_window);
 
+  // Fill out return data
   result->handle = (U64)new_window;
   result->name = push_str8_copy(gfx_lnx_arena, title);
   result->pos_target = out->default_window_pos;
@@ -285,7 +327,7 @@ x11_window_open(GFX_LinuxContext* out, OS_Handle* out_handle,
 OS_Key
 x11_oskey_from_keycode(U32 keycode)
 {
-  U32 table_size = sizeof(x11_keysym);
+  U32 table_size = ArrayCount(x11_keysym);
   U32 x_keycode = 0;
   for (int i=0; i<table_size; ++i)
   {

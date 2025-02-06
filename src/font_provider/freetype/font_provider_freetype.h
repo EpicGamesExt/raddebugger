@@ -9,7 +9,23 @@
 /* #include <freetype/freetype.h> */
 #include <freetype/tttables.h>
 #include <ft2build.h>
+
+// Setup error strings for debugging
+#undef FTERRORS_H_
+#define FT_ERRORDEF( e, v, s )  { e, s },
+#define FT_ERROR_START_LIST     {
+#define FT_ERROR_END_LIST       { 0, NULL } };
+
+const struct
+{
+  int          err_code;
+  const char*  err_msg;
+} freetype_errors[] =
+
+#include FT_ERRORS_H
+
 #include FT_FREETYPE_H
+
 // Restore internal macro
 #define internal static
 
@@ -44,6 +60,7 @@ typedef FT_Face FreeType_FontFace;
 
 FreeType_FontFace freetype_face_from_handle(FP_Handle face);
 FP_Handle freetype_handle_from_face(FreeType_FontFace face);
+String8 freetype_error_string(U32 error);
 
 B32 freetype_write_bmp_file(String8 name, U8* data, U32 width, U32 height);
 B32 freetype_write_bmp_monochrome_file(String8 name, U8* data, U32 width, U32 height);

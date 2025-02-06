@@ -6,6 +6,10 @@ global GFX_LinuxWindowList gfx_lnx_windows = {0};
 global GFX_LinuxMonitorArray gfx_lnx_monitors = {0};
 global GFX_LinuxMonitor* gfx_lnx_primary_monitor = {0};
 global GFX_LinuxMonitor gfx_lnx_monitor_stub = {0};
+global void* gfx_lnx_icon = NULL;
+global Vec2S32 gfx_lnx_icon_size = {0};
+global U32 gfx_lnx_icon_capacity = 0;
+global U32 gfx_lnx_icon_stride = 0;
 
 /// Determines if wayland pathway should be used by default. We have seperate
 /// pathway so recompilation isn't necesscary
@@ -16,6 +20,8 @@ global U32 gfx_lnx_event_limit = 5000;
 
 global S32 gfx_egl_version_major = 0;
 global S32 gfx_egl_version_minor = 0;
+global const S32 gfx_opengl_version_major = 4;
+global const S32 gfx_opengl_version_minor = 0;
 global String8 gfx_default_window_name = {0};
 global GFX_LinuxContext gfx_context = {0};
 
@@ -33,8 +39,8 @@ global S32 gfx_egl_config[] = {
 EGLConfig gfx_egl_config_available[10];
 global S32 gfx_egl_config_available_size = 0;
 global S32 gfx_egl_context_config[] = {
-  EGL_CONTEXT_CLIENT_VERSION,
-  2,
+  EGL_CONTEXT_MAJOR_VERSION, gfx_opengl_version_major,
+  EGL_CONTEXT_MINOR_VERSION, gfx_opengl_version_minor,
   EGL_NONE
 };
 
@@ -72,6 +78,7 @@ gfx_monitor_from_handle(OS_Handle monitor)
 {
   return gfx_monitor_from_id(*monitor.u64);
 }
+
 OS_Handle gfx_handle_from_monitor(GFX_LinuxMonitor* monitor)
 {
   OS_Handle result = {0};
@@ -93,6 +100,85 @@ gfx_handle_from_window(GFX_LinuxWindow* window)
   return result;
 }
 
+B32
+gfx_load_image_from_ico(String8 ico, void** out_data, Vec2S32* out_size)
+{
+  // Copied from df_gfx
+  // unpack icon image data
+  Temp scratch = scratch_begin(0, 0);
+  String8 data = ico;
+  U8 *ptr = data.str;
+  U8 *opl = ptr+data.size;
+
+  // read header
+  ICO_Header hdr = {0};
+  if(ptr+sizeof(hdr) < opl)
+  {
+    MemoryCopy(&hdr, ptr, sizeof(hdr));
+    ptr += sizeof(hdr);
+  }
+
+  // read image entries
+  U64 entries_count = hdr.num_images;
+  ICO_Entry *entries = push_array(scratch.arena, ICO_Entry, hdr.num_images);
+  {
+    U64 bytes_to_read = sizeof(ICO_Entry)*entries_count;
+    bytes_to_read = Min(bytes_to_read, opl-ptr);
+    MemoryCopy(entries, ptr, bytes_to_read);
+    ptr += bytes_to_read;
+  }
+
+  // find largest image
+  ICO_Entry *best_entry = 0;
+  U64 best_entry_area = 0;
+  for(U64 idx = 0; idx < entries_count; idx += 1)
+  {
+    ICO_Entry *entry = &entries[idx];
+    U64 width = entry->image_width_px;
+    if(width == 0) { width = 256; }
+    U64 height = entry->image_height_px;
+    if(height == 0) { height = 256; }
+    U64 entry_area = width*height;
+    if(entry_area > best_entry_area)
+    {
+      best_entry = entry;
+      best_entry_area = entry_area;
+    }
+  }
+
+  // deserialize raw image data from best entry's offset
+  U8 *image_data = 0;
+  B32 success = 1;
+  if(best_entry != 0)
+  {
+    U8 *file_data_ptr = data.str + best_entry->image_data_off;
+    U64 file_data_size = best_entry->image_data_size;
+    int width = 0;
+    int height = 0;
+    int components = 0;
+    image_data = stbi_load_from_memory(file_data_ptr, file_data_size, &width, &height, &components, 4);
+
+    int width_padding = (4 - (width%4)) % 4;
+    int stride = (width + width_padding);
+    stride = width;
+    U32 data_size = (stride * height * components);
+    out_size->x = width;
+    out_size->y = height;
+    Assert(components == 4);  // Made to assume 4 component RGBA format
+
+    gfx_lnx_icon_capacity = data_size;
+    gfx_lnx_icon_stride = stride;
+    *out_data = push_array(gfx_lnx_arena, U8, data_size * 4);
+    MemoryCopy(*out_data, image_data, data_size);
+    // Cleanup
+    stbi_image_free(image_data);
+  }
+  else { success = 0; }
+  // Cleanup
+  scratch_end(scratch);
+  return success;
+}
+
 internal void
 os_graphical_init(void)
 {
@@ -108,6 +194,9 @@ os_graphical_init(void)
 
   ArrayAllocate(&gfx_lnx_monitors, gfx_lnx_arena, gfx_lnx_max_monitors);
   ArrayAllocate(&gfx_lnx_monitors_active, gfx_lnx_arena, gfx_lnx_max_monitors);
+
+  // Deserialize application icon
+  gfx_load_image_from_ico(df_g_icon_file_bytes, &gfx_lnx_icon, &gfx_lnx_icon_size);
 
   B32 init_result = 0;
   if (gfx_lnx_wayland_disabled)
@@ -190,14 +279,7 @@ os_window_first_paint(OS_Handle window)
 internal void
 os_window_equip_repaint(OS_Handle window, OS_WindowRepaintFunctionType *repaint,  void *user_data)
 {
-  GFX_LinuxWindow* _window = gfx_window_from_handle(window);
-  Vec4F32 dark_magenta = vec_4f32( 0.2f, 0.f, 0.2f, 1.0f );
 
-  eglMakeCurrent(gfx_egl_display, _window->first_surface, _window->first_surface, gfx_egl_context);
-  /* glBindFramebuffer(GL_FRAMEBUFFER, 0); */
-  glClearColor(dark_magenta.x, dark_magenta.y, dark_magenta.z, dark_magenta.w);
-  glClear( GL_COLOR_BUFFER_BIT  | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT );
-  S32 swap_result = eglSwapBuffers(gfx_egl_display, _window->first_surface);
 }
 
 internal void
@@ -268,7 +350,7 @@ os_window_set_monitor(OS_Handle window, OS_Handle monitor)
 internal void
 os_window_clear_custom_border_data(OS_Handle handle)
 {
-  // NOTE(mallchad): No practical use yet4
+  // NOTE(mallchad): No practical use yet
   NoOp;
 }
 

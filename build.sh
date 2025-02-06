@@ -94,7 +94,7 @@ set auto_compile_flags=
 clang_release="clang -g -O2 -DBUILD_DEBUG=0 ${clang_common} ${clang_dynamic} ${clang_errors} ${auto_compile_flags}"
       cl_link="/link /MANIFEST:EMBED /INCREMENTAL:NO \
 /natvis:'${self_directory}/src/natvis/base.natvis' logo.res"
-   clang_link="-fuse-ld=lld"
+   clang_link="-fuse-ld=ld"
        cl_out="/out:"
     clang_out="-o"
 

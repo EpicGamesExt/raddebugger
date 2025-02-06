@@ -13,6 +13,9 @@
 // OpenGL
 #include <GL/gl.h>
 
+// Undefine annoy X11 macros
+#undef Status
+
 
 /* NOTE(mallchad): Xrandr is the X Resize, Rotate and Reflection extension, which allows
    for seamlessly spreading an X11 display across multiple physical monitors. It
@@ -224,6 +227,7 @@ enum x11_atoms
   X11_Atom_WM_STATE_ABOVE,
   X11_Atom_WM_STATE_BELOW,
   X11_Atom_WM_STATE_DEMANDS_ATTENTION,
+  X11_Atom_WM_ICON,
   X11_Atom_XdndTypeList,
   X11_Atom_XdndSelection,
   X11_Atom_XdndEnter,
@@ -256,6 +260,7 @@ global char* x11_test_atoms[] =
   "_NET_WM_STATE_ABOVE",
   "_NET_WM_STATE_BELOW",
   "_NET_WM_STATE_DEMANDS_ATTENTION",
+  "_NET_WM_ICON",
   "XdndTypeList",
   "XdndSelection",
   "XdndEnter",

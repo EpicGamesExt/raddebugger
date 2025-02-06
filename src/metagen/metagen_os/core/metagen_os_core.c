@@ -86,10 +86,15 @@ os_relaunch_self(void){
 internal String8
 os_data_from_file_path(Arena *arena, String8 path)
 {
-  OS_Handle file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_Shared, path);
+  Temp scratch = scratch_begin(0, 0);
+  // Create null terminated copy
+  String8 _path = push_str8_copy(scratch.arena, path);
+
+  OS_Handle file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_Shared, _path);
   FileProperties props = os_properties_from_file(file);
   String8 data = os_string_from_file_range(arena, file, r1u64(0, props.size));
   os_file_close(file);
+  scratch_end(scratch);
   return data;
 }
 

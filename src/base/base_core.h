@@ -842,7 +842,7 @@ struct GenericArray
   struct NAME                                   \
   {                                             \
     ELEMENT_TYPE* data;                         \
-    Arena* arena;                               \
+    struct Arena* arena;                        \
     U64 size;                                   \
     U64 head;                                   \
     U64 head_size;                              \
@@ -875,5 +875,12 @@ B32 _ArrayPushTail(GenericArray* target, void* item, U32 item_size);
 B32 _ArrayPopTail(GenericArray* target, void* out, U32 item_size);
 #define ArrayPopTail(target, out) \
   _ArrayPopTail((GenericArray*)(target), (out), sizeof((target)->data[0]))
+
+// Create commonly used generic array types
+DeclareArray(U8Array, U8);
+DeclareArray(U32Array, U32);
+DeclareArray(U64Array, U64);
+DeclareArray(F32Array, F32);
+DeclareArray(F64Array, F64);
 
 #endif // BASE_CORE_H

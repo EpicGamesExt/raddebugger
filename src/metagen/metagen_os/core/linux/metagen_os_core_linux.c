@@ -1714,9 +1714,11 @@ internal B32
 os_make_directory(String8 path)
 {
   B32 result = 0;
-  if (mkdir((char*)path.str, 0777) != -1){
-    result = 1;
-  }
+  mkdir((char*)path.str, 0770);
+  DIR* dirfd = opendir((char*)path.str);
+  result = (ENOENT != errno);
+  closedir(dirfd);
+
   return(result);
 }
 
