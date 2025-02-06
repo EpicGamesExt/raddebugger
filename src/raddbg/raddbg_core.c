@@ -419,6 +419,36 @@ rd_cfg_newf(RD_Cfg *parent, char *fmt, ...)
 }
 
 internal RD_Cfg *
+rd_cfg_new_replace(RD_Cfg *parent, String8 string)
+{
+  for(RD_Cfg *child = parent->first->next, *next = &rd_nil_cfg; child != &rd_nil_cfg; child = next)
+  {
+    next = child->next;
+    rd_cfg_release(child);
+  }
+  if(parent->first == &rd_nil_cfg)
+  {
+    rd_cfg_new(parent, str8_zero());
+  }
+  RD_Cfg *child = parent->first;
+  rd_cfg_equip_string(child, string);
+  return child;
+}
+
+internal RD_Cfg *
+rd_cfg_new_replacef(RD_Cfg *parent, char *fmt, ...)
+{
+  Temp scratch = scratch_begin(0, 0);
+  va_list args;
+  va_start(args, fmt);
+  String8 string = push_str8fv(scratch.arena, fmt, args);
+  RD_Cfg *result = rd_cfg_new_replace(parent, string);
+  va_end(args);
+  scratch_end(scratch);
+  return result;
+}
+
+internal RD_Cfg *
 rd_cfg_deep_copy(RD_Cfg *src_root)
 {
   RD_CfgRec rec = {0};
@@ -471,6 +501,10 @@ rd_cfg_insert_child(RD_Cfg *parent, RD_Cfg *prev_child, RD_Cfg *new_child)
 {
   if(parent != &rd_nil_cfg)
   {
+    if(new_child->parent != &rd_nil_cfg)
+    {
+      rd_cfg_unhook(new_child->parent, new_child);
+    }
     DLLInsert_NPZ(&rd_nil_cfg, parent->first, parent->last, prev_child, new_child, next, prev);
     new_child->parent = parent;
   }
@@ -2119,8 +2153,7 @@ rd_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range)
               {
                 child = rd_cfg_new(cfg, child_name);
               }
-              rd_cfg_release_all_children(child);
-              rd_cfg_new(child, new_string);
+              rd_cfg_new_replace(child, new_string);
             }
             result = 1;
             break;
@@ -2140,8 +2173,7 @@ rd_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range)
             {
               child = rd_cfg_new(cfg, child_name);
             }
-            rd_cfg_release_all_children(child);
-            rd_cfg_newf(child, "%I64u", value);
+            rd_cfg_new_replacef(child, "%I64u", value);
           }
           result = 1;
           break;
@@ -2160,8 +2192,7 @@ rd_eval_space_write(void *u, E_Space space, void *in, Rng1U64 range)
             {
               child = rd_cfg_new(cfg, child_name);
             }
-            rd_cfg_release_all_children(child);
-            rd_cfg_newf(child, "%I64u", value);
+            rd_cfg_new_replacef(child, "%I64u", value);
           }
           result = 1;
           break;
@@ -2785,8 +2816,7 @@ rd_store_view_expr_string(String8 string)
 {
   RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
   RD_Cfg *expr = rd_cfg_child_from_string_or_alloc(view, str8_lit("expression"));
-  rd_cfg_release_all_children(expr);
-  rd_cfg_new(expr, string);
+  rd_cfg_new_replace(expr, string);
 }
 
 internal void
@@ -2794,8 +2824,7 @@ rd_store_view_filter(String8 string)
 {
   RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
   RD_Cfg *filter = rd_cfg_child_from_string_or_alloc(view, str8_lit("filter"));
-  rd_cfg_release_all_children(filter);
-  rd_cfg_new(filter, string);
+  rd_cfg_new_replace(filter, string);
 }
 
 internal void
@@ -2821,8 +2850,7 @@ rd_store_view_param(String8 key, String8 value)
 {
   RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
   RD_Cfg *child = rd_cfg_child_from_string_or_alloc(view, key);
-  rd_cfg_release_all_children(child);
-  rd_cfg_new(child, value);
+  rd_cfg_new_replace(child, value);
 }
 
 internal void
@@ -5691,8 +5719,7 @@ rd_window_frame(void)
         RD_RegsScope(.panel = 0, .view = view->id)
         {
           RD_ViewRuleInfo *view_rule_info = rd_view_rule_info_from_string(view->string);
-          rd_cfg_release_all_children(expr);
-          rd_cfg_new(expr, ws->hover_eval_string);
+          rd_cfg_new_replace(expr, ws->hover_eval_string);
           EV_BlockTree predicted_block_tree = ev_block_tree_from_string(scratch.arena, rd_view_eval_view(), str8_zero(), ws->hover_eval_string);
           F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
           U64 max_row_count = (U64)floor_f32(ui_top_font_size()*10.f / row_height_px);
@@ -7267,6 +7294,7 @@ rd_window_frame(void)
           }
           
           // rjf: apply tab change
+          if(next_selected_tab != panel->selected_tab)
           {
             rd_cmd(RD_CmdKind_FocusTab, .view = next_selected_tab->id);
           }
@@ -12633,8 +12661,7 @@ rd_frame(void)
               for(RD_CfgNode *n = bps.first; n != 0; n = n->next)
               {
                 RD_Cfg *hit_count = rd_cfg_child_from_string_or_alloc(n->v, str8_lit("hit_count"));
-                rd_cfg_release_all_children(hit_count);
-                rd_cfg_new(hit_count, str8_lit("0"));
+                rd_cfg_new_replace(hit_count, str8_lit("0"));
               }
             }
           } // fallthrough
@@ -13001,8 +13028,7 @@ rd_frame(void)
             F32 new_font_size = clamp_1f32(r1f32(6, 72), current_font_size+1);
             RD_Cfg *window = rd_cfg_from_id(rd_regs()->window);
             RD_Cfg *main_font_size = rd_cfg_child_from_string_or_alloc(window, str8_lit("main_font_size"));
-            rd_cfg_release_all_children(main_font_size);
-            rd_cfg_newf(main_font_size, "%f", new_font_size);
+            rd_cfg_new_replacef(main_font_size, "%f", new_font_size);
           }break;
           case RD_CmdKind_DecUIFontScale:
           {
@@ -13011,8 +13037,7 @@ rd_frame(void)
             F32 new_font_size = clamp_1f32(r1f32(6, 72), current_font_size-1);
             RD_Cfg *window = rd_cfg_from_id(rd_regs()->window);
             RD_Cfg *main_font_size = rd_cfg_child_from_string_or_alloc(window, str8_lit("main_font_size"));
-            rd_cfg_release_all_children(main_font_size);
-            rd_cfg_newf(main_font_size, "%f", new_font_size);
+            rd_cfg_new_replacef(main_font_size, "%f", new_font_size);
           }break;
           case RD_CmdKind_IncCodeFontScale:
           {
@@ -13021,8 +13046,7 @@ rd_frame(void)
             F32 new_font_size = clamp_1f32(r1f32(6, 72), current_font_size+1);
             RD_Cfg *window = rd_cfg_from_id(rd_regs()->window);
             RD_Cfg *code_font_size = rd_cfg_child_from_string_or_alloc(window, str8_lit("code_font_size"));
-            rd_cfg_release_all_children(code_font_size);
-            rd_cfg_newf(code_font_size, "%f", new_font_size);
+            rd_cfg_new_replacef(code_font_size, "%f", new_font_size);
           }break;
           case RD_CmdKind_DecCodeFontScale:
           {
@@ -13031,8 +13055,7 @@ rd_frame(void)
             F32 new_font_size = clamp_1f32(r1f32(6, 72), current_font_size-1);
             RD_Cfg *window = rd_cfg_from_id(rd_regs()->window);
             RD_Cfg *code_font_size = rd_cfg_child_from_string_or_alloc(window, str8_lit("code_font_size"));
-            rd_cfg_release_all_children(code_font_size);
-            rd_cfg_newf(code_font_size, "%f", new_font_size);
+            rd_cfg_new_replacef(code_font_size, "%f", new_font_size);
           }break;
           
           //- rjf: panel creation
@@ -13204,20 +13227,30 @@ rd_frame(void)
           {
             RD_Cfg *panel = rd_cfg_from_id(rd_regs()->panel);
             RD_PanelTree panel_tree = rd_panel_tree_from_cfg(scratch.arena, panel);
+            RD_Cfg *selection_cfg = &rd_nil_cfg;
             for(RD_PanelNode *p = panel_tree.root;
                 p != &rd_nil_panel_node;
                 p = rd_panel_node_rec__depth_first_pre(panel_tree.root, p).next)
             {
               RD_Cfg *p_cfg = p->cfg;
               RD_Cfg *p_selection = rd_cfg_child_from_string(p_cfg, str8_lit("selected"));
-              if(p_selection != &rd_nil_cfg)
+              if(selection_cfg == &rd_nil_cfg)
+              {
+                selection_cfg = p_selection;
+              }
+              else
               {
                 rd_cfg_release(p_selection);
               }
             }
+            if(selection_cfg == &rd_nil_cfg)
+            {
+              selection_cfg = rd_cfg_alloc();
+              rd_cfg_equip_string(selection_cfg, str8_lit("selected"));
+            }
             if(panel != &rd_nil_cfg)
             {
-              rd_cfg_new(panel, str8_lit("selected"));
+              rd_cfg_insert_child(panel, &rd_nil_cfg, selection_cfg);
               RD_Cfg *window = rd_window_from_cfg(panel);
               RD_WindowState *ws = rd_window_state_from_cfg(window);
               ws->menu_bar_focused = 0;
@@ -13462,11 +13495,25 @@ rd_frame(void)
             RD_Cfg *panel = tab->parent;
             RD_PanelTree panel_tree = rd_panel_tree_from_cfg(scratch.arena, panel);
             RD_PanelNode *panel_node = rd_panel_node_from_tree_cfg(panel_tree.root, panel);
+            RD_Cfg *selection_cfg = &rd_nil_cfg;
             for(RD_CfgNode *n = panel_node->tabs.first; n != 0; n = n->next)
             {
-              rd_cfg_release(rd_cfg_child_from_string(n->v, str8_lit("selected")));
+              RD_Cfg *tab_selection_cfg = rd_cfg_child_from_string(n->v, str8_lit("selected"));
+              if(selection_cfg == &rd_nil_cfg)
+              {
+                selection_cfg = tab_selection_cfg;
+              }
+              else
+              {
+                rd_cfg_release(tab_selection_cfg);
+              }
             }
-            rd_cfg_new(tab, str8_lit("selected"));
+            if(selection_cfg == &rd_nil_cfg)
+            {
+              selection_cfg = rd_cfg_alloc();
+              rd_cfg_equip_string(selection_cfg, str8_lit("selected"));
+            }
+            rd_cfg_insert_child(tab, &rd_nil_cfg, selection_cfg);
           }break;
           case RD_CmdKind_NextTab:
           {
@@ -15947,8 +15994,7 @@ Z(getting_started)
                   hit_count += 1;
                 }
               }
-              rd_cfg_release_all_children(hit_count_root);
-              rd_cfg_newf(hit_count_root, "%I64u", hit_count);
+              rd_cfg_new_replacef(hit_count_root, "%I64u", hit_count);
             }
           }
           

@@ -967,6 +967,8 @@ internal void rd_cfg_release_all_children(RD_Cfg *cfg);
 internal RD_Cfg *rd_cfg_from_id(RD_CfgID id);
 internal RD_Cfg *rd_cfg_new(RD_Cfg *parent, String8 string);
 internal RD_Cfg *rd_cfg_newf(RD_Cfg *parent, char *fmt, ...);
+internal RD_Cfg *rd_cfg_new_replace(RD_Cfg *parent, String8 string);
+internal RD_Cfg *rd_cfg_new_replacef(RD_Cfg *parent, char *fmt, ...);
 internal RD_Cfg *rd_cfg_deep_copy(RD_Cfg *src_root);
 internal void rd_cfg_equip_string(RD_Cfg *cfg, String8 string);
 internal void rd_cfg_equip_stringf(RD_Cfg *cfg, char *fmt, ...);

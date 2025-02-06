@@ -1959,11 +1959,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, Rng2F32 rect)
                   if(cfg != &rd_nil_cfg)
                   {
                     RD_Cfg *expr = rd_cfg_child_from_string_or_alloc(cfg, str8_lit("expression"));
-                    rd_cfg_release_all_children(expr);
-                    if(new_string.size != 0)
-                    {
-                      rd_cfg_new(expr, new_string);
-                    }
+                    rd_cfg_new_replace(expr, new_string);
                   }
                 }break;
                 case RD_WatchCellKind_Tag:
