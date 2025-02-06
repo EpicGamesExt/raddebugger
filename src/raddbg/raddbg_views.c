@@ -2198,6 +2198,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, Rng2F32 rect)
                     RD_WatchPt new_pt = {parent_key, key, pt.cell_id};
                     next_cursor_pt = new_pt;
                     next_cursor_set = 1;
+                    state_dirty = 1;
                   }
                 }
               }break;
@@ -2208,6 +2209,7 @@ rd_watch_view_build(RD_WatchViewState *ewv, Rng2F32 rect)
                   rd_cfg_release(rd_cfg_child_from_string(row_info.group_cfg, str8_lit("view_rule")));
                 }
                 ev_key_set_view_rule(eval_view, row->key, str8_zero());
+                state_dirty = 1;
               }break;
               case RD_WatchCellKind_Eval:
               {

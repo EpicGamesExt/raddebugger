@@ -152,8 +152,8 @@ e_string2expr_map_insert(Arena *arena, E_String2ExprMap *map, String8 string, E_
     SLLQueuePush_N(map->slots[slot_idx].first, map->slots[slot_idx].last, node, hash_next);
     node->string = push_str8_copy(arena, string);
     existing_node = node;
+    existing_node->expr = expr;
   }
-  existing_node->expr = expr;
 }
 
 internal void

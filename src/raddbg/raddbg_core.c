@@ -8845,7 +8845,11 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
             case 2: {string = str8_from_16(arena, str16_cstring((U16 *)string_buffer));}break;
             case 4: {string = str8_from_32(arena, str32_cstring((U32 *)string_buffer));}break;
           }
-          String8 string_escaped = ev_escaped_from_raw_string(arena, string);
+          String8 string_escaped = string;
+          if(!no_addr || depth > 0)
+          {
+            string_escaped = ev_escaped_from_raw_string(arena, string);
+          }
           space_taken += fnt_dim_from_tag_size_string(font, font_size, 0, 0, string_escaped).x;
           space_taken += 2*fnt_dim_from_tag_size_string(font, font_size, 0, 0, str8_lit("\"")).x;
           if(!no_addr || depth > 0)
