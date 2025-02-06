@@ -2341,7 +2341,9 @@ rd_commit_eval_value_string(E_Eval dst_eval, String8 string, B32 string_needs_un
     if((E_TypeKind_FirstBasic <= type_kind && type_kind <= E_TypeKind_LastBasic) ||
        type_kind == E_TypeKind_Enum)
     {
-      E_Eval src_eval = e_eval_from_string(scratch.arena, string);
+      E_Expr *src_expr = e_parse_expr_from_text(scratch.arena, string);
+      E_Expr *src_expr__casted = e_expr_ref_cast(scratch.arena, type_key, src_expr);
+      E_Eval src_eval = e_eval_from_expr(scratch.arena, src_expr__casted);
       commit_data = push_str8_copy(scratch.arena, str8_struct(&src_eval.value));
       commit_data.size = Min(commit_data.size, e_type_byte_size_from_key(type_key));
     }
