@@ -214,7 +214,7 @@ struct E_ParseState
 
 global read_only E_String2NumMap e_string2num_map_nil = {0};
 global read_only E_String2ExprMap e_string2expr_map_nil = {0};
-global read_only E_Expr e_expr_nil = {&e_expr_nil, &e_expr_nil, &e_expr_nil};
+global read_only E_Expr e_expr_nil = {&e_expr_nil, &e_expr_nil, &e_expr_nil, &e_expr_nil, &e_expr_nil};
 thread_static E_ParseState *e_parse_state = 0;
 
 ////////////////////////////////

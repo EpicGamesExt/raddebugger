@@ -41,6 +41,19 @@ e_eval_from_string(Arena *arena, String8 string)
 }
 
 internal E_Eval
+e_eval_from_stringf(Arena *arena, char *fmt, ...)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  va_list args;
+  va_start(args, fmt);
+  String8 string = push_str8fv(scratch.arena, fmt, args);
+  E_Eval eval = e_eval_from_string(arena, string);
+  va_end(args);
+  scratch_end(scratch);
+  return eval;
+}
+
+internal E_Eval
 e_autoresolved_eval_from_eval(E_Eval eval)
 {
   if(e_parse_state &&

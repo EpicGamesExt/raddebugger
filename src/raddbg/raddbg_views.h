@@ -235,4 +235,19 @@ internal void rd_watch_view_column_release(RD_WatchViewState *wv, RD_WatchViewCo
 internal void rd_watch_view_init(RD_WatchViewState *ewv);
 internal void rd_watch_view_build(RD_WatchViewState *ewv, Rng2F32 rect);
 
+////////////////////////////////
+//~ rjf: View Hooks
+
+// TODO(rjf): @cfg eliminate once we are predeclaring these with metacode
+
+RD_VIEW_UI_FUNCTION_DEF(null);
+RD_VIEW_UI_FUNCTION_DEF(watch);
+RD_VIEW_UI_FUNCTION_DEF(text);
+RD_VIEW_UI_FUNCTION_DEF(disasm);
+RD_VIEW_UI_FUNCTION_DEF(memory);
+RD_VIEW_UI_FUNCTION_DEF(bitmap);
+RD_VIEW_UI_FUNCTION_DEF(checkbox);
+RD_VIEW_UI_FUNCTION_DEF(color_rgba);
+RD_VIEW_UI_FUNCTION_DEF(geo3d);
+
 #endif // RADDBG_VIEWS_H

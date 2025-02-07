@@ -350,24 +350,6 @@ RD_IconKind_Dot,
 RD_IconKind_COUNT,
 } RD_IconKind;
 
-typedef enum RD_ViewRuleKind
-{
-RD_ViewRuleKind_Null,
-RD_ViewRuleKind_Empty,
-RD_ViewRuleKind_GettingStarted,
-RD_ViewRuleKind_Settings,
-RD_ViewRuleKind_PendingFile,
-RD_ViewRuleKind_Watch,
-RD_ViewRuleKind_Text,
-RD_ViewRuleKind_Disasm,
-RD_ViewRuleKind_Memory,
-RD_ViewRuleKind_Bitmap,
-RD_ViewRuleKind_Checkbox,
-RD_ViewRuleKind_ColorRGBA,
-RD_ViewRuleKind_Geo3D,
-RD_ViewRuleKind_COUNT,
-} RD_ViewRuleKind;
-
 typedef enum RD_ThemeColor
 {
 RD_ThemeColor_Null,
@@ -545,19 +527,6 @@ RD_CmdKindFlags flags;
 RD_Query query;
 };
 
-typedef struct RD_ViewRuleInfo RD_ViewRuleInfo;
-struct RD_ViewRuleInfo
-{
-String8 string;
-String8 description;
-String8 display_name;
-String8 params_schema;
-RD_IconKind icon_kind;
-RD_ViewRuleInfoFlags flags;
-EV_ExpandRuleInfoHookFunctionType *expr_expand_info;
-RD_ViewRuleUIFunctionType *ui;
-};
-
 #define rd_regs_lit_init_top \
 .machine = rd_regs()->machine,\
 .module = rd_regs()->module,\
@@ -597,25 +566,6 @@ RD_ViewRuleUIFunctionType *ui;
 .params_tree = rd_regs()->params_tree,\
 .os_event = rd_regs()->os_event,\
 
-RD_VIEW_RULE_UI_FUNCTION_DEF(null);
-EV_EXPAND_RULE_INFO_FUNCTION_DEF(text);
-EV_EXPAND_RULE_INFO_FUNCTION_DEF(disasm);
-EV_EXPAND_RULE_INFO_FUNCTION_DEF(memory);
-EV_EXPAND_RULE_INFO_FUNCTION_DEF(bitmap);
-EV_EXPAND_RULE_INFO_FUNCTION_DEF(color_rgba);
-EV_EXPAND_RULE_INFO_FUNCTION_DEF(geo3d);
-RD_VIEW_RULE_UI_FUNCTION_DEF(empty);
-RD_VIEW_RULE_UI_FUNCTION_DEF(getting_started);
-RD_VIEW_RULE_UI_FUNCTION_DEF(settings);
-RD_VIEW_RULE_UI_FUNCTION_DEF(pending_file);
-RD_VIEW_RULE_UI_FUNCTION_DEF(watch);
-RD_VIEW_RULE_UI_FUNCTION_DEF(text);
-RD_VIEW_RULE_UI_FUNCTION_DEF(disasm);
-RD_VIEW_RULE_UI_FUNCTION_DEF(memory);
-RD_VIEW_RULE_UI_FUNCTION_DEF(bitmap);
-RD_VIEW_RULE_UI_FUNCTION_DEF(checkbox);
-RD_VIEW_RULE_UI_FUNCTION_DEF(color_rgba);
-RD_VIEW_RULE_UI_FUNCTION_DEF(geo3d);
 C_LINKAGE_BEGIN
 extern String8 rd_cfg_src_string_table[4];
 extern RD_CmdKind rd_cfg_src_load_cmd_kind_table[4];
@@ -627,7 +577,6 @@ extern RD_StringBindingPair rd_default_binding_table[111];
 extern String8 rd_binding_version_remap_old_name_table[8];
 extern String8 rd_binding_version_remap_new_name_table[8];
 extern String8 rd_icon_kind_text_table[69];
-extern RD_ViewRuleInfo rd_view_rule_kind_info_table[13];
 extern String8 rd_theme_preset_display_string_table[9];
 extern String8 rd_theme_preset_code_string_table[9];
 extern String8 rd_theme_color_version_remap_old_name_table[22];

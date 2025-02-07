@@ -75,7 +75,7 @@ struct EV_View
 };
 
 ////////////////////////////////
-//~ rjf: View Rule Info Types
+//~ rjf: Expansion Rule Types
 
 typedef struct EV_ExpandInfo EV_ExpandInfo;
 struct EV_ExpandInfo
@@ -119,9 +119,6 @@ struct EV_ExpandRuleTable
   EV_ExpandRuleSlot *slots;
   U64 slots_count;
 };
-
-////////////////////////////////
-//~ rjf: Expansion Rule Types
 
 typedef struct EV_ExpandRuleTagPair EV_ExpandRuleTagPair;
 struct EV_ExpandRuleTagPair

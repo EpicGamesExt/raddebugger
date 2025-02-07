@@ -55,15 +55,8 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
   //////////////////////////////
   //- rjf: process commands
   //
-  for(RD_Cmd *cmd = 0; rd_next_cmd(&cmd);)
+  for(RD_Cmd *cmd = 0; rd_next_view_cmd(&cmd);)
   {
-    // rjf: mismatched window/panel => skip
-    if(rd_regs()->view != cmd->regs->view)
-    {
-      continue;
-    }
-    
-    // rjf: process
     RD_CmdKind kind = rd_cmd_kind_from_string(cmd->name);
     switch(kind)
     {
@@ -3995,166 +3988,12 @@ rd_watch_view_build(RD_WatchViewState *ewv, Rng2F32 rect)
 ////////////////////////////////
 //~ rjf: null @view_hook_impl
 
-RD_VIEW_RULE_UI_FUNCTION_DEF(null) {}
-
-////////////////////////////////
-//~ rjf: empty @view_hook_impl
-
-RD_VIEW_RULE_UI_FUNCTION_DEF(empty)
-{
-  ui_set_next_flags(UI_BoxFlag_DefaultFocusNav);
-  UI_Focus(UI_FocusKind_On) UI_WidthFill UI_HeightFill UI_NamedColumn(str8_lit("empty_view")) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
-    UI_Padding(ui_pct(1, 0)) UI_Focus(UI_FocusKind_Null)
-  {
-    UI_PrefHeight(ui_em(3.f, 1.f))
-      UI_Row
-      UI_Padding(ui_pct(1, 0))
-      UI_TextAlignment(UI_TextAlign_Center)
-      UI_PrefWidth(ui_em(15.f, 1.f))
-      UI_CornerRadius(ui_top_font_size()/2.f)
-      RD_Palette(RD_PaletteCode_NegativePopButton)
-    {
-      if(ui_clicked(rd_icon_buttonf(RD_IconKind_X, 0, "Close Panel")))
-      {
-        rd_cmd(RD_CmdKind_ClosePanel);
-      }
-    }
-  }
-}
-
-////////////////////////////////
-//~ rjf: getting_started @view_hook_impl
-
-RD_VIEW_RULE_UI_FUNCTION_DEF(getting_started)
-{
-  ProfBeginFunction();
-  Temp scratch = scratch_begin(0, 0);
-  ui_set_next_flags(UI_BoxFlag_DefaultFocusNav);
-  UI_Focus(UI_FocusKind_On) UI_WidthFill UI_HeightFill UI_NamedColumn(str8_lit("empty_view"))
-    UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
-    UI_Padding(ui_pct(1, 0)) UI_Focus(UI_FocusKind_Null)
-  {
-    RD_CfgList targets = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("target"));
-    CTRL_EntityList processes = ctrl_entity_list_from_kind(d_state->ctrl_entity_store, CTRL_EntityKind_Process);
-    
-    //- rjf: icon & info
-    UI_Padding(ui_em(2.f, 1.f))
-    {
-      //- rjf: icon
-      {
-        F32 icon_dim = ui_top_font_size()*10.f;
-        UI_PrefHeight(ui_px(icon_dim, 1.f))
-          UI_Row
-          UI_Padding(ui_pct(1, 0))
-          UI_PrefWidth(ui_px(icon_dim, 1.f))
-        {
-          R_Handle texture = rd_state->icon_texture;
-          Vec2S32 texture_dim = r_size_from_tex2d(texture);
-          ui_image(texture, R_Tex2DSampleKind_Linear, r2f32p(0, 0, texture_dim.x, texture_dim.y), v4f32(1, 1, 1, 1), 0, str8_lit(""));
-        }
-      }
-      
-      //- rjf: info
-      UI_Padding(ui_em(2.f, 1.f))
-        UI_WidthFill UI_PrefHeight(ui_em(2.f, 1.f))
-        UI_Row
-        UI_Padding(ui_pct(1, 0))
-        UI_TextAlignment(UI_TextAlign_Center)
-        UI_PrefWidth(ui_text_dim(10, 1))
-      {
-        ui_label(str8_lit(BUILD_TITLE_STRING_LITERAL));
-      }
-    }
-    
-    //- rjf: targets state dependent helper
-    B32 helper_built = 0;
-    if(processes.count == 0)
-    {
-      helper_built = 1;
-      switch(targets.count)
-      {
-        //- rjf: user has no targets. build helper for adding them
-        case 0:
-        {
-          UI_PrefHeight(ui_em(3.75f, 1.f))
-            UI_Row
-            UI_Padding(ui_pct(1, 0))
-            UI_TextAlignment(UI_TextAlign_Center)
-            UI_PrefWidth(ui_em(22.f, 1.f))
-            UI_CornerRadius(ui_top_font_size()/2.f)
-            RD_Palette(RD_PaletteCode_NeutralPopButton)
-            if(ui_clicked(rd_icon_buttonf(RD_IconKind_Add, 0, "Add Target")))
-          {
-            rd_cmd(RD_CmdKind_RunCommand, .cmd_name = rd_cmd_kind_info_table[RD_CmdKind_AddTarget].string);
-          }
-        }break;
-        
-        //- rjf: user has 1 target. build helper for launching it
-        case 1:
-        {
-          RD_Cfg *target_cfg = rd_cfg_list_first(&targets);
-          D_Target target = rd_target_from_cfg(scratch.arena, target_cfg);
-          String8 target_full_path = target.exe;
-          String8 target_name = str8_skip_last_slash(target_full_path);
-          UI_PrefHeight(ui_em(3.75f, 1.f))
-            UI_Row
-            UI_Padding(ui_pct(1, 0))
-            UI_TextAlignment(UI_TextAlign_Center)
-            UI_PrefWidth(ui_em(22.f, 1.f))
-            UI_CornerRadius(ui_top_font_size()/2.f)
-            RD_Palette(RD_PaletteCode_PositivePopButton)
-          {
-            if(ui_clicked(rd_icon_buttonf(RD_IconKind_Play, 0, "Launch %S", target_name)))
-            {
-              rd_cmd(RD_CmdKind_LaunchAndRun, .cfg = target_cfg->id);
-            }
-            ui_spacer(ui_em(1.5f, 1));
-            if(ui_clicked(rd_icon_buttonf(RD_IconKind_Play, 0, "Step Into %S", target_name)))
-            {
-              rd_cmd(RD_CmdKind_LaunchAndInit, .cfg = target_cfg->id);
-            }
-          }
-        }break;
-        
-        //- rjf: user has N targets.
-        default:
-        {
-          helper_built = 0;
-        }break;
-      }
-    }
-    
-    //- rjf: or text
-    if(helper_built)
-    {
-      UI_PrefHeight(ui_em(2.25f, 1.f))
-        UI_Row
-        UI_Padding(ui_pct(1, 0))
-        UI_TextAlignment(UI_TextAlign_Center)
-        UI_WidthFill
-        ui_labelf("- or -");
-    }
-    
-    //- rjf: helper text for command lister activation
-    UI_PrefHeight(ui_em(2.25f, 1.f)) UI_Row
-      UI_PrefWidth(ui_text_dim(10, 1))
-      UI_TextAlignment(UI_TextAlign_Center)
-      UI_Padding(ui_pct(1, 0))
-      RD_Palette(RD_PaletteCode_Floating)
-    {
-      ui_labelf("use");
-      UI_TextAlignment(UI_TextAlign_Center) rd_cmd_binding_buttons(rd_cmd_kind_info_table[RD_CmdKind_OpenLister].string);
-      ui_labelf("to open the lister for commands and options");
-    }
-  }
-  scratch_end(scratch);
-  ProfEnd();
-}
+RD_VIEW_UI_FUNCTION_DEF(null) {}
 
 ////////////////////////////////
 //~ rjf: watch @view_hook_impl
 
-RD_VIEW_RULE_UI_FUNCTION_DEF(watch)
+RD_VIEW_UI_FUNCTION_DEF(watch)
 {
   ProfBeginFunction();
   RD_WatchViewState *wv = rd_view_state(RD_WatchViewState);
@@ -4171,136 +4010,6 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(watch)
 }
 
 ////////////////////////////////
-//~ rjf: pending_file @view_hook_impl
-
-typedef struct RD_PendingFileViewState RD_PendingFileViewState;
-struct RD_PendingFileViewState
-{
-  Arena *deferred_cmd_arena;
-  RD_CmdList deferred_cmds;
-};
-
-RD_VIEW_RULE_UI_FUNCTION_DEF(pending_file)
-{
-  Temp scratch = scratch_begin(0, 0);
-  RD_PendingFileViewState *pves = rd_view_state(RD_PendingFileViewState);
-  if(pves->deferred_cmd_arena == 0)
-  {
-    pves->deferred_cmd_arena = rd_push_view_arena();
-  }
-  rd_store_view_loading_info(1, 0, 0);
-  
-  //////////////////////////////
-  //- rjf: process commands
-  //
-  for(RD_Cmd *cmd = 0; rd_next_cmd(&cmd);)
-  {
-    // rjf: mismatched window/panel => skip
-    if(rd_regs()->view != cmd->regs->view)
-    {
-      continue;
-    }
-    
-    // rjf: process
-    RD_CmdKind kind = rd_cmd_kind_from_string(cmd->name);
-    switch(kind)
-    {
-      default:break;
-      
-      // rjf: gather deferred commands to redispatch when entity is ready
-      case RD_CmdKind_GoToLine:
-      case RD_CmdKind_GoToAddress:
-      case RD_CmdKind_CenterCursor:
-      case RD_CmdKind_ContainCursor:
-      {
-        rd_cmd_list_push_new(pves->deferred_cmd_arena, &pves->deferred_cmds, cmd->name, cmd->regs);
-      }break;
-    }
-  }
-  
-  //- rjf: determine if file is ready, and which viewer to use
-  String8 expr_string = rd_view_expr_string();
-  String8 file_path = rd_file_path_from_eval_string(scratch.arena, expr_string);
-  Rng1U64 file_range = r1u64(0, 1024);
-  U128 file_hash = fs_hash_from_path_range(file_path, file_range, 0);
-  B32 file_is_ready = 0;
-  RD_ViewRuleKind viewer_kind = RD_ViewRuleKind_Text;
-  {
-    HS_Scope *hs_scope = hs_scope_open();
-    String8 data = hs_data_from_hash(hs_scope, file_hash);
-    if(!u128_match(file_hash, u128_zero()))
-    {
-      U64 num_utf8_bytes = 0;
-      U64 num_unknown_bytes = 0;
-      for(U64 idx = 0; idx < data.size && idx < file_range.max;)
-      {
-        UnicodeDecode decode = utf8_decode(data.str+idx, data.size-idx);
-        if(decode.codepoint != max_U32 && (decode.inc > 1 ||
-                                           (10 <= decode.codepoint && decode.codepoint <= 13) ||
-                                           (32 <= decode.codepoint && decode.codepoint <= 126)))
-        {
-          num_utf8_bytes += decode.inc;
-          idx += decode.inc;
-        }
-        else
-        {
-          num_unknown_bytes += 1;
-          idx += 1;
-        }
-      }
-      file_is_ready = 1;
-      if(num_utf8_bytes > num_unknown_bytes*4 || num_unknown_bytes == 0)
-      {
-        viewer_kind = RD_ViewRuleKind_Text;
-      }
-      else
-      {
-        viewer_kind = RD_ViewRuleKind_Memory;
-      }
-    }
-    hs_scope_close(hs_scope);
-  }
-  
-  //- rjf: if file is ready, dispatch all deferred commands
-  if(file_is_ready)
-  {
-    for(RD_CmdNode *cmd_node = pves->deferred_cmds.first; cmd_node != 0; cmd_node = cmd_node->next)
-    {
-      RD_Cmd *cmd = &cmd_node->cmd;
-      rd_push_cmd(cmd->name, cmd->regs);
-    }
-    arena_clear(pves->deferred_cmd_arena);
-    MemoryZeroStruct(&pves->deferred_cmds);
-  }
-  
-  //- rjf: if file is ready, move params tree to scratch for new command
-#if 0 // TODO(rjf): @cfg
-  MD_Node *params_copy = &md_nil_node;
-  if(file_is_ready)
-  {
-    params_copy = md_tree_copy(scratch.arena, params);
-  }
-  
-  //- rjf: if file is ready, replace this view with the correct one, if any viewer is specified
-  if(file_is_ready && viewer_kind != RD_ViewRuleKind_Null)
-  {
-    RD_ViewRuleInfo *view_rule_info = rd_view_rule_info_from_kind(viewer_kind);
-    String8 query = rd_eval_string_from_file_path(scratch.arena, file_path);
-    RD_View *view = rd_view_from_handle(rd_regs()->view);
-    rd_view_equip_spec(view, view_rule_info, query, params_copy);
-  }
-#endif
-  
-  //- rjf: if entity is ready, but we have no viewer for it, then just close this tab
-  if(file_is_ready && viewer_kind == RD_ViewRuleKind_Null)
-  {
-    rd_cmd(RD_CmdKind_CloseTab);
-  }
-  
-  scratch_end(scratch);
-}
-
-////////////////////////////////
 //~ rjf: text @view_hook_impl
 
 EV_EXPAND_RULE_INFO_FUNCTION_DEF(text)
@@ -4311,7 +4020,7 @@ EV_EXPAND_RULE_INFO_FUNCTION_DEF(text)
   return info;
 }
 
-RD_VIEW_RULE_UI_FUNCTION_DEF(text)
+RD_VIEW_UI_FUNCTION_DEF(text)
 {
   RD_CodeViewState *cv = rd_view_state(RD_CodeViewState);
   rd_code_view_init(cv);
@@ -4329,15 +4038,8 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(text)
   //////////////////////////////
   //- rjf: process code-file commands
   //
-  ProfScope("process code-file commands") for(RD_Cmd *cmd = 0; rd_next_cmd(&cmd);)
+  ProfScope("process code-file commands") for(RD_Cmd *cmd = 0; rd_next_view_cmd(&cmd);)
   {
-    // rjf: mismatched window/panel => skip
-    if(rd_regs()->view != cmd->regs->view)
-    {
-      continue;
-    }
-    
-    // rjf: process
     RD_CmdKind kind = rd_cmd_kind_from_string(cmd->name);
     switch(kind)
     {
@@ -4364,30 +4066,23 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(text)
   //- rjf: unpack parameterization info
   //
   ProfBegin("unpack parameterization info");
-  String8 path = rd_file_path_from_eval_string(rd_frame_arena(), string);
-  rd_regs()->file_path     = path;
   rd_regs()->vaddr         = 0;
   rd_regs()->prefer_disasm = 0;
-  rd_regs()->cursor.line   = rd_value_from_params_key(params, str8_lit("cursor_line")).s64;
-  rd_regs()->cursor.column = rd_value_from_params_key(params, str8_lit("cursor_column")).s64;
-  rd_regs()->mark.line     = rd_value_from_params_key(params, str8_lit("mark_line")).s64;
-  rd_regs()->mark.column   = rd_value_from_params_key(params, str8_lit("mark_column")).s64;
+  rd_regs()->cursor.line   = rd_view_cfg_value_from_string(str8_lit("cursor_line")).s64;
+  rd_regs()->cursor.column = rd_view_cfg_value_from_string(str8_lit("cursor_column")).s64;
+  rd_regs()->mark.line     = rd_view_cfg_value_from_string(str8_lit("mark_line")).s64;
+  rd_regs()->mark.column   = rd_view_cfg_value_from_string(str8_lit("mark_column")).s64;
   if(rd_regs()->cursor.line == 0)   { rd_regs()->cursor.line = 1; }
   if(rd_regs()->cursor.column == 0) { rd_regs()->cursor.column = 1; }
-  if(rd_regs()->mark.line == 0)   { rd_regs()->mark.line = 1; }
-  if(rd_regs()->mark.column == 0) { rd_regs()->mark.column = 1; }
-  E_Eval eval = e_eval_from_string(scratch.arena, string);
-  Rng1U64 range = rd_range_from_eval_params(eval, params);
+  if(rd_regs()->mark.line == 0)     { rd_regs()->mark.line = 1; }
+  if(rd_regs()->mark.column == 0)   { rd_regs()->mark.column = 1; }
+  Rng1U64 range = rd_range_from_eval_tag(eval, tag);
   rd_regs()->text_key = rd_key_from_eval_space_range(eval.space, range, 1);
-  rd_regs()->lang_kind = rd_lang_kind_from_eval_params(eval, params);
-  if(rd_regs()->lang_kind == TXT_LangKind_Null && path.size != 0)
-  {
-    rd_regs()->lang_kind = txt_lang_kind_from_extension(str8_skip_last_dot(path));
-  }
+  rd_regs()->lang_kind = rd_lang_kind_from_eval_tag(eval, tag);
   U128 hash = {0};
   TXT_TextInfo info = txt_text_info_from_key_lang(txt_scope, rd_regs()->text_key, rd_regs()->lang_kind, &hash);
   String8 data = hs_data_from_hash(hs_scope, hash);
-  B32 file_is_missing = (path.size != 0 && os_properties_from_file_path(path).modified == 0);
+  B32 file_is_missing = (rd_regs()->file_path.size != 0 && os_properties_from_file_path(rd_regs()->file_path).modified == 0);
   B32 key_has_data = !u128_match(hash, u128_zero()) && info.lines_count;
   ProfEnd();
   
@@ -4405,7 +4100,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(text)
         UI_Palette(ui_build_palette(ui_top_palette(), .text = rd_rgba_from_theme_color(RD_ThemeColor_TextNegative)))
       {
         RD_Font(RD_FontSlot_Icons) ui_label(rd_icon_kind_text_table[RD_IconKind_WarningBig]);
-        ui_labelf("Could not find \"%S\".", path);
+        ui_labelf("Could not find \"%S\".", rd_regs()->file_path);
       }
       UI_PrefHeight(ui_em(3, 1))
         UI_Row UI_Padding(ui_pct(1, 0))
@@ -4444,11 +4139,11 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(text)
   //////////////////////////////
   //- rjf: unpack cursor info
   //
-  if(path.size != 0)
+  if(rd_regs()->file_path.size != 0)
   {
     CTRL_Entity *module = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->module);
     DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
-    rd_regs()->lines = d_lines_from_dbgi_key_file_path_line_num(rd_frame_arena(), dbgi_key, path, rd_regs()->cursor.line);
+    rd_regs()->lines = d_lines_from_dbgi_key_file_path_line_num(rd_frame_arena(), dbgi_key, rd_regs()->file_path, rd_regs()->cursor.line);
   }
   
   //////////////////////////////
@@ -4457,7 +4152,7 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(text)
   B32 file_is_out_of_date = 0;
   String8 out_of_date_dbgi_name = {0};
   {
-    U64 file_timestamp = fs_timestamp_from_path(path);
+    U64 file_timestamp = fs_timestamp_from_path(rd_regs()->file_path);
     if(file_timestamp != 0)
     {
       for(DI_KeyNode *n = dbgi_keys.first; n != 0; n = n->next)
@@ -4512,9 +4207,9 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(text)
       }
       RD_Font(RD_FontSlot_Code)
       {
-        if(path.size != 0)
+        if(rd_regs()->file_path.size != 0)
         {
-          ui_label(path);
+          ui_label(rd_regs()->file_path);
           ui_spacer(ui_em(1.5f, 1));
         }
         ui_labelf("Line: %I64d, Column: %I64d", rd_regs()->cursor.line, rd_regs()->cursor.column);
@@ -4566,7 +4261,7 @@ EV_EXPAND_RULE_INFO_FUNCTION_DEF(disasm)
   return info;
 }
 
-RD_VIEW_RULE_UI_FUNCTION_DEF(disasm)
+RD_VIEW_UI_FUNCTION_DEF(disasm)
 {
   RD_DisasmViewState *dv = rd_view_state(RD_DisasmViewState);
   if(dv->initialized == 0)
@@ -4591,19 +4286,19 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(disasm)
   //
   B32 auto_selected = 0;
   E_Space auto_space = {0};
-  if(string.size == 0)
+  if(eval.space.kind == E_SpaceKind_Null)
   {
     if(dv->temp_look_vaddr != 0 && dv->temp_look_run_gen == ctrl_run_gen())
     {
       auto_selected = 1;
       auto_space = rd_eval_space_from_ctrl_entity(ctrl_entity_from_handle(d_state->ctrl_entity_store, dv->temp_look_process), RD_EvalSpaceKind_CtrlEntity);
-      string = push_str8f(scratch.arena, "(0x%I64x & (~(0x4000 - 1)))", dv->temp_look_vaddr);
+      eval = e_eval_from_stringf(scratch.arena, "(0x%I64x & (~(0x4000 - 1)))", dv->temp_look_vaddr);
     }
     else
     {
       auto_selected = 1;
       auto_space = rd_eval_space_from_ctrl_entity(ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->process), RD_EvalSpaceKind_CtrlEntity);
-      string = str8_lit("(rip.u64 & (~(0x4000 - 1)))");
+      eval = e_eval_from_stringf(scratch.arena, "(rip.u64 & (~(0x4000 - 1)))");
     }
   }
   
@@ -4620,15 +4315,8 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(disasm)
   //////////////////////////////
   //- rjf: process disassembly-specific commands
   //
-  for(RD_Cmd *cmd = 0; rd_next_cmd(&cmd);)
+  for(RD_Cmd *cmd = 0; rd_next_view_cmd(&cmd);)
   {
-    // rjf: mismatched window/panel => skip
-    if(rd_regs()->view != cmd->regs->view)
-    {
-      continue;
-    }
-    
-    // rjf: process
     RD_CmdKind kind = rd_cmd_kind_from_string(cmd->name);
     switch(kind)
     {
@@ -4648,7 +4336,6 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(disasm)
   //////////////////////////////
   //- rjf: unpack parameterization info
   //
-  E_Eval eval = e_eval_from_string(scratch.arena, string);
   E_Space space = eval.space;
   if(auto_selected)
   {
@@ -4791,7 +4478,7 @@ EV_EXPAND_RULE_INFO_FUNCTION_DEF(memory)
   return info;
 }
 
-RD_VIEW_RULE_UI_FUNCTION_DEF(memory)
+RD_VIEW_UI_FUNCTION_DEF(memory)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
@@ -4801,7 +4488,6 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(memory)
   //////////////////////////////
   //- rjf: unpack parameterization info
   //
-  E_Eval eval = e_eval_from_string(scratch.arena, string);
   Rng1U64 space_range = {0}; // TODO(rjf): @cfg rd_range_from_eval_params(eval, params);
   if(eval.space.kind == 0)
   {
@@ -4827,15 +4513,8 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(memory)
   //////////////////////////////
   //- rjf: process commands
   //
-  for(RD_Cmd *cmd = 0; rd_next_cmd(&cmd);)
+  for(RD_Cmd *cmd = 0; rd_next_view_cmd(&cmd);)
   {
-    // rjf: mismatched window/panel => skip
-    if(rd_regs()->view != cmd->regs->view)
-    {
-      continue;
-    }
-    
-    // rjf: process
     RD_CmdKind kind = rd_cmd_kind_from_string(cmd->name);
     switch(kind)
     {
@@ -5718,7 +5397,7 @@ EV_EXPAND_RULE_INFO_FUNCTION_DEF(bitmap)
   return info;
 }
 
-RD_VIEW_RULE_UI_FUNCTION_DEF(bitmap)
+RD_VIEW_UI_FUNCTION_DEF(bitmap)
 {
   Temp scratch = scratch_begin(0, 0);
   HS_Scope *hs_scope = hs_scope_open();
@@ -5727,7 +5406,6 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(bitmap)
   //////////////////////////////
   //- rjf: evaluate expression
   //
-  E_Eval eval = e_eval_from_string(scratch.arena, string);
   Vec2S32 dim = {0}; // TODO(rjf): @cfg rd_dim2s32_from_eval_params(eval, params);
   R_Tex2DFormat fmt = R_Tex2DFormat_RGBA8; // TODO(rjf): @cfg rd_tex2dformat_from_eval_params(eval, params);
   U64 base_offset = rd_base_offset_from_eval(eval);
@@ -5921,16 +5599,13 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(bitmap)
 ////////////////////////////////
 //~ rjf: "checkbox"
 
-RD_VIEW_RULE_UI_FUNCTION_DEF(checkbox)
+RD_VIEW_UI_FUNCTION_DEF(checkbox)
 {
-  Temp scratch = scratch_begin(0, 0);
-  E_Eval eval = e_eval_from_string(scratch.arena, string);
   E_Eval value_eval = e_value_eval_from_eval(eval);
   if(ui_clicked(rd_icon_buttonf(value_eval.value.u64 == 0 ? RD_IconKind_CheckHollow : RD_IconKind_CheckFilled, 0, "###check")))
   {
     rd_commit_eval_value_string(eval, value_eval.value.u64 == 0 ? str8_lit("1") : str8_lit("0"), 0);
   }
-  scratch_end(scratch);
 }
 
 ////////////////////////////////
@@ -5966,12 +5641,11 @@ EV_EXPAND_RULE_INFO_FUNCTION_DEF(color_rgba)
   return info;
 }
 
-RD_VIEW_RULE_UI_FUNCTION_DEF(color_rgba)
+RD_VIEW_UI_FUNCTION_DEF(color_rgba)
 {
   Temp scratch = scratch_begin(0, 0);
   Vec2F32 dim = dim_2f32(rect);
   F32 padding = ui_top_font_size()*3.f;
-  E_Eval eval = e_eval_from_string(scratch.arena, string);
   Vec4F32 rgba = {0}; // TODO(rjf): @cfg rd_rgba_from_eval_params(eval, params);
   Vec4F32 hsva = hsva_from_rgba(rgba);
   
@@ -6127,7 +5801,7 @@ EV_EXPAND_RULE_INFO_FUNCTION_DEF(geo3d)
   return info;
 }
 
-RD_VIEW_RULE_UI_FUNCTION_DEF(geo3d)
+RD_VIEW_UI_FUNCTION_DEF(geo3d)
 {
   Temp scratch = scratch_begin(0, 0);
   GEO_Scope *geo_scope = geo_scope_open();
@@ -6146,7 +5820,6 @@ RD_VIEW_RULE_UI_FUNCTION_DEF(geo3d)
   //////////////////////////////
   //- rjf: evaluate & unpack expression
   //
-  E_Eval eval = e_eval_from_string(scratch.arena, string);
   U64 base_offset = rd_base_offset_from_eval(eval);
   Rng1U64 idxs_range = r1u64(base_offset, base_offset+count*sizeof(U32));
   Rng1U64 vtxs_range = r1u64(vtx_base_off, vtx_base_off+vtx_size);

@@ -25,7 +25,7 @@ struct RD_CfgIDList
 };
 
 ////////////////////////////////
-//~ rjf: Key Binding Types
+//~ rjf: Key Bindings
 
 typedef struct RD_Binding RD_Binding;
 struct RD_Binding
@@ -92,6 +92,42 @@ enum
   RD_EvalSpaceKind_MetaCfg,
   RD_EvalSpaceKind_MetaCtrlEntity,
   RD_EvalSpaceKind_MetaCmd,
+};
+
+////////////////////////////////
+//~ rjf: View UI Hook Types
+
+#define RD_VIEW_UI_FUNCTION_SIG(name) void name(E_Eval eval, E_Expr *tag, Rng2F32 rect)
+#define RD_VIEW_UI_FUNCTION_NAME(name) rd_view_ui__##name
+#define RD_VIEW_UI_FUNCTION_DEF(name) internal RD_VIEW_UI_FUNCTION_SIG(RD_VIEW_UI_FUNCTION_NAME(name))
+typedef RD_VIEW_UI_FUNCTION_SIG(RD_ViewUIFunctionType);
+
+typedef struct RD_ViewUIRule RD_ViewUIRule;
+struct RD_ViewUIRule
+{
+  String8 name;
+  RD_ViewUIFunctionType *ui;
+};
+
+typedef struct RD_ViewUIRuleNode RD_ViewUIRuleNode;
+struct RD_ViewUIRuleNode
+{
+  RD_ViewUIRuleNode *next;
+  RD_ViewUIRule v;
+};
+
+typedef struct RD_ViewUIRuleSlot RD_ViewUIRuleSlot;
+struct RD_ViewUIRuleSlot
+{
+  RD_ViewUIRuleNode *first;
+  RD_ViewUIRuleNode *last;
+};
+
+typedef struct RD_ViewUIRuleMap RD_ViewUIRuleMap;
+struct RD_ViewUIRuleMap
+{
+  RD_ViewUIRuleSlot *slots;
+  U64 slots_count;
 };
 
 ////////////////////////////////
@@ -721,6 +757,9 @@ struct RD_State
   RD_Cfg2EvalBlobMap *cfg2evalblob_map;
   RD_Entity2EvalBlobMap *entity2evalblob_map;
   
+  // rjf: name -> view ui map (constructed from-scratch each frame)
+  RD_ViewUIRuleMap *view_ui_rule_map;
+  
   // rjf: registers stack
   RD_RegsNode base_regs;
   RD_RegsNode *top_regs;
@@ -841,6 +880,14 @@ read_only global RD_PanelNode rd_nil_panel_node =
 
 read_only global RD_CmdKindInfo rd_nil_cmd_kind_info = {0};
 
+RD_VIEW_UI_FUNCTION_DEF(null);
+read_only global RD_ViewUIRule rd_nil_view_ui_rule =
+{
+  {0},
+  RD_VIEW_UI_FUNCTION_NAME(null),
+};
+
+#if 0 // TODO(rjf): @cfg
 read_only global RD_ViewRuleInfo rd_nil_view_rule_info =
 {
   {0},
@@ -852,6 +899,7 @@ read_only global RD_ViewRuleInfo rd_nil_view_rule_info =
   EV_EXPAND_RULE_INFO_FUNCTION_NAME(nil),
   RD_VIEW_RULE_UI_FUNCTION_NAME(null)
 };
+#endif
 
 read_only global RD_ViewState rd_nil_view_state =
 {
@@ -891,9 +939,19 @@ internal void rd_cmd_list_push_new(Arena *arena, RD_CmdList *cmds, String8 name,
 ////////////////////////////////
 //~ rjf: View Spec Type Functions
 
+#if 0 // TODO(rjf): @cfg
 internal RD_ViewRuleKind rd_view_rule_kind_from_string(String8 string);
 internal RD_ViewRuleInfo *rd_view_rule_info_from_kind(RD_ViewRuleKind kind);
 internal RD_ViewRuleInfo *rd_view_rule_info_from_string(String8 string);
+#endif
+
+////////////////////////////////
+//~ rjf: View UI Rule Functions
+
+internal RD_ViewUIRuleMap *rd_view_ui_rule_map_make(Arena *arena, U64 slots_count);
+internal void rd_view_ui_rule_map_insert(Arena *arena, RD_ViewUIRuleMap *map, String8 string, RD_ViewUIFunctionType *ui);
+
+internal RD_ViewUIRule *rd_view_ui_rule_from_string(String8 string);
 
 ////////////////////////////////
 //~ rjf: Global Cross-Window UI Interaction State Functions
@@ -977,6 +1035,8 @@ internal RD_Cfg *rd_immediate_cfg_from_keyf(char *fmt, ...);
 internal String8 rd_mapped_from_file_path(Arena *arena, String8 file_path);
 internal String8List rd_possible_overrides_from_file_path(Arena *arena, String8 file_path);
 
+internal E_Expr *rd_tag_from_cfg(Arena *arena, RD_Cfg *cfg);
+
 ////////////////////////////////
 //~ rjf: Control Entity Info Extraction
 
@@ -1023,7 +1083,6 @@ internal Rng1U64 rd_whole_range_from_eval_space(E_Space space);
 internal B32 rd_commit_eval_value_string(E_Eval dst_eval, String8 string, B32 string_needs_unescaping);
 
 //- rjf: eval / view rule params tree info extraction
-internal U64 rd_base_offset_from_eval(E_Eval eval);
 internal E_Value rd_value_from_params_key(MD_Node *params, String8 key);
 internal Rng1U64 rd_range_from_eval_params(E_Eval eval, MD_Node *params);
 internal TXT_LangKind rd_lang_kind_from_eval_params(E_Eval eval, MD_Node *params);
@@ -1040,6 +1099,7 @@ internal String8 rd_eval_string_from_file_path(Arena *arena, String8 string);
 
 internal RD_ViewState *rd_view_state_from_cfg(RD_Cfg *cfg);
 internal DR_FancyStringList rd_title_fstrs_from_view(Arena *arena, String8 viewer_name_string, String8 query, Vec4F32 primary_color, Vec4F32 secondary_color, F32 size);
+internal void rd_view_ui(Rng2F32 rect);
 
 ////////////////////////////////
 //~ rjf: View Building API
@@ -1050,6 +1110,16 @@ internal UI_ScrollPt2 rd_view_scroll_pos(void);
 internal EV_View *rd_view_eval_view(void);
 internal String8 rd_view_expr_string(void);
 internal String8 rd_view_filter(void);
+internal RD_Cfg *rd_view_cfg_from_string(String8 string);
+internal E_Value rd_view_cfg_value_from_string(String8 string);
+
+//- rjf: evaluation & tag (a view's 'call') parameter extraction
+internal U64 rd_base_offset_from_eval(E_Eval eval);
+internal Rng1U64 rd_range_from_eval_tag(E_Eval eval, E_Expr *tag);
+internal TXT_LangKind rd_lang_kind_from_eval_tag(E_Eval eval, E_Expr *tag);
+internal Arch rd_arch_from_eval_tag(E_Eval eval, E_Expr *tag);
+internal Vec2S32 rd_dim2s32_from_eval_tag(E_Eval eval, E_Expr *tag);
+internal R_Tex2DFormat rd_tex2dformat_from_eval_tag(E_Eval eval, E_Expr *tag);
 
 //- rjf: pushing/attaching view resources
 internal void *rd_view_state_by_size(U64 size);
@@ -1185,6 +1255,7 @@ internal void rd_push_cmd(String8 name, RD_Regs *regs);
 
 //- rjf: iterating
 internal B32 rd_next_cmd(RD_Cmd **cmd);
+internal B32 rd_next_view_cmd(RD_Cmd **cmd);
 
 ////////////////////////////////
 //~ rjf: Main Layer Top-Level Calls
