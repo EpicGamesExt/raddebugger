@@ -108,6 +108,9 @@ RD_VocabularyMap:
   {call_stack           _                           "Call Stack"                _                     Thread                                         }
   {output               _                           "Output"                    _                     List                                           }
   {scheduler            _                           "Scheduler"                 _                     Scheduler                                      }
+  {register             _                           "Register"                  _                     Null                                           }
+  {local                _                           "Local"                     _                     Null                                           }
+  {memory               memories                    "Memory"                    "Memories"            Grid                                           }
 }
 
 @struct RD_VocabularyInfo:

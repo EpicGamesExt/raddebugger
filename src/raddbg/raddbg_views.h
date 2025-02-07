@@ -80,6 +80,7 @@ struct RD_WatchRowInfo
   U64 callstack_inline_depth;
   RD_WatchCellList cells;
   RD_ViewUIRule *view_ui_rule;
+  E_Expr *view_ui_tag;
 };
 
 typedef struct RD_WatchRowCellInfo RD_WatchRowCellInfo;
@@ -91,8 +92,8 @@ struct RD_WatchRowCellInfo
   B32 is_errored;
   String8 error_tooltip;
   String8 inheritance_tooltip;
-  RD_ViewRuleUIFunctionType *ui;
-  MD_Node *ui_params;
+  RD_ViewUIRule *view_ui_rule;
+  E_Expr *view_ui_tag;
 };
 
 typedef enum RD_WatchViewColumnKind
@@ -164,13 +165,6 @@ struct RD_WatchViewState
 {
   B32 initialized;
   
-  // rjf: column state
-  Arena *column_arena;
-  RD_WatchViewColumn *first_column;
-  RD_WatchViewColumn *last_column;
-  RD_WatchViewColumn *free_column;
-  U64 column_count;
-  
   // rjf; table cursor state
   RD_WatchPt cursor;
   RD_WatchPt mark;
@@ -200,9 +194,6 @@ internal RD_WatchCell *rd_watch_cell_list_push(Arena *arena, RD_WatchCellList *l
 internal RD_WatchCell *rd_watch_cell_list_push_new_(Arena *arena, RD_WatchCellList *list, RD_WatchCell *params);
 #define rd_watch_cell_list_push_new(arena, list, kind_, ...) rd_watch_cell_list_push_new_((arena), (list), &(RD_WatchCell){.kind = (kind_), __VA_ARGS__})
 
-//- rjf: index -> column
-internal RD_WatchViewColumn *rd_watch_view_column_from_x(RD_WatchViewState *wv, S64 index);
-
 //- rjf: watch view points <-> table coordinates
 internal B32 rd_watch_pt_match(RD_WatchPt a, RD_WatchPt b);
 internal RD_WatchPt rd_watch_pt_from_tbl(EV_BlockRangeList *block_ranges, Vec2S64 tbl);
@@ -227,15 +218,6 @@ internal String8 rd_string_from_eval_viz_row_column(Arena *arena, EV_Row *row, R
 
 //- rjf: table coordinates -> text edit state
 internal RD_WatchViewTextEditState *rd_watch_view_text_edit_state_from_pt(RD_WatchViewState *wv, RD_WatchPt pt);
-
-//- rjf: watch view column state mutation
-internal RD_WatchViewColumn *rd_watch_view_column_alloc_(RD_WatchViewState *wv, RD_WatchViewColumnKind kind, F32 pct, RD_WatchViewColumnParams *params);
-#define rd_watch_view_column_alloc(wv, kind, pct, ...) rd_watch_view_column_alloc_((wv), (kind), (pct), &(RD_WatchViewColumnParams){.string = str8_zero(), __VA_ARGS__})
-internal void rd_watch_view_column_release(RD_WatchViewState *wv, RD_WatchViewColumn *col);
-
-//- rjf: watch view main hooks
-internal void rd_watch_view_init(RD_WatchViewState *ewv);
-internal void rd_watch_view_build(RD_WatchViewState *ewv, Rng2F32 rect);
 
 ////////////////////////////////
 //~ rjf: View Hooks

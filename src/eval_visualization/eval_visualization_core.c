@@ -950,7 +950,8 @@ ev_windowed_row_list_from_block_range_list(Arena *arena, EV_View *view, String8 
         {
           range_exprs[idx] = &e_expr_nil;
         }
-        if(n->v.block->lookup_rule == &e_lookup_rule__nil)
+        if(n->v.block->lookup_rule == &e_lookup_rule__nil ||
+           n->v.block->single_item)
         {
           is_root = 1;
         }

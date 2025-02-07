@@ -28,7 +28,7 @@ RD_CmdKind_Null,
 RD_CmdKind_Null,
 };
 
-RD_VocabularyInfo rd_vocabulary_info_table[57] =
+RD_VocabularyInfo rd_vocabulary_info_table[60] =
 {
 {str8_lit_comp("auto_view_rule"), str8_lit_comp("auto_view_rules"), str8_lit_comp("Auto View Rule"), str8_lit_comp("Auto View Rules"), RD_IconKind_Binoculars},
 {str8_lit_comp("file_path_map"), str8_lit_comp("file_path_maps"), str8_lit_comp("File Path Map"), str8_lit_comp("File Path Maps"), RD_IconKind_FileOutline},
@@ -87,6 +87,9 @@ RD_VocabularyInfo rd_vocabulary_info_table[57] =
 {str8_lit_comp("call_stack"), str8_lit_comp("call_stacks"), str8_lit_comp("Call Stack"), str8_lit_comp("Call Stacks"), RD_IconKind_Thread},
 {str8_lit_comp("output"), str8_lit_comp("outputs"), str8_lit_comp("Output"), str8_lit_comp("Outputs"), RD_IconKind_List},
 {str8_lit_comp("scheduler"), str8_lit_comp("schedulers"), str8_lit_comp("Scheduler"), str8_lit_comp("Schedulers"), RD_IconKind_Scheduler},
+{str8_lit_comp("register"), str8_lit_comp("registers"), str8_lit_comp("Register"), str8_lit_comp("Registers"), RD_IconKind_Null},
+{str8_lit_comp("local"), str8_lit_comp("locals"), str8_lit_comp("Local"), str8_lit_comp("Locals"), RD_IconKind_Null},
+{str8_lit_comp("memory"), str8_lit_comp("memories"), str8_lit_comp("Memory"), str8_lit_comp("Memories"), RD_IconKind_Grid},
 };
 
 RD_NameSchemaInfo rd_name_schema_info_table[10] =
