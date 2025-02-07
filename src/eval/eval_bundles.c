@@ -273,3 +273,38 @@ e_member_eval_from_eval_member_name(E_Eval eval, String8 member_name)
   }
   return result;
 }
+
+internal E_Value
+e_value_from_string(String8 string)
+{
+  Temp scratch = scratch_begin(0, 0);
+  E_Eval eval = e_eval_from_string(scratch.arena, string);
+  E_Eval value_eval = e_value_eval_from_eval(eval);
+  E_Value result = value_eval.value;
+  scratch_end(scratch);
+  return result;
+}
+
+internal E_Value
+e_value_from_stringf(char *fmt, ...)
+{
+  Temp scratch = scratch_begin(0, 0);
+  va_list args;
+  va_start(args, fmt);
+  String8 string = push_str8fv(scratch.arena, fmt, args);
+  E_Value result = e_value_from_string(string);
+  va_end(args);
+  scratch_end(scratch);
+  return result;
+}
+
+internal E_Value
+e_value_from_expr(E_Expr *expr)
+{
+  Temp scratch = scratch_begin(0, 0);
+  E_Eval eval = e_eval_from_expr(scratch.arena, expr);
+  E_Eval value_eval = e_value_eval_from_eval(eval);
+  E_Value result = value_eval.value;
+  scratch_end(scratch);
+  return result;
+}

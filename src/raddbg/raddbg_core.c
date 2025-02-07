@@ -1220,7 +1220,7 @@ rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg, Vec4F32 secondary_color, F32 
     if(expr_string.size != 0)
     {
       String8 query_name = rd_query_from_eval_string(arena, expr_string);
-      if(query_name.size != 0)
+      if(query_name.size != 0 && !str8_match(query_name, str8_lit("watches"), 0))
       {
         String8 query_code_name = query_name;
         String8 query_display_name = rd_display_from_code_name(query_code_name);
@@ -1303,11 +1303,11 @@ rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg, Vec4F32 secondary_color, F32 
     }
     else if(file_path.size != 0)
     {
-      dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Main), running_size, running_rgba, file_path);
+      dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Main), running_size, running_rgba, str8_skip_last_slash(file_path));
       dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), size, secondary_color, str8_lit(" "));
       start_secondary();
     }
-    else if(expr_string.size != 0)
+    else if(expr_string.size != 0 && !str8_match(cfg->string, str8_lit("watch"), 0))
     {
       dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), running_size, running_rgba, expr_string);
       dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), size, secondary_color, str8_lit(" "));
@@ -3222,13 +3222,12 @@ rd_base_offset_from_eval(E_Eval eval)
 internal Rng1U64
 rd_range_from_eval_tag(E_Eval eval, E_Expr *tag)
 {
-  Temp scratch = scratch_begin(0, 0);
   U64 size = 0;
   for(E_Expr *param = tag->first->next; param != &e_expr_nil; param = param->next)
   {
     if(param->kind == E_ExprKind_Define && str8_match(param->first->string, str8_lit("size"), 0))
     {
-      size = e_eval_from_expr(scratch.arena, param->first->next).value.u64;
+      size = e_value_from_expr(param->first->next).u64;
       break;
     }
   }
@@ -3257,7 +3256,6 @@ rd_range_from_eval_tag(E_Eval eval, E_Expr *tag)
   Rng1U64 result = {0};
   result.min = rd_base_offset_from_eval(eval);
   result.max = result.min + size;
-  scratch_end(scratch);
   return result;
 }
 
@@ -3283,19 +3281,124 @@ rd_lang_kind_from_eval_tag(E_Eval eval, E_Expr *tag)
 internal Arch
 rd_arch_from_eval_tag(E_Eval eval, E_Expr *tag)
 {
+  // rjf: try implicitly from either `eval` itself, or from context
+  CTRL_Entity *ctrl_entity = rd_ctrl_entity_from_eval_space(eval.space);
+  CTRL_Entity *process = ctrl_process_from_entity(ctrl_entity);
+  if(process == &ctrl_entity_nil)
+  {
+    process = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->process);
+  }
+  Arch arch = process->arch;
+  if(arch == Arch_Null)
+  {
+    arch = arch_from_context();
+  }
   
+  // rjf: try arch parameters
+  for(E_Expr *param = tag->first->next; param != &e_expr_nil; param = param->next)
+  {
+    String8 param_arch_string = param->string;
+    if(param->kind == E_ExprKind_Define && str8_match(param->first->string, str8_lit("arch"), 0))
+    {
+      param_arch_string = param->first->next->string;
+    }
+    if(str8_match(param->first->next->string, str8_lit("x64"), 0))
+    {
+      arch = Arch_x64;
+      break;
+    }
+  }
+  
+  return arch;
 }
 
 internal Vec2S32
 rd_dim2s32_from_eval_tag(E_Eval eval, E_Expr *tag)
 {
+  Vec2S32 dim = v2s32(1, 1);
+  B32 got_x = 0;
+  B32 got_y = 0;
   
+  // rjf: try explicitly passed dimensions
+  for(E_Expr *param = tag->first->next; param != &e_expr_nil; param = param->next)
+  {
+    if(param->kind == E_ExprKind_Define)
+    {
+      if(str8_match(param->first->string, str8_lit("w"), 0))
+      {
+        got_x = 1;
+        dim.x = e_value_from_expr(param->first->next).s64;
+      }
+      if(str8_match(param->first->string, str8_lit("h"), 0))
+      {
+        got_y = 1;
+        dim.y = e_value_from_expr(param->first->next).s64;
+      }
+    }
+  }
+  
+  // rjf: try ordered non-define arguments
+  for(E_Expr *param = tag->first->next; param != &e_expr_nil; param = param->next)
+  {
+    if(param->kind != E_ExprKind_Define)
+    {
+      if(!got_x)
+      {
+        got_x = 1;
+        dim.x = e_value_from_expr(param).s64;
+      }
+      else if(!got_y)
+      {
+        got_y = 1;
+        dim.y = e_value_from_expr(param).s64;
+        break;
+      }
+    }
+  }
+  
+  return dim;
 }
 
 internal R_Tex2DFormat
 rd_tex2dformat_from_eval_tag(E_Eval eval, E_Expr *tag)
 {
+  R_Tex2DFormat fmt = R_Tex2DFormat_RGBA8;
+  B32 got_fmt = 0;
   
+  // rjf: try explicitly passed formats
+  for(E_Expr *param = tag->first->next; param != &e_expr_nil; param = param->next)
+  {
+    if(param->kind == E_ExprKind_Define && str8_match(param->first->string, str8_lit("fmt"), 0))
+    {
+      got_fmt = 1;
+      for EachEnumVal(R_Tex2DFormat, f)
+      {
+        if(str8_match(param->first->next->string, r_tex2d_format_display_string_table[f], StringMatchFlag_CaseInsensitive))
+        {
+          fmt = f;
+          break;
+        }
+      }
+    }
+  }
+  
+  // rjf: try implicit non-define arguments
+  for(E_Expr *param = tag->first->next; param != &e_expr_nil && !got_fmt; param = param->next)
+  {
+    if(param->kind == E_ExprKind_LeafIdent)
+    {
+      for EachEnumVal(R_Tex2DFormat, f)
+      {
+        if(str8_match(param->string, r_tex2d_format_display_string_table[f], StringMatchFlag_CaseInsensitive))
+        {
+          fmt = f;
+          break;
+        }
+      }
+    }
+  }
+  
+  return fmt;
 }
 
 //- rjf: pushing/attaching view resources
@@ -9222,7 +9325,7 @@ E_LOOKUP_NUM_FROM_ID_FUNCTION_DEF(debug_info_table)
 }
 
 internal F32
-rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size, S32 depth, E_Eval eval, String8List *out)
+rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 default_radix, FNT_Tag font, F32 font_size, F32 max_size, S32 depth, E_Expr *root_expr, E_Eval eval, String8List *out)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(&arena, 1);
@@ -9234,7 +9337,7 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
   B32 no_addr = 0;
   B32 no_string = 0;
   B32 has_array = 0;
-  for(E_Expr *tag = eval.expr->first_tag; tag != &e_expr_nil; tag = tag->next)
+  for(E_Expr *tag = root_expr->first_tag; tag != &e_expr_nil; tag = tag->next)
   {
     if(0){}
     else if(str8_match(tag->string, str8_lit("dec"), 0)) {radix = 10;}
@@ -9430,7 +9533,7 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
           {
             E_Expr *deref_expr = e_expr_ref_deref(scratch.arena, eval.expr);
             E_Eval deref_eval = e_eval_from_expr(scratch.arena, deref_expr);
-            space_taken += rd_append_value_strings_from_eval(arena, flags, radix, font, font_size, max_size-space_taken, depth+1, deref_eval, out);
+            space_taken += rd_append_value_strings_from_eval(arena, flags, radix, font, font_size, max_size-space_taken, depth+1, root_expr, deref_eval, out);
           }
           else
           {
@@ -9553,7 +9656,7 @@ rd_append_value_strings_from_eval(Arena *arena, EV_StringFlags flags, U32 defaul
               }
               is_first = 0;
               E_Eval child_eval = e_eval_from_expr(scratch.arena, expr);
-              space_taken += rd_append_value_strings_from_eval(arena, flags, radix, font, font_size, max_size-space_taken, depth+1, child_eval, out);
+              space_taken += rd_append_value_strings_from_eval(arena, flags, radix, font, font_size, max_size-space_taken, depth+1, root_expr, child_eval, out);
               if(space_taken > max_size && idx+1 < total_possible_child_count)
               {
                 String8 ellipses = str8_lit(", ...");
@@ -9589,7 +9692,7 @@ rd_value_string_from_eval(Arena *arena, EV_StringFlags flags, U32 default_radix,
 {
   Temp scratch = scratch_begin(&arena, 1);
   String8List strs = {0};
-  rd_append_value_strings_from_eval(scratch.arena, flags, default_radix, font, font_size, max_size, 0, eval, &strs);
+  rd_append_value_strings_from_eval(scratch.arena, flags, default_radix, font, font_size, max_size, 0, eval.expr, eval, &strs);
   String8 result = str8_list_join(arena, &strs, 0);
   scratch_end(scratch);
   return result;

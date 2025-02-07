@@ -5409,8 +5409,8 @@ RD_VIEW_UI_FUNCTION_DEF(bitmap)
   //////////////////////////////
   //- rjf: evaluate expression
   //
-  Vec2S32 dim = {0}; // TODO(rjf): @cfg rd_dim2s32_from_eval_params(eval, params);
-  R_Tex2DFormat fmt = R_Tex2DFormat_RGBA8; // TODO(rjf): @cfg rd_tex2dformat_from_eval_params(eval, params);
+  Vec2S32 dim = rd_dim2s32_from_eval_tag(eval, tag);
+  R_Tex2DFormat fmt = rd_tex2dformat_from_eval_tag(eval, tag);
   U64 base_offset = rd_base_offset_from_eval(eval);
   U64 expected_size = dim.x*dim.y*r_tex2d_format_bytes_per_pixel_table[fmt];
   Rng1U64 offset_range = r1u64(base_offset, base_offset + expected_size);
@@ -5418,11 +5418,11 @@ RD_VIEW_UI_FUNCTION_DEF(bitmap)
   //////////////////////////////
   //- rjf: unpack params
   //
-  F32 zoom = 1.f; // TODO(rjf): @cfg rd_value_from_params_key(params, str8_lit("zoom")).f32;
+  F32 zoom = rd_view_cfg_value_from_string(str8_lit("zoom")).f32;
   Vec2F32 view_center_pos =
   {
-    0.f, // TODO(rjf): @cfg rd_value_from_params_key(params, str8_lit("x")).f32,
-    0.f, // TODO(rjf): @cfg rd_value_from_params_key(params, str8_lit("y")).f32,
+    rd_view_cfg_value_from_string(str8_lit("x")).f32,
+    rd_view_cfg_value_from_string(str8_lit("y")).f32,
   };
   if(zoom == 0)
   {

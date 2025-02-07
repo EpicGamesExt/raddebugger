@@ -1195,1081 +1195,921 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
   E_Token *it = tokens->v;
   E_Token *it_opl = tokens->v + tokens->count;
   E_Parse result = {0, &e_expr_nil};
+  E_Expr *last_expr = &e_expr_nil;
   
-  //- rjf: parse prefix unaries
-  typedef struct PrefixUnaryNode PrefixUnaryNode;
-  struct PrefixUnaryNode
+  //- rjf: parse chain of expressions
+  for(;it < it_opl;)
   {
-    PrefixUnaryNode *next;
-    E_ExprKind kind;
-    E_Expr *cast_expr;
-    void *location;
-  };
-  PrefixUnaryNode *first_prefix_unary = 0;
-  PrefixUnaryNode *last_prefix_unary = 0;
-  {
-    for(;it < it_opl;)
+    //- rjf: exit on symbols callers may be waiting on
     {
-      E_Token *start_it = it;
       E_Token token = e_token_at_it(it, tokens);
       String8 token_string = str8_substr(text, token.range);
-      S64 prefix_unary_precedence = 0;
-      E_ExprKind prefix_unary_kind = 0;
-      E_Expr *cast_expr = &e_expr_nil;
-      void *location = 0;
-      
-      // rjf: try op table
-      for EachNonZeroEnumVal(E_ExprKind, k)
+      if(token.kind == E_TokenKind_Symbol &&
+         (str8_match(token_string, str8_lit(")"), 0) ||
+          str8_match(token_string, str8_lit("]"), 0)))
       {
-        E_OpInfo *op_info = &e_expr_kind_op_info_table[k];
-        if(op_info->kind == E_OpKind_UnaryPrefix && str8_match(op_info->pre, token_string, 0))
+        break;
+      }
+    }
+    
+    //- rjf: skip commas, semicolons, etc.
+    for(;it < it_opl;)
+    {
+      E_Token token = e_token_at_it(it, tokens);
+      String8 token_string = str8_substr(text, token.range);
+      if(token.kind == E_TokenKind_Symbol &&
+         (str8_match(token_string, str8_lit(","), 0) ||
+          str8_match(token_string, str8_lit(";"), 0)))
+      {
+        it += 1;
+      }
+      else
+      {
+        break;
+      }
+    }
+    
+    //- rjf: parse prefix unaries
+    typedef struct PrefixUnaryNode PrefixUnaryNode;
+    struct PrefixUnaryNode
+    {
+      PrefixUnaryNode *next;
+      E_ExprKind kind;
+      E_Expr *cast_expr;
+      void *location;
+    };
+    PrefixUnaryNode *first_prefix_unary = 0;
+    PrefixUnaryNode *last_prefix_unary = 0;
+    {
+      for(;it < it_opl;)
+      {
+        E_Token *start_it = it;
+        E_Token token = e_token_at_it(it, tokens);
+        String8 token_string = str8_substr(text, token.range);
+        S64 prefix_unary_precedence = 0;
+        E_ExprKind prefix_unary_kind = 0;
+        E_Expr *cast_expr = &e_expr_nil;
+        void *location = 0;
+        
+        // rjf: try op table
+        for EachNonZeroEnumVal(E_ExprKind, k)
         {
-          prefix_unary_precedence = op_info->precedence;
-          prefix_unary_kind = k;
+          E_OpInfo *op_info = &e_expr_kind_op_info_table[k];
+          if(op_info->kind == E_OpKind_UnaryPrefix && str8_match(op_info->pre, token_string, 0))
+          {
+            prefix_unary_precedence = op_info->precedence;
+            prefix_unary_kind = k;
+            break;
+          }
+        }
+        
+        // rjf: consume valid op
+        if(prefix_unary_precedence != 0)
+        {
+          location = token_string.str;
+          it += 1;
+        }
+        
+        // rjf: try casting expression
+        if(prefix_unary_precedence == 0 && str8_match(token_string, str8_lit("("), 0))
+        {
+          E_Token some_type_identifier_maybe = e_token_at_it(it+1, tokens);
+          String8 some_type_identifier_maybe_string = str8_substr(text, some_type_identifier_maybe.range);
+          if(some_type_identifier_maybe.kind == E_TokenKind_Identifier)
+          {
+            E_TypeKey type_key = e_leaf_type_from_name(some_type_identifier_maybe_string);
+            if(!e_type_key_match(type_key, e_type_key_zero()) || str8_match(some_type_identifier_maybe_string, str8_lit("unsigned"), 0))
+            {
+              // rjf: move past open paren
+              it += 1;
+              
+              // rjf: parse type expr
+              E_TokenArray type_parse_tokens = e_token_array_make_first_opl(it, it_opl);
+              E_Parse type_parse = e_parse_type_from_text_tokens(arena, text, &type_parse_tokens);
+              E_Expr *type = type_parse.expr;
+              e_msg_list_concat_in_place(&result.msgs, &type_parse.msgs);
+              it = type_parse.last_token;
+              location = token_string.str;
+              
+              // rjf: expect )
+              E_Token close_paren_maybe = e_token_at_it(it, tokens);
+              String8 close_paren_maybe_string = str8_substr(text, close_paren_maybe.range);
+              if(close_paren_maybe.kind != E_TokenKind_Symbol || !str8_match(close_paren_maybe_string, str8_lit(")"), 0))
+              {
+                e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, token_string.str, "Missing `)`.");
+              }
+              
+              // rjf: consume )
+              else
+              {
+                it += 1;
+              }
+              
+              // rjf: fill
+              prefix_unary_precedence = 2;
+              prefix_unary_kind = E_ExprKind_Cast;
+              cast_expr = type;
+            }
+          }
+        }
+        
+        // rjf: break if we got no operators
+        if(prefix_unary_precedence == 0)
+        {
           break;
         }
-      }
-      
-      // rjf: consume valid op
-      if(prefix_unary_precedence != 0)
-      {
-        location = token_string.str;
-        it += 1;
-      }
-      
-      // rjf: try casting expression
-      if(prefix_unary_precedence == 0 && str8_match(token_string, str8_lit("("), 0))
-      {
-        E_Token some_type_identifier_maybe = e_token_at_it(it+1, tokens);
-        String8 some_type_identifier_maybe_string = str8_substr(text, some_type_identifier_maybe.range);
-        if(some_type_identifier_maybe.kind == E_TokenKind_Identifier)
+        
+        // rjf: break if the token node iterator has not changed
+        if(it == start_it)
         {
-          E_TypeKey type_key = e_leaf_type_from_name(some_type_identifier_maybe_string);
-          if(!e_type_key_match(type_key, e_type_key_zero()) || str8_match(some_type_identifier_maybe_string, str8_lit("unsigned"), 0))
-          {
-            // rjf: move past open paren
-            it += 1;
-            
-            // rjf: parse type expr
-            E_TokenArray type_parse_tokens = e_token_array_make_first_opl(it, it_opl);
-            E_Parse type_parse = e_parse_type_from_text_tokens(arena, text, &type_parse_tokens);
-            E_Expr *type = type_parse.expr;
-            e_msg_list_concat_in_place(&result.msgs, &type_parse.msgs);
-            it = type_parse.last_token;
-            location = token_string.str;
-            
-            // rjf: expect )
-            E_Token close_paren_maybe = e_token_at_it(it, tokens);
-            String8 close_paren_maybe_string = str8_substr(text, close_paren_maybe.range);
-            if(close_paren_maybe.kind != E_TokenKind_Symbol || !str8_match(close_paren_maybe_string, str8_lit(")"), 0))
-            {
-              e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, token_string.str, "Missing `)`.");
-            }
-            
-            // rjf: consume )
-            else
-            {
-              it += 1;
-            }
-            
-            // rjf: fill
-            prefix_unary_precedence = 2;
-            prefix_unary_kind = E_ExprKind_Cast;
-            cast_expr = type;
-          }
+          break;
+        }
+        
+        // rjf: push prefix unary if we got one
+        {
+          PrefixUnaryNode *op_n = push_array(scratch.arena, PrefixUnaryNode, 1);
+          op_n->kind = prefix_unary_kind;
+          op_n->cast_expr = cast_expr;
+          op_n->location = location;
+          SLLQueuePushFront(first_prefix_unary, last_prefix_unary, op_n);
+        }
+      }
+    }
+    
+    //- rjf: parse atom
+    E_Expr *atom = &e_expr_nil;
+    String8 atom_implicit_member_name = {0};
+    if(it < it_opl)
+    {
+      E_Token token = e_token_at_it(it, tokens);
+      String8 token_string = str8_substr(text, token.range);
+      
+      //- rjf: gather resolution qualifier
+      String8 resolution_qualifier = {0};
+      if(token.kind == E_TokenKind_Identifier)
+      {
+        E_Token next_token = e_token_at_it(it+1, tokens);
+        String8 next_token_string = str8_substr(text, next_token.range);
+        if(next_token.kind == E_TokenKind_Symbol && str8_match(next_token_string, str8_lit(":"), 0))
+        {
+          it += 2;
+          resolution_qualifier = token_string;
+          token = e_token_at_it(it, tokens);
+          token_string = str8_substr(text, token.range);
         }
       }
       
-      // rjf: break if we got no operators
-      if(prefix_unary_precedence == 0)
+      //- rjf: descent to nested expression
+      if(token.kind == E_TokenKind_Symbol && str8_match(token_string, str8_lit("("), 0))
       {
-        break;
-      }
-      
-      // rjf: break if the token node iterator has not changed
-      if(it == start_it)
-      {
-        break;
-      }
-      
-      // rjf: push prefix unary if we got one
-      {
-        PrefixUnaryNode *op_n = push_array(scratch.arena, PrefixUnaryNode, 1);
-        op_n->kind = prefix_unary_kind;
-        op_n->cast_expr = cast_expr;
-        op_n->location = location;
-        SLLQueuePushFront(first_prefix_unary, last_prefix_unary, op_n);
-      }
-    }
-  }
-  
-  //- rjf: parse atom
-  E_Expr *atom = &e_expr_nil;
-  String8 atom_implicit_member_name = {0};
-  if(it < it_opl)
-  {
-    E_Token token = e_token_at_it(it, tokens);
-    String8 token_string = str8_substr(text, token.range);
-    
-    //- rjf: gather resolution qualifier
-    String8 resolution_qualifier = {0};
-    if(token.kind == E_TokenKind_Identifier)
-    {
-      E_Token next_token = e_token_at_it(it+1, tokens);
-      String8 next_token_string = str8_substr(text, next_token.range);
-      if(next_token.kind == E_TokenKind_Symbol && str8_match(next_token_string, str8_lit(":"), 0))
-      {
-        it += 2;
-        resolution_qualifier = token_string;
-        token = e_token_at_it(it, tokens);
-        token_string = str8_substr(text, token.range);
-      }
-    }
-    
-    //- rjf: descent to nested expression
-    if(token.kind == E_TokenKind_Symbol && str8_match(token_string, str8_lit("("), 0))
-    {
-      // rjf: skip (
-      it += 1;
-      
-      // rjf: parse () contents
-      E_TokenArray nested_parse_tokens = e_token_array_make_first_opl(it, it_opl);
-      E_Parse nested_parse = e_parse_expr_from_text_tokens__prec(arena, text, &nested_parse_tokens, e_max_precedence);
-      e_msg_list_concat_in_place(&result.msgs, &nested_parse.msgs);
-      atom = nested_parse.expr;
-      it = nested_parse.last_token;
-      
-      // rjf: expect )
-      E_Token close_paren_maybe = e_token_at_it(it, tokens);
-      String8 close_paren_maybe_string = str8_substr(text, close_paren_maybe.range);
-      if(close_paren_maybe.kind != E_TokenKind_Symbol || !str8_match(close_paren_maybe_string, str8_lit(")"), 0))
-      {
-        e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, token_string.str, "Missing `)`.");
-      }
-      
-      // rjf: consume )
-      else
-      {
+        // rjf: skip (
         it += 1;
-      }
-    }
-    
-    //- rjf: descent to assembly-style dereference sub-expression
-    else if(token.kind == E_TokenKind_Symbol && str8_match(token_string, str8_lit("["), 0))
-    {
-      // rjf: skip [
-      it += 1;
-      
-      // rjf: parse [] contents
-      E_TokenArray nested_parse_tokens = e_token_array_make_first_opl(it, it_opl);
-      E_Parse nested_parse = e_parse_expr_from_text_tokens__prec(arena, text, &nested_parse_tokens, e_max_precedence);
-      e_msg_list_concat_in_place(&result.msgs, &nested_parse.msgs);
-      atom = nested_parse.expr;
-      it = nested_parse.last_token;
-      
-      // rjf: build cast-to-U64*, and dereference operators
-      if(nested_parse.expr == &e_expr_nil)
-      {
-        e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, token_string.str, "Expected expression following `[`.");
-      }
-      else
-      {
-        E_Expr *type = e_push_expr(arena, E_ExprKind_TypeIdent, token_string.str);
-        type->type_key = e_type_key_cons_ptr(e_parse_state->ctx->primary_module->arch, e_type_key_basic(E_TypeKind_U64), 1, 0);
-        E_Expr *casted = atom;
-        E_Expr *cast = e_push_expr(arena, E_ExprKind_Cast, token_string.str);
-        e_expr_push_child(cast, type);
-        e_expr_push_child(cast, casted);
-        atom = e_push_expr(arena, E_ExprKind_Deref, token_string.str);
-        e_expr_push_child(atom, cast);
-      }
-      
-      // rjf: expect ]
-      E_Token close_paren_maybe = e_token_at_it(it, tokens);
-      String8 close_paren_maybe_string = str8_substr(text, close_paren_maybe.range);
-      if(close_paren_maybe.kind != E_TokenKind_Symbol || !str8_match(close_paren_maybe_string, str8_lit("]"), 0))
-      {
-        e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, token_string.str, "Missing `]`.");
-      }
-      
-      // rjf: consume )
-      else
-      {
-        it += 1;
-      }
-    }
-    
-    //- rjf: leaf (identifier, literal)
-    else if(token.kind != E_TokenKind_Symbol)
-    {
-      switch(token.kind)
-      {
-        //- rjf: identifier => name resolution
-        default:
-        case E_TokenKind_Identifier:
+        
+        // rjf: parse () contents
+        E_TokenArray nested_parse_tokens = e_token_array_make_first_opl(it, it_opl);
+        E_Parse nested_parse = e_parse_expr_from_text_tokens__prec(arena, text, &nested_parse_tokens, e_max_precedence);
+        e_msg_list_concat_in_place(&result.msgs, &nested_parse.msgs);
+        atom = nested_parse.expr;
+        it = nested_parse.last_token;
+        
+        // rjf: expect )
+        E_Token close_paren_maybe = e_token_at_it(it, tokens);
+        String8 close_paren_maybe_string = str8_substr(text, close_paren_maybe.range);
+        if(close_paren_maybe.kind != E_TokenKind_Symbol || !str8_match(close_paren_maybe_string, str8_lit(")"), 0))
         {
-          B32 mapped_identifier = 0;
-          B32 identifier_is_constant_value = 0;
-          B32 identifier_type_is_possibly_dynamically_overridden = 0;
-          B32 identifier_looks_like_type_expr = 0;
-          RDI_LocationKind        loc_kind = RDI_LocationKind_NULL;
-          RDI_LocationReg         loc_reg = {0};
-          RDI_LocationRegPlusU16  loc_reg_u16 = {0};
-          String8                 loc_bytecode = {0};
-          U64                     constant_value = 0;
-          REGS_RegCode            reg_code = 0;
-          REGS_AliasCode          alias_code = 0;
-          E_TypeKey               type_key = zero_struct;
-          String8                 local_lookup_string = token_string;
-          E_Space                 space = {0};
-          Arch                    arch = Arch_Null;
-          
-          //- rjf: identifiers surrounded by ``s should have those `s stripped
-          if(local_lookup_string.size >= 2 &&
-             local_lookup_string.str[0] == '`' &&
-             local_lookup_string.str[local_lookup_string.size-1] == '`')
+          e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, token_string.str, "Missing `)`.");
+        }
+        
+        // rjf: consume )
+        else
+        {
+          it += 1;
+        }
+      }
+      
+      //- rjf: descent to assembly-style dereference sub-expression
+      else if(token.kind == E_TokenKind_Symbol && str8_match(token_string, str8_lit("["), 0))
+      {
+        // rjf: skip [
+        it += 1;
+        
+        // rjf: parse [] contents
+        E_TokenArray nested_parse_tokens = e_token_array_make_first_opl(it, it_opl);
+        E_Parse nested_parse = e_parse_expr_from_text_tokens__prec(arena, text, &nested_parse_tokens, e_max_precedence);
+        e_msg_list_concat_in_place(&result.msgs, &nested_parse.msgs);
+        atom = nested_parse.expr;
+        it = nested_parse.last_token;
+        
+        // rjf: build cast-to-U64*, and dereference operators
+        if(nested_parse.expr == &e_expr_nil)
+        {
+          e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, token_string.str, "Expected expression following `[`.");
+        }
+        else
+        {
+          E_Expr *type = e_push_expr(arena, E_ExprKind_TypeIdent, token_string.str);
+          type->type_key = e_type_key_cons_ptr(e_parse_state->ctx->primary_module->arch, e_type_key_basic(E_TypeKind_U64), 1, 0);
+          E_Expr *casted = atom;
+          E_Expr *cast = e_push_expr(arena, E_ExprKind_Cast, token_string.str);
+          e_expr_push_child(cast, type);
+          e_expr_push_child(cast, casted);
+          atom = e_push_expr(arena, E_ExprKind_Deref, token_string.str);
+          e_expr_push_child(atom, cast);
+        }
+        
+        // rjf: expect ]
+        E_Token close_paren_maybe = e_token_at_it(it, tokens);
+        String8 close_paren_maybe_string = str8_substr(text, close_paren_maybe.range);
+        if(close_paren_maybe.kind != E_TokenKind_Symbol || !str8_match(close_paren_maybe_string, str8_lit("]"), 0))
+        {
+          e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, token_string.str, "Missing `]`.");
+        }
+        
+        // rjf: consume )
+        else
+        {
+          it += 1;
+        }
+      }
+      
+      //- rjf: leaf (identifier, literal)
+      else if(token.kind != E_TokenKind_Symbol)
+      {
+        switch(token.kind)
+        {
+          //- rjf: identifier => name resolution
+          default:
+          case E_TokenKind_Identifier:
           {
-            token_string = local_lookup_string = str8_substr(local_lookup_string, r1u64(1, local_lookup_string.size-1));
-          }
-          
-          //- rjf: form namespaceified fallback versions of this lookup string
-          String8List namespaceified_token_strings = {0};
-          {
-            E_Module *module = e_parse_state->ctx->primary_module;
-            RDI_Parsed *rdi = module->rdi;
-            U64 scope_idx = rdi_vmap_idx_from_section_kind_voff(rdi, RDI_SectionKind_ScopeVMap, e_parse_state->ctx->ip_voff);
-            RDI_Scope *scope = rdi_element_from_name_idx(rdi, Scopes, scope_idx);
-            U64 proc_idx = scope->proc_idx;
-            RDI_Procedure *procedure = rdi_element_from_name_idx(rdi, Procedures, proc_idx);
-            U64 name_size = 0;
-            U8 *name_ptr = rdi_string_from_idx(rdi, procedure->name_string_idx, &name_size);
-            String8 containing_procedure_name = str8(name_ptr, name_size);
-            U64 last_past_scope_resolution_pos = 0;
-            for(;;)
+            B32 mapped_identifier = 0;
+            B32 identifier_is_constant_value = 0;
+            B32 identifier_type_is_possibly_dynamically_overridden = 0;
+            B32 identifier_looks_like_type_expr = 0;
+            RDI_LocationKind        loc_kind = RDI_LocationKind_NULL;
+            RDI_LocationReg         loc_reg = {0};
+            RDI_LocationRegPlusU16  loc_reg_u16 = {0};
+            String8                 loc_bytecode = {0};
+            U64                     constant_value = 0;
+            REGS_RegCode            reg_code = 0;
+            REGS_AliasCode          alias_code = 0;
+            E_TypeKey               type_key = zero_struct;
+            String8                 local_lookup_string = token_string;
+            E_Space                 space = {0};
+            Arch                    arch = Arch_Null;
+            
+            //- rjf: identifiers surrounded by ``s should have those `s stripped
+            if(local_lookup_string.size >= 2 &&
+               local_lookup_string.str[0] == '`' &&
+               local_lookup_string.str[local_lookup_string.size-1] == '`')
             {
-              U64 past_next_dbl_colon_pos = str8_find_needle(containing_procedure_name, last_past_scope_resolution_pos, str8_lit("::"), 0)+2;
-              U64 past_next_dot_pos = str8_find_needle(containing_procedure_name, last_past_scope_resolution_pos, str8_lit("."), 0)+1;
-              U64 past_next_scope_resolution_pos = Min(past_next_dbl_colon_pos, past_next_dot_pos);
-              if(past_next_scope_resolution_pos >= containing_procedure_name.size)
-              {
-                break;
-              }
-              String8 new_namespace_prefix_possibility = str8_prefix(containing_procedure_name, past_next_scope_resolution_pos);
-              String8 namespaceified_token_string = push_str8f(scratch.arena, "%S%S", new_namespace_prefix_possibility, token_string);
-              str8_list_push_front(scratch.arena, &namespaceified_token_strings, namespaceified_token_string);
-              last_past_scope_resolution_pos = past_next_scope_resolution_pos;
+              token_string = local_lookup_string = str8_substr(local_lookup_string, r1u64(1, local_lookup_string.size-1));
             }
-          }
-          
-          //- rjf: try members
-          if(mapped_identifier == 0 && (resolution_qualifier.size == 0 || str8_match(resolution_qualifier, str8_lit("member"), 0))) ProfScope("try to map name as member")
-          {
-            U64 data_member_num = e_num_from_string(e_parse_state->ctx->member_map, token_string);
-            if(data_member_num != 0)
+            
+            //- rjf: form namespaceified fallback versions of this lookup string
+            String8List namespaceified_token_strings = {0};
             {
-              atom_implicit_member_name = token_string;
-              local_lookup_string = str8_lit("this");
-            }
-          }
-          
-          //- rjf: try locals
-          if(mapped_identifier == 0 && (resolution_qualifier.size == 0 || str8_match(resolution_qualifier, str8_lit("local"), 0))) ProfScope("try to map name as local")
-          {
-            E_Module *module = e_parse_state->ctx->primary_module;
-            RDI_Parsed *rdi = module->rdi;
-            U64 local_num = e_num_from_string(e_parse_state->ctx->locals_map, local_lookup_string);
-            if(local_num != 0)
-            {
-              identifier_type_is_possibly_dynamically_overridden = 1;
-              RDI_Local *local_var = rdi_element_from_name_idx(rdi, Locals, local_num-1);
-              RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, local_var->type_idx);
-              type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), local_var->type_idx, (U32)(module - e_parse_state->ctx->modules));
-              
-              // rjf: grab location info
-              for(U32 loc_block_idx = local_var->location_first;
-                  loc_block_idx < local_var->location_opl;
-                  loc_block_idx += 1)
+              E_Module *module = e_parse_state->ctx->primary_module;
+              RDI_Parsed *rdi = module->rdi;
+              U64 scope_idx = rdi_vmap_idx_from_section_kind_voff(rdi, RDI_SectionKind_ScopeVMap, e_parse_state->ctx->ip_voff);
+              RDI_Scope *scope = rdi_element_from_name_idx(rdi, Scopes, scope_idx);
+              U64 proc_idx = scope->proc_idx;
+              RDI_Procedure *procedure = rdi_element_from_name_idx(rdi, Procedures, proc_idx);
+              U64 name_size = 0;
+              U8 *name_ptr = rdi_string_from_idx(rdi, procedure->name_string_idx, &name_size);
+              String8 containing_procedure_name = str8(name_ptr, name_size);
+              U64 last_past_scope_resolution_pos = 0;
+              for(;;)
               {
-                RDI_LocationBlock *block = rdi_element_from_name_idx(rdi, LocationBlocks, loc_block_idx);
-                if(block->scope_off_first <= e_parse_state->ctx->ip_voff && e_parse_state->ctx->ip_voff < block->scope_off_opl)
+                U64 past_next_dbl_colon_pos = str8_find_needle(containing_procedure_name, last_past_scope_resolution_pos, str8_lit("::"), 0)+2;
+                U64 past_next_dot_pos = str8_find_needle(containing_procedure_name, last_past_scope_resolution_pos, str8_lit("."), 0)+1;
+                U64 past_next_scope_resolution_pos = Min(past_next_dbl_colon_pos, past_next_dot_pos);
+                if(past_next_scope_resolution_pos >= containing_procedure_name.size)
                 {
-                  mapped_identifier = 1;
-                  space = module->space;
-                  arch = module->arch;
-                  U64 all_location_data_size = 0;
-                  U8 *all_location_data = rdi_table_from_name(rdi, LocationData, &all_location_data_size);
-                  loc_kind = *((RDI_LocationKind *)(all_location_data + block->location_data_off));
-                  switch(loc_kind)
+                  break;
+                }
+                String8 new_namespace_prefix_possibility = str8_prefix(containing_procedure_name, past_next_scope_resolution_pos);
+                String8 namespaceified_token_string = push_str8f(scratch.arena, "%S%S", new_namespace_prefix_possibility, token_string);
+                str8_list_push_front(scratch.arena, &namespaceified_token_strings, namespaceified_token_string);
+                last_past_scope_resolution_pos = past_next_scope_resolution_pos;
+              }
+            }
+            
+            //- rjf: try members
+            if(mapped_identifier == 0 && (resolution_qualifier.size == 0 || str8_match(resolution_qualifier, str8_lit("member"), 0))) ProfScope("try to map name as member")
+            {
+              U64 data_member_num = e_num_from_string(e_parse_state->ctx->member_map, token_string);
+              if(data_member_num != 0)
+              {
+                atom_implicit_member_name = token_string;
+                local_lookup_string = str8_lit("this");
+              }
+            }
+            
+            //- rjf: try locals
+            if(mapped_identifier == 0 && (resolution_qualifier.size == 0 || str8_match(resolution_qualifier, str8_lit("local"), 0))) ProfScope("try to map name as local")
+            {
+              E_Module *module = e_parse_state->ctx->primary_module;
+              RDI_Parsed *rdi = module->rdi;
+              U64 local_num = e_num_from_string(e_parse_state->ctx->locals_map, local_lookup_string);
+              if(local_num != 0)
+              {
+                identifier_type_is_possibly_dynamically_overridden = 1;
+                RDI_Local *local_var = rdi_element_from_name_idx(rdi, Locals, local_num-1);
+                RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, local_var->type_idx);
+                type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), local_var->type_idx, (U32)(module - e_parse_state->ctx->modules));
+                
+                // rjf: grab location info
+                for(U32 loc_block_idx = local_var->location_first;
+                    loc_block_idx < local_var->location_opl;
+                    loc_block_idx += 1)
+                {
+                  RDI_LocationBlock *block = rdi_element_from_name_idx(rdi, LocationBlocks, loc_block_idx);
+                  if(block->scope_off_first <= e_parse_state->ctx->ip_voff && e_parse_state->ctx->ip_voff < block->scope_off_opl)
                   {
-                    default:{mapped_identifier = 0;}break;
-                    case RDI_LocationKind_ValBytecodeStream: goto bytecode_stream;
-                    case RDI_LocationKind_AddrBytecodeStream: goto bytecode_stream;
-                    bytecode_stream:;
+                    mapped_identifier = 1;
+                    space = module->space;
+                    arch = module->arch;
+                    U64 all_location_data_size = 0;
+                    U8 *all_location_data = rdi_table_from_name(rdi, LocationData, &all_location_data_size);
+                    loc_kind = *((RDI_LocationKind *)(all_location_data + block->location_data_off));
+                    switch(loc_kind)
                     {
-                      U64 bytecode_size = 0;
-                      U64 off_first = block->location_data_off + sizeof(RDI_LocationKind);
-                      U64 off_opl = all_location_data_size;
-                      for(U64 off = off_first, next_off = off_opl;
-                          off < all_location_data_size;
-                          off = next_off)
+                      default:{mapped_identifier = 0;}break;
+                      case RDI_LocationKind_ValBytecodeStream: goto bytecode_stream;
+                      case RDI_LocationKind_AddrBytecodeStream: goto bytecode_stream;
+                      bytecode_stream:;
                       {
-                        next_off = off_opl;
-                        U8 op = all_location_data[off];
-                        if(op == 0)
+                        U64 bytecode_size = 0;
+                        U64 off_first = block->location_data_off + sizeof(RDI_LocationKind);
+                        U64 off_opl = all_location_data_size;
+                        for(U64 off = off_first, next_off = off_opl;
+                            off < all_location_data_size;
+                            off = next_off)
                         {
-                          break;
+                          next_off = off_opl;
+                          U8 op = all_location_data[off];
+                          if(op == 0)
+                          {
+                            break;
+                          }
+                          U16 ctrlbits = rdi_eval_op_ctrlbits_table[op];
+                          U32 p_size = RDI_DECODEN_FROM_CTRLBITS(ctrlbits);
+                          bytecode_size += (1 + p_size);
+                          next_off = (off + 1 + p_size);
                         }
-                        U16 ctrlbits = rdi_eval_op_ctrlbits_table[op];
-                        U32 p_size = RDI_DECODEN_FROM_CTRLBITS(ctrlbits);
-                        bytecode_size += (1 + p_size);
-                        next_off = (off + 1 + p_size);
-                      }
-                      loc_bytecode = str8(all_location_data + off_first, bytecode_size);
-                    }break;
-                    case RDI_LocationKind_AddrRegPlusU16:
-                    case RDI_LocationKind_AddrAddrRegPlusU16:
-                    {
-                      MemoryCopy(&loc_reg_u16, (all_location_data + block->location_data_off), sizeof(loc_reg_u16));
-                    }break;
-                    case RDI_LocationKind_ValReg:
-                    {
-                      MemoryCopy(&loc_reg, (all_location_data + block->location_data_off), sizeof(loc_reg));
-                    }break;
+                        loc_bytecode = str8(all_location_data + off_first, bytecode_size);
+                      }break;
+                      case RDI_LocationKind_AddrRegPlusU16:
+                      case RDI_LocationKind_AddrAddrRegPlusU16:
+                      {
+                        MemoryCopy(&loc_reg_u16, (all_location_data + block->location_data_off), sizeof(loc_reg_u16));
+                      }break;
+                      case RDI_LocationKind_ValReg:
+                      {
+                        MemoryCopy(&loc_reg, (all_location_data + block->location_data_off), sizeof(loc_reg));
+                      }break;
+                    }
                   }
                 }
               }
             }
-          }
-          
-          //- rjf: try registers
-          if(mapped_identifier == 0 && (resolution_qualifier.size == 0 || str8_match(resolution_qualifier, str8_lit("reg"), 0))) ProfScope("try to map name as register")
-          {
-            U64 reg_num = e_num_from_string(e_parse_state->ctx->regs_map, token_string);
-            if(reg_num != 0)
-            {
-              reg_code = reg_num;
-              type_key = e_type_key_reg(e_parse_state->ctx->primary_module->arch, reg_code);
-              mapped_identifier = 1;
-              space = e_parse_state->ctx->ip_thread_space;
-              arch = e_parse_state->ctx->primary_module->arch;
-            }
-          }
-          
-          //- rjf: try register aliases
-          if(mapped_identifier == 0 && (resolution_qualifier.size == 0 || str8_match(resolution_qualifier, str8_lit("reg"), 0))) ProfScope("try to map name as register alias")
-          {
-            U64 alias_num = e_num_from_string(e_parse_state->ctx->reg_alias_map, token_string);
-            if(alias_num != 0)
-            {
-              alias_code = (REGS_AliasCode)alias_num;
-              type_key = e_type_key_reg_alias(e_parse_state->ctx->primary_module->arch, alias_code);
-              mapped_identifier = 1;
-              space = e_parse_state->ctx->ip_thread_space;
-              arch = e_parse_state->ctx->primary_module->arch;
-            }
-          }
-          
-          //- rjf: try global variables
-          if(mapped_identifier == 0 && (resolution_qualifier.size == 0 || str8_match(resolution_qualifier, str8_lit("global"), 0))) ProfScope("try to map name as global variable")
-          {
-            for(U64 module_idx = 0; module_idx < e_parse_state->ctx->modules_count; module_idx += 1)
-            {
-              E_Module *module = &e_parse_state->ctx->modules[module_idx];
-              RDI_Parsed *rdi = module->rdi;
-              RDI_NameMap *name_map = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_GlobalVariables);
-              RDI_ParsedNameMap parsed_name_map = {0};
-              rdi_parsed_from_name_map(rdi, name_map, &parsed_name_map);
-              RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &parsed_name_map, token_string.str, token_string.size);
-              U32 matches_count = 0;
-              U32 *matches = rdi_matches_from_map_node(rdi, node, &matches_count);
-              for(String8Node *n = namespaceified_token_strings.first;
-                  n != 0 && matches_count == 0;
-                  n = n->next)
-              {
-                node = rdi_name_map_lookup(rdi, &parsed_name_map, n->string.str, n->string.size);
-                matches_count = 0;
-                matches = rdi_matches_from_map_node(rdi, node, &matches_count);
-              }
-              if(matches_count != 0)
-              {
-                // NOTE(rjf): apparently, PDBs can be produced such that they
-                // also keep stale *GLOBAL VARIABLE SYMBOLS* around too. I
-                // don't know of a magic hash table fixup path in PDBs, so
-                // in this case, I'm going to prefer the latest-added global.
-                U32 match_idx = matches[matches_count-1];
-                RDI_GlobalVariable *global_var = rdi_element_from_name_idx(rdi, GlobalVariables, match_idx);
-                E_OpList oplist = {0};
-                e_oplist_push_op(arena, &oplist, RDI_EvalOp_ConstU64, e_value_u64(module->vaddr_range.min + global_var->voff));
-                loc_kind = RDI_LocationKind_AddrBytecodeStream;
-                loc_bytecode = e_bytecode_from_oplist(arena, &oplist);
-                U32 type_idx = global_var->type_idx;
-                RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, type_idx);
-                type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), type_idx, (U32)module_idx);
-                mapped_identifier = 1;
-                space = module->space;
-                arch = module->arch;
-                break;
-              }
-            }
-          }
-          
-          //- rjf: try thread variables
-          if(mapped_identifier == 0 && (resolution_qualifier.size == 0 || str8_match(resolution_qualifier, str8_lit("thread_variable"), 0))) ProfScope("try to map name as thread variable")
-          {
-            for(U64 module_idx = 0; module_idx < e_parse_state->ctx->modules_count; module_idx += 1)
-            {
-              E_Module *module = &e_parse_state->ctx->modules[module_idx];
-              RDI_Parsed *rdi = module->rdi;
-              RDI_NameMap *name_map = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_ThreadVariables);
-              RDI_ParsedNameMap parsed_name_map = {0};
-              rdi_parsed_from_name_map(rdi, name_map, &parsed_name_map);
-              RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &parsed_name_map, token_string.str, token_string.size);
-              U32 matches_count = 0;
-              U32 *matches = rdi_matches_from_map_node(rdi, node, &matches_count);
-              for(String8Node *n = namespaceified_token_strings.first;
-                  n != 0 && matches_count == 0;
-                  n = n->next)
-              {
-                node = rdi_name_map_lookup(rdi, &parsed_name_map, n->string.str, n->string.size);
-                matches_count = 0;
-                matches = rdi_matches_from_map_node(rdi, node, &matches_count);
-              }
-              if(matches_count != 0)
-              {
-                U32 match_idx = matches[0];
-                RDI_ThreadVariable *thread_var = rdi_element_from_name_idx(rdi, ThreadVariables, match_idx);
-                E_OpList oplist = {0};
-                e_oplist_push_op(arena, &oplist, RDI_EvalOp_TLSOff, e_value_u64(thread_var->tls_off));
-                loc_kind = RDI_LocationKind_AddrBytecodeStream;
-                loc_bytecode = e_bytecode_from_oplist(arena, &oplist);
-                U32 type_idx = thread_var->type_idx;
-                RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, type_idx);
-                type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), type_idx, (U32)module_idx);
-                mapped_identifier = 1;
-                space = module->space;
-                arch = module->arch;
-                break;
-              }
-            }
-          }
-          
-          //- rjf: try procedures
-          if(mapped_identifier == 0 && (resolution_qualifier.size == 0 || str8_match(resolution_qualifier, str8_lit("procedure"), 0))) ProfScope("try to map name as procedure")
-          {
-            for(U64 module_idx = 0; module_idx < e_parse_state->ctx->modules_count; module_idx += 1)
-            {
-              E_Module *module = &e_parse_state->ctx->modules[module_idx];
-              RDI_Parsed *rdi = module->rdi;
-              RDI_NameMap *name_map = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_Procedures);
-              RDI_ParsedNameMap parsed_name_map = {0};
-              rdi_parsed_from_name_map(rdi, name_map, &parsed_name_map);
-              RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &parsed_name_map, token_string.str, token_string.size);
-              U32 matches_count = 0;
-              U32 *matches = rdi_matches_from_map_node(rdi, node, &matches_count);
-              for(String8Node *n = namespaceified_token_strings.first;
-                  n != 0 && matches_count == 0;
-                  n = n->next)
-              {
-                node = rdi_name_map_lookup(rdi, &parsed_name_map, n->string.str, n->string.size);
-                matches_count = 0;
-                matches = rdi_matches_from_map_node(rdi, node, &matches_count);
-              }
-              if(matches_count != 0)
-              {
-                U32 match_idx = matches[0];
-                RDI_Procedure *procedure = rdi_element_from_name_idx(rdi, Procedures, match_idx);
-                RDI_Scope *scope = rdi_element_from_name_idx(rdi, Scopes, procedure->root_scope_idx);
-                U64 voff = *rdi_element_from_name_idx(rdi, ScopeVOffData, scope->voff_range_first);
-                E_OpList oplist = {0};
-                e_oplist_push_op(arena, &oplist, RDI_EvalOp_ConstU64, e_value_u64(module->vaddr_range.min + voff));
-                loc_kind = RDI_LocationKind_ValBytecodeStream;
-                loc_bytecode = e_bytecode_from_oplist(arena, &oplist);
-                U32 type_idx = procedure->type_idx;
-                RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, type_idx);
-                type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), type_idx, (U32)module_idx);
-                mapped_identifier = 1;
-                space = module->space;
-                arch = module->arch;
-                break;
-              }
-            }
-          }
-          
-          //- rjf: try types
-          if(mapped_identifier == 0 && (resolution_qualifier.size == 0 || str8_match(resolution_qualifier, str8_lit("type"), 0))) ProfScope("try to map name as type")
-          {
-            type_key = e_leaf_type_from_name(token_string);
-            if(!e_type_key_match(e_type_key_zero(), type_key))
-            {
-              mapped_identifier = 1;
-              identifier_looks_like_type_expr = 1;
-              MemoryZeroStruct(&space);
-              arch = e_parse_state->ctx->primary_module->arch;
-            }
-          }
-          
-          //- rjf: try basic constants
-          if(mapped_identifier == 0 && str8_match(token_string, str8_lit("true"), 0))
-          {
-            mapped_identifier = 1;
-            identifier_is_constant_value = 1;
-            type_key = e_type_key_basic(E_TypeKind_Bool);
-            constant_value = 1;
-          }
-          if(mapped_identifier == 0 && str8_match(token_string, str8_lit("false"), 0))
-          {
-            mapped_identifier = 1;
-            identifier_is_constant_value = 1;
-            type_key = e_type_key_basic(E_TypeKind_Bool);
-            constant_value = 0;
-          }
-          
-          //- rjf: attach on map
-          if(mapped_identifier != 0) ProfScope("attach on map")
-          {
-            it += 1;
             
-            // rjf: build atom
-            switch(loc_kind)
+            //- rjf: try registers
+            if(mapped_identifier == 0 && (resolution_qualifier.size == 0 || str8_match(resolution_qualifier, str8_lit("reg"), 0))) ProfScope("try to map name as register")
             {
-              default:
+              U64 reg_num = e_num_from_string(e_parse_state->ctx->regs_map, token_string);
+              if(reg_num != 0)
               {
-                if(identifier_is_constant_value)
+                reg_code = reg_num;
+                type_key = e_type_key_reg(e_parse_state->ctx->primary_module->arch, reg_code);
+                mapped_identifier = 1;
+                space = e_parse_state->ctx->ip_thread_space;
+                arch = e_parse_state->ctx->primary_module->arch;
+              }
+            }
+            
+            //- rjf: try register aliases
+            if(mapped_identifier == 0 && (resolution_qualifier.size == 0 || str8_match(resolution_qualifier, str8_lit("reg"), 0))) ProfScope("try to map name as register alias")
+            {
+              U64 alias_num = e_num_from_string(e_parse_state->ctx->reg_alias_map, token_string);
+              if(alias_num != 0)
+              {
+                alias_code = (REGS_AliasCode)alias_num;
+                type_key = e_type_key_reg_alias(e_parse_state->ctx->primary_module->arch, alias_code);
+                mapped_identifier = 1;
+                space = e_parse_state->ctx->ip_thread_space;
+                arch = e_parse_state->ctx->primary_module->arch;
+              }
+            }
+            
+            //- rjf: try global variables
+            if(mapped_identifier == 0 && (resolution_qualifier.size == 0 || str8_match(resolution_qualifier, str8_lit("global"), 0))) ProfScope("try to map name as global variable")
+            {
+              for(U64 module_idx = 0; module_idx < e_parse_state->ctx->modules_count; module_idx += 1)
+              {
+                E_Module *module = &e_parse_state->ctx->modules[module_idx];
+                RDI_Parsed *rdi = module->rdi;
+                RDI_NameMap *name_map = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_GlobalVariables);
+                RDI_ParsedNameMap parsed_name_map = {0};
+                rdi_parsed_from_name_map(rdi, name_map, &parsed_name_map);
+                RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &parsed_name_map, token_string.str, token_string.size);
+                U32 matches_count = 0;
+                U32 *matches = rdi_matches_from_map_node(rdi, node, &matches_count);
+                for(String8Node *n = namespaceified_token_strings.first;
+                    n != 0 && matches_count == 0;
+                    n = n->next)
                 {
-                  atom = e_push_expr(arena, E_ExprKind_LeafBool, token_string.str);
-                  atom->value.u64 = constant_value;
-                  atom->type_key  = type_key;
+                  node = rdi_name_map_lookup(rdi, &parsed_name_map, n->string.str, n->string.size);
+                  matches_count = 0;
+                  matches = rdi_matches_from_map_node(rdi, node, &matches_count);
                 }
-                else if(identifier_looks_like_type_expr)
+                if(matches_count != 0)
                 {
-                  E_TokenArray type_parse_tokens = e_token_array_make_first_opl(it-1, it_opl);
-                  E_Parse type_parse = e_parse_type_from_text_tokens(arena, text, &type_parse_tokens);
-                  E_Expr *type = type_parse.expr;
-                  e_msg_list_concat_in_place(&result.msgs, &type_parse.msgs);
-                  it = type_parse.last_token;
-                  atom = type;
-                }
-                else if(reg_code != 0)
-                {
-                  REGS_Rng reg_rng = regs_reg_code_rng_table_from_arch(e_parse_state->ctx->primary_module->arch)[reg_code];
+                  // NOTE(rjf): apparently, PDBs can be produced such that they
+                  // also keep stale *GLOBAL VARIABLE SYMBOLS* around too. I
+                  // don't know of a magic hash table fixup path in PDBs, so
+                  // in this case, I'm going to prefer the latest-added global.
+                  U32 match_idx = matches[matches_count-1];
+                  RDI_GlobalVariable *global_var = rdi_element_from_name_idx(rdi, GlobalVariables, match_idx);
                   E_OpList oplist = {0};
-                  e_oplist_push_uconst(arena, &oplist, reg_rng.byte_off);
+                  e_oplist_push_op(arena, &oplist, RDI_EvalOp_ConstU64, e_value_u64(module->vaddr_range.min + global_var->voff));
+                  loc_kind = RDI_LocationKind_AddrBytecodeStream;
+                  loc_bytecode = e_bytecode_from_oplist(arena, &oplist);
+                  U32 type_idx = global_var->type_idx;
+                  RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, type_idx);
+                  type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), type_idx, (U32)module_idx);
+                  mapped_identifier = 1;
+                  space = module->space;
+                  arch = module->arch;
+                  break;
+                }
+              }
+            }
+            
+            //- rjf: try thread variables
+            if(mapped_identifier == 0 && (resolution_qualifier.size == 0 || str8_match(resolution_qualifier, str8_lit("thread_variable"), 0))) ProfScope("try to map name as thread variable")
+            {
+              for(U64 module_idx = 0; module_idx < e_parse_state->ctx->modules_count; module_idx += 1)
+              {
+                E_Module *module = &e_parse_state->ctx->modules[module_idx];
+                RDI_Parsed *rdi = module->rdi;
+                RDI_NameMap *name_map = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_ThreadVariables);
+                RDI_ParsedNameMap parsed_name_map = {0};
+                rdi_parsed_from_name_map(rdi, name_map, &parsed_name_map);
+                RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &parsed_name_map, token_string.str, token_string.size);
+                U32 matches_count = 0;
+                U32 *matches = rdi_matches_from_map_node(rdi, node, &matches_count);
+                for(String8Node *n = namespaceified_token_strings.first;
+                    n != 0 && matches_count == 0;
+                    n = n->next)
+                {
+                  node = rdi_name_map_lookup(rdi, &parsed_name_map, n->string.str, n->string.size);
+                  matches_count = 0;
+                  matches = rdi_matches_from_map_node(rdi, node, &matches_count);
+                }
+                if(matches_count != 0)
+                {
+                  U32 match_idx = matches[0];
+                  RDI_ThreadVariable *thread_var = rdi_element_from_name_idx(rdi, ThreadVariables, match_idx);
+                  E_OpList oplist = {0};
+                  e_oplist_push_op(arena, &oplist, RDI_EvalOp_TLSOff, e_value_u64(thread_var->tls_off));
+                  loc_kind = RDI_LocationKind_AddrBytecodeStream;
+                  loc_bytecode = e_bytecode_from_oplist(arena, &oplist);
+                  U32 type_idx = thread_var->type_idx;
+                  RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, type_idx);
+                  type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), type_idx, (U32)module_idx);
+                  mapped_identifier = 1;
+                  space = module->space;
+                  arch = module->arch;
+                  break;
+                }
+              }
+            }
+            
+            //- rjf: try procedures
+            if(mapped_identifier == 0 && (resolution_qualifier.size == 0 || str8_match(resolution_qualifier, str8_lit("procedure"), 0))) ProfScope("try to map name as procedure")
+            {
+              for(U64 module_idx = 0; module_idx < e_parse_state->ctx->modules_count; module_idx += 1)
+              {
+                E_Module *module = &e_parse_state->ctx->modules[module_idx];
+                RDI_Parsed *rdi = module->rdi;
+                RDI_NameMap *name_map = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_Procedures);
+                RDI_ParsedNameMap parsed_name_map = {0};
+                rdi_parsed_from_name_map(rdi, name_map, &parsed_name_map);
+                RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &parsed_name_map, token_string.str, token_string.size);
+                U32 matches_count = 0;
+                U32 *matches = rdi_matches_from_map_node(rdi, node, &matches_count);
+                for(String8Node *n = namespaceified_token_strings.first;
+                    n != 0 && matches_count == 0;
+                    n = n->next)
+                {
+                  node = rdi_name_map_lookup(rdi, &parsed_name_map, n->string.str, n->string.size);
+                  matches_count = 0;
+                  matches = rdi_matches_from_map_node(rdi, node, &matches_count);
+                }
+                if(matches_count != 0)
+                {
+                  U32 match_idx = matches[0];
+                  RDI_Procedure *procedure = rdi_element_from_name_idx(rdi, Procedures, match_idx);
+                  RDI_Scope *scope = rdi_element_from_name_idx(rdi, Scopes, procedure->root_scope_idx);
+                  U64 voff = *rdi_element_from_name_idx(rdi, ScopeVOffData, scope->voff_range_first);
+                  E_OpList oplist = {0};
+                  e_oplist_push_op(arena, &oplist, RDI_EvalOp_ConstU64, e_value_u64(module->vaddr_range.min + voff));
+                  loc_kind = RDI_LocationKind_ValBytecodeStream;
+                  loc_bytecode = e_bytecode_from_oplist(arena, &oplist);
+                  U32 type_idx = procedure->type_idx;
+                  RDI_TypeNode *type_node = rdi_element_from_name_idx(rdi, TypeNodes, type_idx);
+                  type_key = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), type_idx, (U32)module_idx);
+                  mapped_identifier = 1;
+                  space = module->space;
+                  arch = module->arch;
+                  break;
+                }
+              }
+            }
+            
+            //- rjf: try types
+            if(mapped_identifier == 0 && (resolution_qualifier.size == 0 || str8_match(resolution_qualifier, str8_lit("type"), 0))) ProfScope("try to map name as type")
+            {
+              type_key = e_leaf_type_from_name(token_string);
+              if(!e_type_key_match(e_type_key_zero(), type_key))
+              {
+                mapped_identifier = 1;
+                identifier_looks_like_type_expr = 1;
+                MemoryZeroStruct(&space);
+                arch = e_parse_state->ctx->primary_module->arch;
+              }
+            }
+            
+            //- rjf: try basic constants
+            if(mapped_identifier == 0 && str8_match(token_string, str8_lit("true"), 0))
+            {
+              mapped_identifier = 1;
+              identifier_is_constant_value = 1;
+              type_key = e_type_key_basic(E_TypeKind_Bool);
+              constant_value = 1;
+            }
+            if(mapped_identifier == 0 && str8_match(token_string, str8_lit("false"), 0))
+            {
+              mapped_identifier = 1;
+              identifier_is_constant_value = 1;
+              type_key = e_type_key_basic(E_TypeKind_Bool);
+              constant_value = 0;
+            }
+            
+            //- rjf: attach on map
+            if(mapped_identifier != 0) ProfScope("attach on map")
+            {
+              it += 1;
+              
+              // rjf: build atom
+              switch(loc_kind)
+              {
+                default:
+                {
+                  if(identifier_is_constant_value)
+                  {
+                    atom = e_push_expr(arena, E_ExprKind_LeafBool, token_string.str);
+                    atom->value.u64 = constant_value;
+                    atom->type_key  = type_key;
+                  }
+                  else if(identifier_looks_like_type_expr)
+                  {
+                    E_TokenArray type_parse_tokens = e_token_array_make_first_opl(it-1, it_opl);
+                    E_Parse type_parse = e_parse_type_from_text_tokens(arena, text, &type_parse_tokens);
+                    E_Expr *type = type_parse.expr;
+                    e_msg_list_concat_in_place(&result.msgs, &type_parse.msgs);
+                    it = type_parse.last_token;
+                    atom = type;
+                  }
+                  else if(reg_code != 0)
+                  {
+                    REGS_Rng reg_rng = regs_reg_code_rng_table_from_arch(e_parse_state->ctx->primary_module->arch)[reg_code];
+                    E_OpList oplist = {0};
+                    e_oplist_push_uconst(arena, &oplist, reg_rng.byte_off);
+                    atom = e_push_expr(arena, E_ExprKind_LeafBytecode, token_string.str);
+                    atom->mode     = E_Mode_Offset;
+                    atom->space    = space;
+                    atom->type_key = type_key;
+                    atom->string   = token_string;
+                    atom->bytecode = e_bytecode_from_oplist(arena, &oplist);
+                  }
+                  else if(alias_code != 0)
+                  {
+                    REGS_Slice alias_slice = regs_alias_code_slice_table_from_arch(e_parse_state->ctx->primary_module->arch)[alias_code];
+                    REGS_Rng alias_reg_rng = regs_reg_code_rng_table_from_arch(e_parse_state->ctx->primary_module->arch)[alias_slice.code];
+                    E_OpList oplist = {0};
+                    e_oplist_push_uconst(arena, &oplist, alias_reg_rng.byte_off + alias_slice.byte_off);
+                    atom = e_push_expr(arena, E_ExprKind_LeafBytecode, token_string.str);
+                    atom->mode     = E_Mode_Offset;
+                    atom->space    = space;
+                    atom->type_key = type_key;
+                    atom->string   = token_string;
+                    atom->bytecode = e_bytecode_from_oplist(arena, &oplist);
+                  }
+                  else
+                  {
+                    e_msgf(arena, &result.msgs, E_MsgKind_MissingInfo, token_string.str, "Missing location information for `%S`.", token_string);
+                  }
+                }break;
+                case RDI_LocationKind_AddrBytecodeStream:
+                {
+                  atom = e_push_expr(arena, E_ExprKind_LeafBytecode, token_string.str);
+                  atom->mode     = E_Mode_Offset;
+                  atom->space    = space;
+                  atom->type_key = type_key;
+                  atom->string   = token_string;
+                  atom->bytecode = loc_bytecode;
+                }break;
+                case RDI_LocationKind_ValBytecodeStream:
+                {
+                  atom = e_push_expr(arena, E_ExprKind_LeafBytecode, token_string.str);
+                  atom->mode     = E_Mode_Value;
+                  atom->space    = space;
+                  atom->type_key = type_key;
+                  atom->string   = token_string;
+                  atom->bytecode = loc_bytecode;
+                }break;
+                case RDI_LocationKind_AddrRegPlusU16:
+                {
+                  E_OpList oplist = {0};
+                  U64 byte_size = bit_size_from_arch(arch)/8;
+                  U64 regread_param = RDI_EncodeRegReadParam(loc_reg_u16.reg_code, byte_size, 0);
+                  e_oplist_push_op(arena, &oplist, RDI_EvalOp_RegRead, e_value_u64(regread_param));
+                  e_oplist_push_op(arena, &oplist, RDI_EvalOp_ConstU16, e_value_u64(loc_reg_u16.offset));
+                  e_oplist_push_op(arena, &oplist, RDI_EvalOp_Add, e_value_u64(0));
                   atom = e_push_expr(arena, E_ExprKind_LeafBytecode, token_string.str);
                   atom->mode     = E_Mode_Offset;
                   atom->space    = space;
                   atom->type_key = type_key;
                   atom->string   = token_string;
                   atom->bytecode = e_bytecode_from_oplist(arena, &oplist);
-                }
-                else if(alias_code != 0)
+                }break;
+                case RDI_LocationKind_AddrAddrRegPlusU16:
                 {
-                  REGS_Slice alias_slice = regs_alias_code_slice_table_from_arch(e_parse_state->ctx->primary_module->arch)[alias_code];
-                  REGS_Rng alias_reg_rng = regs_reg_code_rng_table_from_arch(e_parse_state->ctx->primary_module->arch)[alias_slice.code];
                   E_OpList oplist = {0};
-                  e_oplist_push_uconst(arena, &oplist, alias_reg_rng.byte_off + alias_slice.byte_off);
+                  U64 byte_size = bit_size_from_arch(arch)/8;
+                  U64 regread_param = RDI_EncodeRegReadParam(loc_reg_u16.reg_code, byte_size, 0);
+                  e_oplist_push_op(arena, &oplist, RDI_EvalOp_RegRead, e_value_u64(regread_param));
+                  e_oplist_push_op(arena, &oplist, RDI_EvalOp_ConstU16, e_value_u64(loc_reg_u16.offset));
+                  e_oplist_push_op(arena, &oplist, RDI_EvalOp_Add, e_value_u64(0));
+                  e_oplist_push_op(arena, &oplist, RDI_EvalOp_MemRead, e_value_u64(bit_size_from_arch(arch)/8));
                   atom = e_push_expr(arena, E_ExprKind_LeafBytecode, token_string.str);
                   atom->mode     = E_Mode_Offset;
                   atom->space    = space;
                   atom->type_key = type_key;
                   atom->string   = token_string;
                   atom->bytecode = e_bytecode_from_oplist(arena, &oplist);
-                }
-                else
+                }break;
+                case RDI_LocationKind_ValReg:
                 {
-                  e_msgf(arena, &result.msgs, E_MsgKind_MissingInfo, token_string.str, "Missing location information for `%S`.", token_string);
-                }
-              }break;
-              case RDI_LocationKind_AddrBytecodeStream:
+                  REGS_RegCode regs_reg_code = regs_reg_code_from_arch_rdi_code(arch, loc_reg.reg_code);
+                  REGS_Rng reg_rng = regs_reg_code_rng_table_from_arch(arch)[regs_reg_code];
+                  E_OpList oplist = {0};
+                  U64 byte_size = (U64)reg_rng.byte_size;
+                  U64 byte_pos = 0;
+                  U64 regread_param = RDI_EncodeRegReadParam(loc_reg.reg_code, byte_size, byte_pos);
+                  e_oplist_push_op(arena, &oplist, RDI_EvalOp_RegRead, e_value_u64(regread_param));
+                  atom = e_push_expr(arena, E_ExprKind_LeafBytecode, token_string.str);
+                  atom->mode     = E_Mode_Value;
+                  atom->space    = space;
+                  atom->type_key = type_key;
+                  atom->string   = token_string;
+                  atom->bytecode = e_bytecode_from_oplist(arena, &oplist);
+                }break;
+              }
+              
+              // rjf: implicit local lookup -> attach member access node
+              if(atom_implicit_member_name.size != 0 && atom != &e_expr_nil)
               {
-                atom = e_push_expr(arena, E_ExprKind_LeafBytecode, token_string.str);
-                atom->mode     = E_Mode_Offset;
-                atom->space    = space;
-                atom->type_key = type_key;
-                atom->string   = token_string;
-                atom->bytecode = loc_bytecode;
-              }break;
-              case RDI_LocationKind_ValBytecodeStream:
-              {
-                atom = e_push_expr(arena, E_ExprKind_LeafBytecode, token_string.str);
-                atom->mode     = E_Mode_Value;
-                atom->space    = space;
-                atom->type_key = type_key;
-                atom->string   = token_string;
-                atom->bytecode = loc_bytecode;
-              }break;
-              case RDI_LocationKind_AddrRegPlusU16:
-              {
-                E_OpList oplist = {0};
-                U64 byte_size = bit_size_from_arch(arch)/8;
-                U64 regread_param = RDI_EncodeRegReadParam(loc_reg_u16.reg_code, byte_size, 0);
-                e_oplist_push_op(arena, &oplist, RDI_EvalOp_RegRead, e_value_u64(regread_param));
-                e_oplist_push_op(arena, &oplist, RDI_EvalOp_ConstU16, e_value_u64(loc_reg_u16.offset));
-                e_oplist_push_op(arena, &oplist, RDI_EvalOp_Add, e_value_u64(0));
-                atom = e_push_expr(arena, E_ExprKind_LeafBytecode, token_string.str);
-                atom->mode     = E_Mode_Offset;
-                atom->space    = space;
-                atom->type_key = type_key;
-                atom->string   = token_string;
-                atom->bytecode = e_bytecode_from_oplist(arena, &oplist);
-              }break;
-              case RDI_LocationKind_AddrAddrRegPlusU16:
-              {
-                E_OpList oplist = {0};
-                U64 byte_size = bit_size_from_arch(arch)/8;
-                U64 regread_param = RDI_EncodeRegReadParam(loc_reg_u16.reg_code, byte_size, 0);
-                e_oplist_push_op(arena, &oplist, RDI_EvalOp_RegRead, e_value_u64(regread_param));
-                e_oplist_push_op(arena, &oplist, RDI_EvalOp_ConstU16, e_value_u64(loc_reg_u16.offset));
-                e_oplist_push_op(arena, &oplist, RDI_EvalOp_Add, e_value_u64(0));
-                e_oplist_push_op(arena, &oplist, RDI_EvalOp_MemRead, e_value_u64(bit_size_from_arch(arch)/8));
-                atom = e_push_expr(arena, E_ExprKind_LeafBytecode, token_string.str);
-                atom->mode     = E_Mode_Offset;
-                atom->space    = space;
-                atom->type_key = type_key;
-                atom->string   = token_string;
-                atom->bytecode = e_bytecode_from_oplist(arena, &oplist);
-              }break;
-              case RDI_LocationKind_ValReg:
-              {
-                REGS_RegCode regs_reg_code = regs_reg_code_from_arch_rdi_code(arch, loc_reg.reg_code);
-                REGS_Rng reg_rng = regs_reg_code_rng_table_from_arch(arch)[regs_reg_code];
-                E_OpList oplist = {0};
-                U64 byte_size = (U64)reg_rng.byte_size;
-                U64 byte_pos = 0;
-                U64 regread_param = RDI_EncodeRegReadParam(loc_reg.reg_code, byte_size, byte_pos);
-                e_oplist_push_op(arena, &oplist, RDI_EvalOp_RegRead, e_value_u64(regread_param));
-                atom = e_push_expr(arena, E_ExprKind_LeafBytecode, token_string.str);
-                atom->mode     = E_Mode_Value;
-                atom->space    = space;
-                atom->type_key = type_key;
-                atom->string   = token_string;
-                atom->bytecode = e_bytecode_from_oplist(arena, &oplist);
-              }break;
+                E_Expr *member_container = atom;
+                E_Expr *member_expr = e_push_expr(arena, E_ExprKind_LeafMember, atom_implicit_member_name.str);
+                member_expr->string = atom_implicit_member_name;
+                atom = e_push_expr(arena, E_ExprKind_MemberAccess, atom_implicit_member_name.str);
+                atom->space = space;
+                e_expr_push_child(atom, member_container);
+                e_expr_push_child(atom, member_expr);
+              }
             }
             
-            // rjf: implicit local lookup -> attach member access node
-            if(atom_implicit_member_name.size != 0 && atom != &e_expr_nil)
+            //- rjf: map failure -> attach as leaf identifier, to be resolved later
+            if(!mapped_identifier)
             {
-              E_Expr *member_container = atom;
-              E_Expr *member_expr = e_push_expr(arena, E_ExprKind_LeafMember, atom_implicit_member_name.str);
-              member_expr->string = atom_implicit_member_name;
-              atom = e_push_expr(arena, E_ExprKind_MemberAccess, atom_implicit_member_name.str);
-              atom->space = space;
-              e_expr_push_child(atom, member_container);
-              e_expr_push_child(atom, member_expr);
+              atom = e_push_expr(arena, E_ExprKind_LeafIdent, token_string.str);
+              atom->string = token_string;
+              it += 1;
             }
-          }
+          }break;
           
-          //- rjf: map failure -> attach as leaf identifier, to be resolved later
-          if(!mapped_identifier)
+          //- rjf: numeric => directly extract value
+          case E_TokenKind_Numeric:
           {
-            atom = e_push_expr(arena, E_ExprKind_LeafIdent, token_string.str);
-            atom->string = token_string;
+            U64 dot_pos = str8_find_needle(token_string, 0, str8_lit("."), 0);
             it += 1;
-          }
-        }break;
-        
-        //- rjf: numeric => directly extract value
-        case E_TokenKind_Numeric:
-        {
-          U64 dot_pos = str8_find_needle(token_string, 0, str8_lit("."), 0);
-          it += 1;
-          
-          // rjf: no . => integral
-          if(dot_pos == token_string.size)
-          {
-            U64 val = 0;
-            try_u64_from_str8_c_rules(token_string, &val);
-            atom = e_push_expr(arena, E_ExprKind_LeafU64, token_string.str);
-            atom->value.u64 = val;
-            break;
-          }
-          
-          // rjf: presence of . => double or float
-          if(dot_pos < token_string.size)
-          {
-            F64 val = f64_from_str8(token_string);
-            U64 f_pos = str8_find_needle(token_string, 0, str8_lit("f"), StringMatchFlag_CaseInsensitive);
             
-            // rjf: presence of f after . => f32
-            if(f_pos < token_string.size)
+            // rjf: no . => integral
+            if(dot_pos == token_string.size)
             {
-              atom = e_push_expr(arena, E_ExprKind_LeafF32, token_string.str);
-              atom->value.f32 = val;
+              U64 val = 0;
+              try_u64_from_str8_c_rules(token_string, &val);
+              atom = e_push_expr(arena, E_ExprKind_LeafU64, token_string.str);
+              atom->value.u64 = val;
+              break;
             }
             
-            // rjf: no f => f64
+            // rjf: presence of . => double or float
+            if(dot_pos < token_string.size)
+            {
+              F64 val = f64_from_str8(token_string);
+              U64 f_pos = str8_find_needle(token_string, 0, str8_lit("f"), StringMatchFlag_CaseInsensitive);
+              
+              // rjf: presence of f after . => f32
+              if(f_pos < token_string.size)
+              {
+                atom = e_push_expr(arena, E_ExprKind_LeafF32, token_string.str);
+                atom->value.f32 = val;
+              }
+              
+              // rjf: no f => f64
+              else
+              {
+                atom = e_push_expr(arena, E_ExprKind_LeafF64, token_string.str);
+                atom->value.f64 = val;
+              }
+            }
+          }break;
+          
+          //- rjf: char => extract char value
+          case E_TokenKind_CharLiteral:
+          {
+            it += 1;
+            if(token_string.size > 1 && token_string.str[0] == '\'' && token_string.str[1] != '\'')
+            {
+              String8 char_literal_escaped = str8_skip(str8_chop(token_string, 1), 1);
+              String8 char_literal_raw = raw_from_escaped_str8(scratch.arena, char_literal_escaped);
+              U8 char_val = char_literal_raw.size > 0 ? char_literal_raw.str[0] : 0;
+              atom = e_push_expr(arena, E_ExprKind_LeafU64, token_string.str);
+              atom->value.u64 = (U64)char_val;
+            }
             else
             {
-              atom = e_push_expr(arena, E_ExprKind_LeafF64, token_string.str);
-              atom->value.f64 = val;
+              e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, token_string.str, "Malformed character literal.");
             }
-          }
-        }break;
+          }break;
+          
+          //- rjf: string => leaf string literal, or file path
+          case E_TokenKind_StringLiteral:
+          {
+            if(str8_match(resolution_qualifier, str8_lit("file"), 0))
+            {
+              String8 string_value_escaped = str8_chop(str8_skip(token_string, 1), 1);
+              String8 string_value_raw = raw_from_escaped_str8(arena, string_value_escaped);
+              atom = e_push_expr(arena, E_ExprKind_LeafFilePath, token_string.str);
+              atom->string = string_value_raw;
+              it += 1;
+            }
+            else
+            {
+              String8 string_value_escaped = str8_chop(str8_skip(token_string, 1), 1);
+              String8 string_value_raw = raw_from_escaped_str8(arena, string_value_escaped);
+              atom = e_push_expr(arena, E_ExprKind_LeafStringLiteral, token_string.str);
+              atom->string = string_value_raw;
+              it += 1;
+            }
+          }break;
+        }
         
-        //- rjf: char => extract char value
-        case E_TokenKind_CharLiteral:
+        //- rjf: upgrade atom w/ qualifier
+        if(resolution_qualifier.size != 0)
         {
-          it += 1;
-          if(token_string.size > 1 && token_string.str[0] == '\'' && token_string.str[1] != '\'')
-          {
-            String8 char_literal_escaped = str8_skip(str8_chop(token_string, 1), 1);
-            String8 char_literal_raw = raw_from_escaped_str8(scratch.arena, char_literal_escaped);
-            U8 char_val = char_literal_raw.size > 0 ? char_literal_raw.str[0] : 0;
-            atom = e_push_expr(arena, E_ExprKind_LeafU64, token_string.str);
-            atom->value.u64 = (U64)char_val;
-          }
-          else
-          {
-            e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, token_string.str, "Malformed character literal.");
-          }
-        }break;
+          atom->qualifier = resolution_qualifier;
+        }
+      }
+    }
+    
+    //- rjf: upgrade atom w/ postfix unaries
+    if(atom != &e_expr_nil) for(;it < it_opl;)
+    {
+      E_Token token = e_token_at_it(it, tokens);
+      String8 token_string = str8_substr(text, token.range);
+      B32 is_postfix_unary = 0;
+      
+      // rjf: dot/arrow operator
+      if(token.kind == E_TokenKind_Symbol &&
+         (str8_match(token_string, str8_lit("."), 0) ||
+          str8_match(token_string, str8_lit("->"), 0)))
+      {
+        is_postfix_unary = 1;
         
-        //- rjf: string => leaf string literal, or file path
-        case E_TokenKind_StringLiteral:
-        {
-          if(str8_match(resolution_qualifier, str8_lit("file"), 0))
-          {
-            String8 string_value_escaped = str8_chop(str8_skip(token_string, 1), 1);
-            String8 string_value_raw = raw_from_escaped_str8(arena, string_value_escaped);
-            atom = e_push_expr(arena, E_ExprKind_LeafFilePath, token_string.str);
-            atom->string = string_value_raw;
-            it += 1;
-          }
-          else
-          {
-            String8 string_value_escaped = str8_chop(str8_skip(token_string, 1), 1);
-            String8 string_value_raw = raw_from_escaped_str8(arena, string_value_escaped);
-            atom = e_push_expr(arena, E_ExprKind_LeafStringLiteral, token_string.str);
-            atom->string = string_value_raw;
-            it += 1;
-          }
-        }break;
-      }
-      
-      //- rjf: upgrade atom w/ qualifier
-      if(resolution_qualifier.size != 0)
-      {
-        atom->qualifier = resolution_qualifier;
-      }
-    }
-  }
-  
-  //- rjf: upgrade atom w/ postfix unaries
-  if(atom != &e_expr_nil) for(;it < it_opl;)
-  {
-    E_Token token = e_token_at_it(it, tokens);
-    String8 token_string = str8_substr(text, token.range);
-    B32 is_postfix_unary = 0;
-    
-    // rjf: dot/arrow operator
-    if(token.kind == E_TokenKind_Symbol &&
-       (str8_match(token_string, str8_lit("."), 0) ||
-        str8_match(token_string, str8_lit("->"), 0)))
-    {
-      is_postfix_unary = 1;
-      
-      // rjf: advance past operator
-      it += 1;
-      
-      // rjf: expect member name
-      String8 member_name = {0};
-      B32 good_member_name = 0;
-      {
-        E_Token member_name_maybe = e_token_at_it(it, tokens);
-        String8 member_name_maybe_string = str8_substr(text, member_name_maybe.range);
-        if(member_name_maybe.kind != E_TokenKind_Identifier)
-        {
-          e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, token_string.str, "Expected member name after `%S`.", token_string);
-        }
-        else
-        {
-          member_name = member_name_maybe_string;
-          good_member_name = 1;
-        }
-      }
-      
-      // rjf: produce lookup member expr
-      if(good_member_name)
-      {
-        E_Expr *member_container = atom;
-        E_Expr *member_expr = e_push_expr(arena, E_ExprKind_LeafMember, member_name.str);
-        member_expr->string = member_name;
-        atom = e_push_expr(arena, E_ExprKind_MemberAccess, token_string.str);
-        e_expr_push_child(atom, member_container);
-        e_expr_push_child(atom, member_expr);
-      }
-      
-      // rjf: increment past good member names
-      if(good_member_name)
-      {
-        it += 1;
-      }
-    }
-    
-    // rjf: array index
-    if(token.kind == E_TokenKind_Symbol &&
-       str8_match(token_string, str8_lit("["), 0))
-    {
-      is_postfix_unary = 1;
-      
-      // rjf: advance past [
-      it += 1;
-      
-      // rjf: parse indexing expression
-      E_TokenArray idx_expr_parse_tokens = e_token_array_make_first_opl(it, it_opl);
-      E_Parse idx_expr_parse = e_parse_expr_from_text_tokens__prec(arena, text, &idx_expr_parse_tokens, e_max_precedence);
-      e_msg_list_concat_in_place(&result.msgs, &idx_expr_parse.msgs);
-      it = idx_expr_parse.last_token;
-      
-      // rjf: valid indexing expression => produce index expr
-      if(idx_expr_parse.expr != &e_expr_nil)
-      {
-        E_Expr *array_expr = atom;
-        E_Expr *index_expr = idx_expr_parse.expr;
-        atom = e_push_expr(arena, E_ExprKind_ArrayIndex, token_string.str);
-        e_expr_push_child(atom, array_expr);
-        e_expr_push_child(atom, index_expr);
-      }
-      
-      // rjf: expect ]
-      {
-        E_Token close_brace_maybe = e_token_at_it(it, tokens);
-        String8 close_brace_maybe_string = str8_substr(text, close_brace_maybe.range);
-        if(close_brace_maybe.kind != E_TokenKind_Symbol || !str8_match(close_brace_maybe_string, str8_lit("]"), 0))
-        {
-          e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, token_string.str, "Unclosed `[`.");
-        }
-        else
-        {
-          it += 1;
-        }
-      }
-    }
-    
-    // rjf: calls
-    if(token.kind == E_TokenKind_Symbol &&
-       str8_match(token_string, str8_lit("("), 0))
-    {
-      it += 1;
-      E_Expr *callee_expr = atom;
-      E_Expr *call_expr = e_push_expr(arena, E_ExprKind_Call, token_string.str);
-      if(callee_expr->kind == E_ExprKind_LeafIdent)
-      {
-        call_expr->string = callee_expr->string;
-      }
-      e_expr_push_child(call_expr, callee_expr);
-      for(B32 done = 0; !done && it < it_opl;)
-      {
-        E_Token token = e_token_at_it(it, tokens);
-        String8 token_string = str8_substr(text, token.range);
-        if(token.kind == E_TokenKind_Symbol && str8_match(token_string, str8_lit(")"), 0))
-        {
-          done = 1;
-          it += 1;
-        }
-        else
-        {
-          E_TokenArray idx_expr_parse_tokens = e_token_array_make_first_opl(it, it_opl);
-          E_Parse arg_parse = e_parse_expr_from_text_tokens__prec(arena, text, &idx_expr_parse_tokens, e_max_precedence);
-          e_msg_list_concat_in_place(&result.msgs, &arg_parse.msgs);
-          if(arg_parse.expr != &e_expr_nil)
-          {
-            e_expr_push_child(call_expr, arg_parse.expr);
-          }
-          it = arg_parse.last_token;
-          E_Token maybe_comma = e_token_at_it(it, tokens);
-          String8 maybe_comma_string = str8_substr(text, token.range);
-          if(maybe_comma.kind == E_TokenKind_Symbol && str8_match(maybe_comma_string, str8_lit(","), 0))
-          {
-            it += 1;
-          }
-        }
-      }
-      atom = call_expr;
-    }
-    
-    // rjf: quit if this doesn't look like any patterns of postfix unary we know
-    if(!is_postfix_unary)
-    {
-      break;
-    }
-  }
-  
-  //- rjf: upgrade atom w/ previously parsed prefix unaries
-  if(atom == &e_expr_nil && first_prefix_unary != 0 && first_prefix_unary->cast_expr != &e_expr_nil)
-  {
-    atom = first_prefix_unary->cast_expr;
-    for(PrefixUnaryNode *prefix_unary = first_prefix_unary->next;
-        prefix_unary != 0;
-        prefix_unary = prefix_unary->next)
-    {
-      E_Expr *rhs = atom;
-      atom = e_push_expr(arena, prefix_unary->kind, prefix_unary->location);
-      if(prefix_unary->cast_expr != &e_expr_nil)
-      {
-        e_expr_push_child(atom, prefix_unary->cast_expr);
-      }
-      e_expr_push_child(atom, rhs);
-    }
-  }
-  else if(atom == &e_expr_nil && first_prefix_unary != 0)
-  {
-    e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, last_prefix_unary->location, "Missing expression.");
-  }
-  else
-  {
-    for(PrefixUnaryNode *prefix_unary = first_prefix_unary;
-        prefix_unary != 0;
-        prefix_unary = prefix_unary->next)
-    {
-      E_Expr *rhs = atom;
-      atom = e_push_expr(arena, prefix_unary->kind, prefix_unary->location);
-      if(prefix_unary->cast_expr != &e_expr_nil)
-      {
-        e_expr_push_child(atom, prefix_unary->cast_expr);
-      }
-      e_expr_push_child(atom, rhs);
-    }
-  }
-  
-  //- rjf: parse complex operators
-  if(atom != &e_expr_nil) for(;it < it_opl;)
-  {
-    E_Token *start_it = it;
-    E_Token token = e_token_at_it(it, tokens);
-    String8 token_string = str8_substr(text, token.range);
-    
-    //- rjf: parse binaries
-    {
-      // rjf: first try to find a matching binary operator
-      S64 binary_precedence = 0;
-      E_ExprKind binary_kind = 0;
-      for EachNonZeroEnumVal(E_ExprKind, k)
-      {
-        E_OpInfo *op_info = &e_expr_kind_op_info_table[k];
-        if(op_info->kind == E_OpKind_Binary && str8_match(op_info->sep, token_string, 0))
-        {
-          binary_precedence = op_info->precedence;
-          binary_kind = k;
-          break;
-        }
-      }
-      
-      // rjf: if we got a valid binary precedence, and it's not to be handled by
-      // a caller, then we need to parse the right-hand-side with a tighter
-      // precedence
-      if(binary_precedence != 0 && binary_precedence <= max_precedence)
-      {
-        E_TokenArray rhs_expr_parse_tokens = e_token_array_make_first_opl(it+1, it_opl);
-        E_Parse rhs_expr_parse = e_parse_expr_from_text_tokens__prec(arena, text, &rhs_expr_parse_tokens, binary_precedence-1);
-        e_msg_list_concat_in_place(&result.msgs, &rhs_expr_parse.msgs);
-        E_Expr *rhs = rhs_expr_parse.expr;
-        it = rhs_expr_parse.last_token;
-        if(rhs == &e_expr_nil)
-        {
-          e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, token_string.str, "Missing right-hand-side of `%S`.", token_string);
-        }
-        else
-        {
-          E_Expr *lhs = atom;
-          atom = e_push_expr(arena, binary_kind, token_string.str);
-          e_expr_push_child(atom, lhs);
-          e_expr_push_child(atom, rhs);
-        }
-      }
-    }
-    
-    //- rjf: parse ternaries
-    {
-      if(token.kind == E_TokenKind_Symbol && str8_match(token_string, str8_lit("?"), 0) && 13 <= max_precedence)
-      {
+        // rjf: advance past operator
         it += 1;
         
-        // rjf: parse middle expression
-        E_TokenArray middle_expr_tokens = e_token_array_make_first_opl(it, it_opl);
-        E_Parse middle_expr_parse = e_parse_expr_from_text_tokens__prec(arena, text, &middle_expr_tokens, e_max_precedence);
-        it = middle_expr_parse.last_token;
-        E_Expr *middle_expr = middle_expr_parse.expr;
-        e_msg_list_concat_in_place(&result.msgs, &middle_expr_parse.msgs);
-        if(middle_expr_parse.expr == &e_expr_nil)
+        // rjf: expect member name
+        String8 member_name = {0};
+        B32 good_member_name = 0;
         {
-          e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, token_string.str, "Expected expression after `?`.");
-        }
-        
-        // rjf: expect :
-        B32 got_colon = 0;
-        E_Token colon_token = zero_struct;
-        String8 colon_token_string = {0};
-        {
-          E_Token colon_token_maybe = e_token_at_it(it, tokens);
-          String8 colon_token_maybe_string = str8_substr(text, colon_token_maybe.range);
-          if(colon_token_maybe.kind != E_TokenKind_Symbol || !str8_match(colon_token_maybe_string, str8_lit(":"), 0))
+          E_Token member_name_maybe = e_token_at_it(it, tokens);
+          String8 member_name_maybe_string = str8_substr(text, member_name_maybe.range);
+          if(member_name_maybe.kind != E_TokenKind_Identifier)
           {
-            e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, token_string.str, "Expected `:` after `?`.");
+            e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, token_string.str, "Expected member name after `%S`.", token_string);
           }
           else
           {
-            got_colon = 1;
-            colon_token = colon_token_maybe;
-            colon_token_string = colon_token_maybe_string;
+            member_name = member_name_maybe_string;
+            good_member_name = 1;
+          }
+        }
+        
+        // rjf: produce lookup member expr
+        if(good_member_name)
+        {
+          E_Expr *member_container = atom;
+          E_Expr *member_expr = e_push_expr(arena, E_ExprKind_LeafMember, member_name.str);
+          member_expr->string = member_name;
+          atom = e_push_expr(arena, E_ExprKind_MemberAccess, token_string.str);
+          e_expr_push_child(atom, member_container);
+          e_expr_push_child(atom, member_expr);
+        }
+        
+        // rjf: increment past good member names
+        if(good_member_name)
+        {
+          it += 1;
+        }
+      }
+      
+      // rjf: array index
+      if(token.kind == E_TokenKind_Symbol &&
+         str8_match(token_string, str8_lit("["), 0))
+      {
+        is_postfix_unary = 1;
+        
+        // rjf: advance past [
+        it += 1;
+        
+        // rjf: parse indexing expression
+        E_TokenArray idx_expr_parse_tokens = e_token_array_make_first_opl(it, it_opl);
+        E_Parse idx_expr_parse = e_parse_expr_from_text_tokens__prec(arena, text, &idx_expr_parse_tokens, e_max_precedence);
+        e_msg_list_concat_in_place(&result.msgs, &idx_expr_parse.msgs);
+        it = idx_expr_parse.last_token;
+        
+        // rjf: valid indexing expression => produce index expr
+        if(idx_expr_parse.expr != &e_expr_nil)
+        {
+          E_Expr *array_expr = atom;
+          E_Expr *index_expr = idx_expr_parse.expr;
+          atom = e_push_expr(arena, E_ExprKind_ArrayIndex, token_string.str);
+          e_expr_push_child(atom, array_expr);
+          e_expr_push_child(atom, index_expr);
+        }
+        
+        // rjf: expect ]
+        {
+          E_Token close_brace_maybe = e_token_at_it(it, tokens);
+          String8 close_brace_maybe_string = str8_substr(text, close_brace_maybe.range);
+          if(close_brace_maybe.kind != E_TokenKind_Symbol || !str8_match(close_brace_maybe_string, str8_lit("]"), 0))
+          {
+            e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, token_string.str, "Unclosed `[`.");
+          }
+          else
+          {
             it += 1;
           }
         }
-        
-        // rjf: parse rhs
-        E_TokenArray rhs_expr_parse_tokens = e_token_array_make_first_opl(it, it_opl);
-        E_Parse rhs_expr_parse = e_parse_expr_from_text_tokens__prec(arena, text, &rhs_expr_parse_tokens, e_max_precedence);
-        if(got_colon)
-        {
-          it = rhs_expr_parse.last_token;
-          e_msg_list_concat_in_place(&result.msgs, &rhs_expr_parse.msgs);
-          if(rhs_expr_parse.expr == &e_expr_nil)
-          {
-            e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, colon_token_string.str, "Expected expression after `:`.");
-          }
-        }
-        
-        // rjf: build ternary
-        if(atom != &e_expr_nil &&
-           middle_expr_parse.expr != &e_expr_nil &&
-           rhs_expr_parse.expr != &e_expr_nil)
-        {
-          E_Expr *lhs = atom;
-          E_Expr *mhs = middle_expr_parse.expr;
-          E_Expr *rhs = rhs_expr_parse.expr;
-          atom = e_push_expr(arena, E_ExprKind_Ternary, token_string.str);
-          e_expr_push_child(atom, lhs);
-          e_expr_push_child(atom, mhs);
-          e_expr_push_child(atom, rhs);
-        }
       }
-    }
-    
-    //- rjf: parse tags
-    {
-      if(token.kind == E_TokenKind_Symbol && str8_match(token_string, str8_lit("=>"), 0))
+      
+      // rjf: calls
+      if(token.kind == E_TokenKind_Symbol &&
+         str8_match(token_string, str8_lit("("), 0))
       {
+        it += 1;
+        E_Expr *callee_expr = atom;
+        E_Expr *call_expr = e_push_expr(arena, E_ExprKind_Call, token_string.str);
+        if(callee_expr->kind == E_ExprKind_LeafIdent)
+        {
+          call_expr->string = callee_expr->string;
+        }
+        e_expr_push_child(call_expr, callee_expr);
         for(B32 done = 0; !done && it < it_opl;)
         {
-          E_Token maybe_identifier = e_token_at_it(it, tokens);
-          E_Token maybe_open_paren = e_token_at_it(it+1, tokens);
-          String8 maybe_open_paren_string = str8_substr(text, maybe_open_paren.range);
-          if(maybe_identifier.kind == E_TokenKind_Identifier &&
-             maybe_open_paren.kind == E_TokenKind_Symbol &&
-             str8_match(maybe_open_paren_string, str8_lit("("), 0))
+          E_Token token = e_token_at_it(it, tokens);
+          String8 token_string = str8_substr(text, token.range);
+          if(token.kind == E_TokenKind_Symbol && str8_match(token_string, str8_lit(")"), 0))
           {
-            E_TokenArray tag_tokens = e_token_array_make_first_opl(it, it_opl);
-            E_Parse tag_parse = e_parse_expr_from_text_tokens(arena, text, &tag_tokens);
-            e_msg_list_concat_in_place(&result.msgs, &tag_parse.msgs);
-            it = tag_parse.last_token;
-            if(tag_parse.expr != &e_expr_nil)
+            done = 1;
+            it += 1;
+          }
+          else
+          {
+            E_TokenArray idx_expr_parse_tokens = e_token_array_make_first_opl(it, it_opl);
+            E_Parse arg_parse = e_parse_expr_from_text_tokens__prec(arena, text, &idx_expr_parse_tokens, e_max_precedence);
+            e_msg_list_concat_in_place(&result.msgs, &arg_parse.msgs);
+            if(arg_parse.expr != &e_expr_nil)
             {
-              e_expr_push_tag(atom, tag_parse.expr);
+              e_expr_push_child(call_expr, arg_parse.expr);
             }
-            else
-            {
-              done = 1;
-            }
+            it = arg_parse.last_token;
             E_Token maybe_comma = e_token_at_it(it, tokens);
             String8 maybe_comma_string = str8_substr(text, token.range);
             if(maybe_comma.kind == E_TokenKind_Symbol && str8_match(maybe_comma_string, str8_lit(","), 0))
@@ -2277,16 +2117,220 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
               it += 1;
             }
           }
-          else
-          {
-            done = 1;
-          }
         }
+        atom = call_expr;
+      }
+      
+      // rjf: quit if this doesn't look like any patterns of postfix unary we know
+      if(!is_postfix_unary)
+      {
+        break;
       }
     }
     
-    // rjf: if we parsed nothing successfully, we're done
-    if(it == start_it)
+    //- rjf: upgrade atom w/ previously parsed prefix unaries
+    if(atom == &e_expr_nil && first_prefix_unary != 0 && first_prefix_unary->cast_expr != &e_expr_nil)
+    {
+      atom = first_prefix_unary->cast_expr;
+      for(PrefixUnaryNode *prefix_unary = first_prefix_unary->next;
+          prefix_unary != 0;
+          prefix_unary = prefix_unary->next)
+      {
+        E_Expr *rhs = atom;
+        atom = e_push_expr(arena, prefix_unary->kind, prefix_unary->location);
+        if(prefix_unary->cast_expr != &e_expr_nil)
+        {
+          e_expr_push_child(atom, prefix_unary->cast_expr);
+        }
+        e_expr_push_child(atom, rhs);
+      }
+    }
+    else if(atom == &e_expr_nil && first_prefix_unary != 0)
+    {
+      e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, last_prefix_unary->location, "Missing expression.");
+    }
+    else
+    {
+      for(PrefixUnaryNode *prefix_unary = first_prefix_unary;
+          prefix_unary != 0;
+          prefix_unary = prefix_unary->next)
+      {
+        E_Expr *rhs = atom;
+        atom = e_push_expr(arena, prefix_unary->kind, prefix_unary->location);
+        if(prefix_unary->cast_expr != &e_expr_nil)
+        {
+          e_expr_push_child(atom, prefix_unary->cast_expr);
+        }
+        e_expr_push_child(atom, rhs);
+      }
+    }
+    
+    //- rjf: parse complex operators
+    if(atom != &e_expr_nil) for(;it < it_opl;)
+    {
+      E_Token *start_it = it;
+      E_Token token = e_token_at_it(it, tokens);
+      String8 token_string = str8_substr(text, token.range);
+      
+      //- rjf: parse binaries
+      {
+        // rjf: first try to find a matching binary operator
+        S64 binary_precedence = 0;
+        E_ExprKind binary_kind = 0;
+        for EachNonZeroEnumVal(E_ExprKind, k)
+        {
+          E_OpInfo *op_info = &e_expr_kind_op_info_table[k];
+          if(op_info->kind == E_OpKind_Binary && str8_match(op_info->sep, token_string, 0))
+          {
+            binary_precedence = op_info->precedence;
+            binary_kind = k;
+            break;
+          }
+        }
+        
+        // rjf: if we got a valid binary precedence, and it's not to be handled by
+        // a caller, then we need to parse the right-hand-side with a tighter
+        // precedence
+        if(binary_precedence != 0 && binary_precedence <= max_precedence)
+        {
+          E_TokenArray rhs_expr_parse_tokens = e_token_array_make_first_opl(it+1, it_opl);
+          E_Parse rhs_expr_parse = e_parse_expr_from_text_tokens__prec(arena, text, &rhs_expr_parse_tokens, binary_precedence-1);
+          e_msg_list_concat_in_place(&result.msgs, &rhs_expr_parse.msgs);
+          E_Expr *rhs = rhs_expr_parse.expr;
+          it = rhs_expr_parse.last_token;
+          if(rhs == &e_expr_nil)
+          {
+            e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, token_string.str, "Missing right-hand-side of `%S`.", token_string);
+          }
+          else
+          {
+            E_Expr *lhs = atom;
+            atom = e_push_expr(arena, binary_kind, token_string.str);
+            e_expr_push_child(atom, lhs);
+            e_expr_push_child(atom, rhs);
+          }
+        }
+      }
+      
+      //- rjf: parse ternaries
+      {
+        if(token.kind == E_TokenKind_Symbol && str8_match(token_string, str8_lit("?"), 0) && 13 <= max_precedence)
+        {
+          it += 1;
+          
+          // rjf: parse middle expression
+          E_TokenArray middle_expr_tokens = e_token_array_make_first_opl(it, it_opl);
+          E_Parse middle_expr_parse = e_parse_expr_from_text_tokens__prec(arena, text, &middle_expr_tokens, e_max_precedence);
+          it = middle_expr_parse.last_token;
+          E_Expr *middle_expr = middle_expr_parse.expr;
+          e_msg_list_concat_in_place(&result.msgs, &middle_expr_parse.msgs);
+          if(middle_expr_parse.expr == &e_expr_nil)
+          {
+            e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, token_string.str, "Expected expression after `?`.");
+          }
+          
+          // rjf: expect :
+          B32 got_colon = 0;
+          E_Token colon_token = zero_struct;
+          String8 colon_token_string = {0};
+          {
+            E_Token colon_token_maybe = e_token_at_it(it, tokens);
+            String8 colon_token_maybe_string = str8_substr(text, colon_token_maybe.range);
+            if(colon_token_maybe.kind != E_TokenKind_Symbol || !str8_match(colon_token_maybe_string, str8_lit(":"), 0))
+            {
+              e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, token_string.str, "Expected `:` after `?`.");
+            }
+            else
+            {
+              got_colon = 1;
+              colon_token = colon_token_maybe;
+              colon_token_string = colon_token_maybe_string;
+              it += 1;
+            }
+          }
+          
+          // rjf: parse rhs
+          E_TokenArray rhs_expr_parse_tokens = e_token_array_make_first_opl(it, it_opl);
+          E_Parse rhs_expr_parse = e_parse_expr_from_text_tokens__prec(arena, text, &rhs_expr_parse_tokens, e_max_precedence);
+          if(got_colon)
+          {
+            it = rhs_expr_parse.last_token;
+            e_msg_list_concat_in_place(&result.msgs, &rhs_expr_parse.msgs);
+            if(rhs_expr_parse.expr == &e_expr_nil)
+            {
+              e_msgf(arena, &result.msgs, E_MsgKind_MalformedInput, colon_token_string.str, "Expected expression after `:`.");
+            }
+          }
+          
+          // rjf: build ternary
+          if(atom != &e_expr_nil &&
+             middle_expr_parse.expr != &e_expr_nil &&
+             rhs_expr_parse.expr != &e_expr_nil)
+          {
+            E_Expr *lhs = atom;
+            E_Expr *mhs = middle_expr_parse.expr;
+            E_Expr *rhs = rhs_expr_parse.expr;
+            atom = e_push_expr(arena, E_ExprKind_Ternary, token_string.str);
+            e_expr_push_child(atom, lhs);
+            e_expr_push_child(atom, mhs);
+            e_expr_push_child(atom, rhs);
+          }
+        }
+      }
+      
+      //- rjf: parse tags
+      {
+        if(token.kind == E_TokenKind_Symbol && str8_match(token_string, str8_lit("=>"), 0))
+        {
+          for(B32 done = 0; !done && it < it_opl;)
+          {
+            E_Token maybe_identifier = e_token_at_it(it, tokens);
+            E_Token maybe_open_paren = e_token_at_it(it+1, tokens);
+            String8 maybe_open_paren_string = str8_substr(text, maybe_open_paren.range);
+            if(maybe_identifier.kind == E_TokenKind_Identifier &&
+               maybe_open_paren.kind == E_TokenKind_Symbol &&
+               str8_match(maybe_open_paren_string, str8_lit("("), 0))
+            {
+              E_TokenArray tag_tokens = e_token_array_make_first_opl(it, it_opl);
+              E_Parse tag_parse = e_parse_expr_from_text_tokens(arena, text, &tag_tokens);
+              e_msg_list_concat_in_place(&result.msgs, &tag_parse.msgs);
+              it = tag_parse.last_token;
+              if(tag_parse.expr != &e_expr_nil)
+              {
+                e_expr_push_tag(atom, tag_parse.expr);
+              }
+              else
+              {
+                done = 1;
+              }
+              E_Token maybe_comma = e_token_at_it(it, tokens);
+              String8 maybe_comma_string = str8_substr(text, token.range);
+              if(maybe_comma.kind == E_TokenKind_Symbol && str8_match(maybe_comma_string, str8_lit(","), 0))
+              {
+                it += 1;
+              }
+            }
+            else
+            {
+              done = 1;
+            }
+          }
+        }
+      }
+      
+      // rjf: if we parsed nothing successfully, we're done
+      if(it == start_it)
+      {
+        break;
+      }
+    }
+    
+    //- rjf: store parsed atom to expression chain - if we didn't get an expression, break
+    if(atom != &e_expr_nil)
+    {
+      DLLPushBack_NPZ(&e_expr_nil, result.expr, last_expr, atom, next, prev);
+    }
+    else
     {
       break;
     }
@@ -2294,7 +2338,6 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
   
   //- rjf: fill result & return
   result.last_token = it;
-  result.expr = atom;
   scratch_end(scratch);
   ProfEnd();
   return result;
