@@ -909,6 +909,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     .group_cfg        = &rd_nil_cfg,
     .group_entity     = &ctrl_entity_nil,
     .callstack_thread = &ctrl_entity_nil,
+    .view_ui_rule     = &rd_nil_view_ui_rule,
   };
   {
     Temp scratch = scratch_begin(&arena, 1);
@@ -964,12 +965,26 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       info.group_cfg = rd_cfg_from_id(id);
     }
     
+    // rjf: determine view ui rule
+    info.view_ui_rule = rd_view_ui_rule_from_string(row->block->expand_rule->string);
+    
     // rjf: fill row's cells
-    rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr,                                        .pct = 0.25f);
-    rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval,                                        .pct = 0.35f);
-    rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .string = str8_lit("typeof($expr)"),   .pct = 0.15f);
-    rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Tag,                                         .pct = 0.25f);
-    // rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .string = str8_lit("sizeof($expr)"),    .pct = 0.15f);
+    {
+      // rjf: singular cell for view ui
+      if(info.view_ui_rule != &rd_nil_view_ui_rule)
+      {
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_ViewUI, .pct = 1.f);
+      }
+      
+      // rjf: default cells
+      else
+      {
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr,                                        .pct = 0.25f);
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval,                                        .pct = 0.35f);
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .string = str8_lit("typeof($expr)"),   .pct = 0.15f);
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Tag,                                         .pct = 0.25f);
+      }
+    }
     
     di_scope_close(di_scope);
     scratch_end(scratch);
@@ -3992,6 +4007,14 @@ RD_VIEW_UI_FUNCTION_DEF(null) {}
 
 ////////////////////////////////
 //~ rjf: watch @view_hook_impl
+
+EV_EXPAND_RULE_INFO_FUNCTION_DEF(watch)
+{
+  EV_ExpandInfo info = {0};
+  info.row_count = 8;
+  info.single_item = 1;
+  return info;
+}
 
 RD_VIEW_UI_FUNCTION_DEF(watch)
 {

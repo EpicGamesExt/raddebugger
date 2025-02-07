@@ -570,7 +570,7 @@ C_LINKAGE_BEGIN
 extern String8 rd_cfg_src_string_table[4];
 extern RD_CmdKind rd_cfg_src_load_cmd_kind_table[4];
 extern RD_CmdKind rd_cfg_src_write_cmd_kind_table[4];
-extern RD_VocabularyInfo rd_vocabulary_info_table[45];
+extern RD_VocabularyInfo rd_vocabulary_info_table[57];
 extern RD_NameSchemaInfo rd_name_schema_info_table[10];
 extern Rng1U64 rd_reg_slot_range_table[38];
 extern RD_StringBindingPair rd_default_binding_table[111];

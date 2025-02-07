@@ -1138,6 +1138,14 @@ rd_location_from_cfg(RD_Cfg *cfg)
 }
 
 internal String8
+rd_label_from_cfg(RD_Cfg *cfg)
+{
+  RD_Cfg *label_root = rd_cfg_child_from_string(cfg, str8_lit("label"));
+  String8 result = label_root->first->string;
+  return result;
+}
+
+internal String8
 rd_expr_from_cfg(RD_Cfg *cfg)
 {
   RD_Cfg *expr_root = rd_cfg_child_from_string(cfg, str8_lit("expression"));
@@ -1176,6 +1184,10 @@ rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg, Vec4F32 secondary_color, F32 
     B32 is_disabled = rd_disabled_from_cfg(cfg);
     RD_Location loc = rd_location_from_cfg(cfg);
     D_Target target = rd_target_from_cfg(scratch.arena, cfg);
+    String8 label_string = rd_label_from_cfg(cfg);
+    String8 expr_string = rd_expr_from_cfg(cfg);
+    String8 collection_name = {0};
+    String8 file_path = {0};
     Vec4F32 rgba = rd_rgba_from_cfg(cfg);
     if(rgba.w == 0)
     {
@@ -1191,6 +1203,45 @@ rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg, Vec4F32 secondary_color, F32 
         {
           is_from_command_line = 1;
           break;
+        }
+      }
+    }
+    B32 is_within_window = 0;
+    {
+      for(RD_Cfg *p = cfg->parent; p != &rd_nil_cfg; p = p->parent)
+      {
+        if(str8_match(p->string, str8_lit("window"), 0))
+        {
+          is_within_window = 1;
+          break;
+        }
+      }
+    }
+    if(expr_string.size != 0)
+    {
+      String8 query_name = rd_query_from_eval_string(arena, expr_string);
+      if(query_name.size != 0)
+      {
+        String8 query_code_name = query_name;
+        String8 query_display_name = rd_display_from_code_name(query_code_name);
+        collection_name = query_display_name;
+        if(query_display_name.size == 0)
+        {
+          query_code_name = rd_singular_from_code_name_plural(query_name);
+          collection_name = rd_display_plural_from_code_name(query_code_name);
+        }
+        RD_IconKind query_icon_kind = rd_icon_kind_from_code_name(query_code_name);
+        if(query_icon_kind != RD_IconKind_Null)
+        {
+          icon_kind = query_icon_kind;
+        }
+      }
+      else
+      {
+        file_path = rd_file_path_from_eval_string(arena, expr_string);
+        if(file_path.size != 0)
+        {
+          icon_kind = RD_IconKind_FileOutline;
         }
       }
     }
@@ -1223,24 +1274,44 @@ rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg, Vec4F32 secondary_color, F32 
       dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), size, secondary_color, str8_lit(" "));
     }
     
-    //- rjf: push label
+    //- rjf: push view title, if from window, and no file path
+    if(is_within_window && file_path.size == 0 && collection_name.size == 0)
     {
-      String8 label = rd_cfg_child_from_string(cfg, str8_lit("label"))->first->string;
-      if(label.size != 0)
+      String8 view_display_name = rd_display_from_code_name(cfg->string);
+      if(view_display_name.size != 0)
       {
-        dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), running_size, running_rgba, label);
+        dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Main), running_size, running_rgba, view_display_name);
+        dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), size, secondary_color, str8_lit(" "));
         start_secondary();
       }
     }
     
-    //- rjf: push expression
+    //- rjf: push label
+    if(label_string.size != 0)
     {
-      String8 expr = rd_cfg_child_from_string(cfg, str8_lit("expression"))->first->string;
-      if(expr.size != 0)
-      {
-        dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), running_size, running_rgba, expr);
-        start_secondary();
-      }
+      dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), running_size, running_rgba, label_string);
+      dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), size, secondary_color, str8_lit(" "));
+      start_secondary();
+    }
+    
+    //- rjf: push expression
+    if(collection_name.size != 0)
+    {
+      dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Main), running_size, running_rgba, collection_name);
+      dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), size, secondary_color, str8_lit(" "));
+      start_secondary();
+    }
+    else if(file_path.size != 0)
+    {
+      dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Main), running_size, running_rgba, file_path);
+      dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), size, secondary_color, str8_lit(" "));
+      start_secondary();
+    }
+    else if(expr_string.size != 0)
+    {
+      dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), running_size, running_rgba, expr_string);
+      dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), size, secondary_color, str8_lit(" "));
+      start_secondary();
     }
     
     //- rjf: push text location
@@ -2578,10 +2649,10 @@ rd_file_path_from_eval_string(Arena *arena, String8 string)
   String8 result = {0};
   {
     Temp scratch = scratch_begin(&arena, 1);
-    E_Eval eval = e_eval_from_string(scratch.arena, string);
-    if(eval.expr->kind == E_ExprKind_LeafFilePath)
+    E_Expr *expr = e_parse_expr_from_text(scratch.arena, string);
+    if(expr->kind == E_ExprKind_LeafFilePath)
     {
-      result = raw_from_escaped_str8(arena, eval.expr->string);
+      result = raw_from_escaped_str8(arena, expr->string);
     }
     scratch_end(scratch);
   }
@@ -2595,6 +2666,25 @@ rd_eval_string_from_file_path(Arena *arena, String8 string)
   String8 string_escaped = escaped_from_raw_str8(scratch.arena, string);
   String8 result = push_str8f(arena, "file:\"%S\"", string_escaped);
   scratch_end(scratch);
+  return result;
+}
+
+//- rjf: eval -> query
+
+internal String8
+rd_query_from_eval_string(Arena *arena, String8 string)
+{
+  String8 result = {0};
+  {
+    Temp scratch = scratch_begin(&arena, 1);
+    E_Expr *expr = e_parse_expr_from_text(scratch.arena, string);
+    if(expr->kind == E_ExprKind_LeafIdent &&
+       str8_match(expr->qualifier, str8_lit("query"), 0))
+    {
+      result = expr->string;
+    }
+    scratch_end(scratch);
+  }
   return result;
 }
 
@@ -12959,7 +13049,7 @@ rd_frame(void)
         expr->space    = space;
         expr->mode     = E_Mode_Offset;
         expr->type_key = e_type_key_cons_array(e_type_key_basic(E_TypeKind_U8), data.size);
-        e_string2expr_map_insert(scratch.arena, ctx->macro_map, str8_lit("output_log"), expr);
+        e_string2expr_map_insert(scratch.arena, ctx->macro_map, str8_lit("output"), expr);
         hs_scope_close(hs_scope);
       }
       
@@ -13025,21 +13115,26 @@ rd_frame(void)
       {
         String8 name;
         RD_ViewUIFunctionType *ui;
+        EV_ExpandRuleInfoHookFunctionType *expand;
       }
       table[] =
       {
-        {str8_lit("watch"),       RD_VIEW_UI_FUNCTION_NAME(watch)},
-        {str8_lit("text"),        RD_VIEW_UI_FUNCTION_NAME(text)},
-        {str8_lit("disasm"),      RD_VIEW_UI_FUNCTION_NAME(disasm)},
-        {str8_lit("memory"),      RD_VIEW_UI_FUNCTION_NAME(memory)},
-        {str8_lit("bitmap"),      RD_VIEW_UI_FUNCTION_NAME(bitmap)},
-        {str8_lit("checkbox"),    RD_VIEW_UI_FUNCTION_NAME(checkbox)},
-        {str8_lit("color_rgba"),  RD_VIEW_UI_FUNCTION_NAME(color_rgba)},
-        {str8_lit("geo3d"),       RD_VIEW_UI_FUNCTION_NAME(geo3d)},
+        {str8_lit("watch"),       RD_VIEW_UI_FUNCTION_NAME(watch),             EV_EXPAND_RULE_INFO_FUNCTION_NAME(watch)},
+        {str8_lit("text"),        RD_VIEW_UI_FUNCTION_NAME(text),              EV_EXPAND_RULE_INFO_FUNCTION_NAME(text)},
+        {str8_lit("disasm"),      RD_VIEW_UI_FUNCTION_NAME(disasm),            EV_EXPAND_RULE_INFO_FUNCTION_NAME(disasm)},
+        {str8_lit("memory"),      RD_VIEW_UI_FUNCTION_NAME(memory),            EV_EXPAND_RULE_INFO_FUNCTION_NAME(memory)},
+        {str8_lit("bitmap"),      RD_VIEW_UI_FUNCTION_NAME(bitmap),            EV_EXPAND_RULE_INFO_FUNCTION_NAME(bitmap)},
+        {str8_lit("checkbox"),    RD_VIEW_UI_FUNCTION_NAME(checkbox),          0},
+        {str8_lit("color_rgba"),  RD_VIEW_UI_FUNCTION_NAME(color_rgba),        EV_EXPAND_RULE_INFO_FUNCTION_NAME(color_rgba)},
+        {str8_lit("geo3d"),       RD_VIEW_UI_FUNCTION_NAME(geo3d),             EV_EXPAND_RULE_INFO_FUNCTION_NAME(geo3d)},
       };
       for EachElement(idx, table)
       {
         rd_view_ui_rule_map_insert(scratch.arena, rd_state->view_ui_rule_map, table[idx].name, table[idx].ui);
+        if(table[idx].expand != 0)
+        {
+          ev_expand_rule_table_push_new(scratch.arena, expand_rule_table, table[idx].name, table[idx].expand);
+        }
       }
     }
     
@@ -14321,7 +14416,7 @@ X(watch_pins)\
 X(targets)\
 X(scheduler)\
 X(modules)\
-Y(output, text, "query:output_log")\
+Y(output, text, "query:output")\
 Y(disasm, disasm, "")\
 Y(memory, memory, "")\
 Z(getting_started)

@@ -1924,7 +1924,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
           }
         }break;
         
-        // rjf: string => leaf string literal, or file path
+        //- rjf: string => leaf string literal, or file path
         case E_TokenKind_StringLiteral:
         {
           if(str8_match(resolution_qualifier, str8_lit("file"), 0))
@@ -1944,7 +1944,12 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
             it += 1;
           }
         }break;
-        
+      }
+      
+      //- rjf: upgrade atom w/ qualifier
+      if(resolution_qualifier.size != 0)
+      {
+        atom->qualifier = resolution_qualifier;
       }
     }
   }

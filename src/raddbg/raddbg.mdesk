@@ -96,6 +96,18 @@ RD_VocabularyMap:
   {process              processes                   "Process"                   "Processes"           Threads                                        }
   {machine              _                           "Machine"                   _                     Machine                                        }
   {module               _                           "Module"                    _                     Module                                         }
+  {getting_started      ""                          "Getting Started"           ""                    QuestionMark                                   }
+  {disasm               ""                          "Disassembly"               ""                    Glasses                                        }
+  {text                 ""                          "Text"                      ""                    FileOutline                                    }
+  {type                 _                           "Type"                      _                     Null                                           }
+  {procedure            _                           "Procedure"                 _                     Null                                           }
+  {global_variable      _                           "Global Variable"           _                     Null                                           }
+  {global               _                           "Global"                    _                     Null                                           }
+  {thread_variable      _                           "Thread Variable"           _                     Null                                           }
+  {thread_local         _                           "Thread Local"              _                     Null                                           }
+  {call_stack           _                           "Call Stack"                _                     Thread                                         }
+  {output               _                           "Output"                    _                     List                                           }
+  {scheduler            _                           "Scheduler"                 _                     Scheduler                                      }
 }
 
 @struct RD_VocabularyInfo:

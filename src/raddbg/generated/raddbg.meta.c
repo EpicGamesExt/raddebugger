@@ -28,7 +28,7 @@ RD_CmdKind_Null,
 RD_CmdKind_Null,
 };
 
-RD_VocabularyInfo rd_vocabulary_info_table[45] =
+RD_VocabularyInfo rd_vocabulary_info_table[57] =
 {
 {str8_lit_comp("auto_view_rule"), str8_lit_comp("auto_view_rules"), str8_lit_comp("Auto View Rule"), str8_lit_comp("Auto View Rules"), RD_IconKind_Binoculars},
 {str8_lit_comp("file_path_map"), str8_lit_comp("file_path_maps"), str8_lit_comp("File Path Map"), str8_lit_comp("File Path Maps"), RD_IconKind_FileOutline},
@@ -75,6 +75,18 @@ RD_VocabularyInfo rd_vocabulary_info_table[45] =
 {str8_lit_comp("process"), str8_lit_comp("processes"), str8_lit_comp("Process"), str8_lit_comp("Processes"), RD_IconKind_Threads},
 {str8_lit_comp("machine"), str8_lit_comp("machines"), str8_lit_comp("Machine"), str8_lit_comp("Machines"), RD_IconKind_Machine},
 {str8_lit_comp("module"), str8_lit_comp("modules"), str8_lit_comp("Module"), str8_lit_comp("Modules"), RD_IconKind_Module},
+{str8_lit_comp("getting_started"), str8_lit_comp(""), str8_lit_comp("Getting Started"), str8_lit_comp(""), RD_IconKind_QuestionMark},
+{str8_lit_comp("disasm"), str8_lit_comp(""), str8_lit_comp("Disassembly"), str8_lit_comp(""), RD_IconKind_Glasses},
+{str8_lit_comp("text"), str8_lit_comp(""), str8_lit_comp("Text"), str8_lit_comp(""), RD_IconKind_FileOutline},
+{str8_lit_comp("type"), str8_lit_comp("types"), str8_lit_comp("Type"), str8_lit_comp("Types"), RD_IconKind_Null},
+{str8_lit_comp("procedure"), str8_lit_comp("procedures"), str8_lit_comp("Procedure"), str8_lit_comp("Procedures"), RD_IconKind_Null},
+{str8_lit_comp("global_variable"), str8_lit_comp("global_variables"), str8_lit_comp("Global Variable"), str8_lit_comp("Global Variables"), RD_IconKind_Null},
+{str8_lit_comp("global"), str8_lit_comp("globals"), str8_lit_comp("Global"), str8_lit_comp("Globals"), RD_IconKind_Null},
+{str8_lit_comp("thread_variable"), str8_lit_comp("thread_variables"), str8_lit_comp("Thread Variable"), str8_lit_comp("Thread Variables"), RD_IconKind_Null},
+{str8_lit_comp("thread_local"), str8_lit_comp("thread_locals"), str8_lit_comp("Thread Local"), str8_lit_comp("Thread Locals"), RD_IconKind_Null},
+{str8_lit_comp("call_stack"), str8_lit_comp("call_stacks"), str8_lit_comp("Call Stack"), str8_lit_comp("Call Stacks"), RD_IconKind_Thread},
+{str8_lit_comp("output"), str8_lit_comp("outputs"), str8_lit_comp("Output"), str8_lit_comp("Outputs"), RD_IconKind_List},
+{str8_lit_comp("scheduler"), str8_lit_comp("schedulers"), str8_lit_comp("Scheduler"), str8_lit_comp("Schedulers"), RD_IconKind_Scheduler},
 };
 
 RD_NameSchemaInfo rd_name_schema_info_table[10] =

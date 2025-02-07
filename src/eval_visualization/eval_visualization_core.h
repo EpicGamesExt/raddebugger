@@ -318,6 +318,7 @@ internal void ev_key_set_view_rule(EV_View *view, EV_Key key, String8 view_rule_
 //~ rjf: View Rule Info Table Building / Selection / Lookups
 
 internal void ev_expand_rule_table_push(Arena *arena, EV_ExpandRuleTable *table, EV_ExpandRule *info);
+#define ev_expand_rule_table_push_new(arena, table, ...) ev_expand_rule_table_push((arena), (table), &(EV_ExpandRule){__VA_ARGS__})
 internal void ev_select_expand_rule_table(EV_ExpandRuleTable *table);
 internal EV_ExpandRule *ev_expand_rule_from_string(String8 string);
 

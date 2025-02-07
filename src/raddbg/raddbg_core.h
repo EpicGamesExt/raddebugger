@@ -1019,6 +1019,7 @@ internal Vec4F32 rd_rgba_from_cfg(RD_Cfg *cfg);
 
 internal B32 rd_disabled_from_cfg(RD_Cfg *cfg);
 internal RD_Location rd_location_from_cfg(RD_Cfg *cfg);
+internal String8 rd_label_from_cfg(RD_Cfg *cfg);
 internal String8 rd_expr_from_cfg(RD_Cfg *cfg);
 internal D_Target rd_target_from_cfg(Arena *arena, RD_Cfg *cfg);
 internal DR_FancyStringList rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg, Vec4F32 secondary_color, F32 size);
@@ -1093,6 +1094,9 @@ internal R_Tex2DFormat rd_tex2dformat_from_eval_params(E_Eval eval, MD_Node *par
 //- rjf: eval <-> file path
 internal String8 rd_file_path_from_eval_string(Arena *arena, String8 string);
 internal String8 rd_eval_string_from_file_path(Arena *arena, String8 string);
+
+//- rjf: eval -> query
+internal String8 rd_query_from_eval_string(Arena *arena, String8 string);
 
 ////////////////////////////////
 //~ rjf: View Functions

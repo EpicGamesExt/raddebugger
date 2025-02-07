@@ -46,6 +46,7 @@ typedef enum RD_WatchCellKind
   RD_WatchCellKind_Expr, // strings to represent expression itself
   RD_WatchCellKind_Tag,  // strings to represent attached tags at row-granularity
   RD_WatchCellKind_Eval, // an evaluation of the expression, with some optional modification - e.g. `$expr.some_member`, or `typeof($expr)`
+  RD_WatchCellKind_ViewUI,
 }
 RD_WatchCellKind;
 
@@ -78,6 +79,7 @@ struct RD_WatchRowInfo
   U64 callstack_unwind_index;
   U64 callstack_inline_depth;
   RD_WatchCellList cells;
+  RD_ViewUIRule *view_ui_rule;
 };
 
 typedef struct RD_WatchRowCellInfo RD_WatchRowCellInfo;
@@ -241,6 +243,15 @@ internal void rd_watch_view_build(RD_WatchViewState *ewv, Rng2F32 rect);
 // TODO(rjf): @cfg eliminate once we are predeclaring these with metacode
 
 RD_VIEW_UI_FUNCTION_DEF(null);
+
+EV_EXPAND_RULE_INFO_FUNCTION_DEF(watch);
+EV_EXPAND_RULE_INFO_FUNCTION_DEF(text);
+EV_EXPAND_RULE_INFO_FUNCTION_DEF(disasm);
+EV_EXPAND_RULE_INFO_FUNCTION_DEF(memory);
+EV_EXPAND_RULE_INFO_FUNCTION_DEF(bitmap);
+EV_EXPAND_RULE_INFO_FUNCTION_DEF(color_rgba);
+EV_EXPAND_RULE_INFO_FUNCTION_DEF(geo3d);
+
 RD_VIEW_UI_FUNCTION_DEF(watch);
 RD_VIEW_UI_FUNCTION_DEF(text);
 RD_VIEW_UI_FUNCTION_DEF(disasm);

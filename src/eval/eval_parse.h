@@ -64,6 +64,7 @@ struct E_Expr
   E_TypeKey type_key;
   E_Value value;
   String8 string;
+  String8 qualifier;
   String8 bytecode;
 };
 
