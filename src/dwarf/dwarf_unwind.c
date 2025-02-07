@@ -148,7 +148,7 @@ dw_unwind_x64__apply_frame_rules(String8           raw_eh_frame,
       
       // is this a roll-over CFA?
       B32 is_roll_over_cfa = 0;
-      if (reg_idx == DW_Reg_x64_Rsp) {
+      if (reg_idx == DW_RegX64_Rsp) {
         DW_CFIRegisterRule rule = row->cells[reg_idx].rule;
         if (rule == DW_CFIRegisterRule_Undefined || rule == DW_CFIRegisterRule_SameValue) {
           is_roll_over_cfa = 1;

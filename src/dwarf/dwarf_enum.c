@@ -12,7 +12,11 @@ dw_string_from_expr_op(Arena *arena, DW_Version ver, DW_Ext ext, DW_ExprOp op)
     case DW_Ext_LLVM:  break;
     case DW_Ext_APPLE: break;
     case DW_Ext_MIPS:  break;
-    case DW_Ext_GNU:   DW_Expr_GNU_XList(X); break;
+    case DW_Ext_GNU:   {
+      switch (op) {
+        DW_Expr_GNU_XList(X); 
+      }
+    } break;
   }
 
   switch (ver) {
@@ -48,6 +52,7 @@ internal String8
 dw_string_from_tag_kind(Arena *arena, DW_TagKind kind)
 {
   switch (kind) {
+  case DW_Tag_Null: return str8_lit("Null");
     #define X(_N,_ID) case DW_Tag_##_N: return str8_lit(Stringify(_N));
     DW_Tag_V3_XList(X)
     DW_Tag_V5_XList(X)
@@ -150,6 +155,50 @@ dw_string_from_language(Arena *arena, DW_Language kind)
 }
 
 internal String8
+dw_string_from_inl(Arena *arena, DW_InlKind kind)
+{
+  switch (kind) {
+#define X(_N,_ID) case _ID: return str8_lit(Stringify(_N));
+    DW_Inl_XList(X)
+#undef X
+  }
+  return push_str8f(arena, "%x", kind);
+}
+
+internal String8
+dw_string_from_access_kind(Arena *arena, DW_AccessKind kind)
+{
+  switch (kind) {
+#define X(_N,_ID) case _ID: return str8_lit(Stringify(_N));
+    DW_AccessKind_XList(X)
+#undef X
+  }
+  return push_str8f(arena, "%llx", kind);
+}
+
+internal String8
+dw_string_from_calling_convetion(Arena *arena, DW_CallingConventionKind kind)
+{
+  switch (kind) {
+#define X(_N,_ID) case _ID: return str8_lit(Stringify(_N));
+    DW_CallingConventionKind_XList(X)
+#undef X
+  }
+  return push_str8f(arena, "%llx", kind);
+}
+
+internal String8
+dw_string_from_attrib_type_encoding(Arena *arena, DW_AttribTypeEncodingKind kind)
+{
+  switch (kind) {
+#define X(_N,_ID) case _ID: return str8_lit(Stringify(_N));
+    DW_AttribTypeEncodingKind_XList(X)
+#undef X
+  }
+  return push_str8f(arena, "%llx", kind);
+}
+
+internal String8
 dw_string_from_std_opcode(Arena *arena, DW_StdOpcode kind)
 {
   switch (kind) {
@@ -201,14 +250,14 @@ dw_string_from_register(Arena *arena, Arch arch, U64 reg_id)
     case Arch_Null: break;
     case Arch_x86: {
       switch (reg_id) {
-        #define X(_N, _ID, ...) case DW_Reg_x86_##_N: reg_str = str8_lit(Stringify(_ID)); break;
+        #define X(_N, _ID, ...) case DW_RegX86_##_N: reg_str = str8_lit(Stringify(_N)); break;
         DW_Regs_X86_XList(X)
         #undef X
       }
     } break;
     case Arch_x64: {
       switch (reg_id) {
-        #define X(_N, _ID, ...) case DW_Reg_x64_##_N: reg_str = str8_lit(Stringify(_ID)); break;
+        #define X(_N, _ID, ...) case DW_RegX64_##_N: reg_str = str8_lit(Stringify(_N)); break;
         DW_Regs_X64_XList(X)
         #undef X
       }

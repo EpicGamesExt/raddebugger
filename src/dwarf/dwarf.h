@@ -119,6 +119,20 @@ typedef enum DW_LanguageEnum
   DW_Language_UserHi = 0xffff,
 } DW_LanguageEnum;
 
+#define DW_Inl_XList(X)    \
+  X(NotInlined,         0) \
+  X(Inlined,            1) \
+  X(DeclaredNotInlined, 2) \
+  X(DeclaredInlined,    3)
+
+typedef U32 DW_InlKind;
+typedef enum DW_InlKindEnum
+{
+#define X(_N,_ID) DW_Inl_##_N = _ID,
+  DW_Inl_XList(X)
+#undef X
+} DW_InlKindEnum;
+
 #define DW_StdOpcode_XList(X) \
   X(ExtendedOpcode,   0x00)   \
   X(Copy,             0x01)   \
@@ -250,6 +264,7 @@ typedef enum DW_NameCase
 typedef U64 DW_TagKind;
 typedef enum DW_TagKindEnum
 {
+  DW_Tag_Null,
 #define X(_N,_ID) DW_Tag_##_N = _ID,
   DW_Tag_V3_XList(X)
   DW_Tag_V5_XList(X)
@@ -1172,12 +1187,12 @@ typedef enum DW_AttribTypeEncodingKindEnum
 #undef X
 } DW_AttribTypeEncodingKindEnum;
 
-#define DW_CallingConventionKind_XList(X)      \
-  X(DW_CallingConvention_Normal,          0x0) \
-  X(DW_CallingConvention_Program,         0x1) \
-  X(DW_CallingConvention_NoCall,          0x2) \
-  X(DW_CallingConvention_PassByValue,     0x1) \
-  X(DW_CallingConvention_PassByReference, 0x2)
+#define DW_CallingConventionKind_XList(X) \
+  X(Normal,          0x0)                 \
+  X(Program,         0x1)                 \
+  X(NoCall,          0x3)                 \
+  X(PassByValue,     0x4)                 \
+  X(PassByReference, 0x5)
 
 typedef U64 DW_CallingConventionKind;
 typedef enum DW_CallingConventionKindEnum
@@ -1188,9 +1203,9 @@ typedef enum DW_CallingConventionKindEnum
 } DW_CallingConventionKindEnum;
 
 #define DW_AccessKind_XList(X) \
-  X(DW_Access_Public,    0x00) \
-  X(DW_Access_Private,   0x01) \
-  X(DW_Access_Protected, 0x02)
+  X(Public,    0x00) \
+  X(Private,   0x01) \
+  X(Protected, 0x02)
   
 typedef U64 DW_AccessKind;
 typedef enum DW_AccessKindEnum
@@ -1505,9 +1520,18 @@ enum
   X(Convert,         0xa8)  \
   X(ReInterpret,     0xa9)
 
-#define DW_Expr_GNU_XList(X)  \
-  X(GNU_PushTlsAddress, 0xe0) \
-  X(GNU_UnInit,         0xf0)
+#define DW_Expr_GNU_XList(X)   \
+  X(GNU_PushTlsAddress,  0xe0) \
+  X(GNU_UnInit,          0xf0) \
+  X(GNU_ImplicitPointer, 0xf2) \
+  X(GNU_EntryValue,      0xf3) \
+  X(GNU_ConstType,       0xf4) \
+  X(GNU_RegvalType,      0xf5) \
+  X(GNU_DerefType,       0xf6) \
+  X(GNU_Convert,         0xf7) \
+  X(GNU_AddrIndex,       0xfb) \
+  X(GNU_ConstIndex,      0xfc)
+  
 typedef U64 DW_ExprOp;
 typedef enum DW_ExprOpEnum
 {
@@ -1541,22 +1565,22 @@ typedef enum DW_ExprOpEnum
   X(St5,    16, st5,    0, 10) \
   X(St6,    17, st6,    0, 10) \
   X(St7,    18, st7,    0, 10) \
-  X(Xmm0,   21, xmm0,   0, 16) \
-  X(Xmm1,   22, xmm1,   0, 16) \
-  X(Xmm2,   23, xmm2,   0, 16) \
-  X(Xmm3,   24, xmm3,   0, 16) \
-  X(Xmm4,   25, xmm4,   0, 16) \
-  X(Xmm5,   26, xmm5,   0, 16) \
-  X(Xmm6,   27, xmm6,   0, 16) \
-  X(Xmm7,   28, xmm7,   0, 16) \
-  X(Mm0,    29, mm0,    0, 4)  \
-  X(Mm1,    30, mm1,    0, 4)  \
-  X(Mm2,    31, mm2,    0, 4)  \
-  X(Mm3,    32, mm3,    0, 4)  \
-  X(Mm4,    33, mm4,    0, 4)  \
-  X(Mm5,    34, mm5,    0, 4)  \
-  X(Mm6,    35, mm6,    0, 4)  \
-  X(Mm7,    36, mm7,    0, 4)  \
+  X(Xmm0,   21, ymm0,   0, 16) \
+  X(Xmm1,   22, ymm1,   0, 16) \
+  X(Xmm2,   23, ymm2,   0, 16) \
+  X(Xmm3,   24, ymm3,   0, 16) \
+  X(Xmm4,   25, ymm4,   0, 16) \
+  X(Xmm5,   26, ymm5,   0, 16) \
+  X(Xmm6,   27, ymm6,   0, 16) \
+  X(Xmm7,   28, ymm7,   0, 16) \
+  X(Mm0,    29, fpr0,   0, 8)  \
+  X(Mm1,    30, fpr1,   0, 8)  \
+  X(Mm2,    31, fpr2,   0, 8)  \
+  X(Mm3,    32, fpr3,   0, 8)  \
+  X(Mm4,    33, fpr4,   0, 8)  \
+  X(Mm5,    34, fpr5,   0, 8)  \
+  X(Mm6,    35, fpr6,   0, 8)  \
+  X(Mm7,    36, fpr7,   0, 8)  \
   X(Fcw,    37, fcw,    0, 2)  \
   X(Fsw,    38, fsw,    0, 2)  \
   X(Mxcsr,  39, mxcsr,  0, 4)  \
@@ -1587,22 +1611,22 @@ typedef enum DW_ExprOpEnum
   X(R14,     14, r14,    0, 8)  \
   X(R15,     15, r15,    0, 8)  \
   X(Rip,     16, rip,    0, 8)  \
-  X(Xmm0,    17, ymm0,   0, 16) \
-  X(Xmm1,    18, ymm1,   0, 16) \
-  X(Xmm2,    19, ymm2,   0, 16) \
-  X(Xmm3,    20, ymm3,   0, 16) \
-  X(Xmm4,    21, ymm4,   0, 16) \
-  X(Xmm5,    22, ymm5,   0, 16) \
-  X(Xmm6,    23, ymm6,   0, 16) \
-  X(Xmm7,    24, ymm7,   0, 16) \
-  X(Xmm8,    25, ymm8,   0, 16) \
-  X(Xmm9,    26, ymm9,   0, 16) \
-  X(Xmm10,   27, ymm10,  0, 16) \
-  X(Xmm11,   28, ymm11,  0, 16) \
-  X(Xmm12,   29, ymm12,  0, 16) \
-  X(Xmm13,   30, ymm13,  0, 16) \
-  X(Xmm14,   31, ymm14,  0, 16) \
-  X(Xmm15,   32, ymm15,  0, 16) \
+  X(Xmm0,    17, zmm0,   0, 16) \
+  X(Xmm1,    18, zmm1,   0, 16) \
+  X(Xmm2,    19, zmm2,   0, 16) \
+  X(Xmm3,    20, zmm3,   0, 16) \
+  X(Xmm4,    21, zmm4,   0, 16) \
+  X(Xmm5,    22, zmm5,   0, 16) \
+  X(Xmm6,    23, zmm6,   0, 16) \
+  X(Xmm7,    24, zmm7,   0, 16) \
+  X(Xmm8,    25, zmm8,   0, 16) \
+  X(Xmm9,    26, zmm9,   0, 16) \
+  X(Xmm10,   27, zmm10,  0, 16) \
+  X(Xmm11,   28, zmm11,  0, 16) \
+  X(Xmm12,   29, zmm12,  0, 16) \
+  X(Xmm13,   30, zmm13,  0, 16) \
+  X(Xmm14,   31, zmm14,  0, 16) \
+  X(Xmm15,   32, zmm15,  0, 16) \
   X(St0,     33, st0,    0, 10) \
   X(St1,     34, st1,    0, 10) \
   X(St2,     35, st2,    0, 10) \
@@ -1611,14 +1635,14 @@ typedef enum DW_ExprOpEnum
   X(St5,     38, st5,    0, 10) \
   X(St6,     39, st6,    0, 10) \
   X(St7,     40, st7,    0, 10) \
-  X(Mm0,     41, mm0,    0, 8)  \
-  X(Mm1,     42, mm1,    0, 8)  \
-  X(Mm2,     43, mm2,    0, 8)  \
-  X(Mm3,     44, mm3,    0, 8)  \
-  X(Mm4,     45, mm4,    0, 8)  \
-  X(Mm5,     46, mm5,    0, 8)  \
-  X(Mm6,     47, mm6,    0, 8)  \
-  X(Mm7,     48, mm7,    0, 8)  \
+  X(Mm0,     41, fpr0,   0, 8)  \
+  X(Mm1,     42, fpr1,   0, 8)  \
+  X(Mm2,     43, fpr2,   0, 8)  \
+  X(Mm3,     44, fpr3,   0, 8)  \
+  X(Mm4,     45, fpr4,   0, 8)  \
+  X(Mm5,     46, fpr5,   0, 8)  \
+  X(Mm6,     47, fpr6,   0, 8)  \
+  X(Mm7,     48, fpr7,   0, 8)  \
   X(Rflags,  49, rflags, 0, 4)  \
   X(Es,      50, es,     0, 2)  \
   X(Cs,      51, cs,     0, 2)  \
@@ -1631,18 +1655,20 @@ typedef enum DW_ExprOpEnum
   X(Tr,      62, nil,    0, 0)  \
   X(Ldtr,    63, nil,    0, 0)
 
-typedef U32 DW_RegX86;
+typedef U32 DW_Reg;
+
+typedef DW_Reg DW_RegX86;
 typedef enum DW_RegX86Enum
 {
-#define X(_N,_ID,...) DW_Reg_x86_##_N = _ID,
+#define X(_N,_ID,...) DW_RegX86_##_N = _ID,
   DW_Regs_X86_XList(X)
 #undef X
 } DW_RegX86Enum;
 
-typedef U32 DW_RegX64;
+typedef DW_Reg DW_RegX64;
 typedef enum DW_RegX64Enum
 {
-#define X(_N,_ID,...) DW_Reg_x64_##_N = _ID,
+#define X(_N,_ID,...) DW_RegX64_##_N = _ID,
   DW_Regs_X64_XList(X)
 #undef X
 } DW_RegX64Enum;
