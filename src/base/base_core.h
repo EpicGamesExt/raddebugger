@@ -180,7 +180,7 @@
 
 #if COMPILER_MSVC
 # include <intrin.h>
-# if ARCH_X64
+# if defined(ARCH_X64) || defined(ARCH_ARM64)
 #  define ins_atomic_u64_eval(x)                 *((volatile U64 *)(x))
 #  define ins_atomic_u64_inc_eval(x)             InterlockedIncrement64((volatile __int64 *)(x))
 #  define ins_atomic_u64_dec_eval(x)             InterlockedDecrement64((volatile __int64 *)(x))
