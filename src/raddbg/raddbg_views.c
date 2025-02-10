@@ -4289,7 +4289,7 @@ RD_VIEW_UI_FUNCTION_DEF(disasm)
   //
   B32 auto_selected = 0;
   E_Space auto_space = {0};
-  if(eval.space.kind == E_SpaceKind_Null)
+  if(eval.expr == &e_expr_nil)
   {
     if(dv->temp_look_vaddr != 0 && dv->temp_look_run_gen == ctrl_run_gen())
     {
@@ -4344,8 +4344,8 @@ RD_VIEW_UI_FUNCTION_DEF(disasm)
   {
     space = auto_space;
   }
-  Rng1U64 range = {0}; // TODO(rjf): @cfg rd_range_from_eval_params(eval, params);
-  Arch arch = Arch_Null; // TODO(rjf): @cfg rd_arch_from_eval_params(eval, params);
+  Rng1U64 range = rd_range_from_eval_tag(eval, tag);
+  Arch arch = rd_arch_from_eval_tag(eval, tag);
   CTRL_Entity *space_entity = rd_ctrl_entity_from_eval_space(space);
   CTRL_Entity *dasm_module = &ctrl_entity_nil;
   DI_Key dbgi_key = {0};
