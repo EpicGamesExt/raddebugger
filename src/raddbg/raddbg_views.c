@@ -957,8 +957,17 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     
     // rjf: fill row's cells
     {
+#if 0
+      // rjf: singular cell for cfgs
+      if(info.group_cfg != &rd_nil_cfg)
+      {
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Button, .pct = 1.f);
+      }
+#endif
+      if(0){}
+      
       // rjf: singular cell for view ui
-      if(info.view_ui_rule != &rd_nil_view_ui_rule)
+      else if(info.view_ui_rule != &rd_nil_view_ui_rule)
       {
         rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_ViewUI, .pct = 1.f);
       }
@@ -2660,17 +2669,24 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                   // rjf: build cell line edit
                   else
                   {
-                    sig = rd_line_editf((RD_LineEditFlag_CodeContents|
-                                         RD_LineEditFlag_NoBackground|
-                                         RD_LineEditFlag_KeyboardClickable|
-                                         RD_LineEditFlag_Expander*!!(cell_x == 0 && row_is_expandable && cell == row_info.cells.first)|
-                                         RD_LineEditFlag_ExpanderPlaceholder*(cell_x == 0 && row_depth==0 && cell == row_info.cells.first)|
-                                         RD_LineEditFlag_ExpanderSpace*(cell_x == 0 && row_depth!=0 && cell == row_info.cells.first)),
-                                        cell_x == 0 ? row_depth : 0,
-                                        0,
-                                        &cell_edit_state->cursor, &cell_edit_state->mark, cell_edit_state->input_buffer, sizeof(cell_edit_state->input_buffer), &cell_edit_state->input_size, &next_row_expanded,
-                                        cell_info.string,
-                                        "%S###%I64x_row_%I64x", str8_zero(), cell_x, row_hash);
+                    RD_LineEditParams line_edit_params = {0};
+                    {
+                      line_edit_params.flags                = (RD_LineEditFlag_CodeContents|
+                                                               RD_LineEditFlag_NoBackground|
+                                                               RD_LineEditFlag_KeyboardClickable|
+                                                               RD_LineEditFlag_Expander*!!(cell_x == 0 && row_is_expandable && cell == row_info.cells.first)|
+                                                               RD_LineEditFlag_ExpanderPlaceholder*(cell_x == 0 && row_depth==0 && cell == row_info.cells.first)|
+                                                               RD_LineEditFlag_ExpanderSpace*(cell_x == 0 && row_depth!=0 && cell == row_info.cells.first));
+                      line_edit_params.depth                = (cell_x == 0 ? row_depth : 0);
+                      line_edit_params.cursor               = &cell_edit_state->cursor;
+                      line_edit_params.mark                 = &cell_edit_state->mark;
+                      line_edit_params.edit_buffer          = cell_edit_state->input_buffer;
+                      line_edit_params.edit_buffer_size     = sizeof(cell_edit_state->input_buffer);
+                      line_edit_params.edit_string_size_out = &cell_edit_state->input_size;
+                      line_edit_params.expanded_out         = &next_row_expanded;
+                      line_edit_params.pre_edit_value       = cell_info.string;
+                    }
+                    sig = rd_line_editf(&line_edit_params, "%S###%I64x_row_%I64x", str8_zero(), cell_x, row_hash);
 #if 0 // TODO(rjf): @cfg
                     if(ui_is_focus_active() &&
                        selection_tbl.min.x == selection_tbl.max.x && selection_tbl.min.y == selection_tbl.max.y &&
@@ -2718,12 +2734,6 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                     
                     
 #if 0 // TODO(rjf): @cfg
-                    // rjf: can edit? -> begin editing
-                    else if(cell_can_edit)
-                    {
-                      rd_cmd(RD_CmdKind_Edit);
-                    }
-                    
                     // rjf: cannot edit, has addr info? -> go to address
                     else if(row_kind == RD_WatchViewRowKind_Normal &&
                             (col->kind == RD_WatchViewColumnKind_Value ||

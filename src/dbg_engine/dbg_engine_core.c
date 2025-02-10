@@ -1597,6 +1597,7 @@ d_init(void)
   d_state->arena = arena;
   d_state->cmds_arena = arena_alloc();
   d_state->output_log_key = hs_hash_from_data(str8_lit("output_log_key"));
+  hs_submit_data(d_state->output_log_key, 0, str8_zero());
   d_state->ctrl_entity_store = ctrl_entity_store_alloc();
   d_state->ctrl_stop_arena = arena_alloc();
   d_state->view_rule_spec_table_size = 1024;

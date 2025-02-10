@@ -108,7 +108,10 @@ hs_submit_data(U128 key, Arena **data_arena, String8 data)
         node = push_array(stripe->arena, HS_Node, 1);
       }
       node->hash = hash;
-      node->arena = *data_arena;
+      if(data_arena != 0)
+      {
+        node->arena = *data_arena;
+      }
       node->data = data;
       node->scope_ref_count = 0;
       node->key_ref_count = 1;
@@ -117,9 +120,15 @@ hs_submit_data(U128 key, Arena **data_arena, String8 data)
     else
     {
       existing_node->key_ref_count += 1;
-      arena_release(*data_arena);
+      if(data_arena != 0)
+      {
+        arena_release(*data_arena);
+      }
     }
-    *data_arena = 0;
+    if(data_arena != 0)
+    {
+      *data_arena = 0;
+    }
   }
   
   //- rjf: commit this hash to key cache
@@ -330,7 +339,10 @@ hs_evictor_thread__entry_point(void *p)
           {
             DLLRemove(slot->first, slot->last, n);
             SLLStackPush(hs_shared->stripes_free_nodes[stripe_idx], n);
-            arena_release(n->arena);
+            if(n->arena != 0)
+            {
+              arena_release(n->arena);
+            }
           }
         }
       }

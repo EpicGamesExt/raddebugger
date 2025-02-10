@@ -970,6 +970,14 @@ e_irtree_const_u(Arena *arena, U64 v)
 }
 
 internal E_IRNode *
+e_irtree_leaf_u128(Arena *arena, U128 u128)
+{
+  E_IRNode *n = e_push_irnode(arena, RDI_EvalOp_ConstU128);
+  n->value.u128 = u128;
+  return n;
+}
+
+internal E_IRNode *
 e_irtree_unary_op(Arena *arena, RDI_EvalOp op, RDI_EvalTypeGroup group, E_IRNode *c)
 {
   E_IRNode *n = e_push_irnode(arena, op);

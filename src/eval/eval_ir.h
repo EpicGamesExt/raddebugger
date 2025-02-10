@@ -398,6 +398,7 @@ internal void e_irnode_push_child(E_IRNode *parent, E_IRNode *child);
 
 //- rjf: ir subtree building helpers
 internal E_IRNode *e_irtree_const_u(Arena *arena, U64 v);
+internal E_IRNode *e_irtree_leaf_u128(Arena *arena, U128 u128);
 internal E_IRNode *e_irtree_unary_op(Arena *arena, RDI_EvalOp op, RDI_EvalTypeGroup group, E_IRNode *c);
 internal E_IRNode *e_irtree_binary_op(Arena *arena, RDI_EvalOp op, RDI_EvalTypeGroup group, E_IRNode *l, E_IRNode *r);
 internal E_IRNode *e_irtree_binary_op_u(Arena *arena, RDI_EvalOp op, E_IRNode *l, E_IRNode *r);

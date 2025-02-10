@@ -2424,7 +2424,7 @@ rd_code_label(F32 alpha, B32 indirection_size_change, Vec4F32 base_color, String
 //~ rjf: UI Widgets: Line Edit
 
 internal UI_Signal
-rd_line_edit(RD_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size, U64 *edit_string_size_out, B32 *expanded_out, String8 pre_edit_value, String8 string)
+rd_line_edit(RD_LineEditParams *params, String8 string)
 {
   ProfBeginFunction();
   
@@ -2450,36 +2450,36 @@ rd_line_edit(RD_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
     ui_set_next_hover_cursor(OS_Cursor_IBar);
   }
   UI_Box *box = ui_build_box_from_key(UI_BoxFlag_MouseClickable|
-                                      (!!(flags & RD_LineEditFlag_KeyboardClickable)*UI_BoxFlag_KeyboardClickable)|
+                                      (!!(params->flags & RD_LineEditFlag_KeyboardClickable)*UI_BoxFlag_KeyboardClickable)|
                                       UI_BoxFlag_ClickToFocus|
                                       UI_BoxFlag_DrawHotEffects|
-                                      (!(flags & RD_LineEditFlag_NoBackground)*UI_BoxFlag_DrawBackground)|
-                                      (!!(flags & RD_LineEditFlag_Border)*UI_BoxFlag_DrawBorder)|
+                                      (!(params->flags & RD_LineEditFlag_NoBackground)*UI_BoxFlag_DrawBackground)|
+                                      (!!(params->flags & RD_LineEditFlag_Border)*UI_BoxFlag_DrawBorder)|
                                       ((is_auto_focus_hot || is_auto_focus_active)*UI_BoxFlag_KeyboardClickable)|
                                       (is_focus_active || is_focus_active_disabled)*(UI_BoxFlag_Clip),
                                       key);
   
   //- rjf: build indent
-  UI_Parent(box) for(S32 idx = 0; idx < depth; idx += 1)
+  UI_Parent(box) for(S32 idx = 0; idx < params->depth; idx += 1)
   {
     ui_set_next_flags(UI_BoxFlag_DrawSideLeft);
     ui_spacer(ui_em(1.f, 1.f));
   }
   
   //- rjf: build expander
-  if(flags & RD_LineEditFlag_Expander) UI_PrefWidth(ui_px(expander_size_px, 1.f)) UI_Parent(box)
+  if(params->flags & RD_LineEditFlag_Expander) UI_PrefWidth(ui_px(expander_size_px, 1.f)) UI_Parent(box)
     UI_Flags(UI_BoxFlag_DrawSideLeft)
     UI_Focus(UI_FocusKind_Off)
   {
-    UI_Signal expander_sig = ui_expanderf(*expanded_out, "expander");
+    UI_Signal expander_sig = ui_expanderf(params->expanded_out[0], "expander");
     if(ui_pressed(expander_sig))
     {
-      *expanded_out ^= 1;
+      params->expanded_out[0] ^= 1;
     }
   }
   
   //- rjf: build expander placeholder
-  else if(flags & RD_LineEditFlag_ExpanderPlaceholder) UI_Parent(box) UI_PrefWidth(ui_px(expander_size_px, 1.f)) UI_Focus(UI_FocusKind_Off)
+  else if(params->flags & RD_LineEditFlag_ExpanderPlaceholder) UI_Parent(box) UI_PrefWidth(ui_px(expander_size_px, 1.f)) UI_Focus(UI_FocusKind_Off)
   {
     UI_FlagsAdd(UI_BoxFlag_DrawTextWeak)
       UI_Flags(UI_BoxFlag_DrawSideLeft)
@@ -2489,7 +2489,7 @@ rd_line_edit(RD_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
   }
   
   //- rjf: build expander space
-  else if(flags & RD_LineEditFlag_ExpanderSpace) UI_Parent(box) UI_Focus(UI_FocusKind_Off)
+  else if(params->flags & RD_LineEditFlag_ExpanderSpace) UI_Parent(box) UI_Focus(UI_FocusKind_Off)
   {
     UI_Flags(UI_BoxFlag_DrawSideLeft) ui_spacer(ui_px(expander_size_px, 1.f));
   }
@@ -2498,7 +2498,7 @@ rd_line_edit(RD_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
   UI_Box *scrollable_box = &ui_nil_box;
   UI_Parent(box) UI_PrefWidth(ui_children_sum(0))
   {
-    scrollable_box = ui_build_box_from_stringf(is_focus_active*(UI_BoxFlag_AllowOverflowX), "scroll_box_%p", edit_buffer);
+    scrollable_box = ui_build_box_from_stringf(is_focus_active*(UI_BoxFlag_AllowOverflowX), "scroll_box_%p", params->edit_buffer);
   }
   
   //- rjf: do non-textual edits (delete, copy, cut)
@@ -2509,12 +2509,12 @@ rd_line_edit(RD_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
     {
       if(evt->flags & UI_EventFlag_Copy)
       {
-        os_set_clipboard_text(pre_edit_value);
+        os_set_clipboard_text(params->pre_edit_value);
       }
       if(evt->flags & UI_EventFlag_Delete)
       {
         commit = 1;
-        edit_string_size_out[0] = 0;
+        params->edit_string_size_out[0] = 0;
       }
     }
   }
@@ -2549,14 +2549,14 @@ rd_line_edit(RD_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
     }
     if(start_editing_via_sig || start_editing_via_typing)
     {
-      String8 edit_string = pre_edit_value;
-      edit_string.size = Min(edit_buffer_size, pre_edit_value.size);
-      MemoryCopy(edit_buffer, edit_string.str, edit_string.size);
-      edit_string_size_out[0] = edit_string.size;
+      String8 edit_string = params->pre_edit_value;
+      edit_string.size = Min(params->edit_buffer_size, params->pre_edit_value.size);
+      MemoryCopy(params->edit_buffer, edit_string.str, edit_string.size);
+      params->edit_string_size_out[0] = edit_string.size;
       ui_set_auto_focus_active_key(key);
       ui_kill_action();
-      *cursor = txt_pt(1, edit_string.size+1);
-      *mark = txt_pt(1, 1);
+      params->cursor[0] = txt_pt(1, edit_string.size+1);
+      params->mark[0] = txt_pt(1, 1);
       focus_started = 1;
     }
   }
@@ -2580,13 +2580,13 @@ rd_line_edit(RD_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
   
   //- rjf: take navigation actions for editing
   B32 changes_made = 0;
-  if(!(flags & RD_LineEditFlag_DisableEdit) && (is_focus_active || focus_started))
+  if(!(params->flags & RD_LineEditFlag_DisableEdit) && (is_focus_active || focus_started))
   {
     Temp scratch = scratch_begin(0, 0);
     rd_state->text_edit_mode = 1;
     for(UI_Event *evt = 0; ui_next_event(&evt);)
     {
-      String8 edit_string = str8(edit_buffer, edit_string_size_out[0]);
+      String8 edit_string = str8(params->edit_buffer, params->edit_string_size_out[0]);
       
       // rjf: do not consume anything that doesn't fit a single-line's operations
       if((evt->kind != UI_EventKind_Edit && evt->kind != UI_EventKind_Navigate && evt->kind != UI_EventKind_Text) || evt->delta_2s32.y != 0)
@@ -2595,20 +2595,20 @@ rd_line_edit(RD_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
       }
       
       // rjf: map this action to an op
-      UI_TxtOp op = ui_single_line_txt_op_from_event(scratch.arena, evt, edit_string, *cursor, *mark);
+      UI_TxtOp op = ui_single_line_txt_op_from_event(scratch.arena, evt, edit_string, params->cursor[0], params->mark[0]);
       
       // rjf: any valid op & autocomplete hint? -> perform autocomplete first, then re-compute op
       if(autocomplete_hint_string.size != 0)
       {
-        String8 word_query = rd_lister_query_word_from_input_string_off(edit_string, cursor->column-1);
+        String8 word_query = rd_lister_query_word_from_input_string_off(edit_string, params->cursor->column-1);
         U64 word_off = (U64)(word_query.str - edit_string.str);
         String8 new_string = ui_push_string_replace_range(scratch.arena, edit_string, r1s64(word_off+1, word_off+1+word_query.size), autocomplete_hint_string);
-        new_string.size = Min(edit_buffer_size, new_string.size);
-        MemoryCopy(edit_buffer, new_string.str, new_string.size);
-        edit_string_size_out[0] = new_string.size;
-        *cursor = *mark = txt_pt(1, word_off+1+autocomplete_hint_string.size);
-        edit_string = str8(edit_buffer, edit_string_size_out[0]);
-        op = ui_single_line_txt_op_from_event(scratch.arena, evt, edit_string, *cursor, *mark);
+        new_string.size = Min(params->edit_buffer_size, new_string.size);
+        MemoryCopy(params->edit_buffer, new_string.str, new_string.size);
+        params->edit_string_size_out[0] = new_string.size;
+        params->cursor[0] = params->mark[0] = txt_pt(1, word_off+1+autocomplete_hint_string.size);
+        edit_string = str8(params->edit_buffer, params->edit_string_size_out[0]);
+        op = ui_single_line_txt_op_from_event(scratch.arena, evt, edit_string, params->cursor[0], params->mark[0]);
         MemoryZeroStruct(&autocomplete_hint_string);
       }
       
@@ -2616,9 +2616,9 @@ rd_line_edit(RD_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
       if(!txt_pt_match(op.range.min, op.range.max) || op.replace.size != 0)
       {
         String8 new_string = ui_push_string_replace_range(scratch.arena, edit_string, r1s64(op.range.min.column, op.range.max.column), op.replace);
-        new_string.size = Min(edit_buffer_size, new_string.size);
-        MemoryCopy(edit_buffer, new_string.str, new_string.size);
-        edit_string_size_out[0] = new_string.size;
+        new_string.size = Min(params->edit_buffer_size, new_string.size);
+        MemoryCopy(params->edit_buffer, new_string.str, new_string.size);
+        params->edit_string_size_out[0] = new_string.size;
       }
       
       // rjf: perform copy
@@ -2628,8 +2628,8 @@ rd_line_edit(RD_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
       }
       
       // rjf: commit op's changed cursor & mark to caller-provided state
-      *cursor = op.cursor;
-      *mark = op.mark;
+      params->cursor[0] = op.cursor;
+      params->mark[0] = op.mark;
       
       // rjf: consume event
       {
@@ -2645,68 +2645,68 @@ rd_line_edit(RD_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
   F32 cursor_off = 0;
   UI_Parent(scrollable_box)
   {
-    if(!is_focus_active && !is_focus_active_disabled && flags & RD_LineEditFlag_CodeContents)
+    if(!is_focus_active && !is_focus_active_disabled && params->flags & RD_LineEditFlag_CodeContents)
     {
       String8 display_string = ui_display_part_from_key_string(string);
-      if(!(flags & RD_LineEditFlag_PreferDisplayString) && pre_edit_value.size != 0)
+      if(!(params->flags & RD_LineEditFlag_PreferDisplayString) && params->pre_edit_value.size != 0)
       {
-        display_string = pre_edit_value;
+        display_string = params->pre_edit_value;
         UI_Box *box = rd_code_label(1.f, 1, ui_top_palette()->text, display_string);
-        if(matches != 0)
+        if(params->fuzzy_matches != 0)
         {
-          ui_box_equip_fuzzy_match_ranges(box, matches);
+          ui_box_equip_fuzzy_match_ranges(box, params->fuzzy_matches);
         }
       }
-      else if(flags & RD_LineEditFlag_DisplayStringIsCode)
+      else if(params->flags & RD_LineEditFlag_DisplayStringIsCode)
       {
         UI_Box *box = rd_code_label(1.f, 1, ui_top_palette()->text, display_string);
-        if(matches != 0)
+        if(params->fuzzy_matches != 0)
         {
-          ui_box_equip_fuzzy_match_ranges(box, matches);
+          ui_box_equip_fuzzy_match_ranges(box, params->fuzzy_matches);
         }
       }
       else
       {
         ui_set_next_flags(UI_BoxFlag_DrawTextWeak);
         UI_Box *box = ui_label(display_string).box;
-        if(matches != 0)
+        if(params->fuzzy_matches != 0)
         {
-          ui_box_equip_fuzzy_match_ranges(box, matches);
+          ui_box_equip_fuzzy_match_ranges(box, params->fuzzy_matches);
         }
       }
     }
-    else if(!is_focus_active && !is_focus_active_disabled && !(flags & RD_LineEditFlag_CodeContents))
+    else if(!is_focus_active && !is_focus_active_disabled && !(params->flags & RD_LineEditFlag_CodeContents))
     {
       String8 display_string = ui_display_part_from_key_string(string);
-      if(!(flags & RD_LineEditFlag_PreferDisplayString) && pre_edit_value.size != 0)
+      if(!(params->flags & RD_LineEditFlag_PreferDisplayString) && params->pre_edit_value.size != 0)
       {
-        display_string = pre_edit_value;
+        display_string = params->pre_edit_value;
       }
       else
       {
         ui_set_next_flags(UI_BoxFlag_DrawTextWeak);
       }
       UI_Box *box = ui_label(display_string).box;
-      if(matches != 0)
+      if(params->fuzzy_matches != 0)
       {
-        ui_box_equip_fuzzy_match_ranges(box, matches);
+        ui_box_equip_fuzzy_match_ranges(box, params->fuzzy_matches);
       }
     }
-    else if((is_focus_active || is_focus_active_disabled) && flags & RD_LineEditFlag_CodeContents)
+    else if((is_focus_active || is_focus_active_disabled) && params->flags & RD_LineEditFlag_CodeContents)
     {
-      String8 edit_string = str8(edit_buffer, edit_string_size_out[0]);
+      String8 edit_string = str8(params->edit_buffer, params->edit_string_size_out[0]);
       Temp scratch = scratch_begin(0, 0);
       F32 total_text_width = fnt_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, ui_top_tab_size(), edit_string).x;
-      F32 total_editstr_width = total_text_width - !!(flags & (RD_LineEditFlag_Expander|RD_LineEditFlag_ExpanderSpace|RD_LineEditFlag_ExpanderPlaceholder)) * expander_size_px;
+      F32 total_editstr_width = total_text_width - !!(params->flags & (RD_LineEditFlag_Expander|RD_LineEditFlag_ExpanderSpace|RD_LineEditFlag_ExpanderPlaceholder)) * expander_size_px;
       ui_set_next_pref_width(ui_px(total_editstr_width+ui_top_font_size()*2, 0.f));
       UI_Box *editstr_box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|UI_BoxFlag_DisableTextTrunc, "###editstr");
       DR_FancyStringList code_fancy_strings = rd_fancy_string_list_from_code_string(scratch.arena, 1.f, 0, ui_top_palette()->text, edit_string);
       if(autocomplete_hint_string.size != 0)
       {
-        String8 query_word = rd_lister_query_word_from_input_string_off(edit_string, cursor->column-1);
+        String8 query_word = rd_lister_query_word_from_input_string_off(edit_string, params->cursor->column-1);
         String8 autocomplete_append_string = str8_skip(autocomplete_hint_string, query_word.size);
         U64 off = 0;
-        U64 cursor_off = cursor->column-1;
+        U64 cursor_off = params->cursor->column-1;
         DR_FancyStringNode *prev_n = 0;
         for(DR_FancyStringNode *n = code_fancy_strings.first; n != 0; n = n->next)
         {
@@ -2768,28 +2768,28 @@ rd_line_edit(RD_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
       ui_box_equip_display_fancy_strings(editstr_box, &code_fancy_strings);
       UI_LineEditDrawData *draw_data = push_array(ui_build_arena(), UI_LineEditDrawData, 1);
       draw_data->edited_string = push_str8_copy(ui_build_arena(), edit_string);
-      draw_data->cursor = *cursor;
-      draw_data->mark = *mark;
+      draw_data->cursor = params->cursor[0];
+      draw_data->mark = params->mark[0];
       ui_box_equip_custom_draw(editstr_box, ui_line_edit_draw, draw_data);
       mouse_pt = txt_pt(1, 1+ui_box_char_pos_from_xy(editstr_box, ui_mouse()));
-      cursor_off = fnt_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, ui_top_tab_size(), str8_prefix(edit_string, cursor->column-1)).x;
+      cursor_off = fnt_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, ui_top_tab_size(), str8_prefix(edit_string, params->cursor->column-1)).x;
       scratch_end(scratch);
     }
-    else if((is_focus_active || is_focus_active_disabled) && !(flags & RD_LineEditFlag_CodeContents))
+    else if((is_focus_active || is_focus_active_disabled) && !(params->flags & RD_LineEditFlag_CodeContents))
     {
-      String8 edit_string = str8(edit_buffer, edit_string_size_out[0]);
+      String8 edit_string = str8(params->edit_buffer, params->edit_string_size_out[0]);
       F32 total_text_width = fnt_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, ui_top_tab_size(), edit_string).x;
-      F32 total_editstr_width = total_text_width - !!(flags & (RD_LineEditFlag_Expander|RD_LineEditFlag_ExpanderSpace|RD_LineEditFlag_ExpanderPlaceholder)) * expander_size_px;
+      F32 total_editstr_width = total_text_width - !!(params->flags & (RD_LineEditFlag_Expander|RD_LineEditFlag_ExpanderSpace|RD_LineEditFlag_ExpanderPlaceholder)) * expander_size_px;
       ui_set_next_pref_width(ui_px(total_editstr_width+ui_top_font_size()*2, 0.f));
       UI_Box *editstr_box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|UI_BoxFlag_DisableTextTrunc, "###editstr");
       UI_LineEditDrawData *draw_data = push_array(ui_build_arena(), UI_LineEditDrawData, 1);
       draw_data->edited_string = push_str8_copy(ui_build_arena(), edit_string);
-      draw_data->cursor = *cursor;
-      draw_data->mark = *mark;
+      draw_data->cursor = params->cursor[0];
+      draw_data->mark = params->mark[0];
       ui_box_equip_display_string(editstr_box, edit_string);
       ui_box_equip_custom_draw(editstr_box, ui_line_edit_draw, draw_data);
       mouse_pt = txt_pt(1, 1+ui_box_char_pos_from_xy(editstr_box, ui_mouse()));
-      cursor_off = fnt_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, ui_top_tab_size(), str8_prefix(edit_string, cursor->column-1)).x;
+      cursor_off = fnt_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, ui_top_tab_size(), str8_prefix(edit_string, params->cursor->column-1)).x;
     }
   }
   
@@ -2798,18 +2798,18 @@ rd_line_edit(RD_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
   {
     if(ui_pressed(sig))
     {
-      *mark = mouse_pt;
+      params->mark[0] = mouse_pt;
     }
-    *cursor = mouse_pt;
+    params->cursor[0] = mouse_pt;
   }
   if(!is_focus_active && is_focus_active_disabled && ui_pressed(sig))
   {
-    *cursor = *mark = mouse_pt;
+    params->cursor[0] = params->mark[0] = mouse_pt;
   }
   
   //- rjf: focus cursor
   {
-    F32 visible_dim_px = dim_2f32(box->rect).x - expander_size_px - ui_top_font_size()*depth;
+    F32 visible_dim_px = dim_2f32(box->rect).x - expander_size_px - ui_top_font_size()*params->depth;
     if(visible_dim_px > 0)
     {
       Rng1F32 cursor_range_px  = r1f32(cursor_off-ui_top_font_size()*2.f, cursor_off+ui_top_font_size()*2.f);
@@ -2838,14 +2838,14 @@ rd_line_edit(RD_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, Tx
 }
 
 internal UI_Signal
-rd_line_editf(RD_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size, U64 *edit_string_size_out, B32 *expanded_out, String8 pre_edit_value, char *fmt, ...)
+rd_line_editf(RD_LineEditParams *params, char *fmt, ...)
 {
   Temp scratch = scratch_begin(0, 0);
   va_list args;
   va_start(args, fmt);
   String8 string = push_str8fv(scratch.arena, fmt, args);
   va_end(args);
-  UI_Signal sig = rd_line_edit(flags, depth, matches, cursor, mark, edit_buffer, edit_buffer_size, edit_string_size_out, expanded_out, pre_edit_value, string);
+  UI_Signal sig = rd_line_edit(params, string);
   scratch_end(scratch);
   return sig;
 }

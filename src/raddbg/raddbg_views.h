@@ -43,10 +43,11 @@ struct RD_CodeViewBuildResult
 
 typedef enum RD_WatchCellKind
 {
-  RD_WatchCellKind_Expr, // strings to represent expression itself
-  RD_WatchCellKind_Tag,  // strings to represent attached tags at row-granularity
-  RD_WatchCellKind_Eval, // an evaluation of the expression, with some optional modification - e.g. `$expr.some_member`, or `typeof($expr)`
-  RD_WatchCellKind_ViewUI,
+  RD_WatchCellKind_Expr,   // strings to represent expression itself
+  RD_WatchCellKind_Tag,    // strings to represent attached tags at row-granularity
+  RD_WatchCellKind_Eval,   // an evaluation of the expression, with some optional modification - e.g. `$expr.some_member`, or `typeof($expr)`
+  RD_WatchCellKind_ViewUI, // an arbitrary user interface, supplied by a hook
+  RD_WatchCellKind_Button, // a fancy button dedicated to the entire row's evaluation, used for listers/etc.
 }
 RD_WatchCellKind;
 

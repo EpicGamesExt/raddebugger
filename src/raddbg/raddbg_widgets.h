@@ -22,6 +22,22 @@ enum
   RD_LineEditFlag_DisplayStringIsCode = (1<<9),
 };
 
+typedef struct RD_LineEditParams RD_LineEditParams;
+struct RD_LineEditParams
+{
+  RD_LineEditFlags flags;
+  S32 depth;
+  FuzzyMatchRangeList *fuzzy_matches;
+  TxtPt *cursor;
+  TxtPt *mark;
+  U8 *edit_buffer;
+  U64 edit_buffer_size;
+  U64 *edit_string_size_out;
+  B32 *expanded_out;
+  String8 pre_edit_value;
+  DR_FancyStringList fancy_strings;
+};
+
 ////////////////////////////////
 //~ rjf: Code Slice Types
 
@@ -114,7 +130,7 @@ internal UI_Box *rd_code_label(F32 alpha, B32 indirection_size_change, Vec4F32 b
 ////////////////////////////////
 //~ rjf: UI Widgets: Line Edit
 
-internal UI_Signal rd_line_edit(RD_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size, U64 *edit_string_size_out, B32 *expanded_out, String8 pre_edit_value, String8 string);
-internal UI_Signal rd_line_editf(RD_LineEditFlags flags, S32 depth, FuzzyMatchRangeList *matches, TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size, U64 *edit_string_size_out, B32 *expanded_out, String8 pre_edit_value, char *fmt, ...);
+internal UI_Signal rd_line_edit(RD_LineEditParams *params, String8 string);
+internal UI_Signal rd_line_editf(RD_LineEditParams *params, char *fmt, ...);
 
 #endif // RADDBG_WIDGETS_H
