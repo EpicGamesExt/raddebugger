@@ -2793,7 +2793,7 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                   String8         string      = ev_expr_string_from_row(scratch.arena, row, 0);
                   E_TokenArray    tokens      = e_token_array_from_text(scratch.arena, string);
                   E_Parse         parse       = e_parse_expr_from_text_tokens(scratch.arena, string, &tokens);
-                  E_IRTreeAndType irtree      = e_irtree_and_type_from_expr(scratch.arena, parse.expr);
+                  E_IRTreeAndType irtree      = e_irtree_and_type_from_expr(scratch.arena, parse.last_expr);
                   E_OpList        oplist      = e_oplist_from_irtree(scratch.arena, irtree.root);
                   String8         bytecode    = e_bytecode_from_oplist(scratch.arena, &oplist);
                   UI_Flags(UI_BoxFlag_DrawTextWeak) ui_labelf("Text:");
@@ -2815,7 +2815,7 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                       E_Expr *expr;
                       S64 depth;
                     };
-                    Task start_task = {0, 0, parse.expr};
+                    Task start_task = {0, 0, parse.last_expr};
                     Task *first_task = &start_task;
                     Task *last_task = first_task;
                     for(Task *t = first_task; t != 0; t = t->next)

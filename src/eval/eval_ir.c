@@ -718,7 +718,7 @@ e_auto_hook_map_insert_new_(Arena *arena, E_AutoHookMap *map, E_AutoHookParams *
   {
     E_TokenArray tokens = e_token_array_from_text(scratch.arena, params->type_pattern);
     E_Parse parse = e_parse_type_from_text_tokens(scratch.arena, params->type_pattern, &tokens);
-    E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, parse.expr);
+    E_IRTreeAndType irtree = e_irtree_and_type_from_expr(scratch.arena, parse.last_expr);
     type_key = irtree.type_key;
   }
   E_AutoHookNode *node = push_array(arena, E_AutoHookNode, 1);

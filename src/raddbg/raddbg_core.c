@@ -74,46 +74,6 @@ rd_cmd_list_push_new(Arena *arena, RD_CmdList *cmds, String8 name, RD_Regs *regs
 }
 
 ////////////////////////////////
-//~ rjf: View Spec Type Functions
-
-#if 0 // TODO(rjf): @cfg
-internal RD_ViewRuleKind
-rd_view_rule_kind_from_string(String8 string)
-{
-  RD_ViewRuleKind kind = RD_ViewRuleKind_Null;
-  for EachEnumVal(RD_ViewRuleKind, k)
-  {
-    if(str8_match(string, rd_view_rule_kind_info_table[k].string, 0))
-    {
-      kind = k;
-      break;
-    }
-  }
-  return kind;
-}
-
-internal RD_ViewRuleInfo *
-rd_view_rule_info_from_kind(RD_ViewRuleKind kind)
-{
-  return &rd_view_rule_kind_info_table[kind];
-}
-
-internal RD_ViewRuleInfo *
-rd_view_rule_info_from_string(String8 string)
-{
-  RD_ViewRuleInfo *result = &rd_nil_view_rule_info;
-  {
-    RD_ViewRuleKind kind = rd_view_rule_kind_from_string(string);
-    if(kind != RD_ViewRuleKind_Null)
-    {
-      result = &rd_view_rule_kind_info_table[kind];
-    }
-  }
-  return result;
-}
-#endif
-
-////////////////////////////////
 //~ rjf: View UI Rule Functions
 
 internal RD_ViewUIRuleMap *
@@ -847,7 +807,7 @@ rd_panel_tree_from_cfg(Arena *arena, RD_Cfg *cfg)
       }
       
       // rjf: extract cfg info
-      B32 panel_has_tabs = 0;
+      B32 panel_has_children = 0;
       dst->cfg = src;
       dst->pct_of_parent = (F32)f64_from_str8(src->string);
       dst->tab_side = (rd_cfg_child_from_string(src, str8_lit("tabs_on_bottom")) != &rd_nil_cfg ? Side_Max : Side_Min);
@@ -857,7 +817,7 @@ rd_panel_tree_from_cfg(Arena *arena, RD_Cfg *cfg)
         MD_TokenizeResult tokenize = md_tokenize_from_text(scratch.arena, src_child->string);
         if(tokenize.tokens.count == 1 && tokenize.tokens.v[0].flags & MD_TokenFlag_Numeric)
         {
-          // NOTE(rjf): skip - this is a panel.
+          panel_has_children = 1;
         }
         else if(str8_match(src_child->string, str8_lit("tabs_on_bottom"), 0))
         {
@@ -869,7 +829,6 @@ rd_panel_tree_from_cfg(Arena *arena, RD_Cfg *cfg)
         }
         else if(tokenize.tokens.count == 1 && tokenize.tokens.v[0].flags & MD_TokenFlag_Identifier)
         {
-          panel_has_tabs = 1;
           rd_cfg_list_push(arena, &dst->tabs, src_child);
           if(rd_cfg_child_from_string(src_child, str8_lit("selected")) != &rd_nil_cfg)
           {
@@ -880,7 +839,7 @@ rd_panel_tree_from_cfg(Arena *arena, RD_Cfg *cfg)
       
       // rjf: recurse
       rec = rd_cfg_rec__depth_first(src_root, src);
-      if(panel_has_tabs)
+      if(!panel_has_children)
       {
         MemoryZeroStruct(&rec);
         rec.next = &rd_nil_cfg;
@@ -13165,7 +13124,10 @@ rd_frame(void)
         E_Parse parse = e_parse_expr_from_text__cached(expr);
         if(parse.msgs.max_kind == E_MsgKind_Null)
         {
-          e_push_leaf_ident_exprs_from_expr__in_place(scratch.arena, ctx->macro_map, parse.expr);
+          for(E_Expr *expr = parse.first_expr; expr != &e_expr_nil; expr = expr->next)
+          {
+            e_push_leaf_ident_exprs_from_expr__in_place(scratch.arena, ctx->macro_map, expr);
+          }
         }
       }
       

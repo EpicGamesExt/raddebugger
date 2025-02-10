@@ -937,15 +937,6 @@ internal RD_Regs *rd_regs_copy(Arena *arena, RD_Regs *src);
 internal void rd_cmd_list_push_new(Arena *arena, RD_CmdList *cmds, String8 name, RD_Regs *regs);
 
 ////////////////////////////////
-//~ rjf: View Spec Type Functions
-
-#if 0 // TODO(rjf): @cfg
-internal RD_ViewRuleKind rd_view_rule_kind_from_string(String8 string);
-internal RD_ViewRuleInfo *rd_view_rule_info_from_kind(RD_ViewRuleKind kind);
-internal RD_ViewRuleInfo *rd_view_rule_info_from_string(String8 string);
-#endif
-
-////////////////////////////////
 //~ rjf: View UI Rule Functions
 
 internal RD_ViewUIRuleMap *rd_view_ui_rule_map_make(Arena *arena, U64 slots_count);
