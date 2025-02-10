@@ -888,7 +888,8 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
   RD_WatchRowInfo info =
   {
     .module           = &ctrl_entity_nil,
-    .group_cfg        = &rd_nil_cfg,
+    .group_cfg_parent = &rd_nil_cfg,
+    .group_cfg_child  = &rd_nil_cfg,
     .group_entity     = &ctrl_entity_nil,
     .callstack_thread = &ctrl_entity_nil,
     .view_ui_rule     = &rd_nil_view_ui_rule,
@@ -929,15 +930,24 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       }
     }
     
-    // rjf: determine cfg group name
+    // rjf: determine cfg group name / parent
     {
-      E_IRTreeAndType block_irtree = e_irtree_and_type_from_expr(scratch.arena, row->block->expr);
-      E_TypeKey block_type_key = block_irtree.type_key;
+      E_Eval block_eval = e_eval_from_expr(scratch.arena, row->block->expr);
+      E_TypeKey block_type_key = block_eval.type_key;
       E_TypeKind block_type_kind = e_type_kind_from_key(block_type_key);
       if(block_type_kind == E_TypeKind_Set)
       {
+        info.group_cfg_parent = rd_cfg_from_id(block_eval.value.u64);
         E_Type *block_type = e_type_from_key__cached(block_type_key);
-        info.group_cfg_name = rd_singular_from_code_name_plural(block_type->name);
+        String8 singular_name = rd_singular_from_code_name_plural(block_type->name);
+        if(singular_name.size != 0)
+        {
+          info.group_cfg_name = singular_name;
+        }
+        else
+        {
+          info.group_cfg_name = block_type->name;
+        }
       }
     }
     
@@ -945,7 +955,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     if(info.group_cfg_name.size != 0)
     {
       RD_CfgID id = row->key.child_id;
-      info.group_cfg = rd_cfg_from_id(id);
+      info.group_cfg_child = rd_cfg_from_id(id);
     }
     
     // rjf: determine view ui rule
@@ -1941,11 +1951,20 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
               {
                 case RD_WatchCellKind_Expr:
                 {
-                  RD_Cfg *cfg = row_info.group_cfg;
+                  RD_Cfg *cfg = row_info.group_cfg_child;
+                  String8 child_key = str8_lit("expression");
                   if(cfg == &rd_nil_cfg && editing_complete && new_string.size != 0)
                   {
-                    RD_CfgList all_cfgs = rd_cfg_top_level_list_from_string(scratch.arena, row_info.group_cfg_name);
-                    RD_Cfg *new_cfg_parent = rd_cfg_list_last(&all_cfgs)->parent;
+                    RD_Cfg *new_cfg_parent = row_info.group_cfg_parent;
+                    if(new_cfg_parent != &rd_nil_cfg)
+                    {
+                      child_key = str8_zero();
+                    }
+                    if(new_cfg_parent == &rd_nil_cfg)
+                    {
+                      RD_CfgList all_cfgs = rd_cfg_top_level_list_from_string(scratch.arena, row_info.group_cfg_name);
+                      new_cfg_parent = rd_cfg_list_last(&all_cfgs)->parent;
+                    }
                     if(new_cfg_parent == &rd_nil_cfg)
                     {
                       new_cfg_parent = rd_cfg_child_from_string(rd_state->root_cfg, str8_lit("project"));
@@ -1956,7 +1975,7 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                   }
                   if(cfg != &rd_nil_cfg)
                   {
-                    RD_Cfg *expr = rd_cfg_child_from_string_or_alloc(cfg, str8_lit("expression"));
+                    RD_Cfg *expr = child_key.size != 0 ? rd_cfg_child_from_string_or_alloc(cfg, child_key) : cfg;
                     rd_cfg_new_replace(expr, new_string);
                   }
                 }break;
@@ -1964,7 +1983,7 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                 if(editing_complete)
                 {
                   ev_key_set_view_rule(eval_view, pt.key, new_string);
-                  RD_Cfg *cfg = row_info.group_cfg;
+                  RD_Cfg *cfg = row_info.group_cfg_child;
                   if(cfg != &rd_nil_cfg && new_string.size != 0)
                   {
                     RD_Cfg *view_rule = rd_cfg_child_from_string_or_alloc(cfg, str8_lit("view_rule"));
@@ -2086,7 +2105,7 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
               default:{}break;
               case RD_WatchCellKind_Expr:
               {
-                RD_Cfg *cfg = row_info.group_cfg;
+                RD_Cfg *cfg = row_info.group_cfg_child;
                 if(cfg != &rd_nil_cfg)
                 {
                   rd_cfg_list_push(scratch.arena, &cfgs_to_remove, cfg);
@@ -2116,9 +2135,9 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
               }break;
               case RD_WatchCellKind_Tag:
               {
-                if(row_info.group_cfg != &rd_nil_cfg)
+                if(row_info.group_cfg_child != &rd_nil_cfg)
                 {
-                  rd_cfg_release(rd_cfg_child_from_string(row_info.group_cfg, str8_lit("view_rule")));
+                  rd_cfg_release(rd_cfg_child_from_string(row_info.group_cfg_child, str8_lit("view_rule")));
                 }
                 ev_key_set_view_rule(eval_view, row->key, str8_zero());
                 state_dirty = 1;
@@ -2527,7 +2546,7 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
               ////////////////////
               //- rjf: draw start of cache lines in expansions
               //
-              if(row_info.view_ui_rule == &rd_nil_view_ui_rule)
+              if(row_info.eval.space.kind == RD_EvalSpaceKind_CtrlEntity && row_info.view_ui_rule == &rd_nil_view_ui_rule)
               {
                 U64 row_offset = row_info.eval.value.u64;
                 if((row_info.eval.mode == E_Mode_Offset || row_info.eval.mode == E_Mode_Null) &&
@@ -2544,7 +2563,7 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
               ////////////////////
               //- rjf: draw mid-row cache line boundaries in expansions
               //
-              if(row_info.view_ui_rule == &rd_nil_view_ui_rule)
+              if(row_info.eval.space.kind == RD_EvalSpaceKind_CtrlEntity && row_info.view_ui_rule == &rd_nil_view_ui_rule)
               {
                 if((row_info.eval.mode == E_Mode_Offset || row_info.eval.mode == E_Mode_Null) &&
                    row_info.eval.value.u64%64 != 0 &&
