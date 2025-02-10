@@ -195,6 +195,10 @@ lnk_write_data_list_to_file_path(String8 path, String8 temp_path, String8List da
   }
 
   if (!os_handle_match(file_handle, os_handle_zero())) {
+    if (!os_file_reserve_size(file_handle, data.total_size)) {
+      lnk_log(LNK_Log_IO_Write, "Failed to pre-allocate file %S with size %M", path, data.total_size);
+    }
+
     // write data nodes
     {
       for (String8Node *data_n = data.first; data_n != 0; data_n = data_n->next) {
