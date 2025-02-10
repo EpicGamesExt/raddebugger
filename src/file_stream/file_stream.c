@@ -316,6 +316,7 @@ ASYNC_WORK_DEF(fs_stream_work)
   U64 range_size = dim_1u64(range);
   U64 read_size = Min(pre_props.size, range_size);
   OS_Handle file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareRead|OS_AccessFlag_ShareWrite, path);
+  B32 file_handle_is_valid = !os_handle_match(os_handle_zero(), file);
   U64 data_arena_size = read_size+ARENA_HEADER_SIZE;
   data_arena_size += KB(4)-1;
   data_arena_size -= data_arena_size%KB(4);
@@ -331,7 +332,8 @@ ASYNC_WORK_DEF(fs_stream_work)
   //- rjf: abort if modification timestamps or sizes differ - we did not successfully read the file
   B32 read_good = (pre_props.modified == post_props.modified &&
                    pre_props.size == post_props.size &&
-                   read_size == data.size);
+                   read_size == data.size &&
+                   file_handle_is_valid);
   if(!read_good)
   {
     ProfScope("abort")
