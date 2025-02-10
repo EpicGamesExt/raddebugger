@@ -8932,12 +8932,46 @@ E_LOOKUP_RANGE_FUNCTION_DEF(top_level_cfg)
 
 E_LOOKUP_ID_FROM_NUM_FUNCTION_DEF(top_level_cfg)
 {
-  return num;
+  U64 id = 0;
+  RD_TopLevelCfgLookupAccel *accel = (RD_TopLevelCfgLookupAccel *)user_data;
+  if(num != 0)
+  {
+    U64 idx = num-1;
+    if(contains_1u64(accel->cfgs_idx_range, idx))
+    {
+      RD_Cfg *cfg = accel->cfgs.v[idx - accel->cfgs_idx_range.min];
+      id = cfg->id;
+    }
+    else if(contains_1u64(accel->cmds_idx_range, idx))
+    {
+      id = num;
+      id |= (1ull<<63);
+    }
+  }
+  return id;
 }
 
 E_LOOKUP_NUM_FROM_ID_FUNCTION_DEF(top_level_cfg)
 {
-  return id;
+  U64 num = 0;
+  RD_TopLevelCfgLookupAccel *accel = (RD_TopLevelCfgLookupAccel *)user_data;
+  if(id != 0)
+  {
+    if(id & (1ull<<63))
+    {
+      num = id;
+      num &= ~(1ull<<63);
+    }
+    else for EachIndex(idx, accel->cfgs.count)
+    {
+      if(accel->cfgs.v[idx]->id == id)
+      {
+        num = idx + accel->cfgs_idx_range.min + 1;
+        break;
+      }
+    }
+  }
+  return num;
 }
 
 //- rjf: threads / callstacks

@@ -2319,6 +2319,10 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
             {
               E_Type *block_type = e_type_from_key__cached(block_type_key);
               group_cfg_name = rd_singular_from_code_name_plural(block_type->name);
+              if(group_cfg_name.size == 0)
+              {
+                group_cfg_name = block_type->name;
+              }
             }
           }
           

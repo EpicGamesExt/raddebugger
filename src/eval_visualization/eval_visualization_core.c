@@ -770,7 +770,7 @@ internal EV_BlockRange
 ev_block_range_from_num(EV_BlockRangeList *block_ranges, U64 num)
 {
   EV_BlockRange result = {&ev_nil_block};
-  U64 base_num = 0;
+  U64 base_num = 1;
   for(EV_BlockRangeNode *n = block_ranges->first; n != 0; n = n->next)
   {
     U64 range_size = n->v.block->single_item ? 1 : dim_1u64(n->v.range);
