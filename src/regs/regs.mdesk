@@ -327,6 +327,147 @@ REGS_AliasTableX86:
 }
 
 ////////////////////////////////
+//~ rjf: ARM64 Tables
+
+@table(name size usage)
+REGS_RegTableARM64:
+{
+  {x0               64  Normal}
+  {x1               64  Normal}
+  {x2               64  Normal}
+  {x3               64  Normal}
+  {x4               64  Normal}
+  {x5               64  Normal}
+  {x6               64  Normal}
+  {x7               64  Normal}
+  {x8               64  Normal}
+  {x9               64  Normal}
+  {x10              64  Normal}
+  {x11              64  Normal}
+  {x12              64  Normal}
+  {x13              64  Normal}
+  {x14              64  Normal}
+  {x15              64  Normal}
+  {x16              64  Normal}
+  {x17              64  Normal}
+  {x18              64  Normal}
+  {x19              64  Normal}
+  {x20              64  Normal}
+  {x21              64  Normal}
+  {x22              64  Normal}
+  {x23              64  Normal}
+  {x24              64  Normal}
+  {x25              64  Normal}
+  {x26              64  Normal}
+  {x27              64  Normal}
+  {x28              64  Normal}
+  {x29              64  Normal}
+  {x30              64  Normal}
+  {x31              64  Normal}
+  {pc               64  Normal}
+  {context_flags    32  Normal}
+  {cpsr             32  Normal}
+  {fpcr             32  Normal}
+  {fpsr             32  Normal}
+  {bcr0             32  Normal}
+  {bcr1             32  Normal}
+  {bcr2             32  Normal}
+  {bcr3             32  Normal}
+  {bcr4             32  Normal}
+  {bcr5             32  Normal}
+  {bcr6             32  Normal}
+  {bcr7             32  Normal}
+  {bvr0             64  Normal}
+  {bvr1             64  Normal}
+  {bvr2             64  Normal}
+  {bvr3             64  Normal}
+  {bvr4             64  Normal}
+  {bvr5             64  Normal}
+  {bvr6             64  Normal}
+  {bvr7             64  Normal}
+  {wcr0             32  Normal}
+  {wcr1             32  Normal}
+  {wvr0             64  Normal}
+  {wvr1             64  Normal}
+  {v0               128 Normal}
+  {v1               128 Normal}
+  {v2               128 Normal}
+  {v3               128 Normal}
+  {v4               128 Normal}
+  {v5               128 Normal}
+  {v6               128 Normal}
+  {v7               128 Normal}
+  {v8               128 Normal}
+  {v9               128 Normal}
+  {v10              128 Normal}
+  {v11              128 Normal}
+  {v12              128 Normal}
+  {v13              128 Normal}
+  {v14              128 Normal}
+  {v15              128 Normal}
+  {v16              128 Normal}
+  {v17              128 Normal}
+  {v18              128 Normal}
+  {v19              128 Normal}
+  {v20              128 Normal}
+  {v21              128 Normal}
+  {v22              128 Normal}
+  {v23              128 Normal}
+  {v24              128 Normal}
+  {v25              128 Normal}
+  {v26              128 Normal}
+  {v27              128 Normal}
+  {v28              128 Normal}
+  {v29              128 Normal}
+  {v30              128 Normal}
+  {v31              128 Normal}
+}
+
+@table(name base off size usage)
+REGS_AliasTableARM64:
+{
+  {xip0              x16  0     64      Normal}
+  {xip1              x17  0     64      Normal}
+  {xpr               x18  0     64      Normal}
+  {fp                x29  0     64      Normal}
+  {lr                x30  0     64      Normal}
+  {zr                x31  0     64      Normal}
+  {sp                x31  0     64      Normal}
+  {w0                x0   0     32      Normal}
+  {w1                x1   0     32      Normal}
+  {w2                x2   0     32      Normal}
+  {w3                x3   0     32      Normal}
+  {w4                x4   0     32      Normal}
+  {w5                x5   0     32      Normal}
+  {w6                x6   0     32      Normal}
+  {w7                x7   0     32      Normal}
+  {w8                x8   0     32      Normal}
+  {w9                x9   0     32      Normal}
+  {w10               x10  0     32      Normal}
+  {w11               x11  0     32      Normal}
+  {w12               x12  0     32      Normal}
+  {w13               x13  0     32      Normal}
+  {w14               x14  0     32      Normal}
+  {w15               x15  0     32      Normal}
+  {w16               x16  0     32      Normal}
+  {w17               x17  0     32      Normal}
+  {w18               x18  0     32      Normal}
+  {w19               x19  0     32      Normal}
+  {w20               x20  0     32      Normal}
+  {w21               x21  0     32      Normal}
+  {w22               x22  0     32      Normal}
+  {w23               x23  0     32      Normal}
+  {w24               x24  0     32      Normal}
+  {w25               x25  0     32      Normal}
+  {w26               x26  0     32      Normal}
+  {w27               x27  0     32      Normal}
+  {w28               x28  0     32      Normal}
+  {w29               x29  0     32      Normal}
+  {w30               x30  0     32      Normal}
+  {w31               x31  0     32      Normal}
+}
+
+////////////////////////////////
 //~ rjf: Architecture Tables
 
 @table(name, name_lower)
@@ -334,6 +475,7 @@ REGS_ArchTable:
 {
   {X64 x64}
   {X86 x86}
+  {ARM64 arm64}
 }
 
 ////////////////////////////////
@@ -452,6 +594,65 @@ regs_g_reg_code_x86_usage_kind_table:
 {
   `{0}`;
   @expand(REGS_AliasTableX86 a) `{REGS_RegCodeX86_$(a.base), $(a.off/8), $(a.size/8)}`,
+}
+
+////////////////////////////////
+//~ antoniom: ARM64 Generators
+
+@enum REGS_RegCodeARM64:
+{
+  NULL,
+  @expand(REGS_RegTableARM64 a) `$(a.name)`,
+  COUNT,
+}
+
+@enum REGS_AliasCodeARM64:
+{
+  NULL,
+  @expand(REGS_AliasTableARM64 a) `$(a.name)`,
+  COUNT,
+}
+
+@struct REGS_RegBlockARM64:
+{
+  @expand(REGS_RegTableARM64 a) `REGS_Reg$(a.size) $(a.name)`,
+}
+
+@data(REGS_UsageKind) regs_g_reg_code_arm64_usage_kind_table:
+{
+  `REGS_UsageKind_Normal`;
+  @expand(REGS_RegTableARM64 a) `REGS_UsageKind_$(a.usage)`;
+}
+
+@data(REGS_UsageKind)
+regs_g_alias_code_arm64_usage_kind_table:
+{
+  `REGS_UsageKind_Normal`;
+  @expand(REGS_AliasTableARM64 a) `REGS_UsageKind_$(a.usage)`;
+}
+
+@data(String8) regs_g_reg_code_arm64_string_table:
+{
+  `str8_lit_comp("")`;
+  @expand(REGS_RegTableARM64 a) `str8_lit_comp("$(a.name)")`;
+}
+
+@data(String8) regs_g_alias_code_arm64_string_table:
+{
+  `str8_lit_comp("")`;
+  @expand(REGS_AliasTableARM64 a) `str8_lit_comp("$(a.name)")`;
+}
+
+@data(REGS_Rng) regs_g_reg_code_arm64_rng_table:
+{
+  `{0}`;
+  @expand(REGS_RegTableARM64 a) `{(U16)OffsetOf(REGS_RegBlockARM64, $(a.name)), $(a.size/8)}`,
+}
+
+@data(REGS_Slice) regs_g_alias_code_arm64_slice_table:
+{
+  `{0}`;
+  @expand(REGS_AliasTableARM64 a) `{REGS_RegCodeARM64_$(a.base), $(a.off/8), $(a.size/8)}`,
 }
 
 ////////////////////////////////

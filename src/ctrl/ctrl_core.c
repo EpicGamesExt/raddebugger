@@ -1908,9 +1908,9 @@ ctrl_intel_pdata_from_module_voff(Arena *arena, CTRL_Handle module_handle, U64 v
     {
       if(ctrl_handle_match(n->module, module_handle))
       {
-        PE_IntelPdata *pdatas = n->pdatas;
-        U64 pdatas_count = n->pdatas_count;
-        if(n->pdatas_count != 0 && voff >= n->pdatas[0].voff_first)
+        PE_IntelPdata *pdatas = n->intel_pdatas;
+        U64 pdatas_count = n->intel_pdatas_count;
+        if(n->intel_pdatas_count != 0 && voff >= n->intel_pdatas[0].voff_first)
         {
           // NOTE(rjf):
           //
@@ -2015,6 +2015,46 @@ ctrl_initial_debug_info_path_from_module(Arena *arena, CTRL_Handle module_handle
     if(ctrl_handle_match(n->module, module_handle))
     {
       result = push_str8_copy(arena, n->initial_debug_info_path);
+      break;
+    }
+  }
+  return result;
+}
+
+internal U64
+ctrl_section_count_from_module(CTRL_Handle module_handle)
+{
+  U64 result = {0};
+  U64 hash = ctrl_hash_from_handle(module_handle);
+  U64 slot_idx = hash%ctrl_state->module_image_info_cache.slots_count;
+  U64 stripe_idx = slot_idx%ctrl_state->module_image_info_cache.stripes_count;
+  CTRL_ModuleImageInfoCacheSlot *slot = &ctrl_state->module_image_info_cache.slots[slot_idx];
+  CTRL_ModuleImageInfoCacheStripe *stripe = &ctrl_state->module_image_info_cache.stripes[stripe_idx];
+  OS_MutexScopeR(stripe->rw_mutex) for(CTRL_ModuleImageInfoCacheNode *n = slot->first; n != 0; n = n->next)
+  {
+    if(ctrl_handle_match(n->module, module_handle))
+    {
+      result = n->section_count;
+      break;
+    }
+  }
+  return result;
+}
+
+internal U64
+ctrl_section_array_offset_from_module(CTRL_Handle module_handle)
+{
+  U64 result = {0};
+  U64 hash = ctrl_hash_from_handle(module_handle);
+  U64 slot_idx = hash%ctrl_state->module_image_info_cache.slots_count;
+  U64 stripe_idx = slot_idx%ctrl_state->module_image_info_cache.stripes_count;
+  CTRL_ModuleImageInfoCacheSlot *slot = &ctrl_state->module_image_info_cache.slots[slot_idx];
+  CTRL_ModuleImageInfoCacheStripe *stripe = &ctrl_state->module_image_info_cache.stripes[stripe_idx];
+  OS_MutexScopeR(stripe->rw_mutex) for(CTRL_ModuleImageInfoCacheNode *n = slot->first; n != 0; n = n->next)
+  {
+    if(ctrl_handle_match(n->module, module_handle))
+    {
+      result = n->section_array_offset;
       break;
     }
   }
@@ -2537,7 +2577,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_Handle process_handle, CT
     U64 frame_off = 0;
     {
       U64 unwind_info_off = first_pdata->voff_unwind_info;
-      PE_UnwindInfo unwind_info = {0};
+      PE_UnwindInfoX64 unwind_info = {0};
       if(!ctrl_read_cached_process_memory_struct(process->handle, module->vaddr_range.min+unwind_info_off, &is_stale, &unwind_info, endt_us) ||
          is_stale)
       {
@@ -2561,11 +2601,11 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_Handle process_handle, CT
       //- rjf: unpack unwind info & codes
       B32 good_unwind_info = 1;
       U64 unwind_info_off = pdata->voff_unwind_info;
-      PE_UnwindInfo unwind_info = {0};
+      PE_UnwindInfoX64 unwind_info = {0};
       good_unwind_info = good_unwind_info && ctrl_read_cached_process_memory_struct(process->handle, module->vaddr_range.min+unwind_info_off, &is_stale, &unwind_info, endt_us);
-      PE_UnwindCode *unwind_codes = push_array(scratch.arena, PE_UnwindCode, unwind_info.codes_num);
+      PE_UnwindCodeX64 *unwind_codes = push_array(scratch.arena, PE_UnwindCodeX64, unwind_info.codes_num);
       good_unwind_info = good_unwind_info && ctrl_read_cached_process_memory(process->handle, r1u64(module->vaddr_range.min+unwind_info_off+sizeof(unwind_info),
-                                                                                                    module->vaddr_range.min+unwind_info_off+sizeof(unwind_info)+sizeof(PE_UnwindCode)*unwind_info.codes_num),
+                                                                                                    module->vaddr_range.min+unwind_info_off+sizeof(unwind_info)+sizeof(PE_UnwindCodeX64)*unwind_info.codes_num),
                                                                              &is_stale, unwind_codes, endt_us);
       good_unwind_info = good_unwind_info && !is_stale;
       
@@ -2586,15 +2626,15 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_Handle process_handle, CT
       }
       
       //- rjf: apply opcodes
-      PE_UnwindCode *code_ptr = unwind_codes;
-      PE_UnwindCode *code_opl = unwind_codes + unwind_info.codes_num;
-      for(PE_UnwindCode *next_code_ptr = 0; code_ptr < code_opl; code_ptr = next_code_ptr)
+      PE_UnwindCodeX64 *code_ptr = unwind_codes;
+      PE_UnwindCodeX64 *code_opl = unwind_codes + unwind_info.codes_num;
+      for(PE_UnwindCodeX64 *next_code_ptr = 0; code_ptr < code_opl; code_ptr = next_code_ptr)
       {
         // rjf: unpack opcode info
         U32 op_code = PE_UNWIND_OPCODE_FROM_FLAGS(code_ptr->flags);
         U32 op_info = PE_UNWIND_INFO_FROM_FLAGS(code_ptr->flags);
-        U32 slot_count = pe_slot_count_from_unwind_op_code(op_code);
-        if(op_code == PE_UnwindOpCode_ALLOC_LARGE && op_info == 1)
+        U32 slot_count = pe_slot_count_from_unwind_op_code__x64(op_code);
+        if(op_code == PE_UnwindOpCodeX64_ALLOC_LARGE && op_info == 1)
         {
           slot_count += 1;
         }
@@ -2616,7 +2656,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_Handle process_handle, CT
         {
           switch(op_code)
           {
-            case PE_UnwindOpCode_PUSH_NONVOL:
+            case PE_UnwindOpCodeX64_PUSH_NONVOL:
             {
               // rjf: read value from stack pointer
               U64 rsp = regs->rsp.u64;
@@ -2638,7 +2678,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_Handle process_handle, CT
               regs->rsp.u64 = new_rsp;
             }break;
             
-            case PE_UnwindOpCode_ALLOC_LARGE:
+            case PE_UnwindOpCodeX64_ALLOC_LARGE:
             {
               // rjf: read alloc size
               U64 size = 0;
@@ -2665,19 +2705,19 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_Handle process_handle, CT
               regs->rsp.u64 = new_rsp;
             }break;
             
-            case PE_UnwindOpCode_ALLOC_SMALL:
+            case PE_UnwindOpCodeX64_ALLOC_SMALL:
             {
               // rjf: advance stack pointer
               regs->rsp.u64 += op_info*8 + 8;
             }break;
             
-            case PE_UnwindOpCode_SET_FPREG:
+            case PE_UnwindOpCodeX64_SET_FPREG:
             {
               // rjf: put stack pointer back to the frame base
               regs->rsp.u64 = frame_base;
             }break;
             
-            case PE_UnwindOpCode_SAVE_NONVOL:
+            case PE_UnwindOpCodeX64_SAVE_NONVOL:
             {
               // rjf: read value from frame base
               U64 off = code_ptr[1].u16*8;
@@ -2696,7 +2736,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_Handle process_handle, CT
               reg->u64 = value;
             }break;
             
-            case PE_UnwindOpCode_SAVE_NONVOL_FAR:
+            case PE_UnwindOpCodeX64_SAVE_NONVOL_FAR:
             {
               // rjf: read value from frame base
               U64 off = code_ptr[1].u16 + ((U32)code_ptr[2].u16 << 16);
@@ -2715,19 +2755,19 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_Handle process_handle, CT
               reg->u64 = value;
             }break;
             
-            case PE_UnwindOpCode_EPILOG:
+            case PE_UnwindOpCodeX64_EPILOG:
             {
               keep_parsing = 1;
             }break;
             
-            case PE_UnwindOpCode_SPARE_CODE:
+            case PE_UnwindOpCodeX64_SPARE_CODE:
             {
               // TODO(rjf): ???
               keep_parsing = 0;
               is_good = 0;
             }break;
             
-            case PE_UnwindOpCode_SAVE_XMM128:
+            case PE_UnwindOpCodeX64_SAVE_XMM128:
             {
               // rjf: read new register values
               U8 buf[16];
@@ -2745,7 +2785,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_Handle process_handle, CT
               MemoryCopy(xmm_reg, buf, sizeof(buf));
             }break;
             
-            case PE_UnwindOpCode_SAVE_XMM128_FAR:
+            case PE_UnwindOpCodeX64_SAVE_XMM128_FAR:
             {
               // rjf: read new register values
               U8 buf[16];
@@ -2764,7 +2804,7 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_Handle process_handle, CT
               MemoryCopy(xmm_reg, buf, sizeof(buf));
             }break;
             
-            case PE_UnwindOpCode_PUSH_MACHFRAME:
+            case PE_UnwindOpCodeX64_PUSH_MACHFRAME:
             {
               // NOTE(rjf): this was found by stepping through kernel code after an exception was
               // thrown, encountered in the exception_stepping_tests (after the throw) in mule_main
@@ -2835,13 +2875,13 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_Handle process_handle, CT
       if(keep_parsing)
       {
         U32 flags = PE_UNWIND_INFO_FLAGS_FROM_HDR(unwind_info.header);
-        if(!(flags & PE_UnwindInfoFlag_CHAINED))
+        if(!(flags & PE_UnwindInfoFlagX64_CHAINED))
         {
           break;
         }
-        U64 code_count_rounded = AlignPow2(unwind_info.codes_num, sizeof(PE_UnwindCode));
-        U64 code_size = code_count_rounded*sizeof(PE_UnwindCode);
-        U64 chained_pdata_off = unwind_info_off + sizeof(PE_UnwindInfo) + code_size;
+        U64 code_count_rounded = AlignPow2(unwind_info.codes_num, sizeof(PE_UnwindCodeX64));
+        U64 code_size = code_count_rounded*sizeof(PE_UnwindCodeX64);
+        U64 chained_pdata_off = unwind_info_off + sizeof(PE_UnwindInfoX64) + code_size;
         last_pdata = pdata;
         pdata = push_array(scratch.arena, PE_IntelPdata, 1);
         if(!ctrl_read_cached_process_memory_struct(process->handle, module->vaddr_range.min+chained_pdata_off, &is_stale, pdata, endt_us) ||
@@ -2887,6 +2927,1596 @@ ctrl_unwind_step__pe_x64(CTRL_EntityStore *store, CTRL_Handle process_handle, CT
   return result;
 }
 
+internal PE_Arm64Pdata *
+ctrl_arm64_pdata_from_module_voff(Arena *arena, CTRL_Handle module_handle, U64 voff)
+{
+  PE_Arm64Pdata *first_pdata = 0;
+  {
+    U64 hash = ctrl_hash_from_handle(module_handle);
+    U64 slot_idx = hash%ctrl_state->module_image_info_cache.slots_count;
+    U64 stripe_idx = slot_idx%ctrl_state->module_image_info_cache.stripes_count;
+    CTRL_ModuleImageInfoCacheSlot *slot = &ctrl_state->module_image_info_cache.slots[slot_idx];
+    CTRL_ModuleImageInfoCacheStripe *stripe = &ctrl_state->module_image_info_cache.stripes[stripe_idx];
+    OS_MutexScopeR(stripe->rw_mutex) for(CTRL_ModuleImageInfoCacheNode *n = slot->first; n != 0; n = n->next)
+    {
+      if(ctrl_handle_match(n->module, module_handle))
+      {
+        PE_Arm64Pdata *pdatas = n->arm64_pdatas;
+        U64 pdatas_count = n->arm64_pdatas_count;
+        if(n->arm64_pdatas_count != 0 && voff >= n->arm64_pdatas[0].voff_first)
+        {
+          // NOTE(rjf):
+          //
+          // binary search:
+          //  find max index s.t. pdata_array[index].voff_first <= voff
+          //  we assume (i < j) -> (pdata_array[i].voff_first < pdata_array[j].voff_first)
+          U64 index = pdatas_count;
+          U64 min = 0;
+          U64 opl = pdatas_count;
+          for(;;)
+          {
+            U64 mid = (min + opl)/2;
+            PE_Arm64Pdata *pdata = pdatas + mid;
+            if(voff < pdata->voff_first)
+            {
+              opl = mid;
+            }
+            else if(pdata->voff_first < voff)
+            {
+              min = mid;
+            }
+            else
+            {
+              index = mid;
+              break;
+            }
+            if(min + 1 >= opl)
+            {
+              index = min;
+              break;
+            }
+          }
+          
+          // rjf: if we are in range fill result
+          {
+            PE_Arm64Pdata *pdata = pdatas + index;
+            U32 pdata_flag = pdata->combined & 0x3;
+            B32 is_good = 1;
+
+            if (pdata_flag != 0)
+            {
+              U32 function_size = 4 * ((pdata->combined >> 2) & 0x7ff);
+              is_good = pdata->voff_first <= voff && voff <= (pdata->voff_first + function_size);
+            }
+
+            if (is_good)
+            {
+              first_pdata = push_array(arena, PE_Arm64Pdata, 1);
+              MemoryCopyStruct(first_pdata, pdata);
+            }
+          }
+        }
+        break;
+      }
+    }
+  }
+  return first_pdata;
+}
+
+typedef struct PE_ParsedPackedUnwindDataArm64 PE_ParsedPackedUnwindDataArm64;
+struct PE_ParsedPackedUnwindDataArm64
+{
+  U32 function_size;
+  U32 regf;
+  U32 regi;
+  U32 h;
+  U32 cr;
+  U32 frame_size;
+  U32 flags;
+};
+
+typedef struct PE_ParsedXdataArm64 PE_ParsedXdataArm64;
+struct PE_ParsedXdataArm64
+{
+  U32 function_size;
+  U32 exception_data_present;
+  U32 packed_epilog;
+  U32 epilog_count;
+  U32 code_words;
+};
+
+typedef struct PE_UnwindCodeArm64 PE_UnwindCodeArm64;
+struct PE_UnwindCodeArm64
+{
+  PE_UnwindOpCodeArm64 op;
+  U32 reg0;
+  U32 reg1;
+  U32 sp_off;
+  U32 add_to_reg;
+};
+
+
+// TODO(antoniom): use list approach again
+internal PE_UnwindCodeArm64
+ctrl_unwind_code_from_packed_unwind_data__pe_arm64(U32 packed_unwind_data, S32 step)
+{
+  PE_UnwindCodeArm64 result = {0};
+
+  PE_ParsedPackedUnwindDataArm64 parsed_data = {0};
+  parsed_data.function_size = 4 * ((packed_unwind_data >> 2) & 0x7ff);
+  parsed_data.regf = (packed_unwind_data >> 13) & 0x7;
+  if(parsed_data.regf != 0)
+  {
+    parsed_data.regf += 1;
+  }
+  parsed_data.regi = (packed_unwind_data >> 16) & 0xf;
+  parsed_data.h = (packed_unwind_data >> 20) & 0x1;
+  parsed_data.cr = (packed_unwind_data >> 21) & 0x3;
+  parsed_data.frame_size = 16 * ((packed_unwind_data >> 23) & 0x1ff);
+
+  U32 int_size = parsed_data.regi * 8;
+  U32 float_size = parsed_data.regf * 8;
+  U32 save_size = ((int_size + float_size + (8 * 8 * parsed_data.h)) + 0xf) & ~0xf;
+  U32 loc_size = parsed_data.frame_size - save_size;
+
+  if(parsed_data.cr == 1)
+  {
+    int_size += 8;
+  }
+
+  if(step <= 0)
+  {
+    result.op = PE_UnwindOpCodeArm64_end;
+  }
+
+  if(parsed_data.cr == 2)
+  {
+    step -= 1;
+    if(step == 0)
+    {
+      result.op = PE_UnwindOpCodeArm64_pac_sign_lr;
+    }
+  }
+
+  if(step > 0)
+  {
+    step -= parsed_data.regi & 1;
+    if(step == 0)
+    {
+      if(parsed_data.regi == 1)
+      {
+        result.op = PE_UnwindOpCodeArm64_save_regp_x;
+        result.sp_off = int_size;
+      }
+      else
+      {
+        result.op = PE_UnwindOpCodeArm64_save_reg;
+        result.sp_off = int_size - 8;
+      }
+
+      result.reg0 = parsed_data.regi + OffsetOf(REGS_RegBlockARM64, x0);
+      if((parsed_data.regi & 1) && parsed_data.cr == 1)
+      {
+        result.op = PE_UnwindOpCodeArm64_save_regp;
+        result.reg1 = 30 + OffsetOf(REGS_RegBlockARM64, x0);
+        result.sp_off = int_size - 16;
+      }
+    }
+  }
+
+  if(step > 0)
+  {
+    step -= (parsed_data.regi / 2);
+    if(step <= 0)
+    {
+      if(step < 0)
+      {
+        result.op = PE_UnwindOpCodeArm64_save_regp;
+        result.sp_off = 16 * -step;
+        result.reg0 = 19 + (2 * -step) + OffsetOf(REGS_RegBlockARM64, x0);
+        result.reg1 = 20 + (2 * -step) + OffsetOf(REGS_RegBlockARM64, x0);
+      }
+      else if(step == 0)
+      {
+        result.op = PE_UnwindOpCodeArm64_save_regp_x;
+        result.sp_off = int_size;
+        result.reg0 = 19 + OffsetOf(REGS_RegBlockARM64, x0);
+        result.reg1 = 20 + OffsetOf(REGS_RegBlockARM64, x0);
+      }
+    }
+  }
+
+  if(step > 0)
+  {
+    if(parsed_data.cr == 1 && (parsed_data.regi % 2 == 0))
+    {
+      step -= 1;
+      if(step == 0)
+      {
+        result.op = PE_UnwindOpCodeArm64_save_reg;
+        result.reg0 = 29 + OffsetOf(REGS_RegBlockARM64, x0);
+        result.sp_off = int_size - 8;
+      }
+    }
+  }
+
+  if(step > 0)
+  {
+    if(parsed_data.regf & 1)
+    {
+      step -= 1;
+      if(step == 0)
+      {
+        if(parsed_data.regf == 1)
+        {
+          result.op = PE_UnwindOpCodeArm64_save_freg;
+          result.sp_off = 8;
+          result.reg0 = 8 + OffsetOf(REGS_RegBlockARM64, v0);
+          if(parsed_data.regi == 0 && parsed_data.cr == 0)
+          {
+            result.op = PE_UnwindOpCodeArm64_save_freg_x;
+          }
+        }
+        else
+        {
+          result.op = PE_UnwindOpCodeArm64_save_freg;
+          result.sp_off = float_size - 8;
+          result.reg0 = 8 + parsed_data.regf + OffsetOf(REGS_RegBlockARM64, v0);
+        }
+      }
+    }
+  }
+
+  if(step > 0)
+  {
+    step -= parsed_data.regf / 2;
+    if(step == 0)
+    {
+      Assert(!"Check me");
+      if(parsed_data.regi == 0 && parsed_data.cr == 0)
+      {
+        result.op = PE_UnwindOpCodeArm64_save_fregp_x;
+      }
+      else
+      {
+        result.op = PE_UnwindOpCodeArm64_save_fregp;
+      }
+      // TODO(antoniom): needs checking
+      result.sp_off = int_size + float_size;
+      result.reg0 = 8 + OffsetOf(REGS_RegBlockARM64, v0);
+      result.reg1 = 9 + OffsetOf(REGS_RegBlockARM64, v0);
+    }
+    else if(step < 0)
+    {
+      Assert(!"Check me");
+      result.op = PE_UnwindOpCodeArm64_save_fregp;
+      result.sp_off = int_size + float_size - (16 * -step);
+      result.reg0 = 8 + (2 * -step) + OffsetOf(REGS_RegBlockARM64, v0);
+      result.reg1 = 9 + (2 * -step) + OffsetOf(REGS_RegBlockARM64, v0);
+    }
+  }
+
+  if(step > 0)
+  {
+    if(parsed_data.h != 0)
+    {
+      step -= 4;
+      if(step <= 0)
+      {
+        result.op = PE_UnwindOpCodeArm64_save_reg;
+        result.sp_off = int_size + float_size + (16 * -step);
+        result.reg0 = (2 * -step) + OffsetOf(REGS_RegBlockARM64, x0);
+        result.reg1 = 1 + (2 * -step) + OffsetOf(REGS_RegBlockARM64, x0);
+      }
+    }
+  }
+
+  if((parsed_data.cr == 2 || parsed_data.cr == 3) && parsed_data.frame_size <= 512)
+  {
+    if(step > 0)
+    {
+      step -= 1;
+      if(step == 0)
+      {
+        result.op = PE_UnwindOpCodeArm64_save_fplr_x;
+        result.sp_off = loc_size;
+        result.reg0 = 29 + OffsetOf(REGS_RegBlockARM64, x0);
+        result.reg1 = 30 + OffsetOf(REGS_RegBlockARM64, x0);
+      }
+    }
+
+    if(step > 0)
+    {
+      step -= 1;
+      if(step == 0)
+      {
+        result.op = PE_UnwindOpCodeArm64_set_fp;
+      }
+    }
+  }
+  else if((parsed_data.cr == 2 || parsed_data.cr == 3) &&
+          (512 < parsed_data.frame_size && parsed_data.frame_size <= 4080))
+  {
+    if(step > 0)
+    {
+      step -= 1;
+      if(step == 0)
+      {
+        result.op = PE_UnwindOpCodeArm64_alloc_m;
+        result.sp_off = loc_size;
+      }
+    }
+
+    if(step > 0)
+    {
+      step -= 1;
+      if(step == 0)
+      {
+        result.op = PE_UnwindOpCodeArm64_save_fplr_x;
+        result.sp_off = 0;
+        result.reg0 = 29 + OffsetOf(REGS_RegBlockARM64, x0);
+        result.reg1 = 30 + OffsetOf(REGS_RegBlockARM64, x0);
+      }
+    }
+
+    if(step > 0)
+    {
+      step -= 1;
+      if(step == 0)
+      {
+        result.op = PE_UnwindOpCodeArm64_set_fp;
+      }
+    }
+  }
+  else if((parsed_data.cr == 2 || parsed_data.cr == 3) &&
+          (4080 < parsed_data.frame_size))
+  {
+    if(step > 0)
+    {
+      step -= 1;
+      if(step == 0)
+      {
+        result.op = PE_UnwindOpCodeArm64_alloc_m;
+        result.sp_off = 4080;
+      }
+    }
+
+    if(step > 0)
+    {
+      step -= 1;
+      if(step == 0)
+      {
+        result.op = PE_UnwindOpCodeArm64_alloc_m;
+        result.sp_off = loc_size - 4080;
+      }
+    }
+
+    if(step > 0)
+    {
+      step -= 1;
+      if(step == 0)
+      {
+        result.op = PE_UnwindOpCodeArm64_save_fplr_x;
+        result.sp_off = 0;
+        result.reg0 = 29 + OffsetOf(REGS_RegBlockARM64, x0);
+        result.reg1 = 30 + OffsetOf(REGS_RegBlockARM64, x0);
+      }
+    }
+
+    if(step > 0)
+    {
+      step -= 1;
+      if(step == 0)
+      {
+        result.op = PE_UnwindOpCodeArm64_set_fp;
+      }
+    }
+  }
+  else if((parsed_data.cr == 0 || parsed_data.cr == 1) &&
+          (parsed_data.frame_size <= 4080))
+  {
+    if(step > 0)
+    {
+      step -= 1;
+      if(step == 0)
+      {
+        result.op = PE_UnwindOpCodeArm64_alloc_m;
+        result.sp_off = loc_size;
+      }
+    }
+  }
+  else if((parsed_data.cr == 0 || parsed_data.cr == 1) &&
+          (4080 < parsed_data.frame_size))
+  {
+    if(step > 0)
+    {
+      step -= 1;
+      if(step == 0)
+      {
+        result.op = PE_UnwindOpCodeArm64_alloc_m;
+        result.sp_off = 4080;
+      }
+    }
+
+    if(step > 0)
+    {
+      step -= 1;
+      if(step == 0)
+      {
+        result.op = PE_UnwindOpCodeArm64_alloc_m;
+        result.sp_off = loc_size - 4080;
+      }
+    }
+  }
+
+  return(result);
+}
+
+internal PE_UnwindCodeArm64
+ctrl_unwind_code_from_xdata__pe_arm64(CTRL_Handle process_handle, U64 endt_us, U64 code_words, U64 xdata_voff, U64 unwind_off_start, S32 step, S32 max_step, B32 *out_is_good, B32 *out_is_stale)
+{
+  PE_UnwindCodeArm64 result = {0};
+  B32 is_good = 1;
+  B32 is_stale = 0;
+  U64 unwind_off = unwind_off_start;
+  B32 keep_parsing = (unwind_off - unwind_off_start) < (code_words * 4);
+  S32 cur_step = 0;
+
+  if(step < 0)
+  {
+    result.op = PE_UnwindOpCodeArm64_end;
+    keep_parsing = 0;
+  }
+
+  while(keep_parsing)
+  {
+    MemoryZeroStruct(&result);
+
+    U32 unwind_header = 0;
+    is_good = is_good && ctrl_read_cached_process_memory(process_handle, r1u64(xdata_voff+unwind_off, xdata_voff+unwind_off+sizeof(U32)), &is_stale, &unwind_header, endt_us);
+    is_good = is_good && !is_stale;
+
+    U8 unwind_op = unwind_header & 0xff;
+    U8 *unwind_header_u8s = (U8*)&unwind_header;
+
+    if((unwind_op >> 5) == 0)
+    {
+      // 000xxxxx
+      // add sp, sp, (x * 16)
+      result.op = PE_UnwindOpCodeArm64_alloc_s;
+      result.sp_off = (unwind_op & 0x1f) * 16;
+      unwind_off += 1;
+    }
+    else if((unwind_op >> 5) == 1)
+    {
+      // 001zzzzz
+      result.op = PE_UnwindOpCodeArm64_save_r19r20_x;
+      result.sp_off = (unwind_op & 0x1f) * 8;
+      result.reg0 = 19 + OffsetOf(REGS_RegBlockARM64, x0);
+      result.reg1 = 20 + OffsetOf(REGS_RegBlockARM64, x0);
+      unwind_off += 1;
+    }
+    else if((unwind_op >> 6) == 1)
+    {
+      // 01zzzzzz
+      result.op = PE_UnwindOpCodeArm64_save_fplr;
+      result.sp_off = (unwind_op & 0x3f) * 8;
+      result.reg0 = 29 + OffsetOf(REGS_RegBlockARM64, x0);
+      result.reg1 = 30 + OffsetOf(REGS_RegBlockARM64, x0);
+      unwind_off += 1;
+    }
+    else if((unwind_op >> 6) == 2)
+    {
+      // 10zzzzzz
+      result.op = PE_UnwindOpCodeArm64_save_fplr;
+      result.sp_off = ((unwind_op & 0x3f) + 1) * 8;
+      result.reg0 = 29 + OffsetOf(REGS_RegBlockARM64, x0);
+      result.reg1 = 30 + OffsetOf(REGS_RegBlockARM64, x0);
+      unwind_off += 1;
+    }
+    else if((unwind_op >> 3) == 24)
+    {
+      // 11000xxx'xxxxxxxx
+      U32 stack_size = ((unwind_op & 0x3) << 8) | unwind_header_u8s[1];
+      result.op = PE_UnwindOpCodeArm64_alloc_m;
+      result.sp_off = stack_size * 16;
+      unwind_off += 2;
+    }
+    else if((unwind_op >> 3) == 29)
+    {
+      // custom stack cases for asm routines
+      unwind_off += 1;
+      Assert(!"Have not encountered");
+    }
+    else if((unwind_op >> 2) == 50)
+    {
+      // 110010xx'xxzzzzzz
+      U32 reg_off = ((unwind_op & 0x3) << 2) | ((unwind_header_u8s[1] >> 6) & 0x3);
+      result.op = PE_UnwindOpCodeArm64_save_regp;
+      result.sp_off = (unwind_header_u8s[1] & 0x3f) * 8;
+      result.reg0 = reg_off + OffsetOf(REGS_RegBlockARM64, x0);
+      result.reg1 = 1 + reg_off + OffsetOf(REGS_RegBlockARM64, x0);
+      unwind_off += 2;
+    }
+    else if((unwind_op >> 2) == 51)
+    {
+      // 110011xx'xxzzzzzz
+      U32 reg_off = ((unwind_op & 0x3) << 2) | ((unwind_header_u8s[1] >> 6) & 0x3);
+      result.op = PE_UnwindOpCodeArm64_save_regp_x;
+      result.sp_off = ((unwind_header_u8s[1] & 0x3f) + 1) * 8;
+      result.reg0 = reg_off + OffsetOf(REGS_RegBlockARM64, x0);
+      result.reg1 = 1 + reg_off + OffsetOf(REGS_RegBlockARM64, x0);
+      unwind_off += 2;
+    }
+    else if((unwind_op >> 2) == 52)
+    {
+      // 110100xx'xxzzzzzz
+      U32 reg_off = ((unwind_op & 0x3) << 2) | ((unwind_header_u8s[1] >> 6) & 0x3);
+      result.op = PE_UnwindOpCodeArm64_save_reg;
+      result.sp_off = (unwind_header_u8s[1] & 0x3f) * 8;
+      result.reg0 = reg_off + OffsetOf(REGS_RegBlockARM64, x0);
+      unwind_off += 2;
+    }
+    else if((unwind_op >> 1) == 106)
+    {
+      // 1101010x'xxxzzzzz
+      U32 reg_off = ((unwind_op & 0x1) << 1) | ((unwind_header_u8s[1] >> 5) & 0x7);
+      result.op = PE_UnwindOpCodeArm64_save_reg_x;
+      result.sp_off = ((unwind_header_u8s[1] & 0x1f) + 1) * 8;
+      result.reg0 = reg_off + OffsetOf(REGS_RegBlockARM64, x0);
+      unwind_off += 2;
+    }
+    else if((unwind_op >> 1) == 107)
+    {
+      // 1101011x'xxzzzzzz
+      U32 reg_off = ((unwind_op & 0x1) << 1) | ((unwind_header_u8s[1] >> 6) & 0x3);
+      result.op = PE_UnwindOpCodeArm64_save_lrpair;
+      result.sp_off = ((unwind_header_u8s[1] & 0x3f) + 1) * 8;
+      result.reg0 = reg_off + OffsetOf(REGS_RegBlockARM64, x0);
+      result.reg1 = 30 + OffsetOf(REGS_RegBlockARM64, x0);
+      unwind_off += 2;
+    }
+    else if((unwind_op >> 1) == 108)
+    {
+      // 1101100x'xxzzzzzz
+      U32 reg_off = ((unwind_op & 0x1) << 1) | ((unwind_header_u8s[1] >> 6) & 0x3);
+      result.op = PE_UnwindOpCodeArm64_save_fregp;
+      result.sp_off = (unwind_header_u8s[1] & 0x3f) * 8;
+      result.reg0 = reg_off + OffsetOf(REGS_RegBlockARM64, v0);
+      result.reg1 = 1 + reg_off + OffsetOf(REGS_RegBlockARM64, v0);
+      unwind_off += 2;
+    }
+    else if((unwind_op >> 1) == 109)
+    {
+      // 1101101x'xxzzzzzz
+      U32 reg_off = ((unwind_op & 0x1) << 1) | ((unwind_header_u8s[1] >> 6) & 0x3);
+      result.op = PE_UnwindOpCodeArm64_save_fregp_x;
+      result.sp_off = ((unwind_header_u8s[1] & 0x3f) + 1) * 8;
+      result.reg0 = reg_off + OffsetOf(REGS_RegBlockARM64, v0);
+      result.reg1 = 1 + reg_off + OffsetOf(REGS_RegBlockARM64, v0);
+      unwind_off += 2;
+    }
+    else if((unwind_op >> 1) == 110)
+    {
+      // 1101110x'xxzzzzzz
+      U32 reg_off = ((unwind_op & 0x1) << 1) | ((unwind_header_u8s[1] >> 6) & 0x3);
+      result.op = PE_UnwindOpCodeArm64_save_freg;
+      result.sp_off = (unwind_header_u8s[1] & 0x3f) * 8;
+      result.reg0 = reg_off + OffsetOf(REGS_RegBlockARM64, v0);
+      unwind_off += 2;
+    }
+    else if(unwind_op == 222)
+    {
+      // 11011110'xxxzzzzz
+      U32 reg_off = (unwind_header_u8s[1] >> 5) & 0x7;
+      result.op = PE_UnwindOpCodeArm64_save_freg_x;
+      result.sp_off = ((unwind_header_u8s[1] & 0x1f) + 1) * 8;
+      result.reg0 = reg_off + OffsetOf(REGS_RegBlockARM64, v0); 
+      unwind_off += 2;
+    }
+    else if(unwind_op == 224)
+    {
+      // 1100000'xxxxxxxx'xxxxxxxx'xxxxxxxx
+      result.op = PE_UnwindOpCodeArm64_alloc_l;
+      result.sp_off = (unwind_header & 0xffffff) * 16;
+      unwind_off += 4;
+    }
+    else if(unwind_op == 225)
+    {
+      // 11100001
+      result.op = PE_UnwindOpCodeArm64_set_fp;
+      unwind_off += 1;
+    }
+    else if(unwind_op == 226)
+    {
+      // 11100010'xxxxxxxx
+      result.op = PE_UnwindOpCodeArm64_add_fp;
+      result.add_to_reg = unwind_header_u8s[1] * 8;
+      unwind_off += 2;
+    }
+    else if(unwind_op == 227)
+    {
+      // 11100011
+      // nop
+      unwind_off += 1;
+    }
+    else if(unwind_op == 228)
+    {
+      // 11100100
+      result.op = PE_UnwindOpCodeArm64_end;
+      unwind_off += 1;
+      keep_parsing = 0;
+    }
+    else if(unwind_op == 229)
+    {
+      // 11100101
+      result.op = PE_UnwindOpCodeArm64_end_c;
+      unwind_off += 1;
+    }
+    else if(unwind_op == 230)
+    {
+      // 11100110
+      result.op = PE_UnwindOpCodeArm64_save_next;
+      unwind_off += 1;
+    }
+    else if(unwind_op == 231)
+    {
+      // 11100111
+      unwind_off += 1;
+    }
+    else if(unwind_op == 232)
+    {
+      // MSFT_OP_TRAP_FRAME
+    }
+    else if(unwind_op == 233)
+    {
+      // MSFT_OP_MACHINE_FRAME
+    }
+    else if(unwind_op == 234)
+    {
+      // MSFT_OP_CONTEXT
+    }
+    else if(unwind_op == 235)
+    {
+      // MSFT_OP_EC_CONTEXT
+    }
+    else if(unwind_op == 236)
+    {
+      // MSFT_OP_CLEAR_UNWOUND_TO_CALL
+    }
+    else if(unwind_op == 252)
+    {
+      // 11111100
+      // qreg
+      unwind_off += 1;
+    }
+
+    if (step == max_step)
+    {
+      keep_parsing = 0;
+    }
+    step += 1;
+    keep_parsing = keep_parsing && is_good && ((unwind_off - unwind_off_start) < (code_words * 4));
+  }
+
+  *out_is_good = is_good;
+  *out_is_stale = is_stale;
+
+  return(result);
+}
+
+internal CTRL_UnwindStepResult
+ctrl_unwind_step__pe_arm64(CTRL_EntityStore *store, CTRL_Handle process_handle, CTRL_Handle module_handle, REGS_RegBlockARM64 *regs, U64 endt_us)
+{
+  Temp scratch = scratch_begin(0, 0);
+  U64 missed_read_addr = 0;
+
+  B32 is_stale = 0;
+  B32 is_good = 1;
+
+  ////////////////////////////////
+  //- antoniom: unpack parameters
+  CTRL_Entity *module = ctrl_entity_from_handle(store, module_handle);
+  CTRL_Entity *process = ctrl_entity_from_handle(store, process_handle);
+  U64 ip_voff = regs->pc.u64 - module->vaddr_range.min;
+
+  PE_Arm64Pdata *first_pdata = ctrl_arm64_pdata_from_module_voff(scratch.arena, module_handle, ip_voff);
+
+  U64 new_pc = 0;
+  U64 new_sp = 0;
+
+  //////////////////////////////
+  //- antoniom: check to see if in epilog
+  B32 has_pdata_and_in_epilog = 0;
+  if(first_pdata)
+  {
+    B32 is_epilog = 0;
+    B32 keep_parsing = 1;
+    U64 read_vaddr = regs->pc.u64;
+    U64 read_vaddr_opl = read_vaddr + 256;
+
+    //- antoniom: Check to see if in epilog
+    for(B32 keep_parsing = 1; keep_parsing; read_vaddr += 4)
+    {
+      U32 inst = 0;
+      if(read_vaddr + sizeof(inst) <= read_vaddr_opl)
+      {
+        is_good = ctrl_read_cached_process_memory(process_handle, r1u64(read_vaddr, read_vaddr+sizeof(inst)), &is_stale, &inst, endt_us);
+        is_good = is_good && !is_stale;
+      }
+
+      if(!is_good)
+      {
+        keep_parsing = 0;
+      }
+      else
+      {
+        if((inst & 0xffc003ff) == 0x910003ff)
+        {
+          // add sp, sp, #imm
+          keep_parsing = 0;
+          is_epilog = 1;
+        }
+        else if((inst & 0xff0003ff) == 0xcb0003ff)
+        {
+          // add sp, sp, reg, lsl #imm
+          keep_parsing = 0;
+          is_epilog = 1;
+        }
+        else if(inst == 0xd65f03c0)
+        {
+          // ret
+          keep_parsing = 0;
+          is_epilog = 1;
+        }
+        else if((inst & 0xfc000000) == 0x94000000)
+        {
+          // bl (e.g. __security_pop_cookie)
+          // go to next instruction
+          read_vaddr += 4;
+        }
+        else if(inst == 0x910002BF)
+        {
+          // mov sp, x29
+          keep_parsing = 0;
+          is_epilog = 1;
+        }
+        else if((inst & 0xffc003e0) == 0xa9c003e0)
+        {
+          // ldp reg0, reg1, [sp, #imm]
+          keep_parsing = 0;
+          is_epilog = 1;
+        }
+        else if((inst & 0xffc003e0) == 0xa8c003e0)
+        {
+          // ldp reg0, reg1, [sp], #imm (post-indexed load)
+          keep_parsing = 0;
+          is_epilog = 1;
+        }
+        else if((inst & 0xffe007e0) == 0xf89007e0)
+        {
+          // ldr reg0, [sp, #imm]
+          keep_parsing = 0;
+          is_epilog = 1;
+        }
+        else if((inst & 0xffe007e0) == 0xf84007e0)
+        {
+          // TODO(antoniom): same as previous
+          // ldr reg0, [sp], #imm (post-indexed_load)
+          keep_parsing = 0;
+          is_epilog = 1;
+        }
+        else
+        {
+          // TODO(antoniom): fregs
+          keep_parsing = 0;
+        }
+      }
+    }
+    has_pdata_and_in_epilog = is_epilog;
+  }
+
+  //- antoniom: pdata & in epilog -> epilog unwind
+  if(first_pdata && has_pdata_and_in_epilog)
+  {
+    U64 read_vaddr = regs->pc.u64;
+    new_sp = regs->x31.u64;
+    new_pc = regs->pc.u64;
+
+    for (B32 keep_parsing = 1; keep_parsing; keep_parsing = keep_parsing && is_good)
+    {
+      U32 inst = 0;
+      is_good = ctrl_read_cached_process_memory(process_handle, r1u64(read_vaddr, read_vaddr+sizeof(inst)), &is_stale, &inst, endt_us);
+      is_good = is_good && !is_stale;
+
+      if(is_good)
+      {
+        if((inst & 0xffc003ff) == 0x910003ff)
+        {
+          // add sp, sp, #imm
+          B32 shift = (inst >> 22) & 0x1;
+          U32 imm = (inst >> 10) & 0xfff;
+          new_sp += shift ? (imm << 12) : imm;
+        }
+        else if((inst & 0xff0003ff) == 0xcb0003ff)
+        {
+          // add sp, sp, lsl #imm
+          // 0 LSL, 1 LSR, 2 ASR, 3 ROR
+          // assuming always LSL
+          U8 shift_type = (inst >> 22) & 0x3;
+          U32 shift_amount = (inst >> 10) & 0x3f;
+          REGS_Reg64 *reg = &regs->x0 + ((inst >> 16) & 0x1f);
+
+          new_sp += (reg->u64 << shift_amount);
+        }
+        else if(inst == 0xd65f03c0)
+        {
+          // ret
+          U64 mask = ~0ULL;
+          mask >>= 17;
+          new_pc = regs->x30.u64 & mask;
+          keep_parsing = 0;
+        }
+        else if((inst & 0xfc000000) == 0x94000000)
+        {
+          // bl (e.g. __security_pop_cookie)
+          // go to next instruction
+        }
+        else if(inst == 0x910002BF)
+        {
+          // mov sp, x29
+          new_sp = regs->x29.u64;
+        }
+        else if((inst & 0xffc003e0) == 0xa9c003e0)
+        {
+          // ldp reg0, reg1, [sp, #imm]
+          REGS_Reg64 *reg0 = &regs->x0 + (inst & 0x1f);
+          REGS_Reg64 *reg1 = &regs->x0 + ((inst >> 10) & 0x1f);
+
+          S64 imm = 8 * ((inst >> 16) & 0x7f);
+          S64 sign_extended_imm = (imm << 58) >> 58;
+          U64 reg_read_vaddr = (U64)((S64)regs->x31.u64 + sign_extended_imm);
+
+          is_good = is_good && ctrl_read_cached_process_memory_struct(process_handle, reg_read_vaddr, &is_stale, &reg0->u64, endt_us);
+          is_good = is_good && !is_stale;
+
+          is_good = is_good && ctrl_read_cached_process_memory_struct(process_handle, reg_read_vaddr + 8, &is_stale, &reg1->u64, endt_us);
+          is_good = is_good && !is_stale;
+          keep_parsing = is_good;
+        }
+        else if((inst & 0xffc003e0) == 0xa8c003e0)
+        {
+          // ldp reg0, reg1, [sp], #imm (post-indexed load)
+          REGS_Reg64 *reg0 = &regs->x0 + (inst & 0x1f);
+          REGS_Reg64 *reg1 = &regs->x0 + ((inst >> 10) & 0x1f);
+
+          S64 imm = 8 * ((inst >> 16) & 0x7f);
+          S64 sign_extended_imm = (imm << 58) >> 58;
+          U64 reg_read_vaddr = regs->x31.u64;
+
+          is_good = is_good && ctrl_read_cached_process_memory_struct(process_handle, reg_read_vaddr, &is_stale, &reg0->u64, endt_us);
+          is_good = is_good && !is_stale;
+
+          is_good = is_good && ctrl_read_cached_process_memory_struct(process_handle, reg_read_vaddr + 8, &is_stale, &reg1->u64, endt_us);
+          is_good = is_good && !is_stale;
+
+          new_sp += sign_extended_imm;
+          keep_parsing = is_good;
+        }
+        else if((inst & 0xffe007e0) == 0xf89007e0)
+        {
+          // ldr reg0, [sp, #imm]
+          REGS_Reg64 *reg0 = &regs->x0 + (inst & 0x1f);
+
+          // TODO(antoniom): sign-extended? even right?
+          S64 imm = 8 * ((inst >> 10) & 0xfff);
+          U64 reg_read_vaddr = (U64)((S64)regs->x31.u64 + imm);
+
+          is_good = is_good && ctrl_read_cached_process_memory_struct(process_handle, reg_read_vaddr, &is_stale, &reg0->u64, endt_us);
+          is_good = is_good && !is_stale;
+          keep_parsing = is_good;
+        }
+        else if((inst & 0xffe007e0) == 0xf84007e0)
+        {
+          // ldr reg0, [sp], #imm (post-indexed_load)
+          REGS_Reg64 *reg0 = &regs->x0 + (inst & 0x1f);
+
+          // TODO(antoniom): sign-extended?
+          S64 imm = 8 * ((inst >> 10) & 0x1ff);
+          S64 sign_extended_imm = (imm << 54) >> 54;
+          U64 reg_read_vaddr = regs->x31.u64;
+
+          is_good = is_good && ctrl_read_cached_process_memory_struct(process_handle, reg_read_vaddr, &is_stale, &reg0->u64, endt_us);
+          is_good = is_good && !is_stale;
+
+          new_sp += sign_extended_imm;
+          keep_parsing = is_good;
+        }
+        else
+        {
+          keep_parsing = 0;
+        }
+      }
+    }
+  }
+
+  B32 has_pdata_and_in_prolog = 0;
+  U64 function_start_voff = 0;
+  if(first_pdata)
+  {
+    function_start_voff = first_pdata->voff_first;
+
+    B32 is_prolog = 0;
+    U64 read_vaddr = regs->pc.u64;
+    U64 inst_start = function_start_voff + module->vaddr_range.min;
+
+    for(B32 keep_parsing = 1; keep_parsing; read_vaddr -= 4)
+    {
+      U32 inst = 0;
+
+      if(contains_1u64(r1u64(inst_start, inst_start + 32), read_vaddr))
+      {
+        is_good = ctrl_read_cached_process_memory(process_handle, r1u64(read_vaddr, read_vaddr+sizeof(inst)), &is_stale, &inst, endt_us);
+        is_good = is_good && !is_stale;
+      }
+
+      if(!is_good)
+      {
+        keep_parsing = 0;
+      }
+      else
+      {
+        if((inst & 0xffc003ff) == 0xd10003ff)
+        {
+          // sub sp, sp, #imm
+          keep_parsing = 0;
+          is_prolog = 1;
+        }
+        else if((inst & 0xff80001f) == 0xd280000f)
+        {
+          // mov x15, #imm
+          keep_parsing = 0;
+          is_prolog = 1;
+        }
+        else if((inst & 0xff0003ff) == 0xcb0003ff)
+        {
+          // TODO(antoniom): same as add version?
+          // sub sp, sp, reg, lsl #imm
+          keep_parsing = 0;
+          is_prolog = 1;
+        }
+        else if((inst & 0xfc000000) == 0x94000000)
+        {
+          // bl (e.g. __security_pop_cookie)
+          // go to prev instruction
+          read_vaddr -= 4;
+        }
+        else if(inst == 0x910003fd)
+        {
+          // mov x29, sp
+          keep_parsing = 0;
+          is_prolog = 1;
+        }
+        else if((inst & 0xffc003e0) == 0xa90003e0)
+        {
+          // TODO(antoniom): 6? or e?
+          // stp reg0, reg1, [sp, #imm]
+          keep_parsing = 0;
+          is_prolog = 1;
+        }
+        else if((inst & 0xffc003e0) == 0xa98003e0)
+        {
+          // stp reg0, reg1, [sp, #imm]! (pre-indexed load)
+          keep_parsing = 0;
+          is_prolog = 1;
+        }
+        else if((inst & 0xffe083e0) == 0xf82083e0)
+        {
+          // str reg0, [sp, #imm]
+          keep_parsing = 0;
+          is_prolog = 1;
+        }
+        else if((inst & 0xffe083e0) == 0xf82083e0)
+        {
+          // TODO(antoniom): same as previous
+          // str reg0, [sp, #imm]! (pre-indexed_load)
+          keep_parsing = 0;
+          is_prolog = 1;
+        }
+        else
+        {
+          // TODO(antoniom): fregs
+          keep_parsing = 0;
+        }
+      }
+    }
+    has_pdata_and_in_prolog = is_prolog;
+  }
+
+  //- antoniom: pdata & in epilog -> prolog unwind
+  //  need to "undo" previous instructions, so the execution stream
+  //  starts at the previous instruction. This makes operations look
+  //  like the epilog block operations
+  if (first_pdata && has_pdata_and_in_prolog)
+  {
+    U64 inst_start = function_start_voff + module->vaddr_range.min;
+    U64 read_vaddr = regs->pc.u64 - 4;
+    new_sp = regs->x31.u64;
+    new_pc = regs->pc.u64;
+
+    for(B32 keep_parsing = 1; keep_parsing; read_vaddr -= 4, keep_parsing = is_good && keep_parsing && (regs->pc.u64 != inst_start))
+    {
+      U32 inst = 0;
+      is_good = ctrl_read_cached_process_memory(process_handle, r1u64(read_vaddr, read_vaddr+sizeof(inst)), &is_stale, &inst, endt_us);
+      is_good = is_good && !is_stale;
+
+      if(is_good)
+      {
+        if((inst & 0xffc003ff) == 0xd10003ff)
+        {
+          // sub sp, sp, #imm
+          B32 shift = (inst >> 22) & 0x1;
+          U32 imm = (inst >> 10) & 0xfff;
+          new_sp += shift ? (imm << 12) : imm;
+        }
+        else if((inst & 0xff80001f) == 0xd280000f)
+        {
+          // mov x15, #imm
+          //- antoniom: no need to do anything.
+          //  If this is the first instruction we encouter,
+          //  then it doesn't matter. If the sub sp, sp, x15, lsl #imm
+          //  has been encountered, then the "functional" part of this
+          //  operation has already occurred
+        }
+        else if((inst & 0xff0003ff) == 0xcb0003ff)
+        {
+          // TODO(antoniom): same as add
+          // sub sp, sp, reg, lsl #imm
+          U8 shift_type = (inst >> 22) & 0x3;
+          U32 shift_amount = (inst >> 10) & 0x3f;
+          REGS_Reg64 *reg = &regs->x0 + ((inst >> 16) & 0x1f);
+          new_sp += reg->u64 << shift_amount;
+        }
+        else if((inst & 0xfc000000) == 0x94000000)
+        {
+        }
+        else if(inst & 0x910003fd)
+        {
+          // mov x29, sp -> mov sp, x29
+          new_sp = regs->x29.u64;
+        }
+        else if((inst & 0xffc003e0) == 0xa90003e0)
+        {
+          // TODO(antoniom): 6 or e?
+          // stp reg0, reg1, [sp,#imm] -> do load
+          REGS_Reg64 *reg0 = &regs->x0 + (inst & 0x1f);
+          REGS_Reg64 *reg1 = &regs->x0 + ((inst >> 10) & 0x1f);
+
+          // TODO(antoniom): how is this right? (multiply by 8)
+          S64 imm = 8 * ((inst >> 15) & 0x7f);
+          S64 sign_extended_imm = (imm << 57) >> 57;
+          U64 reg_read_vaddr = (U64)((S64)regs->x31.u64 + sign_extended_imm);
+
+          is_good = is_good && ctrl_read_cached_process_memory_struct(process_handle, reg_read_vaddr, &is_stale, &reg0->u64, endt_us);
+          is_good = is_good && !is_stale;
+
+          is_good = is_good && ctrl_read_cached_process_memory_struct(process_handle, reg_read_vaddr + 8, &is_stale, &reg1->u64, endt_us);
+          is_good = is_good && !is_stale;
+
+          keep_parsing = is_good;
+        }
+        else if((inst & 0xffc003e0) == 0xa98003e0)
+        {
+          // stp reg0, reg1, [sp,#imm] -> do load
+          REGS_Reg64 *reg0 = &regs->x0 + (inst & 0x1f);
+          REGS_Reg64 *reg1 = &regs->x0 + ((inst >> 10) & 0x1f);
+
+          // TODO(antoniom): how is this right? (multiply by 8)
+          S64 imm = 8 * ((inst >> 15) & 0x7f);
+          S64 sign_extended_imm = (imm << 57) >> 57;
+          sign_extended_imm *= -1;
+
+          U64 reg_read_vaddr = regs->x31.u64;
+
+          is_good = is_good && ctrl_read_cached_process_memory_struct(process_handle, reg_read_vaddr, &is_stale, &reg0->u64, endt_us);
+          is_good = is_good && !is_stale;
+
+          is_good = is_good && ctrl_read_cached_process_memory_struct(process_handle, reg_read_vaddr + 8, &is_stale, &reg1->u64, endt_us);
+          is_good = is_good && !is_stale;
+
+          new_sp += sign_extended_imm;
+          keep_parsing = is_good;
+        }
+        else if((inst & 0xffe083e0) == 0xf82083e0)
+        {
+          // str reg0, [sp,#imm] -> do load
+          REGS_Reg64 *reg0 = &regs->x0 + (inst & 0x1f);
+
+          // TODO(antoniom): sign-extended? even right?
+          S64 imm = 8 * ((inst >> 10) & 0xfff);
+          U64 reg_read_vaddr = (U64)((S64)regs->x31.u64 + imm);
+
+          is_good = is_good && ctrl_read_cached_process_memory_struct(process_handle, reg_read_vaddr, &is_stale, &reg0->u64, endt_us);
+          is_good = is_good && !is_stale;
+
+          keep_parsing = is_good;
+        }
+        else if((inst & 0xffe083e0) == 0xf82083e0)
+        {
+          // ldr reg0, [sp], #imm (post-indexed_load)
+          REGS_Reg64 *reg0 = &regs->x0 + (inst & 0x1f);
+
+          // TODO(antoniom): sign-extended?
+          S64 imm = 8 * ((inst >> 10) & 0x1ff);
+          S64 sign_extended_imm = (imm << 54) >> 54;
+          U64 reg_read_vaddr = regs->x31.u64;
+
+          is_good = is_good && ctrl_read_cached_process_memory_struct(process_handle, reg_read_vaddr, &is_stale, &reg0->u64, endt_us);
+          is_good = is_good && !is_stale;
+
+          new_sp += sign_extended_imm;
+          keep_parsing = is_good;
+        }
+        else
+        {
+          // TODO(antoniom): fregs
+          keep_parsing = 0;
+        }
+      }
+    }
+
+    //- antoniom: simulate ret
+    new_pc = regs->x30.u64;
+  }
+
+  //////////////////////////////
+  //- antoniom: pdata & not in epilog/prolog -> xdata unwind
+  //
+  if(is_good && first_pdata && !has_pdata_and_in_epilog && !has_pdata_and_in_prolog)
+  {
+    B32 is_packed_unwind_data = 0;
+    B32 is_xdata = 0;
+
+    PE_Arm64Pdata *pdata = first_pdata;
+
+    U64 ip_from_function_start_voff = ip_voff - function_start_voff;
+
+    U64 xdata_code_words = 0;
+    U64 xdata_code_words_ptr = 0;
+    U64 xdata_step_count = 0;
+    U64 xdata_voff = 0;
+    U64 xdata_off = 0;
+
+    U64 packed_unwind_step_count = 0;
+
+    U32 combined_flag = pdata->combined & 0x3;
+    if(is_good && combined_flag)
+    {
+      is_packed_unwind_data = 1;
+
+      U32 packed_unwind_data = pdata->combined;
+      PE_ParsedPackedUnwindDataArm64 parsed_data = {0};
+      if(is_good)
+      {
+        parsed_data.function_size = 4 * ((packed_unwind_data >> 2) & 0x7ff);
+        parsed_data.regf = (packed_unwind_data >> 13) & 0x7;
+        if(parsed_data.regf != 0)
+        {
+          parsed_data.regf += 1;
+        }
+        parsed_data.regi = (packed_unwind_data >> 16) & 0x7;
+        parsed_data.h = (packed_unwind_data >> 20) & 0x1;
+        parsed_data.cr = (packed_unwind_data >> 21) & 0x3;
+        parsed_data.frame_size =  16 * ((packed_unwind_data >> 23) & 0x1ff);
+
+        if(parsed_data.cr == 2)
+        {
+          packed_unwind_step_count += 1;
+        }
+
+        U32 regi_count = (parsed_data.regi / 2) + (parsed_data.regi & 0x1);
+        packed_unwind_step_count += regi_count;
+        if(parsed_data.cr == 1 && ((parsed_data.regi & 0x1) == 0))
+        {
+          packed_unwind_step_count += 1;
+        }
+
+        // TODO(antoniom): review
+        U32 regf_count = (parsed_data.regf / 2) + (parsed_data.regf & 0x1);
+        packed_unwind_step_count += regf_count;
+
+        if(parsed_data.h != 0)
+        {
+          packed_unwind_step_count += 4;
+        }
+
+        if((parsed_data.cr == 2 || parsed_data.cr == 3) && parsed_data.frame_size <= 512)
+        {
+          packed_unwind_step_count += 2;
+        }
+        else if((parsed_data.cr == 2 || parsed_data.cr == 3) &&
+                (512 < parsed_data.frame_size && parsed_data.frame_size <= 4080))
+        {
+          packed_unwind_step_count += 3;
+        }
+        else if((parsed_data.cr == 2 || parsed_data.cr == 3) && 4080 < parsed_data.frame_size)
+        {
+          packed_unwind_step_count += 4;
+        }
+        else if((parsed_data.cr == 0 || parsed_data.cr == 1) && parsed_data.frame_size <= 4080)
+        {
+          packed_unwind_step_count += 1;
+        }
+        else if((parsed_data.cr == 0 || parsed_data.cr == 1) && 4080 < parsed_data.frame_size)
+        {
+          packed_unwind_step_count += 2;
+        }
+      }
+    }
+    else if(is_good)
+    {
+      is_xdata = 1;
+
+      xdata_voff = pdata->combined + module->vaddr_range.min;
+      xdata_off = 0;
+
+      PE_ParsedXdataArm64 parsed_data = {0};
+      if(is_good)
+      {
+        U32 header = 0;
+
+        is_good = ctrl_read_cached_process_memory(process_handle, r1u64(xdata_voff+xdata_off, xdata_voff+xdata_off+sizeof(U32)), &is_stale, &header, endt_us);
+        is_good = is_good && !is_stale;
+
+        parsed_data.function_size = 4 * (header & 0x3ffff);
+        parsed_data.exception_data_present = (header >> 20) & 0x1;
+        parsed_data.packed_epilog = (header >> 21) & 0x1;
+        parsed_data.epilog_count = (header >> 22) & 0x1f;
+        parsed_data.code_words = (header >> 27) & 0x1f;
+      }
+
+      is_good = is_good && (pdata->voff_first <= ip_voff && ip_voff < (pdata->voff_first + parsed_data.function_size));
+
+      if(is_good && parsed_data.code_words == 0 && parsed_data.epilog_count == 0)
+      {
+        xdata_off += 4;
+
+        U32 ext_header = 0;
+        is_good = ctrl_read_cached_process_memory(process_handle, r1u64(xdata_voff+xdata_off, xdata_voff+xdata_off+sizeof(U32)), &is_stale, &ext_header, endt_us);
+        is_good = is_good && !is_stale;
+
+        if(is_good)
+        {
+          parsed_data.epilog_count = ext_header & 0xffff;
+          parsed_data.code_words = (ext_header >> 16) & 0xff;
+        }
+      }
+
+      xdata_off += 4;
+
+      if(parsed_data.packed_epilog == 0)
+      {
+        // antoniom: epilog scope
+        U64 epilog_scope_ptr = xdata_voff + xdata_off;
+        U32 min_epilog_offset = 0xffffffff;
+        U32 min_unwind_code_offset = 0xffffffff;
+        for(U32 epilog_scope_idx = 0; is_good && !is_stale && epilog_scope_idx < parsed_data.epilog_count; epilog_scope_idx += 1)
+        {
+          U32 epilog_scope_header = 0;
+          is_good = ctrl_read_cached_process_memory(process_handle, r1u64(epilog_scope_ptr, epilog_scope_ptr+sizeof(U32)), &is_stale, &epilog_scope_header, endt_us);
+          is_good = is_good && !is_stale;
+
+          U32 epilog_offset = 4 * (epilog_scope_header & 0x3ffff);
+          if(epilog_offset < min_epilog_offset)
+          {
+            min_epilog_offset = epilog_offset;
+          }
+
+          U32 unwind_code_offset = (epilog_scope_header >> 22) & 0x3ff;
+          if(unwind_code_offset < min_unwind_code_offset)
+          {
+            min_unwind_code_offset = unwind_code_offset;
+          }
+        }
+
+        if(min_epilog_offset < 0xffffffff)
+        {
+          xdata_off += parsed_data.epilog_count;
+        }
+
+        xdata_code_words_ptr = xdata_voff + xdata_off;
+        xdata_code_words = parsed_data.code_words;
+
+        U64 unwind_off = xdata_off;
+        for(B32 keep_parsing = unwind_off - xdata_off <= 4 * parsed_data.code_words;
+            keep_parsing;
+            xdata_step_count += 1,
+            keep_parsing = keep_parsing && (unwind_off - xdata_off) < 4 * parsed_data.code_words)
+        {
+          U32 unwind_header = 0;
+
+          is_good = ctrl_read_cached_process_memory(process_handle, r1u64(xdata_voff+unwind_off, xdata_voff+unwind_off+sizeof(U32)), &is_stale, &unwind_header, endt_us);
+          is_good = is_good && !is_stale;
+
+          U8 unwind_op = unwind_header & 0xff;
+          U8 *unwind_op_u8s = (U8*)&unwind_op;
+
+          if((unwind_op >> 5) == 0)
+          {
+            unwind_off += 1;
+          }
+          else if((unwind_op >> 5) == 1)
+          {
+            unwind_off += 1;
+          }
+          else if((unwind_op >> 6) == 1)
+          {
+            unwind_off += 1;
+          }
+          else if((unwind_op >> 6) == 2)
+          {
+            unwind_off += 1;
+          }
+          else if((unwind_op >> 3) == 24)
+          {
+            unwind_off += 2;
+          }
+          else if((unwind_op >> 3) == 29)
+          {
+            unwind_off += 1;
+          }
+          else if((unwind_op >> 2) == 50)
+          {
+            unwind_off += 2;
+          }
+          else if((unwind_op >> 2) == 51)
+          {
+            unwind_off += 2;
+          }
+          else if((unwind_op >> 2) == 52)
+          {
+            unwind_off += 2;
+          }
+          else if((unwind_op >> 1) == 106)
+          {
+            unwind_off += 2;
+          }
+          else if((unwind_op >> 1) == 107)
+          {
+            unwind_off += 2;
+          }
+          else if((unwind_op >> 1) == 108)
+          {
+            unwind_off += 2;
+          }
+          else if((unwind_op >> 1) == 109)
+          {
+            unwind_off += 2;
+          }
+          else if((unwind_op >> 1) == 110)
+          {
+            unwind_off += 2;
+          }
+          else if(unwind_op == 222)
+          {
+            unwind_off += 2;
+          }
+          else if(unwind_op == 224)
+          {
+            unwind_off += 4;
+          }
+          else if(unwind_op == 225)
+          {
+            unwind_off += 1;
+          }
+          else if(unwind_op == 226)
+          {
+            unwind_off += 2;
+          }
+          else if(unwind_op == 227)
+          {
+            unwind_off += 1;
+          }
+          else if(unwind_op == 228)
+          {
+            unwind_off += 1;
+            keep_parsing = 0;
+          }
+          else if(unwind_op == 229)
+          {
+            unwind_off += 1;
+          }
+          else if(unwind_op == 230)
+          {
+            unwind_off += 1;
+          }
+          else if(unwind_op == 231)
+          {
+            // 11100111
+            unwind_off += 1;
+          }
+          else if(unwind_op == 232)
+          {
+            // MSFT_OP_TRAP_FRAME
+          }
+          else if(unwind_op == 233)
+          {
+            // MSFT_OP_MACHINE_FRAME
+          }
+          else if(unwind_op == 234)
+          {
+            // MSFT_OP_CONTEXT
+          }
+          else if(unwind_op == 235)
+          {
+            // MSFT_OP_EC_CONTEXT
+          }
+          else if(unwind_op == 236)
+          {
+            // MSFT_OP_CLEAR_UNWOUND_TO_CALL
+          }
+          else if(unwind_op == 252)
+          {
+            // 11111100
+            // qreg
+            unwind_off += 1;
+          }
+        }
+      }
+    }
+
+    is_good = is_good && !is_stale;
+    if(is_good)
+    {
+      U32 step = 0;
+
+      if(is_packed_unwind_data)
+      {
+        step = packed_unwind_step_count;
+      }
+      else if(is_xdata)
+      {
+        step = xdata_step_count;
+      }
+
+      new_sp = regs->x31.u64;
+
+      if(is_good) for(B32 keep_processing = 1; keep_processing; step -= 1)
+      {
+        PE_UnwindCodeArm64 unwind_code = {0};
+
+        if(is_packed_unwind_data)
+        {
+          unwind_code = ctrl_unwind_code_from_packed_unwind_data__pe_arm64(pdata->combined, step);
+        }
+        else if(is_xdata)
+        {
+          unwind_code = ctrl_unwind_code_from_xdata__pe_arm64(process_handle, endt_us, xdata_code_words, xdata_voff, xdata_off, step, xdata_step_count, &is_good, &is_stale);
+        }
+
+        keep_processing = is_good;
+        switch(unwind_code.op)
+        {
+          default: {}break;
+
+          case PE_UnwindOpCodeArm64_alloc_s:
+          case PE_UnwindOpCodeArm64_alloc_m:
+          case PE_UnwindOpCodeArm64_alloc_l:
+          {
+            new_sp += unwind_code.sp_off;
+          }break;
+
+          case PE_UnwindOpCodeArm64_save_fplr:
+          case PE_UnwindOpCodeArm64_save_regp:
+          case PE_UnwindOpCodeArm64_save_reg:
+          case PE_UnwindOpCodeArm64_save_lrpair:
+          case PE_UnwindOpCodeArm64_save_fregp:
+          case PE_UnwindOpCodeArm64_save_freg:
+          case PE_UnwindOpCodeArm64_save_qregp:
+          case PE_UnwindOpCodeArm64_save_r19r20_x:
+          case PE_UnwindOpCodeArm64_save_fplr_x:
+          case PE_UnwindOpCodeArm64_save_regp_x:
+          case PE_UnwindOpCodeArm64_save_reg_x:
+          case PE_UnwindOpCodeArm64_save_fregp_x:
+          case PE_UnwindOpCodeArm64_save_freg_x:
+          case PE_UnwindOpCodeArm64_save_qregp_x:
+          {
+            REGS_Reg64 *first_reg = &regs->x0 + unwind_code.reg0;
+            REGS_Reg64 *second_reg = unwind_code.reg1 ? &regs->x0 + unwind_code.reg1: 0;
+
+            U64 first_reg_mask = ~0ULL;
+            U64 second_reg_mask = ~0ULL;
+
+            U64 sp = new_sp;
+            U64 sp_off = unwind_code.sp_off;
+
+            if (unwind_code.op == PE_UnwindOpCodeArm64_save_fplr ||
+                unwind_code.op == PE_UnwindOpCodeArm64_save_fplr_x)
+            {
+              //- antoniom: assume that is user-mode module
+              second_reg_mask >>= 17;
+            }
+            else if (PE_UnwindOpCodeArm64_save_r19r20_x <= unwind_code.op && unwind_code.op <= PE_UnwindOpCodeArm64_save_freg_x)
+            {
+              // defer to add later
+              sp_off = 0;
+            }
+
+            U64 first_reg_read = 0;
+            is_good = ctrl_read_cached_process_memory(process_handle, r1u64(sp+sp_off, sp+sp_off+sizeof(first_reg_read)), &is_stale, &first_reg_read, endt_us);
+            is_good = is_good && !is_stale;
+            if (is_good)
+            {
+              first_reg->u64 = first_reg_read & first_reg_mask;
+            }
+
+            if(second_reg)
+            {
+              U64 second_reg_read = 0;
+              is_good = ctrl_read_cached_process_memory(process_handle, r1u64(sp+sp_off, sp+sp_off+sizeof(second_reg_read)), &is_stale, &second_reg_read, endt_us);
+              is_good = is_good && !is_stale;
+              if (is_good)
+              {
+                second_reg->u64 = second_reg_read & second_reg_mask;
+              }
+            }
+
+            if (PE_UnwindOpCodeArm64_save_r19r20_x <= unwind_code.op && unwind_code.op <= PE_UnwindOpCodeArm64_save_freg_x)
+            {
+              // defer to add later
+              new_sp += unwind_code.sp_off;
+            }
+          }break;
+
+          case PE_UnwindOpCodeArm64_set_fp:
+          {
+            regs->x31.u64 = regs->x29.u64;
+            new_sp = regs->x29.u64;
+          }break;
+
+          case PE_UnwindOpCodeArm64_add_fp:
+          {
+            Assert(!"add_fp encountered");
+            regs->x29.u64 = regs->x31.u64 + unwind_code.add_to_reg;
+          }break;
+
+          case PE_UnwindOpCodeArm64_end:
+          {
+            keep_processing = 0;
+            new_pc = regs->x30.u64;
+          }break;
+
+          case PE_UnwindOpCodeArm64_end_c:
+          case PE_UnwindOpCodeArm64_save_next:
+          {
+            Assert(!"Wait until encountered");
+          }break;
+
+          case PE_UnwindOpCodeArm64_nop:
+          case PE_UnwindOpCodeArm64_MSFT_OP_TRAP_FRAME:
+          case PE_UnwindOpCodeArm64_MSFT_OP_MACHINE_FRAME:
+          case PE_UnwindOpCodeArm64_MSFT_OP_CONTEXT:
+          case PE_UnwindOpCodeArm64_MSFT_OP_EC_CONTEXT:
+          case PE_UnwindOpCodeArm64_MSFT_OP_CLEAR_UNWOUND_TO_CALL:
+          case PE_UnwindOpCodeArm64_pac_sign_lr:
+          {
+          }break;
+        }
+      }
+    }
+  }
+
+  scratch_end(scratch);
+  //////////////////////////////
+  //- antoniom: fill & return
+  //
+  scratch_end(scratch);
+  CTRL_UnwindStepResult result = {0};
+  if(!is_good) {result.flags |= CTRL_UnwindFlag_Error;}
+  if(is_stale) {result.flags |= CTRL_UnwindFlag_Stale;}
+  return result;
+}
+
 //- rjf: abstracted unwind step
 
 internal CTRL_UnwindStepResult
@@ -2899,6 +4529,10 @@ ctrl_unwind_step(CTRL_EntityStore *store, CTRL_Handle process, CTRL_Handle modul
     case Arch_x64:
     {
       result = ctrl_unwind_step__pe_x64(store, process, module, (REGS_RegBlockX64 *)reg_block, endt_us);
+    case Arch_arm64:
+    {
+      result = ctrl_unwind_step__pe_arm64(store, process, module, (REGS_RegBlockARM64 *)reg_block, endt_us);
+    }
     }break;
   }
   return result;
@@ -3447,12 +5081,16 @@ ctrl_thread__append_resolved_process_user_bp_traps(Arena *arena, CTRL_Handle pro
 internal void
 ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_range, String8 path)
 {
+  Temp scratch = scratch_begin(0, 0);
+
   //////////////////////////////
   //- rjf: parse module image info
   //
   Arena *arena = arena_alloc();
-  PE_IntelPdata *pdatas = 0;
-  U64 pdatas_count = 0;
+  PE_IntelPdata *intel_pdatas = 0;
+  U64 intel_pdatas_count = 0;
+  PE_Arm64Pdata *arm64_pdatas = 0;
+  U64 arm64_pdatas_count = 0;
   U64 entry_point_voff = 0;
   Rng1U64 tls_vaddr_range = {0};
   U32 pdb_dbg_time = 0;
@@ -3546,20 +5184,108 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
           reported_data_dir_count = pe_optional.data_dir_count;
         }break;
       }
-      
+
+      //- antoniom: find section count
+      U32 coff_header_off = dos_header.coff_file_offset + sizeof(pe_magic);
+      U64 after_coff_header_off = coff_header_off + sizeof(coff_header);
+      U64 after_optional_header_off = after_coff_header_off + opt_ext_size;
+
+      Rng1U64 optional_range = {0};
+      optional_range.min = ClampTop(after_coff_header_off, dim_1u64(vaddr_range));
+      optional_range.max = ClampTop(after_optional_header_off, dim_1u64(vaddr_range));
+
+      U64 section_array_offset = optional_range.max;
+      COFF_SectionHeader *sec_array = (COFF_SectionHeader*)(vaddr_range.min + section_array_offset);
+      U64 sec_array_raw_opl = section_array_offset + coff_header.section_count*sizeof(COFF_SectionHeader);
+      U64 sec_array_opl = ClampTop(sec_array_raw_opl, dim_1u64(vaddr_range));
+      U64 section_count = (sec_array_opl - section_array_offset)/sizeof(COFF_SectionHeader);
+
+      COFF_SectionHeader *loaded_sec_array = push_array(scratch.arena, COFF_SectionHeader, section_count);
+      dmn_process_read(process.dmn_handle, rng_1u64(vaddr_range.min+section_array_offset,vaddr_range.min+section_array_offset+sizeof(COFF_SectionHeader)*section_count), loaded_sec_array);
+
       // rjf: find number of data directories
       U32 data_dir_max = (opt_ext_size - reported_data_dir_offset) / sizeof(PE_DataDirectory);
       data_dir_count = ClampTop(reported_data_dir_count, data_dir_max);
       
+      // antoniom: detect if ARM64X binary
+      COFF_MachineType machine_type = coff_header.machine;
+      PE_LoadConfig64 load_config_header = {0};
+
+      U64 pdata_voff = 0;
+      U64 pdata_size = 0;
+      B32 is_arm64ec = 0;
+
+      if (PE_DataDirectoryIndex_LOAD_CONFIG < data_dir_count)
+      {
+        U64 dir_offset = vaddr_range.min + optional_range.min + reported_data_dir_offset + sizeof(PE_DataDirectory)*PE_DataDirectoryIndex_LOAD_CONFIG;
+        PE_DataDirectory data_dir = {0};
+        dmn_process_read_struct(process.dmn_handle, dir_offset, &data_dir);
+
+        switch(optional_magic)
+        {
+          case PE_PE32PLUS_MAGIC:
+          {
+            dmn_process_read_struct(process.dmn_handle, vaddr_range.min + data_dir.virt_off, &load_config_header);
+          }break;
+          case PE_PE32_MAGIC:
+          {
+            PE_LoadConfig32 load_config_header32 = {0};
+            dmn_process_read_struct(process.dmn_handle, vaddr_range.min + data_dir.virt_off, &load_config_header);
+            load_config_header.size = load_config_header32.size;
+            load_config_header.chpe_metadata_ptr = load_config_header32.chpe_metadata_ptr;
+          }
+        }
+      }
+
+      if (load_config_header.size >= OffsetOf(PE_LoadConfig64, chpe_metadata_ptr) && load_config_header.chpe_metadata_ptr != 0)
+      {
+        machine_type = COFF_MachineType_ARM64;
+
+        PE_ARM64ECMetadata arm64ec_metadata = {0};
+        dmn_process_read_struct(process.dmn_handle, load_config_header.chpe_metadata_ptr, &arm64ec_metadata);
+
+        for(U32 section_idx = 0; section_idx < section_count; section_idx += 1)
+        {
+          COFF_SectionHeader *cur_sec = loaded_sec_array + section_idx;
+          String8 cur_sec_name = str8_cstring_capped(cur_sec->name, cur_sec->name + sizeof(cur_sec->name));
+          if(str8_match(cur_sec_name, str8_lit(".pdata"), 0))
+          {
+            pdata_voff = cur_sec->voff;
+            pdata_size = cur_sec->vsize;
+            is_arm64ec = 1;
+            break;
+          }
+        }
+        // TODO(antonio): get hybrid code ranges for arm64ec
+      }
+
       // rjf: grab pdatas from exceptions section
       if(data_dir_count > PE_DataDirectoryIndex_EXCEPTIONS)
       {
         PE_DataDirectory dir = {0};
         dmn_process_read_struct(process.dmn_handle, vaddr_range.min + opt_ext_off_range.min + reported_data_dir_offset + sizeof(PE_DataDirectory)*PE_DataDirectoryIndex_EXCEPTIONS, &dir);
         Rng1U64 pdatas_voff_range = r1u64((U64)dir.virt_off, (U64)dir.virt_off + (U64)dir.virt_size);
-        pdatas_count = dim_1u64(pdatas_voff_range)/sizeof(PE_IntelPdata);
-        pdatas = push_array(arena, PE_IntelPdata, pdatas_count);
-        dmn_process_read(process.dmn_handle, r1u64(vaddr_range.min + pdatas_voff_range.min, vaddr_range.min + pdatas_voff_range.max), pdatas);
+        if(is_arm64ec)
+        {
+          pdatas_voff_range = r1u64(pdata_voff, pdata_voff+pdata_size);
+        }
+
+        switch(machine_type)
+        {
+          case COFF_MachineType_X86:
+          case COFF_MachineType_X64:
+          {
+            intel_pdatas_count = dim_1u64(pdatas_voff_range)/sizeof(PE_IntelPdata);
+            intel_pdatas = push_array(arena, PE_IntelPdata, intel_pdatas_count);
+            dmn_process_read(process.dmn_handle, r1u64(vaddr_range.min + pdatas_voff_range.min, vaddr_range.min + pdatas_voff_range.max), intel_pdatas);
+          }break;
+          case COFF_MachineType_ARM64:
+          {
+            arm64_pdatas_count = dim_1u64(pdatas_voff_range)/sizeof(PE_Arm64Pdata);
+            arm64_pdatas = push_array(arena, PE_Arm64Pdata, arm64_pdatas_count);
+            dmn_process_read(process.dmn_handle, r1u64(vaddr_range.min + pdatas_voff_range.min, vaddr_range.min + pdatas_voff_range.max), arm64_pdatas);
+          }break;
+        }
       }
       
       // rjf: extract tls header
@@ -3569,7 +5295,7 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
         PE_DataDirectory dir = {0};
         dmn_process_read_struct(process.dmn_handle, vaddr_range.min + opt_ext_off_range.min + reported_data_dir_offset + sizeof(PE_DataDirectory)*PE_DataDirectoryIndex_TLS, &dir);
         Rng1U64 tls_voff_range = r1u64((U64)dir.virt_off, (U64)dir.virt_off + (U64)dir.virt_size);
-        switch(coff_header.machine)
+        switch(machine_type)
         {
           default:{}break;
           case COFF_MachineType_X86:
@@ -3584,6 +5310,7 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
             tls_header.characteristics   = (U64)tls_header32.characteristics;
           }break;
           case COFF_MachineType_X64:
+          case COFF_MachineType_ARM64:
           {
             dmn_process_read_struct(process.dmn_handle, vaddr_range.min + tls_voff_range.min, &tls_header);
           }break;
@@ -3729,13 +5456,16 @@ ctrl_thread__module_open(CTRL_Handle process, CTRL_Handle module, Rng1U64 vaddr_
         DLLPushBack(slot->first, slot->last, node);
         node->module = module;
         node->arena = arena;
-        node->pdatas = pdatas;
-        node->pdatas_count = pdatas_count;
+        node->intel_pdatas = intel_pdatas;
+        node->intel_pdatas_count = intel_pdatas_count;
+        node->arm64_pdatas = arm64_pdatas;
+        node->arm64_pdatas_count = arm64_pdatas_count;
         node->entry_point_voff = entry_point_voff;
         node->initial_debug_info_path = initial_debug_info_path;
       }
     }
   }
+  scratch_end(scratch);
 }
 
 internal void
@@ -3937,20 +5667,34 @@ ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg, 
     if(got_event == 0) ProfScope("no event -> dmn_ctrl_run for a new one")
     {
       // rjf: prep spoof
+      CTRL_Entity *spoof_process = ctrl_entity_from_handle(ctrl_state->ctrl_thread_entity_store, ctrl_handle_make(CTRL_MachineID_Local, spoof->process));
+      Arch arch = spoof_process->arch;
       B32 do_spoof = (spoof != 0 && dmn_handle_match(run_ctrls->single_step_thread, dmn_handle_zero()));
       U64 size_of_spoof = 0;
       if(do_spoof) ProfScope("prep spoof")
       {
-        CTRL_Entity *spoof_process = ctrl_entity_from_handle(ctrl_state->ctrl_thread_entity_store, ctrl_handle_make(CTRL_MachineID_Local, spoof->process));
-        Arch arch = spoof_process->arch;
-        size_of_spoof = bit_size_from_arch(arch)/8;
-        dmn_process_read(spoof_process->handle.dmn_handle, r1u64(spoof->vaddr, spoof->vaddr+size_of_spoof), &spoof_old_ip_value);
+        switch(arch)
+        {
+          default: {}break;
+          case Arch_x64:
+          {
+            size_of_spoof = bit_size_from_arch(arch)/8;
+            dmn_process_read(spoof_process->handle.dmn_handle, r1u64(spoof->vaddr, spoof->vaddr+size_of_spoof), &spoof_old_ip_value);
+          }break;
+        }
       }
       
       // rjf: set spoof
       if(do_spoof) ProfScope("set spoof")
       {
-        dmn_process_write(spoof->process, r1u64(spoof->vaddr, spoof->vaddr+size_of_spoof), &spoof->new_ip_value);
+        switch(arch)
+        {
+          default: {}break;
+          case Arch_x64:
+          {
+            dmn_process_write(spoof->process, r1u64(spoof->vaddr, spoof->vaddr+size_of_spoof), &spoof->new_ip_value);
+          }break;
+        }
       }
       
       // rjf: run for new events
@@ -4764,7 +6508,8 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
   CTRL_Handle target_thread = msg->entity;
   CTRL_Handle target_process = msg->parent;
   CTRL_Entity *target_process_entity = ctrl_entity_from_handle(ctrl_state->ctrl_thread_entity_store, target_process);
-  U64 spoof_ip_vaddr = 911;
+  //- antonio: ARM64 requires that instructions be 32-bit aligned
+  U64 spoof_ip_vaddr = 912;
   log_infof("ctrl_thread__run:\n{\n");
   
   //////////////////////////////
@@ -5704,13 +7449,25 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
         if(hit_trap_flags & CTRL_TrapFlag_BeginSpoofMode) LogInfoNamedBlockF("trap_net__begin_spoof_mode")
         {
           // rjf: setup spoof mode
+          U64 spoof_sp = 0;
+
           begin_spoof_mode = 1;
-          U64 spoof_sp = dmn_rsp_from_thread(target_thread.dmn_handle);
           spoof_mode = 1;
           spoof.process = target_process.dmn_handle;
           spoof.thread  = target_thread.dmn_handle;
-          spoof.vaddr   = spoof_sp;
           spoof.new_ip_value = spoof_ip_vaddr;
+
+          switch(arch)
+          {
+            default: {}break;
+            case Arch_x64:
+            case Arch_x86:
+            {
+              spoof_sp = dmn_rsp_from_thread(target_thread.dmn_handle);
+              spoof.vaddr = spoof_sp;
+            }break;
+          }
+
           log_infof("spoof:{process:[0x%I64x], thread:[0x%I64x], vaddr:0x%I64x, new_ip_value:0x%I64x}\n", spoof.process.u64[0], spoof.thread.u64[0], spoof.vaddr, spoof.new_ip_value);
         }
       }

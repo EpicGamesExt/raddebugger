@@ -69,6 +69,7 @@ if "%msvc%"=="1"    if "%x64%"=="1" set no_aslr=/DYNAMICBASE:NO
 if "%clang%"=="1"   if "%x64%"=="1" set no_aslr=-Wl,/DYNAMICBASE:NO
 if "%msvc%"=="1"    set rc=call rc
 if "%clang%"=="1"   set rc=call llvm-rc
+if "%arm64%"=="1"   set no_aslr=
 
 :: --- Choose Compile/Link Lines ----------------------------------------------
 if "%msvc%"=="1"      set compile_debug=%cl_debug%

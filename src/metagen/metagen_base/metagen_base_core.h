@@ -172,10 +172,12 @@
 
 #if OS_WINDOWS
 # include <windows.h>
-# include <tmmintrin.h>
-# include <wmmintrin.h>
 # include <intrin.h>
 # if ARCH_X64
+#  include <tmmintrin.h>
+#  include <wmmintrin.h>
+# endif
+# if ARCH_X64 || ARCH_ARM64
 #  define ins_atomic_u64_eval(x) InterlockedAdd64((volatile __int64 *)(x), 0)
 #  define ins_atomic_u64_inc_eval(x) InterlockedIncrement64((volatile __int64 *)(x))
 #  define ins_atomic_u64_dec_eval(x) InterlockedDecrement64((volatile __int64 *)(x))

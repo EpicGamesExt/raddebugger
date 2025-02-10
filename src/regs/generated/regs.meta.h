@@ -320,6 +320,146 @@ REGS_AliasCodeX86_mm7,
 REGS_AliasCodeX86_COUNT,
 } REGS_AliasCodeX86;
 
+typedef enum REGS_RegCodeARM64
+{
+REGS_RegCodeARM64_NULL,
+REGS_RegCodeARM64_x0,
+REGS_RegCodeARM64_x1,
+REGS_RegCodeARM64_x2,
+REGS_RegCodeARM64_x3,
+REGS_RegCodeARM64_x4,
+REGS_RegCodeARM64_x5,
+REGS_RegCodeARM64_x6,
+REGS_RegCodeARM64_x7,
+REGS_RegCodeARM64_x8,
+REGS_RegCodeARM64_x9,
+REGS_RegCodeARM64_x10,
+REGS_RegCodeARM64_x11,
+REGS_RegCodeARM64_x12,
+REGS_RegCodeARM64_x13,
+REGS_RegCodeARM64_x14,
+REGS_RegCodeARM64_x15,
+REGS_RegCodeARM64_x16,
+REGS_RegCodeARM64_x17,
+REGS_RegCodeARM64_x18,
+REGS_RegCodeARM64_x19,
+REGS_RegCodeARM64_x20,
+REGS_RegCodeARM64_x21,
+REGS_RegCodeARM64_x22,
+REGS_RegCodeARM64_x23,
+REGS_RegCodeARM64_x24,
+REGS_RegCodeARM64_x25,
+REGS_RegCodeARM64_x26,
+REGS_RegCodeARM64_x27,
+REGS_RegCodeARM64_x28,
+REGS_RegCodeARM64_x29,
+REGS_RegCodeARM64_x30,
+REGS_RegCodeARM64_x31,
+REGS_RegCodeARM64_pc,
+REGS_RegCodeARM64_context_flags,
+REGS_RegCodeARM64_cpsr,
+REGS_RegCodeARM64_fpcr,
+REGS_RegCodeARM64_fpsr,
+REGS_RegCodeARM64_bcr0,
+REGS_RegCodeARM64_bcr1,
+REGS_RegCodeARM64_bcr2,
+REGS_RegCodeARM64_bcr3,
+REGS_RegCodeARM64_bcr4,
+REGS_RegCodeARM64_bcr5,
+REGS_RegCodeARM64_bcr6,
+REGS_RegCodeARM64_bcr7,
+REGS_RegCodeARM64_bvr0,
+REGS_RegCodeARM64_bvr1,
+REGS_RegCodeARM64_bvr2,
+REGS_RegCodeARM64_bvr3,
+REGS_RegCodeARM64_bvr4,
+REGS_RegCodeARM64_bvr5,
+REGS_RegCodeARM64_bvr6,
+REGS_RegCodeARM64_bvr7,
+REGS_RegCodeARM64_wcr0,
+REGS_RegCodeARM64_wcr1,
+REGS_RegCodeARM64_wvr0,
+REGS_RegCodeARM64_wvr1,
+REGS_RegCodeARM64_v0,
+REGS_RegCodeARM64_v1,
+REGS_RegCodeARM64_v2,
+REGS_RegCodeARM64_v3,
+REGS_RegCodeARM64_v4,
+REGS_RegCodeARM64_v5,
+REGS_RegCodeARM64_v6,
+REGS_RegCodeARM64_v7,
+REGS_RegCodeARM64_v8,
+REGS_RegCodeARM64_v9,
+REGS_RegCodeARM64_v10,
+REGS_RegCodeARM64_v11,
+REGS_RegCodeARM64_v12,
+REGS_RegCodeARM64_v13,
+REGS_RegCodeARM64_v14,
+REGS_RegCodeARM64_v15,
+REGS_RegCodeARM64_v16,
+REGS_RegCodeARM64_v17,
+REGS_RegCodeARM64_v18,
+REGS_RegCodeARM64_v19,
+REGS_RegCodeARM64_v20,
+REGS_RegCodeARM64_v21,
+REGS_RegCodeARM64_v22,
+REGS_RegCodeARM64_v23,
+REGS_RegCodeARM64_v24,
+REGS_RegCodeARM64_v25,
+REGS_RegCodeARM64_v26,
+REGS_RegCodeARM64_v27,
+REGS_RegCodeARM64_v28,
+REGS_RegCodeARM64_v29,
+REGS_RegCodeARM64_v30,
+REGS_RegCodeARM64_v31,
+REGS_RegCodeARM64_COUNT,
+} REGS_RegCodeARM64;
+
+typedef enum REGS_AliasCodeARM64
+{
+REGS_AliasCodeARM64_NULL,
+REGS_AliasCodeARM64_xip0,
+REGS_AliasCodeARM64_xip1,
+REGS_AliasCodeARM64_xpr,
+REGS_AliasCodeARM64_fp,
+REGS_AliasCodeARM64_lr,
+REGS_AliasCodeARM64_zr,
+REGS_AliasCodeARM64_sp,
+REGS_AliasCodeARM64_w0,
+REGS_AliasCodeARM64_w1,
+REGS_AliasCodeARM64_w2,
+REGS_AliasCodeARM64_w3,
+REGS_AliasCodeARM64_w4,
+REGS_AliasCodeARM64_w5,
+REGS_AliasCodeARM64_w6,
+REGS_AliasCodeARM64_w7,
+REGS_AliasCodeARM64_w8,
+REGS_AliasCodeARM64_w9,
+REGS_AliasCodeARM64_w10,
+REGS_AliasCodeARM64_w11,
+REGS_AliasCodeARM64_w12,
+REGS_AliasCodeARM64_w13,
+REGS_AliasCodeARM64_w14,
+REGS_AliasCodeARM64_w15,
+REGS_AliasCodeARM64_w16,
+REGS_AliasCodeARM64_w17,
+REGS_AliasCodeARM64_w18,
+REGS_AliasCodeARM64_w19,
+REGS_AliasCodeARM64_w20,
+REGS_AliasCodeARM64_w21,
+REGS_AliasCodeARM64_w22,
+REGS_AliasCodeARM64_w23,
+REGS_AliasCodeARM64_w24,
+REGS_AliasCodeARM64_w25,
+REGS_AliasCodeARM64_w26,
+REGS_AliasCodeARM64_w27,
+REGS_AliasCodeARM64_w28,
+REGS_AliasCodeARM64_w29,
+REGS_AliasCodeARM64_w30,
+REGS_AliasCodeARM64_w31,
+REGS_AliasCodeARM64_COUNT,
+} REGS_AliasCodeARM64;
+
 typedef struct REGS_RegBlockX64 REGS_RegBlockX64;
 struct REGS_RegBlockX64
 {
@@ -490,6 +630,100 @@ REGS_Reg256 ymm6;
 REGS_Reg256 ymm7;
 };
 
+typedef struct REGS_RegBlockARM64 REGS_RegBlockARM64;
+struct REGS_RegBlockARM64
+{
+REGS_Reg64 x0;
+REGS_Reg64 x1;
+REGS_Reg64 x2;
+REGS_Reg64 x3;
+REGS_Reg64 x4;
+REGS_Reg64 x5;
+REGS_Reg64 x6;
+REGS_Reg64 x7;
+REGS_Reg64 x8;
+REGS_Reg64 x9;
+REGS_Reg64 x10;
+REGS_Reg64 x11;
+REGS_Reg64 x12;
+REGS_Reg64 x13;
+REGS_Reg64 x14;
+REGS_Reg64 x15;
+REGS_Reg64 x16;
+REGS_Reg64 x17;
+REGS_Reg64 x18;
+REGS_Reg64 x19;
+REGS_Reg64 x20;
+REGS_Reg64 x21;
+REGS_Reg64 x22;
+REGS_Reg64 x23;
+REGS_Reg64 x24;
+REGS_Reg64 x25;
+REGS_Reg64 x26;
+REGS_Reg64 x27;
+REGS_Reg64 x28;
+REGS_Reg64 x29;
+REGS_Reg64 x30;
+REGS_Reg64 x31;
+REGS_Reg64 pc;
+REGS_Reg32 context_flags;
+REGS_Reg32 cpsr;
+REGS_Reg32 fpcr;
+REGS_Reg32 fpsr;
+REGS_Reg32 bcr0;
+REGS_Reg32 bcr1;
+REGS_Reg32 bcr2;
+REGS_Reg32 bcr3;
+REGS_Reg32 bcr4;
+REGS_Reg32 bcr5;
+REGS_Reg32 bcr6;
+REGS_Reg32 bcr7;
+REGS_Reg64 bvr0;
+REGS_Reg64 bvr1;
+REGS_Reg64 bvr2;
+REGS_Reg64 bvr3;
+REGS_Reg64 bvr4;
+REGS_Reg64 bvr5;
+REGS_Reg64 bvr6;
+REGS_Reg64 bvr7;
+REGS_Reg32 wcr0;
+REGS_Reg32 wcr1;
+REGS_Reg64 wvr0;
+REGS_Reg64 wvr1;
+REGS_Reg128 v0;
+REGS_Reg128 v1;
+REGS_Reg128 v2;
+REGS_Reg128 v3;
+REGS_Reg128 v4;
+REGS_Reg128 v5;
+REGS_Reg128 v6;
+REGS_Reg128 v7;
+REGS_Reg128 v8;
+REGS_Reg128 v9;
+REGS_Reg128 v10;
+REGS_Reg128 v11;
+REGS_Reg128 v12;
+REGS_Reg128 v13;
+REGS_Reg128 v14;
+REGS_Reg128 v15;
+REGS_Reg128 v16;
+REGS_Reg128 v17;
+REGS_Reg128 v18;
+REGS_Reg128 v19;
+REGS_Reg128 v20;
+REGS_Reg128 v21;
+REGS_Reg128 v22;
+REGS_Reg128 v23;
+REGS_Reg128 v24;
+REGS_Reg128 v25;
+REGS_Reg128 v26;
+REGS_Reg128 v27;
+REGS_Reg128 v28;
+REGS_Reg128 v29;
+REGS_Reg128 v30;
+REGS_Reg128 v31;
+};
+
 C_LINKAGE_BEGIN
 extern REGS_UsageKind regs_g_reg_code_x64_usage_kind_table[101];
 extern REGS_UsageKind regs_g_alias_code_x64_usage_kind_table[96];
@@ -503,6 +737,12 @@ extern String8 regs_g_reg_code_x86_string_table[61];
 extern String8 regs_g_alias_code_x86_string_table[36];
 extern REGS_Rng regs_g_reg_code_x86_rng_table[61];
 extern REGS_Slice regs_g_alias_code_x86_slice_table[36];
+extern REGS_UsageKind regs_g_reg_code_arm64_usage_kind_table[90];
+extern REGS_UsageKind regs_g_alias_code_arm64_usage_kind_table[40];
+extern String8 regs_g_reg_code_arm64_string_table[90];
+extern String8 regs_g_alias_code_arm64_string_table[40];
+extern REGS_Rng regs_g_reg_code_arm64_rng_table[90];
+extern REGS_Slice regs_g_alias_code_arm64_slice_table[40];
 
 C_LINKAGE_END
 

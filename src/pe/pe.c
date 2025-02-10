@@ -5,22 +5,22 @@
 //~ rjf: Basic Enum Functions
 
 internal U32
-pe_slot_count_from_unwind_op_code(PE_UnwindOpCode opcode)
+pe_slot_count_from_unwind_op_code__x64(PE_UnwindOpCodeX64 opcode)
 {
   U32 result = 0;
   switch(opcode)
   {
-    case PE_UnwindOpCode_PUSH_NONVOL:     result = 1; break;
-    case PE_UnwindOpCode_ALLOC_LARGE:     result = 2; break;
-    case PE_UnwindOpCode_ALLOC_SMALL:     result = 1; break;
-    case PE_UnwindOpCode_SET_FPREG:       result = 1; break;
-    case PE_UnwindOpCode_SAVE_NONVOL:     result = 2; break;
-    case PE_UnwindOpCode_SAVE_NONVOL_FAR: result = 3; break;
-    case PE_UnwindOpCode_EPILOG:          result = 2; break;
-    case PE_UnwindOpCode_SPARE_CODE:      result = 3; break;
-    case PE_UnwindOpCode_SAVE_XMM128:     result = 2; break;
-    case PE_UnwindOpCode_SAVE_XMM128_FAR: result = 3; break;
-    case PE_UnwindOpCode_PUSH_MACHFRAME:  result = 1; break;
+    case PE_UnwindOpCodeX64_PUSH_NONVOL:     result = 1; break;
+    case PE_UnwindOpCodeX64_ALLOC_LARGE:     result = 2; break;
+    case PE_UnwindOpCodeX64_ALLOC_SMALL:     result = 1; break;
+    case PE_UnwindOpCodeX64_SET_FPREG:       result = 1; break;
+    case PE_UnwindOpCodeX64_SAVE_NONVOL:     result = 2; break;
+    case PE_UnwindOpCodeX64_SAVE_NONVOL_FAR: result = 3; break;
+    case PE_UnwindOpCodeX64_EPILOG:          result = 2; break;
+    case PE_UnwindOpCodeX64_SPARE_CODE:      result = 3; break;
+    case PE_UnwindOpCodeX64_SAVE_XMM128:     result = 2; break;
+    case PE_UnwindOpCodeX64_SAVE_XMM128_FAR: result = 3; break;
+    case PE_UnwindOpCodeX64_PUSH_MACHFRAME:  result = 1; break;
   }
   return result;
 }

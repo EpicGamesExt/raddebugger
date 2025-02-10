@@ -11,6 +11,7 @@ switch(arch)
 default:{}break;
 case Arch_x64:{result = sizeof(REGS_RegBlockX64);}break;
 case Arch_x86:{result = sizeof(REGS_RegBlockX86);}break;
+case Arch_arm64:{result = sizeof(REGS_RegBlockARM64);}break;
 }
 return result;
 }
@@ -22,6 +23,7 @@ switch(arch)
 default:{}break;
 case Arch_x64:{result = REGS_RegCodeX64_COUNT;}break;
 case Arch_x86:{result = REGS_RegCodeX86_COUNT;}break;
+case Arch_arm64:{result = REGS_RegCodeARM64_COUNT;}break;
 }
 return result;
 }
@@ -33,6 +35,7 @@ switch(arch)
 default:{}break;
 case Arch_x64:{result = REGS_AliasCodeX64_COUNT;}break;
 case Arch_x86:{result = REGS_AliasCodeX86_COUNT;}break;
+case Arch_arm64:{result = REGS_AliasCodeARM64_COUNT;}break;
 }
 return result;
 }
@@ -44,6 +47,7 @@ switch(arch)
 default:{}break;
 case Arch_x64:{result = regs_g_reg_code_x64_string_table;}break;
 case Arch_x86:{result = regs_g_reg_code_x86_string_table;}break;
+case Arch_arm64:{result = regs_g_reg_code_arm64_string_table;}break;
 }
 return result;
 }
@@ -55,6 +59,7 @@ switch(arch)
 default:{}break;
 case Arch_x64:{result = regs_g_alias_code_x64_string_table;}break;
 case Arch_x86:{result = regs_g_alias_code_x86_string_table;}break;
+case Arch_arm64:{result = regs_g_alias_code_arm64_string_table;}break;
 }
 return result;
 }
@@ -66,6 +71,7 @@ switch(arch)
 default:{}break;
 case Arch_x64:{result = regs_g_reg_code_x64_rng_table;}break;
 case Arch_x86:{result = regs_g_reg_code_x86_rng_table;}break;
+case Arch_arm64:{result = regs_g_reg_code_arm64_rng_table;}break;
 }
 return result;
 }
@@ -77,6 +83,7 @@ switch(arch)
 default:{}break;
 case Arch_x64:{result = regs_g_alias_code_x64_slice_table;}break;
 case Arch_x86:{result = regs_g_alias_code_x86_slice_table;}break;
+case Arch_arm64:{result = regs_g_alias_code_arm64_slice_table;}break;
 }
 return result;
 }
@@ -88,6 +95,7 @@ switch(arch)
 default:{}break;
 case Arch_x64:{result = regs_g_reg_code_x64_usage_kind_table;}break;
 case Arch_x86:{result = regs_g_reg_code_x86_usage_kind_table;}break;
+case Arch_arm64:{result = regs_g_reg_code_arm64_usage_kind_table;}break;
 }
 return result;
 }
@@ -99,6 +107,7 @@ switch(arch)
 default:{}break;
 case Arch_x64:{result = regs_g_alias_code_x64_usage_kind_table;}break;
 case Arch_x86:{result = regs_g_alias_code_x86_usage_kind_table;}break;
+case Arch_arm64:{result = regs_g_alias_code_arm64_usage_kind_table;}break;
 }
 return result;
 }
@@ -1031,6 +1040,420 @@ REGS_Slice regs_g_alias_code_x86_slice_table[36] =
 {REGS_RegCodeX86_fpr5, 0, 8},
 {REGS_RegCodeX86_fpr6, 0, 8},
 {REGS_RegCodeX86_fpr7, 0, 8},
+};
+
+REGS_UsageKind regs_g_reg_code_arm64_usage_kind_table[90] =
+{
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+};
+
+REGS_UsageKind regs_g_alias_code_arm64_usage_kind_table[40] =
+{
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+REGS_UsageKind_Normal,
+};
+
+String8 regs_g_reg_code_arm64_string_table[90] =
+{
+str8_lit_comp(""),
+str8_lit_comp("x0"),
+str8_lit_comp("x1"),
+str8_lit_comp("x2"),
+str8_lit_comp("x3"),
+str8_lit_comp("x4"),
+str8_lit_comp("x5"),
+str8_lit_comp("x6"),
+str8_lit_comp("x7"),
+str8_lit_comp("x8"),
+str8_lit_comp("x9"),
+str8_lit_comp("x10"),
+str8_lit_comp("x11"),
+str8_lit_comp("x12"),
+str8_lit_comp("x13"),
+str8_lit_comp("x14"),
+str8_lit_comp("x15"),
+str8_lit_comp("x16"),
+str8_lit_comp("x17"),
+str8_lit_comp("x18"),
+str8_lit_comp("x19"),
+str8_lit_comp("x20"),
+str8_lit_comp("x21"),
+str8_lit_comp("x22"),
+str8_lit_comp("x23"),
+str8_lit_comp("x24"),
+str8_lit_comp("x25"),
+str8_lit_comp("x26"),
+str8_lit_comp("x27"),
+str8_lit_comp("x28"),
+str8_lit_comp("x29"),
+str8_lit_comp("x30"),
+str8_lit_comp("x31"),
+str8_lit_comp("pc"),
+str8_lit_comp("context_flags"),
+str8_lit_comp("cpsr"),
+str8_lit_comp("fpcr"),
+str8_lit_comp("fpsr"),
+str8_lit_comp("bcr0"),
+str8_lit_comp("bcr1"),
+str8_lit_comp("bcr2"),
+str8_lit_comp("bcr3"),
+str8_lit_comp("bcr4"),
+str8_lit_comp("bcr5"),
+str8_lit_comp("bcr6"),
+str8_lit_comp("bcr7"),
+str8_lit_comp("bvr0"),
+str8_lit_comp("bvr1"),
+str8_lit_comp("bvr2"),
+str8_lit_comp("bvr3"),
+str8_lit_comp("bvr4"),
+str8_lit_comp("bvr5"),
+str8_lit_comp("bvr6"),
+str8_lit_comp("bvr7"),
+str8_lit_comp("wcr0"),
+str8_lit_comp("wcr1"),
+str8_lit_comp("wvr0"),
+str8_lit_comp("wvr1"),
+str8_lit_comp("v0"),
+str8_lit_comp("v1"),
+str8_lit_comp("v2"),
+str8_lit_comp("v3"),
+str8_lit_comp("v4"),
+str8_lit_comp("v5"),
+str8_lit_comp("v6"),
+str8_lit_comp("v7"),
+str8_lit_comp("v8"),
+str8_lit_comp("v9"),
+str8_lit_comp("v10"),
+str8_lit_comp("v11"),
+str8_lit_comp("v12"),
+str8_lit_comp("v13"),
+str8_lit_comp("v14"),
+str8_lit_comp("v15"),
+str8_lit_comp("v16"),
+str8_lit_comp("v17"),
+str8_lit_comp("v18"),
+str8_lit_comp("v19"),
+str8_lit_comp("v20"),
+str8_lit_comp("v21"),
+str8_lit_comp("v22"),
+str8_lit_comp("v23"),
+str8_lit_comp("v24"),
+str8_lit_comp("v25"),
+str8_lit_comp("v26"),
+str8_lit_comp("v27"),
+str8_lit_comp("v28"),
+str8_lit_comp("v29"),
+str8_lit_comp("v30"),
+str8_lit_comp("v31"),
+};
+
+String8 regs_g_alias_code_arm64_string_table[40] =
+{
+str8_lit_comp(""),
+str8_lit_comp("xip0"),
+str8_lit_comp("xip1"),
+str8_lit_comp("xpr"),
+str8_lit_comp("fp"),
+str8_lit_comp("lr"),
+str8_lit_comp("zr"),
+str8_lit_comp("sp"),
+str8_lit_comp("w0"),
+str8_lit_comp("w1"),
+str8_lit_comp("w2"),
+str8_lit_comp("w3"),
+str8_lit_comp("w4"),
+str8_lit_comp("w5"),
+str8_lit_comp("w6"),
+str8_lit_comp("w7"),
+str8_lit_comp("w8"),
+str8_lit_comp("w9"),
+str8_lit_comp("w10"),
+str8_lit_comp("w11"),
+str8_lit_comp("w12"),
+str8_lit_comp("w13"),
+str8_lit_comp("w14"),
+str8_lit_comp("w15"),
+str8_lit_comp("w16"),
+str8_lit_comp("w17"),
+str8_lit_comp("w18"),
+str8_lit_comp("w19"),
+str8_lit_comp("w20"),
+str8_lit_comp("w21"),
+str8_lit_comp("w22"),
+str8_lit_comp("w23"),
+str8_lit_comp("w24"),
+str8_lit_comp("w25"),
+str8_lit_comp("w26"),
+str8_lit_comp("w27"),
+str8_lit_comp("w28"),
+str8_lit_comp("w29"),
+str8_lit_comp("w30"),
+str8_lit_comp("w31"),
+};
+
+REGS_Rng regs_g_reg_code_arm64_rng_table[90] =
+{
+{0},
+{(U16)OffsetOf(REGS_RegBlockARM64, x0), 8},
+{(U16)OffsetOf(REGS_RegBlockARM64, x1), 8},
+{(U16)OffsetOf(REGS_RegBlockARM64, x2), 8},
+{(U16)OffsetOf(REGS_RegBlockARM64, x3), 8},
+{(U16)OffsetOf(REGS_RegBlockARM64, x4), 8},
+{(U16)OffsetOf(REGS_RegBlockARM64, x5), 8},
+{(U16)OffsetOf(REGS_RegBlockARM64, x6), 8},
+{(U16)OffsetOf(REGS_RegBlockARM64, x7), 8},
+{(U16)OffsetOf(REGS_RegBlockARM64, x8), 8},
+{(U16)OffsetOf(REGS_RegBlockARM64, x9), 8},
+{(U16)OffsetOf(REGS_RegBlockARM64, x10), 8},
+{(U16)OffsetOf(REGS_RegBlockARM64, x11), 8},
+{(U16)OffsetOf(REGS_RegBlockARM64, x12), 8},
+{(U16)OffsetOf(REGS_RegBlockARM64, x13), 8},
+{(U16)OffsetOf(REGS_RegBlockARM64, x14), 8},
+{(U16)OffsetOf(REGS_RegBlockARM64, x15), 8},
+{(U16)OffsetOf(REGS_RegBlockARM64, x16), 8},
+{(U16)OffsetOf(REGS_RegBlockARM64, x17), 8},
+{(U16)OffsetOf(REGS_RegBlockARM64, x18), 8},
+{(U16)OffsetOf(REGS_RegBlockARM64, x19), 8},
+{(U16)OffsetOf(REGS_RegBlockARM64, x20), 8},
+{(U16)OffsetOf(REGS_RegBlockARM64, x21), 8},
+{(U16)OffsetOf(REGS_RegBlockARM64, x22), 8},
+{(U16)OffsetOf(REGS_RegBlockARM64, x23), 8},
+{(U16)OffsetOf(REGS_RegBlockARM64, x24), 8},
+{(U16)OffsetOf(REGS_RegBlockARM64, x25), 8},
+{(U16)OffsetOf(REGS_RegBlockARM64, x26), 8},
+{(U16)OffsetOf(REGS_RegBlockARM64, x27), 8},
+{(U16)OffsetOf(REGS_RegBlockARM64, x28), 8},
+{(U16)OffsetOf(REGS_RegBlockARM64, x29), 8},
+{(U16)OffsetOf(REGS_RegBlockARM64, x30), 8},
+{(U16)OffsetOf(REGS_RegBlockARM64, x31), 8},
+{(U16)OffsetOf(REGS_RegBlockARM64, pc), 8},
+{(U16)OffsetOf(REGS_RegBlockARM64, context_flags), 4},
+{(U16)OffsetOf(REGS_RegBlockARM64, cpsr), 4},
+{(U16)OffsetOf(REGS_RegBlockARM64, fpcr), 4},
+{(U16)OffsetOf(REGS_RegBlockARM64, fpsr), 4},
+{(U16)OffsetOf(REGS_RegBlockARM64, bcr0), 4},
+{(U16)OffsetOf(REGS_RegBlockARM64, bcr1), 4},
+{(U16)OffsetOf(REGS_RegBlockARM64, bcr2), 4},
+{(U16)OffsetOf(REGS_RegBlockARM64, bcr3), 4},
+{(U16)OffsetOf(REGS_RegBlockARM64, bcr4), 4},
+{(U16)OffsetOf(REGS_RegBlockARM64, bcr5), 4},
+{(U16)OffsetOf(REGS_RegBlockARM64, bcr6), 4},
+{(U16)OffsetOf(REGS_RegBlockARM64, bcr7), 4},
+{(U16)OffsetOf(REGS_RegBlockARM64, bvr0), 8},
+{(U16)OffsetOf(REGS_RegBlockARM64, bvr1), 8},
+{(U16)OffsetOf(REGS_RegBlockARM64, bvr2), 8},
+{(U16)OffsetOf(REGS_RegBlockARM64, bvr3), 8},
+{(U16)OffsetOf(REGS_RegBlockARM64, bvr4), 8},
+{(U16)OffsetOf(REGS_RegBlockARM64, bvr5), 8},
+{(U16)OffsetOf(REGS_RegBlockARM64, bvr6), 8},
+{(U16)OffsetOf(REGS_RegBlockARM64, bvr7), 8},
+{(U16)OffsetOf(REGS_RegBlockARM64, wcr0), 4},
+{(U16)OffsetOf(REGS_RegBlockARM64, wcr1), 4},
+{(U16)OffsetOf(REGS_RegBlockARM64, wvr0), 8},
+{(U16)OffsetOf(REGS_RegBlockARM64, wvr1), 8},
+{(U16)OffsetOf(REGS_RegBlockARM64, v0), 16},
+{(U16)OffsetOf(REGS_RegBlockARM64, v1), 16},
+{(U16)OffsetOf(REGS_RegBlockARM64, v2), 16},
+{(U16)OffsetOf(REGS_RegBlockARM64, v3), 16},
+{(U16)OffsetOf(REGS_RegBlockARM64, v4), 16},
+{(U16)OffsetOf(REGS_RegBlockARM64, v5), 16},
+{(U16)OffsetOf(REGS_RegBlockARM64, v6), 16},
+{(U16)OffsetOf(REGS_RegBlockARM64, v7), 16},
+{(U16)OffsetOf(REGS_RegBlockARM64, v8), 16},
+{(U16)OffsetOf(REGS_RegBlockARM64, v9), 16},
+{(U16)OffsetOf(REGS_RegBlockARM64, v10), 16},
+{(U16)OffsetOf(REGS_RegBlockARM64, v11), 16},
+{(U16)OffsetOf(REGS_RegBlockARM64, v12), 16},
+{(U16)OffsetOf(REGS_RegBlockARM64, v13), 16},
+{(U16)OffsetOf(REGS_RegBlockARM64, v14), 16},
+{(U16)OffsetOf(REGS_RegBlockARM64, v15), 16},
+{(U16)OffsetOf(REGS_RegBlockARM64, v16), 16},
+{(U16)OffsetOf(REGS_RegBlockARM64, v17), 16},
+{(U16)OffsetOf(REGS_RegBlockARM64, v18), 16},
+{(U16)OffsetOf(REGS_RegBlockARM64, v19), 16},
+{(U16)OffsetOf(REGS_RegBlockARM64, v20), 16},
+{(U16)OffsetOf(REGS_RegBlockARM64, v21), 16},
+{(U16)OffsetOf(REGS_RegBlockARM64, v22), 16},
+{(U16)OffsetOf(REGS_RegBlockARM64, v23), 16},
+{(U16)OffsetOf(REGS_RegBlockARM64, v24), 16},
+{(U16)OffsetOf(REGS_RegBlockARM64, v25), 16},
+{(U16)OffsetOf(REGS_RegBlockARM64, v26), 16},
+{(U16)OffsetOf(REGS_RegBlockARM64, v27), 16},
+{(U16)OffsetOf(REGS_RegBlockARM64, v28), 16},
+{(U16)OffsetOf(REGS_RegBlockARM64, v29), 16},
+{(U16)OffsetOf(REGS_RegBlockARM64, v30), 16},
+{(U16)OffsetOf(REGS_RegBlockARM64, v31), 16},
+};
+
+REGS_Slice regs_g_alias_code_arm64_slice_table[40] =
+{
+{0},
+{REGS_RegCodeARM64_x16, 0, 8},
+{REGS_RegCodeARM64_x17, 0, 8},
+{REGS_RegCodeARM64_x18, 0, 8},
+{REGS_RegCodeARM64_x29, 0, 8},
+{REGS_RegCodeARM64_x30, 0, 8},
+{REGS_RegCodeARM64_x31, 0, 8},
+{REGS_RegCodeARM64_x31, 0, 8},
+{REGS_RegCodeARM64_x0, 0, 4},
+{REGS_RegCodeARM64_x1, 0, 4},
+{REGS_RegCodeARM64_x2, 0, 4},
+{REGS_RegCodeARM64_x3, 0, 4},
+{REGS_RegCodeARM64_x4, 0, 4},
+{REGS_RegCodeARM64_x5, 0, 4},
+{REGS_RegCodeARM64_x6, 0, 4},
+{REGS_RegCodeARM64_x7, 0, 4},
+{REGS_RegCodeARM64_x8, 0, 4},
+{REGS_RegCodeARM64_x9, 0, 4},
+{REGS_RegCodeARM64_x10, 0, 4},
+{REGS_RegCodeARM64_x11, 0, 4},
+{REGS_RegCodeARM64_x12, 0, 4},
+{REGS_RegCodeARM64_x13, 0, 4},
+{REGS_RegCodeARM64_x14, 0, 4},
+{REGS_RegCodeARM64_x15, 0, 4},
+{REGS_RegCodeARM64_x16, 0, 4},
+{REGS_RegCodeARM64_x17, 0, 4},
+{REGS_RegCodeARM64_x18, 0, 4},
+{REGS_RegCodeARM64_x19, 0, 4},
+{REGS_RegCodeARM64_x20, 0, 4},
+{REGS_RegCodeARM64_x21, 0, 4},
+{REGS_RegCodeARM64_x22, 0, 4},
+{REGS_RegCodeARM64_x23, 0, 4},
+{REGS_RegCodeARM64_x24, 0, 4},
+{REGS_RegCodeARM64_x25, 0, 4},
+{REGS_RegCodeARM64_x26, 0, 4},
+{REGS_RegCodeARM64_x27, 0, 4},
+{REGS_RegCodeARM64_x28, 0, 4},
+{REGS_RegCodeARM64_x29, 0, 4},
+{REGS_RegCodeARM64_x30, 0, 4},
+{REGS_RegCodeARM64_x31, 0, 4},
 };
 
 C_LINKAGE_END
