@@ -328,8 +328,11 @@ ASYNC_WORK_DEF(fs_stream_work)
   os_file_close(file);
   FileProperties post_props = os_properties_from_file_path(path);
   
-  //- rjf: abort if modification timestamps differ - we did not successfully read the file
-  if(pre_props.modified != post_props.modified)
+  //- rjf: abort if modification timestamps or sizes differ - we did not successfully read the file
+  B32 read_good = (pre_props.modified == post_props.modified &&
+                   pre_props.size == post_props.size &&
+                   read_size == data.size);
+  if(!read_good)
   {
     ProfScope("abort")
     {
@@ -360,29 +363,14 @@ ASYNC_WORK_DEF(fs_stream_work)
         break;
       }
     }
-    if(node != 0)
+    if(node != 0 && read_good)
     {
       if(node->timestamp != 0)
       {
         ins_atomic_u64_inc_eval(&fs_shared->change_gen);
       }
-      if(post_props.modified == pre_props.modified)
-      {
-        node->timestamp = post_props.modified;
-        node->size = post_props.size;
-      }
-      U64 range_hash = fs_little_hash_from_string(str8_struct(&range));
-      U64 range_slot_idx = range_hash%node->slots_count;
-      FS_RangeSlot *range_slot = &node->slots[range_slot_idx];
-      FS_RangeNode *range_node = 0;
-      for(FS_RangeNode *n = range_slot->first; n != 0; n = n->next)
-      {
-        if(MemoryMatchStruct(&n->range, &range))
-        {
-          range_node = n;
-          break;
-        }
-      }
+      node->timestamp = post_props.modified;
+      node->size = post_props.size;
     }
   }
   os_condition_variable_broadcast(path_stripe->cv);

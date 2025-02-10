@@ -495,6 +495,6 @@ internal B32 d_next_cmd(D_Cmd **cmd);
 //~ rjf: Main Layer Top-Level Calls
 
 internal void d_init(void);
-internal D_EventList d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_PathMapArray *path_maps, U64 exception_code_filters[(CTRL_ExceptionCodeKind_COUNT+63)/64], CTRL_MetaEvalArray *meta_evals);
+internal D_EventList d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_PathMapArray *path_maps, U64 exception_code_filters[(CTRL_ExceptionCodeKind_COUNT+63)/64]);
 
 #endif // DBG_ENGINE_CORE_H

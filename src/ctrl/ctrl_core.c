@@ -216,7 +216,6 @@ ctrl_msg_deep_copy(Arena *arena, CTRL_Msg *dst, CTRL_Msg *src)
   dst->env_string_list      = str8_list_copy(arena, &src->env_string_list);
   dst->traps                = ctrl_trap_list_copy(arena, &src->traps);
   dst->user_bps             = ctrl_user_breakpoint_list_copy(arena, &src->user_bps);
-  dst->meta_evals           = *deep_copy_from_struct(arena, CTRL_MetaEvalArray, &src->meta_evals);
 }
 
 //- rjf: list building
@@ -347,10 +346,6 @@ ctrl_serialized_string_from_msg_list(Arena *arena, CTRL_MsgList *msgs)
         str8_serial_push_struct(scratch.arena, &msgs_srlzed, &bp->condition.size);
         str8_serial_push_data(scratch.arena, &msgs_srlzed, bp->condition.str, bp->condition.size);
       }
-      
-      // rjf: write meta-eval-info array
-      String8 meta_evals_srlzed = serialized_from_struct(scratch.arena, CTRL_MetaEvalArray, &msg->meta_evals);
-      str8_serial_push_string(scratch.arena, &msgs_srlzed, meta_evals_srlzed);
     }
   }
   String8 string = str8_serial_end(arena, &msgs_srlzed);
@@ -474,12 +469,6 @@ ctrl_msg_list_from_serialized_string(Arena *arena, String8 string)
         bp->condition.str = push_array_no_zero(arena, U8, bp->condition.size);
         read_off += str8_deserial_read(string, read_off, bp->condition.str, bp->condition.size, 1);
       }
-      
-      // rjf: read meta-eval-info array
-      String8 meta_evals_data = str8_skip(string, read_off);
-      U64 meta_evals_size = 0;
-      msg->meta_evals = *struct_from_serialized(arena, CTRL_MetaEvalArray, meta_evals_data, .advance_out = &meta_evals_size);
-      read_off += meta_evals_size;
     }
   }
   return msgs;
@@ -1320,7 +1309,6 @@ ctrl_init(void)
   ctrl_state->ctrl_thread_entity_store = ctrl_entity_store_alloc();
   ctrl_state->dmn_event_arena = arena_alloc();
   ctrl_state->user_entry_point_arena = arena_alloc();
-  ctrl_state->user_meta_eval_arena = arena_alloc();
   ctrl_state->dbg_dir_arena = arena_alloc();
   for(CTRL_ExceptionCodeKind k = (CTRL_ExceptionCodeKind)0; k < CTRL_ExceptionCodeKind_COUNT; k = (CTRL_ExceptionCodeKind)(k+1))
   {
@@ -3009,42 +2997,112 @@ ctrl_unwind_from_thread(Arena *arena, CTRL_EntityStore *store, CTRL_Handle threa
 internal CTRL_CallStack
 ctrl_call_stack_from_unwind(Arena *arena, DI_Scope *di_scope, CTRL_Entity *process, CTRL_Unwind *base_unwind)
 {
+  Temp scratch = scratch_begin(&arena, 1);
   Arch arch = process->arch;
   CTRL_CallStack result = {0};
-  result.concrete_frame_count = base_unwind->frames.count;
-  result.total_frame_count = result.concrete_frame_count;
-  result.frames = push_array(arena, CTRL_CallStackFrame, result.concrete_frame_count);
-  for(U64 idx = 0; idx < result.concrete_frame_count; idx += 1)
   {
-    CTRL_UnwindFrame *src = &base_unwind->frames.v[idx];
-    CTRL_CallStackFrame *dst = &result.frames[idx];
-    U64 rip_vaddr = regs_rip_from_arch_block(arch, src->regs);
-    CTRL_Entity *module = ctrl_module_from_process_vaddr(process, rip_vaddr);
-    U64 rip_voff = ctrl_voff_from_vaddr(module, rip_vaddr);
-    DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
-    RDI_Parsed *rdi = di_rdi_from_key(di_scope, &dbgi_key, 0);
-    RDI_Scope *scope = rdi_scope_from_voff(rdi, rip_voff);
-    
-    // rjf: fill concrete frame info
-    dst->regs = src->regs;
-    dst->rdi = rdi;
-    dst->procedure = rdi_element_from_name_idx(rdi, Procedures, scope->proc_idx);
-    
-    // rjf: push inline frames
-    for(RDI_Scope *s = scope;
-        s->inline_site_idx != 0;
-        s = rdi_element_from_name_idx(rdi, Scopes, s->parent_scope_idx))
+    typedef struct FrameNode FrameNode;
+    struct FrameNode
     {
-      RDI_InlineSite *site = rdi_element_from_name_idx(rdi, InlineSites, s->inline_site_idx);
-      CTRL_CallStackInlineFrame *inline_frame = push_array(arena, CTRL_CallStackInlineFrame, 1);
-      DLLPushFront(dst->first_inline_frame, dst->last_inline_frame, inline_frame);
-      inline_frame->inline_site = site;
-      dst->inline_frame_count += 1;
-      result.inline_frame_count += 1;
-      result.total_frame_count += 1;
+      FrameNode *next;
+      CTRL_CallStackFrame v;
+    };
+    
+    //- rjf: gather all frames
+    FrameNode *first_frame = 0;
+    FrameNode *last_frame = 0;
+    U64 frame_count = 0;
+    for(U64 base_frame_idx = 0; base_frame_idx < base_unwind->frames.count; base_frame_idx += 1)
+    {
+      // rjf: unpack
+      CTRL_UnwindFrame *src = &base_unwind->frames.v[base_frame_idx];
+      U64 rip_vaddr = regs_rip_from_arch_block(arch, src->regs);
+      CTRL_Entity *module = ctrl_module_from_process_vaddr(process, rip_vaddr);
+      U64 rip_voff = ctrl_voff_from_vaddr(module, rip_vaddr);
+      DI_Key dbgi_key = ctrl_dbgi_key_from_module(module);
+      RDI_Parsed *rdi = di_rdi_from_key(di_scope, &dbgi_key, 0);
+      RDI_Scope *scope = rdi_scope_from_voff(rdi, rip_voff);
+      
+      // rjf: build inline frames (minus parent & inline depth)
+      FrameNode *first_inline_frame = 0;
+      FrameNode *last_inline_frame = 0;
+      U64 inline_frame_count = 0;
+      for(RDI_Scope *s = scope;
+          s->inline_site_idx != 0;
+          s = rdi_element_from_name_idx(rdi, Scopes, s->parent_scope_idx))
+      {
+        FrameNode *dst_inline = push_array(scratch.arena, FrameNode, 1);
+        if(first_inline_frame == 0)
+        {
+          first_inline_frame = dst_inline;
+        }
+        last_inline_frame = dst_inline;
+        SLLQueuePush(first_frame, last_frame, dst_inline);
+        dst_inline->v.unwind_count = base_frame_idx;
+        dst_inline->v.regs         = src->regs;
+        dst_inline->v.rdi          = rdi;
+        dst_inline->v.inline_site  = rdi_element_from_name_idx(rdi, InlineSites, s->inline_site_idx);
+        frame_count += 1;
+        inline_frame_count += 1;
+      }
+      
+      // rjf: build concrete frame
+      FrameNode *dst_base = push_array(scratch.arena, FrameNode, 1);
+      SLLQueuePush(first_frame, last_frame, dst_base);
+      dst_base->v.unwind_count = base_frame_idx;
+      dst_base->v.regs         = src->regs;
+      dst_base->v.rdi          = rdi;
+      dst_base->v.procedure    = rdi_element_from_name_idx(rdi, Procedures, scope->proc_idx);
+      frame_count += 1;
+      
+      // rjf: hook up inline frames to point to concrete frame, and to account for inline depth
+      U64 inline_frame_idx = 0;
+      for(FrameNode *inline_frame = first_inline_frame; inline_frame != 0; inline_frame = inline_frame->next, inline_frame_idx += 1)
+      {
+        inline_frame->v.parent_num = frame_count;
+        inline_frame->v.inline_depth = inline_frame_count - inline_frame_idx;
+      }
+    }
+    
+    //- rjf: package
+    result.count = frame_count; 
+    result.frames = push_array(arena, CTRL_CallStackFrame, result.count);
+    {
+      U64 idx = 0;
+      for(FrameNode *n = first_frame; n != 0; n = n->next, idx += 1)
+      {
+        MemoryCopyStruct(&result.frames[idx], &n->v);
+      }
     }
   }
+  scratch_end(scratch);
   return result;
+}
+
+internal CTRL_CallStackFrame *
+ctrl_call_stack_frame_from_unwind_and_inline_depth(CTRL_CallStack *call_stack, U64 unwind_count, U64 inline_depth)
+{
+  CTRL_CallStackFrame *f = 0;
+  {
+    U64 base_frame_idx = 0;
+    for(U64 idx = 0; idx < call_stack->count; idx += 1)
+    {
+      if(call_stack->frames[idx].parent_num == 0)
+      {
+        if(base_frame_idx == unwind_count)
+        {
+          f = &call_stack->frames[idx];
+          break;
+        }
+        base_frame_idx += 1;
+      }
+    }
+    if(f != 0 && call_stack->frames + inline_depth < f)
+    {
+      f -= inline_depth;
+    }
+  }
+  return f;
 }
 
 ////////////////////////////////
@@ -3257,8 +3315,6 @@ ctrl_thread__entry_point(void *p)
         //- rjf: unpack per-message parameterizations & store
         {
           MemoryCopyArray(ctrl_state->exception_code_filters, msg->exception_code_filters);
-          arena_clear(ctrl_state->user_meta_eval_arena);
-          ctrl_state->user_meta_evals = *deep_copy_from_struct(ctrl_state->user_meta_eval_arena, CTRL_MetaEvalArray, &msg->meta_evals);
         }
         
         //- rjf: process message
@@ -4419,37 +4475,7 @@ ctrl_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
     //- rjf: meta evaluations
     case CTRL_EvalSpaceKind_Meta:
     {
-      Temp scratch = scratch_begin(0, 0);
-      U64 meta_eval_idx = space.u64s[0];
-      if(meta_eval_idx < ctrl_state->user_meta_evals.count)
-      {
-        CTRL_MetaEval *meval = &ctrl_state->user_meta_evals.v[meta_eval_idx];
-        
-        // rjf: copy meta evaluation to scratch arena, to form range of legal reads
-        arena_push(scratch.arena, 0, 64);
-        String8 meval_srlzed = serialized_from_struct(scratch.arena, CTRL_MetaEval, meval);
-        U64 pos_min = arena_pos(scratch.arena);
-        CTRL_MetaEval *meval_read = struct_from_serialized(scratch.arena, CTRL_MetaEval, meval_srlzed);
-        U64 pos_opl = arena_pos(scratch.arena);
-        
-        // rjf: rebase all pointer values in meta evaluation to be relative to base pointer
-        struct_rebase_ptrs(CTRL_MetaEval, meval_read, meval_read);
-        
-        // rjf: perform actual read
-        Rng1U64 legal_range = r1u64(0, pos_opl-pos_min);
-        if(contains_1u64(legal_range, range.min))
-        {
-          result = 1;
-          U64 range_dim = dim_1u64(range);
-          U64 bytes_to_read = Min(range_dim, (legal_range.max - range.min));
-          MemoryCopy(out, ((U8 *)meval_read) + range.min, bytes_to_read);
-          if(bytes_to_read < range_dim)
-          {
-            MemoryZero((U8 *)out + bytes_to_read, range_dim - bytes_to_read);
-          }
-        }
-      }
-      scratch_end(scratch);
+      
     }break;
   }
   return result;
@@ -5503,16 +5529,6 @@ ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, CTRL_Msg *msg)
               E_IRCtx *ctx = &ir_ctx;
               ctx->macro_map     = push_array(temp.arena, E_String2ExprMap, 1);
               ctx->macro_map[0]  = e_string2expr_map_make(temp.arena, 512);
-              E_TypeKey meval_type_key = e_type_key_cons_base(type(CTRL_MetaEval));
-              for EachIndex(idx, ctrl_state->user_meta_evals.count)
-              {
-                E_Space space = e_space_make(CTRL_EvalSpaceKind_Meta);
-                E_Expr *expr = e_push_expr(scratch.arena, E_ExprKind_LeafOffset, 0);
-                expr->space    = space;
-                expr->mode     = E_Mode_Offset;
-                expr->type_key = meval_type_key;
-                e_string2expr_map_insert(temp.arena, ctx->macro_map, ctrl_state->user_meta_evals.v[idx].label, expr);
-              }
             }
             e_select_ir_ctx(&ir_ctx);
             

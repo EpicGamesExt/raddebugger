@@ -1631,7 +1631,7 @@ d_init(void)
 }
 
 internal D_EventList
-d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_PathMapArray *path_maps, U64 exception_code_filters[(CTRL_ExceptionCodeKind_COUNT+63)/64], CTRL_MetaEvalArray *meta_evals)
+d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_PathMapArray *path_maps, U64 exception_code_filters[(CTRL_ExceptionCodeKind_COUNT+63)/64])
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(&arena, 1);
@@ -1972,7 +1972,6 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
                 msg->debug_subprocesses = target->debug_subprocesses;
                 msg->env_inherit = 1;
                 MemoryCopyArray(msg->exception_code_filters, exception_code_filters);
-                MemoryCopyStruct(&msg->meta_evals, meta_evals);
                 str8_list_push(scratch.arena, &msg->entry_points, custom_entry_point_name);
                 msg->env_string_list = env;
               }
@@ -2005,7 +2004,6 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
             msg->exit_code = 1;
             msg->entity = process->handle;
             MemoryCopyArray(msg->exception_code_filters, exception_code_filters);
-            MemoryCopyStruct(&msg->meta_evals, meta_evals);
           }
         }break;
         case D_CmdKind_KillAll:
@@ -2014,7 +2012,6 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
           msg->kind = CTRL_MsgKind_KillAll;
           msg->exit_code = 1;
           MemoryCopyArray(msg->exception_code_filters, exception_code_filters);
-          MemoryCopyStruct(&msg->meta_evals, meta_evals);
         }break;
         case D_CmdKind_Detach:
         {
@@ -2029,7 +2026,6 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
             msg->kind   = CTRL_MsgKind_Detach;
             msg->entity = process->handle;
             MemoryCopyArray(msg->exception_code_filters, exception_code_filters);
-            MemoryCopyStruct(&msg->meta_evals, meta_evals);
           }
         }break;
         case D_CmdKind_Continue:
@@ -2305,7 +2301,6 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
             msg->kind      = CTRL_MsgKind_Attach;
             msg->entity_id = pid;
             MemoryCopyArray(msg->exception_code_filters, exception_code_filters);
-            MemoryCopyStruct(&msg->meta_evals, meta_evals);
           }
         }break;
       }
@@ -2327,7 +2322,6 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
           msg->entity     = run_thread->handle;
           msg->parent     = process->handle;
           MemoryCopyArray(msg->exception_code_filters, exception_code_filters);
-          MemoryCopyStruct(&msg->meta_evals, meta_evals);
           MemoryCopyStruct(&msg->traps, &run_traps);
           D_BreakpointArray *bp_batches[] =
           {

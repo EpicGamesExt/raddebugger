@@ -618,25 +618,6 @@ struct RD_WindowStateSlot
 };
 
 ////////////////////////////////
-//~ rjf: Meta Evaluation Cache Types
-
-typedef struct RD_CtrlEntityMetaEvalCacheNode RD_CtrlEntityMetaEvalCacheNode;
-struct RD_CtrlEntityMetaEvalCacheNode
-{
-  RD_CtrlEntityMetaEvalCacheNode *next;
-  CTRL_Handle handle;
-  CTRL_MetaEval *meval;
-  Rng1U64 range;
-};
-
-typedef struct RD_CtrlEntityMetaEvalCacheSlot RD_CtrlEntityMetaEvalCacheSlot;
-struct RD_CtrlEntityMetaEvalCacheSlot
-{
-  RD_CtrlEntityMetaEvalCacheNode *first;
-  RD_CtrlEntityMetaEvalCacheNode *last;
-};
-
-////////////////////////////////
 //~ rjf: Config -> Eval Blob Cache Types
 
 typedef struct RD_Cfg2EvalBlobNode RD_Cfg2EvalBlobNode;
@@ -787,10 +768,6 @@ struct RD_State
   // rjf: string search state
   Arena *string_search_arena;
   String8 string_search_string;
-  
-  // rjf: ctrl entity meta eval cache
-  U64 ctrl_entity_meval_cache_slots_count;
-  RD_CtrlEntityMetaEvalCacheSlot *ctrl_entity_meval_cache_slots;
   
   // rjf: contextual hover info
   RD_Regs *hover_regs;
@@ -1054,9 +1031,6 @@ internal String8 rd_eval_blob_from_cfg__cached(RD_Cfg *cfg);
 //- rjf: ctrl entity -> eval blob
 internal String8 rd_eval_blob_from_entity(Arena *arena, CTRL_Entity *entity);
 internal String8 rd_eval_blob_from_entity__cached(CTRL_Entity *entity);
-
-//- rjf: entity -> meta eval
-internal CTRL_MetaEval *rd_ctrl_meta_eval_from_ctrl_entity(Arena *arena, CTRL_Entity *entity);
 
 //- rjf: eval space reads/writes
 internal B32 rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range);

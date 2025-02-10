@@ -2017,52 +2017,6 @@ rd_eval_blob_from_entity__cached(CTRL_Entity *entity)
   return result;
 }
 
-//- rjf: entity -> meta eval
-
-internal CTRL_MetaEval *
-rd_ctrl_meta_eval_from_ctrl_entity(Arena *arena, CTRL_Entity *entity)
-{
-  ProfBeginFunction();
-  CTRL_MetaEval *meval = push_array(arena, CTRL_MetaEval, 1);
-  meval->frozen      = entity->is_frozen;
-  meval->vaddr_range = entity->vaddr_range;
-  meval->color       = entity->rgba;
-  meval->label       = entity->string;
-  meval->id          = entity->id;
-  if(entity->kind == CTRL_EntityKind_Thread)
-  {
-    DI_Scope *di_scope = di_scope_open();
-    CTRL_Entity *process = ctrl_entity_ancestor_from_kind(entity, CTRL_EntityKind_Process);
-    CTRL_Unwind base_unwind = d_query_cached_unwind_from_thread(entity);
-    CTRL_CallStack rich_unwind = ctrl_call_stack_from_unwind(arena, di_scope, process, &base_unwind);
-    meval->callstack.count = rich_unwind.total_frame_count;
-    meval->callstack.v = push_array(arena, CTRL_MetaEvalFrame, meval->callstack.count);
-    U64 idx = 0;
-    for(U64 base_idx = 0; base_idx < rich_unwind.concrete_frame_count; base_idx += 1)
-    {
-      U64 inline_idx = 0;
-      for(CTRL_CallStackInlineFrame *f = rich_unwind.frames[base_idx].first_inline_frame; f != 0; f = f->next, inline_idx += 1)
-      {
-        meval->callstack.v[idx].vaddr = regs_rip_from_arch_block(entity->arch, rich_unwind.frames[base_idx].regs);
-        meval->callstack.v[idx].inline_depth = inline_idx + 1;
-        idx += 1;
-      }
-      meval->callstack.v[idx].vaddr = regs_rip_from_arch_block(entity->arch, rich_unwind.frames[base_idx].regs);
-      idx += 1;
-    }
-    di_scope_close(di_scope);
-  }
-  if(entity->kind == CTRL_EntityKind_Module)
-  {
-    DI_Key dbgi_key = ctrl_dbgi_key_from_module(entity);
-    meval->label = str8_skip_last_slash(entity->string);
-    meval->exe = path_normalized_from_string(arena, entity->string);
-    meval->dbg = path_normalized_from_string(arena, dbgi_key.path);
-  }
-  ProfEnd();
-  return meval;
-}
-
 //- rjf: eval space reads/writes
 
 internal B32
@@ -2070,8 +2024,6 @@ rd_eval_space_read(void *u, E_Space space, void *out, Rng1U64 range)
 {
   Temp scratch = scratch_begin(0, 0);
   B32 result = 0;
-  CTRL_MetaEval *meval_read = 0;
-  Rng1U64 meval_legal_range = {0};
   switch(space.kind)
   {
     //- rjf: filesystem reads
@@ -3954,49 +3906,37 @@ rd_window_frame(void)
           {
             CTRL_Entity *process = ctrl_entity_ancestor_from_kind(ctrl_entity, CTRL_EntityKind_Process);
             CTRL_Unwind base_unwind = d_query_cached_unwind_from_thread(ctrl_entity);
-            CTRL_CallStack rich_unwind = ctrl_call_stack_from_unwind(scratch.arena, di_scope, process, &base_unwind);
-            if(rich_unwind.concrete_frame_count != 0)
+            CTRL_CallStack call_stack = ctrl_call_stack_from_unwind(scratch.arena, di_scope, process, &base_unwind);
+            if(call_stack.count != 0)
             {
               ui_spacer(ui_em(1.5f, 1.f));
             }
-            for(U64 idx = 0; idx < rich_unwind.concrete_frame_count; idx += 1)
+            for(U64 idx = 0; idx < call_stack.count; idx += 1)
             {
-              CTRL_CallStackFrame *f = &rich_unwind.frames[idx];
+              CTRL_CallStackFrame *f = &call_stack.frames[idx];
               RDI_Parsed *rdi = f->rdi;
               RDI_Procedure *procedure = f->procedure;
               U64 rip_vaddr = regs_rip_from_arch_block(arch, f->regs);
               CTRL_Entity *module = ctrl_module_from_process_vaddr(process, rip_vaddr);
               String8 module_name = module == &ctrl_entity_nil ? str8_lit("???") : str8_skip_last_slash(module->string);
-              
-              // rjf: inline frames
-              for(CTRL_CallStackInlineFrame *fin = f->last_inline_frame; fin != 0; fin = fin->prev)
-                UI_PrefWidth(ui_children_sum(1)) UI_Row
-              {
-                String8 name = {0};
-                name.str = rdi_string_from_idx(rdi, fin->inline_site->name_string_idx, &name.size);
-                name.size = Min(512, name.size);
-                UI_TextAlignment(UI_TextAlign_Left) RD_Font(RD_FontSlot_Code) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_em(12.f, 1)) ui_labelf("0x%I64x", rip_vaddr);
-                RD_Font(RD_FontSlot_Code) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_text_dim(10, 1)) ui_label(str8_lit("[inlined]"));
-                if(name.size != 0)
-                {
-                  RD_Font(RD_FontSlot_Code) UI_PrefWidth(ui_text_dim(10, 1))
-                  {
-                    rd_code_label(1.f, 0, rd_rgba_from_theme_color(RD_ThemeColor_CodeSymbol), name);
-                  }
-                }
-                else
-                {
-                  RD_Font(RD_FontSlot_Code) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_text_dim(10, 1)) ui_labelf("[??? in %S]", module_name);
-                }
-              }
-              
-              // rjf: concrete frame
               UI_PrefWidth(ui_children_sum(1)) UI_Row
               {
                 String8 name = {0};
-                name.str = rdi_name_from_procedure(rdi, procedure, &name.size);
-                name.size = Min(512, name.size);
+                if(f->inline_site != 0)
+                {
+                  name.str = rdi_string_from_idx(rdi, f->inline_site->name_string_idx, &name.size);
+                  name.size = Min(512, name.size);
+                }
+                else if(f->procedure != 0)
+                {
+                  name.str = rdi_name_from_procedure(rdi, procedure, &name.size);
+                  name.size = Min(512, name.size);
+                }
                 UI_TextAlignment(UI_TextAlign_Left) RD_Font(RD_FontSlot_Code) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_em(12.f, 1)) ui_labelf("0x%I64x", rip_vaddr);
+                if(f->parent_num != 0)
+                {
+                  RD_Font(RD_FontSlot_Code) UI_FlagsAdd(UI_BoxFlag_DrawTextWeak) UI_PrefWidth(ui_text_dim(10, 1)) ui_label(str8_lit("[inlined]"));
+                }
                 if(name.size != 0)
                 {
                   RD_Font(RD_FontSlot_Code) UI_PrefWidth(ui_text_dim(10, 1))
@@ -5068,56 +5008,6 @@ rd_window_frame(void)
               String8 string = str8_from_u64(scratch.arena, ctrl_entity->id, 10, 0, 0);
               os_set_clipboard_text(string);
               ui_ctx_menu_close();
-            }
-            
-            // rjf: copy call stack
-            if(ctrl_entity->kind == CTRL_EntityKind_Thread)
-            {
-              if(ui_clicked(rd_icon_buttonf(RD_IconKind_Clipboard, 0, "Copy Call Stack")))
-              {
-                DI_Scope *di_scope = di_scope_open();
-                CTRL_Entity *process = ctrl_entity_ancestor_from_kind(ctrl_entity, CTRL_EntityKind_Process);
-                CTRL_Unwind base_unwind = d_query_cached_unwind_from_thread(ctrl_entity);
-                CTRL_CallStack rich_unwind = ctrl_call_stack_from_unwind(scratch.arena, di_scope, process, &base_unwind);
-                String8List lines = {0};
-                for(U64 frame_idx = 0; frame_idx < rich_unwind.concrete_frame_count; frame_idx += 1)
-                {
-                  CTRL_CallStackFrame *concrete_frame = &rich_unwind.frames[frame_idx];
-                  U64 rip_vaddr = regs_rip_from_arch_block(ctrl_entity->arch, concrete_frame->regs);
-                  CTRL_Entity *module = ctrl_module_from_process_vaddr(process, rip_vaddr);
-                  RDI_Parsed *rdi = concrete_frame->rdi;
-                  RDI_Procedure *procedure = concrete_frame->procedure;
-                  for(CTRL_CallStackInlineFrame *inline_frame = concrete_frame->last_inline_frame;
-                      inline_frame != 0;
-                      inline_frame = inline_frame->prev)
-                  {
-                    RDI_InlineSite *inline_site = inline_frame->inline_site;
-                    String8 name = {0};
-                    name.str = rdi_string_from_idx(rdi, inline_site->name_string_idx, &name.size);
-                    str8_list_pushf(scratch.arena, &lines, "0x%I64x: [inlined] \"%S\"%s%S", rip_vaddr, name, module == &ctrl_entity_nil ? "" : " in ", module->string);
-                  }
-                  if(procedure != 0)
-                  {
-                    String8 name = {0};
-                    name.str = rdi_name_from_procedure(rdi, procedure, &name.size);
-                    str8_list_pushf(scratch.arena, &lines, "0x%I64x: \"%S\"%s%S", rip_vaddr, name, module == &ctrl_entity_nil ? "" : " in ", module->string);
-                  }
-                  else if(module != &ctrl_entity_nil)
-                  {
-                    str8_list_pushf(scratch.arena, &lines, "0x%I64x: [??? in %S]", rip_vaddr, module->string);
-                  }
-                  else
-                  {
-                    str8_list_pushf(scratch.arena, &lines, "0x%I64x: [??? in ???]", rip_vaddr);
-                  }
-                }
-                StringJoin join = {0};
-                join.sep = join.post = str8_lit("\n");
-                String8 text = str8_list_join(scratch.arena, &lines, &join);
-                os_set_clipboard_text(text);
-                ui_ctx_menu_close();
-                di_scope_close(di_scope);
-              }
             }
             
             // rjf: find
@@ -9101,6 +8991,7 @@ typedef struct RD_CallStackLookupAccel RD_CallStackLookupAccel;
 struct RD_CallStackLookupAccel
 {
   Arch arch;
+  CTRL_Handle process;
   CTRL_CallStack call_stack;
 };
 
@@ -9122,8 +9013,9 @@ E_LOOKUP_INFO_FUNCTION_DEF(call_stack)
       CTRL_Entity *process = ctrl_process_from_entity(entity);
       CTRL_Unwind base_unwind = d_query_cached_unwind_from_thread(entity);
       accel->arch = entity->arch;
+      accel->process = process->handle;
       accel->call_stack = ctrl_call_stack_from_unwind(arena, rd_state->frame_di_scope, process, &base_unwind);
-      result.idxed_expr_count = accel->call_stack.total_frame_count;
+      result.idxed_expr_count = accel->call_stack.count;
     }
     result.user_data = accel;
   }
@@ -9144,23 +9036,13 @@ E_LOOKUP_ACCESS_FUNCTION_DEF(call_stack)
     E_Value rhs_value = rhs_interp.value;
     RD_CallStackLookupAccel *accel = (RD_CallStackLookupAccel *)user_data;
     CTRL_CallStack *call_stack = &accel->call_stack;
-    if(0 <= rhs_value.u64 && rhs_value.u64 < call_stack->total_frame_count)
+    if(0 <= rhs_value.u64 && rhs_value.u64 < call_stack->count)
     {
-      U64 frame_idx = 0;
-#if 0
-      for(U64 base_idx = 0; base_idx < call_stack->concrete_frame_count; base_idx += 1, frame_idx += 1)
-      {
-        CTRL_CallStackFrame *base_frame = call_stack->frames + base_idx;
-        for(CTRL_CallStackInlineFrame *inline_frame = base_frame->first_inline_frame; inline_frame != 0; inline_frame = inline_frame->next, frame_idx += 1)
-        {
-          if(frame_idx == rhs_value.u64)
-          {
-            result.irtree_and_type.root = e_irtree_const_u(arena, );
-            break;
-          }
-        }
-      }
-#endif 
+      CTRL_Entity *process = ctrl_entity_from_handle(d_state->ctrl_entity_store, accel->process);
+      CTRL_CallStackFrame *f = &call_stack->frames[rhs_value.u64];
+      result.irtree_and_type.root = e_irtree_set_space(arena, rd_eval_space_from_ctrl_entity(process, RD_EvalSpaceKind_CtrlEntity), e_irtree_const_u(arena, regs_rip_from_arch_block(accel->arch, f->regs)));
+      result.irtree_and_type.type_key = e_type_key_cons_ptr(process->arch, e_type_key_basic(E_TypeKind_Void), 1, 0);
+      result.irtree_and_type.mode = E_Mode_Value;
     }
     scratch_end(scratch);
   }
@@ -9234,30 +9116,20 @@ E_LOOKUP_INFO_FUNCTION_DEF(environment)
   return result;
 }
 
-E_LOOKUP_ACCESS_FUNCTION_DEF(environment)
+E_LOOKUP_RANGE_FUNCTION_DEF(environment)
 {
-  E_LookupAccess result = {{&e_irnode_nil}};
-  if(kind == E_ExprKind_ArrayIndex)
+  RD_CfgArray *cfgs = (RD_CfgArray *)user_data;
+  Rng1U64 legal_idx_range = r1u64(0, cfgs->count);
+  Rng1U64 read_range = intersect_1u64(idx_range, legal_idx_range);
+  U64 read_range_count = dim_1u64(read_range);
+  for(U64 idx = 0; idx < read_range_count; idx += 1)
   {
-    Temp scratch = scratch_begin(&arena, 1);
-    RD_CfgArray *accel = (RD_CfgArray *)user_data;
-    E_IRTreeAndType rhs_irtree = e_irtree_and_type_from_expr(scratch.arena, rhs);
-    E_OpList rhs_oplist = e_oplist_from_irtree(scratch.arena, rhs_irtree.root);
-    String8 rhs_bytecode = e_bytecode_from_oplist(scratch.arena, &rhs_oplist);
-    E_Interpretation rhs_interp = e_interpret(rhs_bytecode);
-    E_Value rhs_value = rhs_interp.value;
-    U64 rhs_index = rhs_value.u64;
-    if(contains_1u64(r1u64(0, accel->count), rhs_index))
+    U64 cfg_idx = read_range.min + idx;
+    if(cfg_idx < cfgs->count)
     {
-      RD_Cfg *env_string = accel->v[rhs_index];
-      E_TypeKey type_key = e_type_key_cons_ptr(arch_from_context(), e_type_key_basic(E_TypeKind_U8), 1, E_TypeFlag_IsCodeText);
-      result.irtree_and_type.root      = e_irtree_set_space(arena, rd_eval_space_from_cfg(env_string), e_irtree_const_u(arena, 0));
-      result.irtree_and_type.type_key  = type_key;
-      result.irtree_and_type.mode      = E_Mode_Offset;
+      
     }
-    scratch_end(scratch);
   }
-  return result;
 }
 
 E_LOOKUP_ID_FROM_NUM_FUNCTION_DEF(environment)
@@ -12351,8 +12223,6 @@ rd_frame(void)
   }
   B32 allow_text_hotkeys = !rd_state->text_edit_mode;
   rd_state->text_edit_mode = 0;
-  rd_state->ctrl_entity_meval_cache_slots_count = 1024;
-  rd_state->ctrl_entity_meval_cache_slots = push_array(rd_frame_arena(), RD_CtrlEntityMetaEvalCacheSlot, rd_state->ctrl_entity_meval_cache_slots_count);
   rd_state->cfg2evalblob_map = push_array(rd_frame_arena(), RD_Cfg2EvalBlobMap, 1);
   rd_state->cfg2evalblob_map->slots_count = 256;
   rd_state->cfg2evalblob_map->slots = push_array(rd_frame_arena(), RD_Cfg2EvalBlobSlot, rd_state->cfg2evalblob_map->slots_count);
@@ -13080,7 +12950,6 @@ rd_frame(void)
     ////////////////////////////
     //- rjf: build eval IR context
     //
-    E_TypeKey meta_eval_type_key = e_type_key_cons_base(type(CTRL_MetaEval));
     E_IRCtx *ir_ctx = push_array(scratch.arena, E_IRCtx, 1);
     if(e_ir_state != 0) { e_ir_state->ctx = 0; }
     {
@@ -13327,7 +13196,7 @@ rd_frame(void)
       {
         e_lookup_rule_map_insert_new(scratch.arena, ctx->lookup_rule_map, str8_lit("environment"),
                                      .info        = E_LOOKUP_INFO_FUNCTION_NAME(environment),
-                                     .access      = E_LOOKUP_ACCESS_FUNCTION_NAME(environment),
+                                     .range       = E_LOOKUP_RANGE_FUNCTION_NAME(environment),
                                      .id_from_num = E_LOOKUP_ID_FROM_NUM_FUNCTION_NAME(environment),
                                      .num_from_id = E_LOOKUP_NUM_FROM_ID_FUNCTION_NAME(environment));
         e_lookup_rule_map_insert_new(scratch.arena, ctx->lookup_rule_map, str8_lit("call_stack"),
@@ -16074,19 +15943,16 @@ Z(getting_started)
             CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_base_regs()->thread);
             CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, CTRL_EntityKind_Process);
             CTRL_Unwind base_unwind = d_query_cached_unwind_from_thread(thread);
-            CTRL_CallStack rich_unwind = ctrl_call_stack_from_unwind(scratch.arena, di_scope, process, &base_unwind);
-            if(rd_regs()->unwind_count < rich_unwind.concrete_frame_count)
+            CTRL_CallStack call_stack = ctrl_call_stack_from_unwind(scratch.arena, di_scope, process, &base_unwind);
+            CTRL_CallStackFrame *frame = ctrl_call_stack_frame_from_unwind_and_inline_depth(&call_stack, rd_regs()->unwind_count, rd_regs()->inline_depth);
+            if(frame == 0)
             {
-              CTRL_CallStackFrame *frame = &rich_unwind.frames[rd_regs()->unwind_count];
-              U64 rip_vaddr = regs_rip_from_arch_block(thread->arch, frame->regs);
-              CTRL_Entity *module = ctrl_module_from_process_vaddr(process, rip_vaddr);
-              rd_state->base_regs.v.module = module->handle;
+              frame = ctrl_call_stack_frame_from_unwind_and_inline_depth(&call_stack, rd_regs()->unwind_count, 0);
+            }
+            if(frame)
+            {
               rd_state->base_regs.v.unwind_count = rd_regs()->unwind_count;
-              rd_state->base_regs.v.inline_depth = 0;
-              if(rd_regs()->inline_depth <= frame->inline_frame_count)
-              {
-                rd_state->base_regs.v.inline_depth = rd_regs()->inline_depth;
-              }
+              rd_state->base_regs.v.inline_depth = rd_regs()->inline_depth;
             }
             rd_cmd(RD_CmdKind_FindThread, .thread = thread->handle, .unwind_count = rd_state->base_regs.v.unwind_count, .inline_depth = rd_state->base_regs.v.inline_depth);
             di_scope_close(di_scope);
@@ -16098,46 +15964,30 @@ Z(getting_started)
             CTRL_Entity *thread = ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_base_regs()->thread);
             CTRL_Entity *process = ctrl_entity_ancestor_from_kind(thread, CTRL_EntityKind_Process);
             CTRL_Unwind base_unwind = d_query_cached_unwind_from_thread(thread);
-            CTRL_CallStack rich_unwind = ctrl_call_stack_from_unwind(scratch.arena, di_scope, process, &base_unwind);
-            U64 crnt_unwind_idx = rd_state->base_regs.v.unwind_count;
-            U64 crnt_inline_dpt = rd_state->base_regs.v.inline_depth;
-            U64 next_unwind_idx = crnt_unwind_idx;
-            U64 next_inline_dpt = crnt_inline_dpt;
-            if(crnt_unwind_idx < rich_unwind.concrete_frame_count)
+            CTRL_CallStack call_stack = ctrl_call_stack_from_unwind(scratch.arena, di_scope, process, &base_unwind);
+            CTRL_CallStackFrame *current_frame = ctrl_call_stack_frame_from_unwind_and_inline_depth(&call_stack, rd_regs()->unwind_count, rd_regs()->inline_depth);
+            CTRL_CallStackFrame *next_frame = current_frame;
+            if(current_frame != 0) switch(kind)
             {
-              CTRL_CallStackFrame *f = &rich_unwind.frames[crnt_unwind_idx];
-              switch(kind)
+              default:{}break;
+              case RD_CmdKind_UpOneFrame:
+              if(current_frame > call_stack.frames)
               {
-                default:{}break;
-                case RD_CmdKind_UpOneFrame:
-                {
-                  if(crnt_inline_dpt < f->inline_frame_count)
-                  {
-                    next_inline_dpt += 1;
-                  }
-                  else if(crnt_unwind_idx > 0)
-                  {
-                    next_unwind_idx -= 1;
-                    next_inline_dpt = 0;
-                  }
-                }break;
-                case RD_CmdKind_DownOneFrame:
-                {
-                  if(crnt_inline_dpt > 0)
-                  {
-                    next_inline_dpt -= 1;
-                  }
-                  else if(crnt_unwind_idx < rich_unwind.concrete_frame_count)
-                  {
-                    next_unwind_idx += 1;
-                    next_inline_dpt = (f+1)->inline_frame_count;
-                  }
-                }break;
-              }
+                next_frame = current_frame-1;
+              }break;
+              case RD_CmdKind_DownOneFrame:
+              if(current_frame+1 < call_stack.frames + call_stack.count)
+              {
+                next_frame = current_frame+1;
+              }break;
             }
-            rd_cmd(RD_CmdKind_SelectUnwind,
-                   .unwind_count = next_unwind_idx,
-                   .inline_depth = next_inline_dpt);
+            if(next_frame != 0)
+            {
+              CTRL_CallStackFrame *next_base_frame = next_frame + next_frame->inline_depth;
+              rd_cmd(RD_CmdKind_SelectUnwind,
+                     .unwind_count = next_frame->unwind_count,
+                     .inline_depth = next_frame->inline_depth);
+            }
             di_scope_close(di_scope);
           }break;
           
@@ -16628,18 +16478,8 @@ Z(getting_started)
     //- rjf: gather breakpoints & meta-evals (for the engine, meta-evals can only be referenced by breakpoints)
     //
     D_BreakpointArray breakpoints = {0};
-    CTRL_MetaEvalArray meta_evals = {0};
     ProfScope("gather breakpoints & meta-evals")
     {
-      typedef struct MetaEvalNode MetaEvalNode;
-      struct MetaEvalNode
-      {
-        MetaEvalNode *next;
-        CTRL_MetaEval *meval;
-      };
-      U64 meval_count = 0;
-      MetaEvalNode *first_meval = 0;
-      MetaEvalNode *last_meval = 0;
       RD_CfgList bp_cfgs = rd_cfg_top_level_list_from_string(scratch.arena, str8_lit("breakpoint"));
       breakpoints.count = bp_cfgs.count;
       breakpoints.v = push_array(scratch.arena, D_Breakpoint, breakpoints.count);
@@ -16737,18 +16577,6 @@ Z(getting_started)
         dst_bp->condition   = src_bp_cnd;
         idx += 1;
       }
-      
-      //- rjf: meta-eval list -> array
-      meta_evals.count = meval_count;
-      meta_evals.v = push_array(scratch.arena, CTRL_MetaEval, meta_evals.count);
-      {
-        U64 idx = 0;
-        for(MetaEvalNode *n = first_meval; n != 0; n = n->next)
-        {
-          MemoryCopyStruct(&meta_evals.v[idx], n->meval);
-          idx += 1;
-        }
-      }
     }
     
     ////////////////////////////
@@ -16823,7 +16651,7 @@ Z(getting_started)
     //- rjf: tick debug engine
     //
     U64 cmd_count_pre_tick = rd_state->cmds[0].count;
-    D_EventList engine_events = d_tick(scratch.arena, &targets, &breakpoints, &path_maps, exception_code_filters, &meta_evals);
+    D_EventList engine_events = d_tick(scratch.arena, &targets, &breakpoints, &path_maps, exception_code_filters);
     
     ////////////////////////////
     //- rjf: process debug engine events
