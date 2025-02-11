@@ -2990,7 +2990,7 @@ rd_view_ui(Rng2F32 rect)
     }
     
     // rjf: unpack view's target expression & hash
-    String8 expr_string = rd_view_expr_string();
+    String8 expr_string = rd_expr_from_cfg(view);
     E_Eval eval = e_eval_from_string(scratch.arena, expr_string);
     Rng1U64 range = r1u64(0, 1024);
     U128 key = rd_key_from_eval_space_range(eval.space, range, 0);
@@ -3110,15 +3110,6 @@ rd_view_eval_view(void)
   RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
   RD_ViewState *view_state = rd_view_state_from_cfg(view);
   return view_state->ev_view;
-}
-
-internal String8
-rd_view_expr_string(void)
-{
-  RD_Cfg *view = rd_cfg_from_id(rd_regs()->view);
-  RD_Cfg *expr = rd_cfg_child_from_string(view, str8_lit("expression"));
-  String8 expr_string = expr->first->string;
-  return expr_string;
 }
 
 internal String8
@@ -6217,7 +6208,7 @@ rd_window_frame(void)
         RD_RegsScope(.view = view->id)
         {
           rd_cfg_new_replace(expr, ws->hover_eval_string);
-          EV_BlockTree predicted_block_tree = ev_block_tree_from_string(scratch.arena, rd_view_eval_view(), str8_zero(), ws->hover_eval_string);
+          EV_BlockTree predicted_block_tree = ev_block_tree_from_eval(scratch.arena, rd_view_eval_view(), str8_zero(), hover_eval);
           F32 row_height_px = floor_f32(ui_top_font_size()*2.5f);
           U64 max_row_count = (U64)floor_f32(ui_top_font_size()*10.f / row_height_px);
           if(ws->hover_eval_focused)
@@ -15138,7 +15129,7 @@ Z(getting_started)
                 
                 // rjf: get source path
                 RD_Cfg *src_view = rd_cfg_from_id(rd_regs()->view);
-                String8 src_view_expr = rd_view_expr_string();
+                String8 src_view_expr = rd_expr_from_cfg(src_view);
                 String8 src_file_path = rd_file_path_from_eval_string(scratch.arena, src_view_expr);
                 String8List src_file_parts = str8_split_path(scratch.arena, src_file_path);
                 
@@ -15305,7 +15296,7 @@ Z(getting_started)
                 if(rd_cfg_is_project_filtered(tab)) { continue; }
                 RD_RegsScope(.view = tab->id)
                 {
-                  String8 tab_expr = rd_view_expr_string();
+                  String8 tab_expr = rd_expr_from_cfg(tab);
                   String8 tab_file_path = rd_file_path_from_eval_string(scratch.arena, tab_expr);
                   if((str8_match(tab->string, str8_lit("text"), 0) || str8_match(tab->string, str8_lit("pending"), 0)) && 
                      path_match_normalized(tab_file_path, file_path))
@@ -15377,7 +15368,7 @@ Z(getting_started)
                   RD_RegsScope(.view = tab->id)
                   {
                     B32 tab_is_selected = (tab == panel->selected_tab);
-                    String8 expr_string = rd_view_expr_string();
+                    String8 expr_string = rd_expr_from_cfg(tab);
                     if(str8_match(tab->string, str8_lit("disasm"), 0) && expr_string.size == 0 && panel_area > best_panel_area)
                     {
                       panel_w_disasm = panel;
@@ -17020,7 +17011,7 @@ Z(getting_started)
           }
           RD_RegsScope(.view = tab->id)
           {
-            String8 eval_string = rd_view_expr_string();
+            String8 eval_string = rd_expr_from_cfg(tab);
             String8 file_path = rd_file_path_from_eval_string(scratch.arena, eval_string);
             if(file_path.size != 0)
             {

@@ -1077,7 +1077,6 @@ internal void rd_view_ui(Rng2F32 rect);
 internal Arena *rd_view_arena(void);
 internal UI_ScrollPt2 rd_view_scroll_pos(void);
 internal EV_View *rd_view_eval_view(void);
-internal String8 rd_view_expr_string(void);
 internal String8 rd_view_filter(void);
 internal RD_Cfg *rd_view_cfg_from_string(String8 string);
 internal E_Value rd_view_cfg_value_from_string(String8 string);

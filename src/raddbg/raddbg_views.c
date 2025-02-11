@@ -1586,11 +1586,6 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
   F32 row_string_max_size_px = dim_2f32(rect).x;
   EV_StringFlags string_flags = EV_StringFlag_ReadOnlyDisplayRules;
   String8 filter = rd_view_filter();
-  String8 expr = rd_view_expr_string();
-  if(expr.size == 0)
-  {
-    expr = str8_lit("query:watches");
-  }
   
   //////////////////////////////
   //- rjf: decide if root should be implicit
@@ -1642,7 +1637,7 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
         MemoryZeroStruct(&block_tree);
         MemoryZeroStruct(&block_ranges);
         ev_key_set_expansion(eval_view, ev_key_root(), ev_key_make(ev_hash_from_key(ev_key_root()), 1), 1);
-        block_tree   = ev_block_tree_from_string(scratch.arena, eval_view, filter, expr);
+        block_tree   = ev_block_tree_from_eval(scratch.arena, eval_view, filter, eval);
         block_ranges = ev_block_range_list_from_tree(scratch.arena, &block_tree);
         if(implicit_root && block_ranges.first != 0)
         {
@@ -4181,7 +4176,7 @@ RD_VIEW_UI_FUNCTION_DEF(text)
       // rjf: override file picking
       case RD_CmdKind_PickFile:
       {
-        String8 src = rd_file_path_from_eval_string(scratch.arena, rd_view_expr_string());
+        String8 src = rd_regs()->file_path;
         String8 dst = cmd->regs->file_path;
         if(src.size != 0 && dst.size != 0)
         {
