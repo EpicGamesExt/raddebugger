@@ -12515,6 +12515,10 @@ rd_frame(void)
         RD_Cfg *vcfg = rd_cfg_from_id(vs->cfg_id);
         if(rd_cfg_child_from_string(vcfg, str8_lit("selected")) != &rd_nil_cfg)
         {
+          if(vs->loading_t_target > 0.5f)
+          {
+            rd_request_frame();
+          }
           vs->loading_t_target = 0;
         }
       }
