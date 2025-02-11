@@ -460,7 +460,7 @@ e_type_key_cons_array(E_TypeKey element_type_key, U64 count)
 internal E_TypeKey
 e_type_key_cons_ptr(Arch arch, E_TypeKey element_type_key, U64 count, E_TypeFlags flags)
 {
-  E_TypeKey key = e_type_key_cons(.arch = arch, .kind = E_TypeKind_Ptr, .flags = flags, .direct_key = element_type_key);
+  E_TypeKey key = e_type_key_cons(.arch = arch, .kind = E_TypeKind_Ptr, .flags = flags, .direct_key = element_type_key, .count = count);
   return key;
 }
 
@@ -1683,6 +1683,11 @@ e_type_lhs_string_from_key(Arena *arena, E_TypeKey key, String8List *out, U32 pr
       E_TypeKey direct = e_type_direct_from_key(key);
       e_type_lhs_string_from_key(arena, direct, out, 1, skip_return);
       str8_list_push(arena, out, str8_lit("*"));
+      E_Type *type = e_type_from_key__cached(key);
+      if(type->count != 1)
+      {
+        str8_list_pushf(arena, out, ".%I64u", type->count);
+      }
     }break;
     
     case E_TypeKind_SpacePtr:

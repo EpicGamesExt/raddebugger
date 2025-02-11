@@ -146,15 +146,18 @@ E_LOOKUP_INFO_FUNCTION_DEF(default)
     {
       E_Type *type = e_type_from_key__cached(lhs_type_key);
       lookup_info.idxed_expr_count = type->count;
-      E_TypeKey direct_type_key = e_type_unwrap(e_type_direct_from_key(lhs->type_key));
-      E_TypeKind direct_type_kind = e_type_kind_from_key(direct_type_key);
-      if(direct_type_kind == E_TypeKind_Struct ||
-         direct_type_kind == E_TypeKind_Class ||
-         direct_type_kind == E_TypeKind_Union ||
-         direct_type_kind == E_TypeKind_Enum)
+      if(type->count == 1)
       {
-        E_Type *direct_type = e_type_from_key__cached(direct_type_key);
-        lookup_info.named_expr_count = direct_type->count;
+        E_TypeKey direct_type_key = e_type_unwrap(e_type_direct_from_key(lhs->type_key));
+        E_TypeKind direct_type_kind = e_type_kind_from_key(direct_type_key);
+        if(direct_type_kind == E_TypeKind_Struct ||
+           direct_type_kind == E_TypeKind_Class ||
+           direct_type_kind == E_TypeKind_Union ||
+           direct_type_kind == E_TypeKind_Enum)
+        {
+          E_Type *direct_type = e_type_from_key__cached(direct_type_key);
+          lookup_info.named_expr_count = direct_type->count;
+        }
       }
     }
     else if(lhs_type_kind == E_TypeKind_Struct ||
@@ -361,57 +364,54 @@ E_LOOKUP_ACCESS_FUNCTION_DEF(default)
       
       // rjf: generate
       E_IRNode *new_tree = &e_irnode_nil;
+      E_Mode mode = l.mode;
       {
-        switch(l.mode)
+        // rjf: reading from an array value -> read from stack value
+        if(l.mode == E_Mode_Value && l_restype_kind == E_TypeKind_Array)
         {
-          // rjf: offsets -> read from base offset
-          default:
-          case E_Mode_Null:
-          case E_Mode_Offset:
+          // rjf: ops to compute the offset
+          E_IRNode *offset_tree = e_irtree_resolve_to_value(arena, r.mode, r.root, r_restype);
+          if(direct_type_size > 1)
           {
-            // rjf: ops to compute the offset
-            E_IRNode *offset_tree = e_irtree_resolve_to_value(arena, r.mode, r.root, r_restype);
-            if(direct_type_size > 1)
-            {
-              E_IRNode *const_tree = e_irtree_const_u(arena, direct_type_size);
-              offset_tree = e_irtree_binary_op_u(arena, RDI_EvalOp_Mul, offset_tree, const_tree);
-            }
-            
-            // rjf: ops to compute the base offset (resolve to value if addr-of-pointer)
-            E_IRNode *base_tree = l.root;
-            if(l_restype_kind == E_TypeKind_Ptr && l.mode != E_Mode_Value)
-            {
-              base_tree = e_irtree_resolve_to_value(arena, l.mode, base_tree, l_restype);
-            }
-            
-            // rjf: ops to compute the final address
-            new_tree = e_irtree_binary_op_u(arena, RDI_EvalOp_Add, offset_tree, base_tree);
-          }break;
+            E_IRNode *const_tree = e_irtree_const_u(arena, direct_type_size);
+            offset_tree = e_irtree_binary_op_u(arena, RDI_EvalOp_Mul, offset_tree, const_tree);
+          }
           
-          // rjf: values -> read from stack value
-          case E_Mode_Value:
+          // rjf: ops to push stack value, push offset, + read from stack value
+          new_tree = e_push_irnode(arena, RDI_EvalOp_ValueRead);
+          new_tree->value.u64 = direct_type_size;
+          e_irnode_push_child(new_tree, offset_tree);
+          e_irnode_push_child(new_tree, l.root);
+        }
+        
+        // rjf: all other cases -> read from base offset
+        else
+        {
+          // rjf: ops to compute the offset
+          E_IRNode *offset_tree = e_irtree_resolve_to_value(arena, r.mode, r.root, r_restype);
+          if(direct_type_size > 1)
           {
-            // rjf: ops to compute the offset
-            E_IRNode *offset_tree = e_irtree_resolve_to_value(arena, r.mode, r.root, r_restype);
-            if(direct_type_size > 1)
-            {
-              E_IRNode *const_tree = e_irtree_const_u(arena, direct_type_size);
-              offset_tree = e_irtree_binary_op_u(arena, RDI_EvalOp_Mul, offset_tree, const_tree);
-            }
-            
-            // rjf: ops to push stack value, push offset, + read from stack value
-            new_tree = e_push_irnode(arena, RDI_EvalOp_ValueRead);
-            new_tree->value.u64 = direct_type_size;
-            e_irnode_push_child(new_tree, offset_tree);
-            e_irnode_push_child(new_tree, l.root);
-          }break;
+            E_IRNode *const_tree = e_irtree_const_u(arena, direct_type_size);
+            offset_tree = e_irtree_binary_op_u(arena, RDI_EvalOp_Mul, offset_tree, const_tree);
+          }
+          
+          // rjf: ops to compute the base offset (resolve to value if addr-of-pointer)
+          E_IRNode *base_tree = l.root;
+          if(l_restype_kind == E_TypeKind_Ptr && l.mode != E_Mode_Value)
+          {
+            base_tree = e_irtree_resolve_to_value(arena, l.mode, base_tree, l_restype);
+          }
+          
+          // rjf: ops to compute the final address
+          new_tree = e_irtree_binary_op_u(arena, RDI_EvalOp_Add, offset_tree, base_tree);
+          mode = E_Mode_Offset;
         }
       }
       
       // rjf: fill
       result.irtree_and_type.root     = new_tree;
       result.irtree_and_type.type_key = direct_type;
-      result.irtree_and_type.mode     = l.mode;
+      result.irtree_and_type.mode     = mode;
     }break;
   }
   return result;
@@ -607,7 +607,10 @@ E_IRGEN_FUNCTION_DEF(slice)
     }
     
     // rjf: overwrite type
-    irtree.type_key = slice_type_key;
+    if(!e_type_key_match(slice_type_key, e_type_key_zero()))
+    {
+      irtree.type_key = slice_type_key;
+    }
   }
   scratch_end(scratch);
   return irtree;
@@ -662,6 +665,11 @@ e_irgen_rule_map_make(Arena *arena, U64 slots_count)
   E_IRGenRuleMap map = {0};
   map.slots_count = slots_count;
   map.slots = push_array(arena, E_IRGenRuleSlot, map.slots_count);
+  e_irgen_rule_map_insert_new(arena, &map, str8_lit("cast"),  .irgen = E_IRGEN_FUNCTION_NAME(cast));
+  e_irgen_rule_map_insert_new(arena, &map, str8_lit("bswap"), .irgen = E_IRGEN_FUNCTION_NAME(bswap));
+  e_irgen_rule_map_insert_new(arena, &map, str8_lit("array"), .irgen = E_IRGEN_FUNCTION_NAME(array));
+  e_irgen_rule_map_insert_new(arena, &map, str8_lit("slice"), .irgen = E_IRGEN_FUNCTION_NAME(slice));
+  e_irgen_rule_map_insert_new(arena, &map, str8_lit("wrap"),  .irgen = E_IRGEN_FUNCTION_NAME(wrap));
   return map;
 }
 
@@ -2018,6 +2026,10 @@ e_irtree_and_type_from_expr(Arena *arena, E_Expr *expr)
     ProfScope("irgen rule '%.*s'", str8_varg(t->rule->name))
     {
       result = t->rule->irgen(arena, expr, t->tag);
+      if(result.root == &e_irnode_nil && t->rule != &e_irgen_rule__default)
+      {
+        result = e_irgen_rule__default.irgen(arena, expr, &e_expr_nil);
+      }
     }
     
     // rjf: find any auto hooks according to this generation's type

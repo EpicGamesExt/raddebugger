@@ -451,9 +451,8 @@ ev_keyed_expr_push_tags(Arena *arena, EV_View *view, EV_Block *block, EV_Key key
   {
     // rjf: push inherited tags first (we want these to be found first, since tags are applied
     // in order, and explicit ones should always be strongest)
-    for(EV_Block *b = block; b != &ev_nil_block; b = b->parent)
     {
-      for(E_Expr *src_tag = b->expr->first_tag; src_tag != &e_expr_nil; src_tag = src_tag->next)
+      for(E_Expr *src_tag = block->expr->first_tag; src_tag != &e_expr_nil; src_tag = src_tag->next)
       {
         e_expr_push_tag(expr, e_expr_copy(arena, src_tag));
       }

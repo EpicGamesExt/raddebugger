@@ -28,7 +28,7 @@ RD_CmdKind_Null,
 RD_CmdKind_Null,
 };
 
-RD_VocabularyInfo rd_vocabulary_info_table[64] =
+RD_VocabularyInfo rd_vocabulary_info_table[66] =
 {
 {str8_lit_comp("auto_view_rule"), str8_lit_comp("auto_view_rules"), str8_lit_comp("Auto View Rule"), str8_lit_comp("Auto View Rules"), RD_IconKind_Binoculars},
 {str8_lit_comp("file_path_map"), str8_lit_comp("file_path_maps"), str8_lit_comp("File Path Map"), str8_lit_comp("File Path Maps"), RD_IconKind_FileOutline},
@@ -94,6 +94,8 @@ RD_VocabularyInfo rd_vocabulary_info_table[64] =
 {str8_lit_comp("disabled"), str8_lit_comp(""), str8_lit_comp("Disabled"), str8_lit_comp("Disabled"), RD_IconKind_Null},
 {str8_lit_comp("debug_subprocesses"), str8_lit_comp(""), str8_lit_comp("Debug Subprocesses"), str8_lit_comp(""), RD_IconKind_Null},
 {str8_lit_comp("environment"), str8_lit_comp("environments"), str8_lit_comp("Environment"), str8_lit_comp("Environments"), RD_IconKind_Null},
+{str8_lit_comp("frozen"), str8_lit_comp(""), str8_lit_comp("Frozen"), str8_lit_comp(""), RD_IconKind_Null},
+{str8_lit_comp("id"), str8_lit_comp("ids"), str8_lit_comp("ID"), str8_lit_comp("IDs"), RD_IconKind_Null},
 };
 
 RD_NameSchemaInfo rd_name_schema_info_table[10] =

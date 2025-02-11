@@ -5,6 +5,5 @@
 #define EVAL_VISUALIZATION_INC_H
 
 #include "eval_visualization_core.h"
-#include "eval_visualization_builtin_view_rules.h"
 
 #endif // EVAL_VISUALIZATION_INC_H

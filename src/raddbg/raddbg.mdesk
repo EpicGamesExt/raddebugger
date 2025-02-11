@@ -115,6 +115,8 @@ RD_VocabularyMap:
   {disabled             ""                          "Disabled"                  "Disabled"            Null                                           }
   {debug_subprocesses   ""                          "Debug Subprocesses"        ""                    Null                                           }
   {environment          _                           "Environment"               _                     Null                                           }
+  {frozen               ""                          "Frozen"                    ""                    Null                                           }
+  {id                   _                           "ID"                        _                     Null                                           }
 }
 
 @struct RD_VocabularyInfo:

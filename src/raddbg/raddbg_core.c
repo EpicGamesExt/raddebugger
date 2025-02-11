@@ -9050,7 +9050,7 @@ E_LOOKUP_ACCESS_FUNCTION_DEF(thread)
   {
     E_Eval eval = e_eval_from_expr(scratch.arena, lhs);
     CTRL_Entity *entity = rd_ctrl_entity_from_eval_space(eval.space);
-    result.irtree_and_type.root     = e_irtree_leaf_u128(arena, u128_make(entity->handle.machine_id, entity->handle.dmn_handle.u64[0]));
+    result.irtree_and_type.root     = e_irtree_set_space(arena, eval.space, e_irtree_leaf_u128(arena, u128_make(entity->handle.machine_id, entity->handle.dmn_handle.u64[0])));
     result.irtree_and_type.type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = str8_lit("call_stack"));
     result.irtree_and_type.mode     = E_Mode_Offset;
   }
@@ -13076,6 +13076,8 @@ rd_frame(void)
       ctx->macro_map[0] = e_string2expr_map_make(scratch.arena, 512);
       ctx->lookup_rule_map    = push_array(scratch.arena, E_LookupRuleMap, 1);
       ctx->lookup_rule_map[0] = e_lookup_rule_map_make(scratch.arena, 512);
+      ctx->irgen_rule_map    = push_array(scratch.arena, E_IRGenRuleMap, 1);
+      ctx->irgen_rule_map[0] = e_irgen_rule_map_make(scratch.arena, 512);
       ctx->auto_hook_map      = push_array(scratch.arena, E_AutoHookMap, 1);
       ctx->auto_hook_map[0]   = e_auto_hook_map_make(scratch.arena, 512);
       
