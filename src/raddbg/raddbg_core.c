@@ -1124,10 +1124,12 @@ rd_target_from_cfg(Arena *arena, RD_Cfg *cfg)
   target.stderr_path                = rd_cfg_child_from_string(cfg, str8_lit("stderr_path"))->first->string;
   target.stdin_path                 = rd_cfg_child_from_string(cfg, str8_lit("stdin_path"))->first->string;
   target.debug_subprocesses         = (rd_cfg_child_from_string(cfg, str8_lit("debug_subprocesses")) != &rd_nil_cfg);
-  RD_Cfg *env_root = rd_cfg_child_from_string(cfg, str8_lit("environment"));
-  for(RD_Cfg *env_child = env_root->first; env_child != &rd_nil_cfg; env_child = env_child->next)
+  for(RD_Cfg *child = cfg->first; child != &rd_nil_cfg; child = child->next)
   {
-    str8_list_push(arena, &target.env, env_child->string);
+    if(str8_match(child->string, str8_lit("environment"), 0))
+    {
+      str8_list_push(arena, &target.env, child->first->string);
+    }
   }
   return target;
 }
