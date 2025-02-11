@@ -6174,6 +6174,13 @@ rd_window_frame(void)
 #endif
       }
       
+      // rjf: evaluate hover-evaluation expression - if it doesn't evaluate, then don't build anything
+      E_Eval hover_eval = e_eval_from_string(scratch.arena, ws->hover_eval_string);
+      if(hover_eval.msgs.max_kind > E_MsgKind_Null)
+      {
+        build_hover_eval = 0;
+      }
+      
       // rjf: reset open animation
       if(ws->hover_eval_string.size == 0)
       {
