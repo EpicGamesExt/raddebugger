@@ -59,6 +59,7 @@ struct RD_WatchCell
   String8 string;
   DR_FancyStringList fancy_strings;
   F32 pct;
+  F32 px;
 };
 
 typedef struct RD_WatchCellList RD_WatchCellList;

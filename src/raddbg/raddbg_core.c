@@ -1414,6 +1414,14 @@ rd_setting_from_name(String8 name)
   {
     // rjf: find most-granular config scope to begin looking for the setting
     RD_Cfg *start_cfg = rd_cfg_from_id(rd_regs()->view);
+    for(RD_Cfg *p = start_cfg->parent; p != &rd_nil_cfg; p = p->parent)
+    {
+      if(str8_match(p->string, str8_lit("transient"), 0))
+      {
+        start_cfg = &rd_nil_cfg;
+        break;
+      }
+    }
     if(start_cfg == &rd_nil_cfg) { start_cfg = rd_cfg_from_id(rd_regs()->panel); }
     if(start_cfg == &rd_nil_cfg) { start_cfg = rd_cfg_from_id(rd_regs()->window); }
     
@@ -6197,7 +6205,9 @@ rd_window_frame(void)
         RD_Cfg *root = rd_immediate_cfg_from_keyf("hover_eval_%p", ws);
         RD_Cfg *view = rd_cfg_child_from_string_or_alloc(root, str8_lit("watch"));
         RD_Cfg *expr = rd_cfg_child_from_string_or_alloc(view, str8_lit("expression"));
-        RD_RegsScope(.panel = 0, .view = view->id)
+        RD_Cfg *explicit_root = rd_cfg_child_from_string_or_alloc(view, str8_lit("explicit_root"));
+        rd_cfg_new(explicit_root, str8_lit("1"));
+        RD_RegsScope(.view = view->id)
         {
           rd_cfg_new_replace(expr, ws->hover_eval_string);
           EV_BlockTree predicted_block_tree = ev_block_tree_from_string(scratch.arena, rd_view_eval_view(), str8_zero(), ws->hover_eval_string);
@@ -8084,7 +8094,7 @@ rd_window_frame(void)
       {
         // rjf: main rectangle
         {
-          R_Rect2DInst *inst = dr_rect(pad_2f32(box->rect, 1), box->palette->colors[UI_ColorCode_Background], 0, 0, 1.f);
+          R_Rect2DInst *inst = dr_rect(pad_2f32(box->rect, 1.f), box->palette->colors[UI_ColorCode_Background], 0, 0, 1.f);
           MemoryCopyArray(inst->corner_radii, box->corner_radii);
         }
         
@@ -8321,22 +8331,22 @@ rd_window_frame(void)
           {
             Rng2F32 r = b->rect;
             F32 half_thickness = 1.f;
-            F32 softness = 0.5f;
+            F32 softness = 0.f;
             if(b->flags & UI_BoxFlag_DrawSideTop)
             {
-              dr_rect(r2f32p(r.x0, r.y0-half_thickness, r.x1, r.y0+half_thickness), b->palette->colors[UI_ColorCode_Border], 0, 0, softness);
+              dr_rect(r2f32p(r.x0, r.y0, r.x1, r.y0+2*half_thickness), b->palette->colors[UI_ColorCode_Border], 0, 0, softness);
             }
             if(b->flags & UI_BoxFlag_DrawSideBottom)
             {
-              dr_rect(r2f32p(r.x0, r.y1-half_thickness, r.x1, r.y1+half_thickness), b->palette->colors[UI_ColorCode_Border], 0, 0, softness);
+              dr_rect(r2f32p(r.x0, r.y1-2*half_thickness, r.x1, r.y1), b->palette->colors[UI_ColorCode_Border], 0, 0, softness);
             }
             if(b->flags & UI_BoxFlag_DrawSideLeft)
             {
-              dr_rect(r2f32p(r.x0-half_thickness, r.y0, r.x0+half_thickness, r.y1), b->palette->colors[UI_ColorCode_Border], 0, 0, softness);
+              dr_rect(r2f32p(r.x0, r.y0, r.x0+2*half_thickness, r.y1), b->palette->colors[UI_ColorCode_Border], 0, 0, softness);
             }
             if(b->flags & UI_BoxFlag_DrawSideRight)
             {
-              dr_rect(r2f32p(r.x1-half_thickness, r.y0, r.x1+half_thickness, r.y1), b->palette->colors[UI_ColorCode_Border], 0, 0, softness);
+              dr_rect(r2f32p(r.x1-2*half_thickness, r.y0, r.x1, r.y1), b->palette->colors[UI_ColorCode_Border], 0, 0, softness);
             }
           }
           
@@ -9146,7 +9156,7 @@ E_LOOKUP_ACCESS_FUNCTION_DEF(target)
   {
     E_Eval eval = e_eval_from_expr(scratch.arena, lhs);
     RD_Cfg *cfg = rd_cfg_from_eval_space(eval.space);
-    result.irtree_and_type.root     = e_irtree_const_u(arena, cfg->id);
+    result.irtree_and_type.root     = e_irtree_set_space(arena, eval.space, e_irtree_const_u(arena, cfg->id));
     result.irtree_and_type.type_key = e_type_key_cons(.kind = E_TypeKind_Set, .name = str8_lit("environment"));
     result.irtree_and_type.mode     = E_Mode_Offset;
   }

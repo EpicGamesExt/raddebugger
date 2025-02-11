@@ -58,7 +58,11 @@ e_interpret(String8 bytecode)
   U64 stack_cap = 128; // TODO(rjf): scan bytecode; determine maximum stack depth
   E_Value *stack = push_array_no_zero(scratch.arena, E_Value, stack_cap);
   U64 stack_count = 0;
-  E_Space selected_space = e_interpret_ctx->primary_space;
+  E_Space selected_space = {0};
+  if(bytecode.size != 0)
+  {
+    selected_space = e_interpret_ctx->primary_space;
+  }
   
   //- rjf: iterate bytecode & perform ops
   U8 *ptr = bytecode.str;

@@ -964,8 +964,8 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     // cfgs, and the evaluations are of the targets themselves.
     //
     B32 row_eval_matches_group = 0;
+    RD_Cfg *evalled_cfg = rd_cfg_from_eval_space(info.eval.space);
     {
-      RD_Cfg *evalled_cfg = rd_cfg_from_eval_space(info.eval.space);
       row_eval_matches_group = (evalled_cfg == info.group_cfg_child);
     }
     
@@ -980,10 +980,16 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     {
       if(0){}
       
-      // rjf: singular button for top-level cfgs
+      // rjf: singular button for top-level cfg group elements
       else if(info.eval.space.kind == RD_EvalSpaceKind_MetaCfg && row_eval_matches_group && info.group_cfg_parent == &rd_nil_cfg)
       {
         rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Button, .pct = 1.f, .fancy_strings = rd_title_fstrs_from_cfg(arena, info.group_cfg_child, ui_top_palette()->text_weak, ui_top_font_size()));
+      }
+      
+      // rjf: singular button for top-level cfg roots
+      else if(row->block->parent == &ev_nil_block && evalled_cfg != &rd_nil_cfg)
+      {
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Button, .pct = 1.f, .fancy_strings = rd_title_fstrs_from_cfg(arena, evalled_cfg, ui_top_palette()->text_weak, ui_top_font_size()));
       }
       
       // rjf: singular button for entities
@@ -1002,6 +1008,19 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       else if(info.view_ui_rule != &rd_nil_view_ui_rule)
       {
         rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_ViewUI, .pct = 1.f);
+      }
+      
+      // rjf: for 'add-new' rows in meta-cfg evaluation spaces, only do expr
+      else if(info.eval.space.kind == E_SpaceKind_Null && info.group_cfg_parent != &rd_nil_cfg)
+      {
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .pct = 1.f);
+      }
+      
+      // rjf: for meta-cfg evaluation spaces, only do expr/value
+      else if(info.eval.space.kind == RD_EvalSpaceKind_MetaCfg)
+      {
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Expr, .pct = 0.25f);
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, .pct = 0.75f);
       }
       
       // rjf: default cells
@@ -1566,15 +1585,7 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
   // the "collection of all watches", to build a watch window. but this behavior is not
   // as desirable if we are just using some other expression as the root.
   //
-  B32 implicit_root = 0;
-  {
-    E_Eval eval = e_eval_from_string(scratch.arena, expr);
-    E_TypeKind kind = e_type_kind_from_key(eval.type_key);
-    if(kind == E_TypeKind_Set)
-    {
-      implicit_root = 1;
-    }
-  }
+  B32 implicit_root = !rd_view_cfg_value_from_string(str8_lit("explicit_root")).u64;
   
   //////////////////////////////
   //- rjf: determine autocompletion string
@@ -2479,6 +2490,7 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
         ProfScope("build table")
         {
           U64 global_row_idx = rows.count_before_semantic;
+          RD_WatchRowInfo last_row_info = {0};
           for(EV_WindowedRowNode *row_node = rows.first; row_node != 0; row_node = row_node->next, global_row_idx += 1)
           {
             ////////////////////////
@@ -2500,6 +2512,37 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
             ProfEnd();
             
             ////////////////////////
+            //- rjf: determine if this row fits the last row's topology
+            //
+            B32 row_matches_last_row_topology = 1;
+            if(row_node != rows.first)
+            {
+              for(RD_WatchCell *last_cell = last_row_info.cells.first, *this_cell = row_info.cells.first;;
+                  last_cell = last_cell->next, this_cell = this_cell->next)
+              {
+                if(last_cell == 0 && this_cell == 0)
+                {
+                  break;
+                }
+                if((last_cell == 0 && this_cell != 0) || (last_cell != 0 && this_cell == 0))
+                {
+                  row_matches_last_row_topology = 0;
+                  break;
+                }
+                if(rd_id_from_watch_cell(last_cell) != rd_id_from_watch_cell(this_cell))
+                {
+                  row_matches_last_row_topology = 0;
+                  break;
+                }
+              }
+            }
+            
+            ////////////////////////
+            //- rjf: store last row's info, for next iteration
+            //
+            last_row_info = row_info;
+            
+            ////////////////////////
             //- rjf: determine if row's data is fresh and/or bad
             //
             ProfBegin("determine if row's data is fresh and/or bad");
@@ -2516,7 +2559,7 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                   U64 size = e_type_byte_size_from_key(row_info.eval.type_key);
                   size = Min(size, 64);
                   Rng1U64 vaddr_rng = r1u64(row_info.eval.value.u64, row_info.eval.value.u64+size);
-                  CTRL_ProcessMemorySlice slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, space_entity->handle, vaddr_rng, 0);
+                  CTRL_ProcessMemorySlice slice = ctrl_query_cached_data_from_process_vaddr_range(scratch.arena, space_entity->handle, vaddr_rng, d_state->frame_eval_memread_endt_us);
                   for(U64 idx = 0; idx < (slice.data.size+63)/64; idx += 1)
                   {
                     if(slice.byte_changed_flags[idx] != 0)
@@ -2549,6 +2592,10 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                 palette = ui_build_palette(ui_top_palette(), .background = rd_rgba_from_theme_color(RD_ThemeColor_BaseBackgroundAlt));
                 row_flags |= UI_BoxFlag_DrawBackground;
               }
+              if(!row_matches_last_row_topology)
+              {
+                row_flags |= UI_BoxFlag_DrawSideTop;
+              }
 #if 0 // TODO(rjf): @cfg
               switch(row_kind)
               {
@@ -2570,7 +2617,7 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
             ui_set_next_pref_width(ui_pct(1, 0));
             ui_set_next_pref_height(ui_px(row_height_px*row->visual_size, 1.f));
             ui_set_next_focus_hot(row_selected ? UI_FocusKind_On : UI_FocusKind_Off);
-            UI_Box *row_box = ui_build_box_from_stringf(row_flags|(!row_node->next)*UI_BoxFlag_DrawSideBottom|UI_BoxFlag_Clickable, "row_%I64x", row_hash);
+            UI_Box *row_box = ui_build_box_from_stringf(row_flags|((!row_node->next)*UI_BoxFlag_DrawSideBottom)|UI_BoxFlag_Clickable, "row_%I64x", row_hash);
             
             //////////////////////
             //- rjf: build row contents
@@ -2631,6 +2678,8 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                 RD_WatchViewTextEditState *cell_edit_state = rd_watch_view_text_edit_state_from_pt(ewv, cell_pt);
                 B32 cell_selected = (row_selected && selection_tbl.min.x <= cell_x && cell_x <= selection_tbl.max.x);
                 RD_WatchRowCellInfo cell_info = rd_info_from_watch_row_cell(scratch.arena, row, string_flags, &row_info, cell, ui_top_font(), ui_top_font_size(), row_string_max_size_px);
+                F32 cell_width_px = cell->px + cell->pct * (dim_2f32(rect).x - floor_f32(ui_top_font_size()*1.5f));
+                F32 next_cell_x_px = cell_x_px + cell_width_px;
                 
                 //- rjf: determine cell's palette
                 ProfBegin("determine cell's palette");
@@ -2652,15 +2701,15 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                 
                 //- rjf: build cell
                 UI_Box *cell_box = &ui_nil_box;
-                UI_Palette(palette)
+                UI_Palette(palette) UI_PrefWidth(ui_px(cell_width_px, 1.f))
                 {
-                  ui_set_next_fixed_height(row->visual_size * row_height_px);
+                  ui_set_next_fixed_height(floor_f32(row->visual_size * row_height_px));
                   cell_box = ui_build_box_from_stringf(UI_BoxFlag_DrawSideLeft, "cell_%I64x_%I64x", row_hash, cell_id);
                 }
                 
-                //- rjf: build cell
+                //- rjf: build cell contents
                 UI_Signal sig = {0};
-                ProfScope("build cell")
+                ProfScope("build cell contents")
                   UI_Parent(cell_box)
                   UI_FocusHot(cell_selected ? UI_FocusKind_On : UI_FocusKind_Off)
                   UI_FocusActive((cell_selected && ewv->text_editing) ? UI_FocusKind_On : UI_FocusKind_Off)
@@ -2683,7 +2732,7 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                   // rjf: cell has hook? -> build ui by calling hook
                   else if(cell_info.view_ui_rule != &rd_nil_view_ui_rule)
                   {
-                    Rng2F32 cell_rect = r2f32p(cell_x_px, 0, cell_x_px + cell->pct*(dim_2f32(rect).x - floor_f32(ui_top_font_size()*1.5f)), row_height_px*(row_node->visual_size_skipped + row->visual_size + row_node->visual_size_chopped));
+                    Rng2F32 cell_rect = r2f32p(cell_x_px, 0, next_cell_x_px, row_height_px*(row_node->visual_size_skipped + row->visual_size + row_node->visual_size_chopped));
                     ui_set_next_fixed_y(-1.f * (row_node->visual_size_skipped) * row_height_px);
                     ui_set_next_fixed_height((row_node->visual_size_skipped + row->visual_size + row_node->visual_size_chopped) * row_height_px);
                     UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clip|UI_BoxFlag_Clickable|UI_BoxFlag_FloatingY, "###val_%I64x", row_hash);
@@ -2694,8 +2743,9 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                       RD_Cfg *expr = rd_cfg_child_from_string_or_alloc(view, str8_lit("expression"));
                       rd_cfg_new(expr, e_string_from_expr(scratch.arena, cell_info.eval.expr));
                       rd_cfg_new(view, str8_lit("selected"));
-                      RD_RegsScope(.panel = 0, .view = view->id)
+                      RD_RegsScope(.view = view->id)
                         UI_PermissionFlags(UI_PermissionFlag_Clicks|UI_PermissionFlag_ScrollX)
+                        UI_Flags(0)
                       {
                         // rjf: loading animation container
                         UI_Box *loading_overlay_container = &ui_nil_box;
@@ -2726,7 +2776,6 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                     {
                       line_edit_params.flags                = (RD_LineEditFlag_CodeContents|
                                                                RD_LineEditFlag_NoBackground*!(cell_info.is_button)|
-                                                               RD_LineEditFlag_Border*!!(cell_info.is_button)|
                                                                RD_LineEditFlag_Button*!!(cell_info.is_button)|
                                                                RD_LineEditFlag_KeyboardClickable|
                                                                RD_LineEditFlag_Expander*!!(cell_x == 0 && row_is_expandable && cell == row_info.cells.first)|
@@ -2840,7 +2889,7 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                 }
                 
                 //- rjf: bump x pixel coordinate
-                cell_x_px += cell->pct*dim_2f32(rect).x;
+                cell_x_px = next_cell_x_px;
                 
                 //- rjf: [DEV] hovering -> watch key tooltips
                 if(DEV_eval_watch_key_tooltips && ui_hovering(sig)) UI_Tooltip RD_Font(RD_FontSlot_Code)
