@@ -151,16 +151,6 @@ os_string_from_file_range(Arena *arena, OS_Handle file, Rng1U64 range)
   return result;
 }
 
-internal B32
-os_rename_file(String8 orig_name, String8 new_name)
-{
-  Temp scratch = scratch_begin(0,0);
-  OS_Handle file = os_file_open(OS_AccessFlag_Read|OS_AccessFlag_ShareWrite|OS_AccessFlag_ShareDelete, orig_name);
-  B32 is_renamed = os_rename_file_by_handle(file, new_name);
-  os_file_close(file);
-  return is_renamed;
-}
-
 ////////////////////////////////
 //~ rjf: Process Launcher Helpers
 
