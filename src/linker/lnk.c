@@ -358,7 +358,7 @@ lnk_manifest_from_inputs(Arena       *arena,
 
     // write linker manifest to temp file
     String8 linker_manifest_path = push_str8f(scratch.arena, "%S.manifest.temp", manifest_name);
-    lnk_write_data_to_file_path(linker_manifest_path, linker_manifest);
+    lnk_write_data_to_file_path(linker_manifest_path, str8_zero(), linker_manifest);
 
     // push linker manifest
     str8_list_push(scratch.arena, &input_manifest_path_list, linker_manifest_path);
@@ -3079,7 +3079,7 @@ lnk_write_thread(void *raw_ctx)
 {
   ProfBeginFunction();
   LNK_WriteThreadContext *ctx = raw_ctx;
-  lnk_write_data_to_file_path(ctx->path, ctx->data);
+  lnk_write_data_to_file_path(ctx->path, ctx->temp_path, ctx->data);
   ProfEnd();
 }
 
@@ -3254,7 +3254,7 @@ lnk_run(int argc, char **argv)
   LNK_ObjList          obj_list                         = {0};
   LNK_LibList          lib_index[LNK_InputSource_Count] = {0};
   String8              image_data                       = str8_zero();
-  OS_Handle            image_write_thread               = {0};
+  OS_Handle         image_write_thread               = {0};
   
   // init state machine
   struct StateList state_list = {0};
@@ -3763,7 +3763,7 @@ lnk_run(int argc, char **argv)
           ProfBeginDynamic("Write Manifest To: %.*s", str8_varg(config->manifest_name));
           Temp temp = temp_begin(scratch.arena);
           String8 manifest_data = lnk_manifest_from_inputs(temp.arena, config->mt_path, config->manifest_name, config->manifest_uac, config->manifest_level, config->manifest_ui_access, input_manifest_path_list, manifest_dep_list);
-          lnk_write_data_to_file_path(config->manifest_name, manifest_data);
+          lnk_write_data_to_file_path(config->manifest_name, str8_zero(), manifest_data);
           temp_end(temp);
           ProfEnd();
         } break;
@@ -4080,10 +4080,14 @@ lnk_run(int argc, char **argv)
           }
         }
         
-        LNK_WriteThreadContext *ctx = push_array(scratch.arena, LNK_WriteThreadContext, 1);
-        ctx->path                   = config->image_name;
-        ctx->data                   = image_data;
-        image_write_thread = os_thread_launch(lnk_write_thread, ctx, 0);
+        // write image file in background
+        {
+          LNK_WriteThreadContext *ctx = push_array(scratch.arena, LNK_WriteThreadContext, 1);
+          ctx->path                   = config->image_name;
+          ctx->temp_path              = config->temp_image_name;
+          ctx->data                   = image_data;
+          image_write_thread = os_thread_launch(lnk_write_thread, ctx, 0);
+        }
 
         if (lnk_get_log_status(LNK_Log_InputObj)) {
           U64 total_input_size = 0;
@@ -4110,7 +4114,7 @@ lnk_run(int argc, char **argv)
         ProfBegin("Build Imp Lib");
         lnk_timer_begin(LNK_Timer_Lib);
         String8List lib_list = lnk_build_import_lib(tp, tp_arena, config->machine, config->time_stamp, config->imp_lib_name, config->image_name, exptab);
-        lnk_write_data_list_to_file_path(config->imp_lib_name, lib_list);
+        lnk_write_data_list_to_file_path(config->imp_lib_name, str8_zero(), lib_list);
         lnk_timer_end(LNK_Timer_Lib);
         ProfEnd();
       } break;
@@ -4143,7 +4147,8 @@ lnk_run(int argc, char **argv)
                                                           input.parsed_symbols,
                                                           types);
           
-          lnk_write_data_list_to_file_path(config->rad_debug_name, rdi_data);
+          lnk_write_data_list_to_file_path(config->rad_debug_name, config->temp_rad_debug_name, rdi_data);
+
           lnk_timer_end(LNK_Timer_Rdi);
         }
         
@@ -4177,7 +4182,7 @@ lnk_run(int argc, char **argv)
                                                input.parsed_symbols,
                                                types);
           
-          lnk_write_data_list_to_file_path(config->pdb_name, pdb_data);
+          lnk_write_data_list_to_file_path(config->pdb_name, config->temp_pdb_name, pdb_data);
           lnk_timer_end(LNK_Timer_Pdb);
         }
         

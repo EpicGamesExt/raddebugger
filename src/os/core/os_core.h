@@ -38,13 +38,14 @@ struct OS_ProcessInfo
 typedef U32 OS_AccessFlags;
 enum
 {
-  OS_AccessFlag_Read       = (1<<0),
-  OS_AccessFlag_Write      = (1<<1),
-  OS_AccessFlag_Execute    = (1<<2),
-  OS_AccessFlag_Append     = (1<<3),
-  OS_AccessFlag_ShareRead  = (1<<4),
-  OS_AccessFlag_ShareWrite = (1<<5),
-  OS_AccessFlag_Inherited  = (1<<6),
+  OS_AccessFlag_Read        = (1<<0),
+  OS_AccessFlag_Write       = (1<<1),
+  OS_AccessFlag_Execute     = (1<<2),
+  OS_AccessFlag_Append      = (1<<3),
+  OS_AccessFlag_ShareRead   = (1<<4),
+  OS_AccessFlag_ShareWrite  = (1<<5),
+  OS_AccessFlag_ShareDelete = (1<<6),
+  OS_AccessFlag_Inherited   = (1<<7),
 };
 
 ////////////////////////////////
@@ -206,6 +207,8 @@ internal U64            os_file_write(OS_Handle file, Rng1U64 rng, void *data);
 internal B32            os_file_set_times(OS_Handle file, DateTime time);
 internal FileProperties os_properties_from_file(OS_Handle file);
 internal OS_FileID      os_id_from_file(OS_Handle file);
+internal B32            os_rename_file_by_handle(OS_Handle file, String8 new_name);
+internal B32            os_rename_file(String8 orig_name, String8 new_name);
 internal B32            os_delete_file_at_path(String8 path);
 internal B32            os_copy_file_path(String8 dst, String8 src);
 internal String8        os_full_path_from_path(Arena *arena, String8 path);

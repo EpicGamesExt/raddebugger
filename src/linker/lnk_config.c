@@ -152,17 +152,17 @@ global read_only struct
   { LNK_CmdSwitch_Rad_PdbHashTypeNames,           "RAD_PDB_HASH_TYPE_NAMES",            ":{NONE|LENIENT|FULL}", "Replace type names in LF_STRUCTURE and LF_CLASS with hashes."       },
   { LNK_CmdSwitch_Rad_SectVirtOff,                "RAD_SECT_VIRT_OFF",                  ":#",        "Set RVA where section data is placed in memory. For internal use only."        },
   { LNK_CmdSwitch_Rad_SharedThreadPool,           "RAD_SHARED_THREAD_POOL",             "[:STRING]", "Default value \"" LNK_DEFAULT_THREAD_POOL_NAME "\""                            },
-  { LNK_CmdSwitch_Rad_SharedThreadPoolMaxWorkers, "RAD_SHARED_THREAD_POOL_MAX_WORKERS", ":#",      "Sets maximum number of workers in a thread pool."                              },
+  { LNK_CmdSwitch_Rad_SharedThreadPoolMaxWorkers, "RAD_SHARED_THREAD_POOL_MAX_WORKERS", ":#",        "Sets maximum number of workers in a thread pool."                              },
   { LNK_CmdSwitch_Rad_SuppressError,              "RAD_SUPPRESS_ERROR",                 ":#",        ""                                                                              },
   { LNK_CmdSwitch_Rad_SymbolTableCapDefined,      "RAD_SYMBOL_TABLE_CAP_DEFINED",       ":#",        "Number of buckets allocated in the symbol table for defined symbols."          },
   { LNK_CmdSwitch_Rad_SymbolTableCapInternal,     "RAD_SYMBOL_TABLE_CAP_INTERNAL",      ":#",        "Number of buckets allocated in the symbol table for internal symbols."         },
   { LNK_CmdSwitch_Rad_SymbolTableCapLib,          "RAD_SYMBOL_TABLE_CAP_LIB",           ":#",        "Number of buckets allocated in the symbol table for library symbols."          },
   { LNK_CmdSwitch_Rad_SymbolTableCapWeak,         "RAD_SYMBOL_TABLE_CAP_WEAK",          ":#",        "Number of buckets allocated in the symbol table for weak symbols."             },
   { LNK_CmdSwitch_Rad_TargetOs,                   "RAD_TARGET_OS",                      ":{WINDOWS,LINUX,MAC}"                                                                       },
+  { LNK_CmdSwitch_Rad_WriteTempFiles,             "RAD_WRITE_TEMP_FILES",               "[:NO]",     "When speicifed linker writes image and debug info to temporary files and renames after link is done." },
   { LNK_CmdSwitch_Rad_TimeStamp,                  "RAD_TIME_STAMP",                     ":#",        "Time stamp embeded in EXE and PDB."                                            },
   { LNK_CmdSwitch_Rad_Version,                    "RAD_VERSION",                        "",          "Print version and exit."                                                       },
   { LNK_CmdSwitch_Rad_Workers,                    "RAD_WORKERS",                        ":#",        "Sets number of workers created in the pool. Number is capped at 1024. When /RAD_SHARED_THREAD_POOL is specified this number cant exceed /RAD_SHARED_THREAD_POOL_MAX_WORKERS." },
-
   { LNK_CmdSwitch_Help, "HELP", "", "" },
   { LNK_CmdSwitch_Help, "?",    "", "" },
 };
@@ -1754,6 +1754,10 @@ lnk_apply_cmd_option_to_config(Arena *arena, LNK_Config *config, String8 cmd_nam
     }
   } break;
 
+  case LNK_CmdSwitch_Rad_WriteTempFiles: {
+    lnk_cmd_switch_parse_flag(obj_path, lib_path, cmd_switch, value_strings, &config->write_temp_files);
+  } break;
+
   case LNK_CmdSwitch_Rad_TimeStamp: {
     lnk_cmd_switch_parse_u32(obj_path, lib_path, cmd_switch, value_strings, &config->time_stamp, 0);
   } break;
@@ -2053,6 +2057,13 @@ lnk_config_from_cmd_line(Arena *arena, String8List raw_cmd_line)
 
   // :Rad_DebugAltPath
   config->rad_debug_alt_path = lnk_expand_env_vars_windows(arena, env_vars, config->rad_debug_alt_path);
+
+  // create temporary files names
+  if (config->write_temp_files == LNK_SwitchState_Yes) {
+    config->temp_image_name     = push_str8f(arena, "%S.tmp%x", config->image_name,     config->time_stamp);
+    config->temp_pdb_name       = push_str8f(arena, "%S.tmp%x", config->pdb_name,       config->time_stamp);
+    config->temp_rad_debug_name = push_str8f(arena, "%S.tmp%x", config->rad_debug_name, config->time_stamp);
+  }
 
   if (lnk_get_log_status(LNK_Log_Debug)) {
     String8 full_cmd_line = str8_list_join(scratch.arena, &raw_cmd_line, &(StringJoin){ .sep = str8_lit_comp(" ") });

@@ -155,6 +155,7 @@ typedef enum
   LNK_CmdSwitch_Rad_SymbolTableCapInternal,
   LNK_CmdSwitch_Rad_SymbolTableCapWeak,
   LNK_CmdSwitch_Rad_SymbolTableCapLib,
+  LNK_CmdSwitch_Rad_WriteTempFiles,
   LNK_CmdSwitch_Rad_TargetOs,
   LNK_CmdSwitch_Rad_TimeStamp,
   LNK_CmdSwitch_Rad_Version,
@@ -364,6 +365,10 @@ typedef struct LNK_Config
   U64                         symbol_table_cap_lib;
   B32                         build_imp_lib;
   B32                         build_exp;
+  LNK_SwitchState             write_temp_files;
+  String8                     temp_image_name;
+  String8                     temp_pdb_name;
+  String8                     temp_rad_debug_name;
 } LNK_Config;
 
 typedef enum

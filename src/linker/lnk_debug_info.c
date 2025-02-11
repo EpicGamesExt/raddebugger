@@ -2676,7 +2676,7 @@ lnk_replace_type_names_with_hashes(TP_Context *tp, TP_Arena *arena, CV_DebugT de
   if (task.make_map) {
     String8List map = {0};
     str8_list_concat_in_place_array(&map, task.maps, tp->worker_count);
-    lnk_write_data_list_to_file_path(map_name, map);
+    lnk_write_data_list_to_file_path(map_name, str8_zero(), map);
     tp_arena_release(&task.map_arena);
   }
 

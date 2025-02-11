@@ -224,6 +224,7 @@ typedef struct
 typedef struct
 {
   String8 path;
+  String8 temp_path;
   String8 data;
 } LNK_WriteThreadContext;
 

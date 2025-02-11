@@ -321,13 +321,14 @@ os_file_open(OS_AccessFlags flags, String8 path)
   DWORD share_mode = 0;
   DWORD creation_disposition = OPEN_EXISTING;
   SECURITY_ATTRIBUTES security_attributes = {sizeof(security_attributes), 0, 0};
-  if(flags & OS_AccessFlag_Read)       {access_flags |= GENERIC_READ;}
-  if(flags & OS_AccessFlag_Write)      {access_flags |= GENERIC_WRITE;}
-  if(flags & OS_AccessFlag_Execute)    {access_flags |= GENERIC_EXECUTE;}
-  if(flags & OS_AccessFlag_ShareRead)  {share_mode |= FILE_SHARE_READ;}
-  if(flags & OS_AccessFlag_ShareWrite) {share_mode |= FILE_SHARE_WRITE|FILE_SHARE_DELETE;}
-  if(flags & OS_AccessFlag_Write)      {creation_disposition = CREATE_ALWAYS;}
-  if(flags & OS_AccessFlag_Append)     {creation_disposition = OPEN_ALWAYS; access_flags |= FILE_APPEND_DATA; }
+  if(flags & OS_AccessFlag_Read)        {access_flags |= GENERIC_READ;}
+  if(flags & OS_AccessFlag_Write)       {access_flags |= GENERIC_WRITE;}
+  if(flags & OS_AccessFlag_Execute)     {access_flags |= GENERIC_EXECUTE;}
+  if(flags & OS_AccessFlag_ShareRead)   {share_mode |= FILE_SHARE_READ;}
+  if(flags & OS_AccessFlag_ShareWrite)  {share_mode |= FILE_SHARE_WRITE|FILE_SHARE_DELETE;}
+  if(flags & OS_AccessFlag_ShareDelete) {share_mode |= FILE_SHARE_DELETE; access_flags |= DELETE;}
+  if(flags & OS_AccessFlag_Write)       {creation_disposition = CREATE_ALWAYS;}
+  if(flags & OS_AccessFlag_Append)      {creation_disposition = OPEN_ALWAYS; access_flags |= FILE_APPEND_DATA; }
   if(flags & OS_AccessFlag_Inherited)
   {
     security_attributes.bInheritHandle = 1;
@@ -467,6 +468,30 @@ os_id_from_file(OS_Handle file)
     result.v[2] = info.nFileIndexHigh;
   }
   return result;
+}
+
+internal B32
+os_rename_file_by_handle(OS_Handle file, String8 new_name)
+{
+  Temp scratch = scratch_begin(0,0);
+
+  HANDLE handle = (HANDLE)file.u64[0];
+
+  String16 new_name16 = str16_from_8(scratch.arena, new_name);
+
+  U64 file_rename_info_size = sizeof(FILE_RENAME_INFO);
+  U64 buffer_size           = file_rename_info_size + sizeof(WCHAR)*new_name16.size;
+  U8 *buffer                = push_array(scratch.arena, U8, buffer_size);
+
+  FILE_RENAME_INFO *rename_info = (FILE_RENAME_INFO *)buffer;
+  rename_info->ReplaceIfExists  = 1;
+  rename_info->FileNameLength   = new_name16.size * sizeof(new_name16.str[0]);
+  MemoryCopy(rename_info->FileName, new_name16.str, new_name16.size * sizeof(new_name16.str[0]));
+
+  BOOL is_renamed = SetFileInformationByHandle(handle, FileRenameInfo, buffer, buffer_size);
+
+  scratch_end(scratch);
+  return is_renamed;
 }
 
 internal B32

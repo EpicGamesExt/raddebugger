@@ -11,6 +11,15 @@ lnk_open_file_read(char *path, uint64_t path_size, void *handle_buffer, uint64_t
 }
 
 shared_function int
+lnk_open_file_write_rename(char *path, uint64_t path_size, void *handle_buffer, uint64_t handle_buffer_max)
+{
+  OS_Handle handle = os_file_open(OS_AccessFlag_Write|OS_AccessFlag_ShareRead|OS_AccessFlag_ShareWrite|OS_AccessFlag_ShareDelete, str8((U8*)path, path_size));
+  Assert(sizeof(handle) <= handle_buffer_max);
+  MemoryCopy(handle_buffer, &handle, sizeof(handle));
+  return !os_handle_match(handle, os_handle_zero());
+}
+
+shared_function int
 lnk_open_file_write(char *path, uint64_t path_size, void *handle_buffer, uint64_t handle_buffer_max)
 {
   OS_Handle handle = os_file_open(OS_AccessFlag_Write, str8((U8*)path, path_size));
@@ -24,6 +33,14 @@ lnk_close_file(void *raw_handle)
 {
   OS_Handle handle = *(OS_Handle *)raw_handle;
   os_file_close(handle);
+}
+
+shared_function int
+lnk_rename_file(void *raw_handle, char *new_file_path, uint64_t new_file_path_size)
+{
+  OS_Handle handle = *(OS_Handle *)raw_handle;
+  B32 is_renamed = os_rename_file_by_handle(handle, str8((U8*)new_file_path, new_file_path_size));
+  return (int)is_renamed;
 }
 
 shared_function uint64_t
@@ -163,34 +180,56 @@ lnk_read_data_from_file_path_parallel(TP_Context *tp, Arena *arena, String8Array
 }
 
 internal void
-lnk_write_data_list_to_file_path(String8 path, String8List data)
+lnk_write_data_list_to_file_path(String8 path, String8 temp_path, String8List data)
 {
   ProfBeginV("Write %M to %S", data.total_size, path);
 
-  B32 is_written = 0;
+  U64 bytes_written = 0;
 
-  OS_Handle handle;
-  if (lnk_open_file_write((char*)path.str, path.size, &handle, sizeof(handle))) {
-    U64 offset = 0;
-    for (String8Node *data_n = data.first; data_n != 0; data_n = data_n->next) {
-      U64 write_size = lnk_write_file(&handle, offset, data_n->string.str, data_n->string.size);
-      if (write_size != data_n->string.size) {
-        break;
+  B32       open_with_rename = (temp_path.size > 0);
+  OS_Handle file_handle      = {0};
+  if (open_with_rename) {
+    lnk_open_file_write_rename((char*)temp_path.str, temp_path.size, &file_handle, sizeof(file_handle)); 
+  } else {
+    lnk_open_file_write((char*)path.str, path.size, &file_handle, sizeof(file_handle));
+  }
+
+  if (!os_handle_match(file_handle, os_handle_zero())) {
+    // write data nodes
+    {
+      for (String8Node *data_n = data.first; data_n != 0; data_n = data_n->next) {
+        U64 write_size = lnk_write_file(&file_handle, bytes_written, data_n->string.str, data_n->string.size);
+        if (write_size != data_n->string.size) {
+          break;
+        }
+        bytes_written += data_n->string.size;
       }
-      offset += data_n->string.size;
     }
 
-    lnk_close_file(&handle);
+    B32 is_write_complete = (bytes_written == data.total_size);
 
-    is_written = (offset == data.total_size);
-    if (is_written) {
+    if (is_write_complete) {
+      // rename file to original name
+      if (open_with_rename) {
+        if (lnk_rename_file(&file_handle, (char*)path.str, path.size)) {
+          lnk_log(LNK_Log_IO_Write, "Renamed %S -> %S", temp_path, path);
+        } else {
+          lnk_error(LNK_Error_IO, "failed to rename %S -> %S", temp_path, path);
+        }
+      }
+    }
+
+    // log write
+    if (is_write_complete) {
       if (lnk_get_log_status(LNK_Log_IO_Write)) {
         lnk_log(LNK_Log_IO_Write, "File \"%S\" %M written", path, data.total_size);
       }
     } else {
-      lnk_error(LNK_Error_IO, "incomplete write occurred, %M written, expected %M, file %S",
-                offset, data.total_size, path);
+      lnk_error(LNK_Error_IO, "incomplete write, %M written, expected %M, file %S", bytes_written, data.total_size, path);
     }
+
+    // clean up handle
+    lnk_close_file(&file_handle);
   } else {
     lnk_error(LNK_Error_NoAccess, "don't have access to write to %S", path);
   }
@@ -199,12 +238,12 @@ lnk_write_data_list_to_file_path(String8 path, String8List data)
 }
 
 internal void
-lnk_write_data_to_file_path(String8 path, String8 data)
+lnk_write_data_to_file_path(String8 path, String8 temp_path, String8 data)
 {
   Temp scratch = scratch_begin(0,0);
   String8List data_list = {0};
   str8_list_push(scratch.arena, &data_list, data);
-  lnk_write_data_list_to_file_path(path, data_list);
+  lnk_write_data_list_to_file_path(path, temp_path, data_list);
   scratch_end(scratch);
 }
 
