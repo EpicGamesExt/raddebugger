@@ -3,7 +3,7 @@
 
 struct itab {
     const char *instr_s;
-    int instr_id;
+    S32 instr_id;
 };
 
 #define OOB(x, a) (((size_t)x) >= (sizeof(a) / sizeof(*a)))
@@ -12,8 +12,8 @@ struct itab {
 #define S_X "%s%#x"
 #define S_LX "%s%#lx"
 
-#define S_A(x) ((int)x) < 0 ? "-" : "", ((int)x) < 0 ? -((int)x) : ((int)x)
-#define S_LA(x) ((long)x) < 0 ? "-" : "", ((long)x) < 0 ? -((long)x) : ((long)x)
+#define S_A(x) ((S32)x) < 0 ? "-" : "", ((S32)x) < 0 ? -((S32)x) : ((S32)x)
+#define S_LA(x) ((S64)x) < 0 ? "-" : "", ((S64)x) < 0 ? -((S64)x) : ((S64)x)
 
 #define _128_BIT (128)
 #define _64_BIT (64)
@@ -33,10 +33,10 @@ struct itab {
 #define ADD_FIELD(i, field) \
     do { \
         if(!i->fields) \
-            i->fields = malloc(sizeof(int) * ++i->num_fields); \
+            i->fields = (S32*)malloc(sizeof(S32) * ++i->num_fields); \
         else{ \
-            int *fields_rea = realloc(i->fields, \
-                    sizeof(int) * ++i->num_fields); \
+            S32 *fields_rea = realloc(i->fields, \
+                    sizeof(S32) * ++i->num_fields); \
             i->fields = fields_rea; \
         } \
         i->fields[i->num_fields - 1] = field; \
@@ -45,9 +45,9 @@ struct itab {
 #define ADD_REG_OPERAND(i, rn_, sz_, zr_, sysreg_, rtbl_) \
     do { \
         if(!i->operands) \
-            i->operands = malloc(sizeof(struct ad_operand) * ++i->num_operands); \
+            i->operands = (struct ad_operand*)malloc(sizeof(struct ad_operand) * ++i->num_operands); \
         else{ \
-            struct ad_operand *operands_rea = realloc(i->operands, \
+            struct ad_operand *operands_rea = (struct ad_operand*)realloc(i->operands, \
                     sizeof(struct ad_operand) * ++i->num_operands); \
             i->operands = operands_rea; \
         } \
@@ -66,9 +66,9 @@ struct itab {
 #define ADD_SHIFT_OPERAND(i, type_, amt_) \
     do { \
         if(!i->operands) \
-            i->operands = malloc(sizeof(struct ad_operand) * ++i->num_operands); \
+            i->operands = (struct ad_operand*)malloc(sizeof(struct ad_operand) * ++i->num_operands); \
         else{ \
-            struct ad_operand *operands_rea = realloc(i->operands, \
+            struct ad_operand *operands_rea = (struct ad_operand*)realloc(i->operands, \
                     sizeof(struct ad_operand) * ++i->num_operands); \
             i->operands = operands_rea; \
         } \
@@ -80,9 +80,9 @@ struct itab {
 #define ADD_IMM_OPERAND(i, type_, bits_) \
     do { \
         if(!i->operands) \
-            i->operands = malloc(sizeof(struct ad_operand) * ++i->num_operands); \
+            i->operands = (struct ad_operand*)malloc(sizeof(struct ad_operand) * ++i->num_operands); \
         else{ \
-            struct ad_operand *operands_rea = realloc(i->operands, \
+            struct ad_operand *operands_rea = (struct ad_operand*)realloc(i->operands, \
                     sizeof(struct ad_operand) * ++i->num_operands); \
             i->operands = operands_rea; \
         } \
@@ -103,8 +103,8 @@ struct itab {
         i->cc = cc_; \
     } while (0)
 
-static inline const char *GET_GEN_REG(const char **rtbl, unsigned int idx,
-        int prefer_zr){
+static inline const char *GET_GEN_REG(const char **rtbl, U32 idx,
+        S32 prefer_zr){
     if(idx > 31)
         return "(reg idx oob)";
 
@@ -114,7 +114,7 @@ static inline const char *GET_GEN_REG(const char **rtbl, unsigned int idx,
     return rtbl[idx];
 }
 
-static inline const char *GET_FP_REG(const char **rtbl, unsigned int idx){
+static inline const char *GET_FP_REG(const char **rtbl, U32 idx){
     if(idx > 31)
         return "(reg idx oob)";
 
@@ -185,14 +185,14 @@ static const char *AD_RTBL_FP_V_128[] = {
     "v25", "v26", "v27", "v28", "v29", "v30", "v31"
 };
 
-static unsigned long AD_RTBL_GEN_32_SZ = sizeof(AD_RTBL_GEN_32) / sizeof(*AD_RTBL_GEN_32);
-static unsigned long AD_RTBL_GEN_64_SZ = sizeof(AD_RTBL_GEN_64) / sizeof(*AD_RTBL_GEN_64);
+static U64 AD_RTBL_GEN_32_SZ = sizeof(AD_RTBL_GEN_32) / sizeof(*AD_RTBL_GEN_32);
+static U64 AD_RTBL_GEN_64_SZ = sizeof(AD_RTBL_GEN_64) / sizeof(*AD_RTBL_GEN_64);
 
-static unsigned long AD_RTBL_FP_8_SZ = sizeof(AD_RTBL_FP_8) / sizeof(*AD_RTBL_FP_8);
-static unsigned long AD_RTBL_FP_16_SZ = sizeof(AD_RTBL_FP_16) / sizeof(*AD_RTBL_FP_16);
-static unsigned long AD_RTBL_FP_32_SZ = sizeof(AD_RTBL_FP_32) / sizeof(*AD_RTBL_FP_32);
-static unsigned long AD_RTBL_FP_64_SZ = sizeof(AD_RTBL_FP_64) / sizeof(*AD_RTBL_FP_64);
-static unsigned long AD_RTBL_FP_128_SZ = sizeof(AD_RTBL_FP_128) / sizeof(*AD_RTBL_FP_128);
-static unsigned long AD_RTBL_FP_V_128_SZ = sizeof(AD_RTBL_FP_V_128) / sizeof(*AD_RTBL_FP_V_128);
+static U64 AD_RTBL_FP_8_SZ = sizeof(AD_RTBL_FP_8) / sizeof(*AD_RTBL_FP_8);
+static U64 AD_RTBL_FP_16_SZ = sizeof(AD_RTBL_FP_16) / sizeof(*AD_RTBL_FP_16);
+static U64 AD_RTBL_FP_32_SZ = sizeof(AD_RTBL_FP_32) / sizeof(*AD_RTBL_FP_32);
+static U64 AD_RTBL_FP_64_SZ = sizeof(AD_RTBL_FP_64) / sizeof(*AD_RTBL_FP_64);
+static U64 AD_RTBL_FP_128_SZ = sizeof(AD_RTBL_FP_128) / sizeof(*AD_RTBL_FP_128);
+static U64 AD_RTBL_FP_V_128_SZ = sizeof(AD_RTBL_FP_V_128) / sizeof(*AD_RTBL_FP_V_128);
 
 #endif

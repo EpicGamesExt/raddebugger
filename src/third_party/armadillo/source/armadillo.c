@@ -74,7 +74,7 @@ S32 ArmadilloDisassemble(U32 opcode, U64 PC,
     if(!out || (out && *out))
         return 1;
 
-    *out = malloc(sizeof(struct ad_insn));
+    *out = (struct ad_insn*)malloc(sizeof(struct ad_insn));
 
     (*out)->decoded = NULL;
 

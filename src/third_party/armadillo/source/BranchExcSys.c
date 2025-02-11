@@ -1414,9 +1414,9 @@ static S32 DisassembleUnconditionalBranchImmInstr(struct instruction *i,
 
     imm26 = sign_extend(imm26 << 2, 28);
 
-    S64 imm = (signed)imm26 + i->PC;
+    S64 imm = (S64)imm26 + i->PC;
 
-    ADD_IMM_OPERAND(out, AD_IMM_LONG, *(long *)&imm);
+    ADD_IMM_OPERAND(out, AD_IMM_LONG, *(S64 *)&imm);
 
     concat(&DECODE_STR(out), "%s "S_LX"", instr_s, S_LA(imm));
 
@@ -1456,10 +1456,10 @@ static S32 DisassembleCompareAndBranchImmediateInstr(struct instruction *i,
 
     imm19 = sign_extend(imm19 << 2, 21);
 
-    S64 imm = (signed)imm19 + i->PC;
+    S64 imm = (S64)imm19 + i->PC;
 
     ADD_REG_OPERAND(out, Rt, sz, NO_PREFER_ZR, _SYSREG(AD_NONE), _RTBL(registers));
-    ADD_IMM_OPERAND(out, AD_IMM_LONG, *(long *)&imm);
+    ADD_IMM_OPERAND(out, AD_IMM_LONG, *(S64 *)&imm);
 
     concat(&DECODE_STR(out), "%s %s, "S_LX"", instr_s, Rt_s, S_LA(imm));
 
@@ -1516,7 +1516,7 @@ static S32 DisassembleTestAndBranchImmediateInstr(struct instruction *i,
     return 0;
 }
 
-int BranchExcSysDisassemble(struct instruction *i, struct ad_insn *out){
+S32 BranchExcSysDisassemble(struct instruction *i, struct ad_insn *out){
     U32 op0 = bits(i->opcode, 29, 31);
     U32 op1 = bits(i->opcode, 12, 25);
     U32 op2 = bits(i->opcode, 0, 4);

@@ -2903,7 +2903,7 @@ static S32 DisassembleAdvancedSIMDModifiedImmediateInstr(struct instruction *i,
 
     /* at this point, only instr without shift is MOVI (64 bit, both variants) */
     if(instr_id == AD_INSTR_MOVI && op == 1 && cmode == 14){
-        ADD_IMM_OPERAND(out, AD_IMM_LONG, *(long *)&imm);
+        ADD_IMM_OPERAND(out, AD_IMM_LONG, *(S64 *)&imm);
 
         concat(&DECODE_STR(out), ", #"S_LX"", S_LA(imm));
 

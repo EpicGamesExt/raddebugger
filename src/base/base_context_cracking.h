@@ -27,7 +27,6 @@
 #  define ARCH_X86 1
 # elif defined(__aarch64__)
 #  define ARCH_ARM64 1
-#  define USE_SOFT_INTRINSICS
 # elif defined(__arm__)
 #  define ARCH_ARM32 1
 # else
@@ -73,6 +72,7 @@
 #  define ARCH_X86 1
 # elif defined(_M_ARM64)
 #  define ARCH_ARM64 1
+#  define USE_SOFT_INTRINSICS
 # elif defined(_M_ARM)
 #  define ARCH_ARM32 1
 # else

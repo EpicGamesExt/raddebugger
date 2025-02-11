@@ -650,7 +650,7 @@ static S32 DisassembleAddSubtractCarryInstr(struct instruction *i,
     return 0;
 }
 
-static int DisassembleRotateRightIntoFlagsInstr(struct instruction *i,
+static S32 DisassembleRotateRightIntoFlagsInstr(struct instruction *i,
         struct ad_insn *out){
     U32 sf = bits(i->opcode, 31, 31);
     U32 op = bits(i->opcode, 30, 30);

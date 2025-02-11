@@ -281,7 +281,7 @@ p2r_rdi_reg_code_from_cv_reg_code(RDI_Arch arch, CV_Reg reg_code)
         CV_Reg_ARM64_XList(X)
 #undef X
       }
-    }
+    }break;
   }
   return(result);
 }

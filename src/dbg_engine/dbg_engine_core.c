@@ -508,9 +508,10 @@ d_trap_net_from_thread__step_over_line(Arena *arena, CTRL_Entity *thread)
     {
       switch(arch)
       {
-        default: {}break;
+        default:{}break;
         case Arch_arm32:
-        case Arch_x86: {NotImplemented;}break;
+        case Arch_x86:
+        {NotImplemented;}break;
 
         case Arch_x64:
         {
@@ -543,9 +544,10 @@ d_trap_net_from_thread__step_over_line(Arena *arena, CTRL_Entity *thread)
     CTRL_TrapFlags trap_flags = 0;
     switch(arch)
     {
-      default: {}break;
+      default:{}break;
       case Arch_arm32:
-      case Arch_x86: {NotImplemented;}break;
+      case Arch_x86:
+      {NotImplemented;}break;
 
       case Arch_x64:
       {
@@ -553,7 +555,7 @@ d_trap_net_from_thread__step_over_line(Arena *arena, CTRL_Entity *thread)
       }break;
       case Arch_arm64:
       {
-        trap_flags |= (CTRL_TrapFlag_EndStepping|CTRL_TrapFlag_IgnoreStackPointerCheck);
+        trap_flags |= (CTRL_TrapFlag_EndStepping | CTRL_TrapFlag_IgnoreStackPointerCheck);
       }break;
     }
 

@@ -34,7 +34,7 @@ static S32 _concat_internal(char **dst, const char *src, va_list args){
 
     va_end(args1);
 
-    *dst = realloc(dst1, strlen(dst1) + 1);
+    *dst = (char*)realloc(dst1, strlen(dst1) + 1);
 
     return w;
 }

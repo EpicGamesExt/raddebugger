@@ -814,8 +814,6 @@ struct CTRL_ModuleImageInfoCacheNode
   U64                            intel_pdatas_count;
   PE_Arm64Pdata                 *arm64_pdatas;
   U64                            arm64_pdatas_count;
-  U64                            section_count;
-  U64                            section_array_offset;
   U64                            entry_point_voff;
   Rng1U64                        tls_vaddr_range;
   String8                        initial_debug_info_path;

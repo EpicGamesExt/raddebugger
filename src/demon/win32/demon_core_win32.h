@@ -87,7 +87,7 @@ DMN_W32_CTX_INTEL_DEBUG)
 #define DMN_W32_CTX_ARM64_DEBUG          0x0008
 #define DMN_W32_CTX_ARM64_X18            0x0010
 
-#define DMN_W32_CTX_ARM64_ALL (DMN_W32_CTX_ARM64 | \
+#define DMN_W32_CTX_ARM64_ALL (DMN_W32_CTX_ARM64 |\
 DMN_W32_CTX_ARM64_CONTROL | DMN_W32_CTX_ARM64_INTEGER | \
 DMN_W32_CTX_ARM64_FLOATING_POINT | DMN_W32_CTX_ARM64_DEBUG | \
 DMN_W32_CTX_ARM64_X18)
@@ -139,13 +139,13 @@ struct DMN_W32_Context_arm64
   } DUMMYUNIONNAME;
   DWORD64          Sp;
   DWORD64          Pc;
-  ARM64_NT_NEON128 V[32];
+  REGS_Reg128      V[32];
   DWORD            Fpcr;
   DWORD            Fpsr;
-  DWORD            Bcr[ARM64_MAX_BREAKPOINTS];
-  DWORD64          Bvr[ARM64_MAX_BREAKPOINTS];
-  DWORD            Wcr[ARM64_MAX_WATCHPOINTS];
-  DWORD64          Wvr[ARM64_MAX_WATCHPOINTS];
+  DWORD            Bcr[8];
+  DWORD64          Bvr[8];
+  DWORD            Wcr[2];
+  DWORD64          Wvr[2];
 };
 
 typedef XSAVE_FORMAT XMM_SAVE_AREA32;
@@ -192,7 +192,7 @@ struct DMN_W32_Context_x64
   DWORD64 Rip;
   union {
     XMM_SAVE_AREA32 FltSave;
-    //- NOTE(antoniom): ARM64-define
+    // NOTE(antoniom): ARM64-define
     // NEON128         Q[16];
     ULONGLONG       D[32];
     struct {
@@ -326,11 +326,9 @@ struct DMN_W32_ImageInfo
 
 ////////////////////////////////
 //~ rjf: Dynamically-Loaded Win32 Function Types
-DWORD64 dmn_w32_stub_GetEnabledXStateFeatures(void) { return(0); }
-
 typedef HRESULT DMN_W32_GetThreadDescriptionFunctionType(HANDLE hThread, WCHAR **ppszThreadDescription);
 typedef VOID   *DMN_W32_LocateXStateFeatureFunctionType(CONTEXT *Context, DWORD FeatureId, DWORD *Length);
-typedef BOOL    DMN_W32_SetXStateFeaturesMaskFunctionType(CONTEXT *Context, DWORD FeatureMask);
+typedef BOOL    DMN_W32_SetXStateFeaturesMaskFunctionType(CONTEXT *Context, DWORD64 FeatureMask);
 typedef BOOL    DMN_W32_GetXStateFeaturesMaskFunctionType(CONTEXT *Context, DWORD64 *FeatureMask);
 typedef DWORD64 DMN_W32_GetEnabledXStateFeaturesFunctionType(void);
 
@@ -382,6 +380,9 @@ struct DMN_W32_Shared
 
 ////////////////////////////////
 //~ rjf: Globals
+//
+
+DWORD64 dmn_w32_stub_GetEnabledXStateFeatures(void) { return(0); }
 
 global DMN_W32_Shared *dmn_w32_shared = 0;
 global DMN_W32_Entity dmn_w32_entity_nil = {&dmn_w32_entity_nil, &dmn_w32_entity_nil, &dmn_w32_entity_nil, &dmn_w32_entity_nil, &dmn_w32_entity_nil};

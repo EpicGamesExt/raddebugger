@@ -780,13 +780,13 @@ enum
   PE_UnwindGprRegX64_R15 = 15,
 };
 
-typedef U8 PE_UnwindInfoFlagsX64;
+typedef U8 PE_UnwindInfoX64Flags;
 enum
 {
-  PE_UnwindInfoFlagX64_EHANDLER = (1<<0),
-  PE_UnwindInfoFlagX64_UHANDLER = (1<<1),
-  PE_UnwindInfoFlagX64_FHANDLER = 3,
-  PE_UnwindInfoFlagX64_CHAINED  = (1<<2),
+  PE_UnwindInfoX64Flag_EHANDLER = (1<<0),
+  PE_UnwindInfoX64Flag_UHANDLER = (1<<1),
+  PE_UnwindInfoX64Flag_FHANDLER = 3,
+  PE_UnwindInfoX64Flag_CHAINED  = (1<<2),
 };
 
 #define PE_UNWIND_OPCODE_FROM_FLAGS(f) ((f)&0xF)
@@ -807,7 +807,7 @@ union PE_UnwindCodeX64
 #define PE_UNWIND_INFO_FLAGS_FROM_HDR(x)   (((x) >> 3)&0x1F)
 #define PE_UNWIND_INFO_REG_FROM_FRAME(x)   ((x)&0xF)
 #define PE_UNWIND_INFO_OFF_FROM_FRAME(x)   (((x) >> 4)&0xF)
-#define PE_UNWIND_INFO_GET_CODE_COUNT(x)   (((x)+1) & ~1)step
+#define PE_UNWIND_INFO_GET_CODE_COUNT(x)   (((x)+1) & ~1)
 
 typedef struct PE_UnwindInfoX64 PE_UnwindInfoX64;
 struct PE_UnwindInfoX64
@@ -872,8 +872,8 @@ read_only global String8 pe_dos_program = {pe_dos_program_data, sizeof(pe_dos_pr
 //~ rjf: Parsed Info Types
 
 //- antoniom: ARM64EC code ranges
-typedef struct PE_HybridCodeRanges PE_HybridCodeRanges;
-struct PE_HybridCodeRanges
+typedef struct PE_HybridCodeRange PE_HybridCodeRange;
+struct PE_HybridCodeRange
 {
   Rng1U64 range;
   Arch    arch;

@@ -459,7 +459,9 @@ dmn_w32_image_info_from_process_base_vaddr(HANDLE process, U64 base_vaddr)
   U32 pe_offset = 0;
   PE_DosHeader dos_header = {0};
   {
+
     dmn_w32_process_read_struct(process, base_vaddr, &dos_header);
+
     if(dos_header.magic == PE_DOS_MAGIC)
     {
       U64 pe_offset_off = base_vaddr + OffsetOf(PE_DosHeader, coff_file_offset);
@@ -486,11 +488,13 @@ dmn_w32_image_info_from_process_base_vaddr(HANDLE process, U64 base_vaddr)
     }
   }
   
+
   // rjf: get arch and size
   B32 got_size = 0;
   U32 size = 0;
   Arch arch = Arch_Null;
   DMN_W32_ImageInfo result = zero_struct;
+
   if(got_coff_header)
   {
     U64 optional_size_off = 0;
@@ -529,7 +533,8 @@ dmn_w32_image_info_from_process_base_vaddr(HANDLE process, U64 base_vaddr)
   {
     Rng1U64 vaddr_range = r1u64(base_vaddr, base_vaddr+size);
     U32 opt_ext_size = coff_header.optional_header_size;
-    Rng1U64 opt_ext_off_range = r1u64(coff_header_off+sizeof(coff_header), coff_header_off+sizeof(coff_header)+opt_ext_size);
+    Rng1U64 opt_ext_off_range = r1u64(coff_header_off + sizeof(coff_header),
+                                      coff_header_off + sizeof(coff_header) + opt_ext_size);
 
     if(opt_ext_size > 0)
     {
@@ -559,7 +564,7 @@ dmn_w32_image_info_from_process_base_vaddr(HANDLE process, U64 base_vaddr)
       U32 data_dir_max = (opt_ext_size - reported_data_dir_offset) / sizeof(PE_DataDirectory);
       U32 data_dir_count = ClampTop(reported_data_dir_count, data_dir_max);
 
-      if(PE_DataDirectoryIndex_LOAD_CONFIG < data_dir_count)
+      if (PE_DataDirectoryIndex_LOAD_CONFIG < data_dir_count)
       {
         U64 dir_offset = opt_ext_off_range.min + reported_data_dir_offset + sizeof(PE_DataDirectory)*PE_DataDirectoryIndex_LOAD_CONFIG;
         PE_DataDirectory data_dir = {0};
@@ -583,7 +588,7 @@ dmn_w32_image_info_from_process_base_vaddr(HANDLE process, U64 base_vaddr)
         }
 
         if(load_config_header.size >= OffsetOf(PE_LoadConfig64, chpe_metadata_ptr) &&
-           load_config_header.chpe_metadata_ptr)
+           load_config_header.chpe_metadata_ptr != 0)
         {
           arch = Arch_arm64;
         }
@@ -591,7 +596,7 @@ dmn_w32_image_info_from_process_base_vaddr(HANDLE process, U64 base_vaddr)
     }
   }
 
-  if(got_size)
+  if (got_size)
   {
     result.arch = arch;
     result.size = size;
@@ -675,6 +680,7 @@ dmn_w32_thread_read_reg_block(Arch arch, HANDLE thread, void *reg_block)
     case Arch_arm64:
     {
       Temp scratch = scratch_begin(0, 0);
+
       REGS_RegBlockARM64 *dst = (REGS_RegBlockARM64 *)reg_block;
 
       DMN_W32_Context_arm64 *ctx = 0;
@@ -682,16 +688,16 @@ dmn_w32_thread_read_reg_block(Arch arch, HANDLE thread, void *reg_block)
       DWORD size = 0;
       InitializeContext(0, ctx_flags, 0, &size);
       DWORD error = GetLastError();
-      if(error = ERROR_INSUFFICIENT_BUFFER){
+      if (error = ERROR_INSUFFICIENT_BUFFER){
         void *ctx_memory = push_array(scratch.arena, U8, size);
-        if (!InitializeContext(ctx_memory, ctx_flags, (CONTEXT**)&ctx, &size))
+        if (!InitializeContext(ctx_memory, ctx_flags, (CONTEXT **) &ctx, &size))
         {
           ctx = 0;
         }
       }
 
       //- antoniom: get thread context
-      if(!GetThreadContext(thread, (CONTEXT*)ctx))
+      if(!GetThreadContext(thread, (CONTEXT *)ctx))
       {
         ctx = 0;
       }
@@ -700,7 +706,6 @@ dmn_w32_thread_read_reg_block(Arch arch, HANDLE thread, void *reg_block)
       {
         break;
       }
-
       result = 1;
 
       //- antoniom: Convert CONTEXT -> REGS_RegBlockARM64
@@ -733,20 +738,22 @@ dmn_w32_thread_read_reg_block(Arch arch, HANDLE thread, void *reg_block)
 
       REGS_Reg64 *x_d = &dst->x0;
       DWORD64 *x_s = &ctx->X[0];
-      for (DWORD i = 0; i < 31; i += 1, x_d += 1, x_s += 1)
-      {
+      for (DWORD i = 0;
+           i < 31;
+           i += 1, x_d += 1, x_s += 1){
         x_d->u64 = *x_s;
       }
 
-      dst->x31.u64 = ctx->Sp;
-
       REGS_Reg128 *v_d = &dst->v0;
-      REGS_Reg128 *v_s = (REGS_Reg128*)&ctx->V[0];
-      for (DWORD i = 0; i < 32; i += 1, v_d += 1, v_s += 1)
-      {
+      REGS_Reg128 *v_s = (REGS_Reg128*) &ctx->V[0];
+      for (DWORD i = 0;
+           i < 32;
+           i += 1, v_d += 1, v_s += 1){
         v_d->u64[0] = v_s->u64[0];
         v_d->u64[1] = v_s->u64[1];
       }
+
+      dst->x31.u64 = ctx->Sp;
 
       scratch_end(scratch);
     }break;
@@ -854,7 +861,7 @@ dmn_w32_thread_read_reg_block(Arch arch, HANDLE thread, void *reg_block)
       if(GetLastError() == ERROR_INSUFFICIENT_BUFFER)
       {
         void *ctx_memory = push_array(scratch.arena, U8, size);
-        if(!InitializeContext(ctx_memory, ctx_flags, (CONTEXT**)&ctx, &size))
+        if(!InitializeContext(ctx_memory, ctx_flags, (CONTEXT **) &ctx, &size))
         {
           ctx = 0;
         }
@@ -863,11 +870,11 @@ dmn_w32_thread_read_reg_block(Arch arch, HANDLE thread, void *reg_block)
       //- rjf: unpack features available on this context
       if (xstate_enabled)
       {
-        dmn_w32_SetXStateFeaturesMask((CONTEXT*)ctx, XSTATE_MASK_AVX | XSTATE_MASK_AVX512);
+        dmn_w32_SetXStateFeaturesMask((CONTEXT *) ctx, XSTATE_MASK_AVX | XSTATE_MASK_AVX512);
       }
       
       //- rjf: get thread context
-      if(!GetThreadContext(thread, (CONTEXT*)ctx))
+      if(!GetThreadContext(thread, (CONTEXT *) ctx))
       {
         ctx = 0;
       }
@@ -880,7 +887,7 @@ dmn_w32_thread_read_reg_block(Arch arch, HANDLE thread, void *reg_block)
       result = 1;
       
       DWORD64 xstate_mask = 0;
-      dmn_w32_GetXStateFeaturesMask((CONTEXT*)ctx, &xstate_mask);
+      dmn_w32_GetXStateFeaturesMask((CONTEXT *) ctx, &xstate_mask);
       
       //- rjf: convert context -> REGS_RegBlockX64
       XSAVE_FORMAT *xsave = &ctx->FltSave;
@@ -949,7 +956,7 @@ dmn_w32_thread_read_reg_block(Arch arch, HANDLE thread, void *reg_block)
       if(xstate_mask & XSTATE_MASK_AVX)
       {
         DWORD avx_length = 0;
-        U8* avx_s = (U8*)dmn_w32_LocateXStateFeature((CONTEXT*)ctx, XSTATE_AVX, &avx_length);
+        U8* avx_s = (U8*)dmn_w32_LocateXStateFeature((CONTEXT * )ctx, XSTATE_AVX, &avx_length);
         Assert(avx_length == 16 * sizeof(REGS_Reg128));
         
         REGS_Reg512 *zmm_d = &dst->zmm0;
@@ -971,7 +978,7 @@ dmn_w32_thread_read_reg_block(Arch arch, HANDLE thread, void *reg_block)
       if(xstate_mask & XSTATE_MASK_AVX512)
       {
         DWORD kmask_length = 0;
-        U64* kmask_s = (U64*)dmn_w32_LocateXStateFeature((CONTEXT*)ctx, XSTATE_AVX512_KMASK, &kmask_length);
+        U64* kmask_s = (U64*)dmn_w32_LocateXStateFeature((CONTEXT *) ctx, XSTATE_AVX512_KMASK, &kmask_length);
         Assert(kmask_length == 8 * sizeof(U64));
         
         REGS_Reg64 *kmask_d = &dst->k0;
@@ -981,7 +988,7 @@ dmn_w32_thread_read_reg_block(Arch arch, HANDLE thread, void *reg_block)
         }
         
         DWORD avx512h_length = 0;
-        U8* avx512h_s = (U8*)dmn_w32_LocateXStateFeature((CONTEXT*)ctx, XSTATE_AVX512_ZMM_H, &avx512h_length);
+        U8* avx512h_s = (U8*)dmn_w32_LocateXStateFeature((CONTEXT *) ctx, XSTATE_AVX512_ZMM_H, &avx512h_length);
         Assert(avx512h_length == 16 * sizeof(REGS_Reg256));
         
         REGS_Reg512 *zmmh_d = &dst->zmm0;
@@ -991,7 +998,7 @@ dmn_w32_thread_read_reg_block(Arch arch, HANDLE thread, void *reg_block)
         }
         
         DWORD avx512_length = 0;
-        U8* avx512_s = (U8*)dmn_w32_LocateXStateFeature((CONTEXT*)ctx, XSTATE_AVX512_ZMM, &avx512_length);
+        U8* avx512_s = (U8*)dmn_w32_LocateXStateFeature((CONTEXT *) ctx, XSTATE_AVX512_ZMM, &avx512_length);
         Assert(avx512_length == 16 * sizeof(REGS_Reg512));
         
         REGS_Reg512 *zmm_d = &dst->zmm16;
@@ -1050,9 +1057,9 @@ dmn_w32_thread_write_reg_block(Arch arch, HANDLE thread, void *reg_block)
     case Arch_arm64:
     {
       Temp scratch = scratch_begin(0, 0);
-      REGS_RegBlockARM64 *src = (REGS_RegBlockARM64*)reg_block;
+      REGS_RegBlockARM64 *src = (REGS_RegBlockARM64 *) reg_block;
 
-      //- antoniom: sets up context
+      //- antoniom: set up context
       DMN_W32_Context_arm64 *ctx = 0;
       U32 ctx_flags = DMN_W32_CTX_ARM64_ALL;
       DWORD size = 0;
@@ -1060,14 +1067,16 @@ dmn_w32_thread_write_reg_block(Arch arch, HANDLE thread, void *reg_block)
       if(GetLastError() == ERROR_INSUFFICIENT_BUFFER)
       {
         void *ctx_memory = push_array(scratch.arena, U8, size);
-        if(!InitializeContext(ctx_memory, ctx_flags, (CONTEXT**)&ctx, &size));
+        if(!InitializeContext(ctx_memory, ctx_flags, (CONTEXT **) &ctx, &size))
         {
           ctx = 0;
         }
       }
 
+      //- antoniom: bad context -> abort
       if(ctx == 0)
       {
+        DWORD error = GetLastError();
         break;
       }
 
@@ -1103,15 +1112,17 @@ dmn_w32_thread_write_reg_block(Arch arch, HANDLE thread, void *reg_block)
 
       DWORD64 *x_d = &ctx->X[0];
       REGS_Reg64 *x_s = &src->x0;
-      for(DWORD i = 0; i < 31; i += 1, x_d += 1, x_s += 1)
-      {
+      for (DWORD i = 0;
+           i < 31;
+           i += 1, x_d += 1, x_s += 1){
         *x_d = x_s->u64;
       }
 
-      REGS_Reg128 *v_d = (REGS_Reg128*)&ctx->V[0];
+      REGS_Reg128 *v_d = (REGS_Reg128*) &ctx->V[0];
       REGS_Reg128 *v_s = &src->v0;
-      for(DWORD i = 0; i < 32; i += 1, v_d += 1, v_s += 1)
-      {
+      for (DWORD i = 0;
+           i < 32;
+           i += 1, v_d += 1, v_s += 1){
         v_d->u64[0] = v_s->u64[0];
         v_d->u64[1] = v_s->u64[1];
       }
@@ -1119,7 +1130,8 @@ dmn_w32_thread_write_reg_block(Arch arch, HANDLE thread, void *reg_block)
       ctx->Sp = src->x31.u64;
       ctx->Pc = src->pc.u64;
 
-      if(SetThreadContext(thread, (CONTEXT*)ctx))
+      //- antoniom: set thread context
+      if(SetThreadContext(thread, (CONTEXT *) ctx))
       {
         result = 1;
       }
@@ -1214,7 +1226,7 @@ dmn_w32_thread_write_reg_block(Arch arch, HANDLE thread, void *reg_block)
       if(GetLastError() == ERROR_INSUFFICIENT_BUFFER)
       {
         void *ctx_memory = push_array(scratch.arena, U8, size);
-        if(!InitializeContext(ctx_memory, ctx_flags, (CONTEXT**)&ctx, &size))
+        if(!InitializeContext(ctx_memory, ctx_flags, (CONTEXT **) &ctx, &size))
         {
           ctx = 0;
         }
@@ -1223,7 +1235,7 @@ dmn_w32_thread_write_reg_block(Arch arch, HANDLE thread, void *reg_block)
       //- rjf: unpack features available on this context
       if (xstate_enabled)
       {
-        dmn_w32_SetXStateFeaturesMask((CONTEXT*)ctx, XSTATE_MASK_AVX | XSTATE_MASK_AVX512);
+        dmn_w32_SetXStateFeaturesMask((CONTEXT *)ctx, XSTATE_MASK_AVX | XSTATE_MASK_AVX512);
       }
       
       //- rjf: bad context -> abort
@@ -1297,7 +1309,7 @@ dmn_w32_thread_write_reg_block(Arch arch, HANDLE thread, void *reg_block)
       if(feature_mask & XSTATE_MASK_AVX)
       {
         DWORD avx_length = 0;
-        U8* avx_d = (U8*)dmn_w32_LocateXStateFeature((CONTEXT*)ctx, XSTATE_AVX, &avx_length);
+        U8* avx_d = (U8*)dmn_w32_LocateXStateFeature((CONTEXT *) ctx, XSTATE_AVX, &avx_length);
         Assert(avx_length == 16 * sizeof(REGS_Reg128));
         
         REGS_Reg512 *zmm_s = &src->zmm0;
@@ -1311,7 +1323,7 @@ dmn_w32_thread_write_reg_block(Arch arch, HANDLE thread, void *reg_block)
       if(feature_mask & XSTATE_MASK_AVX512)
       {
         DWORD kmask_length = 0;
-        U64* kmask_d = (U64*)dmn_w32_LocateXStateFeature((CONTEXT*)ctx, XSTATE_AVX512_KMASK, &kmask_length);
+        U64* kmask_d = (U64*)dmn_w32_LocateXStateFeature((CONTEXT *) ctx, XSTATE_AVX512_KMASK, &kmask_length);
         Assert(kmask_length == 8 * sizeof(*kmask_d));
         
         REGS_Reg64 *kmask_s = &src->k0;
@@ -1321,7 +1333,7 @@ dmn_w32_thread_write_reg_block(Arch arch, HANDLE thread, void *reg_block)
         }
         
         DWORD avx512h_length = 0;
-        U8* avx512h_d = (U8*)dmn_w32_LocateXStateFeature((CONTEXT*)ctx, XSTATE_AVX512_ZMM_H, &avx512h_length);
+        U8* avx512h_d = (U8*)dmn_w32_LocateXStateFeature((CONTEXT *) ctx, XSTATE_AVX512_ZMM_H, &avx512h_length);
         Assert(avx512h_length == 16 * sizeof(REGS_Reg256));
         
         REGS_Reg512 *zmmh_s = &src->zmm0;
@@ -1331,7 +1343,7 @@ dmn_w32_thread_write_reg_block(Arch arch, HANDLE thread, void *reg_block)
         }
         
         DWORD avx512_length = 0;
-        U8* avx512_d = (U8*)dmn_w32_LocateXStateFeature((CONTEXT*)ctx, XSTATE_AVX512_ZMM, &avx512_length);
+        U8* avx512_d = (U8*)dmn_w32_LocateXStateFeature((CONTEXT *) ctx, XSTATE_AVX512_ZMM, &avx512_length);
         Assert(avx512_length == 16 * sizeof(REGS_Reg512));
         
         REGS_Reg512 *zmm_s = &src->zmm16;
@@ -1342,7 +1354,7 @@ dmn_w32_thread_write_reg_block(Arch arch, HANDLE thread, void *reg_block)
       }
       
       //- rjf: set thread context
-      if(SetThreadContext(thread, (CONTEXT*)ctx))
+      if(SetThreadContext(thread, (CONTEXT *) ctx))
       {
         result = 1;
       }
@@ -1590,7 +1602,7 @@ dmn_ctrl_attach(DMN_CtrlCtx *ctx, U32 pid)
       struct JIT_DEBUG_INFO
       {
         DWORD dwSize;
-        DWORD dwProcessorArchitecture;
+        DWORD dwProcessorArch;
         DWORD dwThreadID;
         DWORD dwReserved0;
         ULONG64 lpExceptionAddress;
@@ -1734,13 +1746,14 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
           default:{}break;
           case Arch_x64:
           {
+            DMN_W32_Context_x64 *x64_ctx = (DMN_W32_Context_x64 *) single_step_thread_ctx;
             U32 ctx_flags = DMN_W32_CTX_X64|DMN_W32_CTX_INTEL_CONTROL;
             DWORD size = 0;
             InitializeContext(0, ctx_flags, 0, &size);
             if(GetLastError() == ERROR_INSUFFICIENT_BUFFER)
             {
               void *ctx_memory = push_array(scratch.arena, U8, size);
-              if(!InitializeContext(ctx_memory, ctx_flags, (CONTEXT**)&single_step_thread_ctx, &size))
+              if(!InitializeContext(ctx_memory, ctx_flags, (CONTEXT **) &x64_ctx, &size))
               {
                 single_step_thread_ctx = 0;
               }
@@ -1754,7 +1767,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
             if(GetLastError() == ERROR_INSUFFICIENT_BUFFER)
             {
               void *ctx_memory = push_array(scratch.arena, U8, size);
-              if(!InitializeContext(ctx_memory, ctx_flags, (CONTEXT**)&single_step_thread_ctx, &size))
+              if(!InitializeContext(ctx_memory, ctx_flags, (CONTEXT **) &single_step_thread_ctx, &size))
               {
                 single_step_thread_ctx = 0;
               }
@@ -1782,7 +1795,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
           case Arch_arm64:
           {
             DMN_W32_Context_arm64 *arm64_ctx = (DMN_W32_Context_arm64 *)single_step_thread_ctx;
-            if(!GetThreadContext(thread->handle, (CONTEXT*)arm64_ctx))
+            if(!GetThreadContext(thread->handle, (CONTEXT *) arm64_ctx))
             {
               single_step_thread_ctx = 0;
             }
@@ -1790,7 +1803,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
             {
               U64 new_cpsr = arm64_ctx->Cpsr | 0x200000;
               arm64_ctx->Cpsr = new_cpsr;
-              SetThreadContext(thread->handle, (CONTEXT*)arm64_ctx);
+              SetThreadContext(thread->handle, (CONTEXT *) arm64_ctx);
               ins_atomic_u64_inc_eval(&dmn_w32_shared->reg_gen);
             }
           }break;
@@ -1807,8 +1820,8 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
           //- rjf: x64
           case Arch_x64:
           {
-            DMN_W32_Context_x64 *x64_ctx = (DMN_W32_Context_x64 *)single_step_thread_ctx;
-            if(!GetThreadContext(thread->handle, (CONTEXT*)x64_ctx))
+            DMN_W32_Context_x64 *x64_ctx = (DMN_W32_Context_x64 *) single_step_thread_ctx;
+            if(!GetThreadContext(thread->handle, (CONTEXT *) x64_ctx))
             {
               single_step_thread_ctx = 0;
             }
@@ -1817,7 +1830,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
               U64 rflags = x64_ctx->EFlags|0x2;
               U64 new_rflags = rflags | 0x100;
               x64_ctx->EFlags = new_rflags;
-              SetThreadContext(thread->handle, (CONTEXT*)x64_ctx);
+              SetThreadContext(thread->handle, (CONTEXT *) x64_ctx);
               ins_atomic_u64_inc_eval(&dmn_w32_shared->reg_gen);
             }
           }break;
@@ -1827,7 +1840,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
       //////////////////////////
       //- rjf: write all traps into memory
       //
-      //- antoniom: need 4 per trap for ARM64
+      //- antoniom: ARM64 trap is 4 bytes, so assume worst case for simplicity
       U8 *trap_swap_bytes = push_array_no_zero(scratch.arena, U8, ctrls->traps.trap_count * 4);
       ProfScope("write all traps into memory")
       {
@@ -1839,7 +1852,6 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
             DMN_Trap *trap = n->v+n_idx;
             DMN_W32_Entity *trap_process = dmn_w32_entity_from_handle(trap->process);
 
-            //- antoniom: modules can be x64/arm64 when running ARM64EC
             Arch arch = trap_process->arch;
 #if 0
             for(DMN_W32_Entity *child = trap_process->first; child != &dmn_w32_entity_nil; child = child->next)
@@ -1862,7 +1874,9 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
               case Arch_arm32:
               {NotImplemented;}break;
 
+              //- rjf: x86/x64
               case Arch_x64:
+              case Arch_x86:
               {
                 trap_swap_bytes[trap_idx] = 0xCC;
                 dmn_process_read(trap->process, r1u64(trap->vaddr, trap->vaddr+1), trap_swap_bytes+trap_idx);
@@ -1870,6 +1884,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                 dmn_process_write(trap->process, r1u64(trap->vaddr, trap->vaddr+1), &int3);
               }break;
 
+              //- antoniom: arm64
               case Arch_arm64:
               {
                 U32 *trap_swap_u32 = (U32*)(trap_swap_bytes + trap_idx*4);
@@ -2094,11 +2109,11 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                 thread->arch                     = image_info.arch;
                 thread->thread.thread_local_base = tls_base;
                 module->handle                         = module_handle;
+                module->arch                           = image_info.arch;
                 module->module.vaddr_range             = r1u64(module_base, module_base+image_info.size);
                 module->module.is_main                 = 1;
                 module->module.address_of_name_pointer = module_name_vaddr;
                 module->module.name_is_unicode         = module_name_is_unicode;
-                module->arch                           = image_info.arch;
               }
               
               // rjf: put thread into suspended state, so it matches expected initial state
@@ -2486,12 +2501,12 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                     if(GetLastError() == ERROR_INSUFFICIENT_BUFFER)
                     {
                       void *ctx_memory = push_array(scratch.arena, U8, size);
-                      if(!InitializeContext(ctx_memory, ctx_flags, (CONTEXT**)&x64_ctx, &size))
+                      if(!InitializeContext(ctx_memory, ctx_flags, (CONTEXT **) &x64_ctx, &size))
                       {
                         ctx = 0;
                       }
                     }
-                    if(!GetThreadContext(thread->handle, (CONTEXT*)x64_ctx))
+                    if(!GetThreadContext(thread->handle, (CONTEXT *) x64_ctx))
                     {
                       x64_ctx = 0;
                     }
@@ -2500,7 +2515,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                       U64 rip = x64_ctx->Rip;
                       U64 new_rip = instruction_pointer;
                       x64_ctx->Rip = new_rip;
-                      SetThreadContext(thread->handle, (CONTEXT*)x64_ctx);
+                      SetThreadContext(thread->handle, (CONTEXT *) x64_ctx);
                       ins_atomic_u64_inc_eval(&dmn_w32_shared->reg_gen);
                     }
                   }break;
@@ -2831,6 +2846,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
               case Arch_arm32:
               {NotImplemented;}break;
 
+              case Arch_x86:
               case Arch_x64:
               {
                 U8 og_byte = trap_swap_bytes[trap_idx];
@@ -2842,12 +2858,12 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
 
               case Arch_arm64:
               {
-                U32 og_u32 = *((U32*)(trap_swap_bytes + trap_idx*4));
+                U32 og_u32 = *((U32*) (trap_swap_bytes+trap_idx*4));
                 if(og_u32 != 0xd43e0000)
                 {
                   dmn_process_write(trap->process, r1u64(trap->vaddr, trap->vaddr+4), &og_u32);
                 }
-              }
+              }break;
             }
           }
         }
@@ -2873,10 +2889,10 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
           case Arch_arm64:
           {
             REGS_RegBlockARM64 regs = {0};
-            dmn_thread_read_reg_block(ctrl->single_step_thread, &regs);
+            dmn_thread_read_reg_block(ctrls->single_step_thread, &regs);
             regs.cpsr.u32 &= ~0x200000;
-            dmn_thread_write_reg_block(ctrl->single_step_thread, &regs);
-          }
+            dmn_thread_write_reg_block(ctrls->single_step_thread, &regs);
+          }break;
           
           //- rjf: x86/64
           case Arch_x86:
@@ -2888,17 +2904,17 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
           }break;
           case Arch_x64:
           {
-            DMN_W32_Context_x64 *x64_ctx = single_step_thread_ctx;
-            if(!GetThreadContext(thread->handle, (CONTEXT*)x64_ctx))
+            DMN_W32_Context_x64 *x64_ctx = (DMN_W32_Context_x64 *) single_step_thread_ctx;
+            if(!GetThreadContext(thread->handle, (CONTEXT *) x64_ctx))
             {
               single_step_thread_ctx = 0;
             }
-            if(ctx != 0)
+            if(x64_ctx != 0)
             {
               U64 rflags = x64_ctx->EFlags|0x2;
               U64 new_rflags = rflags & ~0x100;
               x64_ctx->EFlags = new_rflags;
-              SetThreadContext(thread->handle, (CONTEXT*)x64_ctx);
+              SetThreadContext(thread->handle, (CONTEXT *) x64_ctx);
               ins_atomic_u64_inc_eval(&dmn_w32_shared->reg_gen);
             }
           }break;
@@ -3206,6 +3222,7 @@ dmn_tls_root_vaddr_from_thread(DMN_Handle handle)
         {}break;
         case Arch_arm32:
         {NotImplemented;}break;
+
         case Arch_arm64:
         case Arch_x64:
         {
