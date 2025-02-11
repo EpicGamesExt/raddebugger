@@ -28,7 +28,7 @@ RD_CmdKind_Null,
 RD_CmdKind_Null,
 };
 
-RD_VocabularyInfo rd_vocabulary_info_table[60] =
+RD_VocabularyInfo rd_vocabulary_info_table[64] =
 {
 {str8_lit_comp("auto_view_rule"), str8_lit_comp("auto_view_rules"), str8_lit_comp("Auto View Rule"), str8_lit_comp("Auto View Rules"), RD_IconKind_Binoculars},
 {str8_lit_comp("file_path_map"), str8_lit_comp("file_path_maps"), str8_lit_comp("File Path Map"), str8_lit_comp("File Path Maps"), RD_IconKind_FileOutline},
@@ -90,6 +90,10 @@ RD_VocabularyInfo rd_vocabulary_info_table[60] =
 {str8_lit_comp("register"), str8_lit_comp("registers"), str8_lit_comp("Register"), str8_lit_comp("Registers"), RD_IconKind_Null},
 {str8_lit_comp("local"), str8_lit_comp("locals"), str8_lit_comp("Local"), str8_lit_comp("Locals"), RD_IconKind_Null},
 {str8_lit_comp("memory"), str8_lit_comp("memories"), str8_lit_comp("Memory"), str8_lit_comp("Memories"), RD_IconKind_Grid},
+{str8_lit_comp("hit_count"), str8_lit_comp("hit_counts"), str8_lit_comp("Hit Count"), str8_lit_comp("Hit Counts"), RD_IconKind_Null},
+{str8_lit_comp("disabled"), str8_lit_comp(""), str8_lit_comp("Disabled"), str8_lit_comp("Disabled"), RD_IconKind_Null},
+{str8_lit_comp("debug_subprocesses"), str8_lit_comp(""), str8_lit_comp("Debug Subprocesses"), str8_lit_comp(""), RD_IconKind_Null},
+{str8_lit_comp("environment"), str8_lit_comp("environments"), str8_lit_comp("Environment"), str8_lit_comp("Environments"), RD_IconKind_Null},
 };
 
 RD_NameSchemaInfo rd_name_schema_info_table[10] =

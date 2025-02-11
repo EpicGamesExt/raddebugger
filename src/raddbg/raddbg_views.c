@@ -1214,7 +1214,22 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
           }break;
           case E_ExprKind_MemberAccess:
           {
-            result.string = push_str8f(arena, ".%S", e_string_from_expr(arena, notable_expr->last));
+            E_Eval row_eval = e_eval_from_expr(arena, row->expr);
+            String8 member_name = e_string_from_expr(arena, notable_expr->last);
+            B32 is_non_code = 0;
+            String8 string = push_str8f(arena, ".%S", member_name);
+            if(row_eval.space.kind == RD_EvalSpaceKind_MetaCfg ||
+               row_eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity)
+            {
+              String8 fancy_name = rd_display_from_code_name(member_name);
+              if(fancy_name.size != 0)
+              {
+                string = fancy_name;
+                is_non_code = 1;
+              }
+            }
+            result.is_non_code = is_non_code;
+            result.string = string;
           }break;
         }
       }
@@ -2770,7 +2785,7 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                   }
                   
                   // rjf: build cell line edit
-                  else
+                  else RD_Font(cell_info.is_non_code ? RD_FontSlot_Main : RD_FontSlot_Code)
                   {
                     RD_LineEditParams line_edit_params = {0};
                     {

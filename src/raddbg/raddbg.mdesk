@@ -111,6 +111,10 @@ RD_VocabularyMap:
   {register             _                           "Register"                  _                     Null                                           }
   {local                _                           "Local"                     _                     Null                                           }
   {memory               memories                    "Memory"                    "Memories"            Grid                                           }
+  {hit_count            hit_counts                  "Hit Count"                 "Hit Counts"          Null                                           }
+  {disabled             ""                          "Disabled"                  "Disabled"            Null                                           }
+  {debug_subprocesses   ""                          "Debug Subprocesses"        ""                    Null                                           }
+  {environment          _                           "Environment"               _                     Null                                           }
 }
 
 @struct RD_VocabularyInfo:

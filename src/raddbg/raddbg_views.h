@@ -93,6 +93,7 @@ struct RD_WatchRowCellInfo
   E_Eval eval;
   String8 string;
   DR_FancyStringList fancy_strings;
+  B32 is_non_code;
   B32 is_button;
   B32 can_edit;
   B32 is_errored;
