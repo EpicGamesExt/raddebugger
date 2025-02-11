@@ -537,8 +537,13 @@ ev_block_tree_from_string(Arena *arena, EV_View *view, String8 filter, String8 s
       // rjf: unpack expr
       E_IRTreeAndType expr_irtree = e_irtree_and_type_from_expr(scratch.arena, t->expr);
       
-      // rjf: skip if type info disallows expansion
-      if(!ev_type_key_and_mode_is_expandable(expr_irtree.type_key, expr_irtree.mode))
+      // rjf: get expr's expansion rule
+      EV_ExpandRuleTagPair expand_rule_and_tag = ev_expand_rule_tag_pair_from_expr_irtree(t->expr, &expr_irtree);
+      EV_ExpandRule *expand_rule = expand_rule_and_tag.rule;
+      E_Expr *expand_rule_tag = expand_rule_and_tag.tag;
+      
+      // rjf: skip if no expansion rule, & type info disallows expansion
+      if(expand_rule == &ev_nil_expand_rule && !ev_type_key_and_mode_is_expandable(expr_irtree.type_key, expr_irtree.mode))
       {
         continue;
       }
@@ -547,11 +552,6 @@ ev_block_tree_from_string(Arena *arena, EV_View *view, String8 filter, String8 s
       E_LookupRuleTagPair lookup_rule_and_tag = e_lookup_rule_tag_pair_from_expr_irtree(t->expr, &expr_irtree);
       E_LookupRule *lookup_rule = lookup_rule_and_tag.rule;
       E_Expr *lookup_rule_tag = lookup_rule_and_tag.tag;
-      
-      // rjf: get expr's expansion rule
-      EV_ExpandRuleTagPair expand_rule_and_tag = ev_expand_rule_tag_pair_from_expr_irtree(t->expr, &expr_irtree);
-      EV_ExpandRule *expand_rule = expand_rule_and_tag.rule;
-      E_Expr *expand_rule_tag = expand_rule_and_tag.tag;
       
       // rjf: get top-level lookup/expansion info
       E_LookupInfo lookup_info = lookup_rule->info(arena, &expr_irtree, filter);

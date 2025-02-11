@@ -4524,7 +4524,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
   //////////////////////////////
   //- rjf: unpack parameterization info
   //
-  Rng1U64 space_range = {0}; // TODO(rjf): @cfg rd_range_from_eval_params(eval, params);
+  Rng1U64 space_range = rd_range_from_eval_tag(eval, tag);
   if(eval.space.kind == 0)
   {
     eval.space = rd_eval_space_from_ctrl_entity(ctrl_entity_from_handle(d_state->ctrl_entity_store, rd_regs()->process), RD_EvalSpaceKind_CtrlEntity);
@@ -4534,10 +4534,10 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
       space_range = r1u64(0, 0x7FFFFFFFFFFFull);
     }
   }
-  U64 cursor          = 0; // TODO(rjf): @cfg rd_value_from_params_key(params, str8_lit("cursor_vaddr")).u64;
-  U64 mark            = 0; // TODO(rjf): @cfg rd_value_from_params_key(params, str8_lit("mark_vaddr")).u64;
-  U64 bytes_per_cell  = 0; // TODO(rjf): @cfg rd_value_from_params_key(params, str8_lit("bytes_per_cell")).u64;
-  U64 num_columns     = 0; // TODO(rjf): @cfg rd_value_from_params_key(params, str8_lit("num_columns")).u64;
+  U64 cursor          = rd_view_cfg_value_from_string(str8_lit("cursor_vaddr")).u64;
+  U64 mark            = rd_view_cfg_value_from_string(str8_lit("mark_vaddr")).u64;
+  U64 bytes_per_cell  = rd_view_cfg_value_from_string(str8_lit("bytes_per_cell")).u64;
+  U64 num_columns     = rd_view_cfg_value_from_string(str8_lit("num_columns")).u64;
   if(num_columns == 0)
   {
     num_columns = 16;
