@@ -472,15 +472,15 @@ E_LOOKUP_RANGE_FUNCTION_DEF(default)
     //- rjf: struct case -> the lookup-range will return a range of members
     if(do_struct_range)
     {
-      E_Type *lhs_type = e_type_from_key__cached(lhs_type_key);
-      Rng1U64 legal_idx_range = r1u64(0, lhs_type->count);
+      E_Type *struct_type = e_type_from_key__cached(struct_type_key);
+      Rng1U64 legal_idx_range = r1u64(0, struct_type->count);
       Rng1U64 read_range = intersect_1u64(legal_idx_range, idx_range);
       U64 read_range_count = dim_1u64(read_range);
       for(U64 idx = 0; idx < read_range_count; idx += 1)
       {
         U64 member_idx = idx + read_range.min;
-        String8 member_name = (lhs_type->members   ? lhs_type->members[member_idx].name :
-                               lhs_type->enum_vals ? lhs_type->enum_vals[member_idx].name : str8_lit(""));
+        String8 member_name = (struct_type->members   ? struct_type->members[member_idx].name :
+                               struct_type->enum_vals ? struct_type->enum_vals[member_idx].name : str8_lit(""));
         exprs[idx] = e_expr_ref_member_access(arena, lhs, member_name);
       }
     }
