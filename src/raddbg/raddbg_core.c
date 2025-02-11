@@ -1287,6 +1287,7 @@ rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg, Vec4F32 secondary_color, F32 
     if(target.exe.size != 0)
     {
       dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Main), running_size, running_rgba, target.exe);
+      dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), size, secondary_color, str8_lit(" "));
       start_secondary();
     }
     
@@ -1294,6 +1295,7 @@ rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg, Vec4F32 secondary_color, F32 
     if(target.args.size != 0)
     {
       dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Main), secondary_size, secondary_rgba, target.args);
+      dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), size, secondary_color, str8_lit(" "));
     }
     
     //- rjf: push conditions
@@ -1302,6 +1304,7 @@ rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg, Vec4F32 secondary_color, F32 
       if(condition.size != 0)
       {
         dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Main), secondary_size, secondary_rgba, condition);
+        dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), size, secondary_color, str8_lit(" "));
       }
     }
     
@@ -1309,6 +1312,7 @@ rd_title_fstrs_from_cfg(Arena *arena, RD_Cfg *cfg, Vec4F32 secondary_color, F32 
     if(is_disabled)
     {
       dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Main), secondary_size, secondary_rgba, str8_lit("(Disabled)"));
+      dr_fancy_string_list_push_new(arena, &result, rd_font_from_slot(RD_FontSlot_Code), size, secondary_color, str8_lit(" "));
     }
     
     //- rjf: push hit count

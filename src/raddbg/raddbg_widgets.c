@@ -2449,10 +2449,15 @@ rd_line_edit(RD_LineEditParams *params, String8 string)
   {
     ui_set_next_hover_cursor(OS_Cursor_IBar);
   }
+  if(params->flags & RD_LineEditFlag_Button)
+  {
+    ui_set_next_hover_cursor(OS_Cursor_HandPoint);
+  }
   UI_Box *box = ui_build_box_from_key(UI_BoxFlag_MouseClickable|
                                       (!!(params->flags & RD_LineEditFlag_KeyboardClickable)*UI_BoxFlag_KeyboardClickable)|
                                       UI_BoxFlag_ClickToFocus|
                                       UI_BoxFlag_DrawHotEffects|
+                                      //(!!(params->flags & RD_LineEditFlag_Button)*UI_BoxFlag_DrawActiveEffects)|
                                       (!(params->flags & RD_LineEditFlag_NoBackground)*UI_BoxFlag_DrawBackground)|
                                       (!!(params->flags & RD_LineEditFlag_Border)*UI_BoxFlag_DrawBorder)|
                                       ((is_auto_focus_hot || is_auto_focus_active)*UI_BoxFlag_KeyboardClickable)|
@@ -2645,7 +2650,12 @@ rd_line_edit(RD_LineEditParams *params, String8 string)
   F32 cursor_off = 0;
   UI_Parent(scrollable_box)
   {
-    if(!is_focus_active && !is_focus_active_disabled && params->flags & RD_LineEditFlag_CodeContents)
+    if(!is_focus_active && !is_focus_active_disabled && params->fancy_strings.total_size != 0)
+    {
+      UI_Box *label = ui_build_box_from_key(UI_BoxFlag_DrawText, ui_key_zero());
+      ui_box_equip_display_fancy_strings(label, &params->fancy_strings);
+    }
+    else if(!is_focus_active && !is_focus_active_disabled && params->flags & RD_LineEditFlag_CodeContents)
     {
       String8 display_string = ui_display_part_from_key_string(string);
       if(!(params->flags & RD_LineEditFlag_PreferDisplayString) && params->pre_edit_value.size != 0)

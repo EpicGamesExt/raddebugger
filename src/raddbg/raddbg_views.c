@@ -958,6 +958,17 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       info.group_cfg_child = rd_cfg_from_id(id);
     }
     
+    // rjf: determine if the row's evaluation matches the group configuration
+    // this distinguishes between e.g. "watches", which uses the group of watch cfgs,
+    // but does not evaluate them, from e.g. "targets", which uses the group of target
+    // cfgs, and the evaluations are of the targets themselves.
+    //
+    B32 row_eval_matches_group = 0;
+    {
+      RD_Cfg *evalled_cfg = rd_cfg_from_eval_space(info.eval.space);
+      row_eval_matches_group = (evalled_cfg == info.group_cfg_child);
+    }
+    
     // rjf: determine view ui rule
     info.view_ui_rule = rd_view_ui_rule_from_string(row->block->expand_rule->string);
     if(info.view_ui_rule != &rd_nil_view_ui_rule)
@@ -967,14 +978,25 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
     
     // rjf: fill row's cells
     {
-#if 0
-      // rjf: singular cell for cfgs
-      if(info.group_cfg != &rd_nil_cfg)
+      if(0){}
+      
+      // rjf: singular button for top-level cfgs
+      else if(info.eval.space.kind == RD_EvalSpaceKind_MetaCfg && row_eval_matches_group && info.group_cfg_parent == &rd_nil_cfg)
+      {
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Button, .pct = 1.f, .fancy_strings = rd_title_fstrs_from_cfg(arena, info.group_cfg_child, ui_top_palette()->text_weak, ui_top_font_size()));
+      }
+      
+      // rjf: singular button for entities
+      else if(info.eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity && info.group_entity != &ctrl_entity_nil)
       {
         rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Button, .pct = 1.f);
       }
-#endif
-      if(0){}
+      
+      // rjf: singular button for commands
+      else if(info.eval.space.kind == RD_EvalSpaceKind_MetaCmd)
+      {
+        rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Button, .pct = 1.f);
+      }
       
       // rjf: singular cell for view ui
       else if(info.view_ui_rule != &rd_nil_view_ui_rule)
@@ -1127,6 +1149,7 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
   RD_WatchRowCellInfo result = {0};
   result.view_ui_rule = &rd_nil_view_ui_rule;
   result.view_ui_tag = &e_expr_nil;
+  result.fancy_strings = cell->fancy_strings;
   switch(cell->kind)
   {
     default:{}break;
@@ -1247,6 +1270,12 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
       result.eval = e_eval_from_expr(arena, row->expr);
       result.view_ui_rule = row_info->view_ui_rule;
       result.view_ui_tag = row_info->view_ui_tag;
+    }break;
+    
+    //- rjf: button cells
+    case RD_WatchCellKind_Button:
+    {
+      result.is_button = 1;
     }break;
   }
   return result;
@@ -2104,6 +2133,7 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
             {
               default:{}break;
               case RD_WatchCellKind_Expr:
+              case RD_WatchCellKind_Button:
               {
                 RD_Cfg *cfg = row_info.group_cfg_child;
                 if(cfg != &rd_nil_cfg)
@@ -2695,10 +2725,12 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                     RD_LineEditParams line_edit_params = {0};
                     {
                       line_edit_params.flags                = (RD_LineEditFlag_CodeContents|
-                                                               RD_LineEditFlag_NoBackground|
+                                                               RD_LineEditFlag_NoBackground*!(cell_info.is_button)|
+                                                               RD_LineEditFlag_Border*!!(cell_info.is_button)|
+                                                               RD_LineEditFlag_Button*!!(cell_info.is_button)|
                                                                RD_LineEditFlag_KeyboardClickable|
                                                                RD_LineEditFlag_Expander*!!(cell_x == 0 && row_is_expandable && cell == row_info.cells.first)|
-                                                               RD_LineEditFlag_ExpanderPlaceholder*(cell_x == 0 && row_depth==0 && cell == row_info.cells.first)|
+                                                               RD_LineEditFlag_ExpanderPlaceholder*(cell_x == 0 && row_depth==0 && cell == row_info.cells.first && !cell_info.is_button)|
                                                                RD_LineEditFlag_ExpanderSpace*(cell_x == 0 && row_depth!=0 && cell == row_info.cells.first));
                       line_edit_params.depth                = (cell_x == 0 ? row_depth : 0);
                       line_edit_params.cursor               = &cell_edit_state->cursor;
@@ -2708,6 +2740,7 @@ RD_VIEW_UI_FUNCTION_DEF(watch)
                       line_edit_params.edit_string_size_out = &cell_edit_state->input_size;
                       line_edit_params.expanded_out         = &next_row_expanded;
                       line_edit_params.pre_edit_value       = cell_info.string;
+                      line_edit_params.fancy_strings        = cell_info.fancy_strings;
                     }
                     sig = rd_line_editf(&line_edit_params, "%S###%I64x_row_%I64x", str8_zero(), cell_x, row_hash);
 #if 0 // TODO(rjf): @cfg
