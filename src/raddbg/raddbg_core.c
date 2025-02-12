@@ -3560,7 +3560,7 @@ rd_window_frame(void)
     ws->cfg_palettes[RD_PaletteCode_DropSiteOverlay].background = current->colors[RD_ThemeColor_DropSiteOverlay];
     ws->cfg_palettes[RD_PaletteCode_DropSiteOverlay].text       = current->colors[RD_ThemeColor_DropSiteOverlay];
     ws->cfg_palettes[RD_PaletteCode_DropSiteOverlay].text_weak  = current->colors[RD_ThemeColor_DropSiteOverlay];
-    ws->cfg_palettes[RD_PaletteCode_DropSiteOverlay].border     = current->colors[RD_ThemeColor_DropSiteOverlay];
+    ws->cfg_palettes[RD_PaletteCode_DropSiteOverlay].border     = current->colors[RD_ThemeColor_BaseBorder];
     if(rd_setting_b32_from_name(str8_lit("opaque_backgrounds")))
     {
       for EachEnumVal(RD_PaletteCode, code)
@@ -6323,7 +6323,8 @@ rd_window_frame(void)
               // rjf: build
               UI_Box *site_box = &ui_nil_box;
               {
-                UI_Rect(site_rect)
+                F32 site_open_t = ui_anim(ui_key_from_stringf(key, "open_t"), 1.f);
+                UI_Rect(site_rect) UI_Squish(0.25f-0.25f*site_open_t) UI_Transparency(1-site_open_t)
                 {
                   site_box = ui_build_box_from_key(UI_BoxFlag_DropSite, key);
                   ui_signal_from_box(site_box);
@@ -6359,14 +6360,23 @@ rd_window_frame(void)
               // rjf: viz
               if(ui_key_match(site_box->key, ui_drop_hot_key()))
               {
-                Rng2F32 future_split_rect = site_rect;
-                future_split_rect.p0.v[axis] -= drop_site_major_dim_px;
-                future_split_rect.p1.v[axis] += drop_site_major_dim_px;
-                future_split_rect.p0.v[axis2_flip(axis)] = panel_rect.p0.v[axis2_flip(axis)];
-                future_split_rect.p1.v[axis2_flip(axis)] = panel_rect.p1.v[axis2_flip(axis)];
-                UI_Rect(future_split_rect) RD_Palette(RD_PaletteCode_DropSiteOverlay)
+                Rng2F32 future_split_rect_target = site_rect;
+                future_split_rect_target.p0.v[axis] -= drop_site_major_dim_px;
+                future_split_rect_target.p1.v[axis] += drop_site_major_dim_px;
+                future_split_rect_target.p0.v[axis2_flip(axis)] = panel_rect.p0.v[axis2_flip(axis)];
+                future_split_rect_target.p1.v[axis2_flip(axis)] = panel_rect.p1.v[axis2_flip(axis)];
+                future_split_rect_target = pad_2f32(future_split_rect_target, -ui_top_font_size()*2.f);
+                Vec2F32 future_split_rect_target_center = center_2f32(future_split_rect_target);
+                Rng2F32 future_split_rect =
                 {
-                  ui_build_box_from_key(UI_BoxFlag_DrawBackground, ui_key_zero());
+                  ui_anim(ui_key_from_stringf(ui_key_zero(), "drop_site_v0"), future_split_rect_target.x0, .initial = future_split_rect_target_center.x),
+                  ui_anim(ui_key_from_stringf(ui_key_zero(), "drop_site_v1"), future_split_rect_target.y0, .initial = future_split_rect_target_center.y),
+                  ui_anim(ui_key_from_stringf(ui_key_zero(), "drop_site_v2"), future_split_rect_target.x1, .initial = future_split_rect_target_center.x),
+                  ui_anim(ui_key_from_stringf(ui_key_zero(), "drop_site_v3"), future_split_rect_target.y1, .initial = future_split_rect_target_center.y),
+                };
+                UI_Rect(future_split_rect) RD_Palette(RD_PaletteCode_DropSiteOverlay) UI_CornerRadius(ui_top_font_size()*2.f)
+                {
+                  ui_build_box_from_key(UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawBorder, ui_key_zero());
                 }
               }
               
@@ -6396,7 +6406,7 @@ rd_window_frame(void)
             // rjf: form rect
             Rng2F32 child_rect = rd_target_rect_from_panel_node_child(panel_rect, panel, child);
             Vec2F32 child_rect_center = center_2f32(child_rect);
-            UI_Key key = ui_key_from_stringf(ui_key_zero(), "drop_boundary_%p_%p", panel, child);
+            UI_Key key = ui_key_from_stringf(ui_key_zero(), "drop_boundary_%p_%p", panel->cfg, child->cfg);
             Rng2F32 site_rect = r2f32(child_rect_center, child_rect_center);
             site_rect.p0.v[split_axis] = child_rect.p0.v[split_axis] - drop_site_minor_dim_px/2;
             site_rect.p1.v[split_axis] = child_rect.p0.v[split_axis] + drop_site_minor_dim_px/2;
@@ -6406,7 +6416,8 @@ rd_window_frame(void)
             // rjf: build
             UI_Box *site_box = &ui_nil_box;
             {
-              UI_Rect(site_rect)
+              F32 site_open_t = ui_anim(ui_key_from_stringf(key, "open_t"), 1.f);
+              UI_Rect(site_rect) UI_Squish(0.25f-0.25f*site_open_t) UI_Transparency(1-site_open_t)
               {
                 site_box = ui_build_box_from_key(UI_BoxFlag_DropSite, key);
                 ui_signal_from_box(site_box);
@@ -6442,14 +6453,23 @@ rd_window_frame(void)
             // rjf: viz
             if(ui_key_match(site_box->key, ui_drop_hot_key()))
             {
-              Rng2F32 future_split_rect = site_rect;
-              future_split_rect.p0.v[split_axis] -= drop_site_major_dim_px;
-              future_split_rect.p1.v[split_axis] += drop_site_major_dim_px;
-              future_split_rect.p0.v[axis2_flip(split_axis)] = child_rect.p0.v[axis2_flip(split_axis)];
-              future_split_rect.p1.v[axis2_flip(split_axis)] = child_rect.p1.v[axis2_flip(split_axis)];
-              UI_Rect(future_split_rect) RD_Palette(RD_PaletteCode_DropSiteOverlay)
+              Rng2F32 future_split_rect_target = site_rect;
+              future_split_rect_target.p0.v[split_axis] -= drop_site_major_dim_px;
+              future_split_rect_target.p1.v[split_axis] += drop_site_major_dim_px;
+              future_split_rect_target.p0.v[axis2_flip(split_axis)] = child_rect.p0.v[axis2_flip(split_axis)];
+              future_split_rect_target.p1.v[axis2_flip(split_axis)] = child_rect.p1.v[axis2_flip(split_axis)];
+              future_split_rect_target = pad_2f32(future_split_rect_target, -ui_top_font_size()*2.f);
+              Vec2F32 future_split_rect_target_center = center_2f32(future_split_rect_target);
+              Rng2F32 future_split_rect =
               {
-                ui_build_box_from_key(UI_BoxFlag_DrawBackground, ui_key_zero());
+                ui_anim(ui_key_from_stringf(ui_key_zero(), "drop_site_v0"), future_split_rect_target.x0, .initial = future_split_rect_target_center.x),
+                ui_anim(ui_key_from_stringf(ui_key_zero(), "drop_site_v1"), future_split_rect_target.y0, .initial = future_split_rect_target_center.y),
+                ui_anim(ui_key_from_stringf(ui_key_zero(), "drop_site_v2"), future_split_rect_target.x1, .initial = future_split_rect_target_center.x),
+                ui_anim(ui_key_from_stringf(ui_key_zero(), "drop_site_v3"), future_split_rect_target.y1, .initial = future_split_rect_target_center.y),
+              };
+              UI_Rect(future_split_rect) RD_Palette(RD_PaletteCode_DropSiteOverlay) UI_CornerRadius(ui_top_font_size()*2.f)
+              {
+                ui_build_box_from_key(UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawBorder, ui_key_zero());
               }
             }
             
@@ -6655,7 +6675,7 @@ rd_window_frame(void)
         //
         {
           RD_Cfg *view = rd_cfg_from_id(rd_state->drag_drop_regs->view);
-          if(rd_drag_is_active() && rd_state->drag_drop_regs_slot == RD_RegSlot_View && view != &rd_nil_cfg && contains_2f32(panel_rect, ui_mouse()))
+          if(rd_drag_is_active() && rd_state->drag_drop_regs_slot == RD_RegSlot_View && view != &rd_nil_cfg && contains_2f32(panel_rect, ui_mouse()) && ui_key_match(ui_drop_hot_key(), ui_key_zero()))
           {
             F32 drop_site_dim_px = ceil_f32(ui_top_font_size()*7.f);
             Vec2F32 drop_site_half_dim = v2f32(drop_site_dim_px/2, drop_site_dim_px/2);
@@ -6723,7 +6743,8 @@ rd_window_frame(void)
               }
               UI_Box *site_box = &ui_nil_box;
               {
-                UI_Rect(rect)
+                F32 site_open_t = ui_anim(ui_key_from_stringf(key, "open_t"), 1.f);
+                UI_Rect(rect) UI_Squish(0.25f-0.25f*site_open_t) UI_Transparency(1-site_open_t)
                 {
                   site_box = ui_build_box_from_key(UI_BoxFlag_DropSite, key);
                   ui_signal_from_box(site_box);
@@ -6799,15 +6820,24 @@ rd_window_frame(void)
               {
                 Axis2 split_axis = axis2_from_dir2(sites[idx].split_dir);
                 Side split_side = side_from_dir2(sites[idx].split_dir);
-                Rng2F32 future_split_rect = panel_rect;
+                Rng2F32 future_split_rect_target = panel_rect;
                 if(sites[idx].split_dir != Dir2_Invalid)
                 {
                   Vec2F32 panel_center = center_2f32(panel_rect);
-                  future_split_rect.v[side_flip(split_side)].v[split_axis] = panel_center.v[split_axis];
+                  future_split_rect_target.v[side_flip(split_side)].v[split_axis] = panel_center.v[split_axis];
                 }
-                UI_Rect(future_split_rect) RD_Palette(RD_PaletteCode_DropSiteOverlay)
+                future_split_rect_target = pad_2f32(future_split_rect_target, -ui_top_font_size()*2.f);
+                Vec2F32 future_split_rect_target_center = center_2f32(future_split_rect_target);
+                Rng2F32 future_split_rect =
                 {
-                  ui_build_box_from_key(UI_BoxFlag_DrawBackground, ui_key_zero());
+                  ui_anim(ui_key_from_stringf(ui_key_zero(), "drop_site_v0"), future_split_rect_target.x0, .initial = future_split_rect_target_center.x),
+                  ui_anim(ui_key_from_stringf(ui_key_zero(), "drop_site_v1"), future_split_rect_target.y0, .initial = future_split_rect_target_center.y),
+                  ui_anim(ui_key_from_stringf(ui_key_zero(), "drop_site_v2"), future_split_rect_target.x1, .initial = future_split_rect_target_center.x),
+                  ui_anim(ui_key_from_stringf(ui_key_zero(), "drop_site_v3"), future_split_rect_target.y1, .initial = future_split_rect_target_center.y),
+                };
+                UI_Rect(future_split_rect) RD_Palette(RD_PaletteCode_DropSiteOverlay) UI_CornerRadius(ui_top_font_size()*2.f)
+                {
+                  ui_build_box_from_key(UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawBorder, ui_key_zero());
                 }
               }
             }

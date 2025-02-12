@@ -58,12 +58,29 @@ internal void
 dr_fstrs_push_new_(Arena *arena, DR_FStrList *list, DR_FStrParams *params, DR_FStrParams *overrides, String8 string)
 {
   DR_FStr fstr = {string, *params};
-  for(U64 idx = 0; idx < sizeof(DR_FStrParams); idx += 1)
+  if(!fnt_tag_match(fnt_tag_zero(), overrides->font))
   {
-    if(((U8 *)overrides)[idx] != 0)
-    {
-      ((U8 *)&fstr.params)[idx] = ((U8 *)overrides)[idx];
-    }
+    fstr.params.font = overrides->font;
+  }
+  if(overrides->raster_flags != 0)
+  {
+    fstr.params.raster_flags = overrides->raster_flags;
+  }
+  if(overrides->color.x != 0 || overrides->color.y != 0 || overrides->color.z != 0 || overrides->color.w != 0)
+  {
+    fstr.params.color = overrides->color;
+  }
+  if(overrides->size != 0)
+  {
+    fstr.params.size = overrides->size;
+  }
+  if(overrides->underline_thickness != 0)
+  {
+    fstr.params.underline_thickness = overrides->underline_thickness;
+  }
+  if(overrides->strikethrough_thickness != 0)
+  {
+    fstr.params.strikethrough_thickness = overrides->strikethrough_thickness;
   }
   dr_fstrs_push(arena, list, &fstr);
 }
