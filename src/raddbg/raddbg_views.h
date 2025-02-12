@@ -97,7 +97,6 @@ struct RD_WatchRowCellInfo
   B32 is_button;
   B32 can_edit;
   B32 is_errored;
-  B32 is_inlined;
   String8 error_tooltip;
   String8 inheritance_tooltip;
   RD_ViewUIRule *view_ui_rule;

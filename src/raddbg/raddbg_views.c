@@ -1286,14 +1286,6 @@ rd_info_from_watch_row_cell(Arena *arena, EV_Row *row, EV_StringFlags string_fla
       result.eval     = e_eval_from_expr(scratch.arena, root_expr);
       result.string   = rd_value_string_from_eval(arena, string_flags, 10, font, font_size, max_size_px, result.eval);
       result.can_edit = (ev_type_key_is_editable(result.eval.type_key) && result.eval.mode == E_Mode_Offset);
-      
-      //- rjf: determine if inlined
-      E_Type *type = e_type_from_key__cached(result.eval.type_key);
-      if(type->depth > 0)
-      {
-        result.is_inlined = 1;
-      }
-      
       scratch_end(scratch);
     }break;
     

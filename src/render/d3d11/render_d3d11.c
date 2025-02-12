@@ -828,6 +828,8 @@ r_end_frame(void)
       next = tex->next;
       tex->view->lpVtbl->Release(tex->view);
       tex->texture->lpVtbl->Release(tex->texture);
+      tex->view = 0;
+      tex->texture = 0;
       tex->generation += 1;
       SLLStackPush(r_d3d11_state->first_free_tex2d, tex);
     }

@@ -727,6 +727,7 @@ d_symbol_name_from_dbgi_key_voff(Arena *arena, DI_Key *dbgi_key, U64 voff, U64 d
           if(decorated && inline_site->type_idx != 0)
           {
             String8List list = {0};
+            str8_list_pushf(scratch.arena, &list, "[inlined] ");
             e_type_lhs_string_from_key(scratch.arena, type, &list, 0, 0);
             str8_list_push(scratch.arena, &list, name);
             e_type_rhs_string_from_key(scratch.arena, type, &list, 0);

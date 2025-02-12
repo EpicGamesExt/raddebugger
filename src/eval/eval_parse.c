@@ -2090,10 +2090,7 @@ e_parse_expr_from_text_tokens__prec(Arena *arena, String8 text, E_TokenArray *to
         // rjf: parse all argument expressions
         E_Expr *callee_expr = atom;
         E_Expr *call_expr = e_push_expr(arena, E_ExprKind_Call, token_string.str);
-        if(callee_expr->kind == E_ExprKind_LeafIdent)
-        {
-          call_expr->string = callee_expr->string;
-        }
+        call_expr->string = callee_expr->string;
         e_expr_push_child(call_expr, callee_expr);
         E_TokenArray args_parse_tokens = e_token_array_make_first_opl(it, it_opl);
         E_Parse args_parse = e_parse_expr_from_text_tokens__prec(arena, text, &args_parse_tokens, e_max_precedence, max_U64);
